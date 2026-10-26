@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The game side of the protocol, shared by the sim worker and the mod: builds observations from the live game
+    objects, lists legal actions, and starts an action through the same entry points as the UI.
+    Waiting for the game to settle afterwards is host-specific (the sim pumps; the mod waits for frames).
+  -->
+  <Import Project="../GameReferences.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="../Sts2Ai.Protocol/Sts2Ai.Protocol.csproj" />
+  </ItemGroup>
+</Project>

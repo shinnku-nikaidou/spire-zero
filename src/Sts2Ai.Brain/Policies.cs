@@ -1,0 +1,71 @@
+using Sts2Ai.Protocol;
+
+namespace Sts2Ai.Brain;
+
+/// <summary>What a combat policy gets at each decision: the legal actions, and the observation on request.</summary>
+public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe)
+{
+    private CombatObservation? _observation;
+
+    public IReadOnlyList<CombatAction> Legal { get; } = legal;
+
+    /// <summary>Built on first use: a policy that ignores it shouldn't pay for it.</summary>
+    public CombatObservation Observation => _observation ??= observe();
+}
+
+/// <summary>Picks the next action of a combat.</summary>
+public interface ICombatPolicy
+{
+    CombatAction Choose(CombatDecision decision);
+}
+
+/// <summary>Answers the card-choice prompts that come up while a card or power resolves.</summary>
+public interface IChoicePolicy
+{
+    /// <summary>Indexes into <see cref="CardChoice.Options"/>; must satisfy <see cref="CardChoice.Accepts"/>.</summary>
+    IReadOnlyList<int> Choose(CardChoice choice);
+}
+
+/// <summary>Uniform over the legal actions. Ends turns early a lot.</summary>
+public sealed class RandomPolicy(Random rng) : ICombatPolicy
+{
+    public CombatAction Choose(CombatDecision decision) => decision.Legal[rng.Next(decision.Legal.Count)];
+}
+
+/// <summary>
+/// Keeps playing random cards, uses a potion now and then, and ends the turn only when nothing else is left.
+/// A placeholder that wins most easy combats, for benchmarks and tests until search exists.
+/// </summary>
+public sealed class PlayPolicy(Random rng) : ICombatPolicy
+{
+    public CombatAction Choose(CombatDecision decision)
+    {
+        var plays = decision.Legal.Where(a => a.Kind == CombatActionKind.PlayCard).ToList();
+        if (plays.Count > 0) return plays[rng.Next(plays.Count)];
+        var potions = decision.Legal.Where(a => a.Kind == CombatActionKind.UsePotion).ToList();
+        if (potions.Count > 0 && rng.Next(4) == 0) return potions[rng.Next(potions.Count)];
+        return CombatAction.EndTurn;
+    }
+}
+
+/// <summary>Uniformly random legal selection.</summary>
+public sealed class RandomChoices(Random rng) : IChoicePolicy
+{
+    public IReadOnlyList<int> Choose(CardChoice choice)
+    {
+        int count = choice.Min == choice.Max ? choice.Min : rng.Next(choice.Min, choice.Max + 1);
+        return Enumerable.Range(0, choice.Options.Count).OrderBy(_ => rng.Next()).Take(count).ToList();
+    }
+}
+
+public static class Policies
+{
+    public static readonly string[] CombatNames = ["play", "random"];
+
+    public static ICombatPolicy Combat(string name, Random rng) => name switch
+    {
+        "play" => new PlayPolicy(rng),
+        "random" => new RandomPolicy(rng),
+        _ => throw new ArgumentException($"unknown policy {name} (one of {string.Join(", ", CombatNames)})"),
+    };
+}

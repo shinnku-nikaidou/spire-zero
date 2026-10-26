@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The messages between the game side (sim worker, mod) and the brain: observations, actions, choice prompts.
+    References nothing but the framework.
+  -->
+</Project>

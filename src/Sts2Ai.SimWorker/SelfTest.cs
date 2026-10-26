@@ -1,10 +1,14 @@
+using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Rngs;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Runs;
+using Sts2Ai.Brain;
+using Sts2Ai.GameBridge;
+using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Headless;
+namespace Sts2Ai.SimWorker;
 
 /// <summary>
 /// Checks the properties that search and training rely on, over an encounter pool:
@@ -13,11 +17,13 @@ namespace Sts2Ai.Headless;
 ///  - determinize: resampling hidden information leaves the observation unchanged, replays exactly, and the
 ///    combat plays on from there;
 ///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
-///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield.
+///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
+///  - protocol: observations and actions survive a round trip through their wire form, and the brain's assemblies
+///    reach no game assembly.
 /// </summary>
 internal static class SelfTest
 {
-    private sealed record Recording(List<CombatSnapshot> Snapshots, List<string> Observations, List<string> Hidden, string Trace);
+    private sealed record Recording(List<CombatSnapshot> Snapshots, List<string> Observations, List<string> Hidden, string Trace, List<string> ProtocolErrors);
 
     public static int Run(Pump pump, Dictionary<string, string> opts)
     {
@@ -35,6 +41,12 @@ internal static class SelfTest
         }
 
         Console.WriteLine($"selftest: {n} combats, act {act} ({rooms}: {pool.Count} encounters), game {HeadlessGame.GameVersion}");
+        foreach (var root in new[] { typeof(ICombatPolicy).Assembly, typeof(CombatObservation).Assembly })
+        {
+            var reached = GameAssembliesReachedFrom(root);
+            Check("brain reaches no game assembly", reached.Count == 0, $"{root.GetName().Name} reaches {string.Join(", ", reached)}");
+        }
+        Check("reference check sees the bridge's game references", GameAssembliesReachedFrom(typeof(Observe).Assembly).Contains("sts2"), "sts2 not found");
         for (int i = 0; i < n; i++)
         {
             var encounter = pool[i % pool.Count];
@@ -45,6 +57,7 @@ internal static class SelfTest
                 var first = Record(pump, setup, seed * 1_000_003 + i);
                 var second = Record(pump, setup, seed * 1_000_003 + i);
                 Check("determinism", first.Observations.SequenceEqual(second.Observations) && first.Hidden.SequenceEqual(second.Hidden) && first.Trace == second.Trace, label);
+                Check("protocol round trip", first.ProtocolErrors.Count == 0, $"{label}: {first.ProtocolErrors.FirstOrDefault()}");
 
                 var cutRng = new Random(seed ^ (i * 7_919));
                 foreach (int k in Enumerable.Range(0, 3).Select(_ => cutRng.Next(first.Snapshots.Count)).Distinct())
@@ -53,7 +66,7 @@ internal static class SelfTest
                     string at = $"{label} at step {k}";
                     using (var restored = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0))))
                     {
-                        Check("restore", Observation.Of(restored).ToJsonString() == first.Observations[k], at);
+                        Check("restore", Json(restored) == first.Observations[k], at);
                         Check("restore hidden state", Hidden(restored) == first.Hidden[k], at);
                         Check("fast hook listeners match the game's", SameListeners(restored), at);
                     }
@@ -74,7 +87,7 @@ internal static class SelfTest
                     var determinized = snapshot with { Trace = [.. snapshot.Trace, new TraceEvent(TraceKind.Determinize, Seed: 11)] };
                     using var replayed = CombatSession.Restore(pump, determinized, new RandomChoices(new Random(k)));
                     Check("determinize replays", DrawOrder(replayed) == orderA, at);
-                    Cli.PlayOut(replayed, "play", new Random(k));
+                    Cli.PlayOut(replayed, new PlayPolicy(new Random(k)));
                     Check("plays on after determinize", replayed.ActionsExecuted >= snapshot.Trace.Count(e => e.Kind == TraceKind.Action), at);
                 }
             }
@@ -100,26 +113,55 @@ internal static class SelfTest
         var snapshots = new List<CombatSnapshot>();
         var observations = new List<string>();
         var hidden = new List<string>();
+        var protocolErrors = new List<string>();
         var rng = new Random(rngSeed);
         using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
-        Cli.PlayOut(session, "play", rng, s =>
+        Cli.PlayOut(session, new PlayPolicy(rng), s =>
         {
             snapshots.Add(s.Snapshot());
-            observations.Add(Observation.Of(s).ToJsonString());
+            var json = Json(s);
+            observations.Add(json);
             hidden.Add(Hidden(s));
+            if (ProtocolJson.Serialize(ProtocolJson.Deserialize<CombatObservation>(json)) != json)
+                protocolErrors.Add($"observation at step {snapshots.Count - 1} changes in a round trip");
+            foreach (var action in s.LegalActions())
+                if (CombatAction.Parse(action.ToString()) != action || ProtocolJson.Deserialize<CombatAction>(ProtocolJson.Serialize(action)) != action)
+                    protocolErrors.Add($"action {action} changes in a round trip");
         });
-        return new(snapshots, observations, hidden, string.Join(" ", session.Trace));
+        return new(snapshots, observations, hidden, string.Join(" ", session.Trace), protocolErrors);
+    }
+
+    private static string Json(CombatSession session) => ProtocolJson.Serialize(session.Observation());
+
+    /// <summary>
+    /// Game assemblies (and game-side projects) that <paramref name="root"/> references, directly or through our
+    /// own assemblies. Compiled references only list what the code actually uses.
+    /// </summary>
+    private static List<string> GameAssembliesReachedFrom(Assembly root)
+    {
+        string[] forbidden = ["sts2", "GodotSharp", "0Harmony", "SmartFormat", "Sts2Ai.GameBridge", "Sts2Ai.SimWorker"];
+        var reached = new List<string>();
+        var seen = new HashSet<string> { root.GetName().Name! };
+        var pending = new Stack<AssemblyName>(root.GetReferencedAssemblies());
+        while (pending.TryPop(out var name))
+        {
+            if (!seen.Add(name.Name!)) continue;
+            if (forbidden.Contains(name.Name)) reached.Add(name.Name!);
+            else if (name.Name!.StartsWith("Sts2Ai.", StringComparison.Ordinal))
+                foreach (var r in Assembly.Load(name).GetReferencedAssemblies()) pending.Push(r);
+        }
+        return reached;
     }
 
     private static (string Observation, string DrawOrder) DeterminizeAt(Pump pump, CombatSnapshot snapshot, ulong seed)
     {
         using var session = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0)));
         session.Determinize(seed);
-        return (Observation.Of(session).ToJsonString(), DrawOrder(session));
+        return (Json(session), DrawOrder(session));
     }
 
     private static string DrawOrder(CombatSession session) =>
-        string.Join("\n", session.Player.PlayerCombatState!.DrawPile.Cards.Select(Observation.CardKey));
+        string.Join("\n", session.Player.PlayerCombatState!.DrawPile.Cards.Select(Observe.CardKey));
 
     /// <summary>State the observation leaves out: draw order, every RNG stream's position, each monster's queued move.</summary>
     private static string Hidden(CombatSession session)
@@ -165,9 +207,9 @@ internal static class SelfTest
             if (session.State.HittableEnemies.Count < 2) continue;
 
             int before = HeadlessPatches.RollingBoulderSplits;
-            var rng = new Random(0);
+            var policy = new PlayPolicy(new Random(0));
             while (!session.IsOver && session.State.RoundNumber <= 3)
-                session.Execute(Cli.Choose("play", session.LegalActions(), rng));
+                session.Execute(policy.Choose(Cli.Decision(session)));
             var errors = HeadlessGame.TakeErrors();
             check("rolling boulder hits one by one", HeadlessPatches.RollingBoulderSplits > before && errors.Count == 0,
                 $"{encounter.Id.Entry}: splits {HeadlessPatches.RollingBoulderSplits - before}, errors {errors.FirstOrDefault()}");

@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Runtime.Loader;
 
-namespace Sts2Ai.Headless;
+namespace Sts2Ai.SimWorker;
 
 internal static class Program
 {

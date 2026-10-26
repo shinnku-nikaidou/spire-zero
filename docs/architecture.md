@@ -4,7 +4,7 @@ STS2 AI 是一个《杀戮尖塔 2》mod，有两种用法：辅助（高亮出�
 策略从零自我迭代，不照搬人的打法。
 
 **状态**：讨论稿，2026-10-26，游戏版本 v0.111.0。
-目前只实现了无头模拟器（[`src/Sts2Ai.Headless`](../src/Sts2Ai.Headless)）里的单场战斗，其余都是设计。
+已有：协议、GameBridge、占位策略，和无头模拟器（[`src/Sts2Ai.SimWorker`](../src/Sts2Ai.SimWorker)）里的单场战斗。其余都是设计。
 每节标题后面注明了"已有"还是"计划"。
 
 ## 决定架构的四条约束
@@ -55,7 +55,7 @@ flowchart TB
 ```
 
 - **游戏进程里只有 mod**：观测、执行、画 UI，不做决策。和决策进程之间只传 JSON（观测、合法动作、推荐），不传游戏对象。
-- **决策进程不引用 `sts2.dll`**，拿不到任何游戏对象。"不作弊"由项目引用在编译期保证，不靠自觉（见 §6.2）。
+- **决策进程不引用 `sts2.dll`**，拿不到任何游戏对象。"不作弊"由项目引用在编译期保证，不靠自觉（见 §6.1）。
 - **模拟器只能多进程**：游戏把局和战斗挂在进程级单例上（`RunManager`、`CombatManager`），一个进程同一时刻只能有一场活着的战斗。
   这条限制刚好和上一条对齐：决策进程本来就不该加载游戏，搜索只能通过 IPC 交给 worker。
 - **离线管线和决策进程物理隔离**：训练时可以看隐藏状态（oracle 标签），部署的策略不行。
@@ -85,7 +85,7 @@ flowchart LR
 
 自我对弈时，"真游戏 + Mod"换成"真 DLL 整局 worker"，Harness、决策脑和协议都不变。
 读游戏、列合法动作、执行动作的那层（GameBridge，见 §6.2）是同一份代码，分别编进 mod 和 worker。
-语义动作形如 `play:<card_uid>:<target_uid>`、`end_turn`、`map:<col>,<row>`。
+语义动作形如 `play:<card_uid>:<target_uid>`、`end_turn`、`map:<col>,<row>`（战斗部分已有，见 §6.1）。
 
 每个里程碑都沿着这条线跑四级评测，分开报告：
 
@@ -190,46 +190,59 @@ flowchart TB
 
 ### 6.1 现在（已有）
 
-```mermaid
-flowchart TB
-    Program["Program<br/>GameAssemblies<br/>从快照目录加载游戏 DLL"] --> Cli
-    Cli["Cli<br/>list · combat · bench<br/>占位策略"]
-    Cli --> HG["HeadlessGame.Boot<br/>TestMode · ModelDb<br/>Instant 模式"]
-    Cli --> SelfTest["SelfTest"]
-    Cli --> ForkBench["ForkBench"]
-    HG --> Stub["GodotNativeStub<br/>Godot native 函数表<br/>全部填成空桩"]
-    HG --> Patches["HeadlessPatches<br/>引擎/OS · 本地化 · 日志<br/>存档 · 规则保真<br/>提速 · 选牌"]
-    HG -.-> Probe["Probe<br/>临时性能诊断"]
-    Cli --> CS
-    SelfTest --> CS
-    ForkBench --> CS
-    CS["CombatSession<br/>Start · Restore · Snapshot<br/>LegalActions · Execute<br/>Determinize"]
-    CS --> Pump["Pump<br/>单线程<br/>SynchronizationContext"]
-    CS --> PS["PolicySelector<br/>游戏的选牌提示<br/>转给 IChoicePolicy<br/>记录和回放选择"]
-    CS --> LO["Loadout<br/>牌组 · 遗物 · 药水 · 血量"]
-    Obs["Observation<br/>白名单 JSON"] -->|"读"| CS
-    CS --> DLL[("sts2.dll<br/>tmp/gamebin/v0.111.0")]
-```
-
-所有东西都在一个项目里，直接引用游戏程序集。公平边界目前只靠约定：`Observation` 是唯一面向大脑的视图，但没有东西阻止别的代码直接读游戏对象。
-
-### 6.2 目标拆分（提议）
-
-实线是项目引用，虚线是运行时 IPC。
+箭头是项目引用。
 
 ```mermaid
 flowchart LR
-    Protocol["Sts2Ai.Protocol<br/>Observation · Action<br/>Recommendation<br/>不引用游戏"]
-    Bridge["Sts2Ai.GameBridge<br/>白名单序列化<br/>合法动作 · 执行<br/>从观测构造状态"]
-    Sim["Sts2Ai.SimWorker<br/>无头启动 · 回放分叉<br/>IPC 服务端"]
+    Protocol["Sts2Ai.Protocol<br/>CombatObservation<br/>CombatAction<br/>CardChoice · JSON<br/>只引用框架"]
+    Bridge["Sts2Ai.GameBridge<br/>Observe<br/>CombatActions<br/>CardChoices"]
+    Brain["Sts2Ai.Brain<br/>策略接口<br/>占位策略 play · random"]
+    Sim["Sts2Ai.SimWorker<br/>无头启动 · 补丁 · Pump<br/>CombatSession<br/>回放分叉 · 确定化<br/>CLI · selftest · bench"]
+    DLL[("sts2.dll<br/>tmp/gamebin/v0.111.0")]
+
+    Bridge --> Protocol
+    Bridge --> DLL
+    Brain --> Protocol
+    Sim --> Bridge
+    Sim --> Brain
+    Sim --> DLL
+```
+
+- **构建**：解决方案是根目录的 `Sts2Ai.sln`。共用设置在 `src/Directory.Build.props`；游戏程序集的引用在 `src/GameReferences.props`，只有 GameBridge 和 SimWorker 导入。
+- **公平边界由编译后的引用强制**：
+  - selftest 沿程序集引用往下查，Brain 和 Protocol 不能碰到 `sts2`、`GodotSharp`、`0Harmony`、`SmartFormat`、GameBridge 或 SimWorker。
+  - GameBridge 做阴性对照：同一个检查必须能在它身上查到 `sts2`，证明检查本身有效。
+- **SimWorker 在进程内宿主 Brain**：基准、selftest 和以后的自我对弈不走 IPC，Brain 仍然只看到协议类型。
+- **语义 id**：
+  - 手牌的 uid 是游戏的 `NetCombatCardDb` 编号，也就是联机消息用的那套；生物的 uid 是 `Creature.CombatId`。
+  - 只有手牌和生物有 uid。游戏在开局洗牌之后才按抽牌堆顺序编号，抽牌堆里一张牌的编号就是它的位置，所以抽牌堆、弃牌堆、消耗堆的牌都不带 uid。
+  - 动作的文本形式是 `play:<card_uid>[:<target_uid>]`、`potion:<slot>[:<target_uid>]`、`end_turn`，JSON 里也用这个字符串。
+  - 轨迹按 uid 记录，回放仍然确定，因为编号的分配本身是确定的。
+- **选牌提示**：
+  - 选项按 card key（不带 uid 的序列化）排成规范顺序再交给 `IChoicePolicy`，不用游戏给的顺序，因为它可能反映抽牌堆顺序。
+  - 完全相同的牌之间的先后，用和隐藏状态无关的种子打乱。
+  - 轨迹里记的是游戏自己的下标。
+- **执行和等待分开**：`CombatActions.Start` 走 UI 的同一个入口（`TryManualPlay`、`EnqueueManualUse`、`EndPlayerTurnAction`），等游戏结算由宿主负责：worker 用 `Pump`，mod 以后等帧。
+- **成本**：拆分后占位基准（act 1 弱/普通战，200 场，单核）猎手 6.7 ms/场，铁甲 5.6 ms/场；拆分前是 6.3 和 5.5。
+
+### 6.2 目标（计划）
+
+实线是项目引用，虚线是运行时调用（进程内或 IPC）。
+
+```mermaid
+flowchart LR
+    Protocol["Sts2Ai.Protocol"]
+    Bridge["Sts2Ai.GameBridge<br/>+ 从观测构造状态"]
+    Sim["Sts2Ai.SimWorker<br/>+ 模拟器接口服务端"]
     Mod["Sts2Ai.Mod<br/>观测器 · 执行器 · UI"]
-    Brain["Sts2Ai.Brain<br/>Harness · 搜索 · 估值"]
+    Brain["Sts2Ai.Brain<br/>+ Harness · 搜索 · 估值"]
     Train["Sts2Ai.Training<br/>自我对弈 · 拟合 · 门禁"]
     DLL[("sts2.dll")]
 
     Bridge --> Protocol
     Bridge --> DLL
     Sim --> Bridge
+    Sim --> Brain
     Mod --> Bridge
     Brain --> Protocol
     Train --> Brain
@@ -239,21 +252,22 @@ flowchart LR
     Train -.-> Sim
 ```
 
-规则：**`Brain` 到 `sts2.dll` 没有任何引用路径**，加一个测试检查程序集引用。
-执行也可以共用：现在的 `CombatSession.Execute` 走的就是 UI 拖牌的同一个入口（`TryManualPlay`），mod 和 worker 用同一套。
+- Brain 的搜索通过一个只用协议类型的模拟器接口调用模拟器。自我对弈时是进程内实现；实盘时是到 worker 进程的 IPC，决策进程本身不加载 `sts2.dll`（§1）。
+- Mod 和 worker 共用 GameBridge：同一个序列化器、同一份合法动作、同一个执行入口。
 
 ## 7. 已知缺口
 
 1. **没有"从观测构造模拟器状态"**。现在的分叉只能从 Setup + Trace 回放，世界是模拟器时成立。
    实盘（R4）没有真实轨迹，也不该有，需要按观测和信念采样直接构造战斗。
+   构造出来的手牌和生物还得用和真机相同的 uid（`NetCombatCardDb` 有测试用的编号入口），否则推荐的动作在真机上对不上号。
    往返测试 `Observation → Determinize → sim state → Observation'` 依赖它。M2 之前要补。
 2. **`Determinize` 不重采样怪物已排好的下一招**（`NextMove`），只重置以后的随机流。
    同一个意图可能对应不同招式（比如 Fogmog），所以这里还漏真信息。要换成"意图 + 招式历史 → 状态机后验"采样。
 3. **已知位置的抽牌堆牌没有建模**：刚放到牌堆顶的牌也会被洗乱。这是信息丢失（偏弱），不是作弊。
-4. **动作用下标**（`HandIndex`、`EnemyIndex`），协议要求语义 id（`play:<card_uid>:<target_uid>`）。
-5. **只有战斗，没有整局**：地图、奖励、商店、事件、篝火还不能跑。
+4. **只有战斗，没有整局**：地图、奖励、商店、事件、篝火还不能跑。
    世界设置用的是 `UnlockState.all` 和默认 act 列表，和真机不一致（真机要用真实解锁和 lobby 的 act-1 抽选）。
-6. **单项目**：公平边界还没有被项目引用强制（§6.2）。`Probe.cs` 是临时诊断代码，分析完要删。
+5. **选牌提示没有上下文**：`CardChoice` 只有选项和数量，不知道是谁在要、选了做什么（弃牌、消耗、放回牌堆顶……）。
+   占位策略用不着；搜索在模拟器里分支时上下文是隐含的；但实盘直接回答提示时需要。
 
 ## 相关文档
 

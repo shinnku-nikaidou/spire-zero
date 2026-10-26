@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-namespace Sts2Ai.Headless;
+namespace Sts2Ai.SimWorker;
 
 /// <summary>
 /// GodotSharp reaches the engine through a table of native function pointers that the engine fills at startup.

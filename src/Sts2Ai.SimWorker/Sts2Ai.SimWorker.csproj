@@ -1,16 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Runs the real sts2.dll in plain .NET, without the Godot engine.
-    The game assemblies come from a read-only snapshot (tmp/gamebin/<version>) and are not copied to bin/;
-    GameAssemblies resolves them from Sts2BinDir at run time (override with STS2_BIN_DIR).
+    Runs the real sts2.dll in plain .NET, without the Godot engine: combats for benchmarks, tests, search and
+    self-play. Hosts the brain in-process; the brain still sees only protocol types.
   -->
+  <Import Project="../GameReferences.props" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <RootNamespace>Sts2Ai.Headless</RootNamespace>
     <!--
       No tiered compilation: every method is compiled once, fully optimized.
       - Safety: with tiering, the runtime re-JITs hot methods in the background and a Harmony patch can silently
@@ -20,15 +17,12 @@
       fully optimized too, about 20% more combats/s.
     -->
     <TieredCompilation>false</TieredCompilation>
-    <Sts2BinDir Condition="'$(Sts2BinDir)' == ''">$(MSBuildThisFileDirectory)../../tmp/gamebin/v0.111.0</Sts2BinDir>
-    <Sts2BinDir>$([System.IO.Path]::GetFullPath('$(Sts2BinDir)'))</Sts2BinDir>
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="sts2"><HintPath>$(Sts2BinDir)/sts2.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="GodotSharp"><HintPath>$(Sts2BinDir)/GodotSharp.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>$(Sts2BinDir)/0Harmony.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="SmartFormat"><HintPath>$(Sts2BinDir)/SmartFormat.dll</HintPath><Private>false</Private></Reference>
+    <ProjectReference Include="../Sts2Ai.GameBridge/Sts2Ai.GameBridge.csproj" />
+    <ProjectReference Include="../Sts2Ai.Brain/Sts2Ai.Brain.csproj" />
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>Sts2BinDir</_Parameter1>
       <_Parameter2>$(Sts2BinDir)</_Parameter2>

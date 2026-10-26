@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Decides. Sees the game only through Sts2Ai.Protocol: no game assembly may be reachable from here, directly or
+    through another project (SimWorker's selftest checks the compiled references).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Sts2Ai.Protocol/Sts2Ai.Protocol.csproj" />
+  </ItemGroup>
+</Project>

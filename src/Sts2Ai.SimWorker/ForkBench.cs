@@ -1,6 +1,7 @@
 using System.Diagnostics;
+using Sts2Ai.Brain;
 
-namespace Sts2Ai.Headless;
+namespace Sts2Ai.SimWorker;
 
 /// <summary>
 /// What branching costs. Restoring is start-up plus replaying the trace, so it grows with depth. A search branch
@@ -26,7 +27,7 @@ internal static class ForkBench
             var snapshots = new List<CombatSnapshot>();
             var rng = new Random(seed * 1_000_003 + i);
             using (var session = CombatSession.Start(pump, setup, new RandomChoices(rng)))
-                Cli.PlayOut(session, "play", rng, s => snapshots.Add(s.Snapshot()));
+                Cli.PlayOut(session, new PlayPolicy(rng), s => snapshots.Add(s.Snapshot()));
 
             // Up to 12 depths per combat, spread over the whole trace.
             int step = Math.Max(1, snapshots.Count / 12);
@@ -46,7 +47,7 @@ internal static class ForkBench
                 using (var branch = CombatSession.Restore(pump, root, new RandomChoices(branchRng)))
                 {
                     branch.Determinize((ulong)b + 1);
-                    Cli.PlayOut(branch, "play", branchRng);
+                    Cli.PlayOut(branch, new PlayPolicy(branchRng));
                     rolloutSteps += branch.ActionsExecuted - rootDepth;
                 }
                 branchMs.Add(clock.Elapsed.TotalMilliseconds);

@@ -19,7 +19,7 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.TestSupport;
 
-namespace Sts2Ai.Headless;
+namespace Sts2Ai.SimWorker;
 
 /// <summary>
 /// Harmony patches that let the game's model layer run without the engine. Each patch replaces a call that
@@ -33,7 +33,7 @@ internal static class HeadlessPatches
     /// <summary>How many times a Rolling Boulder hit was split into one hit per enemy (checked by selftest).</summary>
     public static int RollingBoulderSplits;
 
-    public static void Apply() => new Harmony("sts2ai.headless").PatchAll(typeof(HeadlessPatches).Assembly);
+    public static void Apply() => new Harmony("sts2ai.simworker").PatchAll(typeof(HeadlessPatches).Assembly);
 
     // ---- engine and OS ----
 

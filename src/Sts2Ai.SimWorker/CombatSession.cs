@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Entities.Rngs;
 using MegaCrit.Sts2.Core.GameActions;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer;
@@ -14,26 +15,11 @@ using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Unlocks;
+using Sts2Ai.Brain;
+using Sts2Ai.GameBridge;
+using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Headless;
-
-internal enum CombatActionKind { PlayCard, UsePotion, EndTurn }
-
-/// <summary>
-/// One legal player action. Targets are indexes into the combat's enemy or ally list at the time the
-/// action was listed; actions are only valid until the next one executes.
-/// </summary>
-internal readonly record struct CombatAction(CombatActionKind Kind, int HandIndex = -1, int PotionSlot = -1, int EnemyIndex = -1, int AllyIndex = -1)
-{
-    public override string ToString() => Kind switch
-    {
-        CombatActionKind.PlayCard => $"play:{HandIndex}{TargetSuffix}",
-        CombatActionKind.UsePotion => $"potion:{PotionSlot}{TargetSuffix}",
-        _ => "end_turn",
-    };
-
-    private string TargetSuffix => EnemyIndex >= 0 ? $":e{EnemyIndex}" : AllyIndex >= 0 ? $":a{AllyIndex}" : "";
-}
+namespace Sts2Ai.SimWorker;
 
 internal enum CombatOutcome { InProgress, Win, Loss, Truncated }
 
@@ -168,97 +154,18 @@ internal sealed class CombatSession : IDisposable
         }
     }
 
-    public bool WaitingForInput
-    {
-        get
-        {
-            var st = CombatManager.Instance.DebugOnlyGetState();
-            var pcs = Player.PlayerCombatState;
-            return st != null && pcs != null && CombatManager.Instance.IsInProgress
-                && st.CurrentSide == CombatSide.Player && pcs.Phase == PlayerTurnPhase.Play
-                && !RunManager.Instance.ActionExecutor.IsRunning && !CombatManager.Instance.PlayerActionsDisabled;
-        }
-    }
+    public bool WaitingForInput => CombatActions.WaitingForInput(Player);
 
-    public List<CombatAction> LegalActions()
-    {
-        var actions = new List<CombatAction>();
-        var st = State;
-        var hand = Pcs.Hand.Cards;
-        for (int i = 0; i < hand.Count; i++)
-        {
-            var card = hand[i];
-            // CanPlayTargeting(t) is IsValidTarget(t) && CanPlay(), and CanPlay runs four hook dispatches, so
-            // check it once per card rather than once per target.
-            if (!card.CanPlay()) continue;
-            switch (card.TargetType)
-            {
-                case TargetType.AnyEnemy:
-                    for (int e = 0; e < st.Enemies.Count; e++)
-                        if (card.IsValidTarget(st.Enemies[e])) actions.Add(new(CombatActionKind.PlayCard, HandIndex: i, EnemyIndex: e));
-                    break;
-                case TargetType.AnyAlly:
-                    for (int a = 0; a < st.Allies.Count; a++)
-                        if (card.IsValidTarget(st.Allies[a])) actions.Add(new(CombatActionKind.PlayCard, HandIndex: i, AllyIndex: a));
-                    break;
-                default:
-                    if (card.IsValidTarget(null)) actions.Add(new(CombatActionKind.PlayCard, HandIndex: i));
-                    break;
-            }
-        }
+    public List<CombatAction> LegalActions() => CombatActions.Legal(State, Player);
 
-        if (Player.CanUseOrRemovePotions)
-        {
-            for (int s = 0; s < Player.PotionSlots.Count; s++)
-            {
-                var potion = Player.PotionSlots[s];
-                if (potion == null || potion.IsQueued || !potion.PassesCustomUsabilityCheck) continue;
-                if (potion.Usage is not (PotionUsage.CombatOnly or PotionUsage.AnyTime)) continue;
-                switch (potion.TargetType)
-                {
-                    case TargetType.AnyEnemy:
-                        for (int e = 0; e < st.Enemies.Count; e++)
-                            if (st.Enemies[e].IsAlive && potion.IsValidTarget(st.Enemies[e])) actions.Add(new(CombatActionKind.UsePotion, PotionSlot: s, EnemyIndex: e));
-                        break;
-                    case TargetType.AnyAlly:
-                        for (int a = 0; a < st.Allies.Count; a++)
-                            if (potion.IsValidTarget(st.Allies[a])) actions.Add(new(CombatActionKind.UsePotion, PotionSlot: s, AllyIndex: a));
-                        break;
-                    default:
-                        if (potion.IsValidTarget(null) || potion.IsValidTarget(Player.Creature)) actions.Add(new(CombatActionKind.UsePotion, PotionSlot: s));
-                        break;
-                }
-            }
-        }
-
-        actions.Add(new(CombatActionKind.EndTurn));
-        return actions;
-    }
+    public CombatObservation Observation() => Observe.Combat(State, Player);
 
     public void Execute(CombatAction action)
     {
         _trace.Add(new(TraceKind.Action, action));
         int turn = Pcs.TurnNumber;
-        switch (action.Kind)
-        {
-            case CombatActionKind.PlayCard:
-            {
-                var card = Pcs.Hand.Cards[action.HandIndex];
-                // Same entry point as dragging a card in the UI: it validates targeting, then enqueues PlayCardAction.
-                if (!card.TryManualPlay(Target(action)))
-                    throw new InvalidOperationException($"illegal play {action} ({card.Id.Entry})");
-                Settle();
-                break;
-            }
-            case CombatActionKind.UsePotion:
-                Player.PotionSlots[action.PotionSlot]!.EnqueueManualUse(Target(action));
-                Settle();
-                break;
-            case CombatActionKind.EndTurn:
-                RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(new EndPlayerTurnAction(Player, turn));
-                Settle(afterTurn: turn);
-                break;
-        }
+        CombatActions.Start(State, Player, action);
+        Settle(afterTurn: action.Kind == CombatActionKind.EndTurn ? turn : null);
         ActionsExecuted++;
     }
 
@@ -281,7 +188,7 @@ internal sealed class CombatSession : IDisposable
 
         // The real order is hidden, so start from an order that depends only on what the player can see.
         var draw = Pcs.DrawPile;
-        var cards = draw.Cards.OrderBy(Observation.CardKey, StringComparer.Ordinal).ToList();
+        var cards = draw.Cards.OrderBy(Observe.CardKey, StringComparer.Ordinal).ToList();
         for (int i = cards.Count - 1; i > 0; i--)
         {
             int j = sample.NextInt(i + 1);
@@ -291,9 +198,6 @@ internal sealed class CombatSession : IDisposable
 
         static void Reseed(Rng rng, Rng sample) => rng.LoadFromSerializable(new Rng(sample.NextUnsignedLong()).ToSerializable());
     }
-
-    private Creature? Target(CombatAction a) =>
-        a.EnemyIndex >= 0 ? State.Enemies[a.EnemyIndex] : a.AllyIndex >= 0 ? State.Allies[a.AllyIndex] : null;
 
     /// <summary>Pumps until the player can act again (on a later turn, if given) or the combat has ended.</summary>
     private void Settle(int? afterTurn = null)
@@ -321,8 +225,10 @@ internal sealed class CombatSession : IDisposable
         var st = State;
         var pcs = Player.PlayerCombatState;
         var me = Player.Creature;
-        var enemies = string.Join(" ", st.Enemies.Select((e, i) => $"e{i}:{e.Monster?.Id.Entry}({e.CurrentHp}/{e.MaxHp}{(e.Block > 0 ? $" b{e.Block}" : "")})"));
-        var hand = pcs == null ? "" : string.Join(" ", pcs.Hand.Cards.Select(c => c.Id.Entry + (c.CurrentUpgradeLevel > 0 ? "+" : "")));
+        // Uids as in actions: "play:7:2" plays card #7 at creature #2.
+        var enemies = string.Join(" ", st.Enemies.Select(e => $"#{e.CombatId}:{e.Monster?.Id.Entry}({e.CurrentHp}/{e.MaxHp}{(e.Block > 0 ? $" b{e.Block}" : "")})"));
+        var hand = pcs == null ? "" : string.Join(" ", pcs.Hand.Cards.Select(c =>
+            $"#{NetCombatCardDb.Instance.GetCardId(c)}:{c.Id.Entry}{(c.CurrentUpgradeLevel > 0 ? "+" : "")}"));
         return $"round {st.RoundNumber} hp {me.CurrentHp}/{me.MaxHp} block {me.Block} energy {pcs?.Energy} | {enemies} | hand [{hand}]";
     }
 

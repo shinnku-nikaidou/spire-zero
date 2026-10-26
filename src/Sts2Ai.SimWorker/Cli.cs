@@ -2,8 +2,10 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using MegaCrit.Sts2.Core.Models;
+using Sts2Ai.Brain;
+using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Headless;
+namespace Sts2Ai.SimWorker;
 
 /// <summary>
 /// Command line:
@@ -16,7 +18,7 @@ namespace Sts2Ai.Headless;
 ///                                          checks determinism, restore and determinize over an encounter pool
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
-/// Loadout options for every command that runs combats: [--character IRONCLAD] [--deck A*5,B+,...]
+/// Loadout options for every command that runs combats: [--character SILENT] [--deck A*5,B+,...]
 /// [--relics A,B] [--potions A,B] [--hp N] [--max-hp N]. Omitted parts keep the character's starting values.
 /// </summary>
 internal static class Cli
@@ -72,15 +74,15 @@ internal static class Cli
         int act = Enumerable.Range(0, ModelDb.ActsByIndex.Count).FirstOrDefault(i => ModelDb.ActsByIndex[i].Any(a => a.AllEncounters.Contains(encounter)));
         var setup = Setup(opts, encounter, act, MakeSeed(seed, 0));
         var rng = new Random(seed);
-        var policy = opts.GetValueOrDefault("policy", "play");
+        var policy = Policies.Combat(opts.GetValueOrDefault("policy", "play"), rng);
 
         Console.WriteLine($"{encounter.Id.Entry} act {act} seed {setup.Seed}");
         using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
         while (!session.IsOver && session.State.RoundNumber <= MaxRounds && session.ActionsExecuted < MaxActions)
         {
             Console.WriteLine("  " + session.Summary());
-            if (opts.ContainsKey("obs")) Console.WriteLine("  " + Observation.Of(session).ToJsonString());
-            var action = Choose(policy, session.LegalActions(), rng);
+            if (opts.ContainsKey("obs")) Console.WriteLine("  " + ProtocolJson.Serialize(session.Observation()));
+            var action = policy.Choose(Decision(session));
             Console.WriteLine($"    -> {action}");
             session.Execute(action);
         }
@@ -96,6 +98,7 @@ internal static class Cli
         int start = Int(opts, "start", 0);
         int seed = Int(opts, "seed", 1);
         var policy = opts.GetValueOrDefault("policy", "play");
+        if (!Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (one of {string.Join(", ", Policies.CombatNames)})");
         var (act, rooms, pool) = Pool(opts);
         if (pool.Count == 0) return Fail("empty encounter pool");
 
@@ -123,7 +126,7 @@ internal static class Cli
             {
                 using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
                 startMs = (clock.Elapsed - started).TotalMilliseconds;
-                PlayOut(session, policy, rng);
+                PlayOut(session, Policies.Combat(policy, rng));
                 outcome = session.IsOver ? session.Outcome.ToString() : CombatOutcome.Truncated.ToString();
                 steps = session.ActionsExecuted;
                 rounds = session.State.RoundNumber;
@@ -168,34 +171,22 @@ internal static class Cli
     }
 
     /// <summary>Plays until the combat ends or hits the round/action cap. Calls <paramref name="beforeAction"/> before each action.</summary>
-    public static void PlayOut(CombatSession session, string policy, Random rng, Action<CombatSession>? beforeAction = null)
+    public static void PlayOut(CombatSession session, ICombatPolicy policy, Action<CombatSession>? beforeAction = null)
     {
         while (!session.IsOver && session.State.RoundNumber <= MaxRounds && session.ActionsExecuted < MaxActions)
         {
             beforeAction?.Invoke(session);
-            session.Execute(Choose(policy, session.LegalActions(), rng));
+            session.Execute(policy.Choose(Decision(session)));
         }
     }
 
-    /// <summary>
-    /// Placeholder policies until the brain exists. "random" is uniform over legal actions (it ends turns
-    /// early a lot); "play" keeps playing random cards and only ends the turn when nothing else is legal.
-    /// </summary>
-    public static CombatAction Choose(string policy, List<CombatAction> legal, Random rng)
-    {
-        if (policy == "random") return legal[rng.Next(legal.Count)];
-        var plays = legal.Where(a => a.Kind == CombatActionKind.PlayCard).ToList();
-        if (plays.Count > 0) return plays[rng.Next(plays.Count)];
-        var potions = legal.Where(a => a.Kind == CombatActionKind.UsePotion).ToList();
-        if (potions.Count > 0 && rng.Next(4) == 0) return potions[rng.Next(potions.Count)];
-        return legal.First(a => a.Kind == CombatActionKind.EndTurn);
-    }
+    public static CombatDecision Decision(CombatSession session) => new(session.LegalActions(), session.Observation);
 
     public static CombatSetup Setup(Dictionary<string, string> opts, EncounterModel encounter, int act, string seed)
     {
         var loadout = Loadout.Parse(opts.GetValueOrDefault("deck"), opts.GetValueOrDefault("relics"), opts.GetValueOrDefault("potions"),
             opts.GetValueOrDefault("hp"), opts.GetValueOrDefault("max-hp"));
-        return new CombatSetup(opts.GetValueOrDefault("character", "IRONCLAD"), encounter, act, seed, Loadout: loadout);
+        return new CombatSetup(opts.GetValueOrDefault("character", "SILENT"), encounter, act, seed, Loadout: loadout);
     }
 
     /// <summary>The encounters of one act's room kinds (--act, --rooms), or just --encounter if given.</summary>

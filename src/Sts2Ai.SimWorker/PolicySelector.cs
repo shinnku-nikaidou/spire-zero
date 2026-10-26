@@ -2,30 +2,16 @@ using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.TestSupport;
+using Sts2Ai.Brain;
+using Sts2Ai.GameBridge;
 
-namespace Sts2Ai.Headless;
-
-/// <summary>Decides the card-choice prompts that come up while a card or power resolves.</summary>
-internal interface IChoicePolicy
-{
-    /// <summary>Indexes into <paramref name="options"/> of the cards to select; between min and max of them.</summary>
-    IReadOnlyList<int> ChooseCards(IReadOnlyList<CardModel> options, int min, int max);
-}
-
-/// <summary>Uniformly random legal selection. Placeholder until the brain answers these too.</summary>
-internal sealed class RandomChoices(Random rng) : IChoicePolicy
-{
-    public IReadOnlyList<int> ChooseCards(IReadOnlyList<CardModel> options, int min, int max)
-    {
-        int count = min == max ? min : rng.Next(min, max + 1);
-        return Enumerable.Range(0, options.Count).OrderBy(_ => rng.Next()).Take(count).ToList();
-    }
-}
+namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// Answers the game's card-choice prompts (discard X, exhaust X, choose 1 of 3, ...). Each answer is recorded so
-/// a combat can be replayed exactly; when replaying, the recorded answers are given back in order before the live
-/// policy is asked again.
+/// Answers the game's card-choice prompts (discard X, exhaust X, choose 1 of 3, ...) by asking an
+/// <see cref="IChoicePolicy"/>, which sees the options in canonical order (<see cref="CardChoices.Canonical"/>).
+/// Each answer is recorded as indexes into the game's own list, so a combat can be replayed exactly; when
+/// replaying, the recorded answers are given back in order before the live policy is asked again.
 /// </summary>
 internal sealed class PolicySelector(IChoicePolicy policy, Action<int[]> record) : ICardSelector
 {
@@ -44,13 +30,23 @@ internal sealed class PolicySelector(IChoicePolicy policy, Action<int[]> record)
 
     public Task<IEnumerable<CardModel>> GetSelectedCards(IEnumerable<CardModel> options, int minSelect, int maxSelect)
     {
-        Prompts++;
+        int prompt = Prompts++;
         var cards = options.ToList();
         int max = Math.Min(maxSelect, cards.Count);
         int min = Math.Min(MustPickOne ? Math.Max(minSelect, 1) : minSelect, max);
-        var picks = _replay.Count > 0 ? _replay.Dequeue() : policy.ChooseCards(cards, min, max).ToArray();
+        int[] picks;
+        if (_replay.Count > 0) picks = _replay.Dequeue();
+        else
+        {
+            // The tie-break only has to be unrelated to the hidden state, and the same on replay.
+            var (choice, gameIndex) = CardChoices.Canonical(cards, min, max, new Random(prompt));
+            var answer = policy.Choose(choice);
+            if (!choice.Accepts(answer))
+                throw new InvalidOperationException($"bad card choice [{string.Join(",", answer)}] for {cards.Count} options, select {min}..{max}");
+            picks = answer.Select(i => gameIndex[i]).ToArray();
+        }
         if (picks.Length < min || picks.Length > max || picks.Distinct().Count() != picks.Length || picks.Any(i => i < 0 || i >= cards.Count))
-            throw new InvalidOperationException($"bad card choice [{string.Join(",", picks)}] for {cards.Count} options, select {min}..{max}");
+            throw new InvalidOperationException($"replayed card choice [{string.Join(",", picks)}] does not fit {cards.Count} options, select {min}..{max}");
         record(picks);
         return Task.FromResult<IEnumerable<CardModel>>(picks.Select(i => cards[i]).ToList());
     }

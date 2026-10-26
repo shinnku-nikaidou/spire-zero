@@ -1,0 +1,23 @@
+using MegaCrit.Sts2.Core.Models;
+using Sts2Ai.Protocol;
+
+namespace Sts2Ai.GameBridge;
+
+/// <summary>Turns the game's card-choice prompts into the protocol's canonical <see cref="CardChoice"/> and back.</summary>
+public static class CardChoices
+{
+    /// <summary>
+    /// The prompt with its options sorted by card key, and for each canonical index the index into the game's list.
+    /// Identical cards are indistinguishable to the player, but which copy is taken can still matter (two equal
+    /// cards at different depths of the draw pile), so ties are put in an order drawn from <paramref name="tieBreak"/>
+    /// rather than the game's order.
+    /// </summary>
+    public static (CardChoice Choice, int[] GameIndex) Canonical(IReadOnlyList<CardModel> options, int min, int max, Random tieBreak)
+    {
+        var sorted = options
+            .Select((card, index) => (View: Observe.Card(card), Index: index, Tie: tieBreak.Next()))
+            .OrderBy(o => ProtocolJson.CardKey(o.View), StringComparer.Ordinal).ThenBy(o => o.Tie)
+            .ToList();
+        return (new CardChoice { Options = sorted.Select(o => o.View).ToList(), Min = min, Max = max }, sorted.Select(o => o.Index).ToArray());
+    }
+}

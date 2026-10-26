@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Sts2Ai.Headless;
+namespace Sts2Ai.SimWorker;
 
 /// <summary>
 /// Single-threaded SynchronizationContext. The game's async code (actions, hooks, commands) posts its

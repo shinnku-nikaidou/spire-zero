@@ -1,0 +1,18 @@
+<Project>
+  <!--
+    The game's assemblies, for the projects that may touch the game (GameBridge, SimWorker, later the mod).
+    Brain and Protocol must never import this: the brain sees the game only through the protocol.
+    The assemblies come from a read-only snapshot (tmp/gamebin/<version>) and are not copied to bin/:
+    SimWorker resolves them from Sts2BinDir at run time (override with STS2_BIN_DIR), and the mod runs inside the game.
+  -->
+  <PropertyGroup>
+    <Sts2BinDir Condition="'$(Sts2BinDir)' == ''">$(MSBuildThisFileDirectory)../tmp/gamebin/v0.111.0</Sts2BinDir>
+    <Sts2BinDir>$([System.IO.Path]::GetFullPath('$(Sts2BinDir)'))</Sts2BinDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="sts2"><HintPath>$(Sts2BinDir)/sts2.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="GodotSharp"><HintPath>$(Sts2BinDir)/GodotSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SmartFormat"><HintPath>$(Sts2BinDir)/SmartFormat.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
