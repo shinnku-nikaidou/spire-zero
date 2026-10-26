@@ -16,6 +16,8 @@ namespace Sts2Ai.SimWorker;
 ///  - restore: rebuilding a snapshot by replay gives exactly the observation recorded at that point;
 ///  - determinize: resampling hidden information leaves the observation unchanged, replays exactly, and the
 ///    combat plays on from there;
+///  - build: a combat built from a recorded observation shows exactly that observation, uids included, restores
+///    by replay, and plays on;
 ///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
 ///  - protocol: observations and actions survive a round trip through their wire form, and the brain's assemblies
@@ -85,10 +87,14 @@ internal static class SelfTest
                     }
 
                     var determinized = snapshot with { Trace = [.. snapshot.Trace, new TraceEvent(TraceKind.Determinize, Seed: 11)] };
-                    using var replayed = CombatSession.Restore(pump, determinized, new RandomChoices(new Random(k)));
-                    Check("determinize replays", DrawOrder(replayed) == orderA, at);
-                    Cli.PlayOut(replayed, new PlayPolicy(new Random(k)));
-                    Check("plays on after determinize", replayed.ActionsExecuted >= snapshot.Trace.Count(e => e.Kind == TraceKind.Action), at);
+                    using (var replayed = CombatSession.Restore(pump, determinized, new RandomChoices(new Random(k))))
+                    {
+                        Check("determinize replays", DrawOrder(replayed) == orderA, at);
+                        Cli.PlayOut(replayed, new PlayPolicy(new Random(k)));
+                        Check("plays on after determinize", replayed.ActionsExecuted >= snapshot.Trace.Count(e => e.Kind == TraceKind.Action), at);
+                    }
+
+                    BuildFrom(pump, ProtocolJson.Deserialize<CombatObservation>(first.Observations[k]), Cli.MakeSeed(seed + 1, i * 3 + k), k, at, Check);
                 }
             }
             catch (Exception e)
@@ -106,6 +112,28 @@ internal static class SelfTest
         foreach (var (name, (pass, fail)) in results)
             Console.WriteLine($"  {(fail == 0 ? "ok  " : "FAIL")} {name}: {pass} passed, {fail} failed");
         return results.Values.Any(r => r.Fail > 0) ? 1 : 0;
+    }
+
+    /// <summary>
+    /// Builds <paramref name="obs"/>, plays a few actions, and rebuilds that point by replay. The built combat must
+    /// show the observation exactly; the replay must give the same visible and hidden state.
+    /// </summary>
+    private static void BuildFrom(Pump pump, CombatObservation obs, string seed, int k, string at, Action<string, bool, string> check)
+    {
+        CombatSnapshot snapshot;
+        string json, hidden;
+        using (var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, seed), new RandomChoices(new Random(k))))
+        {
+            check("build shows the observation", built.BuildDifferences.Count == 0, $"{at}: {string.Join("; ", built.BuildDifferences.Take(4))}");
+            var policy = new PlayPolicy(new Random(k));
+            for (int a = 0; a < 3 && !built.IsOver; a++) built.Execute(policy.Choose(Cli.Decision(built)));
+            snapshot = built.Snapshot();
+            (json, hidden) = (Json(built), Hidden(built));
+        }
+        using var restored = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0)));
+        check("built combat restores", Json(restored) == json && Hidden(restored) == hidden, at);
+        Cli.PlayOut(restored, new PlayPolicy(new Random(k)));
+        check("plays on after build", restored.IsOver || restored.State.RoundNumber > obs.Round, at);
     }
 
     private static Recording Record(Pump pump, CombatSetup setup, int rngSeed)

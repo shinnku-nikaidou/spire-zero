@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
+using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.GameBridge;
@@ -20,6 +21,9 @@ public static class Observe
         Creature[] targets = [me];
         return new CombatObservation
         {
+            Encounter = st.Encounter?.Id.Entry,
+            Act = st.RunState.CurrentActIndex,
+            Ascension = st.RunState.AscensionLevel,
             Round = st.RoundNumber,
             Player = new PlayerView
             {
@@ -85,10 +89,12 @@ public static class Observe
         MaxHp = c.MaxHp,
         Block = c.Block,
         Powers = Powers(c),
-        Intents = c.Monster is { } monster && c.IsAlive && c.Side != CombatSide.Player
-            ? monster.NextMove.Intents.Select(i => Intent(i, c, targets)).ToList()
-            : null,
+        Intents = c.Monster is { } monster && c.IsAlive && c.Side != CombatSide.Player ? Intents(monster.NextMove, c, targets) : null,
     };
+
+    /// <summary>The intents <paramref name="move"/> would show above <paramref name="owner"/>, aimed at <paramref name="targets"/>.</summary>
+    public static List<IntentView> Intents(MoveState move, Creature owner, Creature[] targets) =>
+        move.Intents.Select(i => Intent(i, owner, targets)).ToList();
 
     private static IntentView Intent(AbstractIntent intent, Creature owner, Creature[] targets) => intent is AttackIntent attack
         ? new IntentView { Type = intent.IntentType.ToString(), Damage = attack.GetSingleDamage(targets, owner), Hits = Math.Max(1, attack.Repeats) }

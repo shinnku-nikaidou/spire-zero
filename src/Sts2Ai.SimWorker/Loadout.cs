@@ -4,8 +4,11 @@ using MegaCrit.Sts2.Core.Saves.Runs;
 
 namespace Sts2Ai.SimWorker;
 
-/// <summary>A card in a loadout: its model id and upgrade count, written "BASH", "BASH+" or "BASH+2".</summary>
-internal readonly record struct CardSpec(string Id, int Upgrades = 0)
+/// <summary>
+/// A card in a loadout: its model id and upgrade count, written "BASH", "BASH+" or "BASH+2", and its enchantment
+/// if any (not available on the command line).
+/// </summary>
+internal readonly record struct CardSpec(string Id, int Upgrades = 0, string? Enchant = null, int EnchantAmount = 0)
 {
     public static CardSpec Parse(string text)
     {
@@ -15,7 +18,16 @@ internal readonly record struct CardSpec(string Id, int Upgrades = 0)
         return new(text[..plus], count.Length == 0 ? 1 : int.Parse(count));
     }
 
-    public override string ToString() => Upgrades switch { 0 => Id, 1 => Id + "+", _ => $"{Id}+{Upgrades}" };
+    public SerializableCard ToSerializable() => new()
+    {
+        Id = Models.Find<CardModel>(Id).Id,
+        CurrentUpgradeLevel = Upgrades,
+        Enchantment = Enchant == null ? null : new SerializableEnchantment { Id = Models.Find<EnchantmentModel>(Enchant).Id, Amount = EnchantAmount },
+        FloorAddedToDeck = 1,
+    };
+
+    public override string ToString() =>
+        Upgrades switch { 0 => Id, 1 => Id + "+", _ => $"{Id}+{Upgrades}" } + (Enchant == null ? "" : $" ({Enchant} {EnchantAmount})");
 }
 
 /// <summary>
@@ -53,29 +65,21 @@ internal sealed record Loadout(
         if (Deck != null)
         {
             foreach (var card in player.Deck.Cards.ToList()) player.Deck.RemoveInternal(card, silent: true);
-            foreach (var spec in Deck)
-            {
-                var save = new SerializableCard { Id = Find(ModelDb.AllCards, spec.Id, "card").Id, CurrentUpgradeLevel = spec.Upgrades, FloorAddedToDeck = 1 };
-                player.Deck.AddInternal(CardModel.FromSerializable(save), silent: true);
-            }
+            foreach (var spec in Deck) player.Deck.AddInternal(CardModel.FromSerializable(spec.ToSerializable()), silent: true);
         }
         if (Relics != null)
         {
             foreach (var relic in player.Relics.ToList()) player.RemoveRelicInternal(relic, silent: true);
-            foreach (var id in Relics) player.AddRelicInternal(Find(ModelDb.AllRelics, id, "relic").ToMutable(), silent: true);
+            foreach (var id in Relics) player.AddRelicInternal(Models.Find<RelicModel>(id).ToMutable(), silent: true);
         }
         if (Potions != null)
         {
             foreach (var potion in player.Potions.ToList()) player.DiscardPotionInternal(potion, silent: true);
             foreach (var id in Potions)
-                if (!player.AddPotionInternal(Find(ModelDb.AllPotions, id, "potion").ToMutable(), silent: true).success)
+                if (!player.AddPotionInternal(Models.Find<PotionModel>(id).ToMutable(), silent: true).success)
                     throw new ArgumentException($"no free potion slot for {id}");
         }
         if (MaxHp is int max) player.Creature.SetMaxHpInternal(max);
         if (Hp is int hp) player.Creature.SetCurrentHpInternal(Math.Min(hp, player.Creature.MaxHp));
     }
-
-    private static T Find<T>(IEnumerable<T> models, string id, string kind) where T : AbstractModel =>
-        models.FirstOrDefault(m => m.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase))
-        ?? throw new ArgumentException($"no {kind} {id}");
 }

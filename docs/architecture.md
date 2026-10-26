@@ -146,7 +146,7 @@ sequenceDiagram
         C->>G: 回放 Action / Choice / Determinize
     end
     S->>C: Determinize(search_seed)
-    Note over C,G: 重置全部 RunRng、PlayerRng 和怪物 Rng<br/>抽牌堆先按可见信息排序再洗
+    Note over C,G: 重置全部 RunRng、PlayerRng 和怪物 Rng<br/>抽牌堆先按可见信息排序再洗，手牌以外的牌重新编号<br/>怪物下一招在意图相同的招式里重抽
     loop 分支打到底
         S->>C: LegalActions()，然后 Execute(a)
         C->>G: 和 UI 拖牌同一个入口（TryManualPlay 等）
@@ -158,7 +158,9 @@ sequenceDiagram
 
 - **确定性**：游戏的所有随机都来自 run 的种子流；`Pump` 是单线程 `SynchronizationContext`，async 续延都在驱动线程上跑。同样的设置 + 轨迹，得到同样的状态。
 - **成本**（单核）：恢复 = 0.55 ms + 0.34 ms × 已走动作数，战斗中段约 5 ms；一次分支（恢复 + 确定化 + 占位策略打到底）中位数约 10 ms，约 100 分支/秒。
-- **自检**（`selftest`）：同种子逐步一致；恢复后观测和隐藏状态逐字节相同；确定化不改变观测、可以精确回放、能接着打到底。
+- **自检**（`selftest`）：
+  - 同种子逐步一致；恢复后观测和隐藏状态逐字节相同；确定化不改变观测、可以精确回放、能接着打到底。
+  - 从观测构造（§6.1）：构造出的战斗显示的观测和原观测完全相同；构造后的快照能精确恢复；能接着打到底。
 - **提速方向**：先用分析器找每个动作 0.34 ms 的热点，再考虑对象图深拷贝（省掉从开局回放）。
 
 ## 5. 自我迭代循环（计划）
@@ -197,7 +199,7 @@ flowchart LR
     Protocol["Sts2Ai.Protocol<br/>CombatObservation<br/>CombatAction<br/>CardChoice · JSON<br/>只引用框架"]
     Bridge["Sts2Ai.GameBridge<br/>Observe<br/>CombatActions<br/>CardChoices"]
     Brain["Sts2Ai.Brain<br/>策略接口<br/>占位策略 play · random"]
-    Sim["Sts2Ai.SimWorker<br/>无头启动 · 补丁 · Pump<br/>CombatSession<br/>回放分叉 · 确定化<br/>CLI · selftest · bench"]
+    Sim["Sts2Ai.SimWorker<br/>无头启动 · 补丁 · Pump<br/>CombatSession<br/>回放分叉 · 确定化<br/>CombatBuilder 从观测构造<br/>CLI · selftest · bench"]
     DLL[("sts2.dll<br/>tmp/gamebin/v0.111.0")]
 
     Bridge --> Protocol
@@ -222,6 +224,14 @@ flowchart LR
   - 选项按 card key（不带 uid 的序列化）排成规范顺序再交给 `IChoicePolicy`，不用游戏给的顺序，因为它可能反映抽牌堆顺序。
   - 完全相同的牌之间的先后，用和隐藏状态无关的种子打乱。
   - 轨迹里记的是游戏自己的下标。
+- **从观测构造**（`CombatBuilder`，CLI 是 `combat --from OBS.json`）：
+  - 观测带上遭遇 id、act 和进阶等级。先按它开一场新战斗，卡组是观测里的所有牌（含附魔），遗物是观测里的遗物。
+  - 再把观测显示的一切覆盖上去：回合数、敌人（缺的按召唤的方式加进来，多的移除，按观测排序）、生命和格挡、能量、金币、药水、遗物计数、能力、四个牌堆和每张牌的改动（升级、数值、关键词、费用、苦难）、怪物意图。
+  - 能力和遗物显示的数字是各自从内部状态算出来的，算法各不相同，所以逐个试内部的整数（数量、动态变量、字段），直到显示的数字对上。
+  - 意图对不上时，在显示相同意图的招式里选；被眩晕的怪物按游戏的方式现做一个眩晕招式。意图还可能取决于能力里的隐藏开关（比如被包围时玩家朝向哪边，背后的敌人伤害更高），这时试能力里每个枚举字段的每个值，留下让最多敌人意图对上的那个。
+  - uid 和真机对齐：生物和手牌用观测里的 uid，其余的牌从更大的编号往后排。
+  - 观测看不到的部分按设置里的种子采样，和确定化用同一个重采样。只有观测和这个种子进去，模拟器知道的不比玩家多。
+  - 构造完会把构造出的战斗的观测和原观测逐字段比较，对不上的列在 `BuildDifferences` 里。
 - **执行和等待分开**：`CombatActions.Start` 走 UI 的同一个入口（`TryManualPlay`、`EnqueueManualUse`、`EndPlayerTurnAction`），等游戏结算由宿主负责：worker 用 `Pump`，mod 以后等帧。
 - **成本**：拆分后占位基准（act 1 弱/普通战，200 场，单核）猎手 6.7 ms/场，铁甲 5.6 ms/场；拆分前是 6.3 和 5.5。
 
@@ -232,7 +242,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     Protocol["Sts2Ai.Protocol"]
-    Bridge["Sts2Ai.GameBridge<br/>+ 从观测构造状态"]
+    Bridge["Sts2Ai.GameBridge"]
     Sim["Sts2Ai.SimWorker<br/>+ 模拟器接口服务端"]
     Mod["Sts2Ai.Mod<br/>观测器 · 执行器 · UI"]
     Brain["Sts2Ai.Brain<br/>+ Harness · 搜索 · 估值"]
@@ -257,12 +267,14 @@ flowchart LR
 
 ## 7. 已知缺口
 
-1. **没有"从观测构造模拟器状态"**。现在的分叉只能从 Setup + Trace 回放，世界是模拟器时成立。
-   实盘（R4）没有真实轨迹，也不该有，需要按观测和信念采样直接构造战斗。
-   构造出来的手牌和生物还得用和真机相同的 uid（`NetCombatCardDb` 有测试用的编号入口），否则推荐的动作在真机上对不上号。
-   往返测试 `Observation → Determinize → sim state → Observation'` 依赖它。M2 之前要补。
-2. **`Determinize` 不重采样怪物已排好的下一招**（`NextMove`），只重置以后的随机流。
-   同一个意图可能对应不同招式（比如 Fogmog），所以这里还漏真信息。要换成"意图 + 招式历史 → 状态机后验"采样。
+1. **从观测构造的战斗是近似**（§6.1）。观测不显示的东西还原不了：
+   - 本回合的历史（打过的牌、受到的伤害……），能力和怪物内部的计数；
+   - 费用改动持续多久（手牌按"本回合或打出前"，其余按"本场战斗"）；玩家身上哪些减益下回合不掉层；
+   - 被眩晕的怪物：真实的眩晕招式会做什么、之后接哪一招（取决于是谁眩晕了它和之前的招式）。
+   卡组是观测里的所有牌，包括战斗中生成的牌。充能球和玩家以外的友方还没有构造。
+   还没在真机观测上验证过；目前的往返测试用的是模拟器自己产生的观测。
+2. **怪物下一招在意图相同的招式里均匀采样**，没有用招式历史。不再漏真信息，但比真实后验宽（比如有的怪物不会连用同一招）。
+   要换成"意图 + 招式历史 → 状态机后验"采样。
 3. **已知位置的抽牌堆牌没有建模**：刚放到牌堆顶的牌也会被洗乱。这是信息丢失（偏弱），不是作弊。
 4. **只有战斗，没有整局**：地图、奖励、商店、事件、篝火还不能跑。
    世界设置用的是 `UnlockState.all` 和默认 act 列表，和真机不一致（真机要用真实解锁和 lobby 的 act-1 抽选）。

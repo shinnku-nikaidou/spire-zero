@@ -12,6 +12,7 @@ namespace Sts2Ai.SimWorker;
 ///   list                                   characters, acts and encounters known to this game build
 ///   combat --encounter ID [--seed N] [--policy random|play] [--obs] [--verbose]
 ///                                          one combat, printing every step (--obs: the observation JSON too)
+///   combat --from OBS.json [--seed N] ...  the same, starting from a combat built to show that observation
 ///   bench [--n 200] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--policy play] [--out results.jsonl]
 ///                                          many combats over an encounter pool; reports throughput and failures
 ///   selftest [--n 20] [--seed 1] [--act 0] [--rooms weak,regular]
@@ -67,17 +68,26 @@ internal static class Cli
 
     private static int OneCombat(Pump pump, Dictionary<string, string> opts)
     {
-        if (!opts.TryGetValue("encounter", out var id)) return Fail("combat needs --encounter ID (see `list`)");
-        var encounter = ModelDb.AllEncounters.FirstOrDefault(e => e.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase));
-        if (encounter == null) return Fail($"no encounter {id}");
         int seed = Int(opts, "seed", 1);
-        int act = Enumerable.Range(0, ModelDb.ActsByIndex.Count).FirstOrDefault(i => ModelDb.ActsByIndex[i].Any(a => a.AllEncounters.Contains(encounter)));
-        var setup = Setup(opts, encounter, act, MakeSeed(seed, 0));
+        CombatSetup setup;
+        if (opts.TryGetValue("from", out var path))
+        {
+            setup = CombatBuilder.Setup(ProtocolJson.Deserialize<CombatObservation>(File.ReadAllText(path)), MakeSeed(seed, 0));
+        }
+        else
+        {
+            if (!opts.TryGetValue("encounter", out var id)) return Fail("combat needs --encounter ID (see `list`) or --from OBS.json");
+            var encounter = ModelDb.AllEncounters.FirstOrDefault(e => e.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase));
+            if (encounter == null) return Fail($"no encounter {id}");
+            int act = Enumerable.Range(0, ModelDb.ActsByIndex.Count).FirstOrDefault(i => ModelDb.ActsByIndex[i].Any(a => a.AllEncounters.Contains(encounter)));
+            setup = Setup(opts, encounter, act, MakeSeed(seed, 0));
+        }
         var rng = new Random(seed);
         var policy = Policies.Combat(opts.GetValueOrDefault("policy", "play"), rng);
 
-        Console.WriteLine($"{encounter.Id.Entry} act {act} seed {setup.Seed}");
+        Console.WriteLine($"{setup.Encounter.Id.Entry} act {setup.ActIndex} seed {setup.Seed}{(setup.From != null ? " (built from observation)" : "")}");
         using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
+        foreach (var difference in session.BuildDifferences) Console.WriteLine("  not reproduced: " + difference);
         while (!session.IsOver && session.State.RoundNumber <= MaxRounds && session.ActionsExecuted < MaxActions)
         {
             Console.WriteLine("  " + session.Summary());

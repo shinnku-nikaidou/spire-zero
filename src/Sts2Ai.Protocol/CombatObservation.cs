@@ -13,6 +13,11 @@ namespace Sts2Ai.Protocol;
 /// </summary>
 public sealed record CombatObservation
 {
+    /// <summary>The encounter's id: which monsters, in which places, under the fight's own rules.</summary>
+    public required string? Encounter { get; init; }
+    /// <summary>Act index, from 0.</summary>
+    public required int Act { get; init; }
+    public required int Ascension { get; init; }
     public required int Round { get; init; }
     public required PlayerView Player { get; init; }
     public required IReadOnlyList<CardView> Hand { get; init; }

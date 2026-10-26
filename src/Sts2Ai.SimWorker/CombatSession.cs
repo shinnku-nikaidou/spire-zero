@@ -23,7 +23,12 @@ namespace Sts2Ai.SimWorker;
 
 internal enum CombatOutcome { InProgress, Win, Loss, Truncated }
 
-internal sealed record CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string Seed, int Ascension = 0, Loadout? Loadout = null);
+/// <summary>
+/// How a combat starts: a fresh run of <see cref="Character"/> with the loadout, entering the encounter. With
+/// <see cref="From"/>, the combat is then made to show that observation (see <see cref="CombatBuilder"/>), and the
+/// seed also picks what the observation hides.
+/// </summary>
+internal sealed record CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string Seed, int Ascension = 0, Loadout? Loadout = null, CombatObservation? From = null);
 
 internal enum TraceKind { Action, Choice, Determinize }
 
@@ -63,6 +68,8 @@ internal sealed class CombatSession : IDisposable
     public RunState Run { get; }
     public int ActionsExecuted { get; private set; }
     public IReadOnlyList<TraceEvent> Trace => _trace;
+    /// <summary>For a combat built from an observation: what it failed to reproduce, as JSON paths. Empty is exact.</summary>
+    public IReadOnlyList<string> BuildDifferences { get; private set; } = [];
 
     private CombatSession(Pump pump, CombatSetup setup, Player player, RunState run, List<TraceEvent> trace, PolicySelector selector)
     {
@@ -127,6 +134,12 @@ internal sealed class CombatSession : IDisposable
             pump.RunUntil(() => enter.IsCompleted, session.Describe);
             if (enter.IsFaulted) throw enter.Exception!.GetBaseException();
             session.Settle();
+            if (setup.From is { } obs)
+            {
+                CombatBuilder.Apply(session.State, player, obs, pump);
+                session.Resample(new Rng(StableHash(setup.Seed)));
+                session.BuildDifferences = CombatBuilder.Differences(obs, session.Observation());
+            }
             return session;
         }
         catch
@@ -170,17 +183,26 @@ internal sealed class CombatSession : IDisposable
     }
 
     /// <summary>
-    /// Replaces everything the player cannot know with a sample drawn from <paramref name="seed"/>: every seeded
-    /// stream (shuffles, generated cards, monster moves, random targets, ...) and the order of the draw pile.
-    /// The visible state is unchanged. A search that branches only from determinized states cannot use the real
-    /// future, and different seeds give different plausible futures.
-    /// Not yet modeled: draw-pile cards whose position the player does know (e.g. one just put on top).
+    /// Replaces everything the player cannot know with a sample drawn from <paramref name="seed"/>. The visible state
+    /// is unchanged. A search that branches only from determinized states cannot use the real future, and different
+    /// seeds give different plausible futures.
     /// </summary>
     public void Determinize(ulong seed)
     {
         _trace.Add(new(TraceKind.Determinize, Seed: seed));
         // Seeded only by the caller, never by the run, so nothing about the real seed leaks into the sample.
-        var sample = new Rng(seed);
+        Resample(new Rng(seed));
+    }
+
+    /// <summary>
+    /// Draws the hidden state from <paramref name="sample"/>: every seeded stream (shuffles, generated cards, monster
+    /// moves, random targets, ...), the order of the draw pile, the ids of cards outside the hand (the game numbers
+    /// them in draw order), and each monster's queued move among those showing the same intents.
+    /// Not yet modeled: draw-pile cards whose position the player does know (e.g. one just put on top), and which of
+    /// those moves the monster's history makes likelier.
+    /// </summary>
+    private void Resample(Rng sample)
+    {
         foreach (var type in Enum.GetValues<RunRngType>()) Reseed(Run.Rng.GetRng(type), sample);
         foreach (var type in Enum.GetValues<PlayerRngType>()) Reseed(Player.PlayerRng.GetRng(type), sample);
         foreach (var creature in State.Enemies.Concat(State.Allies))
@@ -195,8 +217,31 @@ internal sealed class CombatSession : IDisposable
             (cards[i], cards[j]) = (cards[j], cards[i]);
         }
         foreach (var card in cards) draw.MoveToBottomInternal(card);
+        var db = NetCombatCardDb.Instance;
+        CombatBuilder.NumberCards(Pcs, Pcs.Hand.Cards.Select(db.GetCardId).ToList());
+
+        Creature[] targets = [Player.Creature];
+        foreach (var enemy in State.Enemies)
+        {
+            if (enemy.IsDead || enemy.Monster?.MoveStateMachine is not { } machine) continue;
+            var monster = enemy.Monster;
+            var moves = CombatBuilder.MovesShowing(enemy, targets, CombatBuilder.Shows(monster.NextMove, enemy, targets));
+            if (moves.Count < 2) continue;
+            var move = moves[sample.NextInt(moves.Count)];
+            if (move == monster.NextMove) continue;
+            if (machine.StateLog.Count > 0 && machine.StateLog[^1] == monster.NextMove) machine.StateLog[^1] = move;
+            monster.SetMoveImmediate(move, forceTransition: true);
+        }
 
         static void Reseed(Rng rng, Rng sample) => rng.LoadFromSerializable(new Rng(sample.NextUnsignedLong()).ToSerializable());
+    }
+
+    /// <summary>FNV-1a: a string hash that is the same in every process, unlike string.GetHashCode.</summary>
+    private static ulong StableHash(string text)
+    {
+        ulong hash = 14695981039346656037;
+        foreach (char c in text) hash = (hash ^ c) * 1099511628211;
+        return hash;
     }
 
     /// <summary>Pumps until the player can act again (on a later turn, if given) or the combat has ended.</summary>
