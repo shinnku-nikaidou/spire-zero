@@ -103,10 +103,11 @@ internal static class Cli
         var outcomes = new Dictionary<string, int>();
         var failures = new Dictionary<string, int>();
         var failedEncounters = new Dictionary<string, int>();
-        int gameErrors = 0;
+        var errorTexts = new Dictionary<string, int>();
+        int gameErrors = 0, combatsWithErrors = 0, firstWithErrors = -1;
         long actions = 0;
 
-        Console.WriteLine($"bench: {n} combats, act {act} ({rooms}: {pool.Count} encounters), policy {policy}, game {HeadlessGame.GameVersion}");
+        Console.WriteLine($"bench: {n} combats, act {act} ({rooms}: {pool.Count} encounters), policy {policy}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
@@ -138,6 +139,8 @@ internal static class Cli
             }
             var errors = HeadlessGame.TakeErrors();
             gameErrors += errors.Count;
+            if (errors.Count > 0 && combatsWithErrors++ == 0) firstWithErrors = i;
+            foreach (var e in errors) errorTexts[FirstLine(e)] = errorTexts.GetValueOrDefault(FirstLine(e)) + 1;
             actions += steps;
             outcomes[outcome] = outcomes.GetValueOrDefault(outcome) + 1;
             output?.WriteLine(JsonSerializer.Serialize(new
@@ -153,6 +156,10 @@ internal static class Cli
         Console.WriteLine("outcomes: " + string.Join(" ", outcomes.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}={kv.Value}")));
         Console.WriteLine($"pump idle waits: {pump.IdleWaits} ({pump.IdleWaitTicks} ms)");
         Console.WriteLine($"game Log.Error lines: {gameErrors}; peak working set {Process.GetCurrentProcess().PeakWorkingSet64 / (1 << 20)} MB");
+        if (combatsWithErrors > 0)
+            Console.WriteLine($"  {combatsWithErrors} combats logged errors, first #{firstWithErrors}");
+        foreach (var (msg, count) in errorTexts.OrderByDescending(kv => kv.Value).Take(5))
+            Console.WriteLine($"  game error x{count}: {(msg.Length > 300 ? msg[..300] + "..." : msg)}");
         foreach (var (msg, count) in failures.OrderByDescending(kv => kv.Value).Take(10))
             Console.WriteLine($"  failure x{count}: {msg}");
         if (failedEncounters.Count > 0)

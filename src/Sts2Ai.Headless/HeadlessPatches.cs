@@ -302,9 +302,9 @@ internal static class HeadlessPatches
     // ---- speed: same results, fewer allocations on the hottest paths ----
 
     /// <summary>
-    /// Every hook call and every <c>CanPlay</c> check reads <c>CombatState.Players</c>, which the game builds
-    /// through three LINQ lists (Creatures, then PlayerCreatures, then Players). These loops return the same
-    /// fresh snapshot list in the same order.
+    /// Combat history, hook contexts and targeting read <c>CombatState.Players</c> many times per action, and the
+    /// game builds it through three LINQ lists (Creatures, then PlayerCreatures, then Players). These loops return
+    /// the same fresh snapshot list in the same order.
     /// </summary>
     [HarmonyPatch(typeof(CombatState), nameof(CombatState.Creatures), MethodType.Getter)]
     private static class FastCreatures

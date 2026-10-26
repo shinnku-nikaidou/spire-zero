@@ -17,6 +17,9 @@ internal static class HeadlessGame
     public static bool Verbose;
     public static string GameVersion { get; private set; } = "";
 
+    /// <summary>Appended to benchmark headers when framework code runs precompiled (see the csproj).</summary>
+    public static string JitNote => Environment.GetEnvironmentVariable("DOTNET_ReadyToRun") == "0" ? "" : " (set DOTNET_ReadyToRun=0 for ~20% more speed)";
+
     /// <summary>Game Log.Error lines and unobserved task faults since the last <see cref="TakeErrors"/>.</summary>
     private static readonly List<string> Errors = [];
 
@@ -32,7 +35,6 @@ internal static class HeadlessGame
 
         GodotNativeStub.Install();
         HeadlessPatches.Apply();
-        Probe.MaybeApply(); // TEMPORARY
         TestMode.TurnOnInternal();
 
         // Mods are never loaded headless; the setter is private.

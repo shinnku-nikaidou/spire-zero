@@ -1,6 +1,8 @@
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Rngs;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Random;
+using MegaCrit.Sts2.Core.Runs;
 
 namespace Sts2Ai.Headless;
 
@@ -10,7 +12,8 @@ namespace Sts2Ai.Headless;
 ///  - restore: rebuilding a snapshot by replay gives exactly the observation recorded at that point;
 ///  - determinize: resampling hidden information leaves the observation unchanged, replays exactly, and the
 ///    combat plays on from there;
-///  - rule fidelity: Rolling Boulder hits several enemies one at a time.
+///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
+///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield.
 /// </summary>
 internal static class SelfTest
 {
@@ -52,6 +55,7 @@ internal static class SelfTest
                     {
                         Check("restore", Observation.Of(restored).ToJsonString() == first.Observations[k], at);
                         Check("restore hidden state", Hidden(restored) == first.Hidden[k], at);
+                        Check("fast hook listeners match the game's", SameListeners(restored), at);
                     }
 
                     string trueOrder;
@@ -131,6 +135,18 @@ internal static class SelfTest
             var r = rng.ToSerializable();
             return $"{r.counter}:{r.state0:x}:{r.state1:x}:{r.state2:x}:{r.state3:x}";
         }
+    }
+
+    /// <summary>FastHookListeners yields the same models, in the same order, as the game's own iterators.</summary>
+    private static bool SameListeners(CombatSession session)
+    {
+        var (combat, run) = (session.State, session.Run);
+        // The reverse patches must reach the game's compiler-generated iterators, or this compares ours with ours.
+        if (FastHookListeners.Original.Combat(combat).GetType().DeclaringType != typeof(CombatState)) return false;
+        if (FastHookListeners.Original.Run(run, null).GetType().DeclaringType != typeof(RunState)) return false;
+        return FastHookListeners.Original.Combat(combat).SequenceEqual(combat.IterateHookListeners(), ReferenceEqualityComparer.Instance)
+            && FastHookListeners.Original.Run(run, combat).SequenceEqual(run.IterateHookListeners(combat), ReferenceEqualityComparer.Instance)
+            && FastHookListeners.Original.Run(run, null).SequenceEqual(run.IterateHookListeners(null), ReferenceEqualityComparer.Instance);
     }
 
     private static int DistinctCards(string drawOrder) => drawOrder.Split('\n').Distinct().Count();

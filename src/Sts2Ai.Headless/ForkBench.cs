@@ -18,7 +18,7 @@ internal static class ForkBench
         var branchMs = new List<double>();
         long rootDepths = 0, rolloutSteps = 0;
 
-        Console.WriteLine($"forkbench: {n} combats, act {act} ({rooms}: {pool.Count} encounters), {branches} branches from mid-combat, game {HeadlessGame.GameVersion}");
+        Console.WriteLine($"forkbench: {n} combats, act {act} ({rooms}: {pool.Count} encounters), {branches} branches from mid-combat, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = new Stopwatch();
         for (int i = 0; i < n; i++)
         {
