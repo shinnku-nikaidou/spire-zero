@@ -1,0 +1,162 @@
+using MegaCrit.Sts2.Core.Entities.Rngs;
+using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Random;
+
+namespace Sts2Ai.Headless;
+
+/// <summary>
+/// Checks the properties that search and training rely on, over an encounter pool:
+///  - determinism: the same setup and decisions give the same observations, step for step, and the same trace;
+///  - restore: rebuilding a snapshot by replay gives exactly the observation recorded at that point;
+///  - determinize: resampling hidden information leaves the observation unchanged, replays exactly, and the
+///    combat plays on from there;
+///  - rule fidelity: Rolling Boulder hits several enemies one at a time.
+/// </summary>
+internal static class SelfTest
+{
+    private sealed record Recording(List<CombatSnapshot> Snapshots, List<string> Observations, List<string> Hidden, string Trace);
+
+    public static int Run(Pump pump, Dictionary<string, string> opts)
+    {
+        int n = Cli.Int(opts, "n", 20);
+        int seed = Cli.Int(opts, "seed", 1);
+        var (act, rooms, pool) = Cli.Pool(opts);
+        var results = new SortedDictionary<string, (int Pass, int Fail)>();
+        int drawCompared = 0, drawResampled = 0, drawMovedFromTrue = 0;
+
+        void Check(string name, bool ok, string detail)
+        {
+            var (pass, fail) = results.GetValueOrDefault(name);
+            results[name] = ok ? (pass + 1, fail) : (pass, fail + 1);
+            if (!ok) Console.WriteLine($"  FAIL {name}: {detail}");
+        }
+
+        Console.WriteLine($"selftest: {n} combats, act {act} ({rooms}: {pool.Count} encounters), game {HeadlessGame.GameVersion}");
+        for (int i = 0; i < n; i++)
+        {
+            var encounter = pool[i % pool.Count];
+            var setup = Cli.Setup(opts, encounter, act, Cli.MakeSeed(seed, i));
+            string label = $"#{i} {encounter.Id.Entry} {setup.Seed}";
+            try
+            {
+                var first = Record(pump, setup, seed * 1_000_003 + i);
+                var second = Record(pump, setup, seed * 1_000_003 + i);
+                Check("determinism", first.Observations.SequenceEqual(second.Observations) && first.Hidden.SequenceEqual(second.Hidden) && first.Trace == second.Trace, label);
+
+                var cutRng = new Random(seed ^ (i * 7_919));
+                foreach (int k in Enumerable.Range(0, 3).Select(_ => cutRng.Next(first.Snapshots.Count)).Distinct())
+                {
+                    var snapshot = first.Snapshots[k];
+                    string at = $"{label} at step {k}";
+                    using (var restored = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0))))
+                    {
+                        Check("restore", Observation.Of(restored).ToJsonString() == first.Observations[k], at);
+                        Check("restore hidden state", Hidden(restored) == first.Hidden[k], at);
+                    }
+
+                    string trueOrder;
+                    using (var restored = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0))))
+                        trueOrder = DrawOrder(restored);
+                    var (obsA, orderA) = DeterminizeAt(pump, snapshot, 11);
+                    var (obsB, orderB) = DeterminizeAt(pump, snapshot, 22);
+                    Check("determinize keeps observation", obsA == first.Observations[k] && obsB == first.Observations[k], at);
+                    if (DistinctCards(trueOrder) >= 2)
+                    {
+                        drawCompared++;
+                        if (orderA != orderB) drawResampled++;
+                        if (orderA != trueOrder) drawMovedFromTrue++;
+                    }
+
+                    var determinized = snapshot with { Trace = [.. snapshot.Trace, new TraceEvent(TraceKind.Determinize, Seed: 11)] };
+                    using var replayed = CombatSession.Restore(pump, determinized, new RandomChoices(new Random(k)));
+                    Check("determinize replays", DrawOrder(replayed) == orderA, at);
+                    Cli.PlayOut(replayed, "play", new Random(k));
+                    Check("plays on after determinize", replayed.ActionsExecuted >= snapshot.Trace.Count(e => e.Kind == TraceKind.Action), at);
+                }
+            }
+            catch (Exception e)
+            {
+                Check("no exceptions", false, $"{label}: {e.GetType().Name}: {Cli.FirstLine(e.Message)}");
+                if (HeadlessGame.Verbose) Console.Error.WriteLine(e);
+            }
+            var errors = HeadlessGame.TakeErrors();
+            Check("no game errors", errors.Count == 0, $"{label}: {errors.FirstOrDefault()}");
+        }
+
+        RollingBoulder(pump, pool, act, Check);
+
+        Console.WriteLine($"draw order resampled by a different determinize seed: {drawResampled}/{drawCompared}; differs from the true order: {drawMovedFromTrue}/{drawCompared}");
+        foreach (var (name, (pass, fail)) in results)
+            Console.WriteLine($"  {(fail == 0 ? "ok  " : "FAIL")} {name}: {pass} passed, {fail} failed");
+        return results.Values.Any(r => r.Fail > 0) ? 1 : 0;
+    }
+
+    private static Recording Record(Pump pump, CombatSetup setup, int rngSeed)
+    {
+        var snapshots = new List<CombatSnapshot>();
+        var observations = new List<string>();
+        var hidden = new List<string>();
+        var rng = new Random(rngSeed);
+        using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
+        Cli.PlayOut(session, "play", rng, s =>
+        {
+            snapshots.Add(s.Snapshot());
+            observations.Add(Observation.Of(s).ToJsonString());
+            hidden.Add(Hidden(s));
+        });
+        return new(snapshots, observations, hidden, string.Join(" ", session.Trace));
+    }
+
+    private static (string Observation, string DrawOrder) DeterminizeAt(Pump pump, CombatSnapshot snapshot, ulong seed)
+    {
+        using var session = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0)));
+        session.Determinize(seed);
+        return (Observation.Of(session).ToJsonString(), DrawOrder(session));
+    }
+
+    private static string DrawOrder(CombatSession session) =>
+        string.Join("\n", session.Player.PlayerCombatState!.DrawPile.Cards.Select(Observation.CardKey));
+
+    /// <summary>State the observation leaves out: draw order, every RNG stream's position, each monster's queued move.</summary>
+    private static string Hidden(CombatSession session)
+    {
+        var lines = new List<string> { DrawOrder(session) };
+        lines.AddRange(Enum.GetValues<RunRngType>().Select(t => $"{t} {Show(session.Run.Rng.GetRng(t))}"));
+        lines.AddRange(Enum.GetValues<PlayerRngType>().Select(t => $"{t} {Show(session.Player.PlayerRng.GetRng(t))}"));
+        lines.AddRange(session.State.Enemies.Select(e => $"{e.Monster?.Id.Entry} {e.Monster?.NextMove.Id} {(e.Monster == null ? "" : Show(e.Monster.Rng))}"));
+        return string.Join("\n", lines);
+
+        static string Show(Rng rng)
+        {
+            var r = rng.ToSerializable();
+            return $"{r.counter}:{r.state0:x}:{r.state1:x}:{r.state2:x}:{r.state3:x}";
+        }
+    }
+
+    private static int DistinctCards(string drawOrder) => drawOrder.Split('\n').Distinct().Count();
+
+    /// <summary>
+    /// Plays Rolling Boulder against the first multi-enemy encounter in the pool. The power fires at the start of
+    /// the next turn and must hit each enemy separately.
+    /// </summary>
+    private static void RollingBoulder(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        var loadout = new Loadout(Deck: Enumerable.Repeat(new CardSpec("ROLLING_BOULDER"), 10).ToList(), Hp: 999, MaxHp: 999);
+        foreach (var encounter in pool)
+        {
+            var setup = new CombatSetup("IRONCLAD", encounter, act, Cli.MakeSeed(0, 0), Loadout: loadout);
+            using var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0)));
+            if (session.State.HittableEnemies.Count < 2) continue;
+
+            int before = HeadlessPatches.RollingBoulderSplits;
+            var rng = new Random(0);
+            while (!session.IsOver && session.State.RoundNumber <= 3)
+                session.Execute(Cli.Choose("play", session.LegalActions(), rng));
+            var errors = HeadlessGame.TakeErrors();
+            check("rolling boulder hits one by one", HeadlessPatches.RollingBoulderSplits > before && errors.Count == 0,
+                $"{encounter.Id.Entry}: splits {HeadlessPatches.RollingBoulderSplits - before}, errors {errors.FirstOrDefault()}");
+            return;
+        }
+        check("rolling boulder hits one by one", false, "no encounter in the pool has two or more enemies");
+    }
+}

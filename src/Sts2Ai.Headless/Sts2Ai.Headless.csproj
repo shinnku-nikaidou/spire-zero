@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Runs the real sts2.dll in plain .NET, without the Godot engine.
+    The game assemblies come from a read-only snapshot (tmp/gamebin/<version>) and are not copied to bin/;
+    GameAssemblies resolves them from Sts2BinDir at run time (override with STS2_BIN_DIR).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Sts2Ai.Headless</RootNamespace>
+    <!--
+      Harmony (MonoMod) hooks the JIT, so every compile is slow. With PGO, methods are compiled an extra time
+      (instrumented tier) and warm-up takes tens of seconds on one core. Off: about 1.3-2x more combats/s.
+    -->
+    <TieredPGO>false</TieredPGO>
+    <Sts2BinDir Condition="'$(Sts2BinDir)' == ''">$(MSBuildThisFileDirectory)../../tmp/gamebin/v0.111.0</Sts2BinDir>
+    <Sts2BinDir>$([System.IO.Path]::GetFullPath('$(Sts2BinDir)'))</Sts2BinDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="sts2"><HintPath>$(Sts2BinDir)/sts2.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="GodotSharp"><HintPath>$(Sts2BinDir)/GodotSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(Sts2BinDir)/0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SmartFormat"><HintPath>$(Sts2BinDir)/SmartFormat.dll</HintPath><Private>false</Private></Reference>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>Sts2BinDir</_Parameter1>
+      <_Parameter2>$(Sts2BinDir)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>
