@@ -71,8 +71,11 @@ Screen variants (surface names = routing keys, harness.md §4):
 | `shop` | entries `{slot, kind, id, cost, stocked, affordable}`, removal `{cost, used}` | `buy:<slot>`, `remove`, `leave` |
 | `rest` | options `{id, enabled}` | `rest:<id>`, `leave` (only after one success or none left) |
 | `treasure` | relic choices | `relic:i`, `relic_skip` |
-| `potion_full` | new potion + current slots | `discard_potion:S`, `potion:S`, `potion_skip` |
+| `crystal_sphere` | 11x11 grid: each cell hidden or what it shows; divinations left | `big:X,Y` (3x3), `small:X,Y` (only if a hidden cell is uncovered) |
 | `game_over` | won, floor | — |
+
+Every macro surface (not `combat`, not `card_choice`) also lists the belt: `potion:S` (any-time potion), `discard_potion:S`. Full belt: potion rewards/purchases are left out of legal until a slot frees (no `potion_full` surface). Event `proceed` = leave to the map (finished event, or an ancient's PROCEED button).
+Implemented: legal + apply for every surface with actions (macro ones as `MacroDecision(surface, legal)`, constants `Surfaces` in `MacroDecision.cs`; `card_choice` still through `IChoicePolicy`); payloads not yet.
 
 - Indexes into game-provided lists are fine when the UI order is public (rewards, events, shop slots). Card lists whose order may reflect hidden state (piles) always go through canonical sort (`CardChoice`).
 - `MapView`: points `{col,row,type}` (`?` stays `unknown`), edges, visited coords, current coord, boss id if shown. Never future `?` outcomes.

@@ -1,6 +1,6 @@
 # GameBridge
 
-Status: combat observe / legal / start EXISTS (`src/Sts2Ai.GameBridge`); run-level surfaces, prompts, events PLANNED.
+Status: combat observe / legal / start and run-level legal / start EXIST (`src/Sts2Ai.GameBridge`); run-level observe, choice context PLANNED.
 Refs: `D/` = `tmp/decompiled/sts2/MegaCrit.Sts2.Core.`; `[V]` read in source, `[I]` inferred.
 
 ## 1. Role and rules
@@ -21,6 +21,7 @@ Refs: `D/` = `tmp/decompiled/sts2/MegaCrit.Sts2.Core.`; `[V]` read in source, `[
 | | `Legal(st, player)` | hand order, then potions by slot, then `end_turn`; `CanPlay()` once per card |
 | | `Start(st, player, action)` | `TryManualPlay(target)` / `EnqueueManualUse(target)` / `RequestEnqueue(EndPlayerTurnAction(player, TurnNumber))` |
 | | `HandCard(pcs, uid)`, `Creature(st, uid)` | throw on unknown uid |
+| `MapActions`, `RewardActions`, `BundleActions`, `EventActions`, `CrystalSphereActions`, `ShopActions`, `RestActions`, `TreasureActions`, `PotionActions` | `Legal(…)` → action texts, `Start(…, action)` (throws if not legal; returns the game task where the UI awaits one) | one static class per surface; grammar protocol.md §3; `ActionText` parses |
 | `CardChoices` | `Canonical(options, min, max, tieBreak)` | card-key sort, ties by caller-seeded `Random` (never game order: may reflect pile depth) → `(CardChoice, gameIndex[])` |
 
 Gap: `EndPlayerTurnAction` path doesn't check `CanTurnBeEnded` [V, agent] → add to `Legal` before the mod uses it.
@@ -62,6 +63,8 @@ Action grammar: protocol.md §3. Apply path per host:
 | shop | `entry.OnTryPurchaseWrapper(inv)` (+ removal `SetUsed`) | same call (`ForceClick` on merchant nodes does nothing [V, agent]) |
 | rest | `ChooseLocalOption(i)` | option button |
 | treasure | `PickRelicLocally(i)` / `SkipRelicLocally()` | chest + relic buttons |
+| crystal sphere | `SetTool` + `CellClicked(cell)` | divination buttons + cell click |
+| potion use (out of combat) | `EnqueueManualUse(null)` | potion popup |
 
 Rule: whenever the mod path is a node handler, the sim path must equal what that handler calls minus pure-UI effects; each such pair gets an R3-vs-R4 equivalence check (same seed, same decisions → same obs stream, mod.md §8).
 
@@ -71,8 +74,10 @@ One Harmony prefix per `CardSelectCmd.From*` entry (`FromChooseACardScreen`, `Fr
 
 ## 6. Decision-point predicates
 
-GameBridge: logic-only `PendingSurface(runState) → surface?`: combat `WaitingForInput`; prompt context set and awaiting; rewards set offered; event options present and no pending option task; shop/rest/treasure room active and not leaving; map: room finished and travel allowed.
-Host adds: Sim = `Pump.RunUntil(PendingSurface != null || ended)`. Mod = predicate + node idle checks held ~3 frames (mod.md §3).
+Which screen is pending is host-side: it depends on what the UI would show, which only the host tracks.
+- Sim: `RunSession.Decide` (simulator.md §5): open rewards sets (from `testSelector`), crystal sphere minigame, then the room kind + per-room `RoomProgress`; settle = combat `WaitingForInput`, else pump empty and executor idle.
+- Mod: the visible screen/overlay + node idle checks held ~3 frames (mod.md §3).
+GameBridge keeps only logic predicates: `CombatActions.WaitingForInput`, `RewardActions.IsTerminal`, legal lists.
 
 ## 7. Uids and indexes
 

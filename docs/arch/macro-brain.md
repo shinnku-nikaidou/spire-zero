@@ -1,6 +1,6 @@
 # Macro brain (out-of-combat decisions)
 
-Status: PLANNED. Today `PolicySelector` skips every card reward and answers prompts with placeholder policies; no run-level play exists (simulator.md §5).
+Status: PLANNED. Today `RunSession` plays whole runs headless with placeholders: `RandomMacro` on every macro surface, `RandomChoices` on card prompts (simulator.md §5).
 
 ## 1. Surfaces and shape
 

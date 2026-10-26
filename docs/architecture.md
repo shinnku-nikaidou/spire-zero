@@ -41,7 +41,7 @@ offline (separate): self-play logs → fit V → ExIt → SPSA → LLM patches �
 | `Sts2Ai.Protocol` | framework | wire types = observation whitelist |
 | `Sts2Ai.GameBridge` | game + Protocol | observe, legal, start (UI entry points) |
 | `Sts2Ai.Brain` | Protocol | policies (placeholders today) |
-| `Sts2Ai.SimWorker` | game + all above | headless host, sessions, CombatBuilder, CLI |
+| `Sts2Ai.SimWorker` | game + all above | headless host, combat + run sessions, CombatBuilder, CLI |
 | `Sts2Ai.Mod` (planned) | game + GameBridge + Protocol | in-game host |
 | Harness (planned) | Protocol + Brain | dispatcher process |
 
@@ -71,7 +71,7 @@ Background notes (gitignored, Chinese): `tmp/notes/plan.md` (plan v1, M0–M5), 
 | combat session, snapshot/replay, Determinize | done; 319 combats/s/core (SILENT), branch 2.8 ms |
 | CombatBuilder (obs → combat) | done; approximations listed in simulator.md §3 |
 | multi-process scaling | measured: 8 procs ≈ 1,860 combats/s |
-| run session (whole runs headless) | planned, API researched (simulator.md §5) |
+| run session (whole runs headless) | done: all surfaces, random placeholders; 200/200 runs deterministic in- and cross-process, 0 failures/game errors (simulator.md §5) |
 | SL clone (load save + replay + seal) | planned, path researched (simulator.md §7) |
 | protocol beyond combat, Harness, worker IPC | planned |
 | combat brain, macro brain, value | placeholders only |
@@ -82,13 +82,13 @@ Background notes (gitignored, Chinese): `tmp/notes/plan.md` (plan v1, M0–M5), 
 1. CombatBuilder approximations: turn history, internal counters, cost-modifier durations, stun follow-ups; never validated on real-game observations (simulator.md §3).
 2. Monster move resampling uniform among intent-identical moves; needs posterior from history (harness.md §3).
 3. Card prompts lack context → `ChoiceContext` (protocol.md §4, gamebridge.md §5).
-4. No full runs: `EnterRoomDebug` skips `?` roll and `GenerateRooms` (simulator.md §5).
-5. Map generation may be nondeterministic across processes (`MapPoint.Children` set order) (simulator.md §5.3).
+4. Run start uses `UnlockState.all`, not the user's profile; ascension not clamped (simulator.md §5.1).
+5. New game code that calls nodes without the TestMode guard outside events (where the transpiler covers it) shows up only as game errors in `run` batches (simulator.md §5.2).
 6. Harmony patches in the real game vs tiered JIT (mod.md §10).
 
 ## 8. Proposed implementation order
 
-1. Run session + all surfaces headless with placeholder macro policy; coverage + determinism + map cross-process tests (simulator.md §5, §9).
+1. [done 2026-10-26] Run session + all surfaces headless with placeholder macro policy; coverage + determinism + map cross-process tests (simulator.md §5, §9).
 2. Protocol run-level types + `ChoiceContext` + GameBridge observe/legal for every surface.
 3. Worker pool + IPC + world API (`RunBranches`).
 4. Harness (record, routing, logs) + combat brain v0 (PIMC, v0 leaf) → combat panel gate vs placeholders.

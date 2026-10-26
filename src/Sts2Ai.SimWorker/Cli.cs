@@ -19,6 +19,9 @@ namespace Sts2Ai.SimWorker;
 ///                                          checks determinism, restore and determinize over an encounter pool
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
+///   run [--n 1] [--start 0] [--seed 1] [--asc 0] [--policy play] [--max-decisions 20000] [--check] [--trace]
+///                                          whole runs, every non-combat decision random; --check plays each seed
+///                                          twice and compares; reports results, map hashes and surface coverage
 /// Loadout options for every command that runs combats: [--character SILENT] [--deck A*5,B+,...]
 /// [--relics A,B] [--potions A,B] [--hp N] [--max-hp N]. Omitted parts keep the character's starting values.
 /// </summary>
@@ -30,7 +33,7 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run"); return 2; }
         var opts = ParseOptions(args.Skip(1).ToArray());
         HeadlessGame.Boot(opts.ContainsKey("verbose"));
         var pump = Pump.InstallOnCurrentThread();
@@ -41,6 +44,7 @@ internal static class Cli
             "bench" => Bench(pump, opts),
             "selftest" => SelfTest.Run(pump, opts),
             "forkbench" => ForkBench.Run(pump, opts),
+            "run" => Runs(pump, opts),
             _ => Fail($"unknown command {args[0]}"),
         };
     }
@@ -178,6 +182,98 @@ internal static class Cli
         if (failedEncounters.Count > 0)
             Console.WriteLine("  failing encounters: " + string.Join(" ", failedEncounters.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}x{kv.Value}")));
         return failures.Count == 0 ? 0 : 1;
+    }
+
+    private static int Runs(Pump pump, Dictionary<string, string> opts)
+    {
+        int n = Int(opts, "n", 1);
+        int start = Int(opts, "start", 0);
+        int seed = Int(opts, "seed", 1);
+        int maxDecisions = Int(opts, "max-decisions", 20_000);
+        bool check = opts.ContainsKey("check");
+        var policy = opts.GetValueOrDefault("policy", "play");
+        if (!Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (one of {string.Join(", ", Policies.CombatNames)})");
+        var loadout = Loadout.Parse(opts.GetValueOrDefault("deck"), opts.GetValueOrDefault("relics"), opts.GetValueOrDefault("potions"),
+            opts.GetValueOrDefault("hp"), opts.GetValueOrDefault("max-hp"));
+
+        var outcomes = new Dictionary<string, int>();
+        var surfaces = new Dictionary<string, int>();
+        var failures = new Dictionary<string, int>();
+        int mismatches = 0, gameErrors = 0;
+        Console.WriteLine($"run: {n} runs, policy {policy}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
+        var clock = Stopwatch.StartNew();
+        for (int i = start; i < start + n; i++)
+        {
+            var setup = new RunSetup(opts.GetValueOrDefault("character", "SILENT"), MakeSeed(seed, i), Int(opts, "asc", 0), loadout);
+            var started = clock.Elapsed;
+            var first = PlayRun(pump, setup, seed * 1_000_003 + i, policy, maxDecisions, opts.ContainsKey("trace"));
+            var ms = (clock.Elapsed - started).TotalMilliseconds;
+            outcomes[first.Outcome] = outcomes.GetValueOrDefault(first.Outcome) + 1;
+            foreach (var step in first.Trace)
+            {
+                var surface = step[..step.IndexOf(' ')];
+                surfaces[surface] = surfaces.GetValueOrDefault(surface) + 1;
+            }
+            if (first.Failure != null) failures[first.Failure] = failures.GetValueOrDefault(first.Failure) + 1;
+            gameErrors += first.Errors.Count;
+            Console.WriteLine($"#{i} {setup.Seed} {first.Outcome} {first.Summary} decisions {first.Trace.Count} {ms:F0} ms " +
+                              $"maps {string.Join(",", first.MapHashes.Select(h => h.ToString("x16")))}");
+            if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
+            foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {FirstLine(e)}");
+            if (!check) continue;
+            var second = PlayRun(pump, setup, seed * 1_000_003 + i, policy, maxDecisions, trace: false);
+            int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k => first.Trace[k] != second.Trace[k], -1);
+            if (diverged < 0 && first.Trace.Count == second.Trace.Count && first.Summary == second.Summary && first.MapHashes.SequenceEqual(second.MapHashes)) continue;
+            mismatches++;
+            Console.WriteLine(diverged >= 0
+                ? $"  NOT DETERMINISTIC: decision {diverged}: {first.Trace[diverged]} vs {second.Trace[diverged]}"
+                : $"  NOT DETERMINISTIC: {first.Trace.Count} vs {second.Trace.Count} decisions; {second.Summary}");
+        }
+        clock.Stop();
+
+        int decisions = surfaces.Values.Sum();
+        Console.WriteLine($"done in {clock.Elapsed.TotalSeconds:F1}s: {decisions / clock.Elapsed.TotalSeconds:F0} decisions/s");
+        Console.WriteLine($"pump idle waits: {pump.IdleWaits} ({pump.IdleWaitTicks} ms)");
+        Console.WriteLine("outcomes: " + string.Join(" ", outcomes.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}={kv.Value}")));
+        Console.WriteLine("surfaces: " + string.Join(" ", surfaces.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}={kv.Value}")));
+        var missing = typeof(Surfaces).GetFields().Select(f => (string)f.GetValue(null)!).Where(s => !surfaces.ContainsKey(s)).ToList();
+        if (missing.Count > 0) Console.WriteLine("surfaces never reached: " + string.Join(" ", missing));
+        foreach (var (msg, count) in failures.OrderByDescending(kv => kv.Value)) Console.WriteLine($"  failure x{count}: {msg}");
+        if (check) Console.WriteLine($"determinism: {n - mismatches}/{n} runs identical on replay");
+        Console.WriteLine($"game Log.Error lines: {gameErrors}");
+        return failures.Count == 0 && mismatches == 0 && gameErrors == 0 ? 0 : 1;
+    }
+
+    private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes, string? Failure, List<string> Errors);
+
+    /// <summary>One run to the end (or the decision cap), every policy drawing from one generator seeded by <paramref name="rngSeed"/>.</summary>
+    private static RunResult PlayRun(Pump pump, RunSetup setup, int rngSeed, string policy, int maxDecisions, bool trace)
+    {
+        var rng = new Random(rngSeed);
+        RunSession? session = null;
+        try
+        {
+            session = RunSession.Start(pump, setup, new RandomChoices(rng), Policies.Combat(policy, rng), new RandomMacro(rng));
+            int printed = 0;
+            while (!session.IsOver && session.Trace.Count < maxDecisions)
+            {
+                session.Step();
+                if (!trace) continue;
+                for (; printed < session.Trace.Count; printed++) Console.WriteLine($"  {printed}: {session.Trace[printed]}");
+            }
+            var outcome = session.Won ? "won" : session.IsOver ? "lost" : "truncated";
+            return new(outcome, session.Summary(), session.Trace.ToList(), session.MapHashes.ToList(), null, HeadlessGame.TakeErrors());
+        }
+        catch (Exception e)
+        {
+            if (HeadlessGame.Verbose) Console.Error.WriteLine(e);
+            return new("failed", session?.Summary() ?? "", session?.Trace.ToList() ?? [], session?.MapHashes.ToList() ?? [],
+                $"{e.GetType().Name}: {FirstLine(e.Message)}", HeadlessGame.TakeErrors());
+        }
+        finally
+        {
+            session?.Dispose();
+        }
     }
 
     /// <summary>Plays until the combat ends or hits the round/action cap. Calls <paramref name="beforeAction"/> before each action.</summary>

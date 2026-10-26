@@ -1,6 +1,6 @@
 # Simulator (SimWorker)
 
-Status: headless host + single-combat sessions + Determinize + CombatBuilder EXIST; full-run session, SL clone, worker pool/IPC PLANNED.
+Status: headless host + single-combat sessions + Determinize + CombatBuilder + full-run session EXIST; SL clone, worker pool/IPC PLANNED.
 Refs: `D/` = `tmp/decompiled/sts2/MegaCrit.Sts2.Core.` (node files: find by name, unique). `[V]` read in source (me or research agent), `[I]` inferred.
 
 Roles of a worker process: (a) host of the "real" run in R1–R3; (b) search worlds (NoSL samples, SL clones); (c) bench/selftest. One live run/combat per process (game singletons `RunManager`, `CombatManager`).
@@ -8,11 +8,11 @@ Roles of a worker process: (a) host of the "real" run in R1–R3; (b) search wor
 ## 1. Headless host [exists]
 
 - Boot (`HeadlessGame.Boot`): `GodotNativeStub.Install` → `HeadlessPatches.Apply` → `TestMode.TurnOnInternal` → `ModManager.State=Skipped` → `AssemblyInfo.Init`, `ModelDb.Init`, `ModelIdSerializationCache.Init`, `ModelDb.InitIds` → `LocalContext.NetId=1` → settings/prefs for test, `FastMode=Instant`. Log.Error + unobserved task faults collected; selftest asserts zero.
-- Patch groups (`HeadlessPatches.cs`): engine shells (OS, Time, singletons, resources, loc, player name); persistence off (`SaveRun`, progress, replay, any disk IO → throw); rule fidelity (RollingBoulder one-by-one; `ShippedBranch` transpiler TestMode→shipped for MerchantPotionEntry, Cauldron, CallingBell); speed (`FastCreatures/PlayerCreatures/Players`, `FastHookListeners` with reverse-patch equivalence check); choices (`ChooseACardSkip` → `PolicySelector.MustPickOne`).
+- Patch groups (`HeadlessPatches.cs`): engine shells (OS, Time, singletons, resources, loc, player name); asset preloads off; presentation in model code without the TestMode guard (Kaiser Crab arms, SoulNexus, `EventPresentation` transpiler, §5.2); persistence off (`SaveRun`, progress, replay, any disk IO → throw); rule fidelity (RollingBoulder one-by-one; `ShippedBranch` transpiler TestMode→shipped for MerchantPotionEntry, Cauldron, CallingBell); speed (`FastCreatures/PlayerCreatures/Players`, `FastHookListeners` with reverse-patch equivalence check); choices (`ChooseACardSkip` → `PolicySelector.MustPickOne`, `ChooseABundle`, `CrystalSphereScreen`).
 - JIT: `TieredCompilation=false` in csproj (tiered rejit silently dropped a Harmony patch after ~thousands of combats); launch with `DOTNET_ReadyToRun=0` (~20% faster).
 - `Pump`: single-threaded `SynchronizationContext`; all game async continuations run on the driver thread → determinism. `RunUntil(cond)`, `Drain()`.
 - Run env: `HOME` → scratch dir, `DOTNET_ROOT=~/.dotnet`, binary `src/Sts2Ai.SimWorker/bin/Release/net9.0/Sts2Ai.SimWorker`.
-- CLI: `list | combat --encounter ID | combat --from OBS.json | bench | selftest | forkbench` + loadout opts (`Cli.cs` header).
+- CLI: `list | combat --encounter ID | combat --from OBS.json | run | bench | selftest | forkbench` + loadout opts (`Cli.cs` header).
 
 ## 2. Combat session [exists]
 
@@ -38,48 +38,53 @@ Roles of a worker process: (a) host of the "real" run in R1–R3; (b) search wor
 - `forkbench`: restore = 0.28 ms + 0.073 ms × replayed actions; branch (restore + determinize + rollout, mean root depth 15.8, rollout 16.6) median 2.78 ms, p90 3.97 → 329 branches/s/core.
 - Multi-process (bench n=3000 each, wall incl. ~1.2 s boot): P=1 275/s, 4 1060, 8 1860, 12 1879, 16 2019 combats/s. 8 physical cores; SMT ≈ +8%. Default pool = 8.
 - Memory ~160 MB/worker.
+- `run` (whole runs, SILENT A0, 9999 HP, random macro + `play` combat; long random-play combats dominate): ~1,800 decisions/s/process, ~0.4 s/run; 8 processes × 50 runs in 22 s wall.
 - Levers, in order: avoid replay depth (DFS prefix reuse; node checkpoints §5.4), per-hook listener filtering (needs `perf`, not installed), object-graph deep copy (removes replay cost; needed for AlphaZero-style search).
 
-## 5. Run session [planned]
+## 5. Run session [exists]
 
-Goal: play whole runs through semantic actions with zero fallback, real world setup, same code path as the mod.
+`RunSession` (`RunSession.cs`): whole runs, real world setup, every decision through GameBridge entry points (same calls as the mod). The driver plays the UI's part: which screen shows, what its buttons do. Per-room screen memory = `RoomProgress` (left, rewards offered, rest succeeded, chest opened, relic picked), reset when `CurrentRoom` changes (also when an event combat resumes its event).
+- `Step()` = settle, then `Decide()`: one decision, or one automatic UI step (offer combat rewards, open chest, leave treasure); >20 automatic steps in a row → throw.
+- Settle: in combat pump until `WaitingForInput` (after EndTurn: a later turn); elsewhere until pump queue empty and executor idle. Then collect driver-started game tasks (`_running`: purchase, rest option, reward, divination…); a faulted one throws.
+- Decide order: newest open rewards screen → a driver task still running with no screen = throw → map (MapRoom or room left) → by room: combat / event (crystal sphere minigame first) / shop / rest / treasure; other room = throw.
+- Policies: combat `ICombatPolicy`, card prompts `IChoicePolicy` via `PolicySelector` (+ card reward and bundle handlers), every other screen `IMacroPolicy` (`MacroDecision(surface, legal)`); placeholder `RandomMacro`.
+- Output: trace (every decision as "surface action", prompts answered inside other actions included), map hash per act, `Summary()` (act, floor, room, hp, gold, deck, relics, potions). `IsOver = RunState.IsGameOver`; won = over in the victory room.
+- CLI: `run [--n] [--start] [--seed] [--asc] [--policy] [--max-decisions] [--check] [--trace]` + loadout opts.
 
-### 5.1 Start (copy `NGame.StartRun`, which exists only in a node [V, agent])
+### 5.1 Start (copy of `NGame.StartRun`, which exists only in a node [V])
 
-`RunState.CreateForNewRun([Player.CreateForNewRun(ch, unlock, 1)], acts, mods, GameMode.Standard, asc, seed)` → `RunManager.SetUpNewSingleplayer` → `FinalizeStartingRelics` → `Launch` → `EnterAct(0, false)` (`D/Nodes/NGame.cs:1138-1145,1176-1187`; `D/Runs/RunManager.cs:295-312,711-738`).
+`RunSetup(Character, Seed, Ascension, Loadout?)` → `Player.CreateForNewRun(ch, UnlockState.all, NetId)` → loadout → acts `ActModel.GetRandomList(Rng(hash(seed),"act_selection"), UnlockState.all, false)` (`StartRunLobby.BeginRunLocally`) → `RunState.CreateForNewRun` → `SetUpNewSingleplayer(run, shouldSave:false)` → `FinalizeStartingRelics` → `Launch` → `EnterAct(0, false)` → settle; first decision = Neow (`D/Nodes/NGame.cs:1138-1145,1176-1187`; `D/Runs/RunManager.cs:295-312,711-738`).
 - Not `SetUpTest` (skips `GenerateRooms` `RunManager.cs:743-771`: ancients, double boss).
-- Acts: `ActModel.GetRandomList` with `Rng(hash(seed),"act_selection")` + Act1 override (`D/Multiplayer.Game.Lobby/StartRunLobby.cs:469-514`); TestMode skips forced-undiscovered act (`ActModel.cs:550`) — fine for a fully discovered save.
-- `UnlockState`: build from the target profile; `StartedWithNeow = IsEpochRevealed<NeowEpoch>()`, else act-1 start is a Monster room (`RunManager.cs:579-582,799-831`). Default target = the user's profile (all discovered) → mirror it; verify vs R4.
-- Ascension clamp to character max (`StartRunLobby.cs:485-491`).
+- `UnlockState.all`: all discovered, `NumberOfRuns` huge → no newbie tweaks, Neow start. Not done: mirroring the user's real profile (verify vs R4); ascension clamp to character max (`StartRunLobby.cs:485-491`), callers pass valid values.
 
-### 5.2 Surfaces (enumerate / apply / wait) [V, agent; spot-check during impl]
+### 5.2 Surfaces (as implemented; grammar protocol.md §3)
 
-| surface | enumerate | apply | wait | node-only logic to copy / patch |
-|---|---|---|---|---|
-| map | copy `NMapScreen.RecalculateTravelability` (`NMapScreen.cs:874-921`: start point / second boss / boss / `MapTravel.GetTravelablePointsFrom`, free travel) | `RequestEnqueue(VoteForMapCoordAction(me, MapLocation(cur, act), MapVote{coord, MapSelectionSynchronizer.MapGenerationCount}))` (`NMapScreen.cs:935-948`) → `MoveToMapCoordAction` | `RunManager.RoomEntered` | travel rules |
-| combat end → rewards | `CombatManager.CombatWon` | `room.OfferRoomEndRewards()` (`CombatRoom.cs:261-270`), or `ProceedFromTerminalRewardsScreen` if `!Encounter.ShouldGiveRewards` | — | `NCombatUi.OnCombatWon` is the only caller |
-| rewards set | inside `RewardsSet.testSelector`: rewards with `!SuccessfullySelected` | `RewardsSetSynchronizer.SelectLocalReward(r)` / `SkipLocalRewardsSet()` | `Offer` awaits selector then TCS (`RewardsSet.cs:167-199`) | install `testSelector` (static); `ThrowInTestIfRewardsNotTaken=false`; **every set left incomplete must be ended with `SkipLocalRewardsSet()` or awaited `OfferCustom` deadlocks** |
-| potion belt full | `PotionReward` returns false (`PotionReward.cs:76-93`) | `DiscardPotionGameAction(owner, slot, false)` or `EnqueueManualUse` (AnyTime), retry | — | |
-| leave rewards / act change | — | non-boss terminal: `ProceedFromTerminalRewardsScreen` (resumes parent event if needed); boss: `ActChangeSynchronizer.SetLocalPlayerReady()` → `MoveToNextAct`; after last act → `EventRoom(TheArchitect)` | `RoomEntered` | branching from `NRewardsScreen.OnProceedButtonPressed` (`:565-611`) |
-| card reward | `ICardSelector.GetSelectedCardReward(cards, alts)`; alts = Skip/Reroll + hook, ≤2 | return card or alternative | sync loop; reroll loops (`CardReward.cs:321-330`) | check `CanReroll` before reroll (alts computed once); `PolicySelector` currently always skips |
-| deck prompts (upgrade/transform/enchant/remove/grid) | `GetSelectedCards(options, min, max)` | return cards | awaited | auto-picks when `count ≤ min && !RequireManualConfirmation`; prefix to expose `CardSelectorPrefs.Cancelable` (`[ThreadStatic]`, like `MustPickOne`) |
-| choose-a-card | `GetSelectedCards(cards,0,1)` | | | `ChooseACardSkip` prefix exists |
-| choose-a-bundle | `FromChooseABundleScreen` (`CardSelectCmd.cs:965-1005`) | | | TestMode forces `bundles[0]` (:978) → prefix asks policy |
-| choose-a-relic | `RelicSelectCmd.FromChooseARelicScreen` | | | no callers in v0.111.0; optional defensive prefix |
-| event / ancient | `EventSynchronizer.GetLocalEvent().CurrentOptions` minus `IsLocked` | `ChooseLocalOption(i)` | `AwaitPendingOptionTasks`, `StateChanged`, `IsFinished` | never `Chosen()` an `IsProceed` option; finished/proceed = go to map (`NEventRoom.Proceed` NREs headless). Neow: `BeforeEventStarted` sets HP 0 then heals. Event combats resume via `ProceedFromTerminalRewardsScreen` |
-| shop | `MerchantRoom.GetLocalInventory().AllEntries` (`IsStocked`, `EnoughGold`, `Cost`) | `entry.OnTryPurchaseWrapper(inv)`; removal `(inv,false,true)` then `SetUsed()` | awaited `Task<bool>` | `Used` set only via `NRun…OnCardRemovalUsed`; `MerchantRoom.Exit` returns early in TestMode → no history (cosmetic) |
-| rest | `RestSiteSynchronizer.GetLocalOptions()` where `IsEnabled` | `ChooseLocalOption(i)` → `Task<bool>` | awaited | leave only after a success or no options (`NRestSiteRoom.cs:333,571-596`) |
-| treasure | `TreasureRoomRelicSynchronizer.CurrentRelics` | `await room.DoNormalRewards()`, `DoExtraRewardsIfNeeded()`, then `PickRelicLocally(i)`/`SkipRelicLocally()`, then `ProceedFromTerminalRewardsScreen` | `RelicsAwarded` | chest open logic in `NTreasureRoom.OpenChest`; empty chest → `CompleteWithNoRelics` [I] |
-| game over | all players `Creature.IsDead` | — | — | TestMode skips `OnEnded(false)`; detect ourselves |
-| victory | TheArchitect option PROCEED (`IsProceed=false`) → `WinRun` | | `OnEnded(true)` then players killed | record win before the kill (postfix `WinRun`) |
+| surface | legal (GameBridge) | apply | notes |
+|---|---|---|---|
+| map | `MapActions.Travelable` = `NMapScreen.RecalculateTravelability` rules, sorted (row, col) | `RequestEnqueue(VoteForMapCoordAction(…))` | |
+| combat | `CombatActions.Legal` | `CombatActions.Start` | won → `room.OfferRoomEndRewards()`, or `ProceedFromTerminalRewardsScreen` if `!Encounter.ShouldGiveRewards` (auto; `NCombatUi.OnCombatWon`) |
+| rewards | untaken rewards (potion only with a free slot), `rewards_done` unless `DisallowSkipping` | `SelectLocalReward` | sets arrive in `RewardsSet.testSelector` (`ThrowInTestIfRewardsNotTaken=false`); non-terminal set closes once `IsRewardsSetCompleted`. Done: non-terminal → `SkipLocalRewardsSet`; boss/victory (not between double bosses) → `ActChangeSynchronizer.SetLocalPlayerReady`; else `ProceedFromTerminalRewardsScreen` (`NRewardsScreen`) |
+| card_reward | cards + alternatives; reroll once per screen (button stays listed after use) | `PolicySelector.GetSelectedCardReward` handler | |
+| card_choice | `IChoicePolicy` via `PolicySelector` | | deck prompts, choose-a-card (`ChooseACardSkip`) |
+| bundle | `bundle:i` | prefix on `CardSelectCmd.FromChooseABundleScreen`: reserve choice id, ask, `SyncLocalChoice` | TestMode forced `bundles[0]`; only caller ScrollBoxes |
+| event | options minus locked | `EventSynchronizer.ChooseLocalOption(i)` | `IsProceed` options are UI buttons: ancient "PROCEED" = `proceed`, Trial DOUBLE_DOWN (abandon popup) never legal. Finished → only `proceed` = open map (`NEventRoom.Proceed` NREs headless) |
+| crystal_sphere | `big:X,Y` (3x3) / `small:X,Y` (one cell), only if it uncovers a hidden cell | `SetTool` + `CellClicked` | CRYSTAL_SPHERE minigame; `NCrystalSphereScreen.ShowScreen` prefix hands it to the driver (`HeadlessPatches.CrystalSphereShown`); after the last divination its rewards arrive as a rewards set. Small tool exists to avoid completing the curse |
+| shop | `buy:i` stocked + affordable (potion needs a free slot), `remove`, `leave` | `OnTryPurchaseWrapper(inv)`; removal `(inv,false,true)` + `SetUsed()` | `MerchantRoom.Exit` returns early in TestMode → no history (cosmetic) |
+| rest | enabled options; `leave` after a success or none enabled | `RestSiteSynchronizer.ChooseLocalOption` → `Task<bool>` | `NRestSiteRoom.cs:333,571-596` |
+| treasure | `relic:i`, `relic_skip` | chest opens automatically (`DoNormalRewards` + `DoExtraRewardsIfNeeded`); pick/skip once; then `ProceedFromTerminalRewardsScreen` | single player: skip leaves `CurrentRelics` non-null → `RelicPicked` flag |
+| potion belt | `potion:S` (any-time), `discard_potion:S`, appended to every macro surface | `EnqueueManualUse` / `DiscardPotionGameAction` | full belt: potion reward/purchase hidden until a slot frees |
+| game over / victory | — | — | `RunState.IsGameOver`; victory room = won (game then kills the players) |
 
-Driver: one async loop keyed by current room: map → wait `RoomEntered`; combat → `CombatSession`-style loop then rewards; event/rest/shop/treasure → options until leave → map. All reward prompts via `testSelector`; all card prompts via pushed `ICardSelector` (checked before `PlayerChoiceSynchronizer`, `CardSelectCmd.cs:264,335`).
+Patches the run needed (§1): asset preloads; presentation in model code that skips the TestMode guard: Kaiser Crab arms `BeforeDeath`, SoulNexus `AfterDeath`, `EventPresentation` transpiler (in every `EventModel` subclass incl. lambdas/state machines: call into or returning a Godot object → dropped, default result; `Task.Delay` → finished; hits Amalgamator, DenseVegetation, DollRoom, JungleMazeAdventure, PunchOff, Trial); `CrystalSphereScreen`; `ChooseABundle`.
+Legit game behavior seen with a 9999-HP loadout: kill mechanics (THE_INSATIABLE Sandpit `Kill`, THE_LOST_AND_FORGOTTEN str/dex steal ~156 turns); PunchOff's "event not finished" warning (combat with `shouldResumeAfterCombat:false`, same in the real game).
 
-### 5.3 Determinism risks for runs
+### 5.3 Determinism for runs
 
-- `MapPoint.Children` is a set ordered by object identity; `MapCoord` tuple hash randomized per process [V, agent] → future act map generation may differ across processes [I]. Test: same seeds, all acts' maps in 2 processes, compare; patch ordering if needed.
-- Remaining TestMode rule branches for runs (testmode-audit): RewardsSet auto-claim (→ testSelector), ChooseABundle (→ prefix), ActModel act-1 (profile-dependent), RunManager newbie tweaks (UnlockState-dependent). Cosmetic: `MerchantRoom.Exit`.
-- `NonInteractiveMode` inline execution vs per-frame yielding: fire-and-forget ordering may differ (R2/R3 diff list).
+- Measured (2026-10-26, 200 seeds SILENT A0, 9999 HP, random macro + `play` combat): `--check` 200/200 identical on replay in-process (trace, summary, map hashes); the same 200 in another process partition (8×25 vs 4×50) identical line for line (outcome, summary, decision count, map hashes) → `MapPoint.Children` order risk not observed; `MapActions` sorts anyway.
+- IRONCLAD, DEFECT, REGENT, NECROBINDER (25 runs each, `--check`): all identical on replay, 0 failures, 0 game errors.
+- TestMode rule branches for runs (testmode-audit): RewardsSet auto-claim → testSelector; ChooseABundle → prefix; ActModel act-1 and newbie tweaks → none with `UnlockState.all`; `MerchantRoom.Exit` cosmetic.
+- Real-time waits: model code must not use `Task.Delay` (breaks quiescence). Amalgamator → patched. Others unreached headless: `ActionExecutor.WaitForUnpause` (50 ms poll while paused), `CombatState.GodotTimerTask` (timeout of a net-id creature lookup), rest-site hover messages (UI). Guard: `pump idle waits` = 0 over the 200-run batch.
+- `NonInteractiveMode` inline execution vs per-frame yielding: fire-and-forget ordering may differ from the real game (R2/R3 diff list).
 
 ### 5.4 Run snapshot = node checkpoint + node trace
 
@@ -118,7 +123,8 @@ Load path (= Continue) [V, agent]:
 ## 9. Tests
 
 Exists (`selftest`): determinism; restore + hidden state byte-equal; determinize keeps obs, replays, plays on; build shows obs, restores, plays on; fast hook listeners = game's; brain reaches no game assembly (+ GameBridge negative control); protocol round trip; rolling boulder path hit; no game errors.
-Planned: run determinism (same seed, 2 processes, all decisions + final state); map generation cross-process; surface coverage (every surface hit, fallback 0) over N random-policy runs; SL seal; horizon counterfactual fields; R3-vs-R4 same-seed diff once the mod logs runs.
+Exists (`run`): `--check` replays each run in-process and compares trace, summary, map hashes; report lists surfaces never reached, driver failures (no fallback: an unknown screen throws), game Log.Error lines, pump idle waits (real-time waits); exit 1 on any. Cross-process = same seeds in another process partition, diff the per-run lines. Result 2026-10-26: §5.3.
+Planned: SL seal; horizon counterfactual fields; R3-vs-R4 same-seed diff once the mod logs runs.
 
 ## 10. Open
 

@@ -237,7 +237,7 @@ internal sealed class CombatSession : IDisposable
     }
 
     /// <summary>FNV-1a: a string hash that is the same in every process, unlike string.GetHashCode.</summary>
-    private static ulong StableHash(string text)
+    internal static ulong StableHash(string text)
     {
         ulong hash = 14695981039346656037;
         foreach (char c in text) hash = (hash ^ c) * 1099511628211;

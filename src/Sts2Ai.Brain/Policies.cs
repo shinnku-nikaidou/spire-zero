@@ -26,6 +26,13 @@ public interface IChoicePolicy
     IReadOnlyList<int> Choose(CardChoice choice);
 }
 
+/// <summary>Picks an out-of-combat action (map, rewards, events, shop, rest, treasure, card rewards, bundles).</summary>
+public interface IMacroPolicy
+{
+    /// <summary>One of <see cref="MacroDecision.Legal"/>.</summary>
+    string Choose(MacroDecision decision);
+}
+
 /// <summary>Uniform over the legal actions. Ends turns early a lot.</summary>
 public sealed class RandomPolicy(Random rng) : ICombatPolicy
 {
@@ -56,6 +63,12 @@ public sealed class RandomChoices(Random rng) : IChoicePolicy
         int count = choice.Min == choice.Max ? choice.Min : rng.Next(choice.Min, choice.Max + 1);
         return Enumerable.Range(0, choice.Options.Count).OrderBy(_ => rng.Next()).Take(count).ToList();
     }
+}
+
+/// <summary>Uniform over the legal actions: a placeholder that reaches every surface, not a strategy.</summary>
+public sealed class RandomMacro(Random rng) : IMacroPolicy
+{
+    public string Choose(MacroDecision decision) => decision.Legal[rng.Next(decision.Legal.Count)];
 }
 
 public static class Policies
