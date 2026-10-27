@@ -86,7 +86,7 @@ internal sealed class RunSession : IDisposable
     /// <summary>A hash of each act's map, taken when the act is entered; the same in every process if generation is.</summary>
     public IReadOnlyList<ulong> MapHashes => _mapHashes;
 
-    /// <summary>Every combat entered so far, with the HP at its first decision.</summary>
+    /// <summary>Every combat entered so far, with the HP at its first decision and, once it is over, its end.</summary>
     public IReadOnlyList<CombatEntry> Combats => _combats;
 
     /// <summary>Card rewards of the rewards screens closed so far, and how many of them were left untaken: skipped on
@@ -239,9 +239,13 @@ internal sealed class RunSession : IDisposable
         }, Describe);
         _pump.Drain();
         _endedTurn = null;
+        if (_combats.Count > 0 && _combats[^1].End == null && (!CombatManager.Instance.IsInProgress || IsOver))
+            _combats[^1] = _combats[^1] with { End = new(IsOver && !Won, Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions()) };
         if (_mapHashes.Count == Run.CurrentActIndex && Run.Map is not NullActMap) _mapHashes.Add(MapHash(Run.Map));
         Collect();
     }
+
+    private int Potions() => Player.PotionSlots.Count(p => p != null);
 
     /// <summary>Ends the driver's tasks that are done, failing on any that faulted.</summary>
     private void Collect()
@@ -328,7 +332,7 @@ internal sealed class RunSession : IDisposable
             {
                 _progress.CombatEntered = true;
                 _combats.Add(new(Run.CurrentActIndex, Run.TotalFloor, room.Encounter.Id.Entry, room.Encounter.RoomType.ToString(),
-                    Player.Creature.CurrentHp, Player.Creature.MaxHp));
+                    Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions()));
             }
             return CombatDecision();
         }

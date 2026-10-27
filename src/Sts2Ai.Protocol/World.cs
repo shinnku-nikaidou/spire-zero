@@ -45,4 +45,7 @@ public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
 
 /// <summary>An action that search scored: its mean value over the worlds, the 95% confidence half-width, and how many worlds.</summary>
-public sealed record Candidate(string Action, double Value, double Ci, int Samples);
+/// <param name="Values">Its value in each world, in world order, to 4 decimals: the Q that ExIt's targets are made of
+/// (docs: learning §2).</param>
+/// <param name="Nodes">The actions the search simulated below it in each world.</param>
+public sealed record Candidate(string Action, double Value, double Ci, int Samples, IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);

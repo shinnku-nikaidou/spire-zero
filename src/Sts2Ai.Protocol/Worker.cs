@@ -43,4 +43,5 @@ public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<Comba
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
 
 /// <summary>A line of play that search found, from its first action, and its value.</summary>
-public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions);
+/// <param name="Nodes">The actions the search simulated after the line's first action, itself included.</param>
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0);

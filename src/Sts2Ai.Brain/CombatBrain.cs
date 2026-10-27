@@ -62,7 +62,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
     /// <summary>Scores each first action by its mean over the worlds; the plan is the best action's line in the first world.</summary>
     public static CombatDecisionResult Merge(IReadOnlyList<CombatAction> first, IReadOnlyList<IReadOnlyList<PlannedLine>> worlds)
     {
-        var candidates = first.Select((action, a) => Summarize(action.ToString(), worlds.Select(lines => lines[a].Value).ToArray())).ToList();
+        var candidates = first.Select((action, a) => Summarize(action.ToString(), worlds.Select(lines => lines[a]).ToList())).ToList();
         int best = Enumerable.Range(0, first.Count).MaxBy(a => candidates[a].Value);
         return new(first[best], worlds[0][best].Actions.Skip(1).ToList(), candidates.OrderByDescending(c => c.Value).ToList());
     }
@@ -71,11 +71,13 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
     public static List<CombatAction> Ordered(IReadOnlyList<CombatAction> legal) =>
         legal.OrderBy(a => a.Kind switch { CombatActionKind.EndTurn => 0, CombatActionKind.PlayCard => 1, _ => 2 }).ToList();
 
-    private static Candidate Summarize(string action, double[] values)
+    /// <param name="lines">The action's best line in each world.</param>
+    private static Candidate Summarize(string action, IReadOnlyList<PlannedLine> lines)
     {
+        var values = lines.Select(l => l.Value).ToArray();
         double mean = values.Average();
         double ci = values.Length < 2 ? 0 : 1.96 * Math.Sqrt(values.Sum(v => (v - mean) * (v - mean)) / (values.Length - 1) / values.Length);
-        return new(action, mean, ci, values.Length);
+        return new(action, mean, ci, values.Length, values.Select(v => Math.Round(v, 4)).ToList(), lines.Select(l => l.Nodes).ToList());
     }
 
     private sealed class WorldSearch(ICombatWorld world, int round, LeafWeights? weights, int nodesPerFirst)
@@ -92,7 +94,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
                 if (a > 0) world.Restore(root);
                 _nodes = 0;
                 var after = After(first[a]);
-                lines[a] = new(after.Value, [first[a], .. after.Actions]);
+                lines[a] = new(after.Value, [first[a], .. after.Actions], _nodes);
             }
             return lines;
         }

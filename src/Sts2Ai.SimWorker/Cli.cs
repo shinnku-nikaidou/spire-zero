@@ -260,7 +260,7 @@ internal static class Cli
         using var records = opts.TryGetValue("records", out var recordsPath) ? new StreamWriter(recordsPath) { AutoFlush = true } : null;
         bool log = check || logFile != null;
         var brainPath = opts.GetValueOrDefault("brain");
-        if (brainPath != null && (opts.Keys.Intersect(["policy", "macro", "worlds", "nodes", "workers", "log"]).FirstOrDefault() is { } brainOption))
+        if (brainPath != null && (opts.Keys.Intersect([.. ChampionOptions.Keys, "log"]).FirstOrDefault() is { } brainOption))
             return Fail($"--{brainOption} belongs to the brain at {brainPath}, not to this host");
         ChampionOptions? champion = null;
         try
@@ -473,6 +473,9 @@ internal static class Cli
     private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, RunValue Value, string? ValueFile,
         LeafFile? Leaf, string? LeafPath)
     {
+        /// <summary>The options <see cref="Parse"/> reads.</summary>
+        public static readonly string[] Keys = ["policy", "macro", "worlds", "nodes", "elite-x", "boss-x", "workers", "value", "leaf"];
+
         public static ChampionOptions Parse(Dictionary<string, string> opts)
         {
             var policy = opts.GetValueOrDefault("policy", "play");
