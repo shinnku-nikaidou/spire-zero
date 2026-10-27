@@ -30,8 +30,9 @@ public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<str
 
 /// <summary>
 /// V v2 (docs: learning §1): a net over the run's cards, relics, potions and context, and V v0's features, run by ONNX
-/// Runtime. The graph (<c>learn/train_value.py</c> defines it) gives one hazard per floor: the chance to die on that
-/// floor if still alive there. The value is read from those chances from the current floor on
+/// Runtime; a net that declares them also reads the cards' and relics' numbers and the ascension
+/// (<see cref="NetNumbers"/>). The graph (<c>learn/train_value.py</c> defines it) gives one hazard per floor: the chance
+/// to die on that floor if still alive there. The value is read from those chances from the current floor on
 /// (<see cref="NetFile.Objective"/>). This class only turns a run into the graph's inputs.
 /// </summary>
 public sealed class RunNet : IRunValue, IDisposable
@@ -146,7 +147,12 @@ public sealed class RunNet : IRunValue, IDisposable
         inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
         inputs.AddRange(Bag("context", "context_mask", tokens.Context));
         inputs.Add(NamedOnnxValue.CreateFromTensor("features", scalars));
-        using var results = _session.Run(inputs);
+        inputs.AddRange(NetNumbers.Cards(run.Deck, Index));
+        inputs.AddRange(NetNumbers.Relics(run.Relics, Index));
+        var extra = new DenseTensor<float>([1, 1]);
+        extra[0, 0] = (float)(run.Ascension / 10.0);
+        inputs.Add(NamedOnnxValue.CreateFromTensor("extra", extra));
+        using var results = _session.Run(NetNumbers.Declared(_session, inputs));
         return results[0].AsEnumerable<float>().ToArray();
     }
 
@@ -164,5 +170,6 @@ public sealed class RunNet : IRunValue, IDisposable
         return [NamedOnnxValue.CreateFromTensor(table, index), NamedOnnxValue.CreateFromTensor(mask, present)];
     }
 
-    private int Index(string table, string id) => _index[table].GetValueOrDefault(id);
+    /// <summary>An id's entry in a token table; 0 for an id the table does not list, or a table the file does not have.</summary>
+    private long Index(string table, string id) => _index.TryGetValue(table, out var ids) ? ids.GetValueOrDefault(id) : 0;
 }

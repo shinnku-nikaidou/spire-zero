@@ -25,7 +25,9 @@ public sealed record CombatNetFile(
 /// <summary>
 /// The learned combat leaf (docs: combat-brain §4): from a round's start, how the combat ends under the policy that
 /// played the training games. The net, run by ONNX Runtime, reads the cards in each pile, the player, each enemy with
-/// its intents now and in its last rounds, the relics, the potions and the encounter. It predicts what is still to come:
+/// its intents now and in its last rounds, the relics, the potions and the encounter; a net that declares them also
+/// reads the cards' and relics' numbers, the powers' stacks and kept cards, the orbs, the allies, and the ascension,
+/// orb slots and gold. It predicts what is still to come:
 /// the HP share lost from here and the potions used, so the HP and potions held now count in full. A state in progress
 /// is worth the endings it predicts, priced as <see cref="LeafValue"/> prices a win (the HP share now less each bucket's
 /// middle, and the potions held less those used); a state whose combat is over is <see cref="LeafValue"/>'s. This class
@@ -34,9 +36,6 @@ public sealed record CombatNetFile(
 public sealed class CombatNet : ICombatLeaf, IDisposable
 {
     private static readonly string[] Piles = ["hand", "draw", "discard", "exhaust"];
-    /// <summary>Every scaled number the net reads is capped at ±this: a few states show huge ones (an erupting
-    /// WATERFALL_GIANT's HP).</summary>
-    private const double Cap = 10;
 
     private readonly CombatNetFile _file;
     private readonly LeafWeights _weights;
@@ -195,8 +194,106 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         inputs.AddRange(Bag("potions", "potion_mask", obs.Potions.OfType<string>().ToList()));
         inputs.AddRange(Bag("context", "context_mask",
             ["character:" + pl.Character, "encounter:" + (obs.Encounter ?? "<none>"), "room:" + (obs.Room ?? "<none>"), $"act:{obs.Act}"]));
-        using var results = _session.Run(inputs);
+        // What the first nets did not read, fed only to a graph that declares it ("costs" is already in).
+        inputs.AddRange(NetNumbers.Cards(cards.Select(c => c.Card).ToList(), Index).Where(v => v.Name != "costs"));
+        inputs.AddRange(PowerNumbers(pl.Powers));
+        var enemyStacks = new DenseTensor<float>([1, e_n, q_n]);
+        var enemyCards = new DenseTensor<long>([1, e_n, q_n]);
+        var enemyCardMask = new DenseTensor<float>([1, e_n, q_n]);
+        for (int k = 0; k < enemies.Count; k++)
+            for (int j = 0; j < enemies[k].Powers.Count; j++)
+            {
+                var power = enemies[k].Powers[j];
+                enemyStacks[0, k, j] = power.Stacks is { } stacks ? Capped(stacks / 10.0) : 0;
+                if (power.Card is not { } card) continue;
+                enemyCards[0, k, j] = Index("cards", card.Id);
+                enemyCardMask[0, k, j] = 1;
+            }
+        inputs.AddRange([
+            NamedOnnxValue.CreateFromTensor("enemy_power_stacks", enemyStacks), NamedOnnxValue.CreateFromTensor("enemy_power_cards", enemyCards),
+            NamedOnnxValue.CreateFromTensor("enemy_power_card_mask", enemyCardMask),
+        ]);
+        inputs.AddRange(NetNumbers.Relics(obs.Relics, Index));
+        inputs.AddRange(Orbs(pl.Orbs));
+        inputs.AddRange(Allies(obs.Allies.Where(a => a.Hp > 0).ToList()));
+        var extra = new DenseTensor<float>([1, 3]);
+        extra[0, 0] = (float)(obs.Ascension / 10.0);
+        extra[0, 1] = (float)(pl.OrbSlots / 10.0);
+        extra[0, 2] = Capped(pl.Gold / 100.0);
+        inputs.Add(NamedOnnxValue.CreateFromTensor("extra", extra));
+        using var results = _session.Run(NetNumbers.Declared(_session, inputs));
         return (results[0].AsEnumerable<float>().ToArray(), results[1].AsEnumerable<float>().First());
+    }
+
+    /// <summary>The player's powers' stacks / 10 (0 where the tooltip states none apart) and kept cards.</summary>
+    private NamedOnnxValue[] PowerNumbers(IReadOnlyList<PowerView> powers)
+    {
+        int n = Math.Max(1, powers.Count);
+        var stacks = new DenseTensor<float>([1, n]);
+        var cards = new DenseTensor<long>([1, n]);
+        var mask = new DenseTensor<float>([1, n]);
+        for (int k = 0; k < powers.Count; k++)
+        {
+            stacks[0, k] = powers[k].Stacks is { } s ? Capped(s / 10.0) : 0;
+            if (powers[k].Card is not { } card) continue;
+            cards[0, k] = Index("cards", card.Id);
+            mask[0, k] = 1;
+        }
+        return
+        [
+            NamedOnnxValue.CreateFromTensor("power_stacks", stacks), NamedOnnxValue.CreateFromTensor("power_cards", cards),
+            NamedOnnxValue.CreateFromTensor("power_card_mask", mask),
+        ];
+    }
+
+    /// <summary>The player's orbs: ids, passive and evoke numbers / 10, and their mask.</summary>
+    private NamedOnnxValue[] Orbs(IReadOnlyList<OrbView> orbs)
+    {
+        int n = Math.Max(1, orbs.Count);
+        var ids = new DenseTensor<long>([1, n]);
+        var values = new DenseTensor<float>([1, n, 2]);
+        var mask = new DenseTensor<float>([1, n]);
+        for (int k = 0; k < orbs.Count; k++)
+        {
+            ids[0, k] = Index("orbs", orbs[k].Id);
+            values[0, k, 0] = Capped((double)orbs[k].Passive / 10);
+            values[0, k, 1] = Capped((double)orbs[k].Evoke / 10);
+            mask[0, k] = 1;
+        }
+        return [NamedOnnxValue.CreateFromTensor("orbs", ids), NamedOnnxValue.CreateFromTensor("orb_values", values), NamedOnnxValue.CreateFromTensor("orb_mask", mask)];
+    }
+
+    /// <summary>The living allies: ids (a player as "&lt;player&gt;"), HP share, HP, max HP and block, and their powers.</summary>
+    private NamedOnnxValue[] Allies(IReadOnlyList<CreatureView> allies)
+    {
+        int n = Math.Max(1, allies.Count);
+        int q = Math.Max(1, allies.Select(a => a.Powers.Count).DefaultIfEmpty(0).Max());
+        var ids = new DenseTensor<long>([1, n]);
+        var scalars = new DenseTensor<float>([1, n, 4]);
+        var mask = new DenseTensor<float>([1, n]);
+        var powers = new DenseTensor<long>([1, n, q]);
+        var amounts = new DenseTensor<float>([1, n, q]);
+        var powerMask = new DenseTensor<float>([1, n, q]);
+        for (int k = 0; k < allies.Count; k++)
+        {
+            var a = allies[k];
+            ids[0, k] = Index("allies", a.Id ?? "<player>");
+            double[] x = [a.Hp / (double)Math.Max(1, a.MaxHp), a.Hp / 100.0, a.MaxHp / 100.0, a.Block / 20.0];
+            for (int i = 0; i < x.Length; i++) scalars[0, k, i] = Capped(x[i]);
+            mask[0, k] = 1;
+            for (int j = 0; j < a.Powers.Count; j++)
+            {
+                powers[0, k, j] = Index("powers", a.Powers[j].Id);
+                amounts[0, k, j] = Capped(a.Powers[j].Amount / 10.0);
+                powerMask[0, k, j] = 1;
+            }
+        }
+        return
+        [
+            NamedOnnxValue.CreateFromTensor("allies", ids), NamedOnnxValue.CreateFromTensor("ally_scalars", scalars),
+            NamedOnnxValue.CreateFromTensor("ally_mask", mask), NamedOnnxValue.CreateFromTensor("ally_powers", powers),
+            NamedOnnxValue.CreateFromTensor("ally_power_amounts", amounts), NamedOnnxValue.CreateFromTensor("ally_power_mask", powerMask),
+        ];
     }
 
     private static IReadOnlyList<CardView> Pile(CombatObservation obs, string pile) => pile switch
@@ -207,7 +304,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         _ => obs.Exhaust,
     };
 
-    private static float Capped(double x) => (float)Math.Clamp(x, -Cap, Cap);
+    private static float Capped(double x) => NetNumbers.Capped(x);
 
     /// <summary>Powers as the graph takes them: ids, amounts over 10 and their mask, padded to at least 1.</summary>
     private NamedOnnxValue[] Powers(string ids, string amounts, string mask, IReadOnlyList<PowerView> powers)
@@ -239,5 +336,6 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return [NamedOnnxValue.CreateFromTensor(table, index), NamedOnnxValue.CreateFromTensor(mask, present)];
     }
 
-    private int Index(string table, string id) => _index[table].GetValueOrDefault(id);
+    /// <summary>An id's entry in a token table; 0 for an id the table does not list, or a table the file does not have.</summary>
+    private long Index(string table, string id) => _index.TryGetValue(table, out var ids) ? ids.GetValueOrDefault(id) : 0;
 }

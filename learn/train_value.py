@@ -34,7 +34,9 @@ from weights import out_path  # noqa: E402
 script = common.app()
 
 MAX_UP = 3  # RunNet.MaxUp
-TABLES = ["cards", "modifiers", "relics", "potions", "context"]
+# Every scaled number the nets read is capped at ±CAP: a few states show huge ones (an erupting WATERFALL_GIANT's HP).
+CAP = 10.0
+TABLES = ["cards", "modifiers", "relics", "potions", "context", "vars", "relic_status"]
 BAGS = ["relics", "potions", "context"]
 # The ONNX graph's inputs, in order (RunNet feeds them by these names).
 INPUTS = [
@@ -50,6 +52,15 @@ INPUTS = [
     "context",
     "context_mask",
     "features",
+    "costs",
+    "mod_amounts",
+    "card_scalars",
+    "vars",
+    "var_values",
+    "var_mask",
+    "relic_values",
+    "relic_status",
+    "extra",
 ]
 
 
@@ -57,8 +68,40 @@ def held_out(run_id: str) -> bool:
     return int(run_id, 16) % 5 == 0
 
 
+def cap(x: float) -> float:
+    return max(-CAP, min(CAP, x))
+
+
+def card_numbers(c: dict) -> dict:
+    """What a card shows beyond its id, upgrade level and modifiers' ids, as RunNet.Numbers reads it: its cost / 3 (0
+    for X or none), its modifiers' amounts / 10, star cost / 3 and whether it costs X, and each of its numbers / 10 by
+    name."""
+    cost = c.get("cost")
+    stars = c.get("stars")
+    return {
+        "cost": cost / 3 if cost is not None and cost > 0 else 0.0,
+        "mod_amounts": [cap(m["amount"] / 10) for m in (c.get("enchant"), c.get("affliction")) if m],
+        "scalars": [stars / 3 if stars is not None and stars > 0 else 0.0, 1.0 if c.get("x_cost") else 0.0],
+        "vars": [(k, cap(float(v) / 10)) for k, v in (c.get("vars") or {}).items()],
+    }
+
+
+def relic_numbers(r: dict) -> dict:
+    """A relic's counter / 10 (0 when none shows), whether one shows, whether it is melted, and its status."""
+    counter = r.get("counter")
+    return {
+        "values": [
+            cap(counter / 10) if counter is not None else 0.0,
+            1.0 if counter is not None else 0.0,
+            1.0 if r.get("melted") else 0.0,
+        ],
+        "status": r.get("status") or "Normal",
+    }
+
+
 def tokens(run: dict):
-    """As RunNet.Tokens: cards (id, upgrade level, modifiers), relics, potions, context."""
+    """As RunNet.Tokens: cards (id, upgrade level, modifiers), relics, potions, context; and as RunNet.Numbers: each
+    card's and relic's numbers, and the ascension."""
     cards = []
     for c in run["deck"]:
         mods = []
@@ -75,7 +118,15 @@ def tokens(run: dict):
         context.append("boss:" + m["second_boss"])
     if m.get("ancient"):
         context.append("ancient:" + m["ancient"])
-    return {"cards": cards, "relics": relics, "potions": potions, "context": context}
+    return {
+        "cards": cards,
+        "relics": relics,
+        "potions": potions,
+        "context": context,
+        "card_numbers": [card_numbers(c) for c in run["deck"]],
+        "relic_numbers": [relic_numbers(r) for r in run["relics"]],
+        "extra": [run.get("ascension", 0) / 10],
+    }
 
 
 def vocab(samples, min_count: int):
@@ -90,6 +141,11 @@ def vocab(samples, min_count: int):
         for t in ("relics", "potions", "context"):
             for i in tok[t]:
                 counts[t][i] = counts[t].get(i, 0) + 1
+        for numbers in tok["card_numbers"]:
+            for k, _ in numbers["vars"]:
+                counts["vars"][k] = counts["vars"].get(k, 0) + 1
+        for numbers in tok["relic_numbers"]:
+            counts["relic_status"][numbers["status"]] = counts["relic_status"].get(numbers["status"], 0) + 1
     return {t: ["<unk>"] + sorted(i for i, n in c.items() if n >= min_count) for t, c in counts.items()}
 
 
@@ -100,6 +156,78 @@ def padded(rows, device):
     for b, r in enumerate(rows):
         ids[b, : len(r)], mask[b, : len(r)] = torch.tensor(r, dtype=torch.long), 1
     return ids.to(device), mask.to(device)
+
+
+def card_number_tensors(rows, index, device):
+    """Each sample's cards' numbers (card_numbers), as the inputs costs, mod_amounts, card_scalars, vars, var_values
+    and var_mask: padded as the cards are, each card's numbers by name padded to the most any card has."""
+    n, width = len(rows), max(1, max(len(r) for r in rows))
+    m = max(1, max((len(c["vars"]) for r in rows for c in r), default=0))
+    costs, mod_amounts, scalars = torch.zeros(n, width), torch.zeros(n, width, 2), torch.zeros(n, width, 2)
+    names, values, mask = torch.zeros(n, width, m, dtype=torch.long), torch.zeros(n, width, m), torch.zeros(n, width, m)
+    for b, r in enumerate(rows):
+        for k, c in enumerate(r):
+            costs[b, k] = c["cost"]
+            for j, a in enumerate(c["mod_amounts"][:2]):
+                mod_amounts[b, k, j] = a
+            scalars[b, k] = torch.tensor(c["scalars"])
+            for j, (name, v) in enumerate(c["vars"]):
+                names[b, k, j], values[b, k, j], mask[b, k, j] = index["vars"].get(name, 0), v, 1
+    return [x.to(device) for x in (costs, mod_amounts, scalars, names, values, mask)]
+
+
+def relic_number_tensors(rows, index, device):
+    """Each sample's relics' numbers (relic_numbers), as the inputs relic_values and relic_status, padded as the relics
+    are."""
+    n, width = len(rows), max(1, max(len(r) for r in rows))
+    values, status = torch.zeros(n, width, 3), torch.zeros(n, width, dtype=torch.long)
+    for b, r in enumerate(rows):
+        for k, x in enumerate(r):
+            values[b, k], status[b, k] = torch.tensor(x["values"]), index["relic_status"].get(x["status"], 0)
+    return [values.to(device), status.to(device)]
+
+
+class CardNumbers(nn.Module):
+    """What a card's numbers add to its vector: cost, modifiers' amounts (each times its modifier's amount vector),
+    star cost and X, and each number times its name's vector."""
+
+    def __init__(self, sizes, dim):
+        super().__init__()
+        self.cost = nn.Parameter(torch.randn(dim) * 0.1)
+        self.mod_amount = nn.Embedding(sizes["modifiers"], dim)
+        self.scalars = nn.Linear(2, dim, bias=False)
+        self.vars = nn.Embedding(sizes["vars"], dim)
+        for e in (self.mod_amount, self.vars):
+            nn.init.normal_(e.weight, std=0.1)
+
+    def forward(self, mods, mod_mask, costs, mod_amounts, card_scalars, var_ids, var_values, var_mask):
+        """Costs may be None, for a net that reads them on its own."""
+        return (
+            (0 if costs is None else costs[..., None] * self.cost)
+            + (self.mod_amount(mods) * (mod_amounts * mod_mask)[..., None]).sum(2)
+            + self.scalars(card_scalars)
+            + (self.vars(var_ids) * (var_values * var_mask)[..., None]).sum(2)
+        )
+
+
+class RelicNumbers(nn.Module):
+    """What a relic's numbers add to its vector: its counter times its id's counter vector, whether a counter shows
+    and whether it is melted, and its status."""
+
+    def __init__(self, sizes, dim):
+        super().__init__()
+        self.counter = nn.Embedding(sizes["relics"], dim)
+        self.flags = nn.Linear(2, dim, bias=False)
+        self.status = nn.Embedding(sizes["relic_status"], dim)
+        for e in (self.counter, self.status):
+            nn.init.normal_(e.weight, std=0.1)
+
+    def forward(self, relics, relic_values, relic_status):
+        return (
+            relic_values[..., 0:1] * self.counter(relics)
+            + self.flags(relic_values[..., 1:])
+            + self.status(relic_status)
+        )
 
 
 class Batch:
@@ -120,6 +248,11 @@ class Batch:
         self.bags = {t: padded([[index[t].get(i, 0) for i in s["tokens"][t]] for s in samples], device) for t in BAGS}
         x = torch.tensor([[s["features"].get(f, 0.0) for f in names] for s in samples], dtype=torch.float64)
         self.features = ((x - mean) / std).float().to(device)
+        self.numbers = (
+            card_number_tensors([s["tokens"]["card_numbers"] for s in samples], index, device)
+            + relic_number_tensors([s["tokens"]["relic_numbers"] for s in samples], index, device)
+            + [torch.tensor([s["tokens"]["extra"] for s in samples]).to(device)]
+        )
         g = torch.arange(floors)
         start = torch.tensor([s["start"] for s in samples])[:, None]
         end = torch.tensor([s["end"] for s in samples])[:, None]
@@ -134,11 +267,11 @@ class Batch:
     def inputs(self):
         """The net's inputs, in the order of INPUTS."""
         bags = [x for t in BAGS for x in self.bags[t]]
-        return (self.cards, self.ups, self.mask, self.mods, self.mod_mask, *bags, self.features)
+        return (self.cards, self.ups, self.mask, self.mods, self.mod_mask, *bags, self.features, *self.numbers)
 
 
 class Net(nn.Module):
-    def __init__(self, sizes, n_features, floors, dim=32, hidden=128, body=256, sum_scale=1 / 16):
+    def __init__(self, sizes, n_features, floors, dim=32, hidden=128, body=256, sum_scale=1 / 16, n_extra=1):
         super().__init__()
         self.sum_scale = sum_scale
         self.cards = nn.Embedding(sizes["cards"], dim)
@@ -149,9 +282,11 @@ class Net(nn.Module):
         self.context = nn.Embedding(sizes["context"], dim)
         for e in (self.cards, self.card_up, self.modifiers, self.relics, self.potions, self.context):
             nn.init.normal_(e.weight, std=0.1)
+        self.card_numbers = CardNumbers(sizes, dim)
+        self.relic_numbers = RelicNumbers(sizes, dim)
         self.phi = nn.Sequential(nn.Linear(dim, hidden), nn.ReLU(), nn.Linear(hidden, hidden), nn.ReLU())
         self.body = nn.Sequential(
-            nn.Linear(2 * hidden + 3 * dim + n_features, body), nn.ReLU(), nn.Linear(body, body), nn.ReLU()
+            nn.Linear(2 * hidden + 3 * dim + n_features + n_extra, body), nn.ReLU(), nn.Linear(body, body), nn.ReLU()
         )
         self.head = nn.Linear(body, floors)
         nn.init.constant_(self.head.bias, -3.0)
@@ -170,24 +305,32 @@ class Net(nn.Module):
         context,
         context_mask,
         features,
+        costs,
+        mod_amounts,
+        card_scalars,
+        var_ids,
+        var_values,
+        var_mask,
+        relic_values,
+        relic_status,
+        extra,
     ):
         """Per sample and floor, the logit of dying on that floor if alive there (inputs as INPUTS names them)."""
         x = (
             self.cards(cards)
             + ups[..., None] * self.card_up(cards)
             + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
+            + self.card_numbers(mods, mod_mask, costs, mod_amounts, card_scalars, var_ids, var_values, var_mask)
         )
         h = self.phi(x) * card_mask[..., None]
         total = h.sum(1)
         mean = total / card_mask.sum(1, keepdim=True).clamp_min(1)
         parts = [mean, total * self.sum_scale]
-        for table, ids, mask in (
-            (self.relics, relics, relic_mask),
-            (self.potions, potions, potion_mask),
-            (self.context, context, context_mask),
-        ):
+        relic = self.relics(relics) + self.relic_numbers(relics, relic_values, relic_status)
+        parts.append((relic * relic_mask[..., None]).sum(1))
+        for table, ids, mask in ((self.potions, potions, potion_mask), (self.context, context, context_mask)):
             parts.append((table(ids) * mask[..., None]).sum(1))
-        return self.head(self.body(torch.cat(parts + [features], 1)))
+        return self.head(self.body(torch.cat(parts + [features, extra], 1)))
 
 
 class Hazards(nn.Module):
@@ -211,7 +354,15 @@ def onnx_bytes(model, example: Batch) -> bytes:
         "mod_mask": {0: "batch", 1: "cards"},
         "features": {0: "batch"},
         "hazards": {0: "batch"},
+        "costs": {0: "batch", 1: "cards"},
+        "mod_amounts": {0: "batch", 1: "cards"},
+        "card_scalars": {0: "batch", 1: "cards"},
+        "relic_values": {0: "batch", 1: "relics"},
+        "relic_status": {0: "batch", 1: "relics"},
+        "extra": {0: "batch"},
     }
+    for name in ("vars", "var_values", "var_mask"):
+        axes[name] = {0: "batch", 1: "cards", 2: "vars"}
     for t, mask in (("relics", "relic_mask"), ("potions", "potion_mask"), ("context", "context_mask")):
         axes[t] = axes[mask] = {0: "batch", 1: t}
     out = io.BytesIO()

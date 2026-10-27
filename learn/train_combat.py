@@ -34,13 +34,37 @@ from torch import nn  # noqa: E402
 
 import common  # noqa: E402
 from common import LearnError, runs_by_log  # noqa: E402
-from train_value import MAX_UP, padded  # noqa: E402
+from train_value import (  # noqa: E402
+    CAP,  # noqa: F401 (the cap the combat side applies too)
+    MAX_UP,
+    CardNumbers,
+    RelicNumbers,
+    cap,
+    card_number_tensors,
+    card_numbers,
+    padded,
+    relic_number_tensors,
+    relic_numbers,
+)
 from weights import out_path  # noqa: E402
 
 script = common.app()
 
 PILES = ["hand", "draw", "discard", "exhaust"]
-TABLES = ["cards", "modifiers", "powers", "enemies", "intents", "relics", "potions", "context"]
+TABLES = [
+    "cards",
+    "modifiers",
+    "powers",
+    "enemies",
+    "intents",
+    "relics",
+    "potions",
+    "context",
+    "vars",
+    "relic_status",
+    "orbs",
+    "allies",
+]
 BAGS = ["relics", "potions", "context"]
 # The ONNX graph's inputs, in order (the combat side feeds them by these names).
 INPUTS = [
@@ -69,11 +93,32 @@ INPUTS = [
     "potion_mask",
     "context",
     "context_mask",
+    "mod_amounts",
+    "card_scalars",
+    "vars",
+    "var_values",
+    "var_mask",
+    "power_stacks",
+    "power_cards",
+    "power_card_mask",
+    "enemy_power_stacks",
+    "enemy_power_cards",
+    "enemy_power_card_mask",
+    "relic_values",
+    "relic_status",
+    "orbs",
+    "orb_values",
+    "orb_mask",
+    "allies",
+    "ally_scalars",
+    "ally_mask",
+    "ally_powers",
+    "ally_power_amounts",
+    "ally_power_mask",
+    "extra",
 ]
 # LeafValue's default weights: what a combat's end is worth, for the report.
 WIN_BASE, PER_HP, PER_POTION = 0.2, 0.6, 0.02
-# Every scaled number the net reads is capped at ±CAP: a few states show huge ones (an erupting WATERFALL_GIANT's HP).
-CAP = 10.0
 HEAD = re.compile(r'\{"run":"(\w+)","decision_id":\d+,"env":"\w+","surface":"(\w+)"')
 
 
@@ -125,10 +170,6 @@ def card_token(c: dict, pile: int):
     return (c["id"], min(c.get("up") or 0, MAX_UP), pile, cost / 3 if cost is not None and cost > 0 else 0.0, mods)
 
 
-def cap(x: float) -> float:
-    return max(-CAP, min(CAP, x))
-
-
 def intent_token(i: dict):
     """An intent: its type, its damage per hit over 10 and its total damage over 20 (0 for no attack)."""
     damage = i.get("damage") or 0
@@ -140,10 +181,24 @@ def power_tokens(powers: list):
     return [(p["id"], cap(p["amount"] / 10)) for p in powers]
 
 
+def power_numbers(powers: list):
+    """Each power's stacks / 10 where its tooltip states them apart from its icon (else 0), and the id of the card it
+    keeps (Nightmare's), if any."""
+    return [
+        (cap(p["stacks"] / 10) if p.get("stacks") is not None else 0.0, (p.get("card") or {}).get("id")) for p in powers
+    ]
+
+
+def creature_scalars(c: dict) -> list[float]:
+    """A creature's HP share, HP / 100, max HP / 100 and block / 20."""
+    return [cap(x) for x in (c["hp"] / max(1, c["max_hp"]), c["hp"] / 100, c["max_hp"] / 100, c["block"] / 20)]
+
+
 def tokens(obs: dict, history: list, lags: int, rounds: bool):
     """The net's tokens of a round's start (the combat side reads it the same way). History is the record of the
     rounds before this one; an enemy's slots are its intents now, then those of its last rounds, most recent first."""
     cards = [card_token(c, p) for p, pile in enumerate(PILES) for c in obs[pile]]
+    numbers = [card_numbers(c) for pile in PILES for c in obs[pile]]
     pl = obs["player"]
     max_hp = max(1, pl["max_hp"])
     player = [
@@ -185,6 +240,7 @@ def tokens(obs: dict, history: list, lags: int, rounds: bool):
                     )
                 ],
                 "powers": power_tokens(e["powers"]),
+                "power_numbers": power_numbers(e["powers"]),
                 "slots": [[intent_token(i) for i in s] for s in slots],
             }
         )
@@ -196,6 +252,11 @@ def tokens(obs: dict, history: list, lags: int, rounds: bool):
         "room:" + (obs.get("room") or "<none>"),
         f"act:{obs['act']}",
     ]
+    allies = [
+        {"id": a.get("id") or "<player>", "scalars": creature_scalars(a), "powers": power_tokens(a["powers"])}
+        for a in obs.get("allies") or []
+        if a["hp"] > 0
+    ]
     return {
         "cards": cards,
         "powers": power_tokens(pl["powers"]),
@@ -204,6 +265,14 @@ def tokens(obs: dict, history: list, lags: int, rounds: bool):
         "relics": relics,
         "potions": potions,
         "context": context,
+        # Read only by nets that take them as inputs: the cards' and relics' numbers, the powers' stacks and kept cards,
+        # orbs, allies, and the ascension, orb slots and gold.
+        "card_numbers": numbers,
+        "power_numbers": power_numbers(pl["powers"]),
+        "relic_numbers": [relic_numbers(r) for r in obs["relics"]],
+        "orbs": [(o["id"], cap(float(o["passive"]) / 10), cap(float(o["evoke"]) / 10)) for o in pl.get("orbs") or []],
+        "allies": allies,
+        "extra": [obs.get("ascension", 0) / 10, pl.get("orb_slots", 0) / 10, cap(pl.get("gold", 0) / 100)],
     }
 
 
@@ -289,6 +358,20 @@ def vocab(samples, min_count: int):
         for t in BAGS:
             for i in tok[t]:
                 count(t, i)
+        for numbers in tok["card_numbers"]:
+            for k, _ in numbers["vars"]:
+                count("vars", k)
+        for numbers in tok["relic_numbers"]:
+            count("relic_status", numbers["status"])
+        for _, card in tok["power_numbers"] + [x for e in tok["enemies"] for x in e["power_numbers"]]:
+            if card:
+                count("cards", card)
+        for orb, _, _ in tok["orbs"]:
+            count("orbs", orb)
+        for a in tok["allies"]:
+            count("allies", a["id"])
+            for pid, _ in a["powers"]:
+                count("powers", pid)
     return {t: ["<unk>"] + sorted(i for i, n in c.items() if n >= min_count) for t, c in counts.items()}
 
 
@@ -356,6 +439,73 @@ class Batch:
         self.tensors = [x.to(device) for x in self.tensors]
         for table in BAGS:
             self.tensors.extend(padded([[index[table].get(i, 0) for i in t[table]] for t in toks], device))
+        # The inputs after the bags: what the first nets did not read.
+        cards_numbers = card_number_tensors([t["card_numbers"] for t in toks], index, "cpu")[1:]
+        stacks, kept, kept_mask = self.power_numbers([t["power_numbers"] for t in toks], index)
+        enemy_stacks, enemy_kept = torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n, dtype=torch.long)
+        enemy_kept_mask = torch.zeros(n, e_n, q_n)
+        for b, t in enumerate(toks):
+            for k, e in enumerate(t["enemies"]):
+                for j, (st, card) in enumerate(e["power_numbers"]):
+                    enemy_stacks[b, k, j] = st
+                    if card:
+                        enemy_kept[b, k, j], enemy_kept_mask[b, k, j] = index["cards"].get(card, 0), 1
+        relics = relic_number_tensors([t["relic_numbers"] for t in toks], index, "cpu")
+        o_n = max(1, max(len(t["orbs"]) for t in toks))
+        orbs, orb_values, orb_mask = torch.zeros(n, o_n, dtype=torch.long), torch.zeros(n, o_n, 2), torch.zeros(n, o_n)
+        for b, t in enumerate(toks):
+            for k, (orb, passive, evoke) in enumerate(t["orbs"]):
+                orbs[b, k], orb_values[b, k], orb_mask[b, k] = (
+                    index["orbs"].get(orb, 0),
+                    torch.tensor([passive, evoke]),
+                    1,
+                )
+        a_n = max(1, max(len(t["allies"]) for t in toks))
+        aq_n = max(1, max((len(a["powers"]) for t in toks for a in t["allies"]), default=0))
+        allies, ally_scalars, ally_mask = (
+            torch.zeros(n, a_n, dtype=torch.long),
+            torch.zeros(n, a_n, 4),
+            torch.zeros(n, a_n),
+        )
+        ally_powers, ally_power_amounts = torch.zeros(n, a_n, aq_n, dtype=torch.long), torch.zeros(n, a_n, aq_n)
+        ally_power_mask = torch.zeros(n, a_n, aq_n)
+        for b, t in enumerate(toks):
+            for k, a in enumerate(t["allies"]):
+                allies[b, k], ally_scalars[b, k], ally_mask[b, k] = (
+                    index["allies"].get(a["id"], 0),
+                    torch.tensor(a["scalars"]),
+                    1,
+                )
+                for j, (pid, amount) in enumerate(a["powers"]):
+                    ally_powers[b, k, j], ally_power_amounts[b, k, j], ally_power_mask[b, k, j] = (
+                        index["powers"].get(pid, 0),
+                        amount,
+                        1,
+                    )
+        extra = torch.tensor([t["extra"] for t in toks])
+        self.tensors.extend(
+            x.to(device)
+            for x in [
+                *cards_numbers,
+                stacks,
+                kept,
+                kept_mask,
+                enemy_stacks,
+                enemy_kept,
+                enemy_kept_mask,
+                *relics,
+                orbs,
+                orb_values,
+                orb_mask,
+                allies,
+                ally_scalars,
+                ally_mask,
+                ally_powers,
+                ally_power_amounts,
+                ally_power_mask,
+                extra,
+            ]
+        )
         # Each enemy's intents at the next round's start, for the next-intent head: their types, and the total damage.
         types = len(index["intents"])
         next_types, next_total, next_mask = torch.zeros(n, e_n, types), torch.zeros(n, e_n), torch.zeros(n, e_n)
@@ -394,6 +544,22 @@ class Batch:
                 ids[b, k], amounts[b, k], mask[b, k] = index["powers"].get(pid, 0), amount, 1
         return ids, amounts, mask
 
+    @staticmethod
+    def power_numbers(rows, index):
+        """The powers' stacks and kept cards (power_numbers), padded as Batch.powers pads the powers."""
+        width = max(1, max(len(r) for r in rows))
+        stacks, cards, mask = (
+            torch.zeros(len(rows), width),
+            torch.zeros(len(rows), width, dtype=torch.long),
+            torch.zeros(len(rows), width),
+        )
+        for b, r in enumerate(rows):
+            for k, (st, card) in enumerate(r):
+                stacks[b, k] = st
+                if card:
+                    cards[b, k], mask[b, k] = index["cards"].get(card, 0), 1
+        return stacks, cards, mask
+
     def inputs(self):
         """The net's inputs, in the order of INPUTS."""
         return tuple(self.tensors)
@@ -407,7 +573,7 @@ def mlp(*sizes):
 
 
 class Net(nn.Module):
-    def __init__(self, sizes, slots, buckets, n_player=8, width=1.0, sum_scale=1 / 8):
+    def __init__(self, sizes, slots, buckets, n_player=8, width=1.0, sum_scale=1 / 8, n_extra=3):
         dim, hidden, body = round(32 * width), round(64 * width), round(256 * width)
         super().__init__()
         self.sum_scale = sum_scale
@@ -426,6 +592,13 @@ class Net(nn.Module):
         self.relics = nn.Embedding(sizes["relics"], dim)
         self.potions = nn.Embedding(sizes["potions"], dim)
         self.context = nn.Embedding(sizes["context"], dim)
+        self.power_stacks = nn.Embedding(sizes["powers"], dim)
+        self.orbs = nn.Embedding(sizes["orbs"], dim)
+        self.orb_passive = nn.Embedding(sizes["orbs"], dim)
+        self.orb_evoke = nn.Embedding(sizes["orbs"], dim)
+        self.allies = nn.Embedding(sizes["allies"], dim)
+        self.card_numbers = CardNumbers(sizes, dim)
+        self.relic_numbers = RelicNumbers(sizes, dim)
         for m in self.modules():
             if isinstance(m, nn.Embedding):
                 nn.init.normal_(m.weight, std=0.1)
@@ -433,14 +606,19 @@ class Net(nn.Module):
         self.power_phi = mlp(dim, hidden)
         self.enemy_scalars = nn.Linear(5, dim)
         self.enemy_phi = mlp(dim + hidden + slots * dim, 2 * hidden, 2 * hidden)
-        self.body = mlp(len(PILES) * hidden + n_player + hidden + 2 * hidden + 3 * dim, body, body)
+        self.ally_scalars = nn.Linear(4, dim)
+        self.ally_phi = mlp(dim + hidden, hidden)
+        self.body = mlp(len(PILES) * hidden + n_player + hidden + 2 * hidden + 4 * dim + hidden + n_extra, body, body)
         self.head = nn.Linear(body, 1 + buckets)
         self.potion_head = nn.Linear(body, 1)
         # Training only: each enemy's next intents from its own vector, which makes the net learn the monsters' moves.
         self.next_head = nn.Linear(2 * hidden, sizes["intents"] + 1)
 
-    def power_sum(self, ids, amounts, mask):
+    def power_sum(self, ids, amounts, mask, stacks=None, cards=None, card_mask=None):
+        """The powers through power_phi, summed; with their stacks and kept cards where the inputs give them."""
         x = self.powers(ids) + amounts[..., None] * self.power_amount(ids)
+        if stacks is not None:
+            x = x + stacks[..., None] * self.power_stacks(ids) + self.cards(cards) * card_mask[..., None]
         return (self.power_phi(x) * mask[..., None]).sum(-2)
 
     def forward(self, *inputs):
@@ -475,6 +653,29 @@ class Net(nn.Module):
         potion_mask,
         context,
         context_mask,
+        mod_amounts,
+        card_scalars,
+        var_ids,
+        var_values,
+        var_mask,
+        power_stacks,
+        power_cards,
+        power_card_mask,
+        enemy_power_stacks,
+        enemy_power_cards,
+        enemy_power_card_mask,
+        relic_values,
+        relic_status,
+        orbs,
+        orb_values,
+        orb_mask,
+        allies,
+        ally_scalars,
+        ally_mask,
+        ally_powers,
+        ally_power_amounts,
+        ally_power_mask,
+        extra,
     ):
         """The body's vector of each sample, and each enemy's own vector."""
         x = (
@@ -483,6 +684,7 @@ class Net(nn.Module):
             + costs[..., None] * self.cost
             + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
             + piles @ self.pile
+            + self.card_numbers(mods, mod_mask, None, mod_amounts, card_scalars, var_ids, var_values, var_mask)
         )
         h = self.card_phi(x)
         per_pile = torch.bmm(piles.transpose(1, 2), h).flatten(1) * self.sum_scale
@@ -495,20 +697,42 @@ class Net(nn.Module):
         e = torch.cat(
             [
                 self.enemies(enemies) + self.enemy_scalars(enemy_scalars),
-                self.power_sum(enemy_powers, enemy_power_amounts, enemy_power_mask),
+                self.power_sum(
+                    enemy_powers,
+                    enemy_power_amounts,
+                    enemy_power_mask,
+                    enemy_power_stacks,
+                    enemy_power_cards,
+                    enemy_power_card_mask,
+                ),
                 slots,
             ],
             2,
         )
         each = self.enemy_phi(e)
         foes = (each * enemy_mask[..., None]).sum(1)
-        parts = [per_pile, player, self.power_sum(powers, power_amounts, power_mask), foes]
-        for table, ids, mask in (
-            (self.relics, relics, relic_mask),
-            (self.potions, potions, potion_mask),
-            (self.context, context, context_mask),
-        ):
+        mine = self.power_sum(powers, power_amounts, power_mask, power_stacks, power_cards, power_card_mask)
+        parts = [per_pile, player, mine, foes]
+        relic = self.relics(relics) + self.relic_numbers(relics, relic_values, relic_status)
+        parts.append((relic * relic_mask[..., None]).sum(1))
+        for table, ids, mask in ((self.potions, potions, potion_mask), (self.context, context, context_mask)):
             parts.append((table(ids) * mask[..., None]).sum(1))
+        orb = (
+            self.orbs(orbs)
+            + orb_values[..., 0:1] * self.orb_passive(orbs)
+            + orb_values[..., 1:2] * self.orb_evoke(orbs)
+        )
+        parts.append((orb * orb_mask[..., None]).sum(1))
+        ally = self.ally_phi(
+            torch.cat(
+                [
+                    self.allies(allies) + self.ally_scalars(ally_scalars),
+                    self.power_sum(ally_powers, ally_power_amounts, ally_power_mask),
+                ],
+                2,
+            )
+        )
+        parts += [(ally * ally_mask[..., None]).sum(1), extra]
         return self.body(torch.cat(parts, 1)), each
 
 
@@ -547,6 +771,23 @@ def onnx_bytes(model, example: Batch) -> bytes:
         axes[name] = {0: "batch", 1: "enemies", 3: "intents"}
     for t, mask in (("relics", "relic_mask"), ("potions", "potion_mask"), ("context", "context_mask")):
         axes[t] = axes[mask] = {0: "batch", 1: t}
+    for name in ("mod_amounts", "card_scalars"):
+        axes[name] = {0: "batch", 1: "cards"}
+    for name in ("vars", "var_values", "var_mask"):
+        axes[name] = {0: "batch", 1: "cards", 2: "vars"}
+    for name in ("power_stacks", "power_cards", "power_card_mask"):
+        axes[name] = {0: "batch", 1: "powers"}
+    for name in ("enemy_power_stacks", "enemy_power_cards", "enemy_power_card_mask"):
+        axes[name] = {0: "batch", 1: "enemies", 2: "enemy_powers"}
+    for name in ("relic_values", "relic_status"):
+        axes[name] = {0: "batch", 1: "relics"}
+    for name in ("orbs", "orb_values", "orb_mask"):
+        axes[name] = {0: "batch", 1: "orbs"}
+    for name in ("allies", "ally_scalars", "ally_mask"):
+        axes[name] = {0: "batch", 1: "allies"}
+    for name in ("ally_powers", "ally_power_amounts", "ally_power_mask"):
+        axes[name] = {0: "batch", 1: "allies", 2: "ally_powers"}
+    axes["extra"] = {0: "batch"}
     out = io.BytesIO()
     torch.onnx.export(
         Outcome(model),
