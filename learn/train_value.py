@@ -11,39 +11,46 @@ a baseline that knows only the floor. The output is a net file for `run --value`
     uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1
 """
 
-import argparse
 import base64
 import io
 import json
 import math
 import random
 import warnings
+from enum import StrEnum
+from typing import Annotated
+
+import typer
+from loguru import logger
 
 warnings.filterwarnings("ignore", message="Failed to initialize NumPy")
 import torch  # noqa: E402
 from torch import nn  # noqa: E402
 
+import common  # noqa: E402
+from common import LearnError, read_lines  # noqa: E402
 from weights import out_path  # noqa: E402
+
+script = common.app()
 
 MAX_UP = 3  # RunNet.MaxUp
 TABLES = ["cards", "modifiers", "relics", "potions", "context"]
 BAGS = ["relics", "potions", "context"]
 # The ONNX graph's inputs, in order (RunNet feeds them by these names).
-INPUTS = ["cards", "ups", "card_mask", "mods", "mod_mask", "relics", "relic_mask", "potions", "potion_mask", "context",
-          "context_mask", "features"]
-
-
-def read_lines(paths: str, needle: str | None = None):
-    """The JSON lines of the files that contain the needle; a line still being written is skipped."""
-    for path in paths.split(","):
-        with open(path) as f:
-            for line in f:
-                if not line.strip() or (needle and needle not in line):
-                    continue
-                try:
-                    yield json.loads(line)
-                except json.JSONDecodeError:
-                    pass
+INPUTS = [
+    "cards",
+    "ups",
+    "card_mask",
+    "mods",
+    "mod_mask",
+    "relics",
+    "relic_mask",
+    "potions",
+    "potion_mask",
+    "context",
+    "context_mask",
+    "features",
+]
 
 
 def held_out(run_id: str) -> bool:
@@ -91,7 +98,7 @@ def padded(rows, device):
     width = max(1, max(len(r) for r in rows))
     ids, mask = torch.zeros(len(rows), width, dtype=torch.long), torch.zeros(len(rows), width)
     for b, r in enumerate(rows):
-        ids[b, :len(r)], mask[b, :len(r)] = torch.tensor(r, dtype=torch.long), 1
+        ids[b, : len(r)], mask[b, : len(r)] = torch.tensor(r, dtype=torch.long), 1
     return ids.to(device), mask.to(device)
 
 
@@ -143,19 +150,42 @@ class Net(nn.Module):
         for e in (self.cards, self.card_up, self.modifiers, self.relics, self.potions, self.context):
             nn.init.normal_(e.weight, std=0.1)
         self.phi = nn.Sequential(nn.Linear(dim, hidden), nn.ReLU(), nn.Linear(hidden, hidden), nn.ReLU())
-        self.body = nn.Sequential(nn.Linear(2 * hidden + 3 * dim + n_features, body), nn.ReLU(), nn.Linear(body, body), nn.ReLU())
+        self.body = nn.Sequential(
+            nn.Linear(2 * hidden + 3 * dim + n_features, body), nn.ReLU(), nn.Linear(body, body), nn.ReLU()
+        )
         self.head = nn.Linear(body, floors)
         nn.init.constant_(self.head.bias, -3.0)
 
-    def forward(self, cards, ups, card_mask, mods, mod_mask, relics, relic_mask, potions, potion_mask, context, context_mask,
-                features):
+    def forward(
+        self,
+        cards,
+        ups,
+        card_mask,
+        mods,
+        mod_mask,
+        relics,
+        relic_mask,
+        potions,
+        potion_mask,
+        context,
+        context_mask,
+        features,
+    ):
         """Per sample and floor, the logit of dying on that floor if alive there (inputs as INPUTS names them)."""
-        x = self.cards(cards) + ups[..., None] * self.card_up(cards) + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
+        x = (
+            self.cards(cards)
+            + ups[..., None] * self.card_up(cards)
+            + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
+        )
         h = self.phi(x) * card_mask[..., None]
         total = h.sum(1)
         mean = total / card_mask.sum(1, keepdim=True).clamp_min(1)
         parts = [mean, total * self.sum_scale]
-        for table, ids, mask in ((self.relics, relics, relic_mask), (self.potions, potions, potion_mask), (self.context, context, context_mask)):
+        for table, ids, mask in (
+            (self.relics, relics, relic_mask),
+            (self.potions, potions, potion_mask),
+            (self.context, context, context_mask),
+        ):
             parts.append((table(ids) * mask[..., None]).sum(1))
         return self.head(self.body(torch.cat(parts + [features], 1)))
 
@@ -173,13 +203,27 @@ class Hazards(nn.Module):
 
 def onnx_bytes(model, example: Batch) -> bytes:
     """The model as an ONNX graph, every input's batch and length dimensions left free."""
-    axes = {"cards": {0: "batch", 1: "cards"}, "ups": {0: "batch", 1: "cards"}, "card_mask": {0: "batch", 1: "cards"},
-            "mods": {0: "batch", 1: "cards"}, "mod_mask": {0: "batch", 1: "cards"}, "features": {0: "batch"}, "hazards": {0: "batch"}}
+    axes = {
+        "cards": {0: "batch", 1: "cards"},
+        "ups": {0: "batch", 1: "cards"},
+        "card_mask": {0: "batch", 1: "cards"},
+        "mods": {0: "batch", 1: "cards"},
+        "mod_mask": {0: "batch", 1: "cards"},
+        "features": {0: "batch"},
+        "hazards": {0: "batch"},
+    }
     for t, mask in (("relics", "relic_mask"), ("potions", "potion_mask"), ("context", "context_mask")):
         axes[t] = axes[mask] = {0: "batch", 1: t}
     out = io.BytesIO()
-    torch.onnx.export(Hazards(model), example.inputs(), out, dynamo=False, input_names=INPUTS, output_names=["hazards"],
-                      dynamic_axes=axes)
+    torch.onnx.export(
+        Hazards(model),
+        example.inputs(),
+        out,
+        dynamo=False,
+        input_names=INPUTS,
+        output_names=["hazards"],
+        dynamic_axes=axes,
+    )
     return out.getvalue()
 
 
@@ -197,37 +241,51 @@ def expected_floor(hazards: torch.Tensor, start: torch.Tensor):
     return start.double() + (survive * (g >= start[:, None])).sum(1)
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--logs", required=True, help="decision logs, comma-separated")
-    p.add_argument("--records", required=True, help="run records, comma-separated")
-    p.add_argument("--name", required=True, help="the net's name, as the champion will show it")
-    p.add_argument("--out", help="where the file goes (default: weights/history/NAME.json)")
-    p.add_argument("--floors", type=int, default=64)
-    p.add_argument("--objective", default="floor", choices=["floor", "win"])
-    p.add_argument("--min-count", type=int, default=3, help="ids seen fewer times read as unknown")
-    p.add_argument("--epochs", type=int, default=40)
-    p.add_argument("--patience", type=int, default=5, help="epochs without a better held-out loss before stopping")
-    p.add_argument("--batch", type=int, default=256)
-    p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--weight-decay", type=float, default=1e-4)
-    p.add_argument("--seed", type=int, default=0)
-    args = p.parse_args()
-    out_file = out_path(args.name, args.out)
-    torch.manual_seed(args.seed)
-    random.seed(args.seed)
+class Objective(StrEnum):
+    floor = "floor"
+    win = "win"
+
+
+@script.command(help=__doc__)
+def main(
+    logs: Annotated[str, typer.Option(help="decision logs, comma-separated")],
+    records: Annotated[str, typer.Option(help="run records, comma-separated")],
+    name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
+    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/history/NAME.json)")] = None,
+    floors: Annotated[int, typer.Option(min=1)] = 64,
+    objective: Annotated[Objective, typer.Option()] = Objective.floor,
+    min_count: Annotated[int, typer.Option(help="ids seen fewer times read as unknown")] = 3,
+    epochs: Annotated[int, typer.Option(min=1)] = 40,
+    patience: Annotated[int, typer.Option(min=1, help="epochs without a better held-out loss before stopping")] = 5,
+    batch: Annotated[int, typer.Option(min=1)] = 256,
+    lr: float = 1e-3,
+    weight_decay: float = 1e-4,
+    seed: int = 0,
+) -> None:
+    out_file = out_path(name, out)
+    torch.manual_seed(seed)
+    random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    runs = {r["run_id"]: r for r in read_lines(args.records) if r.get("run_id") and not r.get("failure")}
+    runs = {r["run_id"]: r for r in read_lines(records) if r.get("run_id") and not r.get("failure")}
     samples = []
-    for e in read_lines(args.logs, '"run_view"'):
+    for e in read_lines(logs, '"run_view"'):
         r = runs.get(e["run"])
         if r is None or "run_view" not in e:
             continue
         kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
-        start = min(max(e["run_view"]["floor"], 0), args.floors - 1)
-        samples.append({"run": e["run"], "view": e["run_view"], "tokens": tokens(e["run_view"]), "features": e["features"],
-                        "start": start, "end": max(start, min(r["floor"], args.floors - 1)), "kind": kind})
+        start = min(max(e["run_view"]["floor"], 0), floors - 1)
+        samples.append(
+            {
+                "run": e["run"],
+                "view": e["run_view"],
+                "tokens": tokens(e["run_view"]),
+                "features": e["features"],
+                "start": start,
+                "end": max(start, min(r["floor"], floors - 1)),
+                "kind": kind,
+            }
+        )
     per_run = {}
     for s in samples:
         per_run[s["run"]] = per_run.get(s["run"], 0) + 1
@@ -236,9 +294,9 @@ def main():
     train = [s for s in samples if not held_out(s["run"])]
     test = [s for s in samples if held_out(s["run"])]
     if not train or not test:
-        raise SystemExit(f"{len(train)} train and {len(test)} held-out samples: too few runs")
+        raise LearnError(f"{len(train)} train and {len(test)} held-out samples: too few runs")
 
-    tables = vocab(train, args.min_count)
+    tables = vocab(train, min_count)
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     names = sorted({f for s in samples for f in s["features"]})
     x = torch.tensor([[s["features"].get(f, 0.0) for f in names] for s in train], dtype=torch.float64)
@@ -251,14 +309,14 @@ def main():
         order = list(range(len(part)))
         if shuffle:
             random.shuffle(order)
-        for i in range(0, len(order), args.batch):
-            yield Batch([part[k] for k in order[i:i + args.batch]], index, names, mean, std, args.floors, device)
+        for i in range(0, len(order), batch):
+            yield Batch([part[k] for k in order[i : i + batch]], index, names, mean, std, floors, device)
 
     test_batches = list(batches(test, False))
     test_weight = sum(s["weight"] for s in test)
 
     # Baseline: per floor, the hazard the training runs show, whatever the state.
-    alive, deaths = torch.zeros(args.floors, dtype=torch.float64), torch.zeros(args.floors, dtype=torch.float64)
+    alive, deaths = torch.zeros(floors, dtype=torch.float64), torch.zeros(floors, dtype=torch.float64)
     for b in batches(train, False):
         alive += (b.label_mask.double().cpu() * b.weight.double().cpu()[:, None]).sum(0)
         deaths += (b.target.double().cpu() * b.label_mask.double().cpu() * b.weight.double().cpu()[:, None]).sum(0)
@@ -266,7 +324,7 @@ def main():
     base_logits = torch.log(base_hazard / (1 - base_hazard)).float().to(device)
 
     def evaluate(model):
-        total, base, rows = 0.0, 0.0, []
+        total, rows = 0.0, []
         with torch.no_grad():
             for b in test_batches:
                 logits = model(*b.inputs()) if model else base_logits.expand(len(b.weight), -1)
@@ -274,10 +332,10 @@ def main():
                 rows.append(expected_floor(torch.sigmoid(logits), b.start))
         return total / test_weight, torch.cat(rows)
 
-    model = Net({t: len(ids) for t, ids in tables.items()}, len(names), args.floors).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    model = Net({t: len(ids) for t, ids in tables.items()}, len(names), floors).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     best, best_state, stale = math.inf, None, 0
-    for epoch in range(args.epochs):
+    for epoch in range(epochs):
         model.train()
         for b in batches(train, True):
             loss = (loss_of(model(*b.inputs()), b) * b.weight).sum() / b.weight.sum()
@@ -286,12 +344,12 @@ def main():
             opt.step()
         model.eval()
         held, _ = evaluate(model)
-        print(f"epoch {epoch}: held-out loss {held:.4f}", flush=True)
+        logger.info("epoch {}: held-out loss {:.4f}", epoch, held)
         if held < best - 1e-4:
             best, best_state, stale = held, {k: v.clone() for k, v in model.state_dict().items()}, 0
         else:
             stale += 1
-            if stale >= args.patience:
+            if stale >= patience:
                 break
     model.load_state_dict(best_state)
     model.eval()
@@ -321,23 +379,37 @@ def main():
 
     # Test runs for RunNet's check on load: a few held-out decisions, valued on the CPU as RunNet values them.
     model = model.cpu()
-    picks = random.Random(args.seed).sample(test, min(8, len(test)))
+    picks = random.Random(seed).sample(test, min(8, len(test)))
     tests = []
     with torch.no_grad():
-        b = Batch(picks, index, names, mean, std, args.floors, "cpu")
+        b = Batch(picks, index, names, mean, std, floors, "cpu")
         hazards = torch.sigmoid(model(*b.inputs()))
-        floors = expected_floor(hazards, b.start)
+        expected = expected_floor(hazards, b.start)
         for k, s in enumerate(picks):
-            value = float(floors[k]) if args.objective == "floor" else float((1 - hazards[k, int(s["start"]):].double()).prod())
+            value = (
+                float(expected[k])
+                if objective == Objective.floor
+                else float((1 - hazards[k, int(s["start"]) :].double()).prod())
+            )
             tests.append({"run": s["view"], "value": value})
 
-    out = {"name": args.name, "objective": args.objective, "floors": args.floors,
-           "vocab": tables, "features": names, "mean": [float(v) for v in mean], "std": [float(v) for v in std],
-           "fit": report, "onnx": base64.b64encode(onnx_bytes(model, b)).decode(), "tests": tests}
+    net = {
+        "name": name,
+        "objective": objective.value,
+        "floors": floors,
+        "vocab": tables,
+        "features": names,
+        "mean": [float(v) for v in mean],
+        "std": [float(v) for v in std],
+        "fit": report,
+        "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
+        "tests": tests,
+    }
     with open(out_file, "w") as f:
-        json.dump(out, f)
+        json.dump(net, f)
         f.write("\n")
+    logger.info("wrote {}", out_file)
 
 
 if __name__ == "__main__":
-    main()
+    common.run(script)

@@ -9,92 +9,137 @@ is rebuilt. Paths are taken from the repository root, where the sim runs.
         --promote eval/reports/DATE-nosl-r1-promotion-1-NAME -- --policy pimc --macro l0 --value weights/history/s1.json
 """
 
-import argparse
 import json
 import shlex
 import subprocess
 import tempfile
+from enum import StrEnum
 from pathlib import Path
+from typing import Annotated
+
+import typer
+from loguru import logger
+
+import common
+from common import LearnError, start_sim, wait_sims
 
 ROOT = Path(__file__).resolve().parent.parent
+script = common.app()
+
+
+class Metric(StrEnum):
+    floor = "floor"
+    win = "win"
 
 
 def play(sim, seed_file, lo, hi, processes, extra, folder):
-    """Plays seeds [lo, hi) of the seed file, split over processes; returns their record files."""
+    """Plays seeds [lo, hi) of the seed file, split over processes; returns their record files. Each process logs to
+    the record file's name with .log."""
     procs = []
     for i in range(processes):
         a, b = lo + (hi - lo) * i // processes, lo + (hi - lo) * (i + 1) // processes
         if a == b:
             continue
         records = folder / f"{a:04}-{b:04}.jsonl"
-        cmd = [*sim, "run", "--seeds", seed_file, "--start", str(a), "--n", str(b - a), "--records", str(records), *extra]
-        procs.append((subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL), records))
-    # Wait for every process before failing, so one failure does not cut the others short.
-    failed = [proc for proc, _ in procs if proc.wait() != 0]
-    if failed:
-        raise SystemExit(f"the sim failed ({shlex.join(failed[0].args)})")
+        cmd = [
+            *sim,
+            "run",
+            "--seeds",
+            seed_file,
+            "--start",
+            str(a),
+            "--n",
+            str(b - a),
+            "--records",
+            str(records),
+            *extra,
+        ]
+        procs.append((start_sim(cmd, records.with_suffix(".log"), cwd=ROOT), records))
+    wait_sims([(proc, records.with_suffix(".log")) for proc, records in procs])
     return [records for _, records in procs]
 
 
-def gate(sim, args, records, promote=None):
+def gate(sim, champion, metric, extra, records, promote=None):
     """Runs the sim's gate on the records so far; returns its verdict (pass, fail, open, void) and its output."""
-    cmd = [*sim, "gate", "--champion", args.champion, "--records", ",".join(str(r) for r in records),
-           "--metric", args.metric, *(["--promote", promote] if promote else []), *args.extra]
+    cmd = [
+        *sim,
+        "gate",
+        "--champion",
+        champion,
+        "--records",
+        ",".join(str(r) for r in records),
+        "--metric",
+        metric.value,
+        *(["--promote", promote] if promote else []),
+        *extra,
+    ]
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
-    lines = [line for line in out.stdout.splitlines() if line.startswith(("champion:", "challenger:", "gate ", "promoted:"))]
+    lines = [
+        line for line in out.stdout.splitlines() if line.startswith(("champion:", "challenger:", "gate ", "promoted:"))
+    ]
     verdict = next((line.split()[1].rstrip(":") for line in lines if line.startswith("gate ")), None)
     if verdict is None:
-        raise SystemExit(f"the gate gave no verdict: {out.stdout[-2000:]}{out.stderr[-2000:]}")
+        raise LearnError(f"the gate gave no verdict: {out.stdout[-2000:]}{out.stderr[-2000:]}")
     return verdict, "\n".join(lines)
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--sim", required=True, help="the command that starts the sim, as one string")
-    p.add_argument("--champion", required=True, help="the champion file, such as eval/champions/nosl.json")
-    p.add_argument("--chunk", type=int, default=40, help="seeds played between two gates")
-    p.add_argument("--processes", type=int, default=4)
-    p.add_argument("--metric", default="floor", choices=["floor", "win"])
-    p.add_argument("--promote", help="where the challenger's report goes if it passes; without it, nothing is promoted")
-    p.add_argument("--records-dir", help="folder for the challenger's run records (default: a temporary one)")
-    p.add_argument("extra", nargs="*", help="the challenger's run options, after --, such as --policy pimc --macro l0")
-    args = p.parse_args()
-
-    sim = shlex.split(args.sim)
-    champion = json.loads((ROOT / args.champion).read_text())
-    report = json.loads((ROOT / champion["report"]).read_text())
+@script.command(help=__doc__)
+def main(
+    sim: Annotated[str, typer.Option(help="the command that starts the sim, as one string")],
+    champion: Annotated[str, typer.Option(help="the champion file, such as eval/champions/nosl.json")],
+    chunk: Annotated[int, typer.Option(min=1, help="seeds played between two gates")] = 40,
+    processes: Annotated[int, typer.Option(min=1)] = 4,
+    metric: Annotated[Metric, typer.Option()] = Metric.floor,
+    promote: Annotated[
+        str | None,
+        typer.Option(help="where the challenger's report goes if it passes; without it, nothing is promoted"),
+    ] = None,
+    records_dir: Annotated[
+        str | None, typer.Option(help="folder for the challenger's run records and sim logs (default: a temporary one)")
+    ] = None,
+    extra: Annotated[
+        list[str] | None,
+        typer.Argument(help="the challenger's run options, after --, such as --policy pimc --macro l0"),
+    ] = None,
+) -> None:
+    extra = extra or []
+    cmd = shlex.split(sim)
+    try:
+        file = json.loads((ROOT / champion).read_text())
+        report = json.loads((ROOT / file["report"]).read_text())
+    except (OSError, KeyError, json.JSONDecodeError) as e:
+        raise LearnError(f"cannot read the champion {champion} and its report: {e}") from e
     seed_set, total = report["seed_set"], report["set_size"]
     seed_file = f"eval/seeds/{seed_set}.txt"
-    folder = Path(args.records_dir or tempfile.mkdtemp(prefix="challenge-")).resolve()
+    folder = Path(records_dir or tempfile.mkdtemp(prefix="challenge-")).resolve()
     folder.mkdir(parents=True, exist_ok=True)
-    print(f"challenging {champion['champion']} on {seed_set} ({total} seeds), records in {folder}", flush=True)
+    logger.info("challenging {} on {} ({} seeds), records in {}", file["champion"], seed_set, total, folder)
 
     records = []
-    for lo in range(0, total, args.chunk):
-        hi = min(total, lo + args.chunk)
-        records += play(sim, seed_file, lo, hi, args.processes, args.extra, folder)
-        verdict, report = gate(sim, args, records)
-        print(f"after {hi} of {total} seeds:\n{report}", flush=True)
+    for lo in range(0, total, chunk):
+        hi = min(total, lo + chunk)
+        records += play(cmd, seed_file, lo, hi, processes, extra, folder)
+        verdict, lines = gate(cmd, champion, metric, extra, records)
+        logger.info("after {} of {} seeds:\n{}", hi, total, lines)
         if verdict in ("fail", "void"):
-            return 1
+            raise typer.Exit(1)
         if verdict == "pass":
             break
     else:
-        print("no verdict on the whole set")
-        return 1
+        logger.info("no verdict on the whole set")
+        raise typer.Exit(1)
 
-    if not args.promote:
-        return 0
+    if not promote:
+        return
     if hi < total:
-        records += play(sim, seed_file, hi, total, args.processes, args.extra, folder)
-    verdict, report = gate(sim, args, records, promote=args.promote)
-    print(f"on the whole set:\n{report}", flush=True)
+        records += play(cmd, seed_file, hi, total, processes, extra, folder)
+    verdict, lines = gate(cmd, champion, metric, extra, records, promote=promote)
+    logger.info("on the whole set:\n{}", lines)
     if verdict != "pass":
-        return 1
-    subprocess.run([*sim, "leaderboard"], cwd=ROOT, stdout=subprocess.DEVNULL, check=True)
-    print("leaderboard rebuilt: eval/leaderboard.md")
-    return 0
+        raise typer.Exit(1)
+    subprocess.run([*cmd, "leaderboard"], cwd=ROOT, stdout=subprocess.DEVNULL, check=True)
+    logger.info("leaderboard rebuilt: eval/leaderboard.md")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    common.run(script)

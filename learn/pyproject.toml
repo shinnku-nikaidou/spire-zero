@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "Offline learning for the STS2 AI: value fitting and tuning from self-play logs (docs: learning)."
 requires-python = ">=3.12"
 dependencies = [
+    "loguru>=0.7.3",
     "onnx>=1.23.2",
     "torch",
+    "typer>=0.27.3",
 ]
 
 [tool.uv.sources]
@@ -15,3 +17,21 @@ torch = [{ index = "pytorch-cu128" }]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.3",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# Long strings and docstrings are left as they are; the formatter wraps the code.
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

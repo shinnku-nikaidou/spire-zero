@@ -9,23 +9,22 @@ by default (docs: learning §6).
     uv run python fit_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name v1
 """
 
-import argparse
 import json
 import math
 import warnings
+from typing import Annotated
+
+import typer
+from loguru import logger
 
 warnings.filterwarnings("ignore", message="Failed to initialize NumPy")
 import torch  # noqa: E402
 
+import common  # noqa: E402
+from common import LearnError, read_lines  # noqa: E402
 from weights import out_path  # noqa: E402
 
-
-def read_lines(paths: str):
-    for path in paths.split(","):
-        with open(path) as f:
-            for line in f:
-                if line.strip():
-                    yield json.loads(line)
+script = common.app()
 
 
 def held_out(run_id: str) -> bool:
@@ -50,20 +49,22 @@ def r2(x, y, w, coef, intercept) -> float:
     return float(1 - (w * (y - pred) ** 2).sum() / (w * (y - y_mean) ** 2).sum())
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--logs", required=True, help="decision logs, comma-separated")
-    p.add_argument("--records", required=True, help="run records, comma-separated")
-    p.add_argument("--name", required=True, help="the weights' name, as the champion will show it")
-    p.add_argument("--out", help="where the file goes (default: weights/history/NAME.json)")
-    p.add_argument("--ridge", type=float, default=0.01, help="penalty per unit of sample weight, on standardized features")
-    args = p.parse_args()
-    out_file = out_path(args.name, args.out)
+@script.command(help=__doc__)
+def main(
+    logs: Annotated[str, typer.Option(help="decision logs, comma-separated")],
+    records: Annotated[str, typer.Option(help="run records, comma-separated")],
+    name: Annotated[str, typer.Option(help="the weights' name, as the champion will show it")],
+    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/history/NAME.json)")] = None,
+    ridge: Annotated[float, typer.Option(help="penalty per unit of sample weight, on standardized features")] = 0.01,
+) -> None:
+    out_file = out_path(name, out)
 
-    runs = {r["run_id"]: r for r in read_lines(args.records) if r.get("run_id")}
+    runs = {r["run_id"]: r for r in read_lines(records) if r.get("run_id")}
     if any(r["outcome"] == "won" for r in runs.values()):
-        print("note: some runs won; the target is still the floor reached")
-    rows = [e for e in read_lines(args.logs) if "features" in e and e["run"] in runs]
+        logger.warning("some runs won; the target is still the floor reached")
+    rows = [e for e in read_lines(logs) if "features" in e and e["run"] in runs]
+    if not rows:
+        raise LearnError("no macro decision with features in the logs joins a run of the records")
     names = sorted({k for e in rows for k in e["features"]})
     per_run = {}
     for e in rows:
@@ -77,29 +78,33 @@ def main():
         return x, y, w
 
     (x, y, w), (xt, yt, wt) = tensors(False), tensors(True)
-    coef, intercept = fit(x, y, w, args.ridge)
+    coef, intercept = fit(x, y, w, ridge)
     floor = names.index("floor")
-    floor_coef, floor_intercept = fit(x[:, [floor]], y, w, args.ridge)
+    floor_coef, floor_intercept = fit(x[:, [floor]], y, w, ridge)
     report = {
         "runs": len({e["run"] for e in rows}),
         "held_out_runs": len({e["run"] for e in rows if held_out(e["run"])}),
         "samples": len(rows),
-        "ridge": args.ridge,
+        "ridge": ridge,
         "r2_train": r2(x, y, w, coef, intercept),
         "r2_held_out": r2(xt, yt, wt, coef, intercept),
         "r2_held_out_floor_only": r2(xt[:, [floor]], yt, wt, floor_coef, floor_intercept),
     }
-    weights = {n: float(c) for n, c in zip(names, coef)}
-    out = {"name": args.name, "target": "floor reached", "fit": report, "intercept": intercept, "weights": weights}
+    weights = {n: float(c) for n, c in zip(names, coef, strict=True)}
+    if not all(math.isfinite(v) for v in weights.values()):
+        raise LearnError(f"the fit is not finite: {weights}")
     with open(out_file, "w") as f:
-        json.dump(out, f, indent=2)
+        json.dump(
+            {"name": name, "target": "floor reached", "fit": report, "intercept": intercept, "weights": weights},
+            f,
+            indent=2,
+        )
         f.write("\n")
-
-    print(json.dumps(report))
+    logger.info("wrote {}", out_file)
     for n in names:
-        print(f"  {n:16} {weights[n]:+.4f}")
-    assert all(math.isfinite(v) for v in weights.values())
+        logger.info("  {:16} {:+.4f}", n, weights[n])
+    print(json.dumps(report))
 
 
 if __name__ == "__main__":
-    main()
+    common.run(script)
