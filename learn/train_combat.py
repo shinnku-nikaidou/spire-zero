@@ -437,14 +437,15 @@ def main():
     test_batches = list(batches(test, False))
 
     def evaluate(model):
-        total, ce, rows = 0.0, 0.0, []
+        """The held-out loss, the cross-entropy of each held-out sample, and the net's value of each."""
+        total, ces, rows = 0.0, [], []
         with torch.no_grad():
             for b in test_batches:
                 logits, potions = model(*b.inputs())
                 total += float(loss_of(logits, potions, b).sum())
-                ce += float(nn.functional.cross_entropy(logits, b.target, reduction="sum"))
+                ces.append(nn.functional.cross_entropy(logits, b.target, reduction="none"))
                 rows.append(values(torch.softmax(logits, 1), potions, args.buckets))
-        return total / len(test), ce / len(test), torch.cat(rows).double().cpu()
+        return total / len(test), torch.cat(ces).double().cpu(), torch.cat(rows).double().cpu()
 
     model = Net({t: len(ids) for t, ids in tables.items()}, slots, args.buckets).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -470,7 +471,11 @@ def main():
 
     # The report: held-out loss against a prior that knows only the training endings, and how well the net's value
     # and LeafValue's predict what the combat's end was worth.
-    held, ce, predicted = evaluate(model)
+    held, ces, predicted = evaluate(model)
+    ce = float(ces.mean())
+    # By room, since a monster's move order should matter most in the long fights of elites and bosses.
+    rooms = [s["obs"].get("room") or "<none>" for s in test]
+    ce_by_room = {r: float(ces[[k for k, x in enumerate(rooms) if x == r]].mean()) for r in sorted(set(rooms))}
     counts = torch.bincount(torch.tensor([s["class"] for s in train]), minlength=1 + args.buckets).double() + 0.5
     prior = counts / counts.sum()
     ce_prior = -float(sum(math.log(prior[s["class"]]) for s in test)) / len(test)
@@ -495,6 +500,8 @@ def main():
         "held_out_loss": held,
         "held_out_ce": ce,
         "held_out_ce_prior": ce_prior,
+        "held_out_ce_by_room": ce_by_room,
+        "held_out_samples_by_room": {r: rooms.count(r) for r in sorted(set(rooms))},
         "value_mse": float(((predicted - actual) ** 2).mean()),
         "value_corr": corr(predicted, actual),
         "value_mse_leaf0": float(((hand - actual) ** 2).mean()),
