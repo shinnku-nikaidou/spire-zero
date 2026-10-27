@@ -1,6 +1,6 @@
 namespace Sts2Ai.Protocol;
 
-/// <summary>Which screen is asking (protocol.md §3). Also the key that routes a decision to a brain.</summary>
+/// <summary>Which screen is asking (docs: protocol §3). Also the key that routes a decision to a brain.</summary>
 public static class Surfaces
 {
     public const string Combat = "combat";
@@ -18,6 +18,6 @@ public static class Surfaces
 
 /// <summary>
 /// An out-of-combat decision: the surface and its legal actions in text form ("map:3,5", "reward:0", "leave", ...;
-/// grammar in protocol.md §3). The answer is one of <see cref="Legal"/>.
+/// grammar in docs: protocol §3). The answer is one of <see cref="Legal"/>.
 /// </summary>
 public sealed record MacroDecision(string Surface, IReadOnlyList<string> Legal);

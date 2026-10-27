@@ -1,0 +1,131 @@
+---
+title: 'Macro brain: out-of-combat decisions'
+description: How the AI makes every decision outside combat by valuing the state right after each option, and checks close calls with paired rollouts.
+sidebar:
+  label: Macro brain
+  badge:
+    text: planned
+    variant: caution
+---
+import { Aside } from '@astrojs/starlight/components';
+
+The **macro brain** makes every decision outside combat: the next map point, which rewards to claim, which card to take, what to buy, which event, rest-site or treasure option to pick. It runs in the decision process next to the [combat brain](/en/arch/combat-brain/). Harness routes every non-combat surface to it ([Harness §4](/en/arch/harness/#sec-4)) and gives it worlds from the worker pool, so it can try each option in the real game code before choosing. Every option is scored on one scale: the estimated probability of winning the run.
+
+<Aside title="Status">
+
+Planned. Today `RunSession` already plays whole runs headless, but with placeholders: `RandomMacro` on every macro surface and `RandomChoices` on card prompts ([Simulator §5](/en/arch/simulator/#sec-5)).
+
+</Aside>
+
+## 1. Surfaces and shape
+
+The decision screens (surfaces) the macro brain handles. "Randomness after choice" is what is revealed only once the option is taken. "Consequence horizon" is how far the effect of the choice reaches ("run" means the rest of the run).
+
+| surface | options | randomness after choice | consequence horizon |
+|---|---|---|---|
+| map (next point) | 1–4 | `?` roll, encounter, rewards | rest of act |
+| rewards (claim order / skip) | ≤6 | none (gold, potion, relic shown) | run |
+| card reward | 3–4 + skip/reroll | reroll result | run |
+| deck prompts: upgrade / remove / enchant | deck size | none | run |
+| transform | deck size | result card | run |
+| choose-a-card / bundle | ≤3 | none | run |
+| event / ancient option | 1–4 | event outcome, next page | run |
+| shop | stock + removal + leave | none (stock visible) | run |
+| rest | rest/smith/lift/dig/… | dig etc. | run |
+| treasure | relic choice/skip | none | run |
+| potion full | discard/use/skip | none | short |
+
+What these surfaces have in common: few options, a long horizon, cheap to apply, hard to value. A combat turn can have thousands of action sequences; here there are a handful of options, and each one can be tried in a simulated world at almost no cost. The hard part is that the effect of a choice shows up many floors later. The value of an option is always P(win run), as defined on the [Learning](/en/arch/learning/) page, never a shaped score built from HP or points.
+
+## 2. Method
+
+There are two levels. L0 decides every time; L1 is an extra check for close calls.
+
+### L0: afterstate + V
+
+L0 is the default and runs on every decision. An **afterstate** is the situation right after an option has been applied, before anything new happens. Scoring afterstates means that one value function V, which reads a single observation, can score every option on every surface: no separate value per (state, option) pair is needed, and applying an option in a world is cheap.
+
+For each option a, the brain applies it in a world and observes the result. That observation is the afterstate `s'_a`, and its value is `V(s'_a)`.
+
+- **Random afterstates** (transform, event outcome, reroll): NoSL takes the mean over K sampled worlds; SL uses the one true outcome, through the node clone.
+- The brain picks the option with the highest value (argmax). Cost: the number of options times (apply + observe + V), far below 1 s.
+- **Multi-step screens** (shop: buy several items, then leave; rewards: claim several; event pages): the brain searches the screen's action sequence the way the combat brain searches the actions inside one turn, depth-first ([Combat brain §2](/en/arch/combat-brain/#sec-2)). The leaf value is V at the screen exit. Sequences that reach the same observation are expanded once (deduplicated by observation).
+
+### L1: rollout check
+
+L1 handles close calls and uses the evaluation-time budget. It starts when the top two L0 values are within their confidence interval (CI: the range the true value probably lies in, given the samples so far), so L0 cannot tell them apart. A **rollout** plays the game forward with fast policies to see where an option leads.
+
+For each candidate:
+
+1. Start from its afterstate in sampled run-worlds ([Simulator §6](/en/arch/simulator/#sec-6)).
+2. Play forward for H nodes (default: up to the next boss) with fast policies: in combat, the rollout policy or a shallow search; for macro decisions, L0.
+3. Pair the candidates with **CRN** (common random numbers): every candidate is played in the same world seeds, so all of them meet the same luck, and the difference between them is far less noisy than with independent samples.
+4. The candidate's value is the mean of V at the horizon, or the terminal outcome if the run ends first.
+5. Choose by the paired difference and its CI.
+
+Both lines are logged for learning: these counterfactual paired rollouts are the training signal for V at key decisions.
+
+In SL, rollouts that go past the current node still use sampled worlds ([Environments §4](/en/arch/environments/#sec-4)).
+
+### Map
+
+- The decision is the next point only; the brain decides again at every step.
+- The L0 afterstate is the observation at the chosen point, before its room starts: the room type is known, but a `?` is still unknown. So V must value the position plus the map still reachable from it. An early V cannot do this, so the baseline evaluator gets **path features**: for the best k paths to the boss, the counts of elite, rest, shop, `?` and monster points, and an estimate of the HP budget for the act.
+- Close calls use L1 rollouts, as above.
+
+## 3. NoSL vs SL
+
+The method is the same in both environments; only the source of outcomes differs.
+
+| | NoSL | SL |
+|---|---|---|
+| in-node random outcomes (event result, transform, reroll, a `?` already rolled) | K samples | exact (node clone) |
+| in-node rewards that depend on how the combat was played | — | known (open question 1, [Environments §10](/en/arch/environments/#sec-10)) |
+| beyond the node | sampled worlds | sampled worlds |
+| value function | V_NoSL | V_SL |
+
+Neow and other Ancient options: SL sees the exact outcome of random options, for example which card the "random rare card" option gives ([Environments §1](/en/arch/environments/#sec-1)).
+
+## 4. Interface
+
+The planned C# interface. One entry point serves every non-combat surface; Harness routes by surface name ([Harness §4](/en/arch/harness/#sec-4)).
+
+```csharp
+// Planned. One entry for every non-combat surface; routing by surface name (docs: harness §4).
+public interface IMacroBrain
+{
+    MacroDecisionResult Decide(MacroRequest request, IWorldSource worlds, Budget budget);
+}
+
+public sealed record MacroDecisionResult(
+    string First,                          // one of legal[]
+    IReadOnlyList<string> Plan,            // rest of this screen (shop buys, reward claims)
+    IReadOnlyList<Candidate> Candidates,   // value, CI, samples per first action
+    IReadOnlyList<Fact> Facts);            // e.g. deck delta, expected HP at boss, P(win) delta
+```
+
+`First` is the action to execute now, `Plan` the rest of this screen, `Candidates` the value, CI and sample count of each possible first action, and `Facts` the statements used to explain the choice.
+
+- Out-of-combat card prompts (upgrade / transform / remove) arrive through the same `card_choice` surface as in-combat prompts; `ChoiceContext.Purpose` says what the prompt is for. Harness routes them by whether a combat is running.
+- The macro policy used inside rollouts is L0 with a smaller K. It never recurses into L1.
+
+## 5. Budget
+
+How much search each mode gets:
+
+- **Self-play:** a fixed number of branches (simulated lines of play), so runs are reproducible. L0 always; L1 only on a sampled subset of close calls, to control cost. Those L1 results become training data.
+- **Assist:** L0 answers instantly; L1 refines the answer while the human looks at it. The search is *anytime*: it can be stopped at any moment and still returns its best answer so far.
+- **Auto (R4):** L0 + L1 under a wall-clock cap.
+
+## 6. Tests
+
+1. Coverage: every macro surface is reached in simulated runs, and the fallback count is 0.
+2. Decision panels: a fixed set of (run state, options) cases whose ground truth comes from large paired rollouts. Track how often L0 agrees with the ground truth, per surface; this shows where V is weakest.
+3. NoSL counterfactual: same public record, different hidden state (`RoomSet` tails, odds, streams) → the same decision.
+4. Determinism with a fixed budget.
+
+## 7. Open questions
+
+1. The horizon H for L1 (next boss or next act), and how strong the rollout combat policy must be. Measure how well each correlates with full-run outcomes.
+2. The shop as one decision or as a sequence (the number of possible buy sets grows combinatorially).
+3. How much path planning V can learn by itself, compared with explicit path features.

@@ -25,7 +25,7 @@ namespace Sts2Ai.SimWorker;
 internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null);
 
 /// <summary>
-/// One whole run in the real engine, started the way the game starts a new singleplayer run (simulator.md §5.1).
+/// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator §5.1).
 /// <see cref="Step"/> pumps the game until it waits for the player, then makes one decision: combat through the
 /// combat policy, card prompts through the card selector, every other screen through the macro policy.
 ///

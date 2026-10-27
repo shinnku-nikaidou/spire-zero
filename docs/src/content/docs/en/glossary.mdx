@@ -1,0 +1,97 @@
+---
+title: Glossary
+description: Short explanations of the game, project, search, learning and evaluation terms used across this manual.
+---
+
+Terms are grouped by area. Each entry links to the page that covers it in depth.
+
+## Game terms
+
+| term | meaning |
+|---|---|
+| run | One playthrough from the start (Neow) to victory or death. |
+| act, floor | A run has several acts, each with its own map and boss. Floor is the total floor number, as the top bar shows. |
+| map point, `?` | A point on the act map: combat, elite, rest site, shop, treasure, event, or `?` (unknown until entered; the game rolls what it becomes on arrival). |
+| encounter, intent | An encounter is the set of monsters in a combat. An intent is the icon showing what a monster plans to do next (attack and its damage, block, buff …). |
+| draw / discard / exhaust pile | Where cards go during combat. The order of the draw pile is hidden from the player. |
+| relic, potion, power | Relics are permanent items. Potions are one-shot items held in slots (the belt). Powers are ongoing effects on a creature (e.g. Strength). |
+| Ancient (Neow) | Special events offering a choice of boons. Neow opens every run. |
+| ascension (A0) | Difficulty level; A0 is the base game. |
+| Silent, Ironclad | Playable characters. The project starts with the Silent. |
+| card prompt | When the game asks the player to choose cards (discard, exhaust, upgrade, transform …). |
+| TestMode | The game's built-in test switch. It turns off presentation, but also changes a few rules, which the simulator patches back ([Simulator §1](/en/arch/simulator/#sec-1)). |
+
+## Project components
+
+| term | meaning |
+|---|---|
+| Protocol | The wire types shared by every process. A field exists only if the game UI shows it ([Protocol](/en/arch/protocol/)). |
+| GameBridge | The only code that turns game objects into protocol observations and protocol actions into game calls ([GameBridge](/en/arch/gamebridge/)). |
+| Brain | The policies: combat brain and macro brain. References Protocol only, never the game. |
+| SimWorker | A process that runs the real game DLL headless, for search worlds and self-play ([Simulator](/en/arch/simulator/)). |
+| Mod | The thin host inside the real game: observe, ask, render or execute ([Mod](/en/arch/mod/)). |
+| Harness | The dispatcher in the decision process: record, routing, budget, logs ([Harness](/en/arch/harness/)). |
+| RunSession | The SimWorker class that plays a whole run headless through every decision surface ([Simulator §5](/en/arch/simulator/#sec-5)). |
+| CombatBuilder | Builds a simulator combat from an observation ([Simulator §3](/en/arch/simulator/#sec-3)). |
+| Pump | The single-threaded scheduler that runs all game async code on one thread, so results are deterministic. |
+| host | Whatever holds the true run: the mod in the real game, or a SimWorker in self-play. |
+| headless | Running the game's logic without graphics, window or input. |
+
+## Environments and information
+
+| term | meaning |
+|---|---|
+| NoSL | The environment with public information only ([Environments §1](/en/arch/environments/#sec-1)). |
+| SL | NoSL plus the true outcomes inside the current node, as if save & load were allowed there. |
+| node | In SL: one map point, from arrival until the travel action that leaves it ([Environments §4](/en/arch/environments/#sec-4)). Not to be confused with Godot UI nodes (`N*` classes). |
+| public history, public record | Everything shown on screen so far plus what can be inferred from it. Harness stores it as the public record. |
+| determinization | Drawing one concrete hidden state (draw order, monster moves, random streams) that agrees with the public history. |
+| world | A simulator state that search may explore: a sampled world in NoSL, the exact node clone in SL. |
+| clone, checkpoint, seal | SL builds its world from a checkpoint taken at node entry plus the actions since. The world is sealed at the node exit: further actions throw. |
+| horizon | The node exit, as seen from inside an SL world (`AtHorizon`). |
+| whitelist | The rule that an observation field exists only if the UI shows it; each field has a test. |
+| fair play | The rules for what the AI may see and do, collected in the local note `fair-play-spec.md`. |
+
+## Decisions and search
+
+| term | meaning |
+|---|---|
+| surface | A kind of decision screen (combat, map, rewards, shop …). The surface name routes a decision to a brain ([Protocol §3](/en/arch/protocol/#sec-3)). |
+| decision point | The moment the game waits for the player and the next decision can be asked. |
+| observation | What the player can see at a decision point, as protocol types. |
+| legal actions | Every action the player could take right now, as text such as `play:C:T` or `map:col,row`. |
+| uid | A stable id for a card in hand or a creature in combat, so actions can name them. |
+| recommendation, fact | The brain's answer: an action, the plan behind it, the candidates it compared, and facts (numbers) that explanations are built from. |
+| fallback | Choosing something (e.g. at random) when no brain covers a decision. Forbidden: the game pauses instead. |
+| branch, rollout | A branch is one action sequence tried in a world. A rollout plays on from there with a fast policy to estimate the outcome. |
+| PIMC | Perfect Information Monte Carlo: sample several determinized worlds, search each as if everything were known, and average ([Combat brain §2](/en/arch/combat-brain/#sec-2)). |
+| strategy fusion | The error of picking a different best line in each sampled world, as if the player knew which world is real. Averaging by first action avoids it. |
+| ISMCTS | Information Set Monte Carlo Tree Search: the alternative to try if PIMC's remaining fusion error turns out to matter. |
+| afterstate | The state right after a choice, before new randomness. The macro brain values options by their afterstates ([Macro brain §2](/en/arch/macro-brain/#sec-2)). |
+| L0, L1 | Macro brain levels: L0 values each afterstate with V; L1 checks close calls with paired rollouts. |
+| budget | How much search a decision may use: a fixed number of branches (reproducible) or wall-clock time ([Harness §5](/en/arch/harness/#sec-5)). |
+
+## Learning
+
+| term | meaning |
+|---|---|
+| value function V, P(win) | V(observation) = estimated probability of winning the run from here. The one scale for every decision ([Learning §1](/en/arch/learning/#sec-1)). |
+| leaf value | V applied where search stops, e.g. at the end of a turn. |
+| V_NoSL, V_SL | Separate value functions for the two environments. |
+| self-play | The current champion plays whole runs in the simulator to produce training data. |
+| champion, challenger | The champion is the current best version; a challenger must pass the gate to replace it. |
+| MC, TD(λ) | Ways to set value targets: from the final outcome (Monte Carlo) or blended with the next state's value (temporal difference). |
+| ExIt | Expert Iteration: use search results as training labels, so the value function learns what search found. |
+| SPSA | Simultaneous Perturbation Stochastic Approximation: tunes many parameters at once by perturbing them together. |
+| privileged information | Hidden state used only at training time to reduce noise; never an input of the deployed policy ([Learning §4](/en/arch/learning/#sec-4)). |
+
+## Evaluation
+
+| term | meaning |
+|---|---|
+| R1–R4 (sim-to-real ladder) | Four rungs from a pure simulator run (R1) to the Steam game with the mod (R4); each adds one new variable ([Evaluation §1](/en/arch/evaluation/#sec-1)). |
+| leaderboard | Results per environment; NoSL and SL are never mixed ([Evaluation §2](/en/arch/evaluation/#sec-2)). |
+| gate | The test a challenger must pass to be promoted ([Evaluation §5](/en/arch/evaluation/#sec-5)). |
+| CRN | Common random numbers: champion and challenger play the same seeds and randomness, so their difference has less noise. |
+| SPRT | Sequential Probability Ratio Test: stops a comparison as soon as the evidence is strong enough either way. |
+| seed sets | Disjoint train, promotion and final seeds; final seeds are registered before use ([Evaluation §4](/en/arch/evaluation/#sec-4)). |

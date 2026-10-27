@@ -1,0 +1,135 @@
+---
+title: 'Output: panel, highlight, auto'
+description: How one recommendation from the brain becomes a text panel, on-screen highlights or an executed action, and how its explanation is written.
+sidebar:
+  label: Output
+  badge:
+    text: planned
+    variant: caution
+---
+import { Aside, Badge, Steps } from '@astrojs/starlight/components';
+
+The output layer turns the brain's answer into something the player sees, or something the game does. It runs inside the [mod](/en/arch/mod/), in the game process. Every output mode reads the same `Recommendation` message from Harness, and the brain never knows which mode is on.
+
+<Aside title="Status">
+
+Planned. Background notes are in the local note `tmp/notes/output-design.md`; the Godot node names in it were verified in the game source. Godot node classes (`N*` types) are cited by class name only: each name is unique in the decompiled source, so find the file by name.
+
+</Aside>
+
+## 1. Contract
+
+Three consumers read one `Recommendation` ([Protocol §6](/en/arch/protocol/#sec-6)); semi-auto combines two of them. The brain never knows which mode is on. The parts of the recommendation they use:
+
+- `Plan`: the rest of the turn or screen, as a list of actions (`plan[0]` is the next one);
+- `Candidates`: the actions considered, each with its value, confidence interval and sample count;
+- `Facts`: the numbers an explanation may use; the only source for explanations.
+
+| mode | consumer | needs |
+|---|---|---|
+| panel (assist, simple) | one text panel for all surfaces | `Plan`, `Candidates`, `Facts` |
+| highlight (assist, advanced) | per-surface `ISurfaceAdapter.AnchorFor` ([Mod §4](/en/arch/mod/#sec-4)) | action → node |
+| auto | `ISurfaceAdapter.Execute(plan[0])`, then re-observe | action → entry point |
+| semi-auto | highlight + Space executes `plan[0]` | both |
+
+A *surface* is the kind of decision screen being shown (combat, map, shop, a card prompt and so on). An *anchor* is the Godot node on screen that an action belongs to, such as the card holder of the card to play.
+
+**Stale guard.** A recommendation is rendered or executed only if its `obs_hash` equals the current one; otherwise the output is cleared. While waiting, the panel shows "thinking…". In assist mode the brain answers *anytime*: it sends its best answer so far and then better ones ([Harness §5](/en/arch/harness/#sec-5)), and each update replaces the content.
+
+## 2. Panel
+
+The panel has its own `CanvasLayer`, a Godot node that draws its children on a separate layer; here a high layer, above the game UI. Inside it sit a `PanelContainer` and a `RichTextLabel`. A corner is draggable; F8 toggles the panel.
+
+What it shows depends on the surface, and all of it comes from `Recommendation`. ΔP(win) is the difference in the estimated probability of winning the run.
+
+| surface | panel content |
+|---|---|
+| combat | numbered plan with targets; 1–2 facts (expected HP loss vs the alternative, lethal next turn); the top alternative with its ΔP(win) |
+| card reward / choices | the options, each with ΔP(win) vs skip or the baseline |
+| map | next point and a path preview |
+| event / rest / shop | same format |
+
+- The panel is the fallback display for every surface that has no highlight adapter.
+- Optional zero-UI variant: the brain serves a local web page, shown on a second screen. Only for the earliest testing; the Unix socket stays the link to the game.
+
+## 3. Highlight
+
+**Follow overlay.** Highlights are drawn by the mod's own nodes, which live only in the mod's `CanvasLayer`, on top of the game. Each frame, each marker reads its target node's rectangle on screen (`GetGlobalRect()`) and moves to follow it; when the target is gone or hidden, the marker hides. The mod never writes into game nodes, for two reasons: `NHandCardHolder.UpdateCard()` resets `CardHighlight` on every state change (`Nodes.Cards.Holders/NHandCardHolder.cs:613-640`) <Badge text="verified" variant="success" />, and the cyan, gold and red glows already mean something in the game (`NCardHighlight`).
+
+**Style.** Order badges ①②③, plus an outline in a color the game does not use (purple).
+
+**Anchors.** The node that each surface's marks attach to, verified (local note `tmp/notes/output-design.md` §3.2) <Badge text="verified" variant="success" />:
+
+| surface | node | mark |
+|---|---|---|
+| hand | `NPlayerHand.Instance.GetCardHolder(card)` | badge + outline; hover = reason |
+| target | `NCombatRoom.Instance.GetCreatureNode(creature)` | crosshair with the card's number |
+| potion | `NPotionHolder` | badge |
+| end turn | `NEndTurnButton` | pulse when the plan is done |
+| in-combat card select | hand select mode, `NCombatPileCardSelectScreen` | check marks |
+| card reward | `NCardRewardSelectionScreen` holders + skip | ΔP per card, best outlined |
+| rewards | `NRewardButton` | claim order / skip |
+| map | `NMapPoint` in `NMapScreen` + our own `Line2D` path (not `NMapDrawings`, which is shared in multiplayer) | next point + path |
+| event | `NEventOptionButton` | best outlined, ΔP on the others |
+| rest | `NRestSiteButton` | same |
+| shop | `NMerchantCard/Relic/Potion/CardRemoval` | buy order |
+| grid select | `NCardGridSelectionScreen` family, `NCardGrid` | check marks |
+
+**Order of work:**
+
+1. hand + targets;
+2. card reward;
+3. map;
+4. event / rest / shop;
+5. grid prompts.
+
+**Pitfalls:**
+
+- Holder nodes are pooled (reused) and re-parented, and they animate. The follow overlay handles this.
+- Screen resolution, UI scale and controller input: use only global rectangles.
+- Re-planning after every action renumbers the badges.
+
+## 4. Auto
+
+The auto loop runs on the mod's per-frame loop ([Mod §3](/en/arch/mod/#sec-3)):
+
+<Steps>
+
+1. Wait until the surface is idle.
+2. Observe.
+3. Get the recommendation.
+4. Check that its hash matches the current observation and that its action is legal.
+5. Execute `plan[0]`, and only that.
+6. Wait for the hash to change, or for the timeout.
+7. Repeat.
+
+</Steps>
+
+The brain re-plans after every action, because draws and random results feed the next decision. Speed comes from the game's FastMode set to Instant, plus an optional delay per step ([Mod §7](/en/arch/mod/#sec-7)).
+
+## 5. Narration
+
+Narration is the text that explains a recommendation.
+
+- It is built only from `Facts` and `Candidates`, never from free reasoning about the state. NoSL facts are probabilities and expectations; SL facts may be exact ("A then B → draws X").
+- Templates come first, one per fact kind.
+- Optionally, a cheap LLM polishes the text, offline or asynchronously (the project's LLM gateway, cheap models only). Its input is the facts JSON and the template text. Its output is checked: every number in the text must equal a fact value (string match after formatting); if not, the template text is shown instead.
+- The LLM never sees game state beyond the facts, and never affects the action.
+
+## 6. Fair play in output
+
+- The executor accepts only actions from `legal[]`.
+- There is no interface for state edits, the console or reloads.
+- `NumReloads` is logged.
+- The mod never exports anything beyond protocol messages; the SL export is gated by environment ([Mod §6](/en/arch/mod/#sec-6)).
+
+## 7. Tests
+
+- **Anchor resolution per surface:** every legal action of an adapted surface resolves to a visible node (checked in a debug overlay mode).
+- **Stale:** delayed recommendations never render after a state change.
+- **Narration number check.**
+
+## 8. Open questions
+
+1. Highlights for plans with several targets, when a target dies mid-plan: renumber, or keep?
+2. How to show NoSL uncertainty (the confidence interval) without clutter.

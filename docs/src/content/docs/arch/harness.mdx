@@ -1,0 +1,158 @@
+---
+title: Harness
+description: 决策进程的调度器：维护公开记录，为当前环境打开世界，把每个决策路由给某个大脑，设定预算，并记录每一个决策。
+sidebar:
+  badge:
+    text: 规划中
+    variant: caution
+---
+import { Aside } from '@astrojs/starlight/components';
+
+Harness 是决策进程里的调度器。它的一边是**宿主**，也就是真正运行游戏的一方：真实游戏里是 Mod，模拟时是负责跑这一局的宿主 worker 进程。另一边是各个大脑，以及执行搜索的 SimWorker 进程池。Harness 自己没有任何策略，也不碰任何游戏对象，只使用 Protocol 类型。它做的是记账类的工作：AI 到目前为止看到了什么，哪个决策界面交给哪个大脑，一个决策能用多少算力，以及要记哪些日志。
+
+<Aside title="状态">
+
+规划中。目前还没有 Harness：SimWorker 在进程内通过 `ICombatPolicy` 和 `IChoicePolicy` 直接调用占位策略。
+
+</Aside>
+
+## 1. 职责
+
+Harness 负责六件事：
+
+1. 处理 Protocol 消息：按 `decision_id` 排序，丢弃过期请求，也就是针对游戏已经离开的状态发出的请求（[协议 §2](/arch/protocol/#sec-2)）。
+2. 为每一局维护公开记录（[§3](#sec-3)）。在 NoSL 下，这份记录是信念的输入；信念就是 AI 对隐藏状态的认识。在 SL 下，Harness 还要保存节点检查点和节点轨迹。
+3. 通过 `IWorldSource` 为当前环境打开世界（[环境 §5](/arch/environments/#sec-5)、[协议 §7](/arch/protocol/#sec-7)）。
+4. 把每个决策界面路由给一个大脑，没有兜底（[§4](#sec-4)）。
+5. 设定预算（[§5](#sec-5)），并保证搜索种子是确定性的。
+6. 写决策日志（[§6](#sec-6)）。
+
+Harness 不做的事：
+
+- 读取或执行游戏：这是宿主里 GameBridge 的工作；
+- 构建或确定化状态：这是 worker 进程的工作，因为它需要游戏代码；
+- 评判动作的好坏：这是各个大脑的工作（[战斗大脑](/arch/combat-brain/)、[宏观大脑](/arch/macro-brain/)）。
+
+## 2. 进程与流程
+
+一次决策的过程如下。宿主发来一条 `decision` 消息，里面有观测、合法动作，以及自上一个决策以来的事件。Harness 把它们追加到记录里，检查请求是否过期，然后为这个决策界面选定大脑。接着它在 worker 池里打开世界：NoSL 下是从记录构建的 K 个世界，每个世界有自己的搜索种子 `seed_k`；SL 下是由节点检查点加节点轨迹得到的 1 个克隆。大脑在预算内搜索这些世界，用 `run_branches` 把分支交给 worker 池执行。Harness 记录结果，再把推荐（recommendation）发回宿主。
+
+```mermaid
+sequenceDiagram
+  participant H as 宿主
+  participant X as Harness
+  participant B as 大脑
+  participant P as worker 池
+  H->>X: decision{obs, legal, events}
+  Note over X: 追加到记录，<br/>检查过期，路由
+  alt NoSL
+    X->>P: open_world(build, record, seed_k) × K
+  else SL
+    X->>P: open_world(clone, checkpoint + node trace)
+  end
+  X->>B: Decide(request, worlds, budget)
+  B->>P: run_branches
+  P-->>B: 分支结果
+  B-->>X: 决策结果
+  Note over X: 写日志
+  X-->>H: recommendation
+```
+
+- 宿主是 Mod（R4，真实游戏）或者负责这一局的宿主 worker 进程（R1–R3，模拟）；R1–R4 是[仿真到实机阶梯](/arch/evaluation/#sec-1)的各级。Harness 分辨不出这两者，这正是项目的原则「换世界，不换大脑」（swap the world, not the brain）。
+- 搜索用的 worker 进程与宿主进程是分开的。自我对弈时，宿主 worker 只持有真实的这一局，搜索在其他 worker 上进行。
+- 单进程模式（bench、selftest）：Harness 和一个 worker 在同一个进程里，接口相同，没有进程间通信（IPC）。
+
+## 3. 公开记录
+
+公开记录就是 NoSL 下的信念：AI 对这一局的全部了解都来自它。
+
+Harness 不维护一个与真实随机数保持同步的镜像游戏。这种镜像正是 spire-mentor 的结构性 bug；spire-mentor 是本设计借鉴过的先行项目。取而代之的做法是：每次决策都从记录重新构建世界。
+
+```csharp
+// Planned. Protocol types only.
+public sealed class PublicRecord
+{
+    public RunHeader Header { get; }                    // character, ascension, game version, env
+    public IReadOnlyList<RecordEntry> Entries { get; }  // observations, events, own decisions, in order
+    public Observation Latest { get; }
+}
+```
+
+- 记录是 NoSL 世界的唯一输入。worker 拿到（记录，搜索种子），用游戏代码采样出一个与记录一致的状态。所需的规则（怪物状态机、各种池、奖励权重）都在 worker 里。
+- 记录必须支持的推断，按优先级排列：
+  1. 抽牌堆的多重集，以及位置已知的牌（需要 `move{pos}` 事件）；
+  2. 每个怪物下一步动作的后验分布（根据已见信息得到的概率分布），依据它的意图历史和效果历史。目前的重采样是在意图相同的动作之间均匀抽取；
+  3. 本回合的历史，由此推出能力和遗物的内部计数器；
+  4. 整局层面：至今见过的奖励、商店和事件，由此推出隐藏的概率计数器。
+- 记录随这一局的日志一起保存。崩溃恢复就是重放日志，不需要游戏存档。
+- SL：记录照样保留，用于日志和解说，但搜索用的世界来自节点克隆（[模拟器 §7](/arch/simulator/#sec-7)）。Harness 保存最新的节点检查点和节点轨迹；每次进入新节点时，轨迹清空重来。
+
+## 4. 决策界面路由
+
+每个决策界面（surface）只交给一个大脑：
+
+| 决策界面 | 大脑 |
+|---|---|
+| `combat` | 战斗大脑 |
+| 战斗中的 `card_choice`（弃牌、消耗、选择、放到牌堆顶……） | 战斗大脑（带 `ChoiceContext`） |
+| 战斗外的 `card_choice`（升级、变化、附魔、移除） | 宏观大脑 |
+| `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`potion_full` | 宏观大脑 |
+
+- 找不到路由时报错「uncovered surface」（未覆盖的决策界面）。宿主暂停，请求人工操作，并记录一个覆盖率 bug。绝不随机兜底。评估要求兜底次数为 0（[评估 §3](/arch/evaluation/#sec-3)）。
+- 决策界面列表及其游戏入口：[模拟器 §5.2](/arch/simulator/#sec-5.2)、[GameBridge §4](/arch/gamebridge/#sec-4)。
+
+## 5. 预算与确定性
+
+预算按分支数计（一个分支就是在某个世界里模拟的一条打法），或者按墙钟时间计，取决于模式：
+
+| 模式 | 单位 | 原因 |
+|---|---|---|
+| 自我对弈、评估 | 固定的分支数 | 可复现：相同请求 + 大脑种子 + 预算 → 相同推荐 |
+| 辅助模式 | 墙钟时间，随时可停（anytime） | 有人在等：先发出目前最好的答案，再逐步改进 |
+| 自动游玩（R4） | 墙钟时间上限 + 最少分支数 | 既不卡住，也不搜得太浅 |
+
+「随时可停」是指搜索在任何时刻被打断，都有一个当前最好的答案可以给出。
+
+- 并行算出的结果按固定顺序合并（先按世界编号，再按候选编号），绝不按完成的先后顺序，这样时序就改变不了答案。
+- 大脑的随机数由 Harness 提供：`brainSeed = Hash(runId, decisionIndex, championVersion)`，绝不从游戏种子派生。
+- 分配：当排名前两位的候选之差超出各自的置信区间（CI）时停止；否则增加样本或深度（[战斗大脑 §5](/arch/combat-brain/#sec-5)）。
+
+## 6. 决策日志
+
+每个决策一行 JSON：
+
+```json
+{"decision_id": 412, "env": "NoSL", "surface": "combat", "obs_hash": "…",
+ "budget": {"branches": 4000}, "worlds": 16,
+ "candidates": [{"plan": ["play:7:3", "play:9", "end_turn"], "value": 0.412, "ci": 0.018, "n": 1600}],
+ "chosen": "play:7:3", "elapsed_ms": 812, "brain": "champion-0007", "degraded": false}
+```
+
+每个候选带有它的计划、估值、置信区间 `ci` 和样本数 `n`。`degraded` 标记这个决策是在 worker 故障之后给出的（[§7](#sec-7)）。
+
+谁读这份日志：
+
+- 学习：价值目标和 ExIt 标签（ExIt，专家迭代：训练学到的部分去模仿搜索的选择）；
+- 评估：兜底次数、每个决策的算力、保守程度；
+- 输出层：解说只根据候选和事实（facts）生成。
+
+## 7. 故障处理
+
+| 情况 | 处理 |
+|---|---|
+| 过期请求（已有更新的 `decision_id`） | 取消搜索，不回复 |
+| worker 崩溃或超时 | 在另一个 worker 上从快照重新打开世界；用已完成的分支作答；`degraded=true` |
+| 从观测构建失败 | 报告 `BuildDifferences`；不搜索；宿主暂停；记录 bug。绝不随机 |
+| 宿主认为动作不合法而拒绝 | 宿主重新请求；连续 2 次 → 暂停 |
+
+## 8. 测试
+
+1. 路由覆盖：N 局模拟覆盖到所有决策界面，兜底次数为 0。
+2. 可复现性：重放一份决策日志，得到完全相同的推荐。
+3. Harness 层面的 NoSL 反事实测试：公开记录相同、隐藏状态不同 → 推荐相同（[环境 §7](/arch/environments/#sec-7)）。
+4. 过期处理：请求被打乱顺序或重复发送 → 只回答最新的一个。
+
+## 9. 未决问题
+
+1. 记录里事件的粒度：先满足 [§3](#sec-3) 列出的推断，有需要再加。
+2. 同一回合内的多个决策之间，是复用已经构建好的世界（增量方式：构建后做一个快照，再把执行过的动作追加到轨迹上），还是每次都重新构建？

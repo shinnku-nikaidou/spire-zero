@@ -1,0 +1,193 @@
+---
+title: 'Mod: the in-game host'
+description: How the mod loads into the real game, waits until the UI is idle, asks the brain for a decision over a socket, and shows or executes the answer.
+sidebar:
+  label: Mod
+  badge:
+    text: planned
+    variant: caution
+---
+import { Aside, Badge, FileTree } from '@astrojs/starlight/components';
+
+The mod is the AI's host inside the real game. The game's own mod loader loads it into the game process. It observes the game through GameBridge, asks Harness (in the separate decision process) for a recommendation over a local socket, and then either shows the answer to the player (assist mode, see [Output](/en/arch/output/)) or executes it (auto-play), logging every step. Search, learning and strategy all live in the decision process; the mod only connects the game to it.
+
+<Aside title="Status">
+
+Planned. A probe mod builds (local folder `tmp/mods/StsAiProbe`, manifest `affects_gameplay:false`) but has never been installed. Installing into the game is allowed (user, 2026-10-26). Earlier research is in the local notes `tmp/notes/mod-research.md` and `tmp/notes/output-design.md`.
+
+</Aside>
+
+## 1. Role
+
+The mod is a thin host in the real game. It does four things: observe the game (through GameBridge), ask Harness over a socket, render the answer ([Output](/en/arch/output/)) and/or execute it, and log. It runs no search, no learning and no strategy inside the game process. It supports single-player only and is disabled in multiplayer.
+
+The project will be `src/Sts2Ai.Mod`. It references the game DLLs (plus GodotSharp, the C# API of the Godot engine), GameBridge and Protocol. It does not reference Brain.
+
+## 2. Loading
+
+How the game finds and starts a mod. Everything in this section was read in the game source <Badge text="verified" variant="success" />, except the last point.
+
+The game scans its `mods/` folder recursively for manifests, and loads the DLL named `<id>.dll` that sits next to each manifest (`Modding/ModManager.cs`). The game folder on this machine is `~/.local/share/Steam/steamapps/common/Slay the Spire 2`. Inside it:
+
+<FileTree>
+
+- mods/
+  - Sts2Ai/
+    - Sts2Ai.json the manifest
+    - Sts2Ai.dll the mod itself (`<id>.dll`)
+    - Sts2Ai.GameBridge.dll shipped alongside (inferred, open question 1)
+    - Sts2Ai.Protocol.dll shipped alongside (inferred, open question 1)
+
+</FileTree>
+
+- **Manifest** fields: `id`, `version`, `has_dll:true`, `has_pck:false` (no Godot resource pack), `affects_gameplay:false`, `min_game_version:"0.111.0"`. `affects_gameplay` only matters for the multiplayer handshake, and the mod refuses multiplayer anyway.
+- **Consent:** the player agrees to mod loading once, with a click in the game. The answer, `PlayerAgreedToModLoading`, is stored in `settings.save` as `mods_enabled`. Mods are loaded at startup only.
+- **Profile:** modded runs use a separate profile folder, `modded/`, copied from the vanilla (unmodded) profile on first use.
+- **Entry point:** a static method marked `[ModInitializer(nameof(Init))]`. It runs before `ModelDb.Init`, so any work that touches game models is deferred to the first frame or to `RunStarted`.
+- **Version guard:** if the game version differs from the pinned one, the mod refuses to activate and shows the reason in the panel.
+- **Dependencies:** the GameBridge and Protocol DLLs ship next to `Sts2Ai.dll` <Badge text="inferred" variant="caution" />. Needs checking: does the game's assembly load context (ALC, the .NET mechanism that decides where an assembly's dependencies are found) resolve sibling DLLs? If not, merge everything into a single DLL, ILMerge-style. This is open question 1 ([§13](#sec-13)).
+
+## 3. Main-thread loop and idle
+
+**One thread for the game.** Godot, like most game engines, expects game state and UI nodes to be touched only from its main thread. So every game read and write happens inside one per-frame callback, `Tick`, attached with `GetTree().ProcessFrame += Tick`. `ProcessFrame` is a plain C# event raised once per frame, so the mod needs no Godot source generators. Waiting on a socket would stall the frame, so socket IO runs on a background thread, which puts incoming messages into a concurrent queue; `Tick` drains that queue every frame. This is the pattern of STS2MCP (MIT license, [§11](#sec-11)).
+
+```mermaid
+flowchart LR
+  H["Harness"] <-->|"JSON lines<br/>Unix socket"| S["socket thread<br/>(background)"]
+  S -->|"incoming messages"| Q["concurrent queue"]
+  Q -->|"drained every frame"| T["Tick<br/>(main thread)"]
+  T -->|"read / act"| G["game state<br/>and UI nodes"]
+```
+
+**The loop.** A *surface* is the kind of decision screen being shown: combat, map, shop, a card prompt and so on. Each frame, `Tick` applies three rules:
+
+| on this frame | the mod |
+|---|---|
+| the surface has been idle for at least 3 frames in a row, and `obs_hash` changed | sends `decision` |
+| a `recommendation` arrived whose hash matches the current one | renders and/or executes it ([§4](#sec-4)) |
+| the hash changed | sends `cancel` (the state moved on, so the brain drops that search) |
+
+`obs_hash` is a hash of the observation (FNV-1a 64 over its canonical JSON, [Protocol §2](/en/arch/protocol/#sec-2)), so a new hash means something visible changed.
+
+**Idle.** "Idle" means the game UI is really ready for the player's input: the game logic is waiting, no queued actions remain, nothing is still being played out, and no other screen covers the one being decided. A decision sent earlier would describe a state that is about to change, and a click might not land. Headless, GameBridge's `CombatActions.WaitingForInput` is enough; in the real game it is not ([GameBridge §2](/en/arch/gamebridge/#sec-2)). So, in addition to GameBridge's `PendingSurface` ([GameBridge §6](/en/arch/gamebridge/#sec-6)), the mod checks the screen and the Godot nodes <Badge text="verified" variant="success" />. The check must hold for at least 3 frames, so that a moment that looks idle only briefly does not count.
+
+| surface | idle when |
+|---|---|
+| combat | all at once: `CombatActions.WaitingForInput`, `ActionQueueSet.IsEmpty`, `Hand.CurrentMode == Play && !InCardPlay`, `NOverlayStack.ScreenCount == 0`, `!NMapScreen.IsOpen` |
+| hand-select prompt | `Hand.CurrentMode` is `SimpleSelect` or `UpgradeSelect` |
+| overlay prompts and screens | told apart by the type of `NOverlayStack.Peek()`: card reward, grid select, choose-a-card, bundle, rewards |
+| rooms (event, rest, shop, treasure) | the room's root node is active and its buttons are enabled |
+
+**Unknown surface.** If no adapter matches, or the idle check holds but there are no legal actions, the mod pauses auto-play, the panel says "manual needed", and the mod logs a coverage bug. It never falls back to a random action.
+
+## 4. Executor adapters
+
+An adapter connects one surface's protocol actions to the Godot nodes on screen. GameBridge never touches Godot nodes ([GameBridge §1](/en/arch/gamebridge/#sec-1)), so this node-side work lives in the mod. One interface serves both output modes: highlighting asks where an action is on screen, auto-play asks the adapter to perform it.
+
+```csharp
+// One adapter per surface; highlight and auto-play share the action → node mapping.
+interface ISurfaceAdapter
+{
+    string Surface { get; }
+    bool Matches();                       // current screen/room is this surface
+    Control? AnchorFor(string action);    // node to highlight; null = panel only
+    bool Execute(string action);          // same entry point a human click reaches
+}
+```
+
+What `Execute` calls on each kind of surface:
+
+| surface | `Execute` |
+|---|---|
+| combat | `CombatActions.Start` (GameBridge); ends the turn only if `CanTurnBeEnded` |
+| buttons | calls the button's handler, but only after checking `IsEnabled && IsVisibleInTree()`. `ForceClick` checks neither <Badge text="verified" variant="success" /> |
+| shop | `entry.OnTryPurchaseWrapper(inv)`. `ForceClick` on merchant nodes does nothing |
+| map | `NMapScreen.OnMapPointSelectedLocally(point)` |
+| card prompts | clicks the card holders, then confirm. This UI path keeps `PlayerChoice` in the replay record ([GameBridge §4](/en/arch/gamebridge/#sec-4)) |
+
+After `Execute`, the mod expects the hash to change within a timeout: 10 s by default at game speed Fast, 3 s at Instant. If it does not change, the mod observes again. After 3 failures in a row it pauses and logs.
+
+For each surface, the mod path and the matching simulator path are listed side by side in [GameBridge §4](/en/arch/gamebridge/#sec-4).
+
+## 5. Brain link
+
+- **Socket:** the Unix domain socket `$XDG_RUNTIME_DIR/sts2ai/brain.sock`, carrying JSON lines ([Protocol §2](/en/arch/protocol/#sec-2)). The mod is the client and Harness is the server. Harness is started by the user, or spawned by the mod from a configured path; the mod never runs search itself.
+- **Environment:** the `hello` message carries the environment (NoSL or SL, see [Environments](/en/arch/environments/)), chosen in the mod config at run start. It stays fixed for the whole run and is logged.
+- **Brain unreachable:** in assist mode the panel says "no brain"; in auto-play the mod pauses.
+
+## 6. SL export
+
+This section runs only in the SL environment, and is switched by it. In SL the brain may search an exact clone of the current node ([Environments §6](/en/arch/environments/#sec-6)). To build that clone, a worker needs the state at node entry plus every action taken in the node since.
+
+- **Node checkpoint:** at node entry (`RunManager.RoomEntered` after a map travel, and at run start) the mod calls `RunManager.ToSave(null)` in memory (`Runs/RunManager.cs:670-709`) and sends `node_checkpoint{json}` to Harness. It never writes `current_run.save` (which is cloud-synced) or any other file under the profile.
+- **Node action log:** every action in the node, whether the mod executed it or the human played it, is sent in order as a protocol action in a `node_action` message, together with all prompt answers. In assist mode the human plays, so the mod captures human actions by comparing the state before and after with the legal set. Another option is to hook `ActionExecutor.BeforeActionExecuted` (`GameActions/ActionExecutor.cs:52`) <Badge text="inferred" variant="caution" />. The choice is open question 2 ([§13](#sec-13)).
+- **NoSL:** none of the above runs. The code is compiled in, but switched off at `hello`. Any `node_checkpoint` in a NoSL log makes the run invalid.
+
+## 7. Auto-run driver
+
+The driver plays whole runs by itself in the real game. It exists for R4 evaluation: R4 is the real-game rung of the [sim-to-real ladder](/en/arch/evaluation/#sec-1).
+
+- **Seeded start:** call `NGame.StartNewSingleplayerRun(character, shouldSave:false, acts, modifiers, seed, GameMode.Standard, asc)` (`Nodes/NGame.cs:1137`) with the act selection the lobby would make ([Simulator §5.1](/en/arch/simulator/#sec-5.1)). The alternative is to set `NGame.DebugSeedOverride` before the Confirm button is pressed (`AutoSlayer.cs:500-502`).
+  With `shouldSave:false`, `current_run.save` stays untouched, as the parameter doc says (`NGame.cs:1130`) <Badge text="verified" variant="success" />. Run history and progress are probably still written <Badge text="inferred" variant="caution" />, so auto-runs use the modded profile only.
+- **Run end:** detect death (all players dead) or `WinRun`; record `run_end`; return to the main menu; take the next seed from the pre-registered list.
+- **Speed:** set `PrefsSave.FastMode = Instant` only while auto-run is active. Two game behaviors matter here: non-editor builds downgrade Instant to Fast at startup, and prefs are saved on quit. So the mod restores the user's own value both when auto-run stops and when the game quits.
+- **Abandon or crash:** the seed is recorded as `aborted`, with the reason. A seed is never re-run to pick a better result.
+
+## 8. Logs and R3 = R4
+
+- **Per decision**, the log records: observation, legal actions, recommendation, executed action, latency, environment, game version, mod version, and `NumReloads` (must be 0).
+- **Equivalence test:** the same seed and the same decision sequence, played in the simulator (R3) and in the game (R4), must give an identical observation stream. A divergence means a bug in the bridge or the simulator; the test reports the first divergence.
+
+## 9. Controls and safety
+
+| control | effect |
+|---|---|
+| F8 | show / hide the panel |
+| F9 | pause / resume auto-play |
+| step mode | one action per key press |
+| Space (semi-auto) | the highlights show the plan; Space executes `plan[0]` |
+
+- Auto-play runs only in single-player runs; any multiplayer lobby disables it.
+- Never: state edits, the console, save writes, reloads, or putting the seed or RNG state into messages (`RunView` excludes the seed).
+
+## 10. Patches and JIT
+
+A **Harmony patch** rewrites a game method at runtime: Harmony is a .NET library that lets a mod run its own code before the original method (a *prefix*) or after it (a *postfix*). The mod prefers the game's own C# events over Harmony: `CombatManager.*`, `RunManager.RoomEntered`, `ActionExecutor.*`, `CardPile.*`.
+
+The unavoidable patches are the context prefixes on `CardSelectCmd.From*` ([GameBridge §5](/en/arch/gamebridge/#sec-5)). Their risk is the JIT. The game runs with .NET *tiered compilation*: a method is first compiled quickly, and frequently used methods are later compiled again with optimizations (a "rejit"). A rejit can drop a patch silently; this was seen headless.
+
+Mitigation:
+
+- **Heartbeat:** each patch bumps a counter.
+- **Missing context:** when a prompt arrives without a context, the mod logs it and shows a warning in the panel.
+- **Launch flag:** recommend launching the game with `DOTNET_TieredCompilation=0` <Badge text="inferred" variant="caution" />. Needs checking: whether the game's hosted runtime honors it (open question 3, [§13](#sec-13)).
+
+## 11. Prior art
+
+STS2MCP (MIT license) is an existing mod that lets outside programs drive STS2 over HTTP.
+
+**Copy:**
+
+- the main-thread queue drained on `ProcessFrame` ([§3](#sec-3));
+- its per-screen action code, as a reference.
+
+**Avoid:**
+
+- raw `new PlayCardAction`: it skips `CanPlayTargeting` and the play effects;
+- ending the turn directly;
+- exposing the seed / path;
+- HTTP with CORS `*`: any web page could drive the game. We use a Unix socket only.
+
+## 12. Tests
+
+- **Load:** the mod initializes, the version guard works, the panel shows.
+- **Surface coverage in the real game:** scripted R4 runs hit every surface; the fallback / manual count is 0.
+- **Idle check:** no decision is sent mid-animation. Log decisions with the frame index, and check that none overlaps queued actions.
+- **SL export round trip:** checkpoint + action log → the worker's replay completes, and every logged action is legal.
+- **Speed restore:** Instant/Fast is restored on stop and on quit.
+
+## 13. Open questions
+
+1. Does the game's ALC find sibling DLLs (GameBridge, Protocol)?
+2. Capturing human actions in assist mode: event hook or state diff?
+3. Does the game honor the environment variable for tiered compilation?

@@ -1,0 +1,150 @@
+---
+title: 'Learning: valuation and self-improvement'
+description: The value function V that both brains share, and the offline self-play loop that trains it from zero and keeps a change only if it passes a gate.
+sidebar:
+  label: Learning
+  badge:
+    text: planned
+    variant: caution
+---
+import { Aside } from '@astrojs/starlight/components';
+
+This page defines the value function V that both brains use to score positions, and the offline loop that makes it better. Strategy is learned from zero by self-play, not from the user's play. Online, every decision is search plus the learned value. The improvement loop follows the development process of Stockfish (the open-source chess engine, taken here as the model): self-play, fit the value, tune, propose patches, and keep a change only if it passes a gate. An LLM takes part only offline (patch proposals, failure analysis), never in an online decision. The loop runs offline, in processes separate from the decision process.
+
+<Aside title="Status">
+
+Planned. Nothing is learned yet; only placeholder policies exist, used by the bench.
+
+</Aside>
+
+## 1. Value function
+
+**V(obs) = P(win this run from here, playing the current champion).** A value function estimates how good a situation is. Here the estimate is a probability: the chance of winning the run from this observation if the current *champion* (the best version of the AI accepted so far) plays the rest of it.
+
+- One scale for combat leaves, macro afterstates and the map ([Combat brain §4](/en/arch/combat-brain/#sec-4), [Macro brain §2](/en/arch/macro-brain/#sec-2)). Because every value is a win probability, HP lost in a fight and a card taken at a reward can be compared directly.
+- The input is the observation only. Hidden state may be used at training time as an auxiliary input ([§4](#sec-4)), never as an input of the deployed model.
+- There are two functions, V_NoSL and V_SL. An SL policy plays every later node better, so its win probability is higher. They have separate training targets, champions and gates, but may share architecture and initialization ([Environments §8](/en/arch/environments/#sec-8)).
+
+Planned versions:
+
+| version | form | training |
+|---|---|---|
+| v0 | hand-written features times linear weights (widely spaced initial weights keep the lexicographic intent) | SPSA |
+| v1 | hand-written features + small MLP | supervised: MC + TD(λ) |
+| v2 | observation encoder (card / relic / power embeddings) + several heads | same + ExIt |
+
+Reading the table:
+
+- **Lexicographic intent** (v0): the starting feature list comes from bottled_ai (a prior-art Slay the Spire bot), which ranks features in a strict order of importance: compare by the first, and use the next only to break ties ([Combat brain §4](/en/arch/combat-brain/#sec-4)). Linear weights that start far apart reproduce that order, and tuning starts from there.
+- **MLP** is a small fully connected neural network. **Embeddings** are learned vectors, one per card, relic or power id, so the encoder can read any deck.
+- **SPSA** (simultaneous perturbation stochastic approximation) tunes parameters from noisy results alone. Each step nudges all parameters at once in a random direction, measures both the "plus" and the "minus" version, and moves the parameters toward the better one. It needs two measurements per step however many parameters there are, and no gradient, which suits weights whose only test is playing games.
+- **MC** (Monte Carlo) target: the real result of the run (win 1, loss 0), used as the label for every decision in it. Unbiased, but noisy: the luck of one run lands on all of its decisions.
+- **TD(λ)** (temporal difference) target: mixes the real result with V's own estimates at the following decisions (k+1, k+2, …). λ, between 0 and 1, sets the mix: λ = 1 is pure MC, λ = 0 looks only one decision ahead. It is less noisy than MC and gives a learning signal at every transition.
+- **ExIt** (expert iteration): search guided by V plays better than V alone, so the values the search finds become the training labels for the next V. A better V makes the next search stronger, and so on.
+
+**Heads** (v1 and later). A head is one output of a network whose body is shared with the other outputs:
+
+- main head: P(win);
+- auxiliary heads, which only help the network learn a good representation and are never used to decide: HP lost in the next combat, the distribution of the floor reached, the kill probability for each boss;
+- combat head, for combat leaves: the distribution of HP at the end of the combat, plus a death class (as in r33hab, a prior-art project).
+
+## 2. Self-play loop
+
+In self-play the champion plays whole runs by itself, in real full-run worlds: the real game code running headless in the worker pool. The loop turns those runs into a *challenger*, and the gate decides whether it replaces the champion:
+
+```mermaid
+flowchart TD
+  C["champion<br/>(one per environment)"] --> SP["self-play<br/>train seeds, worker pool,<br/>real full-run worlds"]
+  SP --> L["decision logs<br/>obs, candidates,<br/>values, outcome"]
+  L --> F["fit V<br/>MC + TD(λ)"]
+  F --> X["ExIt<br/>search values as labels"]
+  X --> T["SPSA<br/>weights, budgets, K,<br/>beam, thresholds"]
+  T --> FC["failure clusters"]
+  FC --> P["LLM patch proposals"]
+  P --> CT["compile + unit<br/>+ fair-play tests"]
+  CT --> CH["challenger"]
+  CH --> G{"gate<br/>promotion seeds,<br/>CRN, SPRT"}
+  G -->|pass| PR["promote"]
+  G -->|fail| D["discard"]
+  PR -.->|"new champion"| C
+```
+
+1. **Self-play:** the champion plays whole runs on train seeds. Log format: [Harness §6](/en/arch/harness/#sec-6).
+2. **Fit:** the target is a mix of the MC outcome and TD(λ) (from decision k to decision k+1). Early on there are no wins, so every MC target is 0; the floor-reached auxiliary target supplies the signal, while the main head stays P(win). Never mix HP targets and win targets in one backward pass (a lesson from r33hab).
+3. **ExIt:** search values become labels for V and for the priors (which actions the search tries first). The teacher is a fair search in the same environment, one that obeys that environment's information rules. No behavior cloning (training a model to copy a teacher's moves) of an omniscient teacher: that failed in several projects.
+4. **SPSA** on the v0 weights and on the search parameters.
+5. **LLM:** the input is pre-aggregated failure clusters plus death summaries; the output is K candidate patches (features, pruning rules, parameters). The candidates are filtered by compiling, unit tests and fair-play tests, then gated. Only cheap models through the LLM gateway.
+6. **Gate:** see [Evaluation §5](/en/arch/evaluation/#sec-5).
+
+## 3. Reward and credit
+
+The only reward is the run outcome. The hard part is not a missing signal but credit assignment (which of the many decisions in a run caused the win or the loss) and variance (luck that hides the effect of a single decision).
+
+1. The hierarchy shortens the chain. Combat is solved by search, and its "reward" is the V after the combat. So run-level credit only has to span about 50 macro decisions plus the combat results.
+2. TD(λ) gives a gradient at every transition.
+3. Auxiliary reward terms must be potential-based: F = Φ(s') − Φ(s) (Ng, Harada and Russell, 1999). See below.
+4. Auxiliary heads give dense supervision, for the representation only.
+5. Variance: a reverse curriculum (start near the bosses), and CRN-paired forks at key decisions ([§5](#sec-5)).
+
+**Potential-based shaping.** Shaping adds small intermediate rewards so that a learner gets feedback before the run ends. In the potential-based form, a function Φ scores each state, and the bonus for a step from s to s' is Φ(s') − Φ(s). Over a whole run the bonuses telescope to Φ(end) − Φ(start): every intermediate term cancels, so the bonus depends only on where the run starts and ends, not on the route in between. Ng, Harada and Russell proved that shaping of this form leaves the optimal policy unchanged. Raw HP penalties do not cancel like this: they would forbid lines such as "bleed in act 1 to win act 3".
+
+**Reverse curriculum.** Training starts on situations close to the end, where the outcome is near and its signal clear (snapshots just before bosses), and then moves the starting points earlier ([§5](#sec-5)).
+
+**CRN** (common random numbers): two lines are played with the same random seeds, so the luck they share cancels out of their difference. To *fork* a decision is to play two of its options from the same point.
+
+## 4. Privileged information
+
+Privileged information is hidden state that a player could not see. The fair-play spec (local note `tmp/notes/fair-play-spec.md`) allows it at training time, as long as the deployed policy reads only observations:
+
+- An *oracle critic* branch, a value branch used only in training, sees hidden state (true draw order, monster moves) to reduce the variance of the targets. Only the observation branch is deployed.
+- Counterfactual labels: fork the same decision point with the same randomness, play both lines to the end, and get an unbiased label for the difference.
+- This lives in the offline pipeline only, in an assembly and process separate from the decision process.
+
+## 5. Local vs global optimum
+
+A self-improving loop can settle into a local optimum: a way of playing that every small change makes worse, while a quite different way would win more often (for example, always playing conservatively). These mechanisms work against it:
+
+| mechanism | effect |
+|---|---|
+| value target = run outcome only | how much HP is worth is learned from data |
+| reverse curriculum | snapshot pool from acts 2/3 and pre-boss first; learn late value, then push earlier |
+| counterfactual lab | at sampled key macro decisions, CRN-fork both lines to the end for an unbiased ΔP(win); tests hypotheses like "bleed in act 1" |
+| population / archive | one champion per style descriptor (MAP-Elites), so no collapse to "always conservative" |
+| exploration | Thompson or ε on macro decisions in self-play; afterstate MC targets are robust to it |
+| conservatism monitors | elites taken, skip rate, HP at boss, gold/potion hoarding ([Evaluation §3](/en/arch/evaluation/#sec-3)) |
+| contrarian hypotheses | user/LLM ideas → constrained policy variants → sim A/B; results back to discussion |
+
+- **MAP-Elites** keeps an archive instead of a single best policy. Each policy is placed in a cell by its style descriptor (a few numbers describing how it plays), and each cell keeps its own best champion. Styles that are not the best yet survive, so the population cannot collapse into one style.
+- **Thompson sampling** explores by drawing a plausible value for each option from its uncertainty and picking the best draw; an option is tried about as often as it might really be the best one. **ε-greedy** picks a random option with a small probability ε.
+- **Sim A/B:** play two policy variants in the simulator on the same seeds and compare the results.
+
+## 6. Infrastructure
+
+The pipeline from runs to weights (a *generation* is one turn of the loop in [§2](#sec-2)):
+
+```mermaid
+flowchart LR
+  S["scheduler<br/>seeds, champion"] --> W["worker pool<br/>8 processes"]
+  W --> L["logs<br/>JSONL per generation"]
+  L --> T["training<br/>Python via uv, GPU"]
+  T --> WT["weights<br/>format TBD"]
+  WT --> B["Brain loads<br/>C# inference"]
+```
+
+- Compute: 8 physical cores / 16 threads. 8 processes reach about 1,860 combats/s, against 275 in a single process ([Simulator §4](/en/arch/simulator/#sec-4)). The GPU (RTX 5070 Ti) is for value-net training only.
+- Training is Python, managed with uv, reading the JSONL logs. Inference is C# inside Brain (a small net on the CPU, with ONNX Runtime or a hand-written forward pass). New packages or runtimes need the user's approval.
+- Reproducibility: each generation records its champion, seed sets, hyperparameters and commit. Logs go into one directory per generation.
+- Storage: about 50 macro decisions plus a few hundred combat decisions per run, compressed. Old generations are pruned on demand.
+
+## 7. Tests
+
+1. Calibration on held-out seeds. Calibrated means the predictions match reality: of the positions where V says 30%, about 30% should be won. Check it with a reliability plot (group the predictions into bins and plot predicted against actual win rate). The Brier score (mean squared error between the predicted probability and the 0/1 result) must beat a constant prediction; the run model of ytcs (a prior-art STS2 solver) failed this.
+2. The potential-based auxiliary terms telescope exactly.
+3. Train/deploy input parity: the deployed model reads protocol observations only, and training reads the same JSON.
+4. Gate A/A test: a challenger that is the champion itself has nothing to gain, so the gate must not promote it more often than the SPRT false-positive rate.
+
+## 8. Open questions
+
+1. The v0 feature set: bottled_ai's 42 features, or a minimum of about 10 features first.
+2. Inference format (ONNX Runtime would be a new package).
+3. One net with an environment input bit, or separate nets (start with separate nets).

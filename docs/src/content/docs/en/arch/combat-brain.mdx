@@ -1,0 +1,117 @@
+---
+title: Combat brain
+description: How the AI chooses actions in combat, with expectation search over determinized worlds in NoSL and deterministic planning in SL, plus the leaf value and how the budget is spent.
+sidebar:
+  badge:
+    text: planned
+    variant: caution
+---
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The combat brain answers two kinds of question during a fight: (a) on the player's turn, what to do next (a card and its target, a potion, or end turn); (b) the prompts that come up during play (discard, exhaust, choose, …). It runs in the decision process; [Harness](/en/arch/harness/) calls it with a set of worlds and a budget. The search code is the same in both environments; only the worlds it is given differ ([Environments §5](/en/arch/environments/#sec-5)).
+
+<Aside title="Status">
+
+Planned. Today there are only placeholders, used by bench and tests: `PlayPolicy` (plays a random playable card) and `RandomPolicy` (uniform over the legal actions).
+
+</Aside>
+
+## 1. Problem shape
+
+- A turn is a sequence of actions that ends with `end_turn`. Uncertainty inside a turn comes from draws and from random generation. The enemy turn is deterministic once the monsters' moves are fixed.
+- Branching: a hand of 5–10 cards, targeted cards times the number of enemies, plus potions; a sequence is 3–8 actions long. That gives up to 10⁴ sequences per turn, with many **transpositions**: different action orders that reach the same state (A then B gives the same state as B then A).
+- Horizon: a combat lasts 3–15 turns. Searching only one turn is greedy: it sees nothing past the turn. Searching the whole combat is expensive, because in NoSL it crosses many chance nodes (points where the game resolves something random, so the search has to branch over the outcomes). So the search is cut at the end of the turn, and the state there is scored by a leaf value in P(win run) units ([§4](#sec-4)).
+- Cost ([Simulator §4](/en/arch/simulator/#sec-4)): a restore takes 0.28 ms plus 0.073 ms per replayed action; a branch takes about 2.8 ms (median), about 330 per second per core; 8 workers give about 6.8 times that.
+
+## 2. NoSL: PIMC
+
+In NoSL the AI does not know the hidden state (draw order, monster moves). The design handles this with **PIMC** (perfect-information Monte Carlo): draw K determinized worlds, i.e. complete hidden states that agree with the public record; search each one as an ordinary game with nothing hidden; and average the results. The answer is an expectation over the worlds.
+
+PIMC has one known weakness, **strategy fusion**: inside one world the search knows that world's future, so if it may choose a different line in each world, the plan acts as if it already knew which world is the real one. The alternative that avoids this is **ISMCTS** (information-set Monte Carlo tree search). It builds one search tree over information sets (groups of states the player cannot tell apart) and samples a different world on each pass, so no choice in the tree can depend on hidden information. The design starts with PIMC and keeps fusion small: it aggregates over the first action only and re-plans after every action (step 3). ISMCTS is held in reserve in case fusion is measured to be a problem (open question 2, [§8](#sec-8)).
+
+<Steps>
+
+1. **Worlds.** Harness supplies K worlds: start with 8, and add more when the top two candidates are within their confidence intervals. Each world has a different draw order, different random streams and different monster moves, all consistent with the public record.
+2. **Search inside the turn.** Depth-first search (DFS: follow one action sequence to its end, then back up and try the next) over action sequences. At every node of the search, ending the turn is one of the options, an idea from bottled_ai, a prior-art project this design learned from. Within a world, states are deduplicated by a canonical observation hash, so each transposition is expanded once.
+3. **Aggregate by first action.** In each world, take the best value reachable after the first action; then take the mean over the K worlds. Never take the max across worlds: that is strategy fusion. Execute the first action only, observe again, and plan again.
+   - Residual fusion: after the first action, each world's plan is still clairvoyant, so lines like "play X, then see what's drawn" are overvalued. If this is measured to be a problem, switch to ISMCTS.
+4. **Enemy turn.** The enemy turn is simulated for real, with the world's sampled monster moves. The leaf is taken at the start of the next player turn, so the value sees the state after the enemies have acted.
+5. **More turns** when the budget allows: expand the top first actions one more turn, with a cheap policy or with beam search for turn 2 (beam search: at each step keep only the B best states and expand only those).
+
+</Steps>
+
+Two more rules:
+
+6. Potions are ordinary actions. Their timing is not hard-coded.
+7. Prompts: inside search, the simulator's selector (the code that answers card prompts) is driven by the search, so each option is a branch. A lone prompt in the real game is handled by evaluating each option with the same search (this needs `ChoiceContext`, [Protocol §4](/en/arch/protocol/#sec-4)).
+
+## 3. SL: deterministic planning
+
+In SL there is one exact world and no chance nodes, so combat becomes deterministic planning on that one world.
+
+1. Inside a turn: the same enumeration, but with 1 world, so deduplication works better.
+2. Across turns: beam search, one step per turn (keep the top B end-of-turn states), until the combat ends or the budget runs out. After a win the node goes on (rewards), so the search may continue to the node exit (open question 1 in [Environments §10](/en/arch/environments/#sec-10)).
+3. RNG manipulation comes for free: different action orders consume the random streams differently, and the search sees the results.
+4. Leaf: V_SL(obs) at the end of the combat or at the node exit; at the end of the turn if the budget runs out.
+5. The world is sealed at the node exit (`AtHorizon`).
+
+## 4. Leaf value
+
+The leaf value scores a state where the search stops. It uses one scale: the estimated probability of winning the run, P(win run) ([Learning](/en/arch/learning/)).
+
+- The input is the observation only, in both environments, so it cannot leak hidden state.
+- v0: hand-made features times linear weights. The feature list is seeded from bottled_ai's 42 features (player HP, block, enemy HP, powers, draw-pile quality, turns to kill, …). bottled_ai compares them in lexicographic order (the first feature decides, the next one only breaks ties); that order becomes linear weights spaced far apart, which are then tuned by SPSA (simultaneous perturbation stochastic approximation: tunes all weights at once from noisy results by perturbing them together). v0 must value block, overkill and lethal next turn without saturating.
+- Later: a small neural net on the encoded observation. Its head predicts the end-of-combat HP distribution plus a death class (an idea from r33hab, another prior-art project this design learned from), and this is mapped to P(win). The training target is a λ-mix: 0.3 × search value + 0.7 × outcome ([Learning §2](/en/arch/learning/#sec-2)).
+- The mid-combat leaf (at turn end) and the post-combat leaf (combat won, before rewards) are the same function; in the post-combat case the combat part is empty.
+
+## 5. Budget and pruning
+
+The levers below keep the search inside its budget. The one that decides when to stop is **CI-based allocation**: each first action's value is a mean over worlds, with a confidence interval (CI), a range that very likely contains the true mean. Once the two best first actions are clearly apart, more samples will not change the choice, so the search stops; otherwise it spends more worlds on those two.
+
+| lever | effect |
+|---|---|
+| canonical obs-hash dedup | each distinct observation is expanded once per world |
+| move ordering + early stop | expand high-prior actions first (a heuristic first, a policy net later) |
+| CI-based allocation over first actions | stop when the top two are separated; otherwise give them more worlds |
+| trivial decisions | one legal action, or all sequences equivalent → no search |
+| restore cost | DFS order reuses prefixes and restores only on backtrack; deep copy later ([Simulator §4](/en/arch/simulator/#sec-4)) |
+
+Rough numbers: 1–2 s per decision times 8 workers gives about 5,000 branches. With K=16 that is about 300 branches per world, enough for a deduplicated enumeration inside one turn.
+
+## 6. Interface
+
+```csharp
+// Planned.
+public interface ICombatBrain
+{
+    // Player's turn: search the worlds, return the first action and the whole plan.
+    CombatDecisionResult Decide(CombatRequest request, IWorldSource worlds, Budget budget);
+
+    // Prompt during play: chosen canonical indexes plus a value per option.
+    ChoiceDecisionResult Choose(ChoiceRequest request, IWorldSource worlds, Budget budget);
+}
+
+public sealed record CombatDecisionResult(
+    string First,                          // one of legal[]
+    IReadOnlyList<string> Plan,            // rest of this turn (narration, highlight)
+    IReadOnlyList<Candidate> Candidates,   // value, CI, samples per first action
+    IReadOnlyList<Fact> Facts);            // expected HP loss, turns to kill, P(draw X), ...
+```
+
+- `Facts` is the only source of narration ([Output §5](/en/arch/output/#sec-5)). NoSL facts are probabilities and expectations; SL facts may be exact.
+- `ICombatPolicy` / `IChoicePolicy` stay, for the placeholders and for rollout policies (fast policies that play a line out inside search).
+
+## 7. Tests
+
+1. Tactics suite: positions cut from simulated games that have clear answers (take lethal, exact block, apply vulnerable before attacking); record found / not found.
+2. Fixed combat panel (encounter, deck, seed) with CRN (common random numbers: every version plays the same random draws, so differences come from the brain, not from luck): mean HP loss and death rate. First beat the placeholders; version gates as in [Evaluation §5](/en/arch/evaluation/#sec-5).
+3. NoSL counterfactual: same record, different hidden state → same recommendation (fixed brain seed).
+4. SL seal: any execute past the node exit throws.
+5. Reproducible with a fixed branch budget.
+
+## 8. Open questions
+
+1. K: starting value and growth rule (panel: the marginal HP-loss gain per added world).
+2. How bad fusion is: PIMC against ISMCTS on the panel.
+3. NoSL: turn-end leaf against rollout to the end of the combat, at equal budget.
+4. SL beam width B; equal wall-clock time with NoSL (open question 2 in [Environments §10](/en/arch/environments/#sec-10)).

@@ -1,0 +1,114 @@
+---
+title: Overview
+description: What the STS2 AI mod is, the rules every design decision follows, how its processes fit together, and a map of this manual.
+---
+import { Badge, LinkCard } from '@astrojs/starlight/components';
+
+This project builds an AI for **Slay the Spire 2** (STS2) that runs as a mod inside the game. One brain drives two modes:
+
+- **Assist:** highlight the order in which to play, and explain why.
+- **Auto-play:** play the whole run on its own.
+
+The strategy improves itself starting from zero. It is not built from the user's own games. The first target is the Silent at Ascension 0 (A0). Single-player only.
+
+The game version is pinned at **v0.111.0**. The game runs on Godot 4.5.1 and .NET 9.0.7; mods change its code at runtime with Harmony patches.
+
+## 1. Constraints
+
+Seven rules that every design decision follows:
+
+1. **No cheating** beyond what the environment allows ([§2](#sec-2)). The decision process holds no reference to game code, and the compiler enforces it.
+2. **An online decision is search plus a learned value,** all on one scale: the probability of winning the run, P(win run). An LLM never decides and never breaks ties. It is used only offline, to propose patches and to polish narration, with cheap models through the project's LLM gateway.
+3. **Training and the real game share one code path:** the same Protocol, GameBridge, Harness and brains.
+4. **The simulator is the real `sts2.dll`,** run headless (without graphics or a window). No engine rewrite.
+5. **No fallback:** a decision that nothing covers pauses the game. It is never made at random.
+6. **The mod never writes saves,** and nothing reloads the real game (`NumReloads == 0`).
+7. **Low coupling, simple, clear:** each project has one job and dependencies point one way ([§4](#sec-4)); each decision surface or component sits behind one small interface; no mechanism is built before something uses it; game bugs are not worked around. Example: a loaded save does not behave exactly like continuous play, and that is accepted ([Environments §6](/en/arch/environments/#sec-6)).
+
+## 2. Environments
+
+The AI plays in one of two environments, defined on [Environments](/en/arch/environments/):
+
+- **NoSL:** public history only. Search runs on K determinized samples (hidden state drawn to agree with what is public) and averages over them.
+- **SL:** NoSL plus the true outcomes inside the current node, i.e. the current map point from arrival until the travel action. Search uses one sealed, exact clone. Later nodes stay hidden in both environments.
+- Each environment has its own value function (V_NoSL, V_SL), its own champions and its own leaderboard. Reports give the SL − NoSL difference.
+
+## 3. Processes
+
+```mermaid
+flowchart TD
+  subgraph G["game process"]
+    GAME["STS2 + Mod"] --- GB["GameBridge<br/>observe · legal · start"]
+    GAME --- UI["overlay · executor"]
+  end
+  subgraph D["decision process (no game refs)"]
+    H["Harness<br/>record · routing<br/>budget · log"] --> CB["combat brain"]
+    H --> MB["macro brain"]
+  end
+  subgraph W["SimWorker × N (real sts2.dll, headless)"]
+    WS["worlds: build · clone · run host<br/>branches · rollouts"]
+  end
+  G <-->|"JSON lines<br/>Unix socket"| D
+  D <-->|"JSON lines<br/>child pipes"| W
+  D -.->|"self-play logs"| OFF["offline<br/>fit V · ExIt · SPSA<br/>LLM patches · gate"]
+```
+
+- **Game process:** the real game with our mod. The mod uses GameBridge to read what is on screen (observe), list the legal actions (legal), and carry one out through the UI's own entry points (start). It draws the overlay and, in auto-play, executes actions.
+- **Decision process:** loads no game code. Harness keeps the record of the run, routes each decision to the combat or macro brain, sets the search budget and writes the decision log.
+- **SimWorker processes:** each one runs the real `sts2.dll` headless. They build or clone the worlds that search explores, run search branches and rollouts, and can host a whole run themselves.
+- **Offline:** a separate pipeline that turns self-play logs into a better value function and gates each change ([Learning](/en/arch/learning/)).
+
+In self-play the run host is a SimWorker instead of the game. Harness and the brains do not change: "swap the world, not the brain".
+
+The game keeps its run in singletons, so one process can hold only one live run. Search therefore has to spread over many processes. This fits the rule that the decision process loads no game code.
+
+## 4. Code
+
+All projects live under `src/`, in the solution `Sts2Ai.sln`. Dependencies point one way, from the top of the table down to Protocol.
+
+| project | references | content |
+|---|---|---|
+| `Sts2Ai.Protocol` | framework only | wire types; together they are the observation whitelist |
+| `Sts2Ai.GameBridge` | game + Protocol | observe, legal, start (UI entry points) |
+| `Sts2Ai.Brain` | Protocol | policies (placeholders today) |
+| `Sts2Ai.SimWorker` | game + all of the above | headless host, combat and run sessions, CombatBuilder, CLI |
+| `Sts2Ai.Mod` (planned) | game + GameBridge + Protocol | in-game host |
+| Harness (planned) | Protocol + Brain | dispatcher process |
+
+## 5. Doc map
+
+The sidebar follows this table. The badge next to each page shows its status.
+
+| page | scope | status |
+|---|---|---|
+| [Environments](/en/arch/environments/) | NoSL/SL definitions, node boundary, information table, guards | <Badge text="decided" variant="success" /> |
+| [Protocol](/en/arch/protocol/) | wire format, observation union, choice context, events, recommendation, world API | <Badge text="partly built" variant="tip" /> combat exists |
+| [GameBridge](/en/arch/gamebridge/) | observe sources, actions per surface, prompt context, decision points, uids | <Badge text="partly built" variant="tip" /> combat exists |
+| [Simulator](/en/arch/simulator/) | headless host, combat session, CombatBuilder, performance, run session, NoSL worlds, SL clone, worker pool | <Badge text="partly built" variant="tip" /> combat and run sessions exist |
+| [Mod](/en/arch/mod/) | loading, main-thread loop, idle detection, adapters, SL export, auto-run driver, safety | <Badge text="planned" variant="caution" /> |
+| [Harness](/en/arch/harness/) | record and belief, routing, budget, decision log, failures | <Badge text="planned" variant="caution" /> |
+| [Combat brain](/en/arch/combat-brain/) | PIMC (NoSL), deterministic planning (SL), leaf value, pruning | <Badge text="planned" variant="caution" /> |
+| [Macro brain](/en/arch/macro-brain/) | afterstate + V, rollout check, map | <Badge text="planned" variant="caution" /> |
+| [Learning](/en/arch/learning/) | definition of V, self-play loop, credit assignment, privileged training, local optima, infrastructure | <Badge text="planned" variant="caution" /> |
+| [Evaluation](/en/arch/evaluation/) | R1–R4 ladder, leaderboards, metrics, seeds, gates, baselines | <Badge text="planned" variant="caution" /> |
+| [Output](/en/arch/output/) | panel, highlight anchors, auto loop, narration | <Badge text="planned" variant="caution" /> |
+
+Progress, known gaps and the implementation order are on [Status and roadmap](/en/status/). Terms are explained in the [Glossary](/en/glossary/).
+
+Background notes, in Chinese, are kept locally under `tmp/notes/` and are not in the repository: `plan.md` (plan v1, milestones M0–M5), `fair-play-spec.md`, `output-design.md`, `testmode-audit.md`, `mod-research.md`.
+
+<LinkCard title="Start here: Environments" description="What the AI may know in NoSL and SL. Every other page builds on it." href="/en/arch/environments/" />
+
+## About this manual
+
+**Reading the pages**
+
+- <Badge text="verified" variant="success" /> means the claim was checked in the game's source. <Badge text="inferred" variant="caution" /> means it was inferred and must be checked before anything relies on it.
+- Game source locations such as `Runs/RunManager.cs:670-709` are paths inside the decompiled `MegaCrit.Sts2.Core` assembly. The decompiled code stays local (`tmp/decompiled/sts2/`) and is not in the repository. Godot node classes (`N*`) are found by file name, which is unique.
+- References like "Simulator §5.1" point to a numbered section of a page. Its anchor is `#sec-5.1` in both languages (`/en/arch/simulator/#sec-5.1`). Code comments cite sections as `docs: simulator §5.1`.
+
+**Maintaining it**
+
+- The English pages are the reference version, and Claude reads them as its design manual. The Chinese pages say the same thing. Change both in the same commit.
+- Keep section numbers stable: code comments cite them.
+- Before committing, run `pnpm check` in `docs/`: it builds the site and checks every internal link and anchor.
