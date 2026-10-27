@@ -29,9 +29,10 @@ def play(sim, seed_file, lo, hi, processes, extra, folder):
         records = folder / f"{a:04}-{b:04}.jsonl"
         cmd = [*sim, "run", "--seeds", seed_file, "--start", str(a), "--n", str(b - a), "--records", str(records), *extra]
         procs.append((subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL), records))
-    for proc, _ in procs:
-        if proc.wait() != 0:
-            raise SystemExit(f"the sim failed ({shlex.join(proc.args)})")
+    # Wait for every process before failing, so one failure does not cut the others short.
+    failed = [proc for proc, _ in procs if proc.wait() != 0]
+    if failed:
+        raise SystemExit(f"the sim failed ({shlex.join(failed[0].args)})")
     return [records for _, records in procs]
 
 
