@@ -47,7 +47,9 @@ Reading the table:
 
 - main head: P(win);
 - auxiliary heads, which only help the network learn a good representation and are never used to decide: HP lost in the next combat, the distribution of the floor reached, the kill probability for each boss;
-- combat head, for combat leaves: the distribution of HP at the end of the combat, plus a death class (as in r33hab, a prior-art project).
+- combat head, for combat leaves: the distribution of the combat's outcome, a death class plus buckets of the HP left at its end, optionally with the potions left (as in r33hab and ytcs, prior-art STS2 projects). It does not predict P(win): the macro V prices its outcomes once per combat ([§3](#sec-3)). Two training targets are compared through the gate:
+  - TD(λ ≈ 0.95) inside the combat, bootstrapping on the head's own distribution at the next decision, with the final bucket smoothed over its neighbours by HL-Gauss (a Gaussian of about 0.75 buckets), as ytcs does; ytcs found λ = 1 worse;
+  - 0.3 × the search's distribution + 0.7 × the outcome, as r33hab does.
 
 ## 2. Self-play loop
 
@@ -73,8 +75,14 @@ flowchart TD
 1. **Self-play:** the champion plays whole runs on train seeds. Log format: [Harness §6](/en/arch/harness/#sec-6).
 2. **Fit:** the target is a mix of the MC outcome and TD(λ) (from decision k to decision k+1). Early on there are no wins, so every MC target is 0; the floor-reached auxiliary target supplies the signal, while the main head stays P(win). Never mix HP targets and win targets in one backward pass (a lesson from r33hab).
 
+   A dense target such as the floor reached is a stopgap. A change it brings is accepted only through the gate on real outcomes, and only after it reproduces on several training seeds: in a GuanDan study (arXiv 2610.29411) one lineage looked strong, and none of its 5 pre-registered replication seeds came out positive.
+
    v0's fit is `learn/fit_value.py`. Every macro decision in the decision logs carries V's features ([Harness §6](/en/arch/harness/#sec-6)), and the run records give the floor its run reached, joined by run id. It is ridge regression on standardized features (ridge regression: least squares with a small penalty on the size of the weights, which keeps correlated features from taking extreme weights). Each run weighs the same however many decisions it has, and every fifth run (by run id) is held out. It reports R² on the held-out runs (R²: the share of the floor's variance the fit explains, 1 at best, below 0 when it does worse than the mean), next to a fit on the floor alone. The weights go to `eval/values/NAME.json`; `run --value FILE` plays L0 with them, and the champion shows them as `l0 NAME`.
 3. **ExIt:** search values become labels for V and for the priors (which actions the search tries first). The teacher is a fair search in the same environment, one that obeys that environment's information rules. No behavior cloning (training a model to copy a teacher's moves) of an omniscient teacher: that failed in several projects.
+
+   The combat policy target is softmax(prior logits + c · minmax(Q)), not the visit counts. Q is each first action's mean value over the worlds, which PIMC already computes; minmax rescales the Q of one decision to [0, 1]; the prior logits are 0 while the prior is uniform. c is tuned by how well the target predicts the choice of a search with a much larger budget (log-likelihood). Visit counts would be a poor target: CRN at the root flattens them (r33hab), and with mctx's (a Gumbel MuZero library) transform, at our 300 nodes per world, the target is almost one-hot. So the decision log records, for each combat decision, every first action's value in every world and the nodes spent on it, and for each combat its outcome (death, HP, potions); what it lacks of these is added.
+
+   Two preconditions. A learned prior steers the search only after it beats the uniform prior in the gate. A learned leaf replaces `LeafValue` only after it beats both `LeafValue` and a rollout to the end of the combat: in r33hab, at 15 simulations, the value head lost 10.6 HP more than rollouts.
 4. **SPSA** on the v0 weights and on the search parameters.
 
    For V's weights this is `learn/spsa.py`. It starts from a weights file (V's initial weights by default, which `weights` prints). Each step draws a random sign for every weight, moves all of them by c times their scale with those signs and against them, and plays the same fresh train seeds with both versions (`run --macro l0 --value`, plus the run options given, such as the combat policy). CRN makes the two comparable on few seeds. The weights then move toward the side that reached the higher mean floor, by Spall's decreasing step sizes, at most a tenth of each weight's scale per step. A weight's scale is its starting size. The floor's weight is left alone, since it changes no choice. The result is a weights file for `run --value`.
@@ -83,11 +91,18 @@ flowchart TD
 5. **LLM:** the input is pre-aggregated failure clusters plus death summaries; the output is K candidate patches (features, pruning rules, parameters). The candidates are filtered by compiling, unit tests and fair-play tests, then gated. Only cheap models through the LLM gateway.
 6. **Gate:** see [Evaluation §5](/en/arch/evaluation/#sec-5). `learn/challenge.py` takes a challenger, given by its run options, through it: it plays the champion's seed set in chunks and runs the gate after each chunk. It stops at a fail or a void verdict; after a pass it plays the rest of the set and promotes the challenger, which rewrites the champion file and rebuilds the leaderboard.
 
+**Running the loop** (planned):
+
+- Exploration noise (Gumbel) goes only on the root of self-play's combat searches, and is off in evaluation. Macro exploration: [§5](#sec-5).
+- PCR (playout cap randomization, from KataGo): 25% of the decisions get the full budget and give policy targets; the other 75% get a quarter of it and give value targets only.
+- Reanalyse (from MuZero): after each new net, a share of old positions is replayed from seed and trace and searched again with it, which refreshes their policy targets and bootstrapped value targets.
+- Every generation goes through the gate. AlphaZero dropped its gate because its signal was clean and its games many; a run here has a high variance, and runs are few.
+
 ## 3. Reward and credit
 
 The only reward is the run outcome. The hard part is not a missing signal but credit assignment (which of the many decisions in a run caused the win or the loss) and variance (luck that hides the effect of a single decision).
 
-1. The hierarchy shortens the chain. Combat is solved by search, and its "reward" is the V after the combat. So run-level credit only has to span about 50 macro decisions plus the combat results.
+1. The hierarchy shortens the chain. Combat is solved by search, and its result is an outcome distribution p(k): death, or the HP left at its end in buckets k. The macro V prices it once per combat: at the start, u[k] = V(the afterstate after the combat, with its HP in bucket k), recomputed when potions or relics change, and u = 0 for death; a leaf's value is Σₖ p(k) · u[k]. So the combat net does not depend on V's version: a new V only reprices, and combat and macro still trade HP against everything else on one scale. With V v0, which is linear in HP, the pricing reduces to P(death) and the expected HP. Run-level credit then only has to span about 50 macro decisions plus the combat results.
 2. TD(λ) gives a gradient at every transition.
 3. Auxiliary reward terms must be potential-based: F = Φ(s') − Φ(s) (Ng, Harada and Russell, 1999). See below.
 4. Auxiliary heads give dense supervision, for the representation only.

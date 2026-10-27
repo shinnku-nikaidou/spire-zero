@@ -87,7 +87,7 @@ The leaf value scores a state where the search stops. It uses one scale: the est
   - The weights are hand-set (`LeafWeights`: WinBase 0.2, PerHp 0.6, PerPotion 0.02, Dps 10, Unblocked 0.5, MinIncoming 3, PoisonShare 0.8). Blind spots: powers other than poison on enemies and Strength on the player, the draw pile, and intents after this turn.
   - `--leaf FILE` gives the brain other weights, in `run`, `brain` and `panel`, and passes them on to the workers (`serve --leaf`). `weights --leaf` prints the default ones as such a file, named `leaf0`; other weights show in the champion's name (`combat pimc NAME`). `learn/spsa.py --param leaf` tunes them ([Learning §2](/en/arch/learning/#sec-2)).
 - Next: hand-made features times linear weights. The feature list is seeded from bottled_ai's 42 features (player HP, block, enemy HP, powers, draw-pile quality, turns to kill, …). bottled_ai compares them in lexicographic order (the first feature decides, the next one only breaks ties); that order becomes linear weights spaced far apart, which are then tuned by SPSA (simultaneous perturbation stochastic approximation: tunes all weights at once from noisy results by perturbing them together). It must value block, overkill and lethal next turn without saturating.
-- Later: a small neural net on the encoded observation. Its head predicts the end-of-combat HP distribution plus a death class (an idea from r33hab, another prior-art project this design learned from), and this is mapped to P(win). The training target is a λ-mix: 0.3 × search value + 0.7 × outcome ([Learning §2](/en/arch/learning/#sec-2)).
+- Later: a small neural net on the encoded observation. Its head predicts the combat's outcome distribution: a death class plus buckets of the HP left at the end (an idea from r33hab, another prior-art project this design learned from, and from ytcs). The macro V prices each outcome once per combat, and the leaf is the priced mean ([Learning §3](/en/arch/learning/#sec-3)), so the net is not retrained for a new V. Two training targets are compared through the gate ([Learning §1](/en/arch/learning/#sec-1)).
 - The mid-combat leaf (at turn end) and the post-combat leaf (combat won, before rewards) are the same function; in the post-combat case the combat part is empty.
 
 ## 5. Budget and pruning
@@ -101,8 +101,13 @@ The levers below keep the search inside its budget. The one that decides when to
 | CI-based allocation over first actions | stop when the top two are separated; otherwise give them more worlds | no: every first action gets every world |
 | trivial decisions | one legal action, or all sequences equivalent → no search | one legal action |
 | restore cost | DFS order reuses prefixes and restores only on backtrack; deep copy later ([Simulator §4](/en/arch/simulator/#sec-4)) | yes |
+| sequential halving at the root | instead of the even split: ⌈log₂ m⌉ rounds; each round splits every world's nodes evenly over the first actions left, each DFS resuming where it stopped, then drops the worse half by their mean over the same worlds (CRN) | no: planned |
+| budget by combat | boss × 4 and elite × 2 to start, then tuned by SPSA | no: planned |
+| K and nodes per world | SPSA parameters | no: planned; 8 × 300 for every combat |
 
 v0's budget is `Budget(Worlds, NodesPerWorld)`, 8 × 300 by default; a node is one executed action. In each world the nodes are split evenly over the first actions, so each gets a fair look. Inside a subtree, once its share is spent, the search stops expanding and the state there is scored as ending the turn, which is the option tried first. On one core this costs about 0.55–0.75 s per action in NoSL and 0.13–0.19 s in SL (one world). In NoSL the worlds are independent, so the worker pool searches one world per worker ([Simulator §8](/en/arch/simulator/#sec-8)): with 8 workers an action takes about 70 ms, with the same result.
+
+**Planned levers.** Sequential halving (SH) is the root selection of Gumbel AlphaZero when the prior is uniform; assist mode, whose time is open-ended, uses its anytime variant. SH and CI-based allocation share the per-world means: SH decides which first action gets the nodes, CI when to stop. The boss multiplier has the strongest evidence on STS: in spire-mentor, raising the boss budget from 1,000 to 4,000 lifted the act 1 clear rate from 21.5% to over 65%, and our runs end mostly at the act 1 boss or in act 2 ([§7.2](#sec-7.2)). K is tuned rather than grown: LoCM (a card-game study) saturates beyond 32 worlds, and ytcs gained 0.018 from K = 64.
 
 Rough numbers: 1–2 s per decision times 8 workers gives about 5,000 branches. With K=16 that is about 300 branches per world, enough for a deduplicated enumeration inside one turn.
 
@@ -175,8 +180,8 @@ The reports are in `eval/reports/` ([Evaluation §6](/en/arch/evaluation/#sec-6)
 
 ## 8. Open questions
 
-1. K: starting value and growth rule (panel: the marginal HP-loss gain per added world).
-2. How bad fusion is: PIMC against ISMCTS on the panel.
-3. NoSL: turn-end leaf against rollout to the end of the combat, at equal budget.
+1. K and nodes per world: SPSA tunes them ([§5](#sec-5)); the panel shows the marginal HP-loss gain per added world.
+2. How bad fusion is, which a fusion panel decides: 300–500 NoSL decisions from the evaluation logs, rich in reveals within the turn (draws, random targets, generated cards), K = 32–64 worlds, the turn enumerated in full. For each first action it compares the PIMC value (the mean over worlds of each world's best) with the value when backups are merged by observation history (max over actions, mean over the worlds consistent with that history). If they disagree on fewer than about 3% of the decisions and the loss is within the noise, there is no ISMCTS. Why: αμ changed only 1.3–3% of decisions, EPIMC gained nothing in games whose information is mostly public, and one tree simulation costs about 3–4 DFS nodes (estimated).
+3. NoSL leaf: the turn-end `LeafValue`, a rollout to the end of the combat, and the outcome head ([§4](#sec-4)), at equal wall-clock time. A rollout at every leaf is too expensive, since almost every DFS node carries an end-turn leaf: only the two first actions SH keeps last get one rollout per world, from their best line, as a confirmation.
 4. SL: beam width B, and how often the planner proves the optimum within the budget, per room type; equal wall-clock time with NoSL (open question 2 in [Environments §10](/en/arch/environments/#sec-10)).
 5. Leaf v0 against the feature leaf tuned by SPSA, on the panel.
