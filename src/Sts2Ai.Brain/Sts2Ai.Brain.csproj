@@ -6,4 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="../Sts2Ai.Protocol/Sts2Ai.Protocol.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.0" />
+  </ItemGroup>
 </Project>

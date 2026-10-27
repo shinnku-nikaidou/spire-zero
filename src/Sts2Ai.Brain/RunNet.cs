@@ -1,9 +1,8 @@
+using Microsoft.ML.OnnxRuntime;
+using Microsoft.ML.OnnxRuntime.Tensors;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
-
-/// <summary>A tensor as a net file holds it: its shape, and its numbers in row-major order.</summary>
-public sealed record NetTensor(IReadOnlyList<int> Shape, float[] Data);
 
 /// <summary>A run and the value the trainer computed for it, which loading checks (docs: learning §7, input parity).</summary>
 public sealed record NetTest(RunView Run, double Value);
@@ -14,16 +13,13 @@ public sealed record NetTest(RunView Run, double Value);
 /// <param name="Objective">What <see cref="RunNet.Value"/> returns: "floor", the floor expected to be reached, or "win",
 /// the chance to survive every floor.</param>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
-/// <param name="SumScale">The factor on the sum of the cards' vectors, which goes in beside their mean.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
 /// <param name="Features">The features of V v0 (<see cref="RunValue.Features"/>) the net reads, in order, with the
 /// <paramref name="Mean"/> and <paramref name="Std"/> that standardize them.</param>
-/// <param name="Tensors">The token tables' embeddings (cards, card_up, modifiers, relics, potions, context), then the
-/// Linear layers of phi (on each card), body and head, as PyTorch stores them: NAME.I.weight [out, in] and NAME.I.bias.</param>
+/// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, output the hazards.</param>
 public sealed record NetFile(
-    string Name, string Objective, int Floors, double SumScale, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab,
-    IReadOnlyList<string> Features, IReadOnlyList<double> Mean, IReadOnlyList<double> Std,
-    IReadOnlyDictionary<string, NetTensor> Tensors, IReadOnlyList<NetTest> Tests);
+    string Name, string Objective, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab,
+    IReadOnlyList<string> Features, IReadOnlyList<double> Mean, IReadOnlyList<double> Std, string Onnx, IReadOnlyList<NetTest> Tests);
 
 /// <summary>A card as the net reads it: its id, upgrade level and the ids of its enchantment and affliction.</summary>
 public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers);
@@ -33,29 +29,27 @@ public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<str
     IReadOnlyList<string> Context);
 
 /// <summary>
-/// V v2 (docs: learning §1): a net over the run's cards, relics, potions and context, and V v0's features. Each card's
-/// vector (its id's, plus its upgrade level times its id's upgrade vector, plus its modifiers') goes through phi; the
-/// deck is the mean and the scaled sum of the results. Relics, potions and context are sums of their vectors. Body and
-/// head turn all of it into one logit per floor: the chance to die on that floor if still alive there. The value is
-/// read from those chances from the current floor on (<see cref="NetFile.Objective"/>).
+/// V v2 (docs: learning §1): a net over the run's cards, relics, potions and context, and V v0's features, run by ONNX
+/// Runtime. The graph (<c>learn/train_value.py</c> defines it) gives one hazard per floor: the chance to die on that
+/// floor if still alive there. The value is read from those chances from the current floor on
+/// (<see cref="NetFile.Objective"/>). This class only turns a run into the graph's inputs.
 /// </summary>
-public sealed class RunNet : IRunValue
+public sealed class RunNet : IRunValue, IDisposable
 {
     /// <summary>Upgrade levels above this read as this one.</summary>
     public const int MaxUp = 3;
 
     private readonly NetFile _file;
     private readonly Dictionary<string, Dictionary<string, int>> _index;
-    private readonly Linear[] _phi, _body;
-    private readonly Linear _head;
+    private readonly InferenceSession _session;
 
     private RunNet(NetFile file)
     {
         _file = file;
         _index = file.Vocab.ToDictionary(t => t.Key, t => t.Value.Select((id, i) => (id, i)).ToDictionary(p => p.id, p => p.i));
-        _phi = Layers("phi");
-        _body = Layers("body");
-        _head = new Linear(file.Tensors["head.weight"], file.Tensors["head.bias"]);
+        // One thread per call: the sim runs many processes, and a macro decision values a handful of small inputs.
+        using var options = new SessionOptions { IntraOpNumThreads = 1, InterOpNumThreads = 1 };
+        _session = new InferenceSession(Convert.FromBase64String(file.Onnx), options);
     }
 
     public string Name => _file.Name;
@@ -68,7 +62,10 @@ public sealed class RunNet : IRunValue
         {
             double value = net.Value(test.Run);
             if (Math.Abs(value - test.Value) > 1e-3 * Math.Max(1, Math.Abs(test.Value)))
+            {
+                net.Dispose();
                 throw new InvalidDataException($"net {file.Name} gives {value} for a test run the trainer valued at {test.Value}");
+            }
         }
         return net;
     }
@@ -85,6 +82,8 @@ public sealed class RunNet : IRunValue
         }
         return _file.Objective == "win" ? alive : floor;
     }
+
+    public void Dispose() => _session.Dispose();
 
     /// <summary>
     /// The net's tokens of a run, which <c>learn/train_value.py</c> reads the same way: each card; each relic, with
@@ -110,89 +109,60 @@ public sealed class RunNet : IRunValue
         }
     }
 
-    /// <summary>Per floor, the chance to die there if still alive there.</summary>
+    /// <summary>Per floor, the chance to die there if still alive there: the graph on a batch of one run.</summary>
     private float[] Hazards(RunView run)
     {
         var tokens = Tokens(run);
-        int width = _phi[^1].Out;
-        var pool = new float[width];
-        foreach (var card in tokens.Cards)
+        // Every length is at least 1, its padding masked out, as in training.
+        int n = Math.Max(1, tokens.Cards.Count);
+        var cards = new DenseTensor<long>([1, n]);
+        var ups = new DenseTensor<float>([1, n]);
+        var cardMask = new DenseTensor<float>([1, n]);
+        var mods = new DenseTensor<long>([1, n, 2]);
+        var modMask = new DenseTensor<float>([1, n, 2]);
+        for (int k = 0; k < tokens.Cards.Count; k++)
         {
-            int id = Index("cards", card.Id);
-            var x = Row("cards", id).ToArray();
-            Add(x, Row("card_up", id), Math.Min(card.Up, MaxUp));
-            foreach (var modifier in card.Modifiers) Add(x, Row("modifiers", Index("modifiers", modifier)), 1);
-            Add(pool, Forward(_phi, x), 1);
+            var card = tokens.Cards[k];
+            cards[0, k] = Index("cards", card.Id);
+            ups[0, k] = Math.Min(card.Up, MaxUp);
+            cardMask[0, k] = 1;
+            for (int j = 0; j < Math.Min(2, card.Modifiers.Count); j++)
+            {
+                mods[0, k, j] = Index("modifiers", card.Modifiers[j]);
+                modMask[0, k, j] = 1;
+            }
         }
-        var input = new List<float>();
-        input.AddRange(pool.Select(v => tokens.Cards.Count == 0 ? 0 : v / tokens.Cards.Count));
-        input.AddRange(pool.Select(v => (float)(v * _file.SumScale)));
-        input.AddRange(Sum("relics", tokens.Relics));
-        input.AddRange(Sum("potions", tokens.Potions));
-        input.AddRange(Sum("context", tokens.Context));
         var features = RunValue.Features(run);
+        var scalars = new DenseTensor<float>([1, _file.Features.Count]);
         for (int i = 0; i < _file.Features.Count; i++)
-            input.Add((float)((features.GetValueOrDefault(_file.Features[i]) - _file.Mean[i]) / _file.Std[i]));
-        var logits = _head.Apply(Forward(_body, input.ToArray()));
-        return logits.Select(l => 1 / (1 + MathF.Exp(-l))).ToArray();
+            scalars[0, i] = (float)((features.GetValueOrDefault(_file.Features[i]) - _file.Mean[i]) / _file.Std[i]);
+        var inputs = new List<NamedOnnxValue>
+        {
+            NamedOnnxValue.CreateFromTensor("cards", cards), NamedOnnxValue.CreateFromTensor("ups", ups),
+            NamedOnnxValue.CreateFromTensor("card_mask", cardMask), NamedOnnxValue.CreateFromTensor("mods", mods),
+            NamedOnnxValue.CreateFromTensor("mod_mask", modMask),
+        };
+        inputs.AddRange(Bag("relics", "relic_mask", tokens.Relics));
+        inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
+        inputs.AddRange(Bag("context", "context_mask", tokens.Context));
+        inputs.Add(NamedOnnxValue.CreateFromTensor("features", scalars));
+        using var results = _session.Run(inputs);
+        return results[0].AsEnumerable<float>().ToArray();
+    }
+
+    /// <summary>A token table's ids as the graph takes them: padded to at least 1, with their mask.</summary>
+    private NamedOnnxValue[] Bag(string table, string mask, IReadOnlyList<string> ids)
+    {
+        int n = Math.Max(1, ids.Count);
+        var index = new DenseTensor<long>([1, n]);
+        var present = new DenseTensor<float>([1, n]);
+        for (int k = 0; k < ids.Count; k++)
+        {
+            index[0, k] = Index(table, ids[k]);
+            present[0, k] = 1;
+        }
+        return [NamedOnnxValue.CreateFromTensor(table, index), NamedOnnxValue.CreateFromTensor(mask, present)];
     }
 
     private int Index(string table, string id) => _index[table].GetValueOrDefault(id);
-
-    /// <summary>Entry <paramref name="index"/> of a token table's embedding.</summary>
-    private ReadOnlySpan<float> Row(string table, int index)
-    {
-        var tensor = _file.Tensors[table];
-        int dim = tensor.Shape[1];
-        return tensor.Data.AsSpan(index * dim, dim);
-    }
-
-    private float[] Sum(string table, IReadOnlyList<string> ids)
-    {
-        var sum = new float[_file.Tensors[table].Shape[1]];
-        foreach (var id in ids) Add(sum, Row(table, Index(table, id)), 1);
-        return sum;
-    }
-
-    private static void Add(float[] to, ReadOnlySpan<float> x, float times)
-    {
-        for (int i = 0; i < to.Length; i++) to[i] += times * x[i];
-    }
-
-    /// <summary>Each layer, then ReLU.</summary>
-    private static float[] Forward(Linear[] layers, float[] x)
-    {
-        foreach (var layer in layers)
-        {
-            x = layer.Apply(x);
-            for (int i = 0; i < x.Length; i++) x[i] = Math.Max(0, x[i]);
-        }
-        return x;
-    }
-
-    private Linear[] Layers(string name) =>
-        Enumerable.Range(0, int.MaxValue).TakeWhile(i => _file.Tensors.ContainsKey($"{name}.{i}.weight"))
-            .Select(i => new Linear(_file.Tensors[$"{name}.{i}.weight"], _file.Tensors[$"{name}.{i}.bias"])).ToArray();
-
-    /// <summary>y = W x + b, with W as PyTorch stores it: [out, in], row-major.</summary>
-    private sealed class Linear(NetTensor weight, NetTensor bias)
-    {
-        public int Out => weight.Shape[0];
-
-        public float[] Apply(float[] x)
-        {
-            int inputs = weight.Shape[1];
-            if (x.Length != inputs) throw new InvalidDataException($"a layer of {inputs} inputs given {x.Length}");
-            var y = new float[Out];
-            var w = weight.Data;
-            for (int o = 0; o < y.Length; o++)
-            {
-                float sum = bias.Data[o];
-                int row = o * inputs;
-                for (int i = 0; i < inputs; i++) sum += w[row + i] * x[i];
-                y[o] = sum;
-            }
-            return y;
-        }
-    }
 }

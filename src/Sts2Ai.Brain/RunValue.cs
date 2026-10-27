@@ -46,11 +46,11 @@ public sealed class RunValue(IReadOnlyDictionary<string, double> weights, string
 
     public static RunValue From(ValueWeights file) => new(file.Weights, file.Name);
 
-    /// <summary>The V a value file holds: a net (<see cref="NetFile"/>, the file with tensors) or V v0's weights.</summary>
+    /// <summary>The V a value file holds: a net (<see cref="NetFile"/>, the file with an ONNX graph) or V v0's weights.</summary>
     public static IRunValue Read(string json)
     {
         using var doc = JsonDocument.Parse(json);
-        return doc.RootElement.TryGetProperty("tensors", out _)
+        return doc.RootElement.TryGetProperty("onnx", out _)
             ? RunNet.Load(ProtocolJson.Deserialize<NetFile>(json))
             : From(ProtocolJson.Deserialize<ValueWeights>(json));
     }

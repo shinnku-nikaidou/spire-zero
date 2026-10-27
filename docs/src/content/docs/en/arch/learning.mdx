@@ -160,7 +160,7 @@ flowchart LR
 ```
 
 - Compute: 8 physical cores / 16 threads. 8 processes reach about 1,860 combats/s, against 275 in a single process ([Simulator §4](/en/arch/simulator/#sec-4)). The GPU (RTX 5070 Ti) is for value-net training only.
-- Training is Python, managed with uv, reading the JSONL logs. Inference is C# inside Brain: a hand-written forward pass on the CPU (`RunNet`), about 2 ms per macro decision. The net file is JSON.
+- Training is Python, managed with uv, reading the JSONL logs. Inference is C# inside Brain: `RunNet` turns the run into the graph's inputs and runs the ONNX graph the trainer exports with ONNX Runtime (`Microsoft.ML.OnnxRuntime`) on the CPU, one thread, about 0.9 ms per macro decision. The net is defined once, in Python. The net file is JSON: the graph in base64, plus the vocabulary, the features' standardization and the test runs.
 - Reproducibility: each generation records its champion, seed sets, hyperparameters and commit. Logs go into one directory per generation, `tmp/selfplay/gN/`, outside git.
 - Storage: about 50 macro decisions plus a few hundred combat decisions per run, most of the bytes in the combat observations and the macro run views; not compressed yet. Old generations are pruned on demand.
 

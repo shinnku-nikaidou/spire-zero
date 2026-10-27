@@ -5,12 +5,15 @@ The decision logs (`run --log`) carry the run view and V v0's features on every 
 it if still alive there. Its targets are the run's outcome only: survived every floor from the decision's up to the one
 it died on, or every floor if it won; a truncated run says nothing from its last floor on. Each run weighs the same
 however many decisions it has, and every fifth run (by run id) is held out, for early stopping and the report, next to
-a baseline that knows only the floor. The output is a net file for `run --value`, whose test runs RunNet checks on load.
+a baseline that knows only the floor. The output is a net file for `run --value`: the net as ONNX, with what RunNet
+needs to feed it, and test runs that RunNet checks on load.
 
     uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1 --out ../eval/values/n1.json
 """
 
 import argparse
+import base64
+import io
 import json
 import math
 import random
@@ -22,6 +25,10 @@ from torch import nn  # noqa: E402
 
 MAX_UP = 3  # RunNet.MaxUp
 TABLES = ["cards", "modifiers", "relics", "potions", "context"]
+BAGS = ["relics", "potions", "context"]
+# The ONNX graph's inputs, in order (RunNet feeds them by these names).
+INPUTS = ["cards", "ups", "card_mask", "mods", "mod_mask", "relics", "relic_mask", "potions", "potion_mask", "context",
+          "context_mask", "features"]
 
 
 def read_lines(paths: str, needle: str | None = None):
@@ -77,27 +84,31 @@ def vocab(samples, min_count: int):
     return {t: ["<unk>"] + sorted(i for i, n in c.items() if n >= min_count) for t, c in counts.items()}
 
 
+def padded(rows, device):
+    """Lists of ids as one padded tensor (at least one wide) and its mask."""
+    width = max(1, max(len(r) for r in rows))
+    ids, mask = torch.zeros(len(rows), width, dtype=torch.long), torch.zeros(len(rows), width)
+    for b, r in enumerate(rows):
+        ids[b, :len(r)], mask[b, :len(r)] = torch.tensor(r, dtype=torch.long), 1
+    return ids.to(device), mask.to(device)
+
+
 class Batch:
-    """Samples as tensors: padded cards with their mask, bags of ids with offsets, features, targets and weights."""
+    """Samples as tensors: padded cards and bags of ids with their masks, features, targets and weights."""
 
     def __init__(self, samples, index, names, mean, std, floors, device):
         n, width = len(samples), max(1, max(len(s["tokens"]["cards"]) for s in samples))
         cards, ups, mask = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width), torch.zeros(n, width)
         mods, mod_mask = torch.zeros(n, width, 2, dtype=torch.long), torch.zeros(n, width, 2)
-        bags = {t: ([], []) for t in ("relics", "potions", "context")}
         for b, s in enumerate(samples):
             tok = s["tokens"]
             for k, (card_id, up, ms) in enumerate(tok["cards"]):
                 cards[b, k], ups[b, k], mask[b, k] = index["cards"].get(card_id, 0), up, 1
                 for j, m in enumerate(ms[:2]):
                     mods[b, k, j], mod_mask[b, k, j] = index["modifiers"].get(m, 0), 1
-            for t, (ids, offsets) in bags.items():
-                offsets.append(len(ids))
-                ids.extend(index[t].get(i, 0) for i in tok[t])
         self.cards, self.ups, self.mask = cards.to(device), ups.to(device), mask.to(device)
         self.mods, self.mod_mask = mods.to(device), mod_mask.to(device)
-        self.bags = {t: (torch.tensor(ids, dtype=torch.long, device=device), torch.tensor(off, dtype=torch.long, device=device))
-                     for t, (ids, off) in bags.items()}
+        self.bags = {t: padded([[index[t].get(i, 0) for i in s["tokens"][t]] for s in samples], device) for t in BAGS}
         x = torch.tensor([[s["features"].get(f, 0.0) for f in names] for s in samples], dtype=torch.float64)
         self.features = ((x - mean) / std).float().to(device)
         g = torch.arange(floors)
@@ -111,6 +122,11 @@ class Batch:
         self.weight = torch.tensor([s["weight"] for s in samples]).to(device)
         self.start = start[:, 0].to(device)
 
+    def inputs(self):
+        """The net's inputs, in the order of INPUTS."""
+        bags = [x for t in BAGS for x in self.bags[t]]
+        return (self.cards, self.ups, self.mask, self.mods, self.mod_mask, *bags, self.features)
+
 
 class Net(nn.Module):
     def __init__(self, sizes, n_features, floors, dim=32, hidden=128, body=256, sum_scale=1 / 16):
@@ -119,9 +135,9 @@ class Net(nn.Module):
         self.cards = nn.Embedding(sizes["cards"], dim)
         self.card_up = nn.Embedding(sizes["cards"], dim)
         self.modifiers = nn.Embedding(sizes["modifiers"], dim)
-        self.relics = nn.EmbeddingBag(sizes["relics"], dim, mode="sum")
-        self.potions = nn.EmbeddingBag(sizes["potions"], dim, mode="sum")
-        self.context = nn.EmbeddingBag(sizes["context"], dim, mode="sum")
+        self.relics = nn.Embedding(sizes["relics"], dim)
+        self.potions = nn.Embedding(sizes["potions"], dim)
+        self.context = nn.Embedding(sizes["context"], dim)
         for e in (self.cards, self.card_up, self.modifiers, self.relics, self.potions, self.context):
             nn.init.normal_(e.weight, std=0.1)
         self.phi = nn.Sequential(nn.Linear(dim, hidden), nn.ReLU(), nn.Linear(hidden, hidden), nn.ReLU())
@@ -129,24 +145,40 @@ class Net(nn.Module):
         self.head = nn.Linear(body, floors)
         nn.init.constant_(self.head.bias, -3.0)
 
-    def forward(self, b: Batch):
-        """Per sample and floor, the logit of dying on that floor if alive there."""
-        x = self.cards(b.cards) + b.ups[..., None] * self.card_up(b.cards) + (self.modifiers(b.mods) * b.mod_mask[..., None]).sum(2)
-        h = self.phi(x) * b.mask[..., None]
+    def forward(self, cards, ups, card_mask, mods, mod_mask, relics, relic_mask, potions, potion_mask, context, context_mask,
+                features):
+        """Per sample and floor, the logit of dying on that floor if alive there (inputs as INPUTS names them)."""
+        x = self.cards(cards) + ups[..., None] * self.card_up(cards) + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
+        h = self.phi(x) * card_mask[..., None]
         total = h.sum(1)
-        mean = total / b.mask.sum(1, keepdim=True).clamp_min(1)
+        mean = total / card_mask.sum(1, keepdim=True).clamp_min(1)
         parts = [mean, total * self.sum_scale]
-        parts += [bag(*b.bags[t]) for t, bag in (("relics", self.relics), ("potions", self.potions), ("context", self.context))]
-        return self.head(self.body(torch.cat(parts + [b.features], 1)))
+        for table, ids, mask in ((self.relics, relics, relic_mask), (self.potions, potions, potion_mask), (self.context, context, context_mask)):
+            parts.append((table(ids) * mask[..., None]).sum(1))
+        return self.head(self.body(torch.cat(parts + [features], 1)))
 
-    def export(self):
-        """The tensors of a net file, named as RunNet reads them."""
-        out = {t: getattr(self, t).weight for t in ("cards", "card_up", "modifiers", "relics", "potions", "context")}
-        for name in ("phi", "body"):
-            for i, layer in enumerate(m for m in getattr(self, name) if isinstance(m, nn.Linear)):
-                out[f"{name}.{i}.weight"], out[f"{name}.{i}.bias"] = layer.weight, layer.bias
-        out["head.weight"], out["head.bias"] = self.head.weight, self.head.bias
-        return {k: {"shape": list(v.shape), "data": [float(x) for x in v.detach().cpu().float().flatten()]} for k, v in out.items()}
+
+class Hazards(nn.Module):
+    """The net as ONNX holds it: the hazards themselves."""
+
+    def __init__(self, net):
+        super().__init__()
+        self.net = net
+
+    def forward(self, *inputs):
+        return torch.sigmoid(self.net(*inputs))
+
+
+def onnx_bytes(model, example: Batch) -> bytes:
+    """The model as an ONNX graph, every input's batch and length dimensions left free."""
+    axes = {"cards": {0: "batch", 1: "cards"}, "ups": {0: "batch", 1: "cards"}, "card_mask": {0: "batch", 1: "cards"},
+            "mods": {0: "batch", 1: "cards"}, "mod_mask": {0: "batch", 1: "cards"}, "features": {0: "batch"}, "hazards": {0: "batch"}}
+    for t, mask in (("relics", "relic_mask"), ("potions", "potion_mask"), ("context", "context_mask")):
+        axes[t] = axes[mask] = {0: "batch", 1: t}
+    out = io.BytesIO()
+    torch.onnx.export(Hazards(model), example.inputs(), out, dynamo=False, input_names=INPUTS, output_names=["hazards"],
+                      dynamic_axes=axes)
+    return out.getvalue()
 
 
 def loss_of(logits, b: Batch):
@@ -234,7 +266,7 @@ def main():
         total, base, rows = 0.0, 0.0, []
         with torch.no_grad():
             for b in test_batches:
-                logits = model(b) if model else base_logits.expand(len(b.weight), -1)
+                logits = model(*b.inputs()) if model else base_logits.expand(len(b.weight), -1)
                 total += float((loss_of(logits, b) * b.weight).sum())
                 rows.append(expected_floor(torch.sigmoid(logits), b.start))
         return total / test_weight, torch.cat(rows)
@@ -245,7 +277,7 @@ def main():
     for epoch in range(args.epochs):
         model.train()
         for b in batches(train, True):
-            loss = (loss_of(model(b), b) * b.weight).sum() / b.weight.sum()
+            loss = (loss_of(model(*b.inputs()), b) * b.weight).sum() / b.weight.sum()
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -290,15 +322,15 @@ def main():
     tests = []
     with torch.no_grad():
         b = Batch(picks, index, names, mean, std, args.floors, "cpu")
-        hazards = torch.sigmoid(model(b))
+        hazards = torch.sigmoid(model(*b.inputs()))
         floors = expected_floor(hazards, b.start)
         for k, s in enumerate(picks):
             value = float(floors[k]) if args.objective == "floor" else float((1 - hazards[k, int(s["start"]):].double()).prod())
             tests.append({"run": s["view"], "value": value})
 
-    out = {"name": args.name, "objective": args.objective, "floors": args.floors, "sum_scale": model.sum_scale,
+    out = {"name": args.name, "objective": args.objective, "floors": args.floors,
            "vocab": tables, "features": names, "mean": [float(v) for v in mean], "std": [float(v) for v in std],
-           "fit": report, "tensors": model.export(), "tests": tests}
+           "fit": report, "onnx": base64.b64encode(onnx_bytes(model, b)).decode(), "tests": tests}
     with open(args.out, "w") as f:
         json.dump(out, f)
         f.write("\n")
