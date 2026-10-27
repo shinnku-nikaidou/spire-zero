@@ -13,7 +13,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-V v0 已经实现：Brain 里的 `RunValue`，17 个手写的对局观测特征乘以线性权重，初始权重是手设的（[§1](#sec-1)）。宏观大脑的 L0 用它估值（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。`learn/fit_value.py` 从自对弈数据拟合权重，`learn/spsa.py` 用 SPSA 调这些权重或 PIMC 的叶子权重，`run --value` 用这两种权重来打，`learn/challenge.py` 让挑战者过晋级门槛（[§2](#sec-2)）；还没有拟合或调出的权重晋升为冠军。V v2 也已实现：Brain 里的 `RunNet`，一个读整局的卡牌、遗物、药水和上下文的网络（[§1](#sec-1)），由 `learn/train_value.py` 训练（[§2](#sec-2)）；`run --value` 也能读它的文件，`run --macro-explore` 和 `--combat-explore` 给自我对弈加上探索（[§5](#sec-5)）。还没有 V v2 晋升为冠军。战斗网络也已实现：Brain 里的 `CombatNet`，PIMC 学到的叶子（`--combat-net`），由 `learn/train_combat.py` 从自我对弈的回合开始局面训练（[§1](#sec-1)、[§2](#sec-2)）；还没有晋升为冠军。`learn/` 是学习循环用的 Python 项目（uv、PyTorch）。
+V v0 已经实现：Brain 里的 `RunValue`，17 个手写的对局观测特征乘以线性权重，初始权重是手设的（[§1](#sec-1)）。宏观大脑的 L0 用它估值（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。`learn/fit_value.py` 从自对弈数据拟合权重，`learn/spsa.py` 用 SPSA 调这些权重或 PIMC 的叶子权重，`run --value` 用这两种权重来打，`learn/challenge.py` 让挑战者过晋级门槛（[§2](#sec-2)）；还没有拟合或调出的权重晋升为冠军。V v2 也已实现：Brain 里的 `RunNet`，一个读整局的卡牌、遗物、药水和上下文的网络（[§1](#sec-1)），由 `learn/train_value.py` 训练（[§2](#sec-2)）；`run --value` 也能读它的文件，`run --macro-explore` 和 `--combat-explore` 给自我对弈加上探索（[§5](#sec-5)）。还没有 V v2 晋升为冠军。战斗网络也已实现：Brain 里的 `CombatNet`，PIMC 学到的叶子（`--combat-net`），由 `learn/train_combat.py` 从自我对弈的回合开始局面训练（[§1](#sec-1)、[§2](#sec-2)）；它的第一代 c2 自 2026-10-27 起是 NoSL 冠军的叶子（[战斗大脑 §7.2](/arch/combat-brain/#sec-7.2)）。`learn/` 是学习循环用的 Python 项目（uv、PyTorch）。
 
 </Aside>
 

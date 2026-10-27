@@ -12,7 +12,7 @@ The combat brain answers two kinds of question during a fight: (a) on the player
 
 <Aside title="Status">
 
-v0 exists (`src/Sts2Ai.Brain/CombatBrain.cs`, `LeafValue.cs`): PIMC over K worlds with a search over this turn ([§2](#sec-2)), a hand-made leaf value and a learned one, the combat net, not promoted yet ([§4](#sec-4)), a fixed rule for card prompts (`p0`, [§2](#sec-2), rule 7) and the fixed combat panel with its results ([§7](#sec-7)). Until the SL planner exists, SL runs the same PIMC search on its one world ([§3](#sec-3)). Not built yet: the SL planner, card prompts as search branches, search past this turn, CI-based allocation and `Facts`. The placeholders stay, for bench and as the panel's baselines: `PlayPolicy` (plays a random playable card) and `RandomPolicy` (uniform over the legal actions).
+v0 exists (`src/Sts2Ai.Brain/CombatBrain.cs`, `LeafValue.cs`): PIMC over K worlds with a search over this turn ([§2](#sec-2)), a hand-made leaf value and a learned one, the combat net, whose first generation c2 the NoSL champion plays since 2026-10-27 ([§4](#sec-4), [§7.2](#sec-7.2)), a fixed rule for card prompts (`p0`, [§2](#sec-2), rule 7) and the fixed combat panel with its results ([§7](#sec-7)). Until the SL planner exists, SL runs the same PIMC search on its one world ([§3](#sec-3)). Not built yet: the SL planner, card prompts as search branches, search past this turn, CI-based allocation and `Facts`. The placeholders stay, for bench and as the panel's baselines: `PlayPolicy` (plays a random playable card) and `RandomPolicy` (uniform over the legal actions).
 
 </Aside>
 
@@ -186,12 +186,15 @@ Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0
 | PIMC NoSL | L0 | 18.50 | 17 | 175 | 15 | 0 |
 | `play`, prompts `p0` | L0 | 11.90 | 12 | 60 | 0 | 0 |
 | PIMC NoSL, prompts `p0` | L0 | 19.34 | 17 | 177 | 19 | 0 |
+| PIMC NoSL with the combat net c2, prompts `p0` | L0 | 21.88 | 17 | 187 | 45 | 0 |
 
 PIMC raises the floor under either macro brain, and L0 under either combat policy. With both, the runs that reach the act 1 boss enter it with 93% of their HP on average (58% with random macro decisions), and 15 reach the act 2 boss. No run wins yet. PIMC took 41–50 s per run, four runs at a time with 8 workers each.
 
 The reports are in `eval/reports/` ([Evaluation §6](/en/arch/evaluation/#sec-6)), from commit `18fdb07`. Five of the 400 PIMC runs failed, each in a world built wrong from the observation: a spent Silver Crucible's hidden counter (three runs), a Glass orb's numbers, and Sloth's limit, which only its tooltip shows (the world allowed fewer cards a turn than the real combat, and a legal play was illegal in it). All three are fixed since ([Simulator §3](/en/arch/simulator/#sec-3), [Protocol §1](/en/arch/protocol/#sec-1)). The 4 game errors come from the game: a card that Mayhem plays can stop early without taking itself off the stack of its choice context, and the game logs the mismatch when Mayhem takes itself off.
 
 With `p0` (commit `c239f12`), PIMC + L0 has no failed run and no game error, enters the act 1 boss with 93% of its HP on average, and skips 43.0% of its card rewards. It passed the gate against `play` + L0 after 14 pairs, by 8.21 floors on average, and is the NoSL champion since 2026-10-27 ([Evaluation §5](/en/arch/evaluation/#sec-5)). It took 75.7 s per run, four runs at a time with 8 workers each, beside other jobs. A first try at `3a74a7b` was void: an exception in one worker left its game set up, and the 24 runs after it failed; a worker now exits after a request that throws ([Simulator §8](/en/arch/simulator/#sec-8)).
+
+With the combat net's first generation, c2, as the leaf (`--combat-net`, commit `fbf89ad`; [§4](#sec-4), [Learning §2](/en/arch/learning/#sec-2)), PIMC + L0 reaches the act 2 boss in 45 runs instead of 19 and the act 1 boss in 187, entering it with 94% of its HP on average. It passed the gate against PIMC + L0 with the hand-made leaf after 77 pairs, by 2.36 floors on average, and is the NoSL champion since 2026-10-27. It took 92.0 s per run, four runs at a time with 8 workers each.
 
 ## 8. Open questions
 
