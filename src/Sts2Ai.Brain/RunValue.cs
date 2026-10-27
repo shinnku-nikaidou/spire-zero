@@ -1,13 +1,23 @@
+using System.Text.Json;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
+
+/// <summary>V (docs: learning §1): what a run is worth, on one scale for every option of every surface.</summary>
+public interface IRunValue
+{
+    /// <summary>Which V this is, for the champion's name.</summary>
+    string Name { get; }
+
+    double Value(RunView run);
+}
 
 /// <summary>
 /// V v0 (docs: learning §1): hand-written features of the run view times linear weights. The value is a logit of
 /// P(win); only its order matters to the macro brain, which compares the afterstates of one decision. The initial
 /// weights are hypotheses, in units of one HP, for fitting and tuning to replace (<see cref="ValueWeights"/>).
 /// </summary>
-public sealed class RunValue(IReadOnlyDictionary<string, double> weights, string name = "v0")
+public sealed class RunValue(IReadOnlyDictionary<string, double> weights, string name = "v0") : IRunValue
 {
     /// <summary>Which weights these are, for the champion's name.</summary>
     public string Name { get; } = name;
@@ -35,6 +45,15 @@ public sealed class RunValue(IReadOnlyDictionary<string, double> weights, string
     public static RunValue Initial { get; } = new(InitialWeights);
 
     public static RunValue From(ValueWeights file) => new(file.Weights, file.Name);
+
+    /// <summary>The V a value file holds: a net (<see cref="NetFile"/>, the file with tensors) or V v0's weights.</summary>
+    public static IRunValue Read(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.TryGetProperty("tensors", out _)
+            ? RunNet.Load(ProtocolJson.Deserialize<NetFile>(json))
+            : From(ProtocolJson.Deserialize<ValueWeights>(json));
+    }
 
     public double Value(RunView run) => Features(run).Sum(f => weights.GetValueOrDefault(f.Key) * f.Value);
 

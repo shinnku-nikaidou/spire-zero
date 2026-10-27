@@ -10,7 +10,7 @@ namespace Sts2Ai.Brain;
 /// choice (a card reward, a removal) is valued as the best pick in it, so a choice that would be skipped is not opened.
 /// It also answers the card prompts outside combat (upgrade, remove, transform, choose a card).
 /// </summary>
-public sealed class MacroBrain(RunValue value) : IMacroPolicy, IChoicePolicy
+public sealed class MacroBrain(IRunValue value) : IMacroPolicy, IChoicePolicy
 {
     public string Choose(MacroDecision decision)
     {

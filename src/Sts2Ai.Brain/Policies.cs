@@ -112,6 +112,22 @@ public sealed class RandomMacro(Random rng) : IMacroPolicy
     public string Choose(MacroDecision decision) => decision.Legal[rng.Next(decision.Legal.Count)];
 }
 
+/// <summary>
+/// Self-play exploration (docs: learning §5): each decision outside combat, card prompts included, takes a uniformly
+/// random legal answer with chance <paramref name="epsilon"/>, and the brain's otherwise. Never in evaluation.
+/// </summary>
+public sealed class Exploring(IMacroPolicy macro, IChoicePolicy choices, double epsilon, Random rng) : IMacroPolicy, IChoicePolicy
+{
+    private readonly RandomChoices _random = new(rng);
+
+    public string Choose(MacroDecision decision) =>
+        rng.NextDouble() < epsilon ? decision.Legal[rng.Next(decision.Legal.Count)] : macro.Choose(decision);
+
+    public IReadOnlyList<string> Plan(MacroDecision decision, string action) => macro.Plan(decision, action);
+
+    public IReadOnlyList<int> Choose(ChoiceDecision decision) => rng.NextDouble() < epsilon ? _random.Choose(decision) : choices.Choose(decision);
+}
+
 public static class Policies
 {
     public static readonly string[] CombatNames = ["play", "random"];
