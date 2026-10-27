@@ -36,12 +36,19 @@ public sealed class PooledPimc(WorkerPool pool)
             [Map(first.Select((action, a) => (WorkerRequest)new SlWorldRequest(a, node, [action], nodes)).ToList()).Select(r => r.Lines![0]).ToList()]);
     }
 
-    /// <summary>As Harness's combat route: NoSL draws the build seed from the decision's seed; SL searches the clone.</summary>
+    /// <summary>As Harness's combat route, one per run: NoSL draws the build seed from the decision's seed; SL searches
+    /// the clone. With <see cref="Budget.Follow"/>, the route keeps the run's <see cref="TurnPlan"/>.</summary>
     /// <param name="name">The brain's name in reports: pimc, and its leaf weights' name unless they are the default.</param>
-    public CombatRoute Route(Budget budget, string name = "pimc") =>
-        new(name, (decision, seed, node) => node == null
+    public CombatRoute Route(Budget budget, string name = "pimc")
+    {
+        var plan = budget.Follow ? new TurnPlan() : null;
+        CombatDecisionResult Search(CombatDecision decision, ulong seed, NodeClone? node) => node == null
             ? Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed)
-            : Decide(node, decision.Legal, budget.For(decision.Observation.Room)), budget);
+            : Decide(node, decision.Legal, budget.For(decision.Observation.Room));
+        return new(name, (decision, seed, node) => plan == null
+            ? Search(decision, seed, node)
+            : plan.Decide(decision.Observation, decision.Legal, () => Search(decision, seed, node)), budget);
+    }
 
     /// <summary>The game's Log.Error lines in the workers since the last call.</summary>
     public List<string> TakeGameErrors()

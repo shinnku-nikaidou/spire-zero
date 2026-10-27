@@ -44,4 +44,6 @@ public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, str
 
 /// <summary>A line of play that search found, from its first action, and its value.</summary>
 /// <param name="Nodes">The actions the search simulated after the line's first action, itself included.</param>
-public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0);
+/// <param name="Hashes">For each of <paramref name="Actions"/>, the hash of the observation it is played at
+/// (<see cref="ProtocolJson.Hash"/>): what the line expects to see before each step.</param>
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0, IReadOnlyList<ulong>? Hashes = null);

@@ -8,7 +8,9 @@ namespace Sts2Ai.Brain;
 /// <param name="Boss">The same for a boss.</param>
 /// <param name="Halving">Whether the first actions share each world's nodes by sequential halving instead of evenly
 /// (<see cref="PimcBrain.Root"/>).</param>
-public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false)
+/// <param name="Follow">Whether the rest of a turn that every world planned the same is played without searching again
+/// (<see cref="TurnPlan"/>).</param>
+public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false, bool Follow = false)
 {
     /// <summary>The budget of a decision in this room (<see cref="CombatObservation.Room"/>), with its multiple applied.</summary>
     public Budget For(string? room) => this with
@@ -18,9 +20,9 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elit
         Boss = 1,
     };
 
-    /// <summary>As the champion's name shows it: 8x300, then the multiples that are not 1, then halving if on.</summary>
+    /// <summary>As the champion's name shows it: 8x300, then the multiples that are not 1, then halving and follow if on.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{Worlds}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}");
+        $"{Worlds}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}");
 }
 
 /// <summary>Searches every world from the decision's state: the best line after each of <paramref name="first"/>, in
@@ -30,7 +32,33 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// <param name="First">One of the legal actions.</param>
 /// <param name="Plan">The rest of the turn after <paramref name="First"/>, in the first world (for narration and highlight).</param>
 /// <param name="Candidates">Every first action, best first.</param>
-public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates);
+/// <param name="PlanHashes">When every world planned the same <paramref name="Plan"/> and expected the same observation
+/// before each of its steps, the hashes of those observations; otherwise null.</param>
+public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
+    IReadOnlyList<ulong>? PlanHashes = null);
+
+/// <summary>
+/// The rest of the turn that a search planned, played without searching again (docs: combat-brain §5). A step is
+/// played only while the combat shows the observation that every world expected before it: then nothing came to light
+/// that the worlds disagreed on, and each world's best line from here is still the plan. Anything else (a draw, a
+/// random result, a plan that differed between worlds) ends it, and the decision is searched. One per combat route.
+/// </summary>
+public sealed class TurnPlan
+{
+    private readonly Queue<(CombatAction Action, ulong Hash)> _steps = new();
+
+    /// <summary>The plan's next step if it still holds here, else <paramref name="search"/>, whose plan is kept.</summary>
+    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<CombatDecisionResult> search)
+    {
+        if (_steps.TryDequeue(out var step) && step.Hash == ProtocolJson.Hash(observation) && legal.Contains(step.Action))
+            return new(step.Action, _steps.Select(s => s.Action).ToList(), [], _steps.Select(s => s.Hash).ToList());
+        _steps.Clear();
+        var result = search();
+        if (result.PlanHashes is { } hashes)
+            foreach (var s in result.Plan.Zip(hashes)) _steps.Enqueue(s);
+        return result;
+    }
+}
 
 /// <summary>Picks a combat action by searching the worlds it is given (docs: combat-brain §6).</summary>
 public interface ICombatBrain
@@ -115,7 +143,10 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
     {
         var candidates = first.Select((action, a) => Summarize(action.ToString(), worlds.Select(lines => lines[a]).ToList())).ToList();
         var order = Enumerable.Range(0, first.Count).OrderByDescending(a => reached[a]).ThenByDescending(a => candidates[a].Value).ToList();
-        return new(first[order[0]], worlds[0][order[0]].Actions.Skip(1).ToList(), order.Select(a => candidates[a]).ToList());
+        var line = worlds[0][order[0]];
+        bool agreed = line.Hashes != null && worlds.All(lines =>
+            lines[order[0]].Actions.SequenceEqual(line.Actions) && lines[order[0]].Hashes!.SequenceEqual(line.Hashes));
+        return new(first[order[0]], line.Actions.Skip(1).ToList(), order.Select(a => candidates[a]).ToList(), agreed ? line.Hashes!.Skip(1).ToList() : null);
     }
 
     /// <summary>Search order: ending the turn first (the fallback a spent budget leaves), then cards in hand order, then potions.</summary>
@@ -139,13 +170,14 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
         public PlannedLine[] Root(IReadOnlyList<CombatAction> first)
         {
             var root = world.Snapshot();
+            ulong rootHash = ProtocolJson.Hash(world.Observe());
             var lines = new PlannedLine[first.Count];
             for (int a = 0; a < first.Count; a++)
             {
                 if (a > 0) world.Restore(root);
                 _nodes = 0;
                 var after = After(first[a]);
-                lines[a] = new(after.Value, [first[a], .. after.Actions], _nodes);
+                lines[a] = new(after.Value, [first[a], .. after.Actions], _nodes, [rootHash, .. after.Hashes!]);
             }
             return lines;
         }
@@ -158,7 +190,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
             var status = world.Status;
             var obs = world.Observe();
             if (status != CombatStatus.InProgress || action.Kind == CombatActionKind.EndTurn || obs.Round != round)
-                return new(LeafValue.Of(status, obs, weights), []);
+                return new(LeafValue.Of(status, obs, weights), [], 0, []);
             return Best(obs);
         }
 
@@ -168,7 +200,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
             ulong key = ProtocolJson.Hash(obs);
             if (_memo.TryGetValue(key, out var known)) return known;
             var here = world.Snapshot();
-            var best = new PlannedLine(double.NegativeInfinity, []);
+            var best = new PlannedLine(double.NegativeInfinity, [], 0, []);
             bool moved = false;
             foreach (var action in Ordered(world.Legal()))
             {
@@ -176,7 +208,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
                 if (moved) world.Restore(here);
                 moved = true;
                 var after = After(action);
-                if (after.Value > best.Value) best = new(after.Value, [action, .. after.Actions]);
+                if (after.Value > best.Value) best = new(after.Value, [action, .. after.Actions], 0, [key, .. after.Hashes!]);
             }
             _memo[key] = best;
             return best;

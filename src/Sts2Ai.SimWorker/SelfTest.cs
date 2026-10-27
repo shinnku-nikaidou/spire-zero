@@ -164,7 +164,8 @@ internal static class SelfTest
         check("no worker restarts", workerPool.Restarts == 0, $"{workerPool.Restarts} restarts");
 
         static string Show(CombatDecisionResult r) =>
-            $"{r.First} [{string.Join(" ", r.Plan)}] " + string.Join(" ", r.Candidates.Select(c => $"{c.Action}={c.Value:R}"));
+            $"{r.First} [{string.Join(" ", r.Plan)}] " + string.Join(" ", r.Candidates.Select(c => $"{c.Action}={c.Value:R}")) +
+            (r.PlanHashes == null ? "" : $" agreed {string.Join(",", r.PlanHashes)}");
     }
 
     /// <summary>

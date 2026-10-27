@@ -112,6 +112,7 @@ internal static class Panel
         PooledPimc? pooled, LeafWeights? leaf, PlayEnvironment env, Budget budget, bool trace)
     {
         var brain = new PimcBrain(leaf);
+        var plan = budget.Follow ? new TurnPlan() : null;
         CombatSession? session = CombatSession.Start(pump, setup, choices);
         try
         {
@@ -122,18 +123,20 @@ internal static class Panel
                 var legal = session.LegalActions();
                 ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{session.ActionsExecuted}");
                 string buildSeed = Cli.MakeSeed((int)decisionSeed, 0);
-                CombatDecisionResult result;
-                if (legal.Count == 1) result = PimcBrain.Only(legal[0]);
-                else if (pooled != null) result = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed);
-                else
+                CombatDecisionResult Search()
                 {
-                    var real = session.Snapshot();
+                    if (legal.Count == 1) return PimcBrain.Only(legal[0]);
+                    if (pooled != null) return pooled.Decide(obs, legal, buildSeed, budget, decisionSeed);
+                    var real = session!.Snapshot();
                     session.Dispose();
                     session = null;
+                    CombatDecisionResult searched;
                     using (var worlds = env == PlayEnvironment.SL ? SimWorlds.SL(pump, real) : SimWorlds.NoSL(pump, obs, buildSeed))
-                        result = brain.Decide(obs, legal, worlds, budget, decisionSeed);
+                        searched = brain.Decide(obs, legal, worlds, budget, decisionSeed);
                     session = CombatSession.Restore(pump, real, choices);
+                    return searched;
                 }
+                var result = plan == null ? Search() : plan.Decide(obs, legal, Search);
                 if (trace)
                     Console.WriteLine($"  {session.Summary()}\n    -> {result.First} then [{string.Join(" ", result.Plan)}]; " +
                                       string.Join(" ", result.Candidates.Take(4).Select(c => $"{c.Action}={c.Value:F3}±{c.Ci:F3}")));

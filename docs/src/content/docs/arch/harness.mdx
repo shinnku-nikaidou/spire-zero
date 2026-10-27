@@ -128,12 +128,12 @@ public sealed class PublicRecord
  "obs_hash": "67f99089ea94de49", "legal": 7, "chosen": "play:2", "plan": ["play:3:1", "play:5", "end_turn"],
  "candidates": [{"action": "play:2", "value": 0.673, "ci": 0.0, "samples": 8,
                  "values": [0.673, 0.673, …], "nodes": [37, 35, …]}, …],
- "budget": {"worlds": 8, "nodes_per_world": 300, "elite": 1, "boss": 1, "halving": false}, "seed": 16058448958323553205, "elapsed_ms": 104.6,
+ "budget": {"worlds": 8, "nodes_per_world": 300, "elite": 1, "boss": 1, "halving": false, "follow": false}, "seed": 16058448958323553205, "elapsed_ms": 104.6,
  "obs": {"encounter": "NIBBITS_WEAK", "room": "Monster", …}}
 ```
 
 - `obs_hash` 是大脑看到的内容的哈希：战斗观测、整局观测或选牌提示。`legal` 是合法动作的个数（对提示而言是选项个数）。`chosen` 是文本形式的动作，或选中的选项下标。
-- 会搜索的大脑还会加上 `plan`（`chosen` 之后本回合剩下的动作，取第一个世界里的）、`candidates`（每个首个动作的平均估值、置信区间半宽 `ci` 和世界数，最好的在前；然后是它在每个世界里的估值，按世界顺序，以及搜索在每个世界里花在它下面的节点数）和 `budget`。占位策略两者都不记。各个世界的估值就是 ExIt 的 policy 目标里的 Q（[学习 §2](/arch/learning/#sec-2)）。
+- 会搜索的大脑还会加上 `plan`（`chosen` 之后本回合剩下的动作，取第一个世界里的）、`candidates`（每个首个动作的平均估值、置信区间半宽 `ci` 和世界数，最好的在前；然后是它在每个世界里的估值，按世界顺序，以及搜索在每个世界里花在它下面的节点数）和 `budget`。沿用计划打出的一步（[战斗大脑 §5](/arch/combat-brain/#sec-5)）有 `plan` 而没有 `candidates`，和只有一个合法动作的决策一样。占位策略两者都不记。各个世界的估值就是 ExIt 的 policy 目标里的 Q（[学习 §2](/arch/learning/#sec-2)）。
 - 在地图上，L0 也会加上 `plan`：`chosen` 之后本幕剩下的路线（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。
 - 一局的战斗决策按战斗分块，每场战斗一块，块与块之间隔着宏观决策，顺序与对局记录里的战斗一致。决策靠这个找到它那场战斗的结局（[评估 §6](/arch/evaluation/#sec-6)）。
 - 战斗决策还会加上 `obs`，即大脑看到的战斗观测（[协议 §1](/arch/protocol/#sec-1)）：学习得到的战斗部件和融合测试集的输入（[战斗大脑 §8](/arch/combat-brain/#sec-8)）。约 1.6 KB。

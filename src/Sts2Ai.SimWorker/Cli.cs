@@ -24,7 +24,7 @@ namespace Sts2Ai.SimWorker;
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
 ///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--champion FILE] [--env NoSL|SL] [--policy play|random|pimc] [--macro random|l0]
-///       [--value v.json] [--leaf leaf.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--halving] [--workers W] [--max-decisions 20000] [--check]
+///       [--value v.json] [--leaf leaf.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--halving] [--follow] [--workers W] [--max-decisions 20000] [--check]
 ///       [--trace] [--obs] [--log decisions.jsonl] [--records runs.jsonl] [--brain SOCKET]
 ///                                          whole runs through Harness. Combat prompts go to p0; --macro picks the
 ///                                          brain of every decision outside combat (l0: the macro brain with V, whose
@@ -38,8 +38,10 @@ namespace Sts2Ai.SimWorker;
 ///                                          pimc searches each combat decision in W worker processes (default: one
 ///                                          per world): NoSL worlds, or in SL the node's clone; --leaf reads the
 ///                                          weights of its leaf value (docs: combat-brain §4); --elite-x and --boss-x
-///                                          multiply the nodes per world in those rooms, and --halving shares them over
-///                                          the first actions by sequential halving (docs: combat-brain §5). --seeds plays the seeds of a seed file, from --start, all
+///                                          multiply the nodes per world in those rooms, --halving shares them over
+///                                          the first actions by sequential halving, and --follow plays the rest of a
+///                                          turn every world planned the same without searching again (docs:
+///                                          combat-brain §5). --seeds plays the seeds of a seed file, from --start, all
 ///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6).
 ///                                          --brain plays against the brain listening at SOCKET instead, which picks the
 ///                                          champion (--check then replays against it too)
@@ -59,7 +61,7 @@ namespace Sts2Ai.SimWorker;
 ///   weights [--leaf]                       V's initial weights as a weights file, for tuning to start from
 ///                                          (--leaf: the default leaf weights of pimc instead)
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
-///         [--leaf leaf.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--halving] [--workers 0] [--trace] [--out results.jsonl]
+///         [--leaf leaf.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--halving] [--follow] [--workers 0] [--trace] [--out results.jsonl]
 ///                                          the fixed combat panel: the same combats for every player; win rate, HP lost.
 ///                                          --workers N searches the NoSL worlds in N worker processes
 ///   fusion --log decisions.jsonl[,more] [--n 400] [--start 0] [--every 1] [--k 32] [--max-nodes 5000] [--out fusion.jsonl]
@@ -479,7 +481,7 @@ internal static class Cli
         LeafFile? Leaf, string? LeafPath)
     {
         /// <summary>The options <see cref="Parse"/> reads.</summary>
-        public static readonly string[] Keys = ["policy", "macro", "worlds", "nodes", "elite-x", "boss-x", "halving", "workers", "value", "leaf"];
+        public static readonly string[] Keys = ["policy", "macro", "worlds", "nodes", "elite-x", "boss-x", "halving", "follow", "workers", "value", "leaf"];
 
         public static ChampionOptions Parse(Dictionary<string, string> opts)
         {
@@ -553,6 +555,7 @@ internal static class Cli
                 if (Budget.Elite != 1) options["elite-x"] = Budget.Elite.ToString(CultureInfo.InvariantCulture);
                 if (Budget.Boss != 1) options["boss-x"] = Budget.Boss.ToString(CultureInfo.InvariantCulture);
                 if (Budget.Halving) options["halving"] = "true";
+                if (Budget.Follow) options["follow"] = "true";
             }
             if (ValueFile != null) options["value"] = ValueFile;
             if (LeafPath != null) options["leaf"] = LeafPath;
@@ -794,7 +797,7 @@ internal static class Cli
 
     /// <summary>--worlds, --nodes, and the multiples of the nodes for elites and bosses (docs: combat-brain §5).</summary>
     internal static Budget BudgetOf(Dictionary<string, string> opts) =>
-        new(Int(opts, "worlds", 8), Int(opts, "nodes", 300), Double(opts, "elite-x", 1), Double(opts, "boss-x", 1), opts.ContainsKey("halving"));
+        new(Int(opts, "worlds", 8), Int(opts, "nodes", 300), Double(opts, "elite-x", 1), Double(opts, "boss-x", 1), opts.ContainsKey("halving"), opts.ContainsKey("follow"));
 
     /// <summary>--leaf FILE: pimc's leaf weights (docs: combat-brain §4); null without it.</summary>
     internal static LeafFile? ReadLeaf(Dictionary<string, string> opts) =>

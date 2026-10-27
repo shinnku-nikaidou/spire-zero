@@ -274,7 +274,10 @@ public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<Comba
 // Lines[i] is the best line after First[i]. Error is set instead when the request failed.
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
 
-public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions);
+// Nodes: the actions simulated below the line's first action. Hashes: the hash of the observation each action
+// is played at, which a followed plan checks before each step.
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
+    IReadOnlyList<ulong>? Hashes = null);
 ```
 
 - 请求带着 worker 需要的一切，所以任何 worker 都能处理它，崩溃的 worker 的请求可以重发。
