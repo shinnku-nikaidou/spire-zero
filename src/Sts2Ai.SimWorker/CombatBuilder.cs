@@ -31,6 +31,9 @@ namespace Sts2Ai.SimWorker;
 /// Uids: the creatures and the cards in hand get the uids the observation names, so an action found in the sim
 /// names the same card or creature in the real game. The other cards get fresh ids above those.
 ///
+/// With the enemies' intents in the rounds so far (Harness's record of them, which the player saw), each monster gets
+/// the log of the moves it made (<see cref="MoveLogs"/>), which its choice of the next move can depend on.
+///
 /// Not reproduced, because the observation doesn't show it: this turn's history (cards played, damage taken, ...),
 /// counters kept inside powers and monsters, how long a card's cost change lasts (a card in hand is taken to be
 /// cheaper this turn or until played, a card elsewhere for the rest of the combat), and which debuffs on the player
@@ -48,17 +51,19 @@ internal static class CombatBuilder
     private static readonly FieldInfo NextCardId = typeof(NetCombatCardDb).GetField("_nextId", Private)!;
 
     /// <summary>The setup that builds <paramref name="obs"/>; <paramref name="seed"/> picks the hidden state.</summary>
-    public static CombatSetup Setup(CombatObservation obs, string seed)
+    /// <param name="history">The enemies' intents in the rounds so far, for the monsters' move logs; none leaves each
+    /// monster the log of a fresh combat.</param>
+    public static CombatSetup Setup(CombatObservation obs, string seed, IReadOnlyList<EnemyTurns>? history = null)
     {
         var encounter = Models.Find<EncounterModel>(obs.Encounter ?? throw new ArgumentException("the observation names no encounter"));
         var deck = obs.Hand.Concat(obs.Draw).Concat(obs.Discard).Concat(obs.Exhaust)
             .Select(c => new CardSpec(c.Id, c.Up ?? 0, c.Enchant?.Id, c.Enchant?.Amount ?? 0)).ToList();
         var loadout = new Loadout(deck, obs.Relics.Select(r => r.Id).ToList(), Potions: [], obs.Player.Hp, obs.Player.MaxHp);
-        return new CombatSetup(obs.Player.Character, encounter, obs.Act, seed, obs.Ascension, loadout, From: obs);
+        return new CombatSetup(obs.Player.Character, encounter, obs.Act, seed, obs.Ascension, loadout, From: obs, History: history);
     }
 
     /// <summary>Overwrites the freshly started combat with everything <paramref name="obs"/> shows.</summary>
-    public static void Apply(CombatState st, Player player, CombatObservation obs, Pump pump)
+    public static void Apply(CombatState st, Player player, CombatObservation obs, Pump pump, IReadOnlyList<EnemyTurns>? history = null)
     {
         var pcs = player.PlayerCombatState!;
         st.RoundNumber = obs.Round;
@@ -90,7 +95,44 @@ internal static class CombatBuilder
         foreach (var machine in st.Enemies.Select(e => e.Monster?.MoveStateMachine))
             if (machine != null && obs.Round > 1) PerformedFirstMove.SetValue(machine, true);
         Moves(st, obs.Enemies, [player.Creature]);
+        if (history != null) MoveLogs(st, history, obs.Round, [player.Creature]);
         pump.Drain();
+    }
+
+    /// <summary>
+    /// Gives each monster the move log of the record: the move each earlier round's intents show, then its current
+    /// move. A monster picks its next move by its last ones (not the same one three times, a fixed cycle), so a log
+    /// that starts afresh makes it pick another move than the real one. An earlier round's numbers can differ from
+    /// what the move shows now (the monster gained strength since), so a round matches the move that shows the same
+    /// intents, else the same intent types and hits, else the same types. A monster with a round that no move matches
+    /// keeps the log it has.
+    /// </summary>
+    private static void MoveLogs(CombatState st, IReadOnlyList<EnemyTurns> history, int round, Creature[] targets)
+    {
+        var record = history.ToDictionary(h => h.Uid);
+        foreach (var enemy in st.Enemies)
+        {
+            if (enemy.CombatId is not { } uid || enemy.Monster?.MoveStateMachine is not { } machine || !record.TryGetValue(uid, out var turns)) continue;
+            var past = turns.Turns.Where(t => t.Round < round).OrderBy(t => t.Round).Select(t => Made(enemy, machine, targets, t.Intents)).ToList();
+            if (past.Any(m => m == null)) continue;
+            machine.StateLog.Clear();
+            machine.StateLog.AddRange(past!);
+            machine.StateLog.Add(enemy.Monster.NextMove);
+        }
+    }
+
+    /// <summary>The move that showed <paramref name="intents"/> in an earlier round, or null if none could have.</summary>
+    private static MoveState? Made(Creature enemy, MonsterMoveStateMachine machine, Creature[] targets, IReadOnlyList<IntentView> intents)
+    {
+        var moves = machine.States.Values.OfType<MoveState>().OrderBy(m => m.Id, StringComparer.Ordinal).ToList();
+        foreach (var key in new Func<IReadOnlyList<IntentView>, string>[] { Key, Types, i => string.Join(",", i.Select(x => x.Type)) })
+        {
+            string want = key(intents);
+            if (moves.FirstOrDefault(m => key(Observe.Intents(m, enemy, targets)) == want) is { } move) return move;
+        }
+        return null;
+
+        static string Types(IReadOnlyList<IntentView> i) => string.Join(",", i.Select(x => $"{x.Type}x{x.Hits ?? 1}"));
     }
 
     /// <summary>

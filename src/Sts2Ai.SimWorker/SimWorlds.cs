@@ -30,9 +30,10 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
 
     /// <exception cref="InvalidOperationException">The combat built from the observation does not show it exactly: search
     /// would explore some other combat (docs: harness §7).</exception>
-    public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed)
+    /// <param name="history">The enemies' intents in the rounds so far, for the monsters' move logs.</param>
+    public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed, IReadOnlyList<EnemyTurns>? history = null)
     {
-        var root = new CombatSnapshot(CombatBuilder.Setup(observation, buildSeed), []);
+        var root = new CombatSnapshot(CombatBuilder.Setup(observation, buildSeed, history), []);
         using (var built = CombatSession.Start(pump, root.Setup, PromptBrain.Instance))
             if (built.BuildDifferences.Count > 0)
                 throw new InvalidOperationException($"not built as observed: {string.Join("; ", built.BuildDifferences.Take(4))}");

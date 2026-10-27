@@ -64,11 +64,13 @@ internal static class Fusion
         {
             var obs = ProtocolJson.Deserialize<CombatObservation>(entry["obs"]!.ToJsonString());
             ulong seed = (ulong)entry["seed"]!;
+            // Logs from before the history field build each monster with a fresh move log.
+            var history = entry["history"] is { } h ? ProtocolJson.Deserialize<List<EnemyTurns>>(h.ToJsonString()) : null;
             string id = $"{entry["run"]}:{entry["decision_id"]}";
             var started = clock.Elapsed;
             Result? result;
             // As pimc's NoSL route: the build seed is drawn from the decision's seed.
-            using (var worlds = SimWorlds.NoSL(pump, obs, seed.ToString("X16")))
+            using (var worlds = SimWorlds.NoSL(pump, obs, seed.ToString("X16"), history))
                 result = Measure(obs, worlds.Worlds(k, seed), maxNodes);
             double ms = (clock.Elapsed - started).TotalMilliseconds;
             if (result == null) capped++;

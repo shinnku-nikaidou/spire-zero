@@ -10,9 +10,11 @@ using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Multiplayer;
 using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Rooms;
+using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Unlocks;
 using Sts2Ai.Brain;
@@ -26,9 +28,11 @@ internal enum CombatOutcome { InProgress, Win, Loss, Truncated }
 /// <summary>
 /// How a combat starts: a fresh run of <see cref="Character"/> with the loadout, entering the encounter. With
 /// <see cref="From"/>, the combat is then made to show that observation (see <see cref="CombatBuilder"/>), and the
-/// seed also picks what the observation hides.
+/// seed also picks what the observation hides; <see cref="History"/>, the enemies' intents in the rounds so far (the
+/// record the player saw), gives each monster the moves it made before.
 /// </summary>
-internal sealed record CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string Seed, int Ascension = 0, Loadout? Loadout = null, CombatObservation? From = null);
+internal sealed record CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string Seed, int Ascension = 0, Loadout? Loadout = null,
+    CombatObservation? From = null, IReadOnlyList<EnemyTurns>? History = null);
 
 internal enum TraceKind { Action, Choice, Determinize }
 
@@ -53,6 +57,12 @@ internal readonly record struct TraceEvent(TraceKind Kind, CombatAction Action =
 
 /// <summary>A point in a combat, kept as the recipe to rebuild it: see <see cref="CombatSession.Restore"/>.</summary>
 internal sealed record CombatSnapshot(CombatSetup Setup, IReadOnlyList<TraceEvent> Trace);
+
+/// <summary>What <see cref="CombatSession.Determinize"/> samples, as one combat has it (<see cref="CombatSession.Hidden"/>):
+/// the draw pile's order by card key, each random stream of the run and of the player, and each monster's stream and
+/// queued move, by creature uid.</summary>
+internal sealed record HiddenDraw(IReadOnlyList<string> Draw, IReadOnlyList<SerializableRng> Run, IReadOnlyList<SerializableRng> Player,
+    IReadOnlyDictionary<uint, (SerializableRng Rng, string? Move)> Monsters);
 
 /// <summary>
 /// One combat in the real engine: a fresh run with the setup's loadout (by default the character's starting deck
@@ -144,7 +154,7 @@ internal sealed class CombatSession : IDisposable
             session.Settle();
             if (setup.From is { } obs)
             {
-                CombatBuilder.Apply(session.State, player, obs, pump);
+                CombatBuilder.Apply(session.State, player, obs, pump, setup.History);
                 session.Resample(new Rng(StableHash(setup.Seed)));
                 session.BuildDifferences = CombatBuilder.Differences(obs, session.Observation());
             }
@@ -242,6 +252,44 @@ internal sealed class CombatSession : IDisposable
         }
 
         static void Reseed(Rng rng, Rng sample) => rng.LoadFromSerializable(new Rng(sample.NextUnsignedLong()).ToSerializable());
+    }
+
+    /// <summary>This combat's <see cref="HiddenDraw"/>.</summary>
+    public HiddenDraw Hidden() => new(
+        Pcs.DrawPile.Cards.Select(Observe.CardKey).ToList(),
+        Enum.GetValues<RunRngType>().Select(t => Run.Rng.GetRng(t).ToSerializable()).ToList(),
+        Enum.GetValues<PlayerRngType>().Select(t => Player.PlayerRng.GetRng(t).ToSerializable()).ToList(),
+        State.Enemies.Concat(State.Allies).Where(c => c.CombatId != null && c.Monster is { IsMutable: true })
+            .ToDictionary(c => c.CombatId!.Value, c => (c.Monster!.Rng.ToSerializable(), c.Monster.NextMove?.Id)));
+
+    /// <summary>
+    /// Takes another combat's <see cref="Hidden"/> state in place of a <see cref="Determinize"/> sample, where this
+    /// combat has the same things: a combat built from the other's observation then differs from it only in what the
+    /// build approximates (the fidelity command). Not in the trace: for a session that is never restored.
+    /// </summary>
+    public void Mirror(HiddenDraw hidden)
+    {
+        var runTypes = Enum.GetValues<RunRngType>();
+        for (int i = 0; i < runTypes.Length; i++) Run.Rng.GetRng(runTypes[i]).LoadFromSerializable(hidden.Run[i]);
+        var playerTypes = Enum.GetValues<PlayerRngType>();
+        for (int i = 0; i < playerTypes.Length; i++) Player.PlayerRng.GetRng(playerTypes[i]).LoadFromSerializable(hidden.Player[i]);
+        foreach (var creature in State.Enemies.Concat(State.Allies))
+        {
+            if (creature.CombatId is not { } uid || creature.Monster is not { IsMutable: true } monster || !hidden.Monsters.TryGetValue(uid, out var m)) continue;
+            monster.Rng.LoadFromSerializable(m.Rng);
+            if (m.Move == null || monster.NextMove?.Id == m.Move) continue;
+            if (monster.MoveStateMachine?.States.Values.OfType<MoveState>().FirstOrDefault(s => s.Id == m.Move) is { } move)
+                monster.SetMoveImmediate(move, forceTransition: true);
+        }
+        var draw = Pcs.DrawPile;
+        var left = draw.Cards.ToList();
+        foreach (var key in hidden.Draw)
+        {
+            int i = left.FindIndex(c => Observe.CardKey(c) == key);
+            if (i < 0) continue;
+            draw.MoveToBottomInternal(left[i]);
+            left.RemoveAt(i);
+        }
     }
 
     /// <summary>FNV-1a: a string hash that is the same in every process, unlike string.GetHashCode.</summary>

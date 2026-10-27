@@ -69,7 +69,7 @@ internal static class Serve
         {
             case PimcWorldRequest r:
             {
-                using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed);
+                using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, r.History);
                 return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst, r.History);
             }
             case SlWorldRequest r:

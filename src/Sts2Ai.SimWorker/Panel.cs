@@ -152,7 +152,7 @@ internal static class Panel
                     session.Dispose();
                     session = null;
                     CombatDecisionResult searched;
-                    using (var worlds = env == PlayEnvironment.SL ? SimWorlds.SL(pump, real) : SimWorlds.NoSL(pump, obs, buildSeed))
+                    using (var worlds = env == PlayEnvironment.SL ? SimWorlds.SL(pump, real) : SimWorlds.NoSL(pump, obs, buildSeed, history))
                         searched = brain.Decide(obs, legal, worlds, budget, decisionSeed, history);
                     session = CombatSession.Restore(pump, real, choices);
                     return searched;
