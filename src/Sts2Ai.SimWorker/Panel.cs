@@ -28,7 +28,7 @@ internal static class Panel
         int seed = Cli.Int(opts, "seed", 1);
         var player = opts.GetValueOrDefault("player", "pimc");
         var env = Enum.Parse<PlayEnvironment>(opts.GetValueOrDefault("env", "NoSL"), ignoreCase: true);
-        var budget = new Budget(Cli.Int(opts, "worlds", 8), Cli.Int(opts, "nodes", 300));
+        var budget = Cli.BudgetOf(opts);
         int workers = Cli.Int(opts, "workers", 0);
         if (player != "pimc" && !Policies.CombatNames.Contains(player)) return Cli.Fail($"unknown player {player} (pimc, {string.Join(", ", Policies.CombatNames)})");
         if (workers > 0 && (player != "pimc" || env != PlayEnvironment.NoSL)) return Cli.Fail("--workers is for --player pimc --env NoSL");
@@ -45,7 +45,7 @@ internal static class Panel
         long decisions = 0, hpLost = 0;
         Console.WriteLine($"panel: {n} combats from #{start}, act {act} ({rooms}: {pool.Count} encounters), player {player}" +
                           (leaf != null ? $" {leaf.Name}" : "") +
-                          (player == "pimc" ? $" {env} worlds {budget.Worlds} nodes {budget.NodesPerWorld}" : "") +
+                          (player == "pimc" ? $" {env} budget {budget}" : "") +
                           (workerPool != null ? $" on {workerPool.Count} workers" : "") +
                           $", game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();

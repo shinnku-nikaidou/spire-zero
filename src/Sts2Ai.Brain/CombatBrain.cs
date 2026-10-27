@@ -3,7 +3,18 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>How much search one decision may use (docs: harness §5): worlds, and actions simulated per world.</summary>
-public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300);
+/// <param name="Elite">How many times the nodes per world an elite's decisions get (docs: combat-brain §5).</param>
+/// <param name="Boss">The same for a boss.</param>
+public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1)
+{
+    /// <summary>The budget of a decision in this room (<see cref="CombatObservation.Room"/>), with its multiple applied.</summary>
+    public Budget For(string? room) =>
+        new(Worlds, (int)Math.Round(NodesPerWorld * (room switch { "Elite" => Elite, "Boss" => Boss, _ => 1.0 })));
+
+    /// <summary>As the champion's name shows it: 8x300, then the multiples that are not 1.</summary>
+    public override string ToString() => FormattableString.Invariant(
+        $"{Worlds}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}");
+}
 
 /// <param name="First">One of the legal actions.</param>
 /// <param name="Plan">The rest of the turn after <paramref name="First"/>, in the first world (for narration and highlight).</param>
@@ -36,6 +47,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IWorldSource worlds, Budget budget, ulong seed)
     {
         if (legal.Count == 1) return Only(legal[0]);
+        budget = budget.For(observation.Room);
         var first = Ordered(legal);
         return Merge(first, worlds.Worlds(budget.Worlds, seed).Select(w => SearchWorld(w, observation.Round, first, budget.NodesPerWorld)).ToList());
     }

@@ -73,7 +73,7 @@ public sealed class Dispatcher(
 
     /// <summary>The brain on each side of the routing table, for reports.</summary>
     public string Champion =>
-        $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b.Worlds}x{b.NodesPerWorld}" : "")}, combat prompts {combatChoices.Brain}, " +
+        $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b}" : "")}, combat prompts {combatChoices.Brain}, " +
         $"macro {macro.Brain}, macro prompts {macroChoices.Brain}";
 
     public CombatAction Choose(CombatDecision decision)

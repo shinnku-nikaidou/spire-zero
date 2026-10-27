@@ -20,13 +20,15 @@ public sealed class PooledPimc(WorkerPool pool)
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, string buildSeed, Budget budget, ulong seed)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
+        budget = budget.For(observation.Room);
         var first = PimcBrain.Ordered(legal);
         var replies = Map(Enumerable.Range(0, budget.Worlds)
             .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, budget.NodesPerWorld)).ToList());
         return PimcBrain.Merge(first, replies.Select(r => r.Lines!).ToList());
     }
 
-    /// <summary>SL: each first action gets the share of the budget that it gets in one search of the world.</summary>
+    /// <summary>SL: each first action gets the share of the budget that it gets in one search of the world. The budget is
+    /// the room's already (<see cref="Budget.For"/>).</summary>
     public CombatDecisionResult Decide(NodeClone node, IReadOnlyList<CombatAction> legal, Budget budget)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
@@ -41,7 +43,7 @@ public sealed class PooledPimc(WorkerPool pool)
     public CombatRoute Route(Budget budget, string name = "pimc") =>
         new(name, (decision, seed, node) => node == null
             ? Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed)
-            : Decide(node, decision.Legal, budget), budget);
+            : Decide(node, decision.Legal, budget.For(decision.Observation.Room)), budget);
 
     /// <summary>The game's Log.Error lines in the workers since the last call.</summary>
     public List<string> TakeGameErrors()

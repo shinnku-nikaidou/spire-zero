@@ -74,6 +74,7 @@ public static class Observe
         return new CombatObservation
         {
             Encounter = st.Encounter?.Id.Entry,
+            Room = st.Encounter?.RoomType.ToString(),
             Act = st.RunState.CurrentActIndex,
             Ascension = st.RunState.AscensionLevel,
             Round = st.RoundNumber,
