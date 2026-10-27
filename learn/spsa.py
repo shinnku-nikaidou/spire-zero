@@ -10,12 +10,12 @@ better side. Two objectives:
   scores the share of its starting HP left, any other end -1.
 
 The options after `--` go to every sim command: the combat policy and its budget, the panel's rooms. The output is a
-weights file for `--value` or `--leaf`; whether it is better is the gate's to decide (docs: evaluation §5).
+weights file for `--value` or `--leaf`, in the weights history by default (docs: learning §6); whether it is better is
+the gate's to decide (docs: evaluation §5).
 
-    uv run python spsa.py --sim ../sim.sh --steps 100 --seeds 32 --processes 8 --name s1 \\
-        --out ../eval/values/s1.json --log s1.jsonl -- --policy play
+    uv run python spsa.py --sim ../sim.sh --steps 100 --seeds 32 --processes 8 --name s1 --log s1.jsonl -- --policy play
     uv run python spsa.py --sim ../sim.sh --param leaf --objective panel --steps 100 --seeds 48 --name leaf1 \\
-        --out ../eval/leaves/leaf1.json --log leaf1.jsonl -- --rooms regular,elite
+        --log leaf1.jsonl -- --rooms regular,elite
 """
 
 import argparse
@@ -25,6 +25,8 @@ import shlex
 import subprocess
 import tempfile
 from pathlib import Path
+
+from weights import out_path
 
 
 def run_side(sim, args, weights_file, first, n, processes, work, tag):
@@ -86,11 +88,12 @@ def main():
     p.add_argument("--c", type=float, default=0.2, help="perturbation, in units of a weight's scale")
     p.add_argument("--max-move", type=float, default=0.1, help="largest change of a weight per step, in its scale")
     p.add_argument("--name", required=True, help="the weights' name, as the champion will show it")
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", help="where the file goes (default: weights/history/NAME.json)")
     p.add_argument("--log", help="one line per step")
     p.add_argument("--work", help="folder for the sides' weights and records (default: a temporary one)")
     p.add_argument("extra", nargs="*", help="sim options after --, such as --policy pimc --worlds 4")
     args = p.parse_args()
+    out_file = out_path(args.name, args.out)
     if args.objective == "panel" and args.param != "leaf":
         p.error("the panel plays combats, which V does not decide: --objective panel needs --param leaf")
     args.a = args.a or (0.5 if args.objective == "panel" else 0.02)
@@ -144,7 +147,7 @@ def main():
         "method": "spsa", "param": args.param, "objective": args.objective, "from": start.get("name"), "steps": args.steps,
         "seeds": args.seeds, "seed_base": args.seed_base, "first_seed": args.first_seed, "a": args.a, "c": args.c,
         "options": args.extra}, "weights": weights}
-    Path(args.out).write_text(json.dumps(out, indent=2) + "\n")
+    out_file.write_text(json.dumps(out, indent=2) + "\n")
     for n in names:
         print(f"  {n:16} {start['weights'][n]:+.4f} -> {weights[n]:+.4f}")
 

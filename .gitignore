@@ -4,3 +4,6 @@ tmp/
 # .NET build output
 bin/
 obj/
+
+# Weights files: the trainers' history and the champions' main names (docs: learning §6)
+weights/

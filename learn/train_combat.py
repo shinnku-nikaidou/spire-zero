@@ -6,10 +6,11 @@ state a search leaf stands in, with the public record of the enemies' moves befo
 the earlier rounds' observations as Dispatcher builds it). The net reads the cards in each pile, the player, each
 enemy with its current intents and those of its last rounds, the relics, the potions and the encounter; its head gives
 the chance of each ending, a death or the HP share left in one of the buckets, and the potions left after a win. A
-fifth of the runs (by run id; --fold picks which) is held out, for early stopping and the report. The output is a net file: the net as ONNX, with
-what the combat side needs to feed it, and test states it checks on load.
+fifth of the runs (by run id; --fold picks which) is held out, for early stopping and the report. The output is a net
+file for `--combat-net`, in the weights history by default (docs: learning §6): the net as ONNX, with what the combat
+side needs to feed it, and test states it checks on load.
 
-    uv run python train_combat.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name c1 --out ../eval/combat/c1.json
+    uv run python train_combat.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name c1
 """
 
 import argparse
@@ -26,6 +27,7 @@ import torch  # noqa: E402
 from torch import nn  # noqa: E402
 
 from train_value import MAX_UP, padded, read_lines  # noqa: E402
+from weights import out_path  # noqa: E402
 
 PILES = ["hand", "draw", "discard", "exhaust"]
 TABLES = ["cards", "modifiers", "powers", "enemies", "intents", "relics", "potions", "context"]
@@ -365,7 +367,7 @@ def main():
     p.add_argument("--logs", required=True, help="decision logs, comma-separated")
     p.add_argument("--records", required=True, help="run records, comma-separated")
     p.add_argument("--name", required=True, help="the net's name, as the champion will show it")
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", help="where the file goes (default: weights/history/NAME.json)")
     p.add_argument("--buckets", type=int, default=20, help="buckets of the HP share left after a win")
     p.add_argument("--lags", type=int, default=3, help="earlier rounds of each enemy's intents the net reads")
     p.add_argument("--no-round", action="store_true", help="hide the round and how many rounds each enemy has shown")
@@ -379,6 +381,7 @@ def main():
     p.add_argument("--fold", type=int, default=0, choices=range(5), help="which fifth of the runs (by run id) is held out")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
+    out_file = out_path(args.name, args.out)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -512,7 +515,7 @@ def main():
 
     out = {"name": args.name, "buckets": args.buckets, "lags": args.lags, "round": rounds, "vocab": tables,
            "fit": report, "onnx": base64.b64encode(onnx_bytes(model, b)).decode(), "tests": tests}
-    with open(args.out, "w") as f:
+    with open(out_file, "w") as f:
         json.dump(out, f)
         f.write("\n")
 

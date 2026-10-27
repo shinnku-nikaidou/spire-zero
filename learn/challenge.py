@@ -6,7 +6,7 @@ champion's report must cover, and is promoted: the gate writes its report and th
 is rebuilt. Paths are taken from the repository root, where the sim runs.
 
     uv run python challenge.py --sim ../sim.sh --champion eval/champions/nosl.json \\
-        --promote eval/reports/DATE-nosl-r1-promotion-1-NAME -- --policy pimc --macro l0 --value eval/values/s1.json
+        --promote eval/reports/DATE-nosl-r1-promotion-1-NAME -- --policy pimc --macro l0 --value weights/history/s1.json
 """
 
 import argparse

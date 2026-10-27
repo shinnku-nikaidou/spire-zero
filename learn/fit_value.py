@@ -3,9 +3,10 @@
 The decision logs (`run --log`) carry V's features on every macro decision; the run records (`run --records`) carry
 each run's outcome, joined by run id. While no run wins, every P(win) target is 0, so the target is the floor the run
 reached. The fit is ridge regression on standardized features, each run weighing the same however many decisions it
-has, with every fifth run (by run id) held out. The output is a weights file for `run --value`.
+has, with every fifth run (by run id) held out. The output is a weights file for `run --value`, in the weights history
+by default (docs: learning §6).
 
-    uv run python fit_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name v1 --out ../eval/values/v1.json
+    uv run python fit_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name v1
 """
 
 import argparse
@@ -15,6 +16,8 @@ import warnings
 
 warnings.filterwarnings("ignore", message="Failed to initialize NumPy")
 import torch  # noqa: E402
+
+from weights import out_path  # noqa: E402
 
 
 def read_lines(paths: str):
@@ -52,9 +55,10 @@ def main():
     p.add_argument("--logs", required=True, help="decision logs, comma-separated")
     p.add_argument("--records", required=True, help="run records, comma-separated")
     p.add_argument("--name", required=True, help="the weights' name, as the champion will show it")
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", help="where the file goes (default: weights/history/NAME.json)")
     p.add_argument("--ridge", type=float, default=0.01, help="penalty per unit of sample weight, on standardized features")
     args = p.parse_args()
+    out_file = out_path(args.name, args.out)
 
     runs = {r["run_id"]: r for r in read_lines(args.records) if r.get("run_id")}
     if any(r["outcome"] == "won" for r in runs.values()):
@@ -87,7 +91,7 @@ def main():
     }
     weights = {n: float(c) for n, c in zip(names, coef)}
     out = {"name": args.name, "target": "floor reached", "fit": report, "intercept": intercept, "weights": weights}
-    with open(args.out, "w") as f:
+    with open(out_file, "w") as f:
         json.dump(out, f, indent=2)
         f.write("\n")
 

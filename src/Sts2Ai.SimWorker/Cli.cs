@@ -583,6 +583,28 @@ internal static class Cli
             return options;
         }
 
+        /// <summary>
+        /// The options of this challenger as the champion: each weights file it plays with (V, the leaf weights, the
+        /// combat net) copied onto the environment's main name, weights/ENV/{value,leaf,combat}.json, which the champion
+        /// file then names. The trainers' own files stay in weights/history (docs: learning §6).
+        /// </summary>
+        public Dictionary<string, string> Promoted(PlayEnvironment env)
+        {
+            var options = Options(env);
+            foreach (var (key, role) in new[] { ("value", "value"), ("leaf", "leaf"), ("combat-net", "combat") })
+            {
+                if (!options.TryGetValue(key, out var path)) continue;
+                var main = Path.Combine("weights", env.ToString().ToLowerInvariant(), role + ".json");
+                if (Path.GetFullPath(path) != Path.GetFullPath(main))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(main)!);
+                    File.Copy(path, main, overwrite: true);
+                }
+                options[key] = main;
+            }
+            return options;
+        }
+
         public override string ToString() =>
             $"policy {Combat}{(Policy == "pimc" ? $" budget {Budget} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
     }
@@ -691,8 +713,9 @@ internal static class Cli
     /// <summary>
     /// The full-run gate (docs: evaluation §5): the challenger's records against the champion's report, paired by seed,
     /// with an SPRT. The challenger is named by its run options, which must be the ones its records were played with.
-    /// On a pass, --promote PATH writes the challenger's report to PATH and makes it the champion; its report faces the
-    /// next challengers, so it must cover the whole seed set. The SPRT may pass early: play the rest, then promote.
+    /// On a pass, --promote PATH writes the challenger's report to PATH and makes it the champion, its weights files on
+    /// the environment's main names (<see cref="ChampionOptions.Promoted"/>); its report faces the next challengers, so it
+    /// must cover the whole seed set. The SPRT may pass early: play the rest, then promote.
     /// </summary>
     private static int GateCommand(Dictionary<string, string> opts)
     {
@@ -723,7 +746,7 @@ internal static class Cli
             File.WriteAllText(outPath + ".json", report.Json());
             File.WriteAllText(outPath + ".md", report.Markdown(champion));
             var env = Enum.Parse<PlayEnvironment>(file.Env);
-            var promoted = new ChampionFile(file.Env, challenger.Name, challenger.Options(env), outPath + ".json", report.Date, result);
+            var promoted = new ChampionFile(file.Env, challenger.Name, challenger.Promoted(env), outPath + ".json", report.Date, result);
             File.WriteAllText(championPath, ProtocolJson.Serialize(promoted) + "\n");
             Console.WriteLine($"promoted: {championPath} now names {challenger.Name}");
             return 0;

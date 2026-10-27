@@ -5,10 +5,10 @@ The decision logs (`run --log`) carry the run view and V v0's features on every 
 it if still alive there. Its targets are the run's outcome only: survived every floor from the decision's up to the one
 it died on, or every floor if it won; a truncated run says nothing from its last floor on. Each run weighs the same
 however many decisions it has, and every fifth run (by run id) is held out, for early stopping and the report, next to
-a baseline that knows only the floor. The output is a net file for `run --value`: the net as ONNX, with what RunNet
-needs to feed it, and test runs that RunNet checks on load.
+a baseline that knows only the floor. The output is a net file for `run --value`, in the weights history by default
+(docs: learning §6): the net as ONNX, with what RunNet needs to feed it, and test runs that RunNet checks on load.
 
-    uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1 --out ../eval/values/n1.json
+    uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1
 """
 
 import argparse
@@ -22,6 +22,8 @@ import warnings
 warnings.filterwarnings("ignore", message="Failed to initialize NumPy")
 import torch  # noqa: E402
 from torch import nn  # noqa: E402
+
+from weights import out_path  # noqa: E402
 
 MAX_UP = 3  # RunNet.MaxUp
 TABLES = ["cards", "modifiers", "relics", "potions", "context"]
@@ -200,7 +202,7 @@ def main():
     p.add_argument("--logs", required=True, help="decision logs, comma-separated")
     p.add_argument("--records", required=True, help="run records, comma-separated")
     p.add_argument("--name", required=True, help="the net's name, as the champion will show it")
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", help="where the file goes (default: weights/history/NAME.json)")
     p.add_argument("--floors", type=int, default=64)
     p.add_argument("--objective", default="floor", choices=["floor", "win"])
     p.add_argument("--min-count", type=int, default=3, help="ids seen fewer times read as unknown")
@@ -211,6 +213,7 @@ def main():
     p.add_argument("--weight-decay", type=float, default=1e-4)
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
+    out_file = out_path(args.name, args.out)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -331,7 +334,7 @@ def main():
     out = {"name": args.name, "objective": args.objective, "floors": args.floors,
            "vocab": tables, "features": names, "mean": [float(v) for v in mean], "std": [float(v) for v in std],
            "fit": report, "onnx": base64.b64encode(onnx_bytes(model, b)).decode(), "tests": tests}
-    with open(args.out, "w") as f:
+    with open(out_file, "w") as f:
         json.dump(out, f)
         f.write("\n")
 
