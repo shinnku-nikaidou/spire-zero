@@ -37,13 +37,14 @@ namespace Sts2Ai.SimWorker;
 /// Not reproduced, because the observation doesn't show it: this turn's history (cards played, damage taken, ...),
 /// counters kept inside powers and monsters, how long a card's cost change lasts (a card in hand is taken to be
 /// cheaper this turn or until played, a card elsewhere for the rest of the combat), and which debuffs on the player
-/// skip their next tick. Allies other than the player are not built yet.
+/// skip their next tick.
 /// </summary>
 internal static class CombatBuilder
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly FieldInfo TurnNumber = typeof(PlayerCombatState).GetField("<TurnNumber>k__BackingField", Private)!;
     private static readonly FieldInfo EnemyList = typeof(CombatState).GetField("_enemies", Private)!;
+    private static readonly FieldInfo AllyList = typeof(CombatState).GetField("_allies", Private)!;
     private static readonly FieldInfo NextCreatureId = typeof(CombatState).GetField("_nextCreatureId", Private)!;
     private static readonly FieldInfo PowerList = typeof(Creature).GetField("_powers", Private)!;
     private static readonly FieldInfo InternalData = typeof(PowerModel).GetField("_internalData", Private)!;
@@ -70,16 +71,20 @@ internal static class CombatBuilder
         TurnNumber.SetValue(pcs, obs.Round);
 
         Enemies(st, obs.Enemies, pump);
+        var allies = Allies(st, player, obs.Allies, pump);
         player.Creature.CombatId = obs.Player.Uid;
         foreach (var (enemy, view) in st.Enemies.Zip(obs.Enemies)) enemy.CombatId = view.Uid;
+        foreach (var (ally, view) in allies.Zip(obs.Allies)) ally.CombatId = view.Uid;
         NextCreatureId.SetValue(st, st.Creatures.Max(c => c.CombatId ?? 0) + 1);
 
         Relics(player, obs.Relics);
         Powers(st, player, player.Creature, obs.Player.Powers);
         foreach (var (enemy, view) in st.Enemies.Zip(obs.Enemies)) Powers(st, player, enemy, view.Powers);
+        foreach (var (ally, view) in allies.Zip(obs.Allies)) Powers(st, player, ally, view.Powers);
         // After the powers, which can change max HP and max energy.
         Stats(player.Creature, obs.Player.Hp, obs.Player.MaxHp, obs.Player.Block);
         foreach (var (enemy, view) in st.Enemies.Zip(obs.Enemies)) Stats(enemy, view.Hp, view.MaxHp, view.Block);
+        foreach (var (ally, view) in allies.Zip(obs.Allies)) Stats(ally, view.Hp, view.MaxHp, view.Block);
         player.MaxEnergy += obs.Player.MaxEnergy - pcs.MaxEnergy;
         pcs.Energy = obs.Player.Energy;
         pcs.Stars = obs.Player.Stars;
@@ -279,6 +284,40 @@ internal static class CombatBuilder
         var list = (List<Creature>)EnemyList.GetValue(st)!;
         list.Clear();
         list.AddRange(matched);
+    }
+
+    /// <summary>
+    /// The allies besides the player, matched like <see cref="Enemies"/>: the fresh combat's (a relic's pet, which
+    /// joins at the start) by monster id, in order. Each missing one joins as the player's pet, as a summon makes it
+    /// (Osty, which any character can summon with a card from another character's pool); the extra ones are removed.
+    /// </summary>
+    private static List<Creature> Allies(CombatState st, Player player, IReadOnlyList<CreatureView> views, Pump pump)
+    {
+        var fresh = st.Allies.Where(c => c != player.Creature).ToList();
+        var matched = new List<Creature>();
+        foreach (var view in views)
+        {
+            var ally = fresh.FirstOrDefault(a => a.Monster?.Id.Entry == view.Id);
+            if (ally != null) fresh.Remove(ally);
+            else
+            {
+                var monster = Models.Find<MonsterModel>(view.Id ?? throw new ArgumentException("an ally that is not a monster")).ToMutable();
+                ally = st.CreateCreature(monster, CombatSide.Player, null);
+                var adding = PlayerCmd.AddPet(ally, player);
+                pump.RunUntil(() => adding.IsCompleted, () => $"adding the pet {view.Id}");
+            }
+            matched.Add(ally);
+        }
+        foreach (var extra in fresh)
+        {
+            CombatManager.Instance.RemoveCreature(extra);
+            st.RemoveCreature(extra);
+        }
+        var list = (List<Creature>)AllyList.GetValue(st)!;
+        list.Clear();
+        list.Add(player.Creature);
+        list.AddRange(matched);
+        return matched;
     }
 
     private static void Stats(Creature c, int hp, int maxHp, int block)
