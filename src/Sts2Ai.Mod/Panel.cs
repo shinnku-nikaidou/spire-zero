@@ -2,10 +2,14 @@ using Godot;
 
 namespace Sts2Ai.Mod;
 
-/// <summary>A few lines of text over the game: the mod's status and the brain's answer. F8 shows or hides it.</summary>
+/// <summary>
+/// A few lines of text over the game: the mod's status and the brain's answer, and the map point the answer goes to.
+/// F8 shows or hides it.
+/// </summary>
 internal sealed class Panel
 {
     private readonly Label _label;
+    private readonly MapMark _mark;
     private bool _f8;
 
     public Panel(SceneTree tree)
@@ -16,6 +20,7 @@ internal sealed class Panel
         _label.AddThemeColorOverride("font_outline_color", Colors.Black);
         _label.AddThemeConstantOverride("outline_size", 8);
         layer.AddChild(_label);
+        _mark = new MapMark(layer);
         tree.Root.CallDeferred(Node.MethodName.AddChild, layer);
     }
 
@@ -27,6 +32,12 @@ internal sealed class Panel
         _f8 = down;
     }
 
-    public void Show(string status, params string[] lines) =>
+    public void Show(string status, params string[] lines) => Show(status, lines, null);
+
+    /// <param name="mapAction">The answer's action, when it is a path on the map: its point gets a ring.</param>
+    public void Show(string status, string[] lines, string? mapAction)
+    {
         _label.Text = string.Join("\n", lines.Prepend($"AI · {status}"));
+        _mark.Show(mapAction, _label.Visible);
+    }
 }

@@ -13,7 +13,9 @@ internal static partial class Describe
 {
     public static string[] Recommendation(Recommendation answer, Observation obs)
     {
-        var lines = new List<string> { $"→ {Action(answer.Action, obs)}" };
+        // The panel rings the map point the answer goes to (MapMark).
+        string ring = ActionText.Is(answer.Action, "map", out _) ? ", the purple ring on the map" : "";
+        var lines = new List<string> { $"→ {Action(answer.Action, obs)}{ring}" };
         if (answer.Plan is { Count: > 0 } plan) lines.Add("then " + string.Join(", ", plan.Select(a => Action(a, obs))));
         if (answer.Candidates is { Count: > 1 } candidates)
             lines.Add(string.Join("   ", candidates.Take(3).Select(c => $"{Action(c.Action, obs)} {c.Value:0.0}±{c.Ci:0.0}")));
@@ -28,7 +30,7 @@ internal static partial class Describe
         {
             CombatScreen { Combat: var combat } => Combat(action, combat),
             CardChoiceScreen { Choice: var choice } => Pick(action, choice),
-            MapScreen map => Map(action, map, obs.Run.Map),
+            MapScreen => Map(action, obs.Run.Map),
             RewardsScreen rewards => Reward(action, rewards),
             CardRewardScreen reward => CardReward(action, reward),
             BundleScreen bundles when ActionText.Is(action, "bundle", out arg) =>
@@ -74,24 +76,24 @@ internal static partial class Describe
         return picks.Count == 0 ? "pick none" : "pick " + string.Join(", ", picks.Select(i => Card(choice.Options[i])));
     }
 
-    /// <summary>The room the path leads to, and which of the paths it is, counted from the left as the map shows them.</summary>
-    private static string Map(string action, MapScreen screen, MapView map)
+    /// <summary>The room the path leads to, by the map legend's name for it.</summary>
+    private static string Map(string action, MapView map)
     {
         if (!ActionText.Is(action, "map", out var arg)) return action;
         var at = arg.Split(',').Select(int.Parse).ToArray();
-        var point = map.Points.FirstOrDefault(p => p.Col == at[0] && p.Row == at[1]);
-        string room = point?.Type switch
+        string? type = map.Points.FirstOrDefault(p => p.Col == at[0] && p.Row == at[1])?.Type;
+        string? legend = type switch
         {
-            "Monster" => "fight",
-            "Elite" => "elite",
-            "Unknown" => "?",
-            "RestSite" => "rest site",
-            null => "?",
-            var type => type.ToLowerInvariant(),
+            "Monster" => "ENEMY",
+            "Elite" => "ELITE",
+            "Unknown" => "UNKNOWN",
+            "RestSite" => "REST",
+            "Shop" => "MERCHANT",
+            "Treasure" => "TREASURE",
+            _ => null,
         };
-        var paths = screen.Travelable.OrderBy(c => c.Col).ToList();
-        int i = paths.FindIndex(c => c.Col == at[0] && c.Row == at[1]);
-        return paths.Count > 1 && i >= 0 ? $"go to {room} (path {i + 1} of {paths.Count} from the left)" : $"go to {room}";
+        string room = (legend != null ? Text("map", $"LEGEND_{legend}.title") : null) ?? type?.ToLowerInvariant() ?? "?";
+        return "go to " + room;
     }
 
     private static string Reward(string action, RewardsScreen screen)
