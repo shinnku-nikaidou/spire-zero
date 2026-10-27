@@ -1,8 +1,8 @@
 """Fit V's weights (docs: learning §2) from self-play: each macro decision's features against what its run reached.
 
 The decision logs (`run --log`) carry V's features on every macro decision; the run records (`run --records`) carry
-each run's outcome, joined by run id. While no run wins, every P(win) target is 0, so the target is the floor the run
-reached. The fit is ridge regression on standardized features, each run weighing the same however many decisions it
+each run's outcome, joined by run id, each log with the record file written beside it (given in the same order). While
+no run wins, every P(win) target is 0, so the target is the floor the run reached. The fit is ridge regression on standardized features, each run weighing the same however many decisions it
 has, with every fifth run (by run id) held out. The output is a weights file for `run --value`, in the weights history
 by default (docs: learning §6).
 
@@ -21,7 +21,7 @@ warnings.filterwarnings("ignore", message="Failed to initialize NumPy")
 import torch  # noqa: E402
 
 import common  # noqa: E402
-from common import LearnError, read_lines  # noqa: E402
+from common import LearnError, read_lines, runs_by_log  # noqa: E402
 from weights import out_path  # noqa: E402
 
 script = common.app()
@@ -59,22 +59,27 @@ def main(
 ) -> None:
     out_file = out_path(name, out)
 
-    runs = {r["run_id"]: r for r in read_lines(records) if r.get("run_id")}
-    if any(r["outcome"] == "won" for r in runs.values()):
-        logger.warning("some runs won; the target is still the floor reached")
-    rows = [e for e in read_lines(logs) if "features" in e and e["run"] in runs]
+    rows = []
+    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
+        if any(r["outcome"] == "won" for r in runs.values()):
+            logger.warning("some runs won; the target is still the floor reached")
+        for e in read_lines(log):
+            if "features" in e and e["run"] in runs:
+                rows.append(
+                    {"key": (i, e["run"]), "run": e["run"], "features": e["features"], "floor": runs[e["run"]]["floor"]}
+                )
     if not rows:
         raise LearnError("no macro decision with features in the logs joins a run of the records")
     names = sorted({k for e in rows for k in e["features"]})
     per_run = {}
     for e in rows:
-        per_run[e["run"]] = per_run.get(e["run"], 0) + 1
+        per_run[e["key"]] = per_run.get(e["key"], 0) + 1
 
     def tensors(test: bool):
         part = [e for e in rows if held_out(e["run"]) == test]
         x = torch.tensor([[e["features"].get(n, 0.0) for n in names] for e in part], dtype=torch.float64)
-        y = torch.tensor([float(runs[e["run"]]["floor"]) for e in part], dtype=torch.float64)
-        w = torch.tensor([1.0 / per_run[e["run"]] for e in part], dtype=torch.float64)
+        y = torch.tensor([float(e["floor"]) for e in part], dtype=torch.float64)
+        w = torch.tensor([1.0 / per_run[e["key"]] for e in part], dtype=torch.float64)
         return x, y, w
 
     (x, y, w), (xt, yt, wt) = tensors(False), tensors(True)
@@ -82,8 +87,8 @@ def main(
     floor = names.index("floor")
     floor_coef, floor_intercept = fit(x[:, [floor]], y, w, ridge)
     report = {
-        "runs": len({e["run"] for e in rows}),
-        "held_out_runs": len({e["run"] for e in rows if held_out(e["run"])}),
+        "runs": len({e["key"] for e in rows}),
+        "held_out_runs": len({e["key"] for e in rows if held_out(e["run"])}),
         "samples": len(rows),
         "ridge": ridge,
         "r2_train": r2(x, y, w, coef, intercept),

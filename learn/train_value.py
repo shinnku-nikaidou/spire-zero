@@ -1,8 +1,8 @@
 """Train V v2 (docs: learning §1–§2), a net over the run's cards, relics, potions and context, from self-play.
 
 The decision logs (`run --log`) carry the run view and V v0's features on every macro decision; the run records
-(`run --records`) carry where each run ended, joined by run id. The net's head gives, per floor, the chance to die on
-it if still alive there. Its targets are the run's outcome only: survived every floor from the decision's up to the one
+(`run --records`) carry where each run ended, joined by run id, each log with the record file written beside it (given
+in the same order). The net's head gives, per floor, the chance to die on it if still alive there. Its targets are the run's outcome only: survived every floor from the decision's up to the one
 it died on, or every floor if it won; a truncated run says nothing from its last floor on. Each run weighs the same
 however many decisions it has, and every fifth run (by run id) is held out, for early stopping and the report, next to
 a baseline that knows only the floor. The output is a net file for `run --value`, in the weights history by default
@@ -28,7 +28,7 @@ import torch  # noqa: E402
 from torch import nn  # noqa: E402
 
 import common  # noqa: E402
-from common import LearnError, read_lines  # noqa: E402
+from common import LearnError, read_lines, runs_by_log  # noqa: E402
 from weights import out_path  # noqa: E402
 
 script = common.app()
@@ -267,30 +267,33 @@ def main(
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    runs = {r["run_id"]: r for r in read_lines(records) if r.get("run_id") and not r.get("failure")}
-    samples = []
-    for e in read_lines(logs, '"run_view"'):
-        r = runs.get(e["run"])
-        if r is None or "run_view" not in e:
-            continue
-        kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
-        start = min(max(e["run_view"]["floor"], 0), floors - 1)
-        samples.append(
-            {
-                "run": e["run"],
-                "view": e["run_view"],
-                "tokens": tokens(e["run_view"]),
-                "features": e["features"],
-                "start": start,
-                "end": max(start, min(r["floor"], floors - 1)),
-                "kind": kind,
-            }
-        )
+    samples, won = [], 0
+    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
+        won += sum(1 for r in runs.values() if r["outcome"] == "won" and not r.get("failure"))
+        for e in read_lines(log, '"run_view"'):
+            r = runs.get(e["run"])
+            if r is None or r.get("failure") or "run_view" not in e:
+                continue
+            kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
+            start = min(max(e["run_view"]["floor"], 0), floors - 1)
+            samples.append(
+                {
+                    "key": (i, e["run"]),
+                    "run": e["run"],
+                    "view": e["run_view"],
+                    "tokens": tokens(e["run_view"]),
+                    "features": e["features"],
+                    "start": start,
+                    "end": max(start, min(r["floor"], floors - 1)),
+                    "floor": r["floor"],
+                    "kind": kind,
+                }
+            )
     per_run = {}
     for s in samples:
-        per_run[s["run"]] = per_run.get(s["run"], 0) + 1
+        per_run[s["key"]] = per_run.get(s["key"], 0) + 1
     for s in samples:
-        s["weight"] = 1.0 / per_run[s["run"]]
+        s["weight"] = 1.0 / per_run[s["key"]]
     train = [s for s in samples if not held_out(s["run"])]
     test = [s for s in samples if held_out(s["run"])]
     if not train or not test:
@@ -357,7 +360,7 @@ def main(
     # The report: held-out loss against the baseline, and how well the expected floor predicts the floor reached.
     held, predicted = evaluate(model)
     base_loss, base_predicted = evaluate(None)
-    actual = torch.tensor([float(runs[s["run"]]["floor"]) for s in test], dtype=torch.float64, device=predicted.device)
+    actual = torch.tensor([float(s["floor"]) for s in test], dtype=torch.float64, device=predicted.device)
     weights = torch.tensor([s["weight"] for s in test], dtype=torch.float64, device=predicted.device)
 
     def r2(pred):
@@ -365,10 +368,10 @@ def main(
         return float(1 - (weights * (actual - pred) ** 2).sum() / (weights * (actual - m) ** 2).sum())
 
     report = {
-        "runs": len({s["run"] for s in samples}),
-        "held_out_runs": len({s["run"] for s in test}),
+        "runs": len({s["key"] for s in samples}),
+        "held_out_runs": len({s["key"] for s in test}),
         "samples": len(samples),
-        "won": sum(1 for r in runs.values() if r["outcome"] == "won"),
+        "won": won,
         "vocab": {t: len(ids) for t, ids in tables.items()},
         "held_out_loss": held,
         "held_out_loss_floor_only": base_loss,

@@ -1,7 +1,8 @@
 """Train the combat net (docs: learning §1), the combat search's leaf: from the start of a round, how the combat ends.
 
 The decision logs (`run --log`) carry the observation on every combat decision; the run records (`run --records`)
-carry how each combat ended, joined by run and by the combats' order. A sample is the first decision of a round, the
+carry how each combat ended, joined by run and by the combats' order, each log with the record file written beside it
+(given in the same order). A sample is the first decision of a round, the
 state a search leaf stands in, with the public record of the enemies' moves before it (Harness's history, rebuilt from
 the earlier rounds' observations as Dispatcher builds it). The net reads the cards in each pile, the player, each
 enemy with its current intents and those of its last rounds, the relics, the potions and the encounter; its head gives
@@ -32,7 +33,7 @@ import torch  # noqa: E402
 from torch import nn  # noqa: E402
 
 import common  # noqa: E402
-from common import LearnError, read_lines  # noqa: E402
+from common import LearnError, runs_by_log  # noqa: E402
 from train_value import MAX_UP, padded  # noqa: E402
 from weights import out_path  # noqa: E402
 
@@ -641,42 +642,43 @@ def main(
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    runs = {r["run_id"]: r for r in read_lines(records) if r.get("run_id") and not r.get("failure")}
     samples, skipped = [], 0
-    for run, blocks in combats(logs).items():
-        r = runs.get(run)
-        if r is None:
-            continue
-        fights = r["combats"]
-        if len(blocks) != len(fights) or any(
-            b[0]["obs"]["encounter"] != f["encounter"] for b, f in zip(blocks, fights, strict=True)
-        ):
-            skipped += 1
-            continue
-        for block, fight in zip(blocks, fights, strict=True):
-            if "end" not in fight:
+    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
+        for run, blocks in combats(log).items():
+            r = runs.get(run)
+            if r is None or r.get("failure"):
                 continue
-            starts, last = [], -1
-            for e in block:
-                if e["obs"]["round"] != last:
-                    starts.append(e["obs"])
-                    last = e["obs"]["round"]
-            history = {}
-            for k, obs in enumerate(starts):
-                past = [{"uid": h["uid"], "id": h["id"], "turns": list(h["turns"])} for h in history.values()]
-                samples.append(
-                    {
-                        "run": run,
-                        "obs": obs,
-                        "history": past,
-                        "tokens": tokens(obs, past, lags, rounds),
-                        "next": next_intents(obs, starts[k + 1] if k + 1 < len(starts) else None),
-                        "end": fight["end"],
-                        "class": outcome(obs, fight["end"], buckets, loss_min),
-                        "value": end_value(fight["end"]),
-                    }
-                )
-                witness(history, obs)
+            fights = r["combats"]
+            if len(blocks) != len(fights) or any(
+                b[0]["obs"]["encounter"] != f["encounter"] for b, f in zip(blocks, fights, strict=True)
+            ):
+                skipped += 1
+                continue
+            for block, fight in zip(blocks, fights, strict=True):
+                if "end" not in fight:
+                    continue
+                starts, last = [], -1
+                for e in block:
+                    if e["obs"]["round"] != last:
+                        starts.append(e["obs"])
+                        last = e["obs"]["round"]
+                history = {}
+                for k, obs in enumerate(starts):
+                    past = [{"uid": h["uid"], "id": h["id"], "turns": list(h["turns"])} for h in history.values()]
+                    samples.append(
+                        {
+                            "key": (i, run),
+                            "run": run,
+                            "obs": obs,
+                            "history": past,
+                            "tokens": tokens(obs, past, lags, rounds),
+                            "next": next_intents(obs, starts[k + 1] if k + 1 < len(starts) else None),
+                            "end": fight["end"],
+                            "class": outcome(obs, fight["end"], buckets, loss_min),
+                            "value": end_value(fight["end"]),
+                        }
+                    )
+                    witness(history, obs)
 
     def held_out(run_id: str) -> bool:
         return int(run_id, 16) % 5 == fold
@@ -688,7 +690,7 @@ def main(
     logger.info(
         "{} round starts from {} runs; {} runs skipped, their combats not matching the record",
         len(samples),
-        len({s["run"] for s in samples}),
+        len({s["key"] for s in samples}),
         skipped,
     )
 
@@ -775,8 +777,8 @@ def main(
         return float((a * b).sum() / (a.norm() * b.norm()).clamp_min(1e-12))
 
     report = {
-        "runs": len({s["run"] for s in samples}),
-        "held_out_runs": len({s["run"] for s in test}),
+        "runs": len({s["key"] for s in samples}),
+        "held_out_runs": len({s["key"] for s in test}),
         "samples": len(samples),
         "held_out_samples": len(test),
         "deaths": int(sum(1 for s in samples if s["class"] == 0)),
