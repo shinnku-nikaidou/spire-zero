@@ -79,10 +79,10 @@ Until run worlds exist, `MacroBrain` predicts each afterstate from what the scre
 
 - **map:** the point is added to the path. V's map features count from there: the expected number of elites, rest sites, shops, treasures and `?` points up to the boss if each next step were picked at random (not yet the best-k path features above). Its plan is the rest of the act's route: each next point along the map's paths as it would choose it if nothing else changed, up to the boss; the mod draws it ([Mod §3](/en/arch/mod/#sec-3)). With V v0 it then keeps to that route: a map decision's options differ only in their map features, and only the position changes those.
 - **rewards, card reward, bundle, treasure, shop purchase:** the gold, potion, relic or cards are added and the price is paid.
-- **an option that opens a choice** (a card reward, a card removal) is worth the best pick in it, so a choice that would be skipped is not opened. A card reward's cards are listed on the rewards screen, since they are rolled before it shows and opening one to look costs nothing ([Protocol §3](/en/arch/protocol/#sec-3)).
-- **rest:** the heal the option shows; smithing upgrades one card.
+- **an option that opens a choice** (a card reward, a card removal, smithing) is worth the best pick in it, so a choice that would be skipped is not opened. A card reward's cards are listed on the rewards screen, since they are rolled before it shows and opening one to look costs nothing ([Protocol §3](/en/arch/protocol/#sec-3)).
+- **rest:** the heal the option shows; smithing is worth its best upgrade, as at the prompt that follows.
 - **event:** the option's relic, or death if the button warns of it. Any other option is valued as no change.
-- **card prompts:** greedy, one pick at a time while V rises (or while the prompt needs more picks). Removal and transform take the card out, upgrade raises it, choose-a-card adds it.
+- **card prompts:** greedy, one pick at a time while V rises (or while the prompt needs more picks). Removal and transform take the card out, upgrade puts in its upgrade preview (`CardView.upgraded`, [Protocol §1](/en/arch/protocol/#sec-1)), with the numbers and cost it will have, choose-a-card adds it.
 
 What it cannot see: an event option's costs and gains are not on the screen as data, so a costly option ties with leaving and wins when listed first (Tablet of Truth takes max HP for every decipher, down to 1); what a relic does beyond being one more relic; what a transform gives. Applying options in run worlds removes all three.
 

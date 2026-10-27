@@ -76,6 +76,9 @@ public sealed record CardView
     public IReadOnlyList<string>? Keywords { get; init; }
     /// <summary>The card's numbers (damage, block, magic number, ...), by name, sorted by name; a calculated number by its parts.</summary>
     public IReadOnlyDictionary<string, decimal>? Vars { get; init; }
+    /// <summary>The card after one more upgrade, as the game's upgrade preview shows it (the deck view's and the upgrade
+    /// prompt's): only on a card of the deck that can be upgraded, in the run's deck and in a deck prompt's options.</summary>
+    public CardView? Upgraded { get; init; }
 }
 
 /// <summary>What Tinker Time made of a Mad Science: its card type (Attack, Skill, Power) and its rider effect.</summary>

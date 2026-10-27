@@ -144,3 +144,54 @@ public class CombatExplorationTests
         Assert.All(Enumerable.Range(0, 50), _ => Assert.Equal(Play, route.Decide(Decision(), 0, null, []).First));
     }
 }
+
+public class MacroUpgradeTests
+{
+    /// <summary>A V that is the HP plus the deck's total damage, and a little for each upgraded card.</summary>
+    private sealed class Damage : IRunValue
+    {
+        public string Name => "test";
+        public double Value(RunView run) =>
+            run.Hp + run.Deck.Sum(c => (double)(c.Vars?.GetValueOrDefault("Damage") ?? 0)) + 0.1 * run.Deck.Count(c => c.Up > 0);
+    }
+
+    private static CardView Card(string id, int damage, int upgraded) => new()
+    {
+        Id = id, Cost = 1, Vars = new Dictionary<string, decimal> { ["Damage"] = damage },
+        Upgraded = new CardView { Id = id, Up = 1, Cost = 1, Vars = new Dictionary<string, decimal> { ["Damage"] = upgraded } },
+    };
+
+    private static readonly CardView Small = Card("AAA", 6, 7), Big = Card("ZZZ", 6, 12);
+
+    private static MacroDecision Rest(int heal, params CardView[] deck) => new(Surfaces.Rest, ["rest:HEAL", "rest:SMITH"],
+        () => new Observation
+        {
+            Run = Fixtures.Floor1() with { Hp = 40, Deck = deck },
+            Screen = new RestScreen { Options = [new("HEAL", true, heal), new("SMITH", true)] },
+        });
+
+    [Fact]
+    public void SmithingIsWorthItsBestUpgradeWhateverTheDecksOrder()
+    {
+        var l0 = new MacroBrain(new Damage());
+        // The best upgrade adds 6 damage: smithing beats a heal of 5, whichever card comes first; the other upgrade
+        // adds only 1, and alone it loses to the heal.
+        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Small, Big)));
+        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Big, Small)));
+        Assert.Equal("rest:HEAL", l0.Choose(Rest(5, Small, Small)));
+    }
+
+    [Fact]
+    public void TheUpgradePromptTakesTheCardWhosePreviewIsBest()
+    {
+        var l0 = new MacroBrain(new Damage());
+        var prompt = new ChoiceDecision(new CardChoice
+        {
+            Options = [Small, Big],
+            Min = 1,
+            Max = 1,
+            Context = new ChoiceContext { Purpose = "deck_for_upgrade", Cancelable = false, InCombat = false },
+        }, () => new Observation { Run = Fixtures.Floor1() with { Deck = [Small, Big] }, Screen = new TreasureScreen { Relics = [] } });
+        Assert.Equal([1], l0.Choose(prompt));
+    }
+}

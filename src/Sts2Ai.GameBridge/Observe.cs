@@ -34,7 +34,7 @@ public static class Observe
         Hp = player.Creature.CurrentHp,
         MaxHp = player.Creature.MaxHp,
         Gold = player.Gold,
-        Deck = player.Deck.Cards.Select(c => Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
+        Deck = player.Deck.Cards.Select(DeckCard).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
         Relics = player.Relics.Select(Relic).ToList(),
         Potions = player.PotionSlots.Select(p => p?.Id.Entry).ToList(),
         Map = Map(run),
@@ -124,6 +124,21 @@ public static class Observe
             Keywords = card.Keywords.Count > 0 ? card.Keywords.Select(k => k.ToString()).Order(StringComparer.Ordinal).ToList() : null,
             Vars = Vars(card) is { Count: > 0 } vars ? vars : null,
         };
+    }
+
+    /// <summary>A card of the deck: <see cref="Card"/> with the upgrade preview the deck view shows, if it can be upgraded.</summary>
+    public static CardView DeckCard(CardModel card) => Card(card) with { Upgraded = card.IsUpgradable ? Card(UpgradePreview(card)) : null };
+
+    /// <summary>
+    /// The card once more upgraded, made as the game's upgrade preview makes it, but on a clone outside the run's
+    /// cards: a mutable clone has none of the original's event subscribers, and the upgrade runs no hooks.
+    /// </summary>
+    private static CardModel UpgradePreview(CardModel card)
+    {
+        var preview = (CardModel)card.MutableClone();
+        preview.UpgradeInternal();
+        preview.FinalizeUpgradeInternal();
+        return preview;
     }
 
     /// <summary>See <see cref="ProtocolJson.CardKey"/>.</summary>

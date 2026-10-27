@@ -5,9 +5,9 @@ namespace Sts2Ai.Brain;
 /// <summary>
 /// The macro brain's L0 (docs: macro brain §2), version 0: it values each option's afterstate with V and takes the
 /// best, the first legal one on a tie. The afterstate is predicted from what the screen shows (the card a reward adds,
-/// the relic, the gold a purchase costs, the HP a rest heals), not applied in a world. An option whose result the
+/// the relic, the gold a purchase costs, the HP a rest heals, a card's upgrade preview), not applied in a world. An option whose result the
 /// screen does not show (most event options, a reroll, a transform) is valued as the state before it. One that opens a
-/// choice (a card reward, a removal) is valued as the best pick in it, so a choice that would be skipped is not opened.
+/// choice (a card reward, a removal, smithing) is valued as the best pick in it, so a choice that would be skipped is not opened.
 /// It also answers the card prompts outside combat (upgrade, remove, transform, choose a card).
 ///
 /// With <paramref name="explore"/>, for self-play, it draws each answer by the same values instead of taking the best
@@ -55,7 +55,7 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
         Func<RunView, CardView, RunView> pick = choice.Context.Purpose switch
         {
             "deck_for_removal" or "deck_for_transformation" => (s, card) => s with { Deck = Without(s.Deck, card) },
-            "deck_for_upgrade" => (s, card) => s with { Deck = [.. Without(s.Deck, card), card with { Up = (card.Up ?? 0) + 1 }] },
+            "deck_for_upgrade" => Upgrade,
             "choose_a_card_screen" or "simple_grid_for_rewards" => (s, card) => s with { Deck = [.. s.Deck, card] },
             _ => (s, _) => s,
         };
@@ -143,9 +143,8 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
             case RestScreen screen when verb == "rest":
                 var rest = screen.Options.First(o => o.Id == arg);
                 if (rest.Heal is { } heal) return run with { Hp = Math.Min(run.MaxHp, run.Hp + heal) };
-                // Smithing upgrades one card; which one is decided at the prompt.
-                if (arg == "SMITH" && run.Deck.FirstOrDefault(c => c.Up is null or 0) is { } card)
-                    return run with { Deck = [.. Without(run.Deck, card), card with { Up = 1 }] };
+                // Smithing opens the upgrade prompt; the best upgrade is what this option is worth.
+                if (arg == "SMITH") return BestUpgrade(run) ?? run;
                 return run;
             case TreasureScreen screen when verb == "relic":
                 return WithRelic(run, screen.Relics[int.Parse(arg)]);
@@ -156,7 +155,17 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
 
     private RunView? Best(IEnumerable<RunView> runs) => runs.MaxBy(value.Value);
 
-    private RunView? BestRemoval(RunView run) => Best(run.Deck.Select(c => run with { Deck = Without(run.Deck, c) }));
+    private RunView? BestRemoval(RunView run) => Best(Distinct(run.Deck).Select(c => run with { Deck = Without(run.Deck, c) }));
+
+    private RunView? BestUpgrade(RunView run) => Best(Distinct(run.Deck).Where(c => c.Upgraded != null).Select(c => Upgrade(run, c)));
+
+    /// <summary>The run with <paramref name="card"/> upgraded as its upgrade preview shows (<see cref="CardView.Upgraded"/>);
+    /// unchanged for a card that has none, which the game does not let be upgraded.</summary>
+    private static RunView Upgrade(RunView run, CardView card) =>
+        card.Upgraded is { } upgraded ? run with { Deck = [.. Without(run.Deck, card), upgraded] } : run;
+
+    /// <summary>One of each card the player can tell apart (<see cref="ProtocolJson.CardKey"/>).</summary>
+    private static IEnumerable<CardView> Distinct(IReadOnlyList<CardView> deck) => deck.DistinctBy(ProtocolJson.CardKey);
 
     private static (string Verb, string Arg) Split(string action)
     {
