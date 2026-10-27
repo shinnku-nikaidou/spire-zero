@@ -1,0 +1,132 @@
+using System.Net.Sockets;
+using Sts2Ai.Brain;
+using Sts2Ai.Protocol;
+
+namespace Sts2Ai.Harness;
+
+/// <summary>
+/// The brain's end of the wire (docs: protocol §2). Each run on a connection gets its own Harness from
+/// <paramref name="harness"/>, made at hello (it refuses the run by throwing); each decision is routed through it and
+/// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
+/// observation that does not match its hash) gets an error instead, and the host ends the run. <paramref name="ended"/>
+/// gets each run's Harness at run_end.
+/// </summary>
+public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, Dispatcher, RunEnd>? ended = null)
+{
+    /// <summary>Serves the hosts that connect to the Unix socket at <paramref name="path"/>, one at a time, forever.</summary>
+    public void Listen(string path)
+    {
+        using var listener = Bind(path);
+        while (true)
+        {
+            using var socket = listener.Accept();
+            try
+            {
+                Serve(socket);
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException)
+            {
+                Console.Error.WriteLine($"brain: dropped a host: {e.GetType().Name}: {e.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// A Unix socket listening at <paramref name="path"/> (a leading NUL names an abstract socket, which has no file).
+    /// A socket file left by a brain that is gone is replaced; one a brain still listens on is not.
+    /// </summary>
+    public static Socket Bind(string path)
+    {
+        if (!path.StartsWith('\0') && File.Exists(path))
+        {
+            using var probe = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            try
+            {
+                probe.Connect(new UnixDomainSocketEndPoint(path));
+                throw new IOException($"a brain is already listening at {path}");
+            }
+            catch (SocketException)
+            {
+                File.Delete(path);
+            }
+        }
+        else if (!path.StartsWith('\0')) Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        listener.Bind(new UnixDomainSocketEndPoint(path));
+        listener.Listen();
+        return listener;
+    }
+
+    /// <summary>Serves one connection until the host closes it.</summary>
+    public void Serve(Socket socket)
+    {
+        using var stream = new NetworkStream(socket);
+        Serve(new WireStream(stream));
+    }
+
+    public void Serve(WireStream wire)
+    {
+        Hello? hello = null;
+        Dispatcher? run = null;
+        long last = -1;
+        while (wire.Receive() is { } message)
+        {
+            switch (message)
+            {
+                case Hello next:
+                    (hello, run, last) = (next, null, -1);
+                    try
+                    {
+                        run = harness(next);
+                        wire.Send(new Ready(run.Champion));
+                    }
+                    catch (Exception e)
+                    {
+                        wire.Send(new WireError(Describe(e)));
+                    }
+                    break;
+                case DecisionRequest request:
+                    try
+                    {
+                        if (run == null) throw new InvalidDataException($"decision {request.DecisionId} outside a run");
+                        if (request.DecisionId <= last) throw new InvalidDataException($"decision {request.DecisionId} after decision {last}");
+                        last = request.DecisionId;
+                        wire.Send(Answer(run, request));
+                    }
+                    catch (Exception e)
+                    {
+                        wire.Send(new WireError(Describe(e)));
+                    }
+                    break;
+                case RunEnd end:
+                    if (run != null) ended?.Invoke(hello!, run, end);
+                    (hello, run) = (null, null);
+                    break;
+                // Each decision is answered before the next message is read, so there is no search to drop.
+                case Executed or Cancel:
+                    break;
+                default:
+                    wire.Send(new WireError($"unexpected {message.GetType().Name}"));
+                    break;
+            }
+        }
+    }
+
+    private static Recommendation Answer(Dispatcher harness, DecisionRequest request)
+    {
+        var obs = request.Obs;
+        if (DecisionRequest.HashOf(obs) != request.ObsHash) throw new InvalidDataException($"obs_hash {request.ObsHash} is not the observation's");
+        string action = (request.Surface, obs.Screen) switch
+        {
+            (Surfaces.Combat, CombatScreen screen) =>
+                harness.Choose(new CombatDecision(request.Legal.Select(CombatAction.Parse).ToList(), () => screen.Combat, _ => obs)).ToString(),
+            (Surfaces.CardChoice, CardChoiceScreen screen) => "pick:" + string.Join(",", harness.Choose(new ChoiceDecision(screen.Choice, () => obs))),
+            (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
+            _ => harness.Choose(new MacroDecision(request.Surface, request.Legal, () => obs)),
+        };
+        var note = harness.Last!;
+        return new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, note.Plan, note.Candidates);
+    }
+
+    private static string Describe(Exception e) => $"{e.GetType().Name}: {e.Message}";
+}

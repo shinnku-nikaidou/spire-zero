@@ -12,7 +12,7 @@ Harness 是决策进程里的调度器。它的一边是**宿主**，也就是�
 
 <Aside title="状态">
 
-部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）、`PooledPimc`（在进程池里搜索 NoSL 世界的战斗大脑）和 `Dispatcher`：它把一局里的决策路由给大脑，抽取大脑的种子，并写决策日志（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 在进程内让每一局都经过它。规划中：公开记录（[§3](#sec-3)）；独立决策进程的消息处理（决策 id、过期请求）；墙钟预算和基于 CI 的分配；降级回答。
+部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）、`PooledPimc`（在进程池里搜索 NoSL 世界的战斗大脑）和 `Dispatcher`：它把一局里的决策路由给大脑，抽取大脑的种子，并写决策日志（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 让每一局都经过它，可以在进程内，也可以走传输协议：`BrainServer` 是 Harness 这一端的宿主–brain 消息处理（[协议 §2](/arch/protocol/#sec-2)），按顺序回答决策。规划中：公开记录（[§3](#sec-3)）；搜索进行中的过期请求和取消；墙钟预算和基于 CI 的分配；降级回答。
 
 </Aside>
 
@@ -58,7 +58,7 @@ sequenceDiagram
   X-->>H: recommendation
 ```
 
-- 宿主是 Mod（R4，真实游戏）或者负责这一局的宿主 worker 进程（R1–R3，模拟）；R1–R4 是[仿真到实机阶梯](/arch/evaluation/#sec-1)的各级。Harness 分辨不出这两者，这正是项目的原则「换世界，不换大脑」（swap the world, not the brain）。
+- 宿主是 Mod（R4，真实游戏）或者负责这一局的宿主 worker 进程（R1–R3，模拟）；R1–R4 是[仿真到实机阶梯](/arch/evaluation/#sec-1)的各级。Harness 分辨不出这两者，这正是项目的原则「换世界，不换大脑」（swap the world, not the brain）。SimWorker 的 `brain` 命令单独运行 Harness，在套接字后面等待宿主；`run --brain` 作为宿主连上它跑整局（[模拟器 §5](/arch/simulator/#sec-5)）。
 - 搜索用的 worker 进程与宿主进程是分开的。自我对弈时，宿主 worker 只持有真实的这一局，搜索在其他 worker 上进行。
 - 单进程模式（bench、selftest）：Harness 和一个 worker 在同一个进程里，接口相同，没有进程间通信（IPC）。
 
@@ -116,7 +116,7 @@ public sealed class PublicRecord
 「随时可停」是指搜索在任何时刻被打断，都有一个当前最好的答案可以给出。
 
 - 并行算出的结果按固定顺序合并（先按世界编号，再按候选编号），绝不按完成的先后顺序，这样时序就改变不了答案。
-- 大脑的随机数由 Harness 提供：`brainSeed = SplitMix64(Hash(runId), decisionIndex)`，其中决策序号计入这一局的每个决策（包括选牌提示），run id 是这一局的种子字符串。大脑绝不从游戏自己的随机数流里取数。等大脑有了版本，冠军版本号也加入哈希。PIMC 的构建种子就是大脑种子的十六进制形式。
+- 大脑的随机数由 Harness 提供：`brainSeed = SplitMix64(Hash(runId), decisionIndex)`，其中决策序号计入这一局的每个决策（包括选牌提示），run id 是这一局种子的哈希，所以大脑看不到种子（[协议 §2](/arch/protocol/#sec-2)）。大脑绝不从游戏自己的随机数流里取数。等大脑有了版本，冠军版本号也加入哈希。PIMC 的构建种子就是大脑种子的十六进制形式。
 - 分配：当排名前两位的候选之差超出各自的置信区间（CI）时停止；否则增加样本或深度（[战斗大脑 §5](/arch/combat-brain/#sec-5)）。
 
 ## 6. 决策日志
@@ -124,7 +124,7 @@ public sealed class PublicRecord
 每个决策一行 JSON：
 
 ```json
-{"run": "VHC9ZPHEBWM1", "decision_id": 4, "env": "NoSL", "surface": "combat", "brain": "pimc",
+{"run": "97eef296cd6717a2", "decision_id": 4, "env": "NoSL", "surface": "combat", "brain": "pimc",
  "obs_hash": "67f99089ea94de49", "legal": 7, "chosen": "play:2", "plan": ["play:3:1", "play:5", "end_turn"],
  "candidates": [{"action": "play:2", "value": 0.673, "ci": 0.0, "samples": 8}, …],
  "budget": {"worlds": 8, "nodes_per_world": 300}, "seed": 16058448958323553205, "elapsed_ms": 104.6}
@@ -155,7 +155,7 @@ public sealed class PublicRecord
 ## 8. 测试
 
 1. 路由覆盖：N 局模拟覆盖到所有决策界面，兜底次数为 0。已有：`run` 列出从未到达的决策界面，遇到未覆盖的界面时 `Dispatcher` 抛异常。
-2. 可复现性：重放一份决策日志，得到完全相同的推荐。部分已有：`run --check` 对每个种子打两遍，比较两份决策日志中除 `elapsed_ms` 外的每个字段。
+2. 可复现性：重放一份决策日志，得到完全相同的推荐。部分已有：`run --check` 对每个种子打两遍，第二遍走传输协议，连到同一进程里的 Harness，然后比较两份决策日志中除 `elapsed_ms` 外的每个字段。
 3. Harness 层面的 NoSL 反事实测试：公开记录相同、隐藏状态不同 → 推荐相同（[环境 §7](/arch/environments/#sec-7)）。
 4. 过期处理：请求被打乱顺序或重复发送 → 只回答最新的一个。
 

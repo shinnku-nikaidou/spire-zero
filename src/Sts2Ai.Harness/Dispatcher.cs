@@ -24,6 +24,9 @@ public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs);
 
+/// <summary>Who made a decision, and what a searching brain planned and scored: what its recommendation carries.</summary>
+public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
+
 /// <summary>
 /// Harness for one run (docs: harness §4–§6). The host asks it as its combat, card-prompt and macro policy; it routes
 /// each decision to exactly one brain, draws the brains' seeds from the run id and the decision's number (never from the
@@ -51,6 +54,9 @@ public sealed class Dispatcher(
 
     public PlayEnvironment Env => env;
 
+    /// <summary>The latest decision's brain, plan and candidates.</summary>
+    public DecisionNote? Last { get; private set; }
+
     /// <summary>How many decisions each brain made so far.</summary>
     public IReadOnlyDictionary<string, int> Brains => _brains;
 
@@ -65,10 +71,10 @@ public sealed class Dispatcher(
         var result = combat.Decide(decision, seed);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(result.First)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
+        Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                result.First.ToString(), result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null,
-                result.Candidates.Count > 0 ? result.Candidates : null, combat.Budget, seed, ms));
+                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms));
         return result.First;
     }
 
@@ -80,6 +86,7 @@ public sealed class Dispatcher(
         var picks = route.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!choice.Accepts(picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", picks)}], which the prompt does not accept");
+        Last = new(route.Brain);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.CardChoice, route.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
                 string.Join(",", picks), null, null, null, seed, ms));
@@ -93,6 +100,7 @@ public sealed class Dispatcher(
         var action = macro.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(action)) throw new InvalidOperationException($"{macro.Brain} chose {action} on {decision.Surface}, which is not legal");
+        Last = new(macro.Brain);
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 action, null, null, null, seed, ms));

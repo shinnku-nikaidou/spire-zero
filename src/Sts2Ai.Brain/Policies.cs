@@ -2,15 +2,23 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
 
-/// <summary>What a combat policy gets at each decision: the legal actions, and the observation on request.</summary>
-public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe)
+/// <summary>
+/// What a combat policy gets at each decision: the legal actions, and the observation on request. In a run, the run
+/// observation around the combat too (<paramref name="inRun"/> makes it from the combat's); a combat started on its
+/// own has none.
+/// </summary>
+public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe, Func<CombatObservation, Observation>? inRun = null)
 {
     private CombatObservation? _observation;
+    private Observation? _runObservation;
 
     public IReadOnlyList<CombatAction> Legal { get; } = legal;
 
     /// <summary>Built on first use: a policy that ignores it shouldn't pay for it.</summary>
     public CombatObservation Observation => _observation ??= observe();
+
+    /// <summary>Built on first use, like <see cref="Observation"/>.</summary>
+    public Observation? RunObservation => _runObservation ??= inRun?.Invoke(Observation);
 }
 
 /// <summary>

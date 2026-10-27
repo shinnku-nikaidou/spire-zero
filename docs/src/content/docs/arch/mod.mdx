@@ -111,7 +111,7 @@ interface ISurfaceAdapter
 
 ## 5. 与大脑的连接
 
-- **Socket**：Unix 域套接字 `$XDG_RUNTIME_DIR/sts2ai/brain.sock`，传输 JSON lines（[协议 §2](/arch/protocol/#sec-2)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。
+- **Socket**：Unix 域套接字 `$XDG_RUNTIME_DIR/sts2ai/brain.sock`，传输 JSON lines（[协议 §2](/arch/protocol/#sec-2)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。服务端已经实现：SimWorker 的 `brain` 命令在这个套接字上等待，`run --brain` 已经作为宿主连上它跑模拟对局（[模拟器 §5](/arch/simulator/#sec-5)）。
 - **环境**：`hello` 消息带上环境（NoSL 或 SL，见[环境](/arch/environments/)），在开局时从 Mod 配置中选定，整局固定不变，并记入日志。
 - **连不上大脑**：辅助模式下面板显示「no brain」（没有大脑）；自动游玩时 Mod 暂停。
 

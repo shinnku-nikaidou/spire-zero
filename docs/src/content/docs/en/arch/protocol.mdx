@@ -14,7 +14,7 @@ This assembly is also the observation **whitelist**: a field exists here only if
 
 <Aside title="Status">
 
-The combat part, the run-level observation with a screen for every surface ([§3](#sec-3)) and `ChoiceContext` ([§4](#sec-4)) exist (`src/Sts2Ai.Protocol`). The combat world API exists too ([§7](#sec-7)), and so do the worker messages that carry PIMC's world searches ([§7.1](#sec-7.1)). The message envelopes and the event stream are planned.
+The combat part, the run-level observation with a screen for every surface ([§3](#sec-3)) and `ChoiceContext` ([§4](#sec-4)) exist (`src/Sts2Ai.Protocol`). The combat world API exists too ([§7](#sec-7)), and so do the worker messages that carry PIMC's world searches ([§7.1](#sec-7.1)). The host–brain messages exist (`Wire.cs`, [§2](#sec-2)), and the simulator plays whole runs over them. The event stream, facts and the SL messages are planned.
 
 </Aside>
 
@@ -40,9 +40,11 @@ All messages are **JSON lines**: one UTF-8 JSON object per line.
 In the messages below, the **host** is the process that runs the game: the Mod in the real game, or a worker that hosts a run (the `role` field says which). The **brain** is the decision process.
 
 ```
-host → brain   hello{v, game_version, env: "NoSL"|"SL", role: "mod"|"worker", run_header}
-host → brain   decision{decision_id, obs_hash, surface, obs, legal[], prompt?, events[]}
-brain → host   recommendation{decision_id, obs_hash, action, plan[], candidates[], facts[], degraded?}
+host → brain   hello{v, game_version, env: "NoSL"|"SL", role: "mod"|"worker", run: {run_id, character, ascension}}
+brain → host   ready{champion}                // the run is accepted
+host → brain   decision{decision_id, obs_hash, surface, obs, legal[], events[]}
+brain → host   recommendation{decision_id, obs_hash, action, brain, plan?, candidates?, facts[], degraded?}
+brain → host   error{message}                 // instead of ready or a recommendation; the host ends the run
 host → brain   executed{decision_id, action, ok, error?}
 host → brain   cancel{decision_id}            // state moved on; brain drops the search
 host → brain   run_end{won, floor, reason}
@@ -53,12 +55,14 @@ host → brain   node_action{node_index, seq, action}  // every executed action 
 
 | message | direction | when / what |
 |---|---|---|
-| `hello` | host → brain | once, at the start: protocol version, game version, environment (`NoSL` or `SL`), role (`mod` or `worker`), run header |
-| `decision` | host → brain | a decision point: decision id, observation hash, surface, observation, legal actions, an optional `prompt`, the events since the previous decision |
-| `recommendation` | brain → host | the answer: action, plan, candidates, facts, an optional degraded flag ([§6](#sec-6)) |
+| `hello` | host → brain | at the start of each run: protocol version, game version, environment (`NoSL` or `SL`), role (`mod` or `worker`), run header (run id, character, ascension) |
+| `ready` | brain → host | the answer to `hello`: the brain takes the run, and names the champion that plays it |
+| `decision` | host → brain | a decision point: decision id, observation hash, surface, observation, legal actions (empty for a card prompt, whose answer is `pick:i,j,…`, [§3](#sec-3)), the events since the previous decision |
+| `recommendation` | brain → host | the answer: action, the brain that chose it, plan, candidates, facts, an optional degraded flag ([§6](#sec-6)) |
+| `error` | brain → host | instead of `ready` or a `recommendation`: the brain cannot take the run or answer the decision (an uncovered surface, an illegal pick, an observation that does not match its hash); the host ends the run |
 | `executed` | host → brain | which action was executed for a decision, whether it succeeded, the error if any |
 | `cancel` | host → brain | the state moved on; the brain drops that search |
-| `run_end` | host → brain | the run is over: won or not, floor, reason |
+| `run_end` | host → brain | the run is over: won or not, floor, reason (`won`, `lost`, `truncated` at the decision cap, `failed` or `aborted`) |
 | `node_checkpoint` | host → brain | SL only: the save `RunManager.ToSave(null)` taken at node entry |
 | `node_action` | host → brain | SL only: every executed action and prompt answer inside the node, numbered by `seq` |
 
@@ -71,6 +75,7 @@ sequenceDiagram
   participant H as host (Mod or worker)
   participant B as brain
   H->>B: hello
+  B->>H: ready
   loop each decision point
     H->>B: decision
     B->>H: recommendation
@@ -85,6 +90,14 @@ Two fields protect against stale answers:
 
 - `obs_hash` is FNV-1a 64 (a fast 64-bit hash) over the canonical JSON of `obs` (`ProtocolJson.Hash`). The host drops a recommendation whose hash differs from the current one, that is, one computed for a state that is no longer on screen.
 - `decision_id` strictly increases within a run, and the brain answers only the latest one.
+
+More rules of the exchange:
+
+- One connection carries runs one after another, each from `hello` to `run_end`. Each run gets its own Harness on the brain side, made at `hello`.
+- `run_id` is a hash of the run's seed (FNV-1a 64, in hex), so the seed never leaves the host ([Mod §9](/en/arch/mod/#sec-9)). Harness draws the brains' seeds from it ([Harness §5](/en/arch/harness/#sec-5)).
+- The brain answers decisions in order, each before it reads the next message, so `cancel` has no search to drop yet.
+- The host reports an action `executed` once the game reaches the next decision, or the end of the run. In the simulator, `ok` is false only when the run failed.
+- The brain also checks `obs_hash` against the observation it received: a mismatch means the JSON did not survive the trip, and gets an `error`.
 
 ## 3. Observation
 
@@ -177,25 +190,22 @@ reward_seen{…}  shop_seen{…}  event_page{…}
 
 ## 6. Recommendation
 
-The brain's answer to a `decision`. It is planned.
+The brain's answer to a `decision`. `Wire.cs` has it without `Facts` and `Degraded`, which are planned:
 
 ```csharp
-// Planned.
-public sealed record Recommendation
-{
-    public required long DecisionId { get; init; }
-    public required string ObsHash { get; init; }
-    public required string Action { get; init; }                 // one of legal[]
-    public required IReadOnlyList<string> Plan { get; init; }    // rest of the turn/screen, for highlight + narration
-    public required IReadOnlyList<Candidate> Candidates { get; init; }
-    public required IReadOnlyList<Fact> Facts { get; init; }     // the only source for explanations
-    public bool Degraded { get; init; }                          // worker loss etc.; docs: harness §7
-}
+public sealed record Recommendation(long DecisionId, string ObsHash, string Action, string Brain,
+    IReadOnlyList<string>? Plan = null,          // rest of the turn/screen, for highlight + narration
+    IReadOnlyList<Candidate>? Candidates = null) : WireMessage;
+// Planned:
+//   IReadOnlyList<Fact> Facts                   // the only source for explanations
+//   bool Degraded                               // worker loss etc.; docs: harness §7
 public sealed record Candidate(string Action, double Value, double Ci, int Samples);
-public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Values, bool Exact); // Exact only in SL
+public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Values, bool Exact); // planned; Exact only in SL
 ```
 
-- `Action` is one of the decision's legal actions.
+- `Action` is one of the decision's legal actions; for a card prompt, `pick:i,j,…`.
+- `Brain` names the brain that chose it, from the champion's routing table ([Harness §4](/en/arch/harness/#sec-4)). The host counts decisions per brain for the run record, where placeholder decisions must be zero ([Evaluation §3](/en/arch/evaluation/#sec-3)).
+- `Plan` and `Candidates` come only from a searching brain, as in the decision log ([Harness §6](/en/arch/harness/#sec-6)).
 - `Plan` is the rest of the turn or screen, used for the highlight and the narration.
 - `Candidates` lists the actions that were scored, each with its `Value`, `Ci` (confidence interval) and number of `Samples`.
 - `Facts` are the only source for explanations.

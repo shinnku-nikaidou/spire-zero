@@ -14,7 +14,7 @@ Protocol（协议）是项目各进程之间的共同语言。游戏宿主（真
 
 <Aside title="状态">
 
-战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。战斗世界 API 也已实现（[§7](#sec-7)），承载 PIMC 世界搜索的 worker 消息也已实现（[§7.1](#sec-7.1)）。消息信封和事件流还在规划中。
+战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。战斗世界 API 也已实现（[§7](#sec-7)），承载 PIMC 世界搜索的 worker 消息也已实现（[§7.1](#sec-7.1)）。宿主与 brain 之间的消息已实现（`Wire.cs`，[§2](#sec-2)），模拟器已经能通过它们跑整局。事件流、事实和 SL 消息还在规划中。
 
 </Aside>
 
@@ -40,9 +40,11 @@ Protocol（协议）是项目各进程之间的共同语言。游戏宿主（真
 下面的消息里，**host**（宿主）是运行游戏的进程：真实游戏里的 Mod，或者承载一局的 worker（由 `role` 字段说明是哪一种）。**brain** 是决策进程。
 
 ```
-host → brain   hello{v, game_version, env: "NoSL"|"SL", role: "mod"|"worker", run_header}
-host → brain   decision{decision_id, obs_hash, surface, obs, legal[], prompt?, events[]}
-brain → host   recommendation{decision_id, obs_hash, action, plan[], candidates[], facts[], degraded?}
+host → brain   hello{v, game_version, env: "NoSL"|"SL", role: "mod"|"worker", run: {run_id, character, ascension}}
+brain → host   ready{champion}                // the run is accepted
+host → brain   decision{decision_id, obs_hash, surface, obs, legal[], events[]}
+brain → host   recommendation{decision_id, obs_hash, action, brain, plan?, candidates?, facts[], degraded?}
+brain → host   error{message}                 // instead of ready or a recommendation; the host ends the run
 host → brain   executed{decision_id, action, ok, error?}
 host → brain   cancel{decision_id}            // state moved on; brain drops the search
 host → brain   run_end{won, floor, reason}
@@ -53,12 +55,14 @@ host → brain   node_action{node_index, seq, action}  // every executed action 
 
 | 消息 | 方向 | 时机 / 内容 |
 |---|---|---|
-| `hello` | host → brain | 开始时发送一次：协议版本、游戏版本、环境（`NoSL` 或 `SL`）、角色（`mod` 或 `worker`）、对局头信息（run header） |
-| `decision` | host → brain | 一个决策点：决策 id、观测哈希、决策界面、观测、合法动作、可选的 `prompt`、自上一个决策以来的事件 |
-| `recommendation` | brain → host | 回答：动作、计划、候选动作、事实、可选的降级标记（[§6](#sec-6)） |
+| `hello` | host → brain | 每局开始时：协议版本、游戏版本、环境（`NoSL` 或 `SL`）、角色（`mod` 或 `worker`）、对局头信息（对局 id、角色、进阶等级） |
+| `ready` | brain → host | 对 `hello` 的回答：brain 接下这一局，并说明由哪个冠军来打 |
+| `decision` | host → brain | 一个决策点：决策 id、观测哈希、决策界面、观测、合法动作（选牌提示的合法动作为空，它的回答是 `pick:i,j,…`，[§3](#sec-3)）、自上一个决策以来的事件 |
+| `recommendation` | brain → host | 回答：动作、做出选择的大脑、计划、候选动作、事实、可选的降级标记（[§6](#sec-6)） |
+| `error` | brain → host | 代替 `ready` 或 `recommendation`：brain 接不了这一局，或答不了这个决策（未覆盖的决策界面、不合法的选择、与哈希不符的观测）；宿主随即结束这一局 |
 | `executed` | host → brain | 某个决策实际执行了哪个动作、是否成功，以及可能的错误 |
 | `cancel` | host → brain | 状态已经往前走了；brain 丢弃这次搜索 |
-| `run_end` | host → brain | 一局结束：是否获胜、层数、原因 |
+| `run_end` | host → brain | 一局结束：是否获胜、层数、原因（`won`、`lost`、触及决策上限的 `truncated`、`failed` 或 `aborted`） |
 | `node_checkpoint` | host → brain | 仅 SL：进入节点时做的存档 `RunManager.ToSave(null)` |
 | `node_action` | host → brain | 仅 SL：节点内每个已执行的动作和每个选牌提示的回答，用 `seq` 编号 |
 
@@ -71,6 +75,7 @@ sequenceDiagram
   participant H as host（Mod 或 worker）
   participant B as brain
   H->>B: hello
+  B->>H: ready
   loop 每个决策点
     H->>B: decision
     B->>H: recommendation
@@ -85,6 +90,14 @@ sequenceDiagram
 
 - `obs_hash` 是对 `obs` 的规范 JSON 计算的 FNV-1a 64（一种快速的 64 位哈希，`ProtocolJson.Hash`）。如果一个推荐的哈希与当前的不同，也就是说它是针对一个已经不在屏幕上的状态算出来的，宿主就丢弃它。
 - `decision_id` 在一局内严格递增，brain 只回答最新的那一个。
+
+往来的其他规则：
+
+- 一条连接上依次跑多局，每局从 `hello` 到 `run_end`。brain 一侧为每局单独建一个 Harness，在 `hello` 时建好。
+- `run_id` 是对局种子的哈希（FNV-1a 64，十六进制），所以种子从不离开宿主（[Mod §9](/arch/mod/#sec-9)）。Harness 从它派生各个大脑的种子（[Harness §5](/arch/harness/#sec-5)）。
+- brain 按顺序回答决策，答完一个才读下一条消息，所以目前 `cancel` 没有可丢弃的搜索。
+- 游戏走到下一个决策或一局结束时，宿主才报告上一个动作 `executed`。在模拟器里，只有这一局失败时 `ok` 才为 false。
+- brain 还会用收到的观测核对 `obs_hash`：对不上说明 JSON 在传输中走了样，回答 `error`。
 
 ## 3. 观测
 
@@ -177,25 +190,22 @@ reward_seen{…}  shop_seen{…}  event_page{…}
 
 ## 6. 推荐
 
-大脑对一条 `decision` 的回答。这部分在规划中。
+大脑对一条 `decision` 的回答。`Wire.cs` 里已经有它，只是还没有 `Facts` 和 `Degraded`，这两项在规划中：
 
 ```csharp
-// Planned.
-public sealed record Recommendation
-{
-    public required long DecisionId { get; init; }
-    public required string ObsHash { get; init; }
-    public required string Action { get; init; }                 // one of legal[]
-    public required IReadOnlyList<string> Plan { get; init; }    // rest of the turn/screen, for highlight + narration
-    public required IReadOnlyList<Candidate> Candidates { get; init; }
-    public required IReadOnlyList<Fact> Facts { get; init; }     // the only source for explanations
-    public bool Degraded { get; init; }                          // worker loss etc.; docs: harness §7
-}
+public sealed record Recommendation(long DecisionId, string ObsHash, string Action, string Brain,
+    IReadOnlyList<string>? Plan = null,          // rest of the turn/screen, for highlight + narration
+    IReadOnlyList<Candidate>? Candidates = null) : WireMessage;
+// Planned:
+//   IReadOnlyList<Fact> Facts                   // the only source for explanations
+//   bool Degraded                               // worker loss etc.; docs: harness §7
 public sealed record Candidate(string Action, double Value, double Ci, int Samples);
-public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Values, bool Exact); // Exact only in SL
+public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Values, bool Exact); // planned; Exact only in SL
 ```
 
-- `Action` 是该决策的合法动作之一。
+- `Action` 是该决策的合法动作之一；选牌提示的回答是 `pick:i,j,…`。
+- `Brain` 说明是哪个大脑做的选择，取自冠军的路由表（[Harness §4](/arch/harness/#sec-4)）。宿主按大脑统计决策数写进对局记录，其中占位策略的决策数必须为零（[评估 §3](/arch/evaluation/#sec-3)）。
+- `Plan` 和 `Candidates` 只来自会搜索的大脑，与决策日志里一样（[Harness §6](/arch/harness/#sec-6)）。
 - `Plan` 是本回合或本界面剩下的步骤，用于高亮和解说。
 - `Candidates` 列出评估过的动作，每个带有 `Value`、`Ci`（置信区间）和样本数 `Samples`。
 - `Facts` 是解释的唯一来源。

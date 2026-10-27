@@ -12,7 +12,7 @@ Harness is the dispatcher of the decision process. On one side is the **host**, 
 
 <Aside title="Status">
 
-Partly built. `Sts2Ai.Harness` holds the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)), `PooledPimc` (the combat brain with its NoSL worlds searched in the pool) and `Dispatcher`, which routes a run's decisions to brains, draws their seeds and writes the decision log ([§4](#sec-4)–[§6](#sec-6)). SimWorker's `run` plays every run through it, in process. Planned: the public record ([§3](#sec-3)); the message handling of a separate decision process (decision ids, stale requests); wall-clock budgets and CI allocation; degraded answers.
+Partly built. `Sts2Ai.Harness` holds the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)), `PooledPimc` (the combat brain with its NoSL worlds searched in the pool) and `Dispatcher`, which routes a run's decisions to brains, draws their seeds and writes the decision log ([§4](#sec-4)–[§6](#sec-6)). SimWorker's `run` plays every run through it, in process or over the wire: `BrainServer` is Harness's end of the host–brain messages ([Protocol §2](/en/arch/protocol/#sec-2)), and answers decisions in order. Planned: the public record ([§3](#sec-3)); stale requests and cancels while a search runs; wall-clock budgets and CI allocation; degraded answers.
 
 </Aside>
 
@@ -58,7 +58,7 @@ sequenceDiagram
   X-->>H: recommendation
 ```
 
-- The host is the mod (R4, the real game) or the run-host worker (R1–R3, simulation); R1–R4 are the rungs of the [sim-to-real ladder](/en/arch/evaluation/#sec-1). Harness cannot tell the two apart. This is the project's rule "swap the world, not the brain".
+- The host is the mod (R4, the real game) or the run-host worker (R1–R3, simulation); R1–R4 are the rungs of the [sim-to-real ladder](/en/arch/evaluation/#sec-1). Harness cannot tell the two apart. This is the project's rule "swap the world, not the brain". SimWorker's `brain` command runs Harness alone behind its socket, and `run --brain` hosts runs against it ([Simulator §5](/en/arch/simulator/#sec-5)).
 - Search workers are separate from the host process. In self-play the host worker only holds the true run; search runs on other workers.
 - Single-process mode (bench, selftest): Harness and a worker run in one process, with the same interfaces and no IPC.
 
@@ -116,7 +116,7 @@ The budget is counted in branches (one branch is one simulated line of play in a
 "Anytime" means the search can be stopped at any moment and still has a best answer to give.
 
 - Results computed in parallel are merged in a fixed order (world index, then candidate index), never in the order they finish, so timing cannot change the answer.
-- The brain's RNG comes from Harness: `brainSeed = SplitMix64(Hash(runId), decisionIndex)`, where the decision index counts every decision of the run, card prompts included, and the run id is the run's seed string. The brain never draws from the game's own random streams. The champion's version joins the hash once brains have versions. PIMC's build seed is the brain seed in hex.
+- The brain's RNG comes from Harness: `brainSeed = SplitMix64(Hash(runId), decisionIndex)`, where the decision index counts every decision of the run, card prompts included, and the run id is a hash of the run's seed, so the brain never sees the seed ([Protocol §2](/en/arch/protocol/#sec-2)). The brain never draws from the game's own random streams. The champion's version joins the hash once brains have versions. PIMC's build seed is the brain seed in hex.
 - Allocation: stop when the top two candidates are separated by more than their confidence intervals (CI); otherwise add samples or depth ([Combat brain §5](/en/arch/combat-brain/#sec-5)).
 
 ## 6. Decision log
@@ -124,7 +124,7 @@ The budget is counted in branches (one branch is one simulated line of play in a
 One JSON line per decision:
 
 ```json
-{"run": "VHC9ZPHEBWM1", "decision_id": 4, "env": "NoSL", "surface": "combat", "brain": "pimc",
+{"run": "97eef296cd6717a2", "decision_id": 4, "env": "NoSL", "surface": "combat", "brain": "pimc",
  "obs_hash": "67f99089ea94de49", "legal": 7, "chosen": "play:2", "plan": ["play:3:1", "play:5", "end_turn"],
  "candidates": [{"action": "play:2", "value": 0.673, "ci": 0.0, "samples": 8}, …],
  "budget": {"worlds": 8, "nodes_per_world": 300}, "seed": 16058448958323553205, "elapsed_ms": 104.6}
@@ -155,7 +155,7 @@ Today: a worker that dies is restarted and gets its request once more ([Simulato
 ## 8. Tests
 
 1. Routing coverage: N simulated runs hit every surface, with a fallback count of 0. Exists: `run` lists the surfaces never reached, and `Dispatcher` throws on an uncovered one.
-2. Reproducibility: replaying a decision log gives identical recommendations. Exists in part: `run --check` plays each seed twice and compares the decision logs, every field but `elapsed_ms`.
+2. Reproducibility: replaying a decision log gives identical recommendations. Exists in part: `run --check` plays each seed twice, the second time over the wire to a Harness in the same process, and compares the decision logs, every field but `elapsed_ms`.
 3. NoSL counterfactual at Harness level: same record, different hidden state → same recommendation ([Environments §7](/en/arch/environments/#sec-7)).
 4. Stale handling: reordered or duplicated requests → only the latest is answered.
 

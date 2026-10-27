@@ -111,7 +111,7 @@ For each surface, the mod path and the matching simulator path are listed side b
 
 ## 5. Brain link
 
-- **Socket:** the Unix domain socket `$XDG_RUNTIME_DIR/sts2ai/brain.sock`, carrying JSON lines ([Protocol §2](/en/arch/protocol/#sec-2)). The mod is the client and Harness is the server. Harness is started by the user, or spawned by the mod from a configured path; the mod never runs search itself.
+- **Socket:** the Unix domain socket `$XDG_RUNTIME_DIR/sts2ai/brain.sock`, carrying JSON lines ([Protocol §2](/en/arch/protocol/#sec-2)). The mod is the client and Harness is the server. Harness is started by the user, or spawned by the mod from a configured path; the mod never runs search itself. The server exists: SimWorker's `brain` command listens there, and `run --brain` already hosts simulated runs against it ([Simulator §5](/en/arch/simulator/#sec-5)).
 - **Environment:** the `hello` message carries the environment (NoSL or SL, see [Environments](/en/arch/environments/)), chosen in the mod config at run start. It stays fixed for the whole run and is logged.
 - **Brain unreachable:** in assist mode the panel says "no brain"; in auto-play the mod pauses.
 

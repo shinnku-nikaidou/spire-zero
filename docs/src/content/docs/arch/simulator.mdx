@@ -221,7 +221,9 @@ flowchart TD
 
 `IsOver = RunState.IsGameOver`。一局在胜利房间里结束即为获胜。
 
-**命令行**：`run [--n] [--start] [--seed | --seeds FILE] [--asc] [--policy play|random|pimc] [--macro random|l0] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--log FILE] [--records FILE]`，外加配装选项。每个决策都经过 Harness 的 `Dispatcher`（[Harness §4](/arch/harness/#sec-4)），会话把它当作自己的战斗、提示和宏观策略。用 `pimc` 时，每个战斗决策都在 worker 进程池里搜索（NoSL），除非 `--workers` 另行指定，每个世界一个 worker；这一局本身一直活在本进程里。`--macro` 选择战斗之外所有决策的大脑：`random`（占位策略）或 `l0`（宏观大脑）；战斗中的选牌提示仍然随机。`--seeds` 从 `--start` 起跑一个种子文件里的种子，`--records` 为每局写一条对局记录，供 `report` 使用（[评估 §4](/arch/evaluation/#sec-4)、[§6](/arch/evaluation/#sec-6)）。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。`--log` 写出决策日志（[Harness §6](/arch/harness/#sec-6)）；`--check` 也比较两遍的日志。
+**命令行**：`run [--n] [--start] [--seed | --seeds FILE] [--asc] [--policy play|random|pimc] [--macro random|l0] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--log FILE] [--records FILE] [--brain SOCKET]`，外加配装选项。每个决策都经过 Harness 的 `Dispatcher`（[Harness §4](/arch/harness/#sec-4)），会话把它当作自己的战斗、提示和宏观策略。用 `pimc` 时，每个战斗决策都在 worker 进程池里搜索（NoSL），除非 `--workers` 另行指定，每个世界一个 worker；这一局本身一直活在本进程里。`--macro` 选择战斗之外所有决策的大脑：`random`（占位策略）或 `l0`（宏观大脑）；战斗中的选牌提示仍然随机。`--seeds` 从 `--start` 起跑一个种子文件里的种子，`--records` 为每局写一条对局记录，供 `report` 使用（[评估 §4](/arch/evaluation/#sec-4)、[§6](/arch/evaluation/#sec-6)）。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。`--log` 写出决策日志（[Harness §6](/arch/harness/#sec-6)）。`--check` 把每个种子再打一遍，这一遍走传输协议（[协议 §2](/arch/protocol/#sec-2)），连到同一进程里一个线程上运行的 `BrainServer`，冠军相同，然后比较两遍：轨迹、观测、对局记录和决策日志。
+
+`--brain SOCKET` 则让这些对局连到在 SOCKET 上等待的 brain 去打，与将来的 Mod 一样：每局发送 `hello`，带上由种子哈希得到的对局 id，每个决策都连同它的观测一起发出。冠军由 brain 决定，所以 `--policy`、`--macro`、预算选项和 `--log` 都属于 brain。`brain [--socket PATH] [--policy …] [--macro …] [--worlds] [--nodes] [--workers] [--log FILE]` 就是这个 brain：单独运行的 Harness，一次服务一个连上来的宿主，默认套接字是 `$XDG_RUNTIME_DIR/sts2ai/brain.sock`。它自己不需要游戏；pimc 的搜索 worker 各自启动游戏。它每局打印一行，附上它的 worker 的游戏错误，宿主的对局记录不计入这些错误。
 
 ### 5.1 开局
 
@@ -369,7 +371,7 @@ worker 就是同一个可执行文件以 `serve` 启动。`WorkerPool`（在 `St
 
 **已有，在 `run` 中：**
 
-- `--check` 在同一进程内重放每一局，比较轨迹、摘要、地图哈希、观测哈希和决策日志（除了其中的耗时）；每个观测还必须能完整地经过 JSON 往返；
+- `--check` 在同一进程内重放每一局，重放走传输协议，连到进程内的 brain，然后比较轨迹、摘要、地图哈希、观测哈希、对局记录和决策日志（除了其中的耗时）；每个观测还必须能完整地经过 JSON 往返；
 - 报告列出从未到达的决策界面、驱动方失败（没有兜底：未知界面直接抛异常）、游戏的 `Log.Error` 输出，以及 pump 空闲等待（真实时间等待）。出现任何一项，退出码就是 1；
 - 跨进程：同样的种子换一种进程划分再跑，对比每局的输出行。
 

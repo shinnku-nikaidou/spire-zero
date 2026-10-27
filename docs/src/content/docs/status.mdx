@@ -22,8 +22,9 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | 战斗世界 API | 完成：NoSL 世界从观测构建，SL 世界通过重放真实战斗得到（[模拟器 §6](/arch/simulator/#sec-6)） |
 | worker 进程池 + 进程间通信 | PIMC 的 NoSL 世界已完成：每个世界一个 JSON 行请求，结果与进程内相同，8 个 worker 快 4.5 倍（[模拟器 §8](/arch/simulator/#sec-8)） |
 | 战斗大脑 v0 | 完成：PIMC，搜索一个回合，手工叶子估值。与最好的占位策略比胜率：第 1 幕弱怪 + 普通 100% 对 85%，第 1 幕精英 36.7% 对 16.7%，第 2 幕 50% 对 16.7%（[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)）。在局外决策随机的整局里，平均打到第 13.1 层（对 8.6 层），24 局里有 10 局打到第 1 幕 Boss（对 1 局）（[§7.2](/arch/combat-brain/#sec-7.2)） |
-| Harness 调度 | 进程内的整局已完成：没有兜底的决策界面路由，由 run id 和决策序号得到的大脑种子，决策日志；`run --check` 能完全重现它（[Harness §4](/arch/harness/#sec-4)–[§6](/arch/harness/#sec-6)） |
-| 消息信封、事件、公开记录 | 规划中 |
+| Harness 调度 | 整局已完成：没有兜底的决策界面路由，由 run id 和决策序号得到的大脑种子，决策日志；`run --check` 能完全重现它（[Harness §4](/arch/harness/#sec-4)–[§6](/arch/harness/#sec-6)） |
+| 宿主–brain 传输 | 完成：[协议 §2](/arch/protocol/#sec-2) 的消息走 Unix 套接字。`brain` 提供服务，`run --brain` 作为宿主连上它跑整局。一局在进程内和走传输协议时打得完全一样：轨迹、观测、对局记录和决策日志都相同，PIMC 也是（[模拟器 §5](/arch/simulator/#sec-5)） |
+| 事件、公开记录 | 规划中 |
 | 宏观大脑、价值函数 | 只有占位实现 |
 | Mod | 已有探针构建，未安装 |
 
@@ -54,7 +55,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 6. 宏观大脑 L0 和 v0 价值函数；R1/R2 完整对局；评估流水线。
 
-7. Mod：加载、观测，用占位大脑显示面板，打通 R4 流水线；然后是执行器和自动开局驱动；R3 ≡ R4 等价测试。
+7. Mod：加载、观测，用占位大脑显示面板，打通 R4 流水线；然后是执行器和自动开局驱动；R3 ≡ R4 等价测试。传输协议的 brain 一端已经完成（`brain`，[协议 §2](/arch/protocol/#sec-2)）。
 
 8. 节点检查点、SL 克隆和封存；SL 排行榜。
 

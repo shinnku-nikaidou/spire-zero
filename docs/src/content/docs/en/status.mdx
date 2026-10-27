@@ -22,8 +22,9 @@ As of 2026-10-27:
 | combat world API | done: NoSL worlds built from the observation, the SL world by replay of the real combat ([Simulator §6](/en/arch/simulator/#sec-6)) |
 | worker pool + IPC | done for PIMC's NoSL worlds: one JSON-lines request per world, the same result as in process, 4.5 times faster on 8 workers ([Simulator §8](/en/arch/simulator/#sec-8)) |
 | combat brain v0 | done: PIMC with a one-turn search and a hand-made leaf. Win rate against the best placeholder: 100% vs 85% on act 1 weak + regular, 36.7% vs 16.7% on act 1 elites, 50% vs 16.7% on act 2 ([Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)). In whole runs with random macro decisions it reaches floor 13.1 on average against 8.6, and the act 1 boss in 10 of 24 runs against 1 ([§7.2](/en/arch/combat-brain/#sec-7.2)) |
-| Harness dispatch | done for runs in process: surface routing with no fallback, brain seeds from the run id and decision index, the decision log; `run --check` replays it exactly ([Harness §4](/en/arch/harness/#sec-4)–[§6](/en/arch/harness/#sec-6)) |
-| wire envelopes, events, public record | planned |
+| Harness dispatch | done for whole runs: surface routing with no fallback, brain seeds from the run id and decision index, the decision log; `run --check` replays it exactly ([Harness §4](/en/arch/harness/#sec-4)–[§6](/en/arch/harness/#sec-6)) |
+| host–brain wire | done: the messages of [Protocol §2](/en/arch/protocol/#sec-2) over a Unix socket. `brain` serves them, and `run --brain` hosts runs against it. A run plays the same in process and over the wire: trace, observations, record and decision log, with PIMC too ([Simulator §5](/en/arch/simulator/#sec-5)) |
+| events, public record | planned |
 | macro brain, value function | placeholders only |
 | mod | probe builds exist, not installed |
 
@@ -54,7 +55,7 @@ As of 2026-10-27:
 
 6. Macro brain L0 and a v0 value function; R1/R2 full runs; the evaluation pipeline.
 
-7. Mod: load, observe, and show the panel with the placeholder brain, giving the R4 pipeline; then the executor and the auto-run driver; the R3 ≡ R4 equivalence test.
+7. Mod: load, observe, and show the panel with the placeholder brain, giving the R4 pipeline; then the executor and the auto-run driver; the R3 ≡ R4 equivalence test. The brain's end of the wire is done (`brain`, [Protocol §2](/en/arch/protocol/#sec-2)).
 
 8. Node checkpoint, SL clone and seal; the SL leaderboard.
 

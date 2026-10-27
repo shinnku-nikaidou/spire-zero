@@ -24,15 +24,21 @@ namespace Sts2Ai.SimWorker;
 ///                                          cost of restoring a combat and of one search branch
 ///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--policy play|random|pimc] [--macro random|l0]
 ///       [--worlds 8] [--nodes 300] [--workers W] [--max-decisions 20000] [--check] [--trace] [--obs]
-///       [--log decisions.jsonl] [--records runs.jsonl]
+///       [--log decisions.jsonl] [--records runs.jsonl] [--brain SOCKET]
 ///                                          whole runs through Harness. Combat prompts are random; --macro picks the
 ///                                          brain of every decision outside combat (l0: the macro brain with V v0); --check plays
-///                                          each seed twice and compares, observations and decision logs included (each
-///                                          observation must survive a JSON round trip); --obs prints them; --log writes
-///                                          the decision log; reports results, hashes and surface coverage.
+///                                          each seed again over the wire, to a brain in this process, and compares,
+///                                          observations, records and decision logs included (each observation must
+///                                          survive a JSON round trip); --obs prints them; --log writes the decision
+///                                          log; reports results, hashes and surface coverage.
 ///                                          pimc searches each combat decision (NoSL) in W worker processes (default:
 ///                                          one per world). --seeds plays the seeds of a seed file, from --start, all
-///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6)
+///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6).
+///                                          --brain plays against the brain listening at SOCKET instead, which picks the
+///                                          champion (--check then replays against it too)
+///   brain [--socket $XDG_RUNTIME_DIR/sts2ai/brain.sock] [--policy ...] [--macro ...] [--worlds 8] [--nodes 300]
+///         [--workers W] [--log decisions.jsonl]
+///                                          the brain alone: serves the hosts that connect, one at a time (docs: protocol §2)
 ///   report --seeds FILE --records A.jsonl[,B.jsonl] --out PATH [--previous OLD.json]
 ///                                          the evaluation report over those records: PATH.json and PATH.md
 ///   seeds --base N --n 300                 a seed file's seeds: MakeSeed(N, 0..n-1), one per line
@@ -52,10 +58,11 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | panel | serve | report | seeds"); return 2; }
-        // These two need no game.
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | serve | report | seeds"); return 2; }
+        // These need no game.
         if (args[0] == "report") return Report(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "seeds") return Seeds(ParseOptions(args.Skip(1).ToArray()));
+        if (args[0] == "brain") return Brain(ParseOptions(args.Skip(1).ToArray()));
         // A worker's stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
         TextWriter? wire = null;
         if (args[0] == "serve")
@@ -228,14 +235,28 @@ internal static class Cli
         using var logFile = opts.TryGetValue("log", out var logPath) ? new StreamWriter(logPath) : null;
         using var records = opts.TryGetValue("records", out var recordsPath) ? new StreamWriter(recordsPath) { AutoFlush = true } : null;
         bool log = check || logFile != null;
-        var policy = opts.GetValueOrDefault("policy", "play");
-        if (policy != "pimc" && !Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (pimc, {string.Join(", ", Policies.CombatNames)})");
-        string macroBrain = opts.GetValueOrDefault("macro", "random");
-        if (macroBrain is not ("random" or "l0")) return Fail($"unknown macro brain {macroBrain} (random, l0)");
-        var budget = new Budget(Int(opts, "worlds", 8), Int(opts, "nodes", 300));
-        // The run holds this process's one live game, so the brain can only search in workers.
-        using var workerPool = policy == "pimc" ? new WorkerPool(SelfCommand(), Int(opts, "workers", budget.Worlds)) : null;
+        var brainPath = opts.GetValueOrDefault("brain");
+        if (brainPath != null && (opts.Keys.Intersect(["policy", "macro", "worlds", "nodes", "workers", "log"]).FirstOrDefault() is { } brainOption))
+            return Fail($"--{brainOption} belongs to the brain at {brainPath}, not to this host");
+        ChampionOptions? champion = null;
+        try
+        {
+            if (brainPath == null) champion = ChampionOptions.Parse(opts);
+        }
+        catch (ArgumentException e)
+        {
+            return Fail(e.Message);
+        }
+        using var workerPool = champion?.Pool();
         var pooled = workerPool == null ? null : new PooledPimc(workerPool);
+        var harness = champion?.Harness(pooled, log);
+        using var remote = brainPath == null ? null : new BrainConnection(brainPath);
+        // --check plays each seed again over the wire: to the same brain if it is remote, else to a brain server in
+        // this process with the same champion, whose decision log is compared too.
+        Dispatcher? served = null;
+        using var checkWire = check && remote == null ? BrainConnection.InProcess(new BrainServer(hello => served = harness!(hello))) : null;
+        Func<Hello, IRunBrain> firstBrain = remote != null ? hello => WireBrain.Start(remote.Wire, hello) : hello => new LocalBrain(harness!(hello));
+        Func<Hello, IRunBrain> secondBrain = hello => WireBrain.Start((remote ?? checkWire)!.Wire, hello);
         var loadout = Loadout.Parse(opts.GetValueOrDefault("deck"), opts.GetValueOrDefault("relics"), opts.GetValueOrDefault("potions"),
             opts.GetValueOrDefault("hp"), opts.GetValueOrDefault("max-hp"));
 
@@ -243,27 +264,13 @@ internal static class Cli
         var surfaces = new Dictionary<string, int>();
         var failures = new Dictionary<string, int>();
         int mismatches = 0, gameErrors = 0;
-        Console.WriteLine($"run: {n} runs, policy {policy}" +
-                          (pooled != null ? $" worlds {budget.Worlds} nodes {budget.NodesPerWorld} on {workerPool!.Count} workers" : "") + $", macro {macroBrain}" +
-                          $", game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
+        Console.WriteLine($"run: {n} runs, {(champion?.ToString() ?? $"brain at {brainPath}")}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
             var setup = new RunSetup(opts.GetValueOrDefault("character", "SILENT"), seeds?[i] ?? MakeSeed(seed, i), Int(opts, "asc", 0), loadout);
             var started = clock.Elapsed;
-            // Placeholders draw from the run's generator, so a seed plays the same run whatever is logged.
-            Dispatcher Harness(Random rng)
-            {
-                var combat = pooled?.Route(budget) ?? CombatRoute.Of(policy, Policies.Combat(policy, rng));
-                var random = new RandomChoices(rng);
-                if (macroBrain == "l0")
-                {
-                    var macro = new MacroBrain(RunValue.Initial);
-                    return new Dispatcher(setup.Seed, PlayEnvironment.NoSL, combat, new("random", random), new("l0", macro), new("l0", macro), log);
-                }
-                return new Dispatcher(setup.Seed, PlayEnvironment.NoSL, combat, new("random", random), new("random", new RandomMacro(rng)), new("random", random), log);
-            }
-            var first = PlayRun(pump, setup, Harness, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
+            var first = PlayRun(pump, setup, firstBrain, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
             if (pooled != null) first.Errors.AddRange(pooled.TakeGameErrors());
             foreach (var entry in first.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
             var ms = (clock.Elapsed - started).TotalMilliseconds;
@@ -278,21 +285,23 @@ internal static class Cli
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
             foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {FirstLine(e)}");
             if (!check) continue;
-            var second = PlayRun(pump, setup, Harness, maxDecisions, trace: false, observe, printObservations: false);
+            var second = PlayRun(pump, setup, secondBrain, maxDecisions, trace: false, observe, printObservations: false);
             if (pooled != null) pooled.TakeGameErrors();
+            var secondLog = served?.Log ?? second.Log;
             // Each decision's observation is shown before its action, so they pair up by index.
             int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k =>
                 first.Trace[k] != second.Trace[k] || first.Observations.ElementAtOrDefault(k) != second.Observations.ElementAtOrDefault(k), -1);
             bool same = first.Trace.Count == second.Trace.Count && first.Summary == second.Summary &&
-                first.MapHashes.SequenceEqual(second.MapHashes) && first.Observations.SequenceEqual(second.Observations);
+                first.MapHashes.SequenceEqual(second.MapHashes) && first.Observations.SequenceEqual(second.Observations) &&
+                ProtocolJson.Serialize(first.Record) == ProtocolJson.Serialize(second.Record);
             static string Timeless(DecisionEntry e) => ProtocolJson.Serialize(e with { ElapsedMs = 0 });
-            bool sameLog = first.Log.Select(Timeless).SequenceEqual(second.Log.Select(Timeless));
+            bool sameLog = first.Log.Select(Timeless).SequenceEqual(secondLog.Select(Timeless));
             if (diverged < 0 && same && sameLog) continue;
             mismatches++;
             Console.WriteLine(diverged >= 0
                 ? first.Trace[diverged] != second.Trace[diverged] ? $"  NOT DETERMINISTIC: decision {diverged}: {first.Trace[diverged]} vs {second.Trace[diverged]}"
                 : $"  NOT DETERMINISTIC: observation {diverged} ({first.Trace[diverged]}) differs"
-                : !same ? $"  NOT DETERMINISTIC: {first.Trace.Count} vs {second.Trace.Count} decisions; {second.Summary}"
+                : !same ? $"  NOT DETERMINISTIC: {first.Trace.Count} vs {second.Trace.Count} decisions; {second.Summary}; {second.Failure}"
                 : "  NOT DETERMINISTIC: the decision logs differ");
         }
         clock.Stop();
@@ -305,30 +314,105 @@ internal static class Cli
         var missing = typeof(Surfaces).GetFields().Select(f => (string)f.GetValue(null)!).Where(s => !surfaces.ContainsKey(s)).ToList();
         if (missing.Count > 0) Console.WriteLine("surfaces never reached: " + string.Join(" ", missing));
         foreach (var (msg, count) in failures.OrderByDescending(kv => kv.Value)) Console.WriteLine($"  failure x{count}: {msg}");
-        if (check) Console.WriteLine($"determinism: {n - mismatches}/{n} runs identical on replay");
+        if (check) Console.WriteLine($"determinism: {n - mismatches}/{n} runs identical on replay over the wire");
         Console.WriteLine($"game Log.Error lines: {gameErrors}" + (workerPool != null ? $"; worker restarts: {workerPool.Restarts}" : ""));
         return failures.Count == 0 && mismatches == 0 && gameErrors == 0 ? 0 : 1;
     }
 
+    /// <summary>
+    /// The brain alone (docs: protocol §2): serves the hosts that connect to the socket, one at a time, with the champion
+    /// --policy and --macro name. Prints a line per run, with the game errors of its search workers.
+    /// </summary>
+    private static int Brain(Dictionary<string, string> opts)
+    {
+        var path = opts.GetValueOrDefault("socket") ??
+                   Path.Combine(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") ?? Path.GetTempPath(), "sts2ai", "brain.sock");
+        ChampionOptions champion;
+        try
+        {
+            champion = ChampionOptions.Parse(opts);
+        }
+        catch (ArgumentException e)
+        {
+            return Fail(e.Message);
+        }
+        using var workerPool = champion.Pool();
+        var pooled = workerPool == null ? null : new PooledPimc(workerPool);
+        using var logFile = opts.TryGetValue("log", out var logPath) ? new StreamWriter(logPath) { AutoFlush = true } : null;
+        var server = new BrainServer(champion.Harness(pooled, logFile != null), (hello, harness, end) =>
+        {
+            foreach (var entry in harness.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
+            var errors = pooled?.TakeGameErrors() ?? [];
+            Console.WriteLine($"{hello.Run.RunId} ({hello.Role}) {end.Reason} floor {end.Floor}, {harness.Brains.Values.Sum()} decisions" +
+                              (errors.Count > 0 ? $", game Log.Error lines in workers: {errors.Count}" : ""));
+            foreach (var e in errors.Take(3)) Console.WriteLine($"  game error: {FirstLine(e)}");
+        });
+        Console.WriteLine($"brain: {champion}, listening on {path}");
+        server.Listen(path);
+        return 0;
+    }
+
+    /// <summary>The champion that --policy and --macro name (docs: harness §4), and pimc's budget.</summary>
+    private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers)
+    {
+        public static ChampionOptions Parse(Dictionary<string, string> opts)
+        {
+            var policy = opts.GetValueOrDefault("policy", "play");
+            if (policy != "pimc" && !Policies.CombatNames.Contains(policy))
+                throw new ArgumentException($"unknown policy {policy} (pimc, {string.Join(", ", Policies.CombatNames)})");
+            var macro = opts.GetValueOrDefault("macro", "random");
+            if (macro is not ("random" or "l0")) throw new ArgumentException($"unknown macro brain {macro} (random, l0)");
+            var budget = new Budget(Int(opts, "worlds", 8), Int(opts, "nodes", 300));
+            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds));
+        }
+
+        /// <summary>pimc's search workers. A run holds its process's one live game, so search runs in other processes.</summary>
+        public WorkerPool? Pool() => Policy == "pimc" ? new WorkerPool(SelfCommand(), Workers) : null;
+
+        /// <summary>
+        /// One Harness per run. Placeholders draw from one generator seeded by the run id, so a run plays the same
+        /// whatever is logged, in this process or over the wire. There is no SL champion yet.
+        /// </summary>
+        public Func<Hello, Dispatcher> Harness(PooledPimc? pooled, bool log) => hello =>
+        {
+            if (hello.Env != nameof(PlayEnvironment.NoSL)) throw new NotSupportedException($"no champion for {hello.Env} yet");
+            var rng = new Random(unchecked((int)ProtocolJson.Hash(hello.Run.RunId)));
+            var combat = pooled?.Route(Budget) ?? CombatRoute.Of(Policy, Policies.Combat(Policy, rng));
+            var random = new RandomChoices(rng);
+            if (Macro == "l0")
+            {
+                var l0 = new MacroBrain(RunValue.Initial);
+                return new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("random", random), new("l0", l0), new("l0", l0), log);
+            }
+            return new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("random", random), new("random", new RandomMacro(rng)), new("random", random), log);
+        };
+
+        public override string ToString() =>
+            $"policy {Policy}{(Policy == "pimc" ? $" worlds {Budget.Worlds} nodes {Budget.NodesPerWorld} on {Workers} workers" : "")}, macro {Macro}";
+    }
+
     /// <param name="Observations">Per decision, its observation's hash (when observing).</param>
-    /// <param name="Log">Harness's decision log, when logging.</param>
+    /// <param name="Log">Harness's decision log, when logging in this process.</param>
     /// <param name="Record">The run's record, its game errors and time still to fill in.</param>
     private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes,
         IReadOnlyList<ulong> Observations, IReadOnlyList<DecisionEntry> Log, string? Failure, List<string> Errors, RunRecord Record);
 
     /// <summary>
-    /// One run to the end (or the decision cap) through the Harness that <paramref name="harness"/> builds on one
-    /// generator, seeded by the run's seed, so the seed alone gives the same run.
+    /// One run to the end (or the decision cap), against the brain that <paramref name="brains"/> gives for the run's
+    /// hello: its id is a hash of the seed, so the seed alone gives the same run.
     /// Observing checks that each observation survives a JSON round trip, and keeps its hash.
     /// </summary>
-    private static RunResult PlayRun(Pump pump, RunSetup setup, Func<Random, Dispatcher> harness, int maxDecisions, bool trace, bool observe, bool printObservations)
+    private static RunResult PlayRun(Pump pump, RunSetup setup, Func<Hello, IRunBrain> brains, int maxDecisions, bool trace, bool observe, bool printObservations)
     {
-        var rng = new Random(unchecked((int)CombatSession.StableHash(setup.Seed)));
-        var dispatcher = harness(rng);
+        var hello = new Hello(HeadlessGame.GameVersion, nameof(PlayEnvironment.NoSL), "worker",
+            new RunHeader(RunHeader.IdOf(setup.Seed), setup.Character, setup.Ascension));
+        IRunBrain? brain = null;
         var observations = new List<ulong>();
         RunSession? session = null;
+        RunResult result;
         try
         {
+            brain = brains(hello);
             Action<Observation>? observed = !observe ? null : obs =>
             {
                 var json = ProtocolJson.Serialize(obs);
@@ -336,7 +420,7 @@ internal static class Cli
                 if (printObservations) Console.WriteLine($"  obs {observations.Count}: {json}");
                 observations.Add(ProtocolJson.Hash(obs));
             };
-            session = RunSession.Start(pump, setup, dispatcher, dispatcher, dispatcher, observed);
+            session = RunSession.Start(pump, setup, brain, brain, brain, observed);
             int printed = 0;
             while (!session.IsOver && session.Trace.Count < maxDecisions)
             {
@@ -344,29 +428,31 @@ internal static class Cli
                 if (!trace) continue;
                 for (; printed < session.Trace.Count; printed++) Console.WriteLine($"  {printed}: {session.Trace[printed]}");
             }
-            return Result(session.Won ? "won" : session.IsOver ? "lost" : "truncated", null);
+            result = Result(session.Won ? "won" : session.IsOver ? "lost" : "truncated", null);
         }
         catch (Exception e)
         {
             if (HeadlessGame.Verbose) Console.Error.WriteLine(e);
-            return Result("failed", $"{e.GetType().Name}: {FirstLine(e.Message)}");
+            result = Result("failed", $"{e.GetType().Name}: {FirstLine(e.Message)}");
         }
         finally
         {
             session?.Dispose();
         }
+        brain?.End(new RunEnd(result.Outcome == "won", result.Record.Floor, result.Outcome), result.Failure);
+        return result;
 
         RunResult Result(string outcome, string? failure)
         {
             var steps = session?.Trace.ToList() ?? [];
             var surfaces = steps.GroupBy(s => s[..s.IndexOf(' ')]).ToDictionary(g => g.Key, g => g.Count());
-            var config = new RunConfig(HeadlessGame.GameVersion, Commit, dispatcher.Champion, dispatcher.Env.ToString(), "R1");
+            var config = new RunConfig(HeadlessGame.GameVersion, Commit, brain?.Champion ?? "none", hello.Env, "R1");
             var player = session?.Player;
             var record = new RunRecord(config, setup.Seed, setup.Character, setup.Ascension, outcome,
                 session?.Run.CurrentActIndex ?? 0, session?.Run.TotalFloor ?? 0, player?.Creature.CurrentHp ?? 0, player?.Creature.MaxHp ?? 0,
-                player?.Gold ?? 0, session?.Combats.ToList() ?? [], surfaces, new Dictionary<string, int>(dispatcher.Brains),
+                player?.Gold ?? 0, session?.Combats.ToList() ?? [], surfaces, new Dictionary<string, int>(brain?.Brains ?? new Dictionary<string, int>()),
                 session?.CardRewards ?? 0, session?.CardRewardsSkipped ?? 0, 0, failure, 0);
-            return new(outcome, session?.Summary() ?? "", steps, session?.MapHashes.ToList() ?? [], observations, dispatcher.Log.ToList(), failure,
+            return new(outcome, session?.Summary() ?? "", steps, session?.MapHashes.ToList() ?? [], observations, brain?.Log.ToList() ?? [], failure,
                 HeadlessGame.TakeErrors(), record);
         }
     }
