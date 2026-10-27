@@ -179,6 +179,7 @@ flowchart LR
 
 - Compute: 8 physical cores / 16 threads. 8 processes reach about 1,860 combats/s, against 275 in a single process ([Simulator §4](/en/arch/simulator/#sec-4)). The GPU (RTX 5070 Ti) is for value-net training only.
 - Training is Python, managed with uv, reading the JSONL logs. Inference is C# inside Brain: `RunNet` turns the run into the graph's inputs and runs the ONNX graph the trainer exports with ONNX Runtime (`Microsoft.ML.OnnxRuntime`) on the CPU, one thread, about 0.9 ms per macro decision. `CombatNet` does the same for each search leaf, in the workers. A net is defined once, in Python. The net file is JSON: the graph in base64, plus the vocabulary, the features' standardization and the test runs.
+- Code: the scripts in `learn/` take their options with Typer (`--help`) and log with loguru on stderr at `LOG_LEVEL` (INFO by default), so stdout carries only their results. A `LearnError` (bad input, a file in the way, a sim that failed) ends a script in one line with exit code 1; anything else is a bug and ends it with a traceback. The sim's command line works the same way ([Simulator §1](/en/arch/simulator/#sec-1)).
 - Reproducibility: each generation records its champion, seed sets, hyperparameters and commit. Logs go into one directory per generation, `tmp/selfplay/gN/`, outside git.
 - Weights: every file a trainer writes (`fit_value.py`, `spsa.py`, `train_value.py`, `train_combat.py`) goes to `weights/history/NAME.json` unless `--out` says otherwise, and is never overwritten, so each name is used once. Each environment's champion plays from its main names, `weights/ENV/value.json`, `leaf.json` and `combat.json`: a promotion copies the challenger's files onto them, and the champion file names them ([Evaluation §5](/en/arch/evaluation/#sec-5)). Which generation a main name holds is the name inside the file, which the champion's name shows. `weights/` is outside git, so the files live on the machine that trains them.
 - Storage: about 50 macro decisions plus a few hundred combat decisions per run, most of the bytes in the combat observations and the macro run views; not compressed yet. Old generations are pruned on demand.
@@ -189,6 +190,7 @@ flowchart LR
 2. The potential-based auxiliary terms telescope exactly.
 3. Train/deploy input parity: the deployed model reads protocol observations only, and training reads the same JSON. A V v2 net file carries test runs that `RunNet` checks on load; a combat net file carries test round starts that `CombatNet` checks the same way.
 4. Gate A/A test: a challenger that is the champion itself has nothing to gain, so the gate must not promote it more often than the SPRT false-positive rate.
+5. Unit tests of the scripts: `uv run pytest` in `learn/` (the shared helpers, the combat net's targets and inputs, where weights files go), and `uv run ruff check`. The C# side has its own ([Simulator §9](/en/arch/simulator/#sec-9)).
 
 ## 8. Open questions
 

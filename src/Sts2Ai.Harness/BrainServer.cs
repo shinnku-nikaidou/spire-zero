@@ -1,4 +1,6 @@
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
@@ -10,10 +12,12 @@ namespace Sts2Ai.Harness;
 /// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
 /// observation that does not match its hash) gets an error instead, and the host ends the run. SL node messages get
 /// no answer: one that Harness refuses fails the run's next decision. <paramref name="ended"/> gets each run's Harness at
-/// run_end.
+/// run_end. <paramref name="log"/> gets the hosts it drops.
 /// </summary>
-public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, Dispatcher, RunEnd>? ended = null)
+public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, Dispatcher, RunEnd>? ended = null, ILogger? log = null)
 {
+    private readonly ILogger _log = log ?? NullLogger.Instance;
+
     /// <summary>Serves the hosts that connect to the Unix socket at <paramref name="path"/>, one at a time, forever.</summary>
     public void Listen(string path)
     {
@@ -27,7 +31,7 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
             }
             catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException)
             {
-                Console.Error.WriteLine($"brain: dropped a host: {e.GetType().Name}: {e.Message}");
+                _log.LogWarning("dropped a host: {Type}: {Message}", e.GetType().Name, e.Message);
             }
         }
     }

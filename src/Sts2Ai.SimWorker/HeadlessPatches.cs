@@ -244,11 +244,18 @@ internal static class HeadlessPatches
     // ---- logging ----
 
     [HarmonyPatch(typeof(ConsoleLogPrinter), nameof(ConsoleLogPrinter.Print))]
-    private static class LogToStderr
+    private static class LogToLogs
     {
         private static bool Prefix(LogLevel logLevel, string text)
         {
-            if (HeadlessGame.Verbose || logLevel >= LogLevel.Warn) Console.Error.WriteLine($"[game:{logLevel}] {text}");
+            var level = logLevel switch
+            {
+                LogLevel.Error => Microsoft.Extensions.Logging.LogLevel.Error,
+                LogLevel.Warn => Microsoft.Extensions.Logging.LogLevel.Warning,
+                _ => Microsoft.Extensions.Logging.LogLevel.Debug,
+            };
+            // The extension method by its class: this file's LogLevel is the game's.
+            if (Logs.Game.IsEnabled(level)) Microsoft.Extensions.Logging.LoggerExtensions.Log(Logs.Game, level, "{Text}", text);
             return false;
         }
     }

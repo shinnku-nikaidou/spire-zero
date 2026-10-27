@@ -1,0 +1,177 @@
+{
+ "encounter": "CORPSE_SLUGS_WEAK",
+ "room": "Monster",
+ "act": 0,
+ "ascension": 0,
+ "round": 1,
+ "player": {
+  "uid": 0,
+  "character": "SILENT",
+  "hp": 70,
+  "max_hp": 70,
+  "block": 0,
+  "energy": 3,
+  "max_energy": 3,
+  "stars": 0,
+  "gold": 99,
+  "powers": [],
+  "orb_slots": 0,
+  "orbs": []
+ },
+ "hand": [
+  {
+   "id": "STRIKE_SILENT",
+   "uid": 0,
+   "cost": 1,
+   "vars": {
+    "Damage": 6
+   }
+  },
+  {
+   "id": "DEFEND_SILENT",
+   "uid": 1,
+   "cost": 1,
+   "vars": {
+    "Block": 5
+   }
+  },
+  {
+   "id": "STRIKE_SILENT",
+   "uid": 2,
+   "cost": 1,
+   "vars": {
+    "Damage": 6
+   }
+  },
+  {
+   "id": "DEFEND_SILENT",
+   "uid": 3,
+   "cost": 1,
+   "vars": {
+    "Block": 5
+   }
+  },
+  {
+   "id": "STRIKE_SILENT",
+   "uid": 4,
+   "cost": 1,
+   "vars": {
+    "Damage": 6
+   }
+  },
+  {
+   "id": "SURVIVOR",
+   "uid": 5,
+   "cost": 1,
+   "vars": {
+    "Block": 8
+   }
+  },
+  {
+   "id": "DEFEND_SILENT",
+   "uid": 6,
+   "cost": 1,
+   "vars": {
+    "Block": 5
+   }
+  }
+ ],
+ "draw": [
+  {
+   "id": "DEFEND_SILENT",
+   "cost": 1,
+   "vars": {
+    "Block": 5
+   }
+  },
+  {
+   "id": "DEFEND_SILENT",
+   "cost": 1,
+   "vars": {
+    "Block": 5
+   }
+  },
+  {
+   "id": "NEUTRALIZE",
+   "cost": 0,
+   "vars": {
+    "Damage": 3,
+    "WeakPower": 1
+   }
+  },
+  {
+   "id": "STRIKE_SILENT",
+   "cost": 1,
+   "vars": {
+    "Damage": 6
+   }
+  },
+  {
+   "id": "STRIKE_SILENT",
+   "cost": 1,
+   "vars": {
+    "Damage": 6
+   }
+  },
+  {
+   "id": "WELL_LAID_PLANS",
+   "cost": 2
+  }
+ ],
+ "discard": [],
+ "exhaust": [],
+ "potions": [
+  null,
+  null,
+  null
+ ],
+ "relics": [
+  {
+   "id": "RING_OF_THE_SNAKE"
+  },
+  {
+   "id": "ARCANE_SCROLL"
+  }
+ ],
+ "allies": [],
+ "enemies": [
+  {
+   "uid": 1,
+   "id": "CORPSE_SLUG",
+   "hp": 25,
+   "max_hp": 25,
+   "block": 0,
+   "powers": [
+    {
+     "id": "RAVENOUS_POWER",
+     "amount": 4
+    }
+   ],
+   "intents": [
+    {
+     "type": "Attack",
+     "damage": 8,
+     "hits": 1
+    }
+   ]
+  },
+  {
+   "uid": 2,
+   "id": "CORPSE_SLUG",
+   "hp": 26,
+   "max_hp": 26,
+   "block": 0,
+   "powers": [
+    {
+     "id": "RAVENOUS_POWER",
+     "amount": 4
+    }
+   ],
+   "intents": [
+    {
+     "type": "Debuff"
+    }
+   ]
+  }
+ ]
+}

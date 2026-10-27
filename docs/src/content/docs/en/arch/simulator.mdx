@@ -67,7 +67,7 @@ A transpiler is a Harmony patch that rewrites a method's IL instead of wrapping 
 
 **Running it.** Set `HOME` to a scratch directory and `DOTNET_ROOT=~/.dotnet`. The binary is `src/Sts2Ai.SimWorker/bin/Release/net9.0/Sts2Ai.SimWorker`.
 
-**CLI** (full options in the `Cli.cs` header):
+**CLI.** `--help` lists the commands and `COMMAND --help` a command's options (System.CommandLine). Each command is a class with its options; the option groups that several commands share (loadout, encounter pool, budget, leaf, champion) are in `Args.cs`. stdout carries only a command's results, which scripts read (for `serve`, the wire). Logs (Microsoft.Extensions.Logging) go to stderr, one line each, Information and up; `--verbose` adds Debug: the game's own log, and each failure's stack. Exit codes: 0 done; 1 done with failures (failed combats or runs, a gate that did not pass); 2 a mistake in the command line or in a file it names, in one line; 70 a bug, with its stack.
 
 | command | what it does |
 |---|---|
@@ -391,6 +391,8 @@ Planned requests, for run worlds and for searches that outgrow one request: open
 - `--check` also loads every node of the first run from its checkpoint and replays the node's decisions ([§7](#sec-7)). In SL both plays send the checkpoints and decisions to the brain, which searches the clone; the wire play must play the same as the one in process. The clone must show the run's observations one for one, stop at its horizon once it has travelled, and refuse to step past it. A node that matches once relic counters and statuses are left out (state the save drops, [Environments §6](/en/arch/environments/#sec-6)) is counted apart; any other difference, or a game error, fails.
 
 Results from 2026-10-26 are in [§5.3](#sec-5.3).
+
+**Exists, in `src/Sts2Ai.Tests`** (xUnit, `dotnet test src/Sts2Ai.Tests`), for what runs without the game: the move record, the leaf value, budgets, reports and the gate, Harness's routing (an illegal pick or an uncovered surface throws, the combat brain gets the moves so far, a macro decision ends them), and the command line (defaults, mistakes, the champion file's options under the ones given, a champion's options playing it again).
 
 **Planned:** the horizon counterfactual fields; an R3-vs-R4 same-seed diff once the mod logs runs.
 

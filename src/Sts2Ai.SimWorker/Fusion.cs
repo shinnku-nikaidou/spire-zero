@@ -1,3 +1,4 @@
+using System.CommandLine;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -24,20 +25,36 @@ internal static class Fusion
 {
     private const double Tie = 1e-9;
 
-    public static int Run(Pump pump, Dictionary<string, string> opts)
+    private static readonly Option<string> Log = Opt.Required<string>("--log", "decision logs, comma-separated");
+    private static readonly Option<int> N = Opt.Of("--n", 400, "decisions");
+    private static readonly Option<int> Start = Opt.Of("--start", 0, "decisions skipped first");
+    private static readonly Option<int> Every = Opt.Of("--every", 1, "takes every so many decisions");
+    private static readonly Option<int> K = Opt.Of("--k", 32, "worlds per decision");
+    private static readonly Option<int> MaxNodes = Opt.Of("--max-nodes", 5000, "a decision with a world over this many states is skipped");
+    private static readonly Option<string?> Out = Opt.Maybe<string?>("--out", "one JSON line per decision");
+
+    public static Command Command()
     {
-        if (!opts.TryGetValue("log", out var logs)) return Cli.Fail("fusion needs --log decisions.jsonl[,more]");
-        int n = Cli.Int(opts, "n", 400);
-        int start = Cli.Int(opts, "start", 0);
-        int every = Cli.Int(opts, "every", 1);
-        int k = Cli.Int(opts, "k", 32);
-        int maxNodes = Cli.Int(opts, "max-nodes", 5000);
+        var command = Opt.Command("fusion", "the fusion panel: PIMC's values against merged ones over the logs' NoSL combat decisions (docs: combat-brain §8)",
+            [Log, N, Start, Every, K, MaxNodes, Out]);
+        command.SetAction(Cli.Game(Run));
+        return command;
+    }
+
+    private static int Run(ParseResult r, Pump pump)
+    {
+        var logs = r.GetValue(Log)!;
+        int n = r.GetValue(N);
+        int start = r.GetValue(Start);
+        int every = r.GetValue(Every);
+        int k = r.GetValue(K);
+        int maxNodes = r.GetValue(MaxNodes);
         // Combat decisions with a choice, taken in NoSL by a searching brain, every --every-th of them.
         var picked = logs.Split(',').SelectMany(File.ReadLines).Select(line => JsonNode.Parse(line)!)
             .Where(e => (string?)e["surface"] == Surfaces.Combat && (string?)e["env"] == nameof(PlayEnvironment.NoSL) && (int)e["legal"]! > 1 && e["obs"] != null)
             .Where((_, j) => j % every == 0).Skip(start).Take(n).ToList();
 
-        using var output = opts.TryGetValue("out", out var outPath) ? new StreamWriter(outPath) { AutoFlush = true } : null;
+        using var output = r.GetValue(Out) is { } outPath ? new StreamWriter(outPath) { AutoFlush = true } : null;
         int measured = 0, capped = 0, revealing = 0, disagree = 0, disagreeRevealing = 0;
         double loss = 0;
         Console.WriteLine($"fusion: {picked.Count} decisions from #{start} (every {every}), K {k}, max {maxNodes} states per world, " +

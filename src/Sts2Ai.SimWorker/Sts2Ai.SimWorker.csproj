@@ -24,6 +24,9 @@
     <ProjectReference Include="../Sts2Ai.GameBridge/Sts2Ai.GameBridge.csproj" />
     <ProjectReference Include="../Sts2Ai.Brain/Sts2Ai.Brain.csproj" />
     <ProjectReference Include="../Sts2Ai.Harness/Sts2Ai.Harness.csproj" />
+    <PackageReference Include="System.CommandLine" Version="2.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.22" />
+    <InternalsVisibleTo Include="Sts2Ai.Tests" />
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>Sts2BinDir</_Parameter1>
       <_Parameter2>$(Sts2BinDir)</_Parameter2>

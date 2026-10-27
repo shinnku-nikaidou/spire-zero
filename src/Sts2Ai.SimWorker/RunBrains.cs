@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
@@ -205,7 +206,7 @@ internal sealed class BrainConnection : IDisposable
                 }
                 catch (Exception e)
                 {
-                    Console.Error.WriteLine($"brain: {e.GetType().Name}: {e.Message}");
+                    Logs.Sim.LogError("the brain in this process stopped: {Type}: {Message}", e.GetType().Name, e.Message);
                 }
             }
         }) { IsBackground = true, Name = "brain" }.Start();

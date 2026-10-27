@@ -45,12 +45,12 @@ internal sealed record Loadout(
     /// <summary>
     /// Parses comma-separated lists, where "ID*N" repeats an entry: deck "STRIKE_IRONCLAD*5,DEFEND_IRONCLAD*4,BASH+".
     /// </summary>
-    public static Loadout Parse(string? deck, string? relics, string? potions, string? hp, string? maxHp) => new(
+    public static Loadout Parse(string? deck, string? relics, string? potions, int? hp, int? maxHp) => new(
         deck == null ? null : Expand(deck).Select(CardSpec.Parse).ToList(),
         relics == null ? null : Expand(relics).ToList(),
         potions == null ? null : Expand(potions).ToList(),
-        hp == null ? null : int.Parse(hp),
-        maxHp == null ? null : int.Parse(maxHp));
+        hp,
+        maxHp);
 
     private static IEnumerable<string> Expand(string list) =>
         list.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).SelectMany(item =>

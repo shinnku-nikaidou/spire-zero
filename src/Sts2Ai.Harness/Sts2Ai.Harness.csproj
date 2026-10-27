@@ -6,5 +6,6 @@
   -->
   <ItemGroup>
     <ProjectReference Include="../Sts2Ai.Brain/Sts2Ai.Brain.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.22" />
   </ItemGroup>
 </Project>

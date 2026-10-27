@@ -14,7 +14,6 @@ namespace Sts2Ai.SimWorker;
 /// <summary>Process-wide boot of the game's model layer, and the error channel the game reports into.</summary>
 internal static class HeadlessGame
 {
-    public static bool Verbose;
     public static string GameVersion { get; private set; } = "";
 
     /// <summary>Appended to benchmark headers when framework code runs precompiled (see the csproj).</summary>
@@ -25,11 +24,10 @@ internal static class HeadlessGame
 
     private static bool _booted;
 
-    public static void Boot(bool verbose = false)
+    public static void Boot()
     {
         if (_booted) return;
         _booted = true;
-        Verbose = verbose;
         GameVersion = ReadGameVersion();
         HeadlessPatches.GameVersion = GameVersion;
 

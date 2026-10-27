@@ -67,7 +67,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 **运行方式。** 把 `HOME` 设成一个临时目录，并设 `DOTNET_ROOT=~/.dotnet`。可执行文件是 `src/Sts2Ai.SimWorker/bin/Release/net9.0/Sts2Ai.SimWorker`。
 
-**命令行**（完整选项见 `Cli.cs` 文件头）：
+**命令行。** `--help` 列出所有命令，`COMMAND --help` 列出一个命令的选项（System.CommandLine）。每个命令是一个类，带着自己的选项；几个命令共用的选项组（配装、遭遇池、预算、叶子、冠军）在 `Args.cs` 里。stdout 只输出命令的结果，供脚本读取（`serve` 的 stdout 就是线路）。日志（Microsoft.Extensions.Logging）写到 stderr，每条一行，默认 Information 及以上；`--verbose` 再加上 Debug：游戏自己的日志，以及每次失败的调用栈。退出码：0 完成；1 完成但有失败（战斗或对局失败、晋级门槛没通过）；2 命令行或它指定的文件有错，报一行；70 程序 bug，附调用栈。
 
 | 命令 | 作用 |
 |---|---|
@@ -391,6 +391,8 @@ worker 就是同一个可执行文件以 `serve` 启动。`WorkerPool`（在 `St
 - `--check` 还会把第一遍对局的每个节点从它的检查点加载出来，重放这个节点的决策（[§7](#sec-7)）。克隆必须逐个给出与原对局相同的观测，移动之后停在视野边界上，并拒绝越过边界再走一步。去掉遗物的计数和状态后才一致的节点（存档丢掉的状态，[环境 §6](/arch/environments/#sec-6)）单独计数；其他任何差异或游戏错误都算失败。SL 下两遍都把检查点和决策发给 brain，由它搜索克隆；走传输协议的一遍必须和进程内的一遍打得一样。
 
 2026-10-26 的结果见 [§5.3](#sec-5.3)。
+
+**已有，在 `src/Sts2Ai.Tests` 中**（xUnit，`dotnet test src/Sts2Ai.Tests`），覆盖不需要游戏就能运行的部分：敌人出招记录、叶子价值、预算、报告与晋级门槛、Harness 的路由（选了不合法的动作或遇到没有路由的界面就抛异常，战斗大脑拿到目前为止的出招记录，宏观决策清空这份记录），以及命令行（默认值、错误输入、冠军文件的选项垫在给出的选项之下、冠军的选项能重新打出同一个冠军）。
 
 **规划中**：视野边界反事实字段；Mod 能记录整局后，做 R3 与 R4 的同种子差异对比。
 

@@ -1,9 +1,11 @@
+using System.CommandLine;
 using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Rngs;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Runs;
+using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Harness;
@@ -33,11 +35,24 @@ internal static class SelfTest
 {
     private sealed record Recording(List<CombatSnapshot> Snapshots, List<string> Observations, List<string> Hidden, string Trace, List<string> ProtocolErrors);
 
-    public static int Run(Pump pump, Dictionary<string, string> opts)
+    private static readonly Option<int> N = Opt.Of("--n", 20, "combats");
+    private static readonly Option<int> Seed = Opt.Of("--seed", 1, "the seed base");
+    private static readonly Option<int> Workers = Opt.Of("--workers", 0, "also checks a pool of this many worker processes");
+    private static readonly PoolArgs Pool = new();
+
+    public static Command Command()
     {
-        int n = Cli.Int(opts, "n", 20);
-        int seed = Cli.Int(opts, "seed", 1);
-        var (act, rooms, pool) = Cli.Pool(opts);
+        var command = Opt.Command("selftest", "checks determinism, restore and determinize over an encounter pool", [N, Seed, Workers], Pool.Options);
+        command.SetAction(Cli.Game(Run));
+        return command;
+    }
+
+    private static int Run(ParseResult r, Pump pump)
+    {
+        int n = r.GetValue(N);
+        int seed = r.GetValue(Seed);
+        var combats = Pool.Read(r);
+        var (act, rooms, pool) = (combats.Act, combats.Rooms, combats.Encounters);
         var results = new SortedDictionary<string, (int Pass, int Fail)>();
         int drawCompared = 0, drawResampled = 0, drawMovedFromTrue = 0;
 
@@ -57,8 +72,8 @@ internal static class SelfTest
         Check("reference check sees the bridge's game references", GameAssembliesReachedFrom(typeof(Observe).Assembly).Contains("sts2"), "sts2 not found");
         for (int i = 0; i < n; i++)
         {
-            var encounter = pool[i % pool.Count];
-            var setup = Cli.Setup(opts, encounter, act, Cli.MakeSeed(seed, i));
+            var setup = combats.Setup(i, Cli.MakeSeed(seed, i));
+            var encounter = setup.Encounter;
             string label = $"#{i} {encounter.Id.Entry} {setup.Seed}";
             try
             {
@@ -106,7 +121,7 @@ internal static class SelfTest
             catch (Exception e)
             {
                 Check("no exceptions", false, $"{label}: {e.GetType().Name}: {Cli.FirstLine(e.Message)}");
-                if (HeadlessGame.Verbose) Console.Error.WriteLine(e);
+                Logs.Sim.LogDebug(e, "{Label} failed", label);
             }
             var errors = HeadlessGame.TakeErrors();
             Check("no game errors", errors.Count == 0, $"{label}: {errors.FirstOrDefault()}");
@@ -116,8 +131,8 @@ internal static class SelfTest
         RollingBoulder(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
-        int workers = Cli.Int(opts, "workers", 0);
-        if (workers > 0) PooledMatches(pump, opts, pool, act, seed, workers, Check);
+        int workers = r.GetValue(Workers);
+        if (workers > 0) PooledMatches(pump, combats, seed, workers, Check);
 
         Console.WriteLine($"draw order resampled by a different determinize seed: {drawResampled}/{drawCompared}; differs from the true order: {drawMovedFromTrue}/{drawCompared}");
         foreach (var (name, (pass, fail)) in results)
@@ -129,15 +144,15 @@ internal static class SelfTest
     /// A few decisions, each searched here and in a pool of <paramref name="workers"/> serve processes with the same
     /// seeds, with the nodes shared evenly and by halving: the candidates, their values and the plan must be the same.
     /// </summary>
-    private static void PooledMatches(Pump pump, Dictionary<string, string> opts, List<EncounterModel> pool, int act, int seed, int workers, Action<string, bool, string> check)
+    private static void PooledMatches(Pump pump, CombatPool combats, int seed, int workers, Action<string, bool, string> check)
     {
         var brain = new PimcBrain();
         using var workerPool = new WorkerPool(Cli.SelfCommand(), workers);
         var pooled = new PooledPimc(workerPool);
         for (int i = 0; i < 4; i++)
         {
-            var encounter = pool[i % pool.Count];
-            var setup = Cli.Setup(opts, encounter, act, Cli.MakeSeed(seed + 2, i));
+            var setup = combats.Setup(i, Cli.MakeSeed(seed + 2, i));
+            var encounter = setup.Encounter;
             CombatObservation obs;
             IReadOnlyList<CombatAction> legal;
             var rng = new Random(i);

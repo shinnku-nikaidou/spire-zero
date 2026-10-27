@@ -1,3 +1,4 @@
+using System.CommandLine;
 using System.Diagnostics;
 using Sts2Ai.Brain;
 
@@ -9,21 +10,33 @@ namespace Sts2Ai.SimWorker;
 /// </summary>
 internal static class ForkBench
 {
-    public static int Run(Pump pump, Dictionary<string, string> opts)
+    private static readonly Option<int> N = Opt.Of("--n", 30, "combats");
+    private static readonly Option<int> Seed = Opt.Of("--seed", 1, "the seed base");
+    private static readonly Option<int> Branches = Opt.Of("--branches", 20, "search branches from mid-combat, per combat");
+    private static readonly PoolArgs Pool = new();
+
+    public static Command Command()
     {
-        int n = Cli.Int(opts, "n", 30);
-        int seed = Cli.Int(opts, "seed", 1);
-        int branches = Cli.Int(opts, "branches", 20);
-        var (act, rooms, pool) = Cli.Pool(opts);
+        var command = Opt.Command("forkbench", "the cost of restoring a combat and of one search branch", [N, Seed, Branches], Pool.Options);
+        command.SetAction(Cli.Game(Run));
+        return command;
+    }
+
+    private static int Run(ParseResult r, Pump pump)
+    {
+        int n = r.GetValue(N);
+        int seed = r.GetValue(Seed);
+        int branches = r.GetValue(Branches);
+        var pool = Pool.Read(r);
         var restores = new List<(int Depth, double Ms)>();
         var branchMs = new List<double>();
         long rootDepths = 0, rolloutSteps = 0;
 
-        Console.WriteLine($"forkbench: {n} combats, act {act} ({rooms}: {pool.Count} encounters), {branches} branches from mid-combat, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
+        Console.WriteLine($"forkbench: {n} combats, act {pool.Act} ({pool.Rooms}: {pool.Encounters.Count} encounters), {branches} branches from mid-combat, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = new Stopwatch();
         for (int i = 0; i < n; i++)
         {
-            var setup = Cli.Setup(opts, pool[i % pool.Count], act, Cli.MakeSeed(seed, i));
+            var setup = pool.Setup(i, Cli.MakeSeed(seed, i));
             var snapshots = new List<CombatSnapshot>();
             var rng = new Random(seed * 1_000_003 + i);
             using (var session = CombatSession.Start(pump, setup, new RandomChoices(rng)))

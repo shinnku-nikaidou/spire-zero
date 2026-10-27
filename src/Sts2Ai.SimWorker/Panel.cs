@@ -1,5 +1,7 @@
+using System.CommandLine;
 using System.Diagnostics;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
@@ -18,32 +20,48 @@ namespace Sts2Ai.SimWorker;
 /// </summary>
 internal static class Panel
 {
-    private const int MaxRounds = 50;
-    private const int MaxActions = 1000;
+    private static readonly Option<int> N = Opt.Of("--n", 40, "combats");
+    private static readonly Option<int> Start = Opt.Of("--start", 0, "the first combat's index");
+    private static readonly Option<int> Seed = Opt.Of("--seed", 1, "the seed base");
+    private static readonly Option<string> Player = Opt.Of("--player", "pimc", "who plays: pimc, or a placeholder policy")
+        .AcceptOnlyFromAmong(["pimc", .. Policies.CombatNames]);
+    private static readonly Option<PlayEnvironment> Env = Opt.Of("--env", PlayEnvironment.NoSL, "pimc's environment");
+    private static readonly BudgetArgs Budget = new();
+    private static readonly Option<int> Workers = Opt.Of("--workers", 0, "searches the NoSL worlds in this many worker processes");
+    private static readonly LeafArgs Leaf = new();
+    private static readonly Option<bool> Trace = Opt.Of("--trace", false, "prints each of pimc's decisions");
+    private static readonly Option<string?> Out = Opt.Maybe<string?>("--out", "one JSON line per combat");
+    private static readonly PoolArgs Pool = new();
 
-    public static int Run(Pump pump, Dictionary<string, string> opts)
+    public static Command Command()
     {
-        int n = Cli.Int(opts, "n", 40);
-        int start = Cli.Int(opts, "start", 0);
-        int seed = Cli.Int(opts, "seed", 1);
-        var player = opts.GetValueOrDefault("player", "pimc");
-        var env = Enum.Parse<PlayEnvironment>(opts.GetValueOrDefault("env", "NoSL"), ignoreCase: true);
-        var budget = Cli.BudgetOf(opts);
-        int workers = Cli.Int(opts, "workers", 0);
-        if (player != "pimc" && !Policies.CombatNames.Contains(player)) return Cli.Fail($"unknown player {player} (pimc, {string.Join(", ", Policies.CombatNames)})");
-        if (workers > 0 && (player != "pimc" || env != PlayEnvironment.NoSL)) return Cli.Fail("--workers is for --player pimc --env NoSL");
-        var leaf = LeafChoice.Read(opts);
-        if (!leaf.IsDefault && player != "pimc") return Cli.Fail("--leaf and --combat-net are for --player pimc");
-        var (act, rooms, pool) = Cli.Pool(opts);
-        if (pool.Count == 0) return Cli.Fail("empty encounter pool");
+        var command = Opt.Command("panel", "the fixed combat panel: the same combats for every player; win rate, HP lost",
+            [N, Start, Seed, Player, Env], Budget.Options, [Workers], Leaf.Options, [Trace, Out], Pool.Options);
+        command.SetAction(Cli.Game(Run));
+        return command;
+    }
 
-        using var output = opts.TryGetValue("out", out var outPath) ? new StreamWriter(outPath) : null;
+    private static int Run(ParseResult r, Pump pump)
+    {
+        int n = r.GetValue(N);
+        int start = r.GetValue(Start);
+        int seed = r.GetValue(Seed);
+        var player = r.GetValue(Player)!;
+        var env = r.GetValue(Env);
+        var budget = Budget.Read(r);
+        int workers = r.GetValue(Workers);
+        if (workers > 0 && (player != "pimc" || env != PlayEnvironment.NoSL)) throw new CliException("--workers is for --player pimc --env NoSL");
+        var leaf = Leaf.Read(r);
+        if (!leaf.IsDefault && player != "pimc") throw new CliException("--leaf and --combat-net are for --player pimc");
+        var pool = Pool.Read(r);
+
+        using var output = r.GetValue(Out) is { } outPath ? new StreamWriter(outPath) : null;
         using var workerPool = workers > 0 ? new WorkerPool(Cli.SelfCommand(), workers, leaf.WorkerOptions()) : null;
         var pooled = workerPool == null ? null : new PooledPimc(workerPool);
         var outcomes = new Dictionary<string, int>();
         int failed = 0, gameErrors = 0;
         long decisions = 0, hpLost = 0;
-        Console.WriteLine($"panel: {n} combats from #{start}, act {act} ({rooms}: {pool.Count} encounters), player {player}" +
+        Console.WriteLine($"panel: {n} combats from #{start}, act {pool.Act} ({pool.Rooms}: {pool.Encounters.Count} encounters), player {player}" +
                           leaf.Suffix +
                           (player == "pimc" ? $" {env} budget {budget}" : "") +
                           (workerPool != null ? $" on {workerPool.Count} workers" : "") +
@@ -51,8 +69,8 @@ internal static class Panel
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
-            var encounter = pool[i % pool.Count];
-            var setup = Cli.Setup(opts, encounter, act, Cli.MakeSeed(seed, i));
+            var setup = pool.Setup(i, Cli.MakeSeed(seed, i));
+            var encounter = setup.Encounter;
             var started = clock.Elapsed;
             string outcome;
             string? failure = null;
@@ -61,7 +79,7 @@ internal static class Panel
             {
                 var rng = new Random(seed * 1_000_003 + i);
                 var result = player == "pimc"
-                    ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, leaf.Leaf, env, budget, opts.ContainsKey("trace"))
+                    ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, leaf.Leaf, env, budget, r.GetValue(Trace))
                     : PlayWithPolicy(pump, setup, PromptBrain.Instance, Policies.Combat(player, rng));
                 (outcome, hpStart, hp, rounds, steps) = result;
             }
@@ -70,7 +88,7 @@ internal static class Panel
                 outcome = "Failed";
                 failure = $"{e.GetType().Name}: {Cli.FirstLine(e.Message)}";
                 failed++;
-                if (HeadlessGame.Verbose) Console.Error.WriteLine(e);
+                Logs.Sim.LogDebug(e, "combat #{Index} failed", i);
             }
             var errors = HeadlessGame.TakeErrors();
             if (pooled != null) errors.AddRange(pooled.TakeGameErrors());
@@ -101,7 +119,7 @@ internal static class Panel
     {
         using var session = CombatSession.Start(pump, setup, choices);
         int hpStart = session.Player.Creature.CurrentHp;
-        while (!session.IsOver && session.State.RoundNumber <= MaxRounds && session.ActionsExecuted < MaxActions)
+        while (!Cli.IsCapped(session))
             session.Execute(policy.Choose(Cli.Decision(session)));
         return (Outcome(session), hpStart, session.Player.Creature.CurrentHp, session.State.RoundNumber, session.ActionsExecuted);
     }
@@ -118,7 +136,7 @@ internal static class Panel
         try
         {
             int hpStart = session.Player.Creature.CurrentHp;
-            while (!session.IsOver && session.State.RoundNumber <= MaxRounds && session.ActionsExecuted < MaxActions)
+            while (!Cli.IsCapped(session))
             {
                 var obs = session.Observation();
                 var legal = session.LegalActions();

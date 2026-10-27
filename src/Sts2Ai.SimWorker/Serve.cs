@@ -1,3 +1,6 @@
+using System.CommandLine;
+using System.Text;
+using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
@@ -6,14 +9,29 @@ namespace Sts2Ai.SimWorker;
 /// <summary>
 /// The worker side of the pool (docs: simulator §8): after the hello, one request per stdin line and one reply per
 /// stdout line, until stdin closes. Each request names its world in full, so nothing carries over between requests.
-/// Everything else the process prints goes to stderr (<see cref="Cli.Run"/> moves it there before the game boots), so
-/// the game's own output cannot get into the stream. After a request that threw, the game's state is unknown (a
+/// Everything else the process prints goes to stderr (moved there before the game boots), so the game's own output
+/// cannot get into the stream. After a request that threw, the game's state is unknown (a
 /// combat may still be set up), so the worker replies with the error and exits; the pool starts it again.
 /// </summary>
 internal static class Serve
 {
+    private static readonly LeafArgs Leaf = new();
+
+    public static Command Command()
+    {
+        var command = Opt.Command("serve", "a worker: JSON lines on stdin and stdout (docs: simulator §8)", Leaf.Options);
+        command.SetAction(r =>
+        {
+            // stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
+            var wire = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
+            Console.SetOut(Console.Error);
+            return Cli.Game((_, pump) => Run(pump, wire, Leaf.Read(r).Leaf))(r);
+        });
+        return command;
+    }
+
     /// <param name="leaf">The leaf to search with.</param>
-    public static int Run(Pump pump, TextWriter wire, ICombatLeaf leaf)
+    private static int Run(Pump pump, TextWriter wire, ICombatLeaf leaf)
     {
         var brain = new PimcBrain(leaf);
         HeadlessGame.TakeErrors();
@@ -29,7 +47,7 @@ internal static class Serve
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine(e);
+                Logs.Sim.LogError(e, "request {Id} failed", id);
                 wire.WriteLine(ProtocolJson.Serialize(new WorkerReply(id, null, Describe(e), HeadlessGame.TakeErrors())));
                 return 1;
             }

@@ -122,10 +122,10 @@ The methods named above:
 - **McNemar's test** is the standard test for paired win/loss outcomes. It looks only at the seeds where exactly one side won and asks whether those split evenly.
 - **A/A test:** run the gate with the champion against itself. There is no real difference, so it must not promote more often than the gate's designed false-positive rate; if it does, the gate is broken.
 
-**The full-run gate as built.** `gate --champion eval/champions/ENV.json --records A[,B…] [the challenger's run options] [--metric floor|win] [--delta D] [--alpha A] [--beta B] [--promote PATH]`.
+**The full-run gate as built.** `gate --champion eval/champions/ENV.json --records A[,B…] [the challenger's run options] [--metric floor|win] [--delta D] [--alpha A] [--beta B] [--promote PATH] [--env ENV]`.
 
 - **Champion file:** `eval/champions/ENV.json`, one per environment, holds the champion's name as the reports show it, the run options that play it, its report, the date it became champion, and the gate it passed (none for the first one). `run --champion FILE` and `brain --champion FILE` play it; options given on the command line override the file's.
-- **The champion's side** is its report. A seed fixes the whole run ([§4](#sec-4)), so playing the champion again would repeat those runs; the gate plays only the challenger. Both sides must come from the same game version, environment and rung.
+- **The champion's side** is its report. A seed fixes the whole run ([§4](#sec-4)), so playing the champion again would repeat those runs; the gate plays only the challenger. Both sides must come from the same game version, environment and rung; `--env` names the challenger's, and one that is not the champion file's is refused.
 - **The challenger's side** is its run records, named by the run options given; every record must have been played by them.
 - **Pairs** go by seed, in the seed set's order. The SPRT looks after each pair and stops at the first clear verdict.
 - **Metrics.** `floor` (the default while runs rarely win): the mean floor difference, challenger minus champion, as a Gaussian SPRT with H0 at 0 and H1 at δ = 1.5 floors; the variance is estimated from the pairs so far (at least 1), and no verdict comes before 10 pairs. `win`: only the pairs where exactly one side won, as in McNemar's test; the challenger's share of them, H0 at 0.5 and H1 at 0.5 + δ, δ = 0.1. α = β = 0.05.
