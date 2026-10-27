@@ -60,6 +60,9 @@ namespace Sts2Ai.SimWorker;
 ///   leaderboard [--reports eval/reports] [--champions eval/champions] [--out eval/leaderboard.md]
 ///                                          the leaderboards over every report in the folder (docs: evaluation §2)
 ///   seeds --base N --n 300                 a seed file's seeds: MakeSeed(N, 0..n-1), one per line
+///   ranks --logs decisions.jsonl[,more] [--value v.json] [--per-act 200] [--top 30]
+///                                          V's card sense: per act, each card's mean change of V when one more copy
+///                                          joins the decks of the logs' card rewards (docs: learning §1)
 ///   weights [--leaf]                       V's initial weights as a weights file, for tuning to start from
 ///                                          (--leaf: the default leaf weights of pimc instead)
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
@@ -81,11 +84,12 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | fusion | serve | report | gate | leaderboard | seeds | weights"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | fusion | serve | report | gate | leaderboard | seeds | ranks | weights"); return 2; }
         // These need no game.
         if (args[0] == "report") return Report(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "leaderboard") return Leaderboards(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "seeds") return Seeds(ParseOptions(args.Skip(1).ToArray()));
+        if (args[0] == "ranks") return Ranks(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "weights")
         {
             Console.WriteLine(args.Contains("--leaf") ? ProtocolJson.Serialize(LeafFile.Initial) : ProtocolJson.Serialize(new ValueWeights("v0", RunValue.InitialWeights)));
@@ -747,6 +751,52 @@ internal static class Cli
         if (!opts.ContainsKey("base")) return Fail("usage: seeds --base N --n 300");
         int seedBase = Int(opts, "base", 0);
         foreach (int i in Enumerable.Range(0, Int(opts, "n", 300))) Console.WriteLine(MakeSeed(seedBase, i));
+        return 0;
+    }
+
+    /// <summary>
+    /// V's card sense, for reading (docs: learning §1): the run views of the logs' card rewards, per act, each valued
+    /// with one more copy of a card and without. A card is shown as the logs' decks hold it unupgraded, and only cards
+    /// some deck held are ranked. What a card is worth depends on the deck, so this is a mean, not a test.
+    /// </summary>
+    private static int Ranks(Dictionary<string, string> opts)
+    {
+        if (!opts.TryGetValue("logs", out var logs)) return Fail("usage: ranks --logs decisions.jsonl[,more] [--value v.json]");
+        IRunValue value = opts.TryGetValue("value", out var file) ? RunValue.Read(File.ReadAllText(file)) : RunValue.Initial;
+        var views = new Dictionary<int, List<RunView>>();
+        var cards = new SortedDictionary<string, CardView>(StringComparer.Ordinal);
+        foreach (var path in logs.Split(','))
+            foreach (var line in File.ReadLines(path))
+            {
+                if (!line.Contains("\"run_view\"")) continue;
+                RunView view;
+                try
+                {
+                    using var doc = JsonDocument.Parse(line);
+                    view = doc.RootElement.GetProperty("run_view").Deserialize<RunView>(ProtocolJson.Options)!;
+                    if (doc.RootElement.GetProperty("surface").GetString() == Surfaces.CardReward)
+                        (views.TryGetValue(view.Act, out var list) ? list : views[view.Act] = []).Add(view);
+                }
+                catch (JsonException)
+                {
+                    continue; // a line still being written
+                }
+                foreach (var card in view.Deck.Where(c => c.Up is null or 0 && c.Enchant == null && c.Affliction == null))
+                    cards.TryAdd(card.Id, card with { Uid = null });
+            }
+        var rng = new Random(0);
+        int top = Int(opts, "top", 30);
+        foreach (var (act, all) in views.OrderBy(kv => kv.Key))
+        {
+            var sample = all.OrderBy(_ => rng.Next()).Take(Int(opts, "per-act", 200)).ToList();
+            var before = sample.Select(value.Value).ToList();
+            var scores = cards.Values.Select(card => (card.Id, Score: sample.Select((v, k) =>
+                value.Value(v with { Deck = [.. v.Deck, card] }) - before[k]).Average())).OrderByDescending(t => t.Score).ToList();
+            Console.WriteLine($"act {act}: {sample.Count} card rewards, {value.Name}, mean change from one more copy");
+            foreach (var (id, score) in scores.Take(top)) Console.WriteLine(FormattableString.Invariant($"  {score,8:+0.000;-0.000}  {id}"));
+            Console.WriteLine("  ...");
+            foreach (var (id, score) in scores.TakeLast(5)) Console.WriteLine(FormattableString.Invariant($"  {score,8:+0.000;-0.000}  {id}"));
+        }
         return 0;
     }
 
