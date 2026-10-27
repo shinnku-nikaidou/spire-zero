@@ -4,8 +4,8 @@ description: How the mod loads into the real game, waits until the UI is idle, a
 sidebar:
   label: Mod
   badge:
-    text: planned
-    variant: caution
+    text: partly built
+    variant: tip
 ---
 import { Aside, Badge, FileTree } from '@astrojs/starlight/components';
 
@@ -13,7 +13,7 @@ The mod is the AI's host inside the real game. The game's own mod loader loads i
 
 <Aside title="Status">
 
-Planned. A probe mod builds (local folder `tmp/mods/StsAiProbe`, manifest `affects_gameplay:false`) but has never been installed. Earlier research is in the local notes `tmp/notes/mod-research.md` and `tmp/notes/output-design.md`.
+A first slice, assist mode for combat, is built: `src/Sts2Ai.Mod` loads in the real game (v0.111.0, started from Steam), connects to the brain, asks about each idle combat state, and shows the answer in a text panel ([§3](#sec-3), [§5](#sec-5)). It has not been watched through a real combat yet. Planned: the other surfaces, the executor adapters ([§4](#sec-4)), the auto-run driver ([§7](#sec-7)), SL export ([§6](#sec-6)) and the decision log ([§8](#sec-8)). Earlier research is in the local notes `tmp/notes/mod-research.md` and `tmp/notes/output-design.md`.
 
 </Aside>
 
@@ -21,11 +21,11 @@ Planned. A probe mod builds (local folder `tmp/mods/StsAiProbe`, manifest `affec
 
 The mod is a thin host in the real game. It does four things: observe the game (through GameBridge), ask Harness over a socket, render the answer ([Output](/en/arch/output/)) and/or execute it, and log. It runs no search, no learning and no strategy inside the game process. It supports single-player only and is disabled in multiplayer.
 
-The project will be `src/Sts2Ai.Mod`. It references the game DLLs (plus GodotSharp, the C# API of the Godot engine), GameBridge and Protocol. It does not reference Brain.
+The project is `src/Sts2Ai.Mod`. It builds against the game DLLs (plus GodotSharp, the C# API of the Godot engine) and compiles in the sources of GameBridge and Protocol ([§2](#sec-2)). It does not reference Brain.
 
 ## 2. Loading
 
-How the game finds and starts a mod. Everything in this section was read in the game source <Badge text="verified" variant="success" />, except the last point.
+How the game finds and starts a mod. Everything in this section was read in the game source and holds for the mod in the game on this machine <Badge text="verified" variant="success" />.
 
 The game scans its `mods/` folder recursively for manifests, and loads the DLL named `<id>.dll` that sits next to each manifest (`Modding/ModManager.cs`). The game folder on this machine is `~/.local/share/Steam/steamapps/common/Slay the Spire 2`. Inside it:
 
@@ -34,9 +34,7 @@ The game scans its `mods/` folder recursively for manifests, and loads the DLL n
 - mods/
   - Sts2Ai/
     - Sts2Ai.json the manifest
-    - Sts2Ai.dll the mod itself (`<id>.dll`)
-    - Sts2Ai.GameBridge.dll shipped alongside (inferred, open question 1)
-    - Sts2Ai.Protocol.dll shipped alongside (inferred, open question 1)
+    - Sts2Ai.dll the mod itself (`<id>.dll`), with GameBridge and Protocol inside
 
 </FileTree>
 
@@ -45,7 +43,8 @@ The game scans its `mods/` folder recursively for manifests, and loads the DLL n
 - **Profile:** modded runs use a separate profile folder, `modded/`, copied from the vanilla (unmodded) profile on first use.
 - **Entry point:** a static method marked `[ModInitializer(nameof(Init))]`. It runs before `ModelDb.Init`, so any work that touches game models is deferred to the first frame or to `RunStarted`.
 - **Version guard:** if the game version differs from the pinned one, the mod refuses to activate and shows the reason in the panel.
-- **Dependencies:** the GameBridge and Protocol DLLs ship next to `Sts2Ai.dll` <Badge text="inferred" variant="caution" />. Needs checking: does the game's assembly load context (ALC, the .NET mechanism that decides where an assembly's dependencies are found) resolve sibling DLLs? If not, merge everything into a single DLL, ILMerge-style. This is open question 1 ([§13](#sec-13)).
+- **One DLL:** the loader lists the mod's types (`Assembly.GetTypes`) before it calls the entry point, and the game's assembly load context (the .NET mechanism that decides where an assembly's dependencies are found) does not look in the mod's folder. A type that needs a DLL shipped next to `Sts2Ai.dll` fails that listing, and the mod is not loaded; a resolver installed by `Init` comes too late. So the mod project compiles the sources of GameBridge and Protocol into `Sts2Ai.dll`.
+- **Install:** `dotnet build src/Sts2Ai.Mod/Sts2Ai.Mod.csproj -t:Install` builds the mod and copies `Sts2Ai.json` and `Sts2Ai.dll` into `mods/Sts2Ai/`. The game picks up a new mod at the next start, enabled.
 
 ## 3. Main-thread loop and idle
 
@@ -68,6 +67,8 @@ flowchart LR
 | the hash changed | sends `cancel` (the state moved on, so the brain drops that search) |
 
 `obs_hash` is a hash of the observation (FNV-1a 64 over its canonical JSON, [Protocol §2](/en/arch/protocol/#sec-2)), so a new hash means something visible changed.
+
+**One decision in flight.** The brain answers decisions in order, one at a time. So the mod keeps at most one decision open: when the state moves on before the answer comes, it sends `cancel` and waits for that answer (and drops it) before it asks about the new state. A slow brain then never falls behind a player who acts faster than it thinks.
 
 **Idle.** "Idle" means the game UI is really ready for the player's input: the game logic is waiting, no queued actions remain, nothing is still being played out, and no other screen covers the one being decided. A decision sent earlier would describe a state that is about to change, and a click might not land. Headless, GameBridge's `CombatActions.WaitingForInput` is enough; in the real game it is not ([GameBridge §2](/en/arch/gamebridge/#sec-2)). So, in addition to GameBridge's `PendingSurface` ([GameBridge §6](/en/arch/gamebridge/#sec-6)), the mod checks the screen and the Godot nodes <Badge text="verified" variant="success" />. The check must hold for at least 3 frames, so that a moment that looks idle only briefly does not count.
 
@@ -111,16 +112,18 @@ For each surface, the mod path and the matching simulator path are listed side b
 
 ## 5. Brain link
 
-- **Socket:** the Unix domain socket `$XDG_RUNTIME_DIR/sts2ai/brain.sock`, carrying JSON lines ([Protocol §2](/en/arch/protocol/#sec-2)). The mod is the client and Harness is the server. Harness is started by the user, or spawned by the mod from a configured path; the mod never runs search itself. The server exists: SimWorker's `brain` command listens there, and `run --brain` already hosts simulated runs against it ([Simulator §5](/en/arch/simulator/#sec-5)).
+- **Socket:** the Unix domain socket `~/.local/state/sts2ai/brain.sock` (under `$XDG_STATE_HOME` when that is set), carrying JSON lines ([Protocol §2](/en/arch/protocol/#sec-2)). The mod is the client and Harness is the server. Harness is started by the user, or spawned by the mod from a configured path; the mod never runs search itself. The server exists: SimWorker's `brain` command listens there, and `run --brain` already hosts simulated runs against it ([Simulator §5](/en/arch/simulator/#sec-5)).
+- **Steam's container:** Steam starts the game inside its Linux runtime container (pressure-vessel), which shares the home directory with the host but has its own `$XDG_RUNTIME_DIR`. A socket there cannot be reached from the game, so the socket lives under the home directory. The brain creates its folder readable by the user only.
 - **Environment:** the `hello` message carries the environment (NoSL or SL, see [Environments](/en/arch/environments/)), chosen in the mod config at run start. It stays fixed for the whole run and is logged.
-- **Brain unreachable:** in assist mode the panel says "no brain"; in auto-play the mod pauses.
+- **Brain unreachable:** in assist mode the panel says "no brain"; in auto-play the mod pauses. The link tries again every 2 s; a new connection starts again from `hello`.
+- **Brain error:** an `error` answer (the brain refused the run, or could not answer) turns the mod off for the rest of that run; the panel shows the message.
 
 ## 6. SL export
 
 This section runs only in the SL environment, and is switched by it. In SL the brain may search an exact clone of the current node ([Environments §6](/en/arch/environments/#sec-6)). To build that clone, a worker needs the state at node entry plus every action taken in the node since.
 
 - **Node checkpoint:** at node entry (`RunManager.RoomEntered` after a map travel, and at run start) the mod calls `RunManager.ToSave(null)` in memory (`Runs/RunManager.cs:670-709`) and sends `node_checkpoint{json}` to Harness. It never writes `current_run.save` (which is cloud-synced) or any other file under the profile.
-- **Node action log:** every action in the node, whether the mod executed it or the human played it, is sent in order as a protocol action in a `node_action` message, together with all prompt answers. In assist mode the human plays, so the mod captures human actions by comparing the state before and after with the legal set. Another option is to hook `ActionExecutor.BeforeActionExecuted` (`GameActions/ActionExecutor.cs:52`) <Badge text="inferred" variant="caution" />. The choice is open question 2 ([§13](#sec-13)).
+- **Node action log:** every action in the node, whether the mod executed it or the human played it, is sent in order as a protocol action in a `node_action` message, together with all prompt answers. In assist mode the human plays, so the mod captures human actions by comparing the state before and after with the legal set. Another option is to hook `ActionExecutor.BeforeActionExecuted` (`GameActions/ActionExecutor.cs:52`) <Badge text="inferred" variant="caution" />. The choice is open question 1 ([§13](#sec-13)).
 - **NoSL:** none of the above runs. The code is compiled in, but switched off at `hello`. Any `node_checkpoint` in a NoSL log makes the run invalid.
 
 ## 7. Auto-run driver
@@ -160,7 +163,7 @@ Mitigation:
 
 - **Heartbeat:** each patch bumps a counter.
 - **Missing context:** when a prompt arrives without a context, the mod logs it and shows a warning in the panel.
-- **Launch flag:** recommend launching the game with `DOTNET_TieredCompilation=0` <Badge text="inferred" variant="caution" />. Needs checking: whether the game's hosted runtime honors it (open question 3, [§13](#sec-13)).
+- **Launch flag:** recommend launching the game with `DOTNET_TieredCompilation=0` <Badge text="inferred" variant="caution" />. Needs checking: whether the game's hosted runtime honors it (open question 2, [§13](#sec-13)).
 
 ## 11. Prior art
 
@@ -188,6 +191,5 @@ STS2MCP (MIT license) is an existing mod that lets outside programs drive STS2 o
 
 ## 13. Open questions
 
-1. Does the game's ALC find sibling DLLs (GameBridge, Protocol)?
-2. Capturing human actions in assist mode: event hook or state diff?
-3. Does the game honor the environment variable for tiered compilation?
+1. Capturing human actions in assist mode: event hook or state diff?
+2. Does the game honor the environment variable for tiered compilation?

@@ -72,6 +72,20 @@ public sealed record RunEnd(bool Won, int Floor, string Reason) : WireMessage;
 /// <summary>Brain → host, instead of an answer: the brain could not take the run or answer the decision, so the host ends the run.</summary>
 public sealed record WireError(string Message) : WireMessage;
 
+/// <summary>Where the brain listens and the mod connects, unless told otherwise.</summary>
+public static class BrainSocket
+{
+    /// <summary>
+    /// Under the user's state directory: Steam runs the game in a container that shares the home directory with the
+    /// host, but not $XDG_RUNTIME_DIR.
+    /// </summary>
+    public static string DefaultPath => Path.Combine(
+        Environment.GetEnvironmentVariable("XDG_STATE_HOME") is { Length: > 0 } state
+            ? state
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "state"),
+        "sts2ai", "brain.sock");
+}
+
 /// <summary>One end of a connection: messages as JSON lines.</summary>
 public sealed class WireStream(Stream stream)
 {

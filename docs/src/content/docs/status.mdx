@@ -26,7 +26,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | 宿主–brain 传输 | 完成：[协议 §2](/arch/protocol/#sec-2) 的消息走 Unix 套接字。`brain` 提供服务，`run --brain` 作为宿主连上它跑整局。一局在进程内和走传输协议时打得完全一样：轨迹、观测、对局记录和决策日志都相同，PIMC 也是（[模拟器 §5](/arch/simulator/#sec-5)） |
 | 事件、公开记录 | 规划中 |
 | 宏观大脑、价值函数 | 只有占位实现 |
-| Mod | 已有探针构建，未安装 |
+| Mod | 战斗的辅助模式：能加载进真实游戏，连上大脑，对空闲的战斗状态发出询问并显示答案；还没有在真实战斗里看它跑过（[Mod §2](/arch/mod/#sec-2)、[§3](/arch/mod/#sec-3)） |
 
 ## 2. 主要缺口与风险
 
@@ -55,7 +55,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 6. 宏观大脑 L0 和 v0 价值函数；R1/R2 完整对局；评估流水线。
 
-7. Mod：加载、观测，用占位大脑显示面板，打通 R4 流水线；然后是执行器和自动开局驱动；R3 ≡ R4 等价测试。传输协议的 brain 一端已经完成（`brain`，[协议 §2](/arch/protocol/#sec-2)）。
+7. Mod：其余决策界面，然后是执行器和自动开局驱动，打通 R4 流水线；R3 ≡ R4 等价测试。加载、与大脑的连接和战斗面板已经完成（[Mod §2](/arch/mod/#sec-2)–[§5](/arch/mod/#sec-5)）。
 
 8. 节点检查点、SL 克隆和封存；SL 排行榜。
 

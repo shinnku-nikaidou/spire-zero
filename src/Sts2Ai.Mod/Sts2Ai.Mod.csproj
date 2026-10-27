@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The in-game host (docs: mod). The game's mod loader loads Sts2Ai.dll from <game>/mods/Sts2Ai/, next to its manifest;
+    the game's own assemblies come from the game at run time.
+    GameBridge and Protocol are compiled into Sts2Ai.dll: the loader lists the mod's types before the mod can run any
+    code, and its load context does not look in the mod's folder for other DLLs.
+    `dotnet build -t:Install` builds the mod and copies it there.
+  -->
+  <Import Project="../GameReferences.props" />
+
+  <PropertyGroup>
+    <AssemblyName>Sts2Ai</AssemblyName>
+    <RootNamespace>Sts2Ai.Mod</RootNamespace>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <Sts2GameDir Condition="'$(Sts2GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Slay the Spire 2</Sts2GameDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../Sts2Ai.GameBridge/**/*.cs;../Sts2Ai.Protocol/**/*.cs" Exclude="../*/bin/**;../*/obj/**" />
+    <None Include="Sts2Ai.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="Install" DependsOnTargets="Build">
+    <Copy SourceFiles="$(OutDir)Sts2Ai.dll;$(OutDir)Sts2Ai.json" DestinationFolder="$(Sts2GameDir)/mods/Sts2Ai" />
+    <Message Importance="high" Text="installed into $(Sts2GameDir)/mods/Sts2Ai" />
+  </Target>
+</Project>

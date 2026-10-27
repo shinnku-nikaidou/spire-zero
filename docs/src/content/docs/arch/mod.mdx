@@ -4,8 +4,8 @@ description: Mod 如何加载进真实游戏、等到界面空闲、通过 socke
 sidebar:
   label: Mod
   badge:
-    text: 规划中
-    variant: caution
+    text: 部分实现
+    variant: tip
 ---
 import { Aside, Badge, FileTree } from '@astrojs/starlight/components';
 
@@ -13,7 +13,7 @@ Mod 是 AI 在真实游戏里的宿主。它由游戏自带的 Mod 加载器加�
 
 <Aside title="状态">
 
-规划中。一个探针 Mod 已能构建（本地目录 `tmp/mods/StsAiProbe`，清单 `affects_gameplay:false`），但从未安装过。之前的调研见本地笔记 `tmp/notes/mod-research.md` 和 `tmp/notes/output-design.md`。
+第一块已经实现，即战斗的辅助模式：`src/Sts2Ai.Mod` 能加载进真实游戏（v0.111.0，从 Steam 启动），连上大脑，对每个空闲的战斗状态发出询问，并在一个文字面板里显示答案（[§3](#sec-3)、[§5](#sec-5)）。还没有在真实战斗里看它跑过。规划中：其余决策界面、执行适配器（[§4](#sec-4)）、自动开局驱动（[§7](#sec-7)）、SL 导出（[§6](#sec-6)）和决策日志（[§8](#sec-8)）。之前的调研见本地笔记 `tmp/notes/mod-research.md` 和 `tmp/notes/output-design.md`。
 
 </Aside>
 
@@ -21,11 +21,11 @@ Mod 是 AI 在真实游戏里的宿主。它由游戏自带的 Mod 加载器加�
 
 Mod 是真实游戏里的一个薄宿主，只做四件事：观测游戏（通过 GameBridge）、经 socket 询问 Harness、渲染答案（[输出层](/arch/output/)）和/或执行它、记日志。游戏进程里不做搜索、不做学习、不含策略。只支持单人模式，多人模式下禁用。
 
-项目将是 `src/Sts2Ai.Mod`。它引用游戏 DLL（外加 Godot 引擎的 C# API 程序集 GodotSharp）、GameBridge 和 Protocol，不引用 Brain。
+项目是 `src/Sts2Ai.Mod`。它针对游戏 DLL（外加 Godot 引擎的 C# API 程序集 GodotSharp）编译，并把 GameBridge 和 Protocol 的源码一起编译进来（[§2](#sec-2)），不引用 Brain。
 
 ## 2. 加载
 
-游戏如何发现并启动一个 Mod。除最后一条外，本节内容都在游戏源码里读过 <Badge text="已核实" variant="success" />。
+游戏如何发现并启动一个 Mod。本节内容都在游戏源码里读过，并且在本机的游戏里对这个 Mod 成立 <Badge text="已核实" variant="success" />。
 
 游戏递归扫描自己的 `mods/` 目录寻找清单（manifest），并加载每个清单旁边名为 `<id>.dll` 的 DLL（`Modding/ModManager.cs`）。本机的游戏目录是 `~/.local/share/Steam/steamapps/common/Slay the Spire 2`，其中：
 
@@ -34,9 +34,7 @@ Mod 是真实游戏里的一个薄宿主，只做四件事：观测游戏（通�
 - mods/
   - Sts2Ai/
     - Sts2Ai.json 清单
-    - Sts2Ai.dll Mod 本体（`<id>.dll`）
-    - Sts2Ai.GameBridge.dll 放在旁边一起发布（推断，见未决问题 1）
-    - Sts2Ai.Protocol.dll 放在旁边一起发布（推断，见未决问题 1）
+    - Sts2Ai.dll Mod 本体（`<id>.dll`），GameBridge 和 Protocol 都在里面
 
 </FileTree>
 
@@ -45,7 +43,8 @@ Mod 是真实游戏里的一个薄宿主，只做四件事：观测游戏（通�
 - **档案**：带 Mod 的局使用单独的档案目录 `modded/`，第一次使用时从原版（不带 Mod）的档案复制而来。
 - **入口**：一个标了 `[ModInitializer(nameof(Init))]` 的静态方法。它在 `ModelDb.Init` 之前运行，所以凡是要碰游戏模型的工作，都推迟到第一帧或 `RunStarted` 再做。
 - **版本守卫**：游戏版本与固定版本不同时，Mod 拒绝启用，并在面板上显示原因。
-- **依赖**：GameBridge 和 Protocol 的 DLL 放在 `Sts2Ai.dll` 旁边一起发布 <Badge text="推断" variant="caution" />。需要核实：游戏的程序集加载上下文（AssemblyLoadContext，ALC，.NET 里决定去哪里找程序集依赖的机制）能否找到同目录的 DLL？如果不能，就像 ILMerge 那样合并成单个 DLL。这是未决问题 1（[§13](#sec-13)）。
+- **单个 DLL**：加载器在调用入口之前先列出 Mod 的全部类型（`Assembly.GetTypes`），而游戏的程序集加载上下文（AssemblyLoadContext，.NET 里决定去哪里找程序集依赖的机制）不会去 Mod 的目录里找。只要有一个类型依赖放在 `Sts2Ai.dll` 旁边的 DLL，这一步就会失败，Mod 不被加载；在 `Init` 里装解析器也来不及。所以 Mod 项目把 GameBridge 和 Protocol 的源码编译进 `Sts2Ai.dll`。
+- **安装**：`dotnet build src/Sts2Ai.Mod/Sts2Ai.Mod.csproj -t:Install` 构建 Mod，并把 `Sts2Ai.json` 和 `Sts2Ai.dll` 复制到 `mods/Sts2Ai/`。游戏下次启动时发现新 Mod，默认启用。
 
 ## 3. 主线程循环与空闲检测
 
@@ -68,6 +67,8 @@ flowchart LR
 | 哈希变了 | 发送 `cancel`（状态已经往前走了，大脑放弃那次搜索） |
 
 `obs_hash` 是观测的哈希（对观测的规范化 JSON 取 FNV-1a 64，[协议 §2](/arch/protocol/#sec-2)），所以哈希变了就说明屏幕上能看到的东西变了。
+
+**同时只有一个决策在途**。大脑按顺序逐个回答决策。所以 Mod 最多只开着一个决策：如果答案到达之前状态就往前走了，它发送 `cancel`，并等那个答案到达（然后丢掉），才询问新的状态。这样即使玩家出手比大脑思考快，慢的大脑也不会越积越落后。
 
 **空闲**。「空闲」指游戏界面真正准备好接受玩家输入：游戏逻辑在等输入，没有排队中的动作，没有还在演出的东西，也没有别的屏幕挡在要决策的屏幕上面。如果提前发出决策，它描述的状态马上就会变，点击也可能落空。无头（headless）运行时，GameBridge 的 `CombatActions.WaitingForInput` 就够了；在真实游戏里不够（[GameBridge §2](/arch/gamebridge/#sec-2)）。所以除了 GameBridge 的 `PendingSurface`（[GameBridge §6](/arch/gamebridge/#sec-6)）之外，Mod 还要检查屏幕和 Godot 节点 <Badge text="已核实" variant="success" />。检查必须连续成立至少 3 帧，这样一闪而过的「看似空闲」不算数。
 
@@ -111,16 +112,18 @@ interface ISurfaceAdapter
 
 ## 5. 与大脑的连接
 
-- **Socket**：Unix 域套接字 `$XDG_RUNTIME_DIR/sts2ai/brain.sock`，传输 JSON lines（[协议 §2](/arch/protocol/#sec-2)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。服务端已经实现：SimWorker 的 `brain` 命令在这个套接字上等待，`run --brain` 已经作为宿主连上它跑模拟对局（[模拟器 §5](/arch/simulator/#sec-5)）。
+- **Socket**：Unix 域套接字 `~/.local/state/sts2ai/brain.sock`（设置了 `$XDG_STATE_HOME` 时放在它下面），传输 JSON lines（[协议 §2](/arch/protocol/#sec-2)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。服务端已经实现：SimWorker 的 `brain` 命令在这个套接字上等待，`run --brain` 已经作为宿主连上它跑模拟对局（[模拟器 §5](/arch/simulator/#sec-5)）。
+- **Steam 的容器**：Steam 在它的 Linux 运行时容器（pressure-vessel）里启动游戏。容器与主机共享主目录，但有自己的 `$XDG_RUNTIME_DIR`，放在那里的套接字游戏访问不到，所以套接字放在主目录下。大脑创建它的目录时，只允许用户本人访问。
 - **环境**：`hello` 消息带上环境（NoSL 或 SL，见[环境](/arch/environments/)），在开局时从 Mod 配置中选定，整局固定不变，并记入日志。
-- **连不上大脑**：辅助模式下面板显示「no brain」（没有大脑）；自动游玩时 Mod 暂停。
+- **连不上大脑**：辅助模式下面板显示「no brain」（没有大脑）；自动游玩时 Mod 暂停。连接每 2 秒重试一次；新的连接从 `hello` 重新开始。
+- **大脑出错**：收到 `error` 回答（大脑拒绝这一局，或答不出）后，Mod 在这一局余下的部分关闭，面板显示错误信息。
 
 ## 6. SL 导出
 
 本节只在 SL 环境下运行，由环境开关控制。在 SL 下，大脑可以在当前节点的精确克隆上搜索（[环境 §6](/arch/environments/#sec-6)）。为了构建这个克隆，worker 进程需要节点入口时的状态，以及此后节点内做过的每一个动作。
 
 - **节点检查点**：进入节点时（地图移动后的 `RunManager.RoomEntered`，以及开局时），Mod 在内存里调用 `RunManager.ToSave(null)`（`Runs/RunManager.cs:670-709`），把 `node_checkpoint{json}` 发给 Harness。它从不写会被云同步的 `current_run.save`，也不写档案目录下的任何其他文件。
-- **节点动作日志**：节点内的每一个动作，不论是 Mod 执行的还是人打出的，都按顺序作为协议动作放进 `node_action` 消息发出，连同所有选牌提示的回答。辅助模式下是人在操作，所以 Mod 通过比较动作前后的状态与合法动作集合，来捕获人的动作。另一种办法是钩住 `ActionExecutor.BeforeActionExecuted`（`GameActions/ActionExecutor.cs:52`） <Badge text="推断" variant="caution" />。选哪种是未决问题 2（[§13](#sec-13)）。
+- **节点动作日志**：节点内的每一个动作，不论是 Mod 执行的还是人打出的，都按顺序作为协议动作放进 `node_action` 消息发出，连同所有选牌提示的回答。辅助模式下是人在操作，所以 Mod 通过比较动作前后的状态与合法动作集合，来捕获人的动作。另一种办法是钩住 `ActionExecutor.BeforeActionExecuted`（`GameActions/ActionExecutor.cs:52`） <Badge text="推断" variant="caution" />。选哪种是未决问题 1（[§13](#sec-13)）。
 - **NoSL**：以上都不运行。代码编译在内，但在 `hello` 时关闭。NoSL 日志里只要出现任何 `node_checkpoint`，这一局就作废。
 
 ## 7. 自动跑局驱动
@@ -160,7 +163,7 @@ interface ISurfaceAdapter
 
 - **心跳**：每个补丁触发时给一个计数器加一。
 - **缺少上下文**：选牌提示到来却没有上下文时，记日志并在面板上显示警告。
-- **启动参数**：建议用 `DOTNET_TieredCompilation=0` 启动游戏 <Badge text="推断" variant="caution" />。需要核实：游戏宿主的 .NET 运行时是否认这个变量（未决问题 3，[§13](#sec-13)）。
+- **启动参数**：建议用 `DOTNET_TieredCompilation=0` 启动游戏 <Badge text="推断" variant="caution" />。需要核实：游戏宿主的 .NET 运行时是否认这个变量（未决问题 2，[§13](#sec-13)）。
 
 ## 11. 已有工作
 
@@ -188,6 +191,5 @@ STS2MCP（MIT 许可）是一个现成的 Mod，让外部程序通过 HTTP 操�
 
 ## 13. 未决问题
 
-1. 游戏的 ALC 能否找到同目录的 DLL（GameBridge、Protocol）？
-2. 辅助模式下捕获人的动作：用事件钩子，还是比较状态差异？
-3. 游戏是否认分层编译的环境变量？
+1. 辅助模式下捕获人的动作：用事件钩子，还是比较状态差异？
+2. 游戏是否认分层编译的环境变量？

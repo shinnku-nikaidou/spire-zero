@@ -1,0 +1,12 @@
+{
+  "id": "Sts2Ai",
+  "name": "STS2 AI",
+  "author": "shinnku",
+  "description": "Shows the AI's recommended action. Assist only: it never acts on the game.",
+  "version": "0.1.0",
+  "has_pck": false,
+  "has_dll": true,
+  "affects_gameplay": false,
+  "dependencies": [],
+  "min_game_version": "0.111.0"
+}

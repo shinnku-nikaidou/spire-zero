@@ -36,7 +36,7 @@ namespace Sts2Ai.SimWorker;
 ///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6).
 ///                                          --brain plays against the brain listening at SOCKET instead, which picks the
 ///                                          champion (--check then replays against it too)
-///   brain [--socket $XDG_RUNTIME_DIR/sts2ai/brain.sock] [--policy ...] [--macro ...] [--worlds 8] [--nodes 300]
+///   brain [--socket ~/.local/state/sts2ai/brain.sock] [--policy ...] [--macro ...] [--worlds 8] [--nodes 300]
 ///         [--workers W] [--log decisions.jsonl]
 ///                                          the brain alone: serves the hosts that connect, one at a time (docs: protocol §2)
 ///   report --seeds FILE --records A.jsonl[,B.jsonl] --out PATH [--previous OLD.json]
@@ -325,8 +325,7 @@ internal static class Cli
     /// </summary>
     private static int Brain(Dictionary<string, string> opts)
     {
-        var path = opts.GetValueOrDefault("socket") ??
-                   Path.Combine(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") ?? Path.GetTempPath(), "sts2ai", "brain.sock");
+        var path = opts.GetValueOrDefault("socket") ?? BrainSocket.DefaultPath;
         ChampionOptions champion;
         try
         {
