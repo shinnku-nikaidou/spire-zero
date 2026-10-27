@@ -274,10 +274,10 @@ internal static class SelfTest
 
     /// <summary>
     /// A Defect combat's observation edited to show numbers that only a model's own state holds: a Glass orb that has
-    /// fired once (3 passive, 6 evoke, against a fresh one's 4 and 8), a Silver Crucible after its third card reward
-    /// (no counter, against a fresh one's 3), Sloth after one card of its 3 (the icon shows the 1), and Nightmare on the
-    /// first card in hand. The built combat must show them, still let cards be played, and add Nightmare's copies next
-    /// turn.
+    /// fired once (3 passive, 6 evoke, against a fresh one's 4 and 8), a Silver Crucible used up (no counter after its
+    /// third card reward, and a treasure room since), Sloth after one card of its 3 (the icon shows the 1), Nightmare on
+    /// the first card in hand, and a Hardened Shell of 20 on the first enemy after 6 damage this turn (it shows 14). The
+    /// built combat must show them, still let cards be played, and add Nightmare's copies next turn.
     /// </summary>
     private static void BuildsInternalNumbers(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
     {
@@ -293,7 +293,8 @@ internal static class SelfTest
                 Orbs = [new OrbView("GLASS_ORB", 3, 6), .. obs.Player.Orbs.Take(obs.Player.OrbSlots - 1)],
                 Powers = [.. obs.Player.Powers, new PowerView("SLOTH_POWER", 1, 3), new PowerView("NIGHTMARE_POWER", 3, Card: held)],
             },
-            Relics = [.. obs.Relics, new RelicView { Id = "SILVER_CRUCIBLE" }],
+            Relics = [.. obs.Relics, new RelicView { Id = "SILVER_CRUCIBLE", Status = "Disabled", UsedUp = true }],
+            Enemies = [obs.Enemies[0] with { Powers = [.. obs.Enemies[0].Powers, new PowerView("HARDENED_SHELL_POWER", 14, 20)] }, .. obs.Enemies.Skip(1)],
         };
         using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
         check("build solves internal numbers", built.BuildDifferences.Count == 0, $"{pool[0].Id.Entry}: {string.Join("; ", built.BuildDifferences.Take(4))}");

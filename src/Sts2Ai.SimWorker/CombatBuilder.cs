@@ -286,11 +286,15 @@ internal static class CombatBuilder
         foreach (var (relic, view) in player.Relics.Zip(views))
         {
             if (relic.Id.Entry != view.Id) continue;
-            if (view.UsedUp == true)
-                Solve(() => relic.IsUsedUp ? 1 : 0, 1, FieldKnobs(relic, typeof(RelicModel)).Concat(FlagKnobs(relic, typeof(RelicModel))));
             if (view.Counter is int counter) Solve(() => relic.DisplayAmount, counter, FieldKnobs(relic, typeof(RelicModel)));
             // A hidden counter can be one that ran out, such as Silver Crucible's after its third card reward.
             else Solve(() => relic.ShowCounter ? 1 : 0, 0, FieldKnobs(relic, typeof(RelicModel)));
+            // After the counter, which can be half of it: Silver Crucible is used up once its counter ran out and a
+            // treasure room was entered. A knob that would change the counter doesn't count.
+            bool CounterAsObserved() => view.Counter is int c ? relic.ShowCounter && relic.DisplayAmount == c : !relic.ShowCounter;
+            if (view.UsedUp == true)
+                Solve(() => relic.IsUsedUp && CounterAsObserved() ? 1 : 0, 1,
+                    FieldKnobs(relic, typeof(RelicModel)).Concat(FlagKnobs(relic, typeof(RelicModel))));
             relic.Status = view.Status == null ? RelicStatus.Normal : Enum.Parse<RelicStatus>(view.Status);
             relic.IsMelted = view.Melted == true;
         }
@@ -328,8 +332,9 @@ internal static class CombatBuilder
         if (!amountKnown) yield return new(() => power.Amount, v => power.SetAmount(v, silent: true));
         foreach (var v in power.DynamicVars.Values) yield return new(() => (int)v.BaseValue, x => v.BaseValue = x);
         foreach (var knob in FieldKnobs(power, typeof(PowerModel))) yield return knob;
+        // Such as Hardened Shell's damage taken this turn, a decimal, which the amount it shows is net of.
         if (InternalData.GetValue(power) is { } data)
-            foreach (var knob in FieldKnobs(data, typeof(object))) yield return knob;
+            foreach (var knob in FieldKnobs(data, typeof(object)).Concat(DecimalKnobs(data, typeof(object)))) yield return knob;
     }
 
     /// <summary>The int fields declared by <paramref name="model"/>'s classes below <paramref name="baseType"/>.</summary>
