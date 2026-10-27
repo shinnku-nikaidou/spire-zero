@@ -16,7 +16,7 @@ public sealed record RunConfig(string Game, string Commit, string Champion, stri
 /// <summary>One run of an evaluation, as the report needs it (docs: evaluation §3).</summary>
 /// <param name="Outcome">won, lost, truncated (the decision cap), or failed (an error in the driver or a brain; never re-run).</param>
 /// <param name="Brains">Decisions per brain name, from Harness's log.</param>
-/// <param name="CardRewards">Card reward screens, and how many of them ended with no card taken.</param>
+/// <param name="CardRewards">Card rewards offered, and how many of them were left untaken (skipped, or never opened).</param>
 public sealed record RunRecord(
     RunConfig Config, string Seed, string Character, int Ascension, string Outcome, int Act, int Floor, int Hp, int MaxHp, int Gold,
     IReadOnlyList<CombatEntry> Combats, IReadOnlyDictionary<string, int> Surfaces, IReadOnlyDictionary<string, int> Brains,

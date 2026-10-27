@@ -77,8 +77,8 @@ internal sealed class RunSession : IDisposable
     /// <summary>Every combat entered so far, with the HP at its first decision.</summary>
     public IReadOnlyList<CombatEntry> Combats => _combats;
 
-    /// <summary>Card reward screens closed so far, and how many of them closed with no card taken (skipped, or an
-    /// alternative such as a sacrifice). A card reward never opened from the rewards screen is not counted.</summary>
+    /// <summary>Card rewards of the rewards screens closed so far, and how many of them were left untaken: skipped on
+    /// their screen, or never opened.</summary>
     public int CardRewards { get; private set; }
 
     public int CardRewardsSkipped { get; private set; }
@@ -201,7 +201,8 @@ internal sealed class RunSession : IDisposable
         }
 
         // A non-terminal rewards screen closes once everything on it is taken.
-        _shown.RemoveAll(s => !RewardActions.IsTerminal(s) && RunManager.Instance.RewardsSetSynchronizer.IsRewardsSetCompleted(s));
+        foreach (var completed in _shown.Where(s => !RewardActions.IsTerminal(s) && RunManager.Instance.RewardsSetSynchronizer.IsRewardsSetCompleted(s)).ToList())
+            Close(completed);
         if (_shown.Count > 0) return RewardsDecision(_shown[^1]);
         // Rewards are the only screen a started task can wait on.
         if (_running.Count > 0)
@@ -224,12 +225,22 @@ internal sealed class RunSession : IDisposable
         if (Ask(Surfaces.Rewards, RewardActions.Legal(set), () => RewardActions.Screen(set)) is not { } action) return true;
         if (action == RewardActions.Done)
         {
-            _shown.Remove(set);
+            Close(set);
             Track(RewardActions.Proceed(Run, set), "rewards proceed");
             if (RewardActions.IsTerminal(set)) _progress.Left = true;
         }
         else Track(RewardActions.Start(set, action), action);
         return true;
+    }
+
+    private void Close(RewardsSet set)
+    {
+        _shown.Remove(set);
+        foreach (var reward in set.Rewards.Where(r => r is MegaCrit.Sts2.Core.Rewards.CardReward))
+        {
+            CardRewards++;
+            if (!reward.SuccessfullySelected) CardRewardsSkipped++;
+        }
     }
 
     private bool MapDecision()
@@ -392,11 +403,6 @@ internal sealed class RunSession : IDisposable
             () => RewardActions.CardRewardScreen(cards, alternatives));
         var answer = RewardActions.CardRewardAnswer(cards, alternatives, action);
         if (answer.alternative is { } used && RewardActions.KeepsScreenOpen(used)) _spentAlternatives.Add(used);
-        else
-        {
-            CardRewards++;
-            if (answer.card == null) CardRewardsSkipped++;
-        }
         return answer;
     }
 
