@@ -63,6 +63,19 @@ public class MacroExplorationTests
     }, () => new Observation { Run = Fixtures.Floor1(), Screen = new TreasureScreen { Relics = [] } });
 
     [Fact]
+    public void ARemovalIsWorthOnlyWhatTheGameLetsBeRemoved()
+    {
+        // Removing the Eternal BAD would be worth the most, but the game offers only A; without A the deck is worse.
+        var deck = new List<CardView> { new() { Id = "A" }, new() { Id = "BAD", Keywords = ["Eternal", "Unplayable"] } };
+        var shop = new MacroDecision(Surfaces.Shop, ["remove", "leave"], () => new Observation
+        {
+            Run = Fixtures.Floor1() with { Deck = deck },
+            Screen = new ShopScreen { Entries = [], RemovalCost = 75 },
+        });
+        Assert.Equal("leave", new MacroBrain(V).Choose(shop));
+    }
+
+    [Fact]
     public void WithoutExplorationItTakesTheBest()
     {
         var l0 = new MacroBrain(V);

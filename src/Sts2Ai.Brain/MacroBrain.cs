@@ -155,7 +155,9 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
 
     private RunView? Best(IEnumerable<RunView> runs) => runs.MaxBy(value.Value);
 
-    private RunView? BestRemoval(RunView run) => Best(Distinct(run.Deck).Select(c => run with { Deck = Without(run.Deck, c) }));
+    /// <summary>The best of the removals the game offers: an Eternal card cannot be removed.</summary>
+    private RunView? BestRemoval(RunView run) =>
+        Best(Distinct(run.Deck).Where(c => c.Keywords?.Contains("Eternal") != true).Select(c => run with { Deck = Without(run.Deck, c) }));
 
     private RunView? BestUpgrade(RunView run) => Best(Distinct(run.Deck).Where(c => c.Upgraded != null).Select(c => Upgrade(run, c)));
 
