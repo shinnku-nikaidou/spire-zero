@@ -163,7 +163,7 @@ Each cell is the win rate, with the mean HP lost per win in brackets. HP lost is
 
 ### 7.2 Whole runs
 
-The brain also plays the combats of whole runs: `run --policy pimc` ([Simulator §5](/en/arch/simulator/#sec-5)) keeps the run live in the host and searches each combat decision in the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)). Card prompts in combat go to `p0`, for both players; the results below were measured while they were still answered at random. The seed set is `promotion-1` (200 runs, Silent A0, [Evaluation §4](/en/arch/evaluation/#sec-4)), the budget 8 × 300, and the macro decisions come from the random placeholder or from L0 ([Macro brain §2](/en/arch/macro-brain/#sec-2)):
+The brain also plays the combats of whole runs: `run --policy pimc` ([Simulator §5](/en/arch/simulator/#sec-5)) keeps the run live in the host and searches each combat decision in the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)). Card prompts in combat go to `p0`, for both players; the first four rows below were measured while they were still answered at random, the last two with `p0`. The seed set is `promotion-1` (200 runs, Silent A0, [Evaluation §4](/en/arch/evaluation/#sec-4)), the budget 8 × 300, and the macro decisions come from the random placeholder or from L0 ([Macro brain §2](/en/arch/macro-brain/#sec-2)):
 
 ```bash
 Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0 --records pimc-l0.jsonl
@@ -175,10 +175,14 @@ Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0
 | PIMC NoSL | random | 13.68 | 14 | 73 | 1 | 0 |
 | `play` | L0 | 11.72 | 12 | 54 | 0 | 0 |
 | PIMC NoSL | L0 | 18.50 | 17 | 175 | 15 | 0 |
+| `play`, prompts `p0` | L0 | 11.90 | 12 | 60 | 0 | 0 |
+| PIMC NoSL, prompts `p0` | L0 | 19.34 | 17 | 177 | 19 | 0 |
 
 PIMC raises the floor under either macro brain, and L0 under either combat policy. With both, the runs that reach the act 1 boss enter it with 93% of their HP on average (58% with random macro decisions), and 15 reach the act 2 boss. No run wins yet. PIMC took 41–50 s per run, four runs at a time with 8 workers each.
 
 The reports are in `eval/reports/` ([Evaluation §6](/en/arch/evaluation/#sec-6)), from commit `18fdb07`. Five of the 400 PIMC runs failed, each in a world built wrong from the observation: a spent Silver Crucible's hidden counter (three runs), a Glass orb's numbers, and Sloth's limit, which only its tooltip shows (the world allowed fewer cards a turn than the real combat, and a legal play was illegal in it). All three are fixed since ([Simulator §3](/en/arch/simulator/#sec-3), [Protocol §1](/en/arch/protocol/#sec-1)). The 4 game errors come from the game: a card that Mayhem plays can stop early without taking itself off the stack of its choice context, and the game logs the mismatch when Mayhem takes itself off.
+
+With `p0` (commit `c239f12`), PIMC + L0 has no failed run and no game error, enters the act 1 boss with 93% of its HP on average, and skips 43.0% of its card rewards. It passed the gate against `play` + L0 after 14 pairs, by 8.21 floors on average, and is the NoSL champion since 2026-10-27 ([Evaluation §5](/en/arch/evaluation/#sec-5)). It took 75.7 s per run, four runs at a time with 8 workers each, beside other jobs. A first try at `3a74a7b` was void: an exception in one worker left its game set up, and the 24 runs after it failed; a worker now exits after a request that throws ([Simulator §8](/en/arch/simulator/#sec-8)).
 
 ## 8. Open questions
 
