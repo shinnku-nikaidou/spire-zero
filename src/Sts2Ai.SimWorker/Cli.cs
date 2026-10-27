@@ -22,7 +22,7 @@ namespace Sts2Ai.SimWorker;
 ///                                          checks determinism, restore and determinize over an encounter pool
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
-///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--policy play|random|pimc] [--macro random|l0]
+///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--env NoSL|SL] [--policy play|random|pimc] [--macro random|l0]
 ///       [--worlds 8] [--nodes 300] [--workers W] [--max-decisions 20000] [--check] [--trace] [--obs]
 ///       [--log decisions.jsonl] [--records runs.jsonl] [--brain SOCKET]
 ///                                          whole runs through Harness. Combat prompts are random; --macro picks the
@@ -32,8 +32,8 @@ namespace Sts2Ai.SimWorker;
 ///                                          survive a JSON round trip), and replays each node from its checkpoint (the
 ///                                          SL clone, docs: simulator §7); --obs prints them; --log writes the decision
 ///                                          log; reports results, hashes and surface coverage.
-///                                          pimc searches each combat decision (NoSL) in W worker processes (default:
-///                                          one per world). --seeds plays the seeds of a seed file, from --start, all
+///                                          pimc searches each combat decision in W worker processes (default: one
+///                                          per world): NoSL worlds, or in SL the node's clone. --seeds plays the seeds of a seed file, from --start, all
 ///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6).
 ///                                          --brain plays against the brain listening at SOCKET instead, which picks the
 ///                                          champion (--check then replays against it too)
@@ -42,6 +42,8 @@ namespace Sts2Ai.SimWorker;
 ///                                          the brain alone: serves the hosts that connect, one at a time (docs: protocol §2)
 ///   report --seeds FILE --records A.jsonl[,B.jsonl] --out PATH [--previous OLD.json]
 ///                                          the evaluation report over those records: PATH.json and PATH.md
+///   leaderboard [--reports eval/reports] [--out eval/leaderboard.md]
+///                                          the leaderboards over every report in the folder (docs: evaluation §2)
 ///   seeds --base N --n 300                 a seed file's seeds: MakeSeed(N, 0..n-1), one per line
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
 ///         [--worlds 8] [--nodes 300] [--workers 0] [--trace] [--out results.jsonl]
@@ -59,9 +61,10 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | serve | report | seeds"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | serve | report | leaderboard | seeds"); return 2; }
         // These need no game.
         if (args[0] == "report") return Report(ParseOptions(args.Skip(1).ToArray()));
+        if (args[0] == "leaderboard") return Leaderboards(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "seeds") return Seeds(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "brain") return Brain(ParseOptions(args.Skip(1).ToArray()));
         // A worker's stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
@@ -583,6 +586,16 @@ internal static class Cli
         File.WriteAllText(outPath + ".json", report.Json());
         var markdown = report.Markdown(previous);
         File.WriteAllText(outPath + ".md", markdown);
+        Console.Write(markdown);
+        return 0;
+    }
+
+    private static int Leaderboards(Dictionary<string, string> opts)
+    {
+        var reports = Directory.GetFiles(opts.GetValueOrDefault("reports", "eval/reports"), "*.json").Order()
+            .Select(path => ProtocolJson.Deserialize<EvalReport>(File.ReadAllText(path))).ToList();
+        var markdown = Leaderboard.Markdown(reports);
+        File.WriteAllText(opts.GetValueOrDefault("out", "eval/leaderboard.md"), markdown);
         Console.Write(markdown);
         return 0;
     }

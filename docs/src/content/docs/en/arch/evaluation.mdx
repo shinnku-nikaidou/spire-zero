@@ -12,7 +12,7 @@ Evaluation answers two questions: how strong is the AI (the leaderboards), and d
 
 <Aside title="Status">
 
-R1 full-run evaluations exist: `run --seeds FILE --records FILE` plays a seed set and writes one record per run, `report` turns the records into the report of [§6](#sec-6) with the metrics of [§3](#sec-3), and the first promotion and final sets are registered ([§4](#sec-4)). The combat panel exists too ([§5](#sec-5), [Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)). Planned: the act-level and SPRT gates, the leaderboards, and rungs R2–R4.
+R1 full-run evaluations exist: `run --seeds FILE --records FILE` plays a seed set and writes one record per run, `report` turns the records into the report of [§6](#sec-6) with the metrics of [§3](#sec-3), and the first promotion and final sets are registered ([§4](#sec-4)). The combat panel exists too ([§5](#sec-5), [Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)), and `leaderboard` ranks the reports ([§2](#sec-2)). Planned: the act-level and SPRT gates, and rungs R2–R4.
 
 </Aside>
 
@@ -51,6 +51,7 @@ A leaderboard holds the results of an environment's champion (the best accepted 
 
 - The two champions share the macro brain and V; their combat brains differ ([Environments §5](/en/arch/environments/#sec-5)). A new V changes both champions, so it is gated in each environment on its own.
 - Also reported: the SL − NoSL win-rate delta, which is the value of in-node information. This is the formal version of the omniscient-vs-resampled ablation in plan v1 (local note `tmp/notes/plan.md`). For reference, spire-mentor (a prior-art project) lost 22.8–25.5 percentage points (pp) of win rate without its cheat, which covered the whole run. Ours is node-level only, so we expect a smaller delta.
+- `leaderboard [--reports eval/reports] [--out eval/leaderboard.md]` builds the leaderboards from the reports: per seed set and rung, one table per environment, ranked by win rate and then mean floor, with void reports last; partial reports are left out. Below them, for each champion with a report in both environments, the SL − NoSL difference on the same seeds, paired by seed: win rate and floor reached, each with a 95% interval. Until gates exist, every report is on the board, not only accepted champions. `eval/leaderboard.md` is committed with the reports.
 
 <Aside type="caution" title="Never mix environments">
 

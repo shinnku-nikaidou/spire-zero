@@ -12,7 +12,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-R1 整局评估已经可用：`run --seeds FILE --records FILE` 跑完一个种子集，每局写一条记录；`report` 把这些记录做成 [§6](#sec-6) 的报告，指标见 [§3](#sec-3)；第一组晋级种子和最终种子已经登记（[§4](#sec-4)）。战斗测试集也已就绪（[§5](#sec-5)，[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)）。规划中：幕级门槛和 SPRT 门槛、排行榜，以及 R2–R4。
+R1 整局评估已经可用：`run --seeds FILE --records FILE` 跑完一个种子集，每局写一条记录；`report` 把这些记录做成 [§6](#sec-6) 的报告，指标见 [§3](#sec-3)；第一组晋级种子和最终种子已经登记（[§4](#sec-4)）。战斗测试集也已就绪（[§5](#sec-5)，[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)），`leaderboard` 给报告排名（[§2](#sec-2)）。规划中：幕级门槛和 SPRT 门槛，以及 R2–R4。
 
 </Aside>
 
@@ -51,6 +51,7 @@ R1 整局评估已经可用：`run --seeds FILE --records FILE` 跑完一个种�
 
 - 两个冠军共用宏观大脑和 V，只有战斗大脑不同（[环境 §5](/arch/environments/#sec-5)）。新的 V 会同时改变两个冠军，所以要在每种环境里分别过门槛。
 - 同时报告 SL − NoSL 的胜率差，也就是节点内信息的价值。这是计划 v1（本地笔记 `tmp/notes/plan.md`）里「全知 vs 重采样」消融实验的正式版本。作为参考：spire-mentor（一个前人项目）去掉它的作弊（覆盖整局）后，胜率下降了 22.8–25.5 个百分点（pp）；我们的作弊只到节点级，所以预计差值更小。
+- `leaderboard [--reports eval/reports] [--out eval/leaderboard.md]` 从报告生成排行榜：每个种子集和阶梯级别下，每个环境一张表，按胜率、再按平均层数排名，作废的报告排在最后；不完整的报告不列入。表下面，对两种环境都有报告的每个冠军，给出同一组种子上按种子配对的 SL − NoSL 差值：胜率和到达层数，各带 95% 区间。门槛实现之前，榜上列出所有报告，而不只是已接受的冠军。`eval/leaderboard.md` 和报告一起提交。
 
 <Aside type="caution" title="不要混用环境">
 
