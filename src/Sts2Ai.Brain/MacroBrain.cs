@@ -18,6 +18,26 @@ public sealed class MacroBrain(RunValue value) : IMacroPolicy, IChoicePolicy
         return decision.Legal.MaxBy(a => Value(obs, a)) ?? throw new InvalidOperationException("no legal action");
     }
 
+    /// <summary>
+    /// On the map, the rest of the act's route after <paramref name="action"/>: each next point along the map's paths as
+    /// <see cref="Choose(MacroDecision)"/> would take it if nothing else changed, up to the boss.
+    /// </summary>
+    public IReadOnlyList<string> Plan(MacroDecision decision, string action)
+    {
+        var obs = decision.Observation;
+        if (obs.Screen is not MapScreen || Split(action).Verb != "map") return [];
+        var points = obs.Run.Map.Points.ToDictionary(p => new Coord(p.Col, p.Row));
+        var route = new List<string>();
+        while (true)
+        {
+            obs = obs with { Run = After(obs, action) };
+            var next = points[obs.Run.Map.Visited[^1]].Next;
+            if (next.Count == 0) return route;
+            action = next.Select(c => $"map:{c.Col},{c.Row}").MaxBy(a => Value(obs, a))!;
+            route.Add(action);
+        }
+    }
+
     public IReadOnlyList<int> Choose(ChoiceDecision decision)
     {
         var choice = decision.Choice;

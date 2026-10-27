@@ -13,7 +13,7 @@ The output layer turns the brain's answer into something the player sees, or som
 
 <Aside title="Status">
 
-A first stand-in is built: the mod's text panel shows the recommended action, the rest of the turn's plan and the top candidates on every surface, named as the game names them ([Mod §3](/en/arch/mod/#sec-3)). The first highlight is built too: a ring that follows the recommended map point ([§3](#sec-3)), with no path preview yet. The rest is planned. Background notes are in the local note `tmp/notes/output-design.md`; the Godot node names in it were verified in the game source. Godot node classes (`N*` types) are cited by class name only: each name is unique in the decompiled source, so find the file by name.
+A first stand-in is built: the mod's text panel shows the recommended action, the rest of the turn's plan and the top candidates on every surface, named as the game names them ([Mod §3](/en/arch/mod/#sec-3)). The first highlight is built too: on the map, a ring on the recommended point and a line along the route the brain plans after it, up to the boss ([§3](#sec-3)). The rest is planned. Background notes are in the local note `tmp/notes/output-design.md`; the Godot node names in it were verified in the game source. Godot node classes (`N*` types) are cited by class name only: each name is unique in the decompiled source, so find the file by name.
 
 </Aside>
 
@@ -21,7 +21,7 @@ A first stand-in is built: the mod's text panel shows the recommended action, th
 
 Three consumers read one `Recommendation` ([Protocol §6](/en/arch/protocol/#sec-6)); semi-auto combines two of them. The brain never knows which mode is on. The parts of the recommendation they use:
 
-- `Plan`: the rest of the turn or screen, as a list of actions (`plan[0]` is the next one);
+- `Plan`: the rest of the turn or screen, or on the map the rest of the act's route, as a list of actions (`plan[0]` is the next one);
 - `Candidates`: the actions considered, each with its value, confidence interval and sample count;
 - `Facts`: the numbers an explanation may use; the only source for explanations.
 

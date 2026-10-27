@@ -77,7 +77,7 @@ L1 处理难分高下的选择，使用评估时的预算。当 L0 排名前两�
 
 在对局世界出现之前，`MacroBrain` 只根据界面上显示的内容预测每个后状态，不跑游戏代码，然后选 V 最高的选项；打平时取第一个合法动作。
 
-- **地图**：把这个点加进路径。V 的地图特征从这里算起：如果之后每一步都随机走，到 Boss 之前预计会遇到几个精英、休息处、商店、宝箱和 `?`（还不是上面说的最优 k 条路径特征）。
+- **地图**：把这个点加进路径。V 的地图特征从这里算起：如果之后每一步都随机走，到 Boss 之前预计会遇到几个精英、休息处、商店、宝箱和 `?`（还不是上面说的最优 k 条路径特征）。它的计划是本幕剩下的路线：沿着地图上的路径，假设别的都不变，它在之后每一步会选哪个点，一直到 Boss；Mod 会把它画出来（[Mod §3](/arch/mod/#sec-3)）。用 V v0 时，它之后会一直按这条路线走：一次地图决策的各个选项只在地图特征上不同，而只有位置会改变它们。
 - **奖励、选卡奖励、卡包、宝箱、商店购买**：加上金币、药水、遗物或牌，并扣掉价格。
 - **会打开一次选择的选项**（选卡奖励、删牌）按其中最好的那一选估值，所以一个打开后会被跳过的选择不会被打开。选卡奖励的牌列在奖励界面上：这些牌在界面出现之前就已经掷好，打开看一眼也没有任何代价（[协议 §3](/arch/protocol/#sec-3)）。
 - **休息处**：选项上显示的回复量；锻造升级一张牌。
@@ -116,12 +116,12 @@ public interface IMacroBrain
 
 public sealed record MacroDecisionResult(
     string First,                          // one of legal[]
-    IReadOnlyList<string> Plan,            // rest of this screen (shop buys, reward claims)
+    IReadOnlyList<string> Plan,            // rest of this screen (shop buys, reward claims), or of the act's route on the map
     IReadOnlyList<Candidate> Candidates,   // value, CI, samples per first action
     IReadOnlyList<Fact> Facts);            // e.g. deck delta, expected HP at boss, P(win) delta
 ```
 
-`First` 是现在就要执行的动作，`Plan` 是这个界面剩下的步骤，`Candidates` 是每个可能的第一步的价值、CI 和样本数，`Facts` 是用来解释这个选择的事实。
+`First` 是现在就要执行的动作，`Plan` 是这个界面剩下的步骤（在地图上是本幕剩下的路线），`Candidates` 是每个可能的第一步的价值、CI 和样本数，`Facts` 是用来解释这个选择的事实。
 
 - 战斗外的选牌提示（升级 / 变化 / 删除）和战斗内的一样，都经由 `card_choice` 决策界面到来；`ChoiceContext.Purpose` 说明这个提示的用途。Harness 按「是否在战斗中」分派。
 - 推演里使用的宏观策略是 K 更小的 L0，它不会再递归调用 L1。

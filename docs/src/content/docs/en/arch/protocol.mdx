@@ -195,7 +195,7 @@ The brain's answer to a `decision`. `Wire.cs` has it without `Facts` and `Degrad
 
 ```csharp
 public sealed record Recommendation(long DecisionId, string ObsHash, string Action, string Brain,
-    IReadOnlyList<string>? Plan = null,          // rest of the turn/screen, for highlight + narration
+    IReadOnlyList<string>? Plan = null,          // rest of the turn/screen, or of the act's route on the map
     IReadOnlyList<Candidate>? Candidates = null) : WireMessage;
 // Planned:
 //   IReadOnlyList<Fact> Facts                   // the only source for explanations
@@ -206,8 +206,8 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 
 - `Action` is one of the decision's legal actions; for a card prompt, `pick:i,j,…`.
 - `Brain` names the brain that chose it, from the champion's routing table ([Harness §4](/en/arch/harness/#sec-4)). The host counts decisions per brain for the run record, where placeholder decisions must be zero ([Evaluation §3](/en/arch/evaluation/#sec-3)).
-- `Plan` and `Candidates` come only from a searching brain, as in the decision log ([Harness §6](/en/arch/harness/#sec-6)).
-- `Plan` is the rest of the turn or screen, used for the highlight and the narration.
+- `Candidates` come only from a searching brain, and `Plan` from a brain that plans (the combat search, and the macro brain on the map), as in the decision log ([Harness §6](/en/arch/harness/#sec-6)).
+- `Plan` is the rest of the turn or screen, or on the map the rest of the act's route, used for the highlight and the narration.
 - `Candidates` lists the actions that were scored, each with its `Value`, `Ci` (confidence interval) and number of `Samples`.
 - `Facts` are the only source for explanations.
 - A fact's `Exact` flag is set only in SL, where facts may be exact outcomes ([Environments §8](/en/arch/environments/#sec-8)).

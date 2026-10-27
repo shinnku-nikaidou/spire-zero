@@ -13,10 +13,11 @@ internal static partial class Describe
 {
     public static string[] Recommendation(Recommendation answer, Observation obs)
     {
-        // The panel rings the map point the answer goes to (MapMark).
-        string ring = ActionText.Is(answer.Action, "map", out _) ? ", the purple ring on the map" : "";
-        var lines = new List<string> { $"→ {Action(answer.Action, obs)}{ring}" };
-        if (answer.Plan is { Count: > 0 } plan) lines.Add("then " + string.Join(", ", plan.Select(a => Action(a, obs))));
+        // On the map, the panel rings the point the answer goes to and draws the route after it (MapMark).
+        bool map = ActionText.Is(answer.Action, "map", out _);
+        var lines = new List<string> { $"→ {Action(answer.Action, obs)}{(map ? ", the purple ring on the map" : "")}" };
+        if (answer.Plan is { Count: > 0 } plan)
+            lines.Add(map ? "then the purple line to the boss" : "then " + string.Join(", ", plan.Select(a => Action(a, obs))));
         if (answer.Candidates is { Count: > 1 } candidates)
             lines.Add(string.Join("   ", candidates.Take(3).Select(c => $"{Action(c.Action, obs)} {c.Value:0.0}±{c.Ci:0.0}")));
         return [.. lines];
@@ -24,11 +25,12 @@ internal static partial class Describe
 
     private static string Action(string action, Observation obs)
     {
+        // A combat potion action carries its target too ("potion:SLOT:TARGET"); the combat names it.
+        if (obs.Screen is CombatScreen { Combat: var combat }) return Combat(action, combat);
         if (ActionText.Is(action, "potion", out var arg)) return "drink " + Potion(obs, arg);
         if (ActionText.Is(action, "discard_potion", out arg)) return "discard " + Potion(obs, arg);
         return obs.Screen switch
         {
-            CombatScreen { Combat: var combat } => Combat(action, combat),
             CardChoiceScreen { Choice: var choice } => Pick(action, choice),
             MapScreen => Map(action, obs.Run.Map),
             RewardsScreen rewards => Reward(action, rewards),

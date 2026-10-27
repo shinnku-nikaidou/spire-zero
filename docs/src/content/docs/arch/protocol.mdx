@@ -195,7 +195,7 @@ reward_seen{…}  shop_seen{…}  event_page{…}
 
 ```csharp
 public sealed record Recommendation(long DecisionId, string ObsHash, string Action, string Brain,
-    IReadOnlyList<string>? Plan = null,          // rest of the turn/screen, for highlight + narration
+    IReadOnlyList<string>? Plan = null,          // rest of the turn/screen, or of the act's route on the map
     IReadOnlyList<Candidate>? Candidates = null) : WireMessage;
 // Planned:
 //   IReadOnlyList<Fact> Facts                   // the only source for explanations
@@ -206,8 +206,8 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 
 - `Action` 是该决策的合法动作之一；选牌提示的回答是 `pick:i,j,…`。
 - `Brain` 说明是哪个大脑做的选择，取自冠军的路由表（[Harness §4](/arch/harness/#sec-4)）。宿主按大脑统计决策数写进对局记录，其中占位策略的决策数必须为零（[评估 §3](/arch/evaluation/#sec-3)）。
-- `Plan` 和 `Candidates` 只来自会搜索的大脑，与决策日志里一样（[Harness §6](/arch/harness/#sec-6)）。
-- `Plan` 是本回合或本界面剩下的步骤，用于高亮和解说。
+- `Candidates` 只来自会搜索的大脑，`Plan` 来自会规划的大脑（战斗搜索，以及地图上的宏观大脑），与决策日志里一样（[Harness §6](/arch/harness/#sec-6)）。
+- `Plan` 是本回合或本界面剩下的步骤，在地图上是本幕剩下的路线，用于高亮和解说。
 - `Candidates` 列出评估过的动作，每个带有 `Value`、`Ci`（置信区间）和样本数 `Samples`。
 - `Facts` 是解释的唯一来源。
 - 事实的 `Exact` 标记只在 SL 中设置，因为 SL 的事实可以是确切结果（[环境 §8](/arch/environments/#sec-8)）。

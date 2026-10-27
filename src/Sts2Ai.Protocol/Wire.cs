@@ -56,7 +56,8 @@ public sealed record DecisionRequest(long DecisionId, string ObsHash, string Sur
 
 /// <summary>Brain → host, the answer to a decision (docs: protocol §6).</summary>
 /// <param name="Brain">The brain that decided, from the champion's routing table.</param>
-/// <param name="Plan">The rest of the turn after <paramref name="Action"/>, from a searching brain.</param>
+/// <param name="Plan">What the brain planned after <paramref name="Action"/>: the rest of the turn from a searching
+/// combat brain, the rest of the act's route from the macro brain on the map.</param>
 /// <param name="Candidates">The first actions it scored, best first.</param>
 public sealed record Recommendation(long DecisionId, string ObsHash, string Action, string Brain,
     IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null) : WireMessage;

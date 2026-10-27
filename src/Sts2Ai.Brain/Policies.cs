@@ -68,6 +68,9 @@ public interface IMacroPolicy
 {
     /// <summary>One of <see cref="MacroDecision.Legal"/>.</summary>
     string Choose(MacroDecision decision);
+
+    /// <summary>The actions the policy plans after <paramref name="action"/>, for the highlight and the log; none by default.</summary>
+    IReadOnlyList<string> Plan(MacroDecision decision, string action) => [];
 }
 
 /// <summary>Uniform over the legal actions. Ends turns early a lot.</summary>

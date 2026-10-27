@@ -3,7 +3,7 @@ using Godot;
 namespace Sts2Ai.Mod;
 
 /// <summary>
-/// A few lines of text over the game: the mod's status and the brain's answer, and the map point the answer goes to.
+/// A few lines of text over the game: the mod's status and the brain's answer, and the answer's route on the map.
 /// F8 shows or hides it.
 /// </summary>
 internal sealed class Panel
@@ -34,10 +34,10 @@ internal sealed class Panel
 
     public void Show(string status, params string[] lines) => Show(status, lines, null);
 
-    /// <param name="mapAction">The answer's action, when it is a path on the map: its point gets a ring.</param>
-    public void Show(string status, string[] lines, string? mapAction)
+    /// <param name="route">The answer's route, when it goes somewhere on the map.</param>
+    public void Show(string status, string[] lines, MapRoute? route)
     {
         _label.Text = string.Join("\n", lines.Prepend($"AI · {status}"));
-        _mark.Show(mapAction, _label.Visible);
+        _mark.Show(route, _label.Visible);
     }
 }

@@ -77,7 +77,7 @@ In SL, rollouts that go past the current node still use sampled worlds ([Environ
 
 Until run worlds exist, `MacroBrain` predicts each afterstate from what the screen shows, with no game code, and takes the option with the highest V; a tie goes to the first legal action.
 
-- **map:** the point is added to the path. V's map features count from there: the expected number of elites, rest sites, shops, treasures and `?` points up to the boss if each next step were picked at random (not yet the best-k path features above).
+- **map:** the point is added to the path. V's map features count from there: the expected number of elites, rest sites, shops, treasures and `?` points up to the boss if each next step were picked at random (not yet the best-k path features above). Its plan is the rest of the act's route: each next point along the map's paths as it would choose it if nothing else changed, up to the boss; the mod draws it ([Mod §3](/en/arch/mod/#sec-3)). With V v0 it then keeps to that route: a map decision's options differ only in their map features, and only the position changes those.
 - **rewards, card reward, bundle, treasure, shop purchase:** the gold, potion, relic or cards are added and the price is paid.
 - **an option that opens a choice** (a card reward, a card removal) is worth the best pick in it, so a choice that would be skipped is not opened. A card reward's cards are listed on the rewards screen, since they are rolled before it shows and opening one to look costs nothing ([Protocol §3](/en/arch/protocol/#sec-3)).
 - **rest:** the heal the option shows; smithing upgrades one card.
@@ -116,12 +116,12 @@ public interface IMacroBrain
 
 public sealed record MacroDecisionResult(
     string First,                          // one of legal[]
-    IReadOnlyList<string> Plan,            // rest of this screen (shop buys, reward claims)
+    IReadOnlyList<string> Plan,            // rest of this screen (shop buys, reward claims), or of the act's route on the map
     IReadOnlyList<Candidate> Candidates,   // value, CI, samples per first action
     IReadOnlyList<Fact> Facts);            // e.g. deck delta, expected HP at boss, P(win) delta
 ```
 
-`First` is the action to execute now, `Plan` the rest of this screen, `Candidates` the value, CI and sample count of each possible first action, and `Facts` the statements used to explain the choice.
+`First` is the action to execute now, `Plan` the rest of this screen (on the map, the rest of the act's route), `Candidates` the value, CI and sample count of each possible first action, and `Facts` the statements used to explain the choice.
 
 - Out-of-combat card prompts (upgrade / transform / remove) arrive through the same `card_choice` surface as in-combat prompts; `ChoiceContext.Purpose` says what the prompt is for. Harness routes them by whether a combat is running.
 - The macro policy used inside rollouts is L0 with a smaller K. It never recurses into L1.

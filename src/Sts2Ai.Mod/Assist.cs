@@ -32,7 +32,7 @@ internal sealed class Assist(BrainLink link, string gameVersion)
     private long _next;
     private Asked? _asked;
     private string? _askedKey;
-    private (string Key, string Action, string[] Lines)? _answer;
+    private (string Key, MapRoute? Route, string[] Lines)? _answer;
     private string? _key;
     private int _stable;
 
@@ -91,7 +91,7 @@ internal sealed class Assist(BrainLink link, string gameVersion)
 
         if (_answer is { } answer && answer.Key == key)
         {
-            panel.Show(status, answer.Lines, asking.Surface == Surfaces.Map ? answer.Action : null);
+            panel.Show(status, answer.Lines, answer.Route);
             return;
         }
         panel.Show(status, "thinking…");
@@ -128,8 +128,10 @@ internal sealed class Assist(BrainLink link, string gameVersion)
                 break;
             case Received { Message: Recommendation answer }:
                 if (_asked?.Id != answer.DecisionId) break;
-                if (!_asked.Cancelled) _answer = (_asked.Key, answer.Action, Describe.Recommendation(answer, _asked.Obs));
+                // Cleared first, so an answer that cannot be described does not leave the mod waiting for it.
+                var asked = _asked;
                 _asked = null;
+                if (!asked.Cancelled) _answer = (asked.Key, MapRoute.Of(answer, asked.Obs), Describe.Recommendation(answer, asked.Obs));
                 break;
             case Received { Message: WireError error }:
                 // The brain refused the run or could not answer: the run goes on without it.

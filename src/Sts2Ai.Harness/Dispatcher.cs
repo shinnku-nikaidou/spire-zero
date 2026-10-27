@@ -22,7 +22,8 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="ObsHash">The hash of what the brain was shown: the combat observation, the run observation, or the card prompt.</param>
 /// <param name="Legal">How many legal actions (or prompt options) there were.</param>
 /// <param name="Chosen">The action in text form; for a prompt, the picked option indexes.</param>
-/// <param name="Plan">The rest of the turn after <paramref name="Chosen"/>, as the brain planned it.</param>
+/// <param name="Plan">What the brain planned after <paramref name="Chosen"/>: the rest of the turn in combat, the rest of
+/// the act's route on the map.</param>
 /// <param name="Features">On a macro decision, V's features of the run the brain was shown: what V is fit on
 /// (docs: learning §2).</param>
 /// <param name="Obs">On a combat decision, the observation the brain was shown: the input of the learned combat parts
@@ -32,7 +33,7 @@ public sealed record DecisionEntry(
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
     IReadOnlyDictionary<string, double>? Features = null, CombatObservation? Obs = null);
 
-/// <summary>Who made a decision, and what a searching brain planned and scored: what its recommendation carries.</summary>
+/// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
 
 /// <summary>
@@ -113,10 +114,11 @@ public sealed class Dispatcher(
         var action = macro.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(action)) throw new InvalidOperationException($"{macro.Brain} chose {action} on {decision.Surface}, which is not legal");
-        Last = new(macro.Brain);
+        var plan = macro.Policy.Plan(decision, action);
+        Last = new(macro.Brain, plan.Count > 0 ? plan : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                action, null, null, null, seed, ms, RunValue.Features(decision.Observation.Run)));
+                action, Last.Plan, null, null, seed, ms, RunValue.Features(decision.Observation.Run)));
         return action;
     }
 
