@@ -29,10 +29,13 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Obs">On a combat decision, the observation the brain was shown: the input of the learned combat parts
 /// and of the fusion panel.</param>
 /// <param name="RunView">On a macro decision, the run the brain was shown: what V v2 is trained on (docs: learning §2).</param>
+/// <param name="History">On a combat decision, what each enemy of the combat showed at the start of each round so far,
+/// this one's included (<see cref="Dispatcher.History"/>).</param>
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
-    IReadOnlyDictionary<string, double>? Features = null, CombatObservation? Obs = null, RunView? RunView = null);
+    IReadOnlyDictionary<string, double>? Features = null, CombatObservation? Obs = null, RunView? RunView = null,
+    IReadOnlyList<EnemyTurns>? History = null);
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
@@ -61,6 +64,8 @@ public sealed class Dispatcher(
     private readonly List<DecisionEntry> _log = [];
     private readonly Dictionary<string, int> _brains = [];
     private readonly List<string> _nodeTrace = [];
+    private readonly Dictionary<uint, (string? Id, List<EnemyTurn> Turns)> _enemyTurns = [];
+    private int _round = -1;
     private int _decisions;
     private NodeCheckpoint? _node;
 
@@ -80,8 +85,15 @@ public sealed class Dispatcher(
         $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b}" : "")}, combat prompts {combatChoices.Brain}, " +
         $"macro {macro.Brain}, macro prompts {macroChoices.Brain}";
 
+    /// <summary>
+    /// The current combat's public record of enemy moves (docs: harness §3): each enemy's intents at the first decision
+    /// of each round. A combat starts over after any macro decision, or when the round goes back.
+    /// </summary>
+    public IReadOnlyList<EnemyTurns> History => _enemyTurns.Select(e => new EnemyTurns(e.Key, e.Value.Id, e.Value.Turns.ToList())).ToList();
+
     public CombatAction Choose(CombatDecision decision)
     {
+        Witness(decision.Observation);
         var (id, seed, clock) = Begin(combat.Brain);
         var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null);
         double ms = clock.Elapsed.TotalMilliseconds;
@@ -89,8 +101,21 @@ public sealed class Dispatcher(
         Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation));
+                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: History));
         return result.First;
+    }
+
+    private void Witness(CombatObservation obs)
+    {
+        if (obs.Round == _round) return;
+        if (obs.Round < _round) _enemyTurns.Clear();
+        _round = obs.Round;
+        foreach (var enemy in obs.Enemies)
+        {
+            if (enemy.Uid is not { } uid || enemy.Intents is not { } intents || enemy.Hp <= 0) continue;
+            if (!_enemyTurns.TryGetValue(uid, out var turns)) _enemyTurns[uid] = turns = (enemy.Id, []);
+            turns.Turns.Add(new(obs.Round, intents));
+        }
     }
 
     public IReadOnlyList<int> Choose(ChoiceDecision decision)
@@ -110,6 +135,8 @@ public sealed class Dispatcher(
 
     public string Choose(MacroDecision decision)
     {
+        _round = -1;
+        _enemyTurns.Clear();
         var (id, seed, clock) = Begin(macro.Brain);
         if (!MacroSurfaces.Contains(decision.Surface)) throw new InvalidOperationException($"uncovered surface {decision.Surface}");
         var action = macro.Policy.Choose(decision);
