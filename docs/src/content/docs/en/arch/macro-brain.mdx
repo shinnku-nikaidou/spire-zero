@@ -13,7 +13,7 @@ The **macro brain** makes every decision outside combat: the next map point, whi
 
 <Aside title="Status">
 
-L0 v0 exists: `MacroBrain` in Brain, played with `run --macro l0` ([Simulator §5](/en/arch/simulator/#sec-5)). It answers every macro surface and the card prompts outside combat, and values options with V v0 ([Learning §1](/en/arch/learning/#sec-1)). Run worlds do not exist yet ([Simulator §6](/en/arch/simulator/#sec-6)), so it predicts each afterstate from the screen instead of applying the option in a world ([§2](#sec-2), L0 v0). Planned: afterstates from run worlds, multi-step screen search, L1, and the `IMacroBrain` interface of [§4](#sec-4).
+L0 v0 exists: `MacroBrain` in Brain, played with `run --macro l0` ([Simulator §5](/en/arch/simulator/#sec-5)). It answers every macro surface and the card prompts outside combat, and values options with V: V v0, or V v2 from a net file ([Learning §1](/en/arch/learning/#sec-1)). With `--explore E` it answers at random with chance E, for self-play ([Learning §5](/en/arch/learning/#sec-5)). Run worlds do not exist yet ([Simulator §6](/en/arch/simulator/#sec-6)), so it predicts each afterstate from the screen instead of applying the option in a world ([§2](#sec-2), L0 v0). Planned: afterstates from run worlds, multi-step screen search, L1, and the `IMacroBrain` interface of [§4](#sec-4).
 
 </Aside>
 

@@ -13,7 +13,7 @@ This page defines the value function V that both brains use to score positions, 
 
 <Aside title="Status">
 
-V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, `learn/spsa.py` tunes them, or PIMC's leaf weights, by SPSA, `run --value` plays with either, and `learn/challenge.py` takes a challenger through the gate ([§2](#sec-2)); no fitted or tuned weights are promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
+V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, `learn/spsa.py` tunes them, or PIMC's leaf weights, by SPSA, `run --value` plays with either, and `learn/challenge.py` takes a challenger through the gate ([§2](#sec-2)); no fitted or tuned weights are promoted yet. V v2 is built too: `RunNet` in Brain, a net over the run's cards, relics, potions and context ([§1](#sec-1)), trained by `learn/train_value.py` ([§2](#sec-2)); `run --value` reads its file as well, and `run --explore` gives self-play its exploration ([§5](#sec-5)). No V v2 is promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
 
 </Aside>
 
@@ -31,12 +31,15 @@ Planned versions:
 |---|---|---|
 | v0 | hand-written features times linear weights (widely spaced initial weights keep the lexicographic intent) | SPSA |
 | v1 | hand-written features + small MLP | supervised: MC + TD(λ) |
-| v2 | observation encoder (card / relic / power embeddings) + several heads | same + ExIt |
+| v2 | observation encoder (card / relic / potion / context embeddings, a set encoder over the deck) + V v0's features; a hazard head per floor | supervised: MC (TD(λ) and ExIt planned) |
 
 Reading the table:
 
 - **Lexicographic intent** (v0): the starting feature list comes from bottled_ai (a prior-art Slay the Spire bot), which ranks features in a strict order of importance: compare by the first, and use the next only to break ties ([Combat brain §4](/en/arch/combat-brain/#sec-4)). Linear weights that start far apart reproduce that order, and tuning starts from there.
 - **V v0 as built** (`RunValue`): HP, max HP, gold, potions, relics, deck size, unplayable cards, upgrades; the mean damage (poison included), block and draw of the playable cards; and the expected elites, rest sites, shops, treasures and `?` points ahead on the map; and the floor, which has no initial weight: every option of a decision shares it, but a fit needs it, so that progress is not credited to what comes with it (relics, gold). Its weights are in units of one HP, not far apart: run-level features trade against each other (a relic against HP), which a strict order cannot express. They are hypotheses for tuning to replace.
+- **V v2 as built** (`RunNet`, trained by `learn/train_value.py`): its inputs are tokens of the run view and V v0's features, standardized. A card's vector is its id's vector, plus its upgrade level (at most 3) times its id's upgrade vector, plus its enchantment's and affliction's vectors. A small MLP (phi) maps each card, and the deck is the mean and the sum (times 1/16) of the results: a set encoder, which reads any deck and ignores the order of its cards. Relics (a used-up one as an id of its own), potions and the context (character, act, boss or bosses, the act's ancient) are sums of their vectors. Two layers of 256 then give one logit per floor: the **hazard**, the chance to die on that floor if still alive there. Ids seen fewer than 3 times in training read as one unknown id. A few hundred thousand weights in all.
+  - From the hazards, the chance to survive every floor from here on is P(win), and the start floor plus the chance to survive each floor is the **expected floor reached**. Until runs win now and then, P(win) has no signal, so V v2's value is the expected floor (objective `floor` in the net file); once they do, it switches to P(win) (objective `win`), read from the same head.
+  - The expected floor weighs every floor the same. It can prefer a safe line that reliably reaches act 2 to a riskier one that sometimes wins, which is why it is only a stopgap.
 - **MLP** is a small fully connected neural network. **Embeddings** are learned vectors, one per card, relic or power id, so the encoder can read any deck.
 - **SPSA** (simultaneous perturbation stochastic approximation) tunes parameters from noisy results alone. Each step nudges all parameters at once in a random direction, measures both the "plus" and the "minus" version, and moves the parameters toward the better one. It needs two measurements per step however many parameters there are, and no gradient, which suits weights whose only test is playing games.
 - **MC** (Monte Carlo) target: the real result of the run (win 1, loss 0), used as the label for every decision in it. Unbiased, but noisy: the luck of one run lands on all of its decisions.
@@ -45,7 +48,7 @@ Reading the table:
 
 **Heads** (v1 and later). A head is one output of a network whose body is shared with the other outputs:
 
-- main head: P(win);
+- main head: P(win); in V v2 as built, the hazard head, which gives P(win) and the expected floor;
 - auxiliary heads, which only help the network learn a good representation and are never used to decide: HP lost in the next combat, the distribution of the floor reached, the kill probability for each boss;
 - combat head, for combat leaves: the distribution of the combat's outcome, a death class plus buckets of the HP left at its end, optionally with the potions left (as in r33hab and ytcs, prior-art STS2 projects). It does not predict P(win): the macro V prices its outcomes once per combat ([§3](#sec-3)). Two training targets are compared through the gate:
   - TD(λ ≈ 0.95) inside the combat, bootstrapping on the head's own distribution at the next decision, with the final bucket smoothed over its neighbours by HL-Gauss (a Gaussian of about 0.75 buckets), as ytcs does; ytcs found λ = 1 worse;
@@ -73,11 +76,13 @@ flowchart TD
 ```
 
 1. **Self-play:** the champion plays whole runs on train seeds. Log format: [Harness §6](/en/arch/harness/#sec-6).
-2. **Fit:** the target is a mix of the MC outcome and TD(λ) (from decision k to decision k+1). Early on there are no wins, so every MC target is 0; the floor-reached auxiliary target supplies the signal, while the main head stays P(win). Never mix HP targets and win targets in one backward pass (a lesson from r33hab).
+2. **Fit:** the target is a mix of the MC outcome and TD(λ) (from decision k to decision k+1). Early on there are no wins, so every MC target of P(win) is 0; V v2's hazard head learns from the floor each run died on instead, and its value is the expected floor reached until runs win ([§1](#sec-1)). Never mix HP targets and win targets in one backward pass (a lesson from r33hab).
 
    A dense target such as the floor reached is a stopgap. A change it brings is accepted only through the gate on real outcomes, and only after it reproduces on several training seeds: in a GuanDan study (arXiv 2610.29411) one lineage looked strong, and none of its 5 pre-registered replication seeds came out positive.
 
    v0's fit is `learn/fit_value.py`. Every macro decision in the decision logs carries V's features ([Harness §6](/en/arch/harness/#sec-6)), and the run records give the floor its run reached, joined by run id. It is ridge regression on standardized features (ridge regression: least squares with a small penalty on the size of the weights, which keeps correlated features from taking extreme weights). Each run weighs the same however many decisions it has, and every fifth run (by run id) is held out. It reports R² on the held-out runs (R²: the share of the floor's variance the fit explains, 1 at best, below 0 when it does worse than the mean), next to a fit on the floor alone. The weights go to `eval/values/NAME.json`; `run --value FILE` plays L0 with them, and the champion shows them as `l0 NAME`.
+
+   V v2's training is `learn/train_value.py`. Every macro decision in the decision logs carries its run view too ([Harness §6](/en/arch/harness/#sec-6)), and its targets are its run's outcome: it survived every floor from the decision's up to the floor it died on, and died there, or survived every floor if the run won. A truncated run says nothing from its last floor on; a failed one is left out. The loss is the cross-entropy of the hazards over those floors. Each run weighs the same, and every fifth run (by run id) is held out, for early stopping (AdamW; at most 40 epochs, ending after 5 without a better held-out loss) and for the report. The report gives the held-out loss and the R² of the expected floor against the floor reached, next to a baseline that knows only the floor (each floor's hazard over the training runs). The net file goes to `eval/values/NAME.json` with a few held-out run views and the values the trainer gave them; `RunNet` checks them on load, which keeps the encoding and the forward pass the same in training and in play ([§7](#sec-7)). `run --value FILE` plays L0 with it, shown as `l0 NAME`.
 3. **ExIt:** search values become labels for V and for the priors (which actions the search tries first). The teacher is a fair search in the same environment, one that obeys that environment's information rules. No behavior cloning (training a model to copy a teacher's moves) of an omniscient teacher: that failed in several projects.
 
    The combat policy target is softmax(prior logits + c · minmax(Q)), not the visit counts. Q is each first action's mean value over the worlds, which PIMC already computes; minmax rescales the Q of one decision to [0, 1]; the prior logits are 0 while the prior is uniform. c is tuned by how well the target predicts the choice of a search with a much larger budget (log-likelihood). Visit counts would be a poor target: CRN at the root flattens them (r33hab), and with mctx's (a Gumbel MuZero library) transform, at our 300 nodes per world, the target is almost one-hot. So the decision log records, for each combat decision, every first action's value in every world and the nodes spent on it, and for each combat its outcome (death, HP, potions). Both are logged: the per-world values and nodes in each candidate ([Harness §6](/en/arch/harness/#sec-6)), each combat's end in the run record ([Evaluation §6](/en/arch/evaluation/#sec-6)).
@@ -132,7 +137,7 @@ A self-improving loop can settle into a local optimum: a way of playing that eve
 | reverse curriculum | snapshot pool from acts 2/3 and pre-boss first; learn late value, then push earlier |
 | counterfactual lab | at sampled key macro decisions, CRN-fork both lines to the end for an unbiased ΔP(win); tests hypotheses like "bleed in act 1" |
 | population / archive | one champion per style descriptor (MAP-Elites), so no collapse to "always conservative" |
-| exploration | Thompson or ε on macro decisions in self-play; afterstate MC targets are robust to it |
+| exploration | Thompson or ε on macro decisions in self-play; afterstate MC targets are robust to it. ε is built: `run --explore E` makes L0 answer every decision outside combat, card prompts included, at random with chance E (`l0 explore E` in the champion's name); never in evaluation |
 | conservatism monitors | elites taken, skip rate, HP at boss, gold/potion hoarding ([Evaluation §3](/en/arch/evaluation/#sec-3)) |
 | contrarian hypotheses | human/LLM ideas → constrained policy variants → sim A/B; results back to discussion |
 
@@ -149,24 +154,24 @@ flowchart LR
   S["scheduler<br/>seeds, champion"] --> W["worker pool<br/>8 processes"]
   W --> L["logs<br/>JSONL per generation"]
   L --> T["training<br/>Python via uv, GPU"]
-  T --> WT["weights<br/>format TBD"]
+  T --> WT["net file<br/>JSON"]
   WT --> B["Brain loads<br/>C# inference"]
 ```
 
 - Compute: 8 physical cores / 16 threads. 8 processes reach about 1,860 combats/s, against 275 in a single process ([Simulator §4](/en/arch/simulator/#sec-4)). The GPU (RTX 5070 Ti) is for value-net training only.
-- Training is Python, managed with uv, reading the JSONL logs. Inference is C# inside Brain (a small net on the CPU, with ONNX Runtime or a hand-written forward pass).
-- Reproducibility: each generation records its champion, seed sets, hyperparameters and commit. Logs go into one directory per generation.
-- Storage: about 50 macro decisions plus a few hundred combat decisions per run, compressed. Old generations are pruned on demand.
+- Training is Python, managed with uv, reading the JSONL logs. Inference is C# inside Brain: a hand-written forward pass on the CPU (`RunNet`), about 2 ms per macro decision. The net file is JSON.
+- Reproducibility: each generation records its champion, seed sets, hyperparameters and commit. Logs go into one directory per generation, `tmp/selfplay/gN/`, outside git.
+- Storage: about 50 macro decisions plus a few hundred combat decisions per run, most of the bytes in the combat observations and the macro run views; not compressed yet. Old generations are pruned on demand.
 
 ## 7. Tests
 
 1. Calibration on held-out seeds. Calibrated means the predictions match reality: of the positions where V says 30%, about 30% should be won. Check it with a reliability plot (group the predictions into bins and plot predicted against actual win rate). The Brier score (mean squared error between the predicted probability and the 0/1 result) must beat a constant prediction; the run model of ytcs (a prior-art STS2 solver) failed this.
 2. The potential-based auxiliary terms telescope exactly.
-3. Train/deploy input parity: the deployed model reads protocol observations only, and training reads the same JSON.
+3. Train/deploy input parity: the deployed model reads protocol observations only, and training reads the same JSON. A V v2 net file carries test runs that `RunNet` checks on load.
 4. Gate A/A test: a challenger that is the champion itself has nothing to gain, so the gate must not promote it more often than the SPRT false-positive rate.
 
 ## 8. Open questions
 
 1. The v0 feature set: V v0 starts with 17; whether to grow it toward bottled_ai's 42 features is open.
-2. Inference format (ONNX Runtime would be a new package).
+2. When V v2's value switches from the expected floor to P(win): after how many wins, and with which check of the head's calibration.
 3. One net with an environment input bit, or separate nets (start with separate nets).

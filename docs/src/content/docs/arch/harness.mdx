@@ -138,6 +138,7 @@ public sealed class PublicRecord
 - 一局的战斗决策按战斗分块，每场战斗一块，块与块之间隔着宏观决策，顺序与对局记录里的战斗一致。决策靠这个找到它那场战斗的结局（[评估 §6](/arch/evaluation/#sec-6)）。
 - 战斗决策还会加上 `obs`，即大脑看到的战斗观测（[协议 §1](/arch/protocol/#sec-1)）：学习得到的战斗部件和融合测试集的输入（[战斗大脑 §8](/arch/combat-brain/#sec-8)）。约 1.6 KB。
 - 宏观决策还会加上 `features`：大脑看到的整局观测上 V 的特征（[学习 §1](/arch/learning/#sec-1)），不管是哪个大脑做的决策。拟合 V 读的就是它们（[学习 §2](/arch/learning/#sec-2)）。
+- 宏观决策还会加上 `run_view`：整局观测本身，约 6 KB，V v2 就用它训练（[学习 §2](/arch/learning/#sec-2)）。
 - `run --log FILE` 写出日志，每个决策一行（[模拟器 §5](/arch/simulator/#sec-5)）。
 - `degraded` 标记 worker 故障之后给出的回答，它和超时一起规划（[§7](#sec-7)）。崩溃的 worker 会被重启，请求再发一次，得到的回答相同，所以目前没有降级的回答。
 

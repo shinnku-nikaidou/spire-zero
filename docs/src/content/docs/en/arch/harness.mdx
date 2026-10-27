@@ -138,6 +138,7 @@ One JSON line per decision:
 - A run's combat decisions come in one block per combat, between macro decisions, in the order of the combats in its run record. That is how a decision finds how its combat ended ([Evaluation §6](/en/arch/evaluation/#sec-6)).
 - A combat decision adds `obs`, the combat observation the brain was shown ([Protocol §1](/en/arch/protocol/#sec-1)): the input of the learned combat parts and of the fusion panel ([Combat brain §8](/en/arch/combat-brain/#sec-8)). It is about 1.6 KB.
 - A macro decision adds `features`: V's features of the run view the brain was shown ([Learning §1](/en/arch/learning/#sec-1)), whatever brain decided. Fitting V reads them ([Learning §2](/en/arch/learning/#sec-2)).
+- A macro decision adds `run_view` as well: the run view itself, about 6 KB, which V v2 is trained on ([Learning §2](/en/arch/learning/#sec-2)).
 - `run --log FILE` writes it, one line per decision ([Simulator §5](/en/arch/simulator/#sec-5)).
 - `degraded`, for an answer given after a worker failure, is planned together with timeouts ([§7](#sec-7)). A crashed worker is restarted and gets its request once more, which gives the same answer, so nothing is degraded yet.
 
