@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Brain;
 using Sts2Ai.GameBridge;
+using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker;
@@ -20,8 +21,10 @@ namespace Sts2Ai.SimWorker;
 ///    by replay, and plays on;
 ///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
-///  - protocol: observations and actions survive a round trip through their wire form, and the brain's assemblies
-///    reach no game assembly.
+///  - protocol: observations and actions survive a round trip through their wire form, and the brain's and harness's
+///    assemblies reach no game assembly;
+///  - worker pool (with --workers N): PIMC over worlds searched in serve processes picks what it picks here, with the
+///    same values.
 /// </summary>
 internal static class SelfTest
 {
@@ -43,10 +46,10 @@ internal static class SelfTest
         }
 
         Console.WriteLine($"selftest: {n} combats, act {act} ({rooms}: {pool.Count} encounters), game {HeadlessGame.GameVersion}");
-        foreach (var root in new[] { typeof(ICombatPolicy).Assembly, typeof(CombatObservation).Assembly })
+        foreach (var root in new[] { typeof(ICombatPolicy).Assembly, typeof(CombatObservation).Assembly, typeof(WorkerPool).Assembly })
         {
             var reached = GameAssembliesReachedFrom(root);
-            Check("brain reaches no game assembly", reached.Count == 0, $"{root.GetName().Name} reaches {string.Join(", ", reached)}");
+            Check("brain and harness reach no game assembly", reached.Count == 0, $"{root.GetName().Name} reaches {string.Join(", ", reached)}");
         }
         Check("reference check sees the bridge's game references", GameAssembliesReachedFrom(typeof(Observe).Assembly).Contains("sts2"), "sts2 not found");
         for (int i = 0; i < n; i++)
@@ -107,11 +110,53 @@ internal static class SelfTest
         }
 
         RollingBoulder(pump, pool, act, Check);
+        int workers = Cli.Int(opts, "workers", 0);
+        if (workers > 0) PooledMatches(pump, opts, pool, act, seed, workers, Check);
 
         Console.WriteLine($"draw order resampled by a different determinize seed: {drawResampled}/{drawCompared}; differs from the true order: {drawMovedFromTrue}/{drawCompared}");
         foreach (var (name, (pass, fail)) in results)
             Console.WriteLine($"  {(fail == 0 ? "ok  " : "FAIL")} {name}: {pass} passed, {fail} failed");
         return results.Values.Any(r => r.Fail > 0) ? 1 : 0;
+    }
+
+    /// <summary>
+    /// A few decisions, each searched here and in a pool of <paramref name="workers"/> serve processes with the same
+    /// seeds: the candidates, their values and the plan must be the same.
+    /// </summary>
+    private static void PooledMatches(Pump pump, Dictionary<string, string> opts, List<EncounterModel> pool, int act, int seed, int workers, Action<string, bool, string> check)
+    {
+        var budget = new Budget(4, 120);
+        var brain = new PimcBrain();
+        using var workerPool = new WorkerPool(Cli.SelfCommand(), workers);
+        var pooled = new PooledPimc(workerPool);
+        for (int i = 0; i < 4; i++)
+        {
+            var encounter = pool[i % pool.Count];
+            var setup = Cli.Setup(opts, encounter, act, Cli.MakeSeed(seed + 2, i));
+            CombatObservation obs;
+            IReadOnlyList<CombatAction> legal;
+            var rng = new Random(i);
+            using (var session = CombatSession.Start(pump, setup, new RandomChoices(rng)))
+            {
+                var policy = new PlayPolicy(rng);
+                for (int a = 0; a < i && !session.IsOver; a++) session.Execute(policy.Choose(Cli.Decision(session)));
+                (obs, legal) = (session.Observation(), session.LegalActions());
+            }
+            ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{i}");
+            string buildSeed = Cli.MakeSeed((int)decisionSeed, 0);
+            CombatDecisionResult here;
+            using (var worlds = SimWorlds.NoSL(pump, obs, buildSeed))
+                here = brain.Decide(obs, legal, worlds, budget, decisionSeed);
+            var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed);
+            check("pooled search matches in-process search",
+                Show(here) == Show(there), $"#{i} {encounter.Id.Entry}: here {Show(here)}; pooled {Show(there)}");
+            var errors = pooled.TakeGameErrors();
+            check("no game errors in workers", errors.Count == 0, $"#{i}: {errors.FirstOrDefault()}");
+        }
+        check("no worker restarts", workerPool.Restarts == 0, $"{workerPool.Restarts} restarts");
+
+        static string Show(CombatDecisionResult r) =>
+            $"{r.First} [{string.Join(" ", r.Plan)}] " + string.Join(" ", r.Candidates.Select(c => $"{c.Action}={c.Value:R}"));
     }
 
     /// <summary>

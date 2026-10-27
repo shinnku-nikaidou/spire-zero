@@ -12,7 +12,7 @@ Harness 是决策进程里的调度器。它的一边是**宿主**，也就是�
 
 <Aside title="状态">
 
-规划中。目前还没有 Harness：SimWorker 在进程内通过 `ICombatPolicy` 和 `IChoicePolicy` 直接调用占位策略。
+部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）和 `PooledPimc`，即在进程池里搜索 NoSL 世界的战斗大脑；`PimcPolicy` 把它包装成整局的战斗策略。记录、路由、预算控制和决策日志在规划中：目前 SimWorker 的命令通过 `ICombatPolicy` 和 `IChoicePolicy` 直接调用策略。
 
 </Aside>
 

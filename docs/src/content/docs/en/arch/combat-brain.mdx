@@ -82,7 +82,7 @@ The levers below keep the search inside its budget. The one that decides when to
 | trivial decisions | one legal action, or all sequences equivalent → no search | one legal action |
 | restore cost | DFS order reuses prefixes and restores only on backtrack; deep copy later ([Simulator §4](/en/arch/simulator/#sec-4)) | yes |
 
-v0's budget is `Budget(Worlds, NodesPerWorld)`, 8 × 300 by default; a node is one executed action. In each world the nodes are split evenly over the first actions, so each gets a fair look. Inside a subtree, once its share is spent, the search stops expanding and the state there is scored as ending the turn, which is the option tried first. On one core this costs about 0.55–0.75 s per action in NoSL and 0.13–0.19 s in SL (one world).
+v0's budget is `Budget(Worlds, NodesPerWorld)`, 8 × 300 by default; a node is one executed action. In each world the nodes are split evenly over the first actions, so each gets a fair look. Inside a subtree, once its share is spent, the search stops expanding and the state there is scored as ending the turn, which is the option tried first. On one core this costs about 0.55–0.75 s per action in NoSL and 0.13–0.19 s in SL (one world). In NoSL the worlds are independent, so the worker pool searches one world per worker ([Simulator §8](/en/arch/simulator/#sec-8)): with 8 workers an action takes about 70 ms, with the same result.
 
 Rough numbers: 1–2 s per decision times 8 workers gives about 5,000 branches. With K=16 that is about 300 branches per world, enough for a deduplicated enumeration inside one turn.
 
@@ -132,6 +132,21 @@ Sts2Ai.SimWorker panel --n 60 --player pimc --env NoSL --act 0 --rooms weak,regu
 | act 2 (`--act 1`) weak + regular | 30 | – | 16.7% (35.0) | 50.0% (38.3) | 46.7% (35.9) |
 
 Each cell is the win rate, with the mean HP lost per win in brackets. HP lost is comparable only between players with similar win rates: a player that wins harder fights loses more HP in them. Time per combat on one core: about 0.2–0.4 s for the placeholders, 17–28 s for PIMC NoSL and 4–7 s for PIMC SL. Game errors and failures: 0.
+
+### 7.2 Whole runs
+
+The brain also plays the combats of whole runs: `run --policy pimc` ([Simulator §5](/en/arch/simulator/#sec-5)) keeps the run live in the host and searches each combat decision in the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)). Every out-of-combat decision is random (map, rewards, card rewards, events, shop, rest), and so are the card prompts, for both players. Silent A0, seeds 0–23, budget 8 × 300.
+
+```bash
+Sts2Ai.SimWorker run --n 24 --policy pimc
+```
+
+| combat policy | runs | mean floor | median | reached the act 1 boss (floor 17) | won |
+|---|---|---|---|---|---|
+| `play` | 24 | 8.6 | 7.5 | 1 | 0 |
+| PIMC NoSL | 24 | 12.7 | 12.5 | 8 | 0 |
+
+Every run ends in act 1, most often at an elite or at the boss, so the random macro decisions now limit the result: the deck never grows into one that can win act 1. PIMC took about 17.5 s per run (two runs at a time, 8 workers each). `--check` on one seed gives the same run twice, and the batches had 0 game errors and 0 worker restarts.
 
 ## 8. Open questions
 

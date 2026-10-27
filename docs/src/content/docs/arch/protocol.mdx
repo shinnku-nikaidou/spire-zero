@@ -14,7 +14,7 @@ Protocol（协议）是项目各进程之间的共同语言。游戏宿主（真
 
 <Aside title="状态">
 
-战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。战斗世界 API 也已实现（[§7](#sec-7)）。消息信封和事件流还在规划中。
+战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。战斗世界 API 也已实现（[§7](#sec-7)），承载 PIMC 世界搜索的 worker 消息也已实现（[§7.1](#sec-7.1)）。消息信封和事件流还在规划中。
 
 </Aside>
 
@@ -236,7 +236,32 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - 世界里弹出的选牌提示在世界内部回答。v0 用一个由该世界播种的随机数生成器随机回答，所以同样的搜索给出同样的回答；把每个选项变成搜索分支还在规划中（[战斗大脑 §2](/arch/combat-brain/#sec-2) 第 7 条）。
 - `Candidate` 是一个打过分的动作：它在各个世界上的平均估值、95% 置信区间的半宽，以及世界的个数。
 
-随 worker 池一起规划的（[模拟器 §8](/arch/simulator/#sec-8)）：一个批量的 `RunBranches(from, branches)` 调用，因为一次进程间往返（约几十 µs）和一个模拟步（约 0.1 ms）的开销相当；以及 SL 封存：上一个动作离开节点之后（`AtHorizon`），`Execute` 会抛异常（[模拟器 §7](/arch/simulator/#sec-7)）。
+规划中：SL 封存：上一个动作离开节点之后（`AtHorizon`），`Execute` 会抛异常（[模拟器 §7](/arch/simulator/#sec-7)）。
+
+### 7.1 worker 消息
+
+worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）不会一步一步地通过线路操作世界：一次进程间往返（几十 µs）和一个模拟步（约 0.1 ms）的开销相当，而搜索每个决策要走几千步。所以一个请求要的是一整块工作，这里是一个世界的搜索（`Worker.cs`）：
+
+```csharp
+// The worker's first line, once it has booted.
+public sealed record WorkerHello(string Game);
+
+public interface IWorkerRequest { long Id { get; } }
+
+// Build the combat from Observation with BuildSeed, take world World of Worlds drawn from SearchSeed,
+// and search this turn after each of First, in that order.
+public sealed record PimcWorldRequest(long Id, CombatObservation Observation, IReadOnlyList<CombatAction> First,
+    string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerWorld) : IWorkerRequest;
+
+// Lines[i] is the best line after First[i]. Error is set instead when the request failed.
+public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
+
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions);
+```
+
+- 请求带着 worker 需要的一切，所以任何 worker 都能处理它，崩溃的 worker 的请求可以重发。
+- 请求里是 NoSL 观测，绝不是真实状态：worker 看到的不会比玩家多。
+- `GameErrors` 是处理请求期间游戏的 `Log.Error` 输出，供宿主计数。
 
 ## 8. 不变量与测试
 

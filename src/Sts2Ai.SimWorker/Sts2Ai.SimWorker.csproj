@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
     Runs the real sts2.dll in plain .NET, without the Godot engine: combats for benchmarks, tests, search and
-    self-play. Hosts the brain in-process; the brain still sees only protocol types.
+    self-play. Hosts the brain in-process, or as a worker (serve) searches for a host elsewhere; the brain still sees
+    only protocol types.
   -->
   <Import Project="../GameReferences.props" />
 
@@ -22,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="../Sts2Ai.GameBridge/Sts2Ai.GameBridge.csproj" />
     <ProjectReference Include="../Sts2Ai.Brain/Sts2Ai.Brain.csproj" />
+    <ProjectReference Include="../Sts2Ai.Harness/Sts2Ai.Harness.csproj" />
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>Sts2BinDir</_Parameter1>
       <_Parameter2>$(Sts2BinDir)</_Parameter2>

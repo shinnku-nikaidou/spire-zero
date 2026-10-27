@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using MegaCrit.Sts2.Core.Models;
 using Sts2Ai.Brain;
+using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker;
@@ -15,17 +17,22 @@ namespace Sts2Ai.SimWorker;
 ///   combat --from OBS.json [--seed N] ...  the same, starting from a combat built to show that observation
 ///   bench [--n 200] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--policy play] [--out results.jsonl]
 ///                                          many combats over an encounter pool; reports throughput and failures
-///   selftest [--n 20] [--seed 1] [--act 0] [--rooms weak,regular]
+///   selftest [--n 20] [--seed 1] [--act 0] [--rooms weak,regular] [--workers 0]
 ///                                          checks determinism, restore and determinize over an encounter pool
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
-///   run [--n 1] [--start 0] [--seed 1] [--asc 0] [--policy play] [--max-decisions 20000] [--check] [--trace] [--obs]
+///   run [--n 1] [--start 0] [--seed 1] [--asc 0] [--policy play|random|pimc] [--worlds 8] [--nodes 300] [--workers W]
+///       [--max-decisions 20000] [--check] [--trace] [--obs]
 ///                                          whole runs, every non-combat decision random; --check plays each seed
 ///                                          twice and compares, observations included (each one must survive a JSON
-///                                          round trip); --obs prints them; reports results, hashes and surface coverage
+///                                          round trip); --obs prints them; reports results, hashes and surface coverage.
+///                                          pimc searches each combat decision (NoSL) in W worker processes (default:
+///                                          one per world)
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
-///         [--worlds 8] [--nodes 300] [--trace] [--out results.jsonl]
-///                                          the fixed combat panel: the same combats for every player; win rate, HP lost
+///         [--worlds 8] [--nodes 300] [--workers 0] [--trace] [--out results.jsonl]
+///                                          the fixed combat panel: the same combats for every player; win rate, HP lost.
+///                                          --workers N searches the NoSL worlds in N worker processes
+///   serve                                  a worker: JSON lines on stdin and stdout (docs: simulator §8)
 /// Loadout options for every command that runs combats: [--character SILENT] [--deck A*5,B+,...]
 /// [--relics A,B] [--potions A,B] [--hp N] [--max-hp N]. Omitted parts keep the character's starting values.
 /// </summary>
@@ -37,7 +44,14 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | panel"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | panel | serve"); return 2; }
+        // A worker's stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
+        TextWriter? wire = null;
+        if (args[0] == "serve")
+        {
+            wire = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
+            Console.SetOut(Console.Error);
+        }
         var opts = ParseOptions(args.Skip(1).ToArray());
         HeadlessGame.Boot(opts.ContainsKey("verbose"));
         var pump = Pump.InstallOnCurrentThread();
@@ -50,6 +64,7 @@ internal static class Cli
             "forkbench" => ForkBench.Run(pump, opts),
             "run" => Runs(pump, opts),
             "panel" => Panel.Run(pump, opts),
+            "serve" => Serve.Run(pump, wire!),
             _ => Fail($"unknown command {args[0]}"),
         };
     }
@@ -198,7 +213,11 @@ internal static class Cli
         bool check = opts.ContainsKey("check");
         bool observe = check || opts.ContainsKey("obs");
         var policy = opts.GetValueOrDefault("policy", "play");
-        if (!Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (one of {string.Join(", ", Policies.CombatNames)})");
+        if (policy != "pimc" && !Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (pimc, {string.Join(", ", Policies.CombatNames)})");
+        var budget = new Budget(Int(opts, "worlds", 8), Int(opts, "nodes", 300));
+        // The run holds this process's one live game, so the brain can only search in workers.
+        using var workerPool = policy == "pimc" ? new WorkerPool(SelfCommand(), Int(opts, "workers", budget.Worlds)) : null;
+        var pooled = workerPool == null ? null : new PooledPimc(workerPool);
         var loadout = Loadout.Parse(opts.GetValueOrDefault("deck"), opts.GetValueOrDefault("relics"), opts.GetValueOrDefault("potions"),
             opts.GetValueOrDefault("hp"), opts.GetValueOrDefault("max-hp"));
 
@@ -206,13 +225,18 @@ internal static class Cli
         var surfaces = new Dictionary<string, int>();
         var failures = new Dictionary<string, int>();
         int mismatches = 0, gameErrors = 0;
-        Console.WriteLine($"run: {n} runs, policy {policy}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
+        Console.WriteLine($"run: {n} runs, policy {policy}" +
+                          (pooled != null ? $" worlds {budget.Worlds} nodes {budget.NodesPerWorld} on {workerPool!.Count} workers" : "") +
+                          $", game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
             var setup = new RunSetup(opts.GetValueOrDefault("character", "SILENT"), MakeSeed(seed, i), Int(opts, "asc", 0), loadout);
             var started = clock.Elapsed;
-            var first = PlayRun(pump, setup, seed * 1_000_003 + i, policy, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
+            Func<Random, ICombatPolicy> combat = pooled == null ? rng => Policies.Combat(policy, rng)
+                : _ => new PimcPolicy(pooled, budget, CombatSession.StableHash(setup.Seed));
+            var first = PlayRun(pump, setup, seed * 1_000_003 + i, combat, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
+            if (pooled != null) first.Errors.AddRange(pooled.TakeGameErrors());
             var ms = (clock.Elapsed - started).TotalMilliseconds;
             outcomes[first.Outcome] = outcomes.GetValueOrDefault(first.Outcome) + 1;
             foreach (var step in first.Trace)
@@ -228,7 +252,8 @@ internal static class Cli
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
             foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {FirstLine(e)}");
             if (!check) continue;
-            var second = PlayRun(pump, setup, seed * 1_000_003 + i, policy, maxDecisions, trace: false, observe, printObservations: false);
+            var second = PlayRun(pump, setup, seed * 1_000_003 + i, combat, maxDecisions, trace: false, observe, printObservations: false);
+            if (pooled != null) pooled.TakeGameErrors();
             // Each decision's observation is shown before its action, so they pair up by index.
             int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k =>
                 first.Trace[k] != second.Trace[k] || first.Observations.ElementAtOrDefault(k) != second.Observations.ElementAtOrDefault(k), -1);
@@ -250,7 +275,7 @@ internal static class Cli
         if (missing.Count > 0) Console.WriteLine("surfaces never reached: " + string.Join(" ", missing));
         foreach (var (msg, count) in failures.OrderByDescending(kv => kv.Value)) Console.WriteLine($"  failure x{count}: {msg}");
         if (check) Console.WriteLine($"determinism: {n - mismatches}/{n} runs identical on replay");
-        Console.WriteLine($"game Log.Error lines: {gameErrors}");
+        Console.WriteLine($"game Log.Error lines: {gameErrors}" + (workerPool != null ? $"; worker restarts: {workerPool.Restarts}" : ""));
         return failures.Count == 0 && mismatches == 0 && gameErrors == 0 ? 0 : 1;
     }
 
@@ -262,7 +287,7 @@ internal static class Cli
     /// One run to the end (or the decision cap), every policy drawing from one generator seeded by <paramref name="rngSeed"/>.
     /// Observing checks that each observation survives a JSON round trip, and keeps its hash.
     /// </summary>
-    private static RunResult PlayRun(Pump pump, RunSetup setup, int rngSeed, string policy, int maxDecisions, bool trace, bool observe, bool printObservations)
+    private static RunResult PlayRun(Pump pump, RunSetup setup, int rngSeed, Func<Random, ICombatPolicy> combat, int maxDecisions, bool trace, bool observe, bool printObservations)
     {
         var rng = new Random(rngSeed);
         var observations = new List<ulong>();
@@ -276,7 +301,7 @@ internal static class Cli
                 if (printObservations) Console.WriteLine($"  obs {observations.Count}: {json}");
                 observations.Add(ProtocolJson.Hash(obs));
             };
-            session = RunSession.Start(pump, setup, new RandomChoices(rng), Policies.Combat(policy, rng), new RandomMacro(rng), observed);
+            session = RunSession.Start(pump, setup, new RandomChoices(rng), combat(rng), new RandomMacro(rng), observed);
             int printed = 0;
             while (!session.IsOver && session.Trace.Count < maxDecisions)
             {
@@ -368,6 +393,13 @@ internal static class Cli
             opts[key] = i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : "true";
         }
         return opts;
+    }
+
+    /// <summary>How to start this program again: its apphost, or dotnet with its dll if that is how it was started.</summary>
+    public static IReadOnlyList<string> SelfCommand()
+    {
+        var exe = Environment.ProcessPath!;
+        return Path.GetFileNameWithoutExtension(exe) == "dotnet" ? [exe, typeof(Cli).Assembly.Location] : [exe];
     }
 
     public static int Int(Dictionary<string, string> opts, string key, int fallback) =>

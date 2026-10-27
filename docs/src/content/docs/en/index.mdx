@@ -70,10 +70,10 @@ All projects live under `src/`, in the solution `Sts2Ai.sln`. Dependencies point
 |---|---|---|
 | `Sts2Ai.Protocol` | framework only | wire types; together they are the observation whitelist |
 | `Sts2Ai.GameBridge` | game + Protocol + Harmony | observe, legal, start (UI entry points) |
-| `Sts2Ai.Brain` | Protocol | policies (placeholders today) |
-| `Sts2Ai.SimWorker` | game + all of the above | headless host, combat and run sessions, CombatBuilder, CLI |
+| `Sts2Ai.Brain` | Protocol | combat brain v0 (PIMC), placeholder policies |
+| `Sts2Ai.SimWorker` | game + all of the above | headless host, combat and run sessions, CombatBuilder, combat worlds, the worker (`serve`), CLI |
 | `Sts2Ai.Mod` (planned) | game + GameBridge + Protocol | in-game host |
-| Harness (planned) | Protocol + Brain | dispatcher process |
+| `Sts2Ai.Harness` | Protocol + Brain | dispatcher: today the worker pool and the pooled PIMC brain; record, routing and logs planned |
 
 ## 5. Doc map
 
@@ -84,9 +84,9 @@ The sidebar follows this table. The badge next to each page shows its status.
 | [Environments](/en/arch/environments/) | NoSL/SL definitions, node boundary, information table, guards | <Badge text="decided" variant="success" /> |
 | [Protocol](/en/arch/protocol/) | wire format, observation union, choice context, events, recommendation, world API | <Badge text="partly built" variant="tip" /> observation and choice context exist |
 | [GameBridge](/en/arch/gamebridge/) | observe sources, actions per surface, prompt context, decision points, uids | <Badge text="partly built" variant="tip" /> every surface exists |
-| [Simulator](/en/arch/simulator/) | headless host, combat session, CombatBuilder, performance, run session, NoSL worlds, SL clone, worker pool | <Badge text="partly built" variant="tip" /> combat and run sessions exist |
+| [Simulator](/en/arch/simulator/) | headless host, combat session, CombatBuilder, performance, run session, NoSL worlds, SL clone, worker pool | <Badge text="partly built" variant="tip" /> combat and run sessions, NoSL combat worlds, worker pool exist |
 | [Mod](/en/arch/mod/) | loading, main-thread loop, idle detection, adapters, SL export, auto-run driver, safety | <Badge text="planned" variant="caution" /> |
-| [Harness](/en/arch/harness/) | record and belief, routing, budget, decision log, failures | <Badge text="planned" variant="caution" /> |
+| [Harness](/en/arch/harness/) | record and belief, routing, budget, decision log, failures | <Badge text="partly built" variant="tip" /> worker pool exists |
 | [Combat brain](/en/arch/combat-brain/) | PIMC (NoSL), deterministic planning (SL), leaf value, pruning | <Badge text="partly built" variant="tip" /> |
 | [Macro brain](/en/arch/macro-brain/) | afterstate + V, rollout check, map | <Badge text="planned" variant="caution" /> |
 | [Learning](/en/arch/learning/) | definition of V, self-play loop, credit assignment, privileged training, local optima, infrastructure | <Badge text="planned" variant="caution" /> |

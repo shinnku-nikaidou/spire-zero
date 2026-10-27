@@ -13,7 +13,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-已有：无头宿主、单场战斗会话、Determinize、CombatBuilder、整局会话，以及进程内的战斗世界（[§6](#sec-6)）。规划中：SL 克隆，以及 worker 进程池和它的 IPC。
+已有：无头宿主、单场战斗会话、Determinize、CombatBuilder、整局会话、战斗世界（[§6](#sec-6)），以及给 PIMC 的 NoSL 世界用的 worker 进程池（[§8](#sec-8)）。规划中：SL 克隆，以及单个 PIMC 世界之外的 worker 请求。
 
 </Aside>
 
@@ -74,11 +74,12 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 | `list` | 列出本游戏版本里的角色、幕和遭遇 |
 | `combat --encounter ID` | 跑一场战斗，打印每一步 |
 | `combat --from OBS.json` | 同上，但从一场按该观测构建的战斗开始（[§3](#sec-3)） |
-| `run` | 跑整局（[§5](#sec-5)） |
+| `run` | 跑整局（[§5](#sec-5)）；`--policy pimc` 让战斗大脑在 worker 里打其中的战斗（[§8](#sec-8)） |
 | `bench` | 在一个遭遇池上跑大量战斗：吞吐量和失败数（[§4](#sec-4)） |
 | `selftest` | 检查确定性、恢复、确定化等（[§9](#sec-9)） |
 | `forkbench` | 一次恢复和一个搜索分支的开销（[§4](#sec-4)） |
 | `panel` | 固定的战斗测试集：占位策略或战斗大脑，每个玩家用同样的种子（[战斗大脑 §7](/arch/combat-brain/#sec-7)） |
+| `serve` | 作为 worker 运行：从 stdin 读 JSON 行请求，在 stdout 回复（[§8](#sec-8)） |
 
 所有会跑战斗的命令都接受配装选项（角色、牌组、遗物、药水、生命值）。
 
@@ -218,7 +219,7 @@ flowchart TD
 
 `IsOver = RunState.IsGameOver`。一局在胜利房间里结束即为获胜。
 
-**命令行**：`run [--n] [--start] [--seed] [--asc] [--policy] [--max-decisions] [--check] [--trace] [--obs]`，外加配装选项。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。
+**命令行**：`run [--n] [--start] [--seed] [--asc] [--policy play|random|pimc] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs]`，外加配装选项。用 `pimc` 时，每个战斗决策都在 worker 进程池里搜索（NoSL），除非 `--workers` 另行指定，每个世界一个 worker；这一局本身一直活在本进程里。无论哪种策略，战斗之外的决策都是随机的。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。
 
 ### 5.1 开局
 
@@ -310,7 +311,7 @@ NoSL 世界是一个确定化样本：一个与玩家见过的一切都一致的
 - **输入**：公开记录（协议类型）和一个搜索种子。**输出**：与之一致的采样状态。
 - **战斗世界**：`SimWorlds` 在一个进程内实现世界 API（[协议 §7](/arch/protocol/#sec-7)）。根是 `CombatBuilder.Setup(combat obs, build seed)`，从观测构建，从不取自真实战斗。第 k 个世界 = 根 + `Determinize(seed_k)`，`seed_k` 由搜索种子和 k 混合得到。从记录推出的旋钮（回合历史、动作后验）仍是缺口（[§3](#sec-3)）。
 - **所有世界共用一场活战斗**。每个世界保存自己的轨迹，它的快照就是这份轨迹。当另一个世界正处于活状态时使用某个世界，它会从根开始重放来重建自己；只在一个世界里进行的搜索，只有回退时才重放。世界里的选牌提示随机回答，随机数生成器由该世界的种子和轨迹长度播种。
-- **与真实战斗共用一个进程**。`panel`（[战斗大脑 §7](/arch/combat-brain/#sec-7)）在每个决策之前把真实战斗保存为快照，让世界使用这个进程，之后再通过重放把真实战斗放回去。worker 池（[§8](#sec-8)）会去掉这种交接。
+- **与真实战斗共用一个进程**。进程内搜索（不带 `--workers` 的 `panel`，[战斗大脑 §7](/arch/combat-brain/#sec-7)）在每个决策之前把真实战斗保存为快照，让世界使用这个进程，之后再通过重放把真实战斗放回去。用 worker 进程池（[§8](#sec-8)）时，世界在 worker 里，真实的战斗或一局一直活着，没有这种交接。
 - `SimWorlds.SL` 是同一个类，以真实战斗的快照为根、只有一个世界：这场战斗的精确副本，没有封存（[§7](#sec-7)）。
 - **整局世界**（越过节点的宏观搜索）：从 `RunView`（牌组、遗物、药水、生命值、金币、幕、层数、地图、已访问的点）构建一个 `SerializableRun`，隐藏部分用采样填充：每条随机数流；`RoomSet` 的内容和计数器（依据规则：各幕的池子减去已见过的）；抽取袋（grab bag）；概率（能从奖励历史推断的就推断，否则用先验）。像存档一样加载它（[§7](#sec-7)）。是否精确由观测往返测试来检验。
 - R1 与 R4 走同一条 Build 路径，决策时不走「对真实状态做确定化」的捷径，所以各级阶梯上的行为完全相同。对真实状态做 `Determinize` 只保留给测试和基准测试。
@@ -337,14 +338,16 @@ NoSL 世界是一个确定化样本：一个与玩家见过的一切都一致的
 
 ## 8. worker 进程池与 IPC
 
-规划中。
+worker 就是同一个可执行文件以 `serve` 启动。`WorkerPool`（在 `Sts2Ai.Harness` 里，它只通过协议类型看到游戏）启动 N 个 worker，在池的整个生命周期里一直用它们。
 
-- N 个进程（默认 8 个）。每个只启动一次（约 1.2 s），通过 stdin/stdout 上的 JSON 行处理请求（[协议 §2](/arch/protocol/#sec-2)、[§7](/arch/protocol/#sec-7)）。
-- 请求：`open_world{kind: build|clone|run_host, payload}` 返回一个世界 id；然后是 `snapshot`、`restore`、`execute`、`legal`、`observe`、`run_branches{snapshot, branches[]}`；以及 `close`。
-- **亲和性**：世界的活状态留在它所在的 worker 里，从这个世界出发的分支优先发给它，因为从头恢复要付出重放的代价。快照可以移植，所以任何 worker 都能接手。
-- 推演策略在 worker 内运行（Brain 代码，只用协议类型）。
-- **崩溃**：重启进程，从快照重新打开它的世界；Harness 把该决策标记为降级。
-- **确定性**：结果按 (world idx, branch idx) 作键并合并，绝不按完成顺序。
+- **线路**。每条消息是 stdin/stdout 上的一行 JSON（[协议 §7](/arch/protocol/#sec-7)）。worker 启动完（约 1.2 s）先写一行 `WorkerHello{game}`，之后按顺序对每一行请求回一行 `WorkerReply`，直到 stdin 关闭。游戏启动之前，`serve` 把 `Console.Out` 转到 stderr，所以游戏打印的任何东西都进不了这条流。池为每个 worker 保留最后 20 行 stderr，用于错误信息。
+- **目前唯一的请求**是 `PimcWorldRequest`：PIMC 对一个战斗决策中一个 NoSL 世界的搜索。worker 用构建种子从观测构建战斗（`SimWorlds.NoSL`，[§6](#sec-6)），取由搜索种子抽出的第 k 个世界，对本回合做深度优先搜索（[战斗大脑 §3](/arch/combat-brain/#sec-3)），回复每个首个动作之后的最佳路线。`PooledPimc` 每个世界发一个请求，再用与进程内 PIMC 相同的方式合并回复（[战斗大脑 §2](/arch/combat-brain/#sec-2)）。
+- **自包含的请求**。请求带着 worker 需要的一切，请求之间不留任何状态。所以任何空闲的 worker 都能接任何请求，离开宿主进程的只有 NoSL 观测：真实状态永远不会到达 worker。
+- **确定性**。回复按请求顺序合并，绝不按完成顺序。种子相同时，结果与进程内搜索完全相同，连数值也一样：`selftest --workers N` 检查四个决策；6 场战斗的 panel 轨迹，用 8 个 worker 和进程内相比，diff 为空。
+- **崩溃**。关闭 stdout 或管道断开的 worker 会被重启，请求再发一次；第二次失败就报错。次数报告为 `worker restarts`。带错误的回复（worker 内的异常）让这个决策失败；worker 里游戏的 `Log.Error` 输出随回复返回，与宿主的一起计数。
+- **速度**。6 场第 1 幕战斗、默认预算（8 个世界 × 300 个节点）下，8 个 worker 每个动作 68.7 ms，进程内是 307.5 ms（9.4 s 对 42.1 s）。用 `pimc` 战斗策略打整局，同时跑两局、每局 8 个 worker 时，每局约 17.5 s（[战斗大脑 §7.2](/arch/combat-brain/#sec-7.2)）。
+
+为 SL 克隆和整局世界规划的请求：按种类（构建、克隆、整局宿主）打开一个世界，得到世界 id；然后对它做快照、恢复、执行、查合法动作、观测和分支；最后关闭。这样的世界在它的 worker 里保有活状态，所以它的分支应优先发给这个 worker（亲和性），因为换个 worker 恢复要付出重放的代价；快照仍可移植，所以任何 worker 都能接手。那时崩溃就从快照重新打开该 worker 的世界。
 
 ## 9. 测试
 
@@ -355,7 +358,8 @@ NoSL 世界是一个确定化样本：一个与玩家见过的一切都一致的
 - 确定化保持观测不变，能重放，并能继续打下去；
 - 构建出的战斗显示该观测，能恢复，并能继续打下去；
 - 快速钩子监听器与游戏原本的结果相同；
-- Brain 不触及任何游戏程序集（以 GameBridge 作为反面对照）；
+- Brain、Protocol 和 Harness 不触及任何游戏程序集（以 GameBridge 作为反面对照）；
+- 带 `--workers N` 时：池化的 PIMC 与进程内 PIMC 选出相同的动作，数值相同，没有 worker 重启，worker 里也没有游戏错误；
 - 协议往返；
 - Rolling Boulder 的补丁路径被走到过；
 - 没有游戏错误。

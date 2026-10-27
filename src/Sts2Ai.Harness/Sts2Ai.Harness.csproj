@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The decision side around the brains: runs their searches in simulator worker processes. Like Sts2Ai.Brain, it
+    sees the game only through Sts2Ai.Protocol (SimWorker's selftest checks the compiled references); it starts
+    workers by their executable, without referencing them.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Sts2Ai.Brain/Sts2Ai.Brain.csproj" />
+  </ItemGroup>
+</Project>

@@ -14,7 +14,7 @@ This assembly is also the observation **whitelist**: a field exists here only if
 
 <Aside title="Status">
 
-The combat part, the run-level observation with a screen for every surface ([§3](#sec-3)) and `ChoiceContext` ([§4](#sec-4)) exist (`src/Sts2Ai.Protocol`). The combat world API exists too ([§7](#sec-7)). The message envelopes and the event stream are planned.
+The combat part, the run-level observation with a screen for every surface ([§3](#sec-3)) and `ChoiceContext` ([§4](#sec-4)) exist (`src/Sts2Ai.Protocol`). The combat world API exists too ([§7](#sec-7)), and so do the worker messages that carry PIMC's world searches ([§7.1](#sec-7.1)). The message envelopes and the event stream are planned.
 
 </Aside>
 
@@ -236,7 +236,32 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - Card prompts raised inside a world are answered there. In v0 they are answered at random from a generator seeded by the world, so the same search gives the same answers; making each option a search branch is planned ([Combat brain §2](/en/arch/combat-brain/#sec-2), rule 7).
 - `Candidate` is one scored action: its mean value over the worlds, the 95% confidence half-width, and the number of worlds.
 
-Planned with the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)): a batched `RunBranches(from, branches)` call, because one IPC round trip (about tens of µs) costs about as much as one sim step (about 0.1 ms); and the SL seal, under which `Execute` throws once the last action left the node (`AtHorizon`, [Simulator §7](/en/arch/simulator/#sec-7)).
+Planned: the SL seal, under which `Execute` throws once the last action left the node (`AtHorizon`, [Simulator §7](/en/arch/simulator/#sec-7)).
+
+### 7.1 Worker messages
+
+The worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) does not move worlds over the wire one step at a time: an IPC round trip (tens of µs) costs about as much as a sim step (about 0.1 ms), and search takes thousands of steps per decision. A request asks for a whole unit of work instead, here the search of one world (`Worker.cs`):
+
+```csharp
+// The worker's first line, once it has booted.
+public sealed record WorkerHello(string Game);
+
+public interface IWorkerRequest { long Id { get; } }
+
+// Build the combat from Observation with BuildSeed, take world World of Worlds drawn from SearchSeed,
+// and search this turn after each of First, in that order.
+public sealed record PimcWorldRequest(long Id, CombatObservation Observation, IReadOnlyList<CombatAction> First,
+    string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerWorld) : IWorkerRequest;
+
+// Lines[i] is the best line after First[i]. Error is set instead when the request failed.
+public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
+
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions);
+```
+
+- A request carries everything the worker needs, so any worker can serve it and a crashed worker's request can be sent again.
+- The request holds the NoSL observation, never the true state: a worker cannot see more than the player.
+- `GameErrors` holds the game's `Log.Error` lines while the request was served, so the host can count them.
 
 ## 8. Invariants and tests
 

@@ -26,29 +26,37 @@ public interface ICombatBrain
 ///
 /// The budget is split evenly over the first actions, so each gets a fair look; inside a subtree the search stops
 /// expanding when its share is spent, and what is left is scored as ending the turn there (that option is tried first).
+///
+/// The worlds are independent, so a decision is three steps that can run apart: <see cref="Ordered"/> first actions, then
+/// <see cref="SearchWorld"/> for each world wherever that world lives (this process, or a worker), then
+/// <see cref="Merge"/>. <see cref="Decide"/> runs them all here.
 /// </summary>
 public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
 {
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IWorldSource worlds, Budget budget, ulong seed)
     {
-        if (legal.Count == 1) return new(legal[0], [], [new(legal[0].ToString(), double.NaN, 0, 0)]);
+        if (legal.Count == 1) return Only(legal[0]);
         var first = Ordered(legal);
-        var sampled = worlds.Worlds(budget.Worlds, seed);
-        var values = first.Select(_ => new double[sampled.Count]).ToArray();
-        Line[] firstWorld = [];
-        for (int k = 0; k < sampled.Count; k++)
-        {
-            var lines = new WorldSearch(sampled[k], observation.Round, weights, Math.Max(1, budget.NodesPerWorld / first.Count)).Root(first);
-            for (int a = 0; a < first.Count; a++) values[a][k] = lines[a].Value;
-            if (k == 0) firstWorld = lines;
-        }
-        var candidates = first.Select((action, a) => Summarize(action.ToString(), values[a])).ToList();
-        int best = Enumerable.Range(0, first.Count).MaxBy(a => candidates[a].Value);
-        return new(first[best], firstWorld[best].Actions.Skip(1).ToList(), candidates.OrderByDescending(c => c.Value).ToList());
+        return Merge(first, worlds.Worlds(budget.Worlds, seed).Select(w => SearchWorld(w, observation.Round, first, budget.NodesPerWorld)).ToList());
     }
 
-    /// <summary>Ending the turn first (the fallback a spent budget leaves), then cards in hand order, then potions.</summary>
-    private static List<CombatAction> Ordered(IReadOnlyList<CombatAction> legal) =>
+    /// <summary>The answer when there is nothing to choose: no search.</summary>
+    public static CombatDecisionResult Only(CombatAction action) => new(action, [], [new(action.ToString(), double.NaN, 0, 0)]);
+
+    /// <summary>One world's part of a decision: the best line after each of <paramref name="first"/>, in that order.</summary>
+    public IReadOnlyList<PlannedLine> SearchWorld(ICombatWorld world, int round, IReadOnlyList<CombatAction> first, int nodesPerWorld) =>
+        new WorldSearch(world, round, weights, Math.Max(1, nodesPerWorld / first.Count)).Root(first);
+
+    /// <summary>Scores each first action by its mean over the worlds; the plan is the best action's line in the first world.</summary>
+    public static CombatDecisionResult Merge(IReadOnlyList<CombatAction> first, IReadOnlyList<IReadOnlyList<PlannedLine>> worlds)
+    {
+        var candidates = first.Select((action, a) => Summarize(action.ToString(), worlds.Select(lines => lines[a].Value).ToArray())).ToList();
+        int best = Enumerable.Range(0, first.Count).MaxBy(a => candidates[a].Value);
+        return new(first[best], worlds[0][best].Actions.Skip(1).ToList(), candidates.OrderByDescending(c => c.Value).ToList());
+    }
+
+    /// <summary>Search order: ending the turn first (the fallback a spent budget leaves), then cards in hand order, then potions.</summary>
+    public static List<CombatAction> Ordered(IReadOnlyList<CombatAction> legal) =>
         legal.OrderBy(a => a.Kind switch { CombatActionKind.EndTurn => 0, CombatActionKind.PlayCard => 1, _ => 2 }).ToList();
 
     private static Candidate Summarize(string action, double[] values)
@@ -58,17 +66,15 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
         return new(action, mean, ci, values.Length);
     }
 
-    private readonly record struct Line(double Value, IReadOnlyList<CombatAction> Actions);
-
     private sealed class WorldSearch(ICombatWorld world, int round, LeafWeights? weights, int nodesPerFirst)
     {
-        private readonly Dictionary<ulong, Line> _memo = [];
+        private readonly Dictionary<ulong, PlannedLine> _memo = [];
         private int _nodes;
 
-        public Line[] Root(IReadOnlyList<CombatAction> first)
+        public PlannedLine[] Root(IReadOnlyList<CombatAction> first)
         {
             var root = world.Snapshot();
-            var lines = new Line[first.Count];
+            var lines = new PlannedLine[first.Count];
             for (int a = 0; a < first.Count; a++)
             {
                 if (a > 0) world.Restore(root);
@@ -80,7 +86,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
         }
 
         /// <summary>Plays <paramref name="action"/> and returns the best line from there.</summary>
-        private Line After(CombatAction action)
+        private PlannedLine After(CombatAction action)
         {
             _nodes++;
             world.Execute(action);
@@ -92,12 +98,12 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
         }
 
         /// <summary>The best line from the current state, where the player is still on this turn.</summary>
-        private Line Best(CombatObservation obs)
+        private PlannedLine Best(CombatObservation obs)
         {
             ulong key = ProtocolJson.Hash(obs);
             if (_memo.TryGetValue(key, out var known)) return known;
             var here = world.Snapshot();
-            var best = new Line(double.NegativeInfinity, []);
+            var best = new PlannedLine(double.NegativeInfinity, []);
             bool moved = false;
             foreach (var action in Ordered(world.Legal()))
             {

@@ -13,7 +13,7 @@ The simulator is `Sts2Ai.SimWorker`: a plain .NET process that loads the game's 
 
 <Aside title="Status">
 
-Exists: the headless host, single-combat sessions, Determinize, CombatBuilder, the whole-run session, and in-process combat worlds ([§6](#sec-6)). Planned: the SL clone, and the worker pool with its IPC.
+Exists: the headless host, single-combat sessions, Determinize, CombatBuilder, the whole-run session, combat worlds ([§6](#sec-6)), and the worker pool for PIMC's NoSL worlds ([§8](#sec-8)). Planned: the SL clone, and worker requests beyond one PIMC world.
 
 </Aside>
 
@@ -74,11 +74,12 @@ A transpiler is a Harmony patch that rewrites a method's IL instead of wrapping 
 | `list` | characters, acts and encounters of this game build |
 | `combat --encounter ID` | one combat, printing every step |
 | `combat --from OBS.json` | the same, from a combat built to show that observation ([§3](#sec-3)) |
-| `run` | whole runs ([§5](#sec-5)) |
+| `run` | whole runs ([§5](#sec-5)); `--policy pimc` plays their combats with the combat brain in workers ([§8](#sec-8)) |
 | `bench` | many combats over an encounter pool: throughput and failures ([§4](#sec-4)) |
 | `selftest` | determinism, restore, determinize and more ([§9](#sec-9)) |
 | `forkbench` | cost of a restore and of one search branch ([§4](#sec-4)) |
 | `panel` | the fixed combat panel: a placeholder or the combat brain, same seeds for every player ([Combat brain §7](/en/arch/combat-brain/#sec-7)) |
+| `serve` | a worker: JSON-lines requests on stdin, replies on stdout ([§8](#sec-8)) |
 
 Every command that runs combats also takes the loadout options (character, deck, relics, potions, HP).
 
@@ -218,7 +219,7 @@ A card prompt's bounds come from its context (`ChoiceContexts.Bounds`): a cancel
 
 `IsOver = RunState.IsGameOver`. A run is won when it is over in the victory room.
 
-**CLI:** `run [--n] [--start] [--seed] [--asc] [--policy] [--max-decisions] [--check] [--trace] [--obs]` plus the loadout options. `--check` also observes every decision: each observation's JSON round trip must be exact, the hashes are compared on replay, and the run's line ends with a digest of them (`obs`). `--obs` prints each observation.
+**CLI:** `run [--n] [--start] [--seed] [--asc] [--policy play|random|pimc] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs]` plus the loadout options. With `pimc`, each combat decision is searched (NoSL) in a worker pool, one worker per world unless `--workers` says otherwise; the run itself stays live in this process. Out-of-combat decisions are random for every policy. `--check` also observes every decision: each observation's JSON round trip must be exact, the hashes are compared on replay, and the run's line ends with a digest of them (`obs`). `--obs` prints each observation.
 
 ### 5.1 Start
 
@@ -310,7 +311,7 @@ A NoSL world is a determinized sample: a full game state that agrees with everyt
 - **Input:** the public record (protocol types) and a search seed. **Output:** a sampled state consistent with it.
 - **Combat worlds:** `SimWorlds` implements the world API ([Protocol §7](/en/arch/protocol/#sec-7)) inside one process. The root is `CombatBuilder.Setup(combat obs, build seed)`, built from the observation and never from the real combat. World k is the root plus `Determinize(seed_k)`, with `seed_k` mixed from the search seed and k. Knobs derived from the record (turn history, move posterior) are still gaps ([§3](#sec-3)).
 - **One live combat for all worlds.** Each world keeps its own trace, and its snapshot is that trace. When a world is used while another one is live, it rebuilds itself from the root by replay; a search that stays inside one world replays only when it backtracks. Card prompts inside a world are answered at random, from a generator seeded by the world's seed and its trace length.
-- **The same process as the real combat.** `panel` ([Combat brain §7](/en/arch/combat-brain/#sec-7)) keeps the real combat as a snapshot before each decision, lets the worlds use the process, and puts the real combat back by replay. The worker pool ([§8](#sec-8)) will remove this hand-over.
+- **The same process as the real combat.** In-process search (`panel` without `--workers`, [Combat brain §7](/en/arch/combat-brain/#sec-7)) keeps the real combat as a snapshot before each decision, lets the worlds use the process, and puts the real combat back by replay. With the worker pool ([§8](#sec-8)) the worlds live in the workers and the real combat or run stays live, so there is no hand-over.
 - `SimWorlds.SL` is the same class with the real combat's snapshot as the root and one world: an exact copy of the combat, with no seal ([§7](#sec-7)).
 - **Run worlds** (macro search beyond a node): build a `SerializableRun` from `RunView` (deck, relics, potions, HP, gold, act, floor, map, visited points) with the hidden parts sampled: every RNG stream; `RoomSet` contents and counters (from the rules: the act pools minus what was seen); grab bags; odds (inferred from the reward history where that is possible, otherwise a prior). Load it like a save ([§7](#sec-7)). Exactness is tested by an observation round trip.
 - R1 uses the same Build path as R4, with no shortcut that determinizes the true state for decisions, so behavior is identical across rungs. `Determinize` on the true state stays for tests and benchmarks.
@@ -337,14 +338,16 @@ Planned. An SL clone is one exact copy of the current node, sealed at its exit (
 
 ## 8. Worker pool and IPC
 
-Planned.
+A worker is the same binary started as `serve`. `WorkerPool` (in `Sts2Ai.Harness`, which sees the game only through protocol types) starts N of them and keeps each one for the pool's lifetime.
 
-- N processes (default 8). Each boots once (about 1.2 s) and serves requests as JSON lines over stdin/stdout ([Protocol §2](/en/arch/protocol/#sec-2), [§7](/en/arch/protocol/#sec-7)).
-- Requests: `open_world{kind: build|clone|run_host, payload}` returns a world id; then `snapshot`, `restore`, `execute`, `legal`, `observe`, `run_branches{snapshot, branches[]}`; and `close`.
-- **Affinity:** a world's live state stays in its worker, and branches from that world go there first, because a restore from scratch costs a replay. Snapshots are portable, so any worker can take over.
-- Rollout policies run inside the worker (Brain code, protocol types only).
-- **Crash:** restart the process and re-open its worlds from snapshots; Harness marks the decision as degraded.
-- **Determinism:** results are keyed and merged by (world idx, branch idx), never by completion order.
+- **Wire.** One JSON line per message over stdin/stdout ([Protocol §7](/en/arch/protocol/#sec-7)). After booting (about 1.2 s) the worker writes `WorkerHello{game}`, then answers each request line with one `WorkerReply` line, in order, until stdin closes. Before the game boots, `serve` moves `Console.Out` to stderr, so nothing the game prints can get into the stream. The pool keeps the last 20 stderr lines of each worker for error messages.
+- **The one request so far** is `PimcWorldRequest`: PIMC's search of one NoSL world of one combat decision. The worker builds the combat from the observation with the build seed (`SimWorlds.NoSL`, [§6](#sec-6)), takes world k of the worlds drawn from the search seed, runs the depth-first search of this turn ([Combat brain §3](/en/arch/combat-brain/#sec-3)), and replies with the best line after each first action. `PooledPimc` sends one request per world and merges the replies the way in-process PIMC does ([Combat brain §2](/en/arch/combat-brain/#sec-2)).
+- **Self-contained requests.** A request carries everything the worker needs, and nothing carries over from one request to the next. So any free worker can take any request, and only the NoSL observation leaves the host: the true state never reaches a worker.
+- **Determinism.** Replies are merged in request order, never in completion order. With the same seeds the result equals in-process search exactly, values included: `selftest --workers N` checks four decisions, and a 6-combat panel trace with 8 workers diffs empty against the in-process one.
+- **Crash.** A worker that closes its stdout or breaks the pipe is restarted, and the request is sent once more. A second failure is an error. The count is reported as `worker restarts`. A reply with an error (an exception in the worker) fails the decision; game `Log.Error` lines in a worker come back in the reply and are counted with the host's.
+- **Speed.** On 6 act-1 combats with the default budget (8 worlds × 300 nodes), 8 workers take 68.7 ms per action against 307.5 ms in process (9.4 s against 42.1 s). A whole run with the `pimc` combat policy takes about 17.5 s, with two runs at a time on 8 workers each ([Combat brain §7.2](/en/arch/combat-brain/#sec-7.2)).
+
+Planned requests, for the SL clone and run worlds: open a world by kind (build, clone, run host) and get a world id; then snapshot, restore, execute, legal, observe and branch on it; then close. Such a world keeps live state in its worker, so its branches should go to that worker first (affinity), since a restore elsewhere costs a replay; snapshots stay portable, so any worker can take over. A crash then reopens the worker's worlds from their snapshots.
 
 ## 9. Tests
 
@@ -355,7 +358,8 @@ Planned.
 - determinize keeps the observation, replays, and plays on;
 - build shows the observation, restores, and plays on;
 - fast hook listeners give the same result as the game's;
-- Brain reaches no game assembly (with GameBridge as the negative control);
+- Brain, Protocol and Harness reach no game assembly (with GameBridge as the negative control);
+- with `--workers N`: pooled PIMC picks what in-process PIMC picks, with the same values, with no worker restarts or worker game errors;
 - protocol round trip;
 - the Rolling Boulder path is hit;
 - no game errors.

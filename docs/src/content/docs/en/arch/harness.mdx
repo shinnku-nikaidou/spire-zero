@@ -12,7 +12,7 @@ Harness is the dispatcher of the decision process. On one side is the **host**, 
 
 <Aside title="Status">
 
-Planned. There is no Harness today: SimWorker calls the placeholder policies in-process, through `ICombatPolicy` and `IChoicePolicy`.
+Partly built. `Sts2Ai.Harness` holds the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) and `PooledPimc`, the combat brain with its NoSL worlds searched in the pool; `PimcPolicy` wraps it as the combat policy of whole runs. Record, routing, budget control and the decision log are planned: today SimWorker's commands call the policies directly, through `ICombatPolicy` and `IChoicePolicy`.
 
 </Aside>
 
