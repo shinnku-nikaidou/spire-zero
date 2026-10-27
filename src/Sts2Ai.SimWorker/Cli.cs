@@ -23,6 +23,9 @@ namespace Sts2Ai.SimWorker;
 ///                                          whole runs, every non-combat decision random; --check plays each seed
 ///                                          twice and compares, observations included (each one must survive a JSON
 ///                                          round trip); --obs prints them; reports results, hashes and surface coverage
+///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
+///         [--worlds 8] [--nodes 300] [--trace] [--out results.jsonl]
+///                                          the fixed combat panel: the same combats for every player; win rate, HP lost
 /// Loadout options for every command that runs combats: [--character SILENT] [--deck A*5,B+,...]
 /// [--relics A,B] [--potions A,B] [--hp N] [--max-hp N]. Omitted parts keep the character's starting values.
 /// </summary>
@@ -34,7 +37,7 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | panel"); return 2; }
         var opts = ParseOptions(args.Skip(1).ToArray());
         HeadlessGame.Boot(opts.ContainsKey("verbose"));
         var pump = Pump.InstallOnCurrentThread();
@@ -46,6 +49,7 @@ internal static class Cli
             "selftest" => SelfTest.Run(pump, opts),
             "forkbench" => ForkBench.Run(pump, opts),
             "run" => Runs(pump, opts),
+            "panel" => Panel.Run(pump, opts),
             _ => Fail($"unknown command {args[0]}"),
         };
     }

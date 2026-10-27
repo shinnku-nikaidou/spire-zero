@@ -41,6 +41,14 @@ internal readonly record struct TraceEvent(TraceKind Kind, CombatAction Action =
         TraceKind.Choice => $"choose:{string.Join(",", Picks!)}",
         _ => $"determinize:{Seed}",
     };
+
+    public static TraceEvent Parse(string text)
+    {
+        if (text.StartsWith("choose:", StringComparison.Ordinal))
+            return new(TraceKind.Choice, Picks: text.Length == 7 ? [] : text[7..].Split(',').Select(int.Parse).ToArray());
+        if (text.StartsWith("determinize:", StringComparison.Ordinal)) return new(TraceKind.Determinize, Seed: ulong.Parse(text[12..]));
+        return new(TraceKind.Action, CombatAction.Parse(text));
+    }
 }
 
 /// <summary>A point in a combat, kept as the recipe to rebuild it: see <see cref="CombatSession.Restore"/>.</summary>

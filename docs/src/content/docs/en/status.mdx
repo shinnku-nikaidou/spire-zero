@@ -19,8 +19,10 @@ As of 2026-10-26:
 | run session (whole runs headless) | done: every surface, with random placeholder policies. 200/200 runs deterministic within a process and across processes, 0 failures, 0 game errors ([Simulator §5](/en/arch/simulator/#sec-5)) |
 | run-level observation + `ChoiceContext` | done: every surface observed; the JSON round trip and the observation hashes are deterministic in the same batches ([Protocol §3](/en/arch/protocol/#sec-3), [§4](/en/arch/protocol/#sec-4)) |
 | SL clone (load save + replay + seal) | planned; the path is researched ([Simulator §7](/en/arch/simulator/#sec-7)) |
+| combat world API, in process | done: NoSL worlds built from the observation, the SL world by replay of the real combat ([Simulator §6](/en/arch/simulator/#sec-6)) |
+| combat brain v0 | done: PIMC with a one-turn search and a hand-made leaf. Win rate against the best placeholder: 100% vs 85% on act 1 weak + regular, 36.7% vs 16.7% on act 1 elites, 50% vs 16.7% on act 2 ([Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)) |
 | wire envelopes, events, Harness, worker IPC | planned |
-| combat brain, macro brain, value function | placeholders only |
+| macro brain, value function | placeholders only |
 | mod | probe builds exist, not installed |
 
 ## 2. Main gaps and risks
@@ -31,6 +33,8 @@ As of 2026-10-26:
 4. **Run start uses `UnlockState.all`,** not the user's profile, and ascension is not clamped to the character's maximum ([Simulator §5.1](/en/arch/simulator/#sec-5.1)).
 5. **New game code that touches Godot nodes** without the TestMode guard, outside events (where the transpiler covers it), shows up only as game errors in `run` batches ([Simulator §5.2](/en/arch/simulator/#sec-5.2)).
 6. **Harmony patches in the real game vs tiered JIT:** the runtime may recompile a method and silently drop a patch ([Mod §10](/en/arch/mod/#sec-10)).
+7. **Combat brain v0 blind spots.** Card prompts are answered at random, both inside search and in the real combat; the search sees this turn only, so SL gains nothing over NoSL yet; the leaf is hand-made and ignores most powers ([Combat brain §4](/en/arch/combat-brain/#sec-4)).
+8. **The search shares a process with the real combat.** The panel parks the real combat as a snapshot before each decision and replays it afterwards. A process that holds a whole run cannot do that, so the brain plays whole runs only once worlds live in other processes ([Simulator §6](/en/arch/simulator/#sec-6), [§8](/en/arch/simulator/#sec-8)).
 
 ## 3. Implementation order
 
@@ -40,16 +44,18 @@ As of 2026-10-26:
 
 2. <Badge text="done 2026-10-26" variant="success" /> Protocol run-level types and `ChoiceContext`; GameBridge observe and legal for every surface.
 
-3. Worker pool, IPC and the world API (`RunBranches`).
+3. <Badge text="done 2026-10-26" variant="success" /> The combat world API in process, combat brain v0 (PIMC with a v0 leaf value) and the combat panel; v0 beats the placeholders on every pool ([Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)).
 
-4. Harness (record, routing, logs) and combat brain v0 (PIMC with a v0 leaf value); gate it on the combat panel against the placeholders.
+4. Worker pool and IPC, so that search runs beside a process that holds a real run.
 
-5. Macro brain L0 and a v0 value function; R1/R2 full runs; the evaluation pipeline.
+5. Harness (record, routing, logs); the combat brain plays the combats of whole runs.
 
-6. Mod: load, observe, and show the panel with the placeholder brain, giving the R4 pipeline; then the executor and the auto-run driver; the R3 ≡ R4 equivalence test.
+6. Macro brain L0 and a v0 value function; R1/R2 full runs; the evaluation pipeline.
 
-7. Node checkpoint, SL clone and seal; the SL leaderboard.
+7. Mod: load, observe, and show the panel with the placeholder brain, giving the R4 pipeline; then the executor and the auto-run driver; the R3 ≡ R4 equivalence test.
 
-8. The learning loop (fit V, ExIt, SPSA, gates), then the LLM patch loop.
+8. Node checkpoint, SL clone and seal; the SL leaderboard.
+
+9. The learning loop (fit V, ExIt, SPSA, gates), then the LLM patch loop.
 
 </Steps>

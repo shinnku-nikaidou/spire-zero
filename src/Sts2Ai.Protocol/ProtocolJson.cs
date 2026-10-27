@@ -18,7 +18,7 @@ public static class ProtocolJson
         JsonSerializer.Deserialize<T>(json, Options) ?? throw new JsonException($"null {typeof(T).Name}");
 
     /// <summary>The obs_hash of docs: protocol §2: FNV-1a 64 over the UTF-8 of the observation's JSON.</summary>
-    public static ulong Hash(Observation observation)
+    public static ulong Hash<T>(T observation)
     {
         ulong hash = 14695981039346656037;
         foreach (byte b in JsonSerializer.SerializeToUtf8Bytes(observation, Options)) hash = (hash ^ b) * 1099511628211;

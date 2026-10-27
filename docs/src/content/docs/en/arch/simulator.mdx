@@ -13,7 +13,7 @@ The simulator is `Sts2Ai.SimWorker`: a plain .NET process that loads the game's 
 
 <Aside title="Status">
 
-Exists: the headless host, single-combat sessions, Determinize, CombatBuilder, and the whole-run session. Planned: the SL clone, and the worker pool with its IPC.
+Exists: the headless host, single-combat sessions, Determinize, CombatBuilder, the whole-run session, and in-process combat worlds ([§6](#sec-6)). Planned: the SL clone, and the worker pool with its IPC.
 
 </Aside>
 
@@ -78,6 +78,7 @@ A transpiler is a Harmony patch that rewrites a method's IL instead of wrapping 
 | `bench` | many combats over an encounter pool: throughput and failures ([§4](#sec-4)) |
 | `selftest` | determinism, restore, determinize and more ([§9](#sec-9)) |
 | `forkbench` | cost of a restore and of one search branch ([§4](#sec-4)) |
+| `panel` | the fixed combat panel: a placeholder or the combat brain, same seeds for every player ([Combat brain §7](/en/arch/combat-brain/#sec-7)) |
 
 Every command that runs combats also takes the loadout options (character, deck, relics, potions, HP).
 
@@ -304,10 +305,13 @@ This is the same mechanism as the SL clone, so there is one code path, tested by
 
 ## 6. NoSL worlds
 
-Planned. A NoSL world is a determinized sample: a full game state that agrees with everything the player has seen ([Environments §1](/en/arch/environments/#sec-1)).
+A NoSL world is a determinized sample: a full game state that agrees with everything the player has seen ([Environments §1](/en/arch/environments/#sec-1)). Combat worlds exist; run worlds are planned.
 
 - **Input:** the public record (protocol types) and a search seed. **Output:** a sampled state consistent with it.
-- **Combat worlds:** `CombatBuilder.Setup(latest combat obs, seed)`, plus knobs derived from the record (turn history, move posterior; both are gaps), then `Resample` per sample. Build once per decision and take a snapshot; each sample is then a restore + `Determinize(seed_k)`.
+- **Combat worlds:** `SimWorlds` implements the world API ([Protocol §7](/en/arch/protocol/#sec-7)) inside one process. The root is `CombatBuilder.Setup(combat obs, build seed)`, built from the observation and never from the real combat. World k is the root plus `Determinize(seed_k)`, with `seed_k` mixed from the search seed and k. Knobs derived from the record (turn history, move posterior) are still gaps ([§3](#sec-3)).
+- **One live combat for all worlds.** Each world keeps its own trace, and its snapshot is that trace. When a world is used while another one is live, it rebuilds itself from the root by replay; a search that stays inside one world replays only when it backtracks. Card prompts inside a world are answered at random, from a generator seeded by the world's seed and its trace length.
+- **The same process as the real combat.** `panel` ([Combat brain §7](/en/arch/combat-brain/#sec-7)) keeps the real combat as a snapshot before each decision, lets the worlds use the process, and puts the real combat back by replay. The worker pool ([§8](#sec-8)) will remove this hand-over.
+- `SimWorlds.SL` is the same class with the real combat's snapshot as the root and one world: an exact copy of the combat, with no seal ([§7](#sec-7)).
 - **Run worlds** (macro search beyond a node): build a `SerializableRun` from `RunView` (deck, relics, potions, HP, gold, act, floor, map, visited points) with the hidden parts sampled: every RNG stream; `RoomSet` contents and counters (from the rules: the act pools minus what was seen); grab bags; odds (inferred from the reward history where that is possible, otherwise a prior). Load it like a save ([§7](#sec-7)). Exactness is tested by an observation round trip.
 - R1 uses the same Build path as R4, with no shortcut that determinizes the true state for decisions, so behavior is identical across rungs. `Determinize` on the true state stays for tests and benchmarks.
 

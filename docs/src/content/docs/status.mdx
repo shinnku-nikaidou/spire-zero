@@ -19,8 +19,10 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | 整局会话（无头跑完整局） | 完成：覆盖所有决策界面，用随机占位策略。200/200 局在进程内和跨进程都是确定性的，0 次失败，0 个游戏错误（[模拟器 §5](/arch/simulator/#sec-5)） |
 | 整局观测 + `ChoiceContext` | 完成：每个决策界面都有观测；在同样的批次里，JSON 往返和观测哈希都是确定性的（[协议 §3](/arch/protocol/#sec-3)、[§4](/arch/protocol/#sec-4)） |
 | SL 克隆（加载存档 + 重放 + 封存） | 规划中；路径已调研（[模拟器 §7](/arch/simulator/#sec-7)） |
+| 战斗世界 API（进程内） | 完成：NoSL 世界从观测构建，SL 世界通过重放真实战斗得到（[模拟器 §6](/arch/simulator/#sec-6)） |
+| 战斗大脑 v0 | 完成：PIMC，搜索一个回合，手工叶子估值。与最好的占位策略比胜率：第 1 幕弱怪 + 普通 100% 对 85%，第 1 幕精英 36.7% 对 16.7%，第 2 幕 50% 对 16.7%（[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)） |
 | 消息信封、事件、Harness、worker 进程间通信 | 规划中 |
-| 战斗大脑、宏观大脑、价值函数 | 只有占位实现 |
+| 宏观大脑、价值函数 | 只有占位实现 |
 | Mod | 已有探针构建，未安装 |
 
 ## 2. 主要缺口与风险
@@ -31,6 +33,8 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 4. **开局用的是 `UnlockState.all`**，不是用户自己的存档进度；进阶等级也没有限制在角色允许的最大值以内（[模拟器 §5.1](/arch/simulator/#sec-5.1)）。
 5. **新增的游戏代码如果在事件之外（事件由 transpiler 覆盖）调用 Godot 节点**而没有 TestMode 保护，只会在 `run` 批量运行里以游戏错误的形式暴露出来（[模拟器 §5.2](/arch/simulator/#sec-5.2)）。
 6. **真实游戏里的 Harmony 补丁与分层 JIT**：运行时可能重新编译某个方法，悄悄丢掉补丁（[Mod §10](/arch/mod/#sec-10)）。
+7. **战斗大脑 v0 的盲区**。选牌提示随机回答，搜索内和真实战斗里都是如此；搜索只看本回合，所以 SL 目前比 NoSL 没有任何优势；叶子是手工的，忽略了大多数能力（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
+8. **搜索与真实战斗共用一个进程**。测试集在每个决策之前把真实战斗存为快照，决策之后再重放回来。持有整局的进程做不到这一点，所以只有等世界放到别的进程里，大脑才能打完整局（[模拟器 §6](/arch/simulator/#sec-6)、[§8](/arch/simulator/#sec-8)）。
 
 ## 3. 实施顺序
 
@@ -40,16 +44,18 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 2. <Badge text="2026-10-26 完成" variant="success" /> 协议的整局级类型和 `ChoiceContext`；GameBridge 为每个决策界面提供 observe 和 legal。
 
-3. worker 池、进程间通信和世界 API（`RunBranches`）。
+3. <Badge text="2026-10-26 完成" variant="success" /> 进程内的战斗世界 API、战斗大脑 v0（PIMC 加 v0 叶子估值）和战斗测试集；v0 在每个遭遇池上都赢过占位策略（[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)）。
 
-4. Harness（记录、路由、日志）和战斗大脑 v0（PIMC 加 v0 叶子估值）；在战斗测试集上与占位策略对比，通过晋级门槛。
+4. worker 池和进程间通信，让搜索可以在持有真实整局的进程旁边运行。
 
-5. 宏观大脑 L0 和 v0 价值函数；R1/R2 完整对局；评估流水线。
+5. Harness（记录、路由、日志）；战斗大脑打完整局里的每场战斗。
 
-6. Mod：加载、观测，用占位大脑显示面板，打通 R4 流水线；然后是执行器和自动开局驱动；R3 ≡ R4 等价测试。
+6. 宏观大脑 L0 和 v0 价值函数；R1/R2 完整对局；评估流水线。
 
-7. 节点检查点、SL 克隆和封存；SL 排行榜。
+7. Mod：加载、观测，用占位大脑显示面板，打通 R4 流水线；然后是执行器和自动开局驱动；R3 ≡ R4 等价测试。
 
-8. 学习循环（拟合 V、ExIt、SPSA、晋级门槛），然后是 LLM 补丁循环。
+8. 节点检查点、SL 克隆和封存；SL 排行榜。
+
+9. 学习循环（拟合 V、ExIt、SPSA、晋级门槛），然后是 LLM 补丁循环。
 
 </Steps>

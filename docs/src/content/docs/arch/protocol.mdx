@@ -14,7 +14,7 @@ Protocol（协议）是项目各进程之间的共同语言。游戏宿主（真
 
 <Aside title="状态">
 
-战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。消息信封、事件流和世界 API 还在规划中。
+战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。战斗世界 API 也已实现（[§7](#sec-7)）。消息信封和事件流还在规划中。
 
 </Aside>
 
@@ -202,39 +202,41 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 
 ## 7. 世界 API
 
-搜索从不直接接触游戏，而是从这个 API 拿到**世界**：可以观测、执行动作、做快照和恢复的模拟游戏。类型定义在 Protocol 里，所以 Brain 不引用游戏也能使用；实现在 SimWorker 里，可以在同一进程内，也可以经由管道。NoSL 和 SL 的世界有何不同，见 [环境 §5](/arch/environments/#sec-5)。
+搜索从不直接接触游戏，而是从这个 API 拿到**世界**：可以观测、执行动作、做快照和恢复的模拟战斗。类型定义在 Protocol 里（`World.cs`），所以 Brain 不引用游戏也能使用；实现在 SimWorker 里（[模拟器 §6](/arch/simulator/#sec-6)）。NoSL 和 SL 的世界有何不同，见 [环境 §5](/arch/environments/#sec-5)。
 
 ```csharp
 public enum PlayEnvironment { NoSL, SL }
+public enum CombatStatus { InProgress, Won, Lost }
 
-// The only way search touches a game. Given by Harness per decision.
+// Hands out the worlds for one decision.
 public interface IWorldSource
 {
     PlayEnvironment Environment { get; }
-    // NoSL: k worlds sampled from the public record, seeded from searchSeed.
-    // SL: one clone of the current node; k and searchSeed are ignored.
-    IReadOnlyList<ISimWorld> Worlds(int k, ulong searchSeed);
+    // NoSL: k samples drawn from searchSeed. SL: the one exact copy.
+    IReadOnlyList<ICombatWorld> Worlds(int k, ulong searchSeed);
 }
 
-public interface ISimWorld : IDisposable
+public interface ICombatWorld
 {
-    Observation Observe();
-    IReadOnlyList<string> Legal();
-    void Execute(string action);       // throws if illegal, or if AtHorizon
-    bool AtHorizon { get; }            // SL: the last action left the node. NoSL: always false.
-    WorldSnapshot Snapshot();          // opaque, serializable recipe (worker-side replay)
-    void Restore(WorldSnapshot snapshot);
-    // Batched to amortize IPC: run each branch from the snapshot, return the leaf observations.
-    IReadOnlyList<BranchResult> RunBranches(WorldSnapshot from, IReadOnlyList<Branch> branches);
+    CombatObservation Observe();
+    IReadOnlyList<CombatAction> Legal();   // empty once the combat is over
+    CombatStatus Status { get; }
+    void Execute(CombatAction action);     // card prompts are answered inside the world
+    WorldSnapshot Snapshot();
+    void Restore(WorldSnapshot snapshot);  // a snapshot taken from this same world
 }
-public sealed record Branch(IReadOnlyList<string> Actions, string? RolloutPolicy, int MaxActions);
-public sealed record BranchResult(Observation Leaf, bool AtHorizon, bool Ended, int ActionsRun);
+
+public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
+public sealed record Candidate(string Action, double Value, double Ci, int Samples);
 ```
 
-- `IWorldSource` 由 Harness 在每个决策时提供，是搜索接触游戏的唯一途径。NoSL 下它返回从公开记录采样出的 k 个世界，用 `searchSeed` 播种。SL 下它返回当前节点的一个克隆，忽略 `k` 和 `searchSeed`。
-- `ISimWorld.Execute` 遇到非法动作会抛异常，世界处于 `AtHorizon` 之后也会抛异常。SL 下 `AtHorizon` 表示上一个动作离开了节点；NoSL 下它始终为 false。
-- `WorldSnapshot` 是一份不透明、可序列化的配方，worker 通过重放来恢复它。因此它能挺过 worker 崩溃：任何 worker 都能通过重放恢复它。
-- 之所以有 `RunBranches`，是因为每一步一次 IPC 往返（约几十 µs）和一个模拟步（约 0.1 ms）的开销相当。所以推演（rollout）在 worker 内部运行，使用 Brain 的推演策略；SimWorker 本来就引用了 Brain。推演是指用一个快速策略把一条路线往下打，以估计它的好坏。每个 `Branch` 给出一串动作、一个可选的推演策略和动作数上限。每个 `BranchResult` 给出叶子观测、世界是否到达视野边界（horizon）、是否已结束，以及实际执行了多少个动作。
+- NoSL 世界是隐藏状态的一个样本，与观测一致；SL 世界是真实战斗的一份精确副本。
+- 目前只有战斗世界：它唯一的使用者是战斗大脑。整局级的世界等到宏观搜索时再加。
+- `WorldSnapshot` 是这个世界从开始以来走过的步骤列表（动作、选牌回答、确定化步骤），以文本形式保存。对搜索来说它是不透明的；只有生成它的那个世界会读它，并通过重放恢复。因为它是纯文本，任何 worker 都能恢复它。
+- 世界里弹出的选牌提示在世界内部回答。v0 用一个由该世界播种的随机数生成器随机回答，所以同样的搜索给出同样的回答；把每个选项变成搜索分支还在规划中（[战斗大脑 §2](/arch/combat-brain/#sec-2) 第 7 条）。
+- `Candidate` 是一个打过分的动作：它在各个世界上的平均估值、95% 置信区间的半宽，以及世界的个数。
+
+随 worker 池一起规划的（[模拟器 §8](/arch/simulator/#sec-8)）：一个批量的 `RunBranches(from, branches)` 调用，因为一次进程间往返（约几十 µs）和一个模拟步（约 0.1 ms）的开销相当；以及 SL 封存：上一个动作离开节点之后（`AtHorizon`），`Execute` 会抛异常（[模拟器 §7](/arch/simulator/#sec-7)）。
 
 ## 8. 不变量与测试
 

@@ -125,7 +125,7 @@ flowchart LR
 
 "No strategy fusion" means NoSL scores each action by its average over the K worlds. It does not pick the best line separately in each world, which would let the plan behave as if it already knew which world is the real one.
 
-Leaf evaluators read observations only, in both environments, so the true streams cannot leak in through evaluation. The search code does not know which environment it runs in; the environment lives in Harness and in the world implementation. The interface is in [Protocol §7](/en/arch/protocol/#sec-7) (`IWorldSource`, `ISimWorld`).
+Leaf evaluators read observations only, in both environments, so the true streams cannot leak in through evaluation. The search code does not know which environment it runs in; the environment lives in Harness and in the world implementation. The interface is in [Protocol §7](/en/arch/protocol/#sec-7) (`IWorldSource`, `ICombatWorld`).
 
 ## 6. Where the SL clone comes from
 
