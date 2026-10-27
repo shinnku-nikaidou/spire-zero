@@ -43,14 +43,25 @@ public sealed class Dispatcher(
 
     private readonly ulong _runHash = ProtocolJson.Hash(runId);
     private readonly List<DecisionEntry> _log = [];
+    private readonly Dictionary<string, int> _brains = [];
     private int _decisions;
 
     /// <summary>The run's decisions so far, when logging.</summary>
     public IReadOnlyList<DecisionEntry> Log => _log;
 
+    public PlayEnvironment Env => env;
+
+    /// <summary>How many decisions each brain made so far.</summary>
+    public IReadOnlyDictionary<string, int> Brains => _brains;
+
+    /// <summary>The brain on each side of the routing table, for reports.</summary>
+    public string Champion =>
+        $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b.Worlds}x{b.NodesPerWorld}" : "")}, combat prompts {combatChoices.Brain}, " +
+        $"macro {macro.Brain}, macro prompts {macroChoices.Brain}";
+
     public CombatAction Choose(CombatDecision decision)
     {
-        var (id, seed, clock) = Begin();
+        var (id, seed, clock) = Begin(combat.Brain);
         var result = combat.Decide(decision, seed);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(result.First)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
@@ -63,8 +74,8 @@ public sealed class Dispatcher(
 
     public IReadOnlyList<int> Choose(CardChoice choice)
     {
-        var (id, seed, clock) = Begin();
         var route = choice.Context.InCombat ? combatChoices : macroChoices;
+        var (id, seed, clock) = Begin(route.Brain);
         var picks = route.Policy.Choose(choice);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!choice.Accepts(picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", picks)}], which the prompt does not accept");
@@ -76,7 +87,7 @@ public sealed class Dispatcher(
 
     public string Choose(MacroDecision decision)
     {
-        var (id, seed, clock) = Begin();
+        var (id, seed, clock) = Begin(macro.Brain);
         if (!MacroSurfaces.Contains(decision.Surface)) throw new InvalidOperationException($"uncovered surface {decision.Surface}");
         var action = macro.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
@@ -87,8 +98,9 @@ public sealed class Dispatcher(
         return action;
     }
 
-    private (int Id, ulong Seed, Stopwatch Clock) Begin()
+    private (int Id, ulong Seed, Stopwatch Clock) Begin(string brain)
     {
+        _brains[brain] = _brains.GetValueOrDefault(brain) + 1;
         int id = _decisions++;
         return (id, Mix(_runHash, (ulong)id), Stopwatch.StartNew());
     }

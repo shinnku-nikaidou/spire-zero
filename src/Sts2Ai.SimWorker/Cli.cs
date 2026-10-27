@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -21,14 +22,18 @@ namespace Sts2Ai.SimWorker;
 ///                                          checks determinism, restore and determinize over an encounter pool
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
-///   run [--n 1] [--start 0] [--seed 1] [--asc 0] [--policy play|random|pimc] [--worlds 8] [--nodes 300] [--workers W]
-///       [--max-decisions 20000] [--check] [--trace] [--obs] [--log decisions.jsonl]
+///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--policy play|random|pimc] [--worlds 8] [--nodes 300]
+///       [--workers W] [--max-decisions 20000] [--check] [--trace] [--obs] [--log decisions.jsonl] [--records runs.jsonl]
 ///                                          whole runs through Harness, every non-combat decision random; --check plays
 ///                                          each seed twice and compares, observations and decision logs included (each
 ///                                          observation must survive a JSON round trip); --obs prints them; --log writes
 ///                                          the decision log; reports results, hashes and surface coverage.
 ///                                          pimc searches each combat decision (NoSL) in W worker processes (default:
-///                                          one per world)
+///                                          one per world). --seeds plays the seeds of a seed file, from --start, all
+///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6)
+///   report --seeds FILE --records A.jsonl[,B.jsonl] --out PATH [--previous OLD.json]
+///                                          the evaluation report over those records: PATH.json and PATH.md
+///   seeds --base N --n 300                 a seed file's seeds: MakeSeed(N, 0..n-1), one per line
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
 ///         [--worlds 8] [--nodes 300] [--workers 0] [--trace] [--out results.jsonl]
 ///                                          the fixed combat panel: the same combats for every player; win rate, HP lost.
@@ -45,7 +50,10 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | panel | serve"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | panel | serve | report | seeds"); return 2; }
+        // These two need no game.
+        if (args[0] == "report") return Report(ParseOptions(args.Skip(1).ToArray()));
+        if (args[0] == "seeds") return Seeds(ParseOptions(args.Skip(1).ToArray()));
         // A worker's stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
         TextWriter? wire = null;
         if (args[0] == "serve")
@@ -207,13 +215,16 @@ internal static class Cli
 
     private static int Runs(Pump pump, Dictionary<string, string> opts)
     {
-        int n = Int(opts, "n", 1);
+        var seeds = opts.TryGetValue("seeds", out var seedFile) ? EvalReport.ReadSeeds(seedFile) : null;
         int start = Int(opts, "start", 0);
+        int n = Int(opts, "n", seeds == null ? 1 : seeds.Count - start);
+        if (seeds != null && start + n > seeds.Count) return Fail($"{seedFile} has {seeds.Count} seeds, not {start + n}");
         int seed = Int(opts, "seed", 1);
         int maxDecisions = Int(opts, "max-decisions", 20_000);
         bool check = opts.ContainsKey("check");
         bool observe = check || opts.ContainsKey("obs");
         using var logFile = opts.TryGetValue("log", out var logPath) ? new StreamWriter(logPath) : null;
+        using var records = opts.TryGetValue("records", out var recordsPath) ? new StreamWriter(recordsPath) { AutoFlush = true } : null;
         bool log = check || logFile != null;
         var policy = opts.GetValueOrDefault("policy", "play");
         if (policy != "pimc" && !Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (pimc, {string.Join(", ", Policies.CombatNames)})");
@@ -234,7 +245,7 @@ internal static class Cli
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
-            var setup = new RunSetup(opts.GetValueOrDefault("character", "SILENT"), MakeSeed(seed, i), Int(opts, "asc", 0), loadout);
+            var setup = new RunSetup(opts.GetValueOrDefault("character", "SILENT"), seeds?[i] ?? MakeSeed(seed, i), Int(opts, "asc", 0), loadout);
             var started = clock.Elapsed;
             // Placeholders draw from the run's generator, so a seed plays the same run whatever is logged.
             Dispatcher Harness(Random rng)
@@ -243,16 +254,13 @@ internal static class Cli
                 var random = new RandomChoices(rng);
                 return new Dispatcher(setup.Seed, PlayEnvironment.NoSL, combat, new("random", random), new("random", new RandomMacro(rng)), new("random", random), log);
             }
-            var first = PlayRun(pump, setup, seed * 1_000_003 + i, Harness, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
+            var first = PlayRun(pump, setup, Harness, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
             if (pooled != null) first.Errors.AddRange(pooled.TakeGameErrors());
             foreach (var entry in first.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
             var ms = (clock.Elapsed - started).TotalMilliseconds;
+            records?.WriteLine(ProtocolJson.Serialize(first.Record with { GameErrors = first.Errors.Count, ElapsedMs = ms }));
             outcomes[first.Outcome] = outcomes.GetValueOrDefault(first.Outcome) + 1;
-            foreach (var step in first.Trace)
-            {
-                var surface = step[..step.IndexOf(' ')];
-                surfaces[surface] = surfaces.GetValueOrDefault(surface) + 1;
-            }
+            foreach (var (surface, count) in first.Record.Surfaces) surfaces[surface] = surfaces.GetValueOrDefault(surface) + count;
             if (first.Failure != null) failures[first.Failure] = failures.GetValueOrDefault(first.Failure) + 1;
             gameErrors += first.Errors.Count;
             Console.WriteLine($"#{i} {setup.Seed} {first.Outcome} {first.Summary} decisions {first.Trace.Count} {ms:F0} ms " +
@@ -261,7 +269,7 @@ internal static class Cli
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
             foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {FirstLine(e)}");
             if (!check) continue;
-            var second = PlayRun(pump, setup, seed * 1_000_003 + i, Harness, maxDecisions, trace: false, observe, printObservations: false);
+            var second = PlayRun(pump, setup, Harness, maxDecisions, trace: false, observe, printObservations: false);
             if (pooled != null) pooled.TakeGameErrors();
             // Each decision's observation is shown before its action, so they pair up by index.
             int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k =>
@@ -295,17 +303,18 @@ internal static class Cli
 
     /// <param name="Observations">Per decision, its observation's hash (when observing).</param>
     /// <param name="Log">Harness's decision log, when logging.</param>
+    /// <param name="Record">The run's record, its game errors and time still to fill in.</param>
     private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes,
-        IReadOnlyList<ulong> Observations, IReadOnlyList<DecisionEntry> Log, string? Failure, List<string> Errors);
+        IReadOnlyList<ulong> Observations, IReadOnlyList<DecisionEntry> Log, string? Failure, List<string> Errors, RunRecord Record);
 
     /// <summary>
-    /// One run to the end (or the decision cap) through the Harness that <paramref name="harness"/> builds on one generator
-    /// seeded by <paramref name="rngSeed"/>.
+    /// One run to the end (or the decision cap) through the Harness that <paramref name="harness"/> builds on one
+    /// generator, seeded by the run's seed, so the seed alone gives the same run.
     /// Observing checks that each observation survives a JSON round trip, and keeps its hash.
     /// </summary>
-    private static RunResult PlayRun(Pump pump, RunSetup setup, int rngSeed, Func<Random, Dispatcher> harness, int maxDecisions, bool trace, bool observe, bool printObservations)
+    private static RunResult PlayRun(Pump pump, RunSetup setup, Func<Random, Dispatcher> harness, int maxDecisions, bool trace, bool observe, bool printObservations)
     {
-        var rng = new Random(rngSeed);
+        var rng = new Random(unchecked((int)CombatSession.StableHash(setup.Seed)));
         var dispatcher = harness(rng);
         var observations = new List<ulong>();
         RunSession? session = null;
@@ -326,19 +335,66 @@ internal static class Cli
                 if (!trace) continue;
                 for (; printed < session.Trace.Count; printed++) Console.WriteLine($"  {printed}: {session.Trace[printed]}");
             }
-            var outcome = session.Won ? "won" : session.IsOver ? "lost" : "truncated";
-            return new(outcome, session.Summary(), session.Trace.ToList(), session.MapHashes.ToList(), observations, dispatcher.Log.ToList(), null, HeadlessGame.TakeErrors());
+            return Result(session.Won ? "won" : session.IsOver ? "lost" : "truncated", null);
         }
         catch (Exception e)
         {
             if (HeadlessGame.Verbose) Console.Error.WriteLine(e);
-            return new("failed", session?.Summary() ?? "", session?.Trace.ToList() ?? [], session?.MapHashes.ToList() ?? [], observations,
-                dispatcher.Log.ToList(), $"{e.GetType().Name}: {FirstLine(e.Message)}", HeadlessGame.TakeErrors());
+            return Result("failed", $"{e.GetType().Name}: {FirstLine(e.Message)}");
         }
         finally
         {
             session?.Dispose();
         }
+
+        RunResult Result(string outcome, string? failure)
+        {
+            var steps = session?.Trace.ToList() ?? [];
+            var surfaces = steps.GroupBy(s => s[..s.IndexOf(' ')]).ToDictionary(g => g.Key, g => g.Count());
+            var config = new RunConfig(HeadlessGame.GameVersion, Commit, dispatcher.Champion, dispatcher.Env.ToString(), "R1");
+            var player = session?.Player;
+            var record = new RunRecord(config, setup.Seed, setup.Character, setup.Ascension, outcome,
+                session?.Run.CurrentActIndex ?? 0, session?.Run.TotalFloor ?? 0, player?.Creature.CurrentHp ?? 0, player?.Creature.MaxHp ?? 0,
+                player?.Gold ?? 0, session?.Combats.ToList() ?? [], surfaces, new Dictionary<string, int>(dispatcher.Brains),
+                session?.CardRewards ?? 0, session?.CardRewardsSkipped ?? 0, 0, failure, 0);
+            return new(outcome, session?.Summary() ?? "", steps, session?.MapHashes.ToList() ?? [], observations, dispatcher.Log.ToList(), failure,
+                HeadlessGame.TakeErrors(), record);
+        }
+    }
+
+    /// <summary>The commit this program was built from, as the build stamped it.</summary>
+    private static readonly string Commit =
+        typeof(Cli).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+').ElementAtOrDefault(1) ?? "unknown";
+
+    private static int Report(Dictionary<string, string> opts)
+    {
+        if (!opts.TryGetValue("seeds", out var seedFile) || !opts.TryGetValue("records", out var recordFiles) || !opts.TryGetValue("out", out var outPath))
+            return Fail("usage: report --seeds FILE --records A.jsonl[,B.jsonl] --out PATH [--previous OLD.json]");
+        var runs = recordFiles.Split(',').SelectMany(File.ReadAllLines).Where(l => l.Length > 0).Select(ProtocolJson.Deserialize<RunRecord>).ToList();
+        var previous = opts.TryGetValue("previous", out var previousPath) ? ProtocolJson.Deserialize<EvalReport>(File.ReadAllText(previousPath)) : null;
+        EvalReport report;
+        try
+        {
+            report = EvalReport.Of(runs, Path.GetFileNameWithoutExtension(seedFile), EvalReport.ReadSeeds(seedFile), DateTime.Now.ToString("yyyy-MM-dd"));
+        }
+        catch (ArgumentException e)
+        {
+            return Fail(e.Message);
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
+        File.WriteAllText(outPath + ".json", report.Json());
+        var markdown = report.Markdown(previous);
+        File.WriteAllText(outPath + ".md", markdown);
+        Console.Write(markdown);
+        return 0;
+    }
+
+    private static int Seeds(Dictionary<string, string> opts)
+    {
+        if (!opts.ContainsKey("base")) return Fail("usage: seeds --base N --n 300");
+        int seedBase = Int(opts, "base", 0);
+        foreach (int i in Enumerable.Range(0, Int(opts, "n", 300))) Console.WriteLine(MakeSeed(seedBase, i));
+        return 0;
     }
 
     /// <summary>One hash for a run's observation hashes, to compare runs across processes.</summary>

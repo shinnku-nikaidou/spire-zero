@@ -17,6 +17,7 @@ using MegaCrit.Sts2.Core.TestSupport;
 using MegaCrit.Sts2.Core.Unlocks;
 using Sts2Ai.Brain;
 using Sts2Ai.GameBridge;
+using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker;
@@ -46,6 +47,7 @@ internal sealed class RunSession : IDisposable
     private readonly IDisposable _selectorScope;
     private readonly List<string> _trace = [];
     private readonly List<ulong> _mapHashes = [];
+    private readonly List<CombatEntry> _combats = [];
 
     /// <summary>Rewards screens open, newest last. The game hands each set over in <see cref="RewardsSet.testSelector"/>.</summary>
     private readonly List<RewardsSet> _shown = [];
@@ -71,6 +73,15 @@ internal sealed class RunSession : IDisposable
 
     /// <summary>A hash of each act's map, taken when the act is entered; the same in every process if generation is.</summary>
     public IReadOnlyList<ulong> MapHashes => _mapHashes;
+
+    /// <summary>Every combat entered so far, with the HP at its first decision.</summary>
+    public IReadOnlyList<CombatEntry> Combats => _combats;
+
+    /// <summary>Card reward screens closed so far, and how many of them closed with no card taken (skipped, or an
+    /// alternative such as a sacrifice). A card reward never opened from the rewards screen is not counted.</summary>
+    public int CardRewards { get; private set; }
+
+    public int CardRewardsSkipped { get; private set; }
 
     public bool IsOver => Run.IsGameOver;
 
@@ -228,7 +239,16 @@ internal sealed class RunSession : IDisposable
     /// <summary>A won combat shows its rewards (<c>NCombatUi.OnCombatWon</c>), or proceeds if the encounter gives none.</summary>
     private bool CombatStep(CombatRoom room)
     {
-        if (CombatManager.Instance.IsInProgress) return CombatDecision();
+        if (CombatManager.Instance.IsInProgress)
+        {
+            if (!_progress.CombatEntered)
+            {
+                _progress.CombatEntered = true;
+                _combats.Add(new(Run.CurrentActIndex, Run.TotalFloor, room.Encounter.Id.Entry, room.Encounter.RoomType.ToString(),
+                    Player.Creature.CurrentHp, Player.Creature.MaxHp));
+            }
+            return CombatDecision();
+        }
         if (_progress.RewardsOffered) throw new InvalidOperationException($"combat over and no screen: {Describe()}");
         _progress.RewardsOffered = true;
         if (room.Encounter.ShouldGiveRewards) Track(room.OfferRoomEndRewards(), "offer combat rewards");
@@ -370,6 +390,11 @@ internal sealed class RunSession : IDisposable
             () => RewardActions.CardRewardScreen(cards, alternatives));
         var answer = RewardActions.CardRewardAnswer(cards, alternatives, action);
         if (answer.alternative is { } used && RewardActions.KeepsScreenOpen(used)) _spentAlternatives.Add(used);
+        else
+        {
+            CardRewards++;
+            if (answer.card == null) CardRewardsSkipped++;
+        }
         return answer;
     }
 
@@ -437,6 +462,7 @@ internal sealed class RunSession : IDisposable
     {
         /// <summary>Proceeded: the map is open.</summary>
         public bool Left;
+        public bool CombatEntered;
         public bool RewardsOffered;
         public bool RestSucceeded;
         public bool ChestOpened;

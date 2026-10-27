@@ -1,0 +1,14 @@
+[project]
+name = "sts2-learn"
+version = "0.1.0"
+description = "Offline learning for the STS2 AI: value fitting and tuning from self-play logs (docs: learning)."
+requires-python = ">=3.12"
+dependencies = ["torch"]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

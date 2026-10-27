@@ -29,4 +29,18 @@
       <_Parameter2>$(Sts2BinDir)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
+
+  <!--
+    Reports name the commit the build came from (docs: evaluation §6). A build with uncommitted changes under src/
+    is not that commit, so its revision gets a "-dirty" suffix.
+  -->
+  <Target Name="MarkUncommittedSource" AfterTargets="InitializeSourceControlInformation" Condition="'$(SourceRevisionId)' != ''">
+    <Exec Command="git status --porcelain -- ." WorkingDirectory="$(MSBuildThisFileDirectory).." ConsoleToMSBuild="true"
+          StandardOutputImportance="low" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_UncommittedSource" />
+    </Exec>
+    <PropertyGroup Condition="'$(_UncommittedSource)' != ''">
+      <SourceRevisionId>$(SourceRevisionId)-dirty</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
 </Project>
