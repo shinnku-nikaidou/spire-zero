@@ -85,6 +85,7 @@ internal static class GateCommand
         if (r.GetValue(Env) is { } env && env.ToString() != file.Env) throw new CliException($"the challenger plays in {env}, the champion in {file.Env}");
         var runs = Cli.ReadRecords(r.GetValue(Records)!);
         var challenger = Challenger.Read(r);
+        if (challenger.Explores) throw new CliException("--macro-explore and --combat-explore are for self-play; a challenger plays its best");
         if (runs.FirstOrDefault(run => run.Config.Champion != challenger.Name) is { } other)
             throw new CliException($"run {other.Seed} was played by {other.Config.Champion}, not by the options given ({challenger.Name})");
         var metric = r.GetValue(Metric)!;

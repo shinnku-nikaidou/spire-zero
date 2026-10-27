@@ -13,7 +13,7 @@ This page defines the value function V that both brains use to score positions, 
 
 <Aside title="Status">
 
-V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, `learn/spsa.py` tunes them, or PIMC's leaf weights, by SPSA, `run --value` plays with either, and `learn/challenge.py` takes a challenger through the gate ([§2](#sec-2)); no fitted or tuned weights are promoted yet. V v2 is built too: `RunNet` in Brain, a net over the run's cards, relics, potions and context ([§1](#sec-1)), trained by `learn/train_value.py` ([§2](#sec-2)); `run --value` reads its file as well, and `run --explore` gives self-play its exploration ([§5](#sec-5)). No V v2 is promoted yet. The combat net is built as well: `CombatNet` in Brain, PIMC's learned leaf (`--combat-net`), trained by `learn/train_combat.py` from the round starts of self-play ([§1](#sec-1), [§2](#sec-2)); none is promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
+V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, `learn/spsa.py` tunes them, or PIMC's leaf weights, by SPSA, `run --value` plays with either, and `learn/challenge.py` takes a challenger through the gate ([§2](#sec-2)); no fitted or tuned weights are promoted yet. V v2 is built too: `RunNet` in Brain, a net over the run's cards, relics, potions and context ([§1](#sec-1)), trained by `learn/train_value.py` ([§2](#sec-2)); `run --value` reads its file as well, and `run --macro-explore` and `--combat-explore` give self-play its exploration ([§5](#sec-5)). No V v2 is promoted yet. The combat net is built as well: `CombatNet` in Brain, PIMC's learned leaf (`--combat-net`), trained by `learn/train_combat.py` from the round starts of self-play ([§1](#sec-1), [§2](#sec-2)); none is promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
 
 </Aside>
 
@@ -87,7 +87,7 @@ flowchart TD
   PR -.->|"new champion"| C
 ```
 
-1. **Self-play:** the champion plays whole runs on train seeds. Log format: [Harness §6](/en/arch/harness/#sec-6).
+1. **Self-play:** the champion plays whole runs on train seeds, with exploration ([§5](#sec-5)). Log format: [Harness §6](/en/arch/harness/#sec-6).
 2. **Fit:** the target is a mix of the MC outcome and TD(λ) (from decision k to decision k+1). Early on there are no wins, so every MC target of P(win) is 0; V v2's hazard head learns from the floor each run died on instead, and its value is the expected floor reached until runs win ([§1](#sec-1)). Never mix HP targets and win targets in one backward pass (a lesson from r33hab).
 
    A dense target such as the floor reached is a stopgap. A change it brings is accepted only through the gate on real outcomes, and only after it reproduces on several training seeds: in a GuanDan study (arXiv 2610.29411) one lineage looked strong, and none of its 5 pre-registered replication seeds came out positive.
@@ -117,7 +117,7 @@ flowchart TD
 
 **Running the loop** (planned):
 
-- Exploration noise (Gumbel) goes only on the root of self-play's combat searches, and is off in evaluation. Macro exploration: [§5](#sec-5).
+- Combat exploration goes only on the root of self-play's searches, and is off in evaluation. It is built ([§5](#sec-5)): the action played is drawn with chance ∝ exp(Q / T) over the root's values Q, the same as adding Gumbel noise to Q / T and taking the best.
 - PCR (playout cap randomization, from KataGo): 25% of the decisions get the full budget and give policy targets; the other 75% get a quarter of it and give value targets only.
 - Reanalyse (from MuZero): after each new net, a share of old positions is replayed from seed and trace and searched again with it, which refreshes their policy targets and bootstrapped value targets.
 - Every generation goes through the gate. AlphaZero dropped its gate because its signal was clean and its games many; a run here has a high variance, and runs are few.
@@ -156,12 +156,14 @@ A self-improving loop can settle into a local optimum: a way of playing that eve
 | reverse curriculum | snapshot pool from acts 2/3 and pre-boss first; learn late value, then push earlier |
 | counterfactual lab | at sampled key macro decisions, CRN-fork both lines to the end for an unbiased ΔP(win); tests hypotheses like "bleed in act 1" |
 | population / archive | one champion per style descriptor (MAP-Elites), so no collapse to "always conservative" |
-| exploration | Thompson or ε on macro decisions in self-play; afterstate MC targets are robust to it. ε is built: `run --explore E` makes L0 answer every decision outside combat, card prompts included, at random with chance E (`l0 explore E` in the champion's name); never in evaluation |
+| exploration | Thompson or softmax sampling of decisions in self-play; afterstate MC targets are robust to it. Softmax is built (below); never in evaluation |
 | conservatism monitors | elites taken, skip rate, HP at boss, gold/potion hoarding ([Evaluation §3](/en/arch/evaluation/#sec-3)) |
 | contrarian hypotheses | human/LLM ideas → constrained policy variants → sim A/B; results back to discussion |
 
 - **MAP-Elites** keeps an archive instead of a single best policy. Each policy is placed in a cell by its style descriptor (a few numbers describing how it plays), and each cell keeps its own best champion. Styles that are not the best yet survive, so the population cannot collapse into one style.
-- **Thompson sampling** explores by drawing a plausible value for each option from its uncertainty and picking the best draw; an option is tried about as often as it might really be the best one. **ε-greedy** picks a random option with a small probability ε.
+- **Thompson sampling** explores by drawing a plausible value for each option from its uncertainty and picking the best draw; an option is tried about as often as it might really be the best one.
+- **Softmax exploration** (built) draws each option with chance ∝ exp((v − best) / T) over the values the brain gave its options: options near the best are tried often, poor ones seldom, equal ones equally often. A uniform ε, which it replaces, tried a poor option as often as a good one. `run --macro-explore T` does this for L0 at every decision outside combat, card prompts included (at a prompt, each pick and whether to stop), over V's values; `--combat-explore T` for pimc's first action, over the search's candidates. The champion's name shows it (`l0 explore T`, `pimc c2 explore T`); the gate refuses an exploring challenger ([Evaluation §5](/en/arch/evaluation/#sec-5)). The decision log marks the steps drawn below the best (`explored`, [Harness §6](/en/arch/harness/#sec-6)); the trainers do not read the mark yet.
+- **The temperatures** are in V's units and the leaf's, so they are chosen again when those change. With V v0's initial weights (in HP), T = 1 explores about 6 macro decisions per run, half the card rewards among them, for 0.2 floors less in 200 runs with the placeholder combat policy, within noise (T = 2: 0.9 floors less). For pimc with the c2 leaf, T = 0.002 explores about 2 searched decisions per combat and gives up about 0.5 HP per combat by the search's own values (T = 0.003: about 0.9 HP); self-play uses these two.
 - **Sim A/B:** play two policy variants in the simulator on the same seeds and compare the results.
 
 ## 6. Infrastructure

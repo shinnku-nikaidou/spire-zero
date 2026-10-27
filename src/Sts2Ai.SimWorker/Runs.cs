@@ -352,34 +352,36 @@ internal static class BrainCommand
 
 /// <summary>The champion that --policy and --macro name (docs: harness §4), pimc's budget, and l0's V (--value).</summary>
 /// <param name="ValueFile">Where <paramref name="Value"/> came from; null for the initial weights.</param>
-/// <param name="Explore">l0's chance to take a random answer instead (--explore), for self-play only; 0 for none.</param>
+/// <param name="MacroExplore">For self-play only (docs: learning §5): l0's softmax temperature over V's values, in V's
+/// units (--macro-explore); 0 for none.</param>
+/// <param name="CombatExplore">The same for pimc over the search's values, in the leaf's units (--combat-explore).</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue Value, string? ValueFile,
-    LeafChoice Leaf, double Explore)
+    LeafChoice Leaf, double MacroExplore, double CombatExplore)
 {
+    /// <summary>Whether it explores, which only self-play does.</summary>
+    public bool Explores => MacroExplore > 0 || CombatExplore > 0;
+
     /// <summary>pimc's search workers. A run holds its process's one live game, so search runs in other processes.</summary>
     public WorkerPool? Pool() => Policy == "pimc" ? new WorkerPool(Cli.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
 
     /// <summary>
     /// One Harness per run. Combat prompts go to p0 (<see cref="PromptBrain"/>), which search worlds ask too.
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
-    /// this process or over the wire. In SL, pimc searches the node's clone; nothing else looks further than in NoSL.
+    /// this process or over the wire; so do the exploring brains, each from its own. In SL, pimc searches the node's
+    /// clone; nothing else looks further than in NoSL.
     /// </summary>
     public Func<Hello, Dispatcher> Harness(PooledPimc? pooled, bool log) => hello =>
     {
         if (!Enum.TryParse<PlayEnvironment>(hello.Env, out var env)) throw new NotSupportedException($"no environment {hello.Env}");
-        var rng = new Random(unchecked((int)ProtocolJson.Hash(hello.Run.RunId)));
+        Random Rng(string stream) => new(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + stream)));
+        var rng = Rng("");
         var combat = pooled?.Route(Budget, Combat) ?? CombatRoute.Of(Policy, Policies.Combat(Policy, rng));
+        if (CombatExplore > 0) combat = combat.Exploring(new Softmax(CombatExplore, Rng(":explore combat")));
         var prompts = new Route<IChoicePolicy>("p0", PromptBrain.Instance);
         Dispatcher dispatcher;
-        if (Macro == "l0" && Explore > 0)
+        if (Macro == "l0")
         {
-            var l0 = new MacroBrain(Value);
-            var exploring = new Exploring(l0, l0, Explore, new Random(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + ":explore"))));
-            dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, exploring), new(L0, exploring), log);
-        }
-        else if (Macro == "l0")
-        {
-            var l0 = new MacroBrain(Value);
+            var l0 = new MacroBrain(Value, MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log);
         }
         else dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
@@ -387,12 +389,13 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         return dispatcher;
     };
 
-    /// <summary>The combat brain, pimc by its leaf's names unless it is the default one.</summary>
-    private string Combat => Policy + Leaf.Suffix;
+    /// <summary>The combat brain, pimc by its leaf's names unless it is the default one, then its exploration if any.</summary>
+    private string Combat => Policy + Leaf.Suffix + Exploration(CombatExplore);
 
     /// <summary>l0 by its V's name, unless V has the initial weights, then its exploration if any.</summary>
-    private string L0 => (Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}") +
-                         (Explore > 0 ? FormattableString.Invariant($" explore {Explore}") : "");
+    private string L0 => (Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}") + Exploration(MacroExplore);
+
+    private static string Exploration(double temperature) => temperature > 0 ? FormattableString.Invariant($" explore {temperature}") : "";
 
     /// <summary>The champion as Harness names it (<see cref="Dispatcher.Champion"/>), which runs check.</summary>
     public string Name
@@ -418,7 +421,8 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
             if (Budget.Follow) options["follow"] = "true";
         }
         if (ValueFile != null) options["value"] = ValueFile;
-        if (Explore > 0) options["explore"] = Explore.ToString(CultureInfo.InvariantCulture);
+        if (MacroExplore > 0) options["macro-explore"] = MacroExplore.ToString(CultureInfo.InvariantCulture);
+        if (CombatExplore > 0) options["combat-explore"] = CombatExplore.ToString(CultureInfo.InvariantCulture);
         if (Leaf.WeightsPath != null) options["leaf"] = Leaf.WeightsPath;
         if (Leaf.NetPath != null) options["combat-net"] = Leaf.NetPath;
         return options;

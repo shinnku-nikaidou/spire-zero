@@ -14,6 +14,30 @@ public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, NodeC
 {
     /// <summary>A placeholder policy: it gives its pick and no candidates.</summary>
     public static CombatRoute Of(string brain, ICombatPolicy policy) => new(brain, (decision, _, _, _) => new(policy.Choose(decision), [], []));
+
+    /// <summary>
+    /// Self-play exploration (docs: learning §5): this route with its first action drawn by <paramref name="explore"/>
+    /// over the search's candidates by value, where there are two or more. One that is not the search's pick is played
+    /// without a plan, as the plan was the pick's, and is marked explored if it is valued below the pick
+    /// (<see cref="Softmax.Explored"/>). The caller names the brain with its exploration.
+    /// </summary>
+    public CombatRoute Exploring(Softmax explore)
+    {
+        var decide = Decide;
+        return this with
+        {
+            Decide = (decision, seed, node, history) =>
+            {
+                var result = decide(decision, seed, node, history);
+                if (result.Candidates.Count < 2) return result;
+                var candidates = result.Candidates;
+                int drawn = explore.Draw(candidates.Select(c => c.Value).ToList());
+                if (drawn == 0) return result;
+                bool explored = explore.Explored(candidates[drawn].Value, candidates[0].Value);
+                return new(CombatAction.Parse(candidates[drawn].Action), [], candidates, Explored: explored);
+            },
+        };
+    }
 }
 
 /// <summary>A brain for one side of the routing table, with its name for the log.</summary>
@@ -32,11 +56,13 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="RunView">On a macro decision, the run the brain was shown: what V v2 is trained on (docs: learning §2).</param>
 /// <param name="History">On a combat decision, what each enemy of the combat showed at the start of each round so far,
 /// this one's included (<see cref="Dispatcher.History"/>).</param>
+/// <param name="Explored">True when <paramref name="Chosen"/> was drawn by self-play exploration and valued below the
+/// brain's best (docs: learning §5; <see cref="Softmax.Explored"/>); absent otherwise.</param>
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
     IReadOnlyDictionary<string, double>? Features = null, CombatObservation? Obs = null, RunView? RunView = null,
-    IReadOnlyList<EnemyTurns>? History = null);
+    IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null);
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
@@ -102,7 +128,8 @@ public sealed class Dispatcher(
         Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: history));
+                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: history,
+                Explored: Mark(result.Explored)));
         return result.First;
     }
 
@@ -117,7 +144,7 @@ public sealed class Dispatcher(
         Last = new(route.Brain);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.CardChoice, route.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
-                string.Join(",", picks), null, null, null, seed, ms));
+                string.Join(",", picks), null, null, null, seed, ms, Explored: Mark(route.Policy.Explored)));
         return picks;
     }
 
@@ -133,7 +160,8 @@ public sealed class Dispatcher(
         Last = new(macro.Brain, plan.Count > 0 ? plan : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                action, Last.Plan, null, null, seed, ms, RunValue.Features(decision.Observation.Run), RunView: decision.Observation.Run));
+                action, Last.Plan, null, null, seed, ms, RunValue.Features(decision.Observation.Run), RunView: decision.Observation.Run,
+                Explored: Mark(macro.Policy.Explored)));
         return action;
     }
 
@@ -165,6 +193,9 @@ public sealed class Dispatcher(
     }
 
     private static string Hex(ulong hash) => hash.ToString("x16");
+
+    /// <summary>The log marks explored steps only.</summary>
+    private static bool? Mark(bool explored) => explored ? true : null;
 
     /// <summary>SplitMix64 of <paramref name="a"/> stepped <paramref name="b"/> + 1 times.</summary>
     private static ulong Mix(ulong a, ulong b)

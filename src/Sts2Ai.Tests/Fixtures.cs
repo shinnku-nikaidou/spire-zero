@@ -15,6 +15,10 @@ internal static class Fixtures
     public static CombatObservation Slugs() =>
         ProtocolJson.Deserialize<CombatObservation>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "corpse-slugs-round1.json")));
 
+    /// <summary>A real run at its first decision, from self-play: SILENT on floor 1 at 70/70, 12 cards, Ring of the Snake.</summary>
+    public static RunView Floor1() =>
+        ProtocolJson.Deserialize<RunView>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "run-floor1.json")));
+
     public static CombatObservation WithEnemyHp(this CombatObservation obs, uint uid, int hp) =>
         obs with { Enemies = obs.Enemies.Select(e => e.Uid == uid ? e with { Hp = hp } : e).ToList() };
 

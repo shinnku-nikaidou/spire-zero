@@ -9,13 +9,22 @@ namespace Sts2Ai.Brain;
 /// screen does not show (most event options, a reroll, a transform) is valued as the state before it. One that opens a
 /// choice (a card reward, a removal) is valued as the best pick in it, so a choice that would be skipped is not opened.
 /// It also answers the card prompts outside combat (upgrade, remove, transform, choose a card).
+///
+/// With <paramref name="explore"/>, for self-play, it draws each answer by the same values instead of taking the best
+/// (docs: learning §5); at a card prompt, each pick and whether to stop.
 /// </summary>
-public sealed class MacroBrain(IRunValue value) : IMacroPolicy, IChoicePolicy
+public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacroPolicy, IChoicePolicy
 {
+    /// <summary>Whether the last answer was drawn and valued below the best (<see cref="Softmax.Explored"/>); at a card
+    /// prompt, any of its steps.</summary>
+    public bool Explored { get; private set; }
+
     public string Choose(MacroDecision decision)
     {
+        if (decision.Legal.Count == 0) throw new InvalidOperationException("no legal action");
         var obs = decision.Observation;
-        return decision.Legal.MaxBy(a => Value(obs, a)) ?? throw new InvalidOperationException("no legal action");
+        Explored = false;
+        return decision.Legal[Pick(decision.Legal.Select(a => Value(obs, a)).ToList())];
     }
 
     /// <summary>
@@ -54,16 +63,30 @@ public sealed class MacroBrain(IRunValue value) : IMacroPolicy, IChoicePolicy
         var picks = new List<int>();
         var state = run;
         double current = value.Value(state);
-        while (picks.Count < choice.Max)
+        Explored = false;
+        while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
-            var (best, bestValue, bestState) = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
-                .Select(i => { var next = pick(state, choice.Options[i]); return (i, value.Value(next), next); })
-                .MaxBy(t => t.Item2);
-            if (picks.Count >= choice.Min && bestValue <= current) break;
-            picks.Add(best);
-            (current, state) = (bestValue, bestState);
+            var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
+                .Select(i => { var next = pick(state, choice.Options[i]); return (Index: i, Value: value.Value(next), State: next); })
+                .ToList();
+            // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
+            if (picks.Count >= choice.Min) options.Insert(0, (-1, current, state));
+            var taken = options[Pick(options.Select(o => o.Value).ToList())];
+            if (taken.Index < 0) break;
+            picks.Add(taken.Index);
+            (current, state) = (taken.Value, taken.State);
         }
         return picks;
+    }
+
+    /// <summary>The first best of <paramref name="values"/>, or a draw by them when exploring.</summary>
+    private int Pick(IReadOnlyList<double> values)
+    {
+        int best = Softmax.Best(values);
+        if (explore == null) return best;
+        int drawn = explore.Draw(values);
+        Explored |= explore.Explored(values[drawn], values[best]);
+        return drawn;
     }
 
     private double Value(Observation obs, string action) => value.Value(After(obs, action));

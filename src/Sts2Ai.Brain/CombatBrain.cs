@@ -34,8 +34,10 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// <param name="Candidates">Every first action, best first.</param>
 /// <param name="PlanHashes">When every world planned the same <paramref name="Plan"/> and expected the same observation
 /// before each of its steps, the hashes of those observations; otherwise null.</param>
+/// <param name="Explored">Whether <paramref name="First"/> was drawn by self-play exploration and valued below the
+/// search's pick (<see cref="Softmax.Explored"/>; Harness's <c>CombatRoute.Exploring</c>).</param>
 public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
-    IReadOnlyList<ulong>? PlanHashes = null);
+    IReadOnlyList<ulong>? PlanHashes = null, bool Explored = false);
 
 /// <summary>
 /// The rest of the turn that a search planned, played without searching again (docs: combat-brain §5). A step is

@@ -163,10 +163,13 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's search worker processes (default: one per world)");
     private readonly Option<string?> _value = Opt.Maybe<string?>("--value", "l0's V: V v0's weights or a net file of V v2 (default: the initial weights)");
     private readonly LeafArgs _leaf = new();
-    private readonly Option<double> _explore = Opt.Of("--explore", 0.0, "l0's chance to answer at random instead, for self-play only");
+    private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
+        "self-play only: l0 draws each answer by V's values, softmax at this temperature in V's units (0: the best)");
+    private readonly Option<double> _combatExplore = Opt.Of("--combat-explore", 0.0,
+        "self-play only: pimc draws each searched action by the search's values, softmax at this temperature in leaf units (0: the best)");
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, .. _leaf.Options, _explore];
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, .. _leaf.Options, _macroExplore, _combatExplore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -182,11 +185,12 @@ internal sealed class ChampionArgs(bool file)
             if (macro != "l0") throw new CliException("--value weighs l0's V; it needs --macro l0");
             value = RunValue.Read(File.ReadAllText(valueFile));
         }
-        double explore = r.GetValue(_explore);
-        if (explore is < 0 or > 1) throw new CliException("--explore is a chance, from 0 to 1");
-        if (explore > 0 && macro != "l0") throw new CliException("--explore is l0's; it needs --macro l0");
+        double macroExplore = r.GetValue(_macroExplore), combatExplore = r.GetValue(_combatExplore);
+        if (macroExplore is not >= 0 || combatExplore is not >= 0) throw new CliException("--macro-explore and --combat-explore are temperatures, from 0");
+        if (macroExplore > 0 && macro != "l0") throw new CliException("--macro-explore is l0's; it needs --macro l0");
+        if (combatExplore > 0 && policy != "pimc") throw new CliException("--combat-explore is pimc's; it needs --policy pimc");
         var leaf = _leaf.Read(r);
         if (!leaf.IsDefault && policy != "pimc") throw new CliException("--leaf and --combat-net value pimc's leaves; they need --policy pimc");
-        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, explore);
+        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore);
     }
 }

@@ -38,6 +38,7 @@ public class CliTests : IDisposable
     [InlineData("run", "--policy", "greedy")]
     [InlineData("run", "--worlds", "many")]
     [InlineData("report", "--seeds", "s.txt")]
+    [InlineData("run", "--explore", "0.2")]
     [InlineData("nonsense")]
     public void ReportsMistakes(params string[] args) => Assert.NotEmpty(Cli.Parse(args).Errors);
 
@@ -71,8 +72,9 @@ public class CliTests : IDisposable
     }
 
     [Theory]
-    [InlineData("--explore", "1.5")]
-    [InlineData("--explore", "0.2", "--macro", "random")]
+    [InlineData("--macro-explore", "-1", "--macro", "l0")]
+    [InlineData("--macro-explore", "2", "--macro", "random")]
+    [InlineData("--combat-explore", "0.01")]
     [InlineData("--value", "v.json", "--macro", "random")]
     public void RefusesChampionsThatDoNotHangTogether(params string[] args)
     {
@@ -101,10 +103,12 @@ public class CliTests : IDisposable
         var config = new ParserConfiguration();
         ParseResult Parse(string[] args) => ChampionFileOption.Merge(root, args, root.Parse(args, config), config);
 
-        var played = champion.Read(Parse(["test", "--policy", "pimc", "--macro", "l0", "--worlds", "4", "--nodes", "100", "--elite-x", "2", "--halving", "--explore", "0.2"]));
+        var played = champion.Read(Parse(["test", "--policy", "pimc", "--macro", "l0", "--worlds", "4", "--nodes", "100", "--elite-x", "2", "--halving",
+            "--macro-explore", "2", "--combat-explore", "0.01"]));
         var file = ChampionFile(played.Options(PlayEnvironment.NoSL));
         var again = champion.Read(Parse(["test", "--champion", file]));
 
+        Assert.Equal("combat pimc explore 0.01 4x100 elite x2 halving, combat prompts p0, macro l0 explore 2, macro prompts l0 explore 2", played.Name);
         Assert.Equal(played.Name, again.Name);
         Assert.Equal(played.Options(PlayEnvironment.NoSL), again.Options(PlayEnvironment.NoSL));
         Assert.Equal(4, again.Workers);
