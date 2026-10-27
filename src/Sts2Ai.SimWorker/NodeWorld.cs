@@ -9,17 +9,16 @@ namespace Sts2Ai.SimWorker;
 /// <summary>
 /// The SL world of a combat decision in a run (docs: simulator §7): the node's clone, loaded and replayed, is the real
 /// combat at the decision. Each action is one more step of the clone; a restore loads the clone again with the steps
-/// it keeps, since the game allows one live run per process. Card prompts inside the world are answered at random
-/// from the search seed and the depth, as in <see cref="SimWorlds"/>, and recorded among the steps.
+/// it keeps, since the game allows one live run per process. Card prompts inside the world are answered by
+/// <see cref="PromptBrain"/>, as in the run, and recorded among the steps.
 /// </summary>
-internal sealed class NodeWorld(Pump pump, NodeClone root, ulong seed) : ICombatWorld, IDisposable
+internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisposable
 {
     private readonly List<string> _steps = [];
     private readonly NextAction _next = new();
     private RunSession? _live;
 
-    private RunSession Live => _live ??= RunSession.Load(pump, root with { Trace = [.. root.Trace, .. _steps] },
-        new RandomChoices(new Random((int)CombatSession.StableHash($"{seed}:{_steps.Count}"))), _next, _next);
+    private RunSession Live => _live ??= RunSession.Load(pump, root with { Trace = [.. root.Trace, .. _steps] }, PromptBrain.Instance, _next, _next);
 
     /// <summary>The live combat, once the clone is loaded.</summary>
     private (CombatState State, Player Player) Combat

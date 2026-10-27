@@ -36,7 +36,7 @@ As of 2026-10-27:
 4. **Run start uses `UnlockState.all`,** not the user's profile, and ascension is not clamped to the character's maximum ([Simulator §5.1](/en/arch/simulator/#sec-5.1)).
 5. **New game code that touches Godot nodes** without the TestMode guard, outside events (where the transpiler covers it), shows up only as game errors in `run` batches ([Simulator §5.2](/en/arch/simulator/#sec-5.2)).
 6. **Harmony patches in the real game vs tiered JIT:** the runtime may recompile a method and silently drop a patch ([Mod §10](/en/arch/mod/#sec-10)).
-7. **Combat brain v0 blind spots.** Card prompts are answered at random, both inside search and in the real combat; the search sees this turn only, so SL gains nothing over NoSL yet; the leaf is hand-made and ignores most powers ([Combat brain §4](/en/arch/combat-brain/#sec-4)).
+7. **Combat brain v0 blind spots.** Card prompts are answered by a fixed rule (`p0`), both inside search and in the real combat, not searched; the search sees this turn only, so SL gains nothing over NoSL yet; the leaf is hand-made and ignores most powers ([Combat brain §4](/en/arch/combat-brain/#sec-4)).
 
 ## 3. Implementation order
 

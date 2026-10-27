@@ -36,7 +36,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 4. **开局用的是 `UnlockState.all`**，不是用户自己的存档进度；进阶等级也没有限制在角色允许的最大值以内（[模拟器 §5.1](/arch/simulator/#sec-5.1)）。
 5. **新增的游戏代码如果在事件之外（事件由 transpiler 覆盖）调用 Godot 节点**而没有 TestMode 保护，只会在 `run` 批量运行里以游戏错误的形式暴露出来（[模拟器 §5.2](/arch/simulator/#sec-5.2)）。
 6. **真实游戏里的 Harmony 补丁与分层 JIT**：运行时可能重新编译某个方法，悄悄丢掉补丁（[Mod §10](/arch/mod/#sec-10)）。
-7. **战斗大脑 v0 的盲区**。选牌提示随机回答，搜索内和真实战斗里都是如此；搜索只看本回合，所以 SL 目前比 NoSL 没有任何优势；叶子是手工的，忽略了大多数能力（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
+7. **战斗大脑 v0 的盲区**。选牌提示按固定规则（`p0`）回答，搜索内和真实战斗里都是如此，不经过搜索；搜索只看本回合，所以 SL 目前比 NoSL 没有任何优势；叶子是手工的，忽略了大多数能力（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
 
 ## 3. 实施顺序
 

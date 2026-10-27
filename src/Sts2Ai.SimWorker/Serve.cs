@@ -47,7 +47,7 @@ internal static class Serve
             }
             case SlWorldRequest r:
             {
-                using var world = new NodeWorld(pump, r.Node, r.SearchSeed);
+                using var world = new NodeWorld(pump, r.Node);
                 return brain.SearchWorld(world, world.Observe().Round, r.First, r.NodesPerWorld);
             }
             default:

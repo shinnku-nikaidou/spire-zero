@@ -10,8 +10,8 @@ namespace Sts2Ai.SimWorker;
 ///
 /// NoSL worlds start from a combat built to show the observation (<see cref="CombatBuilder"/>), never from the real
 /// combat, and each is determinized with its own seed. The SL world is the real combat itself, replayed exactly.
-/// Card prompts inside a world are answered at random, from a generator seeded by the world's seed and its depth,
-/// so the same search gives the same answers.
+/// Card prompts inside a world are answered by <see cref="PromptBrain"/>, the run's own prompt brain, so search
+/// expects the picks the run will make.
 /// </summary>
 internal sealed class SimWorlds : IWorldSource, IDisposable
 {
@@ -32,7 +32,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
     public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed)
     {
         var root = new CombatSnapshot(CombatBuilder.Setup(observation, buildSeed), []);
-        using (var built = CombatSession.Start(pump, root.Setup, new RandomChoices(new Random(0))))
+        using (var built = CombatSession.Start(pump, root.Setup, PromptBrain.Instance))
             if (built.BuildDifferences.Count > 0)
                 throw new InvalidOperationException($"not built as observed: {string.Join("; ", built.BuildDifferences.Take(4))}");
         return new(pump, PlayEnvironment.NoSL, root);
@@ -43,11 +43,11 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
     public PlayEnvironment Environment { get; }
 
     public IReadOnlyList<ICombatWorld> Worlds(int k, ulong searchSeed) => Environment == PlayEnvironment.SL
-        ? [new World(this, [], searchSeed)]
+        ? [new World(this, [])]
         : Enumerable.Range(0, k).Select(i =>
         {
             ulong seed = Mix(searchSeed, (ulong)i);
-            return (ICombatWorld)new World(this, [new TraceEvent(TraceKind.Determinize, Seed: seed)], seed);
+            return (ICombatWorld)new World(this, [new TraceEvent(TraceKind.Determinize, Seed: seed)]);
         }).ToList();
 
     public void Dispose()
@@ -59,7 +59,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
 
     private static ulong Mix(ulong a, ulong b) => CombatSession.StableHash($"{a}:{b}");
 
-    private sealed class World(SimWorlds source, List<TraceEvent> trace, ulong seed) : ICombatWorld
+    private sealed class World(SimWorlds source, List<TraceEvent> trace) : ICombatWorld
     {
         /// <summary>The live combat is this world at its trace; false after a restore, until the next use.</summary>
         private bool _current;
@@ -71,8 +71,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
                 if (source._owner == this && _current) return source._live!;
                 source._live?.Dispose();
                 source._live = null;
-                var choices = new RandomChoices(new Random((int)Mix(seed, (ulong)trace.Count)));
-                source._live = CombatSession.Restore(source._pump, source._root with { Trace = [.. source._root.Trace, .. trace] }, choices);
+                source._live = CombatSession.Restore(source._pump, source._root with { Trace = [.. source._root.Trace, .. trace] }, PromptBrain.Instance);
                 source._owner = this;
                 _current = true;
                 Sync();

@@ -26,13 +26,12 @@ public sealed class PooledPimc(WorkerPool pool)
     }
 
     /// <summary>SL: each first action gets the share of the budget that it gets in one search of the world.</summary>
-    /// <param name="seed">Answers the card prompts inside the world.</param>
-    public CombatDecisionResult Decide(NodeClone node, IReadOnlyList<CombatAction> legal, Budget budget, ulong seed)
+    public CombatDecisionResult Decide(NodeClone node, IReadOnlyList<CombatAction> legal, Budget budget)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
         var first = PimcBrain.Ordered(legal);
         int nodes = Math.Max(1, budget.NodesPerWorld / first.Count);
-        var replies = Map(first.Select((action, a) => (WorkerRequest)new SlWorldRequest(a, node, [action], seed, nodes)).ToList());
+        var replies = Map(first.Select((action, a) => (WorkerRequest)new SlWorldRequest(a, node, [action], nodes)).ToList());
         return PimcBrain.Merge(first, [replies.Select(r => r.Lines![0]).ToList()]);
     }
 
@@ -40,7 +39,7 @@ public sealed class PooledPimc(WorkerPool pool)
     public CombatRoute Route(Budget budget) =>
         new("pimc", (decision, seed, node) => node == null
             ? Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed)
-            : Decide(node, decision.Legal, budget, seed), budget);
+            : Decide(node, decision.Legal, budget), budget);
 
     /// <summary>The game's Log.Error lines in the workers since the last call.</summary>
     public List<string> TakeGameErrors()

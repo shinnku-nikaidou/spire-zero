@@ -467,22 +467,22 @@ internal static class Cli
         public WorkerPool? Pool() => Policy == "pimc" ? new WorkerPool(SelfCommand(), Workers) : null;
 
         /// <summary>
-        /// One Harness per run. Placeholders draw from one generator seeded by the run id, so a run plays the same
-        /// whatever is logged, in this process or over the wire. In SL, pimc searches the node's clone; nothing else
-        /// looks further than in NoSL.
+        /// One Harness per run. Combat prompts go to p0 (<see cref="PromptBrain"/>), which search worlds ask too.
+        /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
+        /// this process or over the wire. In SL, pimc searches the node's clone; nothing else looks further than in NoSL.
         /// </summary>
         public Func<Hello, Dispatcher> Harness(PooledPimc? pooled, bool log) => hello =>
         {
             if (!Enum.TryParse<PlayEnvironment>(hello.Env, out var env)) throw new NotSupportedException($"no environment {hello.Env}");
             var rng = new Random(unchecked((int)ProtocolJson.Hash(hello.Run.RunId)));
             var combat = pooled?.Route(Budget) ?? CombatRoute.Of(Policy, Policies.Combat(Policy, rng));
-            var random = new RandomChoices(rng);
+            var prompts = new Route<IChoicePolicy>("p0", PromptBrain.Instance);
             if (Macro == "l0")
             {
                 var l0 = new MacroBrain(RunValue.Initial);
-                return new Dispatcher(hello.Run.RunId, env, combat, new("random", random), new("l0", l0), new("l0", l0), log);
+                return new Dispatcher(hello.Run.RunId, env, combat, prompts, new("l0", l0), new("l0", l0), log);
             }
-            return new Dispatcher(hello.Run.RunId, env, combat, new("random", random), new("random", new RandomMacro(rng)), new("random", random), log);
+            return new Dispatcher(hello.Run.RunId, env, combat, prompts, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
         };
 
         public override string ToString() =>

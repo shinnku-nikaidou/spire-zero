@@ -246,7 +246,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - NoSL 世界是隐藏状态的一个样本，与观测一致；SL 世界是真实战斗的一份精确副本。
 - 目前只有战斗世界：它唯一的使用者是战斗大脑。整局级的世界等到宏观搜索时再加。
 - `WorldSnapshot` 是这个世界从开始以来走过的步骤列表（动作、选牌回答、确定化步骤），以文本形式保存。对搜索来说它是不透明的；只有生成它的那个世界会读它，并通过重放恢复。因为它是纯文本，任何 worker 都能恢复它。
-- 世界里弹出的选牌提示在世界内部回答。v0 用一个由该世界播种的随机数生成器随机回答，所以同样的搜索给出同样的回答；把每个选项变成搜索分支还在规划中（[战斗大脑 §2](/arch/combat-brain/#sec-2) 第 7 条）。
+- 世界里弹出的选牌提示在世界内部回答。v0 交给 `p0`，也就是这一局自己回答提示所用的固定规则，所以世界里的选择和这一局一样；把每个选项变成搜索分支还在规划中（[战斗大脑 §2](/arch/combat-brain/#sec-2) 第 7 条）。
 - `Candidate` 是一个打过分的动作：它在各个世界上的平均估值、95% 置信区间的半宽，以及世界的个数。
 
 规划中：SL 封存：上一个动作离开节点之后（`AtHorizon`），`Execute` 会抛异常（[模拟器 §7](/arch/simulator/#sec-7)）。
@@ -267,10 +267,9 @@ public abstract record WorkerRequest(long Id);
 public sealed record PimcWorldRequest(long Id, CombatObservation Observation, IReadOnlyList<CombatAction> First,
     string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerWorld) : WorkerRequest(Id);
 
-// "sl_world": load Node, the SL clone, and search this turn after each of First; SearchSeed answers
-// the card prompts inside the world.
+// "sl_world": load Node, the SL clone, and search this turn after each of First.
 public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First,
-    ulong SearchSeed, int NodesPerWorld) : WorkerRequest(Id);
+    int NodesPerWorld) : WorkerRequest(Id);
 
 // Lines[i] is the best line after First[i]. Error is set instead when the request failed.
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);

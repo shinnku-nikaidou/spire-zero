@@ -33,10 +33,10 @@ public sealed record PimcWorldRequest(
 
 /// <summary>
 /// PIMC's search of the SL world of a combat decision in a run (docs: simulator §7): <see cref="Node"/> loaded and
-/// replayed is the real combat at the decision; card prompts inside it are answered from <see cref="SearchSeed"/>. The
-/// reply holds the best line after each of <see cref="First"/>, in that order.
+/// replayed is the real combat at the decision. The reply holds the best line after each of <see cref="First"/>, in
+/// that order.
 /// </summary>
-public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First, ulong SearchSeed, int NodesPerWorld)
+public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First, int NodesPerWorld)
     : WorkerRequest(Id);
 
 /// <param name="GameErrors">The game's Log.Error lines while serving the request.</param>

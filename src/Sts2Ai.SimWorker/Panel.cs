@@ -13,8 +13,8 @@ namespace Sts2Ai.SimWorker;
 ///
 /// The brain searches in this process, which can hold only one live combat, so before each of its decisions the real
 /// combat is kept as a snapshot and put back by replay afterwards; or, with --workers, in worker processes, while the
-/// real combat stays live here. Both give the same moves. Card prompts in the real combat are answered at random for
-/// every player, as in bench.
+/// real combat stays live here. Both give the same moves. Card prompts in the real combat are answered by p0
+/// (<see cref="PromptBrain"/>) for every player, as in a run.
 /// </summary>
 internal static class Panel
 {
@@ -58,8 +58,8 @@ internal static class Panel
             {
                 var rng = new Random(seed * 1_000_003 + i);
                 var result = player == "pimc"
-                    ? PlayWithBrain(pump, setup, new RandomChoices(rng), pooled, env, budget, opts.ContainsKey("trace"))
-                    : PlayWithPolicy(pump, setup, new RandomChoices(rng), Policies.Combat(player, rng));
+                    ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, env, budget, opts.ContainsKey("trace"))
+                    : PlayWithPolicy(pump, setup, PromptBrain.Instance, Policies.Combat(player, rng));
                 (outcome, hpStart, hp, rounds, steps) = result;
             }
             catch (Exception e)

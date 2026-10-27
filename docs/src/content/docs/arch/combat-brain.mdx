@@ -12,7 +12,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-v0 已实现（`src/Sts2Ai.Brain/CombatBrain.cs`、`LeafValue.cs`）：在 K 个世界上做 PIMC，每个世界里搜索本回合（[§2](#sec-2)）；一个手工的叶子估值（[§4](#sec-4)）；以及固定的战斗测试集和它的结果（[§7](#sec-7)）。SL 规划器做出来之前，SL 在它唯一的世界上运行同样的 PIMC 搜索（[§3](#sec-3)）。尚未实现：SL 规划器、把选牌提示变成搜索分支、越过本回合的搜索、基于置信区间的分配，以及 `Facts`。占位策略保留下来，供 bench 使用，也作为测试集上的基线：`PlayPolicy`（随机打出一张能打的牌）和 `RandomPolicy`（在合法动作中均匀随机）。
+v0 已实现（`src/Sts2Ai.Brain/CombatBrain.cs`、`LeafValue.cs`）：在 K 个世界上做 PIMC，每个世界里搜索本回合（[§2](#sec-2)）；一个手工的叶子估值（[§4](#sec-4)）；选牌提示的固定规则（`p0`，[§2](#sec-2) 第 7 条）；以及固定的战斗测试集和它的结果（[§7](#sec-7)）。SL 规划器做出来之前，SL 在它唯一的世界上运行同样的 PIMC 搜索（[§3](#sec-3)）。尚未实现：SL 规划器、把选牌提示变成搜索分支、越过本回合的搜索、基于置信区间的分配，以及 `Facts`。占位策略保留下来，供 bench 使用，也作为测试集上的基线：`PlayPolicy`（随机打出一张能打的牌）和 `RandomPolicy`（在合法动作中均匀随机）。
 
 </Aside>
 
@@ -43,7 +43,12 @@ PIMC 有一个已知的弱点，即**策略融合（strategy fusion）**：在�
 另外两条规则：
 
 6. 药水是普通动作，使用时机不写死。
-7. 选牌提示：在搜索中，模拟器的选择器（负责回答选牌提示的代码）由搜索驱动，每个选项就是一个分支。真实游戏里单独出现的选牌提示，用同一套搜索逐个评估各个选项（需要 `ChoiceContext`，[协议 §4](/arch/protocol/#sec-4)）。v0 两者都还没做：世界里的选牌提示用该世界的种子随机回答，测试集里真实战斗的选牌提示对每个玩家都随机回答。
+7. 选牌提示：在搜索中，模拟器的选择器（负责回答选牌提示的代码）由搜索驱动，每个选项就是一个分支。真实游戏里单独出现的选牌提示，用同一套搜索逐个评估各个选项（需要 `ChoiceContext`，[协议 §4](/arch/protocol/#sec-4)）。v0 两者都还没做。战斗中的每个选牌提示，无论在真实战斗里还是在世界里，都交给 `PromptBrain`（`p0`，在 Brain 里），按选中的牌会怎样用固定规则回答：
+   - 选中的牌这回合离开手牌（弃牌、消耗、放到抽牌堆顶）：选最没用的牌；弃牌时先选 Sly 牌，因为弃掉它们就会打出。超过最少张数时，只多选本来就该扔的牌：不能打出的牌，弃牌时还有 Sly 牌。
+   - 让一张牌免费的提示：选最贵的。
+   - 其他提示都是加牌或改进牌（拿一张牌进手牌、复制、升级）：选最有用的，能选多少选多少。
+
+   一张牌有多有用，是它的数值之和（伤害、格挡、中毒、抽牌、能量、虚弱和易伤、升级）加一个固定部分；不能打出的牌毫无用处。`p0` 只看提示本身，从不随机，所以世界里的回答和这一局里的一样。
 
 ## 3. SL：确定性规划
 
@@ -134,7 +139,7 @@ public sealed record CombatDecisionResult(
 
 ### 7.1 测试集结果
 
-Silent（静默猎手），起始牌组，满血，每个种子一场战斗，依次轮换池中的每个遭遇。每个玩家打的都是同样的战斗。真实战斗中的选牌提示对每个玩家都随机回答。大脑预算为 8 个世界 × 300 个节点。
+Silent（静默猎手），起始牌组，满血，每个种子一场战斗，依次轮换池中的每个遭遇。每个玩家打的都是同样的战斗。真实战斗中的选牌提示对每个玩家都交给 `p0`。大脑预算为 8 个世界 × 300 个节点。下面的结果测于选牌提示还随机回答的时候，真实战斗和世界里都是。
 
 ```bash
 Sts2Ai.SimWorker panel --n 60 --player pimc --env NoSL --act 0 --rooms weak,regular
@@ -150,7 +155,7 @@ Sts2Ai.SimWorker panel --n 60 --player pimc --env NoSL --act 0 --rooms weak,regu
 
 ### 7.2 整局
 
-大脑也能打整局里的战斗：`run --policy pimc`（[模拟器 §5](/arch/simulator/#sec-5)）让这一局在宿主进程里一直活着，每个战斗决策都在 worker 进程池里搜索（[模拟器 §8](/arch/simulator/#sec-8)）。战斗里的选牌提示随机回答，两个玩家都一样。种子集是 `promotion-1`（200 局，Silent A0，[评估 §4](/arch/evaluation/#sec-4)），预算 8 × 300，局外决策来自随机占位策略或 L0（[宏观大脑 §2](/arch/macro-brain/#sec-2)）：
+大脑也能打整局里的战斗：`run --policy pimc`（[模拟器 §5](/arch/simulator/#sec-5)）让这一局在宿主进程里一直活着，每个战斗决策都在 worker 进程池里搜索（[模拟器 §8](/arch/simulator/#sec-8)）。战斗里的选牌提示交给 `p0`，两个玩家都一样；下面的结果测于它们还随机回答的时候。种子集是 `promotion-1`（200 局，Silent A0，[评估 §4](/arch/evaluation/#sec-4)），预算 8 × 300，局外决策来自随机占位策略或 L0（[宏观大脑 §2](/arch/macro-brain/#sec-2)）：
 
 ```bash
 Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0 --records pimc-l0.jsonl

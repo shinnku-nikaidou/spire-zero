@@ -353,7 +353,7 @@ internal static class SelfTest
             return action;
         });
         string label = $"run {Cli.MakeSeed(seed, 0)}";
-        using (session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed, 0)), new RandomChoices(rng), capture, new RandomMacro(rng)))
+        using (session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed, 0)), PromptBrain.Instance, capture, new RandomMacro(rng)))
             while (!session.IsOver && steps.Count < 8 && (clone == null || session.NodeStart == node)) session.Step();
         if (clone == null || steps.Count < 2)
         {
@@ -361,7 +361,7 @@ internal static class SelfTest
             return;
         }
         string Json(CombatObservation obs) => ProtocolJson.Serialize(obs);
-        using var world = new NodeWorld(pump, clone, 7);
+        using var world = new NodeWorld(pump, clone);
         var root = world.Snapshot();
         check("SL world shows the run's combat", Json(world.Observe()) == Json(steps[0].Obs), label);
         int played = 0;
