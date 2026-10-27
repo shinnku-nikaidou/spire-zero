@@ -51,7 +51,7 @@ R1 整局评估已经可用：`run --seeds FILE --records FILE` 跑完一个种�
 
 - 两个冠军共用宏观大脑和 V，只有战斗大脑不同（[环境 §5](/arch/environments/#sec-5)）。新的 V 会同时改变两个冠军，所以要在每种环境里分别过门槛。
 - 同时报告 SL − NoSL 的胜率差，也就是节点内信息的价值。这是计划 v1（本地笔记 `tmp/notes/plan.md`）里「全知 vs 重采样」消融实验的正式版本。作为参考：spire-mentor（一个前人项目）去掉它的作弊（覆盖整局）后，胜率下降了 22.8–25.5 个百分点（pp）；我们的作弊只到节点级，所以预计差值更小。
-- `leaderboard [--reports eval/reports] [--out eval/leaderboard.md]` 从报告生成排行榜：每个种子集和阶梯级别下，每个环境一张表，按胜率、再按平均层数排名，作废的报告排在最后；不完整的报告不列入。表下面，对两种环境都有报告的每个冠军，给出同一组种子上按种子配对的 SL − NoSL 差值：胜率和到达层数，各带 95% 区间。榜上列出所有报告，而不只是已接受的冠军；已接受的那个由冠军文件指明（[§5](#sec-5)）。`eval/leaderboard.md` 和报告一起提交。
+- `leaderboard [--reports eval/reports] [--champions eval/champions] [--out eval/leaderboard.md]` 从报告生成排行榜：每个种子集和阶梯级别下，每个环境一张表，按胜率、再按平均层数排名，作废的报告排在最后，该环境冠军文件指明的报告会被标出（[§5](#sec-5)）；不完整的报告不列入。表下面，对两种环境都有报告的每个冠军，给出同一组种子上按种子配对的 SL − NoSL 差值：胜率和到达层数，各带 95% 区间。榜上列出所有报告，而不只是已接受的冠军。`eval/leaderboard.md` 和报告一起提交。
 
 <Aside type="caution" title="不要混用环境">
 
@@ -148,7 +148,8 @@ Wilson 区间是比例（例如胜率）的置信区间。与简单的正态近�
 |---|---|---|
 | FableBot | Ironclad（铁甲战士）A0 20.7%（71/343，Wilson 区间 16.7–25.3） | 唯一一个公平、在真实游戏上、样本量足够的结果；没有 Silent |
 | AgenticSTS | Silent（静默猎手）A0 约 35%（44/125，混合多个版本）；A8+ 0/25 | LLM + 人写的 Silent 攻略 |
-| 我们：占位策略（战斗 `play`，局外随机） | Silent A0 0%（0/200）；平均层数 8.09 | `promotion-1`，R1，NoSL；我们的下限 |
+| 我们：占位策略（战斗 `play`，局外随机） | Silent A0 0%（0/200）；平均层数 8.12 | `promotion-1`，R1，NoSL；我们的下限 |
+| 我们：战斗 `play` + L0 | Silent A0 0%（0/200）；平均层数 11.90，60 局打到第 1 幕 Boss | `promotion-1`，R1，NoSL；第一份没有随机决策的报告，也就是第一个 NoSL 冠军（[§5](#sec-5)） |
 | 我们：PIMC + L0 | Silent A0 0%（0/200）；平均层数 18.50，175 局打到第 1 幕 Boss | `promotion-1`，R1，NoSL（[战斗大脑 §7.2](/arch/combat-brain/#sec-7.2)） |
 
 第一个角色是 Silent，先做进阶等级 A0。
