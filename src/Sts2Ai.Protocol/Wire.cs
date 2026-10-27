@@ -17,6 +17,8 @@ namespace Sts2Ai.Protocol;
 [JsonDerivedType(typeof(Cancel), "cancel")]
 [JsonDerivedType(typeof(RunEnd), "run_end")]
 [JsonDerivedType(typeof(WireError), "error")]
+[JsonDerivedType(typeof(NodeCheckpoint), "node_checkpoint")]
+[JsonDerivedType(typeof(NodeAction), "node_action")]
 public abstract record WireMessage
 {
     /// <summary>Bumped on any breaking change.</summary>
@@ -71,6 +73,18 @@ public sealed record RunEnd(bool Won, int Floor, string Reason) : WireMessage;
 
 /// <summary>Brain → host, instead of an answer: the brain could not take the run or answer the decision, so the host ends the run.</summary>
 public sealed record WireError(string Message) : WireMessage;
+
+/// <summary>
+/// Host → brain, SL only (docs: mod §6): the game's save on arrival at a node, before the node's first decision. Nodes
+/// are numbered from 0 in the run.
+/// </summary>
+public sealed record NodeCheckpoint(int NodeIndex, string SaveJson) : WireMessage;
+
+/// <summary>
+/// Host → brain, SL only: a decision taken in the node, numbered by <see cref="Seq"/> from 0, as "surface action" (a
+/// card prompt's picks as the game's own indexes). Sent before the next decision.
+/// </summary>
+public sealed record NodeAction(int NodeIndex, int Seq, string Action) : WireMessage;
 
 /// <summary>Where the brain listens and the mod connects, unless told otherwise.</summary>
 public static class BrainSocket

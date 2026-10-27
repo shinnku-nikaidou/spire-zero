@@ -47,7 +47,7 @@ public sealed class WorkerPool : IDisposable
     /// <summary>Workers started again after dying.</summary>
     public int Restarts => _restarts;
 
-    public IReadOnlyList<WorkerReply> Map<T>(IReadOnlyList<T> requests) where T : IWorkerRequest
+    public IReadOnlyList<WorkerReply> Map(IReadOnlyList<WorkerRequest> requests)
     {
         var replies = new WorkerReply[requests.Count];
         Parallel.For(0, requests.Count, new ParallelOptions { MaxDegreeOfParallelism = Count }, i =>

@@ -14,7 +14,7 @@ This assembly is also the observation **whitelist**: a field exists here only if
 
 <Aside title="Status">
 
-The combat part, the run-level observation with a screen for every surface ([§3](#sec-3)) and `ChoiceContext` ([§4](#sec-4)) exist (`src/Sts2Ai.Protocol`). The combat world API exists too ([§7](#sec-7)), and so do the worker messages that carry PIMC's world searches ([§7.1](#sec-7.1)). The host–brain messages exist (`Wire.cs`, [§2](#sec-2)), and the simulator plays whole runs over them. The event stream, facts and the SL messages are planned.
+The combat part, the run-level observation with a screen for every surface ([§3](#sec-3)) and `ChoiceContext` ([§4](#sec-4)) exist (`src/Sts2Ai.Protocol`). The combat world API exists too ([§7](#sec-7)), and so do the worker messages that carry PIMC's world searches ([§7.1](#sec-7.1)). The host–brain messages exist (`Wire.cs`, [§2](#sec-2)), the SL ones included, and the simulator plays whole runs over them. The event stream and facts are planned.
 
 </Aside>
 
@@ -51,7 +51,7 @@ host → brain   cancel{decision_id}            // state moved on; brain drops t
 host → brain   run_end{won, floor, reason}
 // SL only (env-gated, docs: mod §6; a NoSL log containing these is invalid)
 host → brain   node_checkpoint{node_index, save_json}      // RunManager.ToSave(null) at node entry
-host → brain   node_action{node_index, seq, action}  // every executed action + prompt answer
+host → brain   node_action{node_index, seq, action}  // every decision in the node, as "surface action"
 ```
 
 | message | direction | when / what |
@@ -65,9 +65,9 @@ host → brain   node_action{node_index, seq, action}  // every executed action 
 | `cancel` | host → brain | the state moved on; the brain drops that search |
 | `run_end` | host → brain | the run is over: won or not, floor, reason (`won`, `lost`, `truncated` at the decision cap, `failed` or `aborted`) |
 | `node_checkpoint` | host → brain | SL only: the save `RunManager.ToSave(null)` taken at node entry |
-| `node_action` | host → brain | SL only: every executed action and prompt answer inside the node, numbered by `seq` |
+| `node_action` | host → brain | SL only: every decision taken inside the node, numbered by `seq` from 0 and sent before the next decision, as `surface action` text (a card prompt's picks are the game's own indexes) |
 
-The two SL messages are gated by the environment ([Mod §6](/en/arch/mod/#sec-6)). A NoSL log that contains either of them is invalid.
+The two SL messages are gated by the environment ([Mod §6](/en/arch/mod/#sec-6)). A NoSL log that contains either of them is invalid, and the brain answers them in NoSL with an `error` at the next decision. Nodes are numbered from 0 in the run; the checkpoint and the decisions after it make the node's clone ([Simulator §7](/en/arch/simulator/#sec-7)).
 
 The normal exchange in one run:
 
@@ -259,12 +259,18 @@ The worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) does not move world
 // The worker's first line, once it has booted.
 public sealed record WorkerHello(string Game);
 
-public interface IWorkerRequest { long Id { get; } }
+// A request, typed by "type" on the wire; its reply carries the same id.
+public abstract record WorkerRequest(long Id);
 
-// Build the combat from Observation with BuildSeed, take world World of Worlds drawn from SearchSeed,
-// and search this turn after each of First, in that order.
+// "pimc_world": build the combat from Observation with BuildSeed, take world World of Worlds drawn
+// from SearchSeed, and search this turn after each of First, in that order.
 public sealed record PimcWorldRequest(long Id, CombatObservation Observation, IReadOnlyList<CombatAction> First,
-    string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerWorld) : IWorkerRequest;
+    string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerWorld) : WorkerRequest(Id);
+
+// "sl_world": load Node, the SL clone, and search this turn after each of First; SearchSeed answers
+// the card prompts inside the world.
+public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First,
+    ulong SearchSeed, int NodesPerWorld) : WorkerRequest(Id);
 
 // Lines[i] is the best line after First[i]. Error is set instead when the request failed.
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
@@ -273,7 +279,7 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
 ```
 
 - A request carries everything the worker needs, so any worker can serve it and a crashed worker's request can be sent again.
-- The request holds the NoSL observation, never the true state: a worker cannot see more than the player.
+- A NoSL request holds the observation, never the true state: a worker cannot see more than the player. An SL request holds the node's clone, which SL may know.
 - `GameErrors` holds the game's `Log.Error` lines while the request was served, so the host can count them.
 
 ## 8. Invariants and tests

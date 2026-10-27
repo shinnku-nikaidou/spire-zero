@@ -22,12 +22,9 @@ internal static class Serve
             WorkerReply reply;
             try
             {
-                var request = ProtocolJson.Deserialize<PimcWorldRequest>(line);
+                var request = ProtocolJson.Deserialize<WorkerRequest>(line);
                 id = request.Id;
-                using var worlds = SimWorlds.NoSL(pump, request.Observation, request.BuildSeed);
-                var world = worlds.Worlds(request.Worlds, request.SearchSeed)[request.World];
-                var lines = brain.SearchWorld(world, request.Observation.Round, request.First, request.NodesPerWorld);
-                reply = new(id, lines, null, HeadlessGame.TakeErrors());
+                reply = new(id, Search(pump, brain, request), null, HeadlessGame.TakeErrors());
             }
             catch (Exception e)
             {
@@ -37,5 +34,24 @@ internal static class Serve
             wire.WriteLine(ProtocolJson.Serialize(reply));
         }
         return 0;
+    }
+
+    private static IReadOnlyList<PlannedLine> Search(Pump pump, PimcBrain brain, WorkerRequest request)
+    {
+        switch (request)
+        {
+            case PimcWorldRequest r:
+            {
+                using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed);
+                return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerWorld);
+            }
+            case SlWorldRequest r:
+            {
+                using var world = new NodeWorld(pump, r.Node, r.SearchSeed);
+                return brain.SearchWorld(world, world.Observe().Round, r.First, r.NodesPerWorld);
+            }
+            default:
+                throw new InvalidDataException($"no search for {request.GetType().Name}");
+        }
     }
 }

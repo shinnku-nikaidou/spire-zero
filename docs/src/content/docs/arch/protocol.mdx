@@ -14,7 +14,7 @@ Protocol（协议）是项目各进程之间的共同语言。游戏宿主（真
 
 <Aside title="状态">
 
-战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。战斗世界 API 也已实现（[§7](#sec-7)），承载 PIMC 世界搜索的 worker 消息也已实现（[§7.1](#sec-7.1)）。宿主与 brain 之间的消息已实现（`Wire.cs`，[§2](#sec-2)），模拟器已经能通过它们跑整局。事件流、事实和 SL 消息还在规划中。
+战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。战斗世界 API 也已实现（[§7](#sec-7)），承载 PIMC 世界搜索的 worker 消息也已实现（[§7.1](#sec-7.1)）。宿主与 brain 之间的消息已实现（`Wire.cs`，[§2](#sec-2)），包括 SL 消息，模拟器已经能通过它们跑整局。事件流和事实还在规划中。
 
 </Aside>
 
@@ -51,7 +51,7 @@ host → brain   cancel{decision_id}            // state moved on; brain drops t
 host → brain   run_end{won, floor, reason}
 // SL only (env-gated, docs: mod §6; a NoSL log containing these is invalid)
 host → brain   node_checkpoint{node_index, save_json}      // RunManager.ToSave(null) at node entry
-host → brain   node_action{node_index, seq, action}  // every executed action + prompt answer
+host → brain   node_action{node_index, seq, action}  // every decision in the node, as "surface action"
 ```
 
 | 消息 | 方向 | 时机 / 内容 |
@@ -65,9 +65,9 @@ host → brain   node_action{node_index, seq, action}  // every executed action 
 | `cancel` | host → brain | 状态已经往前走了；brain 丢弃这次搜索 |
 | `run_end` | host → brain | 一局结束：是否获胜、层数、原因（`won`、`lost`、触及决策上限的 `truncated`、`failed` 或 `aborted`） |
 | `node_checkpoint` | host → brain | 仅 SL：进入节点时做的存档 `RunManager.ToSave(null)` |
-| `node_action` | host → brain | 仅 SL：节点内每个已执行的动作和每个选牌提示的回答，用 `seq` 编号 |
+| `node_action` | host → brain | 仅 SL：节点内做出的每个决策，用 `seq` 从 0 编号，在下一个决策之前发送，形式是 `surface action` 文本（选牌提示的选择用游戏自己的下标） |
 
-这两种 SL 消息按环境开关（[Mod §6](/arch/mod/#sec-6)）。NoSL 日志里只要出现其中任何一种，这份日志就无效。
+这两种 SL 消息按环境开关（[Mod §6](/arch/mod/#sec-6)）。NoSL 日志里只要出现其中任何一种，这份日志就无效；NoSL 下 brain 会在下一个决策时用 `error` 回应它们。节点在一局里从 0 编号；检查点加上它之后的决策就是这个节点的克隆（[模拟器 §7](/arch/simulator/#sec-7)）。
 
 一局里正常的消息往来：
 
@@ -259,12 +259,18 @@ worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）不会一步一步�
 // The worker's first line, once it has booted.
 public sealed record WorkerHello(string Game);
 
-public interface IWorkerRequest { long Id { get; } }
+// A request, typed by "type" on the wire; its reply carries the same id.
+public abstract record WorkerRequest(long Id);
 
-// Build the combat from Observation with BuildSeed, take world World of Worlds drawn from SearchSeed,
-// and search this turn after each of First, in that order.
+// "pimc_world": build the combat from Observation with BuildSeed, take world World of Worlds drawn
+// from SearchSeed, and search this turn after each of First, in that order.
 public sealed record PimcWorldRequest(long Id, CombatObservation Observation, IReadOnlyList<CombatAction> First,
-    string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerWorld) : IWorkerRequest;
+    string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerWorld) : WorkerRequest(Id);
+
+// "sl_world": load Node, the SL clone, and search this turn after each of First; SearchSeed answers
+// the card prompts inside the world.
+public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First,
+    ulong SearchSeed, int NodesPerWorld) : WorkerRequest(Id);
 
 // Lines[i] is the best line after First[i]. Error is set instead when the request failed.
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
@@ -273,7 +279,7 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
 ```
 
 - 请求带着 worker 需要的一切，所以任何 worker 都能处理它，崩溃的 worker 的请求可以重发。
-- 请求里是 NoSL 观测，绝不是真实状态：worker 看到的不会比玩家多。
+- NoSL 请求里是观测，绝不是真实状态：worker 看到的不会比玩家多。SL 请求里是节点克隆，这是 SL 允许知道的。
 - `GameErrors` 是处理请求期间游戏的 `Log.Error` 输出，供宿主计数。
 
 ## 8. 不变量与测试

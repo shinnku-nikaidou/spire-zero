@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Sts2Ai.Protocol;
 
 /// <summary>
@@ -7,11 +9,11 @@ namespace Sts2Ai.Protocol;
 /// </summary>
 public sealed record WorkerHello(string Game);
 
-/// <summary>A request; its reply carries the same id.</summary>
-public interface IWorkerRequest
-{
-    long Id { get; }
-}
+/// <summary>A request, with its type; its reply carries the same id.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(PimcWorldRequest), "pimc_world")]
+[JsonDerivedType(typeof(SlWorldRequest), "sl_world")]
+public abstract record WorkerRequest(long Id);
 
 /// <summary>
 /// PIMC's search of one NoSL world of a combat decision (docs: combat-brain §2): the world is built from
@@ -27,7 +29,15 @@ public sealed record PimcWorldRequest(
     ulong SearchSeed,
     int World,
     int Worlds,
-    int NodesPerWorld) : IWorkerRequest;
+    int NodesPerWorld) : WorkerRequest(Id);
+
+/// <summary>
+/// PIMC's search of the SL world of a combat decision in a run (docs: simulator §7): <see cref="Node"/> loaded and
+/// replayed is the real combat at the decision; card prompts inside it are answered from <see cref="SearchSeed"/>. The
+/// reply holds the best line after each of <see cref="First"/>, in that order.
+/// </summary>
+public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First, ulong SearchSeed, int NodesPerWorld)
+    : WorkerRequest(Id);
 
 /// <param name="GameErrors">The game's Log.Error lines while serving the request.</param>
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);

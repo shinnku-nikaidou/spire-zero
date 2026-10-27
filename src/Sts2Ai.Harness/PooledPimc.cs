@@ -4,10 +4,11 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// <see cref="PimcBrain"/> with its worlds searched in a <see cref="WorkerPool"/>, one request per world. NoSL only:
-/// each world is rebuilt in its worker from the observation, so nothing of the true state leaves the host. With the
-/// same seeds it gives the same answer as <see cref="PimcBrain.Decide"/> over in-process worlds. The workers use the
-/// default leaf weights.
+/// <see cref="PimcBrain"/> with its worlds searched in a <see cref="WorkerPool"/>. NoSL: one request per world, each
+/// world rebuilt in its worker from the observation, so nothing of the true state leaves the host; with the same seeds
+/// it gives the same answer as <see cref="PimcBrain.Decide"/> over in-process worlds. SL: the one exact world is the
+/// node's clone, searched in one request per first action so the workers share it; each request keeps its own memo,
+/// where a search in one process shares it across first actions. The workers use the default leaf weights.
 /// </summary>
 public sealed class PooledPimc(WorkerPool pool)
 {
@@ -19,18 +20,27 @@ public sealed class PooledPimc(WorkerPool pool)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
         var first = PimcBrain.Ordered(legal);
-        var requests = Enumerable.Range(0, budget.Worlds)
-            .Select(k => new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, budget.NodesPerWorld))
-            .ToList();
-        var replies = pool.Map(requests);
-        foreach (var r in replies) _gameErrors.AddRange(r.GameErrors);
-        if (replies.FirstOrDefault(r => r.Error != null) is { } failed) throw new InvalidOperationException($"world {failed.Id}: {failed.Error}");
+        var replies = Map(Enumerable.Range(0, budget.Worlds)
+            .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, budget.NodesPerWorld)).ToList());
         return PimcBrain.Merge(first, replies.Select(r => r.Lines!).ToList());
     }
 
-    /// <summary>As Harness's combat route: the build seed is drawn from the decision's seed.</summary>
+    /// <summary>SL: each first action gets the share of the budget that it gets in one search of the world.</summary>
+    /// <param name="seed">Answers the card prompts inside the world.</param>
+    public CombatDecisionResult Decide(NodeClone node, IReadOnlyList<CombatAction> legal, Budget budget, ulong seed)
+    {
+        if (legal.Count == 1) return PimcBrain.Only(legal[0]);
+        var first = PimcBrain.Ordered(legal);
+        int nodes = Math.Max(1, budget.NodesPerWorld / first.Count);
+        var replies = Map(first.Select((action, a) => (WorkerRequest)new SlWorldRequest(a, node, [action], seed, nodes)).ToList());
+        return PimcBrain.Merge(first, [replies.Select(r => r.Lines![0]).ToList()]);
+    }
+
+    /// <summary>As Harness's combat route: NoSL draws the build seed from the decision's seed; SL searches the clone.</summary>
     public CombatRoute Route(Budget budget) =>
-        new("pimc", (decision, seed) => Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed), budget);
+        new("pimc", (decision, seed, node) => node == null
+            ? Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed)
+            : Decide(node, decision.Legal, budget, seed), budget);
 
     /// <summary>The game's Log.Error lines in the workers since the last call.</summary>
     public List<string> TakeGameErrors()
@@ -38,5 +48,13 @@ public sealed class PooledPimc(WorkerPool pool)
         var errors = _gameErrors.ToList();
         _gameErrors.Clear();
         return errors;
+    }
+
+    private IReadOnlyList<WorkerReply> Map(IReadOnlyList<WorkerRequest> requests)
+    {
+        var replies = pool.Map(requests);
+        foreach (var r in replies) _gameErrors.AddRange(r.GameErrors);
+        if (replies.FirstOrDefault(r => r.Error != null) is { } failed) throw new InvalidOperationException($"world {failed.Id}: {failed.Error}");
+        return replies;
     }
 }

@@ -231,6 +231,8 @@ internal static class Cli
         if (seeds != null && start + n > seeds.Count) return Fail($"{seedFile} has {seeds.Count} seeds, not {start + n}");
         int seed = Int(opts, "seed", 1);
         int maxDecisions = Int(opts, "max-decisions", 20_000);
+        if (!Enum.TryParse<PlayEnvironment>(opts.GetValueOrDefault("env", "NoSL"), ignoreCase: true, out var env))
+            return Fail($"unknown environment {opts["env"]} (NoSL, SL)");
         bool check = opts.ContainsKey("check");
         bool observe = check || opts.ContainsKey("obs");
         using var logFile = opts.TryGetValue("log", out var logPath) ? new StreamWriter(logPath) : null;
@@ -266,13 +268,13 @@ internal static class Cli
         var failures = new Dictionary<string, int>();
         int mismatches = 0, gameErrors = 0, nodes = 0, nodesExact = 0, nodesRelicState = 0;
         var cloneMs = new List<double>();
-        Console.WriteLine($"run: {n} runs, {(champion?.ToString() ?? $"brain at {brainPath}")}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
+        Console.WriteLine($"run: {n} runs in {env}, {(champion?.ToString() ?? $"brain at {brainPath}")}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
             var setup = new RunSetup(opts.GetValueOrDefault("character", "SILENT"), seeds?[i] ?? MakeSeed(seed, i), Int(opts, "asc", 0), loadout);
             var started = clock.Elapsed;
-            var first = PlayRun(pump, setup, firstBrain, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
+            var first = PlayRun(pump, setup, env, firstBrain, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
             if (pooled != null) first.Errors.AddRange(pooled.TakeGameErrors());
             foreach (var entry in first.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
             var ms = (clock.Elapsed - started).TotalMilliseconds;
@@ -292,7 +294,7 @@ internal static class Cli
             nodesExact += clonesExact;
             nodesRelicState += clonesRelicState;
             if (cloneMismatch != null) Console.WriteLine($"  CLONE MISMATCH: {cloneMismatch}");
-            var second = PlayRun(pump, setup, secondBrain, maxDecisions, trace: false, observe, printObservations: false);
+            var second = PlayRun(pump, setup, env, secondBrain, maxDecisions, trace: false, observe, printObservations: false);
             if (pooled != null) pooled.TakeGameErrors();
             var secondLog = served?.Log ?? second.Log;
             // Each decision's observation is shown before its action, so they pair up by index.
@@ -463,20 +465,21 @@ internal static class Cli
 
         /// <summary>
         /// One Harness per run. Placeholders draw from one generator seeded by the run id, so a run plays the same
-        /// whatever is logged, in this process or over the wire. There is no SL champion yet.
+        /// whatever is logged, in this process or over the wire. In SL, pimc searches the node's clone; nothing else
+        /// looks further than in NoSL.
         /// </summary>
         public Func<Hello, Dispatcher> Harness(PooledPimc? pooled, bool log) => hello =>
         {
-            if (hello.Env != nameof(PlayEnvironment.NoSL)) throw new NotSupportedException($"no champion for {hello.Env} yet");
+            if (!Enum.TryParse<PlayEnvironment>(hello.Env, out var env)) throw new NotSupportedException($"no environment {hello.Env}");
             var rng = new Random(unchecked((int)ProtocolJson.Hash(hello.Run.RunId)));
             var combat = pooled?.Route(Budget) ?? CombatRoute.Of(Policy, Policies.Combat(Policy, rng));
             var random = new RandomChoices(rng);
             if (Macro == "l0")
             {
                 var l0 = new MacroBrain(RunValue.Initial);
-                return new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("random", random), new("l0", l0), new("l0", l0), log);
+                return new Dispatcher(hello.Run.RunId, env, combat, new("random", random), new("l0", l0), new("l0", l0), log);
             }
-            return new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("random", random), new("random", new RandomMacro(rng)), new("random", random), log);
+            return new Dispatcher(hello.Run.RunId, env, combat, new("random", random), new("random", new RandomMacro(rng)), new("random", random), log);
         };
 
         public override string ToString() =>
@@ -496,9 +499,10 @@ internal static class Cli
     /// hello: its id is a hash of the seed, so the seed alone gives the same run.
     /// Observing checks that each observation survives a JSON round trip, and keeps its hash.
     /// </summary>
-    private static RunResult PlayRun(Pump pump, RunSetup setup, Func<Hello, IRunBrain> brains, int maxDecisions, bool trace, bool observe, bool printObservations)
+    private static RunResult PlayRun(Pump pump, RunSetup setup, PlayEnvironment env, Func<Hello, IRunBrain> brains, int maxDecisions, bool trace,
+        bool observe, bool printObservations)
     {
-        var hello = new Hello(HeadlessGame.GameVersion, nameof(PlayEnvironment.NoSL), "worker",
+        var hello = new Hello(HeadlessGame.GameVersion, env.ToString(), "worker",
             new RunHeader(RunHeader.IdOf(setup.Seed), setup.Character, setup.Ascension));
         IRunBrain? brain = null;
         var observations = new List<(ulong Full, ulong Bare)>();
@@ -508,6 +512,7 @@ internal static class Cli
         try
         {
             brain = brains(hello);
+            var export = env == PlayEnvironment.SL ? new NodeExport(brain) : null;
             Action<Observation>? observed = !observe ? null : obs =>
             {
                 var json = ProtocolJson.Serialize(obs);
@@ -515,7 +520,9 @@ internal static class Cli
                 if (printObservations) Console.WriteLine($"  obs {observations.Count}: {json}");
                 observations.Add((ProtocolJson.Hash(obs), ProtocolJson.Hash(WithoutRelicState(obs))));
             };
-            session = RunSession.Start(pump, setup, brain, brain, brain, observed);
+            IRunBrain player = export ?? brain;
+            session = RunSession.Start(pump, setup, player, player, player, observed);
+            if (export != null) export.Session = session;
             int printed = 0;
             while (!session.IsOver && session.Trace.Count < maxDecisions)
             {

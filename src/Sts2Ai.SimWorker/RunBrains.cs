@@ -16,6 +16,12 @@ internal interface IRunBrain : ICombatPolicy, IChoicePolicy, IMacroPolicy
     /// <summary>Harness's decision log, when Harness is in this process and logging.</summary>
     IReadOnlyList<DecisionEntry> Log { get; }
 
+    /// <summary>SL: the host arrived at a node (docs: protocol §2).</summary>
+    void Checkpoint(NodeCheckpoint checkpoint);
+
+    /// <summary>SL: a decision taken in the current node, sent before the next decision.</summary>
+    void Act(NodeAction action);
+
     /// <summary>Once, when the run is over; <paramref name="failure"/> if it failed.</summary>
     void End(RunEnd end, string? failure);
 }
@@ -29,7 +35,62 @@ internal sealed class LocalBrain(Dispatcher harness) : IRunBrain
     public CombatAction Choose(CombatDecision decision) => harness.Choose(decision);
     public IReadOnlyList<int> Choose(ChoiceDecision decision) => harness.Choose(decision);
     public string Choose(MacroDecision decision) => harness.Choose(decision);
+    public void Checkpoint(NodeCheckpoint checkpoint) => harness.Checkpoint(checkpoint);
+    public void Act(NodeAction action) => harness.Act(action);
     public void End(RunEnd end, string? failure) { }
+}
+
+/// <summary>
+/// SL (docs: environments §6): before each decision, tells the brain what it has not heard of the current node: its
+/// checkpoint on arrival, then the decisions taken in it since, card prompts included. <see cref="Session"/> is the run,
+/// set once it has started.
+/// </summary>
+internal sealed class NodeExport(IRunBrain brain) : IRunBrain
+{
+    private int _node = -1;
+    private int _start = -1;
+    private int _sent;
+
+    public RunSession? Session { get; set; }
+
+    public string Champion => brain.Champion;
+    public IReadOnlyDictionary<string, int> Brains => brain.Brains;
+    public IReadOnlyList<DecisionEntry> Log => brain.Log;
+
+    public CombatAction Choose(CombatDecision decision)
+    {
+        Flush();
+        return brain.Choose(decision);
+    }
+
+    public IReadOnlyList<int> Choose(ChoiceDecision decision)
+    {
+        Flush();
+        return brain.Choose(decision);
+    }
+
+    public string Choose(MacroDecision decision)
+    {
+        Flush();
+        return brain.Choose(decision);
+    }
+
+    public void Checkpoint(NodeCheckpoint checkpoint) => brain.Checkpoint(checkpoint);
+    public void Act(NodeAction action) => brain.Act(action);
+    public void End(RunEnd end, string? failure) => brain.End(end, failure);
+
+    /// <summary>A node's decisions begin at a new place in the run's trace, as each node has at least its travel.</summary>
+    private void Flush()
+    {
+        var session = Session ?? throw new InvalidOperationException("a decision before the run started");
+        var clone = session.Clone();
+        if (session.NodeStart != _start)
+        {
+            (_node, _start, _sent) = (_node + 1, session.NodeStart, 0);
+            brain.Checkpoint(new NodeCheckpoint(_node, clone.Save));
+        }
+        for (; _sent < clone.Trace.Count; _sent++) brain.Act(new NodeAction(_node, _sent, clone.Trace[_sent]));
+    }
 }
 
 /// <summary>
@@ -71,6 +132,18 @@ internal sealed class WireBrain : IRunBrain
     }
 
     public string Choose(MacroDecision decision) => Ask(decision.Surface, decision.Observation, decision.Legal);
+
+    public void Checkpoint(NodeCheckpoint checkpoint)
+    {
+        Report(null);
+        _wire.Send(checkpoint);
+    }
+
+    public void Act(NodeAction action)
+    {
+        Report(null);
+        _wire.Send(action);
+    }
 
     public void End(RunEnd end, string? failure)
     {

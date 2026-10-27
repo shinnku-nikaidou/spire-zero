@@ -21,7 +21,8 @@ namespace Sts2Ai.SimWorker;
 ///    by replay, and plays on; also numbers kept inside a model (a worn Glass orb, a spent Silver Crucible, Sloth's
 ///    count of cards played) and the card Nightmare keeps;
 ///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
-///  - worlds: a search world restores exactly after a prompt, also when a relic asks at the start of each turn;
+///  - worlds: a search world restores exactly after a prompt, also when a relic asks at the start of each turn; the
+///    SL world of a run's combat shows the run's observation, plays on as the run did, and restores;
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
 ///  - protocol: observations and actions survive a round trip through their wire form, and the brain's and harness's
 ///    assemblies reach no game assembly;
@@ -114,6 +115,7 @@ internal static class SelfTest
         BuildsInternalNumbers(pump, pool, act, Check);
         RollingBoulder(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
+        NodeWorldPlaysAsTheRun(pump, seed, Check);
         int workers = Cli.Int(opts, "workers", 0);
         if (workers > 0) PooledMatches(pump, opts, pool, act, seed, workers, Check);
 
@@ -324,6 +326,57 @@ internal static class SelfTest
             return;
         }
         check("rolling boulder hits one by one", false, "no encounter in the pool has two or more enemies");
+    }
+
+    /// <summary>
+    /// A run with random policies, stopped at its third combat decision: the SL world loaded from the node's clone must
+    /// show that decision's observation, give the run's next observations for the run's actions (up to a card prompt,
+    /// which the world answers its own way), and show the first observation again after a restore.
+    /// </summary>
+    private static void NodeWorldPlaysAsTheRun(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed);
+        RunSession? session = null;
+        var steps = new List<(CombatObservation Obs, CombatAction Action, int Trace)>();
+        NodeClone? clone = null;
+        int decisions = 0, node = -1;
+        var play = new PlayPolicy(rng);
+        var capture = new CapturePolicy(decision =>
+        {
+            var action = play.Choose(decision);
+            if (++decisions >= 3 && steps.Count < 8)
+            {
+                clone ??= session!.Clone();
+                node = session!.NodeStart;
+                steps.Add((decision.Observation, action, session.Trace.Count));
+            }
+            return action;
+        });
+        string label = $"run {Cli.MakeSeed(seed, 0)}";
+        using (session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed, 0)), new RandomChoices(rng), capture, new RandomMacro(rng)))
+            while (!session.IsOver && steps.Count < 8 && (clone == null || session.NodeStart == node)) session.Step();
+        if (clone == null || steps.Count < 2)
+        {
+            check("SL world shows the run's combat", false, $"{label}: no combat with 3 decisions");
+            return;
+        }
+        string Json(CombatObservation obs) => ProtocolJson.Serialize(obs);
+        using var world = new NodeWorld(pump, clone, 7);
+        var root = world.Snapshot();
+        check("SL world shows the run's combat", Json(world.Observe()) == Json(steps[0].Obs), label);
+        int played = 0;
+        for (int k = 0; k + 1 < steps.Count && steps[k + 1].Trace == steps[k].Trace + 1; k++, played++)
+        {
+            world.Execute(steps[k].Action);
+            check("SL world plays as the run", Json(world.Observe()) == Json(steps[k + 1].Obs), $"{label} after {steps[k].Action}");
+        }
+        world.Restore(root);
+        check("SL world restores", Json(world.Observe()) == Json(steps[0].Obs), $"{label} after {played} actions");
+    }
+
+    private sealed class CapturePolicy(Func<CombatDecision, CombatAction> choose) : ICombatPolicy
+    {
+        public CombatAction Choose(CombatDecision decision) => choose(decision);
     }
 
     /// <summary>

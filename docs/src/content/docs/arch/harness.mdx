@@ -12,7 +12,7 @@ Harness 是决策进程里的调度器。它的一边是**宿主**，也就是�
 
 <Aside title="状态">
 
-部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）、`PooledPimc`（在进程池里搜索 NoSL 世界的战斗大脑）和 `Dispatcher`：它把一局里的决策路由给大脑，抽取大脑的种子，并写决策日志（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 让每一局都经过它，可以在进程内，也可以走传输协议：`BrainServer` 是 Harness 这一端的宿主–brain 消息处理（[协议 §2](/arch/protocol/#sec-2)），按顺序回答决策。规划中：公开记录（[§3](#sec-3)）；搜索进行中的过期请求和取消；墙钟预算和基于 CI 的分配；降级回答。
+部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）、`PooledPimc`（在进程池里搜索世界的战斗大脑，NoSL 或 SL）和 `Dispatcher`：它把一局里的决策路由给大脑，抽取大脑的种子，并写决策日志（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 让每一局都经过它，可以在进程内，也可以走传输协议：`BrainServer` 是 Harness 这一端的宿主–brain 消息处理（[协议 §2](/arch/protocol/#sec-2)），按顺序回答决策。规划中：公开记录（[§3](#sec-3)）；搜索进行中的过期请求和取消；墙钟预算和基于 CI 的分配；降级回答。
 
 </Aside>
 
@@ -85,7 +85,7 @@ public sealed class PublicRecord
   3. 本回合的历史，由此推出能力和遗物的内部计数器；
   4. 整局层面：至今见过的奖励、商店和事件，由此推出隐藏的概率计数器。
 - 记录随这一局的日志一起保存。崩溃恢复就是重放日志，不需要游戏存档。
-- SL：记录照样保留，用于日志和解说，但搜索用的世界来自节点克隆（[模拟器 §7](/arch/simulator/#sec-7)）。Harness 保存最新的节点检查点和节点轨迹；每次进入新节点时，轨迹清空重来。
+- SL：记录照样保留，用于日志和解说，但搜索用的世界来自节点克隆（[模拟器 §7](/arch/simulator/#sec-7)）。Harness 保存最新的节点检查点和节点轨迹；每次进入新节点时，轨迹清空重来。`Dispatcher` 从宿主的 `node_checkpoint` 和 `node_action` 消息里保存它们，NoSL 下拒收，并在每个战斗决策时把克隆交给战斗大脑。还没收到任何检查点就来了战斗决策，会抛异常。
 
 ## 4. 决策界面路由
 
@@ -98,7 +98,7 @@ public sealed class PublicRecord
 | 战斗外的 `card_choice`（升级、变化、附魔、移除） | 宏观大脑 |
 | `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`potion_full` | 宏观大脑 |
 
-- 战斗大脑取决于环境：NoSL 用 PIMC，SL 用 SL 规划器（[战斗大脑 §3](/arch/combat-brain/#sec-3)）；规划器做出来之前，SL 在它唯一的世界上运行 PIMC。宏观大脑在两种环境里是同一个（[环境 §5](/arch/environments/#sec-5)）。
+- 战斗大脑取决于环境：NoSL 用 PIMC，SL 用 SL 规划器（[战斗大脑 §3](/arch/combat-brain/#sec-3)）；规划器做出来之前，SL 在它唯一的世界（节点克隆）上运行 PIMC（[模拟器 §8](/arch/simulator/#sec-8)）。宏观大脑在两种环境里是同一个（[环境 §5](/arch/environments/#sec-5)）。
 - `Dispatcher` 为一局实现这张表。宿主把它作为自己的战斗策略、选牌提示策略和宏观策略。它为每一侧各持有一个大脑（战斗、战斗中的提示、宏观、战斗外的提示），并按 `ChoiceContext.InCombat` 把选牌提示交给对应的一侧（[协议 §4](/arch/protocol/#sec-4)）。目前除了战斗大脑，其余的大脑都是随机占位策略。
 - 找不到路由时报错「uncovered surface」（未覆盖的决策界面）：决策界面不在 `Dispatcher.MacroSurfaces` 里，或大脑的回答不合法，`Dispatcher` 都会抛异常。宿主暂停，请求人工操作，并记录一个覆盖率 bug。绝不随机兜底。评估要求兜底次数为 0（[评估 §3](/arch/evaluation/#sec-3)）。
 - 决策界面列表及其游戏入口：[模拟器 §5.2](/arch/simulator/#sec-5.2)、[GameBridge §4](/arch/gamebridge/#sec-4)。

@@ -4,12 +4,15 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Harness;
 
-/// <summary>A combat brain as Harness calls it: the decision, and the seed Harness drew for it.</summary>
+/// <summary>
+/// A combat brain as Harness calls it: the decision, the seed Harness drew for it, and in SL the current node's clone
+/// (null in NoSL).
+/// </summary>
 /// <param name="Budget">What the brain may spend, for the log; null for a policy that does not search.</param>
-public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, CombatDecisionResult> Decide, Budget? Budget = null)
+public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, NodeClone?, CombatDecisionResult> Decide, Budget? Budget = null)
 {
     /// <summary>A placeholder policy: it gives its pick and no candidates.</summary>
-    public static CombatRoute Of(string brain, ICombatPolicy policy) => new(brain, (decision, _) => new(policy.Choose(decision), [], []));
+    public static CombatRoute Of(string brain, ICombatPolicy policy) => new(brain, (decision, _, _) => new(policy.Choose(decision), [], []));
 }
 
 /// <summary>A brain for one side of the routing table, with its name for the log.</summary>
@@ -32,6 +35,9 @@ public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = nu
 /// each decision to exactly one brain, draws the brains' seeds from the run id and the decision's number (never from the
 /// game), and logs every decision when asked to. A surface with no route throws: there is no fallback.
 /// Card prompts go to the combat side when asked during a combat, to the macro side otherwise.
+///
+/// In SL the host also sends the current node's checkpoint and each decision taken in it (docs: protocol §2), which
+/// make the node's clone for the combat brain. In NoSL they are refused.
 /// </summary>
 public sealed class Dispatcher(
     string runId, PlayEnvironment env, CombatRoute combat, Route<IChoicePolicy> combatChoices, Route<IMacroPolicy> macro,
@@ -47,7 +53,9 @@ public sealed class Dispatcher(
     private readonly ulong _runHash = ProtocolJson.Hash(runId);
     private readonly List<DecisionEntry> _log = [];
     private readonly Dictionary<string, int> _brains = [];
+    private readonly List<string> _nodeTrace = [];
     private int _decisions;
+    private NodeCheckpoint? _node;
 
     /// <summary>The run's decisions so far, when logging.</summary>
     public IReadOnlyList<DecisionEntry> Log => _log;
@@ -68,7 +76,7 @@ public sealed class Dispatcher(
     public CombatAction Choose(CombatDecision decision)
     {
         var (id, seed, clock) = Begin(combat.Brain);
-        var result = combat.Decide(decision, seed);
+        var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(result.First)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
         Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
@@ -106,6 +114,26 @@ public sealed class Dispatcher(
                 action, null, null, null, seed, ms));
         return action;
     }
+
+    /// <summary>SL: the host arrived at a node; its decisions follow.</summary>
+    public void Checkpoint(NodeCheckpoint checkpoint)
+    {
+        if (env != PlayEnvironment.SL) throw new InvalidOperationException($"a node checkpoint in {env}");
+        if (checkpoint.NodeIndex <= (_node?.NodeIndex ?? -1)) throw new InvalidDataException($"node {checkpoint.NodeIndex} after node {_node!.NodeIndex}");
+        _node = checkpoint;
+        _nodeTrace.Clear();
+    }
+
+    /// <summary>SL: a decision taken in the current node.</summary>
+    public void Act(NodeAction action)
+    {
+        if (env != PlayEnvironment.SL) throw new InvalidOperationException($"a node action in {env}");
+        if (action.NodeIndex != _node?.NodeIndex || action.Seq != _nodeTrace.Count)
+            throw new InvalidDataException($"node action {action.NodeIndex}:{action.Seq}, expected {_node?.NodeIndex}:{_nodeTrace.Count}");
+        _nodeTrace.Add(action.Action);
+    }
+
+    private NodeClone Clone() => new((_node ?? throw new InvalidOperationException("an SL decision before any node checkpoint")).SaveJson, _nodeTrace.ToList());
 
     private (int Id, ulong Seed, Stopwatch Clock) Begin(string brain)
     {

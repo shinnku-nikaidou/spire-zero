@@ -8,8 +8,9 @@ namespace Sts2Ai.Harness;
 /// The brain's end of the wire (docs: protocol §2). Each run on a connection gets its own Harness from
 /// <paramref name="harness"/>, made at hello (it refuses the run by throwing); each decision is routed through it and
 /// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
-/// observation that does not match its hash) gets an error instead, and the host ends the run. <paramref name="ended"/>
-/// gets each run's Harness at run_end.
+/// observation that does not match its hash) gets an error instead, and the host ends the run. SL node messages get
+/// no answer: one that Harness refuses fails the run's next decision. <paramref name="ended"/> gets each run's Harness at
+/// run_end.
 /// </summary>
 public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, Dispatcher, RunEnd>? ended = null)
 {
@@ -71,12 +72,13 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
         Hello? hello = null;
         Dispatcher? run = null;
         long last = -1;
+        string? refused = null;
         while (wire.Receive() is { } message)
         {
             switch (message)
             {
                 case Hello next:
-                    (hello, run, last) = (next, null, -1);
+                    (hello, run, last, refused) = (next, null, -1, null);
                     try
                     {
                         run = harness(next);
@@ -91,6 +93,7 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
                     try
                     {
                         if (run == null) throw new InvalidDataException($"decision {request.DecisionId} outside a run");
+                        if (refused != null) throw new InvalidDataException(refused);
                         if (request.DecisionId <= last) throw new InvalidDataException($"decision {request.DecisionId} after decision {last}");
                         last = request.DecisionId;
                         wire.Send(Answer(run, request));
@@ -98,6 +101,18 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
                     catch (Exception e)
                     {
                         wire.Send(new WireError(Describe(e)));
+                    }
+                    break;
+                case NodeCheckpoint or NodeAction:
+                    try
+                    {
+                        if (run == null) throw new InvalidDataException($"{message.GetType().Name} outside a run");
+                        if (message is NodeCheckpoint checkpoint) run.Checkpoint(checkpoint);
+                        else run.Act((NodeAction)message);
+                    }
+                    catch (Exception e)
+                    {
+                        refused ??= Describe(e);
                     }
                     break;
                 case RunEnd end:

@@ -229,7 +229,7 @@ internal sealed class RunSession : IDisposable
     }
 
     /// <summary>Pumps until the player can act: in combat, their turn (a later one after ending a turn); elsewhere, the game idle.</summary>
-    private void Settle()
+    public void Settle()
     {
         _pump.RunUntil(() =>
         {
