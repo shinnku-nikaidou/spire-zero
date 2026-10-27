@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Runs;
@@ -172,5 +173,6 @@ public static class Observe
         Status = r.Status != RelicStatus.Normal ? r.Status.ToString() : null,
         Melted = r.IsMelted ? true : null,
         UsedUp = r.IsUsedUp ? true : null,
+        Cards = r is PaelsTooth { SerializableCards.Count: > 0 } tooth ? tooth.SerializableCards.Select(c => c.Id!.Entry).ToList() : null,
     };
 }

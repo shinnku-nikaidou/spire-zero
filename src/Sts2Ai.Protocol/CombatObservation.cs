@@ -102,6 +102,8 @@ public sealed record RelicView
     public bool? Melted { get; init; }
     /// <summary>Set when the relic is used up, as its tip says (a spent LIZARD_TAIL, WINGED_BOOTS with no flights left).</summary>
     public bool? UsedUp { get; init; }
+    /// <summary>The cards the relic keeps, by id, as its tip lists them: PAELS_TOOTH's, given back one after each combat.</summary>
+    public IReadOnlyList<string>? Cards { get; init; }
 }
 
 public sealed record CreatureView

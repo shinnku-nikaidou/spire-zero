@@ -11,6 +11,7 @@ using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Events;
+using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using Sts2Ai.GameBridge;
@@ -283,11 +284,16 @@ internal static class CombatBuilder
         foreach (var (i, power) in places.Zip(wanted)) list[i] = power;
     }
 
+    private static readonly PropertyInfo ToothCards = typeof(PaelsTooth).GetProperty(nameof(PaelsTooth.SerializableCards))!;
+
     private static void Relics(Player player, IReadOnlyList<RelicView> views)
     {
         foreach (var (relic, view) in player.Relics.Zip(views))
         {
             if (relic.Id.Entry != view.Id) continue;
+            // Pael's Tooth's counter is how many cards it keeps, so they go in first. Their upgrades are hidden, and
+            // they come back only after the combat.
+            if (relic is PaelsTooth) ToothCards.SetValue(relic, (view.Cards ?? []).Select(id => new CardSpec(id).ToSerializable()).ToList());
             if (view.Counter is int counter) Solve(() => relic.DisplayAmount, counter, FieldKnobs(relic, typeof(RelicModel)));
             // A hidden counter can be one that ran out, such as Silver Crucible's after its third card reward.
             else Solve(() => relic.ShowCounter ? 1 : 0, 0, FieldKnobs(relic, typeof(RelicModel)));
