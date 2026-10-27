@@ -142,7 +142,7 @@ One JSON line per decision:
 - A macro decision adds `features`: V's features of the run view the brain was shown ([Learning §1](/en/arch/learning/#sec-1)), whatever brain decided. Fitting V reads them ([Learning §2](/en/arch/learning/#sec-2)).
 - A macro decision adds `run_view` as well: the run view itself, about 6 KB, which V v2 is trained on ([Learning §2](/en/arch/learning/#sec-2)).
 - `run --log FILE` writes it, one line per decision ([Simulator §5](/en/arch/simulator/#sec-5)).
-- `degraded`, for an answer given after a worker failure, is planned together with timeouts ([§7](#sec-7)). A crashed worker is restarted and gets its request once more, which gives the same answer, so nothing is degraded yet.
+- `degraded`, for an answer given after a worker failure, is planned with worlds reopened on other workers ([§7](#sec-7)). A crashed or stuck worker is restarted and gets its request once more, which gives the same answer, so nothing is degraded yet.
 
 Who reads the log:
 
@@ -159,7 +159,7 @@ Who reads the log:
 | building from the observation fails | report `BuildDifferences`; no search; the host pauses; the bug is logged. Never random |
 | the host rejects the action as illegal | the host requests again; twice in a row → pause |
 
-Today: a worker that dies is restarted and gets its request once more ([Simulator §8](/en/arch/simulator/#sec-8)); there are no timeouts. A combat not built as observed fails the decision with its differences (`SimWorlds.NoSL`), which in `run` fails the run. An illegal answer from a brain throws in `Dispatcher`.
+Today: a worker that dies, or does not answer within 5 minutes, is killed, restarted and gets its request once more; a second failure fails the decision ([Simulator §8](/en/arch/simulator/#sec-8)). A request is one world's search, seconds at most, so the timeout catches a stuck worker, not a slow one. A combat not built as observed fails the decision with its differences (`SimWorlds.NoSL`), which in `run` fails the run. An illegal answer from a brain throws in `Dispatcher`.
 
 ## 8. Tests
 

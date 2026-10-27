@@ -9,20 +9,28 @@ namespace Sts2Ai.Harness;
 /// Simulator worker processes (docs: simulator §8), each started as <c>COMMAND serve OPTIONS</c> and spoken to in JSON
 /// lines over its stdin and stdout (<see cref="WorkerHello"/>, <see cref="WorkerReply"/>). A worker serves one request
 /// at a time; <see cref="Map"/> hands each request to whichever worker is free and returns the replies in request
-/// order, whatever order they finish in, so timing cannot change a result. A worker that dies is started again and
-/// gets its request once more; a second death fails the call.
+/// order, whatever order they finish in, so timing cannot change a result. A worker that dies, or does not answer
+/// within the timeout (a worker alive but stuck), is killed and started again and gets its request once more; a
+/// second failure fails the call.
 /// </summary>
 public sealed class WorkerPool : IDisposable
 {
+    /// <summary>How long a worker may take to boot or to answer one request. A request is one world's search, a few
+    /// seconds at most; this is for a worker that is stuck, not slow.</summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(5);
+
     private readonly ProcessStartInfo _start;
+    private readonly TimeSpan _timeout;
     private readonly BlockingCollection<Worker> _free = new();
     private int _restarts;
 
     /// <summary>Starts <paramref name="count"/> workers in parallel and waits until each has booted.</summary>
     /// <param name="command">The worker program and its leading arguments, e.g. <c>dotnet Sts2Ai.SimWorker.dll</c>.</param>
     /// <param name="options">The options of <c>serve</c>, such as the leaf weights the workers search with.</param>
-    public WorkerPool(IReadOnlyList<string> command, int count, IReadOnlyList<string>? options = null)
+    /// <param name="timeout">How long a worker may take to boot or answer (<see cref="DefaultTimeout"/>).</param>
+    public WorkerPool(IReadOnlyList<string> command, int count, IReadOnlyList<string>? options = null, TimeSpan? timeout = null)
     {
+        _timeout = timeout ?? DefaultTimeout;
         _start = new ProcessStartInfo(command[0], [.. command.Skip(1), "serve", .. options ?? []])
         {
             RedirectStandardInput = true,
@@ -34,7 +42,7 @@ public sealed class WorkerPool : IDisposable
         };
         // The environment is filled in on first read, which is not thread-safe: read it once before the parallel starts.
         _ = _start.Environment;
-        var workers = Enumerable.Range(0, count).AsParallel().Select(_ => new Worker(_start)).ToList();
+        var workers = Enumerable.Range(0, count).AsParallel().Select(_ => new Worker(_start, _timeout)).ToList();
         Game = workers[0].Game;
         foreach (var w in workers) _free.Add(w);
         Count = count;
@@ -90,7 +98,7 @@ public sealed class WorkerPool : IDisposable
             {
                 Interlocked.Increment(ref _restarts);
                 worker.Dispose();
-                worker = new Worker(_start);
+                worker = new Worker(_start, _timeout);
             }
         }
     }
@@ -109,12 +117,14 @@ public sealed class WorkerPool : IDisposable
         private const int StderrLines = 20;
 
         private readonly Process _process;
+        private readonly TimeSpan _timeout;
         /// <summary>The worker's last stderr lines, for the report if it dies.</summary>
         private readonly Queue<string> _stderr = new();
 
         /// <summary>Starts the process and waits for its hello.</summary>
-        public Worker(ProcessStartInfo start)
+        public Worker(ProcessStartInfo start, TimeSpan timeout)
         {
+            _timeout = timeout;
             _process = new Process { StartInfo = start };
             _process.ErrorDataReceived += (_, e) =>
             {
@@ -127,7 +137,7 @@ public sealed class WorkerPool : IDisposable
             };
             _process.Start();
             _process.BeginErrorReadLine();
-            Game = ProtocolJson.Deserialize<WorkerHello>(_process.StandardOutput.ReadLine() ?? throw Died()).Game;
+            Game = ProtocolJson.Deserialize<WorkerHello>(ReadLine("boot")).Game;
         }
 
         public string Game { get; }
@@ -138,12 +148,34 @@ public sealed class WorkerPool : IDisposable
             {
                 _process.StandardInput.WriteLine(line);
                 _process.StandardInput.Flush();
-                return _process.StandardOutput.ReadLine() ?? throw Died();
+                return ReadLine("answer");
             }
             catch (IOException)
             {
                 throw Died();
             }
+        }
+
+        /// <summary>The worker's next line; a worker that gives none within the timeout is killed.</summary>
+        private string ReadLine(string what)
+        {
+            var read = _process.StandardOutput.ReadLineAsync();
+            bool done;
+            try
+            {
+                done = read.Wait(_timeout);
+            }
+            catch (AggregateException e) when (e.InnerException is IOException)
+            {
+                throw Died();
+            }
+            if (!done)
+            {
+                _process.Kill();
+                _process.WaitForExit(1000);
+                throw new WorkerDiedException($"worker {_process.Id} did not {what} within {_timeout.TotalSeconds:F0} s, killed:\n{Tail()}");
+            }
+            return read.Result ?? throw Died();
         }
 
         private WorkerDiedException Died()
