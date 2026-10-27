@@ -414,7 +414,7 @@ def main(
     epochs: Annotated[int, typer.Option(min=1)] = 40,
     patience: Annotated[int, typer.Option(min=1, help="epochs without a better held-out loss before stopping")] = 5,
     batch: Annotated[int, typer.Option(min=1)] = 256,
-    lr: float = 1e-3,
+    lr: float = 3e-5,
     weight_decay: float = 1e-4,
     seed: int = 0,
 ) -> None:
@@ -492,6 +492,9 @@ def main(
         return total / test_weight, torch.cat(rows)
 
     model = Net({t: len(ids) for t, ids in tables.items()}, len(names), floors).to(device)
+    # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
+    with torch.no_grad():
+        model.head.bias.copy_(base_logits)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     best, best_state, stale = math.inf, None, 0
     for epoch in range(epochs):
