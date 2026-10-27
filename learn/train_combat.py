@@ -856,7 +856,12 @@ def main(
     logs: Annotated[str, typer.Option(help="decision logs, comma-separated")],
     records: Annotated[str, typer.Option(help="run records, comma-separated")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
-    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/history/NAME.json)")] = None,
+    out: Annotated[
+        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/history/NAME.json)")
+    ] = None,
+    character: Annotated[
+        str, typer.Option(help="the character whose runs these are: each has a brain of its own")
+    ] = "SILENT",
     buckets: Annotated[int, typer.Option(min=1, help="buckets of the HP share lost from here after a win")] = 50,
     loss_min: Annotated[float, typer.Option(max=0, help="the lowest bucket's bottom: a share healed")] = -0.25,
     lags: Annotated[int, typer.Option(min=0, help="earlier rounds of each enemy's intents the net reads")] = 3,
@@ -878,13 +883,13 @@ def main(
     width: Annotated[float, typer.Option(min=0.05, help="multiplies every layer's width")] = 1.0,
     seed: int = 0,
 ) -> None:
-    out_file = out_path(name, out)
+    out_file = out_path(name, out, character)
     torch.manual_seed(seed)
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     samples, skipped = [], 0
-    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
+    for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         for run, blocks in combats(log).items():
             r = runs.get(run)
             if r is None or r.get("failure"):
@@ -1060,6 +1065,7 @@ def main(
 
     net = {
         "name": name,
+        "character": character,
         "buckets": buckets,
         "loss_min": loss_min,
         "lags": lags,

@@ -137,6 +137,26 @@ internal static class Cli
 }
 
 /// <summary>
+/// Where each character's files go, from the repository root (docs: learning §6, evaluation §2): each character is
+/// trained and judged on its own, every ascension by the same brain, so its weights and its evaluation have a folder
+/// of their own. The seed sets are shared.
+/// </summary>
+internal static class Layout
+{
+    /// <summary>The character's folder name: SILENT's is silent.</summary>
+    public static string Folder(string character) => character.ToLowerInvariant();
+
+    /// <summary>eval/CHARACTER: champions/ENV.json, reports/ and leaderboard.md.</summary>
+    public static string Eval(string character) => Path.Combine("eval", Folder(character));
+
+    /// <summary>weights/CHARACTER/ENV/ROLE.json, a champion's main name for one of its weights files.</summary>
+    public static string MainWeights(string character, PlayEnvironment env, string role) =>
+        Path.Combine("weights", Folder(character), env.ToString().ToLowerInvariant(), role + ".json");
+
+    public static string Seeds(string seedSet) => Path.Combine("eval", "seeds", seedSet + ".txt");
+}
+
+/// <summary>
 /// What pimc values its leaves with (docs: combat-brain §4): --leaf FILE's weights (the default ones without it), and
 /// --combat-net FILE's net, which then values the leaves still in progress at those weights' prices.
 /// </summary>

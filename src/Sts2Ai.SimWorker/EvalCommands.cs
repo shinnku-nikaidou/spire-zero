@@ -53,13 +53,14 @@ internal static class ReportCommand
 /// <summary>
 /// gate: the full-run gate (docs: evaluation §5), the challenger's records against the champion's report, paired by
 /// seed, with an SPRT. The challenger is named by its run options, which must be the ones its records were played
-/// with. On a pass, --promote PATH writes the challenger's report to PATH and makes it the champion, its weights files
-/// on the environment's main names (<see cref="ChampionOptions.Promoted"/>); its report faces the next challengers, so
-/// it must cover the whole seed set. The SPRT may pass early: play the rest, then promote.
+/// with, and its runs must be of the champion's character and ascension. On a pass, --promote PATH writes the
+/// challenger's report to PATH and makes it the champion, its weights files on the character's main names in the
+/// environment (<see cref="ChampionOptions.Promoted"/>); its report faces the next challengers, so it must cover the
+/// whole seed set. The SPRT may pass early: play the rest, then promote.
 /// </summary>
 internal static class GateCommand
 {
-    private static readonly Option<string> ChampionPath = Opt.Required<string>("--champion", "the champion file to beat, such as eval/champions/nosl.json");
+    private static readonly Option<string> ChampionPath = Opt.Required<string>("--champion", "the champion file to beat, such as eval/silent/champions/nosl.json");
     private static readonly Option<string> Records = Opt.Required<string>("--records", "the challenger's run record files, comma-separated");
     private static readonly Option<string> Metric = Opt.Of("--metric", "floor", "what the SPRT compares").AcceptOnlyFromAmong("floor", "win");
     private static readonly Option<double?> Delta = Opt.Maybe<double?>("--delta", "the difference the SPRT tells from none (default: 1.5 floors, or 0.1 wins)");
@@ -90,51 +91,60 @@ internal static class GateCommand
             throw new CliException($"run {other.Seed} was played by {other.Config.Champion}, not by the options given ({challenger.Name})");
         var metric = r.GetValue(Metric)!;
         double delta = r.GetValue(Delta) ?? (metric == "floor" ? 1.5 : 0.1);
-        var result = Gate.Sprt(Gate.Pairs(champion, runs), metric, delta, r.GetValue(Alpha), r.GetValue(Beta));
+        IReadOnlyList<(RunRecord, RunRecord)> pairs;
+        try
+        {
+            pairs = Gate.Pairs(champion, runs);
+        }
+        catch (ArgumentException e)
+        {
+            throw new CliException(e.Message);
+        }
+        var result = Gate.Sprt(pairs, metric, delta, r.GetValue(Alpha), r.GetValue(Beta));
         Console.WriteLine($"champion: {file.Champion} ({file.Report})");
         Console.WriteLine($"challenger: {challenger.Name}, {runs.Count} runs");
         Console.WriteLine(result.Summary());
         if (result.Verdict != "pass" || r.GetValue(Promote) is not { } outPath) return result.Verdict == "pass" ? 0 : 1;
 
-        var seedFile = Path.Combine("eval", "seeds", champion.SeedSet + ".txt");
+        var seedFile = Layout.Seeds(champion.SeedSet);
         var report = ReportCommand.Of(runs, champion.SeedSet, EvalReport.ReadSeeds(seedFile));
         if (report.Runs.Count != report.SetSize)
             throw new CliException($"not promoted: {report.Runs.Count} of {champion.SeedSet}'s {report.SetSize} seeds were run; the champion's report needs them all");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
         File.WriteAllText(outPath + ".json", report.Json());
         File.WriteAllText(outPath + ".md", report.Markdown(champion));
-        var promoted = new ChampionFile(file.Env, challenger.Name, challenger.Promoted(Enum.Parse<PlayEnvironment>(file.Env)), outPath + ".json", report.Date, result);
+        var options = challenger.Promoted(Enum.Parse<PlayEnvironment>(file.Env), report.Runs[0].Character, report.Runs[0].Ascension);
+        var promoted = new ChampionFile(file.Env, challenger.Name, options, outPath + ".json", report.Date, result);
         File.WriteAllText(championPath, ProtocolJson.Serialize(promoted) + "\n");
         Console.WriteLine($"promoted: {championPath} now names {challenger.Name}");
         return 0;
     }
 }
 
-/// <summary>leaderboard: the leaderboards over every report in the folder (docs: evaluation §2).</summary>
+/// <summary>leaderboard: a character's leaderboards over every report in its folder (docs: evaluation §2).</summary>
 internal static class LeaderboardCommand
 {
-    private static readonly Option<string> Reports = Opt.Of("--reports", "eval/reports", "the folder of reports");
-    private static readonly Option<string> Champions = Opt.Of("--champions", "eval/champions", "the folder of champion files");
-    private static readonly Option<string> Out = Opt.Of("--out", "eval/leaderboard.md", "where the leaderboards go");
+    private static readonly Option<string> Character = Opt.Of("--character", "SILENT", "the character, whose eval folder holds the reports and champions");
 
     public static Command Command()
     {
-        var command = Opt.Command("leaderboard", "the leaderboards over every report in the folder (docs: evaluation §2)", [Reports, Champions, Out]);
+        var command = Opt.Command("leaderboard", "a character's leaderboards over every report in eval/CHARACTER/reports (docs: evaluation §2)", [Character]);
         command.SetAction(Run);
         return command;
     }
 
     private static int Run(ParseResult r)
     {
-        var reports = Directory.GetFiles(r.GetValue(Reports)!, "*.json").Order()
+        var folder = Layout.Eval(r.GetValue(Character)!);
+        var reports = Directory.GetFiles(Path.Combine(folder, "reports"), "*.json").Order()
             .ToDictionary(Path.GetFullPath, path => ProtocolJson.Deserialize<EvalReport>(File.ReadAllText(path)));
-        var championDir = r.GetValue(Champions)!;
+        var championDir = Path.Combine(folder, "champions");
         var champions = Directory.Exists(championDir)
             ? Directory.GetFiles(championDir, "*.json").Select(path => Path.GetFullPath(ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(path)).Report))
                 .Where(reports.ContainsKey).Select(path => reports[path]).ToList()
             : [];
         var markdown = Leaderboard.Markdown(reports.Values.ToList(), champions);
-        File.WriteAllText(r.GetValue(Out)!, markdown);
+        File.WriteAllText(Path.Combine(folder, "leaderboard.md"), markdown);
         Console.Write(markdown);
         return 0;
     }

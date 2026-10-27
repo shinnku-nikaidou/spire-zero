@@ -25,6 +25,8 @@ public class EvalReportTests
         Assert.Throws<ArgumentException>(() => EvalReport.Of([Fixtures.Run("Z", 1)], "set", Seeds, "d"));
         var other = Fixtures.Config with { Commit = "def5678" };
         Assert.Throws<ArgumentException>(() => EvalReport.Of([Fixtures.Run("A", 1), Fixtures.Run("B", 1, config: other)], "set", Seeds, "d"));
+        Assert.Throws<ArgumentException>(() => EvalReport.Of([Fixtures.Run("A", 1), Fixtures.Run("B", 1) with { Character = "IRONCLAD" }], "set", Seeds, "d"));
+        Assert.Throws<ArgumentException>(() => EvalReport.Of([Fixtures.Run("A", 1), Fixtures.Run("B", 1) with { Ascension = 1 }], "set", Seeds, "d"));
     }
 
     [Fact]
@@ -52,6 +54,15 @@ public class GateTests
         Assert.Equal("pass", result.Verdict);
         Assert.Equal(Gate.MinPairs, result.Decided);
         Assert.Equal(5, result.FloorDiffMean);
+    }
+
+    [Fact]
+    public void PairsOnlyRunsOfTheChampionsCharacterAndAscension()
+    {
+        var champion = EvalReport.Of([Fixtures.Run("A", 10), Fixtures.Run("B", 10)], "set", ["A", "B"], "d");
+        Assert.Equal(2, Gate.Pairs(champion, [Fixtures.Run("A", 12, config: Challenger), Fixtures.Run("B", 12, config: Challenger)]).Count);
+        Assert.Throws<ArgumentException>(() => Gate.Pairs(champion, [Fixtures.Run("A", 12, config: Challenger) with { Character = "IRONCLAD" }]));
+        Assert.Throws<ArgumentException>(() => Gate.Pairs(champion, [Fixtures.Run("A", 12, config: Challenger) with { Ascension = 5 }]));
     }
 
     [Fact]

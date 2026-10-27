@@ -57,11 +57,12 @@ def read_lines(paths: str, needle: str | None = None) -> Iterator[dict]:
                     pass
 
 
-def runs_by_log(logs: str, records: str) -> list[tuple[str, dict[str, dict]]]:
+def runs_by_log(logs: str, records: str, character: str) -> list[tuple[str, dict[str, dict]]]:
     """Each decision log (comma-separated) with the runs, by run id, of the record file at the same place in records:
     the one its `run` wrote beside it. A run id is a hash of the seed alone, so files of other runs can hold another
     run of the same seed (another policy, an exploration scan); a log is joined only with its own records. A run id
-    twice in one record file is refused."""
+    twice in one record file is refused, and so is a run of another character than the one being trained: each
+    character has a brain of its own (docs: learning §6)."""
     log_paths, record_paths = logs.split(","), records.split(",")
     if len(log_paths) != len(record_paths):
         raise LearnError(
@@ -77,6 +78,8 @@ def runs_by_log(logs: str, records: str) -> list[tuple[str, dict[str, dict]]]:
                 continue
             if run_id in runs:
                 raise LearnError(f"run {run_id} is in {path} twice")
+            if r.get("character") != character:
+                raise LearnError(f"run {run_id} in {path} was played as {r.get('character')}, not {character}")
             runs[run_id] = r
         pairs.append((log, runs))
     return pairs

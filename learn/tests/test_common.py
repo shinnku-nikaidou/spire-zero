@@ -42,9 +42,9 @@ def test_wait_sims_passes_when_all_succeed(tmp_path):
 def test_runs_by_log_joins_each_log_with_its_own_records(tmp_path):
     # The same seed played by two policies: one run id, two runs, each with its own log.
     a, b = tmp_path / "rec-a.jsonl", tmp_path / "rec-b.jsonl"
-    a.write_text('{"run_id": "ab", "floor": 5}\n')
-    b.write_text('{"run_id": "ab", "floor": 9}\n{"seed": "no id"}\n')
-    pairs = runs_by_log("log-a.jsonl,log-b.jsonl", f"{a},{b}")
+    a.write_text('{"run_id": "ab", "character": "SILENT", "floor": 5}\n')
+    b.write_text('{"run_id": "ab", "character": "SILENT", "floor": 9}\n{"seed": "no id"}\n')
+    pairs = runs_by_log("log-a.jsonl,log-b.jsonl", f"{a},{b}", "SILENT")
     assert [(log, runs["ab"]["floor"]) for log, runs in pairs] == [("log-a.jsonl", 5), ("log-b.jsonl", 9)]
 
 
@@ -52,11 +52,18 @@ def test_runs_by_log_wants_one_record_file_per_log(tmp_path):
     a = tmp_path / "rec-a.jsonl"
     a.write_text("")
     with pytest.raises(LearnError, match="2 decision logs and 1 record files"):
-        runs_by_log("log-a.jsonl,log-b.jsonl", str(a))
+        runs_by_log("log-a.jsonl,log-b.jsonl", str(a), "SILENT")
 
 
 def test_runs_by_log_refuses_a_run_id_twice_in_one_file(tmp_path):
     a = tmp_path / "rec-a.jsonl"
-    a.write_text('{"run_id": "ab"}\n{"run_id": "ab"}\n')
+    a.write_text('{"run_id": "ab", "character": "SILENT"}\n{"run_id": "ab", "character": "SILENT"}\n')
     with pytest.raises(LearnError, match="twice"):
-        runs_by_log("log-a.jsonl", str(a))
+        runs_by_log("log-a.jsonl", str(a), "SILENT")
+
+
+def test_runs_by_log_refuses_another_characters_run(tmp_path):
+    a = tmp_path / "rec-a.jsonl"
+    a.write_text('{"run_id": "ab", "character": "IRONCLAD"}\n')
+    with pytest.raises(LearnError, match="IRONCLAD, not SILENT"):
+        runs_by_log("log-a.jsonl", str(a), "SILENT")

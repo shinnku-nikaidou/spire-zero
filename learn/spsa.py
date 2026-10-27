@@ -47,7 +47,7 @@ class Objective(StrEnum):
     panel = "panel"
 
 
-def run_side(sim, objective, param, seed_base, extra, weights_file, first, n, processes, work, tag):
+def run_side(sim, objective, param, seed_base, character, extra, weights_file, first, n, processes, work, tag):
     """Starts train seeds [first, first + n) with these weights, split over processes: runs or panel combats. Each
     process writes its records to work/TAG-I.jsonl and its output to work/TAG-I.log."""
     chunks = [(first + n * i // processes, first + n * (i + 1) // processes) for i in range(processes)]
@@ -56,7 +56,7 @@ def run_side(sim, objective, param, seed_base, extra, weights_file, first, n, pr
         if hi == lo:
             continue
         records = work / f"{tag}-{i}.jsonl"
-        seeds = ["--seed", str(seed_base), "--start", str(lo), "--n", str(hi - lo)]
+        seeds = ["--seed", str(seed_base), "--start", str(lo), "--n", str(hi - lo), "--character", character]
         if objective == Objective.panel:
             cmd = [*sim, "panel", *seeds, "--player", "pimc", "--leaf", str(weights_file), "--out", str(records)]
         else:
@@ -122,7 +122,10 @@ def main(
     ] = None,
     c: Annotated[float, typer.Option(help="perturbation, in units of a weight's scale")] = 0.2,
     max_move: Annotated[float, typer.Option(help="largest change of a weight per step, in its scale")] = 0.1,
-    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/history/NAME.json)")] = None,
+    out: Annotated[
+        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/history/NAME.json)")
+    ] = None,
+    character: Annotated[str, typer.Option(help="the character that plays: each has a brain of its own")] = "SILENT",
     log: Annotated[str | None, typer.Option(help="one line per step")] = None,
     work: Annotated[
         str | None, typer.Option(help="folder for the sides' weights, records and sim logs (default: a temporary one)")
@@ -132,7 +135,7 @@ def main(
     ] = None,
 ) -> None:
     extra = extra or []
-    out_file = out_path(name, out)
+    out_file = out_path(name, out, character)
     if objective == Objective.panel and param != Param.leaf:
         raise LearnError("the panel plays combats, which V does not decide: --objective panel needs --param leaf")
     a = a or (0.5 if objective == Objective.panel else 0.02)
@@ -172,7 +175,18 @@ def main(
             path.write_text(json.dumps({"name": f"{name}-{k}{'+' if sign > 0 else '-'}", "weights": side}))
             procs.append(
                 run_side(
-                    cmd, objective, param, seed_base, extra, path, first, seeds, max(1, processes // 2), folder, tag
+                    cmd,
+                    objective,
+                    param,
+                    seed_base,
+                    character,
+                    extra,
+                    path,
+                    first,
+                    seeds,
+                    max(1, processes // 2),
+                    folder,
+                    tag,
                 )
             )
         plus, minus = collect(procs[0]), collect(procs[1])
@@ -211,6 +225,7 @@ def main(
     )
     tuned = {
         "name": name,
+        "character": character,
         "target": target,
         "tuned": {
             "method": "spsa",

@@ -54,13 +54,18 @@ def main(
     logs: Annotated[str, typer.Option(help="decision logs, comma-separated")],
     records: Annotated[str, typer.Option(help="run records, comma-separated")],
     name: Annotated[str, typer.Option(help="the weights' name, as the champion will show it")],
-    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/history/NAME.json)")] = None,
+    out: Annotated[
+        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/history/NAME.json)")
+    ] = None,
+    character: Annotated[
+        str, typer.Option(help="the character whose runs these are: each has a brain of its own")
+    ] = "SILENT",
     ridge: Annotated[float, typer.Option(help="penalty per unit of sample weight, on standardized features")] = 0.01,
 ) -> None:
-    out_file = out_path(name, out)
+    out_file = out_path(name, out, character)
 
     rows = []
-    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
+    for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         if any(r["outcome"] == "won" for r in runs.values()):
             logger.warning("some runs won; the target is still the floor reached")
         for e in read_lines(log):
@@ -100,7 +105,14 @@ def main(
         raise LearnError(f"the fit is not finite: {weights}")
     with open(out_file, "w") as f:
         json.dump(
-            {"name": name, "target": "floor reached", "fit": report, "intercept": intercept, "weights": weights},
+            {
+                "name": name,
+                "character": character,
+                "target": "floor reached",
+                "fit": report,
+                "intercept": intercept,
+                "weights": weights,
+            },
             f,
             indent=2,
         )

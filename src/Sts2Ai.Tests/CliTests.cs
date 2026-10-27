@@ -63,6 +63,16 @@ public class CliTests : IDisposable
     }
 
     [Fact]
+    public void RunPlaysAChampionFilesCharacterAndAscension()
+    {
+        var file = ChampionFile(new() { ["env"] = "NoSL", ["character"] = "IRONCLAD", ["asc"] = "3" });
+        var r = Cli.Parse(["run", "--champion", file]);
+        Assert.Empty(r.Errors);
+        Assert.Equal("IRONCLAD", r.GetValue<string>("--character"));
+        Assert.Equal(3, r.GetValue<int>("--asc"));
+    }
+
+    [Fact]
     public void BrainTakesAChampionFileWithoutItsEnvironment()
     {
         var file = ChampionFile(new() { ["env"] = "SL", ["policy"] = "pimc", ["worlds"] = "4" });

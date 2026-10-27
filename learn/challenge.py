@@ -3,10 +3,12 @@
 The challenger plays the champion's seed set in chunks, and the sim's gate pairs what it has played with the champion's
 report after each chunk. A fail or a void verdict stops it there. After a pass it plays the rest of the set, which the
 champion's report must cover, and is promoted: the gate writes its report and the champion file, and the leaderboard
-is rebuilt. Paths are taken from the repository root, where the sim runs.
+is rebuilt. The challenger plays the champion's character at its ascension (docs: learning §6). Paths are taken from
+the repository root, where the sim runs.
 
-    uv run python challenge.py --sim ../sim.sh --champion eval/champions/nosl.json \\
-        --promote eval/reports/DATE-nosl-r1-promotion-1-NAME -- --policy pimc --macro l0 --value weights/history/s1.json
+    uv run python challenge.py --sim ../sim.sh --champion eval/silent/champions/nosl.json \\
+        --promote eval/silent/reports/DATE-nosl-r1-promotion-1-NAME \\
+        -- --policy pimc --macro l0 --value weights/silent/history/s1.json
 """
 
 import json
@@ -32,9 +34,9 @@ class Metric(StrEnum):
     win = "win"
 
 
-def play(sim, seed_file, lo, hi, processes, extra, folder):
-    """Plays seeds [lo, hi) of the seed file, split over processes; returns their record files. Each process logs to
-    the record file's name with .log."""
+def play(sim, seed_file, lo, hi, processes, player, extra, folder):
+    """Plays seeds [lo, hi) of the seed file, split over processes, with the player's options (its character and
+    ascension); returns their record files. Each process logs to the record file's name with .log."""
     procs = []
     for i in range(processes):
         a, b = lo + (hi - lo) * i // processes, lo + (hi - lo) * (i + 1) // processes
@@ -52,6 +54,7 @@ def play(sim, seed_file, lo, hi, processes, extra, folder):
             str(b - a),
             "--records",
             str(records),
+            *player,
             *extra,
         ]
         procs.append((start_sim(cmd, records.with_suffix(".log"), cwd=ROOT), records))
@@ -86,7 +89,7 @@ def gate(sim, champion, metric, extra, records, promote=None):
 @script.command(help=__doc__)
 def main(
     sim: Annotated[str, typer.Option(help="the command that starts the sim, as one string")],
-    champion: Annotated[str, typer.Option(help="the champion file, such as eval/champions/nosl.json")],
+    champion: Annotated[str, typer.Option(help="the champion file, such as eval/silent/champions/nosl.json")],
     chunk: Annotated[int, typer.Option(min=1, help="seeds played between two gates")] = 40,
     processes: Annotated[int, typer.Option(min=1)] = 4,
     metric: Annotated[Metric, typer.Option()] = Metric.floor,
@@ -111,14 +114,25 @@ def main(
         raise LearnError(f"cannot read the champion {champion} and its report: {e}") from e
     seed_set, total = report["seed_set"], report["set_size"]
     seed_file = f"eval/seeds/{seed_set}.txt"
+    # A report holds one character at one ascension, which the challenger plays too.
+    character, ascension = report["runs"][0]["character"], report["runs"][0]["ascension"]
+    player = ["--character", character, "--asc", str(ascension)]
     folder = Path(records_dir or tempfile.mkdtemp(prefix="challenge-")).resolve()
     folder.mkdir(parents=True, exist_ok=True)
-    logger.info("challenging {} on {} ({} seeds), records in {}", file["champion"], seed_set, total, folder)
+    logger.info(
+        "challenging {} as {} at ascension {} on {} ({} seeds), records in {}",
+        file["champion"],
+        character,
+        ascension,
+        seed_set,
+        total,
+        folder,
+    )
 
     records = []
     for lo in range(0, total, chunk):
         hi = min(total, lo + chunk)
-        records += play(cmd, seed_file, lo, hi, processes, extra, folder)
+        records += play(cmd, seed_file, lo, hi, processes, player, extra, folder)
         verdict, lines = gate(cmd, champion, metric, extra, records)
         logger.info("after {} of {} seeds:\n{}", hi, total, lines)
         if verdict in ("fail", "void"):
@@ -132,13 +146,13 @@ def main(
     if not promote:
         return
     if hi < total:
-        records += play(cmd, seed_file, hi, total, processes, extra, folder)
+        records += play(cmd, seed_file, hi, total, processes, player, extra, folder)
     verdict, lines = gate(cmd, champion, metric, extra, records, promote=promote)
     logger.info("on the whole set:\n{}", lines)
     if verdict != "pass":
         raise typer.Exit(1)
-    subprocess.run([*cmd, "leaderboard"], cwd=ROOT, stdout=subprocess.DEVNULL, check=True)
-    logger.info("leaderboard rebuilt: eval/leaderboard.md")
+    subprocess.run([*cmd, "leaderboard", "--character", character], cwd=ROOT, stdout=subprocess.DEVNULL, check=True)
+    logger.info("leaderboard rebuilt: eval/{}/leaderboard.md", character.lower())
 
 
 if __name__ == "__main__":

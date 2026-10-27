@@ -402,7 +402,12 @@ def main(
     logs: Annotated[str, typer.Option(help="decision logs, comma-separated")],
     records: Annotated[str, typer.Option(help="run records, comma-separated")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
-    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/history/NAME.json)")] = None,
+    out: Annotated[
+        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/history/NAME.json)")
+    ] = None,
+    character: Annotated[
+        str, typer.Option(help="the character whose runs these are: each has a brain of its own")
+    ] = "SILENT",
     floors: Annotated[int, typer.Option(min=1)] = 64,
     objective: Annotated[Objective, typer.Option()] = Objective.floor,
     min_count: Annotated[int, typer.Option(help="ids seen fewer times read as unknown")] = 3,
@@ -413,13 +418,13 @@ def main(
     weight_decay: float = 1e-4,
     seed: int = 0,
 ) -> None:
-    out_file = out_path(name, out)
+    out_file = out_path(name, out, character)
     torch.manual_seed(seed)
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     samples, won = [], 0
-    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
+    for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         won += sum(1 for r in runs.values() if r["outcome"] == "won" and not r.get("failure"))
         for e in read_lines(log, '"run_view"'):
             r = runs.get(e["run"])
@@ -549,6 +554,7 @@ def main(
 
     net = {
         "name": name,
+        "character": character,
         "objective": objective.value,
         "floors": floors,
         "vocab": tables,

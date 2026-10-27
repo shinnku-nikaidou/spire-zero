@@ -33,12 +33,17 @@ public static class Gate
     }
 
     /// <summary>The pairs: every seed of <paramref name="champion"/> that the challenger played too, in the champion's order.</summary>
-    /// <exception cref="ArgumentException">The two sides played in different environments, rungs or games.</exception>
+    /// <exception cref="ArgumentException">The two sides played in different environments, rungs or games, or as
+    /// different characters or at different ascensions.</exception>
     public static IReadOnlyList<(RunRecord Champion, RunRecord Challenger)> Pairs(EvalReport champion, IReadOnlyList<RunRecord> challenger)
     {
         var c = champion.Config;
         if (challenger.FirstOrDefault(r => (r.Config.Game, r.Config.Env, r.Config.Rung) != (c.Game, c.Env, c.Rung)) is { } other)
             throw new ArgumentException($"run {other.Seed} was played in {other.Config.Game} {other.Config.Env} {other.Config.Rung}, the champion in {c.Game} {c.Env} {c.Rung}");
+        // A report holds one character at one ascension (EvalReport.Of).
+        var (character, ascension) = (champion.Runs[0].Character, champion.Runs[0].Ascension);
+        if (challenger.FirstOrDefault(r => (r.Character, r.Ascension) != (character, ascension)) is { } stranger)
+            throw new ArgumentException($"run {stranger.Seed} was played as {stranger.Character} at ascension {stranger.Ascension}, the champion as {character} at ascension {ascension}");
         if (challenger.Select(r => r.Config.Champion).Distinct().Count() > 1) throw new ArgumentException("the challenger's runs come from more than one champion");
         var bySeed = challenger.GroupBy(r => r.Seed).ToDictionary(g => g.Key, g => g.Count() == 1 ? g.First() : throw new ArgumentException($"seed {g.Key} was run {g.Count()} times"));
         return champion.Runs.Where(r => bySeed.ContainsKey(r.Seed)).Select(r => (r, bySeed[r.Seed])).ToList();
@@ -90,9 +95,10 @@ public static class Gate
 }
 
 /// <summary>
-/// The champion of one environment, as <c>eval/champions/ENV.json</c> holds it (docs: evaluation §5): the run options that
-/// play it (<c>run --champion FILE</c>), its name as the reports show it, the report that challengers are paired
-/// against, and the gate it passed (none for the first champion).
+/// The champion of one character in one environment, as <c>eval/CHARACTER/champions/ENV.json</c> holds it (docs:
+/// evaluation §5): the run options that play it (<c>run --champion FILE</c>), its character and ascension included, its
+/// name as the reports show it, the report that challengers are paired against, and the gate it passed (none for the
+/// first champion).
 /// </summary>
 public sealed record ChampionFile(string Env, string Champion, IReadOnlyDictionary<string, string> Options, string Report, string Since,
     Gate.Result? Gate = null);
