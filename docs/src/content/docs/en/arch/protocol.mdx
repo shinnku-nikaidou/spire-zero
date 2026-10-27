@@ -263,13 +263,13 @@ public sealed record WorkerHello(string Game);
 public abstract record WorkerRequest(long Id);
 
 // "pimc_world": build the combat from Observation with BuildSeed, take world World of Worlds drawn
-// from SearchSeed, and search this turn after each of First, in that order.
+// from SearchSeed, and search this turn after each of First, in that order, each with NodesPerFirst nodes.
 public sealed record PimcWorldRequest(long Id, CombatObservation Observation, IReadOnlyList<CombatAction> First,
-    string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerWorld) : WorkerRequest(Id);
+    string BuildSeed, ulong SearchSeed, int World, int Worlds, int NodesPerFirst) : WorkerRequest(Id);
 
-// "sl_world": load Node, the SL clone, and search this turn after each of First.
+// "sl_world": load Node, the SL clone, and search this turn after each of First, each with NodesPerFirst nodes.
 public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First,
-    int NodesPerWorld) : WorkerRequest(Id);
+    int NodesPerFirst) : WorkerRequest(Id);
 
 // Lines[i] is the best line after First[i]. Error is set instead when the request failed.
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
@@ -5,16 +6,26 @@ namespace Sts2Ai.Brain;
 /// <summary>How much search one decision may use (docs: harness §5): worlds, and actions simulated per world.</summary>
 /// <param name="Elite">How many times the nodes per world an elite's decisions get (docs: combat-brain §5).</param>
 /// <param name="Boss">The same for a boss.</param>
-public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1)
+/// <param name="Halving">Whether the first actions share each world's nodes by sequential halving instead of evenly
+/// (<see cref="PimcBrain.Root"/>).</param>
+public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false)
 {
     /// <summary>The budget of a decision in this room (<see cref="CombatObservation.Room"/>), with its multiple applied.</summary>
-    public Budget For(string? room) =>
-        new(Worlds, (int)Math.Round(NodesPerWorld * (room switch { "Elite" => Elite, "Boss" => Boss, _ => 1.0 })));
+    public Budget For(string? room) => this with
+    {
+        NodesPerWorld = (int)Math.Round(NodesPerWorld * (room switch { "Elite" => Elite, "Boss" => Boss, _ => 1.0 })),
+        Elite = 1,
+        Boss = 1,
+    };
 
-    /// <summary>As the champion's name shows it: 8x300, then the multiples that are not 1.</summary>
+    /// <summary>As the champion's name shows it: 8x300, then the multiples that are not 1, then halving if on.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{Worlds}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}");
+        $"{Worlds}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}");
 }
+
+/// <summary>Searches every world from the decision's state: the best line after each of <paramref name="first"/>, in
+/// that order, per world in world order, each first action with <paramref name="nodesPerFirst"/> nodes.</summary>
+public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyList<CombatAction> first, int nodesPerFirst);
 
 /// <param name="First">One of the legal actions.</param>
 /// <param name="Plan">The rest of the turn after <paramref name="First"/>, in the first world (for narration and highlight).</param>
@@ -35,12 +46,13 @@ public interface ICombatBrain
 /// over the worlds; never the max across worlds, which is strategy fusion. Only the first action is played: the
 /// caller asks again after it. In SL there is one exact world, so this is plain planning.
 ///
-/// The budget is split evenly over the first actions, so each gets a fair look; inside a subtree the search stops
-/// expanding when its share is spent, and what is left is scored as ending the turn there (that option is tried first).
+/// Each world's nodes go to the first actions evenly, so each gets a fair look, or by sequential halving
+/// (<see cref="Root"/>); inside a subtree the search stops expanding when its share is spent, and what is left is scored
+/// as ending the turn there (that option is tried first).
 ///
 /// The worlds are independent, so a decision is three steps that can run apart: <see cref="Ordered"/> first actions, then
-/// <see cref="SearchWorld"/> for each world wherever that world lives (this process, or a worker), then
-/// <see cref="Merge"/>. <see cref="Decide"/> runs them all here.
+/// <see cref="SearchWorld"/> for each world wherever that world lives (this process, or a worker), then merging by
+/// <see cref="Root"/>, which asks for the worlds' searches once per halving round. <see cref="Decide"/> runs them all here.
 /// </summary>
 public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
 {
@@ -48,23 +60,62 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
     {
         if (legal.Count == 1) return Only(legal[0]);
         budget = budget.For(observation.Room);
-        var first = Ordered(legal);
-        return Merge(first, worlds.Worlds(budget.Worlds, seed).Select(w => SearchWorld(w, observation.Round, first, budget.NodesPerWorld)).ToList());
+        var live = worlds.Worlds(budget.Worlds, seed);
+        var roots = live.Select(w => w.Snapshot()).ToList();
+        return Root(Ordered(legal), budget, (first, nodes) => live.Select((w, k) =>
+        {
+            w.Restore(roots[k]);
+            return SearchWorld(w, observation.Round, first, nodes);
+        }).ToList());
     }
 
     /// <summary>The answer when there is nothing to choose: no search, so no candidates.</summary>
     public static CombatDecisionResult Only(CombatAction action) => new(action, [], []);
 
     /// <summary>One world's part of a decision: the best line after each of <paramref name="first"/>, in that order.</summary>
-    public IReadOnlyList<PlannedLine> SearchWorld(ICombatWorld world, int round, IReadOnlyList<CombatAction> first, int nodesPerWorld) =>
-        new WorldSearch(world, round, weights, Math.Max(1, nodesPerWorld / first.Count)).Root(first);
+    public IReadOnlyList<PlannedLine> SearchWorld(ICombatWorld world, int round, IReadOnlyList<CombatAction> first, int nodesPerFirst) =>
+        new WorldSearch(world, round, weights, nodesPerFirst).Root(first);
+
+    /// <summary>
+    /// Shares each world's nodes over the first actions and merges the worlds' lines. Evenly: one search, each first
+    /// action with an equal share. By sequential halving (docs: combat-brain §5): ⌈log₂ m⌉ rounds over the m first
+    /// actions; each round's part of the nodes is split evenly over the actions still in, each searched again from the
+    /// root with all the nodes it has had so far (workers keep nothing between requests, so a round searches anew rather
+    /// than resuming, at up to about 1.5 times the nodes), and then the better half by the mean over the same worlds
+    /// stays. The pick is the better of the last two.
+    /// </summary>
+    public static CombatDecisionResult Root(IReadOnlyList<CombatAction> first, Budget budget, RootSearch search)
+    {
+        if (!budget.Halving) return Merge(first, search(first, Math.Max(1, budget.NodesPerWorld / first.Count)), new int[first.Count]);
+        int rounds = BitOperations.Log2((uint)first.Count - 1) + 1;
+        var lines = new List<PlannedLine[]>();
+        var reached = new int[first.Count];
+        var left = Enumerable.Range(0, first.Count).ToList();
+        int nodes = 0;
+        for (int round = 0; ; round++)
+        {
+            nodes += Math.Max(1, budget.NodesPerWorld / (rounds * left.Count));
+            var found = search(left.Select(a => first[a]).ToList(), nodes);
+            for (int w = 0; w < found.Count; w++)
+            {
+                if (w == lines.Count) lines.Add(new PlannedLine[first.Count]);
+                for (int i = 0; i < left.Count; i++) lines[w][left[i]] = found[w][i];
+            }
+            foreach (int a in left) reached[a] = round;
+            if (round == rounds - 1) break;
+            left = left.OrderByDescending(a => lines.Average(l => l[a].Value)).Take((left.Count + 1) / 2).Order().ToList();
+        }
+        return Merge(first, lines, reached);
+    }
 
     /// <summary>Scores each first action by its mean over the worlds; the plan is the best action's line in the first world.</summary>
-    public static CombatDecisionResult Merge(IReadOnlyList<CombatAction> first, IReadOnlyList<IReadOnlyList<PlannedLine>> worlds)
+    /// <param name="reached">Each first action's last halving round: the pick is the best of those that reached the
+    /// last one, and the candidates are listed by round, then value.</param>
+    private static CombatDecisionResult Merge(IReadOnlyList<CombatAction> first, IReadOnlyList<IReadOnlyList<PlannedLine>> worlds, IReadOnlyList<int> reached)
     {
         var candidates = first.Select((action, a) => Summarize(action.ToString(), worlds.Select(lines => lines[a]).ToList())).ToList();
-        int best = Enumerable.Range(0, first.Count).MaxBy(a => candidates[a].Value);
-        return new(first[best], worlds[0][best].Actions.Skip(1).ToList(), candidates.OrderByDescending(c => c.Value).ToList());
+        var order = Enumerable.Range(0, first.Count).OrderByDescending(a => reached[a]).ThenByDescending(a => candidates[a].Value).ToList();
+        return new(first[order[0]], worlds[0][order[0]].Actions.Skip(1).ToList(), order.Select(a => candidates[a]).ToList());
     }
 
     /// <summary>Search order: ending the turn first (the fallback a spent budget leaves), then cards in hand order, then potions.</summary>

@@ -101,7 +101,7 @@ The levers below keep the search inside its budget. The one that decides when to
 | CI-based allocation over first actions | stop when the top two are separated; otherwise give them more worlds | no: every first action gets every world |
 | trivial decisions | one legal action, or all sequences equivalent → no search | one legal action |
 | restore cost | DFS order reuses prefixes and restores only on backtrack; deep copy later ([Simulator §4](/en/arch/simulator/#sec-4)) | yes |
-| sequential halving at the root | instead of the even split: ⌈log₂ m⌉ rounds; each round splits every world's nodes evenly over the first actions left, each DFS resuming where it stopped, then drops the worse half by their mean over the same worlds (CRN) | no: planned |
+| sequential halving at the root | instead of the even split: ⌈log₂ m⌉ rounds; each round splits every world's nodes evenly over the first actions left, then drops the worse half by their mean over the same worlds (CRN) | built (`--halving`), off by default. Workers keep nothing between requests, so each round searches the actions left again from the root with all the nodes they have had so far: up to about 1.5 times the nodes of resuming (1.25 at 4 first actions, 1.4 at 8, 1.5 at 16) |
 | budget by combat | an elite's or a boss's decisions get a multiple of the nodes per world (`--elite-x`, `--boss-x`, by the observation's room type) | built, × 1 by default; × 2 and × 4 to try first, then SPSA |
 | K and nodes per world | SPSA parameters | no: planned; 8 × 300 for every combat |
 
@@ -114,7 +114,7 @@ Rough numbers: 1–2 s per decision times 8 workers gives about 5,000 branches. 
 ## 6. Interface
 
 ```csharp
-public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300);
+public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false);
 
 public interface ICombatBrain
 {

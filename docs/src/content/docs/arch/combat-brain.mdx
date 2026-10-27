@@ -101,7 +101,7 @@ v0 还没有规划器：SL 在它唯一的世界上运行 [§2](#sec-2) 的 PIMC
 | 对第一个动作按置信区间分配 | 前两名拉开就停止；否则给它们更多的世界 | 没有：每个第一个动作都用全部世界 |
 | 平凡决策 | 只有一个合法动作，或所有序列等价 → 不搜索 | 只有一个合法动作时 |
 | 恢复开销 | 按 DFS 顺序复用前缀，只在回退时恢复；以后改用深拷贝（[模拟器 §4](/arch/simulator/#sec-4)） | 有 |
-| 根上的 Sequential Halving | 代替平均分配：分 ⌈log₂ m⌉ 轮，每轮在每个世界里把节点平分给留下的第一个动作，各自的 DFS 从上次停下的地方续跑；然后按同一批世界上的均值（CRN）淘汰较差的一半 | 没有：计划中 |
+| 根上的 Sequential Halving | 代替平均分配：分 ⌈log₂ m⌉ 轮，每轮在每个世界里把节点平分给留下的第一个动作，然后按同一批世界上的均值（CRN）淘汰较差的一半 | 已实现（`--halving`），默认关闭。worker 在请求之间什么都不保留，所以每一轮都从根上把留下的动作重新搜一遍，用上它们到这一轮为止分到的全部节点：最多约为续跑的 1.5 倍节点（4 个第一个动作时 1.25 倍，8 个时 1.4 倍，16 个时 1.5 倍） |
 | 按战斗分预算 | 精英和 Boss 战的决策，每个世界的节点数乘一个倍数（`--elite-x`、`--boss-x`，按观测里的房间类型） | 已实现，默认 × 1；先试 × 2 和 × 4，再交给 SPSA |
 | K 和每个世界的节点数 | 作为 SPSA 参数 | 没有：计划中；所有战斗都是 8 × 300 |
 
@@ -114,7 +114,7 @@ v0 的预算是 `Budget(Worlds, NodesPerWorld)`，默认 8 × 300；一个节点
 ## 6. 接口
 
 ```csharp
-public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300);
+public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false);
 
 public interface ICombatBrain
 {

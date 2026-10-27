@@ -127,11 +127,10 @@ internal static class SelfTest
 
     /// <summary>
     /// A few decisions, each searched here and in a pool of <paramref name="workers"/> serve processes with the same
-    /// seeds: the candidates, their values and the plan must be the same.
+    /// seeds, with the nodes shared evenly and by halving: the candidates, their values and the plan must be the same.
     /// </summary>
     private static void PooledMatches(Pump pump, Dictionary<string, string> opts, List<EncounterModel> pool, int act, int seed, int workers, Action<string, bool, string> check)
     {
-        var budget = new Budget(4, 120);
         var brain = new PimcBrain();
         using var workerPool = new WorkerPool(Cli.SelfCommand(), workers);
         var pooled = new PooledPimc(workerPool);
@@ -150,12 +149,15 @@ internal static class SelfTest
             }
             ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{i}");
             string buildSeed = Cli.MakeSeed((int)decisionSeed, 0);
-            CombatDecisionResult here;
-            using (var worlds = SimWorlds.NoSL(pump, obs, buildSeed))
-                here = brain.Decide(obs, legal, worlds, budget, decisionSeed);
-            var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed);
-            check("pooled search matches in-process search",
-                Show(here) == Show(there), $"#{i} {encounter.Id.Entry}: here {Show(here)}; pooled {Show(there)}");
+            foreach (var budget in new Budget[] { new(4, 120), new(4, 120, Halving: true) })
+            {
+                CombatDecisionResult here;
+                using (var worlds = SimWorlds.NoSL(pump, obs, buildSeed))
+                    here = brain.Decide(obs, legal, worlds, budget, decisionSeed);
+                var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed);
+                check("pooled search matches in-process search",
+                    Show(here) == Show(there), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; pooled {Show(there)}");
+            }
             var errors = pooled.TakeGameErrors();
             check("no game errors in workers", errors.Count == 0, $"#{i}: {errors.FirstOrDefault()}");
         }

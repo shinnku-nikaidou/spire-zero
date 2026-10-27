@@ -52,12 +52,12 @@ internal static class Serve
             case PimcWorldRequest r:
             {
                 using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed);
-                return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerWorld);
+                return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst);
             }
             case SlWorldRequest r:
             {
                 using var world = new NodeWorld(pump, r.Node);
-                return brain.SearchWorld(world, world.Observe().Round, r.First, r.NodesPerWorld);
+                return brain.SearchWorld(world, world.Observe().Round, r.First, r.NodesPerFirst);
             }
             default:
                 throw new InvalidDataException($"no search for {request.GetType().Name}");
