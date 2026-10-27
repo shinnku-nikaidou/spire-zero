@@ -61,6 +61,9 @@ namespace Sts2Ai.SimWorker;
 ///         [--leaf leaf.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--workers 0] [--trace] [--out results.jsonl]
 ///                                          the fixed combat panel: the same combats for every player; win rate, HP lost.
 ///                                          --workers N searches the NoSL worlds in N worker processes
+///   fusion --log decisions.jsonl[,more] [--n 400] [--start 0] [--every 1] [--k 32] [--max-nodes 5000] [--out fusion.jsonl]
+///                                          the fusion panel: the logs' NoSL combat decisions, K worlds' turns enumerated
+///                                          in full, PIMC's values against merged ones (docs: combat-brain §8)
 ///   serve [--leaf leaf.json]               a worker: JSON lines on stdin and stdout (docs: simulator §8)
 /// Loadout options for every command that runs combats: [--character SILENT] [--deck A*5,B+,...]
 /// [--relics A,B] [--potions A,B] [--hp N] [--max-hp N]. Omitted parts keep the character's starting values.
@@ -73,7 +76,7 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | serve | report | gate | leaderboard | seeds | weights"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | fusion | serve | report | gate | leaderboard | seeds | weights"); return 2; }
         // These need no game.
         if (args[0] == "report") return Report(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "leaderboard") return Leaderboards(ParseOptions(args.Skip(1).ToArray()));
@@ -104,6 +107,7 @@ internal static class Cli
             "forkbench" => ForkBench.Run(pump, opts),
             "run" => Runs(pump, opts),
             "panel" => Panel.Run(pump, opts),
+            "fusion" => Fusion.Run(pump, opts),
             "serve" => Serve.Run(pump, wire!, ReadLeaf(opts)?.Weights),
             _ => Fail($"unknown command {args[0]}"),
         };

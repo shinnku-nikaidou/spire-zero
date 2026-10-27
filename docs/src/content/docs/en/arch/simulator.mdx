@@ -84,6 +84,7 @@ A transpiler is a Harmony patch that rewrites a method's IL instead of wrapping 
 | `selftest` | determinism, restore, determinize and more ([§9](#sec-9)) |
 | `forkbench` | cost of a restore and of one search branch ([§4](#sec-4)) |
 | `panel` | the fixed combat panel: a placeholder or the combat brain, same seeds for every player ([Combat brain §7](/en/arch/combat-brain/#sec-7)) |
+| `fusion` | the fusion panel: NoSL combat decisions from decision logs, PIMC's values against merged ones ([Combat brain §8](/en/arch/combat-brain/#sec-8)) |
 | `serve` | a worker: JSON-lines requests on stdin, replies on stdout ([§8](#sec-8)); `--leaf FILE` sets its search's leaf weights |
 
 Every command that runs combats also takes the loadout options (character, deck, relics, potions, HP).

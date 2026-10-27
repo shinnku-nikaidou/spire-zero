@@ -25,10 +25,12 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Plan">The rest of the turn after <paramref name="Chosen"/>, as the brain planned it.</param>
 /// <param name="Features">On a macro decision, V's features of the run the brain was shown: what V is fit on
 /// (docs: learning §2).</param>
+/// <param name="Obs">On a combat decision, the observation the brain was shown: the input of the learned combat parts
+/// and of the fusion panel.</param>
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
-    IReadOnlyDictionary<string, double>? Features = null);
+    IReadOnlyDictionary<string, double>? Features = null, CombatObservation? Obs = null);
 
 /// <summary>Who made a decision, and what a searching brain planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
@@ -85,7 +87,7 @@ public sealed class Dispatcher(
         Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms));
+                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation));
         return result.First;
     }
 

@@ -84,6 +84,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 | `selftest` | 检查确定性、恢复、确定化等（[§9](#sec-9)） |
 | `forkbench` | 一次恢复和一个搜索分支的开销（[§4](#sec-4)） |
 | `panel` | 固定的战斗测试集：占位策略或战斗大脑，每个玩家用同样的种子（[战斗大脑 §7](/arch/combat-brain/#sec-7)） |
+| `fusion` | 融合测试集：取决策日志里的 NoSL 战斗决策，比较 PIMC 值和合并后的值（[战斗大脑 §8](/arch/combat-brain/#sec-8)） |
 | `serve` | 作为 worker 运行：从 stdin 读 JSON 行请求，在 stdout 回复（[§8](#sec-8)）；`--leaf FILE` 设定它搜索用的叶子权重 |
 
 所有会跑战斗的命令都接受配装选项（角色、牌组、遗物、药水、生命值）。

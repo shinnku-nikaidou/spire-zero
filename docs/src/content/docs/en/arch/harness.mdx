@@ -128,12 +128,14 @@ One JSON line per decision:
  "obs_hash": "67f99089ea94de49", "legal": 7, "chosen": "play:2", "plan": ["play:3:1", "play:5", "end_turn"],
  "candidates": [{"action": "play:2", "value": 0.673, "ci": 0.0, "samples": 8,
                  "values": [0.673, 0.673, …], "nodes": [37, 35, …]}, …],
- "budget": {"worlds": 8, "nodes_per_world": 300, "elite": 1, "boss": 1}, "seed": 16058448958323553205, "elapsed_ms": 104.6}
+ "budget": {"worlds": 8, "nodes_per_world": 300, "elite": 1, "boss": 1}, "seed": 16058448958323553205, "elapsed_ms": 104.6,
+ "obs": {"encounter": "NIBBITS_WEAK", "room": "Monster", …}}
 ```
 
 - `obs_hash` is the hash of what the brain was shown: the combat observation, the run observation, or the card prompt. `legal` counts the legal actions (the options, for a prompt). `chosen` is the action in text form, or the picked option indexes.
 - A searching brain adds `plan` (the rest of the turn after `chosen`, in the first world), `candidates` (each first action's mean value, confidence half-width `ci` and number of worlds, best first; then its value in each world, in world order, and the nodes the search spent below it in each world) and `budget`. Placeholders log neither. The per-world values are the Q of ExIt's policy target ([Learning §2](/en/arch/learning/#sec-2)).
 - A run's combat decisions come in one block per combat, between macro decisions, in the order of the combats in its run record. That is how a decision finds how its combat ended ([Evaluation §6](/en/arch/evaluation/#sec-6)).
+- A combat decision adds `obs`, the combat observation the brain was shown ([Protocol §1](/en/arch/protocol/#sec-1)): the input of the learned combat parts and of the fusion panel ([Combat brain §8](/en/arch/combat-brain/#sec-8)). It is about 1.6 KB.
 - A macro decision adds `features`: V's features of the run view the brain was shown ([Learning §1](/en/arch/learning/#sec-1)), whatever brain decided. Fitting V reads them ([Learning §2](/en/arch/learning/#sec-2)).
 - `run --log FILE` writes it, one line per decision ([Simulator §5](/en/arch/simulator/#sec-5)).
 - `degraded`, for an answer given after a worker failure, is planned together with timeouts ([§7](#sec-7)). A crashed worker is restarted and gets its request once more, which gives the same answer, so nothing is degraded yet.

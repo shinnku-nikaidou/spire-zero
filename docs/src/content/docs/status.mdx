@@ -58,6 +58,6 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 8. worker 进程池里从克隆加载的 SL 世界；SL 排行榜。节点检查点、SL 克隆、封存和整局里的 SL 世界已完成（[模拟器 §7](/arch/simulator/#sec-7)、[§8](/arch/simulator/#sec-8)）。
 
-9. 学习循环（拟合 V、ExIt、SPSA、晋级门槛），然后是 LLM 补丁循环。用自对弈拟合 V、用 SPSA 调 V 和叶子的权重，整局门槛和每个环境一个的冠军文件，精英和 Boss 战的预算倍数（[战斗大脑 §5](/arch/combat-brain/#sec-5)），以及决策日志和对局记录里的 ExIt 数据（[Harness §6](/arch/harness/#sec-6)），已经完成（[学习 §2](/arch/learning/#sec-2)，[评估 §5](/arch/evaluation/#sec-5)）。接下来依次是：调 K 和每个世界的节点数，并试这些倍数；融合测试集，只做测量；根上的 Sequential Halving（[战斗大脑 §5](/arch/combat-brain/#sec-5)）；战斗结局输出头；先验网络；局外 V 网络；最后是带 PCR 和 Reanalyse 的闭环（[学习 §2](/arch/learning/#sec-2)）。共享树、多回合搜索和 v2 编码器，看这些测量的结果再定。
+9. 学习循环（拟合 V、ExIt、SPSA、晋级门槛），然后是 LLM 补丁循环。用自对弈拟合 V、用 SPSA 调 V 和叶子的权重，整局门槛和每个环境一个的冠军文件，精英和 Boss 战的预算倍数（[战斗大脑 §5](/arch/combat-brain/#sec-5)），以及决策日志和对局记录里的 ExIt 数据（[Harness §6](/arch/harness/#sec-6)），已经完成（[学习 §2](/arch/learning/#sec-2)，[评估 §5](/arch/evaluation/#sec-5)）。接下来依次是：调 K 和每个世界的节点数，并试这些倍数；用自对弈日志里的 300–500 个决策跑融合测试集（工具已实现，[战斗大脑 §8](/arch/combat-brain/#sec-8)）；根上的 Sequential Halving（[战斗大脑 §5](/arch/combat-brain/#sec-5)）；战斗结局输出头；先验网络；局外 V 网络；最后是带 PCR 和 Reanalyse 的闭环（[学习 §2](/arch/learning/#sec-2)）。共享树、多回合搜索和 v2 编码器，看这些测量的结果再定。
 
 </Steps>
