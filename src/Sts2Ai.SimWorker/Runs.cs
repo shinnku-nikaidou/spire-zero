@@ -56,7 +56,8 @@ internal static class RunCommand
         bool trace = r.GetValue(Trace);
         bool printObservations = r.GetValue(Obs);
         bool observe = check || printObservations;
-        using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) : null;
+        // Both flush each line, so a run stopped midway (self-play, mostly) loses at most the line being written.
+        using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;
         using var records = r.GetValue(Records) is { } recordsPath ? new StreamWriter(recordsPath) { AutoFlush = true } : null;
         bool log = check || logFile != null;
         var brainPath = r.GetValue(Brain);
