@@ -152,6 +152,16 @@ def outcome(obs: dict, end: dict, buckets: int, loss_min: float):
     return 1 + max(0, min(buckets - 1, int((lost - loss_min) / (1 - loss_min) * buckets)))
 
 
+def next_intents(obs: dict, nxt: dict | None):
+    """For each living enemy of a round's start, in the order tokens lists them, its intents at the next round's start;
+    None where it is not alive then, or there is no next round in the combat."""
+    alive = {}
+    for e in (nxt or {}).get("enemies", []):
+        if e.get("uid") is not None and e["hp"] > 0 and e.get("intents") is not None:
+            alive[e["uid"]] = e["intents"]
+    return [alive.get(e.get("uid")) for e in obs["enemies"] if e["hp"] > 0]
+
+
 def held_potions(obs: dict) -> int:
     return sum(1 for p in obs["potions"] if p is not None)
 
@@ -256,6 +266,18 @@ class Batch:
         self.tensors = [x.to(device) for x in self.tensors]
         for table in BAGS:
             self.tensors.extend(padded([[index[table].get(i, 0) for i in t[table]] for t in toks], device))
+        # Each enemy's intents at the next round's start, for the next-intent head: their types, and the total damage.
+        types = len(index["intents"])
+        next_types, next_total, next_mask = torch.zeros(n, e_n, types), torch.zeros(n, e_n), torch.zeros(n, e_n)
+        for b, s in enumerate(samples):
+            for k, nxt in enumerate(s.get("next") or []):
+                if nxt is None:
+                    continue
+                next_mask[b, k] = 1
+                for kind, _, total in (intent_token(i) for i in nxt):
+                    next_types[b, k, index["intents"].get(kind, 0)] = 1
+                    next_total[b, k] += total
+        self.next_types, self.next_total, self.next_mask = next_types.to(device), next_total.to(device), next_mask.to(device)
         self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
         self.used = torch.tensor([held_potions(s["obs"]) - s["end"]["potions"] for s in samples], dtype=torch.float, device=device)
         self.share = torch.tensor([share(s["obs"]["player"]["hp"], s["obs"]["player"]["max_hp"]) for s in samples], device=device)
@@ -283,7 +305,8 @@ def mlp(*sizes):
 
 
 class Net(nn.Module):
-    def __init__(self, sizes, slots, buckets, n_player=8, dim=32, hidden=64, body=256, sum_scale=1 / 8):
+    def __init__(self, sizes, slots, buckets, n_player=8, width=1.0, sum_scale=1 / 8):
+        dim, hidden, body = round(32 * width), round(64 * width), round(256 * width)
         super().__init__()
         self.sum_scale = sum_scale
         self.cards = nn.Embedding(sizes["cards"], dim)
@@ -311,15 +334,22 @@ class Net(nn.Module):
         self.body = mlp(len(PILES) * hidden + n_player + hidden + 2 * hidden + 3 * dim, body, body)
         self.head = nn.Linear(body, 1 + buckets)
         self.potion_head = nn.Linear(body, 1)
+        # Training only: each enemy's next intents from its own vector, which makes the net learn the monsters' moves.
+        self.next_head = nn.Linear(2 * hidden, sizes["intents"] + 1)
 
     def power_sum(self, ids, amounts, mask):
         x = self.powers(ids) + amounts[..., None] * self.power_amount(ids)
         return (self.power_phi(x) * mask[..., None]).sum(-2)
 
-    def forward(self, cards, ups, costs, piles, mods, mod_mask, powers, power_amounts, power_mask, player,
-                enemies, enemy_scalars, enemy_mask, enemy_powers, enemy_power_amounts, enemy_power_mask,
-                intents, intent_values, intent_mask, relics, relic_mask, potions, potion_mask, context, context_mask):
-        """Per sample, the logits of the ending classes and the potions left after a win (inputs as INPUTS names them)."""
+    def forward(self, *inputs):
+        """Per sample, the logits of the ending classes and the potions used after a win (inputs as INPUTS names them)."""
+        z, _ = self.encode(*inputs)
+        return self.head(z), self.potion_head(z)[:, 0]
+
+    def encode(self, cards, ups, costs, piles, mods, mod_mask, powers, power_amounts, power_mask, player,
+               enemies, enemy_scalars, enemy_mask, enemy_powers, enemy_power_amounts, enemy_power_mask,
+               intents, intent_values, intent_mask, relics, relic_mask, potions, potion_mask, context, context_mask):
+        """The body's vector of each sample, and each enemy's own vector."""
         x = (self.cards(cards) + ups[..., None] * self.card_up(cards) + costs[..., None] * self.cost
              + (self.modifiers(mods) * mod_mask[..., None]).sum(2) + piles @ self.pile)
         h = self.card_phi(x)
@@ -329,12 +359,12 @@ class Net(nn.Module):
         slots = ((i * intent_mask[..., None]).sum(3) + self.slot).flatten(2)
         e = torch.cat([self.enemies(enemies) + self.enemy_scalars(enemy_scalars),
                        self.power_sum(enemy_powers, enemy_power_amounts, enemy_power_mask), slots], 2)
-        foes = (self.enemy_phi(e) * enemy_mask[..., None]).sum(1)
+        each = self.enemy_phi(e)
+        foes = (each * enemy_mask[..., None]).sum(1)
         parts = [per_pile, player, self.power_sum(powers, power_amounts, power_mask), foes]
         for table, ids, mask in ((self.relics, relics, relic_mask), (self.potions, potions, potion_mask), (self.context, context, context_mask)):
             parts.append((table(ids) * mask[..., None]).sum(1))
-        z = self.body(torch.cat(parts, 1))
-        return self.head(z), self.potion_head(z)[:, 0]
+        return self.body(torch.cat(parts, 1)), each
 
 
 class Outcome(nn.Module):
@@ -378,6 +408,34 @@ def values(probs: torch.Tensor, used: torch.Tensor, b: "Batch", buckets: int, lo
     return won * WIN_BASE + PER_HP * (probs[:, 1:] * (b.share[:, None] - mids)).sum(1) + won * PER_POTION * (b.held - used)
 
 
+def next_intent_report(model, test, test_batches, index, batch):
+    """How well the next-intent head predicts each held-out enemy's next intents: the share whose set of types it gets
+    exactly, and the mean error of the total damage, against guessing that the enemy shows the same as now."""
+    rows = []
+    with torch.no_grad():
+        for start, b in zip(range(0, len(test), batch), test_batches):
+            out = model.next_head(model.encode(*b.inputs())[1]).cpu()
+            for bi, s in enumerate(test[start:start + batch]):
+                for k, e in enumerate(s["tokens"]["enemies"]):
+                    if not b.next_mask[bi, k]:
+                        continue
+                    truth = b.next_types[bi, k].cpu() > 0.5
+                    now = torch.zeros_like(truth)
+                    for kind, _, _ in e["slots"][0]:
+                        now[index["intents"].get(kind, 0)] = True
+                    total, total_now = float(b.next_total[bi, k]), sum(t for _, _, t in e["slots"][0])
+                    rows.append((e["id"], bool(((out[bi, k, :-1] > 0) == truth).all()), bool((now == truth).all()),
+                                 20 * abs(float(out[bi, k, -1]) - total), 20 * abs(total_now - total)))
+    by = {}
+    for enemy, hit, hit_now, _, _ in rows:
+        by.setdefault(enemy, []).append((hit, hit_now))
+    top = sorted(by.items(), key=lambda x: -len(x[1]))[:20]
+    n = max(1, len(rows))
+    return {"enemies": len(rows), "type_accuracy": sum(r[1] for r in rows) / n, "type_accuracy_now": sum(r[2] for r in rows) / n,
+            "damage_mae": sum(r[3] for r in rows) / n, "damage_mae_now": sum(r[4] for r in rows) / n,
+            "by_enemy": {e: [len(v), sum(h for h, _ in v) / len(v), sum(h for _, h in v) / len(v)] for e, v in top}}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--logs", required=True, help="decision logs, comma-separated")
@@ -396,6 +454,9 @@ def main():
     p.add_argument("--weight-decay", type=float, default=1e-4)
     p.add_argument("--potion-weight", type=float, default=0.1, help="weight of the potions' squared error in the loss")
     p.add_argument("--fold", type=int, default=0, choices=range(5), help="which fifth of the runs (by run id) is held out")
+    p.add_argument("--next-weight", type=float, default=0.0, help="weight of the next-intent head's loss (0: no head)")
+    p.add_argument("--train-share", type=float, default=1.0, help="share of the training runs used, for learning curves")
+    p.add_argument("--width", type=float, default=1.0, help="multiplies every layer's width")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
     out_file = out_path(args.name, args.out)
@@ -417,20 +478,22 @@ def main():
         for block, fight in zip(blocks, fights):
             if "end" not in fight:
                 continue
-            history, last = {}, -1
+            starts, last = [], -1
             for e in block:
-                obs = e["obs"]
-                if obs["round"] == last:
-                    continue
-                last = obs["round"]
+                if e["obs"]["round"] != last:
+                    starts.append(e["obs"])
+                    last = e["obs"]["round"]
+            history = {}
+            for k, obs in enumerate(starts):
                 past = [{"uid": h["uid"], "id": h["id"], "turns": list(h["turns"])} for h in history.values()]
                 samples.append({"run": run, "obs": obs, "history": past, "tokens": tokens(obs, past, args.lags, rounds),
+                                "next": next_intents(obs, starts[k + 1] if k + 1 < len(starts) else None),
                                 "end": fight["end"], "class": outcome(obs, fight["end"], args.buckets, args.loss_min), "value": end_value(fight["end"])})
                 witness(history, obs)
     def held_out(run_id: str) -> bool:
         return int(run_id, 16) % 5 == args.fold
 
-    train = [s for s in samples if not held_out(s["run"])]
+    train = [s for s in samples if not held_out(s["run"]) and int(s["run"], 16) // 5 % 1000 < args.train_share * 1000]
     test = [s for s in samples if held_out(s["run"])]
     if not train or not test:
         raise SystemExit(f"{len(train)} train and {len(test)} held-out samples: too few runs")
@@ -451,6 +514,12 @@ def main():
         won = (b.target > 0).float()
         return nn.functional.cross_entropy(logits, b.target, reduction="none") + args.potion_weight * won * (potions - b.used) ** 2
 
+    def next_loss(model, each, b: Batch):
+        """Per sample, the next-intent head's loss: each type's cross-entropy, and the total damage's squared error."""
+        out = model.next_head(each)
+        types = nn.functional.binary_cross_entropy_with_logits(out[..., :-1], b.next_types, reduction="none").sum(-1)
+        return ((types + (out[..., -1] - b.next_total) ** 2) * b.next_mask).sum(1)
+
     test_batches = list(batches(test, False))
 
     def evaluate(model):
@@ -464,13 +533,17 @@ def main():
                 rows.append(values(torch.softmax(logits, 1), potions, b, args.buckets, args.loss_min))
         return total / len(test), torch.cat(ces).double().cpu(), torch.cat(rows).double().cpu()
 
-    model = Net({t: len(ids) for t, ids in tables.items()}, slots, args.buckets).to(device)
+    model = Net({t: len(ids) for t, ids in tables.items()}, slots, args.buckets, width=args.width).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     best, best_state, stale = math.inf, None, 0
     for epoch in range(args.epochs):
         model.train()
         for b in batches(train, True):
-            loss = loss_of(*model(*b.inputs()), b).mean()
+            z, each = model.encode(*b.inputs())
+            loss = loss_of(model.head(z), model.potion_head(z)[:, 0], b)
+            if args.next_weight:
+                loss = loss + args.next_weight * next_loss(model, each, b)
+            loss = loss.mean()
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -493,6 +566,7 @@ def main():
     # By room, since a monster's move order should matter most in the long fights of elites and bosses.
     rooms = [s["obs"].get("room") or "<none>" for s in test]
     ce_by_room = {r: float(ces[[k for k, x in enumerate(rooms) if x == r]].mean()) for r in sorted(set(rooms))}
+    next_report = next_intent_report(model, test, test_batches, index, args.batch) if args.next_weight else None
     counts = torch.bincount(torch.tensor([s["class"] for s in train]), minlength=1 + args.buckets).double() + 0.5
     prior = counts / counts.sum()
     ce_prior = -float(sum(math.log(prior[s["class"]]) for s in test)) / len(test)
@@ -524,6 +598,7 @@ def main():
         "value_mse_leaf0": float(((hand - actual) ** 2).mean()),
         "value_corr_leaf0": corr(hand, actual),
         "death_corr": corr(1 - predicted, died),
+        "next_intents": next_report,
     }
     print(json.dumps(report))
 
