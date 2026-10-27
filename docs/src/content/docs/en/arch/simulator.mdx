@@ -129,7 +129,7 @@ Details:
 - **Intents.** The builder chooses among the moves that show the observed intents. A stunned enemy gets a synthesized stun move, made like `Creature.StunInternal` does (`FollowUpStateId = StateLog.Last().Id`). Hidden enum switches in powers (e.g. `SurroundedPower._facing`) and then the monsters' own int fields (e.g. the Waterfall Giant's pressure gun damage, which grows each time it fires) are searched to maximize the number of matching enemies.
 - **uids** match the observation; other cards are numbered above them.
 - **Allies** besides the player are built like enemies: a relic's pet, which joins at the start, is matched by monster id, and a missing one joins as the player's pet, as a summon makes it. Any character can summon Osty with a card from another character's pool (`KALEIDOSCOPE` offers those), which failed one g1 run in 165 before allies were built.
-- **Move logs.** A monster picks its next move by the moves it made (not the same one three times in a row, a fixed cycle), and a fresh combat's log holds none. `Setup(obs, seed, history)` takes the record of what each enemy showed at the start of each round ([Harness §6](/en/arch/harness/#sec-6)) and gives each monster its log: each earlier round's move, then the current one. An earlier round matches the move that shows the same intents, else the same intent types and hits, else the same types, since the numbers grow with the monster's strength. A monster with a round that no move matches keeps a fresh log. Without the record, every monster has a fresh log.
+- **Move logs.** A monster picks its next move by the moves it made (not the same one three times in a row, a fixed cycle), and a fresh combat's log holds none. `Setup(obs, seed, history)` takes the record of what each enemy showed at the start of each round ([Harness §6](/en/arch/harness/#sec-6)) and gives each monster its log: each earlier round's move, then the current one. An earlier round matches the move that shows the same intents, else the same intent types and hits, else the same types, since the numbers grow with the monster's strength. A monster with a round that no move matches keeps a fresh log. A stun is not logged, as in the game: a round shown stunned is left out, and a monster stunned now goes on, after the stun, with the move it showed at this round's start. Without the record, every monster has a fresh log.
 - **Approximations (gap):** this turn's history and the counters inside powers and monsters; cost-modifier durations; player debuff decay; real stun-move follow-ups; the deck is all cards seen, generated ones included. `fidelity` measures what they cost in the simulator ([§6](#sec-6)); never validated on real-game observations.
 
 Selftest matrix (2026-10-27), all checks pass:
@@ -329,12 +329,12 @@ A NoSL world is a determinized sample: a full game state that agrees with everyt
 
   | combats | decisions | the same through the enemies' turn, without the record → with it |
   |---|---|---|
-  | act 0 weak + regular, 30 | 459 | 82.4% → 96.3% |
-  | act 1 weak + regular, 30 | 478 | 88.7% → 98.1% |
+  | act 0 weak + regular, 30 | 459 | 82.4% → 96.3%; 97.4% with stuns' follow-ups |
+  | act 1 weak + regular, 30 | 478 | 88.7% → 98.1%; 99.0% with stuns' follow-ups |
   | act 0 boss, 9 | 201 | 96.5% → 96.5% |
   | act 0 elite, 15 | 289 | 99.0% → 99.0% |
 
-  No combat was built wrong, and no action was illegal in a built one. Within the turn at most 1% differ. The rest differ after the turn ends: in act 0 mostly the intents of `TWO_TAILED_RAT` and `CORPSE_SLUG`, in act 1 `THIEVING_HOPPER`'s and `PARAFRIGHT`'s and the next hand, in the boss fights the Waterfall Giant's damage.
+  No combat was built wrong, and no action was illegal in a built one. Within the turn at most 1% differ. The rest differ after the turn ends: in act 0 the intents of `TWO_TAILED_RAT`, whose summon depends on counters inside the monster (turns until it may summon, summons so far); in act 1 `PARAFRIGHT`'s; in the boss fights the Waterfall Giant's damage. A stunned `CORPSE_SLUG` (another slug died) went on with the wrong move until stuns took their follow-up from the record.
 - R1 uses the same Build path as R4, with no shortcut that determinizes the true state for decisions, so behavior is identical across rungs. `Determinize` on the true state stays for tests and benchmarks.
 
 ## 7. SL node clone

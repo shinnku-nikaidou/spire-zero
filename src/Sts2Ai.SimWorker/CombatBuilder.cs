@@ -111,6 +111,10 @@ internal static class CombatBuilder
     /// what the move shows now (the monster gained strength since), so a round matches the move that shows the same
     /// intents, else the same intent types and hits, else the same types. A monster with a round that no move matches
     /// keeps the log it has.
+    ///
+    /// A stun is not one of the monster's moves and is not logged (<see cref="Creature.StunInternal"/>): a round shown
+    /// stunned is left out, and a monster stunned now goes on with the move it showed at this round's start, the last
+    /// one logged, rather than the one the fresh log gave its stun.
     /// </summary>
     private static void MoveLogs(CombatState st, IReadOnlyList<EnemyTurns> history, int round, Creature[] targets)
     {
@@ -118,11 +122,20 @@ internal static class CombatBuilder
         foreach (var enemy in st.Enemies)
         {
             if (enemy.CombatId is not { } uid || enemy.Monster?.MoveStateMachine is not { } machine || !record.TryGetValue(uid, out var turns)) continue;
-            var past = turns.Turns.Where(t => t.Round < round).OrderBy(t => t.Round).Select(t => Made(enemy, machine, targets, t.Intents)).ToList();
+            var shown = turns.Turns.Where(t => !t.Intents.All(i => i.Type == nameof(IntentType.Stun))).OrderBy(t => t.Round).ToList();
+            var past = shown.Where(t => t.Round < round).Select(t => Made(enemy, machine, targets, t.Intents)).ToList();
             if (past.Any(m => m == null)) continue;
+            var log = past.Select(m => (MonsterState)m!).ToList();
+            var next = enemy.Monster.NextMove;
+            if (machine.States.ContainsKey(next.Id)) log.Add(next);
+            else if (shown.FirstOrDefault(t => t.Round == round) is { } now && Made(enemy, machine, targets, now.Intents) is { } queued)
+            {
+                log.Add(queued);
+                enemy.Monster.SetMoveImmediate(Stunned(queued.Id), forceTransition: true);
+            }
+            if (log.Count == 0) continue;
             machine.StateLog.Clear();
-            machine.StateLog.AddRange(past!);
-            machine.StateLog.Add(enemy.Monster.NextMove);
+            machine.StateLog.AddRange(log);
         }
     }
 
@@ -178,7 +191,7 @@ internal static class CombatBuilder
             var intents = Key(view.Intents);
             if (Shows(enemy.Monster.NextMove, enemy, targets) != intents)
             {
-                var move = MovesShowing(enemy, targets, intents).FirstOrDefault() ?? Stunned(machine);
+                var move = MovesShowing(enemy, targets, intents).FirstOrDefault() ?? Stunned(machine.StateLog.Last().Id);
                 if (Shows(move, enemy, targets) == intents) enemy.Monster.SetMoveImmediate(move, forceTransition: true);
             }
             if (Shows(enemy.Monster.NextMove, enemy, targets) == intents) shown++;
@@ -189,11 +202,11 @@ internal static class CombatBuilder
     /// <summary>
     /// The move of a stunned monster, made on the spot as the game's <see cref="Creature.StunInternal"/> makes it,
     /// since it is not one of the monster's own. On its turn the real one does what the stun's cause gives it to do;
-    /// this one does nothing, then goes on with the last move logged.
+    /// this one does nothing, then goes on with <paramref name="followUp"/>, the last move logged.
     /// </summary>
-    private static MoveState Stunned(MonsterMoveStateMachine machine) => new("STUNNED", _ => Task.CompletedTask, new StunIntent())
+    private static MoveState Stunned(string followUp) => new("STUNNED", _ => Task.CompletedTask, new StunIntent())
     {
-        FollowUpStateId = machine.StateLog.Last().Id,
+        FollowUpStateId = followUp,
         MustPerformOnceBeforeTransitioning = true,
     };
 
