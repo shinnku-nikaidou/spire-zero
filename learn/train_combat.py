@@ -5,7 +5,9 @@ carry how each combat ended, joined by run and by the combats' order. A sample i
 state a search leaf stands in, with the public record of the enemies' moves before it (Harness's history, rebuilt from
 the earlier rounds' observations as Dispatcher builds it). The net reads the cards in each pile, the player, each
 enemy with its current intents and those of its last rounds, the relics, the potions and the encounter; its head gives
-the chance of each ending, a death or the HP share left in one of the buckets, and the potions left after a win. A
+the chance of each ending, a death or the share of max HP still to be lost from here in one of the buckets, and the
+potions still to be used after a win. Both are relative to the state, so the HP and potions it has now count in full
+(a net that predicts what is left learns only part of that, and the search then trades HP away too cheaply). A
 fifth of the runs (by run id; --fold picks which) is held out, for early stopping and the report. The output is a net
 file for `--combat-net`, in the weights history by default (docs: learning §6): the net as ONNX, with what the combat
 side needs to feed it, and test states it checks on load.
@@ -137,11 +139,21 @@ def tokens(obs: dict, history: list, lags: int, rounds: bool):
             "enemies": enemies, "relics": relics, "potions": potions, "context": context}
 
 
-def outcome(end: dict, buckets: int):
-    """The class of a combat's end: 0 for a death, else 1 + the bucket of the HP share left."""
+def share(hp: int, max_hp: int) -> float:
+    return hp / max(1, max_hp)
+
+
+def outcome(obs: dict, end: dict, buckets: int, loss_min: float):
+    """The class of a combat's end from a state: 0 for a death, else 1 + the bucket of the HP share lost since, the
+    buckets spanning [loss_min, 1) (below 0 for a combat that healed)."""
     if end["died"]:
         return 0
-    return 1 + min(buckets - 1, int(end["hp"] / max(1, end["max_hp"]) * buckets))
+    lost = share(obs["player"]["hp"], obs["player"]["max_hp"]) - share(end["hp"], end["max_hp"])
+    return 1 + max(0, min(buckets - 1, int((lost - loss_min) / (1 - loss_min) * buckets)))
+
+
+def held_potions(obs: dict) -> int:
+    return sum(1 for p in obs["potions"] if p is not None)
 
 
 def end_value(end: dict):
@@ -245,7 +257,9 @@ class Batch:
         for table in BAGS:
             self.tensors.extend(padded([[index[table].get(i, 0) for i in t[table]] for t in toks], device))
         self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
-        self.potions = torch.tensor([s["end"]["potions"] for s in samples], dtype=torch.float, device=device)
+        self.used = torch.tensor([held_potions(s["obs"]) - s["end"]["potions"] for s in samples], dtype=torch.float, device=device)
+        self.share = torch.tensor([share(s["obs"]["player"]["hp"], s["obs"]["player"]["max_hp"]) for s in samples], device=device)
+        self.held = torch.tensor([float(held_potions(s["obs"])) for s in samples], device=device)
 
     @staticmethod
     def powers(rows, index):
@@ -324,7 +338,7 @@ class Net(nn.Module):
 
 
 class Outcome(nn.Module):
-    """The net as ONNX holds it: the chance of each ending, and the potions left after a win."""
+    """The net as ONNX holds it: the chance of each ending, and the potions used after a win."""
 
     def __init__(self, net):
         super().__init__()
@@ -339,7 +353,7 @@ def onnx_bytes(model, example: Batch) -> bytes:
     """The model as an ONNX graph, every input's batch and length dimensions left free."""
     axes = {"cards": {0: "batch", 1: "cards"}, "ups": {0: "batch", 1: "cards"}, "costs": {0: "batch", 1: "cards"},
             "piles": {0: "batch", 1: "cards"}, "mods": {0: "batch", 1: "cards"}, "mod_mask": {0: "batch", 1: "cards"},
-            "player": {0: "batch"}, "outcome": {0: "batch"}, "potions_left": {0: "batch"}}
+            "player": {0: "batch"}, "outcome": {0: "batch"}, "potions_used": {0: "batch"}}
     for name in ("powers", "power_amounts", "power_mask"):
         axes[name] = {0: "batch", 1: "powers"}
     for name in ("enemies", "enemy_scalars", "enemy_mask"):
@@ -352,14 +366,16 @@ def onnx_bytes(model, example: Batch) -> bytes:
         axes[t] = axes[mask] = {0: "batch", 1: t}
     out = io.BytesIO()
     torch.onnx.export(Outcome(model), example.inputs(), out, dynamo=False, input_names=INPUTS,
-                      output_names=["outcome", "potions_left"], dynamic_axes=axes)
+                      output_names=["outcome", "potions_used"], dynamic_axes=axes)
     return out.getvalue()
 
 
-def values(probs: torch.Tensor, potions: torch.Tensor, buckets: int):
-    """What LeafValue's weights make of the predicted ending: each bucket at its middle, potions after a win."""
-    mids = WIN_BASE + PER_HP * (torch.arange(buckets, device=probs.device) + 0.5) / buckets
-    return (probs[:, 1:] * mids).sum(1) + (1 - probs[:, 0]) * PER_POTION * potions
+def values(probs: torch.Tensor, used: torch.Tensor, b: "Batch", buckets: int, loss_min: float):
+    """What LeafValue's weights make of the predicted ending: the HP share now less each bucket's middle, and the
+    potions held now less those used, after a win."""
+    mids = loss_min + (1 - loss_min) * (torch.arange(buckets, device=probs.device) + 0.5) / buckets
+    won = 1 - probs[:, 0]
+    return won * WIN_BASE + PER_HP * (probs[:, 1:] * (b.share[:, None] - mids)).sum(1) + won * PER_POTION * (b.held - used)
 
 
 def main():
@@ -368,7 +384,8 @@ def main():
     p.add_argument("--records", required=True, help="run records, comma-separated")
     p.add_argument("--name", required=True, help="the net's name, as the champion will show it")
     p.add_argument("--out", help="where the file goes (default: weights/history/NAME.json)")
-    p.add_argument("--buckets", type=int, default=20, help="buckets of the HP share left after a win")
+    p.add_argument("--buckets", type=int, default=50, help="buckets of the HP share lost from here after a win")
+    p.add_argument("--loss-min", type=float, default=-0.25, help="the lowest bucket's bottom: a share healed")
     p.add_argument("--lags", type=int, default=3, help="earlier rounds of each enemy's intents the net reads")
     p.add_argument("--no-round", action="store_true", help="hide the round and how many rounds each enemy has shown")
     p.add_argument("--min-count", type=int, default=3, help="ids seen fewer times read as unknown")
@@ -408,7 +425,7 @@ def main():
                 last = obs["round"]
                 past = [{"uid": h["uid"], "id": h["id"], "turns": list(h["turns"])} for h in history.values()]
                 samples.append({"run": run, "obs": obs, "history": past, "tokens": tokens(obs, past, args.lags, rounds),
-                                "end": fight["end"], "class": outcome(fight["end"], args.buckets), "value": end_value(fight["end"])})
+                                "end": fight["end"], "class": outcome(obs, fight["end"], args.buckets, args.loss_min), "value": end_value(fight["end"])})
                 witness(history, obs)
     def held_out(run_id: str) -> bool:
         return int(run_id, 16) % 5 == args.fold
@@ -432,7 +449,7 @@ def main():
 
     def loss_of(logits, potions, b: Batch):
         won = (b.target > 0).float()
-        return nn.functional.cross_entropy(logits, b.target, reduction="none") + args.potion_weight * won * (potions - b.potions) ** 2
+        return nn.functional.cross_entropy(logits, b.target, reduction="none") + args.potion_weight * won * (potions - b.used) ** 2
 
     test_batches = list(batches(test, False))
 
@@ -444,7 +461,7 @@ def main():
                 logits, potions = model(*b.inputs())
                 total += float(loss_of(logits, potions, b).sum())
                 ces.append(nn.functional.cross_entropy(logits, b.target, reduction="none"))
-                rows.append(values(torch.softmax(logits, 1), potions, args.buckets))
+                rows.append(values(torch.softmax(logits, 1), potions, b, args.buckets, args.loss_min))
         return total / len(test), torch.cat(ces).double().cpu(), torch.cat(rows).double().cpu()
 
     model = Net({t: len(ids) for t, ids in tables.items()}, slots, args.buckets).to(device)
@@ -517,10 +534,10 @@ def main():
         b = Batch(picks, index, slots, "cpu")
         logits, potions = model(*b.inputs())
         probs = torch.softmax(logits, 1)
-    tests = [{"obs": s["obs"], "history": s["history"], "outcome": [float(v) for v in probs[k]], "potions": float(potions[k])}
+    tests = [{"obs": s["obs"], "history": s["history"], "outcome": [float(v) for v in probs[k]], "potions_used": float(potions[k])}
              for k, s in enumerate(picks)]
 
-    out = {"name": args.name, "buckets": args.buckets, "lags": args.lags, "round": rounds, "vocab": tables,
+    out = {"name": args.name, "buckets": args.buckets, "loss_min": args.loss_min, "lags": args.lags, "round": rounds, "vocab": tables,
            "fit": report, "onnx": base64.b64encode(onnx_bytes(model, b)).decode(), "tests": tests}
     with open(out_file, "w") as f:
         json.dump(out, f)

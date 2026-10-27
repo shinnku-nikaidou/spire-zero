@@ -5,28 +5,31 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>A round's start and what the trainer's net made of it, which loading checks (docs: learning §7, input parity).</summary>
-public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, double Potions);
+public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, double PotionsUsed);
 
 /// <summary>
 /// The combat net as <c>learn/train_combat.py</c> writes it (docs: learning §1).
 /// </summary>
-/// <param name="Buckets">How many buckets of the HP share left after a win the head has, after its first class, a death.</param>
+/// <param name="Buckets">How many buckets of the share of max HP lost from the state to a win the head has, after its
+/// first class, a death.</param>
+/// <param name="LossMin">The lowest bucket's bottom (below 0: a combat that healed); the buckets span it to 1 evenly.</param>
 /// <param name="Lags">How many earlier rounds of each enemy's intents the net reads.</param>
 /// <param name="Round">Whether the net reads the round and how many rounds each enemy has shown.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="CombatNet"/> feeds them, outputs the
-/// chance of each ending and the potions left after a win.</param>
+/// chance of each ending and the potions used after a win.</param>
 public sealed record CombatNetFile(
-    string Name, int Buckets, int Lags, bool Round, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
+    string Name, int Buckets, double LossMin, int Lags, bool Round, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
     IReadOnlyList<CombatNetTest> Tests);
 
 /// <summary>
 /// The learned combat leaf (docs: combat-brain §4): from a round's start, how the combat ends under the policy that
 /// played the training games. The net, run by ONNX Runtime, reads the cards in each pile, the player, each enemy with
-/// its intents now and in its last rounds, the relics, the potions and the encounter. A state in progress is worth the
-/// endings it predicts, priced as <see cref="LeafValue"/> prices a win (each HP bucket at its middle, and the potions
-/// left); a state whose combat is over is <see cref="LeafValue"/>'s. This class only turns a state into the graph's
-/// inputs.
+/// its intents now and in its last rounds, the relics, the potions and the encounter. It predicts what is still to come:
+/// the HP share lost from here and the potions used, so the HP and potions held now count in full. A state in progress
+/// is worth the endings it predicts, priced as <see cref="LeafValue"/> prices a win (the HP share now less each bucket's
+/// middle, and the potions held less those used); a state whose combat is over is <see cref="LeafValue"/>'s. This class
+/// only turns a state into the graph's inputs.
 /// </summary>
 public sealed class CombatNet : ICombatLeaf, IDisposable
 {
@@ -59,8 +62,8 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         var net = new CombatNet(file, weights ?? LeafValue.Default);
         foreach (var test in file.Tests)
         {
-            var (outcome, potions) = net.Predict(test.Obs, test.History);
-            double error = Math.Abs(potions - test.Potions);
+            var (outcome, used) = net.Predict(test.Obs, test.History);
+            double error = Math.Abs(used - test.PotionsUsed);
             for (int k = 0; k < outcome.Length; k++) error = Math.Max(error, Math.Abs(outcome[k] - test.Outcome[k]));
             if (outcome.Length != test.Outcome.Count || error > 1e-3)
             {
@@ -74,20 +77,23 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
     {
         if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs, _weights);
-        var (outcome, potions) = Predict(obs, history);
-        double value = 0;
-        for (int k = 1; k < outcome.Length; k++) value += outcome[k] * (_weights.WinBase + _weights.PerHp * (k - 0.5) / _file.Buckets);
-        return value + (1 - outcome[0]) * _weights.PerPotion * potions;
+        var (outcome, used) = Predict(obs, history);
+        double share = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
+        double width = (1 - _file.LossMin) / _file.Buckets, value = 0;
+        for (int k = 1; k < outcome.Length; k++)
+            value += outcome[k] * (_weights.WinBase + _weights.PerHp * (share - (_file.LossMin + (k - 0.5) * width)));
+        int held = obs.Potions.Count(p => p != null);
+        return value + (1 - outcome[0]) * _weights.PerPotion * (held - used);
     }
 
     public void Dispose() => _session.Dispose();
 
     /// <summary>
-    /// The chance of each ending (a death, then each HP bucket) and the potions left after a win: the graph on a
+    /// The chance of each ending (a death, then each bucket of HP lost) and the potions used after a win: the graph on a
     /// batch of one state, read as <c>learn/train_combat.py</c> reads it. An enemy's slots are its intents now, then
     /// those of its last rounds before this one, most recent first.
     /// </summary>
-    public (float[] Outcome, float Potions) Predict(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
+    public (float[] Outcome, float PotionsUsed) Predict(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
     {
         var cards = Piles.SelectMany((pile, p) => Pile(obs, pile).Select(c => (Card: c, Pile: p))).ToList();
         int n = Math.Max(1, cards.Count);
