@@ -573,8 +573,9 @@ internal static class CombatBuilder
         var cost = card.EnergyCost;
         if (!cost.CostsX && view.Cost is int energy && cost.GetWithModifiers(CostModifiers.All) != energy)
         {
-            // Global modifiers (powers, relics) apply on top of the card's own; leave room for them.
-            int local = Math.Max(0, energy - (cost.GetWithModifiers(CostModifiers.All) - cost.GetWithModifiers(CostModifiers.Local)));
+            // Global modifiers (powers, relics) apply on top of the card's own; leave room for them. The card's own cost
+            // may be below 0 under a global increase (Pinpoint after 3 Skills, Entangled: 0 - 3 + 1 shows 0).
+            int local = energy - (cost.GetWithModifiers(CostModifiers.All) - cost.GetWithModifiers(CostModifiers.Local));
             if (inHand) cost.SetThisTurnOrUntilPlayed(local);
             else cost.SetThisCombat(local);
         }
