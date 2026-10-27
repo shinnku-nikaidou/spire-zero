@@ -190,7 +190,7 @@ flowchart LR
 - 算力：8 个物理核 / 16 线程。8 个进程约 1,860 场战斗/秒，单进程为 275 场/秒（[模拟器 §4](/arch/simulator/#sec-4)）。GPU（RTX 5070 Ti）只用于训练价值网络。
 - 训练用 Python，由 uv 管理，读取 JSONL 日志。推理在 Brain 里用 C# 完成：`RunNet` 把整局观测转成计算图的输入，再用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）在 CPU 上单线程运行训练器导出的 ONNX 计算图，每个宏观决策约 0.9 毫秒。`CombatNet` 在 worker 里对每个搜索叶子做同样的事。网络结构只在 Python 里定义一次。网络文件是 JSON：base64 编码的计算图，加上词表、特征的标准化参数和测试用的对局。
 - 代码：`learn/` 里的脚本用 Typer 读选项（`--help`），用 loguru 把日志写到 stderr，级别由 `LOG_LEVEL` 决定（默认 INFO），所以 stdout 只输出结果。`LearnError`（输入有错、文件挡路、模拟器失败）让脚本报一行信息后以退出码 1 结束；其他异常都是 bug，带着 traceback 结束。模拟器的命令行也是这样（[模拟器 §1](/arch/simulator/#sec-1)）。
-- 可复现：每一代记录冠军、种子集、超参数和提交（commit）。日志按代分目录存放，即 `tmp/selfplay/gN/`，不进 git。
+- 可复现：每一代记录冠军、种子集、超参数和提交（commit）。日志按角色和代分目录存放，即 `tmp/selfplay/CHARACTER/gN/`，不进 git。
 - 权重：每个角色单独训练、单独评判，各有自己的大脑；同一个角色的所有进阶等级都由这一个大脑来打，它逐级往上爬。所以每个角色的文件有自己的文件夹。训练脚本（`fit_value.py`、`spsa.py`、`train_value.py`、`train_combat.py`）写出的每个文件，除非 `--out` 另行指定，都写到 `weights/CHARACTER/history/NAME.json`（静默猎手是 `weights/silent/history/`），并且永不覆盖，所以每个名字只用一次。训练脚本的 `--character`（默认 SILENT）指定角色：记录里有别的角色的对局就拒绝，文件里也记下这个角色。每个角色在每个环境的冠军从它的主名字读权重：`weights/CHARACTER/ENV/value.json`、`leaf.json` 和 `combat.json`。晋级时把挑战者的文件复制到这些主名字上，冠军文件引用的就是它们（[评估 §5](/arch/evaluation/#sec-5)）。主名字里是哪一代，看文件里存的名字，冠军名里也会显示。`weights/` 不进 git，所以这些文件只在训练它们的机器上。
 - 存储：每局约 50 个宏观决策加几百个战斗决策，大部分字节在战斗观测和宏观决策的整局观测里；目前还没有压缩。旧的代按需清理。
 
