@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -62,12 +63,13 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | serve | report | leaderboard | seeds"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | serve | report | gate | leaderboard | seeds"); return 2; }
         // These need no game.
         if (args[0] == "report") return Report(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "leaderboard") return Leaderboards(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "seeds") return Seeds(ParseOptions(args.Skip(1).ToArray()));
-        if (args[0] == "brain") return Brain(ParseOptions(args.Skip(1).ToArray()));
+        if (args[0] == "gate") return GateCommand(ParseOptions(args.Skip(1).ToArray()));
+        if (args[0] == "brain") return Brain(WithChampion(ParseOptions(args.Skip(1).ToArray())));
         // A worker's stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
         TextWriter? wire = null;
         if (args[0] == "serve")
@@ -75,7 +77,7 @@ internal static class Cli
             wire = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
             Console.SetOut(Console.Error);
         }
-        var opts = ParseOptions(args.Skip(1).ToArray());
+        var opts = WithChampion(ParseOptions(args.Skip(1).ToArray()));
         HeadlessGame.Boot(opts.ContainsKey("verbose"));
         var pump = Pump.InstallOnCurrentThread();
         return args[0] switch
@@ -451,7 +453,8 @@ internal static class Cli
     }
 
     /// <summary>The champion that --policy and --macro name (docs: harness §4), pimc's budget, and l0's V (--value).</summary>
-    private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, RunValue Value)
+    /// <param name="ValueFile">Where <paramref name="Value"/> came from; null for the initial weights.</param>
+    private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, RunValue Value, string? ValueFile)
     {
         public static ChampionOptions Parse(Dictionary<string, string> opts)
         {
@@ -462,12 +465,13 @@ internal static class Cli
             if (macro is not ("random" or "l0")) throw new ArgumentException($"unknown macro brain {macro} (random, l0)");
             var budget = new Budget(Int(opts, "worlds", 8), Int(opts, "nodes", 300));
             var value = RunValue.Initial;
-            if (opts.TryGetValue("value", out var valueFile))
+            var valueFile = opts.GetValueOrDefault("value");
+            if (valueFile != null)
             {
                 if (macro != "l0") throw new ArgumentException("--value weighs l0's V; it needs --macro l0");
                 value = RunValue.From(ProtocolJson.Deserialize<ValueWeights>(File.ReadAllText(valueFile)));
             }
-            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds), value);
+            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds), value, valueFile);
         }
 
         /// <summary>pimc's search workers. A run holds its process's one live game, so search runs in other processes.</summary>
@@ -484,16 +488,38 @@ internal static class Cli
             var rng = new Random(unchecked((int)ProtocolJson.Hash(hello.Run.RunId)));
             var combat = pooled?.Route(Budget) ?? CombatRoute.Of(Policy, Policies.Combat(Policy, rng));
             var prompts = new Route<IChoicePolicy>("p0", PromptBrain.Instance);
+            Dispatcher dispatcher;
             if (Macro == "l0")
             {
                 var l0 = new MacroBrain(Value);
-                return new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log);
+                dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log);
             }
-            return new Dispatcher(hello.Run.RunId, env, combat, prompts, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
+            else dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
+            if (dispatcher.Champion != Name) throw new InvalidOperationException($"champion {dispatcher.Champion} goes by {Name} in champion files");
+            return dispatcher;
         };
 
         /// <summary>l0 by its V's name, unless V has the initial weights.</summary>
         private string L0 => Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}";
+
+        /// <summary>The champion as Harness names it (<see cref="Dispatcher.Champion"/>), which runs check.</summary>
+        public string Name
+        {
+            get
+            {
+                string macro = Macro == "l0" ? L0 : "random";
+                return $"combat {Policy}{(Policy == "pimc" ? $" {Budget.Worlds}x{Budget.NodesPerWorld}" : "")}, combat prompts p0, macro {macro}, macro prompts {macro}";
+            }
+        }
+
+        /// <summary>The options that play this champion, for a champion file.</summary>
+        public Dictionary<string, string> Options(PlayEnvironment env)
+        {
+            var options = new Dictionary<string, string> { ["env"] = env.ToString(), ["policy"] = Policy, ["macro"] = Macro };
+            if (Policy == "pimc") { options["worlds"] = $"{Budget.Worlds}"; options["nodes"] = $"{Budget.NodesPerWorld}"; }
+            if (ValueFile != null) options["value"] = ValueFile;
+            return options;
+        }
 
         public override string ToString() =>
             $"policy {Policy}{(Policy == "pimc" ? $" worlds {Budget.Worlds} nodes {Budget.NodesPerWorld} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
@@ -600,6 +626,53 @@ internal static class Cli
         return 0;
     }
 
+    /// <summary>
+    /// The full-run gate (docs: evaluation §5): the challenger's records against the champion's report, paired by seed,
+    /// with an SPRT. The challenger is named by its run options, which must be the ones its records were played with.
+    /// On a pass, --promote PATH writes the challenger's report to PATH and makes it the champion; its report faces the
+    /// next challengers, so it must cover the whole seed set. The SPRT may pass early: play the rest, then promote.
+    /// </summary>
+    private static int GateCommand(Dictionary<string, string> opts)
+    {
+        if (!opts.TryGetValue("champion", out var championPath) || !opts.TryGetValue("records", out var recordFiles))
+            return Fail("usage: gate --champion eval/champions/ENV.json --records A.jsonl[,B.jsonl] [--metric floor|win] [--delta D] " +
+                        "[--alpha 0.05] [--beta 0.05] [--promote PATH] --policy ... [--macro ...] [--value ...] [--worlds ...] [--nodes ...]");
+        try
+        {
+            var file = ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(championPath));
+            var champion = ProtocolJson.Deserialize<EvalReport>(File.ReadAllText(file.Report));
+            var runs = recordFiles.Split(',').SelectMany(File.ReadAllLines).Where(l => l.Length > 0).Select(ProtocolJson.Deserialize<RunRecord>).ToList();
+            var challenger = ChampionOptions.Parse(opts);
+            if (runs.FirstOrDefault(r => r.Config.Champion != challenger.Name) is { } other)
+                return Fail($"run {other.Seed} was played by {other.Config.Champion}, not by the options given ({challenger.Name})");
+            var metric = opts.GetValueOrDefault("metric", "floor");
+            double delta = opts.TryGetValue("delta", out var d) ? double.Parse(d, CultureInfo.InvariantCulture) : metric == "floor" ? 1.5 : 0.1;
+            double Real(string key, double fallback) => opts.TryGetValue(key, out var v) ? double.Parse(v, CultureInfo.InvariantCulture) : fallback;
+            var result = Gate.Sprt(Gate.Pairs(champion, runs), metric, delta, Real("alpha", 0.05), Real("beta", 0.05));
+            Console.WriteLine($"champion: {file.Champion} ({file.Report})");
+            Console.WriteLine($"challenger: {challenger.Name}, {runs.Count} runs");
+            Console.WriteLine(result.Summary());
+            if (result.Verdict != "pass" || !opts.TryGetValue("promote", out var outPath)) return result.Verdict == "pass" ? 0 : 1;
+
+            var seedFile = Path.Combine("eval", "seeds", champion.SeedSet + ".txt");
+            var report = EvalReport.Of(runs, champion.SeedSet, EvalReport.ReadSeeds(seedFile), DateTime.Now.ToString("yyyy-MM-dd"));
+            if (report.Runs.Count != report.SetSize)
+                return Fail($"not promoted: {report.Runs.Count} of {champion.SeedSet}'s {report.SetSize} seeds were run; the champion's report needs them all");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
+            File.WriteAllText(outPath + ".json", report.Json());
+            File.WriteAllText(outPath + ".md", report.Markdown(champion));
+            var env = Enum.Parse<PlayEnvironment>(file.Env);
+            var promoted = new ChampionFile(file.Env, challenger.Name, challenger.Options(env), outPath + ".json", report.Date, result);
+            File.WriteAllText(championPath, ProtocolJson.Serialize(promoted) + "\n");
+            Console.WriteLine($"promoted: {championPath} now names {challenger.Name}");
+            return 0;
+        }
+        catch (Exception e) when (e is ArgumentException or IOException or JsonException)
+        {
+            return Fail(e.Message);
+        }
+    }
+
     private static int Leaderboards(Dictionary<string, string> opts)
     {
         var reports = Directory.GetFiles(opts.GetValueOrDefault("reports", "eval/reports"), "*.json").Order()
@@ -675,6 +748,15 @@ internal static class Cli
         const string alphabet = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";
         var rng = new Random(unchecked(seed * 1_000_003 + index * 7_919) ^ 0x5eed);
         return string.Concat(Enumerable.Range(0, 12).Select(_ => alphabet[rng.Next(alphabet.Length)]));
+    }
+
+    /// <summary>--champion FILE: the champion file's options, under the ones given (docs: evaluation §5).</summary>
+    private static Dictionary<string, string> WithChampion(Dictionary<string, string> opts)
+    {
+        if (!opts.TryGetValue("champion", out var path)) return opts;
+        var file = ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(path));
+        foreach (var (key, value) in file.Options) opts.TryAdd(key, value);
+        return opts;
     }
 
     private static Dictionary<string, string> ParseOptions(string[] args)

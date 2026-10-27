@@ -12,7 +12,7 @@ Evaluation answers two questions: how strong is the AI (the leaderboards), and d
 
 <Aside title="Status">
 
-R1 full-run evaluations exist: `run --seeds FILE --records FILE` plays a seed set and writes one record per run, `report` turns the records into the report of [§6](#sec-6) with the metrics of [§3](#sec-3), and the first promotion and final sets are registered ([§4](#sec-4)). The combat panel exists too ([§5](#sec-5), [Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)), and `leaderboard` ranks the reports ([§2](#sec-2)). Planned: the act-level and SPRT gates, and rungs R2–R4.
+R1 full-run evaluations exist: `run --seeds FILE --records FILE` plays a seed set and writes one record per run, `report` turns the records into the report of [§6](#sec-6) with the metrics of [§3](#sec-3), and the first promotion and final sets are registered ([§4](#sec-4)). The combat panel exists too ([§5](#sec-5), [Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)), `leaderboard` ranks the reports ([§2](#sec-2)), and the full-run gate (`gate`) promotes a challenger into the environment's champion file ([§5](#sec-5)). Planned: the act-level gate, and rungs R2–R4.
 
 </Aside>
 
@@ -51,7 +51,7 @@ A leaderboard holds the results of an environment's champion (the best accepted 
 
 - The two champions share the macro brain and V; their combat brains differ ([Environments §5](/en/arch/environments/#sec-5)). A new V changes both champions, so it is gated in each environment on its own.
 - Also reported: the SL − NoSL win-rate delta, which is the value of in-node information. This is the formal version of the omniscient-vs-resampled ablation in plan v1 (local note `tmp/notes/plan.md`). For reference, spire-mentor (a prior-art project) lost 22.8–25.5 percentage points (pp) of win rate without its cheat, which covered the whole run. Ours is node-level only, so we expect a smaller delta.
-- `leaderboard [--reports eval/reports] [--out eval/leaderboard.md]` builds the leaderboards from the reports: per seed set and rung, one table per environment, ranked by win rate and then mean floor, with void reports last; partial reports are left out. Below them, for each champion with a report in both environments, the SL − NoSL difference on the same seeds, paired by seed: win rate and floor reached, each with a 95% interval. Until gates exist, every report is on the board, not only accepted champions. `eval/leaderboard.md` is committed with the reports.
+- `leaderboard [--reports eval/reports] [--out eval/leaderboard.md]` builds the leaderboards from the reports: per seed set and rung, one table per environment, ranked by win rate and then mean floor, with void reports last; partial reports are left out. Below them, for each champion with a report in both environments, the SL − NoSL difference on the same seeds, paired by seed: win rate and floor reached, each with a 95% interval. Every report is on the board, not only accepted champions; the accepted one is the one the champion file names ([§5](#sec-5)). `eval/leaderboard.md` is committed with the reports.
 
 <Aside type="caution" title="Never mix environments">
 
@@ -121,6 +121,16 @@ The methods named above:
 - **SPRT** (sequential probability ratio test) checks the evidence after each pair of runs and stops as soon as it clearly favours one hypothesis: H0, the challenger is not better (Δ ≤ 0), or H1, it is better by at least δ (Δ ≥ δ). Δ is the win-rate difference, challenger minus champion. The error rates are fixed in advance, and a clear result usually needs far fewer runs than a test with a fixed number of runs.
 - **McNemar's test** is the standard test for paired win/loss outcomes. It looks only at the seeds where exactly one side won and asks whether those split evenly.
 - **A/A test:** run the gate with the champion against itself. There is no real difference, so it must not promote more often than the gate's designed false-positive rate; if it does, the gate is broken.
+
+**The full-run gate as built.** `gate --champion eval/champions/ENV.json --records A[,B…] [the challenger's run options] [--metric floor|win] [--delta D] [--alpha A] [--beta B] [--promote PATH]`.
+
+- **Champion file:** `eval/champions/ENV.json`, one per environment, holds the champion's name as the reports show it, the run options that play it, its report, the date it became champion, and the gate it passed (none for the first one). `run --champion FILE` and `brain --champion FILE` play it; options given on the command line override the file's.
+- **The champion's side** is its report. A seed fixes the whole run ([§4](#sec-4)), so playing the champion again would repeat those runs; the gate plays only the challenger. Both sides must come from the same game version, environment and rung.
+- **The challenger's side** is its run records, named by the run options given; every record must have been played by them.
+- **Pairs** go by seed, in the seed set's order. The SPRT looks after each pair and stops at the first clear verdict.
+- **Metrics.** `floor` (the default while runs rarely win): the mean floor difference, challenger minus champion, as a Gaussian SPRT with H0 at 0 and H1 at δ = 1.5 floors; the variance is estimated from the pairs so far (at least 1), and no verdict comes before 10 pairs. `win`: only the pairs where exactly one side won, as in McNemar's test; the challenger's share of them, H0 at 0.5 and H1 at 0.5 + δ, δ = 0.1. α = β = 0.05.
+- **Verdicts:** pass, fail, open (the pairs ran out first), or void (the challenger's runs break a must-be-zero rule, [§3](#sec-3)). The exit code is 0 on a pass.
+- **Promotion:** on a pass, `--promote PATH` writes the challenger's report to PATH.json and PATH.md and rewrites the champion file, with the gate's result in it. The new report faces the next challengers, so it must cover the whole seed set. The SPRT can pass early: play the challenger in chunks, gate after each, stop at a fail, and after a pass play the rest of the set, then promote.
 
 ## 6. Reports
 
