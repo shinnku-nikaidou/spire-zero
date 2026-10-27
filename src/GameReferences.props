@@ -14,5 +14,7 @@
     <Reference Include="sts2"><HintPath>$(Sts2BinDir)/sts2.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="GodotSharp"><HintPath>$(Sts2BinDir)/GodotSharp.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="SmartFormat"><HintPath>$(Sts2BinDir)/SmartFormat.dll</HintPath><Private>false</Private></Reference>
+    <!-- The game ships Harmony for mods; GameBridge patches card prompts with it, SimWorker the engine calls. -->
+    <Reference Include="0Harmony"><HintPath>$(Sts2BinDir)/0Harmony.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 </Project>

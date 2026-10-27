@@ -57,7 +57,7 @@ Patch groups (`HeadlessPatches.cs`):
 | persistence | off: `SaveRun`, progress, replay. Any disk IO throws. |
 | rule fidelity | puts back shipped rules that TestMode changes: RollingBoulder hits enemies one by one; the `ShippedBranch` transpiler swaps the TestMode branch for the shipped one in MerchantPotionEntry, Cauldron and CallingBell |
 | speed | `FastCreatures`, `FastPlayerCreatures`, `FastPlayers`; `FastHookListeners`, checked against the game's own listeners through reverse patches |
-| choices | `ChooseACardSkip` → `PolicySelector.MustPickOne`, `ChooseABundle`, `CrystalSphereScreen` |
+| choices | `ChooseABundle`, `CrystalSphereScreen`, `CardRemovalUsed`; plus GameBridge's `ChoiceContexts`, patched first ([GameBridge §5](/en/arch/gamebridge/#sec-5)) |
 
 A transpiler is a Harmony patch that rewrites a method's IL instead of wrapping it.
 
@@ -204,17 +204,20 @@ flowchart TD
 
 - combat: `ICombatPolicy`;
 - card prompts: `IChoicePolicy` via `PolicySelector` (plus card-reward and bundle handlers);
-- every other screen: `IMacroPolicy` (`MacroDecision(surface, legal)`), with the placeholder `RandomMacro`.
+- every other screen: `IMacroPolicy` (`MacroDecision(surface, legal, observation)`), with the placeholder `RandomMacro`.
+
+A card prompt's bounds come from its context (`ChoiceContexts.Bounds`): a cancelable prompt has min 0.
 
 **Output:**
 
 - the trace: every decision as "surface action", including card prompts answered inside other actions;
 - a hash of each act's map;
-- `Summary()`: act, floor, room, HP, gold, deck, relics, potions.
+- `Summary()`: act, floor, room, HP, gold, deck, relics, potions;
+- optionally, an `observed` callback that receives each decision's `Observation` before its action applies.
 
 `IsOver = RunState.IsGameOver`. A run is won when it is over in the victory room.
 
-**CLI:** `run [--n] [--start] [--seed] [--asc] [--policy] [--max-decisions] [--check] [--trace]` plus the loadout options.
+**CLI:** `run [--n] [--start] [--seed] [--asc] [--policy] [--max-decisions] [--check] [--trace] [--obs]` plus the loadout options. `--check` also observes every decision: each observation's JSON round trip must be exact, the hashes are compared on replay, and the run's line ends with a digest of them (`obs`). `--obs` prints each observation.
 
 ### 5.1 Start
 
@@ -243,11 +246,11 @@ A surface is the kind of decision screen. The table lists each one as implemente
 | combat | `CombatActions.Legal` | `CombatActions.Start` | When won: `room.OfferRoomEndRewards()`, or `ProceedFromTerminalRewardsScreen` if `!Encounter.ShouldGiveRewards`. Automatic, as in `NCombatUi.OnCombatWon`. |
 | rewards | untaken rewards (a potion only with a free slot); `rewards_done` unless `DisallowSkipping` | `SelectLocalReward` | Sets arrive in `RewardsSet.testSelector` (`ThrowInTestIfRewardsNotTaken=false`). A non-terminal set closes once `IsRewardsSetCompleted`. On done: a non-terminal set → `SkipLocalRewardsSet`; boss or victory (not between double bosses) → `ActChangeSynchronizer.SetLocalPlayerReady`; otherwise `ProceedFromTerminalRewardsScreen` (as `NRewardsScreen` does). |
 | card_reward | the cards plus alternatives; reroll once per screen (the button stays listed after use) | `PolicySelector.GetSelectedCardReward` handler | |
-| card_choice | `IChoicePolicy` via `PolicySelector` | | Deck prompts; choose-a-card (`ChooseACardSkip`). |
+| card_choice | `IChoicePolicy` via `PolicySelector`; bounds by `ChoiceContexts.Bounds` | the answer is the picks; empty means cancel or skip | The context is read inside the `CardSelectCmd.From*` entry. Choose-a-card without skip has min 1 (the game enforces it after the selector). |
 | bundle | `bundle:i` | prefix on `CardSelectCmd.FromChooseABundleScreen`: reserve the choice id, ask, `SyncLocalChoice` | TestMode forced `bundles[0]`. The only caller is ScrollBoxes. |
 | event | the options minus locked ones | `EventSynchronizer.ChooseLocalOption(i)` | `IsProceed` options are UI buttons: the ancient's "PROCEED" is `proceed`; Trial's DOUBLE_DOWN (an abandon popup) is never legal. Once the event is finished, the only action is `proceed`, which opens the map (`NEventRoom.Proceed` throws a null reference headless). |
 | crystal_sphere | `big:X,Y` (the 3x3 block) or `small:X,Y` (one cell), only if it uncovers a hidden cell | `SetTool` + `CellClicked` | The CRYSTAL_SPHERE minigame. A prefix on `NCrystalSphereScreen.ShowScreen` hands it to the driver (`HeadlessPatches.CrystalSphereShown`). After the last divination its rewards arrive as a rewards set. The small tool is offered so the player can avoid completing the curse. |
-| shop | `buy:i` for stocked, affordable items (a potion needs a free slot); `remove`; `leave` | `OnTryPurchaseWrapper(inv)`; removal is `(inv,false,true)` + `SetUsed()` | `MerchantRoom.Exit` returns early in TestMode, so no history is written (cosmetic). |
+| shop | `buy:i` for stocked, affordable items (a potion needs a free slot); `remove`; `leave` | `OnTryPurchaseWrapper(inv)` | `CardRemovalUsed` marks a removal used, which is the removal node's job; this also covers Lord's Parasol's free removal. `MerchantRoom.Exit` returns early in TestMode, so no history is written (cosmetic). |
 | rest | the enabled options; `leave` after a success or when none is enabled | `RestSiteSynchronizer.ChooseLocalOption` → `Task<bool>` | `NRestSiteRoom.cs:333,571-596` |
 | treasure | `relic:i`, `relic_skip` | The chest opens automatically (`DoNormalRewards` + `DoExtraRewardsIfNeeded`). Pick or skip once, then `ProceedFromTerminalRewardsScreen`. | In single player, skipping leaves `CurrentRelics` non-null, hence the `RelicPicked` flag. |
 | potion belt | `potion:S` (any-time potions), `discard_potion:S`; appended to every macro surface | `EnqueueManualUse` / `DiscardPotionGameAction` | With a full belt, potion rewards and potion purchases are hidden until a slot frees. |
@@ -259,7 +262,8 @@ A surface is the kind of decision screen. The table lists each one as implemente
 - presentation in model code that skips the TestMode guard: Kaiser Crab arms (`BeforeDeath`) and SoulNexus (`AfterDeath`);
 - the `EventPresentation` transpiler. In every `EventModel` subclass, including its lambdas and async state machines, a call into a Godot object or one returning a Godot object is dropped and gives the default result, and `Task.Delay` becomes a finished task. It hits Amalgamator, DenseVegetation, DollRoom, JungleMazeAdventure, PunchOff and Trial;
 - `CrystalSphereScreen`;
-- `ChooseABundle`.
+- `ChooseABundle`;
+- `CardRemovalUsed`.
 
 **Legitimate game behavior** seen with a 9999-HP loadout (not bugs):
 
@@ -273,6 +277,7 @@ Measured on 2026-10-26 with 200 seeds (SILENT A0, 9999 HP, random macro policy +
 - `--check` replays each run in the same process: 200/200 identical (trace, summary, map hashes).
 - The same 200 seeds in another process partition (8 processes times 25 runs against 4 times 50) are identical line for line: outcome, summary, decision count, map hashes. So the risk that `MapPoint.Children` comes out in a different order was not observed; `MapActions` sorts anyway.
 - IRONCLAD, DEFECT, REGENT and NECROBINDER (25 runs each, `--check`): all identical on replay, 0 failures, 0 game errors.
+- With observations (same setup): every observation round-trips exactly; 200/200 identical on replay, including the per-decision observation hashes; 8 times 25 against 4 times 50 identical per-run lines, including the observation digest; the other 4 characters (25 runs each) identical; 0 failures, 0 game errors, 0 idle waits. Every surface was reached; the rarest was bundle, in 9 of 200 runs.
 
 TestMode changes some rules. The branches that matter for runs (from the local note `tmp/notes/testmode-audit.md`):
 
@@ -353,7 +358,7 @@ Planned.
 
 **Exists, in `run`:**
 
-- `--check` replays each run in the same process and compares trace, summary and map hashes;
+- `--check` replays each run in the same process and compares trace, summary, map hashes and observation hashes; each observation must also survive a JSON round trip;
 - the report lists surfaces never reached, driver failures (there is no fallback: an unknown screen throws), game `Log.Error` lines, and pump idle waits (real-time waits). Any of these makes the exit code 1;
 - cross-process: run the same seeds in another process partition and diff the per-run lines.
 

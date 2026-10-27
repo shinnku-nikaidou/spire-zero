@@ -9,6 +9,8 @@ public static class TreasureActions
 {
     public const string Skip = "relic_skip";
 
+    public static TreasureScreen Screen(IReadOnlyList<RelicModel> relics) => new() { Relics = relics.Select(r => r.Id.Entry).ToList() };
+
     public static List<string> Legal(IReadOnlyList<RelicModel> relics) =>
         [.. Enumerable.Range(0, relics.Count).Select(i => $"relic:{i}"), Skip];
 

@@ -17,8 +17,9 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | CombatBuilder（观测 → 战斗） | 完成；近似之处列在[模拟器 §3](/arch/simulator/#sec-3) |
 | 多进程扩展 | 已测：8 个进程 ≈ 1,860 场战斗/秒 |
 | 整局会话（无头跑完整局） | 完成：覆盖所有决策界面，用随机占位策略。200/200 局在进程内和跨进程都是确定性的，0 次失败，0 个游戏错误（[模拟器 §5](/arch/simulator/#sec-5)） |
+| 整局观测 + `ChoiceContext` | 完成：每个决策界面都有观测；在同样的批次里，JSON 往返和观测哈希都是确定性的（[协议 §3](/arch/protocol/#sec-3)、[§4](/arch/protocol/#sec-4)） |
 | SL 克隆（加载存档 + 重放 + 封存） | 规划中；路径已调研（[模拟器 §7](/arch/simulator/#sec-7)） |
-| 战斗之外的协议、Harness、worker 进程间通信 | 规划中 |
+| 消息信封、事件、Harness、worker 进程间通信 | 规划中 |
 | 战斗大脑、宏观大脑、价值函数 | 只有占位实现 |
 | Mod | 已有探针构建，未安装 |
 
@@ -26,7 +27,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 1. **CombatBuilder 的近似**。回合历史、内部计数器、费用修改的持续时间、眩晕后续动作都是近似的，而且从没用真实游戏的观测验证过（[模拟器 §3](/arch/simulator/#sec-3)）。
 2. **怪物动作重采样**目前在「显示相同意图」的动作里均匀选取，需要改成根据怪物历史得到的后验（[Harness §3](/arch/harness/#sec-3)）。
-3. **选牌提示缺少上下文**：策略不知道游戏为什么要它选牌。解决办法：`ChoiceContext`（[协议 §4](/arch/protocol/#sec-4)、[GameBridge §5](/arch/gamebridge/#sec-5)）。
+3. **选牌提示的上下文依赖异步入口上的 Harmony 前缀**：内联或 rejit 都可能绕过它们（[GameBridge §5](/arch/gamebridge/#sec-5)、[Mod §10](/arch/mod/#sec-10)）。
 4. **开局用的是 `UnlockState.all`**，不是用户自己的存档进度；进阶等级也没有限制在角色允许的最大值以内（[模拟器 §5.1](/arch/simulator/#sec-5.1)）。
 5. **新增的游戏代码如果在事件之外（事件由 transpiler 覆盖）调用 Godot 节点**而没有 TestMode 保护，只会在 `run` 批量运行里以游戏错误的形式暴露出来（[模拟器 §5.2](/arch/simulator/#sec-5.2)）。
 6. **真实游戏里的 Harmony 补丁与分层 JIT**：运行时可能重新编译某个方法，悄悄丢掉补丁（[Mod §10](/arch/mod/#sec-10)）。
@@ -37,7 +38,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 1. <Badge text="2026-10-26 完成" variant="success" /> 整局会话，所有决策界面都能无头运行，宏观决策用占位策略；覆盖率、确定性和跨进程地图测试（[模拟器 §5](/arch/simulator/#sec-5)、[§9](/arch/simulator/#sec-9)）。
 
-2. 协议的整局级类型和 `ChoiceContext`；GameBridge 为每个决策界面提供 observe 和 legal。
+2. <Badge text="2026-10-26 完成" variant="success" /> 协议的整局级类型和 `ChoiceContext`；GameBridge 为每个决策界面提供 observe 和 legal。
 
 3. worker 池、进程间通信和世界 API（`RunBranches`）。
 

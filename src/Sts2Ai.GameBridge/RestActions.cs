@@ -12,6 +12,11 @@ public static class RestActions
 {
     public const string Leave = "leave";
 
+    public static RestScreen Screen(IReadOnlyList<RestSiteOption> options) => new()
+    {
+        Options = options.Select(o => new RestOptionView(o.OptionId, o.IsEnabled)).ToList(),
+    };
+
     public static List<string> Legal(IReadOnlyList<RestSiteOption> options, bool anySucceeded)
     {
         var actions = options.Where(o => o.IsEnabled).Select(o => $"rest:{o.OptionId}").ToList();

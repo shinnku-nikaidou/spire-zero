@@ -57,7 +57,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 | 持久化 | 关闭：`SaveRun`、进度、回放。任何磁盘 IO 都会抛异常。 |
 | 规则保真 | 恢复被 TestMode 改掉的正式版规则：RollingBoulder 逐个敌人命中；`ShippedBranch` 转译器在 MerchantPotionEntry、Cauldron、CallingBell 中把 TestMode 分支换回正式版分支 |
 | 速度 | `FastCreatures`、`FastPlayerCreatures`、`FastPlayers`；`FastHookListeners`，通过反向补丁与游戏原本的监听器逐一比对 |
-| 选择 | `ChooseACardSkip` → `PolicySelector.MustPickOne`、`ChooseABundle`、`CrystalSphereScreen` |
+| 选择 | `ChooseABundle`、`CrystalSphereScreen`、`CardRemovalUsed`；另有 GameBridge 的 `ChoiceContexts`，最先打补丁（[GameBridge §5](/arch/gamebridge/#sec-5)） |
 
 转译器（transpiler）是一种 Harmony 补丁，它直接改写方法的 IL，而不是在方法外面包一层。
 
@@ -204,17 +204,20 @@ flowchart TD
 
 - 战斗：`ICombatPolicy`；
 - 选牌提示：经由 `PolicySelector` 交给 `IChoicePolicy`（另有卡牌奖励和卡包的处理器）；
-- 其他所有界面：`IMacroPolicy`（`MacroDecision(surface, legal)`），占位实现是 `RandomMacro`。
+- 其他所有界面：`IMacroPolicy`（`MacroDecision(surface, legal, observation)`），占位实现是 `RandomMacro`。
+
+选牌提示的选择数量范围来自它的上下文（`ChoiceContexts.Bounds`）：可取消的提示 min 为 0。
 
 **输出：**
 
 - 轨迹：每个决策记为「surface action」，包括在其他动作内部回答的选牌提示；
 - 每一幕地图的哈希；
-- `Summary()`：幕、层数、房间、生命值、金币、牌组、遗物、药水。
+- `Summary()`：幕、层数、房间、生命值、金币、牌组、遗物、药水；
+- 可选的 `observed` 回调：在每个决策的动作生效之前，收到该决策的 `Observation`。
 
 `IsOver = RunState.IsGameOver`。一局在胜利房间里结束即为获胜。
 
-**命令行**：`run [--n] [--start] [--seed] [--asc] [--policy] [--max-decisions] [--check] [--trace]`，外加配装选项。
+**命令行**：`run [--n] [--start] [--seed] [--asc] [--policy] [--max-decisions] [--check] [--trace] [--obs]`，外加配装选项。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。
 
 ### 5.1 开局
 
@@ -243,11 +246,11 @@ flowchart TD
 | combat | `CombatActions.Legal` | `CombatActions.Start` | 获胜后：`room.OfferRoomEndRewards()`；若 `!Encounter.ShouldGiveRewards` 则 `ProceedFromTerminalRewardsScreen`。自动完成，与 `NCombatUi.OnCombatWon` 相同。 |
 | rewards | 未领取的奖励（药水只在有空槽时出现）；`rewards_done`，除非 `DisallowSkipping` | `SelectLocalReward` | 奖励组通过 `RewardsSet.testSelector` 送达（`ThrowInTestIfRewardsNotTaken=false`）。非终结的奖励组在 `IsRewardsSetCompleted` 后关闭。选择完成时：非终结组 → `SkipLocalRewardsSet`；Boss 或胜利（不在双 Boss 之间） → `ActChangeSynchronizer.SetLocalPlayerReady`；否则 `ProceedFromTerminalRewardsScreen`（与 `NRewardsScreen` 的做法相同）。 |
 | card_reward | 各张卡牌加替代选项；每个界面可重抽一次（用过后按钮仍在列表里） | `PolicySelector.GetSelectedCardReward` 处理器 | |
-| card_choice | 经由 `PolicySelector` 交给 `IChoicePolicy` | | 牌组提示；选一张牌（`ChooseACardSkip`）。 |
+| card_choice | 经由 `PolicySelector` 交给 `IChoicePolicy`；数量范围由 `ChoiceContexts.Bounds` 给出 | 回答就是所选的牌；空回答表示取消或跳过 | 上下文在 `CardSelectCmd.From*` 入口内部读取。没有跳过按钮的选一张牌 min 为 1（游戏在选择器之后强制执行）。 |
 | bundle | `bundle:i` | 在 `CardSelectCmd.FromChooseABundleScreen` 上加前缀补丁：预留选择 id、询问、`SyncLocalChoice` | TestMode 会强制选 `bundles[0]`。唯一的调用方是 ScrollBoxes。 |
 | event | 去掉锁定项后的选项 | `EventSynchronizer.ChooseLocalOption(i)` | `IsProceed` 选项是 UI 按钮：Ancient 事件的「PROCEED」对应 `proceed`；Trial 的 DOUBLE_DOWN（放弃弹窗）永远不合法。事件结束后唯一的动作是 `proceed`，即打开地图（无头时 `NEventRoom.Proceed` 会抛空引用异常）。 |
 | crystal_sphere | `big:X,Y`（3x3 区域）或 `small:X,Y`（单格），仅当能揭开隐藏格子时提供 | `SetTool` + `CellClicked` | CRYSTAL_SPHERE 小游戏。`NCrystalSphereScreen.ShowScreen` 上的前缀补丁把它交给驱动方（`HeadlessPatches.CrystalSphereShown`）。最后一次占卜后，奖励以一个奖励组送达。提供小工具是为了能避免把诅咒完整揭开。 |
-| shop | 有货且买得起的 `buy:i`（药水需要空槽）；`remove`；`leave` | `OnTryPurchaseWrapper(inv)`；删牌用 `(inv,false,true)` + `SetUsed()` | TestMode 下 `MerchantRoom.Exit` 提前返回，所以不写历史（只影响外观）。 |
+| shop | 有货且买得起的 `buy:i`（药水需要空槽）；`remove`；`leave` | `OnTryPurchaseWrapper(inv)` | `CardRemovalUsed` 把删牌标记为已用，这本是删牌节点的工作；它也覆盖 Lord's Parasol 的免费删牌。TestMode 下 `MerchantRoom.Exit` 提前返回，所以不写历史（只影响外观）。 |
 | rest | 可用的选项；成功一次后或没有可用选项时提供 `leave` | `RestSiteSynchronizer.ChooseLocalOption` → `Task<bool>` | `NRestSiteRoom.cs:333,571-596` |
 | treasure | `relic:i`、`relic_skip` | 宝箱自动打开（`DoNormalRewards` + `DoExtraRewardsIfNeeded`）。选或跳过一次，然后 `ProceedFromTerminalRewardsScreen`。 | 单人模式下跳过后 `CurrentRelics` 仍非空，所以需要 `RelicPicked` 标记。 |
 | 药水栏 | `potion:S`（随时可用的药水）、`discard_potion:S`；附加在每个宏观决策界面上 | `EnqueueManualUse` / `DiscardPotionGameAction` | 药水栏满时，药水奖励和药水购买都会隐藏，直到空出一个槽。 |
@@ -259,7 +262,8 @@ flowchart TD
 - 模型代码中绕过 TestMode 守卫的表现层代码：Kaiser Crab 的手臂（`BeforeDeath`）和 SoulNexus（`AfterDeath`）；
 - `EventPresentation` 转译器。在每个 `EventModel` 子类里（包括其中的 lambda 和异步状态机），调用 Godot 对象或返回 Godot 对象的调用会被丢掉并返回默认结果，`Task.Delay` 变成已完成的任务。涉及 Amalgamator、DenseVegetation、DollRoom、JungleMazeAdventure、PunchOff 和 Trial；
 - `CrystalSphereScreen`；
-- `ChooseABundle`。
+- `ChooseABundle`；
+- `CardRemovalUsed`。
 
 用 9999 生命值配装时观察到的**正常游戏行为**（不是 bug）：
 
@@ -273,6 +277,7 @@ flowchart TD
 - `--check` 在同一进程内重放每一局：200/200 完全相同（轨迹、摘要、地图哈希）。
 - 同样的 200 个种子换一种进程划分（8 个进程各 25 局对比 4 个进程各 50 局），逐行完全相同：结果、摘要、决策数、地图哈希。所以 `MapPoint.Children` 顺序不一致的风险没有出现；`MapActions` 仍然会排序。
 - IRONCLAD、DEFECT、REGENT、NECROBINDER（各 25 局，`--check`）：重放全部相同，0 失败，0 游戏错误。
+- 加上观测后（相同设置）：每个观测的 JSON 往返都完全一致；200/200 重放相同，包括每个决策的观测哈希；8 × 25 与 4 × 50 的每局结果行相同，包括观测摘要；其他 4 个角色（各 25 局）相同；0 失败，0 游戏错误，0 次空闲等待。每个决策界面都到达过；最少见的是 bundle，200 局里出现在 9 局。
 
 TestMode 会改动一些规则。对整局有影响的分支（来自本地笔记 `tmp/notes/testmode-audit.md`）：
 
@@ -353,7 +358,7 @@ TestMode 会改动一些规则。对整局有影响的分支（来自本地笔�
 
 **已有，在 `run` 中：**
 
-- `--check` 在同一进程内重放每一局，比较轨迹、摘要和地图哈希；
+- `--check` 在同一进程内重放每一局，比较轨迹、摘要、地图哈希和观测哈希；每个观测还必须能完整地经过 JSON 往返；
 - 报告列出从未到达的决策界面、驱动方失败（没有兜底：未知界面直接抛异常）、游戏的 `Log.Error` 输出，以及 pump 空闲等待（真实时间等待）。出现任何一项，退出码就是 1；
 - 跨进程：同样的种子换一种进程划分再跑，对比每局的输出行。
 

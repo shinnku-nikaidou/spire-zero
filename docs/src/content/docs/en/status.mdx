@@ -17,8 +17,9 @@ As of 2026-10-26:
 | CombatBuilder (observation → combat) | done; its approximations are listed in [Simulator §3](/en/arch/simulator/#sec-3) |
 | multi-process scaling | measured: 8 processes ≈ 1,860 combats/s |
 | run session (whole runs headless) | done: every surface, with random placeholder policies. 200/200 runs deterministic within a process and across processes, 0 failures, 0 game errors ([Simulator §5](/en/arch/simulator/#sec-5)) |
+| run-level observation + `ChoiceContext` | done: every surface observed; the JSON round trip and the observation hashes are deterministic in the same batches ([Protocol §3](/en/arch/protocol/#sec-3), [§4](/en/arch/protocol/#sec-4)) |
 | SL clone (load save + replay + seal) | planned; the path is researched ([Simulator §7](/en/arch/simulator/#sec-7)) |
-| protocol beyond combat, Harness, worker IPC | planned |
+| wire envelopes, events, Harness, worker IPC | planned |
 | combat brain, macro brain, value function | placeholders only |
 | mod | probe builds exist, not installed |
 
@@ -26,7 +27,7 @@ As of 2026-10-26:
 
 1. **CombatBuilder approximations.** Turn history, internal counters, durations of cost modifiers and stun follow-ups are approximated, and the builder has never been checked against observations from the real game ([Simulator §3](/en/arch/simulator/#sec-3)).
 2. **Monster move resampling** picks uniformly among moves that show the same intent. It needs a posterior built from the monster's history ([Harness §3](/en/arch/harness/#sec-3)).
-3. **Card prompts lack context:** a policy cannot tell why the game is asking. Fix: `ChoiceContext` ([Protocol §4](/en/arch/protocol/#sec-4), [GameBridge §5](/en/arch/gamebridge/#sec-5)).
+3. **The card prompt context relies on Harmony prefixes over async entries:** inlining or a rejit can bypass them ([GameBridge §5](/en/arch/gamebridge/#sec-5), [Mod §10](/en/arch/mod/#sec-10)).
 4. **Run start uses `UnlockState.all`,** not the user's profile, and ascension is not clamped to the character's maximum ([Simulator §5.1](/en/arch/simulator/#sec-5.1)).
 5. **New game code that touches Godot nodes** without the TestMode guard, outside events (where the transpiler covers it), shows up only as game errors in `run` batches ([Simulator §5.2](/en/arch/simulator/#sec-5.2)).
 6. **Harmony patches in the real game vs tiered JIT:** the runtime may recompile a method and silently drop a patch ([Mod §10](/en/arch/mod/#sec-10)).
@@ -37,7 +38,7 @@ As of 2026-10-26:
 
 1. <Badge text="done 2026-10-26" variant="success" /> Run session with every surface headless, using a placeholder macro policy; coverage, determinism and cross-process map tests ([Simulator §5](/en/arch/simulator/#sec-5), [§9](/en/arch/simulator/#sec-9)).
 
-2. Protocol run-level types and `ChoiceContext`; GameBridge observe and legal for every surface.
+2. <Badge text="done 2026-10-26" variant="success" /> Protocol run-level types and `ChoiceContext`; GameBridge observe and legal for every surface.
 
 3. Worker pool, IPC and the world API (`RunBranches`).
 

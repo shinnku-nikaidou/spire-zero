@@ -27,7 +27,8 @@ internal sealed record RunSetup(string Character, string Seed, int Ascension = 0
 /// <summary>
 /// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator §5.1).
 /// <see cref="Step"/> pumps the game until it waits for the player, then makes one decision: combat through the
-/// combat policy, card prompts through the card selector, every other screen through the macro policy.
+/// combat policy, card prompts through the card selector, every other screen through the macro policy. Each decision
+/// can be observed (<see cref="Observation"/>): policies build it on request, and <c>observed</c> sees all of them.
 ///
 /// The game runs each room by itself; this class plays the part of the UI: which screen is showing and what its
 /// buttons do. What a screen would remember (a rewards screen still open, the player having left the room) is kept
@@ -41,6 +42,7 @@ internal sealed class RunSession : IDisposable
     private readonly Pump _pump;
     private readonly ICombatPolicy _combat;
     private readonly IMacroPolicy _macro;
+    private readonly Action<Observation>? _observed;
     private readonly IDisposable _selectorScope;
     private readonly List<string> _trace = [];
     private readonly List<ulong> _mapHashes = [];
@@ -75,7 +77,8 @@ internal sealed class RunSession : IDisposable
     /// <summary>Winning ends in the victory room, where the game kills the players once the run is recorded.</summary>
     public bool Won => IsOver && Run.CurrentRoom?.IsVictoryRoom == true;
 
-    private RunSession(Pump pump, RunSetup setup, Player player, RunState run, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro)
+    private RunSession(Pump pump, RunSetup setup, Player player, RunState run, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro,
+        Action<Observation>? observed)
     {
         _pump = pump;
         Setup = setup;
@@ -83,7 +86,12 @@ internal sealed class RunSession : IDisposable
         Run = run;
         _combat = combat;
         _macro = macro;
-        var selector = new PolicySelector(choices, picks => _trace.Add($"{Surfaces.CardChoice} {string.Join(",", picks)}"), CardReward, Bundle);
+        _observed = observed;
+        var selector = new PolicySelector(choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => new CardChoiceScreen
+        {
+            Choice = choice,
+            Combat = CombatManager.Instance.IsInProgress ? Observe.Combat(CombatManager.Instance.DebugOnlyGetState()!, Player) : null,
+        }), CardReward, Bundle);
         _selectorScope = CardSelectCmd.PushSelector(selector);
         RewardsSet.testSelector = set =>
         {
@@ -94,8 +102,12 @@ internal sealed class RunSession : IDisposable
         HeadlessPatches.CrystalSphereShown = minigame => _minigame = minigame;
     }
 
-    /// <summary>Starts the run and pumps it to the first decision (normally Neow).</summary>
-    public static RunSession Start(Pump pump, RunSetup setup, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro)
+    /// <summary>
+    /// Starts the run and pumps it to the first decision (normally Neow). <paramref name="observed"/>, if given, gets
+    /// every decision's observation, taken before its action is applied.
+    /// </summary>
+    public static RunSession Start(Pump pump, RunSetup setup, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro,
+        Action<Observation>? observed = null)
     {
         var character = ModelDb.AllCharacters.First(c => c.Id.Entry.Equals(setup.Character, StringComparison.OrdinalIgnoreCase));
         var player = Player.CreateForNewRun(character, UnlockState.all, LocalContext.NetId!.Value);
@@ -107,7 +119,7 @@ internal sealed class RunSession : IDisposable
         var run = RunState.CreateForNewRun([player], acts, [], GameMode.Standard, setup.Ascension, setup.Seed);
         RunManager.Instance.SetUpNewSingleplayer(run, shouldSave: false);
 
-        var session = new RunSession(pump, setup, player, run, choices, combat, macro);
+        var session = new RunSession(pump, setup, player, run, choices, combat, macro, observed);
         try
         {
             // NGame.StartRun without the nodes.
@@ -196,7 +208,7 @@ internal sealed class RunSession : IDisposable
 
     private bool RewardsDecision(RewardsSet set)
     {
-        if (Ask(Surfaces.Rewards, RewardActions.Legal(set)) is not { } action) return true;
+        if (Ask(Surfaces.Rewards, RewardActions.Legal(set), () => RewardActions.Screen(set)) is not { } action) return true;
         if (action == RewardActions.Done)
         {
             _shown.Remove(set);
@@ -209,7 +221,7 @@ internal sealed class RunSession : IDisposable
 
     private bool MapDecision()
     {
-        if (Ask(Surfaces.Map, MapActions.Legal(Run)) is { } action) MapActions.Start(Run, Player, action);
+        if (Ask(Surfaces.Map, MapActions.Legal(Run), () => MapActions.Screen(Run)) is { } action) MapActions.Start(Run, Player, action);
         return true;
     }
 
@@ -232,9 +244,10 @@ internal sealed class RunSession : IDisposable
     {
         var state = CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
         var legal = CombatActions.Legal(state, Player);
-        var action = _combat.Choose(new CombatDecision(legal, () => Observe.Combat(state, Player)));
+        var decision = new CombatDecision(legal, () => Observe.Combat(state, Player));
+        var action = _combat.Choose(decision);
         if (!legal.Contains(action)) throw new InvalidOperationException($"combat policy chose {action}, which is not legal");
-        _trace.Add($"{Surfaces.Combat} {action}");
+        Record(Surfaces.Combat, action.ToString(), () => new CombatScreen { Combat = decision.Observation });
         if (action.Kind == CombatActionKind.EndTurn) _endedTurn = Player.PlayerCombatState!.TurnNumber;
         CombatActions.Start(state, Player, action);
         return true;
@@ -245,7 +258,7 @@ internal sealed class RunSession : IDisposable
         if (_minigame is { IsFinished: false } minigame) return CrystalSphereDecision(minigame);
         _minigame = null;
         var ev = RunManager.Instance.EventSynchronizer.GetLocalEvent();
-        if (Ask(Surfaces.Event, EventActions.Legal(ev)) is not { } action) return true;
+        if (Ask(Surfaces.Event, EventActions.Legal(ev), () => EventActions.Screen(ev, Player)) is not { } action) return true;
         EventActions.Start(ev, action);
         if (action == EventActions.Proceed) _progress.Left = true;
         return true;
@@ -253,14 +266,14 @@ internal sealed class RunSession : IDisposable
 
     private bool CrystalSphereDecision(CrystalSphereMinigame minigame)
     {
-        if (Ask(Surfaces.CrystalSphere, CrystalSphereActions.Legal(minigame)) is { } action) Track(CrystalSphereActions.Start(minigame, action), action);
+        if (Ask(Surfaces.CrystalSphere, CrystalSphereActions.Legal(minigame), () => CrystalSphereActions.Screen(minigame)) is { } action) Track(CrystalSphereActions.Start(minigame, action), action);
         return true;
     }
 
     private bool ShopDecision(MerchantRoom room)
     {
         var inventory = room.GetLocalInventory();
-        if (Ask(Surfaces.Shop, ShopActions.Legal(inventory)) is not { } action) return true;
+        if (Ask(Surfaces.Shop, ShopActions.Legal(inventory), () => ShopActions.Screen(inventory)) is not { } action) return true;
         Track(ShopActions.Start(inventory, action), action);
         if (action == ShopActions.Leave) _progress.Left = true;
         return true;
@@ -270,7 +283,7 @@ internal sealed class RunSession : IDisposable
     {
         var options = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
         var progress = _progress;
-        if (Ask(Surfaces.Rest, RestActions.Legal(options, progress.RestSucceeded)) is not { } action) return true;
+        if (Ask(Surfaces.Rest, RestActions.Legal(options, progress.RestSucceeded), () => RestActions.Screen(options)) is not { } action) return true;
         if (action == RestActions.Leave)
         {
             progress.Left = true;
@@ -296,7 +309,7 @@ internal sealed class RunSession : IDisposable
         var relics = RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics;
         if (relics is { Count: > 0 } && !_progress.RelicPicked)
         {
-            if (Ask(Surfaces.Treasure, TreasureActions.Legal(relics)) is not { } action) return true;
+            if (Ask(Surfaces.Treasure, TreasureActions.Legal(relics), () => TreasureActions.Screen(relics)) is not { } action) return true;
             TreasureActions.Start(relics, action);
             _progress.RelicPicked = true;
             return true;
@@ -316,21 +329,30 @@ internal sealed class RunSession : IDisposable
     /// Asks the macro policy. The potion belt is usable on every screen, so its actions are offered everywhere and
     /// handled here: then the result is null, and the screen asks again once the potion is done.
     /// </summary>
-    private string? Ask(string surface, List<string> legal)
+    private string? Ask(string surface, List<string> legal, Func<ScreenView> screen)
     {
         legal.AddRange(PotionActions.Legal(Player));
-        var action = Choose(surface, legal);
+        var action = Choose(surface, legal, screen);
         if (!PotionActions.Handles(action)) return action;
         PotionActions.Start(Player, action);
         return null;
     }
 
-    private string Choose(string surface, List<string> legal)
+    private string Choose(string surface, List<string> legal, Func<ScreenView> screen)
     {
-        var action = _macro.Choose(new MacroDecision(surface, legal));
+        var decision = new MacroDecision(surface, legal, () => Observe.Of(Run, Player, screen()));
+        var action = _macro.Choose(decision);
         if (!legal.Contains(action)) throw new InvalidOperationException($"macro policy chose {action}, not legal on {surface}: {string.Join(" ", legal)}");
         _trace.Add($"{surface} {action}");
+        _observed?.Invoke(decision.Observation);
         return action;
+    }
+
+    /// <summary>Adds a decision to the trace, and shows its observation to <see cref="_observed"/>.</summary>
+    private void Record(string surface, string action, Func<ScreenView> screen)
+    {
+        _trace.Add($"{surface} {action}");
+        _observed?.Invoke(Observe.Of(Run, Player, screen()));
     }
 
     /// <summary>
@@ -344,14 +366,15 @@ internal sealed class RunSession : IDisposable
             _alternatives = alternatives;
             _spentAlternatives.Clear();
         }
-        var action = Choose(Surfaces.CardReward, RewardActions.CardRewardLegal(cards, alternatives, _spentAlternatives));
+        var action = Choose(Surfaces.CardReward, RewardActions.CardRewardLegal(cards, alternatives, _spentAlternatives),
+            () => RewardActions.CardRewardScreen(cards, alternatives));
         var answer = RewardActions.CardRewardAnswer(cards, alternatives, action);
         if (answer.alternative is { } used && RewardActions.KeepsScreenOpen(used)) _spentAlternatives.Add(used);
         return answer;
     }
 
     private int Bundle(IReadOnlyList<IReadOnlyList<CardModel>> bundles) =>
-        BundleActions.Index(bundles.Count, Choose(Surfaces.Bundle, BundleActions.Legal(bundles.Count)));
+        BundleActions.Index(bundles.Count, Choose(Surfaces.Bundle, BundleActions.Legal(bundles.Count), () => BundleActions.Screen(bundles)));
 
     private void Track(Task task, string what, Action? done = null) => _running.Add((task, done, what));
 

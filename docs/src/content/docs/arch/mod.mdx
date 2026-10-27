@@ -154,7 +154,7 @@ interface ISurfaceAdapter
 
 **Harmony 补丁**在运行时改写游戏的方法：Harmony 是一个 .NET 库，能让 Mod 在原方法之前（*prefix*）或之后（*postfix*）运行自己的代码。比起 Harmony，Mod 优先使用游戏自己的 C# 事件：`CombatManager.*`、`RunManager.RoomEntered`、`ActionExecutor.*`、`CardPile.*`。
 
-无法避免的补丁是 `CardSelectCmd.From*` 上的上下文 prefix（[GameBridge §5](/arch/gamebridge/#sec-5)）。它们的风险来自 JIT。游戏在 .NET 的**分层编译**下运行：方法先被快速编译一遍，常用的方法之后再带优化重新编译一次（rejit）。一次 rejit 可能悄无声息地丢掉补丁；这在无头运行时见过。
+无法避免的补丁是 `CardSelectCmd.From*` 上的上下文 prefix（[GameBridge §5](/arch/gamebridge/#sec-5)）。它们最先安装，早于任何其他会编译游戏代码的操作：在补丁之前编译的调用方可能把入口内联进去，从而绕过补丁。这在无头运行时见过：另一个补丁重新编译 SapphireSeed 时把入口内联了。它们的另一个风险来自 JIT。游戏在 .NET 的**分层编译**下运行：方法先被快速编译一遍，常用的方法之后再带优化重新编译一次（rejit）。一次 rejit 可能悄无声息地丢掉补丁；这在无头运行时见过。
 
 应对办法：
 

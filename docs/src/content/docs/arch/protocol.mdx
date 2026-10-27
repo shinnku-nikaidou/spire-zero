@@ -14,19 +14,20 @@ Protocol（协议）是项目各进程之间的共同语言。游戏宿主（真
 
 <Aside title="状态">
 
-战斗部分已实现（`src/Sts2Ai.Protocol`）。整局层面的界面、消息信封、事件流和世界 API 还在规划中。每个有动作的决策界面都已经能列出并执行合法动作，但界面载荷（payload）还没有实现（[§3](#sec-3)）。
+战斗部分、带有每个决策界面画面的整局观测（[§3](#sec-3)）和 `ChoiceContext`（[§4](#sec-4)）已实现（`src/Sts2Ai.Protocol`）。消息信封、事件流和世界 API 还在规划中。
 
 </Aside>
 
 ## 1. 现有类型
 
-下面这些类型已经存在，覆盖战斗和选牌提示。
+下面这些类型已经存在，覆盖战斗、选牌提示和整局观测。
 
 - `CombatObservation`：玩家在一场战斗里能看到的一切。它包括遭遇 id、幕、进阶等级、回合数、一个 `PlayerView`、手牌（带 uid）、按卡牌键（card key）排序的抽牌堆、弃牌堆和消耗堆、每个槽位的药水、遗物、友方单位，以及敌人和它们的意图 `IntentView{type, damage per hit, hits}`（类型、每段伤害、段数）。抽牌堆要排序，是因为它的真实顺序是隐藏的。
 - `CardView{id, uid?, up, cost|x_cost, stars, enchant, affliction, keywords sorted, vars sorted}`：玩家眼中的一张牌。`ProtocolJson.CardKey` 是这张牌去掉 uid 之后的序列化结果，也就是它对玩家可见的身份：键相同的两张牌，在玩家看来一模一样。
 - `CombatAction`：一个战斗动作，文本形式为 `play:C[:T]`（打出牌 C，可选目标 T）、`potion:S[:T]`（使用槽位 S 的药水）或 `end_turn`。动作用 **uid** 指代对象：uid 是取自游戏本身的稳定 id，而不是列表里的位置。手牌的 uid 是它的 `NetCombatCardDb` id，生物的 uid 是它的 `CombatId`。因此手牌变化时动作依然有效，而且在模拟器和真实游戏里含义相同。
-- `CardChoice{options canonical-sorted by card key, ties by hidden-state-free seed; min; max}` 以及 `Accepts(picks)`：一个选牌提示，比如「弃 1 张牌」或「3 选 1」。选项按**规范顺序**排列：按卡牌键排序，键相同时用一个不含隐藏状态的种子打破平局，从不使用游戏自己的顺序。一个回答要选 min 到 max 个选项；`Accepts(picks)` 检查回答是否有效。
-- `ProtocolJson`：JSON 设置：字段名用 snake_case，值为 null 的字段省略。
+- `CardChoice{options canonical-sorted by card key, ties by hidden-state-free seed; min; max; context}` 以及 `Accepts(picks)`：一个选牌提示，比如「弃 1 张牌」或「3 选 1」。选项按**规范顺序**排列：按卡牌键排序，键相同时用一个不含隐藏状态的种子打破平局，从不使用游戏自己的顺序。一个回答要选 min 到 max 个选项；`Accepts(picks)` 检查回答是否有效。`context` 说明游戏为什么要问（[§4](#sec-4)）。
+- `Observation{run, screen}`：玩家在任一决策点看到的内容（[§3](#sec-3)）；`Surfaces` 常量（`Surfaces.cs`）给各个画面命名。
+- `ProtocolJson`：JSON 设置：字段名用 snake_case，值为 null 的字段省略。`ProtocolJson.Hash(obs)` 计算 `obs_hash`（[§2](#sec-2)）。
 
 ## 2. 传输
 
@@ -82,84 +83,79 @@ sequenceDiagram
 
 有两个字段用来防止过时的回答：
 
-- `obs_hash` 是对 `obs` 的规范 JSON 计算的 FNV-1a 64（一种快速的 64 位哈希）。如果一个推荐的哈希与当前的不同，也就是说它是针对一个已经不在屏幕上的状态算出来的，宿主就丢弃它。
+- `obs_hash` 是对 `obs` 的规范 JSON 计算的 FNV-1a 64（一种快速的 64 位哈希，`ProtocolJson.Hash`）。如果一个推荐的哈希与当前的不同，也就是说它是针对一个已经不在屏幕上的状态算出来的，宿主就丢弃它。
 - `decision_id` 在一局内严格递增，brain 只回答最新的那一个。
 
 ## 3. 观测
 
-这部分在规划中：每个决策一个 `Observation`。它是一个**联合类型**（union）：整局部分总是存在，界面部分恰好是若干变体之一，也就是正在询问的那个决策界面对应的变体。**决策界面**（surface）指一类决策画面（战斗、地图、商店……）。
+每个决策一个 `Observation`（`Observation.cs`、`Screens.cs`）。它是一个**联合类型**（union）：整局部分总是存在，界面部分恰好是若干变体之一，也就是正在询问的那个决策界面对应的变体。**决策界面**（surface）指一类决策画面（战斗、地图、商店……）。在 JSON 里，界面部分带一个 `"surface"` 字段，值是决策界面的名字，说明它是哪个变体。观测由 GameBridge 构建（[GameBridge §3](/arch/gamebridge/#sec-3)）。
 
-```csharp
-// Planned. One per decision; the screen part says which surface is asking.
-public sealed record Observation
-{
-    public required RunView Run { get; init; }       // always present
-    public required ScreenView Screen { get; init; } // exactly one variant
-}
-
-public sealed record RunView
-{
-    public required string Character { get; init; }
-    public required int Ascension { get; init; }
-    public required int Act { get; init; }            // index from 0
-    public required int Floor { get; init; }          // total floor, as the top bar shows
-    public required int Hp { get; init; }
-    public required int MaxHp { get; init; }
-    public required int Gold { get; init; }
-    public required IReadOnlyList<CardView> Deck { get; init; }   // deck view order (public)
-    public required IReadOnlyList<RelicView> Relics { get; init; }
-    public required IReadOnlyList<string?> Potions { get; init; }
-    public required MapView Map { get; init; }
-}
 ```
+Observation{run: RunView, screen: ScreenView}       // screen JSON carries "surface": <Surfaces constant>
+RunView{character, ascension, act (from 0), act_id, floor (run total), hp, max_hp, gold,
+        deck (sorted by card key), relics, potions (per slot, null = empty), map}
+MapView{points (sorted by row, col: start row 0 .. boss / second boss), visited (this act, last = current),
+        boss, second_boss?, ancient?}
+MapPointView{col, row, type (map icon; "?" stays Unknown after the visit), next (sorted), quest?}
+```
+
+- `act_id` 说明这一局抽到的是该幕的哪个变体。`floor` 按整局累计，与顶栏显示的一致。
+- `map` 是当前这一幕的地图：每个点及其图标、它的路径通向的点、本幕走过的点（最后一个是玩家当前所在的位置），以及地图上画出的 Boss、第二个 Boss 和 Ancient。`quest` 标记一个任务奖励到达的点。
 
 每个界面变体以它的决策界面命名。决策界面的名字同时也是 Harness 把决策路由给某个大脑时用的键（[Harness §4](/arch/harness/#sec-4)）。
 
-| 决策界面 | 载荷 | 合法动作形式 |
+| 决策界面 | 画面载荷 | 合法动作形式 |
 |---|---|---|
-| `combat` | `CombatObservation` | `play:C[:T]`、`potion:S[:T]`、`end_turn` |
-| `card_choice` | `CardChoice` + `ChoiceContext`（[§4](#sec-4)） | `pick:i,j,…`（规范索引；只有 min = 0 时才允许一张都不选） |
-| `map` | 可前往的坐标（当前地图在 `RunView.Map` 里） | `map:col,row` |
-| `rewards` | 按 UI 顺序排列的奖励 `{kind, id/amount}` | `reward:i`、`rewards_done` |
-| `card_reward` | 卡牌 + 替代选项（跳过、重抽、由钩子添加的；最多 2 个） | `card:i`、`card_alt:<id>` |
-| `bundle` | 若干组卡牌（bundle） | `bundle:i` |
-| `event` | 事件 id、页面键、选项 `{index, key, locked, tips}` | `event:i`、`proceed` |
-| `shop` | 商品条目 `{slot, kind, id, cost, stocked, affordable}`，移除卡牌服务 `{cost, used}` | `buy:<slot>`、`remove`、`leave` |
-| `rest` | 选项 `{id, enabled}` | `rest:<id>`、`leave`（只在某个选项成功一次之后，或已没有选项可选时） |
-| `treasure` | 可选的遗物 | `relic:i`、`relic_skip` |
-| `crystal_sphere` | 11x11 网格：每格是隐藏的，或显示它的内容；剩余占卜次数 | `big:X,Y`（3x3）、`small:X,Y`（只在会揭开隐藏格子时） |
-| `game_over` | 是否获胜、层数 | — |
+| `combat` | `combat: CombatObservation` | `play:C[:T]`、`potion:S[:T]`、`end_turn` |
+| `card_choice` | `choice: CardChoice`（带它的 `context`，[§4](#sec-4)）；战斗进行中时还有 `combat` | `pick:i,j,…`（规范索引；只有 min = 0 时才允许一张都不选） |
+| `map` | `travelable`：可前往的坐标，按合法动作的顺序（地图本身在 `run.map` 里） | `map:col,row` |
+| `rewards` | 还没领取的奖励：`{index, kind, id?, amount?, card?}`，kind 为 `gold`、`potion`、`relic`、`card`、`special_card` 或 `remove_card` | `reward:i`、`rewards_done` |
+| `card_reward` | `cards`，以及 `alternatives`：其他按钮的 id（跳过、重抽、遗物添加的按钮） | `card:i`、`card_alt:<id>` |
+| `bundle` | `bundles`：若干组卡牌 | `bundle:i` |
+| `event` | `id`、`page`（本地化键）、`options{index, key, locked?, relic?, tips?, kills?}`（事件结束后为空）、`finished` | `event:i`、`proceed` |
+| `shop` | `entries{slot, kind, card? or id?, cost, on_sale?}`：仍在出售的商品，kind 为 `card`、`relic` 或 `potion`；`removal_cost`（用过之后不再出现） | `buy:<slot>`、`remove`、`leave` |
+| `rest` | `options{id, enabled}` | `rest:<id>`、`leave`（只在某个选项成功一次之后，或已没有选项可选时） |
+| `treasure` | `relics`：宝箱里的遗物 id | `relic:i`、`relic_skip` |
+| `crystal_sphere` | `rows`：11x11 网格，`rows[y][x]` 为 `#`（隐藏）、`.`（已揭开且为空），或已揭开格子所显示内容的一部分（`R` 遗物、`P` 药水、`C` 卡牌奖励、`G` 金币、`X` 诅咒）；`divinations_left` | `big:X,Y`（3x3）、`small:X,Y`（只在会揭开隐藏格子时） |
+
+一局的结束是传输消息 `run_end`（[§2](#sec-2)），不是一个决策界面。
 
 每个宏观决策界面（除 `combat` 和 `card_choice` 以外的所有决策界面）还会列出药水栏动作：`potion:S`（可随时使用的药水）和 `discard_potion:S`（丢弃药水）。药水栏满时，药水奖励和药水购买会从合法动作里去掉，直到空出一个槽位；没有单独的 `potion_full` 决策界面。事件动作 `proceed` 表示离开、回到地图：事件已结束时，或者通过 Ancient 事件的 PROCEED 按钮。
 
-**目前已实现**：每个有动作的决策界面都能列出合法动作并执行。宏观决策界面以 `MacroDecision(surface, legal)` 传递，界面常量在 `MacroDecision.cs` 的 `Surfaces` 里；`card_choice` 仍然走 `IChoicePolicy`。表中的载荷还没有实现。
+宏观决策界面以 `MacroDecision{surface, legal, observation}`（在 Brain 里）交给策略；`card_choice` 走 `IChoicePolicy`。
 
 - 如果 UI 顺序是公开的（奖励、事件、商店槽位），直接用游戏所给列表的索引没有问题。顺序可能反映隐藏状态的卡牌列表（各个牌堆）一律经过规范排序（`CardChoice`）。
-- `MapView` 包含所有点 `{col,row,type}`（`?` 一直是 `unknown`）、边、走过的坐标、当前坐标，以及显示出来时的 Boss id。它从不包含未来某个 `?` 的结果。
-- 文本：事件和选项的 id 以本地化键（loc key）发送，从不发送已经解析好、可能带有隐藏数值的字符串。悬停提示（提示里显示的卡牌或遗物）是可见的，所以包括在内。
+- 牌组按卡牌键排序，所以以不同顺序得到的同一副牌组给出相同的观测。
+- 地图从不包含未来某个 `?` 的结果；Boss 和 Ancient 画在地图上，所以包括在内。
+- 文本以本地化键（loc key，`table.key`；事件选项用它的文本键）发送，从不发送已经解析好的字符串。游戏填进事件文本的数字暂不包括：有些事件把页面上不显示的数值也放在其中，所以要先有一份按事件划分的白名单。悬停提示（提示里显示的卡牌或遗物）是可见的，所以选项的 `tips` 列出它们的模型 id（`+` 表示升级过的牌）。
+- 观测是惰性构建的：只在有人读取时才构建（`MacroDecision.Observation`、`CombatDecision.Observation`，或整局会话的 `observed` 回调）。
 
 ## 4. ChoiceContext
 
-这个类型填补一个已知缺口：`CardChoice` 只说明有哪些选项，不说明游戏为什么要问。在真实游戏里，策略可能单独收到一个选牌提示，没有别的信息告诉它这个提示是做什么用的。`ChoiceContext` 带上的就是这个原因。它还在规划中，将由 GameBridge 填写（[GameBridge §5](/arch/gamebridge/#sec-5)）。
+`CardChoice` 只说明有哪些选项，不说明游戏为什么要问：同样的选项，用于升级、移除还是弃牌，意义完全不同。在真实游戏里，策略可能单独收到一个选牌提示，没有别的信息告诉它这个提示是做什么用的。`ChoiceContext` 带上的就是这个原因。它由 GameBridge 填写（[GameBridge §5](/arch/gamebridge/#sec-5)）。
 
 ```csharp
-// Planned. Why the game is asking, so a policy can answer a lone prompt in the real game.
 public sealed record ChoiceContext
 {
-    public required string Purpose { get; init; }   // discard, exhaust, upgrade, transform, enchant, remove,
-                                                    // choose, put_on_draw_top, retain, … (from the CardSelectCmd entry)
-    public string? Source { get; init; }            // card/relic/power/event id that asked
-    public required bool Cancelable { get; init; }  // CardSelectorPrefs.Cancelable (needs a prefix to expose, docs: simulator §5)
-    public string? PromptKey { get; init; }         // the prompt's loc key
+    public required string Purpose { get; init; }       // from the CardSelectCmd entry, or "<pile>_pile"
+    public string? Source { get; init; }                // card/relic/power/event id that asked
+    public required bool Cancelable { get; init; }      // a cancel or skip button closes the prompt
+    public string? PromptKey { get; init; }             // the prompt's loc key, "table.key"
+    public ModifierView? Enchantment { get; init; }     // for deck_for_enchantment
 }
 ```
 
 | 字段 | 含义 |
 |---|---|
-| `Purpose` | 这次选牌做什么：discard（弃牌）、exhaust（消耗）、upgrade（升级）、transform（变化）、enchant（附魔）、remove（移除）、choose（选择）、put_on_draw_top（放到抽牌堆顶）、retain（保留）……；取自游戏所用的 `CardSelectCmd` 入口 |
-| `Source` | 发起询问的卡牌、遗物、能力或事件的 id（可选） |
-| `Cancelable` | `CardSelectorPrefs.Cancelable`；要暴露它需要一个前缀（prefix）补丁（[模拟器 §5](/arch/simulator/#sec-5)） |
-| `PromptKey` | 提示的本地化键（可选） |
+| `Purpose` | 提示的种类：游戏所用 `CardSelectCmd` 入口的名字，去掉 "From"，转成 snake_case：`deck_for_upgrade`、`deck_for_transformation`、`deck_for_enchantment`、`deck_for_removal`、`deck_generic`、`hand`、`hand_for_discard`、`hand_for_upgrade`、`choose_a_card_screen`、`simple_grid`、`simple_grid_for_rewards`。针对战斗中某个牌堆的提示是 `draw_pile`、`discard_pile`、`exhaust_pile`…… |
+| `Source` | 发起询问的卡牌、遗物、能力或事件的 id，在游戏指明时给出：入口的 `source` 参数，否则是它的 `PlayerChoiceContext` 最近涉及的模型（可选） |
+| `Cancelable` | `CardSelectorPrefs.Cancelable`，或「3 选 1」画面的 `canSkip` |
+| `PromptKey` | 提示文本的本地化键（可选） |
+| `Enchantment` | 用于 `deck_for_enchantment`：被选中的牌获得的附魔及其数值 |
+
+- 取消或跳过就是空回答，所以只要 `Cancelable` 为真，`min` 就是 0。
+- 没有跳过按钮的「3 选 1」画面向选择器要 0 或 1 张牌，然后自己强制必须选一张，所以它的 `min` 是 1（`ChoiceContexts.Bounds`）。
+- 一个入口调用另一个入口时（移除卡牌会经过通用的牌组提示），由最外层的入口给出用途。
 
 ## 5. 事件
 
@@ -242,7 +238,7 @@ public sealed record BranchResult(Observation Leaf, bool AtHorizon, bool Ended, 
 
 ## 8. 不变量与测试
 
-- **往返**：每个类型序列化再反序列化后，得到相等的记录（战斗部分已有）。
+- **往返**：每个类型序列化再反序列化后，得到相同的 JSON。战斗：selftest；整局：一批 `run --check` 中的每个观测。
 - **白名单**：每个字段都有测试，证明该字段在 UI 上可见。新增任何字段时，评审者要在公平性表（fair-play table）里加一行。
 - 没有任何字段携带种子、随机数计数器、怪物动作 id（move id）、牌堆的隐藏顺序或存档路径。
 - 只要游戏的顺序可能反映隐藏状态，就使用规范顺序。
@@ -250,5 +246,5 @@ public sealed record BranchResult(Observation Leaf, bool AtHorizon, bool Ended, 
 ## 9. 未决问题
 
 1. 事件流的粒度：先从最小集合开始，按需扩充。
-2. `RunView.Deck` 的顺序：牌组界面会排序吗？使用公开的 UI 顺序；需在游戏中核实。
-3. worker 的管道是否需要二进制编码（实测决定）。
+2. worker 的管道是否需要二进制编码（实测决定）。
+3. 还有哪些内容要进入观测：事件文本里的数字（按事件的白名单）、卡牌奖励的稀有度提示、变化（transform）在确认前显示的预览。

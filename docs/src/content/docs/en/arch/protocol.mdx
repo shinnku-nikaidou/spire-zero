@@ -14,19 +14,20 @@ This assembly is also the observation **whitelist**: a field exists here only if
 
 <Aside title="Status">
 
-The combat part exists (`src/Sts2Ai.Protocol`). Run-level screens, the message envelopes, the event stream and the world API are planned. Listing and applying legal actions already works for every surface that has actions; the screen payloads do not exist yet ([§3](#sec-3)).
+The combat part, the run-level observation with a screen for every surface ([§3](#sec-3)) and `ChoiceContext` ([§4](#sec-4)) exist (`src/Sts2Ai.Protocol`). The message envelopes, the event stream and the world API are planned.
 
 </Aside>
 
 ## 1. Existing types
 
-These types exist today. They cover combat and card prompts.
+These types exist today. They cover combat, card prompts and the run-level observation.
 
 - `CombatObservation`: everything the player can see of one combat. It holds the encounter id, act, ascension, round, a `PlayerView`, the hand (with uids), the draw pile sorted by card key, the discard and exhaust piles, potions per slot, relics, allies, and the enemies with their intents as `IntentView{type, damage per hit, hits}`. The draw pile is sorted because its real order is hidden.
 - `CardView{id, uid?, up, cost|x_cost, stars, enchant, affliction, keywords sorted, vars sorted}`: one card as the player sees it. `ProtocolJson.CardKey` is the card serialized without its uid. That is the card's player-visible identity: two cards with the same key look the same to the player.
 - `CombatAction`: one combat action, in text form `play:C[:T]` (play card C, optionally at target T), `potion:S[:T]` (use the potion in slot S) or `end_turn`. Actions name things by **uid**, a stable id taken from the game rather than a position in a list: a hand card's uid is its `NetCombatCardDb` id, a creature's uid is its `CombatId`. So an action stays valid while the hand changes, and means the same thing in the simulator and in the real game.
-- `CardChoice{options canonical-sorted by card key, ties by hidden-state-free seed; min; max}`, with `Accepts(picks)`: a card prompt, such as "discard 1" or "choose 1 of 3". The options come in *canonical order*: sorted by card key, with ties broken by a seed that carries no hidden state, never in the game's own order. An answer picks between min and max options; `Accepts(picks)` checks it.
-- `ProtocolJson`: the JSON settings: snake_case names, null fields omitted.
+- `CardChoice{options canonical-sorted by card key, ties by hidden-state-free seed; min; max; context}`, with `Accepts(picks)`: a card prompt, such as "discard 1" or "choose 1 of 3". The options come in *canonical order*: sorted by card key, with ties broken by a seed that carries no hidden state, never in the game's own order. An answer picks between min and max options; `Accepts(picks)` checks it. `context` says why the game asks ([§4](#sec-4)).
+- `Observation{run, screen}`: what the player sees at any decision ([§3](#sec-3)); the `Surfaces` constants (`Surfaces.cs`) name the screens.
+- `ProtocolJson`: the JSON settings: snake_case names, null fields omitted. `ProtocolJson.Hash(obs)` computes `obs_hash` ([§2](#sec-2)).
 
 ## 2. Wire
 
@@ -82,84 +83,79 @@ sequenceDiagram
 
 Two fields protect against stale answers:
 
-- `obs_hash` is FNV-1a 64 (a fast 64-bit hash) over the canonical JSON of `obs`. The host drops a recommendation whose hash differs from the current one, that is, one computed for a state that is no longer on screen.
+- `obs_hash` is FNV-1a 64 (a fast 64-bit hash) over the canonical JSON of `obs` (`ProtocolJson.Hash`). The host drops a recommendation whose hash differs from the current one, that is, one computed for a state that is no longer on screen.
 - `decision_id` strictly increases within a run, and the brain answers only the latest one.
 
 ## 3. Observation
 
-This is planned: one `Observation` per decision. It is a *union*: the run part is always present, and the screen part is exactly one of several variants, the one for the surface that is asking. A **surface** is a kind of decision screen (combat, map, shop, …).
+One `Observation` per decision (`Observation.cs`, `Screens.cs`). It is a *union*: the run part is always present, and the screen part is exactly one of several variants, the one for the surface that is asking. A **surface** is a kind of decision screen (combat, map, shop, …). In JSON the screen carries a `"surface"` field with the surface name, which says which variant it is. GameBridge builds observations ([GameBridge §3](/en/arch/gamebridge/#sec-3)).
 
-```csharp
-// Planned. One per decision; the screen part says which surface is asking.
-public sealed record Observation
-{
-    public required RunView Run { get; init; }       // always present
-    public required ScreenView Screen { get; init; } // exactly one variant
-}
-
-public sealed record RunView
-{
-    public required string Character { get; init; }
-    public required int Ascension { get; init; }
-    public required int Act { get; init; }            // index from 0
-    public required int Floor { get; init; }          // total floor, as the top bar shows
-    public required int Hp { get; init; }
-    public required int MaxHp { get; init; }
-    public required int Gold { get; init; }
-    public required IReadOnlyList<CardView> Deck { get; init; }   // deck view order (public)
-    public required IReadOnlyList<RelicView> Relics { get; init; }
-    public required IReadOnlyList<string?> Potions { get; init; }
-    public required MapView Map { get; init; }
-}
 ```
+Observation{run: RunView, screen: ScreenView}       // screen JSON carries "surface": <Surfaces constant>
+RunView{character, ascension, act (from 0), act_id, floor (run total), hp, max_hp, gold,
+        deck (sorted by card key), relics, potions (per slot, null = empty), map}
+MapView{points (sorted by row, col: start row 0 .. boss / second boss), visited (this act, last = current),
+        boss, second_boss?, ancient?}
+MapPointView{col, row, type (map icon; "?" stays Unknown after the visit), next (sorted), quest?}
+```
+
+- `act_id` says which variant of the act this run rolled. `floor` is counted over the whole run, as the top bar shows it.
+- `map` is the current act's map: every point with its icon and the points its paths lead to, the points visited in this act (the last one is where the player stands), and the boss, second boss and Ancient drawn on the map. `quest` marks a point a quest rewards reaching.
 
 Each screen variant is named by its surface. The surface name is also the key Harness uses to route a decision to a brain ([Harness §4](/en/arch/harness/#sec-4)).
 
-| surface | payload | legal action forms |
+| surface | screen payload | legal action forms |
 |---|---|---|
-| `combat` | `CombatObservation` | `play:C[:T]`, `potion:S[:T]`, `end_turn` |
-| `card_choice` | `CardChoice` + `ChoiceContext` ([§4](#sec-4)) | `pick:i,j,…` (canonical indexes; an empty pick is allowed only if min = 0) |
-| `map` | travelable coords (the current map is in `RunView.Map`) | `map:col,row` |
-| `rewards` | rewards in UI order, `{kind, id/amount}` | `reward:i`, `rewards_done` |
-| `card_reward` | cards + alternatives (skip, reroll, added by a hook; at most 2) | `card:i`, `card_alt:<id>` |
-| `bundle` | bundles of cards | `bundle:i` |
-| `event` | event id, page key, options `{index, key, locked, tips}` | `event:i`, `proceed` |
-| `shop` | entries `{slot, kind, id, cost, stocked, affordable}`, card removal `{cost, used}` | `buy:<slot>`, `remove`, `leave` |
-| `rest` | options `{id, enabled}` | `rest:<id>`, `leave` (only after one option succeeded, or when none is left) |
-| `treasure` | relic choices | `relic:i`, `relic_skip` |
-| `crystal_sphere` | 11x11 grid: for each cell, hidden or what it shows; divinations left | `big:X,Y` (3x3), `small:X,Y` (only if a hidden cell is uncovered) |
-| `game_over` | won, floor | — |
+| `combat` | `combat: CombatObservation` | `play:C[:T]`, `potion:S[:T]`, `end_turn` |
+| `card_choice` | `choice: CardChoice` (with its `context`, [§4](#sec-4)); `combat` too while a combat is going on | `pick:i,j,…` (canonical indexes; an empty pick is allowed only if min = 0) |
+| `map` | `travelable` coords, in legal-action order (the map itself is in `run.map`) | `map:col,row` |
+| `rewards` | the rewards not taken yet: `{index, kind, id?, amount?, card?}` with kind `gold`, `potion`, `relic`, `card`, `special_card` or `remove_card` | `reward:i`, `rewards_done` |
+| `card_reward` | `cards`, and `alternatives`: the other buttons by id (Skip, reroll, ones added by relics) | `card:i`, `card_alt:<id>` |
+| `bundle` | `bundles`: lists of cards | `bundle:i` |
+| `event` | `id`, `page` (loc key), `options{index, key, locked?, relic?, tips?, kills?}` (empty once finished), `finished` | `event:i`, `proceed` |
+| `shop` | `entries{slot, kind, card? or id?, cost, on_sale?}` for the goods still for sale, kind `card`, `relic` or `potion`; `removal_cost` (absent once used) | `buy:<slot>`, `remove`, `leave` |
+| `rest` | `options{id, enabled}` | `rest:<id>`, `leave` (only after one option succeeded, or when none is left) |
+| `treasure` | `relics`: the relics in the chest, by id | `relic:i`, `relic_skip` |
+| `crystal_sphere` | `rows`, an 11x11 grid where `rows[y][x]` is `#` hidden, `.` uncovered and empty, or what the uncovered cell shows part of (`R` relic, `P` potion, `C` card reward, `G` gold, `X` curse); `divinations_left` | `big:X,Y` (3x3), `small:X,Y` (only if a hidden cell is uncovered) |
+
+The end of a run is the wire message `run_end` ([§2](#sec-2)), not a surface.
 
 Every macro surface (every surface except `combat` and `card_choice`) also lists the potion belt: `potion:S` (a potion that can be used at any time) and `discard_potion:S`. When the belt is full, potion rewards and potion purchases are left out of the legal actions until a slot frees up; there is no separate `potion_full` surface. The event action `proceed` means leaving to the map: from a finished event, or through an Ancient's PROCEED button.
 
-**Built today:** legal actions and applying them, for every surface that has actions. The macro surfaces are passed as `MacroDecision(surface, legal)`, with the surface constants in `Surfaces` in `MacroDecision.cs`; `card_choice` still goes through `IChoicePolicy`. The payloads in the table are not built yet.
+The macro surfaces reach a policy as `MacroDecision{surface, legal, observation}` (in Brain); `card_choice` goes through `IChoicePolicy`.
 
 - Indexes into lists the game provides are fine when the UI order is public (rewards, events, shop slots). Card lists whose order may reflect hidden state (piles) always go through the canonical sort (`CardChoice`).
-- `MapView` holds the points `{col,row,type}` (a `?` stays `unknown`), the edges, the visited coords, the current coord, and the boss id if it is shown. It never holds what a future `?` turns out to be.
-- Text: event and option ids are sent as loc keys (localization keys), never as resolved strings that contain hidden values. Hover tips (cards or relics shown in a tip) are visible, so they are included.
+- The deck is sorted by card key, so the same deck reached in a different order gives the same observation.
+- The map never holds what a future `?` turns out to be; the boss and the Ancient are drawn on the map, so they are included.
+- Text is sent as loc keys (localization keys, `table.key`; event options by their text key), never as resolved strings. The numbers the game fills into event texts are not included yet: some events keep values the page does not show among them, so they need a per-event whitelist first. Hover tips (cards or relics shown in a tip) are visible, so an option's `tips` lists their model ids (`+` marks an upgraded card).
+- Observations are built lazily: only when someone reads one (`MacroDecision.Observation`, `CombatDecision.Observation`, or the run session's `observed` callback).
 
 ## 4. ChoiceContext
 
-This type fixes a known gap: `CardChoice` says what the options are, but not why the game is asking. In the real game a policy may get a prompt on its own, with nothing else telling it what the prompt is for. `ChoiceContext` carries that reason. It is planned; GameBridge will fill it ([GameBridge §5](/en/arch/gamebridge/#sec-5)).
+`CardChoice` says what the options are, but not why the game is asking: the same options mean different things for an upgrade, a removal or a discard. In the real game a policy may get a prompt on its own, with nothing else telling it what the prompt is for. `ChoiceContext` carries that reason. GameBridge fills it ([GameBridge §5](/en/arch/gamebridge/#sec-5)).
 
 ```csharp
-// Planned. Why the game is asking, so a policy can answer a lone prompt in the real game.
 public sealed record ChoiceContext
 {
-    public required string Purpose { get; init; }   // discard, exhaust, upgrade, transform, enchant, remove,
-                                                    // choose, put_on_draw_top, retain, … (from the CardSelectCmd entry)
-    public string? Source { get; init; }            // card/relic/power/event id that asked
-    public required bool Cancelable { get; init; }  // CardSelectorPrefs.Cancelable (needs a prefix to expose, docs: simulator §5)
-    public string? PromptKey { get; init; }         // the prompt's loc key
+    public required string Purpose { get; init; }       // from the CardSelectCmd entry, or "<pile>_pile"
+    public string? Source { get; init; }                // card/relic/power/event id that asked
+    public required bool Cancelable { get; init; }      // a cancel or skip button closes the prompt
+    public string? PromptKey { get; init; }             // the prompt's loc key, "table.key"
+    public ModifierView? Enchantment { get; init; }     // for deck_for_enchantment
 }
 ```
 
 | field | meaning |
 |---|---|
-| `Purpose` | what the pick does: discard, exhaust, upgrade, transform, enchant, remove, choose, put_on_draw_top, retain, …; taken from the `CardSelectCmd` entry the game used |
-| `Source` | id of the card, relic, power or event that asked (optional) |
-| `Cancelable` | `CardSelectorPrefs.Cancelable`; exposing it needs a prefix patch ([Simulator §5](/en/arch/simulator/#sec-5)) |
-| `PromptKey` | the prompt's loc key (optional) |
+| `Purpose` | the kind of prompt: the name of the `CardSelectCmd` entry the game used, without "From", in snake_case: `deck_for_upgrade`, `deck_for_transformation`, `deck_for_enchantment`, `deck_for_removal`, `deck_generic`, `hand`, `hand_for_discard`, `hand_for_upgrade`, `choose_a_card_screen`, `simple_grid`, `simple_grid_for_rewards`. A prompt over a combat pile is `draw_pile`, `discard_pile`, `exhaust_pile`, … |
+| `Source` | id of the card, relic, power or event that asked, when the game names one: the entry's `source` argument, else the last model its `PlayerChoiceContext` involved (optional) |
+| `Cancelable` | `CardSelectorPrefs.Cancelable`, or the `canSkip` of a choose-a-card screen |
+| `PromptKey` | the prompt text's loc key (optional) |
+| `Enchantment` | for `deck_for_enchantment`: the enchantment the picked cards get, and its amount |
+
+- Cancelling or skipping is the empty answer, so `min` is 0 whenever `Cancelable` is set.
+- A choose-a-card screen without a skip button asks its selector for 0 or 1 card and then enforces the pick itself, so its `min` is 1 (`ChoiceContexts.Bounds`).
+- When one entry calls another (a removal goes through the generic deck prompt), the outermost entry names the purpose.
 
 ## 5. Events
 
@@ -242,7 +238,7 @@ public sealed record BranchResult(Observation Leaf, bool AtHorizon, bool Ended, 
 
 ## 8. Invariants and tests
 
-- **Round trip:** every type serializes and deserializes to an equal record (exists for combat).
+- **Round trip:** every type serializes and deserializes to the same JSON. Combat: selftest; run level: every observation of a `run --check` batch.
 - **Whitelist:** a per-field test that the field is visible in the UI. For any new field, reviewers add a row to the fair-play table.
 - No field carries seeds, RNG counters, move ids, the hidden order of a pile, or save paths.
 - Canonical ordering wherever the game's order could reflect hidden state.
@@ -250,5 +246,5 @@ public sealed record BranchResult(Observation Leaf, bool AtHorizon, bool Ended, 
 ## 9. Open questions
 
 1. Granularity of the event stream: start minimal, grow on demand.
-2. `RunView.Deck` order: does the deck view sort? Use the public UI order; verify in game.
-3. Whether the worker pipes need a binary codec (measure).
+2. Whether the worker pipes need a binary codec (measure).
+3. What still has to reach the observation: the numbers in event texts (per-event whitelist), the rarity hint of card rewards, the preview a transform shows before it is confirmed.

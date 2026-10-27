@@ -154,7 +154,7 @@ The driver plays whole runs by itself in the real game. It exists for R4 evaluat
 
 A **Harmony patch** rewrites a game method at runtime: Harmony is a .NET library that lets a mod run its own code before the original method (a *prefix*) or after it (a *postfix*). The mod prefers the game's own C# events over Harmony: `CombatManager.*`, `RunManager.RoomEntered`, `ActionExecutor.*`, `CardPile.*`.
 
-The unavoidable patches are the context prefixes on `CardSelectCmd.From*` ([GameBridge §5](/en/arch/gamebridge/#sec-5)). Their risk is the JIT. The game runs with .NET *tiered compilation*: a method is first compiled quickly, and frequently used methods are later compiled again with optimizations (a "rejit"). A rejit can drop a patch silently; this was seen headless.
+The unavoidable patches are the context prefixes on `CardSelectCmd.From*` ([GameBridge §5](/en/arch/gamebridge/#sec-5)). They are installed first, before anything else compiles game code: a caller compiled before the patch can inline an entry and bypass it. This was seen headless, where SapphireSeed was inlined while another patch recompiled it. Their other risk is the JIT. The game runs with .NET *tiered compilation*: a method is first compiled quickly, and frequently used methods are later compiled again with optimizations (a "rejit"). A rejit can drop a patch silently; this was seen headless.
 
 Mitigation:
 

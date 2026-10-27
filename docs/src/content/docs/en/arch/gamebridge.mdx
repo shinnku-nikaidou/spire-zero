@@ -12,14 +12,14 @@ GameBridge (`Sts2Ai.GameBridge`) is the translation layer between the game and [
 
 <Aside title="Status">
 
-Combat observe, legal and start exist, and so do run-level legal and start (`src/Sts2Ai.GameBridge`). Run-level observe and the choice context are planned.
+Observe, legal and start exist for every surface, and so does the choice context (`src/Sts2Ai.GameBridge`). The event stream is planned.
 
 </Aside>
 
 ## 1. Role and rules
 
 - GameBridge is the only code that turns game objects into protocol (observe, legal) and a protocol action into a game call (start). SimWorker and the Mod share it, so R1–R4 (the rungs of the [sim-to-real ladder](/en/arch/evaluation/#sec-1)) use one code path.
-- It references the game DLLs and Protocol. Never Brain. Never Godot nodes (`N*` types), the game's UI scene objects. Work that needs nodes lives in the host adapters instead: the Mod's UI adapters ([Mod §4](/en/arch/mod/#sec-4)), and in the simulator, copied node logic ([Simulator §5.2](/en/arch/simulator/#sec-5.2)).
+- It references the game DLLs, Protocol, and Harmony (the game's own `0Harmony.dll`, for [§5](#sec-5)). Never Brain. Never Godot nodes (`N*` types), the game's UI scene objects. Work that needs nodes lives in the host adapters instead: the Mod's UI adapters ([Mod §4](/en/arch/mod/#sec-4)), and in the simulator, copied node logic ([Simulator §5.2](/en/arch/simulator/#sec-5.2)).
 - Observe reads only what the UI shows (the fair-play whitelist, [Protocol §8](/en/arch/protocol/#sec-8)). Each field is mapped from the property the UI binds to (`DisplayAmount`, `IsVisible`, `ShowCounter`, intents via `GetSingleDamage`), never from internal state.
 - Start uses the same entry point as the UI. Never state edits, and never commands that skip validation (`CardCmd.AutoPlay`, a raw `new PlayCardAction`, `PlayerCmd.EndTurn`).
 - **Settling** (running the game until the next decision point is reached) is host-specific. GameBridge provides only logic predicates for it ([§6](#sec-6)).
@@ -31,13 +31,15 @@ What exists in `src/Sts2Ai.GameBridge` today:
 | type | member | notes |
 |---|---|---|
 | `Observe` | `Combat(st, player)` | hand with uids; draw pile sorted by card key; powers only if `IsVisible`, with their `DisplayAmount`; intents of `NextMove` aimed at the player |
-| | `Card(card, withUid)`, `CardKey(card)`, `Intents(move, owner, targets)` | `Intents` is reused by CombatBuilder (intent matching) |
+| | `Of(run, player, screen)`, `Run(run, player)` | an `Observation`: the `RunView` plus the surface's screen ([§3](#sec-3)) |
+| | `Card(card, withUid)`, `CardKey(card)`, `Relic`, `Coord`, `Intents(move, owner, targets)` | `Intents` is reused by CombatBuilder (intent matching) |
 | `CombatActions` | `WaitingForInput(player)` | player side, `Phase==Play`, executor idle, actions enabled. Enough headless, but NOT in the real game ([Mod §3](/en/arch/mod/#sec-3)) |
 | | `Legal(st, player)` | hand order, then potions by slot, then `end_turn`; `CanPlay()` once per card |
 | | `Start(st, player, action)` | `TryManualPlay(target)` / `EnqueueManualUse(target)` / `RequestEnqueue(EndPlayerTurnAction(player, TurnNumber))` |
 | | `HandCard(pcs, uid)`, `Creature(st, uid)` | throw on an unknown uid |
-| `MapActions`, `RewardActions`, `BundleActions`, `EventActions`, `CrystalSphereActions`, `ShopActions`, `RestActions`, `TreasureActions`, `PotionActions` | `Legal(…)` returns action texts; `Start(…, action)` throws if the action is not legal, and returns the game task where the UI awaits one | one static class per surface; grammar in [Protocol §3](/en/arch/protocol/#sec-3); `ActionText` parses |
-| `CardChoices` | `Canonical(options, min, max, tieBreak)` | sorts by card key, ties by a caller-seeded `Random`, never by game order (it may reflect pile depth); returns `(CardChoice, gameIndex[])` |
+| `MapActions`, `RewardActions`, `BundleActions`, `EventActions`, `CrystalSphereActions`, `ShopActions`, `RestActions`, `TreasureActions`, `PotionActions` | `Screen(…)` returns the surface's screen; `Legal(…)` returns action texts; `Start(…, action)` throws if the action is not legal, and returns the game task where the UI awaits one | one static class per surface (`PotionActions` has belt actions only, no screen); grammar in [Protocol §3](/en/arch/protocol/#sec-3); `ActionText` parses |
+| `CardChoices` | `Canonical(options, min, max, context, tieBreak)` | sorts by card key, ties by a caller-seeded `Random`, never by game order (it may reflect pile depth); returns `(CardChoice, gameIndex[])` |
+| `ChoiceContexts` | `Patch(harmony)`, `Current`, `Bounds(context, minSelect, maxSelect, n)` | the choice context ([§5](#sec-5)) |
 
 <Aside type="caution" title="Known gap">
 
@@ -47,25 +49,27 @@ The `EndPlayerTurnAction` path does not check `CanTurnBeEnded` <Badge text="veri
 
 ## 3. Observation sources
 
-This is planned: where each part of the run-level observation ([Protocol §3](/en/arch/protocol/#sec-3)) will be read from. Every source below was read in the game code <Badge text="verified" variant="success" /> unless it is marked inferred.
+Where each part of the run-level observation ([Protocol §3](/en/arch/protocol/#sec-3)) is read from. Each surface's screen is built by the `Screen(…)` of its class, next to its legal actions. Every source below was read in the game code <Badge text="verified" variant="success" />.
 
 | part | source |
 |---|---|
-| `RunView` character, ascension, act, floor | `player.Character`, `RunState.AscensionLevel`, `CurrentActIndex`, `TotalFloor` |
+| `RunView` character, ascension, act, floor | `player.Character`, `RunState.AscensionLevel`, `CurrentActIndex` and `Act.Id`, `TotalFloor` |
 | hp, gold | `player.Creature.CurrentHp/MaxHp`, `player.Gold` |
-| deck | `player.Deck.Cards` → `Observe.Card`. Order: deck view order <Badge text="inferred" variant="caution" />, open question 2 in [Protocol §9](/en/arch/protocol/#sec-9) |
-| relics, potions | `player.Relics`, `player.PotionSlots` (existing mappers) |
-| map | `RunState.Map` (points: `MapPoint.PointType`, children), `VisitedMapCoords`, `CurrentMapCoord`; a `?` stays `unknown`; the boss id only if the UI shows it <Badge text="inferred" variant="caution" /> |
-| travelable | the rules of `NMapScreen.RecalculateTravelability` (`NMapScreen.cs:874-921`), copied here as a logic function |
-| rewards | the rewards of the current `RewardsSet` in UI order, `!SuccessfullySelected` <Badge text="inferred" variant="caution" /> (field names per reward type still to check) |
-| card reward | offered cards + alternatives (computed once per screen, `CardReward.cs:321-330`) |
-| event | `EventSynchronizer.GetLocalEvent()`: id, page, `CurrentOptions` (key, `IsLocked`, tips) |
-| shop | `MerchantRoom.GetLocalInventory().AllEntries` (slot order, `IsStocked`, `Cost`, `EnoughGold`), the removal entry |
+| deck | `player.Deck.Cards` → `Observe.Card`, sorted by card key |
+| relics, potions | `player.Relics`, `player.PotionSlots` (the combat mappers) |
+| map | the points of `RunState.Map` (plus the start, boss and second boss points), with `PointType`, `Children` and `Quests`; `VisitedMapCoords`; `Act.BossEncounter`, the map's second boss, `Act.Ancient` |
+| map screen | travelable points: the rules of `NMapScreen.RecalculateTravelability`, copied into `MapActions` as a logic function |
+| rewards | the rewards of the `RewardsSet` with `!SuccessfullySelected`; a special card comes from the reward's `CardHoverTip` (its card field is private) |
+| card reward | offered cards + alternative ids (computed once per screen, `CardReward.cs:321-330`) |
+| bundle | the bundles' cards → `Observe.Card` |
+| event | `EventSynchronizer.GetLocalEvent()`: id, `Description` key, `CurrentOptions` (`TextKey`, `IsLocked`, `Relic`, hover tips, `WillKillPlayer`) |
+| shop | `MerchantInventory.AllEntries` without the removal (slot order, `IsStocked`, `Cost`, `IsOnSale`), and `CardRemovalEntry` |
 | rest | `RestSiteSynchronizer.GetLocalOptions()` (`Id`, `IsEnabled`) |
 | treasure | `TreasureRoomRelicSynchronizer.CurrentRelics` |
-| card prompt | options + `CardSelectorPrefs` (`MinSelect`, `MaxSelect`, `Cancelable`, `Prompt` loc key), via `ChoiceContext` ([§5](#sec-5)) |
+| crystal sphere | the minigame's cells: `IsHidden`, the item under each uncovered cell (`Item.ToSerializable().type`), divinations left |
+| card prompt | options + `CardSelectorPrefs`, via `ChoiceContexts` ([§5](#sec-5)) |
 
-A combat during a run uses the same `Observe.Combat`, plus the `RunView`.
+A combat during a run uses the same `Observe.Combat`, inside the screen: `combat`, or `card_choice` with its `combat`.
 
 ## 4. Actions per surface
 
@@ -81,7 +85,7 @@ The action grammar is in [Protocol §3](/en/arch/protocol/#sec-3). Each host app
 | card reward | answer `GetSelectedCardReward` (sim selector) | card holder / skip / reroll buttons |
 | card prompts | answer `CardSelectCmd.Selector` (sim) | screen holders + confirm. This UI path records a `PlayerChoice` for replay. `LocalSelector` skips `SyncLocalChoice` (`CardSelectCmd.cs:264-300`) <Badge text="verified" variant="success" />, so it would break SL replay |
 | event | `ChooseLocalOption(i)` | option button |
-| shop | `entry.OnTryPurchaseWrapper(inv)` (plus `SetUsed` for the removal) | the same call (`ForceClick` on merchant nodes does nothing <Badge text="verified" variant="success" />) |
+| shop | `entry.OnTryPurchaseWrapper(inv)`; the removal node marks a card removal used (in the simulator a headless patch does, [Simulator §5.2](/en/arch/simulator/#sec-5.2)) | the same call (`ForceClick` on merchant nodes does nothing <Badge text="verified" variant="success" />) |
 | rest | `ChooseLocalOption(i)` | option button |
 | treasure | `PickRelicLocally(i)` / `SkipRelicLocally()` | chest + relic buttons |
 | crystal sphere | `SetTool` + `CellClicked(cell)` | divination buttons + cell click |
@@ -91,18 +95,15 @@ The action grammar is in [Protocol §3](/en/arch/protocol/#sec-3). Each host app
 
 ## 5. Choice context
 
-This section describes how GameBridge will fill `ChoiceContext` ([Protocol §4](/en/arch/protocol/#sec-4)). It uses Harmony, the library that patches game methods at runtime: a *prefix* runs before the original method, a *postfix* after it.
+How GameBridge fills `ChoiceContext` ([Protocol §4](/en/arch/protocol/#sec-4)). Every card prompt goes through one of the `CardSelectCmd.From*` entries, and only their arguments say why the game asks. So `ChoiceContexts` patches them with Harmony, the library that patches game methods at runtime: a *prefix* runs before the original method, a *finalizer* after it, even when it throws.
 
-There is one Harmony prefix per `CardSelectCmd.From*` entry: `FromChooseACardScreen`, `FromSimpleGrid[ForRewards]`, `FromCombatPile`, `FromDeckForUpgrade/Transformation/Enchantment`, `FromDeckGeneric`, `FromHand[ForDiscard|ForUpgrade]`, `FromChooseABundleScreen` (`Commands/CardSelectCmd.cs:252-965`) <Badge text="verified" variant="success" />.
+- The targets are every public static `CardSelectCmd.From*` method except `FromChooseABundleScreen`, which has its own surface (`Commands/CardSelectCmd.cs`) <Badge text="verified" variant="success" />. The list is computed by reflection, so new entries are picked up; their arguments still need a review on every game update.
+- The prefix reads the entry's arguments into `Current`: `CardSelectorPrefs`, the `source` argument or the `PlayerChoiceContext`'s `LastInvolvedModel`, a `CardPile`, an `EnchantmentModel` with its `amount`, `canSkip`. The finalizer clears it.
+- A depth counter makes the outermost entry win (a removal calls `FromDeckGeneric`). The fields are `[ThreadStatic]`.
+- `Current` must be read synchronously inside the entry, as the selector call is: once the entry's first await returns, it is gone. The Mod's UI adapter must do the same.
+- Each host calls `ChoiceContexts.Patch(harmony)` once, **before any other patch** (SimWorker: `HeadlessPatches.Apply`). A caller compiled earlier, for example while another patch compiles its replacement method, can inline an entry's small async stub and bypass the prefix. This happened headless with SapphireSeed. In the simulator, a prompt without a context throws.
 
-The prefix sets a static "current" `ChoiceContext`:
-
-- `Purpose` = the entry + the prompt key;
-- `Source` = the model on the stack of the current action <Badge text="inferred" variant="caution" /> (taken from the `ActionExecutor` current action);
-- `Cancelable`;
-- `PromptKey`.
-
-The postfix clears it. Both hosts share the patch, so they get the same context. The list of patched methods is re-checked on every game update.
+Both hosts share the patch, so they get the same context.
 
 ## 6. Decision-point predicates
 
@@ -160,5 +161,5 @@ All knowledge of the game's API lives in three places: here, the SimWorker patch
 
 ## 11. Open questions
 
-1. Attributing `Source` (the card, relic, power or event that asked) for prompts: the owner of the current action may be indirect (power → hook → cmd).
+1. `Source` when the entry has no `source` argument: the `LastInvolvedModel` may be indirect (power → hook → cmd).
 2. Card-reward alternatives added by hooks: how to name their ids (`card_alt:<id>`, [Protocol §3](/en/arch/protocol/#sec-3)).

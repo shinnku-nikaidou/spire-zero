@@ -13,7 +13,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-规划中。目前 `RunSession` 已经能无头（headless）跑完整局，但用的是占位策略：所有宏观决策界面用 `RandomMacro`，选牌提示用 `RandomChoices`（[模拟器 §5](/arch/simulator/#sec-5)）。
+规划中。目前 `RunSession` 已经能无头（headless）跑完整局，但用的是占位策略：所有宏观决策界面用 `RandomMacro`，选牌提示用 `RandomChoices`（[模拟器 §5](/arch/simulator/#sec-5)）。输入已经具备：`MacroDecision{surface, legal, observation}`，以及带 `ChoiceContext` 的 `CardChoice`（[协议 §3](/arch/protocol/#sec-3)、[§4](/arch/protocol/#sec-4)）。
 
 </Aside>
 

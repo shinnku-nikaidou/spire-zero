@@ -13,6 +13,21 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
     public CombatObservation Observation => _observation ??= observe();
 }
 
+/// <summary>
+/// What a macro policy gets at each out-of-combat decision: the surface, its legal actions in text form ("map:3,5",
+/// "reward:0", "leave", ...; grammar in docs: protocol §3), and the observation on request.
+/// </summary>
+public sealed class MacroDecision(string surface, IReadOnlyList<string> legal, Func<Observation> observe)
+{
+    private Observation? _observation;
+
+    public string Surface { get; } = surface;
+    public IReadOnlyList<string> Legal { get; } = legal;
+
+    /// <summary>Built on first use, like <see cref="CombatDecision.Observation"/>.</summary>
+    public Observation Observation => _observation ??= observe();
+}
+
 /// <summary>Picks the next action of a combat.</summary>
 public interface ICombatPolicy
 {
