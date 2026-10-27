@@ -15,11 +15,13 @@ namespace Sts2Ai.SimWorker;
 /// so a combat can be replayed exactly; when replaying, the recorded answers are given back in order before the live
 /// policy is asked again.
 /// Card rewards and bundles are run-level decisions, answered by the handlers if given: without them a card reward is
-/// skipped and a bundle is left to TestMode (the first one).
+/// skipped and a bundle is left to TestMode (the first one). <paramref name="observe"/>, if given, makes a prompt's
+/// observation for the policy.
 /// </summary>
 internal sealed class PolicySelector(
     IChoicePolicy policy,
     Action<CardChoice, int[]> record,
+    Func<CardChoice, Observation>? observe = null,
     Func<IReadOnlyList<CardCreationResult>, IReadOnlyList<CardRewardAlternative>, CardRewardSelection>? cardReward = null,
     Func<IReadOnlyList<IReadOnlyList<CardModel>>, int>? bundle = null) : ICardSelector
 {
@@ -45,7 +47,7 @@ internal sealed class PolicySelector(
         if (_replay.Count > 0) picks = _replay.Dequeue();
         else
         {
-            var answer = policy.Choose(choice);
+            var answer = policy.Choose(new ChoiceDecision(choice, observe == null ? null : () => observe(choice)));
             if (!choice.Accepts(answer))
                 throw new InvalidOperationException($"bad card choice [{string.Join(",", answer)}] for {cards.Count} options, select {min}..{max}");
             picks = answer.Select(i => gameIndex[i]).ToArray();

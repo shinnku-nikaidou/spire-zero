@@ -4,8 +4,8 @@ description: The value function V that both brains share, and the offline self-p
 sidebar:
   label: Learning
   badge:
-    text: planned
-    variant: caution
+    text: partly built
+    variant: tip
 ---
 import { Aside } from '@astrojs/starlight/components';
 
@@ -13,7 +13,7 @@ This page defines the value function V that both brains use to score positions, 
 
 <Aside title="Status">
 
-Planned. Nothing is learned yet; only placeholder policies exist, used by the bench.
+V v0 exists, untuned: `RunValue` in Brain, 16 hand-written features of the run view times hand-set weights ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). Nothing is learned or tuned yet; `learn/` holds the Python project (uv, PyTorch) for the learning loop.
 
 </Aside>
 
@@ -36,6 +36,7 @@ Planned versions:
 Reading the table:
 
 - **Lexicographic intent** (v0): the starting feature list comes from bottled_ai (a prior-art Slay the Spire bot), which ranks features in a strict order of importance: compare by the first, and use the next only to break ties ([Combat brain §4](/en/arch/combat-brain/#sec-4)). Linear weights that start far apart reproduce that order, and tuning starts from there.
+- **V v0 as built** (`RunValue`): HP, max HP, gold, potions, relics, deck size, unplayable cards, upgrades; the mean damage (poison included), block and draw of the playable cards; and the expected elites, rest sites, shops, treasures and `?` points ahead on the map. Its weights are in units of one HP, not far apart: run-level features trade against each other (a relic against HP), which a strict order cannot express. They are hypotheses for tuning to replace.
 - **MLP** is a small fully connected neural network. **Embeddings** are learned vectors, one per card, relic or power id, so the encoder can read any deck.
 - **SPSA** (simultaneous perturbation stochastic approximation) tunes parameters from noisy results alone. Each step nudges all parameters at once in a random direction, measures both the "plus" and the "minus" version, and moves the parameters toward the better one. It needs two measurements per step however many parameters there are, and no gradient, which suits weights whose only test is playing games.
 - **MC** (Monte Carlo) target: the real result of the run (win 1, loss 0), used as the label for every decision in it. Unbiased, but noisy: the luck of one run lands on all of its decisions.
@@ -145,6 +146,6 @@ flowchart LR
 
 ## 8. Open questions
 
-1. The v0 feature set: bottled_ai's 42 features, or a minimum of about 10 features first.
+1. The v0 feature set: V v0 starts with 16; whether to grow it toward bottled_ai's 42 features is open.
 2. Inference format (ONNX Runtime would be a new package).
 3. One net with an environment input bit, or separate nets (start with separate nets).

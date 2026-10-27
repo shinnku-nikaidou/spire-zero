@@ -56,6 +56,11 @@ public sealed record RewardView
     public int? Amount { get; init; }
     /// <summary>The special card.</summary>
     public CardView? Card { get; init; }
+    /// <summary>
+    /// A card reward's cards. They are rolled before the screen shows, and opening the reward to look costs nothing
+    /// (skipping keeps it), so they are known before it is opened.
+    /// </summary>
+    public IReadOnlyList<CardView>? Cards { get; init; }
 }
 
 public sealed record CardRewardScreen : ScreenView
@@ -124,7 +129,8 @@ public sealed record RestScreen : ScreenView
     public required IReadOnlyList<RestOptionView> Options { get; init; }
 }
 
-public sealed record RestOptionView(string Id, bool Enabled);
+/// <param name="Heal">For HEAL: the HP it heals, as its description shows (relics change it).</param>
+public sealed record RestOptionView(string Id, bool Enabled, int? Heal = null);
 
 public sealed record TreasureScreen : ScreenView
 {

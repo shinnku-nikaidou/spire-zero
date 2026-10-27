@@ -31,6 +31,8 @@ public sealed class WorkerPool : IDisposable
             StandardOutputEncoding = Encoding.UTF8,
             UseShellExecute = false,
         };
+        // The environment is filled in on first read, which is not thread-safe: read it once before the parallel starts.
+        _ = _start.Environment;
         var workers = Enumerable.Range(0, count).AsParallel().Select(_ => new Worker(_start)).ToList();
         Game = workers[0].Game;
         foreach (var w in workers) _free.Add(w);

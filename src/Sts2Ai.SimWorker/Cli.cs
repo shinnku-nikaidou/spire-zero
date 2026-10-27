@@ -22,9 +22,11 @@ namespace Sts2Ai.SimWorker;
 ///                                          checks determinism, restore and determinize over an encounter pool
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
-///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--policy play|random|pimc] [--worlds 8] [--nodes 300]
-///       [--workers W] [--max-decisions 20000] [--check] [--trace] [--obs] [--log decisions.jsonl] [--records runs.jsonl]
-///                                          whole runs through Harness, every non-combat decision random; --check plays
+///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--policy play|random|pimc] [--macro random|l0]
+///       [--worlds 8] [--nodes 300] [--workers W] [--max-decisions 20000] [--check] [--trace] [--obs]
+///       [--log decisions.jsonl] [--records runs.jsonl]
+///                                          whole runs through Harness. Combat prompts are random; --macro picks the
+///                                          brain of every decision outside combat (l0: the macro brain with V v0); --check plays
 ///                                          each seed twice and compares, observations and decision logs included (each
 ///                                          observation must survive a JSON round trip); --obs prints them; --log writes
 ///                                          the decision log; reports results, hashes and surface coverage.
@@ -228,6 +230,8 @@ internal static class Cli
         bool log = check || logFile != null;
         var policy = opts.GetValueOrDefault("policy", "play");
         if (policy != "pimc" && !Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (pimc, {string.Join(", ", Policies.CombatNames)})");
+        string macroBrain = opts.GetValueOrDefault("macro", "random");
+        if (macroBrain is not ("random" or "l0")) return Fail($"unknown macro brain {macroBrain} (random, l0)");
         var budget = new Budget(Int(opts, "worlds", 8), Int(opts, "nodes", 300));
         // The run holds this process's one live game, so the brain can only search in workers.
         using var workerPool = policy == "pimc" ? new WorkerPool(SelfCommand(), Int(opts, "workers", budget.Worlds)) : null;
@@ -240,7 +244,7 @@ internal static class Cli
         var failures = new Dictionary<string, int>();
         int mismatches = 0, gameErrors = 0;
         Console.WriteLine($"run: {n} runs, policy {policy}" +
-                          (pooled != null ? $" worlds {budget.Worlds} nodes {budget.NodesPerWorld} on {workerPool!.Count} workers" : "") +
+                          (pooled != null ? $" worlds {budget.Worlds} nodes {budget.NodesPerWorld} on {workerPool!.Count} workers" : "") + $", macro {macroBrain}" +
                           $", game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
@@ -252,6 +256,11 @@ internal static class Cli
             {
                 var combat = pooled?.Route(budget) ?? CombatRoute.Of(policy, Policies.Combat(policy, rng));
                 var random = new RandomChoices(rng);
+                if (macroBrain == "l0")
+                {
+                    var macro = new MacroBrain(RunValue.Initial);
+                    return new Dispatcher(setup.Seed, PlayEnvironment.NoSL, combat, new("random", random), new("l0", macro), new("l0", macro), log);
+                }
                 return new Dispatcher(setup.Seed, PlayEnvironment.NoSL, combat, new("random", random), new("random", new RandomMacro(rng)), new("random", random), log);
             }
             var first = PlayRun(pump, setup, Harness, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));

@@ -98,11 +98,13 @@ internal sealed class RunSession : IDisposable
         _combat = combat;
         _macro = macro;
         _observed = observed;
-        var selector = new PolicySelector(choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => new CardChoiceScreen
+        ScreenView Prompt(CardChoice choice) => new CardChoiceScreen
         {
             Choice = choice,
             Combat = CombatManager.Instance.IsInProgress ? Observe.Combat(CombatManager.Instance.DebugOnlyGetState()!, Player) : null,
-        }), CardReward, Bundle);
+        };
+        var selector = new PolicySelector(choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => Prompt(choice)),
+            choice => Observe.Of(Run, Player, Prompt(choice)), CardReward, Bundle);
         _selectorScope = CardSelectCmd.PushSelector(selector);
         RewardsSet.testSelector = set =>
         {
@@ -303,7 +305,7 @@ internal sealed class RunSession : IDisposable
     {
         var options = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
         var progress = _progress;
-        if (Ask(Surfaces.Rest, RestActions.Legal(options, progress.RestSucceeded), () => RestActions.Screen(options)) is not { } action) return true;
+        if (Ask(Surfaces.Rest, RestActions.Legal(options, progress.RestSucceeded), () => RestActions.Screen(options, Player)) is not { } action) return true;
         if (action == RestActions.Leave)
         {
             progress.Left = true;

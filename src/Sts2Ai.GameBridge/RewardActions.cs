@@ -21,7 +21,7 @@ public static class RewardActions
     /// <summary>A combat room's rewards screen ends the room: proceeding opens the map (<c>NRewardsScreen</c>).</summary>
     public static bool IsTerminal(RewardsSet set) => set.Room is CombatRoom;
 
-    /// <summary>The buttons of the rewards not taken yet: what each shows (a card reward shows no cards until opened).</summary>
+    /// <summary>The buttons of the rewards not taken yet: what each shows, and the cards a card reward would show if opened.</summary>
     public static RewardsScreen Screen(RewardsSet set) => new()
     {
         Rewards = set.Rewards.Select((reward, i) => (reward, i)).Where(r => !r.reward.SuccessfullySelected).Select(r => View(r.reward, r.i)).ToList(),
@@ -32,7 +32,7 @@ public static class RewardActions
         GoldReward gold => new() { Index = index, Kind = "gold", Amount = gold.Amount },
         PotionReward potion => new() { Index = index, Kind = "potion", Id = potion.Potion?.Id.Entry },
         RelicReward relic => new() { Index = index, Kind = "relic", Id = relic.Relic?.Id.Entry },
-        CardReward => new() { Index = index, Kind = "card" },
+        CardReward card => new() { Index = index, Kind = "card", Cards = card.Cards.Select(c => Observe.Card(c)).ToList() },
         // The card is private; the button's hover tip shows it.
         SpecialCardReward special => new() { Index = index, Kind = "special_card", Card = special.HoverTips.OfType<CardHoverTip>().Select(t => Observe.Card(t.Card)).FirstOrDefault() },
         CardRemovalReward => new() { Index = index, Kind = "remove_card" },

@@ -72,11 +72,12 @@ public sealed class Dispatcher(
         return result.First;
     }
 
-    public IReadOnlyList<int> Choose(CardChoice choice)
+    public IReadOnlyList<int> Choose(ChoiceDecision decision)
     {
+        var choice = decision.Choice;
         var route = choice.Context.InCombat ? combatChoices : macroChoices;
         var (id, seed, clock) = Begin(route.Brain);
-        var picks = route.Policy.Choose(choice);
+        var picks = route.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!choice.Accepts(picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", picks)}], which the prompt does not accept");
         if (log)

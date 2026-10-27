@@ -109,12 +109,12 @@ MapPointView{col, row, type (map icon; "?" stays Unknown after the visit), next 
 | `combat` | `combat: CombatObservation` | `play:C[:T]`、`potion:S[:T]`、`end_turn` |
 | `card_choice` | `choice: CardChoice`（带它的 `context`，[§4](#sec-4)）；战斗进行中时还有 `combat` | `pick:i,j,…`（规范索引；只有 min = 0 时才允许一张都不选） |
 | `map` | `travelable`：可前往的坐标，按合法动作的顺序（地图本身在 `run.map` 里） | `map:col,row` |
-| `rewards` | 还没领取的奖励：`{index, kind, id?, amount?, card?}`，kind 为 `gold`、`potion`、`relic`、`card`、`special_card` 或 `remove_card` | `reward:i`、`rewards_done` |
+| `rewards` | 还没领取的奖励：`{index, kind, id?, amount?, card?, cards?}`，kind 为 `gold`、`potion`、`relic`、`card`、`special_card` 或 `remove_card`；`cards` 是选卡奖励里的牌（界面出现前就已掷好；玩家可以打开奖励看一眼再跳过，没有任何代价） | `reward:i`、`rewards_done` |
 | `card_reward` | `cards`，以及 `alternatives`：其他按钮的 id（跳过、重抽、遗物添加的按钮） | `card:i`、`card_alt:<id>` |
 | `bundle` | `bundles`：若干组卡牌 | `bundle:i` |
 | `event` | `id`、`page`（本地化键）、`options{index, key, locked?, relic?, tips?, kills?}`（事件结束后为空）、`finished` | `event:i`、`proceed` |
 | `shop` | `entries{slot, kind, card? or id?, cost, on_sale?}`：仍在出售的商品，kind 为 `card`、`relic` 或 `potion`；`removal_cost`（用过之后不再出现） | `buy:<slot>`、`remove`、`leave` |
-| `rest` | `options{id, enabled}` | `rest:<id>`、`leave`（只在某个选项成功一次之后，或已没有选项可选时） |
+| `rest` | `options{id, enabled, heal?}`，`heal` 是 HEAL 选项回复的生命值，以选项文字上显示的为准（遗物会改变它） | `rest:<id>`、`leave`（只在某个选项成功一次之后，或已没有选项可选时） |
 | `treasure` | `relics`：宝箱里的遗物 id | `relic:i`、`relic_skip` |
 | `crystal_sphere` | `rows`：11x11 网格，`rows[y][x]` 为 `#`（隐藏）、`.`（已揭开且为空），或已揭开格子所显示内容的一部分（`R` 遗物、`P` 药水、`C` 卡牌奖励、`G` 金币、`X` 诅咒）；`divinations_left` | `big:X,Y`（3x3）、`small:X,Y`（只在会揭开隐藏格子时） |
 
@@ -122,7 +122,7 @@ MapPointView{col, row, type (map icon; "?" stays Unknown after the visit), next 
 
 每个宏观决策界面（除 `combat` 和 `card_choice` 以外的所有决策界面）还会列出药水栏动作：`potion:S`（可随时使用的药水）和 `discard_potion:S`（丢弃药水）。药水栏满时，药水奖励和药水购买会从合法动作里去掉，直到空出一个槽位；没有单独的 `potion_full` 决策界面。事件动作 `proceed` 表示离开、回到地图：事件已结束时，或者通过 Ancient 事件的 PROCEED 按钮。
 
-宏观决策界面以 `MacroDecision{surface, legal, observation}`（在 Brain 里）交给策略；`card_choice` 走 `IChoicePolicy`。
+宏观决策界面以 `MacroDecision{surface, legal, observation}`（在 Brain 里）交给策略；`card_choice` 以 `ChoiceDecision{choice, observation}` 交给 `IChoicePolicy`。两者都只在策略读取时才生成观测；单独开局的战斗没有对局，它的提示也就不带观测。
 
 - 如果 UI 顺序是公开的（奖励、事件、商店槽位），直接用游戏所给列表的索引没有问题。顺序可能反映隐藏状态的卡牌列表（各个牌堆）一律经过规范排序（`CardChoice`）。
 - 牌组按卡牌键排序，所以以不同顺序得到的同一副牌组给出相同的观测。

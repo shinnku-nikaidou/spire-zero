@@ -3,8 +3,8 @@ title: Evaluation
 description: How the AI's strength is measured and how a change is accepted, with the sim-to-real ladder, leaderboards, metrics, seeds, gates and baselines.
 sidebar:
   badge:
-    text: planned
-    variant: caution
+    text: partly built
+    variant: tip
 ---
 import { Aside } from '@astrojs/starlight/components';
 
@@ -12,7 +12,7 @@ Evaluation answers two questions: how strong is the AI (the leaderboards), and d
 
 <Aside title="Status">
 
-Planned. Today there are only single-combat tools: `bench`, `forkbench`, `selftest`, and `panel`, the combat panel of the table in [§5](#sec-5) ([Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)).
+R1 full-run evaluations exist: `run --seeds FILE --records FILE` plays a seed set and writes one record per run, `report` turns the records into the report of [§6](#sec-6) with the metrics of [§3](#sec-3), and the first promotion and final sets are registered ([§4](#sec-4)). The combat panel exists too ([§5](#sec-5), [Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)). Planned: the act-level and SPRT gates, the leaderboards, and rungs R2–R4.
 
 </Aside>
 
@@ -71,6 +71,8 @@ The Wilson interval is a confidence interval for a proportion such as a win rate
 **Must be zero** (otherwise the evaluation is void)
 
 - fallback or random decisions ([Harness §4](/en/arch/harness/#sec-4));
+- failed runs (an error in the driver or a brain) and truncated runs (the decision cap);
+- game errors (`Log.Error` lines);
 - `NumReloads`;
 - save exports in NoSL runs ([Environments §6](/en/arch/environments/#sec-6)).
 
@@ -80,7 +82,7 @@ The Wilson interval is a confidence interval for a proportion such as a win rate
 - compute per decision (branches, wall-clock time, SL clone queries);
 - macro calibration: the Brier score (mean squared error between the predicted win probability and the 0/1 result; lower is better) must be below that of a constant prediction;
 - conservatism: elites taken, skip rate, HP at the boss, gold/potion hoarding;
-- hangs and crashes: counted as losses or reported separately, never re-run.
+- failed and truncated runs also count as losses in the win rate; they are never re-run.
 
 ## 4. Seeds
 
@@ -88,6 +90,16 @@ The Wilson interval is a confidence interval for a proportion such as a win rate
 - Final seeds are generated and registered in the repo beforehand (method and date). All of them are run and all are reported, so no one can pick seeds that happen to look good. A formal claim needs at least 300 runs.
 - A seed is the game's run seed string. R1–R3 runs are started by the worker, R4 runs by the mod with the same seed ([Mod §7](/en/arch/mod/#sec-7)).
 - Train seeds are unlimited. Promotion seeds are rotated, to avoid overfitting to them.
+
+A seed set is a text file in `eval/seeds/`, one seed per line, with a header comment giving the method and the date. `seeds --base B --n K` writes the K seeds `MakeSeed(B, i)` for i = 0…K−1: 12 characters drawn from a generator seeded with B × 1,000,003 + i × 7,919 (32-bit). Two of the bases below share a generator seed only hundreds of millions of seeds in, so the sets are disjoint. The bases are fixed:
+
+| set | base | seeds |
+|---|---|---|
+| train | 1 | unlimited (what `run --seed 1` plays) |
+| `promotion-1` | 2 | 200, registered 2026-10-27 |
+| `final-1` | 3 | 300, registered 2026-10-27 |
+
+A run's random generator (the placeholders, the brain seeds) is seeded from a stable hash of the seed string, so the seed alone fixes the run whatever the set or position.
 
 ## 5. Gates
 
@@ -111,7 +123,10 @@ The methods named above:
 
 ## 6. Reports
 
-Each evaluation writes a JSON file plus a one-page Markdown report with: game version, commit, champion, environment, rung, seed set, budget, all metrics, the must-be-zero metrics, and the diff against the previous evaluation. Reports go into `reports/` (to be created); raw logs are not committed.
+Each evaluation writes a JSON file plus a one-page Markdown report with: game version, commit, champion, environment, rung, seed set, budget, all metrics, the must-be-zero metrics, and the diff against the previous evaluation. Reports go into `eval/reports/` as `DATE-ENV-RUNG-SET-NAME.json` and `.md`; raw logs are not committed.
+
+- `report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]` writes PATH.json and PATH.md. The records may come from several processes; they must share one config (game, commit, champion, environment, rung), and each must play a different seed of the set. A report with fewer runs than the set is marked partial.
+- The commit is the build's: a build with uncommitted changes under `src/` gets `-dirty` after it, and such a report is for development only.
 
 ## 7. Baselines
 

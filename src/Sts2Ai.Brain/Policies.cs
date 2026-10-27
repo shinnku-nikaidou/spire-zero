@@ -28,6 +28,20 @@ public sealed class MacroDecision(string surface, IReadOnlyList<string> legal, F
     public Observation Observation => _observation ??= observe();
 }
 
+/// <summary>
+/// A card prompt for a choice policy, and the observation it is asked in (docs: protocol §3, surface card_choice) on
+/// request. The observation is null where there is no run around the prompt (a combat started on its own).
+/// </summary>
+public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe = null)
+{
+    private Observation? _observation;
+
+    public CardChoice Choice { get; } = choice;
+
+    /// <summary>Built on first use, like <see cref="CombatDecision.Observation"/>.</summary>
+    public Observation? Observation => _observation ??= observe?.Invoke();
+}
+
 /// <summary>Picks the next action of a combat.</summary>
 public interface ICombatPolicy
 {
@@ -38,7 +52,7 @@ public interface ICombatPolicy
 public interface IChoicePolicy
 {
     /// <summary>Indexes into <see cref="CardChoice.Options"/>; must satisfy <see cref="CardChoice.Accepts"/>.</summary>
-    IReadOnlyList<int> Choose(CardChoice choice);
+    IReadOnlyList<int> Choose(ChoiceDecision decision);
 }
 
 /// <summary>Picks an out-of-combat action (map, rewards, events, shop, rest, treasure, card rewards, bundles).</summary>
@@ -73,8 +87,9 @@ public sealed class PlayPolicy(Random rng) : ICombatPolicy
 /// <summary>Uniformly random legal selection.</summary>
 public sealed class RandomChoices(Random rng) : IChoicePolicy
 {
-    public IReadOnlyList<int> Choose(CardChoice choice)
+    public IReadOnlyList<int> Choose(ChoiceDecision decision)
     {
+        var choice = decision.Choice;
         int count = choice.Min == choice.Max ? choice.Min : rng.Next(choice.Min, choice.Max + 1);
         return Enumerable.Range(0, choice.Options.Count).OrderBy(_ => rng.Next()).Take(count).ToList();
     }

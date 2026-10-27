@@ -74,7 +74,9 @@ A transpiler is a Harmony patch that rewrites a method's IL instead of wrapping 
 | `list` | characters, acts and encounters of this game build |
 | `combat --encounter ID` | one combat, printing every step |
 | `combat --from OBS.json` | the same, from a combat built to show that observation ([§3](#sec-3)) |
-| `run` | whole runs ([§5](#sec-5)); `--policy pimc` plays their combats with the combat brain in workers ([§8](#sec-8)) |
+| `run` | whole runs ([§5](#sec-5)); `--policy pimc` plays their combats with the combat brain in workers ([§8](#sec-8)), `--macro l0` the rest with the macro brain |
+| `report` | an evaluation report from run records ([Evaluation §6](/en/arch/evaluation/#sec-6)) |
+| `seeds` | a seed set's seeds ([Evaluation §4](/en/arch/evaluation/#sec-4)) |
 | `bench` | many combats over an encounter pool: throughput and failures ([§4](#sec-4)) |
 | `selftest` | determinism, restore, determinize and more ([§9](#sec-9)) |
 | `forkbench` | cost of a restore and of one search branch ([§4](#sec-4)) |
@@ -205,8 +207,8 @@ flowchart TD
 **Policies:**
 
 - combat: `ICombatPolicy`;
-- card prompts: `IChoicePolicy` via `PolicySelector` (plus card-reward and bundle handlers);
-- every other screen: `IMacroPolicy` (`MacroDecision(surface, legal, observation)`), with the placeholder `RandomMacro`.
+- card prompts: `IChoicePolicy` via `PolicySelector`, as `ChoiceDecision(choice, observation)` (plus card-reward and bundle handlers);
+- every other screen: `IMacroPolicy` (`MacroDecision(surface, legal, observation)`): the macro brain ([Macro brain §2](/en/arch/macro-brain/#sec-2)) or the placeholder `RandomMacro`.
 
 A card prompt's bounds come from its context (`ChoiceContexts.Bounds`): a cancelable prompt has min 0.
 
@@ -219,7 +221,7 @@ A card prompt's bounds come from its context (`ChoiceContexts.Bounds`): a cancel
 
 `IsOver = RunState.IsGameOver`. A run is won when it is over in the victory room.
 
-**CLI:** `run [--n] [--start] [--seed] [--asc] [--policy play|random|pimc] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--log FILE]` plus the loadout options. Every decision goes through Harness's `Dispatcher` ([Harness §4](/en/arch/harness/#sec-4)), which the session is given as its combat, prompt and macro policy. With `pimc`, each combat decision is searched (NoSL) in a worker pool, one worker per world unless `--workers` says otherwise; the run itself stays live in this process. Out-of-combat decisions are random for every policy. `--check` also observes every decision: each observation's JSON round trip must be exact, the hashes are compared on replay, and the run's line ends with a digest of them (`obs`). `--obs` prints each observation. `--log` writes the decision log ([Harness §6](/en/arch/harness/#sec-6)); `--check` compares the two plays' logs too.
+**CLI:** `run [--n] [--start] [--seed | --seeds FILE] [--asc] [--policy play|random|pimc] [--macro random|l0] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--log FILE] [--records FILE]` plus the loadout options. Every decision goes through Harness's `Dispatcher` ([Harness §4](/en/arch/harness/#sec-4)), which the session is given as its combat, prompt and macro policy. With `pimc`, each combat decision is searched (NoSL) in a worker pool, one worker per world unless `--workers` says otherwise; the run itself stays live in this process. `--macro` picks the brain of every decision outside combat: `random` (the placeholders) or `l0` (the macro brain); card prompts inside combat stay random. `--seeds` plays the seeds of a seed file, from `--start`, and `--records` writes one run record per run for `report` ([Evaluation §4](/en/arch/evaluation/#sec-4), [§6](/en/arch/evaluation/#sec-6)). `--check` also observes every decision: each observation's JSON round trip must be exact, the hashes are compared on replay, and the run's line ends with a digest of them (`obs`). `--obs` prints each observation. `--log` writes the decision log ([Harness §6](/en/arch/harness/#sec-6)); `--check` compares the two plays' logs too.
 
 ### 5.1 Start
 

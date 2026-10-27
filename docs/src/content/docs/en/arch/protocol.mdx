@@ -109,12 +109,12 @@ Each screen variant is named by its surface. The surface name is also the key Ha
 | `combat` | `combat: CombatObservation` | `play:C[:T]`, `potion:S[:T]`, `end_turn` |
 | `card_choice` | `choice: CardChoice` (with its `context`, [§4](#sec-4)); `combat` too while a combat is going on | `pick:i,j,…` (canonical indexes; an empty pick is allowed only if min = 0) |
 | `map` | `travelable` coords, in legal-action order (the map itself is in `run.map`) | `map:col,row` |
-| `rewards` | the rewards not taken yet: `{index, kind, id?, amount?, card?}` with kind `gold`, `potion`, `relic`, `card`, `special_card` or `remove_card` | `reward:i`, `rewards_done` |
+| `rewards` | the rewards not taken yet: `{index, kind, id?, amount?, card?, cards?}` with kind `gold`, `potion`, `relic`, `card`, `special_card` or `remove_card`; `cards` is a card reward's cards (rolled before the screen shows; a player can open the reward, look and skip at no cost) | `reward:i`, `rewards_done` |
 | `card_reward` | `cards`, and `alternatives`: the other buttons by id (Skip, reroll, ones added by relics) | `card:i`, `card_alt:<id>` |
 | `bundle` | `bundles`: lists of cards | `bundle:i` |
 | `event` | `id`, `page` (loc key), `options{index, key, locked?, relic?, tips?, kills?}` (empty once finished), `finished` | `event:i`, `proceed` |
 | `shop` | `entries{slot, kind, card? or id?, cost, on_sale?}` for the goods still for sale, kind `card`, `relic` or `potion`; `removal_cost` (absent once used) | `buy:<slot>`, `remove`, `leave` |
-| `rest` | `options{id, enabled}` | `rest:<id>`, `leave` (only after one option succeeded, or when none is left) |
+| `rest` | `options{id, enabled, heal?}`, `heal` being the HP the HEAL option restores, as its text shows (relics change it) | `rest:<id>`, `leave` (only after one option succeeded, or when none is left) |
 | `treasure` | `relics`: the relics in the chest, by id | `relic:i`, `relic_skip` |
 | `crystal_sphere` | `rows`, an 11x11 grid where `rows[y][x]` is `#` hidden, `.` uncovered and empty, or what the uncovered cell shows part of (`R` relic, `P` potion, `C` card reward, `G` gold, `X` curse); `divinations_left` | `big:X,Y` (3x3), `small:X,Y` (only if a hidden cell is uncovered) |
 
@@ -122,7 +122,7 @@ The end of a run is the wire message `run_end` ([§2](#sec-2)), not a surface.
 
 Every macro surface (every surface except `combat` and `card_choice`) also lists the potion belt: `potion:S` (a potion that can be used at any time) and `discard_potion:S`. When the belt is full, potion rewards and potion purchases are left out of the legal actions until a slot frees up; there is no separate `potion_full` surface. The event action `proceed` means leaving to the map: from a finished event, or through an Ancient's PROCEED button.
 
-The macro surfaces reach a policy as `MacroDecision{surface, legal, observation}` (in Brain); `card_choice` goes through `IChoicePolicy`.
+The macro surfaces reach a policy as `MacroDecision{surface, legal, observation}` (in Brain); `card_choice` goes through `IChoicePolicy` as `ChoiceDecision{choice, observation}`. Both build the observation only when the policy reads it; a combat started on its own has no run, so its prompts come without one.
 
 - Indexes into lists the game provides are fine when the UI order is public (rewards, events, shop slots). Card lists whose order may reflect hidden state (piles) always go through the canonical sort (`CardChoice`).
 - The deck is sorted by card key, so the same deck reached in a different order gives the same observation.

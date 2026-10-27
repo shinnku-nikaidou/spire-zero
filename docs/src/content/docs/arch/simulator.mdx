@@ -74,7 +74,9 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 | `list` | 列出本游戏版本里的角色、幕和遭遇 |
 | `combat --encounter ID` | 跑一场战斗，打印每一步 |
 | `combat --from OBS.json` | 同上，但从一场按该观测构建的战斗开始（[§3](#sec-3)） |
-| `run` | 跑整局（[§5](#sec-5)）；`--policy pimc` 让战斗大脑在 worker 里打其中的战斗（[§8](#sec-8)） |
+| `run` | 跑整局（[§5](#sec-5)）；`--policy pimc` 让战斗大脑在 worker 里打其中的战斗（[§8](#sec-8)），`--macro l0` 让宏观大脑做其余决策 |
+| `report` | 用对局记录生成评估报告（[评估 §6](/arch/evaluation/#sec-6)） |
+| `seeds` | 输出一个种子集的种子（[评估 §4](/arch/evaluation/#sec-4)） |
 | `bench` | 在一个遭遇池上跑大量战斗：吞吐量和失败数（[§4](#sec-4)） |
 | `selftest` | 检查确定性、恢复、确定化等（[§9](#sec-9)） |
 | `forkbench` | 一次恢复和一个搜索分支的开销（[§4](#sec-4)） |
@@ -205,8 +207,8 @@ flowchart TD
 **策略：**
 
 - 战斗：`ICombatPolicy`；
-- 选牌提示：经由 `PolicySelector` 交给 `IChoicePolicy`（另有卡牌奖励和卡包的处理器）；
-- 其他所有界面：`IMacroPolicy`（`MacroDecision(surface, legal, observation)`），占位实现是 `RandomMacro`。
+- 选牌提示：经由 `PolicySelector`，以 `ChoiceDecision(choice, observation)` 交给 `IChoicePolicy`（另有卡牌奖励和卡包的处理器）；
+- 其他所有界面：`IMacroPolicy`（`MacroDecision(surface, legal, observation)`）：宏观大脑（[宏观大脑 §2](/arch/macro-brain/#sec-2)）或占位实现 `RandomMacro`。
 
 选牌提示的选择数量范围来自它的上下文（`ChoiceContexts.Bounds`）：可取消的提示 min 为 0。
 
@@ -219,7 +221,7 @@ flowchart TD
 
 `IsOver = RunState.IsGameOver`。一局在胜利房间里结束即为获胜。
 
-**命令行**：`run [--n] [--start] [--seed] [--asc] [--policy play|random|pimc] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--log FILE]`，外加配装选项。每个决策都经过 Harness 的 `Dispatcher`（[Harness §4](/arch/harness/#sec-4)），会话把它当作自己的战斗、提示和宏观策略。用 `pimc` 时，每个战斗决策都在 worker 进程池里搜索（NoSL），除非 `--workers` 另行指定，每个世界一个 worker；这一局本身一直活在本进程里。无论哪种策略，战斗之外的决策都是随机的。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。`--log` 写出决策日志（[Harness §6](/arch/harness/#sec-6)）；`--check` 也比较两遍的日志。
+**命令行**：`run [--n] [--start] [--seed | --seeds FILE] [--asc] [--policy play|random|pimc] [--macro random|l0] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--log FILE] [--records FILE]`，外加配装选项。每个决策都经过 Harness 的 `Dispatcher`（[Harness §4](/arch/harness/#sec-4)），会话把它当作自己的战斗、提示和宏观策略。用 `pimc` 时，每个战斗决策都在 worker 进程池里搜索（NoSL），除非 `--workers` 另行指定，每个世界一个 worker；这一局本身一直活在本进程里。`--macro` 选择战斗之外所有决策的大脑：`random`（占位策略）或 `l0`（宏观大脑）；战斗中的选牌提示仍然随机。`--seeds` 从 `--start` 起跑一个种子文件里的种子，`--records` 为每局写一条对局记录，供 `report` 使用（[评估 §4](/arch/evaluation/#sec-4)、[§6](/arch/evaluation/#sec-6)）。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。`--log` 写出决策日志（[Harness §6](/arch/harness/#sec-6)）；`--check` 也比较两遍的日志。
 
 ### 5.1 开局
 
