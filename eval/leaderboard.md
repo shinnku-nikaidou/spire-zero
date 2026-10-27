@@ -10,7 +10,8 @@ ranked together.
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
-| combat pimc 8x300, combat prompts p0, macro l0, macro prompts l0 **(champion)** | 2026-10-27 | `c239f12` | 0.0 % (0/200, 0.0 %–1.9 %) | 19.34 | 177 | 75.7 |
+| combat pimc c2 8x300, combat prompts p0, macro l0, macro prompts l0 **(champion)** | 2026-10-27 | `fbf89ad` | 0.0 % (0/200, 0.0 %–1.9 %) | 21.88 | 187 | 92.0 |
+| combat pimc 8x300, combat prompts p0, macro l0, macro prompts l0 | 2026-10-27 | `c239f12` | 0.0 % (0/200, 0.0 %–1.9 %) | 19.34 | 177 | 75.7 |
 | combat play, combat prompts p0, macro l0, macro prompts l0 | 2026-10-27 | `dc0105a` | 0.0 % (0/200, 0.0 %–1.9 %) | 11.90 | 60 | 0.2 |
 | combat pimc 8x300, combat prompts random, macro l0, macro prompts l0 (void) | 2026-10-27 | `18fdb07` | 0.0 % (0/200, 0.0 %–1.9 %) | 18.50 | 175 | 49.7 |
 | combat pimc 8x300, combat prompts random, macro random, macro prompts random (void) | 2026-10-27 | `18fdb07` | 0.0 % (0/200, 0.0 %–1.9 %) | 13.68 | 73 | 41.3 |
