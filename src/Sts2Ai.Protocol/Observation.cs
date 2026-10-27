@@ -3,7 +3,7 @@ namespace Sts2Ai.Protocol;
 /// <summary>
 /// What the player sees at a decision: the run around them and the screen that asks. Like
 /// <see cref="CombatObservation"/>, every field is whitelisted from the UI; hidden information never appears (seeds,
-/// RNG state, what an unvisited "?" holds, the cards a card reward will offer before it is opened).
+/// RNG state, what an unvisited "?" holds, what a reroll or a transform will give).
 /// </summary>
 public sealed record Observation
 {

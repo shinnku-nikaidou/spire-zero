@@ -22,7 +22,7 @@ Results from the simulator count only if they carry over to the real game. The l
 
 | rung | world | measures | today |
 |---|---|---|---|
-| R1 | full run in the simulator, driven by Harness | the policy | combats only |
+| R1 | full run in the simulator, driven by Harness | the policy | full runs, NoSL ([§6](#sec-6)) |
 | R2 | R1 + observation round trip (decisions only on worlds built from observations) | observation reconstruction | combat round trip exists |
 | R3 | full run on the real DLL with real unlocks, the lobby's act selection and the live protocol | world setup + interfaces | none |
 | R4 | Steam game + mod | everything | none |
@@ -136,7 +136,8 @@ Reference results from prior-art projects, and our own floor:
 |---|---|---|
 | FableBot | Ironclad A0 20.7% (71/343, Wilson 16.7–25.3) | the only fair, real-game, adequately sampled result; no Silent |
 | AgenticSTS | Silent A0 about 35% (44/125, mixed versions); A8+ 0/25 | LLM + human Silent guide |
-| placeholders | TBD | our floor |
+| ours: placeholders (`play` combat, random macro) | Silent A0 0% (0/200); mean floor 8.09 | `promotion-1`, R1, NoSL; our floor |
+| ours: PIMC + L0 | Silent A0 0% (0/200); mean floor 18.50, act 1 boss in 175 runs | `promotion-1`, R1, NoSL ([Combat brain §7.2](/en/arch/combat-brain/#sec-7.2)) |
 
 The first character is the Silent, and ascension A0 comes first.
 

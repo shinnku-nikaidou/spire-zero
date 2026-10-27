@@ -86,6 +86,8 @@ Until run worlds exist, `MacroBrain` predicts each afterstate from what the scre
 
 What it cannot see: an event option's costs and gains are not on the screen as data, so a costly option ties with leaving and wins when listed first (Tablet of Truth takes max HP for every decipher, down to 1); what a relic does beyond being one more relic; what a transform gives. Applying options in run worlds removes all three.
 
+On `promotion-1` (200 runs, Silent A0) L0 beats random macro decisions under both combat policies: with PIMC, floor 18.50 on average against 13.68 and the act 1 boss in 175 runs against 73; with the `play` placeholder, 11.72 against 8.09 and 54 against 5 ([Combat brain §7.2](/en/arch/combat-brain/#sec-7.2)). It skips fewer card rewards (43% against 58%, with PIMC) and fights fewer elites (0.30 per run against 0.94).
+
 ## 3. NoSL vs SL
 
 One macro brain serves both environments, with one value function V; only the source of outcomes differs.

@@ -150,18 +150,22 @@ Sts2Ai.SimWorker panel --n 60 --player pimc --env NoSL --act 0 --rooms weak,regu
 
 ### 7.2 整局
 
-大脑也能打整局里的战斗：`run --policy pimc`（[模拟器 §5](/arch/simulator/#sec-5)）让这一局在宿主进程里一直活着，每个战斗决策都在 worker 进程池里搜索（[模拟器 §8](/arch/simulator/#sec-8)）。战斗之外的每个决策都是随机的（地图、奖励、卡牌奖励、事件、商店、休息处），选牌提示也是，两个玩家都一样。Silent A0，种子 0–23，预算 8 × 300。
+大脑也能打整局里的战斗：`run --policy pimc`（[模拟器 §5](/arch/simulator/#sec-5)）让这一局在宿主进程里一直活着，每个战斗决策都在 worker 进程池里搜索（[模拟器 §8](/arch/simulator/#sec-8)）。战斗里的选牌提示随机回答，两个玩家都一样。种子集是 `promotion-1`（200 局，Silent A0，[评估 §4](/arch/evaluation/#sec-4)），预算 8 × 300，局外决策来自随机占位策略或 L0（[宏观大脑 §2](/arch/macro-brain/#sec-2)）：
 
 ```bash
-Sts2Ai.SimWorker run --n 24 --policy pimc
+Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0 --records pimc-l0.jsonl
 ```
 
-| 战斗策略 | 局数 | 平均层数 | 中位数 | 打到第 1 幕 Boss（第 17 层） | 胜局 |
-|---|---|---|---|---|---|
-| `play` | 24 | 8.6 | 7.5 | 1 | 0 |
-| PIMC NoSL | 24 | 13.1 | 12 | 10 | 0 |
+| 战斗策略 | 局外 | 平均层数 | 中位数 | 打到第 1 幕 Boss（第 17 层） | 打到第 2 幕 Boss | 胜局 |
+|---|---|---|---|---|---|---|
+| `play` | 随机 | 8.09 | 7 | 5 | 0 | 0 |
+| PIMC NoSL | 随机 | 13.68 | 14 | 73 | 1 | 0 |
+| `play` | L0 | 11.72 | 12 | 54 | 0 | 0 |
+| PIMC NoSL | L0 | 18.50 | 17 | 175 | 15 | 0 |
 
-有两局打赢了第 1 幕 Boss，死在第 2 幕前段；其余每局都结束在第 1 幕，多半死在精英或 Boss 手里。现在限制结果的是随机的局外决策：牌组很少长成能通关第 1 幕的样子。PIMC 每局约 19.9 s（同时跑两局，每局 8 个 worker）。对一个种子用 `--check` 跑两遍得到同一局；这些批次里游戏错误为 0，worker 重启为 0。
+无论局外用哪个大脑，PIMC 都提高了层数；无论战斗用哪个策略，L0 也都提高了层数。两者合用时，打到第 1 幕 Boss 的局进 Boss 战时平均还有 93% 的生命（局外随机时是 58%），有 15 局打到第 2 幕 Boss。还没有一局获胜。PIMC 每局 41–50 s，同时跑四局，每局 8 个 worker。
+
+报告在 `eval/reports/`（[评估 §6](/arch/evaluation/#sec-6)），来自提交 `18fdb07`。400 局 PIMC 里有 5 局失败，都失败在构建世界时。其中 4 局（用完的银坩埚隐藏的计数、玻璃充能球的数值）此后已修复（[模拟器 §3](/arch/simulator/#sec-3)）。第 5 局是 `MAYHEM_POWER` 打出的 `PREDATOR`，还没解决；4 个游戏错误也来自它。
 
 ## 8. 未决问题
 

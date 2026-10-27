@@ -21,11 +21,11 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | SL 克隆（加载存档 + 重放 + 封存） | 模拟器里已完成：一局的每个节点都能从检查点加载，并重现原局的观测；7,335 个节点里 7,300 个完全一致，其余只差存档丢掉的遗物状态，正常生命下每个节点 8–11 ms。SL 搜索还没用上它（[模拟器 §7](/arch/simulator/#sec-7)） |
 | 战斗世界 API | 完成：NoSL 世界从观测构建，SL 世界通过重放真实战斗得到（[模拟器 §6](/arch/simulator/#sec-6)） |
 | worker 进程池 + 进程间通信 | PIMC 的 NoSL 世界已完成：每个世界一个 JSON 行请求，结果与进程内相同，8 个 worker 快 4.5 倍（[模拟器 §8](/arch/simulator/#sec-8)） |
-| 战斗大脑 v0 | 完成：PIMC，搜索一个回合，手工叶子估值。与最好的占位策略比胜率：第 1 幕弱怪 + 普通 100% 对 85%，第 1 幕精英 36.7% 对 16.7%，第 2 幕 50% 对 16.7%（[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)）。在局外决策随机的整局里，平均打到第 13.1 层（对 8.6 层），24 局里有 10 局打到第 1 幕 Boss（对 1 局）（[§7.2](/arch/combat-brain/#sec-7.2)） |
+| 战斗大脑 v0 | 完成：PIMC，搜索一个回合，手工叶子估值。与最好的占位策略比胜率：第 1 幕弱怪 + 普通 100% 对 85%，第 1 幕精英 36.7% 对 16.7%，第 2 幕 50% 对 16.7%（[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)）。在整局里（`promotion-1`，200 局），局外决策随机时平均打到第 13.68 层（对 8.09 层），局外用 L0 时打到第 18.50 层（对 11.72 层）（[§7.2](/arch/combat-brain/#sec-7.2)） |
 | Harness 调度 | 整局已完成：没有兜底的决策界面路由，由 run id 和决策序号得到的大脑种子，决策日志；`run --check` 能完全重现它（[Harness §4](/arch/harness/#sec-4)–[§6](/arch/harness/#sec-6)） |
 | 宿主–brain 传输 | 完成：[协议 §2](/arch/protocol/#sec-2) 的消息走 Unix 套接字。`brain` 提供服务，`run --brain` 作为宿主连上它跑整局。一局在进程内和走传输协议时打得完全一样：轨迹、观测、对局记录和决策日志都相同，PIMC 也是（[模拟器 §5](/arch/simulator/#sec-5)） |
 | 事件、公开记录 | 规划中 |
-| 宏观大脑、价值函数 | 只有占位实现 |
+| 宏观大脑、价值函数 | L0 v0 加 V v0：从界面预测每个选项的后状态，再用 V 估值。战斗用 PIMC 时，平均层数 18.50 对局外随机的 13.68，200 局里 175 局打到第 1 幕 Boss（对 73 局）；还没有一局获胜（[宏观大脑 §2](/arch/macro-brain/#sec-2)） |
 | Mod | 战斗的辅助模式：能加载进真实游戏，连上大脑，对空闲的战斗状态发出询问并显示答案；还没有在真实战斗里看它跑过（[Mod §2](/arch/mod/#sec-2)、[§3](/arch/mod/#sec-3)） |
 
 ## 2. 主要缺口与风险
@@ -53,7 +53,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 5. <Badge text="2026-10-27 完成" variant="success" /> Harness 调度：路由、大脑种子和决策日志，覆盖每一局（[Harness §4](/arch/harness/#sec-4)–[§6](/arch/harness/#sec-6)）。公开记录等第一个需要它的推断出现时再做（[Harness §3](/arch/harness/#sec-3)）。
 
-6. 宏观大脑 L0 和 v0 价值函数；R1/R2 完整对局；评估流水线。
+6. 宏观大脑 L0 和 v0 价值函数；R1/R2 完整对局；评估流水线。L0 v0、V v0、R1 整局和流水线已完成，第一批报告在 `eval/reports/`（[评估 §6](/arch/evaluation/#sec-6)）；还剩 R2。
 
 7. Mod：其余决策界面，然后是执行器和自动开局驱动，打通 R4 流水线；R3 ≡ R4 等价测试。加载、与大脑的连接和战斗面板已经完成（[Mod §2](/arch/mod/#sec-2)–[§5](/arch/mod/#sec-5)）。
 
