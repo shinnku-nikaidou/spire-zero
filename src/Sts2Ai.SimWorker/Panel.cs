@@ -32,19 +32,19 @@ internal static class Panel
         int workers = Cli.Int(opts, "workers", 0);
         if (player != "pimc" && !Policies.CombatNames.Contains(player)) return Cli.Fail($"unknown player {player} (pimc, {string.Join(", ", Policies.CombatNames)})");
         if (workers > 0 && (player != "pimc" || env != PlayEnvironment.NoSL)) return Cli.Fail("--workers is for --player pimc --env NoSL");
-        var leaf = Cli.ReadLeaf(opts);
-        if (leaf != null && player != "pimc") return Cli.Fail("--leaf is for --player pimc");
+        var leaf = LeafChoice.Read(opts);
+        if (!leaf.IsDefault && player != "pimc") return Cli.Fail("--leaf and --combat-net are for --player pimc");
         var (act, rooms, pool) = Cli.Pool(opts);
         if (pool.Count == 0) return Cli.Fail("empty encounter pool");
 
         using var output = opts.TryGetValue("out", out var outPath) ? new StreamWriter(outPath) : null;
-        using var workerPool = workers > 0 ? new WorkerPool(Cli.SelfCommand(), workers, Cli.LeafOptions(opts.GetValueOrDefault("leaf"))) : null;
+        using var workerPool = workers > 0 ? new WorkerPool(Cli.SelfCommand(), workers, leaf.WorkerOptions()) : null;
         var pooled = workerPool == null ? null : new PooledPimc(workerPool);
         var outcomes = new Dictionary<string, int>();
         int failed = 0, gameErrors = 0;
         long decisions = 0, hpLost = 0;
         Console.WriteLine($"panel: {n} combats from #{start}, act {act} ({rooms}: {pool.Count} encounters), player {player}" +
-                          (leaf != null ? $" {leaf.Name}" : "") +
+                          leaf.Suffix +
                           (player == "pimc" ? $" {env} budget {budget}" : "") +
                           (workerPool != null ? $" on {workerPool.Count} workers" : "") +
                           $", game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
@@ -61,7 +61,7 @@ internal static class Panel
             {
                 var rng = new Random(seed * 1_000_003 + i);
                 var result = player == "pimc"
-                    ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, leaf?.Weights, env, budget, opts.ContainsKey("trace"))
+                    ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, leaf.Leaf, env, budget, opts.ContainsKey("trace"))
                     : PlayWithPolicy(pump, setup, PromptBrain.Instance, Policies.Combat(player, rng));
                 (outcome, hpStart, hp, rounds, steps) = result;
             }
@@ -107,11 +107,12 @@ internal static class Panel
     }
 
     /// <param name="pooled">Searches in workers; null searches here.</param>
-    /// <param name="leaf">The leaf weights of the search here; the workers have theirs from their start.</param>
+    /// <param name="leaf">The leaf of the search here; the workers have theirs from their start.</param>
     private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions) PlayWithBrain(Pump pump, CombatSetup setup, IChoicePolicy choices,
-        PooledPimc? pooled, LeafWeights? leaf, PlayEnvironment env, Budget budget, bool trace)
+        PooledPimc? pooled, ICombatLeaf leaf, PlayEnvironment env, Budget budget, bool trace)
     {
         var brain = new PimcBrain(leaf);
+        var moves = new MoveRecord();
         var plan = budget.Follow ? new TurnPlan() : null;
         CombatSession? session = CombatSession.Start(pump, setup, choices);
         try
@@ -121,18 +122,20 @@ internal static class Panel
             {
                 var obs = session.Observation();
                 var legal = session.LegalActions();
+                moves.Witness(obs);
+                var history = moves.History;
                 ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{session.ActionsExecuted}");
                 string buildSeed = Cli.MakeSeed((int)decisionSeed, 0);
                 CombatDecisionResult Search()
                 {
                     if (legal.Count == 1) return PimcBrain.Only(legal[0]);
-                    if (pooled != null) return pooled.Decide(obs, legal, buildSeed, budget, decisionSeed);
+                    if (pooled != null) return pooled.Decide(obs, legal, buildSeed, budget, decisionSeed, history);
                     var real = session!.Snapshot();
                     session.Dispose();
                     session = null;
                     CombatDecisionResult searched;
                     using (var worlds = env == PlayEnvironment.SL ? SimWorlds.SL(pump, real) : SimWorlds.NoSL(pump, obs, buildSeed))
-                        searched = brain.Decide(obs, legal, worlds, budget, decisionSeed);
+                        searched = brain.Decide(obs, legal, worlds, budget, decisionSeed, history);
                     session = CombatSession.Restore(pump, real, choices);
                     return searched;
                 }

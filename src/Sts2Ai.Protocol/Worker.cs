@@ -19,7 +19,8 @@ public abstract record WorkerRequest(long Id);
 /// PIMC's search of one NoSL world of a combat decision (docs: combat-brain §2): the world is built from
 /// <see cref="Observation"/> with <see cref="BuildSeed"/>, then determinized as world <see cref="World"/> of
 /// <see cref="Worlds"/> drawn from <see cref="SearchSeed"/>; the reply holds the best line after each of
-/// <see cref="First"/>, in that order, each searched with <see cref="NodesPerFirst"/> nodes.
+/// <see cref="First"/>, in that order, each searched with <see cref="NodesPerFirst"/> nodes. <see cref="History"/> is the
+/// combat's record of enemy moves so far, for the leaves.
 /// </summary>
 public sealed record PimcWorldRequest(
     long Id,
@@ -29,15 +30,17 @@ public sealed record PimcWorldRequest(
     ulong SearchSeed,
     int World,
     int Worlds,
-    int NodesPerFirst) : WorkerRequest(Id);
+    int NodesPerFirst,
+    IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
 /// <summary>
 /// PIMC's search of the SL world of a combat decision in a run (docs: simulator §7): <see cref="Node"/> loaded and
 /// replayed is the real combat at the decision. The reply holds the best line after each of <see cref="First"/>, in
-/// that order, each searched with <see cref="NodesPerFirst"/> nodes.
+/// that order, each searched with <see cref="NodesPerFirst"/> nodes, the leaves with <see cref="History"/> as in
+/// <see cref="PimcWorldRequest"/>.
 /// </summary>
-public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First, int NodesPerFirst)
-    : WorkerRequest(Id);
+public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First, int NodesPerFirst,
+    IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
 /// <param name="GameErrors">The game's Log.Error lines while serving the request.</param>
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);

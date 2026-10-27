@@ -63,15 +63,17 @@ public sealed class TurnPlan
 /// <summary>Picks a combat action by searching the worlds it is given (docs: combat-brain §6).</summary>
 public interface ICombatBrain
 {
-    CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IWorldSource worlds, Budget budget, ulong seed);
+    /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>), for the leaves.</param>
+    CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IWorldSource worlds, Budget budget, ulong seed,
+        IReadOnlyList<EnemyTurns>? history = null);
 }
 
 /// <summary>
 /// Combat brain v0 (docs: combat-brain §2): PIMC over K worlds. In each world, a depth-first search over this turn's
 /// action sequences, with ending the turn an option at every step; states are merged by their observation, so each
 /// transposition is expanded once. A line ends when the turn ends (after the enemies' turn) or the combat does, and
-/// is scored by <see cref="LeafValue"/>. Each first action is scored by its best line in each world, then averaged
-/// over the worlds; never the max across worlds, which is strategy fusion. Only the first action is played: the
+/// is scored by the leaf (<see cref="ICombatLeaf"/>; <see cref="HandLeaf"/> by default). Each first action is scored
+/// by its best line in each world, then averaged over the worlds; never the max across worlds, which is strategy fusion. Only the first action is played: the
 /// caller asks again after it. In SL there is one exact world, so this is plain planning.
 ///
 /// Each world's nodes go to the first actions evenly, so each gets a fair look, or by sequential halving
@@ -82,9 +84,12 @@ public interface ICombatBrain
 /// <see cref="SearchWorld"/> for each world wherever that world lives (this process, or a worker), then merging by
 /// <see cref="Root"/>, which asks for the worlds' searches once per halving round. <see cref="Decide"/> runs them all here.
 /// </summary>
-public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
+public sealed class PimcBrain(ICombatLeaf? leaf = null) : ICombatBrain
 {
-    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IWorldSource worlds, Budget budget, ulong seed)
+    private readonly ICombatLeaf _leaf = leaf ?? new HandLeaf();
+
+    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IWorldSource worlds, Budget budget, ulong seed,
+        IReadOnlyList<EnemyTurns>? history = null)
     {
         if (legal.Count == 1) return Only(legal[0]);
         budget = budget.For(observation.Room);
@@ -93,7 +98,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
         return Root(Ordered(legal), budget, (first, nodes) => live.Select((w, k) =>
         {
             w.Restore(roots[k]);
-            return SearchWorld(w, observation.Round, first, nodes);
+            return SearchWorld(w, observation.Round, first, nodes, history);
         }).ToList());
     }
 
@@ -101,8 +106,10 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
     public static CombatDecisionResult Only(CombatAction action) => new(action, [], []);
 
     /// <summary>One world's part of a decision: the best line after each of <paramref name="first"/>, in that order.</summary>
-    public IReadOnlyList<PlannedLine> SearchWorld(ICombatWorld world, int round, IReadOnlyList<CombatAction> first, int nodesPerFirst) =>
-        new WorldSearch(world, round, weights, nodesPerFirst).Root(first);
+    /// <param name="history">The combat's record of enemy moves up to the decision, which every leaf of this turn follows.</param>
+    public IReadOnlyList<PlannedLine> SearchWorld(ICombatWorld world, int round, IReadOnlyList<CombatAction> first, int nodesPerFirst,
+        IReadOnlyList<EnemyTurns>? history = null) =>
+        new WorldSearch(world, round, _leaf, history ?? [], nodesPerFirst).Root(first);
 
     /// <summary>
     /// Shares each world's nodes over the first actions and merges the worlds' lines. Evenly: one search, each first
@@ -162,7 +169,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
         return new(action, mean, ci, values.Length, values.Select(v => Math.Round(v, 4)).ToList(), lines.Select(l => l.Nodes).ToList());
     }
 
-    private sealed class WorldSearch(ICombatWorld world, int round, LeafWeights? weights, int nodesPerFirst)
+    private sealed class WorldSearch(ICombatWorld world, int round, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodesPerFirst)
     {
         private readonly Dictionary<ulong, PlannedLine> _memo = [];
         private int _nodes;
@@ -190,7 +197,7 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
             var status = world.Status;
             var obs = world.Observe();
             if (status != CombatStatus.InProgress || action.Kind == CombatActionKind.EndTurn || obs.Round != round)
-                return new(LeafValue.Of(status, obs, weights), [], 0, []);
+                return new(leaf.Value(status, obs, history), [], 0, []);
             return Best(obs);
         }
 

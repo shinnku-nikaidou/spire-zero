@@ -5,14 +5,15 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// A combat brain as Harness calls it: the decision, the seed Harness drew for it, and in SL the current node's clone
-/// (null in NoSL).
+/// A combat brain as Harness calls it: the decision, the seed Harness drew for it, in SL the current node's clone
+/// (null in NoSL), and the combat's record of enemy moves so far (<see cref="Dispatcher.History"/>).
 /// </summary>
 /// <param name="Budget">What the brain may spend, for the log; null for a policy that does not search.</param>
-public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, NodeClone?, CombatDecisionResult> Decide, Budget? Budget = null)
+public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, NodeClone?, IReadOnlyList<EnemyTurns>, CombatDecisionResult> Decide,
+    Budget? Budget = null)
 {
     /// <summary>A placeholder policy: it gives its pick and no candidates.</summary>
-    public static CombatRoute Of(string brain, ICombatPolicy policy) => new(brain, (decision, _, _) => new(policy.Choose(decision), [], []));
+    public static CombatRoute Of(string brain, ICombatPolicy policy) => new(brain, (decision, _, _, _) => new(policy.Choose(decision), [], []));
 }
 
 /// <summary>A brain for one side of the routing table, with its name for the log.</summary>
@@ -64,8 +65,7 @@ public sealed class Dispatcher(
     private readonly List<DecisionEntry> _log = [];
     private readonly Dictionary<string, int> _brains = [];
     private readonly List<string> _nodeTrace = [];
-    private readonly Dictionary<uint, (string? Id, List<EnemyTurn> Turns)> _enemyTurns = [];
-    private int _round = -1;
+    private readonly MoveRecord _moves = new();
     private int _decisions;
     private NodeCheckpoint? _node;
 
@@ -89,33 +89,21 @@ public sealed class Dispatcher(
     /// The current combat's public record of enemy moves (docs: harness §3): each enemy's intents at the first decision
     /// of each round. A combat starts over after any macro decision, or when the round goes back.
     /// </summary>
-    public IReadOnlyList<EnemyTurns> History => _enemyTurns.Select(e => new EnemyTurns(e.Key, e.Value.Id, e.Value.Turns.ToList())).ToList();
+    public IReadOnlyList<EnemyTurns> History => _moves.History;
 
     public CombatAction Choose(CombatDecision decision)
     {
-        Witness(decision.Observation);
+        _moves.Witness(decision.Observation);
+        var history = History;
         var (id, seed, clock) = Begin(combat.Brain);
-        var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null);
+        var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null, history);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(result.First)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
         Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: History));
+                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: history));
         return result.First;
-    }
-
-    private void Witness(CombatObservation obs)
-    {
-        if (obs.Round == _round) return;
-        if (obs.Round < _round) _enemyTurns.Clear();
-        _round = obs.Round;
-        foreach (var enemy in obs.Enemies)
-        {
-            if (enemy.Uid is not { } uid || enemy.Intents is not { } intents || enemy.Hp <= 0) continue;
-            if (!_enemyTurns.TryGetValue(uid, out var turns)) _enemyTurns[uid] = turns = (enemy.Id, []);
-            turns.Turns.Add(new(obs.Round, intents));
-        }
     }
 
     public IReadOnlyList<int> Choose(ChoiceDecision decision)
@@ -135,8 +123,7 @@ public sealed class Dispatcher(
 
     public string Choose(MacroDecision decision)
     {
-        _round = -1;
-        _enemyTurns.Clear();
+        _moves.Clear();
         var (id, seed, clock) = Begin(macro.Brain);
         if (!MacroSurfaces.Contains(decision.Surface)) throw new InvalidOperationException($"uncovered surface {decision.Surface}");
         var action = macro.Policy.Choose(decision);

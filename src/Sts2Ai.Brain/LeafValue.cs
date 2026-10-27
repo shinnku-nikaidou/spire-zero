@@ -23,6 +23,21 @@ public sealed record LeafWeights
     public double PoisonShare { get; init; } = 0.8;
 }
 
+/// <summary>
+/// What a search leaf is worth (docs: combat-brain §4): a state after the turn ends, or after the combat does, with
+/// the public record of the enemies' moves before it (<see cref="MoveRecord"/>).
+/// </summary>
+public interface ICombatLeaf
+{
+    double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
+}
+
+/// <summary>The hand-made leaf, <see cref="LeafValue"/>, which reads the observation alone.</summary>
+public sealed class HandLeaf(LeafWeights? weights = null) : ICombatLeaf
+{
+    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history) => LeafValue.Of(status, obs, weights);
+}
+
 /// <summary>Leaf weights with their name, as <c>--leaf FILE</c> reads them; the name goes into the champion's.</summary>
 public sealed record LeafFile(string Name, LeafWeights Weights)
 {

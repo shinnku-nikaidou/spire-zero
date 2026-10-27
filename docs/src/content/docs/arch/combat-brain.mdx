@@ -12,7 +12,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-v0 已实现（`src/Sts2Ai.Brain/CombatBrain.cs`、`LeafValue.cs`）：在 K 个世界上做 PIMC，每个世界里搜索本回合（[§2](#sec-2)）；一个手工的叶子估值（[§4](#sec-4)）；选牌提示的固定规则（`p0`，[§2](#sec-2) 第 7 条）；以及固定的战斗测试集和它的结果（[§7](#sec-7)）。SL 规划器做出来之前，SL 在它唯一的世界上运行同样的 PIMC 搜索（[§3](#sec-3)）。尚未实现：SL 规划器、把选牌提示变成搜索分支、越过本回合的搜索、基于置信区间的分配，以及 `Facts`。占位策略保留下来，供 bench 使用，也作为测试集上的基线：`PlayPolicy`（随机打出一张能打的牌）和 `RandomPolicy`（在合法动作中均匀随机）。
+v0 已实现（`src/Sts2Ai.Brain/CombatBrain.cs`、`LeafValue.cs`）：在 K 个世界上做 PIMC，每个世界里搜索本回合（[§2](#sec-2)）；一个手工的叶子估值，和一个学到的叶子即战斗网络，后者还没有晋升（[§4](#sec-4)）；选牌提示的固定规则（`p0`，[§2](#sec-2) 第 7 条）；以及固定的战斗测试集和它的结果（[§7](#sec-7)）。SL 规划器做出来之前，SL 在它唯一的世界上运行同样的 PIMC 搜索（[§3](#sec-3)）。尚未实现：SL 规划器、把选牌提示变成搜索分支、越过本回合的搜索、基于置信区间的分配，以及 `Facts`。占位策略保留下来，供 bench 使用，也作为测试集上的基线：`PlayPolicy`（随机打出一张能打的牌）和 `RandomPolicy`（在合法动作中均匀随机）。
 
 </Aside>
 
@@ -85,9 +85,10 @@ v0 还没有规划器：SL 在它唯一的世界上运行 [§2](#sec-2) 的 PIMC
   - 所以，打在出手重、死得快的敌人身上的伤害更值钱；溢出伤害毫无价值；战斗中途的状态永远不会比它在相同生命值下能达到的胜利更好。
   - 推算出死亡（生命值占比低于 0）时，估值以指数方式衰减到 0，在 0 处斜率相同，所以它始终高于输掉，也仍然能给路线排序。如果在这里用一个平的下限，所有会输的路线看起来都一样，大脑就会过早结束回合。
   - 权重是手工设定的（`LeafWeights`：WinBase 0.2、PerHp 0.6、PerPotion 0.02、Dps 10、Unblocked 0.5、MinIncoming 3、PoisonShare 0.8）。盲区：敌人身上除中毒以外的能力、玩家身上除力量以外的能力、抽牌堆，以及本回合之后的意图。
-  - `--leaf FILE` 让大脑用别的权重，`run`、`brain`、`panel` 都支持，并会传给 worker（`serve --leaf`）。`weights --leaf` 把默认权重输出成这种文件，名为 `leaf0`；用别的权重时，冠军名里会带上它的名字（`combat pimc NAME`）。`learn/spsa.py --param leaf` 调这些权重（[学习 §2](/arch/learning/#sec-2)）。
+  - `--leaf FILE` 让大脑用别的权重，`run`、`brain`、`panel` 都支持，并会传给 worker（`serve --leaf`）。`weights --leaf` 把默认权重输出成这种文件，名为 `leaf0`；用别的权重时，冠军名里会带上它的名字（`combat pimc NAME`）。`learn/spsa.py --param leaf` 调这些权重（[学习 §2](/arch/learning/#sec-2)）。`--combat-net FILE` 则让大脑改用下面学到的叶子，支持的命令相同，并以 `serve --combat-net` 传给 worker；它的名字同样显示在冠军名里。
 - 下一步：手工特征 × 线性权重。特征列表以 bottled_ai 的 42 个特征为起点（玩家生命值、格挡、敌人生命值、能力、抽牌堆质量、几回合能杀死……）。bottled_ai 按字典序比较这些特征（第一个特征决定胜负，后面的特征只在打平时起作用）；这个顺序被转换成间隔很大的线性权重，再用 SPSA（同时扰动随机逼近：把所有权重一起扰动，根据带噪声的结果同时调整它们）调优。它必须给格挡、溢出伤害（overkill）和下回合斩杀定出价值，并且不能饱和。
-- 以后：在编码后的观测上用一个小型神经网络。它的输出头预测战斗的结局分布：一个死亡类别，加上战斗结束时剩余生命值的分桶（这个做法来自 r33hab，另一个本设计借鉴过的先行项目，ytcs 也是这样）。局外 V 每场战斗给每个结局定一次价，叶子就是定价后的期望（[学习 §3](/arch/learning/#sec-3)），所以换了 V 不用重训这个网络。两个训练目标通过晋级门槛比较（[学习 §1](/arch/learning/#sec-1)）。
+- 学到的叶子（已实现，`CombatNet`，[学习 §1](/arch/learning/#sec-1)）：一个读编码后的观测和敌人至今每回合意图的网络。它的输出头预测战斗的结局分布：一个死亡类别，加上战斗结束时剩余生命值的分桶（这个做法来自 r33hab，另一个本设计借鉴过的先行项目，ytcs 也是这样）。目前叶子按 `LeafValue` 给打赢的战斗定的价（WinBase、PerHp、PerPotion）给这些结局定价。以后由局外 V 每场战斗给每个结局定一次价，叶子就是定价后的期望（[学习 §3](/arch/learning/#sec-3)），所以换了 V 不用重训这个网络。已经结束的战斗按 `LeafValue` 估值。两个训练目标通过晋级门槛比较（[学习 §1](/arch/learning/#sec-1)）；第一个网络用 MC 目标训练。
+- 两种叶子都是 `ICombatLeaf`（[§6](#sec-6)）：输入一个状态、它的战斗状态和这场战斗的敌人出招记录（`MoveRecord`）。Harness 每个决策都把这份记录交给战斗大脑，`PooledPimc` 在每个请求里把它发给 worker（[模拟器 §8](/arch/simulator/#sec-8)）。一个决策的搜索里所有叶子都用同一份记录：叶子都是下一回合的开始，而记录里是直到决策所在回合为止的各回合。
 - 战斗中途的叶子（回合结束时）和战斗后的叶子（已赢、尚未领奖励）是同一个函数；后一种情况下，函数中与战斗有关的部分为空。
 
 ## 5. 预算与剪枝
@@ -121,8 +122,16 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elit
 public interface ICombatBrain
 {
     // Player's turn: search the worlds, return the first action and the rest of the plan.
+    // history: the combat's record of enemy moves so far (MoveRecord), for the leaves.
     CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal,
-                                IWorldSource worlds, Budget budget, ulong seed);
+                                IWorldSource worlds, Budget budget, ulong seed,
+                                IReadOnlyList<EnemyTurns>? history = null);
+}
+
+public interface ICombatLeaf
+{
+    // A search leaf: the state after the turn ends, or after the combat does.
+    double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
 }
 
 public sealed record CombatDecisionResult(

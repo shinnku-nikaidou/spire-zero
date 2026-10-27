@@ -12,8 +12,8 @@ namespace Sts2Ai.SimWorker;
 /// </summary>
 internal static class Serve
 {
-    /// <param name="leaf">The leaf weights to search with; null for the default ones.</param>
-    public static int Run(Pump pump, TextWriter wire, LeafWeights? leaf)
+    /// <param name="leaf">The leaf to search with.</param>
+    public static int Run(Pump pump, TextWriter wire, ICombatLeaf leaf)
     {
         var brain = new PimcBrain(leaf);
         HeadlessGame.TakeErrors();
@@ -52,12 +52,12 @@ internal static class Serve
             case PimcWorldRequest r:
             {
                 using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed);
-                return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst);
+                return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst, r.History);
             }
             case SlWorldRequest r:
             {
                 using var world = new NodeWorld(pump, r.Node);
-                return brain.SearchWorld(world, world.Observe().Round, r.First, r.NodesPerFirst);
+                return brain.SearchWorld(world, world.Observe().Round, r.First, r.NodesPerFirst, r.History);
             }
             default:
                 throw new InvalidDataException($"no search for {request.GetType().Name}");

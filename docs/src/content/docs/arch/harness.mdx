@@ -12,7 +12,7 @@ Harness 是决策进程里的调度器。它的一边是**宿主**，也就是�
 
 <Aside title="状态">
 
-部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）、`PooledPimc`（在进程池里搜索世界的战斗大脑，NoSL 或 SL）和 `Dispatcher`：它把一局里的决策路由给大脑，抽取大脑的种子，并写决策日志（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 让每一局都经过它，可以在进程内，也可以走传输协议：`BrainServer` 是 Harness 这一端的宿主–brain 消息处理（[协议 §2](/arch/protocol/#sec-2)），按顺序回答决策。规划中：公开记录（[§3](#sec-3)）；搜索进行中的过期请求和取消；墙钟预算和基于 CI 的分配；降级回答。
+部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）、`PooledPimc`（在进程池里搜索世界的战斗大脑，NoSL 或 SL）和 `Dispatcher`：它把一局里的决策路由给大脑，抽取大脑的种子，并写决策日志（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 让每一局都经过它，可以在进程内，也可以走传输协议：`BrainServer` 是 Harness 这一端的宿主–brain 消息处理（[协议 §2](/arch/protocol/#sec-2)），按顺序回答决策。规划中：公开记录的其余部分（[§3](#sec-3)；目前只记录敌人每回合的意图，[§6](#sec-6)）；搜索进行中的过期请求和取消；墙钟预算和基于 CI 的分配；降级回答。
 
 </Aside>
 
@@ -137,7 +137,7 @@ public sealed class PublicRecord
 - 在地图上，L0 也会加上 `plan`：`chosen` 之后本幕剩下的路线（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。
 - 一局的战斗决策按战斗分块，每场战斗一块，块与块之间隔着宏观决策，顺序与对局记录里的战斗一致。决策靠这个找到它那场战斗的结局（[评估 §6](/arch/evaluation/#sec-6)）。
 - 战斗决策还会加上 `obs`，即大脑看到的战斗观测（[协议 §1](/arch/protocol/#sec-1)）：学习得到的战斗部件和融合测试集的输入（[战斗大脑 §8](/arch/combat-brain/#sec-8)）。约 1.6 KB。
-- 战斗决策还会加上 `history`：这场战斗里每个敌人在至今每一回合开始时显示的意图，包括本回合，按 uid 分组，每项是 `{round, intents}`。这是目前已实现的那部分公开记录（[§3](#sec-3)）：Harness 从它看到的战斗观测里收集，每次宏观决策后重新开始。战斗网络读它和回合数，这样每个怪物的出招顺序能从数据里学到，而不是靠手写的规则（[学习 §1](/arch/learning/#sec-1)）。
+- 战斗决策还会加上 `history`：这场战斗里每个敌人在至今每一回合开始时显示的意图，包括本回合，按 uid 分组，每项是 `{round, intents}`。这是目前已实现的那部分公开记录（[§3](#sec-3)）：Harness 从它看到的战斗观测里收集，每次宏观决策后重新开始。战斗网络读它和回合数，这样每个怪物的出招顺序能从数据里学到，而不是靠手写的规则（[学习 §1](/arch/learning/#sec-1)）。Brain 里的 `MoveRecord` 保存这份记录，Harness 每个决策都把它交给战斗大脑（战斗路由的最后一个参数），搜索再把它发给 worker，供叶子使用（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
 - 宏观决策还会加上 `features`：大脑看到的整局观测上 V 的特征（[学习 §1](/arch/learning/#sec-1)），不管是哪个大脑做的决策。拟合 V 读的就是它们（[学习 §2](/arch/learning/#sec-2)）。
 - 宏观决策还会加上 `run_view`：整局观测本身，约 6 KB，V v2 就用它训练（[学习 §2](/arch/learning/#sec-2)）。
 - `run --log FILE` 写出日志，每个决策一行（[模拟器 §5](/arch/simulator/#sec-5)）。

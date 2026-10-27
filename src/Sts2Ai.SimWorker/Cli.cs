@@ -24,7 +24,7 @@ namespace Sts2Ai.SimWorker;
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
 ///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--champion FILE] [--env NoSL|SL] [--policy play|random|pimc] [--macro random|l0]
-///       [--value v.json] [--explore E] [--leaf leaf.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--halving] [--follow] [--workers W] [--max-decisions 20000] [--check]
+///       [--value v.json] [--explore E] [--leaf leaf.json] [--combat-net net.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--halving] [--follow] [--workers W] [--max-decisions 20000] [--check]
 ///       [--trace] [--obs] [--log decisions.jsonl] [--records runs.jsonl] [--brain SOCKET]
 ///                                          whole runs through Harness. Combat prompts go to p0; --macro picks the
 ///                                          brain of every decision outside combat (l0: the macro brain with V, which
@@ -39,7 +39,9 @@ namespace Sts2Ai.SimWorker;
 ///                                          the champion a champion file names; options given override the file's.
 ///                                          pimc searches each combat decision in W worker processes (default: one
 ///                                          per world): NoSL worlds, or in SL the node's clone; --leaf reads the
-///                                          weights of its leaf value (docs: combat-brain §4); --elite-x and --boss-x
+///                                          weights of its leaf value (docs: combat-brain §4), and --combat-net a net
+///                                          file of the combat net, which values the leaves still in progress at those
+///                                          weights' prices (docs: learning §1); --elite-x and --boss-x
 ///                                          multiply the nodes per world in those rooms, --halving shares them over
 ///                                          the first actions by sequential halving, and --follow plays the rest of a
 ///                                          turn every world planned the same without searching again (docs:
@@ -47,7 +49,7 @@ namespace Sts2Ai.SimWorker;
 ///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6).
 ///                                          --brain plays against the brain listening at SOCKET instead, which picks the
 ///                                          champion (--check then replays against it too)
-///   brain [--socket ~/.local/state/sts2ai/brain.sock] [--champion FILE] [--policy ...] [--macro ...] [--value ...] [--leaf ...] [--worlds 8] [--nodes 300]
+///   brain [--socket ~/.local/state/sts2ai/brain.sock] [--champion FILE] [--policy ...] [--macro ...] [--value ...] [--leaf ...] [--combat-net ...] [--worlds 8] [--nodes 300]
 ///         [--workers W] [--log decisions.jsonl]
 ///                                          the brain alone: serves the hosts that connect, one at a time (docs: protocol §2)
 ///   report --seeds FILE --records A.jsonl[,B.jsonl] --out PATH [--previous OLD.json]
@@ -66,13 +68,14 @@ namespace Sts2Ai.SimWorker;
 ///   weights [--leaf]                       V's initial weights as a weights file, for tuning to start from
 ///                                          (--leaf: the default leaf weights of pimc instead)
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
-///         [--leaf leaf.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--halving] [--follow] [--workers 0] [--trace] [--out results.jsonl]
+///         [--leaf leaf.json] [--combat-net net.json] [--worlds 8] [--nodes 300] [--elite-x 1] [--boss-x 1] [--halving] [--follow] [--workers 0] [--trace] [--out results.jsonl]
 ///                                          the fixed combat panel: the same combats for every player; win rate, HP lost.
 ///                                          --workers N searches the NoSL worlds in N worker processes
 ///   fusion --log decisions.jsonl[,more] [--n 400] [--start 0] [--every 1] [--k 32] [--max-nodes 5000] [--out fusion.jsonl]
 ///                                          the fusion panel: the logs' NoSL combat decisions, K worlds' turns enumerated
 ///                                          in full, PIMC's values against merged ones (docs: combat-brain §8)
-///   serve [--leaf leaf.json]               a worker: JSON lines on stdin and stdout (docs: simulator §8)
+///   serve [--leaf leaf.json] [--combat-net net.json]
+///                                          a worker: JSON lines on stdin and stdout (docs: simulator §8)
 /// Loadout options for every command that runs combats: [--character SILENT] [--deck A*5,B+,...]
 /// [--relics A,B] [--potions A,B] [--hp N] [--max-hp N]. Omitted parts keep the character's starting values.
 /// </summary>
@@ -117,7 +120,7 @@ internal static class Cli
             "run" => Runs(pump, opts),
             "panel" => Panel.Run(pump, opts),
             "fusion" => Fusion.Run(pump, opts),
-            "serve" => Serve.Run(pump, wire!, ReadLeaf(opts)?.Weights),
+            "serve" => Serve.Run(pump, wire!, LeafChoice.Read(opts).Leaf),
             _ => Fail($"unknown command {args[0]}"),
         };
     }
@@ -482,13 +485,12 @@ internal static class Cli
 
     /// <summary>The champion that --policy and --macro name (docs: harness §4), pimc's budget, and l0's V (--value).</summary>
     /// <param name="ValueFile">Where <paramref name="Value"/> came from; null for the initial weights.</param>
-    /// <param name="LeafPath">Where <paramref name="Leaf"/> came from; null for the default leaf weights.</param>
     /// <param name="Explore">l0's chance to take a random answer instead (--explore), for self-play only; 0 for none.</param>
     private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue Value, string? ValueFile,
-        LeafFile? Leaf, string? LeafPath, double Explore)
+        LeafChoice Leaf, double Explore)
     {
         /// <summary>The options <see cref="Parse"/> reads.</summary>
-        public static readonly string[] Keys = ["policy", "macro", "worlds", "nodes", "elite-x", "boss-x", "halving", "follow", "workers", "value", "leaf", "explore"];
+        public static readonly string[] Keys = ["policy", "macro", "worlds", "nodes", "elite-x", "boss-x", "halving", "follow", "workers", "value", "leaf", "combat-net", "explore"];
 
         public static ChampionOptions Parse(Dictionary<string, string> opts)
         {
@@ -508,13 +510,13 @@ internal static class Cli
             double explore = double.Parse(opts.GetValueOrDefault("explore", "0"), CultureInfo.InvariantCulture);
             if (explore is < 0 or > 1) throw new ArgumentException("--explore is a chance, from 0 to 1");
             if (explore > 0 && macro != "l0") throw new ArgumentException("--explore is l0's; it needs --macro l0");
-            var leaf = ReadLeaf(opts);
-            if (leaf != null && policy != "pimc") throw new ArgumentException("--leaf weighs pimc's leaves; it needs --policy pimc");
-            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds), value, valueFile, leaf, opts.GetValueOrDefault("leaf"), explore);
+            var leaf = LeafChoice.Read(opts);
+            if (!leaf.IsDefault && policy != "pimc") throw new ArgumentException("--leaf and --combat-net value pimc's leaves; they need --policy pimc");
+            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds), value, valueFile, leaf, explore);
         }
 
         /// <summary>pimc's search workers. A run holds its process's one live game, so search runs in other processes.</summary>
-        public WorkerPool? Pool() => Policy == "pimc" ? new WorkerPool(SelfCommand(), Workers, LeafOptions(LeafPath)) : null;
+        public WorkerPool? Pool() => Policy == "pimc" ? new WorkerPool(SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
 
         /// <summary>
         /// One Harness per run. Combat prompts go to p0 (<see cref="PromptBrain"/>), which search worlds ask too.
@@ -544,8 +546,8 @@ internal static class Cli
             return dispatcher;
         };
 
-        /// <summary>The combat brain, pimc by its leaf weights' name unless they are the default ones.</summary>
-        private string Combat => Leaf == null ? Policy : $"{Policy} {Leaf.Name}";
+        /// <summary>The combat brain, pimc by its leaf's names unless it is the default one.</summary>
+        private string Combat => Policy + Leaf.Suffix;
 
         /// <summary>l0 by its V's name, unless V has the initial weights, then its exploration if any.</summary>
         private string L0 => (Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}") +
@@ -576,7 +578,8 @@ internal static class Cli
             }
             if (ValueFile != null) options["value"] = ValueFile;
             if (Explore > 0) options["explore"] = Explore.ToString(CultureInfo.InvariantCulture);
-            if (LeafPath != null) options["leaf"] = LeafPath;
+            if (Leaf.WeightsPath != null) options["leaf"] = Leaf.WeightsPath;
+            if (Leaf.NetPath != null) options["combat-net"] = Leaf.NetPath;
             return options;
         }
 
@@ -863,13 +866,6 @@ internal static class Cli
     internal static Budget BudgetOf(Dictionary<string, string> opts) =>
         new(Int(opts, "worlds", 8), Int(opts, "nodes", 300), Double(opts, "elite-x", 1), Double(opts, "boss-x", 1), opts.ContainsKey("halving"), opts.ContainsKey("follow"));
 
-    /// <summary>--leaf FILE: pimc's leaf weights (docs: combat-brain §4); null without it.</summary>
-    internal static LeafFile? ReadLeaf(Dictionary<string, string> opts) =>
-        opts.TryGetValue("leaf", out var path) ? ProtocolJson.Deserialize<LeafFile>(File.ReadAllText(path)) : null;
-
-    /// <summary>The worker options that pass the leaf weights on: workers start from the same folder, by full path anyway.</summary>
-    internal static IReadOnlyList<string>? LeafOptions(string? path) => path == null ? null : ["--leaf", Path.GetFullPath(path)];
-
     /// <summary>--champion FILE: the champion file's options, under the ones given (docs: evaluation §5).</summary>
     private static Dictionary<string, string> WithChampion(Dictionary<string, string> opts)
     {
@@ -914,5 +910,37 @@ internal static class Cli
     {
         Console.Error.WriteLine(message);
         return 2;
+    }
+}
+
+/// <summary>
+/// What pimc values its leaves with (docs: combat-brain §4): --leaf FILE's weights (the default ones without it), and
+/// --combat-net FILE's net, which then values the leaves still in progress at those weights' prices.
+/// </summary>
+internal sealed record LeafChoice(LeafFile? Weights, string? WeightsPath, CombatNet? Net, string? NetPath)
+{
+    public static LeafChoice Read(Dictionary<string, string> opts)
+    {
+        var weightsPath = opts.GetValueOrDefault("leaf");
+        var weights = weightsPath == null ? null : ProtocolJson.Deserialize<LeafFile>(File.ReadAllText(weightsPath));
+        var netPath = opts.GetValueOrDefault("combat-net");
+        var net = netPath == null ? null : CombatNet.Load(ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(netPath)), weights?.Weights);
+        return new(weights, weightsPath, net, netPath);
+    }
+
+    public bool IsDefault => Weights == null && Net == null;
+
+    /// <summary>What follows pimc in the brain's name: the weights' name, then the net's, each when given.</summary>
+    public string Suffix => (Weights != null ? $" {Weights.Name}" : "") + (Net != null ? $" {Net.Name}" : "");
+
+    public ICombatLeaf Leaf => Net ?? (ICombatLeaf)new HandLeaf(Weights?.Weights);
+
+    /// <summary>The options that give workers the same leaf: they start from the same folder, by full path anyway.</summary>
+    public IReadOnlyList<string>? WorkerOptions()
+    {
+        var options = new List<string>();
+        if (WeightsPath != null) options.AddRange(["--leaf", Path.GetFullPath(WeightsPath)]);
+        if (NetPath != null) options.AddRange(["--combat-net", Path.GetFullPath(NetPath)]);
+        return options.Count > 0 ? options : null;
     }
 }

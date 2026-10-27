@@ -9,8 +9,8 @@ namespace Sts2Ai.Harness;
 /// it gives the same answer as <see cref="PimcBrain.Decide"/> over in-process worlds. SL: the one exact world is the
 /// node's clone, searched in one request per first action so the workers share it; each request keeps its own memo,
 /// where a search in one process shares it across first actions. With sequential halving each round is one such set
-/// of requests, with the actions still in. The workers search with the leaf weights they were started with
-/// (<c>serve --leaf</c>).
+/// of requests, with the actions still in. The workers search with the leaf they were started with
+/// (<c>serve --leaf --combat-net</c>); each request carries the combat's record of enemy moves for it.
 /// </summary>
 public sealed class PooledPimc(WorkerPool pool)
 {
@@ -18,36 +18,38 @@ public sealed class PooledPimc(WorkerPool pool)
 
     /// <param name="buildSeed">Seeds the combat built from the observation (docs: simulator §3).</param>
     /// <param name="seed">Draws the worlds.</param>
-    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, string buildSeed, Budget budget, ulong seed)
+    /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
+    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, string buildSeed, Budget budget, ulong seed,
+        IReadOnlyList<EnemyTurns>? history = null)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
         budget = budget.For(observation.Room);
         return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) => Map(Enumerable.Range(0, budget.Worlds)
-                .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes)).ToList())
+                .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes, history)).ToList())
             .Select(r => r.Lines!).ToList());
     }
 
     /// <summary>SL: each first action gets the share of the budget that it gets in one search of the world. The budget is
     /// the room's already (<see cref="Budget.For"/>).</summary>
-    public CombatDecisionResult Decide(NodeClone node, IReadOnlyList<CombatAction> legal, Budget budget)
+    public CombatDecisionResult Decide(NodeClone node, IReadOnlyList<CombatAction> legal, Budget budget, IReadOnlyList<EnemyTurns>? history = null)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
         return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) =>
-            [Map(first.Select((action, a) => (WorkerRequest)new SlWorldRequest(a, node, [action], nodes)).ToList()).Select(r => r.Lines![0]).ToList()]);
+            [Map(first.Select((action, a) => (WorkerRequest)new SlWorldRequest(a, node, [action], nodes, history)).ToList()).Select(r => r.Lines![0]).ToList()]);
     }
 
     /// <summary>As Harness's combat route, one per run: NoSL draws the build seed from the decision's seed; SL searches
     /// the clone. With <see cref="Budget.Follow"/>, the route keeps the run's <see cref="TurnPlan"/>.</summary>
-    /// <param name="name">The brain's name in reports: pimc, and its leaf weights' name unless they are the default.</param>
+    /// <param name="name">The brain's name in reports: pimc, and its leaf's names unless it is the default one.</param>
     public CombatRoute Route(Budget budget, string name = "pimc")
     {
         var plan = budget.Follow ? new TurnPlan() : null;
-        CombatDecisionResult Search(CombatDecision decision, ulong seed, NodeClone? node) => node == null
-            ? Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed)
-            : Decide(node, decision.Legal, budget.For(decision.Observation.Room));
-        return new(name, (decision, seed, node) => plan == null
-            ? Search(decision, seed, node)
-            : plan.Decide(decision.Observation, decision.Legal, () => Search(decision, seed, node)), budget);
+        CombatDecisionResult Search(CombatDecision decision, ulong seed, NodeClone? node, IReadOnlyList<EnemyTurns> history) => node == null
+            ? Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed, history)
+            : Decide(node, decision.Legal, budget.For(decision.Observation.Room), history);
+        return new(name, (decision, seed, node, history) => plan == null
+            ? Search(decision, seed, node, history)
+            : plan.Decide(decision.Observation, decision.Legal, () => Search(decision, seed, node, history)), budget);
     }
 
     /// <summary>The game's Log.Error lines in the workers since the last call.</summary>
