@@ -45,10 +45,11 @@ A leaderboard holds the results of an environment's champion (the best accepted 
 | | NoSL | SL |
 |---|---|---|
 | seeds | same pre-registered set | same |
-| champion | V_NoSL champion | V_SL champion |
+| champion | NoSL champion | SL champion |
 | info allowed | [Environments §3](/en/arch/environments/#sec-3) | same table |
 | budget | per decision, same tier | same |
 
+- The two champions share the macro brain and V; their combat brains differ ([Environments §5](/en/arch/environments/#sec-5)). A new V changes both champions, so it is gated in each environment on its own.
 - Also reported: the SL − NoSL win-rate delta, which is the value of in-node information. This is the formal version of the omniscient-vs-resampled ablation in plan v1 (local note `tmp/notes/plan.md`). For reference, spire-mentor (a prior-art project) lost 22.8–25.5 percentage points (pp) of win rate without its cheat, which covered the whole run. Ours is node-level only, so we expect a smaller delta.
 
 <Aside type="caution" title="Never mix environments">

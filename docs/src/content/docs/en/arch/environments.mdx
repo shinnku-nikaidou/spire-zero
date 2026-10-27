@@ -98,34 +98,40 @@ Grey-zone rulings, the same in both environments (from the fair-play spec, local
 - **Special cases:** the Ancient at run start (Neow) is node 1. After a boss, the first point of the next act is a new node. The end of the run is an exit.
 - Search that crosses the exit (e.g. "what is this card worth in the next fight?") must use determinized samples seeded by the search, never the true streams.
 
-## 5. One brain, two kinds of world
+## 5. One macro brain, two combat algorithms
 
-The search code is the same in both environments. Only the worlds it is handed differ:
+The macro brain and the value function V are the same in both environments. The combat brain is not: NoSL and SL pose different problems, so each has its own algorithm behind the same interface (`ICombatBrain`). Harness picks it by environment and hands it the matching worlds:
 
 ```mermaid
 flowchart LR
   subgraph NoSL
     R["public record"] -->|"Build × K<br/>seed_k"| W["K sampled worlds"]
-    W --> S1["search"] --> A["average over K"] --> L1["leaf V_NoSL(obs)"]
+    W --> S1["PIMC search<br/>to turn end"] --> A["average over K"] --> L1["leaf V(obs)"]
   end
   subgraph SL
     E["node-entry state<br/>+ node trace"] --> C["1 exact world<br/>sealed at exit"]
-    C --> S2["search"] --> L2["leaf V_SL(obs)"]
+    C --> S2["plan to<br/>combat end"] --> L2["leaf V(obs)"]
   end
 ```
 
 | | NoSL | SL |
 |---|---|---|
+| problem | hidden state and chance: the best action on average over the possible worlds | deterministic: the best line in the one world |
 | where worlds come from | public record → Build / Determinize ([Simulator §6](/en/arch/simulator/#sec-6)) | node clone ([Simulator §7](/en/arch/simulator/#sec-7)) |
-| number of worlds | K, averaged (no strategy fusion) | 1, deterministic |
+| number of worlds | K, averaged (no strategy fusion) | 1; taking the best line is correct, there is nothing to fuse |
 | chance nodes | at every reveal | none |
+| combat algorithm | PIMC: search to the end of the turn, average by first action, plan again after every action ([Combat brain §2](/en/arch/combat-brain/#sec-2)) | branch-and-bound over the whole combat, with an anytime beam; plan once ([Combat brain §3](/en/arch/combat-brain/#sec-3)) |
+| transpositions keyed by | observation | full state, random streams included |
 | budget is spent on | samples × depth | depth and breadth (a combat can usually be searched to its end) |
 | past the horizon | already samples | the world stops (`AtHorizon`); continue only by re-determinizing from the exit observation |
-| leaf | V_NoSL(observation) | V_SL(observation) |
+| macro brain | afterstate + V, mean over K samples | the same brain, on the one exact outcome |
+| value | V(observation) | the same V |
 
 "No strategy fusion" means NoSL scores each action by its average over the K worlds. It does not pick the best line separately in each world, which would let the plan behave as if it already knew which world is the real one.
 
-Leaf evaluators read observations only, in both environments, so the true streams cannot leak in through evaluation. The search code does not know which environment it runs in; the environment lives in Harness and in the world implementation. The interface is in [Protocol §7](/en/arch/protocol/#sec-7) (`IWorldSource`, `ICombatWorld`).
+**One V for both.** In principle SL changes values outside combat too: from the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk (more elites, high-variance events and cards). This is ignored: one V serves both environments, and in SL it is somewhat conservative. Which runs train it is open question 4 ([§10](#sec-10)).
+
+Leaf evaluators read observations only, in both environments, so the true streams cannot leak in through evaluation. The environment lives in Harness, which picks the combat brain and the world source, and in the world implementation; the macro brain and V never see it. The interface is in [Protocol §7](/en/arch/protocol/#sec-7) (`IWorldSource`, `ICombatWorld`).
 
 ## 6. Where the SL clone comes from
 
@@ -163,7 +169,7 @@ Each rule above has a test that keeps it true.
 
 ## 8. Learning, evaluation, output
 
-- V_NoSL and V_SL are different functions: an SL policy plays every later node better, so its win probability is higher. They have separate training targets, champions and gates, but may share architecture and initialization.
+- One V for both environments ([§5](#sec-5)). Champions, gates and leaderboards stay per environment; a new V changes both champions, so it must pass the gate of each environment separately.
 - The same seeds feed two leaderboards. The report includes the SL − NoSL difference: the value of node-level information. This is the formal version of the "omniscient vs resampled" ablation in plan v1 (local note `tmp/notes/plan.md`).
 - Output: NoSL facts are probabilities and expectations; SL facts may be exact outcomes ("play A then B → you draw X").
 
@@ -176,9 +182,9 @@ Each rule above has a test that keeps it true.
 | simulator | Build from the record, Determinize | node checkpoint, load save + replay, seal |
 | mod | observe, execute, overlay | node-entry export + action log (gated by environment) |
 | Harness | record, K worlds | 1 clone |
-| combat brain | PIMC expectation search | deterministic planning |
-| macro brain | afterstate + V | in-node choices with exact outcomes |
-| learning | V_NoSL | V_SL |
+| combat brain | PIMC expectation search | its own algorithm: the SL planner |
+| macro brain | afterstate + V | none (the same brain; in-node outcomes come exact from the clone) |
+| learning | V | none (the same V) |
 | evaluation | NoSL leaderboard | SL leaderboard + delta |
 
 ## 10. Open questions
@@ -186,3 +192,4 @@ Each rule above has a test that keeps it true.
 1. Rewards after a combat win: node rule (current) or the game's save rule? Once full runs work, measure how often rewards depend on how the combat used the random streams. The Rewards stream is shared with shops and events <Badge text="verified" variant="success" />, so inside a combat node this is probably rare.
 2. SL budget: equal wall-clock time with NoSL, which is fairer than an equal number of branches.
 3. Real reloads to verify clones: allowed only in tagged validation runs, never scored.
+4. Which runs train the shared V: NoSL runs only, or both. NoSL values are roughly a lower bound for SL, so a V trained on NoSL alone is merely conservative in SL.

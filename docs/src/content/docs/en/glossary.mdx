@@ -67,6 +67,7 @@ Terms are grouped by area. Each entry links to the page that covers it in depth.
 | PIMC | Perfect Information Monte Carlo: sample several determinized worlds, search each as if everything were known, and average ([Combat brain §2](/en/arch/combat-brain/#sec-2)). |
 | strategy fusion | The error of picking a different best line in each sampled world, as if the player knew which world is real. Averaging by first action avoids it. |
 | ISMCTS | Information Set Monte Carlo Tree Search: the alternative to try if PIMC's remaining fusion error turns out to matter. |
+| branch-and-bound | Search that keeps the best line found so far and drops every branch whose upper bound cannot beat it; a line that reaches the bound is proved optimal. The SL combat planner uses it ([Combat brain §3](/en/arch/combat-brain/#sec-3)). |
 | afterstate | The state right after a choice, before new randomness. The macro brain values options by their afterstates ([Macro brain §2](/en/arch/macro-brain/#sec-2)). |
 | L0, L1 | Macro brain levels: L0 values each afterstate with V; L1 checks close calls with paired rollouts. |
 | budget | How much search a decision may use: a fixed number of branches (reproducible) or wall-clock time ([Harness §5](/en/arch/harness/#sec-5)). |
@@ -77,7 +78,6 @@ Terms are grouped by area. Each entry links to the page that covers it in depth.
 |---|---|
 | value function V, P(win) | V(observation) = estimated probability of winning the run from here. The one scale for every decision ([Learning §1](/en/arch/learning/#sec-1)). |
 | leaf value | V applied where search stops, e.g. at the end of a turn. |
-| V_NoSL, V_SL | Separate value functions for the two environments. |
 | self-play | The current champion plays whole runs in the simulator to produce training data. |
 | champion, challenger | The champion is the current best version; a challenger must pass the gate to replace it. |
 | MC, TD(λ) | Ways to set value targets: from the final outcome (Monte Carlo) or blended with the next state's value (temporal difference). |

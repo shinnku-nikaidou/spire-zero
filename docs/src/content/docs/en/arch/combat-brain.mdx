@@ -8,11 +8,11 @@ sidebar:
 ---
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-The combat brain answers two kinds of question during a fight: (a) on the player's turn, what to do next (a card and its target, a potion, or end turn); (b) the prompts that come up during play (discard, exhaust, choose, …). It runs in the decision process; [Harness](/en/arch/harness/) calls it with a set of worlds and a budget. The search code is the same in both environments; only the worlds it is given differ ([Environments §5](/en/arch/environments/#sec-5)).
+The combat brain answers two kinds of question during a fight: (a) on the player's turn, what to do next (a card and its target, a potion, or end turn); (b) the prompts that come up during play (discard, exhaust, choose, …). It runs in the decision process; [Harness](/en/arch/harness/) calls it with a set of worlds and a budget. The two environments pose different problems, so they get different algorithms behind one interface: NoSL averages over sampled worlds ([§2](#sec-2)), SL plans on one exact world ([§3](#sec-3)). Harness picks the brain by environment ([Environments §5](/en/arch/environments/#sec-5)).
 
 <Aside title="Status">
 
-v0 exists (`src/Sts2Ai.Brain/CombatBrain.cs`, `LeafValue.cs`): PIMC over K worlds with a search over this turn ([§2](#sec-2)), the same search on the one SL world ([§3](#sec-3)), a hand-made leaf value ([§4](#sec-4)) and the fixed combat panel with its results ([§7](#sec-7)). Not built yet: card prompts as search branches, search past this turn, CI-based allocation and `Facts`. The placeholders stay, for bench and as the panel's baselines: `PlayPolicy` (plays a random playable card) and `RandomPolicy` (uniform over the legal actions).
+v0 exists (`src/Sts2Ai.Brain/CombatBrain.cs`, `LeafValue.cs`): PIMC over K worlds with a search over this turn ([§2](#sec-2)), a hand-made leaf value ([§4](#sec-4)) and the fixed combat panel with its results ([§7](#sec-7)). Until the SL planner exists, SL runs the same PIMC search on its one world ([§3](#sec-3)). Not built yet: the SL planner, card prompts as search branches, search past this turn, CI-based allocation and `Facts`. The placeholders stay, for bench and as the panel's baselines: `PlayPolicy` (plays a random playable card) and `RandomPolicy` (uniform over the legal actions).
 
 </Aside>
 
@@ -47,19 +47,33 @@ Two more rules:
 
 ## 3. SL: deterministic planning
 
-In SL there is one exact world and no chance nodes, so combat becomes deterministic planning on that one world. v0 runs the search of [§2](#sec-2) on that world, so it plans this turn only; items 2 and 5 below are planned. With a one-turn horizon SL plays no better than NoSL on the panel ([§7](#sec-7)): knowing the future helps only a search that looks past the turn.
+In SL the combat brain gets one exact world, the node clone. The clone holds every random stream, so the same action sequence always gives the same outcome. There is no hidden state and no chance node, so the combat is a deterministic planning problem. That is a different problem from NoSL's, and it gets its own algorithm, the **SL planner** (planned): a second implementation of `ICombatBrain` ([§6](#sec-6)).
 
-1. Inside a turn: the same enumeration, but with 1 world, so deduplication works better.
-2. Across turns: beam search, one step per turn (keep the top B end-of-turn states), until the combat ends or the budget runs out. After a win the node goes on (rewards), so the search may continue to the node exit (open question 1 in [Environments §10](/en/arch/environments/#sec-10)).
-3. RNG manipulation comes for free: different action orders consume the random streams differently, and the search sees the results.
-4. Leaf: V_SL(obs) at the end of the combat or at the node exit; at the end of the turn if the budget runs out.
-5. The world is sealed at the node exit (`AtHorizon`).
+**What optimal means.** With one world, taking the best line is correct: strategy fusion needs several worlds to fuse, so knowing the future is not an error here. A combat has finitely many lines, so a best line exists and exhaustive search finds it. It is best with respect to V at the end of the combat (or at the node exit): once the search reaches the end, the fight itself holds no estimate, and the only error left is in V of the end state (HP, potions, max HP, gold, …).
+
+**How hard it is.** In general, with hand, energy and turns unbounded, the problem is NP-hard: choosing a turn's cards under an energy limit already contains a knapsack problem. The real instances are bounded (a hand of at most 10 cards, 3–15 turns) but large: up to 10⁴ sequences per turn ([§1](#sec-1)), over many turns. So the planner aims at the optimum and proves it when it can, but does not need it.
+
+<Steps>
+
+1. **Search the whole combat.** Depth-first branch-and-bound over the actions of every turn until the combat ends; card prompts are branches too. **Branch-and-bound** keeps the best line found so far and drops every branch whose upper bound cannot beat it.
+2. **Bound.** A branch's upper bound is the best end it could still reach: a win at its current HP (plus what the fight can still add, such as healing) with every potion it still holds. Once the best line found reaches the root's bound, it is proved optimal and the search stops. In easy hallway fights a win with no HP lost is often found early.
+3. **Anytime.** For long fights (elites, bosses) a beam search gives a good first line quickly: one step per turn, keeping the top B end-of-turn states. Branch-and-bound then improves it until the budget runs out. The result says either "proved optimal" or "best found, at most Δ below the bound".
+4. **Key by full state.** Two action orders can reach the same observation with the random streams in different states (after a reshuffle, a random target or a generated card), and then they draw different futures. That is the RNG manipulation SL allows, and the search sees it for free. So transpositions are keyed by the full state, random streams included, not by the observation as in NoSL. Only the SL world offers this key: a NoSL world that offered it would leak hidden state.
+5. **Plan once.** The world is exact, so the plan for the whole combat is computed once and then played as computed. A real outcome that differs from the plan means the clone is wrong ([§7](#sec-7)).
+6. **Past the combat.** After a win the node goes on (rewards), so the search may continue to the node exit (open question 1 in [Environments §10](/en/arch/environments/#sec-10)). The leaf is V(obs) at the end of the combat or at the node exit, the same V as in NoSL and in the macro brain ([§4](#sec-4)).
+7. **Workers.** There is only one world, so the worker pool splits the tree by action prefix instead of by world, and the workers share the best value found so far for pruning.
+8. **Seal.** The world is sealed at the node exit (`AtHorizon`).
+
+</Steps>
+
+v0 has no planner yet: SL runs the PIMC search of [§2](#sec-2) on its one world, so it plans this turn only. With a one-turn horizon SL plays no better than NoSL on the panel ([§7](#sec-7)): knowing the future helps only a search that looks past the turn.
 
 ## 4. Leaf value
 
 The leaf value scores a state where the search stops. It uses one scale: the estimated probability of winning the run, P(win run) ([Learning](/en/arch/learning/)).
 
 - The input is the observation only, in both environments, so it cannot leak hidden state.
+- It is one function for both environments, shared with the macro brain ([Learning §1](/en/arch/learning/#sec-1)). NoSL uses it at the end of the turn; SL mostly at the end of the combat ([§3](#sec-3)).
 - v0 (built, `LeafValue`) projects the rest of the fight from the observation:
   - A lost combat is 0. A won combat scores `WinBase + PerHp × (HP / max HP)`, plus `PerPotion` for each potion still held.
   - Mid-combat, each enemy alive gets an effective HP (HP + block − `PoisonShare` × the poison's remaining damage n + (n−1) + … + 1) and a damage rate (its shown attack this turn, damage × hits, at least `MinIncoming`). The player deals `Dps` + 2 × Strength per turn and kills the enemies one after another, the highest rate per HP first. That is Smith's rule, the order that minimizes the total of (rate × time until dead). Each enemy hits until it dies; `Unblocked` of the damage beyond the player's current block is taken off the HP, and the HP left is scored like a win.
@@ -104,7 +118,7 @@ public sealed record CombatDecisionResult(
     IReadOnlyList<Candidate> Candidates);  // every first action, best first
 ```
 
-`PimcBrain` implements it. Planned: `Choose(request, worlds, budget)` for a prompt during play (chosen canonical indexes plus a value per option), and `Facts` on the result (expected HP loss, turns to kill, P(draw X), …).
+`PimcBrain` implements it for NoSL; the SL planner ([§3](#sec-3)) will be a second implementation, and Harness picks one by environment. Planned: `Choose(request, worlds, budget)` for a prompt during play (chosen canonical indexes plus a value per option), and `Facts` on the result (expected HP loss, turns to kill, P(draw X), …).
 
 - `Facts` will be the only source of narration ([Output §5](/en/arch/output/#sec-5)). NoSL facts are probabilities and expectations; SL facts may be exact.
 - `ICombatPolicy` / `IChoicePolicy` stay, for the placeholders and for rollout policies (fast policies that play a line out inside search).
@@ -116,6 +130,7 @@ public sealed record CombatDecisionResult(
 3. NoSL counterfactual: same record, different hidden state → same recommendation (fixed brain seed).
 4. SL seal: any execute past the node exit throws.
 5. Reproducible with a fixed branch budget. Holds: two panel runs give the same moves and results.
+6. SL plan fidelity: the real combat follows the plan; a divergence means the clone is wrong.
 
 ### 7.1 Panel results
 
@@ -153,5 +168,5 @@ Two runs beat the act 1 boss and die early in act 2; every other run ends in act
 1. K: starting value and growth rule (panel: the marginal HP-loss gain per added world).
 2. How bad fusion is: PIMC against ISMCTS on the panel.
 3. NoSL: turn-end leaf against rollout to the end of the combat, at equal budget.
-4. SL beam width B; equal wall-clock time with NoSL (open question 2 in [Environments §10](/en/arch/environments/#sec-10)).
+4. SL: beam width B, and how often the planner proves the optimum within the budget, per room type; equal wall-clock time with NoSL (open question 2 in [Environments §10](/en/arch/environments/#sec-10)).
 5. Leaf v0 against the feature leaf tuned by SPSA, on the panel.

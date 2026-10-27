@@ -45,10 +45,11 @@ import { Aside } from '@astrojs/starlight/components';
 | | NoSL | SL |
 |---|---|---|
 | 种子 | 同一组预先登记的种子 | 相同 |
-| 冠军 | V_NoSL 冠军 | V_SL 冠军 |
+| 冠军 | NoSL 冠军 | SL 冠军 |
 | 允许的信息 | [环境 §3](/arch/environments/#sec-3) | 同一张表 |
 | 预算 | 按每个决策计，同一档位 | 相同 |
 
+- 两个冠军共用宏观大脑和 V，只有战斗大脑不同（[环境 §5](/arch/environments/#sec-5)）。新的 V 会同时改变两个冠军，所以要在每种环境里分别过门槛。
 - 同时报告 SL − NoSL 的胜率差，也就是节点内信息的价值。这是计划 v1（本地笔记 `tmp/notes/plan.md`）里「全知 vs 重采样」消融实验的正式版本。作为参考：spire-mentor（一个前人项目）去掉它的作弊（覆盖整局）后，胜率下降了 22.8–25.5 个百分点（pp）；我们的作弊只到节点级，所以预计差值更小。
 
 <Aside type="caution" title="不要混用环境">

@@ -341,7 +341,7 @@ NoSL 世界是一个确定化样本：一个与玩家见过的一切都一致的
 worker 就是同一个可执行文件以 `serve` 启动。`WorkerPool`（在 `Sts2Ai.Harness` 里，它只通过协议类型看到游戏）启动 N 个 worker，在池的整个生命周期里一直用它们。
 
 - **线路**。每条消息是 stdin/stdout 上的一行 JSON（[协议 §7](/arch/protocol/#sec-7)）。worker 启动完（约 1.2 s）先写一行 `WorkerHello{game}`，之后按顺序对每一行请求回一行 `WorkerReply`，直到 stdin 关闭。游戏启动之前，`serve` 把 `Console.Out` 转到 stderr，所以游戏打印的任何东西都进不了这条流。池为每个 worker 保留最后 20 行 stderr，用于错误信息。
-- **目前唯一的请求**是 `PimcWorldRequest`：PIMC 对一个战斗决策中一个 NoSL 世界的搜索。worker 用构建种子从观测构建战斗（`SimWorlds.NoSL`，[§6](#sec-6)），取由搜索种子抽出的第 k 个世界，对本回合做深度优先搜索（[战斗大脑 §3](/arch/combat-brain/#sec-3)），回复每个首个动作之后的最佳路线。`PooledPimc` 每个世界发一个请求，再用与进程内 PIMC 相同的方式合并回复（[战斗大脑 §2](/arch/combat-brain/#sec-2)）。
+- **目前唯一的请求**是 `PimcWorldRequest`：PIMC 对一个战斗决策中一个 NoSL 世界的搜索。worker 用构建种子从观测构建战斗（`SimWorlds.NoSL`，[§6](#sec-6)），取由搜索种子抽出的第 k 个世界，对本回合做深度优先搜索（[战斗大脑 §2](/arch/combat-brain/#sec-2)），回复每个首个动作之后的最佳路线。`PooledPimc` 每个世界发一个请求，再用与进程内 PIMC 相同的方式合并回复（[战斗大脑 §2](/arch/combat-brain/#sec-2)）。
 - **自包含的请求**。请求带着 worker 需要的一切，请求之间不留任何状态。所以任何空闲的 worker 都能接任何请求，离开宿主进程的只有 NoSL 观测：真实状态永远不会到达 worker。
 - **确定性**。回复按请求顺序合并，绝不按完成顺序。种子相同时，结果与进程内搜索完全相同，连数值也一样：`selftest --workers N` 检查四个决策；6 场战斗的 panel 轨迹，用 8 个 worker 和进程内相比，diff 为空。
 - **崩溃**。关闭 stdout 或管道断开的 worker 会被重启，请求再发一次；第二次失败就报错。次数报告为 `worker restarts`。带错误的回复（worker 内的异常）让这个决策失败；worker 里游戏的 `Log.Error` 输出随回复返回，与宿主的一起计数。

@@ -75,16 +75,18 @@ In SL, rollouts that go past the current node still use sampled worlds ([Environ
 
 ## 3. NoSL vs SL
 
-The method is the same in both environments; only the source of outcomes differs.
+One macro brain serves both environments, with one value function V; only the source of outcomes differs.
 
 | | NoSL | SL |
 |---|---|---|
 | in-node random outcomes (event result, transform, reroll, a `?` already rolled) | K samples | exact (node clone) |
 | in-node rewards that depend on how the combat was played | — | known (open question 1, [Environments §10](/en/arch/environments/#sec-10)) |
 | beyond the node | sampled worlds | sampled worlds |
-| value function | V_NoSL | V_SL |
+| value function | V | the same V |
 
 Neow and other Ancient options: SL sees the exact outcome of random options, for example which card the "random rare card" option gives ([Environments §1](/en/arch/environments/#sec-1)).
+
+SL does change values outside combat in principle: from the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk (more elites, high-variance events). This is ignored: V is shared, and in SL it is somewhat conservative ([Environments §5](/en/arch/environments/#sec-5)).
 
 ## 4. Interface
 
