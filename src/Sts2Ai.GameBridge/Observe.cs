@@ -159,7 +159,8 @@ public static class Observe
         : new IntentView { Type = intent.IntentType.ToString() };
 
     private static List<PowerView> Powers(Creature c) =>
-        c.Powers.Where(p => p.IsVisible).Select(p => new PowerView(p.Id.Entry, p.DisplayAmount)).ToList();
+        c.Powers.Where(p => p.IsVisible).Select(p => new PowerView(p.Id.Entry, p.DisplayAmount, p.DisplayAmount != p.Amount ? p.Amount : null,
+            HeldCards.Get(p) is { } card ? Card(card) : null)).ToList();
 
     public static RelicView Relic(RelicModel r) => new()
     {

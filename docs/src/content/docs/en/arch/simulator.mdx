@@ -114,7 +114,7 @@ This is **not** the real travel path: it skips the `?` roll and its odds, and `G
 `CombatBuilder` builds a combat that shows a given observation. `CombatBuilder.Setup(obs, seed)`:
 
 1. starts the encounter with the observation's deck and relics;
-2. `Apply` overwrites the visible state: round; enemies (added, removed, reordered); HP and block; energy; gold; potions; orb slots and orbs, with the numbers they show; relic counters, shown or hidden, and used-up relics; powers; the 4 piles with per-card modifications; intents;
+2. `Apply` overwrites the visible state: round; enemies (added, removed, reordered); HP and block; energy; gold; potions; orb slots and orbs, with the numbers they show; relic counters, shown or hidden, and used-up relics; powers, with their stacks where the icon shows another number and the card a power keeps; the 4 piles with per-card modifications; intents;
 3. `Resample(StableHash(seed))` draws the hidden state;
 4. `BuildDifferences` diffs, by JSON path, the input observation against the observation of the rebuilt combat. Empty means exact.
 

@@ -67,8 +67,8 @@ internal static class CombatBuilder
         NextCreatureId.SetValue(st, st.Creatures.Max(c => c.CombatId ?? 0) + 1);
 
         Relics(player, obs.Relics);
-        Powers(player.Creature, obs.Player.Powers);
-        foreach (var (enemy, view) in st.Enemies.Zip(obs.Enemies)) Powers(enemy, view.Powers);
+        Powers(st, player, player.Creature, obs.Player.Powers);
+        foreach (var (enemy, view) in st.Enemies.Zip(obs.Enemies)) Powers(st, player, enemy, view.Powers);
         // After the powers, which can change max HP and max energy.
         Stats(player.Creature, obs.Player.Hp, obs.Player.MaxHp, obs.Player.Block);
         foreach (var (enemy, view) in st.Enemies.Zip(obs.Enemies)) Stats(enemy, view.Hp, view.MaxHp, view.Block);
@@ -247,9 +247,9 @@ internal static class CombatBuilder
     /// <summary>
     /// Makes the visible powers the observed ones, in the observed order. A power the fresh combat already has keeps
     /// its own state; a missing one is attached without its on-apply effects, which the observation already shows.
-    /// Hidden powers are left alone.
+    /// Hidden powers are left alone. A card a power keeps is the player's, outside every pile.
     /// </summary>
-    private static void Powers(Creature c, IReadOnlyList<PowerView> views)
+    private static void Powers(CombatState st, Player player, Creature c, IReadOnlyList<PowerView> views)
     {
         var visible = c.Powers.Where(p => p.IsVisible).ToList();
         var wanted = new List<PowerModel>();
@@ -262,9 +262,16 @@ internal static class CombatBuilder
                 power = Models.Find<PowerModel>(view.Id).ToMutable();
                 // The game: a power's target "is used on instanced powers that each target a player".
                 if (power.InstanceType != PowerInstanceType.None && c.Side == CombatSide.Enemy) power.Target = c.CombatState!.Players[0].Creature;
-                power.ApplyInternal(c, view.Amount != 0 ? view.Amount : 1, silent: true);
+                power.ApplyInternal(c, (view.Stacks ?? view.Amount) is var amount and not 0 ? amount : 1, silent: true);
             }
-            Solve(() => power.DisplayAmount, view.Amount, Knobs(power));
+            if (view.Stacks is int stacks) power.SetAmount(stacks, silent: true);
+            if (view.Card is { } held)
+            {
+                var card = Create(st, player, new CardSpec(held.Id, held.Up ?? 0, held.Enchant?.Id, held.Enchant?.Amount ?? 0));
+                Modify(card, held, inHand: false);
+                HeldCards.Set(power, card);
+            }
+            Solve(() => power.DisplayAmount, view.Amount, Knobs(power, amountKnown: view.Stacks != null));
             wanted.Add(power);
         }
         foreach (var power in visible) power.RemoveInternal();
@@ -312,10 +319,13 @@ internal static class CombatBuilder
         }
     }
 
-    /// <summary>A power's amount first, then its own numbers, then its fields and those of its internal data.</summary>
-    private static IEnumerable<Knob> Knobs(PowerModel power)
+    /// <summary>
+    /// A power's amount first, unless it is known (shown apart from the icon's number), then its own numbers, then its
+    /// fields and those of its internal data.
+    /// </summary>
+    private static IEnumerable<Knob> Knobs(PowerModel power, bool amountKnown)
     {
-        yield return new(() => power.Amount, v => power.SetAmount(v, silent: true));
+        if (!amountKnown) yield return new(() => power.Amount, v => power.SetAmount(v, silent: true));
         foreach (var v in power.DynamicVars.Values) yield return new(() => (int)v.BaseValue, x => v.BaseValue = x);
         foreach (var knob in FieldKnobs(power, typeof(PowerModel))) yield return knob;
         if (InternalData.GetValue(power) is { } data)

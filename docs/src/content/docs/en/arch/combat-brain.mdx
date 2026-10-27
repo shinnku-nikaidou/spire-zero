@@ -165,7 +165,7 @@ Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0
 
 PIMC raises the floor under either macro brain, and L0 under either combat policy. With both, the runs that reach the act 1 boss enter it with 93% of their HP on average (58% with random macro decisions), and 15 reach the act 2 boss. No run wins yet. PIMC took 41–50 s per run, four runs at a time with 8 workers each.
 
-The reports are in `eval/reports/` ([Evaluation §6](/en/arch/evaluation/#sec-6)), from commit `18fdb07`. Five of the 400 PIMC runs failed, each in a world build. Four of the failures (a spent Silver Crucible's hidden counter, a Glass orb's numbers) are fixed since ([Simulator §3](/en/arch/simulator/#sec-3)). The fifth, Predator played by Mayhem, is still open; it is the source of the 4 game errors.
+The reports are in `eval/reports/` ([Evaluation §6](/en/arch/evaluation/#sec-6)), from commit `18fdb07`. Five of the 400 PIMC runs failed, each in a world built wrong from the observation: a spent Silver Crucible's hidden counter (three runs), a Glass orb's numbers, and Sloth's limit, which only its tooltip shows (the world allowed fewer cards a turn than the real combat, and a legal play was illegal in it). All three are fixed since ([Simulator §3](/en/arch/simulator/#sec-3), [Protocol §1](/en/arch/protocol/#sec-1)). The 4 game errors come from the game: a card that Mayhem plays can stop early without taking itself off the stack of its choice context, and the game logs the mismatch when Mayhem takes itself off.
 
 ## 8. Open questions
 

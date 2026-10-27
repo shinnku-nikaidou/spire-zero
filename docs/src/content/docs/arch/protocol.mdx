@@ -24,6 +24,7 @@ Protocol（协议）是项目各进程之间的共同语言。游戏宿主（真
 
 - `CombatObservation`：玩家在一场战斗里能看到的一切。它包括遭遇 id、幕、进阶等级、回合数、一个 `PlayerView`、手牌（带 uid）、按卡牌键（card key）排序的抽牌堆、弃牌堆和消耗堆、每个槽位的药水、遗物、友方单位，以及敌人和它们的意图 `IntentView{type, damage per hit, hits}`（类型、每段伤害、段数）。抽牌堆要排序，是因为它的真实顺序是隐藏的。
 - `CardView{id, uid?, up, cost|x_cost, stars, enchant, affliction, keywords sorted, vars sorted}`：玩家眼中的一张牌。`ProtocolJson.CardKey` 是这张牌去掉 uid 之后的序列化结果，也就是它对玩家可见的身份：键相同的两张牌，在玩家看来一模一样。`vars` 不含计算出的数值（完美打击的伤害）：牌面把它显示为一个基础数值加上额外数值乘以状态里的某个计数，而这两部分都已列出。
+- `PowerView{id, amount, stacks?, card?}`：图标和提示框里看到的一个能力。`amount` 是图标上的数字。`stacks` 是能力本身的层数，提示框里会写出来；只有图标显示别的数字时才有这一项（Sloth 的图标数的是本回合打出的牌数，层数才是上限）。`card` 是能力保存的一张牌，提示框里会写出它的名字：Nightmare 下回合要复制的那张牌。
 - `CombatAction`：一个战斗动作，文本形式为 `play:C[:T]`（打出牌 C，可选目标 T）、`potion:S[:T]`（使用槽位 S 的药水）或 `end_turn`。动作用 **uid** 指代对象：uid 是取自游戏本身的稳定 id，而不是列表里的位置。手牌的 uid 是它的 `NetCombatCardDb` id，生物的 uid 是它的 `CombatId`。因此手牌变化时动作依然有效，而且在模拟器和真实游戏里含义相同。
 - `CardChoice{options canonical-sorted by card key, ties by hidden-state-free seed; min; max; context}` 以及 `Accepts(picks)`：一个选牌提示，比如「弃 1 张牌」或「3 选 1」。选项按**规范顺序**排列：按卡牌键排序，键相同时用一个不含隐藏状态的种子打破平局，从不使用游戏自己的顺序。一个回答要选 min 到 max 个选项；`Accepts(picks)` 检查回答是否有效。`context` 说明游戏为什么要问（[§4](#sec-4)）。
 - `Observation{run, screen}`：玩家在任一决策点看到的内容（[§3](#sec-3)）；`Surfaces` 常量（`Surfaces.cs`）给各个画面命名。

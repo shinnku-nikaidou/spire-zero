@@ -165,7 +165,7 @@ Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0
 
 无论局外用哪个大脑，PIMC 都提高了层数；无论战斗用哪个策略，L0 也都提高了层数。两者合用时，打到第 1 幕 Boss 的局进 Boss 战时平均还有 93% 的生命（局外随机时是 58%），有 15 局打到第 2 幕 Boss。还没有一局获胜。PIMC 每局 41–50 s，同时跑四局，每局 8 个 worker。
 
-报告在 `eval/reports/`（[评估 §6](/arch/evaluation/#sec-6)），来自提交 `18fdb07`。400 局 PIMC 里有 5 局失败，都失败在构建世界时。其中 4 局（用完的银坩埚隐藏的计数、玻璃充能球的数值）此后已修复（[模拟器 §3](/arch/simulator/#sec-3)）。第 5 局是 `MAYHEM_POWER` 打出的 `PREDATOR`，还没解决；4 个游戏错误也来自它。
+报告在 `eval/reports/`（[评估 §6](/arch/evaluation/#sec-6)），来自提交 `18fdb07`。400 局 PIMC 里有 5 局失败，都是因为从观测构建的世界不对：用完的银坩埚隐藏的计数（三局）、玻璃充能球的数值，以及只有提示框里才写出的 Sloth 上限（世界里每回合能打的牌比真实战斗少，一张合法的牌在世界里变得不合法）。这三处此后都已修复（[模拟器 §3](/arch/simulator/#sec-3)、[协议 §1](/arch/protocol/#sec-1)）。4 个游戏错误来自游戏本身：`MAYHEM_POWER` 打出的牌可能中途结束，却没把自己从选择上下文的栈里移除，等 `MAYHEM_POWER` 移除自己时，游戏就记下这个不匹配。
 
 ## 8. 未决问题
 

@@ -18,7 +18,8 @@ namespace Sts2Ai.SimWorker;
 ///  - determinize: resampling hidden information leaves the observation unchanged, replays exactly, and the
 ///    combat plays on from there;
 ///  - build: a combat built from a recorded observation shows exactly that observation, uids included, restores
-///    by replay, and plays on; also numbers kept inside a model (a worn Glass orb, a spent Silver Crucible);
+///    by replay, and plays on; also numbers kept inside a model (a worn Glass orb, a spent Silver Crucible, Sloth's
+///    count of cards played) and the card Nightmare keeps;
 ///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
 ///  - worlds: a search world restores exactly after a prompt, also when a relic asks at the start of each turn;
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
@@ -271,8 +272,10 @@ internal static class SelfTest
 
     /// <summary>
     /// A Defect combat's observation edited to show numbers that only a model's own state holds: a Glass orb that has
-    /// fired once (3 passive, 6 evoke, against a fresh one's 4 and 8) and a Silver Crucible after its third card reward
-    /// (no counter, against a fresh one's 3). The built combat must show them.
+    /// fired once (3 passive, 6 evoke, against a fresh one's 4 and 8), a Silver Crucible after its third card reward
+    /// (no counter, against a fresh one's 3), Sloth after one card of its 3 (the icon shows the 1), and Nightmare on the
+    /// first card in hand. The built combat must show them, still let cards be played, and add Nightmare's copies next
+    /// turn.
     /// </summary>
     private static void BuildsInternalNumbers(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
     {
@@ -280,13 +283,22 @@ internal static class SelfTest
         CombatObservation obs;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
             obs = session.Observation();
+        var held = obs.Hand[0] with { Uid = null };
         obs = obs with
         {
-            Player = obs.Player with { Orbs = [new OrbView("GLASS_ORB", 3, 6), .. obs.Player.Orbs.Take(obs.Player.OrbSlots - 1)] },
+            Player = obs.Player with
+            {
+                Orbs = [new OrbView("GLASS_ORB", 3, 6), .. obs.Player.Orbs.Take(obs.Player.OrbSlots - 1)],
+                Powers = [.. obs.Player.Powers, new PowerView("SLOTH_POWER", 1, 3), new PowerView("NIGHTMARE_POWER", 3, Card: held)],
+            },
             Relics = [.. obs.Relics, new RelicView { Id = "SILVER_CRUCIBLE" }],
         };
         using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
         check("build solves internal numbers", built.BuildDifferences.Count == 0, $"{pool[0].Id.Entry}: {string.Join("; ", built.BuildDifferences.Take(4))}");
+        check("build keeps a power's stacks", built.LegalActions().Any(a => a.Kind == CombatActionKind.PlayCard), "Sloth after 1 card of 3 allows no card");
+        built.Execute(built.LegalActions().First(a => a.Kind == CombatActionKind.EndTurn));
+        var hand = built.Observation().Hand;
+        check("build keeps a power's card", hand.Count(c => c.Id == held.Id) >= 3, $"Nightmare of {held.Id} left a hand of {string.Join(",", hand.Select(c => c.Id))}");
     }
 
     /// <summary>

@@ -76,7 +76,12 @@ public sealed record CardView
 /// <summary>An enchantment or affliction on a card.</summary>
 public sealed record ModifierView(string Id, int Amount);
 
-public sealed record PowerView(string Id, int Amount);
+/// <summary>A power as its icon and its tooltip show it.</summary>
+/// <param name="Amount">The number on the icon.</param>
+/// <param name="Stacks">The power's own amount, which its tooltip states, when the icon shows another number: Sloth's
+/// icon counts the cards played this turn, and its stacks are the limit.</param>
+/// <param name="Card">The card the power keeps, which its tooltip names: the card Nightmare adds copies of.</param>
+public sealed record PowerView(string Id, int Amount, int? Stacks = null, CardView? Card = null);
 
 public sealed record OrbView(string Id, decimal Passive, decimal Evoke);
 
