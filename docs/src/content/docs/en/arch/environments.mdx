@@ -13,7 +13,7 @@ The AI always plays in one of two **environments**. They differ in only one thin
 
 <Aside title="Status">
 
-Decided by the user on 2026-10-26.
+Decided.
 
 </Aside>
 
@@ -35,8 +35,6 @@ The *public history* is everything shown on screen so far, plus what can be infe
 ### SL: save & load inside the current node
 
 SL is NoSL plus the true outcome of any action sequence inside the **current node**. The project calls this "limited cheating". It is the same as a player who may save and quit as often as they like inside the node and remembers everything.
-
-The user's definition: "sl 只能查看当前房间，当前事件，比如桥，接下来分别会删除什么卡之类的" (SL may only look into the current room or the current event, e.g. which card the bridge will take next).
 
 A **node** is the current map point (`MapPoint`), from arrival until the next map point is chosen. It includes every room of that point (`MapPointHistoryEntry.Rooms`, e.g. a combat started by an event), the rewards screen, shop purchases, rest options, the chest, and every event page.
 
@@ -67,7 +65,7 @@ Why not use the game's own save points as the boundary? The game autosaves <Badg
 
 There is no save in the middle of a combat. Reloading replays the room exactly: same encounter, same opening hand, same monster moves. A save stores the full RNG state `{counter, s0..s3}` of every stream (`Saves/SerializableRng.cs:51-63`).
 
-So the game's own save & load is slightly narrower than a node. After a combat win the save has already moved past the combat, so "would a different line of play change the rewards?" cannot be tested in the real game. The node boundary was chosen anyway: it matches the user's words and gives a single point at which to seal the world. The difference between the two is open question 1 ([§10](#sec-10)).
+So the game's own save & load is slightly narrower than a node. After a combat win the save has already moved past the combat, so "would a different line of play change the rewards?" cannot be tested in the real game. The node boundary was chosen anyway: it covers everything inside one map point (rooms, rewards, every event page) and gives a single point at which to seal the world. The difference between the two is open question 1 ([§10](#sec-10)).
 
 ## 3. Information table
 
@@ -133,7 +131,7 @@ Leaf evaluators read observations only, in both environments, so the true stream
 
 - **R1–R3** (the simulator plays the run; rungs of the [sim-to-real ladder](/en/arch/evaluation/#sec-1)): the host worker holds the true state. At node entry it takes a checkpoint with `RunManager.ToSave(null)` (`Runs/RunManager.cs:670-709`) <Badge text="verified" variant="success" />. The clone is that checkpoint plus the node trace, restored through the run-replay path ([Simulator §5.4](/en/arch/simulator/#sec-5.4)).
 - **R4** (the real game): at node entry the mod calls `ToSave(null)` in memory. It never touches `current_run.save`, which is cloud-synced. It also logs every action in the node (and a `CombatReplayWriter` dump in the middle of a combat, [Mod §6](/en/arch/mod/#sec-6)) and sends both to a worker. The worker loads them through the Continue path and replays the actions.
-- A clone may differ from a game that ran without interruption: loading re-runs map hooks and `OnRunLoaded`, and drops relic fields that are not marked as saved (`Runs/RunManager.cs:815-816`, `Runs/RunState.cs:330-332`). This is a game bug and is accepted as is (user, 2026-10-26): no checksum verification, no fallback, not modeled in training.
+- A clone may differ from a game that ran without interruption: loading re-runs map hooks and `OnRunLoaded`, and drops relic fields that are not marked as saved (`Runs/RunManager.cs:815-816`, `Runs/RunState.cs:330-332`). This is a game bug and is accepted as is: no checksum verification, no fallback, not modeled in training.
 - **NoSL:** this channel is closed. The environment is fixed at session start and logged. The mod never exports saves and workers never offer clones. Any export found in a NoSL log makes the run invalid.
 - The decision process never reads saves: Brain has no reference to the game, which the compiler enforces.
 

@@ -112,7 +112,7 @@ A self-improving loop can settle into a local optimum: a way of playing that eve
 | population / archive | one champion per style descriptor (MAP-Elites), so no collapse to "always conservative" |
 | exploration | Thompson or ε on macro decisions in self-play; afterstate MC targets are robust to it |
 | conservatism monitors | elites taken, skip rate, HP at boss, gold/potion hoarding ([Evaluation §3](/en/arch/evaluation/#sec-3)) |
-| contrarian hypotheses | user/LLM ideas → constrained policy variants → sim A/B; results back to discussion |
+| contrarian hypotheses | human/LLM ideas → constrained policy variants → sim A/B; results back to discussion |
 
 - **MAP-Elites** keeps an archive instead of a single best policy. Each policy is placed in a cell by its style descriptor (a few numbers describing how it plays), and each cell keeps its own best champion. Styles that are not the best yet survive, so the population cannot collapse into one style.
 - **Thompson sampling** explores by drawing a plausible value for each option from its uncertainty and picking the best draw; an option is tried about as often as it might really be the best one. **ε-greedy** picks a random option with a small probability ε.
@@ -132,7 +132,7 @@ flowchart LR
 ```
 
 - Compute: 8 physical cores / 16 threads. 8 processes reach about 1,860 combats/s, against 275 in a single process ([Simulator §4](/en/arch/simulator/#sec-4)). The GPU (RTX 5070 Ti) is for value-net training only.
-- Training is Python, managed with uv, reading the JSONL logs. Inference is C# inside Brain (a small net on the CPU, with ONNX Runtime or a hand-written forward pass). New packages or runtimes need the user's approval.
+- Training is Python, managed with uv, reading the JSONL logs. Inference is C# inside Brain (a small net on the CPU, with ONNX Runtime or a hand-written forward pass).
 - Reproducibility: each generation records its champion, seed sets, hyperparameters and commit. Logs go into one directory per generation.
 - Storage: about 50 macro decisions plus a few hundred combat decisions per run, compressed. Old generations are pruned on demand.
 
