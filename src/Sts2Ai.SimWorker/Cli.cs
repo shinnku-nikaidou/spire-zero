@@ -53,6 +53,7 @@ namespace Sts2Ai.SimWorker;
 ///   leaderboard [--reports eval/reports] [--champions eval/champions] [--out eval/leaderboard.md]
 ///                                          the leaderboards over every report in the folder (docs: evaluation §2)
 ///   seeds --base N --n 300                 a seed file's seeds: MakeSeed(N, 0..n-1), one per line
+///   weights                                V's initial weights as a weights file, for tuning to start from
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
 ///         [--worlds 8] [--nodes 300] [--workers 0] [--trace] [--out results.jsonl]
 ///                                          the fixed combat panel: the same combats for every player; win rate, HP lost.
@@ -69,11 +70,12 @@ internal static class Cli
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static int Run(string[] args)
     {
-        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | serve | report | gate | leaderboard | seeds"); return 2; }
+        if (args.Length == 0) { Console.Error.WriteLine("usage: list | combat --encounter ID | bench | selftest | forkbench | run | brain | panel | serve | report | gate | leaderboard | seeds | weights"); return 2; }
         // These need no game.
         if (args[0] == "report") return Report(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "leaderboard") return Leaderboards(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "seeds") return Seeds(ParseOptions(args.Skip(1).ToArray()));
+        if (args[0] == "weights") { Console.WriteLine(ProtocolJson.Serialize(new ValueWeights("v0", RunValue.InitialWeights))); return 0; }
         if (args[0] == "gate") return GateCommand(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "brain") return Brain(WithChampion(ParseOptions(args.Skip(1).ToArray())));
         // A worker's stdout is the wire: keep it, and send everything else that is printed to stderr from the start.

@@ -130,7 +130,7 @@ The methods named above:
 - **Pairs** go by seed, in the seed set's order. The SPRT looks after each pair and stops at the first clear verdict.
 - **Metrics.** `floor` (the default while runs rarely win): the mean floor difference, challenger minus champion, as a Gaussian SPRT with H0 at 0 and H1 at δ = 1.5 floors; the variance is estimated from the pairs so far (at least 1), and no verdict comes before 10 pairs. `win`: only the pairs where exactly one side won, as in McNemar's test; the challenger's share of them, H0 at 0.5 and H1 at 0.5 + δ, δ = 0.1. α = β = 0.05.
 - **Verdicts:** pass, fail, open (the pairs ran out first), or void (the challenger's runs break a must-be-zero rule, [§3](#sec-3)). The exit code is 0 on a pass.
-- **Promotion:** on a pass, `--promote PATH` writes the challenger's report to PATH.json and PATH.md and rewrites the champion file, with the gate's result in it. The new report faces the next challengers, so it must cover the whole seed set. The SPRT can pass early: play the challenger in chunks, gate after each, stop at a fail, and after a pass play the rest of the set, then promote.
+- **Promotion:** on a pass, `--promote PATH` writes the challenger's report to PATH.json and PATH.md and rewrites the champion file, with the gate's result in it. The new report faces the next challengers, so it must cover the whole seed set. The SPRT can pass early: play the challenger in chunks, gate after each, stop at a fail, and after a pass play the rest of the set, then promote. `learn/challenge.py` does exactly that ([Learning §2](/en/arch/learning/#sec-2)).
 
 ## 6. Reports
 

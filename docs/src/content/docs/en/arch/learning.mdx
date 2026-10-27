@@ -13,7 +13,7 @@ This page defines the value function V that both brains use to score positions, 
 
 <Aside title="Status">
 
-V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, and `run --value` plays with the fitted ones ([§2](#sec-2)); no fitted weights are promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
+V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, `learn/spsa.py` tunes them by SPSA, `run --value` plays with either, and `learn/challenge.py` takes a challenger through the gate ([§2](#sec-2)); no fitted or tuned weights are promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
 
 </Aside>
 
@@ -76,8 +76,10 @@ flowchart TD
    v0's fit is `learn/fit_value.py`. Every macro decision in the decision logs carries V's features ([Harness §6](/en/arch/harness/#sec-6)), and the run records give the floor its run reached, joined by run id. It is ridge regression on standardized features (ridge regression: least squares with a small penalty on the size of the weights, which keeps correlated features from taking extreme weights). Each run weighs the same however many decisions it has, and every fifth run (by run id) is held out. It reports R² on the held-out runs (R²: the share of the floor's variance the fit explains, 1 at best, below 0 when it does worse than the mean), next to a fit on the floor alone. The weights go to `eval/values/NAME.json`; `run --value FILE` plays L0 with them, and the champion shows them as `l0 NAME`.
 3. **ExIt:** search values become labels for V and for the priors (which actions the search tries first). The teacher is a fair search in the same environment, one that obeys that environment's information rules. No behavior cloning (training a model to copy a teacher's moves) of an omniscient teacher: that failed in several projects.
 4. **SPSA** on the v0 weights and on the search parameters.
+
+   For V's weights this is `learn/spsa.py`. It starts from a weights file (V's initial weights by default, which `weights` prints). Each step draws a random sign for every weight, moves all of them by c times their scale with those signs and against them, and plays the same fresh train seeds with both versions (`run --macro l0 --value`, plus the run options given, such as the combat policy). CRN makes the two comparable on few seeds. The weights then move toward the side that reached the higher mean floor, by Spall's decreasing step sizes, at most a tenth of each weight's scale per step. A weight's scale is its starting size. The floor's weight is left alone, since it changes no choice. The result is a weights file for `run --value`.
 5. **LLM:** the input is pre-aggregated failure clusters plus death summaries; the output is K candidate patches (features, pruning rules, parameters). The candidates are filtered by compiling, unit tests and fair-play tests, then gated. Only cheap models through the LLM gateway.
-6. **Gate:** see [Evaluation §5](/en/arch/evaluation/#sec-5).
+6. **Gate:** see [Evaluation §5](/en/arch/evaluation/#sec-5). `learn/challenge.py` takes a challenger, given by its run options, through it: it plays the champion's seed set in chunks and runs the gate after each chunk. It stops at a fail or a void verdict; after a pass it plays the rest of the set and promotes the challenger, which rewrites the champion file and rebuilds the leaderboard.
 
 ## 3. Reward and credit
 
