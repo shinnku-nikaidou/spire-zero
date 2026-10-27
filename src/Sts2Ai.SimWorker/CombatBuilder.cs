@@ -31,7 +31,7 @@ namespace Sts2Ai.SimWorker;
 /// Not reproduced, because the observation doesn't show it: this turn's history (cards played, damage taken, ...),
 /// counters kept inside powers and monsters, how long a card's cost change lasts (a card in hand is taken to be
 /// cheaper this turn or until played, a card elsewhere for the rest of the combat), and which debuffs on the player
-/// skip their next tick. Orbs and allies other than the player are not built yet.
+/// skip their next tick. Allies other than the player are not built yet.
 /// </summary>
 internal static class CombatBuilder
 {
@@ -282,6 +282,8 @@ internal static class CombatBuilder
             if (view.UsedUp == true)
                 Solve(() => relic.IsUsedUp ? 1 : 0, 1, FieldKnobs(relic, typeof(RelicModel)).Concat(FlagKnobs(relic, typeof(RelicModel))));
             if (view.Counter is int counter) Solve(() => relic.DisplayAmount, counter, FieldKnobs(relic, typeof(RelicModel)));
+            // A hidden counter can be one that ran out, such as Silver Crucible's after its third card reward.
+            else Solve(() => relic.ShowCounter ? 1 : 0, 0, FieldKnobs(relic, typeof(RelicModel)));
             relic.Status = view.Status == null ? RelicStatus.Normal : Enum.Parse<RelicStatus>(view.Status);
             relic.IsMelted = view.Melted == true;
         }
@@ -325,6 +327,11 @@ internal static class CombatBuilder
         Fields(model, baseType).Where(f => f.FieldType == typeof(int))
             .Select(f => new Knob(() => (int)f.GetValue(model)!, v => f.SetValue(model, v)));
 
+    /// <summary>The decimal fields, as <see cref="FieldKnobs"/>, set to whole numbers.</summary>
+    private static IEnumerable<Knob> DecimalKnobs(object model, Type baseType) =>
+        Fields(model, baseType).Where(f => f.FieldType == typeof(decimal))
+            .Select(f => new Knob(() => (int)(decimal)f.GetValue(model)!, v => f.SetValue(model, (decimal)v)));
+
     /// <summary>The bool fields, as <see cref="FieldKnobs"/>: a flag reads as 0 or 1 and is set by any number but 0.</summary>
     private static IEnumerable<Knob> FlagKnobs(object model, Type baseType) =>
         Fields(model, baseType).Where(f => f.FieldType == typeof(bool))
@@ -343,7 +350,10 @@ internal static class CombatBuilder
                 yield return f;
     }
 
-    /// <summary>The observed orb slots and orbs, in order, put in without their on-channel effects.</summary>
+    /// <summary>
+    /// The observed orb slots and orbs, in order, put in without their on-channel effects. An orb's numbers can drift
+    /// from its fresh ones (a Glass orb loses one passive damage each time it fires), so they are solved like a power's.
+    /// </summary>
     private static void Orbs(Player player, int slots, IReadOnlyList<OrbView> views)
     {
         var queue = player.PlayerCombatState!.OrbQueue;
@@ -354,6 +364,9 @@ internal static class CombatBuilder
             var orb = Models.Find<OrbModel>(view.Id).ToMutable();
             orb.Owner = player;
             queue.Insert(i, orb);
+            var knobs = DecimalKnobs(orb, typeof(OrbModel)).ToList();
+            Solve(() => (int)orb.PassiveVal, (int)view.Passive, knobs);
+            Solve(() => (int)orb.EvokeVal, (int)view.Evoke, knobs);
         }
     }
 

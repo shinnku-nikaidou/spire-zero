@@ -114,7 +114,7 @@ This is **not** the real travel path: it skips the `?` roll and its odds, and `G
 `CombatBuilder` builds a combat that shows a given observation. `CombatBuilder.Setup(obs, seed)`:
 
 1. starts the encounter with the observation's deck and relics;
-2. `Apply` overwrites the visible state: round; enemies (added, removed, reordered); HP and block; energy; gold; potions; orb slots and orbs; relic counters and used-up relics; powers; the 4 piles with per-card modifications; intents;
+2. `Apply` overwrites the visible state: round; enemies (added, removed, reordered); HP and block; energy; gold; potions; orb slots and orbs, with the numbers they show; relic counters, shown or hidden, and used-up relics; powers; the 4 piles with per-card modifications; intents;
 3. `Resample(StableHash(seed))` draws the hidden state;
 4. `BuildDifferences` diffs, by JSON path, the input observation against the observation of the rebuilt combat. Empty means exact.
 
@@ -123,7 +123,7 @@ Details:
 - **Knob solver.** Shown numbers derive from internal integers in a different way for each power or relic. The builder tries integers (amount, dynamic vars, fields) until the display matches. A relic seen as used up (a spent `LIZARD_TAIL`, `WINGED_BOOTS` with no flights left) gets its int and bool fields tried the same way until the rebuilt one is used up too.
 - **Intents.** The builder chooses among the moves that show the observed intents. A stunned enemy gets a synthesized stun move, made like `Creature.StunInternal` does (`FollowUpStateId = StateLog.Last().Id`). Hidden enum switches in powers (e.g. `SurroundedPower._facing`) and then the monsters' own int fields (e.g. the Waterfall Giant's pressure gun damage, which grows each time it fires) are searched to maximize the number of matching enemies.
 - **uids** match the observation; other cards are numbered above them.
-- **Approximations (gap):** per-turn history and internal counters; cost-modifier durations; player debuff decay; real stun-move follow-ups; the deck is all cards seen, generated ones included; orbs are put in without their own internal state; non-player allies are not built. Never validated on real-game observations.
+- **Approximations (gap):** per-turn history and internal counters; cost-modifier durations; player debuff decay; real stun-move follow-ups; the deck is all cards seen, generated ones included; non-player allies are not built. Never validated on real-game observations.
 
 Selftest matrix (2026-10-27), all checks pass:
 
@@ -360,7 +360,7 @@ Planned requests, for the SL clone and run worlds: open a world by kind (build, 
 - determinism;
 - restore, with the hidden state byte-equal;
 - determinize keeps the observation, replays, and plays on;
-- build shows the observation, restores, and plays on;
+- build shows the observation, restores, and plays on; it also shows numbers that only a model's own state holds (a worn Glass orb, a spent Silver Crucible);
 - fast hook listeners give the same result as the game's;
 - Brain, Protocol and Harness reach no game assembly (with GameBridge as the negative control);
 - with `--workers N`: pooled PIMC picks what in-process PIMC picks, with the same values, with no worker restarts or worker game errors;

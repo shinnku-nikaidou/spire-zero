@@ -18,7 +18,7 @@ namespace Sts2Ai.SimWorker;
 ///  - determinize: resampling hidden information leaves the observation unchanged, replays exactly, and the
 ///    combat plays on from there;
 ///  - build: a combat built from a recorded observation shows exactly that observation, uids included, restores
-///    by replay, and plays on;
+///    by replay, and plays on; also numbers kept inside a model (a worn Glass orb, a spent Silver Crucible);
 ///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
 ///  - worlds: a search world restores exactly after a prompt, also when a relic asks at the start of each turn;
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
@@ -110,6 +110,7 @@ internal static class SelfTest
             Check("no game errors", errors.Count == 0, $"{label}: {errors.FirstOrDefault()}");
         }
 
+        BuildsInternalNumbers(pump, pool, act, Check);
         RollingBoulder(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         int workers = Cli.Int(opts, "workers", 0);
@@ -267,6 +268,26 @@ internal static class SelfTest
     }
 
     private static int DistinctCards(string drawOrder) => drawOrder.Split('\n').Distinct().Count();
+
+    /// <summary>
+    /// A Defect combat's observation edited to show numbers that only a model's own state holds: a Glass orb that has
+    /// fired once (3 passive, 6 evoke, against a fresh one's 4 and 8) and a Silver Crucible after its third card reward
+    /// (no counter, against a fresh one's 3). The built combat must show them.
+    /// </summary>
+    private static void BuildsInternalNumbers(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        var setup = new CombatSetup("DEFECT", pool[0], act, Cli.MakeSeed(0, 0));
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
+            obs = session.Observation();
+        obs = obs with
+        {
+            Player = obs.Player with { Orbs = [new OrbView("GLASS_ORB", 3, 6), .. obs.Player.Orbs.Take(obs.Player.OrbSlots - 1)] },
+            Relics = [.. obs.Relics, new RelicView { Id = "SILVER_CRUCIBLE" }],
+        };
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
+        check("build solves internal numbers", built.BuildDifferences.Count == 0, $"{pool[0].Id.Entry}: {string.Join("; ", built.BuildDifferences.Take(4))}");
+    }
 
     /// <summary>
     /// Plays Rolling Boulder against the first multi-enemy encounter in the pool. The power fires at the start of

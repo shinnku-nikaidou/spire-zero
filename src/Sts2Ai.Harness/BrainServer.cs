@@ -51,7 +51,7 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
             }
         }
         // Only the user may connect.
-        else if (!path.StartsWith('\0'))
+        else if (!path.StartsWith('\0') && !OperatingSystem.IsWindows())
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         listener.Bind(new UnixDomainSocketEndPoint(path));
