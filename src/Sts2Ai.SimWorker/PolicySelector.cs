@@ -27,8 +27,12 @@ internal sealed class PolicySelector(
 {
     private readonly Queue<int[]> _replay = new();
 
+    /// <summary>Prompts asked so far; each one's number seeds its tie-break.</summary>
     public int Prompts { get; private set; }
     public int PendingReplay => _replay.Count;
+
+    /// <summary>Numbers the next prompts from 0 again, as a session that starts here would.</summary>
+    public void RestartPrompts() => Prompts = 0;
 
     public void QueueReplay(IEnumerable<int[]> picks)
     {

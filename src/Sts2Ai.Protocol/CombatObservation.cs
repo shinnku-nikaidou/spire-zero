@@ -69,7 +69,7 @@ public sealed record CardView
     public ModifierView? Affliction { get; init; }
     /// <summary>Sorted.</summary>
     public IReadOnlyList<string>? Keywords { get; init; }
-    /// <summary>The card's numbers (damage, block, magic number, ...), by name, sorted by name.</summary>
+    /// <summary>The card's numbers (damage, block, magic number, ...), by name, sorted by name; a calculated number by its parts.</summary>
     public IReadOnlyDictionary<string, decimal>? Vars { get; init; }
 }
 

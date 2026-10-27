@@ -306,7 +306,7 @@ Replaying a whole run from its start would cost 0.073 ms times some thousands of
 - a run snapshot is `(checkpoint, node trace)`;
 - restore loads the checkpoint (the path in [§7](#sec-7)) and replays the node trace.
 
-This is the same mechanism as the SL clone, so there is one code path, tested by both. The load cost is still to be measured (open question 1, [§10](#sec-10)).
+This is the SL clone's mechanism ([§7](#sec-7)), so there is one code path, and its cost is measured there.
 
 ## 6. NoSL worlds
 
@@ -322,23 +322,30 @@ A NoSL world is a determinized sample: a full game state that agrees with everyt
 
 ## 7. SL node clone
 
-Planned. An SL clone is one exact copy of the current node, sealed at its exit ([Environments §6](/en/arch/environments/#sec-6)). It is built by loading the node-entry checkpoint the same way the game's Continue path loads a save <Badge text="verified" variant="success" />:
+An SL clone is one exact copy of the current node, sealed at its exit ([Environments §6](/en/arch/environments/#sec-6)). It exists in the simulator; SL search inside runs does not use it yet ([§8](#sec-8)).
+
+- **Node and checkpoint.** A node is a map point, from arrival until travel. On arrival the game saves the run (`RunManager.ToSave(null)`; the headless host keeps the save instead of writing it), and that save is the node's checkpoint. `RunSession` keeps it, with every decision since as "surface action" text; a card prompt's picks are the game's own indexes, and card prompts are numbered from the node's entry.
+- **Clone:** `NodeClone(save, trace)`, a protocol type that only the simulator reads. `RunSession.Clone()` makes one at any point of the node, and `RunSession.Load(clone)` loads it.
+
+Loading follows the game's Continue path (`NMainMenu`'s Continue and `NGame.LoadRun`, without the nodes) <Badge text="verified" variant="success" />:
 
 <Steps>
 
-1. `SaveManager.FromJson<SerializableRun>(json)` (`Saves/SaveManager.cs:786`), or the migration manager (`RunSaveManager.cs:115`). Optionally `RunManager.CanonicalizeSave(save,1)`.
-2. `state = RunState.FromSerializable(save)`.
-3. `await RunManager.Instance.SetUpSavedSingleplayer(state, save)`. It needs `State==null`, so call `CleanUp()` between sessions. It increments `NumReloads`, but only in the process: headless never writes, and the field is used only for metrics <Badge text="verified" variant="success" />.
-4. `Launch()`; `await GenerateMap()` (the saved map).
-5. `await LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, state))`, which calls `EnterMapPointInternal(saveGame:false)`. This gives the same `?` roll, encounter, monster HP (Niche), opening shuffle and moves.
-6. After a combat won in the harness, call `room.OfferRoomEndRewards()`; in the live game the UI does this.
+1. `SaveManager.FromJson<SerializableRun>(save)`, then `RunState.FromSerializable(save)`.
+2. `await RunManager.Instance.SetUpSavedSingleplayer(state, save)`. It needs `State==null`, so the previous session's `CleanUp()` comes first. It increments `NumReloads`, which only metrics read. It also turns saving on; the clone turns it off again, as for any run the simulator starts, or the run's end would write progress.
+3. `Launch()`; `await GenerateMap()` (the saved map).
+4. `await LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, state))`. It enters the point as the arrival did: the same `?` roll, encounter, monster HP, opening shuffle and moves.
+5. Replay the trace: combat and macro decisions from a queue, card picks through the card selector. A step recorded on another surface than the one asked, or one never asked for, is a divergence and throws.
 
 </Steps>
 
-- **Template:** `Nodes.Debug.Multiplayer/NMultiplayerTest.cs:535-600`. It also fast-forwards the action, hook, choice and reward ids that are not in the save (:552-556). That is needed so uids line up with the live game.
-- Then replay the node action log ([Mod §6](/en/arch/mod/#sec-6)).
-- **Seal:** a world wrapper intercepts the travel action (and the run end) and sets `AtHorizon=true`; any later `Execute` throws.
-- **Horizon counterfactual helpers:** perturb the RoomSet tails, UnknownMapPoint, TreasureRoomRelics, the grab-bag tail and the future map seeds ([Environments §7](/en/arch/environments/#sec-7)); test that the node never reads each of them.
+- **Ids.** The multiplayer test loader (`Nodes.Debug.Multiplayer/NMultiplayerTest.cs:552-556`) also fast-forwards the action, hook, choice and reward ids that the save leaves out. The clone does not: no observation shows them, and the clone's observations equal the run's without them.
+- **Seal.** The travel is the node's last decision. A clone records it and stops there without travelling, and sets `AtHorizon`; any later `Step` throws. A run that ends inside the node ends the clone with it.
+- **Accepted differences.** What the save leaves out comes back as loading sets it. Seen so far: relic statuses and counters that the relic does not save (`KUSARIGAMA`, `WHETSTONE`). `run --check` counts such nodes apart ([§9](#sec-9)).
+- **Checked** on every node of a run by `run --check`. On five characters, 26 runs each at 9999 HP (macro random) and 30 each at normal HP (macro L0): 7,335 nodes, of which 7,300 replay exactly and 35 differ only in relic state; nothing else differs, and the game logs no errors.
+- **Cost** of a load plus its replay: 8–11 ms per node on average at normal HP (at most 241 ms). At 9999 HP bosses last long, and it is 25–38 ms (at most 8.8 s, a long boss node).
+- **Real game.** The mod is to send the same checkpoint and decisions from the game ([Mod §6](/en/arch/mod/#sec-6)).
+- **Horizon counterfactual helpers** (planned): perturb the RoomSet tails, UnknownMapPoint, TreasureRoomRelics, the grab-bag tail and the future map seeds ([Environments §7](/en/arch/environments/#sec-7)); test that the node never reads each of them.
 
 ## 8. Worker pool and IPC
 
@@ -374,13 +381,13 @@ Planned requests, for the SL clone and run worlds: open a world by kind (build, 
 - `--check` replays each run in the same process, over the wire to an in-process brain, and compares trace, summary, map hashes, observation hashes, the run record and the decision log (all but its timings); each observation must also survive a JSON round trip;
 - the report lists surfaces never reached, driver failures (there is no fallback: an unknown screen throws), game `Log.Error` lines, and pump idle waits (real-time waits). Any of these makes the exit code 1;
 - cross-process: run the same seeds in another process partition and diff the per-run lines.
+- `--check` also loads every node of the first run from its checkpoint and replays the node's decisions ([§7](#sec-7)). The clone must show the run's observations one for one, stop at its horizon once it has travelled, and refuse to step past it. A node that matches once relic counters and statuses are left out (state the save drops, [Environments §6](/en/arch/environments/#sec-6)) is counted apart; any other difference, or a game error, fails.
 
 Results from 2026-10-26 are in [§5.3](#sec-5.3).
 
-**Planned:** the SL seal; the horizon counterfactual fields; an R3-vs-R4 same-seed diff once the mod logs runs.
+**Planned:** the horizon counterfactual fields; an R3-vs-R4 same-seed diff once the mod logs runs.
 
 ## 10. Open questions
 
-1. The load cost of a checkpoint, which dominates run-level branching.
-2. Deep copy or replay: decide once search exists and profiles show that restore dominates.
-3. Building a run world from `RunView`: how much of `RoomSet` and the odds can be inferred, and how much must come from a prior.
+1. Deep copy or replay: decide once search exists and profiles show that restore dominates.
+2. Building a run world from `RunView`: how much of `RoomSet` and the odds can be inferred, and how much must come from a prior.

@@ -37,5 +37,12 @@ public interface IWorldSource
 /// </summary>
 public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 
+/// <summary>
+/// An SL clone of the current node (docs: environments §6): the game's save at the node's entry, and every decision
+/// since, as "surface action" (picks of a card prompt as the game's own indexes). Opaque outside the simulator, which
+/// loads the save as the game's Continue does and replays the decisions.
+/// </summary>
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
+
 /// <summary>An action that search scored: its mean value over the worlds, the 95% confidence half-width, and how many worlds.</summary>
 public sealed record Candidate(string Action, double Value, double Ci, int Samples);

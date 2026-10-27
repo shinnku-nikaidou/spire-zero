@@ -4,6 +4,7 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
@@ -117,18 +118,24 @@ public static class Observe
             Enchant = card.Enchantment is { } e ? new ModifierView(e.Id.Entry, e.Amount) : null,
             Affliction = card.Affliction is { } a ? new ModifierView(a.Id.Entry, a.Amount) : null,
             Keywords = card.Keywords.Count > 0 ? card.Keywords.Select(k => k.ToString()).Order(StringComparer.Ordinal).ToList() : null,
-            Vars = card.DynamicVars.Count > 0 ? Vars(card) : null,
+            Vars = Vars(card) is { Count: > 0 } vars ? vars : null,
         };
     }
 
     /// <summary>See <see cref="ProtocolJson.CardKey"/>.</summary>
     public static string CardKey(CardModel card) => ProtocolJson.CardKey(Card(card));
 
+    /// <summary>
+    /// The card's numbers, but for calculated ones: the card shows those as their base number plus their extra number
+    /// times a count from the state, and both parts are listed. A calculated number's own value only mirrors its base
+    /// number, and a downgrade leaves it stale.
+    /// </summary>
     private static Dictionary<string, decimal> Vars(CardModel card)
     {
         // Filled in sorted order; the serializer writes a dictionary in insertion order.
         var vars = new Dictionary<string, decimal>(card.DynamicVars.Count);
-        foreach (var (name, v) in card.DynamicVars.OrderBy(kv => kv.Key, StringComparer.Ordinal)) vars[name] = v.BaseValue;
+        foreach (var (name, v) in card.DynamicVars.Where(kv => kv.Value is not CalculatedVar).OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            vars[name] = v.BaseValue;
         return vars;
     }
 

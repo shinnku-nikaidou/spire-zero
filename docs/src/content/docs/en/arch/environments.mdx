@@ -135,9 +135,9 @@ Leaf evaluators read observations only, in both environments, so the true stream
 
 ## 6. Where the SL clone comes from
 
-- **R1–R3** (the simulator plays the run; rungs of the [sim-to-real ladder](/en/arch/evaluation/#sec-1)): the host worker holds the true state. At node entry it takes a checkpoint with `RunManager.ToSave(null)` (`Runs/RunManager.cs:670-709`) <Badge text="verified" variant="success" />. The clone is that checkpoint plus the node trace, restored through the run-replay path ([Simulator §5.4](/en/arch/simulator/#sec-5.4)).
+- **R1–R3** (the simulator plays the run; rungs of the [sim-to-real ladder](/en/arch/evaluation/#sec-1)): the host worker holds the true state. At node entry it takes a checkpoint with `RunManager.ToSave(null)` (`Runs/RunManager.cs:670-709`) <Badge text="verified" variant="success" />. It takes it when the game saves on arrival at the map point. The clone is that checkpoint plus the node trace, loaded the way the game's Continue loads a save and then replayed ([Simulator §7](/en/arch/simulator/#sec-7)).
 - **R4** (the real game): at node entry the mod calls `ToSave(null)` in memory. It never touches `current_run.save`, which is cloud-synced. It also logs every action in the node (and a `CombatReplayWriter` dump in the middle of a combat, [Mod §6](/en/arch/mod/#sec-6)) and sends both to a worker. The worker loads them through the Continue path and replays the actions.
-- A clone may differ from a game that ran without interruption: loading re-runs map hooks and `OnRunLoaded`, and drops relic fields that are not marked as saved (`Runs/RunManager.cs:815-816`, `Runs/RunState.cs:330-332`). This is a game bug and is accepted as is: no checksum verification, no fallback, not modeled in training.
+- A clone may differ from a game that ran without interruption: loading re-runs map hooks and `OnRunLoaded`, and drops relic fields that are not marked as saved (`Runs/RunManager.cs:815-816`, `Runs/RunState.cs:330-332`). This is a game bug and is accepted as is: no checksum verification, no fallback, not modeled in training. In the simulator's runs it shows only as relic state, a status or counter that the relic keeps in memory ([Simulator §7](/en/arch/simulator/#sec-7)).
 - **NoSL:** this channel is closed. The environment is fixed at session start and logged. The mod never exports saves and workers never offer clones. Any export found in a NoSL log makes the run invalid.
 - The decision process never reads saves: Brain has no reference to the game, which the compiler enforces.
 
@@ -160,7 +160,7 @@ Each rule above has a test that keeps it true.
 
 **SL**
 
-8. Seal: any `Execute` after the exit action throws (in the world implementation).
+8. Seal: any step after the exit action throws (exists for the clone, in `run --check`).
 9. Horizon counterfactual: perturbing only state that is read after the exit → the same decision.
    - Can be perturbed <Badge text="verified" variant="success" />: the `RoomSet` entries past their counters for every act (events, weak/regular/elite encounters, boss, second boss, ancient; fixed at run start by UpFront in `GenerateRooms`, `Runs/RunManager.cs:743-767`, consumed through counters, `Rooms/RoomSet.cs:70-108`); the UnknownMapPoint stream (used only when entering a `?`, `Odds/UnknownMapPointOdds.cs:140-175`); the TreasureRoomRelics stream and the tail of the shared relic grab bag; the map seeds of future acts (`Rng(seed, "act_N_map")`).
    - Cannot be perturbed, because the current node shares them: Shuffle, MonsterAi, Niche, the six Combat* streams, and the player's Rewards, Shops and Transformations streams.

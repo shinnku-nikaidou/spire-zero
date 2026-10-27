@@ -306,7 +306,7 @@ TestMode 会改动一些规则。对整局有影响的分支（来自本地笔�
 - 整局快照 = `(checkpoint, node trace)`；
 - 恢复时加载检查点（走 [§7](#sec-7) 的路径），再重放节点轨迹。
 
-这与 SL 克隆是同一个机制，所以只有一条代码路径，两边的测试都覆盖它。加载开销还有待测量（未决问题 1，[§10](#sec-10)）。
+这就是 SL 克隆的机制（[§7](#sec-7)），所以只有一条代码路径，开销也在那里测量。
 
 ## 6. NoSL 世界
 
@@ -322,23 +322,30 @@ NoSL 世界是一个确定化样本：一个与玩家见过的一切都一致的
 
 ## 7. SL 节点克隆
 
-规划中。SL 克隆是当前节点的一个精确副本，在节点出口处封存（[环境 §6](/arch/environments/#sec-6)）。它的构建方法是：像游戏「继续游戏」（Continue）的路径加载存档那样，加载节点入口的检查点 <Badge text="已核实" variant="success" />：
+SL 克隆是当前节点的一个精确副本，在节点出口处封存（[环境 §6](/arch/environments/#sec-6)）。它已在模拟器里实现；整局里的 SL 搜索还没用上它（[§8](#sec-8)）。
+
+- **节点与检查点**：节点是一个地图点，从到达开始，到离开为止。到达时游戏会保存这一局（`RunManager.ToSave(null)`；无头宿主留下这份存档而不写盘），这份存档就是节点的检查点。`RunSession` 保留它，以及此后的每个决策，形式是「界面 动作」文本；卡牌提示的选择用游戏自己的下标，卡牌提示从节点入口开始编号。
+- **克隆**：`NodeClone(save, trace)`，一个只有模拟器读取的协议类型。`RunSession.Clone()` 可以在节点内任意时刻生成克隆，`RunSession.Load(clone)` 加载它。
+
+加载走游戏「继续游戏」（Continue）的路径（`NMainMenu` 的 Continue 和 `NGame.LoadRun`，去掉节点树部分）<Badge text="已核实" variant="success" />：
 
 <Steps>
 
-1. `SaveManager.FromJson<SerializableRun>(json)`（`Saves/SaveManager.cs:786`），或者用迁移管理器（`RunSaveManager.cs:115`）。可选：`RunManager.CanonicalizeSave(save,1)`。
-2. `state = RunState.FromSerializable(save)`。
-3. `await RunManager.Instance.SetUpSavedSingleplayer(state, save)`。它要求 `State==null`，所以两次会话之间要调用 `CleanUp()`。它会让 `NumReloads` 加一，但只在进程内：无头时从不写盘，而且这个字段只用于统计 <Badge text="已核实" variant="success" />。
-4. `Launch()`；`await GenerateMap()`（存档里的地图）。
-5. `await LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, state))`，它会调用 `EnterMapPointInternal(saveGame:false)`。这样得到相同的 `?` 掷骰结果、遭遇、怪物生命值（Niche）、开局洗牌和怪物动作。
-6. 在 harness 内赢下战斗后，调用 `room.OfferRoomEndRewards()`；真实游戏里这一步由 UI 完成。
+1. `SaveManager.FromJson<SerializableRun>(save)`，然后 `RunState.FromSerializable(save)`。
+2. `await RunManager.Instance.SetUpSavedSingleplayer(state, save)`。它要求 `State==null`，所以要先对上一个会话调用 `CleanUp()`。它会让 `NumReloads` 加一，而这个字段只有统计会读。它还会打开存档；克隆再把它关掉，和模拟器开始的任何一局一样，否则一局结束时会写入进度。
+3. `Launch()`；`await GenerateMap()`（存档里的地图）。
+4. `await LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, state))`。它像到达时那样进入这个点：相同的 `?` 掷骰结果、遭遇、怪物生命值、开局洗牌和怪物动作。
+5. 重放轨迹：战斗和宏观决策从队列里取，卡牌选择交给选牌器。记录的界面与被问到的界面不同，或者某一步一直没被问到，都算分歧，会抛异常。
 
 </Steps>
 
-- **模板**：`Nodes.Debug.Multiplayer/NMultiplayerTest.cs:535-600`。它还会把存档里没有的动作、钩子、选择和奖励 id 快进到位（:552-556），这是 uid 与真实游戏对齐所必需的。
-- 然后重放节点的动作日志（[Mod §6](/arch/mod/#sec-6)）。
-- **封存**：一个世界包装层拦截移动动作（以及一局结束），设置 `AtHorizon=true`；之后任何 `Execute` 都会抛异常。
-- **视野边界反事实的辅助工具**：扰动 RoomSet 的尾部、UnknownMapPoint、TreasureRoomRelics、抽取袋的尾部和后续地图种子（[环境 §7](/arch/environments/#sec-7)）；逐一测试节点内从不读取它们。
+- **id**：多人测试加载器（`Nodes.Debug.Multiplayer/NMultiplayerTest.cs:552-556`）还会把存档里没有的动作、钩子、选择和奖励 id 快进到位。克隆不这样做：没有任何观测显示这些 id，不快进时克隆的观测也与原局一致。
+- **封存**：离开节点的移动是节点的最后一个决策。克隆记录它，但停在那里不移动，并设置 `AtHorizon`；之后任何 `Step` 都会抛异常。一局如果在节点内结束，克隆也随之结束。
+- **接受的差异**：存档里没有的东西，按加载时的设置回来。目前见到的是遗物自己不保存的状态和计数（`KUSARIGAMA`、`WHETSTONE`）。`run --check` 把这类节点单独计数（[§9](#sec-9)）。
+- **检验**：`run --check` 检查一局的每个节点。五个角色，每个角色 26 局 9999 生命（宏观随机）和 30 局正常生命（宏观 L0）：共 7,335 个节点，7,300 个精确重放，35 个只在遗物状态上不同；没有其他差异，游戏也没有记录错误。
+- **开销**：一次加载加重放，正常生命下平均每个节点 8–11 ms（最多 241 ms）。9999 生命下 Boss 战很长，平均 25–38 ms（最多 8.8 s，一个很长的 Boss 节点）。
+- **真实游戏**：Mod 将从游戏里发送同样的检查点和决策（[Mod §6](/arch/mod/#sec-6)）。
+- **视野边界反事实的辅助工具**（规划中）：扰动 RoomSet 的尾部、UnknownMapPoint、TreasureRoomRelics、抽取袋的尾部和后续地图种子（[环境 §7](/arch/environments/#sec-7)）；逐一测试节点内从不读取它们。
 
 ## 8. worker 进程池与 IPC
 
@@ -374,13 +381,13 @@ worker 就是同一个可执行文件以 `serve` 启动。`WorkerPool`（在 `St
 - `--check` 在同一进程内重放每一局，重放走传输协议，连到进程内的 brain，然后比较轨迹、摘要、地图哈希、观测哈希、对局记录和决策日志（除了其中的耗时）；每个观测还必须能完整地经过 JSON 往返；
 - 报告列出从未到达的决策界面、驱动方失败（没有兜底：未知界面直接抛异常）、游戏的 `Log.Error` 输出，以及 pump 空闲等待（真实时间等待）。出现任何一项，退出码就是 1；
 - 跨进程：同样的种子换一种进程划分再跑，对比每局的输出行。
+- `--check` 还会把第一遍对局的每个节点从它的检查点加载出来，重放这个节点的决策（[§7](#sec-7)）。克隆必须逐个给出与原对局相同的观测，移动之后停在视野边界上，并拒绝越过边界再走一步。去掉遗物的计数和状态后才一致的节点（存档丢掉的状态，[环境 §6](/arch/environments/#sec-6)）单独计数；其他任何差异或游戏错误都算失败。
 
 2026-10-26 的结果见 [§5.3](#sec-5.3)。
 
-**规划中**：SL 封存；视野边界反事实字段；Mod 能记录整局后，做 R3 与 R4 的同种子差异对比。
+**规划中**：视野边界反事实字段；Mod 能记录整局后，做 R3 与 R4 的同种子差异对比。
 
 ## 10. 未决问题
 
-1. 加载一个检查点的开销，它决定了整局层面分支的主要成本。
-2. 深拷贝还是重放：等搜索做出来、性能剖析表明恢复是主要开销时再定。
-3. 从 `RunView` 构建整局世界：`RoomSet` 和各种概率中，有多少能推断出来，有多少只能用先验。
+1. 深拷贝还是重放：等搜索做出来、性能剖析表明恢复是主要开销时再定。
+2. 从 `RunView` 构建整局世界：`RoomSet` 和各种概率中，有多少能推断出来，有多少只能用先验。

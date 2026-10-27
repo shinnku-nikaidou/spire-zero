@@ -18,7 +18,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | 多进程扩展 | 已测：8 个进程 ≈ 1,860 场战斗/秒 |
 | 整局会话（无头跑完整局） | 完成：覆盖所有决策界面，用随机占位策略。200/200 局在进程内和跨进程都是确定性的，0 次失败，0 个游戏错误（[模拟器 §5](/arch/simulator/#sec-5)） |
 | 整局观测 + `ChoiceContext` | 完成：每个决策界面都有观测；在同样的批次里，JSON 往返和观测哈希都是确定性的（[协议 §3](/arch/protocol/#sec-3)、[§4](/arch/protocol/#sec-4)） |
-| SL 克隆（加载存档 + 重放 + 封存） | 规划中；路径已调研（[模拟器 §7](/arch/simulator/#sec-7)） |
+| SL 克隆（加载存档 + 重放 + 封存） | 模拟器里已完成：一局的每个节点都能从检查点加载，并重现原局的观测；7,335 个节点里 7,300 个完全一致，其余只差存档丢掉的遗物状态，正常生命下每个节点 8–11 ms。SL 搜索还没用上它（[模拟器 §7](/arch/simulator/#sec-7)） |
 | 战斗世界 API | 完成：NoSL 世界从观测构建，SL 世界通过重放真实战斗得到（[模拟器 §6](/arch/simulator/#sec-6)） |
 | worker 进程池 + 进程间通信 | PIMC 的 NoSL 世界已完成：每个世界一个 JSON 行请求，结果与进程内相同，8 个 worker 快 4.5 倍（[模拟器 §8](/arch/simulator/#sec-8)） |
 | 战斗大脑 v0 | 完成：PIMC，搜索一个回合，手工叶子估值。与最好的占位策略比胜率：第 1 幕弱怪 + 普通 100% 对 85%，第 1 幕精英 36.7% 对 16.7%，第 2 幕 50% 对 16.7%（[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)）。在局外决策随机的整局里，平均打到第 13.1 层（对 8.6 层），24 局里有 10 局打到第 1 幕 Boss（对 1 局）（[§7.2](/arch/combat-brain/#sec-7.2)） |
@@ -37,7 +37,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 5. **新增的游戏代码如果在事件之外（事件由 transpiler 覆盖）调用 Godot 节点**而没有 TestMode 保护，只会在 `run` 批量运行里以游戏错误的形式暴露出来（[模拟器 §5.2](/arch/simulator/#sec-5.2)）。
 6. **真实游戏里的 Harmony 补丁与分层 JIT**：运行时可能重新编译某个方法，悄悄丢掉补丁（[Mod §10](/arch/mod/#sec-10)）。
 7. **战斗大脑 v0 的盲区**。选牌提示随机回答，搜索内和真实战斗里都是如此；搜索只看本回合，所以 SL 目前比 NoSL 没有任何优势；叶子是手工的，忽略了大多数能力（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
-8. **整局里的 SL 搜索需要 SL 克隆**。worker 进程池只提供 NoSL 世界；测试集里的 SL 玩家在进程内交接真实战斗，而持有整局的进程做不到这一点（[模拟器 §7](/arch/simulator/#sec-7)、[§8](/arch/simulator/#sec-8)）。
+8. **整局里的 SL 搜索还没接上**。SL 克隆已经有了，但 worker 进程池只提供 NoSL 世界；测试集里的 SL 玩家在进程内交接真实战斗，而持有整局的进程做不到这一点（[模拟器 §7](/arch/simulator/#sec-7)、[§8](/arch/simulator/#sec-8)）。
 
 ## 3. 实施顺序
 
@@ -57,7 +57,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 7. Mod：其余决策界面，然后是执行器和自动开局驱动，打通 R4 流水线；R3 ≡ R4 等价测试。加载、与大脑的连接和战斗面板已经完成（[Mod §2](/arch/mod/#sec-2)–[§5](/arch/mod/#sec-5)）。
 
-8. 节点检查点、SL 克隆和封存；SL 排行榜。
+8. worker 进程池里从克隆加载的 SL 世界；SL 排行榜。节点检查点、SL 克隆和封存已完成（[模拟器 §7](/arch/simulator/#sec-7)）。
 
 9. 学习循环（拟合 V、ExIt、SPSA、晋级门槛），然后是 LLM 补丁循环。
 

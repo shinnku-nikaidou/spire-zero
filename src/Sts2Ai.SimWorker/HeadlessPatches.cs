@@ -20,6 +20,7 @@ using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Platform;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.TestSupport;
@@ -41,6 +42,9 @@ internal static class HeadlessPatches
 
     /// <summary>Plays a crystal sphere minigame the game would put on screen. Without it, the screen's code runs (and fails).</summary>
     public static Action<CrystalSphereMinigame>? CrystalSphereShown;
+
+    /// <summary>The game saving on arrival at a map point (docs: environments §4): its state is a node checkpoint.</summary>
+    public static Action? NodeEntered;
 
     public static void Apply()
     {
@@ -251,10 +255,16 @@ internal static class HeadlessPatches
 
     // ---- persistence: nothing is ever saved; the user's real saves must stay untouched ----
 
+    /// <summary>Also tells <see cref="NodeEntered"/>: the save with no finished room is the one on arrival at a map point.</summary>
     [HarmonyPatch(typeof(SaveManager), nameof(SaveManager.SaveRun))]
     private static class NoRunSave
     {
-        private static bool Prefix(ref Task __result) { __result = Task.CompletedTask; return false; }
+        private static bool Prefix(AbstractRoom? preFinishedRoom, ref Task __result)
+        {
+            if (preFinishedRoom == null) NodeEntered?.Invoke();
+            __result = Task.CompletedTask;
+            return false;
+        }
     }
 
     [HarmonyPatch(typeof(SaveManager), nameof(SaveManager.UpdateProgressAfterCombatWon))]

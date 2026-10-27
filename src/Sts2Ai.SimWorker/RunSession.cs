@@ -1,4 +1,5 @@
 using System.Text;
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Context;
@@ -13,6 +14,7 @@ using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.TestSupport;
 using MegaCrit.Sts2.Core.Unlocks;
 using Sts2Ai.Brain;
@@ -34,6 +36,9 @@ internal sealed record RunSetup(string Character, string Seed, int Ascension = 0
 /// The game runs each room by itself; this class plays the part of the UI: which screen is showing and what its
 /// buttons do. What a screen would remember (a rewards screen still open, the player having left the room) is kept
 /// per room. Same setup and same policy answers, same run. Like <see cref="CombatSession"/>, one live at a time.
+///
+/// On arrival at each map point the game saves; that save is the node's checkpoint, and with the decisions since it
+/// makes the node's SL clone (<see cref="Clone"/>, <see cref="Load"/>; docs: simulator §7).
 /// </summary>
 internal sealed class RunSession : IDisposable
 {
@@ -44,6 +49,7 @@ internal sealed class RunSession : IDisposable
     private readonly ICombatPolicy _combat;
     private readonly IMacroPolicy _macro;
     private readonly Action<Observation>? _observed;
+    private readonly PolicySelector _selector;
     private readonly IDisposable _selectorScope;
     private readonly List<string> _trace = [];
     private readonly List<ulong> _mapHashes = [];
@@ -64,6 +70,12 @@ internal sealed class RunSession : IDisposable
     private IReadOnlyList<CardRewardAlternative>? _alternatives;
     private readonly HashSet<CardRewardAlternative> _spentAlternatives = [];
 
+    /// <summary>The current node's checkpoint: the game's save on arrival, as JSON.</summary>
+    private string? _checkpoint;
+
+    /// <summary>A loaded clone stops at its node's exit.</summary>
+    private bool _sealed;
+
     public RunSetup Setup { get; }
     public Player Player { get; }
     public RunState Run { get; }
@@ -82,6 +94,12 @@ internal sealed class RunSession : IDisposable
     public int CardRewards { get; private set; }
 
     public int CardRewardsSkipped { get; private set; }
+
+    /// <summary>Where the current node's decisions begin in <see cref="Trace"/>.</summary>
+    public int NodeStart { get; private set; }
+
+    /// <summary>A sealed clone has left its node: it travelled. It cannot step any more.</summary>
+    public bool AtHorizon { get; private set; }
 
     public bool IsOver => Run.IsGameOver;
 
@@ -103,9 +121,9 @@ internal sealed class RunSession : IDisposable
             Choice = choice,
             Combat = CombatManager.Instance.IsInProgress ? Observe.Combat(CombatManager.Instance.DebugOnlyGetState()!, Player) : null,
         };
-        var selector = new PolicySelector(choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => Prompt(choice)),
+        _selector = new PolicySelector(choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => Prompt(choice)),
             choice => Observe.Of(Run, Player, Prompt(choice)), CardReward, Bundle);
-        _selectorScope = CardSelectCmd.PushSelector(selector);
+        _selectorScope = CardSelectCmd.PushSelector(_selector);
         RewardsSet.testSelector = set =>
         {
             set.ThrowInTestIfRewardsNotTaken = false;
@@ -113,6 +131,12 @@ internal sealed class RunSession : IDisposable
             return Task.CompletedTask;
         };
         HeadlessPatches.CrystalSphereShown = minigame => _minigame = minigame;
+        // A clone's prompts are numbered from its node's entry, so the node's own are too.
+        HeadlessPatches.NodeEntered = () =>
+        {
+            (_checkpoint, NodeStart) = (SaveManager.ToJson(RunManager.Instance.ToSave(null)), _trace.Count);
+            _selector.RestartPrompts();
+        };
     }
 
     /// <summary>
@@ -149,9 +173,52 @@ internal sealed class RunSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Loads <paramref name="clone"/> (docs: simulator §7): its save as the game's Continue loads one, then its decisions
+    /// replayed, before the policies answer. The clone is sealed: once it travels it is at its horizon, and stepping
+    /// further throws. A clone may differ from the run it came from where loading a save does (docs: environments §6).
+    /// </summary>
+    public static RunSession Load(Pump pump, NodeClone clone, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro,
+        Action<Observation>? observed = null)
+    {
+        var read = SaveManager.FromJson<SerializableRun>(clone.Save);
+        var save = read.SaveData ?? throw new InvalidDataException($"node checkpoint does not load: {read.Status} {read.ErrorMessage}");
+        var run = RunState.FromSerializable(save);
+        var player = run.Players[0];
+        var replay = new Replay(clone.Trace, combat, macro);
+        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel);
+        var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = true, _checkpoint = clone.Save };
+        session._selector.QueueReplay(clone.Trace.Where(s => s.StartsWith(Surfaces.CardChoice + " ", StringComparison.Ordinal))
+            .Select(s => s[(Surfaces.CardChoice.Length + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray()));
+        try
+        {
+            // NMainMenu's Continue and NGame.LoadRun without the nodes.
+            session.Await(RunManager.Instance.SetUpSavedSingleplayer(run, save));
+            // Continue always saves; a clone saves nothing, as a run this simulator starts.
+            AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
+            RunManager.Instance.Launch();
+            session.Await(RunManager.Instance.GenerateMap());
+            session.Await(RunManager.Instance.LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, run)));
+            while (replay.Pending > 0 && !session.IsOver) session.Step();
+            if (!session.AtHorizon) session.Settle();
+            if (replay.Pending > 0 || session._selector.PendingReplay > 0)
+                throw new InvalidOperationException($"replay diverged: {replay.Pending} decisions and {session._selector.PendingReplay} card picks never asked for");
+            return session;
+        }
+        catch
+        {
+            session.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>The current node's SL clone: its checkpoint and the decisions since.</summary>
+    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), _trace.Skip(NodeStart).ToList());
+
     /// <summary>Makes one decision, after anything the game or the driver does on its own. Does nothing once the run is over.</summary>
     public void Step()
     {
+        if (AtHorizon) throw new InvalidOperationException("sealed: the clone has left its node");
         for (int auto = 0; ; auto++)
         {
             Settle();
@@ -245,7 +312,10 @@ internal sealed class RunSession : IDisposable
 
     private bool MapDecision()
     {
-        if (Ask(Surfaces.Map, MapActions.Legal(Run), () => MapActions.Screen(Run)) is { } action) MapActions.Start(Run, Player, action);
+        if (Ask(Surfaces.Map, MapActions.Legal(Run), () => MapActions.Screen(Run)) is not { } action) return true;
+        // The travel is the node's last action: a sealed clone records it and stops there, without travelling.
+        if (_sealed) AtHorizon = true;
+        else MapActions.Start(Run, Player, action);
         return true;
     }
 
@@ -458,11 +528,35 @@ internal sealed class RunSession : IDisposable
     {
         RewardsSet.testSelector = null;
         HeadlessPatches.CrystalSphereShown = null;
+        HeadlessPatches.NodeEntered = null;
         _selectorScope.Dispose();
         _pump.Drain();
         RunManager.Instance.CleanUp(graceful: true);
         _pump.Drain();
         LocalContext.NetId = 1UL;
+    }
+
+    /// <summary>
+    /// Answers combat and macro decisions from a recorded trace, in order, then passes them on to the policies. Card
+    /// prompts are replayed by the card selector, which keeps the game's own indexes.
+    /// </summary>
+    private sealed class Replay(IEnumerable<string> trace, ICombatPolicy combat, IMacroPolicy macro) : ICombatPolicy, IMacroPolicy
+    {
+        private readonly Queue<string> _steps = new(trace.Where(s => !s.StartsWith(Surfaces.CardChoice + " ", StringComparison.Ordinal)));
+
+        public int Pending => _steps.Count;
+
+        public CombatAction Choose(CombatDecision decision) => _steps.Count > 0 ? CombatAction.Parse(Next(Surfaces.Combat)) : combat.Choose(decision);
+
+        public string Choose(MacroDecision decision) => _steps.Count > 0 ? Next(decision.Surface) : macro.Choose(decision);
+
+        private string Next(string surface)
+        {
+            var step = _steps.Dequeue();
+            int space = step.IndexOf(' ');
+            if (step[..space] != surface) throw new InvalidOperationException($"replay diverged: recorded \"{step}\", asked on {surface}");
+            return step[(space + 1)..];
+        }
     }
 
     /// <summary>What the room's screen remembers. A new room starts fresh; a room resumed after an event combat too.</summary>
