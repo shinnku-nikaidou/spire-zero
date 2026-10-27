@@ -6,7 +6,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// Simulator worker processes (docs: simulator §8), each started as <c>COMMAND serve</c> and spoken to in JSON
+/// Simulator worker processes (docs: simulator §8), each started as <c>COMMAND serve OPTIONS</c> and spoken to in JSON
 /// lines over its stdin and stdout (<see cref="WorkerHello"/>, <see cref="WorkerReply"/>). A worker serves one request
 /// at a time; <see cref="Map"/> hands each request to whichever worker is free and returns the replies in request
 /// order, whatever order they finish in, so timing cannot change a result. A worker that dies is started again and
@@ -20,9 +20,10 @@ public sealed class WorkerPool : IDisposable
 
     /// <summary>Starts <paramref name="count"/> workers in parallel and waits until each has booted.</summary>
     /// <param name="command">The worker program and its leading arguments, e.g. <c>dotnet Sts2Ai.SimWorker.dll</c>.</param>
-    public WorkerPool(IReadOnlyList<string> command, int count)
+    /// <param name="options">The options of <c>serve</c>, such as the leaf weights the workers search with.</param>
+    public WorkerPool(IReadOnlyList<string> command, int count, IReadOnlyList<string>? options = null)
     {
-        _start = new ProcessStartInfo(command[0], [.. command.Skip(1), "serve"])
+        _start = new ProcessStartInfo(command[0], [.. command.Skip(1), "serve", .. options ?? []])
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,

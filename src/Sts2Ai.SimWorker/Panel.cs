@@ -32,16 +32,19 @@ internal static class Panel
         int workers = Cli.Int(opts, "workers", 0);
         if (player != "pimc" && !Policies.CombatNames.Contains(player)) return Cli.Fail($"unknown player {player} (pimc, {string.Join(", ", Policies.CombatNames)})");
         if (workers > 0 && (player != "pimc" || env != PlayEnvironment.NoSL)) return Cli.Fail("--workers is for --player pimc --env NoSL");
+        var leaf = Cli.ReadLeaf(opts);
+        if (leaf != null && player != "pimc") return Cli.Fail("--leaf is for --player pimc");
         var (act, rooms, pool) = Cli.Pool(opts);
         if (pool.Count == 0) return Cli.Fail("empty encounter pool");
 
         using var output = opts.TryGetValue("out", out var outPath) ? new StreamWriter(outPath) : null;
-        using var workerPool = workers > 0 ? new WorkerPool(Cli.SelfCommand(), workers) : null;
+        using var workerPool = workers > 0 ? new WorkerPool(Cli.SelfCommand(), workers, Cli.LeafOptions(opts.GetValueOrDefault("leaf"))) : null;
         var pooled = workerPool == null ? null : new PooledPimc(workerPool);
         var outcomes = new Dictionary<string, int>();
         int failed = 0, gameErrors = 0;
         long decisions = 0, hpLost = 0;
         Console.WriteLine($"panel: {n} combats from #{start}, act {act} ({rooms}: {pool.Count} encounters), player {player}" +
+                          (leaf != null ? $" {leaf.Name}" : "") +
                           (player == "pimc" ? $" {env} worlds {budget.Worlds} nodes {budget.NodesPerWorld}" : "") +
                           (workerPool != null ? $" on {workerPool.Count} workers" : "") +
                           $", game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
@@ -58,7 +61,7 @@ internal static class Panel
             {
                 var rng = new Random(seed * 1_000_003 + i);
                 var result = player == "pimc"
-                    ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, env, budget, opts.ContainsKey("trace"))
+                    ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, leaf?.Weights, env, budget, opts.ContainsKey("trace"))
                     : PlayWithPolicy(pump, setup, PromptBrain.Instance, Policies.Combat(player, rng));
                 (outcome, hpStart, hp, rounds, steps) = result;
             }
@@ -104,10 +107,11 @@ internal static class Panel
     }
 
     /// <param name="pooled">Searches in workers; null searches here.</param>
+    /// <param name="leaf">The leaf weights of the search here; the workers have theirs from their start.</param>
     private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions) PlayWithBrain(Pump pump, CombatSetup setup, IChoicePolicy choices,
-        PooledPimc? pooled, PlayEnvironment env, Budget budget, bool trace)
+        PooledPimc? pooled, LeafWeights? leaf, PlayEnvironment env, Budget budget, bool trace)
     {
-        var brain = new PimcBrain();
+        var brain = new PimcBrain(leaf);
         CombatSession? session = CombatSession.Start(pump, setup, choices);
         try
         {

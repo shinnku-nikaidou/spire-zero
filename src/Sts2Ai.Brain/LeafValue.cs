@@ -3,7 +3,8 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// The tunable numbers of <see cref="LeafValue"/>. Hand-set for v0; SPSA tunes them later (docs: combat-brain §4).
+/// The tunable numbers of <see cref="LeafValue"/>. Hand-set for v0; SPSA tunes them (docs: combat-brain §4), and a
+/// <see cref="LeafFile"/> holds the result.
 /// </summary>
 public sealed record LeafWeights
 {
@@ -20,6 +21,12 @@ public sealed record LeafWeights
     public double MinIncoming { get; init; } = 3;
     /// <summary>Share of the poison's remaining damage (n + (n-1) + ... + 1) counted against the enemy's HP.</summary>
     public double PoisonShare { get; init; } = 0.8;
+}
+
+/// <summary>Leaf weights with their name, as <c>--leaf FILE</c> reads them; the name goes into the champion's.</summary>
+public sealed record LeafFile(string Name, LeafWeights Weights)
+{
+    public static LeafFile Initial { get; } = new("leaf0", LeafValue.Default);
 }
 
 /// <summary>

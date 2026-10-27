@@ -8,7 +8,8 @@ namespace Sts2Ai.Harness;
 /// world rebuilt in its worker from the observation, so nothing of the true state leaves the host; with the same seeds
 /// it gives the same answer as <see cref="PimcBrain.Decide"/> over in-process worlds. SL: the one exact world is the
 /// node's clone, searched in one request per first action so the workers share it; each request keeps its own memo,
-/// where a search in one process shares it across first actions. The workers use the default leaf weights.
+/// where a search in one process shares it across first actions. The workers search with the leaf weights they were
+/// started with (<c>serve --leaf</c>).
 /// </summary>
 public sealed class PooledPimc(WorkerPool pool)
 {
@@ -36,8 +37,9 @@ public sealed class PooledPimc(WorkerPool pool)
     }
 
     /// <summary>As Harness's combat route: NoSL draws the build seed from the decision's seed; SL searches the clone.</summary>
-    public CombatRoute Route(Budget budget) =>
-        new("pimc", (decision, seed, node) => node == null
+    /// <param name="name">The brain's name in reports: pimc, and its leaf weights' name unless they are the default.</param>
+    public CombatRoute Route(Budget budget, string name = "pimc") =>
+        new(name, (decision, seed, node) => node == null
             ? Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed)
             : Decide(node, decision.Legal, budget), budget);
 

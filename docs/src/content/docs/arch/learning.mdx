@@ -13,7 +13,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-V v0 已经实现：Brain 里的 `RunValue`，17 个手写的对局观测特征乘以线性权重，初始权重是手设的（[§1](#sec-1)）。宏观大脑的 L0 用它估值（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。`learn/fit_value.py` 从自对弈数据拟合权重，`learn/spsa.py` 用 SPSA 调权重，`run --value` 用这两种权重来打，`learn/challenge.py` 让挑战者过晋级门槛（[§2](#sec-2)）；还没有拟合或调出的权重晋升为冠军。`learn/` 是学习循环用的 Python 项目（uv、PyTorch）。
+V v0 已经实现：Brain 里的 `RunValue`，17 个手写的对局观测特征乘以线性权重，初始权重是手设的（[§1](#sec-1)）。宏观大脑的 L0 用它估值（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。`learn/fit_value.py` 从自对弈数据拟合权重，`learn/spsa.py` 用 SPSA 调这些权重或 PIMC 的叶子权重，`run --value` 用这两种权重来打，`learn/challenge.py` 让挑战者过晋级门槛（[§2](#sec-2)）；还没有拟合或调出的权重晋升为冠军。`learn/` 是学习循环用的 Python 项目（uv、PyTorch）。
 
 </Aside>
 
@@ -78,6 +78,8 @@ flowchart TD
 4. **SPSA**：调 v0 的权重和搜索参数。
 
    V 的权重由 `learn/spsa.py` 来调。它从一个权重文件出发（默认是 V 的初始权重，由 `weights` 输出）。每一步给每个权重随机抽一个正负号，把所有权重按这些符号同时加上、再同时减去它们尺度的 c 倍，两个版本在同一批新的训练种子上各打一遍（`run --macro l0 --value`，外加给定的对局选项，例如战斗策略）。有了 CRN，两边在不多的种子上就能比较。然后权重朝平均层数更高的那边挪，步长按 Spall 的递减序列，每步最多挪各自尺度的十分之一。权重的尺度就是它的初始大小。层数的权重不动，因为它不改变任何选择。结果是一个权重文件，供 `run --value` 使用。
+
+   搜索参数方面，`--param leaf` 用同样的办法调 PIMC 的叶子权重（[战斗大脑 §4](/arch/combat-brain/#sec-4)）：两边用 `--leaf` 传权重，起点是默认叶子权重（`weights --leaf`）；这些权重始终保持为正，因为每个都是速率、比例或高于失败的价值。这时对局得用 `--policy pimc`，很慢，所以 `--objective panel` 改打面板战斗（`panel --player pimc --leaf`，[战斗大脑 §7](/arch/combat-brain/#sec-7)）：赢下的战斗得分为剩余 HP 占开战时 HP 的比例，其他结局得 −1。面板得分的范围是 2，而一局的层数范围约 50，所以它的默认步长更大（0.5 对 0.02）。结果是一个叶子权重文件，供 `--leaf` 使用，最终仍由整局门槛决定。
 5. **LLM**：输入是预先聚合好的失败聚类和死亡摘要；输出是 K 个候选补丁（特征、剪枝规则、参数）。候选先经过编译、单元测试和公平性测试的筛选，再过晋级门槛。只通过 LLM 网关使用便宜的模型。
 6. **晋级门槛**：见[评估 §5](/arch/evaluation/#sec-5)。`learn/challenge.py` 带一个挑战者（由它的对局选项给出）过门槛：在冠军的种子集上分批打，每批之后过一次门槛。结论是不通过或作废就停下；通过之后把种子集剩下的打完并让它晋级，也就是改写冠军文件、重建排行榜。
 

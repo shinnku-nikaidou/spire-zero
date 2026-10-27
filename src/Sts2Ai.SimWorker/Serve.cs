@@ -11,9 +11,10 @@ namespace Sts2Ai.SimWorker;
 /// </summary>
 internal static class Serve
 {
-    public static int Run(Pump pump, TextWriter wire)
+    /// <param name="leaf">The leaf weights to search with; null for the default ones.</param>
+    public static int Run(Pump pump, TextWriter wire, LeafWeights? leaf)
     {
-        var brain = new PimcBrain();
+        var brain = new PimcBrain(leaf);
         HeadlessGame.TakeErrors();
         wire.WriteLine(ProtocolJson.Serialize(new WorkerHello(HeadlessGame.GameVersion)));
         while (Console.In.ReadLine() is { } line)

@@ -13,7 +13,7 @@ This page defines the value function V that both brains use to score positions, 
 
 <Aside title="Status">
 
-V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, `learn/spsa.py` tunes them by SPSA, `run --value` plays with either, and `learn/challenge.py` takes a challenger through the gate ([§2](#sec-2)); no fitted or tuned weights are promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
+V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, `learn/spsa.py` tunes them, or PIMC's leaf weights, by SPSA, `run --value` plays with either, and `learn/challenge.py` takes a challenger through the gate ([§2](#sec-2)); no fitted or tuned weights are promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
 
 </Aside>
 
@@ -78,6 +78,8 @@ flowchart TD
 4. **SPSA** on the v0 weights and on the search parameters.
 
    For V's weights this is `learn/spsa.py`. It starts from a weights file (V's initial weights by default, which `weights` prints). Each step draws a random sign for every weight, moves all of them by c times their scale with those signs and against them, and plays the same fresh train seeds with both versions (`run --macro l0 --value`, plus the run options given, such as the combat policy). CRN makes the two comparable on few seeds. The weights then move toward the side that reached the higher mean floor, by Spall's decreasing step sizes, at most a tenth of each weight's scale per step. A weight's scale is its starting size. The floor's weight is left alone, since it changes no choice. The result is a weights file for `run --value`.
+
+   For the search parameters, `--param leaf` tunes PIMC's leaf weights ([Combat brain §4](/en/arch/combat-brain/#sec-4)) the same way, with `--leaf` as the sides' option and the default leaf weights (`weights --leaf`) as the start; they stay positive, since each is a rate, a share or a value above a loss. The runs then need `--policy pimc`, which makes them slow, so `--objective panel` plays panel combats instead (`panel --player pimc --leaf`, [Combat brain §7](/en/arch/combat-brain/#sec-7)): a won combat scores the share of its starting HP left, any other end −1. The panel's score spans 2 where a run's floor spans about 50, so its default step size is larger (0.5 against 0.02). The result is a leaf file for `--leaf`, and the gate on whole runs still decides.
 5. **LLM:** the input is pre-aggregated failure clusters plus death summaries; the output is K candidate patches (features, pruning rules, parameters). The candidates are filtered by compiling, unit tests and fair-play tests, then gated. Only cheap models through the LLM gateway.
 6. **Gate:** see [Evaluation §5](/en/arch/evaluation/#sec-5). `learn/challenge.py` takes a challenger, given by its run options, through it: it plays the champion's seed set in chunks and runs the gate after each chunk. It stops at a fail or a void verdict; after a pass it plays the rest of the set and promotes the challenger, which rewrites the champion file and rebuilds the leaderboard.
 

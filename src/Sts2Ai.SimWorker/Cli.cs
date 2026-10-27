@@ -24,8 +24,8 @@ namespace Sts2Ai.SimWorker;
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
 ///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--champion FILE] [--env NoSL|SL] [--policy play|random|pimc] [--macro random|l0]
-///       [--value v.json] [--worlds 8] [--nodes 300] [--workers W] [--max-decisions 20000] [--check] [--trace] [--obs]
-///       [--log decisions.jsonl] [--records runs.jsonl] [--brain SOCKET]
+///       [--value v.json] [--leaf leaf.json] [--worlds 8] [--nodes 300] [--workers W] [--max-decisions 20000] [--check]
+///       [--trace] [--obs] [--log decisions.jsonl] [--records runs.jsonl] [--brain SOCKET]
 ///                                          whole runs through Harness. Combat prompts go to p0; --macro picks the
 ///                                          brain of every decision outside combat (l0: the macro brain with V, whose
 ///                                          weights --value reads, the initial ones by default); --check plays
@@ -36,11 +36,12 @@ namespace Sts2Ai.SimWorker;
 ///                                          log; reports results, hashes and surface coverage. --champion plays
 ///                                          the champion a champion file names; options given override the file's.
 ///                                          pimc searches each combat decision in W worker processes (default: one
-///                                          per world): NoSL worlds, or in SL the node's clone. --seeds plays the seeds of a seed file, from --start, all
+///                                          per world): NoSL worlds, or in SL the node's clone; --leaf reads the
+///                                          weights of its leaf value (docs: combat-brain §4). --seeds plays the seeds of a seed file, from --start, all
 ///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6).
 ///                                          --brain plays against the brain listening at SOCKET instead, which picks the
 ///                                          champion (--check then replays against it too)
-///   brain [--socket ~/.local/state/sts2ai/brain.sock] [--champion FILE] [--policy ...] [--macro ...] [--value ...] [--worlds 8] [--nodes 300]
+///   brain [--socket ~/.local/state/sts2ai/brain.sock] [--champion FILE] [--policy ...] [--macro ...] [--value ...] [--leaf ...] [--worlds 8] [--nodes 300]
 ///         [--workers W] [--log decisions.jsonl]
 ///                                          the brain alone: serves the hosts that connect, one at a time (docs: protocol §2)
 ///   report --seeds FILE --records A.jsonl[,B.jsonl] --out PATH [--previous OLD.json]
@@ -53,12 +54,13 @@ namespace Sts2Ai.SimWorker;
 ///   leaderboard [--reports eval/reports] [--champions eval/champions] [--out eval/leaderboard.md]
 ///                                          the leaderboards over every report in the folder (docs: evaluation §2)
 ///   seeds --base N --n 300                 a seed file's seeds: MakeSeed(N, 0..n-1), one per line
-///   weights                                V's initial weights as a weights file, for tuning to start from
+///   weights [--leaf]                       V's initial weights as a weights file, for tuning to start from
+///                                          (--leaf: the default leaf weights of pimc instead)
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
-///         [--worlds 8] [--nodes 300] [--workers 0] [--trace] [--out results.jsonl]
+///         [--leaf leaf.json] [--worlds 8] [--nodes 300] [--workers 0] [--trace] [--out results.jsonl]
 ///                                          the fixed combat panel: the same combats for every player; win rate, HP lost.
 ///                                          --workers N searches the NoSL worlds in N worker processes
-///   serve                                  a worker: JSON lines on stdin and stdout (docs: simulator §8)
+///   serve [--leaf leaf.json]               a worker: JSON lines on stdin and stdout (docs: simulator §8)
 /// Loadout options for every command that runs combats: [--character SILENT] [--deck A*5,B+,...]
 /// [--relics A,B] [--potions A,B] [--hp N] [--max-hp N]. Omitted parts keep the character's starting values.
 /// </summary>
@@ -75,7 +77,11 @@ internal static class Cli
         if (args[0] == "report") return Report(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "leaderboard") return Leaderboards(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "seeds") return Seeds(ParseOptions(args.Skip(1).ToArray()));
-        if (args[0] == "weights") { Console.WriteLine(ProtocolJson.Serialize(new ValueWeights("v0", RunValue.InitialWeights))); return 0; }
+        if (args[0] == "weights")
+        {
+            Console.WriteLine(args.Contains("--leaf") ? ProtocolJson.Serialize(LeafFile.Initial) : ProtocolJson.Serialize(new ValueWeights("v0", RunValue.InitialWeights)));
+            return 0;
+        }
         if (args[0] == "gate") return GateCommand(ParseOptions(args.Skip(1).ToArray()));
         if (args[0] == "brain") return Brain(WithChampion(ParseOptions(args.Skip(1).ToArray())));
         // A worker's stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
@@ -97,7 +103,7 @@ internal static class Cli
             "forkbench" => ForkBench.Run(pump, opts),
             "run" => Runs(pump, opts),
             "panel" => Panel.Run(pump, opts),
-            "serve" => Serve.Run(pump, wire!),
+            "serve" => Serve.Run(pump, wire!, ReadLeaf(opts)?.Weights),
             _ => Fail($"unknown command {args[0]}"),
         };
     }
@@ -462,7 +468,9 @@ internal static class Cli
 
     /// <summary>The champion that --policy and --macro name (docs: harness §4), pimc's budget, and l0's V (--value).</summary>
     /// <param name="ValueFile">Where <paramref name="Value"/> came from; null for the initial weights.</param>
-    private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, RunValue Value, string? ValueFile)
+    /// <param name="LeafPath">Where <paramref name="Leaf"/> came from; null for the default leaf weights.</param>
+    private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, RunValue Value, string? ValueFile,
+        LeafFile? Leaf, string? LeafPath)
     {
         public static ChampionOptions Parse(Dictionary<string, string> opts)
         {
@@ -479,11 +487,13 @@ internal static class Cli
                 if (macro != "l0") throw new ArgumentException("--value weighs l0's V; it needs --macro l0");
                 value = RunValue.From(ProtocolJson.Deserialize<ValueWeights>(File.ReadAllText(valueFile)));
             }
-            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds), value, valueFile);
+            var leaf = ReadLeaf(opts);
+            if (leaf != null && policy != "pimc") throw new ArgumentException("--leaf weighs pimc's leaves; it needs --policy pimc");
+            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds), value, valueFile, leaf, opts.GetValueOrDefault("leaf"));
         }
 
         /// <summary>pimc's search workers. A run holds its process's one live game, so search runs in other processes.</summary>
-        public WorkerPool? Pool() => Policy == "pimc" ? new WorkerPool(SelfCommand(), Workers) : null;
+        public WorkerPool? Pool() => Policy == "pimc" ? new WorkerPool(SelfCommand(), Workers, LeafOptions(LeafPath)) : null;
 
         /// <summary>
         /// One Harness per run. Combat prompts go to p0 (<see cref="PromptBrain"/>), which search worlds ask too.
@@ -494,7 +504,7 @@ internal static class Cli
         {
             if (!Enum.TryParse<PlayEnvironment>(hello.Env, out var env)) throw new NotSupportedException($"no environment {hello.Env}");
             var rng = new Random(unchecked((int)ProtocolJson.Hash(hello.Run.RunId)));
-            var combat = pooled?.Route(Budget) ?? CombatRoute.Of(Policy, Policies.Combat(Policy, rng));
+            var combat = pooled?.Route(Budget, Combat) ?? CombatRoute.Of(Policy, Policies.Combat(Policy, rng));
             var prompts = new Route<IChoicePolicy>("p0", PromptBrain.Instance);
             Dispatcher dispatcher;
             if (Macro == "l0")
@@ -507,6 +517,9 @@ internal static class Cli
             return dispatcher;
         };
 
+        /// <summary>The combat brain, pimc by its leaf weights' name unless they are the default ones.</summary>
+        private string Combat => Leaf == null ? Policy : $"{Policy} {Leaf.Name}";
+
         /// <summary>l0 by its V's name, unless V has the initial weights.</summary>
         private string L0 => Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}";
 
@@ -516,7 +529,7 @@ internal static class Cli
             get
             {
                 string macro = Macro == "l0" ? L0 : "random";
-                return $"combat {Policy}{(Policy == "pimc" ? $" {Budget.Worlds}x{Budget.NodesPerWorld}" : "")}, combat prompts p0, macro {macro}, macro prompts {macro}";
+                return $"combat {Combat}{(Policy == "pimc" ? $" {Budget.Worlds}x{Budget.NodesPerWorld}" : "")}, combat prompts p0, macro {macro}, macro prompts {macro}";
             }
         }
 
@@ -526,11 +539,12 @@ internal static class Cli
             var options = new Dictionary<string, string> { ["env"] = env.ToString(), ["policy"] = Policy, ["macro"] = Macro };
             if (Policy == "pimc") { options["worlds"] = $"{Budget.Worlds}"; options["nodes"] = $"{Budget.NodesPerWorld}"; }
             if (ValueFile != null) options["value"] = ValueFile;
+            if (LeafPath != null) options["leaf"] = LeafPath;
             return options;
         }
 
         public override string ToString() =>
-            $"policy {Policy}{(Policy == "pimc" ? $" worlds {Budget.Worlds} nodes {Budget.NodesPerWorld} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
+            $"policy {Combat}{(Policy == "pimc" ? $" worlds {Budget.Worlds} nodes {Budget.NodesPerWorld} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
     }
 
     /// <param name="Observations">Per decision, its observation's hash, and the hash without relic state (when observing).</param>
@@ -762,6 +776,13 @@ internal static class Cli
         var rng = new Random(unchecked(seed * 1_000_003 + index * 7_919) ^ 0x5eed);
         return string.Concat(Enumerable.Range(0, 12).Select(_ => alphabet[rng.Next(alphabet.Length)]));
     }
+
+    /// <summary>--leaf FILE: pimc's leaf weights (docs: combat-brain §4); null without it.</summary>
+    internal static LeafFile? ReadLeaf(Dictionary<string, string> opts) =>
+        opts.TryGetValue("leaf", out var path) ? ProtocolJson.Deserialize<LeafFile>(File.ReadAllText(path)) : null;
+
+    /// <summary>The worker options that pass the leaf weights on: workers start from the same folder, by full path anyway.</summary>
+    internal static IReadOnlyList<string>? LeafOptions(string? path) => path == null ? null : ["--leaf", Path.GetFullPath(path)];
 
     /// <summary>--champion FILE: the champion file's options, under the ones given (docs: evaluation §5).</summary>
     private static Dictionary<string, string> WithChampion(Dictionary<string, string> opts)
