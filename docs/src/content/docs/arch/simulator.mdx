@@ -264,7 +264,7 @@ flowchart TD
 | bundle | `bundle:i` | 在 `CardSelectCmd.FromChooseABundleScreen` 上加前缀补丁：预留选择 id、询问、`SyncLocalChoice` | TestMode 会强制选 `bundles[0]`。唯一的调用方是 ScrollBoxes。 |
 | event | 去掉锁定项后的选项 | `EventSynchronizer.ChooseLocalOption(i)` | `IsProceed` 选项是 UI 按钮：Ancient 事件的「PROCEED」对应 `proceed`；Trial 的 DOUBLE_DOWN（放弃弹窗）永远不合法。事件结束后唯一的动作是 `proceed`，即打开地图（无头时 `NEventRoom.Proceed` 会抛空引用异常）。 |
 | crystal_sphere | `big:X,Y`（3x3 区域）或 `small:X,Y`（单格），仅当能揭开隐藏格子时提供 | `SetTool` + `CellClicked` | CRYSTAL_SPHERE 小游戏。`NCrystalSphereScreen.ShowScreen` 上的前缀补丁把它交给驱动方（`HeadlessPatches.CrystalSphereShown`）。最后一次占卜后，奖励以一个奖励组送达。提供小工具是为了能避免把诅咒完整揭开。 |
-| shop | 有货且买得起的 `buy:i`（药水需要空槽）；`remove`；`leave` | `OnTryPurchaseWrapper(inv)` | `CardRemovalUsed` 把删牌标记为已用，这本是删牌节点的工作；它也覆盖 Lord's Parasol 的免费删牌。TestMode 下 `MerchantRoom.Exit` 提前返回，所以不写历史（只影响外观）。 |
+| shop | 有货且买得起的 `buy:i`（药水需要空槽，且角色可以获得药水：Sozu 禁止获得，购买会失败且什么都不变）；`remove`；`leave` | `OnTryPurchaseWrapper(inv)` | `CardRemovalUsed` 把删牌标记为已用，这本是删牌节点的工作；它也覆盖 Lord's Parasol 的免费删牌。TestMode 下 `MerchantRoom.Exit` 提前返回，所以不写历史（只影响外观）。 |
 | rest | 可用的选项；成功一次后或没有可用选项时提供 `leave` | `RestSiteSynchronizer.ChooseLocalOption` → `Task<bool>` | `NRestSiteRoom.cs:333,571-596` |
 | treasure | `relic:i`、`relic_skip` | 宝箱自动打开（`DoNormalRewards` + `DoExtraRewardsIfNeeded`）。选或跳过一次，然后 `ProceedFromTerminalRewardsScreen`。 | 单人模式下跳过后 `CurrentRelics` 仍非空，所以需要 `RelicPicked` 标记。 |
 | 药水栏 | `potion:S`（随时可用的药水）、`discard_potion:S`；附加在每个宏观决策界面上 | `EnqueueManualUse` / `DiscardPotionGameAction` | 药水栏满时，药水奖励和药水购买都会隐藏，直到空出一个槽。 |

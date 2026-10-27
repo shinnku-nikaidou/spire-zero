@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Entities.Merchant;
+using MegaCrit.Sts2.Core.Hooks;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.GameBridge;
@@ -28,18 +29,21 @@ public static class ShopActions
     };
 
     /// <summary>
-    /// Stocked entries the player can afford. Potions need a free belt slot: without one the purchase fails and
-    /// nothing changes.
+    /// Stocked entries the player can afford. Potions need a free belt slot and the game's leave to take one (Sozu
+    /// forbids it): without either the purchase fails and nothing changes.
     /// </summary>
     public static List<string> Legal(MerchantInventory inventory)
     {
         var actions = new List<string>();
         var entries = Goods(inventory);
+        var player = inventory.Player;
         for (int i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
             if (!entry.IsStocked || !entry.EnoughGold) continue;
-            if (entry is MerchantPotionEntry && !inventory.Player.HasOpenPotionSlots) continue;
+            if (entry is MerchantPotionEntry potion
+                && (!player.HasOpenPotionSlots || !Hook.ShouldProcurePotion(player.RunState, player.Creature.CombatState, potion.Model!, player)))
+                continue;
             actions.Add($"buy:{i}");
         }
         if (inventory.CardRemovalEntry is { IsStocked: true, EnoughGold: true }) actions.Add(Remove);
