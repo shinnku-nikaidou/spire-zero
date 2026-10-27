@@ -132,7 +132,9 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
     private static Recommendation Answer(Dispatcher harness, DecisionRequest request)
     {
         var obs = request.Obs;
-        if (DecisionRequest.HashOf(obs) != request.ObsHash) throw new InvalidDataException($"obs_hash {request.ObsHash} is not the observation's");
+        // A field this build does not know is dropped on reading, so a mod built from newer wire types fails here.
+        if (DecisionRequest.HashOf(obs) != request.ObsHash)
+            throw new InvalidDataException($"obs_hash {request.ObsHash} is not the observation's: are the mod and the brain built from the same commit?");
         string action = (request.Surface, obs.Screen) switch
         {
             (Surfaces.Combat, CombatScreen screen) =>
