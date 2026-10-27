@@ -22,10 +22,11 @@ namespace Sts2Ai.SimWorker;
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
 ///   run [--n 1] [--start 0] [--seed 1] [--asc 0] [--policy play|random|pimc] [--worlds 8] [--nodes 300] [--workers W]
-///       [--max-decisions 20000] [--check] [--trace] [--obs]
-///                                          whole runs, every non-combat decision random; --check plays each seed
-///                                          twice and compares, observations included (each one must survive a JSON
-///                                          round trip); --obs prints them; reports results, hashes and surface coverage.
+///       [--max-decisions 20000] [--check] [--trace] [--obs] [--log decisions.jsonl]
+///                                          whole runs through Harness, every non-combat decision random; --check plays
+///                                          each seed twice and compares, observations and decision logs included (each
+///                                          observation must survive a JSON round trip); --obs prints them; --log writes
+///                                          the decision log; reports results, hashes and surface coverage.
 ///                                          pimc searches each combat decision (NoSL) in W worker processes (default:
 ///                                          one per world)
 ///   panel [--n 40] [--start 0] [--seed 1] [--act 0] [--rooms weak,regular] [--player pimc|play|random] [--env NoSL|SL]
@@ -212,6 +213,8 @@ internal static class Cli
         int maxDecisions = Int(opts, "max-decisions", 20_000);
         bool check = opts.ContainsKey("check");
         bool observe = check || opts.ContainsKey("obs");
+        using var logFile = opts.TryGetValue("log", out var logPath) ? new StreamWriter(logPath) : null;
+        bool log = check || logFile != null;
         var policy = opts.GetValueOrDefault("policy", "play");
         if (policy != "pimc" && !Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (pimc, {string.Join(", ", Policies.CombatNames)})");
         var budget = new Budget(Int(opts, "worlds", 8), Int(opts, "nodes", 300));
@@ -233,10 +236,16 @@ internal static class Cli
         {
             var setup = new RunSetup(opts.GetValueOrDefault("character", "SILENT"), MakeSeed(seed, i), Int(opts, "asc", 0), loadout);
             var started = clock.Elapsed;
-            Func<Random, ICombatPolicy> combat = pooled == null ? rng => Policies.Combat(policy, rng)
-                : _ => new PimcPolicy(pooled, budget, CombatSession.StableHash(setup.Seed));
-            var first = PlayRun(pump, setup, seed * 1_000_003 + i, combat, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
+            // Placeholders draw from the run's generator, so a seed plays the same run whatever is logged.
+            Dispatcher Harness(Random rng)
+            {
+                var combat = pooled?.Route(budget) ?? CombatRoute.Of(policy, Policies.Combat(policy, rng));
+                var random = new RandomChoices(rng);
+                return new Dispatcher(setup.Seed, PlayEnvironment.NoSL, combat, new("random", random), new("random", new RandomMacro(rng)), new("random", random), log);
+            }
+            var first = PlayRun(pump, setup, seed * 1_000_003 + i, Harness, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
             if (pooled != null) first.Errors.AddRange(pooled.TakeGameErrors());
+            foreach (var entry in first.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
             var ms = (clock.Elapsed - started).TotalMilliseconds;
             outcomes[first.Outcome] = outcomes.GetValueOrDefault(first.Outcome) + 1;
             foreach (var step in first.Trace)
@@ -252,17 +261,22 @@ internal static class Cli
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
             foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {FirstLine(e)}");
             if (!check) continue;
-            var second = PlayRun(pump, setup, seed * 1_000_003 + i, combat, maxDecisions, trace: false, observe, printObservations: false);
+            var second = PlayRun(pump, setup, seed * 1_000_003 + i, Harness, maxDecisions, trace: false, observe, printObservations: false);
             if (pooled != null) pooled.TakeGameErrors();
             // Each decision's observation is shown before its action, so they pair up by index.
             int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k =>
                 first.Trace[k] != second.Trace[k] || first.Observations.ElementAtOrDefault(k) != second.Observations.ElementAtOrDefault(k), -1);
-            if (diverged < 0 && first.Trace.Count == second.Trace.Count && first.Summary == second.Summary &&
-                first.MapHashes.SequenceEqual(second.MapHashes) && first.Observations.SequenceEqual(second.Observations)) continue;
+            bool same = first.Trace.Count == second.Trace.Count && first.Summary == second.Summary &&
+                first.MapHashes.SequenceEqual(second.MapHashes) && first.Observations.SequenceEqual(second.Observations);
+            static string Timeless(DecisionEntry e) => ProtocolJson.Serialize(e with { ElapsedMs = 0 });
+            bool sameLog = first.Log.Select(Timeless).SequenceEqual(second.Log.Select(Timeless));
+            if (diverged < 0 && same && sameLog) continue;
             mismatches++;
-            Console.WriteLine(diverged < 0 ? $"  NOT DETERMINISTIC: {first.Trace.Count} vs {second.Trace.Count} decisions; {second.Summary}"
-                : first.Trace[diverged] != second.Trace[diverged] ? $"  NOT DETERMINISTIC: decision {diverged}: {first.Trace[diverged]} vs {second.Trace[diverged]}"
-                : $"  NOT DETERMINISTIC: observation {diverged} ({first.Trace[diverged]}) differs");
+            Console.WriteLine(diverged >= 0
+                ? first.Trace[diverged] != second.Trace[diverged] ? $"  NOT DETERMINISTIC: decision {diverged}: {first.Trace[diverged]} vs {second.Trace[diverged]}"
+                : $"  NOT DETERMINISTIC: observation {diverged} ({first.Trace[diverged]}) differs"
+                : !same ? $"  NOT DETERMINISTIC: {first.Trace.Count} vs {second.Trace.Count} decisions; {second.Summary}"
+                : "  NOT DETERMINISTIC: the decision logs differ");
         }
         clock.Stop();
 
@@ -280,16 +294,19 @@ internal static class Cli
     }
 
     /// <param name="Observations">Per decision, its observation's hash (when observing).</param>
+    /// <param name="Log">Harness's decision log, when logging.</param>
     private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes,
-        IReadOnlyList<ulong> Observations, string? Failure, List<string> Errors);
+        IReadOnlyList<ulong> Observations, IReadOnlyList<DecisionEntry> Log, string? Failure, List<string> Errors);
 
     /// <summary>
-    /// One run to the end (or the decision cap), every policy drawing from one generator seeded by <paramref name="rngSeed"/>.
+    /// One run to the end (or the decision cap) through the Harness that <paramref name="harness"/> builds on one generator
+    /// seeded by <paramref name="rngSeed"/>.
     /// Observing checks that each observation survives a JSON round trip, and keeps its hash.
     /// </summary>
-    private static RunResult PlayRun(Pump pump, RunSetup setup, int rngSeed, Func<Random, ICombatPolicy> combat, int maxDecisions, bool trace, bool observe, bool printObservations)
+    private static RunResult PlayRun(Pump pump, RunSetup setup, int rngSeed, Func<Random, Dispatcher> harness, int maxDecisions, bool trace, bool observe, bool printObservations)
     {
         var rng = new Random(rngSeed);
+        var dispatcher = harness(rng);
         var observations = new List<ulong>();
         RunSession? session = null;
         try
@@ -301,7 +318,7 @@ internal static class Cli
                 if (printObservations) Console.WriteLine($"  obs {observations.Count}: {json}");
                 observations.Add(ProtocolJson.Hash(obs));
             };
-            session = RunSession.Start(pump, setup, new RandomChoices(rng), combat(rng), new RandomMacro(rng), observed);
+            session = RunSession.Start(pump, setup, dispatcher, dispatcher, dispatcher, observed);
             int printed = 0;
             while (!session.IsOver && session.Trace.Count < maxDecisions)
             {
@@ -310,13 +327,13 @@ internal static class Cli
                 for (; printed < session.Trace.Count; printed++) Console.WriteLine($"  {printed}: {session.Trace[printed]}");
             }
             var outcome = session.Won ? "won" : session.IsOver ? "lost" : "truncated";
-            return new(outcome, session.Summary(), session.Trace.ToList(), session.MapHashes.ToList(), observations, null, HeadlessGame.TakeErrors());
+            return new(outcome, session.Summary(), session.Trace.ToList(), session.MapHashes.ToList(), observations, dispatcher.Log.ToList(), null, HeadlessGame.TakeErrors());
         }
         catch (Exception e)
         {
             if (HeadlessGame.Verbose) Console.Error.WriteLine(e);
             return new("failed", session?.Summary() ?? "", session?.Trace.ToList() ?? [], session?.MapHashes.ToList() ?? [], observations,
-                $"{e.GetType().Name}: {FirstLine(e.Message)}", HeadlessGame.TakeErrors());
+                dispatcher.Log.ToList(), $"{e.GetType().Name}: {FirstLine(e.Message)}", HeadlessGame.TakeErrors());
         }
         finally
         {

@@ -12,7 +12,7 @@ Harness is the dispatcher of the decision process. On one side is the **host**, 
 
 <Aside title="Status">
 
-Partly built. `Sts2Ai.Harness` holds the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) and `PooledPimc`, the combat brain with its NoSL worlds searched in the pool; `PimcPolicy` wraps it as the combat policy of whole runs. Record, routing, budget control and the decision log are planned: today SimWorker's commands call the policies directly, through `ICombatPolicy` and `IChoicePolicy`.
+Partly built. `Sts2Ai.Harness` holds the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)), `PooledPimc` (the combat brain with its NoSL worlds searched in the pool) and `Dispatcher`, which routes a run's decisions to brains, draws their seeds and writes the decision log ([§4](#sec-4)–[§6](#sec-6)). SimWorker's `run` plays every run through it, in process. Planned: the public record ([§3](#sec-3)); the message handling of a separate decision process (decision ids, stale requests); wall-clock budgets and CI allocation; degraded answers.
 
 </Aside>
 
@@ -98,7 +98,8 @@ Each surface (kind of decision screen) goes to exactly one brain:
 | `card_choice` out of combat (upgrade, transform, enchant, remove) | macro |
 | `map`, `rewards`, `card_reward`, `bundle`, `event`, `shop`, `rest`, `treasure`, `potion_full` | macro |
 
-- No route means the error "uncovered surface". The host pauses, asks for manual play and logs a coverage bug. There is never a random fallback. Evaluation requires the fallback count to be 0 ([Evaluation §3](/en/arch/evaluation/#sec-3)).
+- `Dispatcher` implements this table for one run. The host gives it as its combat, card-prompt and macro policy. It holds one brain per side (combat, prompts in combat, macro, prompts out of combat) and sends a card prompt to a side by `ChoiceContext.InCombat` ([Protocol §4](/en/arch/protocol/#sec-4)). Today every brain but the combat brain is the random placeholder.
+- No route means the error "uncovered surface": `Dispatcher` throws on a surface outside `Dispatcher.MacroSurfaces`, and on a brain's answer that is not legal. The host pauses, asks for manual play and logs a coverage bug. There is never a random fallback. Evaluation requires the fallback count to be 0 ([Evaluation §3](/en/arch/evaluation/#sec-3)).
 - The list of surfaces and their game entry points: [Simulator §5.2](/en/arch/simulator/#sec-5.2), [GameBridge §4](/en/arch/gamebridge/#sec-4).
 
 ## 5. Budget and determinism
@@ -114,7 +115,7 @@ The budget is counted in branches (one branch is one simulated line of play in a
 "Anytime" means the search can be stopped at any moment and still has a best answer to give.
 
 - Results computed in parallel are merged in a fixed order (world index, then candidate index), never in the order they finish, so timing cannot change the answer.
-- The brain's RNG comes from Harness: `brainSeed = Hash(runId, decisionIndex, championVersion)`. It is never derived from the game seed.
+- The brain's RNG comes from Harness: `brainSeed = SplitMix64(Hash(runId), decisionIndex)`, where the decision index counts every decision of the run, card prompts included, and the run id is the run's seed string. The brain never draws from the game's own random streams. The champion's version joins the hash once brains have versions. PIMC's build seed is the brain seed in hex.
 - Allocation: stop when the top two candidates are separated by more than their confidence intervals (CI); otherwise add samples or depth ([Combat brain §5](/en/arch/combat-brain/#sec-5)).
 
 ## 6. Decision log
@@ -122,13 +123,16 @@ The budget is counted in branches (one branch is one simulated line of play in a
 One JSON line per decision:
 
 ```json
-{"decision_id": 412, "env": "NoSL", "surface": "combat", "obs_hash": "…",
- "budget": {"branches": 4000}, "worlds": 16,
- "candidates": [{"plan": ["play:7:3", "play:9", "end_turn"], "value": 0.412, "ci": 0.018, "n": 1600}],
- "chosen": "play:7:3", "elapsed_ms": 812, "brain": "champion-0007", "degraded": false}
+{"run": "VHC9ZPHEBWM1", "decision_id": 4, "env": "NoSL", "surface": "combat", "brain": "pimc",
+ "obs_hash": "67f99089ea94de49", "legal": 7, "chosen": "play:2", "plan": ["play:3:1", "play:5", "end_turn"],
+ "candidates": [{"action": "play:2", "value": 0.673, "ci": 0.0, "samples": 8}, …],
+ "budget": {"worlds": 8, "nodes_per_world": 300}, "seed": 16058448958323553205, "elapsed_ms": 104.6}
 ```
 
-Each candidate carries its plan, its value, its confidence interval `ci` and its sample count `n`. `degraded` marks a decision answered after a worker failure ([§7](#sec-7)).
+- `obs_hash` is the hash of what the brain was shown: the combat observation, the run observation, or the card prompt. `legal` counts the legal actions (the options, for a prompt). `chosen` is the action in text form, or the picked option indexes.
+- A searching brain adds `plan` (the rest of the turn after `chosen`, in the first world), `candidates` (each first action's mean value, confidence half-width `ci` and number of worlds, best first) and `budget`. Placeholders log neither.
+- `run --log FILE` writes it, one line per decision ([Simulator §5](/en/arch/simulator/#sec-5)).
+- `degraded`, for an answer given after a worker failure, is planned together with timeouts ([§7](#sec-7)). A crashed worker is restarted and gets its request once more, which gives the same answer, so nothing is degraded yet.
 
 Who reads the log:
 
@@ -145,10 +149,12 @@ Who reads the log:
 | building from the observation fails | report `BuildDifferences`; no search; the host pauses; the bug is logged. Never random |
 | the host rejects the action as illegal | the host requests again; twice in a row → pause |
 
+Today: a worker that dies is restarted and gets its request once more ([Simulator §8](/en/arch/simulator/#sec-8)); there are no timeouts. A combat not built as observed fails the decision with its differences (`SimWorlds.NoSL`), which in `run` fails the run. An illegal answer from a brain throws in `Dispatcher`.
+
 ## 8. Tests
 
-1. Routing coverage: N simulated runs hit every surface, with a fallback count of 0.
-2. Reproducibility: replaying a decision log gives identical recommendations.
+1. Routing coverage: N simulated runs hit every surface, with a fallback count of 0. Exists: `run` lists the surfaces never reached, and `Dispatcher` throws on an uncovered one.
+2. Reproducibility: replaying a decision log gives identical recommendations. Exists in part: `run --check` plays each seed twice and compares the decision logs, every field but `elapsed_ms`.
 3. NoSL counterfactual at Harness level: same record, different hidden state → same recommendation ([Environments §7](/en/arch/environments/#sec-7)).
 4. Stale handling: reordered or duplicated requests → only the latest is answered.
 

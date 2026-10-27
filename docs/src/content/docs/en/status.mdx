@@ -21,8 +21,9 @@ As of 2026-10-27:
 | SL clone (load save + replay + seal) | planned; the path is researched ([Simulator §7](/en/arch/simulator/#sec-7)) |
 | combat world API | done: NoSL worlds built from the observation, the SL world by replay of the real combat ([Simulator §6](/en/arch/simulator/#sec-6)) |
 | worker pool + IPC | done for PIMC's NoSL worlds: one JSON-lines request per world, the same result as in process, 4.5 times faster on 8 workers ([Simulator §8](/en/arch/simulator/#sec-8)) |
-| combat brain v0 | done: PIMC with a one-turn search and a hand-made leaf. Win rate against the best placeholder: 100% vs 85% on act 1 weak + regular, 36.7% vs 16.7% on act 1 elites, 50% vs 16.7% on act 2 ([Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)). In whole runs with random macro decisions it reaches floor 12.7 on average against 8.6, and the act 1 boss in 8 of 24 runs against 1 ([§7.2](/en/arch/combat-brain/#sec-7.2)) |
-| wire envelopes, events; Harness record, routing and decision log | planned |
+| combat brain v0 | done: PIMC with a one-turn search and a hand-made leaf. Win rate against the best placeholder: 100% vs 85% on act 1 weak + regular, 36.7% vs 16.7% on act 1 elites, 50% vs 16.7% on act 2 ([Combat brain §7.1](/en/arch/combat-brain/#sec-7.1)). In whole runs with random macro decisions it reaches floor 13.1 on average against 8.6, and the act 1 boss in 10 of 24 runs against 1 ([§7.2](/en/arch/combat-brain/#sec-7.2)) |
+| Harness dispatch | done for runs in process: surface routing with no fallback, brain seeds from the run id and decision index, the decision log; `run --check` replays it exactly ([Harness §4](/en/arch/harness/#sec-4)–[§6](/en/arch/harness/#sec-6)) |
+| wire envelopes, events, public record | planned |
 | macro brain, value function | placeholders only |
 | mod | probe builds exist, not installed |
 
@@ -49,7 +50,7 @@ As of 2026-10-27:
 
 4. <Badge text="done 2026-10-27" variant="success" /> Worker pool and IPC: PIMC's NoSL worlds are searched in worker processes beside the process that holds the run, and the combat brain plays the combats of whole runs ([Simulator §8](/en/arch/simulator/#sec-8), [Combat brain §7.2](/en/arch/combat-brain/#sec-7.2)).
 
-5. Harness: routing, brain seeds and the decision log; the public record.
+5. <Badge text="done 2026-10-27" variant="success" /> Harness dispatch: routing, brain seeds and the decision log, for every run ([Harness §4](/en/arch/harness/#sec-4)–[§6](/en/arch/harness/#sec-6)). The public record comes with the first inference that needs it ([Harness §3](/en/arch/harness/#sec-3)).
 
 6. Macro brain L0 and a v0 value function; R1/R2 full runs; the evaluation pipeline.
 

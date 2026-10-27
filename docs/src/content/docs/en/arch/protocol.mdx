@@ -140,6 +140,7 @@ public sealed record ChoiceContext
     public required string Purpose { get; init; }       // from the CardSelectCmd entry, or "<pile>_pile"
     public string? Source { get; init; }                // card/relic/power/event id that asked
     public required bool Cancelable { get; init; }      // a cancel or skip button closes the prompt
+    public required bool InCombat { get; init; }        // asked during a combat
     public string? PromptKey { get; init; }             // the prompt's loc key, "table.key"
     public ModifierView? Enchantment { get; init; }     // for deck_for_enchantment
 }
@@ -150,6 +151,7 @@ public sealed record ChoiceContext
 | `Purpose` | the kind of prompt: the name of the `CardSelectCmd` entry the game used, without "From", in snake_case: `deck_for_upgrade`, `deck_for_transformation`, `deck_for_enchantment`, `deck_for_removal`, `deck_generic`, `hand`, `hand_for_discard`, `hand_for_upgrade`, `choose_a_card_screen`, `simple_grid`, `simple_grid_for_rewards`. A prompt over a combat pile is `draw_pile`, `discard_pile`, `exhaust_pile`, … |
 | `Source` | id of the card, relic, power or event that asked, when the game names one: the entry's `source` argument, else the last model its `PlayerChoiceContext` involved (optional) |
 | `Cancelable` | `CardSelectorPrefs.Cancelable`, or the `canSkip` of a choose-a-card screen |
+| `InCombat` | `CombatManager.IsInProgress` when the prompt opens: a card or power resolving, rather than a rest site, event or shop. Harness routes the prompt by it ([Harness §4](/en/arch/harness/#sec-4)) |
 | `PromptKey` | the prompt text's loc key (optional) |
 | `Enchantment` | for `deck_for_enchantment`: the enchantment the picked cards get, and its amount |
 

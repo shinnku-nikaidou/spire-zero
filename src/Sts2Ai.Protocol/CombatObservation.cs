@@ -87,6 +87,8 @@ public sealed record RelicView
     /// <summary>Set when not the normal status.</summary>
     public string? Status { get; init; }
     public bool? Melted { get; init; }
+    /// <summary>Set when the relic is used up, as its tip says (a spent LIZARD_TAIL, WINGED_BOOTS with no flights left).</summary>
+    public bool? UsedUp { get; init; }
 }
 
 public sealed record CreatureView

@@ -20,6 +20,7 @@ namespace Sts2Ai.SimWorker;
 ///  - build: a combat built from a recorded observation shows exactly that observation, uids included, restores
 ///    by replay, and plays on;
 ///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
+///  - worlds: a search world restores exactly after a prompt, also when a relic asks at the start of each turn;
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
 ///  - protocol: observations and actions survive a round trip through their wire form, and the brain's and harness's
 ///    assemblies reach no game assembly;
@@ -110,6 +111,7 @@ internal static class SelfTest
         }
 
         RollingBoulder(pump, pool, act, Check);
+        WorldRestoresAfterPrompts(pump, pool, act, Check);
         int workers = Cli.Int(opts, "workers", 0);
         if (workers > 0) PooledMatches(pump, opts, pool, act, seed, workers, Check);
 
@@ -289,5 +291,33 @@ internal static class SelfTest
             return;
         }
         check("rolling boulder hits one by one", false, "no encounter in the pool has two or more enemies");
+    }
+
+    /// <summary>
+    /// With Toasty Mittens, which asks for a card to exhaust at the start of each turn, a world plays Survivor (which
+    /// asks for a card to discard), then is rebuilt from its snapshot: the start's own prompt must not take Survivor's
+    /// recorded pick. Over several search seeds, since a wrong pick can match by chance.
+    /// </summary>
+    private static void WorldRestoresAfterPrompts(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        var deck = new[] { "SURVIVOR", "SURVIVOR", "SURVIVOR", "SURVIVOR", "SURVIVOR", "STRIKE_SILENT", "DEFEND_SILENT", "NEUTRALIZE" };
+        var loadout = new Loadout(Deck: deck.Select(id => new CardSpec(id)).ToList(), Relics: ["TOASTY_MITTENS"], Hp: 999, MaxHp: 999);
+        var setup = new CombatSetup("SILENT", pool[0], act, Cli.MakeSeed(0, 0), Loadout: loadout);
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
+            obs = session.Observation();
+        using var worlds = SimWorlds.NoSL(pump, obs, setup.Seed);
+        foreach (var world in worlds.Worlds(6, 1))
+        {
+            var root = world.Snapshot();
+            uint survivor = world.Observe().Hand.First(c => c.Id == "SURVIVOR").Uid!.Value;
+            world.Execute(world.Legal().First(a => a.Card == survivor));
+            string after = ProtocolJson.Serialize(world.Observe());
+            var played = world.Snapshot();
+            world.Restore(root);
+            world.Observe();
+            world.Restore(played);
+            check("world restores after prompts", ProtocolJson.Serialize(world.Observe()) == after, $"{pool[0].Id.Entry}: {string.Join(" ", played.Steps)}");
+        }
     }
 }

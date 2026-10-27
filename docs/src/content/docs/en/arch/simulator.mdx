@@ -112,24 +112,24 @@ This is **not** the real travel path: it skips the `?` roll and its odds, and `G
 `CombatBuilder` builds a combat that shows a given observation. `CombatBuilder.Setup(obs, seed)`:
 
 1. starts the encounter with the observation's deck and relics;
-2. `Apply` overwrites the visible state: round; enemies (added, removed, reordered); HP and block; energy; gold; potions; relic counters; powers; the 4 piles with per-card modifications; intents;
+2. `Apply` overwrites the visible state: round; enemies (added, removed, reordered); HP and block; energy; gold; potions; orb slots and orbs; relic counters and used-up relics; powers; the 4 piles with per-card modifications; intents;
 3. `Resample(StableHash(seed))` draws the hidden state;
 4. `BuildDifferences` diffs, by JSON path, the input observation against the observation of the rebuilt combat. Empty means exact.
 
 Details:
 
-- **Knob solver.** Shown numbers derive from internal integers in a different way for each power or relic. The builder tries integers (amount, dynamic vars, fields) until the display matches.
-- **Intents.** The builder chooses among the moves that show the observed intents. A stunned enemy gets a synthesized stun move, made like `Creature.StunInternal` does (`FollowUpStateId = StateLog.Last().Id`). Hidden enum switches in powers (e.g. `SurroundedPower._facing`) are searched to maximize the number of matching enemies.
+- **Knob solver.** Shown numbers derive from internal integers in a different way for each power or relic. The builder tries integers (amount, dynamic vars, fields) until the display matches. A relic seen as used up (a spent `LIZARD_TAIL`, `WINGED_BOOTS` with no flights left) gets its int and bool fields tried the same way until the rebuilt one is used up too.
+- **Intents.** The builder chooses among the moves that show the observed intents. A stunned enemy gets a synthesized stun move, made like `Creature.StunInternal` does (`FollowUpStateId = StateLog.Last().Id`). Hidden enum switches in powers (e.g. `SurroundedPower._facing`) and then the monsters' own int fields (e.g. the Waterfall Giant's pressure gun damage, which grows each time it fires) are searched to maximize the number of matching enemies.
 - **uids** match the observation; other cards are numbered above them.
-- **Approximations (gap):** per-turn history and internal counters; cost-modifier durations; player debuff decay; real stun-move follow-ups; the deck is all cards seen, generated ones included; orbs and non-player allies are not built. Never validated on real-game observations.
+- **Approximations (gap):** per-turn history and internal counters; cost-modifier durations; player debuff decay; real stun-move follow-ups; the deck is all cards seen, generated ones included; orbs are put in without their own internal state; non-player allies are not built. Never validated on real-game observations.
 
-Selftest matrix (2026-10-26), all checks pass:
+Selftest matrix (2026-10-27), all checks pass:
 
 | set | combats |
 |---|---|
 | SILENT | 60/60 |
 | IRONCLAD | 58/58 |
-| SILENT, elite + boss, acts 0 / 1 / 2 | 57 / 58 / 57 |
+| SILENT, elite + boss, acts 0 / 1 / 2 | 57 / 57 / 58 |
 
 ## 4. Performance
 
@@ -219,7 +219,7 @@ A card prompt's bounds come from its context (`ChoiceContexts.Bounds`): a cancel
 
 `IsOver = RunState.IsGameOver`. A run is won when it is over in the victory room.
 
-**CLI:** `run [--n] [--start] [--seed] [--asc] [--policy play|random|pimc] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs]` plus the loadout options. With `pimc`, each combat decision is searched (NoSL) in a worker pool, one worker per world unless `--workers` says otherwise; the run itself stays live in this process. Out-of-combat decisions are random for every policy. `--check` also observes every decision: each observation's JSON round trip must be exact, the hashes are compared on replay, and the run's line ends with a digest of them (`obs`). `--obs` prints each observation.
+**CLI:** `run [--n] [--start] [--seed] [--asc] [--policy play|random|pimc] [--worlds] [--nodes] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--log FILE]` plus the loadout options. Every decision goes through Harness's `Dispatcher` ([Harness §4](/en/arch/harness/#sec-4)), which the session is given as its combat, prompt and macro policy. With `pimc`, each combat decision is searched (NoSL) in a worker pool, one worker per world unless `--workers` says otherwise; the run itself stays live in this process. Out-of-combat decisions are random for every policy. `--check` also observes every decision: each observation's JSON round trip must be exact, the hashes are compared on replay, and the run's line ends with a digest of them (`obs`). `--obs` prints each observation. `--log` writes the decision log ([Harness §6](/en/arch/harness/#sec-6)); `--check` compares the two plays' logs too.
 
 ### 5.1 Start
 
@@ -310,7 +310,7 @@ A NoSL world is a determinized sample: a full game state that agrees with everyt
 
 - **Input:** the public record (protocol types) and a search seed. **Output:** a sampled state consistent with it.
 - **Combat worlds:** `SimWorlds` implements the world API ([Protocol §7](/en/arch/protocol/#sec-7)) inside one process. The root is `CombatBuilder.Setup(combat obs, build seed)`, built from the observation and never from the real combat. World k is the root plus `Determinize(seed_k)`, with `seed_k` mixed from the search seed and k. Knobs derived from the record (turn history, move posterior) are still gaps ([§3](#sec-3)).
-- **One live combat for all worlds.** Each world keeps its own trace, and its snapshot is that trace. When a world is used while another one is live, it rebuilds itself from the root by replay; a search that stays inside one world replays only when it backtracks. Card prompts inside a world are answered at random, from a generator seeded by the world's seed and its trace length.
+- **One live combat for all worlds.** Each world keeps its own trace, and its snapshot is that trace. When a world is used while another one is live, it rebuilds itself from the root by replay; a search that stays inside one world replays only when it backtracks. Card prompts inside a world are answered at random, from a generator seeded by the world's seed and its trace length. A world's trace is the live combat's, so it also holds the prompts asked while the combat starts (a relic that asks at the start of each turn); replay hands out recorded picks in order, and without those a later prompt's pick would go to them.
 - **The same process as the real combat.** In-process search (`panel` without `--workers`, [Combat brain §7](/en/arch/combat-brain/#sec-7)) keeps the real combat as a snapshot before each decision, lets the worlds use the process, and puts the real combat back by replay. With the worker pool ([§8](#sec-8)) the worlds live in the workers and the real combat or run stays live, so there is no hand-over.
 - `SimWorlds.SL` is the same class with the real combat's snapshot as the root and one world: an exact copy of the combat, with no seal ([§7](#sec-7)).
 - **Run worlds** (macro search beyond a node): build a `SerializableRun` from `RunView` (deck, relics, potions, HP, gold, act, floor, map, visited points) with the hidden parts sampled: every RNG stream; `RoomSet` contents and counters (from the rules: the act pools minus what was seen); grab bags; odds (inferred from the reward history where that is possible, otherwise a prior). Load it like a save ([§7](#sec-7)). Exactness is tested by an observation round trip.
@@ -345,7 +345,7 @@ A worker is the same binary started as `serve`. `WorkerPool` (in `Sts2Ai.Harness
 - **Self-contained requests.** A request carries everything the worker needs, and nothing carries over from one request to the next. So any free worker can take any request, and only the NoSL observation leaves the host: the true state never reaches a worker.
 - **Determinism.** Replies are merged in request order, never in completion order. With the same seeds the result equals in-process search exactly, values included: `selftest --workers N` checks four decisions, and a 6-combat panel trace with 8 workers diffs empty against the in-process one.
 - **Crash.** A worker that closes its stdout or breaks the pipe is restarted, and the request is sent once more. A second failure is an error. The count is reported as `worker restarts`. A reply with an error (an exception in the worker) fails the decision; game `Log.Error` lines in a worker come back in the reply and are counted with the host's.
-- **Speed.** On 6 act-1 combats with the default budget (8 worlds × 300 nodes), 8 workers take 68.7 ms per action against 307.5 ms in process (9.4 s against 42.1 s). A whole run with the `pimc` combat policy takes about 17.5 s, with two runs at a time on 8 workers each ([Combat brain §7.2](/en/arch/combat-brain/#sec-7.2)).
+- **Speed.** On 6 act-1 combats with the default budget (8 worlds × 300 nodes), 8 workers take 68.7 ms per action against 307.5 ms in process (9.4 s against 42.1 s). A whole run with the `pimc` combat policy takes about 19.9 s, with two runs at a time on 8 workers each ([Combat brain §7.2](/en/arch/combat-brain/#sec-7.2)).
 
 Planned requests, for the SL clone and run worlds: open a world by kind (build, clone, run host) and get a world id; then snapshot, restore, execute, legal, observe and branch on it; then close. Such a world keeps live state in its worker, so its branches should go to that worker first (affinity), since a restore elsewhere costs a replay; snapshots stay portable, so any worker can take over. A crash then reopens the worker's worlds from their snapshots.
 
@@ -362,11 +362,12 @@ Planned requests, for the SL clone and run worlds: open a world by kind (build, 
 - with `--workers N`: pooled PIMC picks what in-process PIMC picks, with the same values, with no worker restarts or worker game errors;
 - protocol round trip;
 - the Rolling Boulder path is hit;
+- a search world restores exactly after a card prompt, also with a relic that asks at the start of each turn (Toasty Mittens);
 - no game errors.
 
 **Exists, in `run`:**
 
-- `--check` replays each run in the same process and compares trace, summary, map hashes and observation hashes; each observation must also survive a JSON round trip;
+- `--check` replays each run in the same process and compares trace, summary, map hashes, observation hashes and the decision log (all but its timings); each observation must also survive a JSON round trip;
 - the report lists surfaces never reached, driver failures (there is no fallback: an unknown screen throws), game `Log.Error` lines, and pump idle waits (real-time waits). Any of these makes the exit code 1;
 - cross-process: run the same seeds in another process partition and diff the per-run lines.
 

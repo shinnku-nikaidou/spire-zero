@@ -34,6 +34,8 @@ public sealed record ChoiceContext
     public string? Source { get; init; }
     /// <summary>A cancel or skip button closes the prompt without a pick.</summary>
     public required bool Cancelable { get; init; }
+    /// <summary>Asked during a combat (a card or power resolving) rather than outside one (a rest site, an event, a shop).</summary>
+    public required bool InCombat { get; init; }
     /// <summary>The prompt text's loc key, "table.key".</summary>
     public string? PromptKey { get; init; }
     /// <summary>For "deck_for_enchantment": the enchantment the picked cards get.</summary>

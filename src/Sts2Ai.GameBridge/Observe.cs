@@ -160,5 +160,6 @@ public static class Observe
         Counter = r.ShowCounter ? r.DisplayAmount : null,
         Status = r.Status != RelicStatus.Normal ? r.Status.ToString() : null,
         Melted = r.IsMelted ? true : null,
+        UsedUp = r.IsUsedUp ? true : null,
     };
 }

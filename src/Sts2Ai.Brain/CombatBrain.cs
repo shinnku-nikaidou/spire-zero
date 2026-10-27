@@ -40,8 +40,8 @@ public sealed class PimcBrain(LeafWeights? weights = null) : ICombatBrain
         return Merge(first, worlds.Worlds(budget.Worlds, seed).Select(w => SearchWorld(w, observation.Round, first, budget.NodesPerWorld)).ToList());
     }
 
-    /// <summary>The answer when there is nothing to choose: no search.</summary>
-    public static CombatDecisionResult Only(CombatAction action) => new(action, [], [new(action.ToString(), double.NaN, 0, 0)]);
+    /// <summary>The answer when there is nothing to choose: no search, so no candidates.</summary>
+    public static CombatDecisionResult Only(CombatAction action) => new(action, [], []);
 
     /// <summary>One world's part of a decision: the best line after each of <paramref name="first"/>, in that order.</summary>
     public IReadOnlyList<PlannedLine> SearchWorld(ICombatWorld world, int round, IReadOnlyList<CombatAction> first, int nodesPerWorld) =>

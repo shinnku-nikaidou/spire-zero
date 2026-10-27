@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.CardSelection;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -55,6 +56,7 @@ public static class ChoiceContexts
             Purpose = pile != null ? $"{JsonNamingPolicy.SnakeCaseLower.ConvertName(pile.Type.ToString())}_pile" : JsonNamingPolicy.SnakeCaseLower.ConvertName(entry.Name["From".Length..]),
             Source = source?.Id.Entry,
             Cancelable = prefs?.Cancelable ?? Arg(p => p.Name == "canSkip") is true,
+            InCombat = CombatManager.Instance.IsInProgress,
             PromptKey = prompt != null ? $"{prompt.LocTable}.{prompt.LocEntryKey}" : null,
             Enchantment = enchantment != null ? new ModifierView(enchantment.Id.Entry, (int)Arg(p => p.Name == "amount")!) : null,
         };

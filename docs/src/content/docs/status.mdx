@@ -21,8 +21,9 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | SL 克隆（加载存档 + 重放 + 封存） | 规划中；路径已调研（[模拟器 §7](/arch/simulator/#sec-7)） |
 | 战斗世界 API | 完成：NoSL 世界从观测构建，SL 世界通过重放真实战斗得到（[模拟器 §6](/arch/simulator/#sec-6)） |
 | worker 进程池 + 进程间通信 | PIMC 的 NoSL 世界已完成：每个世界一个 JSON 行请求，结果与进程内相同，8 个 worker 快 4.5 倍（[模拟器 §8](/arch/simulator/#sec-8)） |
-| 战斗大脑 v0 | 完成：PIMC，搜索一个回合，手工叶子估值。与最好的占位策略比胜率：第 1 幕弱怪 + 普通 100% 对 85%，第 1 幕精英 36.7% 对 16.7%，第 2 幕 50% 对 16.7%（[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)）。在局外决策随机的整局里，平均打到第 12.7 层（对 8.6 层），24 局里有 8 局打到第 1 幕 Boss（对 1 局）（[§7.2](/arch/combat-brain/#sec-7.2)） |
-| 消息信封、事件；Harness 的记录、路由和决策日志 | 规划中 |
+| 战斗大脑 v0 | 完成：PIMC，搜索一个回合，手工叶子估值。与最好的占位策略比胜率：第 1 幕弱怪 + 普通 100% 对 85%，第 1 幕精英 36.7% 对 16.7%，第 2 幕 50% 对 16.7%（[战斗大脑 §7.1](/arch/combat-brain/#sec-7.1)）。在局外决策随机的整局里，平均打到第 13.1 层（对 8.6 层），24 局里有 10 局打到第 1 幕 Boss（对 1 局）（[§7.2](/arch/combat-brain/#sec-7.2)） |
+| Harness 调度 | 进程内的整局已完成：没有兜底的决策界面路由，由 run id 和决策序号得到的大脑种子，决策日志；`run --check` 能完全重现它（[Harness §4](/arch/harness/#sec-4)–[§6](/arch/harness/#sec-6)） |
+| 消息信封、事件、公开记录 | 规划中 |
 | 宏观大脑、价值函数 | 只有占位实现 |
 | Mod | 已有探针构建，未安装 |
 
@@ -49,7 +50,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 4. <Badge text="2026-10-27 完成" variant="success" /> worker 进程池和进程间通信：PIMC 的 NoSL 世界在持有整局的进程旁边的 worker 进程里搜索，战斗大脑打整局里的每场战斗（[模拟器 §8](/arch/simulator/#sec-8)、[战斗大脑 §7.2](/arch/combat-brain/#sec-7.2)）。
 
-5. Harness：路由、大脑种子和决策日志；公开记录。
+5. <Badge text="2026-10-27 完成" variant="success" /> Harness 调度：路由、大脑种子和决策日志，覆盖每一局（[Harness §4](/arch/harness/#sec-4)–[§6](/arch/harness/#sec-6)）。公开记录等第一个需要它的推断出现时再做（[Harness §3](/arch/harness/#sec-3)）。
 
 6. 宏观大脑 L0 和 v0 价值函数；R1/R2 完整对局；评估流水线。
 

@@ -73,7 +73,7 @@ flowchart TD
 | `Sts2Ai.Brain` | Protocol | 战斗大脑 v0（PIMC）、占位策略 |
 | `Sts2Ai.SimWorker` | 游戏 + 以上全部 | 无头宿主、战斗和整局会话、CombatBuilder、战斗世界、worker（`serve`）、命令行 |
 | `Sts2Ai.Mod`（规划中） | 游戏 + GameBridge + Protocol | 游戏内宿主 |
-| `Sts2Ai.Harness` | Protocol + Brain | 调度进程：目前有 worker 进程池和池化的 PIMC 大脑；记录、路由和日志在规划中 |
+| `Sts2Ai.Harness` | Protocol + Brain | 调度进程：路由、大脑种子、决策日志、worker 进程池和池化的 PIMC 大脑；记录在规划中 |
 
 ## 5. 文档地图
 
@@ -86,7 +86,7 @@ flowchart TD
 | [GameBridge](/arch/gamebridge/) | 观测来源、各界面的动作、选牌提示上下文、决策点、uid | <Badge text="部分实现" variant="tip" /> 每个决策界面都已有 |
 | [模拟器](/arch/simulator/) | 无头宿主、战斗会话、CombatBuilder、性能、整局会话、NoSL 世界、SL 克隆、worker 池 | <Badge text="部分实现" variant="tip" /> 战斗与整局会话、NoSL 战斗世界、worker 进程池已有 |
 | [Mod](/arch/mod/) | 加载、主线程循环、空闲检测、适配器、SL 导出、自动开局驱动、安全 | <Badge text="规划中" variant="caution" /> |
-| [Harness](/arch/harness/) | 记录与信念、路由、预算、决策日志、故障处理 | <Badge text="部分实现" variant="tip" /> worker 进程池已有 |
+| [Harness](/arch/harness/) | 记录与信念、路由、预算、决策日志、故障处理 | <Badge text="部分实现" variant="tip" /> 路由、决策日志和 worker 进程池已有 |
 | [战斗大脑](/arch/combat-brain/) | PIMC（NoSL）、确定性规划（SL）、叶子估值、剪枝 | <Badge text="部分实现" variant="tip" /> |
 | [宏观大脑](/arch/macro-brain/) | 后状态 + V、推演复核、地图 | <Badge text="规划中" variant="caution" /> |
 | [学习](/arch/learning/) | V 的定义、自我对弈循环、功劳分配、特权训练、局部最优、基础设施 | <Badge text="规划中" variant="caution" /> |

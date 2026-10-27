@@ -28,6 +28,10 @@ public sealed class PooledPimc(WorkerPool pool)
         return PimcBrain.Merge(first, replies.Select(r => r.Lines!).ToList());
     }
 
+    /// <summary>As Harness's combat route: the build seed is drawn from the decision's seed.</summary>
+    public CombatRoute Route(Budget budget) =>
+        new("pimc", (decision, seed) => Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed), budget);
+
     /// <summary>The game's Log.Error lines in the workers since the last call.</summary>
     public List<string> TakeGameErrors()
     {

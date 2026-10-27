@@ -77,6 +77,7 @@ internal static class CombatBuilder
         pcs.Stars = obs.Player.Stars;
         player.Gold = obs.Player.Gold;
         Potions(player, obs.Potions);
+        Orbs(player, obs.Player.OrbSlots, obs.Player.Orbs);
 
         // After powers and relics, whose global modifiers show in card costs and keywords.
         Cards(st, player, obs);
@@ -91,14 +92,18 @@ internal static class CombatBuilder
 
     /// <summary>
     /// Gives each enemy a move that shows its observed intents. What an intent shows can also depend on a hidden
-    /// switch, such as which way the player faces when Surrounded (an enemy behind them hits harder), so while some
-    /// enemy doesn't show its intents, each value of each enum field of a power is tried, and the one under which the
-    /// most enemies show theirs is kept.
+    /// switch, such as which way the player faces when Surrounded (an enemy behind them hits harder), or on a number
+    /// the monster keeps, such as the Waterfall Giant's pressure gun, which hits harder each time it fires. So while
+    /// some enemy doesn't show its intents, each value of each enum field of a power is tried, then each small value of
+    /// each int field of a monster, and the one under which the most enemies show theirs is kept.
     /// </summary>
     private static void Moves(CombatState st, IReadOnlyList<CreatureView> views, Creature[] targets)
     {
+        var switches = st.Creatures.SelectMany(c => c.Powers).SelectMany(Switches);
+        var numbers = st.Enemies.Where(e => e.Monster != null)
+            .SelectMany(e => FieldKnobs(e.Monster!, typeof(MonsterModel)).Select(k => (k, Enumerable.Range(0, 100).ToArray())));
         int best = SetMoves(st, views, targets);
-        foreach (var (knob, values) in st.Creatures.SelectMany(c => c.Powers).SelectMany(Switches).ToList())
+        foreach (var (knob, values) in switches.Concat(numbers).ToList())
         {
             if (best == views.Count) return;
             int keep = knob.Get();
@@ -274,6 +279,8 @@ internal static class CombatBuilder
         foreach (var (relic, view) in player.Relics.Zip(views))
         {
             if (relic.Id.Entry != view.Id) continue;
+            if (view.UsedUp == true)
+                Solve(() => relic.IsUsedUp ? 1 : 0, 1, FieldKnobs(relic, typeof(RelicModel)).Concat(FlagKnobs(relic, typeof(RelicModel))));
             if (view.Counter is int counter) Solve(() => relic.DisplayAmount, counter, FieldKnobs(relic, typeof(RelicModel)));
             relic.Status = view.Status == null ? RelicStatus.Normal : Enum.Parse<RelicStatus>(view.Status);
             relic.IsMelted = view.Melted == true;
@@ -318,6 +325,11 @@ internal static class CombatBuilder
         Fields(model, baseType).Where(f => f.FieldType == typeof(int))
             .Select(f => new Knob(() => (int)f.GetValue(model)!, v => f.SetValue(model, v)));
 
+    /// <summary>The bool fields, as <see cref="FieldKnobs"/>: a flag reads as 0 or 1 and is set by any number but 0.</summary>
+    private static IEnumerable<Knob> FlagKnobs(object model, Type baseType) =>
+        Fields(model, baseType).Where(f => f.FieldType == typeof(bool))
+            .Select(f => new Knob(() => (bool)f.GetValue(model)! ? 1 : 0, v => f.SetValue(model, v != 0)));
+
     /// <summary>The enum fields declared by a power's classes, with their values.</summary>
     private static IEnumerable<(Knob, int[])> Switches(PowerModel power) =>
         Fields(power, typeof(PowerModel)).Where(f => f.FieldType.IsEnum).Select(f => (
@@ -329,6 +341,20 @@ internal static class CombatBuilder
         for (var type = model.GetType(); type != null && type != baseType; type = type.BaseType)
             foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                 yield return f;
+    }
+
+    /// <summary>The observed orb slots and orbs, in order, put in without their on-channel effects.</summary>
+    private static void Orbs(Player player, int slots, IReadOnlyList<OrbView> views)
+    {
+        var queue = player.PlayerCombatState!.OrbQueue;
+        queue.Clear();
+        queue.AddCapacity(slots);
+        foreach (var (view, i) in views.Select((v, i) => (v, i)))
+        {
+            var orb = Models.Find<OrbModel>(view.Id).ToMutable();
+            orb.Owner = player;
+            queue.Insert(i, orb);
+        }
     }
 
     private static void Potions(Player player, IReadOnlyList<string?> slots)

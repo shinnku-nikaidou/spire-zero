@@ -140,6 +140,7 @@ public sealed record ChoiceContext
     public required string Purpose { get; init; }       // from the CardSelectCmd entry, or "<pile>_pile"
     public string? Source { get; init; }                // card/relic/power/event id that asked
     public required bool Cancelable { get; init; }      // a cancel or skip button closes the prompt
+    public required bool InCombat { get; init; }        // asked during a combat
     public string? PromptKey { get; init; }             // the prompt's loc key, "table.key"
     public ModifierView? Enchantment { get; init; }     // for deck_for_enchantment
 }
@@ -150,6 +151,7 @@ public sealed record ChoiceContext
 | `Purpose` | 提示的种类：游戏所用 `CardSelectCmd` 入口的名字，去掉 "From"，转成 snake_case：`deck_for_upgrade`、`deck_for_transformation`、`deck_for_enchantment`、`deck_for_removal`、`deck_generic`、`hand`、`hand_for_discard`、`hand_for_upgrade`、`choose_a_card_screen`、`simple_grid`、`simple_grid_for_rewards`。针对战斗中某个牌堆的提示是 `draw_pile`、`discard_pile`、`exhaust_pile`…… |
 | `Source` | 发起询问的卡牌、遗物、能力或事件的 id，在游戏指明时给出：入口的 `source` 参数，否则是它的 `PlayerChoiceContext` 最近涉及的模型（可选） |
 | `Cancelable` | `CardSelectorPrefs.Cancelable`，或「3 选 1」画面的 `canSkip` |
+| `InCombat` | 提示打开时的 `CombatManager.IsInProgress`：是卡牌或能力结算中的提示，而不是休息处、事件或商店里的。Harness 按它路由提示（[Harness §4](/arch/harness/#sec-4)） |
 | `PromptKey` | 提示文本的本地化键（可选） |
 | `Enchantment` | 用于 `deck_for_enchantment`：被选中的牌获得的附魔及其数值 |
 

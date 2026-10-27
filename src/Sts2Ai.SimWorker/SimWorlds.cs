@@ -27,8 +27,16 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
         _root = root;
     }
 
-    public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed) =>
-        new(pump, PlayEnvironment.NoSL, new CombatSnapshot(CombatBuilder.Setup(observation, buildSeed), []));
+    /// <exception cref="InvalidOperationException">The combat built from the observation does not show it exactly: search
+    /// would explore some other combat (docs: harness §7).</exception>
+    public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed)
+    {
+        var root = new CombatSnapshot(CombatBuilder.Setup(observation, buildSeed), []);
+        using (var built = CombatSession.Start(pump, root.Setup, new RandomChoices(new Random(0))))
+            if (built.BuildDifferences.Count > 0)
+                throw new InvalidOperationException($"not built as observed: {string.Join("; ", built.BuildDifferences.Take(4))}");
+        return new(pump, PlayEnvironment.NoSL, root);
+    }
 
     public static SimWorlds SL(Pump pump, CombatSnapshot real) => new(pump, PlayEnvironment.SL, real);
 
@@ -67,8 +75,20 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
                 source._live = CombatSession.Restore(source._pump, source._root with { Trace = [.. source._root.Trace, .. trace] }, choices);
                 source._owner = this;
                 _current = true;
+                Sync();
                 return source._live;
             }
+        }
+
+        /// <summary>
+        /// Takes the trace from the live combat, which also records the prompts asked while it starts (a relic that
+        /// asks at the start of each turn). Replay answers prompts from the recorded picks in order, so a trace
+        /// without those would hand a later prompt's pick to them.
+        /// </summary>
+        private void Sync()
+        {
+            trace.Clear();
+            trace.AddRange(source._live!.Trace.Skip(source._root.Trace.Count));
         }
 
         public CombatObservation Observe() => Live.Observation();
@@ -84,10 +104,8 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
 
         public void Execute(CombatAction action)
         {
-            var live = Live;
-            int before = live.Trace.Count;
-            live.Execute(action);
-            trace.AddRange(live.Trace.Skip(before));
+            Live.Execute(action);
+            Sync();
         }
 
         public WorldSnapshot Snapshot() => new(trace.Select(e => e.ToString()).ToList());
