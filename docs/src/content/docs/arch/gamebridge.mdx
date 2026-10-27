@@ -39,7 +39,7 @@ GameBridge（`Sts2Ai.GameBridge`）是游戏与 [协议](/arch/protocol/) 之间
 | | `HandCard(pcs, uid)`、`Creature(st, uid)` | 遇到未知 uid 时抛异常 |
 | `MapActions`、`RewardActions`、`BundleActions`、`EventActions`、`CrystalSphereActions`、`ShopActions`、`RestActions`、`TreasureActions`、`PotionActions` | `Screen(…)` 返回该决策界面的画面；`Legal(…)` 返回动作文本；`Start(…, action)` 在动作不合法时抛异常，并在 UI 会等待某个游戏任务时返回该任务 | 每个决策界面一个静态类（`PotionActions` 只有药水栏动作，没有画面）；文法见 [协议 §3](/arch/protocol/#sec-3)；由 `ActionText` 解析 |
 | `CardChoices` | `Canonical(options, min, max, context, tieBreak)` | 按卡牌键排序，平局用调用方播种的 `Random` 打破，从不用游戏顺序（它可能反映牌在牌堆中的深度）；返回 `(CardChoice, gameIndex[])` |
-| `ChoiceContexts` | `Patch(harmony)`、`Current`、`Bounds(context, minSelect, maxSelect, n)` | 选牌上下文（[§5](#sec-5)） |
+| `ChoiceContexts` | `Patch(harmony)`、`Current`、`Last`、`Bounds(context, minSelect, maxSelect, n)` | 选牌上下文（[§5](#sec-5)） |
 
 <Aside type="caution" title="已知缺口">
 
@@ -99,8 +99,8 @@ GameBridge 如何填写 `ChoiceContext`（[协议 §4](/arch/protocol/#sec-4)）
 
 - 目标是除 `FromChooseABundleScreen` 以外的每个公开静态 `CardSelectCmd.From*` 方法；`FromChooseABundleScreen` 有自己的决策界面（`Commands/CardSelectCmd.cs`） <Badge text="已核实" variant="success" />。目标列表用反射计算，所以新增的入口会被自动纳入；但每次游戏更新时，仍要核对它们的参数。
 - 前缀把入口的参数读进 `Current`：`CardSelectorPrefs`、`source` 参数或 `PlayerChoiceContext` 的 `LastInvolvedModel`、一个 `CardPile`、一个 `EnchantmentModel` 及其 `amount`、`canSkip`。终结器把它清掉。
-- 一个深度计数器让最外层的入口生效（移除卡牌会调用 `FromDeckGeneric`）。这些字段是 `[ThreadStatic]`。
-- `Current` 必须在入口内部同步读取，选择器的调用就是这样做的：入口第一次 await 返回之后，它就没了。Mod 的 UI 适配器也必须这样做。
+- 一个深度计数器让最外层的入口生效（移除卡牌会调用 `FromDeckGeneric`）。`Current` 和计数器是 `[ThreadStatic]`。
+- `Current` 必须在入口内部同步读取，选择器的调用就是这样做的：入口第一次 await 返回之后，它就没了。真实游戏里选牌提示的屏幕在这之后才打开，所以前缀还把上下文存进 `Last`，一直保留到下一个入口。Mod 从那里读取屏幕上那个提示的上下文（[Mod §3](/arch/mod/#sec-3)）。
 - 每个宿主在**任何其他补丁之前**调用一次 `ChoiceContexts.Patch(harmony)`（SimWorker：`HeadlessPatches.Apply`）。更早编译的调用方（例如另一个补丁在编译它的替换方法时）可能把入口那个很小的 async 存根内联进去，从而绕过前缀。无头运行时 SapphireSeed 就发生过这种情况。在模拟器里，没有上下文的选牌提示会抛异常。
 
 两种宿主共用这个补丁，所以得到的上下文相同。

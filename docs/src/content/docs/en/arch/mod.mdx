@@ -13,7 +13,7 @@ The mod is the AI's host inside the real game. The game's own mod loader loads i
 
 <Aside title="Status">
 
-A first slice, assist mode for combat, is built: `src/Sts2Ai.Mod` loads in the real game (v0.111.0, started from Steam), connects to the brain, asks about each idle combat state, and shows the answer in a text panel ([§3](#sec-3), [§5](#sec-5)). It has not been watched through a real combat yet. Planned: the other surfaces, the executor adapters ([§4](#sec-4)), the auto-run driver ([§7](#sec-7)), SL export ([§6](#sec-6)) and the decision log ([§8](#sec-8)). Earlier research is in the local notes `tmp/notes/mod-research.md` and `tmp/notes/output-design.md`.
+Assist mode is built for every surface: `src/Sts2Ai.Mod` loads in the real game (v0.111.0, started from Steam), connects to the brain, asks about each decision once the screen on top is idle (combat, card prompts, map, rewards, card reward, bundle, event, shop, rest site, treasure, crystal sphere), and shows the answer in a text panel with the game's names ([§3](#sec-3), [§5](#sec-5)). It has not been watched through a whole real run yet. Planned: the executor adapters ([§4](#sec-4)), the auto-run driver ([§7](#sec-7)), SL export ([§6](#sec-6)) and the decision log ([§8](#sec-8)). Earlier research is in the local notes `tmp/notes/mod-research.md` and `tmp/notes/output-design.md`.
 
 </Aside>
 
@@ -70,16 +70,24 @@ flowchart LR
 
 **One decision in flight.** The brain answers decisions in order, one at a time. So the mod keeps at most one decision open: when the state moves on before the answer comes, it sends `cancel` and waits for that answer (and drops it) before it asks about the new state. A slow brain then never falls behind a player who acts faster than it thinks.
 
-**Idle.** "Idle" means the game UI is really ready for the player's input: the game logic is waiting, no queued actions remain, nothing is still being played out, and no other screen covers the one being decided. A decision sent earlier would describe a state that is about to change, and a click might not land. Headless, GameBridge's `CombatActions.WaitingForInput` is enough; in the real game it is not ([GameBridge §2](/en/arch/gamebridge/#sec-2)). So, in addition to GameBridge's `PendingSurface` ([GameBridge §6](/en/arch/gamebridge/#sec-6)), the mod checks the screen and the Godot nodes <Badge text="verified" variant="success" />. The check must hold for at least 3 frames, so that a moment that looks idle only briefly does not count.
+**Idle.** "Idle" means the game UI is really ready for the player's input: the game logic is waiting, no queued actions remain, nothing is still being played out, and no other screen covers the one being decided. A decision sent earlier would describe a state that is about to change, and a click might not land. Headless, GameBridge's `CombatActions.WaitingForInput` is enough; in the real game it is not ([GameBridge §2](/en/arch/gamebridge/#sec-2)). So the mod reads the screen the player is looking at from the game's own `ActiveScreenContext.GetCurrentScreen()`: the open modal, the map if open, the top of the overlay stack, else the current room. Its type picks the surface <Badge text="verified" variant="success" />. The decision must then hold for at least 3 frames, so that a moment that looks idle only briefly does not count.
 
-| surface | idle when |
-|---|---|
-| combat | all at once: `CombatActions.WaitingForInput`, `ActionQueueSet.IsEmpty`, `Hand.CurrentMode == Play && !InCardPlay`, `NOverlayStack.ScreenCount == 0`, `!NMapScreen.IsOpen` |
-| hand-select prompt | `Hand.CurrentMode` is `SimpleSelect` or `UpgradeSelect` |
-| overlay prompts and screens | told apart by the type of `NOverlayStack.Peek()`: card reward, grid select, choose-a-card, bundle, rewards |
-| rooms (event, rest, shop, treasure) | the room's root node is active and its buttons are enabled |
+| screen on top | surface | idle when |
+|---|---|---|
+| `NCombatRoom` (also an event's combat) | combat | `CombatActions.WaitingForInput`, `ActionQueueSet.IsEmpty`, `Hand.CurrentMode == Play && !InCardPlay` |
+| `NCombatRoom`, hand in a select mode | card prompt | `NPlayerHand.IsInCardSelection` |
+| a grid select screen, `NCombatPileCardSelectScreen`, `NChooseACardSelectionScreen` | card prompt | on top: the game waits on it inside an action, so the queue is not checked |
+| `NCardRewardSelectionScreen`, `NChooseABundleSelectionScreen` | card reward, bundle | on top |
+| `NRewardsScreen`, `NCrystalSphereScreen`, `NMapScreen` with travel enabled | rewards, crystal sphere, map | on top, and `ActionQueueSet.IsEmpty` |
+| `NEventRoom` (and the fake merchant's screens), `NMerchantRoom` or its inventory, `NRestSiteRoom`, `NTreasureRoom` once the relics are shown | event, shop, rest, treasure | on top, and `ActionQueueSet.IsEmpty` |
 
-**Unknown surface.** If no adapter matches, or the idle check holds but there are no legal actions, the mod pauses auto-play, the panel says "manual needed", and the mod logs a coverage bug. It never falls back to a random action.
+A surface is asked as the simulator asks it (`RunSession`), with the same GameBridge calls, so the brain sees the same observations and legal actions in both. The potion belt's actions are offered on the same screens: everywhere but the card reward, the bundle and card prompts. What a screen offers is read from the screen node's private fields, which hold exactly what it shows: the rewards set, the card reward's cards and buttons, the bundles, the prompt's cards and `CardSelectorPrefs`. The hand's select mode and a combat pile prompt filter a pile instead, so the mod applies their filter to the pile.
+
+**Card prompts.** The prompt's options are put in canonical order (`CardChoices.Canonical`) with a fixed tie-break seed, so the observation and its hash hold still from frame to frame. Its context comes from `ChoiceContexts.Last` ([GameBridge §5](/en/arch/gamebridge/#sec-5)): the screen opens after the entry's first await, when `Current` is already gone. Each prompt (a new screen node, or a new hand selection) takes the latest context once. When that context was already used by an earlier prompt, the prompt came without one: the mod logs it and leaves the prompt to the player.
+
+**Answers.** An answer is for one observation hash and one set of legal actions: a rest site can allow leaving with the same observation once an option has been used. The panel describes the action with names from the game's localization tables (cards, relics, potions, monsters, event options, rest options), falling back to ids.
+
+**Unknown surface.** In assist mode, a screen that asks nothing the mod knows (a modal, the deck view, a chest still closed) shows only the status line; the closed chest adds "open the chest". For auto-play: if no adapter matches, or the idle check holds but there are no legal actions, the mod pauses auto-play, the panel says "manual needed", and the mod logs a coverage bug. It never falls back to a random action.
 
 ## 4. Executor adapters
 

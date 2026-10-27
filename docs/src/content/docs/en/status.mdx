@@ -26,7 +26,7 @@ As of 2026-10-27:
 | host–brain wire | done: the messages of [Protocol §2](/en/arch/protocol/#sec-2) over a Unix socket. `brain` serves them, and `run --brain` hosts runs against it. A run plays the same in process and over the wire: trace, observations, record and decision log, with PIMC too ([Simulator §5](/en/arch/simulator/#sec-5)) |
 | events, public record | planned |
 | macro brain, value function | L0 v0 with V v0: each option's afterstate is predicted from the screen and valued by V. With PIMC combat, floor 18.50 on average against 13.68 for random macro decisions, and the act 1 boss in 175 of 200 runs against 73; no run wins yet ([Macro brain §2](/en/arch/macro-brain/#sec-2)) |
-| mod | assist mode for combat: loads in the real game, connects to the brain, asks about idle combat states and shows the answer; not yet watched through a real combat ([Mod §2](/en/arch/mod/#sec-2), [§3](/en/arch/mod/#sec-3)) |
+| mod | assist mode on every surface: loads in the real game, connects to the brain, asks about each idle decision and shows the answer with the game's names; not yet watched through a whole real run ([Mod §2](/en/arch/mod/#sec-2), [§3](/en/arch/mod/#sec-3)) |
 
 ## 2. Main gaps and risks
 
@@ -54,7 +54,7 @@ As of 2026-10-27:
 
 6. Macro brain L0 and a v0 value function; R1/R2 full runs; the evaluation pipeline. L0 v0, V v0, R1 full runs and the pipeline are done, with the first reports in `eval/reports/` ([Evaluation §6](/en/arch/evaluation/#sec-6)); R2 is left.
 
-7. Mod: the other surfaces, then the executor and the auto-run driver, giving the R4 pipeline; the R3 ≡ R4 equivalence test. Loading, the brain link and the combat panel are done ([Mod §2](/en/arch/mod/#sec-2)–[§5](/en/arch/mod/#sec-5)).
+7. Mod: the executor and the auto-run driver, giving the R4 pipeline; the R3 ≡ R4 equivalence test. Loading, the brain link and the assist panel on every surface are done ([Mod §2](/en/arch/mod/#sec-2)–[§5](/en/arch/mod/#sec-5)).
 
 8. SL worlds in the worker pool, loaded from the clone; the SL leaderboard. The node checkpoint, the SL clone, its seal and SL worlds in runs are done ([Simulator §7](/en/arch/simulator/#sec-7), [§8](/en/arch/simulator/#sec-8)).
 

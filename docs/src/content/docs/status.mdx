@@ -26,7 +26,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | 宿主–brain 传输 | 完成：[协议 §2](/arch/protocol/#sec-2) 的消息走 Unix 套接字。`brain` 提供服务，`run --brain` 作为宿主连上它跑整局。一局在进程内和走传输协议时打得完全一样：轨迹、观测、对局记录和决策日志都相同，PIMC 也是（[模拟器 §5](/arch/simulator/#sec-5)） |
 | 事件、公开记录 | 规划中 |
 | 宏观大脑、价值函数 | L0 v0 加 V v0：从界面预测每个选项的后状态，再用 V 估值。战斗用 PIMC 时，平均层数 18.50 对局外随机的 13.68，200 局里 175 局打到第 1 幕 Boss（对 73 局）；还没有一局获胜（[宏观大脑 §2](/arch/macro-brain/#sec-2)） |
-| Mod | 战斗的辅助模式：能加载进真实游戏，连上大脑，对空闲的战斗状态发出询问并显示答案；还没有在真实战斗里看它跑过（[Mod §2](/arch/mod/#sec-2)、[§3](/arch/mod/#sec-3)） |
+| Mod | 覆盖所有决策界面的辅助模式：能加载进真实游戏，连上大脑，对每个空闲的决策发出询问，并用游戏里的名字显示答案；还没有在真实游戏里看它跑完一整局（[Mod §2](/arch/mod/#sec-2)、[§3](/arch/mod/#sec-3)） |
 
 ## 2. 主要缺口与风险
 
@@ -54,7 +54,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 6. 宏观大脑 L0 和 v0 价值函数；R1/R2 完整对局；评估流水线。L0 v0、V v0、R1 整局和流水线已完成，第一批报告在 `eval/reports/`（[评估 §6](/arch/evaluation/#sec-6)）；还剩 R2。
 
-7. Mod：其余决策界面，然后是执行器和自动开局驱动，打通 R4 流水线；R3 ≡ R4 等价测试。加载、与大脑的连接和战斗面板已经完成（[Mod §2](/arch/mod/#sec-2)–[§5](/arch/mod/#sec-5)）。
+7. Mod：执行器和自动开局驱动，打通 R4 流水线；R3 ≡ R4 等价测试。加载、与大脑的连接和覆盖所有决策界面的辅助面板已经完成（[Mod §2](/arch/mod/#sec-2)–[§5](/arch/mod/#sec-5)）。
 
 8. worker 进程池里从克隆加载的 SL 世界；SL 排行榜。节点检查点、SL 克隆、封存和整局里的 SL 世界已完成（[模拟器 §7](/arch/simulator/#sec-7)、[§8](/arch/simulator/#sec-8)）。
 

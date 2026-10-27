@@ -13,7 +13,7 @@ Mod 是 AI 在真实游戏里的宿主。它由游戏自带的 Mod 加载器加�
 
 <Aside title="状态">
 
-第一块已经实现，即战斗的辅助模式：`src/Sts2Ai.Mod` 能加载进真实游戏（v0.111.0，从 Steam 启动），连上大脑，对每个空闲的战斗状态发出询问，并在一个文字面板里显示答案（[§3](#sec-3)、[§5](#sec-5)）。还没有在真实战斗里看它跑过。规划中：其余决策界面、执行适配器（[§4](#sec-4)）、自动开局驱动（[§7](#sec-7)）、SL 导出（[§6](#sec-6)）和决策日志（[§8](#sec-8)）。之前的调研见本地笔记 `tmp/notes/mod-research.md` 和 `tmp/notes/output-design.md`。
+辅助模式已经覆盖所有决策界面：`src/Sts2Ai.Mod` 能加载进真实游戏（v0.111.0，从 Steam 启动），连上大脑，在最上层的屏幕空闲时对每个决策发出询问（战斗、选牌提示、地图、奖励、卡牌奖励、卡包、事件、商店、休息处、宝箱、水晶球），并在一个文字面板里用游戏里的名字显示答案（[§3](#sec-3)、[§5](#sec-5)）。还没有在真实游戏里看它跑完一整局。规划中：执行适配器（[§4](#sec-4)）、自动开局驱动（[§7](#sec-7)）、SL 导出（[§6](#sec-6)）和决策日志（[§8](#sec-8)）。之前的调研见本地笔记 `tmp/notes/mod-research.md` 和 `tmp/notes/output-design.md`。
 
 </Aside>
 
@@ -70,16 +70,24 @@ flowchart LR
 
 **同时只有一个决策在途**。大脑按顺序逐个回答决策。所以 Mod 最多只开着一个决策：如果答案到达之前状态就往前走了，它发送 `cancel`，并等那个答案到达（然后丢掉），才询问新的状态。这样即使玩家出手比大脑思考快，慢的大脑也不会越积越落后。
 
-**空闲**。「空闲」指游戏界面真正准备好接受玩家输入：游戏逻辑在等输入，没有排队中的动作，没有还在演出的东西，也没有别的屏幕挡在要决策的屏幕上面。如果提前发出决策，它描述的状态马上就会变，点击也可能落空。无头（headless）运行时，GameBridge 的 `CombatActions.WaitingForInput` 就够了；在真实游戏里不够（[GameBridge §2](/arch/gamebridge/#sec-2)）。所以除了 GameBridge 的 `PendingSurface`（[GameBridge §6](/arch/gamebridge/#sec-6)）之外，Mod 还要检查屏幕和 Godot 节点 <Badge text="已核实" variant="success" />。检查必须连续成立至少 3 帧，这样一闪而过的「看似空闲」不算数。
+**空闲**。「空闲」指游戏界面真正准备好接受玩家输入：游戏逻辑在等输入，没有排队中的动作，没有还在演出的东西，也没有别的屏幕挡在要决策的屏幕上面。如果提前发出决策，它描述的状态马上就会变，点击也可能落空。无头（headless）运行时，GameBridge 的 `CombatActions.WaitingForInput` 就够了；在真实游戏里不够（[GameBridge §2](/arch/gamebridge/#sec-2)）。所以 Mod 用游戏自己的 `ActiveScreenContext.GetCurrentScreen()` 读出玩家正在看的屏幕：打开的模态框、打开着的地图、覆盖层栈顶，否则就是当前房间。由它的类型决定决策界面 <Badge text="已核实" variant="success" />。之后这个决策还必须连续成立至少 3 帧，这样一闪而过的「看似空闲」不算数。
 
-| 决策界面 | 何时算空闲 |
-|---|---|
-| 战斗 | 同时满足：`CombatActions.WaitingForInput`、`ActionQueueSet.IsEmpty`、`Hand.CurrentMode == Play && !InCardPlay`、`NOverlayStack.ScreenCount == 0`、`!NMapScreen.IsOpen` |
-| 手牌选择提示 | `Hand.CurrentMode` 为 `SimpleSelect` 或 `UpgradeSelect` |
-| 覆盖层上的提示和屏幕 | 按 `NOverlayStack.Peek()` 的类型区分：卡牌奖励、网格选牌、三选一选牌（choose-a-card）、卡包（bundle）、奖励 |
-| 房间（事件、休息处、商店、宝箱） | 房间的根节点处于激活状态，且它的按钮可用 |
+| 最上层的屏幕 | 决策界面 | 何时算空闲 |
+|---|---|---|
+| `NCombatRoom`（也包括事件里的战斗） | 战斗 | `CombatActions.WaitingForInput`、`ActionQueueSet.IsEmpty`、`Hand.CurrentMode == Play && !InCardPlay` |
+| `NCombatRoom`，手牌处于选择模式 | 选牌提示 | `NPlayerHand.IsInCardSelection` |
+| 网格选牌屏幕、`NCombatPileCardSelectScreen`、`NChooseACardSelectionScreen` | 选牌提示 | 在最上层：游戏在某个动作内部等它，所以不检查队列 |
+| `NCardRewardSelectionScreen`、`NChooseABundleSelectionScreen` | 卡牌奖励、卡包 | 在最上层 |
+| `NRewardsScreen`、`NCrystalSphereScreen`、可以移动时的 `NMapScreen` | 奖励、水晶球、地图 | 在最上层，且 `ActionQueueSet.IsEmpty` |
+| `NEventRoom`（以及假商人的屏幕）、`NMerchantRoom` 或它的货架、`NRestSiteRoom`、已经亮出遗物的 `NTreasureRoom` | 事件、商店、休息处、宝箱 | 在最上层，且 `ActionQueueSet.IsEmpty` |
 
-**未知决策界面**。如果没有适配器匹配，或者空闲检查成立却没有合法动作，Mod 就暂停自动游玩，面板显示「manual needed」（需要手动操作），并把它作为覆盖率 bug 记入日志。绝不退回随机动作。
+每个决策界面的询问方式和模拟器（`RunSession`）一样，用的是同样的 GameBridge 调用，所以大脑在两边看到的观测和合法动作相同。药水栏的动作也在同样的屏幕上提供：除了卡牌奖励、卡包和选牌提示之外都有。屏幕提供了什么，从屏幕节点的私有字段里读取，这些字段装的正是它显示的东西：奖励组、卡牌奖励的卡和按钮、卡包、提示的卡和 `CardSelectorPrefs`。手牌的选择模式和战斗牌堆提示则是对一个牌堆做筛选，所以 Mod 把它们的筛选条件用在那个牌堆上。
+
+**选牌提示**。提示的选项按规范顺序排列（`CardChoices.Canonical`），平局用固定的种子打破，所以观测和它的哈希每帧都保持不变。它的上下文来自 `ChoiceContexts.Last`（[GameBridge §5](/arch/gamebridge/#sec-5)）：屏幕在入口第一次 await 之后才打开，那时 `Current` 已经没了。每个提示（一个新的屏幕节点，或一次新的手牌选择）取一次最新的上下文。如果那个上下文已经被之前的提示用过，说明这个提示没有带上下文：Mod 记一条日志，把这个提示留给玩家。
+
+**答案**。一个答案对应一个观测哈希加一组合法动作：休息处在用过一个选项之后，观测不变也可能允许离开。面板用游戏本地化表里的名字（卡牌、遗物、药水、怪物、事件选项、休息处选项）描述动作，找不到就用 id。
+
+**未知决策界面**。在辅助模式下，如果屏幕问的不是 Mod 认识的决策（模态框、牌组查看、还没打开的宝箱），面板只显示状态行；宝箱没打开时会加一句「open the chest」。对自动游玩来说：如果没有适配器匹配，或者空闲检查成立却没有合法动作，Mod 就暂停自动游玩，面板显示「manual needed」（需要手动操作），并把它作为覆盖率 bug 记入日志。绝不退回随机动作。
 
 ## 4. 执行适配器
 

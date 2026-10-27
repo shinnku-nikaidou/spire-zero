@@ -23,9 +23,16 @@ public static class ChoiceContexts
 
     [ThreadStatic] private static ChoiceContext? _current;
     [ThreadStatic] private static int _depth;
+    private static volatile ChoiceContext? _last;
 
     /// <summary>The context of the prompt being asked; null outside the entries.</summary>
     public static ChoiceContext? Current => _current;
+
+    /// <summary>
+    /// The context of the latest prompt, kept after its entry returns. In the real game the prompt's screen opens
+    /// after the entry's first await, when <see cref="Current"/> is already gone; a new context object means a new prompt.
+    /// </summary>
+    public static ChoiceContext? Last => _last;
 
     public static void Patch(Harmony harmony) => harmony.CreateClassProcessor(typeof(Entries)).Patch();
 
@@ -72,7 +79,7 @@ public static class ChoiceContexts
         // An entry can call another (removal goes through the generic deck prompt): the outermost one says why.
         private static void Prefix(MethodBase __originalMethod, object?[] __args)
         {
-            if (_depth++ == 0) _current = Read(__originalMethod, __args);
+            if (_depth++ == 0) _last = _current = Read(__originalMethod, __args);
         }
 
         private static Exception? Finalizer(Exception? __exception)

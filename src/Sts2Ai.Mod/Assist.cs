@@ -1,12 +1,6 @@
-using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Context;
-using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Logging;
-using MegaCrit.Sts2.Core.Nodes.Combat;
-using MegaCrit.Sts2.Core.Nodes.Screens.Map;
-using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 using MegaCrit.Sts2.Core.Runs;
-using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Mod;
@@ -16,15 +10,16 @@ namespace Sts2Ai.Mod;
 /// that state, and shows the answer while the state lasts. The player acts; the mod never does.
 /// One decision is in flight at a time: when the state moves on first, the mod cancels it and waits for its answer
 /// before asking about the new state, so a slow brain never falls behind.
-/// Only combat is covered yet; any other screen is left to the player.
 /// </summary>
 internal sealed class Assist(BrainLink link, string gameVersion)
 {
     /// <summary>How many frames in a row a state must hold before it counts as idle.</summary>
     private const int IdleFrames = 3;
 
-    private sealed record Asked(long Id, string Hash, Observation Obs, bool Cancelled = false);
+    /// <param name="Key">The observation's hash and the legal actions: what the answer is for.</param>
+    private sealed record Asked(long Id, string Key, Observation Obs, bool Cancelled = false);
 
+    private readonly Screens _screens = new();
     private bool _connected;
     private string _linkNote = "connecting to the brain";
 
@@ -36,9 +31,9 @@ internal sealed class Assist(BrainLink link, string gameVersion)
 
     private long _next;
     private Asked? _asked;
-    private string? _askedHash;
-    private (Recommendation Answer, Observation Obs)? _answer;
-    private string? _hash;
+    private string? _askedKey;
+    private (string Key, string[] Lines)? _answer;
+    private string? _key;
     private int _stable;
 
     public void Tick(Panel panel)
@@ -82,24 +77,25 @@ internal sealed class Assist(BrainLink link, string gameVersion)
         }
 
         string status = $"{_champion}, NoSL";
-        if (Idle(me) is not { } st)
+        if (_screens.Read(run, me, out string note) is not { } asking)
         {
-            (_hash, _stable) = (null, 0);
-            panel.Show(status, CombatManager.Instance.IsInProgress ? "" : "manual: only combat is covered yet");
+            (_key, _stable) = (null, 0);
+            panel.Show(status, note);
             return;
         }
-        var obs = Observe.Of(run, me, new CombatScreen { Combat = Observe.Combat(st, me) });
-        string hash = DecisionRequest.HashOf(obs);
-        if (hash != _hash) (_hash, _stable) = (hash, 0);
+        string hash = DecisionRequest.HashOf(asking.Obs);
+        // The same observation can allow different actions (whether a rest site may be left yet).
+        string key = hash + " " + string.Join(" ", asking.Legal);
+        if (key != _key) (_key, _stable) = (key, 0);
         if (++_stable < IdleFrames) return;
 
-        if (_answer is { } answer && answer.Answer.ObsHash == hash)
+        if (_answer is { } answer && answer.Key == key)
         {
-            panel.Show(status, Describe.Recommendation(answer.Answer, answer.Obs));
+            panel.Show(status, answer.Lines);
             return;
         }
         panel.Show(status, "thinking…");
-        if (hash == _askedHash) return;
+        if (key == _askedKey) return;
         if (_asked != null)
         {
             if (!_asked.Cancelled)
@@ -109,9 +105,8 @@ internal sealed class Assist(BrainLink link, string gameVersion)
             }
             return;
         }
-        var legal = CombatActions.Legal(st, me).Select(a => a.ToString()).ToList();
-        (_asked, _askedHash) = (new Asked(_next++, hash, obs), hash);
-        link.Send(new DecisionRequest(_asked.Id, hash, Surfaces.Combat, obs, legal));
+        (_asked, _askedKey) = (new Asked(_next++, key, asking.Obs), key);
+        link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal));
     }
 
     private void Handle(LinkEvent e)
@@ -133,7 +128,7 @@ internal sealed class Assist(BrainLink link, string gameVersion)
                 break;
             case Received { Message: Recommendation answer }:
                 if (_asked?.Id != answer.DecisionId) break;
-                if (!_asked.Cancelled) _answer = (answer, _asked.Obs);
+                if (!_asked.Cancelled) _answer = (_asked.Key, Describe.Recommendation(answer, _asked.Obs));
                 _asked = null;
                 break;
             case Received { Message: WireError error }:
@@ -159,16 +154,5 @@ internal sealed class Assist(BrainLink link, string gameVersion)
         Forget();
     }
 
-    private void Forget() => (_asked, _askedHash, _answer, _hash, _stable) = (null, null, null, null, 0);
-
-    /// <summary>The combat, when the player can act and nothing on screen is still moving or covering it (docs: mod §3).</summary>
-    private static CombatState? Idle(Player me)
-    {
-        var st = CombatManager.Instance.DebugOnlyGetState();
-        return st != null && CombatActions.WaitingForInput(me) && RunManager.Instance.ActionQueueSet.IsEmpty
-            && NPlayerHand.Instance is { CurrentMode: NPlayerHand.Mode.Play, InCardPlay: false }
-            && NOverlayStack.Instance is { ScreenCount: 0 } && NMapScreen.Instance is not { IsOpen: true }
-            ? st
-            : null;
-    }
+    private void Forget() => (_asked, _askedKey, _answer, _key, _stable) = (null, null, null, null, 0);
 }

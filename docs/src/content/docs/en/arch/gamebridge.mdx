@@ -39,7 +39,7 @@ What exists in `src/Sts2Ai.GameBridge` today:
 | | `HandCard(pcs, uid)`, `Creature(st, uid)` | throw on an unknown uid |
 | `MapActions`, `RewardActions`, `BundleActions`, `EventActions`, `CrystalSphereActions`, `ShopActions`, `RestActions`, `TreasureActions`, `PotionActions` | `Screen(…)` returns the surface's screen; `Legal(…)` returns action texts; `Start(…, action)` throws if the action is not legal, and returns the game task where the UI awaits one | one static class per surface (`PotionActions` has belt actions only, no screen); grammar in [Protocol §3](/en/arch/protocol/#sec-3); `ActionText` parses |
 | `CardChoices` | `Canonical(options, min, max, context, tieBreak)` | sorts by card key, ties by a caller-seeded `Random`, never by game order (it may reflect pile depth); returns `(CardChoice, gameIndex[])` |
-| `ChoiceContexts` | `Patch(harmony)`, `Current`, `Bounds(context, minSelect, maxSelect, n)` | the choice context ([§5](#sec-5)) |
+| `ChoiceContexts` | `Patch(harmony)`, `Current`, `Last`, `Bounds(context, minSelect, maxSelect, n)` | the choice context ([§5](#sec-5)) |
 
 <Aside type="caution" title="Known gap">
 
@@ -99,8 +99,8 @@ How GameBridge fills `ChoiceContext` ([Protocol §4](/en/arch/protocol/#sec-4)).
 
 - The targets are every public static `CardSelectCmd.From*` method except `FromChooseABundleScreen`, which has its own surface (`Commands/CardSelectCmd.cs`) <Badge text="verified" variant="success" />. The list is computed by reflection, so new entries are picked up; their arguments still need a review on every game update.
 - The prefix reads the entry's arguments into `Current`: `CardSelectorPrefs`, the `source` argument or the `PlayerChoiceContext`'s `LastInvolvedModel`, a `CardPile`, an `EnchantmentModel` with its `amount`, `canSkip`. The finalizer clears it.
-- A depth counter makes the outermost entry win (a removal calls `FromDeckGeneric`). The fields are `[ThreadStatic]`.
-- `Current` must be read synchronously inside the entry, as the selector call is: once the entry's first await returns, it is gone. The Mod's UI adapter must do the same.
+- A depth counter makes the outermost entry win (a removal calls `FromDeckGeneric`). `Current` and the counter are `[ThreadStatic]`.
+- `Current` must be read synchronously inside the entry, as the selector call is: once the entry's first await returns, it is gone. In the real game the prompt's screen opens after that, so the prefix also keeps the context in `Last`, which stays until the next entry. The Mod reads the context of the prompt on screen from there ([Mod §3](/en/arch/mod/#sec-3)).
 - Each host calls `ChoiceContexts.Patch(harmony)` once, **before any other patch** (SimWorker: `HeadlessPatches.Apply`). A caller compiled earlier, for example while another patch compiles its replacement method, can inline an entry's small async stub and bypass the prefix. This happened headless with SapphireSeed. In the simulator, a prompt without a context throws.
 
 Both hosts share the patch, so they get the same context.
