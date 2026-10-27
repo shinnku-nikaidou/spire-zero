@@ -6,6 +6,11 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "docs", "dev", "--host", "127.0.0.1", "--port", "4321"],
       "port": 4321
+    },
+    {
+      "name": "docs-running",
+      "url": "http://localhost:4322",
+      "port": 4322
     }
   ]
 }
