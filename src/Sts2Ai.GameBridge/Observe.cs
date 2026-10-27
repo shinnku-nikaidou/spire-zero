@@ -4,16 +4,67 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
+using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.GameBridge;
 
-/// <summary>Builds the protocol's observation from the live game objects. See <see cref="CombatObservation"/>.</summary>
+/// <summary>
+/// Builds the protocol's observations from the live game objects: the run (<see cref="RunView"/>) and the combat
+/// (<see cref="CombatObservation"/>) here, each other screen next to its legal actions (<c>MapActions.Screen</c>, ...).
+/// </summary>
 public static class Observe
 {
+    public static Observation Of(RunState run, Player player, ScreenView screen) => new() { Run = Run(run, player), Screen = screen };
+
+    public static RunView Run(RunState run, Player player) => new()
+    {
+        Character = player.Character.Id.Entry,
+        Ascension = run.AscensionLevel,
+        Act = run.CurrentActIndex,
+        ActId = run.Act.Id.Entry,
+        Floor = run.TotalFloor,
+        Hp = player.Creature.CurrentHp,
+        MaxHp = player.Creature.MaxHp,
+        Gold = player.Gold,
+        Deck = player.Deck.Cards.Select(c => Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
+        Relics = player.Relics.Select(Relic).ToList(),
+        Potions = player.PotionSlots.Select(p => p?.Id.Entry).ToList(),
+        Map = Map(run),
+    };
+
+    /// <summary>
+    /// The map as its screen draws it. The boss, second boss and start points are not in the map's grid, and a
+    /// point's children are a hash set, so everything is put in (row, col) order.
+    /// </summary>
+    private static MapView Map(RunState run)
+    {
+        var map = run.Map;
+        var points = map.GetAllMapPoints().Append(map.StartingMapPoint).Append(map.BossMapPoint);
+        if (map.SecondBossMapPoint is { } second) points = points.Append(second);
+        return new MapView
+        {
+            Points = points.Distinct().OrderBy(p => p.coord.row).ThenBy(p => p.coord.col).Select(p => new MapPointView
+            {
+                Col = p.coord.col,
+                Row = p.coord.row,
+                Type = p.PointType.ToString(),
+                Next = p.Children.Select(c => c.coord).OrderBy(c => c.row).ThenBy(c => c.col).Select(Coord).ToList(),
+                Quest = p.Quests.Count > 0 ? true : null,
+            }).ToList(),
+            Visited = run.VisitedMapCoords.Select(Coord).ToList(),
+            Boss = run.Act.BossEncounter.Id.Entry,
+            SecondBoss = map.SecondBossMapPoint != null ? run.Act.SecondBossEncounter?.Id.Entry : null,
+            Ancient = run.Act.Ancient?.Id.Entry,
+        };
+    }
+
+    public static Coord Coord(MapCoord c) => new(c.col, c.row);
+
     public static CombatObservation Combat(CombatState st, Player player)
     {
         var pcs = player.PlayerCombatState ?? throw new InvalidOperationException("player has no combat state");
@@ -103,7 +154,7 @@ public static class Observe
     private static List<PowerView> Powers(Creature c) =>
         c.Powers.Where(p => p.IsVisible).Select(p => new PowerView(p.Id.Entry, p.DisplayAmount)).ToList();
 
-    private static RelicView Relic(RelicModel r) => new()
+    public static RelicView Relic(RelicModel r) => new()
     {
         Id = r.Id.Entry,
         Counter = r.ShowCounter ? r.DisplayAmount : null,

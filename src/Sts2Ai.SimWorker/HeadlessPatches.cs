@@ -23,6 +23,7 @@ using MegaCrit.Sts2.Core.Platform;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.TestSupport;
+using Sts2Ai.GameBridge;
 
 namespace Sts2Ai.SimWorker;
 
@@ -41,7 +42,14 @@ internal static class HeadlessPatches
     /// <summary>Plays a crystal sphere minigame the game would put on screen. Without it, the screen's code runs (and fails).</summary>
     public static Action<CrystalSphereMinigame>? CrystalSphereShown;
 
-    public static void Apply() => new Harmony("sts2ai.simworker").PatchAll(typeof(HeadlessPatches).Assembly);
+    public static void Apply()
+    {
+        var harmony = new Harmony("sts2ai.simworker");
+        // First: patching compiles each replaced method, which can inline a CardSelectCmd entry not yet patched
+        // (SapphireSeed's planting, rewritten by EventPresentation, did).
+        ChoiceContexts.Patch(harmony);
+        harmony.PatchAll(typeof(HeadlessPatches).Assembly);
+    }
 
     // ---- engine and OS ----
 
@@ -447,17 +455,6 @@ internal static class HeadlessPatches
 
     // ---- choices ----
 
-    /// <summary>
-    /// The choose-a-card screen always asks the selector for 0..1 cards; whether skipping is allowed is a
-    /// separate flag. The selector runs synchronously inside this call, so a prefix/postfix pair can pass it on.
-    /// </summary>
-    [HarmonyPatch(typeof(CardSelectCmd), nameof(CardSelectCmd.FromChooseACardScreen))]
-    private static class ChooseACardSkip
-    {
-        private static void Prefix(bool canSkip) => PolicySelector.MustPickOne = !canSkip;
-        private static void Postfix() => PolicySelector.MustPickOne = false;
-    }
-
     /// <summary>The crystal sphere's screen: <see cref="CrystalSphereShown"/> plays the minigame instead.</summary>
     [HarmonyPatch(typeof(NCrystalSphereScreen), nameof(NCrystalSphereScreen.ShowScreen))]
     private static class CrystalSphereScreen
@@ -467,6 +464,23 @@ internal static class HeadlessPatches
             if (CrystalSphereShown is not { } play) return true;
             play(grid);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// A card removal is marked used by the shop's removal button (<c>NMerchantCardRemoval.OnCardRemovalUsed</c>), whoever
+    /// bought it: the player or Lord's Parasol. Headless there is no button, so this marks it.
+    /// </summary>
+    [HarmonyPatch(typeof(MerchantCardRemovalEntry), "OnTryPurchase", [typeof(MerchantInventory), typeof(bool), typeof(bool)])]
+    private static class CardRemovalUsed
+    {
+        private static void Postfix(MerchantCardRemovalEntry __instance, ref Task<(bool, int)> __result) => __result = MarkUsed(__instance, __result);
+
+        private static async Task<(bool, int)> MarkUsed(MerchantCardRemovalEntry removal, Task<(bool, int)> purchase)
+        {
+            var result = await purchase;
+            if (result.Item1) removal.SetUsed();
+            return result;
         }
     }
 

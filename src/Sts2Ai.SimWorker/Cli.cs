@@ -19,9 +19,10 @@ namespace Sts2Ai.SimWorker;
 ///                                          checks determinism, restore and determinize over an encounter pool
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
-///   run [--n 1] [--start 0] [--seed 1] [--asc 0] [--policy play] [--max-decisions 20000] [--check] [--trace]
+///   run [--n 1] [--start 0] [--seed 1] [--asc 0] [--policy play] [--max-decisions 20000] [--check] [--trace] [--obs]
 ///                                          whole runs, every non-combat decision random; --check plays each seed
-///                                          twice and compares; reports results, map hashes and surface coverage
+///                                          twice and compares, observations included (each one must survive a JSON
+///                                          round trip); --obs prints them; reports results, hashes and surface coverage
 /// Loadout options for every command that runs combats: [--character SILENT] [--deck A*5,B+,...]
 /// [--relics A,B] [--potions A,B] [--hp N] [--max-hp N]. Omitted parts keep the character's starting values.
 /// </summary>
@@ -191,6 +192,7 @@ internal static class Cli
         int seed = Int(opts, "seed", 1);
         int maxDecisions = Int(opts, "max-decisions", 20_000);
         bool check = opts.ContainsKey("check");
+        bool observe = check || opts.ContainsKey("obs");
         var policy = opts.GetValueOrDefault("policy", "play");
         if (!Policies.CombatNames.Contains(policy)) return Fail($"unknown policy {policy} (one of {string.Join(", ", Policies.CombatNames)})");
         var loadout = Loadout.Parse(opts.GetValueOrDefault("deck"), opts.GetValueOrDefault("relics"), opts.GetValueOrDefault("potions"),
@@ -206,7 +208,7 @@ internal static class Cli
         {
             var setup = new RunSetup(opts.GetValueOrDefault("character", "SILENT"), MakeSeed(seed, i), Int(opts, "asc", 0), loadout);
             var started = clock.Elapsed;
-            var first = PlayRun(pump, setup, seed * 1_000_003 + i, policy, maxDecisions, opts.ContainsKey("trace"));
+            var first = PlayRun(pump, setup, seed * 1_000_003 + i, policy, maxDecisions, opts.ContainsKey("trace"), observe, opts.ContainsKey("obs"));
             var ms = (clock.Elapsed - started).TotalMilliseconds;
             outcomes[first.Outcome] = outcomes.GetValueOrDefault(first.Outcome) + 1;
             foreach (var step in first.Trace)
@@ -217,17 +219,21 @@ internal static class Cli
             if (first.Failure != null) failures[first.Failure] = failures.GetValueOrDefault(first.Failure) + 1;
             gameErrors += first.Errors.Count;
             Console.WriteLine($"#{i} {setup.Seed} {first.Outcome} {first.Summary} decisions {first.Trace.Count} {ms:F0} ms " +
-                              $"maps {string.Join(",", first.MapHashes.Select(h => h.ToString("x16")))}");
+                              $"maps {string.Join(",", first.MapHashes.Select(h => h.ToString("x16")))}" +
+                              (observe ? $" obs {Digest(first.Observations):x16}" : ""));
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
             foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {FirstLine(e)}");
             if (!check) continue;
-            var second = PlayRun(pump, setup, seed * 1_000_003 + i, policy, maxDecisions, trace: false);
-            int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k => first.Trace[k] != second.Trace[k], -1);
-            if (diverged < 0 && first.Trace.Count == second.Trace.Count && first.Summary == second.Summary && first.MapHashes.SequenceEqual(second.MapHashes)) continue;
+            var second = PlayRun(pump, setup, seed * 1_000_003 + i, policy, maxDecisions, trace: false, observe, printObservations: false);
+            // Each decision's observation is shown before its action, so they pair up by index.
+            int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k =>
+                first.Trace[k] != second.Trace[k] || first.Observations.ElementAtOrDefault(k) != second.Observations.ElementAtOrDefault(k), -1);
+            if (diverged < 0 && first.Trace.Count == second.Trace.Count && first.Summary == second.Summary &&
+                first.MapHashes.SequenceEqual(second.MapHashes) && first.Observations.SequenceEqual(second.Observations)) continue;
             mismatches++;
-            Console.WriteLine(diverged >= 0
-                ? $"  NOT DETERMINISTIC: decision {diverged}: {first.Trace[diverged]} vs {second.Trace[diverged]}"
-                : $"  NOT DETERMINISTIC: {first.Trace.Count} vs {second.Trace.Count} decisions; {second.Summary}");
+            Console.WriteLine(diverged < 0 ? $"  NOT DETERMINISTIC: {first.Trace.Count} vs {second.Trace.Count} decisions; {second.Summary}"
+                : first.Trace[diverged] != second.Trace[diverged] ? $"  NOT DETERMINISTIC: decision {diverged}: {first.Trace[diverged]} vs {second.Trace[diverged]}"
+                : $"  NOT DETERMINISTIC: observation {diverged} ({first.Trace[diverged]}) differs");
         }
         clock.Stop();
 
@@ -244,16 +250,29 @@ internal static class Cli
         return failures.Count == 0 && mismatches == 0 && gameErrors == 0 ? 0 : 1;
     }
 
-    private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes, string? Failure, List<string> Errors);
+    /// <param name="Observations">Per decision, its observation's hash (when observing).</param>
+    private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes,
+        IReadOnlyList<ulong> Observations, string? Failure, List<string> Errors);
 
-    /// <summary>One run to the end (or the decision cap), every policy drawing from one generator seeded by <paramref name="rngSeed"/>.</summary>
-    private static RunResult PlayRun(Pump pump, RunSetup setup, int rngSeed, string policy, int maxDecisions, bool trace)
+    /// <summary>
+    /// One run to the end (or the decision cap), every policy drawing from one generator seeded by <paramref name="rngSeed"/>.
+    /// Observing checks that each observation survives a JSON round trip, and keeps its hash.
+    /// </summary>
+    private static RunResult PlayRun(Pump pump, RunSetup setup, int rngSeed, string policy, int maxDecisions, bool trace, bool observe, bool printObservations)
     {
         var rng = new Random(rngSeed);
+        var observations = new List<ulong>();
         RunSession? session = null;
         try
         {
-            session = RunSession.Start(pump, setup, new RandomChoices(rng), Policies.Combat(policy, rng), new RandomMacro(rng));
+            Action<Observation>? observed = !observe ? null : obs =>
+            {
+                var json = ProtocolJson.Serialize(obs);
+                if (ProtocolJson.Serialize(ProtocolJson.Deserialize<Observation>(json)) != json) throw new InvalidOperationException($"observation does not round-trip: {json}");
+                if (printObservations) Console.WriteLine($"  obs {observations.Count}: {json}");
+                observations.Add(ProtocolJson.Hash(obs));
+            };
+            session = RunSession.Start(pump, setup, new RandomChoices(rng), Policies.Combat(policy, rng), new RandomMacro(rng), observed);
             int printed = 0;
             while (!session.IsOver && session.Trace.Count < maxDecisions)
             {
@@ -262,18 +281,26 @@ internal static class Cli
                 for (; printed < session.Trace.Count; printed++) Console.WriteLine($"  {printed}: {session.Trace[printed]}");
             }
             var outcome = session.Won ? "won" : session.IsOver ? "lost" : "truncated";
-            return new(outcome, session.Summary(), session.Trace.ToList(), session.MapHashes.ToList(), null, HeadlessGame.TakeErrors());
+            return new(outcome, session.Summary(), session.Trace.ToList(), session.MapHashes.ToList(), observations, null, HeadlessGame.TakeErrors());
         }
         catch (Exception e)
         {
             if (HeadlessGame.Verbose) Console.Error.WriteLine(e);
-            return new("failed", session?.Summary() ?? "", session?.Trace.ToList() ?? [], session?.MapHashes.ToList() ?? [],
+            return new("failed", session?.Summary() ?? "", session?.Trace.ToList() ?? [], session?.MapHashes.ToList() ?? [], observations,
                 $"{e.GetType().Name}: {FirstLine(e.Message)}", HeadlessGame.TakeErrors());
         }
         finally
         {
             session?.Dispose();
         }
+    }
+
+    /// <summary>One hash for a run's observation hashes, to compare runs across processes.</summary>
+    private static ulong Digest(IReadOnlyList<ulong> hashes)
+    {
+        ulong digest = 14695981039346656037;
+        foreach (var h in hashes) digest = (digest ^ h) * 1099511628211;
+        return digest;
     }
 
     /// <summary>Plays until the combat ends or hits the round/action cap. Calls <paramref name="beforeAction"/> before each action.</summary>

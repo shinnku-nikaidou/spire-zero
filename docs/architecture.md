@@ -50,9 +50,9 @@ offline (separate): self-play logs → fit V → ExIt → SPSA → LLM patches �
 | doc | scope | status |
 |---|---|---|
 | [environments.md](arch/environments.md) | NoSL/SL definitions, node boundary, information table, guards | decided |
-| [protocol.md](arch/protocol.md) | wire, observation union, choice context, events, recommendation, world API | combat exists |
-| [gamebridge.md](arch/gamebridge.md) | observe sources, actions per surface, prompt context, decision points, uids | combat exists |
-| [simulator.md](arch/simulator.md) | headless host, combat session, CombatBuilder, perf, run session, NoSL worlds, SL clone, pool | combat exists |
+| [protocol.md](arch/protocol.md) | wire, observation union, choice context, events, recommendation, world API | observation + choice context exist |
+| [gamebridge.md](arch/gamebridge.md) | observe sources, actions per surface, prompt context, decision points, uids | all surfaces exist |
+| [simulator.md](arch/simulator.md) | headless host, combat session, CombatBuilder, perf, run session, NoSL worlds, SL clone, pool | combat + run session exist |
 | [mod.md](arch/mod.md) | loading, main-thread loop, idle detection, adapters, SL export, auto-run driver, safety | planned |
 | [harness.md](arch/harness.md) | record/belief, routing, budget, decision log, failures | planned |
 | [combat-brain.md](arch/combat-brain.md) | PIMC (NoSL), deterministic planning (SL), leaf value, pruning | planned |
@@ -72,8 +72,9 @@ Background notes (gitignored, Chinese): `tmp/notes/plan.md` (plan v1, M0–M5), 
 | CombatBuilder (obs → combat) | done; approximations listed in simulator.md §3 |
 | multi-process scaling | measured: 8 procs ≈ 1,860 combats/s |
 | run session (whole runs headless) | done: all surfaces, random placeholders; 200/200 runs deterministic in- and cross-process, 0 failures/game errors (simulator.md §5) |
+| run-level observation + `ChoiceContext` | done: every surface observed, JSON round trip + obs hashes deterministic in the same batches (protocol.md §3–4) |
 | SL clone (load save + replay + seal) | planned, path researched (simulator.md §7) |
-| protocol beyond combat, Harness, worker IPC | planned |
+| wire envelopes, events, Harness, worker IPC | planned |
 | combat brain, macro brain, value | placeholders only |
 | mod | probe builds, not installed |
 
@@ -81,7 +82,7 @@ Background notes (gitignored, Chinese): `tmp/notes/plan.md` (plan v1, M0–M5), 
 
 1. CombatBuilder approximations: turn history, internal counters, cost-modifier durations, stun follow-ups; never validated on real-game observations (simulator.md §3).
 2. Monster move resampling uniform among intent-identical moves; needs posterior from history (harness.md §3).
-3. Card prompts lack context → `ChoiceContext` (protocol.md §4, gamebridge.md §5).
+3. Card prompt context relies on Harmony prefixes over async entries: inlining or a rejit can bypass them (gamebridge.md §5, mod.md §10).
 4. Run start uses `UnlockState.all`, not the user's profile; ascension not clamped (simulator.md §5.1).
 5. New game code that calls nodes without the TestMode guard outside events (where the transpiler covers it) shows up only as game errors in `run` batches (simulator.md §5.2).
 6. Harmony patches in the real game vs tiered JIT (mod.md §10).
@@ -89,7 +90,7 @@ Background notes (gitignored, Chinese): `tmp/notes/plan.md` (plan v1, M0–M5), 
 ## 8. Proposed implementation order
 
 1. [done 2026-10-26] Run session + all surfaces headless with placeholder macro policy; coverage + determinism + map cross-process tests (simulator.md §5, §9).
-2. Protocol run-level types + `ChoiceContext` + GameBridge observe/legal for every surface.
+2. [done 2026-10-26] Protocol run-level types + `ChoiceContext` + GameBridge observe/legal for every surface.
 3. Worker pool + IPC + world API (`RunBranches`).
 4. Harness (record, routing, logs) + combat brain v0 (PIMC, v0 leaf) → combat panel gate vs placeholders.
 5. Macro brain L0 + v0 value → R1/R2 full runs; evaluation pipeline.

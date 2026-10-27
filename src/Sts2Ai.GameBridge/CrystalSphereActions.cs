@@ -11,6 +11,28 @@ namespace Sts2Ai.GameBridge;
 /// </summary>
 public static class CrystalSphereActions
 {
+    public static CrystalSphereScreen Screen(CrystalSphereMinigame game)
+    {
+        var size = game.GridSize;
+        return new CrystalSphereScreen
+        {
+            Rows = Enumerable.Range(0, size.Y).Select(y => new string(Enumerable.Range(0, size.X).Select(x => Cell(game.cells[x, y])).ToArray())).ToList(),
+            DivinationsLeft = game.DivinationCount,
+        };
+    }
+
+    /// <summary>What the screen shows in the cell: the fog, or the part of the item under it.</summary>
+    private static char Cell(CrystalSphereCell cell) => cell.IsHidden ? '#' : cell.Item?.ToSerializable().type switch
+    {
+        null => '.',
+        CrystalSphereItemType.Relic => 'R',
+        CrystalSphereItemType.Potion => 'P',
+        CrystalSphereItemType.CardReward => 'C',
+        CrystalSphereItemType.Gold => 'G',
+        CrystalSphereItemType.Curse => 'X',
+        var type => throw new NotSupportedException($"crystal sphere item {type} has no view"),
+    };
+
     public static List<string> Legal(CrystalSphereMinigame game)
     {
         var actions = new List<string>();

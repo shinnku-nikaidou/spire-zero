@@ -1,6 +1,6 @@
 # Macro brain (out-of-combat decisions)
 
-Status: PLANNED. Today `RunSession` plays whole runs headless with placeholders: `RandomMacro` on every macro surface, `RandomChoices` on card prompts (simulator.md §5).
+Status: PLANNED. Today `RunSession` plays whole runs headless with placeholders: `RandomMacro` on every macro surface, `RandomChoices` on card prompts (simulator.md §5). Inputs exist: `MacroDecision{surface, legal, observation}` and `CardChoice` with `ChoiceContext` (protocol.md §3–4).
 
 ## 1. Surfaces and shape
 

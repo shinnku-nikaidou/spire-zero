@@ -125,7 +125,7 @@ internal sealed class CombatSession : IDisposable
         RunManager.Instance.SetUpTest(run, new NetSingleplayerGameService(), disableCombatStateSync: true, shouldSave: false);
 
         var trace = new List<TraceEvent>();
-        var selector = new PolicySelector(policy, picks => trace.Add(new(TraceKind.Choice, Picks: picks)));
+        var selector = new PolicySelector(policy, (_, picks) => trace.Add(new(TraceKind.Choice, Picks: picks)));
         selector.QueueReplay(replayPicks);
         var session = new CombatSession(pump, setup, player, run, trace, selector);
         try

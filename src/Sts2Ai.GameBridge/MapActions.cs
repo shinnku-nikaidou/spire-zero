@@ -26,6 +26,8 @@ public static class MapActions
         return MapTravel.GetTravelablePointsFrom(run, point).Select(p => p.coord).OrderBy(c => c.row).ThenBy(c => c.col).ToList();
     }
 
+    public static MapScreen Screen(RunState run) => new() { Travelable = Travelable(run).Select(Observe.Coord).ToList() };
+
     public static List<string> Legal(RunState run) => Travelable(run).Select(Text).ToList();
 
     public static string Text(MapCoord c) => $"map:{c.col},{c.row}";

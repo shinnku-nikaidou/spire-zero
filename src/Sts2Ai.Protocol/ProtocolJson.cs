@@ -17,6 +17,14 @@ public static class ProtocolJson
     public static T Deserialize<T>(string json) =>
         JsonSerializer.Deserialize<T>(json, Options) ?? throw new JsonException($"null {typeof(T).Name}");
 
+    /// <summary>The obs_hash of protocol.md §2: FNV-1a 64 over the UTF-8 of the observation's JSON.</summary>
+    public static ulong Hash(Observation observation)
+    {
+        ulong hash = 14695981039346656037;
+        foreach (byte b in JsonSerializer.SerializeToUtf8Bytes(observation, Options)) hash = (hash ^ b) * 1099511628211;
+        return hash;
+    }
+
     /// <summary>The card's identity as the player sees it: its serialization without the uid.</summary>
     public static string CardKey(CardView card) => Serialize(card.Uid == null ? card : card with { Uid = null });
 }

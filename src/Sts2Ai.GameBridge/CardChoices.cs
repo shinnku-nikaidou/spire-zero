@@ -12,12 +12,13 @@ public static class CardChoices
     /// cards at different depths of the draw pile), so ties are put in an order drawn from <paramref name="tieBreak"/>
     /// rather than the game's order.
     /// </summary>
-    public static (CardChoice Choice, int[] GameIndex) Canonical(IReadOnlyList<CardModel> options, int min, int max, Random tieBreak)
+    public static (CardChoice Choice, int[] GameIndex) Canonical(IReadOnlyList<CardModel> options, int min, int max, ChoiceContext context, Random tieBreak)
     {
         var sorted = options
             .Select((card, index) => (View: Observe.Card(card), Index: index, Tie: tieBreak.Next()))
             .OrderBy(o => ProtocolJson.CardKey(o.View), StringComparer.Ordinal).ThenBy(o => o.Tie)
             .ToList();
-        return (new CardChoice { Options = sorted.Select(o => o.View).ToList(), Min = min, Max = max }, sorted.Select(o => o.Index).ToArray());
+        var choice = new CardChoice { Options = sorted.Select(o => o.View).ToList(), Min = min, Max = max, Context = context };
+        return (choice, sorted.Select(o => o.Index).ToArray());
     }
 }

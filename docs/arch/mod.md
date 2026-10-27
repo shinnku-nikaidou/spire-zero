@@ -84,7 +84,7 @@ interface ISurfaceAdapter
 ## 10. Patches and JIT
 
 - Prefer events (`CombatManager.*`, `RunManager.RoomEntered`, `ActionExecutor.*`, `CardPile.*`) over Harmony.
-- Unavoidable patches: `CardSelectCmd.From*` context prefixes (gamebridge.md §5). The game runs with tiered compilation → a rejit can drop a patch silently (seen headless). Mitigation: heartbeat — each patch bumps a counter; on a prompt without a context → log + panel warning; recommend launching with `DOTNET_TieredCompilation=0` [I: honored by the game's hosted runtime; verify].
+- Unavoidable patches: `CardSelectCmd.From*` context prefixes (gamebridge.md §5). Install them first, before anything else compiles game code: a caller compiled before the patch can inline an entry and bypass it (seen headless: SapphireSeed via another patch's recompile). The game runs with tiered compilation → a rejit can drop a patch silently (seen headless). Mitigation: heartbeat — each patch bumps a counter; on a prompt without a context → log + panel warning; recommend launching with `DOTNET_TieredCompilation=0` [I: honored by the game's hosted runtime; verify].
 
 ## 11. Prior art (STS2MCP, MIT)
 
