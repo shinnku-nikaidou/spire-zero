@@ -69,11 +69,17 @@ public sealed record CardView
     public int? Stars { get; init; }
     public ModifierView? Enchant { get; init; }
     public ModifierView? Affliction { get; init; }
+    /// <summary>For a card the Tinker Time event made (Mad Science): the type and rider chosen there, which its frame
+    /// and text show.</summary>
+    public TinkerView? Tinker { get; init; }
     /// <summary>Sorted.</summary>
     public IReadOnlyList<string>? Keywords { get; init; }
     /// <summary>The card's numbers (damage, block, magic number, ...), by name, sorted by name; a calculated number by its parts.</summary>
     public IReadOnlyDictionary<string, decimal>? Vars { get; init; }
 }
+
+/// <summary>What Tinker Time made of a Mad Science: its card type (Attack, Skill, Power) and its rider effect.</summary>
+public sealed record TinkerView(string Type, string Rider);
 
 /// <summary>An enchantment or affliction on a card.</summary>
 public sealed record ModifierView(string Id, int Amount);

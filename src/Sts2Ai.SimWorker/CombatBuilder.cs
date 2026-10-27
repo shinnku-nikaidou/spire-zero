@@ -9,6 +9,8 @@ using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using Sts2Ai.GameBridge;
@@ -439,9 +441,15 @@ internal static class CombatBuilder
         return card;
     }
 
-    /// <summary>The changes a card picks up during a combat: affliction, numbers, keywords, cost.</summary>
+    /// <summary>The changes a card picks up during a combat (affliction, numbers, keywords, cost), and what Tinker Time
+    /// made of a Mad Science, which a card built from its id alone lacks.</summary>
     private static void Modify(CardModel card, CardView view, bool inHand)
     {
+        if (card is MadScience mad && view.Tinker is { } tinker)
+        {
+            mad.TinkerTimeType = Enum.Parse<CardType>(tinker.Type);
+            mad.TinkerTimeRider = Enum.Parse<TinkerTime.RiderEffect>(tinker.Rider);
+        }
         if (card.Affliction?.Id.Entry != view.Affliction?.Id)
         {
             card.ClearAfflictionInternal();

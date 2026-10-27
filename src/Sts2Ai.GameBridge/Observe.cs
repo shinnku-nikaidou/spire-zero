@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Runs;
@@ -118,6 +119,7 @@ public static class Observe
             Stars = card.CanonicalStarCost >= 0 ? card.GetStarCostWithModifiers() : null,
             Enchant = card.Enchantment is { } e ? new ModifierView(e.Id.Entry, e.Amount) : null,
             Affliction = card.Affliction is { } a ? new ModifierView(a.Id.Entry, a.Amount) : null,
+            Tinker = card is MadScience mad ? new TinkerView(mad.TinkerTimeType.ToString(), mad.TinkerTimeRider.ToString()) : null,
             Keywords = card.Keywords.Count > 0 ? card.Keywords.Select(k => k.ToString()).Order(StringComparer.Ordinal).ToList() : null,
             Vars = Vars(card) is { Count: > 0 } vars ? vars : null,
         };
