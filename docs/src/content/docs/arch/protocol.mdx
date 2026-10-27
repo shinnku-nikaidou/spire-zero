@@ -234,6 +234,7 @@ public interface ICombatWorld
     CombatObservation Observe();
     IReadOnlyList<CombatAction> Legal();   // empty once the combat is over
     CombatStatus Status { get; }
+    ulong HiddenKey();                     // what Observe hides that changes what happens next, as a hash
     void Execute(CombatAction action);     // card prompts are answered inside the world
     WorldSnapshot Snapshot();
     void Restore(WorldSnapshot snapshot);  // a snapshot taken from this same world

@@ -148,11 +148,12 @@ internal static class Fusion
     /// <param name="Edges">By the action as worlds compare it, in the order the search tries them.</param>
     private sealed record Node(ulong Key, Dictionary<string, Edge> Edges);
 
-    /// <summary>One world's turn, every line of it: states merged by their observation, as PIMC's search merges them.</summary>
+    /// <summary>One world's turn, every line of it: states merged by their observation and hidden state, as PIMC's
+    /// search merges them.</summary>
     private sealed class Tree
     {
         public List<Node> Nodes { get; } = [];
-        private readonly Dictionary<ulong, int> _index = [];
+        private readonly Dictionary<(ulong Obs, ulong Hidden), int> _index = [];
         private readonly Dictionary<int, double> _best = [];
 
         public static Tree Enumerate(ICombatWorld world, int round, int maxNodes)
@@ -172,7 +173,7 @@ internal static class Fusion
 
         private int Visit(ICombatWorld world, CombatObservation obs, int round, int maxNodes)
         {
-            ulong full = ProtocolJson.Hash(obs);
+            var full = (ProtocolJson.Hash(obs), world.HiddenKey());
             if (_index.TryGetValue(full, out var known)) return known;
             if (Nodes.Count >= maxNodes) throw new CappedException();
             int i = Nodes.Count;

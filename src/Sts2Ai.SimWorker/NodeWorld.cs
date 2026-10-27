@@ -36,6 +36,12 @@ internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisp
         return GameBridge.Observe.Combat(state, player);
     }
 
+    public ulong HiddenKey()
+    {
+        var (state, player) = Combat;
+        return HiddenState.Key(state, player);
+    }
+
     public IReadOnlyList<CombatAction> Legal()
     {
         if (Status != CombatStatus.InProgress) return [];

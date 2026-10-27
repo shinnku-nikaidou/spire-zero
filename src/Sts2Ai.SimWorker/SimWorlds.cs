@@ -1,4 +1,5 @@
 using Sts2Ai.Brain;
+using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker;
@@ -91,6 +92,8 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
         }
 
         public CombatObservation Observe() => Live.Observation();
+
+        public ulong HiddenKey() => HiddenState.Key(Live.State, Live.Player);
 
         public IReadOnlyList<CombatAction> Legal() => Live.IsOver ? [] : Live.LegalActions();
 

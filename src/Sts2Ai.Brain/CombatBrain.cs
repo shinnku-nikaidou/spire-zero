@@ -72,15 +72,17 @@ public interface ICombatBrain
 
 /// <summary>
 /// Combat brain v0 (docs: combat-brain §2): PIMC over K worlds. In each world, a depth-first search over this turn's
-/// action sequences, with ending the turn an option at every step; states are merged by their observation, so each
-/// transposition is expanded once. A line ends when the turn ends (after the enemies' turn) or the combat does, and
-/// is scored by the leaf (<see cref="ICombatLeaf"/>; <see cref="HandLeaf"/> by default). Each first action is scored
+/// action sequences, with ending the turn an option at every step; states are merged by their observation and the
+/// world's hidden state (<see cref="ICombatWorld.HiddenKey"/>), so each transposition is expanded once, and two lines
+/// that look the same but drew or rolled differently are not. A line ends when the turn ends (after the enemies'
+/// turn) or the combat does, and is scored by the leaf (<see cref="ICombatLeaf"/>; <see cref="HandLeaf"/> by default). Each first action is scored
 /// by its best line in each world, then averaged over the worlds; never the max across worlds, which is strategy fusion. Only the first action is played: the
 /// caller asks again after it. In SL there is one exact world, so this is plain planning.
 ///
 /// Each world's nodes go to the first actions evenly, so each gets a fair look, or by sequential halving
 /// (<see cref="Root"/>); inside a subtree the search stops expanding when its share is spent, and what is left is scored
-/// as ending the turn there (that option is tried first).
+/// as ending the turn there (that option is tried first). A state cut short so is not kept for its transpositions: its
+/// value is only a lower bound, and another first action reaching it searches it with its own share.
 ///
 /// The worlds are independent, so a decision is three steps that can run apart: <see cref="Ordered"/> first actions, then
 /// <see cref="SearchWorld"/> for each world wherever that world lives (this process, or a worker), then merging by
@@ -173,8 +175,10 @@ public sealed class PimcBrain(ICombatLeaf? leaf = null) : ICombatBrain
 
     private sealed class WorldSearch(ICombatWorld world, int round, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodesPerFirst)
     {
-        private readonly Dictionary<ulong, PlannedLine> _memo = [];
+        private readonly Dictionary<(ulong Obs, ulong Hidden), PlannedLine> _memo = [];
         private int _nodes;
+        /// <summary>States cut short by the budget so far: a state whose subtree has none is searched in full.</summary>
+        private int _cuts;
 
         public PlannedLine[] Root(IReadOnlyList<CombatAction> first)
         {
@@ -206,20 +210,26 @@ public sealed class PimcBrain(ICombatLeaf? leaf = null) : ICombatBrain
         /// <summary>The best line from the current state, where the player is still on this turn.</summary>
         private PlannedLine Best(CombatObservation obs)
         {
-            ulong key = ProtocolJson.Hash(obs);
+            ulong hash = ProtocolJson.Hash(obs);
+            var key = (hash, world.HiddenKey());
             if (_memo.TryGetValue(key, out var known)) return known;
             var here = world.Snapshot();
             var best = new PlannedLine(double.NegativeInfinity, [], 0, []);
             bool moved = false;
+            int cuts = _cuts;
             foreach (var action in Ordered(world.Legal()))
             {
-                if (moved && _nodes >= nodesPerFirst) break;
+                if (moved && _nodes >= nodesPerFirst)
+                {
+                    _cuts++;
+                    break;
+                }
                 if (moved) world.Restore(here);
                 moved = true;
                 var after = After(action);
-                if (after.Value > best.Value) best = new(after.Value, [action, .. after.Actions], 0, [key, .. after.Hashes!]);
+                if (after.Value > best.Value) best = new(after.Value, [action, .. after.Actions], 0, [hash, .. after.Hashes!]);
             }
-            _memo[key] = best;
+            if (_cuts == cuts) _memo[key] = best;
             return best;
         }
     }

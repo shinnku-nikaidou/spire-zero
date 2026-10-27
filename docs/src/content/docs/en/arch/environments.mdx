@@ -121,7 +121,7 @@ flowchart LR
 | number of worlds | K, averaged (no strategy fusion) | 1; taking the best line is correct, there is nothing to fuse |
 | chance nodes | at every reveal | none |
 | combat algorithm | PIMC: search to the end of the turn, average by first action, plan again after every action ([Combat brain §2](/en/arch/combat-brain/#sec-2)) | branch-and-bound over the whole combat, with an anytime beam; plan once ([Combat brain §3](/en/arch/combat-brain/#sec-3)) |
-| transpositions keyed by | observation | full state, random streams included |
+| transpositions keyed by | observation and the world's sampled hidden state | full state, random streams included |
 | budget is spent on | samples × depth | depth and breadth (a combat can usually be searched to its end) |
 | past the horizon | already samples | the world stops (`AtHorizon`); continue only by re-determinizing from the exit observation |
 | macro brain | afterstate + V, mean over K samples | the same brain, on the one exact outcome |

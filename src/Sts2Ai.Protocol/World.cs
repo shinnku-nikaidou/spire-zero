@@ -16,6 +16,12 @@ public interface ICombatWorld
     /// <summary>Empty once the combat is over.</summary>
     IReadOnlyList<CombatAction> Legal();
     CombatStatus Status { get; }
+    /// <summary>
+    /// What <see cref="Observe"/> hides that changes how the same plays turn out from here (the draw pile's order, the
+    /// position of each random stream, a monster's queued move), as a hash. Together with the observation it tells
+    /// states apart for search, within this world.
+    /// </summary>
+    ulong HiddenKey();
     /// <summary>Card prompts raised by the action are answered inside the world (docs: combat-brain §2, rule 7).</summary>
     void Execute(CombatAction action);
     WorldSnapshot Snapshot();
