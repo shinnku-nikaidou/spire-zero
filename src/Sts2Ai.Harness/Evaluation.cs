@@ -14,13 +14,14 @@ public sealed record CombatEntry(int Act, int Floor, string Encounter, string Ro
 public sealed record RunConfig(string Game, string Commit, string Champion, string Env, string Rung);
 
 /// <summary>One run of an evaluation, as the report needs it (docs: evaluation §3).</summary>
+/// <param name="RunId">The run id the brain knew the run by, as in the decision log (docs: harness §6).</param>
 /// <param name="Outcome">won, lost, truncated (the decision cap), or failed (an error in the driver or a brain; never re-run).</param>
 /// <param name="Brains">Decisions per brain name, from Harness's log.</param>
 /// <param name="CardRewards">Card rewards offered, and how many of them were left untaken (skipped, or never opened).</param>
 public sealed record RunRecord(
     RunConfig Config, string Seed, string Character, int Ascension, string Outcome, int Act, int Floor, int Hp, int MaxHp, int Gold,
     IReadOnlyList<CombatEntry> Combats, IReadOnlyDictionary<string, int> Surfaces, IReadOnlyDictionary<string, int> Brains,
-    int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs);
+    int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string? RunId = null);
 
 /// <summary>A proportion with its Wilson 95% interval.</summary>
 public sealed record Rate(int Hits, int Of, double Value, double Low, double High)

@@ -127,6 +127,7 @@ The methods named above:
 Each evaluation writes a JSON file plus a one-page Markdown report with: game version, commit, champion, environment, rung, seed set, budget, all metrics, the must-be-zero metrics, and the diff against the previous evaluation. Reports go into `eval/reports/` as `DATE-ENV-RUNG-SET-NAME.json` and `.md`; raw logs are not committed.
 
 - `report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]` writes PATH.json and PATH.md. The records may come from several processes; they must share one config (game, commit, champion, environment, rung), and each must play a different seed of the set. A report with fewer runs than the set is marked partial.
+- A run record (`run --records`) also holds the run id that the decision log knows the run by ([Harness §6](/en/arch/harness/#sec-6)), which joins the two for learning.
 - The commit is the build's: a build with uncommitted changes under `src/` gets `-dirty` after it, and such a report is for development only.
 
 ## 7. Baselines

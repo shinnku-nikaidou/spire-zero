@@ -23,10 +23,11 @@ namespace Sts2Ai.SimWorker;
 ///   forkbench [--n 30] [--seed 1] [--act 0] [--rooms weak,regular] [--branches 20]
 ///                                          cost of restoring a combat and of one search branch
 ///   run [--n 1] [--start 0] [--seed 1 | --seeds FILE] [--asc 0] [--env NoSL|SL] [--policy play|random|pimc] [--macro random|l0]
-///       [--worlds 8] [--nodes 300] [--workers W] [--max-decisions 20000] [--check] [--trace] [--obs]
+///       [--value v.json] [--worlds 8] [--nodes 300] [--workers W] [--max-decisions 20000] [--check] [--trace] [--obs]
 ///       [--log decisions.jsonl] [--records runs.jsonl] [--brain SOCKET]
-///                                          whole runs through Harness. Combat prompts are random; --macro picks the
-///                                          brain of every decision outside combat (l0: the macro brain with V v0); --check plays
+///                                          whole runs through Harness. Combat prompts go to p0; --macro picks the
+///                                          brain of every decision outside combat (l0: the macro brain with V, whose
+///                                          weights --value reads, the initial ones by default); --check plays
 ///                                          each seed again over the wire, to a brain in this process, and compares,
 ///                                          observations, records and decision logs included (each observation must
 ///                                          survive a JSON round trip), and replays each node from its checkpoint (the
@@ -37,7 +38,7 @@ namespace Sts2Ai.SimWorker;
 ///                                          of them unless --n; --records writes one run record per line (docs: evaluation §6).
 ///                                          --brain plays against the brain listening at SOCKET instead, which picks the
 ///                                          champion (--check then replays against it too)
-///   brain [--socket ~/.local/state/sts2ai/brain.sock] [--policy ...] [--macro ...] [--worlds 8] [--nodes 300]
+///   brain [--socket ~/.local/state/sts2ai/brain.sock] [--policy ...] [--macro ...] [--value ...] [--worlds 8] [--nodes 300]
 ///         [--workers W] [--log decisions.jsonl]
 ///                                          the brain alone: serves the hosts that connect, one at a time (docs: protocol §2)
 ///   report --seeds FILE --records A.jsonl[,B.jsonl] --out PATH [--previous OLD.json]
@@ -449,8 +450,8 @@ internal static class Cli
         return 0;
     }
 
-    /// <summary>The champion that --policy and --macro name (docs: harness §4), and pimc's budget.</summary>
-    private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers)
+    /// <summary>The champion that --policy and --macro name (docs: harness §4), pimc's budget, and l0's V (--value).</summary>
+    private sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, RunValue Value)
     {
         public static ChampionOptions Parse(Dictionary<string, string> opts)
         {
@@ -460,7 +461,13 @@ internal static class Cli
             var macro = opts.GetValueOrDefault("macro", "random");
             if (macro is not ("random" or "l0")) throw new ArgumentException($"unknown macro brain {macro} (random, l0)");
             var budget = new Budget(Int(opts, "worlds", 8), Int(opts, "nodes", 300));
-            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds));
+            var value = RunValue.Initial;
+            if (opts.TryGetValue("value", out var valueFile))
+            {
+                if (macro != "l0") throw new ArgumentException("--value weighs l0's V; it needs --macro l0");
+                value = RunValue.From(ProtocolJson.Deserialize<ValueWeights>(File.ReadAllText(valueFile)));
+            }
+            return new(policy, macro, budget, Int(opts, "workers", budget.Worlds), value);
         }
 
         /// <summary>pimc's search workers. A run holds its process's one live game, so search runs in other processes.</summary>
@@ -479,14 +486,17 @@ internal static class Cli
             var prompts = new Route<IChoicePolicy>("p0", PromptBrain.Instance);
             if (Macro == "l0")
             {
-                var l0 = new MacroBrain(RunValue.Initial);
-                return new Dispatcher(hello.Run.RunId, env, combat, prompts, new("l0", l0), new("l0", l0), log);
+                var l0 = new MacroBrain(Value);
+                return new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log);
             }
             return new Dispatcher(hello.Run.RunId, env, combat, prompts, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
         };
 
+        /// <summary>l0 by its V's name, unless V has the initial weights.</summary>
+        private string L0 => Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}";
+
         public override string ToString() =>
-            $"policy {Policy}{(Policy == "pimc" ? $" worlds {Budget.Worlds} nodes {Budget.NodesPerWorld} on {Workers} workers" : "")}, macro {Macro}";
+            $"policy {Policy}{(Policy == "pimc" ? $" worlds {Budget.Worlds} nodes {Budget.NodesPerWorld} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
     }
 
     /// <param name="Observations">Per decision, its observation's hash, and the hash without relic state (when observing).</param>
@@ -557,7 +567,7 @@ internal static class Cli
             var record = new RunRecord(config, setup.Seed, setup.Character, setup.Ascension, outcome,
                 session?.Run.CurrentActIndex ?? 0, session?.Run.TotalFloor ?? 0, player?.Creature.CurrentHp ?? 0, player?.Creature.MaxHp ?? 0,
                 player?.Gold ?? 0, session?.Combats.ToList() ?? [], surfaces, new Dictionary<string, int>(brain?.Brains ?? new Dictionary<string, int>()),
-                session?.CardRewards ?? 0, session?.CardRewardsSkipped ?? 0, 0, failure, 0);
+                session?.CardRewards ?? 0, session?.CardRewardsSkipped ?? 0, 0, failure, 0, hello.Run.RunId);
             return new(outcome, session?.Summary() ?? "", steps, session?.MapHashes.ToList() ?? [], observations, brain?.Log.ToList() ?? [], failure,
                 HeadlessGame.TakeErrors(), record, nodes);
         }

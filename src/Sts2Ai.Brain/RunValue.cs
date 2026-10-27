@@ -5,10 +5,13 @@ namespace Sts2Ai.Brain;
 /// <summary>
 /// V v0 (docs: learning §1): hand-written features of the run view times linear weights. The value is a logit of
 /// P(win); only its order matters to the macro brain, which compares the afterstates of one decision. The initial
-/// weights are hypotheses, in units of one HP, for tuning to replace.
+/// weights are hypotheses, in units of one HP, for fitting and tuning to replace (<see cref="ValueWeights"/>).
 /// </summary>
-public sealed class RunValue(IReadOnlyDictionary<string, double> weights)
+public sealed class RunValue(IReadOnlyDictionary<string, double> weights, string name = "v0")
 {
+    /// <summary>Which weights these are, for the champion's name.</summary>
+    public string Name { get; } = name;
+
     public static readonly IReadOnlyDictionary<string, double> InitialWeights = new Dictionary<string, double>
     {
         ["hp"] = 1,
@@ -31,12 +34,15 @@ public sealed class RunValue(IReadOnlyDictionary<string, double> weights)
 
     public static RunValue Initial { get; } = new(InitialWeights);
 
+    public static RunValue From(ValueWeights file) => new(file.Weights, file.Name);
+
     public double Value(RunView run) => Features(run).Sum(f => weights.GetValueOrDefault(f.Key) * f.Value);
 
     /// <summary>
     /// The features. Card numbers are means over the playable cards (damage counts poison too). Map counts are the
     /// expected number of points of each type from the current point (included) to the boss, if each step took a
-    /// random path.
+    /// random path. The floor has no initial weight: it is the same for every option of a decision, and a fit needs it
+    /// so that progress is not credited to what comes with it (relics, gold).
     /// </summary>
     public static Dictionary<string, double> Features(RunView run)
     {
@@ -44,6 +50,7 @@ public sealed class RunValue(IReadOnlyDictionary<string, double> weights)
         double Mean(Func<CardView, decimal> f) => playable.Count == 0 ? 0 : (double)playable.Sum(f) / playable.Count;
         var features = new Dictionary<string, double>
         {
+            ["floor"] = run.Floor,
             ["hp"] = run.Hp,
             ["max_hp"] = run.MaxHp,
             ["gold"] = run.Gold,
@@ -92,3 +99,7 @@ public sealed class RunValue(IReadOnlyDictionary<string, double> weights)
         return Of(from);
     }
 }
+
+/// <summary>V's weights as a file holds them (docs: learning §2): a name for reports, and a weight per feature. A
+/// feature it leaves out weighs nothing.</summary>
+public sealed record ValueWeights(string Name, IReadOnlyDictionary<string, double> Weights);

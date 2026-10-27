@@ -132,6 +132,7 @@ public sealed class PublicRecord
 
 - `obs_hash` 是大脑看到的内容的哈希：战斗观测、整局观测或选牌提示。`legal` 是合法动作的个数（对提示而言是选项个数）。`chosen` 是文本形式的动作，或选中的选项下标。
 - 会搜索的大脑还会加上 `plan`（`chosen` 之后本回合剩下的动作，取第一个世界里的）、`candidates`（每个首个动作的平均估值、置信区间半宽 `ci` 和世界数，最好的在前）和 `budget`。占位策略两者都不记。
+- 宏观决策还会加上 `features`：大脑看到的整局观测上 V 的特征（[学习 §1](/arch/learning/#sec-1)），不管是哪个大脑做的决策。拟合 V 读的就是它们（[学习 §2](/arch/learning/#sec-2)）。
 - `run --log FILE` 写出日志，每个决策一行（[模拟器 §5](/arch/simulator/#sec-5)）。
 - `degraded` 标记 worker 故障之后给出的回答，它和超时一起规划（[§7](#sec-7)）。崩溃的 worker 会被重启，请求再发一次，得到的回答相同，所以目前没有降级的回答。
 

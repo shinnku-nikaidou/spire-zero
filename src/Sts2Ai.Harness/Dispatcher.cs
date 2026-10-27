@@ -23,9 +23,12 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Legal">How many legal actions (or prompt options) there were.</param>
 /// <param name="Chosen">The action in text form; for a prompt, the picked option indexes.</param>
 /// <param name="Plan">The rest of the turn after <paramref name="Chosen"/>, as the brain planned it.</param>
+/// <param name="Features">On a macro decision, V's features of the run the brain was shown: what V is fit on
+/// (docs: learning §2).</param>
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
-    IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs);
+    IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
+    IReadOnlyDictionary<string, double>? Features = null);
 
 /// <summary>Who made a decision, and what a searching brain planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
@@ -111,7 +114,7 @@ public sealed class Dispatcher(
         Last = new(macro.Brain);
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                action, null, null, null, seed, ms));
+                action, null, null, null, seed, ms, RunValue.Features(decision.Observation.Run)));
         return action;
     }
 

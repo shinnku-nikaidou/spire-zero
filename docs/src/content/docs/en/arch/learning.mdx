@@ -13,7 +13,7 @@ This page defines the value function V that both brains use to score positions, 
 
 <Aside title="Status">
 
-V v0 exists, untuned: `RunValue` in Brain, 16 hand-written features of the run view times hand-set weights ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). Nothing is learned or tuned yet; `learn/` holds the Python project (uv, PyTorch) for the learning loop.
+V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times linear weights, the initial ones set by hand ([§1](#sec-1)). The macro brain's L0 uses it ([Macro brain §2](/en/arch/macro-brain/#sec-2)). `learn/fit_value.py` fits the weights from self-play, and `run --value` plays with the fitted ones ([§2](#sec-2)); no fitted weights are promoted yet. `learn/` is the Python project (uv, PyTorch) for the learning loop.
 
 </Aside>
 
@@ -36,7 +36,7 @@ Planned versions:
 Reading the table:
 
 - **Lexicographic intent** (v0): the starting feature list comes from bottled_ai (a prior-art Slay the Spire bot), which ranks features in a strict order of importance: compare by the first, and use the next only to break ties ([Combat brain §4](/en/arch/combat-brain/#sec-4)). Linear weights that start far apart reproduce that order, and tuning starts from there.
-- **V v0 as built** (`RunValue`): HP, max HP, gold, potions, relics, deck size, unplayable cards, upgrades; the mean damage (poison included), block and draw of the playable cards; and the expected elites, rest sites, shops, treasures and `?` points ahead on the map. Its weights are in units of one HP, not far apart: run-level features trade against each other (a relic against HP), which a strict order cannot express. They are hypotheses for tuning to replace.
+- **V v0 as built** (`RunValue`): HP, max HP, gold, potions, relics, deck size, unplayable cards, upgrades; the mean damage (poison included), block and draw of the playable cards; and the expected elites, rest sites, shops, treasures and `?` points ahead on the map; and the floor, which has no initial weight: every option of a decision shares it, but a fit needs it, so that progress is not credited to what comes with it (relics, gold). Its weights are in units of one HP, not far apart: run-level features trade against each other (a relic against HP), which a strict order cannot express. They are hypotheses for tuning to replace.
 - **MLP** is a small fully connected neural network. **Embeddings** are learned vectors, one per card, relic or power id, so the encoder can read any deck.
 - **SPSA** (simultaneous perturbation stochastic approximation) tunes parameters from noisy results alone. Each step nudges all parameters at once in a random direction, measures both the "plus" and the "minus" version, and moves the parameters toward the better one. It needs two measurements per step however many parameters there are, and no gradient, which suits weights whose only test is playing games.
 - **MC** (Monte Carlo) target: the real result of the run (win 1, loss 0), used as the label for every decision in it. Unbiased, but noisy: the luck of one run lands on all of its decisions.
@@ -72,6 +72,8 @@ flowchart TD
 
 1. **Self-play:** the champion plays whole runs on train seeds. Log format: [Harness §6](/en/arch/harness/#sec-6).
 2. **Fit:** the target is a mix of the MC outcome and TD(λ) (from decision k to decision k+1). Early on there are no wins, so every MC target is 0; the floor-reached auxiliary target supplies the signal, while the main head stays P(win). Never mix HP targets and win targets in one backward pass (a lesson from r33hab).
+
+   v0's fit is `learn/fit_value.py`. Every macro decision in the decision logs carries V's features ([Harness §6](/en/arch/harness/#sec-6)), and the run records give the floor its run reached, joined by run id. It is ridge regression on standardized features (ridge regression: least squares with a small penalty on the size of the weights, which keeps correlated features from taking extreme weights). Each run weighs the same however many decisions it has, and every fifth run (by run id) is held out. It reports R² on the held-out runs (R²: the share of the floor's variance the fit explains, 1 at best, below 0 when it does worse than the mean), next to a fit on the floor alone. The weights go to `eval/values/NAME.json`; `run --value FILE` plays L0 with them, and the champion shows them as `l0 NAME`.
 3. **ExIt:** search values become labels for V and for the priors (which actions the search tries first). The teacher is a fair search in the same environment, one that obeys that environment's information rules. No behavior cloning (training a model to copy a teacher's moves) of an omniscient teacher: that failed in several projects.
 4. **SPSA** on the v0 weights and on the search parameters.
 5. **LLM:** the input is pre-aggregated failure clusters plus death summaries; the output is K candidate patches (features, pruning rules, parameters). The candidates are filtered by compiling, unit tests and fair-play tests, then gated. Only cheap models through the LLM gateway.
@@ -146,6 +148,6 @@ flowchart LR
 
 ## 8. Open questions
 
-1. The v0 feature set: V v0 starts with 16; whether to grow it toward bottled_ai's 42 features is open.
+1. The v0 feature set: V v0 starts with 17; whether to grow it toward bottled_ai's 42 features is open.
 2. Inference format (ONNX Runtime would be a new package).
 3. One net with an environment input bit, or separate nets (start with separate nets).

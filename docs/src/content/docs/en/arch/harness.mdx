@@ -132,6 +132,7 @@ One JSON line per decision:
 
 - `obs_hash` is the hash of what the brain was shown: the combat observation, the run observation, or the card prompt. `legal` counts the legal actions (the options, for a prompt). `chosen` is the action in text form, or the picked option indexes.
 - A searching brain adds `plan` (the rest of the turn after `chosen`, in the first world), `candidates` (each first action's mean value, confidence half-width `ci` and number of worlds, best first) and `budget`. Placeholders log neither.
+- A macro decision adds `features`: V's features of the run view the brain was shown ([Learning §1](/en/arch/learning/#sec-1)), whatever brain decided. Fitting V reads them ([Learning §2](/en/arch/learning/#sec-2)).
 - `run --log FILE` writes it, one line per decision ([Simulator §5](/en/arch/simulator/#sec-5)).
 - `degraded`, for an answer given after a worker failure, is planned together with timeouts ([§7](#sec-7)). A crashed worker is restarted and gets its request once more, which gives the same answer, so nothing is degraded yet.
 
