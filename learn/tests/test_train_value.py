@@ -82,11 +82,13 @@ def test_a_boss_fight_scores_a_win_above_one_half_and_a_loss_by_the_boss_hp_take
     assert tv.boss_score({"won": False, "enemy_hp": 300, "enemy_max_hp": 400}, 80) == 0.125
 
 
-def test_a_simulated_boss_fight_labels_only_its_boss_floor():
-    tok = {"cards": [], "relics": [], "potions": [], "context": [], "card_numbers": [], "relic_numbers": [], "extra": [0]}
-    s = {"tokens": tok, "features": {}, "start": 20, "end": 20, "kind": "censored", "weight": 1.0, "next": []}
-    s |= {"boss_floor": 33, "boss_lost": 0.5}
-    index = {t: {} for t in tv.TABLES}
-    b = tv.Batch([s], index, [], torch.zeros(0), torch.ones(0), 40, "cpu")
-    assert b.label_mask[0].nonzero().flatten().tolist() == [33]
-    assert float(b.target[0, 33]) == 0.5
+def test_a_boss_is_worth_the_floors_its_winners_went_on_to():
+    win = {"act": 1, "room": "Boss", "hp": 50, "max_hp": 80, "end": {"died": False, "hp": 40, "max_hp": 80}}
+    runs = [{"outcome": "lost", "floor": 40, "combats": [win]}, {"outcome": "lost", "floor": 36, "combats": [win]}]
+    runs.append({"outcome": "lost", "floor": 33, "combats": [win | {"end": {"died": True}}]})
+    assert tv.boss_worth(runs, 64) == {0: 0.0, 1: 5.0}
+
+
+def test_centred_values_lose_their_groups_mean():
+    v = tv.centred(torch.tensor([1.0, 3.0, 10.0]), torch.tensor([0, 0, 1]), 2)
+    assert v.tolist() == [-1.0, 1.0, 0.0]
