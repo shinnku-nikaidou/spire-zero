@@ -48,6 +48,7 @@ script = common.app()
 
 MAX_UP = 3  # RunNet.MaxUp
 AUX = 6  # the next combats whose HP cost the second head learns
+ACT = 2  # with --aux-act, the second head also learns whether the act's boss was beaten, and the HP share left after it
 # Every scaled number the nets read is capped at ±CAP: a few states show huge ones (an erupting WATERFALL_GIANT's HP).
 CAP = 10.0
 TABLES = ["cards", "modifiers", "relics", "potions", "context", "vars", "relic_status"]
@@ -89,6 +90,18 @@ def next_combats(record: dict, floor: int) -> list[float]:
         lost = c["hp"] - (0 if end.get("died") else end.get("hp", c["hp"]))
         costs.append(min(max(lost / max(c["max_hp"], 1), 0.0), 1.0))
     return costs
+
+
+def act_boss(record: dict, act: int) -> list[float] | None:
+    """Whether the run beat its act's last boss fight, and the share of max HP left after it (0 if it did not); None
+    when the run stopped before an outcome (truncated, not dead) without a boss fight of that act."""
+    bosses = [c for c in record.get("combats", []) if c.get("act") == act and c.get("room") == "Boss"]
+    if bosses and not (bosses[-1].get("end") or {}).get("died") and bosses[-1].get("end"):
+        end = bosses[-1]["end"]
+        return [1.0, min(max(end["hp"] / max(end["max_hp"], 1), 0.0), 1.0)]
+    if record["outcome"] == "lost" or bosses:
+        return [0.0, 0.0]
+    return None
 
 
 def held_out(run_id: str) -> bool:
@@ -343,6 +356,12 @@ class Batch:
         for b, s in enumerate(samples):
             for k, cost in enumerate(s["next"]):
                 aux[b, k], aux_mask[b, k] = cost, 1
+        if any("act_boss" in s for s in samples):
+            act, act_mask = torch.zeros(n, ACT), torch.zeros(n, ACT)
+            for b, s in enumerate(samples):
+                if s.get("act_boss") is not None:
+                    act[b], act_mask[b] = torch.tensor(s["act_boss"]), 1
+            aux, aux_mask = torch.cat([aux, act], 1), torch.cat([aux_mask, act_mask], 1)
         self.aux, self.aux_mask = aux.to(device), aux_mask.to(device)
 
     def inputs(self):
@@ -352,7 +371,9 @@ class Batch:
 
 
 class Net(nn.Module):
-    def __init__(self, sizes, n_features, floors, dim=32, hidden=128, body=256, sum_scale=1 / 16, n_extra=1):
+    def __init__(
+        self, sizes, n_features, floors, dim=32, hidden=128, body=256, sum_scale=1 / 16, n_extra=1, n_aux=AUX
+    ):
         super().__init__()
         self.sum_scale = sum_scale
         self.cards = nn.Embedding(sizes["cards"], dim)
@@ -371,7 +392,7 @@ class Net(nn.Module):
         )
         self.head = nn.Linear(body, floors)
         nn.init.constant_(self.head.bias, -3.0)
-        self.aux_head = nn.Linear(body, AUX)
+        self.aux_head = nn.Linear(body, n_aux)
 
     def forward(self, *inputs):
         """Per sample and floor, the logit of dying on that floor if alive there (inputs as INPUTS names them)."""
@@ -825,6 +846,12 @@ def main(
     aux_weight: Annotated[
         float, typer.Option(min=0, help="the weight of the next combats' HP costs in the loss; 0: no second head")
     ] = 3.0,
+    aux_act: Annotated[
+        bool, typer.Option(help="the second head also learns the act boss's outcome and the HP share left after it")
+    ] = False,
+    state_out: Annotated[
+        str | None, typer.Option(help="also write the torch net, both heads, for analysis (torch.save)")
+    ] = None,
     forks: Annotated[str | None, typer.Option(help="counterfactual pairs (`fork`), comma-separated")] = None,
     fork_weight: Annotated[
         float, typer.Option(min=0, help="the weight of each fork branch's outcome in the loss")
@@ -882,6 +909,7 @@ def main(
                     "kind": kind,
                     "next": next_combats(r, e["run_view"]["floor"]),
                 }
+                | ({"act_boss": act_boss(r, e["run_view"]["act"])} if aux_act else {})
             )
     per_run = {}
     for s in samples:
@@ -990,7 +1018,9 @@ def main(
                 kl += float(side_losses(model, None, gb)[2]) * gb.groups
         return fork / max(1, len(test_pairs)), pair / max(1, len(test_pairs)), kl / max(1, len(test_groups))
 
-    model = Net({t: len(ids) for t, ids in tables.items()}, len(names), floors).to(device)
+    model = Net(
+        {t: len(ids) for t, ids in tables.items()}, len(names), floors, n_aux=AUX + (ACT if aux_act else 0)
+    ).to(device)
     # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
     with torch.no_grad():
         model.head.bias.copy_(base_logits)
@@ -1056,6 +1086,7 @@ def main(
         "held_out_loss": held,
         "held_out_loss_floor_only": base_loss,
         "aux_weight": aux_weight,
+        "aux_act": aux_act,
         "held_out_next_combats": held_aux,
         "r2_held_out": r2(predicted),
         "r2_held_out_floor_only": r2(base_predicted),
@@ -1067,6 +1098,13 @@ def main(
         report |= {"decisions_pulled": len(groups), "kl_weight": kl_weight, "kl_temperature": kl_temperature}
         report |= pull_report(model, test_group_batches)
     print(json.dumps(report))
+
+    if state_out:
+        torch.save(
+            {"state": model.state_dict(), "tables": tables, "names": names, "mean": mean, "std": std,
+             "floors": floors, "n_aux": AUX + (ACT if aux_act else 0), "report": report},
+            state_out,
+        )
 
     # Test runs for RunNet's check on load: a few held-out decisions, valued on the CPU as RunNet values them.
     model = model.cpu()

@@ -56,3 +56,13 @@ def test_a_segment_log_softmax_normalises_each_group_alone():
     assert torch.allclose(logp[:2], torch.log_softmax(values[:2], 0))
     assert torch.allclose(logp[2:], torch.log_softmax(values[2:], 0))
     assert math.isclose(float(logp[2:].exp().sum()), 1.0)
+
+
+def test_the_act_boss_label_is_the_last_boss_fight_of_the_act_or_unknown_when_truncated():
+    boss = {"act": 0, "room": "Boss", "hp": 50, "max_hp": 80, "end": {"died": False, "hp": 40, "max_hp": 80}}
+    other = {"act": 0, "room": "Monster", "hp": 80, "max_hp": 80, "end": {"died": False, "hp": 80, "max_hp": 80}}
+    assert tv.act_boss({"outcome": "lost", "combats": [other, boss]}, 0) == [1.0, 0.5]
+    assert tv.act_boss({"outcome": "lost", "combats": [other]}, 0) == [0.0, 0.0]
+    died = boss | {"end": {"died": True}}
+    assert tv.act_boss({"outcome": "truncated", "combats": [died]}, 0) == [0.0, 0.0]
+    assert tv.act_boss({"outcome": "truncated", "combats": [other]}, 0) is None
