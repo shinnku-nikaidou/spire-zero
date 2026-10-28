@@ -77,7 +77,7 @@ internal static class Panel
             var started = clock.Elapsed;
             string outcome;
             string? failure = null;
-            int hpStart = 0, hp = 0, rounds = 0, steps = 0;
+            int hpStart = 0, hp = 0, rounds = 0, steps = 0, enemyHp = 0, enemyMaxHp = 0;
             var searched = new Searched();
             try
             {
@@ -86,7 +86,7 @@ internal static class Panel
                     ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, player == "plan" ? null : new PimcBrain(leaf.Leaf),
                         new SlPlanner(leaf.Leaf), env, budget, searched, r.GetValue(Trace))
                     : PlayWithPolicy(pump, setup, PromptBrain.Instance, Policies.Combat(player, rng));
-                (outcome, hpStart, hp, rounds, steps) = result;
+                (outcome, hpStart, hp, rounds, steps, enemyHp, enemyMaxHp) = result;
             }
             catch (Exception e)
             {
@@ -109,7 +109,8 @@ internal static class Panel
             output?.WriteLine(JsonSerializer.Serialize(new
             {
                 i, encounter = encounter.Id.Entry, seed = setup.Seed, player, env = searches ? env.ToString() : null,
-                outcome, hp_start = hpStart, hp, rounds, actions = steps, ms, failure, game_errors = errors.Take(3),
+                outcome, hp_start = hpStart, hp, rounds, actions = steps, enemy_hp = enemyHp, enemy_max_hp = enemyMaxHp, ms, failure,
+                game_errors = errors.Take(3),
                 searches = searched.Plans, proved = searched.Proved, nodes = searched.Nodes, replans = searched.Replans,
                 search_ms = searched.Ms,
             }));
@@ -125,14 +126,21 @@ internal static class Panel
         return failed == 0 ? 0 : 1;
     }
 
-    private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions) PlayWithPolicy(Pump pump, CombatSetup setup, IChoicePolicy choices, ICombatPolicy policy)
+    private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions, int EnemyHp, int EnemyMaxHp) PlayWithPolicy(Pump pump, CombatSetup setup,
+        IChoicePolicy choices, ICombatPolicy policy)
     {
         using var session = CombatSession.Start(pump, setup, choices);
         int hpStart = session.Player.Creature.CurrentHp;
         while (!Cli.IsCapped(session))
             session.Execute(policy.Choose(Cli.Decision(session)));
-        return (Outcome(session), hpStart, session.Player.Creature.CurrentHp, session.State.RoundNumber, session.ActionsExecuted);
+        return Ended(session, hpStart);
     }
+
+    /// <summary>How a combat ended: its outcome, the player's HP at the start and the end, its rounds and actions, and the
+    /// HP the enemies still had, against their max HP (how far a lost fight got).</summary>
+    private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions, int EnemyHp, int EnemyMaxHp) Ended(CombatSession session, int hpStart) =>
+        (Outcome(session), hpStart, session.Player.Creature.CurrentHp, session.State.RoundNumber, session.ActionsExecuted,
+            session.State.Enemies.Where(e => e.IsAlive).Sum(e => e.CurrentHp), session.State.Enemies.Sum(e => e.MaxHp));
 
     /// <summary>What a searching player's searches of one combat did: how many there were, how many of the planner's
     /// were proved the best, their nodes, the replans among them, and their time.</summary>
@@ -147,7 +155,7 @@ internal static class Panel
     /// <param name="pimc">The PIMC brain that plays, with its leaf; null for the planner.</param>
     /// <param name="planner">The SL planner, with the same leaf, when <paramref name="pimc"/> is null. It plans once and
     /// then follows its plan (<see cref="SlRoute"/>).</param>
-    private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions) PlayWithBrain(Pump pump, CombatSetup setup, IChoicePolicy choices,
+    private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions, int EnemyHp, int EnemyMaxHp) PlayWithBrain(Pump pump, CombatSetup setup, IChoicePolicy choices,
         PooledPimc? pooled, PimcBrain? pimc, SlPlanner planner, PlayEnvironment env, Budget budget, Searched searched, bool trace)
     {
         var moves = new MoveRecord();
@@ -203,7 +211,7 @@ internal static class Panel
                                       string.Join(" ", result.Candidates.Take(4).Select(c => $"{c.Action}={c.Value:F3}±{c.Ci:F3}")));
                 session.Execute(result.First);
             }
-            return (Outcome(session), hpStart, session.Player.Creature.CurrentHp, session.State.RoundNumber, session.ActionsExecuted);
+            return Ended(session, hpStart);
         }
         finally
         {
