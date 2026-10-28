@@ -934,8 +934,9 @@ def main(
         model.eval()
         held, _, held_aux = evaluate(model)
         held_fork, held_pair, held_kl = evaluate_side(model)
-        # Early stopping weighs the held-out losses as training does.
-        total = held + fork_weight * held_fork + pair_weight * held_pair + kl_weight * held_kl
+        # Early stopping weighs the held-out losses as training does, but for the pairs': their targets are V's own
+        # values at the horizon, which move as V learns, so their loss does not compare across epochs.
+        total = held + fork_weight * held_fork + kl_weight * held_kl
         logger.info(
             "epoch {}: held-out loss {:.4f}, next combats {:.4f}, forks {:.4f}, pairs {:.4f}, pull {:.4f}",
             epoch,
