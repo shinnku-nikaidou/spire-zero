@@ -250,11 +250,11 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - 世界里弹出的选牌提示在世界内部回答。v0 交给 `p0`，也就是这一局自己回答提示所用的固定规则，所以世界里的选择和这一局一样；把每个选项变成搜索分支还在规划中（[战斗大脑 §2](/arch/combat-brain/#sec-2) 第 7 条）。
 - `Candidate` 是一个打过分的动作：它在各个世界上的平均估值、95% 置信区间的半宽，以及世界的个数。
 
-规划中：SL 封存：上一个动作离开节点之后（`AtHorizon`），`Execute` 会抛异常（[模拟器 §7](/arch/simulator/#sec-7)）。
+SL 封存：节点克隆在节点出口处停下（`AtHorizon`），之后的任何一步都会抛异常；SL 世界在它那场战斗结束后，任何动作都会抛异常，所以搜索永远不会离开这个房间（[模拟器 §7](/arch/simulator/#sec-7)）。
 
 ### 7.1 worker 消息
 
-worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）不会一步一步地通过线路操作世界：一次进程间往返（几十 µs）和一个模拟步（约 0.1 ms）的开销相当，而搜索每个决策要走几千步。所以一个请求要的是一整块工作，这里是一个世界的搜索（`Worker.cs`）：
+worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）不会一步一步地通过线路操作世界：一次进程间往返（几十 µs）和一个模拟步（约 0.1 ms）的开销相当，而搜索每个决策要走几千步。所以一个请求要的是一整块工作：一个世界的搜索，或者 SL 规划器的一个回合（`Worker.cs`）：
 
 ```csharp
 // The worker's first line, once it has booted.
@@ -274,8 +274,23 @@ public sealed record PimcWorldRequest(long Id, CombatObservation Observation, IR
 public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First,
     int NodesPerFirst, IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
-// Lines[i] is the best line after First[i]. Error is set instead when the request failed.
-public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
+// "sl_turn": load Node, play Path from the decision, and search the rest of that turn with Nodes nodes
+// (the SL planner, Combat brain §3): keep the best Keep states at the next turn's start and the best end of
+// the combat, none whose bound cannot beat Floor. History is the record of enemy moves up to that state.
+public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep,
+    double? Floor, IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
+
+// Lines[i] is the best line after First[i]; Turn answers an sl_turn. Error is set instead when the request failed.
+public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors,
+    TurnSearch? Turn = null);
+
+// Cut: the nodes ran out, or more states were found than kept.
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
+
+// Where a turn ends (or the combat): its actions and the observation hash before each, the leaf's value, the
+// bound (a win at its HP and potions), the key of its observation and full hidden state, its record of moves.
+public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
+    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
 
 // Nodes: the actions simulated below the line's first action. Hashes: the hash of the observation each action
 // is played at, which a followed plan checks before each step.
@@ -284,7 +299,7 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
 ```
 
 - 请求带着 worker 需要的一切，所以任何 worker 都能处理它，崩溃的 worker 的请求可以重发。
-- NoSL 请求里是观测，绝不是真实状态：worker 看到的不会比玩家多。SL 请求里是节点克隆，这是 SL 允许知道的。
+- NoSL 请求里是观测，绝不是真实状态：worker 看到的不会比玩家多。SL 请求里是节点克隆，这是 SL 允许知道的。`TurnEnd` 的键是隐藏状态的哈希，它只留在 SL 的搜索里；叶子仍然只读观测。
 - `GameErrors` 是处理请求期间游戏的 `Log.Error` 输出，供宿主计数。
 
 ## 8. 不变量与测试

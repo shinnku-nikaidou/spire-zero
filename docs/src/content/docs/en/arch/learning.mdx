@@ -23,7 +23,7 @@ V v0 exists: `RunValue` in Brain, 17 hand-written features of the run view times
 
 - One scale for combat leaves, macro afterstates and the map ([Combat brain §4](/en/arch/combat-brain/#sec-4), [Macro brain §2](/en/arch/macro-brain/#sec-2)). Because every value is a win probability, HP lost in a fight and a card taken at a reward can be compared directly.
 - The input is the observation only. Hidden state may be used at training time as an auxiliary input ([§4](#sec-4)), never as an input of the deployed model.
-- There is one V for both environments. An SL policy plays every later node better, so from the same observation its true win probability is higher; the shared V ignores this and is somewhat conservative in SL ([Environments §5](/en/arch/environments/#sec-5)). Which runs train it is still open ([Environments §10](/en/arch/environments/#sec-10)).
+- There is one V for both environments. An SL policy plays every later node better, so from the same observation its true win probability is higher; the shared V ignores this on purpose ([Environments §5](/en/arch/environments/#sec-5)). It is trained on runs whose combats the SL combat brain plays, in self-play and in fork rollouts (decided 2026-10-28); the macro brain sees the same information in both environments.
 
 Planned versions:
 

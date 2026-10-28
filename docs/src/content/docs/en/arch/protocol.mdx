@@ -250,11 +250,11 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - Card prompts raised inside a world are answered there. In v0 they go to `p0`, the fixed rule the run itself answers by, so a world picks as the run will; making each option a search branch is planned ([Combat brain §2](/en/arch/combat-brain/#sec-2), rule 7).
 - `Candidate` is one scored action: its mean value over the worlds, the 95% confidence half-width, and the number of worlds.
 
-Planned: the SL seal, under which `Execute` throws once the last action left the node (`AtHorizon`, [Simulator §7](/en/arch/simulator/#sec-7)).
+The SL seal: the node's clone stops at the node's exit (`AtHorizon`) and throws on any later step, and the SL world throws on any action after its combat's end, so search never leaves the room ([Simulator §7](/en/arch/simulator/#sec-7)).
 
 ### 7.1 Worker messages
 
-The worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) does not move worlds over the wire one step at a time: an IPC round trip (tens of µs) costs about as much as a sim step (about 0.1 ms), and search takes thousands of steps per decision. A request asks for a whole unit of work instead, here the search of one world (`Worker.cs`):
+The worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) does not move worlds over the wire one step at a time: an IPC round trip (tens of µs) costs about as much as a sim step (about 0.1 ms), and search takes thousands of steps per decision. A request asks for a whole unit of work instead: the search of one world, or one turn of the SL planner (`Worker.cs`):
 
 ```csharp
 // The worker's first line, once it has booted.
@@ -274,8 +274,23 @@ public sealed record PimcWorldRequest(long Id, CombatObservation Observation, IR
 public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First,
     int NodesPerFirst, IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
-// Lines[i] is the best line after First[i]. Error is set instead when the request failed.
-public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
+// "sl_turn": load Node, play Path from the decision, and search the rest of that turn with Nodes nodes
+// (the SL planner, Combat brain §3): keep the best Keep states at the next turn's start and the best end of
+// the combat, none whose bound cannot beat Floor. History is the record of enemy moves up to that state.
+public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep,
+    double? Floor, IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
+
+// Lines[i] is the best line after First[i]; Turn answers an sl_turn. Error is set instead when the request failed.
+public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors,
+    TurnSearch? Turn = null);
+
+// Cut: the nodes ran out, or more states were found than kept.
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
+
+// Where a turn ends (or the combat): its actions and the observation hash before each, the leaf's value, the
+// bound (a win at its HP and potions), the key of its observation and full hidden state, its record of moves.
+public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
+    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
 
 // Nodes: the actions simulated below the line's first action. Hashes: the hash of the observation each action
 // is played at, which a followed plan checks before each step.
@@ -284,7 +299,7 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
 ```
 
 - A request carries everything the worker needs, so any worker can serve it and a crashed worker's request can be sent again.
-- A NoSL request holds the observation, never the true state: a worker cannot see more than the player. An SL request holds the node's clone, which SL may know.
+- A NoSL request holds the observation, never the true state: a worker cannot see more than the player. An SL request holds the node's clone, which SL may know. A `TurnEnd`'s key hashes the hidden state, which stays in SL's search; the leaves still read observations only.
 - `GameErrors` holds the game's `Log.Error` lines while the request was served, so the host can count them.
 
 ## 8. Invariants and tests

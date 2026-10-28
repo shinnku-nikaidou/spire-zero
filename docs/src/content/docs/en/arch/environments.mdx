@@ -120,8 +120,8 @@ flowchart LR
 | where worlds come from | public record → Build / Determinize ([Simulator §6](/en/arch/simulator/#sec-6)) | node clone ([Simulator §7](/en/arch/simulator/#sec-7)) |
 | number of worlds | K, averaged (no strategy fusion) | 1; taking the best line is correct, there is nothing to fuse |
 | chance nodes | at every reveal | none |
-| combat algorithm | PIMC: search to the end of the turn, average by first action, plan again after every action ([Combat brain §2](/en/arch/combat-brain/#sec-2)) | branch-and-bound over the whole combat, with an anytime beam; plan once ([Combat brain §3](/en/arch/combat-brain/#sec-3)) |
-| transpositions keyed by | observation and the world's sampled hidden state | full state, random streams included |
+| combat algorithm | PIMC: search to the end of the turn, average by first action, plan again after every action ([Combat brain §2](/en/arch/combat-brain/#sec-2)) | a beam over the whole combat's turns, each turn searched in full, pruned by the best line that ends the combat; plan once ([Combat brain §3](/en/arch/combat-brain/#sec-3)) |
+| transpositions keyed by | observation and the world's sampled hidden state | observation and the full hidden state: random streams, monster move logs, this turn's combat history |
 | budget is spent on | samples × depth | depth and breadth (a combat can usually be searched to its end) |
 | past the horizon | already samples | the world stops (`AtHorizon`); continue only by re-determinizing from the exit observation |
 | macro brain | afterstate + V, mean over K samples | the same brain, on the one exact outcome |
@@ -129,7 +129,7 @@ flowchart LR
 
 "No strategy fusion" means NoSL scores each action by its average over the K worlds. It does not pick the best line separately in each world, which would let the plan behave as if it already knew which world is the real one.
 
-**One V for both.** In principle SL changes values outside combat too: from the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk (more elites, high-variance events and cards). This is ignored: one V serves both environments, and in SL it is somewhat conservative. Which runs train it is open question 4 ([§10](#sec-10)).
+**One V for both.** In principle SL changes values outside combat too: from the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk (more elites, high-variance events and cards). This is ignored on purpose: one V serves both environments. It is trained on runs whose combats the SL combat brain plays, in self-play and in fork rollouts (decided 2026-10-28). The macro brain sees the same information in both environments, so this is not SL teaching NoSL combat: the NoSL combat brain is trained on its own, and the macro values' difference between the environments stays ignored.
 
 Leaf evaluators read observations only, in both environments, so the true streams cannot leak in through evaluation. The environment lives in Harness, which picks the combat brain and the world source, and in the world implementation; the macro brain and V never see it. The interface is in [Protocol §7](/en/arch/protocol/#sec-7) (`IWorldSource`, `ICombatWorld`).
 
@@ -160,7 +160,7 @@ Each rule above has a test that keeps it true.
 
 **SL**
 
-8. Seal: any step after the exit action throws (exists for the clone, in `run --check`).
+8. Seal: any step after the exit action throws (exists for the clone, in `run --check` and in `selftest`). The SL world of a combat also refuses to step past the combat's end, so search never leaves the room (exists, in `selftest`).
 9. Horizon counterfactual: perturbing only state that is read after the exit → the same decision.
    - Can be perturbed <Badge text="verified" variant="success" />: the `RoomSet` entries past their counters for every act (events, weak/regular/elite encounters, boss, second boss, ancient; fixed at run start by UpFront in `GenerateRooms`, `Runs/RunManager.cs:743-767`, consumed through counters, `Rooms/RoomSet.cs:70-108`); the UnknownMapPoint stream (used only when entering a `?`, `Odds/UnknownMapPointOdds.cs:140-175`); the TreasureRoomRelics stream and the tail of the shared relic grab bag; the map seeds of future acts (`Rng(seed, "act_N_map")`).
    - Cannot be perturbed, because the current node shares them: Shuffle, MonsterAi, Niche, the six Combat* streams, and the player's Rewards, Shops and Transformations streams.
@@ -192,4 +192,3 @@ Each rule above has a test that keeps it true.
 1. Rewards after a combat win: node rule (current) or the game's save rule? Once full runs work, measure how often rewards depend on how the combat used the random streams. The Rewards stream is shared with shops and events <Badge text="verified" variant="success" />, so inside a combat node this is probably rare.
 2. SL budget: equal wall-clock time with NoSL, which is fairer than an equal number of branches.
 3. Real reloads to verify clones: allowed only in tagged validation runs, never scored.
-4. Which runs train the shared V: NoSL runs only, or both. NoSL values are roughly a lower bound for SL, so a V trained on NoSL alone is merely conservative in SL.
