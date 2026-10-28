@@ -15,9 +15,11 @@ decision with the same seed, played to the end of the act. Each branch's afterst
 censored where the branch stopped, at --fork-weight; and the difference of the two afterstates' expected floors is
 fitted to the pair's played-out difference, at --pair-weight: a branch that died reached its floor, one that lived
 through the act what V expects of the run at its horizon (bootstrapped). --afterstates reads every option of the
-logged decisions (`afterstates`); at --kl-weight, V's softmax over each decision's options (at --kl-temperature,
-floors) is pulled towards the policy that played the logs: the softmax of V v0's values at the log's own exploration
-temperature. Fork pairs and decisions are split by run id as the decisions are.
+logged decisions (`afterstates`, valued by the V that played the logs); at --kl-weight, V's softmax over each
+decision's options is pulled towards the policy that played the logs: the softmax of the logging V's values at the
+log's own exploration temperature. V's softmax is at the temperature that matches it: the log's own for a V v2 net,
+which values in floors as V does, and --kl-temperature for V v0. Fork pairs and decisions are split by run id as the
+decisions are.
 
     uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1
 """
@@ -111,6 +113,28 @@ def temperature(brain: str) -> float | None:
     """The macro exploration temperature a log's brain name carries ("l0 explore 0.25"), or None when it did not explore."""
     parts = brain.split()
     return float(parts[parts.index("explore") + 1]) if "explore" in parts else None
+
+
+def pull_temperature(brain: str, v0_temperature: float) -> float:
+    """V's softmax temperature, in floors, at which it would play as the brain that logged a decision. A V v2 net
+    ("l0 n2 explore 0.006") values in expected floors as V does, so it is the log's own temperature; V v0
+    ("l0 explore 0.25") values in its own units, which --kl-temperature converts."""
+    parts = brain.split()
+    return v0_temperature if parts[1] == "explore" else float(parts[parts.index("explore") + 1])
+
+
+def segment_softmax_share(values, below, group, groups) -> torch.Tensor:
+    """Per group, the softmax's mass on the options marked below (values already divided by the temperature)."""
+    p = segment_log_softmax(values, group, groups).exp()
+    return torch.zeros(groups, dtype=p.dtype, device=p.device).index_add(0, group, p * below)
+
+
+def explored(values, temperature, group, groups) -> torch.Tensor:
+    """Per group, the chance a softmax at the temperature (one per option) draws an option more than temperature / 100
+    below the group's best: what self-play counts as explored (Softmax.Explored)."""
+    best = torch.full((groups,), -math.inf, dtype=values.dtype, device=values.device)
+    best = best.scatter_reduce(0, group, values, reduce="amax")
+    return segment_softmax_share(values / temperature, best[group] - values > temperature / 100, group, groups)
 
 
 def cap(x: float) -> float:
@@ -542,11 +566,15 @@ def read_forks(paths: str, floors: int) -> list[dict]:
     return pairs
 
 
-def read_afterstates(paths: str, views: dict, floors: int) -> list[dict]:
+def read_afterstates(paths: str, views: dict, floors: int, v0_temperature: float) -> list[dict]:
     """The logged decisions with two options or more, each with its options' afterstates, the chance the logs'
-    policy gave each (the softmax of V v0's values at the exploration temperature the log's brain names), the option
-    it drew and the floor its run reached."""
-    groups = []
+    policy gave each (the softmax of the values of the V the log's brain names, at its exploration temperature), V's
+    temperature that matches it (`pull_temperature`), the option it drew and the floor its run reached.
+
+    The afterstates must be valued by the V that played the logs. Where a log says a pick did not explore, it was
+    within the temperature / 100 of the best, so the share of such picks that are not the afterstates' best tells:
+    near 0 when they are, and a warning above 1% (g0's logs, whose observations have gained fields since, are at 12%)."""
+    groups, checked, off = [], {}, {}
     for e in read_lines(paths):
         key = (e["run"], e["decision_id"])
         if len(e["options"]) < 2 or key not in views:
@@ -557,6 +585,9 @@ def read_afterstates(paths: str, views: dict, floors: int) -> list[dict]:
         if t is None or e["chosen"] not in actions:
             continue
         values = torch.tensor([o["value"] for o in e["options"]], dtype=torch.float64)
+        if not e["explored"]:
+            checked[brain] = checked.get(brain, 0) + 1
+            off[brain] = off.get(brain, 0) + int(float(values.max() - values[actions.index(e["chosen"])]) > t / 100)
         groups.append(
             {
                 "run": e["run"],
@@ -567,9 +598,19 @@ def read_afterstates(paths: str, views: dict, floors: int) -> list[dict]:
                 "outcome": float(outcome),
                 "options": [(o["after"], o["features"]) for o in e["options"]],
                 "values": values.tolist(),
+                "temperature": t,
                 "behaviour": torch.softmax(values / t, 0).tolist(),
+                "tau": pull_temperature(brain, v0_temperature),
             }
         )
+    for brain, n in sorted(checked.items()):
+        if off[brain] > 0.01 * n:
+            logger.warning(
+                "{} of the {} picks {} logged without exploring are not the afterstates' best: are they valued by its V?",
+                off[brain],
+                n,
+                brain,
+            )
     return groups
 
 
@@ -591,8 +632,8 @@ class PairBatch:
 
 
 class GroupBatch:
-    """Logged decisions as one batch of their options' afterstates, with each option's decision and the chance the
-    logs' policy gave it."""
+    """Logged decisions as one batch of their options' afterstates, with each option's decision, the chance the
+    logs' policy gave it, and per option the logs' temperature and V's that matches it."""
 
     def __init__(self, groups, make, floors, device):
         samples, group, behaviour = [], [], []
@@ -604,6 +645,10 @@ class GroupBatch:
         self.options = make(samples)
         self.group = torch.tensor(group, device=device)
         self.behaviour = torch.tensor(behaviour, dtype=torch.float64, device=device)
+        self.temperature, self.tau = (
+            torch.tensor([g[key] for g in groups for _ in g["options"]], dtype=torch.float64, device=device)
+            for key in ("temperature", "tau")
+        )
         self.v0 = torch.tensor([v for g in groups for v in g["values"]], dtype=torch.float64, device=device)
         self.groups = len(groups)
         self.sizes = [len(g["options"]) for g in groups]
@@ -658,21 +703,27 @@ def fork_report(model, batches) -> dict:
     }
 
 
-def pull_report(model, batches, temperature: float) -> dict:
+def pull_report(model, batches) -> dict:
     """On the held-out decisions, per surface: the KL from the logs' policy to V's softmax, how often V's best option
-    is V v0's (the champion's), and on card rewards how often each would skip. And the slope of V's values on V v0's
-    within a decision (both less their decision's mean): V v0's exploration temperature times it is that temperature
-    in floors.
+    is the logging V's (V v0's, or the champion's), and on card rewards how often each would skip. And the slope of
+    V's values on the logging V's within a decision (both less their decision's mean): V v0's exploration temperature
+    times it is that temperature in floors.
+
+    And the self-play temperature for V (`run --macro-explore`): the one at which V would explore as often as the
+    logs' policies did (the share of decisions drawn more than the temperature / 100 below the best), so that the
+    next generation explores as this one did.
 
     And an off-policy check of V's ranking (inverse propensity scoring): on the decisions where the logs' policy gave
     V v0's best option a chance between 2% and 98%, the floor the runs reached after drawing another option against
     after drawing the best, each weighed by the inverse of its chance, next to what V expects of the same: the other
     options at their chances, less the best. The draws do not depend on the run's luck, so the played difference is
     unbiased, if noisy."""
-    stats, xy, xx, ips = {}, 0.0, 0.0, []
+    stats, xy, xx, ips, valued, logs_explored = {}, 0.0, 0.0, [], [], 0.0
     with torch.no_grad():
         for gb in batches:
             values = expected_floor(torch.sigmoid(model(*gb.options.inputs())), gb.options.start)
+            valued.append((values, gb))
+            logs_explored += float(explored(gb.v0, gb.temperature, gb.group, gb.groups).sum())
             count = torch.tensor(gb.sizes, dtype=torch.float64, device=values.device)
             centred = [
                 x
@@ -682,7 +733,7 @@ def pull_report(model, batches, temperature: float) -> dict:
                 for x in (values, gb.v0)
             ]
             xy, xx = xy + float((centred[0] * centred[1]).sum()), xx + float((centred[1] ** 2).sum())
-            logp = segment_log_softmax(values / temperature, gb.group, gb.groups)
+            logp = segment_log_softmax(values / gb.tau, gb.group, gb.groups)
             p = gb.behaviour
             kl = torch.zeros(gb.groups, dtype=torch.float64, device=p.device).index_add(
                 0, gb.group, p * (p.clamp_min(1e-12).log() - logp)
@@ -705,6 +756,17 @@ def pull_report(model, batches, temperature: float) -> dict:
     n = sum(row["decisions"] for row in stats.values())
     report = {"pull_kl": sum(row["kl"] for row in stats.values()) / max(1, n), "pull_slope": xy / max(xx, 1e-12)}
     report["pull_agree"] = sum(row["agree"] for row in stats.values()) / max(1, n)
+
+    def share(t: float) -> float:
+        return sum(float(explored(v, torch.full_like(v, t), gb.group, gb.groups).sum()) for v, gb in valued) / max(1, n)
+
+    # The share grows with the temperature: bisect on its log.
+    target, lo, hi = logs_explored / max(1, n), math.log(1e-6), math.log(10.0)
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if share(math.exp(mid)) < target else (lo, mid)
+    report["explore_share_logs"] = target
+    report["explore_temperature"] = math.exp((lo + hi) / 2)
     if len(ips) > 1:
         played = torch.tensor([p for _, p, _ in ips], dtype=torch.float64)
         report["ips"] = {
@@ -769,7 +831,12 @@ def main(
     ] = None,
     kl_weight: Annotated[float, typer.Option(min=0, help="the weight of the pull towards the logs' policy")] = 0.0,
     kl_temperature: Annotated[
-        float, typer.Option(min=0.001, help="V's softmax temperature over a decision's options, in floors")
+        float,
+        typer.Option(
+            min=0.001,
+            help="V's softmax temperature, in floors, over the options of decisions V v0 logged (its exploration "
+            "temperature in floors); a V v2 net's logs use their own",
+        ),
     ] = 1.0,
     side_batch: Annotated[int, typer.Option(min=1, help="fork pairs, or logged decisions, per step")] = 64,
     seed: int = 0,
@@ -814,7 +881,7 @@ def main(
         raise LearnError(f"{len(train)} train and {len(test)} held-out samples: too few runs")
 
     pairs = read_forks(forks, floors) if forks else []
-    groups = read_afterstates(afterstates, views, floors) if afterstates else []
+    groups = read_afterstates(afterstates, views, floors, kl_temperature) if afterstates else []
     if (forks and not pairs) or (afterstates and not groups):
         raise LearnError(
             f"{len(pairs)} fork pairs and {len(groups)} logged decisions with options: nothing to learn from"
@@ -896,7 +963,7 @@ def main(
             pair = ((values[:n] - values[n:] - pair_target(model, pb)) ** 2).mean() / pair_scale
         if gb is not None:
             values = expected_floor(torch.sigmoid(model(*gb.options.inputs())), gb.options.start)
-            logp = segment_log_softmax(values / kl_temperature, gb.group, gb.groups)
+            logp = segment_log_softmax(values / gb.tau, gb.group, gb.groups)
             kl = -(gb.behaviour * logp).sum() / gb.groups
         return fork, pair, kl
 
@@ -983,7 +1050,7 @@ def main(
         report |= {"pair_weight": pair_weight, **fork_report(model, test_pair_batches)}
     if groups:
         report |= {"decisions_pulled": len(groups), "kl_weight": kl_weight, "kl_temperature": kl_temperature}
-        report |= pull_report(model, test_group_batches, kl_temperature)
+        report |= pull_report(model, test_group_batches)
     print(json.dumps(report))
 
     # Test runs for RunNet's check on load: a few held-out decisions, valued on the CPU as RunNet values them.
