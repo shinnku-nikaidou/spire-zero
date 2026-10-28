@@ -149,9 +149,8 @@ internal static class Layout
     /// <summary>eval/CHARACTER: champions/ENV.json, reports/ and leaderboard.md.</summary>
     public static string Eval(string character) => Path.Combine("eval", Folder(character));
 
-    /// <summary>weights/CHARACTER/ENV/ROLE.json, a champion's main name for one of its weights files.</summary>
-    public static string MainWeights(string character, PlayEnvironment env, string role) =>
-        Path.Combine("weights", Folder(character), env.ToString().ToLowerInvariant(), role + ".json");
+    /// <summary>weights/CHARACTER: every weights file of the character, NAME.json, each name used once.</summary>
+    public static string Weights(string character) => Path.Combine("weights", Folder(character));
 
     public static string Seeds(string seedSet) => Path.Combine("eval", "seeds", seedSet + ".txt");
 }

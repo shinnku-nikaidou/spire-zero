@@ -10,8 +10,8 @@ the chance of each ending, a death or the share of max HP still to be lost from 
 potions still to be used after a win. Both are relative to the state, so the HP and potions it has now count in full
 (a net that predicts what is left learns only part of that, and the search then trades HP away too cheaply). A
 fifth of the runs (by run id; --fold picks which) is held out, for early stopping and the report. The output is a net
-file for `--combat-net`, in the weights history by default (docs: learning §6): the net as ONNX, with what the combat
-side needs to feed it, and test states it checks on load.
+file for `--combat-net`, in the character's weights folder by default (docs: learning §6): the net as ONNX, with what
+the combat side needs to feed it, and test states it checks on load.
 
     uv run python train_combat.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name c1
 """
@@ -857,7 +857,7 @@ def main(
     records: Annotated[str, typer.Option(help="run records, comma-separated")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
     out: Annotated[
-        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/history/NAME.json)")
+        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")
     ] = None,
     character: Annotated[
         str, typer.Option(help="the character whose runs these are: each has a brain of its own")

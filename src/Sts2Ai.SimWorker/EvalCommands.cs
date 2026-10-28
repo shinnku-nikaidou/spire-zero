@@ -54,8 +54,8 @@ internal static class ReportCommand
 /// gate: the full-run gate (docs: evaluation §5), the challenger's records against the champion's report, paired by
 /// seed, with an SPRT. The challenger is named by its run options, which must be the ones its records were played
 /// with, and its runs must be of the champion's character and ascension. On a pass, --promote PATH writes the
-/// challenger's report to PATH and makes it the champion, its weights files on the character's main names in the
-/// environment (<see cref="ChampionOptions.Promoted"/>); its report faces the next challengers, so it must cover the
+/// challenger's report to PATH and makes it the champion, naming its weights files where they are, in the character's
+/// weights folder (<see cref="ChampionOptions.Promoted"/>); its report faces the next challengers, so it must cover the
 /// whole seed set. The SPRT may pass early: play the rest, then promote.
 /// </summary>
 internal static class GateCommand
@@ -112,10 +112,10 @@ internal static class GateCommand
         var report = ReportCommand.Of(runs, champion.SeedSet, EvalReport.ReadSeeds(seedFile));
         if (report.Runs.Count != report.SetSize)
             throw new CliException($"not promoted: {report.Runs.Count} of {champion.SeedSet}'s {report.SetSize} seeds were run; the champion's report needs them all");
+        var options = challenger.Promoted(Enum.Parse<PlayEnvironment>(file.Env), report.Runs[0].Character, report.Runs[0].Ascension);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
         File.WriteAllText(outPath + ".json", report.Json());
         File.WriteAllText(outPath + ".md", report.Markdown(champion));
-        var options = challenger.Promoted(Enum.Parse<PlayEnvironment>(file.Env), report.Runs[0].Character, report.Runs[0].Ascension);
         var promoted = new ChampionFile(file.Env, challenger.Name, options, outPath + ".json", report.Date, result);
         File.WriteAllText(championPath, ProtocolJson.Serialize(promoted) + "\n");
         Console.WriteLine($"promoted: {championPath} now names {challenger.Name}");

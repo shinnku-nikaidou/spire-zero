@@ -7,7 +7,7 @@ it died on, or every floor if it won; a truncated run says nothing from its last
 however many decisions it has, and every fifth run (by run id) is held out, for early stopping and the report, next to
 a baseline that knows only the floor. A second head learns from the run's next combats too (the share of max HP each
 one cost, which the run records hold), at --aux-weight in the loss; it shapes the body only, and the net file holds
-the hazards alone. The output is a net file for `run --value`, in the weights history by default
+the hazards alone. The output is a net file for `run --value`, in the character's weights folder by default
 (docs: learning §6): the net as ONNX, with what RunNet needs to feed it, and test runs that RunNet checks on load.
 
 Two more sources, both optional (docs: learning §2). --forks reads counterfactual pairs (`fork`): two branches from one
@@ -802,7 +802,7 @@ def main(
     records: Annotated[str, typer.Option(help="run records, comma-separated")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
     out: Annotated[
-        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/history/NAME.json)")
+        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")
     ] = None,
     character: Annotated[
         str, typer.Option(help="the character whose runs these are: each has a brain of its own")

@@ -10,8 +10,8 @@ better side. Two objectives:
   scores the share of its starting HP left, any other end -1.
 
 The options after `--` go to every sim command: the combat policy and its budget, the panel's rooms. The output is a
-weights file for `--value` or `--leaf`, in the weights history by default (docs: learning §6); whether it is better is
-the gate's to decide (docs: evaluation §5).
+weights file for `--value` or `--leaf`, in the character's weights folder by default (docs: learning §6); whether it is
+better is the gate's to decide (docs: evaluation §5).
 
     uv run python spsa.py --sim ../sim.sh --steps 100 --seeds 32 --processes 8 --name s1 --log s1.jsonl -- --policy play
     uv run python spsa.py --sim ../sim.sh --param leaf --objective panel --steps 100 --seeds 48 --name leaf1 \\
@@ -123,7 +123,7 @@ def main(
     c: Annotated[float, typer.Option(help="perturbation, in units of a weight's scale")] = 0.2,
     max_move: Annotated[float, typer.Option(help="largest change of a weight per step, in its scale")] = 0.1,
     out: Annotated[
-        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/history/NAME.json)")
+        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")
     ] = None,
     character: Annotated[str, typer.Option(help="the character that plays: each has a brain of its own")] = "SILENT",
     log: Annotated[str | None, typer.Option(help="one line per step")] = None,

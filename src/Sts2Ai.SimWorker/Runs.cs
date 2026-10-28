@@ -420,27 +420,19 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     }
 
     /// <summary>
-    /// The options of this challenger as the character's champion: its character and ascension, and each weights file
-    /// it plays with (V, the leaf weights, the combat net) copied onto the character's main name in the environment,
-    /// weights/CHARACTER/ENV/{value,leaf,combat}.json, which the champion file then names. The trainers' own files stay
-    /// in weights/CHARACTER/history (docs: learning §6).
+    /// The options of this challenger as the character's champion, with its character and ascension. Each weights file
+    /// it plays with (V, the leaf weights, the combat net) must be in the character's weights folder, weights/CHARACTER,
+    /// where a name is used once, so the champion file names it where it is (docs: learning §6).
     /// </summary>
     public Dictionary<string, string> Promoted(PlayEnvironment env, string character, int ascension)
     {
         var options = Options(env);
         options["character"] = character;
         options["asc"] = ascension.ToString(CultureInfo.InvariantCulture);
-        foreach (var (key, role) in new[] { ("value", "value"), ("leaf", "leaf"), ("combat-net", "combat") })
-        {
-            if (!options.TryGetValue(key, out var path)) continue;
-            var main = Layout.MainWeights(character, env, role);
-            if (Path.GetFullPath(path) != Path.GetFullPath(main))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(main)!);
-                File.Copy(path, main, overwrite: true);
-            }
-            options[key] = main;
-        }
+        var folder = Layout.Weights(character);
+        foreach (var key in new[] { "value", "leaf", "combat-net" })
+            if (options.TryGetValue(key, out var path) && Path.GetDirectoryName(Path.GetFullPath(path)) != Path.GetFullPath(folder))
+                throw new CliException($"not promoted: {path} is not in {folder}, where a champion's weights files are (docs: learning §6)");
         return options;
     }
 

@@ -205,7 +205,7 @@ Each cell is the win rate, with the mean HP lost per win in brackets. HP lost is
 **The SL planner (2026-10-28).** The same pools, with prompts by `p0` and the combat net c2 as the leaf for every player ([§4](#sec-4)), so these rows do not compare with the table above. PIMC searches 8 worlds × 300 nodes, the planner beam 8 × 300 ([§3](#sec-3)); commit `4ea2949`:
 
 ```bash
-Sts2Ai.SimWorker panel --n 60 --player plan --env SL --combat-net weights/silent/nosl/combat.json --act 0 --rooms weak,regular
+Sts2Ai.SimWorker panel --n 60 --player plan --env SL --combat-net weights/silent/c2.json --act 0 --rooms weak,regular
 ```
 
 | pool | combats | PIMC NoSL | PIMC SL | SL planner |

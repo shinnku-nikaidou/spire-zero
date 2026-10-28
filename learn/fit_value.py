@@ -3,8 +3,8 @@
 The decision logs (`run --log`) carry V's features on every macro decision; the run records (`run --records`) carry
 each run's outcome, joined by run id, each log with the record file written beside it (given in the same order). While
 no run wins, every P(win) target is 0, so the target is the floor the run reached. The fit is ridge regression on standardized features, each run weighing the same however many decisions it
-has, with every fifth run (by run id) held out. The output is a weights file for `run --value`, in the weights history
-by default (docs: learning §6).
+has, with every fifth run (by run id) held out. The output is a weights file for `run --value`, in the character's
+weights folder by default (docs: learning §6).
 
     uv run python fit_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name v1
 """
@@ -55,7 +55,7 @@ def main(
     records: Annotated[str, typer.Option(help="run records, comma-separated")],
     name: Annotated[str, typer.Option(help="the weights' name, as the champion will show it")],
     out: Annotated[
-        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/history/NAME.json)")
+        str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")
     ] = None,
     character: Annotated[
         str, typer.Option(help="the character whose runs these are: each has a brain of its own")

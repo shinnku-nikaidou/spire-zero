@@ -3,18 +3,19 @@
 The challenger plays the champion's seed set in chunks, and the sim's gate pairs what it has played with the champion's
 report after each chunk. A fail or a void verdict stops it there. After a pass it plays the rest of the set, which the
 champion's report must cover, and is promoted: the gate writes its report and the champion file, and the leaderboard
-is rebuilt. The challenger plays the champion's character at its ascension (docs: learning §6). Paths are taken from
-the repository root, where the sim runs.
+is rebuilt. The challenger plays the champion's character at its ascension (docs: learning §6). Its run records and
+the sim's logs are kept in --records-dir, data/CHARACTER/ENV/eval/DATE-gate-NAME (docs: learning §6). Paths are taken
+from the repository root, where the sim runs.
 
     uv run python challenge.py --sim ../sim.sh --champion eval/silent/champions/nosl.json \\
+        --records-dir data/silent/nosl/eval/DATE-gate-s1 \\
         --promote eval/silent/reports/DATE-nosl-r1-promotion-1-NAME \\
-        -- --policy pimc --macro l0 --value weights/silent/history/s1.json
+        -- --policy pimc --macro l0 --value weights/silent/s1.json
 """
 
 import json
 import shlex
 import subprocess
-import tempfile
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -91,6 +92,10 @@ def gate(sim, champion, metric, extra, records, promote=None, not_worse=False):
 def main(
     sim: Annotated[str, typer.Option(help="the command that starts the sim, as one string")],
     champion: Annotated[str, typer.Option(help="the champion file, such as eval/silent/champions/nosl.json")],
+    records_dir: Annotated[
+        str,
+        typer.Option(help="folder for the challenger's run records and sim logs: data/CHARACTER/ENV/eval/DATE-gate-NAME"),
+    ],
     chunk: Annotated[int, typer.Option(min=1, help="seeds played between two gates")] = 40,
     processes: Annotated[int, typer.Option(min=1)] = 4,
     metric: Annotated[Metric, typer.Option()] = Metric.floor,
@@ -100,9 +105,6 @@ def main(
     promote: Annotated[
         str | None,
         typer.Option(help="where the challenger's report goes if it passes; without it, nothing is promoted"),
-    ] = None,
-    records_dir: Annotated[
-        str | None, typer.Option(help="folder for the challenger's run records and sim logs (default: a temporary one)")
     ] = None,
     extra: Annotated[
         list[str] | None,
@@ -121,7 +123,7 @@ def main(
     # A report holds one character at one ascension, which the challenger plays too.
     character, ascension = report["runs"][0]["character"], report["runs"][0]["ascension"]
     player = ["--character", character, "--asc", str(ascension)]
-    folder = Path(records_dir or tempfile.mkdtemp(prefix="challenge-")).resolve()
+    folder = (ROOT / records_dir).resolve()
     folder.mkdir(parents=True, exist_ok=True)
     logger.info(
         "challenging {} as {} at ascension {} on {} ({} seeds), records in {}",

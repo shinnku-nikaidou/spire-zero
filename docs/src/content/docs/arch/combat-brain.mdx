@@ -205,7 +205,7 @@ Sts2Ai.SimWorker panel --n 60 --player pimc --env NoSL --act 0 --rooms weak,regu
 **SL 规划器（2026-10-28）**。同样的遭遇池，选牌提示对每个玩家都交给 `p0`，叶子都是战斗网络 c2（[§4](#sec-4)），所以这几行和上面的表不可比。PIMC 搜索 8 个世界 × 300 个节点，规划器的束为 8 × 300（[§3](#sec-3)）；提交 `4ea2949`：
 
 ```bash
-Sts2Ai.SimWorker panel --n 60 --player plan --env SL --combat-net weights/silent/nosl/combat.json --act 0 --rooms weak,regular
+Sts2Ai.SimWorker panel --n 60 --player plan --env SL --combat-net weights/silent/c2.json --act 0 --rooms weak,regular
 ```
 
 | 遭遇池 | 场数 | PIMC NoSL | PIMC SL | SL 规划器 |

@@ -142,7 +142,7 @@ public sealed class PublicRecord
 - 战斗决策还会加上 `history`：这场战斗里每个敌人在至今每一回合开始时显示的意图，包括本回合，按 uid 分组，每项是 `{round, intents}`。这是目前已实现的那部分公开记录（[§3](#sec-3)）：Harness 从它看到的战斗观测里收集，每次宏观决策后重新开始。战斗网络读它和回合数，这样每个怪物的出招顺序能从数据里学到，而不是靠手写的规则（[学习 §1](/arch/learning/#sec-1)）。Brain 里的 `MoveRecord` 保存这份记录，Harness 每个决策都把它交给战斗大脑（战斗路由的最后一个参数），搜索再把它发给 worker，供叶子使用（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
 - 宏观决策还会加上 `features`：大脑看到的整局观测上 V 的特征（[学习 §1](/arch/learning/#sec-1)），不管是哪个大脑做的决策。拟合 V 读的就是它们（[学习 §2](/arch/learning/#sec-2)）。
 - 宏观决策还会加上 `run_view`：整局观测本身，约 6 KB，V v2 就用它训练（[学习 §2](/arch/learning/#sec-2)）。
-- `run --log FILE` 写出日志，每个决策一行（[模拟器 §5](/arch/simulator/#sec-5)）。
+- `run --log FILE` 写出日志，每个决策一行（[模拟器 §5](/arch/simulator/#sec-5)）；它和对局记录一起放在 `data/`（[学习 §6](/arch/learning/#sec-6)）。
 - `degraded` 标记 worker 故障之后给出的回答，它和在其他 worker 上重新打开世界一起规划（[§7](#sec-7)）。崩溃或卡住的 worker 会被重启，请求再发一次，得到的回答相同，所以目前没有降级的回答。
 
 谁读这份日志：
