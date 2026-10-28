@@ -32,6 +32,12 @@ runs that beat it less the boss floor, and a win against a loss is about half a 
 more output of the second head, which shapes the body only. The report says how often V's best option on held-out
 decisions is the sims' best, and how well V's centred values correlate with the sims'.
 
+--boss-states reads simulated boss fights of whole loadouts (`bosslab.py states`, collected): each run's view at an
+act boss's door (its last logged decision before the boss) at a few HP levels. Each level is a sample with no hazard
+label whose second head learns the fights' mean boss score, at --boss-state-weight: how well this deck, relics and
+potions at this HP fare against the boss, which shapes the body only. The report gives the held-out correlation of the
+second head's score with the sims', and of V's chance to live through the boss floor with them.
+
     uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1
 """
 
@@ -656,6 +662,54 @@ def read_boss_sims(paths: str, afterstates: str, views: dict, floors: int, worth
     return groups
 
 
+def read_boss_states(paths: str, views: dict, floors: int) -> list[dict]:
+    """The simulated boss fights of door loadouts (`bosslab.py states`, collected): per door, the logged view and its
+    V v0 features at each HP level fought, as samples with no hazard label, each with its fights' mean boss score for
+    the second head; the levels of a door share its weight."""
+    doors = []
+    for d in read_lines(paths):
+        if (d["run"], d["decision_id"]) not in views or d["act"] not in BOSS_FLOORS:
+            continue
+        view, _, _, features = views[(d["run"], d["decision_id"])]
+        group = []
+        for o in d["options"]:
+            if not o["fights"]:
+                continue
+            at = {"hp": o["hp"], "max_hp": d["max_hp"]}
+            scores = [boss_score(f, d["max_hp"]) for f in o["fights"]]
+            sample = state_sample(d["run"], view | at, features | at, floors)
+            group.append(sample | {"boss_score": [sum(scores) / len(scores)]})
+        for x in group:
+            x["weight"] = 1.0 / len(group)
+        if group:
+            doors.append({"run": d["run"], "act": d["act"], "samples": group})
+    return doors
+
+
+def door_report(model, doors, make, score_at: int) -> dict:
+    """On held-out doors, per act: the correlation of the sims' boss scores with the second head's, and with V's chance
+    to live through the boss floor, over all their HP levels."""
+    report = {}
+    with torch.no_grad():
+        for act, floor in BOSS_FLOORS.items():
+            samples = [s for g in doors if g["act"] == act for s in g["samples"]]
+            if len(samples) < 3:
+                continue
+            b = make(samples)
+            logits, aux = model.both(*b.inputs())
+            target = torch.tensor([s["boss_score"][0] for s in samples], dtype=torch.float64)
+            head = torch.sigmoid(aux[:, score_at]).double().cpu()
+            alive = 1 - torch.sigmoid(logits[:, floor]).double().cpu()
+            corr = {k: pearson(x, target) for k, x in (("corr_head", head), ("corr_v", alive))}
+            report[str(act)] = {"samples": len(samples)} | corr
+    return {"door_corr": report}
+
+
+def pearson(x: torch.Tensor, y: torch.Tensor) -> float:
+    x, y = x - x.mean(), y - y.mean()
+    return float((x * y).sum() / ((x * x).sum() * (y * y).sum()).sqrt().clamp_min(1e-12))
+
+
 def centred(values: torch.Tensor, group: torch.Tensor, groups: int) -> torch.Tensor:
     """Values less their group's mean."""
     total = torch.zeros(groups, dtype=values.dtype, device=values.device).index_add(0, group, values)
@@ -749,7 +803,7 @@ def read_afterstates(paths: str, views: dict, floors: int, v0_temperature: float
         key = (e["run"], e["decision_id"])
         if len(e["options"]) < 2 or key not in views:
             continue
-        view, brain, outcome = views[key]
+        view, brain, outcome, _ = views[key]
         t = temperature(brain)
         actions = [o["action"] for o in e["options"]]
         if t is None or e["chosen"] not in actions:
@@ -1040,12 +1094,19 @@ def main(
         str | None,
         typer.Option(help="the V v0 features the net reads, comma-separated (default: every one the logs carry)"),
     ] = None,
+    boss_states: Annotated[
+        str | None,
+        typer.Option(help="simulated boss fights of door loadouts at HP levels (`bosslab.py states`), comma-separated"),
+    ] = None,
+    boss_state_weight: Annotated[
+        float, typer.Option(min=0, help="the weight of the door loadouts' boss scores, per door, all its HP levels together")
+    ] = 1.0,
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out, character)
     if boss_sims and not boss_afterstates:
         raise LearnError("--boss-sims needs --boss-afterstates")
-    EXTRA_AUX[:] = ([("act_boss", ACT)] if aux_act else []) + ([("boss_score", 1)] if boss_sims else [])
+    EXTRA_AUX[:] = ([("act_boss", ACT)] if aux_act else []) + ([("boss_score", 1)] if boss_sims or boss_states else [])
     n_aux = AUX + sum(w for _, w in EXTRA_AUX)
     torch.manual_seed(seed)
     random.seed(seed)
@@ -1059,7 +1120,7 @@ def main(
             r = runs.get(e["run"])
             if r is None or r.get("failure") or "run_view" not in e:
                 continue
-            views[(e["run"], e["decision_id"])] = (e["run_view"], e["brain"], r["floor"])
+            views[(e["run"], e["decision_id"])] = (e["run_view"], e["brain"], r["floor"], e["features"])
             kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
             start = min(max(e["run_view"]["floor"], 0), floors - 1)
             samples.append(
@@ -1091,6 +1152,11 @@ def main(
     groups = read_afterstates(afterstates, views, floors, kl_temperature) if afterstates else []
     worth = boss_worth(all_runs, floors)
     bosses = read_boss_sims(boss_sims, boss_afterstates, views, floors, worth) if boss_sims else []
+    doors = read_boss_states(boss_states, views, floors) if boss_states else []
+    if boss_states and not doors:
+        raise LearnError("no door of --boss-states has fights and a logged view")
+    train_doors = [g for g in doors if not held_out(g["run"])]
+    test_doors = [g for g in doors if held_out(g["run"])]
     if boss_sims and not bosses:
         raise LearnError("no decision of --boss-sims has two options with fights and a logged view")
     train_bosses = [g for g in bosses if not held_out(g["run"])]
@@ -1174,6 +1240,28 @@ def main(
             total = sum(float(boss_loss(model, boss_chunk([g]))) for g in test_bosses)
         return total / max(1, len(test_bosses))
 
+    def door_chunk(chunk):
+        return boss_batch_of([s for g in chunk for s in g["samples"]]), len(chunk)
+
+    train_door_stream = side(train_doors, door_chunk)
+    # The door scores are fitted in units of their variance, so the weight does not depend on their scale.
+    door_samples = [s for g in train_doors for s in g["samples"]]
+    door_mean = sum(s["boss_score"][0] * s["weight"] for s in door_samples) / max(1, len(train_doors))
+    door_scale = max(
+        1e-4, sum((s["boss_score"][0] - door_mean) ** 2 * s["weight"] for s in door_samples) / max(1, len(train_doors))
+    )
+
+    def door_loss(model, chunk):
+        """A chunk of doors' loss, per door: the second head's boss scores against the sims', in units of their
+        variance (the door samples have no other label)."""
+        b, n = chunk
+        _, aux = model.both(*b.inputs())
+        return (aux_loss_of(aux, b) * b.weight).sum() / door_scale / n
+
+    def evaluate_doors(model):
+        with torch.no_grad():
+            return sum(float(door_loss(model, door_chunk([g]))) for g in test_doors) / max(1, len(test_doors))
+
     # Baseline: per floor, the hazard the training runs show, whatever the state.
     alive, deaths = torch.zeros(floors, dtype=torch.float64), torch.zeros(floors, dtype=torch.float64)
     for b in batches(train, False):
@@ -1250,6 +1338,8 @@ def main(
             loss = loss + fork_weight * fork + pair_weight * pair + kl_weight * kl
             if train_bosses and boss_weight > 0:
                 loss = loss + boss_weight * boss_loss(model, next(train_boss_stream))
+            if train_doors and boss_state_weight > 0:
+                loss = loss + boss_state_weight * door_loss(model, next(train_door_stream))
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -1259,9 +1349,12 @@ def main(
         # Early stopping weighs the held-out losses as training does, but for the pairs': their targets are V's own
         # values at the horizon, which move as V learns, so their loss does not compare across epochs.
         held_boss = evaluate_bosses(model) if test_bosses else 0.0
+        held_door = evaluate_doors(model) if test_doors else 0.0
         total = held + fork_weight * held_fork + kl_weight * held_kl + boss_weight * held_boss
+        total += boss_state_weight * held_door
         logger.info(
-            "epoch {}: held-out loss {:.4f}, next combats {:.4f}, forks {:.4f}, pairs {:.4f}, pull {:.4f}, boss sims {:.4f}",
+            "epoch {}: held-out loss {:.4f}, next combats {:.4f}, forks {:.4f}, pairs {:.4f}, pull {:.4f}, boss sims {:.4f}"
+            ", doors {:.4f}",
             epoch,
             held,
             held_aux,
@@ -1269,6 +1362,7 @@ def main(
             held_pair,
             held_kl,
             held_boss,
+            held_door,
         )
         if total < best - 1e-4:
             best, best_state, stale = total, {k: v.clone() for k, v in model.state_dict().items()}, 0
@@ -1314,6 +1408,11 @@ def main(
         report |= {"boss_sims": len(bosses), "held_out_boss_sims": len(test_bosses), "boss_weight": boss_weight}
         report |= {"boss_worth": worth, "held_out_boss_loss": evaluate_bosses(model)}
         report |= boss_report(model, test_bosses, boss_batch_of)
+    if doors:
+        report |= {"doors": len(doors), "held_out_doors": len(test_doors), "boss_state_weight": boss_state_weight}
+        report |= {"held_out_door_loss": evaluate_doors(model)}
+        score_at = AUX + sum(w for k, w in EXTRA_AUX[: [k for k, _ in EXTRA_AUX].index("boss_score")])
+        report |= door_report(model, test_doors, boss_batch_of, score_at)
     if groups:
         report |= {"decisions_pulled": len(groups), "kl_weight": kl_weight, "kl_temperature": kl_temperature}
         report |= pull_report(model, test_group_batches)

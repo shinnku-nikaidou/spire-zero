@@ -104,3 +104,19 @@ def test_the_net_reads_every_feature_the_logs_carry_or_the_chosen_ones():
         assert "gold" in str(e)
     else:
         raise AssertionError("an unknown feature must fail")
+
+
+def test_a_door_state_is_the_door_view_at_each_hp_level_with_its_mean_boss_score(tmp_path):
+    view = {"floor": 32, "hp": 50, "max_hp": 80, "deck": [{"id": "STRIKE_SILENT"}], "relics": [], "potions": []}
+    view |= {"character": "SILENT", "act_id": "HIVE", "map": {"boss": "B"}}
+    views = {("r1", 9): (view, "l0", 33, {"hp": 50, "floor": 32})}
+    won = {"won": True, "hp": 40, "enemy_hp": 0, "enemy_max_hp": 100}
+    lost = {"won": False, "hp": 0, "enemy_hp": 50, "enemy_max_hp": 100}
+    line = {"run": "r1", "decision_id": 9, "act": 1, "max_hp": 80}
+    line["options"] = [{"hp": 20, "fights": [lost, lost]}, {"hp": 80, "fights": [won, lost]}, {"hp": 60, "fights": []}]
+    path = tmp_path / "states.jsonl"
+    path.write_text(__import__("json").dumps(line) + "\n")
+    [door] = tv.read_boss_states(str(path), views, 64)
+    assert [s["view"]["hp"] for s in door["samples"]] == [20, 80] and door["samples"][1]["features"]["hp"] == 80
+    assert door["samples"][0]["boss_score"] == [0.25] and door["samples"][1]["boss_score"] == [(0.75 + 0.25) / 2]
+    assert [s["weight"] for s in door["samples"]] == [0.5, 0.5] and door["samples"][0]["end"] == 32

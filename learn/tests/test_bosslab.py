@@ -135,3 +135,38 @@ def test_a_won_fight_scores_above_any_lost_one():
     lost = {"won": False, "hp": 0, "hp_start": 50, "enemy_hp": 1, "enemy_max_hp": 300}
     assert bosslab.score(lost) < 0.5 <= bosslab.score(won)
     assert bosslab.score({**won, "hp": 50}) == 1
+
+
+def test_door_states_fight_the_door_loadout_at_the_hp_entered_with_and_at_shares_of_max_hp(tmp_path):
+    run = "00000000000000ff"
+    log, rec = tmp_path / "log.jsonl", tmp_path / "rec.jsonl"
+    log.write_text(
+        "\n".join(
+            json.dumps({"surface": s, "run": run, "decision_id": i, "run_view": view(floor=f)})
+            for s, i, f in [("map", 8, 31), ("map", 9, 32), ("rewards", 12, 33)]
+        )
+        + "\n"
+    )
+    rec.write_text(
+        json.dumps({"run_id": run, "combats": [{"act": 1, "floor": 33, "room": "Boss", "hp": 55, "max_hp": 80}]})
+    )
+    out = tmp_path / "lab"
+    bosslab.states(
+        argparse.Namespace(
+            logs=str(log),
+            records=str(rec),
+            act=1,
+            hp_shares="0.5,1",
+            max_runs=None,
+            seeds=2,
+            budget=bosslab.BUDGET,
+            combat_net="c2.json",
+            results="res",
+            out=str(out),
+        )
+    )
+    lines = [shlex.split(x) for x in (out / "tasks.txt").read_text().splitlines()]
+    assert [t[t.index("--hp") + 1] for t in lines] == ["40", "55", "80"]
+    assert len({t[t.index("--seed") + 1] for t in lines}) == 1
+    door = json.loads((out / "decisions.jsonl").read_text())
+    assert door["decision_id"] == 9 and door["max_hp"] == 80 and [o["entered"] for o in door["options"]] == [0, 1, 0]

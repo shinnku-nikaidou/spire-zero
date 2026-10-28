@@ -6,6 +6,8 @@ few seeds each, the same seeds for every option of a decision, so the options sh
   doors    the same files, but each option fights at the boss's door instead: the run's loadout before its boss
            fight, at the HP it entered with, with the decision's pick swapped for the option (the picked card out,
            the option's in, at the upgrade level the picked one had reached), for runs that reached that boss
+  states   the runs' loadouts at a boss's door alone, at the HP they entered with and at shares of max HP, one decision
+           line per door with an option per HP level, for `train_value.py --boss-states`
   play     plays the task lines whose output is missing, PROCS at a time at nice 19, each decision's options together
            and the decisions in a fixed shuffled order, so the finished decisions come early; a stopped play leaves no
            partial file, and another host can play the rest
@@ -21,6 +23,7 @@ Only the standard library, unlike the rest of learn/: the fleet's hosts play the
 
     python3 bosslab.py tasks --logs a.jsonl,b.jsonl --afterstates s.jsonl --acts 1 --out lab/a1
     python3 bosslab.py doors --logs a.jsonl --records ra.jsonl --afterstates s.jsonl --act 1 --out lab/d1
+    python3 bosslab.py states --logs a.jsonl --records ra.jsonl --act 1 --out lab/s1
     python3 bosslab.py play SIM lab/a1/tasks.txt 8
     python3 bosslab.py collect --decisions lab/a1/decisions.jsonl --results lab/a1/res --out lab/a1/collect.jsonl
 """
@@ -186,33 +189,45 @@ def swapped(door: list[dict], picked: list[dict], option: list[dict]) -> list[di
     return deck
 
 
-def doors(args) -> None:
-    os.makedirs(args.out, exist_ok=True)
-    act = args.act
+def boss_fights(records: str, act: int, max_runs: int | None) -> dict:
+    """Each run's fight with the act's boss (its record's combat), for the runs that reached it; the first by run id
+    with `max_runs`."""
     fights = {}
-    for path in args.records.split(","):
+    for path in records.split(","):
         for line in open(path):
             r = json.loads(line)
             boss = next((c for c in r.get("combats", []) if c["act"] == act and c["room"] == "Boss"), None)
             if boss is not None and not r.get("failure"):
                 fights[r["run_id"]] = boss
-    runs = sorted(fights)[: args.max_runs] if args.max_runs else sorted(fights)
-    wanted = set(runs)
-    acts = {int(x) for x in args.acts.split(",")} if args.acts else {act}
+    runs = sorted(fights)[:max_runs] if max_runs else sorted(fights)
+    return {run: fights[run] for run in runs}
+
+
+def at_doors(logs: str, fights: dict, act: int, reward_acts: set[int]) -> tuple[dict, dict]:
+    """Each run's door: its last logged decision of the act before the boss fight, as (decision id, run view); and
+    the run views of its card rewards in `reward_acts`."""
     door, views = {}, {}
-    for path in args.logs.split(","):
+    for path in logs.split(","):
         for line in open(path):
             if '"run_view"' not in line:
                 continue
             e = json.loads(line)
             run, v = e["run"], e.get("run_view")
-            if run not in wanted or v is None:
+            if run not in fights or v is None:
                 continue
             if v["act"] == act and v["floor"] < fights[run]["floor"]:
                 if run not in door or e["decision_id"] > door[run][0]:
                     door[run] = (e["decision_id"], v)
-            if e["surface"] == "card_reward" and v["act"] in acts:
+            if e["surface"] == "card_reward" and v["act"] in reward_acts:
                 views[(run, e["decision_id"])] = v
+    return door, views
+
+
+def doors(args) -> None:
+    os.makedirs(args.out, exist_ok=True)
+    act = args.act
+    fights = boss_fights(args.records, act, args.max_runs)
+    door, views = at_doors(args.logs, fights, act, {int(x) for x in args.acts.split(",")} if args.acts else {act})
     picked = dropped = 0
     with open(os.path.join(args.out, "tasks.txt"), "w") as f, open(os.path.join(args.out, "decisions.jsonl"), "w") as d:
         for path in args.afterstates.split(","):
@@ -264,6 +279,33 @@ def doors(args) -> None:
 def out_of(task: list[str], root: str | None) -> str:
     path = task[task.index("--out") + 1]
     return os.path.join(root, os.path.basename(path)) if root else path
+
+
+def states(args) -> None:
+    os.makedirs(args.out, exist_ok=True)
+    fights = boss_fights(args.records, args.act, args.max_runs)
+    door, _ = at_doors(args.logs, fights, args.act, set())
+    shares = [float(x) for x in args.hp_shares.split(",")]
+    with open(os.path.join(args.out, "tasks.txt"), "w") as f, open(os.path.join(args.out, "decisions.jsonl"), "w") as d:
+        for run in sorted(door):
+            did, view = door[run]
+            boss = fights[run]
+            levels = sorted({max(1, boss["hp"])} | {max(1, round(x * boss["max_hp"])) for x in shares})
+            seed = int(run, 16) % 100000 + did
+            options = []
+            for k, hp in enumerate(levels):
+                key = f"{run}-{did}-{k}"
+                f.write(task_line(args, seed, key, view | {"max_hp": boss["max_hp"]}, hp))
+                options.append({"k": k, "hp": hp, "key": key, "deck": len(view["deck"]), "entered": hp == boss["hp"]})
+            line = {
+                "run": run,
+                "decision_id": did,
+                "act": args.act,
+                "floor": view["floor"],
+                "boss": view["map"]["boss"],
+            }
+            d.write(json.dumps(line | {"max_hp": boss["max_hp"], "hp": boss["hp"], "options": options}) + "\n")
+    print(f"{len(door)} runs at the act {args.act} boss's door")
 
 
 def play(args) -> None:
@@ -387,6 +429,17 @@ if __name__ == "__main__":
     o.add_argument("--combat-net", default="weights/silent/c2.json")
     o.add_argument("--results", default="res", help="where the panel outputs go, as the playing host sees it")
     o.add_argument("--out", required=True)
+    s = sub.add_parser("states", help="panel command lines for the runs' loadouts at a boss's door, at HP levels")
+    s.add_argument("--logs", required=True, help="decision logs, comma-separated")
+    s.add_argument("--records", required=True, help="their run records, comma-separated")
+    s.add_argument("--act", type=int, default=1, help="the act index of the boss (0 is the first act)")
+    s.add_argument("--hp-shares", default="0.4,0.7,1", help="shares of max HP to fight at, besides the HP entered with")
+    s.add_argument("--max-runs", type=int, help="the first runs by run id only")
+    s.add_argument("--seeds", type=int, default=2, help="fights per HP level")
+    s.add_argument("--budget", default=BUDGET, help="the planner's budget options")
+    s.add_argument("--combat-net", default="weights/silent/c2.json")
+    s.add_argument("--results", default="res", help="where the panel outputs go, as the playing host sees it")
+    s.add_argument("--out", required=True)
     g = sub.add_parser("play", help="play the task lines whose output is missing")
     g.add_argument("sim", help="the sim's launcher (tmp/builds/REV/sim.sh)")
     g.add_argument("tasks")
@@ -400,4 +453,4 @@ if __name__ == "__main__":
     m.add_argument("decisions")
     m.add_argument("results")
     a = p.parse_args()
-    {"tasks": tasks, "doors": doors, "play": play, "collect": collect, "compare": compare}[a.cmd](a)
+    {"tasks": tasks, "doors": doors, "states": states, "play": play, "collect": collect, "compare": compare}[a.cmd](a)
