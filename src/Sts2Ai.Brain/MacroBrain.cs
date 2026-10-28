@@ -22,10 +22,13 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
     public string Choose(MacroDecision decision)
     {
         if (decision.Legal.Count == 0) throw new InvalidOperationException("no legal action");
-        var obs = decision.Observation;
         Explored = false;
-        return decision.Legal[Pick(decision.Legal.Select(a => Value(obs, a)).ToList())];
+        return decision.Legal[Pick(Options(decision).Select(o => o.Value).ToList())];
     }
+
+    /// <summary>Each legal action, in order, with its predicted afterstate and V's value of it: what <see cref="Choose(MacroDecision)"/> picks by.</summary>
+    public IReadOnlyList<(string Action, RunView After, double Value)> Options(MacroDecision decision) =>
+        decision.Legal.Select(a => { var after = After(decision.Observation, a); return (a, after, value.Value(after)); }).ToList();
 
     /// <summary>
     /// On the map, the rest of the act's route after <paramref name="action"/>: each next point along the map's paths as
