@@ -3,6 +3,9 @@ few seeds each, the same seeds for every option of a decision, so the options sh
 
   tasks    from decision logs and their afterstates (`afterstates`), one `panel` command line per (decision, option)
            in OUT/tasks.txt, and the decisions with their options in OUT/decisions.jsonl
+  doors    the same files, but each option fights at the boss's door instead: the run's loadout before its boss
+           fight, at the HP it entered with, with the decision's pick swapped for the option (the picked card out,
+           the option's in, at the upgrade level the picked one had reached), for runs that reached that boss
   play     plays the task lines whose output is missing, PROCS at a time at nice 19, each decision's options together
            and the decisions in a fixed shuffled order, so the finished decisions come early; a stopped play leaves no
            partial file, and another host can play the rest
@@ -17,6 +20,7 @@ that act's boss with), so the label measures the deck, not the HP the run happen
 Only the standard library, unlike the rest of learn/: the fleet's hosts play the tasks with a plain python3.
 
     python3 bosslab.py tasks --logs a.jsonl,b.jsonl --afterstates s.jsonl --acts 1 --out lab/a1
+    python3 bosslab.py doors --logs a.jsonl --records ra.jsonl --afterstates s.jsonl --act 1 --out lab/d1
     python3 bosslab.py play SIM lab/a1/tasks.txt 8
     python3 bosslab.py collect --decisions lab/a1/decisions.jsonl --results lab/a1/res --out lab/a1/collect.jsonl
 """
@@ -47,12 +51,13 @@ def merged(view: dict, changes: dict) -> dict:
     return out
 
 
-def loadout(view: dict) -> list[str]:
-    """panel's options for the view's deck, relics, potions and its act's boss, at the act's HP share."""
+def loadout(view: dict, hp: int | None = None) -> list[str]:
+    """panel's options for the view's deck, relics, potions and its act's boss, at the act's HP share (or `hp`)."""
     deck = ",".join(c["id"] + ("+" if c.get("up") else "") for c in view["deck"])
     relics = [r["id"] for r in view.get("relics", []) if not r.get("used_up") and r.get("status") != "Disabled"]
     potions = [p for p in view.get("potions", []) if p]
-    hp = max(1, round(ENTER_SHARE.get(view["act"], 0.8) * view["max_hp"]))
+    if hp is None:
+        hp = max(1, round(ENTER_SHARE.get(view["act"], 0.8) * view["max_hp"]))
     args = [
         "--act",
         str(view["act"]),
@@ -93,6 +98,28 @@ def card_rewards(logs: list[str], afterstates: list[str], acts: set[int]):
                 yield a, view
 
 
+def task_line(args, seed: int, key: str, view: dict, hp: int | None = None) -> str:
+    """The `panel` command line of one option: its fights, with the decision's seed, into RESULTS/KEY.jsonl."""
+    cmd = [
+        "panel",
+        "--player",
+        "plan",
+        "--env",
+        "SL",
+        *shlex.split(args.budget),
+        "--combat-net",
+        args.combat_net,
+        "--n",
+        str(args.seeds),
+        "--seed",
+        str(seed),
+        "--out",
+        f"{args.results}/{key}.jsonl",
+        *loadout(view, hp),
+    ]
+    return shlex.join(cmd) + "\n"
+
+
 def tasks(args) -> None:
     os.makedirs(args.out, exist_ok=True)
     picked = 0
@@ -107,24 +134,7 @@ def tasks(args) -> None:
             for k, o in enumerate(a["options"]):
                 after = merged(view, o.get("after") or {})
                 key = f"{a['run']}-{a['decision_id']}-{k}"
-                cmd = [
-                    "panel",
-                    "--player",
-                    "plan",
-                    "--env",
-                    "SL",
-                    *shlex.split(args.budget),
-                    "--combat-net",
-                    args.combat_net,
-                    "--n",
-                    str(args.seeds),
-                    "--seed",
-                    str(seed),
-                    "--out",
-                    f"{args.results}/{key}.jsonl",
-                    *loadout(after),
-                ]
-                f.write(shlex.join(cmd) + "\n")
+                f.write(task_line(args, seed, key, after))
                 options.append(
                     {"k": k, "action": o["action"], "value": o["value"], "key": key, "deck": len(after["deck"])}
                 )
@@ -143,6 +153,112 @@ def tasks(args) -> None:
                 + "\n"
             )
     print(f"{picked} card rewards")
+
+
+def added(before: list[dict], after: list[dict]) -> list[dict]:
+    """The cards of `after` that `before` lacks, by id and upgrade level."""
+    left: dict[tuple, int] = {}
+    for c in before:
+        left[(c["id"], c.get("up") or 0)] = left.get((c["id"], c.get("up") or 0), 0) + 1
+    out = []
+    for c in after:
+        k = (c["id"], c.get("up") or 0)
+        if left.get(k):
+            left[k] -= 1
+        else:
+            out.append(c)
+    return out
+
+
+def swapped(door: list[dict], picked: list[dict], option: list[dict]) -> list[dict] | None:
+    """The door's deck with the picked cards out (a copy at the picked level first, else any copy) and the option's
+    in, each at least at the level its picked counterpart had reached; None when a picked card has left the deck."""
+    deck, levels = list(door), []
+    for c in picked:
+        same = [i for i, d in enumerate(deck) if d["id"] == c["id"]]
+        if not same:
+            return None
+        i = next((i for i in same if (deck[i].get("up") or 0) == (c.get("up") or 0)), same[0])
+        levels.append(deck.pop(i).get("up") or 0)
+    for j, c in enumerate(option):
+        up = max(c.get("up") or 0, levels[j] if j < len(levels) else 0)
+        deck.append({k: v for k, v in c.items() if k != "up"} | ({"up": up} if up else {}))
+    return deck
+
+
+def doors(args) -> None:
+    os.makedirs(args.out, exist_ok=True)
+    act = args.act
+    fights = {}
+    for path in args.records.split(","):
+        for line in open(path):
+            r = json.loads(line)
+            boss = next((c for c in r.get("combats", []) if c["act"] == act and c["room"] == "Boss"), None)
+            if boss is not None and not r.get("failure"):
+                fights[r["run_id"]] = boss
+    runs = sorted(fights)[: args.max_runs] if args.max_runs else sorted(fights)
+    wanted = set(runs)
+    acts = {int(x) for x in args.acts.split(",")} if args.acts else {act}
+    door, views = {}, {}
+    for path in args.logs.split(","):
+        for line in open(path):
+            if '"run_view"' not in line:
+                continue
+            e = json.loads(line)
+            run, v = e["run"], e.get("run_view")
+            if run not in wanted or v is None:
+                continue
+            if v["act"] == act and v["floor"] < fights[run]["floor"]:
+                if run not in door or e["decision_id"] > door[run][0]:
+                    door[run] = (e["decision_id"], v)
+            if e["surface"] == "card_reward" and v["act"] in acts:
+                views[(run, e["decision_id"])] = v
+    picked = dropped = 0
+    with open(os.path.join(args.out, "tasks.txt"), "w") as f, open(os.path.join(args.out, "decisions.jsonl"), "w") as d:
+        for path in args.afterstates.split(","):
+            for line in open(path):
+                a = json.loads(line)
+                view = views.get((a["run"], a["decision_id"]))
+                if a["surface"] != "card_reward" or view is None or a["run"] not in door or len(a["options"]) < 2:
+                    continue
+                door_view, boss = door[a["run"]][1], fights[a["run"]]
+                adds = {
+                    o["action"]: added(view["deck"], merged(view, o.get("after") or {})["deck"]) for o in a["options"]
+                }
+                if a["chosen"] not in adds:
+                    continue
+                decks = {k: swapped(door_view["deck"], adds[a["chosen"]], c) for k, c in adds.items()}
+                if any(deck is None for deck in decks.values()):
+                    dropped += 1
+                    continue
+                picked += 1
+                seed = int(a["run"], 16) % 100000 + a["decision_id"]
+                options = []
+                for k, o in enumerate(a["options"]):
+                    key = f"{a['run']}-{a['decision_id']}-{k}"
+                    after = {**door_view, "deck": decks[o["action"]], "max_hp": boss["max_hp"]}
+                    f.write(task_line(args, seed, key, after, max(1, boss["hp"])))
+                    options.append(
+                        {"k": k, "action": o["action"], "value": o["value"], "key": key, "deck": len(after["deck"])}
+                    )
+                d.write(
+                    json.dumps(
+                        {
+                            "run": a["run"],
+                            "decision_id": a["decision_id"],
+                            "act": act,
+                            "floor": view["floor"],
+                            "decision_act": view["act"],
+                            "door_floor": door_view["floor"],
+                            "boss": door_view["map"]["boss"],
+                            "hp": boss["hp"],
+                            "chosen": a["chosen"],
+                            "options": options,
+                        }
+                    )
+                    + "\n"
+                )
+    print(f"{len(door)} runs at the door, {picked} card rewards, {dropped} left out (the pick left the deck)")
 
 
 def out_of(task: list[str], root: str | None) -> str:
@@ -259,6 +375,18 @@ if __name__ == "__main__":
     t.add_argument("--combat-net", default="weights/silent/c2.json")
     t.add_argument("--results", default="res", help="where the panel outputs go, as the playing host sees it")
     t.add_argument("--out", required=True)
+    o = sub.add_parser("doors", help="panel command lines for the card rewards of the runs at a boss's door")
+    o.add_argument("--logs", required=True, help="decision logs, comma-separated")
+    o.add_argument("--records", required=True, help="their run records, comma-separated")
+    o.add_argument("--afterstates", required=True, help="their afterstates, comma-separated")
+    o.add_argument("--act", type=int, default=1, help="the act index of the boss (0 is the first act)")
+    o.add_argument("--acts", help="the act indices of the card rewards, comma-separated (default: the boss's)")
+    o.add_argument("--max-runs", type=int, help="the first runs by run id only")
+    o.add_argument("--seeds", type=int, default=2, help="fights per option")
+    o.add_argument("--budget", default=BUDGET, help="the planner's budget options")
+    o.add_argument("--combat-net", default="weights/silent/c2.json")
+    o.add_argument("--results", default="res", help="where the panel outputs go, as the playing host sees it")
+    o.add_argument("--out", required=True)
     g = sub.add_parser("play", help="play the task lines whose output is missing")
     g.add_argument("sim", help="the sim's launcher (tmp/builds/REV/sim.sh)")
     g.add_argument("tasks")
@@ -272,4 +400,4 @@ if __name__ == "__main__":
     m.add_argument("decisions")
     m.add_argument("results")
     a = p.parse_args()
-    {"tasks": tasks, "play": play, "collect": collect, "compare": compare}[a.cmd](a)
+    {"tasks": tasks, "doors": doors, "play": play, "collect": collect, "compare": compare}[a.cmd](a)
