@@ -5,7 +5,9 @@ The decision logs (`run --log`) carry the run view and V v0's features on every 
 in the same order). The net's head gives, per floor, the chance to die on it if still alive there. Its targets are the run's outcome only: survived every floor from the decision's up to the one
 it died on, or every floor if it won; a truncated run says nothing from its last floor on. Each run weighs the same
 however many decisions it has, and every fifth run (by run id) is held out, for early stopping and the report, next to
-a baseline that knows only the floor. The output is a net file for `run --value`, in the weights history by default
+a baseline that knows only the floor. A second head learns from the run's next combats too (the share of max HP each
+one cost, which the run records hold), at --aux-weight in the loss; it shapes the body only, and the net file holds
+the hazards alone. The output is a net file for `run --value`, in the weights history by default
 (docs: learning §6): the net as ONNX, with what RunNet needs to feed it, and test runs that RunNet checks on load.
 
     uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1
@@ -34,6 +36,7 @@ from weights import out_path  # noqa: E402
 script = common.app()
 
 MAX_UP = 3  # RunNet.MaxUp
+AUX = 6  # the next combats whose HP cost the second head learns
 # Every scaled number the nets read is capped at ±CAP: a few states show huge ones (an erupting WATERFALL_GIANT's HP).
 CAP = 10.0
 TABLES = ["cards", "modifiers", "relics", "potions", "context", "vars", "relic_status"]
@@ -62,6 +65,19 @@ INPUTS = [
     "relic_status",
     "extra",
 ]
+
+
+def next_combats(record: dict, floor: int) -> list[float]:
+    """The share of max HP each of the run's next combats after the floor cost, at most AUX of them (a death costs
+    what was left)."""
+    costs = []
+    for c in record.get("combats", []):
+        if c["floor"] <= floor or len(costs) == AUX:
+            continue
+        end = c.get("end") or {}
+        lost = c["hp"] - (0 if end.get("died") else end.get("hp", c["hp"]))
+        costs.append(min(max(lost / max(c["max_hp"], 1), 0.0), 1.0))
+    return costs
 
 
 def held_out(run_id: str) -> bool:
@@ -263,6 +279,11 @@ class Batch:
         self.label_mask = ((g >= start) & (won | (g < end) | (died & (g == end)))).float().to(device)
         self.weight = torch.tensor([s["weight"] for s in samples]).to(device)
         self.start = start[:, 0].to(device)
+        aux, aux_mask = torch.zeros(n, AUX), torch.zeros(n, AUX)
+        for b, s in enumerate(samples):
+            for k, cost in enumerate(s["next"]):
+                aux[b, k], aux_mask[b, k] = cost, 1
+        self.aux, self.aux_mask = aux.to(device), aux_mask.to(device)
 
     def inputs(self):
         """The net's inputs, in the order of INPUTS."""
@@ -290,8 +311,18 @@ class Net(nn.Module):
         )
         self.head = nn.Linear(body, floors)
         nn.init.constant_(self.head.bias, -3.0)
+        self.aux_head = nn.Linear(body, AUX)
 
-    def forward(
+    def forward(self, *inputs):
+        """Per sample and floor, the logit of dying on that floor if alive there (inputs as INPUTS names them)."""
+        return self.head(self.state(*inputs))
+
+    def both(self, *inputs):
+        """The hazards' logits and the second head's logits of the next combats' HP costs."""
+        h = self.state(*inputs)
+        return self.head(h), self.aux_head(h)
+
+    def state(
         self,
         cards,
         ups,
@@ -315,7 +346,7 @@ class Net(nn.Module):
         relic_status,
         extra,
     ):
-        """Per sample and floor, the logit of dying on that floor if alive there (inputs as INPUTS names them)."""
+        """The body's output, which both heads read."""
         x = (
             self.cards(cards)
             + ups[..., None] * self.card_up(cards)
@@ -330,7 +361,7 @@ class Net(nn.Module):
         parts.append((relic * relic_mask[..., None]).sum(1))
         for table, ids, mask in ((self.potions, potions, potion_mask), (self.context, context, context_mask)):
             parts.append((table(ids) * mask[..., None]).sum(1))
-        return self.head(self.body(torch.cat(parts + [features, extra], 1)))
+        return self.body(torch.cat(parts + [features, extra], 1))
 
 
 class Hazards(nn.Module):
@@ -384,6 +415,11 @@ def loss_of(logits, b: Batch):
     return (per_floor * b.label_mask).sum(1)
 
 
+def aux_loss_of(aux_logits, b: Batch):
+    """Per sample, the squared error of the next combats' HP costs, over the combats the run had."""
+    return ((torch.sigmoid(aux_logits) - b.aux) ** 2 * b.aux_mask).sum(1)
+
+
 def expected_floor(hazards: torch.Tensor, start: torch.Tensor):
     """As RunNet.Value with objective floor: the start floor plus the chance to survive each floor from it on."""
     h = hazards.double()
@@ -416,6 +452,9 @@ def main(
     batch: Annotated[int, typer.Option(min=1)] = 256,
     lr: float = 3e-5,
     weight_decay: float = 1e-4,
+    aux_weight: Annotated[
+        float, typer.Option(min=0, help="the weight of the next combats' HP costs in the loss; 0: no second head")
+    ] = 3.0,
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out, character)
@@ -443,6 +482,7 @@ def main(
                     "end": max(start, min(r["floor"], floors - 1)),
                     "floor": r["floor"],
                     "kind": kind,
+                    "next": next_combats(r, e["run_view"]["floor"]),
                 }
             )
     per_run = {}
@@ -483,13 +523,17 @@ def main(
     base_logits = torch.log(base_hazard / (1 - base_hazard)).float().to(device)
 
     def evaluate(model):
-        total, rows = 0.0, []
+        total, aux_total, rows = 0.0, 0.0, []
         with torch.no_grad():
             for b in test_batches:
-                logits = model(*b.inputs()) if model else base_logits.expand(len(b.weight), -1)
+                if model:
+                    logits, aux = model.both(*b.inputs())
+                    aux_total += float((aux_loss_of(aux, b) * b.weight).sum())
+                else:
+                    logits = base_logits.expand(len(b.weight), -1)
                 total += float((loss_of(logits, b) * b.weight).sum())
                 rows.append(expected_floor(torch.sigmoid(logits), b.start))
-        return total / test_weight, torch.cat(rows)
+        return total / test_weight, torch.cat(rows), aux_total / test_weight
 
     model = Net({t: len(ids) for t, ids in tables.items()}, len(names), floors).to(device)
     # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
@@ -500,13 +544,15 @@ def main(
     for epoch in range(epochs):
         model.train()
         for b in batches(train, True):
-            loss = (loss_of(model(*b.inputs()), b) * b.weight).sum() / b.weight.sum()
+            logits, aux = model.both(*b.inputs())
+            per_sample = loss_of(logits, b) + aux_weight * aux_loss_of(aux, b)
+            loss = (per_sample * b.weight).sum() / b.weight.sum()
             opt.zero_grad()
             loss.backward()
             opt.step()
         model.eval()
-        held, _ = evaluate(model)
-        logger.info("epoch {}: held-out loss {:.4f}", epoch, held)
+        held, _, held_aux = evaluate(model)
+        logger.info("epoch {}: held-out loss {:.4f}, next combats {:.4f}", epoch, held, held_aux)
         if held < best - 1e-4:
             best, best_state, stale = held, {k: v.clone() for k, v in model.state_dict().items()}, 0
         else:
@@ -517,8 +563,8 @@ def main(
     model.eval()
 
     # The report: held-out loss against the baseline, and how well the expected floor predicts the floor reached.
-    held, predicted = evaluate(model)
-    base_loss, base_predicted = evaluate(None)
+    held, predicted, held_aux = evaluate(model)
+    base_loss, base_predicted, _ = evaluate(None)
     actual = torch.tensor([float(s["floor"]) for s in test], dtype=torch.float64, device=predicted.device)
     weights = torch.tensor([s["weight"] for s in test], dtype=torch.float64, device=predicted.device)
 
@@ -534,6 +580,8 @@ def main(
         "vocab": {t: len(ids) for t, ids in tables.items()},
         "held_out_loss": held,
         "held_out_loss_floor_only": base_loss,
+        "aux_weight": aux_weight,
+        "held_out_next_combats": held_aux,
         "r2_held_out": r2(predicted),
         "r2_held_out_floor_only": r2(base_predicted),
     }
