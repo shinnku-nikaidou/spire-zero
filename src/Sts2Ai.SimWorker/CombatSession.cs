@@ -86,7 +86,8 @@ internal sealed class CombatSession : IDisposable
     public RunState Run { get; }
     public int ActionsExecuted { get; private set; }
     public IReadOnlyList<TraceEvent> Trace => _trace;
-    /// <summary>For a combat built from an observation: what it failed to reproduce, as JSON paths. Empty is exact.</summary>
+    /// <summary>For a combat built from an observation: what it failed to reproduce, as JSON paths. Empty is exact; a
+    /// restored combat is not checked again, and shows none.</summary>
     public IReadOnlyList<string> BuildDifferences { get; private set; } = [];
 
     private CombatSession(Pump pump, CombatSetup setup, Player player, RunState run, List<TraceEvent> trace, PolicySelector selector)
@@ -100,13 +101,14 @@ internal sealed class CombatSession : IDisposable
         _selectorScope = CardSelectCmd.PushSelector(selector);
     }
 
-    public static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy policy) => Start(pump, setup, policy, []);
+    public static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy policy) => Start(pump, setup, policy, [], check: true);
 
     /// <summary>Rebuilds the combat at <paramref name="snapshot"/>; afterwards, choices come from <paramref name="policy"/>.</summary>
     public static CombatSession Restore(Pump pump, CombatSnapshot snapshot, IChoicePolicy policy)
     {
         var picks = snapshot.Trace.Where(e => e.Kind == TraceKind.Choice).Select(e => e.Picks!);
-        var session = Start(pump, snapshot.Setup, policy, picks);
+        // The build was checked when the setup was first started (SimWorlds.NoSL); a restore does not check it again.
+        var session = Start(pump, snapshot.Setup, policy, picks, check: false);
         try
         {
             foreach (var e in snapshot.Trace)
@@ -127,7 +129,7 @@ internal sealed class CombatSession : IDisposable
 
     public CombatSnapshot Snapshot() => new(Setup, _trace.ToArray());
 
-    private static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy policy, IEnumerable<int[]> replayPicks)
+    private static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy policy, IEnumerable<int[]> replayPicks, bool check)
     {
         var character = ModelDb.AllCharacters.First(c => c.Id.Entry.Equals(setup.Character, StringComparison.OrdinalIgnoreCase));
         var player = Player.CreateForNewRun(character, UnlockState.all, LocalContext.NetId!.Value);
@@ -156,7 +158,7 @@ internal sealed class CombatSession : IDisposable
             {
                 CombatBuilder.Apply(session.State, player, obs, pump, setup.History);
                 session.Resample(new Rng(StableHash(setup.Seed)));
-                session.BuildDifferences = CombatBuilder.Differences(obs, session.Observation());
+                if (check) session.BuildDifferences = CombatBuilder.Differences(obs, session.Observation());
             }
             return session;
         }
