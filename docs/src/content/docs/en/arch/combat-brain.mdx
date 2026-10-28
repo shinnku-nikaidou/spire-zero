@@ -253,7 +253,7 @@ With `p0` (commit `c239f12`), PIMC + L0 has no failed run and no game error, ent
 
 With the combat net's first generation, c2, as the leaf (`--combat-net`, commit `fbf89ad`; [§4](#sec-4), [Learning §2](/en/arch/learning/#sec-2)), PIMC + L0 reaches the act 2 boss in 45 runs instead of 19 and the act 1 boss in 187, entering it with 94% of its HP on average. It passed the gate against PIMC + L0 with the hand-made leaf after 77 pairs, by 2.36 floors on average, and is the NoSL champion since 2026-10-27. It took 92.0 s per run, four runs at a time with 8 workers each.
 
-**SL with the planner (2026-10-28).** `run --env SL --policy plan` plays each combat with the SL planner on the node's clone ([§3](#sec-3)) and every other decision with the NoSL champion's L0 and V (n2-b0.1, [Learning §2](/en/arch/learning/#sec-2)), so only the combat brain differs from the champion's. On `promotion-1` #0–39 (commit `4ea2949`, the champion's macro code unchanged), paired by seed with the runs in the champion's report:
+**SL with the planner (2026-10-28).** `run --env SL --policy plan` plays each combat with the SL planner on the node's clone ([§3](#sec-3)) and every other decision with the NoSL champion's L0 and V of the time (n2-b0.1; n2-b0.03 since, [Learning §2](/en/arch/learning/#sec-2)), so only the combat brain differs from the champion's. On `promotion-1` #0–39 (commit `4ea2949`, the champion's macro code unchanged), paired by seed with the runs in the champion's report:
 
 ```bash
 Sts2Ai.SimWorker run --champion eval/silent/champions/nosl.json --env SL --policy plan --workers 4 --seeds eval/seeds/promotion-1.txt --n 40 --records sl-plan.jsonl
