@@ -111,6 +111,8 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
 
     private sealed class Beam(int nodesPerState, IReadOnlyList<EnemyTurns> history, TurnSearcher search)
     {
+        /// <summary>The dive's turns, each searched in full (every end, no floor), by the path to the turn's state.</summary>
+        private readonly Dictionary<string, TurnSearch> _searched = [];
         private readonly Dictionary<CombatAction, double> _byFirst = [];
         private TurnEnd? _best;
         private double _bestFrom = double.NegativeInfinity, _bound = double.PositiveInfinity;
@@ -132,7 +134,7 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
             _complete = true;
             for (int turn = 0; states.Count > 0 && turn < MaxTurns; turn++)
             {
-                var found = search(states.Select(s => new PlanJob(s.Actions, s.History)).ToList(), nodesPerState, width, _best?.Value);
+                var found = Search(states, width);
                 _turns++;
                 if (turn == 0) _bound = found[0].Bound;
                 var next = new List<TurnEnd>();
@@ -173,6 +175,35 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
             _left = states;
         }
 
+        /// <summary>
+        /// The turn's search from each state, as <see cref="SearchTurn"/> finds it with this width and the best line so
+        /// far as the floor. The dive asks for each turn in full and keeps it, and a later beam that comes to the same
+        /// state takes its ends from there (<see cref="Narrow"/>) instead of searching the turn again: the full beam's
+        /// first turn always, and the dive's later states when it keeps them.
+        /// </summary>
+        private List<TurnSearch> Search(List<TurnEnd> states, int width)
+        {
+            double? floor = _best?.Value;
+            bool dive = width == 1;
+            var found = new TurnSearch[states.Count];
+            var asked = new List<int>();
+            for (int i = 0; i < states.Count; i++)
+                if (_searched.TryGetValue(PathKey(states[i].Actions), out var full)) found[i] = Narrow(full, width, floor) with { Nodes = 0 };
+                else asked.Add(i);
+            if (asked.Count == 0) return [.. found];
+            var replies = search(asked.Select(i => new PlanJob(states[i].Actions, states[i].History)).ToList(), nodesPerState,
+                dive ? int.MaxValue : width, dive ? null : floor);
+            for (int k = 0; k < asked.Count; k++)
+            {
+                int i = asked[k];
+                if (dive) _searched[PathKey(states[i].Actions)] = replies[k];
+                found[i] = dive ? Narrow(replies[k], width, floor) : replies[k];
+            }
+            return [.. found];
+        }
+
+        private static string PathKey(IReadOnlyList<CombatAction> path) => string.Join(' ', path);
+
         /// <param name="replan">The turns of an unproved losing line played before planning again; 0 plays it to its end.</param>
         public SlPlan Result(int replan)
         {
@@ -201,6 +232,19 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
     private static void Note(Dictionary<CombatAction, double> byFirst, TurnEnd line)
     {
         if (!byFirst.TryGetValue(line.Actions[0], out var value) || line.Value > value) byFirst[line.Actions[0]] = line.Value;
+    }
+
+    /// <summary>
+    /// What <see cref="SearchTurn"/> finds with <paramref name="keep"/> and <paramref name="floor"/>, from what it found
+    /// with every end kept and no floor: the floor only drops ends, and the kept states are the best, in the same order.
+    /// </summary>
+    public static TurnSearch Narrow(TurnSearch full, int keep, double? floor)
+    {
+        var ends = full.Ends.Where(e => !(e.Bound <= floor)).ToList();
+        // A full search returns the best end of the combat only: if it is below the floor, so is every other one.
+        var over = ends.Where(e => e.Status != CombatStatus.InProgress).ToList();
+        var going = ends.Where(e => e.Status == CombatStatus.InProgress).ToList();
+        return full with { Ends = [.. over, .. going.Take(keep)], Cut = full.Cut || going.Count > keep };
     }
 
     /// <summary>
