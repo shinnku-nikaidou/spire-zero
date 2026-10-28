@@ -1,0 +1,165 @@
+---
+title: GameBridge
+description: 唯一一層把遊戲狀態讀成協定觀測和合法動作、並把協定動作變成與 UI 相同的遊戲呼叫的程式碼。
+sidebar:
+  badge:
+    text: 部分實作
+    variant: tip
+---
+import { Aside, Badge, Steps } from '@astrojs/starlight/components';
+
+GameBridge（`Sts2Ai.GameBridge`）是遊戲與 [協定](/zh-tw/arch/protocol/) 之間的翻譯層。它有三項工作：**observe**（把遊戲物件讀成觀測）、**legal**（以協定文字列出合法動作）和 **start**（把一個協定動作變成 UI 會做的同一個遊戲呼叫，並開始執行）。它執行在承載遊戲的行程裡：無頭執行的 SimWorker，或者真實遊戲中的 Mod。因為兩種宿主都用它，從 R1 到 R4 的每一級跑的都是同一份程式碼。
+
+<Aside title="狀態">
+
+每個決策介面的 observe、legal、start 都已實作，選牌上下文（choice context）也已實作（`src/Sts2Ai.GameBridge`）。事件流還在規劃中。
+
+</Aside>
+
+## 1. 職責與規則
+
+- GameBridge 是唯一把遊戲物件變成協定（observe、legal）、把協定動作變成遊戲呼叫（start）的程式碼。SimWorker 和 Mod 共用它，所以 R1–R4（[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)的各級）走同一條程式碼路徑。
+- 它引用遊戲 DLL、Protocol 和 Harmony（遊戲自帶的 `0Harmony.dll`，用於 [§5](#sec-5)）。從不引用 Brain，也從不引用 Godot 節點（`N*` 型別），即遊戲 UI 場景裡的物件。需要節點的工作放在宿主轉接器裡：Mod 的 UI 轉接器（[Mod §4](/zh-tw/arch/mod/#sec-4)），以及模擬器裡複製過來的節點邏輯（[模擬器 §5.2](/zh-tw/arch/simulator/#sec-5.2)）。
+- observe 只讀取 UI 顯示的內容（公平性白名單，[協定 §8](/zh-tw/arch/protocol/#sec-8)）。每個欄位都取自 UI 繫結的那個屬性（`DisplayAmount`、`IsVisible`、`ShowCounter`，意圖透過 `GetSingleDamage`），從不取自內部狀態。
+- start 使用與 UI 相同的入口。從不直接修改狀態，也從不使用跳過檢查的命令（`CardCmd.AutoPlay`、直接 `new PlayCardAction`、`PlayerCmd.EndTurn`）。
+- **推進到穩定（settle）**，即讓遊戲一直執行到下一個決策點，由各個宿主自己負責。GameBridge 只為此提供純邏輯的判定函式（[§6](#sec-6)）。
+
+## 2. 現有 API
+
+`src/Sts2Ai.GameBridge` 裡目前已有的內容：
+
+| 型別 | 成員 | 說明 |
+|---|---|---|
+| `Observe` | `Combat(st, player)` | 手牌帶 uid；抽牌堆按卡牌鍵排序；能力只在 `IsVisible` 時出現，數值用 `DisplayAmount`；意圖取自瞄準玩家的 `NextMove` |
+| | `Of(run, player, screen)`、`Run(run, player)` | 一個 `Observation`：`RunView` 加上該決策介面的畫面（[§3](#sec-3)） |
+| | `Card(card, withUid)`、`CardKey(card)`、`Relic`、`Coord`、`Intents(move, owner, targets)` | `Intents` 被 CombatBuilder 複用（意圖匹配） |
+| `CombatActions` | `WaitingForInput(player)` | 輪到玩家方、`Phase==Play`、執行器空閒、動作已啟用。無頭時足夠，但在真實遊戲裡**不**夠（[Mod §3](/zh-tw/arch/mod/#sec-3)） |
+| | `Legal(st, player)` | 先按手牌順序，再按槽位列藥水，最後是 `end_turn`；每張牌呼叫一次 `CanPlay()` |
+| | `Start(st, player, action)` | `TryManualPlay(target)` / `EnqueueManualUse(target)` / `RequestEnqueue(EndPlayerTurnAction(player, TurnNumber))` |
+| | `HandCard(pcs, uid)`、`Creature(st, uid)` | 遇到未知 uid 時拋出例外 |
+| `MapActions`、`RewardActions`、`BundleActions`、`EventActions`、`CrystalSphereActions`、`ShopActions`、`RestActions`、`TreasureActions`、`PotionActions` | `Screen(…)` 回傳該決策介面的畫面；`Legal(…)` 回傳動作文字；`Start(…, action)` 在動作不合法時拋出例外，並在 UI 會等待某個遊戲任務時回傳該任務 | 每個決策介面一個靜態類別（`PotionActions` 只有藥水欄動作，沒有畫面）；文法見 [協定 §3](/zh-tw/arch/protocol/#sec-3)；由 `ActionText` 解析 |
+| `CardChoices` | `Canonical(options, min, max, context, tieBreak)` | 按卡牌鍵排序，平局用呼叫方播種的 `Random` 打破，從不用遊戲順序（它可能反映牌在牌堆中的深度）；回傳 `(CardChoice, gameIndex[])` |
+| `ChoiceContexts` | `Patch(harmony)`、`Current`、`Last`、`Bounds(context, minSelect, maxSelect, n)` | 選牌上下文（[§5](#sec-5)） |
+
+<Aside type="caution" title="已知缺口">
+
+`EndPlayerTurnAction` 這條路徑不檢查 `CanTurnBeEnded` <Badge text="已核實" variant="success" />。在 Mod 使用它之前，要把這項檢查加進 `Legal`。
+
+</Aside>
+
+## 3. 觀測來源
+
+整局層面觀測（[協定 §3](/zh-tw/arch/protocol/#sec-3)）的每個部分從哪裡讀取。每個決策介面的畫面由它所在類別的 `Screen(…)` 建構，與它的合法動作放在一起。下面每個來源都已在遊戲程式碼中讀到 <Badge text="已核實" variant="success" />。
+
+| 部分 | 來源 |
+|---|---|
+| `RunView` 角色、晉階等級、幕、層數 | `player.Character`、`RunState.AscensionLevel`、`CurrentActIndex` 和 `Act.Id`、`TotalFloor` |
+| 生命值、金幣 | `player.Creature.CurrentHp/MaxHp`、`player.Gold` |
+| 牌組 | `player.Deck.Cards` → `Observe.Card`，按卡牌鍵排序 |
+| 遺物、藥水 | `player.Relics`、`player.PotionSlots`（戰鬥用的對映函式） |
+| 地圖 | `RunState.Map` 的各個點（加上起點、頭目點和第二個頭目點），帶 `PointType`、`Children` 和 `Quests`；`VisitedMapCoords`；`Act.BossEncounter`、地圖上的第二個頭目、`Act.Ancient` |
+| 地圖畫面 | 可前往的點：把 `NMapScreen.RecalculateTravelability` 的規則複製到 `MapActions` 裡，寫成一個純邏輯函式 |
+| 獎勵 | `RewardsSet` 中 `!SuccessfullySelected` 的獎勵；特殊卡牌取自獎勵的 `CardHoverTip`（它的卡牌欄位是私有的） |
+| 卡牌獎勵 | 提供的卡牌 + 替代選項（每個介面只計算一次，`CardReward.cs:321-330`） |
+| 卡包（bundle） | 各組卡牌 → `Observe.Card` |
+| 事件 | `EventSynchronizer.GetLocalEvent()`：id、`Description` 鍵、`CurrentOptions`（`TextKey`、`IsLocked`、`Relic`、工具提示、`WillKillPlayer`） |
+| 商店 | `MerchantInventory.AllEntries` 去掉移除卡牌（槽位順序、`IsStocked`、`Cost`、`IsOnSale`），以及 `CardRemovalEntry` |
+| 休息處 | `RestSiteSynchronizer.GetLocalOptions()`（`Id`、`IsEnabled`） |
+| 財寶房 | `TreasureRoomRelicSynchronizer.CurrentRelics` |
+| 水晶球 | 小遊戲的格子：`IsHidden`、每個已揭開格子下的物品（`Item.ToSerializable().type`）、剩餘占卜次數 |
+| 選牌提示 | 選項 + `CardSelectorPrefs`，透過 `ChoiceContexts` 提供（[§5](#sec-5)） |
+
+一局中的戰鬥使用同一個 `Observe.Combat`，放在畫面裡：`combat`，或者帶有 `combat` 的 `card_choice`。
+
+## 4. 各決策介面的動作
+
+動作文法見 [協定 §3](/zh-tw/arch/protocol/#sec-3)。每種宿主用自己的方式執行動作：模擬器呼叫 GameBridge 裡的邏輯入口；Mod 往往走點選時會觸發的那個 UI 節點處理函式。
+
+| 決策介面 | 邏輯入口（GameBridge，模擬器使用） | Mod 路徑 |
+|---|---|---|
+| 戰鬥 | `CombatActions.Start` | 相同 |
+| 丟棄藥水 | `DiscardPotionGameAction` | 相同 |
+| 地圖 | `RequestEnqueue(VoteForMapCoordAction(…))` | `NMapScreen.OnMapPointSelectedLocally`（由節點負責鎖定和動畫） |
+| 獎勵 | `RewardsSetSynchronizer.SelectLocalReward` / `SkipLocalRewardsSet` | 獎勵按鈕的處理函式 |
+| 離開獎勵畫面 | `ProceedFromTerminalRewardsScreen` / `ActChangeSynchronizer.SetLocalPlayerReady`（[模擬器 §5.2](/zh-tw/arch/simulator/#sec-5.2)） | 繼續按鈕 |
+| 卡牌獎勵 | 回答 `GetSelectedCardReward`（模擬器的選擇器） | 卡牌槽 / 略過 / 重骰按鈕 |
+| 選牌提示 | 回答 `CardSelectCmd.Selector`（模擬器） | 介面上的卡牌槽 + 確認。這條 UI 路徑會記錄一個 `PlayerChoice` 供重播使用。`LocalSelector` 會跳過 `SyncLocalChoice`（`CardSelectCmd.cs:264-300`） <Badge text="已核實" variant="success" />，因此會破壞 SL 重播 |
+| 事件 | `ChooseLocalOption(i)` | 選項按鈕 |
+| 商店 | `entry.OnTryPurchaseWrapper(inv)`；移除卡牌由移除節點標記為已用（模擬器裡由一個無頭補丁完成，[模擬器 §5.2](/zh-tw/arch/simulator/#sec-5.2)） | 同一個呼叫（對商人節點呼叫 `ForceClick` 沒有任何效果 <Badge text="已核實" variant="success" />） |
+| 休息處 | `ChooseLocalOption(i)` | 選項按鈕 |
+| 財寶房 | `PickRelicLocally(i)` / `SkipRelicLocally()` | 寶箱按鈕 + 遺物按鈕 |
+| 水晶球 | `SetTool` + `CellClicked(cell)` | 占卜按鈕 + 點選格子 |
+| 使用藥水（戰鬥外） | `EnqueueManualUse(null)` | 藥水彈出選單 |
+
+**規則**：只要 Mod 路徑是一個節點處理函式，模擬器路徑就必須等於該處理函式所做的呼叫，去掉純 UI 的效果。每一對這樣的路徑都有一個 R3 對 R4 的等價性檢查：相同種子、相同決策，必須得到相同的觀測流（[Mod §8](/zh-tw/arch/mod/#sec-8)）。
+
+## 5. 選牌上下文
+
+GameBridge 如何填寫 `ChoiceContext`（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。每個選牌提示都經過某個 `CardSelectCmd.From*` 入口，而只有這些入口的參數能說明遊戲為什麼要問。所以 `ChoiceContexts` 用 Harmony 給它們打補丁。Harmony 是一個在執行時給遊戲方法打補丁的函式庫：**前綴**（prefix）在原方法之前執行，**終結器**（finalizer）在原方法之後執行，即使原方法拋出了例外也會執行。
+
+- 目標是除 `FromChooseABundleScreen` 以外的每個公開靜態 `CardSelectCmd.From*` 方法；`FromChooseABundleScreen` 有自己的決策介面（`Commands/CardSelectCmd.cs`） <Badge text="已核實" variant="success" />。目標清單用反射計算，所以新增的入口會被自動納入；但每次遊戲更新時，仍要核對它們的參數。
+- 前綴把入口的參數讀進 `Current`：`CardSelectorPrefs`、`source` 參數或 `PlayerChoiceContext` 的 `LastInvolvedModel`、一個 `CardPile`、一個 `EnchantmentModel` 及其 `amount`、`canSkip`。終結器把它清掉。
+- 一個深度計數器讓最外層的入口生效（移除卡牌會呼叫 `FromDeckGeneric`）。`Current` 和計數器是 `[ThreadStatic]`。
+- `Current` 必須在入口內部同步讀取，選擇器的呼叫就是這樣做的：入口第一次 await 回傳之後，它就沒了。真實遊戲裡選牌提示的畫面在這之後才開啟，所以前綴還把上下文存進 `Last`，一直保留到下一個入口。Mod 從那裡讀取螢幕上那個提示的上下文（[Mod §3](/zh-tw/arch/mod/#sec-3)）。
+- 每個宿主在**任何其他補丁之前**呼叫一次 `ChoiceContexts.Patch(harmony)`（SimWorker：`HeadlessPatches.Apply`）。更早編譯的呼叫方（例如另一個補丁在編譯它的替換方法時）可能把入口那個很小的 async 存根內嵌進去，從而繞過前綴。無頭執行時 SapphireSeed 就發生過這種情況。在模擬器裡，沒有上下文的選牌提示會拋出例外。
+
+兩種宿主共用這個補丁，所以得到的上下文相同。
+
+## 6. 決策點判定
+
+當前懸而未決的是哪個介面，由宿主判斷。這取決於 UI 會顯示什麼，而只有宿主在追蹤這件事。
+
+- **模擬器**：`RunSession.Decide`（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）先看開啟著的獎勵組（來自 `testSelector`）和水晶球小遊戲，再看房間型別和每種房間的 `RoomProgress`。推進到穩定的條件是：戰鬥中為 `WaitingForInput`；否則是 Pump 已空且執行器空閒。
+- **Mod**：可見的介面或覆蓋層，加上節點空閒檢查，並且要持續約 3 個影格（[Mod §3](/zh-tw/arch/mod/#sec-3)）。
+
+GameBridge 只保留純邏輯的判定：`CombatActions.WaitingForInput`、`RewardActions.IsTerminal`，以及各個合法動作清單。
+
+## 7. uid 與索引
+
+動作如何指代它作用的對象：
+
+| 對象 | 指代方式 |
+|---|---|
+| 手牌（僅戰鬥中） | 它的 `NetCombatCardDb` id |
+| 生物（僅戰鬥中） | 它的 `CombatId` |
+| 牌組或網格提示裡的選項 | 規範索引（`CardChoices.Canonical`），從不用 uid：戰鬥外沒有 uid |
+| 按 UI 排序的清單中的條目（獎勵、事件選項、商店槽位、休息處選項、財寶房的遺物） | 遊戲裡的索引（順序是公開的） |
+| 地圖點 | `col,row` |
+
+對 Mod 而言：SL 複本必須給出相同的編號，所以載入時要把 id 快進（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。
+
+## 8. 事件流
+
+這部分在規劃中：公開歷史流（[協定 §5](/zh-tw/arch/protocol/#sec-5)）裡每種事件的來源。
+
+- 手牌、抽牌堆、棄牌堆、消耗堆上的 `CardPile.CardAdded` / `CardRemoved`（`Entities.Cards/CardPile.cs:35-37`）提供 draw、move 和 generate，插入抽牌堆時再加上位置 <Badge text="推斷" variant="caution" />。
+- `ActionExecutor.AfterActionExecuted`（`GameActions/ActionExecutor.cs:56`）提供出牌（play）。
+- `CombatManager.TurnStarted`，加上一份意圖快照。
+- 洗牌 = 抽牌堆從棄牌堆補滿 <Badge text="推斷" variant="caution" />；具體的洗牌命令還要找。
+
+只收錄公開可見的效果。插入到隨機位置的牌，記錄時不帶位置。
+
+## 9. 因應版本更新
+
+所有關於遊戲 API 的知識只放在三個地方：這裡、SimWorker 的補丁，以及 Mod 的節點轉接器。遊戲更新時：
+
+<Steps>
+
+1. 重新反編譯遊戲。
+2. 重新建置。
+3. 執行 selftest 和決策介面覆蓋測試（[模擬器 §9](/zh-tw/arch/simulator/#sec-9)）。
+4. 生成受影響簽章的差異清單。
+
+</Steps>
+
+## 10. 測試
+
+- **白名單**：一張逐欄位的「UI 顯示它」表格，每新增一個欄位都要審查。
+- **合法動作完整性**（Mod 除錯模式）：每個啟用的 UI 控制元件都對應一個合法動作。
+- **start 往返**：每個合法動作都能不拋例外地執行，並改變 `obs_hash`（或結束這個決策介面）。
+- **模擬器與 Mod 一致**：相同狀態給出相同觀測（R3 與 R4 的日誌對比）。
+
+## 11. 未決問題
+
+1. 入口沒有 `source` 參數時的 `Source`：`LastInvolvedModel` 可能是間接的（能力 → 鉤子 → 命令）。
+2. 由鉤子新增的卡牌獎勵替代選項：它們的 id 怎麼命名（`card_alt:<id>`，[協定 §3](/zh-tw/arch/protocol/#sec-3)）。

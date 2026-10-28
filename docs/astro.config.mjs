@@ -79,22 +79,23 @@ export default defineConfig({
     // Must come before Starlight so it sees mermaid code blocks first.
     mermaid({ autoTheme: true, enableLog: false }),
     starlight({
-      title: { 'zh-CN': '杀戮尖塔 2 AI 架构手册', en: 'STS2 AI Architecture' },
+      title: { 'zh-CN': '杀戮尖塔 2 AI 架构手册', 'zh-TW': '殺戮尖塔 2 AI 架構手冊', en: 'STS2 AI Architecture' },
       customCss: ['katex/dist/katex.min.css'],
       defaultLocale: 'root',
       locales: {
         root: { label: '简体中文', lang: 'zh-CN' },
+        'zh-tw': { label: '繁體中文', lang: 'zh-TW' },
         en: { label: 'English', lang: 'en' },
       },
       sidebar: [
         {
           label: '总览',
-          translations: { en: 'Overview' },
+          translations: { 'zh-TW': '總覽', en: 'Overview' },
           items: ['index', 'status', 'glossary'],
         },
         {
           label: '子系统',
-          translations: { en: 'Subsystems' },
+          translations: { 'zh-TW': '子系統', en: 'Subsystems' },
           items: architecture,
         },
       ],

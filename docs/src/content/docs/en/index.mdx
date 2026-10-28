@@ -105,10 +105,10 @@ Background notes, in Chinese, are kept locally under `tmp/notes/` and are not in
 
 - <Badge text="verified" variant="success" /> means the claim was checked in the game's source. <Badge text="inferred" variant="caution" /> means it was inferred and must be checked before anything relies on it.
 - Game source locations such as `Runs/RunManager.cs:670-709` are paths inside the decompiled `MegaCrit.Sts2.Core` assembly. The decompiled code stays local (`tmp/decompiled/sts2/`) and is not in the repository. Godot node classes (`N*`) are found by file name, which is unique.
-- References like "Simulator §5.1" point to a numbered section of a page. Its anchor is `#sec-5.1` in both languages (`/en/arch/simulator/#sec-5.1`). Code comments cite sections as `docs: simulator §5.1`.
+- References like "Simulator §5.1" point to a numbered section of a page. Its anchor is `#sec-5.1` in all three languages (`/en/arch/simulator/#sec-5.1`). Code comments cite sections as `docs: simulator §5.1`.
 
 **Maintaining it**
 
-- The English pages are the reference version, and Claude reads them as its design manual. The Chinese pages say the same thing. Change both in the same commit.
+- The English pages are the reference version, and Claude reads them as its design manual. The Simplified and Traditional Chinese pages say the same thing. Change all three in the same commit.
 - Keep section numbers stable: code comments cite them.
 - Before committing, run `pnpm check` in `docs/`: it builds the site and checks every internal link and anchor.

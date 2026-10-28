@@ -1,7 +1,8 @@
 // Checks the built site in dist/ (run after `astro build`):
 // - every internal link in page content reaches an existing page and anchor,
 // - links stay in the locale of the page they are on,
-// - every page exists in both locales (Chinese at the root, English under /en/),
+// - every page exists in all three locales (Simplified Chinese at the root,
+//   Traditional Chinese under /zh-tw/, English under /en/),
 // - no Markdown bold was left unrendered (in Chinese, `**入口：**到达` does not render;
 //   write `**入口**：到达`).
 import { readdirSync, readFileSync } from 'node:fs';
@@ -9,6 +10,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
+const prefixes = ['/en', '/zh-tw', ''];
 
 function* pageFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -19,7 +21,8 @@ function* pageFiles(dir) {
 }
 
 const decode = (s) => decodeURIComponent(s.replaceAll('&amp;', '&'));
-const isEnglish = (route) => route.startsWith('/en/');
+const localeOf = (route) => prefixes.find((p) => route.startsWith(p + '/'));
+const stripLocale = (route) => route.slice(localeOf(route).length);
 
 const pages = new Map();
 for (const file of pageFiles(dist)) {
@@ -36,8 +39,10 @@ for (const file of pageFiles(dist)) {
 const errors = [];
 let checked = 0;
 for (const [route, page] of pages) {
-  const twin = isEnglish(route) ? route.slice(3) : '/en' + route;
-  if (!pages.has(twin)) errors.push(`${route}: no page in the other locale (${twin})`);
+  for (const prefix of prefixes) {
+    const twin = prefix + stripLocale(route);
+    if (!pages.has(twin)) errors.push(`${route}: no page in locale "${prefix || '/'}" (${twin})`);
+  }
 
   for (const m of page.text.matchAll(/[^<>]{0,20}\*\*[^<>]{0,20}/g))
     errors.push(`${route}: unrendered bold near "${m[0]}"`);
@@ -54,7 +59,7 @@ for (const [route, page] of pages) {
     }
     if (anchor && anchor !== '_top' && !targetPage.ids.has(decode(anchor)))
       errors.push(`${route}: link to missing anchor ${href}`);
-    if (isEnglish(route) !== isEnglish(target))
+    if (localeOf(route) !== localeOf(target))
       errors.push(`${route}: link leaves the page's locale ${href}`);
   }
 }

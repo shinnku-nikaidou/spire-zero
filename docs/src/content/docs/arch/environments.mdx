@@ -42,7 +42,7 @@ SL 可以知道的例子：
 
 - 抽牌顺序和每一次洗牌、怪物动作、生成的卡牌、随机目标、随机费用和随机充能球；
 - 动作顺序如何改变上面这些结果（在节点内操纵随机数是允许的）；
-- 事件结果。比如在「滑溜的桥」（Slippery Bridge）上，SL 知道每次 HOLD_ON 之后会拿走哪张牌：`SlipperyBridge.GetNewRandomCard` 使用事件自己的 `Rng`，种子由 seed + slot + hash(事件 id) 得到（`Models/EventModel.cs:234`） <Badge text="已核实" variant="success" />；
+- 事件结果。比如在「滑脚木桥」（Slippery Bridge）上，SL 知道每次 HOLD_ON 之后会拿走哪张牌：`SlipperyBridge.GetNewRandomCard` 使用事件自己的 `Rng`，种子由 seed + slot + hash(事件 id) 得到（`Models/EventModel.cs:234`） <Badge text="已核实" variant="success" />；
 - 本节点的奖励，包括奖励如何随打法变化；
 - Ancient 事件的「随机稀有卡」选项具体会给哪张牌。
 
