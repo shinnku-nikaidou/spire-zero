@@ -10,9 +10,10 @@ The two environments are never ranked together, nor two characters or ascensions
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
+| combat pimc c2 8x300, combat prompts p0, macro l0 n2-b0.1, macro prompts l0 n2-b0.1 **(champion)** | 2026-10-28 | `0d7818f` | 0.0 % (0/200, 0.0 %–1.9 %) | 23.96 | 186 | 125.6 |
 | combat pimc c2 8x300, combat prompts p0, macro l0, macro prompts l0 | 2026-10-27 | `432aa0c` | 0.0 % (0/200, 0.0 %–1.9 %) | 22.70 | 190 | 97.8 |
 | combat pimc c2 8x300, combat prompts p0, macro l0, macro prompts l0 | 2026-10-27 | `32a0160` | 0.0 % (0/200, 0.0 %–1.9 %) | 22.58 | 190 | 100.7 |
-| combat pimc c2 8x300, combat prompts p0, macro l0, macro prompts l0 **(champion)** | 2026-10-27 | `c5ee8de` | 0.0 % (0/200, 0.0 %–1.9 %) | 22.58 | 190 | 93.1 |
+| combat pimc c2 8x300, combat prompts p0, macro l0, macro prompts l0 | 2026-10-27 | `c5ee8de` | 0.0 % (0/200, 0.0 %–1.9 %) | 22.58 | 190 | 93.1 |
 | combat pimc c2 8x300, combat prompts p0, macro l0, macro prompts l0 | 2026-10-27 | `fbf89ad` | 0.0 % (0/200, 0.0 %–1.9 %) | 21.88 | 187 | 92.0 |
 | combat pimc 8x300, combat prompts p0, macro l0, macro prompts l0 | 2026-10-27 | `c239f12` | 0.0 % (0/200, 0.0 %–1.9 %) | 19.34 | 177 | 75.7 |
 | combat play, combat prompts p0, macro l0, macro prompts l0 | 2026-10-27 | `dc0105a` | 0.0 % (0/200, 0.0 %–1.9 %) | 11.90 | 60 | 0.2 |
