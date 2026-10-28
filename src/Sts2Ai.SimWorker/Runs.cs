@@ -413,7 +413,13 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     public Dictionary<string, string> Options(PlayEnvironment env)
     {
         var options = new Dictionary<string, string> { ["env"] = env.ToString(), ["policy"] = Policy, ["macro"] = Macro };
-        if (Policy == "plan") options["beam"] = $"{Budget.Beam}";
+        if (Policy == "plan")
+        {
+            options["beam"] = $"{Budget.Beam}";
+            if (Budget.EasyBeam > 0) options["easy-beam"] = $"{Budget.EasyBeam}";
+            options["replan"] = $"{Budget.Replan}";
+            options["loss-plans"] = $"{Budget.LossPlans}";
+        }
         if (Policy == "pimc") options["worlds"] = $"{Budget.Worlds}";
         if (Searches)
         {

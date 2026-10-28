@@ -98,13 +98,14 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
     /// <summary>
     /// The beam over turns, from the decision's state, with the budget of its room (<see cref="Budget.For"/>). A greedy
     /// dive comes first, a beam of one: its line, often a win, is the floor that prunes the full beam from its first
-    /// turn on, and when it already reaches the decision's bound the full beam is not needed.
+    /// turn on, and when it already reaches the decision's bound the full beam is not needed. When the dive wins, the
+    /// full beam keeps <see cref="Budget.EasyBeam"/> states, if set: it only improves a win already found.
     /// </summary>
     public static SlPlan Search(Budget budget, IReadOnlyList<EnemyTurns> history, TurnSearcher search)
     {
         var beam = new Beam(budget.NodesPerWorld, history, search);
         if (budget.Beam > 1) beam.Run(1);
-        if (!beam.Proved) beam.Run(budget.Beam);
+        if (!beam.Proved) beam.Run(beam.Wins && budget.EasyBeam > 0 ? budget.EasyBeam : budget.Beam);
         return beam.Result(budget.Replan);
     }
 
@@ -120,6 +121,9 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
         /// <summary>Whether the best line is the best there is: the last beam left nothing out, or the line reaches the
         /// decision's bound, which nothing can beat.</summary>
         public bool Proved => _best != null && (_complete || _best.Value >= _bound);
+
+        /// <summary>Whether the best line so far wins the combat.</summary>
+        public bool Wins => _best?.Status == CombatStatus.Won;
 
         /// <summary>A beam of <paramref name="width"/> states from the decision, pruned by the best line so far.</summary>
         public void Run(int width)

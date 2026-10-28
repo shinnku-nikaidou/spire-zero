@@ -104,7 +104,7 @@ internal sealed class BudgetArgs
 
     /// <summary>The budget options' names in a champion file: they belong to the file's combat brain.</summary>
     public static readonly IReadOnlySet<string> Keys = new HashSet<string>
-        { "worlds", "nodes", "elite-x", "boss-x", "halving", "follow", "effort", "beam", "replan", "loss-plans" };
+        { "worlds", "nodes", "elite-x", "boss-x", "halving", "follow", "effort", "beam", "easy-beam", "replan", "loss-plans" };
 
     private readonly Option<int> _worlds = Opt.Of("--worlds", 8, "pimc's determinized worlds per decision");
     private readonly Option<int?> _nodes = Opt.Maybe<int?>("--nodes", "search nodes per world (default 300; plan: per state and turn, default by --effort)");
@@ -115,11 +115,12 @@ internal sealed class BudgetArgs
     private readonly Option<string?> _effort = Opt.Maybe<string?>("--effort", $"plan's budget preset: {string.Join(", ", Budget.Efforts)} (default {DefaultEffort})")
         .AcceptOnlyFromAmong([.. Budget.Efforts]);
     private readonly Option<int?> _beam = Opt.Maybe<int?>("--beam", "plan's states kept from one turn to the next (default by --effort)");
+    private readonly Option<int?> _easyBeam = Opt.Maybe<int?>("--easy-beam", "plan's states kept when its greedy dive already wins; 0: --beam (default by --effort)");
     private readonly Option<int?> _replan = Opt.Maybe<int?>("--replan", "plan's turns of an unproved losing plan played before planning again, 0: to its end (default by --effort)");
     private readonly Option<int?> _lossPlans = Opt.Maybe<int?>("--loss-plans",
         "plan's unproved losing plans in a row in one combat, the last played to its end; 0: no limit (default by --effort)");
 
-    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _effort, _beam, _replan, _lossPlans];
+    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _effort, _beam, _easyBeam, _replan, _lossPlans];
 
     /// <summary>The budget of the combat brain <paramref name="brain"/> (pimc, plan, or a placeholder).</summary>
     /// <param name="planElsewhere">Whether plan's options belong to another brain of the command (brain's SL hosts).</param>
@@ -127,10 +128,11 @@ internal sealed class BudgetArgs
     {
         var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes) ?? 300, r.GetValue(_elite) ?? 1, r.GetValue(_boss) ?? 1, r.GetValue(_halving),
             r.GetValue(_follow));
+        bool planOptions = r.GetValue(_effort) != null || r.GetValue(_beam) != null || r.GetValue(_easyBeam) != null || r.GetValue(_replan) != null
+            || r.GetValue(_lossPlans) != null;
         if (brain != "plan")
-            return planElsewhere || r.GetValue(_effort) == null && r.GetValue(_beam) == null && r.GetValue(_replan) == null && r.GetValue(_lossPlans) == null
-                ? budget
-                : throw new CliException("--effort, --beam, --replan and --loss-plans are plan's; they need --policy plan");
+            return planElsewhere || !planOptions ? budget
+                : throw new CliException("--effort, --beam, --easy-beam, --replan and --loss-plans are plan's; they need --policy plan");
         if (budget.Halving || budget.Follow) throw new CliException("--halving and --follow are pimc's; plan follows its plan always");
         var effort = Budget.Effort(r.GetValue(_effort) ?? DefaultEffort);
         budget = budget with
@@ -139,10 +141,11 @@ internal sealed class BudgetArgs
             Elite = r.GetValue(_elite) ?? effort.Elite,
             Boss = r.GetValue(_boss) ?? effort.Boss,
             Beam = r.GetValue(_beam) ?? effort.Beam,
+            EasyBeam = r.GetValue(_easyBeam) ?? effort.EasyBeam,
             Replan = r.GetValue(_replan) ?? effort.Replan,
             LossPlans = r.GetValue(_lossPlans) ?? effort.LossPlans,
         };
-        if (budget.Beam < 1) throw new CliException("--beam is at least 1");
+        if (budget.Beam < 1 || budget.EasyBeam < 0) throw new CliException("--beam is at least 1, --easy-beam at least 0");
         if (budget.Elite <= 0 || budget.Boss <= 0) throw new CliException("--elite-x and --boss-x are above 0");
         return budget.Replan >= 0 && budget.LossPlans >= 0 ? budget : throw new CliException("--replan and --loss-plans are at least 0");
     }

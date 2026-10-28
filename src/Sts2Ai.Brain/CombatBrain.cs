@@ -18,8 +18,10 @@ namespace Sts2Ai.Brain;
 /// <param name="Replan">The SL planner's turns of an unproved losing plan played before planning again; 0 plays it to its end.</param>
 /// <param name="LossPlans">The most unproved losing plans the SL planner makes in a row, that is in one combat
 /// (<see cref="SlRoute"/>); the last is played to its end. 0: no limit.</param>
+/// <param name="EasyBeam">The SL planner's states kept when its greedy dive already wins the combat; 0:
+/// <paramref name="Beam"/>.</param>
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false, bool Follow = false,
-    int Beam = 0, int Replan = 1, int LossPlans = 0)
+    int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0)
 {
     /// <summary>The planner's budget at an effort level (docs: combat-brain §5): beam, nodes per state and turn, and the
     /// turns of an unproved losing plan played before planning again (0: to its end).</summary>
@@ -40,15 +42,16 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elit
     public Budget For(string? room)
     {
         double x = room switch { "Elite" => Elite, "Boss" => Boss, _ => 1.0 };
+        int Scaled(int beam) => beam > 0 ? Math.Max(1, (int)Math.Round(beam * x)) : 0;
         return Beam > 0
-            ? this with { Beam = Math.Max(1, (int)Math.Round(Beam * x)), Elite = 1, Boss = 1 }
+            ? this with { Beam = Scaled(Beam), EasyBeam = Scaled(EasyBeam), Elite = 1, Boss = 1 }
             : this with { NodesPerWorld = (int)Math.Round(NodesPerWorld * x), Elite = 1, Boss = 1 };
     }
 
     /// <summary>As the champion's name shows it: 8x300 (beam 16x300 for the planner), then the multiples that are not 1,
-    /// then halving and follow if on, and the planner's replan when not 1 and its loss plans when limited.</summary>
+    /// then halving and follow if on, and the planner's easy beam, replan when not 1 and loss plans when limited.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}");
+        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}");
 }
 
 /// <summary>Searches every world from the decision's state: the best line after each of <paramref name="first"/>, in

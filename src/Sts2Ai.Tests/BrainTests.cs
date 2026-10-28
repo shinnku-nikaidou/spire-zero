@@ -117,8 +117,8 @@ public class BudgetTests
     [InlineData("Boss", 6)]
     public void ThePlannersRoomMultipleScalesItsBeam(string room, int beam)
     {
-        var budget = new Budget(NodesPerWorld: 150, Elite: 2, Boss: 1.5, Beam: 4).For(room);
-        Assert.Equal(new Budget(NodesPerWorld: 150, Beam: beam), budget);
+        var budget = new Budget(NodesPerWorld: 150, Elite: 2, Boss: 1.5, Beam: 4, EasyBeam: 2).For(room);
+        Assert.Equal(new Budget(NodesPerWorld: 150, Beam: beam, EasyBeam: beam / 2), budget);
         Assert.Equal(budget, budget.For(room));
     }
 
@@ -129,6 +129,7 @@ public class BudgetTests
         Assert.Equal("4x100 elite x2 halving", new Budget(4, 100, Elite: 2, Halving: true).ToString());
         Assert.Equal("beam 16x300 boss x2", new Budget(Boss: 2, Beam: 16).ToString());
         Assert.Equal("beam 4x300 elite x2 loss plans 3", new Budget(Elite: 2, Beam: 4, LossPlans: 3).ToString());
+        Assert.Equal("beam 8x300 easy 4 loss plans 3", new Budget(Beam: 8, EasyBeam: 4, LossPlans: 3).ToString());
     }
 }
 
@@ -410,6 +411,27 @@ public class SlPlannerTests
         Assert.Equal(CombatStatus.Lost, unlimited.End);
         Assert.True(unlimited.Plans > 2);
         Assert.Equal((2, CombatStatus.Lost), limited);
+    }
+
+    [Fact]
+    public void WhenTheDiveWinsTheFullBeamKeepsTheEasyBeam()
+    {
+        var world = new Toy();
+        var easy = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000, EasyBeam: 2));
+        var narrow = new SlPlanner(Leaf).Plan(world.Observe(), new Toy(), new Budget(NodesPerWorld: 100_000, Beam: 2));
+
+        Assert.Equal(CombatStatus.Won, easy.End);
+        Assert.Equal((narrow.Value, narrow.Nodes, narrow.Turns), (easy.Value, easy.Nodes, easy.Turns));
+        Assert.Equal(narrow.Result.Plan, easy.Result.Plan);
+    }
+
+    [Fact]
+    public void WhenTheDiveLosesTheFullBeamKeepsTheBeam()
+    {
+        var losing = new SlPlanner(Leaf).Plan(new Toy(enemyHp: 500).Observe(), new Toy(enemyHp: 500), new Budget(NodesPerWorld: 100_000, Beam: 1000, EasyBeam: 2));
+        var full = new SlPlanner(Leaf).Plan(new Toy(enemyHp: 500).Observe(), new Toy(enemyHp: 500), new Budget(NodesPerWorld: 100_000, Beam: 1000));
+
+        Assert.Equal((full.Value, full.Nodes, full.Turns, full.Proved), (losing.Value, losing.Nodes, losing.Turns, losing.Proved));
     }
 
     [Fact]
