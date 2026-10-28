@@ -10,6 +10,15 @@ one cost, which the run records hold), at --aux-weight in the loss; it shapes th
 the hazards alone. The output is a net file for `run --value`, in the weights history by default
 (docs: learning §6): the net as ONNX, with what RunNet needs to feed it, and test runs that RunNet checks on load.
 
+Two more sources, both optional (docs: learning §2). --forks reads counterfactual pairs (`fork`): two branches from one
+decision with the same seed, played to the end of the act. Each branch's afterstate is a sample like a decision's,
+censored where the branch stopped, at --fork-weight; and the difference of the two afterstates' expected floors is
+fitted to the pair's played-out difference, at --pair-weight: a branch that died reached its floor, one that lived
+through the act what V expects of the run at its horizon (bootstrapped). --afterstates reads every option of the
+logged decisions (`afterstates`); at --kl-weight, V's softmax over each decision's options (at --kl-temperature,
+floors) is pulled towards the policy that played the logs: the softmax of V v0's values at the log's own exploration
+temperature. Fork pairs and decisions are split by run id as the decisions are.
+
     uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1
 """
 
@@ -82,6 +91,26 @@ def next_combats(record: dict, floor: int) -> list[float]:
 
 def held_out(run_id: str) -> bool:
     return int(run_id, 16) % 5 == 0
+
+
+def merged(view: dict, changes: dict) -> dict:
+    """A run view with an afterstate's changes as `fork` and `afterstates` write them: the fields that differ, to one
+    level inside an object field; a null removes a field."""
+    out = dict(view)
+    for k, v in changes.items():
+        if v is None:
+            out.pop(k, None)
+        elif isinstance(v, dict) and isinstance(view.get(k), dict):
+            out[k] = {kk: vv for kk, vv in {**view[k], **v}.items() if vv is not None}
+        else:
+            out[k] = v
+    return out
+
+
+def temperature(brain: str) -> float | None:
+    """The macro exploration temperature a log's brain name carries ("l0 explore 0.25"), or None when it did not explore."""
+    parts = brain.split()
+    return float(parts[parts.index("explore") + 1]) if "explore" in parts else None
 
 
 def cap(x: float) -> float:
@@ -428,6 +457,278 @@ def expected_floor(hazards: torch.Tensor, start: torch.Tensor):
     return start.double() + (survive * (g >= start[:, None])).sum(1)
 
 
+def floors_within(hazards: torch.Tensor, start: torch.Tensor, horizon: torch.Tensor):
+    """The floor reached within the horizon: the start floor plus the chance to survive each floor from it up to the
+    horizon's last floor. A branch that died on floor f reached f; one that lived through the horizon, the floor after."""
+    h = hazards.double()
+    g = torch.arange(h.shape[1], device=h.device)
+    inside = (g >= start[:, None]) & (g <= horizon[:, None])
+    survive = torch.where(inside, 1 - h, torch.ones_like(h)).cumprod(1)
+    return start.double() + (survive * inside).sum(1)
+
+
+def segment_log_softmax(values: torch.Tensor, group: torch.Tensor, groups: int):
+    """The log-softmax of values within each group (group[i] is value i's group, groups in 0..groups-1)."""
+    top = torch.full((groups,), -math.inf, dtype=values.dtype, device=values.device).scatter_reduce(
+        0, group, values, "amax"
+    )
+    shifted = values - top[group]
+    total = torch.zeros(groups, dtype=values.dtype, device=values.device).index_add(0, group, shifted.exp())
+    return shifted - total.log()[group]
+
+
+def state_sample(
+    run: str, view: dict, features: dict, floors: int, reached: int | None = None, died: bool = False
+) -> dict:
+    """A run view as a sample, with an outcome when it was played out: died on floor reached, or lived through the
+    floor before it."""
+    start = min(max(view["floor"], 0), floors - 1)
+    end = start if reached is None else max(start, min(reached, floors - 1))
+    return {
+        "run": run,
+        "view": view,
+        "tokens": tokens(view),
+        "features": features,
+        "start": start,
+        "end": end,
+        "kind": "died" if died else "censored",
+        "next": [],
+        "weight": 1.0,
+    }
+
+
+def read_forks(paths: str, floors: int) -> list[dict]:
+    """The fork pairs: each branch's afterstate as a sample with its outcome (died on its floor, or lived through the
+    act), the run at the horizon of each branch that lived, V v0's difference (the champion's ranking: the first
+    branch is its best), the act's last floor (from the branches that lived through it), and two differences played
+    out: the floors reached within the act, and the same plus the share of max HP left at the horizon."""
+    entries = list(read_lines(paths))
+    last = {}
+    for e in entries:
+        for b in e["branches"]:
+            if not b["died"]:
+                last[e["act"]] = max(last.get(e["act"], 0), b["floor"])
+    pairs = []
+    for e in entries:
+        options = {o["action"]: o for o in e["options"]}
+        branches = []
+        for b in e["branches"]:
+            o = options[b["action"]]
+            reached = b["floor"] if b["died"] else b["floor"] + 1
+            view = merged(e["run_view"], o["after"])
+            branches.append(
+                {
+                    "sample": state_sample(e["run"], view, o["features"], floors, reached, b["died"]),
+                    "reached": float(reached),
+                    "score": reached + (0.0 if b["died"] else b["hp"] / max(b["max_hp"], 1)),
+                    "horizon": None
+                    if b["died"]
+                    else state_sample(e["run"], b["horizon"], b["horizon_features"], floors),
+                    "v0": o["value"],
+                }
+            )
+        a, b = branches
+        horizon = last.get(e["act"], max(a["reached"], b["reached"]))
+        pairs.append(
+            {
+                "run": e["run"],
+                "branches": branches,
+                "last": min(int(horizon), floors - 1),
+                "within": a["reached"] - b["reached"],
+                "score": a["score"] - b["score"],
+                "v0": a["v0"] - b["v0"],
+            }
+        )
+    return pairs
+
+
+def read_afterstates(paths: str, views: dict, floors: int) -> list[dict]:
+    """The logged decisions with two options or more, each with its options' afterstates, the chance the logs'
+    policy gave each (the softmax of V v0's values at the exploration temperature the log's brain names), the option
+    it drew and the floor its run reached."""
+    groups = []
+    for e in read_lines(paths):
+        key = (e["run"], e["decision_id"])
+        if len(e["options"]) < 2 or key not in views:
+            continue
+        view, brain, outcome = views[key]
+        t = temperature(brain)
+        actions = [o["action"] for o in e["options"]]
+        if t is None or e["chosen"] not in actions:
+            continue
+        values = torch.tensor([o["value"] for o in e["options"]], dtype=torch.float64)
+        groups.append(
+            {
+                "run": e["run"],
+                "surface": e["surface"],
+                "view": view,
+                "actions": actions,
+                "chosen": actions.index(e["chosen"]),
+                "outcome": float(outcome),
+                "options": [(o["after"], o["features"]) for o in e["options"]],
+                "values": values.tolist(),
+                "behaviour": torch.softmax(values / t, 0).tolist(),
+            }
+        )
+    return groups
+
+
+class PairBatch:
+    """Fork pairs as one batch of their branches, the first branches then the second ones; the horizons of the
+    branches that lived, in the same order; and each pair's differences."""
+
+    def __init__(self, pairs, make, device):
+        branches = [p["branches"][0] for p in pairs] + [p["branches"][1] for p in pairs]
+        self.both = make([b["sample"] for b in branches])
+        self.reached = torch.tensor([b["reached"] for b in branches], dtype=torch.float64, device=device)
+        self.lived = torch.tensor([b["horizon"] is not None for b in branches], device=device)
+        horizons = [b["horizon"] for b in branches if b["horizon"] is not None]
+        self.horizons = make(horizons) if horizons else None
+        self.last = torch.tensor([p["last"] for p in pairs] * 2, device=device)
+        self.within, self.score, self.v0 = (
+            torch.tensor([p[k] for p in pairs], dtype=torch.float64, device=device) for k in ("within", "score", "v0")
+        )
+
+
+class GroupBatch:
+    """Logged decisions as one batch of their options' afterstates, with each option's decision and the chance the
+    logs' policy gave it."""
+
+    def __init__(self, groups, make, floors, device):
+        samples, group, behaviour = [], [], []
+        for k, g in enumerate(groups):
+            for (after, features), p in zip(g["options"], g["behaviour"], strict=True):
+                samples.append(state_sample(g["run"], merged(g["view"], after), features, floors))
+                group.append(k)
+                behaviour.append(p)
+        self.options = make(samples)
+        self.group = torch.tensor(group, device=device)
+        self.behaviour = torch.tensor(behaviour, dtype=torch.float64, device=device)
+        self.v0 = torch.tensor([v for g in groups for v in g["values"]], dtype=torch.float64, device=device)
+        self.groups = len(groups)
+        self.sizes = [len(g["options"]) for g in groups]
+        self.surfaces = [g["surface"] for g in groups]
+        self.actions = [g["actions"] for g in groups]
+        self.chosen = [g["chosen"] for g in groups]
+        self.outcomes = [g["outcome"] for g in groups]
+
+
+def pair_target(model, pb: PairBatch):
+    """Each pair's difference in the floor its branches reach: the floor a branch died on, or, past the horizon, V's
+    expected floor at the run there (bootstrapped, without a gradient)."""
+    with torch.no_grad():
+        target = pb.reached.clone()
+        if pb.horizons is not None:
+            target[pb.lived] = expected_floor(torch.sigmoid(model(*pb.horizons.inputs())), pb.horizons.start)
+    n = len(pb.v0)
+    return target[:n] - target[n:]
+
+
+def fork_report(model, batches) -> dict:
+    """On the held-out pairs: how often a predicted difference has the played one's sign, each pair weighed by the
+    played difference's size and ties left out. V's expected floor (what L0 compares) and V v0's values (the champion's
+    ranking: its best is the first branch) against the floors reached within the act plus the HP share left; the
+    floors reached within the act predicted against the played ones, and the share of their variance explained."""
+    within, expected, v0, real_within, real_score = [], [], [], [], []
+    with torch.no_grad():
+        for pb in batches:
+            h = torch.sigmoid(model(*pb.both.inputs()))
+            n = len(pb.v0)
+            w, f = floors_within(h, pb.both.start, pb.last), expected_floor(h, pb.both.start)
+            within.append(w[:n] - w[n:])
+            expected.append(f[:n] - f[n:])
+            v0.append(pb.v0)
+            real_within.append(pb.within)
+            real_score.append(pb.score)
+    if not v0:
+        return {}
+    pw, pf, pv, rw, rs = (torch.cat(x).cpu() for x in (within, expected, v0, real_within, real_score))
+
+    def sign_accuracy(pred, real):
+        size = real.abs()
+        return float((size * (torch.sign(pred) == torch.sign(real))).sum() / size.sum().clamp_min(1e-9))
+
+    return {
+        "fork_sign_accuracy": sign_accuracy(pf, rs),
+        "fork_sign_accuracy_v0": sign_accuracy(pv, rs),
+        "fork_sign_accuracy_within": sign_accuracy(pw, rw),
+        "fork_r2_within": 1 - float(((pw - rw) ** 2).sum() / ((rw - rw.mean()) ** 2).sum().clamp_min(1e-9)),
+        "fork_mean_score_diff": float(rs.mean()),
+        "fork_ties": float((rs == 0).double().mean()),
+    }
+
+
+def pull_report(model, batches, temperature: float) -> dict:
+    """On the held-out decisions, per surface: the KL from the logs' policy to V's softmax, how often V's best option
+    is V v0's (the champion's), and on card rewards how often each would skip. And the slope of V's values on V v0's
+    within a decision (both less their decision's mean): V v0's exploration temperature times it is that temperature
+    in floors.
+
+    And an off-policy check of V's ranking (inverse propensity scoring): on the decisions where the logs' policy gave
+    V v0's best option a chance between 2% and 98%, the floor the runs reached after drawing another option against
+    after drawing the best, each weighed by the inverse of its chance, next to what V expects of the same: the other
+    options at their chances, less the best. The draws do not depend on the run's luck, so the played difference is
+    unbiased, if noisy."""
+    stats, xy, xx, ips = {}, 0.0, 0.0, []
+    with torch.no_grad():
+        for gb in batches:
+            values = expected_floor(torch.sigmoid(model(*gb.options.inputs())), gb.options.start)
+            count = torch.tensor(gb.sizes, dtype=torch.float64, device=values.device)
+            centred = [
+                x
+                - (torch.zeros(gb.groups, dtype=torch.float64, device=x.device).index_add(0, gb.group, x) / count)[
+                    gb.group
+                ]
+                for x in (values, gb.v0)
+            ]
+            xy, xx = xy + float((centred[0] * centred[1]).sum()), xx + float((centred[1] ** 2).sum())
+            logp = segment_log_softmax(values / temperature, gb.group, gb.groups)
+            p = gb.behaviour
+            kl = torch.zeros(gb.groups, dtype=torch.float64, device=p.device).index_add(
+                0, gb.group, p * (p.clamp_min(1e-12).log() - logp)
+            )
+            for k, (v, q) in enumerate(zip(values.split(gb.sizes), p.split(gb.sizes), strict=True)):
+                row = stats.setdefault(gb.surfaces[k], {"decisions": 0, "kl": 0.0, "agree": 0, "skip": 0, "skip_v0": 0})
+                best, best_v0 = gb.actions[k][int(v.argmax())], gb.actions[k][int(q.argmax())]
+                row["decisions"] += 1
+                row["kl"] += float(kl[k])
+                row["agree"] += best == best_v0
+                row["skip"] += best.startswith("card_alt")
+                row["skip_v0"] += best_v0.startswith("card_alt")
+                g = int(q.argmax())
+                pg = float(q[g])
+                if 0.02 < pg < 0.98:
+                    drew_best = gb.chosen[k] == g
+                    played = gb.outcomes[k] * ((0.0 if drew_best else 1 / (1 - pg)) - (1 / pg if drew_best else 0.0))
+                    others = float((q * v).sum() - pg * v[g]) / (1 - pg)
+                    ips.append((gb.surfaces[k], played, others - float(v[g])))
+    n = sum(row["decisions"] for row in stats.values())
+    report = {"pull_kl": sum(row["kl"] for row in stats.values()) / max(1, n), "pull_slope": xy / max(xx, 1e-12)}
+    report["pull_agree"] = sum(row["agree"] for row in stats.values()) / max(1, n)
+    if len(ips) > 1:
+        played = torch.tensor([p for _, p, _ in ips], dtype=torch.float64)
+        report["ips"] = {
+            "decisions": len(ips),
+            "played": float(played.mean()),
+            "played_se": float(played.std() / len(ips) ** 0.5),
+            "expected": sum(e for _, _, e in ips) / len(ips),
+        }
+    report["pull"] = {
+        surface: {
+            "decisions": row["decisions"],
+            "kl": row["kl"] / row["decisions"],
+            "agree": row["agree"] / row["decisions"],
+        }
+        | (
+            {"skip": row["skip"] / row["decisions"], "skip_v0": row["skip_v0"] / row["decisions"]}
+            if surface == "card_reward"
+            else {}
+        )
+        for surface, row in sorted(stats.items())
+    }
+    return report
+
+
 class Objective(StrEnum):
     floor = "floor"
     win = "win"
@@ -455,6 +756,22 @@ def main(
     aux_weight: Annotated[
         float, typer.Option(min=0, help="the weight of the next combats' HP costs in the loss; 0: no second head")
     ] = 3.0,
+    forks: Annotated[str | None, typer.Option(help="counterfactual pairs (`fork`), comma-separated")] = None,
+    fork_weight: Annotated[
+        float, typer.Option(min=0, help="the weight of each fork branch's outcome in the loss")
+    ] = 1.0,
+    pair_weight: Annotated[
+        float,
+        typer.Option(min=0, help="the weight of the pairs' differences, as a share of their variance left unexplained"),
+    ] = 1.0,
+    afterstates: Annotated[
+        str | None, typer.Option(help="every option of the logged decisions (`afterstates`), comma-separated")
+    ] = None,
+    kl_weight: Annotated[float, typer.Option(min=0, help="the weight of the pull towards the logs' policy")] = 0.0,
+    kl_temperature: Annotated[
+        float, typer.Option(min=0.001, help="V's softmax temperature over a decision's options, in floors")
+    ] = 1.0,
+    side_batch: Annotated[int, typer.Option(min=1, help="fork pairs, or logged decisions, per step")] = 64,
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out, character)
@@ -462,13 +779,14 @@ def main(
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    samples, won = [], 0
+    samples, won, views = [], 0, {}
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         won += sum(1 for r in runs.values() if r["outcome"] == "won" and not r.get("failure"))
         for e in read_lines(log, '"run_view"'):
             r = runs.get(e["run"])
             if r is None or r.get("failure") or "run_view" not in e:
                 continue
+            views[(e["run"], e["decision_id"])] = (e["run_view"], e["brain"], r["floor"])
             kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
             start = min(max(e["run_view"]["floor"], 0), floors - 1)
             samples.append(
@@ -495,6 +813,20 @@ def main(
     if not train or not test:
         raise LearnError(f"{len(train)} train and {len(test)} held-out samples: too few runs")
 
+    pairs = read_forks(forks, floors) if forks else []
+    groups = read_afterstates(afterstates, views, floors) if afterstates else []
+    if (forks and not pairs) or (afterstates and not groups):
+        raise LearnError(
+            f"{len(pairs)} fork pairs and {len(groups)} logged decisions with options: nothing to learn from"
+        )
+    train_pairs = [p for p in pairs if not held_out(p["run"])]
+    test_pairs = [p for p in pairs if held_out(p["run"])]
+    train_groups = [g for g in groups if not held_out(g["run"])]
+    test_groups = [g for g in groups if held_out(g["run"])]
+    # The pairs' differences are fitted in units of their played-out differences' mean square (floors reached and HP
+    # share left), so the weight does not depend on their scale.
+    pair_scale = max(0.01, sum(p["score"] ** 2 for p in train_pairs) / max(1, len(train_pairs)))
+
     tables = vocab(train, min_count)
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     names = sorted({f for s in samples for f in s["features"]})
@@ -513,6 +845,23 @@ def main(
 
     test_batches = list(batches(test, False))
     test_weight = sum(s["weight"] for s in test)
+
+    def pair_batch(chunk):
+        return PairBatch(chunk, lambda part: Batch(part, index, names, mean, std, floors, device), device)
+
+    def group_batch(chunk):
+        return GroupBatch(chunk, lambda part: Batch(part, index, names, mean, std, floors, device), floors, device)
+
+    def side(part, make):
+        """Endless batches of fork pairs or logged decisions, shuffled anew on each pass."""
+        while part:
+            order = random.sample(part, len(part))
+            for i in range(0, len(order), side_batch):
+                yield make(order[i : i + side_batch])
+
+    test_pair_batches = [pair_batch(test_pairs[i : i + side_batch]) for i in range(0, len(test_pairs), side_batch)]
+    test_group_batches = [group_batch(test_groups[i : i + side_batch]) for i in range(0, len(test_groups), side_batch)]
+    train_pair_stream, train_group_stream = side(train_pairs, pair_batch), side(train_groups, group_batch)
 
     # Baseline: per floor, the hazard the training runs show, whatever the state.
     alive, deaths = torch.zeros(floors, dtype=torch.float64), torch.zeros(floors, dtype=torch.float64)
@@ -535,6 +884,32 @@ def main(
                 rows.append(expected_floor(torch.sigmoid(logits), b.start))
         return total / test_weight, torch.cat(rows), aux_total / test_weight
 
+    def side_losses(model, pb, gb):
+        """The fork branches' loss, the pairs' share of variance unexplained and the pull's cross-entropy, each a
+        mean (0 without the batch)."""
+        fork, pair, kl = (torch.zeros((), device=device) for _ in range(3))
+        if pb is not None:
+            logits = model(*pb.both.inputs())
+            fork = loss_of(logits, pb.both).mean()
+            n = len(pb.v0)
+            values = expected_floor(torch.sigmoid(logits), pb.both.start)
+            pair = ((values[:n] - values[n:] - pair_target(model, pb)) ** 2).mean() / pair_scale
+        if gb is not None:
+            values = expected_floor(torch.sigmoid(model(*gb.options.inputs())), gb.options.start)
+            logp = segment_log_softmax(values / kl_temperature, gb.group, gb.groups)
+            kl = -(gb.behaviour * logp).sum() / gb.groups
+        return fork, pair, kl
+
+    def evaluate_side(model):
+        fork = pair = kl = 0.0
+        with torch.no_grad():
+            for pb in test_pair_batches:
+                f, p, _ = side_losses(model, pb, None)
+                fork, pair = fork + float(f) * len(pb.v0), pair + float(p) * len(pb.v0)
+            for gb in test_group_batches:
+                kl += float(side_losses(model, None, gb)[2]) * gb.groups
+        return fork / max(1, len(test_pairs)), pair / max(1, len(test_pairs)), kl / max(1, len(test_groups))
+
     model = Net({t: len(ids) for t, ids in tables.items()}, len(names), floors).to(device)
     # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
     with torch.no_grad():
@@ -547,14 +922,31 @@ def main(
             logits, aux = model.both(*b.inputs())
             per_sample = loss_of(logits, b) + aux_weight * aux_loss_of(aux, b)
             loss = (per_sample * b.weight).sum() / b.weight.sum()
+            fork, pair, kl = side_losses(
+                model,
+                next(train_pair_stream, None) if fork_weight > 0 or pair_weight > 0 else None,
+                next(train_group_stream, None) if kl_weight > 0 else None,
+            )
+            loss = loss + fork_weight * fork + pair_weight * pair + kl_weight * kl
             opt.zero_grad()
             loss.backward()
             opt.step()
         model.eval()
         held, _, held_aux = evaluate(model)
-        logger.info("epoch {}: held-out loss {:.4f}, next combats {:.4f}", epoch, held, held_aux)
-        if held < best - 1e-4:
-            best, best_state, stale = held, {k: v.clone() for k, v in model.state_dict().items()}, 0
+        held_fork, held_pair, held_kl = evaluate_side(model)
+        # Early stopping weighs the held-out losses as training does.
+        total = held + fork_weight * held_fork + pair_weight * held_pair + kl_weight * held_kl
+        logger.info(
+            "epoch {}: held-out loss {:.4f}, next combats {:.4f}, forks {:.4f}, pairs {:.4f}, pull {:.4f}",
+            epoch,
+            held,
+            held_aux,
+            held_fork,
+            held_pair,
+            held_kl,
+        )
+        if total < best - 1e-4:
+            best, best_state, stale = total, {k: v.clone() for k, v in model.state_dict().items()}, 0
         else:
             stale += 1
             if stale >= patience:
@@ -585,6 +977,12 @@ def main(
         "r2_held_out": r2(predicted),
         "r2_held_out_floor_only": r2(base_predicted),
     }
+    if pairs:
+        report |= {"forks": len(pairs), "held_out_forks": len(test_pairs), "fork_weight": fork_weight}
+        report |= {"pair_weight": pair_weight, **fork_report(model, test_pair_batches)}
+    if groups:
+        report |= {"decisions_pulled": len(groups), "kl_weight": kl_weight, "kl_temperature": kl_temperature}
+        report |= pull_report(model, test_group_batches, kl_temperature)
     print(json.dumps(report))
 
     # Test runs for RunNet's check on load: a few held-out decisions, valued on the CPU as RunNet values them.
