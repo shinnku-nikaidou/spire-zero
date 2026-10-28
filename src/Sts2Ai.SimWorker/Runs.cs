@@ -81,7 +81,7 @@ internal static class RunCommand
         var outcomes = new Dictionary<string, int>();
         var surfaces = new Dictionary<string, int>();
         var failures = new Dictionary<string, int>();
-        int mismatches = 0, gameErrors = 0, nodes = 0, nodesExact = 0, nodesRelicState = 0, replans = 0;
+        int mismatches = 0, gameErrors = 0, nodes = 0, nodesExact = 0, replans = 0;
         var cloneMs = new List<double>();
         Console.WriteLine($"run: {n} runs in {env}, {(champion?.ToString() ?? $"brain at {brainPath}")}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
@@ -102,14 +102,13 @@ internal static class RunCommand
             Console.WriteLine($"#{i} {setup.Seed} {first.Outcome} {first.Summary} decisions {first.Trace.Count} {ms:F0} ms " +
                               (first.Replans > 0 ? $"replans {first.Replans} " : "") +
                               $"maps {string.Join(",", first.MapHashes.Select(h => h.ToString("x16")))}" +
-                              (observe ? $" obs {Digest(first.Observations.Select(o => o.Full)):x16}" : ""));
+                              (observe ? $" obs {Digest(first.Observations):x16}" : ""));
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
             foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {Cli.FirstLine(e)}");
             if (!check) continue;
-            var (clonesExact, clonesRelicState, cloneMismatch) = ClonesReplay(pump, first, cloneMs);
+            var (clonesExact, cloneMismatch) = ClonesReplay(pump, first, cloneMs);
             nodes += first.Nodes.Count;
             nodesExact += clonesExact;
-            nodesRelicState += clonesRelicState;
             if (cloneMismatch != null) Console.WriteLine($"  CLONE MISMATCH: {cloneMismatch}");
             var second = PlayRun(pump, setup, env, secondBrain, maxDecisions, trace: false, observe, printObservations: false);
             workerPool?.TakeGameErrors();
@@ -142,38 +141,35 @@ internal static class RunCommand
         foreach (var (msg, count) in failures.OrderByDescending(kv => kv.Value)) Console.WriteLine($"  failure x{count}: {msg}");
         if (check) Console.WriteLine($"determinism: {n - mismatches}/{n} runs identical on replay over the wire; " +
                                      $"{nodesExact}/{nodes} nodes replay exactly from their checkpoint" +
-                                     (nodesRelicState > 0 ? $", {nodesRelicState} more but for relic state the save drops" : "") +
                                      (cloneMs.Count > 0 ? $" ({cloneMs.Average():F0} ms each, max {cloneMs.Max():F0})" : ""));
         Console.WriteLine($"game Log.Error lines: {gameErrors}" + (workerPool != null ? $"; worker restarts: {workerPool.Restarts}" : "") +
                           (champion?.Policy == "plan" ? $"; replans: {replans}" : ""));
-        return failures.Count == 0 && mismatches == 0 && nodesExact + nodesRelicState == nodes && gameErrors == 0 ? 0 : 1;
+        return failures.Count == 0 && mismatches == 0 && nodesExact == nodes && gameErrors == 0 ? 0 : 1;
     }
 
     /// <summary>
     /// Loads each node of a played run from its checkpoint and replays the node's decisions (docs: simulator §7): the
     /// clone must show the run's observations one for one, and be at its horizon once it has travelled. Returns how
-    /// many nodes did, how many did but for the state of relics (fields the save drops, docs: environments §6), and
-    /// what went wrong in the first that did neither; each node's load and replay time goes to <paramref name="ms"/>.
+    /// many nodes did, and what went wrong in the first that did not; each node's load and replay time goes to
+    /// <paramref name="ms"/>.
     /// </summary>
-    private static (int Exact, int RelicState, string? Mismatch) ClonesReplay(Pump pump, RunResult run, List<double> ms)
+    private static (int Exact, string? Mismatch) ClonesReplay(Pump pump, RunResult run, List<double> ms)
     {
-        int exact = 0, relicState = 0;
+        int exact = 0;
         string? mismatch = null;
         for (int k = 0; k < run.Nodes.Count; k++)
         {
             var (save, start) = run.Nodes[k];
             int end = k + 1 < run.Nodes.Count ? run.Nodes[k + 1].Start : run.Trace.Count;
-            var seen = new List<(ulong Full, ulong Bare)>();
-            bool relicsDiffer = false;
+            var seen = new List<ulong>();
             string? wrong;
             var clock = Stopwatch.StartNew();
             try
             {
                 var clone = new NodeClone(save, run.Trace.Skip(start).Take(end - start).ToList());
                 using var session = RunSession.Load(pump, clone, Unasked.Instance, Unasked.Instance, Unasked.Instance,
-                    obs => seen.Add((ProtocolJson.Hash(obs), ProtocolJson.Hash(WithoutRelicState(obs)))));
-                relicsDiffer = Enumerable.Range(0, end - start).Any(i => seen.ElementAtOrDefault(i).Full != run.Observations[start + i].Full);
-                int differs = Enumerable.Range(0, end - start).FirstOrDefault(i => seen.ElementAtOrDefault(i).Bare != run.Observations[start + i].Bare, -1);
+                    obs => seen.Add(ProtocolJson.Hash(obs)));
+                int differs = Enumerable.Range(0, end - start).FirstOrDefault(i => seen.ElementAtOrDefault(i) != run.Observations[start + i], -1);
                 bool last = k + 1 == run.Nodes.Count;
                 wrong = differs >= 0 ? $"observation {start + differs} ({run.Trace[start + differs]}) differs"
                     : seen.Count != end - start ? $"{seen.Count} observations, not {end - start}"
@@ -196,26 +192,9 @@ internal static class RunCommand
             ms.Add(clock.Elapsed.TotalMilliseconds);
             if (HeadlessGame.TakeErrors() is [var error, ..]) wrong ??= $"game error: {Cli.FirstLine(error)}";
             if (wrong != null) mismatch ??= $"node {k} (decisions {start}..{end - 1}): {wrong}";
-            else if (relicsDiffer) relicState++;
             else exact++;
         }
-        return (exact, relicState, mismatch);
-    }
-
-    /// <summary>The observation with each relic shown by its id alone, its counter and status left out.</summary>
-    private static Observation WithoutRelicState(Observation obs)
-    {
-        static IReadOnlyList<RelicView> Ids(IReadOnlyList<RelicView> relics) => [.. relics.Select(r => new RelicView { Id = r.Id })];
-        return obs with
-        {
-            Run = obs.Run with { Relics = Ids(obs.Run.Relics) },
-            Screen = obs.Screen switch
-            {
-                CombatScreen screen => screen with { Combat = screen.Combat with { Relics = Ids(screen.Combat.Relics) } },
-                CardChoiceScreen { Combat: { } combat } screen => screen with { Combat = combat with { Relics = Ids(combat.Relics) } },
-                _ => obs.Screen,
-            },
-        };
+        return (exact, mismatch);
     }
 
     /// <summary>Policies for a clone that replays everything: asking one means the recording ran out.</summary>
@@ -232,12 +211,12 @@ internal static class RunCommand
         private static InvalidOperationException Exhausted() => new("asked beyond the recording");
     }
 
-    /// <param name="Observations">Per decision, its observation's hash, and the hash without relic state (when observing).</param>
+    /// <param name="Observations">Per decision, its observation's hash (when observing).</param>
     /// <param name="Log">Harness's decision log, when logging in this process.</param>
     /// <param name="Record">The run's record, its game errors and time still to fill in.</param>
     /// <param name="Nodes">Each node's checkpoint and where its decisions begin in the trace (when observing).</param>
     private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes,
-        IReadOnlyList<(ulong Full, ulong Bare)> Observations, IReadOnlyList<DecisionEntry> Log, string? Failure, List<string> Errors, RunRecord Record,
+        IReadOnlyList<ulong> Observations, IReadOnlyList<DecisionEntry> Log, string? Failure, List<string> Errors, RunRecord Record,
         IReadOnlyList<(string Save, int Start)> Nodes, int Replans);
 
     /// <summary>
@@ -251,7 +230,7 @@ internal static class RunCommand
         var hello = new Hello(HeadlessGame.GameVersion, env.ToString(), "worker",
             new RunHeader(RunHeader.IdOf(setup.Seed), setup.Character, setup.Ascension));
         IRunBrain? brain = null;
-        var observations = new List<(ulong Full, ulong Bare)>();
+        var observations = new List<ulong>();
         var nodes = new List<(string Save, int Start)>();
         RunSession? session = null;
         RunResult result;
@@ -264,7 +243,7 @@ internal static class RunCommand
                 var json = ProtocolJson.Serialize(obs);
                 if (ProtocolJson.Serialize(ProtocolJson.Deserialize<Observation>(json)) != json) throw new InvalidOperationException($"observation does not round-trip: {json}");
                 if (printObservations) Console.WriteLine($"  obs {observations.Count}: {json}");
-                observations.Add((ProtocolJson.Hash(obs), ProtocolJson.Hash(WithoutRelicState(obs))));
+                observations.Add(ProtocolJson.Hash(obs));
             };
             IRunBrain player = export ?? brain;
             session = RunSession.Start(pump, setup, player, player, player, observed);

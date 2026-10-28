@@ -134,7 +134,7 @@ internal sealed class RunSession : IDisposable
         // A clone's prompts are numbered from its node's entry, so the node's own are too.
         HeadlessPatches.NodeEntered = () =>
         {
-            (_checkpoint, NodeStart) = (SaveManager.ToJson(RunManager.Instance.ToSave(null)), _trace.Count);
+            (_checkpoint, NodeStart) = (Checkpoint.Take(player), _trace.Count);
             _selector.RestartPrompts();
         };
     }
@@ -174,14 +174,14 @@ internal sealed class RunSession : IDisposable
     }
 
     /// <summary>
-    /// Loads <paramref name="clone"/> (docs: simulator §7): its save as the game's Continue loads one, then its decisions
-    /// replayed, before the policies answer. The clone is sealed: once it travels it is at its horizon, and stepping
-    /// further throws. A clone may differ from the run it came from where loading a save does (docs: environments §6).
+    /// Loads <paramref name="clone"/> (docs: simulator §7): its save as the game's Continue loads one, with the relic fields
+    /// the save drops put back (<see cref="Checkpoint"/>), then its decisions replayed, before the policies answer. The
+    /// clone is sealed: once it travels it is at its horizon, and stepping further throws.
     /// </summary>
     public static RunSession Load(Pump pump, NodeClone clone, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro,
         Action<Observation>? observed = null)
     {
-        var read = SaveManager.FromJson<SerializableRun>(clone.Save);
+        var read = SaveManager.FromJson<SerializableRun>(Checkpoint.Save(clone.Save));
         var save = read.SaveData ?? throw new InvalidDataException($"node checkpoint does not load: {read.Status} {read.ErrorMessage}");
         var run = RunState.FromSerializable(save);
         var player = run.Players[0];
@@ -194,6 +194,7 @@ internal sealed class RunSession : IDisposable
         {
             // NMainMenu's Continue and NGame.LoadRun without the nodes.
             session.Await(RunManager.Instance.SetUpSavedSingleplayer(run, save));
+            Checkpoint.RestoreRelics(clone.Save, player);
             // Continue always saves; a clone saves nothing, as a run this simulator starts.
             AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
             RunManager.Instance.Launch();

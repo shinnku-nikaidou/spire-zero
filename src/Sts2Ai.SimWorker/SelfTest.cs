@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.Entities.Rngs;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Random;
@@ -138,6 +139,7 @@ internal static class SelfTest
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);
+        CloneKeepsRelicState(pump, seed, Check);
         int workers = r.GetValue(Workers);
         PlanHoldsInTheRun(pump, seed, workers, Check);
         if (workers > 0) PooledMatches(pump, combats, seed, workers, Check);
@@ -467,6 +469,45 @@ internal static class SelfTest
         check("SL clone stops at its node's exit", loaded.AtHorizon && clone.Trace[^1].StartsWith(Surfaces.Map + " ", StringComparison.Ordinal),
             $"{clone.Trace.Count} decisions, the last {clone.Trace[^1]}, at horizon {loaded.AtHorizon}");
         check("SL clone refuses to step past its node's exit", Throws(loaded.Step), $"stepped past {clone.Trace[^1]}");
+    }
+
+    /// <summary>
+    /// A run with random policies, to its third node, whose first relic is disabled at the start, a status that the save
+    /// drops, as Lava Rock's own. The second node's clone must show every observation of the node as the run did, the
+    /// disabled relic among them (docs: simulator §7).
+    /// </summary>
+    private static void CloneKeepsRelicState(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed + 3);
+        var nodes = new List<(string Save, int Start)>();
+        var seen = new List<string>();
+        List<string> trace;
+        using (var session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed + 3, 0)), PromptBrain.Instance, new PlayPolicy(rng), new RandomMacro(rng),
+                   obs => seen.Add(ProtocolJson.Serialize(obs))))
+        {
+            session.Player.Relics[0].Status = RelicStatus.Disabled;
+            while (!session.IsOver && nodes.Count < 3)
+            {
+                if (nodes.Count == 0 || nodes[^1].Start != session.NodeStart) nodes.Add((session.Clone().Save, session.NodeStart));
+                session.Step();
+            }
+            trace = session.Trace.ToList();
+        }
+        if (nodes.Count < 3)
+        {
+            check("SL clone keeps relic state the save drops", false, "the run ended before its third node");
+            return;
+        }
+        var (start, end) = (nodes[1].Start, nodes[2].Start);
+        var cloned = new List<string>();
+        using (RunSession.Load(pump, new NodeClone(nodes[1].Save, trace.Skip(start).Take(end - start).ToList()),
+                   RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, obs => cloned.Add(ProtocolJson.Serialize(obs))))
+        {
+        }
+        bool disabled = seen[start].Contains("\"status\":\"Disabled\"", StringComparison.Ordinal);
+        check("SL clone keeps relic state the save drops", disabled && cloned.SequenceEqual(seen.Skip(start).Take(end - start)),
+            $"run shows the relic disabled: {disabled}; {cloned.Count} of {end - start} observations, the first differing at " +
+            $"{Enumerable.Range(0, Math.Min(cloned.Count, end - start)).FirstOrDefault(i => cloned[i] != seen[start + i], -1)}");
     }
 
     /// <summary>

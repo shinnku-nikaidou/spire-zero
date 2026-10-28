@@ -192,7 +192,7 @@ public sealed class Dispatcher(
         _nodeTrace.Add(action.Action);
     }
 
-    private NodeClone Clone() => new((_node ?? throw new InvalidOperationException("an SL decision before any node checkpoint")).SaveJson, _nodeTrace.ToList());
+    private NodeClone Clone() => new((_node ?? throw new InvalidOperationException("an SL decision before any node checkpoint")).Checkpoint, _nodeTrace.ToList());
 
     private (int Id, ulong Seed, Stopwatch Clock) Begin(string brain)
     {

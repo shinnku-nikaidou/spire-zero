@@ -44,9 +44,10 @@ public interface IWorldSource
 public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 
 /// <summary>
-/// An SL clone of the current node (docs: environments §6): the game's save at the node's entry, and every decision
-/// since, as "surface action" (picks of a card prompt as the game's own indexes). Opaque outside the simulator, which
-/// loads the save as the game's Continue does and replays the decisions.
+/// An SL clone of the current node (docs: environments §6): the node's checkpoint at its entry (the game's save and the
+/// relic fields it drops), and every decision since, as "surface action" (picks of a card prompt as the game's own
+/// indexes). Opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back
+/// and replays the decisions.
 /// </summary>
 public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
 
