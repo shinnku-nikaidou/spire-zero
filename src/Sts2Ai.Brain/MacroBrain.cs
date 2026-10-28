@@ -19,11 +19,21 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
     /// prompt, any of its steps.</summary>
     public bool Explored { get; private set; }
 
+    /// <summary>
+    /// Whether the last macro answer opens a card prompt it was valued by (smithing, a removal). Stopping that prompt
+    /// without a pick would not leave things as they are: it cancels back to the screen that opened it, where the same
+    /// answer comes again (at a rest site, which must be used, forever). So the prompt takes at least the pick the
+    /// answer was valued by.
+    /// </summary>
+    private bool _opened;
+
     public string Choose(MacroDecision decision)
     {
         if (decision.Legal.Count == 0) throw new InvalidOperationException("no legal action");
         Explored = false;
-        return decision.Legal[Pick(Options(decision).Select(o => o.Value).ToList())];
+        var action = decision.Legal[Pick(Options(decision).Select(o => o.Value).ToList())];
+        _opened = OpensPrompt(decision.Observation, action);
+        return action;
     }
 
     /// <summary>Each legal action, in order, with its predicted afterstate and V's value of it: what <see cref="Choose(MacroDecision)"/> picks by.</summary>
@@ -63,6 +73,8 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
             _ => (s, _) => s,
         };
         // Greedy: add the best pick while it helps, or while the prompt wants more.
+        int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
+        _opened = false;
         var picks = new List<int>();
         var state = run;
         double current = value.Value(state);
@@ -73,7 +85,7 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
                 .Select(i => { var next = pick(state, choice.Options[i]); return (Index: i, Value: value.Value(next), State: next); })
                 .ToList();
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
-            if (picks.Count >= choice.Min) options.Insert(0, (-1, current, state));
+            if (picks.Count >= min) options.Insert(0, (-1, current, state));
             var taken = options[Pick(options.Select(o => o.Value).ToList())];
             if (taken.Index < 0) break;
             picks.Add(taken.Index);
@@ -157,6 +169,19 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null) : IMacr
     }
 
     private RunView? Best(IEnumerable<RunView> runs) => runs.MaxBy(value.Value);
+
+    /// <summary>Whether <see cref="After"/> values <paramref name="action"/> as the best pick of the card prompt it opens.</summary>
+    private static bool OpensPrompt(Observation obs, string action)
+    {
+        var (verb, arg) = Split(action);
+        return obs.Screen switch
+        {
+            RestScreen when verb == "rest" => arg == "SMITH",
+            ShopScreen when verb == "remove" => true,
+            RewardsScreen screen when verb == "reward" => screen.Rewards.First(r => r.Index == int.Parse(arg)).Kind == "remove_card",
+            _ => false,
+        };
+    }
 
     /// <summary>The best of the removals the game offers: an Eternal card cannot be removed.</summary>
     private RunView? BestRemoval(RunView run) =>

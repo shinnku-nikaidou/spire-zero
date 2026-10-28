@@ -157,14 +157,16 @@ internal static class CombatBuilder
     /// Gives each enemy a move that shows its observed intents. What an intent shows can also depend on a hidden
     /// switch, such as which way the player faces when Surrounded (an enemy behind them hits harder), or on a number
     /// the monster keeps, such as the Waterfall Giant's pressure gun, which hits harder each time it fires. So while
-    /// some enemy doesn't show its intents, each value of each enum field of a power is tried, then each small value of
-    /// each int field of a monster, and the one under which the most enemies show theirs is kept.
+    /// some enemy doesn't show its intents, each value of each enum field of a power is tried, then each value below
+    /// 100 of each int field of a monster, then each one below 1,000 (the Giant's eruption, which grows all fight, can
+    /// pass 100), and the one under which the most enemies show theirs is kept.
     /// </summary>
     private static void Moves(CombatState st, IReadOnlyList<CreatureView> views, Creature[] targets)
     {
         var switches = st.Creatures.SelectMany(c => c.Powers).SelectMany(Switches);
-        var numbers = st.Enemies.Where(e => e.Monster != null)
-            .SelectMany(e => FieldKnobs(e.Monster!, typeof(MonsterModel)).Select(k => (k, Enumerable.Range(0, 100).ToArray())));
+        var fields = st.Enemies.Where(e => e.Monster != null).SelectMany(e => FieldKnobs(e.Monster!, typeof(MonsterModel))).ToList();
+        var numbers = fields.Select(k => (k, Enumerable.Range(0, 100).ToArray()))
+            .Concat(fields.Select(k => (k, Enumerable.Range(100, 900).ToArray())));
         int best = SetMoves(st, views, targets);
         foreach (var (knob, values) in switches.Concat(numbers).ToList())
         {

@@ -133,6 +133,7 @@ internal static class SelfTest
 
         BuildsInternalNumbers(pump, pool, act, Check);
         BuildsAtLowHp(pump, pool, act, Check);
+        BuildsAGrownEruption(pump, Check);
         RollingBoulder(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
@@ -311,6 +312,22 @@ internal static class SelfTest
         using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
         check("build survives a deadly start", built.BuildDifferences.Count == 0 && built.Player.IsActiveForHooks,
             $"{pool[0].Id.Entry} at 3 HP with Royal Poison: hooks {(built.Player.IsActiveForHooks ? "on" : "off")}; {string.Join("; ", built.BuildDifferences.Take(4))}");
+    }
+
+    /// <summary>
+    /// The Waterfall Giant about to erupt shows its eruption as a death blow, a number the monster keeps that grows all
+    /// fight and can pass 100: the build must find it.
+    /// </summary>
+    private static void BuildsAGrownEruption(Pump pump, Action<string, bool, string> check)
+    {
+        var (encounter, act) = Cli.Encounter("WATERFALL_GIANT_BOSS");
+        var setup = new CombatSetup("SILENT", encounter, act, Cli.MakeSeed(0, 0));
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
+            obs = session.Observation();
+        obs = obs with { Enemies = [obs.Enemies[0] with { Intents = [new IntentView { Type = "DeathBlow", Damage = 150, Hits = 1 }] }, .. obs.Enemies.Skip(1)] };
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
+        check("build finds an eruption past 100", built.BuildDifferences.Count == 0, string.Join("; ", built.BuildDifferences.Take(4)));
     }
 
     /// <summary>

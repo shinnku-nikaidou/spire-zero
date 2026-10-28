@@ -194,6 +194,33 @@ public class MacroUpgradeTests
         Assert.Equal("rest:HEAL", l0.Choose(Rest(5, Small, Small)));
     }
 
+    /// <summary>A V that likes the run as it is best: each HP and each upgraded card costs.</summary>
+    private sealed class Unchanged : IRunValue
+    {
+        public string Name => "test";
+        public double Value(RunView run) => -run.Hp - 2 * run.Deck.Count(c => c.Up > 0);
+    }
+
+    private static ChoiceDecision UpgradePrompt() => new(new CardChoice
+    {
+        Options = [Small, Big],
+        Min = 0,
+        Max = 1,
+        Context = new ChoiceContext { Purpose = "deck_for_upgrade", Cancelable = true, InCombat = false },
+    }, () => new Observation { Run = Fixtures.Floor1() with { Hp = 40, Deck = [Small, Big] }, Screen = new TreasureScreen { Relics = [] } });
+
+    [Fact]
+    public void ThePromptSmithingOpensTakesTheUpgradeItWasValuedBy()
+    {
+        // An upgrade beats the heal, and keeping the run as it is beats both; but the rest site must be used, and
+        // stopping the prompt would only go back to it.
+        var l0 = new MacroBrain(new Unchanged());
+        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Small, Big)));
+        Assert.Single(l0.Choose(UpgradePrompt()));
+        // A prompt that no answer of L0's opened may still be stopped.
+        Assert.Empty(l0.Choose(UpgradePrompt()));
+    }
+
     [Fact]
     public void TheUpgradePromptTakesTheCardWhosePreviewIsBest()
     {
