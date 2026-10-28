@@ -239,8 +239,8 @@ internal static class AfterstatesCommand
 /// </summary>
 internal static class ForkCommand
 {
-    private static readonly Option<int> PerRun = Opt.Of("--per-run", 2, "decisions forked per logged run, drawn among the ones that qualify");
-    private static readonly Option<string> ForkSurfaces = Opt.Of("--surfaces", "map,rewards,card_reward,rest,shop", "the macro surfaces to fork on, comma-separated");
+    private static readonly Option<int> PerRun = Opt.Of("--per-run", 2, "decisions forked per logged run, drawn among the ones that qualify, a surface at a time");
+    private static readonly Option<string> ForkSurfaces = Opt.Of("--surfaces", "map,card_reward,rest,shop", "the macro surfaces to fork on, comma-separated");
     private static readonly Option<int> Act = Opt.Of("--act", 0, "forks decisions of this act only");
     private static readonly Option<int> MaxDecisions = Opt.Of("--max-decisions", 20_000, "a branch stops here");
     private static readonly ChampionArgs Champion = new(file: true);
@@ -269,11 +269,16 @@ internal static class ForkCommand
         int forks = 0, failed = 0;
         foreach (var run in Logged.Runs(r))
         {
-            var qualify = Enumerable.Range(0, run.Steps.Count)
-                .Where(i => run.Steps[i] is { Act: { } a, Legal: >= 2 } s && a == act && surfaces.Contains(s.Surface)).ToList();
+            // A surface at a time, in a random order, each surface's decisions in a random order: a run has far more of
+            // some surfaces than of others.
             var rng = new Random(unchecked((int)ProtocolJson.Hash(run.RunId + ":fork")));
+            var bySurface = Enumerable.Range(0, run.Steps.Count)
+                .Where(i => run.Steps[i] is { Act: { } a, Legal: >= 2 } s && a == act && surfaces.Contains(s.Surface))
+                .GroupBy(i => run.Steps[i].Surface).OrderBy(_ => rng.Next()).Select(g => g.OrderBy(_ => rng.Next()).ToList()).ToList();
+            var qualify = Enumerable.Range(0, bySurface.Select(g => g.Count).DefaultIfEmpty(0).Max())
+                .SelectMany(round => bySurface.Where(g => round < g.Count).Select(g => g[round]));
             int done = 0;
-            foreach (int k in qualify.OrderBy(_ => rng.Next()))
+            foreach (int k in qualify)
             {
                 if (done == perRun) break;
                 try
