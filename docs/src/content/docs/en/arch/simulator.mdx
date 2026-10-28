@@ -118,7 +118,7 @@ This is **not** the real travel path: it skips the `?` roll and its odds, and `G
 
 `CombatBuilder` builds a combat that shows a given observation. `CombatBuilder.Setup(obs, seed)`:
 
-1. starts the encounter with the observation's deck and relics;
+1. starts the encounter with the observation's deck, relics and HP. A start-of-combat effect can kill a player at low HP (Royal Poison deals 4 at the start of the first turn, which every build starts with), and a dead player's relics, powers and cards no longer act; such a combat starts again at full HP, and `Apply` sets the observed HP as always. A relic that keeps a flag by the HP at the start (Red Skull's strength) can then be off, which only that rare start risks;
 2. `Apply` overwrites the visible state: round; enemies (added, removed, reordered); HP and block; energy; gold; potions; orb slots and orbs, with the numbers they show; relic counters, shown or hidden, and used-up relics; the cards a relic keeps (Pael's Tooth's, whose counter is their number), as canonical copies, since the tip shows no upgrades and they come back only after the combat; powers, with their stacks where the icon shows another number and the card a power keeps; the 4 piles with per-card modifications; intents;
 3. `Resample(StableHash(seed))` draws the hidden state;
 4. `BuildDifferences` diffs, by JSON path, the input observation against the observation of the rebuilt combat. Empty means exact.
@@ -390,6 +390,7 @@ Planned requests, for run worlds and for searches that outgrow one request: open
 - restore, with the hidden state byte-equal;
 - determinize keeps the observation, replays, and plays on;
 - build shows the observation, restores, and plays on; it also shows numbers that only a model's own state holds (a worn Glass orb, a spent Silver Crucible, a Pael's Tooth keeping two cards, a Hardened Shell after damage this turn);
+- a player built at 3 HP with Royal Poison survives the start, with relics and powers acting;
 - fast hook listeners give the same result as the game's;
 - Brain, Protocol and Harness reach no game assembly (with GameBridge as the negative control);
 - with `--workers N`: pooled PIMC picks what in-process PIMC picks, with the same values, with no worker restarts or worker game errors;

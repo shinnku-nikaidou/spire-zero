@@ -128,6 +128,7 @@ internal static class SelfTest
         }
 
         BuildsInternalNumbers(pump, pool, act, Check);
+        BuildsAtLowHp(pump, pool, act, Check);
         RollingBoulder(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
@@ -289,6 +290,22 @@ internal static class SelfTest
     }
 
     private static int DistinctCards(string drawOrder) => drawOrder.Split('\n').Distinct().Count();
+
+    /// <summary>
+    /// A player built at low HP still plays after a start-of-combat effect that would kill them: Royal Poison deals 4
+    /// at the start of the first turn, which every build starts with.
+    /// </summary>
+    private static void BuildsAtLowHp(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        var setup = new CombatSetup("SILENT", pool[0], act, Cli.MakeSeed(0, 0));
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
+            obs = session.Observation();
+        obs = obs with { Player = obs.Player with { Hp = 3 }, Relics = [.. obs.Relics, new RelicView { Id = "ROYAL_POISON" }] };
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
+        check("build survives a deadly start", built.BuildDifferences.Count == 0 && built.Player.IsActiveForHooks,
+            $"{pool[0].Id.Entry} at 3 HP with Royal Poison: hooks {(built.Player.IsActiveForHooks ? "on" : "off")}; {string.Join("; ", built.BuildDifferences.Take(4))}");
+    }
 
     /// <summary>
     /// A Defect combat's observation edited to show numbers that only a model's own state holds: a Glass orb that has

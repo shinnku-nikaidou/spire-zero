@@ -154,6 +154,15 @@ internal sealed class CombatSession : IDisposable
             pump.RunUntil(() => enter.IsCompleted, session.Describe);
             if (enter.IsFaulted) throw enter.Exception!.GetBaseException();
             session.Settle();
+            // A start-of-combat effect can kill a player built at low HP (Royal Poison's 4 damage at 3 HP), and a dead
+            // player's relics, powers and cards no longer act. Such a combat starts again at full HP; the build then
+            // sets the observed HP as always. A relic that keeps a flag by the HP at the start (Red Skull) can then
+            // be off, which only this rare start risks.
+            if (setup.From != null && player.Creature.IsDead && setup.Loadout is { Hp: { } hp, MaxHp: { } maxHp } && hp < maxHp)
+            {
+                session.Dispose();
+                return Start(pump, setup with { Loadout = setup.Loadout with { Hp = maxHp } }, policy, replayPicks, check);
+            }
             if (setup.From is { } obs)
             {
                 CombatBuilder.Apply(session.State, player, obs, pump, setup.History);
