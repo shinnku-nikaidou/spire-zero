@@ -116,8 +116,9 @@ internal sealed class Script(IReadOnlyList<LoggedStep> steps, IRunBrain? then, F
 }
 
 /// <summary>An option of a macro decision as L0 valued it; <paramref name="After"/> is its afterstate as the run view's
-/// fields that differ from the decision's (<see cref="Logged.Changes"/>).</summary>
-internal sealed record ValuedOption(string Action, double Value, JsonObject After);
+/// fields that differ from the decision's (<see cref="Logged.Changes"/>), and <paramref name="Features"/> V v0's
+/// features of it, which V v2 reads too.</summary>
+internal sealed record ValuedOption(string Action, double Value, JsonObject After, IReadOnlyDictionary<string, double> Features);
 
 /// <summary>One macro decision of a logged run, with every option L0 weighed (afterstates).</summary>
 /// <param name="Same">Whether the replayed observation's hash is the log's.</param>
@@ -125,8 +126,9 @@ internal sealed record AfterstateEntry(string Run, int DecisionId, string Surfac
 
 /// <summary>One branch of a fork, at its horizon: the end of the fork's act, or of the run.</summary>
 /// <param name="Decisions">The decisions it made after the fork.</param>
-/// <param name="Horizon">The run at the horizon.</param>
-internal sealed record ForkBranch(string Action, bool Died, int Act, int Floor, int Hp, int MaxHp, int Gold, int Decisions, double ElapsedMs, RunView Horizon);
+/// <param name="Horizon">The run at the horizon, and V v0's features of it.</param>
+internal sealed record ForkBranch(string Action, bool Died, int Act, int Floor, int Hp, int MaxHp, int Gold, int Decisions, double ElapsedMs, RunView Horizon,
+    IReadOnlyDictionary<string, double> HorizonFeatures);
 
 /// <param name="Logged">What the logged run chose at the decision.</param>
 /// <param name="Mismatches">Replayed observations whose hash differs from the log's, before the decision.</param>
@@ -149,7 +151,7 @@ internal static class Logged
     }
 
     public static IReadOnlyList<ValuedOption> Options(MacroBrain l0, MacroDecision decision) =>
-        l0.Options(decision).Select(o => new ValuedOption(o.Action, o.Value, Changes(decision.Observation.Run, o.After))).ToList();
+        l0.Options(decision).Select(o => new ValuedOption(o.Action, o.Value, Changes(decision.Observation.Run, o.After), RunValue.Features(o.After))).ToList();
 
     /// <summary>
     /// The fields of <paramref name="after"/> that differ from <paramref name="before"/>, in their JSON form, to one level
@@ -347,7 +349,8 @@ internal static class ForkCommand
         if (action == null) throw new InvalidOperationException($"the replay never reached decision {k}");
         mismatches = script.Mismatches;
         var player = session.Player;
+        var horizon = Observe.Run(session.Run, player);
         return new(action, session.IsOver && !session.Won, session.Run.CurrentActIndex, session.Run.TotalFloor, player.Creature.CurrentHp, player.Creature.MaxHp,
-            player.Gold, session.Trace.Count - k - 1, clock.Elapsed.TotalMilliseconds, Observe.Run(session.Run, player));
+            player.Gold, session.Trace.Count - k - 1, clock.Elapsed.TotalMilliseconds, horizon, RunValue.Features(horizon));
     }
 }
