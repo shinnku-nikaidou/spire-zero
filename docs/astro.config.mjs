@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
+import katex from 'katex';
 
 // Sidebar mirrors the doc map on the overview page. Labels and status badges
 // come from each page's own frontmatter, so every locale shows its own text.
@@ -40,13 +41,46 @@ const sectionIds = {
   },
 };
 
+// $…$ and $$…$$ render with KaTeX at build time. The processor parses them
+// into code.language-math (inside a pre for display math); this swaps each
+// for KaTeX's HTML before Expressive Code can take the pre as a code block.
+const isMath = (node) => String(node.properties?.className ?? '').includes('language-math');
+const mathKatex = {
+  name: 'math-katex',
+  hooks: {
+    'astro:config:setup': ({ config }) => {
+      const options = config.markdown.processor.options;
+      options.features = { ...options.features, math: true };
+      options.hastPlugins.push({
+        name: 'math-katex',
+        element: {
+          filter: ['pre', 'code'],
+          visit(node, ctx) {
+            if (node.tagName === 'pre') {
+              const code = node.children?.find((child) => child.tagName === 'code');
+              if (!code || !isMath(code)) return;
+              const html = katex.renderToString(ctx.textContent(code), { displayMode: true, throwOnError: true });
+              ctx.replaceNode(node, { type: 'raw', value: html });
+            } else if (isMath(node) && ctx.parent(node)?.tagName !== 'pre') {
+              const html = katex.renderToString(ctx.textContent(node), { throwOnError: true });
+              ctx.replaceNode(node, { type: 'raw', value: html });
+            }
+          },
+        },
+      });
+    },
+  },
+};
+
 export default defineConfig({
   integrations: [
     sectionIds,
+    mathKatex,
     // Must come before Starlight so it sees mermaid code blocks first.
     mermaid({ autoTheme: true, enableLog: false }),
     starlight({
       title: { 'zh-CN': '杀戮尖塔 2 AI 架构手册', en: 'STS2 AI Architecture' },
+      customCss: ['katex/dist/katex.min.css'],
       defaultLocale: 'root',
       locales: {
         root: { label: '简体中文', lang: 'zh-CN' },

@@ -60,19 +60,19 @@ Two more rules:
 
 The rolls draw from the monster's own random stream, which the run's seed fixes: the same seed gives the same moves, which is what SL may exploit. The player never sees the stream, so in NoSL a roll is unknown until its intent shows. This round's move is always known, since its intent shows. A player learns a monster quickly because the constraints leave the rolls little room; what stays unknown is exactly the rolls. The combat net shows the same picture: it names the next round's intent type 57.7% of the time, against 28.9% for repeating the current one, and its misses fall mostly on the rolls.
 
-**What the worlds sample.** The hidden state `s` of a combat is the draw pile's order, the position of every random stream and, for each monster, which of the moves showing its intent it has queued. The public record `h` is the observation plus the intents shown each round. A world is one sample of `s` that agrees with `h`. Later moves are not sampled separately: the world's own state machine makes them, from the log rebuilt from `h` ([Simulator §3](/en/arch/simulator/#sec-3)) and the world's random stream. All of it, cards, rolls and the enemy turn, is played by the real game code in the worker; no net simulates anything. The net only values the leaves.
+**What the worlds sample.** The hidden state $s$ of a combat is the draw pile's order, the position of every random stream and, for each monster, which of the moves showing its intent it has queued. The public record $h$ is the observation plus the intents shown each round. A world is one sample of $s$ that agrees with $h$. Later moves are not sampled separately: the world's own state machine makes them, from the log rebuilt from $h$ ([Simulator §3](/en/arch/simulator/#sec-3)) and the world's random stream. All of it, cards, rolls and the enemy turn, is played by the real game code in the worker; no net simulates anything. The net only values the leaves.
 
-**The estimate.** For a first action `a`, PIMC computes
+**The estimate.** For a first action $a$, PIMC computes
 
-```text
-Q̂(a) = (1/K) · Σ_k  max_π  V( leaf(s_k, a, π) ),   s_k ~ world sampler given h
-```
+$$
+\hat Q(a) = \frac{1}{K} \sum_{k=1}^{K} \max_{\pi} V\big(\mathrm{leaf}(s_k, a, \pi)\big), \qquad s_k \sim \tilde P(s \mid h)
+$$
 
-where `π` ranges over the rest of the turn, `leaf` is the state at the start of the next player turn ([§2](#sec-2), step 4) and `V` the leaf value ([§4](#sec-4)). It plays `argmax_a Q̂(a)`. Three properties follow:
+where $\pi$ ranges over the rest of the turn, $\mathrm{leaf}$ is the state at the start of the next player turn ([§2](#sec-2), step 4) and $V$ the leaf value ([§4](#sec-4)). It plays $\arg\max_a \hat Q(a)$. Three properties follow:
 
-- **Noise.** `Q̂(a)` is a mean of K samples, so its standard error is `σ_a / √K`. Every first action is scored on the same K worlds (common random numbers), so the noise of the difference between two actions is much smaller than either one's: the world's luck cancels.
-- **Bias up: strategy fusion.** The quantity estimated is `E_s[ max_π V ]`. The player must fix the rest of the turn before seeing `s`, which is worth `max_π E_s[ V ]`. The mean of maxima is never below the maximum of means (Jensen), so PIMC overvalues lines whose later choices depend on what is drawn or rolled. Re-planning after every action keeps the gap to what is still hidden after the first action (open question 2, [§8](#sec-8)).
-- **Bias from the sampler.** The worlds should follow the posterior `P(s | h)`. The sampler shuffles the draw pile uniformly, which is exact, but picks a monster's queued move uniformly among the moves that show its intent, not by the roll's weights, and keeps no posterior over hidden counters ([Simulator §6](/en/arch/simulator/#sec-6)). A more exact sampler lowers this bias without changing the search.
+- **Noise.** $\hat Q(a)$ is a mean of $K$ samples, so its standard error is $\sigma_a / \sqrt{K}$. Every first action is scored on the same $K$ worlds (common random numbers), so the noise of the difference between two actions is much smaller than either one's: the world's luck cancels.
+- **Bias up: strategy fusion.** The quantity estimated is $\mathbb{E}_s[\max_\pi V]$. The player must fix the rest of the turn before seeing $s$, which is worth $\max_\pi \mathbb{E}_s[V]$. The mean of maxima is never below the maximum of means (Jensen), so PIMC overvalues lines whose later choices depend on what is drawn or rolled. Re-planning after every action keeps the gap to what is still hidden after the first action (open question 2, [§8](#sec-8)).
+- **Bias from the sampler.** The worlds should follow the posterior $P(s \mid h)$; they follow the sampler's $\tilde P(s \mid h)$. It shuffles the draw pile uniformly, which is exact, but picks a monster's queued move uniformly among the moves that show its intent, not by the roll's weights, and keeps no posterior over hidden counters ([Simulator §6](/en/arch/simulator/#sec-6)). A more exact sampler lowers this bias without changing the search.
 
 ## 3. SL: deterministic planning
 
