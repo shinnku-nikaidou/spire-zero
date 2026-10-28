@@ -100,7 +100,7 @@ internal sealed record CombatPool(int Act, string Rooms, List<EncounterModel> En
 internal sealed class BudgetArgs
 {
     /// <summary>The planner's effort when --effort is not given.</summary>
-    public const string DefaultEffort = "high";
+    public const string DefaultEffort = "medium";
 
     /// <summary>The budget options' names in a champion file: they belong to the file's combat brain.</summary>
     public static readonly IReadOnlySet<string> Keys = new HashSet<string>

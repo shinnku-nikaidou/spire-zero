@@ -23,12 +23,13 @@ namespace Sts2Ai.Brain;
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false, bool Follow = false,
     int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0)
 {
-    /// <summary>The planner's budget at an effort level (docs: combat-brain §5): beam, nodes per state and turn, and the
-    /// turns of an unproved losing plan played before planning again (0: to its end).</summary>
+    /// <summary>The planner's budget at an effort level (docs: combat-brain §5): beam, nodes per state and turn, the
+    /// easy beam, the turns of an unproved losing plan played before planning again (0: to its end), and the losing
+    /// plans in a row before the last is played to its end.</summary>
     public static Budget Effort(string level) => level switch
     {
-        "low" => new(NodesPerWorld: 150, Beam: 4, Replan: 0),
-        "medium" => new(NodesPerWorld: 300, Beam: 8, Replan: 0),
+        "low" => new(NodesPerWorld: 300, Beam: 8, EasyBeam: 2, LossPlans: 3),
+        "medium" => new(NodesPerWorld: 300, Beam: 8, EasyBeam: 4, LossPlans: 3),
         "high" => new(NodesPerWorld: 300, Beam: 8, Replan: 1),
         "max" => new(NodesPerWorld: 300, Beam: 16, Replan: 1),
         _ => throw new ArgumentException($"no effort {level}: low, medium, high or max"),

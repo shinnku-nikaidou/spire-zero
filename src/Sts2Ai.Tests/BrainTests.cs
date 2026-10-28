@@ -487,7 +487,7 @@ public class SlPlannerTests
     {
         Assert.Equal(new Budget(NodesPerWorld: 300, Beam: 8, Replan: 1), Budget.Effort("high"));
         Assert.All(Budget.Efforts, e => Assert.True(Budget.Effort(e).Beam > 0));
-        Assert.Equal("beam 8x300 replan 0", Budget.Effort("medium").ToString());
+        Assert.Equal("beam 8x300 easy 4 loss plans 3", Budget.Effort("medium").ToString());
         Assert.Throws<ArgumentException>(() => Budget.Effort("ultra"));
     }
 
