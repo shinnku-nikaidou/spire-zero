@@ -345,6 +345,38 @@ public class SlPlannerTests
         Assert.Equal(steps.Count - 1, plan.Result.PlanHashes!.Count);
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(0)]
+    public void ALosingPlanIsPlayedForItsReplanTurns(int replan)
+    {
+        var world = new Toy(enemyHp: 500);
+        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 2, Replan: replan));
+
+        Assert.Equal(CombatStatus.Lost, plan.End);
+        Assert.False(plan.Proved);
+        var steps = plan.Result.Plan.Prepend(plan.Result.First).ToList();
+        int ends = steps.Count(a => a.Kind == CombatActionKind.EndTurn);
+        if (replan > 0) Assert.Equal(replan, ends);
+        else Assert.True(ends > 2);
+        // Played to its end, the plan dies where it claims.
+        if (replan == 0)
+        {
+            var replay = new Toy(enemyHp: 500);
+            foreach (var step in steps) replay.Execute(step);
+            Assert.Equal(CombatStatus.Lost, replay.Status);
+        }
+    }
+
+    [Fact]
+    public void EachEffortIsAPlannerBudget()
+    {
+        Assert.Equal(new Budget(NodesPerWorld: 300, Beam: 8, Replan: 1), Budget.Effort("high"));
+        Assert.All(Budget.Efforts, e => Assert.True(Budget.Effort(e).Beam > 0));
+        Assert.Equal("beam 8x300 replan 0", Budget.Effort("medium").ToString());
+        Assert.Throws<ArgumentException>(() => Budget.Effort("ultra"));
+    }
+
     [Fact]
     public void AProvedLossIsPlayedToTheEnd()
     {

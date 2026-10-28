@@ -11,8 +11,8 @@ public sealed record PlanJob(IReadOnlyList<CombatAction> Path, IReadOnlyList<Ene
 /// <paramref name="keep"/> states, none that cannot beat <paramref name="floor"/>.</summary>
 public delegate IReadOnlyList<TurnSearch> TurnSearcher(IReadOnlyList<PlanJob> jobs, int nodes, int keep, double? floor);
 
-/// <summary>The SL planner's answer, and how its search went. A losing line's plan stops at the end of its first turn,
-/// unless the loss is proved.</summary>
+/// <summary>The SL planner's answer, and how its search went. A losing line's plan stops at the end of its
+/// <see cref="Budget.Replan"/>th turn, unless the loss is proved.</summary>
 /// <param name="Value">The value of the line's end: the leaf at the end of the combat, or at the last state searched
 /// when the line stops before it.</param>
 /// <param name="End">How the line ends: won, lost, or still in progress where the search stopped.</param>
@@ -38,8 +38,8 @@ public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatSta
 /// bound, a win with the HP and the potions it has, cannot beat it. The beam stops when no state is left, or after
 /// <see cref="MaxTurns"/> turns. A greedy dive, a beam of one, goes first, so the full beam is pruned from its start.
 /// Every loss is worth the same, so among losing lines the one that died from the turn
-/// start the leaf valued highest is the pick; and a losing plan that is not proved is played for its first turn only,
-/// then the next turn is planned again, from where a beam reaches deeper.
+/// start the leaf valued highest is the pick; and a losing plan that is not proved is played for its first
+/// <see cref="Budget.Replan"/> turns only, then planned again, from where a beam reaches deeper (or to its end, at 0).
 ///
 /// Only one turn's transpositions are merged, so each state kept is the end of a concrete line of actions, and the
 /// plan replays exactly in the world it was searched in. Card prompts are answered by <see cref="PromptBrain"/>, as in
@@ -82,7 +82,7 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
         var beam = new Beam(budget.NodesPerWorld, history, search);
         if (budget.Beam > 1) beam.Run(1);
         if (!beam.Proved) beam.Run(budget.Beam);
-        return beam.Result();
+        return beam.Result(budget.Replan);
     }
 
     private sealed class Beam(int nodesPerState, IReadOnlyList<EnemyTurns> history, TurnSearcher search)
@@ -146,7 +146,8 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
             _left = states;
         }
 
-        public SlPlan Result()
+        /// <param name="replan">The turns of an unproved losing line played before planning again; 0 plays it to its end.</param>
+        public SlPlan Result(int replan)
         {
             foreach (var state in _left) Note(_byFirst, state);
             // The best end of the combat, unless the search stopped first at a state the leaf values higher.
@@ -154,9 +155,15 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
                 ?? throw new InvalidOperationException("the planner found no line");
             var candidates = _byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value)
                 .Select(kv => new Candidate(kv.Key.ToString(), kv.Value, 0, 1, [Math.Round(kv.Value, 4)])).ToList();
-            // A loss the search may have been wrong about is played a turn at a time; a proved one has nothing better.
-            int turnEnd = pick.Actions.ToList().FindIndex(a => a.Kind == CombatActionKind.EndTurn);
-            int played = pick.Status == CombatStatus.Lost && !Proved && turnEnd >= 0 ? turnEnd + 1 : pick.Actions.Count;
+            // A loss the search may have been wrong about is played replan turns at a time; a proved one has nothing better.
+            int played = pick.Actions.Count;
+            if (pick.Status == CombatStatus.Lost && !Proved && replan > 0)
+                for (int i = 0, ends = 0; i < pick.Actions.Count; i++)
+                    if (pick.Actions[i].Kind == CombatActionKind.EndTurn && ++ends == replan)
+                    {
+                        played = i + 1;
+                        break;
+                    }
             var result = new CombatDecisionResult(pick.Actions[0], pick.Actions.Take(played).Skip(1).ToList(), candidates,
                 pick.Hashes.Take(played).Skip(1).ToList());
             return new(result, pick.Value, pick.Status, _nodes, _turns, Proved);

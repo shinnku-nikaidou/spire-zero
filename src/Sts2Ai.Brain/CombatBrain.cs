@@ -15,8 +15,22 @@ namespace Sts2Ai.Brain;
 /// <param name="Beam">The SL planner's states kept from one turn to the next (<see cref="SlPlanner"/>); 0 for PIMC,
 /// which does not read it. The planner has one world, and ignores <paramref name="Worlds"/>.</param>
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false, bool Follow = false,
-    int Beam = 0)
+    int Beam = 0, int Replan = 1)
 {
+    /// <summary>The planner's budget at an effort level (docs: combat-brain §5): beam, nodes per state and turn, and the
+    /// turns of an unproved losing plan played before planning again (0: to its end).</summary>
+    public static Budget Effort(string level) => level switch
+    {
+        "low" => new(NodesPerWorld: 150, Beam: 4, Replan: 0),
+        "medium" => new(NodesPerWorld: 300, Beam: 8, Replan: 0),
+        "high" => new(NodesPerWorld: 300, Beam: 8, Replan: 1),
+        "max" => new(NodesPerWorld: 300, Beam: 16, Replan: 1),
+        _ => throw new ArgumentException($"no effort {level}: low, medium, high or max"),
+    };
+
+    /// <summary>The effort levels, cheapest first.</summary>
+    public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "max"];
+
     /// <summary>The budget of a decision in this room (<see cref="CombatObservation.Room"/>), with its multiple applied.</summary>
     public Budget For(string? room) => this with
     {
@@ -26,9 +40,9 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elit
     };
 
     /// <summary>As the champion's name shows it: 8x300 (beam 16x300 for the planner), then the multiples that are not 1,
-    /// then halving and follow if on.</summary>
+    /// then halving and follow if on, and the planner's replan when not 1.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}");
+        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}");
 }
 
 /// <summary>Searches every world from the decision's state: the best line after each of <paramref name="first"/>, in

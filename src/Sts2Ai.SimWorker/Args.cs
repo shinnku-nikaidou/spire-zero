@@ -99,28 +99,39 @@ internal sealed record CombatPool(int Act, string Rooms, List<EncounterModel> En
 /// <summary>pimc's and plan's budget (docs: combat-brain §3, §5).</summary>
 internal sealed class BudgetArgs
 {
-    /// <summary>The planner's beam when --beam is not given.</summary>
-    public const int DefaultBeam = 8;
+    /// <summary>The planner's effort when --effort is not given.</summary>
+    public const string DefaultEffort = "high";
 
     private readonly Option<int> _worlds = Opt.Of("--worlds", 8, "pimc's determinized worlds per decision");
-    private readonly Option<int> _nodes = Opt.Of("--nodes", 300, "search nodes per world (plan: per state and turn)");
+    private readonly Option<int?> _nodes = Opt.Maybe<int?>("--nodes", "search nodes per world (default 300; plan: per state and turn, default by --effort)");
     private readonly Option<double> _elite = Opt.Of("--elite-x", 1.0, "multiplies the nodes per world in elite rooms");
     private readonly Option<double> _boss = Opt.Of("--boss-x", 1.0, "multiplies the nodes per world in boss rooms");
     private readonly Option<bool> _halving = Opt.Of("--halving", false, "shares the nodes over the first actions by sequential halving");
     private readonly Option<bool> _follow = Opt.Of("--follow", false, "plays the rest of a turn every world planned the same without searching again");
-    private readonly Option<int?> _beam = Opt.Maybe<int?>("--beam", $"plan's states kept from one turn to the next (default {DefaultBeam})");
+    private readonly Option<string?> _effort = Opt.Maybe<string?>("--effort", $"plan's budget preset: {string.Join(", ", Budget.Efforts)} (default {DefaultEffort})")
+        .AcceptOnlyFromAmong([.. Budget.Efforts]);
+    private readonly Option<int?> _beam = Opt.Maybe<int?>("--beam", "plan's states kept from one turn to the next (default by --effort)");
+    private readonly Option<int?> _replan = Opt.Maybe<int?>("--replan", "plan's turns of an unproved losing plan played before planning again, 0: to its end (default by --effort)");
 
-    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _beam];
+    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _effort, _beam, _replan];
 
     /// <summary>The budget of the combat brain <paramref name="brain"/> (pimc, plan, or a placeholder).</summary>
     public Budget Read(ParseResult r, string brain)
     {
-        var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes), r.GetValue(_elite), r.GetValue(_boss), r.GetValue(_halving), r.GetValue(_follow));
+        var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes) ?? 300, r.GetValue(_elite), r.GetValue(_boss), r.GetValue(_halving), r.GetValue(_follow));
         if (brain != "plan")
-            return r.GetValue(_beam) == null ? budget : throw new CliException("--beam is plan's; it needs --policy plan");
+            return r.GetValue(_effort) == null && r.GetValue(_beam) == null && r.GetValue(_replan) == null ? budget
+                : throw new CliException("--effort, --beam and --replan are plan's; they need --policy plan");
         if (budget.Halving || budget.Follow) throw new CliException("--halving and --follow are pimc's; plan follows its plan always");
-        int beam = r.GetValue(_beam) ?? DefaultBeam;
-        return beam > 0 ? budget with { Beam = beam } : throw new CliException("--beam is at least 1");
+        var effort = Budget.Effort(r.GetValue(_effort) ?? DefaultEffort);
+        budget = budget with
+        {
+            NodesPerWorld = r.GetValue(_nodes) ?? effort.NodesPerWorld,
+            Beam = r.GetValue(_beam) ?? effort.Beam,
+            Replan = r.GetValue(_replan) ?? effort.Replan,
+        };
+        if (budget.Beam < 1) throw new CliException("--beam is at least 1");
+        return budget.Replan >= 0 ? budget : throw new CliException("--replan is at least 0");
     }
 }
 
