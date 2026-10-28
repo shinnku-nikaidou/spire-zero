@@ -81,6 +81,18 @@ public class GateTests
         Assert.Equal("open", Gate.Sprt(Pairs(Gate.MinPairs - 1, 10), "floor", 1.5).Verdict);
 
     [Fact]
+    public void TiedPairsDoNotCountTowardsTheMinimum()
+    {
+        // One run in ten gains 15 floors, none of the first ten: a gain of 1.5 that ties at first.
+        var pairs = Enumerable.Range(0, 200).Select(i => (
+            Fixtures.Run($"S{i}", 20),
+            Fixtures.Run($"S{i}", i >= 10 && i % 10 == 9 ? 35 : 20, config: Challenger))).ToList();
+        var result = Gate.Sprt(pairs, "floor", 1.5);
+        Assert.Equal("pass", result.Verdict);
+        Assert.True(result.Decided > 10 * Gate.MinPairs);
+    }
+
+    [Fact]
     public void AChallengerThatFailsARunIsVoid()
     {
         var result = Gate.Sprt(Pairs(40, 5, "failed"), "floor", 1.5);

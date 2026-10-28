@@ -17,7 +17,11 @@ namespace Sts2Ai.Harness;
 /// </summary>
 public static class Gate
 {
-    /// <summary>A floor SPRT decides nothing before this many pairs: the variance estimate needs a few.</summary>
+    /// <summary>
+    /// A floor SPRT decides nothing before this many pairs differ: the variance estimate needs a few. Tied pairs do not
+    /// count, since a change that alters only some runs (a boss's budget) ties most pairs, and ties alone would put
+    /// the variance at its floor and fail the change at once.
+    /// </summary>
     public const int MinPairs = 10;
 
     /// <param name="Verdict">pass (H1: the challenger is better by delta, or not worse in a not-worse gate), fail (H0: it is
@@ -65,7 +69,7 @@ public static class Gate
 
         // A not-worse gate tests the same as a gain of delta would, on differences shifted up by delta.
         double shift = notWorse ? delta : 0, sum = 0, sumSq = 0, llr = 0;
-        int only = 0, championOnly = 0, decided = pairs.Count;
+        int only = 0, championOnly = 0, differing = 0, decided = pairs.Count;
         string verdict = "open";
         for (int n = 1; n <= pairs.Count; n++)
         {
@@ -73,12 +77,13 @@ public static class Gate
             double d = b.Floor - a.Floor;
             sum += d;
             sumSq += d * d;
+            if (d != 0) differing++;
             bool aWon = a.Outcome == "won", bWon = b.Outcome == "won";
             if (bWon && !aWon) only++;
             if (aWon && !bWon) championOnly++;
             if (metric == "floor")
             {
-                if (n < MinPairs) continue;
+                if (differing < MinPairs) continue;
                 double variance = Math.Max(1, (sumSq - sum * sum / n) / (n - 1));
                 llr = delta / variance * (sum + n * shift - n * delta / 2);
             }
