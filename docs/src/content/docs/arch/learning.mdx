@@ -227,7 +227,7 @@ flowchart LR
 - 代码：`learn/` 里的脚本用 Typer 读选项（`--help`），用 loguru 把日志写到 stderr，级别由 `LOG_LEVEL` 决定（默认 INFO），所以 stdout 只输出结果。`LearnError`（输入有错、文件挡路、模拟器失败）让脚本报一行信息后以退出码 1 结束；其他异常都是 bug，带着 traceback 结束。模拟器的命令行也是这样（[模拟器 §1](/arch/simulator/#sec-1)）。
 - 数据：对局记录和决策日志是原始数据，不进 git，放在 `data/CHARACTER/ENV/`（ENV 是 `sl` 或 `nosl`），每个任务一个文件夹。文件夹里的 `manifest.json` 说明谁打的（提交、对局选项、权重名）、打的哪些种子、为什么打、留下了多少局。文件是 `rec-SHARD.jsonl`（对局记录）、`log-SHARD.jsonl`（决策日志）和 `out-SHARD.txt`（模拟器的输出），每个进程各一份。
   - 自对弈放在 `selfplay/gN/bK/`。第 N 代是循环的第 N 轮（[§2](#sec-2)），两个环境用同一套编号：`sl/selfplay/g3/` 和 `nosl/selfplay/g3/` 是第三轮分别在两个环境里打的。第 K 批是一次启动，最多几个小时。一批的后续状态（`afterstates` 的输出）放在它自己的文件夹里。
-  - 评估放在 `eval/日期-种类-对象/`：种类是 `gate`、`rebaseline`、`eval`、`panel` 或 `bench`，对象照它的权重名或选项原样写，例如 `2026-10-28-gate-n2-b0.01`。分叉放在 `forks/日期-对象/`。
+  - 评估放在 `eval/日期-种类-对象/`：种类是 `gate`、`rebaseline`、`eval`、`panel` 或 `bench`，对象照它的权重名或选项原样写，例如 `2026-10-28-gate-n2-b0.01`。分叉放在 `forks/日期-对象/`，真实游戏里助手模式的日志放在 `assist/日期-对象/`（[Mod §8](/arch/mod/#sec-8)）。
   - 不能用的数据（选项用错、停得太早）移到 `data/CHARACTER/void/` 下原来的路径，附一个 `VOID.txt` 写明原因。
 - 账本：`eval/CHARACTER/ledger.md` 在 git 里，用来理清来龙去脉。它列出每一批自对弈（代、环境、打它的大脑、训练种子、局数、用不用）和每一个权重文件（种类、从哪几代学的、门槛结果）。每一批从这里领一段新的训练种子，宽 100,000（`run --seed 1 --start K`），所以两批永远不会用到同一个种子。
 - 权重：每个角色单独训练、单独评判，各有自己的大脑；同一个角色的所有进阶等级都由这一个大脑来打，它逐级往上爬。所以每个角色的文件有自己的文件夹。训练脚本（`fit_value.py`、`spsa.py`、`train_value.py`、`train_combat.py`）写出的每个文件，除非 `--out` 另行指定，都写到 `weights/CHARACTER/NAME.json`（静默猎手是 `weights/silent/`），并且永不覆盖，所以一个名字只用一次，永远指同一份权重。训练脚本的 `--character`（默认 SILENT）指定角色：记录里有别的角色的对局就拒绝，文件里也记下这个角色。名字是种类加编号，变体写在短横线后面：战斗网络是 `cN`，V v2 的网络是 `nN`（`n2-b0.03`）。冠军文件直接引用权重文件所在的路径（[评估 §5](/arch/evaluation/#sec-5)）。`weights/` 进 git：一个文件 1–2 MB，而且不会改，所以一个提交就同时确定了代码、权重和冠军文件。没有被任何保留下来的对局用到的试验文件，用 `--out` 放到别处。
