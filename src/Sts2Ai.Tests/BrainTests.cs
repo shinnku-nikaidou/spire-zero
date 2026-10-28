@@ -291,9 +291,9 @@ public class SlPlannerTests
     }
 
     /// <summary>Plays the plan from the start: each step at the observation it expects, to the end it claims.</summary>
-    private static void AssertReplays(SlPlan plan)
+    private static void AssertReplays(SlPlan plan, int enemyHp = 24)
     {
-        var world = new Toy();
+        var world = new Toy(enemyHp);
         var steps = plan.Result.Plan.Prepend(plan.Result.First).ToList();
         var hashes = plan.Result.PlanHashes!;
         Assert.Equal(steps.Count - 1, hashes.Count);
@@ -302,8 +302,8 @@ public class SlPlannerTests
             if (i > 0) Assert.Equal(hashes[i - 1], ProtocolJson.Hash(world.Observe()));
             world.Execute(steps[i]);
         }
-        // A losing plan is played for its first turn only.
-        if (plan.End == CombatStatus.Lost) return;
+        // A losing plan is played for its first turn only, unless proved; InProgress checks the steps alone.
+        if (plan.End != CombatStatus.Won && !(plan.End == CombatStatus.Lost && plan.Proved)) return;
         Assert.Equal(plan.End, world.Status);
         Assert.Equal(plan.Value, Leaf.Value(world.Status, world.Observe(), []), 9);
     }
@@ -335,13 +335,26 @@ public class SlPlannerTests
     public void ALosingPlanIsPlayedForOneTurn()
     {
         var world = new Toy(enemyHp: 500);
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 50));
+        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 2));
 
         Assert.Equal(CombatStatus.Lost, plan.End);
+        Assert.False(plan.Proved);
         var steps = plan.Result.Plan.Prepend(plan.Result.First).ToList();
         Assert.Equal(CombatActionKind.EndTurn, steps[^1].Kind);
         Assert.Single(steps, a => a.Kind == CombatActionKind.EndTurn);
         Assert.Equal(steps.Count - 1, plan.Result.PlanHashes!.Count);
+    }
+
+    [Fact]
+    public void AProvedLossIsPlayedToTheEnd()
+    {
+        var world = new Toy(enemyHp: 500);
+        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+
+        Assert.True(plan.Proved);
+        Assert.Equal(CombatStatus.Lost, plan.End);
+        Assert.True(plan.Result.Plan.Count(a => a.Kind == CombatActionKind.EndTurn) >= 1);
+        AssertReplays(plan, enemyHp: 500);
     }
 
     [Fact]

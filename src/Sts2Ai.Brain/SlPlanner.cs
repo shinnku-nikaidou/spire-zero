@@ -11,7 +11,8 @@ public sealed record PlanJob(IReadOnlyList<CombatAction> Path, IReadOnlyList<Ene
 /// <paramref name="keep"/> states, none that cannot beat <paramref name="floor"/>.</summary>
 public delegate IReadOnlyList<TurnSearch> TurnSearcher(IReadOnlyList<PlanJob> jobs, int nodes, int keep, double? floor);
 
-/// <summary>The SL planner's answer, and how its search went. A losing line's plan stops at the end of its first turn.</summary>
+/// <summary>The SL planner's answer, and how its search went. A losing line's plan stops at the end of its first turn,
+/// unless the loss is proved.</summary>
 /// <param name="Value">The value of the line's end: the leaf at the end of the combat, or at the last state searched
 /// when the line stops before it.</param>
 /// <param name="End">How the line ends: won, lost, or still in progress where the search stopped.</param>
@@ -37,8 +38,8 @@ public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatSta
 /// bound, a win with the HP and the potions it has, cannot beat it. The beam stops when no state is left, or after
 /// <see cref="MaxTurns"/> turns. A greedy dive, a beam of one, goes first, so the full beam is pruned from its start.
 /// Every loss is worth the same, so among losing lines the one that died from the turn
-/// start the leaf valued highest is the pick; and a losing plan is played for its first turn only, then the next turn
-/// is planned again, from where a beam reaches deeper.
+/// start the leaf valued highest is the pick; and a losing plan that is not proved is played for its first turn only,
+/// then the next turn is planned again, from where a beam reaches deeper.
 ///
 /// Only one turn's transpositions are merged, so each state kept is the end of a concrete line of actions, and the
 /// plan replays exactly in the world it was searched in. Card prompts are answered by <see cref="PromptBrain"/>, as in
@@ -153,8 +154,9 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
                 ?? throw new InvalidOperationException("the planner found no line");
             var candidates = _byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value)
                 .Select(kv => new Candidate(kv.Key.ToString(), kv.Value, 0, 1, [Math.Round(kv.Value, 4)])).ToList();
+            // A loss the search may have been wrong about is played a turn at a time; a proved one has nothing better.
             int turnEnd = pick.Actions.ToList().FindIndex(a => a.Kind == CombatActionKind.EndTurn);
-            int played = pick.Status == CombatStatus.Lost && turnEnd >= 0 ? turnEnd + 1 : pick.Actions.Count;
+            int played = pick.Status == CombatStatus.Lost && !Proved && turnEnd >= 0 ? turnEnd + 1 : pick.Actions.Count;
             var result = new CombatDecisionResult(pick.Actions[0], pick.Actions.Take(played).Skip(1).ToList(), candidates,
                 pick.Hashes.Take(played).Skip(1).ToList());
             return new(result, pick.Value, pick.Status, _nodes, _turns, Proved);
