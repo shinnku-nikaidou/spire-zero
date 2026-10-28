@@ -5,5 +5,9 @@ tmp/
 bin/
 obj/
 
-# Weights files: the trainers' history and the champions' main names (docs: learning §6)
-weights/
+# Raw run records and decision logs, one folder per job (docs: learning §6)
+data/
+
+# The old weights layout, kept until every session uses weights/CHARACTER/NAME.json
+weights/*/history/
+weights/*/nosl/
