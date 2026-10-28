@@ -100,7 +100,7 @@ internal sealed record CombatPool(int Act, string Rooms, List<EncounterModel> En
 internal sealed class BudgetArgs
 {
     /// <summary>The planner's beam when --beam is not given.</summary>
-    public const int DefaultBeam = 16;
+    public const int DefaultBeam = 8;
 
     private readonly Option<int> _worlds = Opt.Of("--worlds", 8, "pimc's determinized worlds per decision");
     private readonly Option<int> _nodes = Opt.Of("--nodes", 300, "search nodes per world (plan: per state and turn)");
