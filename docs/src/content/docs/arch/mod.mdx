@@ -13,7 +13,7 @@ Mod 是 AI 在真实游戏里的宿主。它由游戏自带的 Mod 加载器加�
 
 <Aside title="状态">
 
-辅助模式已经覆盖所有决策界面：`src/Sts2Ai.Mod` 能加载进真实游戏（v0.111.0，从 Steam 启动），连上大脑，在最上层的屏幕空闲时对每个决策发出询问（战斗、选牌提示、地图、奖励、卡牌奖励、卡包、事件、商店、休息处、宝箱、水晶球），并在一个文字面板里用游戏里的名字显示答案（[§3](#sec-3)、[§5](#sec-5)）。还没有在真实游戏里看它跑完一整局。规划中：执行适配器（[§4](#sec-4)）、自动开局驱动（[§7](#sec-7)）、SL 导出（[§6](#sec-6)）和决策日志（[§8](#sec-8)）。之前的调研见本地笔记 `tmp/notes/mod-research.md` 和 `tmp/notes/output-design.md`。
+辅助模式已经在两种环境下覆盖所有决策界面：`src/Sts2Ai.Mod` 能加载进真实游戏（v0.111.0，从 Steam 启动），连上大脑，在最上层的屏幕空闲时对每个决策发出询问（战斗、选牌提示、地图、奖励、卡牌奖励、卡包、事件、商店、休息处、宝箱、水晶球），并在一个文字面板里用游戏里的名字显示答案（[§3](#sec-3)、[§5](#sec-5)）。面板上有一个勾选框，选 SL 辅助还是 NoSL 辅助。SL 下 Mod 会发送节点的检查点和节点内的每一步，大脑因此在节点的克隆上规划每场战斗（[§6](#sec-6)）；在真实游戏里，90 个 SL 决策放到各自的克隆上重放，89 个问出同一个决策，剩下那个的原因已经修好（[§12](#sec-12)）。还没有在真实游戏里看它跑完一整局。规划中：执行适配器（[§4](#sec-4)）、自动开局驱动（[§7](#sec-7)）和决策日志（[§8](#sec-8)）。之前的调研见本地笔记 `tmp/notes/mod-research.md` 和 `tmp/notes/output-design.md`。
 
 </Aside>
 
@@ -85,7 +85,7 @@ flowchart LR
 
 **选牌提示**。提示的选项按规范顺序排列（`CardChoices.Canonical`），平局用固定的种子打破，所以观测和它的哈希每帧都保持不变。它的上下文来自 `ChoiceContexts.Last`（[GameBridge §5](/arch/gamebridge/#sec-5)）：屏幕在入口第一次 await 之后才打开，那时 `Current` 已经没了。每个提示（一个新的屏幕节点，或一次新的手牌选择）取一次最新的上下文。如果那个上下文已经被之前的提示用过，说明这个提示没有带上下文：Mod 记一条日志，把这个提示留给玩家。
 
-**答案**。一个答案对应一个观测哈希加一组合法动作：休息处在用过一个选项之后，观测不变也可能允许离开。面板用游戏本地化表里的名字（卡牌、遗物、药水、怪物、事件选项、休息处选项、地图图例里的房间名）描述动作，找不到就用 id。在地图上，它还会画出路线：推荐的地图点上有一个会脉动的紫色圆圈，大脑在它之后规划的路线上，每段路径都有一条紫色的线，一直画到 Boss。两者都画在 Mod 自己的图层里，随地图滚动跟着游戏的节点（地图点，以及每段路径上的小点）走（[输出层 §3](/arch/output/#sec-3)）。
+**答案**。一个答案对应一个观测哈希加一组合法动作：休息处在用过一个选项之后，观测不变也可能允许离开。战斗里面板只列出到本回合结束为止的计划；SL 规划器规划的是整场战斗，后面几回合要打的牌还没抽到，所以只报回合数。面板用游戏本地化表里的名字（卡牌、遗物、药水、怪物、事件选项、休息处选项、地图图例里的房间名）描述动作，找不到就用 id。在地图上，它还会画出路线：推荐的地图点上有一个会脉动的紫色圆圈，大脑在它之后规划的路线上，每段路径都有一条紫色的线，一直画到 Boss。两者都画在 Mod 自己的图层里，随地图滚动跟着游戏的节点（地图点，以及每段路径上的小点）走（[输出层 §3](/arch/output/#sec-3)）。
 
 **未知决策界面**。在辅助模式下，如果屏幕问的不是 Mod 认识的决策（模态框、牌组查看、还没打开的宝箱），面板只显示状态行；宝箱没打开时会加一句「open the chest」。对自动游玩来说：如果没有适配器匹配，或者空闲检查成立却没有合法动作，Mod 就暂停自动游玩，面板显示「manual needed」（需要手动操作），并把它作为覆盖率 bug 记入日志。绝不退回随机动作。
 
@@ -122,17 +122,33 @@ interface ISurfaceAdapter
 
 - **Socket**：Unix 域套接字 `~/.local/state/sts2ai/brain.sock`（设置了 `$XDG_STATE_HOME` 时放在它下面），传输 JSON lines（[协议 §2](/arch/protocol/#sec-2)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。服务端已经实现：SimWorker 的 `brain` 命令在这个套接字上等待，`run --brain` 已经作为宿主连上它跑模拟对局（[模拟器 §5](/arch/simulator/#sec-5)）。
 - **Steam 的容器**：Steam 在它的 Linux 运行时容器（pressure-vessel）里启动游戏。容器与主机共享主目录，但有自己的 `$XDG_RUNTIME_DIR`，放在那里的套接字游戏访问不到，所以套接字放在主目录下。大脑创建它的目录时，只允许用户本人访问。
-- **环境**：`hello` 消息带上环境（NoSL 或 SL，见[环境](/arch/environments/)），在开局时从 Mod 配置中选定，整局固定不变，并记入日志。
+- **环境**：由面板上的 SL 勾选框选定：勾上是 SL，否则是 NoSL（[环境](/arch/environments/)）。勾选框默认勾上；这个选择存在 `~/.local/state/sts2ai/env`，和套接字放在一起，不在游戏的档案目录里。`hello` 带上它；对大脑来说，它在一局里固定不变：在一局中途切换时，Mod 发出 `run_end`（`aborted`）和新的 `hello`，大脑从这一刻起当作新的一局。一个大脑同时服务两种环境：`brain` 对 NoSL 宿主用 `--policy` 的战斗大脑（冠军的 PIMC），对 SL 宿主用 `--sl-policy` 的战斗大脑（默认是 SL 规划器），宏观大脑相同（[Harness §4](/arch/harness/#sec-4)）。
 - **连不上大脑**：辅助模式下面板显示「no brain」（没有大脑）；自动游玩时 Mod 暂停。连接每 2 秒重试一次；新的连接从 `hello` 重新开始。
 - **大脑出错**：收到 `error` 回答（大脑拒绝这一局，或答不出）后，Mod 在这一局余下的部分关闭，面板显示错误信息。
 
 ## 6. SL 导出
 
-本节只在 SL 环境下运行，由环境开关控制。在 SL 下，大脑可以在当前节点的精确克隆上搜索（[环境 §6](/arch/environments/#sec-6)）。为了构建这个克隆，worker 进程需要节点入口时的状态，以及此后节点内做过的每一个动作。
+SL 下，大脑在当前节点的精确克隆上规划战斗（[环境 §6](/arch/environments/#sec-6)）。worker 用节点的检查点，加上进入节点以来做过的每一个决策来构建克隆；决策的写法与模拟器自己的轨迹相同（[模拟器 §7](/arch/simulator/#sec-7)）。Mod 在两种环境下都把这两样东西记在内存里（`NodeRecord`），所以在任何房间里勾上 SL 都能马上用；只有 SL 才把它们发出去。
 
-- **节点检查点**：进入节点时（地图移动后的 `RunManager.RoomEntered`，以及开局时），Mod 在内存里用 GameBridge 的 `Checkpoint.Take` 做节点的检查点：`RunManager.ToSave(null)`（`Runs/RunManager.cs:670-709`）加上它丢掉的遗物字段（[模拟器 §7](/arch/simulator/#sec-7)），把 `node_checkpoint{checkpoint}` 发给 Harness。它从不写会被云同步的 `current_run.save`，也不写档案目录下的任何其他文件。
-- **节点动作日志**：节点内的每一个动作，不论是 Mod 执行的还是人打出的，都按顺序作为协议动作放进 `node_action` 消息发出，连同所有选牌提示的回答。辅助模式下是人在操作，所以 Mod 通过比较动作前后的状态与合法动作集合，来捕获人的动作。另一种办法是钩住 `ActionExecutor.BeforeActionExecuted`（`GameActions/ActionExecutor.cs:52`） <Badge text="推断" variant="caution" />。选哪种是未决问题 1（[§13](#sec-13)）。
-- **NoSL**：以上都不运行。代码编译在内，但在 `hello` 时关闭。NoSL 日志里只要出现任何 `node_checkpoint`，这一局就作废。
+- **检查点**：在游戏到达地图点、存档的那一刻，用 GameBridge 的 `Checkpoint.Take` 取：在 `SaveManager.SaveRun` 上挂一个前缀（prefix），只在它的「已完成房间」为空时取，与模拟器取检查点是同一时刻。开局时游戏以同样方式进入第一个地图点。继续游戏（Continue）时，游戏重新进入存档所在的地图点，但不再存档（`RunManager.LoadIntoLatestMapCoord`）：如果存档是到达时存的，就在这里取检查点；如果是房间里更晚的存档（战斗胜利后、Ancient 事件后），房间的开头已经不在了，这个节点就没有克隆。Mod 从不写会被云同步的 `current_run.save`，也不写档案目录下的任何其他文件。
+- **步骤**：玩家的每个决策，都在游戏提交它的地方读出来；这些入口也正是模拟器自己调用的入口（[GameBridge §4](/arch/gamebridge/#sec-4)），所以在游戏执行之前就能精确知道这一步。未决问题 1 因此选了钩子，而不是比较前后的状态：状态比较分不出两张一样的牌，玩家操作得比画面稳定还快时也会漏掉动作。
+
+| 玩家 | 挂钩的方法（Harmony 前缀） | 步骤 |
+|---|---|---|
+| 出牌、使用或丢弃药水、结束回合、移动 | `ActionQueueSynchronizer.RequestEnqueue`，动作为 `PlayCardAction`、`UsePotionAction`、`DiscardPotionGameAction`、`EndPlayerTurnAction`、`VoteForMapCoordAction` | `combat play:…`、`combat potion:…`、`combat end_turn`；战斗外是药水栏的 `potion:S` 或 `discard_potion:S`，记在使用它的那个界面上；`map map:C,R` |
+| 回答选牌提示、卡牌奖励、卡包 | `PlayerChoiceSynchronizer.SyncLocalChoice` | `card_choice I,J`（游戏自己的序号）、`card_reward card:I` 或 `card_alt:ID`、`bundle bundle:I` |
+| 选事件选项、休息处选项 | `EventSynchronizer.ChooseLocalOption`、`RestSiteSynchronizer.ChooseLocalOption` | `event event:I`、`rest rest:ID` |
+| 领取奖励、离开奖励界面 | `RewardsSetSynchronizer.SelectLocalReward`；在奖励界面上的 `SkipLocalRewardsSet`、`ProceedFromTerminalRewardsScreen`、`ActChangeSynchronizer.SetLocalPlayerReady` | `rewards reward:I`、`rewards rewards_done` |
+| 拿或跳过宝箱的遗物 | `TreasureRoomRelicSynchronizer.PickRelicLocally` | `treasure relic:I`、`treasure relic_skip` |
+| 购买、删牌 | `MerchantEntry.OnTryPurchaseWrapper`、`MerchantCardRemovalEntry.OnTryPurchaseWrapper` | `shop buy:I`、`shop remove` |
+| 占卜 | `CrystalSphereMinigame.CellClicked` | `crystal_sphere big:X,Y`、`crystal_sphere small:X,Y` |
+| 离开事件、商店、休息处 | 地图要求选择移动时 | `event proceed`、`shop leave`、`rest leave` |
+
+出牌动作的卡牌从动作的 `NetCombatCard` 取得：动作要到执行时才去找它的卡牌。只有需要选目标的牌和药水才保留目标，与合法动作的写法一致。什么都没改变的购买或占卜（金币不够、格子已经揭开）不算一步。离开宝箱房、离开没有奖励的战斗时也会调用同样的方法，这些也不算一步：只有在奖励界面上的才算。事件选项、休息选项、领取奖励、购买和占卜都作为游戏自己的任务运行，界面要等任务结束才显示这一步的结果；在那之前，Mod 不在这个界面上发问，和模拟器等待正在运行的任务一样。
+
+- **记录中断**：遇到模拟器里没有对应决策的步骤，这个节点余下的记录就中断：战斗中丢弃药水、收回结束回合、没有选择就关掉卡牌奖励、在 Mod 读不了的界面上做选择。这时，以及在没有检查点的节点里，Mod 不询问 SL 的战斗决策：面板说明原因，下一个节点又会有克隆。选牌提示和战斗外的决策照常询问，因为它们的大脑不需要克隆。钩子从不让异常传到游戏里：出了错就把记录标为中断，并写日志。
+- **发送**：SL 下，每个决策之前，Mod 先把节点的检查点发一次（`node_checkpoint`），再发大脑还没收到的步骤（`node_action`，在节点内从 0 编号，[协议 §2](/arch/protocol/#sec-2)）。节点最后一个决策之后的步骤（比如它的移动）永远用不到，不发送。节点从 Mod 运行后游戏进入的第一个节点开始编号。
+- **NoSL**：照样记录，但从不发送。NoSL 日志里只要出现任何 `node_checkpoint`，这一局就作废。
 
 ## 7. 自动跑局驱动
 
@@ -154,6 +170,7 @@ interface ISurfaceAdapter
 | 操作 | 作用 |
 |---|---|
 | F8 | 显示 / 隐藏面板 |
+| SL 勾选框 | SL 辅助或 NoSL 辅助（[§5](#sec-5)） |
 | F9 | 暂停 / 继续自动游玩 |
 | 单步模式 | 每按一次键执行一个动作 |
 | 空格（半自动） | 高亮显示计划；按空格执行 `plan[0]` |
@@ -194,10 +211,11 @@ STS2MCP（MIT 许可）是一个现成的 Mod，让外部程序通过 HTTP 操�
 - **加载**：Mod 能初始化，版本守卫生效，面板能显示。
 - **真实游戏里的决策界面覆盖**：脚本化的 R4 局走遍每一种决策界面；兜底 / 手动次数为 0。
 - **空闲检查**：动画进行中从不发出决策。决策日志带上帧号，检查没有一条与排队中的动作重叠。
-- **SL 导出往返**：检查点 + 动作日志 → worker 的重放能跑完，且日志里每个动作都合法。
+- **SL 导出往返**：`brain --wire FILE` 把宿主发来的每条消息写下来。`clones --wire FILE` 为每个 SL 决策加载它的克隆（检查点，加上这个决策之前发出的步骤），检查克隆接下来问的是同一个决策，观测逐项相同；不同时指出第一个不同的字段。在模拟器自己的导出上（一局 SL，455 个决策），每个决策都相同。在真实游戏里，开着辅助玩的一局 SL 的第 2–5 层（4 个节点：3 场战斗和 1 个事件），90 个 SL 决策中有 89 个相同。另一个是在事件选项还在运行时问的，界面上还是选项之前的金币；Mod 现在会等这一步的任务结束（[§6](#sec-6)），这一点还没有在真实游戏里重放验证。更早一次第 1–2 层的记录发现出牌没有被记下来，因为排进队列的出牌动作要到执行时才去找它的卡牌。
+- **SL 规划器的等待**：把同一份记录对一个新启动的大脑重放，大脑和游戏在同一台机器上（`plan` c2，8 个 worker 上 beam 8×300）：一场战斗的第一个决策要 3–15 秒，因为它规划整场战斗；抽牌或敌人偏离计划时的重新规划要 1–11 秒；其余 66 个战斗决策中的 56 个按计划走，不到 50 毫秒。战斗以外的决策不到 20 毫秒。
 - **速度恢复**：停止和退出时都恢复 Instant/Fast 设置。
 
 ## 13. 未决问题
 
-1. 辅助模式下捕获人的动作：用事件钩子，还是比较状态差异？
+1. 辅助模式下捕获人的动作：已定，在游戏提交动作的地方挂钩子（[§6](#sec-6)）。
 2. 游戏是否认分层编译的环境变量？

@@ -66,15 +66,16 @@ internal sealed class Assist(BrainLink link, string gameVersion)
         if (_run != null) End("aborted");
     }
 
+    /// <summary>The kept choice; SL until the player chooses.</summary>
     private static PlayEnvironment ReadEnv()
     {
         try
         {
-            return File.Exists(EnvFile) && Enum.TryParse<PlayEnvironment>(File.ReadAllText(EnvFile).Trim(), out var env) ? env : PlayEnvironment.NoSL;
+            return File.Exists(EnvFile) && Enum.TryParse<PlayEnvironment>(File.ReadAllText(EnvFile).Trim(), out var env) ? env : PlayEnvironment.SL;
         }
         catch (IOException)
         {
-            return PlayEnvironment.NoSL;
+            return PlayEnvironment.SL;
         }
     }
 

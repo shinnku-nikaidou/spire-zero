@@ -26,7 +26,7 @@ As of 2026-10-28:
 | host–brain wire | done: the messages of [Protocol §2](/en/arch/protocol/#sec-2) over a Unix socket. `brain` serves them, and `run --brain` hosts runs against it. A run plays the same in process and over the wire: trace, observations, record and decision log, with PIMC too ([Simulator §5](/en/arch/simulator/#sec-5)) |
 | events, public record | planned |
 | macro brain, value function | L0 v0 with V v0: each option's afterstate is predicted from the screen and valued by V. With PIMC combat and the hand-made leaf, floor 19.34 on average and the act 1 boss in 177 of 200 runs, against 13.68 and 73 for random macro decisions; no run wins yet ([Macro brain §2](/en/arch/macro-brain/#sec-2)). V v2, a net over the run's cards, relics, potions and context, is built with its training and self-play exploration; its n2-b0.03, trained on three generations of self-play with a pull towards V v0's choices, is the NoSL champion's V since 2026-10-28, at floor 26.16 against V v0's 22.58 on the same seeds ([Learning §1](/en/arch/learning/#sec-1), [§2](/en/arch/learning/#sec-2)) |
-| mod | assist mode on every surface: loads in the real game, connects to the brain, asks about each idle decision and shows the answer with the game's names; not yet watched through a whole real run ([Mod §2](/en/arch/mod/#sec-2), [§3](/en/arch/mod/#sec-3)) |
+| mod | assist mode on every surface, in NoSL and SL: loads in the real game, connects to the brain, asks about each idle decision and shows the answer with the game's names; a box on the panel picks the environment. In SL it sends each node's checkpoint and the player's steps, read where the game commits them, and the SL planner plans on the node's clone: in the real game 89 of 90 SL decisions asked the same on their clones (the other one's cause is fixed), and a combat's first decision waits 3–15 s for the planner. Not yet watched through a whole real run ([Mod §2](/en/arch/mod/#sec-2), [§3](/en/arch/mod/#sec-3), [§6](/en/arch/mod/#sec-6)) |
 
 ## 2. Main gaps and risks
 
@@ -54,7 +54,7 @@ As of 2026-10-28:
 
 6. Macro brain L0 and a v0 value function; R1/R2 full runs; the evaluation pipeline. L0 v0, V v0, R1 full runs and the pipeline are done, with the first reports in `eval/silent/reports/` ([Evaluation §6](/en/arch/evaluation/#sec-6)); R2 is left.
 
-7. Mod: the executor and the auto-run driver, giving the R4 pipeline; the R3 ≡ R4 equivalence test. Loading, the brain link and the assist panel on every surface are done ([Mod §2](/en/arch/mod/#sec-2)–[§5](/en/arch/mod/#sec-5)).
+7. Mod: the executor and the auto-run driver, giving the R4 pipeline; the R3 ≡ R4 equivalence test. Loading, the brain link and the assist panel on every surface are done, in both environments, with the SL export and its round trip ([Mod §2](/en/arch/mod/#sec-2)–[§6](/en/arch/mod/#sec-6), [§12](/en/arch/mod/#sec-12)).
 
 8. SL worlds in the worker pool, loaded from the clone; the SL leaderboard. The node checkpoint, the SL clone, its seal, SL worlds in runs and the SL planner, which plans whole combats on the clone in the worker pool, are done ([Simulator §7](/en/arch/simulator/#sec-7), [§8](/en/arch/simulator/#sec-8), [Combat brain §3](/en/arch/combat-brain/#sec-3)); the SL leaderboard is left.
 

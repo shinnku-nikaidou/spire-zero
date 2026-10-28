@@ -98,7 +98,7 @@ public sealed class PublicRecord
 | 战斗外的 `card_choice`（升级、变化、附魔、移除） | 宏观大脑 |
 | `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`potion_full` | 宏观大脑 |
 
-- 战斗大脑取决于环境：NoSL 用 PIMC，SL 用 SL 规划器（`--policy plan`，[战斗大脑 §3](/arch/combat-brain/#sec-3)），它在节点克隆上规划，在 NoSL 里拒绝运行。在克隆上跑 PIMC（SL 下的 `--policy pimc`）保留下来，作为规划器的基线：它只搜索本回合。宏观大脑在两种环境里是同一个（[环境 §5](/arch/environments/#sec-5)）。
+- 战斗大脑取决于环境：NoSL 用 PIMC，SL 用 SL 规划器（`--policy plan`，[战斗大脑 §3](/arch/combat-brain/#sec-3)），它在节点克隆上规划，在 NoSL 里拒绝运行。在克隆上跑 PIMC（SL 下的 `--policy pimc`）保留下来，作为规划器的基线：它只搜索本回合。宏观大脑在两种环境里是同一个（[环境 §5](/arch/environments/#sec-5)）。每个宿主在 `hello` 里报出自己的环境，所以 `brain` 命令同时服务两种：NoSL 宿主用 `--policy` 的战斗大脑，SL 宿主用 `--sl-policy` 的，默认是 SL 规划器（[Mod §5](/arch/mod/#sec-5)）。
 - `Dispatcher` 为一局实现这张表。宿主把它作为自己的战斗策略、选牌提示策略和宏观策略。它为每一侧各持有一个大脑（战斗、战斗中的提示、宏观、战斗外的提示），并按 `ChoiceContext.InCombat` 把选牌提示交给对应的一侧（[协议 §4](/arch/protocol/#sec-4)）。目前战斗中的提示交给 `p0`（[战斗大脑 §2](/arch/combat-brain/#sec-2) 第 7 条），宏观一侧和它的提示交给 L0 或随机占位策略。
 - 找不到路由时报错「uncovered surface」（未覆盖的决策界面）：决策界面不在 `Dispatcher.MacroSurfaces` 里，或大脑的回答不合法，`Dispatcher` 都会抛异常。宿主暂停，请求人工操作，并记录一个覆盖率 bug。绝不随机兜底。评估要求兜底次数为 0（[评估 §3](/arch/evaluation/#sec-3)）。
 - 决策界面列表及其游戏入口：[模拟器 §5.2](/arch/simulator/#sec-5.2)、[GameBridge §4](/arch/gamebridge/#sec-4)。

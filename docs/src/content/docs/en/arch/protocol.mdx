@@ -67,7 +67,7 @@ host → brain   node_action{node_index, seq, action}  // every decision in the 
 | `node_checkpoint` | host → brain | SL only: the node's checkpoint at entry, the save `RunManager.ToSave(null)` with the relic fields it drops ([Simulator §7](/en/arch/simulator/#sec-7)) |
 | `node_action` | host → brain | SL only: every decision taken inside the node, numbered by `seq` from 0 and sent before the next decision, as `surface action` text (a card prompt's picks are the game's own indexes) |
 
-The two SL messages are gated by the environment ([Mod §6](/en/arch/mod/#sec-6)). A NoSL log that contains either of them is invalid, and the brain answers them in NoSL with an `error` at the next decision. Nodes are numbered from 0 in the run; the checkpoint and the decisions after it make the node's clone ([Simulator §7](/en/arch/simulator/#sec-7)).
+The two SL messages are gated by the environment ([Mod §6](/en/arch/mod/#sec-6)). A NoSL log that contains either of them is invalid, and the brain answers them in NoSL with an `error` at the next decision. Nodes are numbered from 0, from the first node the host saw (a mod can join a run later); the checkpoint and the decisions after it make the node's clone ([Simulator §7](/en/arch/simulator/#sec-7)).
 
 The normal exchange in one run:
 

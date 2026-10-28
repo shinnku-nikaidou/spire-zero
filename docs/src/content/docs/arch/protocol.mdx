@@ -67,7 +67,7 @@ host → brain   node_action{node_index, seq, action}  // every decision in the 
 | `node_checkpoint` | host → brain | 仅 SL：进入节点时的检查点，即存档 `RunManager.ToSave(null)` 加上它丢掉的遗物字段（[模拟器 §7](/arch/simulator/#sec-7)） |
 | `node_action` | host → brain | 仅 SL：节点内做出的每个决策，用 `seq` 从 0 编号，在下一个决策之前发送，形式是 `surface action` 文本（选牌提示的选择用游戏自己的下标） |
 
-这两种 SL 消息按环境开关（[Mod §6](/arch/mod/#sec-6)）。NoSL 日志里只要出现其中任何一种，这份日志就无效；NoSL 下 brain 会在下一个决策时用 `error` 回应它们。节点在一局里从 0 编号；检查点加上它之后的决策就是这个节点的克隆（[模拟器 §7](/arch/simulator/#sec-7)）。
+这两种 SL 消息按环境开关（[Mod §6](/arch/mod/#sec-6)）。NoSL 日志里只要出现其中任何一种，这份日志就无效；NoSL 下 brain 会在下一个决策时用 `error` 回应它们。节点从 0 编号，从宿主看到的第一个节点算起（Mod 可能中途才加入一局）；检查点加上它之后的决策就是这个节点的克隆（[模拟器 §7](/arch/simulator/#sec-7)）。
 
 一局里正常的消息往来：
 
