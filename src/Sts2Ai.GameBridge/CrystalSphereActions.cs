@@ -46,6 +46,10 @@ public static class CrystalSphereActions
         return actions;
     }
 
+    /// <summary>A click on <paramref name="cell"/> with the tool the minigame holds, as the action names it.</summary>
+    public static string Of(CrystalSphereMinigame game, CrystalSphereCell cell) =>
+        $"{(game.CrystalSphereTool == Tool.Big ? "big" : "small")}:{cell.X},{cell.Y}";
+
     /// <summary>Picks the tool and clicks the cell, as the screen does. The minigame ends with the last divination.</summary>
     public static Task Start(CrystalSphereMinigame game, string action)
     {

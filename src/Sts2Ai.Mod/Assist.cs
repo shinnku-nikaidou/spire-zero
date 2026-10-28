@@ -6,15 +6,21 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Mod;
 
 /// <summary>
-/// Assist mode (docs: mod §3, §5): once the game has been idle on a decision for a few frames, asks the brain about
+/// Assist mode (docs: mod §3, §5, §6): once the game has been idle on a decision for a few frames, asks the brain about
 /// that state, and shows the answer while the state lasts. The player acts; the mod never does.
 /// One decision is in flight at a time: when the state moves on first, the mod cancels it and waits for its answer
 /// before asking about the new state, so a slow brain never falls behind.
+/// The environment is the player's choice (the panel's SL box), kept across games. Switching it tells the brain a new
+/// run starts at this point. In SL the brain plans combats on a clone of the node, so before each decision the mod sends
+/// the node's checkpoint and the steps taken in it (<see cref="NodeRecord"/>); NoSL sends neither.
 /// </summary>
 internal sealed class Assist(BrainLink link, string gameVersion)
 {
     /// <summary>How many frames in a row a state must hold before it counts as idle.</summary>
     private const int IdleFrames = 3;
+
+    /// <summary>Where the chosen environment is kept: beside the brain's socket, outside the game's profile.</summary>
+    private static readonly string EnvFile = Path.Combine(Path.GetDirectoryName(BrainSocket.DefaultPath)!, "env");
 
     /// <param name="Key">The observation's hash and the legal actions: what the answer is for.</param>
     private sealed record Asked(long Id, string Key, Observation Obs, bool Cancelled = false);
@@ -29,12 +35,48 @@ internal sealed class Assist(BrainLink link, string gameVersion)
     private string? _failure;
     private (bool Over, bool Won, int Floor) _last;
 
+    // SL: the node and its steps the brain has been sent in this run.
+    private int _sentNode;
+    private int _sentSteps;
+
     private long _next;
     private Asked? _asked;
     private string? _askedKey;
     private (string Key, MapRoute? Route, string[] Lines)? _answer;
     private string? _key;
     private int _stable;
+
+    public PlayEnvironment Env { get; private set; } = ReadEnv();
+
+    /// <summary>The player switched the environment: the brain gets a new run from here.</summary>
+    public void Switch(PlayEnvironment env)
+    {
+        if (env == Env) return;
+        Env = env;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(EnvFile)!);
+            File.WriteAllText(EnvFile, env.ToString());
+        }
+        catch (IOException e)
+        {
+            Log.Warn($"{Host.Tag} could not keep the environment in {EnvFile}: {e.Message}");
+        }
+        Log.Info($"{Host.Tag} environment {env}");
+        if (_run != null) End("aborted");
+    }
+
+    private static PlayEnvironment ReadEnv()
+    {
+        try
+        {
+            return File.Exists(EnvFile) && Enum.TryParse<PlayEnvironment>(File.ReadAllText(EnvFile).Trim(), out var env) ? env : PlayEnvironment.NoSL;
+        }
+        catch (IOException)
+        {
+            return PlayEnvironment.NoSL;
+        }
+    }
 
     public void Tick(Panel panel)
     {
@@ -54,6 +96,11 @@ internal sealed class Assist(BrainLink link, string gameVersion)
             panel.Show("off in multiplayer");
             return;
         }
+        // Read without a brain too: the SL record needs the screen the player answers.
+        var asking = _screens.Read(run, me, out string note);
+        if (asking != null) NodeRecord.Seen(asking);
+        // The screen does not show a step's result before the step ends.
+        if (asking != null && NodeRecord.Running(asking.Surface)) asking = null;
         if (!_connected)
         {
             panel.Show(_linkNote);
@@ -61,8 +108,8 @@ internal sealed class Assist(BrainLink link, string gameVersion)
         }
         if (_run == null)
         {
-            (_run, _champion, _failure, _next) = (id, null, null, 0);
-            link.Send(new Hello(gameVersion, nameof(PlayEnvironment.NoSL), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel)));
+            (_run, _champion, _failure, _next, _sentNode, _sentSteps) = (id, null, null, 0, -1, 0);
+            link.Send(new Hello(gameVersion, Env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel)));
         }
         _last = (run.IsGameOver, run.IsGameOver && run.CurrentRoom?.IsVictoryRoom == true, run.TotalFloor);
         if (_failure != null)
@@ -76,11 +123,18 @@ internal sealed class Assist(BrainLink link, string gameVersion)
             return;
         }
 
-        string status = $"{_champion}, NoSL";
-        if (_screens.Read(run, me, out string note) is not { } asking)
+        string status = $"{_champion}, {Env}";
+        if (asking == null)
         {
             (_key, _stable) = (null, 0);
             panel.Show(status, note);
+            return;
+        }
+        // SL plans a combat on the node's clone; without one there is nothing to plan on (prompts go to p0, which needs none).
+        if (Env == PlayEnvironment.SL && asking.Surface == Surfaces.Combat && (NodeRecord.Checkpoint == null || NodeRecord.Broken != null))
+        {
+            (_key, _stable) = (null, 0);
+            panel.Show(status, $"no SL clone of this room ({NodeRecord.Broken}); the next room has one");
             return;
         }
         string hash = DecisionRequest.HashOf(asking.Obs);
@@ -105,8 +159,21 @@ internal sealed class Assist(BrainLink link, string gameVersion)
             }
             return;
         }
+        if (Env == PlayEnvironment.SL) SendNode();
         (_asked, _askedKey) = (new Asked(_next++, key, asking.Obs), key);
         link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal));
+    }
+
+    /// <summary>SL: the current node's checkpoint once, and its steps the brain has not had yet, before the next decision.</summary>
+    private void SendNode()
+    {
+        if (NodeRecord.Checkpoint is not { } checkpoint) return;
+        if (NodeRecord.Node != _sentNode)
+        {
+            link.Send(new NodeCheckpoint(NodeRecord.Node, checkpoint));
+            (_sentNode, _sentSteps) = (NodeRecord.Node, 0);
+        }
+        for (var steps = NodeRecord.Steps; _sentSteps < steps.Count; _sentSteps++) link.Send(new NodeAction(_sentNode, _sentSteps, steps[_sentSteps]));
     }
 
     private void Handle(LinkEvent e)

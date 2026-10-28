@@ -17,10 +17,25 @@ internal static partial class Describe
         bool map = ActionText.Is(answer.Action, "map", out _);
         var lines = new List<string> { $"→ {Action(answer.Action, obs)}{(map ? ", the purple ring on the map" : "")}" };
         if (answer.Plan is { Count: > 0 } plan)
-            lines.Add(map ? "then the purple line to the boss" : "then " + string.Join(", ", plan.Select(a => Action(a, obs))));
+            lines.Add(map ? "then the purple line to the boss" : obs.Screen is CombatScreen ? Turn(answer.Action, plan, obs) : "then " + string.Join(", ", plan.Select(a => Action(a, obs))));
         if (answer.Candidates is { Count: > 1 } candidates)
             lines.Add(string.Join("   ", candidates.Take(3).Select(c => $"{Action(c.Action, obs)} {c.Value:0.0}±{c.Ci:0.0}")));
         return [.. lines];
+    }
+
+    /// <summary>
+    /// A combat plan from the action on to this turn's end. The SL planner plans the whole combat, but later turns play
+    /// cards not drawn yet, which the screen cannot name: they are only counted.
+    /// </summary>
+    private static string Turn(string first, IReadOnlyList<string> plan, Observation obs)
+    {
+        static bool Ends(string a) => CombatAction.TryParse(a, out var c) && c.Kind == CombatActionKind.EndTurn;
+        var all = plan.Prepend(first).ToList();
+        int end = all.FindIndex(Ends);
+        var turn = all.Skip(1).Take(end < 0 ? all.Count : end).Select(a => Action(a, obs)).ToList();
+        int later = end < 0 ? 0 : all.Skip(end + 1).Count(Ends) + (all.Count > end + 1 && !Ends(all[^1]) ? 1 : 0);
+        string more = later == 0 ? "" : $"{later} more turn{(later > 1 ? "s" : "")} planned";
+        return turn.Count == 0 ? $"then {more}" : $"then {string.Join(", ", turn)}{(more != "" ? $" ({more})" : "")}";
     }
 
     private static string Action(string action, Observation obs)

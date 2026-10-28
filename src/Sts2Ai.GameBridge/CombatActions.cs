@@ -109,6 +109,19 @@ public static class CombatActions
         }
     }
 
+    /// <summary>
+    /// A play of <paramref name="card"/> as <see cref="Legal"/> names it: with its target only when the card picks one.
+    /// The UI can pass a target for other cards too (the player for a self card).
+    /// </summary>
+    public static CombatAction PlayOf(CardModel card, uint? target) =>
+        CombatAction.Play(NetCombatCardDb.Instance.GetCardId(card), PicksTarget(card.TargetType) ? target : null);
+
+    /// <summary>A use of the potion in <paramref name="slot"/> as <see cref="Legal"/> names it (see <see cref="PlayOf"/>).</summary>
+    public static CombatAction PotionOf(Player player, int slot, uint? target) =>
+        CombatAction.Potion(slot, player.PotionSlots[slot] is { } potion && PicksTarget(potion.TargetType) ? target : null);
+
+    private static bool PicksTarget(TargetType type) => type is TargetType.AnyEnemy or TargetType.AnyAlly;
+
     /// <summary>The card in hand with this uid.</summary>
     public static CardModel HandCard(PlayerCombatState pcs, uint uid) =>
         NetCombatCardDb.Instance.TryGetCard(uid, out var card) && card != null && pcs.Hand.Cards.Contains(card)

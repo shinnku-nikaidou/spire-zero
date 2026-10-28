@@ -31,9 +31,11 @@ internal static class Host
         else
         {
             // First, before anything else compiles game code that could inline an entry (docs: mod §10).
-            ChoiceContexts.Patch(new Harmony("sts2ai.mod"));
+            var harmony = new Harmony("sts2ai.mod");
+            ChoiceContexts.Patch(harmony);
+            NodeRecord.Patch(harmony);
             _assist = new Assist(BrainLink.Start(BrainSocket.DefaultPath), version);
-            Log.Info($"{Tag} assist mode, brain at {BrainSocket.DefaultPath}");
+            Log.Info($"{Tag} assist mode, {_assist.Env}, brain at {BrainSocket.DefaultPath}");
         }
         ((SceneTree)Engine.GetMainLoop()).ProcessFrame += Tick;
     }
@@ -42,7 +44,8 @@ internal static class Host
     {
         try
         {
-            _panel ??= new Panel((SceneTree)Engine.GetMainLoop());
+            _panel ??= new Panel((SceneTree)Engine.GetMainLoop(), _assist?.Env == PlayEnvironment.SL,
+                _assist == null ? null : sl => _assist.Switch(sl ? PlayEnvironment.SL : PlayEnvironment.NoSL));
             _panel.Poll();
             if (_assist == null) _panel.Show(_off!);
             else _assist.Tick(_panel);

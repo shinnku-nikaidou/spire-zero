@@ -26,7 +26,9 @@ using ChoiceContext = Sts2Ai.Protocol.ChoiceContext;
 namespace Sts2Ai.Mod;
 
 /// <summary>A decision to ask the brain about: the request's surface, observation and legal actions.</summary>
-internal sealed record Asking(string Surface, Observation Obs, IReadOnlyList<string> Legal);
+/// <param name="Source">What the player's answer is read against (<see cref="NodeRecord"/>): a card prompt's options in
+/// the game's own order, a rewards screen's set.</param>
+internal sealed record Asking(string Surface, Observation Obs, IReadOnlyList<string> Legal, object? Source = null);
 
 /// <summary>
 /// The decision the screen on top asks for (docs: mod §3), asked as the simulator asks it (RunSession): the same
@@ -80,7 +82,7 @@ internal sealed class Screens
                 return Ask(run, me, Surfaces.Bundle, BundleActions.Screen(bundles), BundleActions.Legal(bundles.Count), potions: false);
             }
             case NRewardsScreen rewards when settled && Field<RewardsSet?>(rewards, "_rewardsSet") is { } set:
-                return Ask(run, me, Surfaces.Rewards, RewardActions.Screen(set), RewardActions.Legal(set));
+                return Ask(run, me, Surfaces.Rewards, RewardActions.Screen(set), RewardActions.Legal(set), source: set);
             case NCrystalSphereScreen sphere when settled && Field<CrystalSphereMinigame>(sphere, "_entity") is { IsFinished: false } game:
                 return Ask(run, me, Surfaces.CrystalSphere, CrystalSphereActions.Screen(game), CrystalSphereActions.Legal(game));
             case NMapScreen { IsTravelEnabled: true, IsTraveling: false } when settled:
@@ -136,7 +138,7 @@ internal sealed class Screens
         var (choice, _) = CardChoices.Canonical(cards, min, max, context, new Random(0));
         var st = CombatManager.Instance.IsInProgress ? CombatManager.Instance.DebugOnlyGetState() : null;
         var screen = new CardChoiceScreen { Choice = choice, Combat = st != null ? Observe.Combat(st, me) : null };
-        return new Asking(Surfaces.CardChoice, Observe.Of(run, me, screen), []);
+        return new Asking(Surfaces.CardChoice, Observe.Of(run, me, screen), [], cards);
     }
 
     /// <summary>
@@ -154,12 +156,12 @@ internal sealed class Screens
         return _context;
     }
 
-    private static Asking? Ask(RunState run, Player me, string surface, ScreenView screen, List<string> legal, bool potions = true)
+    private static Asking? Ask(RunState run, Player me, string surface, ScreenView screen, List<string> legal, bool potions = true, object? source = null)
     {
         // A screen with nothing to pick is waiting on something else (an animation, a proceed button).
         if (legal.Count == 0) return null;
         if (potions) legal.AddRange(PotionActions.Legal(me));
-        return new Asking(surface, Observe.Of(run, me, screen), legal);
+        return new Asking(surface, Observe.Of(run, me, screen), legal, source);
     }
 
     private static T Field<T>(object node, string name) => (T)AccessTools.Field(node.GetType(), name).GetValue(node)!;

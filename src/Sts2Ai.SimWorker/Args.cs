@@ -122,12 +122,13 @@ internal sealed class BudgetArgs
     public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _effort, _beam, _replan, _lossPlans];
 
     /// <summary>The budget of the combat brain <paramref name="brain"/> (pimc, plan, or a placeholder).</summary>
-    public Budget Read(ParseResult r, string brain)
+    /// <param name="planElsewhere">Whether plan's options belong to another brain of the command (brain's SL hosts).</param>
+    public Budget Read(ParseResult r, string brain, bool planElsewhere = false)
     {
         var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes) ?? 300, r.GetValue(_elite) ?? 1, r.GetValue(_boss) ?? 1, r.GetValue(_halving),
             r.GetValue(_follow));
         if (brain != "plan")
-            return r.GetValue(_effort) == null && r.GetValue(_beam) == null && r.GetValue(_replan) == null && r.GetValue(_lossPlans) == null
+            return planElsewhere || r.GetValue(_effort) == null && r.GetValue(_beam) == null && r.GetValue(_replan) == null && r.GetValue(_lossPlans) == null
                 ? budget
                 : throw new CliException("--effort, --beam, --replan and --loss-plans are plan's; they need --policy plan");
         if (budget.Halving || budget.Follow) throw new CliException("--halving and --follow are pimc's; plan follows its plan always");
@@ -213,11 +214,13 @@ internal sealed class ChampionArgs(bool file)
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
-    public ChampionOptions Read(ParseResult r)
+    /// <param name="policy">The combat brain instead of --policy's (brain's SL hosts).</param>
+    /// <param name="planElsewhere">Whether plan's budget options belong to another champion of the command.</param>
+    public ChampionOptions Read(ParseResult r, string? policy = null, bool planElsewhere = false)
     {
-        var policy = r.GetValue(_policy)!;
+        policy ??= r.GetValue(_policy)!;
         var macro = r.GetValue(_macro)!;
-        var budget = _budget.Read(r, policy);
+        var budget = _budget.Read(r, policy, planElsewhere);
         IRunValue value = RunValue.Initial;
         var valueFile = r.GetValue(_value);
         if (valueFile != null)

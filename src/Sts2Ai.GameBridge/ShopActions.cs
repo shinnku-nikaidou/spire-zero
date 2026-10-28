@@ -64,6 +64,10 @@ public static class ShopActions
         return await Goods(inventory)[ActionText.Index(action["buy:".Length..])].OnTryPurchaseWrapper(inventory);
     }
 
+    /// <summary>Buying <paramref name="entry"/>, or the removal service, as the action names it.</summary>
+    public static string Of(MerchantInventory inventory, MerchantEntry entry) =>
+        entry is MerchantCardRemovalEntry ? Remove : $"buy:{Goods(inventory).IndexOf(entry)}";
+
     private static List<MerchantEntry> Goods(MerchantInventory inventory) =>
         inventory.AllEntries.Where(e => e is not MerchantCardRemovalEntry).ToList();
 }
