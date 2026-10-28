@@ -55,12 +55,15 @@ internal static class Serve
         return 0;
     }
 
-    /// <summary>The exception, with the innermost one's top frames first, since the run's failure keeps one short line.</summary>
+    /// <summary>
+    /// The exception, with the innermost one's top frames first, since the run's failure keeps one short line; the
+    /// whole exception follows on the next lines, for the run's log (a worker's own stderr is not kept).
+    /// </summary>
     private static string Describe(Exception e)
     {
         var frames = (e.GetBaseException().StackTrace ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Take(3).Select(f => string.Join('.', f.Split('(')[0].Split(' ').Last().Split('.').TakeLast(2)));
-        return $"{e.GetType().Name} at {string.Join(" from ", frames)}: {Cli.FirstLine(e.Message)}";
+        return $"{e.GetType().Name} at {string.Join(" from ", frames)}: {Cli.FirstLine(e.Message)}\n{e}";
     }
 
     private static IReadOnlyList<PlannedLine> Search(Pump pump, PimcBrain brain, WorkerRequest request)

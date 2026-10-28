@@ -88,7 +88,7 @@ internal static class Panel
                 outcome = "Failed";
                 failure = $"{e.GetType().Name}: {Cli.FirstLine(e.Message)}";
                 failed++;
-                Logs.Sim.LogDebug(e, "combat #{Index} failed", i);
+                Logs.Sim.LogError(e, "combat #{Index} failed", i);
             }
             var errors = HeadlessGame.TakeErrors();
             if (pooled != null) errors.AddRange(pooled.TakeGameErrors());

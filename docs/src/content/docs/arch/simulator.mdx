@@ -67,7 +67,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 **运行方式。** 把 `HOME` 设成一个临时目录，并设 `DOTNET_ROOT=~/.dotnet`。可执行文件是 `src/Sts2Ai.SimWorker/bin/Release/net9.0/Sts2Ai.SimWorker`。
 
-**命令行。** `--help` 列出所有命令，`COMMAND --help` 列出一个命令的选项（System.CommandLine）。每个命令是一个类，带着自己的选项；几个命令共用的选项组（配装、遭遇池、预算、叶子、冠军）在 `Args.cs` 里。stdout 只输出命令的结果，供脚本读取（`serve` 的 stdout 就是线路）。日志（Microsoft.Extensions.Logging）写到 stderr，每条一行，默认 Information 及以上；`--verbose` 再加上 Debug：游戏自己的日志，以及每次失败的调用栈。退出码：0 完成；1 完成但有失败（战斗或对局失败、晋级门槛没通过）；2 命令行或它指定的文件有错，报一行；70 程序 bug，附调用栈。
+**命令行。** `--help` 列出所有命令，`COMMAND --help` 列出一个命令的选项（System.CommandLine）。每个命令是一个类，带着自己的选项；几个命令共用的选项组（配装、遭遇池、预算、叶子、冠军）在 `Args.cs` 里。stdout 只输出命令的结果，供脚本读取（`serve` 的 stdout 就是线路）。日志（Microsoft.Extensions.Logging）写到 stderr，每条一行，默认 Information 及以上；`--verbose` 再加上 Debug：游戏自己的日志。失败的战斗或对局会以 Error 记下调用栈；若是 worker 里的某个世界失败，还附上 worker 的完整异常。罕见的失败未必会再出现。退出码：0 完成；1 完成但有失败（战斗或对局失败、晋级门槛没通过）；2 命令行或它指定的文件有错，报一行；70 程序 bug，附调用栈。
 
 | 命令 | 作用 |
 |---|---|

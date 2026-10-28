@@ -25,7 +25,7 @@ internal static class Cli
     private static readonly Option<bool> Verbose = new("--verbose")
     {
         Recursive = true,
-        Description = "logs at Debug too: the game's own log, and each failure's stack",
+        Description = "logs at Debug too: the game's own log",
     };
 
     /// <summary>No response files: an argument that starts with @ is just an argument.</summary>

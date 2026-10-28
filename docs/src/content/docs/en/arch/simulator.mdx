@@ -67,7 +67,7 @@ A transpiler is a Harmony patch that rewrites a method's IL instead of wrapping 
 
 **Running it.** Set `HOME` to a scratch directory and `DOTNET_ROOT=~/.dotnet`. The binary is `src/Sts2Ai.SimWorker/bin/Release/net9.0/Sts2Ai.SimWorker`.
 
-**CLI.** `--help` lists the commands and `COMMAND --help` a command's options (System.CommandLine). Each command is a class with its options; the option groups that several commands share (loadout, encounter pool, budget, leaf, champion) are in `Args.cs`. stdout carries only a command's results, which scripts read (for `serve`, the wire). Logs (Microsoft.Extensions.Logging) go to stderr, one line each, Information and up; `--verbose` adds Debug: the game's own log, and each failure's stack. Exit codes: 0 done; 1 done with failures (failed combats or runs, a gate that did not pass); 2 a mistake in the command line or in a file it names, in one line; 70 a bug, with its stack.
+**CLI.** `--help` lists the commands and `COMMAND --help` a command's options (System.CommandLine). Each command is a class with its options; the option groups that several commands share (loadout, encounter pool, budget, leaf, champion) are in `Args.cs`. stdout carries only a command's results, which scripts read (for `serve`, the wire). Logs (Microsoft.Extensions.Logging) go to stderr, one line each, Information and up; `--verbose` adds Debug: the game's own log. A failed combat or run logs its stack at Error, with a worker's whole exception when a world failed in a worker; a rare failure may not come again. Exit codes: 0 done; 1 done with failures (failed combats or runs, a gate that did not pass); 2 a mistake in the command line or in a file it names, in one line; 70 a bug, with its stack.
 
 | command | what it does |
 |---|---|

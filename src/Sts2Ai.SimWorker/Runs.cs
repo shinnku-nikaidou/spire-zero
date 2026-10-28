@@ -278,7 +278,7 @@ internal static class RunCommand
         }
         catch (Exception e)
         {
-            Logs.Sim.LogDebug(e, "run {Seed} failed", setup.Seed);
+            Logs.Sim.LogError(e, "run {Seed} failed", setup.Seed);
             result = Result("failed", $"{e.GetType().Name}: {Cli.FirstLine(e.Message)}");
         }
         finally

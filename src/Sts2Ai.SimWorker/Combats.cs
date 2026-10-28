@@ -153,7 +153,7 @@ internal static class BenchCommand
                 failure = $"{e.GetType().Name}: {Cli.FirstLine(e.Message)}";
                 failures[failure] = failures.GetValueOrDefault(failure) + 1;
                 failedEncounters[encounter.Id.Entry] = failedEncounters.GetValueOrDefault(encounter.Id.Entry) + 1;
-                Logs.Sim.LogDebug(e, "combat #{Index} failed", i);
+                Logs.Sim.LogError(e, "combat #{Index} failed", i);
             }
             var errors = HeadlessGame.TakeErrors();
             gameErrors += errors.Count;
