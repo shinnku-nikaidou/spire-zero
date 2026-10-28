@@ -130,7 +130,7 @@ interface ISurfaceAdapter
 
 本节只在 SL 环境下运行，由环境开关控制。在 SL 下，大脑可以在当前节点的精确克隆上搜索（[环境 §6](/arch/environments/#sec-6)）。为了构建这个克隆，worker 进程需要节点入口时的状态，以及此后节点内做过的每一个动作。
 
-- **节点检查点**：进入节点时（地图移动后的 `RunManager.RoomEntered`，以及开局时），Mod 在内存里调用 `RunManager.ToSave(null)`（`Runs/RunManager.cs:670-709`），把 `node_checkpoint{json}` 发给 Harness。它从不写会被云同步的 `current_run.save`，也不写档案目录下的任何其他文件。
+- **节点检查点**：进入节点时（地图移动后的 `RunManager.RoomEntered`，以及开局时），Mod 在内存里用 GameBridge 的 `Checkpoint.Take` 做节点的检查点：`RunManager.ToSave(null)`（`Runs/RunManager.cs:670-709`）加上它丢掉的遗物字段（[模拟器 §7](/arch/simulator/#sec-7)），把 `node_checkpoint{checkpoint}` 发给 Harness。它从不写会被云同步的 `current_run.save`，也不写档案目录下的任何其他文件。
 - **节点动作日志**：节点内的每一个动作，不论是 Mod 执行的还是人打出的，都按顺序作为协议动作放进 `node_action` 消息发出，连同所有选牌提示的回答。辅助模式下是人在操作，所以 Mod 通过比较动作前后的状态与合法动作集合，来捕获人的动作。另一种办法是钩住 `ActionExecutor.BeforeActionExecuted`（`GameActions/ActionExecutor.cs:52`） <Badge text="推断" variant="caution" />。选哪种是未决问题 1（[§13](#sec-13)）。
 - **NoSL**：以上都不运行。代码编译在内，但在 `hello` 时关闭。NoSL 日志里只要出现任何 `node_checkpoint`，这一局就作废。
 

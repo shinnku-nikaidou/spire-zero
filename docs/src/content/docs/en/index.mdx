@@ -23,7 +23,7 @@ Seven rules that every design decision follows:
 4. **The simulator is the real `sts2.dll`,** run headless (without graphics or a window). No engine rewrite.
 5. **No fallback:** a decision that nothing covers pauses the game. It is never made at random.
 6. **The mod never writes saves,** and nothing reloads the real game (`NumReloads == 0`).
-7. **Low coupling, simple, clear:** each project has one job and dependencies point one way ([§4](#sec-4)); each decision surface or component sits behind one small interface; no mechanism is built before something uses it; game bugs are not worked around. Example: a loaded save does not behave exactly like continuous play, and that is accepted ([Environments §6](/en/arch/environments/#sec-6)).
+7. **Low coupling, simple, clear:** each project has one job and dependencies point one way ([§4](#sec-4)); each decision surface or component sits behind one small interface; no mechanism is built before something uses it; game bugs get no checksum or fallback, and one that breaks our own correctness is fixed where it enters our code. Example: a loaded save drops relic fields that continuous play keeps, so the SL checkpoint carries them ([Environments §6](/en/arch/environments/#sec-6)).
 
 ## 2. Environments
 

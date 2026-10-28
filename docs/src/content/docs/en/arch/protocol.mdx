@@ -50,7 +50,7 @@ host → brain   executed{decision_id, action, ok, error?}
 host → brain   cancel{decision_id}            // state moved on; brain drops the search
 host → brain   run_end{won, floor, reason}
 // SL only (env-gated, docs: mod §6; a NoSL log containing these is invalid)
-host → brain   node_checkpoint{node_index, save_json}      // RunManager.ToSave(null) at node entry
+host → brain   node_checkpoint{node_index, checkpoint}     // at node entry: ToSave(null) + relic fields
 host → brain   node_action{node_index, seq, action}  // every decision in the node, as "surface action"
 ```
 
@@ -64,7 +64,7 @@ host → brain   node_action{node_index, seq, action}  // every decision in the 
 | `executed` | host → brain | which action was executed for a decision, whether it succeeded, the error if any |
 | `cancel` | host → brain | the state moved on; the brain drops that search |
 | `run_end` | host → brain | the run is over: won or not, floor, reason (`won`, `lost`, `truncated` at the decision cap, `failed` or `aborted`) |
-| `node_checkpoint` | host → brain | SL only: the save `RunManager.ToSave(null)` taken at node entry |
+| `node_checkpoint` | host → brain | SL only: the node's checkpoint at entry, the save `RunManager.ToSave(null)` with the relic fields it drops ([Simulator §7](/en/arch/simulator/#sec-7)) |
 | `node_action` | host → brain | SL only: every decision taken inside the node, numbered by `seq` from 0 and sent before the next decision, as `surface action` text (a card prompt's picks are the game's own indexes) |
 
 The two SL messages are gated by the environment ([Mod §6](/en/arch/mod/#sec-6)). A NoSL log that contains either of them is invalid, and the brain answers them in NoSL with an `error` at the next decision. Nodes are numbered from 0 in the run; the checkpoint and the decisions after it make the node's clone ([Simulator §7](/en/arch/simulator/#sec-7)).

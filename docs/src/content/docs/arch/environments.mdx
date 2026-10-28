@@ -135,9 +135,9 @@ flowchart LR
 
 ## 6. SL 克隆从哪来
 
-- **R1–R3**（由模拟器来玩这一局；R1–R4 是[仿真到实机阶梯](/arch/evaluation/#sec-1)的各级）：宿主 worker 进程持有真实状态。进入节点时，它用 `RunManager.ToSave(null)` 做一个检查点（`Runs/RunManager.cs:670-709`） <Badge text="已核实" variant="success" />。它在游戏到达地图点时存档的那一刻取这个检查点。克隆 = 这个检查点 + 节点轨迹，像游戏「继续游戏」加载存档那样加载，然后重放（[模拟器 §7](/arch/simulator/#sec-7)）。
-- **R4**（真实游戏）：进入节点时，Mod 在内存里调用 `ToSave(null)`，从不碰会被云同步的 `current_run.save`。它还记录节点内的每个动作（战斗中途再加一份 `CombatReplayWriter` 转储，[Mod §6](/arch/mod/#sec-6)），一起发给 worker。worker 通过「继续游戏」（Continue）的路径加载，再重放这些动作。
-- 克隆可能与一直不间断运行的游戏不同：加载会重新执行地图钩子和 `OnRunLoaded`，并丢掉没有标记为保存的遗物字段（`Runs/RunManager.cs:815-816`、`Runs/RunState.cs:330-332`）。这是游戏的 bug，按原样接受：不做校验和验证，不做兜底，训练时也不建模。在模拟器的对局里，它只表现为遗物状态，即遗物保存在内存里的状态或计数（[模拟器 §7](/arch/simulator/#sec-7)）。
+- **R1–R3**（由模拟器来玩这一局；R1–R4 是[仿真到实机阶梯](/arch/evaluation/#sec-1)的各级）：宿主 worker 进程持有真实状态。进入节点时，它做一个检查点：`RunManager.ToSave(null)`（`Runs/RunManager.cs:670-709`） <Badge text="已核实" variant="success" />，加上存档丢掉的遗物字段。它在游戏到达地图点时存档的那一刻取这个检查点。克隆 = 这个检查点 + 节点轨迹，像游戏「继续游戏」加载存档那样加载，放回遗物字段，然后重放（[模拟器 §7](/arch/simulator/#sec-7)）。
+- **R4**（真实游戏）：进入节点时，Mod 在内存里做同样的检查点，从不碰会被云同步的 `current_run.save`。它还记录节点内的每个动作（战斗中途再加一份 `CombatReplayWriter` 转储，[Mod §6](/arch/mod/#sec-6)），一起发给 worker。worker 通过「继续游戏」（Continue）的路径加载，再重放这些动作。
+- 加载存档和一直不间断运行的游戏并不一样：加载会重新执行地图钩子和 `OnRunLoaded`，并丢掉没有标记为保存的遗物字段（`Runs/RunManager.cs:815-816`、`Runs/RunState.cs:330-332`）。遗物字段的差别会表现出来：存档丢掉的状态或计数改变了克隆的每个观测，SL 规划器每一步都要重新规划。所以检查点带上每个遗物的简单字段，加载之后放回去，`run --check` 现在找不到任何和原对局不同的节点（[模拟器 §7](/arch/simulator/#sec-7)）。不做校验和验证，不做兜底。
 - **NoSL**：这个通道是关闭的。环境在会话开始时确定并记入日志；Mod 从不导出存档，worker 也从不提供克隆。NoSL 日志里只要出现一次导出，这一局就作废。
 - 决策进程从不读存档：Brain 不引用游戏程序集，由编译器保证。
 

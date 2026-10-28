@@ -50,7 +50,7 @@ host → brain   executed{decision_id, action, ok, error?}
 host → brain   cancel{decision_id}            // state moved on; brain drops the search
 host → brain   run_end{won, floor, reason}
 // SL only (env-gated, docs: mod §6; a NoSL log containing these is invalid)
-host → brain   node_checkpoint{node_index, save_json}      // RunManager.ToSave(null) at node entry
+host → brain   node_checkpoint{node_index, checkpoint}     // at node entry: ToSave(null) + relic fields
 host → brain   node_action{node_index, seq, action}  // every decision in the node, as "surface action"
 ```
 
@@ -64,7 +64,7 @@ host → brain   node_action{node_index, seq, action}  // every decision in the 
 | `executed` | host → brain | 某个决策实际执行了哪个动作、是否成功，以及可能的错误 |
 | `cancel` | host → brain | 状态已经往前走了；brain 丢弃这次搜索 |
 | `run_end` | host → brain | 一局结束：是否获胜、层数、原因（`won`、`lost`、触及决策上限的 `truncated`、`failed` 或 `aborted`） |
-| `node_checkpoint` | host → brain | 仅 SL：进入节点时做的存档 `RunManager.ToSave(null)` |
+| `node_checkpoint` | host → brain | 仅 SL：进入节点时的检查点，即存档 `RunManager.ToSave(null)` 加上它丢掉的遗物字段（[模拟器 §7](/arch/simulator/#sec-7)） |
 | `node_action` | host → brain | 仅 SL：节点内做出的每个决策，用 `seq` 从 0 编号，在下一个决策之前发送，形式是 `surface action` 文本（选牌提示的选择用游戏自己的下标） |
 
 这两种 SL 消息按环境开关（[Mod §6](/arch/mod/#sec-6)）。NoSL 日志里只要出现其中任何一种，这份日志就无效；NoSL 下 brain 会在下一个决策时用 `error` 回应它们。节点在一局里从 0 编号；检查点加上它之后的决策就是这个节点的克隆（[模拟器 §7](/arch/simulator/#sec-7)）。
