@@ -32,12 +32,14 @@ internal static class Panel
     private static readonly LeafArgs Leaf = new();
     private static readonly Option<bool> Trace = Opt.Of("--trace", false, "prints each of pimc's decisions");
     private static readonly Option<string?> Out = Opt.Maybe<string?>("--out", "one JSON line per combat");
+    private static readonly Option<string?> Prefer = Opt.Maybe<string?>("--prompt-prefer",
+        "an experiment: a card prompt that offers some of these card ids takes the first listed of them instead of p0's pick, in the real combat and the planner's worlds");
     private static readonly PoolArgs Pool = new();
 
     public static Command Command()
     {
         var command = Opt.Command("panel", "the fixed combat panel: the same combats for every player; win rate, HP lost",
-            [N, Start, Seed, Player, Env], Budget.Options, [Workers], Leaf.Options, [Trace, Out], Pool.Options);
+            [N, Start, Seed, Player, Env], Budget.Options, [Workers], Leaf.Options, [Trace, Out, Prefer], Pool.Options);
         command.SetAction(Cli.Game(Run));
         return command;
     }
@@ -57,6 +59,9 @@ internal static class Panel
         var leaf = Leaf.Read(r);
         if (!leaf.IsDefault && !searches) throw new CliException("--leaf and --combat-net are for --player pimc or plan");
         var pool = Pool.Read(r);
+        var preferred = r.GetValue(Prefer) is { } ids ? ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : null;
+        if (preferred != null && workers > 0) throw new CliException("--prompt-prefer does not reach the workers");
+        IChoicePolicy prompts = preferred == null ? PromptBrain.Instance : new Preferred(preferred);
 
         using var output = r.GetValue(Out) is { } outPath ? new StreamWriter(outPath) : null;
         using var workerPool = workers > 0 ? new WorkerPool(Cli.SelfCommand(), workers, leaf.WorkerOptions()) : null;
@@ -67,6 +72,7 @@ internal static class Panel
         Console.WriteLine($"panel: {n} combats from #{start}, act {pool.Act} ({pool.Rooms}: {pool.Encounters.Count} encounters), player {player}" +
                           leaf.Suffix +
                           (searches ? $" {env} budget {budget}" : "") +
+                          (preferred != null ? $", prompts prefer {string.Join(",", preferred)}" : "") +
                           (workerPool != null ? $" on {workerPool.Count} workers" : "") +
                           $", game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
@@ -79,13 +85,14 @@ internal static class Panel
             string? failure = null;
             int hpStart = 0, hp = 0, rounds = 0, steps = 0, enemyHp = 0, enemyMaxHp = 0;
             var searched = new Searched();
+            var powers = new Dictionary<string, int>();
             try
             {
                 var rng = new Random(seed * 1_000_003 + i);
                 var result = searches
-                    ? PlayWithBrain(pump, setup, PromptBrain.Instance, pooled, player == "plan" ? null : new PimcBrain(leaf.Leaf),
-                        new SlPlanner(leaf.Leaf), env, budget, searched, r.GetValue(Trace))
-                    : PlayWithPolicy(pump, setup, PromptBrain.Instance, Policies.Combat(player, rng));
+                    ? PlayWithBrain(pump, setup, prompts, pooled, player == "plan" ? null : new PimcBrain(leaf.Leaf),
+                        new SlPlanner(leaf.Leaf), env, budget, searched, powers, r.GetValue(Trace))
+                    : PlayWithPolicy(pump, setup, prompts, Policies.Combat(player, rng), powers);
                 (outcome, hpStart, hp, rounds, steps, enemyHp, enemyMaxHp) = result;
             }
             catch (Exception e)
@@ -108,8 +115,8 @@ internal static class Panel
                               (failure != null ? $" failure: {failure}" : ""));
             output?.WriteLine(JsonSerializer.Serialize(new
             {
-                i, encounter = encounter.Id.Entry, seed = setup.Seed, player, env = searches ? env.ToString() : null,
-                outcome, hp_start = hpStart, hp, rounds, actions = steps, enemy_hp = enemyHp, enemy_max_hp = enemyMaxHp, ms, failure,
+                i, encounter = encounter.Id.Entry, seed = setup.Seed, player, env = searches ? env.ToString() : null, prefer = preferred,
+                outcome, hp_start = hpStart, hp, rounds, actions = steps, enemy_hp = enemyHp, enemy_max_hp = enemyMaxHp, player_powers = powers, ms, failure,
                 game_errors = errors.Take(3),
                 searches = searched.Plans, proved = searched.Proved, nodes = searched.Nodes, replans = searched.Replans,
                 search_ms = searched.Ms,
@@ -127,12 +134,16 @@ internal static class Panel
     }
 
     private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions, int EnemyHp, int EnemyMaxHp) PlayWithPolicy(Pump pump, CombatSetup setup,
-        IChoicePolicy choices, ICombatPolicy policy)
+        IChoicePolicy choices, ICombatPolicy policy, Dictionary<string, int> powers)
     {
         using var session = CombatSession.Start(pump, setup, choices);
         int hpStart = session.Player.Creature.CurrentHp;
         while (!Cli.IsCapped(session))
-            session.Execute(policy.Choose(Cli.Decision(session)));
+        {
+            var decision = Cli.Decision(session);
+            Peak(powers, decision.Observation);
+            session.Execute(policy.Choose(decision));
+        }
         return Ended(session, hpStart);
     }
 
@@ -141,6 +152,14 @@ internal static class Panel
     private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions, int EnemyHp, int EnemyMaxHp) Ended(CombatSession session, int hpStart) =>
         (Outcome(session), hpStart, session.Player.Creature.CurrentHp, session.State.RoundNumber, session.ActionsExecuted,
             session.State.Enemies.Where(e => e.IsAlive).Sum(e => e.CurrentHp), session.State.Enemies.Sum(e => e.MaxHp));
+
+    /// <summary>Keeps each of the player's powers at its highest amount seen at the player's decisions; a lost combat
+    /// ends with none.</summary>
+    private static void Peak(Dictionary<string, int> powers, CombatObservation obs)
+    {
+        foreach (var power in obs.Player.Powers)
+            powers[power.Id] = Math.Max(powers.GetValueOrDefault(power.Id, int.MinValue), power.Amount);
+    }
 
     /// <summary>What a searching player's searches of one combat did: how many there were, how many of the planner's
     /// were proved the best, their nodes, the replans among them, and their time.</summary>
@@ -156,7 +175,8 @@ internal static class Panel
     /// <param name="planner">The SL planner, with the same leaf, when <paramref name="pimc"/> is null. It plans once and
     /// then follows its plan (<see cref="SlRoute"/>).</param>
     private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions, int EnemyHp, int EnemyMaxHp) PlayWithBrain(Pump pump, CombatSetup setup, IChoicePolicy choices,
-        PooledPimc? pooled, PimcBrain? pimc, SlPlanner planner, PlayEnvironment env, Budget budget, Searched searched, bool trace)
+        PooledPimc? pooled, PimcBrain? pimc, SlPlanner planner, PlayEnvironment env, Budget budget, Searched searched, Dictionary<string, int> powers,
+        bool trace)
     {
         var moves = new MoveRecord();
         var plan = budget.Follow && pimc != null ? new TurnPlan() : null;
@@ -169,6 +189,7 @@ internal static class Panel
             {
                 var obs = session.Observation();
                 var legal = session.LegalActions();
+                Peak(powers, obs);
                 moves.Witness(obs);
                 var history = moves.History;
                 ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{session.ActionsExecuted}");
@@ -181,7 +202,7 @@ internal static class Panel
                     session = null;
                     var clock = Stopwatch.StartNew();
                     T result;
-                    using (var worlds = env == PlayEnvironment.SL ? SimWorlds.SL(pump, real) : SimWorlds.NoSL(pump, obs, buildSeed, history))
+                    using (var worlds = env == PlayEnvironment.SL ? SimWorlds.SL(pump, real, choices) : SimWorlds.NoSL(pump, obs, buildSeed, history))
                         result = search(worlds, clock);
                     searched.Plans++;
                     searched.Ms += clock.Elapsed.TotalMilliseconds;
@@ -216,6 +237,21 @@ internal static class Panel
         finally
         {
             session?.Dispose();
+        }
+    }
+
+    /// <summary>p0, except that a prompt offering some of the preferred card ids takes the first listed of them.</summary>
+    private sealed class Preferred(IReadOnlyList<string> ids) : IChoicePolicy
+    {
+        public IReadOnlyList<int> Choose(ChoiceDecision decision)
+        {
+            var options = decision.Choice.Options;
+            if (decision.Choice.Max == 1)
+                foreach (var id in ids)
+                    for (int i = 0; i < options.Count; i++)
+                        if (options[i].Id == id)
+                            return [i];
+            return PromptBrain.Instance.Choose(decision);
         }
     }
 

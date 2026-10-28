@@ -13,18 +13,20 @@ namespace Sts2Ai.SimWorker;
 /// combat, and each is determinized with its own seed. The SL world is the real combat itself, replayed exactly, and
 /// tells states apart by the full hidden state (<see cref="HiddenState.Full"/>).
 /// Card prompts inside a world are answered by <see cref="PromptBrain"/>, the run's own prompt brain, so search
-/// expects the picks the run will make.
+/// expects the picks the run will make; an SL world may be given the prompt policy of its real combat instead.
 /// </summary>
 internal sealed class SimWorlds : IWorldSource, IDisposable
 {
     private readonly Pump _pump;
     private readonly CombatSnapshot _root;
+    private readonly IChoicePolicy _prompts;
     private CombatSession? _live;
     private World? _owner;
 
-    private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root)
+    private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, IChoicePolicy? prompts = null)
     {
         _pump = pump;
+        _prompts = prompts ?? PromptBrain.Instance;
         Environment = environment;
         _root = root;
     }
@@ -41,7 +43,8 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
         return new(pump, PlayEnvironment.NoSL, root);
     }
 
-    public static SimWorlds SL(Pump pump, CombatSnapshot real) => new(pump, PlayEnvironment.SL, real);
+    /// <param name="prompts">Answers the card prompts, as in the real combat; null: <see cref="PromptBrain"/>.</param>
+    public static SimWorlds SL(Pump pump, CombatSnapshot real, IChoicePolicy? prompts = null) => new(pump, PlayEnvironment.SL, real, prompts);
 
     public PlayEnvironment Environment { get; }
 
@@ -74,7 +77,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
                 if (source._owner == this && _current) return source._live!;
                 source._live?.Dispose();
                 source._live = null;
-                source._live = CombatSession.Restore(source._pump, source._root with { Trace = [.. source._root.Trace, .. trace] }, PromptBrain.Instance);
+                source._live = CombatSession.Restore(source._pump, source._root with { Trace = [.. source._root.Trace, .. trace] }, source._prompts);
                 source._owner = this;
                 _current = true;
                 Sync();
