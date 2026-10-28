@@ -21,6 +21,12 @@ log's own exploration temperature. V's softmax is at the temperature that matche
 which values in floors as V does, and --kl-temperature for V v0. Fork pairs and decisions are split by run id as the
 decisions are.
 
+--boss-sims reads simulated boss fights (`bosslab.py collect`): for decisions of the logs, each option's afterstate
+(from --boss-afterstates) fought its act's boss a few times with the same seeds. Each option is a sample labelled on
+the boss floor alone, by the share of its fights lost, and its fights' mean boss score (a win 0.5 to 1 by the HP left,
+a loss 0 to 0.5 by the boss's HP taken) is one more output of the second head; a decision's options weigh one run
+together, at --boss-weight. The report says how often V's best option on held-out decisions is the sims' best.
+
     uv run python train_value.py --logs a.jsonl,b.jsonl --records a.jsonl,b.jsonl --name n1
 """
 
@@ -49,6 +55,9 @@ script = common.app()
 MAX_UP = 3  # RunNet.MaxUp
 AUX = 6  # the next combats whose HP cost the second head learns
 ACT = 2  # with --aux-act, the second head also learns whether the act's boss was beaten, and the HP share left after it
+BOSS_FLOORS = {0: 17, 1: 33}  # the floor of each act's boss fight, where --boss-sims' fights label the hazard
+# The second head's outputs past the next combats, in order, with their widths: main() sets the ones in use.
+EXTRA_AUX: list[tuple[str, int]] = []
 # Every scaled number the nets read is capped at ±CAP: a few states show huge ones (an erupting WATERFALL_GIANT's HP).
 CAP = 10.0
 TABLES = ["cards", "modifiers", "relics", "potions", "context", "vars", "relic_status"]
@@ -356,12 +365,17 @@ class Batch:
         for b, s in enumerate(samples):
             for k, cost in enumerate(s["next"]):
                 aux[b, k], aux_mask[b, k] = cost, 1
-        if any("act_boss" in s for s in samples):
-            act, act_mask = torch.zeros(n, ACT), torch.zeros(n, ACT)
+        for key, width in EXTRA_AUX:
+            extra, extra_mask = torch.zeros(n, width), torch.zeros(n, width)
             for b, s in enumerate(samples):
-                if s.get("act_boss") is not None:
-                    act[b], act_mask[b] = torch.tensor(s["act_boss"]), 1
-            aux, aux_mask = torch.cat([aux, act], 1), torch.cat([aux_mask, act_mask], 1)
+                if s.get(key) is not None:
+                    extra[b], extra_mask[b] = torch.tensor(s[key], dtype=torch.float), 1
+            aux, aux_mask = torch.cat([aux, extra], 1), torch.cat([aux_mask, extra_mask], 1)
+        # A simulated boss fight labels its act's boss floor alone: the share of its fights lost.
+        for b, s in enumerate(samples):
+            if s.get("boss_floor") is not None:
+                at = (g == s["boss_floor"]).float()
+                self.label_mask[b], self.target[b] = at.to(device), (at * s["boss_lost"]).to(device)
         self.aux, self.aux_mask = aux.to(device), aux_mask.to(device)
 
     def inputs(self):
@@ -579,6 +593,76 @@ def state_sample(
         "next": [],
         "weight": 1.0,
     }
+
+
+def boss_score(fight: dict, max_hp: int) -> float:
+    """A simulated boss fight as one number in [0, 1]: a win is 0.5 plus half the share of max HP left, a loss half
+    the share of the boss's HP taken."""
+    if fight["won"]:
+        return 0.5 + 0.5 * min(max(fight["hp"] / max(max_hp, 1), 0.0), 1.0)
+    return 0.5 * (1 - min(max(fight["enemy_hp"] / max(fight["enemy_max_hp"], 1), 0.0), 1.0))
+
+
+def read_boss_sims(paths: str, afterstates: str, views: dict, floors: int) -> list[dict]:
+    """The simulated boss fights (`bosslab.py collect`): per decision, each option's afterstate (the logged view with
+    the option's changes from `afterstates`) as a sample labelled on its act's boss floor alone, by the share of its
+    fights lost, and with its fights' mean boss score for the second head. Every option of a decision is in one group,
+    which holds the options' sim scores for the report."""
+    sims = [d for d in read_lines(paths) if (d["run"], d["decision_id"]) in views and d["act"] in BOSS_FLOORS]
+    sims = [d for d in sims if any(o["fights"] for o in d["options"])]
+    wanted = {(d["run"], d["decision_id"]) for d in sims}
+    options = {}
+    for e in read_lines(afterstates):
+        if (e["run"], e["decision_id"]) in wanted:
+            options[(e["run"], e["decision_id"])] = {o["action"]: o for o in e["options"]}
+    groups = []
+    for d in sims:
+        view = views[(d["run"], d["decision_id"])][0]
+        after = options.get((d["run"], d["decision_id"]), {})
+        group = []
+        for o in d["options"]:
+            if not o["fights"] or o["action"] not in after:
+                continue
+            a = merged(view, after[o["action"]].get("after") or {})
+            sample = state_sample(d["run"], a, after[o["action"]]["features"], floors)
+            scores = [boss_score(f, a["max_hp"]) for f in o["fights"]]
+            sample |= {
+                "boss_floor": min(BOSS_FLOORS[d["act"]], floors - 1),
+                "boss_lost": sum(not f["won"] for f in o["fights"]) / len(o["fights"]),
+                "boss_score": [sum(scores) / len(scores)],
+                "logged_value": o.get("value"),
+            }
+            group.append(sample)
+        if len(group) >= 2:
+            for sample in group:
+                sample["weight"] = 1.0 / len(group)
+            groups.append({"run": d["run"], "samples": group})
+    return groups
+
+
+def boss_report(model, groups, make) -> dict:
+    """On held-out decisions with simulated boss fights: how often V's best option is the sims' best (by mean boss
+    score, decisions with one best only), next to the logging V's (the afterstates' values), and the boss loss."""
+    agree = logged = n = 0
+    loss = weight = 0.0
+    with torch.no_grad():
+        for g in groups:
+            b = make(g["samples"])
+            logits = model(*b.inputs())
+            loss += float((loss_of(logits, b) * b.weight).sum())
+            weight += float(b.weight.sum())
+            scores = [s["boss_score"][0] for s in g["samples"]]
+            best = max(scores)
+            if scores.count(best) > 1:
+                continue
+            values = expected_floor(torch.sigmoid(logits), b.start).tolist()
+            n += 1
+            agree += scores[values.index(max(values))] == best
+            old = [s["logged_value"] for s in g["samples"]]
+            if None not in old:
+                logged += scores[old.index(max(old))] == best
+    return {"boss_decisions": n, "boss_agree": agree / max(n, 1), "boss_agree_logged": logged / max(n, 1),
+            "boss_loss": loss / max(weight, 1e-9)}
 
 
 def read_forks(paths: str, floors: int) -> list[dict]:
@@ -887,6 +971,15 @@ def main(
     attention: Annotated[
         int, typer.Option(min=0, help="self-attention blocks over the deck's cards before they are pooled")
     ] = 0,
+    boss_sims: Annotated[
+        str | None, typer.Option(help="simulated boss fights per decision option (`bosslab.py collect`), comma-separated")
+    ] = None,
+    boss_afterstates: Annotated[
+        str | None, typer.Option(help="the afterstates (`afterstates`) of those decisions, comma-separated")
+    ] = None,
+    boss_weight: Annotated[
+        float, typer.Option(min=0, help="the weight of a decision's simulated fights, all its options together")
+    ] = 1.0,
     state_out: Annotated[
         str | None, typer.Option(help="also write the torch net, both heads, for analysis (torch.save)")
     ] = None,
@@ -920,6 +1013,10 @@ def main(
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out, character)
+    if boss_sims and not boss_afterstates:
+        raise LearnError("--boss-sims needs --boss-afterstates")
+    EXTRA_AUX[:] = ([("act_boss", ACT)] if aux_act else []) + ([("boss_score", 1)] if boss_sims else [])
+    n_aux = AUX + sum(w for _, w in EXTRA_AUX)
     torch.manual_seed(seed)
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -961,6 +1058,11 @@ def main(
 
     pairs = read_forks(forks, floors) if forks else []
     groups = read_afterstates(afterstates, views, floors, kl_temperature) if afterstates else []
+    bosses = read_boss_sims(boss_sims, boss_afterstates, views, floors) if boss_sims else []
+    if boss_sims and not bosses:
+        raise LearnError("no decision of --boss-sims has two options with fights and a logged view")
+    train_bosses = [g for g in bosses if not held_out(g["run"])]
+    test_bosses = [g for g in bosses if held_out(g["run"])]
     if (forks and not pairs) or (afterstates and not groups):
         raise LearnError(
             f"{len(pairs)} fork pairs and {len(groups)} logged decisions with options: nothing to learn from"
@@ -1008,6 +1110,24 @@ def main(
     test_pair_batches = [pair_batch(test_pairs[i : i + side_batch]) for i in range(0, len(test_pairs), side_batch)]
     test_group_batches = [group_batch(test_groups[i : i + side_batch]) for i in range(0, len(test_groups), side_batch)]
     train_pair_stream, train_group_stream = side(train_pairs, pair_batch), side(train_groups, group_batch)
+
+    def boss_batch_of(part):
+        return Batch(part, index, names, mean, std, floors, device)
+
+    def boss_batch(chunk):
+        return boss_batch_of([s for g in chunk for s in g["samples"]])
+
+    train_boss_stream = side(train_bosses, lambda chunk: (boss_batch(chunk), len(chunk)))
+
+    def boss_loss(model, b, decisions):
+        """A batch of simulated fights' loss, per decision: hazard at the boss floor and the second head."""
+        logits, aux = model.both(*b.inputs())
+        return ((loss_of(logits, b) + aux_weight * aux_loss_of(aux, b)) * b.weight).sum() / decisions
+
+    def evaluate_bosses(model):
+        with torch.no_grad():
+            total = sum(float(boss_loss(model, boss_batch([g]), 1)) for g in test_bosses)
+        return total / max(1, len(test_bosses))
 
     # Baseline: per floor, the hazard the training runs show, whatever the state.
     alive, deaths = torch.zeros(floors, dtype=torch.float64), torch.zeros(floors, dtype=torch.float64)
@@ -1063,7 +1183,7 @@ def main(
         dim=round(32 * width),
         hidden=round(128 * width),
         body=round(256 * width),
-        n_aux=AUX + (ACT if aux_act else 0),
+        n_aux=n_aux,
         attention=attention,
     ).to(device)
     # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
@@ -1083,6 +1203,9 @@ def main(
                 next(train_group_stream, None) if kl_weight > 0 else None,
             )
             loss = loss + fork_weight * fork + pair_weight * pair + kl_weight * kl
+            if train_bosses and boss_weight > 0:
+                bb, decisions = next(train_boss_stream)
+                loss = loss + boss_weight * boss_loss(model, bb, decisions)
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -1091,15 +1214,17 @@ def main(
         held_fork, held_pair, held_kl = evaluate_side(model)
         # Early stopping weighs the held-out losses as training does, but for the pairs': their targets are V's own
         # values at the horizon, which move as V learns, so their loss does not compare across epochs.
-        total = held + fork_weight * held_fork + kl_weight * held_kl
+        held_boss = evaluate_bosses(model) if test_bosses else 0.0
+        total = held + fork_weight * held_fork + kl_weight * held_kl + boss_weight * held_boss
         logger.info(
-            "epoch {}: held-out loss {:.4f}, next combats {:.4f}, forks {:.4f}, pairs {:.4f}, pull {:.4f}",
+            "epoch {}: held-out loss {:.4f}, next combats {:.4f}, forks {:.4f}, pairs {:.4f}, pull {:.4f}, boss sims {:.4f}",
             epoch,
             held,
             held_aux,
             held_fork,
             held_pair,
             held_kl,
+            held_boss,
         )
         if total < best - 1e-4:
             best, best_state, stale = total, {k: v.clone() for k, v in model.state_dict().items()}, 0
@@ -1141,6 +1266,9 @@ def main(
     if pairs:
         report |= {"forks": len(pairs), "held_out_forks": len(test_pairs), "fork_weight": fork_weight}
         report |= {"pair_weight": pair_weight, **fork_report(model, test_pair_batches)}
+    if bosses:
+        report |= {"boss_sims": len(bosses), "held_out_boss_sims": len(test_bosses), "boss_weight": boss_weight}
+        report |= boss_report(model, test_bosses, boss_batch_of)
     if groups:
         report |= {"decisions_pulled": len(groups), "kl_weight": kl_weight, "kl_temperature": kl_temperature}
         report |= pull_report(model, test_group_batches)
@@ -1149,7 +1277,7 @@ def main(
     if state_out:
         torch.save(
             {"state": model.state_dict(), "tables": tables, "names": names, "mean": mean, "std": std,
-             "floors": floors, "width": width, "attention": attention, "n_aux": AUX + (ACT if aux_act else 0), "report": report},
+             "floors": floors, "width": width, "attention": attention, "n_aux": n_aux, "report": report},
             state_out,
         )
 

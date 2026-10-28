@@ -75,3 +75,18 @@ def test_deck_attention_ignores_masked_cards():
     y = x.clone()
     y[0, 2] = torch.randn(8)
     assert torch.allclose(block(x, mask)[0, :2], block(y, mask)[0, :2], atol=1e-6)
+
+
+def test_a_boss_fight_scores_a_win_above_one_half_and_a_loss_by_the_boss_hp_taken():
+    assert tv.boss_score({"won": True, "hp": 40}, 80) == 0.75
+    assert tv.boss_score({"won": False, "enemy_hp": 300, "enemy_max_hp": 400}, 80) == 0.125
+
+
+def test_a_simulated_boss_fight_labels_only_its_boss_floor():
+    tok = {"cards": [], "relics": [], "potions": [], "context": [], "card_numbers": [], "relic_numbers": [], "extra": [0]}
+    s = {"tokens": tok, "features": {}, "start": 20, "end": 20, "kind": "censored", "weight": 1.0, "next": []}
+    s |= {"boss_floor": 33, "boss_lost": 0.5}
+    index = {t: {} for t in tv.TABLES}
+    b = tv.Batch([s], index, [], torch.zeros(0), torch.ones(0), 40, "cpu")
+    assert b.label_mask[0].nonzero().flatten().tolist() == [33]
+    assert float(b.target[0, 33]) == 0.5
