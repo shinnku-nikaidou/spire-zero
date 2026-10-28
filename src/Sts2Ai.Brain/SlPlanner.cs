@@ -25,6 +25,29 @@ public delegate IReadOnlyList<TurnSearch> TurnSearcher(IReadOnlyList<PlanJob> jo
 public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatStatus End, int Nodes, int Turns, bool Proved);
 
 /// <summary>
+/// The SL planner as a combat route plays it (docs: combat-brain §3), one per run: a plan is followed step by step with a
+/// <see cref="TurnPlan"/>, and planned again only where it does not hold or has run out. An unproved losing plan runs out
+/// after its <see cref="Budget.Replan"/> turns; after <see cref="Budget.LossPlans"/> of them in a row, the last is played
+/// to its end. A combat ends with its first plan that is not an unproved loss, or with the run, so the plans in a row are
+/// the combat's.
+/// </summary>
+public sealed class SlRoute(Budget budget)
+{
+    private readonly TurnPlan _plan = new();
+    private int _losses;
+
+    /// <param name="plan">Plans the rest of the combat at the decision with the budget it is given.</param>
+    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<Budget, SlPlan> plan) =>
+        _plan.Decide(observation, legal, () =>
+        {
+            if (legal.Count == 1) return PimcBrain.Only(legal[0]);
+            var made = plan(budget.LossPlans > 0 && _losses + 1 >= budget.LossPlans ? budget with { Replan = 0 } : budget);
+            _losses = made.End == CombatStatus.Lost && !made.Proved ? _losses + 1 : 0;
+            return made.Result;
+        });
+}
+
+/// <summary>
 /// The SL combat brain (docs: combat-brain §3): deterministic planning over the whole combat in the one exact world,
 /// the node's clone. Nothing is hidden there and nothing is random, so the best line is the answer, with no average
 /// over worlds; it is planned once and then played as planned (Harness's route follows it with a <see cref="TurnPlan"/>).

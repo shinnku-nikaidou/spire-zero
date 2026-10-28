@@ -20,15 +20,14 @@ public sealed class PooledPlanner(WorkerPool pool)
                 .Select((job, i) => (WorkerRequest)new SlTurnRequest(i, node, job.Path, nodes, keep, floor, job.History)).ToList())
             .Select(r => r.Turn ?? throw new InvalidDataException($"request {r.Id}: no turn in the reply")).ToList());
 
-    /// <summary>As Harness's combat route in SL, one per run: plans once, then follows the plan with a
-    /// <see cref="TurnPlan"/>, planning again only where it does not hold or has run out.</summary>
+    /// <summary>As Harness's combat route in SL, one per run (<see cref="SlRoute"/>): plans once, then follows the plan,
+    /// planning again only where it does not hold or has run out.</summary>
     /// <param name="name">The brain's name in reports: plan, and its leaf's names unless it is the default one.</param>
     public CombatRoute Route(Budget budget, string name = "plan")
     {
-        var plan = new TurnPlan();
-        return new(name, (decision, _, node, history) => plan.Decide(decision.Observation, decision.Legal, () => decision.Legal.Count == 1
-            ? PimcBrain.Only(decision.Legal[0])
-            : Plan(node ?? throw new InvalidOperationException("the SL planner has no node clone: it plays in SL only"),
-                budget.For(decision.Observation.Room), history).Result), budget);
+        var route = new SlRoute(budget);
+        return new(name, (decision, _, node, history) => route.Decide(decision.Observation, decision.Legal, b =>
+            Plan(node ?? throw new InvalidOperationException("the SL planner has no node clone: it plays in SL only"),
+                b.For(decision.Observation.Room), history)), budget);
     }
 }

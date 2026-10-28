@@ -6,7 +6,8 @@ namespace Sts2Ai.Brain;
 /// <summary>How much search one decision may use (docs: harness §5): worlds, and actions simulated per world.</summary>
 /// <param name="NodesPerWorld">PIMC: the actions simulated in each world's search of the turn. The SL planner: in each
 /// search of one turn from one state.</param>
-/// <param name="Elite">How many times the nodes per world an elite's decisions get (docs: combat-brain §5).</param>
+/// <param name="Elite">How many times its budget an elite's decisions get (docs: combat-brain §5): PIMC's nodes per world,
+/// the SL planner's beam.</param>
 /// <param name="Boss">The same for a boss.</param>
 /// <param name="Halving">Whether the first actions share each world's nodes by sequential halving instead of evenly
 /// (<see cref="PimcBrain.Root"/>).</param>
@@ -14,8 +15,11 @@ namespace Sts2Ai.Brain;
 /// (<see cref="TurnPlan"/>).</param>
 /// <param name="Beam">The SL planner's states kept from one turn to the next (<see cref="SlPlanner"/>); 0 for PIMC,
 /// which does not read it. The planner has one world, and ignores <paramref name="Worlds"/>.</param>
+/// <param name="Replan">The SL planner's turns of an unproved losing plan played before planning again; 0 plays it to its end.</param>
+/// <param name="LossPlans">The most unproved losing plans the SL planner makes in a row, that is in one combat
+/// (<see cref="SlRoute"/>); the last is played to its end. 0: no limit.</param>
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false, bool Follow = false,
-    int Beam = 0, int Replan = 1)
+    int Beam = 0, int Replan = 1, int LossPlans = 0)
 {
     /// <summary>The planner's budget at an effort level (docs: combat-brain §5): beam, nodes per state and turn, and the
     /// turns of an unproved losing plan played before planning again (0: to its end).</summary>
@@ -31,18 +35,20 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elit
     /// <summary>The effort levels, cheapest first.</summary>
     public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "max"];
 
-    /// <summary>The budget of a decision in this room (<see cref="CombatObservation.Room"/>), with its multiple applied.</summary>
-    public Budget For(string? room) => this with
+    /// <summary>The budget of a decision in this room (<see cref="CombatObservation.Room"/>), with its multiple applied: to
+    /// the SL planner's beam, or to PIMC's nodes per world. Applied twice, it is the same.</summary>
+    public Budget For(string? room)
     {
-        NodesPerWorld = (int)Math.Round(NodesPerWorld * (room switch { "Elite" => Elite, "Boss" => Boss, _ => 1.0 })),
-        Elite = 1,
-        Boss = 1,
-    };
+        double x = room switch { "Elite" => Elite, "Boss" => Boss, _ => 1.0 };
+        return Beam > 0
+            ? this with { Beam = Math.Max(1, (int)Math.Round(Beam * x)), Elite = 1, Boss = 1 }
+            : this with { NodesPerWorld = (int)Math.Round(NodesPerWorld * x), Elite = 1, Boss = 1 };
+    }
 
     /// <summary>As the champion's name shows it: 8x300 (beam 16x300 for the planner), then the multiples that are not 1,
-    /// then halving and follow if on, and the planner's replan when not 1.</summary>
+    /// then halving and follow if on, and the planner's replan when not 1 and its loss plans when limited.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}");
+        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}");
 }
 
 /// <summary>Searches every world from the decision's state: the best line after each of <paramref name="first"/>, in

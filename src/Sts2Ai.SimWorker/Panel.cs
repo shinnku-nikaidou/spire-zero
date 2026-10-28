@@ -146,12 +146,13 @@ internal static class Panel
     /// <param name="pooled">Searches in workers; null searches here.</param>
     /// <param name="pimc">The PIMC brain that plays, with its leaf; null for the planner.</param>
     /// <param name="planner">The SL planner, with the same leaf, when <paramref name="pimc"/> is null. It plans once and
-    /// then follows its plan.</param>
+    /// then follows its plan (<see cref="SlRoute"/>).</param>
     private static (string Outcome, int HpStart, int Hp, int Rounds, int Actions) PlayWithBrain(Pump pump, CombatSetup setup, IChoicePolicy choices,
         PooledPimc? pooled, PimcBrain? pimc, SlPlanner planner, PlayEnvironment env, Budget budget, Searched searched, bool trace)
     {
         var moves = new MoveRecord();
-        var plan = budget.Follow || pimc == null ? new TurnPlan() : null;
+        var plan = budget.Follow && pimc != null ? new TurnPlan() : null;
+        var route = pimc == null ? new SlRoute(budget) : null;
         CombatSession? session = CombatSession.Start(pump, setup, choices);
         try
         {
@@ -164,35 +165,38 @@ internal static class Panel
                 var history = moves.History;
                 ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{session.ActionsExecuted}");
                 string buildSeed = Cli.MakeSeed((int)decisionSeed, 0);
-                CombatDecisionResult Search()
+                // Searches the decision's worlds here: the real combat is kept as a snapshot meanwhile and put back after.
+                T Searching<T>(Func<IWorldSource, Stopwatch, T> search)
                 {
-                    if (legal.Count == 1) return PimcBrain.Only(legal[0]);
-                    if (pooled != null) return pooled.Decide(obs, legal, buildSeed, budget, decisionSeed, history);
                     var real = session!.Snapshot();
                     session.Dispose();
                     session = null;
                     var clock = Stopwatch.StartNew();
-                    CombatDecisionResult result;
+                    T result;
                     using (var worlds = env == PlayEnvironment.SL ? SimWorlds.SL(pump, real) : SimWorlds.NoSL(pump, obs, buildSeed, history))
-                    {
-                        if (pimc != null) result = pimc.Decide(obs, legal, worlds, budget, decisionSeed, history);
-                        else
-                        {
-                            var made = planner.Plan(obs, worlds.Worlds(1, 0)[0], budget, history);
-                            searched.Proved += made.Proved ? 1 : 0;
-                            searched.Nodes += made.Nodes;
-                            if (trace)
-                                Console.WriteLine($"  plan: {made.End} value {made.Value:F3}, {made.Result.Plan.Count + 1} actions, {made.Turns} turns, {made.Nodes} nodes" +
-                                                  $"{(made.Proved ? ", proved" : "")}, {clock.ElapsedMilliseconds} ms");
-                            result = made.Result;
-                        }
-                    }
+                        result = search(worlds, clock);
                     searched.Plans++;
                     searched.Ms += clock.Elapsed.TotalMilliseconds;
                     session = CombatSession.Restore(pump, real, choices);
                     return result;
                 }
-                var result = plan == null ? Search() : plan.Decide(obs, legal, Search);
+                CombatDecisionResult Search()
+                {
+                    if (legal.Count == 1) return PimcBrain.Only(legal[0]);
+                    if (pooled != null) return pooled.Decide(obs, legal, buildSeed, budget, decisionSeed, history);
+                    return Searching((worlds, _) => pimc!.Decide(obs, legal, worlds, budget, decisionSeed, history));
+                }
+                SlPlan Plan(Budget b) => Searching((worlds, clock) =>
+                {
+                    var made = planner.Plan(obs, worlds.Worlds(1, 0)[0], b, history);
+                    searched.Proved += made.Proved ? 1 : 0;
+                    searched.Nodes += made.Nodes;
+                    if (trace)
+                        Console.WriteLine($"  plan: {made.End} value {made.Value:F3}, {made.Result.Plan.Count + 1} actions, {made.Turns} turns, {made.Nodes} nodes" +
+                                          $"{(made.Proved ? ", proved" : "")}, {clock.ElapsedMilliseconds} ms");
+                    return made;
+                });
+                var result = route != null ? route.Decide(obs, legal, Plan) : plan == null ? Search() : plan.Decide(obs, legal, Search);
                 if (result.Replanned) searched.Replans++;
                 if (trace)
                     Console.WriteLine($"  {session.Summary()}\n    -> {result.First} then [{string.Join(" ", result.Plan)}]; " +

@@ -111,12 +111,24 @@ public class BudgetTests
         Assert.Equal(new Budget(NodesPerWorld: nodes), budget);
     }
 
+    [Theory]
+    [InlineData("Monster", 4)]
+    [InlineData("Elite", 8)]
+    [InlineData("Boss", 6)]
+    public void ThePlannersRoomMultipleScalesItsBeam(string room, int beam)
+    {
+        var budget = new Budget(NodesPerWorld: 150, Elite: 2, Boss: 1.5, Beam: 4).For(room);
+        Assert.Equal(new Budget(NodesPerWorld: 150, Beam: beam), budget);
+        Assert.Equal(budget, budget.For(room));
+    }
+
     [Fact]
     public void NamesShowOnlyWhatIsNotTheDefault()
     {
         Assert.Equal("8x300", new Budget().ToString());
         Assert.Equal("4x100 elite x2 halving", new Budget(4, 100, Elite: 2, Halving: true).ToString());
         Assert.Equal("beam 16x300 boss x2", new Budget(Boss: 2, Beam: 16).ToString());
+        Assert.Equal("beam 4x300 elite x2 loss plans 3", new Budget(Elite: 2, Beam: 4, LossPlans: 3).ToString());
     }
 }
 
@@ -367,6 +379,42 @@ public class SlPlannerTests
             Assert.Equal(CombatStatus.Lost, replay.Status);
         }
     }
+
+    /// <summary>A combat played through the route, the real toy apart from the one planned on, as in a run.</summary>
+    private static (int Plans, CombatStatus End) PlayRoute(Budget budget, int enemyHp)
+    {
+        var real = new Toy(enemyHp);
+        var route = new SlRoute(budget);
+        int plans = 0;
+        while (real.Status == CombatStatus.InProgress)
+        {
+            var result = route.Decide(real.Observe(), real.Legal(), b =>
+            {
+                plans++;
+                var world = new Toy(enemyHp);
+                world.Restore(real.Snapshot());
+                return new SlPlanner(Leaf).Plan(real.Observe(), world, b);
+            });
+            Assert.False(result.Replanned);
+            real.Execute(result.First);
+        }
+        return (plans, real.Status);
+    }
+
+    [Fact]
+    public void AfterItsLossPlansALosingCombatIsPlayedToItsEnd()
+    {
+        var unlimited = PlayRoute(new Budget(NodesPerWorld: 100_000, Beam: 2), enemyHp: 500);
+        var limited = PlayRoute(new Budget(NodesPerWorld: 100_000, Beam: 2, LossPlans: 2), enemyHp: 500);
+
+        Assert.Equal(CombatStatus.Lost, unlimited.End);
+        Assert.True(unlimited.Plans > 2);
+        Assert.Equal((2, CombatStatus.Lost), limited);
+    }
+
+    [Fact]
+    public void AWinningCombatIsPlannedOnce() =>
+        Assert.Equal((1, CombatStatus.Won), PlayRoute(new Budget(NodesPerWorld: 100_000, Beam: 1000, LossPlans: 1), enemyHp: 24));
 
     [Fact]
     public void EachEffortIsAPlannerBudget()

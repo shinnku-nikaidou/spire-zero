@@ -102,36 +102,48 @@ internal sealed class BudgetArgs
     /// <summary>The planner's effort when --effort is not given.</summary>
     public const string DefaultEffort = "high";
 
+    /// <summary>The budget options' names in a champion file: they belong to the file's combat brain.</summary>
+    public static readonly IReadOnlySet<string> Keys = new HashSet<string>
+        { "worlds", "nodes", "elite-x", "boss-x", "halving", "follow", "effort", "beam", "replan", "loss-plans" };
+
     private readonly Option<int> _worlds = Opt.Of("--worlds", 8, "pimc's determinized worlds per decision");
     private readonly Option<int?> _nodes = Opt.Maybe<int?>("--nodes", "search nodes per world (default 300; plan: per state and turn, default by --effort)");
-    private readonly Option<double> _elite = Opt.Of("--elite-x", 1.0, "multiplies the nodes per world in elite rooms");
-    private readonly Option<double> _boss = Opt.Of("--boss-x", 1.0, "multiplies the nodes per world in boss rooms");
+    private readonly Option<double?> _elite = Opt.Maybe<double?>("--elite-x", "multiplies the budget in elite rooms: pimc's nodes per world, plan's beam (default 1; plan: by --effort)");
+    private readonly Option<double?> _boss = Opt.Maybe<double?>("--boss-x", "multiplies the budget in boss rooms: pimc's nodes per world, plan's beam (default 1; plan: by --effort)");
     private readonly Option<bool> _halving = Opt.Of("--halving", false, "shares the nodes over the first actions by sequential halving");
     private readonly Option<bool> _follow = Opt.Of("--follow", false, "plays the rest of a turn every world planned the same without searching again");
     private readonly Option<string?> _effort = Opt.Maybe<string?>("--effort", $"plan's budget preset: {string.Join(", ", Budget.Efforts)} (default {DefaultEffort})")
         .AcceptOnlyFromAmong([.. Budget.Efforts]);
     private readonly Option<int?> _beam = Opt.Maybe<int?>("--beam", "plan's states kept from one turn to the next (default by --effort)");
     private readonly Option<int?> _replan = Opt.Maybe<int?>("--replan", "plan's turns of an unproved losing plan played before planning again, 0: to its end (default by --effort)");
+    private readonly Option<int?> _lossPlans = Opt.Maybe<int?>("--loss-plans",
+        "plan's unproved losing plans in a row in one combat, the last played to its end; 0: no limit (default by --effort)");
 
-    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _effort, _beam, _replan];
+    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _effort, _beam, _replan, _lossPlans];
 
     /// <summary>The budget of the combat brain <paramref name="brain"/> (pimc, plan, or a placeholder).</summary>
     public Budget Read(ParseResult r, string brain)
     {
-        var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes) ?? 300, r.GetValue(_elite), r.GetValue(_boss), r.GetValue(_halving), r.GetValue(_follow));
+        var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes) ?? 300, r.GetValue(_elite) ?? 1, r.GetValue(_boss) ?? 1, r.GetValue(_halving),
+            r.GetValue(_follow));
         if (brain != "plan")
-            return r.GetValue(_effort) == null && r.GetValue(_beam) == null && r.GetValue(_replan) == null ? budget
-                : throw new CliException("--effort, --beam and --replan are plan's; they need --policy plan");
+            return r.GetValue(_effort) == null && r.GetValue(_beam) == null && r.GetValue(_replan) == null && r.GetValue(_lossPlans) == null
+                ? budget
+                : throw new CliException("--effort, --beam, --replan and --loss-plans are plan's; they need --policy plan");
         if (budget.Halving || budget.Follow) throw new CliException("--halving and --follow are pimc's; plan follows its plan always");
         var effort = Budget.Effort(r.GetValue(_effort) ?? DefaultEffort);
         budget = budget with
         {
             NodesPerWorld = r.GetValue(_nodes) ?? effort.NodesPerWorld,
+            Elite = r.GetValue(_elite) ?? effort.Elite,
+            Boss = r.GetValue(_boss) ?? effort.Boss,
             Beam = r.GetValue(_beam) ?? effort.Beam,
             Replan = r.GetValue(_replan) ?? effort.Replan,
+            LossPlans = r.GetValue(_lossPlans) ?? effort.LossPlans,
         };
         if (budget.Beam < 1) throw new CliException("--beam is at least 1");
-        return budget.Replan >= 0 ? budget : throw new CliException("--replan is at least 0");
+        if (budget.Elite <= 0 || budget.Boss <= 0) throw new CliException("--elite-x and --boss-x are above 0");
+        return budget.Replan >= 0 && budget.LossPlans >= 0 ? budget : throw new CliException("--replan and --loss-plans are at least 0");
     }
 }
 
@@ -155,7 +167,9 @@ internal sealed class ChampionFileOption : Option<string?>
 
     /// <summary>
     /// The parse again with the file's options after the ones given: each that the command has and was not given (brain
-    /// has no --env: each host names its own). The same parse if the command has no --champion FILE or was not given one.
+    /// has no --env: each host names its own). The file's budget is its combat brain's, so a --policy given that is not
+    /// the file's keeps its own budget (plan's effort). The same parse if the command has no --champion FILE or was not
+    /// given one.
     /// </summary>
     public static ParseResult Merge(Command root, IReadOnlyList<string> args, ParseResult parsed, ParserConfiguration config)
     {
@@ -163,10 +177,13 @@ internal sealed class ChampionFileOption : Option<string?>
         if (command.Options.OfType<ChampionFileOption>().FirstOrDefault() is not { } option || parsed.GetValue(option) is not { } path)
             return parsed;
         var file = ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(path));
+        bool otherBrain = command.Options.FirstOrDefault(o => o.Name == "--policy") is Option<string> policy && parsed.GetResult(policy) is { Implicit: false }
+            && parsed.GetValue(policy) != file.Options.GetValueOrDefault("policy");
         var merged = args.ToList();
         foreach (var (key, value) in file.Options)
         {
             if (command.Options.FirstOrDefault(o => o.Name == "--" + key) is not { } known || parsed.GetResult(known) is { Implicit: false }) continue;
+            if (otherBrain && BudgetArgs.Keys.Contains(key)) continue;
             merged.AddRange(["--" + key, value]);
         }
         return root.Parse(merged, config);
