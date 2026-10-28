@@ -9,6 +9,7 @@ a baseline that knows only the floor. A second head learns from the run's next c
 one cost, which the run records hold), at --aux-weight in the loss; it shapes the body only, and the net file holds
 the hazards alone. The output is a net file for `run --value`, in the character's weights folder by default
 (docs: learning §6): the net as ONNX, with what RunNet needs to feed it, and test runs that RunNet checks on load.
+--features names the V v0 features (the logs' `features`) the net reads; by default it reads them all.
 
 Two more sources, both optional (docs: learning §2). --forks reads counterfactual pairs (`fork`): two branches from one
 decision with the same seed, played to the end of the act. Each branch's afterstate is a sample like a decision's,
@@ -229,6 +230,17 @@ def tokens(run: dict):
         "relic_numbers": [relic_numbers(r) for r in run["relics"]],
         "extra": [run.get("ascension", 0) / 10],
     }
+
+
+def feature_names(samples, wanted: str | None) -> list[str]:
+    """The V v0 features the net reads, sorted: every one the samples carry, or those of `wanted`."""
+    carried = sorted({f for s in samples for f in s["features"]})
+    if wanted is None:
+        return carried
+    names = sorted(set(wanted.split(",")))
+    if missing := [f for f in names if f not in carried]:
+        raise LearnError(f"no sample carries the features {missing}")
+    return names
 
 
 def vocab(samples, min_count: int):
@@ -1024,6 +1036,10 @@ def main(
     train_start: Annotated[
         float, typer.Option(min=0, max=1, help="where that share starts among the training runs (by run id)")
     ] = 0.0,
+    features: Annotated[
+        str | None,
+        typer.Option(help="the V v0 features the net reads, comma-separated (default: every one the logs carry)"),
+    ] = None,
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out, character)
@@ -1093,7 +1109,7 @@ def main(
 
     tables = vocab(train, min_count)
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
-    names = sorted({f for s in samples for f in s["features"]})
+    names = feature_names(samples, features)
     x = torch.tensor([[s["features"].get(f, 0.0) for f in names] for s in train], dtype=torch.float64)
     w = torch.tensor([s["weight"] for s in train], dtype=torch.float64)
     mean = (w[:, None] * x).sum(0) / w.sum()

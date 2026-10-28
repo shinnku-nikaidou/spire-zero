@@ -92,3 +92,15 @@ def test_a_boss_is_worth_the_floors_its_winners_went_on_to():
 def test_centred_values_lose_their_groups_mean():
     v = tv.centred(torch.tensor([1.0, 3.0, 10.0]), torch.tensor([0, 0, 1]), 2)
     assert v.tolist() == [-1.0, 1.0, 0.0]
+
+
+def test_the_net_reads_every_feature_the_logs_carry_or_the_chosen_ones():
+    samples = [{"features": {"hp": 1, "damage": 2}}, {"features": {"floor": 3}}]
+    assert tv.feature_names(samples, None) == ["damage", "floor", "hp"]
+    assert tv.feature_names(samples, "hp,floor") == ["floor", "hp"]
+    try:
+        tv.feature_names(samples, "hp,gold")
+    except tv.LearnError as e:
+        assert "gold" in str(e)
+    else:
+        raise AssertionError("an unknown feature must fail")
