@@ -66,3 +66,12 @@ def test_the_act_boss_label_is_the_last_boss_fight_of_the_act_or_unknown_when_tr
     died = boss | {"end": {"died": True}}
     assert tv.act_boss({"outcome": "truncated", "combats": [died]}, 0) == [0.0, 0.0]
     assert tv.act_boss({"outcome": "truncated", "combats": [other]}, 0) is None
+
+
+def test_deck_attention_ignores_masked_cards():
+    torch.manual_seed(0)
+    block = tv.DeckAttention(8)
+    x, mask = torch.randn(1, 3, 8), torch.tensor([[1.0, 1.0, 0.0]])
+    y = x.clone()
+    y[0, 2] = torch.randn(8)
+    assert torch.allclose(block(x, mask)[0, :2], block(y, mask)[0, :2], atol=1e-6)

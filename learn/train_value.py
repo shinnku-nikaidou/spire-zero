@@ -370,9 +370,38 @@ class Batch:
         return (self.cards, self.ups, self.mask, self.mods, self.mod_mask, *bags, self.features, *self.numbers)
 
 
+class DeckAttention(nn.Module):
+    """One self-attention block over the deck's card vectors (pre-norm, residual, masked), so a card's vector can
+    depend on the others before they are pooled; written out by hand so that it exports to plain ONNX ops."""
+
+    def __init__(self, dim, heads=4):
+        super().__init__()
+        self.heads = heads
+        self.norm1, self.norm2 = nn.LayerNorm(dim), nn.LayerNorm(dim)
+        self.qkv, self.out = nn.Linear(dim, 3 * dim), nn.Linear(dim, dim)
+        self.ff = nn.Sequential(nn.Linear(dim, 2 * dim), nn.ReLU(), nn.Linear(2 * dim, dim))
+
+    def forward(self, x, mask):
+        n, k, d = x.shape
+        q, key, v = self.qkv(self.norm1(x)).reshape(n, k, 3, self.heads, d // self.heads).permute(2, 0, 3, 1, 4)
+        scores = q @ key.transpose(-1, -2) / math.sqrt(d // self.heads) + (mask[:, None, None, :] - 1) * 1e9
+        x = x + self.out((scores.softmax(-1) @ v).transpose(1, 2).reshape(n, k, d))
+        return x + self.ff(self.norm2(x))
+
+
 class Net(nn.Module):
     def __init__(
-        self, sizes, n_features, floors, dim=32, hidden=128, body=256, sum_scale=1 / 16, n_extra=1, n_aux=AUX
+        self,
+        sizes,
+        n_features,
+        floors,
+        dim=32,
+        hidden=128,
+        body=256,
+        sum_scale=1 / 16,
+        n_extra=1,
+        n_aux=AUX,
+        attention=0,
     ):
         super().__init__()
         self.sum_scale = sum_scale
@@ -386,6 +415,7 @@ class Net(nn.Module):
             nn.init.normal_(e.weight, std=0.1)
         self.card_numbers = CardNumbers(sizes, dim)
         self.relic_numbers = RelicNumbers(sizes, dim)
+        self.attention = nn.ModuleList(DeckAttention(dim) for _ in range(attention))
         self.phi = nn.Sequential(nn.Linear(dim, hidden), nn.ReLU(), nn.Linear(hidden, hidden), nn.ReLU())
         self.body = nn.Sequential(
             nn.Linear(2 * hidden + 3 * dim + n_features + n_extra, body), nn.ReLU(), nn.Linear(body, body), nn.ReLU()
@@ -434,6 +464,8 @@ class Net(nn.Module):
             + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
             + self.card_numbers(mods, mod_mask, costs, mod_amounts, card_scalars, var_ids, var_values, var_mask)
         )
+        for block in self.attention:
+            x = block(x, card_mask)
         h = self.phi(x) * card_mask[..., None]
         total = h.sum(1)
         mean = total / card_mask.sum(1, keepdim=True).clamp_min(1)
@@ -849,6 +881,12 @@ def main(
     aux_act: Annotated[
         bool, typer.Option(help="the second head also learns the act boss's outcome and the HP share left after it")
     ] = False,
+    width: Annotated[
+        float, typer.Option(min=0.1, help="scales the net's widths (embeddings 32, card net 128, body 256)")
+    ] = 1.0,
+    attention: Annotated[
+        int, typer.Option(min=0, help="self-attention blocks over the deck's cards before they are pooled")
+    ] = 0,
     state_out: Annotated[
         str | None, typer.Option(help="also write the torch net, both heads, for analysis (torch.save)")
     ] = None,
@@ -1019,7 +1057,14 @@ def main(
         return fork / max(1, len(test_pairs)), pair / max(1, len(test_pairs)), kl / max(1, len(test_groups))
 
     model = Net(
-        {t: len(ids) for t, ids in tables.items()}, len(names), floors, n_aux=AUX + (ACT if aux_act else 0)
+        {t: len(ids) for t, ids in tables.items()},
+        len(names),
+        floors,
+        dim=round(32 * width),
+        hidden=round(128 * width),
+        body=round(256 * width),
+        n_aux=AUX + (ACT if aux_act else 0),
+        attention=attention,
     ).to(device)
     # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
     with torch.no_grad():
@@ -1087,6 +1132,8 @@ def main(
         "held_out_loss_floor_only": base_loss,
         "aux_weight": aux_weight,
         "aux_act": aux_act,
+        "width": width,
+        "attention": attention,
         "held_out_next_combats": held_aux,
         "r2_held_out": r2(predicted),
         "r2_held_out_floor_only": r2(base_predicted),
@@ -1102,7 +1149,7 @@ def main(
     if state_out:
         torch.save(
             {"state": model.state_dict(), "tables": tables, "names": names, "mean": mean, "std": std,
-             "floors": floors, "n_aux": AUX + (ACT if aux_act else 0), "report": report},
+             "floors": floors, "width": width, "attention": attention, "n_aux": AUX + (ACT if aux_act else 0), "report": report},
             state_out,
         )
 
