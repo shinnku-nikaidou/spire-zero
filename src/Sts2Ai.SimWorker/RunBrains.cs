@@ -17,6 +17,9 @@ internal interface IRunBrain : ICombatPolicy, IChoicePolicy, IMacroPolicy
     /// <summary>Harness's decision log, when Harness is in this process and logging.</summary>
     IReadOnlyList<DecisionEntry> Log { get; }
 
+    /// <summary>Harness's <see cref="Dispatcher.Replans"/>, when Harness is in this process.</summary>
+    int Replans { get; }
+
     /// <summary>SL: the host arrived at a node (docs: protocol §2).</summary>
     void Checkpoint(NodeCheckpoint checkpoint);
 
@@ -33,6 +36,7 @@ internal sealed class LocalBrain(Dispatcher harness) : IRunBrain
     public string Champion => harness.Champion;
     public IReadOnlyDictionary<string, int> Brains => harness.Brains;
     public IReadOnlyList<DecisionEntry> Log => harness.Log;
+    public int Replans => harness.Replans;
     public CombatAction Choose(CombatDecision decision) => harness.Choose(decision);
     public IReadOnlyList<int> Choose(ChoiceDecision decision) => harness.Choose(decision);
     public string Choose(MacroDecision decision) => harness.Choose(decision);
@@ -57,6 +61,7 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
     public string Champion => brain.Champion;
     public IReadOnlyDictionary<string, int> Brains => brain.Brains;
     public IReadOnlyList<DecisionEntry> Log => brain.Log;
+    public int Replans => brain.Replans;
 
     public CombatAction Choose(CombatDecision decision)
     {
@@ -121,6 +126,7 @@ internal sealed class WireBrain : IRunBrain
     public string Champion { get; }
     public IReadOnlyDictionary<string, int> Brains => _brains;
     public IReadOnlyList<DecisionEntry> Log => [];
+    public int Replans => 0;
 
     public CombatAction Choose(CombatDecision decision) => CombatAction.Parse(Ask(Surfaces.Combat,
         decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run"), decision.Legal.Select(a => a.ToString()).ToList()));

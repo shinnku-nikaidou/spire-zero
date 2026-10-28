@@ -14,8 +14,6 @@ namespace Sts2Ai.Harness;
 /// </summary>
 public sealed class PooledPimc(WorkerPool pool)
 {
-    private readonly List<string> _gameErrors = [];
-
     /// <param name="buildSeed">Seeds the combat built from the observation (docs: simulator §3).</param>
     /// <param name="seed">Draws the worlds.</param>
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
@@ -24,7 +22,7 @@ public sealed class PooledPimc(WorkerPool pool)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
         budget = budget.For(observation.Room);
-        return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) => Map(Enumerable.Range(0, budget.Worlds)
+        return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) => pool.Map(Enumerable.Range(0, budget.Worlds)
                 .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes, history)).ToList())
             .Select(r => r.Lines!).ToList());
     }
@@ -35,7 +33,7 @@ public sealed class PooledPimc(WorkerPool pool)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
         return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) =>
-            [Map(first.Select((action, a) => (WorkerRequest)new SlWorldRequest(a, node, [action], nodes, history)).ToList()).Select(r => r.Lines![0]).ToList()]);
+            [pool.Map(first.Select((action, a) => (WorkerRequest)new SlWorldRequest(a, node, [action], nodes, history)).ToList()).Select(r => r.Lines![0]).ToList()]);
     }
 
     /// <summary>As Harness's combat route, one per run: NoSL draws the build seed from the decision's seed; SL searches
@@ -50,21 +48,5 @@ public sealed class PooledPimc(WorkerPool pool)
         return new(name, (decision, seed, node, history) => plan == null
             ? Search(decision, seed, node, history)
             : plan.Decide(decision.Observation, decision.Legal, () => Search(decision, seed, node, history)), budget);
-    }
-
-    /// <summary>The game's Log.Error lines in the workers since the last call.</summary>
-    public List<string> TakeGameErrors()
-    {
-        var errors = _gameErrors.ToList();
-        _gameErrors.Clear();
-        return errors;
-    }
-
-    private IReadOnlyList<WorkerReply> Map(IReadOnlyList<WorkerRequest> requests)
-    {
-        var replies = pool.Map(requests);
-        foreach (var r in replies) _gameErrors.AddRange(r.GameErrors);
-        if (replies.FirstOrDefault(r => r.Error != null) is { } failed) throw new InvalidOperationException($"world {failed.Id}: {failed.Error}");
-        return replies;
     }
 }

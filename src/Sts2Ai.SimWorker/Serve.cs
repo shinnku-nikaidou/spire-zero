@@ -33,7 +33,8 @@ internal static class Serve
     /// <param name="leaf">The leaf to search with.</param>
     private static int Run(Pump pump, TextWriter wire, ICombatLeaf leaf)
     {
-        var brain = new PimcBrain(leaf);
+        var pimc = new PimcBrain(leaf);
+        var planner = new SlPlanner(leaf);
         HeadlessGame.TakeErrors();
         wire.WriteLine(ProtocolJson.Serialize(new WorkerHello(HeadlessGame.GameVersion)));
         while (Console.In.ReadLine() is { } line)
@@ -43,7 +44,10 @@ internal static class Serve
             {
                 var request = ProtocolJson.Deserialize<WorkerRequest>(line);
                 id = request.Id;
-                wire.WriteLine(ProtocolJson.Serialize(new WorkerReply(id, Search(pump, brain, request), null, HeadlessGame.TakeErrors())));
+                var reply = request is SlTurnRequest turn
+                    ? new WorkerReply(id, null, null, [], SearchTurn(pump, planner, turn))
+                    : new WorkerReply(id, Search(pump, pimc, request), null, []);
+                wire.WriteLine(ProtocolJson.Serialize(reply with { GameErrors = HeadlessGame.TakeErrors() }));
             }
             catch (Exception e)
             {
@@ -83,5 +87,13 @@ internal static class Serve
             default:
                 throw new InvalidDataException($"no search for {request.GetType().Name}");
         }
+    }
+
+    /// <summary>The SL planner's turn from a state of the node's clone: the clone at the decision, then the path.</summary>
+    private static TurnSearch SearchTurn(Pump pump, SlPlanner planner, SlTurnRequest r)
+    {
+        using var world = new NodeWorld(pump, r.Node);
+        foreach (var action in r.Path) world.Execute(action);
+        return planner.SearchTurn(world, r.History ?? [], r.Nodes, r.Keep, r.Floor);
     }
 }

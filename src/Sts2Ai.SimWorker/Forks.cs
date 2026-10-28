@@ -260,8 +260,7 @@ internal static class ForkCommand
         if (champion.Macro != "l0") throw new CliException("fork picks the best action with l0's V: it needs --macro l0");
         var l0 = new MacroBrain(champion.Value);
         using var pool = champion.Pool();
-        var pooled = pool == null ? null : new PooledPimc(pool);
-        var harness = champion.Harness(pooled, log: false);
+        var harness = champion.Harness(pool, log: false);
         var surfaces = r.GetValue(ForkSurfaces)!.Split(',').ToHashSet();
         int perRun = r.GetValue(PerRun), act = r.GetValue(Act), maxDecisions = r.GetValue(MaxDecisions);
         using var output = new StreamWriter(r.GetValue(Logged.Out)!) { AutoFlush = true };
@@ -295,7 +294,7 @@ internal static class ForkCommand
                     Logs.Sim.LogError(e, "fork {Run} {Decision} failed", run.RunId, k);
                     failed++;
                 }
-                pooled?.TakeGameErrors();
+                pool?.TakeGameErrors();
             }
         }
         Console.WriteLine($"fork: {forks} forks, {failed} failed");

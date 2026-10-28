@@ -11,6 +11,20 @@ public sealed class MoveRecord
     private readonly Dictionary<uint, (string? Id, List<EnemyTurn> Turns)> _turns = [];
     private int _round = -1;
 
+    public MoveRecord()
+    {
+    }
+
+    /// <summary>A record that goes on from <paramref name="history"/>, a record's <see cref="History"/>.</summary>
+    public MoveRecord(IReadOnlyList<EnemyTurns> history)
+    {
+        foreach (var e in history)
+        {
+            _turns[e.Uid] = (e.Id, e.Turns.ToList());
+            foreach (var turn in e.Turns) _round = Math.Max(_round, turn.Round);
+        }
+    }
+
     /// <summary>Each enemy's rounds so far, in the order the enemies first showed up.</summary>
     public IReadOnlyList<EnemyTurns> History => _turns.Select(e => new EnemyTurns(e.Key, e.Value.Id, e.Value.Turns.ToList())).ToList();
 

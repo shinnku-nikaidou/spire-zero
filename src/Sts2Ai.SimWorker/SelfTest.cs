@@ -25,6 +25,10 @@ namespace Sts2Ai.SimWorker;
 ///  - rule fidelity: Rolling Boulder hits several enemies one at a time;
 ///  - worlds: a search world restores exactly after a prompt, also when a relic asks at the start of each turn; the
 ///    SL world of a run's combat shows the run's observation, plays on as the run did, and restores;
+///  - SL seal: a node's clone stops at the node's exit and refuses to step past it, and the SL world refuses to step
+///    past the end of its combat;
+///  - SL plan: the planner's plan of a run's combat holds in the real run, step for step, to the end it planned (and,
+///    with --workers N, the pooled planner plans the same);
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
 ///  - protocol: observations and actions survive a round trip through their wire form, and the brain's and harness's
 ///    assemblies reach no game assembly;
@@ -132,7 +136,9 @@ internal static class SelfTest
         RollingBoulder(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
+        CloneStopsAtTheExit(pump, seed, Check);
         int workers = r.GetValue(Workers);
+        PlanHoldsInTheRun(pump, seed, workers, Check);
         if (workers > 0) PooledMatches(pump, combats, seed, workers, Check);
 
         Console.WriteLine($"draw order resampled by a different determinize seed: {drawResampled}/{drawCompared}; differs from the true order: {drawMovedFromTrue}/{drawCompared}");
@@ -174,7 +180,7 @@ internal static class SelfTest
                 check("pooled search matches in-process search",
                     Show(here) == Show(there), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; pooled {Show(there)}");
             }
-            var errors = pooled.TakeGameErrors();
+            var errors = workerPool.TakeGameErrors();
             check("no game errors in workers", errors.Count == 0, $"#{i}: {errors.FirstOrDefault()}");
         }
         check("no worker restarts", workerPool.Restarts == 0, $"{workerPool.Restarts} restarts");
@@ -413,6 +419,154 @@ internal static class SelfTest
         }
         world.Restore(root);
         check("SL world restores", Json(world.Observe()) == Json(steps[0].Obs), $"{label} after {played} actions");
+    }
+
+    /// <summary>
+    /// A run with random policies, to its third node: its first node's clone (the save on arrival and every decision of
+    /// the node, the travel last) must load at its horizon, without travelling, and refuse another step (docs:
+    /// environments §7, guard 8).
+    /// </summary>
+    private static void CloneStopsAtTheExit(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed + 1);
+        var nodes = new List<(string Save, int Start)>();
+        List<string> trace;
+        using (var session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed + 1, 0)), PromptBrain.Instance, new PlayPolicy(rng), new RandomMacro(rng)))
+        {
+            while (!session.IsOver && nodes.Count < 3)
+            {
+                if (nodes.Count == 0 || nodes[^1].Start != session.NodeStart) nodes.Add((session.Clone().Save, session.NodeStart));
+                session.Step();
+            }
+            trace = session.Trace.ToList();
+        }
+        if (nodes.Count < 3)
+        {
+            check("SL clone stops at its node's exit", false, "the run ended before its third node");
+            return;
+        }
+        var clone = new NodeClone(nodes[1].Save, trace.Skip(nodes[1].Start).Take(nodes[2].Start - nodes[1].Start).ToList());
+        using var loaded = RunSession.Load(pump, clone, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance);
+        check("SL clone stops at its node's exit", loaded.AtHorizon && clone.Trace[^1].StartsWith(Surfaces.Map + " ", StringComparison.Ordinal),
+            $"{clone.Trace.Count} decisions, the last {clone.Trace[^1]}, at horizon {loaded.AtHorizon}");
+        check("SL clone refuses to step past its node's exit", Throws(loaded.Step), $"stepped past {clone.Trace[^1]}");
+    }
+
+    /// <summary>
+    /// A run with random policies, stopped at the first decision of its second combat. The SL planner plans the rest of
+    /// that combat on the node's clone (here, and with <paramref name="workers"/> in a pool too, which must plan the
+    /// same). A hallway fight at full HP: the plan must win it. The clone, played to the plan's end, must end the combat as
+    /// planned and refuse to step past it. Then the run is played again to the decision and follows the plan: each step
+    /// must find the observation the plan expects, and the combat must end where the plan ends, as the plan says (docs:
+    /// combat-brain §7, test 6).
+    /// </summary>
+    private static void PlanHoldsInTheRun(Pump pump, int seed, int workers, Action<string, bool, string> check)
+    {
+        var budget = new Budget(NodesPerWorld: 150, Beam: 4);
+        string label = $"run {Cli.MakeSeed(seed + 2, 0)}";
+        RunSession? session = null;
+        NodeClone? clone = null;
+        CombatObservation? at = null;
+        var record = new MoveRecord();
+        Play((decision, _) =>
+        {
+            clone ??= session!.Clone();
+            at ??= decision.Observation;
+            record.Witness(decision.Observation);
+            return null;
+        });
+        var history = record.History;
+        if (clone == null || at == null)
+        {
+            check("SL plan holds in the run", false, $"{label}: no second combat");
+            return;
+        }
+
+        SlPlan plan;
+        using (var world = new NodeWorld(pump, clone))
+        {
+            plan = new SlPlanner().Plan(at, world, budget.For(at.Room), history);
+            world.Restore(new([]));
+            foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
+            check("SL world ends its combat as planned", plan.End == CombatStatus.Won && world.Status == plan.End, $"{label}: {world.Status}, planned {plan.End}");
+            check("SL world refuses to step past its combat", world.Legal().Count == 0 && Throws(() => world.Execute(CombatAction.EndTurn)), label);
+        }
+        if (workers > 0)
+        {
+            using var workerPool = new WorkerPool(Cli.SelfCommand(), workers);
+            var pooled = new PooledPlanner(workerPool).Plan(clone, budget.For(at.Room), history);
+            check("pooled planner plans what the planner plans here", Show(pooled) == Show(plan), $"{label}: here {Show(plan)}; pooled {Show(pooled)}");
+            check("no game errors in workers", workerPool.TakeGameErrors() is [], label);
+        }
+
+        var steps = new Queue<CombatAction>(plan.Result.Plan.Prepend(plan.Result.First));
+        var hashes = new Queue<ulong>(plan.Result.PlanHashes!.Prepend(ProtocolJson.Hash(at)));
+        string? broke = null;
+        var end = Play((decision, inCombat) =>
+        {
+            if (!inCombat || broke != null) return null;
+            if (!steps.TryDequeue(out var step)) broke = "the combat went on past the plan";
+            else if (hashes.Dequeue() != ProtocolJson.Hash(decision.Observation)) broke = $"before {step}, {steps.Count} steps from the end, the observation differs";
+            return broke == null ? step : null;
+        });
+        check("SL plan holds in the run", broke == null && steps.Count == 0 && plan.Result.Plan.Count >= 2,
+            $"{label}: {broke ?? $"{steps.Count} steps left of {plan.Result.Plan.Count + 1}"}");
+        var w = LeafValue.Default;
+        check("SL plan ends the run's combat as planned", end is { Died: false } e && Math.Abs(w.WinBase + w.PerHp * e.Hp / e.MaxHp + w.PerPotion * e.Potions - plan.Value) < 1e-9,
+            $"{label}: {end}, planned {plan.End} at {plan.Value:F4}");
+
+        // Plays the run to the first decision of its second combat, then asks follow at each combat decision of that
+        // combat (true) and the next decision after it (false), which plays the rest of it, until follow gives null.
+        CombatEnd? Play(Func<CombatDecision, bool, CombatAction?> follow)
+        {
+            var rng = new Random(seed + 2);
+            var play = new PlayPolicy(rng);
+            bool done = false, following = false;
+            var policy = new CapturePolicy(decision =>
+            {
+                if (!following && session!.Combats.Count == 2) following = true;
+                if (!following) return play.Choose(decision);
+                var action = follow(decision, true);
+                done |= action == null;
+                return action ?? play.Choose(decision);
+            });
+            var macro = new FollowMacro(new RandomMacro(rng), () =>
+            {
+                if (following && !done) done = follow(null!, false) == null;
+            });
+            using (session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed + 2, 0)), PromptBrain.Instance, policy, macro))
+            {
+                while (!session.IsOver && !done) session.Step();
+                return session.Combats.ElementAtOrDefault(1)?.End;
+            }
+        }
+
+        static string Show(SlPlan p) =>
+            $"{p.Result.First} [{string.Join(" ", p.Result.Plan)}] {p.Value:R} {p.End} {p.Nodes} nodes {p.Turns} turns {p.Exhaustive} " +
+            string.Join(",", p.Result.PlanHashes!);
+    }
+
+    private static bool Throws(Action act)
+    {
+        try
+        {
+            act();
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>A macro policy that tells <paramref name="before"/> of each decision it is asked.</summary>
+    private sealed class FollowMacro(IMacroPolicy macro, Action before) : IMacroPolicy
+    {
+        public string Choose(MacroDecision decision)
+        {
+            before();
+            return macro.Choose(decision);
+        }
     }
 
     private sealed class CapturePolicy(Func<CombatDecision, CombatAction> choose) : ICombatPolicy

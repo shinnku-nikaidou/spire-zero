@@ -4,13 +4,18 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>How much search one decision may use (docs: harness §5): worlds, and actions simulated per world.</summary>
+/// <param name="NodesPerWorld">PIMC: the actions simulated in each world's search of the turn. The SL planner: in each
+/// search of one turn from one state.</param>
 /// <param name="Elite">How many times the nodes per world an elite's decisions get (docs: combat-brain §5).</param>
 /// <param name="Boss">The same for a boss.</param>
 /// <param name="Halving">Whether the first actions share each world's nodes by sequential halving instead of evenly
 /// (<see cref="PimcBrain.Root"/>).</param>
 /// <param name="Follow">Whether the rest of a turn that every world planned the same is played without searching again
 /// (<see cref="TurnPlan"/>).</param>
-public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false, bool Follow = false)
+/// <param name="Beam">The SL planner's states kept from one turn to the next (<see cref="SlPlanner"/>); 0 for PIMC,
+/// which does not read it. The planner has one world, and ignores <paramref name="Worlds"/>.</param>
+public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false, bool Follow = false,
+    int Beam = 0)
 {
     /// <summary>The budget of a decision in this room (<see cref="CombatObservation.Room"/>), with its multiple applied.</summary>
     public Budget For(string? room) => this with
@@ -20,9 +25,10 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elit
         Boss = 1,
     };
 
-    /// <summary>As the champion's name shows it: 8x300, then the multiples that are not 1, then halving and follow if on.</summary>
+    /// <summary>As the champion's name shows it: 8x300 (beam 16x300 for the planner), then the multiples that are not 1,
+    /// then halving and follow if on.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{Worlds}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}");
+        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Elite != 1 ? $" elite x{Elite}" : "")}{(Boss != 1 ? $" boss x{Boss}" : "")}{(Halving ? " halving" : "")}{(Follow ? " follow" : "")}");
 }
 
 /// <summary>Searches every world from the decision's state: the best line after each of <paramref name="first"/>, in
@@ -36,26 +42,32 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// before each of its steps, the hashes of those observations; otherwise null.</param>
 /// <param name="Explored">Whether <paramref name="First"/> was drawn by self-play exploration and valued below the
 /// search's pick (<see cref="Softmax.Explored"/>; Harness's <c>CombatRoute.Exploring</c>).</param>
+/// <param name="Replanned">Whether this search replaced a step of a plan that the combat did not show
+/// (<see cref="TurnPlan"/>). In SL that means the clone differs from the real combat.</param>
 public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
-    IReadOnlyList<ulong>? PlanHashes = null, bool Explored = false);
+    IReadOnlyList<ulong>? PlanHashes = null, bool Explored = false, bool Replanned = false);
 
 /// <summary>
-/// The rest of the turn that a search planned, played without searching again (docs: combat-brain §5). A step is
-/// played only while the combat shows the observation that every world expected before it: then nothing came to light
-/// that the worlds disagreed on, and each world's best line from here is still the plan. Anything else (a draw, a
-/// random result, a plan that differed between worlds) ends it, and the decision is searched. One per combat route.
+/// The rest of the plan that a search made, played without searching again (docs: combat-brain §3, §5). A step is
+/// played only while the combat shows the observation the plan expected before it. PIMC's plan is the rest of a turn
+/// that every world planned the same: anything that comes to light (a draw, a random result) ends it, and the decision
+/// is searched. The SL planner's plan is the rest of the combat in its one exact world, so it ends only with the
+/// combat; a step that does not hold there means the world differs from the real combat. One per combat route.
 /// </summary>
 public sealed class TurnPlan
 {
     private readonly Queue<(CombatAction Action, ulong Hash)> _steps = new();
 
-    /// <summary>The plan's next step if it still holds here, else <paramref name="search"/>, whose plan is kept.</summary>
+    /// <summary>The plan's next step if it still holds here, else <paramref name="search"/>, whose plan is kept; marked
+    /// replanned if a step was left that did not hold.</summary>
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<CombatDecisionResult> search)
     {
-        if (_steps.TryDequeue(out var step) && step.Hash == ProtocolJson.Hash(observation) && legal.Contains(step.Action))
+        bool pending = _steps.TryDequeue(out var step);
+        if (pending && step.Hash == ProtocolJson.Hash(observation) && legal.Contains(step.Action))
             return new(step.Action, _steps.Select(s => s.Action).ToList(), [], _steps.Select(s => s.Hash).ToList());
         _steps.Clear();
         var result = search();
+        if (pending) result = result with { Replanned = true };
         if (result.PlanHashes is { } hashes)
             foreach (var s in result.Plan.Zip(hashes)) _steps.Enqueue(s);
         return result;

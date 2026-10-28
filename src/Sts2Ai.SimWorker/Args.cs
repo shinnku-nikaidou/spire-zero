@@ -96,20 +96,32 @@ internal sealed record CombatPool(int Act, string Rooms, List<EncounterModel> En
     public CombatSetup Setup(EncounterModel encounter, string seed) => new(Character, encounter, Act, seed, Loadout: Loadout);
 }
 
-/// <summary>pimc's budget (docs: combat-brain §5).</summary>
+/// <summary>pimc's and plan's budget (docs: combat-brain §3, §5).</summary>
 internal sealed class BudgetArgs
 {
+    /// <summary>The planner's beam when --beam is not given.</summary>
+    public const int DefaultBeam = 16;
+
     private readonly Option<int> _worlds = Opt.Of("--worlds", 8, "pimc's determinized worlds per decision");
-    private readonly Option<int> _nodes = Opt.Of("--nodes", 300, "search nodes per world");
+    private readonly Option<int> _nodes = Opt.Of("--nodes", 300, "search nodes per world (plan: per state and turn)");
     private readonly Option<double> _elite = Opt.Of("--elite-x", 1.0, "multiplies the nodes per world in elite rooms");
     private readonly Option<double> _boss = Opt.Of("--boss-x", 1.0, "multiplies the nodes per world in boss rooms");
     private readonly Option<bool> _halving = Opt.Of("--halving", false, "shares the nodes over the first actions by sequential halving");
     private readonly Option<bool> _follow = Opt.Of("--follow", false, "plays the rest of a turn every world planned the same without searching again");
+    private readonly Option<int?> _beam = Opt.Maybe<int?>("--beam", $"plan's states kept from one turn to the next (default {DefaultBeam})");
 
-    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow];
+    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _beam];
 
-    public Budget Read(ParseResult r) =>
-        new(r.GetValue(_worlds), r.GetValue(_nodes), r.GetValue(_elite), r.GetValue(_boss), r.GetValue(_halving), r.GetValue(_follow));
+    /// <summary>The budget of the combat brain <paramref name="brain"/> (pimc, plan, or a placeholder).</summary>
+    public Budget Read(ParseResult r, string brain)
+    {
+        var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes), r.GetValue(_elite), r.GetValue(_boss), r.GetValue(_halving), r.GetValue(_follow));
+        if (brain != "plan")
+            return r.GetValue(_beam) == null ? budget : throw new CliException("--beam is plan's; it needs --policy plan");
+        if (budget.Halving || budget.Follow) throw new CliException("--halving and --follow are pimc's; plan follows its plan always");
+        int beam = r.GetValue(_beam) ?? DefaultBeam;
+        return beam > 0 ? budget with { Beam = beam } : throw new CliException("--beam is at least 1");
+    }
 }
 
 /// <summary>What pimc values its leaves with (docs: combat-brain §4).</summary>
@@ -150,17 +162,17 @@ internal sealed class ChampionFileOption : Option<string?>
     }
 }
 
-/// <summary>The options that name a champion (docs: harness §4): its brains, pimc's budget and workers, and weights files.</summary>
+/// <summary>The options that name a champion (docs: harness §4): its brains, the search's budget and workers, and weights files.</summary>
 /// <param name="file">Whether the command also takes --champion FILE to play (run, brain; gate's --champion is the one to beat).</param>
 internal sealed class ChampionArgs(bool file)
 {
     private readonly ChampionFileOption? _file = file ? new() : null;
-    private readonly Option<string> _policy = Opt.Of("--policy", "play", "the combat brain: pimc, or a placeholder policy")
-        .AcceptOnlyFromAmong(["pimc", .. Policies.CombatNames]);
+    private readonly Option<string> _policy = Opt.Of("--policy", "play", "the combat brain: pimc, plan (SL only), or a placeholder policy")
+        .AcceptOnlyFromAmong(["pimc", "plan", .. Policies.CombatNames]);
     private readonly Option<string> _macro = Opt.Of("--macro", "random", "the brain of every decision outside combat: l0 (the macro brain with V) or random")
         .AcceptOnlyFromAmong("random", "l0");
     private readonly BudgetArgs _budget = new();
-    private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's search worker processes (default: one per world)");
+    private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's and plan's search worker processes (default: one per world, --worlds)");
     private readonly Option<string?> _value = Opt.Maybe<string?>("--value", "l0's V: V v0's weights or a net file of V v2 (default: the initial weights)");
     private readonly LeafArgs _leaf = new();
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
@@ -177,7 +189,7 @@ internal sealed class ChampionArgs(bool file)
     {
         var policy = r.GetValue(_policy)!;
         var macro = r.GetValue(_macro)!;
-        var budget = _budget.Read(r);
+        var budget = _budget.Read(r, policy);
         IRunValue value = RunValue.Initial;
         var valueFile = r.GetValue(_value);
         if (valueFile != null)
@@ -190,7 +202,7 @@ internal sealed class ChampionArgs(bool file)
         if (macroExplore > 0 && macro != "l0") throw new CliException("--macro-explore is l0's; it needs --macro l0");
         if (combatExplore > 0 && policy != "pimc") throw new CliException("--combat-explore is pimc's; it needs --policy pimc");
         var leaf = _leaf.Read(r);
-        if (!leaf.IsDefault && policy != "pimc") throw new CliException("--leaf and --combat-net value pimc's leaves; they need --policy pimc");
+        if (!leaf.IsDefault && policy is not ("pimc" or "plan")) throw new CliException("--leaf and --combat-net value the search's leaves; they need --policy pimc or plan");
         return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore);
     }
 }

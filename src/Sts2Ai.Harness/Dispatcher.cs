@@ -58,11 +58,13 @@ public sealed record Route<T>(string Brain, T Policy);
 /// this one's included (<see cref="Dispatcher.History"/>).</param>
 /// <param name="Explored">True when <paramref name="Chosen"/> was drawn by self-play exploration and valued below the
 /// brain's best (docs: learning §5; <see cref="Softmax.Explored"/>); absent otherwise.</param>
+/// <param name="Replanned">True when the combat brain searched again because a step of its plan did not hold
+/// (<see cref="CombatDecisionResult.Replanned"/>); absent otherwise.</param>
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
     IReadOnlyDictionary<string, double>? Features = null, CombatObservation? Obs = null, RunView? RunView = null,
-    IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null);
+    IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null, bool? Replanned = null);
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
@@ -106,6 +108,12 @@ public sealed class Dispatcher(
     /// <summary>How many decisions each brain made so far.</summary>
     public IReadOnlyDictionary<string, int> Brains => _brains;
 
+    /// <summary>
+    /// How many combat decisions were searched again because a step of the brain's plan did not hold. With PIMC's
+    /// --follow that is a turn revealing something; with the SL planner, a clone that differs from the real combat.
+    /// </summary>
+    public int Replans { get; private set; }
+
     /// <summary>The brain on each side of the routing table, for reports.</summary>
     public string Champion =>
         $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b}" : "")}, combat prompts {combatChoices.Brain}, " +
@@ -125,11 +133,12 @@ public sealed class Dispatcher(
         var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null, history);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(result.First)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
+        if (result.Replanned) Replans++;
         Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: history,
-                Explored: Mark(result.Explored)));
+                Explored: Mark(result.Explored), Replanned: Mark(result.Replanned)));
         return result.First;
     }
 
@@ -194,7 +203,7 @@ public sealed class Dispatcher(
 
     private static string Hex(ulong hash) => hash.ToString("x16");
 
-    /// <summary>The log marks explored steps only.</summary>
+    /// <summary>The log marks explored and replanned steps only.</summary>
     private static bool? Mark(bool explored) => explored ? true : null;
 
     /// <summary>SplitMix64 of <paramref name="a"/> stepped <paramref name="b"/> + 1 times.</summary>

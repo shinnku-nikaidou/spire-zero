@@ -11,7 +11,8 @@ namespace Sts2Ai.Harness;
 /// at a time; <see cref="Map"/> hands each request to whichever worker is free and returns the replies in request
 /// order, whatever order they finish in, so timing cannot change a result. A worker that dies, or does not answer
 /// within the timeout (a worker alive but stuck), is killed and started again and gets its request once more; a
-/// second failure fails the call.
+/// second failure fails the call. A reply with an error fails it too, and the game's Log.Error lines in the replies
+/// are kept for <see cref="TakeGameErrors"/>.
 /// </summary>
 public sealed class WorkerPool : IDisposable
 {
@@ -23,6 +24,7 @@ public sealed class WorkerPool : IDisposable
     private readonly TimeSpan _timeout;
     private readonly BlockingCollection<Worker> _free = new();
     private int _restarts;
+    private readonly List<string> _gameErrors = [];
 
     /// <summary>Starts <paramref name="count"/> workers in parallel and waits until each has booted.</summary>
     /// <param name="command">The worker program and its leading arguments, e.g. <c>dotnet Sts2Ai.SimWorker.dll</c>.</param>
@@ -56,6 +58,15 @@ public sealed class WorkerPool : IDisposable
     /// <summary>Workers started again after dying.</summary>
     public int Restarts => _restarts;
 
+    /// <summary>The game's Log.Error lines in the workers' replies since the last call.</summary>
+    public List<string> TakeGameErrors()
+    {
+        var errors = _gameErrors.ToList();
+        _gameErrors.Clear();
+        return errors;
+    }
+
+    /// <exception cref="InvalidOperationException">A reply has an error (an exception in its worker).</exception>
     public IReadOnlyList<WorkerReply> Map(IReadOnlyList<WorkerRequest> requests)
     {
         var replies = new WorkerReply[requests.Count];
@@ -72,6 +83,8 @@ public sealed class WorkerPool : IDisposable
                 _free.Add(worker);
             }
         });
+        foreach (var r in replies) _gameErrors.AddRange(r.GameErrors);
+        if (replies.FirstOrDefault(r => r.Error != null) is { } failed) throw new InvalidOperationException($"request {failed.Id}: {failed.Error}");
         return replies;
     }
 

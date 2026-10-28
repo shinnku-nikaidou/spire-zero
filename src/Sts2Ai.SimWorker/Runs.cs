@@ -64,9 +64,9 @@ internal static class RunCommand
         if (brainPath != null && Champion.Champion.Append(Log).FirstOrDefault(o => r.GetResult(o) is { Implicit: false }) is { } brainOption)
             throw new CliException($"{brainOption.Name} belongs to the brain at {brainPath}, not to this host");
         var champion = brainPath == null ? Champion.Read(r) : null;
+        if (champion?.Policy == "plan" && env != PlayEnvironment.SL) throw new CliException("plan plays in SL only (--env SL)");
         using var workerPool = champion?.Pool();
-        var pooled = workerPool == null ? null : new PooledPimc(workerPool);
-        var harness = champion?.Harness(pooled, log);
+        var harness = champion?.Harness(workerPool, log);
         using var remote = brainPath == null ? null : new BrainConnection(brainPath);
         // --check plays each seed again over the wire: to the same brain if it is remote, else to a brain server in
         // this process with the same champion, whose decision log is compared too.
@@ -81,7 +81,7 @@ internal static class RunCommand
         var outcomes = new Dictionary<string, int>();
         var surfaces = new Dictionary<string, int>();
         var failures = new Dictionary<string, int>();
-        int mismatches = 0, gameErrors = 0, nodes = 0, nodesExact = 0, nodesRelicState = 0;
+        int mismatches = 0, gameErrors = 0, nodes = 0, nodesExact = 0, nodesRelicState = 0, replans = 0;
         var cloneMs = new List<double>();
         Console.WriteLine($"run: {n} runs in {env}, {(champion?.ToString() ?? $"brain at {brainPath}")}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
@@ -90,7 +90,7 @@ internal static class RunCommand
             var setup = new RunSetup(character, seeds?[i] ?? Cli.MakeSeed(seed, i), asc, loadout);
             var started = clock.Elapsed;
             var first = PlayRun(pump, setup, env, firstBrain, maxDecisions, trace, observe, printObservations);
-            if (pooled != null) first.Errors.AddRange(pooled.TakeGameErrors());
+            if (workerPool != null) first.Errors.AddRange(workerPool.TakeGameErrors());
             foreach (var entry in first.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
             var ms = (clock.Elapsed - started).TotalMilliseconds;
             records?.WriteLine(ProtocolJson.Serialize(first.Record with { GameErrors = first.Errors.Count, ElapsedMs = ms }));
@@ -98,7 +98,9 @@ internal static class RunCommand
             foreach (var (surface, count) in first.Record.Surfaces) surfaces[surface] = surfaces.GetValueOrDefault(surface) + count;
             if (first.Failure != null) failures[first.Failure] = failures.GetValueOrDefault(first.Failure) + 1;
             gameErrors += first.Errors.Count;
+            replans += first.Replans;
             Console.WriteLine($"#{i} {setup.Seed} {first.Outcome} {first.Summary} decisions {first.Trace.Count} {ms:F0} ms " +
+                              (first.Replans > 0 ? $"replans {first.Replans} " : "") +
                               $"maps {string.Join(",", first.MapHashes.Select(h => h.ToString("x16")))}" +
                               (observe ? $" obs {Digest(first.Observations.Select(o => o.Full)):x16}" : ""));
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
@@ -110,7 +112,7 @@ internal static class RunCommand
             nodesRelicState += clonesRelicState;
             if (cloneMismatch != null) Console.WriteLine($"  CLONE MISMATCH: {cloneMismatch}");
             var second = PlayRun(pump, setup, env, secondBrain, maxDecisions, trace: false, observe, printObservations: false);
-            if (pooled != null) pooled.TakeGameErrors();
+            workerPool?.TakeGameErrors();
             var secondLog = served?.Log ?? second.Log;
             // Each decision's observation is shown before its action, so they pair up by index.
             int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k =>
@@ -142,7 +144,8 @@ internal static class RunCommand
                                      $"{nodesExact}/{nodes} nodes replay exactly from their checkpoint" +
                                      (nodesRelicState > 0 ? $", {nodesRelicState} more but for relic state the save drops" : "") +
                                      (cloneMs.Count > 0 ? $" ({cloneMs.Average():F0} ms each, max {cloneMs.Max():F0})" : ""));
-        Console.WriteLine($"game Log.Error lines: {gameErrors}" + (workerPool != null ? $"; worker restarts: {workerPool.Restarts}" : ""));
+        Console.WriteLine($"game Log.Error lines: {gameErrors}" + (workerPool != null ? $"; worker restarts: {workerPool.Restarts}" : "") +
+                          (champion?.Policy == "plan" ? $"; replans: {replans}" : ""));
         return failures.Count == 0 && mismatches == 0 && nodesExact + nodesRelicState == nodes && gameErrors == 0 ? 0 : 1;
     }
 
@@ -216,7 +219,7 @@ internal static class RunCommand
     }
 
     /// <summary>Policies for a clone that replays everything: asking one means the recording ran out.</summary>
-    private sealed class Unasked : ICombatPolicy, IChoicePolicy, IMacroPolicy
+    internal sealed class Unasked : ICombatPolicy, IChoicePolicy, IMacroPolicy
     {
         public static readonly Unasked Instance = new();
 
@@ -235,7 +238,7 @@ internal static class RunCommand
     /// <param name="Nodes">Each node's checkpoint and where its decisions begin in the trace (when observing).</param>
     private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes,
         IReadOnlyList<(ulong Full, ulong Bare)> Observations, IReadOnlyList<DecisionEntry> Log, string? Failure, List<string> Errors, RunRecord Record,
-        IReadOnlyList<(string Save, int Start)> Nodes);
+        IReadOnlyList<(string Save, int Start)> Nodes, int Replans);
 
     /// <summary>
     /// One run to the end (or the decision cap), against the brain that <paramref name="brains"/> gives for the run's
@@ -299,7 +302,7 @@ internal static class RunCommand
                 player?.Gold ?? 0, session?.Combats.ToList() ?? [], surfaces, new Dictionary<string, int>(brain?.Brains ?? new Dictionary<string, int>()),
                 session?.CardRewards ?? 0, session?.CardRewardsSkipped ?? 0, 0, failure, 0, hello.Run.RunId);
             return new(outcome, session?.Summary() ?? "", steps, session?.MapHashes.ToList() ?? [], observations, brain?.Log.ToList() ?? [], failure,
-                HeadlessGame.TakeErrors(), record, nodes);
+                HeadlessGame.TakeErrors(), record, nodes, brain?.Replans ?? 0);
         }
     }
 
@@ -335,13 +338,13 @@ internal static class BrainCommand
         var champion = Champion.Read(r);
 
         using var workerPool = champion.Pool();
-        var pooled = workerPool == null ? null : new PooledPimc(workerPool);
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;
-        var server = new BrainServer(champion.Harness(pooled, logFile != null), log: Logs.Factory.CreateLogger("brain"), ended: (hello, harness, end) =>
+        var server = new BrainServer(champion.Harness(workerPool, logFile != null), log: Logs.Factory.CreateLogger("brain"), ended: (hello, harness, end) =>
         {
             foreach (var entry in harness.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
-            var errors = pooled?.TakeGameErrors() ?? [];
+            var errors = workerPool?.TakeGameErrors() ?? [];
             Console.WriteLine($"{hello.Run.RunId} ({hello.Role}) {end.Reason} floor {end.Floor}, {harness.Brains.Values.Sum()} decisions" +
+                              (harness.Replans > 0 ? $", {harness.Replans} replans" : "") +
                               (errors.Count > 0 ? $", game Log.Error lines in workers: {errors.Count}" : ""));
             foreach (var e in errors.Take(3)) Console.WriteLine($"  game error: {Cli.FirstLine(e)}");
         });
@@ -362,21 +365,28 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// <summary>Whether it explores, which only self-play does.</summary>
     public bool Explores => MacroExplore > 0 || CombatExplore > 0;
 
-    /// <summary>pimc's search workers. A run holds its process's one live game, so search runs in other processes.</summary>
-    public WorkerPool? Pool() => Policy == "pimc" ? new WorkerPool(Cli.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
+    /// <summary>The search's workers (pimc's, plan's). A run holds its process's one live game, so search runs in other processes.</summary>
+    public WorkerPool? Pool() => Searches ? new WorkerPool(Cli.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
+
+    /// <summary>Whether the combat brain searches: pimc, or plan in SL.</summary>
+    private bool Searches => Policy is "pimc" or "plan";
 
     /// <summary>
     /// One Harness per run. Combat prompts go to p0 (<see cref="PromptBrain"/>), which search worlds ask too.
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
-    /// this process or over the wire; so do the exploring brains, each from its own. In SL, pimc searches the node's
-    /// clone; nothing else looks further than in NoSL.
+    /// this process or over the wire; so do the exploring brains, each from its own. In SL, pimc searches this turn on
+    /// the node's clone and plan the whole combat (docs: combat-brain §3); nothing else looks further than in NoSL. The
+    /// search runs in <paramref name="pool"/> (<see cref="Pool"/>).
     /// </summary>
-    public Func<Hello, Dispatcher> Harness(PooledPimc? pooled, bool log) => hello =>
+    public Func<Hello, Dispatcher> Harness(WorkerPool? pool, bool log) => hello =>
     {
         if (!Enum.TryParse<PlayEnvironment>(hello.Env, out var env)) throw new NotSupportedException($"no environment {hello.Env}");
+        if (Policy == "plan" && env != PlayEnvironment.SL) throw new NotSupportedException($"plan plays in SL only, not in {env}");
         Random Rng(string stream) => new(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + stream)));
         var rng = Rng("");
-        var combat = pooled?.Route(Budget, Combat) ?? CombatRoute.Of(Policy, Policies.Combat(Policy, rng));
+        var combat = pool == null ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
+            : Policy == "plan" ? new PooledPlanner(pool).Route(Budget, Combat)
+            : new PooledPimc(pool).Route(Budget, Combat);
         if (CombatExplore > 0) combat = combat.Exploring(new Softmax(CombatExplore, Rng(":explore combat")));
         var prompts = new Route<IChoicePolicy>("p0", PromptBrain.Instance);
         Dispatcher dispatcher;
@@ -390,7 +400,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         return dispatcher;
     };
 
-    /// <summary>The combat brain, pimc by its leaf's names unless it is the default one, then its exploration if any.</summary>
+    /// <summary>The combat brain, pimc or plan by its leaf's names unless it is the default one, then its exploration if any.</summary>
     private string Combat => Policy + Leaf.Suffix + Exploration(CombatExplore);
 
     /// <summary>l0 by its V's name, unless V has the initial weights, then its exploration if any.</summary>
@@ -404,7 +414,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         get
         {
             string macro = Macro == "l0" ? L0 : "random";
-            return $"combat {Combat}{(Policy == "pimc" ? $" {Budget}" : "")}, combat prompts p0, macro {macro}, macro prompts {macro}";
+            return $"combat {Combat}{(Searches ? $" {Budget}" : "")}, combat prompts p0, macro {macro}, macro prompts {macro}";
         }
     }
 
@@ -412,9 +422,10 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     public Dictionary<string, string> Options(PlayEnvironment env)
     {
         var options = new Dictionary<string, string> { ["env"] = env.ToString(), ["policy"] = Policy, ["macro"] = Macro };
-        if (Policy == "pimc")
+        if (Policy == "plan") options["beam"] = $"{Budget.Beam}";
+        if (Policy == "pimc") options["worlds"] = $"{Budget.Worlds}";
+        if (Searches)
         {
-            options["worlds"] = $"{Budget.Worlds}";
             options["nodes"] = $"{Budget.NodesPerWorld}";
             if (Budget.Elite != 1) options["elite-x"] = Budget.Elite.ToString(CultureInfo.InvariantCulture);
             if (Budget.Boss != 1) options["boss-x"] = Budget.Boss.ToString(CultureInfo.InvariantCulture);
@@ -455,5 +466,5 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     }
 
     public override string ToString() =>
-        $"policy {Combat}{(Policy == "pimc" ? $" budget {Budget} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
+        $"policy {Combat}{(Searches ? $" budget {Budget} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
 }

@@ -13,6 +13,7 @@ public sealed record WorkerHello(string Game);
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(PimcWorldRequest), "pimc_world")]
 [JsonDerivedType(typeof(SlWorldRequest), "sl_world")]
+[JsonDerivedType(typeof(SlTurnRequest), "sl_turn")]
 public abstract record WorkerRequest(long Id);
 
 /// <summary>
@@ -42,11 +43,44 @@ public sealed record PimcWorldRequest(
 public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First, int NodesPerFirst,
     IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
+/// <summary>
+/// The SL planner's search of one turn from one state of a combat decision in a run (docs: combat-brain §3):
+/// <see cref="Node"/> loaded and replayed is the real combat at the decision, and <see cref="Path"/> played from there
+/// reaches the state. The reply's <see cref="WorkerReply.Turn"/> holds the best ends of that turn: up to
+/// <see cref="Keep"/> states at the next turn's start, and the best end of the combat, each above <see cref="Floor"/>
+/// at best (the best whole line the planner holds), searched with <see cref="Nodes"/> nodes. <see cref="History"/> is
+/// the record of enemy moves up to the state, for the leaves.
+/// </summary>
+public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep, double? Floor,
+    IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
+
 /// <param name="GameErrors">The game's Log.Error lines while serving the request.</param>
-public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors);
+/// <param name="Turn">The answer to an <see cref="SlTurnRequest"/>.</param>
+public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors, TurnSearch? Turn = null);
 
 /// <summary>A line of play that search found, from its first action, and its value.</summary>
 /// <param name="Nodes">The actions the search simulated after the line's first action, itself included.</param>
 /// <param name="Hashes">For each of <paramref name="Actions"/>, the hash of the observation it is played at
 /// (<see cref="ProtocolJson.Hash"/>): what the line expects to see before each step.</param>
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0, IReadOnlyList<ulong>? Hashes = null);
+
+/// <summary>What the SL planner's search of one turn found (docs: combat-brain §3).</summary>
+/// <param name="Ends">The best end of the combat, if the turn can reach one, then the states at the next turn's start, best first.</param>
+/// <param name="Nodes">The actions the search simulated.</param>
+/// <param name="Cut">Whether anything was left out: the nodes ran out, or more states were found than kept.</param>
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
+
+/// <summary>
+/// A state where a turn of the SL planner's line ends: at the next turn's first decision, after the enemies' turn, or
+/// where the combat ended. As a whole line, the same from the planner's decision.
+/// </summary>
+/// <param name="Actions">The actions that reach it, the last one ending the turn.</param>
+/// <param name="Hashes">For each of <paramref name="Actions"/>, the hash of the observation it is played at.</param>
+/// <param name="Value">The leaf's value of the state.</param>
+/// <param name="Bound">The best the state can still reach: a win with the HP and the potions it has; once the combat is
+/// over, its value.</param>
+/// <param name="Key">The state's observation and its full hidden state, hashed: states with the same key are the same
+/// state. 0 once the combat is over.</param>
+/// <param name="History">The record of enemy moves up to the state.</param>
+public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, double Value, double Bound,
+    ulong Key, IReadOnlyList<EnemyTurns> History);

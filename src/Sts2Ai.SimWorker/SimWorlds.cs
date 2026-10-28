@@ -10,7 +10,8 @@ namespace Sts2Ai.SimWorker;
 /// rebuilds itself by replay.
 ///
 /// NoSL worlds start from a combat built to show the observation (<see cref="CombatBuilder"/>), never from the real
-/// combat, and each is determinized with its own seed. The SL world is the real combat itself, replayed exactly.
+/// combat, and each is determinized with its own seed. The SL world is the real combat itself, replayed exactly, and
+/// tells states apart by the full hidden state (<see cref="HiddenState.Full"/>).
 /// Card prompts inside a world are answered by <see cref="PromptBrain"/>, the run's own prompt brain, so search
 /// expects the picks the run will make.
 /// </summary>
@@ -94,7 +95,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
 
         public CombatObservation Observe() => Live.Observation();
 
-        public ulong HiddenKey() => HiddenState.Key(Live.State, Live.Player);
+        public ulong HiddenKey() => source.Environment == PlayEnvironment.SL ? HiddenState.Full(Live.State, Live.Player) : HiddenState.Key(Live.State, Live.Player);
 
         public IReadOnlyList<CombatAction> Legal() => Live.IsOver ? [] : Live.LegalActions();
 

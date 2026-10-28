@@ -116,6 +116,7 @@ public class BudgetTests
     {
         Assert.Equal("8x300", new Budget().ToString());
         Assert.Equal("4x100 elite x2 halving", new Budget(4, 100, Elite: 2, Halving: true).ToString());
+        Assert.Equal("beam 16x300 boss x2", new Budget(Boss: 2, Beam: 16).ToString());
     }
 }
 
@@ -179,5 +180,210 @@ public class PimcMemoTests
         // A then B: one roll, 190. B then A: three rolls, 170. Searched in either order.
         Assert.Equal([190.0, 170.0], pimc.SearchWorld(new Rolls(), 1, [A, B], 1000).Select(l => l.Value));
         Assert.Equal([170.0, 190.0], pimc.SearchWorld(new Rolls(), 1, [B, A], 1000).Select(l => l.Value));
+    }
+}
+
+public class SlPlannerTests
+{
+    /// <summary>
+    /// A small exact combat: 2 energy and 3 cards a turn from a fixed draw order, Strikes (1 energy, 6 damage to the one
+    /// enemy) and Defends (1 energy, 5 block this turn), against an enemy with 24 HP whose attacks are known for every
+    /// round, 4 then 13 then 4 again. HP never comes back, so the planner's bound holds and a full search is exact.
+    /// </summary>
+    private sealed class Toy : ICombatWorld
+    {
+        private static readonly string[] Deck = ["S", "D", "S", "S", "D", "D", "S", "S", "D", "S", "D", "S", "S", "D", "S"];
+        private static readonly int[] Attacks = [4, 13, 4];
+        private static readonly CombatObservation Start = Fixtures.Slugs();
+
+        private readonly List<string> _steps = [];
+        private int _hp, _enemy, _block, _energy, _round, _drawn;
+        private List<(uint Uid, string Id)> _hand = [];
+
+        private readonly int _enemyHp;
+
+        public Toy(int enemyHp = 24)
+        {
+            _enemyHp = enemyHp;
+            Reset();
+        }
+
+        private void Reset()
+        {
+            (_hp, _enemy, _block, _energy, _round, _drawn) = (20, _enemyHp, 0, 2, 1, 0);
+            _hand = [];
+            Draw();
+        }
+
+        private void Draw()
+        {
+            for (int i = 0; i < 3; i++, _drawn++) _hand.Add(((uint)_drawn + 10, Deck[_drawn % Deck.Length]));
+        }
+
+        private int Attack => Attacks[(_round - 1) % Attacks.Length];
+
+        public CombatObservation Observe() => Start with
+        {
+            Round = _round,
+            Player = Start.Player with { Hp = Math.Max(0, _hp), MaxHp = 20, Block = _block, Energy = _energy },
+            Hand = _hand.Select(c => new CardView { Id = c.Id, Uid = c.Uid }).ToList(),
+            Draw = [],
+            Discard = [],
+            Potions = [null, null, null],
+            Enemies = [Start.Enemies[0] with { Uid = 1, Hp = Math.Max(0, _enemy), MaxHp = _enemyHp, Block = 0, Powers = [],
+                Intents = [new IntentView { Type = "Attack", Damage = Attack, Hits = 1 }] }],
+        };
+
+        public IReadOnlyList<CombatAction> Legal() => Status != CombatStatus.InProgress ? [] :
+            [CombatAction.EndTurn, .. _energy > 0 ? _hand.Select(c => CombatAction.Play(c.Uid, c.Id == "S" ? 1u : null)) : []];
+
+        public CombatStatus Status => _hp <= 0 ? CombatStatus.Lost : _enemy <= 0 ? CombatStatus.Won : CombatStatus.InProgress;
+
+        public ulong HiddenKey() => (ulong)_drawn;
+
+        public void Execute(CombatAction action)
+        {
+            if (!Legal().Contains(action)) throw new InvalidOperationException($"{action} is not legal");
+            _steps.Add(action.ToString());
+            if (action.Kind == CombatActionKind.EndTurn)
+            {
+                _hp -= Math.Max(0, Attack - _block);
+                (_block, _energy, _round) = (0, 2, _round + 1);
+                _hand = [];
+                Draw();
+                return;
+            }
+            var card = _hand.First(c => c.Uid == action.Card);
+            _hand.Remove(card);
+            _energy--;
+            if (card.Id == "S") _enemy -= 6;
+            else _block += 5;
+        }
+
+        public WorldSnapshot Snapshot() => new(_steps.ToList());
+
+        public void Restore(WorldSnapshot snapshot)
+        {
+            _steps.Clear();
+            Reset();
+            foreach (var step in snapshot.Steps) Execute(CombatAction.Parse(step));
+        }
+    }
+
+    private static readonly HandLeaf Leaf = new();
+
+    /// <summary>The best end of the combat by trying every line; each state once, as the toy shows all of it but the draw.</summary>
+    private static double BruteForce(Toy world, Dictionary<(ulong, ulong), double> known)
+    {
+        if (world.Status != CombatStatus.InProgress) return Leaf.Value(world.Status, world.Observe(), []);
+        var key = (ProtocolJson.Hash(world.Observe()), world.HiddenKey());
+        if (known.TryGetValue(key, out var value)) return value;
+        var here = world.Snapshot();
+        double best = double.NegativeInfinity;
+        foreach (var action in world.Legal())
+        {
+            world.Restore(here);
+            world.Execute(action);
+            best = Math.Max(best, BruteForce(world, known));
+        }
+        world.Restore(here);
+        return known[key] = best;
+    }
+
+    /// <summary>Plays the plan from the start: each step at the observation it expects, to the end it claims.</summary>
+    private static void AssertReplays(SlPlan plan)
+    {
+        var world = new Toy();
+        var steps = plan.Result.Plan.Prepend(plan.Result.First).ToList();
+        var hashes = plan.Result.PlanHashes!;
+        Assert.Equal(steps.Count - 1, hashes.Count);
+        for (int i = 0; i < steps.Count; i++)
+        {
+            if (i > 0) Assert.Equal(hashes[i - 1], ProtocolJson.Hash(world.Observe()));
+            world.Execute(steps[i]);
+        }
+        Assert.Equal(plan.End, world.Status);
+        Assert.Equal(plan.Value, Leaf.Value(world.Status, world.Observe(), []), 9);
+    }
+
+    [Fact]
+    public void AFullSearchFindsTheBestLine()
+    {
+        var world = new Toy();
+        double best = BruteForce(world, []);
+        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+
+        Assert.True(plan.Exhaustive);
+        Assert.Equal(CombatStatus.Won, plan.End);
+        Assert.Equal(best, plan.Value, 9);
+        AssertReplays(plan);
+    }
+
+    [Fact]
+    public void ANarrowBeamSaysWhatItLeftOutAndStillPlaysItsLine()
+    {
+        var world = new Toy();
+        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 4, Beam: 1));
+
+        Assert.False(plan.Exhaustive);
+        AssertReplays(plan);
+    }
+
+    [Fact]
+    public void ALosingPlanIsPlayedForOneTurn()
+    {
+        var world = new Toy(enemyHp: 500);
+        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 50));
+
+        Assert.Equal(CombatStatus.Lost, plan.End);
+        var steps = plan.Result.Plan.Prepend(plan.Result.First).ToList();
+        Assert.Equal(CombatActionKind.EndTurn, steps[^1].Kind);
+        Assert.Single(steps, a => a.Kind == CombatActionKind.EndTurn);
+        Assert.Equal(steps.Count - 1, plan.Result.PlanHashes!.Count);
+    }
+
+    [Fact]
+    public void ItsCandidatesStartWithItsPick()
+    {
+        var world = new Toy();
+        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        Assert.Equal(plan.Result.First.ToString(), plan.Result.Candidates[0].Action);
+        Assert.Equal(plan.Value, plan.Result.Candidates[0].Value, 9);
+    }
+
+    [Fact]
+    public void ARecordGoesOnFromItsHistory()
+    {
+        var record = new MoveRecord();
+        record.Witness(Fixtures.Slugs());
+        var copy = new MoveRecord(record.History);
+        copy.Witness(Fixtures.Slugs());
+        copy.Witness(Fixtures.Slugs() with { Round = 2 });
+
+        Assert.All(copy.History, e => Assert.Equal([1, 2], e.Turns.Select(t => t.Round)));
+        Assert.All(record.History, e => Assert.Equal([1], e.Turns.Select(t => t.Round)));
+    }
+}
+
+public class TurnPlanTests
+{
+    private static CombatDecisionResult Planned(params (CombatAction Action, ulong Hash)[] steps) =>
+        new(CombatAction.EndTurn, steps.Select(s => s.Action).ToList(), [], steps.Select(s => s.Hash).ToList());
+
+    [Fact]
+    public void AStepThatDoesNotHoldIsReplannedAndMarked()
+    {
+        var obs = Fixtures.Slugs();
+        var play = CombatAction.Play(1);
+        var plan = new TurnPlan();
+        int searches = 0;
+        plan.Decide(obs, [play], () => { searches++; return Planned((play, ProtocolJson.Hash(obs)), (play, 7)); });
+
+        var followed = plan.Decide(obs, [play], () => throw new InvalidOperationException("searched"));
+        Assert.False(followed.Replanned);
+        var replanned = plan.Decide(obs, [play], () => { searches++; return Planned(); });
+        Assert.True(replanned.Replanned);
+        Assert.False(plan.Decide(obs, [play], () => { searches++; return Planned(); }).Replanned);
+        Assert.Equal(3, searches);
     }
 }
