@@ -25,7 +25,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | Harness 调度 | 整局已完成：没有兜底的决策界面路由，由 run id 和决策序号得到的大脑种子，决策日志；`run --check` 能完全重现它（[Harness §4](/arch/harness/#sec-4)–[§6](/arch/harness/#sec-6)） |
 | 宿主–brain 传输 | 完成：[协议 §2](/arch/protocol/#sec-2) 的消息走 Unix 套接字。`brain` 提供服务，`run --brain` 作为宿主连上它跑整局。一局在进程内和走传输协议时打得完全一样：轨迹、观测、对局记录和决策日志都相同，PIMC 也是（[模拟器 §5](/arch/simulator/#sec-5)） |
 | 事件、公开记录 | 规划中 |
-| 宏观大脑、价值函数 | L0 v0 加 V v0：从界面预测每个选项的后状态，再用 V 估值。战斗用 PIMC 加手工叶子时，平均层数 19.34，200 局里 177 局打到第 1 幕 Boss，局外随机时是 13.68 层和 73 局；还没有一局获胜（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。V v2（一个读整局的卡牌、遗物、药水和上下文的网络）连同它的训练和自我对弈的探索已经实现；还没有晋升，第二代自我对弈正在跑，按估值探索（[学习 §1](/arch/learning/#sec-1)、[§2](/arch/learning/#sec-2)） |
+| 宏观大脑、价值函数 | L0 v0 加 V v0：从界面预测每个选项的后状态，再用 V 估值。战斗用 PIMC 加手工叶子时，平均层数 19.34，200 局里 177 局打到第 1 幕 Boss，局外随机时是 13.68 层和 73 局；还没有一局获胜（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。V v2（一个读整局的卡牌、遗物、药水和上下文的网络）连同它的训练和自我对弈的探索已经实现；它的 n2-b0.03（在三代自我对弈上训练，并被拉向 V v0 的选择）从 2026-10-28 起是 NoSL 冠军的 V，同样的种子上平均 26.16 层，V v0 是 22.58（[学习 §1](/arch/learning/#sec-1)、[§2](/arch/learning/#sec-2)） |
 | Mod | 覆盖所有决策界面的辅助模式：能加载进真实游戏，连上大脑，对每个空闲的决策发出询问，并用游戏里的名字显示答案；还没有在真实游戏里看它跑完一整局（[Mod §2](/arch/mod/#sec-2)、[§3](/arch/mod/#sec-3)） |
 
 ## 2. 主要缺口与风险
@@ -58,6 +58,6 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 8. worker 进程池里从克隆加载的 SL 世界；SL 排行榜。节点检查点、SL 克隆、封存、整局里的 SL 世界，以及在 worker 进程池里在克隆上规划整场战斗的 SL 规划器已完成（[模拟器 §7](/arch/simulator/#sec-7)、[§8](/arch/simulator/#sec-8)、[战斗大脑 §3](/arch/combat-brain/#sec-3)）；SL 排行榜还没做。
 
-9. 学习循环（拟合 V、ExIt、SPSA、晋级门槛），然后是 LLM 补丁循环。用自对弈拟合 V、用 SPSA 调 V 和叶子的权重，整局门槛和每个环境一个的冠军文件，精英和 Boss 战的预算倍数（[战斗大脑 §5](/arch/combat-brain/#sec-5)），以及决策日志和对局记录里的 ExIt 数据（[Harness §6](/arch/harness/#sec-6)），已经完成（[学习 §2](/arch/learning/#sec-2)，[评估 §5](/arch/evaluation/#sec-5)）。V v2（局外 V 网络）及其训练、自我对弈的探索也已完成（[学习 §1](/arch/learning/#sec-1)、[§2](/arch/learning/#sec-2)），因为选卡是最弱的一环，它被提到了战斗相关各项的前面。战斗结局输出头也已实现，即战斗网络：PIMC 学到的叶子，读敌人至今每回合的意图（[学习 §1](/arch/learning/#sec-1)）。战斗网络的第一代已经过了晋级门槛（c2，[战斗大脑 §7.2](/arch/combat-brain/#sec-7.2)），第二代自我对弈用它来跑，按估值探索（[学习 §5](/arch/learning/#sec-5)）。接下来依次是：V v2 的第一代过晋级门槛，以及只用第二代数据训练的下一代战斗网络；调 K 和每个世界的节点数，并试这些倍数；用自对弈日志里的 300–500 个决策跑融合测试集（工具已实现，[战斗大脑 §8](/arch/combat-brain/#sec-8)）；根上的 Sequential Halving（[战斗大脑 §5](/arch/combat-brain/#sec-5)）；先验网络；最后是带 PCR 和 Reanalyse 的闭环（[学习 §2](/arch/learning/#sec-2)）。共享树、多回合搜索和 v2 编码器，看这些测量的结果再定。
+9. 学习循环（拟合 V、ExIt、SPSA、晋级门槛），然后是 LLM 补丁循环。用自对弈拟合 V、用 SPSA 调 V 和叶子的权重，整局门槛和每个环境一个的冠军文件，精英和 Boss 战的预算倍数（[战斗大脑 §5](/arch/combat-brain/#sec-5)），以及决策日志和对局记录里的 ExIt 数据（[Harness §6](/arch/harness/#sec-6)），已经完成（[学习 §2](/arch/learning/#sec-2)，[评估 §5](/arch/evaluation/#sec-5)）。V v2（局外 V 网络）及其训练、自我对弈的探索也已完成（[学习 §1](/arch/learning/#sec-1)、[§2](/arch/learning/#sec-2)），因为选卡是最弱的一环，它被提到了战斗相关各项的前面。战斗结局输出头也已实现，即战斗网络：PIMC 学到的叶子，读敌人至今每回合的意图（[学习 §1](/arch/learning/#sec-1)）。战斗网络的第一代已经过了晋级门槛（c2，[战斗大脑 §7.2](/arch/combat-brain/#sec-7.2)），第二代自我对弈用它来跑，按估值探索（[学习 §5](/arch/learning/#sec-5)）。V v2 第一个晋升的是 n2-b0.03（[学习 §2](/arch/learning/#sec-2)）。接下来依次是：下一代战斗网络（c4，用第二、三代数据训练）过晋级门槛；调 K 和每个世界的节点数，并试这些倍数；用自对弈日志里的 300–500 个决策跑融合测试集（工具已实现，[战斗大脑 §8](/arch/combat-brain/#sec-8)）；根上的 Sequential Halving（[战斗大脑 §5](/arch/combat-brain/#sec-5)）；先验网络；最后是带 PCR 和 Reanalyse 的闭环（[学习 §2](/arch/learning/#sec-2)）。共享树、多回合搜索和 v2 编码器，看这些测量的结果再定。
 
 </Steps>
