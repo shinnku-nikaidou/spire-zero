@@ -183,30 +183,38 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
         private readonly List<TurnEnd> _ends = [];
         private readonly List<CombatAction> _actions = [];
         private readonly List<ulong> _hashes = [];
-        private int _nodes, _round;
+        private int _nodes, _round, _limit;
         private bool _cut;
 
         public TurnSearch Run(int keep)
         {
             var obs = world.Observe();
             _round = obs.Round;
-            Visit(obs);
+            Visit(obs, root: true);
             var over = _ends.Where(e => e.Status != CombatStatus.InProgress).MaxBy(e => e.Value);
             var going = _ends.Where(e => e.Status == CombatStatus.InProgress).OrderByDescending(e => e.Value).ToList();
             if (going.Count > keep) _cut = true;
             return new([.. over == null ? [] : new[] { over }, .. going.Take(keep)], _nodes, _cut, leaf.Value(CombatStatus.Won, obs, history));
         }
 
-        /// <summary>Tries every action from the current state, where the player is still on this turn, once per state.</summary>
-        private void Visit(CombatObservation obs)
+        /// <summary>
+        /// Tries every action from the current state, where the player is still on this turn, once per state. At the
+        /// turn's start the nodes are shared over the first actions, each with an even share plus what the ones before it
+        /// left, so every first action is looked at however many states the turn has; below, a subtree spends its share
+        /// depth first.
+        /// </summary>
+        private void Visit(CombatObservation obs, bool root = false)
         {
             ulong hash = ProtocolJson.Hash(obs);
             if (!_seen.Add((hash, world.HiddenKey()))) return;
             var here = world.Snapshot();
             bool moved = false;
-            foreach (var action in PimcBrain.Ordered(world.Legal()))
+            var legal = PimcBrain.Ordered(world.Legal());
+            for (int i = 0; i < legal.Count; i++)
             {
-                if (moved && _nodes >= nodes)
+                var action = legal[i];
+                if (root) _limit = Math.Max(_nodes + 1, (int)((long)nodes * (i + 1) / legal.Count));
+                else if (moved && _nodes >= _limit)
                 {
                     _cut = true;
                     break;

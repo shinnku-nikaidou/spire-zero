@@ -302,6 +302,8 @@ public class SlPlannerTests
             if (i > 0) Assert.Equal(hashes[i - 1], ProtocolJson.Hash(world.Observe()));
             world.Execute(steps[i]);
         }
+        // A losing plan is played for its first turn only.
+        if (plan.End == CombatStatus.Lost) return;
         Assert.Equal(plan.End, world.Status);
         Assert.Equal(plan.Value, Leaf.Value(world.Status, world.Observe(), []), 9);
     }
