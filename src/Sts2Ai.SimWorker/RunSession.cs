@@ -178,10 +178,12 @@ internal sealed class RunSession : IDisposable
     /// the save drops put back (<see cref="Checkpoint"/>), then its decisions replayed, before the policies answer. The
     /// clone is sealed: once it travels it is at its horizon, and stepping further throws.
     /// </summary>
+    /// <param name="opened">The clone's checkpoint already read (<see cref="Checkpoint.Open"/>), for a node loaded many times.</param>
     public static RunSession Load(Pump pump, NodeClone clone, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro,
-        Action<Observation>? observed = null)
+        Action<Observation>? observed = null, Checkpoint.Opened? opened = null)
     {
-        var read = SaveManager.FromJson<SerializableRun>(Checkpoint.Save(clone.Save));
+        opened ??= Checkpoint.Open(clone.Save);
+        var read = SaveManager.FromJson<SerializableRun>(opened.Save);
         var save = read.SaveData ?? throw new InvalidDataException($"node checkpoint does not load: {read.Status} {read.ErrorMessage}");
         var run = RunState.FromSerializable(save);
         var player = run.Players[0];
@@ -194,7 +196,7 @@ internal sealed class RunSession : IDisposable
         {
             // NMainMenu's Continue and NGame.LoadRun without the nodes.
             session.Await(RunManager.Instance.SetUpSavedSingleplayer(run, save));
-            Checkpoint.RestoreRelics(clone.Save, player);
+            Checkpoint.RestoreRelics(opened, player);
             // Continue always saves; a clone saves nothing, as a run this simulator starts.
             AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
             RunManager.Instance.Launch();

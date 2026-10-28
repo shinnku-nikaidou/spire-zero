@@ -16,30 +16,30 @@ namespace Sts2Ai.GameBridge;
 /// </summary>
 public static class Checkpoint
 {
-    private sealed record Data(string Save, IReadOnlyList<RelicFields> Relics);
+    /// <summary>A checkpoint read (<see cref="Open"/>): the game's save, to load as the game's Continue loads one, and the
+    /// relics' plain fields.</summary>
+    public sealed record Opened(string Save, IReadOnlyList<RelicFields> Relics);
 
-    private sealed record RelicFields(string Id, Dictionary<string, string> Fields);
+    public sealed record RelicFields(string Id, Dictionary<string, string> Fields);
 
     /// <summary>The checkpoint of the run as it is now.</summary>
-    public static string Take(Player player) => JsonSerializer.Serialize(new Data(SaveManager.ToJson(RunManager.Instance.ToSave(null)),
+    public static string Take(Player player) => JsonSerializer.Serialize(new Opened(SaveManager.ToJson(RunManager.Instance.ToSave(null)),
         player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!)))).ToList()));
 
-    /// <summary>The game's save in <paramref name="checkpoint"/>, to load as the game's Continue loads one.</summary>
-    public static string Save(string checkpoint) => Read(checkpoint).Save;
+    /// <summary>Reads <paramref name="checkpoint"/>, once for every load of it.</summary>
+    public static Opened Open(string checkpoint) =>
+        JsonSerializer.Deserialize<Opened>(checkpoint) ?? throw new InvalidDataException("not a node checkpoint");
 
     /// <summary>Gives each relic of the run loaded from <paramref name="checkpoint"/> the plain fields it had in the run.</summary>
-    public static void RestoreRelics(string checkpoint, Player player)
+    public static void RestoreRelics(Opened checkpoint, Player player)
     {
-        var relics = Read(checkpoint).Relics;
+        var relics = checkpoint.Relics;
         if (!relics.Select(r => r.Id).SequenceEqual(player.Relics.Select(r => r.Id.Entry)))
             throw new InvalidOperationException("the loaded run's relics are not the checkpoint's");
         foreach (var (saved, relic) in relics.Zip(player.Relics))
             foreach (var field in Plain(relic))
                 field.SetValue(relic, Parse(saved.Fields[Key(field)], field.FieldType));
     }
-
-    private static Data Read(string checkpoint) =>
-        JsonSerializer.Deserialize<Data>(checkpoint) ?? throw new InvalidDataException("not a node checkpoint");
 
     /// <summary>The relic's writable fields of a number, flag or enum type, from its own class up to RelicModel.</summary>
     private static IEnumerable<FieldInfo> Plain(RelicModel relic)

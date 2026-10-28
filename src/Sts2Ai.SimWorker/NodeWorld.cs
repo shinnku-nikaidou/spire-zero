@@ -17,9 +17,11 @@ internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisp
 {
     private readonly List<string> _steps = [];
     private readonly NextAction _next = new();
+    private readonly Checkpoint.Opened _checkpoint = Checkpoint.Open(root.Save);
     private RunSession? _live;
 
-    private RunSession Live => _live ??= RunSession.Load(pump, root with { Trace = [.. root.Trace, .. _steps] }, PromptBrain.Instance, _next, _next);
+    private RunSession Live => _live ??= RunSession.Load(pump, root with { Trace = [.. root.Trace, .. _steps] }, PromptBrain.Instance, _next, _next,
+        opened: _checkpoint);
 
     /// <summary>The live combat, once the clone is loaded.</summary>
     private (CombatState State, Player Player) Combat
