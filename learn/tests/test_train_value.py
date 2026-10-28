@@ -12,6 +12,16 @@ def test_an_afterstate_is_the_view_with_its_changes_one_level_deep():
     assert view["map"]["visited"] == [1]
 
 
+def test_shares_of_the_training_runs_nest_and_disjoint_starts_split_them():
+    runs = [f"{i * 7919:016x}" for i in range(5000)]
+    train = [r for r in runs if not tv.held_out(r)]
+    quarter = {r for r in train if tv.trained_on(r, 0.25, 0)}
+    half = {r for r in train if tv.trained_on(r, 0.5, 0)}
+    other = {r for r in train if tv.trained_on(r, 0.5, 0.5)}
+    assert quarter < half and not half & other and half | other == set(train)
+    assert 0.2 < len(quarter) / len(train) < 0.3
+
+
 def test_the_exploration_temperature_comes_from_the_brain_name():
     assert tv.temperature("l0 explore 0.25") == 0.25
     assert tv.temperature("l0 n1 explore 2") == 2

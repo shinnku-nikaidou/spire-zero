@@ -95,6 +95,13 @@ def held_out(run_id: str) -> bool:
     return int(run_id, 16) % 5 == 0
 
 
+def trained_on(run_id: str, share: float, start: float) -> bool:
+    """Whether a training run is in the share of the training runs used, for learning curves: its place in [0, 1),
+    from the run id, lies in [start, start + share). Disjoint starts give disjoint halves, for split-half tests."""
+    place = int(run_id, 16) // 5 % 1000
+    return start * 1000 <= place < (start + share) * 1000
+
+
 def merged(view: dict, changes: dict) -> dict:
     """A run view with an afterstate's changes as `fork` and `afterstates` write them: the fields that differ, to one
     level inside an object field; a null removes a field."""
@@ -839,6 +846,12 @@ def main(
         ),
     ] = 1.0,
     side_batch: Annotated[int, typer.Option(min=1, help="fork pairs, or logged decisions, per step")] = 64,
+    train_share: Annotated[
+        float, typer.Option(min=0, max=1, help="share of the training runs used, for learning curves")
+    ] = 1.0,
+    train_start: Annotated[
+        float, typer.Option(min=0, max=1, help="where that share starts among the training runs (by run id)")
+    ] = 0.0,
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out, character)
@@ -875,7 +888,7 @@ def main(
         per_run[s["key"]] = per_run.get(s["key"], 0) + 1
     for s in samples:
         s["weight"] = 1.0 / per_run[s["key"]]
-    train = [s for s in samples if not held_out(s["run"])]
+    train = [s for s in samples if not held_out(s["run"]) and trained_on(s["run"], train_share, train_start)]
     test = [s for s in samples if held_out(s["run"])]
     if not train or not test:
         raise LearnError(f"{len(train)} train and {len(test)} held-out samples: too few runs")
@@ -1035,6 +1048,8 @@ def main(
     report = {
         "runs": len({s["key"] for s in samples}),
         "held_out_runs": len({s["key"] for s in test}),
+        "train_runs": len({s["key"] for s in train}),
+        "train_share": [train_start, train_share],
         "samples": len(samples),
         "won": won,
         "vocab": {t: len(ids) for t, ids in tables.items()},
