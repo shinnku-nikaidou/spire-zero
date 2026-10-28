@@ -542,7 +542,7 @@ internal static class SelfTest
         }
 
         static string Show(SlPlan p) =>
-            $"{p.Result.First} [{string.Join(" ", p.Result.Plan)}] {p.Value:R} {p.End} {p.Nodes} nodes {p.Turns} turns {p.Exhaustive} " +
+            $"{p.Result.First} [{string.Join(" ", p.Result.Plan)}] {p.Value:R} {p.End} {p.Nodes} nodes {p.Turns} turns {p.Proved} " +
             string.Join(",", p.Result.PlanHashes!);
     }
 

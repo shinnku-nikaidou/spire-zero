@@ -68,7 +68,8 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
 /// <param name="Ends">The best end of the combat, if the turn can reach one, then the states at the next turn's start, best first.</param>
 /// <param name="Nodes">The actions the search simulated.</param>
 /// <param name="Cut">Whether anything was left out: the nodes ran out, or more states were found than kept.</param>
-public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
+/// <param name="Bound">The bound of the state the search started from (<see cref="TurnEnd.Bound"/>).</param>
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
 
 /// <summary>
 /// A state where a turn of the SL planner's line ends: at the next turn's first decision, after the enemies' turn, or

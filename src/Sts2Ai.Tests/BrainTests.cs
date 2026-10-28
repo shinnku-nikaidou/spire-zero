@@ -313,19 +313,19 @@ public class SlPlannerTests
         double best = BruteForce(world, []);
         var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
 
-        Assert.True(plan.Exhaustive);
+        Assert.True(plan.Proved);
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.Equal(best, plan.Value, 9);
         AssertReplays(plan);
     }
 
     [Fact]
-    public void ANarrowBeamSaysWhatItLeftOutAndStillPlaysItsLine()
+    public void ANarrowBeamProvesNothingAndStillPlaysItsLine()
     {
         var world = new Toy();
         var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 4, Beam: 1));
 
-        Assert.False(plan.Exhaustive);
+        Assert.False(plan.Proved);
         AssertReplays(plan);
     }
 

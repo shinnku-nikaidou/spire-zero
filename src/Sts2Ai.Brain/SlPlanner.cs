@@ -16,11 +16,12 @@ public delegate IReadOnlyList<TurnSearch> TurnSearcher(IReadOnlyList<PlanJob> jo
 /// when the line stops before it.</param>
 /// <param name="End">How the line ends: won, lost, or still in progress where the search stopped.</param>
 /// <param name="Nodes">The actions simulated, over all the turns' searches.</param>
-/// <param name="Turns">How many turns the beam went on.</param>
-/// <param name="Exhaustive">Whether nothing was left out: no turn's search ran out of nodes or kept fewer states than
-/// it found, no beam dropped a state, and every line reached the end of the combat or was pruned. The line is then the
-/// best there is, as far as the bound holds (<see cref="TurnEnd.Bound"/>).</param>
-public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatStatus End, int Nodes, int Turns, bool Exhaustive);
+/// <param name="Turns">How many turns the beams searched, the dive's included.</param>
+/// <param name="Proved">Whether the line is the best there is, as far as the bound holds (<see cref="TurnEnd.Bound"/>):
+/// it reaches the decision's bound (a win that loses no HP and no potion), or the full beam left nothing out, with no
+/// turn's search out of nodes or keeping fewer states than it found, no state dropped from the beam, and every line at
+/// the end of the combat or pruned.</param>
+public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatStatus End, int Nodes, int Turns, bool Proved);
 
 /// <summary>
 /// The SL combat brain (docs: combat-brain §3): deterministic planning over the whole combat in the one exact world,
@@ -34,7 +35,8 @@ public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatSta
 /// alone); the best <see cref="Budget.Beam"/> of all the states' ends, distinct by key, are the next turn's states. A
 /// line that ends the combat is scored by the leaf at its end, and the best such line so far prunes every state whose
 /// bound, a win with the HP and the potions it has, cannot beat it. The beam stops when no state is left, or after
-/// <see cref="MaxTurns"/> turns. Every loss is worth the same, so among losing lines the one that died from the turn
+/// <see cref="MaxTurns"/> turns. A greedy dive, a beam of one, goes first, so the full beam is pruned from its start.
+/// Every loss is worth the same, so among losing lines the one that died from the turn
 /// start the leaf valued highest is the pick; and a losing plan is played for its first turn only, then the next turn
 /// is planned again, from where a beam reaches deeper.
 ///
@@ -69,65 +71,94 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
         }).ToList());
     }
 
-    /// <summary>The beam over turns, from the decision's state, with the budget of its room (<see cref="Budget.For"/>).</summary>
+    /// <summary>
+    /// The beam over turns, from the decision's state, with the budget of its room (<see cref="Budget.For"/>). A greedy
+    /// dive comes first, a beam of one: its line, often a win, is the floor that prunes the full beam from its first
+    /// turn on, and when it already reaches the decision's bound the full beam is not needed.
+    /// </summary>
     public static SlPlan Search(Budget budget, IReadOnlyList<EnemyTurns> history, TurnSearcher search)
     {
-        int beam = Math.Max(1, budget.Beam);
-        var states = new List<TurnEnd> { new([], [], CombatStatus.InProgress, 0, double.PositiveInfinity, 0, history) };
-        TurnEnd? best = null;
-        double bestFrom = double.NegativeInfinity;
-        var byFirst = new Dictionary<CombatAction, double>();
-        int nodes = 0, turns = 0;
-        bool exhaustive = true;
-        while (states.Count > 0 && turns < MaxTurns)
+        var beam = new Beam(budget.NodesPerWorld, history, search);
+        if (budget.Beam > 1) beam.Run(1);
+        if (!beam.Proved) beam.Run(budget.Beam);
+        return beam.Result();
+    }
+
+    private sealed class Beam(int nodesPerState, IReadOnlyList<EnemyTurns> history, TurnSearcher search)
+    {
+        private readonly Dictionary<CombatAction, double> _byFirst = [];
+        private TurnEnd? _best;
+        private double _bestFrom = double.NegativeInfinity, _bound = double.PositiveInfinity;
+        private List<TurnEnd> _left = [];
+        private int _nodes, _turns;
+        private bool _complete;
+
+        /// <summary>Whether the best line is the best there is: the last beam left nothing out, or the line reaches the
+        /// decision's bound, which nothing can beat.</summary>
+        public bool Proved => _best != null && (_complete || _best.Value >= _bound);
+
+        /// <summary>A beam of <paramref name="width"/> states from the decision, pruned by the best line so far.</summary>
+        public void Run(int width)
         {
-            var found = search(states.Select(s => new PlanJob(s.Actions, s.History)).ToList(), budget.NodesPerWorld, beam, best?.Value);
-            turns++;
-            var next = new List<TurnEnd>();
-            for (int i = 0; i < states.Count; i++)
+            var states = new List<TurnEnd> { new([], [], CombatStatus.InProgress, 0, double.PositiveInfinity, 0, history) };
+            _complete = true;
+            for (int turn = 0; states.Count > 0 && turn < MaxTurns; turn++)
             {
-                nodes += found[i].Nodes;
-                exhaustive &= !found[i].Cut;
-                foreach (var end in found[i].Ends)
+                var found = search(states.Select(s => new PlanJob(s.Actions, s.History)).ToList(), nodesPerState, width, _best?.Value);
+                _turns++;
+                if (turn == 0) _bound = found[0].Bound;
+                var next = new List<TurnEnd>();
+                for (int i = 0; i < states.Count; i++)
                 {
-                    var line = end with { Actions = [.. states[i].Actions, .. end.Actions], Hashes = [.. states[i].Hashes, .. end.Hashes] };
-                    if (line.Status == CombatStatus.InProgress)
+                    _nodes += found[i].Nodes;
+                    _complete &= !found[i].Cut;
+                    foreach (var end in found[i].Ends)
                     {
-                        next.Add(line);
-                        continue;
+                        var line = end with { Actions = [.. states[i].Actions, .. end.Actions], Hashes = [.. states[i].Hashes, .. end.Hashes] };
+                        if (line.Status == CombatStatus.InProgress)
+                        {
+                            next.Add(line);
+                            continue;
+                        }
+                        Note(_byFirst, line);
+                        // A loss is 0 however it comes: then the turn start it came from decides.
+                        double from = states[i].Value;
+                        if (_best == null || line.Value > _best.Value || (line.Value == _best.Value && line.Status == CombatStatus.Lost && from > _bestFrom))
+                            (_best, _bestFrom) = (line, from);
                     }
-                    Note(byFirst, line);
-                    // A loss is 0 however it comes: then the turn start it came from decides.
-                    double from = states[i].Value;
-                    if (best == null || line.Value > best.Value || (line.Value == best.Value && line.Status == CombatStatus.Lost && from > bestFrom))
-                        (best, bestFrom) = (line, from);
                 }
-            }
-            var seen = new HashSet<ulong>();
-            states = [];
-            // A stable sort: ties stay in the order the states were searched in, so the beam does not depend on timing.
-            foreach (var line in next.Where(l => best == null || l.Bound > best.Value).OrderByDescending(l => l.Value))
-            {
-                if (!seen.Add(line.Key)) continue;
-                if (states.Count == beam)
+                var seen = new HashSet<ulong>();
+                states = [];
+                // A stable sort: ties stay in the order the states were searched in, so the beam does not depend on timing.
+                foreach (var line in next.Where(l => _best == null || l.Bound > _best.Value).OrderByDescending(l => l.Value))
                 {
-                    exhaustive = false;
-                    break;
+                    if (!seen.Add(line.Key)) continue;
+                    if (states.Count == width)
+                    {
+                        _complete = false;
+                        break;
+                    }
+                    states.Add(line);
                 }
-                states.Add(line);
             }
+            _complete &= states.Count == 0;
+            _left = states;
         }
-        exhaustive &= states.Count == 0;
-        foreach (var state in states) Note(byFirst, state);
-        // The best end of the combat, unless the search stopped first at a state the leaf values higher.
-        var pick = (states.Count > 0 && (best == null || states[0].Value > best.Value) ? states[0] : best)
-            ?? throw new InvalidOperationException("the planner found no line");
-        var candidates = byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value)
-            .Select(kv => new Candidate(kv.Key.ToString(), kv.Value, 0, 1, [Math.Round(kv.Value, 4)])).ToList();
-        int turnEnd = pick.Actions.ToList().FindIndex(a => a.Kind == CombatActionKind.EndTurn);
-        int played = pick.Status == CombatStatus.Lost && turnEnd >= 0 ? turnEnd + 1 : pick.Actions.Count;
-        var result = new CombatDecisionResult(pick.Actions[0], pick.Actions.Take(played).Skip(1).ToList(), candidates, pick.Hashes.Take(played).Skip(1).ToList());
-        return new(result, pick.Value, pick.Status, nodes, turns, exhaustive);
+
+        public SlPlan Result()
+        {
+            foreach (var state in _left) Note(_byFirst, state);
+            // The best end of the combat, unless the search stopped first at a state the leaf values higher.
+            var pick = (_left.Count > 0 && (_best == null || _left[0].Value > _best.Value) ? _left[0] : _best)
+                ?? throw new InvalidOperationException("the planner found no line");
+            var candidates = _byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value)
+                .Select(kv => new Candidate(kv.Key.ToString(), kv.Value, 0, 1, [Math.Round(kv.Value, 4)])).ToList();
+            int turnEnd = pick.Actions.ToList().FindIndex(a => a.Kind == CombatActionKind.EndTurn);
+            int played = pick.Status == CombatStatus.Lost && turnEnd >= 0 ? turnEnd + 1 : pick.Actions.Count;
+            var result = new CombatDecisionResult(pick.Actions[0], pick.Actions.Take(played).Skip(1).ToList(), candidates,
+                pick.Hashes.Take(played).Skip(1).ToList());
+            return new(result, pick.Value, pick.Status, _nodes, _turns, Proved);
+        }
     }
 
     /// <summary>Keeps the best value of the lines that start with each first action, for the candidates.</summary>
@@ -163,7 +194,7 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
             var over = _ends.Where(e => e.Status != CombatStatus.InProgress).MaxBy(e => e.Value);
             var going = _ends.Where(e => e.Status == CombatStatus.InProgress).OrderByDescending(e => e.Value).ToList();
             if (going.Count > keep) _cut = true;
-            return new([.. over == null ? [] : new[] { over }, .. going.Take(keep)], _nodes, _cut);
+            return new([.. over == null ? [] : new[] { over }, .. going.Take(keep)], _nodes, _cut, leaf.Value(CombatStatus.Won, obs, history));
         }
 
         /// <summary>Tries every action from the current state, where the player is still on this turn, once per state.</summary>

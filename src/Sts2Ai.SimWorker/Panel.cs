@@ -104,13 +104,13 @@ internal static class Panel
             if (outcome == nameof(CombatOutcome.Win)) hpLost += hpStart - hp;
             double ms = (clock.Elapsed - started).TotalMilliseconds;
             Console.WriteLine($"#{i} {encounter.Id.Entry} {setup.Seed} {outcome} hp {hp}/{hpStart} rounds {rounds} actions {steps} {ms:F0} ms" +
-                              (player == "plan" ? $" plans {searched.Plans} ({searched.Exhaustive} exhaustive, {searched.Nodes} nodes, {searched.Replans} replans)" : "") +
+                              (player == "plan" ? $" plans {searched.Plans} ({searched.Proved} proved, {searched.Nodes} nodes, {searched.Replans} replans)" : "") +
                               (failure != null ? $" failure: {failure}" : ""));
             output?.WriteLine(JsonSerializer.Serialize(new
             {
                 i, encounter = encounter.Id.Entry, seed = setup.Seed, player, env = searches ? env.ToString() : null,
                 outcome, hp_start = hpStart, hp, rounds, actions = steps, ms, failure, game_errors = errors.Take(3),
-                searches = searched.Plans, exhaustive = searched.Exhaustive, nodes = searched.Nodes, replans = searched.Replans,
+                searches = searched.Plans, proved = searched.Proved, nodes = searched.Nodes, replans = searched.Replans,
                 search_ms = searched.Ms,
             }));
         }
@@ -135,10 +135,10 @@ internal static class Panel
     }
 
     /// <summary>What a searching player's searches of one combat did: how many there were, how many of the planner's
-    /// were exhaustive, their nodes, the replans among them, and their time.</summary>
+    /// were proved the best, their nodes, the replans among them, and their time.</summary>
     private sealed class Searched
     {
-        public int Plans, Exhaustive, Replans;
+        public int Plans, Proved, Replans;
         public long Nodes;
         public double Ms;
     }
@@ -179,11 +179,11 @@ internal static class Panel
                         else
                         {
                             var made = planner.Plan(obs, worlds.Worlds(1, 0)[0], budget, history);
-                            searched.Exhaustive += made.Exhaustive ? 1 : 0;
+                            searched.Proved += made.Proved ? 1 : 0;
                             searched.Nodes += made.Nodes;
                             if (trace)
                                 Console.WriteLine($"  plan: {made.End} value {made.Value:F3}, {made.Result.Plan.Count + 1} actions, {made.Turns} turns, {made.Nodes} nodes" +
-                                                  $"{(made.Exhaustive ? ", exhaustive" : "")}, {clock.ElapsedMilliseconds} ms");
+                                                  $"{(made.Proved ? ", proved" : "")}, {clock.ElapsedMilliseconds} ms");
                             result = made.Result;
                         }
                     }
