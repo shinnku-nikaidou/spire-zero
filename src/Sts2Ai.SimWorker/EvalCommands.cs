@@ -64,8 +64,10 @@ internal static class GateCommand
     private static readonly Option<string> Records = Opt.Required<string>("--records", "the challenger's run record files, comma-separated");
     private static readonly Option<string> Metric = Opt.Of("--metric", "floor", "what the SPRT compares").AcceptOnlyFromAmong("floor", "win");
     private static readonly Option<double?> Delta = Opt.Maybe<double?>("--delta", "the difference the SPRT tells from none (default: 1.5 floors, or 0.1 wins)");
-    private static readonly Option<double> Alpha = Opt.Of("--alpha", 0.05, "the SPRT's chance to pass a challenger no better");
-    private static readonly Option<double> Beta = Opt.Of("--beta", 0.05, "the SPRT's chance to fail a challenger better by --delta");
+    private static readonly Option<double> Alpha = Opt.Of("--alpha", 0.05, "the SPRT's chance to pass a challenger no better (with --not-worse: worse by --delta)");
+    private static readonly Option<double> Beta = Opt.Of("--beta", 0.05, "the SPRT's chance to fail a challenger better by --delta (with --not-worse: no worse)");
+    private static readonly Option<bool> NotWorse = Opt.Of("--not-worse", false,
+        "for a change meant to be cheaper, not stronger: passes a challenger that is not worse (H0: worse by --delta, H1: no difference)");
     private static readonly Option<string?> Promote = Opt.Maybe<string?>("--promote", "on a pass, the challenger's report path, and it becomes the champion");
     private static readonly Option<PlayEnvironment?> Env = Opt.Maybe<PlayEnvironment?>("--env", "the challenger's environment, which must be the champion's");
     private static readonly ChampionArgs Challenger = new(file: false);
@@ -73,7 +75,7 @@ internal static class GateCommand
     public static Command Command()
     {
         var command = Opt.Command("gate", "the challenger's records against the champion's report, paired by seed, with an SPRT",
-            [ChampionPath, Records, Metric, Delta, Alpha, Beta, Promote, Env], Challenger.Options);
+            [ChampionPath, Records, Metric, Delta, Alpha, Beta, NotWorse, Promote, Env], Challenger.Options);
         command.SetAction(Run);
         return command;
     }
@@ -100,7 +102,7 @@ internal static class GateCommand
         {
             throw new CliException(e.Message);
         }
-        var result = Gate.Sprt(pairs, metric, delta, r.GetValue(Alpha), r.GetValue(Beta));
+        var result = Gate.Sprt(pairs, metric, delta, r.GetValue(Alpha), r.GetValue(Beta), r.GetValue(NotWorse));
         Console.WriteLine($"champion: {file.Champion} ({file.Report})");
         Console.WriteLine($"challenger: {challenger.Name}, {runs.Count} runs");
         Console.WriteLine(result.Summary());

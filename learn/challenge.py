@@ -62,7 +62,7 @@ def play(sim, seed_file, lo, hi, processes, player, extra, folder):
     return [records for _, records in procs]
 
 
-def gate(sim, champion, metric, extra, records, promote=None):
+def gate(sim, champion, metric, extra, records, promote=None, not_worse=False):
     """Runs the sim's gate on the records so far; returns its verdict (pass, fail, open, void) and its output."""
     cmd = [
         *sim,
@@ -73,6 +73,7 @@ def gate(sim, champion, metric, extra, records, promote=None):
         ",".join(str(r) for r in records),
         "--metric",
         metric.value,
+        *(["--not-worse"] if not_worse else []),
         *(["--promote", promote] if promote else []),
         *extra,
     ]
@@ -93,6 +94,9 @@ def main(
     chunk: Annotated[int, typer.Option(min=1, help="seeds played between two gates")] = 40,
     processes: Annotated[int, typer.Option(min=1)] = 4,
     metric: Annotated[Metric, typer.Option()] = Metric.floor,
+    not_worse: Annotated[
+        bool, typer.Option(help="for a change meant to be cheaper, not stronger: pass it if it is not worse")
+    ] = False,
     promote: Annotated[
         str | None,
         typer.Option(help="where the challenger's report goes if it passes; without it, nothing is promoted"),
@@ -133,7 +137,7 @@ def main(
     for lo in range(0, total, chunk):
         hi = min(total, lo + chunk)
         records += play(cmd, seed_file, lo, hi, processes, player, extra, folder)
-        verdict, lines = gate(cmd, champion, metric, extra, records)
+        verdict, lines = gate(cmd, champion, metric, extra, records, not_worse=not_worse)
         logger.info("after {} of {} seeds:\n{}", hi, total, lines)
         if verdict in ("fail", "void"):
             raise typer.Exit(1)
@@ -147,7 +151,7 @@ def main(
         return
     if hi < total:
         records += play(cmd, seed_file, hi, total, processes, player, extra, folder)
-    verdict, lines = gate(cmd, champion, metric, extra, records, promote=promote)
+    verdict, lines = gate(cmd, champion, metric, extra, records, promote=promote, not_worse=not_worse)
     logger.info("on the whole set:\n{}", lines)
     if verdict != "pass":
         raise typer.Exit(1)

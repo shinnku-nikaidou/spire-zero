@@ -69,6 +69,14 @@ public class GateTests
     public void NoGainFails() => Assert.Equal("fail", Gate.Sprt(Pairs(200, 0), "floor", 1.5).Verdict);
 
     [Fact]
+    public void ANotWorseGatePassesNoLossAndFailsALoss()
+    {
+        Assert.Equal("pass", Gate.Sprt(Pairs(200, 0), "floor", 1.5, notWorse: true).Verdict);
+        Assert.Equal("fail", Gate.Sprt(Pairs(200, -5), "floor", 1.5, notWorse: true).Verdict);
+        Assert.Contains("floor, not worse, delta 1.5", Gate.Sprt(Pairs(200, 0), "floor", 1.5, notWorse: true).Summary());
+    }
+
+    [Fact]
     public void AFloorGateDecidesNothingBeforeItsMinimumPairs() =>
         Assert.Equal("open", Gate.Sprt(Pairs(Gate.MinPairs - 1, 10), "floor", 1.5).Verdict);
 
