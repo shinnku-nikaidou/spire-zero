@@ -46,6 +46,8 @@ public static class Gate
     public static IReadOnlyList<(RunRecord Champion, RunRecord Challenger)> Pairs(EvalReport champion, IReadOnlyList<RunRecord> challenger)
     {
         var c = champion.Config;
+        if (challenger.FirstOrDefault(r => r.Config.AutoWin == true) is { } gauntlet)
+            throw new ArgumentException($"run {gauntlet.Seed} is a boss gauntlet's (every combat won at its start), not a played run");
         if (challenger.FirstOrDefault(r => (r.Config.Game, r.Config.Env, r.Config.Rung) != (c.Game, c.Env, c.Rung)) is { } other)
             throw new ArgumentException($"run {other.Seed} was played in {other.Config.Game} {other.Config.Env} {other.Config.Rung}, the champion in {c.Game} {c.Env} {c.Rung}");
         // A report holds one character at one ascension (EvalReport.Of).

@@ -26,6 +26,8 @@ internal static class RunCommand
     private static readonly Option<bool> Check = Opt.Of("--check", false, "plays each seed again over the wire and compares, and replays each node from its checkpoint");
     private static readonly Option<bool> Trace = Opt.Of("--trace", false, "prints every decision");
     private static readonly Option<bool> Obs = Opt.Of("--obs", false, "prints every observation");
+    private static readonly Option<bool> AutoWin = Opt.Of("--auto-win", false,
+        "the boss gauntlet: every combat, bosses included, is won at its start (the game's win command) and its rewards follow");
     private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
     private static readonly Option<string?> Records = Opt.Maybe<string?>("--records", "writes one run record per line (docs: evaluation §6)");
     private static readonly Option<string?> Brain = Opt.Maybe<string?>("--brain",
@@ -36,7 +38,7 @@ internal static class RunCommand
     public static Command Command()
     {
         var command = Opt.Command("run", "whole runs through Harness",
-            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records, Brain], Champion.Options, Loadout.Options);
+            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, AutoWin, Log, Records, Brain], Champion.Options, Loadout.Options);
         command.SetAction(Cli.Game(Run));
         return command;
     }
@@ -53,6 +55,8 @@ internal static class RunCommand
         int maxDecisions = r.GetValue(MaxDecisions);
         var env = r.GetValue(Env);
         bool check = r.GetValue(Check);
+        bool autoWin = r.GetValue(AutoWin);
+        if (autoWin && check) throw new CliException("--check replays nodes from their checkpoints, which do not keep --auto-win");
         bool trace = r.GetValue(Trace);
         bool printObservations = r.GetValue(Obs);
         bool observe = check || printObservations;
@@ -87,7 +91,7 @@ internal static class RunCommand
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
-            var setup = new RunSetup(character, seeds?[i] ?? Cli.MakeSeed(seed, i), asc, loadout);
+            var setup = new RunSetup(character, seeds?[i] ?? Cli.MakeSeed(seed, i), asc, loadout, autoWin);
             var started = clock.Elapsed;
             var first = PlayRun(pump, setup, env, firstBrain, maxDecisions, trace, observe, printObservations);
             if (workerPool != null) first.Errors.AddRange(workerPool.TakeGameErrors());
@@ -274,7 +278,7 @@ internal static class RunCommand
         {
             var steps = session?.Trace.ToList() ?? [];
             var surfaces = steps.GroupBy(s => s[..s.IndexOf(' ')]).ToDictionary(g => g.Key, g => g.Count());
-            var config = new RunConfig(HeadlessGame.GameVersion, Cli.Commit, brain?.Champion ?? "none", hello.Env, "R1");
+            var config = new RunConfig(HeadlessGame.GameVersion, Cli.Commit, brain?.Champion ?? "none", hello.Env, "R1", setup.AutoWin ? true : null);
             var player = session?.Player;
             var record = new RunRecord(config, setup.Seed, setup.Character, setup.Ascension, outcome,
                 session?.Run.CurrentActIndex ?? 0, session?.Run.TotalFloor ?? 0, player?.Creature.CurrentHp ?? 0, player?.Creature.MaxHp ?? 0,

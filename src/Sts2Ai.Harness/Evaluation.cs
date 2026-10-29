@@ -18,7 +18,9 @@ public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions);
 /// <summary>What played a run, the same for every run of one evaluation (docs: evaluation §6).</summary>
 /// <param name="Champion">The brain on each side of the routing table, with its budget.</param>
 /// <param name="Rung">R1 to R4 (docs: evaluation §1).</param>
-public sealed record RunConfig(string Game, string Commit, string Champion, string Env, string Rung);
+/// <param name="AutoWin">True for a boss gauntlet's run (<c>run --auto-win</c>): every combat won at its start, so the
+/// run says nothing of how it would have fared; null otherwise.</param>
+public sealed record RunConfig(string Game, string Commit, string Champion, string Env, string Rung, bool? AutoWin = null);
 
 /// <summary>One run of an evaluation, as the report needs it (docs: evaluation §3).</summary>
 /// <param name="RunId">The run id the brain knew the run by, as in the decision log (docs: harness §6).</param>

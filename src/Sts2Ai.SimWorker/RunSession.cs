@@ -25,7 +25,9 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>How a run starts: a new singleplayer run of <see cref="Character"/>; a loadout replaces the starting one.</summary>
-internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null);
+/// <param name="AutoWin">The boss gauntlet's rule: every combat, bosses included, is won at its start as the game's
+/// <c>win</c> console command wins it, and its rewards follow as after any win; no combat decision is asked.</param>
+internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null, bool AutoWin = false);
 
 /// <summary>
 /// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator §5.1).
@@ -337,7 +339,11 @@ internal sealed class RunSession : IDisposable
                 _combats.Add(new(Run.CurrentActIndex, Run.TotalFloor, room.Encounter.Id.Entry, room.Encounter.RoomType.ToString(),
                     Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions()));
             }
-            return CombatDecision();
+            if (!Setup.AutoWin) return CombatDecision();
+            // An enemy that comes back or calls others when killed keeps the combat going: kill again, a few times.
+            if (++_progress.AutoWins > 5) throw new InvalidOperationException($"auto-win: the combat goes on after 5 wins: {Describe()}");
+            Await(Win());
+            return false;
         }
         if (_progress.RewardsOffered) throw new InvalidOperationException($"combat over and no screen: {Describe()}");
         _progress.RewardsOffered = true;
@@ -348,6 +354,17 @@ internal sealed class RunSession : IDisposable
             _progress.Left = true;
         }
         return false;
+    }
+
+    /// <summary>The game's <c>WinConsoleCmd</c>: each enemy loses its powers and is killed, then the game checks for the win.</summary>
+    private static async Task Win()
+    {
+        foreach (var enemy in CombatManager.Instance.DebugOnlyGetState()!.Enemies.ToList())
+        {
+            enemy.RemoveAllPowersInternalExcept();
+            await CreatureCmd.Kill(enemy);
+        }
+        await CombatManager.Instance.CheckWinCondition();
     }
 
     private bool CombatDecision()
@@ -572,6 +589,7 @@ internal sealed class RunSession : IDisposable
         /// <summary>Proceeded: the map is open.</summary>
         public bool Left;
         public bool CombatEntered;
+        public int AutoWins;
         public bool RewardsOffered;
         public bool RestSucceeded;
         public bool ChestOpened;

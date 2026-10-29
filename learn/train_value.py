@@ -1138,6 +1138,8 @@ def main(
                 }
                 | ({"act_boss": act_boss(r, e["run_view"]["act"])} if aux_act else {})
             )
+    if any(r["config"].get("auto_win") for r in all_runs):
+        raise LearnError("a boss gauntlet's records (run --auto-win) say nothing of how a run fares: not V's outcomes")
     per_run = {}
     for s in samples:
         per_run[s["key"]] = per_run.get(s["key"], 0) + 1

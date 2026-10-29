@@ -141,6 +141,7 @@ internal static class SelfTest
         NodeWorldPlaysAsTheRun(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);
         CloneKeepsRelicState(pump, seed, Check);
+        AutoWinWinsEveryCombat(pump, seed, Check);
         int workers = r.GetValue(Workers);
         PlanHoldsInTheRun(pump, seed, workers, Check);
         if (workers > 0) PooledMatches(pump, combats, seed, workers, Check);
@@ -497,6 +498,23 @@ internal static class SelfTest
         check("SL clone stops at its node's exit", loaded.AtHorizon && clone.Trace[^1].StartsWith(Surfaces.Map + " ", StringComparison.Ordinal),
             $"{clone.Trace.Count} decisions, the last {clone.Trace[^1]}, at horizon {loaded.AtHorizon}");
         check("SL clone refuses to step past its node's exit", Throws(loaded.Step), $"stepped past {clone.Trace[^1]}");
+    }
+
+    /// <summary>
+    /// The boss gauntlet (<c>run --auto-win</c>): a run with a random macro brain, and a combat brain that must never be
+    /// asked, into the second act. Every combat entered, the first act's boss among them, must end won at no HP lost.
+    /// </summary>
+    private static void AutoWinWinsEveryCombat(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed + 5);
+        using var session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed + 5, 0), AutoWin: true), PromptBrain.Instance,
+            RunCommand.Unasked.Instance, new RandomMacro(rng));
+        for (int i = 0; i < 5000 && !session.IsOver && session.Run.CurrentActIndex < 1; i++) session.Step();
+        var combats = session.Combats;
+        bool boss = combats.Any(c => c.Act == 0 && c.Room == "Boss");
+        var hurt = combats.FirstOrDefault(c => c.End is not { Died: false } end || end.Hp < c.Hp);
+        check("auto-win wins every combat at no HP lost, the first act's boss included", boss && hurt == null && session.Run.CurrentActIndex >= 1,
+            $"act {session.Run.CurrentActIndex}, {combats.Count} combats, boss {boss}, first hurt {hurt}");
     }
 
     /// <summary>
