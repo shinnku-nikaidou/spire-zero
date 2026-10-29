@@ -44,9 +44,12 @@ internal static class Serve
             {
                 var request = ProtocolJson.Deserialize<WorkerRequest>(line);
                 id = request.Id;
-                var reply = request is SlTurnRequest turn
-                    ? new WorkerReply(id, null, null, [], SearchTurn(pump, planner, turn))
-                    : new WorkerReply(id, Search(pump, pimc, request), null, []);
+                var reply = request switch
+                {
+                    SlTurnRequest turn => new WorkerReply(id, null, null, [], SearchTurn(pump, planner, turn)),
+                    SlMacroRequest macro => new WorkerReply(id, null, null, [], Afters: NodeProbe.After(pump, macro.Node, macro.Paths)),
+                    _ => new WorkerReply(id, Search(pump, pimc, request), null, []),
+                };
                 wire.WriteLine(ProtocolJson.Serialize(reply with { GameErrors = HeadlessGame.TakeErrors() }));
             }
             catch (Exception e)

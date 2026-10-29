@@ -1,0 +1,121 @@
+using Sts2Ai.Protocol;
+
+namespace Sts2Ai.Brain;
+
+/// <summary>
+/// L0's search of a decision on the node's clone in SL (docs: macro-brain §2). Each option is played in the real game,
+/// and what the game asks next is its afterstate. While that is still a screen of the node (not the map, not a combat,
+/// not the run's end), the search goes on: a beam over the screen's own actions (a potion's, which every screen
+/// offers, are left out), level by level, keeping the <see cref="Beam"/> states V values best, up to
+/// <see cref="MaxProbes"/> probes in all. A state reached twice is searched once. A state is worth the best state after
+/// it, or V's value of it where the search stops; an option, its afterstate.
+/// A card prompt that needs two picks or more is not searched into: its own decision searches it.
+/// </summary>
+public sealed class CloneSearch(IRunValue value, IMacroClone clone)
+{
+    public const int Beam = 16;
+    public const int MaxProbes = 1024;
+
+    /// <summary>The probes the last search played.</summary>
+    public int Probes { get; private set; }
+
+    /// <param name="root">The decision itself, as a probe of no answers would show it.</param>
+    /// <param name="options">Each option, as the answers it plays from the decision.</param>
+    /// <returns>Each option's afterstate and worth, in order.</returns>
+    public IReadOnlyList<(Afterstate After, double Value)> Search(Afterstate root, IReadOnlyList<IReadOnlyList<string>> options)
+    {
+        // The decision itself is never searched again: an answer that comes back to it adds nothing.
+        var seen = new Dictionary<ulong, Node?> { [Key(root)] = null };
+        var firsts = new List<Node>();
+        var frontier = new List<Node>();
+        var afters = clone.After(options);
+        Probes = options.Count;
+        for (int i = 0; i < options.Count; i++)
+        {
+            ulong key = Key(afters[i]);
+            if (seen.TryGetValue(key, out var same) && same != null)
+            {
+                firsts.Add(same);
+                continue;
+            }
+            var node = new Node(options[i], afters[i], value.Value(afters[i].Run), 1);
+            firsts.Add(node);
+            if (seen.TryAdd(key, node)) frontier.Add(node);
+        }
+        for (int level = 2; frontier.Count > 0 && Probes < MaxProbes; level++)
+        {
+            var parents = frontier.Where(n => Inside(n.After)).OrderByDescending(n => n.Value).Take(Beam).ToList();
+            var jobs = parents.SelectMany(p => Answers(p.After).Select(a => (Parent: p, Path: (IReadOnlyList<string>)[.. p.Path, a]))).ToList();
+            if (jobs.Count > MaxProbes - Probes)
+            {
+                foreach (var job in jobs.Skip(MaxProbes - Probes)) job.Parent.Cut = true;
+                jobs = jobs.Take(MaxProbes - Probes).ToList();
+            }
+            var next = clone.After(jobs.Select(j => j.Path).ToList());
+            Probes += jobs.Count;
+            frontier = [];
+            for (int i = 0; i < jobs.Count; i++)
+            {
+                ulong key = Key(next[i]);
+                if (seen.TryGetValue(key, out var same))
+                {
+                    // Linked only within a level, so that the states form no cycle.
+                    if (same?.Level == level) jobs[i].Parent.Children.Add(same);
+                    continue;
+                }
+                var node = new Node(jobs[i].Path, next[i], value.Value(next[i].Run), level);
+                seen[key] = node;
+                jobs[i].Parent.Children.Add(node);
+                frontier.Add(node);
+            }
+        }
+        return firsts.Select(n => (n.After, n.Worth())).ToList();
+    }
+
+    /// <summary>Whether the search goes on from <paramref name="after"/>: a screen of the node.</summary>
+    private static bool Inside(Afterstate after) => after.Surface is not (null or Surfaces.Map or Surfaces.Combat);
+
+    /// <summary>The answers searched at a screen of the node: its own actions, or a card prompt's single picks.</summary>
+    private static IEnumerable<string> Answers(Afterstate after)
+    {
+        if (after.Screen is not CardChoiceScreen { Choice: var choice })
+        {
+            foreach (var action in after.Legal)
+                if (!IsPotion(action)) yield return action;
+            yield break;
+        }
+        if (choice.Min > 1) yield break;
+        if (choice.Min == 0) yield return Pick([]);
+        if (choice.Max < 1) yield break;
+        foreach (var group in Groups(choice)) yield return Pick([group[0]]);
+    }
+
+    public static bool IsPotion(string action) => action.StartsWith("potion:", StringComparison.Ordinal) || action.StartsWith("discard_potion:", StringComparison.Ordinal);
+
+    /// <summary>A card prompt's answer in a path.</summary>
+    public static string Pick(IEnumerable<int> picks) => "pick:" + string.Join(",", picks.Order());
+
+    /// <summary>The prompt's options grouped by what the player can tell apart (<see cref="ProtocolJson.CardKey"/>), each
+    /// group's indexes in order: picking k of a group picks its first k.</summary>
+    public static IReadOnlyList<IReadOnlyList<int>> Groups(CardChoice choice) =>
+        Enumerable.Range(0, choice.Options.Count).GroupBy(i => ProtocolJson.CardKey(choice.Options[i])).Select(g => (IReadOnlyList<int>)g.ToList()).ToList();
+
+    private static ulong Key(Afterstate after) => ProtocolJson.Hash(after);
+
+    private sealed class Node(IReadOnlyList<string> path, Afterstate after, double value, int level)
+    {
+        private double? _worth;
+
+        public IReadOnlyList<string> Path { get; } = path;
+        public Afterstate After { get; } = after;
+        public double Value { get; } = value;
+        public int Level { get; } = level;
+        public List<Node> Children { get; } = [];
+
+        /// <summary>Some of its answers were never probed, the probes having run out.</summary>
+        public bool Cut { get; set; }
+
+        public double Worth() => _worth ??= Children.Count == 0 ? Value
+            : Math.Max(Children.Max(c => c.Worth()), Cut ? Value : double.NegativeInfinity);
+    }
+}

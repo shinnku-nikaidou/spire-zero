@@ -76,11 +76,12 @@ public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = nu
 /// Card prompts go to the combat side when asked during a combat, to the macro side otherwise.
 ///
 /// In SL the host also sends the current node's checkpoint and each decision taken in it (docs: protocol §2), which
-/// make the node's clone for the combat brain. In NoSL they are refused.
+/// make the node's clone for the combat brain and, with <paramref name="clones"/>, for the macro side, which gets it
+/// opened at each of its decisions (<see cref="MacroDecision.Clone"/>). In NoSL they are refused.
 /// </summary>
 public sealed class Dispatcher(
     string runId, PlayEnvironment env, CombatRoute combat, Route<IChoicePolicy> combatChoices, Route<IMacroPolicy> macro,
-    Route<IChoicePolicy> macroChoices, bool log = false) : ICombatPolicy, IChoicePolicy, IMacroPolicy
+    Route<IChoicePolicy> macroChoices, bool log = false, Func<NodeClone, IMacroClone>? clones = null) : ICombatPolicy, IChoicePolicy, IMacroPolicy
 {
     /// <summary>Every surface outside combat that has a route (docs: harness §4).</summary>
     public static readonly IReadOnlySet<string> MacroSurfaces = new HashSet<string>
@@ -147,6 +148,7 @@ public sealed class Dispatcher(
         var choice = decision.Choice;
         var route = choice.Context.InCombat ? combatChoices : macroChoices;
         var (id, seed, clock) = Begin(route.Brain);
+        if (!choice.Context.InCombat && MacroClone() is { } node) decision = decision.With(node);
         var picks = route.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!choice.Accepts(picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", picks)}], which the prompt does not accept");
@@ -162,6 +164,7 @@ public sealed class Dispatcher(
         _moves.Clear();
         var (id, seed, clock) = Begin(macro.Brain);
         if (!MacroSurfaces.Contains(decision.Surface)) throw new InvalidOperationException($"uncovered surface {decision.Surface}");
+        if (MacroClone() is { } node) decision = decision.With(node);
         var action = macro.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(action)) throw new InvalidOperationException($"{macro.Brain} chose {action} on {decision.Surface}, which is not legal");
@@ -191,6 +194,9 @@ public sealed class Dispatcher(
             throw new InvalidDataException($"node action {action.NodeIndex}:{action.Seq}, expected {_node?.NodeIndex}:{_nodeTrace.Count}");
         _nodeTrace.Add(action.Action);
     }
+
+    /// <summary>SL with <c>clones</c>: the node's clone at this decision, for the macro side.</summary>
+    private IMacroClone? MacroClone() => env == PlayEnvironment.SL && clones != null ? clones(Clone()) : null;
 
     private NodeClone Clone() => new((_node ?? throw new InvalidOperationException("an SL decision before any node checkpoint")).Checkpoint, _nodeTrace.ToList());
 

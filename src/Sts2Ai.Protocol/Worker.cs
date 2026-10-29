@@ -14,6 +14,7 @@ public sealed record WorkerHello(string Game);
 [JsonDerivedType(typeof(PimcWorldRequest), "pimc_world")]
 [JsonDerivedType(typeof(SlWorldRequest), "sl_world")]
 [JsonDerivedType(typeof(SlTurnRequest), "sl_turn")]
+[JsonDerivedType(typeof(SlMacroRequest), "sl_macro")]
 public abstract record WorkerRequest(long Id);
 
 /// <summary>
@@ -54,9 +55,27 @@ public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<Comba
 public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep, double? Floor,
     IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
+/// <summary>
+/// L0's probes of a decision outside combat in a run (docs: macro-brain §2): <see cref="Node"/> loaded and replayed
+/// stands at the decision; each of <see cref="Paths"/> is played from there, in its own load of the clone, and the
+/// reply's <see cref="WorkerReply.Afters"/> holds what the game asks next after each, in order. A path's answers are
+/// macro actions in text form and, for a card prompt, "pick:" and its picks in the prompt's canonical order.
+/// </summary>
+public sealed record SlMacroRequest(long Id, NodeClone Node, IReadOnlyList<IReadOnlyList<string>> Paths) : WorkerRequest(Id);
+
 /// <param name="GameErrors">The game's Log.Error lines while serving the request.</param>
 /// <param name="Turn">The answer to an <see cref="SlTurnRequest"/>.</param>
-public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors, TurnSearch? Turn = null);
+/// <param name="Afters">The answer to an <see cref="SlMacroRequest"/>.</param>
+public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors, TurnSearch? Turn = null,
+    IReadOnlyList<Afterstate>? Afters = null);
+
+/// <summary>
+/// What a path of answers from a decision in a node's clone leads to (<see cref="SlMacroRequest"/>): the run then, and
+/// the next decision the game asks. <see cref="Surface"/> is null once the run is over. A card prompt's options are in
+/// its screen (<see cref="CardChoiceScreen"/>), so its <see cref="Legal"/> is empty; a combat's screen is left out, as
+/// a combat ends a probe.
+/// </summary>
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
 
 /// <summary>A line of play that search found, from its first action, and its value.</summary>
 /// <param name="Nodes">The actions the search simulated after the line's first action, itself included.</param>

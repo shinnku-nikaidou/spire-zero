@@ -207,13 +207,19 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's and plan's search worker processes (default: one per world, --worlds)");
     private readonly Option<string?> _value = Opt.Maybe<string?>("--value", "l0's V: V v0's weights or a net file of V v2 (default: the initial weights)");
     private readonly LeafArgs _leaf = new();
+    private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
+            "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain §2)")
+        .AcceptOnlyFromAmong("screen", "clone");
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
         "self-play only: l0 draws each answer by V's values, softmax at this temperature in V's units (0: the best)");
     private readonly Option<double> _combatExplore = Opt.Of("--combat-explore", 0.0,
         "self-play only: pimc draws each searched action by the search's values, softmax at this temperature in leaf units (0: the best)");
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, .. _leaf.Options, _macroExplore, _combatExplore];
+    private readonly Option<double> _cardExplore = Opt.Of("--card-explore", 0.0,
+        "self-play only: at each card reward, the chance that l0 draws its outcome evenly among its cards and skipping, whatever V says");
+
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, _afterstates, .. _leaf.Options, _macroExplore, _combatExplore, _cardExplore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -231,12 +237,18 @@ internal sealed class ChampionArgs(bool file)
             if (macro != "l0") throw new CliException("--value weighs l0's V; it needs --macro l0");
             value = RunValue.Read(File.ReadAllText(valueFile));
         }
+        bool clone = r.GetValue(_afterstates) == "clone";
+        if (clone && macro != "l0") throw new CliException("--afterstates is l0's; it needs --macro l0");
         double macroExplore = r.GetValue(_macroExplore), combatExplore = r.GetValue(_combatExplore);
         if (macroExplore is not >= 0 || combatExplore is not >= 0) throw new CliException("--macro-explore and --combat-explore are temperatures, from 0");
         if (macroExplore > 0 && macro != "l0") throw new CliException("--macro-explore is l0's; it needs --macro l0");
         if (combatExplore > 0 && policy != "pimc") throw new CliException("--combat-explore is pimc's; it needs --policy pimc");
+        double cardExplore = r.GetValue(_cardExplore);
+        if (cardExplore is not (>= 0 and <= 1)) throw new CliException("--card-explore is a share of card rewards, from 0 to 1");
+        if (cardExplore > 0 && macro != "l0") throw new CliException("--card-explore is l0's; it needs --macro l0");
         var leaf = _leaf.Read(r);
         if (!leaf.IsDefault && policy is not ("pimc" or "plan")) throw new CliException("--leaf and --combat-net value the search's leaves; they need --policy pimc or plan");
-        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore);
+        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore, clone,
+            cardExplore);
     }
 }

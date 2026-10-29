@@ -350,14 +350,17 @@ internal static class BrainCommand
 /// <param name="MacroExplore">For self-play only (docs: learning §5): l0's softmax temperature over V's values, in V's
 /// units (--macro-explore); 0 for none.</param>
 /// <param name="CombatExplore">The same for pimc over the search's values, in the leaf's units (--combat-explore).</param>
+/// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
+/// <param name="CardExplore">For self-play only: the share of card rewards whose outcome l0 draws evenly, whatever V
+/// says (--card-explore, <see cref="CardDraw"/>); 0 for none.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue Value, string? ValueFile,
-    LeafChoice Leaf, double MacroExplore, double CombatExplore)
+    LeafChoice Leaf, double MacroExplore, double CombatExplore, bool OnClone = false, double CardExplore = 0)
 {
     /// <summary>Whether it explores, which only self-play does.</summary>
-    public bool Explores => MacroExplore > 0 || CombatExplore > 0;
+    public bool Explores => MacroExplore > 0 || CombatExplore > 0 || CardExplore > 0;
 
-    /// <summary>The search's workers (pimc's, plan's). A run holds its process's one live game, so search runs in other processes.</summary>
-    public WorkerPool? Pool() => Searches ? new WorkerPool(Cli.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
+    /// <summary>The search's workers (pimc's, plan's, l0's on the clone). A run holds its process's one live game, so search runs in other processes.</summary>
+    public WorkerPool? Pool() => Searches || OnClone ? new WorkerPool(Cli.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
 
     /// <summary>Whether the combat brain searches: pimc, or plan in SL.</summary>
     private bool Searches => Policy is "pimc" or "plan";
@@ -366,16 +369,18 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// One Harness per run. Combat prompts go to p0 (<see cref="PromptBrain"/>), which search worlds ask too.
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
     /// this process or over the wire; so do the exploring brains, each from its own. In SL, pimc searches this turn on
-    /// the node's clone and plan the whole combat (docs: combat-brain §3); nothing else looks further than in NoSL. The
-    /// search runs in <paramref name="pool"/> (<see cref="Pool"/>).
+    /// the node's clone and plan the whole combat (docs: combat-brain §3), and with --afterstates clone l0 plays each
+    /// option on it (docs: macro-brain §2); nothing else looks further than in NoSL. The search runs in
+    /// <paramref name="pool"/> (<see cref="Pool"/>).
     /// </summary>
     public Func<Hello, Dispatcher> Harness(WorkerPool? pool, bool log) => hello =>
     {
         if (!Enum.TryParse<PlayEnvironment>(hello.Env, out var env)) throw new NotSupportedException($"no environment {hello.Env}");
         if (Policy == "plan" && env != PlayEnvironment.SL) throw new NotSupportedException($"plan plays in SL only, not in {env}");
+        if (OnClone && env != PlayEnvironment.SL) throw new NotSupportedException($"l0 plays on the node's clone in SL only, not in {env}");
         Random Rng(string stream) => new(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + stream)));
         var rng = Rng("");
-        var combat = pool == null ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
+        var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
             : Policy == "plan" ? new PooledPlanner(pool).Route(Budget, Combat)
             : new PooledPimc(pool).Route(Budget, Combat);
         if (CombatExplore > 0) combat = combat.Exploring(new Softmax(CombatExplore, Rng(":explore combat")));
@@ -383,8 +388,10 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         Dispatcher dispatcher;
         if (Macro == "l0")
         {
-            var l0 = new MacroBrain(Value, MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null);
-            dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log);
+            var l0 = new MacroBrain(Value, MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null,
+                CardExplore > 0 ? new CardDraw(CardExplore, Rng(":explore cards")) : null);
+            dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log,
+                OnClone ? node => new PooledClone(pool!, node) : null);
         }
         else dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
         if (dispatcher.Champion != Name) throw new InvalidOperationException($"champion {dispatcher.Champion} goes by {Name} in champion files");
@@ -394,8 +401,9 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// <summary>The combat brain, pimc or plan by its leaf's names unless it is the default one, then its exploration if any.</summary>
     private string Combat => Policy + Leaf.Suffix + Exploration(CombatExplore);
 
-    /// <summary>l0 by its V's name, unless V has the initial weights, then its exploration if any.</summary>
-    private string L0 => (Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}") + Exploration(MacroExplore);
+    /// <summary>l0 by its V's name, unless V has the initial weights, then "clone" if it plays on the node's clone, then its exploration if any.</summary>
+    private string L0 => (Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}") + (OnClone ? " clone" : "") + Exploration(MacroExplore)
+        + (CardExplore > 0 ? FormattableString.Invariant($" cards {CardExplore}") : "");
 
     private static string Exploration(double temperature) => temperature > 0 ? FormattableString.Invariant($" explore {temperature}") : "";
 
@@ -430,7 +438,9 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
             if (Budget.Follow) options["follow"] = "true";
         }
         if (ValueFile != null) options["value"] = ValueFile;
+        if (OnClone) options["afterstates"] = "clone";
         if (MacroExplore > 0) options["macro-explore"] = MacroExplore.ToString(CultureInfo.InvariantCulture);
+        if (CardExplore > 0) options["card-explore"] = CardExplore.ToString(CultureInfo.InvariantCulture);
         if (CombatExplore > 0) options["combat-explore"] = CombatExplore.ToString(CultureInfo.InvariantCulture);
         if (Leaf.WeightsPath != null) options["leaf"] = Leaf.WeightsPath;
         if (Leaf.NetPath != null) options["combat-net"] = Leaf.NetPath;
