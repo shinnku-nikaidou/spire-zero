@@ -86,7 +86,7 @@ def test_a_boss_is_worth_the_floors_its_winners_went_on_to():
     win = {"act": 1, "room": "Boss", "hp": 50, "max_hp": 80, "end": {"died": False, "hp": 40, "max_hp": 80}}
     runs = [{"outcome": "lost", "floor": 40, "combats": [win]}, {"outcome": "lost", "floor": 36, "combats": [win]}]
     runs.append({"outcome": "lost", "floor": 33, "combats": [win | {"end": {"died": True}}]})
-    assert tv.boss_worth(runs, 64) == {0: 0.0, 1: 5.0}
+    assert tv.boss_worth(runs, 64) == {0: 0.0, 1: 5.0, 2: 0.0}
 
 
 def test_centred_values_lose_their_groups_mean():
