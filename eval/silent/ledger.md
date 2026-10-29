@@ -4,8 +4,10 @@ The lineage of the Silent's brain: which brain played which data, and which data
 learning §6). The session that runs the training loop keeps it, one row per self-play batch and per weights file. Raw
 data is in `data/silent/ENV/` (outside git); evaluations are in `leaderboard.md` and `reports/`.
 
-Champions now: NoSL `champions/nosl.json` (pimc c2 8x300, L0 n2-b0.03). SL has none yet: it needs the SL planner's
-full promotion-1 evaluation.
+Champions now: NoSL `champions/nosl.json` (pimc c2 8x300, L0 n2-b0.03). SL `champions/sl.json` (plan c2 at the
+default medium effort, L0 n2-b0.03), set 2026-10-28 by its promotion-1 baseline at `3699fc1` (`8defd6a`'s sim): 200
+runs, floor 28.25, 0 won, 0 game errors (`data/silent/sl/eval/2026-10-28-eval-champion-promotion-1` seeds 40–199 and
+`…-promotion-1b` seeds 0–39), no gate.
 
 ## Self-play batches
 
