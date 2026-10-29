@@ -23,3 +23,9 @@ The two environments are never ranked together, nor two characters or ascensions
 | combat play, combat prompts random, macro l0, macro prompts l0 (void) | 2026-10-27 | `18fdb07` | 0.0 % (0/200, 0.0 %–1.9 %) | 11.72 | 54 | 0.1 |
 | combat play, combat prompts p0, macro random, macro prompts random (void) | 2026-10-27 | `dc0105a` | 0.0 % (0/200, 0.0 %–1.9 %) | 8.12 | 3 | 0.2 |
 | combat play, combat prompts random, macro random, macro prompts random (void) | 2026-10-27 | `18fdb07` | 0.0 % (0/200, 0.0 %–1.9 %) | 8.09 | 5 | 0.1 |
+
+### SL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 n2-b0.03, macro prompts l0 n2-b0.03 **(champion)** | 2026-10-28 | `3699fc1` | 0.0 % (0/200, 0.0 %–1.9 %) | 28.25 | 192 | 194.8 |
