@@ -8,31 +8,38 @@ namespace Sts2Ai.Brain;
 public sealed record NetTest(RunView Run, double Value);
 
 /// <summary>
-/// V v2 as <c>learn/train_value.py</c> writes it (docs: learning §1).
+/// V as <c>learn/v/export.py</c> writes it (pure V), or as <c>learn/train_value.py</c> wrote it (V v2, which also read
+/// V v0's features) (docs: learning §1).
 /// </summary>
 /// <param name="Objective">What <see cref="RunNet.Value"/> returns: "floor", the floor expected to be reached, or "win",
 /// the chance to survive every floor.</param>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
-/// <param name="Features">The features of V v0 (<see cref="RunValue.Features"/>) the net reads, in order, with the
-/// <paramref name="Mean"/> and <paramref name="Std"/> that standardize them.</param>
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, output the hazards.</param>
+/// <param name="State">Pure V's: the run's numbers the net reads, by name, with the mean and std that standardize them.</param>
+/// <param name="Features">V v2's: the features of V v0 (<see cref="RunValue.Features"/>) the net reads, in order, with
+/// the <paramref name="Mean"/> and <paramref name="Std"/> that standardize them.</param>
 public sealed record NetFile(
-    string Name, string Objective, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab,
-    IReadOnlyList<string> Features, IReadOnlyList<double> Mean, IReadOnlyList<double> Std, string Onnx, IReadOnlyList<NetTest> Tests);
+    string Name, string Objective, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
+    IReadOnlyList<NetTest> Tests, NetState? State = null, IReadOnlyList<string>? Features = null,
+    IReadOnlyList<double>? Mean = null, IReadOnlyList<double>? Std = null);
+
+/// <summary>The run's numbers a pure V net reads (<c>learn/v/encode.py</c>'s STATE), and how they are standardized.</summary>
+public sealed record NetState(IReadOnlyList<string> Names, IReadOnlyList<double> Mean, IReadOnlyList<double> Std);
 
 /// <summary>A card as the net reads it: its id, upgrade level and the ids of its enchantment and affliction.</summary>
 public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers);
 
-/// <summary>A run as the net reads it, besides V v0's features.</summary>
+/// <summary>A run's ids as the net reads them.</summary>
 public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<string> Relics, IReadOnlyList<string> Potions,
-    IReadOnlyList<string> Context);
+    IReadOnlyList<string> Context, IReadOnlyList<string> Map);
 
 /// <summary>
-/// V v2 (docs: learning §1): a net over the run's cards, relics, potions and context, and V v0's features, run by ONNX
-/// Runtime; a net that declares them also reads the cards' and relics' numbers and the ascension
-/// (<see cref="NetNumbers"/>). The graph (<c>learn/train_value.py</c> defines it) gives one hazard per floor: the chance
-/// to die on that floor if still alive there. The value is read from those chances from the current floor on
+/// V (docs: learning §1), run by ONNX Runtime: a net over the run's cards, relics, potions and context, and, for pure V
+/// (<c>learn/v/encode.py</c>), the map points still reachable and the run's numbers (<see cref="NetFile.State"/>); V v2
+/// read V v0's features and the cards' and relics' numbers (<see cref="NetNumbers"/>) instead. Each input is fed only
+/// if the graph declares it, so both kinds of file load. The graph gives one hazard per floor: the chance to die on that
+/// floor if still alive there. The value is read from those chances from the current floor on
 /// (<see cref="NetFile.Objective"/>). This class only turns a run into the graph's inputs.
 /// </summary>
 public sealed class RunNet : IRunValue, IDisposable
@@ -87,8 +94,8 @@ public sealed class RunNet : IRunValue, IDisposable
     public void Dispose() => _session.Dispose();
 
     /// <summary>
-    /// The net's tokens of a run, which <c>learn/train_value.py</c> reads the same way: each card; each relic, with
-    /// ":used" once used up; each potion; and the context: character, act, boss(es) and the act's ancient.
+    /// The net's tokens of a run, which <c>learn/v/encode.py</c> reads the same way: each card; each relic, with ":used"
+    /// once used up; each potion; the context: character, act, boss(es) and the act's ancient; and the map (<see cref="MapTokens"/>).
     /// </summary>
     public static RunTokens Tokens(RunView run)
     {
@@ -99,7 +106,8 @@ public sealed class RunNet : IRunValue, IDisposable
             run.Deck.Select(c => new CardToken(c.Id, c.Up ?? 0, Modifiers(c))).ToList(),
             run.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id).ToList(),
             run.Potions.OfType<string>().ToList(),
-            context);
+            context,
+            MapTokens(run.Map));
 
         static IReadOnlyList<string> Modifiers(CardView card)
         {
@@ -109,6 +117,38 @@ public sealed class RunNet : IRunValue, IDisposable
             return ids;
         }
     }
+
+    /// <summary>
+    /// Each map point a path leads to from where the player is (the last visited point, or the start before any), the
+    /// player's own left out, sorted by (row, col): its type and how many floors ahead it is ("Elite+3"), ":quest" if a
+    /// quest marks it.
+    /// </summary>
+    public static IReadOnlyList<string> MapTokens(MapView map)
+    {
+        var points = map.Points.ToDictionary(p => (p.Col, p.Row));
+        var here = map.Visited.Count > 0 ? (map.Visited[^1].Col, map.Visited[^1].Row) : points.Keys.MinBy(k => (k.Row, k.Col));
+        var seen = new HashSet<(int Col, int Row)>();
+        var todo = new Stack<(int, int)>([here]);
+        while (todo.Count > 0)
+            foreach (var next in points[todo.Pop()].Next)
+                if (points.ContainsKey((next.Col, next.Row)) && seen.Add((next.Col, next.Row)))
+                    todo.Push((next.Col, next.Row));
+        return seen.OrderBy(k => k.Row).ThenBy(k => k.Col)
+            .Select(k => $"{points[k].Type}+{k.Row - here.Row}" + (points[k].Quest == true ? ":quest" : ""))
+            .ToList();
+    }
+
+    /// <summary>The run's number a pure V net reads by this name (<c>learn/v/encode.py</c>'s state).</summary>
+    private static double StateValue(RunView run, string name) => name switch
+    {
+        "floor" => run.Floor,
+        "hp" => run.Hp,
+        "max_hp" => run.MaxHp,
+        "gold" => run.Gold,
+        "ascension" => run.Ascension,
+        "potion_slots" => run.Potions.Count,
+        _ => throw new InvalidDataException($"a net reads the run's {name}, which RunNet does not know"),
+    };
 
     /// <summary>Per floor, the chance to die there if still alive there: the graph on a batch of one run.</summary>
     private float[] Hazards(RunView run)
@@ -133,10 +173,6 @@ public sealed class RunNet : IRunValue, IDisposable
                 modMask[0, k, j] = 1;
             }
         }
-        var features = RunValue.Features(run);
-        var scalars = new DenseTensor<float>([1, _file.Features.Count]);
-        for (int i = 0; i < _file.Features.Count; i++)
-            scalars[0, i] = (float)((features.GetValueOrDefault(_file.Features[i]) - _file.Mean[i]) / _file.Std[i]);
         var inputs = new List<NamedOnnxValue>
         {
             NamedOnnxValue.CreateFromTensor("cards", cards), NamedOnnxValue.CreateFromTensor("ups", ups),
@@ -146,7 +182,22 @@ public sealed class RunNet : IRunValue, IDisposable
         inputs.AddRange(Bag("relics", "relic_mask", tokens.Relics));
         inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
         inputs.AddRange(Bag("context", "context_mask", tokens.Context));
-        inputs.Add(NamedOnnxValue.CreateFromTensor("features", scalars));
+        inputs.AddRange(Bag("map", "map_mask", tokens.Map));
+        if (_file.State is { } state)
+        {
+            var values = new DenseTensor<float>([1, state.Names.Count]);
+            for (int i = 0; i < state.Names.Count; i++)
+                values[0, i] = (float)((StateValue(run, state.Names[i]) - state.Mean[i]) / state.Std[i]);
+            inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
+        }
+        if (_file.Features is { } names)
+        {
+            var features = RunValue.Features(run);
+            var scalars = new DenseTensor<float>([1, names.Count]);
+            for (int i = 0; i < names.Count; i++)
+                scalars[0, i] = (float)((features.GetValueOrDefault(names[i]) - _file.Mean![i]) / _file.Std![i]);
+            inputs.Add(NamedOnnxValue.CreateFromTensor("features", scalars));
+        }
         inputs.AddRange(NetNumbers.Cards(run.Deck, Index));
         inputs.AddRange(NetNumbers.Relics(run.Relics, Index));
         var extra = new DenseTensor<float>([1, 1]);
