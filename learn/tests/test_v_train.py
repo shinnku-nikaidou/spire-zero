@@ -13,7 +13,7 @@ import bosslab
 import common
 from common import LearnError
 from v import data, encode, export, train
-from v.net import Batch, Net, centred, expected_floor, explored
+from v.net import Batch, Net, centred, expected_floor, expected_progress, explored
 
 
 def record(run_id, floor, outcome="lost", combats=(), **config):
@@ -27,8 +27,9 @@ def record(run_id, floor, outcome="lost", combats=(), **config):
     }
 
 
-def write_runs(tmp_path, runs=10, auto_win=False):
-    """A log and its records: runs of three decisions each (floors 1–3), the run i reaching floor 4 + i % 4."""
+def write_runs(tmp_path, runs=10, auto_win=False, gauntlet=False):
+    """A log and its records: runs of three decisions each (floors 1–3), the run i reaching floor 4 + i % 4; in the
+    gauntlet, each run dies in an elite fight on its last floor, having taken a tenth of its HP per floor reached."""
     log, recs = tmp_path / "log.jsonl", tmp_path / "rec.jsonl"
     with open(log, "w") as lf, open(recs, "w") as rf:
         for i in range(runs):
@@ -38,10 +39,15 @@ def write_runs(tmp_path, runs=10, auto_win=False):
                 lf.write(
                     json.dumps({"run": run, "decision_id": d, "brain": "l0 n2 explore 0.01", "run_view": view}) + "\n"
                 )
-            combats = [{"floor": f, "hp": 60, "max_hp": 70, "end": {"died": False, "hp": 55}} for f in (2, 3)]
-            rf.write(
-                json.dumps(record(run, 4 + i % 4, combats=combats, **({"auto_win": True} if auto_win else {}))) + "\n"
-            )
+            combats = [
+                {"floor": f, "room": "Monster", "hp": 60, "max_hp": 70, "end": {"died": False, "hp": 55}}
+                for f in (2, 3)
+            ]
+            config = {"auto_win": True} if auto_win else {"gauntlet": True} if gauntlet else {}
+            if gauntlet:
+                end = {"died": True, "hp": 0, "enemy_hp": 100 - 10 * (4 + i % 4), "enemy_max_hp": 100}
+                combats.append({"floor": 4 + i % 4, "room": "Elite", "hp": 40, "max_hp": 70, "end": end})
+            rf.write(json.dumps(record(run, 4 + i % 4, combats=combats, **config)) + "\n")
     lists = tmp_path / "smoke"
     (tmp_path / "smoke-logs.txt").write_text(f"{log}\n")
     (tmp_path / "smoke-recs.txt").write_text(f"{recs}\n")
@@ -68,6 +74,31 @@ def test_each_decision_is_a_sample_of_where_its_run_ended_and_each_run_weighs_on
 def test_a_boss_gauntlet_is_refused(tmp_path):
     with pytest.raises(LearnError, match="auto-win"):
         data.read_runs(*common.lists(write_runs(tmp_path, auto_win=True)), "SILENT", 64)
+
+
+def test_a_whole_runs_v_refuses_the_gauntlets_runs_and_the_gauntlets_v_whole_runs(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    with pytest.raises(LearnError, match="gauntlet"):
+        data.read_runs(*common.lists(write_runs(tmp_path / "a", gauntlet=True)), "SILENT", 64)
+    with pytest.raises(LearnError, match="gauntlet"):
+        data.read_runs(*common.lists(write_runs(tmp_path / "b")), "SILENT", 64, gauntlet=True)
+
+
+def test_a_gauntlet_run_ends_where_it_ended_with_the_share_of_the_enemies_hp_it_took():
+    elite = {"floor": 9, "room": "Elite", "hp": 30, "max_hp": 70}
+    died = record("a", 9, combats=[elite | {"end": {"died": True, "enemy_hp": 40, "enemy_max_hp": 100}}])
+    event = record("b", 12, combats=[elite | {"end": {"died": False, "hp": 20, "enemy_hp": 0, "enemy_max_hp": 100}}])
+    won = record("c", 48, "won", combats=[elite | {"end": {"died": False, "hp": 20}}])
+    assert [data.death_share(r) for r in (died, event)] == [0.6, 0.0]
+    assert [data.progress(r) for r in (died, event, won)] == [9.6, 12.0, 49.0]
+
+
+def test_the_gauntlets_samples_end_where_their_run_ended_with_its_share_and_their_fought_next_combats(tmp_path):
+    samples, _, _ = data.read_runs(*common.lists(write_runs(tmp_path, gauntlet=True)), "SILENT", 64, gauntlet=True)
+    first = samples[0]
+    assert (first["end"], first["kind"], first["share"]) == (4, "died", pytest.approx(0.4))
+    assert first["next"] == [40 / 70]  # the elite fight it died in, not the monsters won at their start
 
 
 def test_a_boss_is_worth_the_floors_its_winners_went_on_to():
@@ -143,6 +174,40 @@ def test_the_onnx_graph_gives_the_test_runs_the_values_torch_gave_them():
         [hazards] = ReferenceEvaluator(graph).run(None, feed)
         value = float(expected_floor(torch.tensor(hazards), b.start)[0])
         assert math.isclose(value, test["value"], rel_tol=1e-5)
+
+
+def test_the_expected_progress_adds_the_chance_to_end_on_each_floor_times_its_share():
+    h, s = torch.tensor([[0.0, 0.5, 1.0, 0.0]]), torch.tensor([[0.9, 0.2, 0.6, 0.9]])
+    # From floor 1: ends on 1 (half the time, share 0.2) or on 2 (share 0.6).
+    assert math.isclose(float(expected_progress(h, s, torch.tensor([1]))[0]), 1.5 + 0.5 * 0.2 + 0.5 * 0.6, rel_tol=1e-6)
+
+
+def test_a_gauntlet_nets_onnx_graph_gives_the_hazards_then_the_shares_and_the_test_runs_their_progress():
+    samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") | {"share": 0.5} for f in (1, 2, 3)]
+    tables = train.vocab(samples * 3)
+    torch.manual_seed(0)
+    model = Net({t: len(ids) for t, ids in tables.items()}, 16, shares=True)
+    net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
+    assert net["objective"] == "progress"
+    graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    for test in net["tests"]:
+        b = Batch([data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu")
+        feed = {name: x.numpy() for name, x in zip(encode.INPUTS, b.inputs(), strict=True)}
+        [out] = ReferenceEvaluator(graph).run(None, feed)
+        assert out.shape == (1, 32)
+        out = torch.tensor(out)
+        value = float(expected_progress(out[:, :16], out[:, 16:], b.start)[0])
+        assert math.isclose(value, test["value"], rel_tol=1e-5)
+
+
+def test_training_the_gauntlets_v_writes_a_progress_net(tmp_path):
+    out = tmp_path / "net.json"
+    args = ["--list", write_runs(tmp_path, gauntlet=True), "--name", "t", "--out", str(out), "--gauntlet"]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code == 0, result.output
+    net = json.loads(out.read_text())
+    assert net["objective"] == "progress" and net["fit"]["gauntlet"] and net["fit"]["runs"] == 10
 
 
 def test_training_writes_a_net_file_with_its_report(tmp_path):

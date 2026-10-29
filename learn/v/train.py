@@ -276,9 +276,12 @@ def main(
     base_hazard = ((deaths + 0.5) / (alive + 1)).clamp(1e-4, 1 - 1e-4)
     base_logits = torch.log(base_hazard / (1 - base_hazard)).float().to(device)
     # The gauntlet's baseline share: the mean share taken where the training runs ended.
-    ended = [s for s in train if s["kind"] == "died"]
-    base_share = min(max(sum(s["share"] * s["weight"] for s in ended) / max(1e-9, sum(s["weight"] for s in ended)), 1e-4), 1 - 1e-4)
-    base_share_logit = math.log(base_share / (1 - base_share)) if gauntlet else 0.0
+    base_share_logit = 0.0
+    if gauntlet:
+        ended = [s for s in train if s["kind"] == "died"]
+        taken = sum(s["share"] * s["weight"] for s in ended) / max(1e-9, sum(s["weight"] for s in ended))
+        base_share = min(max(taken, 1e-4), 1 - 1e-4)
+        base_share_logit = math.log(base_share / (1 - base_share))
 
     def evaluate(model):
         total, aux_total, rows = 0.0, 0.0, []
@@ -365,6 +368,7 @@ def main(
         "held_out_runs": len({s["key"] for s in test}),
         "samples": len(samples),
         "won": sum(1 for r in runs if r["outcome"] == "won"),
+        "gauntlet": gauntlet,
         "vocab": {t: len(ids) for t, ids in tables.items()},
         "held_out_loss": held,
         "held_out_loss_floor_only": base_loss,

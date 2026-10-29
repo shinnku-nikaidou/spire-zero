@@ -106,7 +106,9 @@ def read_runs(
                 s = sample(e["run"], view, floors, r["floor"], "died" if ended else "censored")
                 s["share"] = 1.0 if r["outcome"] == "won" else death_share(r)
             else:
-                s = sample(e["run"], view, floors, r["floor"], {"won": "won", "lost": "died"}.get(r["outcome"], "censored"))
+                s = sample(
+                    e["run"], view, floors, r["floor"], {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
+                )
             nxt = next_combats(r, view["floor"], fought_only=gauntlet)
             samples.append(s | {"key": (i, e["run"]), "floor": r["floor"], "next": nxt})
     per_run = {}

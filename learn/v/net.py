@@ -166,7 +166,9 @@ def values(model, b: Batch):
 
 def share_loss(logits, b: Batch):
     """Per sample, the cross-entropy of the share head at the floor the run ended on (none for a censored run)."""
-    per_floor = nn.functional.binary_cross_entropy_with_logits(logits, b.share[:, None].expand_as(logits), reduction="none")
+    per_floor = nn.functional.binary_cross_entropy_with_logits(
+        logits, b.share[:, None].expand_as(logits), reduction="none"
+    )
     return (per_floor * b.target * b.label_mask).sum(1)
 
 
