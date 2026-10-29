@@ -49,3 +49,4 @@ Every file is `weights/silent/NAME.json` (in git). V v0's initial weights are bu
 | pure-1 | pure V (learn/v/: ids and raw state only, no pull), runs only | g0–g3 (1,617 runs) | not yet: SL report (plan v4 step 3) | – |
 | pure-1-b | pure V + a0 decision-time boss sims (2,358 act 0 card rewards of g3) | g0–g3 (1,617 runs) | not yet: SL report (plan v4 step 3) | – |
 | pure-1-d | pure V + door states s0, s1 (1,891 real-run doors at the act 0 / act 1 boss) | g0–g3 (1,617 runs) | not yet: SL report (plan v4 step 3) | – |
+| pure-1-g | pure V + door states s0, s1 + the boss gauntlet pilot's doors (900 doors, acts 0–2, `sl/forks/2026-10-29-gauntlet`) | g0–g3 (1,617 runs) | not yet: SL report (plan v4 step 3) | – |
