@@ -36,7 +36,7 @@ internal sealed record MapRoute(MapCoord? At, IReadOnlyList<MapCoord> Points)
 internal sealed class MapMark
 {
     private const int Segments = 48;
-    private static readonly Color Purple = new(0.75f, 0.35f, 1f);
+    private static readonly Color Purple = Panel.Accent;
 
     private readonly CanvasLayer _layer;
     private readonly Line2D _ring = new() { Width = 7, DefaultColor = Purple, Closed = true, Antialiased = true, Visible = false };
@@ -51,14 +51,15 @@ internal sealed class MapMark
     }
 
     /// <summary>Marks a route, or nothing for null; once per frame.</summary>
-    public void Show(MapRoute? route, bool visible)
+    /// <param name="whole">The lines along the route too, not only the ring on its next point.</param>
+    public void Show(MapRoute? route, bool visible, bool whole = true)
     {
         if (route != _route || _point != null && !GodotObject.IsInstanceValid(_point)) Find(route);
         _ring.Visible = visible && _point != null && _point.IsVisibleInTree();
         foreach (var (line, dots) in _paths)
         {
             // A path's line runs from its first dot to its last, so it stops short of the points' icons.
-            line.Visible = _ring.Visible && GodotObject.IsInstanceValid(dots[0]) && GodotObject.IsInstanceValid(dots[^1]);
+            line.Visible = _ring.Visible && whole && GodotObject.IsInstanceValid(dots[0]) && GodotObject.IsInstanceValid(dots[^1]);
             if (line.Visible) line.Points = [Center(dots[0]), Center(dots[^1])];
         }
         if (!_ring.Visible) return;

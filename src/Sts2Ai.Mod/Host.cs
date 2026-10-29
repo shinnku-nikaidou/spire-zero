@@ -34,8 +34,9 @@ internal static class Host
             var harmony = new Harmony("sts2ai.mod");
             ChoiceContexts.Patch(harmony);
             NodeRecord.Patch(harmony);
+            SettingsTab.Patch(harmony);
             _assist = new Assist(BrainLink.Start(BrainSocket.DefaultPath), version);
-            Log.Info($"{Tag} assist mode, {_assist.Env}, brain at {BrainSocket.DefaultPath}");
+            Log.Info($"{Tag} assist mode, {Settings.Current.Env}, brain at {BrainSocket.DefaultPath}");
         }
         ((SceneTree)Engine.GetMainLoop()).ProcessFrame += Tick;
     }
@@ -44,10 +45,9 @@ internal static class Host
     {
         try
         {
-            _panel ??= new Panel((SceneTree)Engine.GetMainLoop(), _assist?.Env == PlayEnvironment.SL,
-                _assist == null ? null : sl => _assist.Switch(sl ? PlayEnvironment.SL : PlayEnvironment.NoSL));
+            _panel ??= new Panel((SceneTree)Engine.GetMainLoop(), _assist == null ? null : env => Settings.Set(Settings.Current with { Env = env }));
             _panel.Poll();
-            if (_assist == null) _panel.Show(_off!);
+            if (_assist == null) _panel.Show("—", "off", null, _off!);
             else _assist.Tick(_panel);
             _lastError = null;
         }
@@ -58,7 +58,7 @@ internal static class Host
             if (error == _lastError) return;
             _lastError = error;
             Log.Error($"{Tag} {error}");
-            _panel?.Show($"error: {e.Message}");
+            _panel?.Show("—", "error", null, "Mod error", e.Message, Tone.Error);
         }
     }
 }

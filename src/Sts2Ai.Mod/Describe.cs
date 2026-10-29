@@ -5,37 +5,49 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Mod;
 
+/// <summary>A brain's answer as the panel shows it (docs: output §2).</summary>
+/// <param name="Next">The action to take.</param>
+/// <param name="Then">The plan after it: the rest of the turn in combat, the rooms the route goes through on the map.</param>
+/// <param name="Route">Whether <paramref name="Then"/> is a map route, shown as rooms rather than numbered steps.</param>
+/// <param name="Later">What the plan holds past <paramref name="Then"/>, such as later turns; null for nothing.</param>
+/// <param name="Options">The first actions the brain scored, best first; empty when it scored one.</param>
+internal sealed record Shown(string Next, IReadOnlyList<string> Then, bool Route, string? Later, IReadOnlyList<Shown.Option> Options)
+{
+    public sealed record Option(string Name, double Value, double Ci);
+}
+
 /// <summary>
 /// A brain's answer as the player reads it: each action named as the screen shows it, in the game's language, from
 /// the observation it answered. An id the game has no text for is shown as is.
 /// </summary>
 internal static partial class Describe
 {
-    public static string[] Recommendation(Recommendation answer, Observation obs)
+    public static Shown Recommendation(Recommendation answer, Observation obs)
     {
-        // On the map, the panel rings the point the answer goes to and draws the route after it (MapMark).
-        bool map = ActionText.Is(answer.Action, "map", out _);
-        var lines = new List<string> { $"→ {Action(answer.Action, obs)}{(map ? ", the purple ring on the map" : "")}" };
-        if (answer.Plan is { Count: > 0 } plan)
-            lines.Add(map ? "then the purple line to the boss" : obs.Screen is CombatScreen ? Turn(answer.Action, plan, obs) : "then " + string.Join(", ", plan.Select(a => Action(a, obs))));
-        if (answer.Candidates is { Count: > 1 } candidates)
-            lines.Add(string.Join("   ", candidates.Take(3).Select(c => $"{Action(c.Action, obs)} {c.Value:0.0}±{c.Ci:0.0}")));
-        return [.. lines];
+        var plan = answer.Plan ?? [];
+        var options = answer.Candidates is { Count: > 1 } candidates
+            ? candidates.Take(3).Select(c => new Shown.Option(Action(c.Action, obs), c.Value, c.Ci)).ToList()
+            : [];
+        string next = Action(answer.Action, obs);
+        // On the map, the route's rings and lines are drawn on the map itself (MapMark); the panel names its rooms.
+        if (ActionText.Is(answer.Action, "map", out _)) return new(next, plan.Select(a => Room(a, obs.Run.Map)).ToList(), true, null, options);
+        if (obs.Screen is not CombatScreen) return new(next, plan.Select(a => Action(a, obs)).ToList(), false, null, options);
+        var (turn, later) = Turn(answer.Action, plan);
+        return new(next, turn.Skip(1).Select(a => Action(a, obs)).ToList(), false,
+            later == 0 ? null : $"{later} more turn{(later > 1 ? "s" : "")} planned", options);
     }
 
     /// <summary>
-    /// A combat plan from the action on to this turn's end. The SL planner plans the whole combat, but later turns play
-    /// cards not drawn yet, which the screen cannot name: they are only counted.
+    /// A combat plan from the action on to this turn's end, and how many turns it plans after that. The SL planner plans
+    /// the whole combat, but later turns play cards not drawn yet, which the screen cannot name: they are only counted.
     /// </summary>
-    private static string Turn(string first, IReadOnlyList<string> plan, Observation obs)
+    public static (IReadOnlyList<string> Turn, int Later) Turn(string first, IReadOnlyList<string> plan)
     {
         static bool Ends(string a) => CombatAction.TryParse(a, out var c) && c.Kind == CombatActionKind.EndTurn;
         var all = plan.Prepend(first).ToList();
         int end = all.FindIndex(Ends);
-        var turn = all.Skip(1).Take(end < 0 ? all.Count : end).Select(a => Action(a, obs)).ToList();
         int later = end < 0 ? 0 : all.Skip(end + 1).Count(Ends) + (all.Count > end + 1 && !Ends(all[^1]) ? 1 : 0);
-        string more = later == 0 ? "" : $"{later} more turn{(later > 1 ? "s" : "")} planned";
-        return turn.Count == 0 ? $"then {more}" : $"then {string.Join(", ", turn)}{(more != "" ? $" ({more})" : "")}";
+        return (end < 0 ? all : all.Take(end + 1).ToList(), later);
     }
 
     private static string Action(string action, Observation obs)
@@ -93,8 +105,10 @@ internal static partial class Describe
         return picks.Count == 0 ? "pick none" : "pick " + string.Join(", ", picks.Select(i => Card(choice.Options[i])));
     }
 
-    /// <summary>The room the path leads to, by the map legend's name for it.</summary>
-    private static string Map(string action, MapView map)
+    private static string Map(string action, MapView map) => ActionText.Is(action, "map", out _) ? "go to " + Room(action, map) : action;
+
+    /// <summary>The room a map action goes to, by the map legend's name for it.</summary>
+    private static string Room(string action, MapView map)
     {
         if (!ActionText.Is(action, "map", out var arg)) return action;
         var at = arg.Split(',').Select(int.Parse).ToArray();
@@ -109,8 +123,7 @@ internal static partial class Describe
             "Treasure" => "TREASURE",
             _ => null,
         };
-        string room = (legend != null ? Text("map", $"LEGEND_{legend}.title") : null) ?? type?.ToLowerInvariant() ?? "?";
-        return "go to " + room;
+        return (legend != null ? Text("map", $"LEGEND_{legend}.title") : null) ?? type?.ToLowerInvariant() ?? "?";
     }
 
     private static string Reward(string action, RewardsScreen screen)
