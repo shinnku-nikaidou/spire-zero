@@ -10,7 +10,8 @@ namespace Sts2Ai.Harness;
 public sealed record CombatEntry(int Act, int Floor, string Encounter, string Room, int Hp, int MaxHp, int Potions = 0, CombatEnd? End = null);
 
 /// <summary>How a combat ended, the target of the combat outcome head (docs: learning §1): a death, or the HP, max HP and
-/// potions left after it; and the HP its enemies had left, against their max HP (how far a lost fight got).</summary>
+/// potions left after it; and the HP its enemies had left, against their max HP (how far a lost fight got; a won
+/// fight's enemies are gone, 0 of 0).</summary>
 public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions, int? EnemyHp = null, int? EnemyMaxHp = null);
 
 /// <summary>What played a run, the same for every run of one evaluation (docs: evaluation §6).</summary>
