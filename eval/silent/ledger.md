@@ -48,3 +48,4 @@ Every file is `weights/silent/NAME.json` (in git). V v0's initial weights are bu
 | n3-free-ctl | V v2 net, no pull, reads 9 of V v0's 17 features (floor, HP, max HP, gold, the map ahead), no boss labels | g0–g3 (1,617 runs) | failed 2026-10-29 in SL, non-inferiority (`--not-worse`, δ 1.5) at 33 pairs; over all 200: −5.77 ± 0.64 floors, act 2 boss reached 12 times (champion 105), deaths in act 2 hallways 76 (38) and elites 45 (7) | – |
 | pure-1 | pure V (learn/v/: ids and raw state only, no pull), runs only | g0–g3 (1,617 runs) | not yet: SL report (plan v4 step 3) | – |
 | pure-1-b | pure V + a0 decision-time boss sims (2,358 act 0 card rewards of g3) | g0–g3 (1,617 runs) | not yet: SL report (plan v4 step 3) | – |
+| pure-1-d | pure V + door states s0, s1 (1,891 real-run doors at the act 0 / act 1 boss) | g0–g3 (1,617 runs) | not yet: SL report (plan v4 step 3) | – |
