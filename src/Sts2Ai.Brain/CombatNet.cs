@@ -91,6 +91,32 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return value + (1 - outcome[0]) * _weights.PerPotion * (held - used);
     }
 
+    /// <summary>
+    /// The state's worth at V's prices (<see cref="PricedLeaf"/>): a death at its price, a win at the price of the HP
+    /// it leaves, less the potions used since the prices were made and, in progress, those still to be used.
+    /// </summary>
+    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history, EndPrices prices)
+    {
+        if (status == CombatStatus.Lost) return prices.Death;
+        double maxHp = Math.Max(1, obs.Player.MaxHp);
+        int spent = prices.Potions - obs.Potions.Count(p => p != null);
+        if (status == CombatStatus.Won) return HpPrice(prices, obs.Player.Hp) - prices.Potion * spent;
+        var (outcome, used) = Predict(obs, history);
+        double share = obs.Player.Hp / maxHp, width = (1 - _file.LossMin) / _file.Buckets;
+        double value = outcome[0] * prices.Death;
+        for (int k = 1; k < outcome.Length; k++)
+            value += outcome[k] * HpPrice(prices, (share - (_file.LossMin + (k - 0.5) * width)) * maxHp);
+        return value - (1 - outcome[0]) * prices.Potion * (spent + used);
+    }
+
+    /// <summary>The price of a win with this HP left, at least 1 and at most the table's: between two HPs, in proportion.</summary>
+    private static double HpPrice(EndPrices prices, double hp)
+    {
+        double h = Math.Clamp(hp, 1, prices.Hp.Count - 1);
+        int low = (int)Math.Floor(h);
+        return low >= prices.Hp.Count - 1 ? prices.Hp[^1] : prices.Hp[low] + (h - low) * (prices.Hp[low + 1] - prices.Hp[low]);
+    }
+
     public void Dispose() => _session.Dispose();
 
     /// <summary>
