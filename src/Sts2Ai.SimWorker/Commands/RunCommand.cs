@@ -26,7 +26,9 @@ internal static class RunCommand
     private static readonly Option<bool> Trace = Opt.Of("--trace", false, "prints every decision");
     private static readonly Option<bool> Obs = Opt.Of("--obs", false, "prints every observation");
     private static readonly Option<bool> AutoWin = Opt.Of("--auto-win", false,
-        "the boss gauntlet: every combat, bosses included, is won at its start (the game's win command) and its rewards follow");
+        "the boss gauntlet pilot: every combat, bosses included, is won at its start (the game's win command) and its rewards follow");
+    private static readonly Option<bool> Gauntlet = Opt.Of("--gauntlet", false,
+        "the boss gauntlet: a plain monster encounter is won at its start (the game's win command), an event's included; the combat brain fights elites and bosses");
     private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
     private static readonly Option<string?> Records = Opt.Maybe<string?>("--records", "writes one run record per line (docs: evaluation §6)");
     private static readonly Option<string?> Brain = Opt.Maybe<string?>("--brain",
@@ -37,7 +39,7 @@ internal static class RunCommand
     public static Command Command()
     {
         var command = Opt.Command("run", "whole runs through Harness",
-            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, AutoWin, Log, Records, Brain], Champion.Options, Loadout.Options);
+            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, AutoWin, Gauntlet, Log, Records, Brain], Champion.Options, Loadout.Options);
         command.SetAction(Cli.Game(Run));
         return command;
     }
@@ -56,6 +58,8 @@ internal static class RunCommand
         bool check = r.GetValue(Check);
         bool autoWin = r.GetValue(AutoWin);
         if (autoWin && check) throw new CliException("--check replays nodes from their checkpoints, which do not keep --auto-win");
+        bool gauntlet = r.GetValue(Gauntlet);
+        if (autoWin && gauntlet) throw new CliException("--auto-win and --gauntlet are two rules; give one");
         bool trace = r.GetValue(Trace);
         bool printObservations = r.GetValue(Obs);
         bool observe = check || printObservations;
@@ -68,6 +72,7 @@ internal static class RunCommand
             throw new CliException($"{brainOption.Name} belongs to the brain at {brainPath}, not to this host");
         var champion = brainPath == null ? Champion.Read(r) : null;
         if (champion?.Policy == "plan" && env != PlayEnvironment.SL) throw new CliException("plan plays in SL only (--env SL)");
+        if (autoWin && champion?.OnClone == true) throw new CliException("--afterstates clone loads nodes from their checkpoints, which do not keep --auto-win");
         using var workerPool = champion?.Pool();
         var harness = champion?.Harness(workerPool, log);
         using var remote = brainPath == null ? null : new BrainConnection(brainPath);
@@ -90,7 +95,7 @@ internal static class RunCommand
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
-            var setup = new RunSetup(character, seeds?[i] ?? GameSeeds.MakeSeed(seed, i), asc, loadout, autoWin);
+            var setup = new RunSetup(character, seeds?[i] ?? GameSeeds.MakeSeed(seed, i), asc, loadout, autoWin, gauntlet);
             var started = clock.Elapsed;
             var first = PlayRun(pump, setup, env, firstBrain, maxDecisions, trace, observe, printObservations);
             if (workerPool != null) first.Errors.AddRange(workerPool.TakeGameErrors());
@@ -109,7 +114,7 @@ internal static class RunCommand
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
             foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {Logs.FirstLine(e)}");
             if (!check) continue;
-            var (clonesExact, cloneMismatch) = ClonesReplay(pump, first, cloneMs);
+            var (clonesExact, cloneMismatch) = ClonesReplay(pump, first, gauntlet, cloneMs);
             nodes += first.Nodes.Count;
             nodesExact += clonesExact;
             if (cloneMismatch != null) Console.WriteLine($"  CLONE MISMATCH: {cloneMismatch}");
@@ -154,9 +159,9 @@ internal static class RunCommand
     /// Loads each node of a played run from its checkpoint and replays the node's decisions (docs: simulator §7): the
     /// clone must show the run's observations one for one, and be at its horizon once it has travelled. Returns how
     /// many nodes did, and what went wrong in the first that did not; each node's load and replay time goes to
-    /// <paramref name="ms"/>.
+    /// <paramref name="ms"/>. A gauntlet run's clones keep its rule.
     /// </summary>
-    private static (int Exact, string? Mismatch) ClonesReplay(Pump pump, RunResult run, List<double> ms)
+    private static (int Exact, string? Mismatch) ClonesReplay(Pump pump, RunResult run, bool gauntlet, List<double> ms)
     {
         int exact = 0;
         string? mismatch = null;
@@ -169,7 +174,7 @@ internal static class RunCommand
             var clock = Stopwatch.StartNew();
             try
             {
-                var clone = new NodeClone(save, run.Trace.Skip(start).Take(end - start).ToList());
+                var clone = new NodeClone(save, run.Trace.Skip(start).Take(end - start).ToList(), gauntlet ? true : null);
                 using var session = RunSession.Load(pump, clone, Unasked.Instance, Unasked.Instance, Unasked.Instance,
                     obs => seen.Add(ProtocolJson.Hash(obs)));
                 int differs = Enumerable.Range(0, end - start).FirstOrDefault(i => seen.ElementAtOrDefault(i) != run.Observations[start + i], -1);
@@ -277,7 +282,8 @@ internal static class RunCommand
         {
             var steps = session?.Trace.ToList() ?? [];
             var surfaces = steps.GroupBy(s => s[..s.IndexOf(' ')]).ToDictionary(g => g.Key, g => g.Count());
-            var config = new RunConfig(HeadlessGame.GameVersion, Program.Commit, brain?.Champion ?? "none", hello.Env, "R1", setup.AutoWin ? true : null);
+            var config = new RunConfig(HeadlessGame.GameVersion, Program.Commit, brain?.Champion ?? "none", hello.Env, "R1", setup.AutoWin ? true : null,
+                setup.Gauntlet ? true : null);
             var player = session?.Player;
             var record = new RunRecord(config, setup.Seed, setup.Character, setup.Ascension, outcome,
                 session?.Run.CurrentActIndex ?? 0, session?.Run.TotalFloor ?? 0, player?.Creature.CurrentHp ?? 0, player?.Creature.MaxHp ?? 0,

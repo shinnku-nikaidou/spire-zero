@@ -12,7 +12,8 @@ public sealed record NetTest(RunView Run, double Value);
 /// V v0's features) (docs: learning §1).
 /// </summary>
 /// <param name="Objective">What <see cref="RunNet.Value"/> returns: "floor", the floor expected to be reached, or "win",
-/// the chance to survive every floor.</param>
+/// the chance to survive every floor; or "progress", the boss gauntlet's (<c>learn/v/</c>): the floor expected to be
+/// reached plus, for a death in a combat, the share of the enemies' HP taken in it, expected.</param>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, output the hazards.</param>
@@ -81,15 +82,17 @@ public sealed class RunNet : IRunValue, IDisposable
 
     public double Value(RunView run)
     {
+        // A "progress" graph gives the hazards, then per floor the share of the enemies' HP taken by a death there.
         var hazards = Hazards(run);
         int from = Math.Clamp(run.Floor, 0, _file.Floors - 1);
-        double alive = 1, floor = from;
+        double alive = 1, floor = from, taken = 0;
         for (int g = from; g < _file.Floors; g++)
         {
+            if (_file.Objective == "progress") taken += alive * hazards[g] * hazards[_file.Floors + g];
             alive *= 1 - hazards[g];
             floor += alive;
         }
-        return _file.Objective == "win" ? alive : floor;
+        return _file.Objective switch { "win" => alive, "progress" => floor + taken, _ => floor };
     }
 
     public void Dispose() => _session.Dispose();

@@ -11,15 +11,15 @@ namespace Sts2Ai.SimWorker;
 /// units (--macro-explore); 0 for none.</param>
 /// <param name="CombatExplore">The same for pimc over the search's values, in the leaf's units (--combat-explore).</param>
 /// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
-/// <param name="CardExplore">For self-play only: the share of card rewards whose outcome l0 draws evenly, whatever V
-/// says (--card-explore, <see cref="CardDraw"/>); 0 for none.</param>
+/// <param name="Explore">For self-play only (plan v6 §3): the share ε of macro decisions whose answer l0 draws evenly,
+/// whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
 /// <param name="VPrices">Whether the SL planner's leaves price a combat's ends at V's prices (--leaf-prices v,
 /// <see cref="PricedLeaf"/>) instead of the leaf weights'.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue Value, string? ValueFile,
-    LeafChoice Leaf, double MacroExplore, double CombatExplore, bool OnClone = false, double CardExplore = 0, bool VPrices = false)
+    LeafChoice Leaf, double MacroExplore, double CombatExplore, bool OnClone = false, double Explore = 0, bool VPrices = false)
 {
     /// <summary>Whether it explores, which only self-play does.</summary>
-    public bool Explores => MacroExplore > 0 || CombatExplore > 0 || CardExplore > 0;
+    public bool Explores => MacroExplore > 0 || CombatExplore > 0 || Explore > 0;
 
     /// <summary>The search's workers (pimc's, plan's, l0's on the clone). A run holds its process's one live game, so search runs in other processes.</summary>
     public WorkerPool? Pool() => Searches || OnClone ? new WorkerPool(Program.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
@@ -52,7 +52,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         if (Macro == "l0")
         {
             var l0 = new MacroBrain(Value, MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null,
-                CardExplore > 0 ? new CardDraw(CardExplore, Rng(":explore cards")) : null);
+                Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log,
                 OnClone ? node => new PooledClone(pool!, node) : null);
         }
@@ -65,9 +65,10 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// leaves' ends, then its exploration if any.</summary>
     private string Combat => Policy + Leaf.Suffix + (VPrices ? " v prices" : "") + Exploration(CombatExplore);
 
-    /// <summary>l0 by its V's name, unless V has the initial weights, then "clone" if it plays on the node's clone, then its exploration if any.</summary>
+    /// <summary>l0 by its V's name, unless V has the initial weights, then "clone" if it plays on the node's clone, then its exploration if any
+    /// ("explore T" for a softmax, "eps ε" for even draws).</summary>
     private string L0 => (Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}") + (OnClone ? " clone" : "") + Exploration(MacroExplore)
-        + (CardExplore > 0 ? FormattableString.Invariant($" cards {CardExplore}") : "");
+        + (Explore > 0 ? FormattableString.Invariant($" eps {Explore}") : "");
 
     private static string Exploration(double temperature) => temperature > 0 ? FormattableString.Invariant($" explore {temperature}") : "";
 
@@ -104,7 +105,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         if (ValueFile != null) options["value"] = ValueFile;
         if (OnClone) options["afterstates"] = "clone";
         if (MacroExplore > 0) options["macro-explore"] = MacroExplore.ToString(CultureInfo.InvariantCulture);
-        if (CardExplore > 0) options["card-explore"] = CardExplore.ToString(CultureInfo.InvariantCulture);
+        if (Explore > 0) options["explore"] = Explore.ToString(CultureInfo.InvariantCulture);
         if (CombatExplore > 0) options["combat-explore"] = CombatExplore.ToString(CultureInfo.InvariantCulture);
         if (Leaf.WeightsPath != null) options["leaf"] = Leaf.WeightsPath;
         if (Leaf.NetPath != null) options["combat-net"] = Leaf.NetPath;

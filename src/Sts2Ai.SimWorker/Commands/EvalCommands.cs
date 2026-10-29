@@ -39,8 +39,8 @@ internal static class ReportCommand
     /// <summary><see cref="EvalReport.Of"/> dated today, its refusal of the records a mistake in the command line.</summary>
     public static EvalReport Of(IReadOnlyList<RunRecord> runs, string seedSet, IReadOnlyList<string> seeds)
     {
-        if (runs.FirstOrDefault(r => r.Config.AutoWin == true) is { } gauntlet)
-            throw new CliException($"run {gauntlet.Seed} is a boss gauntlet's (every combat won at its start): no evaluation reports it");
+        if (runs.FirstOrDefault(r => r.Config.AutoWin == true || r.Config.Gauntlet == true) is { } gauntlet)
+            throw new CliException($"run {gauntlet.Seed} is a boss gauntlet's (combats won at their start): no evaluation reports it");
         try
         {
             return EvalReport.Of(runs, seedSet, seeds, DateTime.Now.ToString("yyyy-MM-dd"));

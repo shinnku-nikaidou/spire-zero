@@ -7,6 +7,10 @@ fit of V's centred values and the door states' fit of the second head's boss sco
 runs weighs them the same way. --afterstates (the logged decisions' options) only feed the report's
 `explore_temperature`: the `run --macro-explore` at which V would explore as often as the logs' brains did.
 
+--gauntlet trains the boss gauntlet's V (plan v6) on the gauntlet's runs alone (`run --gauntlet`): the same net with a
+third head, the share of the enemies' HP taken in the combat the run ends in, fitted at the floor it ended on; its value
+is the progress expected (net file objective "progress").
+
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
 
@@ -28,7 +32,19 @@ import torch  # noqa: E402
 import common  # noqa: E402
 from common import LearnError  # noqa: E402
 from v import data, encode, export  # noqa: E402
-from v.net import BOSS_AT, Batch, Net, aux_loss, centred, expected_floor, explored, hazard_loss, pearson  # noqa: E402
+from v.net import (  # noqa: E402
+    BOSS_AT,
+    Batch,
+    Net,
+    aux_loss,
+    centred,
+    expected_floor,
+    expected_progress,
+    explored,
+    hazard_loss,
+    pearson,
+    share_loss,
+)
 from weights import out_path  # noqa: E402
 
 script = common.app()
@@ -160,17 +176,20 @@ def main(
     afterstates: Annotated[
         str | None, typer.Option(help="the logged decisions' options (`afterstates`), for explore_temperature")
     ] = None,
+    gauntlet: Annotated[bool, typer.Option(help="the boss gauntlet's V, on its runs (run --gauntlet) alone")] = False,
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out, character)
     if bool(boss_sims) != bool(boss_afterstates):
         raise LearnError("--boss-sims and --boss-afterstates go together")
+    if gauntlet and (boss_sims or boss_states or door_logs or afterstates):
+        raise LearnError("--gauntlet trains on the gauntlet's runs alone: no boss sims, door states or afterstates")
     torch.manual_seed(seed)
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     logs, records = common.lists(list_)
-    samples, runs, views = data.read_runs(logs, records, character, FLOORS)
+    samples, runs, views = data.read_runs(logs, records, character, FLOORS, gauntlet)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -256,24 +275,35 @@ def main(
         alive, deaths = alive + (m * wt).sum(0), deaths + (b.target.double().cpu() * m * wt).sum(0)
     base_hazard = ((deaths + 0.5) / (alive + 1)).clamp(1e-4, 1 - 1e-4)
     base_logits = torch.log(base_hazard / (1 - base_hazard)).float().to(device)
+    # The gauntlet's baseline share: the mean share taken where the training runs ended.
+    ended = [s for s in train if s["kind"] == "died"]
+    base_share = min(max(sum(s["share"] * s["weight"] for s in ended) / max(1e-9, sum(s["weight"] for s in ended)), 1e-4), 1 - 1e-4)
+    base_share_logit = math.log(base_share / (1 - base_share)) if gauntlet else 0.0
 
     def evaluate(model):
         total, aux_total, rows = 0.0, 0.0, []
         with torch.no_grad():
             for b in test_batches:
                 if model:
-                    logits, aux = model.both(*b.inputs())
+                    logits, aux, shares = model.heads(*b.inputs())
                     aux_total += float((aux_loss(aux, b) * b.weight).sum())
                 else:
                     logits = base_logits.expand(len(b.weight), -1)
+                    shares = torch.full_like(logits, base_share_logit) if gauntlet else None
                 total += float((hazard_loss(logits, b) * b.weight).sum())
-                rows.append(expected_floor(torch.sigmoid(logits), b.start))
+                if shares is None:
+                    rows.append(expected_floor(torch.sigmoid(logits), b.start))
+                else:
+                    total += float((share_loss(shares, b) * b.weight).sum())
+                    rows.append(expected_progress(torch.sigmoid(logits), torch.sigmoid(shares), b.start))
         return total / test_weight, torch.cat(rows), aux_total / test_weight
 
-    model = Net({t: len(ids) for t, ids in tables.items()}, FLOORS).to(device)
+    model = Net({t: len(ids) for t, ids in tables.items()}, FLOORS, shares=gauntlet).to(device)
     # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
     with torch.no_grad():
         model.head.bias.copy_(base_logits)
+        if gauntlet:
+            model.share_head.bias.fill_(base_share_logit)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     boss_stream = stream(train_bosses, lambda c: grouped(make, c))
     door_stream = stream(train_doors, lambda c: grouped(make, c))
@@ -281,8 +311,10 @@ def main(
     for epoch in range(EPOCHS):
         model.train()
         for b in batches(train, True):
-            logits, aux = model.both(*b.inputs())
+            logits, aux, shares = model.heads(*b.inputs())
             per_sample = hazard_loss(logits, b) + AUX_WEIGHT * aux_loss(aux, b)
+            if shares is not None:
+                per_sample = per_sample + share_loss(shares, b)
             loss = (per_sample * b.weight).sum() / b.weight.sum()
             if train_bosses:
                 loss = loss + BOSS_WEIGHT * boss_loss(model, next(boss_stream))
@@ -316,7 +348,12 @@ def main(
     # The report: held-out loss against the baseline, and how well the expected floor predicts the floor reached.
     held, predicted, held_aux = evaluate(model)
     base_loss, base_predicted, _ = evaluate(None)
-    actual = torch.tensor([float(s["floor"]) for s in test], dtype=torch.float64, device=predicted.device)
+    # The gauntlet's actual is its progress: the floor, plus the share taken where the run ended.
+    actual = torch.tensor(
+        [float(s["floor"]) + (s["share"] if gauntlet and s["kind"] == "died" else 0.0) for s in test],
+        dtype=torch.float64,
+        device=predicted.device,
+    )
     weights = torch.tensor([s["weight"] for s in test], dtype=torch.float64, device=predicted.device)
 
     def r2(pred):

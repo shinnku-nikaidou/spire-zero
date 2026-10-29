@@ -102,6 +102,44 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// The boss gauntlet (<c>run --gauntlet</c>): a run with random macro and combat brains, into the second act or to its
+    /// end. The combat brain is asked in elite and boss fights only, each of them entered is asked, and the first act's
+    /// boss is among them; every plain monster combat ends won at no HP lost; and every combat's end has its enemies' HP.
+    /// </summary>
+    private static void GauntletFightsElitesAndBosses(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed + 6);
+        var asked = new Asked(new PlayPolicy(rng));
+        using var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 6, 0), Gauntlet: true), PromptBrain.Instance,
+            asked, new RandomMacro(rng));
+        for (int i = 0; i < 5000 && !session.IsOver && session.Run.CurrentActIndex < 1; i++) session.Step();
+        var combats = session.Combats;
+        var fought = combats.Where(c => c.Room != "Monster").ToList();
+        bool boss = fought.Any(c => c.Act == 0 && c.Room == "Boss");
+        var hurt = combats.FirstOrDefault(c => c.Room == "Monster" && (c.End is not { Died: false } end || end.Hp < c.Hp));
+        var unasked = fought.FirstOrDefault(c => !asked.Encounters.Contains(c.Encounter));
+        var blind = combats.FirstOrDefault(c => c.End is { } end && (end.EnemyHp == null || end.EnemyMaxHp is not > 0));
+        check("gauntlet asks the combat brain in elite and boss fights only, the first act's boss among them, and wins the rest at no HP lost",
+            boss && hurt == null && unasked == null && blind == null && asked.Rooms.All(r => r is "Elite" or "Boss"),
+            $"act {session.Run.CurrentActIndex}, {combats.Count} combats ({fought.Count} fought), boss {boss}, rooms asked [{string.Join(",", asked.Rooms)}], " +
+            $"first hurt {hurt}, first unasked {unasked}, first without enemy HP {blind}");
+    }
+
+    /// <summary>A combat policy that keeps the rooms and encounters it was asked in.</summary>
+    private sealed class Asked(ICombatPolicy policy) : ICombatPolicy
+    {
+        public readonly HashSet<string?> Rooms = [];
+        public readonly HashSet<string?> Encounters = [];
+
+        public CombatAction Choose(CombatDecision decision)
+        {
+            Rooms.Add(decision.Observation.Room);
+            Encounters.Add(decision.Observation.Encounter);
+            return policy.Choose(decision);
+        }
+    }
+
+    /// <summary>
     /// A run with random policies, to its third node, whose first relic is disabled at the start, a status that the save
     /// drops, as Lava Rock's own. The second node's clone must show every observation of the node as the run did, the
     /// disabled relic among them (docs: simulator §7).

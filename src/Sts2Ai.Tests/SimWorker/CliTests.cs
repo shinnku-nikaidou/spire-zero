@@ -38,7 +38,7 @@ public class CliTests : IDisposable
     [InlineData("run", "--policy", "greedy")]
     [InlineData("run", "--worlds", "many")]
     [InlineData("report", "--seeds", "s.txt")]
-    [InlineData("run", "--explore", "0.2")]
+    [InlineData("run", "--card-explore", "0.2")]
     [InlineData("nonsense")]
     public void ReportsMistakes(params string[] args) => Assert.NotEmpty(Cli.Parse(args).Errors);
 

@@ -10,15 +10,17 @@ namespace Sts2Ai.Harness;
 public sealed record CombatEntry(int Act, int Floor, string Encounter, string Room, int Hp, int MaxHp, int Potions = 0, CombatEnd? End = null);
 
 /// <summary>How a combat ended, the target of the combat outcome head (docs: learning §1): a death, or the HP, max HP and
-/// potions left after it.</summary>
-public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions);
+/// potions left after it; and the HP its enemies had left, against their max HP (how far a lost fight got).</summary>
+public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions, int? EnemyHp = null, int? EnemyMaxHp = null);
 
 /// <summary>What played a run, the same for every run of one evaluation (docs: evaluation §6).</summary>
 /// <param name="Champion">The brain on each side of the routing table, with its budget.</param>
 /// <param name="Rung">R1 to R4 (docs: evaluation §1).</param>
-/// <param name="AutoWin">True for a boss gauntlet's run (<c>run --auto-win</c>): every combat won at its start, so the
-/// run says nothing of how it would have fared; null otherwise.</param>
-public sealed record RunConfig(string Game, string Commit, string Champion, string Env, string Rung, bool? AutoWin = null);
+/// <param name="AutoWin">True for a boss gauntlet pilot's run (<c>run --auto-win</c>): every combat won at its start, so
+/// the run says nothing of how it would have fared; null otherwise.</param>
+/// <param name="Gauntlet">True for a boss gauntlet's run (<c>run --gauntlet</c>): plain monster encounters won at their
+/// start, elites and bosses fought, so the run is no whole run (no report or gate takes it); null otherwise.</param>
+public sealed record RunConfig(string Game, string Commit, string Champion, string Env, string Rung, bool? AutoWin = null, bool? Gauntlet = null);
 
 /// <summary>One run of an evaluation, as the report needs it (docs: evaluation §3).</summary>
 /// <param name="RunId">The run id the brain knew the run by, as in the decision log (docs: harness §6).</param>

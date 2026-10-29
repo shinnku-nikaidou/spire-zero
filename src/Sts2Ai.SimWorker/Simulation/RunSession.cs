@@ -25,9 +25,13 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>How a run starts: a new singleplayer run of <see cref="Character"/>; a loadout replaces the starting one.</summary>
-/// <param name="AutoWin">The boss gauntlet's rule: every combat, bosses included, is won at its start as the game's
+/// <param name="AutoWin">The boss gauntlet pilot's rule: every combat, bosses included, is won at its start as the game's
 /// <c>win</c> console command wins it, and its rewards follow as after any win; no combat decision is asked.</param>
-internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null, bool AutoWin = false);
+/// <param name="Gauntlet">The boss gauntlet's rule (gauntlet-elite): a combat whose encounter is a plain monster
+/// encounter is won at its start as with <paramref name="AutoWin"/>, an event's included; elites and bosses, an event's
+/// included, are fought by the combat policy.</param>
+internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null, bool AutoWin = false,
+    bool Gauntlet = false);
 
 /// <summary>
 /// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator §5.1).
@@ -65,6 +69,9 @@ internal sealed class RunSession : IDisposable
 
     /// <summary>The crystal sphere screen, open over its event until the last divination.</summary>
     private CrystalSphereMinigame? _minigame;
+
+    /// <summary>The state of the last combat entered, kept for its enemies' HP once it is over.</summary>
+    private CombatState? _combatState;
 
     private AbstractRoom? _room;
     private RoomProgress _progress = new();
@@ -191,7 +198,7 @@ internal sealed class RunSession : IDisposable
         var run = RunState.FromSerializable(save);
         var player = run.Players[0];
         var replay = new Replay(clone.Trace, combat, macro);
-        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel);
+        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel, Gauntlet: clone.Gauntlet == true);
         var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = true, _checkpoint = clone.Save };
         session._selector.QueueReplay(clone.Trace.Where(s => s.StartsWith(Surfaces.CardChoice + " ", StringComparison.Ordinal))
             .Select(s => s[(Surfaces.CardChoice.Length + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray()));
@@ -218,8 +225,9 @@ internal sealed class RunSession : IDisposable
         }
     }
 
-    /// <summary>The current node's SL clone: its checkpoint and the decisions since.</summary>
-    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), _trace.Skip(NodeStart).ToList());
+    /// <summary>The current node's SL clone: its checkpoint and the decisions since, and the gauntlet's rule if the run plays by it.</summary>
+    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), _trace.Skip(NodeStart).ToList(),
+        Setup.Gauntlet ? true : null);
 
     /// <summary>Makes one decision, after anything the game or the driver does on its own. Does nothing once the run is over.</summary>
     public void Step()
@@ -246,7 +254,14 @@ internal sealed class RunSession : IDisposable
         _pump.Drain();
         _endedTurn = null;
         if (_combats.Count > 0 && _combats[^1].End == null && (!CombatManager.Instance.IsInProgress || IsOver))
-            _combats[^1] = _combats[^1] with { End = new(IsOver && !Won, Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions()) };
+        {
+            var enemies = _combatState!.Enemies;
+            _combats[^1] = _combats[^1] with
+            {
+                End = new(IsOver && !Won, Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions(),
+                    enemies.Where(e => e.IsAlive).Sum(e => e.CurrentHp), enemies.Sum(e => e.MaxHp)),
+            };
+        }
         if (_mapHashes.Count == Run.CurrentActIndex && Run.Map is not NullActMap) _mapHashes.Add(MapHash(Run.Map));
         Collect();
     }
@@ -337,10 +352,11 @@ internal sealed class RunSession : IDisposable
             if (!_progress.CombatEntered)
             {
                 _progress.CombatEntered = true;
+                _combatState = CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
                 _combats.Add(new(Run.CurrentActIndex, Run.TotalFloor, room.Encounter.Id.Entry, room.Encounter.RoomType.ToString(),
                     Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions()));
             }
-            if (!Setup.AutoWin) return CombatDecision();
+            if (!Setup.AutoWin && !(Setup.Gauntlet && room.Encounter.RoomType == RoomType.Monster)) return CombatDecision();
             // An enemy that comes back or calls others when killed keeps the combat going: kill again, a few times.
             if (++_progress.AutoWins > 5) throw new InvalidOperationException($"auto-win: the combat goes on after 5 wins: {Describe()}");
             Await(Win());

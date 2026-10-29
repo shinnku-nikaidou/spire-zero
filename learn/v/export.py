@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 
 from v import encode
-from v.net import Batch, Hazards, expected_floor
+from v.net import Batch, Hazards, values
 
 
 def onnx_bytes(model, example: Batch) -> bytes:
@@ -41,17 +41,17 @@ def net_file(name, character, floors, tables, mean, std, model, held, report, se
     picks = random.Random(seed).sample(held, min(8, len(held)))
     b = Batch(picks, index, mean, std, floors, "cpu")
     with torch.no_grad():
-        values = expected_floor(torch.sigmoid(model(*b.inputs())), b.start)
+        valued = values(model, b)
     return {
         "name": name,
         "character": character,
-        "objective": "floor",
+        "objective": "floor" if model.share_head is None else "progress",
         "floors": floors,
         "vocab": tables,
         "state": {"names": encode.STATE, "mean": [float(v) for v in mean], "std": [float(v) for v in std]},
         "fit": report,
         "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
-        "tests": [{"run": s["view"], "value": float(v)} for s, v in zip(picks, values, strict=True)],
+        "tests": [{"run": s["view"], "value": float(v)} for s, v in zip(picks, valued, strict=True)],
     }
 
 

@@ -226,12 +226,13 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<double> _combatExplore = Opt.Of("--combat-explore", 0.0,
         "self-play only: pimc draws each searched action by the search's values, softmax at this temperature in leaf units (0: the best)");
 
-    /// <summary>The options that make the champion, without --champion FILE.</summary>
-    private readonly Option<double> _cardExplore = Opt.Of("--card-explore", 0.0,
-        "self-play only: at each card reward, the chance that l0 draws its outcome evenly among its cards and skipping, whatever V says");
+    private readonly Option<double> _explore = Opt.Of("--explore", 0.0,
+        "self-play only: the chance ε that l0 draws a decision's answer evenly, whatever V says: a card reward's outcome among its cards and skipping, " +
+        "a card prompt's picks, every other screen's options but the potion belt's");
 
+    /// <summary>The options that make the champion, without --champion FILE.</summary>
     public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, _afterstates, .. _leaf.Options, _leafPrices, _macroExplore,
-        _combatExplore, _cardExplore];
+        _combatExplore, _explore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -256,15 +257,15 @@ internal sealed class ChampionArgs(bool file)
         if (macroExplore is not >= 0 || combatExplore is not >= 0) throw new CliException("--macro-explore and --combat-explore are temperatures, from 0");
         if (macroExplore > 0 && macro != "l0") throw new CliException("--macro-explore is l0's; it needs --macro l0");
         if (combatExplore > 0 && policy != "pimc") throw new CliException("--combat-explore is pimc's; it needs --policy pimc");
-        double cardExplore = r.GetValue(_cardExplore);
-        if (cardExplore is not (>= 0 and <= 1)) throw new CliException("--card-explore is a share of card rewards, from 0 to 1");
-        if (cardExplore > 0 && macro != "l0") throw new CliException("--card-explore is l0's; it needs --macro l0");
+        double explore = r.GetValue(_explore);
+        if (explore is not (>= 0 and <= 1)) throw new CliException("--explore is a share of decisions, from 0 to 1");
+        if (explore > 0 && macro != "l0") throw new CliException("--explore is l0's; it needs --macro l0");
         var leaf = _leaf.Read(r);
         if (!leaf.IsDefault && policy is not ("pimc" or "plan")) throw new CliException("--leaf and --combat-net value the search's leaves; they need --policy pimc or plan");
         bool vPrices = r.GetValue(_leafPrices) == "v";
         if (vPrices && (policy != "plan" || leaf.Net == null || value is not RunNet))
             throw new CliException("--leaf-prices v prices plan's combat net's endings in V's floors: it needs --policy plan, --combat-net and a net --value");
         return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore, clone,
-            cardExplore, vPrices);
+            explore, vPrices);
     }
 }

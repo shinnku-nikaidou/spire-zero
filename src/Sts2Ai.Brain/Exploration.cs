@@ -40,15 +40,26 @@ public sealed class Softmax(double temperature, Random rng)
 }
 
 /// <summary>
-/// Self-play exploration at card rewards (docs: learning §5): with chance <paramref name="share"/> per card reward, its
-/// outcome is drawn evenly among its cards and skipping it, whatever V says, so that V also sees decks with the cards it
-/// would not take. Never in evaluation.
+/// Self-play exploration by even draws (plan v6 §3): with chance <paramref name="share"/> ε, a macro decision's answer is
+/// drawn evenly among its options, whatever V says; otherwise the brain answers. What is drawn does not depend on V or on
+/// how strong the run is. Never in evaluation.
 /// </summary>
-public sealed class CardDraw(double share, Random rng)
+public sealed class Uniform(double share, Random rng)
 {
     public double Share { get; } =
-        share is > 0 and <= 1 ? share : throw new ArgumentOutOfRangeException(nameof(share), "a share of card rewards is above 0, at most 1");
+        share is > 0 and <= 1 ? share : throw new ArgumentOutOfRangeException(nameof(share), "a share of decisions is above 0, at most 1");
 
-    /// <summary>For a reward of <paramref name="cards"/> cards: null to leave it to the brain, else the index drawn, <paramref name="cards"/> for skipping it.</summary>
-    public int? Draw(int cards) => rng.NextDouble() < Share ? rng.Next(cards + 1) : null;
+    /// <summary>For a decision of <paramref name="options"/> options: null to leave it to the brain, else the index drawn.</summary>
+    public int? Draw(int options) => rng.NextDouble() < Share ? rng.Next(options) : null;
+
+    /// <summary>
+    /// For a card prompt of <paramref name="options"/> cards that takes <paramref name="min"/> to <paramref name="max"/>
+    /// picks: null to leave it to the brain, else how many picks drawn evenly, then which, evenly, in order.
+    /// </summary>
+    public IReadOnlyList<int>? Picks(int options, int min, int max)
+    {
+        if (rng.NextDouble() >= Share) return null;
+        int n = min + rng.Next(max - min + 1);
+        return Enumerable.Range(0, options).OrderBy(_ => rng.Next()).Take(n).Order().ToList();
+    }
 }

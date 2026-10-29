@@ -1,7 +1,8 @@
 """Pure V's net (docs: learning §1): a set encoder over the deck, bags of ids for the rest, the raw state, then a body
 and two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the floor
 expected to be reached. The second head learns the next combats' HP costs and the boss score, which shapes the body
-only: it is not in the net file.
+only: it is not in the net file. The boss gauntlet's V (`shares`) has a third head: per floor, the share of the
+enemies' HP taken in the combat the run ends in there; its value is the progress expected (`expected_progress`).
 """
 
 import math
@@ -54,6 +55,8 @@ class Batch:
         # A censored sample says nothing from the floor it stopped on; one with no reach (end = start) says nothing.
         self.label_mask = ((g >= start) & (won | (g < end) | (died & (g == end)))).float().to(device)
         self.weight = torch.tensor([s["weight"] for s in samples]).to(device)
+        # The gauntlet's: the share of the enemies' HP taken in the combat the run ended in (0 for other samples).
+        self.share = torch.tensor([s.get("share", 0.0) for s in samples]).to(device)
         # A boss sim's target: its option's boss score less its decision's mean, in floors (0 for other samples).
         self.boss_target = torch.tensor([s.get("boss_target", 0.0) for s in samples], dtype=torch.float64).to(device)
         self.start = start[:, 0].to(device)
@@ -76,7 +79,7 @@ class Net(nn.Module):
     DIM, HIDDEN, BODY = 32, 128, 256
     SUM_SCALE = 1 / 16  # the deck's sum next to its mean, scaled to about a mean's size
 
-    def __init__(self, sizes: dict[str, int], floors: int):
+    def __init__(self, sizes: dict[str, int], floors: int, shares: bool = False):
         super().__init__()
         d, h = self.DIM, self.HIDDEN
         self.cards = nn.Embedding(sizes["cards"], d)
@@ -90,6 +93,7 @@ class Net(nn.Module):
         self.body = nn.Sequential(nn.Linear(width, self.BODY), nn.ReLU(), nn.Linear(self.BODY, self.BODY), nn.ReLU())
         self.head = nn.Linear(self.BODY, floors)
         self.aux_head = nn.Linear(self.BODY, N_AUX)
+        self.share_head = nn.Linear(self.BODY, floors) if shares else None
 
     def forward(self, *inputs):
         """Per sample and floor, the logit of dying on that floor if alive there (inputs as encode.INPUTS names them)."""
@@ -99,6 +103,11 @@ class Net(nn.Module):
         """The hazards' logits and the second head's logits."""
         x = self.encoded(*inputs)
         return self.head(x), self.aux_head(x)
+
+    def heads(self, *inputs):
+        """The hazards' logits, the second head's, and the share head's (None without it)."""
+        x = self.encoded(*inputs)
+        return self.head(x), self.aux_head(x), None if self.share_head is None else self.share_head(x)
 
     def encoded(self, cards, ups, card_mask, mods, mod_mask, *rest):
         """The body's output, which both heads read."""
@@ -117,14 +126,15 @@ class Net(nn.Module):
 
 
 class Hazards(nn.Module):
-    """The net as ONNX holds it: the hazards themselves."""
+    """The net as ONNX holds it: the hazards themselves, then for a net with a share head its shares (RunNet.Value)."""
 
     def __init__(self, net):
         super().__init__()
         self.net = net
 
     def forward(self, *inputs):
-        return torch.sigmoid(self.net(*inputs))
+        hazards, _, shares = self.net.heads(*inputs)
+        return torch.sigmoid(hazards) if shares is None else torch.sigmoid(torch.cat([hazards, shares], 1))
 
 
 def expected_floor(hazards: torch.Tensor, start: torch.Tensor):
@@ -133,6 +143,31 @@ def expected_floor(hazards: torch.Tensor, start: torch.Tensor):
     g = torch.arange(h.shape[1], device=h.device)
     survive = torch.where(g >= start[:, None], 1 - h, torch.ones_like(h)).cumprod(1)
     return start.double() + (survive * (g >= start[:, None])).sum(1)
+
+
+def expected_progress(hazards: torch.Tensor, shares: torch.Tensor, start: torch.Tensor):
+    """As RunNet.Value for "progress": the floor expected, plus the chance to end on each floor from the start on times
+    the share of the enemies' HP taken there."""
+    h, s = hazards.double(), shares.double()
+    g = torch.arange(h.shape[1], device=h.device)
+    from_start = g >= start[:, None]
+    survive = torch.where(from_start, 1 - h, torch.ones_like(h)).cumprod(1)
+    before = torch.cat([torch.ones_like(survive[:, :1]), survive[:, :-1]], 1)
+    return expected_floor(hazards, start) + (before * h * s * from_start).sum(1)
+
+
+def values(model, b: Batch):
+    """V's value of a batch: the floor expected, or with a share head the progress expected."""
+    hazards, _, shares = model.heads(*b.inputs())
+    if shares is None:
+        return expected_floor(torch.sigmoid(hazards), b.start)
+    return expected_progress(torch.sigmoid(hazards), torch.sigmoid(shares), b.start)
+
+
+def share_loss(logits, b: Batch):
+    """Per sample, the cross-entropy of the share head at the floor the run ended on (none for a censored run)."""
+    per_floor = nn.functional.binary_cross_entropy_with_logits(logits, b.share[:, None].expand_as(logits), reduction="none")
+    return (per_floor * b.target * b.label_mask).sum(1)
 
 
 def hazard_loss(logits, b: Batch):

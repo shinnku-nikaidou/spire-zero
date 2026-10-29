@@ -12,8 +12,13 @@ Two kinds of simulated boss fights (`bosslab.py`) can be added, both measured by
     scores, which shapes the body only.
 
 The afterstates of logged decisions (`afterstates`) serve the report alone: the self-play temperature at which V would
-explore as often as the logs did. A boss gauntlet's runs (`run --auto-win`) are refused: their outcomes are not real;
-their logs serve only as the views of their door states (--door-logs).
+explore as often as the logs did. A boss gauntlet pilot's runs (`run --auto-win`) are refused: their outcomes are not
+real; their logs serve only as the views of their door states (--door-logs).
+
+The boss gauntlet's V (plan v6, `run --gauntlet`: plain monster combats won at their start, elites and bosses fought)
+reads the gauntlet's runs only, and a whole run's V refuses them. Its target is the run's progress (`progress`): where
+the run ended, as a death on that floor, with the share of the enemies' HP taken in the combat it ended in as the third
+head's label; a won run ends on its last floor with its last boss all taken.
 """
 
 import bosslab
@@ -47,12 +52,12 @@ def sample(run: str, view: dict, floors: int, reached: int | None = None, kind: 
     }
 
 
-def next_combats(record: dict, floor: int) -> list[float]:
+def next_combats(record: dict, floor: int, fought_only: bool = False) -> list[float]:
     """The share of max HP each of the run's next combats after the floor cost, at most AUX of them (a death costs
-    what was left)."""
+    what was left); with fought_only, the gauntlet's fought combats only (elites and bosses)."""
     costs = []
     for c in record.get("combats", []):
-        if c["floor"] <= floor or len(costs) == AUX:
+        if c["floor"] <= floor or len(costs) == AUX or (fought_only and c["room"] == "Monster"):
             continue
         end = c.get("end") or {}
         lost = c["hp"] - (0 if end.get("died") else end.get("hp", c["hp"]))
@@ -60,13 +65,35 @@ def next_combats(record: dict, floor: int) -> list[float]:
     return costs
 
 
-def read_runs(logs: str, records: str, character: str, floors: int) -> tuple[list[dict], list[dict], dict]:
-    """The logged decisions as samples, the run records, and each decision's view and brain by (run, decision id)."""
+def death_share(record: dict) -> float:
+    """The share of the enemies' HP taken in the combat a lost run died in; 0 when it died outside a combat."""
+    last = (record.get("combats") or [{}])[-1]
+    end = last.get("end") or {}
+    if not end.get("died") or last["floor"] != record["floor"] or not end.get("enemy_max_hp"):
+        return 0.0
+    return min(max(1 - end["enemy_hp"] / end["enemy_max_hp"], 0.0), 1.0)
+
+
+def progress(record: dict) -> float:
+    """The boss gauntlet's progress (plan v6 §2): the floor reached, plus the share of the enemies' HP taken in the
+    combat a lost run died in; a won run took all of its last boss's (+1)."""
+    return record["floor"] + (1.0 if record["outcome"] == "won" else death_share(record))
+
+
+def read_runs(
+    logs: str, records: str, character: str, floors: int, gauntlet: bool = False
+) -> tuple[list[dict], list[dict], dict]:
+    """The logged decisions as samples, the run records, and each decision's view and brain by (run, decision id).
+    With gauntlet, the boss gauntlet's runs, each ended where it ended (won or lost) with its share (`progress`)."""
     samples, runs_seen, views = [], [], {}
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         runs = {k: r for k, r in runs.items() if not r.get("failure")}
         if any(r["config"].get("auto_win") for r in runs.values()):
-            raise LearnError(f"{log}: a boss gauntlet's runs (run --auto-win) say nothing of how a run fares")
+            raise LearnError(f"{log}: a boss gauntlet pilot's runs (run --auto-win) say nothing of how a run fares")
+        if any(bool(r["config"].get("gauntlet")) != gauntlet for r in runs.values()):
+            raise LearnError(
+                f"{log}: the boss gauntlet's V reads the gauntlet's runs (run --gauntlet) alone, a whole run's V none of them"
+            )
         runs_seen += runs.values()
         for e in read_lines(log, '"run_view"'):
             r = runs.get(e["run"])
@@ -74,9 +101,14 @@ def read_runs(logs: str, records: str, character: str, floors: int) -> tuple[lis
                 continue
             view = e["run_view"]
             views[(e["run"], e["decision_id"])] = (view, e["brain"])
-            kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
-            s = sample(e["run"], view, floors, r["floor"], kind)
-            samples.append(s | {"key": (i, e["run"]), "floor": r["floor"], "next": next_combats(r, view["floor"])})
+            if gauntlet:
+                ended = r["outcome"] in ("won", "lost")
+                s = sample(e["run"], view, floors, r["floor"], "died" if ended else "censored")
+                s["share"] = 1.0 if r["outcome"] == "won" else death_share(r)
+            else:
+                s = sample(e["run"], view, floors, r["floor"], {"won": "won", "lost": "died"}.get(r["outcome"], "censored"))
+            nxt = next_combats(r, view["floor"], fought_only=gauntlet)
+            samples.append(s | {"key": (i, e["run"]), "floor": r["floor"], "next": nxt})
     per_run = {}
     for s in samples:
         per_run[s["key"]] = per_run.get(s["key"], 0) + 1

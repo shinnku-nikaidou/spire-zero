@@ -13,16 +13,18 @@ namespace Sts2Ai.Brain;
 /// It also answers the card prompts outside combat (upgrade, remove, transform, choose a card).
 ///
 /// With <paramref name="explore"/>, for self-play, it draws each answer by the same values instead of taking the best
-/// (docs: learning §5); at a card prompt, each pick and whether to stop. With <paramref name="cards"/>, some card
-/// rewards' outcomes are drawn whatever V says (<see cref="CardDraw"/>).
+/// (docs: learning §5); at a card prompt, each pick and whether to stop. With <paramref name="uniform"/>, for self-play
+/// (plan v6 §3), some answers are drawn evenly whatever V says (<see cref="Uniform"/>): a card reward's outcome among
+/// its cards and skipping it, a card prompt's picks, and on every other screen its options but a potion's (the belt,
+/// which every screen offers) and those that would come back to a state already decided.
 /// </summary>
-public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDraw? cards = null) : IMacroPolicy, IChoicePolicy
+public sealed class MacroBrain(IRunValue value, Softmax? explore = null, Uniform? uniform = null) : IMacroPolicy, IChoicePolicy
 {
-    /// <summary>Each card reward's draw by <c>cards</c> (null: none), by its floor and cards, made when it is first seen.</summary>
+    /// <summary>Each card reward's draw by <c>uniform</c> (null: none), by its floor and cards, made when it is first seen.</summary>
     private readonly Dictionary<string, int?> _draws = [];
 
-    /// <summary>Whether the last answer was drawn and valued below the best (<see cref="Softmax.Explored"/>); at a card
-    /// prompt, any of its steps.</summary>
+    /// <summary>Whether the last answer was drawn: by <c>explore</c> and valued below the best (<see cref="Softmax.Explored"/>;
+    /// at a card prompt, any of its steps), or by <c>uniform</c>.</summary>
     public bool Explored { get; private set; }
 
     /// <summary>
@@ -50,7 +52,12 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
         if (Drawn(decision.Observation, options) is { } drawn)
         {
             pick = Softmax.Best(drawn);
-            Explored = values[pick] < values[Softmax.Best(values)];
+            Explored = double.IsPositiveInfinity(drawn[pick]) || values[pick] < values[Softmax.Best(values)];
+        }
+        else if (Even(decision.Observation, options) is { } even)
+        {
+            pick = even;
+            Explored = true;
         }
         else pick = Pick(values);
         var option = options[pick];
@@ -60,13 +67,13 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
     }
 
     /// <summary>
-    /// With <c>cards</c>, the options' values with a card reward's drawn outcome first (+∞) and its others last (−∞);
+    /// With <c>uniform</c>, the options' values with a card reward's drawn outcome first (+∞) and its others last (−∞);
     /// null where nothing is drawn. On the rewards screen, a card reward drawn to be skipped is never opened and one drawn
     /// to be taken is opened now; on the card reward screen, the drawn card, or skipping, is taken.
     /// </summary>
     private List<double>? Drawn(Observation obs, List<Option> options)
     {
-        if (cards == null) return null;
+        if (uniform == null) return null;
         var values = options.Select(o => o.Value).ToList();
         bool any = false;
         switch (obs.Screen)
@@ -95,8 +102,29 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
     private int? Draw(RunView run, IReadOnlyList<CardView> offered)
     {
         string key = $"{run.Floor}:{string.Join(",", offered.Select(c => $"{c.Id}+{c.Up ?? 0}"))}";
-        if (!_draws.TryGetValue(key, out var drawn)) _draws[key] = drawn = cards!.Draw(offered.Count);
+        if (!_draws.TryGetValue(key, out var drawn)) _draws[key] = drawn = uniform!.Draw(offered.Count + 1);
         return drawn;
+    }
+
+    /// <summary>
+    /// With <c>uniform</c>, an option drawn evenly, or null to leave it to V: on every screen but the card reward's (its
+    /// outcome is drawn as a whole, <see cref="Drawn"/>), among the options that are not a potion's and not worth −∞
+    /// (they would come back to a state already decided), when there are two or more.
+    /// </summary>
+    private int? Even(Observation obs, List<Option> options)
+    {
+        if (uniform == null || obs.Screen is CardRewardScreen) return null;
+        var open = Enumerable.Range(0, options.Count)
+            .Where(k => !double.IsNegativeInfinity(options[k].Value) && Split(options[k].Action).Verb is not ("potion" or "discard_potion"))
+            .ToList();
+        return open.Count >= 2 && uniform.Draw(open.Count) is { } drawn ? open[drawn] : null;
+    }
+
+    /// <summary>With <c>uniform</c>, a card prompt's picks drawn evenly (<see cref="Uniform.Picks"/>), at least <paramref name="min"/>; or null.</summary>
+    private IReadOnlyList<int>? Even(CardChoice choice, int min)
+    {
+        int n = choice.Options.Count;
+        return uniform?.Picks(n, Math.Min(min, n), Math.Min(choice.Max, n));
     }
 
     /// <summary>Each legal action, in order, with its afterstate and its value: what <see cref="Choose(MacroDecision)"/> picks by.</summary>
@@ -172,10 +200,15 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
         // Greedy: add the best pick while it helps, or while the prompt wants more.
         int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
         _opened = false;
+        Explored = false;
+        if (Even(choice, min) is { } even)
+        {
+            Explored = true;
+            return even;
+        }
         var picks = new List<int>();
         var state = run;
         double current = value.Value(state);
-        Explored = false;
         while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
             var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
@@ -205,6 +238,12 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
         _opened = false;
         Explored = false;
         var root = new Afterstate(obs.Run, Surfaces.CardChoice, obs.Screen, []);
+        if (Even(choice, min) is { } even)
+        {
+            _decided.Add(CloneSearch.Key(root));
+            Explored = true;
+            return even;
+        }
         var groups = CloneSearch.Groups(choice);
         // An answer is how many of each group it picks.
         var counts = new int[groups.Count];

@@ -19,7 +19,8 @@ internal sealed record LoggedRun(string RunId, RunSetup Setup, IReadOnlyList<Log
     public static IEnumerable<LoggedRun> Read(string logs, string records)
     {
         var setups = new Dictionary<string, RunSetup>();
-        foreach (var r in RunRecord.Read(records)) setups.TryAdd(RunHeader.IdOf(r.Seed), new RunSetup(r.Character, r.Seed, r.Ascension));
+        foreach (var r in RunRecord.Read(records))
+            setups.TryAdd(RunHeader.IdOf(r.Seed), new RunSetup(r.Character, r.Seed, r.Ascension, AutoWin: r.Config.AutoWin == true, Gauntlet: r.Config.Gauntlet == true));
         foreach (var path in logs.Split(','))
         {
             string? run = null;
