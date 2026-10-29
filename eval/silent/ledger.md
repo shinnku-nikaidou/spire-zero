@@ -14,7 +14,7 @@ Earlier SL champion: L0 n2-b0.03, set 2026-10-28 by its promotion-1 baseline at 
 Train seeds are `run --seed 1 --start K`. A new batch takes the next free block of 100,000 seeds, entered here before
 it starts: shard i starts at block + 1000·i and plays `--n 1000` at most, so no two shards share a seed.
 
-**Next free block: 100000–199999.** 200000–202999 is the boss gauntlet pilot (`run --auto-win`, not self-play: `sl/forks/2026-10-29-gauntlet`, 2026-10-29); the gauntlet keeps 200000–299999.
+**Next free block: 100000–199999.** 200000–202999 is the boss gauntlet pilot (`run --auto-win`, not self-play: `sl/forks/2026-10-29-gauntlet`, 2026-10-29); the gauntlet keeps 200000–299999; 203000–205399 is its second batch (plan v4 step 5, `sl/forks/2026-10-29-gauntlet-2`, V pure-1-g).
 
 | batch | env | played by | commits | train seeds | runs | used | folder (under `data/silent/`) |
 |---|---|---|---|---|---|---|---|
