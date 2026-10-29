@@ -56,11 +56,12 @@ internal sealed class Panel
 
         var head = Row(10);
         head.AddChild(Badge("AI", 28, 8, Accent, null, 12));
+        // A champion's name can be a whole line of options: it takes the head's free width and is cut there.
         var names = Column(0);
-        names.AddChild(_champion = Text("", 17, Fg));
-        names.AddChild(_status = Text("", 13, Muted));
+        names.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        names.AddChild(_champion = Clipped(Text("", 17, Fg)));
+        names.AddChild(_status = Clipped(Text("", 13, Muted)));
         head.AddChild(names);
-        head.AddChild(Quiet(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }));
         if (switched != null)
         {
             var frame = Quiet(new PanelContainer());
@@ -231,10 +232,8 @@ internal sealed class Panel
         {
             var o = options[i];
             var color = i == 0 ? Accent : Fg;
-            var name = Text(o.Name, 15, color);
+            var name = Clipped(Text(o.Name, 15, color));
             name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            name.ClipText = true;
-            name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             grid.AddChild(name);
             var value = Text($"{o.Value:0.0} ±{o.Ci:0.0}", 15, color);
             value.HorizontalAlignment = HorizontalAlignment.Right;
@@ -321,6 +320,14 @@ internal sealed class Panel
         label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         label.CustomMinimumSize = new Vector2(200, 0);
+        return label;
+    }
+
+    /// <summary>One line, cut with an ellipsis where its space ends, instead of widening the card.</summary>
+    private static Label Clipped(Label label)
+    {
+        label.ClipText = true;
+        label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         return label;
     }
 
