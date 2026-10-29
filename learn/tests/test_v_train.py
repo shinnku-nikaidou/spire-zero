@@ -10,6 +10,7 @@ from onnx.reference import ReferenceEvaluator
 from typer.testing import CliRunner
 
 import bosslab
+import common
 from common import LearnError
 from v import data, encode, export, train
 from v.net import Batch, Net, centred, expected_floor, explored
@@ -50,12 +51,12 @@ def write_runs(tmp_path, runs=10, auto_win=False):
 def test_a_list_pair_gives_the_logs_and_records_in_the_same_order(tmp_path):
     (tmp_path / "x-logs.txt").write_text("/a/l1.jsonl\nb/l2.jsonl\n")
     (tmp_path / "x-recs.txt").write_text("/a/r1.jsonl\nb/r2.jsonl\n")
-    logs, recs = data.lists(str(tmp_path / "x"))
-    assert logs == f"/a/l1.jsonl,{data.ROOT / 'b/l2.jsonl'}" and recs.startswith("/a/r1.jsonl,")
+    logs, recs = common.lists(str(tmp_path / "x"))
+    assert logs == f"/a/l1.jsonl,{common.ROOT / 'b/l2.jsonl'}" and recs.startswith("/a/r1.jsonl,")
 
 
 def test_each_decision_is_a_sample_of_where_its_run_ended_and_each_run_weighs_one(tmp_path):
-    samples, runs, views = data.read_runs(*data.lists(write_runs(tmp_path)), "SILENT", 64)
+    samples, runs, views = data.read_runs(*common.lists(write_runs(tmp_path)), "SILENT", 64)
     assert len(samples) == 30 and len(runs) == 10 and len(views) == 30
     first = samples[0]
     assert (first["start"], first["end"], first["kind"], first["floor"]) == (1, 4, "died", 4)
@@ -66,7 +67,7 @@ def test_each_decision_is_a_sample_of_where_its_run_ended_and_each_run_weighs_on
 
 def test_a_boss_gauntlet_is_refused(tmp_path):
     with pytest.raises(LearnError, match="auto-win"):
-        data.read_runs(*data.lists(write_runs(tmp_path, auto_win=True)), "SILENT", 64)
+        data.read_runs(*common.lists(write_runs(tmp_path, auto_win=True)), "SILENT", 64)
 
 
 def test_a_boss_is_worth_the_floors_its_winners_went_on_to():

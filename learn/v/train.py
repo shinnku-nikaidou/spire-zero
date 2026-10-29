@@ -166,7 +166,7 @@ def main(
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    logs, records = data.lists(list_)
+    logs, records = common.lists(list_)
     samples, runs, views = data.read_runs(logs, records, character, FLOORS)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]

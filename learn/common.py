@@ -15,6 +15,8 @@ from pathlib import Path
 import typer
 from loguru import logger
 
+ROOT = Path(__file__).resolve().parent.parent  # the repo
+
 
 class LearnError(Exception):
     """A failure a script reports in one line and exits on: bad input, a file in the way, a sim that failed."""
@@ -83,6 +85,20 @@ def runs_by_log(logs: str, records: str, character: str) -> list[tuple[str, dict
             runs[run_id] = r
         pairs.append((log, runs))
     return pairs
+
+
+def lists(prefix: str) -> tuple[str, str]:
+    """A list pair's logs and records, comma-separated: PREFIX-logs.txt and PREFIX-recs.txt, one path per line, line i
+    of one pairing with line i of the other. Relative paths (the prefix's too) are the repo's."""
+    base = Path(prefix) if Path(prefix).is_absolute() else ROOT / prefix
+    out = []
+    for suffix in ("logs", "recs"):
+        path = base.parent / f"{base.name}-{suffix}.txt"
+        if not path.exists():
+            raise LearnError(f"no list {path}")
+        lines = [x.strip() for x in path.read_text().splitlines() if x.strip()]
+        out.append(",".join(x if Path(x).is_absolute() else str(ROOT / x) for x in lines))
+    return out[0], out[1]
 
 
 def start_sim(cmd: Sequence[str], log: Path, cwd: Path | None = None) -> subprocess.Popen:
