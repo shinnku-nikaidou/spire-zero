@@ -133,8 +133,9 @@ def test_door_tasks_fight_the_runs_loadout_before_its_boss_at_the_hp_it_entered_
 def test_a_won_fight_scores_above_any_lost_one():
     won = {"won": True, "hp": 0, "hp_start": 50, "enemy_hp": 0, "enemy_max_hp": 300}
     lost = {"won": False, "hp": 0, "hp_start": 50, "enemy_hp": 1, "enemy_max_hp": 300}
-    assert bosslab.score(lost) < 0.5 <= bosslab.score(won)
-    assert bosslab.score({**won, "hp": 50}) == 1
+    assert bosslab.score(lost, 70) < 0.5 <= bosslab.score(won, 70)
+    assert bosslab.score({**won, "hp": 70}, 70) == 1
+    assert bosslab.score({**won, "hp": 35}, 70) == 0.75  # by the share of max HP left, not of the HP it started with
 
 
 def test_door_states_fight_the_door_loadout_at_the_hp_entered_with_and_at_shares_of_max_hp(tmp_path):

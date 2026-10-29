@@ -8,25 +8,10 @@ computed from the deck: what matters in them is the net's to learn.
 
 MAX_UP = 3  # RunNet.MaxUp: upgrade levels above this read as this one
 TABLES = ["cards", "modifiers", "relics", "potions", "context", "map"]
-BAGS = ["relics", "potions", "context", "map"]
+BAGS = {"relics": "relic_mask", "potions": "potion_mask", "context": "context_mask", "map": "map_mask"}  # and masks
 STATE = ["floor", "hp", "max_hp", "gold", "ascension", "potion_slots"]
 # The ONNX graph's inputs, in order (RunNet feeds them by these names).
-INPUTS = [
-    "cards",
-    "ups",
-    "card_mask",
-    "mods",
-    "mod_mask",
-    "relics",
-    "relic_mask",
-    "potions",
-    "potion_mask",
-    "context",
-    "context_mask",
-    "map",
-    "map_mask",
-    "state",
-]
+INPUTS = ["cards", "ups", "card_mask", "mods", "mod_mask", *(x for bag in BAGS.items() for x in bag), "state"]
 
 
 def reachable(m: dict) -> list[dict]:

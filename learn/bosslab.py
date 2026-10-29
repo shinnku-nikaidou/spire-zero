@@ -7,12 +7,12 @@ few seeds each, the same seeds for every option of a decision, so the options sh
            fight, at the HP it entered with, with the decision's pick swapped for the option (the picked card out,
            the option's in, at the upgrade level the picked one had reached), for runs that reached that boss
   states   the runs' loadouts at a boss's door alone, at the HP they entered with and at shares of max HP, one decision
-           line per door with an option per HP level, for `train_value.py --boss-states`
+           line per door with an option per HP level, for `v.train --boss-states`
   play     plays the task lines whose output is missing, PROCS at a time at nice 19, each decision's options together
            and the decisions in a fixed shuffled order, so the finished decisions come early; a stopped play leaves no
            partial file, and another host can play the rest
   collect  joins the outputs back to the decisions, one line per decision with each option's fights, for
-           `train_value.py --boss-sims`
+           `v.train --boss-sims`
   compare  on the decisions with every option played: how often the option V valued best is the fights' best
 
 The loadout is the afterstate's deck, relics and potions; cards lose their enchantments (panel cannot give them) and
@@ -42,13 +42,14 @@ BUDGET = "--effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --repla
 
 
 def merged(view: dict, changes: dict) -> dict:
-    """The view with an afterstate's changes, one level deep (as train_value.py's)."""
+    """A run view with an afterstate's changes as `fork` and `afterstates` write them: the fields that differ, to one
+    level inside an object field; a null removes a field. v/data.py reads afterstates with this one too."""
     out = dict(view)
     for k, v in changes.items():
         if v is None:
             out.pop(k, None)
-        elif isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = {**out[k], **v}
+        elif isinstance(v, dict) and isinstance(view.get(k), dict):
+            out[k] = {kk: vv for kk, vv in {**view[k], **v}.items() if vv is not None}
         else:
             out[k] = v
     return out
@@ -362,12 +363,12 @@ def collect(args) -> None:
             out.write(json.dumps(d) + "\n")
 
 
-def score(f: dict) -> float:
-    """A fight as one number in [0, 1], as train_value.py's boss score: a win 0.5 to 1 by the HP left, a loss 0 to
-    0.5 by the boss's HP taken."""
+def score(f: dict, max_hp: int) -> float:
+    """A fight as one number in [0, 1], V's boss score (v/data.py): a win 0.5 plus half the share of max_hp left, a
+    loss half the share of the boss's HP taken."""
     if f["won"]:
-        return 0.5 + 0.5 * f["hp"] / max(1, f["hp_start"])
-    return 0.5 * (1 - f["enemy_hp"] / max(1, f["enemy_max_hp"]))
+        return 0.5 + 0.5 * min(max(f["hp"] / max(max_hp, 1), 0.0), 1.0)
+    return 0.5 * (1 - min(max(f["enemy_hp"] / max(f["enemy_max_hp"], 1), 0.0), 1.0))
 
 
 def compare(args) -> None:
@@ -379,11 +380,14 @@ def compare(args) -> None:
         if any(len(f) < 2 for _, f in rows):
             continue
         n += 1
-        mean = [sum(map(score, f)) / len(f) for _, f in rows]
+        # Every option of a decision starts at the same HP, so scoring by it ranks them as by max HP.
+        mean = [sum(score(x, x["hp_start"]) for x in f) / len(f) for _, f in rows]
         best = max(range(len(rows)), key=lambda i: mean[i])
         v = max(range(len(rows)), key=lambda i: rows[i][0]["value"])
         chosen = next(i for i, (o, _) in enumerate(rows) if o["action"] == d["chosen"])
-        first, second = (max(range(len(rows)), key=lambda i, s=s: score(rows[i][1][s])) for s in (0, 1))
+        first, second = (
+            max(range(len(rows)), key=lambda i, s=s: score(rows[i][1][s], rows[i][1][s]["hp_start"])) for s in (0, 1)
+        )
         agree_v += best == v
         agree_chosen += best == chosen
         self_agree += first == second
