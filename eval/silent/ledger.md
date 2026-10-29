@@ -14,7 +14,7 @@ Earlier SL champion: L0 n2-b0.03, set 2026-10-28 by its promotion-1 baseline at 
 Train seeds are `run --seed 1 --start K`. A new batch takes the next free block of 100,000 seeds, entered here before
 it starts: shard i starts at block + 1000·i and plays `--n 1000` at most, so no two shards share a seed.
 
-**Next free block: 100000–199999.** 200000–202999 is the boss gauntlet pilot (`run --auto-win`, not self-play: `sl/forks/2026-10-29-gauntlet`, 2026-10-29); the gauntlet keeps 200000–299999; 203000–205399 is its second batch (plan v4 step 5, `sl/forks/2026-10-29-gauntlet-2`, V pure-1-g).
+**Next free block: 100000–199999.** 200000–202999 is the boss gauntlet pilot (`run --auto-win`, not self-play: `sl/forks/2026-10-29-gauntlet`, 2026-10-29); the gauntlet keeps 200000–299999; 203000–205399 is its second batch (plan v4 step 5, `sl/forks/2026-10-29-gauntlet-2`, V pure-1-g). Plan v6's elite gauntlet (`run --gauntlet`) takes the rest of that block: 205400–205549 is step 1b's smoke runs (V pure-1-g, `--explore` 1.0 / 0.5 / 0.15 on 205400 / 205450 / 205500, 50 each, `sl/eval/2026-10-29-gauntlet-smoke`); 206000–217999 is generation 1 (V pure-1-g; `--explore` 1.0 on 206000–209999, 0.5 on 210000–213999, 0.15 on 214000–217999, each a time box from its start, `sl/selfplay/v6g1/e100`, `e050`, `e015`); the next generations follow from 218000, 12,000 seeds each. **The elite gauntlet's evaluation seeds: 300000–300499** (`run --seed 1 --start 300000 --n 500`, fixed, never trained on).
 
 | batch | env | played by | commits | train seeds | runs | used | folder (under `data/silent/`) |
 |---|---|---|---|---|---|---|---|
