@@ -8,7 +8,7 @@ namespace Sts2Ai.Brain;
 public sealed record NetTest(RunView Run, double Value);
 
 /// <summary>
-/// V as <c>learn/v/export.py</c> writes it (pure V), or as <c>learn/train_value.py</c> wrote it (V v2, which also read
+/// V as <c>learn/v/export.py</c> writes it (pure V), or as the removed <c>learn/train_value.py</c> wrote it (V v2, which also read
 /// V v0's features) (docs: learning §1).
 /// </summary>
 /// <param name="Objective">What <see cref="RunNet.Value"/> returns: "floor", the floor expected to be reached, or "win",

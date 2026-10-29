@@ -34,21 +34,126 @@ from torch import nn  # noqa: E402
 
 import common  # noqa: E402
 from common import LearnError, runs_by_log  # noqa: E402
-from train_value import (  # noqa: E402
-    CAP,  # noqa: F401 (the cap the combat side applies too)
-    MAX_UP,
-    CardNumbers,
-    RelicNumbers,
-    cap,
-    card_number_tensors,
-    card_numbers,
-    padded,
-    relic_number_tensors,
-    relic_numbers,
-)
 from weights import out_path  # noqa: E402
 
 script = common.app()
+
+MAX_UP = 3  # RunNet.MaxUp
+# Every scaled number the nets read is capped at ±CAP: a few states show huge ones (an erupting WATERFALL_GIANT's HP).
+CAP = 10.0
+
+
+def cap(x: float) -> float:
+    return max(-CAP, min(CAP, x))
+
+
+def card_numbers(c: dict) -> dict:
+    """What a card shows beyond its id, upgrade level and modifiers' ids, as RunNet.Numbers reads it: its cost / 3 (0
+    for X or none), its modifiers' amounts / 10, star cost / 3 and whether it costs X, and each of its numbers / 10 by
+    name."""
+    cost = c.get("cost")
+    stars = c.get("stars")
+    return {
+        "cost": cost / 3 if cost is not None and cost > 0 else 0.0,
+        "mod_amounts": [cap(m["amount"] / 10) for m in (c.get("enchant"), c.get("affliction")) if m],
+        "scalars": [stars / 3 if stars is not None and stars > 0 else 0.0, 1.0 if c.get("x_cost") else 0.0],
+        "vars": [(k, cap(float(v) / 10)) for k, v in (c.get("vars") or {}).items()],
+    }
+
+
+def relic_numbers(r: dict) -> dict:
+    """A relic's counter / 10 (0 when none shows), whether one shows, whether it is melted, and its status."""
+    counter = r.get("counter")
+    return {
+        "values": [
+            cap(counter / 10) if counter is not None else 0.0,
+            1.0 if counter is not None else 0.0,
+            1.0 if r.get("melted") else 0.0,
+        ],
+        "status": r.get("status") or "Normal",
+    }
+
+
+def padded(rows, device):
+    """Lists of ids as one padded tensor (at least one wide) and its mask."""
+    width = max(1, max(len(r) for r in rows))
+    ids, mask = torch.zeros(len(rows), width, dtype=torch.long), torch.zeros(len(rows), width)
+    for b, r in enumerate(rows):
+        ids[b, : len(r)], mask[b, : len(r)] = torch.tensor(r, dtype=torch.long), 1
+    return ids.to(device), mask.to(device)
+
+
+def card_number_tensors(rows, index, device):
+    """Each sample's cards' numbers (card_numbers), as the inputs costs, mod_amounts, card_scalars, vars, var_values
+    and var_mask: padded as the cards are, each card's numbers by name padded to the most any card has."""
+    n, width = len(rows), max(1, max(len(r) for r in rows))
+    m = max(1, max((len(c["vars"]) for r in rows for c in r), default=0))
+    costs, mod_amounts, scalars = torch.zeros(n, width), torch.zeros(n, width, 2), torch.zeros(n, width, 2)
+    names, values, mask = torch.zeros(n, width, m, dtype=torch.long), torch.zeros(n, width, m), torch.zeros(n, width, m)
+    for b, r in enumerate(rows):
+        for k, c in enumerate(r):
+            costs[b, k] = c["cost"]
+            for j, a in enumerate(c["mod_amounts"][:2]):
+                mod_amounts[b, k, j] = a
+            scalars[b, k] = torch.tensor(c["scalars"])
+            for j, (name, v) in enumerate(c["vars"]):
+                names[b, k, j], values[b, k, j], mask[b, k, j] = index["vars"].get(name, 0), v, 1
+    return [x.to(device) for x in (costs, mod_amounts, scalars, names, values, mask)]
+
+
+def relic_number_tensors(rows, index, device):
+    """Each sample's relics' numbers (relic_numbers), as the inputs relic_values and relic_status, padded as the relics
+    are."""
+    n, width = len(rows), max(1, max(len(r) for r in rows))
+    values, status = torch.zeros(n, width, 3), torch.zeros(n, width, dtype=torch.long)
+    for b, r in enumerate(rows):
+        for k, x in enumerate(r):
+            values[b, k], status[b, k] = torch.tensor(x["values"]), index["relic_status"].get(x["status"], 0)
+    return [values.to(device), status.to(device)]
+
+
+class CardNumbers(nn.Module):
+    """What a card's numbers add to its vector: cost, modifiers' amounts (each times its modifier's amount vector),
+    star cost and X, and each number times its name's vector."""
+
+    def __init__(self, sizes, dim):
+        super().__init__()
+        self.cost = nn.Parameter(torch.randn(dim) * 0.1)
+        self.mod_amount = nn.Embedding(sizes["modifiers"], dim)
+        self.scalars = nn.Linear(2, dim, bias=False)
+        self.vars = nn.Embedding(sizes["vars"], dim)
+        for e in (self.mod_amount, self.vars):
+            nn.init.normal_(e.weight, std=0.1)
+
+    def forward(self, mods, mod_mask, costs, mod_amounts, card_scalars, var_ids, var_values, var_mask):
+        """Costs may be None, for a net that reads them on its own."""
+        return (
+            (0 if costs is None else costs[..., None] * self.cost)
+            + (self.mod_amount(mods) * (mod_amounts * mod_mask)[..., None]).sum(2)
+            + self.scalars(card_scalars)
+            + (self.vars(var_ids) * (var_values * var_mask)[..., None]).sum(2)
+        )
+
+
+class RelicNumbers(nn.Module):
+    """What a relic's numbers add to its vector: its counter times its id's counter vector, whether a counter shows
+    and whether it is melted, and its status."""
+
+    def __init__(self, sizes, dim):
+        super().__init__()
+        self.counter = nn.Embedding(sizes["relics"], dim)
+        self.flags = nn.Linear(2, dim, bias=False)
+        self.status = nn.Embedding(sizes["relic_status"], dim)
+        for e in (self.counter, self.status):
+            nn.init.normal_(e.weight, std=0.1)
+
+    def forward(self, relics, relic_values, relic_status):
+        return (
+            relic_values[..., 0:1] * self.counter(relics)
+            + self.flags(relic_values[..., 1:])
+            + self.status(relic_status)
+        )
+
 
 PILES = ["hand", "draw", "discard", "exhaust"]
 TABLES = [

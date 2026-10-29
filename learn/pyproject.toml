@@ -1,7 +1,7 @@
 [project]
 name = "sts2-learn"
 version = "0.1.0"
-description = "Offline learning for the STS2 AI: value fitting and tuning from self-play logs (docs: learning)."
+description = "Offline learning for the STS2 AI: V and the combat net, trained from self-play logs (docs: learning)."
 requires-python = ">=3.12"
 dependencies = [
     "loguru>=0.7.3",

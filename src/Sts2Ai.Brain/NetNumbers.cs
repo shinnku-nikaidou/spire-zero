@@ -5,9 +5,9 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// The numbers of cards and relics as both nets read them (<c>learn/train_value.py</c>'s card_numbers and
-/// relic_numbers): what a card or relic shows beyond its ids. A net file made before these inputs existed does not
-/// declare them, and is fed without them (<see cref="Declared"/>).
+/// The numbers of cards and relics as the combat net reads them (<c>learn/train_combat.py</c>'s card_numbers and
+/// relic_numbers), and V v2 read them: what a card or relic shows beyond its ids. A net file made before these inputs
+/// existed, or a pure V's, does not declare them, and is fed without them (<see cref="Declared"/>).
 /// </summary>
 public static class NetNumbers
 {
