@@ -93,7 +93,7 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
         if (session.NodeStart != _start)
         {
             (_node, _start, _sent) = (_node + 1, session.NodeStart, 0);
-            brain.Checkpoint(new NodeCheckpoint(_node, clone.Save));
+            brain.Checkpoint(new NodeCheckpoint(_node, clone.Save, clone.Gauntlet));
         }
         for (; _sent < clone.Trace.Count; _sent++) brain.Act(new NodeAction(_node, _sent, clone.Trace[_sent]));
     }

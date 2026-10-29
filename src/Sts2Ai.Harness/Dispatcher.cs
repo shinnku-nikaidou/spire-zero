@@ -199,7 +199,11 @@ public sealed class Dispatcher(
     /// <summary>SL with <c>clones</c>: the node's clone at this decision, for the macro side.</summary>
     private IMacroClone? MacroClone() => env == PlayEnvironment.SL && clones != null ? clones(Clone()) : null;
 
-    private NodeClone Clone() => new((_node ?? throw new InvalidOperationException("an SL decision before any node checkpoint")).Checkpoint, _nodeTrace.ToList());
+    private NodeClone Clone()
+    {
+        var node = _node ?? throw new InvalidOperationException("an SL decision before any node checkpoint");
+        return new(node.Checkpoint, _nodeTrace.ToList(), node.Gauntlet);
+    }
 
     private (int Id, ulong Seed, Stopwatch Clock) Begin(string brain)
     {

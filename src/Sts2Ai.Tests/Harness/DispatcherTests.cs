@@ -67,6 +67,22 @@ public class DispatcherTests
     public void RefusesNodeCheckpointsInNoSL() =>
         Assert.Throws<InvalidOperationException>(() => Make(CombatRoute.Of("test", new EndTurns())).Checkpoint(new(0, "{}")));
 
+    [Fact]
+    public void AnSLNodesClonesKeepTheGauntletsRule()
+    {
+        NodeClone? seen = null;
+        var macro = new Fixed("map:0,1");
+        var dispatcher = new Dispatcher("run-1", PlayEnvironment.SL, new("test", (_, _, clone, _) =>
+        {
+            seen = clone;
+            return new(CombatAction.EndTurn, [], []);
+        }), new("p0", macro), new("l0", macro), new("l0", macro));
+        dispatcher.Checkpoint(new(0, "{}", Gauntlet: true));
+        dispatcher.Act(new(0, 0, "event event:1"));
+        dispatcher.Choose(Decision(Fixtures.Slugs()));
+        Assert.True(seen is { Save: "{}", Gauntlet: true } && seen.Trace.SequenceEqual(["event event:1"]));
+    }
+
     private sealed class EndTurns : ICombatPolicy
     {
         public CombatAction Choose(CombatDecision decision) => CombatAction.EndTurn;
