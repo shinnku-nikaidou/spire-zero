@@ -45,4 +45,4 @@ Every file is `weights/silent/NAME.json` (in git). V v0's initial weights are bu
 | n2-b0.03 | V v2 net, pull β 0.03 | g0–g2 (1,198 runs) | passed 2026-10-28 (+1.78 floors) | NoSL champion's V; played SL g3 |
 | n2-b0.01 | V v2 net, pull β 0.01 | g0–g2 (1,198 runs) | stopped halfway, to be run again | – |
 | n3-ctl | V v2 net, pull β 0.03 (towards g0–g2's V v0), no boss labels | g0–g3 (1,617 runs) | not gated | – |
-| n3-free-ctl | V v2 net, no pull, reads 9 of V v0's 17 features (floor, HP, max HP, gold, the map ahead), no boss labels | g0–g3 (1,617 runs) | SL gate 2026-10-29 | – |
+| n3-free-ctl | V v2 net, no pull, reads 9 of V v0's 17 features (floor, HP, max HP, gold, the map ahead), no boss labels | g0–g3 (1,617 runs) | failed 2026-10-29 in SL, non-inferiority (`--not-worse`, δ 1.5) at 33 pairs; over all 200: −5.77 ± 0.64 floors, act 2 boss reached 12 times (champion 105), deaths in act 2 hallways 76 (38) and elites 45 (7) | – |
