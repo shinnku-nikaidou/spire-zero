@@ -46,4 +46,24 @@ internal static class GameAssemblies
             return File.Exists(path) ? context.LoadFromAssemblyPath(path) : null;
         };
     }
+
+    /// <summary>
+    /// Game assemblies (and game-side projects) that <paramref name="root"/> references, directly or through our
+    /// own assemblies. Compiled references only list what the code actually uses.
+    /// </summary>
+    public static List<string> ReachedFrom(Assembly root)
+    {
+        string[] forbidden = ["sts2", "GodotSharp", "0Harmony", "SmartFormat", "Sts2Ai.GameBridge", "Sts2Ai.SimWorker"];
+        var reached = new List<string>();
+        var seen = new HashSet<string> { root.GetName().Name! };
+        var pending = new Stack<AssemblyName>(root.GetReferencedAssemblies());
+        while (pending.TryPop(out var name))
+        {
+            if (!seen.Add(name.Name!)) continue;
+            if (forbidden.Contains(name.Name)) reached.Add(name.Name!);
+            else if (name.Name!.StartsWith("Sts2Ai.", StringComparison.Ordinal))
+                foreach (var r in Assembly.Load(name).GetReferencedAssemblies()) pending.Push(r);
+        }
+        return reached;
+    }
 }
