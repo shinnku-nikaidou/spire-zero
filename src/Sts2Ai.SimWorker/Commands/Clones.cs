@@ -76,7 +76,7 @@ internal static class ClonesCommand
         }
         catch (Exception e)
         {
-            return (null, $"{e.GetType().Name}: {Cli.FirstLine(e.Message)}");
+            return (null, $"{e.GetType().Name}: {Logs.FirstLine(e.Message)}");
         }
         return (next.Asked, next.Asked == null ? "no decision after its steps" : null);
     }
@@ -127,7 +127,7 @@ internal static class ClonesCommand
                     return null;
                 default:
                     string sa = a?.ToJsonString() ?? "absent", sb = b?.ToJsonString() ?? "absent";
-                    return sa == sb ? null : $"{path}: game {Cli.FirstLine(sa)}, clone {Cli.FirstLine(sb)}";
+                    return sa == sb ? null : $"{path}: game {Logs.FirstLine(sa)}, clone {Logs.FirstLine(sb)}";
             }
         }
     }

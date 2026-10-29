@@ -25,7 +25,7 @@ internal static class ReportCommand
     {
         var seedFile = r.GetValue(Seeds)!;
         var outPath = r.GetValue(Out)!;
-        var runs = Cli.ReadRecords(r.GetValue(Records)!);
+        var runs = RunRecord.Read(r.GetValue(Records)!);
         var previous = r.GetValue(Previous) is { } previousPath ? ProtocolJson.Deserialize<EvalReport>(File.ReadAllText(previousPath)) : null;
         var report = Of(runs, Path.GetFileNameWithoutExtension(seedFile), EvalReport.ReadSeeds(seedFile));
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
@@ -88,7 +88,7 @@ internal static class GateCommand
         var file = ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(championPath));
         var champion = ProtocolJson.Deserialize<EvalReport>(File.ReadAllText(file.Report));
         if (r.GetValue(Env) is { } env && env.ToString() != file.Env) throw new CliException($"the challenger plays in {env}, the champion in {file.Env}");
-        var runs = Cli.ReadRecords(r.GetValue(Records)!);
+        var runs = RunRecord.Read(r.GetValue(Records)!);
         var challenger = Challenger.Read(r);
         if (challenger.Explores) throw new CliException("--macro-explore and --combat-explore are for self-play; a challenger plays its best");
         if (runs.FirstOrDefault(run => run.Config.Champion != challenger.Name) is { } other)
@@ -165,7 +165,7 @@ internal static class SeedsCommand
         var command = Opt.Command("seeds", "a seed file's seeds: MakeSeed(base, 0..n-1), one per line", [Base, N]);
         command.SetAction(r =>
         {
-            foreach (int i in Enumerable.Range(0, r.GetValue(N))) Console.WriteLine(Cli.MakeSeed(r.GetValue(Base), i));
+            foreach (int i in Enumerable.Range(0, r.GetValue(N))) Console.WriteLine(GameSeeds.MakeSeed(r.GetValue(Base), i));
         });
         return command;
     }

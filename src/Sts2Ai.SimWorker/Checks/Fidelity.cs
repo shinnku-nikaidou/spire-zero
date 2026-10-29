@@ -50,13 +50,13 @@ internal static partial class Fidelity
                           $"game {HeadlessGame.GameVersion}");
         for (int i = start; i < start + n; i++)
         {
-            var setup = pool.Setup(i, Cli.MakeSeed(seed, i));
+            var setup = pool.Setup(i, GameSeeds.MakeSeed(seed, i));
             var policy = Policies.Combat(r.GetValue(Player)!, new Random(seed * 1_000_003 + i));
             var moves = new MoveRecord();
             CombatSession? real = CombatSession.Start(pump, setup, PromptBrain.Instance);
             try
             {
-                for (int d = 0; !Cli.IsCapped(real); d++)
+                for (int d = 0; !real.IsCapped; d++)
                 {
                     moves.Witness(real.Observation());
                     if (d % every == 0)
@@ -100,7 +100,7 @@ internal static partial class Fidelity
         real.Dispose();
 
         tally.Measured++;
-        using (var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, Cli.MakeSeed(seed, 0), history), PromptBrain.Instance))
+        using (var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, GameSeeds.MakeSeed(seed, 0), history), PromptBrain.Instance))
         {
             if (built.BuildDifferences.Count > 0)
                 tally.BuiltWrong++;

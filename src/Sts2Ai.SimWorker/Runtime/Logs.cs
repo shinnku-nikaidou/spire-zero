@@ -33,6 +33,13 @@ internal static class Logs
         return factory;
     }
 
+    /// <summary>A message's first line, at most 200 characters: what a one-line report of an error shows.</summary>
+    public static string FirstLine(string s)
+    {
+        var line = s.Split('\n')[0].Trim();
+        return line.Length > 200 ? line[..200] : line;
+    }
+
     /// <summary>"12:34:56 INFO    sim: message", as the Python scripts' logs; an exception follows on its own lines.</summary>
     private sealed class Line() : ConsoleFormatter(Id)
     {

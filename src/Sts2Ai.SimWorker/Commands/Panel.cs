@@ -65,7 +65,7 @@ internal static class Panel
         IChoicePolicy prompts = preferred == null ? PromptBrain.Instance : new Preferred(preferred);
 
         using var output = r.GetValue(Out) is { } outPath ? new StreamWriter(outPath) : null;
-        using var workerPool = workers > 0 ? new WorkerPool(Cli.SelfCommand(), workers, leaf.WorkerOptions()) : null;
+        using var workerPool = workers > 0 ? new WorkerPool(Program.SelfCommand(), workers, leaf.WorkerOptions()) : null;
         var pooled = workerPool == null ? null : new PooledPimc(workerPool);
         var outcomes = new Dictionary<string, int>();
         int failed = 0, gameErrors = 0, replans = 0;
@@ -79,7 +79,7 @@ internal static class Panel
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
-            var setup = pool.Setup(i, Cli.MakeSeed(seed, i));
+            var setup = pool.Setup(i, GameSeeds.MakeSeed(seed, i));
             var encounter = setup.Encounter;
             var started = clock.Elapsed;
             string outcome;
@@ -99,7 +99,7 @@ internal static class Panel
             catch (Exception e)
             {
                 outcome = "Failed";
-                failure = $"{e.GetType().Name}: {Cli.FirstLine(e.Message)}";
+                failure = $"{e.GetType().Name}: {Logs.FirstLine(e.Message)}";
                 failed++;
                 Logs.Sim.LogError(e, "combat #{Index} failed", i);
             }
@@ -139,9 +139,9 @@ internal static class Panel
     {
         using var session = CombatSession.Start(pump, setup, choices);
         int hpStart = session.Player.Creature.CurrentHp;
-        while (!Cli.IsCapped(session))
+        while (!session.IsCapped)
         {
-            var decision = Cli.Decision(session);
+            var decision = session.Decision();
             Peak(powers, decision.Observation);
             session.Execute(policy.Choose(decision));
         }
@@ -186,7 +186,7 @@ internal static class Panel
         try
         {
             int hpStart = session.Player.Creature.CurrentHp;
-            while (!Cli.IsCapped(session))
+            while (!session.IsCapped)
             {
                 var obs = session.Observation();
                 var legal = session.LegalActions();
@@ -194,7 +194,7 @@ internal static class Panel
                 moves.Witness(obs);
                 var history = moves.History;
                 ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{session.ActionsExecuted}");
-                string buildSeed = Cli.MakeSeed((int)decisionSeed, 0);
+                string buildSeed = GameSeeds.MakeSeed((int)decisionSeed, 0);
                 // Searches the decision's worlds here: the real combat is kept as a snapshot meanwhile and put back after.
                 T Searching<T>(Func<IWorldSource, Stopwatch, T> search)
                 {

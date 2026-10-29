@@ -30,7 +30,12 @@ public sealed record RunConfig(string Game, string Commit, string Champion, stri
 public sealed record RunRecord(
     RunConfig Config, string Seed, string Character, int Ascension, string Outcome, int Act, int Floor, int Hp, int MaxHp, int Gold,
     IReadOnlyList<CombatEntry> Combats, IReadOnlyDictionary<string, int> Surfaces, IReadOnlyDictionary<string, int> Brains,
-    int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string? RunId = null);
+    int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string? RunId = null)
+{
+    /// <summary>The run records in these files (comma-separated), one per line.</summary>
+    public static List<RunRecord> Read(string files) =>
+        files.Split(',').SelectMany(File.ReadAllLines).Where(l => l.Length > 0).Select(ProtocolJson.Deserialize<RunRecord>).ToList();
+}
 
 /// <summary>A proportion with its Wilson 95% interval.</summary>
 public sealed record Rate(int Hits, int Of, double Value, double Low, double High)

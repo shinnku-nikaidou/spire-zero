@@ -70,7 +70,7 @@ internal static class Serve
     {
         var frames = (e.GetBaseException().StackTrace ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Take(3).Select(f => string.Join('.', f.Split('(')[0].Split(' ').Last().Split('.').TakeLast(2)));
-        return $"{e.GetType().Name} at {string.Join(" from ", frames)}: {Cli.FirstLine(e.Message)}\n{e}";
+        return $"{e.GetType().Name} at {string.Join(" from ", frames)}: {Logs.FirstLine(e.Message)}\n{e}";
     }
 
     private static IReadOnlyList<PlannedLine> Search(Pump pump, PimcBrain brain, WorkerRequest request)

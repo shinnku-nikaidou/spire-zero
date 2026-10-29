@@ -76,6 +76,9 @@ internal sealed record HiddenDraw(IReadOnlyList<string> Draw, IReadOnlyList<Seri
 /// </summary>
 internal sealed class CombatSession : IDisposable
 {
+    private const int MaxRounds = 50;
+    private const int MaxActions = 1000;
+
     private readonly Pump _pump;
     private readonly List<TraceEvent> _trace;
     private readonly PolicySelector _selector;
@@ -201,6 +204,21 @@ internal sealed class CombatSession : IDisposable
     public List<CombatAction> LegalActions() => CombatActions.Legal(State, Player);
 
     public CombatObservation Observation() => Observe.Combat(State, Player);
+
+    /// <summary>Whether the combat is over or at the round/action cap.</summary>
+    public bool IsCapped => IsOver || State.RoundNumber > MaxRounds || ActionsExecuted >= MaxActions;
+
+    public CombatDecision Decision() => new(LegalActions(), Observation);
+
+    /// <summary>Plays until the combat ends or hits the round/action cap. Calls <paramref name="beforeAction"/> before each action.</summary>
+    public void PlayOut(ICombatPolicy policy, Action<CombatSession>? beforeAction = null)
+    {
+        while (!IsCapped)
+        {
+            beforeAction?.Invoke(this);
+            Execute(policy.Choose(Decision()));
+        }
+    }
 
     public void Execute(CombatAction action)
     {

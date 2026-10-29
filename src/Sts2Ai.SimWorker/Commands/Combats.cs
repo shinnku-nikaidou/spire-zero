@@ -63,13 +63,13 @@ internal static class CombatCommand
         CombatSetup setup;
         if (r.GetValue(From) is { } path)
         {
-            setup = CombatBuilder.Setup(ProtocolJson.Deserialize<CombatObservation>(File.ReadAllText(path)), Cli.MakeSeed(seed, 0));
+            setup = CombatBuilder.Setup(ProtocolJson.Deserialize<CombatObservation>(File.ReadAllText(path)), GameSeeds.MakeSeed(seed, 0));
         }
         else
         {
             var id = r.GetValue(Encounter) ?? throw new CliException("combat needs --encounter ID (see list) or --from OBS.json");
-            var (encounter, act) = Cli.Encounter(id);
-            setup = new CombatSetup(Loadout.Character(r), encounter, act, Cli.MakeSeed(seed, 0), Loadout: Loadout.Loadout(r));
+            var (encounter, act) = Opt.Encounter(id);
+            setup = new CombatSetup(Loadout.Character(r), encounter, act, GameSeeds.MakeSeed(seed, 0), Loadout: Loadout.Loadout(r));
         }
         var rng = new Random(seed);
         var policy = Policies.Combat(r.GetValue(Policy)!, rng);
@@ -77,11 +77,11 @@ internal static class CombatCommand
         Console.WriteLine($"{setup.Encounter.Id.Entry} act {setup.ActIndex} seed {setup.Seed}{(setup.From != null ? " (built from observation)" : "")}");
         using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
         foreach (var difference in session.BuildDifferences) Console.WriteLine("  not reproduced: " + difference);
-        while (!Cli.IsCapped(session))
+        while (!session.IsCapped)
         {
             Console.WriteLine("  " + session.Summary());
             if (r.GetValue(Obs)) Console.WriteLine("  " + ProtocolJson.Serialize(session.Observation()));
-            var action = policy.Choose(Cli.Decision(session));
+            var action = policy.Choose(session.Decision());
             Console.WriteLine($"    -> {action}");
             session.Execute(action);
         }
@@ -129,7 +129,7 @@ internal static class BenchCommand
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
-            var setup = pool.Setup(i, Cli.MakeSeed(seed, i));
+            var setup = pool.Setup(i, GameSeeds.MakeSeed(seed, i));
             var encounter = setup.Encounter;
             var rng = new Random(seed * 1_000_003 + i);
             var started = clock.Elapsed;
@@ -141,7 +141,7 @@ internal static class BenchCommand
             {
                 using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
                 startMs = (clock.Elapsed - started).TotalMilliseconds;
-                Cli.PlayOut(session, Policies.Combat(policy, rng));
+                session.PlayOut(Policies.Combat(policy, rng));
                 outcome = session.IsOver ? session.Outcome.ToString() : CombatOutcome.Truncated.ToString();
                 steps = session.ActionsExecuted;
                 rounds = session.State.RoundNumber;
@@ -150,7 +150,7 @@ internal static class BenchCommand
             catch (Exception e)
             {
                 outcome = "Failed";
-                failure = $"{e.GetType().Name}: {Cli.FirstLine(e.Message)}";
+                failure = $"{e.GetType().Name}: {Logs.FirstLine(e.Message)}";
                 failures[failure] = failures.GetValueOrDefault(failure) + 1;
                 failedEncounters[encounter.Id.Entry] = failedEncounters.GetValueOrDefault(encounter.Id.Entry) + 1;
                 Logs.Sim.LogError(e, "combat #{Index} failed", i);
@@ -158,7 +158,7 @@ internal static class BenchCommand
             var errors = HeadlessGame.TakeErrors();
             gameErrors += errors.Count;
             if (errors.Count > 0 && combatsWithErrors++ == 0) firstWithErrors = i;
-            foreach (var e in errors) errorTexts[Cli.FirstLine(e)] = errorTexts.GetValueOrDefault(Cli.FirstLine(e)) + 1;
+            foreach (var e in errors) errorTexts[Logs.FirstLine(e)] = errorTexts.GetValueOrDefault(Logs.FirstLine(e)) + 1;
             actions += steps;
             outcomes[outcome] = outcomes.GetValueOrDefault(outcome) + 1;
             output?.WriteLine(JsonSerializer.Serialize(new

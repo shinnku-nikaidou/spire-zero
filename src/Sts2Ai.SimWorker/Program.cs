@@ -11,6 +11,17 @@ internal static class Program
         GameAssemblies.InstallResolver();
         return Cli.Run(args);
     }
+
+    /// <summary>The commit this program was built from, as the build stamped it.</summary>
+    public static readonly string Commit =
+        typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+').ElementAtOrDefault(1) ?? "unknown";
+
+    /// <summary>How to start this program again: its apphost, or dotnet with its dll if that is how it was started.</summary>
+    public static IReadOnlyList<string> SelfCommand()
+    {
+        var exe = Environment.ProcessPath!;
+        return Path.GetFileNameWithoutExtension(exe) == "dotnet" ? [exe, typeof(Program).Assembly.Location] : [exe];
+    }
 }
 
 /// <summary>

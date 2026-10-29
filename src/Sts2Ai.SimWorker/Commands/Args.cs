@@ -29,6 +29,14 @@ internal static class Opt
         foreach (var option in options.SelectMany(o => o)) command.Options.Add(option);
         return command;
     }
+
+    /// <summary>The encounter of this id, any case, and its act.</summary>
+    public static (EncounterModel Encounter, int Act) Encounter(string id)
+    {
+        var encounter = ModelDb.AllEncounters.FirstOrDefault(e => e.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase))
+            ?? throw new CliException($"no encounter {id} (see list)");
+        return (encounter, Enumerable.Range(0, ModelDb.ActsByIndex.Count).FirstOrDefault(i => ModelDb.ActsByIndex[i].Any(a => a.AllEncounters.Contains(encounter))));
+    }
 }
 
 /// <summary>The player's loadout, for every command that plays: omitted parts keep the character's starting values.</summary>
@@ -66,7 +74,7 @@ internal sealed class PoolArgs
         var loadout = _loadout.Loadout(r);
         if (r.GetValue(_encounter) is { } id)
         {
-            var (encounter, encounterAct) = Cli.Encounter(id);
+            var (encounter, encounterAct) = Opt.Encounter(id);
             return new(encounterAct, encounter.Id.Entry, [encounter], character, loadout);
         }
         int act = r.GetValue(_act);

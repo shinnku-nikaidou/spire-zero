@@ -1,10 +1,7 @@
 using System.CommandLine;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using MegaCrit.Sts2.Core.Models;
 using Microsoft.Extensions.Logging;
-using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
@@ -19,9 +16,6 @@ namespace Sts2Ai.SimWorker;
 /// </summary>
 internal static class Cli
 {
-    private const int MaxRounds = 50;
-    private const int MaxActions = 1000;
-
     private static readonly Option<bool> Verbose = new("--verbose")
     {
         Recursive = true,
@@ -70,7 +64,7 @@ internal static class Cli
         }
         catch (Exception e)
         {
-            Logs.Sim.LogCritical(e, "{Type}: {Message}", e.GetType().Name, FirstLine(e.Message));
+            Logs.Sim.LogCritical(e, "{Type}: {Message}", e.GetType().Name, Logs.FirstLine(e.Message));
             return 70;
         }
     }
@@ -81,117 +75,4 @@ internal static class Cli
         HeadlessGame.Boot();
         return action(r, Pump.InstallOnCurrentThread());
     };
-
-    /// <summary>The commit this program was built from, as the build stamped it.</summary>
-    public static readonly string Commit =
-        typeof(Cli).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+').ElementAtOrDefault(1) ?? "unknown";
-
-    /// <summary>The encounter of this id, any case, and its act.</summary>
-    public static (EncounterModel Encounter, int Act) Encounter(string id)
-    {
-        var encounter = ModelDb.AllEncounters.FirstOrDefault(e => e.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase))
-            ?? throw new CliException($"no encounter {id} (see list)");
-        return (encounter, Enumerable.Range(0, ModelDb.ActsByIndex.Count).FirstOrDefault(i => ModelDb.ActsByIndex[i].Any(a => a.AllEncounters.Contains(encounter))));
-    }
-
-    /// <summary>Plays until the combat ends or hits the round/action cap. Calls <paramref name="beforeAction"/> before each action.</summary>
-    public static void PlayOut(CombatSession session, ICombatPolicy policy, Action<CombatSession>? beforeAction = null)
-    {
-        while (!IsCapped(session))
-        {
-            beforeAction?.Invoke(session);
-            session.Execute(policy.Choose(Decision(session)));
-        }
-    }
-
-    /// <summary>Whether a combat is over or at the round/action cap.</summary>
-    public static bool IsCapped(CombatSession session) =>
-        session.IsOver || session.State.RoundNumber > MaxRounds || session.ActionsExecuted >= MaxActions;
-
-    public static CombatDecision Decision(CombatSession session) => new(session.LegalActions(), session.Observation);
-
-    /// <summary>A game-style seed string (the game's alphabet, 12 chars), derived deterministically from (seed, index).</summary>
-    public static string MakeSeed(int seed, int index)
-    {
-        const string alphabet = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-        var rng = new Random(unchecked(seed * 1_000_003 + index * 7_919) ^ 0x5eed);
-        return string.Concat(Enumerable.Range(0, 12).Select(_ => alphabet[rng.Next(alphabet.Length)]));
-    }
-
-    /// <summary>How to start this program again: its apphost, or dotnet with its dll if that is how it was started.</summary>
-    public static IReadOnlyList<string> SelfCommand()
-    {
-        var exe = Environment.ProcessPath!;
-        return Path.GetFileNameWithoutExtension(exe) == "dotnet" ? [exe, typeof(Cli).Assembly.Location] : [exe];
-    }
-
-    public static string FirstLine(string s)
-    {
-        var line = s.Split('\n')[0].Trim();
-        return line.Length > 200 ? line[..200] : line;
-    }
-
-    /// <summary>The run records in these files (comma-separated).</summary>
-    public static List<RunRecord> ReadRecords(string files) =>
-        files.Split(',').SelectMany(File.ReadAllLines).Where(l => l.Length > 0).Select(ProtocolJson.Deserialize<RunRecord>).ToList();
-}
-
-/// <summary>
-/// Where each character's files go, from the repository root (docs: learning §6, evaluation §2): each character is
-/// trained and judged on its own, every ascension by the same brain, so its weights and its evaluation have a folder
-/// of their own. The seed sets are shared.
-/// </summary>
-internal static class Layout
-{
-    /// <summary>The character's folder name: SILENT's is silent.</summary>
-    public static string Folder(string character) => character.ToLowerInvariant();
-
-    /// <summary>eval/CHARACTER: champions/ENV.json, reports/ and leaderboard.md.</summary>
-    public static string Eval(string character) => Path.Combine("eval", Folder(character));
-
-    /// <summary>weights/CHARACTER: every weights file of the character, NAME.json, each name used once.</summary>
-    public static string Weights(string character) => Path.Combine("weights", Folder(character));
-
-    public static string Seeds(string seedSet) => Path.Combine("eval", "seeds", seedSet + ".txt");
-}
-
-/// <summary>
-/// What pimc values its leaves with (docs: combat-brain §4): --leaf FILE's weights (the default ones without it), and
-/// --combat-net FILE's net, which then values the leaves still in progress at those weights' prices.
-/// </summary>
-internal sealed record LeafChoice(LeafFile? Weights, string? WeightsPath, CombatNet? Net, string? NetPath)
-{
-    public static LeafChoice Read(string? weightsPath, string? netPath)
-    {
-        var weights = weightsPath == null ? null : ProtocolJson.Deserialize<LeafFile>(File.ReadAllText(weightsPath));
-        var net = netPath == null ? null : CombatNet.Load(ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(netPath)), weights?.Weights);
-        return new(weights, weightsPath, net, netPath);
-    }
-
-    public bool IsDefault => Weights == null && Net == null;
-
-    /// <summary>
-    /// Fails for a combat net of another environment: it predicts the endings of another policy, and SL's planner wins
-    /// more from the same state than NoSL's search (docs: learning §2). A file without one (c1–c4) plays in either.
-    /// </summary>
-    public void Check(PlayEnvironment env)
-    {
-        // OLD NETS: a file without an environment is c1–c4's; remove once no champion uses them.
-        if (Net?.Env is { } own && own != env.ToString())
-            throw new NotSupportedException($"combat net {Net.Name} predicts {own}'s endings, not {env}'s");
-    }
-
-    /// <summary>What follows pimc in the brain's name: the weights' name, then the net's, each when given.</summary>
-    public string Suffix => (Weights != null ? $" {Weights.Name}" : "") + (Net != null ? $" {Net.Name}" : "");
-
-    public ICombatLeaf Leaf => Net ?? (ICombatLeaf)new HandLeaf(Weights?.Weights);
-
-    /// <summary>The options that give workers the same leaf: they start from the same folder, by full path anyway.</summary>
-    public IReadOnlyList<string>? WorkerOptions()
-    {
-        var options = new List<string>();
-        if (WeightsPath != null) options.AddRange(["--leaf", Path.GetFullPath(WeightsPath)]);
-        if (NetPath != null) options.AddRange(["--combat-net", Path.GetFullPath(NetPath)]);
-        return options.Count > 0 ? options : null;
-    }
 }

@@ -77,7 +77,7 @@ internal static class SelfTest
         Check("reference check sees the bridge's game references", GameAssembliesReachedFrom(typeof(Observe).Assembly).Contains("sts2"), "sts2 not found");
         for (int i = 0; i < n; i++)
         {
-            var setup = combats.Setup(i, Cli.MakeSeed(seed, i));
+            var setup = combats.Setup(i, GameSeeds.MakeSeed(seed, i));
             var encounter = setup.Encounter;
             string label = $"#{i} {encounter.Id.Entry} {setup.Seed}";
             try
@@ -116,16 +116,16 @@ internal static class SelfTest
                     using (var replayed = CombatSession.Restore(pump, determinized, new RandomChoices(new Random(k))))
                     {
                         Check("determinize replays", DrawOrder(replayed) == orderA, at);
-                        Cli.PlayOut(replayed, new PlayPolicy(new Random(k)));
+                        replayed.PlayOut(new PlayPolicy(new Random(k)));
                         Check("plays on after determinize", replayed.ActionsExecuted >= snapshot.Trace.Count(e => e.Kind == TraceKind.Action), at);
                     }
 
-                    BuildFrom(pump, ProtocolJson.Deserialize<CombatObservation>(first.Observations[k]), Cli.MakeSeed(seed + 1, i * 3 + k), k, at, Check);
+                    BuildFrom(pump, ProtocolJson.Deserialize<CombatObservation>(first.Observations[k]), GameSeeds.MakeSeed(seed + 1, i * 3 + k), k, at, Check);
                 }
             }
             catch (Exception e)
             {
-                Check("no exceptions", false, $"{label}: {e.GetType().Name}: {Cli.FirstLine(e.Message)}");
+                Check("no exceptions", false, $"{label}: {e.GetType().Name}: {Logs.FirstLine(e.Message)}");
                 Logs.Sim.LogDebug(e, "{Label} failed", label);
             }
             var errors = HeadlessGame.TakeErrors();
@@ -159,11 +159,11 @@ internal static class SelfTest
     private static void PooledMatches(Pump pump, CombatPool combats, int seed, int workers, Action<string, bool, string> check)
     {
         var brain = new PimcBrain();
-        using var workerPool = new WorkerPool(Cli.SelfCommand(), workers);
+        using var workerPool = new WorkerPool(Program.SelfCommand(), workers);
         var pooled = new PooledPimc(workerPool);
         for (int i = 0; i < 4; i++)
         {
-            var setup = combats.Setup(i, Cli.MakeSeed(seed + 2, i));
+            var setup = combats.Setup(i, GameSeeds.MakeSeed(seed + 2, i));
             var encounter = setup.Encounter;
             CombatObservation obs;
             IReadOnlyList<CombatAction> legal;
@@ -171,11 +171,11 @@ internal static class SelfTest
             using (var session = CombatSession.Start(pump, setup, new RandomChoices(rng)))
             {
                 var policy = new PlayPolicy(rng);
-                for (int a = 0; a < i && !session.IsOver; a++) session.Execute(policy.Choose(Cli.Decision(session)));
+                for (int a = 0; a < i && !session.IsOver; a++) session.Execute(policy.Choose(session.Decision()));
                 (obs, legal) = (session.Observation(), session.LegalActions());
             }
             ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{i}");
-            string buildSeed = Cli.MakeSeed((int)decisionSeed, 0);
+            string buildSeed = GameSeeds.MakeSeed((int)decisionSeed, 0);
             foreach (var budget in new Budget[] { new(4, 120), new(4, 120, Halving: true) })
             {
                 CombatDecisionResult here;
@@ -207,13 +207,13 @@ internal static class SelfTest
         {
             check("build shows the observation", built.BuildDifferences.Count == 0, $"{at}: {string.Join("; ", built.BuildDifferences.Take(4))}");
             var policy = new PlayPolicy(new Random(k));
-            for (int a = 0; a < 3 && !built.IsOver; a++) built.Execute(policy.Choose(Cli.Decision(built)));
+            for (int a = 0; a < 3 && !built.IsOver; a++) built.Execute(policy.Choose(built.Decision()));
             snapshot = built.Snapshot();
             (json, hidden) = (Json(built), Hidden(built));
         }
         using var restored = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0)));
         check("built combat restores", Json(restored) == json && Hidden(restored) == hidden, at);
-        Cli.PlayOut(restored, new PlayPolicy(new Random(k)));
+        restored.PlayOut(new PlayPolicy(new Random(k)));
         check("plays on after build", restored.IsOver || restored.State.RoundNumber > obs.Round, at);
     }
 
@@ -225,7 +225,7 @@ internal static class SelfTest
         var protocolErrors = new List<string>();
         var rng = new Random(rngSeed);
         using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
-        Cli.PlayOut(session, new PlayPolicy(rng), s =>
+        session.PlayOut(new PlayPolicy(rng), s =>
         {
             snapshots.Add(s.Snapshot());
             var json = Json(s);
@@ -308,7 +308,7 @@ internal static class SelfTest
     /// </summary>
     private static void BuildsAtLowHp(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
     {
-        var setup = new CombatSetup("SILENT", pool[0], act, Cli.MakeSeed(0, 0));
+        var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0));
         CombatObservation obs;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
             obs = session.Observation();
@@ -324,8 +324,8 @@ internal static class SelfTest
     /// </summary>
     private static void BuildsAGrownEruption(Pump pump, Action<string, bool, string> check)
     {
-        var (encounter, act) = Cli.Encounter("WATERFALL_GIANT_BOSS");
-        var setup = new CombatSetup("SILENT", encounter, act, Cli.MakeSeed(0, 0));
+        var (encounter, act) = Opt.Encounter("WATERFALL_GIANT_BOSS");
+        var setup = new CombatSetup("SILENT", encounter, act, GameSeeds.MakeSeed(0, 0));
         CombatObservation obs;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
             obs = session.Observation();
@@ -344,7 +344,7 @@ internal static class SelfTest
     /// </summary>
     private static void BuildsInternalNumbers(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
     {
-        var setup = new CombatSetup("DEFECT", pool[0], act, Cli.MakeSeed(0, 0));
+        var setup = new CombatSetup("DEFECT", pool[0], act, GameSeeds.MakeSeed(0, 0));
         CombatObservation obs;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
             obs = session.Observation();
@@ -380,14 +380,14 @@ internal static class SelfTest
         var loadout = new Loadout(Deck: Enumerable.Repeat(new CardSpec("ROLLING_BOULDER"), 10).ToList(), Hp: 999, MaxHp: 999);
         foreach (var encounter in pool)
         {
-            var setup = new CombatSetup("IRONCLAD", encounter, act, Cli.MakeSeed(0, 0), Loadout: loadout);
+            var setup = new CombatSetup("IRONCLAD", encounter, act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
             using var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0)));
             if (session.State.HittableEnemies.Count < 2) continue;
 
             int before = HeadlessPatches.RollingBoulderSplits;
             var policy = new PlayPolicy(new Random(0));
             while (!session.IsOver && session.State.RoundNumber <= 3)
-                session.Execute(policy.Choose(Cli.Decision(session)));
+                session.Execute(policy.Choose(session.Decision()));
             var errors = HeadlessGame.TakeErrors();
             check("rolling boulder hits one by one", HeadlessPatches.RollingBoulderSplits > before && errors.Count == 0,
                 $"{encounter.Id.Entry}: splits {HeadlessPatches.RollingBoulderSplits - before}, errors {errors.FirstOrDefault()}");
@@ -405,7 +405,7 @@ internal static class SelfTest
     private static void ThornsKillDuringSlyPlay(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
     {
         var loadout = new Loadout(Deck: [new CardSpec("RICOCHET")]);
-        var setup = new CombatSetup("SILENT", pool[0], act, Cli.MakeSeed(0, 0), Loadout: loadout);
+        var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
         CombatObservation obs;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
             obs = session.Observation();
@@ -447,8 +447,8 @@ internal static class SelfTest
             }
             return action;
         });
-        string label = $"run {Cli.MakeSeed(seed, 0)}";
-        using (session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed, 0)), PromptBrain.Instance, capture, new RandomMacro(rng)))
+        string label = $"run {GameSeeds.MakeSeed(seed, 0)}";
+        using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed, 0)), PromptBrain.Instance, capture, new RandomMacro(rng)))
             while (!session.IsOver && steps.Count < 8 && (clone == null || session.NodeStart == node)) session.Step();
         if (clone == null || steps.Count < 2)
         {
@@ -479,7 +479,7 @@ internal static class SelfTest
         var rng = new Random(seed + 1);
         var nodes = new List<(string Save, int Start)>();
         List<string> trace;
-        using (var session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed + 1, 0)), PromptBrain.Instance, new PlayPolicy(rng), new RandomMacro(rng)))
+        using (var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 1, 0)), PromptBrain.Instance, new PlayPolicy(rng), new RandomMacro(rng)))
         {
             while (!session.IsOver && nodes.Count < 3)
             {
@@ -507,7 +507,7 @@ internal static class SelfTest
     private static void AutoWinWinsEveryCombat(Pump pump, int seed, Action<string, bool, string> check)
     {
         var rng = new Random(seed + 5);
-        using var session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed + 5, 0), AutoWin: true), PromptBrain.Instance,
+        using var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 5, 0), AutoWin: true), PromptBrain.Instance,
             RunCommand.Unasked.Instance, new RandomMacro(rng));
         for (int i = 0; i < 5000 && !session.IsOver && session.Run.CurrentActIndex < 1; i++) session.Step();
         var combats = session.Combats;
@@ -528,7 +528,7 @@ internal static class SelfTest
         var nodes = new List<(string Save, int Start)>();
         var seen = new List<string>();
         List<string> trace;
-        using (var session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed + 3, 0)), PromptBrain.Instance, new PlayPolicy(rng), new RandomMacro(rng),
+        using (var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 3, 0)), PromptBrain.Instance, new PlayPolicy(rng), new RandomMacro(rng),
                    obs => seen.Add(ProtocolJson.Serialize(obs))))
         {
             session.Player.Relics[0].Status = RelicStatus.Disabled;
@@ -567,7 +567,7 @@ internal static class SelfTest
     private static void PlanHoldsInTheRun(Pump pump, int seed, int workers, Action<string, bool, string> check)
     {
         var budget = new Budget(NodesPerWorld: 150, Beam: 4);
-        string label = $"run {Cli.MakeSeed(seed + 2, 0)}";
+        string label = $"run {GameSeeds.MakeSeed(seed + 2, 0)}";
         RunSession? session = null;
         NodeClone? clone = null;
         CombatObservation? at = null;
@@ -597,7 +597,7 @@ internal static class SelfTest
         }
         if (workers > 0)
         {
-            using var workerPool = new WorkerPool(Cli.SelfCommand(), workers);
+            using var workerPool = new WorkerPool(Program.SelfCommand(), workers);
             var pooled = new PooledPlanner(workerPool).Plan(clone, budget.For(at.Room), history);
             check("pooled planner plans what the planner plans here", Show(pooled) == Show(plan), $"{label}: here {Show(plan)}; pooled {Show(pooled)}");
             check("no game errors in workers", workerPool.TakeGameErrors() is [], label);
@@ -638,7 +638,7 @@ internal static class SelfTest
             {
                 if (following && !done) done = follow(null!, false) == null;
             });
-            using (session = RunSession.Start(pump, new RunSetup("SILENT", Cli.MakeSeed(seed + 2, 0)), PromptBrain.Instance, policy, macro))
+            using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 2, 0)), PromptBrain.Instance, policy, macro))
             {
                 while (!session.IsOver && !done) session.Step();
                 return session.Combats.ElementAtOrDefault(1)?.End;
@@ -687,7 +687,7 @@ internal static class SelfTest
     {
         var deck = new[] { "SURVIVOR", "SURVIVOR", "SURVIVOR", "SURVIVOR", "SURVIVOR", "STRIKE_SILENT", "DEFEND_SILENT", "NEUTRALIZE" };
         var loadout = new Loadout(Deck: deck.Select(id => new CardSpec(id)).ToList(), Relics: ["TOASTY_MITTENS"], Hp: 999, MaxHp: 999);
-        var setup = new CombatSetup("SILENT", pool[0], act, Cli.MakeSeed(0, 0), Loadout: loadout);
+        var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
         CombatObservation obs;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
             obs = session.Observation();

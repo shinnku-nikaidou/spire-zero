@@ -36,11 +36,11 @@ internal static class ForkBench
         var clock = new Stopwatch();
         for (int i = 0; i < n; i++)
         {
-            var setup = pool.Setup(i, Cli.MakeSeed(seed, i));
+            var setup = pool.Setup(i, GameSeeds.MakeSeed(seed, i));
             var snapshots = new List<CombatSnapshot>();
             var rng = new Random(seed * 1_000_003 + i);
             using (var session = CombatSession.Start(pump, setup, new RandomChoices(rng)))
-                Cli.PlayOut(session, new PlayPolicy(rng), s => snapshots.Add(s.Snapshot()));
+                session.PlayOut(new PlayPolicy(rng), s => snapshots.Add(s.Snapshot()));
 
             // Up to 12 depths per combat, spread over the whole trace.
             int step = Math.Max(1, snapshots.Count / 12);
@@ -60,7 +60,7 @@ internal static class ForkBench
                 using (var branch = CombatSession.Restore(pump, root, new RandomChoices(branchRng)))
                 {
                     branch.Determinize((ulong)b + 1);
-                    Cli.PlayOut(branch, new PlayPolicy(branchRng));
+                    branch.PlayOut(new PlayPolicy(branchRng));
                     rolloutSteps += branch.ActionsExecuted - rootDepth;
                 }
                 branchMs.Add(clock.Elapsed.TotalMilliseconds);
