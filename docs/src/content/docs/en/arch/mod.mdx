@@ -122,8 +122,8 @@ For each surface, the mod path and the matching simulator path are listed side b
 
 - **Socket:** the Unix domain socket `~/.local/state/sts2ai/brain.sock` (under `$XDG_STATE_HOME` when that is set), carrying JSON lines ([Protocol §2](/en/arch/protocol/#sec-2)). The mod is the client and Harness is the server. Harness is started by the user, or spawned by the mod from a configured path; the mod never runs search itself. The server exists: SimWorker's `brain` command listens there, and `run --brain` already hosts simulated runs against it ([Simulator §5](/en/arch/simulator/#sec-5)).
 - **Steam's container:** Steam starts the game inside its Linux runtime container (pressure-vessel), which shares the home directory with the host but has its own `$XDG_RUNTIME_DIR`. A socket there cannot be reached from the game, so the socket lives under the home directory. The brain creates its folder readable by the user only.
-- **Environment:** the panel's SL box picks it: ticked is SL, otherwise NoSL ([Environments](/en/arch/environments/)). The box starts ticked; the choice is kept in `~/.local/state/sts2ai/env`, beside the socket and outside the game's profile. `hello` carries it, and it holds for the run as the brain sees it: switching in the middle of a run sends `run_end` (`aborted`) and a new `hello`, so the brain starts a new run at that point. One brain serves both: `brain` plays NoSL hosts with the combat brain of `--policy` (the champion's PIMC) and SL hosts with that of `--sl-policy` (the SL planner by default), with the same macro brain ([Harness §4](/en/arch/harness/#sec-4)).
-- **Brain unreachable:** in assist mode the panel says "no brain"; in auto-play the mod pauses. The link tries again every 2 s; a new connection starts again from `hello`.
+- **Environment:** the SL/NoSL switch in the panel's head picks it ([Environments](/en/arch/environments/)), SL by default; the choice is kept with the mod's other settings in `~/.local/state/sts2ai/settings.json`, beside the socket and outside the game's profile ([Output §2](/en/arch/output/#sec-2)). `hello` carries it, and it holds for the run as the brain sees it: switching in the middle of a run sends `run_end` (`aborted`) and a new `hello`, so the brain starts a new run at that point. One brain serves both: `brain` plays NoSL hosts with the combat brain of `--policy` (the champion's PIMC) and SL hosts with that of `--sl-policy` (the SL planner by default), with the same macro brain ([Harness §4](/en/arch/harness/#sec-4)).
+- **Brain unreachable:** in assist mode the panel says "No brain running"; in auto-play the mod pauses. The link tries again every 2 s; a new connection starts again from `hello`.
 - **Brain error:** an `error` answer (the brain refused the run, or could not answer) turns the mod off for the rest of that run; the panel shows the message.
 
 ## 6. SL export
@@ -168,8 +168,9 @@ The driver plays whole runs by itself in the real game. It exists for R4 evaluat
 
 | control | effect |
 |---|---|
-| F8 | show / hide the panel |
-| SL box | SL or NoSL assist ([§5](#sec-5)) |
+| F8 | show / hide the panel and every mark |
+| SL/NoSL switch | in the panel's head: SL or NoSL assist ([§5](#sec-5)) |
+| AI tab | in the game's settings screen: the mod's settings ([Output §2](/en/arch/output/#sec-2)) |
 | F9 | pause / resume auto-play |
 | step mode | one action per key press |
 | Space (semi-auto) | the highlights show the plan; Space executes `plan[0]` |

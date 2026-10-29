@@ -38,7 +38,25 @@ A *surface* is the kind of decision screen being shown (combat, map, shop, a car
 
 ## 2. Panel
 
-The panel has its own `CanvasLayer`, a Godot node that draws its children on a separate layer; here a high layer, above the game UI. Inside it sit a `PanelContainer` and a `RichTextLabel`. A corner is draggable; F8 toggles the panel.
+The panel has its own `CanvasLayer`, a Godot node that draws its children on a separate layer; here a high layer, above the game UI. It is a card near the top left corner (`Panel`), and F8 hides and shows it with every mark:
+
+- **Head:** the champion, the status, an SL/NoSL switch ([Mod §5](/en/arch/mod/#sec-5)) and the F8 hint.
+- **Body:** the next action, then the numbered plan up to the turn's end (on the map, the route's rooms) and how many more turns are planned; the best three actions the brain scored, each with its value ± confidence interval, as bars on one shared scale; and a foot line with the brain that answered and how long it took.
+- **Without an answer:** one line saying why, with a quieter reason under it: connecting; no brain running, trying again every 2 s; start or continue a run; off in multiplayer; brain error, back on at the next run; waiting for the brain; waiting for a decision; no SL clone of this room, the next room has one; or thinking, with the seconds so far.
+
+**Settings.** The player's choices are kept in `~/.local/state/sts2ai/settings.json`, beside the brain's socket and outside the game's profile:
+
+- assist on or off: off asks the brain nothing and draws nothing, and ends the run as the brain sees it, as switching the environment does;
+- the environment, SL or NoSL;
+- the panel;
+- the considered actions: off, values, or values with bars;
+- the order numbers on the cards, and the target and end-turn marks;
+- the map route: off, the next point, or the whole route;
+- the panel's opacity.
+
+They are set in an "AI" tab that the mod adds to the game's settings screen, after General, Graphics, Sound and Input (`SettingsTab`). A postfix on `NSettingsTabManager._Ready`, run at the next idle, builds it from a copy of the Input tab and an emptied copy of the Sound panel; its rows are the mod's own controls in the game's font, `<  value  >` steppers and an opacity slider, with a button that resets them. If building it fails, the screen stays as the game built it and the error is logged.
+
+The card, the settings and the tab are built but not yet run in the real game.
 
 What it shows depends on the surface, and all of it comes from `Recommendation`. ΔP(win) is the difference in the estimated probability of winning the run.
 
@@ -57,6 +75,8 @@ What it shows depends on the surface, and all of it comes from `Recommendation`.
 **Follow overlay.** Highlights are drawn by the mod's own nodes, which live only in the mod's `CanvasLayer`, on top of the game. Each frame, each marker reads its target node's rectangle on screen (`GetGlobalRect()`) and moves to follow it; when the target is gone or hidden, the marker hides. The mod never writes into game nodes, for two reasons: `NHandCardHolder.UpdateCard()` resets `CardHighlight` on every state change (`Nodes.Cards.Holders/NHandCardHolder.cs:613-640`) <Badge text="verified" variant="success" />, and the cyan, gold and red glows already mean something in the game (`NCardHighlight`).
 
 **Style.** Order badges ①②③, plus an outline in a color the game does not use (purple).
+
+**Built so far.** `CombatMark` marks the plan's current turn in combat: each card the plan plays is outlined in purple on its holder's hitbox with its step's number, each target creature (`NCreature.Hitbox`) is ringed with the numbers of the steps aimed at it, and the end turn button is ringed with its step's number. Potions have no mark yet. On the map, `MapMark` shows the route as the settings say. Like the panel, the combat marks are built but not yet run in the real game.
 
 **Anchors.** The node that each surface's marks attach to, verified (local note `tmp/notes/output-design.md` §3.2) <Badge text="verified" variant="success" />:
 

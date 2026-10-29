@@ -122,8 +122,8 @@ interface ISurfaceAdapter
 
 - **Socket**：Unix domain socket `~/.local/state/sts2ai/brain.sock`（設定了 `$XDG_STATE_HOME` 時放在它下面），傳輸 JSON lines（[協定 §2](/zh-tw/arch/protocol/#sec-2)）。Mod 是用戶端，Harness 是伺服器端。Harness 由使用者啟動，或由 Mod 按設定的路徑啟動；Mod 自己從不做搜尋。伺服器端已經實作：SimWorker 的 `brain` 命令在這個 socket 上等待，`run --brain` 已經作為宿主連上它跑模擬對局（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）。
 - **Steam 的容器**：Steam 在它的 Linux 執行時容器（pressure-vessel）裡啟動遊戲。容器與主機共享主目錄，但有自己的 `$XDG_RUNTIME_DIR`，放在那裡的 socket 遊戲存取不到，所以 socket 放在主目錄下。大腦建立它的目錄時，只允許使用者本人存取。
-- **環境**：由面板上的 SL 核取方塊選定：勾上是 SL，否則是 NoSL（[環境](/zh-tw/arch/environments/)）。核取方塊預設勾上；這個選擇存在 `~/.local/state/sts2ai/env`，和 socket 放在一起，不在遊戲的玩家檔案目錄裡。`hello` 帶上它；對大腦來說，它在一局裡固定不變：在一局中途切換時，Mod 發出 `run_end`（`aborted`）和新的 `hello`，大腦從這一刻起當作新的一局。一個大腦同時服務兩種環境：`brain` 對 NoSL 宿主用 `--policy` 的戰鬥大腦（冠軍的 PIMC），對 SL 宿主用 `--sl-policy` 的戰鬥大腦（預設是 SL 規劃器），宏觀大腦相同（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
-- **連不上大腦**：輔助模式下面板顯示「no brain」（沒有大腦）；自動遊玩時 Mod 暫停。連線每 2 秒重試一次；新的連線從 `hello` 重新開始。
+- **環境**：由面板卡頭上的 SL/NoSL 開關選定（[環境](/zh-tw/arch/environments/)），預設是 SL；這個選擇和 Mod 的其他設定一起存在 `~/.local/state/sts2ai/settings.json`，和 socket 放在一起，不在遊戲的玩家檔案目錄裡（[輸出層 §2](/zh-tw/arch/output/#sec-2)）。`hello` 帶上它；對大腦來說，它在一局裡固定不變：在一局中途切換時，Mod 發出 `run_end`（`aborted`）和新的 `hello`，大腦從這一刻起當作新的一局。一個大腦同時服務兩種環境：`brain` 對 NoSL 宿主用 `--policy` 的戰鬥大腦（冠軍的 PIMC），對 SL 宿主用 `--sl-policy` 的戰鬥大腦（預設是 SL 規劃器），宏觀大腦相同（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
+- **連不上大腦**：輔助模式下面板顯示「No brain running」（沒有大腦在執行）；自動遊玩時 Mod 暫停。連線每 2 秒重試一次；新的連線從 `hello` 重新開始。
 - **大腦出錯**：收到 `error` 回答（大腦拒絕這一局，或答不出）後，Mod 在這一局餘下的部分關閉，面板顯示錯誤資訊。
 
 ## 6. SL 匯出
@@ -169,8 +169,9 @@ SL 下，大腦在當前節點的精確複本上規劃戰鬥（[環境 §6](/zh-
 
 | 操作 | 作用 |
 |---|---|
-| F8 | 顯示 / 隱藏面板 |
-| SL 核取方塊 | SL 輔助或 NoSL 輔助（[§5](#sec-5)） |
+| F8 | 顯示 / 隱藏面板和所有標記 |
+| SL/NoSL 開關 | 在面板卡頭上：SL 輔助或 NoSL 輔助（[§5](#sec-5)） |
+| AI 分頁 | 在遊戲的設定畫面裡：Mod 的設定（[輸出層 §2](/zh-tw/arch/output/#sec-2)） |
 | F9 | 暫停 / 繼續自動遊玩 |
 | 單步模式 | 每按一次鍵執行一個動作 |
 | 空白鍵（半自動） | 標示計畫；按空白鍵執行 `plan[0]` |

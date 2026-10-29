@@ -122,8 +122,8 @@ interface ISurfaceAdapter
 
 - **Socket**：Unix 域套接字 `~/.local/state/sts2ai/brain.sock`（设置了 `$XDG_STATE_HOME` 时放在它下面），传输 JSON lines（[协议 §2](/arch/protocol/#sec-2)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。服务端已经实现：SimWorker 的 `brain` 命令在这个套接字上等待，`run --brain` 已经作为宿主连上它跑模拟对局（[模拟器 §5](/arch/simulator/#sec-5)）。
 - **Steam 的容器**：Steam 在它的 Linux 运行时容器（pressure-vessel）里启动游戏。容器与主机共享主目录，但有自己的 `$XDG_RUNTIME_DIR`，放在那里的套接字游戏访问不到，所以套接字放在主目录下。大脑创建它的目录时，只允许用户本人访问。
-- **环境**：由面板上的 SL 勾选框选定：勾上是 SL，否则是 NoSL（[环境](/arch/environments/)）。勾选框默认勾上；这个选择存在 `~/.local/state/sts2ai/env`，和套接字放在一起，不在游戏的档案目录里。`hello` 带上它；对大脑来说，它在一局里固定不变：在一局中途切换时，Mod 发出 `run_end`（`aborted`）和新的 `hello`，大脑从这一刻起当作新的一局。一个大脑同时服务两种环境：`brain` 对 NoSL 宿主用 `--policy` 的战斗大脑（冠军的 PIMC），对 SL 宿主用 `--sl-policy` 的战斗大脑（默认是 SL 规划器），宏观大脑相同（[Harness §4](/arch/harness/#sec-4)）。
-- **连不上大脑**：辅助模式下面板显示「no brain」（没有大脑）；自动游玩时 Mod 暂停。连接每 2 秒重试一次；新的连接从 `hello` 重新开始。
+- **环境**：由面板卡头上的 SL/NoSL 开关选定（[环境](/arch/environments/)），默认是 SL；这个选择和 Mod 的其它设置一起存在 `~/.local/state/sts2ai/settings.json`，和套接字放在一起，不在游戏的档案目录里（[输出层 §2](/arch/output/#sec-2)）。`hello` 带上它；对大脑来说，它在一局里固定不变：在一局中途切换时，Mod 发出 `run_end`（`aborted`）和新的 `hello`，大脑从这一刻起当作新的一局。一个大脑同时服务两种环境：`brain` 对 NoSL 宿主用 `--policy` 的战斗大脑（冠军的 PIMC），对 SL 宿主用 `--sl-policy` 的战斗大脑（默认是 SL 规划器），宏观大脑相同（[Harness §4](/arch/harness/#sec-4)）。
+- **连不上大脑**：辅助模式下面板显示「No brain running」（没有大脑在运行）；自动游玩时 Mod 暂停。连接每 2 秒重试一次；新的连接从 `hello` 重新开始。
 - **大脑出错**：收到 `error` 回答（大脑拒绝这一局，或答不出）后，Mod 在这一局余下的部分关闭，面板显示错误信息。
 
 ## 6. SL 导出
@@ -169,8 +169,9 @@ SL 下，大脑在当前节点的精确克隆上规划战斗（[环境 §6](/arc
 
 | 操作 | 作用 |
 |---|---|
-| F8 | 显示 / 隐藏面板 |
-| SL 勾选框 | SL 辅助或 NoSL 辅助（[§5](#sec-5)） |
+| F8 | 显示 / 隐藏面板和所有标记 |
+| SL/NoSL 开关 | 在面板卡头上：SL 辅助或 NoSL 辅助（[§5](#sec-5)） |
+| AI 标签页 | 在游戏的设置画面里：Mod 的设置（[输出层 §2](/arch/output/#sec-2)） |
 | F9 | 暂停 / 继续自动游玩 |
 | 单步模式 | 每按一次键执行一个动作 |
 | 空格（半自动） | 高亮显示计划；按空格执行 `plan[0]` |
