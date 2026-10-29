@@ -176,6 +176,7 @@ internal sealed record LeafChoice(LeafFile? Weights, string? WeightsPath, Combat
     /// </summary>
     public void Check(PlayEnvironment env)
     {
+        // OLD NETS: a file without an environment is c1–c4's; remove once no champion uses them.
         if (Net?.Env is { } own && own != env.ToString())
             throw new NotSupportedException($"combat net {Net.Name} predicts {own}'s endings, not {env}'s");
     }

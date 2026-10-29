@@ -234,6 +234,7 @@ internal sealed class ChampionArgs(bool file)
         policy ??= r.GetValue(_policy)!;
         var macro = r.GetValue(_macro)!;
         var budget = _budget.Read(r, policy, planElsewhere);
+        // OLD NETS: V v0 by default; remove once no champion uses them.
         IRunValue value = RunValue.Initial;
         var valueFile = r.GetValue(_value);
         if (valueFile != null)

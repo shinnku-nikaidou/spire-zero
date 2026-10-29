@@ -27,6 +27,7 @@ public class RunNetTests
         Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 3)).Distinct().Count());
     }
 
+    // OLD NETS: V v2's; remove once no champion uses them.
     [Fact]
     public void StillReadsAV2Net()
     {

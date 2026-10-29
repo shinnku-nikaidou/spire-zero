@@ -19,6 +19,7 @@ public sealed record NetTest(RunView Run, double Value);
 /// <param name="State">Pure V's: the run's numbers the net reads, by name, with the mean and std that standardize them.</param>
 /// <param name="Features">V v2's: the features of V v0 (<see cref="RunValue.Features"/>) the net reads, in order, with
 /// the <paramref name="Mean"/> and <paramref name="Std"/> that standardize them.</param>
+// OLD NETS: Features, Mean and Std are V v2's; remove once no champion uses them.
 public sealed record NetFile(
     string Name, string Objective, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
     IReadOnlyList<NetTest> Tests, NetState? State = null, IReadOnlyList<string>? Features = null,
@@ -190,6 +191,7 @@ public sealed class RunNet : IRunValue, IDisposable
                 values[0, i] = (float)((StateValue(run, state.Names[i]) - state.Mean[i]) / state.Std[i]);
             inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
         }
+        // OLD NETS: V v2's inputs, to the end of the numbers; remove once no champion uses them.
         if (_file.Features is { } names)
         {
             var features = RunValue.Features(run);

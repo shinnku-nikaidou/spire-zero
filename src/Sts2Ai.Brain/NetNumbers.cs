@@ -22,6 +22,7 @@ public static class NetNumbers
     public static List<NamedOnnxValue> Declared(InferenceSession session, IEnumerable<NamedOnnxValue> all) =>
         all.Where(v => session.InputMetadata.ContainsKey(v.Name)).ToList();
 
+    // OLD NETS: Cards and Relics feed V v2 and the combat nets c1–c4 only; remove once no champion uses them.
     /// <summary>
     /// The cards' numbers, in the cards' order, padded to at least one: costs (cost / 3, 0 for X or none), mod_amounts
     /// (the enchantment's and affliction's amounts / 10, in the order the modifiers are listed), card_scalars (star cost

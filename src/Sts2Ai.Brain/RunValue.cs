@@ -12,6 +12,8 @@ public interface IRunValue
     double Value(RunView run);
 }
 
+// OLD NETS: V v0 is l0's default V, the features V v2 reads and those the decision log and afterstates write; remove
+// once no champion uses them.
 /// <summary>
 /// V v0 (docs: learning §1): hand-written features of the run view times linear weights. The value is a logit of
 /// P(win); only its order matters to the macro brain, which compares the afterstates of one decision. The initial

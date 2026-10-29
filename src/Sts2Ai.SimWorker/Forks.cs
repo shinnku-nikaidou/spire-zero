@@ -118,6 +118,7 @@ internal sealed class Script(IReadOnlyList<LoggedStep> steps, IRunBrain? then, F
 /// <summary>An option of a macro decision as L0 valued it; <paramref name="After"/> is its afterstate as the run view's
 /// fields that differ from the decision's (<see cref="Logged.Changes"/>), and <paramref name="Features"/> V v0's
 /// features of it, which V v2 reads too.</summary>
+// OLD NETS: Features (and ForkBranch's HorizonFeatures) are V v0's; remove once no champion uses them.
 internal sealed record ValuedOption(string Action, double Value, JsonObject After, IReadOnlyDictionary<string, double> Features);
 
 /// <summary>One macro decision of a logged run, with every option L0 weighed (afterstates).</summary>

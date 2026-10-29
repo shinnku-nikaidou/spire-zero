@@ -130,6 +130,8 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         int n = Math.Max(1, cards.Count);
         var cardIds = new DenseTensor<long>([1, n]);
         var ups = new DenseTensor<float>([1, n]);
+        // OLD NETS: costs (here and below) and the cards' and relics' numbers are c1–c4's inputs; remove once no
+        // champion uses them.
         var costs = new DenseTensor<float>([1, n]);
         var piles = new DenseTensor<float>([1, n, Piles.Length]);
         var mods = new DenseTensor<long>([1, n, 2]);
@@ -226,7 +228,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         inputs.AddRange(Bag("potions", "potion_mask", obs.Potions.OfType<string>().ToList()));
         inputs.AddRange(Bag("context", "context_mask",
             ["character:" + pl.Character, "encounter:" + (obs.Encounter ?? "<none>"), "room:" + (obs.Room ?? "<none>"), $"act:{obs.Act}"]));
-        // What the first nets did not read, fed only to a graph that declares it ("costs" is already in).
+        // OLD NETS: c1–c4's. What the first nets did not read, fed only to a graph that declares it ("costs" is already in).
         inputs.AddRange(NetNumbers.Cards(cards.Select(c => c.Card).ToList(), Index).Where(v => v.Name != "costs"));
         inputs.AddRange(PowerNumbers(pl.Powers));
         var enemyStacks = new DenseTensor<float>([1, e_n, q_n]);
@@ -245,6 +247,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
             NamedOnnxValue.CreateFromTensor("enemy_power_stacks", enemyStacks), NamedOnnxValue.CreateFromTensor("enemy_power_cards", enemyCards),
             NamedOnnxValue.CreateFromTensor("enemy_power_card_mask", enemyCardMask),
         ]);
+        // OLD NETS: c1–c4's.
         inputs.AddRange(NetNumbers.Relics(obs.Relics, Index));
         inputs.AddRange(Orbs(pl.Orbs));
         inputs.AddRange(Allies(obs.Allies.Where(a => a.Hp > 0).ToList()));

@@ -31,6 +31,7 @@ public class CombatNetTests
         Assert.Equal(3, file.Tests.Select(t => Math.Round(t.PotionsUsed, 2)).Distinct().Count());
     }
 
+    // OLD NETS: this test and the next one's c2 half; remove once no champion uses them.
     [Fact]
     public void StillReadsC2()
     {

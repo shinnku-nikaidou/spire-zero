@@ -170,6 +170,7 @@ public sealed class Dispatcher(
         if (!decision.Legal.Contains(action)) throw new InvalidOperationException($"{macro.Brain} chose {action} on {decision.Surface}, which is not legal");
         var plan = macro.Policy.Plan(decision, action);
         Last = new(macro.Brain, plan.Count > 0 ? plan : null);
+        // OLD NETS: the features are V v0's, which only V v2 was fit on; remove once no champion uses them.
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 action, Last.Plan, null, null, seed, ms, RunValue.Features(decision.Observation.Run), RunView: decision.Observation.Run,

@@ -231,6 +231,7 @@ internal static class RanksCommand
     }
 }
 
+// OLD NETS: V's initial weights are V v0's; remove once no champion uses them.
 /// <summary>weights: initial weights as a weights file, for tuning to start from.</summary>
 internal static class WeightsCommand
 {
