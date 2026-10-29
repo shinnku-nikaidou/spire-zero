@@ -26,6 +26,12 @@ def test_the_loadout_keeps_the_live_relics_and_starts_at_the_acts_hp_share():
     assert opts["--hp"] == str(round(0.81 * 70)) and opts["--encounter"] == "KAISER_CRAB_BOSS"
 
 
+def test_the_loadout_keeps_every_upgrade_and_the_enchantments():
+    deck = [{"id": "BASH", "up": 2}, {"id": "LEADING_STRIKE", "up": 1, "enchant": {"id": "SHARP", "amount": 2}}]
+    args = bosslab.loadout(view(deck=deck))
+    assert args[args.index("--deck") + 1] == "BASH+2,LEADING_STRIKE+@SHARP:2"
+
+
 def test_every_option_of_a_decision_fights_with_the_same_seeds(tmp_path):
     log, after = tmp_path / "log.jsonl", tmp_path / "after.jsonl"
     log.write_text(

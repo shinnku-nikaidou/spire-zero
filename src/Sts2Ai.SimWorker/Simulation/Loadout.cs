@@ -6,16 +6,25 @@ namespace Sts2Ai.SimWorker;
 
 /// <summary>
 /// A card in a loadout: its model id and upgrade count, written "BASH", "BASH+" or "BASH+2", and its enchantment
-/// if any (not available on the command line).
+/// if any, written after "@" with its amount: "BASH@SHARP:2", "BASH+2@SHARP:2".
 /// </summary>
 internal readonly record struct CardSpec(string Id, int Upgrades = 0, string? Enchant = null, int EnchantAmount = 0)
 {
     public static CardSpec Parse(string text)
     {
+        string? enchant = null;
+        int amount = 0;
+        int at = text.IndexOf('@');
+        if (at >= 0)
+        {
+            var parts = text[(at + 1)..].Split(':');
+            if (parts.Length != 2) throw new FormatException($"enchantment of {text} is not ENCHANT:AMOUNT");
+            (enchant, amount, text) = (parts[0], int.Parse(parts[1]), text[..at]);
+        }
         int plus = text.IndexOf('+');
-        if (plus < 0) return new(text);
+        if (plus < 0) return new(text, 0, enchant, amount);
         var count = text[(plus + 1)..];
-        return new(text[..plus], count.Length == 0 ? 1 : int.Parse(count));
+        return new(text[..plus], count.Length == 0 ? 1 : int.Parse(count), enchant, amount);
     }
 
     public SerializableCard ToSerializable() => new()

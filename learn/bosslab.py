@@ -15,7 +15,7 @@ few seeds each, the same seeds for every option of a decision, so the options sh
            `v.train --boss-sims`
   compare  on the decisions with every option played: how often the option V valued best is the fights' best
 
-The loadout is the afterstate's deck, relics and potions; cards lose their enchantments (panel cannot give them) and
+The loadout is the afterstate's deck, relics and potions; cards keep their upgrade levels and enchantments, and
 used-up or disabled relics are left out. HP starts at a fixed share of max HP per act (about the share the runs enter
 that act's boss with), so the label measures the deck, not the HP the run happened to have.
 
@@ -55,9 +55,21 @@ def merged(view: dict, changes: dict) -> dict:
     return out
 
 
+def card_spec(card: dict) -> str:
+    """A run view's card as panel's --deck writes it: ID, + or +N for its upgrades, @ENCHANT:AMOUNT for its
+    enchantment."""
+    up = card.get("up") or 0
+    enchant = card.get("enchant")
+    return (
+        card["id"]
+        + ("" if not up else "+" if up == 1 else f"+{up}")
+        + (f"@{enchant['id']}:{enchant['amount']}" if enchant else "")
+    )
+
+
 def loadout(view: dict, hp: int | None = None) -> list[str]:
     """panel's options for the view's deck, relics, potions and its act's boss, at the act's HP share (or `hp`)."""
-    deck = ",".join(c["id"] + ("+" if c.get("up") else "") for c in view["deck"])
+    deck = ",".join(card_spec(c) for c in view["deck"])
     relics = [r["id"] for r in view.get("relics", []) if not r.get("used_up") and r.get("status") != "Disabled"]
     potions = [p for p in view.get("potions", []) if p]
     if hp is None:

@@ -43,7 +43,7 @@ internal static class Opt
 internal sealed class LoadoutArgs
 {
     private readonly Option<string> _character = Opt.Of("--character", "SILENT", "the character");
-    private readonly Option<string?> _deck = Opt.Maybe<string?>("--deck", "the deck, such as A*5,B+ (ID*N repeats an entry, + upgrades it)");
+    private readonly Option<string?> _deck = Opt.Maybe<string?>("--deck", "the deck, such as A*5,B+,C+2@SHARP:2 (ID*N repeats an entry, + upgrades it, @ENCHANT:AMOUNT enchants it)");
     private readonly Option<string?> _relics = Opt.Maybe<string?>("--relics", "the relics, such as A,B");
     private readonly Option<string?> _potions = Opt.Maybe<string?>("--potions", "the potions, such as A,B");
     private readonly Option<int?> _hp = Opt.Maybe<int?>("--hp", "the HP to start with");
