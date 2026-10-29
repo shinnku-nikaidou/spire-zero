@@ -140,7 +140,7 @@ public sealed class PublicRecord
 - 一局的戰鬥決策按戰鬥分塊，每場戰鬥一塊，塊與塊之間隔著宏觀決策，順序與對局記錄裡的戰鬥一致。決策靠這個找到它那場戰鬥的結局（[評估 §6](/zh-tw/arch/evaluation/#sec-6)）。
 - 戰鬥決策還會加上 `obs`，即大腦看到的戰鬥觀測（[協定 §1](/zh-tw/arch/protocol/#sec-1)）：學習得到的戰鬥部件和融合測試集的輸入（[戰鬥大腦 §8](/zh-tw/arch/combat-brain/#sec-8)）。約 1.6 KB。
 - 戰鬥決策還會加上 `history`：這場戰鬥裡每個敵人在至今每一回合開始時顯示的意圖，包括本回合，按 uid 分組，每項是 `{round, intents}`。這是目前已實作的那部分公開記錄（[§3](#sec-3)）：Harness 從它看到的戰鬥觀測裡收集，每次宏觀決策後重新開始。戰鬥網路讀它和回合數，這樣每個怪物的出招順序能從資料裡學到，而不是靠手寫的規則（[學習 §1](/zh-tw/arch/learning/#sec-1)）。Brain 裡的 `MoveRecord` 儲存這份記錄，Harness 每個決策都把它交給戰鬥大腦（戰鬥路由的最後一個參數），搜尋再把它發給 worker，供葉節點使用（[戰鬥大腦 §4](/zh-tw/arch/combat-brain/#sec-4)）。
-- 宏觀決策還會加上 `features`：大腦看到的整局觀測上 V 的特徵（[學習 §1](/zh-tw/arch/learning/#sec-1)），不管是哪個大腦做的決策。擬合 V 讀的就是它們（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
+- 宏觀決策還會加上 `features`：大腦看到的整局觀測上 V 的特徵（[學習 §1](/zh-tw/arch/learning/#sec-1)），不管是哪個大腦做的決策。V v0 的擬合和 V v2 的訓練讀的就是它們；兩者都已刪除，純 V 不讀它們（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
 - 宏觀決策還會加上 `run_view`：整局觀測本身，約 6 KB，V v2 就用它訓練（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
 - `run --log FILE` 寫出日誌，每個決策一行（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）；它和對局記錄一起放在 `data/`（[學習 §6](/zh-tw/arch/learning/#sec-6)）。
 - `degraded` 標記 worker 故障之後給出的回答，它和在其他 worker 上重新開啟世界一起規劃（[§7](#sec-7)）。崩潰或卡住的 worker 會被重啟，請求再發一次，得到的回答相同，所以目前沒有降級的回答。

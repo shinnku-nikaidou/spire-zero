@@ -13,7 +13,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-L0 v0 已经实现：Brain 里的 `MacroBrain`，用 `run --macro l0` 来跑（[模拟器 §5](/arch/simulator/#sec-5)）。它回答所有宏观决策界面和战斗外的选牌提示，用 V 给选项估值：V v0，或网络文件里的 V v2（[学习 §1](/arch/learning/#sec-1)）。加上 `--macro-explore T` 时，它改为按同样的估值、以 softmax 温度 T 抽取每个答案，供自我对弈用（[学习 §5](/arch/learning/#sec-5)）。对局世界还不存在（[模拟器 §6](/arch/simulator/#sec-6)），所以它根据界面上显示的内容预测每个后状态，而不是在世界里把选项执行一遍（[§2](#sec-2) 的 L0 v0）。规划中：从对局世界得到后状态、多步界面的搜索、L1，以及 [§4](#sec-4) 的 `IMacroBrain` 接口。
+L0 v0 已经实现：Brain 里的 `MacroBrain`，用 `run --macro l0` 来跑（[模拟器 §5](/arch/simulator/#sec-5)）。它回答所有宏观决策界面和战斗外的选牌提示，用 V 给选项估值：V v0，或网络文件里的 V v2 或纯 V（[学习 §1](/arch/learning/#sec-1)）。加上 `--macro-explore T` 时，它改为按同样的估值、以 softmax 温度 T 抽取每个答案，供自我对弈用（[学习 §5](/arch/learning/#sec-5)）。对局世界还不存在（[模拟器 §6](/arch/simulator/#sec-6)），所以它根据界面上显示的内容预测每个后状态，而不是在世界里把选项执行一遍（[§2](#sec-2) 的 L0 v0）。规划中：从对局世界得到后状态、多步界面的搜索、L1，以及 [§4](#sec-4) 的 `IMacroBrain` 接口。
 
 </Aside>
 
