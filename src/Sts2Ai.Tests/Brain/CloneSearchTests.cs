@@ -115,6 +115,58 @@ public class CloneSearchTests
         Assert.Equal([1, 3], new MacroBrain(V).Choose(prompt));
     }
 
+    private static readonly CardView[] Offered = [new() { Id = "A" }, new() { Id = "BAD" }];
+
+    /// <summary>
+    /// A rewards screen: a card reward (reward:0, A or BAD) and relic Y (reward:1). Skipping the card reward returns to
+    /// the screen with the card reward still on it, as in the game. Leaving goes on to a state V likes less (relic BAD).
+    /// </summary>
+    private static Afterstate Rewards(IReadOnlyList<string> path)
+    {
+        var run = Start;
+        bool card = true, relic = true;
+        for (int i = 0; i < path.Count; i++)
+        {
+            switch (path[i])
+            {
+                case "rewards_done":
+                    return Exit(run with { Relics = [.. run.Relics, new RelicView { Id = "BAD" }] });
+                case "reward:1":
+                    relic = false;
+                    run = run with { Relics = [.. run.Relics, new RelicView { Id = "Y" }] };
+                    break;
+                case "reward:0" when ++i == path.Count:
+                    return new(run, Surfaces.CardReward, new CardRewardScreen { Cards = Offered, Alternatives = ["Skip"] }, ["card:0", "card:1", "card_alt:Skip"]);
+                case "reward:0" when path[i] != "card_alt:Skip":
+                    card = false;
+                    run = run with { Deck = [.. run.Deck, Offered[int.Parse(path[i]["card:".Length..])]] };
+                    break;
+            }
+        }
+        var rewards = new List<RewardView>();
+        if (card) rewards.Add(new() { Index = 0, Kind = "card", Cards = Offered });
+        if (relic) rewards.Add(new() { Index = 1, Kind = "relic", Id = "Y" });
+        return new(run, Surfaces.Rewards, new RewardsScreen { Rewards = rewards }, [.. rewards.Select(r => $"reward:{r.Index}"), "rewards_done"]);
+    }
+
+    [Fact]
+    public void ASkippedCardRewardIsNotOpenedAgain()
+    {
+        // From the card reward, skipping searches on through the rewards screen: relic Y, then the card reward again,
+        // whose picks lead to states seen a level earlier, so it is worth V's value of it (1, before leaving's BAD)
+        // and beats taking A (0 in the end). Opening it again from the rewards screen, which knows the true end, wins
+        // again. Each decision on the node's clone is played, as a run would, until the node is left.
+        var l0 = new MacroBrain(V);
+        var path = new List<string>();
+        while (Rewards(path).Surface != Surfaces.Map)
+        {
+            Assert.True(path.Count < 8, $"no way out: {string.Join(" ", path)}");
+            var at = path.ToList();
+            path.Add(l0.Choose(Root(new Toy(p => Rewards([.. at, .. p])))));
+        }
+        Assert.Equal(["reward:0", "card:0", "reward:1", "rewards_done"], path);
+    }
+
     [Fact]
     public void AStateReachedTwiceIsSearchedOnce()
     {

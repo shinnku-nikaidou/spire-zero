@@ -33,6 +33,13 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
     /// </summary>
     private bool _opened;
 
+    /// <summary>
+    /// SL: the states of this run's decisions on the node's clone (<see cref="CloneSearch.Key"/>), macro decisions and
+    /// card prompts. No answer goes back to one (<see cref="CloneSearch"/>): skipping a card reward returns to the rewards
+    /// screen that opened it, which would open it again, forever.
+    /// </summary>
+    private readonly HashSet<ulong> _decided = [];
+
     public string Choose(MacroDecision decision)
     {
         if (decision.Legal.Count == 0) throw new InvalidOperationException("no legal action");
@@ -48,6 +55,7 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
         else pick = Pick(values);
         var option = options[pick];
         _opened = option.Opens;
+        if (decision.Clone != null) _decided.Add(CloneSearch.Key(Root(decision)));
         return option.Action;
     }
 
@@ -104,7 +112,7 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
         if (decision.Clone is not { } clone)
             return decision.Legal.Select(a => { var after = After(obs, a); return new Option(a, after, value.Value(after), OpensPrompt(obs, a)); }).ToList();
         var played = decision.Legal.Where(a => !Travels(obs, a)).ToList();
-        var found = new CloneSearch(value, clone).Search(new Afterstate(obs.Run, decision.Surface, obs.Screen, decision.Legal), played.Select(a => (IReadOnlyList<string>)[a]).ToList());
+        var found = new CloneSearch(value, clone, _decided).Search(Root(decision), played.Select(a => (IReadOnlyList<string>)[a]).ToList());
         var options = new List<Option>();
         int k = 0;
         foreach (var a in decision.Legal)
@@ -120,6 +128,10 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
         }
         return options;
     }
+
+    /// <summary>The decision as a probe of no answers shows it.</summary>
+    private static Afterstate Root(MacroDecision decision) =>
+        new(decision.Observation.Run, decision.Surface, decision.Observation.Screen, decision.Legal);
 
     /// <summary>A map move: the node's exit, which its clone cannot play past.</summary>
     private static bool Travels(Observation obs, string action) => obs.Screen is MapScreen && Split(action).Verb == "map";
@@ -211,13 +223,14 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, CardDra
             var fresh = near.Select(Answer).Where(a => !worth.ContainsKey(a)).Distinct().ToList();
             if (fresh.Count > 0)
             {
-                var found = new CloneSearch(value, clone).Search(root, fresh.Select(a => (IReadOnlyList<string>)[a]).ToList());
+                var found = new CloneSearch(value, clone, _decided).Search(root, fresh.Select(a => (IReadOnlyList<string>)[a]).ToList());
                 for (int i = 0; i < fresh.Count; i++) worth[fresh[i]] = found[i].Value;
             }
             var taken = near[Pick(near.Select(c => worth[Answer(c)]).ToList())];
             if (taken == current) break;
             counts = taken;
         }
+        _decided.Add(CloneSearch.Key(root));
         return counts.SelectMany((n, g) => groups[g].Take(n)).Order().ToList();
     }
 

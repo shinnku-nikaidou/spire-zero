@@ -10,8 +10,12 @@ namespace Sts2Ai.Brain;
 /// <see cref="MaxProbes"/> probes in all. A state reached twice is searched once. A state is worth the best state after
 /// it, or V's value of it where the search stops; an option, its afterstate.
 /// A card prompt that needs two picks or more is not searched into: its own decision searches it.
+/// The decision itself and the states <paramref name="decided"/> before it are never searched: an answer that comes back
+/// to one goes round in a cycle (a card reward skipped returns to the rewards screen that opened it, where the same
+/// answer comes again). Such an option is worth −∞, so it is never taken; deeper, such an answer adds nothing.
 /// </summary>
-public sealed class CloneSearch(IRunValue value, IMacroClone clone)
+/// <param name="decided">The keys (<see cref="Key"/>) of the states decided before this decision.</param>
+public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet<ulong>? decided = null)
 {
     public const int Beam = 16;
     public const int MaxProbes = 1024;
@@ -24,8 +28,8 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone)
     /// <returns>Each option's afterstate and worth, in order.</returns>
     public IReadOnlyList<(Afterstate After, double Value)> Search(Afterstate root, IReadOnlyList<IReadOnlyList<string>> options)
     {
-        // The decision itself is never searched again: an answer that comes back to it adds nothing.
         var seen = new Dictionary<ulong, Node?> { [Key(root)] = null };
+        foreach (var key in decided ?? new HashSet<ulong>()) seen.TryAdd(key, null);
         var firsts = new List<Node>();
         var frontier = new List<Node>();
         var afters = clone.After(options);
@@ -33,14 +37,15 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone)
         for (int i = 0; i < options.Count; i++)
         {
             ulong key = Key(afters[i]);
-            if (seen.TryGetValue(key, out var same) && same != null)
+            if (seen.TryGetValue(key, out var same))
             {
-                firsts.Add(same);
+                firsts.Add(same ?? new Node(options[i], afters[i], double.NegativeInfinity, 1));
                 continue;
             }
             var node = new Node(options[i], afters[i], value.Value(afters[i].Run), 1);
             firsts.Add(node);
-            if (seen.TryAdd(key, node)) frontier.Add(node);
+            seen[key] = node;
+            frontier.Add(node);
         }
         for (int level = 2; frontier.Count > 0 && Probes < MaxProbes; level++)
         {
@@ -100,7 +105,7 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone)
     public static IReadOnlyList<IReadOnlyList<int>> Groups(CardChoice choice) =>
         Enumerable.Range(0, choice.Options.Count).GroupBy(i => ProtocolJson.CardKey(choice.Options[i])).Select(g => (IReadOnlyList<int>)g.ToList()).ToList();
 
-    private static ulong Key(Afterstate after) => ProtocolJson.Hash(after);
+    public static ulong Key(Afterstate after) => ProtocolJson.Hash(after);
 
     private sealed class Node(IReadOnlyList<string> path, Afterstate after, double value, int level)
     {
