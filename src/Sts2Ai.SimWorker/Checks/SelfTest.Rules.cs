@@ -57,4 +57,28 @@ internal static partial class SelfTest
             $"{pool[0].Id.Entry}: dead {built.Player.Creature.IsDead}, pops {HeadlessPatches.PopCardAfterEarlyReturn.Pops - before}, " +
             $"build {string.Join("; ", built.BuildDifferences.Take(2))}, errors {errors.FirstOrDefault()}");
     }
+
+    /// <summary>
+    /// A loadout whose relics give potion slots holds more potions than the base three: the slots are what the game
+    /// gives for those relics (3 + Potion Belt's 2 + Alchemical Coffer's 4 + Phial Holster's 1), in a combat and at
+    /// the start of a run, where ascension 4 (Tight Belt) takes one away, and the relics' pickups do not run again.
+    /// </summary>
+    private static void LoadoutPotionSlots(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        string[] potions = ["FIRE_POTION", "BLOCK_POTION", "SWIFT_POTION", "FYSH_OIL", "COLORLESS_POTION", "CLARITY", "TOUCH_OF_INSANITY",
+            "FIRE_POTION", "BLOCK_POTION"];
+        var loadout = new Loadout(Relics: ["RING_OF_THE_SNAKE", "POTION_BELT", "ALCHEMICAL_COFFER", "PHIAL_HOLSTER"], Potions: potions);
+        string Slots(IEnumerable<string?> slots) => string.Join(",", slots.Select(p => p ?? "-"));
+        string want = Slots(potions);
+        using (var combat = CombatSession.Start(pump, new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout),
+                   new RandomChoices(new Random(0))))
+        {
+            var slots = Slots(combat.Observation().Potions);
+            check("loadout gets its relics' potion slots", slots == want + ",-", $"combat: slots {slots}");
+        }
+        using var run = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(0, 0), Ascension: 4, Loadout: loadout), PromptBrain.Instance,
+            RunCommand.Unasked.Instance, new RandomMacro(new Random(0)));
+        var runSlots = Slots(run.Player.PotionSlots.Select(p => p?.Id.Entry));
+        check("loadout gets its relics' potion slots", runSlots == want, $"run at ascension 4: slots {runSlots}");
+    }
 }

@@ -33,7 +33,8 @@ internal readonly record struct CardSpec(string Id, int Upgrades = 0, string? En
 /// <summary>
 /// What the player brings into a combat. Null fields keep the character's starting values, so the default
 /// loadout is a fresh run's. This is the final state, not a list of pickups: relics are added without running
-/// their pickup effects (a max-HP relic does not raise <see cref="MaxHp"/>).
+/// their pickup effects (a max-HP relic does not raise <see cref="MaxHp"/>), except the potion slots a relic gives
+/// (Potion Belt), which the potions need.
 /// </summary>
 internal sealed record Loadout(
     IReadOnlyList<CardSpec>? Deck = null,
@@ -69,8 +70,17 @@ internal sealed record Loadout(
         }
         if (Relics != null)
         {
-            foreach (var relic in player.Relics.ToList()) player.RemoveRelicInternal(relic, silent: true);
-            foreach (var id in Relics) player.AddRelicInternal(Models.Find<RelicModel>(id).ToMutable(), silent: true);
+            foreach (var relic in player.Relics.ToList())
+            {
+                player.RemoveRelicInternal(relic, silent: true);
+                player.SubtractFromMaxPotionCount(PotionSlots(relic));
+            }
+            foreach (var id in Relics)
+            {
+                var relic = Models.Find<RelicModel>(id).ToMutable();
+                player.AddRelicInternal(relic, silent: true);
+                player.AddToMaxPotionCount(PotionSlots(relic));
+            }
         }
         if (Potions != null)
         {
@@ -82,4 +92,11 @@ internal sealed record Loadout(
         if (MaxHp is int max) player.Creature.SetMaxHpInternal(max);
         if (Hp is int hp) player.Creature.SetCurrentHpInternal(Math.Min(hp, player.Creature.MaxHp));
     }
+
+    /// <summary>
+    /// The potion slots a relic gives on pickup: every such relic (Potion Belt, Phial Holster, Alchemical Coffer)
+    /// passes its "PotionSlots" var to PlayerCmd.GainMaxPotionCount in AfterObtained.
+    /// </summary>
+    private static int PotionSlots(RelicModel relic) =>
+        relic.DynamicVars.TryGetValue("PotionSlots", out var slots) ? slots.IntValue : 0;
 }

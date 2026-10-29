@@ -161,8 +161,9 @@ internal sealed class RunSession : IDisposable
         var session = new RunSession(pump, setup, player, run, choices, combat, macro, observed);
         try
         {
-            // NGame.StartRun without the nodes.
-            session.Await(RunManager.Instance.FinalizeStartingRelics());
+            // NGame.StartRun without the nodes. A loadout's relics are its final state, pickups done (their potion
+            // slots included), so their AfterObtained does not run again.
+            if (setup.Loadout?.Relics == null) session.Await(RunManager.Instance.FinalizeStartingRelics());
             RunManager.Instance.Launch();
             session.Await(RunManager.Instance.EnterAct(0, doTransition: false));
             session.Settle();
