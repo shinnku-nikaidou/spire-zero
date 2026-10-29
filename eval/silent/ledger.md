@@ -9,6 +9,12 @@ default medium effort, L0 pure-1-g), set 2026-10-29 as the first pure V (plan v4
 its 200-run promotion-1 report at `6ce07fc`: floor 25.69, 0 won, 0 failures; +10.40 over the random macro brain's 15.29,
 −2.56 ± 0.66 against the V v2 champion n2-b0.03's 28.25). NoSL keeps n2-b0.03 until a NoSL report of pure-1-g exists.
 Earlier SL champion: L0 n2-b0.03, set 2026-10-28 by its promotion-1 baseline at `3699fc1`: floor 28.25, 0 won.
+The elite gauntlet's champion (plan v6, `run --gauntlet`, judged by progress on the eval seeds 300000–300499 at the low
+budget with clone, `learn/gauntlet.py`): pure-1-g, the plan's first. Its reference lines at `b013f95` (2026-10-29, 500
+runs each, `sl/eval/2026-10-29-gauntlet-ref`): pure-1-g 34.47 ± 0.33 (acts' bosses beaten 94 % / 24 % / 3 % of those
+reached, 2 won, 2.37 elites a run); n2-b0.03 33.71 ± 0.35 (88 % / 19 % / 2 %, 1 won, 0.64 elites), −0.76 ± 0.45
+paired against pure-1-g; explore 1.0 with pure-1-g (every macro decision drawn evenly) 21.89 ± 0.35 (40 % / 5 % / 0 %,
+0 won, 1.54 elites), −12.58 ± 0.46.
 ## Self-play batches
 
 Train seeds are `run --seed 1 --start K`. A new batch takes the next free block of 100,000 seeds, entered here before
