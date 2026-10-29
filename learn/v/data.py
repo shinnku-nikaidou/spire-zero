@@ -12,7 +12,8 @@ Two kinds of simulated boss fights (`bosslab.py`) can be added, both measured by
     scores, which shapes the body only.
 
 The afterstates of logged decisions (`afterstates`) serve the report alone: the self-play temperature at which V would
-explore as often as the logs did. A boss gauntlet's runs (`run --auto-win`) are refused: their outcomes are not real.
+explore as often as the logs did. A boss gauntlet's runs (`run --auto-win`) are refused: their outcomes are not real;
+their logs serve only as the views of their door states (--door-logs).
 """
 
 import bosslab
@@ -82,6 +83,16 @@ def read_runs(logs: str, records: str, character: str, floors: int) -> tuple[lis
     for s in samples:
         s["weight"] = 1.0 / per_run[s["key"]]
     return samples, runs_seen, views
+
+
+def read_views(logs: str) -> dict:
+    """Each logged decision's view and brain by (run, decision id), from logs whose runs are no samples: a boss
+    gauntlet's, whose door states (--boss-states) need their views."""
+    return {
+        (e["run"], e["decision_id"]): (e["run_view"], e["brain"])
+        for e in read_lines(logs, '"run_view"')
+        if "run_view" in e
+    }
 
 
 def beat_boss(record: dict, act: int) -> bool:

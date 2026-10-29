@@ -154,6 +154,9 @@ def main(
     boss_states: Annotated[
         str | None, typer.Option(help="door states (`bosslab.py states`, collected), comma-separated")
     ] = None,
+    door_logs: Annotated[
+        str | None, typer.Option(help="boss gauntlet logs (`run --auto-win`) whose door states --boss-states holds")
+    ] = None,
     afterstates: Annotated[
         str | None, typer.Option(help="the logged decisions' options (`afterstates`), for explore_temperature")
     ] = None,
@@ -174,7 +177,8 @@ def main(
         raise LearnError(f"{len(train)} train and {len(test)} held-out samples: too few runs")
     worth = data.boss_worth(runs, FLOORS)
     bosses = data.read_boss_sims(boss_sims, boss_afterstates, views, FLOORS, worth) if boss_sims else []
-    doors = data.read_boss_states(boss_states, views, FLOORS) if boss_states else []
+    door_views = views | data.read_views(door_logs) if door_logs else views
+    doors = data.read_boss_states(boss_states, door_views, FLOORS) if boss_states else []
     options = data.read_options(afterstates, views, FLOORS) if afterstates else []
     train_bosses, test_bosses = (
         [g for g in bosses if not data.held_out(g["run"])],

@@ -152,3 +152,10 @@ def test_training_writes_a_net_file_with_its_report(tmp_path):
     net = json.loads(out.read_text())
     assert net["objective"] == "floor" and net["fit"]["runs"] == 10 and net["fit"]["held_out_runs"] == 2
     assert set(net["vocab"]) == set(encode.TABLES) and net["tests"]
+
+
+def test_a_gauntlets_logs_give_its_door_states_their_views_and_no_samples(tmp_path):
+    log = tmp_path / "gauntlet.jsonl"
+    log.write_text(json.dumps({"run": "g1", "decision_id": 4, "brain": "l0", "run_view": make_view(floor=16)}) + "\n")
+    views = data.read_views(str(log))
+    assert list(views) == [("g1", 4)] and views[("g1", 4)][0]["floor"] == 16
