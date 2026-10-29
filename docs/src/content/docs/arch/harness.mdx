@@ -85,7 +85,7 @@ public sealed class PublicRecord
   3. 本回合的历史，由此推出能力和遗物的内部计数器；
   4. 整局层面：至今见过的奖励、商店和事件，由此推出隐藏的概率计数器。
 - 记录随这一局的日志一起保存。崩溃恢复就是重放日志，不需要游戏存档。
-- SL：记录照样保留，用于日志和解说，但搜索用的世界来自节点克隆（[模拟器 §7](/arch/simulator/#sec-7)）。Harness 保存最新的节点检查点和节点轨迹；每次进入新节点时，轨迹清空重来。`Dispatcher` 从宿主的 `node_checkpoint` 和 `node_action` 消息里保存它们，NoSL 下拒收，并在每个战斗决策时把克隆交给战斗大脑。还没收到任何检查点就来了战斗决策，会抛异常。
+- SL：记录照样保留，用于日志和解说，但搜索用的世界来自节点克隆（[模拟器 §7](/arch/simulator/#sec-7)）。Harness 保存最新的节点检查点和节点轨迹；每次进入新节点时，轨迹清空重来。`Dispatcher` 从宿主的 `node_checkpoint` 和 `node_action` 消息里保存它们，NoSL 下拒收，并在每个战斗决策时把克隆交给战斗大脑；加上 `--afterstates clone` 时，也在每个宏观决策和每个战斗外的选牌提示处把它交给 L0，L0 的试探由 `PooledClone` 在 worker 进程池里打（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。还没收到任何检查点就来了 SL 决策，会抛异常。
 
 ## 4. 决策界面路由
 

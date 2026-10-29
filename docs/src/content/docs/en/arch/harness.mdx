@@ -85,7 +85,7 @@ public sealed class PublicRecord
   3. this turn's history, which gives the internal counters of powers and relics;
   4. at run level: the rewards, shops and events seen so far, which give the hidden odds counters.
 - The record is saved with the run log. Crash recovery means replaying the log; no game save is needed.
-- SL: the record is still kept, for logs and narration, but the search worlds come from the node clone ([Simulator §7](/en/arch/simulator/#sec-7)). Harness stores the latest node checkpoint and node trace; the trace is reset at each node entry. `Dispatcher` keeps them from the host's `node_checkpoint` and `node_action` messages, refuses them in NoSL, and hands the clone to the combat brain with each combat decision. A combat decision before any checkpoint throws.
+- SL: the record is still kept, for logs and narration, but the search worlds come from the node clone ([Simulator §7](/en/arch/simulator/#sec-7)). Harness stores the latest node checkpoint and node trace; the trace is reset at each node entry. `Dispatcher` keeps them from the host's `node_checkpoint` and `node_action` messages, refuses them in NoSL, and hands the clone to the combat brain with each combat decision and, with `--afterstates clone`, to L0 at each macro decision and each card prompt outside combat, whose probes `PooledClone` plays in the worker pool ([Macro brain §2](/en/arch/macro-brain/#sec-2)). An SL decision before any checkpoint throws.
 
 ## 4. Surface routing
 

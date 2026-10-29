@@ -21,7 +21,7 @@ Mod 是 AI 在真實遊戲裡的宿主。它由遊戲自帶的 Mod 載入器載�
 
 Mod 是真實遊戲裡的一個薄宿主，只做四件事：觀測遊戲（透過 GameBridge）、經 socket 詢問 Harness、渲染答案（[輸出層](/zh-tw/arch/output/)）和/或執行它、記日誌。遊戲行程裡不做搜尋、不做學習、不含策略。只支援單人模式，多人模式下停用。
 
-專案是 `src/Sts2Ai.Mod`。它針對遊戲 DLL（外加 Godot 引擎的 C# API 組件 GodotSharp）編譯，並把 GameBridge 和 Protocol 的原始碼一起編譯進來（[§2](#sec-2)），不引用 Brain。
+專案是 `src/Sts2Ai.Mod`。它針對遊戲 DLL（外加 Godot 引擎的 C# API 組件 GodotSharp）編譯，並把 GameBridge 和 Protocol 的原始碼一起編譯進來（[§2](#sec-2)），不引用 Brain。它的 `UI/` 資料夾放畫面上的部分（面板、地圖和戰鬥標記、設定和「AI」分頁）；宿主、大腦連線、輔助驅動和 SL 記錄放在根目錄。
 
 ## 2. 載入
 

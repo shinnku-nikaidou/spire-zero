@@ -47,7 +47,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 游戏的 `Log.Error` 输出和未观察到的任务异常都会被收集起来，selftest 断言它们为零。
 
-补丁分组（`HeadlessPatches.cs`）：
+补丁分组（`Runtime/Patches/`，分部类 `HeadlessPatches` 每组一个文件；`HeadlessPatches.Apply` 把它们全部装上，GameBridge 的 `ChoiceContexts` 最先）：
 
 | 分组 | 作用 |
 |---|---|
@@ -58,6 +58,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 | 规则保真 | 恢复被 TestMode 改掉的正式版规则：RollingBoulder 逐个敌人命中；`ShippedBranch` 转译器在 MerchantPotionEntry、Cauldron、CallingBell 中把 TestMode 分支换回正式版分支 |
 | 速度 | `FastCreatures`、`FastPlayerCreatures`、`FastPlayers`；`FastHookListeners`，通过反向补丁与游戏原本的监听器逐一比对 |
 | 选择 | `ChooseABundle`、`CrystalSphereScreen`、`CardRemovalUsed`；另有 GameBridge 的 `ChoiceContexts`，最先打补丁（[GameBridge §5](/arch/gamebridge/#sec-5)） |
+| 游戏瑕疵 | 正式版游戏同样会记下的错误，修掉它们，好让每个游戏错误都是真的问题：玩家在出牌途中死亡（Sly 打出一张牌时，敌人的 Thorns 杀死玩家），出牌会提前返回，把这张牌留在它的选择上下文（`PlayerChoiceContext`）上，随后发起这次出牌的钩子就记下一条错误；`PopCardAfterEarlyReturn` 把这张牌弹出 |
 
 转译器（transpiler）是一种 Harmony 补丁，它直接改写方法的 IL，而不是在方法外面包一层。
 
@@ -67,25 +68,32 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 **运行方式。** 把 `HOME` 设成一个临时目录，并设 `DOTNET_ROOT=~/.dotnet`。可执行文件是 `src/Sts2Ai.SimWorker/bin/Release/net9.0/Sts2Ai.SimWorker`。
 
-**命令行。** `--help` 列出所有命令，`COMMAND --help` 列出一个命令的选项（System.CommandLine）。每个命令是一个类，带着自己的选项；几个命令共用的选项组（配装、遭遇池、预算、叶子、冠军）在 `Args.cs` 里。stdout 只输出命令的结果，供脚本读取（`serve` 的 stdout 就是线路）。日志（Microsoft.Extensions.Logging）写到 stderr，每条一行，默认 Information 及以上；`--verbose` 再加上 Debug：游戏自己的日志。失败的战斗或对局会以 Error 记下调用栈；若是 worker 里的某个世界失败，还附上 worker 的完整异常。罕见的失败未必会再出现。退出码：0 完成；1 完成但有失败（战斗或对局失败、晋级门槛没通过）；2 命令行或它指定的文件有错，报一行；70 程序 bug，附调用栈。
+**命令行。** `--help` 列出所有命令，`COMMAND --help` 列出一个命令的选项（System.CommandLine）。每个命令是一个类，带着自己的选项；几个命令共用的选项组（配装、遭遇池、预算、叶子、冠军）在 `Commands/Args.cs` 里。stdout 只输出命令的结果，供脚本读取（`serve` 的 stdout 就是线路）。日志（Microsoft.Extensions.Logging）写到 stderr，每条一行，默认 Information 及以上；`--verbose` 再加上 Debug：游戏自己的日志。失败的战斗或对局会以 Error 记下调用栈；若是 worker 里的某个世界失败，还附上 worker 的完整异常。罕见的失败未必会再出现。退出码：0 完成；1 完成但有失败（战斗或对局失败、晋级门槛没通过）；2 命令行或它指定的文件有错，报一行；70 程序 bug，附调用栈。
+
+代码按职责分文件夹，命名空间不变：`Runtime/` 让游戏脱离引擎运行（无头宿主、`Pump`、补丁），`Simulation/` 放战斗和整局的游戏一侧（`CombatSession`、`CombatBuilder`、`RunSession`、各种世界），`Brains/` 放一局的大脑需要的东西（大脑连接、冠军选项、日志里的对局），`Commands/` 放各个命令，`Checks/` 放诊断：只检查和测量，不产出训练或评估数据（`selftest`、`fidelity`、`forkbench`）。`Simulation/` 和 `Runtime/` 不用 `Commands/` 里的任何东西。
 
 | 命令 | 作用 |
 |---|---|
 | `list` | 列出本游戏版本里的角色、幕和遭遇 |
 | `combat --encounter ID` | 跑一场战斗，打印每一步 |
 | `combat --from OBS.json` | 同上，但从一场按该观测构建的战斗开始（[§3](#sec-3)） |
-| `run` | 跑整局（[§5](#sec-5)）；`--policy pimc` 让战斗大脑在 worker 里打其中的战斗（[§8](#sec-8)），`--macro l0` 让宏观大脑做其余决策 |
+| `run` | 跑整局（[§5](#sec-5)）；`--policy pimc` 让战斗大脑在 worker 里打其中的战斗（[§8](#sec-8)），`--macro l0` 让宏观大脑做其余决策；`--auto-win` 让它成为 Boss 连战（[§5](#sec-5)） |
+| `brain` | 单独运行的大脑：Harness 一次服务一个连上来的宿主（[§5](#sec-5)、[协议 §2](/arch/protocol/#sec-2)） |
 | `report` | 用对局记录生成评估报告（[评估 §6](/arch/evaluation/#sec-6)） |
 | `gate` | 用挑战者的对局记录对比冠军的报告，以及它的晋级（[评估 §5](/arch/evaluation/#sec-5)） |
 | `leaderboard` | 从报告生成排行榜（[评估 §2](/arch/evaluation/#sec-2)） |
 | `seeds` | 输出一个种子集的种子（[评估 §4](/arch/evaluation/#sec-4)） |
 | `weights` | 把 V 的初始权重输出成权重文件（加 `--leaf` 则输出 PIMC 的默认叶子权重），供调参起步（[学习 §2](/arch/learning/#sec-2)） |
+| `ranks` | V 的选牌眼光：每一幕里，日志中的牌组多一张某牌时 V 的平均变化（[学习 §1](/arch/learning/#sec-1)） |
+| `afterstates` | 重放日志里的对局，写出每个宏观决策中每个选项的后状态和估值（[学习 §2](/arch/learning/#sec-2)） |
+| `fork` | 反事实配对：重放到日志里的决策，再分别用 L0 的最优动作和另一个动作打下去（[学习 §2](/arch/learning/#sec-2)） |
 | `bench` | 在一个遭遇池上跑大量战斗：吞吐量和失败数（[§4](#sec-4)） |
 | `selftest` | 检查确定性、恢复、确定化等（[§9](#sec-9)） |
 | `forkbench` | 一次恢复和一个搜索分支的开销（[§4](#sec-4)） |
-| `panel` | 固定的战斗测试集：占位策略或战斗大脑，每个玩家用同样的种子（[战斗大脑 §7](/arch/combat-brain/#sec-7)） |
+| `panel` | 固定的战斗测试集：占位策略或战斗大脑，每个玩家用同样的种子（[战斗大脑 §7](/arch/combat-brain/#sec-7)）；实验用的 `--prompt-prefer IDS` 让提供了其中某些牌的选牌提示改选列在最前的那张，而不是 `p0` 的选择，在真实战斗和规划器的世界里都如此 |
 | `fusion` | 融合测试集：取决策日志里的 NoSL 战斗决策，比较 PIMC 值和合并后的值（[战斗大脑 §8](/arch/combat-brain/#sec-8)） |
 | `fidelity` | 从观测构建的战斗打起来和真实战斗有多接近，采样的部分除外（[§6](#sec-6)） |
+| `clones` | 在节点克隆上重放宿主消息里的每个 SL 决策，比较观测（[Mod §12](/arch/mod/#sec-12)） |
 | `serve` | 作为 worker 运行：从 stdin 读 JSON 行请求，在 stdout 回复（[§8](#sec-8)）；`--leaf FILE` 设定它搜索用的叶子权重，`--combat-net FILE` 设定学到的叶子 |
 
 所有会跑战斗的命令都接受配装选项（角色、牌组、遗物、药水、生命值）。
@@ -231,7 +239,9 @@ flowchart TD
 
 `IsOver = RunState.IsGameOver`。一局在胜利房间里结束即为获胜。
 
-**命令行**：`run [--n] [--start] [--seed | --seeds FILE] [--asc] [--champion FILE] [--env NoSL|SL] [--policy play|random|pimc|plan] [--macro random|l0] [--value FILE] [--leaf FILE] [--combat-net FILE] [--leaf-prices leaf|v] [--worlds] [--nodes] [--elite-x] [--boss-x] [--halving] [--follow] [--effort] [--beam] [--easy-beam] [--replan] [--loss-plans] [--macro-explore T] [--combat-explore T] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--log FILE] [--records FILE] [--brain SOCKET]`，外加配装选项。每个决策都经过 Harness 的 `Dispatcher`（[Harness §4](/arch/harness/#sec-4)），会话把它当作自己的战斗、提示和宏观策略。用 `pimc` 时，每个战斗决策都在 worker 进程池里搜索，除非 `--workers` 另行指定，每个世界一个 worker；这一局本身一直活在本进程里；`--leaf` 设定搜索用的叶子权重，`--combat-net` 设定学到的叶子（[战斗大脑 §4](/arch/combat-brain/#sec-4)）；`--elite-x` 和 `--boss-x` 让精英战和 Boss 战里每个世界的节点数乘上倍数，`--halving` 让这些节点按 Sequential Halving 分给各个第一个动作，而不是平分，`--follow` 把每个世界都规划得一样的本回合剩余动作直接打出，不再搜索（[战斗大脑 §5](/arch/combat-brain/#sec-5)）。用 `plan` 时（只在 SL 下），SL 规划器在 worker 进程池里规划每场战斗（[战斗大脑 §3](/arch/combat-brain/#sec-3)）：`--effort` 设定它的预算（默认 `medium`），`--beam`、`--easy-beam`、`--replan`、`--loss-plans` 和 `--nodes` 覆盖其中的部分；`--elite-x` 和 `--boss-x` 放大它的束宽和轻松束宽（[战斗大脑 §5](/arch/combat-brain/#sec-5)）；`--leaf-prices v` 让它的叶子用 V 给结局定价（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。`--env` 选择环境（默认 NoSL）：SL 下搜索的是节点克隆，而不是 NoSL 世界（[§7](#sec-7)）。`--macro` 选择战斗之外所有决策的大脑：`random`（占位策略）或 `l0`（宏观大脑），它的 V 是 `--value` 读入的东西：网络文件（V v2 或纯 V，[学习 §1](/arch/learning/#sec-1)），或已不再拟合的 V v0 权重（默认是 V v0 的初始权重）；战斗中的选牌提示交给 `p0`（[战斗大脑 §2](/arch/combat-brain/#sec-2) 第 7 条）。`--macro-explore T` 和 `--combat-explore T` 只用于自我对弈：l0 和 pimc 按各自的估值抽取答案，而不是总取最好的那个（[学习 §5](/arch/learning/#sec-5)）。`--champion FILE` 打冠军文件指明的冠军（[评估 §5](/arch/evaluation/#sec-5)）；给出的选项覆盖文件里的。`--seeds` 从 `--start` 起跑一个种子文件里的种子，`--records` 为每局写一条对局记录，供 `report` 使用（[评估 §4](/arch/evaluation/#sec-4)、[§6](/arch/evaluation/#sec-6)）。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。`--log` 写出决策日志（[Harness §6](/arch/harness/#sec-6)）。`--check` 把每个种子再打一遍，这一遍走传输协议（[协议 §2](/arch/protocol/#sec-2)），连到同一进程里一个线程上运行的 `BrainServer`，冠军相同，然后比较两遍：轨迹、观测、对局记录和决策日志。SL 下第二遍还带着节点消息。
+**命令行**：`run [--n] [--start] [--seed | --seeds FILE] [--asc] [--champion FILE] [--env NoSL|SL] [--policy play|random|pimc|plan] [--macro random|l0] [--value FILE] [--afterstates screen|clone] [--leaf FILE] [--combat-net FILE] [--leaf-prices leaf|v] [--worlds] [--nodes] [--elite-x] [--boss-x] [--halving] [--follow] [--effort] [--beam] [--easy-beam] [--replan] [--loss-plans] [--macro-explore T] [--combat-explore T] [--card-explore P] [--workers] [--max-decisions] [--check] [--trace] [--obs] [--auto-win] [--log FILE] [--records FILE] [--brain SOCKET]`，外加配装选项。每个决策都经过 Harness 的 `Dispatcher`（[Harness §4](/arch/harness/#sec-4)），会话把它当作自己的战斗、提示和宏观策略。用 `pimc` 时，每个战斗决策都在 worker 进程池里搜索，除非 `--workers` 另行指定，每个世界一个 worker；这一局本身一直活在本进程里；`--leaf` 设定搜索用的叶子权重，`--combat-net` 设定学到的叶子（[战斗大脑 §4](/arch/combat-brain/#sec-4)）；`--elite-x` 和 `--boss-x` 让精英战和 Boss 战里每个世界的节点数乘上倍数，`--halving` 让这些节点按 Sequential Halving 分给各个第一个动作，而不是平分，`--follow` 把每个世界都规划得一样的本回合剩余动作直接打出，不再搜索（[战斗大脑 §5](/arch/combat-brain/#sec-5)）。用 `plan` 时（只在 SL 下），SL 规划器在 worker 进程池里规划每场战斗（[战斗大脑 §3](/arch/combat-brain/#sec-3)）：`--effort` 设定它的预算（默认 `medium`），`--beam`、`--easy-beam`、`--replan`、`--loss-plans` 和 `--nodes` 覆盖其中的部分；`--elite-x` 和 `--boss-x` 放大它的束宽和轻松束宽（[战斗大脑 §5](/arch/combat-brain/#sec-5)）；`--leaf-prices v` 让它的叶子用 V 给结局定价（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。`--env` 选择环境（默认 NoSL）：SL 下搜索的是节点克隆，而不是 NoSL 世界（[§7](#sec-7)）。`--macro` 选择战斗之外所有决策的大脑：`random`（占位策略）或 `l0`（宏观大脑），它的 V 是 `--value` 读入的东西：网络文件（V v2 或纯 V，[学习 §1](/arch/learning/#sec-1)），或已不再拟合的 V v0 权重（默认是 V v0 的初始权重）；战斗中的选牌提示交给 `p0`（[战斗大脑 §2](/arch/combat-brain/#sec-2) 第 7 条）。`--afterstates clone`（只在 SL 下）让 L0 在节点克隆上把每个选项真的打一遍，读出真实的后状态，而不是像默认的 `screen` 那样根据界面预测它（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。`--macro-explore T` 和 `--combat-explore T` 只用于自我对弈：l0 和 pimc 按各自的估值抽取答案，而不是总取最好的那个（[学习 §5](/arch/learning/#sec-5)）。`--card-explore P` 同样只用于自我对弈：每个卡牌奖励以概率 P 由 L0 在其中的牌和跳过之间均匀抽取结果，不管 V 怎么说（[学习 §5](/arch/learning/#sec-5)）。`--champion FILE` 打冠军文件指明的冠军（[评估 §5](/arch/evaluation/#sec-5)）；给出的选项覆盖文件里的。`--seeds` 从 `--start` 起跑一个种子文件里的种子，`--records` 为每局写一条对局记录，供 `report` 使用（[评估 §4](/arch/evaluation/#sec-4)、[§6](/arch/evaluation/#sec-6)）。`--check` 还会观测每个决策：每个观测的 JSON 往返必须完全一致，重放时比较观测哈希，每局的结果行末尾附上它们的摘要（`obs`）。`--obs` 打印每个观测。`--log` 写出决策日志（[Harness §6](/arch/harness/#sec-6)）。`--check` 把每个种子再打一遍，这一遍走传输协议（[协议 §2](/arch/protocol/#sec-2)），连到同一进程里一个线程上运行的 `BrainServer`，冠军相同，然后比较两遍：轨迹、观测、对局记录和决策日志。SL 下第二遍还带着节点消息。
+
+**Boss 连战。** `run --auto-win` 在每场战斗（包括 Boss 战）的第一个决策就赢下它，做法和游戏的 `win` 控制台命令（`WinConsoleCmd`）一样：每个敌人去掉所有能力后被杀死，然后游戏检查是否获胜；被杀后复活或召唤同伴的敌人会再被杀一次，最多 5 次。战斗奖励照常发放，和任何一场胜利之后一样，也不会问任何战斗决策。这样一局大约一秒就能走到每一幕的 Boss 门口，只打局外决策（n2-b0.03 的 L0 加 `--card-explore 0.5` 跑 5 局：共 3.1 秒，三幕的 Boss 都过了，没有游戏错误）；之后由 `bosslab.py states` 在这些门口开打（[学习 §2](/arch/learning/#sec-2)）。这种对局的记录标有 `auto_win`，`gate`、`report` 和纯 V 的训练都会拒收，因为它们的层数和生命说明不了一局真正打得怎样（[评估 §6](/arch/evaluation/#sec-6)）。它不能和 `--check` 一起用：节点检查点不保存这条规则。
 
 `--brain SOCKET` 则让这些对局连到在 SOCKET 上等待的 brain 去打，与将来的 Mod 一样：每局发送 `hello`，带上由种子哈希得到的对局 id，每个决策都连同它的观测一起发出。冠军由 brain 决定，所以 `--policy`、`--macro`、预算选项和 `--log` 都属于 brain。`brain [--socket PATH] [--champion FILE] [--policy …] [--macro …] [--worlds] [--nodes] [--workers] [--log FILE]` 就是这个 brain：单独运行的 Harness，一次服务一个连上来的宿主，默认套接字是 `~/.local/state/sts2ai/brain.sock`（[Mod §5](/arch/mod/#sec-5)）。它自己不需要游戏；pimc 的搜索 worker 各自启动游戏。它每局打印一行，附上它的 worker 的游戏错误，宿主的对局记录不计入这些错误。
 
@@ -373,9 +383,10 @@ SL 克隆是当前节点的一个精确副本，在节点出口处封存（[环�
 worker 就是同一个可执行文件以 `serve` 启动。`WorkerPool`（在 `Sts2Ai.Harness` 里，它只通过协议类型看到游戏）启动 N 个 worker，在池的整个生命周期里一直用它们。
 
 - **线路**。每条消息是 stdin/stdout 上的一行 JSON（[协议 §7](/arch/protocol/#sec-7)）。worker 启动完（约 1.2 s）先写一行 `WorkerHello{game}`，之后按顺序对每一行请求回一行 `WorkerReply`，直到 stdin 关闭。游戏启动之前，`serve` 把 `Console.Out` 转到 stderr，所以游戏打印的任何东西都进不了这条流。池为每个 worker 保留最后 20 行 stderr，用于错误信息。
-- **目前有三种请求**。`PimcWorldRequest` 是 PIMC 对一个战斗决策中一个 NoSL 世界的搜索。worker 用构建种子从观测构建战斗（`SimWorlds.NoSL`，[§6](#sec-6)），取由搜索种子抽出的第 k 个世界，对本回合做深度优先搜索（[战斗大脑 §2](/arch/combat-brain/#sec-2)），回复每个首个动作之后的最佳路线。`PooledPimc` 每个世界发一个请求，再用与进程内 PIMC 相同的方式合并回复（[战斗大脑 §2](/arch/combat-brain/#sec-2)）；用 Sequential Halving 时每一轮发一组这样的请求，只带还留着的第一个动作（[战斗大脑 §5](/arch/combat-brain/#sec-5)）。
+- **目前有四种请求**。`PimcWorldRequest` 是 PIMC 对一个战斗决策中一个 NoSL 世界的搜索。worker 用构建种子从观测构建战斗（`SimWorlds.NoSL`，[§6](#sec-6)），取由搜索种子抽出的第 k 个世界，对本回合做深度优先搜索（[战斗大脑 §2](/arch/combat-brain/#sec-2)），回复每个首个动作之后的最佳路线。`PooledPimc` 每个世界发一个请求，再用与进程内 PIMC 相同的方式合并回复（[战斗大脑 §2](/arch/combat-brain/#sec-2)）；用 Sequential Halving 时每一轮发一组这样的请求，只带还留着的第一个动作（[战斗大脑 §5](/arch/combat-brain/#sec-5)）。
 - `SlWorldRequest` 是 PIMC 在一个首个动作之后对 SL 世界的搜索：worker 加载节点克隆（`NodeWorld`，[§7](#sec-7)），搜索本回合。SL 只有一个世界，所以 `PooledPimc` 改为按首个动作拆分：每个首个动作一个请求，每个请求拿到该动作在一次搜索里应得的那份预算。每个请求有自己的转置备忘表，而单进程搜索在各首个动作之间共用一张，所以答案可能与进程内搜索不同。
 - `SlTurnRequest` 是 SL 规划器从束里的一个状态出发对一个回合的搜索（[战斗大脑 §3](/arch/combat-brain/#sec-3)）：worker 加载节点克隆，从决策处走完这个状态的路径，搜索这个回合，回复这个回合最好的几个结束状态（`TurnSearch`）。`PooledPlanner` 在束的每个回合里对每个保留状态发一个请求，带上目前最好的完整路线作为剪枝的下限。一个回合的搜索整个在一个请求里，所以计划和单进程里的一样，`selftest --workers N` 会检查这一点。
+- `SlMacroRequest` 是 L0 在战斗外的决策处对节点克隆的试探（[宏观大脑 §2](/arch/macro-brain/#sec-2)）：对每条答案路径，worker 加载克隆，从这个决策起把答案依次打出，回复游戏接着问的下一个决策：它的 `RunView`、界面、画面和合法动作（`NodeProbe`）；战斗、地图或对局结束和其他决策一样，都会让试探停下。`PooledClone` 把一次搜索的路径按顺序分成每个 worker 一个请求。一条路径的后状态只取决于克隆和路径，所以怎么分都不改变结果。
 - **自包含的请求**。请求带着 worker 需要的一切，请求之间不留任何状态。所以任何空闲的 worker 都能接任何请求。NoSL 下离开宿主进程的只有观测：真实状态永远不会到达 worker。SL 下离开的是节点克隆，这是 SL 允许知道的。请求还带着这场战斗至今的敌人出招记录：NoSL 的 worker 用它构建怪物的出招日志（[§3](#sec-3)），各种请求都把它交给叶子（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
 - **确定性**。回复按请求顺序合并，绝不按完成顺序。种子相同时，结果与进程内搜索完全相同，连数值也一样：`selftest --workers N` 检查四个决策；6 场战斗的 panel 轨迹，用 8 个 worker 和进程内相比，diff 为空。
 - **崩溃**。关闭 stdout 或管道断开的 worker 会被重启，请求再发一次；第二次失败就报错。在池的超时（5 分钟）内没有启动完或没有回答的 worker 也一样，先被杀掉：一个请求最多几秒，这样的 worker 是卡住了。次数报告为 `worker restarts`。带错误的回复（worker 内的异常）让这个决策失败；进程池保留回复里的游戏错误，交给调用方报告。回复里写明最内层异常抛出的位置，worker 发完后就退出：抛了异常的请求可能让游戏停在已搭好的状态（战斗仍在），之后的每个请求都会失败；下一个请求会重启它。worker 里游戏的 `Log.Error` 输出随回复返回，与宿主的一起计数。
@@ -397,9 +408,12 @@ worker 就是同一个可执行文件以 `serve` 启动。`WorkerPool`（在 `St
 - 带 `--workers N` 时：池化的 PIMC 与进程内 PIMC 选出相同的动作，数值相同，没有 worker 重启，worker 里也没有游戏错误；
 - 协议往返；
 - Rolling Boulder 的补丁路径被走到过；
+- 玩家在出牌途中死亡（Sly 打出一张牌时被敌人的 Thorns 杀死）不会留下游戏错误（[§1](#sec-1) 的游戏瑕疵）；
 - 搜索世界在选牌提示之后能精确恢复，带着每回合开始都会提问的遗物（Toasty Mittens）也一样；
 - 整局里一场战斗的 SL 世界显示这场战斗，和原对局打得一样，并能恢复；
 - SL 封存：记下了离开动作的节点克隆，加载后停在视野边界，拒绝再走一步；SL 世界打到它那场战斗结束后，拒绝任何动作；
+- SL 克隆保留存档丢掉的遗物状态（一件遗物像 `LAVA_ROCK` 那样被禁用，[§7](#sec-7)）；
+- Boss 连战：一局用 `--auto-win`、随机的宏观大脑和一个绝不能被问到的战斗大脑，赢下每场战斗，包括第 1 幕的 Boss，不掉一点生命（[§5](#sec-5)）；
 - SL 计划成立：规划器在节点克隆上为对局里一场战斗剩下的部分做计划（满血的普通战斗，必须赢）；对局重新打到那个决策，然后一步一步照着计划打，每个观测都和计划预期的一样，战斗结束时的生命值和药水正是计划的估值所说的；用 `--workers N` 时，进程池里的规划器做出相同的计划，连节点数都相同；
 - 没有游戏错误。
 
@@ -412,7 +426,7 @@ worker 就是同一个可执行文件以 `serve` 启动。`WorkerPool`（在 `St
 
 2026-10-26 的结果见 [§5.3](#sec-5.3)。
 
-**已有，在 `src/Sts2Ai.Tests` 中**（xUnit，`dotnet test src/Sts2Ai.Tests`），覆盖不需要游戏就能运行的部分：敌人出招记录、叶子价值、预算、报告与晋级门槛、Harness 的路由（选了不合法的动作或遇到没有路由的界面就抛异常，战斗大脑拿到目前为止的出招记录，宏观决策清空这份记录）、探索（softmax 的抽取、l0 和 pimc 的探索、日志里的标记），以及命令行（默认值、错误输入、冠军文件的选项垫在给出的选项之下、冠军的选项能重新打出同一个冠军）。
+**已有，在 `src/Sts2Ai.Tests` 中**（xUnit，`dotnet test src/Sts2Ai.Tests`），按被测的项目分文件夹（`Brain/`、`Harness/`、`SimWorker/`），每个测试类一个文件，覆盖不需要游戏就能运行的部分：敌人出招记录、叶子价值、预算、报告与晋级门槛、Harness 的路由（选了不合法的动作或遇到没有路由的界面就抛异常，战斗大脑拿到目前为止的出招记录，宏观决策清空这份记录）、探索（softmax 的抽取、l0 和 pimc 的探索、日志里的标记）、L0 在克隆上的搜索（在一个玩具克隆上：商店值它最好的一篮购买，事件选项值它下一页给的东西，地图上的移动不去实际走，要选两张牌的提示找到最好的一对，到达两次的状态只搜一次），以及命令行（默认值、错误输入、冠军文件的选项垫在给出的选项之下、冠军的选项能重新打出同一个冠军）。`BoundaryTests` 不启动游戏，检查 `selftest` 启动游戏时检查的同一件事：Brain、Protocol 和 Harness 不触及任何游戏程序集，而这项检查确实看得到 GameBridge 对 `sts2` 的引用。
 
 **规划中**：视野边界反事实字段；Mod 能记录整局后，做 R3 与 R4 的同种子差异对比。
 

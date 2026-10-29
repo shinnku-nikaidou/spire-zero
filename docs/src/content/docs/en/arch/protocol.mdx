@@ -254,7 +254,7 @@ The SL seal: the node's clone stops at the node's exit (`AtHorizon`) and throws 
 
 ### 7.1 Worker messages
 
-The worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) does not move worlds over the wire one step at a time: an IPC round trip (tens of µs) costs about as much as a sim step (about 0.1 ms), and search takes thousands of steps per decision. A request asks for a whole unit of work instead: the search of one world, or one turn of the SL planner (`Worker.cs`):
+The worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) does not move worlds over the wire one step at a time: an IPC round trip (tens of µs) costs about as much as a sim step (about 0.1 ms), and search takes thousands of steps per decision. A request asks for a whole unit of work instead: the search of one world, one turn of the SL planner, or L0's probes of a decision on the node's clone (`Worker.cs`):
 
 ```csharp
 // The worker's first line, once it has booted.
@@ -276,16 +276,25 @@ public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<Comba
 
 // "sl_turn": load Node, play Path from the decision, and search the rest of that turn with Nodes nodes
 // (the SL planner, Combat brain §3): keep the best Keep states at the next turn's start and the best end of
-// the combat, none whose bound cannot beat Floor. History is the record of enemy moves up to that state.
+// the combat, none whose bound cannot beat Floor. History is the record of enemy moves up to that state;
+// with Prices, the leaves price the combat's ends with them instead of the leaf weights (Combat brain §4).
 public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep,
-    double? Floor, IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
+    double? Floor, IReadOnlyList<EnemyTurns>? History = null, EndPrices? Prices = null) : WorkerRequest(Id);
 
-// Lines[i] is the best line after First[i]; Turn answers an sl_turn. Error is set instead when the request failed.
+// "sl_macro": load Node and play each of Paths from the decision, each in its own load (L0 on the clone,
+// Macro brain §2); a path is macro actions in text form and, for a card prompt, "pick:" and its picks.
+public sealed record SlMacroRequest(long Id, NodeClone Node, IReadOnlyList<IReadOnlyList<string>> Paths) : WorkerRequest(Id);
+
+// Lines[i] is the best line after First[i]; Turn answers an sl_turn, Afters an sl_macro. Error is set instead when the request failed.
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors,
-    TurnSearch? Turn = null);
+    TurnSearch? Turn = null, IReadOnlyList<Afterstate>? Afters = null);
 
-// Cut: the nodes ran out, or more states were found than kept.
-public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
+// What the game asks next after a path: the run then, the surface (null once the run is over), its screen
+// and legal actions.
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
+
+// Cut: the nodes ran out, or more states were found than kept. Bound: the bound of the state searched from.
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
 
 // Where a turn ends (or the combat): its actions and the observation hash before each, the leaf's value, the
 // bound (a win at its HP and potions), the key of its observation and full hidden state, its record of moves.

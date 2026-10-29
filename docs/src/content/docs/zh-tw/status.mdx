@@ -25,7 +25,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 | Harness 排程 | 整局已完成：沒有後備的決策介面路由，由 run id 和決策序號得到的大腦種子，決策日誌；`run --check` 能完全重現它（[Harness §4](/zh-tw/arch/harness/#sec-4)–[§6](/zh-tw/arch/harness/#sec-6)） |
 | 宿主–brain 傳輸 | 完成：[協定 §2](/zh-tw/arch/protocol/#sec-2) 的訊息走 Unix socket。`brain` 提供服務，`run --brain` 作為宿主連上它跑整局。一局在行程內和走傳輸協定時打得完全一樣：軌跡、觀測、對局記錄和決策日誌都相同，PIMC 也是（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)） |
 | 事件、公開記錄 | 規劃中 |
-| 宏觀大腦、價值函式 | L0 v0 加 V v0：從介面預測每個選項的後狀態，再用 V 估值。戰鬥用 PIMC 加手工葉節點時，平均層數 19.34，200 局裡 177 局打到第 1 幕頭目，局外隨機時是 13.68 層和 73 局；還沒有一局獲勝（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。V v2（一個讀整局的卡牌、遺物、藥水和上下文的網路）連同它的訓練和自我對弈的探索已經實作；它的 n2-b0.03（在三代自我對弈上訓練，並被拉向 V v0 的選擇）從 2026-10-28 起是 NoSL 冠軍的 V，同樣的種子上平均 26.16 層，V v0 是 22.58（[學習 §1](/zh-tw/arch/learning/#sec-1)、[§2](/zh-tw/arch/learning/#sec-2)） |
+| 宏觀大腦、價值函式 | L0 v0 加 V v0：從介面預測每個選項的後狀態，再用 V 估值。戰鬥用 PIMC 加手工葉節點時，平均層數 19.34，200 局裡 177 局打到第 1 幕頭目，局外隨機時是 13.68 層和 73 局；還沒有一局獲勝（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。V v2（一個讀整局的卡牌、遺物、藥水和上下文的網路）連同它的訓練和自我對弈的探索已經實作；它的 n2-b0.03（在三代自我對弈上訓練，並被拉向 V v0 的選擇）從 2026-10-28 起是 NoSL 冠軍的 V，同樣的種子上平均 26.16 層，V v0 是 22.58（[學習 §1](/zh-tw/arch/learning/#sec-1)、[§2](/zh-tw/arch/learning/#sec-2)）SL 下，L0 可以在節點複本上把每個選項真的打一遍，並在節點的畫面裡往下搜尋（`--afterstates clone`，[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。 |
 | Mod | 在 NoSL 和 SL 下覆蓋所有決策介面的輔助模式：能載入進真實遊戲，連上大腦，對每個空閒的決策發出詢問，並用遊戲裡的名字顯示答案；面板上的核取方塊選擇環境。SL 下它傳送每個節點的檢查點和玩家的步驟（在遊戲提交動作的地方讀出），SL 規劃器在節點的複本上規劃：在真實遊戲裡，90 個 SL 決策中有 89 個在複本上問出同一個決策（剩下那個的原因已經修好），一場戰鬥的第一個決策要等規劃器 3–15 秒。還沒有在真實遊戲裡看它跑完一整局（[Mod §2](/zh-tw/arch/mod/#sec-2)、[§3](/zh-tw/arch/mod/#sec-3)、[§6](/zh-tw/arch/mod/#sec-6)） |
 
 ## 2. 主要缺口與風險
@@ -56,7 +56,7 @@ import { Badge, Steps } from '@astrojs/starlight/components';
 
 7. Mod：執行器和自動開局驅動，打通 R4 管線；R3 ≡ R4 等價測試。載入、與大腦的連線和覆蓋所有決策介面的輔助面板已經完成，兩種環境都支援，包括 SL 匯出和它的往返測試（[Mod §2](/zh-tw/arch/mod/#sec-2)–[§6](/zh-tw/arch/mod/#sec-6)、[§12](/zh-tw/arch/mod/#sec-12)）。
 
-8. worker 行程池裡從複本載入的 SL 世界；SL 排行榜。節點檢查點、SL 複本、封存、整局裡的 SL 世界，以及在 worker 行程池裡在複本上規劃整場戰鬥的 SL 規劃器已完成（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)、[§8](/zh-tw/arch/simulator/#sec-8)、[戰鬥大腦 §3](/zh-tw/arch/combat-brain/#sec-3)）；SL 排行榜還沒做。
+8. worker 行程池裡從複本載入的 SL 世界；SL 排行榜。節點檢查點、SL 複本、封存、整局裡的 SL 世界，以及在 worker 行程池裡在複本上規劃整場戰鬥的 SL 規劃器已完成（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)、[§8](/zh-tw/arch/simulator/#sec-8)、[戰鬥大腦 §3](/zh-tw/arch/combat-brain/#sec-3)）；SL 排行榜有了第一個冠軍，2026-10-28 由它的基線定下：SL 規劃器 c2 加 L0 n2-b0.03，在 `promotion-1` 上平均 28.25 層（[評估 §7](/zh-tw/arch/evaluation/#sec-7)）。
 
 9. 學習循環（擬合 V、ExIt、SPSA、晉級門檻），然後是 LLM 補丁循環。用自我對弈擬合 V、用 SPSA 調 V 和葉節點的權重，整局門檻和每個環境一個的冠軍檔案，菁英和頭目戰的預算倍數（[戰鬥大腦 §5](/zh-tw/arch/combat-brain/#sec-5)），以及決策日誌和對局記錄裡的 ExIt 資料（[Harness §6](/zh-tw/arch/harness/#sec-6)），已經完成（[學習 §2](/zh-tw/arch/learning/#sec-2)，[評估 §5](/zh-tw/arch/evaluation/#sec-5)）。V v2（局外 V 網路）及其訓練、自我對弈的探索也已完成（[學習 §1](/zh-tw/arch/learning/#sec-1)、[§2](/zh-tw/arch/learning/#sec-2)），因為選卡是最弱的一環，它被提到了戰鬥相關各項的前面。戰鬥結局輸出頭也已實作，即戰鬥網路：PIMC 學到的葉節點，讀敵人至今每回合的意圖（[學習 §1](/zh-tw/arch/learning/#sec-1)）。戰鬥網路的第一代已經過了晉級門檻（c2，[戰鬥大腦 §7.2](/zh-tw/arch/combat-brain/#sec-7.2)），第二代自我對弈用它來跑，按估值探索（[學習 §5](/zh-tw/arch/learning/#sec-5)）。V v2 第一個晉升的是 n2-b0.03（[學習 §2](/zh-tw/arch/learning/#sec-2)）。接下來依次是：下一代戰鬥網路（c4，用第二、三代資料訓練）過晉級門檻；調 K 和每個世界的節點數，並試這些倍數；用自我對弈日誌裡的 300–500 個決策跑融合測試集（工具已實作，[戰鬥大腦 §8](/zh-tw/arch/combat-brain/#sec-8)）；根上的 Sequential Halving（[戰鬥大腦 §5](/zh-tw/arch/combat-brain/#sec-5)）；先驗網路；最後是帶 PCR 和 Reanalyse 的閉迴路（[學習 §2](/zh-tw/arch/learning/#sec-2)）。共享樹、多回合搜尋和 v2 編碼器，看這些測量的結果再定。
 

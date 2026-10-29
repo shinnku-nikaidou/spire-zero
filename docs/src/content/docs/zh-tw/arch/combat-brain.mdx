@@ -12,7 +12,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-v0 已實作（`src/Sts2Ai.Brain/CombatBrain.cs`、`LeafValue.cs`）：在 K 個世界上做 PIMC，每個世界裡搜尋本回合（[§2](#sec-2)）；一個手工的葉節點估值，和一個學到的葉節點即戰鬥網路，它的第一代 c2 自 2026-10-27 起由 NoSL 冠軍使用（[§4](#sec-4)、[§7.2](#sec-7.2)）；選牌提示的固定規則（`p0`，[§2](#sec-2) 第 7 條）；以及固定的戰鬥測試集和它的結果（[§7](#sec-7)）。SL 規劃器（`SlPlanner.cs`，2026-10-28）在 SL 唯一的世界上規劃整場戰鬥，然後照著計畫打（[§3](#sec-3)）。尚未實作：把選牌提示變成搜尋分支、PIMC 越過本回合的搜尋、基於信賴區間的分配，以及 `Facts`。佔位策略保留下來，供 bench 使用，也作為測試集上的基線：`PlayPolicy`（隨機打出一張能打的牌）和 `RandomPolicy`（在合法動作中均勻隨機）。
+v0 已實作（`src/Sts2Ai.Brain/Combat/CombatBrain.cs`、`LeafValue.cs`）：在 K 個世界上做 PIMC，每個世界裡搜尋本回合（[§2](#sec-2)）；一個手工的葉節點估值，和一個學到的葉節點即戰鬥網路，它的第一代 c2 自 2026-10-27 起由 NoSL 冠軍使用（[§4](#sec-4)、[§7.2](#sec-7.2)）；選牌提示的固定規則（`p0`，[§2](#sec-2) 第 7 條）；以及固定的戰鬥測試集和它的結果（[§7](#sec-7)）。SL 規劃器（`SlPlanner.cs`，2026-10-28）在 SL 唯一的世界上規劃整場戰鬥，然後照著計畫打（[§3](#sec-3)）。尚未實作：把選牌提示變成搜尋分支、PIMC 越過本回合的搜尋、基於信賴區間的分配，以及 `Facts`。佔位策略保留下來，供 bench 使用，也作為測試集上的基線：`PlayPolicy`（隨機打出一張能打的牌）和 `RandomPolicy`（在合法動作中均勻隨機）。
 
 </Aside>
 

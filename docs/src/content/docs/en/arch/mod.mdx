@@ -21,7 +21,7 @@ Assist mode is built for every surface, in both environments: `src/Sts2Ai.Mod` l
 
 The mod is a thin host in the real game. It does four things: observe the game (through GameBridge), ask Harness over a socket, render the answer ([Output](/en/arch/output/)) and/or execute it, and log. It runs no search, no learning and no strategy inside the game process. It supports single-player only and is disabled in multiplayer.
 
-The project is `src/Sts2Ai.Mod`. It builds against the game DLLs (plus GodotSharp, the C# API of the Godot engine) and compiles in the sources of GameBridge and Protocol ([§2](#sec-2)). It does not reference Brain.
+The project is `src/Sts2Ai.Mod`. It builds against the game DLLs (plus GodotSharp, the C# API of the Godot engine) and compiles in the sources of GameBridge and Protocol ([§2](#sec-2)). It does not reference Brain. Its `UI/` folder holds what it draws (the panel, the map and combat marks, the settings and the "AI" tab); the host, the brain link, the assist driver and the SL records are at its root.
 
 ## 2. Loading
 

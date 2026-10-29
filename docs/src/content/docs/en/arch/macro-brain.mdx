@@ -13,7 +13,7 @@ The **macro brain** makes every decision outside combat: the next map point, whi
 
 <Aside title="Status">
 
-L0 v0 exists: `MacroBrain` in Brain, played with `run --macro l0` ([Simulator §5](/en/arch/simulator/#sec-5)). It answers every macro surface and the card prompts outside combat, and values options with V: V v0, or V v2 or pure V from a net file ([Learning §1](/en/arch/learning/#sec-1)). With `--macro-explore T`, for self-play, it draws each answer by the same values instead, at softmax temperature T ([Learning §5](/en/arch/learning/#sec-5)). Run worlds do not exist yet ([Simulator §6](/en/arch/simulator/#sec-6)), so it predicts each afterstate from the screen instead of applying the option in a world ([§2](#sec-2), L0 v0). Planned: afterstates from run worlds, multi-step screen search, L1, and the `IMacroBrain` interface of [§4](#sec-4).
+L0 v0 exists: `MacroBrain` in Brain, played with `run --macro l0` ([Simulator §5](/en/arch/simulator/#sec-5)). It answers every macro surface and the card prompts outside combat, and values options with V: V v0, or V v2 or pure V from a net file ([Learning §1](/en/arch/learning/#sec-1)). With `--macro-explore T`, for self-play, it draws each answer by the same values instead, at softmax temperature T ([Learning §5](/en/arch/learning/#sec-5)). With `--card-explore P` it draws the outcome of a share P of the card rewards evenly instead. In NoSL, run worlds do not exist yet ([Simulator §6](/en/arch/simulator/#sec-6)), so it predicts each afterstate from the screen instead of applying the option in a world ([§2](#sec-2), L0 v0). In SL, with `--afterstates clone`, it plays each option on the node's clone and searches on through the node's screens ([§2](#sec-2), L0 on the clone). Planned: afterstates from run worlds and multi-step screen search in NoSL, L1, and the `IMacroBrain` interface of [§4](#sec-4).
 
 </Aside>
 
@@ -87,6 +87,17 @@ Until run worlds exist, `MacroBrain` predicts each afterstate from what the scre
 What it cannot see: an event option's costs and gains are not on the screen as data, so a costly option ties with leaving and wins when listed first (Tablet of Truth takes max HP for every decipher, down to 1); what a relic does beyond being one more relic; what a transform gives. Applying options in run worlds removes all three.
 
 On `promotion-1` (200 runs, Silent A0) L0 beats random macro decisions under both combat policies: with PIMC, floor 19.34 on average and the act 1 boss in 177 runs (combat prompts by `p0`), against 13.68 and 73 (prompts still random); with the `play` placeholder, 11.90 against 8.09 and 60 against 5 ([Combat brain §7.2](/en/arch/combat-brain/#sec-7.2)). It skips fewer card rewards (43% against 58%, with PIMC) and fights fewer elites (0.30 per run against 0.94).
+
+### L0 on the clone (SL)
+
+In SL, with `--afterstates clone` (and `--macro l0`), Harness hands L0 the node's clone at each macro decision and at each card prompt outside combat ([Harness §3](/en/arch/harness/#sec-3)), and L0 plays the options in the real game instead of predicting them (`CloneSearch`, commit `952cb04`):
+
+- **Afterstates.** Each option is played on the clone, and what the game asks next is its afterstate, valued by V. Only the map's moves are still predicted, as in L0 v0: travel is the node's exit, which the clone cannot play past.
+- **Search through the node's screens.** While an afterstate is still a screen of the node (not the map, a combat or the run's end), the search goes on over that screen's own actions, potions left out: level by level, a beam keeps the 16 states V values best, up to 1,024 probes in all. A state reached twice (by its afterstate's hash) is searched once. A state is worth the best state after it, or V's value where the search stops; an option, its afterstate's worth. So a shop's purchases, a rewards screen's claims and an event's pages are searched as sequences, as the multi-step screens above describe.
+- **Card prompts.** A prompt on the clone is answered by a local search: from no pick (or the fewest picks it needs), each step tries the answers one pick away (one more, one fewer, one swapped), each searched on as above, and moves to the best while it beats the answer it has. Cards the player cannot tell apart count as one. A prompt that needs two or more picks is not searched into from the screen that opens it: its own decision searches it.
+- **Probes** run in the worker pool, each a load of the clone and a replay of its path of answers ([Simulator §8](/en/arch/simulator/#sec-8)).
+
+The champion's name says `l0 NAME clone`, and a champion file `"afterstates": "clone"`. NoSL and `--afterstates screen` play as before (the same runs on 4 seeds in both environments). Checked: `run --check` plays the same over the wire and replays every node exactly, with no game error (17 runs with `play` in combat, 2 with the SL planner and c2). With the SL planner, a macro decision took 40 ms on average (median 13 ms, at most 0.5 s), 9 s of a 187 s two-run total.
 
 ## 3. NoSL vs SL
 

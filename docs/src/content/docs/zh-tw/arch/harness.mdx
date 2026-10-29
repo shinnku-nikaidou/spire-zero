@@ -85,7 +85,7 @@ public sealed class PublicRecord
   3. 本回合的歷史，由此推出能力和遺物的內部計數器；
   4. 整局層面：至今見過的獎勵、商店和事件，由此推出隱藏的機率計數器。
 - 記錄隨這一局的日誌一起儲存。崩潰恢復就是重播日誌，不需要遊戲存檔。
-- SL：記錄照樣保留，用於日誌和解說，但搜尋用的世界來自節點複本（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。Harness 儲存最新的節點檢查點和節點軌跡；每次進入新節點時，軌跡清空重來。`Dispatcher` 從宿主的 `node_checkpoint` 和 `node_action` 訊息裡儲存它們，NoSL 下拒收，並在每個戰鬥決策時把複本交給戰鬥大腦。還沒收到任何檢查點就來了戰鬥決策，會拋出例外。
+- SL：記錄照樣保留，用於日誌和解說，但搜尋用的世界來自節點複本（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。Harness 儲存最新的節點檢查點和節點軌跡；每次進入新節點時，軌跡清空重來。`Dispatcher` 從宿主的 `node_checkpoint` 和 `node_action` 訊息裡儲存它們，NoSL 下拒收，並在每個戰鬥決策時把複本交給戰鬥大腦；加上 `--afterstates clone` 時，也在每個宏觀決策和每個戰鬥外的選牌提示處把它交給 L0，L0 的試探由 `PooledClone` 在 worker 行程池裡打（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。還沒收到任何檢查點就來了 SL 決策，會拋出例外。
 
 ## 4. 決策介面路由
 
