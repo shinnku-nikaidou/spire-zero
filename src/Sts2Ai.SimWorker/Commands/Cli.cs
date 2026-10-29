@@ -2,8 +2,6 @@ using System.CommandLine;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Sts2Ai.Harness;
-using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker;
 

@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using System.Text.Json;
-using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;

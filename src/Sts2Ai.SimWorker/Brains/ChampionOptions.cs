@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using Sts2Ai.Brain;
 using Sts2Ai.Harness;
