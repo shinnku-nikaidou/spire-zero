@@ -66,7 +66,7 @@ script = common.app()
 MAX_UP = 3  # RunNet.MaxUp
 AUX = 6  # the next combats whose HP cost the second head learns
 ACT = 2  # with --aux-act, the second head also learns whether the act's boss was beaten, and the HP share left after it
-BOSS_FLOORS = {0: 17, 1: 33}  # the floor of each act's boss fight
+BOSS_FLOORS = {0: 17, 1: 33, 2: 48}  # the floor of each act's boss fight
 # The second head's outputs past the next combats, in order, with their widths: main() sets the ones in use.
 EXTRA_AUX: list[tuple[str, int]] = []
 # Every scaled number the nets read is capped at ±CAP: a few states show huge ones (an erupting WATERFALL_GIANT's HP).
