@@ -170,6 +170,16 @@ internal sealed record LeafChoice(LeafFile? Weights, string? WeightsPath, Combat
 
     public bool IsDefault => Weights == null && Net == null;
 
+    /// <summary>
+    /// Fails for a combat net of another environment: it predicts the endings of another policy, and SL's planner wins
+    /// more from the same state than NoSL's search (docs: learning §2). A file without one (c1–c4) plays in either.
+    /// </summary>
+    public void Check(PlayEnvironment env)
+    {
+        if (Net?.Env is { } own && own != env.ToString())
+            throw new NotSupportedException($"combat net {Net.Name} predicts {own}'s endings, not {env}'s");
+    }
+
     /// <summary>What follows pimc in the brain's name: the weights' name, then the net's, each when given.</summary>
     public string Suffix => (Weights != null ? $" {Weights.Name}" : "") + (Net != null ? $" {Net.Name}" : "");
 

@@ -58,6 +58,7 @@ internal static class Panel
         if (workers > 0 && (player != "pimc" || env != PlayEnvironment.NoSL)) throw new CliException("--workers is for --player pimc --env NoSL");
         var leaf = Leaf.Read(r);
         if (!leaf.IsDefault && !searches) throw new CliException("--leaf and --combat-net are for --player pimc or plan");
+        leaf.Check(env);
         var pool = Pool.Read(r);
         var preferred = r.GetValue(Prefer) is { } ids ? ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : null;
         if (preferred != null && workers > 0) throw new CliException("--prompt-prefer does not reach the workers");

@@ -8,7 +8,8 @@ namespace Sts2Ai.Brain;
 public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, double PotionsUsed);
 
 /// <summary>
-/// The combat net as <c>learn/train_combat.py</c> writes it (docs: learning §1).
+/// The combat net as <c>learn/combat/export.py</c> writes it, or as the removed <c>learn/train_combat.py</c> wrote it
+/// (docs: learning §1).
 /// </summary>
 /// <param name="Buckets">How many buckets of the share of max HP lost from the state to a win the head has, after its
 /// first class, a death.</param>
@@ -18,16 +19,18 @@ public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTur
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="CombatNet"/> feeds them, outputs the
 /// chance of each ending and the potions used after a win.</param>
+/// <param name="Env">The environment whose games it learned from, whose policy's endings it predicts: SL or NoSL. The
+/// files made before nets had one (c1–c4, all NoSL's) have none.</param>
 public sealed record CombatNetFile(
     string Name, int Buckets, double LossMin, int Lags, bool Round, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
-    IReadOnlyList<CombatNetTest> Tests);
+    IReadOnlyList<CombatNetTest> Tests, string? Env = null);
 
 /// <summary>
 /// The learned combat leaf (docs: combat-brain §4): from a round's start, how the combat ends under the policy that
 /// played the training games. The net, run by ONNX Runtime, reads the cards in each pile, the player, each enemy with
 /// its intents now and in its last rounds, the relics, the potions and the encounter; a net that declares them also
-/// reads the cards' and relics' numbers, the powers' stacks and kept cards, the orbs, the allies, and the ascension,
-/// orb slots and gold. It predicts what is still to come:
+/// reads the powers' stacks and kept cards, the orbs, the allies, and the ascension, orb slots and gold, and the older
+/// ones (c1–c4) the cards' and relics' numbers too. It predicts what is still to come:
 /// the HP share lost from here and the potions used, so the HP and potions held now count in full. A state in progress
 /// is worth the endings it predicts, priced as <see cref="LeafValue"/> prices a win (the HP share now less each bucket's
 /// middle, and the potions held less those used); a state whose combat is over is <see cref="LeafValue"/>'s. This class
@@ -53,6 +56,9 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     }
 
     public string Name => _file.Name;
+
+    /// <summary>The environment whose endings it predicts (<see cref="CombatNetFile.Env"/>).</summary>
+    public string? Env => _file.Env;
 
     /// <summary>The net of a file, once it gives every test state the trainer's outcome.</summary>
     /// <param name="weights">The prices of the endings; null for the default leaf weights.</param>
@@ -89,7 +95,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     /// <summary>
     /// The chance of each ending (a death, then each bucket of HP lost) and the potions used after a win: the graph on a
-    /// batch of one state, read as <c>learn/train_combat.py</c> reads it. An enemy's slots are its intents now, then
+    /// batch of one state, read as <c>learn/combat/encode.py</c> reads it (each input fed only if the graph declares it). An enemy's slots are its intents now, then
     /// those of its last rounds before this one, most recent first.
     /// </summary>
     public (float[] Outcome, float PotionsUsed) Predict(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
