@@ -85,7 +85,7 @@ public sealed class PublicRecord
   3. 本回合的歷史，由此推出能力和遺物的內部計數器；
   4. 整局層面：至今見過的獎勵、商店和事件，由此推出隱藏的機率計數器。
 - 記錄隨這一局的日誌一起儲存。崩潰恢復就是重播日誌，不需要遊戲存檔。
-- SL：記錄照樣保留，用於日誌和解說，但搜尋用的世界來自節點複本（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。Harness 儲存最新的節點檢查點和節點軌跡；每次進入新節點時，軌跡清空重來。`Dispatcher` 從宿主的 `node_checkpoint` 和 `node_action` 訊息裡儲存它們，NoSL 下拒收，並在每個戰鬥決策時把複本交給戰鬥大腦；加上 `--afterstates clone` 時，也在每個宏觀決策和每個戰鬥外的選牌提示處把它交給 L0，L0 的試探由 `PooledClone` 在 worker 行程池裡打（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。還沒收到任何檢查點就來了 SL 決策，會拋出例外。
+- SL：記錄照樣保留，用於日誌和解說，但搜尋用的世界來自節點複本（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。Harness 儲存最新的節點檢查點和節點軌跡；每次進入新節點時，軌跡清空重來。`Dispatcher` 從宿主的 `node_checkpoint` 和 `node_action` 訊息裡儲存它們，NoSL 下拒收，並在每個戰鬥決策時把複本交給戰鬥大腦；加上 `--afterstates clone` 時，也在每個宏觀決策和每個戰鬥外的選牌提示處把它交給 L0，L0 的試探由 `PooledClone` 在 worker 行程池裡打（[宏觀大腦：搜尋 §6](/zh-tw/arch/macro-brain/search/#sec-6)）。還沒收到任何檢查點就來了 SL 決策，會拋出例外。
 
 ## 4. 決策介面路由
 
@@ -134,7 +134,7 @@ public sealed class PublicRecord
 
 - `obs_hash` 是大腦看到的內容的雜湊：戰鬥觀測、整局觀測或選牌提示。`legal` 是合法動作的個數（對提示而言是選項個數）。`chosen` 是文字形式的動作，或選中的選項索引。
 - 會搜尋的大腦還會加上 `plan`（`chosen` 之後本回合剩下的動作，取第一個世界裡的；SL 規劃器則是整場戰鬥剩下的動作）、`candidates`（每個首個動作的平均估值、信賴區間半寬 `ci` 和世界數，最好的在前；然後是它在每個世界裡的估值，按世界順序，以及搜尋在每個世界裡花在它下面的節點數；SL 規劃器則是它保留的路線裡出現過的每個首個動作，估值取其中最好的路線）和 `budget`。沿用計畫打出的一步（[戰鬥大腦 §5](/zh-tw/arch/combat-brain/#sec-5)）有 `plan` 而沒有 `candidates`，和只有一個合法動作的決策一樣。佔位策略兩者都不記。各個世界的估值就是 ExIt 的 policy 目標裡的 Q（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
-- 在地圖上，L0 也會加上 `plan`：`chosen` 之後本幕剩下的路線（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。
+- 在地圖上，L0 也會加上 `plan`：`chosen` 之後本幕剩下的路線（[宏觀大腦：搜尋 §1](/zh-tw/arch/macro-brain/search/#sec-1)）。
 - `explored: true` 標出自我對弈的探索抽中的、不是大腦最佳選擇的一步，且大腦給它的估值比最佳低出溫度的百分之一以上（[學習 §5](/zh-tw/arch/learning/#sec-5)）。差距比這更小就算平手（例如同一回合換了個出牌順序），不標。用均勻抽取（`--explore ε`）時，每個抽出的答案都會標出，即使它碰巧就是大腦自己的首選。其他步驟沒有 `explored`。沒有選搜尋首選的戰鬥步驟保留 `candidates`，但沒有 `plan`，因為那個計畫是首選的。
 - `replanned: true` 標出因為大腦計畫裡的一步對不上（戰鬥沒有出現計畫預期的觀測）而重新搜尋的戰鬥步驟（[戰鬥大腦 §5](/zh-tw/arch/combat-brain/#sec-5)）。用 PIMC 的 `--follow` 時，這是回合裡揭示了新東西；用 SL 規劃器時，說明複本和真實戰鬥不同（[戰鬥大腦 §3](/zh-tw/arch/combat-brain/#sec-3)）。對局那一行統計它們的次數（`replans`）。
 - 一局的戰鬥決策按戰鬥分塊，每場戰鬥一塊，塊與塊之間隔著宏觀決策，順序與對局記錄裡的戰鬥一致。決策靠這個找到它那場戰鬥的結局（[評估 §6](/zh-tw/arch/evaluation/#sec-6)）。

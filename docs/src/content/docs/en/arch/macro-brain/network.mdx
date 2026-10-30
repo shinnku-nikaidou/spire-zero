@@ -1,0 +1,104 @@
+---
+title: The value network
+description: What pure V reads (ids and raw state only), and how its set encoder, bags and body turn a run into one hazard per floor; with the whole forward pass running in the page.
+sidebar:
+  label: The value network
+---
+import { Aside } from '@astrojs/starlight/components';
+import RunExplorer from '../../../../../components/v/RunExplorer.svelte';
+import NetExplorer from '../../../../../components/v/NetExplorer.svelte';
+
+V is a neural network that reads a run and predicts how it will end. This section describes the current one, **pure V** (`learn/v/`), as v6-3-2 has it: what it reads, how each layer transforms it, and why it is built that way. How its output becomes a value, and how it is trained, is the [next section](/en/arch/macro-brain/value/).
+
+## 1. What V reads
+
+Pure V reads **what the run is and its raw state, nothing else**. No feature written by hand, no card's damage or cost, no relic's effect: what matters in a card, a relic or a deck is the net's to learn from how runs end.
+
+The inputs, all read from the run view that Harness logs at every decision ([Harness §6](/en/arch/harness/#sec-6)):
+
+- **Each card of the deck:** its id, its upgrade level (at most 3) and the ids of its enchantment and affliction, if any.
+- **Each relic:** its id, with `:used` once it is used up. **Each potion:** its id.
+- **The context:** the character, the act's id, the act's boss or bosses and the act's ancient.
+- **The map:** every point a path leads to from where the player stands (the last visited point, or the start before any), each as one token: its type plus how many floors ahead it is, such as `Elite+3`, with `:quest` where a quest marks it.
+- **Six numbers:** the floor, HP, max HP, gold, the ascension and the potion slots. Each is standardized, $(x - \mu)/\sigma$, by the mean and standard deviation of the training data, which the net file keeps.
+
+An id seen fewer than 3 times in the training data reads as one shared *unknown* id. v6-3-2's tables hold 509 card ids, 21 modifiers, 260 relic ids, 53 potions, 26 context tokens and 133 map tokens, each counting the unknown one. The one specification of all this is `learn/v/encode.py`; the brain's `RunNet` (its `Tokens`, `MapTokens` and the state) and this page's figures follow it.
+
+<RunExplorer client:visible lang="en" start="map" />
+
+The map in the figure is the act's graph of points, row 0 at the bottom. The ringed point is where the player stands; coloured points are the ones still reachable along the map's paths, which V reads; grey ones are behind or off every path ahead. Point at a node to see its token. The map is read as a *bag* of these tokens: V knows that an elite lies three floors ahead and a rest site four floors ahead, but not whether the rest site comes after the elite on the same path. Keeping the paths is one of the next steps ([Weaknesses and next steps §2](/en/arch/macro-brain/next/#sec-2)).
+
+**Why no hand-written knowledge.** The first V (V v0, `RunValue`) was 17 hand-written features of the run times weights in units of one HP: a potion was worth 8 HP, a relic 8, an upgraded card 3, a gold 0.1, each card in the deck −0.3, plus the deck's mean damage, block and draw. A later net, n2-b0.03, read those 17 features as inputs and was pulled towards V v0's choices in training. Its choices followed the prices. On the SL runs of `promotion-1` (160 for n2-b0.03, 200 for the others):
+
+| | n2-b0.03 (read V v0's features) | pure-1-g (pure V) | random choices |
+|---|---|---|---|
+| rest site at 70–85% HP: share that rested | 99% | 51% | 48% |
+| rest site at 85–99% HP: share that rested | 35% | 7% | 53% |
+| potions bought | 417 | 330 | 92 |
+| cards bought | 55 | 313 | 162 |
+| gold left when leaving a shop (mean) | 89 | 27 | 36 |
+
+A potion at 8 HP for 50–75 gold (5–7.5 HP at the price of gold) always looked like a bargain, and a heal of 21 HP always beat an upgrade worth 3. A price written by hand is a strategy written by hand, and it is wrong in ways that runs cannot correct, since the net copies it. Pure V has no prices; its only teacher is the run's outcome.
+
+## 2. The architecture
+
+The net turns the tokens into one vector per card, pools the deck, sums each bag, appends the numbers, and passes the result through a body of two layers to its heads. In formulas, for a deck of $n$ cards:
+
+**Card vectors.** Card $k$ has an id $c_k$, an upgrade level $u_k \le 3$ and modifier ids $m$ (its enchantment and affliction). Its input vector, 32 numbers, is
+
+$$
+x_k = E[c_k] + u_k\, U[c_k] + \sum_{m \in \mathrm{mods}(k)} M[m],
+$$
+
+where $E$, $U$ and $M$ are learned tables (*embeddings*): one vector per card id, one *upgrade direction* per card id, one vector per modifier. An upgrade moves a card along a direction the net learns for that card.
+
+**The set encoder.** A small network $\varphi$ (32 → 128 → 128, ReLU) maps each card on its own, and the deck is pooled two ways:
+
+$$
+h_k = \varphi(x_k), \qquad \bar h = \frac{1}{n}\sum_{k=1}^{n} h_k, \qquad \tilde h = \frac{1}{16}\sum_{k=1}^{n} h_k .
+$$
+
+The mean $\bar h$ says what the deck is made of; the scaled sum $\tilde h$ also says how much of it there is (the factor $1/16$ keeps it about a mean's size).
+
+**The bags.** Relics, potions, context and map are each the sum of their tokens' 32-number vectors: $r = \sum_i R[\text{relic}_i]$, and the same for the other three.
+
+**The body.** The deck's two pools, the four bags and the six standardized numbers are concatenated into one vector of $128 + 128 + 4 \cdot 32 + 6 = 390$ numbers, $z$, and
+
+$$
+b_1 = \mathrm{ReLU}(W_1 z + c_1), \qquad b_2 = \mathrm{ReLU}(W_2 b_1 + c_2),
+$$
+
+each of 256 numbers. **The heads** read $b_2$: for each floor $g$ from 0 to 63, a *hazard* $h_g = \sigma(w_g^\top b_2 + a_g)$, the chance that the run ends on floor $g$ if it is still alive there; and, for the gauntlet's V, a *share* $s_g$ by a second set of weights ([From hazards to value §1](/en/arch/macro-brain/value/#sec-1)). A third head, used only in training, is not in the net file ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
+
+| part | shape | weights |
+|---|---|---|
+| card, upgrade, modifier embeddings | 509 × 32, 509 × 32, 21 × 32 | 33,248 |
+| relic, potion, context, map embeddings | 260, 53, 26, 133 × 32 | 15,104 |
+| $\varphi$ | 32 → 128 → 128 | 20,736 |
+| body | 390 → 256 → 256 | 165,888 |
+| hazard and share heads | 256 → 64, twice | 32,896 |
+| **total** | | **267,872** |
+
+The figure runs this net, v6-3-2's real weights, in your browser. Pick a state, change HP or gold, add a card, remove or upgrade one, and every layer is computed again. Each row of cells is one vector: blue is positive, red negative, grey near zero; a ReLU layer's output is never negative, so its cells are grey to blue. The right-hand column is what each distinct card adds to V: V of the deck as it is, minus V with one copy of that card removed.
+
+<NetExplorer client:visible lang="en" />
+
+Some things to try:
+
+- In the floor-2 card reward state (the Silent's starting cards, one Strike fewer), Neutralize adds 1.84 floors, Survivor 0.25 and a Defend nearly nothing, while a Strike *subtracts* 0.65: V values this deck higher with one Strike fewer. Card removal is the best one-step option in the [running example's shop](/en/arch/macro-brain/afterstates/#sec-2), too.
+- Lower HP and watch the numbers row, then the body: HP is one input among 390, yet it moves V by about 0.08 floors per HP at the floor-25 rest site.
+- Add a card the net never saw, or one seen fewer than 3 times: it reads as the unknown id, and its name is greyed.
+
+<Aside>
+
+**One forward pass, three implementations.** The trainer (PyTorch) exports the net as an ONNX graph inside the net file (`weights/silent/v6-3-2.json`), with the token tables, the standardization and 8 held-out test runs with the values it gave them. The brain's `RunNet` runs the graph with ONNX Runtime and refuses the file unless it gives the 8 runs the trainer's values. This page reads the same file at build time, decodes the graph's weights, and runs the forward pass in TypeScript (`docs/src/lib/v/`). `pnpm check` gives it the 8 test runs and the 23 options of the four running examples, and fails if any value is off by more than $10^{-4}$.
+
+</Aside>
+
+## 3. Why a set encoder
+
+A deck is a *multiset*: the order of its cards means nothing, and its size varies from about 10 to 40. A net that read the cards in a sequence would have to learn that every order is the same; a fixed-size vector of counts per card would have hundreds of mostly empty slots and nothing shared between similar cards. The architecture above is a **Deep Set** (Zaheer et al., 2017): a function of the form $\rho\left(\sum_k \varphi(x_k)\right)$ gives the same output for every order of its inputs and reads sets of any size, and every such function can be written in that form. Here $\varphi$ is the card network and $\rho$ the body.
+
+Each card id has its own learned vector, so the net starts knowing nothing about any card. What it learns about a card comes from the runs whose decks held it, through every decision of those runs. That is why ids seen fewer than 3 times read as unknown: a vector trained on one or two runs is noise.
+
+The design has a known limit. Cards meet each other, and the relics, only in the body, after the deck is pooled into 128 numbers twice. A relation such as "Shivs are worth more with Shuriken and Kunai" has to pass through those pooled numbers before it can meet the relic bag. A layer of attention between the cards and relics before pooling would let them interact directly, and it is part of the next plan's build encoder ([Weaknesses and next steps §2](/en/arch/macro-brain/next/#sec-2)).

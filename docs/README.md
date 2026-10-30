@@ -9,11 +9,21 @@ Chinese) and `src/content/docs/en/` (English).
 pnpm install        # once
 pnpm dev            # http://localhost:4321 (runs in the background)
 pnpm astro dev stop # stop it
-pnpm check          # build, then check links, anchors, locale triplets, unrendered bold
+pnpm check          # build, then check links, anchors, locale triplets, unrendered bold, and the figures' V
 ```
+
+The sidebar is the book's table of contents (`astro.config.mjs`): an overview, four parts and the appendices. A
+chapter of several pages lives in a folder (`arch/macro-brain/`, its first page `index.mdx` at the chapter's URL).
+
+**Figures.** The macro brain's interactive figures are Svelte islands in `src/components/v/`, drawn with D3. They run
+the champion's V in the page: `src/lib/v/` reads `weights/silent/v6-3-2.json` at build time (served as
+`/data/v6-3-2.json` and `.bin`) and runs its forward pass in TypeScript; `pnpm check` makes it value the net file's
+test runs and the real decisions in `src/data/macro-examples.json` as the trainer and `sim afterstates` did. Cards,
+relics and potions show the game's own names (`src/data/names/`, written by
+`node scripts/game-names.mjs PATH/SlayTheSpire2.pck`), followed by the id in brackets.
 
 Editing rules: the English page is the reference version; change all three languages in the
 same commit; keep section numbers stable (numbered headings get the anchor `#sec-5.1`,
-and code comments cite them as `docs: simulator §5.1`). The Traditional Chinese pages use
+and code comments cite them as `docs: simulator §5.1`, or `docs: macro-brain/search §2` for a page of a chapter). The Traditional Chinese pages use
 Taiwan wording and the game's own Traditional Chinese names (Boss = 頭目, Elite = 菁英,
 Ascension = 晉階).

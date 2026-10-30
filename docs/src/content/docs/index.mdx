@@ -77,23 +77,40 @@ flowchart TD
 
 ## 5. 文档地图
 
-侧边栏与这张表一致，每页旁边的徽章表示它的状态。
+本手册像一本书那样阅读：一篇概览、四个部分和两个附录，顺序与侧边栏一致。每页旁边的徽章表示它的状态。
+
+**第一部　问题**
 
 | 页面 | 范围 | 状态 |
 |---|---|---|
 | [环境](/arch/environments/) | NoSL/SL 定义、节点边界、信息表、守护测试 | <Badge text="已定" variant="success" /> |
-| [协议](/arch/protocol/) | 通信格式、观测联合类型、选择上下文、事件、推荐、世界 API | <Badge text="部分实现" variant="tip" /> 观测与选牌上下文已有 |
-| [GameBridge](/arch/gamebridge/) | 观测来源、各界面的动作、选牌提示上下文、决策点、uid | <Badge text="部分实现" variant="tip" /> 每个决策界面都已有 |
-| [模拟器](/arch/simulator/) | 无头宿主、战斗会话、CombatBuilder、性能、整局会话、NoSL 世界、SL 克隆、worker 池 | <Badge text="部分实现" variant="tip" /> 战斗与整局会话、NoSL 战斗世界、worker 进程池已有 |
-| [Mod](/arch/mod/) | 加载、主线程循环、空闲检测、适配器、SL 导出、自动开局驱动、安全 | <Badge text="规划中" variant="caution" /> |
-| [Harness](/arch/harness/) | 记录与信念、路由、预算、决策日志、故障处理 | <Badge text="部分实现" variant="tip" /> 路由、决策日志和 worker 进程池已有 |
+
+**第二部　决策**
+
+| 页面 | 范围 | 状态 |
+|---|---|---|
 | [战斗大脑](/arch/combat-brain/) | PIMC（NoSL）、确定性规划（SL）、叶子估值、剪枝 | <Badge text="部分实现" variant="tip" /> |
-| [宏观大脑](/arch/macro-brain/) | 后状态 + V、推演复核、地图 | <Badge text="规划中" variant="caution" /> |
+| [宏观大脑](/arch/macro-brain/) | 一章七节：它决定什么、后状态与单一 V、SL 克隆上的搜索、价值网络、从风险值到价值、精英连战里的自我对弈、弱点与下一步 | <Badge text="部分实现" variant="tip" /> L0、纯 V 及其自我对弈已有 |
+
+**第三部　学习与评估**
+
+| 页面 | 范围 | 状态 |
+|---|---|---|
 | [学习](/arch/learning/) | V 的定义、自我对弈循环、功劳分配、特权训练、局部最优、基础设施 | <Badge text="规划中" variant="caution" /> |
 | [评估](/arch/evaluation/) | R1–R4 阶梯、排行榜、指标、种子、晋级门槛、基线 | <Badge text="规划中" variant="caution" /> |
+
+**第四部　机器**
+
+| 页面 | 范围 | 状态 |
+|---|---|---|
+| [模拟器](/arch/simulator/) | 无头宿主、战斗会话、CombatBuilder、性能、整局会话、NoSL 世界、SL 克隆、worker 池 | <Badge text="部分实现" variant="tip" /> 战斗与整局会话、NoSL 战斗世界、worker 进程池已有 |
+| [Harness](/arch/harness/) | 记录与信念、路由、预算、决策日志、故障处理 | <Badge text="部分实现" variant="tip" /> 路由、决策日志和 worker 进程池已有 |
+| [协议](/arch/protocol/) | 通信格式、观测联合类型、选择上下文、事件、推荐、世界 API | <Badge text="部分实现" variant="tip" /> 观测与选牌上下文已有 |
+| [GameBridge](/arch/gamebridge/) | 观测来源、各界面的动作、选牌提示上下文、决策点、uid | <Badge text="部分实现" variant="tip" /> 每个决策界面都已有 |
+| [Mod](/arch/mod/) | 加载、主线程循环、空闲检测、适配器、SL 导出、自动开局驱动、安全 | <Badge text="规划中" variant="caution" /> |
 | [输出层](/arch/output/) | 面板、高亮锚点、自动循环、解说 | <Badge text="规划中" variant="caution" /> |
 
-进度、已知缺口和实施顺序见[进度与路线图](/status/)。术语解释见[术语表](/glossary/)。
+附录：进度、已知缺口和实施顺序见[进度与路线图](/status/)；术语解释见[术语表](/glossary/)。
 
 背景笔记（中文）只保存在本地 `tmp/notes/` 下，不在仓库里：`plan.md`（计划 v1，里程碑 M0–M5）、`fair-play-spec.md`、`output-design.md`、`testmode-audit.md`、`mod-research.md`。
 
@@ -106,6 +123,7 @@ flowchart TD
 - <Badge text="已核实" variant="success" /> 表示这条说法已在游戏源码里核对过。<Badge text="推断" variant="caution" /> 表示它是推断出来的，在依赖它之前必须先核实。
 - 像 `Runs/RunManager.cs:670-709` 这样的源码位置，是反编译后 `MegaCrit.Sts2.Core` 程序集里的路径。反编译代码只保存在本地（`tmp/decompiled/sts2/`），不在仓库里。Godot 节点类（`N*`）按文件名查找，文件名是唯一的。
 - 「模拟器 §5.1」这样的引用指向某页的编号小节。它的锚点在三种语言里都是 `#sec-5.1`（`/arch/simulator/#sec-5.1`）。代码注释写作 `docs: simulator §5.1`。
+- 由几页组成的一章（例如宏观大脑）在引用时还要写出页名：「宏观大脑：搜索 §2」就是 `/arch/macro-brain/search/#sec-2`，代码注释写作 `docs: macro-brain/search §2`。
 
 **怎么维护**
 

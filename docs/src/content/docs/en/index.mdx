@@ -77,23 +77,40 @@ All projects live under `src/`, in the solution `Sts2Ai.sln`. Dependencies point
 
 ## 5. Doc map
 
-The sidebar follows this table. The badge next to each page shows its status.
+The manual reads as a book: an overview, four parts and two appendices, in the order of the sidebar. The badge next to each page shows its status.
+
+**Part I: The problem**
 
 | page | scope | status |
 |---|---|---|
 | [Environments](/en/arch/environments/) | NoSL/SL definitions, node boundary, information table, guards | <Badge text="decided" variant="success" /> |
-| [Protocol](/en/arch/protocol/) | wire format, observation union, choice context, events, recommendation, world API | <Badge text="partly built" variant="tip" /> observation and choice context exist |
-| [GameBridge](/en/arch/gamebridge/) | observe sources, actions per surface, prompt context, decision points, uids | <Badge text="partly built" variant="tip" /> every surface exists |
-| [Simulator](/en/arch/simulator/) | headless host, combat session, CombatBuilder, performance, run session, NoSL worlds, SL clone, worker pool | <Badge text="partly built" variant="tip" /> combat and run sessions, NoSL combat worlds, worker pool exist |
-| [Mod](/en/arch/mod/) | loading, main-thread loop, idle detection, adapters, SL export, auto-run driver, safety | <Badge text="planned" variant="caution" /> |
-| [Harness](/en/arch/harness/) | record and belief, routing, budget, decision log, failures | <Badge text="partly built" variant="tip" /> routing, decision log and worker pool exist |
+
+**Part II: Deciding**
+
+| page | scope | status |
+|---|---|---|
 | [Combat brain](/en/arch/combat-brain/) | PIMC (NoSL), deterministic planning (SL), leaf value, pruning | <Badge text="partly built" variant="tip" /> |
-| [Macro brain](/en/arch/macro-brain/) | afterstate + V, rollout check, map | <Badge text="planned" variant="caution" /> |
+| [Macro brain](/en/arch/macro-brain/) | a chapter of seven sections: what it decides, afterstates and one V, search on the SL clone, the value network, from hazards to value, self-play in the elite gauntlet, weaknesses and next steps | <Badge text="partly built" variant="tip" /> L0, pure V and its self-play exist |
+
+**Part III: Learning and evaluation**
+
+| page | scope | status |
+|---|---|---|
 | [Learning](/en/arch/learning/) | definition of V, self-play loop, credit assignment, privileged training, local optima, infrastructure | <Badge text="planned" variant="caution" /> |
 | [Evaluation](/en/arch/evaluation/) | R1–R4 ladder, leaderboards, metrics, seeds, gates, baselines | <Badge text="planned" variant="caution" /> |
+
+**Part IV: The machinery**
+
+| page | scope | status |
+|---|---|---|
+| [Simulator](/en/arch/simulator/) | headless host, combat session, CombatBuilder, performance, run session, NoSL worlds, SL clone, worker pool | <Badge text="partly built" variant="tip" /> combat and run sessions, NoSL combat worlds, worker pool exist |
+| [Harness](/en/arch/harness/) | record and belief, routing, budget, decision log, failures | <Badge text="partly built" variant="tip" /> routing, decision log and worker pool exist |
+| [Protocol](/en/arch/protocol/) | wire format, observation union, choice context, events, recommendation, world API | <Badge text="partly built" variant="tip" /> observation and choice context exist |
+| [GameBridge](/en/arch/gamebridge/) | observe sources, actions per surface, prompt context, decision points, uids | <Badge text="partly built" variant="tip" /> every surface exists |
+| [Mod](/en/arch/mod/) | loading, main-thread loop, idle detection, adapters, SL export, auto-run driver, safety | <Badge text="planned" variant="caution" /> |
 | [Output](/en/arch/output/) | panel, highlight anchors, auto loop, narration | <Badge text="planned" variant="caution" /> |
 
-Progress, known gaps and the implementation order are on [Status and roadmap](/en/status/). Terms are explained in the [Glossary](/en/glossary/).
+The appendices: progress, known gaps and the implementation order are on [Status and roadmap](/en/status/); terms are explained in the [Glossary](/en/glossary/).
 
 Background notes, in Chinese, are kept locally under `tmp/notes/` and are not in the repository: `plan.md` (plan v1, milestones M0–M5), `fair-play-spec.md`, `output-design.md`, `testmode-audit.md`, `mod-research.md`.
 
@@ -106,6 +123,7 @@ Background notes, in Chinese, are kept locally under `tmp/notes/` and are not in
 - <Badge text="verified" variant="success" /> means the claim was checked in the game's source. <Badge text="inferred" variant="caution" /> means it was inferred and must be checked before anything relies on it.
 - Game source locations such as `Runs/RunManager.cs:670-709` are paths inside the decompiled `MegaCrit.Sts2.Core` assembly. The decompiled code stays local (`tmp/decompiled/sts2/`) and is not in the repository. Godot node classes (`N*`) are found by file name, which is unique.
 - References like "Simulator §5.1" point to a numbered section of a page. Its anchor is `#sec-5.1` in all three languages (`/en/arch/simulator/#sec-5.1`). Code comments cite sections as `docs: simulator §5.1`.
+- A chapter of several pages, such as the macro brain, names the page as well: "Macro brain: search §2" is `/en/arch/macro-brain/search/#sec-2`, and code comments cite it as `docs: macro-brain/search §2`.
 
 **Maintaining it**
 

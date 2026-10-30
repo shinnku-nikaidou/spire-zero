@@ -255,7 +255,7 @@ PIMC 贏下的戰鬥，規劃器都贏了，另外還多贏 1、5、3 場。在�
 
 ### 7.2 整局
 
-大腦也能打整局裡的戰鬥：`run --policy pimc`（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）讓這一局在宿主行程裡一直活著，每個戰鬥決策都在 worker 行程池裡搜尋（[模擬器 §8](/zh-tw/arch/simulator/#sec-8)）。戰鬥裡的選牌提示交給 `p0`，兩個玩家都一樣；下面前四行測於它們還隨機回答的時候，後兩行用的是 `p0`。種子集是 `promotion-1`（200 局，Silent A0，[評估 §4](/zh-tw/arch/evaluation/#sec-4)），預算 8 × 300，局外決策來自隨機佔位策略或 L0（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）：
+大腦也能打整局裡的戰鬥：`run --policy pimc`（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）讓這一局在宿主行程裡一直活著，每個戰鬥決策都在 worker 行程池裡搜尋（[模擬器 §8](/zh-tw/arch/simulator/#sec-8)）。戰鬥裡的選牌提示交給 `p0`，兩個玩家都一樣；下面前四行測於它們還隨機回答的時候，後兩行用的是 `p0`。種子集是 `promotion-1`（200 局，Silent A0，[評估 §4](/zh-tw/arch/evaluation/#sec-4)），預算 8 × 300，局外決策來自隨機佔位策略或 L0（[宏觀大腦：搜尋 §1](/zh-tw/arch/macro-brain/search/#sec-1)）：
 
 ```bash
 Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0 --records pimc-l0.jsonl

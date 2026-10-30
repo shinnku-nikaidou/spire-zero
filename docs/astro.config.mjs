@@ -1,23 +1,43 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import svelte from '@astrojs/svelte';
 import mermaid from 'astro-mermaid';
 import katex from 'katex';
 
-// Sidebar mirrors the doc map on the overview page. Labels and status badges
-// come from each page's own frontmatter, so every locale shows its own text.
-const architecture = [
-  'arch/environments',
-  'arch/protocol',
-  'arch/gamebridge',
-  'arch/simulator',
-  'arch/mod',
-  'arch/harness',
-  'arch/combat-brain',
+// The sidebar is the book's table of contents, as the overview's doc map lists it: an overview, four parts and the
+// appendices. Labels and status badges come from each page's own frontmatter, so every locale shows its own text.
+const macroBrain = [
   'arch/macro-brain',
-  'arch/learning',
-  'arch/evaluation',
-  'arch/output',
+  'arch/macro-brain/afterstates',
+  'arch/macro-brain/search',
+  'arch/macro-brain/network',
+  'arch/macro-brain/value',
+  'arch/macro-brain/selfplay',
+  'arch/macro-brain/next',
+];
+const book = [
+  { label: '前言', translations: { 'zh-TW': '前言', en: 'Introduction' }, items: ['index'] },
+  { label: '第一部　问题', translations: { 'zh-TW': '第一部　問題', en: 'Part I: The problem' }, items: ['arch/environments'] },
+  {
+    label: '第二部　决策',
+    translations: { 'zh-TW': '第二部　決策', en: 'Part II: Deciding' },
+    items: [
+      'arch/combat-brain',
+      { label: '宏观大脑', translations: { 'zh-TW': '宏觀大腦', en: 'Macro brain' }, items: macroBrain },
+    ],
+  },
+  {
+    label: '第三部　学习与评估',
+    translations: { 'zh-TW': '第三部　學習與評估', en: 'Part III: Learning and evaluation' },
+    items: ['arch/learning', 'arch/evaluation'],
+  },
+  {
+    label: '第四部　机器',
+    translations: { 'zh-TW': '第四部　機器', en: 'Part IV: The machinery' },
+    items: ['arch/simulator', 'arch/harness', 'arch/protocol', 'arch/gamebridge', 'arch/mod', 'arch/output'],
+  },
+  { label: '附录', translations: { 'zh-TW': '附錄', en: 'Appendices' }, items: ['status', 'glossary'] },
 ];
 
 // Numbered headings ("## 5." / "### 5.1") get the id "sec-5" / "sec-5.1" in every
@@ -78,27 +98,18 @@ export default defineConfig({
     mathKatex,
     // Must come before Starlight so it sees mermaid code blocks first.
     mermaid({ autoTheme: true, enableLog: false }),
+    // The macro brain's figures are Svelte islands (src/components/v/).
+    svelte(),
     starlight({
       title: { 'zh-CN': '杀戮尖塔 2 AI 架构手册', 'zh-TW': '殺戮尖塔 2 AI 架構手冊', en: 'STS2 AI Architecture' },
-      customCss: ['katex/dist/katex.min.css'],
+      customCss: ['katex/dist/katex.min.css', './src/styles/viz.css'],
       defaultLocale: 'root',
       locales: {
         root: { label: '简体中文', lang: 'zh-CN' },
         'zh-tw': { label: '繁體中文', lang: 'zh-TW' },
         en: { label: 'English', lang: 'en' },
       },
-      sidebar: [
-        {
-          label: '总览',
-          translations: { 'zh-TW': '總覽', en: 'Overview' },
-          items: ['index', 'status', 'glossary'],
-        },
-        {
-          label: '子系统',
-          translations: { 'zh-TW': '子系統', en: 'Subsystems' },
-          items: architecture,
-        },
-      ],
+      sidebar: book,
     }),
   ],
 });

@@ -255,7 +255,7 @@ On won combats the planner costs about what PIMC NoSL does, 3.4 times PIMC SL. O
 
 ### 7.2 Whole runs
 
-The brain also plays the combats of whole runs: `run --policy pimc` ([Simulator §5](/en/arch/simulator/#sec-5)) keeps the run live in the host and searches each combat decision in the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)). Card prompts in combat go to `p0`, for both players; the first four rows below were measured while they were still answered at random, the last two with `p0`. The seed set is `promotion-1` (200 runs, Silent A0, [Evaluation §4](/en/arch/evaluation/#sec-4)), the budget 8 × 300, and the macro decisions come from the random placeholder or from L0 ([Macro brain §2](/en/arch/macro-brain/#sec-2)):
+The brain also plays the combats of whole runs: `run --policy pimc` ([Simulator §5](/en/arch/simulator/#sec-5)) keeps the run live in the host and searches each combat decision in the worker pool ([Simulator §8](/en/arch/simulator/#sec-8)). Card prompts in combat go to `p0`, for both players; the first four rows below were measured while they were still answered at random, the last two with `p0`. The seed set is `promotion-1` (200 runs, Silent A0, [Evaluation §4](/en/arch/evaluation/#sec-4)), the budget 8 × 300, and the macro decisions come from the random placeholder or from L0 ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)):
 
 ```bash
 Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0 --records pimc-l0.jsonl

@@ -255,7 +255,7 @@ PIMC 赢下的战斗，规划器都赢了，另外还多赢 1、5、3 场。在�
 
 ### 7.2 整局
 
-大脑也能打整局里的战斗：`run --policy pimc`（[模拟器 §5](/arch/simulator/#sec-5)）让这一局在宿主进程里一直活着，每个战斗决策都在 worker 进程池里搜索（[模拟器 §8](/arch/simulator/#sec-8)）。战斗里的选牌提示交给 `p0`，两个玩家都一样；下面前四行测于它们还随机回答的时候，后两行用的是 `p0`。种子集是 `promotion-1`（200 局，Silent A0，[评估 §4](/arch/evaluation/#sec-4)），预算 8 × 300，局外决策来自随机占位策略或 L0（[宏观大脑 §2](/arch/macro-brain/#sec-2)）：
+大脑也能打整局里的战斗：`run --policy pimc`（[模拟器 §5](/arch/simulator/#sec-5)）让这一局在宿主进程里一直活着，每个战斗决策都在 worker 进程池里搜索（[模拟器 §8](/arch/simulator/#sec-8)）。战斗里的选牌提示交给 `p0`，两个玩家都一样；下面前四行测于它们还随机回答的时候，后两行用的是 `p0`。种子集是 `promotion-1`（200 局，Silent A0，[评估 §4](/arch/evaluation/#sec-4)），预算 8 × 300，局外决策来自随机占位策略或 L0（[宏观大脑：搜索 §1](/arch/macro-brain/search/#sec-1)）：
 
 ```bash
 Sts2Ai.SimWorker run --seeds eval/seeds/promotion-1.txt --policy pimc --macro l0 --records pimc-l0.jsonl

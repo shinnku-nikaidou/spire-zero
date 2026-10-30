@@ -64,6 +64,23 @@ for (const [route, page] of pages) {
   }
 }
 
+// The figures' V (src/lib/v/) must value the net file's test runs as the trainer did, and the macro brain's real
+// decisions as `sim afterstates` did, as RunNet's load check does (docs: macro-brain/network §2).
+const { V } = await import('../src/lib/v/net.ts');
+const { merged } = await import('../src/lib/v/encode.ts');
+const { NET, netFile } = await import('../src/lib/v/files.ts');
+const file = JSON.parse(readFileSync(netFile(fileURLToPath(new URL('../..', import.meta.url))), 'utf8'));
+const net = V.fromFile(file);
+const examples = JSON.parse(readFileSync(new URL('../src/data/macro-examples.json', import.meta.url), 'utf8'));
+const valued = [
+  ...file.tests.map((t, i) => [`test run ${i}`, t.run, t.value]),
+  ...Object.entries(examples.decisions).flatMap(([k, d]) => d.options.map((o) => [`${k} ${o.action}`, merged(d.run_view, o.after), o.value])),
+];
+for (const [what, view, value] of valued) {
+  const got = net.of(view);
+  if (Math.abs(got - value) > 1e-4 * Math.max(1, Math.abs(value))) errors.push(`${NET}: ${what} is ${got}, the trainer's ${value}`);
+}
+
 for (const error of errors) console.error(error);
-console.log(`${pages.size} pages, ${checked} internal links, ${errors.length} problems`);
+console.log(`${pages.size} pages, ${checked} internal links, ${valued.length} values of ${NET}, ${errors.length} problems`);
 process.exit(errors.length ? 1 : 0);

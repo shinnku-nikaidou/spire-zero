@@ -1,0 +1,88 @@
+---
+title: 'Search: playing the options'
+description: How L0 gets each option's afterstate, first by predicting it from the screen, then in SL by playing it on the node's clone and searching on through the node's screens.
+sidebar:
+  label: Search
+---
+import CloneSearchDemo from '../../../../../components/v/CloneSearchDemo.svelte';
+
+[Afterstates](/en/arch/macro-brain/afterstates/) explained why the macro brain values the situation right after each option. This section is about how it gets that situation. There are two ways: predict it from what the screen shows (L0 v0, used in NoSL), or play the option in the real game on a clone of the current node and look (L0 on the clone, used in SL). The second also lets the brain look past the first step, through the rest of the node's screens.
+
+## 1. L0 v0: afterstates predicted from the screen
+
+Until run worlds exist ([Simulator §6](/en/arch/simulator/#sec-6)), NoSL has no world to play an option in, so `MacroBrain` predicts each afterstate from the screen alone, with no game code, and takes the option with the highest V (the first legal one on a tie). The prediction, by surface:
+
+- **Map:** the point is added to the path. With V v0, V's map features count from there: the expected number of elites, rest sites, shops, treasures and `?` points up to the boss if each next step were picked at random. L0's plan for the act is the rest of the route: each next point as it would choose it if nothing else changed, up to the boss; the mod draws it ([Mod §3](/en/arch/mod/#sec-3)). Pure V reads the map itself instead ([The value network §1](/en/arch/macro-brain/network/#sec-1)).
+- **Rewards, card reward, bundle, treasure, shop purchase:** the gold, potion, relic or cards are added and the price is paid.
+- **An option that opens a choice** (a card reward, a card removal, smithing) is worth the best pick in it, among the picks the game will offer (an Eternal card cannot be removed), so a choice that would be skipped is not opened. A card reward's cards are listed on the rewards screen, since they are rolled before it shows and opening one to look costs nothing ([Protocol §3](/en/arch/protocol/#sec-3)).
+- **Rest:** the heal the option shows; smithing is worth its best upgrade, as at the prompt that follows.
+- **Event:** the option's relic, or death if the button warns of it. Any other option is valued as no change.
+- **Card prompts:** greedy, one pick at a time while V rises (or while the prompt needs more picks). Removal and transform take the card out, upgrade puts in its upgrade preview (`CardView.upgraded`, [Protocol §1](/en/arch/protocol/#sec-1)) with the numbers and cost it will have, choose-a-card adds it. A prompt that L0's own answer opened (smithing, a removal) takes at least the one pick that answer was valued by: stopping it would not leave the run as it is but cancel back to the screen that opened it, where the same answer comes again. At a rest site, which must be used, that looped until the run was truncated, twice in n2-b0.03's gate, with a V that valued the run unchanged above both the heal and every upgrade.
+
+What the screen does not show, L0 v0 cannot see. An event option's costs and gains are not on the screen as data, so a costly option ties with leaving and wins when listed first: Tablet of Truth takes max HP for every decipher, down to 1. Nor does it see what a relic does beyond being one more relic, or what a transform gives. Playing the options removes all three.
+
+Even so, on `promotion-1` (200 runs, NoSL) L0 v0 with V v0 beat random macro decisions under both combat policies: with PIMC, floor 19.34 on average and the act 1 boss reached in 177 runs, against 13.68 and 73; with the `play` placeholder, 11.90 against 8.09 and 60 against 5 ([Combat brain §7.2](/en/arch/combat-brain/#sec-7.2)). It skipped fewer card rewards (43% against 58%, with PIMC) and fought fewer elites (0.30 per run against 0.94).
+
+## 2. L0 on the clone
+
+In SL, with `--afterstates clone` (and `--macro l0`), Harness hands L0 the node's clone at each macro decision and at each card prompt outside combat ([Harness §3](/en/arch/harness/#sec-3)), and L0 plays the options in the real game instead of predicting them (`CloneSearch`).
+
+- **Afterstates are played.** Each option is played on the clone, and what the game asks next is its afterstate: the event's real outcome, the card the transform really gave, the shop after the purchase. V values that.
+- **The map is still predicted.** Travel is the node's exit, which the clone cannot play past: the next node's contents are not the current node's to see ([Environments §1](/en/arch/environments/#sec-1)). So a map move's afterstate is predicted as in L0 v0, the point added to the path.
+- **The search goes on.** While an afterstate is still a screen of the node, not the map, a combat or the run's end, the brain does not stop at it: it searches on over that screen's own actions ([§3](#sec-3)).
+
+The champion's name says `l0 NAME clone`, and a champion file `"afterstates": "clone"`. NoSL and `--afterstates screen` play as before: L0 v0 on the same runs, checked on 4 seeds in both environments.
+
+## 3. Searching through a node's screens
+
+Many nodes are not one decision but a sequence: a shop is several purchases and then leaving, a rewards screen is several claims, an event can have several pages. Valuing only the first step of a sequence would value "buy this relic" without knowing that the gold left could still buy a removal. `CloneSearch` searches the sequence.
+
+The states of the search are what the game shows after a path of answers from the decision. Starting from the options' afterstates (level 1), it goes level by level:
+
+1. **Which states go on.** Of the states found at the last level, those that are still screens of the node are candidates; the **beam** keeps the 16 that V values highest.
+2. **Their answers.** Each kept state's own legal actions are played on the clone, potions left out (every screen offers the potion belt). A card prompt contributes "no pick" if it allows it, and each single pick among the cards the player can tell apart; a prompt that needs two or more picks is not searched into here, since its own decision will search it ([§4](#sec-4)).
+3. **Seen states.** A state is identified by the hash of its afterstate. A state reached twice in a level is searched once (two orders of the same claims reach the same screen); a state first seen at an earlier level is not linked again, so the states form no cycle.
+4. **Budget.** At most 1,024 probes in all, options included. When a level's answers would exceed it, the rest are not played, and their parent is marked *cut*.
+
+When the frontier is empty or the probes are spent, every state gets a **worth** $W$, from the deepest level back:
+
+$$
+W(n) =
+\begin{cases}
+V(n) & \text{if } n \text{ has no children,}\\[2pt]
+\max\left( \max_{c \,\in\, \mathrm{children}(n)} W(c),\; [\,n \text{ cut}\,]\, V(n) \right) & \text{otherwise,}
+\end{cases}
+$$
+
+where $[\,n\text{ cut}\,]V(n)$ is $V(n)$ for a state some of whose answers were never played, and $-\infty$ otherwise: a state whose answers were all played is worth its best answer, while a cut one may also stop where it is. An option is worth its afterstate's $W$, and L0 takes the best. The search is a beam search over the node, in the sense of classical AI search: breadth-first, but keeping only the most promising states at each depth.
+
+<CloneSearchDemo client:visible lang="en" />
+
+In the shop of the [running example](/en/arch/macro-brain/afterstates/#sec-2) (floor 13, 287 gold), the one-step values from the screen put removing a card first (37.81) and a relic third (37.59). The search on the clone, which follows each purchase with what the remaining gold can still do and plays the removal prompt itself, bought the relic.
+
+## 4. Card prompts
+
+A card prompt (pick cards to upgrade, remove, transform or take) can have many legal answers: any subset of the offered cards within the prompt's minimum and maximum. L0 on the clone answers it with a local search over those subsets:
+
+- An answer is how many cards of each *group* it picks, where a group is the cards the player cannot tell apart (same id, upgrade and modifiers); picking $k$ of a group picks its first $k$.
+- It starts from no pick, or the fewest picks the prompt needs.
+- Each step weighs the answers one pick away: one more, one fewer, or one swapped for another group. Each is played on the clone and searched on as in [§3](#sec-3). The answer it has is listed first, so it wins a tie.
+- It moves to the best neighbour while that beats the current answer, and stops otherwise. The steps are capped at four times the prompt's maximum (exploration can make the search wander; without it each step is strictly better).
+
+As in L0 v0, a prompt that L0's own answer opened (smithing, a removal) takes at least one pick.
+
+## 5. No way back
+
+L0 keeps the keys (hashes) of the run's decisions on the clone, macro decisions and card prompts both. An option whose afterstate is one of them, or the decision itself, is worth $-\infty$ and never taken; deeper in the search such an answer adds nothing.
+
+Without this rule the search looped. Skipping a card reward returned to the rewards screen that opened it, with the card reward still on it. From there the search reached the card picks one level later than it first had. Those states were already seen, so they were not linked again, and that card reward was worth V's value of a state in the middle of the node, which was above every pick's true end. So skipping won; back on the rewards screen, opening the card reward won again; and so on. A run of promotion-1 looped from its second decision, and one of pure-1's runs went round 3,877 times at the act 1 boss's rewards. Without exploration, the rule changes only answers that would repeat a decision.
+
+## 6. Cost and where the probes run
+
+A probe is a load of the clone plus a replay of its path of answers. Probes run in the worker pool: the paths of a level are split into one request per worker, each worker loads the clone once per path ([Simulator §8](/en/arch/simulator/#sec-8)).
+
+- With the SL planner in whole runs, a macro decision took 40 ms on average (median 13 ms, at most 0.5 s): 9 s of a 187 s two-run total.
+- In the elite gauntlet, a macro decision on the clone takes 70–90 ms, against 1–2 ms from the screen: about 10 s of a 45–53 s run.
+- V itself is a small part of this: one evaluation takes about 0.9 ms in C# ([Learning §6](/en/arch/learning/#sec-6)).
+
+Checked: `run --check` plays the same over the wire and replays every node exactly, with no game error (17 runs with `play` in combat, 2 with the SL planner and c2).

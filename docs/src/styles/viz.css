@@ -1,0 +1,100 @@
+/* The macro brain's figures (src/components/v/): chart tokens by role, light and dark. The categorical slots and
+   ramps are the dataviz reference palette; slots 1–3 pass the colour-vision checks in both modes. */
+.vfig {
+  --v-surface: #fcfcfb;
+  --v-ink: #0b0b0b;
+  --v-ink-2: #52514e;
+  --v-muted: #898781;
+  --v-grid: #e1e0d9;
+  --v-axis: #c3c2b7;
+  --v-ring: rgba(11, 11, 11, 0.1);
+  --v-s1: #2a78d6;
+  --v-s2: #eb6834;
+  --v-s3: #1baf7a;
+  --v-s4: #eda100;
+  --v-s5: #e87ba4;
+  --v-s6: #008300;
+  --v-s7: #6250d6;
+  --v-s8: #e34948;
+  --v-pos: #2a78d6;
+  --v-neg: #e34948;
+  --v-mid: #f0efec;
+  --v-wash: rgba(42, 120, 214, 0.1);
+  color-scheme: light;
+}
+:root[data-theme='dark'] .vfig {
+  --v-surface: #1a1a19;
+  --v-ink: #f0efec;
+  --v-ink-2: #c3c2b7;
+  --v-muted: #898781;
+  --v-grid: #2c2c2a;
+  --v-axis: #383835;
+  --v-ring: rgba(255, 255, 255, 0.1);
+  --v-s1: #3987e5;
+  --v-s2: #d95926;
+  --v-s3: #199e70;
+  --v-s4: #c98500;
+  --v-s5: #d55181;
+  --v-s6: #008300;
+  --v-s7: #9085e9;
+  --v-s8: #e66767;
+  --v-pos: #3987e5;
+  --v-neg: #e66767;
+  --v-mid: #383835;
+  --v-wash: rgba(57, 135, 229, 0.12);
+  color-scheme: dark;
+}
+
+.vfig {
+  background: var(--v-surface);
+  color: var(--v-ink);
+  border: 1px solid var(--v-ring);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 1.5rem 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.vfig * { margin-top: 0; }
+.vfig .v-caption { color: var(--v-ink-2); font-size: 0.8125rem; margin-top: 0.75rem; }
+.vfig .v-muted { color: var(--v-muted); }
+.vfig .v-ink2 { color: var(--v-ink-2); }
+.vfig .v-num { font-variant-numeric: tabular-nums; }
+.vfig .v-row { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
+.vfig .v-tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.75rem; }
+.vfig button,
+.vfig select,
+.vfig input[type='search'] {
+  font: inherit;
+  color: var(--v-ink);
+  background: var(--v-surface);
+  border: 1px solid var(--v-axis);
+  border-radius: 0.375rem;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+}
+.vfig button[aria-pressed='true'] { border-color: var(--v-s1); box-shadow: inset 0 0 0 1px var(--v-s1); }
+.vfig button:disabled { opacity: 0.5; cursor: default; }
+.vfig input[type='range'] { accent-color: var(--v-s1); vertical-align: middle; }
+.vfig label { display: inline-flex; gap: 0.4rem; align-items: center; }
+.vfig svg text { fill: var(--v-ink-2); font-size: 11px; }
+.vfig .v-tip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--v-surface);
+  border: 1px solid var(--v-axis);
+  border-radius: 0.375rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.75rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+  max-width: 22rem;
+}
+.vfig .v-tip strong { color: var(--v-ink); }
+.vfig .v-stat { display: inline-flex; flex-direction: column; min-width: 7rem; }
+.vfig .v-stat .v-label { color: var(--v-ink-2); font-size: 0.75rem; }
+.vfig .v-stat .v-value { font-size: 1.25rem; font-weight: 600; color: var(--v-ink); }
+.vfig .v-key { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 2px; vertical-align: -1px; }
+.vfig .v-line-key { display: inline-block; width: 1rem; height: 2px; vertical-align: middle; }
+.vfig .v-scroll { overflow-x: auto; }
+.vfig table { font-size: 0.8125rem; }
