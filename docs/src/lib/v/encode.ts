@@ -1,7 +1,7 @@
 // A run view as pure V reads it: a port of learn/v/encode.py, the one spec RunNet follows (docs: macro-brain/network §1).
 // Only what the run is and its raw state: each card's id, upgrade level and modifiers' ids; the relics and potions;
 // the character, act, boss(es) and ancient; the map points the player can still reach, each as its type and how many
-// floors ahead it is; and six numbers.
+// floors ahead it is; and six numbers. The encoders' net reads the same points as a graph instead (route).
 
 export interface Point {
   col: number;
@@ -87,6 +87,25 @@ export function mapToken(p: Point, row: number): string {
 export function mapTokens(m: RunView['map']): string[] {
   const row = here(m).row;
   return reachable(m).map((p) => mapToken(p, row));
+}
+
+export const MAX_AHEAD = 16; // floors ahead above this read as this one (an act's map has 16 rows after its start)
+
+export type RouteNode = [type: string, ahead: number, quest: boolean, next: number[]];
+
+/** The route the encoders' net reads instead of the map's bag (encode.route): where the player is, then the reachable
+ *  points in reachable's order, each as its type, how many floors ahead of the player it is (at most MAX_AHEAD),
+ *  whether a quest marks it, and the indices of the nodes it leads to. */
+export function route(m: RunView['map']): RouteNode[] {
+  const at = here(m);
+  const nodes = [at, ...reachable(m)];
+  const index = new Map(nodes.map((p, i) => [key(p), i]));
+  return nodes.map((p) => [
+    p.type,
+    Math.min(p.row - at.row, MAX_AHEAD),
+    !!p.quest,
+    p.next.flatMap((n) => (index.has(key(n)) ? [index.get(key(n))!] : [])),
+  ]);
 }
 
 /** The ids the net reads: cards as (id, upgrade level, modifiers), and the bags. */

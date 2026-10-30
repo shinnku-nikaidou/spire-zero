@@ -9,6 +9,7 @@
   import { words } from './i18n.ts';
   import { loadNames, type Lang, type Names } from './names.ts';
   import { states, type Picked } from './states.ts';
+  import { COLOUR, DX, DY, GLYPH, TYPES } from './map.ts';
 
   let { lang = 'en', start = 'map' }: { lang?: Lang; start?: string } = $props();
   const t = $derived(words(lang));
@@ -29,13 +30,6 @@
   const tk = $derived(view ? tokens(view) : null);
   const known = (table: string, id: string) => !!meta && meta.vocab[table].includes(id);
 
-  const TYPES = ['Monster', 'Elite', 'RestSite', 'Shop', 'Unknown', 'Treasure', 'Boss', 'Ancient'];
-  const COLOUR: Record<string, string> = {
-    Monster: 'var(--v-s1)', Elite: 'var(--v-s2)', RestSite: 'var(--v-s3)', Shop: 'var(--v-s4)',
-    Unknown: 'var(--v-s5)', Treasure: 'var(--v-s6)', Boss: 'var(--v-s7)', Ancient: 'var(--v-muted)',
-  };
-  const GLYPH: Record<string, string> = { Monster: 'M', Elite: 'E', RestSite: 'R', Shop: '$', Unknown: '?', Treasure: 'T', Boss: 'B', Ancient: 'A' };
-
   const map = $derived.by(() => {
     if (!view) return null;
     const m = view.map;
@@ -46,8 +40,6 @@
     const visited = new Set(m.visited.map((p) => `${p.col},${p.row}`));
     return { m, rows, cols, at, reach, visited };
   });
-  const DX = 34;
-  const DY = 24;
   const px = (col: number) => 16 + col * DX;
   const py = (row: number) => 16 + (map!.rows - row) * DY;
 

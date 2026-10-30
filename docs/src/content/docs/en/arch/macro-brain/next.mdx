@@ -14,39 +14,19 @@ v6-3-2 wins 23 of 300 whole SL runs. Its 277 losses, and the runs of v6-2 before
 - **V hardly weighs HP before a monster fight.** In v6-2's whole runs, 106 of the 299 losses died in a plain monster combat. Offered a monster and a rest site on the map, v6-2 took the monster in 46% of the cases at 40% of max HP or less (24 of 52), and in 50% at 70–90%. The running example has the same choice: at floor 43 with 24 of 66 HP, v6-3-2 values the monster 0.12 floors above the rest site ([Afterstates §2](/en/arch/macro-brain/afterstates/#sec-2)). In the gauntlet that was right: the monster cost nothing.
 - **The gauntlet's ranking is not the whole game's.** v6-3-1 beats v6-2 in the gauntlet (+1.73 ± 0.54), wins 13 whole runs to v6-2's 1, and reaches no higher a floor (−0.26 ± 0.70) ([Self-play §5](/en/arch/macro-brain/selfplay/#sec-5)).
 - **Labels carry the later draws.** A state's label in a run that explores more is lower, and V is not told the run's ε ([Self-play §2](/en/arch/macro-brain/selfplay/#sec-2)).
-- **The encoder sees the map as a bag and meets cards and relics late.** V cannot tell whether a rest site comes after an elite on the same path, and a card–relic synergy must pass through the pooled deck before it meets the relic bag ([The value network §1](/en/arch/macro-brain/network/#sec-1), [§3](/en/arch/macro-brain/network/#sec-3)).
+- **The encoder sees the map as a bag and meets cards and relics late.** V cannot tell whether a rest site comes after an elite on the same path, and a card–relic synergy must pass through the pooled deck before it meets the relic bag ([The value network §1](/en/arch/macro-brain/network/#sec-1), [§3](/en/arch/macro-brain/network/#sec-3)). The encoders' net reads both differently ([The value network §4](/en/arch/macro-brain/network/#sec-4)).
 
 ## 2. Next steps
 
-The next plan (v7) addresses the first three points and the last; the labels stay as they are for now. These steps are planned, not built.
+The next plan (v7) addresses the first three points and the last; the labels stay as they are for now. Its code is built: the whole runs' objective and gate, and the encoders' net. Its first generation of self-play is being played by v6-3-2, and no net of the plan is trained yet.
 
 **Back to whole runs.** V's self-play and its gates play the whole game: plain monster fights are fought by the SL planner too. Self-play keeps the low budget and the even draws at ε 0.3 / 0.15 / 0.05; gates play the champion's planner at medium effort. The elite gauntlet is no longer used to train or judge V.
 
-**P(win), and a gate on wins.** V is trained on whole runs with the labels of [From hazards to value §2](/en/arch/macro-brain/value/#sec-2): a run that died on floor $e$ ended there, a won run survived every floor, a stopped run is labelled up to where it stopped. Its value is then the chance to survive every floor, $P(\text{win}) = S_{63}$ (objective `win`), read from the same hazard head; the share head goes. The second head keeps the next six combats' HP costs, now monster fights included. The gate pairs the challenger's and the champion's runs by seed on 500 seeds (`promotion-1-500`, whose first 300 are `promotion-1-300`) and compares wins, 1 or 0: a challenger passes when the 95% one-sided lower bound of the mean difference is above 0, which at 500 seeds takes about 2–3 percentage points more wins. Reports keep the floors, each act's boss rate, where the runs died (boss, elite, monster, outside combat, per act), the elites per run, and the monster-or-rest choices by HP.
+**P(win), and a gate on wins.** V is trained on whole runs with the labels of [From hazards to value §2](/en/arch/macro-brain/value/#sec-2): a run that died on floor $e$ ended there, a won run survived every floor, a stopped run is labelled up to where it stopped. Its value is then the chance to survive every floor, $P(\text{win}) = S_{63}$ (objective `win`, `v.train --objective win`), read from the same hazard head; the share head goes. The trainer's report adds the held-out Brier score of that chance: the mean squared gap between the predicted chance and the run's outcome, 1 or 0. The second head keeps the next six combats' HP costs, now monster fights included. The gate pairs the challenger's and the champion's runs by seed on 500 seeds (`promotion-1-500`, whose first 300 are `promotion-1-300`) and compares wins, 1 or 0: a challenger passes when the 95% one-sided lower bound of the mean difference is above 0, which at 500 seeds takes about 2–3 percentage points more wins. Reports keep the floors, each act's boss rate, where the runs died (boss, elite, monster, outside combat, per act), the elites per run, and the monster-or-rest choices by HP.
 
-**A build encoder and a route encoder inside the one V.** The single V and its single score stay ([Afterstates §4](/en/arch/macro-brain/afterstates/#sec-4)); only its input side changes. The body, the heads, `IRunValue`, `MacroBrain` and `CloneSearch` do not.
+**A build encoder and a route encoder inside the one V.** The single V and its single score stay ([Afterstates §4](/en/arch/macro-brain/afterstates/#sec-4)); only its input side changes, in the encoders' net ([The value network §4](/en/arch/macro-brain/network/#sec-4)). The build encoder lets cards, relics and potions act on each other before they are pooled; the route encoder reads the map's paths from the boss back. The body, the heads, `IRunValue`, `MacroBrain` and `CloneSearch` do not change. `learn/v/encode.py` stays the one specification, `RunNet` builds the same tensors from it, and the net file's test runs check both sides.
 
-```mermaid
-flowchart LR
-  subgraph B["build encoder"]
-    I["cards, relics, potions<br/>id + kind (+ upgrade, modifiers)"] --> AT["2 layers of masked<br/>self-attention"]
-    AT --> PO["mean + sum"]
-  end
-  subgraph R["route encoder"]
-    N["reachable points + here<br/>type, quest, floors ahead"] --> MP["messages from the boss back<br/>max + mean of next points"]
-    MP --> OUT["here's vector<br/>+ mean of all points"]
-  end
-  PO --> Z["body<br/>(as now)"]
-  OUT --> Z
-  CX["context bag<br/>+ six numbers"] --> Z
-  Z --> H["hazard head"]
-```
-
-- **Build encoder.** Cards, relics and potions go into one set, each element with an embedding of its kind (card, relic or potion); cards keep their id, upgrade and modifiers. Two layers of masked self-attention let every element look at every other before pooling, so a Shiv can see Shuriken and Kunai, then the set is pooled by mean and sum as the deck is now. This is the Set Transformer's idea (Lee et al., 2019) applied to the whole loadout. It replaces $\varphi$ and the relic and potion bags, and reads ids only, with no "attack" or "skill" tag written by hand.
-- **Route encoder.** The nodes are the act's points still reachable plus the player's own position, each embedded from its type, its quest mark and how many floors ahead it is; the edges are the map's own links. Messages pass back from the boss for a fixed number of rounds, one per floor of an act: each point is updated from itself and the maximum and mean of the points it leads to. The output is the player's position's vector plus the mean over all points. It replaces the map bag and reads only the map's types and links, no counts such as "elites ahead".
-- `learn/v/encode.py` stays the one specification, `RunNet` builds the same tensors from it, and the net file's test runs check both sides.
-
-**Generations.** Each generation's self-play runs under a deadline; two nets are trained on that generation's runs alone, the current architecture going on from the champion's weights and the new encoders going on from their own previous generation (the first from scratch); both face the champion in the same gate. A net that passes replaces the V of both champion files.
+**Generations.** Each generation's self-play runs under a deadline. Two nets are trained on that generation's runs alone: a pure V going on from the champion's weights (v7-1 from v6-3-2, whose share head is dropped), and an encoders' net going on from the previous encoders' net (v7-1e from scratch). Both face the champion in the same gate; if both pass, the one with more wins. A net that passes replaces the V of both champion files.
 
 ## 3. Planned, not built
 

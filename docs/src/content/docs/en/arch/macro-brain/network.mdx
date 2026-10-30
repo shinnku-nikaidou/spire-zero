@@ -1,14 +1,16 @@
 ---
 title: The value network
-description: What pure V reads (ids and raw state only), and how its set encoder, bags and body turn a run into one hazard per floor; with the whole forward pass running in the page.
+description: What pure V reads (ids and raw state only), and how its set encoder, bags and body turn a run into one hazard per floor, with the whole forward pass running in the page; then the encoders' net, which reads the loadout with self-attention and the map as a graph.
 sidebar:
   label: The value network
 ---
 import { Aside } from '@astrojs/starlight/components';
 import RunExplorer from '../../../../../components/v/RunExplorer.svelte';
 import NetExplorer from '../../../../../components/v/NetExplorer.svelte';
+import RouteRounds from '../../../../../components/v/RouteRounds.svelte';
+import ArchDiagram from '../../../../../components/v/ArchDiagram.svelte';
 
-V is a neural network that reads a run and predicts how it will end. This section describes the current one, **pure V** (`learn/v/`), as v6-3-2 has it: what it reads, how each layer transforms it, and why it is built that way. How its output becomes a value, and how it is trained, is the [next section](/en/arch/macro-brain/value/).
+V is a neural network that reads a run and predicts how it will end. This section describes the current one, **pure V** (`learn/v/`), as v6-3-2 has it: what it reads, how each layer transforms it, and why it is built that way. Then §4 describes the **encoders' net**, the architecture the next plan trains next to it. How its output becomes a value, and how it is trained, is the [next section](/en/arch/macro-brain/value/).
 
 ## 1. What V reads
 
@@ -26,7 +28,7 @@ An id seen fewer than 3 times in the training data reads as one shared *unknown*
 
 <RunExplorer client:visible lang="en" start="map" />
 
-The map in the figure is the act's graph of points, row 0 at the bottom. The ringed point is where the player stands; coloured points are the ones still reachable along the map's paths, which V reads; grey ones are behind or off every path ahead. Point at a node to see its token. The map is read as a *bag* of these tokens: V knows that an elite lies three floors ahead and a rest site four floors ahead, but not whether the rest site comes after the elite on the same path. Keeping the paths is one of the next steps ([Weaknesses and next steps §2](/en/arch/macro-brain/next/#sec-2)).
+The map in the figure is the act's graph of points, row 0 at the bottom. The ringed point is where the player stands; coloured points are the ones still reachable along the map's paths, which V reads; grey ones are behind or off every path ahead. Point at a node to see its token. The map is read as a *bag* of these tokens: V knows that an elite lies three floors ahead and a rest site four floors ahead, but not whether the rest site comes after the elite on the same path. The encoders' net reads the paths ([§4](#sec-4)).
 
 **Why no hand-written knowledge.** The first V (V v0, `RunValue`) was 17 hand-written features of the run times weights in units of one HP: a potion was worth 8 HP, a relic 8, an upgraded card 3, a gold 0.1, each card in the deck −0.3, plus the deck's mean damage, block and draw. A later net, n2-b0.03, read those 17 features as inputs and was pulled towards V v0's choices in training. Its choices followed the prices. On the SL runs of `promotion-1` (160 for n2-b0.03, 200 for the others):
 
@@ -42,7 +44,11 @@ A potion at 8 HP for 50–75 gold (5–7.5 HP at the price of gold) always looke
 
 ## 2. The architecture
 
-The net turns the tokens into one vector per card, pools the deck, sums each bag, appends the numbers, and passes the result through a body of two layers to its heads. In formulas, for a deck of $n$ cards:
+The net turns the tokens into one vector per card, pools the deck, sums each bag, appends the numbers, and passes the result through a body of two layers to its heads. The diagram shows it from the inputs at the bottom to the output at the top; point at a block for what it computes.
+
+<ArchDiagram client:visible lang="en" net="pure" />
+
+In formulas, for a deck of $n$ cards:
 
 **Card vectors.** Card $k$ has an id $c_k$, an upgrade level $u_k \le 3$ and modifier ids $m$ (its enchantment and affliction). Its input vector, 32 numbers, is
 
@@ -101,4 +107,127 @@ A deck is a *multiset*: the order of its cards means nothing, and its size varie
 
 Each card id has its own learned vector, so the net starts knowing nothing about any card. What it learns about a card comes from the runs whose decks held it, through every decision of those runs. That is why ids seen fewer than 3 times read as unknown: a vector trained on one or two runs is noise.
 
-The design has a known limit. Cards meet each other, and the relics, only in the body, after the deck is pooled into 128 numbers twice. A relation such as "Shivs are worth more with Shuriken and Kunai" has to pass through those pooled numbers before it can meet the relic bag. A layer of attention between the cards and relics before pooling would let them interact directly, and it is part of the next plan's build encoder ([Weaknesses and next steps §2](/en/arch/macro-brain/next/#sec-2)).
+The design has a known limit. Cards meet each other, and the relics, only in the body, after the deck is pooled into 128 numbers twice. A relation such as "Shivs are worth more with Shuriken and Kunai" has to pass through those pooled numbers before it can meet the relic bag. A layer of attention between the cards and relics before pooling lets them interact directly; that is the encoders' net's build encoder ([§4](#sec-4)).
+
+## 4. The encoders' net
+
+The next plan trains a second architecture next to pure V: the **encoders' net** (`EncoderNet` in `learn/v/net.py`, trained with `v.train --encoders`; its first net is to be v7-1e). It reads the same ids and numbers as pure V and keeps its body and heads. Only the input side changes, in the two places where pure V is weakest:
+
+- A **build encoder** replaces the deck's set encoder and the relic and potion bags. Cards, relics and potions become one set whose elements act on each other before the set is pooled.
+- A **route encoder** replaces the map's bag. It reads the reachable points as a graph of paths, not as a bag of tokens.
+
+The context bag and the six numbers stay as they are.
+
+<ArchDiagram client:visible lang="en" net="encoders" />
+
+The diagram draws it in the manner of the Transformer paper's figure: inputs at the bottom, a grey frame for blocks repeated (×2: two blocks, each with its own weights; ×16: one round, run 16 times with the same weights), ⊕ for a residual sum, and the side lines for the inputs that skip ahead. Point at a block for what it computes.
+
+<Aside title="Not trained yet">
+
+The encoders' net is built and tested, but no net of it is trained yet. v7-1e is to be trained from scratch on the next plan's first generation of whole runs, and gated against the champion next to v7-1, a pure V trained on the same runs ([Weaknesses and next steps §2](/en/arch/macro-brain/next/#sec-2)). This section describes the architecture only; the figure below shows structure, not values.
+
+</Aside>
+
+### The build encoder
+
+Every card, relic and potion of the run becomes one element of a single set, a vector of 64 numbers:
+
+$$
+x =
+\begin{cases}
+E[c] + u\, U[c] + \sum_{m} M[m] + v_{\text{card}} & \text{a card,}\\[2pt]
+R[r] + v_{\text{relic}} & \text{a relic,}\\[2pt]
+P[p] + v_{\text{potion}} & \text{a potion.}
+\end{cases}
+$$
+
+For a card with id $c$, upgrade level $u$ and modifiers $m$, the first line is pure V's card vector ([§2](#sec-2)), now 64 numbers wide; $r$ and $p$ are a relic's and a potion's ids. $v_{\text{card}}$, $v_{\text{relic}}$ and $v_{\text{potion}}$ are learned *kind vectors*: they tell the net which of the three kinds an element is.
+
+The set then goes through two **self-attention blocks** (Vaswani et al., 2017). Self-attention lets each element look at every other element of the set and take in a weighted mix of them. The element computes the weights from its own vector and theirs. One block does two updates, each added back to the element:
+
+$$
+x \leftarrow x + W_o\, \mathrm{MHA}(\mathrm{LN}(x)), \qquad x \leftarrow x + \mathrm{FF}(\mathrm{LN}(x)).
+$$
+
+- **LN** is a layer normalization: each vector is shifted and scaled to mean 0 and variance 1.
+- **FF** is a small network (64 → 128 → 64, ReLU) applied to each element on its own.
+- **MHA** is multi-head attention: 4 heads of 16 numbers each, run side by side and joined back into 64 numbers.
+
+Within one head, element $i$ forms a query $q_i$, and every element $j$ a key $k_j$ and a value $v_j$, each a learned linear map of $\mathrm{LN}(x)$. Then
+
+$$
+a_{ij} = \frac{\exp\!\big(q_i^\top k_j / 4\big)}{\sum_{j'} \exp\!\big(q_i^\top k_{j'} / 4\big)}, \qquad y_i = \sum_j a_{ij}\, v_j .
+$$
+
+So $a_{ij}$ is how much element $i$ attends to element $j$, and the 4 is $\sqrt{16}$, the usual scaling.
+
+A batch pads runs of different sizes to one length with empty slots. Each empty slot's score is lowered by $10^9$ before the softmax, so no element attends to it.
+
+After the two blocks, a last layer normalization, and the set is pooled as pure V pools the deck: its mean and its sum times $1/16$, 128 numbers.
+
+In pure V, a card meets the relics only in the body, after the deck is pooled into numbers that no longer say which card is which ([§3](#sec-3)). Here a Shiv's vector can change because Shuriken and Kunai are in the set, before anything is pooled. This is the idea of the Set Transformer (Lee et al., 2019), applied to the whole loadout. The output still does not depend on the elements' order, since attention and pooling treat every element alike. Like pure V, it reads ids only, with no "attack" or "skill" tag written by hand.
+
+### The route encoder
+
+The map's bag tells pure V that an elite lies three floors ahead and a rest site four floors ahead. It cannot tell whether the rest site comes after the elite on the same path, or on another path the player would have to choose instead. The route encoder reads the paths themselves.
+
+**Nodes** (`encode.route`). Node 0 is the player's point. Then come the points still reachable, in order of row, then column. Each node has four fields:
+- its type (monster, elite, rest site, merchant, unknown, treasure, ancient, boss);
+- how many floors ahead of the player it is, at most 16;
+- whether a quest marks it;
+- the indices of the nodes its links lead to.
+
+On 1,242 states of low-budget whole runs, a state had up to 69 reachable points (22 on average), and no point led to more than 5. The boss is the last point, on row 15 or 16 of the act's map.
+
+**Start.** Each node starts as $s_i = T[\text{type}_i] + A[\text{ahead}_i] + q_i\, v_{\text{quest}}$, 32 numbers, where $q_i$ is 1 for a quest mark and 0 otherwise.
+
+**Rounds.** Then, 16 times, every node is made anew from its start and the nodes it leads to:
+
+$$
+h_i \leftarrow \mathrm{ReLU}\Big( W \big[\, s_i \,;\; \max_{j \in \mathrm{next}(i)} h_j \,;\; \operatorname{mean}_{j \in \mathrm{next}(i)} h_j \,\big] + b \Big),
+$$
+
+- $[\,\cdot\,;\cdot\,]$ joins vectors end to end.
+- The max is taken number by number.
+- $h = s$ before the first round.
+- The boss leads nowhere, so its max and mean are 0.
+- Every round uses the same $W$ and $b$.
+
+After $k$ rounds, a node's vector depends on the nodes up to $k$ steps ahead. Information thus moves back from the boss one floor per round. An act's map has 16 rows above its start, so 16 rounds carry the boss to any node.
+
+This is a learned **dynamic program** back from the boss. The classic one computes the best path's value from each point as $\text{value}(i) = \text{reward}(i) + \max_{j \in \text{next}(i)} \text{value}(j)$, from the boss back. The round has the same shape:
+- vectors stand in for single values;
+- a learned $W$ stands in for the addition;
+- the mean of the next points joins the max. A run does not always get to follow its best path, so what the other paths hold matters too.
+
+In the terms of graph networks, it is **message passing** (Gilmer et al., 2017) along the map's links, backwards only, with one shared update.
+
+**Output.** The player's node's vector $h_0$, and the mean over all nodes, 64 numbers in all. The first is "what lies ahead of me along the paths"; the second summarizes the rest of the act.
+
+<RouteRounds client:visible lang="en" />
+
+The figure shows the route of a state as the net reads it: the table holds the node rows, which become the input tensors. Drag the rounds. A filled node's vector already depends on the boss; a dashed one's does not yet. Point at a node to see its row and the links its vector has read through after those rounds. In the floor-2 state, the player's node is 15 steps from the boss, so it hears of the boss in round 15. The net always runs 16 rounds, whatever the state.
+
+### The body, the size and the cost
+
+The body reads $128 + 64 + 64 + 6 = 262$ numbers: the build, the context bag (now 64 numbers wide), the route, and the six numbers. Then it is pure V's body: 256 → 256 with ReLU, then the hazard head. With the next plan's objective `win`, the value is the chance to win, $S_{63}$ ([From hazards to value §1](/en/arch/macro-brain/value/#sec-1)).
+
+| part | shape | weights |
+|---|---|---|
+| card, upgrade, modifier embeddings | 509 × 64, 509 × 64, 21 × 64 | 66,496 |
+| relic, potion, context embeddings | 260, 53, 26 × 64 | 21,696 |
+| kind and quest vectors | 3 × 64, 32 | 224 |
+| type and floors-ahead embeddings | 9 × 32, 17 × 32 | 832 |
+| two self-attention blocks | 64 wide, 4 heads, feed-forward 128 | 66,432 |
+| route update $W, b$ | 96 → 32 | 3,104 |
+| body | 262 → 256 → 256 | 133,120 |
+| hazard head | 256 → 64 | 16,448 |
+| **total** | | **308,352** |
+
+The table counts the embeddings with v6-3-2's table sizes and the eight point types plus the unknown id. v7-1e's tables will come from its own training data. As in §2, the training-only head is left out.
+
+Most of the extra cost is in the 16 rounds and the attention. In the brain, `RunNet` (`src/Sts2Ai.Brain/Macro/RunNet.cs`) builds the route's tensors and feeds them only when the net file's graph declares a `route` input, so every older net loads as before. A full-size encoders' net takes 0.44 ms a call in C#, against 0.093 ms for v6-3-2. A macro decision on the clone takes 70–90 ms, so the difference does not matter.
+
+**Tests.** The ONNX check of [§2](#sec-2) applies as before: the brain refuses a net file unless it gives the test runs the trainer's values. Beyond that, a tiny untrained encoders' net (small widths, weights scaled up, `src/Sts2Ai.Tests/Fixtures/pure-v-tiny-encoders.json`) is run on three real views. Its values move by 10 times the load check's tolerance when the route loses its links or its floors ahead, and 3 times when every type reads as unknown. So a route encoder that silently ignored the map would fail the tests.
+
+Two details come from the export, not from the design. The layer normalizations have no scale and shift of their own; the linear layer after each carries them. The kind and quest vectors start random, not at zero. Both are needed because the ONNX export merges weights of equal value, which would drop their names from the file.
