@@ -26,7 +26,7 @@ public sealed record CombatNetFile(
     IReadOnlyList<CombatNetTest> Tests, string? Env = null);
 
 /// <summary>
-/// The learned combat leaf (docs: combat-brain §4): from a round's start, how the combat ends under the policy that
+/// The learned combat leaf (docs: combat-brain/leaf §3): from a round's start, how the combat ends under the policy that
 /// played the training games. The net, run by ONNX Runtime, reads the cards in each pile, the player, each enemy with
 /// its intents now and in its last rounds, the relics, the potions and the encounter; a net that declares them also
 /// reads the powers' stacks and kept cards, the orbs, the allies, and the ascension, orb slots and gold, and the older

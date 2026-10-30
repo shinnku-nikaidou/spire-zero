@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// The SL planner's leaf when V prices the combat's ends (<c>--leaf-prices v</c>, docs: combat-brain §4): the combat
+/// The SL planner's leaf when V prices the combat's ends (<c>--leaf-prices v</c>, docs: combat-brain/leaf §5): the combat
 /// net's endings, each at V's price, instead of the leaf weights' hand-set ones.
 /// </summary>
 public sealed class PricedLeaf(CombatNet net, EndPrices prices) : ICombatLeaf

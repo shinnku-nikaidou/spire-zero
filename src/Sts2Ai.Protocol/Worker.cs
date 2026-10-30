@@ -18,7 +18,7 @@ public sealed record WorkerHello(string Game);
 public abstract record WorkerRequest(long Id);
 
 /// <summary>
-/// PIMC's search of one NoSL world of a combat decision (docs: combat-brain §2): the world is built from
+/// PIMC's search of one NoSL world of a combat decision (docs: pimc/budget §5): the world is built from
 /// <see cref="Observation"/> with <see cref="BuildSeed"/>, then determinized as world <see cref="World"/> of
 /// <see cref="Worlds"/> drawn from <see cref="SearchSeed"/>; the reply holds the best line after each of
 /// <see cref="First"/>, in that order, each searched with <see cref="NodesPerFirst"/> nodes. <see cref="History"/> is the
@@ -45,7 +45,7 @@ public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<Comba
     IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
 /// <summary>
-/// The SL planner's search of one turn from one state of a combat decision in a run (docs: combat-brain §3):
+/// The SL planner's search of one turn from one state of a combat decision in a run (docs: sl-planner/budget §4):
 /// <see cref="Node"/> loaded and replayed is the real combat at the decision, and <see cref="Path"/> played from there
 /// reaches the state. The reply's <see cref="WorkerReply.Turn"/> holds the best ends of that turn: up to
 /// <see cref="Keep"/> states at the next turn's start, and the best end of the combat, each above <see cref="Floor"/>
@@ -57,7 +57,7 @@ public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<Combat
     IReadOnlyList<EnemyTurns>? History = null, EndPrices? Prices = null) : WorkerRequest(Id);
 
 /// <summary>
-/// What a combat's end is worth, from V at the decision (docs: combat-brain §4), in V's units, the floors the run is
+/// What a combat's end is worth, from V at the decision (docs: combat-brain/leaf §5), in V's units, the floors the run is
 /// expected to reach: a death, the run's floor, where it ends; a win, V of the run with that HP left (<see cref="Hp"/>,
 /// by HP from 0, never lower for more HP), less <see cref="Potion"/> for each of the <see cref="Potions"/> held at
 /// the decision that the combat uses up.
@@ -92,7 +92,7 @@ public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen
 /// (<see cref="ProtocolJson.Hash"/>): what the line expects to see before each step.</param>
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0, IReadOnlyList<ulong>? Hashes = null);
 
-/// <summary>What the SL planner's search of one turn found (docs: combat-brain §3).</summary>
+/// <summary>What the SL planner's search of one turn found (docs: sl-planner/turn-search §4).</summary>
 /// <param name="Ends">The best end of the combat, if the turn can reach one, then the states at the next turn's start, best first.</param>
 /// <param name="Nodes">The actions the search simulated.</param>
 /// <param name="Cut">Whether anything was left out: the nodes ran out, or more states were found than kept.</param>

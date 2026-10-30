@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// The tunable numbers of <see cref="LeafValue"/>. Hand-set for v0; SPSA tunes them (docs: combat-brain §4), and a
+/// The tunable numbers of <see cref="LeafValue"/>. Hand-set for v0; SPSA tunes them (docs: combat-brain/leaf §2), and a
 /// <see cref="LeafFile"/> holds the result.
 /// </summary>
 public sealed record LeafWeights
@@ -24,7 +24,7 @@ public sealed record LeafWeights
 }
 
 /// <summary>
-/// What a search leaf is worth (docs: combat-brain §4): a state after the turn ends, or after the combat does, with
+/// What a search leaf is worth (docs: combat-brain/leaf §1): a state after the turn ends, or after the combat does, with
 /// the public record of the enemies' moves before it (<see cref="MoveRecord"/>).
 /// </summary>
 public interface ICombatLeaf
@@ -45,7 +45,7 @@ public sealed record LeafFile(string Name, LeafWeights Weights)
 }
 
 /// <summary>
-/// v0 leaf value (docs: combat-brain §4): a hand-made estimate of P(win run) from the observation alone, so it cannot
+/// v0 leaf value (docs: combat-brain/leaf §2): a hand-made estimate of P(win run) from the observation alone, so it cannot
 /// see hidden state in either environment. A won combat scores by the HP and potions left. Mid-combat, the rest of
 /// the fight is projected: the player kills the enemies one after another at a fixed damage rate, the most dangerous
 /// per HP first, and each enemy keeps hitting at its shown rate until it dies. The projected HP is scored like a win.

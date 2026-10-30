@@ -22,7 +22,7 @@ public interface ICombatWorld
     /// states apart for search, within this world.
     /// </summary>
     ulong HiddenKey();
-    /// <summary>Card prompts raised by the action are answered inside the world (docs: combat-brain §2, rule 7).</summary>
+    /// <summary>Card prompts raised by the action are answered inside the world (docs: combat-brain/shared §1).</summary>
     void Execute(CombatAction action);
     WorldSnapshot Snapshot();
     /// <summary>Goes back to a snapshot taken from this same world.</summary>

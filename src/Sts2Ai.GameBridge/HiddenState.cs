@@ -29,7 +29,7 @@ public static class HiddenState
     }
 
     /// <summary>
-    /// The SL world's key (docs: combat-brain §3): the transpositions of its one exact combat must be the same state, so
+    /// The SL world's key (docs: sl-planner/turn-search §2): the transpositions of its one exact combat must be the same state, so
     /// besides <see cref="Key"/> it holds each monster's moves so far and what the combat's history holds of this turn.
     /// The turn's entries go in as a multiset, so the same plays in another order still meet.
     /// </summary>

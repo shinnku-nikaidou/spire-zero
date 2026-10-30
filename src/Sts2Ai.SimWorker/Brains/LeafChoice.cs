@@ -4,7 +4,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// What pimc values its leaves with (docs: combat-brain §4): --leaf FILE's weights (the default ones without it), and
+/// What pimc values its leaves with (docs: combat-brain/leaf §2, §3): --leaf FILE's weights (the default ones without it), and
 /// --combat-net FILE's net, which then values the leaves still in progress at those weights' prices.
 /// </summary>
 internal sealed record LeafChoice(LeafFile? Weights, string? WeightsPath, CombatNet? Net, string? NetPath)

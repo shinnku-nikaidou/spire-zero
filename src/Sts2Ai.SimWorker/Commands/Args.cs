@@ -104,7 +104,7 @@ internal sealed record CombatPool(int Act, string Rooms, List<EncounterModel> En
     public CombatSetup Setup(EncounterModel encounter, string seed) => new(Character, encounter, Act, seed, Loadout: Loadout);
 }
 
-/// <summary>pimc's and plan's budget (docs: combat-brain §3, §5).</summary>
+/// <summary>pimc's and plan's budget (docs: pimc/budget §1, sl-planner/budget §1).</summary>
 internal sealed class BudgetArgs
 {
     /// <summary>The planner's effort when --effort is not given.</summary>
@@ -159,7 +159,7 @@ internal sealed class BudgetArgs
     }
 }
 
-/// <summary>What pimc values its leaves with (docs: combat-brain §4).</summary>
+/// <summary>What pimc values its leaves with (docs: combat-brain/leaf §2, §3).</summary>
 internal sealed class LeafArgs
 {
     private readonly Option<string?> _leaf = Opt.Maybe<string?>("--leaf", "the leaf value's weights file (default: the initial weights)");
@@ -219,7 +219,7 @@ internal sealed class ChampionArgs(bool file)
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
         .AcceptOnlyFromAmong("screen", "clone");
     private readonly Option<string> _leafPrices = Opt.Of("--leaf-prices", "leaf",
-            "what the SL planner's leaves price a combat's end at: leaf, the leaf weights'; v, V's at the decision, for a --combat-net with a net --value (docs: combat-brain §4)")
+            "what the SL planner's leaves price a combat's end at: leaf, the leaf weights'; v, V's at the decision, for a --combat-net with a net --value (docs: combat-brain/leaf §5)")
         .AcceptOnlyFromAmong("leaf", "v");
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
         "self-play only: l0 draws each answer by V's values, softmax at this temperature in V's units (0: the best)");

@@ -31,7 +31,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// One Harness per run. Combat prompts go to p0 (<see cref="PromptBrain"/>), which search worlds ask too.
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
     /// this process or over the wire; so do the exploring brains, each from its own. In SL, pimc searches this turn on
-    /// the node's clone and plan the whole combat (docs: combat-brain §3), and with --afterstates clone l0 plays each
+    /// the node's clone and plan the whole combat (docs: sl-planner §3), and with --afterstates clone l0 plays each
     /// option on it (docs: macro-brain/search §2); nothing else looks further than in NoSL. The search runs in
     /// <paramref name="pool"/> (<see cref="Pool"/>).
     /// </summary>

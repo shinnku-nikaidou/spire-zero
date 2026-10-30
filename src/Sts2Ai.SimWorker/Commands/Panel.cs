@@ -9,10 +9,10 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// The fixed combat panel (docs: combat-brain §7, test 2): the same combats, from the same seeds, for every player
+/// The fixed combat panel (docs: combat-brain §5, test 2): the same combats, from the same seeds, for every player
 /// being compared, so differences come from the player and not from luck (common random numbers). A player is a
 /// placeholder policy, the PIMC brain in NoSL or SL, or the SL planner, which plans the whole combat once and follows
-/// its plan (docs: combat-brain §3).
+/// its plan (docs: sl-planner §4).
 ///
 /// The brain searches in this process, which can hold only one live combat, so before each of its decisions the real
 /// combat is kept as a snapshot and put back by replay afterwards; or, with --workers, in worker processes, while the

@@ -8,7 +8,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// The fusion panel (docs: combat-brain §8, open question 2), which only measures: how much PIMC's strategy fusion
+/// The fusion panel (docs: pimc/search §4), which only measures: how much PIMC's strategy fusion
 /// costs. It takes NoSL combat decisions from decision logs, with their observations and seeds; for each, K worlds are
 /// built from the observation as pimc builds them, and each world's turn is enumerated in full. Each first action then
 /// gets two values: PIMC's, the mean over the worlds of each world's best line; and the merged one, where the worlds
@@ -35,7 +35,7 @@ internal static class Fusion
 
     public static Command Command()
     {
-        var command = Opt.Command("fusion", "the fusion panel: PIMC's values against merged ones over the logs' NoSL combat decisions (docs: combat-brain §8)",
+        var command = Opt.Command("fusion", "the fusion panel: PIMC's values against merged ones over the logs' NoSL combat decisions (docs: pimc/search §4)",
             [Log, N, Start, Every, K, MaxNodes, Out]);
         command.SetAction(Cli.Game(Run));
         return command;

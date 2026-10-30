@@ -25,7 +25,7 @@ public delegate IReadOnlyList<TurnSearch> TurnSearcher(IReadOnlyList<PlanJob> jo
 public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatStatus End, int Nodes, int Turns, bool Proved);
 
 /// <summary>
-/// The SL planner as a combat route plays it (docs: combat-brain §3), one per run: a plan is followed step by step with a
+/// The SL planner as a combat route plays it (docs: sl-planner §4), one per run: a plan is followed step by step with a
 /// <see cref="TurnPlan"/>, and planned again only where it does not hold or has run out. An unproved losing plan runs out
 /// after its <see cref="Budget.Replan"/> turns; after <see cref="Budget.LossPlans"/> of them in a row, the last is played
 /// to its end. A combat ends with its first plan that is not an unproved loss, or with the run, so the plans in a row are
@@ -48,7 +48,7 @@ public sealed class SlRoute(Budget budget)
 }
 
 /// <summary>
-/// The SL combat brain (docs: combat-brain §3): deterministic planning over the whole combat in the one exact world,
+/// The SL combat brain (docs: sl-planner §3): deterministic planning over the whole combat in the one exact world,
 /// the node's clone. Nothing is hidden there and nothing is random, so the best line is the answer, with no average
 /// over worlds; it is planned once and then played as planned (Harness's route follows it with a <see cref="TurnPlan"/>).
 ///

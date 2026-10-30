@@ -6,7 +6,7 @@ namespace Sts2Ai.Brain;
 /// <summary>How much search one decision may use (docs: harness §5): worlds, and actions simulated per world.</summary>
 /// <param name="NodesPerWorld">PIMC: the actions simulated in each world's search of the turn. The SL planner: in each
 /// search of one turn from one state.</param>
-/// <param name="Elite">How many times its budget an elite's decisions get (docs: combat-brain §5): PIMC's nodes per world,
+/// <param name="Elite">How many times its budget an elite's decisions get (docs: pimc/budget §4, sl-planner/budget §1): PIMC's nodes per world,
 /// the SL planner's beam.</param>
 /// <param name="Boss">The same for a boss.</param>
 /// <param name="Halving">Whether the first actions share each world's nodes by sequential halving instead of evenly
@@ -23,7 +23,7 @@ namespace Sts2Ai.Brain;
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elite = 1, double Boss = 1, bool Halving = false, bool Follow = false,
     int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0)
 {
-    /// <summary>The planner's budget at an effort level (docs: combat-brain §5): beam, nodes per state and turn, the
+    /// <summary>The planner's budget at an effort level (docs: sl-planner/budget §1): beam, nodes per state and turn, the
     /// easy beam, the turns of an unproved losing plan played before planning again (0: to its end), and the losing
     /// plans in a row before the last is played to its end.</summary>
     public static Budget Effort(string level) => level switch
@@ -72,7 +72,7 @@ public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<Comb
     IReadOnlyList<ulong>? PlanHashes = null, bool Explored = false, bool Replanned = false);
 
 /// <summary>
-/// The rest of the plan that a search made, played without searching again (docs: combat-brain §3, §5). A step is
+/// The rest of the plan that a search made, played without searching again (docs: pimc/budget §2, sl-planner §4). A step is
 /// played only while the combat shows the observation the plan expected before it. PIMC's plan is the rest of a turn
 /// that every world planned the same: anything that comes to light (a draw, a random result) ends it, and the decision
 /// is searched. The SL planner's plan is the rest of the combat in its one exact world, so it ends only with the
@@ -98,7 +98,7 @@ public sealed class TurnPlan
     }
 }
 
-/// <summary>Picks a combat action by searching the worlds it is given (docs: combat-brain §6).</summary>
+/// <summary>Picks a combat action by searching the worlds it is given (docs: combat-brain §4).</summary>
 public interface ICombatBrain
 {
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>), for the leaves.</param>
@@ -107,7 +107,7 @@ public interface ICombatBrain
 }
 
 /// <summary>
-/// Combat brain v0 (docs: combat-brain §2): PIMC over K worlds. In each world, a depth-first search over this turn's
+/// Combat brain v0 (docs: pimc/search §1): PIMC over K worlds. In each world, a depth-first search over this turn's
 /// action sequences, with ending the turn an option at every step; states are merged by their observation and the
 /// world's hidden state (<see cref="ICombatWorld.HiddenKey"/>), so each transposition is expanded once, and two lines
 /// that look the same but drew or rolled differently are not. A line ends when the turn ends (after the enemies'
@@ -153,7 +153,7 @@ public sealed class PimcBrain(ICombatLeaf? leaf = null) : ICombatBrain
 
     /// <summary>
     /// Shares each world's nodes over the first actions and merges the worlds' lines. Evenly: one search, each first
-    /// action with an equal share. By sequential halving (docs: combat-brain §5): ⌈log₂ m⌉ rounds over the m first
+    /// action with an equal share. By sequential halving (docs: pimc/budget §3): ⌈log₂ m⌉ rounds over the m first
     /// actions; each round's part of the nodes is split evenly over the actions still in, each searched again from the
     /// root with all the nodes it has had so far (workers keep nothing between requests, so a round searches anew rather
     /// than resuming, at up to about 1.5 times the nodes), and then the better half by the mean over the same worlds
