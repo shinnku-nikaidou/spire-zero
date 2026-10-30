@@ -33,20 +33,27 @@ def padded(rows, device):
 
 def route_inputs(samples, index, device) -> dict:
     """The route's tensors (encode.ROUTE): per sample, its nodes' type ids, floors ahead and quest marks, and each
-    node's next nodes' indices; nodes and next lists padded to at least one, with their masks."""
-    n = len(samples)
-    width = max(1, max(len(s["tokens"]["route"]) for s in samples))
-    fan = max(1, max((len(nx) for s in samples for *_, nx in s["tokens"]["route"]), default=1))
-    ids, ahead = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width, dtype=torch.long)
-    quest, mask = torch.zeros(n, width), torch.zeros(n, width)
-    nxt, next_mask = torch.zeros(n, width, fan, dtype=torch.long), torch.zeros(n, width, fan)
-    for b, s in enumerate(samples):
-        for k, (kind, floors, marked, to) in enumerate(s["tokens"]["route"]):
-            ids[b, k], ahead[b, k], quest[b, k], mask[b, k] = index["route"].get(kind, 0), floors, float(marked), 1
-            for j, t in enumerate(to):
-                nxt[b, k, j], next_mask[b, k, j] = t, 1
-    tensors = (ids, ahead, quest, mask, nxt, next_mask)
-    return {name: x.to(device) for name, x in zip(encode.ROUTE, tensors, strict=True)}
+    node's next nodes' indices; nodes and next lists padded to at least one, with their masks. Built as lists, then one
+    tensor each (filling tensors element by element took six times as long)."""
+    routes = [s["tokens"]["route"] for s in samples]
+    width = max(1, max(len(r) for r in routes))
+    fan = max(1, max((len(to) for r in routes for *_, to in r), default=1))
+    table = index["route"]
+    ids, ahead, quest, mask, nxt, next_mask = [], [], [], [], [], []
+    for r in routes:
+        pad = width - len(r)
+        ids.append([table.get(kind, 0) for kind, *_ in r] + [0] * pad)
+        ahead.append([floors for _, floors, _, _ in r] + [0] * pad)
+        quest.append([float(marked) for _, _, marked, _ in r] + [0.0] * pad)
+        mask.append([1.0] * len(r) + [0.0] * pad)
+        nxt.append([to + [0] * (fan - len(to)) for *_, to in r] + [[0] * fan] * pad)
+        next_mask.append([[1.0] * len(to) + [0.0] * (fan - len(to)) for *_, to in r] + [[0.0] * fan] * pad)
+    longs = {"route": ids, "route_ahead": ahead, "route_next": nxt}
+    rows = {"route_quest": quest, "route_mask": mask, "route_next_mask": next_mask} | longs
+    return {
+        name: torch.tensor(rows[name], dtype=torch.long if name in longs else torch.float32).to(device)
+        for name in encode.ROUTE
+    }
 
 
 class Batch:
@@ -56,15 +63,19 @@ class Batch:
     def __init__(self, samples, index, mean, std, floors, device, names=encode.INPUTS):
         self.names = names
         n, width = len(samples), max(1, max(len(s["tokens"]["cards"]) for s in samples))
-        cards, ups, mask = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width), torch.zeros(n, width)
-        mods, mod_mask = torch.zeros(n, width, 2, dtype=torch.long), torch.zeros(n, width, 2)
-        for b, s in enumerate(samples):
-            for k, (card_id, up, ms) in enumerate(s["tokens"]["cards"]):
-                cards[b, k], ups[b, k], mask[b, k] = index["cards"].get(card_id, 0), up, 1
-                for j, m in enumerate(ms[:2]):
-                    mods[b, k, j], mod_mask[b, k, j] = index["modifiers"].get(m, 0), 1
-        feed = {"cards": cards, "ups": ups, "card_mask": mask, "mods": mods, "mod_mask": mod_mask}
-        feed = {name: x.to(device) for name, x in feed.items()}
+        rows = {name: [] for name in ("cards", "ups", "card_mask", "mods", "mod_mask")}
+        for s in samples:
+            deck, pad = s["tokens"]["cards"], width - len(s["tokens"]["cards"])
+            rows["cards"].append([index["cards"].get(card_id, 0) for card_id, _, _ in deck] + [0] * pad)
+            rows["ups"].append([float(up) for _, up, _ in deck] + [0.0] * pad)
+            rows["card_mask"].append([1.0] * len(deck) + [0.0] * pad)
+            mods = [[index["modifiers"].get(m, 0) for m in ms[:2]] for _, _, ms in deck]
+            rows["mods"].append([m + [0] * (2 - len(m)) for m in mods] + [[0, 0]] * pad)
+            rows["mod_mask"].append([[1.0] * len(m) + [0.0] * (2 - len(m)) for m in mods] + [[0.0, 0.0]] * pad)
+        feed = {
+            name: torch.tensor(r, dtype=torch.long if name in ("cards", "mods") else torch.float32).to(device)
+            for name, r in rows.items()
+        }
         for t, bag_mask in encode.BAGS.items():
             if t in names:
                 feed[t], feed[bag_mask] = padded(
