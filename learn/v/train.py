@@ -17,6 +17,9 @@ return and the units of the report's explore_temperature change. Whichever the o
 the Brier score of that chance on the held-out decisions against whether their runs were won (`brier_held_out`, and
 `brier_held_out_floor_only` for the training runs' hazards whatever the state).
 
+--encoders trains net.EncoderNet (plan v7 §3): the build and route encoders in place of the deck's set encoder and the
+relic, potion and map bags; the rest is the same. Its net file is told by its graph's inputs (the route's).
+
 --init goes on from a net file instead of from scratch: its token tables, state scaling and weights, read back from its
 ONNX (the second head, not in the file, starts anew). A whole run's V may go on from the gauntlet's (plan v7: from
 v6-3-2), whose share head it drops.
@@ -45,6 +48,7 @@ from v import data, encode, export  # noqa: E402
 from v.net import (  # noqa: E402
     BOSS_AT,
     Batch,
+    EncoderNet,
     Net,
     aux_loss,
     centred,
@@ -82,6 +86,8 @@ def vocab(samples) -> dict[str, list[str]]:
         for t in encode.BAGS:
             for i in tok[t]:
                 counts[t][i] = counts[t].get(i, 0) + 1
+        for kind, *_ in tok["route"]:
+            counts["route"][kind] = counts["route"].get(kind, 0) + 1
     return {t: ["<unk>"] + sorted(i for i, n in c.items() if n >= MIN_COUNT) for t, c in counts.items()}
 
 
@@ -191,6 +197,7 @@ def main(
     objective: Annotated[
         str, typer.Option(help="a whole run's value: floor (the floor expected) or win (the chance to win)")
     ] = "floor",
+    encoders: Annotated[bool, typer.Option(help="the build and route encoders' net (plan v7 §3)")] = False,
     init: Annotated[
         str | None,
         typer.Option(
@@ -207,9 +214,16 @@ def main(
         raise LearnError("the gauntlet's V values progress: no --objective")
     if boss_sims and objective != "floor":
         raise LearnError("the boss sims' targets are floors: --objective floor")
+    if gauntlet and encoders:
+        raise LearnError("the gauntlet's V has no encoders")
+    kind = EncoderNet if encoders else Net
     start = export.read(init) if init else None
     if start and ((gauntlet and start["objective"] != "progress") or start["floors"] != FLOORS):
         raise LearnError(f"{init} is a {start['objective']} net of {start['floors']} floors: not this training's")
+    if start and export.encoders(start) != encoders:
+        raise LearnError(
+            f"{init} is {'' if export.encoders(start) else 'not '}an encoders' net: --encoders goes with it"
+        )
     if start and start["state"]["names"] != encode.STATE:
         raise LearnError(f"{init} reads the state {start['state']['names']}, this training {encode.STATE}")
     if bool(boss_sims) != bool(boss_afterstates):
@@ -266,7 +280,7 @@ def main(
         std = torch.where(std > 1e-9, std, torch.ones_like(std))
 
     def make(part):
-        return Batch(part, index, mean, std, FLOORS, device)
+        return Batch(part, index, mean, std, FLOORS, device, kind.INPUTS)
 
     def batches(part, shuffle):
         order = random.sample(range(len(part)), len(part)) if shuffle else list(range(len(part)))
@@ -341,7 +355,7 @@ def main(
                     rows.append(expected_progress(torch.sigmoid(logits), torch.sigmoid(shares), b.start))
         return total / test_weight, torch.cat(rows), aux_total / test_weight, torch.cat(wins)
 
-    model = Net({t: len(ids) for t, ids in tables.items()}, FLOORS, shares=gauntlet)
+    model = kind({t: len(ids) for t, ids in tables.items()}, FLOORS, shares=gauntlet)
     if start:
         model.load_state_dict(export.weights(start, model))
     else:
@@ -419,6 +433,7 @@ def main(
         "won": sum(1 for r in runs if r["outcome"] == "won"),
         "gauntlet": gauntlet,
         "objective": "progress" if gauntlet else objective,
+        "encoders": encoders,
         "vocab": {t: len(ids) for t, ids in tables.items()},
         "held_out_loss": held,
         "held_out_loss_floor_only": base_loss,

@@ -42,6 +42,21 @@ public class RunNetTests
         Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 2)).Distinct().Count());
     }
 
+    /// <summary>
+    /// An untrained encoders' net (plan v7 §3: <c>learn/v/net.py</c>'s EncoderNet at small widths, its weights scaled
+    /// up), its test runs pure-v-tiny's three real views: loading checks RunNet feeds the route as the trainer did. Its
+    /// values move 10 times the check's tolerance when a run's route loses its links or its floors ahead, and 3 times
+    /// when every node's type reads as unknown.
+    /// </summary>
+    [Fact]
+    public void ReadsAnEncodersNetsRunsAsItsTrainerDid()
+    {
+        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-encoders.json")));
+        using var net = RunNet.Load(file);
+        Assert.Contains("route", file.Vocab.Keys);
+        Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 3)).Distinct().Count());
+    }
+
     // OLD NETS: V v2's; remove once no champion uses them.
     [Fact]
     public void StillReadsAV2Net()
@@ -76,5 +91,17 @@ public class RunNetTests
         Assert.Equal(["RestSite+1", "Boss+2"], RunNet.MapTokens(Map((0, 0), (1, 1))));
         Assert.Equal(RunNet.MapTokens(Map((0, 0))), RunNet.MapTokens(Map()));
         Assert.Empty(RunNet.MapTokens(Map((0, 0), (0, 1), (0, 2), (0, 3))));
+    }
+
+    // As learn/tests/test_v_encode.py's route test.
+    [Fact]
+    public void TheRouteIsThePlayersPointThenTheReachableOnesEachWithTheNodesItLeadsTo()
+    {
+        static (string, int, bool, int[]) Node(RouteNode n) => (n.Type, n.Ahead, n.Quest, n.Next.ToArray());
+        Assert.Equal(
+            [("Ancient", 0, false, [1, 2]), ("Monster", 1, false, [3]), ("Elite", 1, true, [3]), ("RestSite", 2, false, [4]), ("Boss", 3, false, [])],
+            RunNet.Route(Map((0, 0))).Select(Node));
+        Assert.Equal([("Elite", 0, true, [1]), ("RestSite", 1, false, [2]), ("Boss", 2, false, [])], RunNet.Route(Map((0, 0), (1, 1))).Select(Node));
+        Assert.Equal([("Boss", 0, false, Array.Empty<int>())], RunNet.Route(Map((0, 0), (0, 1), (0, 2), (0, 3))).Select(Node));
     }
 }

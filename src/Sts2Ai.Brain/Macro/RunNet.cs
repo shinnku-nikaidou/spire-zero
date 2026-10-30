@@ -32,6 +32,12 @@ public sealed record NetState(IReadOnlyList<string> Names, IReadOnlyList<double>
 /// <summary>A card as the net reads it: its id, upgrade level and the ids of its enchantment and affliction.</summary>
 public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers);
 
+/// <summary>
+/// A node of the route an encoders' net reads (<c>learn/v/encode.py</c>'s route): a map point's type, how many floors
+/// ahead of the player it is (at most <see cref="RunNet.MaxAhead"/>), whether a quest marks it, and the nodes it leads to.
+/// </summary>
+public sealed record RouteNode(string Type, int Ahead, bool Quest, IReadOnlyList<int> Next);
+
 /// <summary>A run's ids as the net reads them.</summary>
 public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<string> Relics, IReadOnlyList<string> Potions,
     IReadOnlyList<string> Context, IReadOnlyList<string> Map);
@@ -39,8 +45,9 @@ public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<str
 /// <summary>
 /// V (docs: learning §1), run by ONNX Runtime: a net over the run's cards, relics, potions and context, and, for pure V
 /// (<c>learn/v/encode.py</c>), the map points still reachable and the run's numbers (<see cref="NetFile.State"/>); V v2
-/// read V v0's features and the cards' and relics' numbers (<see cref="NetNumbers"/>) instead. Each input is fed only
-/// if the graph declares it, so both kinds of file load. The graph gives one hazard per floor: the chance to die on that
+/// read V v0's features and the cards' and relics' numbers (<see cref="NetNumbers"/>) instead; an encoders' net (plan v7)
+/// reads the map as a graph (<see cref="Route"/>) instead of its bag. Each input is fed only if the graph declares it,
+/// so every kind of file loads. The graph gives one hazard per floor: the chance to die on that
 /// floor if still alive there. The value is read from those chances from the current floor on
 /// (<see cref="NetFile.Objective"/>). This class only turns a run into the graph's inputs.
 /// </summary>
@@ -48,6 +55,9 @@ public sealed class RunNet : IRunValue, IDisposable
 {
     /// <summary>Upgrade levels above this read as this one.</summary>
     public const int MaxUp = 3;
+
+    /// <summary>Floors ahead above this read as this one in the route (an act's map has 16 rows after its start).</summary>
+    public const int MaxAhead = 16;
 
     private readonly NetFile _file;
     private readonly Dictionary<string, Dictionary<string, int>> _index;
@@ -130,16 +140,41 @@ public sealed class RunNet : IRunValue, IDisposable
     public static IReadOnlyList<string> MapTokens(MapView map)
     {
         var points = map.Points.ToDictionary(p => (p.Col, p.Row));
-        var here = map.Visited.Count > 0 ? (map.Visited[^1].Col, map.Visited[^1].Row) : points.Keys.MinBy(k => (k.Row, k.Col));
+        var here = Here(map, points);
+        return Reachable(points, here)
+            .Select(k => $"{points[k].Type}+{k.Row - here.Row}" + (points[k].Quest == true ? ":quest" : ""))
+            .ToList();
+    }
+
+    /// <summary>
+    /// The route an encoders' net reads (<c>learn/v/encode.py</c>'s route): where the player is, then the points a path
+    /// leads to from there in <see cref="MapTokens"/>' order, each with the indices of the nodes it leads to.
+    /// </summary>
+    public static IReadOnlyList<RouteNode> Route(MapView map)
+    {
+        var points = map.Points.ToDictionary(p => (p.Col, p.Row));
+        var here = Here(map, points);
+        var nodes = Reachable(points, here).Prepend(here).ToList();
+        var index = nodes.Select((k, i) => (k, i)).ToDictionary(p => p.k, p => p.i);
+        return nodes.Select(k => new RouteNode(points[k].Type, Math.Min(k.Row - here.Row, MaxAhead), points[k].Quest == true,
+                points[k].Next.Where(n => index.ContainsKey((n.Col, n.Row))).Select(n => index[(n.Col, n.Row)]).ToList()))
+            .ToList();
+    }
+
+    /// <summary>Where the player is: the last visited point, or the start (the first by row, col) before any.</summary>
+    private static (int Col, int Row) Here(MapView map, Dictionary<(int Col, int Row), MapPointView> points) =>
+        map.Visited.Count > 0 ? (map.Visited[^1].Col, map.Visited[^1].Row) : points.Keys.MinBy(k => (k.Row, k.Col));
+
+    /// <summary>The points a path leads to from <paramref name="here"/>, itself left out, sorted by (row, col).</summary>
+    private static List<(int Col, int Row)> Reachable(Dictionary<(int Col, int Row), MapPointView> points, (int Col, int Row) here)
+    {
         var seen = new HashSet<(int Col, int Row)>();
         var todo = new Stack<(int, int)>([here]);
         while (todo.Count > 0)
             foreach (var next in points[todo.Pop()].Next)
                 if (points.ContainsKey((next.Col, next.Row)) && seen.Add((next.Col, next.Row)))
                     todo.Push((next.Col, next.Row));
-        return seen.OrderBy(k => k.Row).ThenBy(k => k.Col)
-            .Select(k => $"{points[k].Type}+{k.Row - here.Row}" + (points[k].Quest == true ? ":quest" : ""))
-            .ToList();
+        return seen.OrderBy(k => k.Row).ThenBy(k => k.Col).ToList();
     }
 
     /// <summary>The run's number a pure V net reads by this name (<c>learn/v/encode.py</c>'s state).</summary>
@@ -187,6 +222,7 @@ public sealed class RunNet : IRunValue, IDisposable
         inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
         inputs.AddRange(Bag("context", "context_mask", tokens.Context));
         inputs.AddRange(Bag("map", "map_mask", tokens.Map));
+        if (_session.InputMetadata.ContainsKey("route")) inputs.AddRange(RouteInputs(Route(run.Map)));
         if (_file.State is { } state)
         {
             var values = new DenseTensor<float>([1, state.Names.Count]);
@@ -224,6 +260,37 @@ public sealed class RunNet : IRunValue, IDisposable
             present[0, k] = 1;
         }
         return [NamedOnnxValue.CreateFromTensor(table, index), NamedOnnxValue.CreateFromTensor(mask, present)];
+    }
+
+    /// <summary>The route's tensors as the graph takes them (<c>learn/v/net.py</c>'s route_inputs): the next lists padded
+    /// to at least 1, with their masks.</summary>
+    private NamedOnnxValue[] RouteInputs(IReadOnlyList<RouteNode> nodes)
+    {
+        int n = Math.Max(1, nodes.Count), fan = Math.Max(1, nodes.Max(x => x.Next.Count));
+        var ids = new DenseTensor<long>([1, n]);
+        var ahead = new DenseTensor<long>([1, n]);
+        var quest = new DenseTensor<float>([1, n]);
+        var mask = new DenseTensor<float>([1, n]);
+        var next = new DenseTensor<long>([1, n, fan]);
+        var nextMask = new DenseTensor<float>([1, n, fan]);
+        for (int k = 0; k < nodes.Count; k++)
+        {
+            ids[0, k] = Index("route", nodes[k].Type);
+            ahead[0, k] = nodes[k].Ahead;
+            quest[0, k] = nodes[k].Quest ? 1 : 0;
+            mask[0, k] = 1;
+            for (int j = 0; j < nodes[k].Next.Count; j++)
+            {
+                next[0, k, j] = nodes[k].Next[j];
+                nextMask[0, k, j] = 1;
+            }
+        }
+        return
+        [
+            NamedOnnxValue.CreateFromTensor("route", ids), NamedOnnxValue.CreateFromTensor("route_ahead", ahead),
+            NamedOnnxValue.CreateFromTensor("route_quest", quest), NamedOnnxValue.CreateFromTensor("route_mask", mask),
+            NamedOnnxValue.CreateFromTensor("route_next", next), NamedOnnxValue.CreateFromTensor("route_next_mask", nextMask),
+        ];
     }
 
     /// <summary>An id's entry in a token table; 0 for an id the table does not list, or a table the file does not have.</summary>

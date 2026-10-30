@@ -13,7 +13,7 @@ import bosslab
 import common
 from common import LearnError
 from v import data, encode, export, train
-from v.net import Batch, Net, centred, expected_floor, expected_progress, explored, values, win_chance
+from v.net import Batch, EncoderNet, Net, centred, expected_floor, expected_progress, explored, values, win_chance
 
 
 def record(run_id, floor, outcome="lost", combats=(), **config):
@@ -209,6 +209,44 @@ def test_a_win_nets_test_runs_are_valued_at_their_chance_to_win():
         assert math.isclose(float(win_chance(torch.tensor(hazards), b.start)[0]), test["value"], rel_tol=1e-5)
 
 
+def test_the_encoders_onnx_graph_reads_the_route_and_gives_the_test_runs_the_values_torch_gave_them():
+    views = [make_view(floor=1), make_view(visited=((0, 0), (1, 1)), floor=2, hp=40), make_view(potions=[None])]
+    samples = [data.sample("a", v, 16, 9, "died") for v in views]
+    tables = train.vocab(samples * 3)
+    torch.manual_seed(0)
+    model = EncoderNet({t: len(ids) for t, ids in tables.items()}, 16)
+    net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
+    graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
+    assert [i.name for i in graph.graph.input] == encode.ENCODER_INPUTS
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    for test in net["tests"]:
+        b = Batch(
+            [data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu", model.INPUTS
+        )
+        feed = {name: x.numpy() for name, x in zip(model.INPUTS, b.inputs(), strict=True)}
+        [hazards] = ReferenceEvaluator(graph).run(None, feed)
+        assert math.isclose(float(expected_floor(torch.tensor(hazards), b.start)[0]), test["value"], rel_tol=1e-5)
+
+
+def test_an_encoder_nets_weights_read_back_give_its_test_runs_their_values():
+    samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") for f in (1, 2, 3)]
+    tables = train.vocab(samples * 3)
+    sizes = {t: len(ids) for t, ids in tables.items()}
+    torch.manual_seed(0)
+    model = EncoderNet(sizes, 16)
+    net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
+    torch.manual_seed(1)
+    fresh = EncoderNet(sizes, 16)
+    fresh.load_state_dict(export.weights(net, fresh))
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    for test in net["tests"]:
+        b = Batch(
+            [data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu", fresh.INPUTS
+        )
+        with torch.no_grad():
+            assert math.isclose(float(values(fresh.eval(), b)[0]), test["value"], rel_tol=1e-5)
+
+
 def test_the_expected_progress_adds_the_chance_to_end_on_each_floor_times_its_share():
     h, s = torch.tensor([[0.0, 0.5, 1.0, 0.0]]), torch.tensor([[0.9, 0.2, 0.6, 0.9]])
     # From floor 1: ends on 1 (half the time, share 0.2) or on 2 (share 0.6).
@@ -312,3 +350,17 @@ def test_a_gauntlets_logs_give_its_door_states_their_views_and_no_samples(tmp_pa
     log.write_text(json.dumps({"run": "g1", "decision_id": 4, "brain": "l0", "run_view": make_view(floor=16)}) + "\n")
     views = data.read_views(str(log))
     assert list(views) == [("g1", 4)] and views[("g1", 4)][0]["floor"] == 16
+
+
+def test_training_the_encoders_net_writes_a_net_that_reads_the_route_and_goes_on_only_from_one(tmp_path):
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    lists = write_runs(tmp_path)
+    for out, more in ((first, []), (second, ["--init", str(tmp_path / "first.json")])):
+        args = ["--list", lists, "--name", out.stem, "--out", str(out), "--encoders", "--objective", "win", *more]
+        result = CliRunner().invoke(train.script, args)
+        assert result.exit_code == 0, result.output
+    net = json.loads(second.read_text())
+    assert export.encoders(net) and net["fit"]["encoders"] and net["objective"] == "win"
+    assert net["vocab"]["route"][0] == "<unk>" and "Boss" in net["vocab"]["route"]
+    result = CliRunner().invoke(train.script, ["--list", lists, "--name", "t", "--init", str(first)])
+    assert result.exit_code != 0 and "encoders" in str(result.exception)

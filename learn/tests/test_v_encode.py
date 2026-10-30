@@ -33,3 +33,19 @@ def test_the_state_is_the_raw_numbers_in_their_order():
         "ascension": 3,
         "potion_slots": 3,
     }
+
+
+def test_the_route_is_the_players_point_then_the_reachable_ones_each_with_the_nodes_it_leads_to():
+    assert encode.tokens(view())["route"] == [
+        ("Ancient", 0, False, [1, 2]),
+        ("Monster", 1, False, [3]),
+        ("Elite", 1, True, [3]),
+        ("RestSite", 2, False, [4]),
+        ("Boss", 3, False, []),
+    ]
+    assert encode.tokens(view(visited=((0, 0), (1, 1))))["route"] == [
+        ("Elite", 0, True, [1]),
+        ("RestSite", 1, False, [2]),
+        ("Boss", 2, False, []),
+    ]
+    assert encode.tokens(view(visited=((0, 0), (0, 1), (0, 2), (0, 3))))["route"] == [("Boss", 0, False, [])]
