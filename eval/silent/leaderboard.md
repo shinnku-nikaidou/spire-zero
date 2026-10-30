@@ -28,9 +28,18 @@ The two environments are never ranked together, nor two characters or ascensions
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
+| combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-2 clone, macro prompts l0 v6-2 clone | 2026-10-30 | `b013f95` | 0.5 % (1/200, 0.1 %–2.8 %) | 31.61 | 199 | 565.6 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 n2-b0.03, macro prompts l0 n2-b0.03 | 2026-10-28 | `3699fc1` | 0.0 % (0/200, 0.0 %–1.9 %) | 28.25 | 192 | 194.8 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 pure-1-g, macro prompts l0 pure-1-g **(champion)** | 2026-10-29 | `6ce07fc` | 0.0 % (0/200, 0.0 %–1.9 %) | 25.69 | 177 | 142.6 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 pure-1-d, macro prompts l0 pure-1-d | 2026-10-29 | `6ce07fc` | 0.0 % (0/200, 0.0 %–1.9 %) | 24.77 | 176 | 136.8 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 pure-1, macro prompts l0 pure-1 | 2026-10-29 | `6ce07fc` | 0.0 % (0/200, 0.0 %–1.9 %) | 22.64 | 161 | 143.4 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 pure-1-b, macro prompts l0 pure-1-b | 2026-10-29 | `6ce07fc` | 0.0 % (0/200, 0.0 %–1.9 %) | 21.44 | 175 | 110.2 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro random, macro prompts random (void) | 2026-10-29 | `6ce07fc` | 0.0 % (0/200, 0.0 %–1.9 %) | 15.29 | 105 | 151.0 |
+
+## SILENT, ascension 0: promotion-1-300, R1
+
+### SL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-2 clone, macro prompts l0 v6-2 clone | 2026-10-30 | `b013f95` | 0.3 % (1/300, 0.1 %–1.9 %) | 31.37 | 298 | 517.1 |
