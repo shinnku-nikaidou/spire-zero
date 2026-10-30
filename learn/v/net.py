@@ -1,6 +1,6 @@
 """Pure V's net (docs: learning §1): a set encoder over the deck, bags of ids for the rest, the raw state, then a body
 and two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the floor
-expected to be reached. The second head learns the next combats' HP costs and the boss score, which shapes the body
+expected to be reached, or (objective "win") the chance to survive every floor. The second head learns the next combats' HP costs and the boss score, which shapes the body
 only: it is not in the net file. The boss gauntlet's V (`shares`) has a third head: per floor, the share of the
 enemies' HP taken in the combat the run ends in there; its value is the progress expected (`expected_progress`).
 """
@@ -145,6 +145,13 @@ def expected_floor(hazards: torch.Tensor, start: torch.Tensor):
     return start.double() + (survive * (g >= start[:, None])).sum(1)
 
 
+def win_chance(hazards: torch.Tensor, start: torch.Tensor):
+    """As RunNet.Value for "win": the chance to survive every floor from the start on (a won run survived them all)."""
+    h = hazards.double()
+    g = torch.arange(h.shape[1], device=h.device)
+    return torch.where(g >= start[:, None], 1 - h, torch.ones_like(h)).prod(1)
+
+
 def expected_progress(hazards: torch.Tensor, shares: torch.Tensor, start: torch.Tensor):
     """As RunNet.Value for "progress": the floor expected, plus the chance to end on each floor from the start on times
     the share of the enemies' HP taken there."""
@@ -156,12 +163,13 @@ def expected_progress(hazards: torch.Tensor, shares: torch.Tensor, start: torch.
     return expected_floor(hazards, start) + (before * h * s * from_start).sum(1)
 
 
-def values(model, b: Batch):
-    """V's value of a batch: the floor expected, or with a share head the progress expected."""
+def values(model, b: Batch, objective: str = "floor"):
+    """V's value of a batch, as RunNet.Value gives it: the floor expected, the chance to win (objective "win"), or with
+    a share head the progress expected."""
     hazards, _, shares = model.heads(*b.inputs())
-    if shares is None:
-        return expected_floor(torch.sigmoid(hazards), b.start)
-    return expected_progress(torch.sigmoid(hazards), torch.sigmoid(shares), b.start)
+    if shares is not None:
+        return expected_progress(torch.sigmoid(hazards), torch.sigmoid(shares), b.start)
+    return (win_chance if objective == "win" else expected_floor)(torch.sigmoid(hazards), b.start)
 
 
 def share_loss(logits, b: Batch):

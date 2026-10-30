@@ -27,6 +27,21 @@ public class RunNetTests
         Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 3)).Distinct().Count());
     }
 
+    /// <summary>
+    /// The same net as a "win" net (plan v7), its hazard head's bias lowered by 6 so a run survives most floors, its
+    /// test runs valued by the trainer at their chance to win (<c>learn/v/net.py</c>'s win_chance): loading checks
+    /// RunNet's chance to survive every floor is the trainer's.
+    /// </summary>
+    [Fact]
+    public void ValuesAWinNetsRunsAtTheTrainersChanceToWin()
+    {
+        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json")));
+        using var net = RunNet.Load(file);
+        Assert.Equal("win", file.Objective);
+        Assert.All(file.Tests, t => Assert.InRange(net.Value(t.Run), 0.01, 0.99));
+        Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 2)).Distinct().Count());
+    }
+
     // OLD NETS: V v2's; remove once no champion uses them.
     [Fact]
     public void StillReadsAV2Net()

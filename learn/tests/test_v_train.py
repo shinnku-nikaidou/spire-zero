@@ -13,7 +13,7 @@ import bosslab
 import common
 from common import LearnError
 from v import data, encode, export, train
-from v.net import Batch, Net, centred, expected_floor, expected_progress, explored, values
+from v.net import Batch, Net, centred, expected_floor, expected_progress, explored, values, win_chance
 
 
 def record(run_id, floor, outcome="lost", combats=(), **config):
@@ -73,6 +73,11 @@ def test_each_decision_is_a_sample_of_where_its_run_ended_and_each_run_weighs_on
     assert all(("view_json" in s) == data.held_out(s["run"]) and "view" not in s for s in samples)
     held = next(s for s in samples if data.held_out(s["run"]))
     assert json.loads(held["view_json"])["floor"] == held["state"][0]
+
+
+def test_without_keep_views_no_views_are_kept(tmp_path):
+    samples, _, views = data.read_runs(*common.lists(write_runs(tmp_path)), "SILENT", 64, keep_views=False)
+    assert len(samples) == 30 and views == {}
 
 
 def test_a_boss_gauntlet_is_refused(tmp_path):
@@ -152,6 +157,11 @@ def test_the_expected_floor_adds_the_chance_to_survive_each_floor_from_the_start
     assert expected_floor(h, torch.tensor([1])).tolist() == [1 + 0.5]
 
 
+def test_the_chance_to_win_is_the_chance_to_survive_every_floor_from_the_start():
+    h = torch.tensor([[0.9, 0.5, 0.2, 0.0]])
+    assert win_chance(h, torch.tensor([1])).tolist() == [pytest.approx(0.5 * 0.8)]
+
+
 def test_explored_is_the_chance_of_a_draw_below_the_best_by_more_than_a_hundredth_of_the_temperature():
     values = torch.tensor([1.0, 0.0, 2.0, 2.0, 2.0 - 1e-4], dtype=torch.float64)
     share = explored(values, torch.ones_like(values), torch.tensor([0, 0, 1, 1, 1]), 2)
@@ -179,6 +189,24 @@ def test_the_onnx_graph_gives_the_test_runs_the_values_torch_gave_them():
         [hazards] = ReferenceEvaluator(graph).run(None, feed)
         value = float(expected_floor(torch.tensor(hazards), b.start)[0])
         assert math.isclose(value, test["value"], rel_tol=1e-5)
+
+
+def test_a_win_nets_test_runs_are_valued_at_their_chance_to_win():
+    samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") for f in (1, 2, 3)]
+    tables = train.vocab(samples * 3)
+    torch.manual_seed(0)
+    model = Net({t: len(ids) for t, ids in tables.items()}, 16)
+    net = export.net_file(
+        "t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0, "win"
+    )
+    assert net["objective"] == "win"
+    graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    for test in net["tests"]:
+        b = Batch([data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu")
+        feed = {name: x.numpy() for name, x in zip(encode.INPUTS, b.inputs(), strict=True)}
+        [hazards] = ReferenceEvaluator(graph).run(None, feed)
+        assert math.isclose(float(win_chance(torch.tensor(hazards), b.start)[0]), test["value"], rel_tol=1e-5)
 
 
 def test_the_expected_progress_adds_the_chance_to_end_on_each_floor_times_its_share():
@@ -243,8 +271,29 @@ def test_training_goes_on_from_a_net_file_with_its_tables_and_state_scaling(tmp_
         assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())
     assert b["vocab"] == a["vocab"] and b["state"] == a["state"]
-    result = CliRunner().invoke(train.script, ["--list", lists, "--name", "t", "--init", str(first)])
-    assert result.exit_code != 0 and "progress net" in str(result.exception)
+
+
+def test_a_whole_runs_v_goes_on_from_the_gauntlets_and_the_gauntlets_from_no_whole_runs(tmp_path):
+    (tmp_path / "g").mkdir()
+    (tmp_path / "w").mkdir()
+    gauntlet, whole = tmp_path / "gauntlet.json", tmp_path / "whole.json"
+    args = ["--list", write_runs(tmp_path / "g", gauntlet=True), "--name", "g", "--out", str(gauntlet), "--gauntlet"]
+    assert CliRunner().invoke(train.script, args).exit_code == 0
+    lists = write_runs(tmp_path / "w")
+    args = ["--list", lists, "--name", "w", "--out", str(whole), "--init", str(gauntlet), "--objective", "win"]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code == 0, result.output
+    a, b = json.loads(gauntlet.read_text()), json.loads(whole.read_text())
+    assert b["objective"] == "win" and b["vocab"] == a["vocab"] and b["state"] == a["state"]
+    args = ["--list", write_runs(tmp_path / "g", gauntlet=True), "--name", "t", "--gauntlet", "--init", str(whole)]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code != 0 and "win net" in str(result.exception)
+
+
+def test_the_gauntlets_v_takes_no_objective(tmp_path):
+    args = ["--list", write_runs(tmp_path, gauntlet=True), "--name", "t", "--gauntlet", "--objective", "win"]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code != 0 and "progress" in str(result.exception)
 
 
 def test_training_writes_a_net_file_with_its_report(tmp_path):
@@ -253,6 +302,7 @@ def test_training_writes_a_net_file_with_its_report(tmp_path):
     assert result.exit_code == 0, result.output
     net = json.loads(out.read_text())
     assert net["objective"] == "floor" and net["fit"]["runs"] == 10 and net["fit"]["held_out_runs"] == 2
+    assert net["fit"]["won_held_out_runs"] == 0 and 0 <= net["fit"]["brier_held_out"] <= 1
     assert set(net["vocab"]) == set(encode.TABLES) and net["tests"]
     assert all(isinstance(t["run"], dict) and "floor" in t["run"] for t in net["tests"])  # views, not JSON
 

@@ -83,11 +83,12 @@ def progress(record: dict) -> float:
 
 
 def read_runs(
-    logs: str, records: str, character: str, floors: int, gauntlet: bool = False
+    logs: str, records: str, character: str, floors: int, gauntlet: bool = False, keep_views: bool = True
 ) -> tuple[list[dict], list[dict], dict]:
-    """The logged decisions as samples, the run records, and each decision's view and brain by (run, decision id).
-    With gauntlet, the boss gauntlet's runs, each ended where it ended (won or lost) with its share (`progress`), and
-    no views (they serve the boss sims, door states and logged options, none of which the gauntlet's V reads).
+    """The logged decisions as samples, the run records, and each decision's view and brain by (run, decision id),
+    which serve the boss sims, door states and logged options only (without keep_views, none: plan v7's whole runs
+    read none of them). With gauntlet, the boss gauntlet's runs, each ended where it ended (won or lost) with its share
+    (`progress`), and no views (the gauntlet's V reads none of those).
 
     A sample keeps its tokens and state, not its view: as Python objects a view is ~54 KB, ten times those (2026-10-30:
     plan v6 generation 3's 2.16M decisions took ~117 GB a training, now 21 GB); a held-out one keeps it as JSON, for
@@ -107,7 +108,7 @@ def read_runs(
             if r is None or "run_view" not in e:
                 continue
             view = e["run_view"]
-            if not gauntlet:
+            if keep_views and not gauntlet:
                 views[(e["run"], e["decision_id"])] = (view, e["brain"])
             if gauntlet:
                 ended = r["outcome"] in ("won", "lost")

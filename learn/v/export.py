@@ -37,18 +37,19 @@ def onnx_bytes(model, example: Batch) -> bytes:
     return out.getvalue()
 
 
-def net_file(name, character, floors, tables, mean, std, model, held, report, seed) -> dict:
-    """The file's content; its test runs are a few held-out decisions, valued on the CPU as RunNet values them."""
+def net_file(name, character, floors, tables, mean, std, model, held, report, seed, objective="floor") -> dict:
+    """The file's content; its test runs are a few held-out decisions, valued on the CPU as RunNet values them. A net
+    with a share head is a "progress" net, any other the objective's ("floor" or "win")."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     picks = random.Random(seed).sample(held, min(8, len(held)))
     b = Batch(picks, index, mean, std, floors, "cpu")
     with torch.no_grad():
-        valued = values(model, b)
+        valued = values(model, b, objective)
     return {
         "name": name,
         "character": character,
-        "objective": "floor" if model.share_head is None else "progress",
+        "objective": objective if model.share_head is None else "progress",
         "floors": floors,
         "vocab": tables,
         "state": {"names": encode.STATE, "mean": [float(v) for v in mean], "std": [float(v) for v in std]},
