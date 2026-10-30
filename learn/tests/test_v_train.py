@@ -69,6 +69,10 @@ def test_each_decision_is_a_sample_of_where_its_run_ended_and_each_run_weighs_on
     assert first["next"] == [5 / 70, 5 / 70] and samples[2]["next"] == []  # the combats after floors 1 and 3
     assert math.isclose(sum(s["weight"] for s in samples), 10)
     assert {data.held_out(s["run"]) for s in samples} == {True, False}
+    # only the held-out samples keep their view, as JSON
+    assert all(("view_json" in s) == data.held_out(s["run"]) and "view" not in s for s in samples)
+    held = next(s for s in samples if data.held_out(s["run"]))
+    assert json.loads(held["view_json"])["floor"] == held["state"][0]
 
 
 def test_a_boss_gauntlet_is_refused(tmp_path):
@@ -95,7 +99,8 @@ def test_a_gauntlet_run_ends_where_it_ended_with_the_share_of_the_enemies_hp_it_
 
 
 def test_the_gauntlets_samples_end_where_their_run_ended_with_its_share_and_their_fought_next_combats(tmp_path):
-    samples, _, _ = data.read_runs(*common.lists(write_runs(tmp_path, gauntlet=True)), "SILENT", 64, gauntlet=True)
+    samples, _, views = data.read_runs(*common.lists(write_runs(tmp_path, gauntlet=True)), "SILENT", 64, gauntlet=True)
+    assert views == {}
     first = samples[0]
     assert (first["end"], first["kind"], first["share"]) == (4, "died", pytest.approx(0.4))
     assert first["next"] == [40 / 70]  # the elite fight it died in, not the monsters won at their start
@@ -249,6 +254,7 @@ def test_training_writes_a_net_file_with_its_report(tmp_path):
     net = json.loads(out.read_text())
     assert net["objective"] == "floor" and net["fit"]["runs"] == 10 and net["fit"]["held_out_runs"] == 2
     assert set(net["vocab"]) == set(encode.TABLES) and net["tests"]
+    assert all(isinstance(t["run"], dict) and "floor" in t["run"] for t in net["tests"])  # views, not JSON
 
 
 def test_a_gauntlets_logs_give_its_door_states_their_views_and_no_samples(tmp_path):

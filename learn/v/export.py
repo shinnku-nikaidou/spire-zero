@@ -54,7 +54,11 @@ def net_file(name, character, floors, tables, mean, std, model, held, report, se
         "state": {"names": encode.STATE, "mean": [float(v) for v in mean], "std": [float(v) for v in std]},
         "fit": report,
         "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
-        "tests": [{"run": s["view"], "value": float(v)} for s, v in zip(picks, valued, strict=True)],
+        # a run's sample keeps its view as JSON (data.read_runs)
+        "tests": [
+            {"run": json.loads(s["view_json"]) if "view_json" in s else s["view"], "value": float(v)}
+            for s, v in zip(picks, valued, strict=True)
+        ],
     }
 
 

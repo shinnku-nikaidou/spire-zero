@@ -21,6 +21,8 @@ the run ended, as a death on that floor, with the share of the enemies' HP taken
 head's label; a won run ends on its last floor with its last boss all taken.
 """
 
+import json
+
 import bosslab
 from common import LearnError, read_lines, runs_by_log
 from v import encode
@@ -84,7 +86,12 @@ def read_runs(
     logs: str, records: str, character: str, floors: int, gauntlet: bool = False
 ) -> tuple[list[dict], list[dict], dict]:
     """The logged decisions as samples, the run records, and each decision's view and brain by (run, decision id).
-    With gauntlet, the boss gauntlet's runs, each ended where it ended (won or lost) with its share (`progress`)."""
+    With gauntlet, the boss gauntlet's runs, each ended where it ended (won or lost) with its share (`progress`), and
+    no views (they serve the boss sims, door states and logged options, none of which the gauntlet's V reads).
+
+    A sample keeps its tokens and state, not its view: as Python objects a view is ~54 KB, ten times those (2026-10-30:
+    plan v6 generation 3's 4.9M decisions did not fit in 125 GB); a held-out one keeps it as JSON, for the net file's
+    test runs."""
     samples, runs_seen, views = [], [], {}
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         runs = {k: r for k, r in runs.items() if not r.get("failure")}
@@ -100,7 +107,8 @@ def read_runs(
             if r is None or "run_view" not in e:
                 continue
             view = e["run_view"]
-            views[(e["run"], e["decision_id"])] = (view, e["brain"])
+            if not gauntlet:
+                views[(e["run"], e["decision_id"])] = (view, e["brain"])
             if gauntlet:
                 ended = r["outcome"] in ("won", "lost")
                 s = sample(e["run"], view, floors, r["floor"], "died" if ended else "censored")
@@ -110,6 +118,9 @@ def read_runs(
                     e["run"], view, floors, r["floor"], {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
                 )
             nxt = next_combats(r, view["floor"], fought_only=gauntlet)
+            del s["view"]
+            if held_out(e["run"]):
+                s["view_json"] = json.dumps(view)
             samples.append(s | {"key": (i, e["run"]), "floor": r["floor"], "next": nxt})
     per_run = {}
     for s in samples:
