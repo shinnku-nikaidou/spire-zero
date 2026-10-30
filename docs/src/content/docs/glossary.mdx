@@ -19,7 +19,7 @@ description: 本手册中游戏、项目、搜索、学习和评估相关术语�
 | 进阶等级（A0） | ascension | 难度等级；A0 是基础难度。 |
 | Silent（静默猎手）、Ironclad（铁甲战士） | | 可玩角色。项目从 Silent 开始。 |
 | 选牌提示 | card prompt | 游戏要求玩家选牌的时刻（弃牌、消耗、升级、变化……）。 |
-| TestMode | | 游戏自带的测试开关。它会关掉表现层，但也会改变少数规则，模拟器用补丁把这些规则改回来（[模拟器 §1](/arch/simulator/#sec-1)）。 |
+| TestMode | | 游戏自带的测试开关。它会关掉表现层，但也会改变少数规则，模拟器用补丁把这些规则改回来（[模拟器：无头宿主 §5](/arch/simulator/headless/#sec-5)）。 |
 
 ## 项目组件
 
@@ -31,8 +31,8 @@ description: 本手册中游戏、项目、搜索、学习和评估相关术语�
 | SimWorker | 以无头方式运行真实游戏 DLL 的进程，用于搜索世界和自我对弈（[模拟器](/arch/simulator/)）。 |
 | Mod | 真实游戏里的轻量宿主：观测、提问、显示或执行（[Mod](/arch/mod/)）。 |
 | Harness | 决策进程里的调度器：记录、路由、预算、日志（[Harness](/arch/harness/)）。 |
-| RunSession | SimWorker 里的类，以无头方式经过所有决策界面跑完整局（[模拟器 §5](/arch/simulator/#sec-5)）。 |
-| CombatBuilder | 根据一个观测构建模拟器里的战斗（[模拟器 §3](/arch/simulator/#sec-3)）。 |
+| RunSession | SimWorker 里的类，以无头方式经过所有决策界面跑完整局（[模拟器：整局 §1](/arch/simulator/runs/#sec-1)）。 |
+| CombatBuilder | 根据一个观测构建模拟器里的战斗（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。 |
 | Pump | 单线程调度器，让游戏的所有异步代码都在同一个线程上运行，从而保证结果确定。 |
 | 宿主（host） | 持有真实这一局的那一方：真实游戏里是 Mod，自我对弈时是一个 SimWorker。 |
 | 无头（headless） | 只运行游戏逻辑，没有画面、窗口和输入。 |

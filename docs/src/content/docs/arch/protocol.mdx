@@ -64,10 +64,10 @@ host → brain   node_action{node_index, seq, action}  // every decision in the 
 | `executed` | host → brain | 某个决策实际执行了哪个动作、是否成功，以及可能的错误 |
 | `cancel` | host → brain | 状态已经往前走了；brain 丢弃这次搜索 |
 | `run_end` | host → brain | 一局结束：是否获胜、层数、原因（`won`、`lost`、触及决策上限的 `truncated`、`failed` 或 `aborted`） |
-| `node_checkpoint` | host → brain | 仅 SL：进入节点时的检查点，即存档 `RunManager.ToSave(null)` 加上它丢掉的遗物字段（[模拟器 §7](/arch/simulator/#sec-7)） |
+| `node_checkpoint` | host → brain | 仅 SL：进入节点时的检查点，即存档 `RunManager.ToSave(null)` 加上它丢掉的遗物字段（[模拟器：世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)） |
 | `node_action` | host → brain | 仅 SL：节点内做出的每个决策，用 `seq` 从 0 编号，在下一个决策之前发送，形式是 `surface action` 文本（选牌提示的选择用游戏自己的下标） |
 
-这两种 SL 消息按环境开关（[Mod §6](/arch/mod/#sec-6)）。NoSL 日志里只要出现其中任何一种，这份日志就无效；NoSL 下 brain 会在下一个决策时用 `error` 回应它们。节点从 0 编号，从宿主看到的第一个节点算起（Mod 可能中途才加入一局）；检查点加上它之后的决策就是这个节点的克隆（[模拟器 §7](/arch/simulator/#sec-7)）。
+这两种 SL 消息按环境开关（[Mod §6](/arch/mod/#sec-6)）。NoSL 日志里只要出现其中任何一种，这份日志就无效；NoSL 下 brain 会在下一个决策时用 `error` 回应它们。节点从 0 编号，从宿主看到的第一个节点算起（Mod 可能中途才加入一局）；检查点加上它之后的决策就是这个节点的克隆（[模拟器：世界与 SL 克隆 §4](/arch/simulator/worlds/#sec-4)）。
 
 一局里正常的消息往来：
 
@@ -215,7 +215,7 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 
 ## 7. 世界 API
 
-搜索从不直接接触游戏，而是从这个 API 拿到**世界**：可以观测、执行动作、做快照和恢复的模拟战斗。类型定义在 Protocol 里（`World.cs`），所以 Brain 不引用游戏也能使用；实现在 SimWorker 里（[模拟器 §6](/arch/simulator/#sec-6)）。NoSL 和 SL 的世界有何不同，见 [环境：世界 §1](/arch/environments/worlds/#sec-1)。
+搜索从不直接接触游戏，而是从这个 API 拿到**世界**：可以观测、执行动作、做快照和恢复的模拟战斗。类型定义在 Protocol 里（`World.cs`），所以 Brain 不引用游戏也能使用；实现在 SimWorker 里（[模拟器：世界与 SL 克隆 §1](/arch/simulator/worlds/#sec-1)）。NoSL 和 SL 的世界有何不同，见 [环境：世界 §1](/arch/environments/worlds/#sec-1)。
 
 ```csharp
 public enum PlayEnvironment { NoSL, SL }
@@ -250,11 +250,11 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - 世界里弹出的选牌提示在世界内部回答。v0 交给 `p0`，也就是这一局自己回答提示所用的固定规则，所以世界里的选择和这一局一样；把每个选项变成搜索分支还在规划中（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1) 第 7 条）。
 - `Candidate` 是一个打过分的动作：它在各个世界上的平均估值、95% 置信区间的半宽，以及世界的个数。
 
-SL 封存：节点克隆在节点出口处停下（`AtHorizon`），之后的任何一步都会抛异常；SL 世界在它那场战斗结束后，任何动作都会抛异常，所以搜索永远不会离开这个房间（[模拟器 §7](/arch/simulator/#sec-7)）。
+SL 封存：节点克隆在节点出口处停下（`AtHorizon`），之后的任何一步都会抛异常；SL 世界在它那场战斗结束后，任何动作都会抛异常，所以搜索永远不会离开这个房间（[模拟器：世界与 SL 克隆 §7](/arch/simulator/worlds/#sec-7)）。
 
 ### 7.1 worker 消息
 
-worker 进程池（[模拟器 §8](/arch/simulator/#sec-8)）不会一步一步地通过线路操作世界：一次进程间往返（几十 µs）和一个模拟步（约 0.1 ms）的开销相当，而搜索每个决策要走几千步。所以一个请求要的是一整块工作：一个世界的搜索、SL 规划器的一个回合，或者 L0 在节点克隆上对一个决策的试探（`Worker.cs`）：
+worker 进程池（[模拟器：工作进程池 §3](/arch/simulator/pool/#sec-3)）不会一步一步地通过线路操作世界：一次进程间往返（几十 µs）和一个模拟步（约 0.1 ms）的开销相当，而搜索每个决策要走几千步。所以一个请求要的是一整块工作：一个世界的搜索、SL 规划器的一个回合，或者 L0 在节点克隆上对一个决策的试探（`Worker.cs`）：
 
 ```csharp
 // The worker's first line, once it has booted.

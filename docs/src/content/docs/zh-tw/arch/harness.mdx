@@ -12,7 +12,7 @@ Harness 是決策行程裡的排程器。它的一邊是**宿主**，也就是�
 
 <Aside title="狀態">
 
-部分實作。`Sts2Ai.Harness` 裡有 worker 行程池（[模擬器 §8](/zh-tw/arch/simulator/#sec-8)）、`PooledPimc`（在行程池裡搜尋世界的 PIMC 戰鬥大腦，NoSL 或 SL）、`PooledPlanner`（在行程池裡搜尋各個回合的 SL 規劃器）和 `Dispatcher`：它把一局裡的決策路由給大腦，抽取大腦的種子，並寫決策日誌（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 讓每一局都經過它，可以在行程內，也可以走傳輸協定：`BrainServer` 是 Harness 這一端的宿主–brain 訊息處理（[協定 §2](/zh-tw/arch/protocol/#sec-2)），按順序回答決策。規劃中：公開記錄的其餘部分（[§3](#sec-3)；目前只記錄敵人每回合的意圖，[§6](#sec-6)）；搜尋進行中的過期請求和取消；掛鐘時間預算和基於 CI 的分配；降級回答。
+部分實作。`Sts2Ai.Harness` 裡有 worker 行程池（[模擬器：工作行程池 §2](/zh-tw/arch/simulator/pool/#sec-2)）、`PooledPimc`（在行程池裡搜尋世界的 PIMC 戰鬥大腦，NoSL 或 SL）、`PooledPlanner`（在行程池裡搜尋各個回合的 SL 規劃器）和 `Dispatcher`：它把一局裡的決策路由給大腦，抽取大腦的種子，並寫決策日誌（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 讓每一局都經過它，可以在行程內，也可以走傳輸協定：`BrainServer` 是 Harness 這一端的宿主–brain 訊息處理（[協定 §2](/zh-tw/arch/protocol/#sec-2)），按順序回答決策。規劃中：公開記錄的其餘部分（[§3](#sec-3)；目前只記錄敵人每回合的意圖，[§6](#sec-6)）；搜尋進行中的過期請求和取消；掛鐘時間預算和基於 CI 的分配；降級回答。
 
 </Aside>
 
@@ -58,7 +58,7 @@ sequenceDiagram
   X-->>H: recommendation
 ```
 
-- 宿主是 Mod（R4，真實遊戲）或者負責這一局的宿主 worker 行程（R1–R3，模擬）；R1–R4 是[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)的各級。Harness 分辨不出這兩者，這正是專案的原則「換世界，不換大腦」（swap the world, not the brain）。SimWorker 的 `brain` 命令單獨執行 Harness，在 socket 後面等待宿主；`run --brain` 作為宿主連上它跑整局（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）。
+- 宿主是 Mod（R4，真實遊戲）或者負責這一局的宿主 worker 行程（R1–R3，模擬）；R1–R4 是[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)的各級。Harness 分辨不出這兩者，這正是專案的原則「換世界，不換大腦」（swap the world, not the brain）。SimWorker 的 `brain` 命令單獨執行 Harness，在 socket 後面等待宿主；`run --brain` 作為宿主連上它跑整局（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。
 - 搜尋用的 worker 行程與宿主行程是分開的。自我對弈時，宿主 worker 只持有真實的這一局，搜尋在其他 worker 上進行。
 - 單行程模式（bench、selftest）：Harness 和一個 worker 在同一個行程裡，介面相同，沒有行程間通訊（IPC）。
 
@@ -85,7 +85,7 @@ public sealed class PublicRecord
   3. 本回合的歷史，由此推出能力和遺物的內部計數器；
   4. 整局層面：至今見過的獎勵、商店和事件，由此推出隱藏的機率計數器。
 - 記錄隨這一局的日誌一起儲存。崩潰恢復就是重播日誌，不需要遊戲存檔。
-- SL：記錄照樣保留，用於日誌和解說，但搜尋用的世界來自節點複本（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。Harness 儲存最新的節點檢查點和節點軌跡；每次進入新節點時，軌跡清空重來。`Dispatcher` 從宿主的 `node_checkpoint` 和 `node_action` 訊息裡儲存它們，NoSL 下拒收，並在每個戰鬥決策時把複本交給戰鬥大腦；加上 `--afterstates clone` 時，也在每個宏觀決策和每個戰鬥外的選牌提示處把它交給 L0，L0 的試探由 `PooledClone` 在 worker 行程池裡打（[宏觀大腦：搜尋 §6](/zh-tw/arch/macro-brain/search/#sec-6)）。還沒收到任何檢查點就來了 SL 決策，會拋出例外。
+- SL：記錄照樣保留，用於日誌和解說，但搜尋用的世界來自節點複本（[模擬器：世界與 SL 複本 §7](/zh-tw/arch/simulator/worlds/#sec-7)）。Harness 儲存最新的節點檢查點和節點軌跡；每次進入新節點時，軌跡清空重來。`Dispatcher` 從宿主的 `node_checkpoint` 和 `node_action` 訊息裡儲存它們，NoSL 下拒收，並在每個戰鬥決策時把複本交給戰鬥大腦；加上 `--afterstates clone` 時，也在每個宏觀決策和每個戰鬥外的選牌提示處把它交給 L0，L0 的試探由 `PooledClone` 在 worker 行程池裡打（[宏觀大腦：搜尋 §6](/zh-tw/arch/macro-brain/search/#sec-6)）。還沒收到任何檢查點就來了 SL 決策，會拋出例外。
 
 ## 4. 決策介面路由
 
@@ -101,7 +101,7 @@ public sealed class PublicRecord
 - 戰鬥大腦取決於環境：NoSL 用 PIMC，SL 用 SL 規劃器（`--policy plan`，[戰鬥大腦 §3](/zh-tw/arch/combat-brain/#sec-3)），它在節點複本上規劃，在 NoSL 裡拒絕執行。在複本上跑 PIMC（SL 下的 `--policy pimc`）保留下來，作為規劃器的基線：它只搜尋本回合。宏觀大腦在兩種環境裡是同一個（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。每個宿主在 `hello` 裡報出自己的環境，所以 `brain` 命令同時服務兩種：NoSL 宿主用 `--policy` 的戰鬥大腦，SL 宿主用 `--sl-policy` 的，預設是 SL 規劃器（[Mod §5](/zh-tw/arch/mod/#sec-5)）。
 - `Dispatcher` 為一局實作這張表。宿主把它作為自己的戰鬥策略、選牌提示策略和宏觀策略。它為每一側各持有一個大腦（戰鬥、戰鬥中的提示、宏觀、戰鬥外的提示），並按 `ChoiceContext.InCombat` 把選牌提示交給對應的一側（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。目前戰鬥中的提示交給 `p0`（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1) 第 7 條），宏觀一側和它的提示交給 L0 或隨機佔位策略。
 - 找不到路由時回報錯誤「uncovered surface」（未覆蓋的決策介面）：決策介面不在 `Dispatcher.MacroSurfaces` 裡，或大腦的回答不合法，`Dispatcher` 都會拋出例外。宿主暫停，請求人工操作，並記錄一個覆蓋率 bug。絕不用隨機選擇當後備。評估要求後備次數為 0（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
-- 決策介面清單及其遊戲入口：[模擬器 §5.2](/zh-tw/arch/simulator/#sec-5.2)、[GameBridge §4](/zh-tw/arch/gamebridge/#sec-4)。
+- 決策介面清單及其遊戲入口：[模擬器：整局 §4](/zh-tw/arch/simulator/runs/#sec-4)、[GameBridge §4](/zh-tw/arch/gamebridge/#sec-4)。
 
 ## 5. 預算與確定性
 
@@ -142,7 +142,7 @@ public sealed class PublicRecord
 - 戰鬥決策還會加上 `history`：這場戰鬥裡每個敵人在至今每一回合開始時顯示的意圖，包括本回合，按 uid 分組，每項是 `{round, intents}`。這是目前已實作的那部分公開記錄（[§3](#sec-3)）：Harness 從它看到的戰鬥觀測裡收集，每次宏觀決策後重新開始。戰鬥網路讀它和回合數，這樣每個怪物的出招順序能從資料裡學到，而不是靠手寫的規則（[學習 §1](/zh-tw/arch/learning/#sec-1)）。Brain 裡的 `MoveRecord` 儲存這份記錄，Harness 每個決策都把它交給戰鬥大腦（戰鬥路由的最後一個參數），搜尋再把它發給 worker，供葉節點使用（[戰鬥大腦：提示、招式與 worker §2](/zh-tw/arch/combat-brain/shared/#sec-2)）。
 - 宏觀決策還會加上 `features`：大腦看到的整局觀測上 V 的特徵（[學習 §1](/zh-tw/arch/learning/#sec-1)），不管是哪個大腦做的決策。V v0 的擬合和 V v2 的訓練讀的就是它們；兩者都已刪除，純 V 不讀它們（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
 - 宏觀決策還會加上 `run_view`：整局觀測本身，約 6 KB，V v2 就用它訓練（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
-- `run --log FILE` 寫出日誌，每個決策一行（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）；它和對局記錄一起放在 `data/`（[學習 §6](/zh-tw/arch/learning/#sec-6)）。
+- `run --log FILE` 寫出日誌，每個決策一行（[模擬器：整局 §5](/zh-tw/arch/simulator/runs/#sec-5)）；它和對局記錄一起放在 `data/`（[學習 §6](/zh-tw/arch/learning/#sec-6)）。
 - `degraded` 標記 worker 故障之後給出的回答，它和在其他 worker 上重新開啟世界一起規劃（[§7](#sec-7)）。崩潰或卡住的 worker 會被重啟，請求再發一次，得到的回答相同，所以目前沒有降級的回答。
 
 誰讀這份日誌：
@@ -160,7 +160,7 @@ public sealed class PublicRecord
 | 從觀測建構失敗 | 報告 `BuildDifferences`；不搜尋；宿主暫停；記錄 bug。絕不隨機 |
 | 宿主認為動作不合法而拒絕 | 宿主重新請求；連續 2 次 → 暫停 |
 
-目前：死掉的 worker，或 5 分鐘內沒有回答的 worker，會被殺掉、重啟，請求再發一次；第二次失敗就讓這個決策失敗（[模擬器 §8](/zh-tw/arch/simulator/#sec-8)）。一個請求是一個世界的搜尋，最多幾秒，所以超時抓的是卡住的 worker，不是慢的 worker。沒有按觀測建構出來的戰鬥會讓這個決策失敗，並帶上差異（`SimWorlds.NoSL`），在 `run` 裡這會讓這一局失敗。大腦給出不合法的回答時，`Dispatcher` 拋出例外。
+目前：死掉的 worker，或 5 分鐘內沒有回答的 worker，會被殺掉、重啟，請求再發一次；第二次失敗就讓這個決策失敗（[模擬器：工作行程池 §6](/zh-tw/arch/simulator/pool/#sec-6)）。一個請求是一個世界的搜尋，最多幾秒，所以超時抓的是卡住的 worker，不是慢的 worker。沒有按觀測建構出來的戰鬥會讓這個決策失敗，並帶上差異（`SimWorlds.NoSL`），在 `run` 裡這會讓這一局失敗。大腦給出不合法的回答時，`Dispatcher` 拋出例外。
 
 ## 8. 測試
 

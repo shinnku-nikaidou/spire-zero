@@ -64,10 +64,10 @@ host → brain   node_action{node_index, seq, action}  // every decision in the 
 | `executed` | host → brain | which action was executed for a decision, whether it succeeded, the error if any |
 | `cancel` | host → brain | the state moved on; the brain drops that search |
 | `run_end` | host → brain | the run is over: won or not, floor, reason (`won`, `lost`, `truncated` at the decision cap, `failed` or `aborted`) |
-| `node_checkpoint` | host → brain | SL only: the node's checkpoint at entry, the save `RunManager.ToSave(null)` with the relic fields it drops ([Simulator §7](/en/arch/simulator/#sec-7)) |
+| `node_checkpoint` | host → brain | SL only: the node's checkpoint at entry, the save `RunManager.ToSave(null)` with the relic fields it drops ([Simulator: worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)) |
 | `node_action` | host → brain | SL only: every decision taken inside the node, numbered by `seq` from 0 and sent before the next decision, as `surface action` text (a card prompt's picks are the game's own indexes) |
 
-The two SL messages are gated by the environment ([Mod §6](/en/arch/mod/#sec-6)). A NoSL log that contains either of them is invalid, and the brain answers them in NoSL with an `error` at the next decision. Nodes are numbered from 0, from the first node the host saw (a mod can join a run later); the checkpoint and the decisions after it make the node's clone ([Simulator §7](/en/arch/simulator/#sec-7)).
+The two SL messages are gated by the environment ([Mod §6](/en/arch/mod/#sec-6)). A NoSL log that contains either of them is invalid, and the brain answers them in NoSL with an `error` at the next decision. Nodes are numbered from 0, from the first node the host saw (a mod can join a run later); the checkpoint and the decisions after it make the node's clone ([Simulator: worlds and the SL clone §4](/en/arch/simulator/worlds/#sec-4)).
 
 The normal exchange in one run:
 
@@ -215,7 +215,7 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 
 ## 7. World API
 
-Search never touches a game directly. It gets **worlds** from this API: simulated combats it can observe, act in, snapshot and restore. The types live in Protocol (`World.cs`), so Brain can use them without game references; SimWorker implements them ([Simulator §6](/en/arch/simulator/#sec-6)). How NoSL and SL worlds differ is described in [Environments: worlds §1](/en/arch/environments/worlds/#sec-1).
+Search never touches a game directly. It gets **worlds** from this API: simulated combats it can observe, act in, snapshot and restore. The types live in Protocol (`World.cs`), so Brain can use them without game references; SimWorker implements them ([Simulator: worlds and the SL clone §1](/en/arch/simulator/worlds/#sec-1)). How NoSL and SL worlds differ is described in [Environments: worlds §1](/en/arch/environments/worlds/#sec-1).
 
 ```csharp
 public enum PlayEnvironment { NoSL, SL }
@@ -250,11 +250,11 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - Card prompts raised inside a world are answered there. In v0 they go to `p0`, the fixed rule the run itself answers by, so a world picks as the run will; making each option a search branch is planned ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1), rule 7).
 - `Candidate` is one scored action: its mean value over the worlds, the 95% confidence half-width, and the number of worlds.
 
-The SL seal: the node's clone stops at the node's exit (`AtHorizon`) and throws on any later step, and the SL world throws on any action after its combat's end, so search never leaves the room ([Simulator §7](/en/arch/simulator/#sec-7)).
+The SL seal: the node's clone stops at the node's exit (`AtHorizon`) and throws on any later step, and the SL world throws on any action after its combat's end, so search never leaves the room ([Simulator: worlds and the SL clone §7](/en/arch/simulator/worlds/#sec-7)).
 
 ### 7.1 Worker messages
 
-The worker pool ([Simulator §8](/en/arch/simulator/#sec-8)) does not move worlds over the wire one step at a time: an IPC round trip (tens of µs) costs about as much as a sim step (about 0.1 ms), and search takes thousands of steps per decision. A request asks for a whole unit of work instead: the search of one world, one turn of the SL planner, or L0's probes of a decision on the node's clone (`Worker.cs`):
+The worker pool ([Simulator: the worker pool §3](/en/arch/simulator/pool/#sec-3)) does not move worlds over the wire one step at a time: an IPC round trip (tens of µs) costs about as much as a sim step (about 0.1 ms), and search takes thousands of steps per decision. A request asks for a whole unit of work instead: the search of one world, one turn of the SL planner, or L0's probes of a decision on the node's clone (`Worker.cs`):
 
 ```csharp
 // The worker's first line, once it has booted.

@@ -66,7 +66,7 @@ import { Aside } from '@astrojs/starlight/components';
 - **相同的程式碼與規則**：相同的規則知識，相同的 Brain、Harness 和 Protocol。只有戰鬥大腦和世界的來源按環境選擇。
 - **相同的種子**：兩者打同一組預先登記的種子集，每個結果都按環境分開報告（[評估 §4](/zh-tw/arch/evaluation/#sec-4)）。
 - **AI 從不真正讀檔**。兩種環境都從不重新載入玩家看到的那個遊戲。SL 的「存讀檔」只發生在複本上，由搜尋在工作行程裡載入。遊戲在存檔欄位 `SerializableRun.NumReloads` 中計算讀檔次數：在真實遊戲裡它必須保持為 0，這項檢查計畫放在 Mod 的日誌裡（[資訊與節點 §8](/zh-tw/arch/environments/information/#sec-8)）。複本本身就是一份載入的存檔，所以在複本裡這個次數是 1 或更多，而那裡沒有任何東西讀它。
-- **一局之內固定**。環境在一局開始時、在主機的 `hello` 裡選定，並維持到這一局的 `run_end`。它記錄在這一局的對局記錄裡（`RunConfig.Env`），也記錄在決策日誌的每一行裡（`env`）。在 Mod 裡，玩家可以隨時切換環境；切換會結束大腦所看到的這一局，並開始新的一局（[Mod §5](/zh-tw/arch/mod/#sec-5)）。
+- **一局之內固定**。環境在一局開始時、在宿主的 `hello` 裡選定，並維持到這一局的 `run_end`。它記錄在這一局的對局記錄裡（`RunConfig.Env`），也記錄在決策日誌的每一行裡（`env`）。在 Mod 裡，玩家可以隨時切換環境；切換會結束大腦所看到的這一局，並開始新的一局（[Mod §5](/zh-tw/arch/mod/#sec-5)）。
 - **兩者都只用觀測**。大腦讀取的是協定觀測，從不讀取遊戲物件；SL 比 NoSL 多知道的東西只能經由複本傳到它們手上，而複本存在於工作行程中（[世界與兩種戰鬥演算法 §1](/zh-tw/arch/environments/worlds/#sec-1)）。
 
 ## 5. 一局如何選定環境
@@ -77,8 +77,8 @@ import { Aside } from '@astrojs/starlight/components';
 |---|---|---|
 | `run`（在模擬器裡打整局） | `--env NoSL\|SL`，大小寫皆可（`Commands/RunCommand.cs:23`）；冠軍檔案的 `env` 會填入它 | NoSL |
 | `panel`（固定的戰鬥面板） | `--env NoSL\|SL`；`--player plan` 需要 SL，`--workers` 需要 NoSL 搭配 pimc（`Commands/Panel.cs:29-58`） | NoSL |
-| 線路上 | `hello{env: "NoSL"\|"SL"}`，由主機在每一局開始時送出（[協定 §2](/zh-tw/arch/protocol/#sec-2)） | – |
-| `brain`（單獨的決策行程） | 兩者都服務：NoSL 主機用 `--policy` 的戰鬥大腦，SL 主機用 `--sl-policy` 的（`Commands/BrainCommand.cs:19`） | `--sl-policy plan` |
+| 線路上 | `hello{env: "NoSL"\|"SL"}`，由宿主在每一局開始時送出（[協定 §2](/zh-tw/arch/protocol/#sec-2)） | – |
+| `brain`（單獨的決策行程） | 兩者都服務：NoSL 宿主用 `--policy` 的戰鬥大腦，SL 宿主用 `--sl-policy` 的（`Commands/BrainCommand.cs:19`） | `--sl-policy plan` |
 | Mod | 面板頂部的 SL/NoSL 切換，保存在 `~/.local/state/sts2ai/settings.json`（[Mod §5](/zh-tw/arch/mod/#sec-5)） | SL |
 | 冠軍檔案 | 每個角色和環境一個，`eval/CHARACTER/champions/nosl.json` 和 `sl.json`；`gate --env` 必須與檔案的一致（[評估 §5](/zh-tw/arch/evaluation/#sec-5)） | – |
 | 戰鬥網路訓練 | `combat.train --env SL\|NoSL`，必填；網路檔案會記錄它（`learn/combat/train.py`、`export.py`） | – |
@@ -87,7 +87,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 - `--policy plan`（SL 規劃器）和 `--afterstates clone`（L0 在複本上打選項）只在 SL 下打：NoSL 的 `hello` 會被拒絕（`Brains/ChampionOptions.cs:40-42`），用會打它們的冠軍執行 `run --env NoSL` 也會被拒絕（`Commands/RunCommand.cs:74`）。
 - 戰鬥網路檔案寫明它學的是哪個環境的戰鬥，在另一個環境裡會被拒絕（`Brains/LeafChoice.cs:25`）；c1–c4 是在網路帶有環境之前做的，在兩種環境裡都能打。
-- 在 NoSL 的一局裡，Harness 拒絕 SL 訊息 `node_checkpoint` 和 `node_action`（`Harness/Dispatcher.cs:184`、`:193`）；大腦伺服器保留這個拒絕，對這一局的下一個決策回覆錯誤，主機把這一局當作失敗結束，而失敗的一局會讓它的報告作廢（`Harness/BrainServer.cs:112-123`、`Harness/Reports.cs:38`）。SL 規劃器拒絕不屬於 SL 的世界（`Brain/Combat/SlPlanner.cs:82`）。
+- 在 NoSL 的一局裡，Harness 拒絕 SL 訊息 `node_checkpoint` 和 `node_action`（`Harness/Dispatcher.cs:184`、`:193`）；大腦伺服器保留這個拒絕，對這一局的下一個決策回覆錯誤，宿主把這一局當作失敗結束，而失敗的一局會讓它的報告作廢（`Harness/BrainServer.cs:112-123`、`Harness/Reports.cs:38`）。SL 規劃器拒絕不屬於 SL 的世界（`Brain/Combat/SlPlanner.cs:82`）。
 - 戰鬥網路訓練器只讀給定環境的日誌，遇到另一個環境的日誌就失敗（`learn/combat/data.py`）。
 - 晉級門檻拒絕把在不同環境、不同級（rung）或不同遊戲中打的對局配對（`Harness/Gate.cs:51`）。
 

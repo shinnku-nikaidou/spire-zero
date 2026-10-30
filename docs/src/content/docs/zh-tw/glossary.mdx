@@ -19,7 +19,7 @@ description: 本手冊中遊戲、專案、搜尋、學習和評估相關術語�
 | 晉階等級（A0） | ascension | 難度等級；A0 是基礎難度。 |
 | Silent（寂靜獵手）、Ironclad（鐵甲戰士） | | 可玩角色。專案從 Silent 開始。 |
 | 選牌提示 | card prompt | 遊戲要求玩家選牌的時刻（棄牌、消耗、升級、轉化……）。 |
-| TestMode | | 遊戲自帶的測試開關。它會關掉表現層，但也會改變少數規則，模擬器用補丁把這些規則改回來（[模擬器 §1](/zh-tw/arch/simulator/#sec-1)）。 |
+| TestMode | | 遊戲自帶的測試開關。它會關掉表現層，但也會改變少數規則，模擬器用補丁把這些規則改回來（[模擬器：無頭宿主 §5](/zh-tw/arch/simulator/headless/#sec-5)）。 |
 
 ## 專案元件
 
@@ -31,8 +31,8 @@ description: 本手冊中遊戲、專案、搜尋、學習和評估相關術語�
 | SimWorker | 以無頭方式執行真實遊戲 DLL 的行程，用於搜尋世界和自我對弈（[模擬器](/zh-tw/arch/simulator/)）。 |
 | Mod | 真實遊戲裡的輕量宿主：觀測、提問、顯示或執行（[Mod](/zh-tw/arch/mod/)）。 |
 | Harness | 決策行程裡的排程器：記錄、路由、預算、日誌（[Harness](/zh-tw/arch/harness/)）。 |
-| RunSession | SimWorker 裡的類別，以無頭方式經過所有決策介面跑完整局（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）。 |
-| CombatBuilder | 根據一個觀測建構模擬器裡的戰鬥（[模擬器 §3](/zh-tw/arch/simulator/#sec-3)）。 |
+| RunSession | SimWorker 裡的類別，以無頭方式經過所有決策介面跑完整局（[模擬器：整局 §1](/zh-tw/arch/simulator/runs/#sec-1)）。 |
+| CombatBuilder | 根據一個觀測建構模擬器裡的戰鬥（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。 |
 | Pump | 單執行緒排程器，讓遊戲的所有非同步程式碼都在同一個執行緒上執行，從而保證結果確定。 |
 | 宿主（host） | 持有真實這一局的那一方：真實遊戲裡是 Mod，自我對弈時是一個 SimWorker。 |
 | 無頭（headless） | 只執行遊戲邏輯，沒有畫面、視窗和輸入。 |

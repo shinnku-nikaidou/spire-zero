@@ -1,0 +1,123 @@
+---
+title: 世界與 SL 複本
+description: 搜尋用來往前打的狀態。從觀測建構並確定化的 NoSL 戰鬥世界；節點檢查點；SL 複本的載入、重播與封存；存檔丟掉的遺物狀態；SL 世界；仍在規劃中的整局世界。
+sidebar:
+  label: 世界與 SL 複本
+---
+
+import { Badge, Steps } from '@astrojs/starlight/components';
+import WorldTurns from '../../../../../components/book/WorldTurns.svelte';
+
+搜尋需要一個嘗試的地方：一個可以在裡面打出一個動作、看一看、再放回去的狀態。這就是**世界**。世界可以包含什麼，是環境的規則（[環境：世界 §1](/zh-tw/arch/environments/worlds/#sec-1)）：NoSL 下是對玩家看不到的一切的一個樣本，SL 下是真實的東西，直到節點的出口為止。本頁講模擬器如何做出每一種。
+
+## 1. 世界是什麼
+
+對搜尋來說，世界就是世界 API 的介面 `ICombatWorld`（[協定 §7](/zh-tw/arch/protocol/#sec-7)）：觀測它、列出它的合法動作、執行其中一個、讀取它的狀態（進行中、贏、輸）和它的隱藏鍵、做一個快照、還原一個快照。世界的來源 `IWorldSource` 給出一個決策的各個世界：`Worlds(k, searchSeed)`。戰鬥大腦只透過這個介面搜尋，所以同一份搜尋程式碼能在任何種類的世界上執行（[戰鬥大腦 §4](/zh-tw/arch/combat-brain/#sec-4)）。
+
+目前每個世界都是**戰鬥世界**：一場戰鬥，處在一個戰鬥決策上。模擬器用兩種方式做出它們：
+
+| | NoSL 世界 | SL 世界 |
+|---|---|---|
+| 由什麼做成 | 戰鬥的觀測和敵人出招記錄，建構成一場全新的戰鬥（[§2](#sec-2)） | 節點的複本：節點入口的檢查點，重播到這個決策（[§7](#sec-7)） |
+| 每個決策幾個 | K 個，各自用自己的種子確定化 | 一個 |
+| 隱藏鍵 | `HiddenState.Key` | `HiddenState.Full` |
+| 類別 | `SimWorlds.NoSL`（`Simulation/SimWorlds.cs`） | `NodeWorld`（`Simulation/NodeWorld.cs`） |
+| 在哪裡 | 工作行程，或測試集裡的宿主 | 工作行程 |
+
+宏觀大腦不使用戰鬥世界：SL 下它直接在節點的複本上打它的選項（[§3](#sec-3)，[宏觀大腦：搜尋 §2](/zh-tw/arch/macro-brain/search/#sec-2)）。整局的世界能讓 NoSL 搜尋看到當前地圖點之後的東西，還在規劃中（[§8](#sec-8)）。
+
+## 2. NoSL 戰鬥世界
+
+NoSL 世界是一個**確定化樣本**：一場完整的戰鬥，和玩家見過的一切都一致，玩家看不到的部分則隨機抽取（[環境：世界 §2](/zh-tw/arch/environments/worlds/#sec-2)）。`SimWorlds.NoSL(pump, observation, buildSeed, history)` 做出一個決策的各個世界（`Simulation/SimWorlds.cs:37-44`）：
+
+1. **根**是 `CombatBuilder.Setup` 從觀測建構的一場戰鬥，用的是建構種子，以及到目前為止敵人意圖的記錄，這份記錄給出怪物的招式日誌（[戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。它從觀測建構，從不取自真實的戰鬥，所以玩家看不到的東西都進不來。建構必須完全顯示這個觀測；如果做不到，呼叫就會拋出例外，因為搜尋會去探索另一場戰鬥（[Harness §7](/zh-tw/arch/harness/#sec-7)）。
+2. **第 k 個世界**是根加上一步確定化，種子由搜尋種子和 k 混合而成（`Simulation/SimWorlds.cs:51-57`）。這一步把玩家無法知道的東西洗亂，並重新播種每條亂數流（[戰鬥 §3](/zh-tw/arch/simulator/combat/#sec-3)）。
+
+這樣一個世界打起來多像真實的戰鬥（確定化這一步取樣的部分除外），由 `fidelity` 衡量（[戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6)）：在這個決策所在的回合內，最多 1% 的觀測不同。
+
+**所有世界共用一場活的戰鬥**。遊戲每個行程只允許一場活的戰鬥，所以 K 個世界輪流使用它。每個世界保留自己的軌跡，它的快照就是這份軌跡（[戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)）。另一個世界正活著時使用某個世界，它會重建自己：從根建一場新的戰鬥，再重播它的軌跡。一直待在一個世界裡的搜尋，只在回溯時才重播。下圖顯示搜尋的順序造成的差別：
+
+<WorldTurns client:visible lang="zh-TW" />
+
+有兩個細節讓重播保持精確：
+
+- 世界裡的**卡牌提示**交給 `p0`，也就是這一局自己的提示大腦，所以搜尋預期的就是這一局會做的選擇（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。
+- **世界的軌跡就是活戰鬥的軌跡**，包括它開始時問到的提示（在每回合開始時提問的遺物）。重播按順序發放記錄下的選擇，少了這些，後面某個提示的選擇就會被它們拿走（`Simulation/SimWorlds.cs:88-98`）。`selftest` 檢查一個世界在卡牌提示之後能精確還原，用的是暖烘烘手套和生存者，6 個世界（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
+
+NoSL 世界把觸及工作階段上限（50 回合或 1,000 個動作，[戰鬥 §1](/zh-tw/arch/simulator/combat/#sec-1)）的戰鬥報告為贏（`Simulation/SimWorlds.cs:105-110`）；沒有哪條被搜尋的路線接近這些上限。
+
+**世界在哪裡**。一局裡，一個決策的各個世界住在行程池的工作行程裡，每個世界一個請求，而真實的這一局一直活在宿主裡（[工作行程池 §3](/zh-tw/arch/simulator/pool/#sec-3)）。只有測試集在自己的行程裡搜尋（不帶 `--workers` 的 `panel`）：它在每個決策之前把真實的戰鬥存為快照，讓世界使用這個行程，再透過重播把真實的戰鬥放回去（[參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。
+
+**`SimWorlds.SL`** 是同一個類別，只有一個世界，以真實戰鬥自己的快照為根，沒有封存。它需要真實的戰鬥在同一個行程裡，所以只有測試集用它，並交給它真實戰鬥的提示策略；一局裡的 SL 世界是節點的複本（[§7](#sec-7)）。
+
+## 3. 節點檢查點
+
+**節點**是一個地圖點，從到達開始，直到移動到下一個點為止（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。SL 可以知道當前節點的一切，所以 SL 需要它的一個精確副本，可以一打再打。這個副本從一份存檔開始。
+
+到達一個地圖點時，遊戲會儲存這一局。無頭時什麼都不寫：`SaveRun` 補丁跳過它；而一份沒有已完成房間的存檔就是到達時的存檔，所以這個補丁也發出一個節點已開始的訊號（`Runtime/Patches/Persistence.cs:13-23`）。接著 `RunSession` 取得這個節點的**檢查點**（`Sts2Ai.GameBridge/Checkpoint.cs`），記下節點的決策在它的軌跡裡從哪裡開始，並把卡牌提示重新從 0 編號（`Simulation/RunSession.cs:143-148`）。檢查點是一個 JSON 物件，分兩部分：
+
+- `Save`：遊戲自己的一局存檔，即由 `SaveManager.ToJson` 序列化的 `RunManager.ToSave(null)`，以字串形式巢狀放入；
+- `Relics`：每個遺物的簡單欄位：從遺物自己的類別一直到 `RelicModel`（其中包括它的狀態），每個數字、旗標、列舉或 decimal 型別的可寫欄位，按類別和欄位名存放。存檔會丟掉其中大部分（[§6](#sec-6)）。
+
+兩種宿主都會取檢查點，模擬器和遊戲裡的 Mod 都是，NoSL 的對局也一樣；只有 SL 的對局會把它們傳給大腦（[環境：資訊與節點 §7](/zh-tw/arch/environments/information/#sec-7)）。
+
+**複本**是檢查點，加上此後節點的每個決策，作為軌跡行（`surface action`；卡牌提示的選擇用遊戲自己的索引）。它的協定型別是 `NodeClone(Save, Trace, Gauntlet?)`（`Sts2Ai.Protocol/World.cs:53`），除了模擬器，對其他一切都是不透明的。一局處於菁英連戰的規則下時，`Gauntlet` 為 true，複本會保留這條規則（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。`RunSession.Clone()` 在節點的任何時刻都能做出一個複本（`Simulation/RunSession.cs:229-230`）。
+
+**在一局裡**，SL 宿主把複本一塊一塊地傳給大腦：新節點開始時傳 `node_checkpoint`，然後節點的每個決策以 `node_action` 傳送，兩者都在下一個決策被提問之前傳送（`Brains/RunBrains.cs:88-99`；[協定 §2](/zh-tw/arch/protocol/#sec-2)）。Harness 保留最新的檢查點和此後的決策，在每個決策時，這就是複本（[Harness §3](/zh-tw/arch/harness/#sec-3)）。Mod 從遊戲裡傳送同樣的訊息（[Mod §6](/zh-tw/arch/mod/#sec-6)）。
+
+## 4. 載入複本
+
+`RunSession.Load(clone)`（`Simulation/RunSession.cs:192-226`）走遊戲「繼續」的路徑：`NMainMenu` 的 Continue 和 `NGame.LoadRun`，不含其中的 Godot 節點（`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`）<Badge text="已核實" variant="success" />。
+
+<Steps>
+
+1. 讀取檢查點；對它的存檔做 `SaveManager.FromJson<SerializableRun>`，然後 `RunState.FromSerializable`。這一局的設定來自存檔：角色、種子、晉階；連戰規則則來自複本。
+2. `await RunManager.SetUpSavedSingleplayer(state, save)`（`Runs/RunManager.cs:354-370`）。它要求沒有一局是活的（`State == null`），所以要先對上一個工作階段做 `CleanUp()`。它會讓 `NumReloads` 加一，只有遊戲的統計會讀這個值。它還會開啟存檔，就像「繼續」總會做的那樣。
+3. 把遺物的簡單欄位放回去（`Checkpoint.RestoreRelics`，[§6](#sec-6)），再把存檔關掉，和模擬器開始的任何一局一樣，否則一局結束時會寫入進度。
+4. `Launch()`；`await GenerateMap()`，它用種子重新做出存檔裡的地圖。
+5. `await LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, state))`。它像到達時那樣進入這個點：相同的 `?` 擲骰、遭遇、怪物生命值、開局洗牌和招式。
+6. 重播軌跡：戰鬥和宏觀決策從一個佇列裡取，卡牌選擇透過選牌器。記錄在一個決策介面上、卻在另一個決策介面上被問到的步驟會拋出例外；遊戲從未問到而剩下的步驟或選擇也一樣（「replay diverged」）。
+
+</Steps>
+
+重播之後，複本停在和這一局相同的決策上，觀測也相同，交給它的策略就從那裡開始回答。
+
+**id**。遊戲的多人測試載入器還會把存檔裡沒有的動作、鉤子、選擇和獎勵 id 以及校驗和快進到位（`Nodes.Debug.Multiplayer/NMultiplayerTest.cs:552-556`）。複本不這樣做：沒有任何觀測顯示它們，而不快進時複本的觀測也與這一局的相同（[§6](#sec-6)）。
+
+## 5. 封存
+
+移動到下一個地圖點是一個節點的最後一個決策。複本會記錄它，但不移動：它停在那裡並設定 `AtHorizon`，之後任何 `Step` 都會拋出例外（「sealed: the clone has left its node」，`Simulation/RunSession.cs:233-236, 338-345`）。如果一局在節點內結束（死亡或勝利），複本也隨之結束。所以在複本上的搜尋可以看到它所在節點的每個結果，卻看不到下一個節點的任何東西，這就是 SL 的邊界（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。
+
+`selftest` 從兩方面檢查封存：一個節點的複本，記下了它的移動，載入後停在視野邊界，並拒絕再走一步（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）；`run --check` 在它重播的每個節點上都檢查這一點（[整局 §6](/zh-tw/arch/simulator/runs/#sec-6)）。
+
+## 6. 存檔丟掉的東西，以及檢查
+
+存檔是用來繼續一局的，不是用來複製它的。它只保留遺物標記為要儲存的欄位，載入時其餘欄位像新遺物那樣設定。對狀態看得見的遺物來說，這個差別會進到觀測裡：鎖鎌（KUSARIGAMA）和磨刀石（WHETSTONE）的計數器，以及熔岩石（LAVA_ROCK），它在第一幕頭目的獎勵之後把自己停用，卻只儲存「已觸發」。此後的每個複本都把這個遺物顯示為正常。於是 SL 規劃器的各步遇到它們沒預料到的觀測，之後的每個戰鬥決策都要重新規劃：40 局 SL 對局裡有 2 局分別重新規劃了 148 次和 120 次（[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）。
+
+所以檢查點帶上每個遺物的簡單欄位，載入存檔之後再把它們放回去（2026-10-28）。如果載入的這一局的遺物和檢查點的不一致（按順序比），`RestoreRelics` 會拋出例外（`Sts2Ai.GameBridge/Checkpoint.cs:34-42`）。存放參考的欄位（一張牌、一個清單）不帶；真有要緊的，`run --check` 會顯示出來。`selftest` 手動把第一個遺物設為停用，檢查複本保留了它（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
+
+**檢查**：`run --check` 檢查一局的每個節點，不允許任何差異：複本必須逐一顯示這一局的觀測，移動之後停在視野邊界，並拒絕再走一步。五個角色，每個角色 86 局 9999 生命值、隨機宏觀策略，和 90 局正常生命值、L0，戰鬥用 `play`：共 9,747 個節點，全部精確重播，沒有遊戲錯誤（2026-10-28）。在檢查點帶上遺物欄位之前，7,335 個節點裡有 35 個在遺物狀態上不同。
+
+**載入並重播一個節點的開銷**，在那次檢查裡：正常生命值下平均 8–11 ms（最多 241 ms）；9999 生命值下頭目戰很長，平均 25–38 ms（最多 8.8 s，一個很長的頭目節點）。這些時間包括每一步都建一次觀測，那是檢查要比較的，搜尋不需要（[§7](#sec-7)）。
+
+## 7. SL 世界
+
+`NodeWorld(pump, clone)`（`Simulation/NodeWorld.cs`）是把節點的複本當作戰鬥世界。載入並重播之後，它就是決策時的真實戰鬥，帶著真實的抽牌順序和亂數流。
+
+- **一個動作**是複本的又一步：世界把這個動作交給複本的戰鬥策略，讓工作階段走一步，然後穩定下來。世界裡的卡牌提示交給 `p0`，和在這一局裡一樣，並記在各步之中。
+- **還原**沒辦法把一局活的對局倒回去，而一個行程只持有一局，所以它丟掉活的工作階段，保留各步；下次使用時，帶著這些步驟重新載入複本（`Simulation/NodeWorld.cs:23-24, 70-76`）。檢查點每個世界只讀一次，而不是每次載入讀一次。
+- **它停留在戰鬥裡**。戰鬥之外的決策會拋出例外（「search left the combat」）；戰鬥一結束，世界就不列出合法動作，也拒絕執行任何動作（`Simulation/NodeWorld.cs:48-62, 96`）。所以在它上面的搜尋止於戰鬥結束，由搜尋的葉節點評估結局（[戰鬥大腦：葉節點 §1](/zh-tw/arch/combat-brain/leaf/#sec-1)）。
+- **它的隱藏鍵**是 `HiddenState.Full`：除了 NoSL 世界的鍵裡有的東西，還有每個怪物到目前為止出過的招，以及戰鬥歷史裡屬於本回合的內容，作為多重集；觀測相同但未來不同的兩個狀態永遠不會被合併（[戰鬥 §4](/zh-tw/arch/simulator/combat/#sec-4)）。
+
+**開銷**。一次還原大約要 0.5 ms 載入檢查點，再加上從進入節點起每一步約 0.1 ms（2026-10-28），所以在一場長戰鬥的後段要 10–20 ms。[戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2) 的圖把它和 NoSL 世界的開銷放在一起。這是精確的代價：NoSL 世界從它在決策時建構的根開始重播，而 SL 世界要重播整個節點直到這個決策。SL 規劃器的應對方式是每個請求從它束裡的一個狀態出發搜尋一個回合，所以一個請求重播一次，然後往前搜尋（[SL 規劃器：束搜尋 §1](/zh-tw/arch/sl-planner/beam/#sec-1)）。
+
+## 8. 整局世界 <Badge text="規劃中" variant="caution" />
+
+能看到當前地圖點之後的 NoSL 搜尋，需要整局的世界：一個與這一局的公開紀錄（`RunView`：牌組、遺物、藥水、生命值、金幣、幕、層、地圖、已造訪的點）一致的 `SerializableRun`，隱藏的部分則取樣：
+
+- 每條亂數流；
+- 每個房間池（`RoomSet`）裡剩下的東西和它的計數器，依據規則：各幕的池子減去已見過的；
+- 抽取袋（grab bag）；
+- 機率計數器，能從獎勵歷史推斷的就推斷（[環境：資訊與節點 §1](/zh-tw/arch/environments/information/#sec-1)），否則用先驗。
+
+它會像複本那樣載入（[§4](#sec-4)），它的精確性會用一次觀測往返來檢驗：載入的世界必須顯示這一局的觀測。房間池和機率有多少能推斷、有多少必須來自先驗，還沒有定論（[參考 §8](/zh-tw/arch/simulator/reference/#sec-8)）。SL 下不需要這樣的世界：節點出口之後的任何東西都不能知道。

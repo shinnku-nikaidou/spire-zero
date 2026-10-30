@@ -98,8 +98,8 @@ SL **不能**知道的：關於之後節點的任何東西。一個 `?` 點最�
 
 - **特權資訊**是只在訓練時使用的隱藏狀態，用來讓學習目標的雜訊更少；它從來不是部署後模型的輸入（[學習 §4](/zh-tw/arch/learning/#sec-4)）。
 - **多重集**是會計算重複的集合：「三張打擊、兩張防禦和一張中和」，沒有順序。觀測送出的抽牌堆，按一個只取決於玩家所見內容的卡牌鍵排序，所以它的順序不帶任何資訊（[協定 §1](/zh-tw/arch/protocol/#sec-1)）。
-- **後驗**是根據已看到的東西更新過的機率分布。目前 NoSL 的世界在顯示相同意圖的招式中均勻抽取怪物的招式，並從它的意圖紀錄中取得它之前招式的順序（[模擬器 §3](/zh-tw/arch/simulator/#sec-3)）；完整的後驗還在規劃中（[Harness §3](/zh-tw/arch/harness/#sec-3)）。
-- **種子字串**從不離開主機：對局以它的雜湊命名（[協定 §2](/zh-tw/arch/protocol/#sec-2)），觀測裡也沒有放它的欄位。
+- **後驗**是根據已看到的東西更新過的機率分布。目前 NoSL 的世界在顯示相同意圖的招式中均勻抽取怪物的招式，並從它的意圖紀錄中取得它之前招式的順序（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）；完整的後驗還在規劃中（[Harness §3](/zh-tw/arch/harness/#sec-3)）。
+- **種子字串**從不離開宿主：對局以它的雜湊命名（[協定 §2](/zh-tw/arch/protocol/#sec-2)），觀測裡也沒有放它的欄位。
 - **挑選種子**是指看到結果之後才選要報告哪些種子；評估的種子集是固定的，並在使用前登記（[評估 §4](/zh-tw/arch/evaluation/#sec-4)）。
 
 ## 6. 灰色地帶
@@ -114,15 +114,15 @@ SL **不能**知道的：關於之後節點的任何東西。一個 `?` 點最�
 
 ## 7. SL 複本從哪裡來
 
-SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過的一切。兩者都來自**主機**：握有真實對局的那一方，自我對弈時是模擬器，真實遊戲裡是 Mod。
+SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過的一切。兩者都來自**宿主**：握有真實對局的那一方，自我對弈時是模擬器，真實遊戲裡是 Mod。
 
-- **在模擬器裡**（[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)的 R1–R3 級，由模擬器來打這一局）：承載這一局的工作行程握有真實狀態。當遊戲在到達地圖點時存檔，它就取一個**檢查點**：也就是 `RunManager.ToSave(null)` 產生的存檔（`Runs/RunManager.cs:670-709`） <Badge text="已核實" variant="success" />，無頭主機把它保留下來而不是寫入，再加上存檔會丟掉的每個遺物的簡單欄位（見下文）。複本就是這個檢查點加上節點的軌跡（到達後的每個決策），像遊戲的「繼續」按鈕載入存檔那樣載入，然後重播（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。
+- **在模擬器裡**（[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)的 R1–R3 級，由模擬器來打這一局）：承載這一局的工作行程握有真實狀態。當遊戲在到達地圖點時存檔，它就取一個**檢查點**：也就是 `RunManager.ToSave(null)` 產生的存檔（`Runs/RunManager.cs:670-709`） <Badge text="已核實" variant="success" />，無頭宿主把它保留下來而不是寫入，再加上存檔會丟掉的每個遺物的簡單欄位（見下文）。複本就是這個檢查點加上節點的軌跡（到達後的每個決策），像遊戲的「繼續」按鈕載入存檔那樣載入，然後重播（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。
 - **在真實遊戲裡**（R4）：Mod 在同一時刻、用同一段 GameBridge 程式碼（`Checkpoint.Take`），在記憶體裡取同樣的檢查點。它從不碰 Steam 會同步到雲端的 `current_run.save`。它還在遊戲提交每個動作的地方記錄節點內的每個動作，並在每個決策之前把兩者送給大腦（[Mod §6](/zh-tw/arch/mod/#sec-6)）。工作行程透過同一條「繼續」路徑載入它們，再重播這些動作。
 - **在線路上**，它們以兩種 SL 專用訊息傳送：節點入口的 `node_checkpoint`，以及節點內每個決策的 `node_action`（[協定 §2](/zh-tw/arch/protocol/#sec-2)）。Harness 保留最新的檢查點和之後的決策，並把它們作為複本交給大腦（[Harness §3](/zh-tw/arch/harness/#sec-3)）。
 
-**載入的存檔和不中斷的遊玩並不相同**。載入存檔會重新執行地圖的鉤子（`Runs/RunManager.cs:815-816`）和 `OnRunLoaded`（562-565），並丟掉每個沒有標記為要儲存的遺物欄位：遺物只儲存它的 `[SavedProperty]` 成員（`Models/RelicModel.cs:556-576`）。這些遺物欄位確實有影響：存檔丟掉的遺物狀態或計數改變了複本的每個觀測，複本於是不再和真實戰鬥一致，SL 規劃器每一步都要重新規劃（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。所以檢查點帶上每個遺物的簡單欄位（數字、旗標和列舉），在載入後放回去，`run --check` 現在找不到任何複本與其對局不同的節點。沒有檢查碼，也沒有後備：破壞我們正確性的遊戲怪癖，在它進入我們程式碼的地方修正（[前言 §1](/zh-tw/#sec-1)，規則 7）。
+**載入的存檔和不中斷的遊玩並不相同**。載入存檔會重新執行地圖的鉤子（`Runs/RunManager.cs:815-816`）和 `OnRunLoaded`（562-565），並丟掉每個沒有標記為要儲存的遺物欄位：遺物只儲存它的 `[SavedProperty]` 成員（`Models/RelicModel.cs:556-576`）。這些遺物欄位確實有影響：存檔丟掉的遺物狀態或計數改變了複本的每個觀測，複本於是不再和真實戰鬥一致，SL 規劃器每一步都要重新規劃（[模擬器：世界與 SL 複本 §6](/zh-tw/arch/simulator/worlds/#sec-6)）。所以檢查點帶上每個遺物的簡單欄位（數字、旗標和列舉），在載入後放回去，`run --check` 現在找不到任何複本與其對局不同的節點。沒有檢查碼，也沒有後備：破壞我們正確性的遊戲怪癖，在它進入我們程式碼的地方修正（[前言 §1](/zh-tw/#sec-1)，規則 7）。
 
-**NoSL 關閉這個通道**。兩種主機在兩種環境下都會取檢查點並保留節點內的各步（`Simulation/RunSession.cs:143-148`；Mod 裡是 `NodeRecord`），好讓在房間中途切換到 SL 也能運作；只有 SL 對局才會送出它們（`Brains/RunBrains.cs:48-100`、Mod 的 `Assist.cs:159`）。NoSL 大腦會拒絕它們：NoSL 下 Harness 遇到節點訊息就拋出例外，大腦伺服器對這一局的下一個決策回覆錯誤，主機把這一局當作失敗結束，這會讓它的報告作廢（[環境 §5](/zh-tw/arch/environments/#sec-5)）。
+**NoSL 關閉這個通道**。兩種宿主在兩種環境下都會取檢查點並保留節點內的各步（`Simulation/RunSession.cs:143-148`；Mod 裡是 `NodeRecord`），好讓在房間中途切換到 SL 也能運作；只有 SL 對局才會送出它們（`Brains/RunBrains.cs:48-100`、Mod 的 `Assist.cs:159`）。NoSL 大腦會拒絕它們：NoSL 下 Harness 遇到節點訊息就拋出例外，大腦伺服器對這一局的下一個決策回覆錯誤，宿主把這一局當作失敗結束，這會讓它的報告作廢（[環境 §5](/zh-tw/arch/environments/#sec-5)）。
 
 **決策行程從不讀存檔**。Brain 沒有引用遊戲組件，這由編譯器強制、由一個測試檢查（[§8](#sec-8)）。存檔只會包在 SL 請求裡、作為一個不透明字串送到工作行程。
 
@@ -132,16 +132,16 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
 
 **兩種環境**
 
-1. Brain 和 Protocol 不引用任何遊戲組件。已有：`selftest`（以 GameBridge 作為陰性對照）和 xUnit 的 `BoundaryTests`，後者也涵蓋 Harness（[模擬器 §9](/zh-tw/arch/simulator/#sec-9)）。
+1. Brain 和 Protocol 不引用任何遊戲組件。已有：`selftest`（以 GameBridge 作為陰性對照）和 xUnit 的 `BoundaryTests`，後者也涵蓋 Harness（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
 2. 搜尋的隨機性只來自呼叫方，從不來自遊戲的亂數流。由構造保證，沒有測試：大腦的種子由對局 id（本身就是種子字串的雜湊）和決策的索引混合而成（`Harness/Dispatcher.cs:208-227`），世界的建構種子和取樣種子則由它而來（[Harness §5](/zh-tw/arch/harness/#sec-5)）。
 3. 後備決策的數量為 0。實際上已有：不存在後備程式碼，Harness 遇到沒有涵蓋的畫面（surface）就拋出例外（xUnit `DispatcherTests`），而由隨機佔位策略做出的決策會讓報告作廢（`Harness/Reports.cs:35-38`、xUnit `EvalReportTests`；[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
-4. 真實遊戲裡 `NumReloads == 0`。規劃中，作為 Mod 決策日誌的一個欄位（[Mod §8](/zh-tw/arch/mod/#sec-8)）；目前沒有東西讀它。複本會載入存檔，所以無論在哪裡載入（工作行程，以及 `run --check`、`selftest` 和 `clones` 裡的主機行程），它們的次數都是 1 或更多。
+4. 真實遊戲裡 `NumReloads == 0`。規劃中，作為 Mod 決策日誌的一個欄位（[Mod §8](/zh-tw/arch/mod/#sec-8)）；目前沒有東西讀它。複本會載入存檔，所以無論在哪裡載入（工作行程，以及 `run --check`、`selftest` 和 `clones` 裡的宿主行程），它們的次數都是 1 或更多。
 5. 每個觀測欄位都有白名單測試。規劃中；目前最接近的檢查，是 `run --check` 和 `selftest` 對每個觀測做的 JSON 往返（[協定 §8](/zh-tw/arch/protocol/#sec-8)）。
 
 **NoSL**
 
 6. 反事實：相同的公開紀錄配上不同的隱藏狀態（抽牌順序、每條亂數流、怪物招式及其私有 AI 欄位、生成池），在固定的大腦種子下給出相同的決策。規劃中；最接近的檢查是 `selftest` 的「確定化後觀測不變」。
-7. 往返：狀態 → 觀測 → 建構 → 觀測′，得到完全相同的觀測。戰鬥部分已有：`selftest` 從觀測建構戰鬥，並要求它們再次顯示出這個觀測（[模擬器 §3](/zh-tw/arch/simulator/#sec-3)），而每個 NoSL 世界都會拒絕做不到這一點的建構（`Simulation/SimWorlds.cs:34-44`，在工作行程裡也一樣）。
+7. 往返：狀態 → 觀測 → 建構 → 觀測′，得到完全相同的觀測。戰鬥部分已有：`selftest` 從觀測建構戰鬥，並要求它們再次顯示出這個觀測（[模擬器：戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6)），而每個 NoSL 世界都會拒絕做不到這一點的建構（`Simulation/SimWorlds.cs:34-44`，在工作行程裡也一樣）。
 
 **SL**
 
@@ -150,7 +150,7 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
    - 可以擾動的 <Badge text="已核實" variant="success" />：每一幕的 `RoomSet` 中超過其計數器的條目（事件、弱遭遇、普通遭遇和菁英遭遇、頭目、第二個頭目、遠古之民；在開局時由 `GenerateRooms` 預先一次抽好，`Runs/RunManager.cs:743-767`，再透過計數器消耗，`Rooms/RoomSet.cs:70-108`）；UnknownMapPoint 亂數流（只在進入 `?` 時使用：`Odds/UnknownMapPointOdds.cs:123-177`，從 `Runs/RunManager.cs:985` 呼叫）；TreasureRoomRelics 亂數流（只在 `Runs/RunManager.cs:486` 使用）和共享遺物抽取袋的尾端；之後各幕的地圖種子（`Rng(seed, "act_N_map")`，`Map/StandardActMap.cs:113`）。
    - 不能擾動的，因為當前節點也共用它們：Shuffle、MonsterAi 和 Niche 亂數流、六條 Combat* 亂數流，以及玩家的 Rewards、Shops 和 Transformations 亂數流。
    - 每個可擾動的欄位都需要一個測試，證明當前節點從不讀它。
-10. 每個決策的複本查詢都記入日誌。規劃中。目前 `brain --wire FILE` 會記錄主機的節點訊息，`clones` 據此重建並檢查每個 SL 決策的複本（[Mod §12](/zh-tw/arch/mod/#sec-12)）；L0 在複本上的試探沒有記入日誌。
+10. 每個決策的複本查詢都記入日誌。規劃中。目前 `brain --wire FILE` 會記錄宿主的節點訊息，`clones` 據此重建並檢查每個 SL 決策的複本（[Mod §12](/zh-tw/arch/mod/#sec-12)）；L0 在複本上的試探沒有記入日誌。
 
 除了這些守護，還有測試環境本身管線的測試：Harness 在 NoSL 下拒絕節點檢查點，也不給 NoSL 任何複本（xUnit `DispatcherTests`）；戰鬥網路只在自己的環境裡打，舊網路在兩種環境裡都能打（`CombatNetTests`）；晉級門檻拒絕來自另一個環境的挑戰者（`GateTests`）；`--env` 預設為 NoSL 且大小寫皆可，`brain` 忽略冠軍檔案的環境（`CliTests`）；`selftest` 檢查複本保留了存檔會丟掉的遺物狀態（`Checks/SelfTest.Run.cs:140-180`）。
 

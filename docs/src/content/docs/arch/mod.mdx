@@ -120,7 +120,7 @@ interface ISurfaceAdapter
 
 ## 5. 与大脑的连接
 
-- **Socket**：Unix 域套接字 `~/.local/state/sts2ai/brain.sock`（设置了 `$XDG_STATE_HOME` 时放在它下面），传输 JSON lines（[协议 §2](/arch/protocol/#sec-2)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。服务端已经实现：SimWorker 的 `brain` 命令在这个套接字上等待，`run --brain` 已经作为宿主连上它跑模拟对局（[模拟器 §5](/arch/simulator/#sec-5)）。
+- **Socket**：Unix 域套接字 `~/.local/state/sts2ai/brain.sock`（设置了 `$XDG_STATE_HOME` 时放在它下面），传输 JSON lines（[协议 §2](/arch/protocol/#sec-2)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。服务端已经实现：SimWorker 的 `brain` 命令在这个套接字上等待，`run --brain` 已经作为宿主连上它跑模拟对局（[模拟器：整局 §8](/arch/simulator/runs/#sec-8)）。
 - **Steam 的容器**：Steam 在它的 Linux 运行时容器（pressure-vessel）里启动游戏。容器与主机共享主目录，但有自己的 `$XDG_RUNTIME_DIR`，放在那里的套接字游戏访问不到，所以套接字放在主目录下。大脑创建它的目录时，只允许用户本人访问。
 - **环境**：由面板卡头上的 SL/NoSL 开关选定（[环境](/arch/environments/)），默认是 SL；这个选择和 Mod 的其它设置一起存在 `~/.local/state/sts2ai/settings.json`，和套接字放在一起，不在游戏的档案目录里（[输出层 §2](/arch/output/#sec-2)）。`hello` 带上它；对大脑来说，它在一局里固定不变：在一局中途切换时，Mod 发出 `run_end`（`aborted`）和新的 `hello`，大脑从这一刻起当作新的一局。一个大脑同时服务两种环境：`brain` 对 NoSL 宿主用 `--policy` 的战斗大脑（冠军的 PIMC），对 SL 宿主用 `--sl-policy` 的战斗大脑（默认是 SL 规划器），宏观大脑相同（[Harness §4](/arch/harness/#sec-4)）。
 - **连不上大脑**：辅助模式下面板显示「No brain running」（没有大脑在运行）；自动游玩时 Mod 暂停。连接每 2 秒重试一次；新的连接从 `hello` 重新开始。
@@ -128,7 +128,7 @@ interface ISurfaceAdapter
 
 ## 6. SL 导出
 
-SL 下，大脑在当前节点的精确克隆上规划战斗（[环境：信息与节点 §7](/arch/environments/information/#sec-7)）。worker 用节点的检查点，加上进入节点以来做过的每一个决策来构建克隆；决策的写法与模拟器自己的轨迹相同（[模拟器 §7](/arch/simulator/#sec-7)）。Mod 在两种环境下都把这两样东西记在内存里（`NodeRecord`），所以在任何房间里勾上 SL 都能马上用；只有 SL 才把它们发出去。
+SL 下，大脑在当前节点的精确克隆上规划战斗（[环境：信息与节点 §7](/arch/environments/information/#sec-7)）。worker 用节点的检查点，加上进入节点以来做过的每一个决策来构建克隆；决策的写法与模拟器自己的轨迹相同（[模拟器：世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)）。Mod 在两种环境下都把这两样东西记在内存里（`NodeRecord`），所以在任何房间里勾上 SL 都能马上用；只有 SL 才把它们发出去。
 
 - **检查点**：在游戏到达地图点、存档的那一刻，用 GameBridge 的 `Checkpoint.Take` 取：在 `SaveManager.SaveRun` 上挂一个前缀（prefix），只在它的「已完成房间」为空时取，与模拟器取检查点是同一时刻。开局时游戏以同样方式进入第一个地图点。继续游戏（Continue）时，游戏重新进入存档所在的地图点，但不再存档（`RunManager.LoadIntoLatestMapCoord`）：如果存档是到达时存的，就在这里取检查点；如果是房间里更晚的存档（战斗胜利后、Ancient 事件后），房间的开头已经不在了，这个节点就没有克隆。Mod 从不写会被云同步的 `current_run.save`，也不写档案目录下的任何其他文件。
 - **步骤**：玩家的每个决策，都在游戏提交它的地方读出来；这些入口也正是模拟器自己调用的入口（[GameBridge §4](/arch/gamebridge/#sec-4)），所以在游戏执行之前就能精确知道这一步。未决问题 1 因此选了钩子，而不是比较前后的状态：状态比较分不出两张一样的牌，玩家操作得比画面稳定还快时也会漏掉动作。
@@ -154,7 +154,7 @@ SL 下，大脑在当前节点的精确克隆上规划战斗（[环境：信息�
 
 驱动在真实游戏里自己完整地打一局又一局，用于 R4 评估：R4 是[仿真到实机阶梯](/arch/evaluation/#sec-1)里真实游戏的那一级。
 
-- **按种子开局**：调用 `NGame.StartNewSingleplayerRun(character, shouldSave:false, acts, modifiers, seed, GameMode.Standard, asc)`（`Nodes/NGame.cs:1137`），幕的选择与大厅（lobby）的做法相同（[模拟器 §5.1](/arch/simulator/#sec-5.1)）。另一种办法是在按下 Confirm 按钮之前设置 `NGame.DebugSeedOverride`（`AutoSlayer.cs:500-502`）。
+- **按种子开局**：调用 `NGame.StartNewSingleplayerRun(character, shouldSave:false, acts, modifiers, seed, GameMode.Standard, asc)`（`Nodes/NGame.cs:1137`），幕的选择与大厅（lobby）的做法相同（[模拟器：整局 §2](/arch/simulator/runs/#sec-2)）。另一种办法是在按下 Confirm 按钮之前设置 `NGame.DebugSeedOverride`（`AutoSlayer.cs:500-502`）。
   `shouldSave:false` 时 `current_run.save` 不会被改动，参数文档里这样写（`NGame.cs:1130`） <Badge text="已核实" variant="success" />。不过局历史和进度大概仍会写入 <Badge text="推断" variant="caution" />，所以自动跑局只用带 Mod 的档案。
 - **一局结束**：检测到死亡（所有玩家都死了）或 `WinRun`；记录 `run_end`；回到主菜单；从预先登记的种子列表里取下一个种子。
 - **速度**：只在自动跑局期间设置 `PrefsSave.FastMode = Instant`。这里有两个游戏行为要注意：非编辑器构建在启动时会把 Instant 降为 Fast，而设置会在退出时保存。所以在自动跑局停止时和游戏退出时，Mod 都要把用户原来的值恢复回去。

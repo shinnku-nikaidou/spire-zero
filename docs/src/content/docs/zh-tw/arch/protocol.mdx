@@ -64,10 +64,10 @@ host → brain   node_action{node_index, seq, action}  // every decision in the 
 | `executed` | host → brain | 某個決策實際執行了哪個動作、是否成功，以及可能的錯誤 |
 | `cancel` | host → brain | 狀態已經往前走了；brain 丟棄這次搜尋 |
 | `run_end` | host → brain | 一局結束：是否獲勝、層數、原因（`won`、`lost`、觸及決策上限的 `truncated`、`failed` 或 `aborted`） |
-| `node_checkpoint` | host → brain | 僅 SL：進入節點時的檢查點，即存檔 `RunManager.ToSave(null)` 加上它丟掉的遺物欄位（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)） |
+| `node_checkpoint` | host → brain | 僅 SL：進入節點時的檢查點，即存檔 `RunManager.ToSave(null)` 加上它丟掉的遺物欄位（[模擬器：世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)） |
 | `node_action` | host → brain | 僅 SL：節點內做出的每個決策，用 `seq` 從 0 編號，在下一個決策之前傳送，形式是 `surface action` 文字（選牌提示的選擇用遊戲自己的索引） |
 
-這兩種 SL 訊息按環境開關（[Mod §6](/zh-tw/arch/mod/#sec-6)）。NoSL 日誌裡只要出現其中任何一種，這份日誌就無效；NoSL 下 brain 會在下一個決策時用 `error` 回應它們。節點從 0 編號，從宿主看到的第一個節點算起（Mod 可能中途才加入一局）；檢查點加上它之後的決策就是這個節點的複本（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。
+這兩種 SL 訊息按環境開關（[Mod §6](/zh-tw/arch/mod/#sec-6)）。NoSL 日誌裡只要出現其中任何一種，這份日誌就無效；NoSL 下 brain 會在下一個決策時用 `error` 回應它們。節點從 0 編號，從宿主看到的第一個節點算起（Mod 可能中途才加入一局）；檢查點加上它之後的決策就是這個節點的複本（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。
 
 一局裡正常的訊息往來：
 
@@ -215,7 +215,7 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 
 ## 7. 世界 API
 
-搜尋從不直接接觸遊戲，而是從這個 API 拿到**世界**：可以觀測、執行動作、做快照和恢復的模擬戰鬥。型別定義在 Protocol 裡（`World.cs`），所以 Brain 不引用遊戲也能使用；實作在 SimWorker 裡（[模擬器 §6](/zh-tw/arch/simulator/#sec-6)）。NoSL 和 SL 的世界有何不同，見 [環境：世界 §1](/zh-tw/arch/environments/worlds/#sec-1)。
+搜尋從不直接接觸遊戲，而是從這個 API 拿到**世界**：可以觀測、執行動作、做快照和恢復的模擬戰鬥。型別定義在 Protocol 裡（`World.cs`），所以 Brain 不引用遊戲也能使用；實作在 SimWorker 裡（[模擬器：世界與 SL 複本 §1](/zh-tw/arch/simulator/worlds/#sec-1)）。NoSL 和 SL 的世界有何不同，見 [環境：世界 §1](/zh-tw/arch/environments/worlds/#sec-1)。
 
 ```csharp
 public enum PlayEnvironment { NoSL, SL }
@@ -250,11 +250,11 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - 世界裡彈出的選牌提示在世界內部回答。v0 交給 `p0`，也就是這一局自己回答提示所用的固定規則，所以世界裡的選擇和這一局一樣；把每個選項變成搜尋分支還在規劃中（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1) 第 7 條）。
 - `Candidate` 是一個評過分的動作：它在各個世界上的平均估值、95% 信賴區間的半寬，以及世界的個數。
 
-SL 封存：節點複本在節點出口處停下（`AtHorizon`），之後的任何一步都會拋出例外；SL 世界在它那場戰鬥結束後，任何動作都會拋出例外，所以搜尋永遠不會離開這個房間（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。
+SL 封存：節點複本在節點出口處停下（`AtHorizon`），之後的任何一步都會拋出例外；SL 世界在它那場戰鬥結束後，任何動作都會拋出例外，所以搜尋永遠不會離開這個房間（[模擬器：世界與 SL 複本 §7](/zh-tw/arch/simulator/worlds/#sec-7)）。
 
 ### 7.1 worker 訊息
 
-worker 行程池（[模擬器 §8](/zh-tw/arch/simulator/#sec-8)）不會一步一步地透過線路操作世界：一次行程間往返（幾十 µs）和一個模擬步（約 0.1 ms）的開銷相當，而搜尋每個決策要走幾千步。所以一個請求要的是一整塊工作：一個世界的搜尋、SL 規劃器的一個回合，或者 L0 在節點複本上對一個決策的試探（`Worker.cs`）：
+worker 行程池（[模擬器：工作行程池 §3](/zh-tw/arch/simulator/pool/#sec-3)）不會一步一步地透過線路操作世界：一次行程間往返（幾十 µs）和一個模擬步（約 0.1 ms）的開銷相當，而搜尋每個決策要走幾千步。所以一個請求要的是一整塊工作：一個世界的搜尋、SL 規劃器的一個回合，或者 L0 在節點複本上對一個決策的試探（`Worker.cs`）：
 
 ```csharp
 // The worker's first line, once it has booted.

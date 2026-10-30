@@ -19,7 +19,7 @@ Terms are grouped by area. Each entry links to the page that covers it in depth.
 | ascension (A0) | Difficulty level; A0 is the base game. |
 | Silent, Ironclad | Playable characters. The project starts with the Silent. |
 | card prompt | When the game asks the player to choose cards (discard, exhaust, upgrade, transform …). |
-| TestMode | The game's built-in test switch. It turns off presentation, but also changes a few rules, which the simulator patches back ([Simulator §1](/en/arch/simulator/#sec-1)). |
+| TestMode | The game's built-in test switch. It turns off presentation, but also changes a few rules, which the simulator patches back ([Simulator: headless host §5](/en/arch/simulator/headless/#sec-5)). |
 
 ## Project components
 
@@ -31,8 +31,8 @@ Terms are grouped by area. Each entry links to the page that covers it in depth.
 | SimWorker | A process that runs the real game DLL headless, for search worlds and self-play ([Simulator](/en/arch/simulator/)). |
 | Mod | The thin host inside the real game: observe, ask, render or execute ([Mod](/en/arch/mod/)). |
 | Harness | The dispatcher in the decision process: record, routing, budget, logs ([Harness](/en/arch/harness/)). |
-| RunSession | The SimWorker class that plays a whole run headless through every decision surface ([Simulator §5](/en/arch/simulator/#sec-5)). |
-| CombatBuilder | Builds a simulator combat from an observation ([Simulator §3](/en/arch/simulator/#sec-3)). |
+| RunSession | The SimWorker class that plays a whole run headless through every decision surface ([Simulator: whole runs §1](/en/arch/simulator/runs/#sec-1)). |
+| CombatBuilder | Builds a simulator combat from an observation ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5)). |
 | Pump | The single-threaded scheduler that runs all game async code on one thread, so results are deterministic. |
 | host | Whatever holds the true run: the mod in the real game, or a SimWorker in self-play. |
 | headless | Running the game's logic without graphics, window or input. |

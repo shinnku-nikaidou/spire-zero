@@ -124,7 +124,7 @@ flowchart TD
 
 - <Badge text="已核实" variant="success" /> 表示这条说法已在游戏源码里核对过。<Badge text="推断" variant="caution" /> 表示它是推断出来的，在依赖它之前必须先核实。
 - 像 `Runs/RunManager.cs:670-709` 这样的源码位置，是反编译后 `MegaCrit.Sts2.Core` 程序集里的路径。反编译代码只保存在本地（`tmp/decompiled/sts2/`），不在仓库里。Godot 节点类（`N*`）按文件名查找，文件名是唯一的。
-- 「模拟器 §5.1」这样的引用指向某页的编号小节。它的锚点在三种语言里都是 `#sec-5.1`（`/arch/simulator/#sec-5.1`）。代码注释写作 `docs: simulator §5.1`。
+- 「Harness §3」这样的引用指向某页的编号小节。它的锚点在三种语言里都是 `#sec-3`（`/arch/harness/#sec-3`）。代码注释写作 `docs: harness §3`。
 - 由几页组成的一章（例如宏观大脑）在引用时还要写出页名：「宏观大脑：搜索 §2」就是 `/arch/macro-brain/search/#sec-2`，代码注释写作 `docs: macro-brain/search §2`。
 
 **怎么维护**

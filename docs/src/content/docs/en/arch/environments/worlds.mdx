@@ -13,7 +13,7 @@ The two environments differ in what search may know ([Information and the node](
 
 A **world** is a simulator state that search may explore: a running game it can observe, act in, save (snapshot) and go back to (restore). Search never touches the real game. It asks for worlds through the world API ([Protocol §7](/en/arch/protocol/#sec-7)), plays its candidate lines in them, and compares how the lines end.
 
-Today every world is a **combat world**: one combat, which the combat brain searches ([Combat brain](/en/arch/combat-brain/)). The macro brain's searches outside combat use the SL clone directly ([Macro brain: search §2](/en/arch/macro-brain/search/#sec-2)); run worlds for NoSL, which would let it look past the current node, are planned ([Simulator §6](/en/arch/simulator/#sec-6)).
+Today every world is a **combat world**: one combat, which the combat brain searches ([Combat brain](/en/arch/combat-brain/)). The macro brain's searches outside combat use the SL clone directly ([Macro brain: search §2](/en/arch/macro-brain/search/#sec-2)); run worlds for NoSL, which would let it look past the current node, are planned ([Simulator: worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)).
 
 Where worlds come from is the one thing the environment changes:
 
@@ -23,15 +23,15 @@ Where worlds come from is the one thing the environment changes:
 | how | build a combat that shows the observation, then draw the hidden state from a seed (*determinize*) | load the checkpoint as the game's Continue does, replay the steps |
 | how many per decision | K, each from its own seed | one |
 | what it is | one plausible guess of the hidden state | the exact real combat |
-| class | `SimWorlds.NoSL` ([Simulator §6](/en/arch/simulator/#sec-6)) | `NodeWorld`, on the node's clone ([Simulator §7](/en/arch/simulator/#sec-7)) |
+| class | `SimWorlds.NoSL` ([Simulator: worlds and the SL clone §2](/en/arch/simulator/worlds/#sec-2)) | `NodeWorld`, on the node's clone ([Simulator: worlds and the SL clone §7](/en/arch/simulator/worlds/#sec-7)) |
 
-Both are built in worker processes from what the request carries ([Simulator §8](/en/arch/simulator/#sec-8)). A NoSL request carries the observation and never the true state, so a NoSL worker cannot see more than the player.
+Both are built in worker processes from what the request carries ([Simulator: the worker pool §5](/en/arch/simulator/pool/#sec-5)). A NoSL request carries the observation and never the true state, so a NoSL worker cannot see more than the player.
 
 ## 2. Determinization: guessing the hidden state
 
 NoSL's search cannot see the hidden state, but it can guess it. To **determinize** is to replace everything the player cannot know with a concrete sample that agrees with everything the player has seen. On one sample, the game is again a game of perfect information, and search can play it like any other simulation.
 
-A NoSL world starts as a combat built to show the observation exactly (`CombatBuilder.Setup`, [Simulator §3](/en/arch/simulator/#sec-3)). Then `Determinize(seed)` draws the hidden part from the seed (`Simulation/CombatSession.cs:237-283`):
+A NoSL world starts as a combat built to show the observation exactly (`CombatBuilder.Setup`, [Simulator: combats §5](/en/arch/simulator/combat/#sec-5)). Then `Determinize(seed)` draws the hidden part from the seed (`Simulation/CombatSession.cs:237-283`):
 
 - every seeded random stream of the run, of the player and of each monster is reseeded: shuffles, generated cards, random targets, monster AI;
 - the draw pile is put in an order that depends only on what the player sees (sorted by card key), then shuffled with the seed;
@@ -44,7 +44,7 @@ The figure takes a real start of a round from the training data of the combat ne
 
 <Determinize client:visible lang="en" />
 
-The champion's NoSL combat brain searches 8 worlds at 300 nodes each by default ([Combat brain §5](/en/arch/combat-brain/#sec-5)). A world is cheap once built (a restore costs about 0.3 ms plus 0.07 ms per replayed action, [Simulator §4](/en/arch/simulator/#sec-4)), but every world multiplies the search, so K trades accuracy against time.
+The champion's NoSL combat brain searches 8 worlds at 300 nodes each by default ([NoSL PIMC: budget §1](/en/arch/pimc/budget/#sec-1)). A world is cheap once built (a restore costs about 0.3 ms plus 0.07 ms per replayed action, [Simulator: combats §2](/en/arch/simulator/combat/#sec-2)), but every world multiplies the search, so K trades accuracy against time.
 
 ## 3. Strategy fusion
 
@@ -52,7 +52,7 @@ Searching each world as if it were the truth has a known flaw. In one world the 
 
 There are two places the error can enter.
 
-- **At the root.** If each world simply picked its own best first action, the AI would play as if it knew the world. NoSL's PIMC never does this: it scores each first action by its mean over the K worlds, and plays the first action with the best mean ([Combat brain §2](/en/arch/combat-brain/#sec-2)). This is what "no strategy fusion" in the comparison below means.
+- **At the root.** If each world simply picked its own best first action, the AI would play as if it knew the world. NoSL's PIMC never does this: it scores each first action by its mean over the K worlds, and plays the first action with the best mean ([NoSL PIMC: search §2](/en/arch/pimc/search/#sec-2)). This is what "no strategy fusion" in the comparison below means.
 - **Below the root.** After the first action, each world's search goes on to the end of the turn on its own, and there it still sees its world's future. A line in which the player must choose before a hidden card is drawn gets, in each world, the choice that suits that world. Averaging the first actions does not remove this. PIMC plans again after every action, so what it plays is always a first action, but its values can still favour lines whose later steps are fused.
 
 The figure has one decision with two worlds: the top card of the draw pile is either a Strike or a Defend. Playing safe is worth the same in both. The other first action leads to a second choice that must be made before the top card is drawn. Move the slider to change how likely each world is, and compare what each world's own search thinks, what PIMC's average thinks, and what the line is really worth to a player who cannot see the card.
@@ -90,19 +90,19 @@ flowchart LR
 | | NoSL | SL |
 |---|---|---|
 | problem | hidden state and chance: the action that is best on average over the possible worlds | deterministic: the best line in the one world |
-| where worlds come from | public record → build and determinize ([Simulator §6](/en/arch/simulator/#sec-6)) | the node's clone ([Simulator §7](/en/arch/simulator/#sec-7)) |
+| where worlds come from | public record → build and determinize ([Simulator: worlds and the SL clone §2](/en/arch/simulator/worlds/#sec-2)) | the node's clone ([Simulator: worlds and the SL clone §4](/en/arch/simulator/worlds/#sec-4)) |
 | number of worlds | K, averaged by first action (no fusion at the root) | 1; its best line is correct, nothing to fuse |
 | chance | K determinized worlds drawn at the root; inside one world's search there is none | none at all |
-| combat algorithm | PIMC: search each world to the end of the turn, average by first action, search again after every action ([Combat brain §2](/en/arch/combat-brain/#sec-2)) | the SL planner: a beam over the whole combat's turns, each turn searched in full, pruned by the best line that ends the combat; it follows its plan, and plans again where a step does not go as planned or the plan runs out ([Combat brain §3](/en/arch/combat-brain/#sec-3)) |
+| combat algorithm | PIMC: search each world to the end of the turn, average by first action, search again after every action ([NoSL PIMC](/en/arch/pimc/)) | the SL planner: a beam over the whole combat's turns, each turn searched in full, pruned by the best line that ends the combat; it follows its plan, and plans again where a step does not go as planned or the plan runs out ([The SL planner §3](/en/arch/sl-planner/#sec-3)) |
 | transpositions keyed by | observation, draw order, the streams' positions, the monsters' queued moves | the same, plus the monsters' moves so far and this turn's combat history |
 | budget is spent on | samples × depth | depth and breadth: a combat can usually be searched to its end |
 | past the horizon | – (no search crosses a node) | the world stops (`AtHorizon`); nothing searches past it |
 | macro brain | afterstates predicted from the screen, valued by V | the same brain; with `--afterstates clone` it plays each option on the clone ([Macro brain: search §2](/en/arch/macro-brain/search/#sec-2)) |
 | value | V(observation) | the same V |
 
-The leaves of both searches are valued from public information only: the observation, the record of the monsters' intents so far, and, with `--leaf-prices v`, V's value of the run view ([Combat brain §4](/en/arch/combat-brain/#sec-4)). So the true streams cannot leak in through evaluation. The macro brain and V never read the environment either; in SL with `--afterstates clone`, Harness hands the macro side the node's clone, so L0's search differs while the brain stays the same.
+The leaves of both searches are valued from public information only: the observation, the record of the monsters' intents so far, and, with `--leaf-prices v`, V's value of the run view ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)). So the true streams cannot leak in through evaluation. The macro brain and V never read the environment either; in SL with `--afterstates clone`, Harness hands the macro side the node's clone, so L0's search differs while the brain stays the same.
 
-PIMC on the clone (`--policy pimc` with `--env SL`) also exists: it searches only the current turn of the one world, sending one request per first action ([Simulator §8](/en/arch/simulator/#sec-8)), and stays as the SL planner's baseline.
+PIMC on the clone (`--policy pimc` with `--env SL`) also exists: it searches only the current turn of the one world, sending one request per first action ([Simulator: the worker pool §3](/en/arch/simulator/pool/#sec-3)), and stays as the SL planner's baseline.
 
 ## 6. One V for both environments
 

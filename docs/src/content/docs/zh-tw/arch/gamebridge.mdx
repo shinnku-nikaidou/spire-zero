@@ -19,7 +19,7 @@ GameBridge（`Sts2Ai.GameBridge`）是遊戲與 [協定](/zh-tw/arch/protocol/) 
 ## 1. 職責與規則
 
 - GameBridge 是唯一把遊戲物件變成協定（observe、legal）、把協定動作變成遊戲呼叫（start）的程式碼。SimWorker 和 Mod 共用它，所以 R1–R4（[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)的各級）走同一條程式碼路徑。
-- 它引用遊戲 DLL、Protocol 和 Harmony（遊戲自帶的 `0Harmony.dll`，用於 [§5](#sec-5)）。從不引用 Brain，也從不引用 Godot 節點（`N*` 型別），即遊戲 UI 場景裡的物件。需要節點的工作放在宿主轉接器裡：Mod 的 UI 轉接器（[Mod §4](/zh-tw/arch/mod/#sec-4)），以及模擬器裡複製過來的節點邏輯（[模擬器 §5.2](/zh-tw/arch/simulator/#sec-5.2)）。
+- 它引用遊戲 DLL、Protocol 和 Harmony（遊戲自帶的 `0Harmony.dll`，用於 [§5](#sec-5)）。從不引用 Brain，也從不引用 Godot 節點（`N*` 型別），即遊戲 UI 場景裡的物件。需要節點的工作放在宿主轉接器裡：Mod 的 UI 轉接器（[Mod §4](/zh-tw/arch/mod/#sec-4)），以及模擬器裡複製過來的節點邏輯（[模擬器：整局 §3](/zh-tw/arch/simulator/runs/#sec-3)）。
 - observe 只讀取 UI 顯示的內容（公平性白名單，[協定 §8](/zh-tw/arch/protocol/#sec-8)）。每個欄位都取自 UI 繫結的那個屬性（`DisplayAmount`、`IsVisible`、`ShowCounter`，意圖透過 `GetSingleDamage`），從不取自內部狀態。
 - start 使用與 UI 相同的入口。從不直接修改狀態，也從不使用跳過檢查的命令（`CardCmd.AutoPlay`、直接 `new PlayCardAction`、`PlayerCmd.EndTurn`）。
 - **推進到穩定（settle）**，即讓遊戲一直執行到下一個決策點，由各個宿主自己負責。GameBridge 只為此提供純邏輯的判定函式（[§6](#sec-6)）。
@@ -81,11 +81,11 @@ GameBridge（`Sts2Ai.GameBridge`）是遊戲與 [協定](/zh-tw/arch/protocol/) 
 | 丟棄藥水 | `DiscardPotionGameAction` | 相同 |
 | 地圖 | `RequestEnqueue(VoteForMapCoordAction(…))` | `NMapScreen.OnMapPointSelectedLocally`（由節點負責鎖定和動畫） |
 | 獎勵 | `RewardsSetSynchronizer.SelectLocalReward` / `SkipLocalRewardsSet` | 獎勵按鈕的處理函式 |
-| 離開獎勵畫面 | `ProceedFromTerminalRewardsScreen` / `ActChangeSynchronizer.SetLocalPlayerReady`（[模擬器 §5.2](/zh-tw/arch/simulator/#sec-5.2)） | 繼續按鈕 |
+| 離開獎勵畫面 | `ProceedFromTerminalRewardsScreen` / `ActChangeSynchronizer.SetLocalPlayerReady`（[模擬器：整局 §4](/zh-tw/arch/simulator/runs/#sec-4)） | 繼續按鈕 |
 | 卡牌獎勵 | 回答 `GetSelectedCardReward`（模擬器的選擇器） | 卡牌槽 / 略過 / 重骰按鈕 |
 | 選牌提示 | 回答 `CardSelectCmd.Selector`（模擬器） | 介面上的卡牌槽 + 確認。這條 UI 路徑會記錄一個 `PlayerChoice` 供重播使用。`LocalSelector` 會跳過 `SyncLocalChoice`（`CardSelectCmd.cs:264-300`） <Badge text="已核實" variant="success" />，因此會破壞 SL 重播 |
 | 事件 | `ChooseLocalOption(i)` | 選項按鈕 |
-| 商店 | `entry.OnTryPurchaseWrapper(inv)`；移除卡牌由移除節點標記為已用（模擬器裡由一個無頭補丁完成，[模擬器 §5.2](/zh-tw/arch/simulator/#sec-5.2)） | 同一個呼叫（對商人節點呼叫 `ForceClick` 沒有任何效果 <Badge text="已核實" variant="success" />） |
+| 商店 | `entry.OnTryPurchaseWrapper(inv)`；移除卡牌由移除節點標記為已用（模擬器裡由一個無頭補丁完成，[模擬器：無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)） | 同一個呼叫（對商人節點呼叫 `ForceClick` 沒有任何效果 <Badge text="已核實" variant="success" />） |
 | 休息處 | `ChooseLocalOption(i)` | 選項按鈕 |
 | 財寶房 | `PickRelicLocally(i)` / `SkipRelicLocally()` | 寶箱按鈕 + 遺物按鈕 |
 | 水晶球 | `SetTool` + `CellClicked(cell)` | 占卜按鈕 + 點選格子 |
@@ -109,7 +109,7 @@ GameBridge 如何填寫 `ChoiceContext`（[協定 §4](/zh-tw/arch/protocol/#sec
 
 當前懸而未決的是哪個介面，由宿主判斷。這取決於 UI 會顯示什麼，而只有宿主在追蹤這件事。
 
-- **模擬器**：`RunSession.Decide`（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）先看開啟著的獎勵組（來自 `testSelector`）和水晶球小遊戲，再看房間型別和每種房間的 `RoomProgress`。推進到穩定的條件是：戰鬥中為 `WaitingForInput`；否則是 Pump 已空且執行器空閒。
+- **模擬器**：`RunSession.Decide`（[模擬器：整局 §3](/zh-tw/arch/simulator/runs/#sec-3)）先看開啟著的獎勵組（來自 `testSelector`）和水晶球小遊戲，再看房間型別和每種房間的 `RoomProgress`。推進到穩定的條件是：戰鬥中為 `WaitingForInput`；否則是 Pump 已空且執行器空閒。
 - **Mod**：可見的介面或覆蓋層，加上節點空閒檢查，並且要持續約 3 個影格（[Mod §3](/zh-tw/arch/mod/#sec-3)）。
 
 GameBridge 只保留純邏輯的判定：`CombatActions.WaitingForInput`、`RewardActions.IsTerminal`，以及各個合法動作清單。
@@ -126,7 +126,7 @@ GameBridge 只保留純邏輯的判定：`CombatActions.WaitingForInput`、`Rewa
 | 按 UI 排序的清單中的條目（獎勵、事件選項、商店槽位、休息處選項、財寶房的遺物） | 遊戲裡的索引（順序是公開的） |
 | 地圖點 | `col,row` |
 
-對 Mod 而言：SL 複本必須給出相同的編號，所以載入時要把 id 快進（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。
+對 Mod 而言：SL 複本必須給出相同的編號，所以載入時要把 id 快進（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。
 
 ## 8. 事件流
 
@@ -147,7 +147,7 @@ GameBridge 只保留純邏輯的判定：`CombatActions.WaitingForInput`、`Rewa
 
 1. 重新反編譯遊戲。
 2. 重新建置。
-3. 執行 selftest 和決策介面覆蓋測試（[模擬器 §9](/zh-tw/arch/simulator/#sec-9)）。
+3. 執行 selftest 和決策介面覆蓋測試（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
 4. 生成受影響簽章的差異清單。
 
 </Steps>

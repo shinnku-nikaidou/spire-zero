@@ -1,0 +1,112 @@
+---
+title: 無頭宿主
+description: 遊戲自己的 sts2.dll 如何在沒有引擎的普通 .NET 行程裡執行，原生存根和每一組補丁做什麼，為什麼關掉分層編譯，以及單執行緒的 Pump 如何讓遊戲具有確定性。
+sidebar:
+  label: 無頭宿主
+---
+import { Steps } from '@astrojs/starlight/components';
+import PumpDemo from '../../../../../components/book/PumpDemo.svelte';
+
+遊戲預期在 Godot 引擎裡執行，有視窗、有渲染器，還有一個每秒呼叫它六十次的主迴圈。本頁說明 `Sts2Ai.SimWorker` 如何在完全沒有這些的情況下執行同一份程式碼：什麼取代了引擎、哪些遊戲方法被打上補丁以及為什麼，以及一個單執行緒的排程器 `Pump` 如何把遊戲的非同步程式碼變成一個確定性的步進函式。模擬器的其餘一切都建立在它之上。
+
+## 1. 模型層與節點
+
+殺戮尖塔 2 是一個用 C# 寫成、執行在 .NET 9.0.7 上的 Godot 4.5.1 應用程式。它的程式碼分成兩層：
+
+- **模型層**：普通的 C# 物件，涵蓋規則所涉及的一切：這一局（`RunState`、`RunManager`）、戰鬥（`CombatState`、`CombatManager`）、生物、卡牌、牌堆、能力、遺物、藥水、房間、事件、亂數流。遊戲邏輯是 `async` 的：打出一張牌是一個動作，它要 await 自己的鉤子、傷害和後續效果。
+- **節點**：Godot 場景物件，即名為 `N…` 的類別（`NGame`、`NCombatRoom`、`NMapScreen`、`NRewardsScreen`…）。它們繪製模型、為模型加上動畫，並把玩家的點擊轉成對模型的呼叫。
+
+無頭執行時只跑模型層。節點從不被建立；在畫面的程式碼決定接下來發生什麼的地方（戰鬥之後開啟哪個畫面、「繼續」按鈕做什麼），改由模擬器的驅動程式來做（[整局 §3](/zh-tw/arch/simulator/runs/#sec-3)）。讓模型層能獨立執行的有三樣東西：引擎原生函式的存根（[§3](#sec-3)）、Harmony 補丁（[§4](#sec-4)），以及遊戲自己的 `TestMode`（[§5](#sec-5)）。
+
+## 2. 啟動
+
+`HeadlessGame.Boot`（`Runtime/HeadlessGame.cs:25-56`）每個行程執行一次。它先從遊戲的 `release_info.json` 讀出遊戲版本，然後：
+
+<Steps>
+
+1. `GodotNativeStub.Install()`：用存根填滿引擎的函式表（[§3](#sec-3)）。
+2. `HeadlessPatches.Apply()`：安裝所有補丁，GameBridge 的卡牌提示上下文補丁最先（[§4](#sec-4)）。
+3. `TestMode.TurnOnInternal()`：開啟遊戲的測試模式（[§5](#sec-5)）。
+4. `ModManager.State = Skipped`：無頭時從不載入 Mod（這個 setter 是私有的，透過反射設定）。
+5. `AssemblyInfo.Init`、`ModelDb.Init`、`ModelIdSerializationCache.Init`、`ModelDb.InitIds`：載入遊戲的模型資料庫，即每張卡牌、每個遺物、怪物和事件。
+6. `LocalContext.NetId = 1`：唯一的本機玩家的網路 id。
+7. 測試用的設定和偏好（`InitSettingsDataForTest`、`InitPrefsDataForTest`），並設 `FastMode = Instant`。
+
+</Steps>
+
+接著它訂閱遊戲的日誌（`Log.LogCallback`，Error 及以上的每一行）以及沒有人 await 的任務所產生的錯誤（`TaskHelper.UnobservedFault`），把兩者都收集為**遊戲錯誤**（[§8](#sec-8)）。啟動約需 1.2 s。
+
+不需要遊戲的指令（`brain`、`report`、`gate`、`leaderboard`、`seeds`、`ranks`、`weights`）從不啟動它（[參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。
+
+## 3. 原生存根
+
+遊戲的 C# 透過 GodotSharp（引擎的 C# 繫結）存取引擎；GodotSharp 經由一張函式指標表呼叫引擎的原生函式，這張表由引擎在啟動時填好。沒有引擎時，這張表會是空的，第一次呼叫就會當掉。
+
+`GodotNativeStub.Install`（`Runtime/GodotNativeStub.cs:23-51`）把表的每個槽都填成同一個極小的函式 `mov rax, imm64; ret`，它回傳一個指向某個清零記憶體分頁上半部的指標。於是碰到 Godot 的受控程式碼能照常跑過去：它拿回的是清零的記憶體，讀起來就是 null 物件、空字串和零，什麼事也不會發生。它是為 linux-x64 寫的。
+
+存根讓零星的呼叫無害，但不會讓它們有意義。需要引擎給出真正答案的程式碼（作業系統、時鐘、資源、在地化），會被打上補丁，改從受控程式碼取得答案（[§4](#sec-4)）。
+
+## 4. 補丁
+
+**Harmony 補丁**在執行時改寫一個遊戲方法。Harmony 是一個 .NET 函式庫：*前綴*（prefix）在原方法之前執行，並且可以跳過原方法；*後綴*（postfix）在原方法之後執行；*轉譯器*（transpiler）則直接改寫方法的 IL（編譯後的指令），而不是包在它外面。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安裝 GameBridge 的 `ChoiceContexts`，再安裝這個組件裡的每個補丁類別。順序很重要：打補丁時會編譯每個被替換的方法，而在卡牌提示補丁之前就編譯好的方法，可能把某個小小的 `CardSelectCmd` 入口內嵌進去，從而繞過它的補丁；藍寶石種子（SapphireSeed）的「種下」（由事件轉譯器改寫）就曾經這樣（[GameBridge §5](/zh-tw/arch/gamebridge/#sec-5)）。
+
+除了規則保真組，沒有任何補丁改變遊戲規則；而規則保真組做的，是在 TestMode 改動過的地方放回正式版的規則。各組補丁，按 `Runtime/Patches/` 裡的檔案：
+
+| 組 | 檔案 | 作用 |
+|---|---|---|
+| 引擎外殼 | `Engine.cs` | 用受控的替身代替引擎的作業系統、時間、單例、資源和玩家名稱 |
+| 資源預載 | `Engine.cs` | 關閉：不從遊戲的資源包載入任何東西 |
+| 表現層 | `Engine.cs` | 沒有 TestMode 守衛就進入表現層的模型程式碼：帝皇蟹的雙臂（火箭和碾碎者的 `BeforeDeath`）、靈魂樞紐（SoulNexus，`AfterDeath`），以及 `EventPresentation` 轉譯器（見下文） |
+| 文字 | `Text.cs` | 在地化回傳鍵名，而不載入文字表；遊戲自己的日誌寫進模擬器的日誌（[§8](#sec-8)） |
+| 持久化 | `Persistence.cs` | 從不儲存任何東西：跳過 `SaveRun`、進度更新、進度檔案和重播檔；到達地圖點時做的那次存檔還會為 SL 複本開啟一個節點（[世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）；遊戲真正的檔案層和它的存檔遷移器若被呼叫就拋出例外，只有三個無害的查詢例外，它們回答「沒有這個檔案」 |
+| 規則保真 | `RuleFidelity.cs` | 放回被 TestMode 改掉的正式版規則：滾動巨石逐一命中敵人；`ShippedBranch` 轉譯器在 `MerchantPotionEntry`、大鍋（Cauldron）和召喚鈴鐺（CallingBell）裡把 TestMode 分支換成正式版的分支，若找不到還能替換的 TestMode 檢查就拋出例外 |
+| 速度 | `Speed.cs`、`../FastHookListeners.cs` | `FastCreatures`、`FastPlayerCreatures`、`FastPlayers`：戰鬥的生物清單和玩家清單，遊戲每個動作都要透過三個 LINQ 查詢重建它們很多次，這裡改用普通迴圈，以相同的順序建進同一個清單；`FastHookListeners`：鉤子分派佔了模擬器大部分的時間（每個動作約 75 次分派），它不再每次都新建一個監聽器清單和迭代器，而是把同樣的物件按同樣的順序填進一個池化的清單，並像遊戲那樣在每個物件即將使用前重新檢查它。`selftest` 在每個切點把它和遊戲自己的迭代器比較，遊戲的迭代器透過反向補丁保持可呼叫 |
+| 選擇 | `Choices.cs` | `ChooseABundle`、`CrystalSphereScreen` 和 `CardRemovalUsed`：驅動程式必須回答其選擇的畫面（[整局 §4](/zh-tw/arch/simulator/runs/#sec-4)） |
+| 遊戲怪癖 | `GameQuirks.cs` | 正式版遊戲同樣會記下的錯誤，修掉它們，好讓每個遊戲錯誤都是真正的錯誤（[§8](#sec-8)） |
+
+**事件轉譯器**。事件是遊戲裡表現層色彩最重的程式碼：它們的方法會開啟對話框、播放音效、等待動畫。`EventPresentation` 轉譯器（`Runtime/Patches/Engine.cs:129-174`）改寫每個 `EventModel` 子類別的每個方法，包括其中的 lambda 和非同步狀態機：對 Godot 物件的呼叫，或回傳 Godot 物件的呼叫，會被丟掉並給出預設結果，`Task.Delay` 則變成一個已完成的任務。它涉及約 17 個事件類別。其中六個沒有它就會失敗，因為它們透過 null 實例呼叫節點，或等待一段真實時間的延遲：融合者（Amalgamator）、茂密植被（DenseVegetation）、玩偶房（DollRoom）、叢林迷宮冒險（JungleMazeAdventure）、拳擊對決（PunchOff）和審判（Trial）。
+
+## 5. TestMode
+
+遊戲內建一個供自身自動化測試使用的開關 `TestMode`。開啟後，大部分模型程式碼會跳過表現層（每個這樣的地方都先檢查 `TestMode.IsOn`），獎勵透過一個測試選擇器而不是畫面來領取，還有少數規則會改變。模擬器開啟它，是因為它能免費去掉大部分的表現層。它改變的規則則逐一放回或處理。對整局有影響的分支（取自本地的稽核 `tmp/notes/testmode-audit.md`）：
+
+| TestMode 分支 | 處理方式 |
+|---|---|
+| 獎勵由 `RewardsSet` 的測試選擇器領取 | 由驅動程式回答（[整局 §4](/zh-tw/arch/simulator/runs/#sec-4)） |
+| ChooseABundle 選第一個組合 | `ChooseABundle` 前綴改為詢問策略 |
+| `ActModel` 裡針對第 1 幕和首次遊玩的調整 | 不用處理：每一局開始時都已全部解鎖（[整局 §2](/zh-tw/arch/simulator/runs/#sec-2)） |
+| `MerchantRoom.Exit` 提前返回，不寫歷史 | 只影響外觀，保持原樣 |
+| 滾動巨石一次命中所有敵人 | 規則保真：拆成對每個敵人各命中一次 |
+| `MerchantPotionEntry` 的價格、大鍋（Cauldron）、召喚鈴鐺（CallingBell） | 規則保真：`ShippedBranch` |
+
+## 6. JIT
+
+.NET 平常使用*分層編譯*：方法先被快速編譯一次，經常執行的方法之後會在背景以完整最佳化再編譯一次（*重新 JIT*，rejit）。重新 JIT 可能悄悄丟掉一個 Harmony 補丁，因為新的程式碼是從原方法編譯出來的。這件事在幾千場戰鬥之後發生過：`RunManager.WriteReplay` 在沒有補丁的情況下執行了。在短批次的執行上，分層編譯還慢了一倍，因為 Harmony 的 JIT 鉤子讓每一次額外的編譯都很昂貴。
+
+所以專案檔設了 `TieredCompilation=false`（`Sts2Ai.SimWorker.csproj:12-20`）：每個方法只編譯一次，並且完整最佳化。啟動程式還應該設定 `DOTNET_ReadyToRun=0`，這是專案檔設不了的：這樣框架自己的程式碼也會以完整最佳化編譯，每秒多打約 20% 的戰鬥。真實遊戲執行時開著分層編譯，這對 Mod 的補丁是一個風險（[Mod §10](/zh-tw/arch/mod/#sec-10)）。
+
+## 7. Pump：一個執行緒，一種順序
+
+遊戲的邏輯是非同步的：動作 await 它的鉤子，鉤子 await 一個指令，而每個 `await` 都把方法剩下的部分（它的*後續*，continuation）交給當前的 `SynchronizationContext`，也就是決定後續在哪裡執行的那個 .NET 物件。在引擎裡，那是 Godot 的主迴圈，一次一幀。無頭時，那是 **Pump**（`Runtime/Pump.cs:10-91`）：一個安裝在驅動程式執行緒上的單執行緒 `SynchronizationContext`。
+
+- `Post(callback)` 把一個後續放進佇列。這時什麼都還沒執行。
+- `Drain()` 執行佇列裡的一切，包括執行中的回呼所投遞的東西，直到佇列為空，並回傳執行了多少個。
+- `RunUntil(done)` 先清空佇列，再檢查條件；若條件還不成立，就最多等 2 ms 看有沒有東西被投遞，然後再試。如果條件仍不成立，而 10 s 內沒有任何東西被投遞，它就拋出 `StuckException`，附上對當時狀態的描述。
+
+因為每個後續都在驅動程式的執行緒上、按投遞的順序執行，同樣的呼叫總是以同樣的順序執行同樣的程式碼。確定性正是從這裡來的：再加上帶種子的亂數流，同樣的設定和同樣的動作總是得到同樣的狀態（[戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)）。
+
+**穩定下來**。*穩定*（settle）是指一直推動 Pump，直到遊戲再次等待玩家：戰鬥中直到 `CombatActions.WaitingForInput` 成立（玩家的回合、處於出牌階段、動作執行器閒置）；戰鬥外直到佇列為空且動作執行器閒置（[整局 §3](/zh-tw/arch/simulator/runs/#sec-3)）。
+
+**真實時間的等待會破壞它**。如果模型程式碼等待牆上時鐘（`Task.Delay`），它的後續要過幾毫秒才由一個計時器執行緒投遞。在那之前佇列是空的，執行器看起來可能是閒置的，穩定判定分辨不出「完成了」和「還沒好」。Pump 會計算 `RunUntil` 有多少次必須阻塞、等待來自其他執行緒的工作（`IdleWaits`）；一批對局會把它報告為 `pump idle waits`，它必須為 0。融合者（Amalgamator）的延遲已打上補丁；其他的在無頭時都不會碰到：`ActionExecutor.WaitForUnpause`（暫停時每 50 ms 輪詢一次）、`CombatState.GodotTimerTask`（按網路 id 查找生物時的逾時）以及休息處的懸停訊息（UI）。
+
+下圖一步一步展示 Pump 如何執行一次出牌，再展示同一次出牌中夾著一個真實時間的等待時會怎樣。
+
+<PumpDemo client:visible lang="zh-TW" />
+
+## 8. 遊戲錯誤與日誌
+
+模擬器自己的規則是：遊戲不記下任何錯誤。遊戲的一行 `Log.Error` 或一個未被觀察的任務錯誤，都表示有不該執行的東西執行了。啟動時會收集這兩者（[§2](#sec-2)），各個指令按每場戰鬥或每一局報告它們，`selftest` 要求一個都沒有，而有任何遊戲錯誤的一局都算失敗（結束代碼 1）。工作行程會把它在服務一個請求期間看到的遊戲錯誤放進回覆裡送回，宿主把它們和自己的一起計數（[工作行程池 §6](/zh-tw/arch/simulator/pool/#sec-6)）。
+
+有些錯誤是正式版遊戲本身就有的，遊戲怪癖組修掉這些錯誤，好讓每個遊戲錯誤都是真正的錯誤。目前修掉的只有一個：玩家在其中死亡的一次出牌（打出一張 Sly 牌時，敵人的荊棘殺死了玩家）會提前返回，並把這張牌留在它的選擇上下文（`PlayerChoiceContext`）上；接著，發起這次出牌的鉤子就會記下一條錯誤。`PopCardAfterEarlyReturn` 會把這張牌彈出，牌已離開戰鬥時也一樣（`Runtime/Patches/GameQuirks.cs:18-42`）。這是專案對待遊戲 bug 的規則：沒有檢查碼，也沒有後備，但破壞我們正確性的怪癖，在它進入我們程式碼的地方修正（[前言 §1](/zh-tw/#sec-1)）。
+
+遊戲的日誌行寫進模擬器的日誌（`Runtime/Patches/Text.cs:31-46`）：遊戲的錯誤和警告分別記為 Error 和 Warning，其他行記為 Debug，只有 `--verbose` 才會顯示。命令列如何記錄日誌，見[參考 §2](/zh-tw/arch/simulator/reference/#sec-2)。

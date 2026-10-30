@@ -1,0 +1,88 @@
+{
+ "source": {
+  "report": "eval/silent/reports/2026-10-30-sl-r1-promotion-1-300-plan-c2-l0-v6-3-2-clone-p0.json",
+  "what": "each run's surfaces and brains counts, summed over the report's 300 runs; the example is the won run of seed 0SSL7NS01MU6",
+  "commit": "b013f95",
+  "env": "SL",
+  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone"
+ },
+ "runs": 300,
+ "won": 23,
+ "surfaces": [
+  {
+   "surface": "combat",
+   "decisions": 118832,
+   "runs": 300,
+   "example": 631
+  },
+  {
+   "surface": "rewards",
+   "decisions": 15676,
+   "runs": 300,
+   "example": 75
+  },
+  {
+   "surface": "map",
+   "decisions": 11260,
+   "runs": 300,
+   "example": 52
+  },
+  {
+   "surface": "card_choice",
+   "decisions": 7245,
+   "runs": 300,
+   "example": 36
+  },
+  {
+   "surface": "event",
+   "decisions": 4199,
+   "runs": 300,
+   "example": 15
+  },
+  {
+   "surface": "card_reward",
+   "decisions": 3789,
+   "runs": 300,
+   "example": 14
+  },
+  {
+   "surface": "rest",
+   "decisions": 2855,
+   "runs": 291,
+   "example": 14
+  },
+  {
+   "surface": "shop",
+   "decisions": 1872,
+   "runs": 266,
+   "example": 8
+  },
+  {
+   "surface": "treasure",
+   "decisions": 686,
+   "runs": 297,
+   "example": 3
+  },
+  {
+   "surface": "crystal_sphere",
+   "decisions": 87,
+   "runs": 29,
+   "example": 0
+  },
+  {
+   "surface": "bundle",
+   "decisions": 26,
+   "runs": 26,
+   "example": 0
+  }
+ ],
+ "card_choice_macro": {
+  "all": 1352,
+  "example": 9
+ },
+ "example": {
+  "seed": "0SSL7NS01MU6",
+  "outcome": "won",
+  "floor": 48
+ }
+}

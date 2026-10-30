@@ -19,7 +19,7 @@ Observe, legal and start exist for every surface, and so does the choice context
 ## 1. Role and rules
 
 - GameBridge is the only code that turns game objects into protocol (observe, legal) and a protocol action into a game call (start). SimWorker and the Mod share it, so R1–R4 (the rungs of the [sim-to-real ladder](/en/arch/evaluation/#sec-1)) use one code path.
-- It references the game DLLs, Protocol, and Harmony (the game's own `0Harmony.dll`, for [§5](#sec-5)). Never Brain. Never Godot nodes (`N*` types), the game's UI scene objects. Work that needs nodes lives in the host adapters instead: the Mod's UI adapters ([Mod §4](/en/arch/mod/#sec-4)), and in the simulator, copied node logic ([Simulator §5.2](/en/arch/simulator/#sec-5.2)).
+- It references the game DLLs, Protocol, and Harmony (the game's own `0Harmony.dll`, for [§5](#sec-5)). Never Brain. Never Godot nodes (`N*` types), the game's UI scene objects. Work that needs nodes lives in the host adapters instead: the Mod's UI adapters ([Mod §4](/en/arch/mod/#sec-4)), and in the simulator, copied node logic ([Simulator: whole runs §3](/en/arch/simulator/runs/#sec-3)).
 - Observe reads only what the UI shows (the fair-play whitelist, [Protocol §8](/en/arch/protocol/#sec-8)). Each field is mapped from the property the UI binds to (`DisplayAmount`, `IsVisible`, `ShowCounter`, intents via `GetSingleDamage`), never from internal state.
 - Start uses the same entry point as the UI. Never state edits, and never commands that skip validation (`CardCmd.AutoPlay`, a raw `new PlayCardAction`, `PlayerCmd.EndTurn`).
 - **Settling** (running the game until the next decision point is reached) is host-specific. GameBridge provides only logic predicates for it ([§6](#sec-6)).
@@ -81,11 +81,11 @@ The action grammar is in [Protocol §3](/en/arch/protocol/#sec-3). Each host app
 | potion discard | `DiscardPotionGameAction` | same |
 | map | `RequestEnqueue(VoteForMapCoordAction(…))` | `NMapScreen.OnMapPointSelectedLocally` (the node does the lock and animation) |
 | rewards | `RewardsSetSynchronizer.SelectLocalReward` / `SkipLocalRewardsSet` | reward button handler |
-| leave rewards | `ProceedFromTerminalRewardsScreen` / `ActChangeSynchronizer.SetLocalPlayerReady` ([Simulator §5.2](/en/arch/simulator/#sec-5.2)) | proceed button |
+| leave rewards | `ProceedFromTerminalRewardsScreen` / `ActChangeSynchronizer.SetLocalPlayerReady` ([Simulator: whole runs §4](/en/arch/simulator/runs/#sec-4)) | proceed button |
 | card reward | answer `GetSelectedCardReward` (sim selector) | card holder / skip / reroll buttons |
 | card prompts | answer `CardSelectCmd.Selector` (sim) | screen holders + confirm. This UI path records a `PlayerChoice` for replay. `LocalSelector` skips `SyncLocalChoice` (`CardSelectCmd.cs:264-300`) <Badge text="verified" variant="success" />, so it would break SL replay |
 | event | `ChooseLocalOption(i)` | option button |
-| shop | `entry.OnTryPurchaseWrapper(inv)`; the removal node marks a card removal used (in the simulator a headless patch does, [Simulator §5.2](/en/arch/simulator/#sec-5.2)) | the same call (`ForceClick` on merchant nodes does nothing <Badge text="verified" variant="success" />) |
+| shop | `entry.OnTryPurchaseWrapper(inv)`; the removal node marks a card removal used (in the simulator a headless patch does, [Simulator: headless host §4](/en/arch/simulator/headless/#sec-4)) | the same call (`ForceClick` on merchant nodes does nothing <Badge text="verified" variant="success" />) |
 | rest | `ChooseLocalOption(i)` | option button |
 | treasure | `PickRelicLocally(i)` / `SkipRelicLocally()` | chest + relic buttons |
 | crystal sphere | `SetTool` + `CellClicked(cell)` | divination buttons + cell click |
@@ -109,7 +109,7 @@ Both hosts share the patch, so they get the same context.
 
 Which screen is pending is decided by the host. It depends on what the UI would show, and only the host tracks that.
 
-- **Sim:** `RunSession.Decide` ([Simulator §5](/en/arch/simulator/#sec-5)) looks at the open rewards sets (from `testSelector`) and the crystal sphere minigame, then at the room kind and the per-room `RoomProgress`. The game has settled when the combat is `WaitingForInput`, or otherwise when the Pump is empty and the executor is idle.
+- **Sim:** `RunSession.Decide` ([Simulator: whole runs §3](/en/arch/simulator/runs/#sec-3)) looks at the open rewards sets (from `testSelector`) and the crystal sphere minigame, then at the room kind and the per-room `RoomProgress`. The game has settled when the combat is `WaitingForInput`, or otherwise when the Pump is empty and the executor is idle.
 - **Mod:** the visible screen or overlay, plus node idle checks that must hold for about 3 frames ([Mod §3](/en/arch/mod/#sec-3)).
 
 GameBridge keeps only logic predicates: `CombatActions.WaitingForInput`, `RewardActions.IsTerminal`, and the legal lists.
@@ -126,7 +126,7 @@ How an action names the thing it acts on:
 | entry of a UI-ordered list (rewards, event options, shop slots, rest options, treasure relics) | the game's index (the order is public) |
 | map point | `col,row` |
 
-For the Mod: SL clones must give the same numbers, so ids are fast-forwarded on load ([Simulator §7](/en/arch/simulator/#sec-7)).
+For the Mod: SL clones must give the same numbers, so ids are fast-forwarded on load ([Simulator: worlds and the SL clone §4](/en/arch/simulator/worlds/#sec-4)).
 
 ## 8. Event stream
 
@@ -147,7 +147,7 @@ All knowledge of the game's API lives in three places: here, the SimWorker patch
 
 1. Re-decompile the game.
 2. Rebuild.
-3. Run selftest and the surface-coverage test ([Simulator §9](/en/arch/simulator/#sec-9)).
+3. Run selftest and the surface-coverage test ([Simulator: reference §5](/en/arch/simulator/reference/#sec-5)).
 4. Produce the diff list of touched signatures.
 
 </Steps>

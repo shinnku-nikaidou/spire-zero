@@ -1,0 +1,123 @@
+---
+title: 世界与 SL 克隆
+description: 搜索在其中往前推演的状态。从观测构建并确定化的 NoSL 战斗世界；节点检查点；SL 克隆的加载、重播与封存；存档丢掉的遗物状态；SL 世界；以及仍在规划中的对局世界。
+sidebar:
+  label: 世界与 SL 克隆
+---
+
+import { Badge, Steps } from '@astrojs/starlight/components';
+import WorldTurns from '../../../../components/book/WorldTurns.svelte';
+
+搜索需要一个可以尝试的地方：一个可以在里面打出动作、查看、再放回原样的状态。这就是**世界**。世界里可以有什么，由环境的规则决定（[环境：世界 §1](/arch/environments/worlds/#sec-1)）：NoSL 下是对玩家看不到的一切的一个采样，SL 下是真实的东西，直到节点的出口为止。本页讲模拟器如何做出这两种世界。
+
+## 1. 世界是什么
+
+对搜索来说，世界就是世界 API 的接口 `ICombatWorld`（[协议 §7](/arch/protocol/#sec-7)）：观测它，列出它的合法动作，执行其中一个，读出它的状态（进行中、赢、输）和隐藏键，做一个快照，还原一个快照。世界的来源 `IWorldSource` 给出一个决策的各个世界：`Worlds(k, searchSeed)`。战斗大脑只通过这个接口搜索，所以同一份搜索代码能在任何一种世界上运行（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
+
+如今每个世界都是**战斗世界**：一场战斗，停在一个战斗决策处。模拟器用两种方式做出它们：
+
+| | NoSL 世界 | SL 世界 |
+|---|---|---|
+| 由什么做成 | 战斗的观测和敌人出招记录，构建成一场新开的战斗（[§2](#sec-2)） | 节点的克隆：节点入口处的检查点，重播到这个决策（[§7](#sec-7)） |
+| 每个决策几个 | K 个，各用自己的种子确定化 | 一个 |
+| 隐藏键 | `HiddenState.Key` | `HiddenState.Full` |
+| 类 | `SimWorlds.NoSL`（`Simulation/SimWorlds.cs`） | `NodeWorld`（`Simulation/NodeWorld.cs`） |
+| 在哪里 | 一个工作进程，或者测试集里的主机 | 一个工作进程 |
+
+宏观大脑不用战斗世界：SL 下它直接在节点的克隆上打出它的选项（[§3](#sec-3)、[宏观大脑：搜索 §2](/arch/macro-brain/search/#sec-2)）。整局的世界能让 NoSL 搜索看到当前地图点之外，还在规划中（[§8](#sec-8)）。
+
+## 2. NoSL 战斗世界
+
+NoSL 世界是一个**确定化样本**：一场完整的战斗，与玩家见过的一切相符，玩家看不到的东西则随机抽取（[环境：世界 §2](/arch/environments/worlds/#sec-2)）。`SimWorlds.NoSL(pump, observation, buildSeed, history)` 做出一个决策的各个世界（`Simulation/SimWorlds.cs:37-44`）：
+
+1. **根**是 `CombatBuilder.Setup` 从观测构建的一场战斗，用的是构建种子和敌人至今的意图记录，后者给出怪物的出招日志（[战斗 §5](/arch/simulator/combat/#sec-5)）。它从观测构建，从不取自真实战斗，所以玩家看不到的东西一样也进不来。构建出的战斗必须精确地显示这个观测；否则调用会抛异常，因为搜索会去探索另一场战斗（[Harness §7](/arch/harness/#sec-7)）。
+2. **第 k 个世界**是根加上一步确定化，种子由搜索种子和 k 混合得到（`Simulation/SimWorlds.cs:51-57`）。这一步打乱玩家不可能知道的东西，并给每条随机数流重新播种（[战斗 §3](/arch/simulator/combat/#sec-3)）。
+
+除了这一步采样的部分之外，这样的世界打起来和真实战斗有多接近，由 `fidelity` 衡量（[战斗 §6](/arch/simulator/combat/#sec-6)）：在决策所在的回合内，最多 1% 的观测不同。
+
+**所有世界共用一场活的战斗**。游戏每个进程只允许一场活的战斗，所以 K 个世界轮流使用它。每个世界保存自己的轨迹，它的快照就是这份轨迹（[战斗 §2](/arch/simulator/combat/#sec-2)）。在另一个世界正活着时使用某个世界，它会重建自己：从根开一场新的战斗，重播它的轨迹。一直待在一个世界里的搜索，只在回溯时才重播。下图显示搜索的顺序带来的差别：
+
+<WorldTurns client:visible lang="zh-CN" />
+
+有两个细节让重播保持精确：
+
+- 世界里的**选牌提示**交给 `p0`，也就是这一局自己的提示大脑，所以搜索预期的正是这一局会做出的选择（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)）。
+- **世界的轨迹取自活的战斗**，包括战斗开始时问到的提示（每回合开始时都会提问的遗物）。重播按顺序发放记录下的选择，缺了这些，后面某个提示的选择就会被它们拿走（`Simulation/SimWorlds.cs:88-98`）。`selftest` 检查世界在选牌提示之后能精确还原，用烘焙手套和生存者，跑 6 个世界（[参考 §5](/arch/simulator/reference/#sec-5)）。
+
+NoSL 世界把碰到会话上限（50 轮或 1,000 个动作，[战斗 §1](/arch/simulator/combat/#sec-1)）的战斗报告为赢（`Simulation/SimWorlds.cs:105-110`）；没有哪条被搜索的路线接近这些上限。
+
+**世界在哪里**。在一局里，一个决策的各个世界在工作进程池的工作进程里，每个世界一个请求，而真实的这一局一直活在主机里（[工作进程池 §3](/arch/simulator/pool/#sec-3)）。只有测试集在自己的进程里搜索（不带 `--workers` 的 `panel`）：它在每个决策之前把真实战斗存为快照，让世界使用这个进程，之后再通过重播把真实战斗放回来（[参考 §4](/arch/simulator/reference/#sec-4)）。
+
+**`SimWorlds.SL`** 是同一个类，只有一个世界，以真实战斗自己的快照为根，没有封存。它需要真实战斗在同一个进程里，所以只有测试集用它，并给它真实战斗的提示策略；在一局里，SL 世界是节点的克隆（[§7](#sec-7)）。
+
+## 3. 节点检查点
+
+**节点**是一个地图点，从到达开始，到移动去下一个点为止（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。SL 可以知道当前节点的一切，所以 SL 需要它的一个精确副本，可以打了再打。这个副本从一份存档开始。
+
+到达一个地图点时，游戏会给这一局存档。无头时什么都不写盘：`SaveRun` 补丁跳过写入；而没有已完成房间的存档就是到达时的那次存档，所以这个补丁同时发出信号：一个节点开始了（`Runtime/Patches/Persistence.cs:13-23`）。`RunSession` 随即取这个节点的**检查点**（`Sts2Ai.GameBridge/Checkpoint.cs`），记下节点的决策在轨迹里从哪里开始，并把选牌提示重新从 0 编号（`Simulation/RunSession.cs:143-148`）。检查点是一个 JSON 对象，分两部分：
+
+- `Save`：游戏自己对这一局的存档，即由 `SaveManager.ToJson` 序列化的 `RunManager.ToSave(null)`，作为字符串嵌在里面；
+- `Relics`：每个遗物的简单字段：从遗物自己的类一直到 `RelicModel`，每个数字、标志、枚举或十进制小数类型的可写字段（其中包括它的状态），按类名和字段名记录。存档会丢掉其中的大部分（[§6](#sec-6)）。
+
+两种主机都会取检查点，即模拟器和游戏里的 Mod，NoSL 对局也不例外；只有 SL 对局会把它们发给大脑（[环境：信息与节点 §7](/arch/environments/information/#sec-7)）。
+
+**克隆**是检查点，加上此后这个节点的每个决策，以轨迹行的形式（`surface action`；选牌提示的选择用游戏自己的下标）。它的协议类型是 `NodeClone(Save, Trace, Gauntlet?)`（`Sts2Ai.Protocol/World.cs:53`），除了模拟器，谁都不解读它的内容。对处于精英连战规则下的对局，`Gauntlet` 为 true，克隆保留这条规则（[整局 §7](/arch/simulator/runs/#sec-7)）。`RunSession.Clone()` 可以在节点的任何时刻生成一个克隆（`Simulation/RunSession.cs:229-230`）。
+
+**在一局里**，SL 主机把克隆一块一块地发给大脑：新节点开始时发 `node_checkpoint`，然后把节点的每个决策作为 `node_action` 发送，两者都在问下一个决策之前发出（`Brains/RunBrains.cs:88-99`；[协议 §2](/arch/protocol/#sec-2)）。Harness 保留最新的检查点和此后的决策，在每个决策处这就是克隆（[Harness §3](/arch/harness/#sec-3)）。Mod 从游戏里发送同样的消息（[Mod §6](/arch/mod/#sec-6)）。
+
+## 4. 加载克隆
+
+`RunSession.Load(clone)`（`Simulation/RunSession.cs:192-226`）走游戏「继续游戏」（Continue）的路径：`NMainMenu` 的 Continue 和 `NGame.LoadRun`，去掉节点部分（`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`） <Badge text="已核实" variant="success" />。
+
+<Steps>
+
+1. 读取检查点；用 `SaveManager.FromJson<SerializableRun>` 解析它的存档，再 `RunState.FromSerializable`。这一局的设置来自存档：角色、种子、进阶等级；连战规则则来自克隆。
+2. `await RunManager.SetUpSavedSingleplayer(state, save)`（`Runs/RunManager.cs:354-370`）。它要求没有活的对局（`State == null`），所以要先对上一个会话调用 `CleanUp()`。它会让 `NumReloads` 加一，而只有游戏的统计数据会读这个字段。它还会打开存档功能，和「继续游戏」每次都做的一样。
+3. 把遗物的简单字段放回去（`Checkpoint.RestoreRelics`，[§6](#sec-6)），再把存档功能关掉，和模拟器开始的任何一局一样，否则一局结束时会写入进度。
+4. `Launch()`；`await GenerateMap()`，它用种子重新生成存档里的地图。
+5. `await LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, state))`。它像到达时那样进入这个点：相同的 `?` 掷骰结果、遭遇、怪物生命值、开局洗牌和出招。
+6. 重播轨迹：战斗和宏观决策从一个队列里取，卡牌选择通过选牌器给出。记录在一个决策界面上、却在另一个决策界面上被问到的步骤会抛异常；游戏一直没问到、剩下来的步骤或选择也一样（「replay diverged」）。
+
+</Steps>
+
+重播之后，克隆停在与这一局相同的决策处，观测也相同，交给它的策略从这里开始回答。
+
+**id**。游戏的多人测试加载器还会把存档里没有的动作、钩子、选择和奖励 id，以及校验和，快进到位（`Nodes.Debug.Multiplayer/NMultiplayerTest.cs:552-556`）。克隆不这样做：没有任何观测显示它们，不快进时克隆的观测也与这一局相同（[§6](#sec-6)）。
+
+## 5. 封存
+
+移动到下一个地图点是节点的最后一个决策。克隆记录它，但不移动：停在那里并设置 `AtHorizon`，之后任何 `Step` 都会抛异常（「sealed: the clone has left its node」，`Simulation/RunSession.cs:233-236, 338-345`）。在节点里结束的一局（死亡或胜利），克隆也随之结束。所以在克隆上的搜索能看到它所在节点的每一种结果，而看不到下一个节点的任何东西，这就是 SL 的边界（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。
+
+`selftest` 从两方面检查封存：记下了移动的节点克隆，加载后停在视野边界，并拒绝再走一步（[参考 §5](/arch/simulator/reference/#sec-5)）；`run --check` 则在它重播的每个节点上检查（[整局 §6](/arch/simulator/runs/#sec-6)）。
+
+## 6. 存档丢掉了什么，以及检查
+
+存档是为了继续一局，而不是复制它。它只保存遗物标记为要保存的字段，加载时其余字段按新遗物的样子设置。对状态会显示出来的遗物，这个差别会传到观测里：锁镰（KUSARIGAMA）和磨刀石（WHETSTONE）体现在计数上；熔岩石（LAVA_ROCK）在第一幕 Boss 的奖励之后把自己禁用，却只保存「已触发」。此后的每个克隆都把这个遗物显示为正常。于是 SL 规划器的每一步都遇到它没预料到的观测，此后的每个战斗决策都要重新规划：40 局 SL 对局里有 2 局分别重新规划了 148 次和 120 次（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。
+
+所以检查点带上每个遗物的简单字段，加载时在存档加载之后把它们放回去（2026-10-28）。如果加载出的一局的遗物与检查点里的遗物不一致（逐个按顺序比较），`RestoreRelics` 就抛异常（`Sts2Ai.GameBridge/Checkpoint.cs:34-42`）。存放引用的字段（一张牌、一个列表）不带；真有要紧的，`run --check` 会显示出来。`selftest` 手动把第一个遗物设为禁用，检查克隆是否保留了这一点（[参考 §5](/arch/simulator/reference/#sec-5)）。
+
+**检验**：`run --check` 检查一局的每个节点，不允许任何差异：克隆必须逐个显示这一局的观测，移动之后停在视野边界，并拒绝再走一步。五个角色，每个角色 86 局 9999 生命值（随机宏观策略）和 90 局正常生命值（L0），战斗用 `play`：共 9,747 个节点，全部精确重播，也没有游戏错误（2026-10-28）。检查点带上遗物字段之前，7,335 个节点里有 35 个在遗物状态上不同。
+
+在这次检查里，**一个节点加载加重播的开销**：正常生命值下平均 8–11 ms（最多 241 ms）；9999 生命值下 Boss 战打得很长，平均 25–38 ms（最多 8.8 s，一个很长的 Boss 节点）。这些数字包含每一步都建一次观测，检查要比较观测，搜索则不需要（[§7](#sec-7)）。
+
+## 7. SL 世界
+
+`NodeWorld(pump, clone)`（`Simulation/NodeWorld.cs`）把节点的克隆当作一个战斗世界。加载并重播之后，它就是决策时的真实战斗，带着真实的抽牌顺序和随机数流。
+
+- **一个动作**是克隆的又一步：世界把这个动作交给克隆的战斗策略，让会话走一步，然后稳定下来。世界里的选牌提示和在这一局里一样交给 `p0`，并记在步骤之中。
+- **还原**无法倒回一局活的对局，而一个进程只能持有一局，所以它丢掉活的会话，保留那些步骤；下次使用时连同这些步骤再加载一次克隆（`Simulation/NodeWorld.cs:23-24, 70-76`）。检查点每个世界只读一次，而不是每次加载都读。
+- **它只待在这场战斗里**。战斗之外的决策会抛异常（「search left the combat」）；战斗结束后，世界不列出任何合法动作，也拒绝执行动作（`Simulation/NodeWorld.cs:48-62, 96`）。所以在它上面的搜索止于战斗结束，由叶子给结局估值（[战斗大脑：叶子 §1](/arch/combat-brain/leaf/#sec-1)）。
+- **它的隐藏键**是 `HiddenState.Full`：除了 NoSL 世界的键里有的，还有每个怪物至今出过的招，以及战斗历史里本回合的内容（作为多重集）；观测相同但未来不同的两个状态永远不会被合并（[战斗 §4](/arch/simulator/combat/#sec-4)）。
+
+**开销**。一次还原约需 0.5 ms 加载检查点，加上从进入节点起每一步约 0.1 ms（2026-10-28），所以在一场长战斗的后段，一次还原要 10–20 ms。[战斗 §2](/arch/simulator/combat/#sec-2) 的图把它和 NoSL 世界的开销放在一起。这是精确的代价：NoSL 世界从它在决策处构建的根开始重播，而 SL 世界要重播整个节点，直到这个决策。SL 规划器的应对办法是每个请求从束里的一个状态出发只搜索一个回合，所以一个请求重播一次，然后向前搜索（[SL 规划器：束搜索 §1](/arch/sl-planner/beam/#sec-1)）。
+
+## 8. 对局世界 <Badge text="规划中" variant="caution" />
+
+看得到当前地图点之外的 NoSL 搜索，需要整局的世界：一个与这一局的公开记录（`RunView`：牌组、遗物、药水、生命值、金币、幕、层、地图、已访问的点）相符的 `SerializableRun`，隐藏的部分用采样填充：
+
+- 每条随机数流；
+- 每个房间池（`RoomSet`）里剩下的内容及其计数器，依据规则：这一幕的池子减去已经见过的；
+- 抽取袋（grab bag）；
+- 概率计数器：能从奖励历史推断的就推断（[环境：信息与节点 §1](/arch/environments/information/#sec-1)），否则取先验。
+
+它会像克隆那样加载（[§4](#sec-4)），是否精确则由观测往返来检验：加载出的世界必须显示这一局的观测。房间池和概率有多少能推断出来、有多少只能取先验，还是未决问题（[参考 §8](/arch/simulator/reference/#sec-8)）。SL 下不需要这样的世界：节点出口之外的东西什么都不能知道。

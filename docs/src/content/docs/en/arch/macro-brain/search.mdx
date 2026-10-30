@@ -10,7 +10,7 @@ import CloneSearchDemo from '../../../../../components/v/CloneSearchDemo.svelte'
 
 ## 1. L0 v0: afterstates predicted from the screen
 
-Until run worlds exist ([Simulator §6](/en/arch/simulator/#sec-6)), NoSL has no world to play an option in, so `MacroBrain` predicts each afterstate from the screen alone, with no game code, and takes the option with the highest V (the first legal one on a tie). The prediction, by surface:
+Until run worlds exist ([Simulator: worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)), NoSL has no world to play an option in, so `MacroBrain` predicts each afterstate from the screen alone, with no game code, and takes the option with the highest V (the first legal one on a tie). The prediction, by surface:
 
 - **Map:** the point is added to the path. With V v0, V's map features count from there: the expected number of elites, rest sites, shops, treasures and `?` points up to the boss if each next step were picked at random. L0's plan for the act is the rest of the route: each next point as it would choose it if nothing else changed, up to the boss; the mod draws it ([Mod §3](/en/arch/mod/#sec-3)). Pure V reads the map itself instead ([The value network §1](/en/arch/macro-brain/network/#sec-1)).
 - **Rewards, card reward, bundle, treasure, shop purchase:** the gold, potion, relic or cards are added and the price is paid.
@@ -79,7 +79,7 @@ Without this rule the search looped. Skipping a card reward returned to the rewa
 
 ## 6. Cost and where the probes run
 
-A probe is a load of the clone plus a replay of its path of answers. Probes run in the worker pool: the paths of a level are split into one request per worker, each worker loads the clone once per path ([Simulator §8](/en/arch/simulator/#sec-8)).
+A probe is a load of the clone plus a replay of its path of answers. Probes run in the worker pool: the paths of a level are split into one request per worker, each worker loads the clone once per path ([Simulator: the worker pool §3](/en/arch/simulator/pool/#sec-3)).
 
 - With the SL planner in whole runs, a macro decision took 40 ms on average (median 13 ms, at most 0.5 s): 9 s of a 187 s two-run total.
 - In the elite gauntlet, a macro decision on the clone takes 70–90 ms, against 1–2 ms from the screen: about 10 s of a 45–53 s run.

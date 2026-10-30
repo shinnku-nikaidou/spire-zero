@@ -8,6 +8,15 @@ import katex from 'katex';
 // The sidebar is the book's table of contents, as the overview's doc map lists it: an overview, four parts and the
 // appendices. Labels and status badges come from each page's own frontmatter, so every locale shows its own text.
 const environments = ['arch/environments', 'arch/environments/information', 'arch/environments/worlds'];
+const simulator = [
+  'arch/simulator',
+  'arch/simulator/headless',
+  'arch/simulator/combat',
+  'arch/simulator/runs',
+  'arch/simulator/worlds',
+  'arch/simulator/pool',
+  'arch/simulator/reference',
+];
 const macroBrain = [
   'arch/macro-brain',
   'arch/macro-brain/afterstates',
@@ -41,7 +50,7 @@ const book = [
   {
     label: '第四部　机器',
     translations: { 'zh-TW': '第四部　機器', en: 'Part IV: The machinery' },
-    items: ['arch/simulator', 'arch/harness', 'arch/protocol', 'arch/gamebridge', 'arch/mod', 'arch/output'],
+    items: [{ label: '模拟器', translations: { 'zh-TW': '模擬器', en: 'Simulator' }, items: simulator }, 'arch/harness', 'arch/protocol', 'arch/gamebridge', 'arch/mod', 'arch/output'],
   },
   { label: '附录', translations: { 'zh-TW': '附錄', en: 'Appendices' }, items: ['status', 'glossary'] },
 ];

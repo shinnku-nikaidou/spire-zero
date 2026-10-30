@@ -56,7 +56,7 @@ These parts of the macro brain's design predate the current plan and are not bui
 
 L0 decides every time; L1 would be an extra check for close calls, with the evaluation-time budget. It would start when the top two L0 values are within their confidence interval, so L0 cannot tell them apart. A **rollout** plays the game forward with fast policies to see where an option leads. For each candidate:
 
-1. Start from its afterstate in sampled run worlds ([Simulator §6](/en/arch/simulator/#sec-6)).
+1. Start from its afterstate in sampled run worlds ([Simulator: worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)).
 2. Play forward for H nodes (by default up to the next boss) with fast policies: in combat the rollout policy or a shallow search, outside combat L0.
 3. Pair the candidates with common random numbers: every candidate is played in the same world seeds, so the difference between them is far less noisy than with independent samples.
 4. A candidate's value is the mean of V at the horizon, or the terminal outcome if the run ends first.

@@ -35,7 +35,7 @@ A monster's next move depends on its moves so far: a fixed cycle, a roll that ne
 
 ## 3. The worker pool
 
-A search is many independent pieces: K worlds in NoSL, a beam's states in SL. They run in a pool of worker processes. A worker is the same binary started as `serve`; `WorkerPool` (in Harness, which sees the game only through protocol types) starts N of them, by default one per world, and keeps them for its lifetime ([Simulator §8](/en/arch/simulator/#sec-8)).
+A search is many independent pieces: K worlds in NoSL, a beam's states in SL. They run in a pool of worker processes. A worker is the same binary started as `serve`; `WorkerPool` (in Harness, which sees the game only through protocol types) starts N of them, by default one per world, and keeps them for its lifetime ([Simulator: the worker pool §2](/en/arch/simulator/pool/#sec-2)).
 
 ```mermaid
 sequenceDiagram
@@ -65,13 +65,13 @@ sequenceDiagram
 
 **Deterministic.** Replies are merged in request order, never in the order they finish. With the same seeds the answer equals that of a search in one process exactly, values included: `selftest --workers N` checks it, and a 6-combat panel trace with 8 workers diffs empty against the in-process one.
 
-**Failures.** A worker that closes its output or breaks the pipe is restarted and gets the request once more; so is one that does not answer within 5 minutes (a request takes seconds), after it is killed. A second failure is an error. A worker that throws exits after sending the error, since a request that threw can leave the game set up and fail every later one ([Simulator §8](/en/arch/simulator/#sec-8)).
+**Failures.** A worker that closes its output or breaks the pipe is restarted and gets the request once more; so is one that does not answer within 5 minutes (a request takes seconds), after it is killed. A second failure is an error. A worker that throws exits after sending the error, since a request that threw can leave the game set up and fail every later one ([Simulator: the worker pool §6](/en/arch/simulator/pool/#sec-6)).
 
-**Where the time goes.** Not in the leaf. A NoSL worker sampled for 40 s during a whole-run gate searched 87% of the time; restoring worlds took 48% (starting the combat from its setup 38%, replaying the line 7%, resampling 4%), playing the searched actions 16%, building observations 16%, and the combat net 5% ([Simulator §4](/en/arch/simulator/#sec-4)). An SL planner's worker spends about 88% of its busy time on restores: loading the node's clone and replaying a path to the state it searches. That is why the planner's levers are the beam and the number of plans rather than the nodes ([The SL planner: budget §3](/en/arch/sl-planner/budget/#sec-3)). Each worker holds about 160 MB.
+**Where the time goes.** Not in the leaf. A NoSL worker sampled for 40 s during a whole-run gate searched 87% of the time; restoring worlds took 48% (starting the combat from its setup 38%, replaying the line 7%, resampling 4%), playing the searched actions 16%, building observations 16%, and the combat net 5% ([Simulator: combats §7](/en/arch/simulator/combat/#sec-7)). An SL planner's worker spends about 88% of its busy time on restores: loading the node's clone and replaying a path to the state it searches. That is why the planner's levers are the beam and the number of plans rather than the nodes ([The SL planner: budget §3](/en/arch/sl-planner/budget/#sec-3)). Each worker holds about 160 MB.
 
 **Speed.** On 6 act 1 fights at 8 worlds × 300 nodes, 8 workers take 68.7 ms per action against 307.5 ms in one process.
 
 ## 4. Planned
 
 - **Prompts as search branches.** Inside a search, the simulator's selector (the code that answers card prompts) would be driven by the search, so each answer is a branch; a lone prompt in the real fight would be answered by valuing each option with the same search (`Choose`, [Overview §4](/en/arch/combat-brain/#sec-4)).
-- **Worlds that live in a worker.** For run worlds and for searches that outgrow one request: open a world by kind (build, clone, run host), branch on it by id, and close it; its branches go to that worker first, since a restore elsewhere costs a replay ([Simulator §8](/en/arch/simulator/#sec-8)).
+- **Worlds that live in a worker.** For run worlds and for searches that outgrow one request: open a world by kind (build, clone, run host), branch on it by id, and close it; its branches go to that worker first, since a restore elsewhere costs a replay ([Simulator: the worker pool §8](/en/arch/simulator/pool/#sec-8)).

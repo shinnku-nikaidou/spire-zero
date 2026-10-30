@@ -120,7 +120,7 @@ interface ISurfaceAdapter
 
 ## 5. 與大腦的連線
 
-- **Socket**：Unix domain socket `~/.local/state/sts2ai/brain.sock`（設定了 `$XDG_STATE_HOME` 時放在它下面），傳輸 JSON lines（[協定 §2](/zh-tw/arch/protocol/#sec-2)）。Mod 是用戶端，Harness 是伺服器端。Harness 由使用者啟動，或由 Mod 按設定的路徑啟動；Mod 自己從不做搜尋。伺服器端已經實作：SimWorker 的 `brain` 命令在這個 socket 上等待，`run --brain` 已經作為宿主連上它跑模擬對局（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）。
+- **Socket**：Unix domain socket `~/.local/state/sts2ai/brain.sock`（設定了 `$XDG_STATE_HOME` 時放在它下面），傳輸 JSON lines（[協定 §2](/zh-tw/arch/protocol/#sec-2)）。Mod 是用戶端，Harness 是伺服器端。Harness 由使用者啟動，或由 Mod 按設定的路徑啟動；Mod 自己從不做搜尋。伺服器端已經實作：SimWorker 的 `brain` 命令在這個 socket 上等待，`run --brain` 已經作為宿主連上它跑模擬對局（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。
 - **Steam 的容器**：Steam 在它的 Linux 執行時容器（pressure-vessel）裡啟動遊戲。容器與主機共享主目錄，但有自己的 `$XDG_RUNTIME_DIR`，放在那裡的 socket 遊戲存取不到，所以 socket 放在主目錄下。大腦建立它的目錄時，只允許使用者本人存取。
 - **環境**：由面板卡頭上的 SL/NoSL 開關選定（[環境](/zh-tw/arch/environments/)），預設是 SL；這個選擇和 Mod 的其他設定一起存在 `~/.local/state/sts2ai/settings.json`，和 socket 放在一起，不在遊戲的玩家檔案目錄裡（[輸出層 §2](/zh-tw/arch/output/#sec-2)）。`hello` 帶上它；對大腦來說，它在一局裡固定不變：在一局中途切換時，Mod 發出 `run_end`（`aborted`）和新的 `hello`，大腦從這一刻起當作新的一局。一個大腦同時服務兩種環境：`brain` 對 NoSL 宿主用 `--policy` 的戰鬥大腦（冠軍的 PIMC），對 SL 宿主用 `--sl-policy` 的戰鬥大腦（預設是 SL 規劃器），宏觀大腦相同（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
 - **連不上大腦**：輔助模式下面板顯示「No brain running」（沒有大腦在執行）；自動遊玩時 Mod 暫停。連線每 2 秒重試一次；新的連線從 `hello` 重新開始。
@@ -128,7 +128,7 @@ interface ISurfaceAdapter
 
 ## 6. SL 匯出
 
-SL 下，大腦在當前節點的精確複本上規劃戰鬥（[環境：資訊與節點 §7](/zh-tw/arch/environments/information/#sec-7)）。worker 用節點的檢查點，加上進入節點以來做過的每一個決策來建構複本；決策的寫法與模擬器自己的軌跡相同（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。Mod 在兩種環境下都把這兩樣東西記在記憶體裡（`NodeRecord`），所以在任何房間裡勾上 SL 都能馬上用；只有 SL 才把它們發出去。
+SL 下，大腦在當前節點的精確複本上規劃戰鬥（[環境：資訊與節點 §7](/zh-tw/arch/environments/information/#sec-7)）。worker 用節點的檢查點，加上進入節點以來做過的每一個決策來建構複本；決策的寫法與模擬器自己的軌跡相同（[模擬器：世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）。Mod 在兩種環境下都把這兩樣東西記在記憶體裡（`NodeRecord`），所以在任何房間裡勾上 SL 都能馬上用；只有 SL 才把它們發出去。
 
 - **檢查點**：在遊戲到達地圖點、存檔的那一刻，用 GameBridge 的 `Checkpoint.Take` 取：在 `SaveManager.SaveRun` 上掛一個前綴（prefix），只在它的「已完成房間」為空時取，與模擬器取檢查點是同一時刻。開局時遊戲以同樣方式進入第一個地圖點。按「繼續」（Continue）時，遊戲重新進入存檔所在的地圖點，但不再存檔（`RunManager.LoadIntoLatestMapCoord`）：如果存檔是到達時存的，就在這裡取檢查點；如果是房間裡更晚的存檔（戰鬥勝利後、Ancient 事件後），房間的開頭已經不在了，這個節點就沒有複本。Mod 從不寫會被雲同步的 `current_run.save`，也不寫玩家檔案目錄下的任何其他檔案。
 - **步驟**：玩家的每個決策，都在遊戲提交它的地方讀出來；這些入口也正是模擬器自己呼叫的入口（[GameBridge §4](/zh-tw/arch/gamebridge/#sec-4)），所以在遊戲執行之前就能精確知道這一步。未決問題 1 因此選了鉤子，而不是比較前後的狀態：狀態比較分不出兩張一樣的牌，玩家操作得比畫面穩定還快時也會漏掉動作。
@@ -154,7 +154,7 @@ SL 下，大腦在當前節點的精確複本上規劃戰鬥（[環境：資訊�
 
 驅動在真實遊戲裡自己完整地打一局又一局，用於 R4 評估：R4 是[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)裡真實遊戲的那一級。
 
-- **按種子開局**：呼叫 `NGame.StartNewSingleplayerRun(character, shouldSave:false, acts, modifiers, seed, GameMode.Standard, asc)`（`Nodes/NGame.cs:1137`），幕的選擇與大廳（lobby）的做法相同（[模擬器 §5.1](/zh-tw/arch/simulator/#sec-5.1)）。另一種辦法是在按下 Confirm 按鈕之前設定 `NGame.DebugSeedOverride`（`AutoSlayer.cs:500-502`）。
+- **按種子開局**：呼叫 `NGame.StartNewSingleplayerRun(character, shouldSave:false, acts, modifiers, seed, GameMode.Standard, asc)`（`Nodes/NGame.cs:1137`），幕的選擇與大廳（lobby）的做法相同（[模擬器：整局 §2](/zh-tw/arch/simulator/runs/#sec-2)）。另一種辦法是在按下 Confirm 按鈕之前設定 `NGame.DebugSeedOverride`（`AutoSlayer.cs:500-502`）。
   `shouldSave:false` 時 `current_run.save` 不會被改動，參數文件裡這樣寫（`NGame.cs:1130`） <Badge text="已核實" variant="success" />。不過對局歷史和進度大概仍會寫入 <Badge text="推斷" variant="caution" />，所以自動跑局只用帶 Mod 的玩家檔案。
 - **一局結束**：檢測到死亡（所有玩家都死了）或 `WinRun`；記錄 `run_end`；回到主選單；從預先登記的種子清單裡取下一個種子。
 - **速度**：只在自動跑局期間設定 `PrefsSave.FastMode = Instant`。這裡有兩個遊戲行為要注意：非編輯器建置在啟動時會把 Instant 降為 Fast，而設定會在結束時儲存。所以在自動跑局停止時和遊戲結束時，Mod 都要把使用者原來的值恢復回去。

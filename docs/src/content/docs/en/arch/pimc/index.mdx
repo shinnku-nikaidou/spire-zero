@@ -31,7 +31,7 @@ The rolls draw from the monster's own random stream, which the run's seed fixes:
 
 A world is one sample of $s$ that agrees with $h$: a complete fight, built in the worker's own copy of the game, that shows exactly the observation the player sees. Two steps make it.
 
-**Build** (`CombatBuilder.Setup(observation, seed)`, [Simulator §3](/en/arch/simulator/#sec-3)) makes a fight that shows the observation:
+**Build** (`CombatBuilder.Setup(observation, seed)`, [Simulator: combats §5](/en/arch/simulator/combat/#sec-5)) makes a fight that shows the observation:
 
 1. start the encounter with the observation's deck, relics and HP;
 2. overwrite the visible state (`Apply`): the round, the enemies (added, removed, reordered), HP and block, energy, gold, potions, orbs, relic counters, powers with their stacks, the four piles with each card's modifications, and the intents;
@@ -40,7 +40,7 @@ A world is one sample of $s$ that agrees with $h$: a complete fight, built in th
 
 What the screen shows is often a function of numbers it does not show, different for each power and relic, so a **knob solver** tries the internal numbers (amounts, fields, a power's private data) until the display matches. The intents are matched by choosing, for each monster, among the moves that show them, and each monster's **move log** is rebuilt from the public record, so that its state machine goes on as the real one would: an earlier round matches the move that showed the same intents (else the same types and hits, else the same types).
 
-**Determinize** (`Determinize(seed)`, [Simulator §2](/en/arch/simulator/#sec-2)) then replaces everything the player cannot know with a sample, and leaves the visible state as it is:
+**Determinize** (`Determinize(seed)`, [Simulator: combats §3](/en/arch/simulator/combat/#sec-3)) then replaces everything the player cannot know with a sample, and leaves the visible state as it is:
 
 - every random stream is reseeded;
 - the draw pile is first sorted by card key, an order that depends only on what the player sees, then shuffled (Fisher–Yates);
@@ -55,7 +55,7 @@ The figure takes a real NoSL decision, the first turn of an elite fight against 
 
 ## 3. How faithful a world is
 
-A world built from the observation should play like the real fight, apart from what `Determinize` samples on purpose. `fidelity` measures it: at every second decision of a panel's fights, the real fight plays on with a placeholder policy to the end of the turn, the enemies' turn included, and a fight built from the decision's observation and record is given the real one's sampled state and plays the same actions; the first observation that differs is counted ([Simulator §6](/en/arch/simulator/#sec-6)). With Silent's starter deck (2026-10-27):
+A world built from the observation should play like the real fight, apart from what `Determinize` samples on purpose. `fidelity` measures it: at every second decision of a panel's fights, the real fight plays on with a placeholder policy to the end of the turn, the enemies' turn included, and a fight built from the decision's observation and record is given the real one's sampled state and plays the same actions; the first observation that differs is counted ([Simulator: combats §6](/en/arch/simulator/combat/#sec-6)). With Silent's starter deck (2026-10-27):
 
 | fights | decisions | the same through the enemies' turn, without the record → with it |
 |---|---|---|
@@ -66,7 +66,7 @@ A world built from the observation should play like the real fight, apart from w
 
 No fight was built wrong, and no action was illegal in a built one. Within the turn at most 1% differ. The rest differ after the turn ends, on counters inside a few monsters (a rat's summons, a giant's growing damage) that no observation shows. The record of moves is what lifts the hallway fights from 82–89% to 96–98%. What the builder still approximates: this turn's history and the counters inside powers and monsters, how long cost modifiers last, the player's debuffs wearing off, and a deck taken as every card seen.
 
-In whole runs a world built wrong fails the decision. Five of the first 400 PIMC runs failed that way: a spent Silver Crucible's hidden counter (three runs), a Glass orb's numbers, and Sloth's limit, which only its tooltip shows (the world allowed fewer cards a turn than the real fight, and a legal play was illegal in it). All three are fixed ([Simulator §3](/en/arch/simulator/#sec-3)).
+In whole runs a world built wrong fails the decision. Five of the first 400 PIMC runs failed that way: a spent Silver Crucible's hidden counter (three runs), a Glass orb's numbers, and Sloth's limit, which only its tooltip shows (the world allowed fewer cards a turn than the real fight, and a legal play was illegal in it). All three are fixed ([Simulator: combats §6](/en/arch/simulator/combat/#sec-6)).
 
 ## 4. Fair play
 

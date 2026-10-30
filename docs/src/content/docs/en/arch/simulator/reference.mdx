@@ -1,0 +1,230 @@
+---
+title: 'Reference: build, commands and tests'
+description: Building and running the simulator, its command-line conventions, logs and exit codes, the option groups commands share, every command with its options, every selftest check, what run --check compares, the xUnit tests, and the open questions.
+sidebar:
+  label: Reference
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+This page is for looking things up. The pages before it explain what the parts do; this one lists them. Everything here was checked against the code at the commit this page was written at; where the code says otherwise, the code is right.
+
+## 1. Build and run
+
+The simulator is the .NET project `src/Sts2Ai.SimWorker` (target `net9.0`), one program with many commands. It references the game's own assemblies, `sts2.dll`, `GodotSharp.dll`, `SmartFormat.dll` and the `0Harmony.dll` the game ships for mods, from a read-only snapshot of the game, without copying them into its output (`src/GameReferences.props:8-19`).
+
+| setting | where | what it does |
+|---|---|---|
+| `Sts2BinDir` | MSBuild property, default `tmp/gamebin/v0.111.0` | the game snapshot the build references, stamped into the program |
+| `STS2_BIN_DIR` | environment, at run time | overrides the stamped snapshot; the program refuses to start if `sts2.dll` is not there (`Program.cs:35-48`) |
+| `TieredCompilation` | `Sts2Ai.SimWorker.csproj:12-20`, off | every method compiled once, fully optimized: tiering re-JITs hot methods in the background, and a Harmony patch can silently drop off (seen after a few thousand combats); it was also 2× slower on short runs |
+| `DOTNET_ReadyToRun=0` | environment, set by the launcher | framework code is JIT-compiled fully optimized too, about 20% more combats per second; the first output line says so when it is missing |
+| `SourceRevisionId` | MSBuild, from git | the commit stamped into the program, which records and reports carry; a build with uncommitted changes under `src/` gets `-dirty` (`Sts2Ai.SimWorker.csproj:36-48`) |
+
+The game's assemblies are found by a resolver installed before any game type is compiled, which is why the entry point that uses them, `Cli.Run`, must not be inlined into `Main` (`Program.cs:10-12`, `Commands/Cli.cs:45`).
+
+**The launcher.** Batches and the fleet run a build of a fixed commit, not the working tree: `tmp/build.sh REV` (a local script) archives the commit, builds it in Release with `SourceRevisionId` set to the commit, and writes `tmp/builds/REV/sim.sh`, which runs that build's dll with `DOTNET_ReadyToRun=0` and `HOME` pointed at `tmp/home`. So a `brain` started through it listens at `tmp/home/.local/state/sts2ai/brain.sock` unless `--socket` says otherwise ([Whole runs §8](/en/arch/simulator/runs/#sec-8)). The fleet's hosts get the same build and a launcher of their own (the fleet skill, `.claude/skills/fleet/SKILL.md`).
+
+## 2. The command line
+
+```text
+Sts2Ai.SimWorker COMMAND [options]
+```
+
+- **Parsing** is System.CommandLine 2.0.14. `--help` works on the root and on every command. `--verbose` works after any command. There are no response files: an argument that starts with `@` is an argument (`Commands/Cli.cs:24`).
+- **stdout carries results only**, which scripts read; logs go to stderr, one line each, `12:34:56 INFO    sim: message`, with an exception's text on the lines after (`Runtime/Logs.cs:43-60`). The level is Information and up, Debug with `--verbose`. The game's own log goes to the category `game`: its errors and warnings at Error and Warning, its other lines at Debug ([Headless host §8](/en/arch/simulator/headless/#sec-8)).
+- **Booting.** Only commands that need the game boot it (`Cli.Game`); `brain`, `report`, `gate`, `leaderboard`, `seeds`, `ranks` and `weights` do not.
+
+**Exit codes** (`Commands/Cli.cs:46-68`):
+
+| code | meaning |
+|---|---|
+| 0 | done |
+| 1 | done, with failures: combats or runs that failed, a replay that differed, game errors, a gate that did not pass |
+| 2 | a mistake in the command line or in a file it names (also an I/O error, a file that is not valid JSON or not valid data) |
+| 70 | a bug; its stack is logged |
+
+By command: `run`, `bench`, `panel`, `selftest`, `clones`, `afterstates` and `fork` exit 1 on failures, and `gate` when it does not pass; `combat`, `forkbench`, `fidelity`, `fusion` and `list` always exit 0 when they finish; `serve` exits 1 after its first failed request.
+
+## 3. Option groups
+
+Several commands share groups of options, defined in `Commands/Args.cs`.
+
+**Loadout** (`Args.cs:43-58`): replaces the starting loadout.
+
+| option | default | meaning |
+|---|---|---|
+| `--character` | `SILENT` | the character |
+| `--deck` | the starting deck | `A*5,B+,C+2@SHARP:2`: `*N` repeats, `+` or `+N` upgrades, `@ENCHANT:AMOUNT` enchants (`Simulation/Loadout.cs`) |
+| `--relics` | the starting relics | `A,B`; replaces them, their potion slots apply, and in a run they skip `FinalizeStartingRelics` |
+| `--potions` | none | `A,B`; throws if no slot is free |
+| `--hp` | the character's | start HP, clamped to max HP |
+| `--max-hp` | the character's | start max HP |
+
+**Pool** (`Args.cs:61-96`): which combats, then the loadout.
+
+| option | default | meaning |
+|---|---|---|
+| `--act` | 0 | the act, counted from 0 |
+| `--rooms` | `weak,regular` | room kinds, from `weak`, `regular`, `elite`, `boss` |
+| `--encounter` | none | one encounter instead; it also sets the act |
+
+**Budget** (`Args.cs:108-160`): the combat brain's budget. The plan options need `--policy plan`; `--halving` and `--follow` are refused with it.
+
+| option | default | meaning |
+|---|---|---|
+| `--worlds` | 8 | PIMC's worlds per decision |
+| `--nodes` | 300 | nodes per world; for plan, per state and turn |
+| `--elite-x`, `--boss-x` | 1 | multiply PIMC's nodes or plan's beam in elite and boss rooms |
+| `--halving` | off | PIMC shares the nodes over the first actions by sequential halving |
+| `--follow` | off | PIMC plays the rest of a turn every world agreed on without searching again |
+| `--effort` | `medium` | plan's preset: `low` beam 8, easy beam 2, loss plans 3; `medium` beam 8, easy 4, loss plans 3; `high` beam 8; `max` beam 16; all 300 nodes and replan 1 (`src/Sts2Ai.Brain/Combat/CombatBrain.cs:29-36`) |
+| `--beam` | the preset's | plan's states kept per turn (at least 1) |
+| `--easy-beam` | the preset's | states kept when the greedy dive wins (0: `--beam`) |
+| `--replan` | the preset's | turns an unproved losing plan is followed before planning again (0: to its end) |
+| `--loss-plans` | the preset's | unproved losing plans in a row per combat (0: no limit) |
+
+**Leaf** (`Args.cs:163-172`): what values a search's unfinished lines.
+
+| option | meaning |
+|---|---|
+| `--leaf FILE` | the leaf weights (default: the initial ones) |
+| `--combat-net FILE` | a combat net that values unfinished leaves at the leaf weights' prices; a net of another environment is refused at play time (`Brains/LeafChoice.cs:25-30`) |
+
+**Champion** (`Args.cs:207-270`): the options that make a champion, in `run`, `brain`, `gate`, `afterstates` and `fork`.
+
+| option | default | meaning |
+|---|---|---|
+| `--policy` | `play` | the combat brain: `pimc`, `plan` (SL only), or a placeholder, `play` or `random` |
+| `--macro` | `random` | the brain outside combat: `l0` (the macro brain with V) or `random` |
+| the budget options | | above |
+| `--workers` | `--worlds` | worker processes, for `pimc`, `plan` or `--afterstates clone` |
+| `--value FILE` | V v0's initial weights | l0's V: V v0 weights, a V v2 net or a pure V net; needs `l0` |
+| `--afterstates` | `screen` | `clone` plays each option on the node's clone (SL, `l0`) |
+| the leaf options | | above; need `pimc` or `plan` |
+| `--leaf-prices` | `leaf` | what plan prices a combat's end at: `v` needs plan, `--combat-net` and a net `--value` |
+| `--macro-explore T` | 0 | l0 draws by a softmax of V's values at temperature T, in V's units; needs `l0` |
+| `--combat-explore T` | 0 | PIMC draws by a softmax of the search's values, in leaf units; needs `pimc` |
+| `--explore ε` | 0 | l0 draws a share ε of its decisions evenly among their options; needs `l0` |
+
+**Champion file**, `--champion FILE` (`Args.cs:175-202`), in `run`, `brain`, `afterstates` and `fork`: plays the champion a champion file names ([Evaluation §5](/en/arch/evaluation/#sec-5)). The file's options come after the ones given, so given ones win; they include its `character` and `asc`. A command without `--env` (`brain`) skips the file's `env`, and a `--policy` given that differs from the file's keeps its own budget. `gate`'s `--champion` is a different option: the champion to beat.
+
+**Logged runs** (`Commands/Forks.cs:34-71`), in `afterstates` and `fork`: `--log` (decision logs, comma-separated), `--records` (their run records), `--out` (JSON lines out), all required; `--start` (first logged run, 0) and `--n` (default: the rest).
+
+## 4. Commands
+
+In `--help` order (`Commands/Cli.cs:31-37`).
+
+**Combats**
+
+| command | options | what it does |
+|---|---|---|
+| `list` | | prints the characters, acts, and encounters by room kind |
+| `combat` | `--encounter ID` or `--from OBS.json`; `--seed` (1); `--policy` `play`\|`random`; `--obs`; loadout | plays one combat and prints it; `--from` builds it from an observation and ignores the loadout |
+| `bench` | `--n` (200), `--start`, `--seed` (1), `--policy`, `--out FILE`; pool | plays combats as fast as it can and reports combats per second ([Combats §7](/en/arch/simulator/combat/#sec-7)) |
+| `selftest` | `--n` (20), `--seed` (1), `--workers N` (0); pool | the checks of [§5](#sec-5) |
+| `forkbench` | `--n` (30), `--seed` (1), `--branches` (20); pool | the cost of restoring a combat and of one search branch, from mid-combat cut points ([Combats §2](/en/arch/simulator/combat/#sec-2)) |
+| `fidelity` | `--n` (20), `--start`, `--seed` (1), `--every` (3), `--player` `play`\|`random`, `--top` (15), `--no-history`; pool | how far a built combat plays like the real one; plays at most 12 actions ahead per measured decision, stopping after the end of the turn ([Combats §6](/en/arch/simulator/combat/#sec-6)) |
+| `panel` | `--n` (40), `--start`, `--seed` (1), `--player` (`pimc`), `--env` (NoSL), `--workers` (0, NoSL PIMC only), `--trace`, `--out FILE`, `--prompt-prefer IDS`; budget, leaf, pool | the fixed combat panel: the same combats for every player; win rate and HP lost ([Evaluation §3](/en/arch/evaluation/#sec-3)); in SL the world gets the real combat's prompt policy; `--prompt-prefer` (one-pick prompts only) is refused with `--workers` |
+| `fusion` | `--log` (required), `--n` (400), `--start`, `--every` (1), `--k` (32), `--max-nodes` (5000, a decision above it is skipped), `--out FILE` | the fusion panel: PIMC's values against merged ones over the logs' NoSL combat decisions ([Environments: worlds §3](/en/arch/environments/worlds/#sec-3)) |
+
+**Runs**
+
+| command | options | what it does |
+|---|---|---|
+| `run` | `--seeds FILE`, `--n`, `--start`, `--seed` (1), `--asc` (0), `--env` (NoSL), `--max-decisions` (20000), `--check`, `--trace`, `--obs`, `--auto-win`, `--gauntlet`, `--log FILE`, `--records FILE`, `--brain SOCKET`; champion, champion file, loadout | plays whole runs ([Whole runs](/en/arch/simulator/runs/)). Refused: `--auto-win` with `--check`, `--gauntlet` or `--afterstates clone`; `plan` outside SL; any champion option or `--log` with `--brain` |
+| `brain` | `--socket PATH`, `--log FILE`, `--wire FILE`, `--sl-policy` (`plan`); champion, champion file | the brain alone, serving hosts over a Unix socket ([Whole runs §8](/en/arch/simulator/runs/#sec-8)) |
+| `serve` | leaf | a worker of the pool ([The worker pool §4](/en/arch/simulator/pool/#sec-4)) |
+| `clones` | `--wire` (required) | replays a host's SL decisions, recorded by `brain --wire`, on their clones and compares observations; exit 1 if any differs ([Mod §12](/en/arch/mod/#sec-12)) |
+
+**Evaluation** ([Evaluation](/en/arch/evaluation/))
+
+| command | options | what it does |
+|---|---|---|
+| `report` | `--seeds`, `--records` (comma-separated), `--out` (a path without extension: writes `.json` and `.md`), all required; `--previous FILE` | a report of a seed set's runs; refuses auto-win and gauntlet records |
+| `gate` | `--champion` (required: the file to beat), `--records` (required), `--metric` `floor`\|`win`, `--delta` (1.5 floors or 0.1 wins), `--alpha` (0.05), `--beta` (0.05), `--not-worse`, `--promote PATH`, `--env`; champion options | the challenger's records against the champion's report, paired by seed, with a sequential test; exit 1 when it does not pass |
+| `leaderboard` | `--character` (`SILENT`) | a character's leaderboards over every report in `eval/CHARACTER/reports`, written to `eval/CHARACTER/leaderboard.md` |
+| `seeds` | `--base` (required), `--n` (300) | a seed file's seeds, `MakeSeed(base, 0..n-1)`, one per line |
+| `ranks` | `--logs` (required, plural), `--value FILE`, `--per-act` (200), `--top` (30) | V's sense of cards: per act, each card's mean change of V when one more copy joins the logged decks |
+| `weights` | `--leaf` | V's initial weights as a weights file, for tuning to start from; PIMC's default leaf weights with `--leaf` |
+
+**Self-play data** ([Learning](/en/arch/learning/))
+
+| command | options | what it does |
+|---|---|---|
+| `afterstates` | logged runs; champion, champion file | each macro decision of logged runs, replayed, with every option's afterstate and value; needs `--macro l0` |
+| `fork` | logged runs; `--per-run` (2), `--surfaces` (`map,card_reward,rest,shop`), `--act` (0), `--max-decisions` (20000); champion, champion file | counterfactual pairs: logged decisions replayed, then played on with L0's best and with another action; needs `l0` and refuses exploration |
+
+## 5. `selftest`
+
+`selftest` plays `--n` combats of the pool (20 by default) and runs these checks, by the names it reports (`Checks/SelfTest*.cs`; the order is `Checks/SelfTest.cs:67-144`). Exit 1 if any fails.
+
+**Boundaries**
+
+1. Brain, Protocol and Harness reach no game assembly.
+2. The reference check does see GameBridge's references to the game (the negative control).
+
+**Per combat**, played twice: determinism (observations, hidden state and trace), the protocol round trip (observations, and actions as text and as JSON), no exceptions, no game errors.
+
+**At up to three random cut points per combat** (so 60 build checks at the default `--n 20`): restore; restore of the hidden state, byte for byte; fast hook listeners give the game's results; determinize keeps the observation (seeds 11 and 22); determinize replays; play goes on after determinize; then `CombatBuilder` at the cut's observation: the build shows the observation, the built combat restores, and play goes on after the build.
+
+**Builds of numbers only a model holds** (Defect): a worn Glass orb (3 of 6), a used-up Silver Crucible, Pael's Tooth keeping 2 cards, Sloth with 1 of 3, Nightmare, a Hardened Shell at 14 of 20; the build keeps a power's stacks (Sloth still lets a card be played) and a power's card (Nightmare's copies next turn). Then: a player built at 3 HP with Royal Poison survives the start; the Waterfall Giant's eruption past 100 (`DeathBlow` 150) is found.
+
+**Rules**: Rolling Boulder hits one enemy after another (Ironclad with 10 Rolling Boulders against the pool's first multi-enemy encounter; the check fails if the pool has none); Thorns kill during a Sly play with no game error; a loadout's relics give their potion slots, in a combat and in a run at ascension 4.
+
+**Worlds and clones**: a world restores after card prompts (Toasty Mittens and Survivor, 6 worlds); the SL world shows the run's combat, plays as the run does, and restores; the SL clone stops at its node's exit and refuses to step past it; the SL clone keeps relic state the save drops (the first relic set to disabled by hand).
+
+**Gauntlets**: auto-win wins every combat at no HP lost, the first act's boss included; the elite gauntlet asks the combat brain in elite and boss fights only, wins the rest at no HP lost, and a death has the enemies' HP.
+
+**The SL plan holds** (the second combat of a run, 150 nodes, beam 4): the SL world ends its combat as planned (a win) and refuses to step past it; the run, played again to that decision, follows the plan step for step; the combat ends as the plan's value says, within 1e-9.
+
+**With `--workers N`**: pooled PIMC matches in-process PIMC on 4 decisions, each with an even budget of 4 worlds × 120 nodes and with halving; the pooled planner plans what the planner plans in one process; no game errors in workers; no worker restarts.
+
+At the end it prints draw-order statistics, which are not a check. Results of 2026-10-27: every check passed, with 60 of 60 builds for the Silent, 58 of 58 for the Ironclad, and 57, 57 and 58 for the Silent's elite and boss fights of acts 1, 2 and 3 ([Combats §5](/en/arch/simulator/combat/#sec-5)).
+
+## 6. `run --check`
+
+What `run --check` compares, for every run it plays ([Whole runs §6](/en/arch/simulator/runs/#sec-6)):
+
+| check | required |
+|---|---|
+| each observation's JSON round trip | exact |
+| a second play over the wire, to an in-process brain or the `--brain` given | the same trace, observation hashes, summary, map hashes, run record, and decision log (timings aside) |
+| every node of the first play, loaded from its checkpoint with its decisions replayed | the run's observations one for one; at the horizon after the travel; refuses another step |
+| game errors | none |
+
+The run line then ends with `obs <digest>`, one hash of the run's observation hashes, to compare runs across processes; the summary adds the `determinism:` line. With `--brain`, the brain's decision log is not in this process, so the log comparison compares two empty logs.
+
+## 7. The xUnit tests
+
+`src/Sts2Ai.Tests` holds what runs without the game, 21 classes and 99 test methods: `dotnet test src/Sts2Ai.Tests`. One folder per project tested (`Brain/`, `Harness/`, `SimWorker/`), `BoundaryTests.cs` at the root, and the shared JSON fixtures in `Fixtures.cs` and `Fixtures/`.
+
+| class | what it checks |
+|---|---|
+| `BoundaryTests` | Brain, Protocol and Harness reach no game assembly, and the check does see GameBridge's `sts2` |
+| `Brain/BudgetTests` | room multiples scale PIMC's nodes and plan's beam, once; names show only what is not the default |
+| `Brain/CloneSearchTests` | L0 on a toy clone: a shop is worth its best basket; an event option is worth what its next page gives; a map move is not played; a two-pick prompt finds the best pair; a skipped card reward is not opened again; a state reached twice is searched once |
+| `Brain/CombatExplorationTests` | an exploring route draws by the search's values and marks the draw; a tie is drawn but not marked; a route without candidates is left alone |
+| `Brain/CombatNetTests` | reads an SL net's states as its trainer did; still reads c2; a net plays only in its environment; V's prices of deaths, wins and potions; states in progress at V's prices |
+| `Brain/LeafValueTests` | a loss is 0; a win scores by HP and potions; in progress is below a win; a projected death stays above a loss; enemy damage raises the value |
+| `Brain/MacroExplorationTests` | a removal is worth only what can be removed; without exploration l0 takes the best; the softmax draws by V and the log marks them; even draws for card rewards; at ε=1 every kind of decision is drawn evenly but the potion belt; prompts at ε=1 and 0.1; an exploring prompt keeps its minimum |
+| `Brain/MacroUpgradeTests` | smithing is worth its best upgrade; the smith prompt takes the valued upgrade; the upgrade prompt takes the best preview |
+| `Brain/MoveRecordTests` | each living enemy is recorded once per round; the dead are skipped; it starts over when the round goes back; `Clear` |
+| `Brain/PimcMemoTests` | lines that look the same but rolled differently are not merged |
+| `Brain/RunNetTests` | reads a pure V net's runs as its trainer did, a win net's at the trainer's chance to win, and an encoders net's; still reads V v2; the map is every point a path still leads to, with its floors ahead; the route is the player's point, then the reachable ones, each with the nodes it leads to |
+| `Brain/SlPlannerTests` | 14 tests: full search, narrow beam, losing plans and replan turns, loss plans, a turn searched with keep and floor, the dive's turns, easy beam and beam, a winning combat planned once, each effort a budget, a proved loss, the candidates' order, the record's history |
+| `Brain/SoftmaxTests` | `Best` is the first best; draws by exp(value); a cold softmax takes the best; a tie within 1/100 of T; refuses T=0 |
+| `Brain/TurnPlanTests` | a step that does not hold is replanned and marked |
+| `Harness/DispatcherTests` | the combat brain gets the moves so far; a macro decision ends the record; an illegal pick is refused; no fallback for an uncovered surface; node checkpoints are refused in NoSL; an SL node's clones keep the gauntlet's rule |
+| `Harness/EvalReportTests` | sorted in the set's order; runs that break the set are rejected; a random decision or a failure voids a run |
+| `Harness/GateTests` | 10 tests: pass, fail and not-worse; minimum pairs; ties; a failed run voids the challenger; the win gate; pairing; refusals |
+| `Harness/WorkerPoolTests` | a worker stuck twice fails the call; one stuck once is restarted and answers |
+| `SimWorker/CliTests` | defaults; environments in any case; mistakes; `--verbose` anywhere and no response files; the champion file's options under the ones given; a champion file's character and asc; `brain` takes a champion file without its env; incoherent champions refused; leaf weights need pimc; a champion's options play it again |
+| `SimWorker/ForkTests` | an afterstate is the fields it changes; a logged run needs its record and every line |
+| `SimWorker/LoadoutTests` | the deck syntax with upgrades and enchantments; an enchantment needs its amount |
+
+## 8. Open questions
+
+1. **Copy or replay.** A snapshot is a recipe, and a restore replays it ([Combats §2](/en/arch/simulator/combat/#sec-2)). A deep copy of the game's object graph would remove the replay's cost, which AlphaZero-style search would need. Decided once profiles show that restoring dominates a search's time.
+2. **Run worlds**: how much of the room pools and the odds counters can be inferred from the public record, and how much must come from a prior ([Worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)).
+3. **Inline execution**: whether running actions inline headless, instead of once per frame, changes anything a player sees; open until runs in the game can be compared with runs here ([Whole runs §6](/en/arch/simulator/runs/#sec-6)).

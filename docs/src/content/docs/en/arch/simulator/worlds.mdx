@@ -1,0 +1,123 @@
+---
+title: Worlds and the SL clone
+description: The states a search plays forward in. NoSL combat worlds built from the observation and determinized; the node checkpoint; loading, replaying and sealing the SL clone; the relic state the save drops; the SL world; run worlds, still planned.
+sidebar:
+  label: Worlds and the SL clone
+---
+
+import { Badge, Steps } from '@astrojs/starlight/components';
+import WorldTurns from '../../../../../components/book/WorldTurns.svelte';
+
+A search needs somewhere to try things: a state it can play an action in, look at, and put back. That is a **world**. What a world may contain is the environment's rule ([Environments: worlds §1](/en/arch/environments/worlds/#sec-1)): in NoSL a sample of everything the player cannot see, in SL the real thing, up to the node's exit. This page is how the simulator makes each.
+
+## 1. What a world is
+
+To a search, a world is the interface `ICombatWorld` of the world API ([Protocol §7](/en/arch/protocol/#sec-7)): observe it, list its legal actions, execute one, read its status (in progress, won, lost) and its hidden key, take a snapshot, restore one. A source of worlds, `IWorldSource`, gives the worlds of one decision: `Worlds(k, searchSeed)`. The combat brains search through this interface only, so the same search code runs on any kind of world ([Combat brain §4](/en/arch/combat-brain/#sec-4)).
+
+Every world today is a **combat world**: one combat, at a combat decision. The simulator makes them in two ways:
+
+| | NoSL world | SL world |
+|---|---|---|
+| made from | the combat's observation and the record of enemy moves, built as a fresh combat ([§2](#sec-2)) | the node's clone: the checkpoint at the node's entry, replayed to the decision ([§7](#sec-7)) |
+| how many per decision | K, each determinized with its own seed | one |
+| hidden key | `HiddenState.Key` | `HiddenState.Full` |
+| class | `SimWorlds.NoSL` (`Simulation/SimWorlds.cs`) | `NodeWorld` (`Simulation/NodeWorld.cs`) |
+| where it lives | a worker process, or the host in the panel | a worker process |
+
+The macro brain does not use combat worlds: in SL it plays its options on the node's clone itself ([§3](#sec-3), [Macro brain: search §2](/en/arch/macro-brain/search/#sec-2)). Worlds of a whole run, which would let a NoSL search look past the current map point, are planned ([§8](#sec-8)).
+
+## 2. NoSL combat worlds
+
+A NoSL world is a **determinized sample**: a complete combat that agrees with everything the player has seen, with what the player cannot see drawn at random ([Environments: worlds §2](/en/arch/environments/worlds/#sec-2)). `SimWorlds.NoSL(pump, observation, buildSeed, history)` makes the worlds of one decision (`Simulation/SimWorlds.cs:37-44`):
+
+1. **The root** is a combat built from the observation by `CombatBuilder.Setup`, with the build seed and the record of the enemies' intents so far, which gives the monsters their move logs ([Combats §5](/en/arch/simulator/combat/#sec-5)). It is built from the observation, never from the real combat, so nothing the player cannot see gets in. The build must show the observation exactly; if it does not, the call throws, since a search would explore some other combat ([Harness §7](/en/arch/harness/#sec-7)).
+2. **World k** is the root plus one determinize step, with a seed mixed from the search seed and k (`Simulation/SimWorlds.cs:51-57`). The step shuffles what the player cannot know and reseeds every random stream ([Combats §3](/en/arch/simulator/combat/#sec-3)).
+
+How far such a world plays like the real combat, apart from what the step samples, is measured by `fidelity` ([Combats §6](/en/arch/simulator/combat/#sec-6)): within the decision's turn at most 1% of observations differ.
+
+**One live combat for all worlds.** The game allows one live combat per process, so the K worlds take turns on it. Each world keeps its own trace, and its snapshot is that trace ([Combats §2](/en/arch/simulator/combat/#sec-2)). A world used while another is live rebuilds itself: a fresh combat from the root, its trace replayed. A search that stays inside one world replays only when it backtracks. The figure shows the difference the order of a search makes:
+
+<WorldTurns client:visible lang="en" />
+
+Two details keep the replays exact:
+
+- **Card prompts** inside a world go to `p0`, the run's own prompt brain, so the search expects the picks the run will make ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
+- **A world's trace is the live combat's**, prompts asked while it starts included (a relic that asks at the start of each turn). Replay hands out the recorded picks in order, and without those, a later prompt's pick would go to them (`Simulation/SimWorlds.cs:88-98`). `selftest` checks that a world restores exactly after card prompts, with Toasty Mittens and Survivor over 6 worlds ([Reference §5](/en/arch/simulator/reference/#sec-5)).
+
+A NoSL world reports a combat that hit the session's caps (50 rounds or 1,000 actions, [Combats §1](/en/arch/simulator/combat/#sec-1)) as won (`Simulation/SimWorlds.cs:105-110`); no searched line gets near them.
+
+**Where the worlds live.** In a run, the worlds of a decision live in the pool's workers, one request per world, while the real run stays live in the host ([The worker pool §3](/en/arch/simulator/pool/#sec-3)). Only the panel searches in its own process (`panel` without `--workers`): it keeps the real combat as a snapshot before each decision, lets the worlds use the process, and puts the real combat back by replay ([Reference §4](/en/arch/simulator/reference/#sec-4)).
+
+**`SimWorlds.SL`** is the same class with one world, the real combat's own snapshot as the root, and no seal. It needs the real combat in the same process, so only the panel uses it, given the real combat's prompt policy; in a run the SL world is the node's clone ([§7](#sec-7)).
+
+## 3. The node checkpoint
+
+A **node** is a map point, from the arrival until the travel to the next ([Environments: information §3](/en/arch/environments/information/#sec-3)). SL may know everything about the current node, so SL needs an exact copy of it that can be played and played again. The copy starts from a save.
+
+On arrival at a map point the game saves the run. Headless nothing is written: the `SaveRun` patch skips it, and a save with no finished room is the arrival's, so the patch also signals that a node has started (`Runtime/Patches/Persistence.cs:13-23`). `RunSession` then takes the node's **checkpoint** (`Sts2Ai.GameBridge/Checkpoint.cs`), notes where the node's decisions begin in its trace, and numbers card prompts from 0 again (`Simulation/RunSession.cs:143-148`). The checkpoint is a JSON object with two parts:
+
+- `Save`: the game's own save of the run, `RunManager.ToSave(null)` serialized by `SaveManager.ToJson`, nested as a string;
+- `Relics`: for each relic, its plain fields: every writable field of a number, flag, enum or decimal type, from the relic's own class up to `RelicModel` (its status among them), by class and field name. The save drops most of them ([§6](#sec-6)).
+
+Both hosts take checkpoints, the simulator and the mod in the game, NoSL runs included; only an SL run sends them to the brain ([Environments: information §7](/en/arch/environments/information/#sec-7)).
+
+**The clone** is the checkpoint plus every decision of the node since, as trace lines (`surface action`; a card prompt's picks as the game's own indexes). Its protocol type is `NodeClone(Save, Trace, Gauntlet?)` (`Sts2Ai.Protocol/World.cs:53`), opaque to everything but the simulator. `Gauntlet` is true for a run under the elite gauntlet's rule, which the clone keeps ([Whole runs §7](/en/arch/simulator/runs/#sec-7)). `RunSession.Clone()` makes one at any point of the node (`Simulation/RunSession.cs:229-230`).
+
+**In a run**, the SL host sends the clone to the brain piece by piece: `node_checkpoint` when a new node starts, then each of the node's decisions as `node_action`, both just before the next decision is asked (`Brains/RunBrains.cs:88-99`; [Protocol §2](/en/arch/protocol/#sec-2)). Harness keeps the latest checkpoint and the decisions since, which is the clone at every decision ([Harness §3](/en/arch/harness/#sec-3)). The mod sends the same messages from the game ([Mod §6](/en/arch/mod/#sec-6)).
+
+## 4. Loading the clone
+
+`RunSession.Load(clone)` (`Simulation/RunSession.cs:192-226`) follows the game's Continue path: `NMainMenu`'s Continue and `NGame.LoadRun`, without the nodes (`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`) <Badge text="verified" variant="success" />.
+
+<Steps>
+
+1. Read the checkpoint; `SaveManager.FromJson<SerializableRun>` its save, then `RunState.FromSerializable`. The run's setup comes from the save: the character, the seed, the ascension, and the gauntlet's rule from the clone.
+2. `await RunManager.SetUpSavedSingleplayer(state, save)` (`Runs/RunManager.cs:354-370`). It needs no run live (`State == null`), so the previous session's `CleanUp()` comes first. It increments `NumReloads`, which only the game's metrics read. It also turns saving on, as Continue always does.
+3. Put the relics' plain fields back (`Checkpoint.RestoreRelics`, [§6](#sec-6)), and turn saving off again, as for any run the simulator starts, or the run's end would write progress.
+4. `Launch()`; `await GenerateMap()`, which makes the saved map again from the seed.
+5. `await LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, state))`. It enters the point as the arrival did: the same `?` roll, encounter, monster HP, opening shuffle and moves.
+6. Replay the trace: combat and macro decisions from a queue, card picks through the card selector. A step recorded on one surface but asked on another throws; so do steps or picks left over that the game never asked for ("replay diverged").
+
+</Steps>
+
+After the replay the clone stands at the same decision as the run, with the same observation, and the policies it was given answer from there.
+
+**Ids.** The game's multiplayer test loader also fast-forwards the action, hook, choice and reward ids that a save leaves out, and the checksums (`Nodes.Debug.Multiplayer/NMultiplayerTest.cs:552-556`). The clone does not: no observation shows them, and the clone's observations equal the run's without them ([§6](#sec-6)).
+
+## 5. The seal
+
+The travel to the next map point is a node's last decision. A clone records it but does not travel: it stops there and sets `AtHorizon`, and any later `Step` throws ("sealed: the clone has left its node", `Simulation/RunSession.cs:233-236, 338-345`). A run that ends inside the node, by a death or the victory, ends the clone with it. So a search on the clone can see every outcome of the node it is in and nothing of the next, which is the SL boundary ([Environments: information §3](/en/arch/environments/information/#sec-3)).
+
+`selftest` checks the seal both ways: a node's clone, its travel recorded, loads at its horizon and refuses another step ([Reference §5](/en/arch/simulator/reference/#sec-5)); `run --check` checks it on every node it replays ([Whole runs §6](/en/arch/simulator/runs/#sec-6)).
+
+## 6. What the save drops, and the checks
+
+A save is meant to continue a run, not to copy it. It keeps a relic's fields only where the relic marks them as saved, and loading sets the rest as a new relic would. For relics whose state shows, that difference reaches the observation: KUSARIGAMA and WHETSTONE in their counters, and LAVA_ROCK, which disables itself after the first act's boss rewards and saves only that it triggered. Every clone after that showed the relic as normal. The SL planner's steps then met observations they did not expect, and each later combat decision was planned again: 148 and 120 replans in 2 of 40 SL runs ([The SL planner §4](/en/arch/sl-planner/#sec-4)).
+
+So the checkpoint carries every relic's plain fields, and loading puts them back after the save is loaded (2026-10-28). `RestoreRelics` throws if the loaded run's relics are not the checkpoint's, in order (`Sts2Ai.GameBridge/Checkpoint.cs:34-42`). Fields that hold a reference (a card, a list) are not carried; `run --check` would show one that mattered. `selftest` sets the first relic to disabled by hand and checks that the clone keeps it ([Reference §5](/en/arch/simulator/reference/#sec-5)).
+
+**Checked** on every node of a run by `run --check`, which allows no difference: the clone must show the run's observations one for one, stand at its horizon after the travel and refuse another step. On five characters, 86 runs each at 9999 HP with the random macro policy and 90 each at normal HP with L0, `play` in combat: 9,747 nodes, all replayed exactly, and no game error (2026-10-28). Before the checkpoint carried the relic fields, 35 of 7,335 nodes differed in relic state.
+
+**What a node costs to load and replay** in that check: 8–11 ms on average at normal HP (241 ms at most); at 9999 HP, where bosses last long, 25–38 ms (8.8 s at most, a long boss node). These include building an observation at every step, which the check compares and a search does not ([§7](#sec-7)).
+
+## 7. The SL world
+
+`NodeWorld(pump, clone)` (`Simulation/NodeWorld.cs`) is the node's clone as a combat world. Loaded and replayed, it is the real combat at the decision, with its real draw order and random streams.
+
+- **An action** is one more step of the clone: the world hands the action to the clone's combat policy and steps the session once, then settles. Card prompts inside the world go to `p0`, as in the run, and are recorded among the steps.
+- **A restore** cannot rewind a live run, and a process holds one run, so it drops the live session and keeps the steps; the next use loads the clone again with them (`Simulation/NodeWorld.cs:23-24, 70-76`). The checkpoint is read once per world, not once per load.
+- **It stays in the combat.** A decision outside the combat throws ("search left the combat"); once the combat is over, the world lists no legal actions and refuses to execute one (`Simulation/NodeWorld.cs:48-62, 96`). So a search on it ends at the combat's end, where its leaf values the outcome ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)).
+- **Its hidden key** is `HiddenState.Full`: besides what a NoSL world's key holds, each monster's moves so far and what the combat's history holds of this turn, as a multiset; two states with the same observation but different futures are never merged ([Combats §4](/en/arch/simulator/combat/#sec-4)).
+
+**Cost.** A restore costs about 0.5 ms to load the checkpoint plus about 0.1 ms per step since the node's entry (2026-10-28), so late in a long fight it takes 10–20 ms. The figure in [Combats §2](/en/arch/simulator/combat/#sec-2) puts it beside a NoSL world's. This is the price of exactness: a NoSL world replays from its root, built at the decision, while the SL world replays the whole node up to it. The SL planner works with it by searching one turn per request from a state of its beam, so a request replays once and then searches forward ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)).
+
+## 8. Run worlds <Badge text="planned" variant="caution" />
+
+A NoSL search that looks past the current map point would need worlds of a whole run: a `SerializableRun` that agrees with the public record of the run (`RunView`: deck, relics, potions, HP, gold, act, floor, map, visited points), with the hidden parts sampled:
+
+- every random stream;
+- what is left in each room pool (`RoomSet`) and its counters, from the rules: the act's pools minus what was seen;
+- the grab bags;
+- the odds counters, inferred from the reward history where that is possible ([Environments: information §1](/en/arch/environments/information/#sec-1)), otherwise from a prior.
+
+It would load like the clone ([§4](#sec-4)), and its exactness would be tested by an observation round trip: the loaded world must show the run's observation. How much of the room pools and the odds can be inferred, and how much must come from a prior, is open ([Reference §8](/en/arch/simulator/reference/#sec-8)). In SL no such world is needed: nothing may be known past the node's exit.
