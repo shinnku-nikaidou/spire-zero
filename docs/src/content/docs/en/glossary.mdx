@@ -85,7 +85,9 @@ Terms are grouped by area. Each entry links to the page that covers it in depth.
 | ExIt | Expert Iteration: use search results as training labels, so the value function learns what search found. |
 | SPSA | Simultaneous Perturbation Stochastic Approximation: tunes many parameters at once by perturbing them together. |
 | privileged information | Hidden state used only at training time to reduce noise; never an input of the deployed policy ([Learning §4](/en/arch/learning/#sec-4)). |
-| boss gauntlet, door state | Runs whose every combat is won at its start (`run --auto-win`), so that they reach each boss's door at once; a door state is a run's loadout there, fought by the SL planner for V's boss-score labels ([Learning §2](/en/arch/learning/#sec-2)). |
+| boss gauntlet pilot, door state | Runs whose every combat is won at its start (`run --auto-win`), so that they reach each boss's door at once; a door state is a run's loadout there, fought by the SL planner for V's boss-score labels ([Learning §2](/en/arch/learning/#sec-2)). |
+| elite gauntlet, progress | V's training game since 2026-10-29 (`run --gauntlet`): plain monster combats are won at their start, elites and bosses are fought with the HP the run has, and a death ends the run. Progress is the floor reached plus the share of the enemies' HP taken in the combat the run died in ([Learning §2](/en/arch/learning/#sec-2)). |
+| even draws, ε | Self-play's exploration for V (`run --explore ε`): with chance ε a macro decision's answer is drawn evenly among its options, whatever V says ([Learning §5](/en/arch/learning/#sec-5)). |
 
 ## Evaluation
 

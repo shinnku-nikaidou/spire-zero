@@ -85,7 +85,9 @@ description: 本手冊中遊戲、專案、搜尋、學習和評估相關術語�
 | ExIt | Expert Iteration | 專家迭代：把搜尋結果當作訓練標籤，讓價值函式學會搜尋發現的東西。 |
 | SPSA | | 同時擾動隨機逼近：同時擾動許多參數，一次調好它們。 |
 | 特權資訊 | privileged information | 只在訓練時使用、用來降低雜訊的隱藏狀態；永遠不是部署後策略的輸入（[學習 §4](/zh-tw/arch/learning/#sec-4)）。 |
-| 頭目連戰、門口狀態 | boss gauntlet, door state | 每場戰鬥一開始就判贏的對局（`run --auto-win`），所以很快就走到每個頭目的門口；門口狀態是對局在那裡的整套配置，由 SL 規劃器去打，給 V 當作頭目分數的標籤（[學習 §2](/zh-tw/arch/learning/#sec-2)）。 |
+| 頭目連戰試驗、門口狀態 | boss gauntlet pilot, door state | 每場戰鬥一開始就判贏的對局（`run --auto-win`），所以很快就走到每個頭目的門口；門口狀態是對局在那裡的整套配置，由 SL 規劃器去打，給 V 當作頭目分數的標籤（[學習 §2](/zh-tw/arch/learning/#sec-2)）。 |
+| 菁英連戰、進度 | elite gauntlet, progress | V 自 2026-10-29 起訓練所用的遊戲形式（`run --gauntlet`）：普通怪物戰一開始就判贏，菁英和頭目用這一局當時的生命值去打，死亡就結束這一局。進度是到達的層數，加上這一局死在其中的那場戰鬥裡打掉的敵人生命比例（[學習 §2](/zh-tw/arch/learning/#sec-2)）。 |
+| 均勻抽取、ε | even draws | 自我對弈裡 V 的探索（`run --explore ε`）：一個宏觀決策以機率 ε 在它的選項之間均勻抽取答案，不管 V 怎麼說（[學習 §5](/zh-tw/arch/learning/#sec-5)）。 |
 
 ## 評估
 
