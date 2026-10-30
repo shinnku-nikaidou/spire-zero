@@ -62,7 +62,7 @@ L0 decides every time; L1 would be an extra check for close calls, with the eval
 4. A candidate's value is the mean of V at the horizon, or the terminal outcome if the run ends first.
 5. Choose by the paired difference and its confidence interval.
 
-These counterfactual paired rollouts would also be training signal for V at key decisions. In SL, rollouts past the current node still use sampled worlds ([Environments §4](/en/arch/environments/#sec-4)). On the map, the decision is the next point only, decided again at every step; close calls there are L1's first use.
+These counterfactual paired rollouts would also be training signal for V at key decisions. In SL, rollouts past the current node still use sampled worlds ([Environments: information §3](/en/arch/environments/information/#sec-3)). On the map, the decision is the next point only, decided again at every step; close calls there are L1's first use.
 
 ### NoSL: run worlds
 

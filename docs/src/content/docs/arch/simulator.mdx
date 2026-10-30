@@ -20,7 +20,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 一个 worker 进程有三种角色：
 
 - **(a)** R1–R3 中「真实」一局的宿主（R1–R3 是[仿真到实机阶梯](/arch/evaluation/#sec-1)中由模拟器而不是真实游戏来玩这一局的几级）；
-- **(b)** 搜索世界：NoSL 样本和 SL 克隆（[环境 §5](/arch/environments/#sec-5)）；
+- **(b)** 搜索世界：NoSL 样本和 SL 克隆（[环境：世界 §1](/arch/environments/worlds/#sec-1)）；
 - **(c)** 基准测试和 selftest。
 
 每个进程同一时刻只持有**一个活着的一局或一场战斗**。游戏把一局和战斗放在进程级单例（`RunManager`、`CombatManager`）里，所以第二局无法与第一局并存。因此分支靠重放来做（[§2](#sec-2)），并行搜索需要多个进程（[§8](#sec-8)）。
@@ -332,7 +332,7 @@ TestMode 会改动一些规则。对整局有影响的分支（来自本地笔�
 
 ## 6. NoSL 世界
 
-NoSL 世界是一个确定化样本：一个与玩家见过的一切都一致的完整游戏状态（[环境 §1](/arch/environments/#sec-1)）。战斗世界已实现；整局世界还在规划中。
+NoSL 世界是一个确定化样本：一个与玩家见过的一切都一致的完整游戏状态（[环境：世界 §2](/arch/environments/worlds/#sec-2)）。战斗世界已实现；整局世界还在规划中。
 
 - **输入**：公开记录（协议类型）和一个搜索种子。**输出**：与之一致的采样状态。
 - **战斗世界**：`SimWorlds` 在一个进程内实现世界 API（[协议 §7](/arch/protocol/#sec-7)）。根是 `CombatBuilder.Setup(combat obs, build seed)`，从观测构建，从不取自真实战斗。第 k 个世界 = 根 + `Determinize(seed_k)`，`seed_k` 由搜索种子和 k 混合得到。怪物的出招日志来自它们意图的记录（[§3](#sec-3)）；本回合的历史和隐藏计数器的后验仍是缺口。
@@ -354,7 +354,7 @@ NoSL 世界是一个确定化样本：一个与玩家见过的一切都一致的
 
 ## 7. SL 节点克隆
 
-SL 克隆是当前节点的一个精确副本，在节点出口处封存（[环境 §6](/arch/environments/#sec-6)）。`run --env SL` 在 worker 进程池里搜索它（[§8](#sec-8)）。
+SL 克隆是当前节点的一个精确副本，在节点出口处封存（[环境：信息与节点 §7](/arch/environments/information/#sec-7)）。`run --env SL` 在 worker 进程池里搜索它（[§8](#sec-8)）。
 
 - **节点与检查点**：节点是一个地图点，从到达开始，到离开为止。到达时游戏会保存这一局（`RunManager.ToSave(null)`；无头宿主留下这份存档而不写盘）。节点的检查点是这份存档，加上每个遗物的简单字段（数字、标志和枚举，其中包括它的状态）；遗物没有标记为保存的字段，存档会丢掉（GameBridge 里的 `Checkpoint`，Mod 也用它）。`RunSession` 保留它，以及此后的每个决策，形式是「界面 动作」文本；卡牌提示的选择用游戏自己的下标，卡牌提示从节点入口开始编号。
 - **克隆**：`NodeClone(save, trace)`，一个只有模拟器读取的协议类型。`RunSession.Clone()` 可以在节点内任意时刻生成克隆，`RunSession.Load(clone)` 加载它：像游戏的「继续游戏」那样加载存档，放回遗物字段，再重放决策。
@@ -378,7 +378,7 @@ SL 克隆是当前节点的一个精确副本，在节点出口处封存（[环�
 - **开销**：一次加载加重放，正常生命下平均每个节点 8–11 ms（最多 241 ms）。9999 生命下 Boss 战很长，平均 25–38 ms（最多 8.8 s，一个很长的 Boss 节点）。
 - **整局里**：SL 下，宿主到达节点时发送检查点，节点里每个决策做出之后也发送（`node_checkpoint`、`node_action`，[协议 §2](/arch/protocol/#sec-2)）。Harness 保存最新的检查点和此后的决策；到了战斗决策时，它们就是克隆（[Harness §3](/arch/harness/#sec-3)）。模拟器的整局宿主发送它们，Mod 也从游戏里发送（[Mod §6](/arch/mod/#sec-6)）；`clones` 把宿主的 SL 决策放到各自的克隆上重放，比较观测（[Mod §12](/arch/mod/#sec-12)）。
 - **SL 世界**：`NodeWorld` 把克隆当作战斗世界（[§6](#sec-6)）：加载并重放之后，它就是决策时的真实战斗。一个动作是克隆的又一步；恢复时连同保留的步骤重新加载克隆，因为一个进程只能持有一局。世界里的选牌提示交给 `p0`，与 NoSL 世界相同。战斗之外的决策会抛异常：搜索只在战斗之内。一次恢复的代价约为加载 0.5 ms，加上从进入节点起每重放一步约 0.1 ms（2026-10-28；上面的 8–11 ms 包含了每一步都建一次观测，那是 `run --check` 用来比较的，搜索不需要），所以长战斗的后段一次恢复要 10–20 ms。
-- **视野边界反事实的辅助工具**（规划中）：扰动 RoomSet 的尾部、UnknownMapPoint、TreasureRoomRelics、抽取袋的尾部和后续地图种子（[环境 §7](/arch/environments/#sec-7)）；逐一测试节点内从不读取它们。
+- **视野边界反事实的辅助工具**（规划中）：扰动 RoomSet 的尾部、UnknownMapPoint、TreasureRoomRelics、抽取袋的尾部和后续地图种子（[环境：信息与节点 §8](/arch/environments/information/#sec-8)）；逐一测试节点内从不读取它们。
 
 ## 8. worker 进程池与 IPC
 

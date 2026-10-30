@@ -20,7 +20,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 一個 worker 行程有三種角色：
 
 - **(a)** R1–R3 中「真實」一局的宿主（R1–R3 是[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)中由模擬器而不是真實遊戲來玩這一局的幾級）；
-- **(b)** 搜尋世界：NoSL 樣本和 SL 複本（[環境 §5](/zh-tw/arch/environments/#sec-5)）；
+- **(b)** 搜尋世界：NoSL 樣本和 SL 複本（[環境：世界 §1](/zh-tw/arch/environments/worlds/#sec-1)）；
 - **(c)** 基準測試和 selftest。
 
 每個行程同一時刻只持有**一個活著的一局或一場戰鬥**。遊戲把一局和戰鬥放在行程級單例（`RunManager`、`CombatManager`）裡，所以第二局無法與第一局並存。因此分支靠重播來做（[§2](#sec-2)），並行搜尋需要多個行程（[§8](#sec-8)）。
@@ -332,7 +332,7 @@ TestMode 會改動一些規則。對整局有影響的分支（來自本地筆�
 
 ## 6. NoSL 世界
 
-NoSL 世界是一個確定化樣本：一個與玩家見過的一切都一致的完整遊戲狀態（[環境 §1](/zh-tw/arch/environments/#sec-1)）。戰鬥世界已實作；整局世界還在規劃中。
+NoSL 世界是一個確定化樣本：一個與玩家見過的一切都一致的完整遊戲狀態（[環境：世界 §2](/zh-tw/arch/environments/worlds/#sec-2)）。戰鬥世界已實作；整局世界還在規劃中。
 
 - **輸入**：公開記錄（協定型別）和一個搜尋種子。**輸出**：與之一致的取樣狀態。
 - **戰鬥世界**：`SimWorlds` 在一個行程內實作世界 API（[協定 §7](/zh-tw/arch/protocol/#sec-7)）。根是 `CombatBuilder.Setup(combat obs, build seed)`，從觀測建構，從不取自真實戰鬥。第 k 個世界 = 根 + `Determinize(seed_k)`，`seed_k` 由搜尋種子和 k 混合得到。怪物的出招日誌來自它們意圖的記錄（[§3](#sec-3)）；本回合的歷史和隱藏計數器的後驗仍是缺口。
@@ -354,7 +354,7 @@ NoSL 世界是一個確定化樣本：一個與玩家見過的一切都一致的
 
 ## 7. SL 節點複本
 
-SL 複本是當前節點的一個精確副本，在節點出口處封存（[環境 §6](/zh-tw/arch/environments/#sec-6)）。`run --env SL` 在 worker 行程池裡搜尋它（[§8](#sec-8)）。
+SL 複本是當前節點的一個精確副本，在節點出口處封存（[環境：資訊與節點 §7](/zh-tw/arch/environments/information/#sec-7)）。`run --env SL` 在 worker 行程池裡搜尋它（[§8](#sec-8)）。
 
 - **節點與檢查點**：節點是一個地圖點，從到達開始，到離開為止。到達時遊戲會儲存這一局（`RunManager.ToSave(null)`；無頭宿主留下這份存檔而不寫入磁碟）。節點的檢查點是這份存檔，加上每個遺物的簡單欄位（數字、標誌和列舉，其中包括它的狀態）；遺物沒有標記為儲存的欄位，存檔會丟掉（GameBridge 裡的 `Checkpoint`，Mod 也用它）。`RunSession` 保留它，以及此後的每個決策，形式是「介面 動作」文字；卡牌提示的選擇用遊戲自己的索引，卡牌提示從節點入口開始編號。
 - **複本**：`NodeClone(save, trace)`，一個只有模擬器讀取的協定型別。`RunSession.Clone()` 可以在節點內任意時刻生成複本，`RunSession.Load(clone)` 載入它：像遊戲的「繼續」那樣載入存檔，放回遺物欄位，再重播決策。
@@ -378,7 +378,7 @@ SL 複本是當前節點的一個精確副本，在節點出口處封存（[環�
 - **開銷**：一次載入加重播，正常生命下平均每個節點 8–11 ms（最多 241 ms）。9999 生命下頭目戰很長，平均 25–38 ms（最多 8.8 s，一個很長的頭目節點）。
 - **整局裡**：SL 下，宿主到達節點時傳送檢查點，節點裡每個決策做出之後也傳送（`node_checkpoint`、`node_action`，[協定 §2](/zh-tw/arch/protocol/#sec-2)）。Harness 儲存最新的檢查點和此後的決策；到了戰鬥決策時，它們就是複本（[Harness §3](/zh-tw/arch/harness/#sec-3)）。模擬器的整局宿主傳送它們，Mod 也從遊戲裡傳送（[Mod §6](/zh-tw/arch/mod/#sec-6)）；`clones` 把宿主的 SL 決策放到各自的複本上重播，比較觀測（[Mod §12](/zh-tw/arch/mod/#sec-12)）。
 - **SL 世界**：`NodeWorld` 把複本當作戰鬥世界（[§6](#sec-6)）：載入並重播之後，它就是決策時的真實戰鬥。一個動作是複本的又一步；恢復時連同保留的步驟重新載入複本，因為一個行程只能持有一局。世界裡的選牌提示交給 `p0`，與 NoSL 世界相同。戰鬥之外的決策會拋出例外：搜尋只在戰鬥之內。一次恢復的代價約為載入 0.5 ms，加上從進入節點起每重播一步約 0.1 ms（2026-10-28；上面的 8–11 ms 包含了每一步都建一次觀測，那是 `run --check` 用來比較的，搜尋不需要），所以長戰鬥的後段一次恢復要 10–20 ms。
-- **視野邊界反事實的輔助工具**（規劃中）：擾動 RoomSet 的尾部、UnknownMapPoint、TreasureRoomRelics、抽取袋的尾部和後續地圖種子（[環境 §7](/zh-tw/arch/environments/#sec-7)）；逐一測試節點內從不讀取它們。
+- **視野邊界反事實的輔助工具**（規劃中）：擾動 RoomSet 的尾部、UnknownMapPoint、TreasureRoomRelics、抽取袋的尾部和後續地圖種子（[環境：資訊與節點 §8](/zh-tw/arch/environments/information/#sec-8)）；逐一測試節點內從不讀取它們。
 
 ## 8. worker 行程池與 IPC
 

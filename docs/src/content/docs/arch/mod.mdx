@@ -128,7 +128,7 @@ interface ISurfaceAdapter
 
 ## 6. SL 导出
 
-SL 下，大脑在当前节点的精确克隆上规划战斗（[环境 §6](/arch/environments/#sec-6)）。worker 用节点的检查点，加上进入节点以来做过的每一个决策来构建克隆；决策的写法与模拟器自己的轨迹相同（[模拟器 §7](/arch/simulator/#sec-7)）。Mod 在两种环境下都把这两样东西记在内存里（`NodeRecord`），所以在任何房间里勾上 SL 都能马上用；只有 SL 才把它们发出去。
+SL 下，大脑在当前节点的精确克隆上规划战斗（[环境：信息与节点 §7](/arch/environments/information/#sec-7)）。worker 用节点的检查点，加上进入节点以来做过的每一个决策来构建克隆；决策的写法与模拟器自己的轨迹相同（[模拟器 §7](/arch/simulator/#sec-7)）。Mod 在两种环境下都把这两样东西记在内存里（`NodeRecord`），所以在任何房间里勾上 SL 都能马上用；只有 SL 才把它们发出去。
 
 - **检查点**：在游戏到达地图点、存档的那一刻，用 GameBridge 的 `Checkpoint.Take` 取：在 `SaveManager.SaveRun` 上挂一个前缀（prefix），只在它的「已完成房间」为空时取，与模拟器取检查点是同一时刻。开局时游戏以同样方式进入第一个地图点。继续游戏（Continue）时，游戏重新进入存档所在的地图点，但不再存档（`RunManager.LoadIntoLatestMapCoord`）：如果存档是到达时存的，就在这里取检查点；如果是房间里更晚的存档（战斗胜利后、Ancient 事件后），房间的开头已经不在了，这个节点就没有克隆。Mod 从不写会被云同步的 `current_run.save`，也不写档案目录下的任何其他文件。
 - **步骤**：玩家的每个决策，都在游戏提交它的地方读出来；这些入口也正是模拟器自己调用的入口（[GameBridge §4](/arch/gamebridge/#sec-4)），所以在游戏执行之前就能精确知道这一步。未决问题 1 因此选了钩子，而不是比较前后的状态：状态比较分不出两张一样的牌，玩家操作得比画面稳定还快时也会漏掉动作。

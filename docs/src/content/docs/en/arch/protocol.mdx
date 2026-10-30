@@ -210,12 +210,12 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 - `Plan` is the rest of the turn or screen, or on the map the rest of the act's route, used for the highlight and the narration.
 - `Candidates` lists the actions that were scored, each with its `Value`, `Ci` (confidence interval) and number of `Samples`.
 - `Facts` are the only source for explanations.
-- A fact's `Exact` flag is set only in SL, where facts may be exact outcomes ([Environments §8](/en/arch/environments/#sec-8)).
+- A fact's `Exact` flag is set only in SL, where facts may be exact outcomes ([Environments: worlds §7](/en/arch/environments/worlds/#sec-7)).
 - `Degraded` marks an answer given under trouble, such as the loss of a worker ([Harness §7](/en/arch/harness/#sec-7)).
 
 ## 7. World API
 
-Search never touches a game directly. It gets **worlds** from this API: simulated combats it can observe, act in, snapshot and restore. The types live in Protocol (`World.cs`), so Brain can use them without game references; SimWorker implements them ([Simulator §6](/en/arch/simulator/#sec-6)). How NoSL and SL worlds differ is described in [Environments §5](/en/arch/environments/#sec-5).
+Search never touches a game directly. It gets **worlds** from this API: simulated combats it can observe, act in, snapshot and restore. The types live in Protocol (`World.cs`), so Brain can use them without game references; SimWorker implements them ([Simulator §6](/en/arch/simulator/#sec-6)). How NoSL and SL worlds differ is described in [Environments: worlds §1](/en/arch/environments/worlds/#sec-1).
 
 ```csharp
 public enum PlayEnvironment { NoSL, SL }

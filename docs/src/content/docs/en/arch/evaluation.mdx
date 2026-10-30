@@ -46,10 +46,10 @@ A leaderboard holds the results of an environment's champion (the best accepted 
 |---|---|---|
 | seeds | same pre-registered set | same |
 | champion | NoSL champion | SL champion |
-| info allowed | [Environments §3](/en/arch/environments/#sec-3) | same table |
+| info allowed | [Environments: information §5](/en/arch/environments/information/#sec-5) | same table |
 | budget | per decision, same tier | same |
 
-- The two champions share the macro brain and one V; their combat brains differ ([Environments §5](/en/arch/environments/#sec-5)). Since 2026-10-30 both champion files name the same V, v6-3-2, chosen by its SL results; NoSL plays it with screen afterstates, since the clone is SL's. Until a NoSL report of that V exists, the NoSL champion file names the SL report: a NoSL gate then refuses to pair with it (the environments differ), and the NoSL leaderboard marks no champion.
+- The two champions share the macro brain and one V; their combat brains differ ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). Since 2026-10-30 both champion files name the same V, v6-3-2, chosen by its SL results; NoSL plays it with screen afterstates, since the clone is SL's. Until a NoSL report of that V exists, the NoSL champion file names the SL report: a NoSL gate then refuses to pair with it (the environments differ), and the NoSL leaderboard marks no champion.
 - Also reported: the SL − NoSL win-rate delta, which is the value of in-node information. This is the formal version of the omniscient-vs-resampled ablation in plan v1 (local note `tmp/notes/plan.md`). For reference, spire-mentor (a prior-art project) lost 22.8–25.5 percentage points (pp) of win rate without its cheat, which covered the whole run. Ours is node-level only, so we expect a smaller delta.
 - `leaderboard [--character SILENT]` builds a character's leaderboards from its reports in `eval/CHARACTER/reports/` into `eval/CHARACTER/leaderboard.md`: per ascension, seed set and rung, one table per environment, ranked by win rate and then mean floor, with void reports last and the report of the environment's champion file (`eval/CHARACTER/champions/`) marked ([§5](#sec-5)); partial reports are left out. Below them, for each champion with a report in both environments, the SL − NoSL difference on the same seeds, paired by seed: win rate and floor reached, each with a 95% interval. Every report is on the board, not only accepted champions. The leaderboard is committed with the reports.
 
@@ -75,7 +75,7 @@ The Wilson interval is a confidence interval for a proportion such as a win rate
 - failed runs (an error in the driver or a brain) and truncated runs (the decision cap);
 - game errors (`Log.Error` lines);
 - `NumReloads`;
-- save exports in NoSL runs ([Environments §6](/en/arch/environments/#sec-6)).
+- save exports in NoSL runs ([Environments: information §7](/en/arch/environments/information/#sec-7)).
 
 **Auxiliary**
 

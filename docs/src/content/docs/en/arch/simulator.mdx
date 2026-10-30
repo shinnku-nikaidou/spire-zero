@@ -20,7 +20,7 @@ Exists: the headless host, single-combat sessions, Determinize, CombatBuilder, t
 A worker process has three roles:
 
 - **(a)** the host of the "real" run in R1–R3 (the rungs of the [sim-to-real ladder](/en/arch/evaluation/#sec-1) where the simulator, not the real game, plays the run);
-- **(b)** search worlds: NoSL samples and SL clones ([Environments §5](/en/arch/environments/#sec-5));
+- **(b)** search worlds: NoSL samples and SL clones ([Environments: worlds §1](/en/arch/environments/worlds/#sec-1));
 - **(c)** benchmarks and the selftest.
 
 Each process holds **one live run or combat** at a time. The game keeps the run and the combat in process-wide singletons (`RunManager`, `CombatManager`), so a second run cannot exist next to the first. Branching is therefore done by replay ([§2](#sec-2)), and parallel search needs several processes ([§8](#sec-8)).
@@ -332,7 +332,7 @@ This is the SL clone's mechanism ([§7](#sec-7)), so there is one code path, and
 
 ## 6. NoSL worlds
 
-A NoSL world is a determinized sample: a full game state that agrees with everything the player has seen ([Environments §1](/en/arch/environments/#sec-1)). Combat worlds exist; run worlds are planned.
+A NoSL world is a determinized sample: a full game state that agrees with everything the player has seen ([Environments: worlds §2](/en/arch/environments/worlds/#sec-2)). Combat worlds exist; run worlds are planned.
 
 - **Input:** the public record (protocol types) and a search seed. **Output:** a sampled state consistent with it.
 - **Combat worlds:** `SimWorlds` implements the world API ([Protocol §7](/en/arch/protocol/#sec-7)) inside one process. The root is `CombatBuilder.Setup(combat obs, build seed)`, built from the observation and never from the real combat. World k is the root plus `Determinize(seed_k)`, with `seed_k` mixed from the search seed and k. The monsters' move logs come from the record of their intents ([§3](#sec-3)); this turn's history and a posterior over hidden counters are still gaps.
@@ -354,7 +354,7 @@ A NoSL world is a determinized sample: a full game state that agrees with everyt
 
 ## 7. SL node clone
 
-An SL clone is one exact copy of the current node, sealed at its exit ([Environments §6](/en/arch/environments/#sec-6)). `run --env SL` searches it in the worker pool ([§8](#sec-8)).
+An SL clone is one exact copy of the current node, sealed at its exit ([Environments: information §7](/en/arch/environments/information/#sec-7)). `run --env SL` searches it in the worker pool ([§8](#sec-8)).
 
 - **Node and checkpoint.** A node is a map point, from arrival until travel. On arrival the game saves the run (`RunManager.ToSave(null)`; the headless host keeps the save instead of writing it). The node's checkpoint is that save plus each relic's plain fields (numbers, flags and enums, its status among them), which the save drops unless the relic marks them as saved (`Checkpoint` in GameBridge, which the mod shares). `RunSession` keeps it, with every decision since as "surface action" text; a card prompt's picks are the game's own indexes, and card prompts are numbered from the node's entry.
 - **Clone:** `NodeClone(save, trace)`, a protocol type that only the simulator reads. `RunSession.Clone()` makes one at any point of the node, and `RunSession.Load(clone)` loads it: the save as the game's Continue loads one, the relic fields put back, then the trace replayed.
@@ -378,7 +378,7 @@ Loading follows the game's Continue path (`NMainMenu`'s Continue and `NGame.Load
 - **Cost** of a load plus its replay: 8–11 ms per node on average at normal HP (at most 241 ms). At 9999 HP bosses last long, and it is 25–38 ms (at most 8.8 s, a long boss node).
 - **In a run.** In SL the host sends the checkpoint on arrival and each decision of the node after it is taken (`node_checkpoint`, `node_action`, [Protocol §2](/en/arch/protocol/#sec-2)). Harness keeps the latest checkpoint and the decisions since; at a combat decision they are the clone ([Harness §3](/en/arch/harness/#sec-3)). The simulator's run host sends them, and so does the mod from the game ([Mod §6](/en/arch/mod/#sec-6)); `clones` replays a host's SL decisions on their clones and compares observations ([Mod §12](/en/arch/mod/#sec-12)).
 - **SL world.** `NodeWorld` is the clone as a combat world ([§6](#sec-6)): loaded and replayed, it is the real combat at the decision. An action is one more step of the clone; a restore loads the clone again with the steps it keeps, since a process holds one run. Card prompts inside the world go to `p0`, as in a NoSL world. A decision outside the combat throws: search stays inside the combat. A restore costs about 0.5 ms for the load plus about 0.1 ms per step replayed since the node's entry (2026-10-28; the 8–11 ms above include building an observation at every step, which `run --check` compares and search does not), so late in a long fight it is 10–20 ms.
-- **Horizon counterfactual helpers** (planned): perturb the RoomSet tails, UnknownMapPoint, TreasureRoomRelics, the grab-bag tail and the future map seeds ([Environments §7](/en/arch/environments/#sec-7)); test that the node never reads each of them.
+- **Horizon counterfactual helpers** (planned): perturb the RoomSet tails, UnknownMapPoint, TreasureRoomRelics, the grab-bag tail and the future map seeds ([Environments: information §8](/en/arch/environments/information/#sec-8)); test that the node never reads each of them.
 
 ## 8. Worker pool and IPC
 

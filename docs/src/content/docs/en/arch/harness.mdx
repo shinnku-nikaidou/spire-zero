@@ -22,7 +22,7 @@ Harness does six things:
 
 1. Handles Protocol messages: keeps them in `decision_id` order and drops stale requests, i.e. requests for a state the game has already left ([Protocol §2](/en/arch/protocol/#sec-2)).
 2. Keeps the public record of each run ([§3](#sec-3)). In NoSL this record is the input to the belief, the AI's picture of the hidden state. In SL Harness also keeps the node checkpoint and the node trace.
-3. Opens worlds for the current environment through `IWorldSource` ([Environments §5](/en/arch/environments/#sec-5), [Protocol §7](/en/arch/protocol/#sec-7)).
+3. Opens worlds for the current environment through `IWorldSource` ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5), [Protocol §7](/en/arch/protocol/#sec-7)).
 4. Routes each surface to a brain, with no fallback ([§4](#sec-4)).
 5. Sets the budget ([§5](#sec-5)) and keeps the search seeds deterministic.
 6. Writes the decision log ([§6](#sec-6)).
@@ -98,7 +98,7 @@ Each surface (kind of decision screen) goes to exactly one brain:
 | `card_choice` out of combat (upgrade, transform, enchant, remove) | macro |
 | `map`, `rewards`, `card_reward`, `bundle`, `event`, `shop`, `rest`, `treasure`, `potion_full` | macro |
 
-- The combat brain depends on the environment: PIMC in NoSL, the SL planner in SL (`--policy plan`, [Combat brain §3](/en/arch/combat-brain/#sec-3)), which plans on the node's clone and refuses to play in NoSL. PIMC on the clone (`--policy pimc` in SL) stays as the planner's baseline: it searches this turn only. The macro brain is the same in both ([Environments §5](/en/arch/environments/#sec-5)). Each host names its environment at `hello`, so the `brain` command serves both: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s, the SL planner by default ([Mod §5](/en/arch/mod/#sec-5)).
+- The combat brain depends on the environment: PIMC in NoSL, the SL planner in SL (`--policy plan`, [Combat brain §3](/en/arch/combat-brain/#sec-3)), which plans on the node's clone and refuses to play in NoSL. PIMC on the clone (`--policy pimc` in SL) stays as the planner's baseline: it searches this turn only. The macro brain is the same in both ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). Each host names its environment at `hello`, so the `brain` command serves both: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s, the SL planner by default ([Mod §5](/en/arch/mod/#sec-5)).
 - `Dispatcher` implements this table for one run. The host gives it as its combat, card-prompt and macro policy. It holds one brain per side (combat, prompts in combat, macro, prompts out of combat) and sends a card prompt to a side by `ChoiceContext.InCombat` ([Protocol §4](/en/arch/protocol/#sec-4)). Today prompts in combat go to `p0` ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1), rule 7), and the macro side and its prompts to L0 or to the random placeholder.
 - No route means the error "uncovered surface": `Dispatcher` throws on a surface outside `Dispatcher.MacroSurfaces`, and on a brain's answer that is not legal. The host pauses, asks for manual play and logs a coverage bug. There is never a random fallback. Evaluation requires the fallback count to be 0 ([Evaluation §3](/en/arch/evaluation/#sec-3)).
 - The list of surfaces and their game entry points: [Simulator §5.2](/en/arch/simulator/#sec-5.2), [GameBridge §4](/en/arch/gamebridge/#sec-4).
@@ -166,7 +166,7 @@ Today: a worker that dies, or does not answer within 5 minutes, is killed, resta
 
 1. Routing coverage: N simulated runs hit every surface, with a fallback count of 0. Exists: `run` lists the surfaces never reached, and `Dispatcher` throws on an uncovered one.
 2. Reproducibility: replaying a decision log gives identical recommendations. Exists in part: `run --check` plays each seed twice, the second time over the wire to a Harness in the same process, and compares the decision logs, every field but `elapsed_ms`.
-3. NoSL counterfactual at Harness level: same record, different hidden state → same recommendation ([Environments §7](/en/arch/environments/#sec-7)).
+3. NoSL counterfactual at Harness level: same record, different hidden state → same recommendation ([Environments: information §8](/en/arch/environments/information/#sec-8)).
 4. Stale handling: reordered or duplicated requests → only the latest is answered.
 
 ## 9. Open questions

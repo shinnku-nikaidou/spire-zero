@@ -7,6 +7,7 @@ import katex from 'katex';
 
 // The sidebar is the book's table of contents, as the overview's doc map lists it: an overview, four parts and the
 // appendices. Labels and status badges come from each page's own frontmatter, so every locale shows its own text.
+const environments = ['arch/environments', 'arch/environments/information', 'arch/environments/worlds'];
 const macroBrain = [
   'arch/macro-brain',
   'arch/macro-brain/afterstates',
@@ -21,7 +22,7 @@ const slPlanner = ['arch/sl-planner', 'arch/sl-planner/turn-search', 'arch/sl-pl
 const pimc = ['arch/pimc', 'arch/pimc/search', 'arch/pimc/budget'];
 const book = [
   { label: '前言', translations: { 'zh-TW': '前言', en: 'Introduction' }, items: ['index'] },
-  { label: '第一部　问题', translations: { 'zh-TW': '第一部　問題', en: 'Part I: The problem' }, items: ['arch/environments'] },
+  { label: '第一部　问题', translations: { 'zh-TW': '第一部　問題', en: 'Part I: The problem' }, items: [{ label: '环境', translations: { 'zh-TW': '環境', en: 'Environments' }, items: environments }] },
   {
     label: '第二部　决策',
     translations: { 'zh-TW': '第二部　決策', en: 'Part II: Deciding' },

@@ -28,7 +28,7 @@ Even so, on `promotion-1` (200 runs, NoSL) L0 v0 with V v0 beat random macro dec
 In SL, with `--afterstates clone` (and `--macro l0`), Harness hands L0 the node's clone at each macro decision and at each card prompt outside combat ([Harness §3](/en/arch/harness/#sec-3)), and L0 plays the options in the real game instead of predicting them (`CloneSearch`).
 
 - **Afterstates are played.** Each option is played on the clone, and what the game asks next is its afterstate: the event's real outcome, the card the transform really gave, the shop after the purchase. V values that.
-- **The map is still predicted.** Travel is the node's exit, which the clone cannot play past: the next node's contents are not the current node's to see ([Environments §1](/en/arch/environments/#sec-1)). So a map move's afterstate is predicted as in L0 v0, the point added to the path.
+- **The map is still predicted.** Travel is the node's exit, which the clone cannot play past: the next node's contents are not the current node's to see ([Environments: information §2](/en/arch/environments/information/#sec-2)). So a map move's afterstate is predicted as in L0 v0, the point added to the path.
 - **The search goes on.** While an afterstate is still a screen of the node, not the map, a combat or the run's end, the brain does not stop at it: it searches on over that screen's own actions ([§3](#sec-3)).
 
 The champion's name says `l0 NAME clone`, and a champion file `"afterstates": "clone"`. NoSL and `--afterstates screen` play as before: L0 v0 on the same runs, checked on 4 seeds in both environments.

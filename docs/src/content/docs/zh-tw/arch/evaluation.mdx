@@ -46,10 +46,10 @@ R1 整局評估已經可用：`run --seeds FILE --records FILE` 跑完一個種�
 |---|---|---|
 | 種子 | 同一組預先登記的種子 | 相同 |
 | 冠軍 | NoSL 冠軍 | SL 冠軍 |
-| 允許的資訊 | [環境 §3](/zh-tw/arch/environments/#sec-3) | 同一張表 |
+| 允許的資訊 | [環境：資訊與節點 §5](/zh-tw/arch/environments/information/#sec-5) | 同一張表 |
 | 預算 | 按每個決策計，同一檔位 | 相同 |
 
-- 兩個冠軍共用宏觀大腦和同一個 V，只有戰鬥大腦不同（[環境 §5](/zh-tw/arch/environments/#sec-5)）。自 2026-10-30 起，兩個冠軍檔案指明同一個 V，即 v6-3-2，按它在 SL 下的成績選出；NoSL 打它時從畫面預測後狀態，因為複本是 SL 才有的。在這個 V 有 NoSL 報告之前，NoSL 冠軍檔案指向那份 SL 報告：這時 NoSL 的門檻拒絕和它配對（環境不同），NoSL 排行榜也不標出冠軍。
+- 兩個冠軍共用宏觀大腦和同一個 V，只有戰鬥大腦不同（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。自 2026-10-30 起，兩個冠軍檔案指明同一個 V，即 v6-3-2，按它在 SL 下的成績選出；NoSL 打它時從畫面預測後狀態，因為複本是 SL 才有的。在這個 V 有 NoSL 報告之前，NoSL 冠軍檔案指向那份 SL 報告：這時 NoSL 的門檻拒絕和它配對（環境不同），NoSL 排行榜也不標出冠軍。
 - 同時報告 SL − NoSL 的勝率差，也就是節點內資訊的價值。這是計畫 v1（本地筆記 `tmp/notes/plan.md`）裡「全知 vs 重取樣」消融實驗的正式版本。作為參考：spire-mentor（一個前人專案）去掉它的作弊（覆蓋整局）後，勝率下降了 22.8–25.5 個百分點（pp）；我們的作弊只到節點級，所以預計差值更小。
 - `leaderboard [--character SILENT]` 從一個角色在 `eval/CHARACTER/reports/` 裡的報告生成它的排行榜，寫到 `eval/CHARACTER/leaderboard.md`：每個晉階等級、種子集和階梯級別下，每個環境一張表，按勝率、再按平均層數排名，作廢的報告排在最後，該環境冠軍檔案（`eval/CHARACTER/champions/`）指明的報告會被標出（[§5](#sec-5)）；不完整的報告不列入。表下面，對兩種環境都有報告的每個冠軍，給出同一組種子上按種子配對的 SL − NoSL 差值：勝率和到達層數，各帶 95% 區間。榜上列出所有報告，而不只是已接受的冠軍。排行榜和報告一起提交。
 
@@ -75,7 +75,7 @@ Wilson 區間是比例（例如勝率）的信賴區間。與簡單的常態近�
 - 失敗的對局（驅動或大腦出錯）和被截斷的對局（觸及決策上限）；
 - 遊戲錯誤（`Log.Error` 行）；
 - `NumReloads`；
-- NoSL 對局中的存檔匯出（[環境 §6](/zh-tw/arch/environments/#sec-6)）。
+- NoSL 對局中的存檔匯出（[環境：資訊與節點 §7](/zh-tw/arch/environments/information/#sec-7)）。
 
 **輔助指標**
 

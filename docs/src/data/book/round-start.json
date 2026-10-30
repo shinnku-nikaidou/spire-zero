@@ -1,0 +1,220 @@
+{
+ "source": {
+  "file": "weights/silent/c2.json",
+  "what": "tests[0].obs: one of the held-out round starts the combat net c2's file carries, a real start of a round from NoSL self-play, as the trainer read it",
+  "fields": "the observation as Protocol serializes it; the draw pile is sorted by card key, as every observation sends it"
+ },
+ "obs": {
+  "encounter": "LOUSE_PROGENITOR_NORMAL",
+  "room": "Monster",
+  "act": 1,
+  "ascension": 0,
+  "round": 8,
+  "player": {
+   "uid": 0,
+   "character": "SILENT",
+   "hp": 39,
+   "max_hp": 77,
+   "block": 0,
+   "energy": 3,
+   "max_energy": 3,
+   "stars": 0,
+   "gold": 173,
+   "powers": [
+    {
+     "id": "FRAIL_POWER",
+     "amount": 2
+    }
+   ],
+   "orb_slots": 0,
+   "orbs": []
+  },
+  "hand": [
+   {
+    "id": "DEFEND_SILENT",
+    "uid": 8,
+    "cost": 1,
+    "vars": {
+     "Block": 5
+    }
+   },
+   {
+    "id": "DEFLECT",
+    "uid": 10,
+    "up": 1,
+    "cost": 0,
+    "vars": {
+     "Block": 7
+    }
+   },
+   {
+    "id": "DEFEND_SILENT",
+    "uid": 6,
+    "up": 1,
+    "cost": 1,
+    "vars": {
+     "Block": 8
+    }
+   },
+   {
+    "id": "STRIKE_SILENT",
+    "uid": 15,
+    "cost": 1,
+    "vars": {
+     "Damage": 6
+    }
+   },
+   {
+    "id": "STRIKE_SILENT",
+    "uid": 3,
+    "cost": 1,
+    "vars": {
+     "Damage": 6
+    }
+   }
+  ],
+  "draw": [
+   {
+    "id": "BUBBLE_BUBBLE",
+    "cost": 1,
+    "enchant": {
+     "id": "IMBUED",
+     "amount": 1
+    },
+    "vars": {
+     "PoisonPower": 9
+    }
+   },
+   {
+    "id": "DEFEND_SILENT",
+    "cost": 1,
+    "vars": {
+     "Block": 5
+    }
+   },
+   {
+    "id": "DEFEND_SILENT",
+    "up": 1,
+    "cost": 1,
+    "vars": {
+     "Block": 8
+    }
+   },
+   {
+    "id": "DEFEND_SILENT",
+    "up": 1,
+    "cost": 1,
+    "vars": {
+     "Block": 8
+    }
+   },
+   {
+    "id": "SLICE",
+    "up": 1,
+    "cost": 0,
+    "vars": {
+     "Damage": 9
+    }
+   },
+   {
+    "id": "STRIKE_SILENT",
+    "cost": 1,
+    "vars": {
+     "Damage": 6
+    }
+   },
+   {
+    "id": "STRIKE_SILENT",
+    "cost": 1,
+    "vars": {
+     "Damage": 6
+    }
+   },
+   {
+    "id": "STRIKE_SILENT",
+    "cost": 1,
+    "vars": {
+     "Damage": 6
+    }
+   },
+   {
+    "id": "SURVIVOR",
+    "cost": 1,
+    "vars": {
+     "Block": 8
+    }
+   }
+  ],
+  "discard": [],
+  "exhaust": [
+   {
+    "id": "DRAMATIC_ENTRANCE",
+    "cost": 0,
+    "enchant": {
+     "id": "SHARP",
+     "amount": 2
+    },
+    "keywords": [
+     "Exhaust",
+     "Innate"
+    ],
+    "vars": {
+     "Damage": 11
+    }
+   },
+   {
+    "id": "THE_HUNT",
+    "cost": 1,
+    "keywords": [
+     "Exhaust"
+    ],
+    "vars": {
+     "Damage": 10
+    }
+   }
+  ],
+  "potions": [
+   "POWER_POTION",
+   null,
+   null
+  ],
+  "relics": [
+   {
+    "id": "RING_OF_THE_SNAKE"
+   },
+   {
+    "id": "LEAD_PAPERWEIGHT"
+   },
+   {
+    "id": "ELECTRIC_SHRYMP"
+   },
+   {
+    "id": "MR_STRUGGLES"
+   }
+  ],
+  "allies": [],
+  "enemies": [
+   {
+    "uid": 1,
+    "id": "LOUSE_PROGENITOR",
+    "hp": 34,
+    "max_hp": 136,
+    "block": 0,
+    "powers": [
+     {
+      "id": "STRENGTH_POWER",
+      "amount": 10
+     }
+    ],
+    "intents": [
+     {
+      "type": "Defend"
+     },
+     {
+      "type": "Buff"
+     }
+    ]
+   }
+  ]
+ }
+}

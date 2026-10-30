@@ -63,13 +63,13 @@ The two environments ([Environments](/en/arch/environments/)) estimate this expe
 | | NoSL | SL |
 |---|---|---|
 | in-node random outcomes (event result, transform, reroll, a `?` already rolled) | mean over K sampled worlds (planned) | exact: the node's clone |
-| in-node rewards that depend on how the combat was played | – | known (open question 1, [Environments §10](/en/arch/environments/#sec-10)) |
+| in-node rewards that depend on how the combat was played | – | known (open question 1, [Environments: information §9](/en/arch/environments/information/#sec-9)) |
 | beyond the node | sampled worlds | sampled worlds |
 | value function | V | the same V |
 
-Neow and the other Ancients' options are the clearest case: SL sees the exact outcome of a random option, such as which card "a random rare card" gives ([Environments §1](/en/arch/environments/#sec-1)).
+Neow and the other Ancients' options are the clearest case: SL sees the exact outcome of a random option, such as which card "a random rare card" gives ([Environments: information §2](/en/arch/environments/information/#sec-2)).
 
-In principle SL would also value states differently: from the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk (more elites, high-variance events). This is ignored. One V serves both environments; it is trained on runs the SL combat brain played, so in NoSL it is somewhat optimistic ([Environments §5](/en/arch/environments/#sec-5)).
+In principle SL would also value states differently: from the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk (more elites, high-variance events). This is ignored. One V serves both environments; it is trained on runs the SL combat brain played, so in NoSL it is somewhat optimistic ([Environments: worlds §6](/en/arch/environments/worlds/#sec-6)).
 
 ## 4. Why one V
 

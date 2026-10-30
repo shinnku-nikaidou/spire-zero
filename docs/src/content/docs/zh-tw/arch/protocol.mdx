@@ -210,12 +210,12 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 - `Plan` 是本回合或本介面剩下的步驟，在地圖上是本幕剩下的路線，用於標示和解說。
 - `Candidates` 列出評估過的動作，每個帶有 `Value`、`Ci`（信賴區間）和樣本數 `Samples`。
 - `Facts` 是解釋的唯一來源。
-- 事實的 `Exact` 標記只在 SL 中設定，因為 SL 的事實可以是確切結果（[環境 §8](/zh-tw/arch/environments/#sec-8)）。
+- 事實的 `Exact` 標記只在 SL 中設定，因為 SL 的事實可以是確切結果（[環境：世界 §7](/zh-tw/arch/environments/worlds/#sec-7)）。
 - `Degraded` 表示這個回答是在出問題時給出的，例如丟失了一個 worker 行程（[Harness §7](/zh-tw/arch/harness/#sec-7)）。
 
 ## 7. 世界 API
 
-搜尋從不直接接觸遊戲，而是從這個 API 拿到**世界**：可以觀測、執行動作、做快照和恢復的模擬戰鬥。型別定義在 Protocol 裡（`World.cs`），所以 Brain 不引用遊戲也能使用；實作在 SimWorker 裡（[模擬器 §6](/zh-tw/arch/simulator/#sec-6)）。NoSL 和 SL 的世界有何不同，見 [環境 §5](/zh-tw/arch/environments/#sec-5)。
+搜尋從不直接接觸遊戲，而是從這個 API 拿到**世界**：可以觀測、執行動作、做快照和恢復的模擬戰鬥。型別定義在 Protocol 裡（`World.cs`），所以 Brain 不引用遊戲也能使用；實作在 SimWorker 裡（[模擬器 §6](/zh-tw/arch/simulator/#sec-6)）。NoSL 和 SL 的世界有何不同，見 [環境：世界 §1](/zh-tw/arch/environments/worlds/#sec-1)。
 
 ```csharp
 public enum PlayEnvironment { NoSL, SL }

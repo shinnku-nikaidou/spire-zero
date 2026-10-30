@@ -210,12 +210,12 @@ public sealed record Fact(string Kind, IReadOnlyDictionary<string, double> Value
 - `Plan` 是本回合或本界面剩下的步骤，在地图上是本幕剩下的路线，用于高亮和解说。
 - `Candidates` 列出评估过的动作，每个带有 `Value`、`Ci`（置信区间）和样本数 `Samples`。
 - `Facts` 是解释的唯一来源。
-- 事实的 `Exact` 标记只在 SL 中设置，因为 SL 的事实可以是确切结果（[环境 §8](/arch/environments/#sec-8)）。
+- 事实的 `Exact` 标记只在 SL 中设置，因为 SL 的事实可以是确切结果（[环境：世界 §7](/arch/environments/worlds/#sec-7)）。
 - `Degraded` 表示这个回答是在出问题时给出的，例如丢失了一个 worker 进程（[Harness §7](/arch/harness/#sec-7)）。
 
 ## 7. 世界 API
 
-搜索从不直接接触游戏，而是从这个 API 拿到**世界**：可以观测、执行动作、做快照和恢复的模拟战斗。类型定义在 Protocol 里（`World.cs`），所以 Brain 不引用游戏也能使用；实现在 SimWorker 里（[模拟器 §6](/arch/simulator/#sec-6)）。NoSL 和 SL 的世界有何不同，见 [环境 §5](/arch/environments/#sec-5)。
+搜索从不直接接触游戏，而是从这个 API 拿到**世界**：可以观测、执行动作、做快照和恢复的模拟战斗。类型定义在 Protocol 里（`World.cs`），所以 Brain 不引用游戏也能使用；实现在 SimWorker 里（[模拟器 §6](/arch/simulator/#sec-6)）。NoSL 和 SL 的世界有何不同，见 [环境：世界 §1](/arch/environments/worlds/#sec-1)。
 
 ```csharp
 public enum PlayEnvironment { NoSL, SL }

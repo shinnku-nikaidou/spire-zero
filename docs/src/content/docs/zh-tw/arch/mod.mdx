@@ -128,7 +128,7 @@ interface ISurfaceAdapter
 
 ## 6. SL 匯出
 
-SL 下，大腦在當前節點的精確複本上規劃戰鬥（[環境 §6](/zh-tw/arch/environments/#sec-6)）。worker 用節點的檢查點，加上進入節點以來做過的每一個決策來建構複本；決策的寫法與模擬器自己的軌跡相同（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。Mod 在兩種環境下都把這兩樣東西記在記憶體裡（`NodeRecord`），所以在任何房間裡勾上 SL 都能馬上用；只有 SL 才把它們發出去。
+SL 下，大腦在當前節點的精確複本上規劃戰鬥（[環境：資訊與節點 §7](/zh-tw/arch/environments/information/#sec-7)）。worker 用節點的檢查點，加上進入節點以來做過的每一個決策來建構複本；決策的寫法與模擬器自己的軌跡相同（[模擬器 §7](/zh-tw/arch/simulator/#sec-7)）。Mod 在兩種環境下都把這兩樣東西記在記憶體裡（`NodeRecord`），所以在任何房間裡勾上 SL 都能馬上用；只有 SL 才把它們發出去。
 
 - **檢查點**：在遊戲到達地圖點、存檔的那一刻，用 GameBridge 的 `Checkpoint.Take` 取：在 `SaveManager.SaveRun` 上掛一個前綴（prefix），只在它的「已完成房間」為空時取，與模擬器取檢查點是同一時刻。開局時遊戲以同樣方式進入第一個地圖點。按「繼續」（Continue）時，遊戲重新進入存檔所在的地圖點，但不再存檔（`RunManager.LoadIntoLatestMapCoord`）：如果存檔是到達時存的，就在這裡取檢查點；如果是房間裡更晚的存檔（戰鬥勝利後、Ancient 事件後），房間的開頭已經不在了，這個節點就沒有複本。Mod 從不寫會被雲同步的 `current_run.save`，也不寫玩家檔案目錄下的任何其他檔案。
 - **步驟**：玩家的每個決策，都在遊戲提交它的地方讀出來；這些入口也正是模擬器自己呼叫的入口（[GameBridge §4](/zh-tw/arch/gamebridge/#sec-4)），所以在遊戲執行之前就能精確知道這一步。未決問題 1 因此選了鉤子，而不是比較前後的狀態：狀態比較分不出兩張一樣的牌，玩家操作得比畫面穩定還快時也會漏掉動作。
