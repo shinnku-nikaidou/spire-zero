@@ -90,8 +90,8 @@ def read_runs(
     no views (they serve the boss sims, door states and logged options, none of which the gauntlet's V reads).
 
     A sample keeps its tokens and state, not its view: as Python objects a view is ~54 KB, ten times those (2026-10-30:
-    plan v6 generation 3's 4.9M decisions did not fit in 125 GB); a held-out one keeps it as JSON, for the net file's
-    test runs."""
+    plan v6 generation 3's 2.16M decisions took ~117 GB a training, now 21 GB); a held-out one keeps it as JSON, for
+    the net file's test runs."""
     samples, runs_seen, views = [], [], {}
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         runs = {k: r for k, r in runs.items() if not r.get("failure")}
