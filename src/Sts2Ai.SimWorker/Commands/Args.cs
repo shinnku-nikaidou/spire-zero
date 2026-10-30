@@ -216,7 +216,7 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<string?> _value = Opt.Maybe<string?>("--value", "l0's V: V v0's weights or a net file of V v2 (default: the initial weights)");
     private readonly LeafArgs _leaf = new();
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
-            "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain §2)")
+            "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
         .AcceptOnlyFromAmong("screen", "clone");
     private readonly Option<string> _leafPrices = Opt.Of("--leaf-prices", "leaf",
             "what the SL planner's leaves price a combat's end at: leaf, the leaf weights'; v, V's at the decision, for a --combat-net with a net --value (docs: combat-brain §4)")

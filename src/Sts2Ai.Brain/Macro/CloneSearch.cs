@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// L0's search of a decision on the node's clone in SL (docs: macro-brain §2). Each option is played in the real game,
+/// L0's search of a decision on the node's clone in SL (docs: macro-brain/search §3). Each option is played in the real game,
 /// and what the game asks next is its afterstate. While that is still a screen of the node (not the map, not a combat,
 /// not the run's end), the search goes on: a beam over the screen's own actions (a potion's, which every screen
 /// offers, are left out), level by level, keeping the <see cref="Beam"/> states V values best, up to

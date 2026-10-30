@@ -65,7 +65,7 @@ public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<Combat
 public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Potion, int Potions);
 
 /// <summary>
-/// L0's probes of a decision outside combat in a run (docs: macro-brain §2): <see cref="Node"/> loaded and replayed
+/// L0's probes of a decision outside combat in a run (docs: macro-brain/search §6): <see cref="Node"/> loaded and replayed
 /// stands at the decision; each of <see cref="Paths"/> is played from there, in its own load of the clone, and the
 /// reply's <see cref="WorkerReply.Afters"/> holds what the game asks next after each, in order. A path's answers are
 /// macro actions in text form and, for a card prompt, "pick:" and its picks in the prompt's canonical order.

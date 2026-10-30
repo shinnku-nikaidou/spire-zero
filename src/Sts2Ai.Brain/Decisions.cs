@@ -65,7 +65,7 @@ public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe
 }
 
 /// <summary>
-/// SL (docs: macro-brain §2): the current node's clone at a decision outside combat. It plays paths of answers from the
+/// SL (docs: macro-brain/search §2): the current node's clone at a decision outside combat. It plays paths of answers from the
 /// decision in the real game and shows what the game asks after each: the true afterstates, random outcomes included.
 /// </summary>
 public interface IMacroClone
