@@ -1,0 +1,76 @@
+---
+title: 'Search: each world, then the average'
+description: How PIMC searches one turn in each sampled world, averages the worlds by first action, why sharing the worlds between actions cuts the noise, and where strategy fusion and the sampler bias the answer; with a real decision in 8 worlds.
+sidebar:
+  label: Search
+---
+import WorldsTable from '../../../../../components/combat/WorldsTable.svelte';
+
+With $K$ worlds in hand ([Overview §2](/en/arch/pimc/#sec-2)), PIMC searches each one as a game with nothing hidden, to the end of the turn, and averages ([§1](#sec-1)–[§2](#sec-2)). The average is an estimate, with noise ([§3](#sec-3)) and two biases: strategy fusion ([§4](#sec-4)) and the sampler's ([§5](#sec-5)).
+
+## 1. The search in one world
+
+In each world, a depth-first search over this turn's action sequences (`PimcBrain.SearchWorld`):
+
+- **Ending the turn is an option at every step**, tried first; then the cards in hand order, then potions.
+- **A line ends** where the turn does or the fight does. When it ends the turn, the enemies' turn is played for real with the world's sampled moves, and the leaf values the state at the start of the next player turn ([The leaf](/en/arch/combat-brain/leaf/)), so the value sees the state after the enemies have acted.
+- **Transpositions.** States are merged by the observation's hash together with the world's hidden state (`ICombatWorld.HiddenKey`: the draw pile's order, the position of every random stream, each monster's queued move), so each transposition is expanded once, and two orders that look the same but drew or rolled differently stay apart. The order of the turn's plays is left out of the key, so the same plays in another order still meet. Keyed by the observation alone, the first of two such states to be searched would give its value to the other. How often that happened was measured with a probe that kept both keys (2026-10-27): on Silent's starter deck (about 990 decisions, 376,000 states) and on a deck of random-effect cards (250 decisions, 81,000 states, 8,600 repeats), no repeated observation had another hidden state, so no decision changed. In a NoSL world the hidden state is the world's own sample, drawn from the observation and the search seed, so the key carries nothing of the real game's.
+- **The budget.** Each world's nodes (300) are split evenly over the first actions, so each gets a fair look. Inside a subtree, once its share is spent the search stops expanding, and the state there is scored as ending the turn, the option tried first. A state cut short is not kept for its transpositions, since its value is only a lower bound.
+
+The world's answer, for each first action $a$, is the best line after $a$ and its value.
+
+## 2. The average by first action
+
+For a first action $a$, PIMC computes
+
+$$
+\hat Q(a) = \frac{1}{K} \sum_{k=1}^{K} \max_{\pi} V\big(\mathrm{leaf}(s_k, a, \pi)\big), \qquad s_k \sim \tilde P(s \mid h),
+$$
+
+where $\pi$ ranges over the rest of the turn, $\mathrm{leaf}(s_k, a, \pi)$ is the state at the start of the next turn in world $k$, $V$ the leaf value, and $\tilde P$ the sampler of [Overview §2](/en/arch/pimc/#sec-2). It plays $\arg\max_a \hat Q(a)$, only that one action, then observes the fight again and searches again.
+
+Two choices in that formula matter:
+
+- **The max is inside each world, the mean across worlds.** Taking the best action separately in each world and then the max across worlds would let the plan act as if it knew which world is the real one. Taking each action's mean over the same worlds asks the right question: which action is best when the world is not known.
+- **Only the first action is played.** After it, the draw or the roll that follows is seen, and the next search starts from the new observation. That is what keeps the clairvoyance inside each world to the rest of one turn ([§4](#sec-4)).
+
+## 3. Noise and common random numbers
+
+$\hat Q(a)$ is a mean of $K$ samples, so its standard error is $\sigma_a / \sqrt{K}$; the decision log records each first action's mean, its 95% interval ($1.96$ standard errors) and its value in every world ([Harness §6](/en/arch/harness/#sec-6)). With $K = 8$ the intervals are wide. What the choice needs, though, is not each value but the differences between them, and every first action is scored on the **same** $K$ worlds: common random numbers (CRN). For two actions,
+
+$$
+\mathrm{Var}\big(\hat Q(a) - \hat Q(b)\big) = \frac{\sigma_a^2 + \sigma_b^2 - 2\rho\,\sigma_a \sigma_b}{K},
+$$
+
+so when the worlds' luck moves both actions alike (correlation $\rho$ near 1), it cancels in the difference.
+
+A real decision shows both cases. A NoSL run of the champion (pimc c2 8×300, L0 v6-3-2; seed #0 of `promotion-1-300`) met Terror Eel, an act 1 elite: round 1, 49 of 92 HP, 3 energy, seven cards in hand, and the eel about to attack for 16. Each row is a first action; each dot is its value in one world, in the leaf's unit; the bar is its 95% interval.
+
+<WorldsTable client:visible lang="en" />
+
+- **Leg Sweep** (Weak 2 on the eel and block) is the pick, at 0.1708 ± 0.0113, ahead of the rest by about 0.02.
+- **Defend and Slice** have the same value in every world, 0.1512: a transposition. Whichever is played first, the best line after it plays the other next, and both reach the same states.
+- **Neow's Fury against Strike**: their values move together across the worlds (correlation 0.86). Their difference is 0.0076 with a paired interval of ± 0.0035; from separate worlds it would be ± 0.0094, too wide to tell them apart. Sharing the worlds made the difference clear.
+- **Leg Sweep against Poisoned Stab**: their values move against each other (correlation −0.73). Leg Sweep is better in five worlds and Poisoned Stab in the other three, so the worlds disagree on the order. Here sharing the worlds does not help (± 0.0168 paired against ± 0.0131): the difference is real variation over what is hidden, not noise to cancel.
+
+## 4. Strategy fusion
+
+Inside one world the search knows that world's future. The quantity PIMC estimates is therefore $\mathbb{E}_s\big[\max_\pi V\big]$: the best rest of the turn chosen *after* seeing the world. A player must choose the rest of the turn before seeing it, which is worth $\max_\pi \mathbb{E}_s\big[V\big]$. A mean of maxima is never below the maximum of means (Jensen's inequality), so PIMC **overvalues lines whose later choices depend on what is drawn or rolled**: "play Calculated Gamble, then see what comes" looks better than it is, because in each world the search already knows what comes. This is **strategy fusion**: the plan fuses one strategy per world into one that no player could follow.
+
+The table above shows the same effect at the root. Ticking "each world's best" marks the best first action in each world: Leg Sweep in five, Poisoned Stab in three. A player who knew the world would get the mean of each world's best, 0.1734; PIMC, which must pick one action for all worlds, gets 0.1708. The 0.0026 between them is what knowing the world is worth at this decision, and PIMC rightly does not count it. The fusion it does count is the same gap one level down, inside each world's line after the first action, where the max over $\pi$ is taken per world.
+
+Two things keep it small. PIMC aggregates over the first action only and plays only that, so the clairvoyance is limited to the rest of one turn; and it plans again after every action, so what is revealed by then is no longer hidden.
+
+The alternative that avoids fusion altogether is **ISMCTS** (information-set Monte Carlo tree search): one search tree over information sets (the groups of states a player cannot tell apart), a different world sampled on each pass, so that no choice in the tree can depend on hidden information. It costs about 3–4 depth-first nodes per tree simulation (an estimate), and in games whose information is mostly public, fusion-aware variants of PIMC changed little: αμ changed 1.3–3% of decisions, and EPIMC gained nothing. So ISMCTS is held in reserve until fusion is measured to matter.
+
+The measurement is a **fusion panel** (built: `fusion --log FILE[,…] [--k 32] [--max-nodes 5000]`). It takes NoSL combat decisions from the decision logs, rich in reveals within the turn, builds their worlds as PIMC does with $K$ = 32–64, enumerates the turn in full, and compares PIMC's value of each first action with the value when backups are merged by observation history (the max over actions, the mean over the worlds consistent with that history). Worlds count as showing the same observation when they differ only in card ids, since a drawn card's id is its place in that world's shuffle. If the two disagree on fewer than about 3% of the decisions and the loss is within the noise, there is no ISMCTS. A first try on 36 decisions from two runs ($K$ = 16) found 8 with a reveal and one pick worse, with a mean loss of 0.00002; a complex turn takes about a minute.
+
+## 5. The sampler's bias
+
+The worlds should follow the posterior $P(s \mid h)$, the distribution of the hidden state given everything seen. They follow the sampler's $\tilde P(s \mid h)$:
+
+- the draw pile is shuffled uniformly, which is exact: every order of the unseen cards is equally likely;
+- a monster's queued move is drawn uniformly among the moves that show its intent, not by the roll's weights;
+- there is no posterior over hidden counters (turns until a summon, a move's growing damage), which the builder sets as it can ([Overview §3](/en/arch/pimc/#sec-3)).
+
+A more exact sampler lowers this bias without changing the search. The fidelity numbers say where it would pay: after the turn ends, on the few monsters whose moves hang on hidden counters.

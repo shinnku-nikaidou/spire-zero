@@ -1,7 +1,7 @@
 // The game's own names of the ids the figures show (src/data/names/, from scripts/game-names.mjs), each followed by
 // its id in brackets: "Dagger Throw (DAGGER_THROW)", "投擲匕首（DAGGER_THROW）".
 export type Lang = 'en' | 'zh-CN' | 'zh-TW';
-export type Kind = 'card' | 'relic' | 'potion' | 'enchant' | 'affliction' | 'act' | 'encounter' | 'ancient' | 'character' | 'map';
+export type Kind = 'card' | 'relic' | 'potion' | 'enchant' | 'affliction' | 'act' | 'encounter' | 'ancient' | 'character' | 'map' | 'monster' | 'power';
 type Table = Record<Kind, Record<string, string>>;
 
 const loaders: Record<Lang, () => Promise<{ default: Table }>> = {

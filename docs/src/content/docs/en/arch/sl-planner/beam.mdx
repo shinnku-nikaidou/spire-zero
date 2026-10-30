@@ -1,0 +1,85 @@
+---
+title: 'Beam: from turn to turn'
+description: How the SL planner carries the best states from one turn to the next, prunes with a bound, finds a floor with a greedy dive first, narrows to the easy beam, picks and proves a line, and handles plans that lose.
+sidebar:
+  label: Beam
+---
+import BeamStepper from '../../../../../components/combat/BeamStepper.svelte';
+
+[Turn search](/en/arch/sl-planner/turn-search/) searches one turn from one state in full. A fight is many turns, and searching every turn of every line in full would multiply without end. The planner keeps only the most promising states from each turn, and prunes those that cannot matter. This section is the beam over turns (`SlPlanner.Search`), the bound that prunes it, and the rules for picking, proving and replanning a line.
+
+## 1. A beam over turns
+
+**Beam search** is breadth-first search that keeps only the best $B$ states at each depth and expands only those. Here a depth is a turn. With $S_0 = \{s_0\}$, the decision's state, and $v^{\star}$ the value of the best line that has ended the fight so far:
+
+$$
+S_{t+1} = \operatorname{top}_B \Big\{\, e \in \bigcup_{s \in S_t} \operatorname{ends}(s) \ :\ e \text{ still in progress},\ \ \operatorname{bound}(e) > v^{\star} \Big\}
+$$
+
+where $\operatorname{ends}(s)$ is what the turn's search from $s$ returns, $\operatorname{top}_B$ takes the $B$ best by the leaf's value, distinct by key, and every end that finishes the fight updates $v^{\star}$ instead. The sort is stable, so ties keep the order in which their states were searched, and the beam does not depend on which worker answered first. The beam goes on until no state is left, or for at most 40 turns.
+
+$B$ is `Budget.Beam` (`--beam`): 8 at every effort level but max, which has 16 ([Budget §1](/en/arch/sl-planner/budget/#sec-1)). Each kept state's turn is searched with the budget's nodes per state and turn. In elite and boss fights, `--elite-x` and `--boss-x` multiply $B$ and the easy beam $E$ of [§4](#sec-4); both are 1 by default.
+
+A turn usually ends in many more states than the beam keeps: of a turn's distinct ends, only the best 8 survive across all 8 kept states. That is the planner's main approximation, and why most of its plans are not proved ([§5](#sec-5)).
+
+## 2. The bound
+
+A state in progress has a **bound**: the leaf's value of winning the fight from it with the HP and potions it has now. At `LeafValue`'s prices that is $0.2 + 0.6\,s + 0.02\,q$ for HP share $s$ and $q$ potions ([Combat brain: the leaf §2](/en/arch/combat-brain/leaf/#sec-2)). If the rest of the fight can only lose HP and use up potions, no line through the state can end higher than its bound. So once a line has ended the fight with value $v^{\star}$, every state whose bound is at most $v^{\star}$ is dropped, from the beam and already inside the turn's search: it could at best tie.
+
+The **decision's bound** is the bound of the decision's own state: a win that loses no HP and no potion. A line that reaches it cannot be beaten.
+
+The bound assumes that the fight neither heals nor gives potions. A few cards, potions and relics break that (a heal, a potion generated in the fight), and then a prune can drop a line that would have been better. The leaf's own shape is what makes the bound valid otherwise: `LeafValue` never values a state in progress above the win it could reach with the same HP, and V's prices are made monotone in HP for the same reason ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+
+## 3. The greedy dive
+
+Pruning needs a floor, and the full beam has none at its first turn. So before the full beam, the planner runs a beam of one: at each turn it keeps the single best state by the leaf. This **greedy dive** reaches the end of the fight in one line, usually a win (in v6-3-2's evaluation, the first plan won 99.8% of the hallway fights that were won, [Budget §3](/en/arch/sl-planner/budget/#sec-3)). Its value is the floor that prunes the full beam from its first turn on.
+
+- When the dive reaches the decision's bound, nothing can beat it, and the full beam is skipped.
+- The dive asks each of its turns for every end, with no floor, and keeps them. The full beam passes through the same states early on (its first turn always), and takes those turns' ends from the dive instead of searching them again ([Turn search §4](/en/arch/sl-planner/turn-search/#sec-4)). On the panel's unproved plans that saved 14–16% of the nodes, and every plan stayed the same.
+
+## 4. The easy beam
+
+When the dive wins short of the bound, the fight is already won; the full beam can only find a win that keeps more HP or potions. So it keeps $E$ states a turn instead of $B$ (`Budget.EasyBeam`, `--easy-beam`; 4 at medium effort, 2 at low). When the dive loses, the full beam keeps $B$: then it is looking for a win at all.
+
+The easy beam is most of medium effort's saving over high, which keeps $B$ always: medium spends 9.5 s on a won hallway fight against high's 13.8 s and reaches the same floors ([Budget §1](/en/arch/sl-planner/budget/#sec-1)). A narrower beam in every hallway fight saved as much time but missed the line that loses no HP in hallway fights at low HP or at 1 max HP; the easy beam keeps the full width whenever the dive loses.
+
+The figure runs the dive and the beam on a made-up fight whose turns are drawn from a fixed seed, so that every setting sees the same fight. The dashed line is the dive's, and its value the floor; crosses are states pruned by the bound; hollow circles fell beyond the beam's width.
+
+<BeamStepper client:visible lang="en" />
+
+## 5. Picking the line, and proving it
+
+The pick is the best line that ends the fight, unless the beam stopped at its turn cap at a state the leaf values higher. Every loss is worth 0, so among losing lines the pick is the one that died from the turn start the leaf valued highest: the line that lasted in the best shape, where the fight is most likely to turn if the plan was wrong.
+
+A plan is **proved** when nothing better can exist, as far as the bound holds:
+
+- its line reaches the decision's bound; or
+- the full beam left nothing out: no turn's search was cut (out of nodes, or more ends than it kept), no state was dropped from the beam, and every line ended the fight or was pruned.
+
+Proofs are rare. On the panel of 2026-10-28, 18% of the searches were proved on act 1 hallway fights, 3% on elites and 1% on act 2's fights: a turn yields many more states than the beam keeps. In the panel below, none of 21 plans was proved.
+
+## 6. Losing plans
+
+A plan that loses and is not proved may be wrong: the beam may have dropped the state that leads to a win. The planner treats such a plan as a guess:
+
+- **Replan.** An unproved losing plan is played for its first `--replan` turns (1 by default) and then the next turn is planned again. From there the rest of the fight is shorter, so the same beam reaches deeper into it.
+- **At most L in a row.** The $L$-th unproved losing plan in a row of one fight is played to its end (`--loss-plans`, 3 at low and medium). Planning a lost fight again every turn took most of a run's time: at high effort, which has no limit, a lost boss fight was planned 6.2 times on average and took 241 s, while only 12 fights in its 200 runs were won after a losing plan, 7 of them by the third plan or earlier.
+- **Proved losses** are played to their end: no line does better.
+
+The route keeps the count (`SlRoute`): a fight ends its run of losing plans with its first plan that is not an unproved loss.
+
+What this looks like, from a panel of act 1 elites and bosses played with Silent's starter deck at full HP (medium effort, 2026-10-30; `panel --player plan --env SL --combat-net c2 --effort medium --act 0 --rooms elite|boss --trace`). Each plan is listed as: how it ends, the actions of it that were played, the turns the dive and the beam searched, and the nodes:
+
+| fight | result | plans | time |
+|---|---|---|---|
+| Byrdonis (elite) | won, 12/70 HP, 9 rounds | win: 39 actions, 19 turns, 11,345 nodes | 24.7 s |
+| Skulking Colony (elite) | won, 49/70 HP, 9 rounds | win: 39 actions, 17 turns, 5,653 nodes | 9.2 s |
+| Terror Eel (elite) | won, 13/70 HP, 17 rounds | win: 75 actions, 33 turns, 10,589 nodes | 27.4 s |
+| Bygone Effigy (elite) | lost, 8 rounds | loss: 5 actions (1 turn), 20 turns, 11,213 nodes · loss: 4 (1 turn), 18 turns, 10,094 · loss: 23 (to the end), 16 turns, 8,444 | 57.1 s |
+| Phrog Parasite (elite) | lost, 11 rounds | loss: 4, 22 turns, 8,629 · loss: 5, 20 turns, 6,803 · loss: 34 (to the end), 18 turns, 5,871 | 56.3 s |
+| Phantasmal Gardeners (elite) | lost, 8 rounds | loss: 4, 16 turns, 17,725 · loss: 5, 14 turns, 15,325 · loss: 23 (to the end), 12 turns, 12,918 | 98.8 s |
+| Ceremonial Beast (boss) | lost, 8 rounds | loss: 5, 18 turns, 9,894 · loss: 4, 16 turns, 8,775 · loss: 23 (to the end), 14 turns, 7,125 | 50.0 s |
+| The Kin (boss) | lost, 8 rounds | loss: 5, 20 turns, 21,592 · loss: 4, 18 turns, 17,829 · loss: 23 (to the end), 16 turns, 15,484 | 115.7 s |
+| Vantom (boss) | lost, 14 rounds | loss: 4, 28 turns, 9,596 · loss: 5, 26 turns, 7,770 · loss: 46 (to the end), 24 turns, 6,733 | 55.2 s |
+
+Every won fight was won by its first plan. Every lost fight shows the rule at work: two plans played one turn each, then the third played to its end. The starter deck at full HP is far weaker than a run's deck at the same point; in whole runs, the same rules plan a lost boss fight 2.95 times on average ([Budget §3](/en/arch/sl-planner/budget/#sec-3)).

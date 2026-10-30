@@ -89,7 +89,9 @@ flowchart TD
 
 | 页面 | 范围 | 状态 |
 |---|---|---|
-| [战斗大脑](/arch/combat-brain/) | PIMC（NoSL）、确定性规划（SL）、叶子估值、剪枝 | <Badge text="部分实现" variant="tip" /> |
+| [战斗大脑](/arch/combat-brain/) | 一章三节：战斗决策是什么、两种算法、叶子（`LeafValue` 与战斗网络）、选牌提示、敌人招式与 worker | <Badge text="部分实现" variant="tip" /> |
+| [SL 规划器](/arch/sl-planner/) | 一章四节：在克隆上规划整场战斗、回合搜索、束搜索及其上界、预算与结果 | <Badge text="已实现" variant="success" /> |
+| [NoSL PIMC](/arch/pimc/) | 一章三节：抽样的世界、每个世界里的搜索与平均、预算与结果 | <Badge text="已实现" variant="success" /> |
 | [宏观大脑](/arch/macro-brain/) | 一章七节：它决定什么、后状态与单一 V、SL 克隆上的搜索、价值网络、从风险值到价值、精英连战里的自我对弈、弱点与下一步 | <Badge text="部分实现" variant="tip" /> L0、纯 V 及其自我对弈已有 |
 
 **第三部　学习与评估**

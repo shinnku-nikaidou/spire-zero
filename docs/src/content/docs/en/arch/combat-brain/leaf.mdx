@@ -1,0 +1,95 @@
+---
+title: 'The leaf: what a state is worth'
+description: Where a combat search stops and how the state there is valued, by the hand-made LeafValue or by the combat net c2, whose head predicts how the fight ends; and how those endings are priced.
+sidebar:
+  label: The leaf
+---
+import LeafPlayground from '../../../../../components/combat/LeafPlayground.svelte';
+import OutcomeHead from '../../../../../components/combat/OutcomeHead.svelte';
+
+Every search stops somewhere. PIMC stops at the end of the turn; the SL planner usually reaches the end of the fight, but it too has to rank the states where its turns end before it knows how the fight goes on ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)). The state where a search stops is a **leaf**, and the function that says what it is worth is the **leaf value**. This section explains the two leaves the brain has: `LeafValue`, written by hand, and the combat net, learned from played fights. The champions of both environments play the combat net c2.
+
+## 1. What a leaf is
+
+A leaf is either a state at the start of a turn, after the enemies' turn has been played for real, or the end of the fight, won or lost. Both are valued by the same function, `ICombatLeaf.Value(status, observation, history)`: a lost fight is worth nothing, a won one by what it leaves, and a fight in progress by what it is expected to leave.
+
+- **Observation only.** The leaf reads what the player sees, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)). It never reads the draw order or a random stream, so it cannot leak hidden state, in either environment.
+- **One scale.** Its unit is the run's: a share of a win, P(win run) as the design states it ([Learning §1](/en/arch/learning/#sec-1)). The weights below make it that only roughly; with V's prices it is V's unit ([§5](#sec-5)).
+- **Ordering, more than level.** A search uses the leaf to compare lines: what matters is that a better state gets a higher value. A leaf that rates every state 0.1 too high plays the same as one that does not.
+
+## 2. The hand-made leaf: LeafValue
+
+`LeafValue` (v0, `src/Sts2Ai.Brain/Combat/LeafValue.cs`) projects the rest of the fight from what is on the screen, with a few numbers set by hand.
+
+- A lost fight is 0. A won fight with HP share $s$ left (HP over max HP) is worth $\mathrm{Win}(s) = 0.2 + 0.6\,s$, plus 0.02 for each potion still held.
+- A fight in progress is projected to its end. Each living enemy $i$ has an **effective HP** $e_i$ (its HP plus block, less 0.8 times the damage its poison will still deal, $n + (n-1) + \dots + 1$ for $n$ poison) and a **damage rate** $r_i$ (the attack it shows this turn, damage × hits, at least 3). The player deals $d = 10 + 2 \times \text{Strength}$ a turn and kills the enemies one after another.
+- The order is the one that loses least HP. Enemy $i$ hits until it dies, at the turn $t_i = \sum_{j \preceq i} e_j / d$ (the sum over the enemies killed before it and itself), so the damage taken is $\sum_i r_i\, t_i$. **Smith's rule**, from scheduling, minimizes such a weighted sum of completion times: take the jobs in decreasing order of weight per length, here $r_i / e_i$. Half of the damage beyond the current block is taken off the HP, and the HP left is scored as a win:
+
+$$
+\text{value} = \mathrm{Win}\!\left(\frac{\text{HP} - 0.5\,\max\!\big(0,\ \sum_i r_i t_i - \text{block}\big)}{\text{max HP}}\right) + 0.02 \times \text{potions}
+$$
+
+- A projected death (a share below 0) decays toward 0 instead of going negative, $\mathrm{Win}(s) = 0.2\, e^{3 s}$ for $s < 0$, with the same slope at 0. It stays above a loss and keeps ordering lines however hopeless: with a flat floor every losing line looked the same, and the brain then ended its turns early.
+
+So damage is worth more on an enemy that hits hard and dies soon, overkill is worth nothing, and a state in progress never beats the win it could reach with the same HP. That last property is what the SL planner's bound relies on ([The SL planner: beam §2](/en/arch/sl-planner/beam/#sec-2)).
+
+<LeafPlayground client:visible lang="en" />
+
+Its blind spots are everything it does not read: the enemies' powers other than poison, the player's powers other than Strength, the draw pile, and every intent after this turn. The numbers (`LeafWeights`: WinBase 0.2, PerHp 0.6, PerPotion 0.02, Dps 10, Unblocked 0.5, MinIncoming 3, PoisonShare 0.8) are hypotheses, never tuned: `--leaf FILE` gives a run, a panel or the brain other weights (`weights --leaf` prints the defaults as such a file, `leaf0`), but no tool tunes them any more, since the strategy is left to learned values ([Learning §2](/en/arch/learning/#sec-2)).
+
+## 3. The combat net
+
+The combat net (`CombatNet`, `--combat-net FILE`) replaces the projection with a prediction learned from fights that were played. It reads a round's start and predicts how the fight will end under the policy that played its training games.
+
+**What it reads.** Everything about the fight that the observation shows, as tokens:
+
+- every card in the four piles (hand, draw, discard, exhaust): its id, its upgrade level, its enchantment and affliction, and which pile it is in;
+- the player: HP share, HP, max HP, block, energy, max energy, stars, the round, and its powers (id and amount);
+- each living enemy: its id, HP share, HP, max HP, block, how many rounds it has shown, its powers, and its **intent slots**: the intents it shows now, then those of its last 3 rounds, most recent first;
+- the relics, the potions, and the context (character, encounter, room, act).
+
+Nothing about a monster's moves is written by hand. From the monster's id, the round and its last intents, the net can learn each monster's move order, and where in it the monster is, from data. With a next-intent head (since dropped) it named the next round's intent type for 57.7% of the enemies, against 28.9% for repeating the current one, and most of its misses were moves the game rolls at random ([NoSL PIMC §1](/en/arch/pimc/#sec-1)).
+
+**How it reads them.** The same set encoder as the macro brain's V ([Macro brain: the value network §2](/en/arch/macro-brain/network/#sec-2)): each card is the sum of learned vectors (its id's, its upgrade level times its id's upgrade vector, its modifiers' and its pile's), a small MLP maps each card, and each pile is the sum of its cards (× 1/8). An enemy's slot is the sum of its intents (the type's vector plus damage / 10 and total damage / 20 times vectors of that type); an MLP maps each enemy with its powers and slots, and the enemies are summed. Relics, potions and the context are sums of their vectors. Two layers of 256 then give the head. A sum ignores order and reads any number of cards or enemies, which is what a pile and a fight need.
+
+c2, the champions' net, was trained on 315 NoSL self-play runs (13,954 round starts) and also reads each card's cost; the newer nets of `learn/combat/` read ids and raw state alone, as pure V does ([Learning §1](/en/arch/learning/#sec-1)). A net file names the inputs its graph takes, and `CombatNet` feeds only those, so old and new nets load alike. The training (samples, targets, loss, held-out runs) is in [Learning §2](/en/arch/learning/#sec-2).
+
+## 4. The head: how the fight ends
+
+The head is a probability distribution over 51 classes: a **death**, or one of 50 buckets of the share of max HP **still to be lost** from this state to the end of a won fight, spanning −0.25 (a fight that heals) to 1. A second output gives the potions still to be used after a win.
+
+Why "still to be lost" and not "left at the end"? The first net, c1, predicted the share left at the end. It learned only about half of what the HP held now is worth there: one HP less now lowered its value by 0.0038, where it lowers the end by a full HP, 0.0078 at `LeafValue`'s prices. Its search then traded HP away too cheaply, lost more HP than the champion in normal and elite fights (7.8 against 6.5 and 26.4 against 18.0 HP per win) and failed its gate. Predicting what is still to come makes the HP held now count in full, since it is added back exactly when the value is formed (0.0083 per HP on the same states), and the error of the value fell from 0.0090 to 0.0077.
+
+The figure shows c2's head on the eight round starts its file carries, real states from held-out runs; loading the net checks that it gives these outcomes, as the trainer computed them ([Learning §7](/en/arch/learning/#sec-7)). The two boss fights at the left are the hard ones: a death in 86% and 77% of the endings.
+
+<OutcomeHead client:visible lang="en" />
+
+On its held-out runs c2's cross-entropy is 1.32 nats, against 2.00 for always predicting the training set's frequencies; it is lowest at bosses (1.13) and highest at elites (2.64), of which there were few. The value it implies correlates 0.959 with the real ending's value, `LeafValue`'s 0.790.
+
+The figure also shows a flaw. A won fight cannot lose more HP than the player holds, so every bucket right of the dashed line is impossible for a win; nothing tells the head so. On the easy states it puts no weight there, but in the two boss fights it does: 83% of The Kin's win mass and 21% of Vantom's. At `LeafValue`'s prices, which the combat net applies linearly, those impossible wins count below a win at 0 HP (0.2), the deepest ones even below a death (0), so the state's value stays low, as it should be there, but for a wrong reason. A head that knew the limit (masking the buckets beyond the HP held) would put that mass where it belongs, on a death or on a close win.
+
+## 5. Pricing the endings
+
+A distribution is not yet a number. The leaf turns it into one with a price for each ending. With `LeafValue`'s prices (the default), for HP share $s$ now, the probability $p_0$ of a death, $p_k$ of bucket $k$ with middle $m_k$, and $u$ potions used after a win out of $q$ held:
+
+$$
+\text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02\,(q - u)
+$$
+
+A death costs nothing extra: it is worth 0. A fight that is already over is valued as `LeafValue` values it.
+
+**V's prices** (`--leaf-prices v`, built, not gated yet). For the SL planner the endings can be priced by the macro brain's V instead. At each plan the host makes the prices from the run view at the decision (`EndPrices`), and the planner's workers price every leaf with them (`PricedLeaf`), in V's own unit:
+
+- a death is worth the run's floor (the run ends there);
+- a win with $h$ HP left is worth V of the run with $h$ HP, taken as the most of it at $h$ or less, so that a win with more HP is never worth less, which the planner's bound needs;
+- a potion is worth what V gives up with one fewer of those held, on average over them, and at least 0.
+
+The net is not retrained for a new V: only the prices change. It needs `--policy plan`, a combat net and a net `--value`; NoSL's search keeps the leaf weights' prices.
+
+## 6. One net per environment
+
+A net predicts the endings of the policy that played its games. SL's planner, which sees what NoSL's search must guess, wins more fights from the same state, so each environment needs nets of its own: a net file names its environment, and a run of the other refuses it. c1–c4 predate that field and name none.
+
+That leaves an open seam: c2 learned from NoSL fights played by PIMC with `LeafValue`, and it is the leaf of the SL planner too. Its endings are those of a weaker player than the planner, so it tends to rate hard states lower than the planner plays them. SL's first own net (`sl-c1`, from the 819 SL runs listed as `sl-combat`) is not trained yet ([The SL planner: budget §6](/en/arch/sl-planner/budget/#sec-6)).
+
+Two other leaves were planned and not built: hand-made features times linear weights, seeded from bottled_ai's 42 features and tuned by SPSA, and a rollout to the end of the fight from the leaf, which in r33hab beat a value head at small budgets ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).

@@ -99,7 +99,7 @@ public sealed class PublicRecord
 | `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`potion_full` | 宏觀大腦 |
 
 - 戰鬥大腦取決於環境：NoSL 用 PIMC，SL 用 SL 規劃器（`--policy plan`，[戰鬥大腦 §3](/zh-tw/arch/combat-brain/#sec-3)），它在節點複本上規劃，在 NoSL 裡拒絕執行。在複本上跑 PIMC（SL 下的 `--policy pimc`）保留下來，作為規劃器的基線：它只搜尋本回合。宏觀大腦在兩種環境裡是同一個（[環境 §5](/zh-tw/arch/environments/#sec-5)）。每個宿主在 `hello` 裡報出自己的環境，所以 `brain` 命令同時服務兩種：NoSL 宿主用 `--policy` 的戰鬥大腦，SL 宿主用 `--sl-policy` 的，預設是 SL 規劃器（[Mod §5](/zh-tw/arch/mod/#sec-5)）。
-- `Dispatcher` 為一局實作這張表。宿主把它作為自己的戰鬥策略、選牌提示策略和宏觀策略。它為每一側各持有一個大腦（戰鬥、戰鬥中的提示、宏觀、戰鬥外的提示），並按 `ChoiceContext.InCombat` 把選牌提示交給對應的一側（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。目前戰鬥中的提示交給 `p0`（[戰鬥大腦 §2](/zh-tw/arch/combat-brain/#sec-2) 第 7 條），宏觀一側和它的提示交給 L0 或隨機佔位策略。
+- `Dispatcher` 為一局實作這張表。宿主把它作為自己的戰鬥策略、選牌提示策略和宏觀策略。它為每一側各持有一個大腦（戰鬥、戰鬥中的提示、宏觀、戰鬥外的提示），並按 `ChoiceContext.InCombat` 把選牌提示交給對應的一側（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。目前戰鬥中的提示交給 `p0`（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1) 第 7 條），宏觀一側和它的提示交給 L0 或隨機佔位策略。
 - 找不到路由時回報錯誤「uncovered surface」（未覆蓋的決策介面）：決策介面不在 `Dispatcher.MacroSurfaces` 裡，或大腦的回答不合法，`Dispatcher` 都會拋出例外。宿主暫停，請求人工操作，並記錄一個覆蓋率 bug。絕不用隨機選擇當後備。評估要求後備次數為 0（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
 - 決策介面清單及其遊戲入口：[模擬器 §5.2](/zh-tw/arch/simulator/#sec-5.2)、[GameBridge §4](/zh-tw/arch/gamebridge/#sec-4)。
 
@@ -117,7 +117,7 @@ public sealed class PublicRecord
 
 - 並行算出的結果按固定順序合併（先按世界編號，再按候選編號），絕不按完成的先後順序，這樣時序就改變不了答案。
 - 大腦的亂數由 Harness 提供：`brainSeed = SplitMix64(Hash(runId), decisionIndex)`，其中決策序號計入這一局的每個決策（包括選牌提示），run id 是這一局種子的雜湊，所以大腦看不到種子（[協定 §2](/zh-tw/arch/protocol/#sec-2)）。大腦絕不從遊戲自己的亂數流裡取數。等大腦有了版本，冠軍版本號也加入雜湊。PIMC 的建構種子就是大腦種子的十六進位形式。
-- 分配：當排名前兩位的候選之差超出各自的信賴區間（CI）時停止；否則增加樣本或深度（[戰鬥大腦 §5](/zh-tw/arch/combat-brain/#sec-5)）。
+- 分配：當排名前兩位的候選之差超出各自的信賴區間（CI）時停止；否則增加樣本或深度（[NoSL PIMC：預算 §1](/zh-tw/arch/pimc/budget/#sec-1)）。
 
 ## 6. 決策日誌
 
@@ -133,13 +133,13 @@ public sealed class PublicRecord
 ```
 
 - `obs_hash` 是大腦看到的內容的雜湊：戰鬥觀測、整局觀測或選牌提示。`legal` 是合法動作的個數（對提示而言是選項個數）。`chosen` 是文字形式的動作，或選中的選項索引。
-- 會搜尋的大腦還會加上 `plan`（`chosen` 之後本回合剩下的動作，取第一個世界裡的；SL 規劃器則是整場戰鬥剩下的動作）、`candidates`（每個首個動作的平均估值、信賴區間半寬 `ci` 和世界數，最好的在前；然後是它在每個世界裡的估值，按世界順序，以及搜尋在每個世界裡花在它下面的節點數；SL 規劃器則是它保留的路線裡出現過的每個首個動作，估值取其中最好的路線）和 `budget`。沿用計畫打出的一步（[戰鬥大腦 §5](/zh-tw/arch/combat-brain/#sec-5)）有 `plan` 而沒有 `candidates`，和只有一個合法動作的決策一樣。佔位策略兩者都不記。各個世界的估值就是 ExIt 的 policy 目標裡的 Q（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
+- 會搜尋的大腦還會加上 `plan`（`chosen` 之後本回合剩下的動作，取第一個世界裡的；SL 規劃器則是整場戰鬥剩下的動作）、`candidates`（每個首個動作的平均估值、信賴區間半寬 `ci` 和世界數，最好的在前；然後是它在每個世界裡的估值，按世界順序，以及搜尋在每個世界裡花在它下面的節點數；SL 規劃器則是它保留的路線裡出現過的每個首個動作，估值取其中最好的路線）和 `budget`。沿用計畫打出的一步（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)）有 `plan` 而沒有 `candidates`，和只有一個合法動作的決策一樣。佔位策略兩者都不記。各個世界的估值就是 ExIt 的 policy 目標裡的 Q（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
 - 在地圖上，L0 也會加上 `plan`：`chosen` 之後本幕剩下的路線（[宏觀大腦：搜尋 §1](/zh-tw/arch/macro-brain/search/#sec-1)）。
 - `explored: true` 標出自我對弈的探索抽中的、不是大腦最佳選擇的一步，且大腦給它的估值比最佳低出溫度的百分之一以上（[學習 §5](/zh-tw/arch/learning/#sec-5)）。差距比這更小就算平手（例如同一回合換了個出牌順序），不標。用均勻抽取（`--explore ε`）時，每個抽出的答案都會標出，即使它碰巧就是大腦自己的首選。其他步驟沒有 `explored`。沒有選搜尋首選的戰鬥步驟保留 `candidates`，但沒有 `plan`，因為那個計畫是首選的。
-- `replanned: true` 標出因為大腦計畫裡的一步對不上（戰鬥沒有出現計畫預期的觀測）而重新搜尋的戰鬥步驟（[戰鬥大腦 §5](/zh-tw/arch/combat-brain/#sec-5)）。用 PIMC 的 `--follow` 時，這是回合裡揭示了新東西；用 SL 規劃器時，說明複本和真實戰鬥不同（[戰鬥大腦 §3](/zh-tw/arch/combat-brain/#sec-3)）。對局那一行統計它們的次數（`replans`）。
+- `replanned: true` 標出因為大腦計畫裡的一步對不上（戰鬥沒有出現計畫預期的觀測）而重新搜尋的戰鬥步驟（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)）。用 PIMC 的 `--follow` 時，這是回合裡揭示了新東西；用 SL 規劃器時，說明複本和真實戰鬥不同（[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）。對局那一行統計它們的次數（`replans`）。
 - 一局的戰鬥決策按戰鬥分塊，每場戰鬥一塊，塊與塊之間隔著宏觀決策，順序與對局記錄裡的戰鬥一致。決策靠這個找到它那場戰鬥的結局（[評估 §6](/zh-tw/arch/evaluation/#sec-6)）。
-- 戰鬥決策還會加上 `obs`，即大腦看到的戰鬥觀測（[協定 §1](/zh-tw/arch/protocol/#sec-1)）：學習得到的戰鬥部件和融合測試集的輸入（[戰鬥大腦 §8](/zh-tw/arch/combat-brain/#sec-8)）。約 1.6 KB。
-- 戰鬥決策還會加上 `history`：這場戰鬥裡每個敵人在至今每一回合開始時顯示的意圖，包括本回合，按 uid 分組，每項是 `{round, intents}`。這是目前已實作的那部分公開記錄（[§3](#sec-3)）：Harness 從它看到的戰鬥觀測裡收集，每次宏觀決策後重新開始。戰鬥網路讀它和回合數，這樣每個怪物的出招順序能從資料裡學到，而不是靠手寫的規則（[學習 §1](/zh-tw/arch/learning/#sec-1)）。Brain 裡的 `MoveRecord` 儲存這份記錄，Harness 每個決策都把它交給戰鬥大腦（戰鬥路由的最後一個參數），搜尋再把它發給 worker，供葉節點使用（[戰鬥大腦 §4](/zh-tw/arch/combat-brain/#sec-4)）。
+- 戰鬥決策還會加上 `obs`，即大腦看到的戰鬥觀測（[協定 §1](/zh-tw/arch/protocol/#sec-1)）：學習得到的戰鬥部件和融合測試集的輸入（[NoSL PIMC：搜尋 §4](/zh-tw/arch/pimc/search/#sec-4)）。約 1.6 KB。
+- 戰鬥決策還會加上 `history`：這場戰鬥裡每個敵人在至今每一回合開始時顯示的意圖，包括本回合，按 uid 分組，每項是 `{round, intents}`。這是目前已實作的那部分公開記錄（[§3](#sec-3)）：Harness 從它看到的戰鬥觀測裡收集，每次宏觀決策後重新開始。戰鬥網路讀它和回合數，這樣每個怪物的出招順序能從資料裡學到，而不是靠手寫的規則（[學習 §1](/zh-tw/arch/learning/#sec-1)）。Brain 裡的 `MoveRecord` 儲存這份記錄，Harness 每個決策都把它交給戰鬥大腦（戰鬥路由的最後一個參數），搜尋再把它發給 worker，供葉節點使用（[戰鬥大腦：提示、招式與 worker §2](/zh-tw/arch/combat-brain/shared/#sec-2)）。
 - 宏觀決策還會加上 `features`：大腦看到的整局觀測上 V 的特徵（[學習 §1](/zh-tw/arch/learning/#sec-1)），不管是哪個大腦做的決策。V v0 的擬合和 V v2 的訓練讀的就是它們；兩者都已刪除，純 V 不讀它們（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
 - 宏觀決策還會加上 `run_view`：整局觀測本身，約 6 KB，V v2 就用它訓練（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
 - `run --log FILE` 寫出日誌，每個決策一行（[模擬器 §5](/zh-tw/arch/simulator/#sec-5)）；它和對局記錄一起放在 `data/`（[學習 §6](/zh-tw/arch/learning/#sec-6)）。

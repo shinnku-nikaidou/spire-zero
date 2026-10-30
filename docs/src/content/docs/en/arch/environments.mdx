@@ -120,7 +120,7 @@ flowchart LR
 | where worlds come from | public record → Build / Determinize ([Simulator §6](/en/arch/simulator/#sec-6)) | node clone ([Simulator §7](/en/arch/simulator/#sec-7)) |
 | number of worlds | K, averaged (no strategy fusion) | 1; taking the best line is correct, there is nothing to fuse |
 | chance nodes | at every reveal | none |
-| combat algorithm | PIMC: search to the end of the turn, average by first action, plan again after every action ([Combat brain §2](/en/arch/combat-brain/#sec-2)) | a beam over the whole combat's turns, each turn searched in full, pruned by the best line that ends the combat; plan once ([Combat brain §3](/en/arch/combat-brain/#sec-3)) |
+| combat algorithm | PIMC: search to the end of the turn, average by first action, plan again after every action ([NoSL PIMC: search §2](/en/arch/pimc/search/#sec-2)) | a beam over the whole combat's turns, each turn searched in full, pruned by the best line that ends the combat; plan once ([The SL planner §3](/en/arch/sl-planner/#sec-3)) |
 | transpositions keyed by | observation and the world's sampled hidden state | observation and the full hidden state: random streams, monster move logs, this turn's combat history |
 | budget is spent on | samples × depth | depth and breadth (a combat can usually be searched to its end) |
 | past the horizon | already samples | the world stops (`AtHorizon`); continue only by re-determinizing from the exit observation |

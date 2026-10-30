@@ -1,5 +1,5 @@
 // Writes the game's own names of the ids the figures show (cards, relics, potions, enchantments, afflictions, acts,
-// encounters, ancients, characters, map point types), in each of the site's languages, from the game's .pck:
+// encounters, ancients, characters, map point types, monsters, powers), in each of the site's languages, from the game's .pck:
 //   node scripts/game-names.mjs "PATH/Slay the Spire 2/SlayTheSpire2.pck"
 // into src/data/names/{en,zh-CN,zh-TW}.json. Run it again when the game's version changes.
 import { openSync, readSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -37,9 +37,9 @@ const json = (lang, name) => {
   if (!f) throw new Error(`${pck}: no localization/${lang}/${name}.json`);
   return JSON.parse(read(f.offset, f.size).toString('utf8'));
 };
-// Every "ID.title" of a table: the name the game shows for ID.
-const titles = (table) =>
-  Object.fromEntries(Object.entries(table).filter(([k]) => /^[A-Z0-9_]+\.title$/.test(k)).map(([k, v]) => [k.slice(0, -6), v]));
+// Every "ID.title" of a table ("ID.name" for monsters): the name the game shows for ID.
+const titles = (table, key = 'title') =>
+  Object.fromEntries(Object.entries(table).filter(([k]) => new RegExp(`^[A-Z0-9_]+\\.${key}$`).test(k)).map(([k, v]) => [k.slice(0, -key.length - 1), v]));
 
 // The map's point types as encode.py's map tokens name them, and the legend entry the game names each by.
 const legend = { Boss: 'BOSS', Elite: 'ELITE', Monster: 'ENEMY', RestSite: 'REST', Shop: 'MERCHANT', Treasure: 'TREASURE', Unknown: 'UNKNOWN', Ancient: 'ANCIENT' };
@@ -58,6 +58,8 @@ for (const [site, game] of Object.entries(langs)) {
     encounter: titles(json(game, 'encounters')),
     ancient: titles(json(game, 'ancients')),
     character: titles(json(game, 'characters')),
+    monster: titles(json(game, 'monsters'), 'name'),
+    power: titles(json(game, 'powers')),
     map: Object.fromEntries(Object.entries(legend).map(([type, key]) => [type, map[`LEGEND_${key}.title`]])),
   };
   writeFileSync(`${out}${site}.json`, JSON.stringify(names) + '\n');

@@ -16,6 +16,9 @@ const macroBrain = [
   'arch/macro-brain/selfplay',
   'arch/macro-brain/next',
 ];
+const combatBrain = ['arch/combat-brain', 'arch/combat-brain/leaf', 'arch/combat-brain/shared'];
+const slPlanner = ['arch/sl-planner', 'arch/sl-planner/turn-search', 'arch/sl-planner/beam', 'arch/sl-planner/budget'];
+const pimc = ['arch/pimc', 'arch/pimc/search', 'arch/pimc/budget'];
 const book = [
   { label: '前言', translations: { 'zh-TW': '前言', en: 'Introduction' }, items: ['index'] },
   { label: '第一部　问题', translations: { 'zh-TW': '第一部　問題', en: 'Part I: The problem' }, items: ['arch/environments'] },
@@ -23,7 +26,9 @@ const book = [
     label: '第二部　决策',
     translations: { 'zh-TW': '第二部　決策', en: 'Part II: Deciding' },
     items: [
-      'arch/combat-brain',
+      { label: '战斗大脑', translations: { 'zh-TW': '戰鬥大腦', en: 'Combat brain' }, items: combatBrain },
+      { label: 'SL 规划器', translations: { 'zh-TW': 'SL 規劃器', en: 'SL planner' }, items: slPlanner },
+      { label: 'NoSL PIMC', translations: { 'zh-TW': 'NoSL PIMC', en: 'NoSL PIMC' }, items: pimc },
       { label: '宏观大脑', translations: { 'zh-TW': '宏觀大腦', en: 'Macro brain' }, items: macroBrain },
     ],
   },

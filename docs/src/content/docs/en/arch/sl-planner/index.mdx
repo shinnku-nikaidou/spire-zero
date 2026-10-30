@@ -1,0 +1,76 @@
+---
+title: 'The SL planner: planning the whole fight'
+description: How SL's combat brain plans a whole fight on the node's exact clone, why the best line is the right answer there, and how the fight follows the plan; with a real boss fight planned at its first decision.
+sidebar:
+  label: Overview
+  badge:
+    text: built
+    variant: success
+---
+import PlanTimeline from '../../../../../components/combat/PlanTimeline.svelte';
+
+In SL the combat brain gets one exact copy of the fight: the clone of the current node, with every random stream in it. The same actions always give the same outcome there, so a fight is a deterministic planning problem, with nothing to guess and nothing to average. The **SL planner** (`SlPlanner`) searches it for the best line to the end of the fight, once, and the fight then plays that line step by step.
+
+Here is what that looks like in a real run. On floor 17 of a run that the current champion went on to win (seed `E91KLB4BRWB4`, from the 300-run evaluation of v6-3-2), the act 1 boss is Vantom: 173 HP and 8 stacks of Slippery, so each hit deals 1 damage and takes a stack off. At the fight's first decision, with 65 of 70 HP, the planner searched for 5.2 seconds and returned a line of 22 actions over 6 rounds. The fight followed it without another search.
+
+<PlanTimeline client:visible lang="en" />
+
+The line is a poison plan. Neutralize and Strike spend two stacks of Slippery for 1 damage each. Calculated Gamble discards the hand and draws as many cards, and the planner already knows they will be Adrenaline, Noxious Fumes, Dash and Bouncing Flask: SL may see the draw order, and the planner tried the Gamble on the clone. Noxious Fumes and Snakebite start the poison in round 1. Round 3 takes Vantom's 26-damage hit (60 → 34 HP) to play Dagger Spray, a second Gamble and another Snakebite rather than block. In round 6 the plan ends the turn without playing a card: Vantom has 35 HP and 42 poison, and dies at the start of its own turn. The plan's value, 0.4914, is the leaf's price of a win with 34 of 70 HP ($0.2 + 0.6 \times 34/70$), and the fight ended with 34 HP.
+
+## 1. What SL may see
+
+SL is NoSL plus the true outcome of any sequence of actions inside the **current node**: the current map point, from arrival until the next point is chosen ([Environments §1](/en/arch/environments/#sec-1)). Inside a fight that means the draw order and every reshuffle, the monsters' moves, generated cards, random targets, and how the order of actions changes all of these: manipulating the random streams inside the node is allowed. Nothing about later nodes is: what a `?` turns out to be, the next encounters, rewards or shops.
+
+The fight's copy is the **node clone** ([Simulator §7](/en/arch/simulator/#sec-7)). On arrival at a point the game saves the run; the node's checkpoint is that save plus each relic's plain fields, which the save drops. Every decision since arrival is recorded as a trace. Loading the checkpoint the way the game's Continue does and replaying the trace gives the real fight at the current decision, random streams included. A **seal** keeps the search inside the room: the clone stops at the node's exit and refuses any later step, and the SL world refuses to play past the end of its fight, so no line can peek at what follows.
+
+## 2. Why the best line is the right answer
+
+With one world, taking the best line is correct. The trap of searching sampled worlds, strategy fusion, needs several worlds to fuse ([NoSL PIMC: search §4](/en/arch/pimc/search/#sec-4)): in a single exact world, knowing the future is not an error but the rules of SL.
+
+Write the fight as a deterministic system: a state $s_t$, an action $a_t$ among the legal ones, and the game's transition $s_{t+1} = f(s_t, a_t)$. A line $a_1, \dots, a_T$ ends where the fight does, and its worth is the leaf's value of the end state, $L(s_T)$ ([The leaf](/en/arch/combat-brain/leaf/)). The planner looks for
+
+$$
+\max_{a_1, \dots, a_T} \; L\big(s_T\big), \qquad s_{t+1} = f(s_t, a_t).
+$$
+
+A fight has finitely many lines, so a best line exists, and a search that tried them all would find it. It is best with respect to $L$ at the end of the fight: once a line reaches the end, nothing in the fight is estimated any more, and the only error left is in what $L$ says a won fight's HP and potions are worth.
+
+Trying them all is out of reach. Choosing a turn's cards under an energy limit is already a knapsack problem, and with hand, energy and turns unbounded the problem is NP-hard. The real fights are bounded (a hand of at most 10 cards, 3–15 turns), but large: up to about $10^4$ sequences per turn ([Combat brain §2](/en/arch/combat-brain/#sec-2)), turn after turn. So the planner aims at the best line, proves it is the best when it can ([Beam §5](/en/arch/sl-planner/beam/#sec-5)), and does without the proof when it cannot.
+
+## 3. The planner in one picture
+
+```mermaid
+flowchart TD
+  D["combat decision<br/>(clone at this state)"] --> V["greedy dive:<br/>a beam of 1"]
+  V -->|"reaches the bound"| P["plan"]
+  V --> B["full beam: B states a turn<br/>(E if the dive won)"]
+  B --> P
+  P --> F["follow the plan<br/>step by step"]
+  F -->|"observation as expected"| F
+  F -->|"differs: replanned"| D
+  P -.->|"unproved loss:<br/>after 1 turn"| D
+```
+
+1. **Each turn searched in full.** From one state, a depth-first search over the turn's actions finds the distinct states where the turn can end, the enemies' turn played for real ([Turn search](/en/arch/sl-planner/turn-search/)).
+2. **A beam over turns.** Of all the states where the kept states' turns end, the best B by the leaf go on to the next turn ([Beam §1](/en/arch/sl-planner/beam/#sec-1)).
+3. **A bound prunes.** A line that ends the fight sets a floor; a state that cannot beat it even by winning with the HP it has is dropped ([Beam §2](/en/arch/sl-planner/beam/#sec-2)).
+4. **A greedy dive first** finds that floor before the full beam starts, and when it already wins, the full beam narrows to the easy beam E ([Beam §3–§4](/en/arch/sl-planner/beam/#sec-3)).
+5. **Pick, and prove if possible.** The best line that ends the fight; it is proved when nothing better can exist ([Beam §5](/en/arch/sl-planner/beam/#sec-5)).
+6. **Losing plans** are played one turn at a time and planned again, at most three in a row ([Beam §6](/en/arch/sl-planner/beam/#sec-6)).
+7. **Workers.** Each beam state's turn is one request to the worker pool ([Budget §4](/en/arch/sl-planner/budget/#sec-4)).
+
+## 4. Plan once, follow the plan
+
+The world is exact, so the plan is computed once and played as computed. A plan is the line's actions with the hash of the observation each one expects before it. At each later decision of the fight, Harness's route plays the plan's next step without a search if the fight shows the expected observation and the action is legal (`TurnPlan`). A step that does not hold means the clone differs from the real fight: the route plans again, marks the decision `replanned` in the decision log, and the run's record counts the replans ([Harness §6](/en/arch/harness/#sec-6)).
+
+Replans are how clone errors show up. In the first 40 SL runs with the planner, 38 had none, and two had 148 and 120. Both held Lava Rock, a relic that turns itself off after the act 1 boss's rewards and saves only that it triggered. Every clone made after that showed the relic as normal, so no step of a plan found the observation it expected, and each combat decision was planned again from scratch. The checkpoint now carries each relic's plain fields, and loading puts them back ([Simulator §7](/en/arch/simulator/#sec-7)). In the 300 runs of v6-3-2's evaluation (5,375 fights) no step failed: 0 replans, and 95.6% of the fights were planned exactly once ([Budget §3](/en/arch/sl-planner/budget/#sec-3)). The rest are fights that a plan expected to lose, which are planned again on purpose ([Beam §6](/en/arch/sl-planner/beam/#sec-6)).
+
+`selftest` checks the same thing on purpose: a run's fight is planned on the node's clone, played in the run step for step, each observation as the plan expects, and it must end with the HP and potions that the plan's value says; the pooled planner must plan what one process plans.
+
+## 5. This chapter
+
+| section | what it explains |
+|---|---|
+| [Turn search](/en/arch/sl-planner/turn-search/) | one turn searched in full: depth first, ending the turn at every step, transpositions keyed by the full hidden state, the nodes shared over the first actions |
+| [Beam](/en/arch/sl-planner/beam/) | the beam over turns, the bound and its pruning, the greedy dive, the easy beam, picking and proving a line, losing plans |
+| [Budget](/en/arch/sl-planner/budget/) | the effort levels and the low budget, where the time goes, workers, measured results, weaknesses and open questions |

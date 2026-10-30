@@ -247,7 +247,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 - A NoSL world is one sample of the hidden state that agrees with the observation; the SL world is an exact copy of the real combat.
 - Worlds are combat worlds only: the combat brain is their only consumer. Run-level worlds come with macro search.
 - `WorldSnapshot` is the list of steps the world has taken since it began (actions, prompt answers, determinize steps), in their text form. Search treats it as opaque; only the world that made it reads it, and restores it by replay. Because it is plain text, any worker can restore it.
-- Card prompts raised inside a world are answered there. In v0 they go to `p0`, the fixed rule the run itself answers by, so a world picks as the run will; making each option a search branch is planned ([Combat brain §2](/en/arch/combat-brain/#sec-2), rule 7).
+- Card prompts raised inside a world are answered there. In v0 they go to `p0`, the fixed rule the run itself answers by, so a world picks as the run will; making each option a search branch is planned ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1), rule 7).
 - `Candidate` is one scored action: its mean value over the worlds, the 95% confidence half-width, and the number of worlds.
 
 The SL seal: the node's clone stops at the node's exit (`AtHorizon`) and throws on any later step, and the SL world throws on any action after its combat's end, so search never leaves the room ([Simulator §7](/en/arch/simulator/#sec-7)).

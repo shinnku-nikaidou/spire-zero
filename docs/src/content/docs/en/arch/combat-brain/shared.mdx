@@ -1,0 +1,77 @@
+---
+title: 'Prompts, moves and workers'
+description: What both combat brains share besides the leaf - the fixed rule for card prompts during a fight (p0), the public record of enemy moves, and the pool of worker processes that runs their searches.
+sidebar:
+  label: Prompts, moves and workers
+---
+
+Three pieces sit under both algorithms. Card prompts during a fight are answered by one fixed rule, in the real fight and in every simulated one, so a search expects the answers the run will give ([§1](#sec-1)). The record of what the enemies showed each round travels with every decision, so leaves read the same history wherever they are computed ([§2](#sec-2)). And the searches run in a pool of worker processes, with a protocol that makes the pooled answer equal to the one-process answer ([§3](#sec-3)).
+
+## 1. Card prompts: p0
+
+Some cards ask a question when played: Survivor asks for a card to discard, Calculated Gamble discards the hand on its own, an exhaust or a "put a card on top of your draw pile" asks which card, and a card that generates three options asks which to take. The design's goal is to treat each answer as a branch of the search, so that the search values them like any other action ([§4](#sec-4)). Until then every card prompt in a fight goes to `PromptBrain`, called `p0`, a fixed rule by what happens to the picked cards:
+
+- **Picks that leave the hand this turn** (a discard, an exhaust, a card put on top of the draw pile) take the least useful cards, Sly cards first in a discard, since discarding a Sly card plays it. Past the prompt's minimum it takes only the cards that are better gone: unplayable ones, and Sly ones in a discard.
+- **A prompt that makes a card free** takes the dearest one.
+- **Any other prompt** adds or improves cards (a card into the hand, a copy, an upgrade), so it takes the most useful ones, as many as it may.
+
+A card's use is a sum of its numbers plus a flat part:
+
+$$
+\text{worth} = 5 + \text{damage} + 1.5\,\text{poison} + \text{block} + 4\,\text{cards drawn} + 4\,\text{energy} + 2\,(\text{Weak} + \text{Vulnerable}) + 2\,\text{upgrades}
+$$
+
+and an unplayable card (a status, a curse) has none. `p0` reads the prompt alone and never draws at random: ties go to the first option in canonical order. That is what lets a simulated world ask it too: the search's worlds answer every prompt as the run will, so a line through a prompt is valued with the answer that will really be given. In NoSL that holds in every sampled world; in SL the planner's plan replays exactly ([The SL planner §4](/en/arch/sl-planner/#sec-4)).
+
+Before `p0` (commit `c239f12`), prompts were answered at random, in the real fight and inside the worlds alike, so a search could not expect the answer the run would give. With it, PIMC's whole runs went from floor 18.50 to 19.34 on the same seeds ([NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6)). The rule is hand-written strategy, the kind the project otherwise leaves to learned values. It stays because a prompt searched as branches needs the world API's prompt branching and `ChoiceContext` ([Protocol §4](/en/arch/protocol/#sec-4)), not built yet.
+
+## 2. The record of enemy moves
+
+A monster's next move depends on its moves so far: a fixed cycle, a roll that never repeats a move three times, a move always followed by another ([NoSL PIMC §1](/en/arch/pimc/#sec-1)). A player remembers what each enemy did. So does the brain: `MoveRecord` keeps, for each enemy of the fight, the intents it showed at the first decision of each round, by uid. It is the part of the public record that is built today ([Harness §3](/en/arch/harness/#sec-3)).
+
+- Harness collects it from the combat observations it is shown, starting over after each macro decision, and hands it to the combat brain with every decision (`history`). The decision log keeps it with each combat decision ([Harness §6](/en/arch/harness/#sec-6)).
+- The search sends it to the workers in every request. A NoSL worker builds each monster's move log from it, so that a sampled world's monsters go on as the real ones would ([NoSL PIMC §2](/en/arch/pimc/#sec-2)). Both kinds of worker hand it to the leaves.
+- The combat net reads it: each enemy's intents in its last 3 rounds and how many rounds it has shown ([The leaf §3](/en/arch/combat-brain/leaf/#sec-3)). Every leaf of one decision's search follows the same record: a leaf is the next round's start, and the record holds the rounds up to the decision's. The SL planner's later turns add the rounds its own lines reach (`MoveRecord.Witness` at each turn's end).
+
+## 3. The worker pool
+
+A search is many independent pieces: K worlds in NoSL, a beam's states in SL. They run in a pool of worker processes. A worker is the same binary started as `serve`; `WorkerPool` (in Harness, which sees the game only through protocol types) starts N of them, by default one per world, and keeps them for its lifetime ([Simulator §8](/en/arch/simulator/#sec-8)).
+
+```mermaid
+sequenceDiagram
+  participant H as Harness (host)
+  participant P as WorkerPool
+  participant W1 as worker 1
+  participant W2 as worker 2
+  H->>P: one request per world (NoSL)<br/>or per beam state (SL)
+  P->>W1: request 1
+  P->>W2: request 2
+  W1-->>P: reply 1
+  W2-->>P: reply 2
+  P-->>H: replies in request order
+  Note over H: merge: the mean over worlds,<br/>or the next turn's beam
+```
+
+**The requests.** One JSON line each way, over the worker's stdin and stdout ([Protocol §7.1](/en/arch/protocol/#sec-7.1)):
+
+| request | who sends it | what the worker does |
+|---|---|---|
+| `PimcWorldRequest` | PIMC in NoSL (`PooledPimc`) | builds the combat from the observation with the build seed, takes world k of the worlds drawn from the search seed, searches this turn, and replies with the best line after each first action |
+| `SlTurnRequest` | the SL planner (`PooledPlanner`) | loads the node's clone, plays the beam state's path from the decision, searches that turn in full, and replies with the turn's best ends ([The SL planner: turn search §4](/en/arch/sl-planner/turn-search/#sec-4)) |
+| `SlWorldRequest` | PIMC on the SL world, the baseline | loads the node's clone and searches this turn after one first action |
+| `SlMacroRequest` | the macro brain on the clone | plays a path of macro answers on the clone and replies with the next decision ([Macro brain: search §6](/en/arch/macro-brain/search/#sec-6)) |
+
+**Self-contained.** A request carries everything its worker needs, and nothing carries over from one request to the next, so any free worker can take any request. In NoSL only the observation and the record leave the host: the true state never reaches a worker ([NoSL PIMC §4](/en/arch/pimc/#sec-4)). In SL the node's clone does, which SL may know.
+
+**Deterministic.** Replies are merged in request order, never in the order they finish. With the same seeds the answer equals that of a search in one process exactly, values included: `selftest --workers N` checks it, and a 6-combat panel trace with 8 workers diffs empty against the in-process one.
+
+**Failures.** A worker that closes its output or breaks the pipe is restarted and gets the request once more; so is one that does not answer within 5 minutes (a request takes seconds), after it is killed. A second failure is an error. A worker that throws exits after sending the error, since a request that threw can leave the game set up and fail every later one ([Simulator §8](/en/arch/simulator/#sec-8)).
+
+**Where the time goes.** Not in the leaf. A NoSL worker sampled for 40 s during a whole-run gate searched 87% of the time; restoring worlds took 48% (starting the combat from its setup 38%, replaying the line 7%, resampling 4%), playing the searched actions 16%, building observations 16%, and the combat net 5% ([Simulator §4](/en/arch/simulator/#sec-4)). An SL planner's worker spends about 88% of its busy time on restores: loading the node's clone and replaying a path to the state it searches. That is why the planner's levers are the beam and the number of plans rather than the nodes ([The SL planner: budget §3](/en/arch/sl-planner/budget/#sec-3)). Each worker holds about 160 MB.
+
+**Speed.** On 6 act 1 fights at 8 worlds × 300 nodes, 8 workers take 68.7 ms per action against 307.5 ms in one process.
+
+## 4. Planned
+
+- **Prompts as search branches.** Inside a search, the simulator's selector (the code that answers card prompts) would be driven by the search, so each answer is a branch; a lone prompt in the real fight would be answered by valuing each option with the same search (`Choose`, [Overview §4](/en/arch/combat-brain/#sec-4)).
+- **Worlds that live in a worker.** For run worlds and for searches that outgrow one request: open a world by kind (build, clone, run host), branch on it by id, and close it; its branches go to that worker first, since a restore elsewhere costs a replay ([Simulator §8](/en/arch/simulator/#sec-8)).

@@ -1,0 +1,61 @@
+---
+title: 'Turn search: one turn in full'
+description: How the SL planner searches one turn from one state - depth first, ending the turn at every step, transpositions merged by the full hidden state, and the turn's nodes shared over its first actions.
+sidebar:
+  label: Turn search
+---
+import TurnTree from '../../../../../components/combat/TurnTree.svelte';
+
+The planner's unit of work is one turn from one state. The [beam](/en/arch/sl-planner/beam/) decides which states get searched; this section is about what happens inside one such search (`SlPlanner.SearchTurn`). It is the same search whether it runs in the host or in a worker, which is what makes a turn one request to the worker pool ([Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)).
+
+## 1. Depth first over the turn
+
+From the state, the search tries every legal action, and from each resulting state every legal action again, depth first: it follows one sequence to its end, then backs up and tries the next. The order at each state is fixed: **ending the turn first**, then the cards in hand order, then potions. Ending the turn is an option at every step, an idea from bottled_ai (a prior-art Slay the Spire bot), so a line can stop after any number of cards.
+
+A line ends in one of two ways:
+
+- **The turn ends.** The enemies' turn that follows is played for real, in the same world, so the turn's end is the state at the next turn's first decision, after the enemies have acted (and, in SL, exactly as they will act).
+- **The fight ends**, won or lost, at any point of the line.
+
+Card prompts on the way go to `p0`, as in the run ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)). Every action played is one **node** of the budget.
+
+## 2. Transpositions and the full hidden state
+
+Different orders of the same cards often reach the same state, and a search that expanded each order would spend most of its nodes on repeats ([Combat brain §2](/en/arch/combat-brain/#sec-2)). So each state is searched once: the search keeps the states it has seen, keyed by
+
+$$
+\text{key}(s) = \big(\,\mathrm{hash}(\text{observation}),\ \mathrm{hash}(\text{hidden state})\,\big),
+$$
+
+and a state seen before is not expanded again. In SL the hidden part is the full one (`HiddenState.Full`): the draw pile's order, the position of every random stream, each monster's queued move and its moves so far, and what the combat's history holds of this turn, as a multiset.
+
+Why the full hidden state, and not the observation alone? Two orders can reach the same observation with the random streams in different places: after a reshuffle, a random target or a generated card, one order has drawn from a stream that the other has not. They then draw different futures. Keyed by the observation alone, the first of them would give its value to the other. Keyed by the hidden state as well, they stay apart, and the search sees, for free, which order sets the streams up best: that is the manipulation of the random streams that SL allows ([Overview §1](/en/arch/sl-planner/#sec-1)). The turn's history enters as a multiset, without its order, so the same plays in another order still meet.
+
+Only one turn's transpositions are merged. A state kept at the end of a turn is therefore always the end of one concrete line of actions from the decision, and the plan replays exactly in the world it was searched in.
+
+## 3. Sharing the nodes over the first actions
+
+A turn's search has a budget of $N$ nodes, 300 at every effort level (150 at the low budget, [Budget §2](/en/arch/sl-planner/budget/#sec-2)). Depth first, an unbounded search would spend all of them under the first card it tries. So at the turn's start the nodes are shared over its $m$ first actions: the $k$-th of them may search until
+
+$$
+\text{limit}_k = \max\!\Big(\text{used} + 1,\ \Big\lfloor \frac{N k}{m} \Big\rfloor\Big)
+$$
+
+nodes are used in all. A first action that needs fewer than its share leaves the rest to the ones after it. Below the first action, a subtree spends its share depth first; once the limit is reached, the remaining actions at that state are not tried and the turn is marked **cut**. A cut turn may have missed a better end, which matters for proofs ([Beam §5](/en/arch/sl-planner/beam/#sec-5)).
+
+The figure runs this search on a made-up turn small enough to show whole: two energy, four cards (one of them free), one enemy. Each row is a node, in the order the search plays it, indented by depth and coloured by its first action. Rows marked *merged* reached a state seen before and stop there; rows marked *same end* reached a turn end already found by another order. Lower the budget to see the shares cut the later first actions, and change how many states are kept.
+
+<TurnTree client:visible lang="en" />
+
+## 4. What a turn's search returns
+
+At each turn end the leaf values the state, and computes a **bound**: the value of winning the fight with the HP and potions that state has now, which no continuation of it can beat as long as the fight neither heals nor gives potions ([Beam §2](/en/arch/sl-planner/beam/#sec-2)). The search returns (`TurnSearch`):
+
+- the best end **of the fight** that the turn can reach, won or lost, if any;
+- the best `keep` distinct states **at the next turn's start**, by the leaf's value;
+- none whose bound cannot beat the floor it was given (the best whole line so far);
+- the nodes it used, and whether it was cut (out of nodes, or more ends found than kept).
+
+Each end carries its line (actions, and the observation hashes the plan will follow), its status, value, bound and key, and the record of enemy moves up to it, which the next turn's search and its leaves go on from ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)).
+
+The greedy dive asks each of its turns for every end, with no floor ([Beam §3](/en/arch/sl-planner/beam/#sec-3)). When the full beam later comes to the same state, it does not search that turn again: it takes the dive's ends and keeps those its own width and floor allow (`Narrow`). A floor only drops ends, and the kept ends are the best, in the same order, so the result is the one a fresh search would give.

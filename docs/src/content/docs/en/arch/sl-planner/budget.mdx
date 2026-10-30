@@ -1,0 +1,85 @@
+---
+title: 'Budget, cost and results'
+description: The SL planner's effort levels and the low budget of self-play, where its time goes in whole runs, how it runs in workers, what it has measured, and its weaknesses and open questions.
+sidebar:
+  label: Budget
+---
+
+The planner's budget is a few numbers: the beam $B$, the easy beam $E$, the nodes per state and turn, how many turns of a losing plan are played before planning again, and how many losing plans are allowed in a row ([Beam](/en/arch/sl-planner/beam/)). This section is how those numbers are set, what they cost, and what the planner achieves with them.
+
+## 1. Effort levels
+
+`--effort low|medium|high|max` sets the planner's budget in one option (`Budget.Effort`); an option given beside it (`--beam`, `--easy-beam`, `--nodes`, `--replan`, `--loss-plans`) overrides its part. Medium is the default since 2026-10-28, and the SL champion plays it. Every level searches 300 nodes per state and turn and plays an unproved losing plan for one turn before planning again:
+
+| effort | beam $B$ | easy beam $E$ | losing plans $L$ | whole runs, paired by seed with high |
+|---|---|---|---|---|
+| low | 8 | 2 | 3 | 200 seeds: −0.76 ± 0.89 floors (95%), further on 33, as far on 113, less far on 54; 0.40 of the time |
+| medium | 8 | 4 | 3 | 171 seeds: −0.04 ± 0.87 floors, further on 25, as far on 115, less far on 31; 0.61 of the time; passed the not-worse gate after 33 pairs |
+| high | 8 | 8 | no limit | the reference: 200 seeds, mean floor 28.54, 412 s per run |
+| max | 16 | 16 | no limit | not measured in whole runs |
+
+The runs were SL runs with the macro brain of the time (L0 with n2-b0.03) on the seeds `promotion-1`, both sides of a pair side by side under the same load; the gate is [Evaluation §5](/en/arch/evaluation/#sec-5)'s. Two later changes cut the cost of a restore and left every plan the same (high replays its runs on the same seeds bit for bit): the full beam takes the dive's turns ([Beam §3](/en/arch/sl-planner/beam/#sec-3)), and a world reads its node's checkpoint once instead of at every restore. With both, medium reached the same floor as before on all 84 seeds it played, in 0.84 of its time: 174 s per run against high's 320 s on those seeds.
+
+**By room.** `--elite-x` and `--boss-x` multiply $B$ and $E$ in elite and boss fights. Beam 4 with × 2 at elites and bosses, and 3 losing plans, went −0.72 ± 0.95 floors against high on 171 seeds in 0.61 of its time and failed the not-worse gate after 92 pairs, so it is not used; medium is as fast and passed.
+
+## 2. The low budget
+
+Self-play needs many runs, and its labels need fights played well but not perfectly. Plan v6's elite gauntlet played its self-play and its gates at a cheaper budget, and plan v7's whole-run self-play uses it too, while the reports and gates on whole runs stay at medium ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)):
+
+```bash
+Sts2Ai.SimWorker run --env SL --policy plan --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 …
+```
+
+That is a beam of 4 at 150 nodes per state and turn, the full width always (an easy beam of 0 means $B$), and every plan played to its end (`--replan 0`), so a fight is planned once. It was chosen on the boss fights that label the macro brain's decisions ([Learning §2](/en/arch/learning/#sec-2)): on 515 boss doors at full HP, the outcomes of two seeds at the low budget correlate 0.83, and those of the low and the medium budget on the same seed 0.94. The cheaper budget ranks doors as well as a second seed of the same budget does.
+
+## 3. Where the time goes
+
+**Restores.** Profiling a worker showed about 88% of its busy time spent restoring states: loading the node's clone and replaying a path to the state a turn's search starts from ([Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)). The search itself and the leaves are the rest. So the levers that save time are the ones that start fewer searches, the beam's width and the number of plans; the nodes per turn are not: on the panel, 150 nodes per state and turn searched about as many nodes as 300, since most turns end their search before the limit.
+
+**Whole runs.** The decision logs of v6-3-2's evaluation (300 SL runs on `promotion-1-300`, the SL champion at medium effort, 5,375 fights) say where a run's fight time goes. "Planned once" counts the fights whose first plan held to the end; a lost fight's HP lost is all the HP it began with.
+
+| fights | number | plans per fight | planned once | s per fight | share of the fight time | HP lost |
+|---|---|---|---|---|---|---|
+| hallway, won | 4,429 | 1.00 | 99.8% | 9.3 | 54.2% | 6.4 |
+| hallway, lost | 96 | 1.77 | 41.7% | 20.3 | 2.6% | 13.5 |
+| elite, won | 286 | 1.02 | 99.0% | 15.3 | 5.8% | 17.3 |
+| elite, lost | 39 | 2.05 | 41.0% | 49.8 | 2.6% | 30.5 |
+| boss, won | 393 | 1.05 | 96.4% | 28.7 | 14.9% | 30.8 |
+| boss, lost | 132 | 2.95 | 0.8% | 114.8 | 20.0% | 50.7 |
+| all | 5,375 | 1.08 | 95.6% | 14.1 | 100% | 10.1 |
+
+- Fights take 253 s of a run's 271 s on average; most of the rest is the macro brain's search on the clone.
+- Won hallway fights are 82% of the fights and 54% of the time, almost all planned once.
+- Lost fights are 5% of the fights and a quarter of the time. A lost boss fight is planned 2.95 times and takes 115 s, the limit of three losing plans at work ([Beam §6](/en/arch/sl-planner/beam/#sec-6)).
+- Every lost fight was a losing plan from its first search: the planner never lost a fight it had planned to win. And 27 of the 294 fights whose first plan lost were won after all, 14 of them boss fights: what replanning a losing plan is for.
+- No step of any plan failed to hold: 0 replans in 300 runs.
+
+## 4. Workers
+
+The turns' searches of one beam step are independent, so each kept state's turn is one request to the worker pool (`SlTurnRequest`, [Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)): the worker loads the node's clone, plays the state's path from the decision, searches the turn and returns its best ends. `PooledPlanner` sends one request per kept state for each turn of the beam, with the best whole line so far as the floor of each request's pruning, and merges the replies in request order. A turn's search lives in one request, so a plan is the same on any number of workers as in one process, which `selftest --workers N` checks. The SL champion's runs use 4 workers each.
+
+## 5. Results
+
+**The panel (2026-10-28).** Silent's starter deck at full HP, one fight per seed, the same fights for every player, prompts by `p0`, the combat net c2 as everyone's leaf. PIMC searches 8 worlds × 300 nodes, the planner beam 8 × 300 (then high effort). Each cell is the win rate and, in brackets, the HP lost per win:
+
+| pool | fights | PIMC NoSL | PIMC SL | SL planner |
+|---|---|---|---|---|
+| act 1 hallway (weak + regular) | 60 | 98.3% (14.2) | 98.3% (14.2) | 100% (14.1) |
+| act 1 elites | 30 | 30.0% (36.9) | 30.0% (37.0) | 46.7% (43.1) |
+| act 2 hallway | 30 | 33.3% (31.6) | 33.3% (31.7) | 43.3% (32.3) |
+
+The planner wins every fight PIMC wins, and 1, 5 and 3 more. On the fights both win it keeps 0.5, 2.0 and 6.8 more HP on average. HP lost compares only between players with similar win rates: one that wins harder fights loses more HP in them. Every fight the planner won was planned once and played as planned. On won hallway fights it costs about what PIMC in NoSL does (595 against 707 ms per action, one core each), 3.4 times PIMC on the SL world; on elites its time goes into the losses it plans again (2,316 ms per action).
+
+**Whole runs.** With the macro brain the same as the NoSL champion's of the time, the planner against that champion's PIMC on `promotion-1` #0–39: floor 28.32 against 23.98, **+4.35 ± 2.56 floors** (95%), further on 17 seeds, as far on 18, less far on 5; the act 1 boss passed in 28 runs against 22, the act 2 boss reached in 20 against 13. A run took 491 s against 126 s then; the effort levels and the cheaper restores have since cut that by more than half ([§1](#sec-1)).
+
+**Now.** The SL champion, the planner at medium effort with L0 v6-3-2 on the clone, reaches floor 33.56 on average on the 300 seeds of `promotion-1-300` and wins 23 runs (7.7%), in 271 s per run. The combat brain has not changed since 2026-10-28: the gains since then are the macro brain's ([Macro brain §4](/en/arch/macro-brain/#sec-4)).
+
+## 6. Weaknesses and open questions
+
+- **A narrow beam.** A turn ends in far more distinct states than the 8 the beam keeps, so few plans are proved (18% on act 1 hallway fights, 3% on elites, 1% on act 2) and a better line can fall outside the beam. What a wider beam or more nodes buy in whole runs (`--effort max`) is not measured. Not built: improving the plan by branch and bound until a time budget runs out, with wider beams in turn, as an anytime search.
+- **The bound's assumption.** A fight that heals or gives potions breaks it, and a prune can then drop the best line ([Beam §2](/en/arch/sl-planner/beam/#sec-2)).
+- **A NoSL leaf.** The leaf, c2, learned the endings of NoSL's PIMC with the hand-made leaf, a weaker player than the planner ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). SL's own net is not trained yet, and V's prices (`--leaf-prices v`) are built but not gated.
+- **Prompts are not searched.** Card prompts go to `p0`, so a plan cannot choose a better discard or pick ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
+- **The fight's end is the horizon.** The search stops where the fight does, valued by the leaf; the rewards after it and the rest of the node, which SL may also see, are left to the macro brain. Searching on to the node's exit is open ([Environments §10](/en/arch/environments/#sec-10), question 1).
+- **Lost fights cost time.** A quarter of the fight time goes into the 5% of fights that are lost ([§3](#sec-3)). The limit on losing plans caps it; no cheaper test tells a lost fight from a hard one.
+- **Fair comparison with NoSL.** The planner gets the same nodes per search, not the same time. Equal wall-clock time is the fairer budget for comparing the environments ([Environments §10](/en/arch/environments/#sec-10), question 2).

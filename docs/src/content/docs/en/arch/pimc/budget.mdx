@@ -1,0 +1,85 @@
+---
+title: 'Budget, tools and results'
+description: How PIMC spends its worlds and nodes, the levers built on top (following the plan, sequential halving, budget by room), how it runs in workers, what it has measured, and its weaknesses and open questions.
+sidebar:
+  label: Budget
+---
+
+PIMC's budget is two numbers, `Budget(Worlds, NodesPerWorld)`: $K$ worlds, each searched with a number of nodes, 8 × 300 by default, where a node is one action played ([§1](#sec-1)). On top of the plain search sit three levers, each built and measured: following the plan through the rest of a turn ([§2](#sec-2)), sequential halving at the root ([§3](#sec-3)), and more nodes in elite and boss fights ([§4](#sec-4)). None of them is on in the champion.
+
+## 1. Worlds and nodes
+
+In each world the nodes are split evenly over the first actions, so each first action gets a fair look; inside a subtree, once its share is spent, the state is scored as ending the turn ([Search §1](/en/arch/pimc/search/#sec-1)). On one core a decision costs about 0.55–0.75 s; the worlds are independent, so the worker pool searches one world per worker, and with 8 workers an action takes about 70 ms, with the same result ([§5](#sec-5)).
+
+How large $K$ should be is a question of returns. Each world adds a sample to every first action's mean, so the noise falls as $1/\sqrt{K}$, but the bias of [Search §4](/en/arch/pimc/search/#sec-4)–[§5](/en/arch/pimc/search/#sec-5) does not fall at all. Elsewhere: in LoCM, a card-game study, PIMC saturates beyond 32 worlds; in ytcs, a prior-art STS2 project, $K$ = 64 gained 0.018. Here $K$ and the nodes per world are 8 × 300 for every fight, and nothing has tuned them yet. As rough numbers, 1–2 s per decision on 8 workers gives about 5,000 branches; at $K$ = 16 that is about 300 per world, enough to enumerate one turn with transpositions merged.
+
+The planned lever that decides when to stop is **CI-based allocation**: each first action's mean has a confidence interval, and once the two best are clearly apart, more worlds will not change the choice; until then, more worlds go to those two. Not built: today every first action gets every world.
+
+## 2. Following the plan
+
+When every world plans the same rest of the turn, and expects the same observation before each of its steps, the plan can be played without searching again, one step at a time, for as long as the fight shows what the worlds expected (`--follow`, `TurnPlan`, [Combat brain §4](/en/arch/combat-brain/#sec-4)). A draw, a random result or a disagreement between the worlds sends the decision back to search.
+
+On the first 6 act 1 panel fights, 66 of 142 decisions were played without a search, every action the same, in 27% less time. In whole runs of the champion on 16 train seeds, a run took 31% less time. Its not-worse gate ([Evaluation §5](/en/arch/evaluation/#sec-5)) was still open after all 200 seeds, −0.72 ± 0.92 floors with 126 seeds to the same floor, so it is built (`--follow`) but not used.
+
+## 3. Sequential halving
+
+An even split gives a hopeless first action as many nodes as the best. **Sequential halving** spends them where the choice is made: over $m$ first actions it runs $R = \lceil \log_2 m \rceil$ rounds; each round splits every world's share of the nodes evenly over the first actions still in, and then drops the worse half by their mean over the same worlds (common random numbers again). The pick is the better of the last two. It is the root selection of Gumbel AlphaZero when the prior is uniform.
+
+In round $r$, each of the $m_r$ actions still in gets $N / (R\, m_r)$ more nodes per world, $N$ being the nodes per world. A worker keeps nothing between requests, so each round searches the actions left again from the root, with all the nodes each has had so far, rather than resuming. That costs up to about 1.5 times the nodes of resuming: 1.25 at 4 first actions, 1.4 at 8, 1.5 at 16.
+
+On the Terror Eel decision of [Search §3](/en/arch/pimc/search/#sec-3), with its 8 first actions, it would go as below. The values are the even search's, standing in for what each round would find:
+
+| round | first actions in | nodes each, per world | dropped by the round's mean |
+|---|---|---|---|
+| 0 | 8 | 12 | Neow's Fury, Calculated Gamble, Strike, End turn |
+| 1 | 4 | 37 | Slice, Poisoned Stab |
+| 2 | 2 | 87 | Defend; the pick is Leg Sweep |
+
+The worlds search $8 \times 12 + 4 \times 37 + 2 \times 87 = 418$ nodes each instead of 300, and Leg Sweep gets 87 of them instead of 37. Built (`--halving`), off by default; assist mode, whose time is open-ended, is meant to use its anytime variant.
+
+## 4. Budget by room
+
+Elite and boss fights decide runs, so they could get more search: `--elite-x` and `--boss-x` multiply PIMC's nodes per world in those rooms (by the observation's room type). The evidence elsewhere is strong: in spire-mentor, raising the boss budget from 1,000 to 4,000 lifted the act 1 clear rate from 21.5% to over 65%. Here boss × 2 failed its gate on seeds 0–99 (2026-10-28): 90 of the 100 pairs tied, the mean difference was −0.39 ± 0.32 floors, 43 runs passed the act 1 boss against the champion's 45, and runs took 15% longer. It is not used; × 4 is untried.
+
+## 5. Workers
+
+Each world of a decision is one request to the worker pool (`PimcWorldRequest`, [Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)): the worker builds the fight from the observation with the build seed, takes world $k$ of the worlds drawn from the search seed, searches this turn and returns the best line after each first action. `PooledPimc` sends one request per world and merges the replies in world order; with sequential halving it sends one such set per round, with the first actions still in. On 6 act 1 fights, 8 workers take 68.7 ms per action against 307.5 ms in one process, with the same moves.
+
+PIMC can also run on SL's one exact world (`--policy pimc --env SL`), the planner's baseline. SL has one world, so `PooledPimc` splits it by first action instead (`SlWorldRequest`): one request per first action, each with that action's share of the budget. Each request keeps its own memo of transpositions, where one process shares it across first actions, so the answer can differ from a search in one process.
+
+## 6. Results
+
+**The panel.** Silent's starter deck at full HP, one fight per seed, the same fights for every player, 8 worlds × 300 nodes. Each cell is the win rate and, in brackets, the HP lost per win. These were measured while card prompts were still answered at random, with the hand-made leaf:
+
+| pool | fights | `random` | `play` | PIMC NoSL | PIMC SL |
+|---|---|---|---|---|---|
+| act 1 hallway (weak + regular) | 60 | 40.0% (42.5) | 85.0% (29.5) | 100% (15.4) | 100% (16.2) |
+| act 1 elites | 30 | – | 16.7% (33.2) | 36.7% (43.7) | 40.0% (45.5) |
+| act 2 hallway | 30 | – | 16.7% (35.0) | 50.0% (38.3) | 46.7% (35.9) |
+
+A fight took 17–28 s for PIMC NoSL on one core, 4–7 s for PIMC SL (one world) and 0.2–0.4 s for the placeholders, with no game error or failure. With `p0` and the combat net c2 as the leaf (2026-10-28), PIMC NoSL won 98.3%, 30.0% and 33.3% of the same pools, and played the same in SL as in NoSL: the same outcome in 112 of the 120 fights, within 5 HP in the other 8 ([The SL planner: budget §5](/en/arch/sl-planner/budget/#sec-5)).
+
+**Whole runs.** On the seeds `promotion-1` (200 runs, Silent A0, [Evaluation §4](/en/arch/evaluation/#sec-4)), at 8 × 300, with the macro decisions from the random placeholder or from L0 with V v0 ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)):
+
+| combat | macro | mean floor | median | act 1 boss reached | act 2 boss reached | won |
+|---|---|---|---|---|---|---|
+| `play` | random | 8.09 | 7 | 5 | 0 | 0 |
+| PIMC | random | 13.68 | 14 | 73 | 1 | 0 |
+| `play` | L0 | 11.72 | 12 | 54 | 0 | 0 |
+| PIMC | L0 | 18.50 | 17 | 175 | 15 | 0 |
+| `play`, prompts `p0` | L0 | 11.90 | 12 | 60 | 0 | 0 |
+| PIMC, prompts `p0` | L0 | 19.34 | 17 | 177 | 19 | 0 |
+| PIMC with c2, prompts `p0` | L0 | 21.88 | 17 | 187 | 45 | 0 |
+
+PIMC raises the floor under either macro brain, and L0 under either combat policy. With both, the runs that reach the act 1 boss enter it with 93% of their HP on average (58% with random macro decisions). PIMC with `p0` and L0 passed its gate against `play` with L0 after 14 pairs, by 8.21 floors on average, and became the NoSL champion on 2026-10-27; with c2 as the leaf it reached the act 2 boss in 45 runs instead of 19 and passed its gate against the hand-made leaf after 77 pairs, by 2.36 floors. A run took 92 s, four runs at a time with 8 workers each. With later V's in the macro brain the same combat brain reached floor 23.96 (n2-b0.1) and 26.16 (n2-b0.03) on the same seeds ([Evaluation §5](/en/arch/evaluation/#sec-5)).
+
+**Now.** The NoSL champion is PIMC with c2 at 8 × 300 and L0 with V v6-3-2, which predicts afterstates from the screen, since clones are SL's ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)). There is no NoSL report of it yet, so the NoSL leaderboard marks no champion.
+
+## 7. Weaknesses and open questions
+
+1. **$K$ and the nodes per world.** 8 × 300 for every fight, untuned. A panel can show the marginal gain in HP per added world; CI-based allocation would spend worlds where the choice is close ([§1](#sec-1)).
+2. **How large fusion is.** The fusion panel is built and has had one small try ([Search §4](/en/arch/pimc/search/#sec-4)): 300–500 decisions rich in reveals would decide whether ISMCTS is worth its cost.
+3. **The leaf at the end of the turn.** The search sees the fight past this turn only through the leaf. Candidates at equal wall-clock time: c2, a rollout to the end of the fight from the leaf, and both. A rollout at every leaf is too expensive, since almost every node carries an end-turn leaf; only the two first actions that sequential halving keeps last would get one rollout per world, from their best line, as a confirmation. Searching one more turn for the best first actions, with a cheap policy or a beam, is planned too.
+4. **The sampler.** Monsters' queued moves are drawn uniformly among those that match the intent, and hidden counters have no posterior ([Search §5](/en/arch/pimc/search/#sec-5)).
+5. **Prompts** go to `p0`, as in SL ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
+6. **No report of the current champion** in NoSL, and no NoSL combat net trained since c2 on newer, better-played fights ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
