@@ -93,6 +93,8 @@ const mathKatex = {
 };
 
 export default defineConfig({
+  // Where the site is served (docs/wrangler.jsonc); Starlight uses it for canonical links and the sitemap.
+  site: 'https://sts2-docs.shinnkunikaidou.workers.dev',
   integrations: [
     sectionIds,
     mathKatex,

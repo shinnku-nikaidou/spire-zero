@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .astro/
+.wrangler/
 
 # The site's own data (figures' examples, game names, the net's endpoints), not run records
 !src/data/
