@@ -12,7 +12,7 @@ import WorldTurns from '../../../../components/book/WorldTurns.svelte';
 
 ## 1. 世界是什么
 
-对搜索来说，世界就是世界 API 的接口 `ICombatWorld`（[协议 §7](/arch/protocol/#sec-7)）：观测它，列出它的合法动作，执行其中一个，读出它的状态（进行中、赢、输）和隐藏键，做一个快照，还原一个快照。世界的来源 `IWorldSource` 给出一个决策的各个世界：`Worlds(k, searchSeed)`。战斗大脑只通过这个接口搜索，所以同一份搜索代码能在任何一种世界上运行（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
+对搜索来说，世界就是世界 API 的接口 `ICombatWorld`（[协议：世界与工作进程消息 §1](/arch/protocol/worlds/#sec-1)）：观测它，列出它的合法动作，执行其中一个，读出它的状态（进行中、赢、输）和隐藏键，做一个快照，还原一个快照。世界的来源 `IWorldSource` 给出一个决策的各个世界：`Worlds(k, searchSeed)`。战斗大脑只通过这个接口搜索，所以同一份搜索代码能在任何一种世界上运行（[战斗大脑 §4](/arch/combat-brain/#sec-4)）。
 
 如今每个世界都是**战斗世界**：一场战斗，停在一个战斗决策处。模拟器用两种方式做出它们：
 
@@ -63,7 +63,7 @@ NoSL 世界把碰到会话上限（50 轮或 1,000 个动作，[战斗 §1](/arc
 
 **克隆**是检查点，加上此后这个节点的每个决策，以轨迹行的形式（`surface action`；选牌提示的选择用游戏自己的下标）。它的协议类型是 `NodeClone(Save, Trace, Gauntlet?)`（`Sts2Ai.Protocol/World.cs:53`），除了模拟器，谁都不解读它的内容。对处于精英连战规则下的对局，`Gauntlet` 为 true，克隆保留这条规则（[整局 §7](/arch/simulator/runs/#sec-7)）。`RunSession.Clone()` 可以在节点的任何时刻生成一个克隆（`Simulation/RunSession.cs:229-230`）。
 
-**在一局里**，SL 主机把克隆一块一块地发给大脑：新节点开始时发 `node_checkpoint`，然后把节点的每个决策作为 `node_action` 发送，两者都在问下一个决策之前发出（`Brains/RunBrains.cs:88-99`；[协议 §2](/arch/protocol/#sec-2)）。Harness 保留最新的检查点和此后的决策，在每个决策处这就是克隆（[Harness §3](/arch/harness/#sec-3)）。Mod 从游戏里发送同样的消息（[Mod §6](/arch/mod/#sec-6)）。
+**在一局里**，SL 主机把克隆一块一块地发给大脑：新节点开始时发 `node_checkpoint`，然后把节点的每个决策作为 `node_action` 发送，两者都在问下一个决策之前发出（`Brains/RunBrains.cs:88-99`；[协议：线路 §6](/arch/protocol/wire/#sec-6)）。Harness 保留最新的检查点和此后的决策，在每个决策处这就是克隆（[Harness §3](/arch/harness/#sec-3)）。Mod 从游戏里发送同样的消息（[Mod §6](/arch/mod/#sec-6)）。
 
 ## 4. 加载克隆
 

@@ -12,7 +12,7 @@ Harness 是决策进程里的调度器。它的一边是**宿主**，也就是�
 
 <Aside title="状态">
 
-部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器：工作进程池 §2](/arch/simulator/pool/#sec-2)）、`PooledPimc`（在进程池里搜索世界的 PIMC 战斗大脑，NoSL 或 SL）、`PooledPlanner`（在进程池里搜索各个回合的 SL 规划器）和 `Dispatcher`：它把一局里的决策路由给大脑，抽取大脑的种子，并写决策日志（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 让每一局都经过它，可以在进程内，也可以走传输协议：`BrainServer` 是 Harness 这一端的宿主–brain 消息处理（[协议 §2](/arch/protocol/#sec-2)），按顺序回答决策。规划中：公开记录的其余部分（[§3](#sec-3)；目前只记录敌人每回合的意图，[§6](#sec-6)）；搜索进行中的过期请求和取消；墙钟预算和基于 CI 的分配；降级回答。
+部分实现。`Sts2Ai.Harness` 里有 worker 进程池（[模拟器：工作进程池 §2](/arch/simulator/pool/#sec-2)）、`PooledPimc`（在进程池里搜索世界的 PIMC 战斗大脑，NoSL 或 SL）、`PooledPlanner`（在进程池里搜索各个回合的 SL 规划器）和 `Dispatcher`：它把一局里的决策路由给大脑，抽取大脑的种子，并写决策日志（[§4](#sec-4)–[§6](#sec-6)）。SimWorker 的 `run` 让每一局都经过它，可以在进程内，也可以走传输协议：`BrainServer` 是 Harness 这一端的宿主–brain 消息处理（[协议：线路 §1](/arch/protocol/wire/#sec-1)），按顺序回答决策。规划中：公开记录的其余部分（[§3](#sec-3)；目前只记录敌人每回合的意图，[§6](#sec-6)）；搜索进行中的过期请求和取消；墙钟预算和基于 CI 的分配；降级回答。
 
 </Aside>
 
@@ -20,9 +20,9 @@ Harness 是决策进程里的调度器。它的一边是**宿主**，也就是�
 
 Harness 负责六件事：
 
-1. 处理 Protocol 消息：按 `decision_id` 排序，丢弃过期请求，也就是针对游戏已经离开的状态发出的请求（[协议 §2](/arch/protocol/#sec-2)）。
+1. 处理 Protocol 消息：按 `decision_id` 排序，丢弃过期请求，也就是针对游戏已经离开的状态发出的请求（[协议：线路 §5](/arch/protocol/wire/#sec-5)）。
 2. 为每一局维护公开记录（[§3](#sec-3)）。在 NoSL 下，这份记录是信念的输入；信念就是 AI 对隐藏状态的认识。在 SL 下，Harness 还要保存节点检查点和节点轨迹。
-3. 通过 `IWorldSource` 为当前环境打开世界（[环境：世界 §5](/arch/environments/worlds/#sec-5)、[协议 §7](/arch/protocol/#sec-7)）。
+3. 通过 `IWorldSource` 为当前环境打开世界（[环境：世界 §5](/arch/environments/worlds/#sec-5)、[协议：世界与工作进程消息 §1](/arch/protocol/worlds/#sec-1)）。
 4. 把每个决策界面路由给一个大脑，没有兜底（[§4](#sec-4)）。
 5. 设定预算（[§5](#sec-5)），并保证搜索种子是确定性的。
 6. 写决策日志（[§6](#sec-6)）。
@@ -99,7 +99,7 @@ public sealed class PublicRecord
 | `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`potion_full` | 宏观大脑 |
 
 - 战斗大脑取决于环境：NoSL 用 PIMC，SL 用 SL 规划器（`--policy plan`，[战斗大脑 §3](/arch/combat-brain/#sec-3)），它在节点克隆上规划，在 NoSL 里拒绝运行。在克隆上跑 PIMC（SL 下的 `--policy pimc`）保留下来，作为规划器的基线：它只搜索本回合。宏观大脑在两种环境里是同一个（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。每个宿主在 `hello` 里报出自己的环境，所以 `brain` 命令同时服务两种：NoSL 宿主用 `--policy` 的战斗大脑，SL 宿主用 `--sl-policy` 的，默认是 SL 规划器（[Mod §5](/arch/mod/#sec-5)）。
-- `Dispatcher` 为一局实现这张表。宿主把它作为自己的战斗策略、选牌提示策略和宏观策略。它为每一侧各持有一个大脑（战斗、战斗中的提示、宏观、战斗外的提示），并按 `ChoiceContext.InCombat` 把选牌提示交给对应的一侧（[协议 §4](/arch/protocol/#sec-4)）。目前战斗中的提示交给 `p0`（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1) 第 7 条），宏观一侧和它的提示交给 L0 或随机占位策略。
+- `Dispatcher` 为一局实现这张表。宿主把它作为自己的战斗策略、选牌提示策略和宏观策略。它为每一侧各持有一个大脑（战斗、战斗中的提示、宏观、战斗外的提示），并按 `ChoiceContext.InCombat` 把选牌提示交给对应的一侧（[协议：观测与动作 §6](/arch/protocol/observation/#sec-6)）。目前战斗中的提示交给 `p0`（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1) 第 7 条），宏观一侧和它的提示交给 L0 或随机占位策略。
 - 找不到路由时报错「uncovered surface」（未覆盖的决策界面）：决策界面不在 `Dispatcher.MacroSurfaces` 里，或大脑的回答不合法，`Dispatcher` 都会抛异常。宿主暂停，请求人工操作，并记录一个覆盖率 bug。绝不随机兜底。评估要求兜底次数为 0（[评估 §3](/arch/evaluation/#sec-3)）。
 - 决策界面列表及其游戏入口：[模拟器：整局 §4](/arch/simulator/runs/#sec-4)、[GameBridge §4](/arch/gamebridge/#sec-4)。
 
@@ -116,7 +116,7 @@ public sealed class PublicRecord
 「随时可停」是指搜索在任何时刻被打断，都有一个当前最好的答案可以给出。
 
 - 并行算出的结果按固定顺序合并（先按世界编号，再按候选编号），绝不按完成的先后顺序，这样时序就改变不了答案。
-- 大脑的随机数由 Harness 提供：`brainSeed = SplitMix64(Hash(runId), decisionIndex)`，其中决策序号计入这一局的每个决策（包括选牌提示），run id 是这一局种子的哈希，所以大脑看不到种子（[协议 §2](/arch/protocol/#sec-2)）。大脑绝不从游戏自己的随机数流里取数。等大脑有了版本，冠军版本号也加入哈希。PIMC 的构建种子就是大脑种子的十六进制形式。
+- 大脑的随机数由 Harness 提供：`brainSeed = SplitMix64(Hash(runId), decisionIndex)`，其中决策序号计入这一局的每个决策（包括选牌提示），run id 是这一局种子的哈希，所以大脑看不到种子（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。大脑绝不从游戏自己的随机数流里取数。等大脑有了版本，冠军版本号也加入哈希。PIMC 的构建种子就是大脑种子的十六进制形式。
 - 分配：当排名前两位的候选之差超出各自的置信区间（CI）时停止；否则增加样本或深度（[NoSL PIMC：预算 §1](/arch/pimc/budget/#sec-1)）。
 
 ## 6. 决策日志
@@ -138,7 +138,7 @@ public sealed class PublicRecord
 - `explored: true` 标出自我对弈的探索抽中的、不是大脑最优选的一步，且大脑给它的估值比最优低出温度的百分之一以上（[学习 §5](/arch/learning/#sec-5)）。差距比这更小就算平手（例如同一回合换了个出牌顺序），不标。用均匀抽取（`--explore ε`）时，每个抽出来的答案都会标上，碰巧就是大脑自己首选的那个也一样。其他步骤没有 `explored`。没有选搜索首选的战斗步骤保留 `candidates`，但没有 `plan`，因为那个计划是首选的。
 - `replanned: true` 标出因为大脑计划里的一步对不上（战斗没有出现计划预期的观测）而重新搜索的战斗步骤（[NoSL PIMC：预算 §2](/arch/pimc/budget/#sec-2)）。用 PIMC 的 `--follow` 时，这是回合里揭示了新东西；用 SL 规划器时，说明克隆和真实战斗不同（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。对局那一行统计它们的次数（`replans`）。
 - 一局的战斗决策按战斗分块，每场战斗一块，块与块之间隔着宏观决策，顺序与对局记录里的战斗一致。决策靠这个找到它那场战斗的结局（[评估 §6](/arch/evaluation/#sec-6)）。
-- 战斗决策还会加上 `obs`，即大脑看到的战斗观测（[协议 §1](/arch/protocol/#sec-1)）：学习得到的战斗部件和融合测试集的输入（[NoSL PIMC：搜索 §4](/arch/pimc/search/#sec-4)）。约 1.6 KB。
+- 战斗决策还会加上 `obs`，即大脑看到的战斗观测（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)）：学习得到的战斗部件和融合测试集的输入（[NoSL PIMC：搜索 §4](/arch/pimc/search/#sec-4)）。约 1.6 KB。
 - 战斗决策还会加上 `history`：这场战斗里每个敌人在至今每一回合开始时显示的意图，包括本回合，按 uid 分组，每项是 `{round, intents}`。这是目前已实现的那部分公开记录（[§3](#sec-3)）：Harness 从它看到的战斗观测里收集，每次宏观决策后重新开始。战斗网络读它和回合数，这样每个怪物的出招顺序能从数据里学到，而不是靠手写的规则（[学习 §1](/arch/learning/#sec-1)）。Brain 里的 `MoveRecord` 保存这份记录，Harness 每个决策都把它交给战斗大脑（战斗路由的最后一个参数），搜索再把它发给 worker，供叶子使用（[战斗大脑：提示、招式与 worker §2](/arch/combat-brain/shared/#sec-2)）。
 - 宏观决策还会加上 `features`：大脑看到的整局观测上 V 的特征（[学习 §1](/arch/learning/#sec-1)），不管是哪个大脑做的决策。V v0 的拟合和 V v2 的训练读的就是它们；两者都已删除，纯 V 不读它们（[学习 §2](/arch/learning/#sec-2)）。
 - 宏观决策还会加上 `run_view`：整局观测本身，约 6 KB，V v2 就用它训练（[学习 §2](/arch/learning/#sec-2)）。

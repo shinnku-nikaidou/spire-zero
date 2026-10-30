@@ -24,7 +24,7 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 
 **啟動**。行程池平行啟動它的工作行程，等到每一個都啟動完成（`Sts2Ai.Harness/WorkerPool.cs:33-50`）。工作行程就是再次啟動的同一個程式，用它的 apphost，或者如果宿主是那樣啟動的，就用 `dotnet` 加它的 dll（`Program.cs:20-24`），帶上 `serve` 和冠軍的葉節點選項（`--leaf`、`--combat-net`），也就是這個工作行程每次搜尋都用的葉節點。啟動大約要 1.2 s（[無頭宿主 §2](/zh-tw/arch/simulator/headless/#sec-2)）。完成時，工作行程寫出它的 hello：`{"game": "v0.111.0"}`，即它執行的遊戲版本。
 
-**線路**是工作行程 stdin 和 stdout 上每條訊息一行 JSON（[協定 §7](/zh-tw/arch/protocol/#sec-7)）。請求帶著它的型別和一個 id；回覆帶著同一個 id、答案、請求失敗時的錯誤，以及服務它時記錄下的遊戲錯誤。工作行程的訊息沒有協定版本欄位：宿主和它的工作行程永遠是同一個建置。
+**線路**是工作行程 stdin 和 stdout 上每條訊息一行 JSON（[協定：世界與工作行程訊息 §4](/zh-tw/arch/protocol/worlds/#sec-4)）。請求帶著它的型別和一個 id；回覆帶著同一個 id、答案、請求失敗時的錯誤，以及服務它時記錄下的遊戲錯誤。工作行程的訊息沒有協定版本欄位：宿主和它的工作行程永遠是同一個建置。
 
 **服務一組請求**。進行搜尋的大腦把一步的所有請求一次交給行程池，例如每個世界一個（`WorkerPool.Map`，`Sts2Ai.Harness/WorkerPool.cs:70-88`）。每個請求交給當時空閒的工作行程；一個工作行程一次服務一個請求；回覆按請求順序回來，不管它們以什麼順序完成。
 

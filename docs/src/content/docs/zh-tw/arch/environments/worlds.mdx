@@ -11,7 +11,7 @@ import StrategyFusion from '../../../../../components/book/StrategyFusion.svelte
 
 ## 1. 世界
 
-**世界**是一個搜尋可以探索的模擬器狀態：一個正在執行的遊戲，搜尋可以觀測它、在裡面行動、儲存它（快照，snapshot）並回到它（還原，restore）。搜尋從不碰真實的遊戲。它透過世界 API 要求世界（[協定 §7](/zh-tw/arch/protocol/#sec-7)），在裡面打它的候選路線，再比較這些路線的結局。
+**世界**是一個搜尋可以探索的模擬器狀態：一個正在執行的遊戲，搜尋可以觀測它、在裡面行動、儲存它（快照，snapshot）並回到它（還原，restore）。搜尋從不碰真實的遊戲。它透過世界 API 要求世界（[協定：世界與工作行程訊息 §1](/zh-tw/arch/protocol/worlds/#sec-1)），在裡面打它的候選路線，再比較這些路線的結局。
 
 目前每個世界都是**戰鬥世界**：一場戰鬥，由戰鬥大腦搜尋（[戰鬥大腦](/zh-tw/arch/combat-brain/)）。宏觀大腦在戰鬥外的搜尋直接使用 SL 複本（[宏觀大腦：搜尋 §2](/zh-tw/arch/macro-brain/search/#sec-2)）；NoSL 的對局世界能讓它看到當前節點之後的東西，目前還在規劃中（[模擬器：世界與 SL 複本 §8](/zh-tw/arch/simulator/worlds/#sec-8)）。
 
@@ -73,7 +73,7 @@ SL 的世界是節點的複本：真實戰鬥的一份精確複製，帶著真�
 
 ## 5. 一個宏觀大腦，兩種戰鬥演算法
 
-所以兩種環境提出了兩個不同的戰鬥問題：NoSL 必須選出在它無法區分的各個世界上平均最好的動作，SL 則必須在一個已知的世界裡找出最好的路線。兩者各有自己的演算法。冠軍的選項按環境選擇演算法：一局用 `run --policy`（SL 規劃器 `plan` 在 SL 以外會被拒絕）；在 `brain` 指令裡，NoSL 宿主用 `--policy`，SL 宿主用 `--sl-policy`，預設為 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。接著 Harness 在每個戰鬥決策都把對應的輸入交給戰鬥路由：SL 下是節點的複本，NoSL 下只有觀測，工作行程再據此建構它們的世界（`Harness/Dispatcher.cs:134`）。在單一行程裡，例如戰鬥面板中，同樣的兩種演算法在同一個介面 `ICombatBrain` 後面執行，使用來自 `IWorldSource` 的世界（[協定 §7](/zh-tw/arch/protocol/#sec-7)）：
+所以兩種環境提出了兩個不同的戰鬥問題：NoSL 必須選出在它無法區分的各個世界上平均最好的動作，SL 則必須在一個已知的世界裡找出最好的路線。兩者各有自己的演算法。冠軍的選項按環境選擇演算法：一局用 `run --policy`（SL 規劃器 `plan` 在 SL 以外會被拒絕）；在 `brain` 指令裡，NoSL 宿主用 `--policy`，SL 宿主用 `--sl-policy`，預設為 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。接著 Harness 在每個戰鬥決策都把對應的輸入交給戰鬥路由：SL 下是節點的複本，NoSL 下只有觀測，工作行程再據此建構它們的世界（`Harness/Dispatcher.cs:134`）。在單一行程裡，例如戰鬥面板中，同樣的兩種演算法在同一個介面 `ICombatBrain` 後面執行，使用來自 `IWorldSource` 的世界（[協定：世界與工作行程訊息 §1](/zh-tw/arch/protocol/worlds/#sec-1)）：
 
 ```mermaid
 flowchart LR
@@ -120,7 +120,7 @@ flowchart LR
 
 | 子系統 | NoSL | SL 額外的部分 |
 |---|---|---|
-| 協定 | 觀測、動作、卡牌提示、推薦、世界 API、NoSL 工作行程請求 | `node_checkpoint` 和 `node_action`；複本型別 `NodeClone`；SL 工作行程請求（`SlWorldRequest`、`SlTurnRequest`、`SlMacroRequest`） |
+| 協定 | 觀測、動作、選牌提示、推薦、世界 API、NoSL 工作行程請求 | `node_checkpoint` 和 `node_action`；複本型別 `NodeClone`；SL 工作行程請求（`SlWorldRequest`、`SlTurnRequest`、`SlMacroRequest`） |
 | GameBridge | 白名單內的觀測、合法動作、啟動動作 | 節點檢查點（`Checkpoint.Take`、`Open`、`RestoreRelics`）；SL 的換位鍵（`HiddenState.Full`） |
 | 模擬器 | 從觀測建構戰鬥、確定化 | 節點檢查點（兩種環境下都會取）、載入存檔並重播、封存（`AtHorizon`） |
 | Mod | 觀測、詢問、顯示答案（輔助；從不執行） | 節點的檢查點和各步，在兩種環境下都記錄，只在 SL 下送出 |

@@ -19,7 +19,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 ## 1. 约定
 
-三个消费者读同一条 `Recommendation`（[协议 §6](/arch/protocol/#sec-6)），半自动模式是其中两个的组合。大脑从不知道当前开着哪种模式。它们用到推荐里的这些部分：
+三个消费者读同一条 `Recommendation`（[协议：线路 §7](/arch/protocol/wire/#sec-7)），半自动模式是其中两个的组合。大脑从不知道当前开着哪种模式。它们用到推荐里的这些部分：
 
 - `Plan`：本回合或本屏剩下的动作序列，在地图上是本幕剩下的路线（`plan[0]` 是下一个动作）；
 - `Candidates`：考虑过的各个动作，每个带有估值、置信区间和样本数；

@@ -29,7 +29,7 @@ Both algorithms are built and play their environment's champion. SL: `SlPlanner`
 
 The combat brain answers two kinds of question:
 
-1. **The player's turn.** Which action next: play a card from the hand (on a target, if it needs one), use a potion, or end the turn. The legal actions come from the game, as Harness lists them ([Protocol §1](/en/arch/protocol/#sec-1)).
+1. **The player's turn.** Which action next: play a card from the hand (on a target, if it needs one), use a potion, or end the turn. The legal actions come from the game, as Harness lists them ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)).
 2. **Card prompts during play.** Some cards ask a question when played: which card to discard, to exhaust, to put on top of the draw pile, which of three generated cards to take. Today these go to a fixed rule, `p0`, in the real fight and inside every simulated one ([Prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
 
 A decision with one legal action is answered without a search. Every other one returns three things: the first action, the rest of the plan after it, and every first action the search looked at with its value (the *candidates*, which the decision log keeps, [Harness §6](/en/arch/harness/#sec-6)). The plan matters: the SL planner's plan is the rest of the fight, and the fight plays it without searching again while the game shows what the plan expected; PIMC's plan is the rest of the turn, played without a search only with `--follow` and only while every world agrees on it ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2)).
@@ -111,7 +111,7 @@ public sealed record CombatDecisionResult(
 ```
 
 - `PimcBrain` implements `ICombatBrain` for NoSL, `SlPlanner` for SL, and Harness picks one by environment ([Harness §4](/en/arch/harness/#sec-4)). In a run they search in the worker pool through `PooledPimc` and `PooledPlanner`, which send the same searches to worker processes and merge the replies in a fixed order, so the answer is the one a single process would give ([Prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)).
-- `IWorldSource` hands out the worlds: K sampled ones in NoSL, the node's clone in SL ([Protocol §7](/en/arch/protocol/#sec-7)). The brain never asks which environment it is in; the worlds carry it.
+- `IWorldSource` hands out the worlds: K sampled ones in NoSL, the node's clone in SL ([Protocol: worlds and worker messages §1](/en/arch/protocol/worlds/#sec-1)). The brain never asks which environment it is in; the worlds carry it.
 - `TurnPlan` follows a plan: a step is played without a search while the combat shows the observation the plan expected before it (its hash in `PlanHashes`); otherwise the decision is searched again and marked `replanned` in the decision log. `SlRoute` adds the planner's rule for losing plans ([The SL planner: beam §6](/en/arch/sl-planner/beam/#sec-6)).
 - Planned: `Choose(request, worlds, budget)` for a card prompt during play, valued by the same search, and `Facts` on the result (expected HP lost, turns to kill, chance to draw a card), which would be narration's only source ([Output §5](/en/arch/output/#sec-5)). NoSL facts are probabilities and expectations; SL facts may be exact.
 - `ICombatPolicy` and `IChoicePolicy` stay, for the placeholders and for fast policies that could play lines out inside a search.

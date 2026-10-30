@@ -25,7 +25,7 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 <Steps>
 
 1. `GodotNativeStub.Install()`：用一个桩填满引擎的函数表（[§3](#sec-3)）。
-2. `HeadlessPatches.Apply()`：安装所有补丁，GameBridge 的卡牌提示上下文补丁最先（[§4](#sec-4)）。
+2. `HeadlessPatches.Apply()`：安装所有补丁，GameBridge 的选牌提示上下文补丁最先（[§4](#sec-4)）。
 3. `TestMode.TurnOnInternal()`：打开游戏的测试模式（[§5](#sec-5)）。
 4. `ModManager.State = Skipped`：无头时从不加载 Mod（这个 setter 是私有的，用反射来设）。
 5. `AssemblyInfo.Init`、`ModelDb.Init`、`ModelIdSerializationCache.Init`、`ModelDb.InitIds`：加载游戏的模型数据库，即每张卡牌、每件遗物、每个怪物和每个事件。
@@ -48,7 +48,7 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 ## 4. 补丁
 
-**Harmony 补丁**在运行时改写游戏的方法。Harmony 是一个 .NET 库：*前缀*（prefix）在原方法之前运行，可以跳过原方法；*后缀*（postfix）在原方法之后运行；*转译器*（transpiler）则不包裹方法，而是直接改写方法的 IL（编译后的指令）。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安装 GameBridge 的 `ChoiceContexts`，再安装程序集里的每个补丁类。顺序很重要：打补丁会编译每个被替换的方法，而在卡牌提示补丁之前编译的方法，可能把某个很小的 `CardSelectCmd` 入口内联进去，从而绕过它的补丁；SapphireSeed 的种植（被事件转译器改写过）就曾这样（[GameBridge §5](/arch/gamebridge/#sec-5)）。
+**Harmony 补丁**在运行时改写游戏的方法。Harmony 是一个 .NET 库：*前缀*（prefix）在原方法之前运行，可以跳过原方法；*后缀*（postfix）在原方法之后运行；*转译器*（transpiler）则不包裹方法，而是直接改写方法的 IL（编译后的指令）。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安装 GameBridge 的 `ChoiceContexts`，再安装程序集里的每个补丁类。顺序很重要：打补丁会编译每个被替换的方法，而在选牌提示补丁之前编译的方法，可能把某个很小的 `CardSelectCmd` 入口内联进去，从而绕过它的补丁；SapphireSeed 的种植（被事件转译器改写过）就曾这样（[GameBridge §5](/arch/gamebridge/#sec-5)）。
 
 除了规则保真这一组，没有任何补丁改变游戏规则；规则保真组把被 TestMode 改掉的正式版规则放回去。各组补丁，按 `Runtime/Patches/` 里的文件：
 

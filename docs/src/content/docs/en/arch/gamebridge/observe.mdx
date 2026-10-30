@@ -1,0 +1,135 @@
+---
+title: Reading the game
+description: 'Where each part of an observation is read in the game: the run and its map, cards, powers, relics and intents, a combat; card prompts in canonical order and how their context is caught; the SL checkpoint; and the hidden-state keys search uses.'
+sidebar:
+  label: Reading the game
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+This page follows each Protocol field back to the game object it comes from. Paths such as `Runs/RunManager.cs` are in the decompiled game (`MegaCrit.Sts2.Core`); project paths are under `src/Sts2Ai.GameBridge/`. Every game source named here was read in the game's code <Badge text="verified" variant="success" />.
+
+## 1. The entry points
+
+`Observe` (`Observe.cs`) builds the run and the combat; each other screen is built by its surface's class, next to its legal actions ([Actions per surface](/en/arch/gamebridge/actions/)).
+
+| member | returns |
+|---|---|
+| `Of(run, player, screen)` | an `Observation`: the run view and the given screen |
+| `Run(run, player)` | the `RunView` ([§2](#sec-2)) |
+| `Combat(state, player)` | the `CombatObservation` ([§4](#sec-4)); throws if the player has no combat state |
+| `Card(card, withUid = false)` | one `CardView`; the uid only when asked, for cards in hand ([§3](#sec-3)) |
+| `DeckCard(card)` | a card as the deck view shows it, with its upgrade preview when it can be upgraded |
+| `CardKey(card)` | the card's key, its view's JSON without the uid |
+| `Relic(relic)`, `Coord(coord)` | one relic, one map coordinate |
+| `Intents(move, owner, targets)` | the intents a move would show above a monster, aimed at the targets; CombatBuilder reuses it to match moves to the intents a player saw |
+
+The hosts fetch the game objects (the run state, the player, the current event, the shop's inventory) and pass them in; GameBridge holds no state of its own except the prompt context ([§6](#sec-6)).
+
+## 2. The run and its map
+
+| field | read from |
+|---|---|
+| `character` | `player.Character.Id` |
+| `ascension`, `act`, `act_id`, `floor` | `RunState.AscensionLevel`, `CurrentActIndex`, `Act.Id`, `TotalFloor` |
+| `hp`, `max_hp`, `gold` | `player.Creature.CurrentHp`, `MaxHp`, `player.Gold` |
+| `deck` | `player.Deck.Cards`, each through `DeckCard`, sorted by card key |
+| `relics`, `potions` | `player.Relics` through `Relic`; `player.PotionSlots`, null for an empty slot |
+| `map.points` | the map's grid points (`GetAllMapPoints`) plus the start, the boss and the second boss, which are not in the grid; each with `PointType`, its `Children` and whether it has `Quests` |
+| `map.visited` | `RunState.VisitedMapCoords` |
+| `map.boss`, `second_boss`, `ancient` | `Act.BossEncounter`; `Act.SecondBossEncounter`, only when the map has a second boss point; `Act.Ancient` |
+
+**Order.** A point's children are a hash set in the game, whose order differs from one process to another; the points are put in row-then-column order and each point's `next` sorted the same way, so the same map gives the same observation in any process (`Observe.cs:47-67`).
+
+## 3. Cards, powers, relics and intents
+
+**A card** (`Observe.Card`, `Observe.cs:110-127`):
+
+| field | read from |
+|---|---|
+| `id`, `up` | the card's id; `CurrentUpgradeLevel` when above 0 |
+| `uid` | `NetCombatCardDb.Instance.GetCardId(card)`, for cards in hand only |
+| `cost`, `x_cost` | `EnergyCost.GetWithModifiers(CostModifiers.All)`, the cost the card shows; `x_cost` when `EnergyCost.CostsX` |
+| `stars` | `GetStarCostWithModifiers()`, for a card with a star cost (`CanonicalStarCost` ≥ 0) |
+| `enchant`, `affliction` | the card's enchantment and affliction, with their amounts |
+| `tinker` | a Mad Science's `TinkerTimeType` and `TinkerTimeRider` |
+| `keywords` | `Keywords`, sorted |
+| `vars` | the card's `DynamicVars` that are not calculated, by name, each its `BaseValue` |
+
+**`vars` are base values.** The card's numbers before Strength, Dexterity or Vulnerable act on them. A calculated number (Perfected Strike's damage) is left out: the card shows it as a base plus an extra per count of something in the state, and those parts are among the vars; the calculated value itself only mirrors its base and goes stale after a downgrade. The vars are added in name order, since the serializer writes a dictionary in the order it was filled.
+
+**The upgrade preview** (`DeckCard`): for an upgradable card in the deck, the card after one more upgrade, as the game's own preview shows it in the deck view and in an upgrade prompt. It is made the way the game makes its preview, on a copy: `MutableClone()`, then `UpgradeInternal()` and `FinalizeUpgradeInternal()`. A mutable clone has none of the original's event subscribers and the upgrade runs no hooks, so nothing in the run changes (`Observe.cs:130-142`).
+
+**A power** (`Observe.cs:180-182`): only powers with `IsVisible`; `amount` is `DisplayAmount`, the number on the icon; `stacks` is `Amount` when it differs from it; `card` is the card the power keeps. That card is in the power's private data, which the game does not expose although the tooltip names it (Nightmare's card), so `HeldCards` finds it by reflection: the first field of card type in the power's `_internalData` (`HeldCards.cs:12-27`). The simulator's CombatBuilder uses `HeldCards.Set` to put such a card back when it builds a combat.
+
+**A relic** (`Observe.cs:184-192`): `counter` is `DisplayAmount` when `ShowCounter`; `status` when not normal; `melted` (`IsMelted`); `used_up` (`IsUsedUp`); `cards`, Pael's Tooth's kept cards.
+
+**Intents** (`Observe.cs:173-178`): the intents of the monster's `NextMove`, for a living monster not on the player's side. An attack's damage is `AttackIntent.GetSingleDamage(targets, owner)` against the player, the same call the icon's number comes from, and its hits `max(1, Repeats)`. The move itself never goes out, only its intents.
+
+**Uids**: a creature's is its `CombatId`; a hand card's its id in `NetCombatCardDb` ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)).
+
+## 4. A combat
+
+`Observe.Combat(state, player)` (`Observe.cs:71-107`):
+
+| field | read from |
+|---|---|
+| `encounter`, `room` | `state.Encounter.Id`, its `RoomType` |
+| `act`, `ascension`, `round` | the run's act and ascension; `state.RoundNumber` |
+| `player` | the player's creature (`CombatId`, HP, max HP, block, powers); the combat state's `Energy`, `MaxEnergy`, `Stars`; `OrbQueue.Capacity` and its orbs with their passive and evoke values; the player's gold |
+| `hand` | `Hand.Cards`, in hand order, with uids |
+| `draw` | `DrawPile.Cards`, sorted by card key |
+| `discard`, `exhaust` | `DiscardPile.Cards`, `ExhaustPile.Cards`, in pile order |
+| `potions`, `relics` | as in the run |
+| `allies` | `state.Allies` without the player |
+| `enemies` | `state.Enemies` |
+
+A combat in a run uses the same `Observe.Combat`, inside the `combat` screen or a card prompt's screen.
+
+## 5. Card prompts in canonical order
+
+`CardChoices.Canonical(options, min, max, context, tieBreak)` (`CardChoices.cs:16-25`) turns a game prompt into a Protocol `CardChoice`:
+
+1. Each option becomes a view: a deck view (`DeckCard`, with its upgrade preview) when the prompt's purpose starts with `deck_`, a plain card view otherwise.
+2. Each option draws a number from `tieBreak`, in the game's order.
+3. The options are sorted by card key, ties by the drawn number.
+4. It returns the choice and, for each canonical index, the index into the game's list.
+
+Why a random tie-break and not the game's order: identical cards look the same, but which copy is taken can matter (two equal cards at different depths of the draw pile), and the game's order of them may follow the hidden order. A tie-break from a stream that knows nothing hidden keeps the choice fair and still reproducible. The simulator seeds it with the prompt's number since the node's entry (`new Random(prompt)`); the mod with 0.
+
+The host keeps the game indexes: an answer in canonical indexes is translated back before the game sees it, and the run's trace records the game's indexes ([Protocol: observations and actions §4](/en/arch/protocol/observation/#sec-4)).
+
+## 6. The prompt's context
+
+Every card prompt goes through one of the game's `CardSelectCmd.From*` entries, and only their arguments say why the game asks. `ChoiceContexts` (`ChoiceContexts.cs`) catches them with Harmony, the library that patches a game method at run time: a **prefix** runs before the method, a **finalizer** after it, even when it throws.
+
+- **Targets**: every public static `CardSelectCmd.From*` method, every overload, except `FromChooseABundleScreen`, which is its own surface. The list is found by reflection, so an entry a game update adds is patched without a change.
+- **The prefix** reads the entry's arguments into a `ChoiceContext` (`ChoiceContexts.cs:47-70`): the `CardSelectorPrefs` (cancelable, the prompt's text), the `source` argument or else the `PlayerChoiceContext`'s last involved model, a `CardPile` (which makes the purpose `<pile>_pile`), an `EnchantmentModel` and its `amount`, `canSkip`. The purpose is the entry's name without `From`, in snake_case. `in_combat` is whether a combat is in progress.
+- **The outermost entry wins.** An entry can call another (a removal goes through the generic deck prompt): a depth counter keeps the first context until the outermost entry returns.
+- **`Current` and `Last`.** `Current` holds the context while the entry runs, per thread; the simulator's card selector runs inside the entry and reads it there. In the real game the prompt's screen opens after the entry's first await, when `Current` is gone, so the prefix also keeps the context in `Last` until the next entry, and the mod reads the prompt on screen from there ([Mod §3](/en/arch/mod/#sec-3)). A new context object means a new prompt.
+- **Patch it first.** Each host calls `ChoiceContexts.Patch` once, before any other patch (`HeadlessPatches.Apply` in the simulator, `Host` in the mod). An entry's small async stub can be inlined into a caller compiled earlier, such as while another patch compiles its replacement, and the inlined copy bypasses the prefix. This happened headless with SapphireSeed.
+
+A prompt that arrives without a context throws in the simulator; the mod leaves it to the player.
+
+## 7. The SL checkpoint
+
+`Checkpoint` (`Checkpoint.cs`) is the node's starting point for SL ([Simulator: worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)). Both hosts take it the same way, so a clone the mod sends loads in the simulator.
+
+| member | what it does |
+|---|---|
+| `Take(player)` | the run now: the game's own save, `SaveManager.ToJson(RunManager.Instance.ToSave(null))`, and each relic's plain fields, as one JSON string |
+| `Open(checkpoint)` | reads it once, for a node loaded many times: `Opened(Save, Relics)` |
+| `RestoreRelics(opened, player)` | after the save is loaded, gives each relic the fields it had; throws if the loaded run's relics are not the checkpoint's, in order |
+
+A relic's **plain fields** are its writable fields of a number, flag, enum or decimal type, from its own class up the hierarchy, keyed by class and field name and written culture-invariant. The save keeps only the fields a relic marks as saved; without these, a relic that changes its state between combats (Lava Rock disables itself after the first boss) would load as a relic just gained. The checkpoint's JSON uses .NET's default names (`Save`, `Relics`, `Id`, `Fields`), not Protocol's: it is opaque to everything but `Checkpoint` itself.
+
+## 8. Hidden-state keys
+
+A search needs to know when two states are the same state, to search it once. The observation is not enough: two states can look the same and play differently. `HiddenState` (`HiddenState.cs`) hashes what the observation hides. It never reaches the brain's decisions; it is read only by search worlds in the simulator ([Protocol: worlds and worker messages §1](/en/arch/protocol/worlds/#sec-1)).
+
+| key | holds | used by |
+|---|---|---|
+| `Key(state, player)` | the draw pile's card keys in order; the counter of every run and player random stream; for each monster its own stream's counter and its next move | NoSL worlds |
+| `Full(state, player)` | `Key`, plus each monster's moves so far (its state log), plus this turn's entries of the combat history (plays, draws, discards, exhausts, generated cards, potions, powers, block, energy), as a sorted multiset | the SL world |
+
+The order of the turn's plays is left out on purpose: the same plays in another order should meet as one state. Each key is `ProtocolJson.Hash` of its text.

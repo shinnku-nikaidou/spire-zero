@@ -24,7 +24,7 @@ Three reasons, in order of weight:
 
 **Starting.** The pool starts its workers in parallel and waits until each has booted (`Sts2Ai.Harness/WorkerPool.cs:33-50`). A worker is the same program started again, as its apphost or as `dotnet` with its dll if that is how the host was started (`Program.cs:20-24`), with `serve` and the champion's leaf options (`--leaf`, `--combat-net`), the leaf every search of that worker uses. Booting takes about 1.2 s ([Headless host §2](/en/arch/simulator/headless/#sec-2)). When it is done, the worker writes its hello, `{"game": "v0.111.0"}`, the game version it runs.
 
-**The wire** is one JSON line per message over the worker's stdin and stdout ([Protocol §7](/en/arch/protocol/#sec-7)). A request carries its type and an id; the reply carries the same id, the answer, an error if the request failed, and the game errors logged while serving it. Worker messages have no protocol version field: the host and its workers are always the same build.
+**The wire** is one JSON line per message over the worker's stdin and stdout ([Protocol: worlds and worker messages §4](/en/arch/protocol/worlds/#sec-4)). A request carries its type and an id; the reply carries the same id, the answer, an error if the request failed, and the game errors logged while serving it. Worker messages have no protocol version field: the host and its workers are always the same build.
 
 **Serving a set of requests.** A searching brain hands the pool all the requests of one step at once, such as one per world (`WorkerPool.Map`, `Sts2Ai.Harness/WorkerPool.cs:70-88`). Each request goes to whichever worker is free; a worker serves one request at a time; and the replies come back in request order, whatever order they finish in.
 

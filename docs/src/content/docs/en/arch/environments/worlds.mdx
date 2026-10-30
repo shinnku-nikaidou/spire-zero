@@ -11,7 +11,7 @@ The two environments differ in what search may know ([Information and the node](
 
 ## 1. Worlds
 
-A **world** is a simulator state that search may explore: a running game it can observe, act in, save (snapshot) and go back to (restore). Search never touches the real game. It asks for worlds through the world API ([Protocol §7](/en/arch/protocol/#sec-7)), plays its candidate lines in them, and compares how the lines end.
+A **world** is a simulator state that search may explore: a running game it can observe, act in, save (snapshot) and go back to (restore). Search never touches the real game. It asks for worlds through the world API ([Protocol: worlds and worker messages §1](/en/arch/protocol/worlds/#sec-1)), plays its candidate lines in them, and compares how the lines end.
 
 Today every world is a **combat world**: one combat, which the combat brain searches ([Combat brain](/en/arch/combat-brain/)). The macro brain's searches outside combat use the SL clone directly ([Macro brain: search §2](/en/arch/macro-brain/search/#sec-2)); run worlds for NoSL, which would let it look past the current node, are planned ([Simulator: worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)).
 
@@ -73,7 +73,7 @@ SL's world is the node's clone: an exact copy of the real combat, with the true 
 
 ## 5. One macro brain, two combat algorithms
 
-So the two environments pose two different combat problems: NoSL must choose the action that is best on average over the worlds it cannot tell apart, and SL must find the best line in one known world. Each has its own algorithm. The champion's options pick it per environment: `run --policy` for a run (the SL planner, `plan`, is refused outside SL), and in the `brain` command `--policy` for NoSL hosts and `--sl-policy`, the SL planner by default, for SL hosts ([Overview §5](/en/arch/environments/#sec-5)). Harness then hands the combat route the matching input with every combat decision: in SL the node's clone, in NoSL nothing but the observation, from which the workers build their worlds (`Harness/Dispatcher.cs:134`). In a single process, as in the combat panel, the same two algorithms run behind one interface, `ICombatBrain`, on worlds from an `IWorldSource` ([Protocol §7](/en/arch/protocol/#sec-7)):
+So the two environments pose two different combat problems: NoSL must choose the action that is best on average over the worlds it cannot tell apart, and SL must find the best line in one known world. Each has its own algorithm. The champion's options pick it per environment: `run --policy` for a run (the SL planner, `plan`, is refused outside SL), and in the `brain` command `--policy` for NoSL hosts and `--sl-policy`, the SL planner by default, for SL hosts ([Overview §5](/en/arch/environments/#sec-5)). Harness then hands the combat route the matching input with every combat decision: in SL the node's clone, in NoSL nothing but the observation, from which the workers build their worlds (`Harness/Dispatcher.cs:134`). In a single process, as in the combat panel, the same two algorithms run behind one interface, `ICombatBrain`, on worlds from an `IWorldSource` ([Protocol: worlds and worker messages §1](/en/arch/protocol/worlds/#sec-1)):
 
 ```mermaid
 flowchart LR

@@ -17,6 +17,8 @@ const simulator = [
   'arch/simulator/pool',
   'arch/simulator/reference',
 ];
+const protocol = ['arch/protocol', 'arch/protocol/wire', 'arch/protocol/observation', 'arch/protocol/worlds'];
+const gamebridge = ['arch/gamebridge', 'arch/gamebridge/observe', 'arch/gamebridge/actions'];
 const macroBrain = [
   'arch/macro-brain',
   'arch/macro-brain/afterstates',
@@ -50,7 +52,7 @@ const book = [
   {
     label: '第四部　机器',
     translations: { 'zh-TW': '第四部　機器', en: 'Part IV: The machinery' },
-    items: [{ label: '模拟器', translations: { 'zh-TW': '模擬器', en: 'Simulator' }, items: simulator }, 'arch/harness', 'arch/protocol', 'arch/gamebridge', 'arch/mod', 'arch/output'],
+    items: [{ label: '模拟器', translations: { 'zh-TW': '模擬器', en: 'Simulator' }, items: simulator }, 'arch/harness', { label: '协议', translations: { 'zh-TW': '協定', en: 'Protocol' }, items: protocol }, { label: 'GameBridge', translations: { 'zh-TW': 'GameBridge', en: 'GameBridge' }, items: gamebridge }, 'arch/mod', 'arch/output'],
   },
   { label: '附录', translations: { 'zh-TW': '附錄', en: 'Appendices' }, items: ['status', 'glossary'] },
 ];

@@ -1,0 +1,176 @@
+---
+title: 觀測與動作
+description: '大腦在每個決策看到什麼、怎麼回答：一局、逐欄位的一場戰鬥、卡牌身份與規範順序、每個決策畫面及其動作、選牌提示及其情境，以及刻意省略的東西。'
+sidebar:
+  label: 觀測與動作
+---
+
+import { Badge } from '@astrojs/starlight/components';
+import ObservationExplorer from '../../../../../components/book/ObservationExplorer.svelte';
+
+一個觀測是大腦在一個決策時得知的關於遊戲的一切，所以它也是大腦所能知道的極限。本頁逐欄位列出它，以及回答每種畫面的動作。型別在 `src/Sts2Ai.Protocol` 裡（`Observation.cs`、`CombatObservation.cs`、`Screens.cs`、`CardChoice.cs`、`CombatAction.cs`）；GameBridge 從遊戲填寫它們（[GameBridge](/zh-tw/arch/gamebridge/)）。
+
+## 1. 每個決策一個觀測
+
+```text
+Observation{run: RunView, screen: ScreenView}
+```
+
+一個 `Observation` 有兩個部分。`run` 是玩家所處的這一局，在每個畫面都一樣：頂欄、牌組檢視和地圖（[§2](#sec-2)）。`screen` 是正在詢問的畫面，是十一種變體之一，每個**決策介面**（surface）一種；決策介面就是決策畫面的種類。在 JSON 裡，畫面在一個 `"surface"` 欄位裡寫出它的變體名稱，讓讀取方知道後面跟著哪些欄位：
+
+```json
+{"run": {"character": "SILENT", "act": 0, "floor": 2, …}, "screen": {"surface": "card_reward", "cards": […], "alternatives": […]}}
+```
+
+決策介面的名稱是 `Surfaces.cs` 裡的常數：`combat`、`card_choice`、`map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere`。決策介面也是 Harness 路由決策時用的鍵（[Harness §4](/zh-tw/arch/harness/#sec-4)）。一局的結束不是決策介面，而是線路訊息 `run_end`（[線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。
+
+觀測是惰性建構的。在大腦內部，一個決策帶著一個建構它的觀測的函式，從不讀取觀測的大腦就從不為它付出代價（`Sts2Ai.Brain/Decisions.cs` 裡的 `CombatDecision`、`MacroDecision`、`ChoiceDecision`）。在線路上它總是會被建構，因為大腦在別處。
+
+## 2. 一局
+
+| 欄位 | 型別 | 是什麼 |
+|---|---|---|
+| `character`、`ascension` | string、int | 角色的 id、晉階等級 |
+| `act` | int | 幕，從 0 起算 |
+| `act_id` | string | 這一局擲出的是該幕的哪個變體（`OVERGROWTH`、`HIVE`、`GLORY`、…） |
+| `floor` | int | 按整局計算的樓層，和頂欄顯示的一樣 |
+| `hp`、`max_hp`、`gold` | int | 頂欄 |
+| `deck` | `CardView[]` | 牌組，按卡牌鍵排序（[§4](#sec-4)）；每張可升級的牌還帶著它的預覽 `upgraded` |
+| `relics` | `RelicView[]` | 遺物，按玩家持有它們的順序 |
+| `potions` | `(string\|null)[]` | 每個藥水槽一項：藥水的 id，空槽為 null |
+| `map` | `MapView` | 當前這一幕的地圖 |
+
+`MapView` 是地圖畫面所畫出的地圖：
+
+| 欄位 | 是什麼 |
+|---|---|
+| `points` | 每個點，先按橫列再按直行排序：起點在第 0 列，然後是各列，最後是最後一列上方的頭目（和第二個頭目） |
+| `visited` | 本幕走過的點，按順序；最後一個是玩家所在的位置 |
+| `boss`、`second_boss`? | 畫在頭目點上的頭目遭遇 |
+| `ancient`? | 本幕的遠古之民，畫在起點上 |
+
+每個點是一個 `MapPointView`：`col`、`row`、`type`，即地圖圖示（`Monster`、`Elite`、`Unknown`、`Shop`、`Treasure`、`RestSite`、`Boss`、`Ancient`）；`next`，它的路徑通往的點，排過序；以及 `quest`，在有任務標記這個點時設定（一個獎勵抵達該點的遺物或卡牌）。一個 `?` 被走過之後仍然是 `Unknown`，和地圖顯示的一樣；未走過的 `?` 裡有什麼，永遠不會出現。
+
+## 3. 一場戰鬥
+
+`CombatObservation` 是玩家看得到的一場戰鬥。它是 `combat` 畫面的載荷，也會隨著戰鬥中彈出的選牌提示一起出現。
+
+| 欄位 | 是什麼 |
+|---|---|
+| `encounter`、`room` | 遭遇的 id；它的房間類型，和地圖上顯示的一樣（`Monster`、`Elite`、`Boss`） |
+| `act`、`ascension`、`round` | 幕（從 0 起算）、晉階、戰鬥的回合數（從 1 起算） |
+| `player` | `PlayerView`：`uid`、`character`、`hp`、`max_hp`、`block`、`energy`、`max_energy`、`stars`、`gold`、`powers`、`orb_slots`、`orbs` |
+| `hand` | 手牌，按手牌順序，每張都帶著它的 `uid` |
+| `draw` | 抽牌堆，按卡牌鍵排序：玩家知道裡面有什麼，不知道它的順序 |
+| `discard`、`exhaust` | 棄牌堆和消耗堆，按牌堆順序 |
+| `potions` | 每個槽一項，和一局裡的一樣 |
+| `relics` | `RelicView`：`id`，以及它的圖示和提示框顯示的內容：`counter`、`status`（不是正常狀態時）、`melted`、`used_up`、`cards`（它保存的牌，例如佩爾之牙保存的） |
+| `allies` | 玩家這一方除了玩家以外的生物：其他玩家、召喚物 |
+| `enemies` | `CreatureView`：`uid`、`id`（怪物的）、`hp`、`max_hp`、`block`、`powers`，以及活著的敵人的 `intents` |
+
+巢狀的檢視：
+
+| 型別 | 欄位 | 說明 |
+|---|---|---|
+| `CardView` | `id`、`uid`?、`up`?、`cost`? 或 `x_cost`?、`stars`?、`enchant`?、`affliction`?、`tinker`?、`keywords`?、`vars`?、`upgraded`? | `cost` 是套用所有修正之後的能量費用；`stars` 是星辰費用，用於有星辰費用的牌；`enchant` 和 `affliction` 是 `{id, amount}`；`tinker` 是 Tinker Time 事件把一張瘋狂科學做成的樣子，即它的類型和附加效果，牌框會顯示這些，而它的 id 不會；`keywords` 排過序；`vars` 是這張牌自己的數字，按名稱列出（[§7](#sec-7)）；`upgraded` 是這張牌再升級一次之後的樣子，和遊戲的升級預覽顯示的一樣，只出現在可升級的牌組卡牌上 |
+| `PowerView` | `id`、`amount`、`stacks`?、`card`? | `amount` 是圖示上的數字；`stacks` 是能力本身的數值，在圖示顯示另一個數字時才有（怠惰的圖示數的是本回合的牌數，它的層數是上限）；`card` 是能力保存的牌，提示框會寫出它的名字（夢魘的） |
+| `IntentView` | `type`、`damage`?、`hits`? | 敵人頭上的一個意圖圖示：它的類型，攻擊的話還有對玩家每段的傷害和段數 |
+| `OrbView` | `id`、`passive`、`evoke` | 一個充能球和它顯示的數字 |
+
+**Uid**。動作指稱一張牌或一個生物的方式，必須在手牌變化時仍然成立，並且在模擬器和遊戲裡意思相同。Uid 是遊戲自己每場戰鬥的 id，也就是它的多人遊戲訊息所用的那些：手牌在這場戰鬥的卡牌資料庫（`NetCombatCardDb`）裡的 id，生物的 `CombatId`。只有玩家能指向的東西才有：手牌和生物。牌堆裡的牌沒有，因為遊戲在開局洗牌之後立刻為牌編號，所以一張牌的編號就是它在洗過的抽牌堆裡的位置。
+
+點開一個真實的例子看看，一個來自 NoSL 自我對弈的回合開始：
+
+<ObservationExplorer client:visible lang="zh-TW" />
+
+**戰鬥動作**（`CombatAction.cs`）有文字形式，那也就是它們的 JSON：
+
+| 動作 | 含義 |
+|---|---|
+| `play:C` 或 `play:C:T` | 打出 uid 為 C 的手牌，如果它需要目標，就以 uid 為 T 的生物為目標 |
+| `potion:S` 或 `potion:S:T` | 使用槽位 S 的藥水，需要目標時以 T 為目標 |
+| `end_turn` | 結束回合 |
+
+戰鬥裡沒有丟棄藥水：協定的戰鬥動作就是這三種。
+
+## 4. 身份與順序
+
+**一張牌的鍵**是它去掉 uid 之後序列化的 `CardView`（`ProtocolJson.CardKey`）。它包含玩家看得到的這張牌的一切，所以鍵相同的兩張牌，對玩家來說是同一張牌。這個鍵給出兩項保證：
+
+- **同樣的狀態，同樣的觀測**。牌組按鍵排序，所以以另一種順序選牌而得到的牌組看起來一樣；抽牌堆按鍵排序，因為它的真實順序是隱藏的。
+- **沒有會洩漏的順序**。遊戲自己給一份清單的順序可能取決於隱藏狀態：針對抽牌堆的提示按牌堆順序列出牌，而玩家不知道這個順序。因此選牌提示的選項以**規範順序**送出：按鍵排序，看起來完全相同的牌之間的平手，由一條不知道任何隱藏資訊的亂數流打破（`CardChoices.Canonical`，`Sts2Ai.GameBridge/CardChoices.cs:16-25`）。模擬器用這個提示自進入節點以來的編號作為它的種子，Mod 用 0。針對牌組的選牌提示顯示牌組檢視（帶 `upgraded`），其他提示都顯示普通的卡牌檢視。
+
+**兩套索引空間**。線路上的回答按規範索引選擇（`pick:0,2`）。宿主把它轉成遊戲自己的索引，對局的軌跡和 SL 節點訊息記錄的就是這些（`card_choice 4,1`），因為重播要經過遊戲的選牌器，而它不知道什麼規範順序（[線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。
+
+**按 UI 順序的清單**。順序由畫面顯示、又不隱藏任何東西的清單，就按那個順序送出，動作用索引指向它們：獎勵、事件選項、商店槽位、寶箱裡的遺物、卡牌獎勵的牌。
+
+## 5. 畫面及其動作
+
+各種畫面變體（`Screens.cs`），以及每個決策介面接受的動作。線路上的合法清單裝的就是這些字串；哪些動作合法的規則見 [模擬器：整局 §4](/zh-tw/arch/simulator/runs/#sec-4)。
+
+| 決策介面 | 畫面欄位 | 動作 |
+|---|---|---|
+| `combat` | `combat`：`CombatObservation` | `play:C[:T]`、`potion:S[:T]`、`end_turn` |
+| `card_choice` | `choice`：`CardChoice`（[§6](#sec-6)）；戰鬥進行中時還有 `combat` | 按規範索引的 `pick:i,j,…`；合法清單為空；只有 `min` 為 0 時才能空選 |
+| `map` | `travelable`：玩家可以前往的座標，按合法動作的順序（地圖本身在 `run.map` 裡） | `map:COL,ROW` |
+| `rewards` | `rewards`：還沒領取的按鈕，`{index, kind, id?, amount?, card?, cards?}`，`kind` 是 `gold`、`potion`、`relic`、`card`、`special_card`、`remove_card` 之一 | `reward:i`、`rewards_done` |
+| `card_reward` | `cards`；`alternatives`，其他按鈕的 id（略過、重骰、遺物加上的按鈕） | `card:i`、`card_alt:ID` |
+| `bundle` | `bundles`：幾組卡牌 | `bundle:i` |
+| `event` | `id`；`page`，頁面文字的本地化鍵；`options` `{index, key, locked?, relic?, tips?, kills?}`，事件結束後為空；`finished` | `event:i`、`proceed` |
+| `shop` | `entries` `{slot, kind, card? or id?, cost, on_sale?}`，仍在出售的商品，`kind` 是 `card`、`relic`、`potion` 之一；`removal_cost`，移除服務用過之後就不出現 | `buy:SLOT`、`remove`、`leave` |
+| `rest` | `options` `{id, enabled, heal?}`；`heal`，在 HEAL 選項上，是它的文字所顯示的回復生命值（遺物會改變它） | `rest:ID`、`leave` |
+| `treasure` | `relics`：寶箱裡的遺物，按 id | `relic:i`、`relic_skip` |
+| `crystal_sphere` | `rows`，一個 11×11 的網格，`rows[y][x]` 是 `#`（隱藏）、`.`（已揭開且為空），或已揭開格子所顯示內容的一部分（`R` 遺物、`P` 藥水、`C` 卡牌獎勵、`G` 金幣、`X` 詛咒）；`divinations_left` | `big:X,Y`（3×3 的區塊）、`small:X,Y`（一格） |
+
+欄位說明：
+
+- **卡牌獎勵的牌**隨著獎勵畫面上的 `card` 按鈕一起送出（`cards`）：遊戲在畫面出現之前就擲好了它們，而打開獎勵看一眼沒有任何代價，所以玩家在打開它之前就知道它們。
+- **事件選項**以它們的文字鍵命名，也就是在所屬事件裡為選項命名的本地化鍵。`relic` 是遠古之民的選項給的遺物；`tips` 是它的懸停提示顯示的卡牌、遺物和藥水的 id（`+` 標記升級過的牌）；`kills` 表示按鈕警告它會殺死玩家；`locked` 是玩家不能選的選項。
+- **商店槽位**按遊戲保存商品的順序（角色卡、無色卡、遺物、藥水）為商店的商品編索引，包括已售完的，所以一個槽位在購買之後保持它的編號；移除服務是它自己的動作。
+- **休息處選項**按 id 命名（`rest:HEAL`、`rest:SMITH`），不按位置。
+
+**藥水欄**。在 `map`、`rewards`、`event`、`shop`、`rest`、`treasure` 和 `crystal_sphere` 上，合法動作也包括藥水欄：可隨時使用的藥水的 `potion:S`，以及 `discard_potion:S`。卡牌獎勵、卡包和選牌提示都沒有。
+
+**在大腦內部**，宏觀決策介面以 `MacroDecision{surface, legal, observation}` 的形式交給策略，選牌提示以 `ChoiceDecision{choice, observation}` 的形式，戰鬥決策以 `CombatDecision{legal, observation}` 的形式。在一局之外單獨打的戰鬥（測試集）沒有一局，所以它的決策和提示只帶著戰鬥。
+
+## 6. 選牌提示
+
+**選牌提示**是遊戲要求從一份清單裡選牌：棄 1 張、消耗至多 2 張、3 選 1、在休息處升級一張牌、在商店移除一張。遊戲從某個動作內部、透過它的某個 `CardSelectCmd.From*` 入口彈出它，所以它隨時都可能出現，在戰鬥中或戰鬥外都會。
+
+```text
+CardChoice{options: CardView[] (canonical order), min, max, context: ChoiceContext}
+```
+
+一個回答是 `min` 到 `max` 個互不相同的 `options` 索引（`CardChoice.Accepts`）。可以取消或略過的提示，`min` 為 0，空回答就是取消。
+
+單看選項，說不出提示是做什麼用的：同樣五張牌，用於升級、移除或棄牌，意義各不相同。`ChoiceContext` 帶著這個資訊，GameBridge 依遊戲所用的入口填寫它（[GameBridge：讀取遊戲 §6](/zh-tw/arch/gamebridge/observe/#sec-6)）：
+
+| 欄位 | 是什麼 |
+|---|---|
+| `purpose` | 提示的種類：入口的名稱去掉 `From`，轉成 snake_case（`deck_for_upgrade`、`deck_for_transformation`、`deck_for_enchantment`、`deck_for_removal`、`deck_generic`、`hand`、`hand_for_discard`、`hand_for_upgrade`、`choose_a_card_screen`、`simple_grid`、`simple_grid_for_rewards`），或者針對戰鬥牌堆的提示，就是牌堆的名稱，`draw_pile` 或 `discard_pile`（在這個遊戲版本裡只會從這兩個牌堆詢問） |
+| `source`? | 發起詢問的卡牌、遺物、能力或事件的 id，在遊戲指明時給出：入口的 `source` 參數，否則是這次選擇最近涉及的模型 |
+| `cancelable` | 有取消或略過按鈕可以關閉提示：提示自己的設定，或「選一張牌」畫面的 `canSkip` |
+| `in_combat` | 在戰鬥中詢問（某張牌或某個能力正在結算），而不是在休息處、事件或商店；Harness 依它路由提示：戰鬥中交給 `p0`，戰鬥外交給宏觀大腦（[Harness §4](/zh-tw/arch/harness/#sec-4)） |
+| `prompt_key`? | 提示文字的本地化鍵，`table.key` |
+| `enchantment`? | 用於 `deck_for_enchantment`：被選中的牌獲得的附魔，`{id, amount}` |
+
+關於上下限的兩個細節（`ChoiceContexts.Bounds`）：`max` 永遠不超過實際的選項數；沒有略過按鈕的「選一張牌」畫面向它的選擇器要 0 或 1 張牌，然後自己堅持要一張，所以它的 `min` 是 1。一個入口呼叫另一個入口時（移除會經過通用的牌組提示），由最外層的入口給出用途。卡包（卷軸箱在幾包卡牌之間的選擇）不是選牌提示：它們有自己的決策介面。
+
+## 7. 文字、數字與省略的東西
+
+- **文字以本地化鍵送出**（`table.key`），從不送出解析後的字串：事件頁面、以文字鍵表示的事件選項、提示文字。想要文字的大腦自己去查。
+- **一張牌的 `vars`** 是它自己的數字，傷害、格擋、魔法數字，按名稱列出：是基礎數值，而不是打出時力量或敏捷把它們變成的值。牌從狀態計算出的數字（完美打擊的傷害）會省略；牌面把它顯示成一個基礎值加上每個計數的額外值，這兩部分都會列出。
+- **事件的數字**還沒有包括在內：有些事件在它們的數字裡保有頁面不顯示的數值，所以要先為每個事件定一份白名單。
+- **永遠不包括**：種子和亂數流、一個 `?` 在進入之前裝著什麼、怪物排定了哪一招、重骰或轉化會給出什麼、抽牌堆的順序（[概覽 §3](/zh-tw/arch/protocol/#sec-3)）。
+
+## 8. 規劃中：事件流 <Badge text="規劃中" variant="caution" />
+
+觀測是一張快照。玩家還記得發生過什麼：抽到和移動了哪些牌、怪物顯示過哪些意圖、商店提供過什麼。要從這段歷史推理隱藏狀態（一個信念），大腦也需要這些事件。計畫是讓每條 `decision` 訊息帶著自上一條以來的事件，這是一個最小集合，只在信念需要時才擴充：
+
+```text
+draw{card}  play{card_uid, target?}  move{card, from, to, pos: top|bottom|random|null}
+generate{card, to}  shuffle{}  intents{creature, intents[]}  move_done{creature, effects…}
+reward_seen{…}  shop_seen{…}  event_page{…}
+```
+
+`move` 是一張牌在牌堆之間移動，`move_done` 是一個生物完成的招式及其效果；最後一行記錄獎勵畫面、商店或事件頁面顯示了什麼。GameBridge 將從遊戲的鉤子產生它們（[GameBridge §5](/zh-tw/arch/gamebridge/#sec-5)）。目前大腦保留的唯一一段歷史，是每回合的敵人意圖記錄，由 Harness 從觀測本身建立（[世界與工作行程訊息 §2](/zh-tw/arch/protocol/worlds/#sec-2)）。

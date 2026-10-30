@@ -1,0 +1,121 @@
+---
+title: 世界与工作进程消息
+description: '搜索用到的类型：战斗搜索在其中进行的世界 API、节点克隆、敌人出招记录、打过分的候选动作，以及四种工作进程请求和它们带回的回答。'
+sidebar:
+  label: 世界与工作进程消息
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+搜索需要在游戏的副本里试动作，而大脑不能碰游戏。Protocol 给搜索提供一个通向这些副本的接口，即**世界 API**；又给大脑提供一种办法，把整次搜索发给持有这些副本的进程，即**工作进程消息**。两者都在这里定义（`World.cs`、`CombatRecord.cs`、`Worker.cs`）；模拟器实现它们（[模拟器：世界与 SL 克隆](/arch/simulator/worlds/)、[模拟器：工作进程池](/arch/simulator/pool/)）。
+
+## 1. 世界 API
+
+```csharp
+public enum PlayEnvironment { NoSL, SL }
+public enum CombatStatus { InProgress, Won, Lost }
+
+public interface IWorldSource                     // the worlds of one decision
+{
+    PlayEnvironment Environment { get; }
+    IReadOnlyList<ICombatWorld> Worlds(int k, ulong searchSeed);   // NoSL: k samples; SL: the one exact copy
+}
+
+public interface ICombatWorld                     // one simulated combat
+{
+    CombatObservation Observe();
+    IReadOnlyList<CombatAction> Legal();          // empty once the combat is over
+    CombatStatus Status { get; }
+    ulong HiddenKey();
+    void Execute(CombatAction action);            // card prompts are answered inside the world
+    WorldSnapshot Snapshot();
+    void Restore(WorldSnapshot snapshot);         // a snapshot taken from this same world
+}
+
+public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
+```
+
+| 成员 | 做什么 |
+|---|---|
+| `Worlds(k, searchSeed)` | 一个决策的各个世界：NoSL 下是 k 个与观测相符的隐藏状态样本，由搜索种子抽出；SL 下是真实战斗唯一的那份精确副本 |
+| `Observe()` | 世界里的战斗在玩家眼中的样子：一个 `CombatObservation`（[观测与动作 §3](/arch/protocol/observation/#sec-3)） |
+| `Legal()` | 合法的战斗动作；战斗结束后为空 |
+| `Status` | 进行中、赢或输 |
+| `HiddenKey()` | 观测所隐藏的、会改变同样的打法从这里往后如何展开的那些东西的哈希：抽牌堆的顺序、每条随机数流的位置、每个怪物排定的招式。它和观测一起，在这个世界之内区分两个状态 |
+| `Execute(action)` | 打出一个合法动作；它弹出的选牌提示在世界内部由 `p0` 回答，和这一局回答它们的方式一样（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)） |
+| `Snapshot()`、`Restore(s)` | 世界里的一个时间点，以及回到它的办法 |
+
+**快照是一份配方**：世界从开始以来走过的步骤（确定化步骤、动作、提示的回答），以文本形式保存。搜索把它当作不透明的东西；只有生成它的那个世界会读它，并通过重播这些步骤来还原它（[模拟器：战斗 §2](/arch/simulator/combat/#sec-2)）。因为是文本，它可以传到另一个进程去。
+
+**两种隐藏键**。一个键包含多少东西取决于环境。NoSL 世界的键（`HiddenState.Key`）是抽牌堆的顺序、这一局和玩家的随机数流的计数器，以及每个怪物的随机数流和下一个招式。SL 世界的键（`HiddenState.Full`）还加上每个怪物至今的招式和这场战斗本回合的历史，这样，看起来一样、之后的发展却不同的两个状态就永远不会被合并（[模拟器：战斗 §4](/arch/simulator/combat/#sec-4)）。
+
+世界 API 只覆盖战斗：战斗大脑是它唯一的使用者。宏观大脑在 SL 下的搜索改为在节点的克隆上打，通过 [§4](#sec-4) 的工作进程消息。整局的世界还在规划中（[模拟器：世界与 SL 克隆 §8](/arch/simulator/worlds/#sec-8)）。
+
+## 2. 节点克隆与敌人出招记录
+
+```csharp
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, bool? Gauntlet = null);
+public sealed record EnemyTurns(uint Uid, string? Id, IReadOnlyList<EnemyTurn> Turns);
+public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
+```
+
+**`NodeClone`** 是当前节点的 SL 克隆：节点的检查点（`Save`，到达时游戏的存档，加上存档丢掉的遗物字段）；此后节点的每个决策，以轨迹行的形式（`surface action`，选牌提示的选择用游戏自己的下标）；以及对局遵循精英连战规则时的这条规则。在模拟器之外它是不透明的；模拟器像游戏的「继续游戏」（Continue）那样加载存档，把遗物字段放回去，再重播这些决策（[模拟器：世界与 SL 克隆 §4](/arch/simulator/worlds/#sec-4)）。Harness 根据线路上的节点消息做出克隆（[线路 §6](/arch/protocol/wire/#sec-6)）。
+
+**`EnemyTurns`** 是当前战斗里一个敌人招式的公开记录：到目前为止的每个回合，从最早的开始，它的图标在该回合第一个决策处显示的意图。看着这场战斗的玩家全都看到过。Harness 按每场战斗从观测中保存它（`MoveRecord`），并在每个决策时把它交给战斗大脑；搜索根据它建立怪物的出招日志（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)），学出来的叶子也读取它（[战斗大脑：叶子 §3](/arch/combat-brain/leaf/#sec-3)）。
+
+## 3. 打过分的动作
+
+```csharp
+public sealed record Candidate(string Action, double Value, double Ci, int Samples,
+    IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+```
+
+一次搜索打过分的一个动作：它在各个世界上的平均值、95% 置信区间的半宽、世界的个数，以及在保留时，它在每个世界里的值（保留 4 位小数，按世界的顺序）和在每个世界里它下面花掉的搜索节点。推荐把它们按从好到差列出（[线路 §7](/arch/protocol/wire/#sec-7)）；战斗网络的 ExIt 目标就是由各个世界的值做成的（[学习 §2](/arch/learning/#sec-2)）。
+
+## 4. 工作进程消息
+
+工作进程就是以 `serve` 启动的模拟器；大脑的工作进程池向它发送请求（[模拟器：工作进程池](/arch/simulator/pool/)）。在工作进程的 stdin 和 stdout 上，每条消息一行 JSON。与线路不同，这些消息没有 `v`：宿主和它的工作进程总是同一个构建。
+
+**为什么用请求，而不是单步**。世界 API 是一步一步的对话，而一次搜索每个决策要走几千步。经管道走一步要花一次几十微秒的往返，和这一步本身差不多（约 0.1 ms）。所以一个请求要的是一整份工作，而世界 API 在工作进程内部、在进程内使用。
+
+| 消息 | JSON `type` | 字段 | 要求做什么 |
+|---|---|---|---|
+| `WorkerHello` | （无） | `game` | 工作进程启动完毕后的第一行：它运行的游戏版本 |
+| `PimcWorldRequest` | `pimc_world` | `id`、`observation`、`first`、`build_seed`、`search_seed`、`world`、`worlds`、`nodes_per_first`、`history`? | PIMC 对一个 NoSL 世界的搜索：用 `build_seed` 从 `observation` 构建战斗，在由 `search_seed` 抽出的 `worlds` 个世界里取第 `world` 个，在 `first` 的每个动作之后搜索本回合，每个用 `nodes_per_first` 个节点 |
+| `SlWorldRequest` | `sl_world` | `id`、`node`、`first`、`nodes_per_first`、`history`? | PIMC 对 SL 世界的搜索：加载克隆 `node`，然后在 `first` 的每个动作之后搜索本回合 |
+| `SlTurnRequest` | `sl_turn` | `id`、`node`、`path`、`nodes`、`keep`、`floor`?、`history`?、`prices`? | SL 规划器的一个回合：加载克隆，从决策处打出 `path`，到达束里的一个状态，再用 `nodes` 个节点搜索那个回合剩下的部分，在下一回合开始时最多保留 `keep` 个状态，外加最好的战斗结束状态，上界赢不过 `floor` 的一个都不保留 |
+| `SlMacroRequest` | `sl_macro` | `id`、`node`、`paths` | 宏观大脑的试探：对每条答案路径，加载克隆，从决策处打出这条路径，记下游戏接下来问什么；一条路径是文本形式的宏观动作，对选牌提示来说是 `pick:` 加上按规范顺序给出的选择 |
+| `WorkerReply` | （无） | `id`、`lines`?、`error`?、`game_errors`、`turn`?、`afters`? | 对请求 `id` 的回答：两种 PIMC 请求用 `lines`，`sl_turn` 用 `turn`，`sl_macro` 用 `afters`；请求失败时改为 `error`；`game_errors`，处理它期间记下的游戏错误行 |
+
+`history` 是这场战斗的敌人出招记录（[§2](#sec-2)），供叶子使用；在 `sl_turn` 里，它记录到被搜索的那个状态为止。`prices` 是 V 给这场战斗各种结局定的价格（[§5](#sec-5)），在规划器用 V 给叶子定价时提供。
+
+## 5. 回答
+
+```csharp
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
+    IReadOnlyList<ulong>? Hashes = null);
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
+public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
+    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
+public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Potion, int Potions);
+```
+
+| 类型 | 所在位置 | 包含什么 |
+|---|---|---|
+| `PlannedLine` | `lines` | 搜索找到的一条打法，从它的首个动作开始：它的值、它的动作、首个动作之后模拟的节点数（包括首个动作本身），以及每个动作被打出时所在的战斗观测的哈希，被跟随的计划在每一步之前核对它。`lines[i]` 是 `first[i]` 之后最好的打法 |
+| `TurnSearch` | `turn` | 一个回合的搜索得到的各个结束状态：`ends`，如果这个回合能到达战斗结束，先是最好的战斗结束状态，然后是下一回合开始时的各个状态，最好的在前；`nodes`，模拟的动作数；`cut`，是否有东西被略去（节点用完了，或者找到的状态比保留的多）；`bound`，被搜索的那个状态的上界 |
+| `TurnEnd` | `turn.ends` | 规划器的打法里一个回合结束处的状态：从决策处到达它的动作（最后一个结束回合）以及每个动作之前的观测哈希；它的战斗状态；叶子的值；它的上界，即它还能达到的最好结果（以它现有的生命值和药水取胜；战斗结束后就是它的值）；它的键，即它的观测和完整隐藏状态的哈希，相等的状态按它合并（战斗结束后为 0）；它的敌人出招记录 |
+| `Afterstate` | `afters` | 一条路径通向什么：那时的这一局；游戏接下来问的决策界面，一局结束后为 null；它的画面；它的合法动作。选牌提示的选项在它的画面里，所以它的合法动作列表为空；战斗的画面被略去，因为战斗会结束一次试探 |
+| `EndPrices` | `prices` | 一场战斗的结局值多少，来自决策处的 V，以 V 的单位计：`death`，死亡；`hp[h]`，剩 h 点生命取胜（生命越多，价格从不更低）；`potion`，决策时持有的 `potions` 瓶药水里，这场战斗每用掉一瓶就扣掉的值（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)） |
+
+`status` 写成数字（0 进行中，1 赢，2 输），哈希和键写成 JSON 数字（[协议 §4](/arch/protocol/#sec-4)）。
+
+## 6. 什么能过去，什么不能
+
+- **NoSL 请求装的是观测和敌人出招记录，从不是真实状态**。工作进程由它们构建自己的世界，所以工作进程不可能比玩家知道得多（[模拟器：工作进程池 §5](/arch/simulator/pool/#sec-5)）。
+- **SL 请求装的是节点的克隆**，这是 SL 可以知道的。`TurnEnd` 的键是完整隐藏状态的哈希，它只留在 SL 的搜索里：叶子仍然只读观测。
+- **每个请求都是自足的**。没有任何东西从一个请求延续到下一个，所以任何工作进程都能处理任何请求，崩溃的工作进程的请求可以重发。
+- **游戏错误会传回来**。工作进程随每个回复返回游戏的错误行，宿主把它们和自己的一起计数（[模拟器：无头宿主 §8](/arch/simulator/headless/#sec-8)）。
+
+规划中 <Badge text="规划中" variant="caution" />：在工作进程里打开一个世界、然后一步步推进它的请求，供一个请求装不下的搜索使用（[模拟器：工作进程池 §8](/arch/simulator/pool/#sec-8)）。

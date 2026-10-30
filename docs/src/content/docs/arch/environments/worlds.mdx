@@ -11,7 +11,7 @@ import StrategyFusion from '../../../../components/book/StrategyFusion.svelte';
 
 ## 1. 世界
 
-**世界**是搜索可以探索的一个模拟器状态：一局正在运行的游戏，搜索可以观测它、在里面行动、保存它（快照）并回到保存的地方（恢复）。搜索从不碰真实游戏。它通过世界 API 请求世界（[协议 §7](/arch/protocol/#sec-7)），在其中打出候选的打法，再比较这些打法如何收场。
+**世界**是搜索可以探索的一个模拟器状态：一局正在运行的游戏，搜索可以观测它、在里面行动、保存它（快照）并回到保存的地方（恢复）。搜索从不碰真实游戏。它通过世界 API 请求世界（[协议：世界与工作进程消息 §1](/arch/protocol/worlds/#sec-1)），在其中打出候选的打法，再比较这些打法如何收场。
 
 如今每个世界都是**战斗世界**：一场战斗，由战斗大脑来搜索（[战斗大脑](/arch/combat-brain/)）。宏观大脑在战斗之外的搜索直接使用 SL 克隆（[宏观大脑：搜索 §2](/arch/macro-brain/search/#sec-2)）；NoSL 的对局世界能让它看到当前节点之外，还在规划中（[模拟器：世界与 SL 克隆 §8](/arch/simulator/worlds/#sec-8)）。
 
@@ -73,7 +73,7 @@ SL 的世界就是节点的克隆：真实战斗的一份精确拷贝，带着�
 
 ## 5. 一个宏观大脑，两种战斗算法
 
-所以两种环境提出了两个不同的战斗问题：NoSL 必须选出在它无法区分的各个世界上平均最好的动作，SL 必须在一个已知的世界里找到最好的打法。每个问题都有自己的算法。冠军的选项按环境挑选算法：一局用 `run --policy`（SL 规划器 `plan` 在 SL 之外会被拒绝），而在 `brain` 命令里，NoSL 宿主用 `--policy`，SL 宿主用 `--sl-policy`，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。然后 Harness 在每个战斗决策里把对应的输入交给战斗那条路由：SL 下是节点的克隆，NoSL 下只有观测，工作进程根据它构建自己的世界（`Harness/Dispatcher.cs:134`）。在单个进程里，比如在战斗测试集里，同样的两种算法运行在同一个接口 `ICombatBrain` 后面，所用的世界来自一个 `IWorldSource`（[协议 §7](/arch/protocol/#sec-7)）：
+所以两种环境提出了两个不同的战斗问题：NoSL 必须选出在它无法区分的各个世界上平均最好的动作，SL 必须在一个已知的世界里找到最好的打法。每个问题都有自己的算法。冠军的选项按环境挑选算法：一局用 `run --policy`（SL 规划器 `plan` 在 SL 之外会被拒绝），而在 `brain` 命令里，NoSL 宿主用 `--policy`，SL 宿主用 `--sl-policy`，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。然后 Harness 在每个战斗决策里把对应的输入交给战斗那条路由：SL 下是节点的克隆，NoSL 下只有观测，工作进程根据它构建自己的世界（`Harness/Dispatcher.cs:134`）。在单个进程里，比如在战斗测试集里，同样的两种算法运行在同一个接口 `ICombatBrain` 后面，所用的世界来自一个 `IWorldSource`（[协议：世界与工作进程消息 §1](/arch/protocol/worlds/#sec-1)）：
 
 ```mermaid
 flowchart LR
@@ -120,7 +120,7 @@ flowchart LR
 
 | 子系统 | NoSL | SL 额外需要 |
 |---|---|---|
-| 协议 | 观测、动作、卡牌提示、推荐、世界 API、NoSL 工作进程请求 | `node_checkpoint` 和 `node_action`；克隆类型 `NodeClone`；SL 工作进程请求（`SlWorldRequest`、`SlTurnRequest`、`SlMacroRequest`） |
+| 协议 | 观测、动作、选牌提示、推荐、世界 API、NoSL 工作进程请求 | `node_checkpoint` 和 `node_action`；克隆类型 `NodeClone`；SL 工作进程请求（`SlWorldRequest`、`SlTurnRequest`、`SlMacroRequest`） |
 | GameBridge | 白名单内的观测、合法动作、发起动作 | 节点检查点（`Checkpoint.Take`、`Open`、`RestoreRelics`）；SL 的换位键（`HiddenState.Full`） |
 | 模拟器 | 根据观测构建战斗，确定化 | 节点检查点（两种环境下都会取）、载入存档并重放、封存（`AtHorizon`） |
 | Mod | 观测、询问、显示答案（辅助模式；它从不执行） | 节点的检查点和步骤，两种环境下都记录，只在 SL 下发送 |

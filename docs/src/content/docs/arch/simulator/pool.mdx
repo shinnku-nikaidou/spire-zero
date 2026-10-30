@@ -24,7 +24,7 @@ import PoolTimeline from '../../../../components/book/PoolTimeline.svelte';
 
 **启动**。池并行启动它的工作进程，等每个都启动完毕（`Sts2Ai.Harness/WorkerPool.cs:33-50`）。工作进程就是同一个程序再启动一次：用它的 apphost，或者如果主机是用 `dotnet` 加 dll 启动的，就也这样启动（`Program.cs:20-24`），带上 `serve` 和冠军的叶子选项（`--leaf`、`--combat-net`），也就是这个工作进程的每次搜索都用的叶子。启动约需 1.2 s（[无头宿主 §2](/arch/simulator/headless/#sec-2)）。启动完成后，工作进程写出它的 hello：`{"game": "v0.111.0"}`，即它运行的游戏版本。
 
-**线路**是工作进程 stdin 和 stdout 上的 JSON 行，每条消息一行（[协议 §7](/arch/protocol/#sec-7)）。请求带着它的类型和一个 id；回复带着同一个 id、答案、请求失败时的错误，以及处理它期间记下的游戏错误。工作进程的消息没有协议版本字段：主机和它的工作进程总是同一个构建。
+**线路**是工作进程 stdin 和 stdout 上的 JSON 行，每条消息一行（[协议：世界与工作进程消息 §4](/arch/protocol/worlds/#sec-4)）。请求带着它的类型和一个 id；回复带着同一个 id、答案、请求失败时的错误，以及处理它期间记下的游戏错误。工作进程的消息没有协议版本字段：主机和它的工作进程总是同一个构建。
 
 **处理一组请求**。搜索中的大脑把一步的所有请求一次交给池，例如每个世界一个（`WorkerPool.Map`，`Sts2Ai.Harness/WorkerPool.cs:70-88`）。每个请求交给任何一个空闲的工作进程；一个工作进程一次处理一个请求；回复按请求的顺序返回，不管它们按什么顺序完成。
 

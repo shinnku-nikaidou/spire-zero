@@ -1,0 +1,121 @@
+---
+title: 世界與工作行程訊息
+description: '搜尋使用的型別：戰鬥搜尋在其中打的世界 API、節點複本、敵人出招記錄、評過分的候選動作，以及四種工作行程請求和它們帶回的回答。'
+sidebar:
+  label: 世界與工作行程訊息
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+搜尋需要在遊戲的副本裡嘗試動作，而大腦不可以碰遊戲。Protocol 給搜尋一個通往這些副本的介面，也就是**世界 API**；並給大腦一種方式，把整次搜尋送到持有這些副本的行程，也就是**工作行程訊息**。兩者都在這裡定義（`World.cs`、`CombatRecord.cs`、`Worker.cs`），由模擬器實作（[模擬器：世界與 SL 複本](/zh-tw/arch/simulator/worlds/)、[模擬器：工作行程池](/zh-tw/arch/simulator/pool/)）。
+
+## 1. 世界 API
+
+```csharp
+public enum PlayEnvironment { NoSL, SL }
+public enum CombatStatus { InProgress, Won, Lost }
+
+public interface IWorldSource                     // the worlds of one decision
+{
+    PlayEnvironment Environment { get; }
+    IReadOnlyList<ICombatWorld> Worlds(int k, ulong searchSeed);   // NoSL: k samples; SL: the one exact copy
+}
+
+public interface ICombatWorld                     // one simulated combat
+{
+    CombatObservation Observe();
+    IReadOnlyList<CombatAction> Legal();          // empty once the combat is over
+    CombatStatus Status { get; }
+    ulong HiddenKey();
+    void Execute(CombatAction action);            // card prompts are answered inside the world
+    WorldSnapshot Snapshot();
+    void Restore(WorldSnapshot snapshot);         // a snapshot taken from this same world
+}
+
+public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
+```
+
+| 成員 | 做什麼 |
+|---|---|
+| `Worlds(k, searchSeed)` | 一個決策的各個世界：NoSL 下是 k 個與觀測一致的隱藏狀態樣本，從搜尋種子抽出；SL 下是真實戰鬥唯一的一份精確副本 |
+| `Observe()` | 世界裡的戰鬥在玩家眼中的樣子：一個 `CombatObservation`（[觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)） |
+| `Legal()` | 合法的戰鬥動作；戰鬥結束後為空 |
+| `Status` | 進行中、贏或輸 |
+| `HiddenKey()` | 觀測所隱藏、又會改變相同打法從此處起如何收場的東西的雜湊：抽牌堆的順序、每條亂數流的位置、每個怪物排定的招式。和觀測一起，它能在這個世界之內區分兩個狀態 |
+| `Execute(action)` | 打出一個合法動作；它彈出的選牌提示在世界內部由 `p0` 回答，和這一局回答它們的方式一樣（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)） |
+| `Snapshot()`、`Restore(s)` | 世界裡的一個點，以及回到那裡的方法 |
+
+**快照是一份配方**：世界從開始以來走過的步驟（確定化步驟、動作、提示的回答），以文字表示。搜尋把它當作不透明的；只有產生它的那個世界會讀它，並透過重播這些步驟來還原它（[模擬器：戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)）。因為是文字，它可以傳到另一個行程。
+
+**兩種隱藏鍵**。一個鍵包含多少東西，取決於環境。NoSL 世界的鍵（`HiddenState.Key`）是抽牌堆的順序、這一局和玩家的亂數流的計數器，以及每個怪物的亂數流和下一招。SL 世界的鍵（`HiddenState.Full`）再加上每個怪物到目前為止的招式和這場戰鬥本回合的歷史，讓看起來相同、但接下來會有所不同的兩個狀態永遠不會被合併（[模擬器：戰鬥 §4](/zh-tw/arch/simulator/combat/#sec-4)）。
+
+世界 API 只涵蓋戰鬥：戰鬥大腦是它唯一的使用者。宏觀大腦在 SL 下的搜尋則在節點的複本上打，透過 [§4](#sec-4) 的工作行程訊息。整局的世界還在規劃中（[模擬器：世界與 SL 複本 §8](/zh-tw/arch/simulator/worlds/#sec-8)）。
+
+## 2. 節點複本與敵人出招記錄
+
+```csharp
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, bool? Gauntlet = null);
+public sealed record EnemyTurns(uint Uid, string? Id, IReadOnlyList<EnemyTurn> Turns);
+public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
+```
+
+**`NodeClone`** 是當前節點的一個 SL 複本：節點的檢查點（`Save`，抵達時遊戲的存檔，加上存檔丟掉的遺物欄位）、此後節點裡的每個決策，以軌跡行表示（`surface action`，選牌提示的選擇用遊戲自己的索引），以及這一局按菁英連戰規則進行時的那條規則。它在模擬器之外是不透明的；模擬器像遊戲的「繼續」那樣載入存檔，把遺物欄位放回去，然後重播這些決策（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。Harness 從線路的節點訊息做出一個複本（[線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。
+
+**`EnemyTurns`** 是一個敵人在當前戰鬥裡招式的公開紀錄：到目前為止的每個回合，最舊的在前，它的圖示在該回合第一個決策時顯示的意圖。看著這場戰鬥的玩家全都看到了。Harness 從觀測按戰鬥保存它（`MoveRecord`），並隨每個決策交給戰鬥大腦；搜尋從它建構怪物的招式日誌（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)），學習得到的葉節點也會讀它（[戰鬥大腦：葉節點 §3](/zh-tw/arch/combat-brain/leaf/#sec-3)）。
+
+## 3. 評過分的動作
+
+```csharp
+public sealed record Candidate(string Action, double Value, double Ci, int Samples,
+    IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+```
+
+一次搜尋評過分的一個動作：它在各個世界上的平均值、95% 信賴區間的半寬、世界的個數，以及在保留時，它在每個世界裡的值（四位小數，按世界順序）和在每個世界裡花在它下面的搜尋節點數。推薦把它們按好壞排列，最好的在前（[線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）；各世界的值正是戰鬥網路的 ExIt 目標的材料（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
+
+## 4. 工作行程訊息
+
+工作行程就是以 `serve` 啟動的模擬器；大腦的行程池向它送出請求（[模擬器：工作行程池](/zh-tw/arch/simulator/pool/)）。在工作行程的 stdin 和 stdout 上，每條訊息一行 JSON。和線路不同，這些訊息沒有 `v`：宿主和它的工作行程永遠是同一個建置。
+
+**為什麼是請求，而不是步驟**。世界 API 是一步一步的對話，而一次搜尋每個決策要走幾千步。透過管道走一步要花一次幾十微秒的往返，和這一步本身（約 0.1 ms）差不多。所以一個請求要的是一整塊工作，而世界 API 在工作行程內部、在行程內使用。
+
+| 訊息 | JSON `type` | 欄位 | 要求什麼 |
+|---|---|---|---|
+| `WorkerHello` | （無） | `game` | 工作行程啟動完成後的第一行：它執行的遊戲版本 |
+| `PimcWorldRequest` | `pimc_world` | `id`、`observation`、`first`、`build_seed`、`search_seed`、`world`、`worlds`、`nodes_per_first`、`history`? | PIMC 對一個 NoSL 世界的搜尋：用 `build_seed` 從 `observation` 建構戰鬥，取由 `search_seed` 抽出的 `worlds` 個世界中的第 `world` 個，在 `first` 的每個動作之後搜尋本回合，每個用 `nodes_per_first` 個節點 |
+| `SlWorldRequest` | `sl_world` | `id`、`node`、`first`、`nodes_per_first`、`history`? | PIMC 對 SL 世界的搜尋：載入複本 `node`，然後在 `first` 的每個動作之後搜尋本回合 |
+| `SlTurnRequest` | `sl_turn` | `id`、`node`、`path`、`nodes`、`keep`、`floor`?、`history`?、`prices`? | SL 規劃器的一個回合：載入複本，從決策處打 `path`，到達束裡的一個狀態，再用 `nodes` 個節點搜尋那個回合剩下的部分，在下一回合開始處保留至多 `keep` 個狀態，以及戰鬥的最佳結局，但不保留上界勝不過 `floor` 的任何一個 |
+| `SlMacroRequest` | `sl_macro` | `id`、`node`、`paths` | 宏觀大腦的試探：對每條答案路徑，載入複本，從決策處打這條路徑，記下遊戲接著問什麼；一條路徑是文字形式的宏觀動作，對選牌提示則是 `pick:` 加上它按規範順序的選擇 |
+| `WorkerReply` | （無） | `id`、`lines`?、`error`?、`game_errors`、`turn`?、`afters`? | 對請求 `id` 的回答：兩種 PIMC 請求用 `lines`，`sl_turn` 用 `turn`，`sl_macro` 用 `afters`；請求失敗時改為 `error`；`game_errors`，服務它期間記錄下的遊戲錯誤行 |
+
+`history` 是這場戰鬥的敵人出招記錄（[§2](#sec-2)），給葉節點用；在 `sl_turn` 裡，是到被搜尋的那個狀態為止的記錄。`prices` 是 V 對這場戰鬥各種結局的定價（[§5](#sec-5)），在規劃器用 V 為它的葉節點定價時帶上。
+
+## 5. 回答
+
+```csharp
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
+    IReadOnlyList<ulong>? Hashes = null);
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
+public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
+    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
+public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Potion, int Potions);
+```
+
+| 型別 | 位於 | 包含什麼 |
+|---|---|---|
+| `PlannedLine` | `lines` | 搜尋找到的一條打法路線，從它的第一個動作起：它的值、它的動作、第一個動作之後模擬的節點數（包括第一個動作本身），以及每個動作被打出時的戰鬥觀測雜湊，被遵循的計畫在每一步之前都會核對它。`lines[i]` 是 `first[i]` 之後的最佳路線 |
+| `TurnSearch` | `turn` | 一個回合搜尋的各個結尾：`ends`，如果這個回合能到達戰鬥的結局，先是最佳結局，然後是下一回合開始處的狀態，最好的在前；`nodes`，模擬的動作數；`cut`，是否有東西被略掉（節點用完了，或找到的狀態比保留的多）；`bound`，被搜尋的那個狀態的上界 |
+| `TurnEnd` | `turn.ends` | 規劃器路線上一個回合結束的狀態：從決策到達它的動作（最後一個結束回合）和每個動作之前的觀測雜湊；它的勝負狀態；葉節點的值；它的上界，即它還能達到的最好結果（以它現有的生命值和藥水獲勝；戰鬥結束後就是它的值）；它的鍵，即它的觀測和完整隱藏狀態的雜湊，相等的狀態按它合併（戰鬥結束後為 0）；它的敵人出招記錄 |
+| `Afterstate` | `afters` | 一條路徑通往的地方：那時的一局；遊戲接著詢問的決策介面，一局結束時為 null；它的畫面；它的合法動作。選牌提示的選項在它的畫面裡，所以它的合法清單為空；戰鬥的畫面被省略，因為一場戰鬥會結束一次試探 |
+| `EndPrices` | `prices` | 一場戰鬥的結局值多少，取自決策時的 V，以 V 的單位表示：`death`，死亡；`hp[h]`，剩 h 生命值獲勝（生命值越多，絕不會越低）；`potion`，決策時持有的 `potions` 瓶藥水中，這場戰鬥每用掉一瓶就扣掉的值（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)） |
+
+`status` 寫成數字（0 進行中、1 贏、2 輸），雜湊和鍵寫成 JSON 數字（[概覽 §4](/zh-tw/arch/protocol/#sec-4)）。
+
+## 6. 什麼會傳過去，什麼不會
+
+- **NoSL 請求裝的是觀測和敵人出招記錄，從不是真實狀態**。工作行程從它們建構自己的世界，所以工作行程不可能比玩家知道得更多（[模擬器：工作行程池 §5](/zh-tw/arch/simulator/pool/#sec-5)）。
+- **SL 請求裝的是節點的複本**，這是 SL 可以知道的。`TurnEnd` 的鍵雜湊的是完整的隱藏狀態，它留在 SL 的搜尋之內：葉節點仍然只讀觀測。
+- **每個請求都是自包含的**。沒有任何東西從一個請求留到下一個，所以任何工作行程都能服務任何請求，而崩潰的工作行程的請求可以再送一次。
+- **遊戲錯誤會送回來**。工作行程隨每個回覆送回遊戲的錯誤行，宿主把它們和自己的一起計數（[模擬器：無頭宿主 §8](/zh-tw/arch/simulator/headless/#sec-8)）。
+
+規劃中 <Badge text="規劃中" variant="caution" />：在工作行程裡開啟一個世界、再一步一步操作它的請求，用於超出單一請求的搜尋（[模擬器：工作行程池 §8](/zh-tw/arch/simulator/pool/#sec-8)）。

@@ -87,7 +87,7 @@ Then it notes what the run record needs: a combat that just ended gets its end (
 
 ## 4. Every decision screen
 
-A **surface** is the kind of decision screen; the protocol names eleven (`Sts2Ai.Protocol/Surfaces.cs:9-19`). Each is listed here as the driver handles it. "Legal" is the list GameBridge makes, "apply" the game call that carries an answer out; the text of each action is defined in [Protocol §3](/en/arch/protocol/#sec-3).
+A **surface** is the kind of decision screen; the protocol names eleven (`Sts2Ai.Protocol/Surfaces.cs:9-19`). Each is listed here as the driver handles it. "Legal" is the list GameBridge makes, "apply" the game call that carries an answer out; the text of each action is defined in [Protocol: observations and actions §5](/en/arch/protocol/observation/#sec-5).
 
 | surface | legal | apply | the driver's part |
 |---|---|---|---|
@@ -170,7 +170,7 @@ Everything downstream needs a run to be a function of its setup and its answers.
 **`run --check`** checks it on every run it plays (`Commands/RunCommand.cs:103-139`):
 
 - it observes every decision: each observation must survive a JSON round trip exactly, and its hash is kept;
-- it plays each seed a second time over the wire ([Protocol §2](/en/arch/protocol/#sec-2)), to a brain in a thread of the same process with the same champion (or to the `--brain` given), and compares the two plays: the trace, the observation hashes, the summary, the map hashes, the run record and the decision log, timings aside; in SL the second play also carries the node messages;
+- it plays each seed a second time over the wire ([Protocol: the wire §1](/en/arch/protocol/wire/#sec-1)), to a brain in a thread of the same process with the same champion (or to the `--brain` given), and compares the two plays: the trace, the observation hashes, the summary, the map hashes, the run record and the decision log, timings aside; in SL the second play also carries the node messages;
 - it loads every node of the first play from its checkpoint, replays the node's decisions, and requires the clone to show the run's observations one for one, to be at its horizon once it has travelled, and to refuse another step ([Worlds and the SL clone §5](/en/arch/simulator/worlds/#sec-5)).
 
 **Measured** on 2026-10-26 with 200 seeds (Silent, ascension 0, 9999 HP, random macro policy and the `play` combat policy):
@@ -200,7 +200,7 @@ Both rules mark their records (`auto_win`, `gauntlet`). `report`, `gate` and a w
 
 ## 8. Runs against a brain
 
-`run` normally keeps the brain in its own process: Harness and the champion's brains are objects there, and their searches go to a worker pool it starts ([The worker pool](/en/arch/simulator/pool/)). With `run --brain SOCKET`, the brain is a separate process listening at a Unix socket instead, the one the mod talks to in the game ([Mod §5](/en/arch/mod/#sec-5)). The simulator then hosts runs exactly as the game does: each run sends `hello` with its environment and a run id hashed from the seed, every decision goes out with its observation and legal actions, and the brain's recommendation is played ([Protocol §2](/en/arch/protocol/#sec-2)). The run id hides the seed in NoSL; in SL the seed does reach the brain, inside the node checkpoint's save, which SL may know.
+`run` normally keeps the brain in its own process: Harness and the champion's brains are objects there, and their searches go to a worker pool it starts ([The worker pool](/en/arch/simulator/pool/)). With `run --brain SOCKET`, the brain is a separate process listening at a Unix socket instead, the one the mod talks to in the game ([Mod §5](/en/arch/mod/#sec-5)). The simulator then hosts runs exactly as the game does: each run sends `hello` with its environment and a run id hashed from the seed, every decision goes out with its observation and legal actions, and the brain's recommendation is played ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). The run id hides the seed in NoSL; in SL the seed does reach the brain, inside the node checkpoint's save, which SL may know.
 
 The brain decides what plays, so `run --brain` refuses every champion option, `--log` included (`Commands/RunCommand.cs:71-72`), and so, since a champion file's options are merged in as given ones, a `--champion FILE` that names any (`Commands/Args.cs:186-202`) <Badge text="inferred" variant="caution" />. In SL the host also sends the node messages: the checkpoint when a new node starts, then the decisions not yet sent, each just before the next decision (`Brains/RunBrains.cs:53-99`).
 

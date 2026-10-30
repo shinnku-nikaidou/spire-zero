@@ -1,0 +1,91 @@
+---
+title: 'GameBridge：游戏与协议之间'
+description: '唯一一层把游戏读成协议观测和合法动作、并把一个动作变回游戏自己的按钮所发出的调用的代码。它的规则、谁在用它、它怎样跟上游戏更新，以及怎样测试它。'
+sidebar:
+  label: 概览
+  badge:
+    text: 部分实现
+    variant: tip
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+大脑说的是协议，不认识任何游戏（[协议](/arch/protocol/)）。总得有东西把游戏的对象读成协议的观测，列出玩家可以做什么，并把选定的动作带回游戏里。这就是 GameBridge（`src/Sts2Ai.GameBridge`），一个由静态类组成的库，两种游戏宿主都用它：无头运行游戏的模拟器，以及真实游戏里的 Mod。因为两者共用它，模拟器里的一个决策和游戏里的同一个决策，是由同一份代码读取和命名的。
+
+<Aside title="状态">
+
+已有：每个画面的观测，每个决策界面（surface）和药水栏的合法动作，模拟器打出的每个动作的启动（start），按规范顺序排列并带有上下文的选牌提示，SL 检查点，以及搜索用的隐藏状态键。规划中：公开历史的事件流（[§5](#sec-5)）。
+
+</Aside>
+
+## 1. 三项工作
+
+对每一种决策画面，GameBridge 都有同样的三项工作：
+
+| 工作 | 输入 | 输出 | 例子 |
+|---|---|---|---|
+| **observe** | 游戏的对象 | 一个协议观测 | `Observe.Combat(state, player)` → `CombatObservation` |
+| **legal** | 游戏的对象 | 合法动作，以文本表示 | `MapActions.Legal(run)` → `["map:0,1", "map:3,1"]` |
+| **start** | 一个合法动作 | 在画面上点击一下会发出的那个游戏调用，已经启动 | `MapActions.Start(run, player, "map:0,1")` → 对这个地图点的一次投票，与地图画面把它加入队列的方式相同 |
+
+它不做的，是判断**哪个**画面在提问，或者等待游戏把一个动作做完。这两件事都取决于画面显示什么，而只有宿主在跟踪这一点：模拟器自己扮演各个画面的角色（[模拟器：整局 §3](/arch/simulator/runs/#sec-3)），Mod 则查看正在显示的画面（[Mod §3](/arch/mod/#sec-3)）。GameBridge 只保留宿主在其上构建的纯判定函数，例如 `CombatActions.WaitingForInput` 和 `RewardActions.IsTerminal`。
+
+## 2. 规则
+
+- **它夹在两边之间，对哪一边都只碰必要的部分**。GameBridge 引用 Protocol 和游戏的程序集（`sts2.dll`、`GodotSharp.dll`、`SmartFormat.dll`，以及游戏自带的 `0Harmony.dll`，用于它唯一的一个补丁，[读取游戏 §6](/arch/gamebridge/observe/#sec-6)）。从不引用 Brain，所以决策无法伸手进游戏。它不用 Godot 节点（游戏的画面对象，即 `N*` 类），无头运行的游戏不会创建它们；它的文档注释提到它们，只是为了说明画面在哪里显示某个值。
+- **观测画面显示的东西**。每个字段都读自画面所绑定的东西：能力的 `DisplayAmount` 和 `IsVisible`，遗物的 `ShowCounter`，意图的伤害则通过图标所用的同一个 `GetSingleDamage`。有两处读得更深，因为画面确实显示这个值，却把它私下保存：能力持有的牌，用反射读取（`HeldCards`）；以及升级预览，在卡牌的副本上做出（[读取游戏 §3](/arch/gamebridge/observe/#sec-3)）。
+- **通过画面自己的入口启动**。动作由游戏按钮所发出的那个调用来执行：打出一张牌通过 `TryManualPlay`，和从手牌拖出时一样；选择地图点用一个 `VoteForMapCoordAction`，和地图画面把它加入队列时一样。从不通过修改状态，也从不通过跳过游戏检查的调用（`CardCmd.AutoPlay`、直接 `new PlayCardAction`、`PlayerCmd.EndTurn`）。游戏拒绝的启动会抛异常。
+- **不合法就是错误**。每个 `Start` 遇到不在其合法清单里的动作都会抛异常，而清单从不提供会失败的东西：没有空槽时的药水，金币不够时的购买。
+
+## 3. 谁在用它
+
+| 宿主 | observe | legal | start |
+|---|---|---|---|
+| 模拟器（`Sts2Ai.SimWorker`） | 每个决策 | 每个决策 | 它打出的每个动作（[模拟器：整局 §4](/arch/simulator/runs/#sec-4)） |
+| Mod（`Sts2Ai.Mod`） | 它向大脑询问的每个决策 | 同上 | 从不：Mod 只提建议，由玩家行动。它给模拟器的 start 所调用的同一批游戏入口打补丁，以此记录玩家自己的动作，所以 SL 记录给一步起的名字和模拟器给的完全一样（[Mod §6](/arch/mod/#sec-6)） |
+
+Mod 把 GameBridge 的源文件编译进自身，在游戏内部运行。模拟器以项目引用的方式引用它。CombatBuilder 是模拟器从观测构建战斗的办法，它复用 GameBridge 读取意图的代码，把怪物的招式与显示出的意图对应起来（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。
+
+## 4. 跟上游戏
+
+这个项目关于游戏代码的全部知识都在三个地方：GameBridge、模拟器的补丁（[模拟器：无头宿主 §4](/arch/simulator/headless/#sec-4)），以及 Mod 的画面适配器（[Mod §4](/arch/mod/#sec-4)）。游戏更新时：
+
+1. 反编译新版游戏，并针对它重新构建（`Sts2BinDir`，[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）；
+2. 运行 `selftest`，然后跑几批 `run --check`，它们遇到驱动程序不认识的画面、不合法的回答或任何游戏错误就会失败，并列出从未到达的决策界面（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）；
+3. 阅读 GameBridge 触及的那些游戏签名的差异；选牌提示的入口是用反射找到的，所以新增的入口不用改代码就会被打上补丁，但它的参数仍需要看一看。
+
+Mod 拒绝在不是为之构建的游戏版本上运行（[Mod §2](/arch/mod/#sec-2)）。
+
+## 5. 规划中：事件流
+
+一局的公开历史（抽到和移动的牌、出牌、显示过的意图、见过的画面）将来自游戏自己的钩子 <Badge text="推断" variant="caution" />：
+
+- 手牌、抽牌堆、弃牌堆和消耗堆上的 `CardPile.CardAdded` 和 `CardRemoved`（`Entities.Cards/CardPile.cs:35-37`）给出抽牌、移动和生成的牌，插入抽牌堆时还给出插入的位置；
+- `ActionExecutor.AfterActionExecuted`（`GameActions/ActionExecutor.cs:56`）给出出牌；
+- `CombatManager.TurnStarted`（`Combat/CombatManager.cs:273`）加上一份意图快照，给出各个回合；
+- 重新洗牌表现为抽牌堆从弃牌堆补满；洗牌命令本身还有待找到。
+
+只有玩家本可以看到的东西才会收录：插入随机位置的牌，记录时不带位置。格式见[协议：观测与动作 §8](/arch/protocol/observation/#sec-8)。
+
+## 6. 测试
+
+| 测什么 | 在哪里 |
+|---|---|
+| GameBridge 确实触及游戏（边界检查的对照） | `BoundaryTests`、`selftest` |
+| 每个战斗观测和动作都能往返；从观测构建出的战斗精确地显示这些观测 | `selftest`（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)） |
+| 每个决策界面的观测都能往返；大脑给出的每个回答都合法，且启动时不出错；对局精确重播，节点也一样 | `run --check`（[模拟器：整局 §6](/arch/simulator/runs/#sec-6)） |
+| Mod 的 SL 记录在各自的克隆上重播，观测与游戏当时显示的相同 | `clones`（[Mod §12](/arch/mod/#sec-12)） |
+
+规划中：Mod 里的一项检查，确认画面上每个启用的控件都是一个合法动作；以及相同的种子和决策在游戏里和模拟器里给出相同的观测（[评估 §1](/arch/evaluation/#sec-1)）。
+
+## 7. 本章内容
+
+| 页面 | 讲什么 |
+|---|---|
+| [读取游戏](/arch/gamebridge/observe/) | 观测的每个部分在游戏里从哪里读取，持有的牌和升级预览，按规范顺序排列的选牌提示及其上下文，SL 检查点，以及隐藏状态键 |
+| [各决策界面的动作](/arch/gamebridge/actions/) | 对每个决策界面：它读取什么，哪些动作合法以及为什么，启动每个动作的游戏调用，以及宿主补充了什么；uid 与索引 |
+
+未决问题：
+
+1. 入口没有 `source` 参数时提示的 `source`：这次选择最后涉及的模型可能是间接的（一个能力，它的钩子运行了一个命令）。
+2. 由钩子添加的卡牌奖励替代选项：它们的 id 是游戏的选项 id，新版游戏可能给它们改名。

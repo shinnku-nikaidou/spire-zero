@@ -19,7 +19,7 @@ A first stand-in is built: the mod's text panel shows the recommended action, th
 
 ## 1. Contract
 
-Three consumers read one `Recommendation` ([Protocol §6](/en/arch/protocol/#sec-6)); semi-auto combines two of them. The brain never knows which mode is on. The parts of the recommendation they use:
+Three consumers read one `Recommendation` ([Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)); semi-auto combines two of them. The brain never knows which mode is on. The parts of the recommendation they use:
 
 - `Plan`: the rest of the turn or screen, or on the map the rest of the act's route, as a list of actions (`plan[0]` is the next one);
 - `Candidates`: the actions considered, each with its value, confidence interval and sample count;

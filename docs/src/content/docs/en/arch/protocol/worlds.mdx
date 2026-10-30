@@ -1,0 +1,121 @@
+---
+title: Worlds and worker messages
+description: 'The types search works with: the world API a combat search plays in, the node clone, the record of enemy moves, the scored candidate, and the four worker requests with the answers they bring back.'
+sidebar:
+  label: Worlds and worker messages
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+Search needs to try actions in copies of the game, and the brain may not touch the game. Protocol gives search an interface to such copies, the **world API**, and gives the brain a way to send whole searches to the processes that hold them, the **worker messages**. Both are defined here (`World.cs`, `CombatRecord.cs`, `Worker.cs`); the simulator implements them ([Simulator: worlds and the SL clone](/en/arch/simulator/worlds/), [Simulator: the worker pool](/en/arch/simulator/pool/)).
+
+## 1. The world API
+
+```csharp
+public enum PlayEnvironment { NoSL, SL }
+public enum CombatStatus { InProgress, Won, Lost }
+
+public interface IWorldSource                     // the worlds of one decision
+{
+    PlayEnvironment Environment { get; }
+    IReadOnlyList<ICombatWorld> Worlds(int k, ulong searchSeed);   // NoSL: k samples; SL: the one exact copy
+}
+
+public interface ICombatWorld                     // one simulated combat
+{
+    CombatObservation Observe();
+    IReadOnlyList<CombatAction> Legal();          // empty once the combat is over
+    CombatStatus Status { get; }
+    ulong HiddenKey();
+    void Execute(CombatAction action);            // card prompts are answered inside the world
+    WorldSnapshot Snapshot();
+    void Restore(WorldSnapshot snapshot);         // a snapshot taken from this same world
+}
+
+public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
+```
+
+| member | what it does |
+|---|---|
+| `Worlds(k, searchSeed)` | the worlds of one decision: in NoSL, k samples of the hidden state that agree with the observation, drawn from the search seed; in SL, the one exact copy of the real combat |
+| `Observe()` | the world's combat as the player would see it: a `CombatObservation` ([Observations and actions §3](/en/arch/protocol/observation/#sec-3)) |
+| `Legal()` | the legal combat actions; empty once the combat is over |
+| `Status` | in progress, won or lost |
+| `HiddenKey()` | a hash of what the observation hides that changes how the same plays turn out from here: the draw pile's order, the position of each random stream, each monster's queued move. With the observation, it tells two states apart, within this world |
+| `Execute(action)` | plays a legal action; card prompts it raises are answered inside the world, by `p0`, as the run answers them ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)) |
+| `Snapshot()`, `Restore(s)` | a point in the world and the way back to it |
+
+**A snapshot is a recipe**: the steps the world has taken since it began (determinize steps, actions, prompt answers), as text. Search treats it as opaque; only the world that made it reads it, and restores it by replaying the steps ([Simulator: combats §2](/en/arch/simulator/combat/#sec-2)). Being text, it can travel to another process.
+
+**Two hidden keys.** How much a key holds depends on the environment. A NoSL world's key (`HiddenState.Key`) is the draw pile's order, the counters of the run's and the player's random streams, and each monster's stream and next move. The SL world's (`HiddenState.Full`) adds each monster's moves so far and this turn's history of the combat, so that two states that look the same but differ in what follows are never merged ([Simulator: combats §4](/en/arch/simulator/combat/#sec-4)).
+
+The world API covers combats only: the combat brain is its only user. The macro brain's searches in SL play on the node's clone instead, through the worker message of [§4](#sec-4). Worlds of a whole run are planned ([Simulator: worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)).
+
+## 2. The node clone and the record of enemy moves
+
+```csharp
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, bool? Gauntlet = null);
+public sealed record EnemyTurns(uint Uid, string? Id, IReadOnlyList<EnemyTurn> Turns);
+public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
+```
+
+**`NodeClone`** is an SL clone of the current node: the node's checkpoint (`Save`, the game's save on arrival with the relic fields it drops), every decision of the node since as trace lines (`surface action`, a card prompt's picks as the game's own indexes), and the elite gauntlet's rule when the run plays by it. It is opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back, and replays the decisions ([Simulator: worlds and the SL clone §4](/en/arch/simulator/worlds/#sec-4)). Harness makes one from the wire's node messages ([The wire §6](/en/arch/protocol/wire/#sec-6)).
+
+**`EnemyTurns`** is the public record of one enemy's moves in the current combat: for each round so far, oldest first, the intents its icons showed at the round's first decision. A player who watched the fight saw all of it. Harness keeps it per combat from the observations (`MoveRecord`), and gives it to the combat brain with each decision; search builds the monsters' move logs from it ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5)), and the learned leaves read it ([Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3)).
+
+## 3. A scored action
+
+```csharp
+public sealed record Candidate(string Action, double Value, double Ci, int Samples,
+    IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+```
+
+One action a search scored: its mean value over the worlds, the half-width of the 95% confidence interval, the number of worlds, and, when kept, its value in each world (to 4 decimals, in world order) and the search nodes spent below it in each. A recommendation lists them best first ([The wire §7](/en/arch/protocol/wire/#sec-7)); the per-world values are what the combat net's ExIt targets are made of ([Learning §2](/en/arch/learning/#sec-2)).
+
+## 4. The worker messages
+
+A worker is the simulator started as `serve`; the brain's pool sends it requests ([Simulator: the worker pool](/en/arch/simulator/pool/)). One JSON line per message on the worker's stdin and stdout. Unlike the wire, these have no `v`: a host and its workers are always the same build.
+
+**Why requests, not steps.** The world API is a conversation of single steps, and a search takes thousands per decision. A step over a pipe costs a round trip of tens of microseconds, about as much as the step itself (about 0.1 ms). So a request asks for a whole unit of work, and the world API is spoken inside the worker, in-process.
+
+| message | JSON `type` | fields | asks for |
+|---|---|---|---|
+| `WorkerHello` | (none) | `game` | the worker's first line, once booted: the game version it runs |
+| `PimcWorldRequest` | `pimc_world` | `id`, `observation`, `first`, `build_seed`, `search_seed`, `world`, `worlds`, `nodes_per_first`, `history`? | PIMC's search of one NoSL world: build the combat from `observation` with `build_seed`, take world `world` of the `worlds` drawn from `search_seed`, and search this turn after each action of `first`, with `nodes_per_first` nodes each |
+| `SlWorldRequest` | `sl_world` | `id`, `node`, `first`, `nodes_per_first`, `history`? | PIMC's search of the SL world: load the clone `node`, then search this turn after each action of `first` |
+| `SlTurnRequest` | `sl_turn` | `id`, `node`, `path`, `nodes`, `keep`, `floor`?, `history`?, `prices`? | one turn of the SL planner: load the clone, play `path` from the decision to reach a state of the beam, and search the rest of that turn with `nodes` nodes, keeping up to `keep` states at the next turn's start and the best end of the combat, none whose bound cannot beat `floor` |
+| `SlMacroRequest` | `sl_macro` | `id`, `node`, `paths` | the macro brain's probes: for each path of answers, load the clone, play the path from the decision, and record what the game asks next; a path is macro actions in text form and, for a card prompt, `pick:` and its picks in canonical order |
+| `WorkerReply` | (none) | `id`, `lines`?, `error`?, `game_errors`, `turn`?, `afters`? | the answer to request `id`: `lines` for the two PIMC requests, `turn` for `sl_turn`, `afters` for `sl_macro`; `error` instead when the request failed; `game_errors`, the game's error lines logged while serving it |
+
+`history` is the combat's record of enemy moves ([§2](#sec-2)) for the leaves; in `sl_turn`, up to the state searched from. `prices` are V's prices of the combat's ends ([§5](#sec-5)), when the planner prices its leaves by V.
+
+## 5. The answers
+
+```csharp
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
+    IReadOnlyList<ulong>? Hashes = null);
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
+public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
+    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
+public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Potion, int Potions);
+```
+
+| type | in | what it holds |
+|---|---|---|
+| `PlannedLine` | `lines` | a line of play a search found, from its first action: its value, its actions, the nodes simulated after the first action (itself included), and for each action the hash of the combat observation it is played at, which a followed plan checks before each step. `lines[i]` is the best line after `first[i]` |
+| `TurnSearch` | `turn` | the ends of one turn's search: `ends`, the best end of the combat if the turn can reach one, then the states at the next turn's start, best first; `nodes`, the actions simulated; `cut`, whether anything was left out (the nodes ran out, or more states were found than kept); `bound`, the bound of the state searched from |
+| `TurnEnd` | `turn.ends` | a state where a turn of the planner's line ends: the actions that reach it from the decision (the last one ending the turn) and the observation hash before each; its status; the leaf's value; its bound, the best it can still reach (a win with the HP and potions it has; once the combat is over, its value); its key, the hash of its observation and full hidden state, by which equal states are merged (0 once the combat is over); its record of enemy moves |
+| `Afterstate` | `afters` | what a path leads to: the run then; the surface the game asks next, null once the run is over; its screen; its legal actions. A card prompt's options are in its screen, so its legal list is empty; a combat's screen is left out, since a combat ends a probe |
+| `EndPrices` | `prices` | what a combat's end is worth, from V at the decision, in V's units: `death`, a death; `hp[h]`, a win with h HP left (never lower for more HP); `potion`, taken off for each of the `potions` held at the decision that the combat uses up ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)) |
+
+`status` is written as a number (0 in progress, 1 won, 2 lost), and hashes and keys as JSON numbers ([Overview §4](/en/arch/protocol/#sec-4)).
+
+## 6. What crosses, and what does not
+
+- **A NoSL request holds the observation and the record of enemy moves, never the true state.** The worker builds its worlds from them, so a worker cannot know more than the player ([Simulator: the worker pool §5](/en/arch/simulator/pool/#sec-5)).
+- **An SL request holds the node's clone**, which SL may know. A `TurnEnd`'s key hashes the full hidden state, and it stays inside SL's search: the leaves still read observations only.
+- **Every request is self-contained.** Nothing carries over from one request to the next, so any worker can serve any request, and a crashed worker's request can be sent again.
+- **Game errors come back.** A worker returns the game's error lines with each reply, and the host counts them with its own ([Simulator: headless host §8](/en/arch/simulator/headless/#sec-8)).
+
+Planned <Badge text="planned" variant="caution" />: requests that open a world in a worker and then step it, for searches that outgrow one request ([Simulator: the worker pool §8](/en/arch/simulator/pool/#sec-8)).

@@ -19,7 +19,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 ## 1. 約定
 
-三個消費者讀同一條 `Recommendation`（[協定 §6](/zh-tw/arch/protocol/#sec-6)），半自動模式是其中兩個的組合。大腦從不知道當前開著哪種模式。它們用到推薦裡的這些部分：
+三個消費者讀同一條 `Recommendation`（[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)），半自動模式是其中兩個的組合。大腦從不知道當前開著哪種模式。它們用到推薦裡的這些部分：
 
 - `Plan`：本回合或本畫面剩下的動作序列，在地圖上是本幕剩下的路線（`plan[0]` 是下一個動作）；
 - `Candidates`：考慮過的各個動作，每個帶有估值、信賴區間和樣本數；

@@ -23,7 +23,7 @@ $$
 
 and an unplayable card (a status, a curse) has none. `p0` reads the prompt alone and never draws at random: ties go to the first option in canonical order. That is what lets a simulated world ask it too: the search's worlds answer every prompt as the run will, so a line through a prompt is valued with the answer that will really be given. In NoSL that holds in every sampled world; in SL the planner's plan replays exactly ([The SL planner §4](/en/arch/sl-planner/#sec-4)).
 
-Before `p0` (commit `c239f12`), prompts were answered at random, in the real fight and inside the worlds alike, so a search could not expect the answer the run would give. With it, PIMC's whole runs went from floor 18.50 to 19.34 on the same seeds ([NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6)). The rule is hand-written strategy, the kind the project otherwise leaves to learned values. It stays because a prompt searched as branches needs the world API's prompt branching and `ChoiceContext` ([Protocol §4](/en/arch/protocol/#sec-4)), not built yet.
+Before `p0` (commit `c239f12`), prompts were answered at random, in the real fight and inside the worlds alike, so a search could not expect the answer the run would give. With it, PIMC's whole runs went from floor 18.50 to 19.34 on the same seeds ([NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6)). The rule is hand-written strategy, the kind the project otherwise leaves to learned values. It stays because a prompt searched as branches needs the world API's prompt branching and `ChoiceContext` ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)), not built yet.
 
 ## 2. The record of enemy moves
 
@@ -52,7 +52,7 @@ sequenceDiagram
   Note over H: merge: the mean over worlds,<br/>or the next turn's beam
 ```
 
-**The requests.** One JSON line each way, over the worker's stdin and stdout ([Protocol §7.1](/en/arch/protocol/#sec-7.1)):
+**The requests.** One JSON line each way, over the worker's stdin and stdout ([Protocol: worlds and worker messages §4](/en/arch/protocol/worlds/#sec-4)):
 
 | request | who sends it | what the worker does |
 |---|---|---|

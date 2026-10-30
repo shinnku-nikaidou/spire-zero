@@ -66,7 +66,7 @@ flowchart LR
 | 收到一個 `recommendation`，其雜湊與當前一致 | 渲染和/或執行它（[§4](#sec-4)） |
 | 雜湊變了 | 傳送 `cancel`（狀態已經往前走了，大腦放棄那次搜尋） |
 
-`obs_hash` 是觀測的雜湊（對觀測的規範化 JSON 取 FNV-1a 64，[協定 §2](/zh-tw/arch/protocol/#sec-2)），所以雜湊變了就說明畫面上能看到的東西變了。
+`obs_hash` 是觀測的雜湊（對觀測的規範化 JSON 取 FNV-1a 64，[協定 §4](/zh-tw/arch/protocol/#sec-4)），所以雜湊變了就說明畫面上能看到的東西變了。
 
 **同時只有一個決策在途**。大腦按順序逐個回答決策。所以 Mod 最多只開著一個決策：如果答案到達之前狀態就往前走了，它傳送 `cancel`，並等那個答案到達（然後丟掉），才詢問新的狀態。這樣即使玩家出手比大腦思考快，慢的大腦也不會越積越落後。
 
@@ -120,7 +120,7 @@ interface ISurfaceAdapter
 
 ## 5. 與大腦的連線
 
-- **Socket**：Unix domain socket `~/.local/state/sts2ai/brain.sock`（設定了 `$XDG_STATE_HOME` 時放在它下面），傳輸 JSON lines（[協定 §2](/zh-tw/arch/protocol/#sec-2)）。Mod 是用戶端，Harness 是伺服器端。Harness 由使用者啟動，或由 Mod 按設定的路徑啟動；Mod 自己從不做搜尋。伺服器端已經實作：SimWorker 的 `brain` 命令在這個 socket 上等待，`run --brain` 已經作為宿主連上它跑模擬對局（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。
+- **Socket**：Unix domain socket `~/.local/state/sts2ai/brain.sock`（設定了 `$XDG_STATE_HOME` 時放在它下面），傳輸 JSON lines（[協定：線路 §1](/zh-tw/arch/protocol/wire/#sec-1)）。Mod 是用戶端，Harness 是伺服器端。Harness 由使用者啟動，或由 Mod 按設定的路徑啟動；Mod 自己從不做搜尋。伺服器端已經實作：SimWorker 的 `brain` 命令在這個 socket 上等待，`run --brain` 已經作為宿主連上它跑模擬對局（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。
 - **Steam 的容器**：Steam 在它的 Linux 執行時容器（pressure-vessel）裡啟動遊戲。容器與主機共享主目錄，但有自己的 `$XDG_RUNTIME_DIR`，放在那裡的 socket 遊戲存取不到，所以 socket 放在主目錄下。大腦建立它的目錄時，只允許使用者本人存取。
 - **環境**：由面板卡頭上的 SL/NoSL 開關選定（[環境](/zh-tw/arch/environments/)），預設是 SL；這個選擇和 Mod 的其他設定一起存在 `~/.local/state/sts2ai/settings.json`，和 socket 放在一起，不在遊戲的玩家檔案目錄裡（[輸出層 §2](/zh-tw/arch/output/#sec-2)）。`hello` 帶上它；對大腦來說，它在一局裡固定不變：在一局中途切換時，Mod 發出 `run_end`（`aborted`）和新的 `hello`，大腦從這一刻起當作新的一局。一個大腦同時服務兩種環境：`brain` 對 NoSL 宿主用 `--policy` 的戰鬥大腦（冠軍的 PIMC），對 SL 宿主用 `--sl-policy` 的戰鬥大腦（預設是 SL 規劃器），宏觀大腦相同（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
 - **連不上大腦**：輔助模式下面板顯示「No brain running」（沒有大腦在執行）；自動遊玩時 Mod 暫停。連線每 2 秒重試一次；新的連線從 `hello` 重新開始。
@@ -147,7 +147,7 @@ SL 下，大腦在當前節點的精確複本上規劃戰鬥（[環境：資訊�
 出牌動作的卡牌從動作的 `NetCombatCard` 取得：動作要到執行時才去找它的卡牌。只有需要選目標的牌和藥水才保留目標，與合法動作的寫法一致。什麼都沒改變的購買或占卜（金幣不夠、格子已經揭開）不算一步。離開財寶房、離開沒有獎勵的戰鬥時也會呼叫同樣的方法，這些也不算一步：只有在獎勵畫面上的才算。事件選項、休息選項、領取獎勵、購買和占卜都作為遊戲自己的任務執行，介面要等任務結束才顯示這一步的結果；在那之前，Mod 不在這個介面上發問，和模擬器等待正在執行的任務一樣。
 
 - **記錄中斷**：遇到模擬器裡沒有對應決策的步驟，這個節點餘下的記錄就中斷：戰鬥中丟棄藥水、收回結束回合、沒有選擇就關掉卡牌獎勵、在 Mod 讀不了的介面上做選擇。這時，以及在沒有檢查點的節點裡，Mod 不詢問 SL 的戰鬥決策：面板說明原因，下一個節點又會有複本。選牌提示和戰鬥外的決策照常詢問，因為它們的大腦不需要複本。鉤子從不讓例外傳到遊戲裡：出了錯就把記錄標為中斷，並寫日誌。
-- **傳送**：SL 下，每個決策之前，Mod 先把節點的檢查點發一次（`node_checkpoint`），再發大腦還沒收到的步驟（`node_action`，在節點內從 0 編號，[協定 §2](/zh-tw/arch/protocol/#sec-2)）。節點最後一個決策之後的步驟（比如它的移動）永遠用不到，不傳送。節點從 Mod 執行後遊戲進入的第一個節點開始編號。
+- **傳送**：SL 下，每個決策之前，Mod 先把節點的檢查點發一次（`node_checkpoint`），再發大腦還沒收到的步驟（`node_action`，在節點內從 0 編號，[協定：線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。節點最後一個決策之後的步驟（比如它的移動）永遠用不到，不傳送。節點從 Mod 執行後遊戲進入的第一個節點開始編號。
 - **NoSL**：照樣記錄，但從不傳送。NoSL 日誌裡只要出現任何 `node_checkpoint`，這一局就作廢。
 
 ## 7. 自動跑局驅動
