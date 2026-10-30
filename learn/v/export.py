@@ -9,8 +9,11 @@ import json
 import random
 from pathlib import Path
 
+import onnx
 import torch
+from onnx import numpy_helper
 
+from common import LearnError
 from v import encode
 from v.net import Batch, Hazards, values
 
@@ -59,3 +62,29 @@ def write(net: dict, path: Path) -> None:
     with open(path, "w") as f:
         json.dump(net, f)
         f.write("\n")
+
+
+def read(path: str) -> dict:
+    with open(path) as f:
+        return json.load(f)
+
+
+def weights(net: dict, model) -> dict[str, torch.Tensor]:
+    """A net file's weights by model's parameter names, from its ONNX: the named initializers, and the Linear layers the
+    export turned into MatMul + Add (their weights transposed, named by their Add's bias). The second head is not in the
+    file and keeps model's own."""
+    graph = onnx.load_from_string(base64.b64decode(net["onnx"])).graph
+    inits = {i.name: torch.from_numpy(numpy_helper.to_array(i).copy()) for i in graph.initializer}
+    found = {k.removeprefix("net."): v for k, v in inits.items() if k.startswith("net.")}
+    adds = {i: n for n in graph.node if n.op_type == "Add" for i in n.input}
+    for n in graph.node:
+        if n.op_type == "MatMul" and n.input[1] in inits and not n.input[1].startswith("net."):
+            bias = next(i for i in adds[n.output[0]].input if i.startswith("net."))
+            found[bias.removeprefix("net.").removesuffix(".bias") + ".weight"] = inits[n.input[1]].T
+    own = model.state_dict()
+    for k, v in own.items():
+        if k.startswith("aux_head."):
+            found[k] = v
+        elif k not in found or found[k].shape != v.shape:
+            raise LearnError(f"the net file has no weight {k} of shape {tuple(v.shape)}")
+    return {k: found[k] for k in own}

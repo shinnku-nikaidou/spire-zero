@@ -13,7 +13,7 @@ import bosslab
 import common
 from common import LearnError
 from v import data, encode, export, train
-from v.net import Batch, Net, centred, expected_floor, expected_progress, explored
+from v.net import Batch, Net, centred, expected_floor, expected_progress, explored, values
 
 
 def record(run_id, floor, outcome="lost", combats=(), **config):
@@ -208,6 +208,38 @@ def test_training_the_gauntlets_v_writes_a_progress_net(tmp_path):
     assert result.exit_code == 0, result.output
     net = json.loads(out.read_text())
     assert net["objective"] == "progress" and net["fit"]["gauntlet"] and net["fit"]["runs"] == 10
+
+
+def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_the_second_head_anew():
+    samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") | {"share": 0.5} for f in (1, 2, 3)]
+    tables = train.vocab(samples * 3)
+    sizes = {t: len(ids) for t, ids in tables.items()}
+    torch.manual_seed(0)
+    model = Net(sizes, 16, shares=True)
+    net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
+    torch.manual_seed(1)
+    fresh = Net(sizes, 16, shares=True)
+    weights = export.weights(net, fresh)
+    assert torch.equal(weights["aux_head.weight"], fresh.state_dict()["aux_head.weight"])
+    fresh.load_state_dict(weights)
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    for test in net["tests"]:
+        b = Batch([data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu")
+        with torch.no_grad():
+            assert math.isclose(float(values(fresh.eval(), b)[0]), test["value"], rel_tol=1e-5)
+
+
+def test_training_goes_on_from_a_net_file_with_its_tables_and_state_scaling(tmp_path):
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    lists = write_runs(tmp_path, gauntlet=True)
+    for out, more in ((first, []), (second, ["--init", str(first)])):
+        args = ["--list", lists, "--name", out.stem, "--out", str(out), "--gauntlet", *more]
+        result = CliRunner().invoke(train.script, args)
+        assert result.exit_code == 0, result.output
+    a, b = json.loads(first.read_text()), json.loads(second.read_text())
+    assert b["vocab"] == a["vocab"] and b["state"] == a["state"]
+    result = CliRunner().invoke(train.script, ["--list", lists, "--name", "t", "--init", str(first)])
+    assert result.exit_code != 0 and "progress net" in str(result.exception)
 
 
 def test_training_writes_a_net_file_with_its_report(tmp_path):

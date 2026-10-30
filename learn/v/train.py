@@ -11,6 +11,9 @@ runs weighs them the same way. --afterstates (the logged decisions' options) onl
 third head, the share of the enemies' HP taken in the combat the run ends in, fitted at the floor it ended on; its value
 is the progress expected (net file objective "progress").
 
+--init goes on from a net file instead of from scratch: its token tables, state scaling and weights, read back from its
+ONNX (the second head, not in the file, starts anew).
+
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
 
@@ -177,9 +180,20 @@ def main(
         str | None, typer.Option(help="the logged decisions' options (`afterstates`), for explore_temperature")
     ] = None,
     gauntlet: Annotated[bool, typer.Option(help="the boss gauntlet's V, on its runs (run --gauntlet) alone")] = False,
+    init: Annotated[
+        str | None,
+        typer.Option(
+            help="a net file to go on from: its token tables, state scaling and weights (the second head anew)"
+        ),
+    ] = None,
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out, character)
+    start = export.read(init) if init else None
+    if start and (start["objective"] != ("progress" if gauntlet else "floor") or start["floors"] != FLOORS):
+        raise LearnError(f"{init} is a {start['objective']} net of {start['floors']} floors: not this training's")
+    if start and start["state"]["names"] != encode.STATE:
+        raise LearnError(f"{init} reads the state {start['state']['names']}, this training {encode.STATE}")
     if bool(boss_sims) != bool(boss_afterstates):
         raise LearnError("--boss-sims and --boss-afterstates go together")
     if gauntlet and (boss_sims or boss_states or door_logs or afterstates):
@@ -218,13 +232,19 @@ def main(
         len(options),
     )
 
-    tables = vocab(train)
+    # Going on from a net keeps what its weights were fitted to read: its tables (ids it never saw read as unknown)
+    # and its state scaling.
+    tables = start["vocab"] if start else vocab(train)
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
-    x = torch.tensor([s["state"] for s in train], dtype=torch.float64)
-    w = torch.tensor([s["weight"] for s in train], dtype=torch.float64)
-    mean = (w[:, None] * x).sum(0) / w.sum()
-    std = ((w[:, None] * (x - mean) ** 2).sum(0) / w.sum()).sqrt()
-    std = torch.where(std > 1e-9, std, torch.ones_like(std))
+    if start:
+        mean = torch.tensor(start["state"]["mean"], dtype=torch.float64)
+        std = torch.tensor(start["state"]["std"], dtype=torch.float64)
+    else:
+        x = torch.tensor([s["state"] for s in train], dtype=torch.float64)
+        w = torch.tensor([s["weight"] for s in train], dtype=torch.float64)
+        mean = (w[:, None] * x).sum(0) / w.sum()
+        std = ((w[:, None] * (x - mean) ** 2).sum(0) / w.sum()).sqrt()
+        std = torch.where(std > 1e-9, std, torch.ones_like(std))
 
     def make(part):
         return Batch(part, index, mean, std, FLOORS, device)
@@ -301,12 +321,16 @@ def main(
                     rows.append(expected_progress(torch.sigmoid(logits), torch.sigmoid(shares), b.start))
         return total / test_weight, torch.cat(rows), aux_total / test_weight
 
-    model = Net({t: len(ids) for t, ids in tables.items()}, FLOORS, shares=gauntlet).to(device)
-    # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
-    with torch.no_grad():
-        model.head.bias.copy_(base_logits)
-        if gauntlet:
-            model.share_head.bias.fill_(base_share_logit)
+    model = Net({t: len(ids) for t, ids in tables.items()}, FLOORS, shares=gauntlet)
+    if start:
+        model.load_state_dict(export.weights(start, model))
+    else:
+        # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
+        with torch.no_grad():
+            model.head.bias.copy_(base_logits)
+            if gauntlet:
+                model.share_head.bias.fill_(base_share_logit)
+    model = model.to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     boss_stream = stream(train_bosses, lambda c: grouped(make, c))
     door_stream = stream(train_doors, lambda c: grouped(make, c))
