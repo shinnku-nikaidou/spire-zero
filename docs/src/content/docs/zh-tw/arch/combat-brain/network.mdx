@@ -45,7 +45,7 @@ import ArchDiagram from '../../../../../components/v/ArchDiagram.svelte';
 
 **規則：戰鬥的狀態都放進輸入；能從 id 推出的東西由網路去學**。一張牌印著的傷害由它的 id 和升級決定，所以不讀。一張牌目前的費用可能在戰鬥中改變，id 說不出來，所以要讀。關於怎麼打，什麼都沒有寫進去：沒有哪張牌被說成好牌，也沒有列出任何怪物的出招順序。
 
-一切都來自玩家看到的觀測，加上敵人至今出招的公開記錄（[提示、招式與 worker §2](/zh-tw/arch/combat-brain/shared/#sec-2)），由 `encode.tokens` 取出：
+一切都來自玩家看到的觀測，加上敵人至今出招的公開記錄（[提示、招式與 worker §2](/zh-tw/arch/combat-brain/shared/#sec-2)），由 `encode.tokens`（`learn/combat/encode.py:113-155`）取出：
 
 | 輸入 | 讀什麼 |
 |---|---|
@@ -63,9 +63,9 @@ import ArchDiagram from '../../../../../components/v/ArchDiagram.svelte';
 
 **上下文**。餵入的詞元是 `character:ID`、`encounter:ID`、`room:ID` 和 `act:N`，但詞元表只列遭遇，所以另外三個讀作未知的那一項：遭遇已經隱含了它們。
 
-**詞元表**。網路檔案為每種 id 保存一張表：`cards`、`modifiers`、`powers`、`enemies`、`intents`、`relics`、`potions`、`context`、`orbs`、`allies`、`relic_status`。表是從訓練對局建出來的：出現不到 3 次的 id 讀作第 0 項，同一個共用的 `<unk>`。
+**詞元表**。網路檔案為每種 id 保存一張表：`cards`、`modifiers`、`powers`、`enemies`、`intents`、`relics`、`potions`、`context`、`orbs`、`allies`、`relic_status`。表是從訓練對局建出來的：出現不到 3 次的 id 讀作第 0 項，同一個共用的 `<unk>`（`vocab`，`learn/combat/train.py:39-73`）。
 
-**縮放**。數字縮放到大約 1，再截斷在 ±10 以內，因為少數狀態會出現極大的數（瀑布巨獸噴發時的生命值）：
+**縮放**。數字縮放到大約 1，再截斷在 ±10 以內，因為少數狀態會出現極大的數（瀑布巨獸噴發時的生命值；`learn/combat/encode.py:62-110`）：
 
 | 數字 | 縮放 |
 |---|---|
@@ -84,7 +84,7 @@ import ArchDiagram from '../../../../../components/v/ArchDiagram.svelte';
 
 死去的敵人或盟友不計入。沒有 id 的敵人讀作 `<none>`，沒有 id 的盟友（玩家的）讀作 `<player>`。
 
-**輸入張量**，按計算圖輸入的順序（`encode.INPUTS`）。每個清單都補齊到批次裡最長的長度，且至少為 1，並有一個遮罩，存在的是 1，補齊的是 0：
+**輸入張量**，按計算圖輸入的順序（`encode.INPUTS`，`learn/combat/encode.py:20-59`）。每個清單都補齊到批次裡最長的長度，且至少為 1，並有一個遮罩，存在的是 1，補齊的是 0：
 
 | 名稱 | 形狀 | 內容 |
 |---|---|---|
@@ -111,7 +111,7 @@ import ArchDiagram from '../../../../../components/v/ArchDiagram.svelte';
 
 ## 3. 牌
 
-牌堆是一個多重集合：牌的順序沒有意義，大小也不固定。所以每張牌各自通過同一個小網路，再把結果加起來：這是一個 Deep Set（Zaheer 等人，2017）。總和能讀任意數量、任意順序的牌。
+牌堆是一個多重集合：牌的順序沒有意義，大小也不固定。所以每張牌各自通過同一個小網路，再把結果加起來：這是一個 Deep Set（Zaheer 等人，2017）。總和能讀任意數量、任意順序的牌。下面所有的編碼器都是 `Net.encode`（`learn/combat/net.py:202-265`）。
 
 **牌的向量**。一張 id 為 $c$、升級次數為 $u$、費用為 $k$、牌堆為 $l$、修飾為 $m$ 且數值為 $a_m$ 的牌成為 32 個數：
 
@@ -187,7 +187,7 @@ $$
 l < s \quad\text{and}\quad l + 0.025 > s - 1.
 $$
 
-其他分桶的 logit 設為 $-10^4$，softmax 之後恰好為 0（`Net.reachable`）。這條規則在計算圖裡，所以 C# 不保存任何相關的東西。在開放的類別上做 softmax，就給出 51 個機率，即計算圖的輸出 `outcome`。
+其他分桶的 logit 設為 $-10^4$，softmax 之後恰好為 0（`Net.reachable`，`learn/combat/net.py:194-200`）。這條規則在計算圖裡，所以 C# 不保存任何相關的東西。在開放的類別上做 softmax，就給出 51 個機率，即計算圖的輸出 `outcome`。
 
 **為什麼是「還會失去」，而不是「結束時剩下」**。估值的形式是*狀態持有的東西，一點不差，加上網路說還會發生的事*（[葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。所以現在持有的生命值完整計入，一個束裡的兩個狀態在網路開口之前，就已經按真實的生命值分出差別。每個輸出頭都遵守這條規則：它預測相對於這個狀態的變化，而狀態持有的東西完整計入。
 
@@ -224,9 +224,9 @@ $$
 
 訓練器用 PyTorch 計算網路；大腦用 C# 執行它。兩者必須一致，靠的是網路檔案（[學習：參考 §7](/zh-tw/arch/learning/reference/#sec-7)）：
 
-- **匯出**。`learn/combat/export.py` 把網路寫成檔案裡的一個 ONNX 計算圖，遮罩、softmax 和 sigmoid 都包含在內，輸入按 [§2](#sec-2) 命名，每個長度都不固定。旁邊是詞元表、分桶、訓練報告，以及 16 個留出的回合開始和訓練器給它們的輸出，其中有多段攻擊、持有藥水和低生命值的狀態。
-- **推論**。`CombatNet`（`src/Sts2Ai.Brain/Combat/CombatNet.cs`）依照 `encode.py`：它建出同樣的張量，由 ONNX Runtime 執行計算圖。
-- **核對**。除非這個檔案給這 16 個狀態的輸出和訓練器一樣（差距在 $10^{-3}$ 以內），否則 `CombatNet.Load` 拒收它。任何一邊讀狀態的方式有差異，檔案就載入不了。
+- **匯出**。`learn/combat/export.py`（`net_file`，`:67-101`）把網路寫成檔案裡的一個 ONNX 計算圖，遮罩、softmax 和 sigmoid 都包含在內，輸入按 [§2](#sec-2) 命名，每個長度都不固定。旁邊是詞元表、分桶、訓練報告，以及 16 個留出的回合開始和訓練器給它們的輸出，其中有多段攻擊、持有藥水和低生命值的狀態。
+- **推論**。`CombatNet`（`src/Sts2Ai.Brain/Combat/CombatNet.cs`）依照 `encode.py`：`Graph`（`:91-114`）建出同樣的張量，由 ONNX Runtime 執行計算圖。
+- **核對**。除非這個檔案給這 16 個狀態的輸出和訓練器一樣（差距在 $10^{-3}$ 以內），否則 `CombatNet.Load`（`:55-72`） 拒收它。任何一邊讀狀態的方式有差異，檔案就載入不了。
 
 ## 10. 結構表達不了什麼
 

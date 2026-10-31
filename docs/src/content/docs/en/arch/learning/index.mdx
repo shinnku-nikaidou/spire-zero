@@ -45,7 +45,7 @@ flowchart LR
   G -->|"fail"| X["discard"]
   D -.-> TD["TD(λ), ExIt<br/>(planned)"]
   TD -.-> F
-  P["SPSA, LLM patches<br/>(removed / planned)"] -.-> G
+  P["SPSA, LLM patches<br/>(not used / planned)"] -.-> G
 ```
 
 1. **Self-play.** The champion plays runs on train seeds, drawing a share ε of its macro decisions at random so that the data shows what other options lead to ([The loop §2](/en/arch/learning/loop/#sec-2), [§9](/en/arch/learning/loop/#sec-9)).
@@ -59,7 +59,7 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 | part | status | where |
 |---|---|---|
 | self-play: whole runs, even draws at ε | built | `run --explore`, [The loop §2](/en/arch/learning/loop/#sec-2) |
-| softmax exploration over V's or the search's values | built, used by older jobs only | `run --macro-explore`, `--combat-explore`, [The loop §9](/en/arch/learning/loop/#sec-9) |
+| softmax exploration over V's or the search's values | built; beside even draws in the next dataset | `run --macro-explore`, `--combat-explore`, [The loop §9](/en/arch/learning/loop/#sec-9) |
 | V's training, Monte Carlo labels | built | `learn/v/`, [Macro brain: from hazards to value §5](/en/arch/macro-brain/value/#sec-5) |
 | the combat net's training, Monte Carlo labels | built | `learn/combat/`, [Training the combat net](/en/arch/learning/combat-net/) |
 | boss-fight labels for V (boss sims, door states) | built, unused | `learn/bosslab.py`, [Reference §9](/en/arch/learning/reference/#sec-9) |
@@ -67,7 +67,7 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 | gates: the simulator's SPRT, the paired lower bound on wins | built | `gate`, `learn/challenge.py`, `learn/gauntlet.py`, [The loop §8](/en/arch/learning/loop/#sec-8) |
 | TD(λ) targets | <Badge text="planned" variant="caution" /> | [The loop §4](/en/arch/learning/loop/#sec-4) |
 | expert iteration (search values as labels, a learned prior) | <Badge text="planned" variant="caution" /> | [The loop §5](/en/arch/learning/loop/#sec-5) |
-| SPSA tuning of hand-set weights | removed (`9b9d170`) | [The loop §6](/en/arch/learning/loop/#sec-6) |
+| SPSA tuning of hand-set weights | not used | [The loop §6](/en/arch/learning/loop/#sec-6) |
 | LLM patch proposals | <Badge text="planned" variant="caution" /> | [The loop §7](/en/arch/learning/loop/#sec-7) |
 | potential-based shaping, privileged training, archives against local optima | <Badge text="planned" variant="caution" /> | [The loop §11](/en/arch/learning/loop/#sec-11)–[§13](/en/arch/learning/loop/#sec-13) |
 
@@ -77,4 +77,4 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 - [The loop](/en/arch/learning/loop/): self-play, Monte Carlo, TD(λ), expert iteration, SPSA, LLM patches and gates, exploration, credit assignment, shaping, privileged information and local optima, each with what is built.
 - [Reference](/en/arch/learning/reference/): compute, the data directory, lists, the ledger, weight names, net files, C# inference, every script with its options, tests and open questions.
 
-The champions are in [Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1), and every net trained so far with what it measured is in the appendix, [The experiment log](/en/arch/learning/experiments/).
+The champions are in [Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1). The project keeps two nets, V v7-1f and the combat net c7-2; the history of its nets and data is the ledger, `eval/silent/ledger.md`.

@@ -16,7 +16,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 - `run --log FILE` 在每一局結束後追加它的各行（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。中途被殺掉的一局不會留下任何一行。`--log` 和 `--brain` 一起用時會被拒絕，因為後者的決策由大腦記錄。
 - `brain --log FILE` 在一局的 `run_end` 時寫出它的各行，所以沒送出這條訊息就斷線的宿主不會留下任何一行（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
-每一行是一個 `DecisionEntry` record（`Dispatcher.cs:63-67`），和每個 Protocol 型別一樣序列化：snake_case 的名字，值為 null 的欄位省略（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。日誌和對局記錄放在一起，在資料目錄裡（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）。
+每一行是一個 `DecisionEntry` record（`Dispatcher.cs:61-65`），和每個 Protocol 型別一樣序列化：snake_case 的名字，值為 null 的欄位省略（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。日誌和對局記錄放在一起，在資料目錄裡（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）。
 
 誰讀這份日誌：
 
@@ -36,7 +36,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `decision_id` | int | 決策在這一局裡的編號，從 0 起，三種決策一起計數（[§4](#sec-4)） | 同上 | 同上 |
 | `env` | string | `NoSL` 或 `SL` | 同上 | 同上 |
 | `surface` | string | `combat` | `card_choice`，不論哪一側 | 這個決策的決策介面 |
-| `brain` | string | 戰鬥路由的名字：`pimc`、`plan c2`、`pimc c2 explore 0.003`…… | 提示那一側的：戰鬥中是 `p0`；戰鬥外是 L0 的名字或 `random` | 宏觀路由的名字 |
+| `brain` | string | 戰鬥路由的名字：`pimc`、`plan c7-2`、`pimc c7-2 explore 0.003`…… | 提示那一側的：戰鬥中是 `p0`；戰鬥外是 L0 的名字或 `random` | 宏觀路由的名字 |
 | `obs_hash` | string（十六進位） | 戰鬥觀測的雜湊 | 選牌提示的雜湊 | 整個觀測的雜湊（[§4](#sec-4)） |
 | `legal` | int | 合法動作數 | 提示的選項數 | 合法動作數 |
 | `chosen` | string | 戰鬥動作的文字：`play:C[:T]`、`potion:S[:T]`、`end_turn`（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)） | 選中的選項索引，用逗號連接，不帶 `pick:` | 動作 |
@@ -45,7 +45,6 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `budget` | Budget? | 路由設定的預算，套用房間倍數之前的，出現在有預算的路由的每一行上，包括只有一個合法動作的步驟和照計畫打出的步驟（[路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)） | 從不 | 從不 |
 | `seed` | integer | 決策的種子（[路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)） | 同上，雖然策略不讀它 | 同上，雖然策略不讀它 |
 | `elapsed_ms` | number | 路由的用時 | 策略的用時 | 策略的用時；它的計畫是之後才問的，不計時 |
-| `features` | `{string: number}`? | – | – | 總是有：V v0 在整局觀測上的特徵（[§7](#sec-7)） |
 | `obs` | CombatObservation? | 總是有 | – | – |
 | `run_view` | RunView? | – | – | 總是有 |
 | `history` | EnemyTurns[]? | 總是有，可能為空（[§7](#sec-7)） | – | – |
@@ -95,9 +94,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 **`run_view`**，在每一行宏觀決策上：大腦看到的整局觀測，約 6 KB（[協定：觀測與動作 §2](/zh-tw/arch/protocol/observation/#sec-2)）。V 就用它訓練（[宏觀大腦：從風險值到價值](/zh-tw/arch/macro-brain/value/)）。
 
-**`features`**，在每一行宏觀決策上，不管是哪個大腦做的決定：V v0 在整局觀測上手工設計的特徵（樓層、生命值、最大生命值、金幣、藥水、遺物、牌、無法打出的牌、升級，牌組的平均傷害、格擋和抽牌，以及前方預計會遇到的菁英、休息處、商店、財寶和未知）。現在沒有訓練器讀它們，V 的網路也不讀（[學習：參考 §8](/zh-tw/arch/learning/reference/#sec-8)）。
-
-戰鬥外的選牌提示既沒有 `run_view` 也沒有 `features`。
+戰鬥外的選牌提示沒有 `run_view`。
 
 ## 8. 測試
 
@@ -120,7 +117,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `DispatcherTests.RefusesNodeCheckpointsInNoSL` | NoSL 下拒收節點檢查點 |
 | `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | 複本保留菁英連戰的規則 |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`、`AWorkerStuckTwiceFailsTheCall` | 行程池的那一次重試 |
-| `GateTests`（10）、`EvalReportTests`（2） | 評估的晉級門檻和報告（[評估：晉級門檻 §12](/zh-tw/arch/evaluation/gates/#sec-12)） |
+| `GateTests`（10）、`EvalReportTests`（2） | 評估的晉級門檻和報告（[評估：晉級門檻 §11](/zh-tw/arch/evaluation/gates/#sec-11)） |
 
 **規劃中的測試**：
 

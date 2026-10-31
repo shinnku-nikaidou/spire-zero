@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Determinization on a real start of a round (src/data/book/round-start.json, from c2's test states): the player
+  // Determinization on a real start of a round (src/data/book/round-start.json, from an earlier combat net's test states): the player
   // sees the draw pile as a multiset; each world is one order of it, drawn the way Determinize draws one (sort by card
   // key, then a Fisher–Yates shuffle), here with the page's own generator (docs: environments/worlds §2).
   import data from '../../data/book/round-start.json';
@@ -117,9 +117,9 @@
     {say(
       lang,
       w(
-        `Round ${obs.round} of a real combat from NoSL self-play: ${who} at ${obs.player.hp}/${obs.player.max_hp} HP against ${foe} at ${obs.enemies[0].hp}/${obs.enemies[0].max_hp}, one of the held-out round starts in the combat net c2’s file. Each world sorts the pile by card key and shuffles it, as Determinize does; this page shuffles with its own generator, where a search’s worlds use the game’s Rng and the search’s seed. SL needs no worlds here: its one world, the node’s clone, holds the real order.`,
-        `NoSL 自我对弈里一场真实战斗的第 ${obs.round} 回合：${who} ${obs.player.hp}/${obs.player.max_hp} HP，对上 ${obs.enemies[0].hp}/${obs.enemies[0].max_hp} 的 ${foe}，是战斗网络 c2 文件里留出的回合起点之一。每个世界先按卡牌键排序再洗牌，和 Determinize 一样；本页用自己的生成器洗牌，搜索的世界则用游戏的 Rng 和搜索的种子。SL 在这里不需要世界：它唯一的世界，也就是节点的克隆，握有真实顺序。`,
-        `NoSL 自我對弈裡一場真實戰鬥的第 ${obs.round} 回合：${who} ${obs.player.hp}/${obs.player.max_hp} HP，對上 ${obs.enemies[0].hp}/${obs.enemies[0].max_hp} 的 ${foe}，是戰鬥網路 c2 檔案裡留出的回合起點之一。每個世界先按卡牌鍵排序再洗牌，和 Determinize 一樣；本頁用自己的產生器洗牌，搜尋的世界則用遊戲的 Rng 和搜尋的種子。SL 在這裡不需要世界：它唯一的世界，也就是節點的複本，握有真實順序。`,
+        `Round ${obs.round} of a real combat from NoSL self-play: ${who} at ${obs.player.hp}/${obs.player.max_hp} HP against ${foe} at ${obs.enemies[0].hp}/${obs.enemies[0].max_hp}, one of the held-out round starts in an earlier combat net’s file. Each world sorts the pile by card key and shuffles it, as Determinize does; this page shuffles with its own generator, where a search’s worlds use the game’s Rng and the search’s seed. SL needs no worlds here: its one world, the node’s clone, holds the real order.`,
+        `NoSL 自我对弈里一场真实战斗的第 ${obs.round} 回合：${who} ${obs.player.hp}/${obs.player.max_hp} HP，对上 ${obs.enemies[0].hp}/${obs.enemies[0].max_hp} 的 ${foe}，是较早一个战斗网络的文件里留出的回合起点之一。每个世界先按卡牌键排序再洗牌，和 Determinize 一样；本页用自己的生成器洗牌，搜索的世界则用游戏的 Rng 和搜索的种子。SL 在这里不需要世界：它唯一的世界，也就是节点的克隆，握有真实顺序。`,
+        `NoSL 自我對弈裡一場真實戰鬥的第 ${obs.round} 回合：${who} ${obs.player.hp}/${obs.player.max_hp} HP，對上 ${obs.enemies[0].hp}/${obs.enemies[0].max_hp} 的 ${foe}，是較早一個戰鬥網路的檔案裡留出的回合起點之一。每個世界先按卡牌鍵排序再洗牌，和 Determinize 一樣；本頁用自己的產生器洗牌，搜尋的世界則用遊戲的 Rng 和搜尋的種子。SL 在這裡不需要世界：它唯一的世界，也就是節點的複本，握有真實順序。`,
       ),
     )}
   </p>

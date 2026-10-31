@@ -41,7 +41,7 @@ The question the search asks: if it stops here, what is this state worth?
 
 ## 2. Tokens
 
-`encode.tokens` throws away the screen and keeps ids and scaled numbers.
+`encode.tokens` (`learn/combat/encode.py:113-155`) throws away the screen and keeps ids and scaled numbers.
 
 **The player** is 8 numbers: <code>{v(walk.tokens.player.slice(0, 4))}</code> and so on. In full:
 
@@ -84,7 +84,7 @@ The tensors have these shapes for this state, with a batch of 1:
 
 ## 4. One card, then the piles
 
-Take **{walk.card.id}+** in the hand. Its entry in the card table is {walk.card.entry}, its upgrade level {walk.card.up}, and it costs 0.
+The card's vector is the first lines of `Net.encode` (`learn/combat/net.py:202-265`). Take **{walk.card.id}+** in the hand. Its entry in the card table is {walk.card.entry}, its upgrade level {walk.card.up}, and it costs 0.
 
 | part | vector |
 |---|---|
@@ -180,7 +180,7 @@ The HP share is {walk.value.share}. A bucket $[l, l + 0.025)$ stays open if $l <
 - The bottom: a fight cannot heal more than the HP missing. {walk.state.max_hp - walk.state.hp} of {walk.state.max_hp} HP is a share of 0.113, so the buckets below {walk.head.open_from} are closed.
 - The top: a win cannot lose all the HP held, so the buckets from {walk.head.open_to} up are closed.
 
-That leaves **{walk.head.open} of the 50 buckets open**. The others get a logit of $-10^4$, and the softmax gives them exactly 0.
+That leaves **{walk.head.open} of the 50 buckets open**. The others get a logit of $-10^4$ (`Net.reachable`, `learn/combat/net.py:194-200`), and the softmax gives them exactly 0.
 
 The softmax over the rest gives the chances. A death has {walk.head.death}, next to nothing. The most likely buckets:
 
@@ -201,7 +201,7 @@ The other {walk.potion.outputs - 1} outputs are computed and not read. The large
 
 ## 13. The number the search reads
 
-`CombatNet.Value` prices the 51 chances ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)):
+`CombatNet.Value` (`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-86`) prices the 51 chances ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)):
 
 $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})

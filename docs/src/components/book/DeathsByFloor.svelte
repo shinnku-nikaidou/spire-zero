@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Where a report's lost runs ended, floor by floor, and in what room (docs: evaluation/metrics §8), from the run
-  // records every report embeds (src/data/book/eval-reports.json, from eval/silent/reports/).
+  // Where one report's lost runs ended, floor by floor, and in what room (docs: evaluation/metrics §8), from the run
+  // records the report embeds (src/data/book/eval-reports.json, from eval/silent/reports/).
   import { scaleBand, scaleLinear } from 'd3';
   import type { Lang } from '../v/names.ts';
   import { w, say, type Words } from './words.ts';
@@ -8,26 +8,24 @@
 
   let { lang = 'en' }: { lang?: Lang } = $props();
 
-  const withDeaths = data.reports.filter((r) => r.deaths && !r.void);
-  let pick = $state(withDeaths.findIndex((r) => r.report.includes('v6-3-2')));
-  const r = $derived(withDeaths[pick]);
+  const r = data.report;
   const KINDS: { key: 'Monster' | 'Elite' | 'Boss' | 'outside'; label: Words; colour: string }[] = [
     { key: 'Monster', label: w('monster fight', '普通战斗', '普通戰鬥'), colour: 'var(--v-s1)' },
     { key: 'Elite', label: w('elite', '精英', '菁英'), colour: 'var(--v-s4)' },
     { key: 'Boss', label: w('boss', 'Boss', '頭目'), colour: 'var(--v-s2)' },
     { key: 'outside', label: w('outside combat', '战斗之外', '戰鬥之外'), colour: 'var(--v-muted)' },
   ];
-  const rows = $derived(r.deaths!.byFloor);
-  const totals = $derived(Object.fromEntries(KINDS.map((k) => [k.key, rows.reduce((s, f) => s + f[k.key], 0)])) as Record<string, number>);
-  const lost = $derived(Object.values(totals).reduce((a, b) => a + b, 0));
+  const rows = r.deaths.byFloor;
+  const totals = Object.fromEntries(KINDS.map((k) => [k.key, rows.reduce((s, f) => s + f[k.key], 0)])) as Record<string, number>;
+  const lost = Object.values(totals).reduce((a, b) => a + b, 0);
   const floors = Array.from({ length: 48 }, (_, i) => i + 1);
 
   const W = 660;
   const H = 240;
   const M = { l: 34, r: 56, t: 16, b: 34 };
   const x = scaleBand<number>().domain(floors).range([M.l, W - M.r]).padding(0.15);
-  const yMax = $derived(Math.max(10, r.won, ...rows.map((f) => f.Monster + f.Elite + f.Boss + f.outside)));
-  const y = $derived(scaleLinear().domain([0, yMax]).nice().range([H - M.b, M.t]));
+  const yMax = Math.max(10, r.won, ...rows.map((f) => f.Monster + f.Elite + f.Boss + f.outside));
+  const y = scaleLinear().domain([0, yMax]).nice().range([H - M.b, M.t]);
   const stack = (f: (typeof rows)[number]) => {
     let base = 0;
     return KINDS.map((k) => {
@@ -38,19 +36,10 @@
   };
   let hover = $state<number | null>(null);
   const hovered = $derived(hover === null ? null : rows.find((f) => f.floor === hover) ?? null);
-  const short = (label: string) => label.replace(' · ', ', ');
 </script>
 
 <div class="vfig" style="position: relative;">
   <div class="v-row" style="margin-bottom: 0.5rem;">
-    <label>
-      {say(lang, w('Report', '报告', '報告'))}
-      <select bind:value={pick}>
-        {#each withDeaths as q, i (q.report)}
-          <option value={i}>{q.env} {q.seedSet}: {short(q.label)}</option>
-        {/each}
-      </select>
-    </label>
     {#each KINDS as k (k.key)}
       <span><span class="v-key" style:background={k.colour}></span> {say(lang, k.label)} {totals[k.key]}</span>
     {/each}
@@ -88,9 +77,9 @@
   {/if}
   <p class="v-caption">
     {say(lang, w(
-      `${lost} lost runs of ${r.runs}, ${r.won} won (${r.env}, ${r.seedSet}, simulator at ${r.commit}). Bosses reached ${r.bossesReached.join(' / ')}, beaten ${r.bossesBeaten!.join(' / ')} (acts 1 / 2 / 3). A lost run died in a combat when its last combat is on the floor it ended on and that combat ended in a death or has no end; ${r.deaths!.noEnd} of these deaths have no end in the record, and learn/gauntlet.py counts those as outside combat. Not listed: the void reports, and the six of 2026-10-27 (at 18fdb07 and dc0105a) whose records have no combat ends yet.`,
-      `${r.runs} 局里输了 ${lost} 局，通关 ${r.won} 局（${r.env}，${r.seedSet}，模拟器在 ${r.commit}）。Boss 到达 ${r.bossesReached.join(' / ')}，击败 ${r.bossesBeaten!.join(' / ')}（第 1 / 2 / 3 幕）。输掉的一局若最后一场战斗就在它结束的楼层，且那场战斗以死亡结束或没有 end，就算死在那场战斗里；其中 ${r.deaths!.noEnd} 场死亡在记录里没有 end，learn/gauntlet.py 把它们算成战斗之外。列表里没有作废的报告，也没有 2026-10-27 那六份（在 18fdb07 和 dc0105a）还没记录战斗结局的报告。`,
-      `${r.runs} 局裡輸了 ${lost} 局，通關 ${r.won} 局（${r.env}，${r.seedSet}，模擬器在 ${r.commit}）。Boss 到達 ${r.bossesReached.join(' / ')}，擊敗 ${r.bossesBeaten!.join(' / ')}（第 1 / 2 / 3 幕）。輸掉的一局若最後一場戰鬥就在它結束的樓層，且那場戰鬥以死亡結束或沒有 end，就算死在那場戰鬥裡；其中 ${r.deaths!.noEnd} 場死亡在紀錄裡沒有 end，learn/gauntlet.py 把它們算成戰鬥之外。列表裡沒有作廢的報告，也沒有 2026-10-27 那六份（在 18fdb07 和 dc0105a）還沒記錄戰鬥結局的報告。`,
+      `${lost} lost runs of ${r.runs}, ${r.won} won (an earlier champion, ${r.env}, ${r.seedSet}). Bosses reached ${r.bossesReached.join(' / ')}, beaten ${r.bossesBeaten.join(' / ')} (acts 1 / 2 / 3). A lost run died in a combat when its last combat is on the floor it ended on and that combat ended in a death or has no end; ${r.deaths.noEnd} of these deaths have no end in the record, and learn/gauntlet.py counts those as outside combat.`,
+      `${r.runs} 局里输了 ${lost} 局，通关 ${r.won} 局（一个较早的冠军，${r.env}，${r.seedSet}）。Boss 到达 ${r.bossesReached.join(' / ')}，击败 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。输掉的一局若最后一场战斗就在它结束的楼层，且那场战斗以死亡结束或没有 end，就算死在那场战斗里；其中 ${r.deaths.noEnd} 场死亡在记录里没有 end，learn/gauntlet.py 把它们算成战斗之外。`,
+      `${r.runs} 局裡輸了 ${lost} 局，通關 ${r.won} 局（一個較早的冠軍，${r.env}，${r.seedSet}）。Boss 到達 ${r.bossesReached.join(' / ')}，擊敗 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。輸掉的一局若最後一場戰鬥就在它結束的樓層，且那場戰鬥以死亡結束或沒有 end，就算死在那場戰鬥裡；其中 ${r.deaths.noEnd} 場死亡在紀錄裡沒有 end，learn/gauntlet.py 把它們算成戰鬥之外。`,
     ))}
   </p>
 </div>

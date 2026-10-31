@@ -25,12 +25,12 @@ import { Badge } from '@astrojs/starlight/components';
 **冠軍的名字**。一局的各個大腦合起來就是它的冠軍，由 `Dispatcher.Champion` 命名：
 
 ```text
-combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone
+combat plan c7-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone
 ```
 
-這是本書範例對局的冠軍：葉節點用戰鬥網路 c2、用低預算的 SL 規劃器，戰鬥中的提示用 `p0`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V v6-3-2，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：戰鬥大腦指名它的葉節點（預設的除外）、V 為它葉節點的結局定價時加上 `v prices`，以及它的探索（`explore T`）；L0 指名它的 V（V 是初始權重時除外）、`clone`，以及它的探索（softmax 是 `explore T`，均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:38-62`）。
+這是 SL 冠軍：葉節點用戰鬥網路 c7-2、用 medium 預算的 SL 規劃器，戰鬥中的提示用 `p0`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V v7-1f，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：戰鬥大腦指名它的戰鬥網路（有的話）和它的探索（`explore T`）；L0 指名它的 V、`clone`，以及它的探索（softmax 是 `explore T`，均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:37-60`）。
 
-**環境決定戰鬥大腦**。宏觀大腦在兩種環境裡是同一個；戰鬥大腦不是（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。冠軍工廠在 SL 之外拒絕 `plan` 和 `--afterstates clone`，也拒絕不適合這個環境的葉節點。`brain` 指令同時服務兩種環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
+**環境決定戰鬥大腦**。宏觀大腦在兩種環境裡是同一個；戰鬥大腦不是（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。冠軍工廠在 SL 之外拒絕 `plan` 和 `--afterstates clone`。`brain` 指令同時服務兩種環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
 ## 2. 戰鬥路由
 
@@ -44,7 +44,7 @@ combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-
 - **SL**：唯一的世界是節點的複本，每個第一個動作用一個 `sl_world` 請求搜尋，所以各個工作行程分擔它。每個請求保有自己的狀態備忘表，而單一行程裡的一次搜尋會在各個第一個動作之間共用它，所以兩者並不完全相同。
 - **照計畫打**（`--follow`）：路由為這一局保有一個 `TurnPlan`。只要戰鬥顯示的是計畫在某一步之前預期的觀測，這一步就不經搜尋打出；否則這個決策重新搜尋，並標為重新規劃（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)）。
 
-**行程池裡的 SL 規劃器**（`PooledPlanner.Route`，[SL 規劃器](/zh-tw/arch/sl-planner/)）。每局一個 `SlRoute`，把戰鬥剩下的部分規劃一次，然後照計畫打，只在某一步不成立或計畫用完時才重新規劃（[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）。一個計畫就是 `SlPlanner.Search`，束的每個回合按保留的每個狀態各送一個 `sl_turn` 請求，用房間的預算。用 `--leaf-prices v` 時，每個計畫帶著 V 對這場戰鬥各種結局的定價，每場戰鬥算一次，由第一次規劃時的這一局算出（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。沒有節點複本時，路由會拋出例外（它只在 SL 下打）；要用 V 的定價時，沒有整局觀測也會拋出例外。
+**行程池裡的 SL 規劃器**（`PooledPlanner.Route`，[SL 規劃器](/zh-tw/arch/sl-planner/)）。每局一個 `SlRoute`，把戰鬥剩下的部分規劃一次，然後照計畫打，只在某一步不成立或計畫用完時才重新規劃（[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）。一個計畫就是 `SlPlanner.Search`，束的每個回合按保留的每個狀態各送一個 `sl_turn` 請求，用房間的預算。沒有節點複本時，路由會拋出例外（它只在 SL 下打）。
 
 **探索**（`CombatRoute.Exploring`，僅自我對弈，`--combat-explore T`，[學習：循環 §9](/zh-tw/arch/learning/loop/#sec-9)）。搜尋回傳兩個或更多候選時，第一個動作按它們估值的 softmax 從中抽取：每個的機率 ∝ exp((v − best) / T)，T 以葉節點的單位計（`Brain/Exploration.cs`）。如果抽到的就是搜尋自己的選擇，結果不變。否則打出抽到的動作，候選不變，沒有計畫，因為計畫是屬於原選擇的；如果它的估值比原選擇低超過 T/100，就標為探索（差距更小則等於平手）；它不會標為重新規劃。
 
@@ -109,7 +109,7 @@ combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-
 
 **run id** 是這一局的種子作為 JSON 字串（含引號）的 FNV-1a 64 位元雜湊，以十六進位表示：種子 `0SSL7NS01MU6` 得到 run `ce13ba5116b7f48a`。大腦看到的是 run id，從不是種子（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。
 
-**一個決策的種子**由 run id 和決策的編號抽出，編號從 0 起計入這一局的每個決策，戰鬥決策、選牌提示和宏觀決策都算（`Dispatcher.cs:208-227`）：
+**一個決策的種子**由 run id 和決策的編號抽出，編號從 0 起計入這一局的每個決策，戰鬥決策、選牌提示和宏觀決策都算（`Dispatcher.cs:205-224`）：
 
 ```text
 H        = FNV-1a 64 of the JSON string run_id
@@ -128,7 +128,7 @@ seed(i)  = z xor (z >> 31)
 
 SL 下的 PIMC 和規劃器搜尋唯一的那個確切世界，忽略它；宏觀策略和提示策略從不收到它。
 
-**佔位策略和探索**從每局各自設定種子的 .NET 產生器裡抽，每條流一個：`Random(FNV(run_id + stream))`，佔位策略的流是 `""`，戰鬥路由的 softmax 是 `:explore combat`，L0 的 softmax 是 `:explore`，L0 的均勻抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:44-55`）。所以一局不管在哪個行程裡、走不走線路、記不記日誌，都打得一樣。
+**佔位策略和探索**從每局各自設定種子的 .NET 產生器裡抽，每條流一個：`Random(FNV(run_id + stream))`，佔位策略的流是 `""`，戰鬥路由的 softmax 是 `:explore combat`，L0 的 softmax 是 `:explore`，L0 的均勻抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:41-53`）。所以一局不管在哪個行程裡、走不走線路、記不記日誌，都打得一樣。
 
 **看順序，不看時序**。一次搜尋的請求平行執行，但行程池按請求順序回傳回覆（[模擬器：工作行程池 §2](/zh-tw/arch/simulator/pool/#sec-2)），候選先按它們到達的減半輪次排序，再按估值排序，平手時保持合法動作的順序（先結束回合，再是牌，再是藥水）。哪個工作行程先完成，永遠不會改變答案。`run --check` 讓整局都受這一點檢驗（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。
 

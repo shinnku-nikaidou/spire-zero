@@ -40,7 +40,7 @@ A NoSL world starts as a combat built to show the observation exactly (`CombatBu
 
 The seed comes only from the caller, never from the run, so nothing of the real seed leaks into the sample. World k of a decision uses a seed mixed from the decision's search seed and k, so K worlds are K different, equally plausible futures. Not modelled yet: a draw-pile card whose position the player does know (one just put on top), and how a monster's history makes some of its moves likelier than others.
 
-The figure takes a real start of a round from the training data of the combat net c2: the Silent at 39 HP against LOUSE_PROGENITOR, nine cards in the draw pile. The player knows which nine; each world is one order of them. Draw K worlds and look at the five cards each one puts on top. The share of worlds in which a card comes up estimates the true chance of drawing it, with more noise the smaller K is.
+The figure takes a real start of a round from the training data of an earlier combat net: the Silent at 39 HP against LOUSE_PROGENITOR, nine cards in the draw pile. The player knows which nine; each world is one order of them. Draw K worlds and look at the five cards each one puts on top. The share of worlds in which a card comes up estimates the true chance of drawing it, with more noise the smaller K is.
 
 <Determinize client:visible lang="en" />
 
@@ -73,7 +73,7 @@ SL's world is the node's clone: an exact copy of the real combat, with the true 
 
 ## 5. One macro brain, two combat algorithms
 
-So the two environments pose two different combat problems: NoSL must choose the action that is best on average over the worlds it cannot tell apart, and SL must find the best line in one known world. Each has its own algorithm. The champion's options pick it per environment: `run --policy` for a run (the SL planner, `plan`, is refused outside SL), and in the `brain` command `--policy` for NoSL hosts and `--sl-policy`, the SL planner by default, for SL hosts ([Overview §5](/en/arch/environments/#sec-5)). Harness then hands the combat route the matching input with every combat decision: in SL the node's clone, in NoSL nothing but the observation, from which the workers build their worlds (`Harness/Dispatcher.cs:134`). In a single process, as in the combat panel, the same two algorithms run behind one interface, `ICombatBrain`, on worlds from an `IWorldSource` ([Protocol: worlds and worker messages §1](/en/arch/protocol/worlds/#sec-1)):
+So the two environments pose two different combat problems: NoSL must choose the action that is best on average over the worlds it cannot tell apart, and SL must find the best line in one known world. Each has its own algorithm. The champion's options pick it per environment: `run --policy` for a run (the SL planner, `plan`, is refused outside SL), and in the `brain` command `--policy` for NoSL hosts and `--sl-policy`, the SL planner by default, for SL hosts ([Overview §5](/en/arch/environments/#sec-5)). Harness then hands the combat route the matching input with every combat decision: in SL the node's clone, in NoSL nothing but the observation, from which the workers build their worlds (`Harness/Dispatcher.cs:132`). In a single process, as in the combat panel, the same two algorithms run behind one interface, `ICombatBrain`, on worlds from an `IWorldSource` ([Protocol: worlds and worker messages §1](/en/arch/protocol/worlds/#sec-1)):
 
 ```mermaid
 flowchart LR
@@ -100,7 +100,7 @@ flowchart LR
 | macro brain | afterstates predicted from the screen, valued by V | the same brain; with `--afterstates clone` it plays each option on the clone ([Macro brain: search §2](/en/arch/macro-brain/search/#sec-2)) |
 | value | V(observation) | the same V |
 
-The leaves of both searches are valued from public information only: the observation, the record of the monsters' intents so far, and, with `--leaf-prices v`, V's value of the run view ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)). So the true streams cannot leak in through evaluation. The macro brain and V never read the environment either; in SL with `--afterstates clone`, Harness hands the macro side the node's clone, so L0's search differs while the brain stays the same.
+The leaves of both searches are valued from public information only: the observation and the record of the monsters' intents so far ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)). So the true streams cannot leak in through evaluation. The macro brain and V never read the environment either; in SL with `--afterstates clone`, Harness hands the macro side the node's clone, so L0's search differs while the brain stays the same.
 
 PIMC on the clone (`--policy pimc` with `--env SL`) also exists: it searches only the current turn of the one world, sending one request per first action ([Simulator: the worker pool §3](/en/arch/simulator/pool/#sec-3)), and stays as the SL planner's baseline.
 
@@ -108,11 +108,11 @@ PIMC on the clone (`--policy pimc` with `--env SL`) also exists: it searches onl
 
 In principle SL would value states outside combat differently too. From the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk: more elites, events and cards with a high variance. This is ignored on purpose. One V serves both environments, and it is trained on runs whose combats the SL combat brain played ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)).
 
-This is not SL teaching NoSL how to fight. The macro brain sees the same information in both environments, and V reads only what the run is ([Macro brain: the value network](/en/arch/macro-brain/network/)). The NoSL combat brain is trained on its own data: each environment's combat nets learn how combats end under that environment's search, and are refused in the other ([Overview §5](/en/arch/environments/#sec-5)). What the shared V gives up is the difference between the two environments' values outside combat, and in NoSL it is somewhat optimistic.
+The macro brain sees the same information in both environments, and V reads only what the run is ([Macro brain: the value network](/en/arch/macro-brain/network/)). The two environments' combat brains also share one net file, c7-2, which learned from SL's games; in NoSL it loads and plays, and it has never been trained or gated there ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). What the shared V gives up is the difference between the two environments' values outside combat, and in NoSL it is somewhat optimistic.
 
 ## 7. Leaderboards, gates and explanations
 
-- **Champions, gates and leaderboards stay per environment.** Each environment has its own champion file, and a gate pairs a challenger only with its own environment's champion, refusing runs from the other (`Harness/Gate.cs:44-52`); `gate --promote` rewrites only the file it is given ([Evaluation: gates §8](/en/arch/evaluation/gates/#sec-8)). One shared V does not change that: a new V becomes each environment's champion only through that environment's file. Since 2026-10-30 both files name the same V, v6-3-2, set by hand without a gate. Until a NoSL report of it exists, the NoSL file names the SL report, so a NoSL gate refuses to pair with it ([Evaluation §3](/en/arch/evaluation/#sec-3)).
+- **Champions, gates and leaderboards stay per environment.** Each environment has its own champion file, and a gate pairs a challenger only with its own environment's champion, refusing runs from the other (`Harness/Gate.cs:44-52`); `gate --promote` rewrites only the file it is given ([Evaluation: gates §8](/en/arch/evaluation/gates/#sec-8)). One shared V does not change that: a new V reaches each environment's champion only through that environment's file. Both files name the same V, v7-1f, and the same combat net, c7-2. Until a NoSL report of them exists, the NoSL file names the SL report, so a NoSL gate refuses to pair with it ([Evaluation §3](/en/arch/evaluation/#sec-3)).
 - **The same seeds feed two leaderboards,** one table per environment, never ranked together. Below them the leaderboard gives the SL − NoSL difference for each champion that has a report in both environments under the same name ([Overview §3](/en/arch/environments/#sec-3)).
 - **Explanations will differ.** The recommendation has no facts yet; when it does, a NoSL fact will be a probability or an expectation ("blocks 6 HP on average"), and an SL fact may be an exact outcome ("play A then B, and you draw X") ([Output §5](/en/arch/output/#sec-5)).
 
@@ -127,5 +127,5 @@ This is not SL teaching NoSL how to fight. The macro brain sees the same informa
 | Harness | routing, seeds, the record of the monsters' intents | the latest checkpoint and the node's steps: one clone, for every combat decision and, with `--afterstates clone`, every macro decision |
 | combat brain | PIMC, an expectation search | its own algorithm: the SL planner |
 | macro brain | afterstates predicted from the screen, valued by V | the same brain; with `--afterstates clone`, afterstates played on the clone (`CloneSearch`, `PooledClone`) |
-| learning | V | none for V; combat nets are trained per environment |
+| learning | V and the combat net, both from SL's games | none: both environments play the same two net files |
 | evaluation | the NoSL leaderboard | the SL leaderboard, and the SL − NoSL difference |

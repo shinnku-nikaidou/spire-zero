@@ -16,7 +16,7 @@ The `Dispatcher` keeps the run's lines in memory (`Dispatcher.Log`) when it is m
 - `run --log FILE` appends each run's lines after the run ends ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). A run killed midway leaves none. `--log` is refused together with `--brain`, whose decisions are logged by the brain.
 - `brain --log FILE` writes a run's lines at its `run_end`, so a host that drops without one leaves none ([Overview §5](/en/arch/harness/#sec-5)).
 
-The lines are `DecisionEntry` records (`Dispatcher.cs:63-67`) serialized like every Protocol type: snake_case names, fields that are null left out ([Protocol §4](/en/arch/protocol/#sec-4)). Logs are kept beside the run records, in the data directory ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
+The lines are `DecisionEntry` records (`Dispatcher.cs:61-65`) serialized like every Protocol type: snake_case names, fields that are null left out ([Protocol §4](/en/arch/protocol/#sec-4)). Logs are kept beside the run records, in the data directory ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
 
 Who reads the log:
 
@@ -36,7 +36,7 @@ Who reads the log:
 | `decision_id` | int | the decision's number in the run, from 0, the three kinds counted together ([§4](#sec-4)) | the same | the same |
 | `env` | string | `NoSL` or `SL` | the same | the same |
 | `surface` | string | `combat` | `card_choice`, on either side | the decision's surface |
-| `brain` | string | the combat route's name: `pimc`, `plan c2`, `pimc c2 explore 0.003`, … | the prompt side's: `p0` in combat; L0's name or `random` outside | the macro route's |
+| `brain` | string | the combat route's name: `pimc`, `plan c7-2`, `pimc c7-2 explore 0.003`, … | the prompt side's: `p0` in combat; L0's name or `random` outside | the macro route's |
 | `obs_hash` | hex string | the hash of the combat observation | the hash of the card prompt | the hash of the whole observation ([§4](#sec-4)) |
 | `legal` | int | the legal actions | the prompt's options | the legal actions |
 | `chosen` | string | the combat action's text: `play:C[:T]`, `potion:S[:T]`, `end_turn` ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)) | the picked option indexes joined by commas, without `pick:` | the action |
@@ -45,7 +45,6 @@ Who reads the log:
 | `budget` | Budget? | the route's budget as configured, before the room's multiple, on every line of a route that has one, including steps with one legal action and followed steps ([Routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)) | never | never |
 | `seed` | integer | the decision's seed ([Routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)) | the same, though the policy does not read it | the same, though the policy does not read it |
 | `elapsed_ms` | number | the route's time | the policy's time | the policy's time; its plan is asked afterwards, and not timed |
-| `features` | `{string: number}`? | – | – | always: V v0's features of the run view ([§7](#sec-7)) |
 | `obs` | CombatObservation? | always | – | – |
 | `run_view` | RunView? | – | – | always |
 | `history` | EnemyTurns[]? | always, possibly empty ([§7](#sec-7)) | – | – |
@@ -95,9 +94,7 @@ A combat step drawn instead of the search's pick keeps its `candidates` but has 
 
 **`run_view`**, on every macro line: the run view the brain was shown, about 6 KB ([Protocol: observations and actions §2](/en/arch/protocol/observation/#sec-2)). V is trained on it ([Macro brain: value](/en/arch/macro-brain/value/)).
 
-**`features`**, on every macro line, whatever brain decided: V v0's hand-made features of the run view (floor, HP, max HP, gold, potions, relics, cards, unplayable cards, upgrades, the deck's mean damage, block and draw, and the elites, rest sites, shops, treasures and unknowns expected ahead). No trainer reads them now, and V's net does not ([Learning: reference §8](/en/arch/learning/reference/#sec-8)).
-
-Card prompts outside combat get neither `run_view` nor `features`.
+Card prompts outside combat get no `run_view`.
 
 ## 8. Tests
 
@@ -120,7 +117,7 @@ Card prompts outside combat get neither `run_view` nor `features`.
 | `DispatcherTests.RefusesNodeCheckpointsInNoSL` | node checkpoints are refused in NoSL |
 | `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | the clone keeps the elite gauntlet's rule |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`, `AWorkerStuckTwiceFailsTheCall` | the pool's one retry |
-| `GateTests` (10), `EvalReportTests` (2) | evaluation's gate and reports ([Evaluation: gates §12](/en/arch/evaluation/gates/#sec-12)) |
+| `GateTests` (10), `EvalReportTests` (2) | evaluation's gate and reports ([Evaluation: gates §11](/en/arch/evaluation/gates/#sec-11)) |
 
 **Planned tests:**
 

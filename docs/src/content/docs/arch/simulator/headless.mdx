@@ -36,7 +36,7 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 然后它订阅游戏的日志（`Log.LogCallback`，Error 及以上级别的每一行）和没有人等待的任务出的错（`TaskHelper.UnobservedFault`），把两者都收集为**游戏错误**（[§8](#sec-8)）。启动大约需要 1.2 s。
 
-不需要游戏的命令（`brain`、`report`、`gate`、`leaderboard`、`seeds`、`ranks`、`weights`）从不启动它（[参考 §4](/arch/simulator/reference/#sec-4)）。
+不需要游戏的命令（`brain`、`report`、`gate`、`leaderboard`、`seeds`、`ranks`）从不启动它（[参考 §4](/arch/simulator/reference/#sec-4)）。
 
 ## 3. 原生桩
 

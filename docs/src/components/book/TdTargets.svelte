@@ -1,5 +1,5 @@
 <script lang="ts">
-  // TD(λ) targets on the book's example run (docs: learning/loop §4): its 181 macro decisions with V v6-3-2's value of
+  // TD(λ) targets on the book's example run (docs: learning/loop §4): its 181 macro decisions with an earlier V's value of
   // each chosen option (src/data/book/learning-td.json, from src/data/macro-examples.json), and each decision's
   // λ-return (./td.ts) for the λ the reader picks. The run was won on floor 48: its outcome, as progress, is 49.
   import { scaleLinear } from 'd3';
@@ -96,9 +96,9 @@
   </div>
   <p class="v-caption">
     {say(lang, w(
-      'The whole SL run on seed 0SSL7NS01MU6, won on floor 48 (run ce13ba5116b7f48a, report 2026-10-30-eval-v6-3-2-clone). V is v6-3-2, a progress net: its unit is the expected progress, roughly the floor the run is expected to reach plus the share of the last fight’s enemy HP taken, so a won run’s outcome G is 48 + 1 = 49. V’s values are those of each decision’s chosen option, as sim afterstates valued it from the screen. Each target is G^λ_k = (1 − λ) V_{k+1} + λ G^λ_{k+1}, with G^λ for the last decision = G. Not used in training: V’s labels are Monte Carlo.',
-      '种子 0SSL7NS01MU6 上的一整局 SL，在第 48 层获胜（run ce13ba5116b7f48a，报告 2026-10-30-eval-v6-3-2-clone）。V 是 v6-3-2，一个 progress 网络：它的单位是期望进度，大致是这一局预计到达的楼层，加上最后一场战斗打掉的敌人 HP 比例，所以获胜的一局结果 G 是 48 + 1 = 49。V 的值是每个决策所选选项的值，由 sim afterstates 从画面预测。每个目标是 G^λ_k = (1 − λ) V_{k+1} + λ G^λ_{k+1}，最后一个决策的 G^λ = G。训练中没有用到：V 的标签是蒙特卡洛的。',
-      '種子 0SSL7NS01MU6 上的一整局 SL，在第 48 層獲勝（run ce13ba5116b7f48a，報告 2026-10-30-eval-v6-3-2-clone）。V 是 v6-3-2，一個 progress 網路：它的單位是期望進度，大致是這一局預計到達的樓層，加上最後一場戰鬥打掉的敵人 HP 比例，所以獲勝的一局結果 G 是 48 + 1 = 49。V 的值是每個決策所選選項的值，由 sim afterstates 從畫面預測。每個目標是 G^λ_k = (1 − λ) V_{k+1} + λ G^λ_{k+1}，最後一個決策的 G^λ = G。訓練中沒有用到：V 的標籤是蒙地卡羅的。',
+      'The whole SL run on seed 0SSL7NS01MU6, won on floor 48 (run ce13ba5116b7f48a). V is an earlier net, valued in progress: its unit is the expected progress, roughly the floor the run is expected to reach plus the share of the last fight’s enemy HP taken, so a won run’s outcome G is 48 + 1 = 49. V’s values are those of each decision’s chosen option, as sim afterstates valued it from the screen. Each target is G^λ_k = (1 − λ) V_{k+1} + λ G^λ_{k+1}, with G^λ for the last decision = G. Not used in training: V’s labels are Monte Carlo.',
+      '种子 0SSL7NS01MU6 上的一整局 SL，在第 48 层获胜（run ce13ba5116b7f48a）。V 是较早的一个网络，以进度为值：它的单位是期望进度，大致是这一局预计到达的楼层，加上最后一场战斗打掉的敌人 HP 比例，所以获胜的一局结果 G 是 48 + 1 = 49。V 的值是每个决策所选选项的值，由 sim afterstates 从画面预测。每个目标是 G^λ_k = (1 − λ) V_{k+1} + λ G^λ_{k+1}，最后一个决策的 G^λ = G。训练中没有用到：V 的标签是蒙特卡洛的。',
+      '種子 0SSL7NS01MU6 上的一整局 SL，在第 48 層獲勝（run ce13ba5116b7f48a）。V 是較早的一個網路，以進度為值：它的單位是期望進度，大致是這一局預計到達的樓層，加上最後一場戰鬥打掉的敵人 HP 比例，所以獲勝的一局結果 G 是 48 + 1 = 49。V 的值是每個決策所選選項的值，由 sim afterstates 從畫面預測。每個目標是 G^λ_k = (1 − λ) V_{k+1} + λ G^λ_{k+1}，最後一個決策的 G^λ = G。訓練中沒有用到：V 的標籤是蒙地卡羅的。',
     ))}
   </p>
 </div>

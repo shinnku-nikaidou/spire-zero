@@ -61,7 +61,7 @@ sequenceDiagram
 ```
 
 1. **宿主發問**。走線路時，宿主送出一條 `decision` 訊息：觀測、它的雜湊和合法動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。`BrainServer` 檢查它屬於一局、它的 id 大於上一個，並且雜湊確實是這個觀測的，然後把它作為戰鬥決策、選牌提示或宏觀決策交給這一局的 `Dispatcher`（[§5](#sec-5)）。在行程內時，模擬器直接詢問 `Dispatcher`。
-2. **Harness 記下它**。戰鬥決策的觀測加入敵人出招紀錄（`MoveRecord.Witness`）；宏觀決策結束這場戰鬥的紀錄（[§4](#sec-4)）。決策得到它在這一局裡的編號，它的大腦的計數加一，並抽取它的種子（`Dispatcher.cs:208-213`）。
+2. **Harness 記下它**。戰鬥決策的觀測加入敵人出招紀錄（`MoveRecord.Witness`）；宏觀決策結束這場戰鬥的紀錄（[§4](#sec-4)）。決策得到它在這一局裡的編號，它的大腦的計數加一，並抽取它的種子（`Dispatcher.cs:205-210`）。
 3. **一個大腦做決定**。這個決策介面的路由拿到決策、種子、SL 下節點的複本，以及這場戰鬥至今的出招。會搜尋的大腦把搜尋拆成工作行程請求，再合併回覆，回覆按請求順序回來（[路由、預算與種子 §2](/zh-tw/arch/harness/routing/#sec-2)）。
 4. **Harness 檢查並記錄**。不合法的回答會拋出例外。大腦的名字、計畫和候選成為這個決策的註記（`Dispatcher.Last`），記錄日誌時也成為決策日誌的一行。
 5. **宿主拿到推薦**：動作、大腦、它的計畫和候選，並回送請求的 id 和雜湊（[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。
@@ -157,7 +157,7 @@ public sealed class PublicRecord
 | `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 報告和排行榜（[評估：指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)） |
 | `Gate.cs` | `Gate`、`ChampionFile` | 配對的晉級門檻和冠軍檔案（[評估：晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)） |
 
-**`Dispatcher`**（`Dispatcher.cs:82-228`）建立時需要 run id、環境、四條路由、是否記錄日誌，以及在 `--afterstates clone` 下如何為宏觀一側開啟節點的複本：
+**`Dispatcher`**（`Dispatcher.cs:80-225`）建立時需要 run id、環境、四條路由、是否記錄日誌，以及在 `--afterstates clone` 下如何為宏觀一側開啟節點的複本：
 
 | 成員 | 內容 |
 |---|---|

@@ -1,6 +1,6 @@
 <script lang="ts">
   // A real CombatObservation, field by field (docs: protocol/observation §3): the start of a round from NoSL self-play
-  // that the combat net c2's file carries as a test state (src/data/book/round-start.json). Clicking a field shows what
+  // that an earlier combat net's file carried as a test state (src/data/book/round-start.json). Clicking a field shows what
   // it holds and where the game shows it.
   import data from '../../data/book/round-start.json';
   import { loadNames, type Lang, type Names, type Kind } from '../v/names.ts';
@@ -114,9 +114,9 @@
   </div>
   <p class="v-caption">
     {say(lang, w(
-      'A real start of a round from NoSL self-play, one of the test states the combat net c2’s file carries (weights/silent/c2.json), as Protocol serializes it: snake_case names, null fields left out. Names after a · are the game’s own, added here for reading; the observation sends ids only.',
-      '一个真实的回合开始，来自 NoSL 自我对弈，是战斗网络 c2 的文件附带的测试状态之一（weights/silent/c2.json），按 Protocol 的序列化：snake_case 名称，省略 null 字段。· 后面的名字取自游戏本身，是为了方便阅读加上的；观测只发送 id。',
-      '一個真實的回合開始，來自 NoSL 自我對弈，是戰鬥網路 c2 的檔案附帶的測試狀態之一（weights/silent/c2.json），按 Protocol 的序列化：snake_case 名稱，省略 null 欄位。· 後面的名字取自遊戲本身，是為了方便閱讀加上的；觀測只傳送 id。',
+      'A real start of a round from NoSL self-play, one of the test states an earlier combat net’s file carried, as Protocol serializes it: snake_case names, null fields left out. Names after a · are the game’s own, added here for reading; the observation sends ids only.',
+      '一个真实的回合开始，来自 NoSL 自我对弈，是较早一个战斗网络的文件附带的测试状态之一，按 Protocol 的序列化：snake_case 名称，省略 null 字段。· 后面的名字取自游戏本身，是为了方便阅读加上的；观测只发送 id。',
+      '一個真實的回合開始，來自 NoSL 自我對弈，是較早一個戰鬥網路的檔案附帶的測試狀態之一，按 Protocol 的序列化：snake_case 名稱，省略 null 欄位。· 後面的名字取自遊戲本身，是為了方便閱讀加上的；觀測只傳送 id。',
     ))}
   </p>
 </div>

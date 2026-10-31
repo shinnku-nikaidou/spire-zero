@@ -18,11 +18,11 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 - **平行**。一個決策的各個世界彼此獨立，所以 K 個世界放在 K 個工作行程上，大約只花一個世界的時間。遊戲的模型層不是執行緒安全的，pump 也是單執行緒的（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)），所以單位是行程，不是執行緒。
 - **可知範圍的邊界**。NoSL 下工作行程拿到的是觀測，從不是真實狀態，它從觀測建構自己的世界（[§5](#sec-5)）。傳給工作行程的是一條協定訊息，所以可以讀取和檢查。
 
-`WorkerPool` 在 `Sts2Ai.Harness` 裡（`Sts2Ai.Harness/WorkerPool.cs`），這個專案只透過協定型別看到遊戲；工作行程那一端是模擬器的 `serve` 指令（`Commands/Serve.cs`）。戰鬥大腦會搜尋（`pimc`，或 SL 下的 `plan`）或宏觀大腦會在複本上打（`--afterstates clone`）的冠軍會得到一個行程池，有 `--workers` 個行程，預設每個世界一個（`--worlds`，8）（`Brains/ChampionOptions.cs:25`）。
+`WorkerPool` 在 `Sts2Ai.Harness` 裡（`Sts2Ai.Harness/WorkerPool.cs`），這個專案只透過協定型別看到遊戲；工作行程那一端是模擬器的 `serve` 指令（`Commands/Serve.cs`）。戰鬥大腦會搜尋（`pimc`，或 SL 下的 `plan`）或宏觀大腦會在複本上打（`--afterstates clone`）的冠軍會得到一個行程池，有 `--workers` 個行程，預設每個世界一個（`--worlds`，8）（`Brains/ChampionOptions.cs:24`）。
 
 ## 2. 行程池
 
-**啟動**。行程池平行啟動它的工作行程，等到每一個都啟動完成（`Sts2Ai.Harness/WorkerPool.cs:33-50`）。工作行程就是再次啟動的同一個程式，用它的 apphost，或者如果宿主是那樣啟動的，就用 `dotnet` 加它的 dll（`Program.cs:20-24`），帶上 `serve` 和冠軍的葉節點選項（`--leaf`、`--combat-net`），也就是這個工作行程每次搜尋都用的葉節點。啟動大約要 1.2 s（[無頭宿主 §2](/zh-tw/arch/simulator/headless/#sec-2)）。完成時，工作行程寫出它的 hello：`{"game": "v0.111.0"}`，即它執行的遊戲版本。
+**啟動**。行程池平行啟動它的工作行程，等到每一個都啟動完成（`Sts2Ai.Harness/WorkerPool.cs:33-50`）。工作行程就是再次啟動的同一個程式，用它的 apphost，或者如果宿主是那樣啟動的，就用 `dotnet` 加它的 dll（`Program.cs:20-24`），帶上 `serve` 和冠軍的 `--combat-net`，也就是這個工作行程每次搜尋都用的葉節點。啟動大約要 1.2 s（[無頭宿主 §2](/zh-tw/arch/simulator/headless/#sec-2)）。完成時，工作行程寫出它的 hello：`{"game": "v0.111.0"}`，即它執行的遊戲版本。
 
 **線路**是工作行程 stdin 和 stdout 上每條訊息一行 JSON（[協定：世界與工作行程訊息 §4](/zh-tw/arch/protocol/worlds/#sec-4)）。請求帶著它的型別和一個 id；回覆帶著同一個 id、答案、請求失敗時的錯誤，以及服務它時記錄下的遊戲錯誤。工作行程的訊息沒有協定版本欄位：宿主和它的工作行程永遠是同一個建置。
 
@@ -47,15 +47,15 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 
 - **NoSL 下的 PIMC** 每個世界送一個請求，每個請求帶著所有第一個動作，再像行程內的 PIMC 那樣合併回覆（[NoSL PIMC：搜尋 §2](/zh-tw/arch/pimc/search/#sec-2)）。用逐次減半時，每一輪送一組這樣的請求，只帶還留著的第一個動作。
 - **SL 下的 PIMC** 只有一個世界，所以改為按第一個動作拆分：每個第一個動作一個請求，每個請求拿到那個動作在一次搜尋裡會分到的那份預算。每個請求有自己的換位備忘表，而一個行程裡的一次搜尋會在各個第一個動作之間共用它，所以答案可能和行程內的搜尋不同。
-- **SL 規劃器**在它束的每個回合裡，對每個保留的狀態送一個請求，帶上目前最好的完整路線作為剪枝的下限。一個回合的搜尋整個在一個請求裡，所以計畫就是單一行程會做出的那個（[SL 規劃器：束搜尋 §1](/zh-tw/arch/sl-planner/beam/#sec-1)）。用 `--leaf-prices v` 時，請求還帶著 V 對這場戰鬥各種結局的定價（`EndPrices`），工作行程需要一個 `--combat-net` 才能使用它們，否則請求失敗。
+- **SL 規劃器**在它束的每個回合裡，對每個保留的狀態送一個請求，帶上目前最好的完整路線作為剪枝的下限。一個回合的搜尋整個在一個請求裡，所以計畫就是單一行程會做出的那個（[SL 規劃器：束搜尋 §1](/zh-tw/arch/sl-planner/beam/#sec-1)）。
 - **複本上的 L0** 把一個決策的各條路徑按順序拆成 `min(paths, workers)` 個請求（`Sts2Ai.Harness/PooledClone.cs:14-24`）。一條路徑的後狀態只取決於複本和這條路徑，所以怎麼拆都不會改變結果（[宏觀大腦：搜尋 §6](/zh-tw/arch/macro-brain/search/#sec-6)）。
 
 ## 4. 工作行程：`serve`
 
-`serve [--leaf FILE] [--combat-net FILE]`（`Commands/Serve.cs`）啟動遊戲，寫出它的 hello，然後每行讀一個請求、每行寫一個回覆，直到 stdin 關閉。
+`serve [--combat-net FILE]`（`Commands/Serve.cs`）啟動遊戲，寫出它的 hello，然後每行讀一個請求、每行寫一個回覆，直到 stdin 關閉。
 
 - **stdout 就是線路**。遊戲啟動之前，`serve` 把真正的 stdout 留給線路，並把 `Console.Out` 指向 stderr，所以遊戲或任何函式庫印出的東西都進不了這條流（`Commands/Serve.cs:23-28`）。它的日誌也寫到 stderr；行程池為每個工作行程保留 stderr 的最後 20 行，供它死掉時的錯誤訊息使用。
-- **每種大腦一個，只建一次**：PIMC 和 SL 規劃器，用工作行程的葉節點。帶有 V 定價的 `SlTurnRequest` 會得到一個規劃器，它的葉節點用這些定價。
+- **每種大腦一個，只建一次**：PIMC 和 SL 規劃器，用工作行程的葉節點。
 - **失敗的請求會結束工作行程**。如果請求拋出例外，工作行程會回覆這個錯誤並以代碼 1 結束（`Commands/Serve.cs:55-59`）：遊戲可能停在已搭好的狀態（一場戰鬥還活著），之後的每個請求都會失敗。錯誤寫明例外的型別、最內層例外最上面的三個堆疊框以及它訊息的第一行，接下來幾行是完整的例外。
 - **每個請求的遊戲錯誤**。服務一個請求時記錄下的遊戲 `Log.Error` 行和未被觀察的任務錯誤，會隨它的回覆送回；宿主把它們和自己的一起計數（[無頭宿主 §8](/zh-tw/arch/simulator/headless/#sec-8)）。
 

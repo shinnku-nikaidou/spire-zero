@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A real gate replayed pair by pair (docs: evaluation/gates §3): the four promoted NoSL gates, each from the two
+  // A real gate replayed pair by pair (docs: evaluation/gates §3): four NoSL floor gates, each from the two
   // committed reports (src/data/book/eval-gates.json), with Gate.Sprt's rule (evalStats.ts, src/Sts2Ai.Harness/Gate.cs:62-107);
   // the replay reaches the verdict, pair and LLR the champion file stored. "Simulate" draws made-up pairs instead.
   import { scaleLinear } from 'd3';
@@ -11,7 +11,6 @@
 
   let { lang = 'en' }: { lang?: Lang } = $props();
 
-  const short = (label: string) => label.replace(' · l0', ' + L0').replace(' (re-baseline 3)', ', re-baseline 3');
   const realPairs = (g: (typeof data.gates)[number]): Pair[] =>
     g.d.map((d, k) => ({ d, championWon: g.championWon.includes(k), challengerWon: g.challengerWon.includes(k) }));
 
@@ -114,7 +113,7 @@
 <div class="vfig" style="position: relative;">
   <div class="v-tabs">
     {#each data.gates as g, i (g.commit)}
-      <button aria-pressed={tab === i} onclick={() => ((tab = i), (hover = null))}>{short(g.champion.label)} → {short(g.challenger.label)}</button>
+      <button aria-pressed={tab === i} onclick={() => ((tab = i), (hover = null))}>{say(lang, w(`Gate ${i + 1}`, `门槛 ${i + 1}`, `門檻 ${i + 1}`))}</button>
     {/each}
     <button aria-pressed={tab === SIM} onclick={() => ((tab = SIM), (hover = null))}>{say(lang, w('Simulate', '模拟', '模擬'))}</button>
   </div>
@@ -189,10 +188,10 @@
   </div>
   {#if gate}
     <p class="v-caption v-num">
-      {say(lang, w('Stored in the champion file at', '冠军文件在', '冠軍檔案在'))} <code>{gate.commit}</code>{say(lang, w(':', ' 存的：', ' 存的：'))}
+      {say(lang, w('Stored in the champion file:', '冠军文件存的：', '冠軍檔案存的：'))}
       {gate.stored.verdict} {say(lang, w('after', '用了', '用了'))} {gate.stored.decided} {say(lang, w('of', '对，共', '對，共'))} {gate.stored.pairs}{say(lang, w(' pairs', ' 对', ' 對'))}, LLR {fmt(lang, gate.stored.llr, 4)},
       {say(lang, w('floor difference', '楼层差', '樓層差'))} {signed(gate.stored.floor_diff_mean, 3)}.
-      {say(lang, w('Champion', '冠军', '冠軍'))}: {gate.champion.name} ({fmt(lang, gate.champion.floor, 2)}); {say(lang, w('challenger', '挑战者', '挑戰者'))}: {gate.challenger.name} ({fmt(lang, gate.challenger.floor, 2)}).
+      {say(lang, w('Mean floor: champion', '平均楼层：冠军', '平均樓層：冠軍'))} {fmt(lang, gate.champion.floor, 2)}, {say(lang, w('challenger', '挑战者', '挑戰者'))} {fmt(lang, gate.challenger.floor, 2)}.
     </p>
   {:else if oc}
     <p class="v-caption v-num">

@@ -11,10 +11,10 @@
   let { lang = 'en' }: { lang?: Lang } = $props();
 
   const PRESETS = [
-    { name: 'v6-3-2', hits: 23, of: 300 },
-    { name: 'v6-3-1', hits: 13, of: 300 },
-    { name: 'v6-2', hits: 1, of: 300 },
-    { name: 'n2-b0.03', hits: 0, of: 200 },
+    { name: '', hits: 23, of: 300 },
+    { name: '', hits: 13, of: 300 },
+    { name: '', hits: 1, of: 300 },
+    { name: '', hits: 0, of: 200 },
     { name: 'FableBot', hits: 71, of: 343 },
   ];
   let hits = $state(23);
@@ -41,7 +41,7 @@
 
 <div class="vfig">
   <div class="v-tabs">
-    {#each PRESETS as p (p.name)}
+    {#each PRESETS as p (`${p.hits}/${p.of}`)}
       <button aria-pressed={k === p.hits && n === p.of} onclick={() => ((hits = p.hits), (of = p.of))}>{p.name} {p.hits}/{p.of}</button>
     {/each}
   </div>
@@ -73,9 +73,9 @@
   </svg>
   <p class="v-caption">
     {say(lang, w(
-      'The Wilson interval is the one every report and the leaderboard print (z = 1.96). The normal interval p̂ ± 1.96·√(p̂(1−p̂)/n) is shown only to compare: with few wins it reaches below 0, and with none it has no width at all. Presets: the whole-run reports of v6-3-2, v6-3-1 and v6-2 on promotion-1-300, n2-b0.03 on promotion-1 (any of the 0-win reports), and FableBot’s 71 of 343 Ironclad runs.',
-      '每份报告和排行榜印的都是 Wilson 区间（z = 1.96）。正态区间 p̂ ± 1.96·√(p̂(1−p̂)/n) 只是拿来比较：赢得少时它会跌到 0 以下，一局都没赢时宽度是 0。预设：v6-3-2、v6-3-1、v6-2 在 promotion-1-300 上的整局报告，n2-b0.03 在 promotion-1 上的报告（任何一份 0 胜的报告都一样），以及 FableBot 的 343 局 Ironclad 赢 71 局。',
-      '每份報告和排行榜印的都是 Wilson 區間（z = 1.96）。常態區間 p̂ ± 1.96·√(p̂(1−p̂)/n) 只是拿來比較：贏得少時它會跌到 0 以下，一局都沒贏時寬度是 0。預設：v6-3-2、v6-3-1、v6-2 在 promotion-1-300 上的整局報告，n2-b0.03 在 promotion-1 上的報告（任何一份 0 勝的報告都一樣），以及 FableBot 的 343 局 Ironclad 贏 71 局。',
+      'The Wilson interval is the one every report and the leaderboard print (z = 1.96). The normal interval p̂ ± 1.96·√(p̂(1−p̂)/n) is shown only to compare: with few wins it reaches below 0, and with none it has no width at all. Presets: three earlier nets’ whole-run reports on promotion-1-300, one on promotion-1 with no win, and FableBot’s 71 of 343 Ironclad runs.',
+      '每份报告和排行榜印的都是 Wilson 区间（z = 1.96）。正态区间 p̂ ± 1.96·√(p̂(1−p̂)/n) 只是拿来比较：赢得少时它会跌到 0 以下，一局都没赢时宽度是 0。预设：三个较早的网络在 promotion-1-300 上的整局报告，一份 promotion-1 上 0 胜的报告，以及 FableBot 的 343 局 Ironclad 赢 71 局。',
+      '每份報告和排行榜印的都是 Wilson 區間（z = 1.96）。常態區間 p̂ ± 1.96·√(p̂(1−p̂)/n) 只是拿來比較：贏得少時它會跌到 0 以下，一局都沒贏時寬度是 0。預設：三個較早的網路在 promotion-1-300 上的整局報告，一份 promotion-1 上 0 勝的報告，以及 FableBot 的 343 局 Ironclad 贏 71 局。',
     ))}
   </p>
 </div>

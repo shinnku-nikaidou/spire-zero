@@ -11,7 +11,7 @@ The planner's budget today is a few numbers: the beam $B$, the easy beam $E$, th
 
 ## 1. Effort levels
 
-`--effort low|medium|high|max` sets the planner's budget in one option (`Budget.Effort`); an option given beside it (`--beam`, `--easy-beam`, `--nodes`, `--replan`, `--loss-plans`) overrides its part. Medium is the default since 2026-10-28, and the SL champion plays it. Every level searches 300 nodes per state and turn and plays an unproved losing plan for one turn before planning again:
+`--effort low|medium|high|max` sets the planner's budget in one option (`Budget.Effort`); an option given beside it (`--beam`, `--easy-beam`, `--nodes`, `--replan`, `--loss-plans`) overrides its part. Medium is the default, and the SL champion plays it. Every level searches 300 nodes per state and turn and plays an unproved losing plan for one turn before planning again:
 
 | effort | beam $B$ | easy beam $E$ | losing plans $L$ | whole runs, paired by seed with high |
 |---|---|---|---|---|
@@ -20,13 +20,13 @@ The planner's budget today is a few numbers: the beam $B$, the easy beam $E$, th
 | high | 8 | 8 | no limit | the reference: 200 seeds, mean floor 28.54, 412 s per run |
 | max | 16 | 16 | no limit | not measured in whole runs |
 
-The runs were SL runs with the macro brain of the time (L0 with n2-b0.03) on the seeds `promotion-1`, both sides of a pair side by side under the same load; the gate is [Evaluation: gates §7](/en/arch/evaluation/gates/#sec-7)'s. Two later changes cut the cost of a restore and left every plan the same (high replays its runs on the same seeds bit for bit): the full beam takes the dive's turns ([Beam §3](/en/arch/sl-planner/beam/#sec-3)), and a world reads its node's checkpoint once instead of at every restore. With both, medium reached the same floor as before on all 84 seeds it played, in 0.84 of its time: 174 s per run against high's 320 s on those seeds.
+The runs were SL runs with the macro brain of the time (L0 with an earlier V) on the seeds `promotion-1`, both sides of a pair side by side under the same load; the gate is [Evaluation: gates §7](/en/arch/evaluation/gates/#sec-7)'s. Two later changes cut the cost of a restore and left every plan the same (high replays its runs on the same seeds bit for bit): the full beam takes the dive's turns ([Beam §3](/en/arch/sl-planner/beam/#sec-3)), and a world reads its node's checkpoint once instead of at every restore. With both, medium reached the same floor as before on all 84 seeds it played, in 0.84 of its time: 174 s per run against high's 320 s on those seeds.
 
 **By room.** `--elite-x` and `--boss-x` multiply $B$ and $E$ in elite and boss fights. Beam 4 with × 2 at elites and bosses, and 3 losing plans, went −0.72 ± 0.95 floors against high on 171 seeds in 0.61 of its time and failed the not-worse gate after 92 pairs, so it is not used; medium is as fast and passed.
 
 ## 2. The low budget
 
-Self-play needs many runs, and its labels need fights played well but not perfectly. Plan v6's elite gauntlet played its self-play and its gates at a cheaper budget, and plan v7's whole-run self-play uses it too, while the reports and gates on whole runs stay at medium ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)):
+Self-play needs many runs, and its labels need fights played well but not perfectly. V's and the combat net's data was played at a cheaper budget, while the reports and gates on whole runs stay at medium ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)):
 
 ```bash
 Sts2Ai.SimWorker run --env SL --policy plan --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 …
@@ -38,7 +38,7 @@ That is a beam of 4 at 150 nodes per state and turn, the full width always (an e
 
 **Restores.** Profiling a worker showed about 88% of its busy time spent restoring states: loading the node's clone and replaying a path to the state a turn's search starts from ([Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)). The search itself and the leaves are the rest. So the levers that save time are the ones that start fewer searches, the beam's width and the number of plans; the nodes per turn are not: on the panel, 150 nodes per state and turn searched about as many nodes as 300, since most turns end their search before the limit.
 
-**Whole runs.** The decision logs of v6-3-2's evaluation (300 SL runs on `promotion-1-300`, the SL champion at medium effort, 5,375 fights) say where a run's fight time goes. "Planned once" counts the fights whose first plan held to the end; a lost fight's HP lost is all the HP it began with.
+**Whole runs.** The decision logs of an evaluation of an earlier V and an earlier combat net (300 SL runs on `promotion-1-300`, the planner at medium effort, 5,375 fights) say where a run's fight time goes. "Planned once" counts the fights whose first plan held to the end; a lost fight's HP lost is all the HP it began with.
 
 | fights | number | plans per fight | planned once | s per fight | share of the fight time | HP lost |
 |---|---|---|---|---|---|---|
@@ -74,7 +74,7 @@ The planner wins every fight PIMC wins, and 1, 5 and 3 more. On the fights both 
 
 **Whole runs.** With the macro brain the same as the NoSL champion's of the time, the planner against that champion's PIMC on `promotion-1` #0–39: floor 28.32 against 23.98, **+4.35 ± 2.56 floors** (95%), further on 17 seeds, as far on 18, less far on 5; the act 1 boss passed in 28 runs against 22, the act 2 boss reached in 20 against 13. A run took 491 s against 126 s then; the effort levels and the cheaper restores have since cut that by more than half ([§1](#sec-1)).
 
-**Now.** The SL champion, the planner at medium effort with L0 v7-1f on the clone, reaches floor 41.57 on average on the 100 seeds of `promotion-1-100` and wins 40 runs (40%), in 345 s per run. The combat brain has not changed since 2026-10-28: the gains since then are the macro brain's ([Learning: the experiment log §1](/en/arch/learning/experiments/#sec-1)).
+**Now.** With an earlier combat net, the planner at medium effort with L0 v7-1f on the clone reached floor 41.57 on average on the 100 seeds of `promotion-1-100` and won 40 runs (40%), in 345 s per run. The SL champion plays the same with c7-2 in its leaves, and has no result here yet.
 
 ## 6. Weaknesses and open questions
 

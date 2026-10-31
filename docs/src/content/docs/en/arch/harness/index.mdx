@@ -61,7 +61,7 @@ sequenceDiagram
 ```
 
 1. **The host asks.** Over the wire, the host sends a `decision` message: the observation, its hash and the legal actions ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). `BrainServer` checks that it belongs to a run, that its id is above the last one, and that the hash is the observation's, then hands it to the run's `Dispatcher` as a combat, card-prompt or macro decision ([§5](#sec-5)). In process, the simulator asks the `Dispatcher` directly.
-2. **Harness notes it.** A combat decision's observation joins the record of enemy moves (`MoveRecord.Witness`); a macro decision ends the combat's record ([§4](#sec-4)). The decision gets its number in the run, its brain's count goes up, and its seed is drawn (`Dispatcher.cs:208-213`).
+2. **Harness notes it.** A combat decision's observation joins the record of enemy moves (`MoveRecord.Witness`); a macro decision ends the combat's record ([§4](#sec-4)). The decision gets its number in the run, its brain's count goes up, and its seed is drawn (`Dispatcher.cs:205-210`).
 3. **One brain decides.** The route for the surface gets the decision, the seed, in SL the node's clone, and the combat's moves so far. A searching brain splits its search into worker requests and merges the replies, which come back in request order ([Routing, budgets and seeds §2](/en/arch/harness/routing/#sec-2)).
 4. **Harness checks and logs.** An answer that is not legal throws. The brain's name, plan and candidates become the decision's note (`Dispatcher.Last`), and, when logging, one line of the decision log.
 5. **The host gets a recommendation**: the action, the brain, its plan and candidates, with the request's id and hash echoed ([Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)).
@@ -157,7 +157,7 @@ public sealed class PublicRecord
 | `Reports.cs` | `Rate`, `BossEntry`, `Metrics`, `EvalReport`, `Leaderboard` | reports and the leaderboard ([Evaluation: metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)) |
 | `Gate.cs` | `Gate`, `ChampionFile` | the paired gate and champion files ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)) |
 
-**`Dispatcher`** (`Dispatcher.cs:82-228`), made with the run id, the environment, the four routes, whether to log, and, for `--afterstates clone`, how to open the node's clone for the macro side:
+**`Dispatcher`** (`Dispatcher.cs:80-225`), made with the run id, the environment, the four routes, whether to log, and, for `--afterstates clone`, how to open the node's clone for the macro side:
 
 | member | what |
 |---|---|

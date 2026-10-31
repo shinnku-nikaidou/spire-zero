@@ -45,7 +45,7 @@ flowchart LR
   G -->|"失敗"| X["丟棄"]
   D -.-> TD["TD(λ)、ExIt<br/>（規劃中）"]
   TD -.-> F
-  P["SPSA、LLM 補丁<br/>（已移除 / 規劃中）"] -.-> G
+  P["SPSA、LLM 補丁<br/>（未使用 / 規劃中）"] -.-> G
 ```
 
 1. **自我對弈**。冠軍在訓練種子上打對局，其中 ε 比例的宏觀決策隨機抽取，讓資料呈現其他選項會導向什麼（[循環 §2](/zh-tw/arch/learning/loop/#sec-2)、[§9](/zh-tw/arch/learning/loop/#sec-9)）。
@@ -59,7 +59,7 @@ flowchart LR
 | 部分 | 狀態 | 位置 |
 |---|---|---|
 | 自我對弈：整局，以 ε 均勻抽取 | 已實作 | `run --explore`，[循環 §2](/zh-tw/arch/learning/loop/#sec-2) |
-| 按 V 或搜尋的估值做 softmax 探索 | 已實作，只有較舊的作業用過 | `run --macro-explore`、`--combat-explore`，[循環 §9](/zh-tw/arch/learning/loop/#sec-9) |
+| 按 V 或搜尋的估值做 softmax 探索 | 已實作；下一個資料集裡和均勻抽取並用 | `run --macro-explore`、`--combat-explore`，[循環 §9](/zh-tw/arch/learning/loop/#sec-9) |
 | V 的訓練，蒙地卡羅標籤 | 已實作 | `learn/v/`，[宏觀大腦：從風險值到價值 §5](/zh-tw/arch/macro-brain/value/#sec-5) |
 | 戰鬥網路的訓練，蒙地卡羅標籤 | 已實作 | `learn/combat/`，[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/) |
 | V 的頭目戰標籤（頭目模擬戰、門前狀態） | 已實作，未使用 | `learn/bosslab.py`，[參考 §9](/zh-tw/arch/learning/reference/#sec-9) |
@@ -67,7 +67,7 @@ flowchart LR
 | 晉級門檻：模擬器的 SPRT，以及勝場的配對下界 | 已實作 | `gate`、`learn/challenge.py`、`learn/gauntlet.py`，[循環 §8](/zh-tw/arch/learning/loop/#sec-8) |
 | TD(λ) 目標 | <Badge text="規劃中" variant="caution" /> | [循環 §4](/zh-tw/arch/learning/loop/#sec-4) |
 | 專家迭代（以搜尋的估值作標籤，學到的先驗） | <Badge text="規劃中" variant="caution" /> | [循環 §5](/zh-tw/arch/learning/loop/#sec-5) |
-| 用 SPSA 調校手設的權重 | 已移除（`9b9d170`） | [循環 §6](/zh-tw/arch/learning/loop/#sec-6) |
+| 用 SPSA 調校手設的權重 | 未使用 | [循環 §6](/zh-tw/arch/learning/loop/#sec-6) |
 | LLM 補丁提案 | <Badge text="規劃中" variant="caution" /> | [循環 §7](/zh-tw/arch/learning/loop/#sec-7) |
 | 基於位能函數的獎勵塑形、特權訓練、對抗局部最佳解的存檔庫 | <Badge text="規劃中" variant="caution" /> | [循環 §11](/zh-tw/arch/learning/loop/#sec-11)–[§13](/zh-tw/arch/learning/loop/#sec-13) |
 
@@ -77,4 +77,4 @@ flowchart LR
 - [循環](/zh-tw/arch/learning/loop/)：自我對弈、蒙地卡羅、TD(λ)、專家迭代、SPSA、LLM 補丁和晉級門檻、探索、信用分配、獎勵塑形、特權資訊和局部最佳解，每一項都附上已實作的部分。
 - [參考](/zh-tw/arch/learning/reference/)：算力、資料目錄、清單、帳本、權重名稱、網路檔案、C# 推論、每個腳本及其選項、測試和未解決的問題。
 
-冠軍見[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)；目前訓練過的每個網路及其量測結果，見附錄[實驗紀錄](/zh-tw/arch/learning/experiments/)。
+冠軍見[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)。本專案保留兩個網路，V v7-1f 和戰鬥網路 c7-2；網路和資料的歷史在帳本 `eval/silent/ledger.md` 裡。

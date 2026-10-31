@@ -11,7 +11,6 @@
 
   let { lang = 'en' }: { lang?: Lang } = $props();
 
-  const name = (label: string) => label.replace(/^.* · /, '').replace(/^l0 /, '').replace(/ clone$/, '');
   let pick = $state(0);
   const p = $derived(data.pairs[pick]);
   const n = $derived(p.floors.length);
@@ -70,7 +69,7 @@
   <div class="v-tabs">
     {#each data.pairs as q, i (i)}
       <button aria-pressed={pick === i} onclick={() => ((pick = i), (hover = null))}>
-        {name(q.b.label)} − {name(q.a.label)} ({q.env}, {q.seedSet})
+        {q.b.label} − {q.a.label} ({q.env}, {q.seedSet})
       </button>
     {/each}
   </div>
@@ -86,8 +85,8 @@
       <line x1={M.l} x2={M.l + S} y1={sy(f)} y2={sy(f)} stroke="var(--v-axis)" stroke-dasharray="2 3" />
     {/each}
     <line x1={sx(0)} y1={sy(0)} x2={sx(50)} y2={sy(50)} stroke="var(--v-ink-2)" />
-    <text x={M.l} y={H - 4}>{say(lang, w('floor of', '楼层：', '樓層：'))} {name(p.a.label)}</text>
-    <text x={M.l - 30} y={M.t + S / 2} transform="rotate(-90 {M.l - 30} {M.t + S / 2})" text-anchor="middle">{say(lang, w('floor of', '楼层：', '樓層：'))} {name(p.b.label)}</text>
+    <text x={M.l} y={H - 4}>{say(lang, w('floor of', '楼层：', '樓層：'))} {p.a.label}</text>
+    <text x={M.l - 30} y={M.t + S / 2} transform="rotate(-90 {M.l - 30} {M.t + S / 2})" text-anchor="middle">{say(lang, w('floor of', '楼层：', '樓層：'))} {p.b.label}</text>
     {#each cells as c, i (`${c.a},${c.b}`)}
       <circle
         cx={sx(c.a)}
@@ -122,15 +121,15 @@
   {#if hover !== null}
     {@const c = cells[hover]}
     <div class="v-tip v-num" style="left: 1rem; top: 3rem;">
-      <strong>{c.n}</strong> {say(lang, w(c.n === 1 ? 'seed' : 'seeds', '个种子', '個種子'))}: {name(p.a.label)} {say(lang, w('floor', '楼层', '樓層'))} {c.a}, {name(p.b.label)} {say(lang, w('floor', '楼层', '樓層'))} {c.b}
-      {#if c.aWon + c.bWon > 0}<br />{say(lang, w('won by', '通关：', '通關：'))} {name(p.a.label)} {c.aWon}, {name(p.b.label)} {c.bWon}{/if}
+      <strong>{c.n}</strong> {say(lang, w(c.n === 1 ? 'seed' : 'seeds', '个种子', '個種子'))}: {p.a.label} {say(lang, w('floor', '楼层', '樓層'))} {c.a}, {p.b.label} {say(lang, w('floor', '楼层', '樓層'))} {c.b}
+      {#if c.aWon + c.bWon > 0}<br />{say(lang, w('won by', '通关：', '通關：'))} {p.a.label} {c.aWon}, {p.b.label} {c.bWon}{/if}
     </div>
   {/if}
   <p class="v-caption">
     {say(lang, w(
-      `Each point is the seeds where the two reached the same pair of floors, larger for more seeds; blue above the diagonal (the second went further), orange below, grey on it; a ring marks a cell with a won run. The dashed lines are the act 1 and act 2 bosses (floors 17 and 33); a run that dies at the act 3 boss or wins ends on 48. The paired interval is the mean of the per-seed differences ± 1.96 SE; the unpaired one treats the two reports as independent samples. Pairing narrows the floor interval; for wins it changes nothing, since almost no seed is won by both.`,
-      `每个点是两边到达同一对楼层的那些种子，种子越多点越大；对角线上方蓝色（第二个走得更远），下方橙色，线上灰色；有通关局的格子加一圈外框。虚线是第 1、2 幕 Boss（第 17、33 层）；死在第 3 幕 Boss 或通关的局都停在第 48 层。配对区间是逐种子差值的平均 ± 1.96 SE；不配对区间把两份报告当成独立样本。配对让楼层区间变窄；对通关则毫无帮助，因为几乎没有两边都通关的种子。`,
-      `每個點是兩邊到達同一對樓層的那些種子，種子越多點越大；對角線上方藍色（第二個走得更遠），下方橙色，線上灰色；有通關局的格子加一圈外框。虛線是第 1、2 幕 Boss（第 17、33 層）；死在第 3 幕 Boss 或通關的局都停在第 48 層。配對區間是逐種子差值的平均 ± 1.96 SE；不配對區間把兩份報告當成獨立樣本。配對讓樓層區間變窄；對通關則毫無幫助，因為幾乎沒有兩邊都通關的種子。`,
+      `Each point is the seeds where the two reached the same pair of floors, larger for more seeds; blue above the diagonal (the second went further), orange below, grey on it; a ring marks a cell with a won run. The dashed lines are the act 1 and act 2 bosses (floors 17 and 33); a run that dies at the act 3 boss or wins ends on 48. The paired interval is the mean of the per-seed differences ± 1.96 SE; the unpaired one treats the two reports as independent samples. Pairing narrows the floor interval; for wins here it changes almost nothing, since wins are rare and almost no seed is won by both.`,
+      `每个点是两边到达同一对楼层的那些种子，种子越多点越大；对角线上方蓝色（第二个走得更远），下方橙色，线上灰色；有通关局的格子加一圈外框。虚线是第 1、2 幕 Boss（第 17、33 层）；死在第 3 幕 Boss 或通关的局都停在第 48 层。配对区间是逐种子差值的平均 ± 1.96 SE；不配对区间把两份报告当成独立样本。配对让楼层区间变窄；这里对通关几乎没有帮助，因为通关少，几乎没有两边都通关的种子。`,
+      `每個點是兩邊到達同一對樓層的那些種子，種子越多點越大；對角線上方藍色（第二個走得更遠），下方橙色，線上灰色；有通關局的格子加一圈外框。虛線是第 1、2 幕 Boss（第 17、33 層）；死在第 3 幕 Boss 或通關的局都停在第 48 層。配對區間是逐種子差值的平均 ± 1.96 SE；不配對區間把兩份報告當成獨立樣本。配對讓樓層區間變窄；這裡對通關幾乎沒有幫助，因為通關少，幾乎沒有兩邊都通關的種子。`,
     ))}
   </p>
 </div>

@@ -8,7 +8,7 @@ This page tracks progress. The chapters say how each part works; this page says 
 
 ## 1. In one paragraph
 
-The AI plays whole Silent A0 runs headless, in the game's own code, in both environments. In **SL** the champion is the SL planner with the combat net c7-2 in combat and L0 with V v7-1f outside it; its gate has no result yet. In **NoSL** the champion is PIMC with the same two nets, with no report yet. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built. The net structure and the environment's inputs and outputs are settled; the code and these pages are being reduced to these two nets.
+The AI plays whole Silent A0 runs headless, in the game's own code, in both environments. In **SL** the champion is the SL planner with the combat net c7-2 in combat and L0 with V v7-1f outside it; its gate has no result yet. In **NoSL** the champion is PIMC with the same two nets, which it has never been gated or trained with. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built. The net structure and the environment's inputs and outputs are settled; the code and these pages are being reduced to these two nets.
 
 ## 2. Each part
 
@@ -25,7 +25,7 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 | SL combat brain | built: the SL planner, a beam search over whole turns on the node's clone; on the combat panel it wins every combat PIMC wins and 9 more of 120 ([The SL planner](/en/arch/sl-planner/)) |
 | combat redesign | <Badge text="planned" variant="caution" /> SL = pruning + net, NoSL = Monte Carlo + net, on one `TurnEnds`, validated by one gate at a time; not implemented ([Combat brain §3](/en/arch/combat-brain/#sec-3), [§6](/en/arch/combat-brain/#sec-6)) |
 | macro brain | built: L0 values each option's afterstate with V, predicted from the screen in NoSL or played on the node's clone in SL; V is pure V, read from the run's ids and raw state alone ([Macro brain](/en/arch/macro-brain/)) |
-| learning | built: self-play with even-draw exploration, V's and the combat net's training, the gauntlet's report and gate, the wins gate for plan v7. Planned: TD(λ), expert iteration, LLM patch proposals; SPSA removed ([Learning: the loop](/en/arch/learning/loop/)) |
+| learning | built: self-play with even-draw exploration, V's and the combat net's training, the wins gate. Planned: TD(λ), expert iteration, LLM patch proposals ([Learning: the loop](/en/arch/learning/loop/)) |
 | evaluation | built: reports, leaderboards per environment, seed sets, the paired full-run gate, champion files ([Evaluation](/en/arch/evaluation/)) |
 | mod | assist mode built on every surface, in both environments: the panel, the map and combat marks, the settings tab, the SL record. In the real game 89 of 90 SL decisions asked the same on their clones (the other one's cause is fixed); a combat's first SL decision waits 3–15 s for the planner. Not yet watched through a whole real run; auto-play planned ([Mod](/en/arch/mod/), [Output](/en/arch/output/)) |
 | compute | time-boxed jobs on several remote hosts, about 50 SL runs at once; data kept on a storage host, analysed and trained on a lab host with two GPUs ([Learning: reference §1](/en/arch/learning/reference/#sec-1)) |
@@ -46,9 +46,8 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 5. **New game code that touches Godot nodes** without the TestMode guard, outside events (where the transpiler covers it), shows up only as game errors in `run` batches ([Simulator: headless host §4](/en/arch/simulator/headless/#sec-4)).
 6. **Harmony patches in the real game against tiered JIT**: the runtime may recompile a method and silently drop a patch ([Mod: auto-play and safety §5](/en/arch/mod/auto/#sec-5)).
 7. **The combat brains' blind spots.** Card prompts are answered by a fixed rule (`p0`), not searched; NoSL's search sees this turn only; the SL planner proves few of its plans, and an unproved loss gets at most 3 plans in a row, so a combat that only a later plan would win is lost ([The SL planner: beam §5](/en/arch/sl-planner/beam/#sec-5)–[§6](/en/arch/sl-planner/beam/#sec-6)).
-8. **V's training game.** v6-3-2 was trained where plain monster combats are free; about half of its losses in whole runs come between two bosses, and the gauntlet's order of two nets did not always hold in whole runs. Plan v7 trains on whole runs again ([Learning: the experiment log §9](/en/arch/learning/experiments/#sec-9)).
-9. **V's labels carry the later exploration draws of their runs**, and V is not told a run's ε ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)).
-10. **SL in the real game without the node's clone**: the mod holds back only combat decisions, so a brain whose macro side plays on the clone would use the previous node's ([Mod: the SL record §6](/en/arch/mod/sl-record/#sec-6)).
+8. **V's labels carry the later exploration draws of their runs**, and V is not told a run's ε ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)).
+9. **SL in the real game without the node's clone**: the mod holds back only combat decisions, so a brain whose macro side plays on the clone would use the previous node's ([Mod: the SL record §6](/en/arch/mod/sl-record/#sec-6)).
 
 ## 4. What comes next
 
@@ -56,15 +55,15 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 
 1. <Badge text="done 2026-10-26" variant="success" /> Whole runs headless with every surface; Protocol's run-level types and card prompt context; GameBridge for every surface; the combat world API, PIMC and the combat panel.
 
-2. <Badge text="done 2026-10-27" variant="success" /> The worker pool; Harness's dispatch, seeds and decision log; L0 with V v0; the first reports and the full-run gate; the combat net c2 as PIMC's leaf.
+2. <Badge text="done 2026-10-27" variant="success" /> The worker pool; Harness's dispatch, seeds and decision log; L0; the first reports and the full-run gate; a combat net as PIMC's leaf.
 
-3. <Badge text="done by 2026-10-28" variant="success" /> The SL clone in the pool and the SL planner; the SL leaderboard's first champion; V v2's n2-b0.03 promoted; the mod's assist mode in the real game, with the SL record.
+3. <Badge text="done by 2026-10-28" variant="success" /> The SL clone in the pool and the SL planner; the mod's assist mode in the real game, with the SL record.
 
-4. <Badge text="done 2026-10-30" variant="success" /> Pure V (pure-1-g), then plan v6's elite gauntlet: three generations of self-play with even draws, v6-1, v6-2 and v6-3-2, each passing the gauntlet's paired gate; v6-3-2 becomes both champions' V and wins 23 of 300 whole SL runs.
+4. <Badge text="done 2026-10-31" variant="success" /> V read from the run's ids and raw state alone, trained on whole runs and deciding by P(win): V v7-1f. How each step measured is in `eval/silent/ledger.md`.
 
-5. **Plan v7, now**: V trained and gated on whole SL runs, with every combat fought; V decides by P(win) (`v.train --objective win`) and is gated on paired wins (`learn/gauntlet.py`). Generation 1's self-play and gates are done: v7-1 won 145 of 500 against v6-3-2's 51, and v7-1f, the same data with the map input fixed, 40 of 100 against v7-1's 24, and became both champions' V. Generation 2 has not started ([Macro brain: weaknesses and next steps](/en/arch/macro-brain/next/)).
+5. <Badge text="done 2026-11-01" variant="success" /> The combat net c7-2, for SL and NoSL alike ([The combat net](/en/arch/combat-brain/network/)); only V v7-1f and c7-2 remain in the code and in `weights/`.
 
-6. **Now:** the combat net c7-2, for SL and NoSL alike ([The combat net](/en/arch/combat-brain/network/)). NoSL's items wait while SL comes first: tuning PIMC's worlds and nodes, the fusion panel's measurement ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+6. **Next:** data at ascension 10 played by these two nets. NoSL's items wait while SL comes first: tuning PIMC's worlds and nodes, the fusion panel's measurement ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
 
 7. The mod's auto-play: the executor, the auto-run driver, the R4 pipeline and the R3 ≡ R4 test ([Mod: auto-play and safety](/en/arch/mod/auto/)).
 

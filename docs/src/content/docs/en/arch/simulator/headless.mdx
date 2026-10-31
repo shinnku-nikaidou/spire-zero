@@ -36,7 +36,7 @@ Headless, only the model layer runs. The nodes are never created; where a screen
 
 Then it subscribes to the game's log (`Log.LogCallback`, every line at Error or above) and to faults of tasks nobody awaited (`TaskHelper.UnobservedFault`), and collects both as **game errors** ([§8](#sec-8)). Booting takes about 1.2 s.
 
-Commands that need no game (`brain`, `report`, `gate`, `leaderboard`, `seeds`, `ranks`, `weights`) never boot it ([Reference §4](/en/arch/simulator/reference/#sec-4)).
+Commands that need no game (`brain`, `report`, `gate`, `leaderboard`, `seeds`, `ranks`) never boot it ([Reference §4](/en/arch/simulator/reference/#sec-4)).
 
 ## 3. The native stub
 

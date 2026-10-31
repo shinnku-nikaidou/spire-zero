@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The first three nodes of the run v6-3-2 won (src/data/book/example-nodes.json): each node's steps, where the game
+  // The first three nodes of the book's example run (src/data/book/example-nodes.json): each node's steps, where the game
   // itself saves, and what NoSL and SL may know at each step (docs: environments/information §3).
   import data from '../../data/book/example-nodes.json';
   import { loadNames, type Lang, type Names } from '../v/names.ts';

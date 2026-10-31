@@ -14,7 +14,7 @@
     json: string;
     note: Words;
   }
-  const CHAMPION = 'combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone';
+  const CHAMPION = 'combat plan c7-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone';
   const STEPS: Step[] = [
     {
       from: 'host',
@@ -38,7 +38,7 @@
     },
     {
       from: 'brain',
-      json: '{"type":"recommendation","v":1,"decision_id":0,"obs_hash":"…","action":"event:0","brain":"l0 v6-3-2 clone"}',
+      json: '{"type":"recommendation","v":1,"decision_id":0,"obs_hash":"…","action":"event:0","brain":"l0 v7-1f clone"}',
       note: w('The answer, with the brain that chose it. The macro brain sends no plan here; a combat search would add its plan and candidates.', '回答，附上做出选择的大脑。宏观大脑在这里不附计划；战斗搜索会附上它的计划与候选。', '回答，附上做出選擇的大腦。宏觀大腦在這裡不附計畫；戰鬥搜尋會附上它的計畫與候選。'),
     },
     {
@@ -58,7 +58,7 @@
     },
     {
       from: 'brain',
-      json: '{"type":"recommendation","v":1,"decision_id":1,"obs_hash":"…","action":"pick:2","brain":"l0 v6-3-2 clone"}',
+      json: '{"type":"recommendation","v":1,"decision_id":1,"obs_hash":"…","action":"pick:2","brain":"l0 v7-1f clone"}',
       note: w('A pick, by the options’ canonical indexes.', '一次挑选，用选项的规范顺序下标。', '一次挑選，用選項的規範順序索引。'),
     },
     {

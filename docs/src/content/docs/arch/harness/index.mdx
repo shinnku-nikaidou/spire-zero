@@ -61,7 +61,7 @@ sequenceDiagram
 ```
 
 1. **宿主提问**。通过线路时，宿主发来一条 `decision` 消息：观测、它的哈希和合法动作（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。`BrainServer` 检查它属于一局、它的 id 大于上一个、哈希确实是这个观测的，然后把它作为战斗、选牌提示或宏观决策交给这一局的 `Dispatcher`（[§5](#sec-5)）。在进程内时，模拟器直接询问 `Dispatcher`。
-2. **Harness 记下它**。战斗决策的观测加入敌人出招记录（`MoveRecord.Witness`）；宏观决策结束这场战斗的记录（[§4](#sec-4)）。这个决策得到它在这一局里的序号，它的大脑的计数加一，并抽取它的种子（`Dispatcher.cs:208-213`）。
+2. **Harness 记下它**。战斗决策的观测加入敌人出招记录（`MoveRecord.Witness`）；宏观决策结束这场战斗的记录（[§4](#sec-4)）。这个决策得到它在这一局里的序号，它的大脑的计数加一，并抽取它的种子（`Dispatcher.cs:205-210`）。
 3. **一个大脑做决定**。这个决策界面的路由拿到决策、种子、SL 下节点的克隆，以及这场战斗至今的出招。会搜索的大脑把搜索拆成工作进程请求，再合并回复，回复按请求的顺序返回（[路由、预算与种子 §2](/arch/harness/routing/#sec-2)）。
 4. **Harness 检查并记日志**。不合法的回答会抛异常。大脑的名字、计划和候选成为这个决策的注记（`Dispatcher.Last`），开着日志时，还成为决策日志里的一行。
 5. **宿主得到一条推荐**：动作、大脑、它的计划和候选，并重复请求的 id 和哈希（[协议：线路 §7](/arch/protocol/wire/#sec-7)）。
@@ -157,7 +157,7 @@ public sealed class PublicRecord
 | `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 报告和排行榜（[评估：指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)） |
 | `Gate.cs` | `Gate`、`ChampionFile` | 配对的晋级门槛和冠军文件（[评估：晋级门槛 §6](/arch/evaluation/gates/#sec-6)） |
 
-**`Dispatcher`**（`Dispatcher.cs:82-228`），创建时给定 run id、环境、四个路由、是否记日志，以及在 `--afterstates clone` 下如何为宏观一侧打开节点的克隆：
+**`Dispatcher`**（`Dispatcher.cs:80-225`），创建时给定 run id、环境、四个路由、是否记日志，以及在 `--afterstates clone` 下如何为宏观一侧打开节点的克隆：
 
 | 成员 | 内容 |
 |---|---|

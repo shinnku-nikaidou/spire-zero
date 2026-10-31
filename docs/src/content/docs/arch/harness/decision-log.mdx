@@ -16,7 +16,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 - `run --log FILE` 在每一局结束后追加它的各行（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。中途被杀掉的一局什么都不留。`--log` 和 `--brain` 同时给出时会被拒绝，因为后者的决策由大脑记日志。
 - `brain --log FILE` 在一局的 `run_end` 时写出它的各行，所以没发这条消息就断开的宿主什么都不留（[概览 §5](/arch/harness/#sec-5)）。
 
-这些行是 `DecisionEntry` record（`Dispatcher.cs:63-67`），像每个协议类型一样序列化：snake_case 的名字，值为 null 的字段省略（[协议 §4](/arch/protocol/#sec-4)）。日志和对局记录放在一起，在数据目录里（[学习：参考 §3](/arch/learning/reference/#sec-3)）。
+这些行是 `DecisionEntry` record（`Dispatcher.cs:61-65`），像每个协议类型一样序列化：snake_case 的名字，值为 null 的字段省略（[协议 §4](/arch/protocol/#sec-4)）。日志和对局记录放在一起，在数据目录里（[学习：参考 §3](/arch/learning/reference/#sec-3)）。
 
 谁读这份日志：
 
@@ -36,7 +36,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 | `decision_id` | int | 这个决策在这一局里的序号，从 0 开始，三种决策一起计数（[§4](#sec-4)） | 同上 | 同上 |
 | `env` | string | `NoSL` 或 `SL` | 同上 | 同上 |
 | `surface` | string | `combat` | `card_choice`，两侧都是 | 这个决策的决策界面 |
-| `brain` | string | 战斗路由的名字：`pimc`、`plan c2`、`pimc c2 explore 0.003`…… | 提示一侧的：战斗中是 `p0`；战斗外是 L0 的名字或 `random` | 宏观路由的 |
+| `brain` | string | 战斗路由的名字：`pimc`、`plan c7-2`、`pimc c7-2 explore 0.003`…… | 提示一侧的：战斗中是 `p0`；战斗外是 L0 的名字或 `random` | 宏观路由的 |
 | `obs_hash` | 十六进制 string | 战斗观测的哈希 | 选牌提示的哈希 | 整个观测的哈希（[§4](#sec-4)） |
 | `legal` | int | 合法动作的个数 | 提示的选项个数 | 合法动作的个数 |
 | `chosen` | string | 战斗动作的文本：`play:C[:T]`、`potion:S[:T]`、`end_turn`（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)） | 选中的选项下标，用逗号连接，不带 `pick:` | 动作 |
@@ -45,7 +45,6 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 | `budget` | Budget? | 路由配置的预算，在乘以房间的倍数之前；有预算的路由的每一行都有，包括只有一个合法动作的步骤和沿用计划的步骤（[路由、预算与种子 §4](/arch/harness/routing/#sec-4)） | 从不 | 从不 |
 | `seed` | integer | 这个决策的种子（[路由、预算与种子 §5](/arch/harness/routing/#sec-5)） | 同上，不过策略不读它 | 同上，不过策略不读它 |
 | `elapsed_ms` | number | 路由的用时 | 策略的用时 | 策略的用时；它的计划是之后才问的，不计时 |
-| `features` | `{string: number}`? | – | – | 总是有：整局观测上 V v0 的特征（[§7](#sec-7)） |
 | `obs` | CombatObservation? | 总是有 | – | – |
 | `run_view` | RunView? | – | – | 总是有 |
 | `history` | EnemyTurns[]? | 总是有，可能为空（[§7](#sec-7)） | – | – |
@@ -95,9 +94,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 **`run_view`**，在每个宏观行上：大脑看到的整局观测，约 6 KB（[协议：观测与动作 §2](/arch/protocol/observation/#sec-2)）。V 就用它训练（[宏观大脑：从风险值到价值](/arch/macro-brain/value/)）。
 
-**`features`**，在每个宏观行上，不管是哪个大脑做的决策：整局观测上 V v0 手工设计的特征（楼层、HP、最大 HP、金币、药水、遗物、牌、不能打出的牌、升级、牌组的平均伤害、格挡和抽牌，以及前方预计的精英、休息处、商店、宝箱和未知）。现在没有训练器读它们，V 的网络也不读（[学习：参考 §8](/arch/learning/reference/#sec-8)）。
-
-战斗外的选牌提示既没有 `run_view`，也没有 `features`。
+战斗外的选牌提示没有 `run_view`。
 
 ## 8. 测试
 
@@ -120,7 +117,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 | `DispatcherTests.RefusesNodeCheckpointsInNoSL` | NoSL 下拒收节点检查点 |
 | `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | 克隆保留精英连战的规则 |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`、`AWorkerStuckTwiceFailsTheCall` | 池的那一次重试 |
-| `GateTests`（10）、`EvalReportTests`（2） | 评估的晋级门槛和报告（[评估：晋级门槛 §12](/arch/evaluation/gates/#sec-12)） |
+| `GateTests`（10）、`EvalReportTests`（2） | 评估的晋级门槛和报告（[评估：晋级门槛 §11](/arch/evaluation/gates/#sec-11)） |
 
 **规划中的测试**：
 

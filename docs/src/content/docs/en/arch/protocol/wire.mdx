@@ -89,7 +89,7 @@ In SL the brain may know the current node exactly, a node being a map point from
 
 **Timing.** Both are sent lazily, just before the next decision: the checkpoint if a new node has started since, then each decision of the node not yet sent (`Brains/RunBrains.cs:88-99`). A node's travel, its last decision, is therefore never sent: the next decision is in the next node, which starts with its own checkpoint.
 
-**Rules** (`Sts2Ai.Harness/Dispatcher.cs:182-197`): node messages in a NoSL run are refused; node indexes must increase; `seq` must equal the number of actions the node has so far; an SL combat decision before any checkpoint is an error. The brain does not answer node messages: one it refuses fails the run's next decision with the reason.
+**Rules** (`Sts2Ai.Harness/Dispatcher.cs:179-194`): node messages in a NoSL run are refused; node indexes must increase; `seq` must equal the number of actions the node has so far; an SL combat decision before any checkpoint is an error. The brain does not answer node messages: one it refuses fails the run's next decision with the reason.
 
 **What SL lets through.** The checkpoint carries the game's save, which holds the run's seed and random streams, so in SL the seed reaches the brain after all. SL may know it: the node's outcomes are the game's own ([Environments: information §2](/en/arch/environments/information/#sec-2)). The brain reads the checkpoint only by loading it in a worker, as a clone sealed at the node's exit.
 

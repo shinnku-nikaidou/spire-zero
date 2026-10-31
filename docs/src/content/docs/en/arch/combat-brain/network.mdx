@@ -45,7 +45,7 @@ The width of the last dimension of the potion head is the size of the potion tab
 
 **The rule: the state of the fight is in the input; what follows from an id is the net's to learn.** A card's printed damage follows from its id and upgrade, so it is not read. A card's current cost can change during a fight, and no id says so, so it is read. Nothing about how to play is written in: no card is called good, and no monster's move order is listed.
 
-Everything comes from the observation a player sees, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)), by `encode.tokens`:
+Everything comes from the observation a player sees, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)), by `encode.tokens` (`learn/combat/encode.py:113-155`):
 
 | input | what is read |
 |---|---|
@@ -63,9 +63,9 @@ Everything comes from the observation a player sees, plus the public record of t
 
 **The context.** The tokens fed are `character:ID`, `encounter:ID`, `room:ID` and `act:N`, but the table lists only encounters, so the other three read as the unknown entry: the encounter implies them.
 
-**Token tables.** The net file holds one table per kind of id: `cards`, `modifiers`, `powers`, `enemies`, `intents`, `relics`, `potions`, `context`, `orbs`, `allies`, `relic_status`. A table is built from the training runs: an id seen fewer than 3 times reads as entry 0, one shared `<unk>`.
+**Token tables.** The net file holds one table per kind of id: `cards`, `modifiers`, `powers`, `enemies`, `intents`, `relics`, `potions`, `context`, `orbs`, `allies`, `relic_status`. A table is built from the training runs: an id seen fewer than 3 times reads as entry 0, one shared `<unk>` (`vocab`, `learn/combat/train.py:39-73`).
 
-**Scales.** Numbers are scaled to about one, then capped at ±10, since a few states show huge numbers (an erupting Waterfall Giant's HP):
+**Scales.** Numbers are scaled to about one, then capped at ±10, since a few states show huge numbers (an erupting Waterfall Giant's HP; `learn/combat/encode.py:62-110`):
 
 | number | scale |
 |---|---|
@@ -84,7 +84,7 @@ Everything comes from the observation a player sees, plus the public record of t
 
 A dead enemy or ally is left out. An enemy without an id reads `<none>`, an ally without one, the player's, `<player>`.
 
-**The input tensors**, in the order of the graph's inputs (`encode.INPUTS`). Every list is padded to the longest in the batch, and to at least 1, with a mask of 1 for what is present and 0 for padding:
+**The input tensors**, in the order of the graph's inputs (`encode.INPUTS`, `learn/combat/encode.py:20-59`). Every list is padded to the longest in the batch, and to at least 1, with a mask of 1 for what is present and 0 for padding:
 
 | name | shape | content |
 |---|---|---|
@@ -111,7 +111,7 @@ A dead enemy or ally is left out. An enemy without an id reads `<none>`, an ally
 
 ## 3. The cards
 
-A pile is a multiset: the order of its cards means nothing, and its size varies. So each card goes through the same small network on its own, and the results are added up, a Deep Set (Zaheer et al., 2017). A sum reads any number of cards in any order.
+A pile is a multiset: the order of its cards means nothing, and its size varies. So each card goes through the same small network on its own, and the results are added up, a Deep Set (Zaheer et al., 2017). A sum reads any number of cards in any order. All the encoders below are `Net.encode` (`learn/combat/net.py:202-265`).
 
 **The card's vector.** A card with id $c$, upgrade level $u$, cost $k$, pile $l$ and modifiers $m$ with amounts $a_m$ becomes 32 numbers:
 
@@ -187,7 +187,7 @@ $$
 l < s \quad\text{and}\quad l + 0.025 > s - 1.
 $$
 
-Every other bucket has its logit set to $-10^4$, which leaves it exactly 0 after the softmax (`Net.reachable`). The rule is inside the graph, so C# holds none of it. A softmax over the open classes then gives the 51 chances, the graph's output `outcome`.
+Every other bucket has its logit set to $-10^4$, which leaves it exactly 0 after the softmax (`Net.reachable`, `learn/combat/net.py:194-200`). The rule is inside the graph, so C# holds none of it. A softmax over the open classes then gives the 51 chances, the graph's output `outcome`.
 
 **Why "still to be lost" and not "left at the end".** The value is formed as *what the state holds, exactly, plus what the net says is still to come* ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)). So the HP held now counts in full, and two states of a beam differ by their true HP before the net says anything. Every head follows this rule: it predicts a change from the state, and what the state holds counts in full.
 
@@ -224,9 +224,9 @@ The embeddings' sizes depend on the token tables, which depend on the training d
 
 The trainer computes the net in PyTorch; the brain runs it in C#. They must agree, and they do so through the net file ([Learning: reference §7](/en/arch/learning/reference/#sec-7)):
 
-- **Export.** `learn/combat/export.py` writes the net as an ONNX graph inside the file, with the mask, the softmax and the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, the buckets, the training report and 16 held-out round starts with the outputs the trainer gave them, among them an attack of several hits, a held potion and low HP.
-- **Inference.** `CombatNet` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) follows `encode.py`: it builds the same tensors, and ONNX Runtime runs the graph.
-- **The check.** `CombatNet.Load` refuses the file unless it gives the 16 states the trainer's outputs to within $10^{-3}$. A difference in how either side reads a state stops the file from loading.
+- **Export.** `learn/combat/export.py` (`net_file`, `:67-101`) writes the net as an ONNX graph inside the file, with the mask, the softmax and the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, the buckets, the training report and 16 held-out round starts with the outputs the trainer gave them, among them an attack of several hits, a held potion and low HP.
+- **Inference.** `CombatNet` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) follows `encode.py`: `Graph` (`:91-114`) builds the same tensors, and ONNX Runtime runs the graph.
+- **The check.** `CombatNet.Load` (`:55-72`) refuses the file unless it gives the 16 states the trainer's outputs to within $10^{-3}$. A difference in how either side reads a state stops the file from loading.
 
 ## 10. What the structure cannot express
 

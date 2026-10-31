@@ -25,12 +25,12 @@ import { Badge } from '@astrojs/starlight/components';
 **冠军的名字**。一局的各个大脑合起来就是它的冠军，名字由 `Dispatcher.Champion` 给出：
 
 ```text
-combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone
+combat plan c7-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone
 ```
 
-这是本书示例对局的冠军：叶子里用战斗网络 c2、用 low 预算的 SL 规划器；战斗中的提示用 `p0`；宏观决策和战斗外的选牌提示用 L0，它带着 V v6-3-2，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：战斗大脑说出它的叶子（默认叶子除外）、V 给它叶子的结局定价时说 `v prices`，以及它的探索（`explore T`）；L0 说出它的 V（V 是初始权重时除外）、`clone`，以及它的探索（softmax 为 `explore T`，均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:38-62`）。
+这是 SL 冠军：叶子里用战斗网络 c7-2、用 medium 预算的 SL 规划器；战斗中的提示用 `p0`；宏观决策和战斗外的选牌提示用 L0，它带着 V v7-1f，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：战斗大脑说出它的战斗网络（如果有的话）和它的探索（`explore T`）；L0 说出它的 V、`clone`，以及它的探索（softmax 为 `explore T`，均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:37-60`）。
 
-**环境决定战斗大脑**。宏观大脑在两种环境里是同一个；战斗大脑则不是（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。冠军工厂在 SL 之外拒绝 `plan` 和 `--afterstates clone`，也拒绝与环境不符的叶子。`brain` 命令同时服务两种环境：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的（[概览 §5](/arch/harness/#sec-5)）。
+**环境决定战斗大脑**。宏观大脑在两种环境里是同一个；战斗大脑则不是（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。冠军工厂在 SL 之外拒绝 `plan` 和 `--afterstates clone`。`brain` 命令同时服务两种环境：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的（[概览 §5](/arch/harness/#sec-5)）。
 
 ## 2. 战斗路由
 
@@ -44,7 +44,7 @@ combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-
 - **SL**：唯一的世界是节点的克隆，每个首个动作用一个 `sl_world` 请求来搜索它，这样各个工作进程分担它。每个请求保留自己的状态备忘表，而单个进程里的搜索会在各首个动作之间共用一张，所以两者并不完全相同。
 - **沿用计划**（`--follow`）：路由为这一局保留一个 `TurnPlan`。只要战斗显示的是计划在这一步之前预期的观测，计划的这一步就不经搜索直接打出；否则这个决策重新搜索，并标为重新规划（[NoSL PIMC：预算 §2](/arch/pimc/budget/#sec-2)）。
 
-**池里的 SL 规划器**（`PooledPlanner.Route`，[SL 规划器](/arch/sl-planner/)）。每局一个 `SlRoute`，把战斗剩下的部分规划一次，然后沿用这个计划，只在某一步对不上或计划用完时才重新规划（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。一个计划就是 `SlPlanner.Search`，束的每个回合按保留的每个状态发一个 `sl_turn` 请求，用房间的预算。用 `--leaf-prices v` 时，每个计划都带着 V 给这场战斗各种结局定的价格，每场战斗算一次，由第一次规划时的这一局算出（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。没有节点克隆时这个路由会抛异常（它只在 SL 下打），要用 V 的价格却没有整局观测时也会。
+**池里的 SL 规划器**（`PooledPlanner.Route`，[SL 规划器](/arch/sl-planner/)）。每局一个 `SlRoute`，把战斗剩下的部分规划一次，然后沿用这个计划，只在某一步对不上或计划用完时才重新规划（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。一个计划就是 `SlPlanner.Search`，束的每个回合按保留的每个状态发一个 `sl_turn` 请求，用房间的预算。没有节点克隆时这个路由会抛异常（它只在 SL 下打）。
 
 **探索**（`CombatRoute.Exploring`，仅自我对弈，`--combat-explore T`，[学习：循环 §9](/arch/learning/loop/#sec-9)）。搜索返回两个或更多候选时，首个动作按它们值的 softmax 从中抽取：每个的概率 ∝ exp((v − best) / T)，T 以叶子的单位计（`Brain/Exploration.cs`）。如果抽中的正是搜索自己的选择，结果不变。否则打出抽中的动作，候选不变，没有计划，因为那个计划是原选择的；如果它的估值比原选择低 T/100 以上，就标为探索（差距更小时就等于平手）；它不标为重新规划。
 
@@ -109,7 +109,7 @@ combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-
 
 **run id** 是这一局种子作为 JSON 字符串（含引号）的 FNV-1a 64 位哈希，写成十六进制：种子 `0SSL7NS01MU6` 得到 run `ce13ba5116b7f48a`。大脑看到的是 run id，从来不是种子（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。
 
-**一个决策的种子**由 run id 和决策的序号抽取；序号从 0 开始计这一局的每个决策，战斗决策、选牌提示和宏观决策都一样（`Dispatcher.cs:208-227`）：
+**一个决策的种子**由 run id 和决策的序号抽取；序号从 0 开始计这一局的每个决策，战斗决策、选牌提示和宏观决策都一样（`Dispatcher.cs:205-224`）：
 
 ```text
 H        = FNV-1a 64 of the JSON string run_id
@@ -128,7 +128,7 @@ seed(i)  = z xor (z >> 31)
 
 SL PIMC 和规划器搜索唯一的精确世界，忽略它；宏观策略和提示策略从不收到它。
 
-**占位策略和探索**从按局播种的 .NET 生成器里取随机数，每个流一个：`Random(FNV(run_id + stream))`，占位策略的流是 `""`，战斗路由的 softmax 是 `:explore combat`，L0 的 softmax 是 `:explore`，L0 的均匀抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:44-55`）。所以一局在任何进程里、通过线路时都打得一样，不管是否记日志。
+**占位策略和探索**从按局播种的 .NET 生成器里取随机数，每个流一个：`Random(FNV(run_id + stream))`，占位策略的流是 `""`，战斗路由的 softmax 是 `:explore combat`，L0 的 softmax 是 `:explore`，L0 的均匀抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:41-53`）。所以一局在任何进程里、通过线路时都打得一样，不管是否记日志。
 
 **看顺序，不看时序**。一次搜索的各个请求并行运行，但池按请求的顺序返回它们的回复（[模拟器：工作进程池 §2](/arch/simulator/pool/#sec-2)），候选先按它们到达的减半轮次排序，再按值排序，平手时保持合法动作的顺序（结束回合，然后是牌，然后是药水）。哪个工作进程先完成，从来改变不了回答。`run --check` 让整局都遵守这一点（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。
 

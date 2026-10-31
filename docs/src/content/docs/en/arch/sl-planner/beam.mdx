@@ -34,7 +34,7 @@ The bound assumes that the fight neither heals nor gives potions. A few cards, p
 
 ## 3. The greedy dive
 
-Pruning needs a floor, and the full beam has none at its first turn. So before the full beam, the planner runs a beam of one: at each turn it keeps the single best state by the leaf. This **greedy dive** reaches the end of the fight in one line, usually a win (in v6-3-2's evaluation, the first plan won 99.8% of the hallway fights that were won, [Budget §3](/en/arch/sl-planner/budget/#sec-3)). Its value is the floor that prunes the full beam from its first turn on.
+Pruning needs a floor, and the full beam has none at its first turn. So before the full beam, the planner runs a beam of one: at each turn it keeps the single best state by the leaf. This **greedy dive** reaches the end of the fight in one line, usually a win (in a 300-run evaluation, the first plan won 99.8% of the hallway fights that were won, [Budget §3](/en/arch/sl-planner/budget/#sec-3)). Its value is the floor that prunes the full beam from its first turn on.
 
 - When the dive reaches the decision's bound, nothing can beat it, and the full beam is skipped.
 - The dive asks each of its turns for every end, with no floor, and keeps them. The full beam passes through the same states early on (its first turn always), and takes those turns' ends from the dive instead of searching them again ([Turn search §4](/en/arch/sl-planner/turn-search/#sec-4)). On the panel's unproved plans that saved 14–16% of the nodes, and every plan stayed the same.
@@ -70,7 +70,7 @@ A plan that loses and is not proved may be wrong: the beam may have dropped the 
 
 The route keeps the count (`SlRoute`): a fight ends its run of losing plans with its first plan that is not an unproved loss.
 
-What this looks like, from a panel of act 1 elites and bosses played with Silent's starter deck at full HP (medium effort, 2026-10-30; `panel --player plan --env SL --combat-net c2 --effort medium --act 0 --rooms elite|boss --trace`). Each plan is listed as: how it ends, the actions of it that were played, the turns the dive and the beam searched, and the nodes:
+What this looks like, from a panel of act 1 elites and bosses played with Silent's starter deck at full HP (an earlier combat net, medium effort, 2026-10-30; `panel --player plan --env SL --combat-net FILE --effort medium --act 0 --rooms elite|boss --trace`). Each plan is listed as: how it ends, the actions of it that were played, the turns the dive and the beam searched, and the nodes:
 
 | fight | result | plans | time |
 |---|---|---|---|

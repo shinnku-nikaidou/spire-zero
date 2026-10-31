@@ -1,6 +1,6 @@
 ---
 title: 'Evaluation: how strong, and is it stronger'
-description: 'How the AI''s strength is measured and how a change is accepted: the two questions, the sim-to-real ladder R1–R4, the two leaderboards, what is built and what plan v7 gates on, and a map of this chapter.'
+description: 'How the AI''s strength is measured and how a change is accepted: the two questions, the sim-to-real ladder R1–R4, the two leaderboards, what is built and how a new net is gated, and a map of this chapter.'
 sidebar:
   label: Overview
   badge:
@@ -15,17 +15,17 @@ Read first: [Environments](/en/arch/environments/) for SL and NoSL, and [Simulat
 
 <Aside title="Status">
 
-Built: whole runs in the simulator in both environments, rung R1 (`run --seeds FILE --records FILE`); the report (`report`) with its void rule; the leaderboards (`leaderboard`); seed files and their generator (`seeds`); the paired SPRT gate (`gate`) with champion files and `--promote`, and `learn/challenge.py`, which takes a challenger through it in chunks; the combat panel (`panel`); and `learn/gauntlet.py`'s paired lower-bound gate, used on the elite gauntlet in plan v6 and on whole runs, by wins, in plan v7. Planned: rungs R2–R4, the act-level gate, an A/A test, `NumReloads` and a NoSL save-export count among the must-be-zero metrics, calibration and search-compute numbers in reports, a run of the final set. Plan v7's first generation is being played; no plan v7 gate result is in git yet ([§4](#sec-4)).
+Built: whole runs in the simulator in both environments, rung R1 (`run --seeds FILE --records FILE`); the report (`report`) with its void rule; the leaderboards (`leaderboard`); seed files and their generator (`seeds`); the paired SPRT gate (`gate`) with champion files and `--promote`; the combat panel (`panel`); and `learn/gauntlet.py`'s paired lower-bound gate on whole runs, by wins. Planned: rungs R2–R4, the act-level gate, an A/A test, `NumReloads` and a NoSL save-export count among the must-be-zero metrics, calibration and search-compute numbers in reports, a run of the final set.
 
 </Aside>
 
 ## 1. Two questions
 
-**How strong is it?** One run says little. Strength is a rate over many runs on seeds fixed in advance: the share of runs won, with its interval, and while wins are rare the mean floor reached ([Metrics, seeds and reports §1](/en/arch/evaluation/metrics/#sec-1)). The SL champion, the SL planner with the macro brain's V v7-1f, won 40 of the 100 seeds of `promotion-1-100`: 40%, with a 95% interval of 30.9–49.8%, and reached floor 41.57 on average. Every evaluation becomes a **report**, and every report goes on its environment's **leaderboard** ([§3](#sec-3)).
+**How strong is it?** One run says little. Strength is a rate over many runs on seeds fixed in advance: the share of runs won, with its interval, and while wins are rare the mean floor reached ([Metrics, seeds and reports §1](/en/arch/evaluation/metrics/#sec-1)). Every evaluation becomes a **report**, and every report goes on its environment's **leaderboard** ([§3](#sec-3)). A report of the current champion is pending.
 
-**Did a change make it stronger?** A challenger (a new V, a new search budget, a code fix) faces the **champion**, the best accepted version, on the same seeds, pair by pair. The test it must pass is a **gate** ([Gates](/en/arch/evaluation/gates/)). Pairing by seed lets the luck both sides share cancel, and a sequential test stops as soon as the evidence is clear. V n2-b0.03 passed its gate against n2-b0.1 after 136 of 200 pairs, by 1.78 floors on average.
+**Did a change make it stronger?** A challenger (a new net, a new search budget, a code fix) faces the **champion**, the best accepted version, on the same seeds, pair by pair. The test it must pass is a **gate** ([Gates](/en/arch/evaluation/gates/)). Pairing by seed lets the luck both sides share cancel, and a sequential test can stop as soon as the evidence is clear.
 
-The two answers are kept apart. A leaderboard lists every complete report, accepted or not; the champion changes only through a gate or a recorded decision, written into the environment's **champion file** ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). v6-3-2, an earlier champion, became one by its report, with no gate.
+The two answers are kept apart. A leaderboard lists every complete report, accepted or not; the champion changes only through a gate or a recorded decision, written into the environment's **champion file** ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)).
 
 ```mermaid
 flowchart TD
@@ -45,7 +45,7 @@ Results from the simulator count only if they carry over to the real game. The l
 
 | rung | world | measures | today |
 |---|---|---|---|
-| R1 | a whole run in the simulator, driven by Harness | the policy | built: whole runs in both environments; SL is the main context, and 10 of the 23 committed reports are SL |
+| R1 | a whole run in the simulator, driven by Harness | the policy | built: whole runs in both environments; SL is the main context |
 | R2 | R1 + the observation round trip (decisions only on worlds built from observations) | observation reconstruction | not a rung of its own: NoSL search already builds its worlds from observations, and `run --check` checks every observation's round trip |
 | R3 | a whole run on the real DLL with real unlocks, the lobby's act selection and the live protocol | world setup and interfaces | none |
 | R4 | the Steam game with the mod | everything | none: the mod's auto-run driver is planned ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)) |
@@ -79,8 +79,8 @@ Never put both environments in one table or in one promotion decision. The gate 
 
 </Aside>
 
-- **Now.** The two champions share the macro brain and one V; their combat brains differ ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). Since 2026-10-31 both champion files name V v7-1f, chosen by its SL gate; NoSL plays it with screen afterstates, since the clone is SL's. No NoSL report of that champion exists yet, so the NoSL file names the SL report: a NoSL gate refuses to pair with it (the environments differ), and the NoSL leaderboard marks no champion.
-- **SL − NoSL.** The difference between a champion's results in the two environments, on the same seeds, is the value of in-node information. It is the formal version of plan v1's omniscient-against-resampled ablation (local note `tmp/notes/plan.md`). For reference, spire-mentor, a prior-art project, lost 22.8–25.5 percentage points (pp) of win rate without its cheat, which covered the whole run (`tmp/notes/refs/strong-bots.md:42`); ours is node-level only, so a smaller difference is expected. `leaderboard` computes it for each champion name that has a report in both environments (`Harness/Reports.cs:205-222`), and no board has shown it: SL champions are named `combat plan …`, NoSL ones `combat pimc …`, so no name has both. The nearest pair is V n2-b0.03 on `promotion-1`: SL with the planner 28.25, NoSL with PIMC 26.16, +2.09 floors paired by seed (standard error 0.55, computed from the two reports); it measures the planner together with the information, since the combat brains differ.
+- **Now.** The two champions share the macro brain, one V (`v7-1f`) and one combat net (`c7-2`); their combat search differs ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). NoSL plays V with screen afterstates, since the clone is SL's. No NoSL report of that champion exists, so the NoSL file names an SL report: a NoSL gate refuses to pair with it (the environments differ), and the NoSL leaderboard marks no champion.
+- **SL − NoSL.** The difference between a champion's results in the two environments, on the same seeds, is the value of in-node information. For reference, spire-mentor, a prior-art project, lost 22.8–25.5 percentage points (pp) of win rate without its cheat, which covered the whole run (`tmp/notes/refs/strong-bots.md:42`); ours is node-level only, so a smaller difference is expected. `leaderboard` computes it for each champion name that has a report in both environments (`Harness/Reports.cs:205-222`), and no board has shown it: SL champions are named `combat plan …`, NoSL ones `combat pimc …`, so no name has both. The nearest pair is one earlier V on `promotion-1`: SL with the planner 28.25, NoSL with PIMC 26.16, +2.09 floors paired by seed (standard error 0.55, computed from the two reports); it measures the planner together with the information, since the combat brains differ.
 - How a board is built, field by field: [Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9).
 
 ## 4. Where it stands
@@ -89,21 +89,20 @@ Never put both environments in one table or in one promotion decision. The gate 
 |---|---|---|
 | whole runs in both environments (R1), run records | built | [Metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8) |
 | reports, the void rule, the Wilson interval | built | [Metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2), [§7](/en/arch/evaluation/metrics/#sec-7) |
-| seed sets `promotion-1`, `-300`, `-500` and `final-1`, and their generator | built; `final-1` never run | [Metrics, seeds and reports §5](/en/arch/evaluation/metrics/#sec-5) |
+| the seed sets, `promotion-1` and its extensions and `final-1`, and their generator | built; `final-1` never run | [Metrics, seeds and reports §5](/en/arch/evaluation/metrics/#sec-5) |
 | leaderboards | built; the SL − NoSL section never shown | [Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9) |
 | the combat panel | built | [Gates §5](/en/arch/evaluation/gates/#sec-5) |
-| the paired SPRT gate `gate`, champion files, promotion, `learn/challenge.py` | built; promoted four NoSL champions on 2026-10-27 and 2026-10-28, and no SL one | [Gates §6](/en/arch/evaluation/gates/#sec-6) |
-| the wins gate of plan v7, `learn/gauntlet.py --against` on whole runs | built; no result yet | [Gates §10](/en/arch/evaluation/gates/#sec-10) |
-| the elite gauntlet's gate (plan v6) | built, used, ended | [Gates §11](/en/arch/evaluation/gates/#sec-11) |
+| the paired SPRT gate `gate`, champion files, promotion | built | [Gates §6](/en/arch/evaluation/gates/#sec-6) |
+| the wins gate, `learn/gauntlet.py --against` on whole runs | built, in use | [Gates §10](/en/arch/evaluation/gates/#sec-10) |
 | act-level gate, A/A test, McNemar's test | planned | [Gates §4](/en/arch/evaluation/gates/#sec-4), [§5](/en/arch/evaluation/gates/#sec-5) |
 | R2–R4 | planned | [§2](#sec-2) |
 
-**Plan v7's gate.** Since plan v7 (2026-10-30), V is trained and judged in whole SL runs again, by its chance to win ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)). Its gate plays the challenger on the 500 seeds of `promotion-1-500` with the champion's planner (the SL planner c2 at medium effort, `--afterstates clone`, no exploration), pairs its runs with the champion's by seed, and promotes it when the 95% one-sided lower bound of the mean difference in wins, 1 or 0 per run, is above 0. If both nets of a generation pass, the one with more wins is promoted. So two gates now coexist: the C# SPRT `gate`, sequential, on floors or on wins, which promoted the NoSL champions; and `learn/gauntlet.py`'s fixed-sample lower bound, which judged the elite gauntlet's generations and now judges whole runs on wins. Plan v7's first generation is being played; no result of its gate is in git yet.
+**How a new net is gated.** A net is trained and judged in whole SL runs, by its chance to win ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)). Its gate plays the challenger on the 300 seeds of `promotion-1-300` with the champion's planner at medium effort (`--afterstates clone`, no exploration), pairs its runs with the champion's by seed, and promotes it when the 95% one-sided lower bound of the mean difference in wins, 1 or 0 per run, is above 0. The same seeds at the low budget are played for reference and decide nothing. If both nets of a generation pass, the one with more wins is promoted. So two gates coexist: the C# SPRT `gate`, sequential, on floors or on wins; and `learn/gauntlet.py`'s fixed-sample lower bound on wins.
 
 ## 5. This chapter
 
 | page | what it explains |
 |---|---|
 | [Metrics, seeds and reports](/en/arch/evaluation/metrics/) | the main metric, what must be zero, the secondary metrics, the Wilson interval; the seed sets and their generator; the report, the run record and the leaderboard, field by field |
-| [Gates](/en/arch/evaluation/gates/) | why pair; common random numbers, the SPRT, McNemar and A/A; the layered gates; every option of `gate` and of the wins gate; not worse, promotion, re-baselining, the elite gauntlet's gate |
-| [Champions and baselines](/en/arch/evaluation/champions/) | the champion file, every champion so far with its report and gate, the gates that did not promote, external baselines and our results, open questions |
+| [Gates](/en/arch/evaluation/gates/) | why pair; common random numbers, the SPRT, McNemar and A/A; the layered gates; every option of `gate` and of the wins gate; not worse, promotion, re-baselining |
+| [Champions and baselines](/en/arch/evaluation/champions/) | the champion file, where the history and the reports live, external baselines, open questions |

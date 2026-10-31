@@ -1,5 +1,5 @@
 <script lang="ts">
-  // How often a run meets each decision screen (docs: simulator/runs §4): the surfaces counts of v6-3-2's SL
+  // How often a run meets each decision screen (docs: simulator/runs §4): the surfaces counts of an earlier V's SL
   // promotion report, summed over its 300 runs, against the won example run.
   import type { Lang } from '../v/names.ts';
   import { surface, fmt } from '../v/i18n.ts';
@@ -64,9 +64,9 @@
   </div>
   <p class="v-caption">
     {say(lang, w(
-      `The surfaces counts of the run records in v6-3-2's SL report on promotion-1-300 (${N} runs, ${data.won} won; simulator at ${data.source.commit}). A card prompt is counted with the screen kind card_choice wherever it is asked: of ${data.surfaces[3].decisions} in all, ${data.card_choice_macro.all} came outside combat. The example run (seed ${data.example.seed}, won at floor ${data.example.floor}) had ${data.card_choice_macro.example} of its ${data.surfaces[3].example} outside combat.`,
-      `v6-3-2 在 promotion-1-300 上的 SL 报告里，各对局记录的决策界面计数（${N} 局，赢 ${data.won} 局；模拟器在 ${data.source.commit}）。卡牌提示不管在哪里出现，都算作 card_choice：总共 ${data.surfaces[3].decisions} 次，其中 ${data.card_choice_macro.all} 次在战斗之外。贯穿全书的那一局（种子 ${data.example.seed}，在第 ${data.example.floor} 层获胜）的 ${data.surfaces[3].example} 次里有 ${data.card_choice_macro.example} 次在战斗之外。`,
-      `v6-3-2 在 promotion-1-300 上的 SL 報告裡，各對局記錄的決策介面計數（${N} 局，贏 ${data.won} 局；模擬器在 ${data.source.commit}）。卡牌提示不論在哪裡出現，都算作 card_choice：總共 ${data.surfaces[3].decisions} 次，其中 ${data.card_choice_macro.all} 次在戰鬥之外。貫穿全書的那一局（種子 ${data.example.seed}，在第 ${data.example.floor} 層獲勝）的 ${data.surfaces[3].example} 次裡有 ${data.card_choice_macro.example} 次在戰鬥之外。`,
+      `The surfaces counts of the run records in an earlier V's SL report on promotion-1-300 (${N} runs, ${data.won} won; simulator at ${data.source.commit}). A card prompt is counted with the screen kind card_choice wherever it is asked: of ${data.surfaces[3].decisions} in all, ${data.card_choice_macro.all} came outside combat. The example run (seed ${data.example.seed}, won at floor ${data.example.floor}) had ${data.card_choice_macro.example} of its ${data.surfaces[3].example} outside combat.`,
+      `一个较早的 V 在 promotion-1-300 上的 SL 报告里，各对局记录的决策界面计数（${N} 局，赢 ${data.won} 局；模拟器在 ${data.source.commit}）。卡牌提示不管在哪里出现，都算作 card_choice：总共 ${data.surfaces[3].decisions} 次，其中 ${data.card_choice_macro.all} 次在战斗之外。贯穿全书的那一局（种子 ${data.example.seed}，在第 ${data.example.floor} 层获胜）的 ${data.surfaces[3].example} 次里有 ${data.card_choice_macro.example} 次在战斗之外。`,
+      `一個較早的 V 在 promotion-1-300 上的 SL 報告裡，各對局記錄的決策介面計數（${N} 局，贏 ${data.won} 局；模擬器在 ${data.source.commit}）。卡牌提示不論在哪裡出現，都算作 card_choice：總共 ${data.surfaces[3].decisions} 次，其中 ${data.card_choice_macro.all} 次在戰鬥之外。貫穿全書的那一局（種子 ${data.example.seed}，在第 ${data.example.floor} 層獲勝）的 ${data.surfaces[3].example} 次裡有 ${data.card_choice_macro.example} 次在戰鬥之外。`,
     ))}
   </p>
 </div>

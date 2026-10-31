@@ -133,7 +133,7 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
 **兩種環境**
 
 1. Brain 和 Protocol 不引用任何遊戲組件。已有：`selftest`（以 GameBridge 作為陰性對照）和 xUnit 的 `BoundaryTests`，後者也涵蓋 Harness（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
-2. 搜尋的隨機性只來自呼叫方，從不來自遊戲的亂數流。由構造保證，沒有測試：大腦的種子由對局 id（本身就是種子字串的雜湊）和決策的索引混合而成（`Harness/Dispatcher.cs:208-227`），世界的建構種子和取樣種子則由它而來（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。
+2. 搜尋的隨機性只來自呼叫方，從不來自遊戲的亂數流。由構造保證，沒有測試：大腦的種子由對局 id（本身就是種子字串的雜湊）和決策的索引混合而成（`Harness/Dispatcher.cs:205-224`），世界的建構種子和取樣種子則由它而來（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。
 3. 後備決策的數量為 0。實際上已有：不存在後備程式碼，Harness 遇到沒有涵蓋的畫面（surface）就拋出例外（xUnit `DispatcherTests`），而由隨機佔位策略做出的決策會讓報告作廢（`Harness/Reports.cs:35-38`、xUnit `EvalReportTests`；[評估：指標、種子與報告 §2](/zh-tw/arch/evaluation/metrics/#sec-2)）。
 4. 真實遊戲裡 `NumReloads == 0`。規劃中，作為 Mod 決策日誌的一個欄位（[Mod：自動遊玩與安全 §3](/zh-tw/arch/mod/auto/#sec-3)）；目前沒有東西讀它。複本會載入存檔，所以無論在哪裡載入（工作行程，以及 `run --check`、`selftest` 和 `clones` 裡的宿主行程），它們的次數都是 1 或更多。
 5. 每個觀測欄位都有白名單測試。規劃中；目前最接近的檢查，是 `run --check` 和 `selftest` 對每個觀測做的 JSON 往返（[協定 §3](/zh-tw/arch/protocol/#sec-3)）。

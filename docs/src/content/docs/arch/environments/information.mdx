@@ -133,7 +133,7 @@ SL 搜索需要节点在抵达时的样子，加上此后在节点里做过的�
 **两种环境**
 
 1. Brain 和 Protocol 不引用任何游戏程序集。已有：`selftest`（以 GameBridge 作为反面对照）和 xUnit 的 `BoundaryTests`，后者也覆盖 Harness（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)）。
-2. 搜索的随机性只来自调用方，绝不来自游戏的随机数流。由构造保证，没有测试：大脑的种子由对局 id（它本身是种子字符串的哈希）和决策的序号混合而成（`Harness/Dispatcher.cs:208-227`），世界的构建种子和采样种子都来自它（[Harness：路由、预算与种子 §5](/arch/harness/routing/#sec-5)）。
+2. 搜索的随机性只来自调用方，绝不来自游戏的随机数流。由构造保证，没有测试：大脑的种子由对局 id（它本身是种子字符串的哈希）和决策的序号混合而成（`Harness/Dispatcher.cs:205-224`），世界的构建种子和采样种子都来自它（[Harness：路由、预算与种子 §5](/arch/harness/routing/#sec-5)）。
 3. 兜底决策的数量为 0。实际上已有：没有兜底代码，Harness 遇到未覆盖的画面（surface）就抛出异常（xUnit `DispatcherTests`），由随机占位策略做出的决策会使报告作废（`Harness/Reports.cs:35-38`，xUnit `EvalReportTests`；[评估：指标、种子与报告 §2](/arch/evaluation/metrics/#sec-2)）。
 4. 真实游戏里 `NumReloads == 0`。规划中，作为 Mod 决策日志的一个字段（[Mod：自动游玩与安全 §3](/arch/mod/auto/#sec-3)）；如今没有东西读它。克隆会载入存档，所以无论在哪里载入（工作进程，以及 `run --check`、`selftest` 和 `clones` 中的宿主进程），它们的计数都是 1 或更多。
 5. 观测的每个字段都有白名单测试。规划中；如今最接近的检查，是 `run --check` 和 `selftest` 里对每个观测做的 JSON 往返（[协议 §3](/arch/protocol/#sec-3)）。

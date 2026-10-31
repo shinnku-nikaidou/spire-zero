@@ -56,7 +56,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 **SL 是墊腳石，也是一把尺**。在節點內，SL 完全不面對隨機性：複本握有真實的亂數流，所以一場戰鬥是一個可以搜到底的確定性謎題，每條路線都只有一個結果，而不是一個分布。這讓 SL 的戰鬥大腦在相同運算量下強得多（[戰鬥大腦](/zh-tw/arch/combat-brain/)），SL 的對局也能打到後面幾幕，而 V 正需要在那裡學會給局面估值。V 用戰鬥由 SL 規劃器來打的對局訓練，並為兩種環境服務（[世界與兩種戰鬥演算法 §6](/zh-tw/arch/environments/worlds/#sec-6)）。
 
-兩種環境打同一組預先登記的種子，所以它們在相同種子上的差距，乾淨地量出了節點內資訊值多少：按種子配對的 SL − NoSL 勝率差與到達樓層差。排行榜會為每個在兩種環境下都有同名報告的冠軍計算這個差值（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；目前的兩個冠軍戰鬥大腦不同，所以還沒有顯示任何差值。這是計畫 v1（專案的第一份計畫，一份本地筆記）所要求的「全知對重取樣」比較的正式版本。作為參考：spire-mentor（一個前人做的殺戮尖塔機器人）去掉它能看到整局的作弊之後，勝率下降了 22.8–25.5 個百分點；SL 只看到一個節點，所以它的增益應該更小。
+兩種環境打同一組預先登記的種子，所以它們在相同種子上的差距，乾淨地量出了節點內資訊值多少：按種子配對的 SL − NoSL 勝率差與到達樓層差。排行榜會為每個在兩種環境下都有同名報告的冠軍計算這個差值（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；目前的兩個冠軍戰鬥大腦不同，所以還沒有顯示任何差值。這是「全知對重取樣」比較的正式版本。作為參考：spire-mentor（一個前人做的殺戮尖塔機器人）去掉它能看到整局的作弊之後，勝率下降了 22.8–25.5 個百分點；SL 只看到一個節點，所以它的增益應該更小。
 
 **整局視野已被否決**。曾考慮過一種知道整局全部順序（之後的每場遭遇、每次獎勵和每家商店）的環境，但已否決：它會讓整局本身變成一個確定性謎題，學到的東西也無法沿用到公平的遊玩中。不會實作它。
 
@@ -85,9 +85,9 @@ import { Aside } from '@astrojs/starlight/components';
 
 拒絕錯誤環境的地方：
 
-- `--policy plan`（SL 規劃器）和 `--afterstates clone`（L0 在複本上打選項）只在 SL 下打：NoSL 的 `hello` 會被拒絕（`Brains/ChampionOptions.cs:40-42`），用會打它們的冠軍執行 `run --env NoSL` 也會被拒絕（`Commands/RunCommand.cs:74`）。
+- `--policy plan`（SL 規劃器）和 `--afterstates clone`（L0 在複本上打選項）只在 SL 下打：NoSL 的 `hello` 會被拒絕（`Brains/ChampionOptions.cs:39-41`），用會打它們的冠軍執行 `run --env NoSL` 也會被拒絕（`Commands/RunCommand.cs:74`）。
 - SL 和 NoSL 打同一個戰鬥網路檔案，它從 SL 的對局學習（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。
-- 在 NoSL 的一局裡，Harness 拒絕 SL 訊息 `node_checkpoint` 和 `node_action`（`Harness/Dispatcher.cs:184`、`:193`）；大腦伺服器保留這個拒絕，對這一局的下一個決策回覆錯誤，宿主把這一局當作失敗結束，`run` 以結束代碼 1 結束，而失敗的一局不計入它的報告（`Harness/BrainServer.cs:112-123`、`Harness/RunRecords.cs:38`）。SL 規劃器拒絕不屬於 SL 的世界（`Brain/Combat/SlPlanner.cs:82`）。
+- 在 NoSL 的一局裡，Harness 拒絕 SL 訊息 `node_checkpoint` 和 `node_action`（`Harness/Dispatcher.cs:181`、`:190`）；大腦伺服器保留這個拒絕，對這一局的下一個決策回覆錯誤，宿主把這一局當作失敗結束，`run` 以結束代碼 1 結束，而失敗的一局不計入它的報告（`Harness/BrainServer.cs:112-123`、`Harness/RunRecords.cs:38`）。SL 規劃器拒絕不屬於 SL 的世界（`Brain/Combat/SlPlanner.cs:82`）。
 - 戰鬥網路訓練器只讀給定環境的日誌，遇到另一個環境的日誌就失敗（`learn/combat/data.py`）。
 - 晉級門檻拒絕把在不同環境、不同級（rung）或不同遊戲中打的對局配對（`Harness/Gate.cs:51`）。
 

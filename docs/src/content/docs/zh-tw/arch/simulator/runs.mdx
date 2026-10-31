@@ -49,7 +49,7 @@ import SurfaceCounts from '../../../../../components/book/SurfaceCounts.svelte';
 
 ## 3. 走一步、穩定、決定
 
-`Step()` 做一個決策（`Simulation/RunSession.cs:233-243`）。它先穩定下來，如果這一局還沒結束，就呼叫 `Decide()`；`Decide()` 要麼提出一個問題並開始執行它的答案，要麼做一個畫面不必詢問就會做的自動步驟。自動步驟之後，它再穩定一次。連續超過 20 個自動步驟而沒有任何決策，是驅動程式的 bug，會拋出例外。
+`Step()` 做一個決策（`Simulation/RunSession.cs:233-243`）。它先穩定下來，如果這一局還沒結束，就呼叫 `Decide()`；它要麼提出一個問題並開始執行它的答案，要麼做一個畫面不必詢問就會做的自動步驟。自動步驟之後，它再穩定一次。連續超過 20 個自動步驟而沒有任何決策，是驅動程式的 bug，會拋出例外。
 
 ```mermaid
 flowchart TD
@@ -134,7 +134,7 @@ flowchart TD
 #15 0SSL7NS01MU6 won act 2 floor 48 room … hp 0/66 gold 195 deck [...] relics [...] potions [...] decisions 848 331715 ms maps <3 hashes>
 ```
 
-SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時，`maps` 之後有 `obs <digest>`（[§6](#sec-6)）。失敗的一局會多一行 `failure:`，之後最多三行 `game error:` 列出遊戲錯誤。最後是總計：
+SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時，它之後有 `obs <digest>`（[§6](#sec-6)）。失敗的一局會多一行 `failure:`，之後最多三行 `game error:` 列出遊戲錯誤。最後是總計：
 
 | 行 | 計的是什麼 |
 |---|---|
@@ -192,7 +192,7 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 
 **頭目連戰試驗**（`run --auto-win`）贏下每場戰鬥，包括頭目戰。這樣一局大約一秒就走到每個頭目的門口，只打宏觀決策：5 局共用 3.1 s，過了三幕的所有頭目，沒有遊戲錯誤。它是為了讓 `bosslab.py states` 能收集頭目門口的狀態並在那裡開打而做的（[學習：參考 §9](/zh-tw/arch/learning/reference/#sec-9)）。它不能和 `--check` 一起用，也不能和 `--afterstates clone` 一起用：節點的檢查點不保存這條規則。
 
-**菁英連戰**（`run --gauntlet`，提交 `7a9f845`）只判贏遭遇是普通怪物戰（`RoomType.Monster`）的戰鬥，事件裡的也算。菁英和頭目（事件裡的也算）由戰鬥大腦用這一局當時的生命值和藥水來打，死亡就結束這一局。其他一切都照遊戲原本的樣子。這條規則跟著這一局的 SL 複本走：節點的檢查點把它帶給大腦（`NodeCheckpoint.Gauntlet`，提交 `e970b60`），所以宏觀大腦在複本上的試探會贏下同樣的戰鬥。沒有這一點時，每次在一場已判贏的怪物戰的獎勵處試探，都會把那場戰鬥當成真打的戰鬥重播，這一局就失敗了。計畫 v6 在這種對局裡訓練和評判 V；計畫 v7 又回到在整局上訓練它、用門檻檢驗它（[學習：實驗紀錄 §9](/zh-tw/arch/learning/experiments/#sec-9)）。
+**菁英連戰**（`run --gauntlet`，提交 `7a9f845`）只判贏遭遇是普通怪物戰（`RoomType.Monster`）的戰鬥，事件裡的也算。菁英和頭目（事件裡的也算）由戰鬥大腦用這一局當時的生命值和藥水來打，死亡就結束這一局。其他一切都照遊戲原本的樣子。這條規則跟著這一局的 SL 複本走：節點的檢查點把它帶給大腦（`NodeCheckpoint.Gauntlet`，提交 `e970b60`），所以宏觀大腦在複本上的試探會贏下同樣的戰鬥。沒有這一點時，每次在一場已判贏的怪物戰的獎勵處試探，都會把那場戰鬥當成真打的戰鬥重播，這一局就失敗了。V 在整局上訓練和過門檻，並拒收這種對局。
 
 程式碼的說明文字和註解把 `--gauntlet` 叫作「the boss gauntlet」；本書對它保留菁英連戰這個名字，因為每場菁英戰都要真打，而把頭目連戰試驗這個名字留給 `--auto-win`。
 
@@ -200,9 +200,9 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 
 ## 8. 連到大腦的對局
 
-`run` 通常把大腦留在自己的行程裡：Harness 和冠軍的各個大腦是這個行程裡的物件，它們的搜尋交給 `run` 啟動的工作行程池（[工作行程池](/zh-tw/arch/simulator/pool/)）。用 `run --brain SOCKET` 時，大腦則是另一個行程，在一個 Unix socket 上監聽，也就是 Mod 在遊戲裡連的那個（[Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8)）。這時模擬器託管對局的方式和遊戲完全一樣：每局傳送 `hello`，帶上它的環境和由種子雜湊得到的對局 id，每個決策都連同它的觀測和合法動作一起發出，然後打出大腦推薦的動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。NoSL 下對局 id 隱藏了種子；SL 下種子確實會到達大腦，在節點檢查點的存檔裡，這是 SL 可以知道的。
+`run` 通常把大腦留在自己的行程裡：Harness 和冠軍的各個大腦是這個行程裡的物件，它們的搜尋交給它啟動的工作行程池（[工作行程池](/zh-tw/arch/simulator/pool/)）。用 `run --brain SOCKET` 時，大腦則是另一個行程，在一個 Unix socket 上監聽，也就是 Mod 在遊戲裡連的那個（[Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8)）。這時模擬器託管對局的方式和遊戲完全一樣：每局傳送 `hello`，帶上它的環境和由種子雜湊得到的對局 id，每個決策都連同它的觀測和合法動作一起發出，然後打出大腦推薦的動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。NoSL 下對局 id 隱藏了種子；SL 下種子確實會到達大腦，在節點檢查點的存檔裡，這是 SL 可以知道的。
 
-由大腦決定打什麼，所以 `run --brain` 拒絕每個冠軍選項，包括 `--log`（`Commands/RunCommand.cs:71-72`）；而且因為冠軍檔案的選項是當作給出的選項合併進來的，它也拒絕指定了任何冠軍選項的 `--champion FILE`（`Commands/Args.cs:186-202`）<Badge text="推斷" variant="caution" />。SL 下宿主還會傳送節點訊息：新節點開始時傳送檢查點，然後是還沒傳送的決策，每個都在下一個決策之前傳送（`Brains/RunBrains.cs:53-99`）。
+由大腦決定打什麼，所以 `run --brain` 拒絕每個冠軍選項，包括 `--log`（`Commands/RunCommand.cs:71-72`）；而且因為冠軍檔案的選項是當作給出的選項合併進來的，它也拒絕指定了任何冠軍選項的 `--champion FILE`（`Commands/Args.cs:185-201`）<Badge text="推斷" variant="caution" />。SL 下宿主還會傳送節點訊息：新節點開始時傳送檢查點，然後是還沒傳送的決策，每個都在下一個決策之前傳送（`Brains/RunBrains.cs:53-99`）。
 
 `brain` 就是那個行程（`Commands/BrainCommand.cs`）：單獨的 Harness，服務連上來的宿主，一次一個。它自己不需要遊戲；搜尋的工作行程各自啟動自己的遊戲。
 

@@ -18,11 +18,11 @@ import PoolTimeline from '../../../../components/book/PoolTimeline.svelte';
 - **并行**。一个决策的各个世界彼此独立，所以 K 个世界放在 K 个工作进程上，用时和一个世界差不多。游戏的模型层不是线程安全的，pump 也是单线程的（[无头宿主 §7](/arch/simulator/headless/#sec-7)），所以并行的单位是进程，而不是线程。
 - **可知内容的边界**。NoSL 下工作进程拿到的是观测，从来不是真实状态，并由观测构建它的世界（[§5](#sec-5)）。传给工作进程的是协议消息，所以可以读出来检查。
 
-`WorkerPool` 在 `Sts2Ai.Harness` 里（`Sts2Ai.Harness/WorkerPool.cs`），Harness 只通过协议类型看到游戏；工作进程一侧是模拟器的 `serve` 命令（`Commands/Serve.cs`）。战斗大脑要搜索（`pimc`，或 SL 下的 `plan`）或宏观大脑要在克隆上打（`--afterstates clone`）的冠军会得到一个工作进程池，有 `--workers` 个进程，默认每个世界一个（`--worlds`，8）（`Brains/ChampionOptions.cs:25`）。
+`WorkerPool` 在 `Sts2Ai.Harness` 里（`Sts2Ai.Harness/WorkerPool.cs`），Harness 只通过协议类型看到游戏；工作进程一侧是模拟器的 `serve` 命令（`Commands/Serve.cs`）。战斗大脑要搜索（`pimc`，或 SL 下的 `plan`）或宏观大脑要在克隆上打（`--afterstates clone`）的冠军会得到一个工作进程池，有 `--workers` 个进程，默认每个世界一个（`--worlds`，8）（`Brains/ChampionOptions.cs:24`）。
 
 ## 2. 工作进程池
 
-**启动**。池并行启动它的工作进程，等每个都启动完毕（`Sts2Ai.Harness/WorkerPool.cs:33-50`）。工作进程就是同一个程序再启动一次：用它的 apphost，或者如果主机是用 `dotnet` 加 dll 启动的，就也这样启动（`Program.cs:20-24`），带上 `serve` 和冠军的叶子选项（`--leaf`、`--combat-net`），也就是这个工作进程的每次搜索都用的叶子。启动约需 1.2 s（[无头宿主 §2](/arch/simulator/headless/#sec-2)）。启动完成后，工作进程写出它的 hello：`{"game": "v0.111.0"}`，即它运行的游戏版本。
+**启动**。池并行启动它的工作进程，等每个都启动完毕（`Sts2Ai.Harness/WorkerPool.cs:33-50`）。工作进程就是同一个程序再启动一次：用它的 apphost，或者如果主机是用 `dotnet` 加 dll 启动的，就也这样启动（`Program.cs:20-24`），带上 `serve` 和冠军的 `--combat-net`，也就是这个工作进程的每次搜索都用的叶子。启动约需 1.2 s（[无头宿主 §2](/arch/simulator/headless/#sec-2)）。启动完成后，工作进程写出它的 hello：`{"game": "v0.111.0"}`，即它运行的游戏版本。
 
 **线路**是工作进程 stdin 和 stdout 上的 JSON 行，每条消息一行（[协议：世界与工作进程消息 §4](/arch/protocol/worlds/#sec-4)）。请求带着它的类型和一个 id；回复带着同一个 id、答案、请求失败时的错误，以及处理它期间记下的游戏错误。工作进程的消息没有协议版本字段：主机和它的工作进程总是同一个构建。
 
@@ -47,15 +47,15 @@ import PoolTimeline from '../../../../components/book/PoolTimeline.svelte';
 
 - **NoSL 下的 PIMC** 每个世界发一个请求，每个请求带着所有首个动作，再像进程内 PIMC 那样合并回复（[NoSL PIMC：搜索 §2](/arch/pimc/search/#sec-2)）。用逐次减半时，它每一轮发一组这样的请求，只带还留着的首个动作。
 - **SL 下的 PIMC** 只有一个世界，所以改为按首个动作拆分：每个首个动作一个请求，每个请求拿到该动作在一次搜索里应得的那份预算。每个请求有自己的换位备忘表，而单个进程里的一次搜索会在各首个动作之间共用一张，所以答案可能与进程内搜索不同。
-- **SL 规划器**在束的每个回合里，对每个保留的状态发一个请求，带上目前最好的完整路线作为剪枝的下限。一个回合的搜索整个在一个请求里，所以计划和单个进程做出的一样（[SL 规划器：束搜索 §1](/arch/sl-planner/beam/#sec-1)）。用 `--leaf-prices v` 时，请求还带着 V 给这场战斗各种结局定的价格（`EndPrices`），工作进程需要有 `--combat-net` 才能使用它们，否则请求失败。
+- **SL 规划器**在束的每个回合里，对每个保留的状态发一个请求，带上目前最好的完整路线作为剪枝的下限。一个回合的搜索整个在一个请求里，所以计划和单个进程做出的一样（[SL 规划器：束搜索 §1](/arch/sl-planner/beam/#sec-1)）。
 - **克隆上的 L0** 把一个决策的路径按顺序分成 `min(paths, workers)` 个请求（`Sts2Ai.Harness/PooledClone.cs:14-24`）。一条路径的后状态只取决于克隆和路径，所以怎么分都不会改变结果（[宏观大脑：搜索 §6](/arch/macro-brain/search/#sec-6)）。
 
 ## 4. 工作进程：`serve`
 
-`serve [--leaf FILE] [--combat-net FILE]`（`Commands/Serve.cs`）启动游戏，写出它的 hello，然后每行读一个请求、每行写一个回复，直到 stdin 关闭。
+`serve [--combat-net FILE]`（`Commands/Serve.cs`）启动游戏，写出它的 hello，然后每行读一个请求、每行写一个回复，直到 stdin 关闭。
 
 - **stdout 就是线路**。游戏启动之前，`serve` 把真正的 stdout 留给线路，把 `Console.Out` 指向 stderr，所以游戏或某个库打印的任何东西都进不了这条流（`Commands/Serve.cs:23-28`）。它的日志也写到 stderr；池为每个工作进程保留 stderr 的最后 20 行，工作进程死掉时用在错误信息里。
-- **每种大脑一个，只建一次**：用这个工作进程的叶子的 PIMC 和 SL 规划器。带着 V 的价格的 `SlTurnRequest` 会得到一个规划器，它的叶子按这些价格定价。
+- **每种大脑一个，只建一次**：用这个工作进程的叶子的 PIMC 和 SL 规划器。
 - **失败的请求会结束工作进程**。如果一个请求抛了异常，工作进程回复这个错误，然后以退出码 1 退出（`Commands/Serve.cs:55-59`）：游戏可能停在已搭好的状态（一场战斗仍活着），之后的每个请求都会失败。错误信息写明异常的类型、最内层异常最上面的三帧和它的消息的第一行，然后在后面几行给出完整的异常。
 - **每个请求的游戏错误**。处理一个请求期间记下的游戏 `Log.Error` 行和未观察到的任务异常，随它的回复返回；主机把它们和自己的一起计数（[无头宿主 §8](/arch/simulator/headless/#sec-8)）。
 

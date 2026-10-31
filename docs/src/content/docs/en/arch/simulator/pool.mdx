@@ -18,11 +18,11 @@ Three reasons, in order of weight:
 - **Parallelism.** The worlds of a decision are independent, so K worlds on K workers take about the time of one. The game's model layer is not thread-safe and the pump is single-threaded ([Headless host §7](/en/arch/simulator/headless/#sec-7)), so processes, not threads, are the unit.
 - **A boundary for what may be known.** In NoSL a worker gets the observation, never the true state, and builds its worlds from it ([§5](#sec-5)). What crosses to a worker is a protocol message, so it can be read and checked.
 
-`WorkerPool` lives in `Sts2Ai.Harness` (`Sts2Ai.Harness/WorkerPool.cs`), which sees the game only through protocol types; the worker side is the `serve` command of the simulator (`Commands/Serve.cs`). A champion whose combat brain searches (`pimc`, or `plan` in SL) or whose macro brain plays on the clone (`--afterstates clone`) gets a pool, of `--workers` processes, by default one per world (`--worlds`, 8) (`Brains/ChampionOptions.cs:25`).
+`WorkerPool` lives in `Sts2Ai.Harness` (`Sts2Ai.Harness/WorkerPool.cs`), which sees the game only through protocol types; the worker side is the `serve` command of the simulator (`Commands/Serve.cs`). A champion whose combat brain searches (`pimc`, or `plan` in SL) or whose macro brain plays on the clone (`--afterstates clone`) gets a pool, of `--workers` processes, by default one per world (`--worlds`, 8) (`Brains/ChampionOptions.cs:24`).
 
 ## 2. The pool
 
-**Starting.** The pool starts its workers in parallel and waits until each has booted (`Sts2Ai.Harness/WorkerPool.cs:33-50`). A worker is the same program started again, as its apphost or as `dotnet` with its dll if that is how the host was started (`Program.cs:20-24`), with `serve` and the champion's leaf options (`--leaf`, `--combat-net`), the leaf every search of that worker uses. Booting takes about 1.2 s ([Headless host §2](/en/arch/simulator/headless/#sec-2)). When it is done, the worker writes its hello, `{"game": "v0.111.0"}`, the game version it runs.
+**Starting.** The pool starts its workers in parallel and waits until each has booted (`Sts2Ai.Harness/WorkerPool.cs:33-50`). A worker is the same program started again, as its apphost or as `dotnet` with its dll if that is how the host was started (`Program.cs:20-24`), with `serve` and the champion's `--combat-net`, the leaf every search of that worker uses. Booting takes about 1.2 s ([Headless host §2](/en/arch/simulator/headless/#sec-2)). When it is done, the worker writes its hello, `{"game": "v0.111.0"}`, the game version it runs.
 
 **The wire** is one JSON line per message over the worker's stdin and stdout ([Protocol: worlds and worker messages §4](/en/arch/protocol/worlds/#sec-4)). A request carries its type and an id; the reply carries the same id, the answer, an error if the request failed, and the game errors logged while serving it. Worker messages have no protocol version field: the host and its workers are always the same build.
 
@@ -47,15 +47,15 @@ How each brain splits its work:
 
 - **PIMC in NoSL** sends one request per world, each with every first action, and merges the replies as in-process PIMC does ([NoSL PIMC: search §2](/en/arch/pimc/search/#sec-2)). With sequential halving it sends one such set per round, with the first actions still in.
 - **PIMC in SL** has one world, so it splits by first action instead: one request per first action, each with the share of the budget that action would get in one search. Each request keeps its own memo of transpositions, where one search in one process would share it across first actions, so the answer can differ from an in-process search.
-- **The SL planner** sends, for each turn of its beam, one request per state kept, with the best whole line so far as the floor of the pruning. A turn's search lives in one request, so the plan is the one a single process makes ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)). With `--leaf-prices v` the request also carries V's prices of the combat's ends (`EndPrices`), and the worker needs a `--combat-net` to use them, or the request fails.
+- **The SL planner** sends, for each turn of its beam, one request per state kept, with the best whole line so far as the floor of the pruning. A turn's search lives in one request, so the plan is the one a single process makes ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)).
 - **L0 on the clone** splits a decision's paths into `min(paths, workers)` requests, in order (`Sts2Ai.Harness/PooledClone.cs:14-24`). A path's afterstate depends on the clone and the path only, so the split cannot change a result ([Macro brain: search §6](/en/arch/macro-brain/search/#sec-6)).
 
 ## 4. The worker: `serve`
 
-`serve [--leaf FILE] [--combat-net FILE]` (`Commands/Serve.cs`) boots the game, writes its hello, then reads one request per line and writes one reply per line until stdin closes.
+`serve [--combat-net FILE]` (`Commands/Serve.cs`) boots the game, writes its hello, then reads one request per line and writes one reply per line until stdin closes.
 
 - **stdout is the wire.** Before the game boots, `serve` keeps the real stdout for the wire and points `Console.Out` at stderr, so nothing the game or a library prints can get into the stream (`Commands/Serve.cs:23-28`). Its logs go to stderr too; the pool keeps the last 20 lines of each worker's stderr for the error message if it dies.
-- **One brain of each kind, made once:** PIMC and the SL planner with the worker's leaf. An `SlTurnRequest` with V's prices gets a planner with a leaf priced by them.
+- **One brain of each kind, made once:** PIMC and the SL planner with the worker's leaf.
 - **A failed request ends the worker.** If a request throws, the worker replies with the error and exits with code 1 (`Commands/Serve.cs:55-59`): the game may be left set up (a combat still live), and every later request would fail. The error names the exception's type, the innermost exception's top three frames and its message's first line, then the whole exception on the following lines.
 - **Game errors per request.** The game's `Log.Error` lines and unobserved task faults logged while serving a request go back in its reply; the host counts them with its own ([Headless host §8](/en/arch/simulator/headless/#sec-8)).
 
