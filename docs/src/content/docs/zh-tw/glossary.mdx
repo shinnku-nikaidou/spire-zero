@@ -79,7 +79,7 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | 束搜尋（beam search）、分支定界（branch-and-bound） | 每一步只保留最好的 B 個狀態；丟掉每個上界贏不了已找到的最佳路線的分支，所以達到上界的路線就被證明是最佳的（[SL 規劃器：束搜尋](/zh-tw/arch/sl-planner/beam/)）。 |
 | TurnEnds | 規劃中：兩種環境共用的一個搜尋步驟，列舉一個回合可能結束在哪些狀態（[戰鬥大腦 §3.1](/zh-tw/arch/combat-brain/#sec-3.1)）。 |
 | 迭代加寬（iterative widening） | 為 SL 規劃器規劃中：寬度 1、2、4、8、…的多輪，每輪都打到戰鬥結束，並用目前最好的路線剪枝（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)）。 |
-| 葉節點（leaf）、戰鬥網路（combat net） | 在搜尋停下的地方，由葉節點給狀態評分：手寫的 `LeafValue`，或戰鬥網路，一個對戰鬥學出來的網路（[戰鬥大腦：葉節點](/zh-tw/arch/combat-brain/leaf/)）。 |
+| 葉節點（leaf）、戰鬥網路（combat net） | 在搜尋停下的地方，由葉節點給狀態評分：戰鬥網路的結局，按 `LeafValue` 手設的數字定價（[戰鬥大腦：葉節點](/zh-tw/arch/combat-brain/leaf/)）。 |
 | 後狀態（afterstate） | 剛做完選擇、新的隨機性出現之前的狀態。宏觀大腦按選項的後狀態給它們估值（[宏觀大腦：後狀態與單一 V](/zh-tw/arch/macro-brain/afterstates/)）。 |
 | L0 | 宏觀大腦：它用 V 給每個選項的後狀態估值，取最好的那個；在地圖上，它規劃通往頭目的路線（[宏觀大腦：搜尋](/zh-tw/arch/macro-brain/search/)）。 |
 | 預算（budget）、力度（effort） | 一個決策可以用多少搜尋：PIMC 是世界數和節點數，SL 規劃器是束；規劃器的力度指名一個預算（[Harness：路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)）。 |
@@ -124,7 +124,7 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | pure-1, pure-1-b, pure-1-d, pure-1-g | 最早的純 V 網路，依序是：只從整局訓練、加上決策時的頭目模擬、加上門口狀態、加上頭目連戰試驗的門口；pure-1-g 在 2026-10-29 是 SL 冠軍的 V。 |
 | v6-1, v6-2, v6-3-1, v6-3-2 | 在菁英連戰的三代裡訓練的純 V；v6-3-2 在計畫 v7 之前是兩個冠軍的 V。 |
 | v7-1, v7-1e, v7-1e2, v7-1f | 計畫 v7 的網路，在第 1 代的資料 `v7g1` 上訓練：`e` 是編碼器網路，`f` 是修好了地圖輸入。v7-1f 自 2026-10-31 起是兩個冠軍的 V。 |
-| c1, c2, c3, c4 | 戰鬥網路；c2 是兩個冠軍的戰鬥大腦的葉節點。 |
+| c7-2 | 戰鬥網路，兩個冠軍都在用（[戰鬥網路](/zh-tw/arch/combat-brain/network/)）。 |
 | `weights/silent/NAME.json` | 一個網路的檔案；`weights/silent/history/` 保存較早的版本。 |
 | `promotion-1`, `promotion-1-300`, `promotion-1-500`, `final-1` | `eval/seeds/` 裡的種子集：200、300 和 500 個晉級種子（每個較長的集合都以較短的那個開頭），以及一個在任何對局用到它之前就登記好的、300 個種子的最終集合。 |
 | `eval/silent/champions/sl.json`, `nosl.json` | 冠軍檔案：打出每種環境冠軍的選項，以及它的報告。 |

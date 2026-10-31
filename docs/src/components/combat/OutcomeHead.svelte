@@ -1,10 +1,10 @@
 <script lang="ts">
-  // The combat net's head on the test states its file carries (weights/silent/c2.json): the chance of a death and of
-  // each bucket of the HP share still to be lost, and the leaf value at LeafValue's prices, as CombatNet.Value
-  // computes it (docs: combat-brain/leaf §4–§5).
+  // The combat net's outputs on the test states its file carries (weights/silent/c7-2.json): the chance of a death and
+  // of each bucket of the HP share still to be lost, each held potion's chance of being gone, and the leaf value, as
+  // CombatNet.Value computes it (docs: combat-brain/leaf §4–§5).
   import { onMount } from 'svelte';
   import { scaleLinear } from 'd3';
-  import examples from '../../data/combat-examples.json';
+  import walk from '../../data/combat-walk.json';
   import { loadNames, type Lang, type Names } from '../v/names.ts';
   import { fmt, intentText, say, w, words } from './words.ts';
 
@@ -13,11 +13,17 @@
   let names = $state.raw<Names | null>(null);
   onMount(async () => (names = await loadNames(lang)));
 
-  const { tests, buckets, loss_min: lossMin } = examples.c2;
-  const W = { winBase: 0.2, perHp: 0.6, perPotion: 0.02 };
+  const { tests } = walk;
+  const buckets = 50;
+  const lossMin = -0.25;
   const width = (1 - lossMin) / buckets;
   const mid = (k: number) => lossMin + (k - 0.5) * width; // bucket k >= 1
-  // The heaviest states first: the two boss fights, then the rest in file order.
+  // Net.reachable's rule: a win ends with an HP share in (0, 1].
+  const isOpen = (k: number, share: number) => {
+    const low = lossMin + (k - 1) * width;
+    return low < share && low + width > share - 1 - 1e-6;
+  };
+  // The heaviest states first, then the rest in file order.
   const order = tests.map((_, i) => i).sort((a, b) => tests[b].outcome[0] - tests[a].outcome[0]);
   let which = $state(order[0]);
   const s = $derived(tests[which]);
@@ -25,20 +31,16 @@
   const r = $derived.by(() => {
     const p = s.outcome;
     const share = s.player.hp / Math.max(1, s.player.max_hp);
-    let value = 0;
     let won = 0;
     let lost = 0;
+    let open = 0;
     for (let k = 1; k < p.length; k++) {
-      value += p[k] * (W.winBase + W.perHp * (share - mid(k)));
       won += p[k];
       lost += p[k] * mid(k);
+      if (isOpen(k, share)) open++;
     }
-    const potions = (1 - p[0]) * W.perPotion * (s.potions_held - s.potions_used);
     const lossIfWon = won > 0 ? lost / won : 0;
-    // A win cannot lose more than the HP held now; the head is not told so.
-    let beyond = 0;
-    for (let k = 1; k < p.length; k++) if (lossMin + (k - 1) * width >= share) beyond += p[k];
-    return { death: p[0], won, share, lossIfWon, beyond: won > 0 ? beyond / won : 0, endHp: (share - lossIfWon) * s.player.max_hp, value: value + potions };
+    return { death: p[0], share, lossIfWon, open, endHp: (share - lossIfWon) * s.player.max_hp, value: s.value };
   });
 
   const CW = 520;
@@ -53,10 +55,12 @@
     death: w('P(death)', 'P(死亡)', 'P(死亡)'),
     lossIfWon: w('expected share lost, if won', '若获胜，预期失去的比例', '若獲勝，預期失去的比例'),
     endHp: w('expected HP at the end, if won', '若获胜，预期结束时的 HP', '若獲勝，預期結束時的 HP'),
-    value: w('leaf value (LeafValue’s prices)', '叶子估值（LeafValue 的价格）', '葉節點估值（LeafValue 的價格）'),
+    value: w('leaf value', '叶子估值', '葉節點估值'),
     heals: w('heals', '回血', '回血'),
     held: w('HP held now', '现在的 HP', '現在的 HP'),
-    beyond: w('of the wins: losing more than the HP held', '获胜中：失去的比现有 HP 还多', '獲勝中：失去的比現有 HP 還多'),
+    open: w('buckets open, of 50', '开着的桶（共 50 个）', '開著的桶（共 50 個）'),
+    closed: w('closed', '关闭', '關閉'),
+    gone: w('chance of being gone, if won', '获胜后已不在的机率', '獲勝後已不在的機率'),
   };
 </script>
 
@@ -94,6 +98,13 @@
       {/if}
       <line x1={x(r.share)} x2={x(r.share)} y1="8" y2={CH - 26} stroke="var(--v-ink)" stroke-dasharray="3 3" />
       <text x={x(r.share) + 4} y="34">{say(lang, L.held)}</text>
+      {#each s.outcome.slice(1) as _, k (k)}
+        {#if !isOpen(k + 1, r.share)}
+          <rect x={x(lossMin + k * width)} width={x(lossMin + (k + 1) * width) - x(lossMin + k * width)} y="8" height={CH - 34} fill="var(--v-grid)" opacity="0.5">
+            <title>{say(lang, L.closed)}</title>
+          </rect>
+        {/if}
+      {/each}
       {#each s.outcome.slice(1) as p, k (k)}
         <rect x={x(lossMin + k * width) + 0.5} width={Math.max(0.5, x(lossMin + (k + 1) * width) - x(lossMin + k * width) - 1)} y={y(p)} height={CH - 26 - y(p)} fill="var(--v-s1)">
           <title>{fmt(lang, lossMin + k * width, 3)}–{fmt(lang, lossMin + (k + 1) * width, 3)}: {fmt(lang, p, 4)}</title>
@@ -109,7 +120,10 @@
       <div class="v-stat"><span class="v-label">{say(lang, L.death)}</span><span class="v-value v-num">{fmt(lang, r.death, 3)}</span></div>
       <div class="v-stat"><span class="v-label">{say(lang, L.lossIfWon)}</span><span class="v-value v-num">{fmt(lang, r.lossIfWon, 3)}</span></div>
       <div class="v-stat"><span class="v-label">{say(lang, L.endHp)}</span><span class="v-value v-num">{fmt(lang, r.endHp, 1)}</span></div>
-      <div class="v-stat"><span class="v-label">{say(lang, L.beyond)}</span><span class="v-value v-num">{fmt(lang, r.beyond, 3)}</span></div>
+      <div class="v-stat"><span class="v-label">{say(lang, L.open)}</span><span class="v-value v-num">{r.open}</span></div>
+      {#each s.potions as p, k (k)}
+        <div class="v-stat"><span class="v-label">{names.name('potion', p.id)}: {say(lang, L.gone)}</span><span class="v-value v-num">{fmt(lang, p.gone, 3)}</span></div>
+      {/each}
       <div class="v-stat"><span class="v-label">{say(lang, L.value)}</span><span class="v-value v-num">{fmt(lang, r.value, 4)}</span></div>
     </div>
   {/if}

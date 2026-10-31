@@ -152,7 +152,7 @@ Each rule above has, or will have, a test that keeps it true. "Exists" names whe
    - Each perturbable field needs a test showing that the current node never reads it.
 10. Clone queries are logged per decision. Planned. Today `brain --wire FILE` logs the host's node messages, from which `clones` rebuilds and checks each SL decision's clone ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)); L0's probes on the clone are not logged.
 
-Tests of the environment's own plumbing, besides the guards: Harness refuses node checkpoints in NoSL and hands NoSL no clone (xUnit `DispatcherTests`); a combat net plays only in its environment and an old net in either (`CombatNetTests`); the gate refuses a challenger from another environment (`GateTests`); `--env` defaults to NoSL and reads any case, and `brain` ignores a champion file's environment (`CliTests`); `selftest` checks that the clone keeps the relic state the save drops (`Checks/SelfTest.Run.cs:140-180`).
+Tests of the environment's own plumbing, besides the guards: Harness refuses node checkpoints in NoSL and hands NoSL no clone (xUnit `DispatcherTests`); the gate refuses a challenger from another environment (`GateTests`); `--env` defaults to NoSL and reads any case, and `brain` ignores a champion file's environment (`CliTests`); `selftest` checks that the clone keeps the relic state the save drops (`Checks/SelfTest.Run.cs:140-180`).
 
 ## 9. Open questions
 

@@ -17,21 +17,19 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 本书的这一部分有三章：
 
-- 本章，两种算法共同的基础：问题本身（[§2](#sec-2)）、形态（[§3](#sec-3)）、接口（[§4](#sec-4)）、叶子估值和战斗网络（[叶子](/arch/combat-brain/leaf/)），以及选牌提示、敌人出招记录和 worker 进程池（[提示、招式与 worker](/arch/combat-brain/shared/)）；
+- 本章，两种算法共同的基础：问题本身（[§2](#sec-2)）、形态（[§3](#sec-3)）、接口（[§4](#sec-4)）、叶子估值（[叶子](/arch/combat-brain/leaf/)）、战斗网络（[战斗网络](/arch/combat-brain/network/)、[一个状态走过网络](/arch/combat-brain/walkthrough/)），以及选牌提示、敌人出招记录和 worker 进程池（[提示、招式与 worker](/arch/combat-brain/shared/)）；
 - [SL 规划器](/arch/sl-planner/)：剪枝 + 网络，在 SL 唯一的精确世界上；
 - [NoSL PIMC](/arch/pimc/)：蒙特卡洛 + 网络，在采样世界上，按动作取平均。
 
 <Aside title="状态">
 
-**已实现，两个冠军都在用**。SL：`SlPlanner` 在节点克隆上规划整场战斗，战斗照着它的计划打（`run --env SL --policy plan`，默认 medium 力度）。NoSL：`PimcBrain` 在 8 个采样世界里各用 300 个节点搜索本回合，再按第一动作取平均（`run --policy pimc`）。两者都在一个 worker 进程池里搜索，并且都用同一个叶子给搜索停下的地方打分：战斗网络 c2，按 `LeafValue` 的价格定价（[叶子](/arch/combat-brain/leaf/)）。战斗中的选牌提示交给一条固定规则 `p0`（[提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)）。两个占位策略保留下来，供基准测试使用，也作为测试集上的基线：`PlayPolicy`（随机打出一张能打的牌）和 `RandomPolicy`（在合法动作中均匀随机）。
+**已实现，两个冠军都在用**。SL：`SlPlanner` 在节点克隆上规划整场战斗，战斗照着它的计划打（`run --env SL --policy plan`，默认 medium 力度）。NoSL：`PimcBrain` 在 8 个采样世界里各用 300 个节点搜索本回合，再按第一动作取平均（`run --policy pimc`）。两者都在一个 worker 进程池里搜索，并且都用同一个叶子给搜索停下的地方打分：战斗网络，它的结局按手设的数定价（[叶子](/arch/combat-brain/leaf/)）。战斗中的选牌提示交给一条固定规则 `p0`（[提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)）。两个占位策略保留下来，供基准测试使用，也作为测试集上的基线：`PlayPolicy`（随机打出一张能打的牌）和 `RandomPolicy`（在合法动作中均匀随机）。
 
-**规划中，尚未实现**。两种算法的一个更简单的设计，这些页面在标题或表格行带有 <Badge text="规划中" variant="caution" /> 的地方描述它。它没有任何部分测过，只有网络的训练器和 V 的价格有代码；没有这个标记的内容描述的都是现在的代码。
+**规划中，尚未实现**。两种算法的一个更简单的设计，这些页面在标题或表格行带有 <Badge text="规划中" variant="caution" /> 的地方描述它。它没有任何部分测过，也没有代码；没有这个标记的内容描述的都是现在的代码。
 
 | 部件 | 现在已实现 | 规划中 |
 |---|---|---|
 | 一个回合的结束状态 | 两个搜索：`SlPlanner.SearchTurn`、`PimcBrain.SearchWorld` | 一个 `TurnEnds`（[§3.1](#sec-3.1)） |
-| 网络 | c2，在 315 局 NoSL 对局上训练，有已知的缺口（[叶子 §7](/arch/combat-brain/leaf/#sec-7)） | 来自 SL 自我对弈的 c7-1v，学习 V 对战斗结局的估价；正在训练，还没过门槛（[叶子 §8](/arch/combat-brain/leaf/#sec-8)） |
-| 价格 | `LeafValue` 的手设价格；V 的价格已为目标是 `worth` 的网络实现，未使用 | V 的价格与 c7-1v 一起，同一个门槛（[叶子 §5](/arch/combat-brain/leaf/#sec-5)） |
 | SL 的搜索 | 贪心下潜，然后是束；简易束、失败计划、重新规划、房间倍数 | 迭代加宽，配一个战斗预算（[SL 规划器：束搜索 §7](/arch/sl-planner/beam/#sec-7)） |
 | NoSL 的搜索 | PIMC，逐次减半、沿用计划和房间倍数已实现但关闭 | 同样的 PIMC，基于 `TurnEnds`，预算只有 K 和每个世界的节点数（[NoSL PIMC：预算 §8](/arch/pimc/budget/#sec-8)） |
 | 选牌提示 | 固定规则 `p0` | 搜索分支（[提示、招式与 worker §4](/arch/combat-brain/shared/#sec-4)） |
@@ -89,7 +87,7 @@ $n = 5$ 时是 326 对 32，$n = 8$ 时是 109,601 对 256。在杀戮尖塔里�
 
 ### 3.2 叶子
 
-叶子把一个状态变成一个数：网络给出的这场战斗怎样结束的分布，乘以每种结局的价格。冠军已经在用这种形式，配 c2 和 `LeafValue` 的价格（[叶子 §3–§5](/arch/combat-brain/leaf/#sec-3)）。<Badge text="规划中" variant="caution" /> 设计保留这种形式，改变它的部件：用环境自己的对局训练的网络，读它的输入规则允许的东西，价格来自 V。
+叶子把一个状态变成一个数：网络给出的这场战斗怎样结束的分布，乘以每种结局的价格（[叶子 §3–§5](/arch/combat-brain/leaf/#sec-3)）。
 
 ```mermaid
 flowchart TB
@@ -162,8 +160,7 @@ public sealed record CombatDecisionResult(
 
 这个设计按顺序过门槛，这样每个门槛都能说明它那一步值多少：
 
-1. **c7-1v**。SL 自己的网络配 V 的价格，用现在的搜索：标签、输入和价格都在同一个门槛里（[叶子 §8](/arch/combat-brain/leaf/#sec-8)）。
-2. **提示**变成搜索分支（[提示、招式与 worker §4](/arch/combat-brain/shared/#sec-4)），**然后是加宽**（[SL 规划器：束搜索 §7](/arch/sl-planner/beam/#sec-7)），**然后是预算**（[SL 规划器：预算 §7](/arch/sl-planner/budget/#sec-7)）。
+1. **提示**变成搜索分支（[提示、招式与 worker §4](/arch/combat-brain/shared/#sec-4)），**然后是加宽**（[SL 规划器：束搜索 §7](/arch/sl-planner/beam/#sec-7)），**然后是预算**（[SL 规划器：预算 §7](/arch/sl-planner/budget/#sec-7)）。
 
 NoSL 有两个自己的条件：合并 `TurnEnds` 需要一个 NoSL 门槛，提示分支需要先跑融合测试集（[NoSL PIMC：搜索 §6](/arch/pimc/search/#sec-6)）。
 
@@ -171,7 +168,9 @@ NoSL 有两个自己的条件：合并 `TurnEnds` 需要一个 NoSL 门槛，提
 
 | 章 | 小节 | 讲什么 | 图 |
 |---|---|---|---|
-| 战斗大脑 | [叶子](/arch/combat-brain/leaf/) | 搜索在哪里停下、那里的状态值多少：`LeafValue`、战斗网络 c2、它的输出头、定价、c2 的已知问题、下一个网络 c7-1v | 手工叶子，实时计算；c2 在真实局面上的预测；两个网络的结构图 |
+| 战斗大脑 | [叶子](/arch/combat-brain/leaf/) | 搜索在哪里停下、那里的状态值多少：网络的两个输出、价格、上界、估值看不到什么 | 网络在真实局面上的输出 |
+| | [战斗网络](/arch/combat-brain/network/) | 网络从输入到输出：每个张量、每个编码器、主体、两个输出头和掩码、大小 | 网络的结构图 |
+| | [一个状态走过网络](/arch/combat-brain/walkthrough/) | 跟着一个真实的回合开始，手工走过每一层，直到估值和一个标签 | – |
 | | [提示、招式与 worker](/arch/combat-brain/shared/) | `p0` 和作为分支的提示、敌人出招记录、worker 进程池 | – |
 | [SL 规划器](/arch/sl-planner/) | 概览 | 节点克隆、为什么最好的路线是对的、规划一次再照着打、规划中的形态 | 一场真实的 Boss 战，在它的第一个决策处规划 |
 | | [回合搜索](/arch/sl-planner/turn-search/) | 完整搜索一个回合、置换、节点的分配、`TurnEnds` | 一个回合的搜索树 |

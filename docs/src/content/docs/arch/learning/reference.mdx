@@ -65,7 +65,7 @@ flowchart LR
 |---|---|---|
 | `v-g0-g3` | V 的整局自我对弈：NoSL g0–g2 和 SL g3 各自的第 1 批，分别为 1,198 局和 419 局，另有 g0–g2 里训练时不用的 5 局失败对局；69 对 | pure-1、pure-1-b、pure-1-d、pure-1-g |
 | `sl-combat` | SL 的战斗训练集：SL g3 的第 1 批（419 局），以及由规划器用 c2、以中等力度打的 SL 评估（`promotion-1` 160 局；`promotion-1b` 40 局；n3-free-ctl 的门槛 200 局），共 819 局、54,405 个回合开始局面；89 对 | 没有网络 |
-| `c7` | c7-1v 的训练集：v7g1 和 `promotion-301-500` 上 600 局中等预算对局，放在数据旁边；`--skip-seeds` 排除 `promotion-1-300` | c7-1v，正在训练 |
+| `c7` | 战斗网络的训练集：整局 SL 自我对弈和 `promotion-301-500` 上 600 局中等预算对局，放在数据旁边；`--skip-seeds` 排除 `promotion-1-300` | c7-2 |
 | `v6-1`、`v6-2`、`v6-3-1`、`v6-3-2` | 每个连战网络的各代 | 在实验室主机上，位于 `sl/eval/2026-10-29-train-v6/lists/` |
 
 fix68 的重跑不在 `sl-combat` 里，因为它们的种子是 `promotion-1` 的。
@@ -89,7 +89,7 @@ fix68 的重跑不在 `sl-combat` 里，因为它们的种子是 `promotion-1` �
 - **角色**。训练器的 `--character`（默认 SILENT）指定角色：记录里有别的角色的对局就拒绝（`learn/common.py:83-84`），文件里也记下角色。
 - **名字**。种类加编号，变体写在短横线后面：`cN` 是到目前为止的战斗网络（都是 NoSL 的），`sl-cN` 是 SL 的（规划中），`nN` 是 V v2 的网络（`n2-b0.03`：第 2 代，牵引项 β 0.03），`pure-N` 是在整局上训练的纯 V（`pure-1-g`：带试点的门前状态），`v6-N` 是精英连战的第 N 代（`v6-3-2`：它的第二个网络），以及计划 v7 的 `v7-N`、`v7-Ne`（编码器网络）、`v7-1e2`（编码器网络，在更早的几代上预训练）和 `v7-1f`（选路读入要进入的点）。`vNgM` 指一代的数据，从不指网络。
 - **在 git 里**。`weights/` 进 git：一个文件 1.3–2.0 MB，而且不会改，所以一个提交就同时确定了代码、权重和冠军文件；冠军文件直接引用权重所在的路径（[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)）。`weights/silent/history/` 和 `weights/silent/nosl/` 是旧布局的副本，被 git 忽略（`.gitignore:11-13`）。
-- **环境**。战斗网络的文件写明它的环境（`env`，SL 或 NoSL），`run`、`brain`、`gate` 和 `panel` 在另一个环境里拒绝它；c1–c4 没有写，两边都能用（[训练战斗网络 §1](/arch/learning/combat-net/#sec-1)）。
+- **环境**。战斗网络的文件写明它学自哪个环境（`env`）。SL 和 NoSL 打同一个文件（[战斗大脑：叶子 §6](/arch/combat-brain/leaf/#sec-6)）。
 
 `weights/silent/` 里现在的文件：c1–c4；n1、n2-b0.1、n2-b0.03、n2-b0.01、n3-ctl、n3-free-ctl；pure-1、pure-1-b、pure-1-d、pure-1-g；v6-1、v6-2、v6-3-1、v6-3-2。
 
@@ -118,16 +118,16 @@ V v2 的文件（n1、n2-\*、n3-\*）用 `features`（17 个或 9 个 V v0 特�
 | 字段 | 内容 | C# 是否读取 |
 |---|---|---|
 | `name` | 和冠军显示的一样（`pimc NAME`、`plan NAME`） | 是 |
-| `character` | 角色（c1、c2 里没有） | 否 |
-| `env` | SL 或 NoSL（c1–c4 里没有） | 是 |
-| `target`、`worth_cap` | `worth` 和 4：网络预测什么，以及上限。c1–c4 没有这两个字段，而是 `buckets` 和 `loss_min`，50 和 −0.25（c1：剩余生命的 20 个桶，没有 `loss_min`） | 是 |
+| `character` | 角色 | 否 |
+| `env` | 它学自哪个环境的对局 | 否 |
+| `target`、`buckets`、`loss_min` | `each_potion`；从 −0.25 起的 50 个分桶：网络预测什么 | 是 |
 | `lags`、`round` | 之前 3 个回合的意图，以及读入的回合数 | 是 |
-| `vocab` | 每张表：`cards`、`modifiers`、`powers`、`enemies`、`intents`、`relics`、`potions`、`context`，较新的网络还有 `orbs`、`allies`；`learn/combat/` 的网络还有 `relic_status`，`context` 只含遭遇 | 是 |
+| `vocab` | 每张表：`cards`、`modifiers`、`powers`、`enemies`、`intents`、`relics`、`potions`、`context`、`orbs`、`allies`、`relic_status`；`context` 只含遭遇 | 是 |
 | `fit` | 训练报告 | 否 |
-| `onnx` | 输入名照 `learn/combat/encode.py` 的 `INPUTS`（c1–c4 有它们自己的）；输出 `worth`（batch）；c1–c4：`outcome`（batch × 51，softmax）和 `potions_used`（batch） | 是 |
-| `tests` | 最多 16 个留出的回合开始局面，至少一个有多段攻击：`obs`、`history`、`worth`；c1–c4：最多 8 个，带 `outcome`（51 个数）和 `potions_used` | 是 |
+| `onnx` | 输入名照 `learn/combat/encode.py` 的 `INPUTS`；输出 `outcome`（batch × 51，softmax，关闭的分桶为 0）和 `potion_used`（batch × 药水 id，sigmoid） | 是 |
+| `tests` | 最多 16 个留出的回合开始局面，其中有多段攻击、持有药水和低生命的状态：`obs`、`history`、`outcome`、`potion_used` | 是 |
 
-图中逐个字段打开两个冠军的文件 v6-3-2.json 和 c2.json：大小、计算图的输入和输出及其形状、它的初始化器（权重张量，只列形状）和算子，以及训练报告。
+图中逐个字段打开两个网络文件 v7-1f.json 和 c7-2.json：大小、计算图的输入和输出及其形状、它的初始化器（权重张量，只列形状）和算子，以及训练报告。
 
 <NetFileAnatomy client:visible lang="zh-CN" />
 
@@ -135,9 +135,9 @@ V v2 的文件（n1、n2-\*、n3-\*）用 `features`（17 个或 9 个 V v0 特�
 
 - **用哪个 V**。`run --value FILE`（配合 `--macro l0`，`SimWorker/Commands/Args.cs:249-253`）读 V v0 的权重或一个网络：带 `onnx` 的文件是网络（`RunNet.Load`），否则是 V v0 的 `{name, weights}`（`RunValue.Read`，`Brain/Macro/RunValue.cs:52-58`）。这个选项的帮助文本仍写着 "V v0's weights or a net file of V v2"（`Args.cs:216`）。`run --combat-net FILE` 加载战斗网络（`CombatNet.Load`）。
 - **`RunNet`**（`Brain/Macro/RunNet.cs`）用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）运行计算图，intra-op 和 inter-op 各一个线程（`:71`），因为模拟器跑很多进程，而一个宏观决策只给少数几个小输入估值。它像 `learn/v/encode.py` 那样从整局观测构建输入，只喂计算图声明的输入（`NetNumbers.Declared`，`:247`），只有计算图有 `route` 输入时才喂路线（`:225`），V v2 的特征、卡牌和遗物的数值以及 `extra` 只喂给读它们的计算图。未知的 id 读作第 0 项。`Value` 读取 objective（`:93-106`）。
-- **加载检查**。`RunNet.Load` 给每个测试对局估值，任何一个值的偏差超过 10⁻³ × max(1, |value|) 就拒绝这个文件（`:78-91`）；`CombatNet.Load` 预测每个测试状态，任何一个类别或药水数的偏差超过 10⁻³，或结局的长度不同，就拒绝它；目标为 `worth` 的网络则看它的那个数（`Brain/Combat/CombatNet.cs:70-92`）。这保证训练和对局时的编码与前向计算一致。
-- **`CombatNet`** 按位置读取 c1–c4 的输出（所以 c1 较旧的输出头会被读成损失的生命），用 `LeafValue` 的价格给它们定价。目标为 `worth` 的网络，它唯一的输出经 `PricedLeaf` 读取，只能配 `--leaf-prices v`（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
-- **开销**。v6-3-2 每次调用 0.093 ms，一个全尺寸的编码器网络 0.44 ms，而一个用克隆的宏观决策要 70–90 ms（提交 `b0ec4b7`）；V v2 每个宏观决策约 0.9 ms（`648026c`）。战斗网络的开销淹没在游戏的模拟里：宽度 0.5、1 和 2 的网络搜索时每个动作同样花 1.58–1.76 s（[训练战斗网络 §6](/arch/learning/combat-net/#sec-6)）。
+- **加载检查**。`RunNet.Load` 给每个测试对局估值，任何一个值的偏差超过 10⁻³ × max(1, |value|) 就拒绝这个文件（`:78-91`）；`CombatNet.Load` 预测每个测试状态，任何一个类别或药水概率的偏差超过 10⁻³，或某个输出的长度不同，就拒绝它（`Brain/Combat/CombatNet.cs`）。这保证训练和对局时的编码与前向计算一致。
+- **`CombatNet`** 读取网络的两个输出，用 `LeafValue` 的价格给它们定价（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
+- **开销**。v6-3-2 每次调用 0.093 ms，一个全尺寸的编码器网络 0.44 ms，而一个用克隆的宏观决策要 70–90 ms（提交 `b0ec4b7`）；V v2 每个宏观决策约 0.9 ms（`648026c`）。
 - **V v0**（`RunValue`，`Brain/Macro/RunValue.cs`）：整局观测的 17 个特征乘以线性权重，`run --value` 没有指定文件时宏观大脑用的 V。特征（`RunValue.cs:68-92`）：层数、生命值、最大生命值、金币、持有的药水数、遗物数、牌组里的牌数、不能打出的牌数、升级过的牌数；能打出的牌的平均伤害（含中毒）、格挡和抽牌；以及假如每一步都随机选路，从当前的点到 Boss 预计会经过的精英、休息处、商店、宝箱和 `?` 点的个数。不管由哪个 V 做决定，它们仍然写在决策日志的每一行宏观记录上，也写进每个后状态（`RunValue.cs:15-16`；[Harness：决策日志 §7](/arch/harness/decision-log/#sec-7)）。没有冠军用它打。
 - **`OLD NETS`**。`src/` 里只有 V v0、V v2 和战斗网络 c1–c4 用到的代码标着 `OLD NETS`（提交 `28fc273`），只要还有冠军在用其中之一就留着。2026-10-30 起没有冠军用 V v0 或 V v2；读 `costs` 的 c2（`CombatNet.cs:130-132`）是两个冠军的叶子。V v0 的特征仍写进每一条宏观日志行和每个后状态。
 
@@ -198,7 +198,7 @@ v6 网络的文件早于 `objective`、`encoders` 和报告里的 Brier 字段�
 
 ### `combat.train`：战斗网络
 
-`uv run python -m combat.train --list PREFIX --env SL|NoSL --name NAME --value V_FILE [--skip-seeds FILE] [--out FILE] [--character SILENT] [--seed 0]`。它的样本、损失、常量和报告见[训练战斗网络 §3](/arch/learning/combat-net/#sec-3)–[§4](/arch/learning/combat-net/#sec-4)。
+`uv run python -m combat.train --list PREFIX --env SL|NoSL --name NAME [--skip-seeds FILE] [--test-list PREFIX] [--out FILE] [--character SILENT] [--seed 0]`。它的样本、损失、常量和报告见[训练战斗网络 §3](/arch/learning/combat-net/#sec-3)–[§4](/arch/learning/combat-net/#sec-4)。
 
 ### `learn/gauntlet.py`：一个 V 的报告和门槛
 
@@ -258,7 +258,7 @@ v6 网络的文件早于 `objective`、`encoders` 和报告里的 Brier 字段�
 |---|---|
 | `run --explore ε` | 自我对弈的均匀抽取（[循环 §9](/arch/learning/loop/#sec-9)）；需要 `--macro l0` |
 | `run --macro-explore T`、`--combat-explore T` | softmax 探索；后者需要 `--policy pimc` |
-| `run --value FILE`、`--combat-net FILE`、`--leaf-prices v` | 用哪个 V、哪个叶子来打 |
+| `run --value FILE`、`--combat-net FILE` | 用哪个 V、哪个叶子来打 |
 | `run --gauntlet`、`run --auto-win` | 精英连战和 Boss 连战试点（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)） |
 | `run --log FILE --records FILE` | 决策日志和对局记录 |
 | `afterstates`、`fork` | 每个日志决策的选项及其估值；反事实配对（[循环 §10](/arch/learning/loop/#sec-10)） |
@@ -284,8 +284,8 @@ v6 网络的文件早于 `objective`、`encoders` 和报告里的 Brier 字段�
 **C#**（[模拟器：参考 §7](/arch/simulator/reference/#sec-7)），网络在训练和部署之间的一致性，用 `Sts2Ai.Tests/Fixtures/` 里的测试数据：
 
 - `RunNetTests`（8）：要进入的点只在选路时才读入，词表里没有它的网络把它略去；一个极小、未训练的纯 V 网络带三个真实的整局观测（`pure-v-tiny.json`），被估值得和训练器给的一样；一个胜局网络（`pure-v-tiny-win.json`，同一个网络，风险值输出头的偏置降低 6：测试对局为 0.63、0.18 和 0.03），按训练器的获胜机会估值；一个极小的编码器网络（`pure-v-tiny-encoders.json`，权重 × 3），路线失去连接或前方层数时，它的估值变动达到加载检查容差的 10 倍，每种类型都读作未知时变动 3 倍；n2-b0.03 仍能加载；共用的测试地图上的地图词元和路线。
-- `CombatNetTests`（6）：一个极小、未训练的 SL 网络带三个真实的 SL 回合开始局面（`combat-sl-tiny.json`，其中一个有 4 个回合的历史，一个有盟友）；一个极小的目标为 `worth` 的网络（`combat-worth-tiny.json`），它带数值、费用、计数、状态、熔化和多段攻击的状态读出来和训练器一样；c2 仍能加载；网络只在自己的环境里打，旧网络两边都能用；V 按生命和药水给胜利的价格；输掉值 0、胜利值它的价格、进行中的状态值网络的比例。
-- 改动一个输入时，只要输出的变化小于容差，检查就会通过，所以每个新输入都在一个让每个输入都起作用的网络上再检查了一次（[训练战斗网络 §2](/arch/learning/combat-net/#sec-2)）。
+- `CombatNetTests`：一个极小、未训练的网络，它带同一 id 的两瓶药水、表外的 id、低生命和多段攻击的测试状态读出来和训练器一样；进行中的状态值它的结局和留下的药水；已结束的状态和上界都是 `LeafValue` 的。
+- 改动一个输入时，只要输出的变化小于容差，检查就会通过，所以每个新输入都在一个让每个输入都起作用的网络上再检查了一次（[战斗网络 §9](/arch/combat-brain/network/#sec-9)）。
 
 **规划** <Badge text="规划中" variant="caution" />：
 

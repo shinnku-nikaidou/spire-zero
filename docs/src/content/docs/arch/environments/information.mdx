@@ -152,7 +152,7 @@ SL 搜索需要节点在抵达时的样子，加上此后在节点里做过的�
    - 每个可扰动的字段都需要一个测试，证明当前节点从不读它。
 10. 每个决策的克隆查询都记入日志。规划中。如今 `brain --wire FILE` 记录宿主的节点消息，`clones` 据此重建并检查每个 SL 决策的克隆（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）；L0 在克隆上的试探不记入日志。
 
-除了这些守护之外，还有对环境自身管道的测试：Harness 在 NoSL 下拒绝节点检查点，也不给 NoSL 克隆（xUnit `DispatcherTests`）；战斗网络只在自己的环境里打，旧网络在两种环境里都能打（`CombatNetTests`）；晋级门槛拒绝来自另一种环境的挑战者（`GateTests`）；`--env` 默认是 NoSL 且大小写不限，`brain` 忽略冠军文件里的环境（`CliTests`）；`selftest` 检查克隆保留了存档丢掉的遗物状态（`Checks/SelfTest.Run.cs:140-180`）。
+除了这些守护之外，还有对环境自身管道的测试：Harness 在 NoSL 下拒绝节点检查点，也不给 NoSL 克隆（xUnit `DispatcherTests`）；晋级门槛拒绝来自另一种环境的挑战者（`GateTests`）；`--env` 默认是 NoSL 且大小写不限，`brain` 忽略冠军文件里的环境（`CliTests`）；`selftest` 检查克隆保留了存档丢掉的遗物状态（`Checks/SelfTest.Run.cs:140-180`）。
 
 ## 9. 未决问题
 

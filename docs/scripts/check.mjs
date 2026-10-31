@@ -64,22 +64,25 @@ for (const [route, page] of pages) {
   }
 }
 
-// The figures' V (src/lib/v/) must value the net file's test runs as the trainer did, and the macro brain's real
-// decisions as `sim afterstates` did, as RunNet's load check does (docs: macro-brain/network §2).
+// The page's port of V (src/lib/v/) must value the net file's test runs as the trainer did, as RunNet's load check does
+// (docs: macro-brain/network §7).
 const { V } = await import('../src/lib/v/net.ts');
-const { merged } = await import('../src/lib/v/encode.ts');
 const { NET, netFile } = await import('../src/lib/v/files.ts');
 const file = JSON.parse(readFileSync(netFile(fileURLToPath(new URL('../..', import.meta.url))), 'utf8'));
 const net = V.fromFile(file);
-const examples = JSON.parse(readFileSync(new URL('../src/data/macro-examples.json', import.meta.url), 'utf8'));
-const valued = [
-  ...file.tests.map((t, i) => [`test run ${i}`, t.run, t.value]),
-  ...Object.entries(examples.decisions).flatMap(([k, d]) => d.options.map((o) => [`${k} ${o.action}`, merged(d.run_view, o.after), o.value])),
-];
+const valued = file.tests.map((t, i) => [`test run ${i}`, t.run, t.value]);
 for (const [what, view, value] of valued) {
   const got = net.of(view);
   if (Math.abs(got - value) > 1e-4 * Math.max(1, Math.abs(value))) errors.push(`${NET}: ${what} is ${got}, the trainer's ${value}`);
 }
+
+// The combat net's walkthrough must hold what the net file's test states hold (docs: combat-brain/walkthrough).
+const combat = JSON.parse(readFileSync(new URL('../../weights/silent/c7-2.json', import.meta.url), 'utf8'));
+const walk = JSON.parse(readFileSync(new URL('../src/data/combat-walk.json', import.meta.url), 'utf8'));
+combat.tests.forEach((t, i) => {
+  const off = Math.max(...t.outcome.map((p, k) => Math.abs(p - walk.tests[i].outcome[k])));
+  if (off > 1e-3) errors.push(`combat-walk.json: test state ${i} is ${off} off the net file's`);
+});
 
 for (const error of errors) console.error(error);
 console.log(`${pages.size} pages, ${checked} internal links, ${valued.length} values of ${NET}, ${errors.length} problems`);

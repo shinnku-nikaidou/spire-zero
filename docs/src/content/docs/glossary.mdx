@@ -79,7 +79,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 束搜索（beam search）、分支定界（branch-and-bound） | 每一步只保留最好的 B 个状态；丢掉上界比不过已找到的最佳路线的每个分支，所以达到上界的路线就被证明是最好的（[SL 规划器：束搜索](/arch/sl-planner/beam/)）。 |
 | TurnEnds | 规划中：两种环境共用的一个搜索步骤，枚举一个回合可能结束的各个状态（[战斗大脑 §3.1](/arch/combat-brain/#sec-3.1)）。 |
 | 迭代加宽（iterative widening） | 为 SL 规划器规划：宽度为 1、2、4、8……的多轮，每轮都打到战斗结束，并由目前最好的路线剪枝（[SL 规划器：束搜索 §7](/arch/sl-planner/beam/#sec-7)）。 |
-| 叶子（leaf）、战斗网络（combat net） | 在搜索停下的地方，由叶子给状态打分：手工的 `LeafValue`，或战斗网络，一个读整场战斗的学到的网络（[战斗大脑：叶子](/arch/combat-brain/leaf/)）。 |
+| 叶子（leaf）、战斗网络（combat net） | 在搜索停下的地方，由叶子给状态打分：战斗网络的结局，按 `LeafValue` 手设的数定价（[战斗大脑：叶子](/arch/combat-brain/leaf/)）。 |
 | 后状态（afterstate） | 刚做完选择、新的随机性出现之前的状态。宏观大脑按后状态给选项估值（[宏观大脑：后状态与单一 V](/arch/macro-brain/afterstates/)）。 |
 | L0 | 宏观大脑：它用 V 给每个选项的后状态估值，取最好的；在地图上它规划通往 Boss 的路线（[宏观大脑：搜索](/arch/macro-brain/search/)）。 |
 | 预算（budget）、力度（effort） | 一个决策可以用多少搜索：PIMC 是世界数和节点数，SL 规划器是束；规划器的力度是某个预算的名字（[Harness：路由、预算与种子 §4](/arch/harness/routing/#sec-4)）。 |
@@ -124,7 +124,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | pure-1、pure-1-b、pure-1-d、pure-1-g | 第一批纯 V 网络，依次是只用对局的、带决策时 Boss 模拟的、带门口状态的，以及带 Boss 连战试点门口的；pure-1-g 是 2026-10-29 时 SL 冠军的 V。 |
 | v6-1、v6-2、v6-3-1、v6-3-2 | 在精英连战的三代里训练的纯 V；v6-3-2 在计划 v7 之前是两个冠军的 V。 |
 | v7-1、v7-1e、v7-1e2、v7-1f | 计划 v7 的网络，在第 1 代的数据 `v7g1` 上训练：`e` 是编码器网络，`f` 是修好了地图输入。v7-1f 从 2026-10-31 起是两个冠军的 V。 |
-| c1、c2、c3、c4 | 战斗网络；c2 是两个冠军的战斗大脑的叶子。 |
+| c7-2 | 战斗网络，两个冠军都用它来打（[战斗网络](/arch/combat-brain/network/)）。 |
 | `weights/silent/NAME.json` | 一个网络的文件；`weights/silent/history/` 保存较早的版本。 |
 | `promotion-1`、`promotion-1-300`、`promotion-1-500`、`final-1` | `eval/seeds/` 里的种子集：200、300 和 500 个晋级种子（每个更长的集合都以较短的那个开头），以及一个 300 个种子的最终集，在它上面的任何对局之前就已登记。 |
 | `eval/silent/champions/sl.json`、`nosl.json` | 冠军文件：让每种环境的冠军上场的选项，以及它的报告。 |

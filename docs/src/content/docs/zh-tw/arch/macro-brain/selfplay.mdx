@@ -27,7 +27,7 @@ flowchart LR
 ```text
 run --env SL --policy plan --macro l0 --afterstates clone --workers 4 \
     --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 \
-    --combat-net weights/silent/c2.json --value weights/silent/V.json --explore ε --seed 1
+    --combat-net weights/silent/c7-2.json --value weights/silent/V.json --explore ε --seed 1
 ```
 
 **預算**。規劃器用它的低預算來打，晉級門檻則用冠軍的 medium 強度。便宜的預算在同樣的算力下給出多得多的對局，而且給配裝排序差不多一樣好：在滿血下打的 515 扇頭目門上，同一個種子上低預算和中預算的相關係數是 0.94，低預算下兩個種子的相關係數是 0.83（[SL 規劃器：預算、開銷與結果 §2](/zh-tw/arch/sl-planner/budget/#sec-2)）。視主機而定，一局佔一個行程約 45–85 s，它的日誌約 1.6 MB。

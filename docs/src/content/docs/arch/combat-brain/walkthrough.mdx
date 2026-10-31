@@ -1,0 +1,259 @@
+---
+title: 一个状态走过网络
+description: 跟着一个真实的回合开始，手工走过战斗网络：从屏幕显示的内容到词元、张量、每一层、掩码、药水概率、搜索读到的估值，以及一个训练标签是什么样子。
+sidebar:
+  label: 一个状态走过网络
+---
+import walk from '../../../../data/combat-walk.json';
+
+export const v = (x) => '[' + x.join(', ') + ', …]';
+export const pct = (x) => (100 * x).toFixed(2) + ' %';
+
+本页取一个真实的状态，手工走过战斗网络，用的是网络为它算出的数字。设计见[战斗网络](/arch/combat-brain/network/)；这里每一步展示那个设计对一场战斗做了什么。向量只显示前四个数。
+
+这个状态是一个回合开始，来自文件自带的留出测试状态（`weights/silent/c7-2.json`，`tests[1]`）。加载网络时会核对它给这个状态的输出正是这些（[战斗网络 §9](/arch/combat-brain/network/#sec-9)）。这些数字来自 `docs/scripts/combat-walk.py`，如果它的各层算不出文件里的输出，脚本就会停下。
+
+## 1. 屏幕显示什么
+
+静默猎手，在第三幕的普通战斗**咬人卷轴**（<code>{walk.state.encounter}</code>）里，第 {walk.state.round} 回合开始时。
+
+| | |
+|---|---|
+| 生命值 | {walk.state.hp} / {walk.state.max_hp}，格挡 {walk.state.block} |
+| 能量 | {walk.state.energy}（最大 {walk.state.max_energy}） |
+| 金币 | {walk.state.gold} |
+| 能力 | 毒雾 {walk.state.powers[0].amount} |
+| 手牌 | {walk.state.piles.hand.join(', ')} |
+| 抽牌堆 | {walk.state.piles.draw.join(', ')} |
+| 弃牌堆 | 空 |
+| 消耗堆 | {walk.state.piles.exhaust.join(', ')} |
+| 遗物 | {walk.state.relics.map((r) => r.id).join(', ')} |
+| 药水 | {walk.tokens.potions[0]}，两个栏位为空 |
+
+两个敌人：
+
+| 敌人 | 生命值 | 能力 | 现在显示 |
+|---|---|---|---|
+| 咬人卷轴 | {walk.state.enemies[0].hp} / {walk.state.enemies[0].max_hp} | 纸伤难愈 2、力量 2、中毒 7 | 一个增益 |
+| 咬人卷轴 | {walk.state.enemies[1].hp} / {walk.state.enemies[1].max_hp} | 纸伤难愈 2、中毒 16、力量 1 | 一次攻击，6 × 2 |
+
+搜索问的问题是：如果停在这里，这个状态值多少？
+
+## 2. 词元
+
+`encode.tokens` 扔掉屏幕，只留下 id 和缩放后的数。
+
+**玩家**是 8 个数：<code>{v(walk.tokens.player.slice(0, 4))}</code>，以此类推。完整如下：
+
+| 生命值比例 | 生命值 / 100 | 最大生命值 / 100 | 格挡 / 20 | 能量 / 3 | 最大能量 / 3 | 星 / 5 | 回合数 / 10 |
+|---|---|---|---|---|---|---|---|
+| {walk.tokens.player[0]} | {walk.tokens.player[1]} | {walk.tokens.player[2]} | {walk.tokens.player[3]} | {walk.tokens.player[4]} | {walk.tokens.player[5]} | {walk.tokens.player[6]} | {walk.tokens.player[7]} |
+
+**3 个数**：进阶 / 10、充能球栏位 / 10 和金币 / 100 依次是 {walk.tokens.extra.join(', ')}。
+
+**第一个敌人**的数值是 {walk.enemies[0].numbers.join(', ')}：生命值比例、生命值 / 100、最大生命值 / 100、格挡 / 20，以及已显示 3 个回合 / 10。它的四个意图槽来自屏幕和它之前出招的记录：
+
+| 槽 | 内容 | 类型 | 伤害 / 10 | 总伤害 / 20 |
+|---|---|---|---|---|
+| 0 | 现在 | {walk.enemies[0].slots[0][0].type} | {walk.enemies[0].slots[0][0].damage} | {walk.enemies[0].slots[0][0].total} |
+| 1 | 上一回合 | {walk.enemies[0].slots[1][0].type} | {walk.enemies[0].slots[1][0].damage} | {walk.enemies[0].slots[1][0].total} |
+| 2 | 2 回合前 | {walk.enemies[0].slots[2][0].type} | {walk.enemies[0].slots[2][0].damage} | {walk.enemies[0].slots[2][0].total} |
+| 3 | 3 回合前 | {walk.enemies[0].slots[3][0].type} | {walk.enemies[0].slots[3][0].damage} | {walk.enemies[0].slots[3][0].total} |
+
+**遗物**带着它们的计数：只有花粉核心显示一个，为 0，所以它的 `relic_values` 是 <code>{JSON.stringify(walk.tokens.relic_values[3])}</code>，每件遗物的状态都是 `Normal`。
+
+**上下文**是 4 个词元：{walk.tokens.context.join(', ')}。
+
+## 3. 表项和张量
+
+每个词元变成它在自己的表里的行。上下文能说明这些表怎样工作：它的表项是 <code>{JSON.stringify(walk.tokens.context_entries)}</code>。遭遇的表项是 {walk.tokens.context_entries[1]}；角色、房间和幕不在表里，所以都读作第 0 项 `<unk>`，共三次。
+
+对这个状态，批次为 1 时，各张量的形状如下：
+
+| 输入 | 形状 | 原因 |
+|---|---|---|
+| `cards`、`ups`、`costs` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 一共 22 张牌 |
+| `piles` | <code>{JSON.stringify(walk.shapes.piles)}</code> | 4 个牌堆上的独热 |
+| `powers` | <code>{JSON.stringify(walk.shapes.powers)}</code> | 一个能力 |
+| `enemies` | <code>{JSON.stringify(walk.shapes.enemies)}</code> | 两个敌人 |
+| `enemy_powers` | <code>{JSON.stringify(walk.shapes.enemy_powers)}</code> | 每个三个能力 |
+| `intents` | <code>{JSON.stringify(walk.shapes.intents)}</code> | 4 个槽，每个一个意图 |
+| `relics` | <code>{JSON.stringify(walk.shapes.relics)}</code> | 五件遗物 |
+| `potions` | <code>{JSON.stringify(walk.shapes.potions)}</code> | 一瓶药水：空栏不是词元 |
+| `orbs`、`allies` | <code>{JSON.stringify(walk.shapes.orbs)}</code> | 没有，所以是一行补齐，掩码为 0 |
+
+## 4. 一张牌，然后是牌堆
+
+取手牌里的 **{walk.card.id}+**。它在牌表里的表项是 {walk.card.entry}，升级次数 {walk.card.up}，费用 0。
+
+| 部分 | 向量 |
+|---|---|
+| 它的 id 的向量 $E[c]$ | <code>{v(walk.card.id_vector)}</code> |
+| 它的升级方向 $U[c]$，乘以 {walk.card.up} | <code>{v(walk.card.up_vector)}</code> |
+| 费用向量 $K$，乘以 {walk.card.cost} | <code>{v(walk.card.cost_vector)}</code> |
+| 手牌的向量 $P[l]$ | <code>{v(walk.card.pile_vector)}</code> |
+| 它们的和 $x$ | <code>{v(walk.card.x)}</code> |
+
+把第一个数加起来核对一下：−0.134 + 0.108 + 0 − 0.132 = −0.158。
+
+然后 $\varphi$ 把 $x$ 映射到 64 个数，<code>{v(walk.card.phi.first)}</code>。作为 ReLU 的输出，没有一个低于 0，64 个中有 {walk.card.phi.zeros} 个恰好为 0。
+
+每张牌都经过同一个 $\varphi$，每个牌堆把它的牌加起来并缩放 1/8：
+
+| 牌堆 | 牌数 | 前几个数 | 长度 | 为 0 的数 |
+|---|---|---|---|---|
+| 手牌 | {walk.piles[0].cards} | <code>{v(walk.piles[0].vector.first)}</code> | {walk.piles[0].vector.norm} | {walk.piles[0].vector.zeros} |
+| 抽牌堆 | {walk.piles[1].cards} | <code>{v(walk.piles[1].vector.first)}</code> | {walk.piles[1].vector.norm} | {walk.piles[1].vector.zeros} |
+| 弃牌堆 | {walk.piles[2].cards} | <code>{v(walk.piles[2].vector.first)}</code> | {walk.piles[2].vector.norm} | {walk.piles[2].vector.zeros} |
+| 消耗堆 | {walk.piles[3].cards} | <code>{v(walk.piles[3].vector.first)}</code> | {walk.piles[3].vector.norm} | {walk.piles[3].vector.zeros} |
+
+空牌堆恰好是零向量。这四个拼接成牌的 256 个数。
+
+## 5. 能力
+
+玩家有一个能力，毒雾，数值 {walk.state.powers[0].amount}，缩放到 0.3。它的向量是它的 id 的向量加上 0.3 乘以它的数值方向。一层 32 → 64 映射它，只有一个能力时，和就是这一个输出：<code>{v(walk.powers.first)}</code>，64 个中有 {walk.powers.zeros} 个为 0。
+
+## 6. 敌人
+
+每个敌人拼接三部分，同一个 $\varphi$ 读两个敌人：
+
+| | 第一个卷轴 | 第二个卷轴 |
+|---|---|---|
+| id + 数值（32） | <code>{v(walk.enemies[0].numbers_vector)}</code> | <code>{v(walk.enemies[1].numbers_vector)}</code> |
+| 能力之和（64） | <code>{v(walk.enemies[0].powers_vector)}</code> | <code>{v(walk.enemies[1].powers_vector)}</code> |
+| 槽 0，4 个槽之一（各 32） | <code>{v(walk.enemies[0].slot_vector)}</code> | <code>{v(walk.enemies[1].slot_vector)}</code> |
+| 经过 $\varphi$（128）后：长度 | {walk.enemies[0].phi.norm} | {walk.enemies[1].phi.norm} |
+| 经过 $\varphi$ 后：为 0 的数 | {walk.enemies[0].phi.zeros} | {walk.enemies[1].phi.zeros} |
+
+两个敌人 id 相同，所以共用表项 {walk.enemies[0].entry}。它们的数值、能力的数值和意图不同，所以向量也不同。
+
+两者之和是敌人的部分：128 个数，长度 {walk.foes.norm}，其中 {walk.foes.zeros} 个为 0。只有在两者中都为 0 的数才仍然是 0。
+
+## 7. 袋
+
+| 部分 | 大小 | 前几个数 | 长度 |
+|---|---|---|---|
+| 遗物，5 件 | 32 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
+| 药水，1 瓶 | 32 | <code>{v(walk.bags.potions.first)}</code> | {walk.bags.potions.norm} |
+| 上下文，4 个词元 | 32 | <code>{v(walk.bags.context.first)}</code> | {walk.bags.context.norm} |
+| 充能球，没有 | 32 | <code>{v(walk.bags.orbs.first)}</code> | {walk.bags.orbs.norm} |
+| 盟友，没有 | 64 | <code>{v(walk.bags.allies.first)}</code> | {walk.bags.allies.norm} |
+
+袋没有层，所以它的数可以低于 0。只有一瓶药水时，药水的袋恰好是那瓶药水的向量。
+
+## 8. 拼接
+
+| 部分 | 大小 | 前几个数 |
+|---|---|---|
+| 牌 | {walk.join[0].size} | <code>{v(walk.join[0].first)}</code> |
+| 玩家 | {walk.join[1].size} | <code>{v(walk.join[1].first)}</code> |
+| 能力 | {walk.join[2].size} | <code>{v(walk.join[2].first)}</code> |
+| 敌人 | {walk.join[3].size} | <code>{v(walk.join[3].first)}</code> |
+| 遗物 | {walk.join[4].size} | <code>{v(walk.join[4].first)}</code> |
+| 药水 | {walk.join[5].size} | <code>{v(walk.join[5].first)}</code> |
+| 上下文 | {walk.join[6].size} | <code>{v(walk.join[6].first)}</code> |
+| 充能球 | {walk.join[7].size} | <code>{v(walk.join[7].first)}</code> |
+| 盟友 | {walk.join[8].size} | <code>{v(walk.join[8].first)}</code> |
+| 3 个数 | {walk.join[9].size} | <code>{v(walk.join[9].first)}</code> |
+
+一个 {walk.z.size} 维的向量，其中 {walk.z.zeros} 个为 0。到这里为止，没有哪一部分见过另一部分：牌对敌人一无所知，敌人对生命值也一无所知。
+
+## 9. 主体
+
+两层，一切第一次相遇：
+
+| 层 | 前几个数 | 长度 | 为 0 的数 |
+|---|---|---|---|
+| 651 → 256 | <code>{v(walk.body[0].first)}</code> | {walk.body[0].norm} | {walk.body[0].zeros} |
+| 256 → 256 | <code>{v(walk.body[1].first)}</code> | {walk.body[1].norm} | {walk.body[1].zeros} |
+
+对这个状态，256 个数大多是 0；不为 0 的 {256 - walk.body[1].zeros} 个承载了输出头要读的一切。
+
+## 10. 结局输出头：51 个 logit
+
+一层线性给出 51 个原始的数。第一个是死亡的，{walk.head.death_logit}。单独一个 logit 没有意义：只有下一步的 softmax 比较它们，才让它们成为概率。
+
+## 11. 掩码，然后是 softmax
+
+生命值比例是 {walk.value.share}。分桶 $[l, l + 0.025)$ 保持开启的条件是 $l < 0.8873$ 且 $l + 0.025 > 0.8873 - 1$。在这里：
+
+- 下端：一场战斗回的血不能超过损失的生命值。{walk.state.max_hp} 中的 {walk.state.max_hp - walk.state.hp} 点生命值是比例 0.113，所以低于 {walk.head.open_from} 的分桶关闭。
+- 上端：一场胜利不能失去全部持有的生命值，所以从 {walk.head.open_to} 起的分桶关闭。
+
+这样 **50 个分桶中有 {walk.head.open} 个开启**。其他分桶的 logit 是 $-10^4$，softmax 给它们恰好 0。
+
+对其余的做 softmax，得到概率。死亡是 {walk.head.death}，几乎没有。最可能的分桶：
+
+| 还要失去的最大生命值比例 | 折合生命值 | 概率 |
+|---|---|---|
+| {walk.head.tops[0].low} 到 {walk.head.tops[0].high} | 0 到 1.8 | {pct(walk.head.tops[0].chance)} |
+| {walk.head.tops[1].low} 到 {walk.head.tops[1].high} | 回血最多 1.8 | {pct(walk.head.tops[1].chance)} |
+| {walk.head.tops[2].low} 到 {walk.head.tops[2].high} | 回血 1.8 到 3.6 | {pct(walk.head.tops[2].chance)} |
+| {walk.head.tops[3].low} 到 {walk.head.tops[3].high} | 1.8 到 3.6 | {pct(walk.head.tops[3].chance)} |
+
+网络几乎确信这场战斗会赢，最多擦破点皮。第二个卷轴以 19 点生命值带着 16 层中毒，玩家的毒雾每回合还会增加更多；网络读了这些数，不过这里没有什么能说明哪些输入对它影响最大。
+
+## 12. 药水输出头
+
+同样的 256 个数经过第二个线性层，256 → {walk.potion.outputs}，药水表的每一项一个输出。攻击药水是第 {walk.potion.entry} 项。它的 logit 是 {walk.potion.logit}，sigmoid 把它变成 **{walk.potion.chance}**：网络预计这瓶药水在战斗后还在。
+
+其他 {walk.potion.outputs - 1} 个输出会算出来，但不读。这里最大的是 {walk.potion.most_likely[0].id}，{walk.potion.most_likely[0].chance}，和 `<unk>`，{walk.potion.most_likely[1].chance}：这个状态两者都没有，所以它们没有意义，也不训练任何东西。
+
+## 13. 搜索读到的数
+
+`CombatNet.Value` 给 51 个概率定价（[叶子 §5](/arch/combat-brain/leaf/#sec-5)）：
+
+$$
+\text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})
+$$
+
+| 项 | 数 |
+|---|---|
+| 结局，对开启的分桶求和 | {walk.value.win_term} |
+| 预计留下的药水，$\sum (1 - u)$ | {walk.value.kept} |
+| 它们的项，$(1 - p_0) \times 0.02 \times$ 上面的数 | {walk.value.potion_term} |
+| **估值** | **{walk.value.value}** |
+
+规划器对这个状态的**上界**是一场不失去生命值和药水的胜利：0.2 + 0.6 × {walk.value.share} + 0.02 = {walk.value.bound}。估值正好在它下面一点，因为网络预计几乎什么都不会失去。
+
+## 14. 搜索看到什么
+
+搜索比较状态。每次只改一样东西，再跑一遍网络：
+
+| 状态 | 生命值比例 | 结局 | 药水 | 估值 |
+|---|---|---|---|---|
+| 原样 | {walk.value.share} | {walk.value.win_term} | {walk.value.potion_term} | {walk.value.value} |
+| 少 {walk.lost_hp} 点生命值 | {walk.siblings.less_hp.share} | {walk.siblings.less_hp.win_term} | {walk.siblings.less_hp.potion_term} | {walk.siblings.less_hp.value} |
+| 药水没有了 | {walk.siblings.no_potion.share} | {walk.siblings.no_potion.win_term} | {walk.siblings.no_potion.potion_term} | {walk.siblings.no_potion.value} |
+
+{walk.lost_hp} 点生命值是 71 的比例 0.141，乘 0.6 是 0.0845，估值正好下降这么多。持有的生命值被完整计入，这正是它的设计（[战斗网络 §7](/arch/combat-brain/network/#sec-7)）。在这个状态上，药水值它的统一价 0.02，相当于 2.4 点生命值。
+
+所以当束比较同一回合的两个结束时，多留下 10 点生命值的那个，在网络对接下来发生什么形成任何看法之前，就已经领先这么多。
+
+## 15. 两个更难的状态
+
+这场战斗快结束了，所以它展示的是机制，不是网络的判断。同一文件里的另外两个状态能展示判断：
+
+| | {walk.others.danger.encounter} | {walk.others.mask.encounter} |
+|---|---|---|
+| 房间、回合 | {walk.others.danger.room}，第 {walk.others.danger.round} 回合 | {walk.others.mask.room}，第 {walk.others.mask.round} 回合 |
+| 生命值 | {walk.others.danger.hp} / {walk.others.danger.max_hp} | {walk.others.mask.hp} / {walk.others.mask.max_hp} |
+| 开启的分桶 | {walk.others.danger.open}（{walk.others.danger.open_from} 到 {walk.others.danger.open_to}） | {walk.others.mask.open}（{walk.others.mask.open_from} 到 {walk.others.mask.open_to}） |
+| 死亡的概率 | {pct(walk.others.danger.death)} | {pct(walk.others.mask.death)} |
+| 最可能的分桶 | {walk.others.danger.tops[0].low} 到 {walk.others.danger.tops[0].high}，{pct(walk.others.danger.tops[0].chance)} | {walk.others.mask.tops[0].low} 到 {walk.others.mask.tops[0].high}，{pct(walk.others.mask.tops[0].chance)} |
+| 估值 | {walk.others.danger.value} | {walk.others.mask.value} |
+| 上界 | {walk.others.danger.bound} | {walk.others.mask.bound} |
+
+在 Boss 战里，估值远低于上界：死亡的概率拿走了估值的那一部分，胜利又分散在许多分桶上。在 10 点生命值时只有 {walk.others.mask.open} 个分桶开启，所以任何概率都不会落在失去的生命值超过玩家持有的胜利上。
+
+[叶子 §4](/arch/combat-brain/leaf/#sec-4) 画出了文件全部 16 个状态。
+
+## 16. 标签
+
+到这里网络一直在预测。在训练中，这个状态还有一个答案，来自它的战斗真实的结局。文件没有保存那个结局，所以取一个作说明：**假设这场战斗以 71 点生命值中的 {walk.label.end_hp} 点赢下，药水还在**。
+
+- **结局的类别**。从这个状态失去的比例是 63/71 − {walk.label.end_hp}/71 = {walk.label.lost}，落在 {walk.label.low} 到 {walk.label.high} 的分桶里：类别 {walk.label.class}。那场战斗的每个回合开始都会按自己的生命值得到自己的类别。
+- **药水的标签**。它在战斗后的第一个整局观测里还在，所以标签是 0。
+- **损失**。类别 {walk.label.class} 的概率是 {walk.label.chance}，所以结局的交叉熵是 {walk.label.ending_loss}。药水的是 {walk.label.potion_loss}。这个样本的损失是两者之和，一步梯度会把那个分桶的概率往上推。
+
+像这样大的损失就是意外的样子：在这个假设的结局下，网络错得很厉害。在一整份对局清单上标签怎样生成，见[训练战斗网络 §3](/arch/learning/combat-net/#sec-3)。

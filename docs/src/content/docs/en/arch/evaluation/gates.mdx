@@ -136,7 +136,7 @@ gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challe
 | `--not-worse` | off | the non-inferiority test ([§7](#sec-7)) |
 | `--promote PATH` | none | on a pass, writes the challenger's report and makes it the champion ([§8](#sec-8)) |
 | `--env ENV` | none | the challenger's environment, refused if it is not the file's |
-| the challenger's run options | | `--policy`, `--macro`, the budget, `--workers`, `--value`, `--afterstates`, the leaf options, `--leaf-prices`, `--macro-explore`, `--combat-explore`, `--explore` ([Simulator: reference §3](/en/arch/simulator/reference/#sec-3)); there is no `--champion FILE` for the challenger, which is named in full by its options |
+| the challenger's run options | | `--policy`, `--macro`, the budget, `--workers`, `--value`, `--afterstates`, the leaf options, `--macro-explore`, `--combat-explore`, `--explore` ([Simulator: reference §3](/en/arch/simulator/reference/#sec-3)); there is no `--champion FILE` for the challenger, which is named in full by its options |
 
 **The two sides.** The champion's side is its report's runs. The challenger's side is its records, and every record must have been played by the options given: the name the options make must be each record's `config.champion` (`:94-95`). The pairs are the champion report's runs whose seed the challenger played, in the champion report's order, which is the seed set's (`Gate.Pairs`, `Harness/Gate.cs:46-60`). A time-boxed challenger that finished only the head of the set is gated on the pairs it has.
 

@@ -32,7 +32,7 @@ const macroBrain = [
   'arch/macro-brain/selfplay',
   'arch/macro-brain/next',
 ];
-const combatBrain = ['arch/combat-brain', 'arch/combat-brain/leaf', 'arch/combat-brain/shared'];
+const combatBrain = ['arch/combat-brain', 'arch/combat-brain/leaf', 'arch/combat-brain/network', 'arch/combat-brain/walkthrough', 'arch/combat-brain/shared'];
 const slPlanner = ['arch/sl-planner', 'arch/sl-planner/turn-search', 'arch/sl-planner/beam', 'arch/sl-planner/budget'];
 const pimc = ['arch/pimc', 'arch/pimc/search', 'arch/pimc/budget'];
 const book = [

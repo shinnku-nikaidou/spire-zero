@@ -1,97 +1,97 @@
 ---
 title: Training the combat net
-description: "How the combat search's learned leaf is trained: what it reads and predicts in brief, what each generation of nets reads, its samples and labels (each round's start and what V makes of its fight's end), the loss and fixed settings, the report and net file, every measurement of c1 to c4, and SL's net c7-1v, in training."
+description: "How the combat search's learned leaf is trained: what it predicts, its inputs in brief, its samples and labels, the loss and fixed settings, the report and net file, and what the trained net measures."
 sidebar:
   label: Training the combat net
 ---
-import { Aside, Badge } from '@astrojs/starlight/components';
 
-The combat net is the combat search's learned leaf: from a round's start it predicts what the fight comes to under the policy that played its training games: how it ends, in c1–c4; what V makes of its end, in c7-1v. What it reads, how its layers combine them and what its head predicts are explained in the combat brain chapter ([Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3), [§4](/en/arch/combat-brain/leaf/#sec-4)); this page is about how it is trained, from which data, and what the trained nets measured.
+The combat net is the combat search's learned leaf: from a round's start it predicts how the fight will end under the policy that played its training games. What it reads and how its layers combine that are in [The combat net](/en/arch/combat-brain/network/), and what the search does with its outputs is in [The leaf](/en/arch/combat-brain/leaf/). This page is about how it is trained, from which data, and what the trained net measures.
 
-<Aside title="Status">
+## 1. What it predicts
 
-`learn/combat/` (`combat.train`, commits `d290783`, `3a95439`, `64f514b`) trains a combat net from one environment's games. Its first, SL's c7-1v, is being trained and has not been gated ([§7](#sec-7)). The nets that exist, c1–c4, were trained by `learn/train_combat.py`, removed in `455d437`; c2, written by it at commit `b4480a1`, has been the leaf of both champions since 2026-10-27, in NoSL's PIMC and in SL's planner. Its known issues are in [Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7).
+From a round's start, two things:
 
-</Aside>
+- **The ending**: a distribution over 51 classes, a death or one of 50 buckets of the share of max HP still to be lost from this state, the buckets the HP held rules out closed.
+- **The potions**: after a win, each held potion's chance of being gone.
 
-## 1. What the net reads and predicts
+`learn/combat/` trains it (`combat.train`). `--combat-net FILE` plays it, in the SL planner (shown as `plan NAME`) or in PIMC (`pimc NAME`).
 
-**Inputs**, as tokens of one round's start ([Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3)): every card of the four piles (its id, upgrade level, enchantment, affliction and pile); the player (HP share, HP, max HP, block, energy, max energy, stars, the round) and its powers; each living enemy (its id, HP share, HP, max HP, block, how many rounds it has shown, its powers, and four intent slots: the intents it shows now, then those of its last 3 rounds, most recent first); the relics, potions and context (character, encounter, room, act); and, in the newer nets, the orbs, the living allies, the ascension, orb slots and gold. The enemies' earlier intents come from the record of enemy moves that Harness keeps ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)). c7-1v also reads each card's current cost and its modifiers' amounts and each relic's counter, melted flag and status; its act, room and character read as `<unk>` ([Combat brain: the leaf §8](/en/arch/combat-brain/leaf/#sec-8)).
+## 2. What it reads
 
-**Outputs**: in `learn/combat/`, one number, the fight's worth: V of the first run view after the fight as a share of V at the last one before it, capped at 4, a death 0 ([§3](#sec-3)); the planner multiplies it by V before the fight ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)). In c2, a distribution over 51 classes, a death or one of 50 buckets of the share of max HP still to be lost, and the potions still to be used after a win, which the leaf turns into one number by pricing each ending ([Combat brain: the leaf §4](/en/arch/combat-brain/leaf/#sec-4)).
-
-**One net per environment.** A net learns how fights end under the policy that played them, and SL's planner, which sees what NoSL's search must guess, wins more from the same state. So a net file names its environment (`env`, SL or NoSL), and a run, a brain, a gate or a panel of the other environment refuses it (`LeafChoice.Check`, `SimWorker/Brains/LeafChoice.cs:25-30`). c1–c4 predate the field and play in either, which is how both champions play c2 ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
-
-`--combat-net FILE` plays it in PIMC (shown as `pimc NAME`) or in the SL planner (`plan NAME`).
-
-## 2. What each generation of nets reads
-
-The nets differ in the numbers they read beside the ids. `CombatNet` feeds a graph only the inputs it declares (`NetNumbers.Declared`, `Brain/Combat/CombatNet.cs:256`), so every generation's file loads.
-
-| nets | trained by | reads beside the ids | not read |
-|---|---|---|---|
-| c1, c2 | `train_combat.py` | each card's cost / 3 times a cost vector (`costs`); the player's 8 numbers; powers' amounts; enemies' 5 numbers and intents | the cards', relics' and orbs' numbers, orbs, allies, ascension, gold |
-| c3, c4 | `train_combat.py` (since 2026-10-27) | all of c2's, plus each card's modifier amounts / 10, star cost / 3, whether it costs X and each of its numbers (`vars`) / 10 times its name's vector; a power's stacks where its tooltip states them apart from its icon (Sloth) and the card it keeps (Nightmare); a relic's counter / 10 times its id's counter vector (Pen Nib, Nunchaku, Happy Flower, Stone Calendar), whether a counter shows, whether it is melted, its status; the orbs (id, passive and evoke numbers / 10) and allies; the ascension / 10, orb slots / 10, gold / 100 | – |
-| `learn/combat/`'s | `combat.train` | c3's inputs less the other numbers printed on a card, relic or orb: the ids, upgrades, modifiers and their amounts / 10, current cost / 3 and piles; the player's numbers; the powers' ids, amounts, stacks and kept cards; the enemies' ids, numbers, powers and intents; the relics' ids, counters / 10, melted flags and status; the potions', orbs' and allies' ids; the encounter; the ascension, orb slots and gold (`learn/combat/encode.py`) | `vars`, star cost, X, whether a counter shows (in `relic_values`, unused by the graph), orb numbers; act, room and character read as `<unk>` |
-
-Why c3 added the numbers: two states that differ only in a card's printed numbers or a relic's counter cannot be told apart by any amount of data if the net does not read them. Why `learn/combat/` leaves the rest out: a printed number follows from the id and the upgrade, and is the net's to learn, as V does ([Macro brain: the value network §2](/en/arch/macro-brain/network/#sec-2)), while a card's current cost, a modifier's amount and a relic's counter and status are the fight's state, which no id says. The parity of each input c3 added was checked with nets of random weights, scaled so that each input moves the output: the trainer's test states load, and a copy of a state with any one input changed fails the check on load.
-
-**`learn/combat/encode.py` is the one specification** of the newer nets' inputs, which `CombatNet.Predict` follows. Its scales (`learn/combat/encode.py:62-155`): a creature's HP share, HP / 100, max HP / 100 and block / 20; the player's energy / 3, max energy / 3, stars / 5 and round / 10; an enemy's rounds shown / 10; a power's amount / 10 and stacks / 10; an intent's damage per hit / 10 and total damage / 20. Each of these is capped at ±10, since a few states show huge numbers (an erupting WATERFALL_GIANT's HP). Of the three extra numbers, gold / 100 is capped; the ascension / 10 and orb slots / 10 are not. A dead enemy or ally is left out; an enemy without an id reads `<none>`, an ally without one (the player's) `<player>`. A card's cost is / 3, 0 for X or none; a modifier's amount and a relic's counter are / 10, capped.
-
-**The net** (`learn/combat/net.py:136-246`), in the same set-encoder style as V's: embeddings of 32; a card is its id's vector, plus its upgrade level times its id's upgrade vector, plus its cost times a learned cost vector, plus its pile's vector and each modifier's vector with its amount times a vector of that modifier, through φ (32 → 64 → 64), summed per pile × 1/8; a power is its id's vector plus its amount and stacks times vectors of its id, plus the kept card's vector, through φ (32 → 64), summed; an intent slot is the sum of its intents (the type's vector plus damage and total damage times vectors of that type) plus a learned vector of the slot's position; an enemy is its id's vector plus a projection of its 5 numbers, its powers and its 4 slots, through φ (224 → 128 → 128), and the enemies are summed; an ally is its id's vector plus a projection of its 4 numbers and its powers, through φ (96 → 64), summed; a relic is its id's vector plus its counter times a vector of its id, a learned vector if melted and its status's vector; the relic, potion, context and orb bags are sums. The body reads 651 numbers (4 × 64 + 8 + 64 + 128 + 4 × 32 + 64 + 3) through two layers of 256; the head gives one number. c2's graph, drawn in [Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3), has no orbs, allies or extra numbers: its body reads 552, and its heads give 51 classes and the potions used.
+Everything is in [The combat net §2](/en/arch/combat-brain/network/#sec-2). `learn/combat/encode.py` is the one specification, which `CombatNet` follows in C#.
 
 ## 3. Samples and labels
 
 `learn/combat/data.py` makes the samples from a list of decision logs and run records ([Reference §4](/en/arch/learning/reference/#sec-4)).
 
-- **A sample is a round's start**: the first combat decision of each round in the logs, the state a search leaf stands in, since the search's leaves are the starts of the next round ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)). A combat's decisions close at the next macro decision, or when the round goes back; card-prompt lines are skipped (`combats`, `learn/combat/data.py:31-67`).
-- **The enemies' history** before it is rebuilt from the earlier rounds' starts, each living enemy's intents by its uid, as Harness's `Dispatcher` builds it (`witness`, `learn/combat/data.py:70-77`).
-- **The label is what V makes of how that combat ended**, the same for every round start of the fight: V of the run at the first macro decision after the fight, as a share of V at the last one before it, capped at 4 (`WORTH_CAP`, `learn/combat/data.py:22`: 99 % of the wins lie below 3.4, since a run's chance can be next to nothing before a fight). A death is 0 ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)), and a fight that wins the run ends at V = 1 (`read`, `learn/combat/data.py:124-125`). `--value` names the V; it computes every label and is not trained. This is a Monte Carlo target under the policy that played the fight ([The loop §3](/en/arch/learning/loop/#sec-3)).
-- **What is left out** (`read`, `learn/combat/data.py:96-131`): failed runs; the runs of a seed file given to `--skip-seeds`; a combat with no `end` in its record, unless it is a lost run's last, which counts as a death; a fight with no run view before it, or, when the run goes on, after it; and every run whose logged combats do not match its record's, in number or in encounters (a log cut short, a combat logged apart), which the trainer counts and reports. An elite gauntlet run's record lists its monster fights, which were won at their start with no decisions, so such runs fail the match and give no samples.
-- **One environment.** `--env SL|NoSL` reads only that environment's lines; a log line of the other fails the training (`learn/combat/data.py:42-43`).
-- **Weights and split.** Every round start weighs the same (no weight per run, unlike V's samples), and every fifth run by run id is held out, with all its round starts, for early stopping and the report. `read` keeps only a sample's tokens, but for one held-out round start in 1,000 (`KEEP`), which keeps its observation and history for the net file's test states: with them a sample takes 55 KB, 88 GB over v7g1.
+- **A sample is a round's start**: the first combat decision of each round in the logs, the state a search leaf stands in, since the search's leaves are the starts of the next round ([The leaf §1](/en/arch/combat-brain/leaf/#sec-1)). A combat's decisions close at the next macro decision, or when the round goes back; card-prompt lines are skipped (`combats`).
+- **The enemies' history** before it is rebuilt from the earlier rounds' starts, each living enemy's intents by its uid, as Harness's `Dispatcher` builds it (`witness`).
+- **The ending's label is relative to the state**: a death, or the bucket of the HP share at this state less the share at the fight's end (`ending`). A heal larger than the lowest bucket falls into it. So every round start of a fight has one end, but its own label. Monte Carlo: it is what really happened under the policy that played ([The loop §3](/en/arch/learning/loop/#sec-3)).
+- **A potion's label** comes from the first run view after the fight, per copy: a potion held at this state and absent there is gone (`potions_used`). Not from the actions, which miss a Fairy in a Bottle spent with no action, 6.2 % of all potions gone. Not from the last round's start, which misses a potion drunk at the last action. A potion gained later in the fight is no potion of this state. A death trains only the ending.
+- **What is left out** (`read`): failed runs; the runs of a seed file given to `--skip-seeds`; a combat with no `end` in its record, unless it is a lost run's last, which counts as a death; a win with no run view after it; and every run whose logged combats do not match its record's, in number or in encounters, which the trainer counts and reports.
+- **One environment.** `--env SL|NoSL` reads only that environment's lines; a log line of the other fails the training. The net is trained on `--env SL` ([The leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
+- **Weights and split.** Every round start weighs the same, and every fifth run by run id is held out, with all its round starts, for early stopping and the report. One held-out round start in 1,000 keeps its observation and history for the net file's test states (`KEEP`).
+
+**The data** is whole SL runs: 21,263 self-play runs, every combat fought and most of them at the low budget ([The SL planner: budget §2](/en/arch/sl-planner/budget/#sec-2)), plus 600 runs at medium budget on the seeds `promotion-301-500`. That makes 21,863 runs and 1,625,608 round starts, of which 325,309 are held out. The seeds of `promotion-1-300` are never trained on.
+
+Of the wins' round starts, the mask never closes the true bucket, and 98 of 1,479,991 heal beyond the lowest bucket. 9.4 % of the round starts hold a potion.
 
 ## 4. Loss and training
 
-`uv run python -m combat.train --list PREFIX --env SL|NoSL --name NAME --value V_FILE [--skip-seeds FILE] [--out FILE] [--character SILENT] [--seed 0]` (`learn/combat/train.py:129-139`).
+```bash
+uv run python -m combat.train --list data/silent/lists/c7 --env SL --name NAME --skip-seeds ../eval/seeds/promotion-1-300.txt --test-list data/silent/lists/medium
+```
 
-The loss of a sample is the squared error of the fight's worth (`loss`, `learn/combat/net.py:249-251`). The settings are fixed in the code (`learn/combat/train.py:37-41`): ids seen fewer than 3 times in the training runs read as unknown, with no id dropout; AdamW at learning rate 10⁻³ and weight decay 10⁻⁴; batches of 256; at most 20 epochs, ending after 3 without a held-out loss lower by 10⁻⁴; the intents of the last 3 rounds, and the round, read. The next-intent head of `train_combat.py`, its comparison with `LeafValue`, and its options for ablations (`--width`, `--train-share`, `--fold`, `--lags`, `--no-round`) are gone: an experiment changes the code, and only a result keeps the change.
+The loss of a sample is
 
-**The report**, one JSON line on stdout (`learn/combat/train.py:225-238`): `env`, `value`, `runs`, `held_out_runs`, `samples`, `held_out_samples`, `vocab` (each table's size), `held_out`, and the same by act, room and encounter (`by_act`, `by_room`, `by_encounter`). Each part gives `samples`, `mse` (the squared error), `mse_mean` (that of the training mean), `rank_within` (the rank correlation with the fight's worth within each (encounter, round) of 10 or more, weighted by their sizes, since a beam ranks the states of one fight), `worth` and `predicted` (the means).
+$$
+\text{loss} = \text{CE}(\text{masked endings}, \text{class}) + \text{won} \sum_{\text{held}} \text{BCE}(u_{\text{id}}, \text{gone}).
+$$
 
-**The net file** goes to `weights/CHARACTER/NAME.json` and is never overwritten ([Reference §6](/en/arch/learning/reference/#sec-6)). It holds the net as ONNX (output `worth`), the token tables, `env`, `target` (`worth`), `worth_cap`, `lags`, `round`, the report, and up to 16 held-out round starts with the trainer's number for each, at least one showing an attack of several hits; `CombatNet.Load` computes them again and refuses the file if any is more than 10⁻³ off (`Brain/Combat/CombatNet.cs:70-92`). Its fields are listed in [Reference §7](/en/arch/learning/reference/#sec-7).
+The potions' term has weight 1 (`POTION_WEIGHT`), which is about 4 % of the loss: 0.105 potion rows per won sample at about 0.46 nats, against a cross-entropy of about 1.27. So the body stays the endings'.
 
-## 5. c1 to c4
+The settings are fixed in the code: ids seen fewer than 3 times in the training runs read as unknown; AdamW at learning rate 10⁻³ and weight decay 10⁻⁴; batches of 256; at most 20 epochs, ending after 3 without a held-out loss lower by 10⁻⁴. An experiment changes the code, and only a result keeps the change. The best epoch was 5 of 8, in 1 h 51 min on a GPU.
 
-Every combat net so far, from their files' `fit` and the ledger (`eval/silent/ledger.md`). All four are NoSL's, trained by `train_combat.py`; the numbers are each file's report, of its fold 0.
+**The report**, one JSON line on stdout, also kept as the net file's `fit`: `env`, `runs`, `held_out_runs`, `samples`, `held_out_samples`, `vocab`, then `held_out` and the same by act, room, encounter, HP (below 30 % or not) and potion id. With `--test-list`, `medium` holds the same for the runs of `--skip-seeds`' seeds in that list, which are reported and never trained on.
 
-| net | trained on | round starts | head | held-out cross-entropy (prior) | value's correlation with the real ending (`LeafValue`'s) | weights | gate |
-|---|---|---|---|---|---|---|---|
-| c1 | g0, 315 runs (NoSL, PIMC with `LeafValue`) | 13,954 | 20 buckets of HP share left | 1.590 (2.487) | 0.949 (0.790) | 296,054 | failed 2026-10-27 after 32 pairs (−1.41 floors) |
-| c2 | the same | 13,954 | 51 classes: death, 50 buckets of HP still to be lost | 1.320 (2.003) | 0.959 (0.790) | 303,764 | passed 2026-10-27 after 77 pairs (+2.36 floors); both champions' leaf |
-| c3 | g1, 505 runs (played by c2) | 27,909 | as c2; reads the numbers | 1.346 (2.041) | 0.960 (0.829) | 351,124 | void at 160 of 200 pairs (+0.58 floors, open) |
-| c4 | g1 + g2, 844 runs | 46,466 | as c3 | 1.356 (2.098) | 0.957 (0.833) | 353,300 | not gated |
+| field | what it says |
+|---|---|
+| `ce`, `ce_prior` | the endings' cross-entropy, and that of the training set's frequencies |
+| `death`, `predicted_death` | the means, actual and predicted |
+| `rank_within`, `rank_within_share` | rank correlation with the end's price within each (encounter, round) of 10 or more, by their sizes; beside it, the HP share's |
+| `rank_lost`, `rank_lost_share` | the same with the HP lost, on wins: what a net adds to the HP held |
+| `auc_death`, `auc_death_share` | the chance that a death's round start scores above a survivor's within each (encounter, round) with 3 or more of each; beside it, the HP share's |
+| `potions` | `rows`, `used`, `predicted`, `log_loss`, and `log_loss_id` and `log_loss_id_room`, those of a rate per id and per id and room |
 
-c2's held-out cross-entropy is lowest at bosses (1.130 on 597 round starts) and highest at elites (2.640 on 106), monsters 1.306 on 1,819; the squared error of its value is 0.00766, against c1's 0.00905; its chance of death correlates 0.787 with the deaths. c1's file is of the older head: 20 buckets of the HP share *left* at the end, no `loss_min`, output `potions_left`. `CombatNet` reads outputs by position, so it would now price c1's buckets as HP lost; c1 plays in no job.
+**The net file** goes to `weights/CHARACTER/NAME.json` and is never overwritten ([Reference §6](/en/arch/learning/reference/#sec-6)). Its fields are in [Reference §7](/en/arch/learning/reference/#sec-7).
 
-## 6. Measurements
+## 5. What it measures
 
-**On 315 NoSL self-play runs** (g0, 13,954 round starts; `train_combat.py`, three folds):
+The numbers are the report of `weights/silent/c7-2.json`. "Held out" is every fifth run of the training list, mostly played at the low budget. "Medium" is 39,732 round starts of runs at medium budget on the seeds `promotion-1-300`, which it never trained on.
 
-- **Data, not size, limits the net.** With a quarter, half and all of the training runs, the held-out cross-entropy is 1.446, 1.379 and 1.337. At half the width it is the same (1.337), at twice the width no better (1.340).
-- **The net learns the monsters' moves from data.** With a next-intent head it named the next round's intent types for 57.7% of the enemies, against 28.9% for repeating the current ones, and the next total damage within 4.15 on average, against 7.65. Most of it needs only the monster and its current intents: without the history and the round it gets 56.7%. The history helps a few monsters most, such as LAGAVULIN_MATRIARCH (43% against 33%) and NIBBIT (41% against 35%). Many misses are moves the game picks at random. The head changed neither the outcome's held-out cross-entropy nor the value's error beyond the noise, so it stayed off by default, and `learn/combat/` dropped it.
-- **Predict what is still to come, not what is left.** c1 predicted the HP share left at the end and learned only about half of what the HP held now is worth: one HP less now lowered its value by 0.0038, where it lowers the end by a full HP, 0.0078 at `LeafValue`'s prices. Its search traded HP away too cheaply, lost more HP than the champion in normal and elite fights (7.8 against 6.5 and 26.4 against 18.0 HP per win) and failed its gate after 32 pairs (−1.41 floors). Predicting the loss from here (c2), the HP held now counts in full (0.0083 per HP on the same states), and the held-out squared error of the value fell from 0.0090 to 0.0077 ([Combat brain: the leaf §4](/en/arch/combat-brain/leaf/#sec-4)).
+| metric | held out | medium | the HP share alone (held out, medium) |
+|---|---|---|---|
+| endings' cross-entropy (the prior's) | 1.266 (2.148) | 1.344 (2.118) | – |
+| deaths, actual and predicted | 5.59 %, 5.39 % | 4.02 %, 4.42 % | – |
+| rank with the end's price | 0.926 | 0.896 | 0.819, 0.796 |
+| rank of HP lost, on wins | 0.634 | 0.600 | 0.082, 0.087 |
+| AUC of a death | 0.942 | 0.874 | 0.758, 0.684 |
+| potions' log loss (per id and room) | 0.311 (0.478) | 0.359 (0.487) | – |
 
-**On g1's 505 runs** (27,909 round starts, played by c2; c3's data; three folds):
+**What to read.** The rank with the end's price says little: the HP share alone gets most of it, since the end's price follows the HP held. The rank of HP lost and the AUC of a death are what the net adds beyond the HP held.
 
-- **Width still does not matter.** The held-out cross-entropy is 1.348, 1.348 and 1.334 at width 1, and 1.356, 1.327 and 1.317 at half the width (the prior: 2.041, 1.973 and 2.014), the same within the folds' spread. Nor does the width change the search's speed: side by side on an 8-combat act 1 panel, nets of width 0.5, 1 and 2 and c2 take 1.58–1.76 s per action, since the game's simulation costs far more than the net. c3 kept width 1, so that its gate would test the data alone.
-- **Nor do the optimizer's settings.** On fold 0, learning rate 3 × 10⁻⁴ or 10⁻⁴ instead of 10⁻³, or a weight decay of 10⁻² instead of 10⁻⁴, give 1.346–1.348, against 1.348.
-- **The value** implied by the net correlates 0.960 with the real ending's, `LeafValue`'s 0.829.
-- **c3's gate**, with the champion's other options, was void after 160 of the 200 seeds: one of its runs bought the same potion in a shop under Sozu until it was truncated, a harness bug since fixed (commit `c5ee8de`). Up to then it reached 0.58 floors more than the champion on average (LLR −0.65, open), well below the gate's δ of 1.5 floors ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)).
+By room, on the held-out runs:
 
-## 7. Planned
+| room | round starts | cross-entropy (prior) | deaths, actual and predicted | rank of HP lost | AUC of a death (HP share) |
+|---|---|---|---|---|---|
+| hallway | 256,011 | 1.089 (1.811) | 1.7 %, 1.6 % | 0.607 | 0.960 (0.851) |
+| elite | 23,476 | 1.841 (2.869) | 9.6 %, 8.7 % | 0.738 | 0.941 (0.777) |
+| boss | 45,822 | 1.956 (3.661) | 25.1 %, 24.8 % | 0.775 | 0.935 (0.719) |
 
-- **SL's net, c7-1v** <Badge text="in training" variant="caution" />. No SL-trained net has ever been gated, and c2 learned from NoSL fights played by PIMC with `LeafValue` ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). c7-1v is the only net of this step: `uv run python -m combat.train --list data/silent/lists/c7 --env SL --name c7-1v --value ../weights/silent/v7-1f.json --skip-seeds ../eval/seeds/promotion-1-300.txt`. It trains on SL's self-play v7g1 (`sl/selfplay/v7g1/`: 21,263 runs, 1,566,757 round starts, all three tiers, no explored combat line) plus 600 medium-budget runs on `promotion-301-500` (v7-1, v7-1e and v6-3-2; 57,697 round starts; Test Subject 72 fights, 10 won, against v7g1's 348 and 16). `promotion-1-300`, the gate's seeds, is never trained on; the medium test set is v7-1f's 100 runs and v7-1's 300 on those seeds. Width 1, lags kept. Most of its labels are the endings of the planner at self-play's low budget ([The SL planner: budget §2](/en/arch/sl-planner/budget/#sec-2)). It must pass its gate ([Combat brain: the leaf §8.4](/en/arch/combat-brain/leaf/#sec-8.4)).
-- **Weights per environment, structure shared** <Badge text="planned" variant="caution" />. The net's code is one, a net file names its environment, and `combat.train` refuses a log of the other ([§3](#sec-3)). NoSL stays on c2 for now.
-- **Labels from continuing unchosen beam states** <Badge text="planned" variant="caution" />, only if c7-1v's gate shows a net effect: a state the search kept and did not play is played on, and its ending labels it, which gives labels off the played line. Other targets (TD(λ) inside the fight, a mix with the search's distribution) are not part of this design ([The loop §4](/en/arch/learning/loop/#sec-4)).
-- **Search values as labels and a learned prior** (expert iteration) are not part of this design either, which has no policy head ([The loop §5](/en/arch/learning/loop/#sec-5)).
+**Low HP**, below 30 % of max HP, where 21.5 % of the held-out round starts die: the AUC of a death is 0.904 against the HP share's 0.633, and on the medium runs 0.960 against 0.510.
+
+**The potion head by id.** On the held-out runs Fairy in a Bottle is used 13.3 % of the time and predicted at 13.1 %, with a log loss of 0.141 against 0.355 per id and room. Across all rows, 23.1 % are used, and 22.7 % predicted.
+
+**The hardest fight.** On Test Subject, where 91.2 % of the held-out round starts die, the net predicts 91.4 %, and its AUC of a death is 0.854 against 0.613. There are too few wins there to measure anything about HP lost.
+
+Which of these translates to more won runs is for a gate to say ([Evaluation: gates §5](/en/arch/evaluation/gates/#sec-5)).

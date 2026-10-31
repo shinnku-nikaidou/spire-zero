@@ -17,21 +17,19 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 本書的這一部分有三章：
 
-- 本章，兩個演算法共同的基礎：問題（[§2](#sec-2)）、形狀（[§3](#sec-3)）、介面（[§4](#sec-4)）、葉節點估值和戰鬥網路（[葉節點](/zh-tw/arch/combat-brain/leaf/)），以及選牌提示、敵人出招記錄和 worker 行程池（[提示、招式與 worker](/zh-tw/arch/combat-brain/shared/)）；
+- 本章，兩個演算法共同的基礎：問題（[§2](#sec-2)）、形狀（[§3](#sec-3)）、介面（[§4](#sec-4)）、葉節點估值（[葉節點](/zh-tw/arch/combat-brain/leaf/)）、戰鬥網路（[戰鬥網路](/zh-tw/arch/combat-brain/network/)、[一個狀態走過網路](/zh-tw/arch/combat-brain/walkthrough/)），以及選牌提示、敵人出招記錄和 worker 行程池（[提示、招式與 worker](/zh-tw/arch/combat-brain/shared/)）；
 - [SL 規劃器](/zh-tw/arch/sl-planner/)：剪枝 + 網路，在 SL 唯一的精確世界上；
 - [NoSL PIMC](/zh-tw/arch/pimc/)：蒙地卡羅 + 網路，在取樣世界上，逐個動作取平均。
 
 <Aside title="狀態">
 
-**已實作，兩個冠軍都在用**。SL：`SlPlanner` 在節點複本上規劃整場戰鬥，戰鬥照著它的計畫打（`run --env SL --policy plan`，預設 medium 力度）。NoSL：`PimcBrain` 在 8 個取樣世界裡各用 300 個節點搜尋本回合，再按第一動作取平均（`run --policy pimc`）。兩者都在一個 worker 行程池裡搜尋，也都用同一個葉節點給停下的地方評分：戰鬥網路 c2，按 `LeafValue` 的價格定價（[葉節點](/zh-tw/arch/combat-brain/leaf/)）。戰鬥中的選牌提示交給一條固定規則 `p0`（[提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。兩個佔位策略保留下來，供基準測試使用，也作為測試集的基線：`PlayPolicy`（隨機打出一張能打的牌）和 `RandomPolicy`（在合法動作中均勻隨機）。
+**已實作，兩個冠軍都在用**。SL：`SlPlanner` 在節點複本上規劃整場戰鬥，戰鬥照著它的計畫打（`run --env SL --policy plan`，預設 medium 力度）。NoSL：`PimcBrain` 在 8 個取樣世界裡各用 300 個節點搜尋本回合，再按第一動作取平均（`run --policy pimc`）。兩者都在一個 worker 行程池裡搜尋，也都用同一個葉節點給停下的地方評分：戰鬥網路，它的結局按手工設定的數字定價（[葉節點](/zh-tw/arch/combat-brain/leaf/)）。戰鬥中的選牌提示交給一條固定規則 `p0`（[提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。兩個佔位策略保留下來，供基準測試使用，也作為測試集的基線：`PlayPolicy`（隨機打出一張能打的牌）和 `RandomPolicy`（在合法動作中均勻隨機）。
 
-**規劃中，尚未實作**。兩個演算法的一個更簡單的設計，只要標題或表格列帶有 <Badge text="規劃中" variant="caution" />，這些頁面描述的就是它。它完全沒有量測過，只有網路的訓練器和 V 的價格有程式碼；沒有這個徽章的一切，描述的都是今天的程式碼。
+**規劃中，尚未實作**。兩個演算法的一個更簡單的設計，只要標題或表格列帶有 <Badge text="規劃中" variant="caution" />，這些頁面描述的就是它。它完全沒有量測過，也沒有程式碼；沒有這個徽章的一切，描述的都是今天的程式碼。
 
 | 部分 | 今天已實作 | 規劃中 |
 |---|---|---|
 | 一個回合的結束狀態 | 兩個搜尋：`SlPlanner.SearchTurn`、`PimcBrain.SearchWorld` | 一個 `TurnEnds`（[§3.1](#sec-3.1)） |
-| 網路 | c2，在 315 局 NoSL 對局上訓練，有已知的缺口（[葉節點 §7](/zh-tw/arch/combat-brain/leaf/#sec-7)） | 來自 SL 自我對弈的 c7-1v，學習 V 對戰鬥結局的估價；正在訓練，還沒過門檻（[葉節點 §8](/zh-tw/arch/combat-brain/leaf/#sec-8)） |
-| 價格 | `LeafValue` 的手工價格；V 的價格已為目標是 `worth` 的網路實作，未使用 | V 的價格與 c7-1v 一起，同一個門檻（[葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)） |
 | SL 的搜尋 | 貪婪下潛，接著是束；簡易束、失敗計畫、重新規劃、房間倍數 | 迭代加寬，配一個戰鬥預算（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)） |
 | NoSL 的搜尋 | PIMC，逐次減半、沿用計畫和房間倍數都已實作但關閉 | 同樣的 PIMC 跑在 `TurnEnds` 上，預算只有 K 和每個世界的節點數（[NoSL PIMC：預算 §8](/zh-tw/arch/pimc/budget/#sec-8)） |
 | 選牌提示 | 固定規則 `p0` | 搜尋分支（[提示、招式與 worker §4](/zh-tw/arch/combat-brain/shared/#sec-4)） |
@@ -89,7 +87,7 @@ $n = 5$ 時是 326 對 32，$n = 8$ 時是 109,601 對 256。在殺戮尖塔裡�
 
 ### 3.2 葉節點
 
-葉節點把一個狀態變成一個數字：網路對戰鬥怎樣結束的分布，乘以每種結局的價格。冠軍們已經在用這個形式，配 c2 和 `LeafValue` 的價格（[葉節點 §3–§5](/zh-tw/arch/combat-brain/leaf/#sec-3)）。<Badge text="規劃中" variant="caution" /> 這個設計保留形式，改變它的各個部分：用環境自己的對局訓練的網路、只讀它的輸入規則允許的東西，以及來自 V 的價格。
+葉節點把一個狀態變成一個數字：網路對戰鬥怎樣結束的分布，乘以每種結局的價格（[葉節點 §3–§5](/zh-tw/arch/combat-brain/leaf/#sec-3)）。
 
 ```mermaid
 flowchart TB
@@ -162,8 +160,7 @@ public sealed record CombatDecisionResult(
 
 這個設計按順序過門檻，讓每個門檻都能說明它那一步值多少：
 
-1. **c7-1v**。SL 自己的網路配 V 的價格，用今天的搜尋：標籤、輸入和價格都在同一個門檻裡（[葉節點 §8](/zh-tw/arch/combat-brain/leaf/#sec-8)）。
-2. **提示**當作搜尋分支（[提示、招式與 worker §4](/zh-tw/arch/combat-brain/shared/#sec-4)），**接著是加寬**（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)），**再接著是預算**（[SL 規劃器：預算 §7](/zh-tw/arch/sl-planner/budget/#sec-7)）。
+1. **提示**當作搜尋分支（[提示、招式與 worker §4](/zh-tw/arch/combat-brain/shared/#sec-4)），**接著是加寬**（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)），**再接著是預算**（[SL 規劃器：預算 §7](/zh-tw/arch/sl-planner/budget/#sec-7)）。
 
 NoSL 有兩個自己的條件：合併 `TurnEnds` 需要一次 NoSL 門檻，提示分支需要先跑融合測試集（[NoSL PIMC：搜尋 §6](/zh-tw/arch/pimc/search/#sec-6)）。
 
@@ -171,7 +168,9 @@ NoSL 有兩個自己的條件：合併 `TurnEnds` 需要一次 NoSL 門檻，提
 
 | 章 | 節 | 解釋什麼 | 圖 |
 |---|---|---|---|
-| 戰鬥大腦 | [葉節點](/zh-tw/arch/combat-brain/leaf/) | 搜尋在哪裡停下、那個狀態值多少：`LeafValue`、戰鬥網路 c2、它的輸出頭、定價、c2 的已知問題、下一個網路 c7-1v | 手工葉節點，可即時操作；c2 在真實狀態上的預測；兩個網路的圖 |
+| 戰鬥大腦 | [葉節點](/zh-tw/arch/combat-brain/leaf/) | 搜尋在哪裡停下、那個狀態值多少：網路的兩個輸出、價格、上界、這個估值看不到什麼 | 網路在真實狀態上的輸出 |
+| | [戰鬥網路](/zh-tw/arch/combat-brain/network/) | 網路從輸入到輸出：每個張量、每個編碼器、主幹、兩個輸出頭和遮罩、大小 | 網路的圖 |
+| | [一個狀態走過網路](/zh-tw/arch/combat-brain/walkthrough/) | 用手跟著一個真實的回合開始走過每一層，直到估值和標籤 | – |
 | | [提示、招式與 worker](/zh-tw/arch/combat-brain/shared/) | `p0` 和當作分支的提示、敵人出招記錄、worker 行程池 | – |
 | [SL 規劃器](/zh-tw/arch/sl-planner/) | 概覽 | 節點複本、為什麼最好的路線是對的、規劃一次並照著打、規劃中的形狀 | 一場真實的頭目戰，在它的第一個決策處規劃 |
 | | [回合搜尋](/zh-tw/arch/sl-planner/turn-search/) | 完整搜尋一個回合、置換、分享節點、`TurnEnds` | 一個回合的搜尋樹 |

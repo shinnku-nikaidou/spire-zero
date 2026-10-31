@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The two champions' net files field by field (docs: learning/reference §7): weights/silent/v6-3-2.json (V) and
-  // c2.json (the combat net), as src/data/book/learning-netfiles.json extracted them: each field's type and size, the
+  // The two champions' net files field by field (docs: learning/reference §7): weights/silent/v7-1f.json (V) and
+  // c7-2.json (the combat net), as src/data/book/learning-netfiles.json extracted them: each field's type and size, the
   // token tables, the state scaling, the training report, the ONNX graph's inputs, outputs, initializer shapes and
   // operators, and the test inputs. No weights.
   import type { Lang } from '../v/names.ts';
@@ -20,8 +20,8 @@
     entry?: Record<string, unknown>;
   }
   interface NetDoc { file: string; bytes: number; fields: Field[] }
-  const FILES: Record<string, NetDoc> = { "v6-3-2": data["v6-3-2"] as unknown as NetDoc, c2: data.c2 as unknown as NetDoc };
-  let which = $state('v6-3-2');
+  const FILES: Record<string, NetDoc> = { "v7-1f": data["v7-1f"] as unknown as NetDoc, "c7-2": data["c7-2"] as unknown as NetDoc };
+  let which = $state('v7-1f');
   const entries = (v: unknown) => Object.entries((v ?? {}) as Record<string, unknown>);
   const list = (v: unknown) => (Array.isArray(v) ? '[' + v.join(', ') + ']' : String(v));
   const numbers = (v: unknown) => ((v ?? []) as number[]).map((x) => fmt(lang, x, 2)).join(', ');
@@ -29,7 +29,7 @@
   const file = $derived(FILES[which]);
 
   const NOTE: Record<string, Words> = {
-    name: w('The net’s name, as the champion shows it (l0 v6-3-2, plan c2).', '网络的名字，冠军名称里就这样显示（l0 v6-3-2、plan c2）。', '網路的名字，冠軍名稱裡就這樣顯示（l0 v6-3-2、plan c2）。'),
+    name: w('The net’s name, as the champion shows it (l0 v7-1f, plan c7-2).', '网络的名字，冠军名称里就这样显示（l0 v7-1f、plan c7-2）。', '網路的名字，冠軍名稱裡就這樣顯示（l0 v7-1f、plan c7-2）。'),
     character: w('The character whose runs trained it. C# does not read it.', '训练它的那些局所用的角色。C# 不读。', '訓練它的那些局所用的角色。C# 不讀。'),
     objective: w('What RunNet.Value returns: floor, win, or progress (a net with a share head).', 'RunNet.Value 返回什么：floor、win，或 progress（带比例输出头的网络）。', 'RunNet.Value 回傳什麼：floor、win，或 progress（帶比例輸出頭的網路）。'),
     floors: w('The hazard head’s floors, from floor 0.', '风险值输出头覆盖的楼层数，从第 0 层起。', '風險值輸出頭涵蓋的樓層數，從第 0 層起。'),
@@ -128,7 +128,7 @@
         {:else if f.key === 'tests'}
           <p style="margin: 0;">{say(lang, w('Each entry', '每一项', '每一項'))}: {entries(f.entry).map(([k, v]) => `${k}: ${list(v)}`).join(' · ')}</p>
           {#if f.values}
-            <p class="v-num" style="margin: 0.25rem 0 0;">{say(lang, w('The trainer’s values (expected progress)', '训练器给出的值（期望进度）', '訓練器給出的值（期望進度）'))}: {numbers(f.values)}</p>
+            <p class="v-num" style="margin: 0.25rem 0 0;">{say(lang, w('The trainer’s values (chance to win)', '训练器给出的值（获胜机率）', '訓練器給出的值（獲勝機率）'))}: {numbers(f.values)}</p>
           {/if}
         {:else}
           <p style="margin: 0;"><code>{JSON.stringify(f.value)}</code></p>
@@ -138,9 +138,9 @@
   {/each}
   <p class="v-caption">
     {say(lang, w(
-      'Extracted from weights/silent/v6-3-2.json and c2.json at the page’s commit: field names, types, sizes and shapes, and the small fields’ values; the weights themselves are left out. c2 predates the env and character fields (it plays in both environments), and its graph has the costs input that the newer combat nets dropped.',
-      '从页面所在提交的 weights/silent/v6-3-2.json 和 c2.json 提取：字段名、类型、大小和形状，以及小字段的值；权重本身没有列出。c2 早于 env 和 character 字段（所以两个环境都能用），它的图还有较新的战斗网络已去掉的 costs 输入。',
-      '從頁面所在提交的 weights/silent/v6-3-2.json 和 c2.json 擷取：欄位名、型別、大小和形狀，以及小欄位的值；權重本身沒有列出。c2 早於 env 和 character 欄位（所以兩個環境都能用），它的圖還有較新的戰鬥網路已去掉的 costs 輸入。',
+      'Extracted from weights/silent/v7-1f.json and c7-2.json at the page’s commit: field names, types, sizes and shapes, and the small fields’ values; the weights themselves are left out.',
+      '从页面所在提交的 weights/silent/v7-1f.json 和 c7-2.json 提取：字段名、类型、大小和形状，以及小字段的值；权重本身没有列出。',
+      '從頁面所在提交的 weights/silent/v7-1f.json 和 c7-2.json 擷取：欄位名、型別、大小和形狀，以及小欄位的值；權重本身沒有列出。',
     ))}
   </p>
 </div>

@@ -62,7 +62,7 @@ The turns' searches of one beam step are independent, so each kept state's turn 
 
 ## 5. Results
 
-**The panel (2026-10-28).** Silent's starter deck at full HP, one fight per seed, the same fights for every player, prompts by `p0`, the combat net c2 as everyone's leaf. PIMC searches 8 worlds × 300 nodes, the planner beam 8 × 300 (then high effort). Each cell is the win rate and, in brackets, the HP lost per win:
+**The panel (2026-10-28).** Silent's starter deck at full HP, one fight per seed, the same fights for every player, prompts by `p0`, an earlier combat net as everyone's leaf. PIMC searches 8 worlds × 300 nodes, the planner beam 8 × 300 (then high effort). Each cell is the win rate and, in brackets, the HP lost per win:
 
 | pool | fights | PIMC NoSL | PIMC SL | SL planner |
 |---|---|---|---|---|
@@ -80,7 +80,7 @@ The planner wins every fight PIMC wins, and 1, 5 and 3 more. On the fights both 
 
 - **A narrow beam.** A turn ends in far more distinct states than the 8 the beam keeps, so few plans are proved (18% on act 1 hallway fights, 3% on elites, 1% on act 2) and a better line can fall outside the beam. What a wider beam or more nodes buy in whole runs (`--effort max`) is not measured. Iterative widening is the planned answer ([Beam §7](/en/arch/sl-planner/beam/#sec-7)).
 - **The bound's assumption.** A fight that heals or gives potions breaks it, and a prune can then drop the best line ([Beam §2](/en/arch/sl-planner/beam/#sec-2)).
-- **A NoSL leaf.** The leaf, c2, learned the endings of NoSL's PIMC with the hand-made leaf, a weaker player than the planner, and it has no act 3 in its vocabulary ([Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7)). SL's own net, c7-1v, is being trained, and V's prices (`--leaf-prices v`), which go with it, are built but not gated ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+- **What the leaf cannot see.** A flat price per potion, no price on gold or max HP ([Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7)).
 - **Prompts are not searched.** Card prompts go to `p0`, so a plan cannot choose a better discard or pick ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)).
 - **The fight's end is the horizon.** The search stops where the fight does, valued by the leaf; the rewards after it and the rest of the node, which SL may also see, are left to the macro brain. Searching on to the node's exit is open ([Environments: information §9](/en/arch/environments/information/#sec-9), question 1).
 - **Lost fights cost time.** A quarter of the fight time goes into the 5% of fights that are lost ([§3](#sec-3)). The limit on losing plans caps it; no cheaper test tells a lost fight from a hard one.

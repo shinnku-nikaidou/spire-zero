@@ -12,7 +12,7 @@ import WorldSampler from '../../../../../components/combat/WorldSampler.svelte';
 
 In NoSL the combat brain knows only what a player knows: the screen, and what can be inferred from it. It does not know the order of the draw pile, what a random effect will roll, or which of its moves a monster has queued behind its intent. It cannot plan on the real fight, because it may not look at it.
 
-So it plans on fights it builds itself. **PIMC** (perfect-information Monte Carlo) draws $K$ complete worlds, hidden parts included, each of which agrees with everything the player has seen; searches each one as an ordinary game with nothing hidden; and averages the results. The answer is the action that is best on average over the worlds. NoSL's combat brain is **Monte Carlo + net**: the worlds are the Monte Carlo, the combat net values where each world's search stops. The NoSL champion plays it with 8 worlds of 300 nodes each and the combat net c2 as its leaf (`run --policy pimc`).
+So it plans on fights it builds itself. **PIMC** (perfect-information Monte Carlo) draws $K$ complete worlds, hidden parts included, each of which agrees with everything the player has seen; searches each one as an ordinary game with nothing hidden; and averages the results. The answer is the action that is best on average over the worlds. NoSL's combat brain is **Monte Carlo + net**: the worlds are the Monte Carlo, the combat net values where each world's search stops. The NoSL champion plays it with 8 worlds of 300 nodes each and the combat net as its leaf (`run --policy pimc`).
 
 <Aside title="Built and planned">
 
@@ -94,7 +94,7 @@ The design keeps PIMC and takes away what has grown around it:
 3. Take $Q(a)$, the mean over the same worlds.
 4. Play $\arg\max_a Q(a)$, one action; observe; search again.
 
-The details are in [Search §6](/en/arch/pimc/search/#sec-6), the budget in [Budget §8](/en/arch/pimc/budget/#sec-8). The worlds, their fidelity and fair play above do not change. NoSL stays on c2 for now.
+The details are in [Search §6](/en/arch/pimc/search/#sec-6), the budget in [Budget §8](/en/arch/pimc/budget/#sec-8). The worlds, their fidelity and fair play above do not change.
 
 ## 6. This chapter
 

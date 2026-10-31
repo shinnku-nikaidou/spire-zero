@@ -1,0 +1,241 @@
+---
+title: The combat net
+description: "The combat net from input to output: every tensor it reads, how cards, powers, enemies and their intents become vectors, the body, the endings head with its mask, the potion head, its sizes, and how PyTorch and C# stay equal."
+sidebar:
+  label: The combat net
+---
+import ArchDiagram from '../../../../../components/v/ArchDiagram.svelte';
+
+The combat net reads the state of a fight at the start of a round and predicts how the fight will end. The search uses that prediction to rank the states it reaches ([The leaf](/en/arch/combat-brain/leaf/)). This page describes the net from its inputs to its outputs. The code is `Net` in `learn/combat/net.py`, and its inputs are specified by `learn/combat/encode.py`. How it is trained is in [Training the combat net](/en/arch/learning/combat-net/). To see every step with real numbers, read [One state through the net](/en/arch/combat-brain/walkthrough/).
+
+## 1. The whole net
+
+Set encoders read the cards, the powers, the enemies and the allies; plain sums of learned vectors read the relics, the potions, the context and the orbs. Their outputs are joined into one vector of 651 numbers. A body of two layers turns it into 256 numbers, and two heads read those: the **endings** and the **potions**.
+
+The diagram reads from the bottom up: inputs at the bottom, outputs at the top. Point at a block for what it computes.
+
+<ArchDiagram client:visible lang="en" net="combat" />
+
+The shapes along the way, for one state in a batch of $B$, with $n$ cards, $q$ powers, $e$ enemies, $i$ intents in a slot, $r$ relics and $a$ allies:
+
+| step | what | shape |
+|---|---|---|
+| cards | each card as one vector | $B \times n \times 32$ |
+| | $\varphi$, card by card | $B \times n \times 64$ |
+| | summed per pile × 1/8, the 4 piles joined | $B \times 256$ |
+| player | 8 numbers | $B \times 8$ |
+| powers | each power as one vector, through $\varphi$ | $B \times q \times 64$ |
+| | summed | $B \times 64$ |
+| enemies | id and numbers | $B \times e \times 32$ |
+| | their powers, summed | $B \times e \times 64$ |
+| | 4 intent slots | $B \times e \times 128$ |
+| | joined, through $\varphi$ | $B \times e \times 128$ |
+| | summed | $B \times 128$ |
+| relics, potions, context, orbs | each a sum of vectors | $B \times 32$ each |
+| allies | through $\varphi$, summed | $B \times 64$ |
+| 3 numbers | the ascension, orb slots, gold | $B \times 3$ |
+| join | all of them | $B \times 651$ |
+| body | two layers | $B \times 256$ |
+| endings head | a death and 50 buckets | $B \times 51$ |
+| potion head | one chance per potion id | $B \times 53$ |
+
+The width of the last dimension of the potion head is the size of the potion table, 53 in this file.
+
+## 2. What it reads
+
+**The rule: the state of the fight is in the input; what follows from an id is the net's to learn.** A card's printed damage follows from its id and upgrade, so it is not read. A card's current cost can change during a fight, and no id says so, so it is read. Nothing about how to play is written in: no card is called good, and no monster's move order is listed.
+
+Everything comes from the observation a player sees, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)), by `encode.tokens`:
+
+| input | what is read |
+|---|---|
+| cards | id, upgrade level (higher levels read as 3), pile, the ids and amounts of its enchantment and affliction, its current cost (0 for X or none) |
+| player | HP share, HP, max HP, block, energy, max energy, stars, the round |
+| powers | id, amount, the stacks a tooltip states apart from its icon, the card it keeps |
+| enemies | id, HP share, HP, max HP, block, how many rounds it has shown, its powers, its intents now and in its last 3 rounds |
+| relics | id (with `:used` added once it is used up), counter, melted flag, status |
+| potions, orbs | their ids |
+| allies | id, HP share, HP, max HP, block, powers |
+| context | the encounter |
+| 3 numbers | the ascension, orb slots, gold |
+
+**Not read:** other numbers printed on cards, relics or orbs, and the draw order. The pile is read as a set, as a player sees it, even in SL. Per-combat relic flags that the observation does not show are out of reach of any input rule.
+
+**The context.** The tokens fed are `character:ID`, `encounter:ID`, `room:ID` and `act:N`, but the table lists only encounters, so the other three read as the unknown entry: the encounter implies them.
+
+**Token tables.** The net file holds one table per kind of id: `cards`, `modifiers`, `powers`, `enemies`, `intents`, `relics`, `potions`, `context`, `orbs`, `allies`, `relic_status`. A table is built from the training runs: an id seen fewer than 3 times reads as entry 0, one shared `<unk>`.
+
+**Scales.** Numbers are scaled to about one, then capped at ±10, since a few states show huge numbers (an erupting Waterfall Giant's HP):
+
+| number | scale |
+|---|---|
+| HP, max HP | / 100 |
+| HP share | as it is |
+| block | / 20 |
+| energy, max energy | / 3 |
+| stars | / 5 |
+| the round, an enemy's rounds shown | / 10 |
+| a power's amount and stacks, a modifier's amount, a relic's counter | / 10 |
+| a card's cost | / 3 |
+| an intent's damage per hit | / 10 |
+| an intent's total damage (damage × hits) | / 20 |
+| gold | / 100 |
+| the ascension, orb slots | / 10, not capped |
+
+A dead enemy or ally is left out. An enemy without an id reads `<none>`, an ally without one, the player's, `<player>`.
+
+**The input tensors**, in the order of the graph's inputs (`encode.INPUTS`). Every list is padded to the longest in the batch, and to at least 1, with a mask of 1 for what is present and 0 for padding:
+
+| name | shape | content |
+|---|---|---|
+| `cards`, `ups`, `costs` | $B \times n$ | each card's entry, upgrade level, cost |
+| `piles` | $B \times n \times 4$ | its pile, one-hot: hand, draw, discard, exhaust |
+| `mods`, `mod_mask`, `mod_amounts` | $B \times n \times 2$ | its modifiers' entries, at most 2, their mask and amounts |
+| `player` | $B \times 8$ | the player's numbers |
+| `powers`, `power_amounts`, `power_stacks`, `power_mask` | $B \times q$ | the player's powers |
+| `power_cards`, `power_card_mask` | $B \times q$ | the card a power keeps |
+| `enemies`, `enemy_mask` | $B \times e$ | each enemy's entry and its mask |
+| `enemy_scalars` | $B \times e \times 5$ | its numbers |
+| `enemy_powers`, `enemy_power_amounts`, `enemy_power_stacks`, `enemy_power_mask`, `enemy_power_cards`, `enemy_power_card_mask` | $B \times e \times q$ | its powers |
+| `intents`, `intent_mask` | $B \times e \times 4 \times i$ | each slot's intent types |
+| `intent_values` | $B \times e \times 4 \times i \times 2$ | their damage and total damage |
+| `relics`, `relic_mask`, `relic_status` | $B \times r$ | each relic's entry, mask and status |
+| `relic_values` | $B \times r \times 3$ | its counter, whether one shows (unused by the graph), melted |
+| `potions`, `potion_mask` | $B \times p$ | each held potion's entry and its mask |
+| `context`, `context_mask` | $B \times 4$ | the context tokens |
+| `orbs`, `orb_mask` | $B \times o$ | the orbs |
+| `allies`, `ally_mask` | $B \times a$ | each ally's entry and mask |
+| `ally_scalars` | $B \times a \times 4$ | its numbers |
+| `ally_powers`, `ally_power_amounts`, `ally_power_mask` | $B \times a \times q$ | its powers |
+| `extra` | $B \times 3$ | the ascension, orb slots, gold |
+
+## 3. The cards
+
+A pile is a multiset: the order of its cards means nothing, and its size varies. So each card goes through the same small network on its own, and the results are added up, a Deep Set (Zaheer et al., 2017). A sum reads any number of cards in any order.
+
+**The card's vector.** A card with id $c$, upgrade level $u$, cost $k$, pile $l$ and modifiers $m$ with amounts $a_m$ becomes 32 numbers:
+
+$$
+x = E[c] + u\, U[c] + k\, K + P[l] + \sum_{m} \big(M[m] + a_m\, A[m]\big).
+$$
+
+$E$, $U$, $M$ and $A$ are learned tables with one vector per id. $K$ is one learned vector, and $P$ holds one vector per pile. Each entry starts as random numbers of standard deviation 0.1.
+
+**$\varphi$, the card's network.** Two layers, the same weights for every card:
+
+$$
+\varphi(x) = \mathrm{ReLU}\big(W_2\, \mathrm{ReLU}(W_1 x + b_1) + b_2\big),
+$$
+
+with $W_1$ of 32 → 64 and $W_2$ of 64 → 64. ReLU is $\max(0, x)$, number by number.
+
+**One sum per pile.** The vectors are added up within each pile and scaled:
+
+$$
+h_l = \frac{1}{8} \sum_{\text{cards in pile } l} \varphi(x).
+$$
+
+The factor $1/8$ keeps a pile's sum about a mean's size. A sum says how much of a kind of card is there; the net can tell a thick hand from a thin one. The four piles are joined: $4 \times 64 = 256$ numbers. The same card reads differently in the hand and in the discard pile, because $P[l]$ is part of $x$, and because the two sums are separate parts of the join.
+
+## 4. The powers
+
+A power with id $t$, amount $g$, stacks $s$ and an optional kept card $c$ becomes 32 numbers:
+
+$$
+y = T[t] + g\, G[t] + s\, S[t] + E[c].
+$$
+
+$G$ and $S$ hold a direction per power id, so an amount can matter a lot for one power and little for another. The kept card's vector comes from the cards' table $E$. One layer of 32 → 64 with a ReLU maps each power, and the powers are summed with no scaling: 64 numbers. The same weights read the player's powers, each enemy's and each ally's (an ally's without stacks or kept cards).
+
+## 5. The enemies and their intents
+
+**An intent** has a type $d$, a damage per hit $f$ and a total damage $v$:
+
+$$
+w = I[d] + f\, I_f[d] + v\, I_v[d].
+$$
+
+**An intent slot** is the sum of its intents plus a learned vector of the slot's position. Slot 0 is what the enemy shows now; slots 1 to 3 are what it showed in its last 3 rounds, most recent first. An empty slot is its position's vector alone. The four slots are joined: $4 \times 32 = 128$ numbers.
+
+**An enemy** joins three parts: its id's vector plus a linear projection of its 5 numbers (32), its powers' sum (64), and its slots (128). That is 224 numbers, which go through an MLP of 224 → 128 → 128, the same weights for each enemy. The enemies are summed: 128 numbers.
+
+Nothing about a monster's moves is written by hand. From the monster's id, the round and its last intents, the net can learn the monster's move order and where in it the monster stands.
+
+## 6. The bags, the allies and the numbers
+
+**A relic** is its id's vector, plus its counter times a learned vector of its id, plus a learned vector if melted, plus its status's vector. The relics are summed: 32 numbers.
+
+**The potions, the context and the orbs** are bags: each id has a learned vector, and the vectors are added up with no layer between. An empty bag is the zero vector. Two copies of a potion count twice.
+
+**An ally** is its id's vector plus a projection of its 4 numbers, joined with its powers' sum, through one layer of 96 → 64. The allies are summed: 64 numbers.
+
+**The join.** All parts are concatenated:
+
+$$
+\underbrace{256}_{\text{cards}} + \underbrace{8}_{\text{player}} + \underbrace{64}_{\text{powers}} + \underbrace{128}_{\text{enemies}} + \underbrace{4 \times 32}_{\text{bags}} + \underbrace{64}_{\text{allies}} + \underbrace{3}_{\text{numbers}} = 651.
+$$
+
+## 7. The body and the two heads
+
+**The body** is an MLP of two layers, 256 numbers each. This is where everything meets: no card has seen an enemy before the join, and no enemy has seen the HP.
+
+**The endings head** is one linear layer of 256 → 51. Class 0 is a **death**. Classes 1 to 50 are buckets, each 0.025 wide, of the share of max HP **still to be lost from this state** to the end of a won fight, from −0.25 (a fight that heals) to 1.
+
+**The mask.** Some buckets are impossible for a state. A win ends with an HP share in $(0, 1]$, so with HP share $s$ now, what is lost must be below $s$ and at least $s - 1$. A bucket $[l, l + 0.025)$ stays open if
+
+$$
+l < s \quad\text{and}\quad l + 0.025 > s - 1.
+$$
+
+Every other bucket has its logit set to $-10^4$, which leaves it exactly 0 after the softmax (`Net.reachable`). The rule is inside the graph, so C# holds none of it. A softmax over the open classes then gives the 51 chances, the graph's output `outcome`.
+
+**Why "still to be lost" and not "left at the end".** The value is formed as *what the state holds, exactly, plus what the net says is still to come* ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)). So the HP held now counts in full, and two states of a beam differ by their true HP before the net says anything. Every head follows this rule: it predicts a change from the state, and what the state holds counts in full.
+
+**The potion head** is one linear layer of 256 → 53 with a sigmoid, the graph's output `potion_used`: one chance per entry of the potion table of being gone by the end of a won fight. Training and the value read only the held potions, by their table entries. Two copies of an id read the same chance; their labels (one gone, one left) train it toward 0.5, whose sum is right.
+
+The potion head has a fixed width and no new dynamic axis, and it shares only the body with the endings. It is a small part of the loss ([Training the combat net §4](/en/arch/learning/combat-net/#sec-4)).
+
+## 8. Sizes
+
+The file is `weights/silent/c7-2.json`.
+
+| part | shape | weights |
+|---|---|---|
+| card id, upgrade | 519 × 32, twice | 33,216 |
+| modifier id, amount | 29 × 32, twice | 1,856 |
+| cost, melted; pile, slot | 32 each; 4 × 32 each | 320 |
+| power id, amount, stacks | 186 × 32, three times | 17,856 |
+| enemy id | 107 × 32 | 3,424 |
+| intent type, damage, total | 14 × 32, three times | 1,344 |
+| relic id, counter; status | 258 × 32, twice; 4 × 32 | 16,640 |
+| potion, context, orb, ally ids | 53, 87, 6, 4 × 32 | 4,800 |
+| card $\varphi$ | 32 → 64 → 64 | 6,272 |
+| power $\varphi$ | 32 → 64 | 2,112 |
+| enemy numbers, enemy $\varphi$ | 5 → 32; 224 → 128 → 128 | 45,504 |
+| ally numbers, ally $\varphi$ | 4 → 32; 96 → 64 | 6,368 |
+| body | 651 → 256 → 256 | 232,704 |
+| endings head | 256 → 51 | 13,107 |
+| potion head | 256 → 53 | 13,621 |
+| **total** | | **399,144** |
+
+The embeddings' sizes depend on the token tables, which depend on the training data.
+
+## 9. One forward pass, two implementations
+
+The trainer computes the net in PyTorch; the brain runs it in C#. They must agree, and they do so through the net file ([Learning: reference §7](/en/arch/learning/reference/#sec-7)):
+
+- **Export.** `learn/combat/export.py` writes the net as an ONNX graph inside the file, with the mask, the softmax and the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, the buckets, the training report and 16 held-out round starts with the outputs the trainer gave them, among them an attack of several hits, a held potion and low HP.
+- **Inference.** `CombatNet` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) follows `encode.py`: it builds the same tensors, and ONNX Runtime runs the graph.
+- **The check.** `CombatNet.Load` refuses the file unless it gives the 16 states the trainer's outputs to within $10^{-3}$. A difference in how either side reads a state stops the file from loading.
+
+## 10. What the structure cannot express
+
+These follow from the structure alone.
+
+- **No card sees another before the sum.** A relation between cards reaches the body only as numbers that survive adding up.
+- **The bags are linear.** A relation between two relics, or a relic and a card, is the body's alone to work out.
+- **A pile is a set.** The draw order is not read, so what comes next can only be guessed from what is in the pile.
+- **Slots hold 3 rounds.** What an enemy did earlier reaches the net only through its number of rounds shown and its powers.
+- **Enemies are a sum.** The net can count what the enemies do, but which enemy stands where is not an input.
+- **Ids, not rules.** The net knows a card only by the fights that held it. An id seen fewer than 3 times in training reads as the shared unknown, whatever it does.
+- **No policy.** The net values a state; it says nothing about which action to play. The search chooses.

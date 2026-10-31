@@ -15,10 +15,10 @@ import ChampionTimeline from '../../../../../components/book/ChampionTimeline.sv
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone",
+  "champion": "combat plan c7-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v7-1f.json", "afterstates": "clone", "combat-net": "weights/silent/c2.json",
+    "value": "weights/silent/v7-1f.json", "afterstates": "clone", "combat-net": "weights/silent/c7-2.json",
     "character": "SILENT", "asc": "0"
   },
   "report": "eval/silent/reports/2026-10-31-sl-r1-promotion-1-100-plan-c2-l0-v7-1f-clone-p0.json",
@@ -45,7 +45,7 @@ import ChampionTimeline from '../../../../../components/book/ChampionTimeline.sv
 
 **由 `--promote` 寫入，或由人工寫入**。`gate --promote` 寫入每個欄位，選項按挑戰者的選項產生（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:86-114`）：對 SL 規劃器是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。還沒有 SL 冠軍是由 `gate` 晉級的；SL 檔案是人工寫的，寫著 `"effort": "medium"`，打的是同樣的預算（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。重定基線只改 `report`（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）。
 
-**現在**。兩個檔案都指明 `weights/silent/v7-1f.json` 和 `weights/silent/c2.json`、上面那份報告、自 2026-10-31 起，依據是配對勝局的門檻。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。NoSL 檔案指向 SL 報告，因為這個冠軍還沒有 NoSL 報告；對它的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
+**現在**。兩個檔案都指明 `weights/silent/v7-1f.json` 和 `weights/silent/c7-2.json`。上面列的那份報告是用較早的戰鬥網路打的；在這個冠軍有自己的報告之前，它繼續算數。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。NoSL 檔案指向 SL 報告，因為這個冠軍還沒有 NoSL 報告；對它的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
 
 ## 2. 迄今每一個冠軍
 

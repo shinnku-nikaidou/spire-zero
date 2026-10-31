@@ -23,9 +23,9 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 **宏观大脑的 V**。在战斗外，宏观大脑把一个决策的每个选项都打一遍，看紧接着它的局面（*后状态*），然后选 V 给后状态估值最高的那个选项（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。V 是一个神经网络，读入这一局是什么（它的卡牌、遗物、药水、幕和 Boss 的 id，以及前方的地图）和六个原始数字，返回一个数，即从这里赢下这一局的概率（[宏观大脑：从风险值到价值 §1](/arch/macro-brain/value/#sec-1)）。一个 V 给每个决策界面（surface）打分，所以一张牌、一件遗物、一次回血和地图上的一条路线在同一个尺度上比较，不需要手写的兑换比率。
 
-**战斗网络**。战斗搜索向前看一个回合或一整场战斗，然后必须说出它到达的状态值多少：它的*叶节点价值*。战斗网络读入一个回合的开始，预测这场战斗会怎样结束：死亡，或者还要再损失多少最大生命值（分成 50 个桶），以及还要用掉的药水（[战斗大脑：叶子 §3](/arch/combat-brain/leaf/#sec-3)、[§4](/arch/combat-brain/leaf/#sec-4)）。它的训练见[训练战斗网络](/arch/learning/combat-net/)。 这是冠军们用的 c2。SL 的下一个网络 c7-1v 只学一个数：战斗后这一局的 V 占战斗前的 V 的比例（[§8](/arch/combat-brain/leaf/#sec-8)）。
+**战斗网络**。战斗搜索向前看一个回合或一整场战斗，然后必须说出它到达的状态值多少：它的*叶节点价值*。战斗网络读入一个回合的开始，预测这场战斗会怎样结束：死亡，或者还要再损失多少最大生命值（分成 50 个桶），以及赢下之后每瓶持有的药水没有了的概率（[战斗网络](/arch/combat-brain/network/)、[战斗大脑：叶子 §4](/arch/combat-brain/leaf/#sec-4)）。它的训练见[训练战斗网络](/arch/learning/combat-net/)。
 
-**设计上是同一个尺度**。设计让两者使用同一个单位，即这一局的胜率：战斗网络学习 V 对战斗结局的估价，规划器的叶子以 V 为单位（[循环 §10](/arch/learning/loop/#sec-10)）。现在实际打的时候，两者各用自己的单位：战斗叶子用手设的数给 c2 的结局定价（`LeafValue` 的价格）。`--leaf-prices v` 配目标为 `worth` 的网络已经实现，但没有冠军使用它（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
+**两个单位**。V 的单位是这一局的胜率。战斗叶子保留自己的单位：它用手设的数给网络的结局定价（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
 
 **策略是学出来的，不是写出来的**。两个网络里都没有手写任何关于怎么打的东西：没有哪张牌被说成好牌，也没有列出任何怪物的出招顺序。手写的是游戏规则（模拟器运行的就是真实的游戏）和目标（一局怎样结束，一场战斗怎样结束）。V 从零学起，从 AI 自己的对局中学，而不是从人类的对局中学。
 
@@ -61,7 +61,7 @@ flowchart LR
 | 自我对弈：整局，以 ε 均匀抽取 | 已实现 | `run --explore`，[循环 §2](/arch/learning/loop/#sec-2) |
 | 按 V 或搜索的估值做 softmax 探索 | 已实现，只有较早的作业用过 | `run --macro-explore`、`--combat-explore`，[循环 §9](/arch/learning/loop/#sec-9) |
 | V 的训练，蒙特卡洛标签 | 已实现 | `learn/v/`，[宏观大脑：从风险值到价值 §5](/arch/macro-brain/value/#sec-5) |
-| 战斗网络的训练，蒙特卡洛标签 | 已实现，c7-1v 正在训练，还没过门槛 | `learn/combat/`，[训练战斗网络](/arch/learning/combat-net/) |
+| 战斗网络的训练，蒙特卡洛标签 | 已实现 | `learn/combat/`，[训练战斗网络](/arch/learning/combat-net/) |
 | V 的 Boss 战标签（Boss 模拟战、门前状态） | 已实现，未使用 | `learn/bosslab.py`，[参考 §9](/arch/learning/reference/#sec-9) |
 | 反事实分叉 | 作为命令已实现；现在没有训练器读它们 | `fork`、`afterstates`，[循环 §10](/arch/learning/loop/#sec-10) |
 | 门槛：模拟器的 SPRT，胜局的配对下界 | 已实现 | `gate`、`learn/challenge.py`、`learn/gauntlet.py`，[循环 §8](/arch/learning/loop/#sec-8) |

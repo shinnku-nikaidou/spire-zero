@@ -136,7 +136,7 @@ gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challe
 | `--not-worse` | 关 | 非劣效检验（[§7](#sec-7)） |
 | `--promote PATH` | 无 | 通过时写出挑战者的报告并让它成为冠军（[§8](#sec-8)） |
 | `--env ENV` | 无 | 挑战者的环境，与文件的环境不同就拒绝 |
-| 挑战者的对局选项 | | `--policy`、`--macro`、预算、`--workers`、`--value`、`--afterstates`、叶子选项、`--leaf-prices`、`--macro-explore`、`--combat-explore`、`--explore`（[模拟器：参考 §3](/arch/simulator/reference/#sec-3)）；挑战者没有 `--champion FILE`，它完全由自己的选项命名 |
+| 挑战者的对局选项 | | `--policy`、`--macro`、预算、`--workers`、`--value`、`--afterstates`、叶子选项、`--macro-explore`、`--combat-explore`、`--explore`（[模拟器：参考 §3](/arch/simulator/reference/#sec-3)）；挑战者没有 `--champion FILE`，它完全由自己的选项命名 |
 
 **两方**。冠军一方是它报告里的对局。挑战者一方是它的记录，每条记录都必须是用给出的选项打出来的：这些选项组成的名字必须等于每条记录的 `config.champion`（`:94-95`）。配对是冠军报告里那些挑战者也打过其种子的对局，按冠军报告的顺序，也就是种子集的顺序（`Gate.Pairs`，`Harness/Gate.cs:46-60`）。限时作业里只打完种子集开头一部分的挑战者，就按它已有的配对过门槛。
 

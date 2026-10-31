@@ -30,7 +30,7 @@ A state in progress has a **bound**: the leaf's value of winning the fight from 
 
 The **decision's bound** is the bound of the decision's own state: a win that loses no HP and no potion. A line that reaches it cannot be beaten.
 
-The bound assumes that the fight neither heals nor gives potions. A few cards, potions and relics break that (a heal, a potion generated in the fight), and then a prune can drop a line that would have been better. The leaf's own shape is what makes the bound valid otherwise: `LeafValue` never values a state in progress above the win it could reach with the same HP, and V's prices are made monotone in HP for the same reason ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)). Nothing makes them monotone in potions: V may price a win with one potion fewer higher, and then the bound can drop a better line too.
+The bound assumes that the fight neither heals nor gives potions. A few cards, potions and relics break that (a heal, a potion generated in the fight), and then a prune can drop a line that would have been better. The leaf's own shape is what makes the bound valid otherwise: a win is priced by the HP and potions it ends with, and the net adds to a state in progress only what is still to come, so a state rises above its bound only by predicted healing ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
 
 ## 3. The greedy dive
 

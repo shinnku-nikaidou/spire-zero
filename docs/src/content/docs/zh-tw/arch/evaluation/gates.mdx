@@ -136,7 +136,7 @@ gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challe
 | `--not-worse` | 關閉 | 非劣效檢定（[§7](#sec-7)） |
 | `--promote PATH` | 無 | 通過時寫出挑戰者的報告並讓它成為冠軍（[§8](#sec-8)） |
 | `--env ENV` | 無 | 挑戰者的環境，與檔案的不同時拒絕 |
-| 挑戰者的對局選項 | | `--policy`、`--macro`、預算、`--workers`、`--value`、`--afterstates`、葉節點選項、`--leaf-prices`、`--macro-explore`、`--combat-explore`、`--explore`（[模擬器：參考 §3](/zh-tw/arch/simulator/reference/#sec-3)）；挑戰者沒有 `--champion FILE`，它完全由自己的選項指明 |
+| 挑戰者的對局選項 | | `--policy`、`--macro`、預算、`--workers`、`--value`、`--afterstates`、葉節點選項、`--macro-explore`、`--combat-explore`、`--explore`（[模擬器：參考 §3](/zh-tw/arch/simulator/reference/#sec-3)）；挑戰者沒有 `--champion FILE`，它完全由自己的選項指明 |
 
 **兩方**。冠軍那一方是它報告裡的對局。挑戰者那一方是它的記錄，而每條記錄都必須是用給定的選項打出來的：這些選項產生的名稱必須等於每條記錄的 `config.champion`（`:94-95`）。配對是冠軍報告中挑戰者也打過其種子的那些對局，按冠軍報告的順序，也就是種子集的順序（`Gate.Pairs`，`Harness/Gate.cs:46-60`）。限時作業中只打完種子集前段的挑戰者，就用它已有的配對過門檻。
 

@@ -86,7 +86,7 @@ Where the environment is set, as the code has it:
 What refuses the wrong environment:
 
 - `--policy plan` (the SL planner) and `--afterstates clone` (L0 playing options on the clone) play in SL only: a NoSL `hello` is refused (`Brains/ChampionOptions.cs:40-42`), and so is `run --env NoSL` with a champion that plays them (`Commands/RunCommand.cs:74`).
-- A combat net file names the environment whose combats it learned, and is refused in the other one (`Brains/LeafChoice.cs:25`); c1–c4, made before nets had one, play in either.
+- SL and NoSL play the same combat net file, which learned from SL's games ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
 - Harness refuses the SL messages `node_checkpoint` and `node_action` in a NoSL run (`Harness/Dispatcher.cs:184`, `:193`); the brain server keeps the refusal and answers the run's next decision with an error, the host ends the run as failed and `run` exits 1, and a failed run is left out of its report (`Harness/BrainServer.cs:112-123`, `Harness/RunRecords.cs:38`). The SL planner refuses worlds that are not SL's (`Brain/Combat/SlPlanner.cs:82`).
 - The combat net trainer reads only the logs of the environment it is given, and fails on the other's (`learn/combat/data.py`).
 - The gate refuses to pair runs played in different environments, rungs or games (`Harness/Gate.cs:51`).

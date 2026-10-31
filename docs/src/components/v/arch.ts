@@ -2,7 +2,7 @@
 // columns of blocks from the inputs up, frames for repeated blocks, ⊕ for residual sums and side links for skip
 // connections; the columns join in one block, then one trunk goes up to the output. `layout` places it all;
 // ArchDiagram.svelte draws it. The net of the macro brain chapter (docs: macro-brain/network) and the combat net
-// (docs: combat-brain/leaf) are at the end.
+// (docs: combat-brain/network) are at the end.
 import type { Lang } from './names.ts';
 
 export type Tone = 'embed' | 'attn' | 'ff' | 'norm' | 'linear' | 'pool' | 'head' | 'msg';
@@ -298,160 +298,8 @@ export function valueNet(lang: Lang): Diagram {
   };
 }
 
-/** The combat net c2 as its net file's graph has it (docs: combat-brain/leaf §3). */
+/** The combat net as its net file's graph has it (docs: combat-brain/network §1). */
 export function combatNet(lang: Lang): Diagram {
-  const L = (x: W) => x[lang];
-  const sum = (info: W): Block => ({ kind: 'block', label: L(w('Sum', '求和', '加總')), tone: 'pool', info: L(info) });
-  return {
-    columns: [
-      {
-        title: L(w('Cards', '卡牌', '卡牌')),
-        input: L(w('hand · draw · discard ·\nexhaust piles', '手牌 · 抽牌堆 ·\n弃牌堆 · 消耗堆', '手牌 · 抽牌堆 ·\n棄牌堆 · 消耗堆')),
-        items: [
-          {
-            kind: 'block',
-            label: L(w('Card embeddings', '卡牌嵌入', '卡牌嵌入')),
-            tone: 'embed',
-            info: L(
-              w(
-                'x = E[c] + u·U[c] + cost·v_cost + Σ M[m] + P[pile]: its id, upgrade level, cost, enchantment and affliction, and pile; 32 numbers per card.',
-                'x = E[c] + u·U[c] + 费用·v_cost + Σ M[m] + P[牌堆]：它的 id、升级等级、费用、附魔与诅咒、所在牌堆；每张牌 32 个数。',
-                'x = E[c] + u·U[c] + 費用·v_cost + Σ M[m] + P[牌堆]：它的 id、升級等級、費用、附魔與詛咒、所在牌堆；每張牌 32 個數。',
-              ),
-            ),
-          },
-          {
-            kind: 'block',
-            label: L(w('φ: Linear + ReLU\n32 → 64 → 64', 'φ：线性层 + ReLU\n32 → 64 → 64', 'φ：線性層 + ReLU\n32 → 64 → 64')),
-            tone: 'ff',
-            info: L(w('The card network, applied to each card on its own.', '卡牌网络，对每张牌单独作用。', '卡牌網路，對每張牌單獨作用。')),
-          },
-          {
-            kind: 'block',
-            label: L(w('Sum per pile × 1/8', '每堆求和 × 1/8', '每堆加總 × 1/8')),
-            tone: 'pool',
-            info: L(w('Each pile’s cards summed, times 1/8: 4 piles × 64 = 256 numbers.', '每一堆的牌相加，乘 1/8：4 堆 × 64 = 256 个数。', '每一堆的牌相加，乘 1/8：4 堆 × 64 = 256 個數。')),
-          },
-        ],
-      },
-      {
-        title: L(w('Enemies', '敌人', '敵人')),
-        input: L(w('id · HP · block · powers ·\nintents now and 3 rounds back', 'id · 生命 · 格挡 · 能力 ·\n现在与前 3 回合的意图', 'id · 生命 · 格擋 · 能力 ·\n現在與前 3 回合的意圖')),
-        items: [
-          {
-            kind: 'block',
-            label: L(w('Id + numbers, powers,\n4 intent slots: 224', 'id + 数值、能力、\n4 个意图槽：224', 'id + 數值、能力、\n4 個意圖槽：224')),
-            tone: 'embed',
-            info: L(
-              w(
-                'Per living enemy: E[e] + W·(HP share, HP / 100, max HP / 100, block / 20, rounds shown / 10) + b, 32 numbers; its powers through the powers’ φ and summed, 64; 4 intent slots (now, then the last 3 rounds), each Σ (I[t] + d·D[t] + s·T[t]) + S[k] over its intents, d = damage / 10, s = damage × hits / 20, 4 × 32 = 128.',
-                '每个活着的敌人：E[e] + W·(生命比例, 生命 / 100, 最大生命 / 100, 格挡 / 20, 已显示回合数 / 10) + b，32 个数；它的能力经能力的 φ 后求和，64 个；4 个意图槽（现在，再往前 3 回合），每个是 Σ (I[t] + d·D[t] + s·T[t]) + S[k]，对槽里的意图求和，d = 伤害 / 10，s = 伤害 × 次数 / 20，4 × 32 = 128。',
-                '每個活著的敵人：E[e] + W·(生命比例, 生命 / 100, 最大生命 / 100, 格擋 / 20, 已顯示回合數 / 10) + b，32 個數；它的能力經能力的 φ 後加總，64 個；4 個意圖槽（現在，再往前 3 回合），每個是 Σ (I[t] + d·D[t] + s·T[t]) + S[k]，對槽裡的意圖加總，d = 傷害 / 10，s = 傷害 × 次數 / 20，4 × 32 = 128。',
-              ),
-            ),
-          },
-          {
-            kind: 'block',
-            label: L(w('φ: Linear + ReLU\n224 → 128 → 128', 'φ：线性层 + ReLU\n224 → 128 → 128', 'φ：線性層 + ReLU\n224 → 128 → 128')),
-            tone: 'ff',
-            info: L(w('The enemy network, applied to each enemy on its own.', '敌人网络，对每个敌人单独作用。', '敵人網路，對每個敵人單獨作用。')),
-          },
-          sum(w('The enemies summed: 128 numbers.', '敌人相加：128 个数。', '敵人相加：128 個數。')),
-        ],
-      },
-      {
-        title: L(w('Powers', '能力', '能力')),
-        input: L(w('the player’s\npowers', '玩家的\n能力', '玩家的\n能力')),
-        narrow: true,
-        items: [
-          {
-            kind: 'block',
-            label: L(w('Embeddings', '嵌入', '嵌入')),
-            tone: 'embed',
-            info: L(w('P[p] + a·A[p], a = amount / 10: 32 numbers per power.', 'P[p] + a·A[p]，a = 层数 / 10：每个能力 32 个数。', 'P[p] + a·A[p]，a = 層數 / 10：每個能力 32 個數。')),
-          },
-          {
-            kind: 'block',
-            label: L(w('φ: Linear + ReLU\n32 → 64', 'φ：线性层 + ReLU\n32 → 64', 'φ：線性層 + ReLU\n32 → 64')),
-            tone: 'ff',
-            info: L(w('The powers’ network; the same weights read each enemy’s powers.', '能力网络；每个敌人的能力也由同一组权重读取。', '能力網路；每個敵人的能力也由同一組權重讀取。')),
-          },
-          sum(w('The powers summed: 64 numbers.', '能力相加：64 个数。', '能力相加：64 個數。')),
-        ],
-      },
-      {
-        title: L(w('Player', '玩家', '玩家')),
-        input: L(w('HP · block · energy ·\nstars · round', '生命 · 格挡 · 能量 ·\n星 · 回合', '生命 · 格擋 · 能量 ·\n星辰 · 回合')),
-        narrow: true,
-        items: [
-          {
-            kind: 'block',
-            label: L(w('Scale: 8', '缩放：8', '縮放：8')),
-            tone: 'norm',
-            info: L(
-              w(
-                'HP share, HP / 100, max HP / 100, block / 20, energy / 3, max energy / 3, stars / 5, round / 10, each kept within ±10: 8 numbers.',
-                '生命比例、生命 / 100、最大生命 / 100、格挡 / 20、能量 / 3、最大能量 / 3、星 / 5、回合 / 10，各自限制在 ±10 内：8 个数。',
-                '生命比例、生命 / 100、最大生命 / 100、格擋 / 20、能量 / 3、最大能量 / 3、星辰 / 5、回合 / 10，各自限制在 ±10 內：8 個數。',
-              ),
-            ),
-          },
-        ],
-      },
-      {
-        title: L(w('Bags', '词袋', '詞元袋')),
-        input: L(w('relics · potions ·\ncontext', '遗物 · 药水 ·\n上下文', '遺物 · 藥水 ·\n上下文')),
-        narrow: true,
-        items: [
-          {
-            kind: 'block',
-            label: L(w('Embeddings', '嵌入', '嵌入')),
-            tone: 'embed',
-            info: L(
-              w(
-                'One 32-number vector per token, a table per bag; the context is the character, encounter, room and act.',
-                '每个词元一个 32 个数的向量，每个袋一张表；上下文是角色、遭遇、房间和幕。',
-                '每個詞元一個 32 個數的向量，每個袋一張表；上下文是角色、遭遇、房間和幕。',
-              ),
-            ),
-          },
-          {
-            kind: 'block',
-            label: L(w('Sum per bag', '每个袋求和', '每個袋加總')),
-            tone: 'pool',
-            info: L(w('Each bag’s vectors summed: 3 × 32 = 96 numbers.', '每个袋的向量相加：3 × 32 = 96 个数。', '每個袋的向量相加：3 × 32 = 96 個數。')),
-          },
-        ],
-      },
-    ],
-    merge: {
-      kind: 'block',
-      label: L(w('Concatenate: 256 + 128 + 64 + 8 + 96 = 552', '拼接：256 + 128 + 64 + 8 + 96 = 552', '串接：256 + 128 + 64 + 8 + 96 = 552')),
-      tone: 'norm',
-      info: L(w('One vector of 552 numbers.', '一个 552 个数的向量。', '一個 552 個數的向量。')),
-    },
-    top: [
-      ...body(lang, 552),
-      {
-        kind: 'block',
-        label: L(w('Outcome head\n256 → 51, softmax', '结局输出头\n256 → 51，softmax', '結局輸出頭\n256 → 51，softmax')),
-        tone: 'head',
-        info: L(
-          w(
-            'The chance of a death and of each of 50 buckets of the share of max HP still to be lost if the fight is won, from −0.25 to 1. A second head, 256 → 1, gives the potions still to be used after a win.',
-            '死亡的机率，以及若赢下战斗、还会失去的最大生命比例落在 50 个区间（−0.25 到 1）里每一个的机率。第二个输出头 256 → 1 给出获胜后还会用掉的药水数。',
-            '死亡的機率，以及若贏下戰鬥、還會失去的最大生命比例落在 50 個區間（−0.25 到 1）裡每一個的機率。第二個輸出頭 256 → 1 給出獲勝後還會用掉的藥水數。',
-          ),
-        ),
-      },
-    ],
-    output: L(w('P(death) · 50 buckets of HP still to lose\n→ the leaf’s value', 'P(死亡) · 还会失去的生命的 50 个区间\n→ 叶子估值', 'P(死亡) · 還會失去的生命的 50 個區間\n→ 葉節點估值')),
-    links: [],
-  };
-}
-
-/** The planned combat net, as a design (docs: combat-brain/leaf §8): no net file has this graph yet. */
-export function combatNext(lang: Lang): Diagram {
   const L = (x: W) => x[lang];
   const sum = (info: W): Block => ({ kind: 'block', label: L(w('Sum', '求和', '加總')), tone: 'pool', info: L(info) });
   return {
@@ -574,20 +422,44 @@ export function combatNext(lang: Lang): Diagram {
       ...body(lang, 651),
       {
         kind: 'block',
-        label: L(w('Worth head\n256 → 1', '价值输出头\n256 → 1', '價值輸出頭\n256 → 1')),
+        label: L(w('Endings head\n256 → 51', '结局输出头\n256 → 51', '結局輸出頭\n256 → 51')),
         tone: 'head',
         info: L(
           w(
-            'V of the first run view after the fight as a share of V at the last one before it, capped at 4; a death 0. No buckets, no potion head, no policy head.',
-            '战斗后第一个整局观测的 V 占战斗前最后一个的 V 的比例，上限 4；死亡为 0。没有桶，没有药水头，也没有策略头。',
-            '戰鬥後第一個整局觀測的 V 占戰鬥前最後一個的 V 的比例，上限 4；死亡為 0。沒有桶，沒有藥水頭，也沒有策略頭。',
+            'One logit for a death and one for each of 50 buckets of the share of max HP still to be lost if the fight is won, from −0.25 to 1.',
+            '死亡一个 logit，若赢下战斗、还会失去的最大 HP 比例的 50 个桶（−0.25 到 1）各一个 logit。',
+            '死亡一個 logit，若贏下戰鬥、還會失去的最大 HP 比例的 50 個桶（−0.25 到 1）各一個 logit。',
+          ),
+        ),
+      },
+      {
+        kind: 'block',
+        label: L(w('Mask + softmax', '遮罩 + softmax', '遮罩 + softmax')),
+        tone: 'norm',
+        info: L(
+          w(
+            'The buckets the HP held rules out are closed inside the graph: a win ends with an HP share in (0, 1]. A closed bucket’s chance is exactly 0.',
+            '现有 HP 排除的桶在图里就被关掉：获胜时结束的 HP 比例在 (0, 1] 之间。被关掉的桶机率正好是 0。',
+            '現有 HP 排除的桶在圖裡就被關掉：獲勝時結束的 HP 比例在 (0, 1] 之間。被關掉的桶機率正好是 0。',
+          ),
+        ),
+      },
+      {
+        kind: 'block',
+        label: L(w('Potion head\n256 → 53, sigmoid', '药水输出头\n256 → 53，sigmoid', '藥水輸出頭\n256 → 53，sigmoid')),
+        tone: 'head',
+        info: L(
+          w(
+            'Beside the endings, from the same 256 numbers: one chance per potion id of being gone after a win. Only the potions held are read.',
+            '和结局并列，读同样的 256 个数：每个药水 id 一个机率，表示获胜后它已不在。只读现在持有的药水。',
+            '和結局並列，讀同樣的 256 個數：每個藥水 id 一個機率，表示獲勝後它已不在。只讀現在持有的藥水。',
           ),
         ),
       },
     ],
-    output: L(w('worth: V after the fight / V before it\n× V before it = the leaf’s value', 'worth：战斗后的 V / 战斗前的 V\n× 战斗前的 V = 叶子估值', 'worth：戰鬥後的 V / 戰鬥前的 V\n× 戰鬥前的 V = 葉節點估值')),
+    output: L(w('outcome: 51 chances · potion_used: 53 chances\n→ priced into the leaf’s value', 'outcome：51 个机率 · potion_used：53 个机率\n→ 定价成叶子估值', 'outcome：51 個機率 · potion_used：53 個機率\n→ 定價成葉節點估值')),
     links: [],
   };
 }
 
-export const DIAGRAMS = { value: valueNet, combat: combatNet, combatNext };
+export const DIAGRAMS = { value: valueNet, combat: combatNet };
