@@ -364,3 +364,28 @@ def test_training_the_encoders_net_writes_a_net_that_reads_the_route_and_goes_on
     assert net["vocab"]["route"][0] == "<unk>" and "Boss" in net["vocab"]["route"]
     result = CliRunner().invoke(train.script, ["--list", lists, "--name", "t", "--init", str(first)])
     assert result.exit_code != 0 and "encoders" in str(result.exception)
+
+
+def test_a_whole_runs_encoders_net_goes_on_from_the_gauntlets_without_its_share_head(tmp_path):
+    (tmp_path / "g").mkdir()
+    (tmp_path / "w").mkdir()
+    gauntlet, whole = tmp_path / "gauntlet.json", tmp_path / "whole.json"
+    lists = write_runs(tmp_path / "g", gauntlet=True)
+    args = ["--list", lists, "--name", "g", "--out", str(gauntlet), "--gauntlet", "--encoders"]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code == 0, result.output
+    a = json.loads(gauntlet.read_text())
+    assert export.encoders(a) and a["objective"] == "progress" and a["fit"]["gauntlet"] and a["fit"]["encoders"]
+    args = ["--list", write_runs(tmp_path / "w"), "--name", "w", "--out", str(whole), "--encoders"]
+    args += ["--objective", "win", "--init", str(gauntlet)]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code == 0, result.output
+    b = json.loads(whole.read_text())
+    assert export.encoders(b) and b["objective"] == "win" and b["vocab"] == a["vocab"] and b["state"] == a["state"]
+    # The share head is gone: the graph gives the hazards alone.
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in b["vocab"].items()}
+    mean, std = torch.tensor(b["state"]["mean"]), torch.tensor(b["state"]["std"])
+    x = Batch([data.sample("a", b["tests"][0]["run"], 64)], index, mean, std, 64, "cpu", encode.ENCODER_INPUTS)
+    feed = {name: t.numpy() for name, t in zip(encode.ENCODER_INPUTS, x.inputs(), strict=True)}
+    [out] = ReferenceEvaluator(onnx.load_from_string(base64.b64decode(b["onnx"]))).run(None, feed)
+    assert out.shape == (1, 64)

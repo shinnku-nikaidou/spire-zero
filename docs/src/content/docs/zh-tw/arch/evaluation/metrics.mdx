@@ -55,7 +55,7 @@ import DeathsByFloor from '../../../../../components/book/DeathsByFloor.svelte';
 
 **規劃中** <Badge text="規劃中" variant="caution" />，不在任何報告裡：
 
-- **校準**：V 預測的獲勝機率與實際結果有多接近。Brier 分數（預測機率與這局的 1 或 0 之間差距平方的平均）只出現在 `v.train` 對整局的留出報告裡：`brier_held_out` 對比 `brier_held_out_floor_only`，後者是只知道層數的模型（`learn/v/train.py:426-448`）；沒有任何評估計算它，也沒有東西拿它和常數預測比較。
+- **校準**：V 預測的獲勝機率與實際結果有多接近。Brier 分數（預測機率與這局的 1 或 0 之間差距平方的平均）只出現在 `v.train` 對整局的留出報告裡：`brier_held_out` 對比 `brier_held_out_floor_only`，後者是只知道層數的模型（`learn/v/train.py:424-446`）；沒有任何評估計算它，也沒有東西拿它和常數預測比較。
 - **搜尋計算量**：每個決策搜尋的分支數和複本查詢次數。報告只有掛鐘時間。
 - **囤積藥水**：持有而未使用的藥水。
 

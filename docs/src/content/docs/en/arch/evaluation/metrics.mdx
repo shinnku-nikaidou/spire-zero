@@ -55,7 +55,7 @@ The elites taken, the skip rate, the gold and the HP at each boss are the conser
 
 **Planned** <Badge text="planned" variant="caution" />, and in no report:
 
-- **Calibration**: how close V's predicted chance to win comes to the outcomes. A Brier score (the mean squared gap between the predicted chance and the run's 1 or 0) exists only in `v.train`'s held-out report for whole runs, `brier_held_out` against `brier_held_out_floor_only`, a model that knows only the floor (`learn/v/train.py:426-448`); no evaluation computes it, and nothing compares it with a constant prediction.
+- **Calibration**: how close V's predicted chance to win comes to the outcomes. A Brier score (the mean squared gap between the predicted chance and the run's 1 or 0) exists only in `v.train`'s held-out report for whole runs, `brier_held_out` against `brier_held_out_floor_only`, a model that knows only the floor (`learn/v/train.py:424-446`); no evaluation computes it, and nothing compares it with a constant prediction.
 - **Search compute**: branches searched and clone queries per decision. Reports have wall time only.
 - **Potion hoarding**: potions held unused.
 

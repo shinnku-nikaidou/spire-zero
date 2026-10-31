@@ -55,7 +55,7 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 **规划中** <Badge text="规划中" variant="caution" />，还不在任何报告里：
 
-- **校准**：V 预测的获胜机会与实际结局有多接近。Brier 分数（预测机会与这一局的 1 或 0 之间的均方差）只出现在 `v.train` 对整局的留出报告里，即 `brier_held_out` 对比 `brier_held_out_floor_only`，后者是一个只知道层数的模型（`learn/v/train.py:426-448`）；没有哪次评估计算它，也没有任何东西拿它和常数预测比较。
+- **校准**：V 预测的获胜机会与实际结局有多接近。Brier 分数（预测机会与这一局的 1 或 0 之间的均方差）只出现在 `v.train` 对整局的留出报告里，即 `brier_held_out` 对比 `brier_held_out_floor_only`，后者是一个只知道层数的模型（`learn/v/train.py:424-446`）；没有哪次评估计算它，也没有任何东西拿它和常数预测比较。
 - **搜索计算量**：每个决策搜索的分支数和克隆查询次数。报告里只有墙钟时间。
 - **囤积药水**：持有而未用的药水。
 

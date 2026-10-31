@@ -18,7 +18,7 @@ the Brier score of that chance on the held-out decisions against whether their r
 `brier_held_out_floor_only` for the training runs' hazards whatever the state).
 
 --encoders trains net.EncoderNet (plan v7 §3): the build and route encoders in place of the deck's set encoder and the
-relic, potion and map bags; the rest is the same. Its net file is told by its graph's inputs (the route's).
+relic, potion and map bags; the rest is the same, with --gauntlet too. Its net file is told by its graph's inputs.
 
 --init goes on from a net file instead of from scratch: its token tables, state scaling and weights, read back from its
 ONNX (the second head, not in the file, starts anew). A whole run's V may go on from the gauntlet's (plan v7: from
@@ -214,8 +214,6 @@ def main(
         raise LearnError("the gauntlet's V values progress: no --objective")
     if boss_sims and objective != "floor":
         raise LearnError("the boss sims' targets are floors: --objective floor")
-    if gauntlet and encoders:
-        raise LearnError("the gauntlet's V has no encoders")
     kind = EncoderNet if encoders else Net
     start = export.read(init) if init else None
     if start and ((gauntlet and start["objective"] != "progress") or start["floors"] != FLOORS):
