@@ -3,17 +3,18 @@ net file for `--combat-net`.
 
 The samples are combat/data.py's: each round's start in the logs of --env. With --value the net's target is the fight's
 worth by that V, the loss its squared error; without, the endings, the loss their cross-entropy plus POTION_WEIGHT times
-the squared error of the potions used after a win. The net's sizes and the training's settings are fixed below: an
-experiment changes them here, and only a result keeps the change.
+each held potion's cross-entropy of being gone after a win. The net's sizes and the training's settings are fixed below:
+an experiment changes them here, and only a result keeps the change. --test-list's games on the seeds of --skip-seeds,
+never trained on, are only reported, as `medium`.
 
-    uv run python -m combat.train --list data/silent/lists/c7 --env SL --name c7-1 \\
-        --skip-seeds ../eval/seeds/promotion-1-300.txt
+    uv run python -m combat.train --list data/silent/lists/c7 --env SL --name c7-2 \\
+        --skip-seeds ../eval/seeds/promotion-1-300.txt --test-list data/silent/lists/medium
 """
 
 import json
 import math
 import random
-from collections import defaultdict
+from collections import Counter, defaultdict
 import warnings
 from typing import Annotated
 
@@ -126,6 +127,45 @@ def rank_within(samples, predicted: torch.Tensor, key: str) -> float:
     return total / max(1, weight)
 
 
+def auc_within(samples, score: torch.Tensor) -> float:
+    """The chance that a death's round start scores above a survivor's, within each (encounter, round) with 3 or more of
+    each, by their deaths."""
+    groups = defaultdict(list)
+    for k, s in enumerate(samples):
+        groups[(s["encounter"], s["round"])].append(k)
+    died = torch.tensor([s["class"] == 0 for s in samples])
+    total, weight = 0.0, 0
+    for ix in groups.values():
+        d = died[ix]
+        deaths, others = int(d.sum()), int((~d).sum())
+        if deaths >= 3 and others >= 3:
+            total += (float(ranks(score[ix])[d].sum()) - deaths * (deaths + 1) / 2) / others
+            weight += deaths
+    return total / max(1, weight)
+
+
+def potion_rates(samples):
+    """What a held potion's chance of being gone would be by its id, and by its id and room, from these samples' wins."""
+    used, held = Counter(), Counter()
+    for s in samples:
+        if s["class"] > 0:
+            for p, u in zip(s["tokens"]["potions"], s["potion_used"], strict=True):
+                for key in (None, p, (p, s["room"])):
+                    used[key] += u
+                    held[key] += 1
+
+    def rate(key):
+        k = key if held[key] else None
+        return used[k] / max(1, held[k])
+
+    return rate
+
+
+def log_loss(chance: float, used: int) -> float:
+    c = min(max(chance, 1e-6), 1 - 1e-6)
+    return -math.log(c if used else 1 - c)
+
+
 @script.command(help=__doc__)
 def main(
     list_: Annotated[str, typer.Option("--list", help="the list pair PREFIX-logs.txt and PREFIX-recs.txt")],
@@ -133,6 +173,7 @@ def main(
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
     value: Annotated[str | None, typer.Option(help="the net file of the V that prices the fights' ends: target worth")] = None,
     skip_seeds: Annotated[str | None, typer.Option(help="a seed file whose runs are not read: the gate's")] = None,
+    test_list: Annotated[str | None, typer.Option(help="a list pair whose games on --skip-seeds' seeds are only reported, as `medium`")] = None,
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")] = None,
     character: Annotated[str, typer.Option(help="the character whose runs these are")] = "SILENT",
     seed: int = 0,
@@ -148,7 +189,8 @@ def main(
     if skip_seeds:
         with open(skip_seeds) as f:
             skip = {x.strip() for x in f if x.strip() and not x.startswith("#")}
-    samples, skipped = data.read(*common.lists(list_), character, env, run_value(value, device) if value else None, skip)
+    run_v = run_value(value, device) if value else None
+    samples, skipped = data.read(*common.lists(list_), character, env, run_v, skip)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -168,26 +210,32 @@ def main(
 
     test_batches = list(batches(test, False))
 
-    def evaluate(model):
-        """The held-out loss, and each held-out sample's prediction: its worth, or the leaf's value, the cross-entropy and
-        the chance of death of its endings."""
-        total, parts = 0.0, []
+    def held_out_loss(model):
         with torch.no_grad():
-            for b in test_batches:
+            return sum(float(loss(model(*b.inputs()), b).sum()) for b in test_batches) / len(test)
+
+    def predict(model, part, part_batches):
+        """Each sample's prediction: its worth; or the leaf's value, the cross-entropy, the chance of death, the HP share
+        expected lost after a win, and its held potions' chances of being gone."""
+        rows = []
+        with torch.no_grad():
+            for b in part_batches:
                 out = model(*b.inputs())
-                total += float(loss(out, b).sum())
-                parts.append(out if model.is_worth else (*out, b.target))
+                rows.append(out if model.is_worth else (out[0], out[1].gather(1, b.potions).sigmoid()))
         if model.is_worth:
-            return total / len(test), torch.cat(parts).double().cpu()
-        logits = torch.cat([p[0] for p in parts]).double().cpu()
-        potions = torch.cat([p[1] for p in parts]).double().cpu()
-        target = torch.cat([p[2] for p in parts]).cpu()
+            return torch.cat(rows).double().cpu()
+        logits = torch.cat([r[0] for r in rows]).double().cpu()
+        wide = [c for r in rows for c in r[1].cpu().tolist()]
+        chances = [c[: len(s["potion_used"])] for c, s in zip(wide, part, strict=True)]
+        target = torch.tensor([s["class"] for s in part])
         probs = torch.softmax(logits, 1)
-        mids = data.LOSS_MIN + (torch.arange(1, data.BUCKETS + 1).double() - 0.5) * (1 - data.LOSS_MIN) / data.BUCKETS
-        hp = torch.tensor([s["share"] for s in test]).double()[:, None]
-        held = torch.tensor([s["held"] for s in test]).double()
-        value = (probs[:, 1:] * (0.2 + 0.6 * (hp - mids))).sum(1) + (1 - probs[:, 0]) * 0.02 * (held - potions)
-        return total / len(test), value, torch.nn.functional.cross_entropy(logits, target, reduction="none"), probs[:, 0]
+        mids = data.LOSS_MIN + (torch.arange(1, data.BUCKETS + 1).double() - 0.5) * data.WIDTH
+        hp = torch.tensor([s["share"] for s in part]).double()[:, None]
+        kept = torch.tensor([sum(1 - x for x in c) for c in chances]).double()
+        value = (probs[:, 1:] * (0.2 + 0.6 * (hp - mids))).sum(1) + (1 - probs[:, 0]) * 0.02 * kept
+        expected = (probs[:, 1:] * mids).sum(1) / (1 - probs[:, 0]).clamp_min(1e-9)
+        ces = torch.nn.functional.cross_entropy(logits, target, reduction="none")
+        return value, ces, probs[:, 0], expected, chances
 
     model = Net({t: len(ids) for t, ids in tables.items()}, worth=value is not None).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
@@ -200,7 +248,7 @@ def main(
             step.backward()
             opt.step()
         model.eval()
-        held = evaluate(model)[0]
+        held = held_out_loss(model)
         logger.info("epoch {}: held-out loss {:.4f}", epoch, held)
         if held < best - 1e-4:
             best, best_state, stale = held, {k: v.clone() for k, v in model.state_dict().items()}, 0
@@ -211,44 +259,91 @@ def main(
     model.load_state_dict(best_state)
     model.eval()
 
-    # The report: the held-out error against the training's prior and the rank within each fight, on the whole and by
-    # act, room and encounter.
-    held, *found = evaluate(model)
-    if value:
-        worths = found[0]
-        target = torch.tensor([s["worth"] for s in test]).double()
-        mean = sum(s["worth"] for s in train) / len(train)
+    # The report: the error against the training's prior and the rank within each fight, on the whole and by act, room and
+    # encounter. Beside a net's ranks stand those of the HP share held now: the end's price follows it (0.82 on v7g1).
+    mean = sum(s["worth"] for s in train) / len(train) if value else None
+    counts = torch.bincount(torch.tensor([s["class"] for s in train]), minlength=1 + data.BUCKETS).double() + 0.5
+    rate = potion_rates(train)
 
-        def part(ix):
-            return {
-                "samples": len(ix),
-                "mse": float(((worths[ix] - target[ix]) ** 2).mean()),
-                "mse_mean": float(((mean - target[ix]) ** 2).mean()),
-                "rank_within": rank_within([test[k] for k in ix], worths[ix], "worth"),
-                "worth": float(target[ix].mean()),
-                "predicted": float(worths[ix].mean()),
-            }
-    else:
-        valued, ces, deaths = found
-        counts = torch.bincount(torch.tensor([s["class"] for s in train]), minlength=1 + data.BUCKETS).double() + 0.5
-        prior = -torch.log(counts / counts.sum())[torch.tensor([s["class"] for s in test])]
-        died = torch.tensor([s["class"] == 0 for s in test], dtype=torch.float64)
+    def potion_report(rows):
+        """The chances of (id, room, chance, used) against the rates of the id and of the id and room."""
+        n = max(1, len(rows))
+        return {
+            "rows": len(rows),
+            "used": sum(r[3] for r in rows) / n,
+            "predicted": sum(r[2] for r in rows) / n,
+            "log_loss": sum(log_loss(r[2], r[3]) for r in rows) / n,
+            "log_loss_id": sum(log_loss(rate(r[0]), r[3]) for r in rows) / n,
+            "log_loss_id_room": sum(log_loss(rate((r[0], r[1])), r[3]) for r in rows) / n,
+        }
 
-        def part(ix):
-            return {
-                "samples": len(ix),
-                "ce": float(ces[ix].mean()),
-                "ce_prior": float(prior[ix].mean()),
-                "death": float(died[ix].mean()),
-                "predicted_death": float(deaths[ix].mean()),
-                "rank_within": rank_within([test[k] for k in ix], valued[ix], "price"),
-            }
+    def summary(part, part_batches):
+        found = predict(model, part, part_batches)
+        if value:
+            target = torch.tensor([s["worth"] for s in part]).double()
 
-    def by(key):
-        groups = defaultdict(list)
-        for k, s in enumerate(test):
-            groups[str(s[key])].append(k)
-        return {g: part(ix) for g, ix in sorted(groups.items())}
+            def of(ix):
+                return {
+                    "samples": len(ix),
+                    "mse": float(((found[ix] - target[ix]) ** 2).mean()),
+                    "mse_mean": float(((mean - target[ix]) ** 2).mean()),
+                    "rank_within": rank_within([part[k] for k in ix], found[ix], "worth"),
+                    "worth": float(target[ix].mean()),
+                    "predicted": float(found[ix].mean()),
+                }
+        else:
+            valued, ces, deaths, expected, chances = found
+            prior = -torch.log(counts / counts.sum())[torch.tensor([s["class"] for s in part])]
+            died = torch.tensor([s["class"] == 0 for s in part], dtype=torch.float64)
+            shares = torch.tensor([s["share"] for s in part]).double()
+            rows_of = [
+                [
+                    (p, s["room"], c, u)
+                    for p, c, u in zip(s["tokens"]["potions"], chances[k], s["potion_used"], strict=True)
+                ]
+                if s["class"] > 0
+                else []
+                for k, s in enumerate(part)
+            ]
+
+            def of(ix):
+                some, wins = [part[k] for k in ix], [k for k in ix if part[k]["class"] > 0]
+                won = [part[k] for k in wins]
+                return {
+                    "samples": len(ix),
+                    "ce": float(ces[ix].mean()),
+                    "ce_prior": float(prior[ix].mean()),
+                    "death": float(died[ix].mean()),
+                    "predicted_death": float(deaths[ix].mean()),
+                    "rank_within": rank_within(some, valued[ix], "price"),
+                    "rank_within_share": rank_within(some, shares[ix], "price"),
+                    "rank_lost": rank_within(won, expected[wins], "lost"),
+                    "rank_lost_share": rank_within(won, shares[wins], "lost"),
+                    "auc_death": auc_within(some, deaths[ix]),
+                    "auc_death_share": auc_within(some, -shares[ix]),
+                    "potions": potion_report([r for k in ix for r in rows_of[k]]),
+                }
+
+        def by(key):
+            groups = defaultdict(list)
+            for k, s in enumerate(part):
+                groups[str(key(s))].append(k)
+            return {g: of(ix) for g, ix in sorted(groups.items())}
+
+        out = {
+            "held_out": of(list(range(len(part)))),
+            "by_act": by(lambda s: s["act"]),
+            "by_room": by(lambda s: s["room"]),
+            "by_encounter": by(lambda s: s["encounter"]),
+        }
+        if not value:
+            out["by_hp"] = by(lambda s: "below 30 %" if s["share"] < 0.3 else "the rest")
+            ids = defaultdict(list)
+            for rows in rows_of:
+                for r in rows:
+                    ids[r[0]].append(r)
+            out["by_potion"] = {p: potion_report(rows) for p, rows in sorted(ids.items())}
+        return out
 
     report = {
         "env": env,
@@ -258,11 +353,11 @@ def main(
         "samples": len(samples),
         "held_out_samples": len(test),
         "vocab": {t: len(ids) for t, ids in tables.items()},
-        "held_out": part(list(range(len(test)))),
-        "by_act": by("act"),
-        "by_room": by("room"),
-        "by_encounter": by("encounter"),
+        **summary(test, test_batches),
     }
+    if test_list:
+        medium, _ = data.read(*common.lists(test_list), character, env, run_v, only_seeds=skip)
+        report["medium"] = summary(medium, list(batches(medium, False)))
     print(json.dumps(report))
 
     kept = [s for s in test if "obs" in s]

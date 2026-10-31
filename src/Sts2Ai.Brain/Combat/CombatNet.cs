@@ -5,7 +5,8 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>A round's start and what the trainer's net made of it, which loading checks (docs: learning/reference §7, input parity).</summary>
-public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double>? Outcome = null, double PotionsUsed = 0, double Worth = 0);
+public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double>? Outcome = null, double PotionsUsed = 0, double Worth = 0,
+    IReadOnlyList<double>? PotionUsed = null);
 
 /// <summary>
 /// The combat net as <c>learn/combat/export.py</c> writes it, or as the removed <c>learn/train_combat.py</c> wrote it
@@ -18,11 +19,13 @@ public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTur
 /// <param name="Round">Whether the net reads the round and how many rounds each enemy has shown.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="CombatNet"/> feeds them, outputs the
-/// chance of each ending and the potions used after a win.</param>
+/// chance of each ending (those the HP held rules out at 0, in a net that masks them) and the potions used after a win:
+/// by each id of the potions table, or a count.</param>
 /// <param name="Env">The environment whose games it learned from, whose policy's endings it predicts: SL or NoSL. The
 /// files made before nets had one (c1–c4, all NoSL's) have none.</param>
 /// <param name="Target">What it predicts: "worth", V of the fight's end as a share of V before it, capped at
-/// <see cref="WorthCap"/>; none, the endings (<see cref="Buckets"/>) and the potions used.</param>
+/// <see cref="WorthCap"/>; "each_potion", the endings (<see cref="Buckets"/>) and each potion id's chance of being gone
+/// after a win; none, the endings and a count of the potions used.</param>
 public sealed record CombatNetFile(
     string Name, int Buckets, double LossMin, int Lags, bool Round, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
     IReadOnlyList<CombatNetTest> Tests, string? Env = null, string? Target = null, double WorthCap = 0);
@@ -36,7 +39,7 @@ public sealed record CombatNetFile(
 /// the HP share lost from here and the potions used, so the HP and potions held now count in full. A state in progress
 /// is worth the endings it predicts, priced as <see cref="LeafValue"/> prices a win (the HP share now less each bucket's
 /// middle, and the potions held less those used); a state whose combat is over is <see cref="LeafValue"/>'s. This class
-/// only turns a state into the graph's inputs.
+/// only turns a state into the graph's inputs and those prices.
 /// </summary>
 public sealed class CombatNet : ICombatLeaf, IDisposable
 {
@@ -65,6 +68,9 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     /// <summary>Whether it predicts a fight's worth (<see cref="Worth"/>) rather than its endings.</summary>
     public bool IsWorth => _file.Target == "worth";
 
+    /// <summary>Whether its potion output is a chance per id rather than a count.</summary>
+    private bool EachPotion => _file.Target == "each_potion";
+
     /// <summary>The net of a file, once it gives every test state the trainer's outcome.</summary>
     /// <param name="weights">The prices of the endings; null for the default leaf weights.</param>
     public static CombatNet Load(CombatNetFile file, LeafWeights? weights = null)
@@ -79,10 +85,14 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
                 net.Dispose();
                 throw new InvalidDataException($"net {file.Name} is {off} off a test state of the trainer's");
             }
-            var (outcome, used) = net.Predict(test.Obs, test.History);
-            double error = Math.Abs(used - test.PotionsUsed);
+            var outputs = net.Graph(test.Obs, test.History);
+            var (outcome, potions) = (outputs[0], outputs[1]);
+            // OLD NETS: a count, c1–c4's and c7-1's; remove once no champion uses them.
+            IReadOnlyList<double> expected = net.EachPotion ? test.PotionUsed! : [test.PotionsUsed];
+            double error = 0;
+            for (int k = 0; k < potions.Length; k++) error = Math.Max(error, Math.Abs(potions[k] - expected[k]));
             for (int k = 0; k < outcome.Length; k++) error = Math.Max(error, Math.Abs(outcome[k] - test.Outcome![k]));
-            if (outcome.Length != test.Outcome!.Count || error > 1e-3)
+            if (outcome.Length != test.Outcome!.Count || potions.Length != expected.Count || error > 1e-3)
             {
                 net.Dispose();
                 throw new InvalidDataException($"net {file.Name} is {error} off a test state of the trainer's");
@@ -95,13 +105,17 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     {
         if (IsWorth) throw new InvalidOperationException($"net {Name} predicts a fight's worth: it plays through PricedLeaf");
         if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs, _weights);
-        var (outcome, used) = Predict(obs, history);
+        var outputs = Graph(obs, history);
+        var (outcome, potions) = (outputs[0], outputs[1]);
         double share = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
         double width = (1 - _file.LossMin) / _file.Buckets, value = 0;
         for (int k = 1; k < outcome.Length; k++)
             value += outcome[k] * (_weights.WinBase + _weights.PerHp * (share - (_file.LossMin + (k - 0.5) * width)));
-        int held = obs.Potions.Count(p => p != null);
-        return value + (1 - outcome[0]) * _weights.PerPotion * (held - used);
+        double kept = EachPotion
+            ? obs.Potions.OfType<string>().Sum(p => 1.0 - potions[Index("potions", p)])
+            // OLD NETS: a count, c1–c4's and c7-1's; remove once no champion uses them.
+            : obs.Potions.Count(p => p != null) - potions[0];
+        return value + (1 - outcome[0]) * _weights.PerPotion * kept;
     }
 
     /// <summary>V of the fight's end as a share of V before it, within what the net learned.</summary>
@@ -109,13 +123,6 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         Math.Clamp(Graph(obs, history)[0][0], 0, _file.WorthCap);
 
     public void Dispose() => _session.Dispose();
-
-    /// <summary>The chance of each ending (a death, then each bucket of HP lost) and the potions used after a win.</summary>
-    public (float[] Outcome, float PotionsUsed) Predict(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
-    {
-        var outputs = Graph(obs, history);
-        return (outputs[0], outputs[1][0]);
-    }
 
     /// <summary>
     /// The graph's outputs on a batch of one state, read as <c>learn/combat/encode.py</c> reads it (each input fed only if the graph declares it). An enemy's slots are its intents now, then

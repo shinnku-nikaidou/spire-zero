@@ -5,8 +5,8 @@ A sample is the first combat decision of a round, with the public record of the 
 history, rebuilt from the earlier rounds' observations as Dispatcher builds it). A net has one of two targets.
 
 Endings: a death, or the share of max HP still to be lost in one of BUCKETS buckets spanning [LOSS_MIN, 1) (below 0: a
-combat that healed), and the potions still to be used after a win; relative to the state, so the HP and potions it has
-now count in full.
+combat that healed), and after a win, per potion held, whether it is gone; relative to the state, so the HP and potions it
+has now count in full.
 
 Worth: V of the run at the first macro decision after the fight, as a share of V at the last one before it, capped at
 WORTH_CAP; a death is 0, and a fight that wins the run ends at V = 1. V reads the deck, the relics, the potions, the HP and
@@ -21,12 +21,14 @@ read (SL's planner sees what NoSL's search must guess, and wins more from the sa
 import json
 import re
 import zlib
+from collections import Counter
 
 from combat import encode
 from common import LearnError, runs_by_log
 
 BUCKETS = 50  # buckets of the HP share lost from the state to a win
 LOSS_MIN = -0.25  # the lowest bucket's bottom: a share healed
+WIDTH = (1 - LOSS_MIN) / BUCKETS
 WORTH_CAP = 4.0  # a run's chance can be next to nothing before a fight: 99 % of the wins lie below 3.4
 KEEP = 1000  # one held-out round start in this many keeps its observation, for the net file's test states
 HEAD = re.compile(r'\{"run":"(\w+)","decision_id":\d+,"env":"(\w+)","surface":"(\w+)"')
@@ -85,8 +87,17 @@ def witness(history: dict, obs: dict):
         )
 
 
-def held_potions(obs: dict) -> int:
-    return sum(1 for p in obs["potions"] if p is not None)
+def potions_used(obs: dict, after: dict) -> list[int]:
+    """Per potion held at this state, in slot order, whether it is gone from the first run view after the fight, each
+    copy left there keeping one. A fight's actions miss a Fairy spent with none, and the last round's start a potion
+    drunk after it; a potion gained later is no potion of this state."""
+    left = Counter(after["potions"])
+    used = []
+    for p in obs["potions"]:
+        if p is not None:
+            used.append(0 if left[p] > 0 else 1)
+            left[p] -= 1
+    return used
 
 
 def share(hp: int, max_hp: int) -> float:
@@ -106,17 +117,18 @@ def price(end: dict) -> float:
     return 0.0 if end["died"] else 0.2 + 0.6 * share(end["hp"], end["max_hp"]) + 0.02 * end["potions"]
 
 
-def sample(run: str, obs: dict, history: list, end: dict, worth: float | None) -> dict:
+def sample(run: str, obs: dict, history: list, end: dict, after: dict | None, worth: float | None = None) -> dict:
     """A round's start; only a few held-out ones keep the observation and the history they were made from."""
+    now = share(obs["player"]["hp"], obs["player"]["max_hp"])
     s = {
         "run": run,
         "tokens": encode.tokens(obs, history),
         "worth": worth,
         "class": ending(obs, end),
-        "used": held_potions(obs) - end.get("potions", 0),
+        "potion_used": [0 for p in obs["potions"] if p is not None] if end["died"] else potions_used(obs, after),
+        "lost": None if end["died"] else now - share(end["hp"], end["max_hp"]),
         "price": price(end),
-        "share": share(obs["player"]["hp"], obs["player"]["max_hp"]),
-        "held": held_potions(obs),
+        "share": now,
         "room": obs.get("room") or "<none>",
         "act": obs["act"],
         "encounter": obs.get("encounter") or "<none>",
@@ -127,17 +139,18 @@ def sample(run: str, obs: dict, history: list, end: dict, worth: float | None) -
     return s
 
 
-def read(logs: str, records: str, character: str, env: str, value, skip_seeds=frozenset()) -> tuple[list[dict], int]:
+def read(logs: str, records: str, character: str, env: str, value, skip_seeds=frozenset(), only_seeds=None) -> tuple[list[dict], int]:
     """The round starts of the logs' combats as samples, and how many runs were skipped: those whose combats do not
     match their record's (a log cut short, a combat logged apart). `value` gives V of a list of run views, for a net of
-    worth; None leaves the worth out. The runs of `skip_seeds` are left out. The run's last combat in a lost run counts
-    as a death even with no `end` in its record."""
+    worth; None leaves the worth out. The runs of `skip_seeds` are left out, and all but those of `only_seeds`, if
+    given. The run's last combat in a lost run counts
+    as a death even with no `end` in its record; a win with no run view after it is left out."""
     samples, skipped = [], 0
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         todo = []
         for run, fights in combats(log, env).items():
             r = runs.get(run)
-            if r is None or r.get("failure") or r.get("seed") in skip_seeds:
+            if r is None or r.get("failure") or r.get("seed") in skip_seeds or (only_seeds is not None and r.get("seed") not in only_seeds):
                 continue
             ends = r["combats"]
             if len(fights) != len(ends) or any(
@@ -149,9 +162,7 @@ def read(logs: str, records: str, character: str, env: str, value, skip_seeds=fr
                 last = k == len(ends) - 1
                 end = f.get("end") or ({"died": True} if last and r.get("outcome") == "lost" else None)
                 won_run = last and r.get("outcome") == "won"
-                if end is None or (
-                    value and (fight["before"] is None or not (end["died"] or won_run or fight["after"]))
-                ):
+                if end is None or (not end["died"] and fight["after"] is None) or (value and fight["before"] is None):
                     continue
                 todo.append((run, fight, end, won_run))
         before = value([t[1]["before"] for t in todo]) if value else [None] * len(todo)
@@ -164,6 +175,6 @@ def read(logs: str, records: str, character: str, env: str, value, skip_seeds=fr
             history = {}
             for obs in fight["starts"]:
                 past = [{"uid": h["uid"], "id": h["id"], "turns": list(h["turns"])} for h in history.values()]
-                samples.append(sample(run, obs, past, end, worth) | {"key": (i, run)})
+                samples.append(sample(run, obs, past, end, fight["after"], worth) | {"key": (i, run)})
                 witness(history, obs)
     return samples, skipped

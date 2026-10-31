@@ -1,6 +1,5 @@
 import base64
 import json
-import math
 
 import onnx
 import pytest
@@ -11,7 +10,7 @@ from typer.testing import CliRunner
 
 import common
 from combat import data, encode, export, train
-from combat.net import Batch, Net
+from combat.net import Batch, Net, loss
 
 
 def obs(round=1, hp=50, **over):
@@ -25,7 +24,7 @@ def obs(round=1, hp=50, **over):
 
 def test_cards_are_ids_upgrades_piles_and_modifiers_without_their_numbers():
     t = encode.tokens(obs(), [])
-    assert t["cards"] == [("STRIKE", encode.MAX_UP, 0, ["enchant:SHARP"]), ("DEFEND", 0, 1, [])]
+    assert t["cards"] == [("STRIKE", encode.MAX_UP, 0, ["enchant:SHARP"], 1 / 3, [0.2]), ("DEFEND", 0, 1, [], 1 / 3, [])]
     assert t["relics"] == ["RING", "VASE:used"] and t["potions"] == ["FIRE"]
     assert t["powers"] == [("STRENGTH_POWER", 0.2, 0.0, None)]
 
@@ -52,8 +51,53 @@ def test_an_ending_is_a_death_or_the_bucket_of_the_hp_share_lost_since():
     assert data.ending(o, {"died": False, "hp": 0, "max_hp": 70}) == data.BUCKETS
 
 
+def test_a_potion_used_is_one_gone_from_the_view_after_the_fight():
+    o = obs(potions=("FIRE", "FAIRY", "FIRE"))
+    assert data.potions_used(o, {"potions": ["FIRE", "FAIRY", None]}) == [0, 0, 1]  # one copy of two
+    assert data.potions_used(o, {"potions": [None, None, "FIRE"]}) == [0, 1, 1]  # a Fairy goes with no action
+    assert data.potions_used(obs(), {"potions": ["FIRE", "GAINED", None]}) == [0]  # gained later: not this state's
+    assert data.potions_used(obs(), {"potions": [None, None, None]}) == [1]  # drunk after the last round's start
+
+
+def test_a_win_cannot_end_in_a_bucket_the_hp_held_rules_out():
+    samples = [
+        data.sample("a", obs(hp=hp), [], {"died": False, "hp": end, "max_hp": 70, "potions": 0}, {"potions": []})
+        for hp, end in ((70, 70), (70, 1), (7, 1), (7, 70), (1, 1), (1, 70), (35, 34))
+    ]
+    tables = train.vocab(samples * 3)
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    b = Batch(samples, index, "cpu")
+    net = Net({t: len(i) for t, i in tables.items()})
+    logits, potions = net(*b.inputs())
+    assert potions.shape[1] == len(tables["potions"])
+    closed = logits < Net.CLOSED / 2
+    assert not closed.gather(1, b.target[:, None]).any()  # the truth stays open
+    assert not closed[:, 0].any()  # a death always can be
+    low = data.LOSS_MIN + torch.arange(data.BUCKETS) * data.WIDTH
+    assert closed[2, 1:].tolist() == (low >= 7 / 70).tolist()  # at 10 % HP nothing above 10 % can be lost
+    assert closed[0, 1:].tolist() == (low + data.WIDTH <= -1e-6).tolist()  # at full HP nothing can heal
+    assert torch.softmax(logits, 1)[closed].max() == 0
+
+
+def test_the_potion_loss_reads_held_potions_after_wins_only():
+    end = {"died": False, "hp": 40, "max_hp": 70, "potions": 0}
+    won = data.sample("a", obs(), [], end, {"potions": []})
+    dead = data.sample("a", obs(), [], {"died": True, "potions": 0}, None)
+    plain = data.sample("a", obs(potions=(None, None, None)), [], end, {"potions": []})
+    tables = train.vocab([won] * 3)
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    b = Batch([won, dead, plain], index, "cpu")
+    assert b.potion_used.tolist() == [[1], [0], [0]] and b.potion_mask.tolist() == [[1], [1], [0]]
+    net = Net({t: len(i) for t, i in tables.items()})
+    out = net(*b.inputs())
+    per = loss(out, b)
+    ces = torch.nn.functional.cross_entropy(out[0], b.target, reduction="none")
+    assert per[0] > ces[0]
+    assert per[1:].tolist() == pytest.approx(ces[1:].tolist())
+
+
 def write_runs(tmp_path, env="SL", runs=10):
-    """A log and its records: runs of one combat of three rounds, each ending at 40 HP with one potion left."""
+    """A log and its records: runs of one combat of three rounds, each ending at 40 HP with its potion gone."""
     log, recs = tmp_path / "log.jsonl", tmp_path / "rec.jsonl"
     with open(log, "w") as lf, open(recs, "w") as rf:
         for i in range(runs):
@@ -61,12 +105,11 @@ def write_runs(tmp_path, env="SL", runs=10):
             for d, r in enumerate((1, 1, 2, 3)):
                 line = {"run": run, "decision_id": d, "env": env, "surface": "combat", "obs": obs(round=r, hp=60 - r)}
                 lf.write(json.dumps(line, separators=(",", ":")) + "\n")
-            lf.write(
-                json.dumps({"run": run, "decision_id": 4, "env": env, "surface": "map"}, separators=(",", ":")) + "\n"
-            )
+            line = {"run": run, "decision_id": 4, "env": env, "surface": "map", "run_view": {"potions": [None, None, None]}}
+            lf.write(json.dumps(line, separators=(",", ":")) + "\n")
             end = {"died": i % 3 == 0, "hp": 40, "max_hp": 70, "potions": 0}
             rf.write(
-                json.dumps({"run_id": run, "character": "SILENT", "combats": [{"encounter": "E", "end": end}]}) + "\n"
+                json.dumps({"run_id": run, "seed": f"S{i}", "character": "SILENT", "combats": [{"encounter": "E", "end": end}]}) + "\n"
             )
     (tmp_path / "s-logs.txt").write_text(f"{log}\n")
     (tmp_path / "s-recs.txt").write_text(f"{recs}\n")
@@ -74,41 +117,50 @@ def write_runs(tmp_path, env="SL", runs=10):
 
 
 def test_each_round_start_is_a_sample_with_the_history_before_it(tmp_path):
-    samples, skipped = data.read(*common.lists(write_runs(tmp_path)), "SILENT", "SL")
+    samples, skipped = data.read(*common.lists(write_runs(tmp_path)), "SILENT", "SL", None)
     assert skipped == 0 and len(samples) == 30  # rounds 1, 2 and 3 of each run's combat
     first, third = samples[0], samples[2]
-    assert first["history"] == [] and [t["round"] for t in third["history"][0]["turns"]] == [1, 2]
-    assert first["class"] == 0 and samples[3]["class"] > 0 and first["used"] == 1
+    assert first["tokens"]["enemies"][0]["scalars"][4] == 0 and third["tokens"]["enemies"][0]["scalars"][4] == 0.2
+    assert first["class"] == 0 and samples[3]["class"] > 0 and samples[3]["potion_used"] == [1]
+    assert first["potion_used"] == [0] and first["lost"] is None and samples[3]["lost"] == pytest.approx((59 - 40) / 70)
 
 
 def test_another_environments_logs_are_refused(tmp_path):
     with pytest.raises(common.LearnError, match="NoSL decisions, not SL"):
-        data.read(*common.lists(write_runs(tmp_path, env="NoSL")), "SILENT", "SL")
+        data.read(*common.lists(write_runs(tmp_path, env="NoSL")), "SILENT", "SL", None)
 
 
 def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
     history = [{"uid": 1, "id": "M", "turns": [{"round": 1, "intents": [{"type": "Buff"}]}]}]
-    samples = [data.sample("a", obs(round=r, hp=40 + r), history, {"died": False, "hp": 30, "max_hp": 70, "potions": 0})
-               for r in (2, 3)]  # fmt: skip
+    end = {"died": False, "hp": 30, "max_hp": 70, "potions": 0}
+    samples = [data.sample("a", obs(round=r, hp=40 + r), history, end, {"potions": []})
+               | {"obs": obs(round=r, hp=40 + r), "history": history} for r in (2, 3)]  # fmt: skip
     tables = train.vocab(samples * 3)
     torch.manual_seed(0)
     net = export.net_file("t", "SILENT", "SL", tables, Net({t: len(i) for t, i in tables.items()}), samples, {}, 0)
-    assert net["env"] == "SL" and net["lags"] == encode.LAGS and len(net["tests"]) == 2
+    assert net["env"] == "SL" and net["target"] == "each_potion" and net["lags"] == encode.LAGS and len(net["tests"]) == 2
     graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
     assert [i.name for i in graph.graph.input] == encode.INPUTS
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     for test in net["tests"]:
-        b = Batch([data.sample("a", test["obs"], test["history"], {"died": True, "potions": 0})], index, "cpu")
+        b = Batch([data.sample("a", test["obs"], test["history"], {"died": True, "potions": 0}, None)], index, "cpu")
         feed = {name: x.numpy() for name, x in zip(encode.INPUTS, b.inputs(), strict=True)}
         outcome, used = ReferenceEvaluator(graph).run(None, feed)
         assert outcome[0].tolist() == pytest.approx(test["outcome"], abs=1e-5)
-        assert math.isclose(float(used[0]), test["potions_used"], abs_tol=1e-5)
+        assert used[0].tolist() == pytest.approx(test["potion_used"], abs=1e-5)
+        assert 0 <= min(test["potion_used"]) and max(test["potion_used"]) <= 1
 
 
-def test_training_writes_a_net_file_of_its_environment(tmp_path):
+def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
+    monkeypatch.setattr(data, "KEEP", 1)
     out = tmp_path / "net.json"
-    args = ["--list", write_runs(tmp_path), "--env", "SL", "--name", "t", "--out", str(out)]
+    runs = write_runs(tmp_path, runs=14)
+    (tmp_path / "seeds.txt").write_text("S10\nS11\nS12\nS13\n")
+    args = ["--list", runs, "--env", "SL", "--name", "t", "--out", str(out), "--skip-seeds", str(tmp_path / "seeds.txt"), "--test-list", runs]
     result = CliRunner().invoke(train.script, args)
     assert result.exit_code == 0, result.output
     net = json.loads(out.read_text())
     assert net["env"] == "SL" and net["fit"]["runs"] == 10 and net["fit"]["held_out_runs"] == 2 and net["tests"]
+    assert set(net["fit"]["held_out"]) >= {"rank_lost", "rank_lost_share", "auc_death", "auc_death_share", "potions"}
+    assert net["fit"]["by_hp"] and net["fit"]["by_potion"]
+    assert net["fit"]["medium"]["held_out"]["samples"] == 12  # the four skipped runs' three rounds

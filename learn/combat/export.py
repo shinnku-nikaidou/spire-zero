@@ -32,7 +32,7 @@ AXES = {
     **{x: {0: "batch", 1: "allies", 2: "ally_powers"} for x in ("ally_powers", "ally_power_amounts", "ally_power_mask")},
     **{x: {0: "batch", 1: "relics"} for x in ("relic_values", "relic_status")},
     "extra": {0: "batch"},
-    **{x: {0: "batch"} for x in ("worth", "outcome", "potions_used")},
+    **{x: {0: "batch"} for x in ("worth", "outcome", "potion_used")},
 }  # fmt: skip
 
 
@@ -45,7 +45,7 @@ def onnx_bytes(model, example: Batch) -> bytes:
         out,
         dynamo=False,
         input_names=encode.INPUTS,
-        output_names=["worth"] if model.is_worth else ["outcome", "potions_used"],
+        output_names=["worth"] if model.is_worth else ["outcome", "potion_used"],
         dynamic_axes=AXES,
     )
     return out.getvalue()
@@ -56,14 +56,25 @@ def multi_hit(s: dict) -> bool:
     return any((i.get("hits") or 1) > 1 for e in s["obs"]["enemies"] for i in e.get("intents") or [])
 
 
+def holds_a_potion(s: dict) -> bool:
+    return any(p is not None for p in s["obs"]["potions"])
+
+
+def low_hp(s: dict) -> bool:
+    return s["share"] < 0.3
+
+
 def net_file(name, character, env, tables, model, kept, report, seed) -> dict:
-    """The file's content; its test states are TESTS of the held-out round starts kept with their observations, one with
-    a multi-hit attack, predicted on the CPU as CombatNet does."""
+    """The file's content; its test states are TESTS of the held-out round starts kept with their observations, among
+    them, where the states kept hold one, a multi-hit attack, a potion and low HP, predicted on the CPU as CombatNet does."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     rng = random.Random(seed)
     picks = rng.sample(kept, min(TESTS, len(kept)))
-    picks[0] = rng.choice([s for s in kept if multi_hit(s)])
+    for k, wanted in zip(range(len(picks)), (multi_hit, holds_a_potion, low_hp), strict=False):
+        found = [s for s in kept if wanted(s)]
+        if found and not any(wanted(s) for s in picks):
+            picks[k] = rng.choice(found)
     b = Batch(picks, index, "cpu")
     with torch.no_grad():
         out = model(*b.inputs())
@@ -71,10 +82,11 @@ def net_file(name, character, env, tables, model, kept, report, seed) -> dict:
         head = {"target": "worth", "worth_cap": data.WORTH_CAP}
         tests = [{"worth": float(out[k])} for k in range(len(picks))]
     else:
-        probs = torch.softmax(out[0], 1)
-        head = {"buckets": data.BUCKETS, "loss_min": data.LOSS_MIN}
+        probs, gone = torch.softmax(out[0], 1), torch.sigmoid(out[1])
+        head = {"target": "each_potion", "buckets": data.BUCKETS, "loss_min": data.LOSS_MIN}
         tests = [
-            {"outcome": [float(v) for v in probs[k]], "potions_used": float(out[1][k])} for k in range(len(picks))
+            {"outcome": [float(v) for v in probs[k]], "potion_used": [float(v) for v in gone[k]]}
+            for k in range(len(picks))
         ]
     return {
         "name": name,
