@@ -234,7 +234,8 @@ def main(
 
     logs, records = common.lists(list_)
     keep_views = bool(boss_sims or boss_states or afterstates)
-    samples, runs, views = data.read_runs(logs, records, character, FLOORS, gauntlet, keep_views)
+    entering = not (gauntlet or encoders)
+    samples, runs, views = data.read_runs(logs, records, character, FLOORS, gauntlet, keep_views, entering)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -264,8 +265,12 @@ def main(
     )
 
     # Going on from a net keeps what its weights were fitted to read: its tables (ids it never saw read as unknown)
-    # and its state scaling.
+    # and its state scaling; only the map's table grows, by the ids a net from before the entering tokens lacks, which
+    # export.weights gives new vectors.
     tables = start["vocab"] if start else vocab(train)
+    if start and entering:
+        known = set(tables["map"])
+        tables = tables | {"map": tables["map"] + [i for i in vocab(train)["map"] if i not in known]}
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     if start:
         mean = torch.tensor(start["state"]["mean"], dtype=torch.float64)

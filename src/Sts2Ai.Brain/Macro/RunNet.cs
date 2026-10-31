@@ -81,7 +81,8 @@ public sealed class RunNet : IRunValue, IDisposable
         foreach (var test in file.Tests)
         {
             double value = net.Value(test.Run);
-            if (Math.Abs(value - test.Value) > 1e-3 * Math.Max(1, Math.Abs(test.Value)))
+            // Relative: a "win" net's values are mostly below 0.01. The 1e-6 is the floats' noise on the smallest of them.
+            if (Math.Abs(value - test.Value) > Math.Max(1e-3 * Math.Abs(test.Value), 1e-6))
             {
                 net.Dispose();
                 throw new InvalidDataException($"net {file.Name} gives {value} for a test run the trainer valued at {test.Value}");
@@ -141,7 +142,7 @@ public sealed class RunNet : IRunValue, IDisposable
     {
         var points = map.Points.ToDictionary(p => (p.Col, p.Row));
         var here = Here(map, points);
-        return Reachable(points, here)
+        return (map.Entering == true ? Reachable(points, here).Prepend(here) : Reachable(points, here))
             .Select(k => $"{points[k].Type}+{k.Row - here.Row}" + (points[k].Quest == true ? ":quest" : ""))
             .ToList();
     }
@@ -221,7 +222,7 @@ public sealed class RunNet : IRunValue, IDisposable
         inputs.AddRange(Bag("relics", "relic_mask", tokens.Relics));
         inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
         inputs.AddRange(Bag("context", "context_mask", tokens.Context));
-        inputs.AddRange(Bag("map", "map_mask", tokens.Map));
+        inputs.AddRange(Bag("map", "map_mask", tokens.Map.Where(t => !t.Contains("+0") || _index["map"].ContainsKey(t)).ToList()));
         if (_session.InputMetadata.ContainsKey("route")) inputs.AddRange(RouteInputs(Route(run.Map)));
         if (_file.State is { } state)
         {

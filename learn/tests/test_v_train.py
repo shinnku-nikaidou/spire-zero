@@ -389,3 +389,26 @@ def test_a_whole_runs_encoders_net_goes_on_from_the_gauntlets_without_its_share_
     feed = {name: t.numpy() for name, t in zip(encode.ENCODER_INPUTS, x.inputs(), strict=True)}
     [out] = ReferenceEvaluator(onnx.load_from_string(base64.b64decode(b["onnx"]))).run(None, feed)
     assert out.shape == (1, 64)
+
+
+def test_a_map_move_gives_a_sample_entering_the_point_and_grows_a_net_from_before_the_tokens(tmp_path):
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    args = ["--list", write_runs(tmp_path), "--name", "first", "--out", str(first), "--objective", "win"]
+    assert CliRunner().invoke(train.script, args).exit_code == 0
+    a = json.loads(first.read_text())
+    assert not any(encode.is_entering(i) for i in a["vocab"]["map"])
+    lists = write_runs(tmp_path)
+    logs = common.lists(lists)[0].split(",")
+    for log in logs:
+        rows = [json.loads(line) for line in open(log)]
+        rows = [r | {"surface": "map", "chosen": "map:1,1"} for r in rows]
+        with open(log, "w") as f:
+            f.writelines(json.dumps(r) + "\n" for r in rows)
+    samples, *_ = data.read_runs(*common.lists(lists), "SILENT", 64, entering=True)
+    assert len(samples) == 60 and samples[1]["tokens"]["map"][0] == "Elite+0:quest"
+    assert math.isclose(sum(s["weight"] for s in samples), 10)
+    args = ["--list", lists, "--name", "second", "--out", str(second), "--objective", "win", "--init", str(first)]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code == 0, result.output
+    b = json.loads(second.read_text())
+    assert b["vocab"]["map"][: len(a["vocab"]["map"])] == a["vocab"]["map"] and "Elite+0:quest" in b["vocab"]["map"]

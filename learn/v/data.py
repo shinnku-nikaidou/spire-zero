@@ -83,7 +83,13 @@ def progress(record: dict) -> float:
 
 
 def read_runs(
-    logs: str, records: str, character: str, floors: int, gauntlet: bool = False, keep_views: bool = True
+    logs: str,
+    records: str,
+    character: str,
+    floors: int,
+    gauntlet: bool = False,
+    keep_views: bool = True,
+    entering: bool = False,
 ) -> tuple[list[dict], list[dict], dict]:
     """The logged decisions as samples, the run records, and each decision's view and brain by (run, decision id),
     which serve the boss sims, door states and logged options only (without keep_views, none: plan v7's whole runs
@@ -92,7 +98,10 @@ def read_runs(
 
     A sample keeps its tokens and state, not its view: as Python objects a view is ~54 KB, ten times those (2026-10-30:
     plan v6 generation 3's 2.16M decisions took ~117 GB a training, now 21 GB); a held-out one keeps it as JSON, for
-    the net file's test runs."""
+    the net file's test runs.
+
+    With entering, a whole run's map moves give a second sample each, the chosen point's afterstate (encode.entered),
+    with the run's own outcome: what V reads when it values a map option, which no logged view shows."""
     samples, runs_seen, views = [], [], {}
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         runs = {k: r for k, r in runs.items() if not r.get("failure")}
@@ -119,10 +128,16 @@ def read_runs(
                     e["run"], view, floors, r["floor"], {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
                 )
             nxt = next_combats(r, view["floor"], fought_only=gauntlet)
-            del s["view"]
-            if held_out(e["run"]):
-                s["view_json"] = json.dumps(view)
-            samples.append(s | {"key": (i, e["run"]), "floor": r["floor"], "next": nxt})
+            more = []
+            if entering and e.get("surface") == "map" and e["chosen"].startswith("map:"):
+                kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
+                after = encode.entered(view, e["chosen"])
+                more.append(sample(e["run"], after, floors, r["floor"], kind))
+            for x in [s, *more]:
+                if held_out(e["run"]):
+                    x["view_json"] = json.dumps(x["view"])
+                del x["view"]
+                samples.append(x | {"key": (i, e["run"]), "floor": r["floor"], "next": nxt})
     per_run = {}
     for s in samples:
         per_run[s["key"]] = per_run.get(s["key"], 0) + 1

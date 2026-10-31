@@ -322,7 +322,7 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, Uniform
         {
             case MapScreen when verb == "map":
                 var at = arg.Split(',');
-                return run with { Map = run.Map with { Visited = [.. run.Map.Visited, new Coord(int.Parse(at[0]), int.Parse(at[1]))] } };
+                return run with { Map = run.Map with { Visited = [.. run.Map.Visited, new Coord(int.Parse(at[0]), int.Parse(at[1]))], Entering = true } };
             case RewardsScreen screen when verb == "reward":
                 var reward = screen.Rewards.First(r => r.Index == int.Parse(arg));
                 return reward.Kind switch

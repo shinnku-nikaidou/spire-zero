@@ -40,6 +40,8 @@ public sealed record MapView
     public required IReadOnlyList<MapPointView> Points { get; init; }
     /// <summary>The points visited in this act, in order; the last one is where the player is.</summary>
     public required IReadOnlyList<Coord> Visited { get; init; }
+    /// <summary>True in a map move's afterstate only: the last visited point is being entered, not yet played.</summary>
+    public bool? Entering { get; init; }
     /// <summary>The boss encounter, shown on the boss point.</summary>
     public required string Boss { get; init; }
     public string? SecondBoss { get; init; }

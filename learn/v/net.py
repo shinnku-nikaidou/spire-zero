@@ -79,7 +79,15 @@ class Batch:
         for t, bag_mask in encode.BAGS.items():
             if t in names:
                 feed[t], feed[bag_mask] = padded(
-                    [[index[t].get(i, 0) for i in s["tokens"][t]] for s in samples], device
+                    [
+                        [
+                            index[t].get(i, 0)
+                            for i in s["tokens"][t]
+                            if t != "map" or not encode.is_entering(i) or i in index[t]
+                        ]
+                        for s in samples
+                    ],
+                    device,
                 )
         if "route" in names:
             feed |= route_inputs(samples, index, device)

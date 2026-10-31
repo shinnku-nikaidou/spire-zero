@@ -5,6 +5,11 @@ character, act, boss(es) and ancient; the map points the player can still reach,
 ahead it is; and six numbers (floor, HP, max HP, gold, ascension, potion slots). No card or relic numbers and nothing
 computed from the deck: what matters in them is the net's to learn.
 
+A map move's afterstate (`entered`) is marked as entering the point: the point's own type reads as "Elite+0", so that
+options with the same points after them differ. The mark never stands for a room already played: a run view logged in
+a room comes after its combat, and a run that died there logs none, so a net that read the type of the room it is in
+would take entering an elite for having beaten it. A net whose map table lacks the token leaves it out.
+
 The encoders' net (plan v7 §3, net.EncoderNet) reads the same cards, relics, potions, context and numbers, and the map
 as a graph instead of a bag (`route`): where the player is, then the points a path leads to from there, each with its
 type, floors ahead and quest mark, and the indices of the points it leads to.
@@ -54,9 +59,25 @@ def reachable(m: dict) -> list[dict]:
 
 
 def map_tokens(m: dict) -> list[str]:
-    """Each reachable point as its type and how many floors ahead it is ("Elite+3"), ":quest" if a quest marks it."""
+    """Each reachable point as its type and how many floors ahead it is ("Elite+3"), ":quest" if a quest marks it; first
+    the point being entered, in a map move's afterstate ("Elite+0")."""
     row = m["visited"][-1]["row"] if m["visited"] else min(p["row"] for p in m["points"])
-    return [f"{p['type']}+{p['row'] - row}" + (":quest" if p.get("quest") else "") for p in reachable(m)]
+    points = {(p["col"], p["row"]): p for p in m["points"]}
+    nodes = ([points[here(m, points)]] if m.get("entering") else []) + reachable(m)
+    return [f"{p['type']}+{p['row'] - row}" + (":quest" if p.get("quest") else "") for p in nodes]
+
+
+def is_entering(token: str) -> bool:
+    """Whether a map token is the point being entered, which a net whose table lacks it leaves out."""
+    return "+0" in token
+
+
+def entered(view: dict, action: str) -> dict:
+    """The afterstate of the map move `map:COL,ROW`: the point added to the path and marked as entered (as
+    MacroBrain.After does)."""
+    col, row = (int(x) for x in action.removeprefix("map:").split(","))
+    m = view["map"] | {"visited": [*view["map"]["visited"], {"col": col, "row": row}], "entering": True}
+    return view | {"map": m}
 
 
 def route(m: dict) -> list[tuple[str, int, bool, list[int]]]:

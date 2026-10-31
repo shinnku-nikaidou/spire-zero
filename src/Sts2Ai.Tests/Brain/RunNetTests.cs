@@ -93,6 +93,25 @@ public class RunNetTests
         Assert.Empty(RunNet.MapTokens(Map((0, 0), (0, 1), (0, 2), (0, 3))));
     }
 
+    // As learn/tests/test_v_encode.py's test of the point entered.
+    [Fact]
+    public void AMapMoveReadsThePointEnteredAndOnlyThen()
+    {
+        Assert.Equal(["Elite+0:quest", "RestSite+1", "Boss+2"], RunNet.MapTokens(Map((0, 0), (1, 1)) with { Entering = true }));
+        Assert.Equal(["RestSite+1", "Boss+2"], RunNet.MapTokens(Map((0, 0), (1, 1))));
+    }
+
+    /// <summary>A net from before the entering tokens has none in its map table: it reads a map move as it always did.</summary>
+    [Fact]
+    public void ANetWhoseTableLacksThePointEnteredLeavesItOut()
+    {
+        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny.json")))!;
+        using var net = RunNet.Load(file);
+        var run = file.Tests[0].Run;
+        Assert.DoesNotContain(file.Vocab["map"], t => t.Contains("+0"));
+        Assert.Equal(net.Value(run), net.Value(run with { Map = run.Map with { Entering = true } }));
+    }
+
     // As learn/tests/test_v_encode.py's route test.
     [Fact]
     public void TheRouteIsThePlayersPointThenTheReachableOnesEachWithTheNodesItLeadsTo()
