@@ -163,7 +163,7 @@ promoted: eval/silent/champions/nosl.json now names combat pimc c2 8x300, combat
 
 (the 38a2664 gate's result in the `Summary` form, `Harness/Gate.cs:37-40`, with the paths of the time). The exit code is 0 on a pass, promoted or not; 1 on fail, open or void; 2 on a command-line mistake, a refused promotion, or a file that cannot be read (`SimWorker/Commands/Cli.cs:50-61`).
 
-**Time boxes.** Evaluations run in time boxes: the job gets a deadline and more seeds than fit, the hosts deal seeds from the front of the file, and what finished is the result (`.claude/skills/sl-selfplay/SKILL.md:158-178`). Runs that die early finish first, so a set cut short leans towards short runs; a batch stopped after 8 minutes was set aside in the ledger for being "biased to early deaths" (`eval/silent/ledger.md:43`). The two sides of a comparison of two time-boxed jobs are therefore given the same hosts and the same box, so they are cut alike.
+**Time boxes.** Evaluations run in time boxes: the job gets a deadline and more seeds than fit, the hosts deal seeds from the front of the file, and what finished is the result (`.claude/skills/sl-selfplay/SKILL.md:108-112`). Runs that die early finish first, so a set cut short leans towards short runs; a batch stopped after 8 minutes was set aside in the ledger for being "biased to early deaths" (`eval/silent/ledger.md:43`). The two sides of a comparison of two time-boxed jobs are therefore given the same hosts and the same box, so they are cut alike.
 
 ## 7. Not worse
 
@@ -243,7 +243,7 @@ the 95% one-sided lower bound of the mean difference (1.645 is the normal distri
 
 The margin needed grows with the champion's own wins; the plan's estimate of 2–3 pp more wins is the case of 20–30 seeds won by the champion alone. With few discordant seeds the normal bound is lenient: 3 seeds won by the challenger alone and none by the champion pass, where an exact McNemar (sign) test gives a one-sided p of 1/8.
 
-**What it does not check.** `gauntlet.py` drops every record with a `failure` before anything (`:44`), so it has no void rule; it has no minimum of pairs, and does not compare the two sides' configs, champions, environments, commits or exploration. The procedure keeps those: the challenger plays `promotion-1-500` with the champion's planner (the SL planner c2 at medium effort, `--afterstates clone`) and no `--explore`, in a time box on the fleet; v6-3-2's side is its `promotion-1-300` report's runs plus its runs on the last 200 seeds, played once (`.claude/skills/sl-selfplay/SKILL.md:39-63`).
+**What it does not check.** `gauntlet.py` drops every record with a `failure` before anything (`:44`), so it has no void rule; it has no minimum of pairs, and does not compare the two sides' configs, champions, environments, commits or exploration. The procedure keeps those: the challenger plays `promotion-1-500` with the champion's planner (the SL planner c2 at medium effort, `--afterstates clone`) and no `--explore`, in a time box on the fleet; v6-3-2's side is its `promotion-1-300` report's runs plus its runs on the last 200 seeds, played once (`.claude/skills/sl-selfplay/SKILL.md:98-104`).
 
 **Promotion** is by hand: the script writes nothing. A net that passes (of two that pass, the one with more wins) replaces the V of both champion files, the ledger records it, and a `report` of its runs at medium goes on the leaderboard.
 
