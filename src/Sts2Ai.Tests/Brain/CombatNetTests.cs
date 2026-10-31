@@ -26,7 +26,6 @@ public class CombatNetTests
     {
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
         using var net = CombatNet.Load(file);
-        Assert.Equal("SL", net.Env);
         Assert.Equal(3, file.Tests.Count);
         Assert.Equal(3, file.Tests.Select(t => Math.Round(t.PotionsUsed, 2)).Distinct().Count());
     }
@@ -36,18 +35,6 @@ public class CombatNetTests
     public void StillReadsC2()
     {
         using var net = CombatNet.Load(ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Repo("weights", "silent", "c2.json"))));
-        Assert.Null(net.Env);
-    }
-
-    [Fact]
-    public void ANetPlaysOnlyInItsEnvironmentAndAnOldOneInEither()
-    {
-        var sl = LeafChoice.Read(null, Fixture);
-        sl.Check(PlayEnvironment.SL);
-        Assert.Contains("SL's endings, not NoSL's", Assert.Throws<NotSupportedException>(() => sl.Check(PlayEnvironment.NoSL)).Message);
-        var c2 = LeafChoice.Read(null, Repo("weights", "silent", "c2.json"));
-        c2.Check(PlayEnvironment.SL);
-        c2.Check(PlayEnvironment.NoSL);
     }
 
     /// <summary>

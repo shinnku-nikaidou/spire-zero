@@ -21,14 +21,12 @@ public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTur
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="CombatNet"/> feeds them, outputs the
 /// chance of each ending (those the HP held rules out at 0, in a net that masks them) and the potions used after a win:
 /// by each id of the potions table, or a count.</param>
-/// <param name="Env">The environment whose games it learned from, whose policy's endings it predicts: SL or NoSL. The
-/// files made before nets had one (c1–c4, all NoSL's) have none.</param>
 /// <param name="Target">What it predicts: "worth", V of the fight's end as a share of V before it, capped at
 /// <see cref="WorthCap"/>; "each_potion", the endings (<see cref="Buckets"/>) and each potion id's chance of being gone
 /// after a win; none, the endings and a count of the potions used.</param>
 public sealed record CombatNetFile(
     string Name, int Buckets, double LossMin, int Lags, bool Round, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
-    IReadOnlyList<CombatNetTest> Tests, string? Env = null, string? Target = null, double WorthCap = 0);
+    IReadOnlyList<CombatNetTest> Tests, string? Target = null, double WorthCap = 0);
 
 /// <summary>
 /// The learned combat leaf (docs: combat-brain/leaf §3): from a round's start, how the combat ends under the policy that
@@ -61,9 +59,6 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     }
 
     public string Name => _file.Name;
-
-    /// <summary>The environment whose endings it predicts (<see cref="CombatNetFile.Env"/>).</summary>
-    public string? Env => _file.Env;
 
     /// <summary>Whether it predicts a fight's worth (<see cref="Worth"/>) rather than its endings.</summary>
     public bool IsWorth => _file.Target == "worth";
