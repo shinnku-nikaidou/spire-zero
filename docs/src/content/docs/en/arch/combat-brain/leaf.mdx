@@ -109,7 +109,6 @@ c2 was written by `train_combat.py` at commit `b4480a1`, removed since, on 315 N
 - **What an all-unknown fight still reads.** With the act, encounter and enemy all unknown, the HP and poison slopes keep their sign: 30 poison adds 0.167, against 0.278 when known.
 - **Impossible buckets can value below a death.** Nothing masks the buckets beyond the HP held ([§4](#sec-4)).
 - **It never saw the planner play.** Its labels are PIMC's endings ([§6](#sec-6)).
-- **Hand quality barely moves it, on one state.** On the Vantom test state, in a torch rebuild of c2, 5 Strikes against 5 Wounds in hand moves the value by 0.007, while 30 less enemy HP moves it by 0.051. Whether data or structure causes this is open. Poison against enemy HP is learned sensibly. This is one state only.
 
 Not measured: c2's calibration on SL round starts, the share of unknown ids in real decks, and how many deaths a bigger beam or another leaf would turn into wins.
 
