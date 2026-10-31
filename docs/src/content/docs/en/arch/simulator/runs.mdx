@@ -124,7 +124,7 @@ How often a run meets each screen, over the 300 SL runs of the champion's promot
 - card rewards and bundles are run-level decisions answered by the driver's handlers; without them a card reward would be skipped and the first bundle taken;
 - prompts are numbered from 0 again at each node's entry, as a clone of the node numbers its own ([Worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)).
 
-In `run` all three interfaces are one object, Harness's `Dispatcher`, which routes each decision to the brain that answers it ([Harness §4](/en/arch/harness/#sec-4)): combat to the combat brain, card prompts in combat to `p0`, everything else, card prompts outside combat included, to the macro brain ([Macro brain](/en/arch/macro-brain/)).
+In `run` all three interfaces are one object, Harness's `Dispatcher`, which routes each decision to the brain that answers it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)): combat to the combat brain, card prompts in combat to `p0`, everything else, card prompts outside combat included, to the macro brain ([Macro brain](/en/arch/macro-brain/)).
 
 **Outcomes.** A run ends `won` (over, in the victory room), `lost` (over anywhere else), `truncated` (still going after `--max-decisions`, 20,000 by default) or `failed` (it threw). A won run's record says HP 0: once the victory room is reached, the game kills the players. The example run's record reads won, act 2 (counted from 0), floor 48, HP 0 of 66.
 
@@ -161,7 +161,7 @@ with `replans N` before `maps` when the SL planner planned again, and `obs <dige
 | `card_rewards`, `card_rewards_skipped` | card reward screens closed, and those closed with no card taken |
 | `game_errors`, `failure`, `elapsed_ms` | the run's health and its wall time |
 
-`--log FILE` writes Harness's decision log, one line per decision ([Harness §6](/en/arch/harness/#sec-6)). Both files are flushed line by line; a run's log lines are written when the run ends, so a batch stopped midway loses at most the run being played.
+`--log FILE` writes Harness's decision log, one line per decision ([Harness: the decision log §1](/en/arch/harness/decision-log/#sec-1)). Both files are flushed line by line; a run's log lines are written when the run ends, so a batch stopped midway loses at most the run being played.
 
 ## 6. Determinism
 

@@ -34,7 +34,7 @@ Three consumers read one `Recommendation` ([Protocol: the wire §7](/en/arch/pro
 
 A *surface* is the kind of decision screen being shown (combat, map, shop, a card prompt and so on). An *anchor* is the Godot node on screen that an action belongs to, such as the card holder of the card to play.
 
-**Stale guard.** A recommendation is rendered or executed only if its `obs_hash` equals the current one; otherwise the output is cleared. While waiting, the panel shows "thinking…". In assist mode the brain answers *anytime*: it sends its best answer so far and then better ones ([Harness §5](/en/arch/harness/#sec-5)), and each update replaces the content.
+**Stale guard.** A recommendation is rendered or executed only if its `obs_hash` equals the current one; otherwise the output is cleared. While waiting, the panel shows "thinking…". In assist mode the brain answers *anytime*: it sends its best answer so far and then better ones ([Harness: routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)), and each update replaces the content.
 
 ## 2. Panel
 

@@ -1,0 +1,129 @@
+---
+title: 决策日志
+description: 'Harness 为一局的每个决策写下的一行 JSON：战斗决策、选牌提示和宏观决策的每个字段；候选、计划和预算；探索的步骤和重新规划的步骤；敌人出招记录；谁读这份日志；以及让 Harness 遵守它的测试。'
+sidebar:
+  label: 决策日志
+---
+
+import DecisionLog from '../../../../components/book/DecisionLog.svelte';
+
+大脑在一局里做的每个决策都可以记下来：它看到了什么，能做什么，选了什么，计划了什么，怎样评估各个备选，花了多少。这就是**决策日志**，每个决策一行 JSON。训练读其中的候选和观测，评估读其中的大脑和用时，解说将来会读其中的候选。
+
+## 1. 谁写它，何时写
+
+`Dispatcher` 若在创建时开着日志，就会把这一局的各行留在内存里（`Dispatcher.Log`），一局结束后由它的宿主写出：
+
+- `run --log FILE` 在每一局结束后追加它的各行（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。中途被杀掉的一局什么都不留。`--log` 和 `--brain` 同时给出时会被拒绝，因为后者的决策由大脑记日志。
+- `brain --log FILE` 在一局的 `run_end` 时写出它的各行，所以没发这条消息就断开的宿主什么都不留（[概览 §5](/arch/harness/#sec-5)）。
+
+这些行是 `DecisionEntry` record（`Dispatcher.cs:63-67`），像每个协议类型一样序列化：snake_case 的名字，值为 null 的字段省略（[协议 §4](/arch/protocol/#sec-4)）。日志和对局记录放在一起，在数据目录里（[学习 §6](/arch/learning/#sec-6)）。
+
+谁读这份日志：
+
+- **学习**：价值目标和战斗网络的 ExIt 标签（ExIt，专家迭代：训练学到的部分去模仿搜索的选择）来自其中的候选和观测（[学习 §2](/arch/learning/#sec-2)）；
+- **评估**：做出决策的大脑、占位策略做出的决策、每个决策的算力（[评估 §3](/arch/evaluation/#sec-3)）；
+- **输出**：解说将只根据候选和事实生成（[输出 §5](/arch/output/#sec-5)）。
+
+## 2. 三行
+
+<DecisionLog client:visible lang="zh-CN" />
+
+## 3. 每个字段
+
+| 字段 | 类型 | 战斗 | 选牌提示 | 宏观 |
+|---|---|---|---|---|
+| `run` | string | run id | 同上 | 同上 |
+| `decision_id` | int | 这个决策在这一局里的序号，从 0 开始，三种决策一起计数（[§4](#sec-4)） | 同上 | 同上 |
+| `env` | string | `NoSL` 或 `SL` | 同上 | 同上 |
+| `surface` | string | `combat` | `card_choice`，两侧都是 | 这个决策的决策界面 |
+| `brain` | string | 战斗路由的名字：`pimc`、`plan c2`、`pimc c2 explore 0.003`…… | 提示一侧的：战斗中是 `p0`；战斗外是 L0 的名字或 `random` | 宏观路由的 |
+| `obs_hash` | 十六进制 string | 战斗观测的哈希 | 选牌提示的哈希 | 整个观测的哈希（[§4](#sec-4)） |
+| `legal` | int | 合法动作的个数 | 提示的选项个数 | 合法动作的个数 |
+| `chosen` | string | 战斗动作的文本：`play:C[:T]`、`potion:S[:T]`、`end_turn`（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)） | 选中的选项下标，用逗号连接，不带 `pick:` | 动作 |
+| `plan` | string[]? | 大脑在 `chosen` 之后的计划，如果有（[§5](#sec-5)） | 从不 | 策略在 `chosen` 之后的计划，如果有：L0 在地图上的路线 |
+| `candidates` | Candidate[]? | 搜索的候选，如果有（[§5](#sec-5)） | 从不 | 从不 |
+| `budget` | Budget? | 路由配置的预算，在乘以房间的倍数之前；有预算的路由的每一行都有，包括只有一个合法动作的步骤和沿用计划的步骤（[路由、预算与种子 §4](/arch/harness/routing/#sec-4)） | 从不 | 从不 |
+| `seed` | integer | 这个决策的种子（[路由、预算与种子 §5](/arch/harness/routing/#sec-5)） | 同上，不过策略不读它 | 同上，不过策略不读它 |
+| `elapsed_ms` | number | 路由的用时 | 策略的用时 | 策略的用时；它的计划是之后才问的，不计时 |
+| `features` | `{string: number}`? | – | – | 总是有：整局观测上 V v0 的特征（[§7](#sec-7)） |
+| `obs` | CombatObservation? | 总是有 | – | – |
+| `run_view` | RunView? | – | – | 总是有 |
+| `history` | EnemyTurns[]? | 总是有，可能为空（[§7](#sec-7)） | – | – |
+| `explored` | `true`? | 这一步是由探索抽出来的（[§6](#sec-6)） | 策略的上一个回答是探索出来的 | 同上 |
+| `replanned` | `true`? | 这一步因为计划对不上而重新搜索（[§6](#sec-6)） | – | – |
+
+## 4. 序号与哈希
+
+- **`decision_id` 是 Harness 自己的计数**，就是用来抽取种子的那个序号，不是线路上请求的 `decision_id`。通过线路时，大脑只检查请求的 id 是否递增。Mod 取消了的请求照样会被回答、计数并记日志，因为大脑忽略 `cancel`（[概览 §5](/arch/harness/#sec-5)）。
+- **`obs_hash` 哈希的是大脑看到的东西**：战斗决策是战斗观测，选牌提示是提示本身，宏观决策是整个观测。只有宏观行的这个值与线路上的 `obs_hash` 相同，后者哈希的是整个观测。哈希是对值的 JSON 计算的 FNV-1a 64，写成十六进制（[协议 §4](/arch/protocol/#sec-4)）。
+
+## 5. 候选与计划
+
+**PIMC 的候选**是每个首个动作，各自带有（[协议：世界与工作进程消息 §3](/arch/protocol/worlds/#sec-3)）：
+
+- `value`：它在各个世界上的平均值；
+- `ci`：它的 95% 置信区间的半宽，在它的各个世界上算 1.96·s/√n，不到 2 个世界时为 0；
+- `samples`：它的世界数；
+- `values`：它在每个世界里的值，按世界顺序，保留 4 位小数。这些就是 ExIt 的策略目标里的 Q（[学习 §2](/arch/learning/#sec-2)）；
+- `nodes`：在每个世界里花在它之后的搜索节点数，包括这个动作本身。
+
+它们先按到达的逐次减半轮次排序，再按值排序；不用减半时每个候选都到达同一轮，所以最好的在前。PIMC 的 `plan` 是 `chosen` 之后本回合剩下的部分，取第一个世界里的。
+
+**SL 规划器的候选**是它保留的路线开头的每个首个动作，估值取这些路线中最好的那条，`ci` 为 0，`samples` 为 1，`values` 是那一个值，没有 `nodes`：选中的在前，然后按值排序。它的 `plan` 是它那条路线上战斗剩下的部分。对一个未证明的失败选择，计划在 `replan` 规定的、重新规划之前要打的那些回合之后停止，一条路线最多 40 个回合（[SL 规划器：束搜索 §6](/arch/sl-planner/beam/#sec-6)）。
+
+**没有候选的行**。只有一个合法动作的决策两者都没有。按沿用的计划打出的一步（[NoSL PIMC：预算 §2](/arch/pimc/budget/#sec-2)、[SL 规划器 §4](/arch/sl-planner/#sec-4)）以计划的剩余部分作为它的 `plan`（计划的最后一步没有），没有 `candidates`。占位策略两者都不记。在地图上，L0 记下它的 `plan`，即 `chosen` 之后本幕剩下的路线（[宏观大脑：搜索 §1](/arch/macro-brain/search/#sec-1)）。
+
+## 6. 探索的步骤与重新规划的步骤
+
+**`explored: true`** 标出自我对弈的探索抽出、而不是大脑最优选的回答（[学习 §5](/arch/learning/#sec-5)）：
+
+- 由 softmax 抽出时（`--combat-explore T`、`--macro-explore T`），当大脑给抽中项的估值比它的最优低出温度的百分之一以上时。差距比这更小就算平手，例如同一回合换了个顺序，不标；
+- 由均匀抽取抽出时（`--explore ε`），总是标，碰巧抽中大脑自己的选择时也一样；
+- 在战斗外的选牌提示处，当它的任何一步是抽出来的时。
+
+抽出来代替搜索选择的战斗步骤保留它的 `candidates`，但没有 `plan`，因为那个计划是原选择的。其他步骤没有 `explored`。
+
+**`replanned: true`** 标出因为大脑计划里的一步对不上而重新搜索的战斗步骤：战斗没有显示计划在这一步之前预期的观测。用 PIMC 的 `--follow` 时，这是回合揭示了新东西；用 SL 规划器时，这说明克隆与真实战斗不同（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。探索出的一步之后，原选择的计划仍在队列里，所以下一步通常也会重新规划（[路由、预算与种子 §2](/arch/harness/routing/#sec-2)）。`run` 和 `brain` 为一局打印的那一行会给出这一局的次数（`replans`）；对局记录不保存它。
+
+## 7. 一行还带着什么
+
+**一场战斗的决策集中在一块里**，夹在两个宏观决策之间，顺序与对局记录里的战斗一致（[评估 §6](/arch/evaluation/#sec-6)）。决策就是靠这个找到它那场战斗的结局。在连战对局里，一开始就判赢的战斗在对局记录里，但没有决策。
+
+**`obs`**，在每个战斗行上：大脑看到的战斗观测，约 1.6 KB（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)）。它是学习得到的战斗部件和融合测试集的输入（[NoSL PIMC：搜索 §4](/arch/pimc/search/#sec-4)）。
+
+**`history`**，在每个战斗行上：这场战斗至今的敌人出招记录，包括本回合，与 Harness 交给战斗大脑的一样（[概览 §4](/arch/harness/#sec-4)）。一项是 `{uid, id, turns: [{round, intents}]}`。战斗网络连同回合数一起读它，从数据里学到每个怪物的出招顺序（[战斗大脑：提示、招式与 worker §2](/arch/combat-brain/shared/#sec-2)）。
+
+**`run_view`**，在每个宏观行上：大脑看到的整局观测，约 6 KB（[协议：观测与动作 §2](/arch/protocol/observation/#sec-2)）。V 就用它训练（[宏观大脑：从风险值到价值](/arch/macro-brain/value/)）。
+
+**`features`**，在每个宏观行上，不管是哪个大脑做的决策：整局观测上 V v0 手工设计的特征（楼层、HP、最大 HP、金币、药水、遗物、牌、不能打出的牌、升级、牌组的平均伤害、格挡和抽牌，以及前方预计的精英、休息处、商店、宝箱和未知）。V v0 的拟合和 V v2 的训练读它们；两者都已删除，纯 V 不读它们（[学习 §1](/arch/learning/#sec-1)）。
+
+战斗外的选牌提示既没有 `run_view`，也没有 `features`。
+
+## 8. 测试
+
+**`run --check`** 让整局遵守 Harness 的确定性（[模拟器：参考 §6](/arch/simulator/reference/#sec-6)）。它打每个种子，然后从检查点重播每个节点，再通过线路把这个种子打第二遍，连到同一进程里带同一个冠军的 `BrainServer`（或连到 `--brain` 的套接字），并要求两遍一致：
+
+- 轨迹，逐个决策；
+- 每个决策的观测哈希，每个还必须经得起一次 JSON 往返；
+- 这一局的摘要和每一幕的地图哈希；
+- 对局记录，去掉游戏错误和用时；
+- 决策日志，除 `elapsed_ms` 外的每个字段。第二份日志是进程内服务器的；用 `--brain` 时两份都是空的，所以不比较。
+
+**xUnit**（`Sts2Ai.Tests/Harness/`，[模拟器：参考 §7](/arch/simulator/reference/#sec-7)）：
+
+| 测试 | 检查什么 |
+|---|---|
+| `DispatcherTests.GivesTheCombatBrainTheMovesSoFar` | 战斗大脑按回合得到每个敌人的意图 |
+| `DispatcherTests.AMacroDecisionEndsTheCombatsRecord` | 宏观决策清空敌人出招记录 |
+| `DispatcherTests.RefusesAnIllegalPick` | 不合法的战斗回答会抛异常 |
+| `DispatcherTests.HasNoFallbackForAnUncoveredSurface` | 未覆盖的决策界面会抛异常 |
+| `DispatcherTests.RefusesNodeCheckpointsInNoSL` | NoSL 下拒收节点检查点 |
+| `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | 克隆保留精英连战的规则 |
+| `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`、`AWorkerStuckTwiceFailsTheCall` | 池的那一次重试 |
+| `GateTests`（10）、`EvalReportTests`（2） | 评估的晋级门槛和报告（[评估 §5](/arch/evaluation/#sec-5)） |
+
+**规划中的测试**：
+
+1. **路由覆盖**：模拟的对局走到每个决策界面，没有任何占位策略做出的决策。部分已有：`run` 列出从未到达的决策界面（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)），`Dispatcher` 遇到未覆盖的决策界面会抛异常。
+2. **Harness 层面的 NoSL 反事实测试**：记录相同、隐藏状态不同，给出相同的推荐（[环境：信息与节点 §8](/arch/environments/information/#sec-8)）。
+3. **过期处理**：在打乱顺序或重复发送的请求里，只回答最新的一个。目前这样的请求会得到 `error`，宿主随即结束这一局。

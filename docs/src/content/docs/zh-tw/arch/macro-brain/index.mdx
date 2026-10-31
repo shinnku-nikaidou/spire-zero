@@ -10,7 +10,7 @@ sidebar:
 import { Aside } from '@astrojs/starlight/components';
 import RunTrajectory from '../../../../../components/v/RunTrajectory.svelte';
 
-**宏觀大腦**負責戰鬥之外的每個決策：下一步去哪個地圖點、領取哪些獎勵、拿哪張牌、買什麼，以及在事件、休息處或財寶房的寶箱前選哪個選項。它和[戰鬥大腦](/zh-tw/arch/combat-brain/)一起執行在決策行程裡。Harness 把每個不是戰鬥的決策介面都交給它（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
+**宏觀大腦**負責戰鬥之外的每個決策：下一步去哪個地圖點、領取哪些獎勵、拿哪張牌、買什麼，以及在事件、休息處或財寶房的寶箱前選哪個選項。它和[戰鬥大腦](/zh-tw/arch/combat-brain/)一起執行在決策行程裡。Harness 把每個不是戰鬥的決策介面都交給它（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）。
 
 它的方法一句話就能說完：把每個選項都打一遍，看看打完之後當下的局面，問一個學到的價值函式 V 這個局面有多好，然後選最好的。本章從基本原理出發，逐一解釋這句話的每個部分：選項有哪些、「打完之後當下的局面」是什麼意思、選項怎麼打、V 讀什麼又算什麼、它的訓練標籤從哪裡來，以及每個新的 V 如何被接受或拒絕。
 

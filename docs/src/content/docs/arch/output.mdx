@@ -34,7 +34,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 决策界面（surface）指当前显示的决策屏幕的种类（战斗、地图、商店、选牌提示等）。**锚点**（anchor）是屏幕上某个动作所对应的 Godot 节点，比如要打出的那张牌所在的卡牌槽。
 
-**过期守卫**。推荐只有在它的 `obs_hash` 等于当前哈希时才会被渲染或执行，否则清空输出。等待期间面板显示「thinking…」（思考中）。辅助模式下大脑是**随时可答**（anytime）的：先发出目前最好的答案，再陆续发出更好的（[Harness §5](/arch/harness/#sec-5)），每次更新都替换面板内容。
+**过期守卫**。推荐只有在它的 `obs_hash` 等于当前哈希时才会被渲染或执行，否则清空输出。等待期间面板显示「thinking…」（思考中）。辅助模式下大脑是**随时可答**（anytime）的：先发出目前最好的答案，再陆续发出更好的（[Harness：路由、预算与种子 §4](/arch/harness/routing/#sec-4)），每次更新都替换面板内容。
 
 ## 2. 面板
 

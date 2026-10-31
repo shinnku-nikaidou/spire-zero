@@ -25,7 +25,7 @@ L0 v0 看不到畫面沒顯示的東西。事件選項的代價和收益並不�
 
 ## 2. 複本上的 L0
 
-SL 下加上 `--afterstates clone`（以及 `--macro l0`）時，Harness 在每個宏觀決策和每個戰鬥外的選牌提示處把節點複本交給 L0（[Harness §3](/zh-tw/arch/harness/#sec-3)），L0 就在真實遊戲裡把選項打出來，而不是去預測（`CloneSearch`）。
+SL 下加上 `--afterstates clone`（以及 `--macro l0`）時，Harness 在每個宏觀決策和每個戰鬥外的選牌提示處把節點複本交給 L0（[Harness：路由、預算與種子 §3](/zh-tw/arch/harness/routing/#sec-3)），L0 就在真實遊戲裡把選項打出來，而不是去預測（`CloneSearch`）。
 
 - **後狀態是打出來的**：每個選項都在複本上打一遍，遊戲接著問的東西就是它的後狀態：事件的真實結果、轉化真正變出的牌、購買之後的商店。V 給它估值。
 - **地圖仍然靠預測**：移動是節點的出口，複本不能越過它往下打：下一個節點的內容不是當前節點能看的（[環境：資訊與節點 §2](/zh-tw/arch/environments/information/#sec-2)）。所以地圖移動的後狀態仍像 L0 v0 那樣預測，把這個點加進路徑。

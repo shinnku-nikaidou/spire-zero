@@ -22,7 +22,7 @@ Observation{run: RunView, screen: ScreenView}
 {"run": {"character": "SILENT", "act": 0, "floor": 2, …}, "screen": {"surface": "card_reward", "cards": […], "alternatives": […]}}
 ```
 
-决策界面的名字是 `Surfaces.cs` 里的常量：`combat`、`card_choice`、`map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere`。决策界面也是 Harness 路由一个决策时用的键（[Harness §4](/arch/harness/#sec-4)）。一局的结束不是决策界面，而是线路消息 `run_end`（[线路 §3](/arch/protocol/wire/#sec-3)）。
+决策界面的名字是 `Surfaces.cs` 里的常量：`combat`、`card_choice`、`map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere`。决策界面也是 Harness 路由一个决策时用的键（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）。一局的结束不是决策界面，而是线路消息 `run_end`（[线路 §3](/arch/protocol/wire/#sec-3)）。
 
 观测是惰性构建的。在大脑内部，一个决策带着一个构建其观测的函数，从不读取观测的大脑也就从不为它付出代价（`CombatDecision`、`MacroDecision`、`ChoiceDecision`，在 `Sts2Ai.Brain/Decisions.cs` 里）。在线路上它总是会被构建，因为大脑在别处。
 
@@ -150,7 +150,7 @@ CardChoice{options: CardView[] (canonical order), min, max, context: ChoiceConte
 | `purpose` | 提示的种类：入口的名字去掉 `From`，转成 snake_case（`deck_for_upgrade`、`deck_for_transformation`、`deck_for_enchantment`、`deck_for_removal`、`deck_generic`、`hand`、`hand_for_discard`、`hand_for_upgrade`、`choose_a_card_screen`、`simple_grid`、`simple_grid_for_rewards`）；针对战斗牌堆的提示则是牌堆的名字，`draw_pile` 或 `discard_pile`（在这个游戏版本里，只会从这两个牌堆提问） |
 | `source`? | 发起询问的卡牌、遗物、能力或事件的 id，在游戏指明时给出：入口的 `source` 参数，否则是这次选择最近涉及的模型 |
 | `cancelable` | 取消或跳过按钮会关闭提示：提示自己的设置，或选卡画面的 `canSkip` |
-| `in_combat` | 在战斗中提问（某张牌或某个能力正在结算），而不是在休息处、事件或商店里；Harness 按它路由提示：战斗中交给 `p0`，战斗外交给宏观大脑（[Harness §4](/arch/harness/#sec-4)） |
+| `in_combat` | 在战斗中提问（某张牌或某个能力正在结算），而不是在休息处、事件或商店里；Harness 按它路由提示：战斗中交给 `p0`，战斗外交给宏观大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)） |
 | `prompt_key`? | 提示文本的本地化键，`table.key` |
 | `enchantment`? | 用于 `deck_for_enchantment`：被选中的牌获得的附魔，`{id, amount}` |
 

@@ -34,7 +34,7 @@ import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
 決策介面（surface）指當前顯示的決策畫面的種類（戰鬥、地圖、商店、選牌提示等）。**錨點**（anchor）是螢幕上某個動作所對應的 Godot 節點，比如要打出的那張牌所在的卡牌槽。
 
-**過期守衛**。推薦只有在它的 `obs_hash` 等於當前雜湊時才會被渲染或執行，否則清空輸出。等待期間面板顯示「thinking…」（思考中）。輔助模式下大腦是**隨時可答**（anytime）的：先發出目前最好的答案，再陸續發出更好的（[Harness §5](/zh-tw/arch/harness/#sec-5)），每次更新都替換面板內容。
+**過期守衛**。推薦只有在它的 `obs_hash` 等於當前雜湊時才會被渲染或執行，否則清空輸出。等待期間面板顯示「thinking…」（思考中）。輔助模式下大腦是**隨時可答**（anytime）的：先發出目前最好的答案，再陸續發出更好的（[Harness：路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)），每次更新都替換面板內容。
 
 ## 2. 面板
 

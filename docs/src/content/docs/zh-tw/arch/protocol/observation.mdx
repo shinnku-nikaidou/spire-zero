@@ -22,7 +22,7 @@ Observation{run: RunView, screen: ScreenView}
 {"run": {"character": "SILENT", "act": 0, "floor": 2, …}, "screen": {"surface": "card_reward", "cards": […], "alternatives": […]}}
 ```
 
-決策介面的名稱是 `Surfaces.cs` 裡的常數：`combat`、`card_choice`、`map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere`。決策介面也是 Harness 路由決策時用的鍵（[Harness §4](/zh-tw/arch/harness/#sec-4)）。一局的結束不是決策介面，而是線路訊息 `run_end`（[線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。
+決策介面的名稱是 `Surfaces.cs` 裡的常數：`combat`、`card_choice`、`map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere`。決策介面也是 Harness 路由決策時用的鍵（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）。一局的結束不是決策介面，而是線路訊息 `run_end`（[線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。
 
 觀測是惰性建構的。在大腦內部，一個決策帶著一個建構它的觀測的函式，從不讀取觀測的大腦就從不為它付出代價（`Sts2Ai.Brain/Decisions.cs` 裡的 `CombatDecision`、`MacroDecision`、`ChoiceDecision`）。在線路上它總是會被建構，因為大腦在別處。
 
@@ -150,7 +150,7 @@ CardChoice{options: CardView[] (canonical order), min, max, context: ChoiceConte
 | `purpose` | 提示的種類：入口的名稱去掉 `From`，轉成 snake_case（`deck_for_upgrade`、`deck_for_transformation`、`deck_for_enchantment`、`deck_for_removal`、`deck_generic`、`hand`、`hand_for_discard`、`hand_for_upgrade`、`choose_a_card_screen`、`simple_grid`、`simple_grid_for_rewards`），或者針對戰鬥牌堆的提示，就是牌堆的名稱，`draw_pile` 或 `discard_pile`（在這個遊戲版本裡只會從這兩個牌堆詢問） |
 | `source`? | 發起詢問的卡牌、遺物、能力或事件的 id，在遊戲指明時給出：入口的 `source` 參數，否則是這次選擇最近涉及的模型 |
 | `cancelable` | 有取消或略過按鈕可以關閉提示：提示自己的設定，或「選一張牌」畫面的 `canSkip` |
-| `in_combat` | 在戰鬥中詢問（某張牌或某個能力正在結算），而不是在休息處、事件或商店；Harness 依它路由提示：戰鬥中交給 `p0`，戰鬥外交給宏觀大腦（[Harness §4](/zh-tw/arch/harness/#sec-4)） |
+| `in_combat` | 在戰鬥中詢問（某張牌或某個能力正在結算），而不是在休息處、事件或商店；Harness 依它路由提示：戰鬥中交給 `p0`，戰鬥外交給宏觀大腦（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)） |
 | `prompt_key`? | 提示文字的本地化鍵，`table.key` |
 | `enchantment`? | 用於 `deck_for_enchantment`：被選中的牌獲得的附魔，`{id, amount}` |
 

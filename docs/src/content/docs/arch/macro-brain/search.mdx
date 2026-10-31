@@ -25,7 +25,7 @@ import CloneSearchDemo from '../../../../components/v/CloneSearchDemo.svelte';
 
 ## 2. 克隆上的 L0
 
-SL 下加上 `--afterstates clone`（配 `--macro l0`）时，Harness 在每个宏观决策和每个战斗外的选牌提示处把节点克隆交给 L0（[Harness §3](/arch/harness/#sec-3)），L0 就在真实游戏里把选项打出来，而不是去预测（`CloneSearch`）。
+SL 下加上 `--afterstates clone`（配 `--macro l0`）时，Harness 在每个宏观决策和每个战斗外的选牌提示处把节点克隆交给 L0（[Harness：路由、预算与种子 §3](/arch/harness/routing/#sec-3)），L0 就在真实游戏里把选项打出来，而不是去预测（`CloneSearch`）。
 
 - **后状态是打出来的**：每个选项都在克隆上打一遍，游戏接着问的东西就是它的后状态：事件的真实结果、变化真正给出的牌、购买之后的商店。V 给它估值。
 - **地图仍然靠预测**：移动是节点的出口，克隆不能越过这一步：下一个节点的内容不是当前节点可以看的（[环境：信息与节点 §2](/arch/environments/information/#sec-2)）。所以地图移动的后状态像 L0 v0 那样预测：把这个点加进路径。

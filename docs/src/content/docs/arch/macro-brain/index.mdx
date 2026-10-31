@@ -10,7 +10,7 @@ sidebar:
 import { Aside } from '@astrojs/starlight/components';
 import RunTrajectory from '../../../../components/v/RunTrajectory.svelte';
 
-**宏观大脑**负责战斗之外的所有决策：下一个去哪个地图点、领取哪些奖励、拿哪张牌、买什么、在事件、休息处或宝箱里选哪个选项。它和[战斗大脑](/arch/combat-brain/)一起运行在决策进程里。Harness 把所有不是战斗的决策界面都交给它（[Harness §4](/arch/harness/#sec-4)）。
+**宏观大脑**负责战斗之外的所有决策：下一个去哪个地图点、领取哪些奖励、拿哪张牌、买什么、在事件、休息处或宝箱里选哪个选项。它和[战斗大脑](/arch/combat-brain/)一起运行在决策进程里。Harness 把所有不是战斗的决策界面都交给它（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）。
 
 它的方法一句话就能说完：把每个选项都打一遍，看看紧接着的局面，问一个学到的价值函数 V 这个局面有多好，然后选最好的。本章从基本原理出发，逐一解释这句话的每个部分：选项是什么，「紧接着的局面」指什么，选项怎样打出来，V 读什么、算什么，它的训练标签从哪里来，以及每个新的 V 怎样被接受或拒绝。
 

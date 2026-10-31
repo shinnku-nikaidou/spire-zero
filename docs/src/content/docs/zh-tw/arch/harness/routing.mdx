@@ -1,0 +1,175 @@
+---
+title: 路由、預算與種子
+description: '哪個大腦回答每種決策介面，以及一局的冠軍如何命名；戰鬥路由（佔位策略、工作行程池裡的 PIMC 和 SL 規劃器、探索、照計畫打）和帶節點複本的宏觀路由；預算；每個種子如何抽取；以及出問題時會怎樣。'
+sidebar:
+  label: 路由、預算與種子
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+一局的 `Dispatcher` 持有四條路由，路由表的每一側一條，每條都是一個大腦，加上它在日誌裡使用的名字。本頁講這些路由：它們能花多少、它們的隨機性從哪裡來，以及其中一條失敗時會怎樣。
+
+## 1. 路由表
+
+每個決策都只交給恰好一側：
+
+| 決策介面（surface） | 側 | 目前的大腦 |
+|---|---|---|
+| `combat` | 戰鬥 | `plan`（SL 規劃器，僅 SL）、`pimc`（NoSL，或在 SL 複本上搜尋本回合），或佔位策略 `play` 和 `random` |
+| 戰鬥中問的 `card_choice`（`ChoiceContext.InCombat`） | 戰鬥提示 | `p0`，提示大腦（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)） |
+| 戰鬥外問的 `card_choice`（升級、轉化、附魔、移除……） | 宏觀提示 | L0，也就是宏觀大腦本身，或 `random` |
+| `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere` | 宏觀 | L0（[宏觀大腦](/zh-tw/arch/macro-brain/)），或 `random` |
+
+藥水欄沒有自己的決策介面：它的動作是每個宏觀畫面合法動作清單的一部分（[GameBridge：各決策介面的動作 §6](/zh-tw/arch/gamebridge/actions/#sec-6)）。表外的決策介面會拋出「uncovered surface」（[§6](#sec-6)）。
+
+**冠軍的名字**。一局的各個大腦合起來就是它的冠軍，由 `Dispatcher.Champion` 命名：
+
+```text
+combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone
+```
+
+這是本書範例對局的冠軍：葉節點用戰鬥網路 c2、用低預算的 SL 規劃器，戰鬥中的提示用 `p0`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V v6-3-2，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：戰鬥大腦指名它的葉節點（預設的除外）、V 為它葉節點的結局定價時加上 `v prices`，以及它的探索（`explore T`）；L0 指名它的 V（V 是初始權重時除外）、`clone`，以及它的探索（softmax 是 `explore T`，均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:38-62`）。
+
+**環境決定戰鬥大腦**。宏觀大腦在兩種環境裡是同一個；戰鬥大腦不是（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。冠軍工廠在 SL 之外拒絕 `plan` 和 `--afterstates clone`，也拒絕不適合這個環境的葉節點。`brain` 指令同時服務兩種環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
+
+## 2. 戰鬥路由
+
+戰鬥路由是一個 `CombatRoute(Brain, Decide, Budget)`：它的名字；一個函式，從（決策、種子、節點的複本或 null、這場戰鬥至今的出招）得到一個 `CombatDecisionResult`；以及它的預算，供日誌和名字使用。
+
+**佔位策略**。`CombatRoute.Of(name, policy)` 包裝一個不搜尋的策略（`play`、`random`）：它給出自己的選擇，沒有計畫，也沒有候選。
+
+**行程池裡的 PIMC**（`PooledPimc.Route`，[NoSL PIMC](/zh-tw/arch/pimc/)）。只有一個合法動作時，它立即回答。否則預算按房間來定（[§4](#sec-4)），並且：
+
+- **NoSL**：每個世界一個 `pimc_world` 請求，每個世界都在它的工作行程裡由觀測、敵人出招紀錄和建構種子重新建構，所以真實狀態的任何部分都不會離開宿主。用逐次減半時，每一輪是一組這樣的請求，帶著還留著的動作。種子相同時，它給出的答案和在單一行程裡搜尋各個世界的 PIMC 相同，`selftest` 會檢查這一點。
+- **SL**：唯一的世界是節點的複本，每個第一個動作用一個 `sl_world` 請求搜尋，所以各個工作行程分擔它。每個請求保有自己的狀態備忘表，而單一行程裡的一次搜尋會在各個第一個動作之間共用它，所以兩者並不完全相同。
+- **照計畫打**（`--follow`）：路由為這一局保有一個 `TurnPlan`。只要戰鬥顯示的是計畫在某一步之前預期的觀測，這一步就不經搜尋打出；否則這個決策重新搜尋，並標為重新規劃（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)）。
+
+**行程池裡的 SL 規劃器**（`PooledPlanner.Route`，[SL 規劃器](/zh-tw/arch/sl-planner/)）。每局一個 `SlRoute`，把戰鬥剩下的部分規劃一次，然後照計畫打，只在某一步不成立或計畫用完時才重新規劃（[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）。一個計畫就是 `SlPlanner.Search`，束的每個回合按保留的每個狀態各送一個 `sl_turn` 請求，用房間的預算。用 `--leaf-prices v` 時，每個計畫帶著 V 對這場戰鬥各種結局的定價，由決策時的這一局算出（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。沒有節點複本時，路由會拋出例外（它只在 SL 下打）；要用 V 的定價時，沒有整局觀測也會拋出例外。
+
+**探索**（`CombatRoute.Exploring`，僅自我對弈，`--combat-explore T`，[學習 §5](/zh-tw/arch/learning/#sec-5)）。搜尋回傳兩個或更多候選時，第一個動作按它們估值的 softmax 從中抽取：每個的機率 ∝ exp((v − best) / T)，T 以葉節點的單位計（`Brain/Exploration.cs`）。如果抽到的就是搜尋自己的選擇，結果不變。否則打出抽到的動作，候選不變，沒有計畫，因為計畫是屬於原選擇的；如果它的估值比原選擇低超過 T/100，就標為探索（差距更小則等於平手）；它不會標為重新規劃。
+
+**持續整局的兩件事**。`TurnPlan` 和 `SlRoute` 每局建立一次，從不清空，戰鬥結束時不會，宏觀決策時也不會；規劃器對連續的沒有證明的失敗計畫的計數，跨決策延續（[SL 規劃器：束搜尋 §6](/zh-tw/arch/sl-planner/beam/#sec-6)）。另外，探索和照計畫打會相互影響：經探索的一步會讓原選擇的計畫仍留在佇列裡，所以下一個決策通常會發現那個計畫的這一步不成立，於是重新搜尋，並作為重新規劃記入日誌和計數。
+
+## 3. 宏觀路由與提示路由
+
+宏觀路由或提示路由是一個 `Route<T>(Brain, Policy)`。目前：
+
+- **L0**（`MacroBrain`，`--macro l0`）同時回答宏觀決策和戰鬥外的選牌提示，是同一個物件、同一個 V（[宏觀大腦：搜尋](/zh-tw/arch/macro-brain/search/)）。它的探索（`--macro-explore T`，按 V 估值的 softmax；`--explore ε`，均勻抽取）從它自己的產生器裡抽（[§5](#sec-5)）。
+- **`p0`**（`PromptBrain`）回答戰鬥中的選牌提示，和搜尋世界裡的做法一樣。
+- **`random`** 佔位策略在 `--macro random` 時回答宏觀的兩側。
+
+**給宏觀一側的節點複本**。在 SL 下加上 `--afterstates clone` 時，`Dispatcher` 在每個宏觀決策和每個戰鬥外的選牌提示處開啟節點的複本，作為這一局工作行程池上的一個 `PooledClone`（`MacroDecision.With`、`ChoiceDecision.With`）。L0 再向它要後狀態：每條答案路徑之後遊戲接著問什麼。`PooledClone` 把各條路徑拆成 min(paths, workers) 個連續的 `sl_macro` 請求，每個工作行程對每條路徑載入一次複本，並檢查每條路徑都得到了後狀態；由於後狀態只取決於複本和路徑，怎麼拆都不會改變結果（[宏觀大腦：搜尋 §6](/zh-tw/arch/macro-brain/search/#sec-6)）。
+
+**計畫**。宏觀回答檢查過之後，`Dispatcher` 向策略詢問它在這個回答之後的計畫（`IMacroPolicy.Plan`）：L0 的計畫在地圖上是本幕剩下的路線，在其他地方為空。它的時間不計入這個決策的 `elapsed_ms`。
+
+**經探索的回答**。當策略說它上一個回答是探索出來的，提示或宏觀回答就標為探索：對 L0 而言，是一次均勻抽取，或一次估值低於最佳的 softmax 抽取（在選牌提示上，是它的任何一步）。
+
+## 4. 預算
+
+一次戰鬥搜尋能花多少，由一個 `Budget` 決定（`Brain/Combat/CombatBrain.cs:23-56`）。它的單位是**節點**：在一個世界裡模擬的一個動作。沒有掛鐘時間預算，也沒有其他單位。
+
+| 欄位（JSON） | 預設值 | 含義 |
+|---|---|---|
+| `worlds` | 8 | PIMC 每個決策的世界數；規劃器只有一個世界，忽略它 |
+| `nodes_per_world` | 300 | PIMC：每個世界裡搜尋本回合時模擬的動作數。規劃器：從一個狀態搜尋一個回合時，每次搜尋模擬的動作數 |
+| `elite`、`boss` | 1 | 菁英或頭目的決策得到幾倍的預算：PIMC 的每世界節點數，或規劃器的束和簡易束 |
+| `halving` | false | PIMC 的各個第一個動作用逐次減半而不是平均分配來分享每個世界的節點（[NoSL PIMC：預算 §3](/zh-tw/arch/pimc/budget/#sec-3)） |
+| `follow` | false | 如果每個世界對一個回合剩下部分的規劃都相同，PIMC 就不再搜尋，直接把它打完 |
+| `beam` | 0 | 規劃器從一個回合帶到下一個回合的狀態數；0 表示 PIMC |
+| `replan` | 1 | 規劃器在重新規劃之前，打一個沒有證明的失敗計畫的回合數；0 表示打到結束 |
+| `loss_plans` | 0 | 在同一場戰鬥裡，規劃器最多連續做出幾個沒有證明的失敗計畫，之後最後一個打到結束；0 表示沒有上限 |
+| `easy_beam` | 0 | 規劃器的貪婪下潛已經能贏時用的束；0 表示等於 `beam` |
+
+**力度等級**（`--effort`、`Budget.Effort`，[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）：
+
+| 等級 | 束 | 節點 | 簡易束 | 失敗計畫 |
+|---|---|---|---|---|
+| `low` | 8 | 300 | 2 | 3 |
+| `medium` | 8 | 300 | 4 | 3 |
+| `high` | 8 | 300 | – | – |
+| `max` | 16 | 300 | – | – |
+
+**房間的預算**（`Budget.For(room)`）：在菁英或頭目房間裡，倍數乘到規劃器的束和簡易束上（至少 1），或乘到 PIMC 的每世界節點數上，然後倍數設為 1，所以套用兩次也不會改變什麼。
+
+**作為名字**（`Budget.ToString`）：PIMC 是 `8x300`（規劃器是 `beam 16x300`），接著是不等於 1 的倍數（`elite x2`），開啟時的 `halving` 和 `follow`，以及規劃器的 `easy N`、不等於 1 時的 `replan N`，和有上限時的 `loss plans N`。
+
+**規劃中：按模式的預算** <Badge text="規劃中" variant="caution" />。目前每種模式都用固定的節點預算。設計給每種模式各自的單位：
+
+| 模式 | 單位 | 原因 |
+|---|---|---|
+| 自我對弈、評估 | 固定的節點數 | 可重現：相同的請求、種子和預算給出相同的推薦 |
+| 輔助 | 掛鐘時間，隨時可停（anytime） | 有人在等：先送出目前最好的答案，再改進它 |
+| 自動遊玩（R4） | 掛鐘時間上限加最少節點數 | 不卡住，也不搜得太淺 |
+
+「隨時可停」是指搜尋在任何時刻被打斷，都還有一個最好的答案可以給出。規劃中的分配會在排名前兩位的候選之差超出它們的信賴區間時停止，否則增加樣本或深度。目前實作的是：平均分配或逐次減半、房間的倍數，以及照計畫打（[NoSL PIMC：預算 §1](/zh-tw/arch/pimc/budget/#sec-1)）。
+
+## 5. 種子與確定性
+
+一個決策的搜尋，每次被問到同樣的東西都必須給出同樣的答案，所以它的隨機性來自 Harness，從不來自遊戲的亂數流，也從不來自時鐘。
+
+**run id** 是這一局的種子作為 JSON 字串（含引號）的 FNV-1a 64 位元雜湊，以十六進位表示：種子 `0SSL7NS01MU6` 得到 run `ce13ba5116b7f48a`。大腦看到的是 run id，從不是種子（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。
+
+**一個決策的種子**由 run id 和決策的編號抽出，編號從 0 起計入這一局的每個決策，戰鬥決策、選牌提示和宏觀決策都算（`Dispatcher.cs:208-227`）：
+
+```text
+H        = FNV-1a 64 of the JSON string run_id
+z        = H + 0x9E3779B97F4A7C15 · (i + 1)          (mod 2^64)
+z        = (z xor (z >> 30)) · 0xBF58476D1CE4E5B9
+z        = (z xor (z >> 27)) · 0x94D049BB133111EB
+seed(i)  = z xor (z >> 31)
+```
+
+這是 SplitMix64 的一步。決策的編號是 Harness 自己的計數器，不是線路上的 `decision_id`。按計畫，等大腦有了版本，冠軍的版本也會加入雜湊。
+
+**誰讀它**。每個決策的那一行都記下它的種子，但只有 NoSL PIMC 用它：
+
+- **建構種子**是種子的大寫十六進位形式（`X16`）；工作行程用一個以它的雜湊為種子的產生器，重新取樣觀測沒有確定的部分（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）；
+- 世界 k 用 `"{seed}:{k}"` 的雜湊確定化（[模擬器：戰鬥 §3](/zh-tw/arch/simulator/combat/#sec-3)）。
+
+SL 下的 PIMC 和規劃器搜尋唯一的那個確切世界，忽略它；宏觀策略和提示策略從不收到它。
+
+**佔位策略和探索**從每局各自設定種子的 .NET 產生器裡抽，每條流一個：`Random(FNV(run_id + stream))`，佔位策略的流是 `""`，戰鬥路由的 softmax 是 `:explore combat`，L0 的 softmax 是 `:explore`，L0 的均勻抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:44-55`）。所以一局不管在哪個行程裡、走不走線路、記不記日誌，都打得一樣。
+
+**看順序，不看時序**。一次搜尋的請求平行執行，但行程池按請求順序回傳回覆（[模擬器：工作行程池 §2](/zh-tw/arch/simulator/pool/#sec-2)），候選先按它們到達的減半輪次排序，再按估值排序，平手時保持合法動作的順序（先結束回合，再是牌，再是藥水）。哪個工作行程先完成，永遠不會改變答案。`run --check` 讓整局都受這一點檢驗（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。
+
+## 6. 失敗
+
+沒有後備：無法按規定回答的決策會失敗，這一局也隨之失敗。從不用隨機的回答頂替它。
+
+**在 `Dispatcher` 裡**（`Dispatcher.cs`）：
+
+| 情況 | 會怎樣 |
+|---|---|
+| 戰鬥大腦的選擇不合法 | `InvalidOperationException` |
+| 提示不接受的提示回答（個數、範圍、重複的索引） | `InvalidOperationException` |
+| 沒有路由的宏觀決策介面 | 「uncovered surface」；決策的編號和它的大腦的計數已經用掉了 |
+| 不合法的宏觀回答 | `InvalidOperationException` |
+| 在任何檢查點之前、需要複本的 SL 決策 | `InvalidOperationException` |
+| NoSL 下的節點檢查點或節點動作 | `InvalidOperationException` |
+| 節點索引沒有遞增的檢查點；屬於別的節點或序號不對的動作 | `InvalidDataException` |
+
+**在線路上**（`BrainServer`）：被拒絕的 `hello`（冠軍工廠拋出例外：未知的環境、SL 之外的 `plan` 或 `--afterstates clone`、對不上的冠軍名字）、在一局之外或在被拒收的節點訊息之後的決策、沒有遞增的 id、與雜湊不符的觀測、沒有對應畫面的戰鬥決策或提示決策、未知的訊息：每一種都得到一個 `error`。被拒收的節點訊息會讓這一局的下一個決策失敗。不相符的協定版本，或 I/O 或 JSON 錯誤，會讓宿主被丟棄（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
+
+**在工作行程池裡**（[模擬器：工作行程池 §6](/zh-tw/arch/simulator/pool/#sec-6)）：
+
+| 情況 | 會怎樣 |
+|---|---|
+| 工作行程啟動或回答超過時限（5 分鐘，啟動和每次回答都一樣） | 被殺掉；請求的第一次失敗會重啟它，並再送一次請求 |
+| 工作行程死掉（I/O 錯誤、它的輸出結束） | 被替換，請求再送一次 |
+| 同一個請求第二次失敗 | 搜尋失敗（平行迴圈拋出的 `AggregateException`） |
+| 不是 JSON 或 id 不對的回覆 | 失敗，不重試 |
+| 錯誤回覆 | 等所有回覆都到齊後失敗，不重試；拋出例外的工作行程會結束，所以下次用它時會重啟 |
+| 沒有按觀測建構出來的戰鬥 | 工作行程的錯誤是「not built as observed」，附上前 4 項差異（`SimWorlds.NoSL`），所以搜尋失敗 |
+
+一個請求大多只要幾秒：一個世界的搜尋、一個束狀態的回合，或一個決策的試探路徑中的一份。時限抓的是卡住的工作行程，不是慢的工作行程。
+
+**在宿主裡**：在 `run` 裡，任何例外都會讓這一局以 `failed` 結束，附上它的型別和第一行，報告會計數（[模擬器：整局 §5](/zh-tw/arch/simulator/runs/#sec-5)）。走線路時，模擬器的宿主遇到 `error` 會拋出例外，結果相同；遇到 id 或雜湊不是請求那個的推薦也會拋出例外。Mod 記下一條警告，用 `run_end{failed}` 結束這一局，讓遊戲在沒有大腦的情況下繼續（[Mod §5](/zh-tw/arch/mod/#sec-5)）。評估要求失敗的對局，以及名為 `random` 的大腦做的決策，都是 0（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
+
+**規劃中的處理** <Badge text="規劃中" variant="caution" />：
+
+| 情況 | 規劃中 | 目前 |
+|---|---|---|
+| 過期請求（已有更新的 `decision_id`） | 取消搜尋，不送回覆 | Mod 丟棄遲到的回答；大腦回答每個請求，id 沒有遞增的請求得到 `error` |
+| 工作行程崩潰或超時 | 在另一個工作行程上從快照重新開啟世界，用已完成的部分作答，把這一行標為 `degraded` | 請求再送一次，得到相同的答案，所以沒有任何降級 |
+| 無法從觀測建構的戰鬥 | 報告差異，不搜尋，宿主暫停，記錄這個 bug | 決策帶著差異失敗，這一局也隨之失敗 |
+| 宿主認為動作不合法而拒絕 | 宿主重新請求；連續兩次就暫停 | GameBridge 開始執行動作時遇到不合法的動作會拋出例外，這一局失敗 |

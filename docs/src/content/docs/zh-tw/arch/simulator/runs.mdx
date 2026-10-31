@@ -124,7 +124,7 @@ flowchart TD
 - 卡牌獎勵和卡包是整局層級的決策，由驅動程式的處理器回答；沒有這些處理器，卡牌獎勵會被跳過，卡包則拿第一個；
 - 每次進入節點，提示都從 0 重新編號，因為節點的複本也是自己編號的（[世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）。
 
-在 `run` 裡，三個介面是同一個物件：Harness 的 `Dispatcher`，它把每個決策交給回答它的大腦（[Harness §4](/zh-tw/arch/harness/#sec-4)）：戰鬥交給戰鬥大腦，戰鬥中的選牌提示交給 `p0`，其他一切（包括戰鬥外的選牌提示）交給宏觀大腦（[宏觀大腦](/zh-tw/arch/macro-brain/)）。
+在 `run` 裡，三個介面是同一個物件：Harness 的 `Dispatcher`，它把每個決策交給回答它的大腦（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）：戰鬥交給戰鬥大腦，戰鬥中的選牌提示交給 `p0`，其他一切（包括戰鬥外的選牌提示）交給宏觀大腦（[宏觀大腦](/zh-tw/arch/macro-brain/)）。
 
 **結果**。一局結束時是 `won`（結束於勝利房間）、`lost`（結束於其他任何地方）、`truncated`（超過 `--max-decisions` 仍未結束，預設 20,000）或 `failed`（拋出了例外）。勝局的記錄寫著生命值 0：一到勝利房間，遊戲就殺死玩家。範例對局的記錄是：won、第 2 幕（從 0 算起）、第 48 層、生命值 0/66。
 
@@ -161,7 +161,7 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 | `card_rewards`、`card_rewards_skipped` | 關閉的卡牌獎勵畫面數，以及其中一張牌都沒拿就關閉的數目 |
 | `game_errors`、`failure`、`elapsed_ms` | 這一局的健康狀況和它的實際耗時 |
 
-`--log FILE` 寫出 Harness 的決策日誌，每個決策一行（[Harness §6](/zh-tw/arch/harness/#sec-6)）。兩個檔案都逐行寫出（flush）；一局的日誌行在這一局結束時寫出，所以中途停下的批次最多丟失正在打的那一局。
+`--log FILE` 寫出 Harness 的決策日誌，每個決策一行（[Harness：決策日誌 §1](/zh-tw/arch/harness/decision-log/#sec-1)）。兩個檔案都逐行寫出（flush）；一局的日誌行在這一局結束時寫出，所以中途停下的批次最多丟失正在打的那一局。
 
 ## 6. 確定性
 

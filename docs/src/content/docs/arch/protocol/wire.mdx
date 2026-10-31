@@ -41,7 +41,7 @@ import WireExchange from '../../../../components/book/WireExchange.svelte';
 | `node_checkpoint` | 宿主 → 大脑 | `node_index`、`checkpoint`、`gauntlet`? | 仅 SL：一个节点开始（[§6](#sec-6)） |
 | `node_action` | 宿主 → 大脑 | `node_index`、`seq`、`action` | 仅 SL：节点内做出的一个决策（[§6](#sec-6)） |
 
-`run_id` 是对种子的 JSON 字符串计算的 `ProtocolJson.Hash`，写成 16 位十六进制数（`RunHeader.IdOf`）：大脑能凭这个 id 区分各局，并用它给自己的随机数流播种，却无法从中得知种子（[Harness §5](/arch/harness/#sec-5)）。`decision_id` 在每一局里从 0 开始计数。`obs_hash` 是观测的哈希，写成 16 位十六进制数。
+`run_id` 是对种子的 JSON 字符串计算的 `ProtocolJson.Hash`，写成 16 位十六进制数（`RunHeader.IdOf`）：大脑能凭这个 id 区分各局，并用它给自己的随机数流播种，却无法从中得知种子（[Harness：路由、预算与种子 §5](/arch/harness/routing/#sec-5)）。`decision_id` 在每一局里从 0 开始计数。`obs_hash` 是观测的哈希，写成 16 位十六进制数。
 
 ## 4. 一局，一步一步
 
@@ -106,16 +106,16 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | 字段 | 含义 |
 |---|---|
 | `action` | 该决策的合法动作之一；对选牌提示来说是 `pick:i,j,…` |
-| `brain` | 做出选择的大脑，名字取自冠军的路由表（[Harness §4](/arch/harness/#sec-4)）；宿主按大脑统计决策数写进对局记录，其中占位决策的数目必须为零（[评估 §3](/arch/evaluation/#sec-3)） |
+| `brain` | 做出选择的大脑，名字取自冠军的路由表（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）；宿主按大脑统计决策数写进对局记录，其中占位决策的数目必须为零（[评估 §3](/arch/evaluation/#sec-3)） |
 | `plan` | 大脑在这个动作之后的计划：会搜索的战斗大脑给出本回合剩下的部分，地图上的宏观大脑给出本幕剩下的路线 |
 | `candidates` | 只来自会搜索的大脑：它打过分的各个首个动作，最好的在前 |
 
-`Candidate`（`World.cs:59`）是一个打过分的动作：`value`，它在各个世界上的平均值；`ci`，它的 95% 置信区间的半宽；`samples`，世界的个数；以及在搜索保留了它们时，`values`，它在每个世界里的值，和 `nodes`，它在每个世界里用掉的搜索节点。计划和候选动作也是决策日志保存的内容（[Harness §6](/arch/harness/#sec-6)），也是输出展示给玩家的内容（[输出 §2](/arch/output/#sec-2)）。
+`Candidate`（`World.cs:59`）是一个打过分的动作：`value`，它在各个世界上的平均值；`ci`，它的 95% 置信区间的半宽；`samples`，世界的个数；以及在搜索保留了它们时，`values`，它在每个世界里的值，和 `nodes`，它在每个世界里用掉的搜索节点。计划和候选动作也是决策日志保存的内容（[Harness：决策日志 §5](/arch/harness/decision-log/#sec-5)），也是输出展示给玩家的内容（[输出 §2](/arch/output/#sec-2)）。
 
 **规划中**：
 
 - `facts`：解说的唯一来源。每条事实会是一个种类和它的数值，只在 SL 下标为精确，因为 SL 的事实可以是确切的结果（[环境：世界 §7](/arch/environments/worlds/#sec-7)）。
-- `degraded`：在出问题时给出的回答，例如丢失了一个工作进程（[Harness §7](/arch/harness/#sec-7)）。
+- `degraded`：在出问题时给出的回答，例如丢失了一个工作进程（[Harness：路由、预算与种子 §6](/arch/harness/routing/#sec-6)）。
 
 ## 8. 两种宿主
 

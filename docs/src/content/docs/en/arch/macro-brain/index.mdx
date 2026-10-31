@@ -10,7 +10,7 @@ sidebar:
 import { Aside } from '@astrojs/starlight/components';
 import RunTrajectory from '../../../../../components/v/RunTrajectory.svelte';
 
-The **macro brain** makes every decision outside combat: which map point to go to next, which rewards to claim, which card to take, what to buy, which option to pick at an event, a rest site or a treasure chest. It runs in the decision process next to the [combat brain](/en/arch/combat-brain/). Harness sends it every surface that is not a combat ([Harness §4](/en/arch/harness/#sec-4)).
+The **macro brain** makes every decision outside combat: which map point to go to next, which rewards to claim, which card to take, what to buy, which option to pick at an event, a rest site or a treasure chest. It runs in the decision process next to the [combat brain](/en/arch/combat-brain/). Harness sends it every surface that is not a combat ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)).
 
 Its method fits in one sentence: play each option, look at the situation right after it, ask a learned value function V how good that situation is, and take the best. This chapter explains each part of that sentence from first principles: what the options are, what "the situation right after" means, how the options are played, what V reads and computes, where its training labels come from, and how each new V is accepted or refused.
 

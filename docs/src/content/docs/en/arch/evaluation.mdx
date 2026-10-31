@@ -71,7 +71,7 @@ The Wilson interval is a confidence interval for a proportion such as a win rate
 
 **Must be zero** (otherwise the evaluation is void)
 
-- fallback or random decisions ([Harness §4](/en/arch/harness/#sec-4));
+- fallback or random decisions ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1));
 - failed runs (an error in the driver or a brain) and truncated runs (the decision cap);
 - game errors (`Log.Error` lines);
 - `NumReloads`;
@@ -150,7 +150,7 @@ With `--against` it pairs the runs with the champion's by seed, on the seeds bot
 Each evaluation writes a JSON file plus a one-page Markdown report with: game version, commit, champion, environment, rung, seed set, budget, all metrics, the must-be-zero metrics, and the diff against the previous evaluation. Reports go into `eval/CHARACTER/reports/` as `DATE-ENV-RUNG-SET-NAME.json` and `.md`; the run records and decision logs behind them stay outside git, in `data/CHARACTER/ENV/` ([Learning §6](/en/arch/learning/#sec-6)).
 
 - `report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]` writes PATH.json and PATH.md. The records may come from several processes; they must share one config (game, commit, champion, environment, rung), one character and one ascension, and each must play a different seed of the set. A report with fewer runs than the set is marked partial.
-- A run record (`run --records`) also holds the run id that the decision log knows the run by ([Harness §6](/en/arch/harness/#sec-6)), which joins the two for learning. It lists each combat the run entered: act, floor, encounter, room type, the HP, max HP and potions at its first decision, and `end`, how it ended: a death, or the HP, max HP and potions left. `end` is missing for a combat the run stopped in without dying (failed, truncated). It is the target of the combat outcome head ([Learning §1](/en/arch/learning/#sec-1)). The gauntlets' records say so in their config (`auto_win` for the boss gauntlet pilot, `gauntlet` for the elite gauntlet, [Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)), and `report` refuses them. An elite gauntlet's `end` also gives the enemies' HP and max HP at a death.
+- A run record (`run --records`) also holds the run id that the decision log knows the run by ([Harness: the decision log §3](/en/arch/harness/decision-log/#sec-3)), which joins the two for learning. It lists each combat the run entered: act, floor, encounter, room type, the HP, max HP and potions at its first decision, and `end`, how it ended: a death, or the HP, max HP and potions left. `end` is missing for a combat the run stopped in without dying (failed, truncated). It is the target of the combat outcome head ([Learning §1](/en/arch/learning/#sec-1)). The gauntlets' records say so in their config (`auto_win` for the boss gauntlet pilot, `gauntlet` for the elite gauntlet, [Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)), and `report` refuses them. An elite gauntlet's `end` also gives the enemies' HP and max HP at a death.
 - The commit is the build's: a build with uncommitted changes under `src/` gets `-dirty` after it, and such a report is for development only.
 
 ## 7. Baselines

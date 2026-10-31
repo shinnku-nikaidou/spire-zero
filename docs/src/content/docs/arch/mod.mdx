@@ -70,7 +70,7 @@ flowchart LR
 
 **同时只有一个决策在途**。大脑按顺序逐个回答决策。所以 Mod 最多只开着一个决策：如果答案到达之前状态就往前走了，它发送 `cancel`，并等那个答案到达（然后丢掉），才询问新的状态。这样即使玩家出手比大脑思考快，慢的大脑也不会越积越落后。
 
-**空闲**。「空闲」指游戏界面真正准备好接受玩家输入：游戏逻辑在等输入，没有排队中的动作，没有还在演出的东西，也没有别的屏幕挡在要决策的屏幕上面。如果提前发出决策，它描述的状态马上就会变，点击也可能落空。无头（headless）运行时，GameBridge 的 `CombatActions.WaitingForInput` 就够了；在真实游戏里不够（[GameBridge §2](/arch/gamebridge/#sec-2)）。所以 Mod 用游戏自己的 `ActiveScreenContext.GetCurrentScreen()` 读出玩家正在看的屏幕：打开的模态框、打开着的地图、覆盖层栈顶，否则就是当前房间。由它的类型决定决策界面 <Badge text="已核实" variant="success" />。之后这个决策还必须连续成立至少 3 帧，这样一闪而过的「看似空闲」不算数。
+**空闲**。「空闲」指游戏界面真正准备好接受玩家输入：游戏逻辑在等输入，没有排队中的动作，没有还在演出的东西，也没有别的屏幕挡在要决策的屏幕上面。如果提前发出决策，它描述的状态马上就会变，点击也可能落空。无头（headless）运行时，GameBridge 的 `CombatActions.WaitingForInput` 就够了；在真实游戏里不够（[GameBridge：各决策界面的动作 §1](/arch/gamebridge/actions/#sec-1)）。所以 Mod 用游戏自己的 `ActiveScreenContext.GetCurrentScreen()` 读出玩家正在看的屏幕：打开的模态框、打开着的地图、覆盖层栈顶，否则就是当前房间。由它的类型决定决策界面 <Badge text="已核实" variant="success" />。之后这个决策还必须连续成立至少 3 帧，这样一闪而过的「看似空闲」不算数。
 
 | 最上层的屏幕 | 决策界面 | 何时算空闲 |
 |---|---|---|
@@ -83,7 +83,7 @@ flowchart LR
 
 每个决策界面的询问方式和模拟器（`RunSession`）一样，用的是同样的 GameBridge 调用，所以大脑在两边看到的观测和合法动作相同。药水栏的动作也在同样的屏幕上提供：除了卡牌奖励、卡包和选牌提示之外都有。屏幕提供了什么，从屏幕节点的私有字段里读取，这些字段装的正是它显示的东西：奖励组、卡牌奖励的卡和按钮、卡包、提示的卡和 `CardSelectorPrefs`。手牌的选择模式和战斗牌堆提示则是对一个牌堆做筛选，所以 Mod 把它们的筛选条件用在那个牌堆上。
 
-**选牌提示**。提示的选项按规范顺序排列（`CardChoices.Canonical`），平局用固定的种子打破，所以观测和它的哈希每帧都保持不变。它的上下文来自 `ChoiceContexts.Last`（[GameBridge §5](/arch/gamebridge/#sec-5)）：屏幕在入口第一次 await 之后才打开，那时 `Current` 已经没了。每个提示（一个新的屏幕节点，或一次新的手牌选择）取一次最新的上下文。如果那个上下文已经被之前的提示用过，说明这个提示没有带上下文：Mod 记一条日志，把这个提示留给玩家。
+**选牌提示**。提示的选项按规范顺序排列（`CardChoices.Canonical`），平局用固定的种子打破，所以观测和它的哈希每帧都保持不变。它的上下文来自 `ChoiceContexts.Last`（[GameBridge：读取游戏 §6](/arch/gamebridge/observe/#sec-6)）：屏幕在入口第一次 await 之后才打开，那时 `Current` 已经没了。每个提示（一个新的屏幕节点，或一次新的手牌选择）取一次最新的上下文。如果那个上下文已经被之前的提示用过，说明这个提示没有带上下文：Mod 记一条日志，把这个提示留给玩家。
 
 **答案**。一个答案对应一个观测哈希加一组合法动作：休息处在用过一个选项之后，观测不变也可能允许离开。战斗里面板只列出到本回合结束为止的计划；SL 规划器规划的是整场战斗，后面几回合要打的牌还没抽到，所以只报回合数。面板用游戏本地化表里的名字（卡牌、遗物、药水、怪物、事件选项、休息处选项、地图图例里的房间名）描述动作，找不到就用 id。在地图上，它还会画出路线：推荐的地图点上有一个会脉动的紫色圆圈，大脑在它之后规划的路线上，每段路径都有一条紫色的线，一直画到 Boss。两者都画在 Mod 自己的图层里，随地图滚动跟着游戏的节点（地图点，以及每段路径上的小点）走（[输出层 §3](/arch/output/#sec-3)）。
 
@@ -91,7 +91,7 @@ flowchart LR
 
 ## 4. 执行适配器
 
-适配器把一个决策界面上的协议动作和屏幕上的 Godot 节点对应起来。GameBridge 从不接触 Godot 节点（[GameBridge §1](/arch/gamebridge/#sec-1)），所以这部分节点相关的工作放在 Mod 里。两种输出模式共用一个接口：高亮问「这个动作在屏幕上的哪里」，自动游玩让适配器去执行它。
+适配器把一个决策界面上的协议动作和屏幕上的 Godot 节点对应起来。GameBridge 从不接触 Godot 节点（[GameBridge §2](/arch/gamebridge/#sec-2)），所以这部分节点相关的工作放在 Mod 里。两种输出模式共用一个接口：高亮问「这个动作在屏幕上的哪里」，自动游玩让适配器去执行它。
 
 ```csharp
 // One adapter per surface; highlight and auto-play share the action → node mapping.
@@ -112,17 +112,17 @@ interface ISurfaceAdapter
 | 按钮 | 调用按钮的处理函数，但要先检查 `IsEnabled && IsVisibleInTree()`。`ForceClick` 两样都不检查 <Badge text="已核实" variant="success" /> |
 | 商店 | `entry.OnTryPurchaseWrapper(inv)`。对商人节点调用 `ForceClick` 没有任何效果 |
 | 地图 | `NMapScreen.OnMapPointSelectedLocally(point)` |
-| 选牌提示 | 点击卡牌槽（holder），再点确认。走这条 UI 路径，`PlayerChoice` 会留在重放记录里（[GameBridge §4](/arch/gamebridge/#sec-4)） |
+| 选牌提示 | 点击卡牌槽（holder），再点确认。走这条 UI 路径，`PlayerChoice` 会留在重放记录里（[GameBridge：各决策界面的动作 §7](/arch/gamebridge/actions/#sec-7)） |
 
 `Execute` 之后，Mod 期望哈希在超时内变化：游戏速度为 Fast 时默认 10 秒，Instant 时 3 秒。如果没变，就重新观测；连续失败 3 次则暂停并记日志。
 
-每个决策界面的 Mod 路径和对应的模拟器路径，在 [GameBridge §4](/arch/gamebridge/#sec-4) 里成对列出。
+每个决策界面的 Mod 路径和对应的模拟器路径，在 [GameBridge：各决策界面的动作](/arch/gamebridge/actions/) 里成对列出。
 
 ## 5. 与大脑的连接
 
 - **Socket**：Unix 域套接字 `~/.local/state/sts2ai/brain.sock`（设置了 `$XDG_STATE_HOME` 时放在它下面），传输 JSON lines（[协议：线路 §1](/arch/protocol/wire/#sec-1)）。Mod 是客户端，Harness 是服务端。Harness 由用户启动，或由 Mod 按配置的路径拉起；Mod 自己从不做搜索。服务端已经实现：SimWorker 的 `brain` 命令在这个套接字上等待，`run --brain` 已经作为宿主连上它跑模拟对局（[模拟器：整局 §8](/arch/simulator/runs/#sec-8)）。
 - **Steam 的容器**：Steam 在它的 Linux 运行时容器（pressure-vessel）里启动游戏。容器与主机共享主目录，但有自己的 `$XDG_RUNTIME_DIR`，放在那里的套接字游戏访问不到，所以套接字放在主目录下。大脑创建它的目录时，只允许用户本人访问。
-- **环境**：由面板卡头上的 SL/NoSL 开关选定（[环境](/arch/environments/)），默认是 SL；这个选择和 Mod 的其它设置一起存在 `~/.local/state/sts2ai/settings.json`，和套接字放在一起，不在游戏的档案目录里（[输出层 §2](/arch/output/#sec-2)）。`hello` 带上它；对大脑来说，它在一局里固定不变：在一局中途切换时，Mod 发出 `run_end`（`aborted`）和新的 `hello`，大脑从这一刻起当作新的一局。一个大脑同时服务两种环境：`brain` 对 NoSL 宿主用 `--policy` 的战斗大脑（冠军的 PIMC），对 SL 宿主用 `--sl-policy` 的战斗大脑（默认是 SL 规划器），宏观大脑相同（[Harness §4](/arch/harness/#sec-4)）。
+- **环境**：由面板卡头上的 SL/NoSL 开关选定（[环境](/arch/environments/)），默认是 SL；这个选择和 Mod 的其它设置一起存在 `~/.local/state/sts2ai/settings.json`，和套接字放在一起，不在游戏的档案目录里（[输出层 §2](/arch/output/#sec-2)）。`hello` 带上它；对大脑来说，它在一局里固定不变：在一局中途切换时，Mod 发出 `run_end`（`aborted`）和新的 `hello`，大脑从这一刻起当作新的一局。一个大脑同时服务两种环境：`brain` 对 NoSL 宿主用 `--policy` 的战斗大脑（冠军的 PIMC），对 SL 宿主用 `--sl-policy` 的战斗大脑（默认是 SL 规划器），宏观大脑相同（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）。
 - **连不上大脑**：辅助模式下面板显示「No brain running」（没有大脑在运行）；自动游玩时 Mod 暂停。连接每 2 秒重试一次；新的连接从 `hello` 重新开始。
 - **大脑出错**：收到 `error` 回答（大脑拒绝这一局，或答不出）后，Mod 在这一局余下的部分关闭，面板显示错误信息。
 
@@ -131,7 +131,7 @@ interface ISurfaceAdapter
 SL 下，大脑在当前节点的精确克隆上规划战斗（[环境：信息与节点 §7](/arch/environments/information/#sec-7)）。worker 用节点的检查点，加上进入节点以来做过的每一个决策来构建克隆；决策的写法与模拟器自己的轨迹相同（[模拟器：世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)）。Mod 在两种环境下都把这两样东西记在内存里（`NodeRecord`），所以在任何房间里勾上 SL 都能马上用；只有 SL 才把它们发出去。
 
 - **检查点**：在游戏到达地图点、存档的那一刻，用 GameBridge 的 `Checkpoint.Take` 取：在 `SaveManager.SaveRun` 上挂一个前缀（prefix），只在它的「已完成房间」为空时取，与模拟器取检查点是同一时刻。开局时游戏以同样方式进入第一个地图点。继续游戏（Continue）时，游戏重新进入存档所在的地图点，但不再存档（`RunManager.LoadIntoLatestMapCoord`）：如果存档是到达时存的，就在这里取检查点；如果是房间里更晚的存档（战斗胜利后、Ancient 事件后），房间的开头已经不在了，这个节点就没有克隆。Mod 从不写会被云同步的 `current_run.save`，也不写档案目录下的任何其他文件。
-- **步骤**：玩家的每个决策，都在游戏提交它的地方读出来；这些入口也正是模拟器自己调用的入口（[GameBridge §4](/arch/gamebridge/#sec-4)），所以在游戏执行之前就能精确知道这一步。未决问题 1 因此选了钩子，而不是比较前后的状态：状态比较分不出两张一样的牌，玩家操作得比画面稳定还快时也会漏掉动作。
+- **步骤**：玩家的每个决策，都在游戏提交它的地方读出来；这些入口也正是模拟器自己调用的入口（[GameBridge：各决策界面的动作 §7](/arch/gamebridge/actions/#sec-7)），所以在游戏执行之前就能精确知道这一步。未决问题 1 因此选了钩子，而不是比较前后的状态：状态比较分不出两张一样的牌，玩家操作得比画面稳定还快时也会漏掉动作。
 
 | 玩家 | 挂钩的方法（Harmony 前缀） | 步骤 |
 |---|---|---|
@@ -183,7 +183,7 @@ SL 下，大脑在当前节点的精确克隆上规划战斗（[环境：信息�
 
 **Harmony 补丁**在运行时改写游戏的方法：Harmony 是一个 .NET 库，能让 Mod 在原方法之前（*prefix*）或之后（*postfix*）运行自己的代码。比起 Harmony，Mod 优先使用游戏自己的 C# 事件：`CombatManager.*`、`RunManager.RoomEntered`、`ActionExecutor.*`、`CardPile.*`。
 
-无法避免的补丁是 `CardSelectCmd.From*` 上的上下文 prefix（[GameBridge §5](/arch/gamebridge/#sec-5)）。它们最先安装，早于任何其他会编译游戏代码的操作：在补丁之前编译的调用方可能把入口内联进去，从而绕过补丁。这在无头运行时见过：另一个补丁重新编译 SapphireSeed 时把入口内联了。它们的另一个风险来自 JIT。游戏在 .NET 的**分层编译**下运行：方法先被快速编译一遍，常用的方法之后再带优化重新编译一次（rejit）。一次 rejit 可能悄无声息地丢掉补丁；这在无头运行时见过。
+无法避免的补丁是 `CardSelectCmd.From*` 上的上下文 prefix（[GameBridge：读取游戏 §6](/arch/gamebridge/observe/#sec-6)）。它们最先安装，早于任何其他会编译游戏代码的操作：在补丁之前编译的调用方可能把入口内联进去，从而绕过补丁。这在无头运行时见过：另一个补丁重新编译 SapphireSeed 时把入口内联了。它们的另一个风险来自 JIT。游戏在 .NET 的**分层编译**下运行：方法先被快速编译一遍，常用的方法之后再带优化重新编译一次（rejit）。一次 rejit 可能悄无声息地丢掉补丁；这在无头运行时见过。
 
 应对办法：
 

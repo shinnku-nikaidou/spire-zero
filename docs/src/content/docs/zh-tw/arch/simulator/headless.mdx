@@ -48,7 +48,7 @@ import PumpDemo from '../../../../../components/book/PumpDemo.svelte';
 
 ## 4. 補丁
 
-**Harmony 補丁**在執行時改寫一個遊戲方法。Harmony 是一個 .NET 函式庫：*前綴*（prefix）在原方法之前執行，並且可以跳過原方法；*後綴*（postfix）在原方法之後執行；*轉譯器*（transpiler）則直接改寫方法的 IL（編譯後的指令），而不是包在它外面。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安裝 GameBridge 的 `ChoiceContexts`，再安裝這個組件裡的每個補丁類別。順序很重要：打補丁時會編譯每個被替換的方法，而在選牌提示補丁之前就編譯好的方法，可能把某個小小的 `CardSelectCmd` 入口內嵌進去，從而繞過它的補丁；藍寶石種子（SapphireSeed）的「種下」（由事件轉譯器改寫）就曾經這樣（[GameBridge §5](/zh-tw/arch/gamebridge/#sec-5)）。
+**Harmony 補丁**在執行時改寫一個遊戲方法。Harmony 是一個 .NET 函式庫：*前綴*（prefix）在原方法之前執行，並且可以跳過原方法；*後綴*（postfix）在原方法之後執行；*轉譯器*（transpiler）則直接改寫方法的 IL（編譯後的指令），而不是包在它外面。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安裝 GameBridge 的 `ChoiceContexts`，再安裝這個組件裡的每個補丁類別。順序很重要：打補丁時會編譯每個被替換的方法，而在選牌提示補丁之前就編譯好的方法，可能把某個小小的 `CardSelectCmd` 入口內嵌進去，從而繞過它的補丁；藍寶石種子（SapphireSeed）的「種下」（由事件轉譯器改寫）就曾經這樣（[GameBridge：讀取遊戲 §6](/zh-tw/arch/gamebridge/observe/#sec-6)）。
 
 除了規則保真組，沒有任何補丁改變遊戲規則；而規則保真組做的，是在 TestMode 改動過的地方放回正式版的規則。各組補丁，按 `Runtime/Patches/` 裡的檔案：
 

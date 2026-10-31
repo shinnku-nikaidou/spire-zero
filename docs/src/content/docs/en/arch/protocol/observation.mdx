@@ -22,7 +22,7 @@ An `Observation` has two parts. `run` is the run around the player, the same at 
 {"run": {"character": "SILENT", "act": 0, "floor": 2, …}, "screen": {"surface": "card_reward", "cards": […], "alternatives": […]}}
 ```
 
-The surface names are constants in `Surfaces.cs`: `combat`, `card_choice`, `map`, `rewards`, `card_reward`, `bundle`, `event`, `shop`, `rest`, `treasure`, `crystal_sphere`. The surface is also the key Harness routes a decision by ([Harness §4](/en/arch/harness/#sec-4)). The end of a run is not a surface; it is the wire message `run_end` ([The wire §3](/en/arch/protocol/wire/#sec-3)).
+The surface names are constants in `Surfaces.cs`: `combat`, `card_choice`, `map`, `rewards`, `card_reward`, `bundle`, `event`, `shop`, `rest`, `treasure`, `crystal_sphere`. The surface is also the key Harness routes a decision by ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)). The end of a run is not a surface; it is the wire message `run_end` ([The wire §3](/en/arch/protocol/wire/#sec-3)).
 
 Observations are built lazily. Inside the brain a decision carries a function that builds its observation, and a brain that never reads it never pays for it (`CombatDecision`, `MacroDecision`, `ChoiceDecision` in `Sts2Ai.Brain/Decisions.cs`). On the wire it is always built, since the brain is elsewhere.
 
@@ -150,7 +150,7 @@ The options alone do not say what the prompt is for: the same five cards mean di
 | `purpose` | the kind of prompt: the entry's name without `From`, in snake_case (`deck_for_upgrade`, `deck_for_transformation`, `deck_for_enchantment`, `deck_for_removal`, `deck_generic`, `hand`, `hand_for_discard`, `hand_for_upgrade`, `choose_a_card_screen`, `simple_grid`, `simple_grid_for_rewards`), or for a prompt over a combat pile the pile's name, `draw_pile` or `discard_pile` (in this game version only those two piles are asked from) |
 | `source`? | the id of the card, relic, power or event that asks, when the game names one: the entry's `source` argument, else the last model the choice involved |
 | `cancelable` | a cancel or skip button closes the prompt: the prompt's own setting, or a choose-a-card screen's `canSkip` |
-| `in_combat` | asked during a combat (a card or power resolving), rather than at a rest site, an event or a shop; Harness routes the prompt by it: in combat to `p0`, outside to the macro brain ([Harness §4](/en/arch/harness/#sec-4)) |
+| `in_combat` | asked during a combat (a card or power resolving), rather than at a rest site, an event or a shop; Harness routes the prompt by it: in combat to `p0`, outside to the macro brain ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) |
 | `prompt_key`? | the prompt text's loc key, `table.key` |
 | `enchantment`? | for `deck_for_enchantment`: the enchantment the picked cards get, `{id, amount}` |
 

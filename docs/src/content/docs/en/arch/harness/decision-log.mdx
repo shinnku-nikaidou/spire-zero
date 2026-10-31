@@ -1,0 +1,129 @@
+---
+title: The decision log
+description: 'One JSON line per decision of a run, as Harness writes it: every field for combat decisions, card prompts and macro decisions; candidates, plans and budgets; explored and replanned steps; the record of enemy moves; who reads the log; and the tests that hold Harness to it.'
+sidebar:
+  label: The decision log
+---
+
+import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
+
+Every decision a brain makes in a run can be written down: what it was shown, what it could do, what it chose, what it planned, how it valued the alternatives and what it spent. That is the **decision log**, one JSON line per decision. Training reads its candidates and observations, evaluation its brains and times, and narration will read its candidates.
+
+## 1. Who writes it, and when
+
+The `Dispatcher` keeps the run's lines in memory (`Dispatcher.Log`) when it is made with logging on, and its host writes them once the run has ended:
+
+- `run --log FILE` appends each run's lines after the run ends ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). A run killed midway leaves none. `--log` is refused together with `--brain`, whose decisions are logged by the brain.
+- `brain --log FILE` writes a run's lines at its `run_end`, so a host that drops without one leaves none ([Overview §5](/en/arch/harness/#sec-5)).
+
+The lines are `DecisionEntry` records (`Dispatcher.cs:63-67`) serialized like every Protocol type: snake_case names, fields that are null left out ([Protocol §4](/en/arch/protocol/#sec-4)). Logs are kept beside the run records, in the data directory ([Learning §6](/en/arch/learning/#sec-6)).
+
+Who reads the log:
+
+- **learning**: the value targets and the combat net's ExIt labels (ExIt, expert iteration: training the learned parts to imitate what the search chose) come from its candidates and observations ([Learning §2](/en/arch/learning/#sec-2));
+- **evaluation**: the brains that decided, decisions by a placeholder, compute per decision ([Evaluation §3](/en/arch/evaluation/#sec-3));
+- **output**: narration is to be built only from the candidates and facts ([Output §5](/en/arch/output/#sec-5)).
+
+## 2. Three lines
+
+<DecisionLog client:visible lang="en" />
+
+## 3. Every field
+
+| field | type | combat | card prompt | macro |
+|---|---|---|---|---|
+| `run` | string | the run id | the same | the same |
+| `decision_id` | int | the decision's number in the run, from 0, the three kinds counted together ([§4](#sec-4)) | the same | the same |
+| `env` | string | `NoSL` or `SL` | the same | the same |
+| `surface` | string | `combat` | `card_choice`, on either side | the decision's surface |
+| `brain` | string | the combat route's name: `pimc`, `plan c2`, `pimc c2 explore 0.003`, … | the prompt side's: `p0` in combat; L0's name or `random` outside | the macro route's |
+| `obs_hash` | hex string | the hash of the combat observation | the hash of the card prompt | the hash of the whole observation ([§4](#sec-4)) |
+| `legal` | int | the legal actions | the prompt's options | the legal actions |
+| `chosen` | string | the combat action's text: `play:C[:T]`, `potion:S[:T]`, `end_turn` ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)) | the picked option indexes joined by commas, without `pick:` | the action |
+| `plan` | string[]? | the brain's plan after `chosen`, if any ([§5](#sec-5)) | never | what the policy plans after `chosen`, if any: L0's route on the map |
+| `candidates` | Candidate[]? | the search's candidates, if any ([§5](#sec-5)) | never | never |
+| `budget` | Budget? | the route's budget as configured, before the room's multiple, on every line of a route that has one, including steps with one legal action and followed steps ([Routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)) | never | never |
+| `seed` | integer | the decision's seed ([Routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)) | the same, though the policy does not read it | the same, though the policy does not read it |
+| `elapsed_ms` | number | the route's time | the policy's time | the policy's time; its plan is asked afterwards, and not timed |
+| `features` | `{string: number}`? | – | – | always: V v0's features of the run view ([§7](#sec-7)) |
+| `obs` | CombatObservation? | always | – | – |
+| `run_view` | RunView? | – | – | always |
+| `history` | EnemyTurns[]? | always, possibly empty ([§7](#sec-7)) | – | – |
+| `explored` | `true`? | the step was drawn by exploration ([§6](#sec-6)) | the policy's last answer was explored | the same |
+| `replanned` | `true`? | the step was searched again because the plan did not hold ([§6](#sec-6)) | – | – |
+
+## 4. Numbers and hashes
+
+- **`decision_id` is Harness's own count**, the same number that draws the seed, not the `decision_id` of the wire's request. Over the wire the brain only checks that request ids rise. A request the mod cancelled is still answered, counted and logged, since the brain ignores `cancel` ([Overview §5](/en/arch/harness/#sec-5)).
+- **`obs_hash` hashes what the brain was shown**: the combat observation for a combat decision, the card prompt for a prompt, the whole observation for a macro decision. Only the macro line's is the wire's `obs_hash`, which hashes the whole observation. Hashes are FNV-1a 64 over the value's JSON, in hex ([Protocol §4](/en/arch/protocol/#sec-4)).
+
+## 5. Candidates and plans
+
+**PIMC's candidates** are every first action, each with ([Protocol: worlds and worker messages §3](/en/arch/protocol/worlds/#sec-3)):
+
+- `value`: its mean over the worlds;
+- `ci`: the half-width of its 95% confidence interval, 1.96·s/√n over its worlds, 0 under 2 worlds;
+- `samples`: its worlds;
+- `values`: its value in each world, in world order, to 4 decimals. These are the Q of ExIt's policy target ([Learning §2](/en/arch/learning/#sec-2));
+- `nodes`: the search nodes spent after it in each world, counting the action itself.
+
+They are sorted by the round of sequential halving they reached, then by value; without halving every candidate reaches the same round, so the best comes first. PIMC's `plan` is the rest of the turn after `chosen`, in the first world.
+
+**The SL planner's candidates** are each first action that its kept lines began with, valued by the best of those lines, with `ci` 0, `samples` 1, `values` the one value and no `nodes`: the pick first, then by value. Its `plan` is the rest of the combat on its line. For an unproved losing pick, the plan stops after the turns that `replan` says to play before planning again, and a line has at most 40 turns ([The SL planner: beam §6](/en/arch/sl-planner/beam/#sec-6)).
+
+**Lines without candidates.** A decision with one legal action has neither. A step played from a followed plan ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2), [The SL planner §4](/en/arch/sl-planner/#sec-4)) has the plan's rest as its `plan` (none on the plan's last step) and no `candidates`. A placeholder logs neither. On the map, L0 logs its `plan`, the rest of the act's route after `chosen` ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)).
+
+## 6. Explored and replanned steps
+
+**`explored: true`** marks an answer that self-play's exploration drew instead of the brain's best ([Learning §5](/en/arch/learning/#sec-5)):
+
+- by a softmax (`--combat-explore T`, `--macro-explore T`), when the brain valued the draw below its best by more than a hundredth of the temperature. Closer than that it is a tie, such as another order of the same turn, and is not marked;
+- by even draws (`--explore ε`), always, also when the draw happens to be the brain's own pick;
+- at a card prompt outside combat, when any of its steps was drawn.
+
+A combat step drawn instead of the search's pick keeps its `candidates` but has no `plan`, since the plan was the pick's. Other steps have no `explored`.
+
+**`replanned: true`** marks a combat step searched again because a step of the brain's plan did not hold: the combat did not show the observation the plan expected before it. With PIMC's `--follow`, that is the turn revealing something; with the SL planner, it means the clone differs from the real combat ([The SL planner §4](/en/arch/sl-planner/#sec-4)). After an explored step the pick's plan is still queued, so the next step is usually replanned too ([Routing, budgets and seeds §2](/en/arch/harness/routing/#sec-2)). A run's line in `run` and `brain` prints the run's count (`replans`); the run record does not keep it.
+
+## 7. What else a line carries
+
+**A combat's decisions come in one block**, between two macro decisions, in the order of the combats in the run's record ([Evaluation §6](/en/arch/evaluation/#sec-6)). That is how a decision finds how its combat ended. In a gauntlet run, the combats won at their start are in the run record but have no decisions.
+
+**`obs`**, on every combat line: the combat observation the brain was shown, about 1.6 KB ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)). It is the input of the learned combat parts and of the fusion panel ([NoSL PIMC: search §4](/en/arch/pimc/search/#sec-4)).
+
+**`history`**, on every combat line: the combat's record of enemy moves so far, this round included, as Harness hands it to the combat brain ([Overview §4](/en/arch/harness/#sec-4)). An entry is `{uid, id, turns: [{round, intents}]}`. The combat net reads it, with the round, to learn each monster's move order from data ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)).
+
+**`run_view`**, on every macro line: the run view the brain was shown, about 6 KB ([Protocol: observations and actions §2](/en/arch/protocol/observation/#sec-2)). V is trained on it ([Macro brain: value](/en/arch/macro-brain/value/)).
+
+**`features`**, on every macro line, whatever brain decided: V v0's hand-made features of the run view (floor, HP, max HP, gold, potions, relics, cards, unplayable cards, upgrades, the deck's mean damage, block and draw, and the elites, rest sites, shops, treasures and unknowns expected ahead). V v0's fit and V v2's training read them; both are removed, and pure V does not read them ([Learning §1](/en/arch/learning/#sec-1)).
+
+Card prompts outside combat get neither `run_view` nor `features`.
+
+## 8. Tests
+
+**`run --check`** holds a whole run to Harness's determinism ([Simulator: reference §6](/en/arch/simulator/reference/#sec-6)). It plays each seed, then replays every node from its checkpoint, then plays the seed a second time over the wire, to a `BrainServer` in the same process with the same champion (or to the `--brain` socket), and requires the two plays to agree:
+
+- the traces, decision by decision;
+- each decision's observation hash, each of which must also survive a JSON round trip;
+- the run's summary and each act's map hash;
+- the run records, with game errors and times left out;
+- the decision logs, every field but `elapsed_ms`. The second log is the in-process server's; with `--brain` both are empty, so they are not compared.
+
+**xUnit** (`Sts2Ai.Tests/Harness/`, [Simulator: reference §7](/en/arch/simulator/reference/#sec-7)):
+
+| test | checks |
+|---|---|
+| `DispatcherTests.GivesTheCombatBrainTheMovesSoFar` | the combat brain gets each enemy's intents per round |
+| `DispatcherTests.AMacroDecisionEndsTheCombatsRecord` | a macro decision clears the record of enemy moves |
+| `DispatcherTests.RefusesAnIllegalPick` | an illegal combat answer throws |
+| `DispatcherTests.HasNoFallbackForAnUncoveredSurface` | an uncovered surface throws |
+| `DispatcherTests.RefusesNodeCheckpointsInNoSL` | node checkpoints are refused in NoSL |
+| `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | the clone keeps the elite gauntlet's rule |
+| `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`, `AWorkerStuckTwiceFailsTheCall` | the pool's one retry |
+| `GateTests` (10), `EvalReportTests` (2) | evaluation's gate and reports ([Evaluation §5](/en/arch/evaluation/#sec-5)) |
+
+**Planned tests:**
+
+1. **Routing coverage**: simulated runs hit every surface with no decision by a placeholder. Exists in part: `run` lists the surfaces never reached ([Simulator: whole runs §5](/en/arch/simulator/runs/#sec-5)), and the `Dispatcher` throws on an uncovered one.
+2. **NoSL counterfactual at Harness level**: the same record with a different hidden state gives the same recommendation ([Environments: information §8](/en/arch/environments/information/#sec-8)).
+3. **Stale handling**: of reordered or duplicated requests, only the latest is answered. Today such a request gets an `error` and the host ends the run.

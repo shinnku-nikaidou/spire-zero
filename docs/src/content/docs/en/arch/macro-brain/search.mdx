@@ -25,7 +25,7 @@ Even so, on `promotion-1` (200 runs, NoSL) L0 v0 with V v0 beat random macro dec
 
 ## 2. L0 on the clone
 
-In SL, with `--afterstates clone` (and `--macro l0`), Harness hands L0 the node's clone at each macro decision and at each card prompt outside combat ([Harness §3](/en/arch/harness/#sec-3)), and L0 plays the options in the real game instead of predicting them (`CloneSearch`).
+In SL, with `--afterstates clone` (and `--macro l0`), Harness hands L0 the node's clone at each macro decision and at each card prompt outside combat ([Harness: routing, budgets and seeds §3](/en/arch/harness/routing/#sec-3)), and L0 plays the options in the real game instead of predicting them (`CloneSearch`).
 
 - **Afterstates are played.** Each option is played on the clone, and what the game asks next is its afterstate: the event's real outcome, the card the transform really gave, the shop after the purchase. V values that.
 - **The map is still predicted.** Travel is the node's exit, which the clone cannot play past: the next node's contents are not the current node's to see ([Environments: information §2](/en/arch/environments/information/#sec-2)). So a map move's afterstate is predicted as in L0 v0, the point added to the path.

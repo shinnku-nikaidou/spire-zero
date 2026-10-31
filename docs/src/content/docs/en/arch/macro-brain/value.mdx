@@ -54,7 +54,7 @@ Why hazards rather than one number:
 
 ## 2. Labels: only what was measured
 
-Every macro decision in the self-play logs is a training sample: the run view at that decision ([Harness §6](/en/arch/harness/#sec-6)), joined by run id to the run's record, which says where the run ended ([Evaluation §6](/en/arch/evaluation/#sec-6)). Its targets are the run's real outcome, a **Monte Carlo (MC) target**: no estimate, no bootstrap, only what happened.
+Every macro decision in the self-play logs is a training sample: the run view at that decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), joined by run id to the run's record, which says where the run ended ([Evaluation §6](/en/arch/evaluation/#sec-6)). Its targets are the run's real outcome, a **Monte Carlo (MC) target**: no estimate, no bootstrap, only what happened.
 
 For a sample taken on floor $s$ whose run ended on floor $e$, each floor $g$ gets a label $y_g$ or none:
 

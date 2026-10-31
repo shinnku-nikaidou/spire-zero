@@ -36,7 +36,7 @@ $$
 
 ## 3. 雜訊與公共亂數
 
-$\hat Q(a)$ 是 $K$ 個樣本的平均值，所以標準誤是 $\sigma_a / \sqrt{K}$；決策日誌記下每個第一動作的平均值、它的 95% 區間（$1.96$ 個標準誤），以及它在每個世界裡的值（[Harness §6](/zh-tw/arch/harness/#sec-6)）。$K = 8$ 時區間很寬。不過選擇需要的不是各自的值，而是它們之間的差，而每個第一動作都在**同樣的** $K$ 個世界上評分：這就是公共亂數（CRN，common random numbers）。對兩個動作，
+$\hat Q(a)$ 是 $K$ 個樣本的平均值，所以標準誤是 $\sigma_a / \sqrt{K}$；決策日誌記下每個第一動作的平均值、它的 95% 區間（$1.96$ 個標準誤），以及它在每個世界裡的值（[Harness：決策日誌 §5](/zh-tw/arch/harness/decision-log/#sec-5)）。$K = 8$ 時區間很寬。不過選擇需要的不是各自的值，而是它們之間的差，而每個第一動作都在**同樣的** $K$ 個世界上評分：這就是公共亂數（CRN，common random numbers）。對兩個動作，
 
 $$
 \mathrm{Var}\big(\hat Q(a) - \hat Q(b)\big) = \frac{\sigma_a^2 + \sigma_b^2 - 2\rho\,\sigma_a \sigma_b}{K},

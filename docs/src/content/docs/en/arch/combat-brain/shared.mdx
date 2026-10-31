@@ -27,9 +27,9 @@ Before `p0` (commit `c239f12`), prompts were answered at random, in the real fig
 
 ## 2. The record of enemy moves
 
-A monster's next move depends on its moves so far: a fixed cycle, a roll that never repeats a move three times, a move always followed by another ([NoSL PIMC §1](/en/arch/pimc/#sec-1)). A player remembers what each enemy did. So does the brain: `MoveRecord` keeps, for each enemy of the fight, the intents it showed at the first decision of each round, by uid. It is the part of the public record that is built today ([Harness §3](/en/arch/harness/#sec-3)).
+A monster's next move depends on its moves so far: a fixed cycle, a roll that never repeats a move three times, a move always followed by another ([NoSL PIMC §1](/en/arch/pimc/#sec-1)). A player remembers what each enemy did. So does the brain: `MoveRecord` keeps, for each enemy of the fight, the intents it showed at the first decision of each round, by uid. It is the part of the public record that is built today ([Harness §4](/en/arch/harness/#sec-4)).
 
-- Harness collects it from the combat observations it is shown, starting over after each macro decision, and hands it to the combat brain with every decision (`history`). The decision log keeps it with each combat decision ([Harness §6](/en/arch/harness/#sec-6)).
+- Harness collects it from the combat observations it is shown, starting over after each macro decision, and hands it to the combat brain with every decision (`history`). The decision log keeps it with each combat decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)).
 - The search sends it to the workers in every request. A NoSL worker builds each monster's move log from it, so that a sampled world's monsters go on as the real ones would ([NoSL PIMC §2](/en/arch/pimc/#sec-2)). Both kinds of worker hand it to the leaves.
 - The combat net reads it: each enemy's intents in its last 3 rounds and how many rounds it has shown ([The leaf §3](/en/arch/combat-brain/leaf/#sec-3)). Every leaf of one decision's search follows the same record: a leaf is the next round's start, and the record holds the rounds up to the decision's. The SL planner's later turns add the rounds its own lines reach (`MoveRecord.Witness` at each turn's end).
 

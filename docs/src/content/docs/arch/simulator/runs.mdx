@@ -124,7 +124,7 @@ flowchart TD
 - 卡牌奖励和卡包是一局层面的决策，由驱动程序的处理器回答；没有这些处理器，卡牌奖励会被跳过，卡包会拿第一个；
 - 每进入一个节点，提示都从 0 重新编号，与节点的克隆给自己的提示编号一致（[世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)）。
 
-在 `run` 里，三个接口都是同一个对象，即 Harness 的 `Dispatcher`，它把每个决策交给负责回答它的大脑（[Harness §4](/arch/harness/#sec-4)）：战斗交给战斗大脑，战斗中的选牌提示交给 `p0`，其余一切（包括战斗外的选牌提示）交给宏观大脑（[宏观大脑](/arch/macro-brain/)）。
+在 `run` 里，三个接口都是同一个对象，即 Harness 的 `Dispatcher`，它把每个决策交给负责回答它的大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）：战斗交给战斗大脑，战斗中的选牌提示交给 `p0`，其余一切（包括战斗外的选牌提示）交给宏观大脑（[宏观大脑](/arch/macro-brain/)）。
 
 **结局**。一局以 `won`（在胜利房间里结束）、`lost`（在其他任何地方结束）、`truncated`（过了 `--max-decisions` 仍在进行，默认 20,000）或 `failed`（抛了异常）结束。获胜对局的记录里生命值是 0：一到胜利房间，游戏就会杀死玩家。示例对局的记录是：获胜，第 2 幕（从 0 数起），第 48 层，生命值 0/66。
 
@@ -161,7 +161,7 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 | `card_rewards`、`card_rewards_skipped` | 关闭的卡牌奖励画面数，以及其中一张牌都没拿就关闭的画面数 |
 | `game_errors`、`failure`、`elapsed_ms` | 这一局的健康状况和墙钟时间 |
 
-`--log FILE` 写出 Harness 的决策日志，每个决策一行（[Harness §6](/arch/harness/#sec-6)）。两个文件都逐行刷新；一局的日志行在这一局结束时写出，所以中途停下的一批对局最多丢掉正在打的那一局。
+`--log FILE` 写出 Harness 的决策日志，每个决策一行（[Harness：决策日志 §1](/arch/harness/decision-log/#sec-1)）。两个文件都逐行刷新；一局的日志行在这一局结束时写出，所以中途停下的一批对局最多丢掉正在打的那一局。
 
 ## 6. 确定性
 

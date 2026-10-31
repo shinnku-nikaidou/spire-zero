@@ -48,7 +48,7 @@ The stub keeps stray calls harmless; it does not make them meaningful. Code that
 
 ## 4. The patches
 
-A **Harmony patch** rewrites a game method at runtime. Harmony is a .NET library: a *prefix* runs before the original method and may skip it, a *postfix* runs after it, and a *transpiler* rewrites the method's IL (its compiled instructions) instead of wrapping it. `HeadlessPatches.Apply` (`Runtime/Patches/HeadlessPatches.cs:26-33`) installs GameBridge's `ChoiceContexts` first, then every patch class of the assembly. The order matters: patching compiles each replaced method, and a method compiled before the card-prompt patches could inline one of the small `CardSelectCmd` entries and bypass its patch, as SapphireSeed's planting (rewritten by the event transpiler) once did ([GameBridge §5](/en/arch/gamebridge/#sec-5)).
+A **Harmony patch** rewrites a game method at runtime. Harmony is a .NET library: a *prefix* runs before the original method and may skip it, a *postfix* runs after it, and a *transpiler* rewrites the method's IL (its compiled instructions) instead of wrapping it. `HeadlessPatches.Apply` (`Runtime/Patches/HeadlessPatches.cs:26-33`) installs GameBridge's `ChoiceContexts` first, then every patch class of the assembly. The order matters: patching compiles each replaced method, and a method compiled before the card-prompt patches could inline one of the small `CardSelectCmd` entries and bypass its patch, as SapphireSeed's planting (rewritten by the event transpiler) once did ([GameBridge: reading the game §6](/en/arch/gamebridge/observe/#sec-6)).
 
 None of the patches changes a game rule, except the rule-fidelity group, which puts back the shipped rules where TestMode changed them. The groups, by file in `Runtime/Patches/`:
 

@@ -16,7 +16,7 @@ V is a neural network that reads a run and predicts how it will end. This sectio
 
 Pure V reads **what the run is and its raw state, nothing else**. No feature written by hand, no card's damage or cost, no relic's effect: what matters in a card, a relic or a deck is the net's to learn from how runs end.
 
-The inputs, all read from the run view that Harness logs at every decision ([Harness §6](/en/arch/harness/#sec-6)):
+The inputs, all read from the run view that Harness logs at every decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)):
 
 - **Each card of the deck:** its id, its upgrade level (at most 3) and the ids of its enchantment and affliction, if any.
 - **Each relic:** its id, with `:used` once it is used up. **Each potion:** its id.

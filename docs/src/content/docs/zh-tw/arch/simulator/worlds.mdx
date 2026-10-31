@@ -30,7 +30,7 @@ import WorldTurns from '../../../../../components/book/WorldTurns.svelte';
 
 NoSL 世界是一個**確定化樣本**：一場完整的戰鬥，和玩家見過的一切都一致，玩家看不到的部分則隨機抽取（[環境：世界 §2](/zh-tw/arch/environments/worlds/#sec-2)）。`SimWorlds.NoSL(pump, observation, buildSeed, history)` 做出一個決策的各個世界（`Simulation/SimWorlds.cs:37-44`）：
 
-1. **根**是 `CombatBuilder.Setup` 從觀測建構的一場戰鬥，用的是建構種子，以及到目前為止敵人意圖的記錄，這份記錄給出怪物的招式日誌（[戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。它從觀測建構，從不取自真實的戰鬥，所以玩家看不到的東西都進不來。建構必須完全顯示這個觀測；如果做不到，呼叫就會拋出例外，因為搜尋會去探索另一場戰鬥（[Harness §7](/zh-tw/arch/harness/#sec-7)）。
+1. **根**是 `CombatBuilder.Setup` 從觀測建構的一場戰鬥，用的是建構種子，以及到目前為止敵人意圖的記錄，這份記錄給出怪物的招式日誌（[戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。它從觀測建構，從不取自真實的戰鬥，所以玩家看不到的東西都進不來。建構必須完全顯示這個觀測；如果做不到，呼叫就會拋出例外，因為搜尋會去探索另一場戰鬥（[Harness：路由、預算與種子 §6](/zh-tw/arch/harness/routing/#sec-6)）。
 2. **第 k 個世界**是根加上一步確定化，種子由搜尋種子和 k 混合而成（`Simulation/SimWorlds.cs:51-57`）。這一步把玩家無法知道的東西洗亂，並重新播種每條亂數流（[戰鬥 §3](/zh-tw/arch/simulator/combat/#sec-3)）。
 
 這樣一個世界打起來多像真實的戰鬥（確定化這一步取樣的部分除外），由 `fidelity` 衡量（[戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6)）：在這個決策所在的回合內，最多 1% 的觀測不同。
@@ -63,7 +63,7 @@ NoSL 世界把觸及工作階段上限（50 回合或 1,000 個動作，[戰鬥 
 
 **複本**是檢查點，加上此後節點的每個決策，作為軌跡行（`surface action`；選牌提示的選擇用遊戲自己的索引）。它的協定型別是 `NodeClone(Save, Trace, Gauntlet?)`（`Sts2Ai.Protocol/World.cs:53`），除了模擬器，對其他一切都是不透明的。一局處於菁英連戰的規則下時，`Gauntlet` 為 true，複本會保留這條規則（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。`RunSession.Clone()` 在節點的任何時刻都能做出一個複本（`Simulation/RunSession.cs:229-230`）。
 
-**在一局裡**，SL 宿主把複本一塊一塊地傳給大腦：新節點開始時傳 `node_checkpoint`，然後節點的每個決策以 `node_action` 傳送，兩者都在下一個決策被提問之前傳送（`Brains/RunBrains.cs:88-99`；[協定：線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。Harness 保留最新的檢查點和此後的決策，在每個決策時，這就是複本（[Harness §3](/zh-tw/arch/harness/#sec-3)）。Mod 從遊戲裡傳送同樣的訊息（[Mod §6](/zh-tw/arch/mod/#sec-6)）。
+**在一局裡**，SL 宿主把複本一塊一塊地傳給大腦：新節點開始時傳 `node_checkpoint`，然後節點的每個決策以 `node_action` 傳送，兩者都在下一個決策被提問之前傳送（`Brains/RunBrains.cs:88-99`；[協定：線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。Harness 保留最新的檢查點和此後的決策，在每個決策時，這就是複本（[Harness §4](/zh-tw/arch/harness/#sec-4)）。Mod 從遊戲裡傳送同樣的訊息（[Mod §6](/zh-tw/arch/mod/#sec-6)）。
 
 ## 4. 載入複本
 

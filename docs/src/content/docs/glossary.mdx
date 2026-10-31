@@ -71,7 +71,7 @@ description: 本手册中游戏、项目、搜索、学习和评估相关术语�
 | 束搜索 | beam search | 每一步只保留最好的 B 个状态，只展开它们。SL 规划器的一步是一个回合：它保留最好的 B 个回合结束状态（[SL 规划器：束搜索 §1](/arch/sl-planner/beam/#sec-1)）。 |
 | 后状态 | afterstate | 刚做完选择、新的随机结果出现之前的状态。宏观大脑用后状态给选项估值（[宏观大脑：后状态 §1](/arch/macro-brain/afterstates/#sec-1)）。 |
 | L0、L1 | | 宏观大脑的两个层级：L0 用 V 给每个后状态估值；L1 对难分高下的选择用成对推演复核。 |
-| 预算 | budget | 一次决策能用多少搜索：固定的分支数（可复现）或墙钟时间（[Harness §5](/arch/harness/#sec-5)）。 |
+| 预算 | budget | 一次决策能用多少搜索：固定的分支数（可复现）或墙钟时间（[Harness：路由、预算与种子 §4](/arch/harness/routing/#sec-4)）。 |
 
 ## 学习
 

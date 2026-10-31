@@ -41,7 +41,7 @@ The version is bumped on any breaking change. A reader refuses a message whose `
 | `node_checkpoint` | host → brain | `node_index`, `checkpoint`, `gauntlet`? | SL only: a node starts ([§6](#sec-6)) |
 | `node_action` | host → brain | `node_index`, `seq`, `action` | SL only: a decision taken in the node ([§6](#sec-6)) |
 
-`run_id` is `ProtocolJson.Hash` of the seed's JSON string, as 16 hex digits (`RunHeader.IdOf`): the brain can tell runs apart and seed its own random streams from the id, without learning the seed from it ([Harness §5](/en/arch/harness/#sec-5)). `decision_id` counts from 0 in each run. `obs_hash` is the observation's hash as 16 hex digits.
+`run_id` is `ProtocolJson.Hash` of the seed's JSON string, as 16 hex digits (`RunHeader.IdOf`): the brain can tell runs apart and seed its own random streams from the id, without learning the seed from it ([Harness: routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)). `decision_id` counts from 0 in each run. `obs_hash` is the observation's hash as 16 hex digits.
 
 ## 4. One run, step by step
 
@@ -106,16 +106,16 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | field | meaning |
 |---|---|
 | `action` | one of the decision's legal actions; for a card prompt, `pick:i,j,…` |
-| `brain` | the brain that chose it, as the champion's routing table names it ([Harness §4](/en/arch/harness/#sec-4)); the host counts decisions per brain for the run record, where placeholder decisions must be none ([Evaluation §3](/en/arch/evaluation/#sec-3)) |
+| `brain` | the brain that chose it, as the champion's routing table names it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)); the host counts decisions per brain for the run record, where placeholder decisions must be none ([Evaluation §3](/en/arch/evaluation/#sec-3)) |
 | `plan` | what the brain planned after this action: the rest of the turn from a searching combat brain, the rest of the act's route from the macro brain on the map |
 | `candidates` | from a searching brain only: the first actions it scored, best first |
 
-A `Candidate` (`World.cs:59`) is one scored action: `value`, its mean over the worlds; `ci`, the half-width of its 95% confidence interval; `samples`, the worlds; and, when the search kept them, `values`, its value in each world, and `nodes`, the search nodes it took in each. The plan and the candidates are what the decision log keeps too ([Harness §6](/en/arch/harness/#sec-6)), and what the output shows the player ([Output §2](/en/arch/output/#sec-2)).
+A `Candidate` (`World.cs:59`) is one scored action: `value`, its mean over the worlds; `ci`, the half-width of its 95% confidence interval; `samples`, the worlds; and, when the search kept them, `values`, its value in each world, and `nodes`, the search nodes it took in each. The plan and the candidates are what the decision log keeps too ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)), and what the output shows the player ([Output §2](/en/arch/output/#sec-2)).
 
 **Planned:**
 
 - `facts`: the only source for explanations. Each fact would be a kind and its numbers, marked exact only in SL, where facts may be exact outcomes ([Environments: worlds §7](/en/arch/environments/worlds/#sec-7)).
-- `degraded`: an answer given under trouble, such as the loss of a worker ([Harness §7](/en/arch/harness/#sec-7)).
+- `degraded`: an answer given under trouble, such as the loss of a worker ([Harness: routing, budgets and seeds §6](/en/arch/harness/routing/#sec-6)).
 
 ## 8. The two hosts
 

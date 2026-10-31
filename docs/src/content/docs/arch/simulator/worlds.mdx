@@ -30,7 +30,7 @@ import WorldTurns from '../../../../components/book/WorldTurns.svelte';
 
 NoSL 世界是一个**确定化样本**：一场完整的战斗，与玩家见过的一切相符，玩家看不到的东西则随机抽取（[环境：世界 §2](/arch/environments/worlds/#sec-2)）。`SimWorlds.NoSL(pump, observation, buildSeed, history)` 做出一个决策的各个世界（`Simulation/SimWorlds.cs:37-44`）：
 
-1. **根**是 `CombatBuilder.Setup` 从观测构建的一场战斗，用的是构建种子和敌人至今的意图记录，后者给出怪物的出招日志（[战斗 §5](/arch/simulator/combat/#sec-5)）。它从观测构建，从不取自真实战斗，所以玩家看不到的东西一样也进不来。构建出的战斗必须精确地显示这个观测；否则调用会抛异常，因为搜索会去探索另一场战斗（[Harness §7](/arch/harness/#sec-7)）。
+1. **根**是 `CombatBuilder.Setup` 从观测构建的一场战斗，用的是构建种子和敌人至今的意图记录，后者给出怪物的出招日志（[战斗 §5](/arch/simulator/combat/#sec-5)）。它从观测构建，从不取自真实战斗，所以玩家看不到的东西一样也进不来。构建出的战斗必须精确地显示这个观测；否则调用会抛异常，因为搜索会去探索另一场战斗（[Harness：路由、预算与种子 §6](/arch/harness/routing/#sec-6)）。
 2. **第 k 个世界**是根加上一步确定化，种子由搜索种子和 k 混合得到（`Simulation/SimWorlds.cs:51-57`）。这一步打乱玩家不可能知道的东西，并给每条随机数流重新播种（[战斗 §3](/arch/simulator/combat/#sec-3)）。
 
 除了这一步采样的部分之外，这样的世界打起来和真实战斗有多接近，由 `fidelity` 衡量（[战斗 §6](/arch/simulator/combat/#sec-6)）：在决策所在的回合内，最多 1% 的观测不同。
@@ -63,7 +63,7 @@ NoSL 世界把碰到会话上限（50 轮或 1,000 个动作，[战斗 §1](/arc
 
 **克隆**是检查点，加上此后这个节点的每个决策，以轨迹行的形式（`surface action`；选牌提示的选择用游戏自己的下标）。它的协议类型是 `NodeClone(Save, Trace, Gauntlet?)`（`Sts2Ai.Protocol/World.cs:53`），除了模拟器，谁都不解读它的内容。对处于精英连战规则下的对局，`Gauntlet` 为 true，克隆保留这条规则（[整局 §7](/arch/simulator/runs/#sec-7)）。`RunSession.Clone()` 可以在节点的任何时刻生成一个克隆（`Simulation/RunSession.cs:229-230`）。
 
-**在一局里**，SL 主机把克隆一块一块地发给大脑：新节点开始时发 `node_checkpoint`，然后把节点的每个决策作为 `node_action` 发送，两者都在问下一个决策之前发出（`Brains/RunBrains.cs:88-99`；[协议：线路 §6](/arch/protocol/wire/#sec-6)）。Harness 保留最新的检查点和此后的决策，在每个决策处这就是克隆（[Harness §3](/arch/harness/#sec-3)）。Mod 从游戏里发送同样的消息（[Mod §6](/arch/mod/#sec-6)）。
+**在一局里**，SL 主机把克隆一块一块地发给大脑：新节点开始时发 `node_checkpoint`，然后把节点的每个决策作为 `node_action` 发送，两者都在问下一个决策之前发出（`Brains/RunBrains.cs:88-99`；[协议：线路 §6](/arch/protocol/wire/#sec-6)）。Harness 保留最新的检查点和此后的决策，在每个决策处这就是克隆（[Harness §4](/arch/harness/#sec-4)）。Mod 从游戏里发送同样的消息（[Mod §6](/arch/mod/#sec-6)）。
 
 ## 4. 加载克隆
 

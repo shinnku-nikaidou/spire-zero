@@ -36,7 +36,7 @@ Two choices in that formula matter:
 
 ## 3. Noise and common random numbers
 
-$\hat Q(a)$ is a mean of $K$ samples, so its standard error is $\sigma_a / \sqrt{K}$; the decision log records each first action's mean, its 95% interval ($1.96$ standard errors) and its value in every world ([Harness §6](/en/arch/harness/#sec-6)). With $K = 8$ the intervals are wide. What the choice needs, though, is not each value but the differences between them, and every first action is scored on the **same** $K$ worlds: common random numbers (CRN). For two actions,
+$\hat Q(a)$ is a mean of $K$ samples, so its standard error is $\sigma_a / \sqrt{K}$; the decision log records each first action's mean, its 95% interval ($1.96$ standard errors) and its value in every world ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)). With $K = 8$ the intervals are wide. What the choice needs, though, is not each value but the differences between them, and every first action is scored on the **same** $K$ worlds: common random numbers (CRN). For two actions,
 
 $$
 \mathrm{Var}\big(\hat Q(a) - \hat Q(b)\big) = \frac{\sigma_a^2 + \sigma_b^2 - 2\rho\,\sigma_a \sigma_b}{K},
