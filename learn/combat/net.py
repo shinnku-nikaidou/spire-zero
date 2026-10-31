@@ -1,4 +1,4 @@
-"""The combat net (docs: learning/combat-net §2): set encoders over the cards (per pile), the powers, the enemies (each with its
+"""The combat net (docs: combat-brain/network): set encoders over the cards (per pile), the powers, the enemies (each with its
 intent slots) and the allies, bags of ids for the rest, then a body and two heads (combat/data.py): the chance of each ending and,
 after a win, each potion's of being gone.
 """

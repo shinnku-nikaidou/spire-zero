@@ -1,4 +1,4 @@
-"""A run view as pure V reads it (docs: macro-brain/network §2), the one spec RunNet follows (Tokens, MapTokens, state).
+"""A run view as V reads it (docs: macro-brain/network §2), the one spec RunNet follows (Tokens, MapTokens, state).
 
 Only what the run is and its raw state: each card's id, upgrade level and modifiers' ids; the relics and potions; the
 character, act, boss(es) and ancient; the map points the player can still reach, each as its type and how many floors

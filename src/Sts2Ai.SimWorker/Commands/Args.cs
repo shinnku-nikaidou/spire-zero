@@ -163,7 +163,7 @@ internal sealed class BudgetArgs
 internal sealed class LeafArgs
 {
     private readonly Option<string?> _net = Opt.Maybe<string?>("--combat-net",
-        "a combat net file, which values the leaves still in progress at the leaf weights' prices (docs: learning/combat-net §1)");
+        "a combat net file, which values the leaves still in progress at LeafValue's prices (docs: learning/combat-net §1)");
 
     public IEnumerable<Option> Options => [_net];
 

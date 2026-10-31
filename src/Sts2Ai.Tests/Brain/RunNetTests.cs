@@ -13,7 +13,7 @@ public class RunNetTests
     }
 
     /// <summary>
-    /// An untrained pure V net with small widths, its test runs real views (Fixtures' floor 1 and two of g3), made by
+    /// An untrained V net with small widths, its test runs real views (Fixtures' floor 1 and two of g3), made by
     /// <c>learn/v/export.py</c>'s net_file; loading checks RunNet gives each the trainer's value, so a change to
     /// <c>learn/v/encode.py</c> or to RunNet that reads a run otherwise fails here.
     /// </summary>

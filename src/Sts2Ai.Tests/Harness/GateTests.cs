@@ -4,7 +4,7 @@ namespace Sts2Ai.Tests;
 
 public class GateTests
 {
-    private static readonly RunConfig Challenger = Fixtures.Config with { Champion = "combat pimc c2 8x300, combat prompts p0, macro l0, macro prompts l0" };
+    private static readonly RunConfig Challenger = Fixtures.Config with { Champion = "combat pimc c7-2 8x300, combat prompts p0, macro l0, macro prompts l0" };
 
     /// <summary>Floors that differ by <paramref name="gain"/> on average, by gain ± 2 in turn so the variance is not 0.</summary>
     private static List<(RunRecord, RunRecord)> Pairs(int n, double gain, string? challengerOutcome = null) =>

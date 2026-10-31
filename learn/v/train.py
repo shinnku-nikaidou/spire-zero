@@ -19,7 +19,7 @@ ONNX (the second head, not in the file, starts anew).
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
 
-    uv run python -m v.train --list data/silent/lists/v-g0-g3 --name pure-1
+    uv run python -m v.train --list data/silent/lists/v7g1 --name v7-1f --objective win --init ../weights/silent/CHAMPION.json
 """
 
 import json

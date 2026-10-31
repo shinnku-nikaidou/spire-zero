@@ -28,7 +28,7 @@ public sealed class WorkerPool : IDisposable
 
     /// <summary>Starts <paramref name="count"/> workers in parallel and waits until each has booted.</summary>
     /// <param name="command">The worker program and its leading arguments, e.g. <c>dotnet Sts2Ai.SimWorker.dll</c>.</param>
-    /// <param name="options">The options of <c>serve</c>, such as the leaf weights the workers search with.</param>
+    /// <param name="options">The options of <c>serve</c>, such as the combat net the workers search with.</param>
     /// <param name="timeout">How long a worker may take to boot or answer (<see cref="DefaultTimeout"/>).</param>
     public WorkerPool(IReadOnlyList<string> command, int count, IReadOnlyList<string>? options = null, TimeSpan? timeout = null)
     {

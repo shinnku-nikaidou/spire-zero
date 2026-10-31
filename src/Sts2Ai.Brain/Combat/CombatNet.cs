@@ -7,7 +7,7 @@ namespace Sts2Ai.Brain;
 /// <summary>A round's start and what the trainer's net made of it, which loading checks (docs: learning/reference §7, input parity).</summary>
 public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, IReadOnlyList<double> PotionUsed);
 
-/// <summary>The combat net as <c>learn/combat/export.py</c> writes it (docs: learning/combat-net §2).</summary>
+/// <summary>The combat net as <c>learn/combat/export.py</c> writes it (docs: combat-brain/network).</summary>
 /// <param name="Buckets">How many buckets of the share of max HP lost from the state to a win the head has, after its
 /// first class, a death.</param>
 /// <param name="LossMin">The lowest bucket's bottom (below 0: a combat that healed); the buckets span it to 1 evenly.</param>

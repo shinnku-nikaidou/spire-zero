@@ -103,7 +103,7 @@ def ending(obs: dict, end: dict) -> int:
 
 
 def price(end: dict) -> float:
-    """A combat's end at the leaf weights' default prices (LeafValue.Of), which a net of endings is valued at."""
+    """A combat's end at LeafValue.Of's prices, which the net's endings are valued at."""
     return 0.0 if end["died"] else 0.2 + 0.6 * share(end["hp"], end["max_hp"]) + 0.02 * end["potions"]
 
 
