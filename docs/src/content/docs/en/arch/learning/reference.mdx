@@ -15,14 +15,14 @@ This page is for looking things up. The pages before it explain the learning loo
 flowchart LR
   S["box job<br/>seeds, champion, deadline"] --> W["remote hosts<br/>slots, each one run at a time"]
   W --> H["storage hub<br/>zstd-packed files"]
-  H --> T["lab host<br/>training, 2 GPUs"]
+  H --> T["GPU machine<br/>training"]
   T --> WT["net file<br/>weights/CHARACTER/NAME.json"]
   WT --> B["Brain loads it<br/>ONNX Runtime, CPU"]
 ```
 
 - **Simulation.** The simulator scales over processes: 8 processes reach about 1,860 combats/s, against 275 in a single process ([Simulator: combats §7](/en/arch/simulator/combat/#sec-7)). A whole SL run at the low budget takes 43–52 s of a slot on one host and 83 s on another. Self-play and gates run on several remote hosts at once.
 - **Time-boxed jobs.** A job gets a deadline instead of a number of runs, and more seeds than fit; every host stops at the deadline, and the job is what finished. The deadline is a file on every host, `~/sts2/deadline/NAME.txt` (a comment line, then one time); jobs launched with the same `NAME` share it, so one edit moves every job of a generation. Each slot reads it before each chunk, and a watcher every 10 s while a run plays; a run still going at the deadline is ended and dropped, so only whole finished runs are kept. How jobs are launched, moved, stopped and fetched is a project skill, `.claude/skills/fleet/SKILL.md`; how SL self-play, gates and evaluations are run (options, exploration, checks) is another, `.claude/skills/sl-selfplay/SKILL.md`.
-- **Where data goes.** Each host sends a job's files to a storage host when it ends, packed with zstd (logs shrink 40–80 times). They are unpacked, analysed and trained on at a lab host with two RTX 4080s, one training per GPU; only the results (weights, report text) come back to the development machine, which builds, tests and serves the brain. There the trainers run with a uv virtual environment from `git archive REV learn/`, so a training's code is a commit.
+- **Where data goes.** Each host sends a job's files to a storage host when it ends, packed with zstd (logs shrink 40–80 times). They are unpacked and analysed where they are kept, and a net is trained on a GPU machine, one training per GPU; only the results (weights, report text) reach the development machine, which builds, tests and serves the brain. The trainers run with a uv virtual environment from `git archive REV learn/`, so a training's code is a commit.
 - **Training** is Python with PyTorch, on a GPU when one is free (`device = "cuda" if torch.cuda.is_available()`). Inference is C#, on the CPU, in the decision process and the workers ([§8](#sec-8)).
 
 ## 2. The `learn/` project

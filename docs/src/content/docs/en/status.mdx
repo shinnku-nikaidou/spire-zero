@@ -28,7 +28,7 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 | learning | built: self-play with even-draw exploration, V's and the combat net's training, the wins gate. Planned: TD(λ), expert iteration, LLM patch proposals ([Learning: the loop](/en/arch/learning/loop/)) |
 | evaluation | built: reports, leaderboards per environment, seed sets, the paired full-run gate, champion files ([Evaluation](/en/arch/evaluation/)) |
 | mod | assist mode built on every surface, in both environments: the panel, the map and combat marks, the settings tab, the SL record. In the real game 89 of 90 SL decisions asked the same on their clones (the other one's cause is fixed); a combat's first SL decision waits 3–15 s for the planner. Not yet watched through a whole real run; auto-play planned ([Mod](/en/arch/mod/), [Output](/en/arch/output/)) |
-| compute | time-boxed jobs on several remote hosts, about 50 SL runs at once; data kept on a storage host, analysed and trained on a lab host with two GPUs ([Learning: reference §1](/en/arch/learning/reference/#sec-1)) |
+| compute | time-boxed jobs on several remote hosts, about 50 SL runs at once; data kept on a storage host and analysed where it is kept, nets trained on a GPU machine ([Learning: reference §1](/en/arch/learning/reference/#sec-1)) |
 
 **The champions' results** (`eval/silent/ledger.md`):
 
