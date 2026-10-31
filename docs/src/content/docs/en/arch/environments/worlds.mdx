@@ -106,7 +106,7 @@ PIMC on the clone (`--policy pimc` with `--env SL`) also exists: it searches onl
 
 ## 6. One V for both environments
 
-In principle SL would value states outside combat differently too. From the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk: more elites, events and cards with a high variance. This is ignored on purpose. One V serves both environments, and it is trained on runs whose combats the SL combat brain played ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)).
+In principle SL would value states outside combat differently too. From the same state SL wins more often, because it plays every later node better, so a value made for SL would accept more risk: more elites, events and cards with a high variance. This is ignored on purpose. One V serves both environments, and it is trained on runs whose combats the SL combat brain played ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)).
 
 This is not SL teaching NoSL how to fight. The macro brain sees the same information in both environments, and V reads only what the run is ([Macro brain: the value network](/en/arch/macro-brain/network/)). The NoSL combat brain is trained on its own data: each environment's combat nets learn how combats end under that environment's search, and are refused in the other ([Overview §5](/en/arch/environments/#sec-5)). What the shared V gives up is the difference between the two environments' values outside combat, and in NoSL it is somewhat optimistic.
 

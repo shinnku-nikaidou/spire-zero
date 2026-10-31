@@ -88,8 +88,8 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 
 | 術語 | 含義 |
 |---|---|
-| 價值函數 V（value function V） | 宏觀大腦對一個對局狀態的評判。它的目標一直是期望到達的層數（進度），直到機器人有時能贏，之後是 P(win)（[學習：價值函數](/zh-tw/arch/learning/value/)、[宏觀大腦：價值網路](/zh-tw/arch/macro-brain/network/)）。 |
-| 純 V（pure V） | 只從這一局的 id 和原始狀態讀取的 V，沒有手工特徵（[宏觀大腦：價值網路](/zh-tw/arch/macro-brain/network/)）。 |
+| 價值函數 V（value function V） | 宏觀大腦對一個對局狀態的評判：從那裡贏下這一局的機率（[宏觀大腦：從風險值到價值](/zh-tw/arch/macro-brain/value/)、[宏觀大腦：價值網路](/zh-tw/arch/macro-brain/network/)）。 |
+| 純 V（pure V） | V 的網路較早的一種形式：牌組上的集合編碼器，其餘用詞元袋，只從這一局的 id 和原始狀態讀取（[學習：實驗紀錄 §8](/zh-tw/arch/learning/experiments/#sec-8)）。 |
 | 自我對弈（self-play） | 冠軍在模擬器裡打完整局，產生訓練資料（[宏觀大腦：自我對弈](/zh-tw/arch/macro-brain/selfplay/)）。 |
 | 冠軍（champion）、挑戰者（challenger） | 冠軍是一種環境中目前最好的版本；挑戰者必須通過門檻才能取代它（[評估：冠軍與基線](/zh-tw/arch/evaluation/champions/)）。 |
 | MC、TD(λ) | 設定價值目標的方法：從最終結果（蒙地卡羅），或與之後幾個狀態的價值混合（時間差分）（[學習：循環 §3](/zh-tw/arch/learning/loop/#sec-3)）。 |
@@ -118,7 +118,7 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | 名稱 | 是什麼 |
 |---|---|
 | V v0 | 第一個 V：用手設定的權重，作用在對局檢視（run view）的手工特徵上；已移除。 |
-| n1, n2-b0.01, n2-b0.03, n2-b0.1, n3-ctl, n3-free-ctl | V v2 網路（建立在 V v0 特徵上的網路，以權重 β 拉向 V v0）：n2-b0.03 自 2026-10-28 起是兩個冠軍的 V（[學習：價值函數 §5](/zh-tw/arch/learning/value/#sec-5)）。 |
+| n1, n2-b0.01, n2-b0.03, n2-b0.1, n3-ctl, n3-free-ctl | V v2 網路（建立在 V v0 特徵上的網路，以權重 β 拉向 V v0）：n2-b0.03 自 2026-10-28 起是兩個冠軍的 V（[學習：實驗紀錄 §3](/zh-tw/arch/learning/experiments/#sec-3)）。 |
 | pure-1, pure-1-b, pure-1-d, pure-1-g | 最早的純 V 網路，依序是：只從整局訓練、加上決策時的頭目模擬、加上門口狀態、加上頭目連戰試驗的門口；pure-1-g 在 2026-10-29 是 SL 冠軍的 V。 |
 | v6-1, v6-2, v6-3-1, v6-3-2 | 在菁英連戰的三代裡訓練的純 V；v6-3-2 自 2026-10-30 起是兩個冠軍的 V。 |
 | c1, c2, c3, c4 | 戰鬥網路；c2 是兩個冠軍的戰鬥大腦的葉節點。 |

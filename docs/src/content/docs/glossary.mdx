@@ -88,8 +88,8 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 
 | 术语 | 含义 |
 |---|---|
-| 价值函数 V（value function V） | 宏观大脑对一局状态的评判。在 bot 偶尔能赢之前，它的目标一直是期望层数（进度），之后是 P(win)（[学习：价值函数](/arch/learning/value/)、[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
-| 纯 V（pure V） | 只从这一局的 id 和原始状态读出的 V，没有任何手工特征（[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
+| 价值函数 V（value function V） | 宏观大脑对一局状态的评判：从那里赢下这一局的概率（[宏观大脑：从风险值到价值](/arch/macro-brain/value/)、[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
+| 纯 V（pure V） | V 的网络较早的一种形式：牌组上的集合编码器，其余部分用词袋，只从这一局的 id 和原始状态读取（[学习：实验记录 §8](/arch/learning/experiments/#sec-8)）。 |
 | 自我对弈（self-play） | 冠军在模拟器里打完整局，产生训练数据（[宏观大脑：自我对弈](/arch/macro-brain/selfplay/)）。 |
 | 冠军（champion）、挑战者（challenger） | 冠军是某个环境里当前最好的版本；挑战者必须通过晋级门槛才能取代它（[评估：冠军与基线](/arch/evaluation/champions/)）。 |
 | MC、TD(λ) | 设定价值目标的方法：用最终结果（蒙特卡洛），或与下一个状态的价值混合（时序差分）（[学习：循环 §3](/arch/learning/loop/#sec-3)）。 |
@@ -118,7 +118,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 名称 | 是什么 |
 |---|---|
 | V v0 | 第一个 V：在这一局视图的手工特征上手设的权重；已移除。 |
-| n1、n2-b0.01、n2-b0.03、n2-b0.1、n3-ctl、n3-free-ctl | V v2 网络（在 V v0 的特征上的网络，以权重 β 拉向 V v0）：n2-b0.03 从 2026-10-28 起是两个冠军的 V（[学习：价值函数 §5](/arch/learning/value/#sec-5)）。 |
+| n1、n2-b0.01、n2-b0.03、n2-b0.1、n3-ctl、n3-free-ctl | V v2 网络（在 V v0 的特征上的网络，以权重 β 拉向 V v0）：n2-b0.03 从 2026-10-28 起是两个冠军的 V（[学习：实验记录 §3](/arch/learning/experiments/#sec-3)）。 |
 | pure-1、pure-1-b、pure-1-d、pure-1-g | 第一批纯 V 网络，依次是只用对局的、带决策时 Boss 模拟的、带门口状态的，以及带 Boss 连战试点门口的；pure-1-g 是 2026-10-29 时 SL 冠军的 V。 |
 | v6-1、v6-2、v6-3-1、v6-3-2 | 在精英连战的三代里训练的纯 V；v6-3-2 从 2026-10-30 起是两个冠军的 V。 |
 | c1、c2、c3、c4 | 战斗网络；c2 是两个冠军的战斗大脑的叶子。 |

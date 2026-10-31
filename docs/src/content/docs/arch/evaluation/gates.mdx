@@ -253,7 +253,7 @@ $$
 
 计划 v6（2026-10-29 至 2026-10-30）在精英连战里训练和评判 V：普通怪物战在开始时直接判胜，只打精英和 Boss（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。每个 V 都打连战的 500 个评估种子（`run --seed 1 --start 300000 --n 500`），不探索，用训练时的预算（SL 规划器的 low 预算），并加上 `--afterstates clone`；`learn/gauntlet.py --records R --logs L --against C` 在双方都打完的种子上按种子把它的对局和冠军的配对，当**进度**的均值差的 95% 单侧下界大于 0 时晋级它（`against`：`pairs`、`diff`、`diff_se`、`lower_95`、`promote`）。进度是到达的层数，加上输局在它死去的那场战斗里打掉的敌人生命比例；胜局再加 1。在这些主机上，一道门槛要 16–20 分钟。
 
-连战的各代及其门槛见[宏观大脑：自我对弈 §4](/arch/macro-brain/selfplay/#sec-4)；它的冠军由手工列在 `eval/silent/gauntlet-leaderboard.md` 里（[冠军与基线 §4](/arch/evaluation/champions/#sec-4)）。它的排名没有迁移到整局上（[宏观大脑：自我对弈 §5](/arch/macro-brain/selfplay/#sec-5)），这是计划 v7 在整局上设门槛的原因之一。
+连战的各代及其门槛见[学习：实验记录 §9](/arch/learning/experiments/#sec-9)；它的冠军由手工列在 `eval/silent/gauntlet-leaderboard.md` 里（[冠军与基线 §4](/arch/evaluation/champions/#sec-4)）。它的排名没有迁移到整局上（[学习：实验记录 §10](/arch/learning/experiments/#sec-10)），这是计划 v7 在整局上设门槛的原因之一。
 
 ## 12. 测试
 

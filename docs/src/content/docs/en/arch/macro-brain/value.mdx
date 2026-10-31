@@ -1,18 +1,25 @@
 ---
 title: From hazards to value, and training
-description: How V's per-floor hazards give the expected floor, progress and P(win); what each training sample's labels are; the loss, the second head and the training settings.
+description: 'What V''s number means, how the per-floor hazards give P(win), how a logged decision becomes a training sample with its labels, the loss, the second head, the training settings and the report.'
 sidebar:
   label: From hazards to value
 ---
 import { Aside } from '@astrojs/starlight/components';
-import HazardChart from '../../../../../components/v/HazardChart.svelte';
-import LabelMask from '../../../../../components/v/LabelMask.svelte';
 
-[The value network](/en/arch/macro-brain/network/) ends in one number per floor. This section turns those numbers into the value that decides, then goes the other way: what each training sample's targets are, the loss, and how a net is trained.
+[The value network](/en/arch/macro-brain/network/) ends in one number per floor. This section turns those numbers into the value that decides, then goes the other way: how a logged decision becomes a training sample, the loss, and how a net is trained.
 
-## 1. From hazards to a value
+## 1. What V is
 
-V does not predict a value directly. Its head predicts, for each floor $g$ from 0 to 63, a **hazard**
+**V(s) = P(win this run from s, playing the current champion).** V of a situation is the chance that the run is won from there if the *champion*, the best version of the AI accepted so far, plays the rest of it.
+
+- **One scale.** Every value is a probability of the same event, so an HP heal at a rest site, a card at a reward and a path on the map are compared directly, with no exchange rate written by hand ([Afterstates §2](/en/arch/macro-brain/afterstates/#sec-2)).
+- **Observation only.** V reads the run view, what the player sees outside combat ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)).
+- **One V for both environments.** An SL policy plays every later node better than a NoSL one, so from the same observation its true chance to win is higher; the shared V ignores that on purpose ([Environments: worlds and two combat algorithms §6](/en/arch/environments/worlds/#sec-6)). V is trained on SL runs, whose combats the SL planner plays.
+- **Under a policy.** "Playing the current champion" matters: the same situation is worth more under a stronger player. That is why a net trains on the newest generation's runs alone ([Self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
+
+## 2. From hazards to a value
+
+V does not predict the chance to win directly. Its head predicts, for each floor $g$ from 0 to 63, a **hazard**
 
 $$
 h_g = P(\text{the run ends on floor } g \mid \text{it is still going on floor } g),
@@ -21,116 +28,110 @@ $$
 which is the discrete-time survival model of statistics (a *hazard* is the chance of the event at a time, given that it has not happened before), here with a neural network computing every floor's hazard from the run (as in Gensheimer and Narasimhan, 2019). Everything else follows by multiplication. From the run's current floor $f$:
 
 $$
-S_g = \prod_{j=f}^{g} (1 - h_j), \qquad e_g = S_{g-1}\, h_g \quad (S_{f-1} = 1),
+S_g = \prod_{j=f}^{g} (1 - h_j), \qquad e_g = S_{g-1}\, h_g \quad (S_{f-1} = 1).
 $$
 
 $S_g$ is the chance to be still going after floor $g$, and $e_g$ the chance that the run ends exactly on floor $g$. Then:
 
-- **Expected floor reached.** The floor reached is $f$ plus the number of floors survived from $f$ on, so $\mathbb{E}[F] = f + \sum_{g \ge f} S_g$.
-- **P(win).** When a won run is labelled as surviving every floor (whole runs, [§2](#sec-2)), the chance to win is the chance to survive them all: $S_{63}$.
-- **Progress** (the elite gauntlet's V). Another head, the share head, gives, per floor, the **share** $s_g$ of the enemies' HP taken in the combat the run ends in there. The expected progress adds it to the expected floor:
+- **P(win)** is the chance to survive every floor: $S_{63}$. A won run is labelled as surviving them all ([§3](#sec-3)), so this is the chance that the run is won. This is V's value: the net file's `objective` is `win`, and `RunNet.Value` computes the product.
+- **The expected floor reached** comes from the same hazards: $\mathbb{E}[F] = f + \sum_{g \ge f} S_g$. The training report uses it ([§6](#sec-6)); nothing decides by it.
+
+Why hazards rather than one output for the chance to win:
+
+- **Every floor gets a label.** Few runs are won: 286 of the 21,275 runs of a generation's self-play ([Self-play §4](/en/arch/macro-brain/selfplay/#sec-4)). As a single target, almost every sample would say only "lost". A sample that survived floors 5 to 32 and died on 33 says something about each of those floors.
+- **Stopped runs still count.** A run cut short (*censored*: truncated, or its time box ended) says nothing about the floors after it stopped, and the mask simply leaves them out. A single target would have to guess.
+- **The whole distribution.** The same head gives where the run is likely to end, which a report can read.
+
+Why the chance to win rather than the floor reached: the floor weighs every floor the same, so it can prefer a safe line that reliably reaches act 2 to a riskier one that sometimes wins. Winning is the goal, and runs win often enough for it to be measured.
+
+## 3. From a logged decision to a sample
+
+`learn/v/data.py` builds the samples. Every macro decision in the self-play logs is one: the run view at that decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), joined by run id to the run's record, which says where the run ended ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). A failed run's decisions are left out. Its targets are the run's real outcome, a **Monte Carlo (MC) target**: no estimate, no bootstrap, only what happened.
+
+A sample holds:
+
+- its **tokens and numbers**, read from the view ([The value network §2](/en/arch/macro-brain/network/#sec-2)). The view itself is dropped: as Python objects a view is about ten times larger. A held-out sample keeps its view as JSON, for the net file's test runs.
+- its **start** $s$, the view's floor, and its run's **end** $e$, the floor reached, each at most 63;
+- its run's **kind**: died, won or censored;
+- the **next combats' HP costs**, for the second head ([§4](#sec-4));
+- its **weight** ([below](#sec-3)).
+
+**Labels: only what was measured.** For a sample taken on floor $s$ whose run ended on floor $e$, each floor $g$ gets a label $y_g$ or none:
+
+| the run | $g < s$ | $s \le g < e$ | $g = e$ | $g > e$ |
+|---|---|---|---|---|
+| died on floor $e$ | none | 0 (survived) | 1 (ended) | none |
+| won | none | 0 | 0 | 0 |
+| censored on floor $e$ | none | 0 | none | none |
+
+For example, a decision on floor 5 of a run that died on floor 33 has 29 labels: 0 on floors 5 to 32 and 1 on floor 33. A decision on floor 5 of a won run has 59: 0 on floors 5 to 63.
+
+**The loss** of a sample is the binary cross-entropy of the hazards over its labelled floors, plus the second head's:
 
 $$
-\mathbb{E}[\text{progress}] = \mathbb{E}[F] + \sum_{g \ge f} e_g\, s_g .
+\mathcal{L} = -\sum_{g \,\text{labelled}} \Big[ y_g \log h_g + (1 - y_g) \log(1 - h_g) \Big] \;+\; 3 \sum_{k} \big( \hat c_k - c_k \big)^2 ,
 $$
 
-`RunNet.Value` computes exactly this, and the net file's `objective` (`floor`, `win` or `progress`) says which of the three is V's value. v6-3-2's is `progress`.
+where $c_k$ is the share of max HP the $k$-th next combat cost, and $\hat c_k$ the second head's prediction of it.
 
-<HazardChart client:visible lang="en" start="test-1" />
+**Every run weighs the same.** All the decisions of one run share one outcome, and a run has well over a hundred of them. Each sample is weighted by one over its run's number of decisions, so a long run counts once, not 180 times, and a batch's loss is the weighted mean. The same concern is why AlphaGo's value network was trained on one position per game (Silver et al., 2016): positions of one game are strongly correlated, and a net trained on all of them memorizes games.
 
-The figure shows v6-3-2's heads for a state. The hazards are low on most floors and spike at the bosses of acts 2 and 3 (floors 33 and 48): that is where gauntlet runs end. The act 1 boss (floor 17), which v6-3-2 beats in 96% of the runs that reach it, is a small step. The survival curve steps down at each spike, and the third chart is the distribution of where the run ends; its mean, plus the shares, is the progress. Lower HP and the spikes grow.
-
-Why hazards rather than one number:
-
-- **Every floor gets a label.** A sample that survived floors 5 to 32 and died on 33 says something about each of those floors, not only "33". This is a denser signal than a single regression target.
-- **Stopped runs still count.** A run cut short (*censored*: truncated, or the time box ended) says nothing about the floors after it stopped, and the mask simply leaves them out ([§2](#sec-2)). A single "floor reached" target would have to guess.
-- **One head, several values.** The same hazards give the expected floor, P(win) and the whole distribution of where the run ends, so the objective can change without changing the net ([§6](#sec-6)).
+**Held out by run.** Every fifth run, by its run id (`int(run_id, 16) % 5 == 0`), is held out, with all its decisions, for early stopping and for the report. Splitting by decision instead would put decisions of the same run on both sides and overstate how well the net does.
 
 <Aside>
 
-**v6-3-2 has no P(win).** The elite gauntlet labels a *won* run as ending on its last floor, with share 1 (its last boss all taken), so its progress is the last floor + 1. The hazard on floor 48 is therefore "the run ends at the last boss, won or lost", and $S_{63}$ is near 0 for every state. A whole-run V trained with won runs surviving every floor reads P(win) from the same head; that is the next plan's objective ([Weaknesses and next steps §2](/en/arch/macro-brain/next/#sec-2)).
+**What MC means here.** The label is how the run ended under the policy that played it, including everything after the decision: the combat planner's luck, and in self-play the later exploration draws ([Self-play §3](/en/arch/macro-brain/selfplay/#sec-3)). That makes it unbiased for that policy and noisy for any one decision.
 
 </Aside>
 
-## 2. Labels: only what was measured
+## 4. The second head
 
-Every macro decision in the self-play logs is a training sample: the run view at that decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), joined by run id to the run's record, which says where the run ended ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). Its targets are the run's real outcome, a **Monte Carlo (MC) target**: no estimate, no bootstrap, only what happened.
+A second head, used only in training, predicts the share of max HP each of the run's next six combats cost, as six sigmoid outputs. A death costs what was left; a run with fewer than six combats ahead has targets for those it has. Its squared error joins the loss at weight 3. Its seventh output serves simulated boss fights as extra labels, which whole-run training does not use, so it has no target there.
 
-For a sample taken on floor $s$ whose run ended on floor $e$, each floor $g$ gets a label $y_g$ or none:
+It never decides and is not in the net file. Its job is to shape the body: a combat's HP cost is measured several times per run, so it gives the body many more targets than the one outcome, all about the same thing V must judge, how strong the run is for the fights ahead.
 
-| the run | $s \le g < e$ | $g = e$ | $g > e$ |
-|---|---|---|---|
-| died on floor $e$ | 0 (survived) | 1 (ended) | none |
-| won (whole runs) | 0 | 0 | 0 |
-| censored on floor $e$ | 0 | none | none |
+## 5. Training
 
-In the elite gauntlet, a run that ended, won or lost, is labelled as ending on its last floor, and the share head learns that floor's share: 1 for a won run, the share of the enemies' HP taken for a run that died in a combat, 0 for one that died outside combat. The loss of a sample is the binary cross-entropy of the hazards over its labelled floors, plus, in the gauntlet, the share's cross-entropy at the floor it ended on:
+```text
+uv run python -m v.train --list PREFIX --name NAME --objective win --encoders [--init FILE]
+```
 
-$$
-\mathcal{L} = -\sum_{g \,\text{labelled}} \Big[ y_g \log h_g + (1 - y_g) \log(1 - h_g) \Big] \;-\; \Big[ \sigma_e \log s_e + (1 - \sigma_e) \log(1 - s_e) \Big],
-$$
-
-where $\sigma_e$ is the share actually taken. The figure computes the first term for a state with v6-3-2's own hazards: pick how the run ended and where, and see which floors are labelled and how much each adds to the loss.
-
-<LabelMask client:visible lang="en" start="test-4" />
-
-**Every run weighs the same.** All the decisions of one run share one outcome. An elite gauntlet run has 108 macro decisions on average in generation 1 and 146 in generation 3, so generation 3's 2,160,792 decisions hold only 14,828 outcomes. Each sample is weighted by one over its run's number of decisions, so a long run counts once, not 180 times. The same concern is why AlphaGo's value network was trained on one position per game (Silver et al., 2016): positions of one game are strongly correlated, and a net trained on all of them memorizes games.
-
-**Held out by run.** Every fifth run, by its run id, is held out, with all its decisions, for early stopping and for the report. Splitting by decision instead would put decisions of the same run on both sides and overstate how well the net does.
-
-**What MC means here.** The label is how the run ended under the policy that played it, including everything after the decision: the combat planner's luck, and in self-play the later exploration draws ([Self-play §2](/en/arch/macro-brain/selfplay/#sec-2)). That makes it unbiased for that policy and noisy for any one decision.
-
-## 3. The second head
-
-A second head, used only in training, predicts the share of max HP each of the run's next six combats cost (a death costs what was left; in the gauntlet only the fought combats, elites and bosses). Its squared error joins the loss at weight 3. It is never used to decide and is not in the net file. Its job is to shape the body: a combat's HP cost is measured several times per run, so it gives the body many more targets than the one outcome, all about the same thing V must judge, how strong the run is for the fights ahead. On V v2's data, with three training seeds, it lowered the held-out loss in every seed (1.222 against 1.235 on average) and raised the $R^2$ (0.384 against 0.371).
-
-## 4. Training
-
-`uv run python -m v.train` (`learn/v/train.py`). The sizes and settings are fixed in the code, not options; an experiment changes them there, and only a result keeps the change:
+`learn/v/train.py`. The sizes and settings are fixed in the code, not options; an experiment changes them there, and only a result keeps the change:
 
 | setting | value |
 |---|---|
-| embeddings, card net, body | 32, 128, 256 |
+| floors | 64, from floor 0 |
 | optimizer | AdamW, learning rate $3 \times 10^{-5}$, weight decay $10^{-4}$ |
-| batch | 256 samples |
-| epochs | at most 40, stopping after 5 without a better held-out loss |
+| batch | 256 samples, shuffled anew each epoch |
+| epochs | at most 40, stopping after 5 without a held-out hazard loss lower by $10^{-4}$; the best epoch's weights are kept |
 | unknown ids | ids seen fewer than 3 times |
 | second head | weight 3 |
-| start | the hazard head's biases at the baseline: each floor's hazard over the training runs, $(\text{deaths} + 0.5) / (\text{alive} + 1)$; the share head's at the mean share |
+| start | the hazard head's biases at the baseline ([below](#sec-5)) |
 
-**Why such a small learning rate, from the baseline.** The data holds few outcomes for its size, and the net overfits fast. On V v2's first data (859 runs), a net with a random head at learning rate $10^{-3}$ memorized the runs within an epoch: held-out loss 1.331 after the first epoch, 4.12 after the sixth. Started at the baseline, the same net reached 1.573 at $10^{-3}$, 1.235 at $10^{-4}$ and 1.229 at $3 \times 10^{-5}$. Starting from the baseline, the net only has to learn how the run moves each floor's hazard away from the average one.
+**Why such a small learning rate, from the baseline.** The data holds few outcomes for its size, and a net overfits fast: it can memorize which run a state came from within an epoch. So the hazard head's biases start at each floor's hazard over the training runs,
 
-**Going on from a net (`--init`).** Training can start from an earlier net file instead of from scratch: its token tables (an id it never saw reads as unknown), its standardization and its weights, read back from its ONNX graph. The second head, not in the file, starts anew.
+$$
+\frac{\text{deaths}_g + 0.5}{\text{alive}_g + 1},
+$$
 
-**Memory.** A sample keeps its tokens and numbers, not its run view: as Python objects a view is about ten times larger, and generation 3's 2,160,792 decisions took about 117 GB in a training with every view kept, 20.9 GB without. A held-out sample keeps its view as JSON, for the net file's test runs.
+both counted by the samples' weights, and the net only has to learn how the run moves each floor's hazard away from that average. It moves slowly enough for held-out runs to say when to stop.
 
-**The report.** The trainer reports the held-out loss next to the baseline's, and the $R^2$ of V's value against the progress (or floor) actually reached on the held-out runs. For generation 3:
+**Going on from a net (`--init`).** Training can start from an earlier net file instead of from scratch: its token tables, its standardization and its weights, read back from its ONNX graph (`export.weights`). The second head, not in the file, starts anew. A net of this structure goes on only from a net of this structure.
 
-| net | started from | held-out loss | $R^2$ | best epoch |
-|---|---|---|---|---|
-| baseline (each floor's average hazard) | – | 1.9558 | 0.205 | – |
-| v6-3-1 | scratch | 1.7926 | 0.355 | 3 of 9 |
-| v6-3-2 | v6-2's weights | 1.7736 | 0.369 | 1 of 7 |
+**On the GPU**, a batch's tensors are built from the samples as lists, then one tensor each. Each training runs on one GPU.
 
-$R^2$ measures how well V tells apart states of different runs. A decision only needs V to order the options of one state correctly, which $R^2$ does not measure; that is why every net is judged by playing ([Self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
+## 6. The report
 
-## 5. Labels that did and did not help
+The trainer prints a report and writes it into the net file (`fit`). All of it is measured on the held-out runs:
 
-Before the elite gauntlet, pure V's first nets (on 1,617 whole runs) tried simulated boss fights as extra labels. Each was judged by 200 SL runs on `promotion-1`:
+| field | what |
+|---|---|
+| `runs`, `held_out_runs`, `samples`, `won` | what the training read |
+| `vocab` | each token table's size |
+| `held_out_loss`, `held_out_loss_floor_only` | the hazards' loss, against the baseline's, which knows only the floor |
+| `held_out_next_combats` | the second head's error |
+| `r2_held_out`, `r2_held_out_floor_only` | the $R^2$ of the expected floor against the floor reached, and the baseline's |
+| `brier_held_out`, `brier_held_out_floor_only` | the Brier score of P(win): the weighted mean of (predicted chance − won)², and the baseline's |
+| `won_held_out_runs` | how many held-out runs were won |
 
-| net | extra labels | floor | paired difference |
-|---|---|---|---|
-| pure-1 | none | 22.64 | +7.35 ± 0.62 against random macro decisions |
-| pure-1-b | each card reward option's deck fights the act's boss (boss sims) | 21.44 | −1.21 ± 0.67 against pure-1 |
-| pure-1-d | each run's loadout at the boss's door, fought at the HP it entered with and at three shares of max HP (door states) | 24.77 | +2.12 ± 0.70 against pure-1 |
-| pure-1-g | door states from a boss gauntlet pilot too (acts 1–3) | 25.69 | +0.93 ± 0.58 against pure-1-d |
-
-Measured boss fights helped when they described the run's real loadout at the door, and hurt as a label for one card choice (the simulated fight's odds are far from real play's). The lesson led to the elite gauntlet, in which bosses and elites are simply fought in every run ([Self-play §1](/en/arch/macro-brain/selfplay/#sec-1)). The details of these labels are in [Learning: the value function §10](/en/arch/learning/value/#sec-10).
-
-## 6. Which objective decides
-
-V's value has changed twice, each time because the previous one had stopped being informative:
-
-1. **Expected floor** (`floor`). While no run wins, P(win) is 0 everywhere and has no signal; the floor reached does. But it weighs every floor the same, and can prefer a safe line that reliably reaches act 2 to a riskier one that sometimes wins. It is a stopgap.
-2. **Expected progress** (`progress`, the elite gauntlet). Most gauntlet runs end at a boss, so the floor alone cannot tell a run that took 60% of a boss's HP from one that took 10%; the share can.
-3. **P(win)** (`win`), once runs win now and then. Whole SL runs with v6-3-2 win 23 of 300, so the condition holds, and the next plan trains a whole-run V that decides by P(win) ([Weaknesses and next steps §2](/en/arch/macro-brain/next/#sec-2)).
+$R^2$ and the Brier score measure how well V tells apart states of different runs. A decision only needs V to order the options of one state correctly, which neither measures. That is why every net is judged by playing ([Self-play §5](/en/arch/macro-brain/selfplay/#sec-5)).

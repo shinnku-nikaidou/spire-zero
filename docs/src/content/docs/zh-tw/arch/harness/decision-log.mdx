@@ -95,7 +95,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 **`run_view`**，在每一行宏觀決策上：大腦看到的整局觀測，約 6 KB（[協定：觀測與動作 §2](/zh-tw/arch/protocol/observation/#sec-2)）。V 就用它訓練（[宏觀大腦：從風險值到價值](/zh-tw/arch/macro-brain/value/)）。
 
-**`features`**，在每一行宏觀決策上，不管是哪個大腦做的決定：V v0 在整局觀測上手工設計的特徵（樓層、生命值、最大生命值、金幣、藥水、遺物、牌、無法打出的牌、升級，牌組的平均傷害、格擋和抽牌，以及前方預計會遇到的菁英、休息處、商店、財寶和未知）。V v0 的擬合和 V v2 的訓練讀的就是它們；兩者都已刪除，純 V 不讀它們（[學習：價值函數 §3](/zh-tw/arch/learning/value/#sec-3)）。
+**`features`**，在每一行宏觀決策上，不管是哪個大腦做的決定：V v0 在整局觀測上手工設計的特徵（樓層、生命值、最大生命值、金幣、藥水、遺物、牌、無法打出的牌、升級，牌組的平均傷害、格擋和抽牌，以及前方預計會遇到的菁英、休息處、商店、財寶和未知）。現在沒有訓練器讀它們，V 的網路也不讀（[學習：參考 §8](/zh-tw/arch/learning/reference/#sec-8)）。
 
 戰鬥外的選牌提示既沒有 `run_view` 也沒有 `features`。
 

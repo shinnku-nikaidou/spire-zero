@@ -137,6 +137,7 @@ The figure opens the champions' two files, v6-3-2.json and c2.json, field by fie
 - **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than 10⁻³ × max(1, |value|) (`:78-91`); `CombatNet.Load` predicts every test state and refuses it if any class or the potions are off by more than 10⁻³, or the outcome's length differs (`Brain/Combat/CombatNet.cs:65-80`). This keeps the encoding and the forward pass the same in training and in play.
 - **`CombatNet`** reads its outputs by position (so c1's older head would be read as HP lost) and prices them with `LeafValue`'s prices or, with `--leaf-prices v`, V's ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
 - **Cost.** v6-3-2 takes 0.093 ms a call, a full-size encoders' net 0.44 ms, against 70–90 ms a macro decision with the clone (commit `b0ec4b7`); V v2 took about 0.9 ms a macro decision (`648026c`). The combat net's cost is lost in the game's simulation: nets of width 0.5, 1 and 2 searched at the same 1.58–1.76 s per action ([Training the combat net §6](/en/arch/learning/combat-net/#sec-6)).
+- **V v0** (`RunValue`, `Brain/Macro/RunValue.cs`): 17 features of the run view times linear weights, the macro brain's V when `run --value` names no file. The features (`RunValue.cs:68-92`): the floor, HP, max HP, gold, the potions held, the relics, the cards in the deck, the unplayable cards, the upgraded cards; the mean damage (poison included), block and draw of the playable cards; and the expected number of elites, rest sites, shops, treasures and `?` points from the current point to the boss, if each step took a random path. They are still written on every macro line of the decision log and into every afterstate, whatever V decides (`RunValue.cs:15-16`; [Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)). No champion plays it.
 - **`OLD NETS`.** Code in `src/` that only V v0, V v2 and the combat nets c1–c4 use is marked `OLD NETS` (commit `28fc273`) and stays while a champion plays one of them. No champion plays V v0 or V v2 since 2026-10-30; c2, which reads `costs` (`CombatNet.cs:133-135`), is both champions' leaf. V v0's features still go into every macro log line and afterstate.
 
 ## 9. Scripts
@@ -151,7 +152,7 @@ The figure opens the champions' two files, v6-3-2.json and c2.json, field by fie
 | `start_sim`, `wait_sims` | start simulator commands with their output in a log file; fail with the first failed one's last 12 log lines (`:104-119`) |
 | `out_path(name, out, character)` | where a weights file goes ([§6](#sec-6)) |
 
-### `v.train`: pure V
+### `v.train`: V
 
 `uv run python -m v.train --list PREFIX --name NAME [options]` (`learn/v/train.py:177-209`).
 
@@ -188,7 +189,7 @@ The figure opens the champions' two files, v6-3-2.json and c2.json, field by fie
 | `held_out_next_combats` | always | the second head's held-out squared error |
 | `r2_held_out`, `r2_held_out_floor_only` | always | $R^2$ of V's value (expected floor or progress) against the floor (or progress) reached |
 | `won_held_out_runs`, `brier_held_out`, `brier_held_out_floor_only` | whole runs | the held-out runs won, and the Brier score of the chance to win, against the baseline's |
-| `boss_sims`, `held_out_boss_sims`, `boss_worth`, `held_out_boss_loss`, `boss_decisions`, `boss_agree`, `boss_corr` | boss sims | [The value function §10](/en/arch/learning/value/#sec-10) |
+| `boss_sims`, `held_out_boss_sims`, `boss_worth`, `held_out_boss_loss`, `boss_decisions`, `boss_agree`, `boss_corr` | boss sims | [§9](#sec-9) |
 | `doors`, `held_out_doors`, `held_out_door_loss`, `door_corr` | door states | the same |
 | `explore_decisions`, `explore_share_logs`, `explore_temperature` | afterstates | the held-out logged decisions, the share the logs' brains explored, and the temperature at which this V would explore as often |
 
@@ -228,6 +229,10 @@ The v6 nets' files predate `objective`, `encoders` and the Brier fields in their
 | `collect` | `--decisions`, `--results`, `--out` | joins the outputs back: each option's `fights` (won, HP, HP at the start, the enemy's HP and max HP, rounds) and `failed` |
 | `compare DECISIONS RESULTS` | – | on the decisions with every option played twice: how often the fights' best is V's best and the run's pick, how often seed 1's best is seed 2's, and the score regrets |
 
+**Boss sims** (`v.train --boss-sims FILES --boss-afterstates FILES`; `tasks`, `play`, `collect`). At a card reward, each option's afterstate fights its act's boss a few times with the SL planner, at a fixed share of max HP, with the same seeds for every option of a decision. The fights' absolute odds are far from real play's, so they give no hazard label, and only the options' differences within a decision count. The **boss score** (`bosslab.py:378-383`): a win is 0.5 plus half the share of max HP left, a loss half the share of the boss's HP taken. V's expected floors less the decision's mean are fitted to the scores less the decision's mean, times $2k$ floors per unit of score, where $k$, one per act, is the mean floor reached by the runs that beat that boss, less the boss floor (`boss_worth`, `learn/v/data.py:149-156`). The score is also the second head's seventh target. A `win` net refuses boss sims, whose targets are floors.
+
+**Door states** (`v.train --boss-states FILES`; `doors`, `states`). A run's whole loadout at an act boss's door fights the boss at the HP it entered with and at shares of max HP. The second head learns their boss scores, which shapes the body only. Door states came mostly from the boss gauntlet pilot (`run --auto-win`, [Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)), whose records never count as runs (`--door-logs FILES` reads only their views).
+
 A loadout is the afterstate's deck, relics and potions; cards keep their upgrade levels and enchantments; used-up or disabled relics are left out (`loadout`, `:70-93`).
 
 ### Removed scripts
@@ -258,7 +263,7 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 | `afterstates`, `fork` | every logged decision's options with their values; counterfactual pairs ([The loop §10](/en/arch/learning/loop/#sec-10)) |
 | `panel` | a fixed fight played by a policy, which `bosslab.py`'s tasks are |
 | `report`, `gate`, `leaderboard` | reports, the SPRT gate, the leaderboards ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6), [Evaluation: metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)) |
-| `ranks` | V's card sense ([The value function §11](/en/arch/learning/value/#sec-11)) |
+| `ranks` | V's card sense: `ranks --logs LOGS [--value FILE] [--per-act 200] [--top 30]` (`SimWorker/Commands/EvalCommands.cs:175-232`): per act, each card's mean change of V when one more copy joins the decks of a sample of the logs' card rewards. A mean for reading, not a test |
 | `weights` | V v0's initial weights as a weights file (`--leaf`: the leaf weights); its help still says "for tuning to start from" |
 
 ## 11. Tests
@@ -289,7 +294,7 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 
 ## 12. Open questions
 
-1. Whether plan v7 works: whole-run self-play, V by P(win) and a gate on wins, with no net trained yet ([Learning §4](/en/arch/learning/#sec-4)).
+1. Whether plan v7 works: whole-run self-play, V by P(win) and a gate on wins, with no net trained yet ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)).
 2. How to check P(win)'s calibration once V decides by it, beyond the Brier score.
 3. Each decision's label carries its run's later draws. A cut point per run would remove them: draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained ([The loop §9](/en/arch/learning/loop/#sec-9)). Deferred again for plan v7.
 4. Whether TD(λ) or expert iteration would help V, whose labels are Monte Carlo only.

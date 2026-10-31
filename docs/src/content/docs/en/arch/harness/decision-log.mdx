@@ -95,7 +95,7 @@ A combat step drawn instead of the search's pick keeps its `candidates` but has 
 
 **`run_view`**, on every macro line: the run view the brain was shown, about 6 KB ([Protocol: observations and actions §2](/en/arch/protocol/observation/#sec-2)). V is trained on it ([Macro brain: value](/en/arch/macro-brain/value/)).
 
-**`features`**, on every macro line, whatever brain decided: V v0's hand-made features of the run view (floor, HP, max HP, gold, potions, relics, cards, unplayable cards, upgrades, the deck's mean damage, block and draw, and the elites, rest sites, shops, treasures and unknowns expected ahead). V v0's fit and V v2's training read them; both are removed, and pure V does not read them ([Learning: the value function §3](/en/arch/learning/value/#sec-3)).
+**`features`**, on every macro line, whatever brain decided: V v0's hand-made features of the run view (floor, HP, max HP, gold, potions, relics, cards, unplayable cards, upgrades, the deck's mean damage, block and draw, and the elites, rest sites, shops, treasures and unknowns expected ahead). No trainer reads them now, and V's net does not ([Learning: reference §8](/en/arch/learning/reference/#sec-8)).
 
 Card prompts outside combat get neither `run_view` nor `features`.
 

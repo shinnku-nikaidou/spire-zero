@@ -21,7 +21,7 @@ const protocol = ['arch/protocol', 'arch/protocol/wire', 'arch/protocol/observat
 const gamebridge = ['arch/gamebridge', 'arch/gamebridge/observe', 'arch/gamebridge/actions'];
 const harness = ['arch/harness', 'arch/harness/routing', 'arch/harness/decision-log'];
 const mod = ['arch/mod', 'arch/mod/loop', 'arch/mod/sl-record', 'arch/mod/auto'];
-const learning = ['arch/learning', 'arch/learning/value', 'arch/learning/combat-net', 'arch/learning/loop', 'arch/learning/experiments', 'arch/learning/reference'];
+const learning = ['arch/learning', 'arch/learning/combat-net', 'arch/learning/loop', 'arch/learning/reference'];
 const evaluation = ['arch/evaluation', 'arch/evaluation/metrics', 'arch/evaluation/gates', 'arch/evaluation/champions'];
 const macroBrain = [
   'arch/macro-brain',
@@ -58,7 +58,7 @@ const book = [
     translations: { 'zh-TW': '第四部　機器', en: 'Part IV: The machinery' },
     items: [{ label: '模拟器', translations: { 'zh-TW': '模擬器', en: 'Simulator' }, items: simulator }, { label: 'Harness', translations: { 'zh-TW': 'Harness', en: 'Harness' }, items: harness }, { label: '协议', translations: { 'zh-TW': '協定', en: 'Protocol' }, items: protocol }, { label: 'GameBridge', translations: { 'zh-TW': 'GameBridge', en: 'GameBridge' }, items: gamebridge }, { label: 'Mod', translations: { 'zh-TW': 'Mod', en: 'Mod' }, items: mod }, 'arch/output'],
   },
-  { label: '附录', translations: { 'zh-TW': '附錄', en: 'Appendices' }, items: ['status', 'glossary'] },
+  { label: '附录', translations: { 'zh-TW': '附錄', en: 'Appendices' }, items: ['status', 'glossary', 'arch/learning/experiments'] },
 ];
 
 // Numbered headings ("## 5." / "### 5.1") get the id "sec-5" / "sec-5.1" in every

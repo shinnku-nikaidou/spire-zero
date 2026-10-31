@@ -15,7 +15,7 @@ Every search stops somewhere. PIMC stops at the end of the turn; the SL planner 
 A leaf is either a state at the start of a turn, after the enemies' turn has been played for real, or the end of the fight, won or lost. Both are valued by the same function, `ICombatLeaf.Value(status, observation, history)`: a lost fight is worth nothing, a won one by what it leaves, and a fight in progress by what it is expected to leave.
 
 - **Observation only.** The leaf reads what the player sees, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)). It never reads the draw order or a random stream, so it cannot leak hidden state, in either environment.
-- **One scale.** Its unit is the run's: a share of a win, P(win run) as the design states it ([Learning: the value function §1](/en/arch/learning/value/#sec-1)). The weights below make it that only roughly; with V's prices it is V's unit ([§5](#sec-5)).
+- **One scale.** Its unit is the run's: a share of a win, P(win run) as the design states it ([Macro brain: from hazards to value §1](/en/arch/macro-brain/value/#sec-1)). The weights below make it that only roughly; with V's prices it is V's unit ([§5](#sec-5)).
 - **Ordering, more than level.** A search uses the leaf to compare lines: what matters is that a better state gets a higher value. A leaf that rates every state 0.1 too high plays the same as one that does not.
 
 ## 2. The hand-made leaf: LeafValue
@@ -51,13 +51,13 @@ The combat net (`CombatNet`, `--combat-net FILE`) replaces the projection with a
 
 Nothing about a monster's moves is written by hand. From the monster's id, the round and its last intents, the net can learn each monster's move order, and where in it the monster is, from data. With a next-intent head (since dropped) it named the next round's intent type for 57.7% of the enemies, against 28.9% for repeating the current one, and most of its misses were moves the game rolls at random ([NoSL PIMC §1](/en/arch/pimc/#sec-1)).
 
-**How it reads them.** The same set encoder as the macro brain's V ([Macro brain: the value network §2](/en/arch/macro-brain/network/#sec-2)): each card is the sum of learned vectors (its id's, its upgrade level times its id's upgrade vector, its modifiers' and its pile's), a small MLP maps each card, and each pile is the sum of its cards (× 1/8). An enemy's slot is the sum of its intents (the type's vector plus damage / 10 and total damage / 20 times vectors of that type); an MLP maps each enemy with its powers and slots, and the enemies are summed. Relics, potions and the context are sums of their vectors. Two layers of 256 then give the head. A sum ignores order and reads any number of cards or enemies, which is what a pile and a fight need.
+**How it reads them.** A set encoder (a *Deep Set*, Zaheer et al., 2017: a function of the sum of its elements' vectors gives the same output for every order and reads sets of any size): each card is the sum of learned vectors (its id's, its upgrade level times its id's upgrade vector, its modifiers' and its pile's), a small MLP maps each card, and each pile is the sum of its cards (× 1/8). An enemy's slot is the sum of its intents (the type's vector plus damage / 10 and total damage / 20 times vectors of that type); an MLP maps each enemy with its powers and slots, and the enemies are summed. Relics, potions and the context are sums of their vectors. Two layers of 256 then give the head. A sum ignores order and reads any number of cards or enemies, which is what a pile and a fight need.
 
 The diagram draws c2 as its net file's graph has it, from the inputs at the bottom to the outcome at the top; point at a block for its shape and formula.
 
 <ArchDiagram client:visible lang="en" net="combat" />
 
-c2, the champions' net, was trained on 315 NoSL self-play runs (13,954 round starts) and also reads each card's cost; the newer nets of `learn/combat/` read ids and raw state alone, as pure V does ([Learning: the value function §6](/en/arch/learning/value/#sec-6)). A net file names the inputs its graph takes, and `CombatNet` feeds only those, so old and new nets load alike. The training (samples, targets, loss, held-out runs) is in [Learning: training the combat net](/en/arch/learning/combat-net/).
+c2, the champions' net, was trained on 315 NoSL self-play runs (13,954 round starts) and also reads each card's cost; the newer nets of `learn/combat/` read ids and raw state alone, as the macro brain's V does ([Macro brain: the value network §2](/en/arch/macro-brain/network/#sec-2)). A net file names the inputs its graph takes, and `CombatNet` feeds only those, so old and new nets load alike. The training (samples, targets, loss, held-out runs) is in [Learning: training the combat net](/en/arch/learning/combat-net/).
 
 ## 4. The head: how the fight ends
 

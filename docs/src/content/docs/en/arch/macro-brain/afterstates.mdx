@@ -4,8 +4,6 @@ description: Why the macro brain values the situation right after each option, w
 sidebar:
   label: Afterstates and one V
 ---
-import { Aside } from '@astrojs/starlight/components';
-import DecisionBars from '../../../../../components/v/DecisionBars.svelte';
 
 A decision outside combat is a choice among a few options whose effects last for the rest of the run. This section explains the one idea the macro brain is built on: value the *situation right after* each option with a single learned function, instead of valuing the options themselves.
 
@@ -25,30 +23,20 @@ Three properties follow:
 
 - **One function for every surface.** V reads a run (deck, relics, potions, HP, gold, the map ahead) and nothing about the screen it came from, so the same V scores a map, a shop and a rest site ([§2](#sec-2)).
 - **Cheap options.** A decision has a handful of options, and applying one costs a few milliseconds in the real game ([Search §6](/en/arch/macro-brain/search/#sec-6)). Every option can be tried; nothing has to be guessed or pruned.
-- **Data from every decision.** Each logged decision's run view, whatever the surface, is a training sample for the same V ([From hazards to value §2](/en/arch/macro-brain/value/#sec-2)).
+- **Data from every decision.** Each logged decision's run view, whatever the surface, is a training sample for the same V ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
 
 ## 2. One scale for every surface
 
 Every option is scored by the same V in the same unit, so options of different kinds are compared directly: an upgrade against a heal, a relic against a potion and a card removal, a monster fight against a rest site. Nothing converts HP into gold or a relic into HP by hand. That conversion is what V learns from how runs end.
 
-The unit is V's *objective*. For the current V it is the expected **progress**: the floor the run is expected to reach, plus, for a run that ends in a combat, the share of the enemies' HP taken in it ([From hazards to value §1](/en/arch/macro-brain/value/#sec-1)). A difference of 0.5 between two options means V expects the run to end half a floor later with one than with the other.
+The unit is the **chance to win the run** ([From hazards to value §2](/en/arch/macro-brain/value/#sec-2)). A difference of 0.02 between two options means V gives the run 2 percentage points more chance to win with one than with the other.
 
-The figure takes four real decisions of the run in the [chapter's opening](/en/arch/macro-brain/), applies each option to the run as the screen shows it, and values every afterstate with v6-3-2 in your browser. Each dot is an option's gap to the best one, in floors.
+The surfaces ask very different questions, and all of them come down to that one number:
 
-<DecisionBars client:visible lang="en" start="rest" />
-
-What the four decisions show:
-
-- **Rest site, floor 25, HP 38 of 70.** Resting heals to 59 HP; smithing upgrades Outbreak. V values the rest 0.41 floors higher. For comparison, V's value of the state itself, with no option taken, moves by about 0.08 floors per HP here: 40.95 at 38 HP, 42.05 at 50, 42.62 at 59.
-- **Card reward, floor 2.** Sucker Punch, Cloak and Dagger, Footwork or skip. V values Sucker Punch best, 2.1 floors above Footwork, which it values below skipping.
-- **Map, floor 43, HP 24 of 66.** A monster fight or a rest site, five floors before the act 3 boss. V values the monster 0.12 floors higher, at 36% of max HP. That choice is a known weakness of a V trained in the elite gauntlet, where monster fights cost nothing ([Weaknesses and next steps §1](/en/arch/macro-brain/next/#sec-1)); the run still won.
-- **Shop, floor 13, 287 gold.** Thirteen items, a card removal and leaving. Valued one step at a time from the screen, removing a card is best; L0 on the clone, which plays the shop as a sequence of purchases and the removal prompt itself, bought a relic ([Search §3](/en/arch/macro-brain/search/#sec-3)).
-
-<Aside>
-
-The values in the figure are V's values of the afterstates *as the screen shows them*: the card added, the HP healed, the item bought. They are the values `sim afterstates` logged for these decisions, which `pnpm check` compares with the page's own V. The run itself was played by L0 on the clone, which plays each option in the real game and searches on through the node's screens, so its values can differ, as in the shop.
-
-</Aside>
+- **Rest site.** Resting heals; smithing upgrades a card. V compares the run with more HP to the run with a better deck.
+- **Card reward.** Each card, or skipping. A card can be worth less than nothing: a deck with one more weak card draws its good cards less often.
+- **Map.** A monster fight or a rest site, say, a few floors before a boss. The fight gives gold and a card and costs HP; V compares what the two next points lead to along their paths.
+- **Shop.** Items, a card removal and leaving, for one purse of gold. Valued one step at a time from the screen, the best first purchase can differ from the best sequence; L0 on the clone plays the shop as a sequence of purchases and the removal prompt itself ([Search §3](/en/arch/macro-brain/search/#sec-3)).
 
 ## 3. Random afterstates and the two environments
 
@@ -75,8 +63,8 @@ In principle SL would also value states differently: from the same state SL wins
 
 Two other designs come up naturally, and both were weighed against the single V.
 
-**Two networks, one for the deck and one for the route.** Card picks feel like a different problem from paths and potions: the first is about combinations (does this card work with the relics I have), the second about resources and risk (can I survive the next elite). But no line separates them. Relics come from elites (a route decision) and shops (a purchase), and their value depends on the deck; a shop sells cards, relics, potions and a removal for one purse of gold; a rest site trades HP against an upgrade; events trade HP for cards or relics. Splitting the value in two needs either an exchange rate between the two networks' outputs, written by hand, which is what V v0 had (a potion worth 8 HP, an upgrade 3) and what made n2-b0.03, a net that read V v0's features, rest at 70–85% HP 99% of the time ([The value network §1](/en/arch/macro-brain/network/#sec-1)), or a third network that learns to combine them from the run's outcome, which is a single V again. Each half would also see only part of the data while needing to read the whole run.
+**Two networks, one for the deck and one for the route.** Card picks feel like a different problem from paths and potions: the first is about combinations (does this card work with the relics I have), the second about resources and risk (can I survive the next elite). But no line separates them. Relics come from elites (a route decision) and shops (a purchase), and their value depends on the deck; a shop sells cards, relics, potions and a removal for one purse of gold; a rest site trades HP against an upgrade; events trade HP for cards or relics. Splitting the value in two needs either an exchange rate between the two networks' outputs, written by hand, which is a strategy written by hand ([The value network §2](/en/arch/macro-brain/network/#sec-2)), or a third network that learns to combine them from the run's outcome, which is a single V again. Each half would also see only part of the data while needing to read the whole run.
 
-**A policy network.** A network that maps a screen directly to a choice, as AlphaZero's policy does, would need a teacher. Imitating L0 can at best match L0; a policy gradient on run outcomes is far noisier than V's targets; and a search stronger than the policy, which AlphaZero relies on, is what L0 already does by trying every option. A policy would save the clone's cost (about a fifth of a gauntlet run's time, [Search §6](/en/arch/macro-brain/search/#sec-6)) and lose what the clone shows. It becomes useful when NoSL needs a fast brain without a clone: distilling SL's L0 into a policy is a candidate then.
+**A policy network.** A network that maps a screen directly to a choice, as AlphaZero's policy does, would need a teacher. Imitating L0 can at best match L0; a policy gradient on run outcomes is far noisier than V's targets; and a search stronger than the policy, which AlphaZero relies on, is what L0 already does by trying every option. A policy would save the clone's cost ([Search §6](/en/arch/macro-brain/search/#sec-6)) and lose what the clone shows. It becomes useful when NoSL needs a fast brain without a clone: distilling SL's L0 into a policy is a candidate then.
 
-So the macro brain keeps one V and one score. The distinction between building a deck and choosing a route moves inside V, as two encoders feeding one body, which is a next step ([Weaknesses and next steps §2](/en/arch/macro-brain/next/#sec-2)).
+So the macro brain keeps one V and one score. The distinction between building a deck and choosing a route lives inside V, as two encoders feeding one body ([The value network §1](/en/arch/macro-brain/network/#sec-1)).

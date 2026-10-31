@@ -11,17 +11,17 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 本章讲 AI 中靠学习而不是靠手写得来的部分，以及让它们变得更好的循环。学的东西有两样：宏观大脑的价值函数 V，它给战斗外的每个局面打分；以及战斗网络，它告诉战斗搜索，前瞻尽头的状态值多少。两者都从 AI 自己打的对局中学习。对其中任何一个的改动，只有通过晋级门槛才会取代当前版本：晋级门槛是在固定种子上与正在使用的版本做的配对测试。
 
-先读：[宏观大脑](/arch/macro-brain/)，了解 V 用来做什么；[战斗大脑：叶子](/arch/combat-brain/leaf/)，了解战斗网络在搜索中做什么。宏观大脑一章还详细讲解了 V 的网络和它的训练标签（[宏观大脑：价值网络](/arch/macro-brain/network/)、[宏观大脑：从风险值到价值](/arch/macro-brain/value/)）；本章链接到那里而不重复，只讲那里没有的内容：V 的每个版本、战斗网络的训练、整个循环及其已用或计划使用的方法、实测的历史，以及文件和脚本。
+先读：[宏观大脑](/arch/macro-brain/)，了解 V 用来做什么；[战斗大脑：叶子](/arch/combat-brain/leaf/)，了解战斗网络在搜索中做什么。宏观大脑一章还详细讲解了 V 的网络和它的训练标签（[宏观大脑：价值网络](/arch/macro-brain/network/)、[宏观大脑：从风险值到价值](/arch/macro-brain/value/)）；本章链接到那里而不重复，只讲那里没有的内容：战斗网络的训练、整个循环及其已用或计划使用的方法，以及文件和脚本。
 
 <Aside title="状态">
 
-已实现：纯 V 的训练器 `learn/v/`（`v.train`）和战斗网络的训练器 `learn/combat/`（`combat.train`），两者都用蒙特卡洛目标（每个决策的标签是它所在对局真实的结局）；自我对弈的均匀抽取探索（`run --explore ε`）；`learn/gauntlet.py`，一个 V 的对局的报告和配对门槛；`learn/challenge.py`，驱动模拟器的序贯门槛；`learn/bosslab.py`，Boss 战标签。计划 v7 的代码也已实现：按胜率做决定的 V（`v.train --objective win`）、编码器网络（`--encoders`）和按配对胜局判定的门槛；它的第一代自我对弈正由冠军 V v6-3-2 来打，这个计划的网络还一个都没训练（[§4](#sec-4)）。两个冠军都用 V v6-3-2 和战斗网络 c2。已删除：V v0 的拟合、SPSA 调参、V v2 的训练器和第一个战斗训练器（它们的网络仍能加载）。规划中、尚未实现：TD(λ) 目标、专家迭代、LLM 补丁提案、奖励塑形、特权训练，以及均匀抽取之外对抗局部最优的机制（[循环](/arch/learning/loop/)）。
+已实现：V 的训练器 `learn/v/`（`v.train`）和战斗网络的训练器 `learn/combat/`（`combat.train`），两者都用蒙特卡洛目标（每个决策的标签是它所在对局真实的结局）；自我对弈的均匀抽取探索（`run --explore ε`）；`learn/gauntlet.py`，一个 V 的对局的报告和配对门槛；`learn/challenge.py`，驱动模拟器的序贯门槛；`learn/bosslab.py`，Boss 战标签。规划中、尚未实现：TD(λ) 目标、专家迭代、LLM 补丁提案、奖励塑形、特权训练，以及均匀抽取之外对抗局部最优的机制（[循环](/arch/learning/loop/)）。
 
 </Aside>
 
 ## 1. 学什么
 
-**宏观大脑的 V**。在战斗外，宏观大脑把一个决策的每个选项都打一遍，看紧接着它的局面（*后状态*），然后选 V 给后状态估值最高的那个选项（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。V 是一个神经网络，读入这一局是什么（它的卡牌、遗物、药水、幕和 Boss 的 id，以及前方的地图）和六个原始数字，返回一个数。理想情况下，这个数是从这里赢下这一局的概率；在对局偶尔能赢之前，它是一个代理量：这一局预计到达的层数（[价值函数 §2](/arch/learning/value/#sec-2)）。一个 V 给每个决策界面（surface）打分，所以一张牌、一件遗物、一次回血和地图上的一条路线在同一个尺度上比较，不需要手写的兑换比率。
+**宏观大脑的 V**。在战斗外，宏观大脑把一个决策的每个选项都打一遍，看紧接着它的局面（*后状态*），然后选 V 给后状态估值最高的那个选项（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。V 是一个神经网络，读入这一局是什么（它的卡牌、遗物、药水、幕和 Boss 的 id，以及前方的地图）和六个原始数字，返回一个数，即从这里赢下这一局的概率（[宏观大脑：从风险值到价值 §1](/arch/macro-brain/value/#sec-1)）。一个 V 给每个决策界面（surface）打分，所以一张牌、一件遗物、一次回血和地图上的一条路线在同一个尺度上比较，不需要手写的兑换比率。
 
 **战斗网络**。战斗搜索向前看一个回合或一整场战斗，然后必须说出它到达的状态值多少：它的*叶节点价值*。战斗网络读入一个回合的开始，预测这场战斗会怎样结束：死亡，或者还要再损失多少最大生命值（分成 50 个桶），以及还要用掉的药水（[战斗大脑：叶子 §3](/arch/combat-brain/leaf/#sec-3)、[§4](/arch/combat-brain/leaf/#sec-4)）。它的训练见[训练战斗网络](/arch/learning/combat-net/)。
 
@@ -52,51 +52,29 @@ flowchart LR
 2. **拟合**。在这些对局上训练一个新的 V（或战斗网络）。每个决策的标签是它所在对局实际的结局，即*蒙特卡洛*目标（[循环 §3](/arch/learning/loop/#sec-3)）。TD(λ) 和专家迭代还会从搜索算出的价值中学习，它们在规划中（[§4](/arch/learning/loop/#sec-4)、[§5](/arch/learning/loop/#sec-5)）。
 3. **门槛**。挑战者打固定的评估种子，逐个种子与冠军的对局配对，只有差值明显大于零时才通过（[循环 §8](/arch/learning/loop/#sec-8)）。
 
-一*代*就是这个循环转一圈。计划 v6 为宏观 V 跑了三代（[宏观大脑：自我对弈 §3](/arch/macro-brain/selfplay/#sec-3)）；计划 v7 的第一代正在打（[§4](#sec-4)）。
+一*代*就是这个循环转一圈（[宏观大脑：自我对弈 §4](/arch/macro-brain/selfplay/#sec-4)）。
 
 ## 3. 已实现与规划中
 
 | 部分 | 状态 | 位置 |
 |---|---|---|
-| 自我对弈：整局或精英连战，以 ε 均匀抽取 | 已实现 | `run --explore`，[循环 §2](/arch/learning/loop/#sec-2) |
+| 自我对弈：整局，以 ε 均匀抽取 | 已实现 | `run --explore`，[循环 §2](/arch/learning/loop/#sec-2) |
 | 按 V 或搜索的估值做 softmax 探索 | 已实现，只有较早的作业用过 | `run --macro-explore`、`--combat-explore`，[循环 §9](/arch/learning/loop/#sec-9) |
-| V 的训练，蒙特卡洛标签 | 已实现 | `learn/v/`，[价值函数 §6](/arch/learning/value/#sec-6) |
+| V 的训练，蒙特卡洛标签 | 已实现 | `learn/v/`，[宏观大脑：从风险值到价值 §5](/arch/macro-brain/value/#sec-5) |
 | 战斗网络的训练，蒙特卡洛标签 | 已实现，还没用它训练出网络 | `learn/combat/`，[训练战斗网络](/arch/learning/combat-net/) |
-| V 的 Boss 战标签（Boss 模拟战、门前状态） | 已实现，计划 v6 起不再使用 | `learn/bosslab.py`，[价值函数 §10](/arch/learning/value/#sec-10) |
+| V 的 Boss 战标签（Boss 模拟战、门前状态） | 已实现，未使用 | `learn/bosslab.py`，[参考 §9](/arch/learning/reference/#sec-9) |
 | 反事实分叉 | 作为命令已实现；现在没有训练器读它们 | `fork`、`afterstates`，[循环 §10](/arch/learning/loop/#sec-10) |
-| 门槛：模拟器的 SPRT，进度或胜局的配对下界 | 已实现 | `gate`、`learn/challenge.py`、`learn/gauntlet.py`，[循环 §8](/arch/learning/loop/#sec-8) |
+| 门槛：模拟器的 SPRT，胜局的配对下界 | 已实现 | `gate`、`learn/challenge.py`、`learn/gauntlet.py`，[循环 §8](/arch/learning/loop/#sec-8) |
 | TD(λ) 目标 | <Badge text="规划中" variant="caution" /> | [循环 §4](/arch/learning/loop/#sec-4) |
 | 专家迭代（搜索价值作标签，学到的先验） | <Badge text="规划中" variant="caution" /> | [循环 §5](/arch/learning/loop/#sec-5) |
 | 用 SPSA 调手设的权重 | 已删除（`9b9d170`） | [循环 §6](/arch/learning/loop/#sec-6) |
 | LLM 补丁提案 | <Badge text="规划中" variant="caution" /> | [循环 §7](/arch/learning/loop/#sec-7) |
 | 基于势函数的奖励塑形、特权训练、对抗局部最优的存档库 | <Badge text="规划中" variant="caution" /> | [循环 §11](/arch/learning/loop/#sec-11)–[§13](/arch/learning/loop/#sec-13) |
 
-## 4. 计划 v7：循环走到了哪里
+## 4. 本章内容
 
-计划 v6 在*精英连战*里训练和评判 V：这是一种简化的对局，普通怪物战斗一开始就判赢，只有精英和 Boss 要真打（[宏观大脑：自我对弈 §1](/arch/macro-brain/selfplay/#sec-1)）。它第三代的网络 v6-3-2 在 2026-10-30 成为两个冠军的 V；在整局 SL 对局里它 300 局赢 23 局，而 v6-2 只赢过 1 局，更早的 V 一局都没赢过。连战里的排序并不总能带到整局，而且 v6-3-2 输掉的对局约有一半输在两个 Boss 之间，那里的怪物战斗在连战里不花代价（[宏观大脑：弱点与下一步 §1](/arch/macro-brain/next/#sec-1)）。
-
-因此计划 v7 回到整局，它的代码已经实现（提交 `7ce03bd`、`4c36cad`、`b0ec4b7`、`d4ae095`）：
-
-- **自我对弈打完整的游戏**，每场战斗都由 SL 规划器以 low 预算来打，ε 为 0.3、0.15 和 0.05 的均匀抽取各占三分之一的对局。每一代是每档一个限时作业，共用一个截止时间（[参考 §1](/arch/learning/reference/#sec-1)）。
-- **V 按胜率做决定**。`v.train --objective win` 把赢下的对局标为活过每一层，所以风险值输出头给出的活过所有层的概率就是 P(win)（[价值函数 §8](/arch/learning/value/#sec-8)）。报告另外给出这个概率在留出数据上的 Brier 分数。
-- **门槛比较胜局**，在 `promotion-1-500` 的 500 个种子上按种子配对，用冠军的 medium 规划器预算：挑战者胜局平均差值的 95% 单侧下界大于 0 时通过（`learn/gauntlet.py --against`，[循环 §8](/arch/learning/loop/#sec-8)）。
-- **每代两个网络**：从冠军的权重接着训练的纯 V（v7-1 接着 v6-3-2 训练），以及编码器网络，它用自注意力读配置，把地图当作图来读（v7-1e 从零开始）（[宏观大脑：价值网络 §4](/arch/macro-brain/network/#sec-4)）。如果两个都通过，胜局多的那个取代两个冠军文件里的 V。
-
-第 1 代正由 v6-3-2 在训练种子 100000–159999 上打（每档 20,000 个种子）；计划 v7 的网络还一个都没训练（[实验记录 §11](/arch/learning/experiments/#sec-11)）。
-
-## 5. 现在的冠军
-
-| 环境 | 战斗 | 宏观 | 报告 |
-|---|---|---|---|
-| SL | medium 力度的 SL 规划器，叶子 c2 | L0 配 V v6-3-2，选项在节点的克隆上打 | `promotion-1-300`：层数 33.56 ± 0.58，300 局赢 23 局（7.7%） |
-| NoSL | PIMC 8 × 300，叶子 c2 | L0 配 V v6-3-2，后状态根据画面预测 | 还没有：它的文件写的是 SL 的报告 |
-
-两个文件都在 2026-10-30 设定，没有经过门槛，两种环境共用一个 V（`eval/silent/champions/sl.json`、`nosl.json`；[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)）。通向这里的 V 谱系，每一步都在各自的设置下测量：V v0（手写，到 2026-10-28 为止是 NoSL 冠军的 V）、n2-b0.03（V v2，SL 在 `promotion-1` 上 28.25 层）、pure-1-g（第一个纯 V，25.69）、v6-2（连战的第 2 代，在 `promotion-1-300` 上 31.37，赢 1 局）和 v6-3-2（33.56，赢 23 局）。c2 自 2026-10-27 起是两个冠军的战斗叶子；SL 自己的战斗网络还没训练。每个网络、它的数据和它的门槛见[实验记录 §1](/arch/learning/experiments/#sec-1)。
-
-## 6. 本章内容
-
-- [价值函数](/arch/learning/value/)：V 是什么，为什么在对局能赢之前它的价值是一个代理量，从 V v0 到计划 v7 的每个版本，输出头，Boss 标签，以及 `ranks`。
 - [训练战斗网络](/arch/learning/combat-net/)：简述它读什么、预测什么，它的样本、标签和训练，以及它的测量结果。
 - [循环](/arch/learning/loop/)：自我对弈、蒙特卡洛、TD(λ)、专家迭代、SPSA、LLM 补丁和门槛，探索、信用分配、奖励塑形、特权信息和局部最优，每一项都说明实现了什么。
-- [实验记录](/arch/learning/experiments/)：按时间顺序列出每个网络和每次测量，从 V v0 的拟合到计划 v7，附所有网络的谱系。
 - [参考](/arch/learning/reference/)：算力、数据目录、清单、账本、权重名、网络文件、C# 推理、每个脚本及其选项、测试和未决问题。
+
+冠军见[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)，目前训练过的每个网络及其测量结果见附录[实验记录](/arch/learning/experiments/)。

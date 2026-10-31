@@ -1,7 +1,7 @@
 // A network drawn as stacked blocks, in the manner of the Transformer paper's figure 1 (Vaswani et al., 2017):
 // columns of blocks from the inputs up, frames for repeated blocks, ⊕ for residual sums and side links for skip
 // connections; the columns join in one block, then one trunk goes up to the output. `layout` places it all;
-// ArchDiagram.svelte draws it. The two nets of the macro brain chapter (docs: macro-brain/network) and the combat net
+// ArchDiagram.svelte draws it. The net of the macro brain chapter (docs: macro-brain/network) and the combat net
 // (docs: combat-brain/leaf) are at the end.
 import type { Lang } from './names.ts';
 
@@ -228,80 +228,6 @@ function body(lang: Lang, width: number): Item[] {
   ];
 }
 
-export function pureV(lang: Lang): Diagram {
-  const L = (x: W) => x[lang];
-  return {
-    columns: [
-      {
-        title: L(w('Deck', '牌组', '牌組')),
-        input: L(w('cards: id, upgrade,\nmodifiers', '卡牌：id、升级、\n修饰', '卡牌：id、升級、\n修飾')),
-        items: [
-          {
-            kind: 'block',
-            label: L(w('Card embeddings', '卡牌嵌入', '卡牌嵌入')),
-            tone: 'embed',
-            info: L(w('x = E[c] + u·U[c] + Σ M[m]: 32 numbers per card.', 'x = E[c] + u·U[c] + Σ M[m]：每张牌 32 个数。', 'x = E[c] + u·U[c] + Σ M[m]：每張牌 32 個數。')),
-          },
-          {
-            kind: 'block',
-            label: L(w('φ: Linear + ReLU\n32 → 128 → 128', 'φ：线性层 + ReLU\n32 → 128 → 128', 'φ：線性層 + ReLU\n32 → 128 → 128')),
-            tone: 'ff',
-            info: L(w('The card network, applied to each card on its own.', '卡牌网络，对每张牌单独作用。', '卡牌網路，對每張牌單獨作用。')),
-          },
-          {
-            kind: 'block',
-            label: L(w('Mean + sum ÷ 16', '均值 + 和 ÷ 16', '平均 + 總和 ÷ 16')),
-            tone: 'pool',
-            info: L(w('The deck pooled two ways: 128 + 128 = 256 numbers.', '牌组用两种方式汇总：128 + 128 = 256 个数。', '牌組用兩種方式匯總：128 + 128 = 256 個數。')),
-          },
-        ],
-      },
-      {
-        title: L(w('Bags', '词袋', '詞元袋')),
-        input: L(w('relics · potions ·\ncontext · map', '遗物 · 药水 ·\n上下文 · 地图', '遺物 · 藥水 ·\n上下文 · 地圖')),
-        items: [
-          {
-            kind: 'block',
-            label: L(w('Embeddings', '嵌入', '嵌入')),
-            tone: 'embed',
-            info: L(w('One 32-number vector per token, a table per bag.', '每个词元一个 32 个数的向量，每个袋一张表。', '每個詞元一個 32 個數的向量，每個袋一張表。')),
-          },
-          {
-            kind: 'block',
-            label: L(w('Sum per bag', '每个袋求和', '每個袋加總')),
-            tone: 'pool',
-            info: L(w('Each bag’s vectors summed: 4 × 32 = 128 numbers.', '每个袋的向量相加：4 × 32 = 128 个数。', '每個袋的向量相加：4 × 32 = 128 個數。')),
-          },
-        ],
-      },
-      numbers(lang),
-    ],
-    merge: {
-      kind: 'block',
-      label: L(w('Concatenate: 256 + 128 + 6 = 390', '拼接：256 + 128 + 6 = 390', '串接：256 + 128 + 6 = 390')),
-      tone: 'norm',
-      info: L(w('One vector z of 390 numbers.', '一个 390 个数的向量 z。', '一個 390 個數的向量 z。')),
-    },
-    top: [
-      ...body(lang, 390),
-      {
-        kind: 'block',
-        label: L(w('Hazard + share heads\n256 → 64, σ', '风险值 + 比例输出头\n256 → 64，σ', '風險值 + 比例輸出頭\n256 → 64，σ')),
-        tone: 'head',
-        info: L(
-          w(
-            'Per floor 0–63, the chance the run ends there if still going, and the share of the enemies’ HP taken there.',
-            '对 0–63 的每一层：还在进行时在该层结束的机率，以及在那里打掉的敌人生命比例。',
-            '對 0–63 的每一層：還在進行時在該層結束的機率，以及在那裡打掉的敵人生命比例。',
-          ),
-        ),
-      },
-    ],
-    output: L(w('hazard and share per floor\n→ expected progress', '每层的风险值和比例\n→ 期望进度', '每層的風險值和比例\n→ 期望進度')),
-    links: [],
-  };
-}
-
 export function encodersNet(lang: Lang): Diagram {
   const L = (x: W) => x[lang];
   const norm = (id?: string): Block => ({ kind: 'block', id, label: L(T.norm), tone: 'norm', info: L(T.normInfo) });
@@ -331,7 +257,7 @@ export function encodersNet(lang: Lang): Diagram {
               norm('b-n1'),
               {
                 kind: 'block',
-                label: L(w('Masked Multi-Head\nAttention', '带遮罩的\n多头注意力', '遮罩\n多頭注意力')),
+                label: L(w('Masked Multi-Head\nAttention, 4 × 16', '带遮罩的\n多头注意力，4 × 16', '遮罩多頭注意力\n4 × 16')),
                 tone: 'attn',
                 info: L(
                   w(
@@ -345,7 +271,7 @@ export function encodersNet(lang: Lang): Diagram {
               norm('b-n2'),
               {
                 kind: 'block',
-                label: L(w('Feed Forward', '前馈', '前饋')),
+                label: L(w('Feed Forward\n64 → 128 → 64', '前馈\n64 → 128 → 64', '前饋\n64 → 128 → 64')),
                 tone: 'ff',
                 info: L(w('64 → 128 → 64 with ReLU, each element on its own.', '64 → 128 → 64，ReLU，对每个元素单独作用。', '64 → 128 → 64，ReLU，對每個元素單獨作用。')),
               },
@@ -434,21 +360,38 @@ export function encodersNet(lang: Lang): Diagram {
       info: L(w('One vector of 262 numbers.', '一个 262 个数的向量。', '一個 262 個數的向量。')),
     },
     top: [
-      ...body(lang, 262),
+      {
+        kind: 'repeat',
+        times: 'MLP',
+        info: L(
+          w(
+            'The body: where the four parts meet. A second head, used only in training, reads its output too: Linear 256 → 7, not in the net file.',
+            '主干：四个部分在这里相遇。训练时另有第二个输出头也读它的输出：线性层 256 → 7，不进网络文件。',
+            '主幹：四個部分在這裡相遇。訓練時另有第二個輸出頭也讀它的輸出：線性層 256 → 7，不進網路檔案。',
+          ),
+        ),
+        items: [
+          { kind: 'block', label: L(w('Linear 262 → 256', '线性层 262 → 256', '線性層 262 → 256')), tone: 'linear', info: L(w('z ↦ W₁z + c₁: 256 numbers.', 'z ↦ W₁z + c₁：256 个数。', 'z ↦ W₁z + c₁：256 個數。')) },
+          { kind: 'block', label: 'ReLU', tone: 'linear', info: L(w('max(0, x), number by number.', 'max(0, x)，逐数计算。', 'max(0, x)，逐數計算。')) },
+          { kind: 'block', label: L(w('Linear 256 → 256', '线性层 256 → 256', '線性層 256 → 256')), tone: 'linear', info: L(w('b₁ ↦ W₂b₁ + c₂: 256 numbers.', 'b₁ ↦ W₂b₁ + c₂：256 个数。', 'b₁ ↦ W₂b₁ + c₂：256 個數。')) },
+          { kind: 'block', label: 'ReLU', tone: 'linear', info: L(w('max(0, x), number by number: the body’s output, which the heads read.', 'max(0, x)，逐数计算：主干的输出，输出头读它。', 'max(0, x)，逐數計算：主幹的輸出，輸出頭讀它。')) },
+        ],
+      },
+      { kind: 'block', label: L(w('Hazard head\nLinear 256 → 64', '风险值输出头\n线性层 256 → 64', '風險值輸出頭\n線性層 256 → 64')), tone: 'head', info: L(w('One logit per floor, 0 to 63.', '每层一个 logit，0 到 63。', '每層一個 logit，0 到 63。')) },
       {
         kind: 'block',
-        label: L(w('Hazard head\n256 → 64, σ', '风险值输出头\n256 → 64，σ', '風險值輸出頭\n256 → 64，σ')),
+        label: L(w('Sigmoid: 64 h_g', 'Sigmoid：64 个 h_g', 'Sigmoid：64 個 h_g')),
         tone: 'head',
         info: L(
           w(
-            'Per floor 0–63, the chance the run ends there if still going; with the objective win, the value is P(win) = S₆₃.',
-            '对 0–63 的每一层：还在进行时在该层结束的机率；目标为 win 时，价值是 P(win) = S₆₃。',
-            '對 0–63 的每一層：還在進行時在該層結束的機率；目標為 win 時，價值是 P(win) = S₆₃。',
+            'Per floor g, the chance h_g that the run ends there if still going.',
+            '对每一层 g：还在进行时在该层结束的机率 h_g。',
+            '對每一層 g：還在進行時在該層結束的機率 h_g。',
           ),
         ),
       },
     ],
-    output: L(w('hazard per floor → P(win)', '每层的风险值 → P(win)', '每層的風險值 → P(win)')),
+    output: L(w('P(win) = ∏ (1 − h_g), from the current floor on', 'P(win) = ∏ (1 − h_g)，从当前层算起', 'P(win) = ∏ (1 − h_g)，從目前樓層算起')),
     links: [
       { from: 'b-n1', at: 'below', to: 'b-a1', side: 'left' },
       { from: 'b-n2', at: 'below', to: 'b-a2', side: 'left' },
@@ -609,4 +552,4 @@ export function combatNet(lang: Lang): Diagram {
   };
 }
 
-export const DIAGRAMS = { pure: pureV, encoders: encodersNet, combat: combatNet };
+export const DIAGRAMS = { encoders: encodersNet, combat: combatNet };

@@ -137,6 +137,7 @@ V v2 的文件（n1、n2-\*、n3-\*）用 `features`（17 个或 9 个 V v0 特�
 - **加载检查**。`RunNet.Load` 给每个测试对局估值，任何一个值的偏差超过 10⁻³ × max(1, |value|) 就拒绝这个文件（`:78-91`）；`CombatNet.Load` 预测每个测试状态，任何一个类别或药水数的偏差超过 10⁻³，或结局的长度不同，就拒绝它（`Brain/Combat/CombatNet.cs:65-80`）。这保证训练和对局时的编码与前向计算一致。
 - **`CombatNet`** 按位置读取输出（所以 c1 较旧的输出头会被读成损失的生命），用 `LeafValue` 的价格给它们定价，或在 `--leaf-prices v` 时用 V 的价格（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
 - **开销**。v6-3-2 每次调用 0.093 ms，一个全尺寸的编码器网络 0.44 ms，而一个用克隆的宏观决策要 70–90 ms（提交 `b0ec4b7`）；V v2 每个宏观决策约 0.9 ms（`648026c`）。战斗网络的开销淹没在游戏的模拟里：宽度 0.5、1 和 2 的网络搜索时每个动作同样花 1.58–1.76 s（[训练战斗网络 §6](/arch/learning/combat-net/#sec-6)）。
+- **V v0**（`RunValue`，`Brain/Macro/RunValue.cs`）：整局观测的 17 个特征乘以线性权重，`run --value` 没有指定文件时宏观大脑用的 V。特征（`RunValue.cs:68-92`）：层数、生命值、最大生命值、金币、持有的药水数、遗物数、牌组里的牌数、不能打出的牌数、升级过的牌数；能打出的牌的平均伤害（含中毒）、格挡和抽牌；以及假如每一步都随机选路，从当前的点到 Boss 预计会经过的精英、休息处、商店、宝箱和 `?` 点的个数。不管由哪个 V 做决定，它们仍然写在决策日志的每一行宏观记录上，也写进每个后状态（`RunValue.cs:15-16`；[Harness：决策日志 §7](/arch/harness/decision-log/#sec-7)）。没有冠军用它打。
 - **`OLD NETS`**。`src/` 里只有 V v0、V v2 和战斗网络 c1–c4 用到的代码标着 `OLD NETS`（提交 `28fc273`），只要还有冠军在用其中之一就留着。2026-10-30 起没有冠军用 V v0 或 V v2；读 `costs` 的 c2（`CombatNet.cs:133-135`）是两个冠军的叶子。V v0 的特征仍写进每一条宏观日志行和每个后状态。
 
 ## 9. 脚本
@@ -151,7 +152,7 @@ V v2 的文件（n1、n2-\*、n3-\*）用 `features`（17 个或 9 个 V v0 特�
 | `start_sim`、`wait_sims` | 启动模拟器命令，输出写到日志文件；以第一个失败命令的最后 12 行日志报错（`:104-119`） |
 | `out_path(name, out, character)` | 权重文件写到哪里（[§6](#sec-6)） |
 
-### `v.train`：纯 V
+### `v.train`：V
 
 `uv run python -m v.train --list PREFIX --name NAME [options]`（`learn/v/train.py:177-209`）。
 
@@ -188,7 +189,7 @@ V v2 的文件（n1、n2-\*、n3-\*）用 `features`（17 个或 9 个 V v0 特�
 | `held_out_next_combats` | 总有 | 第二个输出头的留出平方误差 |
 | `r2_held_out`、`r2_held_out_floor_only` | 总有 | V 的估值（期望层数或进度）对实际到达的层数（或进度）的 $R^2$ |
 | `won_held_out_runs`、`brier_held_out`、`brier_held_out_floor_only` | 整局 | 留出对局中获胜的局数，以及获胜机会的 Brier 分数，和基线的对比 |
-| `boss_sims`、`held_out_boss_sims`、`boss_worth`、`held_out_boss_loss`、`boss_decisions`、`boss_agree`、`boss_corr` | Boss 模拟战 | [价值函数 §10](/arch/learning/value/#sec-10) |
+| `boss_sims`、`held_out_boss_sims`、`boss_worth`、`held_out_boss_loss`、`boss_decisions`、`boss_agree`、`boss_corr` | Boss 模拟战 | [§9](#sec-9) |
 | `doors`、`held_out_doors`、`held_out_door_loss`、`door_corr` | 门前状态 | 同上 |
 | `explore_decisions`、`explore_share_logs`、`explore_temperature` | 后状态 | 留出的日志决策，日志里的大脑探索的比例，以及这个 V 以同样频率探索时的温度 |
 
@@ -228,6 +229,10 @@ v6 网络的文件早于 `objective`、`encoders` 和报告里的 Brier 字段�
 | `collect` | `--decisions`、`--results`、`--out` | 把输出接回去：每个选项的 `fights`（是否赢、生命、开始时的生命、敌人的生命和最大生命、回合数）和 `failed` |
 | `compare DECISIONS RESULTS` | – | 在每个选项都打了两次的决策上：战斗的最好选项与 V 的最好选项、与对局的选择一致的频率，种子 1 的最好与种子 2 的最好一致的频率，以及分数的遗憾值 |
 
+**Boss 模拟战**（`v.train --boss-sims FILES --boss-afterstates FILES`；`tasks`、`play`、`collect`）。在卡牌奖励处，每个选项的后状态用 SL 规划器和本幕的 Boss 打几次，生命值固定为最大生命的一个比例，一个决策的每个选项用同样的种子。这些战斗的绝对胜算和真实对局相差很远，所以不给风险值标签，只有决策内各选项的差值才算数。**Boss 分数**（`bosslab.py:378-383`）：赢了是 0.5 加上剩余生命占最大生命比例的一半，输了是打掉的 Boss 生命比例的一半。V 的期望层数减去决策内的平均，拟合到分数减去决策内的平均再乘以每单位分数 $2k$ 层，其中 $k$ 每幕一个，是打赢这个 Boss 的对局平均到达的层数减去 Boss 那一层（`boss_worth`，`learn/v/data.py:149-156`）。这个分数也是第二个输出头的第七个目标。`win` 网络拒收 Boss 模拟战，因为后者的目标是层数。
+
+**门前状态**（`v.train --boss-states FILES`；`doors`、`states`）。一局在某一幕 Boss 门前的整套配置，用进门时的生命值以及最大生命的几个比例和 Boss 打。第二个输出头学它们的 Boss 分数，这只塑造主干。门前状态大多来自 Boss 连战试点（`run --auto-win`，[模拟器：整局 §7](/arch/simulator/runs/#sec-7)），试点的记录从不算作对局（`--door-logs FILES` 只读它们的整局观测）。
+
 配置是后状态的牌组、遗物和药水；卡牌保留升级等级和附魔；用完或失效的遗物不算在内（`loadout`，`:70-93`）。
 
 ### 已删除的脚本
@@ -258,7 +263,7 @@ v6 网络的文件早于 `objective`、`encoders` 和报告里的 Brier 字段�
 | `afterstates`、`fork` | 每个日志决策的选项及其估值；反事实配对（[循环 §10](/arch/learning/loop/#sec-10)） |
 | `panel` | 由某个策略打的一场固定战斗，`bosslab.py` 的任务就是这种命令 |
 | `report`、`gate`、`leaderboard` | 报告、SPRT 门槛、排行榜（[评估：晋级门槛 §6](/arch/evaluation/gates/#sec-6)、[评估：指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)） |
-| `ranks` | V 的卡牌感（[价值函数 §11](/arch/learning/value/#sec-11)） |
+| `ranks` | V 的牌感：`ranks --logs LOGS [--value FILE] [--per-act 200] [--top 30]`（`SimWorker/Commands/EvalCommands.cs:175-232`）：每一幕里，给日志中一批卡牌奖励样本的牌组再加一张某牌，计算 V 的平均变化。这是供阅读的平均值，不是检验 |
 | `weights` | 把 V v0 的初始权重写成权重文件（`--leaf`：叶子权重）；它的帮助文本仍写着 "for tuning to start from" |
 
 ## 11. 测试
@@ -289,7 +294,7 @@ v6 网络的文件早于 `objective`、`encoders` 和报告里的 Brier 字段�
 
 ## 12. 未决问题
 
-1. 计划 v7 行不行得通：整局自我对弈、按 P(win) 的 V 和按胜局的门槛，目前还没有训练出任何网络（[学习 §4](/arch/learning/#sec-4)）。
+1. 计划 v7 行不行得通：整局自我对弈、按 P(win) 的 V 和按胜局的门槛，目前还没有训练出任何网络（[宏观大脑：自我对弈 §1](/arch/macro-brain/selfplay/#sec-1)）。
 2. 一旦 V 按 P(win) 做决策，除了 Brier 分数，还能怎样检查 P(win) 的校准。
 3. 每个决策的标签都带着它那一局之后的抽取。每局一个切分点就能去掉它们：切分点之前抽取，之后取 V 的最优，只用切分点之后的决策训练，AlphaGo 的价值网络就是这样训练的（[循环 §9](/arch/learning/loop/#sec-9)）。计划 v7 又一次推迟了它。
 4. 标签只有蒙特卡洛目标的 V，TD(λ) 或专家迭代会不会对它有帮助。

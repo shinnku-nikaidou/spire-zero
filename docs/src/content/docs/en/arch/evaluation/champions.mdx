@@ -113,7 +113,7 @@ Plan v6's V's were promoted in the elite gauntlet by `learn/gauntlet.py`'s lower
 | v6-2 | 2026-10-30 | 40.69 ± 0.38 | +4.62 ± 0.46 against v6-1, lower +3.86 | 68 |
 | v6-3-2 | 2026-10-30 | 43.36 ± 0.38 | +2.67 ± 0.49 against v6-2, lower +1.87 | 173 |
 
-v6-3-1 passed too (+1.73 ± 0.54 against v6-2, lower +0.85) and was not promoted, since v6-3-2's mean was higher. Plan v6 ended with v6-3-2. The generations are told in [Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3).
+v6-3-1 passed too (+1.73 ± 0.54 against v6-2, lower +0.85) and was not promoted, since v6-3-2's mean was higher. Plan v6 ended with v6-3-2. The generations are told in [Learning: the experiment log §9](/en/arch/learning/experiments/#sec-9).
 
 ## 5. Baselines
 
@@ -153,12 +153,12 @@ v6-3-1 passed too (+1.73 ± 0.54 against v6-2, lower +0.85) and was not promoted
 | plan c2, L0 v6-3-1 clone | SL | `promotion-1-300` | 13/300 (2.5–7.3%) | 31.11 | 284 / 144 / 51 | 248 / 75 / 13 | 240.6 | `b013f95` | |
 | plan c2, L0 v6-3-2 clone | SL | `promotion-1-300` | 23/300 (5.2–11.2%) | 33.56 | 290 / 171 / 65 | 276 / 94 / 23 | 271.2 | `b013f95` | champion of both files |
 
-"prompts random" are card prompts in combat answered by the `random` placeholder, before `p0`; "random" in the macro column is the random macro placeholder. The V's names are explained in [Macro brain §4](/en/arch/macro-brain/#sec-4). v6-2's `promotion-1` report is the first 200 runs of its `promotion-1-300` one, record for record. v6-2 is the first V whose whole runs won; v6-3-2 the first champion that wins.
+"prompts random" are card prompts in combat answered by the `random` placeholder, before `p0`; "random" in the macro column is the random macro placeholder. The V's names are explained in [Learning: the experiment log §1](/en/arch/learning/experiments/#sec-1). v6-2's `promotion-1` report is the first 200 runs of its `promotion-1-300` one, record for record. v6-2 is the first V whose whole runs won; v6-3-2 the first champion that wins.
 
 **What the table shows.**
 
 - **Search, then the macro brain.** On `promotion-1` in NoSL, PIMC took the floor from 11.90 (`play`) to 19.34 with the same macro brain; c2 as its leaf to 21.88; learned V's in the macro brain to 23.96 and 26.16. In SL the planner took n2-b0.03's 26.16 to 28.25; the gauntlet's V's on the clone, to 31–33.6 and the first wins. Since 2026-10-28 the combat brain has not changed: the gains since are the macro brain's ([The SL planner: budget §5](/en/arch/sl-planner/budget/#sec-5)).
-- **Where runs end.** v6-3-2 beats the act 1 boss in 95% of the runs that reach it, the act 2 boss in 55%, the act 3 boss in 35%. Of its 277 losses, 133 are at a boss, 39 at an elite, 103 in a monster fight and 2 outside combat ([Metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8), [Macro brain: weaknesses and next steps §1](/en/arch/macro-brain/next/#sec-1)).
+- **Where runs end.** v6-3-2 beats the act 1 boss in 95% of the runs that reach it, the act 2 boss in 55%, the act 3 boss in 35%. Of its 277 losses, 133 are at a boss, 39 at an elite, 103 in a monster fight and 2 outside combat ([Metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8), [Learning: the experiment log §10](/en/arch/learning/experiments/#sec-10)).
 - **The first character is the Silent, and A0 comes first.** Each character has folders of its own, `eval/CHARACTER/`, `weights/CHARACTER/` and `data/CHARACTER/`, and one brain for all its ascensions ([Learning: reference §3](/en/arch/learning/reference/#sec-3)); the seed sets in `eval/seeds/` are shared.
 
 ## 6. Open questions

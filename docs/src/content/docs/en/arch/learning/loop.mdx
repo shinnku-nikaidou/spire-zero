@@ -8,7 +8,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 import TdTargets from '../../../../../components/book/TdTargets.svelte';
 import ShapingToy from '../../../../../components/book/ShapingToy.svelte';
 
-The loop turns the champion's own runs into a challenger, and a gate decides whether the challenger replaces the champion. This page goes through the loop as it was designed, step by step, and says for each step what is built. Several steps rest on methods from reinforcement learning (Monte Carlo targets, TD(λ), expert iteration, SPSA, reward shaping); each is explained from scratch where it first appears. Read [Learning](/en/arch/learning/) first for what is learned; the macro brain's side of the loop as plan v6 ran it is told in [Macro brain: self-play](/en/arch/macro-brain/selfplay/).
+The loop turns the champion's own runs into a challenger, and a gate decides whether the challenger replaces the champion. This page goes through the loop as it was designed, step by step, and says for each step what is built. Several steps rest on methods from reinforcement learning (Monte Carlo targets, TD(λ), expert iteration, SPSA, reward shaping); each is explained from scratch where it first appears. Read [Learning](/en/arch/learning/) first for what is learned; the macro brain's side of the loop is told in [Macro brain: self-play](/en/arch/macro-brain/selfplay/).
 
 <Aside title="Status">
 
@@ -65,7 +65,7 @@ What self-play played changed with the plans:
 
 **Exploration.** Self-play draws some decisions on purpose instead of taking V's best, so that the data shows what the other options lead to ([§9](#sec-9)).
 
-**The newest generation.** Since plan v6's third generation, a net trains on the newest generation's runs alone: runs played by a weaker V label states lower than the champion would now play them ([Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3)). Each generation's runs are one time-boxed job per exploration tier, under one deadline that can be moved while it plays ([Reference §1](/en/arch/learning/reference/#sec-1)).
+**The newest generation.** Since plan v6's third generation, a net trains on the newest generation's runs alone: runs played by a weaker V label states lower than the champion would now play them ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)). Each generation's runs are one time-boxed job per exploration tier, under one deadline that can be moved while it plays ([Reference §1](/en/arch/learning/reference/#sec-1)).
 
 **Budget.** Self-play plays the SL planner at its low budget (`--effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0`), the gates at the champion's medium ([The SL planner: budget, cost and results §2](/en/arch/sl-planner/budget/#sec-2)).
 
@@ -79,12 +79,12 @@ $$
 
 Its expectation, over the luck of the rest of the run, is exactly the value of decision $k$'s state under the policy that played, so the target is *unbiased*. But it is *noisy*: the luck of one run, every draw and every fight after decision $k$, lands on all of its decisions alike, and a run's macro decisions (108 a run on average in plan v6's first generation, 146 in its third, 181 in the book's example run; [Macro brain §1](/en/arch/macro-brain/#sec-1)) all share its one outcome.
 
-**As built, both trainers use MC targets only.** V's are the masked hazard labels of the floor each run ended on ([Macro brain: from hazards to value §2](/en/arch/macro-brain/value/#sec-2)); the combat net's are how each fight ended ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)). Nothing in `learn/` bootstraps on a value. Two measures keep MC's noise in check:
+**As built, both trainers use MC targets only.** V's are the masked hazard labels of the floor each run ended on ([Macro brain: from hazards to value §3](/en/arch/macro-brain/value/#sec-3)); the combat net's are how each fight ended ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)). Nothing in `learn/` bootstraps on a value. Two measures keep MC's noise in check:
 
 - **every run weighs the same** however many decisions it has (each sample weighs one over its run's decisions), and the held-out runs are split by run, not by decision;
-- **a second head** with denser targets, the next six combats' HP costs, shapes the body ([The value function §9](/en/arch/learning/value/#sec-9)). The design had a rule from r33hab, a prior-art STS2 project: never mix HP targets and win targets in one backward pass. Pure V's training does mix them, the second head's squared errors added to the hazards' loss at weight 3 (`learn/v/train.py:376`); it lowered the held-out loss in every training seed it was tried with ([The experiment log §3](/en/arch/learning/experiments/#sec-3)).
+- **a second head** with denser targets, the next six combats' HP costs, shapes the body ([Macro brain: from hazards to value §4](/en/arch/macro-brain/value/#sec-4)). The design had a rule from r33hab, a prior-art STS2 project: never mix HP targets and win targets in one backward pass. Pure V's training does mix them, the second head's squared errors added to the hazards' loss at weight 3 (`learn/v/train.py:376`); it lowered the held-out loss in every training seed it was tried with ([The experiment log §3](/en/arch/learning/experiments/#sec-3)).
 
-**A proxy is accepted only through the gate.** A dense target such as the floor reached is a stopgap ([The value function §2](/en/arch/learning/value/#sec-2)). A change it brings is accepted only through the gate on real outcomes, and only after it reproduces on several training seeds: in a GuanDan study (arXiv 2610.29411) one lineage looked strong, and none of its 5 pre-registered replication seeds came out positive.
+**A proxy is accepted only through the gate.** A dense target such as the floor reached is a stopgap ([Macro brain: from hazards to value §2](/en/arch/macro-brain/value/#sec-2)). A change it brings is accepted only through the gate on real outcomes, and only after it reproduces on several training seeds: in a GuanDan study (arXiv 2610.29411) one lineage looked strong, and none of its 5 pre-registered replication seeds came out positive.
 
 ## 4. TD(λ) targets <Badge text="planned" variant="caution" />
 
@@ -149,7 +149,7 @@ $$
 \bar d = \frac1n \sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\, \mathrm{SE} > 0,
 $$
 
-the 95% one-sided lower bound above 0 (`learn/gauntlet.py:136-161`; [Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
+the 95% one-sided lower bound above 0 (`learn/gauntlet.py:136-161`; [Macro brain: self-play §5](/en/arch/macro-brain/selfplay/#sec-5)).
 
 **The paired lower bound on wins** (the same code on whole runs, plan v7). $d_i$ is 1 − 0, 0 − 1 or 0: whether the challenger won seed $i$ less whether the champion did. On the 500 seeds of `promotion-1-500` at the champion's medium budget, a challenger passes when the lower bound of the mean difference in wins is above 0, which at 500 seeds takes about 2–3 percentage points more wins; the report also pairs the floors. Checked on v6-3-2's and v6-2's whole-run reports: 300 pairs, 23 won against 1, +0.073 ± 0.016 wins, lower bound +0.047, floors +2.20 ± 0.62 (commit `7ce03bd`).
 
@@ -157,7 +157,7 @@ the 95% one-sided lower bound above 0 (`learn/gauntlet.py:136-161`; [Macro brain
 
 ## 9. Exploration
 
-V learns only from what the runs did. If self-play always took V's best option, the data would never show what the other options lead to, and V could never find out it was wrong about them. So self-play sometimes takes another option on purpose; how it picks that option matters ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2), with a figure on real decisions).
+V learns only from what the runs did. If self-play always took V's best option, the data would never show what the other options lead to, and V could never find out it was wrong about them. So self-play sometimes takes another option on purpose; how it picks that option matters ([Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3)).
 
 **Even draws** (`run --explore ε`, built, commit `7a9f845`; `Uniform`, `Brain/Exploration.cs:47-65`), V's exploration since the elite gauntlet. With chance ε a macro decision's answer is drawn uniformly among its $n$ options, whatever V says; otherwise L0 takes V's best $a^\ast$:
 
@@ -168,7 +168,7 @@ $$
 It covers every decision outside combat: a card reward's outcome among its cards and skipping (a skip drawn is never opened, a card drawn is opened and taken); a card prompt's picks (how many, evenly, then which); every other screen's options but the potion belt's and those that would come back to a state already decided. ε is fixed per run. What is drawn depends neither on V nor on how strong the run is, so its outcomes are causal evidence about the options, and every kind of decision is drawn as often. Every drawn answer is marked `explored` in the log ([Harness: the decision log §6](/en/arch/harness/decision-log/#sec-6)), and the champion's name ends in `eps ε`.
 
 - **The tiers.** A generation's runs are split into three tiers of ε, a third of the runs each: 1.0, 0.5 and 0.15 in plan v6's generations 1–2, then 0.3, 0.15 and 0.05 from its generation 3 and in plan v7.
-- **A label carries the later draws.** A decision's label is how its run ended, the draws made after it included, and V is not told the run's ε; the same state is labelled lower in a run that explores more. A *cut point* per run would remove this (draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained on one position per game); it is not done, and plan v7 deferred it again ([Macro brain: weaknesses and next steps §4](/en/arch/macro-brain/next/#sec-4)).
+- **A label carries the later draws.** A decision's label is how its run ended, the draws made after it included, and V is not told the run's ε; the same state is labelled lower in a run that explores more. A *cut point* per run would remove this (draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained on one position per game); it is not done, and plan v7 deferred it again ([Macro brain: weaknesses and next steps §3](/en/arch/macro-brain/next/#sec-3)).
 - **Check.** In self-play the share of `explored` decisions among those with two or more options should be about ε: 0.161 at ε = 0.15 over 2,347 decisions in plan v7's first test.
 
 **Softmax exploration** (built; `Softmax`, `Brain/Exploration.cs:9-40`) draws each option with chance
@@ -194,7 +194,7 @@ The only reward is the run's outcome. The hard part is not a missing signal but 
 1. **The hierarchy shortens the chain.** Combat is solved by search, and its result is an outcome distribution $p(k)$: a death, or the HP left in bucket $k$. The macro V prices it once per combat: at the start, $u_k$ = V of the afterstate after the combat with its HP in bucket $k$, recomputed when potions or relics change, and a death's price; a leaf's value is $\sum_k p(k)\, u_k$. The combat net then does not depend on V's version: a new V only reprices, and combat and macro trade HP against everything else on one scale. Run-level credit then only spans the macro decisions plus the combat results. **As built** this is the SL planner's `--leaf-prices v` (`PricedLeaf`, `Brain/Combat/PricedLeaf.cs:16-26`; [Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)), not gated and played by no champion. Its death is priced at the run's floor, V's value of a run that ends there in the `floor` and `progress` units (`PricedLeaf.cs:25`); a `win` net values in $[0, 1]$, where a death is worth 0.
 2. **TD(λ)** <Badge text="planned" variant="caution" /> gives a learning signal at every transition ([§4](#sec-4)).
 3. **Auxiliary reward terms must be potential-based** <Badge text="planned" variant="caution" /> ([§11](#sec-11)).
-4. **Auxiliary heads** give dense supervision, for the representation only: built, the second head ([The value function §9](/en/arch/learning/value/#sec-9)).
+4. **Auxiliary heads** give dense supervision, for the representation only: built, the second head ([Macro brain: from hazards to value §4](/en/arch/macro-brain/value/#sec-4)).
 5. **Variance**: common random numbers in every gate (built), counterfactual forks at key decisions (the commands are built, below), and a reverse curriculum (planned, [§13](#sec-13)).
 
 ### Counterfactual forks

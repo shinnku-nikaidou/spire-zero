@@ -253,7 +253,7 @@ $$
 
 計畫 v6（2026-10-29 到 2026-10-30）在菁英連戰裡訓練和評判 V：普通怪物戰在開始時就算贏，只有菁英和頭目要真打（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。每個 V 都打連戰的 500 個評估種子（`run --seed 1 --start 300000 --n 500`），不探索，用訓練時的預算（SL 規劃器的低預算），並加上 `--afterstates clone`；`learn/gauntlet.py --records R --logs L --against C` 在雙方都打完的種子上把它的對局和冠軍的按種子配對，當**進度**平均差的 95% 單側下界大於 0 時讓它晉級（`against`：`pairs`、`diff`、`diff_se`、`lower_95`、`promote`）。進度是到達的層數，加上輸掉的局在它死去的那場戰鬥中打掉的敵人生命值比例；贏下的局 +1。一次門檻在這些主機上要 16–20 分鐘。
 
-連戰的各代及其門檻見[宏觀大腦：自我對弈 §4](/zh-tw/arch/macro-brain/selfplay/#sec-4)；它的冠軍由人工列在 `eval/silent/gauntlet-leaderboard.md`（[冠軍與基線 §4](/zh-tw/arch/evaluation/champions/#sec-4)）。它的排名沒有遷移到整局上（[宏觀大腦：自我對弈 §5](/zh-tw/arch/macro-brain/selfplay/#sec-5)），這是計畫 v7 在整局上設門檻的原因之一。
+連戰的各代及其門檻見[學習：實驗紀錄 §9](/zh-tw/arch/learning/experiments/#sec-9)；它的冠軍由人工列在 `eval/silent/gauntlet-leaderboard.md`（[冠軍與基線 §4](/zh-tw/arch/evaluation/champions/#sec-4)）。它的排名沒有遷移到整局上（[學習：實驗紀錄 §10](/zh-tw/arch/learning/experiments/#sec-10)），這是計畫 v7 在整局上設門檻的原因之一。
 
 ## 12. 測試
 

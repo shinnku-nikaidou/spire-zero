@@ -88,8 +88,8 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 
 | term | meaning |
 |---|---|
-| value function V | The macro brain's judge of a run state. Its target has been the expected floor (progress) until the bot wins sometimes, then P(win) ([Learning: the value function](/en/arch/learning/value/), [Macro brain: the value network](/en/arch/macro-brain/network/)). |
-| pure V | V read from the run's ids and raw state alone, with no hand-made features ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
+| value function V | The macro brain's judge of a run state: the chance to win the run from there ([Macro brain: from hazards to value](/en/arch/macro-brain/value/), [Macro brain: the value network](/en/arch/macro-brain/network/)). |
+| pure V | An earlier form of V's net: a set encoder over the deck and bags for the rest, read from the run's ids and raw state alone ([Learning: the experiment log §8](/en/arch/learning/experiments/#sec-8)). |
 | self-play | The champion plays whole runs in the simulator to produce training data ([Macro brain: self-play](/en/arch/macro-brain/selfplay/)). |
 | champion, challenger | The champion is the current best version in an environment; a challenger must pass the gate to replace it ([Evaluation: champions and baselines](/en/arch/evaluation/champions/)). |
 | MC, TD(λ) | Ways to set value targets: from the final outcome (Monte Carlo), or blended with the next states' values (temporal difference) ([Learning: the loop §3](/en/arch/learning/loop/#sec-3)). |
@@ -118,7 +118,7 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | name | what |
 |---|---|
 | V v0 | The first V: hand-set weights over hand-made features of the run view; removed. |
-| n1, n2-b0.01, n2-b0.03, n2-b0.1, n3-ctl, n3-free-ctl | V v2 nets (a net over V v0's features, pulled towards V v0 with weight β): n2-b0.03 was both champions' V from 2026-10-28 ([Learning: the value function §5](/en/arch/learning/value/#sec-5)). |
+| n1, n2-b0.01, n2-b0.03, n2-b0.1, n3-ctl, n3-free-ctl | V v2 nets (a net over V v0's features, pulled towards V v0 with weight β): n2-b0.03 was both champions' V from 2026-10-28 ([Learning: the experiment log §3](/en/arch/learning/experiments/#sec-3)). |
 | pure-1, pure-1-b, pure-1-d, pure-1-g | The first pure V nets: from runs only, with decision-time boss sims, with door states, and with the boss gauntlet pilot's doors; pure-1-g was the SL champion's V on 2026-10-29. |
 | v6-1, v6-2, v6-3-1, v6-3-2 | Pure V trained in the elite gauntlet's three generations; v6-3-2 is the V of both champions since 2026-10-30. |
 | c1, c2, c3, c4 | Combat nets; c2 is the leaf of both champions' combat brains. |

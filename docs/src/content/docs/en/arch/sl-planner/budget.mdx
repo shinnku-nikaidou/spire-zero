@@ -24,13 +24,13 @@ The runs were SL runs with the macro brain of the time (L0 with n2-b0.03) on the
 
 ## 2. The low budget
 
-Self-play needs many runs, and its labels need fights played well but not perfectly. Plan v6's elite gauntlet played its self-play and its gates at a cheaper budget, and plan v7's whole-run self-play uses it too, while the reports and gates on whole runs stay at medium ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)):
+Self-play needs many runs, and its labels need fights played well but not perfectly. Plan v6's elite gauntlet played its self-play and its gates at a cheaper budget, and plan v7's whole-run self-play uses it too, while the reports and gates on whole runs stay at medium ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)):
 
 ```bash
 Sts2Ai.SimWorker run --env SL --policy plan --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 …
 ```
 
-That is a beam of 4 at 150 nodes per state and turn, the full width always (an easy beam of 0 means $B$), and every plan played to its end (`--replan 0`), so a fight is planned once. It was chosen on the boss fights that label the macro brain's decisions ([Learning: the value function §10](/en/arch/learning/value/#sec-10)): on 515 boss doors at full HP, the outcomes of two seeds at the low budget correlate 0.83, and those of the low and the medium budget on the same seed 0.94. The cheaper budget ranks doors as well as a second seed of the same budget does.
+That is a beam of 4 at 150 nodes per state and turn, the full width always (an easy beam of 0 means $B$), and every plan played to its end (`--replan 0`), so a fight is planned once. It was chosen on the boss fights that label the macro brain's decisions ([Learning: reference §9](/en/arch/learning/reference/#sec-9)): on 515 boss doors at full HP, the outcomes of two seeds at the low budget correlate 0.83, and those of the low and the medium budget on the same seed 0.94. The cheaper budget ranks doors as well as a second seed of the same budget does.
 
 ## 3. Where the time goes
 
@@ -72,7 +72,7 @@ The planner wins every fight PIMC wins, and 1, 5 and 3 more. On the fights both 
 
 **Whole runs.** With the macro brain the same as the NoSL champion's of the time, the planner against that champion's PIMC on `promotion-1` #0–39: floor 28.32 against 23.98, **+4.35 ± 2.56 floors** (95%), further on 17 seeds, as far on 18, less far on 5; the act 1 boss passed in 28 runs against 22, the act 2 boss reached in 20 against 13. A run took 491 s against 126 s then; the effort levels and the cheaper restores have since cut that by more than half ([§1](#sec-1)).
 
-**Now.** The SL champion, the planner at medium effort with L0 v6-3-2 on the clone, reaches floor 33.56 on average on the 300 seeds of `promotion-1-300` and wins 23 runs (7.7%), in 271 s per run. The combat brain has not changed since 2026-10-28: the gains since then are the macro brain's ([Macro brain §4](/en/arch/macro-brain/#sec-4)).
+**Now.** The SL champion, the planner at medium effort with L0 v6-3-2 on the clone, reaches floor 33.56 on average on the 300 seeds of `promotion-1-300` and wins 23 runs (7.7%), in 271 s per run. The combat brain has not changed since 2026-10-28: the gains since then are the macro brain's ([Learning: the experiment log §1](/en/arch/learning/experiments/#sec-1)).
 
 ## 6. Weaknesses and open questions
 

@@ -95,7 +95,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 **`run_view`**，在每个宏观行上：大脑看到的整局观测，约 6 KB（[协议：观测与动作 §2](/arch/protocol/observation/#sec-2)）。V 就用它训练（[宏观大脑：从风险值到价值](/arch/macro-brain/value/)）。
 
-**`features`**，在每个宏观行上，不管是哪个大脑做的决策：整局观测上 V v0 手工设计的特征（楼层、HP、最大 HP、金币、药水、遗物、牌、不能打出的牌、升级、牌组的平均伤害、格挡和抽牌，以及前方预计的精英、休息处、商店、宝箱和未知）。V v0 的拟合和 V v2 的训练读它们；两者都已删除，纯 V 不读它们（[学习：价值函数 §3](/arch/learning/value/#sec-3)）。
+**`features`**，在每个宏观行上，不管是哪个大脑做的决策：整局观测上 V v0 手工设计的特征（楼层、HP、最大 HP、金币、药水、遗物、牌、不能打出的牌、升级、牌组的平均伤害、格挡和抽牌，以及前方预计的精英、休息处、商店、宝箱和未知）。现在没有训练器读它们，V 的网络也不读（[学习：参考 §8](/arch/learning/reference/#sec-8)）。
 
 战斗外的选牌提示既没有 `run_view`，也没有 `features`。
 

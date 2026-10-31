@@ -11,17 +11,17 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 This chapter is about the parts of the AI that are learned rather than written, and about the loop that makes them better. Two things are learned: the macro brain's value function V, which scores every situation outside combat, and the combat net, which tells a combat search what the state at the end of its lookahead is worth. Both learn from the runs the AI plays by itself. A change to either replaces the current version only if it passes a gate: a paired test on fixed seeds against the version in play.
 
-Read first: [Macro brain](/en/arch/macro-brain/) for what V is used for, and [Combat brain: the leaf](/en/arch/combat-brain/leaf/) for what the combat net does in a search. The macro brain chapter also explains V's network and its training labels in detail ([Macro brain: the value network](/en/arch/macro-brain/network/), [Macro brain: from hazards to value](/en/arch/macro-brain/value/)); this chapter links there rather than repeating it, and covers what is not there: every version of V, the combat net's training, the loop as a whole with the methods it uses or plans to use, the measured history, and the files and scripts.
+Read first: [Macro brain](/en/arch/macro-brain/) for what V is used for, and [Combat brain: the leaf](/en/arch/combat-brain/leaf/) for what the combat net does in a search. The macro brain chapter also explains V's network and its training labels in detail ([Macro brain: the value network](/en/arch/macro-brain/network/), [Macro brain: from hazards to value](/en/arch/macro-brain/value/)); this chapter links there rather than repeating it, and covers what is not there: the combat net's training, the loop as a whole with the methods it uses or plans to use, and the files and scripts.
 
 <Aside title="Status">
 
-Built: pure V's trainer `learn/v/` (`v.train`) and the combat net's trainer `learn/combat/` (`combat.train`), both Monte Carlo (each decision labelled by how its run really ended); the even-draw exploration of self-play (`run --explore ε`); `learn/gauntlet.py`, the report and paired gate of a V's runs; `learn/challenge.py`, which drives the simulator's sequential gate; `learn/bosslab.py`, the boss-fight labels. Plan v7's code is built too: V by its chance to win (`v.train --objective win`), the encoders' net (`--encoders`) and the gate on paired wins; its first generation of self-play is being played by the champion V, v6-3-2, and no net of the plan is trained yet ([§4](#sec-4)). Both champions play V v6-3-2 and the combat net c2. Removed: V v0's fit, SPSA tuning, V v2's trainer and the first combat trainer (their nets still load). Planned, not built: TD(λ) targets, expert iteration, LLM patch proposals, reward shaping, privileged training, and the mechanisms against local optima beyond even draws ([The loop](/en/arch/learning/loop/)).
+Built: V's trainer `learn/v/` (`v.train`) and the combat net's trainer `learn/combat/` (`combat.train`), both Monte Carlo (each decision labelled by how its run really ended); the even-draw exploration of self-play (`run --explore ε`); `learn/gauntlet.py`, the report and paired gate of a V's runs; `learn/challenge.py`, which drives the simulator's sequential gate; `learn/bosslab.py`, the boss-fight labels. Planned, not built: TD(λ) targets, expert iteration, LLM patch proposals, reward shaping, privileged training, and the mechanisms against local optima beyond even draws ([The loop](/en/arch/learning/loop/)).
 
 </Aside>
 
 ## 1. What is learned
 
-**The macro brain's V.** Outside combat the macro brain plays each option of a decision, looks at the situation right after it (the *afterstate*), and takes the option whose afterstate V values highest ([Macro brain §2](/en/arch/macro-brain/#sec-2)). V is a neural network that reads what the run is (the ids of its cards, relics, potions, act and bosses, the map ahead) and six raw numbers, and returns one number. Ideally that number is the chance to win the run from here; until runs win now and then it is a proxy, the floor the run is expected to reach ([The value function §2](/en/arch/learning/value/#sec-2)). One V scores every surface, so a card, a relic, an HP heal and a path on the map are compared on one scale without exchange rates written by hand.
+**The macro brain's V.** Outside combat the macro brain plays each option of a decision, looks at the situation right after it (the *afterstate*), and takes the option whose afterstate V values highest ([Macro brain §2](/en/arch/macro-brain/#sec-2)). V is a neural network that reads what the run is (the ids of its cards, relics, potions, act and bosses, the map ahead) and six raw numbers, and returns one number, the chance to win the run from here ([Macro brain: from hazards to value §1](/en/arch/macro-brain/value/#sec-1)). One V scores every surface, so a card, a relic, an HP heal and a path on the map are compared on one scale without exchange rates written by hand.
 
 **The combat net.** A combat search looks a turn or a fight ahead and must then say what the state it reached is worth: its *leaf value*. The combat net reads a round's start and predicts how the fight will end: a death, or how much of max HP is still to be lost, in 50 buckets, and the potions still to be used ([Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3), [§4](/en/arch/combat-brain/leaf/#sec-4)). Its training is in [Training the combat net](/en/arch/learning/combat-net/).
 
@@ -52,51 +52,29 @@ flowchart LR
 2. **Fit.** A new V (or combat net) is trained on those runs. Each decision's label is how its run actually ended, a *Monte Carlo* target ([The loop §3](/en/arch/learning/loop/#sec-3)). TD(λ) and expert iteration, which would also learn from the values the search computes, are planned ([§4](/en/arch/learning/loop/#sec-4), [§5](/en/arch/learning/loop/#sec-5)).
 3. **Gate.** The challenger plays fixed evaluation seeds, paired seed by seed with the champion's runs, and passes only if the difference is clearly above zero ([The loop §8](/en/arch/learning/loop/#sec-8)).
 
-A *generation* is one turn of this loop. Plan v6 ran three for the macro V ([Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3)); plan v7's first is being played ([§4](#sec-4)).
+A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
 
 ## 3. What is built and what is planned
 
 | part | status | where |
 |---|---|---|
-| self-play: whole runs or the elite gauntlet, even draws at ε | built | `run --explore`, [The loop §2](/en/arch/learning/loop/#sec-2) |
+| self-play: whole runs, even draws at ε | built | `run --explore`, [The loop §2](/en/arch/learning/loop/#sec-2) |
 | softmax exploration over V's or the search's values | built, used by older jobs only | `run --macro-explore`, `--combat-explore`, [The loop §9](/en/arch/learning/loop/#sec-9) |
-| V's training, Monte Carlo labels | built | `learn/v/`, [The value function §6](/en/arch/learning/value/#sec-6) |
+| V's training, Monte Carlo labels | built | `learn/v/`, [Macro brain: from hazards to value §5](/en/arch/macro-brain/value/#sec-5) |
 | the combat net's training, Monte Carlo labels | built, no net of it trained yet | `learn/combat/`, [Training the combat net](/en/arch/learning/combat-net/) |
-| boss-fight labels for V (boss sims, door states) | built, unused since plan v6 | `learn/bosslab.py`, [The value function §10](/en/arch/learning/value/#sec-10) |
+| boss-fight labels for V (boss sims, door states) | built, unused | `learn/bosslab.py`, [Reference §9](/en/arch/learning/reference/#sec-9) |
 | counterfactual forks | built as commands; no trainer reads them now | `fork`, `afterstates`, [The loop §10](/en/arch/learning/loop/#sec-10) |
-| gates: the simulator's SPRT, the paired lower bound on progress or wins | built | `gate`, `learn/challenge.py`, `learn/gauntlet.py`, [The loop §8](/en/arch/learning/loop/#sec-8) |
+| gates: the simulator's SPRT, the paired lower bound on wins | built | `gate`, `learn/challenge.py`, `learn/gauntlet.py`, [The loop §8](/en/arch/learning/loop/#sec-8) |
 | TD(λ) targets | <Badge text="planned" variant="caution" /> | [The loop §4](/en/arch/learning/loop/#sec-4) |
 | expert iteration (search values as labels, a learned prior) | <Badge text="planned" variant="caution" /> | [The loop §5](/en/arch/learning/loop/#sec-5) |
 | SPSA tuning of hand-set weights | removed (`9b9d170`) | [The loop §6](/en/arch/learning/loop/#sec-6) |
 | LLM patch proposals | <Badge text="planned" variant="caution" /> | [The loop §7](/en/arch/learning/loop/#sec-7) |
 | potential-based shaping, privileged training, archives against local optima | <Badge text="planned" variant="caution" /> | [The loop §11](/en/arch/learning/loop/#sec-11)–[§13](/en/arch/learning/loop/#sec-13) |
 
-## 4. Plan v7: where the loop stands
+## 4. This chapter
 
-Plan v6 trained and judged V in the *elite gauntlet*, a simplified run in which plain monster fights are won at their start and only elites and bosses are fought ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)). Its third generation's net, v6-3-2, became the V of both champions on 2026-10-30; in whole SL runs it wins 23 of 300, where v6-2 had won 1 and no earlier V any. The gauntlet's order did not always carry over to whole runs, and about half of v6-3-2's losses come between bosses, where the gauntlet's monster fights were free ([Macro brain: weaknesses and next steps §1](/en/arch/macro-brain/next/#sec-1)).
-
-Plan v7 therefore returns to whole runs, and its code is built (commits `7ce03bd`, `4c36cad`, `b0ec4b7`, `d4ae095`):
-
-- **Self-play plays the whole game**, every fight fought by the SL planner at its low budget, with even draws at ε 0.3, 0.15 and 0.05 on a third of the runs each. Each generation is one time-boxed job per tier under one deadline ([Reference §1](/en/arch/learning/reference/#sec-1)).
-- **V decides by its chance to win.** `v.train --objective win` labels a won run as surviving every floor, so the hazard head's chance to survive them all is P(win) ([The value function §8](/en/arch/learning/value/#sec-8)). The report adds the held-out Brier score of that chance.
-- **The gate compares wins**, paired by seed on the 500 seeds of `promotion-1-500` at the champion's medium planner budget: a challenger passes when the 95% one-sided lower bound of its mean difference in wins is above 0 (`learn/gauntlet.py --against`, [The loop §8](/en/arch/learning/loop/#sec-8)).
-- **Two nets per generation**: pure V going on from the champion's weights (v7-1 from v6-3-2) and the encoders' net, which reads the loadout with self-attention and the map as a graph (v7-1e from scratch) ([Macro brain: the value network §4](/en/arch/macro-brain/network/#sec-4)). If both pass, the one with more wins replaces the V of both champion files.
-
-Generation 1 is being played by v6-3-2 on the train seeds 100000–159999 (20,000 seeds per tier); no net of plan v7 is trained yet ([The experiment log §11](/en/arch/learning/experiments/#sec-11)).
-
-## 5. The champions now
-
-| environment | combat | macro | report |
-|---|---|---|---|
-| SL | the SL planner at medium effort, leaf c2 | L0 with V v6-3-2, options played on the node's clone | `promotion-1-300`: floor 33.56 ± 0.58, 23 won of 300 (7.7%) |
-| NoSL | PIMC 8 × 300, leaf c2 | L0 with V v6-3-2, afterstates predicted from the screen | none yet: its file names the SL report |
-
-Both files were set on 2026-10-30 with no gate, one V for both environments (`eval/silent/champions/sl.json`, `nosl.json`; [Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). The V lineage that led there, each step measured in its own setting: V v0 (hand-written, NoSL champion until 2026-10-28), n2-b0.03 (V v2, SL floor 28.25 on `promotion-1`), pure-1-g (the first pure V, 25.69), v6-2 (the gauntlet's generation 2, 31.37 on `promotion-1-300`, 1 won) and v6-3-2 (33.56, 23 won). c2 has been the combat leaf of both champions since 2026-10-27; SL's own combat net is not trained yet. Every net, its data and its gate are in [The experiment log §1](/en/arch/learning/experiments/#sec-1).
-
-## 6. This chapter
-
-- [The value function](/en/arch/learning/value/): what V is, why its value is a proxy until runs win, every version from V v0 to plan v7's, the heads, the boss labels, and `ranks`.
 - [Training the combat net](/en/arch/learning/combat-net/): what it reads and predicts in brief, its samples, labels and training, and its measurements.
 - [The loop](/en/arch/learning/loop/): self-play, Monte Carlo, TD(λ), expert iteration, SPSA, LLM patches and gates, exploration, credit assignment, shaping, privileged information and local optima, each with what is built.
-- [The experiment log](/en/arch/learning/experiments/): every net and measurement in time order, from V v0's fit to plan v7, with the lineage of all nets.
 - [Reference](/en/arch/learning/reference/): compute, the data directory, lists, the ledger, weight names, net files, C# inference, every script with its options, tests and open questions.
+
+The champions are in [Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1), and every net trained so far with what it measured is in the appendix, [The experiment log](/en/arch/learning/experiments/).
