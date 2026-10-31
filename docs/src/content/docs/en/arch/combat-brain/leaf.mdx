@@ -15,7 +15,7 @@ Every search stops somewhere. PIMC stops at the end of the turn; the SL planner 
 A leaf is either a state at the start of a turn, after the enemies' turn has been played for real, or the end of the fight, won or lost. Both are valued by the same function, `ICombatLeaf.Value(status, observation, history)`: a lost fight is worth nothing, a won one by what it leaves, and a fight in progress by what it is expected to leave.
 
 - **Observation only.** The leaf reads what the player sees, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)). It never reads the draw order or a random stream, so it cannot leak hidden state, in either environment.
-- **One scale.** Its unit is the run's: a share of a win, P(win run) as the design states it ([Learning §1](/en/arch/learning/#sec-1)). The weights below make it that only roughly; with V's prices it is V's unit ([§5](#sec-5)).
+- **One scale.** Its unit is the run's: a share of a win, P(win run) as the design states it ([Learning: the value function §1](/en/arch/learning/value/#sec-1)). The weights below make it that only roughly; with V's prices it is V's unit ([§5](#sec-5)).
 - **Ordering, more than level.** A search uses the leaf to compare lines: what matters is that a better state gets a higher value. A leaf that rates every state 0.1 too high plays the same as one that does not.
 
 ## 2. The hand-made leaf: LeafValue
@@ -36,7 +36,7 @@ So damage is worth more on an enemy that hits hard and dies soon, overkill is wo
 
 <LeafPlayground client:visible lang="en" />
 
-Its blind spots are everything it does not read: the enemies' powers other than poison, the player's powers other than Strength, the draw pile, and every intent after this turn. The numbers (`LeafWeights`: WinBase 0.2, PerHp 0.6, PerPotion 0.02, Dps 10, Unblocked 0.5, MinIncoming 3, PoisonShare 0.8) are hypotheses, never tuned: `--leaf FILE` gives a run, a panel or the brain other weights (`weights --leaf` prints the defaults as such a file, `leaf0`), but no tool tunes them any more, since the strategy is left to learned values ([Learning §2](/en/arch/learning/#sec-2)).
+Its blind spots are everything it does not read: the enemies' powers other than poison, the player's powers other than Strength, the draw pile, and every intent after this turn. The numbers (`LeafWeights`: WinBase 0.2, PerHp 0.6, PerPotion 0.02, Dps 10, Unblocked 0.5, MinIncoming 3, PoisonShare 0.8) are hypotheses, never tuned: `--leaf FILE` gives a run, a panel or the brain other weights (`weights --leaf` prints the defaults as such a file, `leaf0`), but no tool tunes them any more, since the strategy is left to learned values ([Learning: the loop §6](/en/arch/learning/loop/#sec-6)).
 
 ## 3. The combat net
 
@@ -57,7 +57,7 @@ The diagram draws c2 as its net file's graph has it, from the inputs at the bott
 
 <ArchDiagram client:visible lang="en" net="combat" />
 
-c2, the champions' net, was trained on 315 NoSL self-play runs (13,954 round starts) and also reads each card's cost; the newer nets of `learn/combat/` read ids and raw state alone, as pure V does ([Learning §1](/en/arch/learning/#sec-1)). A net file names the inputs its graph takes, and `CombatNet` feeds only those, so old and new nets load alike. The training (samples, targets, loss, held-out runs) is in [Learning §2](/en/arch/learning/#sec-2).
+c2, the champions' net, was trained on 315 NoSL self-play runs (13,954 round starts) and also reads each card's cost; the newer nets of `learn/combat/` read ids and raw state alone, as pure V does ([Learning: the value function §6](/en/arch/learning/value/#sec-6)). A net file names the inputs its graph takes, and `CombatNet` feeds only those, so old and new nets load alike. The training (samples, targets, loss, held-out runs) is in [Learning: training the combat net](/en/arch/learning/combat-net/).
 
 ## 4. The head: how the fight ends
 
@@ -65,7 +65,7 @@ The head is a probability distribution over 51 classes: a **death**, or one of 5
 
 Why "still to be lost" and not "left at the end"? The first net, c1, predicted the share left at the end. It learned only about half of what the HP held now is worth there: one HP less now lowered its value by 0.0038, where it lowers the end by a full HP, 0.0078 at `LeafValue`'s prices. Its search then traded HP away too cheaply, lost more HP than the champion in normal and elite fights (7.8 against 6.5 and 26.4 against 18.0 HP per win) and failed its gate. Predicting what is still to come makes the HP held now count in full, since it is added back exactly when the value is formed (0.0083 per HP on the same states), and the error of the value fell from 0.0090 to 0.0077.
 
-The figure shows c2's head on the eight round starts its file carries, real states from held-out runs; loading the net checks that it gives these outcomes, as the trainer computed them ([Learning §7](/en/arch/learning/#sec-7)). The two boss fights at the left are the hard ones: a death in 86% and 77% of the endings.
+The figure shows c2's head on the eight round starts its file carries, real states from held-out runs; loading the net checks that it gives these outcomes, as the trainer computed them ([Learning: reference §7](/en/arch/learning/reference/#sec-7)). The two boss fights at the left are the hard ones: a death in 86% and 77% of the endings.
 
 <OutcomeHead client:visible lang="en" />
 

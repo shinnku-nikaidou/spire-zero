@@ -45,7 +45,7 @@ import SurfaceCounts from '../../../../../components/book/SurfaceCounts.svelte';
 - `UnlockState.all` 表示每個紀元和遭遇都已解鎖，而且打過的局數極大（`Unlocks/UnlockState.cs:34`），所以第 1 幕和第一局給新玩家的調整永遠不會生效，一局從涅奧開始（[無頭宿主 §5](/zh-tw/arch/simulator/headless/#sec-5)）。
 - 沒做的：照搬真實玩家的設定檔（他們解鎖了什麼），以及把晉階限制在角色的上限內，這是遊戲大廳會做的（`StartRunLobby.cs:485-491`）。呼叫方傳入的都是合法值。
 
-**種子**。一局的種子是遊戲種子：遊戲字母表裡的 12 個字元，字母表是數字和去掉 I 與 O 的大寫字母，例如 `0SSL7NS01MU6`。`run --seeds FILE` 從種子檔案讀入種子（[評估 §4](/zh-tw/arch/evaluation/#sec-4)）；沒有種子檔案時，`run --seed B` 用基數 B 和索引生成第 *i* 局的種子：`GameSeeds.MakeSeed(B, i)`（`Simulation/GameSeeds.cs:7-12`）。
+**種子**。一局的種子是遊戲種子：遊戲字母表裡的 12 個字元，字母表是數字和去掉 I 與 O 的大寫字母，例如 `0SSL7NS01MU6`。`run --seeds FILE` 從種子檔案讀入種子（[評估：指標、種子與報告 §5](/zh-tw/arch/evaluation/metrics/#sec-5)）；沒有種子檔案時，`run --seed B` 用基數 B 和索引生成第 *i* 局的種子：`GameSeeds.MakeSeed(B, i)`（`Simulation/GameSeeds.cs:7-12`）。
 
 ## 3. 走一步、穩定、決定
 
@@ -149,7 +149,7 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 
 **結束代碼**：有一局失敗、有一次重播不同、有一個節點沒有精確重播，或記錄到遊戲錯誤時為 1；否則為 0。從未到達的決策介面和空閒等待只會印出來（`Commands/RunCommand.cs:155`）。
 
-**記錄與日誌**。`--records FILE` 每行寫一條對局記錄，是 `report` 和 `gate` 的輸入（[評估 §6](/zh-tw/arch/evaluation/#sec-6)）：
+**記錄與日誌**。`--records FILE` 每行寫一條對局記錄，是 `report` 和 `gate` 的輸入（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)）：
 
 | 欄位 | 內容 |
 |---|---|
@@ -165,7 +165,7 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 
 ## 6. 確定性
 
-下游的一切都需要一局是它的設定和答案的函數。SL 複本從檢查點重播一個節點的決策，必須到達相同的狀態（[世界與 SL 複本](/zh-tw/arch/simulator/worlds/)）；晉級門檻在相同的種子上把挑戰者和冠軍配對（[評估 §5](/zh-tw/arch/evaluation/#sec-5)）；`--check` 把一局和它自己的重播比較。給定種子，遊戲是確定性的，但前提是沒有別的東西滲進來：沒有時鐘、沒有執行緒時序、沒有無序的集合。pump 在一個執行緒上按投遞順序執行每個後續（continuation）（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)），規則永遠碰不到以時鐘為種子的亂數流（[戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)），GameBridge 則把遊戲不按順序保存的東西排好序，例如一個地圖點的子節點。
+下游的一切都需要一局是它的設定和答案的函數。SL 複本從檢查點重播一個節點的決策，必須到達相同的狀態（[世界與 SL 複本](/zh-tw/arch/simulator/worlds/)）；晉級門檻在相同的種子上把挑戰者和冠軍配對（[評估：晉級門檻 §2](/zh-tw/arch/evaluation/gates/#sec-2)）；`--check` 把一局和它自己的重播比較。給定種子，遊戲是確定性的，但前提是沒有別的東西滲進來：沒有時鐘、沒有執行緒時序、沒有無序的集合。pump 在一個執行緒上按投遞順序執行每個後續（continuation）（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)），規則永遠碰不到以時鐘為種子的亂數流（[戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)），GameBridge 則把遊戲不按順序保存的東西排好序，例如一個地圖點的子節點。
 
 **`run --check`** 在它打的每一局上檢查這一點（`Commands/RunCommand.cs:103-139`）：
 
@@ -184,19 +184,19 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 
 **真實時間等待**。模型程式碼不能等待時鐘。`Task.Delay` 會讓 pump 的佇列一直是空的，直到計時器執行緒投遞工作，所以穩定時無法分辨遊戲是空閒還是在等待（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)）。Amalgamator 的事件就是這樣等待的，已打上補丁。其他幾處在無頭時走不到：`ActionExecutor.WaitForUnpause` 在遊戲暫停時每 50 ms 輪詢一次（`GameActions/ActionExecutor.cs:227-242`），`CombatState.GodotTimerTask` 為按 net id 查找生物設了超時（`Combat/CombatState.cs:603-609`），休息處的懸停訊息屬於 UI。守護手段是上面的空閒等待計數，在 200 局的批次裡為 0。
 
-**內嵌執行**。無頭時，遊戲在 `NonInteractiveMode` 下執行，動作內嵌執行，而不是每影格讓出一次，所以「發出即不管」（fire-and-forget）的工作順序可能與真實遊戲不同。這是否改變玩家看得到的任何東西，要等到遊戲裡的對局能和這裡的對局比較時才知道（[評估 §1](/zh-tw/arch/evaluation/#sec-1)）。
+**內嵌執行**。無頭時，遊戲在 `NonInteractiveMode` 下執行，動作內嵌執行，而不是每影格讓出一次，所以「發出即不管」（fire-and-forget）的工作順序可能與真實遊戲不同。這是否改變玩家看得到的任何東西，要等到遊戲裡的對局能和這裡的對局比較時才知道（[評估 §2](/zh-tw/arch/evaluation/#sec-2)）。
 
 ## 7. 兩種連戰
 
 有兩條規則會讓某些戰鬥在開始時就判贏，從而縮短一局，做法和遊戲的 `win` 主控台指令一樣（`DevConsole.ConsoleCommands/WinConsoleCmd.cs:31-47`）：每個敵人失去它的能力後被殺死，然後遊戲檢查是否獲勝（`Simulation/RunSession.cs:377-385`）。被殺死時復活或召喚同伴的敵人會再被殺一次，最多 5 次。戰鬥獎勵照常發放，和任何一場勝利之後一樣，也不會問任何戰鬥決策。
 
-**頭目連戰試驗**（`run --auto-win`）贏下每場戰鬥，包括頭目戰。這樣一局大約一秒就走到每個頭目的門口，只打宏觀決策：5 局共用 3.1 s，過了三幕的所有頭目，沒有遊戲錯誤。它是為了讓 `bosslab.py states` 能收集頭目門口的狀態並在那裡開打而做的（[學習 §2](/zh-tw/arch/learning/#sec-2)）。它不能和 `--check` 一起用，也不能和 `--afterstates clone` 一起用：節點的檢查點不保存這條規則。
+**頭目連戰試驗**（`run --auto-win`）贏下每場戰鬥，包括頭目戰。這樣一局大約一秒就走到每個頭目的門口，只打宏觀決策：5 局共用 3.1 s，過了三幕的所有頭目，沒有遊戲錯誤。它是為了讓 `bosslab.py states` 能收集頭目門口的狀態並在那裡開打而做的（[學習：價值函數 §10](/zh-tw/arch/learning/value/#sec-10)）。它不能和 `--check` 一起用，也不能和 `--afterstates clone` 一起用：節點的檢查點不保存這條規則。
 
-**菁英連戰**（`run --gauntlet`，提交 `7a9f845`）只判贏遭遇是普通怪物戰（`RoomType.Monster`）的戰鬥，事件裡的也算。菁英和頭目（事件裡的也算）由戰鬥大腦用這一局當時的生命值和藥水來打，死亡就結束這一局。其他一切都照遊戲原本的樣子。這條規則跟著這一局的 SL 複本走：節點的檢查點把它帶給大腦（`NodeCheckpoint.Gauntlet`，提交 `e970b60`），所以宏觀大腦在複本上的試探會贏下同樣的戰鬥。沒有這一點時，每次在一場已判贏的怪物戰的獎勵處試探，都會把那場戰鬥當成真打的戰鬥重播，這一局就失敗了。計畫 v6 在這種對局裡訓練和評判 V；計畫 v7 又回到在整局上訓練它、用門檻檢驗它（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
+**菁英連戰**（`run --gauntlet`，提交 `7a9f845`）只判贏遭遇是普通怪物戰（`RoomType.Monster`）的戰鬥，事件裡的也算。菁英和頭目（事件裡的也算）由戰鬥大腦用這一局當時的生命值和藥水來打，死亡就結束這一局。其他一切都照遊戲原本的樣子。這條規則跟著這一局的 SL 複本走：節點的檢查點把它帶給大腦（`NodeCheckpoint.Gauntlet`，提交 `e970b60`），所以宏觀大腦在複本上的試探會贏下同樣的戰鬥。沒有這一點時，每次在一場已判贏的怪物戰的獎勵處試探，都會把那場戰鬥當成真打的戰鬥重播，這一局就失敗了。計畫 v6 在這種對局裡訓練和評判 V；計畫 v7 又回到在整局上訓練它、用門檻檢驗它（[學習：價值函數 §7](/zh-tw/arch/learning/value/#sec-7)）。
 
 程式碼的說明文字和註解把 `--gauntlet` 叫作「the boss gauntlet」；本書對它保留菁英連戰這個名字，因為每場菁英戰都要真打，而把頭目連戰試驗這個名字留給 `--auto-win`。
 
-兩條規則都會在它們的記錄上做標記（`auto_win`、`gauntlet`）。`report`、`gate` 和整局用的 V 都拒收這些記錄，因為它們的層數和生命值說明不了一整局打得怎麼樣（[評估 §6](/zh-tw/arch/evaluation/#sec-6)）。連戰對局的戰鬥還會記錄死亡時敵人的生命值和最大生命值（贏下的戰鬥敵人都已不在，是 0/0）。
+兩條規則都會在它們的記錄上做標記（`auto_win`、`gauntlet`）。`report`、`gate` 和整局用的 V 都拒收這些記錄，因為它們的層數和生命值說明不了一整局打得怎麼樣（[評估：指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)）。這些對局和整局一樣，每場戰鬥的結局都記錄敵人的生命值和最大生命值（自 `7a9f845` 起），連戰的進度在死亡時讀取它；贏下的戰鬥敵人都已不在，是 0/0。
 
 ## 8. 連到大腦的對局
 

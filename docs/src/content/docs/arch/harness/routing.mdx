@@ -46,7 +46,7 @@ combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-
 
 **池里的 SL 规划器**（`PooledPlanner.Route`，[SL 规划器](/arch/sl-planner/)）。每局一个 `SlRoute`，把战斗剩下的部分规划一次，然后沿用这个计划，只在某一步对不上或计划用完时才重新规划（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。一个计划就是 `SlPlanner.Search`，束的每个回合按保留的每个状态发一个 `sl_turn` 请求，用房间的预算。用 `--leaf-prices v` 时，每个计划都带着 V 给这场战斗各种结局定的价格，由决策时的这一局算出（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。没有节点克隆时这个路由会抛异常（它只在 SL 下打），要用 V 的价格却没有整局观测时也会。
 
-**探索**（`CombatRoute.Exploring`，仅自我对弈，`--combat-explore T`，[学习 §5](/arch/learning/#sec-5)）。搜索返回两个或更多候选时，首个动作按它们值的 softmax 从中抽取：每个的概率 ∝ exp((v − best) / T)，T 以叶子的单位计（`Brain/Exploration.cs`）。如果抽中的正是搜索自己的选择，结果不变。否则打出抽中的动作，候选不变，没有计划，因为那个计划是原选择的；如果它的估值比原选择低 T/100 以上，就标为探索（差距更小时就等于平手）；它不标为重新规划。
+**探索**（`CombatRoute.Exploring`，仅自我对弈，`--combat-explore T`，[学习：循环 §9](/arch/learning/loop/#sec-9)）。搜索返回两个或更多候选时，首个动作按它们值的 softmax 从中抽取：每个的概率 ∝ exp((v − best) / T)，T 以叶子的单位计（`Brain/Exploration.cs`）。如果抽中的正是搜索自己的选择，结果不变。否则打出抽中的动作，候选不变，没有计划，因为那个计划是原选择的；如果它的估值比原选择低 T/100 以上，就标为探索（差距更小时就等于平手）；它不标为重新规划。
 
 **两样持续整局的东西**。`TurnPlan` 和 `SlRoute` 每局只做一次，从不清空，战斗结束时不清，宏观决策时也不清；规划器对连续未证明的失败计划的计数跨决策延续（[SL 规划器：束搜索 §6](/arch/sl-planner/beam/#sec-6)）。另外，探索和沿用计划会相互影响：探索出的一步会让原选择的计划留在队列里，所以下一个决策通常会发现那个计划的这一步对不上，于是重新搜索，并作为重新规划记进日志和计数。
 
@@ -163,7 +163,7 @@ SL PIMC 和规划器搜索唯一的精确世界，忽略它；宏观策略和提
 
 一个请求大多只要几秒：一个世界的搜索、一个束状态的一个回合，或一个决策的试探路径中的一份。超时抓的是卡住的工作进程，不是慢的。
 
-**在宿主里**：在 `run` 里，任何异常都会让这一局以 `failed` 结束，带上它的类型和第一行，报告会计入它（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）。通过线路时，模拟器这个宿主遇到 `error` 会抛异常，结果相同；遇到 id 或哈希不是请求的推荐时也会。Mod 记一条警告，以 `run_end{failed}` 结束这一局，让游戏在没有大脑的情况下继续（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。评估要求失败的对局，以及名为 `random` 的大脑做出的决策，都为 0（[评估 §3](/arch/evaluation/#sec-3)）。
+**在宿主里**：在 `run` 里，任何异常都会让这一局以 `failed` 结束，带上它的类型和第一行，报告会计入它（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）。通过线路时，模拟器这个宿主遇到 `error` 会抛异常，结果相同；遇到 id 或哈希不是请求的推荐时也会。Mod 记一条警告，以 `run_end{failed}` 结束这一局，让游戏在没有大脑的情况下继续（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。评估要求失败的对局，以及名为 `random` 的大脑做出的决策，都为 0（[评估：指标、种子与报告 §2](/arch/evaluation/metrics/#sec-2)）。
 
 **规划中的处理** <Badge text="规划中" variant="caution" />：
 

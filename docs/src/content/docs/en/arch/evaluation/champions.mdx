@@ -1,0 +1,170 @@
+---
+title: Champions and baselines
+description: 'The champion file field by field and who reads it; every champion so far, with its report and the gate it passed or the decision that set it; the gates that did not promote; the elite gauntlet''s champions; external baselines and every committed report; open questions.'
+sidebar:
+  label: Champions and baselines
+---
+import ChampionTimeline from '../../../../../components/book/ChampionTimeline.svelte';
+
+A **champion** is the best accepted version of the AI in one environment: the brains, their budget and their weights, and the report that stands for them. This page is the record: the file that names a champion, every champion so far and how it got there, the gates that did not promote, and what other projects and our own generations have reached. How gates work is on [Gates](/en/arch/evaluation/gates/).
+
+## 1. The champion file
+
+`eval/CHARACTER/champions/ENV.json` (`nosl.json`, `sl.json`) holds one champion per character and environment, as the `ChampionFile` record (`Harness/Gate.cs:116-117`). The SL champion's file today:
+
+```json
+{
+  "env": "SL",
+  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone",
+  "options": {
+    "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
+    "value": "weights/silent/v6-3-2.json", "afterstates": "clone", "combat-net": "weights/silent/c2.json",
+    "character": "SILENT", "asc": "0"
+  },
+  "report": "eval/silent/reports/2026-10-30-sl-r1-promotion-1-300-plan-c2-l0-v6-3-2-clone-p0.json",
+  "since": "2026-10-30"
+}
+```
+
+(one line in the file, spread out here).
+
+| field | what it holds |
+|---|---|
+| `env` | `NoSL` or `SL`; a gate refuses a challenger's `--env` that is not this |
+| `champion` | the champion's name as the reports show it, the brains on each side of the routing table with the budget ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) |
+| `options` | the run options that play it, without their `--`, the character and ascension among them; weights files by their path in `weights/CHARACTER/` |
+| `report` | the report a challenger is paired with: the champion's side of every gate |
+| `since` | the date it became champion (the promoted report's date, or the date written by hand) |
+| `gate` | the gate it passed, absent for a champion set without one: `metric`, `delta`, `alpha`, `beta`, `pairs`, `decided`, `llr`, `lower`, `upper`, `floor_diff_mean`, `challenger_only_wins`, `champion_only_wins`, `verdict`, `void_reason` when there is one, and `not_worse` (in the files from `a2643cf` on; the field came with the not-worse gate, `62876d4`) |
+
+**Who reads it.**
+
+- `run`, `brain`, `afterstates` and `fork` take `--champion FILE` and play the champion it names (`SimWorker/Commands/Args.cs:173-202`, [Simulator: reference §3](/en/arch/simulator/reference/#sec-3)). The file's options come after the ones given, so given ones win; an option the command does not have is skipped (`brain` has no `--env`: each host names its own); a `--policy` given that is not the file's keeps its own budget.
+- `gate --champion FILE` is the champion to beat: it reads the file's `env` and `report` ([Gates §6](/en/arch/evaluation/gates/#sec-6)). `learn/challenge.py` reads the report's seed set, size, character and ascension.
+- `leaderboard` marks the report each file names, on the board of the file's environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
+
+**Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:86-114`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. No SL champion has been promoted by `gate`; the SL files were written by hand and say `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `report` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
+
+**Now.** Both files name `weights/silent/v6-3-2.json` and `weights/silent/c2.json`, the report above, since 2026-10-30, and no gate. SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The NoSL file names the SL report, since no NoSL report of this champion exists; a NoSL gate against it is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)).
+
+## 2. Every champion so far
+
+Each change to a champion file, in time order. Commit times in UTC; the reports are on `promotion-1` unless said otherwise; floors are the report's mean.
+
+| commit, UTC | env | champion | report | how |
+|---|---|---|---|---|
+| `d5eedc7`, 10-27 07:49 | NoSL | `play` combat, L0 with V v0, prompts `p0` | 11.90 | the first champion: the first report with no random decision |
+| `3ced4d0`, 10-27 10:11 | NoSL | PIMC 8 × 300, L0 with V v0 | 19.34 | floor gate passed after 14 of 200 pairs, +8.21, LLR 3.05 |
+| `df0967b`, 10-27 14:26 | NoSL | PIMC with the combat net c2 as its leaf, L0 with V v0 | 21.88 | floor gate passed after 77 pairs, +2.36, LLR 3.24 |
+| `921b08f`, 10-27 16:50 | NoSL | the same | the same | the file moves to `eval/silent/`; the options gain `character` and `asc` |
+| `abab741`, 10-27 18:18 | NoSL | the same | 22.70 | re-baseline 1 ([Gates §9](/en/arch/evaluation/gates/#sec-9)); gate and date kept |
+| `3a2e8c2`, 10-27 22:30 | NoSL | the same | 22.58 | re-baseline 2 |
+| `534c1aa`, 10-28 01:09 | NoSL | the same | 22.58 | re-baseline 3 |
+| `a2643cf`, 10-28 08:34 | NoSL | PIMC c2, L0 with V v2 n2-b0.1 | 23.96 | floor gate passed after 122 pairs, +2.00, LLR 2.95 |
+| `38a2664`, 10-28 11:49 | NoSL | PIMC c2, L0 with n2-b0.03 | 26.16 | floor gate passed after 136 pairs, +1.78, LLR 2.99 |
+| `3699fc1`, 10-28 16:50 | NoSL | the same | the same | the weights renamed to `weights/silent/n2-b0.03.json` and `c2.json` |
+| `e22438b`, 10-29 01:44 | SL | the SL planner c2 at medium effort, L0 with n2-b0.03 | 28.25 | the first SL champion, set by its baseline, no gate |
+| `7ce103b`, 10-29 10:43 | SL | the SL planner c2 medium, L0 with pure V pure-1-g, screen afterstates | 25.69 | no gate: the first pure V, the start of a new line judged by its own report |
+| `dc4ee30`, 10-30 15:17 | SL and NoSL | SL: the planner c2 medium, L0 with v6-3-2 on the clone; NoSL: PIMC c2, L0 with v6-3-2 | 33.56 and 23 won of 300, on `promotion-1-300` (both files) | no gate: one V for both environments, chosen by its SL report; the NoSL file drops its gate |
+
+- All four NoSL gates are the floor SPRT at δ = 1.5, α = β = 0.05, and none of their reports won a run; [Gates §3](/en/arch/evaluation/gates/#sec-3) replays them pair by pair.
+- **v6-3-2's evidence.** v6-2's report was +5.92 floors against pure-1-g's on `promotion-1`'s 200 seeds (standard error 0.74; v6-2 played on the clone at `b013f95`, pure-1-g with screen afterstates at `6ce07fc`), and v6-3-2's +2.20 against v6-2's on all 300 (standard error 0.62). v6-2 was the elite gauntlet's champion, never a whole-run one.
+- The ± in these two numbers, as in the ledger, is one standard error; the re-baselines' ± ([Gates §9](/en/arch/evaluation/gates/#sec-9)) is a 95% half-width, 1.96 standard errors.
+
+<ChampionTimeline client:visible lang="en" />
+
+## 3. Gates that did not promote, and gates that never ran
+
+**Gates that ran and did not promote.** Their records are on the storage host, not in git; the results are the ledger's (`eval/silent/ledger.md:58-70`) and the budget pages':
+
+| challenger | env | gate | result |
+|---|---|---|---|
+| c1, combat net | NoSL | 2026-10-27 | not promoted |
+| c3, combat net | NoSL | floor | void at 160 of 200 pairs (+0.58 floors, open) |
+| n1, V v2 | NoSL | floor, 2026-10-27 | failed, −0.61 floors |
+| n2-b0.01, V v2 | NoSL | – | stopped halfway, to be run again |
+| PIMC boss budget × 2 | NoSL | floor, seeds 0–99, 2026-10-28 | failed: 90 of 100 pairs tied, −0.39 ± 0.32 floors ([NoSL PIMC: budget §4](/en/arch/pimc/budget/#sec-4)) |
+| PIMC `--follow` | NoSL | not worse | open after all 200 pairs, −0.72 ± 0.92 floors ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2)) |
+| the SL planner's beam 4, × 2 at elites and bosses | SL | not worse | failed after 92 pairs ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)) |
+| n3-free-ctl, V v2 reading 9 of V v0's 17 features | SL | not worse, δ 1.5, 2026-10-29 | failed after 33 pairs; over all 200: −5.77 ± 0.64 floors |
+
+The SL planner's medium effort passed its not-worse gate after 33 pairs and became the planner's default and the SL champion's effort by hand ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)).
+
+**The SL champions' gates that never ran.** Every SL change of champion was set by a report and a decision, not by `gate`. Computed here from the committed reports with the gate's own rules (the C# SPRTs at their defaults, and plan v7's wins bound):
+
+| change | floor SPRT | win SPRT | wins bound |
+|---|---|---|---|
+| SL n2-b0.03 → pure-1-g, `promotion-1` | fail after 40 pairs (−3.02) | open: no wins | no: 0 against 0 |
+| pure-1-g → v6-2, `promotion-1` | pass after 32 (+6.72) | open: 1 against 0 | no: lower −0.003 |
+| v6-2 → v6-3-2, `promotion-1-300` | pass after 139 (+2.56) | pass after 234 (18 against 1 by then) | yes: lower +0.047 |
+| v6-2 → v6-3-1, `promotion-1-300` | fail after 288 (−0.27) | open: 13 against 1 | yes: lower +0.020 |
+| v6-3-1 → v6-3-2, `promotion-1-300` | pass after 173 (+2.40) | open: 21 against 11 | yes: lower +0.002 |
+
+pure-1-g would have failed the floor gate that its own line's later V's passed by wide margins; it was kept as the start of the pure-V line all the same. v6-3-1 shows the floor and the wins disagreeing: worse by floors, clearly better by wins.
+
+## 4. The elite gauntlet's champions
+
+Plan v6's V's were promoted in the elite gauntlet by `learn/gauntlet.py`'s lower bound on progress, on the 500 evaluation seeds at the low budget with the clone ([Gates §11](/en/arch/evaluation/gates/#sec-11)). From `eval/silent/gauntlet-leaderboard.md`, kept by hand, its dates Taiwan's:
+
+| V | date | progress | paired against the champion before it | won of 500 |
+|---|---|---|---|---|
+| pure-1-g | 2026-10-29 | 34.47 ± 0.33 | the first | 2 |
+| v6-1 | 2026-10-30 | 36.07 ± 0.34 | +1.60 ± 0.44 against pure-1-g, lower +0.88 | 10 |
+| v6-2 | 2026-10-30 | 40.69 ± 0.38 | +4.62 ± 0.46 against v6-1, lower +3.86 | 68 |
+| v6-3-2 | 2026-10-30 | 43.36 ± 0.38 | +2.67 ± 0.49 against v6-2, lower +1.87 | 173 |
+
+v6-3-1 passed too (+1.73 ± 0.54 against v6-2, lower +0.85) and was not promoted, since v6-3-2's mean was higher. Plan v6 ended with v6-3-2. The generations are told in [Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3).
+
+## 5. Baselines
+
+**Other projects.** From the project's local notes on prior art:
+
+| source | result | note |
+|---|---|---|
+| FableBot | Ironclad A0 20.7% (71 of 343, Wilson 16.7–25.3%) | the only fair, real-game, adequately sampled result; no Silent (`tmp/notes/refs/prior-art-rl.md:343`) |
+| AgenticSTS | Silent A0 about 35% (44 of 125, mixed game versions); A8 and above 0 of 25 | an LLM with a human-written Silent guide; counted from its published run history |
+| spire-mentor | −22.8 and −25.5 pp of win rate without its cheat | its ranker and its PPO policy, with the whole-run cheat switched off; the reference for SL − NoSL ([Evaluation §3](/en/arch/evaluation/#sec-3); `tmp/notes/refs/strong-bots.md:42`) |
+
+**Every committed report.** All Silent, ascension 0, rung R1. "Won" with its Wilson interval when above 0; bosses per act; "beaten" from the run records' combat ends, none before `c239f12`; seconds per run on the hosts of the time, so they compare only within a day.
+
+| champion | env | seeds | won | floor | bosses reached | bosses beaten | s per run | simulator | |
+|---|---|---|---|---|---|---|---|---|---|
+| `play`, prompts random, random | NoSL | `promotion-1` | 0/200 | 8.09 | 5 | – | 0.1 | `18fdb07` | void |
+| `play`, prompts random, L0 | NoSL | `promotion-1` | 0/200 | 11.72 | 54 | – | 0.1 | `18fdb07` | void |
+| PIMC, prompts random, random | NoSL | `promotion-1` | 0/200 | 13.68 | 73 / 1 | – | 41.3 | `18fdb07` | void |
+| PIMC, prompts random, L0 | NoSL | `promotion-1` | 0/200 | 18.50 | 175 / 15 | – | 49.7 | `18fdb07` | void |
+| `play`, random | NoSL | `promotion-1` | 0/200 | 8.12 | 3 | – | 0.2 | `dc0105a` | void |
+| `play`, L0 | NoSL | `promotion-1` | 0/200 | 11.90 | 60 | – | 0.2 | `dc0105a` | champion |
+| PIMC, L0 | NoSL | `promotion-1` | 0/200 | 19.34 | 177 / 19 | 61 / 0 | 75.7 | `c239f12` | champion |
+| PIMC c2, L0 | NoSL | `promotion-1` | 0/200 | 21.88 | 187 / 45 / 1 | 86 / 2 / 0 | 92.0 | `fbf89ad` | champion |
+| PIMC c2, L0 (re-baseline 1) | NoSL | `promotion-1` | 0/200 | 22.70 | 190 / 45 / 4 | 95 / 5 / 0 | 97.8 | `432aa0c` | champion |
+| PIMC c2, L0 (re-baseline 2) | NoSL | `promotion-1` | 0/200 | 22.58 | 190 / 45 / 3 | 94 / 5 / 0 | 100.7 | `32a0160` | champion |
+| PIMC c2, L0 (re-baseline 3) | NoSL | `promotion-1` | 0/200 | 22.58 | 190 / 45 / 3 | 94 / 5 / 0 | 93.1 | `c5ee8de` | champion |
+| PIMC c2, L0 n2-b0.1 | NoSL | `promotion-1` | 0/200 | 23.96 | 186 / 62 / 1 | 117 / 4 / 0 | 125.6 | `0d7818f` | champion |
+| PIMC c2, L0 n2-b0.03 | NoSL | `promotion-1` | 0/200 | 26.16 | 190 / 83 / 3 | 137 / 15 / 0 | 159.6 | `377e180` | champion |
+| plan c2, L0 n2-b0.03 | SL | `promotion-1` | 0/200 | 28.25 | 192 / 105 / 4 | 150 / 17 / 0 | 194.8 | `3699fc1` | champion |
+| plan c2, random | SL | `promotion-1` | 0/200 | 15.29 | 105 | 19 | 151.0 | `6ce07fc` | void |
+| plan c2, L0 pure-1-b | SL | `promotion-1` | 0/200 | 21.44 | 175 / 14 / 1 | 99 / 1 / 0 | 110.2 | `6ce07fc` | |
+| plan c2, L0 pure-1 | SL | `promotion-1` | 0/200 | 22.64 | 161 / 33 | 116 / 4 | 143.4 | `6ce07fc` | |
+| plan c2, L0 pure-1-d | SL | `promotion-1` | 0/200 | 24.77 | 176 / 49 / 1 | 139 / 2 / 0 | 136.8 | `6ce07fc` | |
+| plan c2, L0 pure-1-g | SL | `promotion-1` | 0/200 | 25.69 | 177 / 52 / 2 | 149 / 6 / 0 | 142.6 | `6ce07fc` | champion |
+| plan c2, L0 v6-2 clone | SL | `promotion-1` | 1/200 (0.1–2.8%) | 31.61 | 199 / 112 / 19 | 179 / 42 / 1 | 565.6 | `b013f95` | the first 200 runs of the next |
+| plan c2, L0 v6-2 clone | SL | `promotion-1-300` | 1/300 (0.1–1.9%) | 31.37 | 298 / 161 / 25 | 272 / 59 / 1 | 517.1 | `b013f95` | |
+| plan c2, L0 v6-3-1 clone | SL | `promotion-1-300` | 13/300 (2.5–7.3%) | 31.11 | 284 / 144 / 51 | 248 / 75 / 13 | 240.6 | `b013f95` | |
+| plan c2, L0 v6-3-2 clone | SL | `promotion-1-300` | 23/300 (5.2–11.2%) | 33.56 | 290 / 171 / 65 | 276 / 94 / 23 | 271.2 | `b013f95` | champion of both files |
+
+"prompts random" are card prompts in combat answered by the `random` placeholder, before `p0`; "random" in the macro column is the random macro placeholder. The V's names are explained in [Macro brain §4](/en/arch/macro-brain/#sec-4). v6-2's `promotion-1` report is the first 200 runs of its `promotion-1-300` one, record for record. v6-2 is the first V whose whole runs won; v6-3-2 the first champion that wins.
+
+**What the table shows.**
+
+- **Search, then the macro brain.** On `promotion-1` in NoSL, PIMC took the floor from 11.90 (`play`) to 19.34 with the same macro brain; c2 as its leaf to 21.88; learned V's in the macro brain to 23.96 and 26.16. In SL the planner took n2-b0.03's 26.16 to 28.25; the gauntlet's V's on the clone, to 31–33.6 and the first wins. Since 2026-10-28 the combat brain has not changed: the gains since are the macro brain's ([The SL planner: budget §5](/en/arch/sl-planner/budget/#sec-5)).
+- **Where runs end.** v6-3-2 beats the act 1 boss in 95% of the runs that reach it, the act 2 boss in 55%, the act 3 boss in 35%. Of its 277 losses, 133 are at a boss, 39 at an elite, 103 in a monster fight and 2 outside combat ([Metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8), [Macro brain: weaknesses and next steps §1](/en/arch/macro-brain/next/#sec-1)).
+- **The first character is the Silent, and A0 comes first.** Each character has folders of its own, `eval/CHARACTER/`, `weights/CHARACTER/` and `data/CHARACTER/`, and one brain for all its ascensions ([Learning: reference §3](/en/arch/learning/reference/#sec-3)); the seed sets in `eval/seeds/` are shared.
+
+## 6. Open questions
+
+1. **R4 throughput:** how many minutes one run takes at the game's Instant speed, and so how many R4 runs are affordable.
+2. **The wins gate at few discordant seeds:** plan v7's bound passes 3 wins against none ([Gates §10](/en/arch/evaluation/gates/#sec-10)); whether to require a minimum of discordant seeds, or an exact test, once the first gates show how many there are.
+3. **The gates' error rates:** neither gate's false-pass rate has been measured; an A/A test needs a way to vary the champion's own randomness alone ([Gates §4](/en/arch/evaluation/gates/#sec-4)).
+4. **A NoSL report of the champion**, so that the NoSL board has a champion again and SL − NoSL can be measured for one V.
+5. **`final-1`**: when the first formal claim is made on it.

@@ -1,0 +1,170 @@
+---
+title: 冠軍與基線
+description: '冠軍檔案逐欄說明，以及誰讀它；迄今每一個冠軍，附它的報告，以及它通過的門檻或定下它的決定；沒有晉級的門檻；菁英連戰的冠軍；外部基線和每一份已提交的報告；未決問題。'
+sidebar:
+  label: 冠軍與基線
+---
+import ChampionTimeline from '../../../../../components/book/ChampionTimeline.svelte';
+
+**冠軍**是某個環境中已接受的最好版本的 AI：大腦、它們的預算和權重，以及代表它們的報告。本頁是一份紀錄：指明冠軍的檔案、迄今每一個冠軍以及它是怎麼來的、沒有晉級的門檻，以及其他專案和我們自己的各代達到了什麼。門檻如何運作見[晉級門檻](/zh-tw/arch/evaluation/gates/)。
+
+## 1. 冠軍檔案
+
+`eval/CHARACTER/champions/ENV.json`（`nosl.json`、`sl.json`）為每個角色和環境保存一個冠軍，格式為 `ChampionFile` 記錄（`Harness/Gate.cs:116-117`）。今天 SL 冠軍的檔案：
+
+```json
+{
+  "env": "SL",
+  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone",
+  "options": {
+    "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
+    "value": "weights/silent/v6-3-2.json", "afterstates": "clone", "combat-net": "weights/silent/c2.json",
+    "character": "SILENT", "asc": "0"
+  },
+  "report": "eval/silent/reports/2026-10-30-sl-r1-promotion-1-300-plan-c2-l0-v6-3-2-clone-p0.json",
+  "since": "2026-10-30"
+}
+```
+
+（檔案裡是一行，這裡展開排版）。
+
+| 欄位 | 內容 |
+|---|---|
+| `env` | `NoSL` 或 `SL`；挑戰者的 `--env` 與它不同時，門檻會拒絕 |
+| `champion` | 冠軍在報告裡顯示的名稱，即路由表每一側的大腦加上預算（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)） |
+| `options` | 打出這個冠軍的對局選項，不帶 `--`，其中包括角色和晉階等級；權重檔案寫成它們在 `weights/CHARACTER/` 裡的路徑 |
+| `report` | 挑戰者與之配對的報告：每次門檻中冠軍那一方 |
+| `since` | 它成為冠軍的日期（晉級報告的日期，或人工寫入的日期） |
+| `gate` | 它通過的門檻，沒有經過門檻而定下的冠軍則沒有這一欄：`metric`、`delta`、`alpha`、`beta`、`pairs`、`decided`、`llr`、`lower`、`upper`、`floor_diff_mean`、`challenger_only_wins`、`champion_only_wins`、`verdict`，有的話還有 `void_reason`，以及 `not_worse`（從 `a2643cf` 起的檔案裡才有；這個欄位隨不更差門檻 `62876d4` 加入） |
+
+**誰讀它**。
+
+- `run`、`brain`、`afterstates` 和 `fork` 接受 `--champion FILE`，打它指明的冠軍（`SimWorker/Commands/Args.cs:173-202`，[模擬器：參考 §3](/zh-tw/arch/simulator/reference/#sec-3)）。檔案的選項排在給定的選項之後，所以給定的優先；指令沒有的選項會被略過（`brain` 沒有 `--env`：每個宿主自己指明）；給定了與檔案不同的 `--policy` 時，保留它自己的預算。
+- `gate --champion FILE` 是要打敗的冠軍：它讀取檔案的 `env` 和 `report`（[晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。`learn/challenge.py` 讀取報告的種子集、大小、角色和晉階等級。
+- `leaderboard` 在檔案所屬環境的榜上，標出每個檔案指明的報告（[指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9)）。
+
+**由 `--promote` 寫入，或由人工寫入**。`gate --promote` 寫入每個欄位，選項按挑戰者的選項產生（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:86-114`）：對 SL 規劃器是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。還沒有 SL 冠軍是由 `gate` 晉級的；SL 檔案是人工寫的，寫著 `"effort": "medium"`，打的是同樣的預算（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。重定基線只改 `report`（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）。
+
+**現在**。兩個檔案都指明 `weights/silent/v6-3-2.json` 和 `weights/silent/c2.json`、上面那份報告、自 2026-10-30 起，沒有門檻。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。NoSL 檔案指向 SL 報告，因為這個冠軍還沒有 NoSL 報告；對它的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
+
+## 2. 迄今每一個冠軍
+
+冠軍檔案的每一次變更，按時間順序。提交時間為 UTC；除非另有說明，報告都在 `promotion-1` 上；層數是報告的平均值。
+
+| 提交，UTC | 環境 | 冠軍 | 報告 | 方式 |
+|---|---|---|---|---|
+| `d5eedc7`，10-27 07:49 | NoSL | 戰鬥 `play`，L0 用 V v0，選牌提示 `p0` | 11.90 | 第一個冠軍：第一份沒有隨機決策的報告 |
+| `3ced4d0`，10-27 10:11 | NoSL | PIMC 8 × 300，L0 用 V v0 | 19.34 | 層數門檻在 200 對中的 14 對後通過，+8.21，LLR 3.05 |
+| `df0967b`，10-27 14:26 | NoSL | PIMC 以戰鬥網路 c2 為葉節點，L0 用 V v0 | 21.88 | 層數門檻在 77 對後通過，+2.36，LLR 3.24 |
+| `921b08f`，10-27 16:50 | NoSL | 同上 | 同上 | 檔案移到 `eval/silent/`；選項加上 `character` 和 `asc` |
+| `abab741`，10-27 18:18 | NoSL | 同上 | 22.70 | 重定基線 1（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）；門檻和日期不變 |
+| `3a2e8c2`，10-27 22:30 | NoSL | 同上 | 22.58 | 重定基線 2 |
+| `534c1aa`，10-28 01:09 | NoSL | 同上 | 22.58 | 重定基線 3 |
+| `a2643cf`，10-28 08:34 | NoSL | PIMC c2，L0 用 V v2 n2-b0.1 | 23.96 | 層數門檻在 122 對後通過，+2.00，LLR 2.95 |
+| `38a2664`，10-28 11:49 | NoSL | PIMC c2，L0 用 n2-b0.03 | 26.16 | 層數門檻在 136 對後通過，+1.78，LLR 2.99 |
+| `3699fc1`，10-28 16:50 | NoSL | 同上 | 同上 | 權重改名為 `weights/silent/n2-b0.03.json` 和 `c2.json` |
+| `e22438b`，10-29 01:44 | SL | medium 力度的 SL 規劃器 c2，L0 用 n2-b0.03 | 28.25 | 第一個 SL 冠軍，由它的基線定下，沒有門檻 |
+| `7ce103b`，10-29 10:43 | SL | SL 規劃器 c2 medium，L0 用純 V pure-1-g，從畫面預測後狀態 | 25.69 | 沒有門檻：第一個純 V，一條新路線的起點，由它自己的報告評判 |
+| `dc4ee30`，10-30 15:17 | SL 和 NoSL | SL：規劃器 c2 medium，L0 在複本上用 v6-3-2；NoSL：PIMC c2，L0 用 v6-3-2 | 33.56，300 局贏 23 局，在 `promotion-1-300` 上（兩個檔案） | 沒有門檻：兩種環境共用一個 V，按它的 SL 報告選出；NoSL 檔案去掉了它的門檻 |
+
+- 四次 NoSL 門檻都是 δ = 1.5、α = β = 0.05 的層數 SPRT，它們的報告都沒有贏過一局；[晉級門檻 §3](/zh-tw/arch/evaluation/gates/#sec-3) 逐對重播它們。
+- **v6-3-2 的依據**。在 `promotion-1` 的 200 個種子上，v6-2 的報告比 pure-1-g 的多 +5.92 層（標準誤 0.74；v6-2 在 `b013f95` 上用複本打，pure-1-g 在 `6ce07fc` 上用從畫面預測的後狀態打），而在全部 300 個種子上，v6-3-2 的比 v6-2 的多 +2.20 層（標準誤 0.62）。v6-2 是菁英連戰的冠軍，從來不是整局的冠軍。
+- 這兩個數字裡的 ±，和帳本裡一樣，是一個標準誤；重定基線的 ±（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）是 95% 半寬，即 1.96 個標準誤。
+
+<ChampionTimeline client:visible lang="zh-TW" />
+
+## 3. 沒有晉級的門檻，以及從沒跑過的門檻
+
+**跑過但沒有晉級的門檻**。它們的記錄在儲存主機上，不在 git 裡；結果取自帳本（`eval/silent/ledger.md:58-70`）和各預算頁面：
+
+| 挑戰者 | 環境 | 門檻 | 結果 |
+|---|---|---|---|
+| c1，戰鬥網路 | NoSL | 2026-10-27 | 未晉級 |
+| c3，戰鬥網路 | NoSL | 層數 | 在 200 對中的第 160 對時作廢（+0.58 層，未定） |
+| n1，V v2 | NoSL | 層數，2026-10-27 | 失敗，−0.61 層 |
+| n2-b0.01，V v2 | NoSL | – | 中途停止，待重跑 |
+| PIMC 頭目預算 × 2 | NoSL | 層數，種子 0–99，2026-10-28 | 失敗：100 對中 90 對平手，−0.39 ± 0.32 層（[NoSL PIMC：預算 §4](/zh-tw/arch/pimc/budget/#sec-4)） |
+| PIMC `--follow` | NoSL | 不更差 | 全部 200 對之後仍未定，−0.72 ± 0.92 層（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)） |
+| SL 規劃器的束寬 4，菁英戰和頭目戰 × 2 | SL | 不更差 | 92 對後失敗（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)） |
+| n3-free-ctl，只讀 V v0 的 17 個特徵中 9 個的 V v2 | SL | 不更差，δ 1.5，2026-10-29 | 33 對後失敗；全部 200 對：−5.77 ± 0.64 層 |
+
+SL 規劃器的 medium 力度在 33 對後通過了它的不更差門檻，並經人工設定，成為規劃器的預設值和 SL 冠軍的力度（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。
+
+**SL 冠軍從沒跑過的門檻**。SL 冠軍的每一次更換都是由一份報告和一個決定定下的，而不是由 `gate`。這裡用門檻自己的規則（預設參數的 C# SPRT，以及計畫 v7 的勝局下界），從已提交的報告算出：
+
+| 更換 | 層數 SPRT | 勝局 SPRT | 勝局下界 |
+|---|---|---|---|
+| SL n2-b0.03 → pure-1-g，`promotion-1` | 40 對後失敗（−3.02） | 未定：沒有勝局 | 否：0 對 0 |
+| pure-1-g → v6-2，`promotion-1` | 32 對後通過（+6.72） | 未定：1 對 0 | 否：下界 −0.003 |
+| v6-2 → v6-3-2，`promotion-1-300` | 139 對後通過（+2.56） | 234 對後通過（那時是 18 對 1） | 是：下界 +0.047 |
+| v6-2 → v6-3-1，`promotion-1-300` | 288 對後失敗（−0.27） | 未定：13 對 1 | 是：下界 +0.020 |
+| v6-3-1 → v6-3-2，`promotion-1-300` | 173 對後通過（+2.40） | 未定：21 對 11 | 是：下界 +0.002 |
+
+pure-1-g 本來會在層數門檻上失敗，而它這條路線後來的 V 都以很大的差距通過了這個門檻；儘管如此，它仍被保留為純 V 路線的起點。v6-3-1 顯示了層數和勝局的分歧：按層數更差，按勝局明顯更好。
+
+## 4. 菁英連戰的冠軍
+
+計畫 v6 的各個 V 在菁英連戰裡由 `learn/gauntlet.py` 的進度下界晉級，用 500 個評估種子、低預算並使用複本（[晉級門檻 §11](/zh-tw/arch/evaluation/gates/#sec-11)）。以下取自人工維護的 `eval/silent/gauntlet-leaderboard.md`，日期是台灣的日期：
+
+| V | 日期 | 進度 | 與前一任冠軍配對 | 500 局中的勝局 |
+|---|---|---|---|---|
+| pure-1-g | 2026-10-29 | 34.47 ± 0.33 | 第一個 | 2 |
+| v6-1 | 2026-10-30 | 36.07 ± 0.34 | 對 pure-1-g +1.60 ± 0.44，下界 +0.88 | 10 |
+| v6-2 | 2026-10-30 | 40.69 ± 0.38 | 對 v6-1 +4.62 ± 0.46，下界 +3.86 | 68 |
+| v6-3-2 | 2026-10-30 | 43.36 ± 0.38 | 對 v6-2 +2.67 ± 0.49，下界 +1.87 | 173 |
+
+v6-3-1 也通過了（對 v6-2 +1.73 ± 0.54，下界 +0.85），但沒有晉級，因為 v6-3-2 的平均值更高。計畫 v6 以 v6-3-2 告終。各代的經過見[宏觀大腦：自我對弈 §3](/zh-tw/arch/macro-brain/selfplay/#sec-3)。
+
+## 5. 基線
+
+**其他專案**。取自本專案關於前人成果的本地筆記：
+
+| 來源 | 結果 | 備註 |
+|---|---|---|
+| FableBot | 鐵甲戰士 A0 20.7%（343 局中 71 局，Wilson 16.7–25.3%） | 唯一一個公平、在真實遊戲上、樣本量足夠的結果；沒有寂靜獵手（`tmp/notes/refs/prior-art-rl.md:343`） |
+| AgenticSTS | 寂靜獵手 A0 約 35%（125 局中 44 局，混合多個遊戲版本）；A8 以上 25 局中 0 局 | 一個 LLM 加上人寫的寂靜獵手攻略；根據它公開的對局歷史計算 |
+| spire-mentor | 去掉作弊後勝率 −22.8 和 −25.5 pp | 它的排序器和它的 PPO 策略，關掉涵蓋整局的作弊時的結果；SL − NoSL 的參考（[評估 §3](/zh-tw/arch/evaluation/#sec-3)；`tmp/notes/refs/strong-bots.md:42`） |
+
+**每一份已提交的報告**。全部是寂靜獵手、晉階 0、R1 級。「勝局」大於 0 時附 Wilson 區間；頭目按幕列出；「擊敗」取自對局記錄中戰鬥的 end，`c239f12` 之前沒有；每局秒數是在當時的主機上量的，所以只能在同一天內比較。
+
+| 冠軍 | 環境 | 種子 | 勝局 | 層數 | 到達頭目 | 擊敗頭目 | 每局秒數 | 模擬器 | |
+|---|---|---|---|---|---|---|---|---|---|
+| `play`，提示 random，random | NoSL | `promotion-1` | 0/200 | 8.09 | 5 | – | 0.1 | `18fdb07` | 作廢 |
+| `play`，提示 random，L0 | NoSL | `promotion-1` | 0/200 | 11.72 | 54 | – | 0.1 | `18fdb07` | 作廢 |
+| PIMC，提示 random，random | NoSL | `promotion-1` | 0/200 | 13.68 | 73 / 1 | – | 41.3 | `18fdb07` | 作廢 |
+| PIMC，提示 random，L0 | NoSL | `promotion-1` | 0/200 | 18.50 | 175 / 15 | – | 49.7 | `18fdb07` | 作廢 |
+| `play`，random | NoSL | `promotion-1` | 0/200 | 8.12 | 3 | – | 0.2 | `dc0105a` | 作廢 |
+| `play`，L0 | NoSL | `promotion-1` | 0/200 | 11.90 | 60 | – | 0.2 | `dc0105a` | 冠軍 |
+| PIMC，L0 | NoSL | `promotion-1` | 0/200 | 19.34 | 177 / 19 | 61 / 0 | 75.7 | `c239f12` | 冠軍 |
+| PIMC c2，L0 | NoSL | `promotion-1` | 0/200 | 21.88 | 187 / 45 / 1 | 86 / 2 / 0 | 92.0 | `fbf89ad` | 冠軍 |
+| PIMC c2，L0（重定基線 1） | NoSL | `promotion-1` | 0/200 | 22.70 | 190 / 45 / 4 | 95 / 5 / 0 | 97.8 | `432aa0c` | 冠軍 |
+| PIMC c2，L0（重定基線 2） | NoSL | `promotion-1` | 0/200 | 22.58 | 190 / 45 / 3 | 94 / 5 / 0 | 100.7 | `32a0160` | 冠軍 |
+| PIMC c2，L0（重定基線 3） | NoSL | `promotion-1` | 0/200 | 22.58 | 190 / 45 / 3 | 94 / 5 / 0 | 93.1 | `c5ee8de` | 冠軍 |
+| PIMC c2，L0 n2-b0.1 | NoSL | `promotion-1` | 0/200 | 23.96 | 186 / 62 / 1 | 117 / 4 / 0 | 125.6 | `0d7818f` | 冠軍 |
+| PIMC c2，L0 n2-b0.03 | NoSL | `promotion-1` | 0/200 | 26.16 | 190 / 83 / 3 | 137 / 15 / 0 | 159.6 | `377e180` | 冠軍 |
+| plan c2，L0 n2-b0.03 | SL | `promotion-1` | 0/200 | 28.25 | 192 / 105 / 4 | 150 / 17 / 0 | 194.8 | `3699fc1` | 冠軍 |
+| plan c2，random | SL | `promotion-1` | 0/200 | 15.29 | 105 | 19 | 151.0 | `6ce07fc` | 作廢 |
+| plan c2，L0 pure-1-b | SL | `promotion-1` | 0/200 | 21.44 | 175 / 14 / 1 | 99 / 1 / 0 | 110.2 | `6ce07fc` | |
+| plan c2，L0 pure-1 | SL | `promotion-1` | 0/200 | 22.64 | 161 / 33 | 116 / 4 | 143.4 | `6ce07fc` | |
+| plan c2，L0 pure-1-d | SL | `promotion-1` | 0/200 | 24.77 | 176 / 49 / 1 | 139 / 2 / 0 | 136.8 | `6ce07fc` | |
+| plan c2，L0 pure-1-g | SL | `promotion-1` | 0/200 | 25.69 | 177 / 52 / 2 | 149 / 6 / 0 | 142.6 | `6ce07fc` | 冠軍 |
+| plan c2，L0 v6-2 clone | SL | `promotion-1` | 1/200（0.1–2.8%） | 31.61 | 199 / 112 / 19 | 179 / 42 / 1 | 565.6 | `b013f95` | 下一列的前 200 局 |
+| plan c2，L0 v6-2 clone | SL | `promotion-1-300` | 1/300（0.1–1.9%） | 31.37 | 298 / 161 / 25 | 272 / 59 / 1 | 517.1 | `b013f95` | |
+| plan c2，L0 v6-3-1 clone | SL | `promotion-1-300` | 13/300（2.5–7.3%） | 31.11 | 284 / 144 / 51 | 248 / 75 / 13 | 240.6 | `b013f95` | |
+| plan c2，L0 v6-3-2 clone | SL | `promotion-1-300` | 23/300（5.2–11.2%） | 33.56 | 290 / 171 / 65 | 276 / 94 / 23 | 271.2 | `b013f95` | 兩個檔案的冠軍 |
+
+「提示 random」是戰鬥中由 `random` 佔位策略回答的選牌提示，在有 `p0` 之前；宏觀一欄的「random」是隨機的宏觀佔位策略。V 的名稱在[宏觀大腦 §4](/zh-tw/arch/macro-brain/#sec-4)裡有說明。v6-2 的 `promotion-1` 報告就是它 `promotion-1-300` 報告的前 200 局，逐條相同。v6-2 是第一個在整局中贏過的 V；v6-3-2 是第一個會贏的冠軍。
+
+**這張表顯示了什麼**。
+
+- **先是搜尋，然後是宏觀大腦**。在 NoSL 的 `promotion-1` 上，同樣的宏觀大腦下，PIMC 把層數從 11.90（`play`）提高到 19.34；以 c2 為葉節點，提高到 21.88；宏觀大腦裡學到的 V，提高到 23.96 和 26.16。在 SL 下，規劃器把 n2-b0.03 的 26.16 提高到 28.25；連戰的 V 在複本上，提高到 31–33.6，並帶來了第一批勝局。自 2026-10-28 起戰鬥大腦沒有改變：此後的提升都來自宏觀大腦（[SL 規劃器：預算 §5](/zh-tw/arch/sl-planner/budget/#sec-5)）。
+- **對局在哪裡結束**。在打到頭目的對局中，v6-3-2 擊敗第 1 幕頭目的比例是 95%，第 2 幕頭目 55%，第 3 幕頭目 35%。它的 277 局輸局中，133 局在頭目戰，39 局在菁英戰，103 局在普通怪物戰，2 局在戰鬥之外（[指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)、[宏觀大腦：弱點與下一步 §1](/zh-tw/arch/macro-brain/next/#sec-1)）。
+- **第一個角色是寂靜獵手，先做 A0**。每個角色都有自己的資料夾 `eval/CHARACTER/`、`weights/CHARACTER/` 和 `data/CHARACTER/`，所有晉階等級共用一個大腦（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）；`eval/seeds/` 裡的種子集是共用的。
+
+## 6. 未決問題
+
+1. **R4 的吞吐量**：在遊戲的 Instant 速度下一局要幾分鐘，由此能負擔多少局 R4。
+2. **不一致種子很少時的勝局門檻**：計畫 v7 的下界讓 3 勝對 0 勝通過（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）；等第一批門檻顯示出不一致種子有多少之後，再決定是否要求最少的不一致種子數，或改用精確檢定。
+3. **門檻的錯誤率**：兩種門檻的誤通過率都沒有量過；A/A 測試需要一種只改變冠軍自身隨機性的方法（[晉級門檻 §4](/zh-tw/arch/evaluation/gates/#sec-4)）。
+4. **冠軍的 NoSL 報告**，讓 NoSL 榜重新有冠軍，也讓同一個 V 的 SL − NoSL 能被量出。
+5. **`final-1`**：何時在它上面做出第一個正式結論。

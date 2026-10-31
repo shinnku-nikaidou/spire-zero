@@ -107,7 +107,7 @@ Several commands share groups of options, defined in `Commands/Args.cs`.
 | `--combat-explore T` | 0 | PIMC draws by a softmax of the search's values, in leaf units; needs `pimc` |
 | `--explore ε` | 0 | l0 draws a share ε of its decisions evenly among their options; needs `l0` |
 
-**Champion file**, `--champion FILE` (`Args.cs:175-202`), in `run`, `brain`, `afterstates` and `fork`: plays the champion a champion file names ([Evaluation §5](/en/arch/evaluation/#sec-5)). The file's options come after the ones given, so given ones win; they include its `character` and `asc`. A command without `--env` (`brain`) skips the file's `env`, and a `--policy` given that differs from the file's keeps its own budget. `gate`'s `--champion` is a different option: the champion to beat.
+**Champion file**, `--champion FILE` (`Args.cs:175-202`), in `run`, `brain`, `afterstates` and `fork`: plays the champion a champion file names ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). The file's options come after the ones given, so given ones win; they include its `character` and `asc`. A command without `--env` (`brain`) skips the file's `env`, and a `--policy` given that differs from the file's keeps its own budget. `gate`'s `--champion` is a different option: the champion to beat.
 
 **Logged runs** (`Commands/Forks.cs:34-71`), in `afterstates` and `fork`: `--log` (decision logs, comma-separated), `--records` (their run records), `--out` (JSON lines out), all required; `--start` (first logged run, 0) and `--n` (default: the rest).
 
@@ -125,7 +125,7 @@ In `--help` order (`Commands/Cli.cs:31-37`).
 | `selftest` | `--n` (20), `--seed` (1), `--workers N` (0); pool | the checks of [§5](#sec-5) |
 | `forkbench` | `--n` (30), `--seed` (1), `--branches` (20); pool | the cost of restoring a combat and of one search branch, from mid-combat cut points ([Combats §2](/en/arch/simulator/combat/#sec-2)) |
 | `fidelity` | `--n` (20), `--start`, `--seed` (1), `--every` (3), `--player` `play`\|`random`, `--top` (15), `--no-history`; pool | how far a built combat plays like the real one; plays at most 12 actions ahead per measured decision, stopping after the end of the turn ([Combats §6](/en/arch/simulator/combat/#sec-6)) |
-| `panel` | `--n` (40), `--start`, `--seed` (1), `--player` (`pimc`), `--env` (NoSL), `--workers` (0, NoSL PIMC only), `--trace`, `--out FILE`, `--prompt-prefer IDS`; budget, leaf, pool | the fixed combat panel: the same combats for every player; win rate and HP lost ([Evaluation §3](/en/arch/evaluation/#sec-3)); in SL the world gets the real combat's prompt policy; `--prompt-prefer` (one-pick prompts only) is refused with `--workers` |
+| `panel` | `--n` (40), `--start`, `--seed` (1), `--player` (`pimc`), `--env` (NoSL), `--workers` (0, NoSL PIMC only), `--trace`, `--out FILE`, `--prompt-prefer IDS`; budget, leaf, pool | the fixed combat panel: the same combats for every player; win rate and HP lost ([Evaluation: gates §5](/en/arch/evaluation/gates/#sec-5)); in SL the world gets the real combat's prompt policy; `--prompt-prefer` (one-pick prompts only) is refused with `--workers` |
 | `fusion` | `--log` (required), `--n` (400), `--start`, `--every` (1), `--k` (32), `--max-nodes` (5000, a decision above it is skipped), `--out FILE` | the fusion panel: PIMC's values against merged ones over the logs' NoSL combat decisions ([Environments: worlds §3](/en/arch/environments/worlds/#sec-3)) |
 
 **Runs**
@@ -148,7 +148,7 @@ In `--help` order (`Commands/Cli.cs:31-37`).
 | `ranks` | `--logs` (required, plural), `--value FILE`, `--per-act` (200), `--top` (30) | V's sense of cards: per act, each card's mean change of V when one more copy joins the logged decks |
 | `weights` | `--leaf` | V's initial weights as a weights file, for tuning to start from; PIMC's default leaf weights with `--leaf` |
 
-**Self-play data** ([Learning](/en/arch/learning/))
+**Self-play data** ([Learning: reference §10](/en/arch/learning/reference/#sec-10))
 
 | command | options | what it does |
 |---|---|---|

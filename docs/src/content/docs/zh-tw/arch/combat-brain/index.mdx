@@ -119,7 +119,7 @@ public sealed record CombatDecisionResult(
 ## 5. 如何檢驗
 
 1. **戰術題**（規劃中）：有明確答案的局面（打出斬殺、正好格擋、先上易傷再攻擊），記錄找到與否。
-2. **固定測試集**：每個玩家打同樣的戰鬥（遭遇、牌組、種子），使用公共亂數，讓差異來自大腦而不是運氣；統計勝率和掉血（[SL 規劃器：預算 §5](/zh-tw/arch/sl-planner/budget/#sec-5)、[NoSL PIMC：預算 §6](/zh-tw/arch/pimc/budget/#sec-6)）。版本晉級門檻用整局（[評估 §5](/zh-tw/arch/evaluation/#sec-5)）。
+2. **固定測試集**：每個玩家打同樣的戰鬥（遭遇、牌組、種子），使用公共亂數，讓差異來自大腦而不是運氣；統計勝率和掉血（[SL 規劃器：預算 §5](/zh-tw/arch/sl-planner/budget/#sec-5)、[NoSL PIMC：預算 §6](/zh-tw/arch/pimc/budget/#sec-6)）。版本晉級門檻用整局（[評估：晉級門檻 §5](/zh-tw/arch/evaluation/gates/#sec-5)）。
 3. **NoSL 反事實**（規劃中）：公開記錄相同、隱藏狀態不同時，在固定的大腦種子下必須給出相同的選擇。
 4. **SL 封存**：越過節點出口的任何一步都會拋出例外。已成立（`selftest`）：節點複本載入到它的視野邊界後，拒絕再走一步；SL 世界在它那場戰鬥結束後拒絕任何動作。
 5. **可重現**：固定預算下，兩次執行測試集給出相同的走法和結果；放到 worker 池裡的搜尋給出的和單一行程相同（`selftest --workers N`）。

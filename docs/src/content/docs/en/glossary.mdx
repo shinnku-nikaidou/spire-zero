@@ -88,13 +88,13 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 
 | term | meaning |
 |---|---|
-| value function V | The macro brain's judge of a run state. Its target has been the expected floor (progress) until the bot wins sometimes, then P(win) ([Learning](/en/arch/learning/), [Macro brain: the value network](/en/arch/macro-brain/network/)). |
+| value function V | The macro brain's judge of a run state. Its target has been the expected floor (progress) until the bot wins sometimes, then P(win) ([Learning: the value function](/en/arch/learning/value/), [Macro brain: the value network](/en/arch/macro-brain/network/)). |
 | pure V | V read from the run's ids and raw state alone, with no hand-made features ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
 | self-play | The champion plays whole runs in the simulator to produce training data ([Macro brain: self-play](/en/arch/macro-brain/selfplay/)). |
-| champion, challenger | The champion is the current best version in an environment; a challenger must pass the gate to replace it ([Evaluation](/en/arch/evaluation/)). |
-| MC, TD(λ) | Ways to set value targets: from the final outcome (Monte Carlo), or blended with the next states' values (temporal difference) ([Learning](/en/arch/learning/)). |
-| ExIt | Expert iteration: train the learned parts to imitate what the search chose ([Learning](/en/arch/learning/)). |
-| SPSA | Simultaneous perturbation stochastic approximation: tunes many parameters at once by perturbing them together. |
+| champion, challenger | The champion is the current best version in an environment; a challenger must pass the gate to replace it ([Evaluation: champions and baselines](/en/arch/evaluation/champions/)). |
+| MC, TD(λ) | Ways to set value targets: from the final outcome (Monte Carlo), or blended with the next states' values (temporal difference) ([Learning: the loop §3](/en/arch/learning/loop/#sec-3)). |
+| ExIt | Expert iteration: train the learned parts to imitate what the search chose ([Learning: the loop §5](/en/arch/learning/loop/#sec-5)). |
+| SPSA | Simultaneous perturbation stochastic approximation: tunes many parameters at once by perturbing them together; tried on V v0's and the leaf's weights, removed ([Learning: the loop §6](/en/arch/learning/loop/#sec-6)). |
 | privileged information | Hidden state used only in training to reduce noise; never an input of the deployed policy. |
 | exploration, even draws, ε | Self-play's exploration (`run --explore ε`): with chance ε a macro decision is drawn evenly among its options, whatever V says. |
 | elite gauntlet, progress | V's training game in plan v6 (`run --gauntlet`): plain monster combats won at their start, elites and bosses fought; progress is the floor reached plus the share of the enemies' HP taken in the fight the run died in ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). |
@@ -104,10 +104,10 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 
 | term | meaning |
 |---|---|
-| R1–R4 | The sim-to-real ladder: four rungs from a simulator run (R1) to the Steam game with the mod (R4), each adding one new variable ([Evaluation](/en/arch/evaluation/)). |
+| R1–R4 | The sim-to-real ladder: four rungs from a simulator run (R1) to the Steam game with the mod (R4), each adding one new variable ([Evaluation §2](/en/arch/evaluation/#sec-2)). |
 | leaderboard | Results per character, ascension, seed set and environment; NoSL and SL are never ranked together (`eval/silent/leaderboard.md`). |
-| report, run record | A batch's results as JSON, with every run's record: its seed, outcome, floor, combats and brains ([Evaluation](/en/arch/evaluation/)). |
-| gate | The paired test a challenger must pass to be promoted ([Evaluation](/en/arch/evaluation/)). |
+| report, run record | A batch's results as JSON, with every run's record: its seed, outcome, floor, combats and brains ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). |
+| gate | The paired test a challenger must pass to be promoted ([Evaluation: gates](/en/arch/evaluation/gates/)). |
 | CRN, pairing | Common random numbers: champion and challenger play the same seeds, so their difference has less noise. |
 | SPRT | The sequential probability ratio test: stops a comparison as soon as the evidence is strong enough either way. |
 | Wilson interval | A confidence interval for a win rate that stays sensible near 0% and 100%. |
@@ -118,7 +118,7 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | name | what |
 |---|---|
 | V v0 | The first V: hand-set weights over hand-made features of the run view; removed. |
-| n1, n2-b0.01, n2-b0.03, n2-b0.1, n3-ctl, n3-free-ctl | V v2 nets (a net over V v0's features, pulled towards V v0 with weight β): n2-b0.03 was both champions' V from 2026-10-28 ([Learning](/en/arch/learning/)). |
+| n1, n2-b0.01, n2-b0.03, n2-b0.1, n3-ctl, n3-free-ctl | V v2 nets (a net over V v0's features, pulled towards V v0 with weight β): n2-b0.03 was both champions' V from 2026-10-28 ([Learning: the value function §5](/en/arch/learning/value/#sec-5)). |
 | pure-1, pure-1-b, pure-1-d, pure-1-g | The first pure V nets: from runs only, with decision-time boss sims, with door states, and with the boss gauntlet pilot's doors; pure-1-g was the SL champion's V on 2026-10-29. |
 | v6-1, v6-2, v6-3-1, v6-3-2 | Pure V trained in the elite gauntlet's three generations; v6-3-2 is the V of both champions since 2026-10-30. |
 | c1, c2, c3, c4 | Combat nets; c2 is the leaf of both champions' combat brains. |
@@ -129,5 +129,5 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | `data/silent/{sl,nosl}/…` | The data directory's self-play and evaluation folders, on the storage host, not in git. |
 | `tmp/build.sh REV`, `sim.sh` | The local launcher that builds a fixed commit and runs it ([Simulator: reference §1](/en/arch/simulator/reference/#sec-1)). |
 | `run`, `brain`, `serve`, `clones`, `gate`, `report`, `leaderboard` | SimWorker commands ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). |
-| `v.train`, `combat.train`, `gauntlet.py` | The Python that trains V and the combat net, and the gauntlet's report and gate ([Learning](/en/arch/learning/)). |
+| `v.train`, `combat.train`, `gauntlet.py` | The Python that trains V and the combat net, and the gauntlet's report and gate ([Learning: reference §9](/en/arch/learning/reference/#sec-9)). |
 | `0SSL7NS01MU6` | The seed of the book's example run, won on floor 48 ([The game §1](/en/arch/game/#sec-1)). |

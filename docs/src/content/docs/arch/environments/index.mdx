@@ -56,7 +56,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 **SL 是一块垫脚石，也是一把尺子**。在节点内，SL 完全不面对随机：克隆持有真实的随机数流，所以一场战斗是一个可以搜到底的确定性谜题，每条打法只有一个结果，而不是一个分布。这让 SL 的战斗大脑在同样的算力下强得多（[战斗大脑](/arch/combat-brain/)），SL 的对局也能打到靠后的几幕，而 V 正需要学会给那里的局面估值。V 用战斗由 SL 规划器来打的对局训练，并服务两种环境（[世界与两种战斗算法 §6](/arch/environments/worlds/#sec-6)）。
 
-两种环境打同一组预先登记的种子，所以它们在同一批种子上的差值，干净地衡量了节点内信息的价值：按种子配对的 SL − NoSL 胜率差和到达层数差。排行榜为每个在两种环境下都有同名报告的冠军计算这个差值（[评估 §2](/arch/evaluation/#sec-2)）；如今两个冠军的战斗大脑不同，所以它还没有显示任何差值。这是计划 v1（本项目的第一份计划，一份本地笔记）所要求的「全知 vs 重采样」对比的正式版本。作为参考：spire-mentor（一个前人做的杀戮尖塔机器人）去掉它那能看到整局的作弊后，胜率下降了 22.8–25.5 个百分点；SL 只看到一个节点，所以它的收益应该更小。
+两种环境打同一组预先登记的种子，所以它们在同一批种子上的差值，干净地衡量了节点内信息的价值：按种子配对的 SL − NoSL 胜率差和到达层数差。排行榜为每个在两种环境下都有同名报告的冠军计算这个差值（[评估 §3](/arch/evaluation/#sec-3)）；如今两个冠军的战斗大脑不同，所以它还没有显示任何差值。这是计划 v1（本项目的第一份计划，一份本地笔记）所要求的「全知 vs 重采样」对比的正式版本。作为参考：spire-mentor（一个前人做的杀戮尖塔机器人）去掉它那能看到整局的作弊后，胜率下降了 22.8–25.5 个百分点；SL 只看到一个节点，所以它的收益应该更小。
 
 **整局视野已被否决**。曾经考虑过一种知道整局顺序（每一场未来的遭遇、奖励和商店）的环境，并已否决：它会让整局本身变成一个确定性谜题，学不到任何能迁移到公平游玩的东西。不要实现它。
 
@@ -64,7 +64,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 - **只支持单人模式**，使用固定的游戏版本 v0.111.0。
 - **相同的代码和规则**：相同的规则知识，相同的 Brain、Harness 和 Protocol。只有战斗大脑和世界的来源按环境选择。
-- **相同的种子**：两者打同一组预先登记的种子集，每个结果都按环境分别报告（[评估 §4](/arch/evaluation/#sec-4)）。
+- **相同的种子**：两者打同一组预先登记的种子集，每个结果都按环境分别报告（[评估：指标、种子与报告 §5](/arch/evaluation/metrics/#sec-5)）。
 - **AI 从不真正读档**。两种环境都从不重新载入玩家看到的那局游戏。SL 的「存档与读档」只发生在克隆上，由搜索在工作进程里载入。游戏在存档字段 `SerializableRun.NumReloads` 里统计读档次数：在真实游戏里它必须保持为 0，这项检查计划放进 Mod 的日志里（[信息与节点 §8](/arch/environments/information/#sec-8)）。克隆本身就是一个载入的存档，所以在克隆里这个计数是 1 或更多，而那里没有任何东西读它。
 - **一局之内固定**。环境在一局开始时、在宿主的 `hello` 里选定，一直保持到这一局的 `run_end`。它记录在这一局的对局记录里（`RunConfig.Env`），也记录在它的决策日志的每一行里（`env`）。在 Mod 里玩家可以随时切换；一次切换会结束大脑眼中的这一局，并开始新的一局（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。
 - **两者都只读观测**。大脑读的是协议观测，从不读游戏对象；SL 比 NoSL 多知道的东西，只通过克隆到达它们，而克隆存在于工作进程里（[世界与两种战斗算法 §1](/arch/environments/worlds/#sec-1)）。
@@ -80,7 +80,7 @@ import { Aside } from '@astrojs/starlight/components';
 | 线路上 | `hello{env: "NoSL"\|"SL"}`，由宿主在每局开始时发送（[协议：线路 §3](/arch/protocol/wire/#sec-3)） | – |
 | `brain`（单独的决策进程） | 两种都服务：NoSL 宿主用 `--policy` 的战斗大脑，SL 宿主用 `--sl-policy` 的（`Commands/BrainCommand.cs:19`） | `--sl-policy plan` |
 | Mod | 面板顶部的 SL/NoSL 开关，保存在 `~/.local/state/sts2ai/settings.json`（[Mod §5](/arch/mod/#sec-5)） | SL |
-| 冠军文件 | 每个角色和环境一个，`eval/CHARACTER/champions/nosl.json` 和 `sl.json`；`gate --env` 必须与文件的环境一致（[评估 §5](/arch/evaluation/#sec-5)） | – |
+| 冠军文件 | 每个角色和环境一个，`eval/CHARACTER/champions/nosl.json` 和 `sl.json`；`gate --env` 必须与文件的环境一致（[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)） | – |
 | 战斗网络训练 | `combat.train --env SL\|NoSL`，必填；网络文件会记录它（`learn/combat/train.py`、`export.py`） | – |
 
 拒绝错误环境的地方：

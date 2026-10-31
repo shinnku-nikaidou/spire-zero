@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 import DecisionBars from '../../../../../components/v/DecisionBars.svelte';
 import Generations from '../../../../../components/v/Generations.svelte';
 
-V learns from runs the champion plays by itself. This section describes the loop as it ran in plan v6: the game the runs are played in (the elite gauntlet), how self-play explores, and how each generation's net was trained and gated. The general loop, and the combat net's side of it, are in [Learning §2](/en/arch/learning/#sec-2).
+V learns from runs the champion plays by itself. This section describes the loop as it ran in plan v6: the game the runs are played in (the elite gauntlet), how self-play explores, and how each generation's net was trained and gated. The general loop, and the combat net's side of it, are in [Learning: the loop](/en/arch/learning/loop/).
 
 ```mermaid
 flowchart LR
@@ -94,13 +94,13 @@ $$
 \bar d = \frac{1}{n}\sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\,\mathrm{SE} > 0,
 $$
 
-that is, when the 95% one-sided lower bound of the mean difference is above 0. A seed fixes the map, the encounters and the rewards up to where the two policies diverge, so most of a run's luck is shared by both sides and cancels in $d_i$ (common random numbers). `learn/gauntlet.py` computes this; a gate takes 16–20 minutes on the hosts ([Evaluation §5](/en/arch/evaluation/#sec-5)).
+that is, when the 95% one-sided lower bound of the mean difference is above 0. A seed fixes the map, the encounters and the rewards up to where the two policies diverge, so most of a run's luck is shared by both sides and cancels in $d_i$ (common random numbers). `learn/gauntlet.py` computes this; a gate takes 16–20 minutes on the hosts ([Evaluation: gates §11](/en/arch/evaluation/gates/#sec-11)).
 
 <Generations client:visible lang="en" />
 
 The dots are the mean progress on the 500 evaluation seeds, the whiskers 95% confidence intervals (±1.96 standard errors); the first table gives each act's boss beaten, as a share of the runs that reached it, and the runs won. Each generation passed its gate: v6-1 +1.60 ± 0.44 against pure-1-g (lower bound +0.88), v6-2 +4.62 ± 0.46 against v6-1 (+3.86), v6-3-2 +2.67 ± 0.49 against v6-2 (+1.87). The reference lines are n2-b0.03 (33.71) and every decision drawn evenly (21.89): V's choices are worth about 21 floors of progress over random ones.
 
-**In whole runs** (the second table: SL, 300 seeds of `promotion-1-300`, the SL champion's planner at medium effort, on the clone), v6-3-2 reaches floor 33.56 and wins 23 runs, beating the bosses of acts 1–3 in 95%, 55% and 35% of the runs that reach them. On 2026-10-30 it became the V of both champions by this report ([Evaluation §5](/en/arch/evaluation/#sec-5)).
+**In whole runs** (the second table: SL, 300 seeds of `promotion-1-300`, the SL champion's planner at medium effort, on the clone), v6-3-2 reaches floor 33.56 and wins 23 runs, beating the bosses of acts 1–3 in 95%, 55% and 35% of the runs that reach them. On 2026-10-30 it became the V of both champions by this report ([Evaluation: champions and baselines §4](/en/arch/evaluation/champions/#sec-4)).
 
 ## 5. Where the gauntlet's order did not carry over
 

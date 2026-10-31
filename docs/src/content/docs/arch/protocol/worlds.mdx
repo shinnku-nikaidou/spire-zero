@@ -70,7 +70,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
     IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
 ```
 
-一次搜索打过分的一个动作：它在各个世界上的平均值、95% 置信区间的半宽、世界的个数，以及在保留时，它在每个世界里的值（保留 4 位小数，按世界的顺序）和在每个世界里它下面花掉的搜索节点。推荐把它们按从好到差列出（[线路 §7](/arch/protocol/wire/#sec-7)）；战斗网络的 ExIt 目标就是由各个世界的值做成的（[学习 §2](/arch/learning/#sec-2)）。
+一次搜索打过分的一个动作：它在各个世界上的平均值、95% 置信区间的半宽、世界的个数，以及在保留时，它在每个世界里的值（保留 4 位小数，按世界的顺序）和在每个世界里它下面花掉的搜索节点。推荐把它们按从好到差列出（[线路 §7](/arch/protocol/wire/#sec-7)）；战斗网络的 ExIt 目标就是由各个世界的值做成的（[学习：循环 §5](/arch/learning/loop/#sec-5)）。
 
 ## 4. 工作进程消息
 

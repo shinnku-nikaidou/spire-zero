@@ -106,7 +106,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | 欄位 | 含義 |
 |---|---|
 | `action` | 這個決策的合法動作之一；對選牌提示是 `pick:i,j,…` |
-| `brain` | 選出它的大腦，用冠軍路由表裡的名稱（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）；宿主按大腦統計決策數寫進對局記錄，其中佔位決策必須一個都沒有（[評估 §3](/zh-tw/arch/evaluation/#sec-3)） |
+| `brain` | 選出它的大腦，用冠軍路由表裡的名稱（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）；宿主按大腦統計決策數寫進對局記錄，其中佔位決策必須一個都沒有（[評估：指標、種子與報告 §2](/zh-tw/arch/evaluation/metrics/#sec-2)） |
 | `plan` | 大腦在這個動作之後的計畫：會搜尋的戰鬥大腦給出本回合剩下的部分，地圖上的宏觀大腦給出本幕剩下的路線 |
 | `candidates` | 只來自會搜尋的大腦：它評過分的第一個動作，最好的在前 |
 

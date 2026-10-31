@@ -153,9 +153,9 @@ public sealed class PublicRecord
 | `PooledPimc.cs` | `PooledPimc` | 在行程池裡搜尋各個世界的 PIMC，NoSL 或 SL |
 | `PooledPlanner.cs` | `PooledPlanner` | 在行程池裡搜尋各個回合的 SL 規劃器 |
 | `PooledClone.cs` | `PooledClone` | 給宏觀一側用的節點複本，它的試探在行程池裡打 |
-| `RunRecords.cs` | `RunConfig`、`RunRecord`、`CombatEntry`、`CombatEnd` | 對局記錄（[評估 §6](/zh-tw/arch/evaluation/#sec-6)） |
-| `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 報告和排行榜（[評估 §6](/zh-tw/arch/evaluation/#sec-6)） |
-| `Gate.cs` | `Gate`、`ChampionFile` | 配對的晉級門檻和冠軍檔案（[評估 §5](/zh-tw/arch/evaluation/#sec-5)） |
+| `RunRecords.cs` | `RunConfig`、`RunRecord`、`CombatEntry`、`CombatEnd` | 對局記錄（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)） |
+| `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 報告和排行榜（[評估：指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)） |
+| `Gate.cs` | `Gate`、`ChampionFile` | 配對的晉級門檻和冠軍檔案（[評估：晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)） |
 
 **`Dispatcher`**（`Dispatcher.cs:82-228`）建立時需要 run id、環境、四條路由、是否記錄日誌，以及在 `--afterstates clone` 下如何為宏觀一側開啟節點的複本：
 

@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 import DecisionBars from '../../../../components/v/DecisionBars.svelte';
 import Generations from '../../../../components/v/Generations.svelte';
 
-V 从冠军自己打的对局里学习。本节介绍计划 v6 中实际运行的循环：对局所用的玩法（精英连战），自我对弈怎样探索，以及每一代的网络怎样训练、怎样过晋级门槛。通用的循环以及其中战斗网络的部分，见[学习 §2](/arch/learning/#sec-2)。
+V 从冠军自己打的对局里学习。本节介绍计划 v6 中实际运行的循环：对局所用的玩法（精英连战），自我对弈怎样探索，以及每一代的网络怎样训练、怎样过晋级门槛。通用的循环以及其中战斗网络的部分，见[学习：循环](/arch/learning/loop/)。
 
 ```mermaid
 flowchart LR
@@ -94,13 +94,13 @@ $$
 \bar d = \frac{1}{n}\sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\,\mathrm{SE} > 0,
 $$
 
-也就是说，平均差值的 95% 单侧下界大于 0 时晋级。在两个策略分道扬镳之前，一个种子固定了地图、遭遇和奖励，所以一局的大部分运气由双方共享，在 $d_i$ 里相互抵消（公共随机数）。`learn/gauntlet.py` 计算这些；在那几台主机上，一次晋级门槛需要 16–20 分钟（[评估 §5](/arch/evaluation/#sec-5)）。
+也就是说，平均差值的 95% 单侧下界大于 0 时晋级。在两个策略分道扬镳之前，一个种子固定了地图、遭遇和奖励，所以一局的大部分运气由双方共享，在 $d_i$ 里相互抵消（公共随机数）。`learn/gauntlet.py` 计算这些；在那几台主机上，一次晋级门槛需要 16–20 分钟（[评估：晋级门槛 §11](/arch/evaluation/gates/#sec-11)）。
 
 <Generations client:visible lang="zh-CN" />
 
 点是 500 个评估种子上的平均进度，须线是 95% 置信区间（±1.96 个标准误）；第一张表给出每一幕的 Boss 被打赢的比例（占到达那里的对局）以及赢下的对局数。每一代都通过了门槛：v6-1 对 pure-1-g +1.60 ± 0.44（下界 +0.88），v6-2 对 v6-1 +4.62 ± 0.46（+3.86），v6-3-2 对 v6-2 +2.67 ± 0.49（+1.87）。参考线是 n2-b0.03（33.71）和每个决策都均匀抽取（21.89）：V 的选择比随机选择多出约 21 层的进度。
 
-**在整局对局里**（第二张表：SL，`promotion-1-300` 的 300 个种子，SL 冠军的规划器用 medium 力度，在克隆上），v6-3-2 到达第 33.56 层，赢 23 局，在到达第 1–3 幕 Boss 的对局中分别有 95%、55% 和 35% 打赢了 Boss。2026-10-30，凭这份报告它成为两个冠军的 V（[评估 §5](/arch/evaluation/#sec-5)）。
+**在整局对局里**（第二张表：SL，`promotion-1-300` 的 300 个种子，SL 冠军的规划器用 medium 力度，在克隆上），v6-3-2 到达第 33.56 层，赢 23 局，在到达第 1–3 幕 Boss 的对局中分别有 95%、55% 和 35% 打赢了 Boss。2026-10-30，凭这份报告它成为两个冠军的 V（[评估：冠军与基线 §4](/arch/evaluation/champions/#sec-4)）。
 
 ## 5. 连战的排序在哪里没能延续
 

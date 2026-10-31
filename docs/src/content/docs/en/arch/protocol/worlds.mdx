@@ -70,7 +70,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
     IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
 ```
 
-One action a search scored: its mean value over the worlds, the half-width of the 95% confidence interval, the number of worlds, and, when kept, its value in each world (to 4 decimals, in world order) and the search nodes spent below it in each. A recommendation lists them best first ([The wire §7](/en/arch/protocol/wire/#sec-7)); the per-world values are what the combat net's ExIt targets are made of ([Learning §2](/en/arch/learning/#sec-2)).
+One action a search scored: its mean value over the worlds, the half-width of the 95% confidence interval, the number of worlds, and, when kept, its value in each world (to 4 decimals, in world order) and the search nodes spent below it in each. A recommendation lists them best first ([The wire §7](/en/arch/protocol/wire/#sec-7)); the per-world values are what the combat net's ExIt targets are made of ([Learning: the loop §5](/en/arch/learning/loop/#sec-5)).
 
 ## 4. The worker messages
 

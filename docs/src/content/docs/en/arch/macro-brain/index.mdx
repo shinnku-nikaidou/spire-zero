@@ -20,7 +20,7 @@ The figure follows one run that the current V won, a whole SL run on seed `0SSL7
 
 <Aside title="Status">
 
-L0 exists: `MacroBrain` in Brain, played with `run --macro l0` ([Simulator: whole runs §5](/en/arch/simulator/runs/#sec-5)). It answers every macro surface and the card prompts outside combat, and values options with V: V v0 (hand-written), or V v2 or pure V from a net file ([Learning §1](/en/arch/learning/#sec-1)). Both champions' V is the pure V net v6-3-2 since 2026-10-30. In SL, with `--afterstates clone`, L0 plays each option on the node's clone and searches on through the node's screens ([Search §2](/en/arch/macro-brain/search/#sec-2)); in NoSL, where run worlds do not exist yet, it predicts each afterstate from the screen ([Search §1](/en/arch/macro-brain/search/#sec-1)). For self-play, `--explore ε` draws a share ε of its decisions evenly ([Self-play §2](/en/arch/macro-brain/selfplay/#sec-2)). The encoders' net, which reads the loadout with self-attention and the map as a graph, is built and not trained yet ([The value network §4](/en/arch/macro-brain/network/#sec-4)). Planned: afterstates from run worlds and multi-step search in NoSL, the L1 rollout check, and the `IMacroBrain` interface ([Next steps §3](/en/arch/macro-brain/next/#sec-3)).
+L0 exists: `MacroBrain` in Brain, played with `run --macro l0` ([Simulator: whole runs §5](/en/arch/simulator/runs/#sec-5)). It answers every macro surface and the card prompts outside combat, and values options with V: V v0 (hand-written), or V v2 or pure V from a net file ([Learning: the value function §3](/en/arch/learning/value/#sec-3)). Both champions' V is the pure V net v6-3-2 since 2026-10-30. In SL, with `--afterstates clone`, L0 plays each option on the node's clone and searches on through the node's screens ([Search §2](/en/arch/macro-brain/search/#sec-2)); in NoSL, where run worlds do not exist yet, it predicts each afterstate from the screen ([Search §1](/en/arch/macro-brain/search/#sec-1)). For self-play, `--explore ε` draws a share ε of its decisions evenly ([Self-play §2](/en/arch/macro-brain/selfplay/#sec-2)). The encoders' net, which reads the loadout with self-attention and the map as a graph, is built and not trained yet ([The value network §4](/en/arch/macro-brain/network/#sec-4)). Planned: afterstates from run worlds and multi-step search in NoSL, the L1 rollout check, and the `IMacroBrain` interface ([Next steps §3](/en/arch/macro-brain/next/#sec-3)).
 
 </Aside>
 
@@ -79,7 +79,7 @@ Every interactive figure runs the champion's V, v6-3-2, in the page: its real we
 
 ## 4. Where it stands
 
-On 300 whole SL runs (the seeds `promotion-1-300`, the SL champion's combat planner at medium effort), v6-3-2 reaches floor 33.56 on average and wins 23 runs (7.7%), the first V that wins at all ([Evaluation §5](/en/arch/evaluation/#sec-5)). Its lineage, each step measured in its own setting:
+On 300 whole SL runs (the seeds `promotion-1-300`, the SL champion's combat planner at medium effort), v6-3-2 reaches floor 33.56 on average and wins 23 runs (7.7%), the first V that wins at all ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). Its lineage, each step measured in its own setting:
 
 | V | what it is | whole SL runs (floor) |
 |---|---|---|

@@ -21,6 +21,8 @@ const protocol = ['arch/protocol', 'arch/protocol/wire', 'arch/protocol/observat
 const gamebridge = ['arch/gamebridge', 'arch/gamebridge/observe', 'arch/gamebridge/actions'];
 const harness = ['arch/harness', 'arch/harness/routing', 'arch/harness/decision-log'];
 const mod = ['arch/mod', 'arch/mod/loop', 'arch/mod/sl-record', 'arch/mod/auto'];
+const learning = ['arch/learning', 'arch/learning/value', 'arch/learning/combat-net', 'arch/learning/loop', 'arch/learning/experiments', 'arch/learning/reference'];
+const evaluation = ['arch/evaluation', 'arch/evaluation/metrics', 'arch/evaluation/gates', 'arch/evaluation/champions'];
 const macroBrain = [
   'arch/macro-brain',
   'arch/macro-brain/afterstates',
@@ -49,7 +51,7 @@ const book = [
   {
     label: '第三部　学习与评估',
     translations: { 'zh-TW': '第三部　學習與評估', en: 'Part III: Learning and evaluation' },
-    items: ['arch/learning', 'arch/evaluation'],
+    items: [{ label: '学习', translations: { 'zh-TW': '學習', en: 'Learning' }, items: learning }, { label: '评估', translations: { 'zh-TW': '評估', en: 'Evaluation' }, items: evaluation }],
   },
   {
     label: '第四部　机器',

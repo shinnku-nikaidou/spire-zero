@@ -153,9 +153,9 @@ public sealed class PublicRecord
 | `PooledPimc.cs` | `PooledPimc` | 在池里搜索各个世界的 PIMC，NoSL 或 SL |
 | `PooledPlanner.cs` | `PooledPlanner` | 在池里搜索各个回合的 SL 规划器 |
 | `PooledClone.cs` | `PooledClone` | 给宏观一侧的节点克隆，它的试探在池里打 |
-| `RunRecords.cs` | `RunConfig`、`RunRecord`、`CombatEntry`、`CombatEnd` | 对局记录（[评估 §6](/arch/evaluation/#sec-6)） |
-| `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 报告和排行榜（[评估 §6](/arch/evaluation/#sec-6)） |
-| `Gate.cs` | `Gate`、`ChampionFile` | 配对的晋级门槛和冠军文件（[评估 §5](/arch/evaluation/#sec-5)） |
+| `RunRecords.cs` | `RunConfig`、`RunRecord`、`CombatEntry`、`CombatEnd` | 对局记录（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)） |
+| `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 报告和排行榜（[评估：指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)） |
+| `Gate.cs` | `Gate`、`ChampionFile` | 配对的晋级门槛和冠军文件（[评估：晋级门槛 §6](/arch/evaluation/gates/#sec-6)） |
 
 **`Dispatcher`**（`Dispatcher.cs:82-228`），创建时给定 run id、环境、四个路由、是否记日志，以及在 `--afterstates clone` 下如何为宏观一侧打开节点的克隆：
 

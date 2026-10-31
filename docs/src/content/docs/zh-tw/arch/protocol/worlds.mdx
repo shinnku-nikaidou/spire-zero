@@ -70,7 +70,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
     IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
 ```
 
-一次搜尋評過分的一個動作：它在各個世界上的平均值、95% 信賴區間的半寬、世界的個數，以及在保留時，它在每個世界裡的值（四位小數，按世界順序）和在每個世界裡花在它下面的搜尋節點數。推薦把它們按好壞排列，最好的在前（[線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）；各世界的值正是戰鬥網路的 ExIt 目標的材料（[學習 §2](/zh-tw/arch/learning/#sec-2)）。
+一次搜尋評過分的一個動作：它在各個世界上的平均值、95% 信賴區間的半寬、世界的個數，以及在保留時，它在每個世界裡的值（四位小數，按世界順序）和在每個世界裡花在它下面的搜尋節點數。推薦把它們按好壞排列，最好的在前（[線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）；各世界的值正是戰鬥網路的 ExIt 目標的材料（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。
 
 ## 4. 工作行程訊息
 

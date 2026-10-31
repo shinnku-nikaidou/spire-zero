@@ -1,0 +1,262 @@
+---
+title: Gates
+description: 'How a challenger replaces a champion: why runs are paired by seed, common random numbers, the SPRT, McNemar and A/A tests explained, the layered gates, every option of the whole-run gate and of plan v7''s wins gate, non-inferiority, promotion, re-baselining and the elite gauntlet''s gate.'
+sidebar:
+  label: Gates
+---
+import { Aside, Badge } from '@astrojs/starlight/components';
+import PairedScatter from '../../../../../components/book/PairedScatter.svelte';
+import SprtReplay from '../../../../../components/book/SprtReplay.svelte';
+
+A **gate** is the test a challenger must pass to replace the champion. This page explains the statistics a gate rests on, starting from nothing, then every gate the project has, option by option. The numbers a gate reads are on [Metrics, seeds and reports](/en/arch/evaluation/metrics/); the champions they produced are on [Champions and baselines](/en/arch/evaluation/champions/).
+
+## 1. Why a gate, and why pair
+
+A challenger that looks better on a few runs may only have been lucky. Whole runs are slow (the SL champion takes 271 s a run on one slot) and noisy, so the question is how many runs it takes to tell a real gain from luck.
+
+**Unpaired**, the answer is many. Two independent samples of runs, one per side, compared by win rate: at a win rate of about 30%, telling +5 pp from no difference takes about 1,300 runs per side, and +2 pp about 8,200 (two-sided α = 0.05, power 0.8, the variance 2p(1−p) of a difference of two rates). At today's 7.7%, +3 pp takes about 1,240 runs per side.
+
+Two ideas cut that down. Every gate here pairs; the C# gate also tests sequentially, while the lower-bound gates of plans v6 and v7 play a fixed set:
+
+1. **Pair the runs by seed** ([§2](#sec-2)): play the challenger on the champion's seeds and compare seed by seed, so luck that both sides share drops out of the difference.
+2. **Test sequentially** ([§3](#sec-3)): look after each pair and stop as soon as the evidence is clear, instead of fixing the number of runs in advance.
+
+And gates are layered, from cheap and narrow to expensive and complete ([§5](#sec-5)).
+
+## 2. Common random numbers
+
+**The idea.** Common random numbers (CRN) means that both sides of a comparison meet the same random events, so that only the policy differs. Here it comes for free: a seed fixes the game, the run's own randomness comes from a hash of the seed ([Metrics, seeds and reports §6](/en/arch/evaluation/metrics/#sec-6)), and a run is a function of its setup and its answers ([Simulator: whole runs §6](/en/arch/simulator/runs/#sec-6)). So a challenger played on the champion's seeds faces the same map, the same first encounters, the same first card offers. Once the two make a different choice their games drift apart, but the map and much of what follows stay shared.
+
+A seed fixes the whole run, so the champion's side never needs to be played again: its report already holds its runs, record by record, and a gate plays only the challenger.
+
+**The paired difference.** For seed $i$, let $d_i$ be the challenger's floor minus the champion's. Over $n$ seeds the gain is estimated by the mean $\bar d$, with standard error $\mathrm{sd}(d)/\sqrt n$. Unpaired, the standard error of the difference of two means is $\sqrt{(s_a^2 + s_b^2)/n}$. Since $\mathrm{var}(d) = s_a^2 + s_b^2 - 2\,\mathrm{cov}(a, b)$, pairing gains exactly as much as the two sides' floors go together on the same seed.
+
+**Measured** on the committed reports (computed here; the code records no such number):
+
+| pair, same seeds | n | correlation of floors | paired SE | unpaired SE | variance ratio |
+|---|---|---|---|---|---|
+| v6-3-2 − v6-2, SL, `promotion-1-300` | 300 | 0.34 | 0.618 | 0.757 | 1.50 |
+| v6-3-1 − v6-2, SL | 300 | 0.23 | 0.695 | 0.790 | 1.29 |
+| v6-3-2 − v6-3-1, SL | 300 | 0.36 | 0.687 | 0.855 | 1.55 |
+| v6-2 − pure-1-g, SL, `promotion-1` | 200 | 0.21 | 0.738 | 0.832 | 1.27 |
+| n2-b0.03 − n2-b0.1, NoSL, `promotion-1` | 200 | 0.46 | 0.627 | 0.853 | 1.85 |
+| SL n2-b0.03 − NoSL n2-b0.03, `promotion-1` | 200 | 0.60 | 0.548 | 0.865 | 2.49 |
+
+Some of these pairs differ in more than the V: v6-2's report plays on the clone at `b013f95` and pure-1-g's with screen afterstates at `6ce07fc`; the last row's two sides have different combat brains. A variance ratio of 1.5 means an unpaired comparison needs 1.5 times the runs per side for the same width. **On wins pairing buys nothing so far**: v6-3-2's 23 wins and v6-2's 1 share no seed, and the paired standard error of the wins difference, 1.58 pp, is the unpaired one, 1.57 pp. Wins are rare and seldom shared: v6-3-2 and v6-3-1 have 2 seeds in common among their 23 and 13.
+
+<PairedScatter client:visible lang="en" />
+
+## 3. The sequential probability ratio test
+
+**The idea.** A test with a fixed number of runs plays them all, even when the first fifty already settle the question. The **sequential probability ratio test** (SPRT, Wald 1945) looks after every pair and stops as soon as the evidence clearly favours one of two hypotheses about the true mean difference $\mu$:
+
+- H0, the challenger is no better: $\mu = 0$;
+- H1, it is better by at least $\delta$: $\mu = \delta$ ($\delta$ = 1.5 floors by default).
+
+**The evidence** is the log-likelihood ratio: how much more likely the pairs so far are under H1 than under H0. If the differences are normal with variance $\sigma^2$,
+
+$$
+\Lambda_n = \sum_{i=1}^{n} \ln\frac{\varphi\big((d_i-\delta)/\sigma\big)}{\varphi\big(d_i/\sigma\big)} = \frac{\delta}{\sigma^2}\Big(S_n - \frac{n\delta}{2}\Big), \qquad S_n = \sum_{i=1}^n d_i .
+$$
+
+Each pair adds $\delta/\sigma^2 \cdot (d_i - \delta/2)$: a pair above $\delta/2$ pushes towards H1, one below pushes towards H0.
+
+**The bounds.** Fix in advance $\alpha$, the chance to pass a challenger that is no better, and $\beta$, the chance to fail one that is better by $\delta$. Wald's bounds are
+
+$$
+A = \ln\frac{1-\beta}{\alpha}, \qquad B = \ln\frac{\beta}{1-\alpha};
+$$
+
+pass at the first $\Lambda_n \ge A$, fail at the first $\Lambda_n \le B$. At $\alpha = \beta = 0.05$, $A = \ln 19 = 2.944$ and $B = -2.944$. If the pairs run out first, the verdict is open. The bounds are Wald's approximations, and with the variance estimated as below the real error rates are not exactly α and β; they have not been measured ([§4](#sec-4)).
+
+**As built** (`Gate.Sprt`, `Harness/Gate.cs:62-107`), for the `floor` metric:
+
+- $\sigma^2$ is not known, so after each pair it is estimated from all pairs so far, ties included: $\hat\sigma^2 = \max\big(1, (Q_n - S_n^2/n)/(n-1)\big)$, with $Q_n = \sum d_i^2$.
+- No LLR is computed before 10 pairs differ (`MinPairs`, `:25`). Tied pairs do not count towards the 10: a change that alters only some runs ties most pairs, and with ties alone the variance sits at its floor of 1, so the gate used to fail such a change at the 10th pair. A change that lifts one run in ten by 15 floors (+1.5 on average) failed that way whenever its first ten pairs tied, about 35% of the time (0.9¹⁰ = 0.35); the boss budget's gate did ([NoSL PIMC: budget §4](/en/arch/pimc/budget/#sec-4)). `GateTests` has the case: with the rule it passes, after more than 100 pairs (after 110, by the figure's port below).
+- It stops at the first pair past a bound; the result keeps that pair (`decided`), the LLR there and the mean difference over the pairs up to it (`floor_diff_mean`).
+
+For the **`win` metric** only the pairs where exactly one side won count, as in McNemar's test ([§4](#sec-4)): $k$ won by the challenger alone, $m$ by the champion alone. If the challenger's share of those pairs is $p$, H0 is $p_0 = 0.5$ and H1 is $p_1 = 0.5 + \delta$ ($\delta$ = 0.1 by default), and
+
+$$
+\Lambda = k \ln\frac{p_1}{p_0} + m \ln\frac{1-p_1}{1-p_0} = 0.1823\,k - 0.2231\,m \quad (\delta = 0.1).
+$$
+
+A pass needs $k - 1.224\,m \ge 16.15$: 17 one-sided wins with none against. A fail needs $m - 0.817\,k \ge 13.2$. Ties, both won or both lost, add nothing, and there is no minimum.
+
+**A real gate, replayed.** The four NoSL promotions can be replayed from git: the champion's side is the report its champion file named before the promotion, and the challenger's is the promoted report, which `--promote` wrote from the gate's own records. The figure replays them with a port of `Gate.Sprt` and reaches each stored verdict at the stored pair, with the stored LLR to within 10⁻⁹: pass after 14, 77, 122 and 136 of 200 pairs. The last tab draws made-up pairs with a true difference you choose and runs the same gate on them, once or a thousand times.
+
+<SprtReplay client:visible lang="en" />
+
+**What a 200-seed gate can tell.** On made-up pairs like the last real gate's (47% of pairs tied, the others with an SD of 12 floors), the figure's 1,000 simulated gates give: with no true gain, 3.8% pass, 64% fail and 33% stay open; with a true gain of δ = 1.5 floors, 63% pass, 5% fail and 32% stay open; with 3 floors, 99.6% pass, after 72 pairs on average. At this noise the size of the seed set, more than α and β, limits the gate: a gain of δ is left open about a third of the time. The not-worse test, at a true loss of δ, passes 6.8% of the simulated gates, above its nominal 5%; the bounds are Wald's approximations and the variance is estimated.
+
+## 4. McNemar's test and A/A tests
+
+**McNemar's test** is the standard test for paired yes/no outcomes, such as a win on the same seed. Put each seed in one of four cells:
+
+| | champion won | champion lost |
+|---|---|---|
+| **challenger won** | both | $k$ |
+| **challenger lost** | $m$ | neither |
+
+Seeds in "both" and "neither" say nothing about which side is better. Under no difference, each of the $k + m$ discordant seeds is a fair coin, so $k$ follows a binomial distribution with $k + m$ trials and chance one half, and an exact p-value follows from it. v6-3-2 against v6-2 on `promotion-1-300`: $k$ = 23, $m$ = 1, none won by both; the chance of 23 or more of 24 under a fair coin is 25 / 2²⁴ ≈ 1.5 × 10⁻⁶.
+
+No McNemar test exists in the code <Badge text="planned" variant="caution" />. What exists uses the same two counts: the C# win SPRT tests $k$ against $m$ sequentially ([§3](#sec-3)), and plan v7's wins gate bounds the mean of the per-seed differences, which depends on $k$, $m$ and the number of pairs ([§10](#sec-10)).
+
+**An A/A test** runs a gate with the champion against itself. There is no real difference, so it must pass no more often than the gate's designed α; if it does, the gate is broken. Here, an A/A test on the same seeds is no test at all: a seed fixes the whole run, so the copy ties on every seed (the third re-baseline played the champion again and all 200 seeds reached the same floor, [§9](#sec-9)), and a floor SPRT that never sees 10 differing pairs stays open. A useful A/A test would play the champion with its own randomness (search seeds, exploration draws) changed and everything else the same; no option changes those, and no A/A test has been run <Badge text="planned" variant="caution" />. So the gates' real false-pass rates are not measured.
+
+## 5. The layered gates
+
+| tier | for | method | state |
+|---|---|---|---|
+| combat panel | combat search and its leaf | the same fights for every player (encounter, deck, seed), so CRN; win rate and HP lost per win | built: `panel` ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)); results in [The SL planner: budget §5](/en/arch/sl-planner/budget/#sec-5) and [NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6) |
+| act-level | macro decisions | acts started from a pool of snapshots; act clear rate and HP at the act's end | planned <Badge text="planned" variant="caution" /> |
+| whole-run SPRT, `gate` | promoting a champion | paired by seed on a promotion set; SPRT on floors or on wins | built ([§6](#sec-6)) |
+| whole-run wins bound | promoting V in plan v7 | `learn/gauntlet.py --against` on whole runs: paired by seed on `promotion-1-500`; lower bound on wins | built, no result yet ([§10](#sec-10)) |
+| elite gauntlet | promoting V in plan v6 | `learn/gauntlet.py --against` on the gauntlet: lower bound on progress | built, ended ([§11](#sec-11)) |
+
+The panel costs seconds to minutes a fight; a whole-run gate costs hours of the fleet. Version gates use whole runs: a panel can show a search is stronger in a fight, not that a run goes further ([Combat brain §5](/en/arch/combat-brain/#sec-5)).
+
+## 6. The whole-run gate
+
+```text
+gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challenger's run options]
+     [--metric floor|win] [--delta D] [--alpha A] [--beta B] [--not-worse] [--promote PATH] [--env ENV]
+```
+
+(`SimWorker/Commands/EvalCommands.cs:63-126`, `Harness/Gate.cs`)
+
+| option | default | what it does |
+|---|---|---|
+| `--champion FILE` | required | the champion file to beat; its `report` is the champion's side |
+| `--records A[,B…]` | required | the challenger's run record files, comma-separated |
+| `--metric` | `floor` | `floor` or `win` ([§3](#sec-3)) |
+| `--delta D` | 1.5 for `floor`, 0.1 for `win` (`:97`) | the difference the SPRT tells from none |
+| `--alpha A` | 0.05 | the chance to pass a challenger no better (with `--not-worse`: worse by δ) |
+| `--beta B` | 0.05 | the chance to fail one better by δ (with `--not-worse`: no worse) |
+| `--not-worse` | off | the non-inferiority test ([§7](#sec-7)) |
+| `--promote PATH` | none | on a pass, writes the challenger's report and makes it the champion ([§8](#sec-8)) |
+| `--env ENV` | none | the challenger's environment, refused if it is not the file's |
+| the challenger's run options | | `--policy`, `--macro`, the budget, `--workers`, `--value`, `--afterstates`, the leaf options, `--leaf-prices`, `--macro-explore`, `--combat-explore`, `--explore` ([Simulator: reference §3](/en/arch/simulator/reference/#sec-3)); there is no `--champion FILE` for the challenger, which is named in full by its options |
+
+**The two sides.** The champion's side is its report's runs. The challenger's side is its records, and every record must have been played by the options given: the name the options make must be each record's `config.champion` (`:94-95`). The pairs are the champion report's runs whose seed the challenger played, in the champion report's order, which is the seed set's (`Gate.Pairs`, `Harness/Gate.cs:46-60`). A time-boxed challenger that finished only the head of the set is gated on the pairs it has.
+
+**Refused**, as a command-line mistake (exit 2):
+
+- exploring options (`--macro-explore`, `--combat-explore` or `--explore` above 0; the message names only the first two, `:93`): exploration is for self-play ([Learning: the loop §9](/en/arch/learning/loop/#sec-9));
+- a record played by another champion name than the options', or records of more than one;
+- the gauntlets' records (`auto_win`, `gauntlet`): some of their combats were never played;
+- a record played in another game version, environment or rung than the champion's report, or as another character or at another ascension; so a NoSL challenger against today's NoSL file, which names an SL report, is refused;
+- a seed run twice; `--env` that is not the file's.
+
+**Not checked:** the commit. A challenger built at another commit pairs with the champion's report all the same, which is why the champion is re-baselined when the code changes how it plays ([§9](#sec-9)). Nor is the champion report's own void checked, and challenger runs whose seed is not in the champion's report are silently left out.
+
+**Verdicts.** `pass`, `fail`, `open` (the pairs ran out first), or `void`: the paired challenger runs break a must-be-zero rule, whatever the SPRT said (`Harness/Gate.cs:67-70, 106`).
+
+**Output and exit code.** Three lines, then a fourth on promotion:
+
+```text
+champion: combat pimc c2 8x300, combat prompts p0, macro l0 n2-b0.1, macro prompts l0 n2-b0.1 (eval/silent/reports/2026-10-28-nosl-r1-promotion-1-pimc-c2-l0-n2-b0.1-p0.json)
+challenger: combat pimc c2 8x300, combat prompts p0, macro l0 n2-b0.03, macro prompts l0 n2-b0.03, 200 runs
+gate pass: floor, delta 1.5, after 136 of 200 pairs; LLR 2.99 in [-2.94, 2.94]; floor difference +1.78; wins only by the challenger 0, only by the champion 0
+promoted: eval/silent/champions/nosl.json now names combat pimc c2 8x300, combat prompts p0, macro l0 n2-b0.03, macro prompts l0 n2-b0.03
+```
+
+(the 38a2664 gate's result in the `Summary` form, `Harness/Gate.cs:37-40`, with the paths of the time). The exit code is 0 on a pass, promoted or not; 1 on fail, open or void; 2 on a command-line mistake, a refused promotion, or a file that cannot be read (`SimWorker/Commands/Cli.cs:50-61`).
+
+**Time boxes.** Evaluations run in time boxes: the job gets a deadline and more seeds than fit, the hosts deal seeds from the front of the file, and what finished is the result (`.claude/skills/sl-selfplay/SKILL.md:158-178`). Runs that die early finish first, so a set cut short leans towards short runs; a batch stopped after 8 minutes was set aside in the ledger for being "biased to early deaths" (`eval/silent/ledger.md:43`). The two sides of a comparison of two time-boxed jobs are therefore given the same hosts and the same box, so they are cut alike.
+
+## 7. Not worse
+
+A change meant to be cheaper rather than stronger (searching less, the same play otherwise) is promoted when it is **not worse**. `--not-worse` shifts both hypotheses down by δ: H0, the challenger is worse by δ ($\mu = -\delta$); H1, it is not worse ($\mu = 0$). The code adds δ to every difference and runs the usual test (`Harness/Gate.cs:72-73, 90`). For `win`, H0 is a share of 0.5 − δ of the discordant pairs, H1 an even share. The gate's line and its stored result say which test it was (`not worse` in the line, `not_worse` in the champion file). `learn/challenge.py --not-worse` passes it on.
+
+The project uses it for one more case: a challenger that only removes a hand-written part passes on a tie, since the simpler brain is preferred when it is not worse. Gates of this kind so far: the SL planner's medium effort passed after 33 pairs, beam 4 with × 2 at elites and bosses failed after 92 ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)); PIMC's `--follow` was still open after all 200 pairs ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2)); n3-free-ctl, a V that read fewer hand-made features, failed in SL after 33 pairs ([Champions and baselines §3](/en/arch/evaluation/champions/#sec-3)).
+
+## 8. Promotion
+
+On a pass, `--promote PATH` (`SimWorker/Commands/EvalCommands.cs:113-123`):
+
+1. makes the challenger's report from its records on the champion's seed set (`eval/seeds/SET.txt`), dated today; refuses a partial one, since the new report faces the next challengers and must cover the whole set;
+2. makes the champion file's options: the challenger's options for the file's environment, plus its character and ascension. Each weights file (`value`, `leaf`, `combat-net`) must be in the character's weights folder, `weights/CHARACTER/`, where a name always means the same file; a promotion with a file elsewhere is refused before anything is written (`SimWorker/Brains/ChampionOptions.cs:121-131`, [Learning: reference §6](/en/arch/learning/reference/#sec-6));
+3. writes `PATH.json` and `PATH.md`, the Markdown with an "Against" section on the champion's report;
+4. rewrites the champion file: the environment, the challenger's name and options, the new report, `since` the report's date, and `gate` the result ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)).
+
+The SPRT can pass early, so the challenger is played in chunks and gated after each: stop at a fail, and after a pass play the rest of the set, then promote. **`learn/challenge.py`** does exactly that (`learn/challenge.py:91-161`):
+
+```text
+uv run python challenge.py --sim CMD --champion FILE --records-dir DIR [--chunk 40] [--processes 4]
+       [--metric floor|win] [--not-worse] [--promote PATH] -- THE CHALLENGER'S RUN OPTIONS
+```
+
+- It reads the champion file and its report for the seed set, its size, the character and the ascension, and plays the challenger as that character at that ascension.
+- Each chunk of `--chunk` seeds is split over `--processes` sim processes, each writing `DIR/AAAA-BBBB.jsonl` and its log; then `gate` runs over every record so far, with `--metric`, `--not-worse` and the run options (never `--delta`, `--alpha` or `--beta`).
+- A fail or a void stops it, exit 1; a pass ends the loop; the whole set with no verdict is exit 1.
+- With `--promote`, after a pass it plays the rest of the set, gates again with `--promote` (which must pass), and rebuilds the leaderboard. Without it, it stops at the pass.
+- The records stay in `--records-dir`, `data/CHARACTER/ENV/eval/DATE-gate-NAME/` ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
+
+## 9. Re-baselining
+
+The champion's report stands for the champion only while the code plays it as it did. A change that makes it play otherwise (a fix in the world builder, the search or L0) makes the report stale, and a gate against it would credit the challenger with the change; the gate does not check the commit ([§6](#sec-6)). The champion then plays the whole seed set again on the new code (`run --champion FILE`), and its champion file is edited to name the new report. That is not a promotion: the champion, its date and its gate stay.
+
+The NoSL champion of 2026-10-27, PIMC with c2 and L0 with V v0, was re-baselined three times on `promotion-1` (computed from the reports):
+
+| re-baseline | after | floor | paired against the report before | act 3 boss reached |
+|---|---|---|---|---|
+| 1 | the fixes to the search's memo, L0's upgrade values and the NoSL worlds' move logs (`432aa0c`) | 21.88 → 22.70 | +0.81 ± 0.89 floors (95%); 131 seeds to the same floor, 42 higher, 27 lower | 1 → 4 |
+| 2 | the NoSL worlds given the allies and the stunned monsters' next moves (`32a0160`) | 22.58 | −0.12 ± 0.18; 197 of 200 to the same floor | 3 |
+| 3 | the fixes to a card's own cost in NoSL worlds and to the shop under Sozu (`c5ee8de`), the build the next gates used | 22.58 | all 200 seeds to the same floor | 3 |
+
+## 10. Plan v7's wins gate
+
+Plan v7 judges V on whole SL runs by wins, with `learn/gauntlet.py`'s paired lower bound, not with `gate` ([Evaluation §4](/en/arch/evaluation/#sec-4)).
+
+```text
+uv run python gauntlet.py --records R1,R2 [--logs L1,L2] [--against C1,C2]
+```
+
+(`learn/gauntlet.py:164-183`, run from `learn/`.) It prints one JSON object. Its report, for whole runs and for the elite gauntlet alike:
+
+| field | what |
+|---|---|
+| `gauntlet` | whether the records are the elite gauntlet's (`config.gauntlet`); the two kinds are never mixed, nor paired (`:42-48`, `:180-181`) |
+| `runs`, `won`, `floor`, `floor_se` | the finished runs, the runs won, the mean floor and its standard error |
+| `progress`, `progress_se` | the elite gauntlet only: the floor, plus the share of the enemies' HP taken in the combat a lost run died in, a won run +1 (`learn/v/data.py:70-82`) |
+| `boss` | per act `"0"`, `"1"`, `"2"`: `{reached, beaten, rate}`, counting every boss combat of the act and those that did not end in a death |
+| `elites_per_run`, `elite_deaths` | elite combats per run, and the elite combats that ended in a death |
+| `died_in` | per act, the lost runs by where they died: the room of the last combat if it ended in a death on the run's floor, else `outside combat` (a combat with no end counts as outside, [Metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)) |
+| `rest`, `monster_or_rest`, `shop` | with `--logs`: the rest sites' choices by the HP share they were made at (0–40%, 40–70%, 70–90%, 90–100%), the map's choices between a monster and a rest site by the same bands, and what the shops sold (relic, card, potion or other, told by what the next decision's run gained after a `buy:`; `remove`, `leave`); only logged runs that have a record (`:107-133`) |
+| `against` | with `--against`, the pairing below |
+
+**The rule.** `--against` names the champion's records. The pairs are the seeds both sides finished. For each, $d_i$ is the challenger's outcome less the champion's: 1 or 0 per run for wins, the floor for floors. With $n$ pairs, $\bar d$ their mean and $\mathrm{SE} = \mathrm{sd}(d)/\sqrt n$ (the sample SD, $n-1$),
+
+$$
+\text{lower} = \bar d - 1.645\,\mathrm{SE}, \qquad \text{promote if lower} > 0,
+$$
+
+the 95% one-sided lower bound of the mean difference (1.645 is the normal distribution's 95% quantile). On whole runs `against` holds `pairs`, `won`, `champion_won`, `wins_diff`, `wins_diff_se`, `wins_lower_95`, `floor_diff`, `floor_diff_se` and `promote`, decided on the wins (`learn/gauntlet.py:136-161`). With one pair the SE is undefined and nothing is promoted; with every pair tied the bound is 0 and nothing is promoted.
+
+**What it takes to pass.** In terms of the discordant seeds ([§4](#sec-4)), $\bar d = (k - m)/n$, and the bound is above 0 roughly when $k - m > 1.645\sqrt{k + m}$. Computed exactly with the rule, at 500 pairs:
+
+| seeds won only by the champion, $m$ | 0 | 1 | 5 | 10 | 20 | 30 | 40 |
+|---|---|---|---|---|---|---|---|
+| fewest won only by the challenger, $k$ | 3 | 6 | 12 | 19 | 32 | 45 | 57 |
+| the win rate it adds | +0.6 pp | +1.0 pp | +1.4 pp | +1.8 pp | +2.4 pp | +3.0 pp | +3.4 pp |
+
+The margin needed grows with the champion's own wins; the plan's estimate of 2–3 pp more wins is the case of 20–30 seeds won by the champion alone. With few discordant seeds the normal bound is lenient: 3 seeds won by the challenger alone and none by the champion pass, where an exact McNemar (sign) test gives a one-sided p of 1/8.
+
+**What it does not check.** `gauntlet.py` drops every record with a `failure` before anything (`:44`), so it has no void rule; it has no minimum of pairs, and does not compare the two sides' configs, champions, environments, commits or exploration. The procedure keeps those: the challenger plays `promotion-1-500` with the champion's planner (the SL planner c2 at medium effort, `--afterstates clone`) and no `--explore`, in a time box on the fleet; v6-3-2's side is its `promotion-1-300` report's runs plus its runs on the last 200 seeds, played once (`.claude/skills/sl-selfplay/SKILL.md:39-63`).
+
+**Promotion** is by hand: the script writes nothing. A net that passes (of two that pass, the one with more wins) replaces the V of both champion files, the ledger records it, and a `report` of its runs on `promotion-1-500` goes on the leaderboard.
+
+**On the committed reports** (computed here; no such gate ran): v6-3-2 against v6-2 on `promotion-1-300`, 300 pairs, 23 won against 1, +0.073 ± 0.016 wins, lower bound +0.047, so it would pass (the floor: +2.20 ± 0.62). v6-3-1 against v6-2 would pass too, 13 against 1, lower bound +0.020, while its floor is −0.26 ± 0.70. v6-3-2 against v6-3-1, 21 against 11 with 2 seeds won by both, passes by +0.0024.
+
+## 11. The elite gauntlet's gate
+
+Plan v6 (2026-10-29 to 2026-10-30) trained and judged V in the elite gauntlet, where plain monster fights are won at their start and elites and bosses are fought ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). Each V played the gauntlet's 500 evaluation seeds (`run --seed 1 --start 300000 --n 500`) with no exploration, at the training's budget (the SL planner's low budget) and with `--afterstates clone`; `learn/gauntlet.py --records R --logs L --against C` paired its runs with the champion's by seed on the seeds both finished and promoted it when the 95% one-sided lower bound of the mean difference in **progress** was above 0 (`against`: `pairs`, `diff`, `diff_se`, `lower_95`, `promote`). Progress is the floor reached, plus the share of the enemies' HP taken in the combat a lost run died in; a won run +1. A gate took 16–20 minutes on the hosts.
+
+The gauntlet's generations and their gates are told in [Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4); its champions are listed by hand in `eval/silent/gauntlet-leaderboard.md` ([Champions and baselines §4](/en/arch/evaluation/champions/#sec-4)). Its ranking did not carry over to whole runs ([Macro brain: self-play §5](/en/arch/macro-brain/selfplay/#sec-5)), which is one reason plan v7 gates on whole runs.
+
+## 12. Tests
+
+- `Harness/GateTests` (`src/Sts2Ai.Tests`), 10 tests: a clear gain passes, at exactly `MinPairs`, with mean 5; pairs only the champion's character and ascension; no gain fails; a not-worse gate passes no loss, fails a loss of 5, and says so in its line; no verdict before `MinPairs`; tied pairs do not count towards it (one run in ten +15 floors passes, after more than 100 pairs); a failed challenger run voids; the win gate counts only one-sided wins, and an unknown metric throws; the pairs follow the champion's order; another environment, a seed twice and two champion names are refused. The figure's port of `Gate.Sprt` gives the same verdicts on the same cases.
+- `learn/tests/test_gauntlet.py`, 6 tests: progress, bosses, elites and deaths; rest sites by HP and shop purchases; the map's monster-or-rest choices by HP; whole runs pair on wins and floors and promote on wins (4 pairs, 3 against 0, lower bound 0.75 − 1.645 · 0.25); the gauntlet's runs and whole runs are never paired; the gauntlet pairs by seed and promotes on a lower bound above 0.
+- Nothing tests the `gate` command itself, its promotion, or `learn/challenge.py`.

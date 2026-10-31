@@ -107,7 +107,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `--combat-explore T` | 0 | PIMC 按搜索的值的 softmax 抽取，以叶子的单位计；需要 `pimc` |
 | `--explore ε` | 0 | l0 把比例为 ε 的决策在它们的选项中均匀抽取；需要 `l0` |
 
-**冠军文件**，`--champion FILE`（`Args.cs:175-202`），用于 `run`、`brain`、`afterstates` 和 `fork`：打冠军文件指明的冠军（[评估 §5](/arch/evaluation/#sec-5)）。文件里的选项排在给出的选项之后，所以给出的选项优先；其中包括它的 `character` 和 `asc`。没有 `--env` 的命令（`brain`）跳过文件里的 `env`；给出的 `--policy` 与文件里的不同时，保留它自己的预算。`gate` 的 `--champion` 是另一个选项：要打败的冠军。
+**冠军文件**，`--champion FILE`（`Args.cs:175-202`），用于 `run`、`brain`、`afterstates` 和 `fork`：打冠军文件指明的冠军（[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)）。文件里的选项排在给出的选项之后，所以给出的选项优先；其中包括它的 `character` 和 `asc`。没有 `--env` 的命令（`brain`）跳过文件里的 `env`；给出的 `--policy` 与文件里的不同时，保留它自己的预算。`gate` 的 `--champion` 是另一个选项：要打败的冠军。
 
 **日志里的对局**（`Commands/Forks.cs:34-71`），用于 `afterstates` 和 `fork`：`--log`（决策日志，逗号分隔）、`--records`（它们的对局记录）、`--out`（输出的 JSON 行），都是必需的；`--start`（第一个日志对局，默认 0）和 `--n`（默认：其余全部）。
 
@@ -125,7 +125,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `selftest` | `--n`（20）、`--seed`（1）、`--workers N`（0）；遭遇池 | [§5](#sec-5) 的各项检查 |
 | `forkbench` | `--n`（30）、`--seed`（1）、`--branches`（20）；遭遇池 | 从战斗中途的切点出发，测还原一场战斗和一个搜索分支的开销（[战斗 §2](/arch/simulator/combat/#sec-2)） |
 | `fidelity` | `--n`（20）、`--start`、`--seed`（1）、`--every`（3）、`--player` `play`\|`random`、`--top`（15）、`--no-history`；遭遇池 | 构建出的战斗打起来和真实战斗有多接近；每个被测的决策最多往前打 12 个动作，过了回合结束就停（[战斗 §6](/arch/simulator/combat/#sec-6)） |
-| `panel` | `--n`（40）、`--start`、`--seed`（1）、`--player`（`pimc`）、`--env`（NoSL）、`--workers`（0，只用于 NoSL PIMC）、`--trace`、`--out FILE`、`--prompt-prefer IDS`；预算、叶子、遭遇池 | 固定的战斗测试集：每个玩家打同样的战斗；胜率和掉血（[评估 §3](/arch/evaluation/#sec-3)）；SL 下世界拿到真实战斗的提示策略；`--prompt-prefer`（只用于只选一张的提示）不能和 `--workers` 一起用 |
+| `panel` | `--n`（40）、`--start`、`--seed`（1）、`--player`（`pimc`）、`--env`（NoSL）、`--workers`（0，只用于 NoSL PIMC）、`--trace`、`--out FILE`、`--prompt-prefer IDS`；预算、叶子、遭遇池 | 固定的战斗测试集：每个玩家打同样的战斗；胜率和掉血（[评估：晋级门槛 §5](/arch/evaluation/gates/#sec-5)）；SL 下世界拿到真实战斗的提示策略；`--prompt-prefer`（只用于只选一张的提示）不能和 `--workers` 一起用 |
 | `fusion` | `--log`（必需）、`--n`（400）、`--start`、`--every`（1）、`--k`（32）、`--max-nodes`（5000，超过它的决策跳过）、`--out FILE` | 融合测试集：在日志里的 NoSL 战斗决策上，比较 PIMC 的值和合并后的值（[环境：世界 §3](/arch/environments/worlds/#sec-3)） |
 
 **整局**
@@ -148,7 +148,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `ranks` | `--logs`（必需，复数）、`--value FILE`、`--per-act`（200）、`--top`（30） | V 的选牌眼光：每一幕里，日志中的牌组多一张某牌时 V 的平均变化 |
 | `weights` | `--leaf` | 把 V 的初始权重输出成权重文件，供调参起步；加 `--leaf` 时输出 PIMC 的默认叶子权重 |
 
-**自我对弈数据**（[学习](/arch/learning/)）
+**自我对弈数据**（[学习：参考 §10](/arch/learning/reference/#sec-10)）
 
 | 命令 | 选项 | 作用 |
 |---|---|---|

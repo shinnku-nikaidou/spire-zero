@@ -45,7 +45,7 @@ import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
 - `UnlockState.all` 表示每个纪元和遭遇都已解锁，且已玩的局数极大（`Unlocks/UnlockState.cs:34`），所以给新玩家的第 1 幕调整和首局调整永远不会生效，一局从涅奥开始（[无头宿主 §5](/arch/simulator/headless/#sec-5)）。
 - 没有做的：照搬真实玩家的档案（他们解锁了什么），以及把进阶等级限制在角色的上限之内，游戏的大厅会做这件事（`StartRunLobby.cs:485-491`）。调用方传入的都是合法值。
 
-**种子**。一局的种子是游戏种子：12 个字符，取自游戏的字母表，即数字和去掉 I、O 的大写字母，例如 `0SSL7NS01MU6`。`run --seeds FILE` 从种子文件读入种子（[评估 §4](/arch/evaluation/#sec-4)）；没有种子文件时，`run --seed B` 由基数 B 和序号得出第 *i* 局的种子：`GameSeeds.MakeSeed(B, i)`（`Simulation/GameSeeds.cs:7-12`）。
+**种子**。一局的种子是游戏种子：12 个字符，取自游戏的字母表，即数字和去掉 I、O 的大写字母，例如 `0SSL7NS01MU6`。`run --seeds FILE` 从种子文件读入种子（[评估：指标、种子与报告 §5](/arch/evaluation/metrics/#sec-5)）；没有种子文件时，`run --seed B` 由基数 B 和序号得出第 *i* 局的种子：`GameSeeds.MakeSeed(B, i)`（`Simulation/GameSeeds.cs:7-12`）。
 
 ## 3. 步进、稳定、决策
 
@@ -149,7 +149,7 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 
 **退出码**：有一局失败、重播结果不同、有节点没有精确重播，或者记下了游戏错误时为 1；否则为 0。从未到达的决策界面和空闲等待只打印出来（`Commands/RunCommand.cs:155`）。
 
-**记录与日志**。`--records FILE` 每行写一条对局记录，作为 `report` 和 `gate` 的输入（[评估 §6](/arch/evaluation/#sec-6)）：
+**记录与日志**。`--records FILE` 每行写一条对局记录，作为 `report` 和 `gate` 的输入（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)）：
 
 | 字段 | 内容 |
 |---|---|
@@ -165,7 +165,7 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 
 ## 6. 确定性
 
-下游的一切都要求一局是它的设置和回答的函数。SL 克隆从检查点重播一个节点的决策，必须到达同一个状态（[世界与 SL 克隆](/arch/simulator/worlds/)）；晋级门槛在相同的种子上把挑战者和冠军配对（[评估 §5](/arch/evaluation/#sec-5)）；`--check` 把一局和它自己的重播相比较。给定种子，游戏是确定的，但前提是没有别的东西渗进来：没有时钟，没有线程时序，没有无序集合。pump 在一个线程上按投递顺序运行每个后续回调（[无头宿主 §7](/arch/simulator/headless/#sec-7)），用时钟做种子的随机数流从不被规则用到（[战斗 §2](/arch/simulator/combat/#sec-2)），GameBridge 还会给游戏无序存放的东西排序，例如一个地图点的子节点。
+下游的一切都要求一局是它的设置和回答的函数。SL 克隆从检查点重播一个节点的决策，必须到达同一个状态（[世界与 SL 克隆](/arch/simulator/worlds/)）；晋级门槛在相同的种子上把挑战者和冠军配对（[评估：晋级门槛 §2](/arch/evaluation/gates/#sec-2)）；`--check` 把一局和它自己的重播相比较。给定种子，游戏是确定的，但前提是没有别的东西渗进来：没有时钟，没有线程时序，没有无序集合。pump 在一个线程上按投递顺序运行每个后续回调（[无头宿主 §7](/arch/simulator/headless/#sec-7)），用时钟做种子的随机数流从不被规则用到（[战斗 §2](/arch/simulator/combat/#sec-2)），GameBridge 还会给游戏无序存放的东西排序，例如一个地图点的子节点。
 
 **`run --check`** 在它打的每一局上检查这一点（`Commands/RunCommand.cs:103-139`）：
 
@@ -184,19 +184,19 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 
 **真实时间等待**。模型代码不能等待时钟。`Task.Delay` 会让 pump 的队列一直空着，直到计时器线程投递工作，于是稳定下来时分不清游戏是空闲还是在等待（[无头宿主 §7](/arch/simulator/headless/#sec-7)）。Amalgamator 事件就是这样等待的，已经打了补丁。其他几处在无头时不会走到：`ActionExecutor.WaitForUnpause` 在游戏暂停时每 50 ms 轮询一次（`GameActions/ActionExecutor.cs:227-242`），`CombatState.GodotTimerTask` 给按 net id 查找生物设了超时（`Combat/CombatState.cs:603-609`），休息处的悬停提示是 UI。守护手段是上面的空闲等待计数，在 200 局的那批里是 0。
 
-**内联执行**。无头时游戏运行在 `NonInteractiveMode` 下，动作内联执行，而不是每帧让出一次，所以「发出即不管」（fire-and-forget）的工作，执行顺序可能和真实游戏不同。这是否会改变玩家看到的任何东西，在能把游戏里的对局和这里的对局相比较之前，还没有定论（[评估 §1](/arch/evaluation/#sec-1)）。
+**内联执行**。无头时游戏运行在 `NonInteractiveMode` 下，动作内联执行，而不是每帧让出一次，所以「发出即不管」（fire-and-forget）的工作，执行顺序可能和真实游戏不同。这是否会改变玩家看到的任何东西，在能把游戏里的对局和这里的对局相比较之前，还没有定论（[评估 §2](/arch/evaluation/#sec-2)）。
 
 ## 7. 两种连战
 
 有两条规则通过在一些战斗开始时就判赢来缩短一局，做法和游戏的 `win` 控制台命令一样（`DevConsole.ConsoleCommands/WinConsoleCmd.cs:31-47`）：每个敌人失去它的能力并被杀死，然后游戏检查是否获胜（`Simulation/RunSession.cs:377-385`）。被杀时复活或召唤同伴的敌人会再被杀一次，最多 5 次。战斗的奖励照常发放，和任何一场胜利之后一样，也不会问任何战斗决策。
 
-**Boss 连战试点**，即 `run --auto-win`，赢下每场战斗，包括 Boss 战。这样一局大约一秒就能走到每个 Boss 的门口，只打宏观决策：5 局共用 3.1 s，三幕的 Boss 都过了，没有游戏错误。做它是为了让 `bosslab.py states` 收集 Boss 门口的状态，在那里开打（[学习 §2](/arch/learning/#sec-2)）。它不能和 `--check` 一起用，也不能和 `--afterstates clone` 一起用：节点的检查点不保存这条规则。
+**Boss 连战试点**，即 `run --auto-win`，赢下每场战斗，包括 Boss 战。这样一局大约一秒就能走到每个 Boss 的门口，只打宏观决策：5 局共用 3.1 s，三幕的 Boss 都过了，没有游戏错误。做它是为了让 `bosslab.py states` 收集 Boss 门口的状态，在那里开打（[学习：价值函数 §10](/arch/learning/value/#sec-10)）。它不能和 `--check` 一起用，也不能和 `--afterstates clone` 一起用：节点的检查点不保存这条规则。
 
-**精英连战**，即 `run --gauntlet`（提交 `7a9f845`），只判赢遭遇是普通怪物的战斗（`RoomType.Monster`），包括事件里的。精英和 Boss（包括事件里的）由战斗大脑用这一局当时的生命值和药水来打，死了这一局就结束。其余一切都照游戏本身。这条规则跟着这一局的 SL 克隆走：节点的检查点把它带给大脑（`NodeCheckpoint.Gauntlet`，提交 `e970b60`），所以宏观大脑在克隆上的试探赢下的是同样那些战斗。没有它时，每次在一场判赢的怪物战斗的奖励处试探，都会把那场战斗当作要真打的重播一遍，这一局就失败了。计划 v6 在这种对局里训练和评判 V；计划 v7 又回到整局上训练 V，并用晋级门槛评判它（[学习 §2](/arch/learning/#sec-2)）。
+**精英连战**，即 `run --gauntlet`（提交 `7a9f845`），只判赢遭遇是普通怪物的战斗（`RoomType.Monster`），包括事件里的。精英和 Boss（包括事件里的）由战斗大脑用这一局当时的生命值和药水来打，死了这一局就结束。其余一切都照游戏本身。这条规则跟着这一局的 SL 克隆走：节点的检查点把它带给大脑（`NodeCheckpoint.Gauntlet`，提交 `e970b60`），所以宏观大脑在克隆上的试探赢下的是同样那些战斗。没有它时，每次在一场判赢的怪物战斗的奖励处试探，都会把那场战斗当作要真打的重播一遍，这一局就失败了。计划 v6 在这种对局里训练和评判 V；计划 v7 又回到整局上训练 V，并用晋级门槛评判它（[学习：价值函数 §7](/arch/learning/value/#sec-7)）。
 
 代码的帮助文本和注释把 `--gauntlet` 称为「the boss gauntlet」；本书把它叫作精英连战，因为每个精英都要真打，而把 `--auto-win` 叫作 Boss 连战试点。
 
-两条规则都会在记录里标明（`auto_win`、`gauntlet`）。`report`、`gate` 和整局用的 V 都拒收这些记录，因为它们的层数和生命值说明不了完整的一局打得怎样（[评估 §6](/arch/evaluation/#sec-6)）。连战对局的战斗还会在死亡时记下敌人的生命值和最大生命值（判赢的战斗里敌人已经没了，是 0/0）。
+两条规则都会在记录里标明（`auto_win`、`gauntlet`）。`report`、`gate` 和整局用的 V 都拒收这些记录，因为它们的层数和生命值说明不了完整的一局打得怎样（[评估：指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)）。这些对局和整局一样，每场战斗的结局都记下敌人的生命值和最大生命值（自 `7a9f845` 起），连战的进度在死亡时读取它；判赢的战斗里敌人已经没了，是 0/0。
 
 ## 8. 连到大脑上的对局
 

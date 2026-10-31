@@ -34,7 +34,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 一個工作行程有三種角色：
 
-1. **託管這一局**。在自我對弈和評估中，由模擬器而不是真實遊戲來打這一局，也就是[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)的 R1–R3 級。宿主工作行程持有唯一真實的那一局，並就每個決策詢問大腦，和 Mod 在真實遊戲裡的做法完全一樣。
+1. **託管這一局**。在自我對弈和評估中，由模擬器而不是真實遊戲來打這一局，也就是[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-2)的 R1–R3 級。宿主工作行程持有唯一真實的那一局，並就每個決策詢問大腦，和 Mod 在真實遊戲裡的做法完全一樣。
 2. **搜尋世界**。戰鬥大腦和宏觀大腦在世界裡嘗試各種打法：NoSL 下是從觀測建出的樣本，SL 下是當前節點的複本（[環境：世界 §1](/zh-tw/arch/environments/worlds/#sec-1)）。每個搜尋請求都送到池裡的一個工作行程，由它建構或載入世界、在其中搜尋，然後回覆。
 3. **基準測試與檢查**。`bench`、`selftest`、`forkbench`、`fidelity` 和戰鬥測試集也在這裡執行（[參考](/zh-tw/arch/simulator/reference/)）。
 

@@ -96,11 +96,11 @@ SL **不能**知道的：關於之後節點的任何東西。一個 `?` 點最�
 
 逐列說明：
 
-- **特權資訊**是只在訓練時使用的隱藏狀態，用來讓學習目標的雜訊更少；它從來不是部署後模型的輸入（[學習 §4](/zh-tw/arch/learning/#sec-4)）。
+- **特權資訊**是只在訓練時使用的隱藏狀態，用來讓學習目標的雜訊更少；它從來不是部署後模型的輸入（[學習：循環 §12](/zh-tw/arch/learning/loop/#sec-12)）。
 - **多重集**是會計算重複的集合：「三張打擊、兩張防禦和一張中和」，沒有順序。觀測送出的抽牌堆，按一個只取決於玩家所見內容的卡牌鍵排序，所以它的順序不帶任何資訊（[協定：觀測與動作 §4](/zh-tw/arch/protocol/observation/#sec-4)）。
 - **後驗**是根據已看到的東西更新過的機率分布。目前 NoSL 的世界在顯示相同意圖的招式中均勻抽取怪物的招式，並從它的意圖紀錄中取得它之前招式的順序（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）；完整的後驗還在規劃中（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
 - **種子字串**從不離開宿主：對局以它的雜湊命名（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)），觀測裡也沒有放它的欄位。
-- **挑選種子**是指看到結果之後才選要報告哪些種子；評估的種子集是固定的，並在使用前登記（[評估 §4](/zh-tw/arch/evaluation/#sec-4)）。
+- **挑選種子**是指看到結果之後才選要報告哪些種子；評估的種子集是固定的，並在使用前登記（[評估：指標、種子與報告 §5](/zh-tw/arch/evaluation/metrics/#sec-5)）。
 
 ## 6. 灰色地帶
 
@@ -116,7 +116,7 @@ SL **不能**知道的：關於之後節點的任何東西。一個 `?` 點最�
 
 SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過的一切。兩者都來自**宿主**：握有真實對局的那一方，自我對弈時是模擬器，真實遊戲裡是 Mod。
 
-- **在模擬器裡**（[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-1)的 R1–R3 級，由模擬器來打這一局）：承載這一局的工作行程握有真實狀態。當遊戲在到達地圖點時存檔，它就取一個**檢查點**：也就是 `RunManager.ToSave(null)` 產生的存檔（`Runs/RunManager.cs:670-709`） <Badge text="已核實" variant="success" />，無頭宿主把它保留下來而不是寫入，再加上存檔會丟掉的每個遺物的簡單欄位（見下文）。複本就是這個檢查點加上節點的軌跡（到達後的每個決策），像遊戲的「繼續」按鈕載入存檔那樣載入，然後重播（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。
+- **在模擬器裡**（[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-2)的 R1–R3 級，由模擬器來打這一局）：承載這一局的工作行程握有真實狀態。當遊戲在到達地圖點時存檔，它就取一個**檢查點**：也就是 `RunManager.ToSave(null)` 產生的存檔（`Runs/RunManager.cs:670-709`） <Badge text="已核實" variant="success" />，無頭宿主把它保留下來而不是寫入，再加上存檔會丟掉的每個遺物的簡單欄位（見下文）。複本就是這個檢查點加上節點的軌跡（到達後的每個決策），像遊戲的「繼續」按鈕載入存檔那樣載入，然後重播（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。
 - **在真實遊戲裡**（R4）：Mod 在同一時刻、用同一段 GameBridge 程式碼（`Checkpoint.Take`），在記憶體裡取同樣的檢查點。它從不碰 Steam 會同步到雲端的 `current_run.save`。它還在遊戲提交每個動作的地方記錄節點內的每個動作，並在每個決策之前把兩者送給大腦（[Mod：SL 紀錄](/zh-tw/arch/mod/sl-record/)）。工作行程透過同一條「繼續」路徑載入它們，再重播這些動作。
 - **在線路上**，它們以兩種 SL 專用訊息傳送：節點入口的 `node_checkpoint`，以及節點內每個決策的 `node_action`（[協定：線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。Harness 保留最新的檢查點和之後的決策，並把它們作為複本交給大腦（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
 
@@ -134,7 +134,7 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
 
 1. Brain 和 Protocol 不引用任何遊戲組件。已有：`selftest`（以 GameBridge 作為陰性對照）和 xUnit 的 `BoundaryTests`，後者也涵蓋 Harness（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
 2. 搜尋的隨機性只來自呼叫方，從不來自遊戲的亂數流。由構造保證，沒有測試：大腦的種子由對局 id（本身就是種子字串的雜湊）和決策的索引混合而成（`Harness/Dispatcher.cs:208-227`），世界的建構種子和取樣種子則由它而來（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。
-3. 後備決策的數量為 0。實際上已有：不存在後備程式碼，Harness 遇到沒有涵蓋的畫面（surface）就拋出例外（xUnit `DispatcherTests`），而由隨機佔位策略做出的決策會讓報告作廢（`Harness/Reports.cs:35-38`、xUnit `EvalReportTests`；[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
+3. 後備決策的數量為 0。實際上已有：不存在後備程式碼，Harness 遇到沒有涵蓋的畫面（surface）就拋出例外（xUnit `DispatcherTests`），而由隨機佔位策略做出的決策會讓報告作廢（`Harness/Reports.cs:35-38`、xUnit `EvalReportTests`；[評估：指標、種子與報告 §2](/zh-tw/arch/evaluation/metrics/#sec-2)）。
 4. 真實遊戲裡 `NumReloads == 0`。規劃中，作為 Mod 決策日誌的一個欄位（[Mod：自動遊玩與安全 §3](/zh-tw/arch/mod/auto/#sec-3)）；目前沒有東西讀它。複本會載入存檔，所以無論在哪裡載入（工作行程，以及 `run --check`、`selftest` 和 `clones` 裡的宿主行程），它們的次數都是 1 或更多。
 5. 每個觀測欄位都有白名單測試。規劃中；目前最接近的檢查，是 `run --check` 和 `selftest` 對每個觀測做的 JSON 往返（[協定 §3](/zh-tw/arch/protocol/#sec-3)）。
 

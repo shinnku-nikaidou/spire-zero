@@ -16,12 +16,12 @@ The `Dispatcher` keeps the run's lines in memory (`Dispatcher.Log`) when it is m
 - `run --log FILE` appends each run's lines after the run ends ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). A run killed midway leaves none. `--log` is refused together with `--brain`, whose decisions are logged by the brain.
 - `brain --log FILE` writes a run's lines at its `run_end`, so a host that drops without one leaves none ([Overview §5](/en/arch/harness/#sec-5)).
 
-The lines are `DecisionEntry` records (`Dispatcher.cs:63-67`) serialized like every Protocol type: snake_case names, fields that are null left out ([Protocol §4](/en/arch/protocol/#sec-4)). Logs are kept beside the run records, in the data directory ([Learning §6](/en/arch/learning/#sec-6)).
+The lines are `DecisionEntry` records (`Dispatcher.cs:63-67`) serialized like every Protocol type: snake_case names, fields that are null left out ([Protocol §4](/en/arch/protocol/#sec-4)). Logs are kept beside the run records, in the data directory ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
 
 Who reads the log:
 
-- **learning**: the value targets and the combat net's ExIt labels (ExIt, expert iteration: training the learned parts to imitate what the search chose) come from its candidates and observations ([Learning §2](/en/arch/learning/#sec-2));
-- **evaluation**: the brains that decided, decisions by a placeholder, compute per decision ([Evaluation §3](/en/arch/evaluation/#sec-3));
+- **learning**: the value targets and the combat net's ExIt labels (ExIt, expert iteration: training the learned parts to imitate what the search chose) come from its candidates and observations ([Learning: the loop §5](/en/arch/learning/loop/#sec-5));
+- **evaluation**: the brains that decided, decisions by a placeholder, compute per decision ([Evaluation: metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2));
 - **output**: narration is to be built only from the candidates and facts ([Output §5](/en/arch/output/#sec-5)).
 
 ## 2. Three lines
@@ -64,7 +64,7 @@ Who reads the log:
 - `value`: its mean over the worlds;
 - `ci`: the half-width of its 95% confidence interval, 1.96·s/√n over its worlds, 0 under 2 worlds;
 - `samples`: its worlds;
-- `values`: its value in each world, in world order, to 4 decimals. These are the Q of ExIt's policy target ([Learning §2](/en/arch/learning/#sec-2));
+- `values`: its value in each world, in world order, to 4 decimals. These are the Q of ExIt's policy target ([Learning: the loop §5](/en/arch/learning/loop/#sec-5));
 - `nodes`: the search nodes spent after it in each world, counting the action itself.
 
 They are sorted by the round of sequential halving they reached, then by value; without halving every candidate reaches the same round, so the best comes first. PIMC's `plan` is the rest of the turn after `chosen`, in the first world.
@@ -75,7 +75,7 @@ They are sorted by the round of sequential halving they reached, then by value; 
 
 ## 6. Explored and replanned steps
 
-**`explored: true`** marks an answer that self-play's exploration drew instead of the brain's best ([Learning §5](/en/arch/learning/#sec-5)):
+**`explored: true`** marks an answer that self-play's exploration drew instead of the brain's best ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)):
 
 - by a softmax (`--combat-explore T`, `--macro-explore T`), when the brain valued the draw below its best by more than a hundredth of the temperature. Closer than that it is a tie, such as another order of the same turn, and is not marked;
 - by even draws (`--explore ε`), always, also when the draw happens to be the brain's own pick;
@@ -87,7 +87,7 @@ A combat step drawn instead of the search's pick keeps its `candidates` but has 
 
 ## 7. What else a line carries
 
-**A combat's decisions come in one block**, between two macro decisions, in the order of the combats in the run's record ([Evaluation §6](/en/arch/evaluation/#sec-6)). That is how a decision finds how its combat ended. In a gauntlet run, the combats won at their start are in the run record but have no decisions.
+**A combat's decisions come in one block**, between two macro decisions, in the order of the combats in the run's record ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). That is how a decision finds how its combat ended. In a gauntlet run, the combats won at their start are in the run record but have no decisions.
 
 **`obs`**, on every combat line: the combat observation the brain was shown, about 1.6 KB ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)). It is the input of the learned combat parts and of the fusion panel ([NoSL PIMC: search §4](/en/arch/pimc/search/#sec-4)).
 
@@ -95,7 +95,7 @@ A combat step drawn instead of the search's pick keeps its `candidates` but has 
 
 **`run_view`**, on every macro line: the run view the brain was shown, about 6 KB ([Protocol: observations and actions §2](/en/arch/protocol/observation/#sec-2)). V is trained on it ([Macro brain: value](/en/arch/macro-brain/value/)).
 
-**`features`**, on every macro line, whatever brain decided: V v0's hand-made features of the run view (floor, HP, max HP, gold, potions, relics, cards, unplayable cards, upgrades, the deck's mean damage, block and draw, and the elites, rest sites, shops, treasures and unknowns expected ahead). V v0's fit and V v2's training read them; both are removed, and pure V does not read them ([Learning §1](/en/arch/learning/#sec-1)).
+**`features`**, on every macro line, whatever brain decided: V v0's hand-made features of the run view (floor, HP, max HP, gold, potions, relics, cards, unplayable cards, upgrades, the deck's mean damage, block and draw, and the elites, rest sites, shops, treasures and unknowns expected ahead). V v0's fit and V v2's training read them; both are removed, and pure V does not read them ([Learning: the value function §3](/en/arch/learning/value/#sec-3)).
 
 Card prompts outside combat get neither `run_view` nor `features`.
 
@@ -120,7 +120,7 @@ Card prompts outside combat get neither `run_view` nor `features`.
 | `DispatcherTests.RefusesNodeCheckpointsInNoSL` | node checkpoints are refused in NoSL |
 | `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | the clone keeps the elite gauntlet's rule |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`, `AWorkerStuckTwiceFailsTheCall` | the pool's one retry |
-| `GateTests` (10), `EvalReportTests` (2) | evaluation's gate and reports ([Evaluation §5](/en/arch/evaluation/#sec-5)) |
+| `GateTests` (10), `EvalReportTests` (2) | evaluation's gate and reports ([Evaluation: gates §12](/en/arch/evaluation/gates/#sec-12)) |
 
 **Planned tests:**
 

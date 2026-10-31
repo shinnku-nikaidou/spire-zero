@@ -153,9 +153,9 @@ public sealed class PublicRecord
 | `PooledPimc.cs` | `PooledPimc` | PIMC with its worlds searched in the pool, NoSL or SL |
 | `PooledPlanner.cs` | `PooledPlanner` | the SL planner with its turns searched in the pool |
 | `PooledClone.cs` | `PooledClone` | the node's clone for the macro side, its probes played in the pool |
-| `RunRecords.cs` | `RunConfig`, `RunRecord`, `CombatEntry`, `CombatEnd` | the run record ([Evaluation §6](/en/arch/evaluation/#sec-6)) |
-| `Reports.cs` | `Rate`, `BossEntry`, `Metrics`, `EvalReport`, `Leaderboard` | reports and the leaderboard ([Evaluation §6](/en/arch/evaluation/#sec-6)) |
-| `Gate.cs` | `Gate`, `ChampionFile` | the paired gate and champion files ([Evaluation §5](/en/arch/evaluation/#sec-5)) |
+| `RunRecords.cs` | `RunConfig`, `RunRecord`, `CombatEntry`, `CombatEnd` | the run record ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)) |
+| `Reports.cs` | `Rate`, `BossEntry`, `Metrics`, `EvalReport`, `Leaderboard` | reports and the leaderboard ([Evaluation: metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)) |
+| `Gate.cs` | `Gate`, `ChampionFile` | the paired gate and champion files ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)) |
 
 **`Dispatcher`** (`Dispatcher.cs:82-228`), made with the run id, the environment, the four routes, whether to log, and, for `--afterstates clone`, how to open the node's clone for the macro side:
 

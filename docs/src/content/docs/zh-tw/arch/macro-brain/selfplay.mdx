@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 import DecisionBars from '../../../../../components/v/DecisionBars.svelte';
 import Generations from '../../../../../components/v/Generations.svelte';
 
-V 從冠軍自己打的對局中學習。本節描述這個循環在計畫 v6 裡實際的樣子：對局在什麼遊戲裡打（菁英連戰）、自我對弈怎麼探索，以及每一代的網路怎麼訓練、怎麼過晉級門檻。一般的循環，以及戰鬥網路那一邊，見[學習 §2](/zh-tw/arch/learning/#sec-2)。
+V 從冠軍自己打的對局中學習。本節描述這個循環在計畫 v6 裡實際的樣子：對局在什麼遊戲裡打（菁英連戰）、自我對弈怎麼探索，以及每一代的網路怎麼訓練、怎麼過晉級門檻。一般的循環，以及戰鬥網路那一邊，見[學習：循環](/zh-tw/arch/learning/loop/)。
 
 ```mermaid
 flowchart LR
@@ -94,13 +94,13 @@ $$
 \bar d = \frac{1}{n}\sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\,\mathrm{SE} > 0,
 $$
 
-也就是說，當平均差的 95% 單側下界大於 0 時晉級。一個種子決定了地圖、遭遇和獎勵，直到兩個策略分岔為止，所以一局的大部分運氣由雙方共享，在 $d_i$ 裡相互抵消（公共亂數）。`learn/gauntlet.py` 計算這些；一次門檻在遠端主機上要 16–20 分鐘（[評估 §5](/zh-tw/arch/evaluation/#sec-5)）。
+也就是說，當平均差的 95% 單側下界大於 0 時晉級。一個種子決定了地圖、遭遇和獎勵，直到兩個策略分岔為止，所以一局的大部分運氣由雙方共享，在 $d_i$ 裡相互抵消（公共亂數）。`learn/gauntlet.py` 計算這些；一次門檻在遠端主機上要 16–20 分鐘（[評估：晉級門檻 §11](/zh-tw/arch/evaluation/gates/#sec-11)）。
 
 <Generations client:visible lang="zh-TW" />
 
 點是 500 個評估種子上的平均進度，鬚線是 95% 信賴區間（±1.96 個標準誤）；第一張表給出到達各幕頭目的對局中打贏它的比例，以及贏下的局數。每一代都通過了門檻：v6-1 對 pure-1-g +1.60 ± 0.44（下界 +0.88），v6-2 對 v6-1 +4.62 ± 0.46（+3.86），v6-3-2 對 v6-2 +2.67 ± 0.49（+1.87）。參考線是 n2-b0.03（33.71）和每個決策都均勻抽取（21.89）：V 的選擇比隨機選擇多值大約 21 層的進度。
 
-**在整局裡**（第二張表：SL，`promotion-1-300` 的 300 個種子，SL 冠軍的規劃器用 medium 強度，在複本上），v6-3-2 到達第 33.56 層，贏下 23 局，在到達第 1–3 幕頭目的對局中分別打贏 95%、55% 和 35%。2026-10-30，它憑這份報告成為兩個冠軍的 V（[評估 §5](/zh-tw/arch/evaluation/#sec-5)）。
+**在整局裡**（第二張表：SL，`promotion-1-300` 的 300 個種子，SL 冠軍的規劃器用 medium 強度，在複本上），v6-3-2 到達第 33.56 層，贏下 23 局，在到達第 1–3 幕頭目的對局中分別打贏 95%、55% 和 35%。2026-10-30，它憑這份報告成為兩個冠軍的 V（[評估：冠軍與基線 §4](/zh-tw/arch/evaluation/champions/#sec-4)）。
 
 ## 5. 連戰的排序沒能延續的地方
 

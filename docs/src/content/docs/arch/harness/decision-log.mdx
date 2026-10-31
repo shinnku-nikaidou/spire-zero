@@ -16,12 +16,12 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 - `run --log FILE` 在每一局结束后追加它的各行（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。中途被杀掉的一局什么都不留。`--log` 和 `--brain` 同时给出时会被拒绝，因为后者的决策由大脑记日志。
 - `brain --log FILE` 在一局的 `run_end` 时写出它的各行，所以没发这条消息就断开的宿主什么都不留（[概览 §5](/arch/harness/#sec-5)）。
 
-这些行是 `DecisionEntry` record（`Dispatcher.cs:63-67`），像每个协议类型一样序列化：snake_case 的名字，值为 null 的字段省略（[协议 §4](/arch/protocol/#sec-4)）。日志和对局记录放在一起，在数据目录里（[学习 §6](/arch/learning/#sec-6)）。
+这些行是 `DecisionEntry` record（`Dispatcher.cs:63-67`），像每个协议类型一样序列化：snake_case 的名字，值为 null 的字段省略（[协议 §4](/arch/protocol/#sec-4)）。日志和对局记录放在一起，在数据目录里（[学习：参考 §3](/arch/learning/reference/#sec-3)）。
 
 谁读这份日志：
 
-- **学习**：价值目标和战斗网络的 ExIt 标签（ExIt，专家迭代：训练学到的部分去模仿搜索的选择）来自其中的候选和观测（[学习 §2](/arch/learning/#sec-2)）；
-- **评估**：做出决策的大脑、占位策略做出的决策、每个决策的算力（[评估 §3](/arch/evaluation/#sec-3)）；
+- **学习**：价值目标和战斗网络的 ExIt 标签（ExIt，专家迭代：训练学到的部分去模仿搜索的选择）来自其中的候选和观测（[学习：循环 §5](/arch/learning/loop/#sec-5)）；
+- **评估**：做出决策的大脑、占位策略做出的决策、每个决策的算力（[评估：指标、种子与报告 §2](/arch/evaluation/metrics/#sec-2)）；
 - **输出**：解说将只根据候选和事实生成（[输出 §5](/arch/output/#sec-5)）。
 
 ## 2. 三行
@@ -64,7 +64,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 - `value`：它在各个世界上的平均值；
 - `ci`：它的 95% 置信区间的半宽，在它的各个世界上算 1.96·s/√n，不到 2 个世界时为 0；
 - `samples`：它的世界数；
-- `values`：它在每个世界里的值，按世界顺序，保留 4 位小数。这些就是 ExIt 的策略目标里的 Q（[学习 §2](/arch/learning/#sec-2)）；
+- `values`：它在每个世界里的值，按世界顺序，保留 4 位小数。这些就是 ExIt 的策略目标里的 Q（[学习：循环 §5](/arch/learning/loop/#sec-5)）；
 - `nodes`：在每个世界里花在它之后的搜索节点数，包括这个动作本身。
 
 它们先按到达的逐次减半轮次排序，再按值排序；不用减半时每个候选都到达同一轮，所以最好的在前。PIMC 的 `plan` 是 `chosen` 之后本回合剩下的部分，取第一个世界里的。
@@ -75,7 +75,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 ## 6. 探索的步骤与重新规划的步骤
 
-**`explored: true`** 标出自我对弈的探索抽出、而不是大脑最优选的回答（[学习 §5](/arch/learning/#sec-5)）：
+**`explored: true`** 标出自我对弈的探索抽出、而不是大脑最优选的回答（[学习：循环 §9](/arch/learning/loop/#sec-9)）：
 
 - 由 softmax 抽出时（`--combat-explore T`、`--macro-explore T`），当大脑给抽中项的估值比它的最优低出温度的百分之一以上时。差距比这更小就算平手，例如同一回合换了个顺序，不标；
 - 由均匀抽取抽出时（`--explore ε`），总是标，碰巧抽中大脑自己的选择时也一样；
@@ -87,7 +87,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 ## 7. 一行还带着什么
 
-**一场战斗的决策集中在一块里**，夹在两个宏观决策之间，顺序与对局记录里的战斗一致（[评估 §6](/arch/evaluation/#sec-6)）。决策就是靠这个找到它那场战斗的结局。在连战对局里，一开始就判赢的战斗在对局记录里，但没有决策。
+**一场战斗的决策集中在一块里**，夹在两个宏观决策之间，顺序与对局记录里的战斗一致（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)）。决策就是靠这个找到它那场战斗的结局。在连战对局里，一开始就判赢的战斗在对局记录里，但没有决策。
 
 **`obs`**，在每个战斗行上：大脑看到的战斗观测，约 1.6 KB（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)）。它是学习得到的战斗部件和融合测试集的输入（[NoSL PIMC：搜索 §4](/arch/pimc/search/#sec-4)）。
 
@@ -95,7 +95,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 **`run_view`**，在每个宏观行上：大脑看到的整局观测，约 6 KB（[协议：观测与动作 §2](/arch/protocol/observation/#sec-2)）。V 就用它训练（[宏观大脑：从风险值到价值](/arch/macro-brain/value/)）。
 
-**`features`**，在每个宏观行上，不管是哪个大脑做的决策：整局观测上 V v0 手工设计的特征（楼层、HP、最大 HP、金币、药水、遗物、牌、不能打出的牌、升级、牌组的平均伤害、格挡和抽牌，以及前方预计的精英、休息处、商店、宝箱和未知）。V v0 的拟合和 V v2 的训练读它们；两者都已删除，纯 V 不读它们（[学习 §1](/arch/learning/#sec-1)）。
+**`features`**，在每个宏观行上，不管是哪个大脑做的决策：整局观测上 V v0 手工设计的特征（楼层、HP、最大 HP、金币、药水、遗物、牌、不能打出的牌、升级、牌组的平均伤害、格挡和抽牌，以及前方预计的精英、休息处、商店、宝箱和未知）。V v0 的拟合和 V v2 的训练读它们；两者都已删除，纯 V 不读它们（[学习：价值函数 §3](/arch/learning/value/#sec-3)）。
 
 战斗外的选牌提示既没有 `run_view`，也没有 `features`。
 
@@ -120,7 +120,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 | `DispatcherTests.RefusesNodeCheckpointsInNoSL` | NoSL 下拒收节点检查点 |
 | `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | 克隆保留精英连战的规则 |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`、`AWorkerStuckTwiceFailsTheCall` | 池的那一次重试 |
-| `GateTests`（10）、`EvalReportTests`（2） | 评估的晋级门槛和报告（[评估 §5](/arch/evaluation/#sec-5)） |
+| `GateTests`（10）、`EvalReportTests`（2） | 评估的晋级门槛和报告（[评估：晋级门槛 §12](/arch/evaluation/gates/#sec-12)） |
 
 **规划中的测试**：
 

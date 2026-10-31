@@ -106,7 +106,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | 字段 | 含义 |
 |---|---|
 | `action` | 该决策的合法动作之一；对选牌提示来说是 `pick:i,j,…` |
-| `brain` | 做出选择的大脑，名字取自冠军的路由表（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）；宿主按大脑统计决策数写进对局记录，其中占位决策的数目必须为零（[评估 §3](/arch/evaluation/#sec-3)） |
+| `brain` | 做出选择的大脑，名字取自冠军的路由表（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）；宿主按大脑统计决策数写进对局记录，其中占位决策的数目必须为零（[评估：指标、种子与报告 §2](/arch/evaluation/metrics/#sec-2)） |
 | `plan` | 大脑在这个动作之后的计划：会搜索的战斗大脑给出本回合剩下的部分，地图上的宏观大脑给出本幕剩下的路线 |
 | `candidates` | 只来自会搜索的大脑：它打过分的各个首个动作，最好的在前 |
 

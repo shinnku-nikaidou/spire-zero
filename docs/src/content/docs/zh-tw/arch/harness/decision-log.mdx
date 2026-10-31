@@ -16,12 +16,12 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 - `run --log FILE` 在每一局結束後追加它的各行（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。中途被殺掉的一局不會留下任何一行。`--log` 和 `--brain` 一起用時會被拒絕，因為後者的決策由大腦記錄。
 - `brain --log FILE` 在一局的 `run_end` 時寫出它的各行，所以沒送出這條訊息就斷線的宿主不會留下任何一行（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
-每一行是一個 `DecisionEntry` record（`Dispatcher.cs:63-67`），和每個 Protocol 型別一樣序列化：snake_case 的名字，值為 null 的欄位省略（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。日誌和對局記錄放在一起，在資料目錄裡（[學習 §6](/zh-tw/arch/learning/#sec-6)）。
+每一行是一個 `DecisionEntry` record（`Dispatcher.cs:63-67`），和每個 Protocol 型別一樣序列化：snake_case 的名字，值為 null 的欄位省略（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。日誌和對局記錄放在一起，在資料目錄裡（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）。
 
 誰讀這份日誌：
 
-- **學習**：價值目標和戰鬥網路的 ExIt 標籤（ExIt，專家迭代：訓練學到的部分去模仿搜尋的選擇）來自它的候選和觀測（[學習 §2](/zh-tw/arch/learning/#sec-2)）；
-- **評估**：做決定的大腦、佔位策略做的決策、每個決策的算力（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；
+- **學習**：價值目標和戰鬥網路的 ExIt 標籤（ExIt，專家迭代：訓練學到的部分去模仿搜尋的選擇）來自它的候選和觀測（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）；
+- **評估**：做決定的大腦、佔位策略做的決策、每個決策的算力（[評估：指標、種子與報告 §2](/zh-tw/arch/evaluation/metrics/#sec-2)）；
 - **輸出**：解說將只根據候選和事實生成（[輸出 §5](/zh-tw/arch/output/#sec-5)）。
 
 ## 2. 三行
@@ -64,7 +64,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 - `value`：它在各個世界上的平均值；
 - `ci`：它 95% 信賴區間的半寬，在它的各個世界上算 1.96·s/√n，不到 2 個世界時為 0；
 - `samples`：它的世界數；
-- `values`：它在每個世界裡的估值，按世界順序，保留 4 位小數。它們就是 ExIt 的 policy 目標裡的 Q（[學習 §2](/zh-tw/arch/learning/#sec-2)）；
+- `values`：它在每個世界裡的估值，按世界順序，保留 4 位小數。它們就是 ExIt 的 policy 目標裡的 Q（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）；
 - `nodes`：每個世界裡搜尋在它之後花掉的節點數，包括這個動作本身。
 
 它們先按到達的逐次減半輪次排序，再按估值排序；不用減半時每個候選都到達同一輪，所以最好的排在最前。PIMC 的 `plan` 是第一個世界裡 `chosen` 之後本回合剩下的部分。
@@ -75,7 +75,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 ## 6. 經探索與重新規劃的步驟
 
-**`explored: true`** 標出自我對弈的探索抽出、取代了大腦最佳選擇的回答（[學習 §5](/zh-tw/arch/learning/#sec-5)）：
+**`explored: true`** 標出自我對弈的探索抽出、取代了大腦最佳選擇的回答（[學習：循環 §9](/zh-tw/arch/learning/loop/#sec-9)）：
 
 - 用 softmax 抽取（`--combat-explore T`、`--macro-explore T`）時，大腦給抽中者的估值比它的最佳低出溫度的百分之一以上才標。差距比這更小就算平手，例如同一回合換了個出牌順序，不標；
 - 用均勻抽取（`--explore ε`）時，總是標，即使抽中的碰巧就是大腦自己的選擇；
@@ -87,7 +87,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 ## 7. 一行還帶著什麼
 
-**一場戰鬥的決策連成一塊**，位於兩個宏觀決策之間，順序與對局記錄裡的戰鬥一致（[評估 §6](/zh-tw/arch/evaluation/#sec-6)）。決策就是靠這個找到它那場戰鬥是怎麼結束的。在連戰對局裡，一開始就判勝的戰鬥在對局記錄裡，但沒有決策。
+**一場戰鬥的決策連成一塊**，位於兩個宏觀決策之間，順序與對局記錄裡的戰鬥一致（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)）。決策就是靠這個找到它那場戰鬥是怎麼結束的。在連戰對局裡，一開始就判勝的戰鬥在對局記錄裡，但沒有決策。
 
 **`obs`**，在每一行戰鬥決策上：大腦看到的戰鬥觀測，約 1.6 KB（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)）。它是學習得到的戰鬥部件和融合測試集的輸入（[NoSL PIMC：搜尋 §4](/zh-tw/arch/pimc/search/#sec-4)）。
 
@@ -95,7 +95,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 **`run_view`**，在每一行宏觀決策上：大腦看到的整局觀測，約 6 KB（[協定：觀測與動作 §2](/zh-tw/arch/protocol/observation/#sec-2)）。V 就用它訓練（[宏觀大腦：從風險值到價值](/zh-tw/arch/macro-brain/value/)）。
 
-**`features`**，在每一行宏觀決策上，不管是哪個大腦做的決定：V v0 在整局觀測上手工設計的特徵（樓層、生命值、最大生命值、金幣、藥水、遺物、牌、無法打出的牌、升級，牌組的平均傷害、格擋和抽牌，以及前方預計會遇到的菁英、休息處、商店、財寶和未知）。V v0 的擬合和 V v2 的訓練讀的就是它們；兩者都已刪除，純 V 不讀它們（[學習 §1](/zh-tw/arch/learning/#sec-1)）。
+**`features`**，在每一行宏觀決策上，不管是哪個大腦做的決定：V v0 在整局觀測上手工設計的特徵（樓層、生命值、最大生命值、金幣、藥水、遺物、牌、無法打出的牌、升級，牌組的平均傷害、格擋和抽牌，以及前方預計會遇到的菁英、休息處、商店、財寶和未知）。V v0 的擬合和 V v2 的訓練讀的就是它們；兩者都已刪除，純 V 不讀它們（[學習：價值函數 §3](/zh-tw/arch/learning/value/#sec-3)）。
 
 戰鬥外的選牌提示既沒有 `run_view` 也沒有 `features`。
 
@@ -120,7 +120,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `DispatcherTests.RefusesNodeCheckpointsInNoSL` | NoSL 下拒收節點檢查點 |
 | `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | 複本保留菁英連戰的規則 |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`、`AWorkerStuckTwiceFailsTheCall` | 行程池的那一次重試 |
-| `GateTests`（10）、`EvalReportTests`（2） | 評估的晉級門檻和報告（[評估 §5](/zh-tw/arch/evaluation/#sec-5)） |
+| `GateTests`（10）、`EvalReportTests`（2） | 評估的晉級門檻和報告（[評估：晉級門檻 §12](/zh-tw/arch/evaluation/gates/#sec-12)） |
 
 **規劃中的測試**：
 

@@ -107,7 +107,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `--combat-explore T` | 0 | PIMC 按搜尋的值的 softmax 抽取，T 以葉節點的單位計；需要 `pimc` |
 | `--explore ε` | 0 | l0 把比例 ε 的決策在它們的選項之間均勻抽取；需要 `l0` |
 
-**冠軍檔案**，`--champion FILE`（`Args.cs:175-202`），用於 `run`、`brain`、`afterstates` 和 `fork`：打冠軍檔案指明的冠軍（[評估 §5](/zh-tw/arch/evaluation/#sec-5)）。檔案的選項排在給出的選項之後，所以給出的選項優先；其中包括它的 `character` 和 `asc`。沒有 `--env` 的指令（`brain`）會略過檔案的 `env`；給出的 `--policy` 如果和檔案的不同，就保留它自己的預算。`gate` 的 `--champion` 是另一個選項：要擊敗的冠軍。
+**冠軍檔案**，`--champion FILE`（`Args.cs:175-202`），用於 `run`、`brain`、`afterstates` 和 `fork`：打冠軍檔案指明的冠軍（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。檔案的選項排在給出的選項之後，所以給出的選項優先；其中包括它的 `character` 和 `asc`。沒有 `--env` 的指令（`brain`）會略過檔案的 `env`；給出的 `--policy` 如果和檔案的不同，就保留它自己的預算。`gate` 的 `--champion` 是另一個選項：要擊敗的冠軍。
 
 **已記錄的對局**（logged runs，`Commands/Forks.cs:34-71`），用於 `afterstates` 和 `fork`：`--log`（決策日誌，以逗號分隔）、`--records`（它們的對局記錄）、`--out`（輸出的 JSON 行），都是必填；`--start`（第一局已記錄的對局，0）和 `--n`（預設：其餘全部）。
 
@@ -125,7 +125,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `selftest` | `--n`（20）、`--seed`（1）、`--workers N`（0）；戰鬥池 | [§5](#sec-5) 的檢查 |
 | `forkbench` | `--n`（30）、`--seed`（1）、`--branches`（20）；戰鬥池 | 從戰鬥中途的切點出發，還原一場戰鬥和一個搜尋分支的開銷（[戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)） |
 | `fidelity` | `--n`（20）、`--start`、`--seed`（1）、`--every`（3）、`--player` `play`\|`random`、`--top`（15）、`--no-history`；戰鬥池 | 建構出的戰鬥打起來和真實戰鬥有多接近；每個量測的決策最多往前打 12 個動作，在回合結束之後停下（[戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6)） |
-| `panel` | `--n`（40）、`--start`、`--seed`（1）、`--player`（`pimc`）、`--env`（NoSL）、`--workers`（0，僅限 NoSL PIMC）、`--trace`、`--out FILE`、`--prompt-prefer IDS`；預算、葉節點、戰鬥池 | 固定的戰鬥測試集：每個玩家打同樣的戰鬥；勝率和損失的生命值（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；SL 下世界拿到真實戰鬥的提示策略；`--prompt-prefer`（僅限單選提示）與 `--workers` 一起用時會被拒絕 |
+| `panel` | `--n`（40）、`--start`、`--seed`（1）、`--player`（`pimc`）、`--env`（NoSL）、`--workers`（0，僅限 NoSL PIMC）、`--trace`、`--out FILE`、`--prompt-prefer IDS`；預算、葉節點、戰鬥池 | 固定的戰鬥測試集：每個玩家打同樣的戰鬥；勝率和損失的生命值（[評估：晉級門檻 §5](/zh-tw/arch/evaluation/gates/#sec-5)）；SL 下世界拿到真實戰鬥的提示策略；`--prompt-prefer`（僅限單選提示）與 `--workers` 一起用時會被拒絕 |
 | `fusion` | `--log`（必填）、`--n`（400）、`--start`、`--every`（1）、`--k`（32）、`--max-nodes`（5000，超過它的決策會被跳過）、`--out FILE` | 融合測試集：在日誌的 NoSL 戰鬥決策上，比較 PIMC 的值和合併後的值（[環境：世界 §3](/zh-tw/arch/environments/worlds/#sec-3)） |
 
 **對局**
@@ -148,7 +148,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `ranks` | `--logs`（必填，複數）、`--value FILE`、`--per-act`（200）、`--top`（30） | V 對卡牌的感覺：每一幕裡，每張牌在記錄下的牌組多一張時 V 的平均變化 |
 | `weights` | `--leaf` | V 的初始權重，寫成一個權重檔案，供調校時作為起點；用 `--leaf` 時是 PIMC 的預設葉節點權重 |
 
-**自我對弈資料**（[學習](/zh-tw/arch/learning/)）
+**自我對弈資料**（[學習：參考 §10](/zh-tw/arch/learning/reference/#sec-10)）
 
 | 指令 | 選項 | 作用 |
 |---|---|---|

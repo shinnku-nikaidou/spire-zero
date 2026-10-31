@@ -54,7 +54,7 @@ Why hazards rather than one number:
 
 ## 2. Labels: only what was measured
 
-Every macro decision in the self-play logs is a training sample: the run view at that decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), joined by run id to the run's record, which says where the run ended ([Evaluation §6](/en/arch/evaluation/#sec-6)). Its targets are the run's real outcome, a **Monte Carlo (MC) target**: no estimate, no bootstrap, only what happened.
+Every macro decision in the self-play logs is a training sample: the run view at that decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), joined by run id to the run's record, which says where the run ended ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). Its targets are the run's real outcome, a **Monte Carlo (MC) target**: no estimate, no bootstrap, only what happened.
 
 For a sample taken on floor $s$ whose run ended on floor $e$, each floor $g$ gets a label $y_g$ or none:
 
@@ -125,7 +125,7 @@ Before the elite gauntlet, pure V's first nets (on 1,617 whole runs) tried simul
 | pure-1-d | each run's loadout at the boss's door, fought at the HP it entered with and at three shares of max HP (door states) | 24.77 | +2.12 ± 0.70 against pure-1 |
 | pure-1-g | door states from a boss gauntlet pilot too (acts 1–3) | 25.69 | +0.93 ± 0.58 against pure-1-d |
 
-Measured boss fights helped when they described the run's real loadout at the door, and hurt as a label for one card choice (the simulated fight's odds are far from real play's). The lesson led to the elite gauntlet, in which bosses and elites are simply fought in every run ([Self-play §1](/en/arch/macro-brain/selfplay/#sec-1)). The details of these labels are in [Learning §2](/en/arch/learning/#sec-2).
+Measured boss fights helped when they described the run's real loadout at the door, and hurt as a label for one card choice (the simulated fight's odds are far from real play's). The lesson led to the elite gauntlet, in which bosses and elites are simply fought in every run ([Self-play §1](/en/arch/macro-brain/selfplay/#sec-1)). The details of these labels are in [Learning: the value function §10](/en/arch/learning/value/#sec-10).
 
 ## 6. Which objective decides
 

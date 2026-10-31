@@ -119,7 +119,7 @@ public sealed record CombatDecisionResult(
 ## 5. How it is checked
 
 1. **Tactics** (planned): positions with clear answers (take lethal, block exactly, apply Vulnerable before attacking), found or not.
-2. **The fixed panel**: the same fights for every player (encounter, deck, seed), with common random numbers, so that differences come from the brain rather than from luck; win rate and HP lost ([The SL planner: budget §5](/en/arch/sl-planner/budget/#sec-5), [NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6)). Version gates use whole runs ([Evaluation §5](/en/arch/evaluation/#sec-5)).
+2. **The fixed panel**: the same fights for every player (encounter, deck, seed), with common random numbers, so that differences come from the brain rather than from luck; win rate and HP lost ([The SL planner: budget §5](/en/arch/sl-planner/budget/#sec-5), [NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6)). Version gates use whole runs ([Evaluation: gates §5](/en/arch/evaluation/gates/#sec-5)).
 3. **NoSL counterfactual** (planned): the same public record with a different hidden state must give the same choice, for a fixed brain seed.
 4. **SL seal**: any step past the node's exit throws. Holds (`selftest`): a node's clone loads at its horizon and refuses another step, and the SL world refuses any action after its combat's end.
 5. **Reproducible**: with a fixed budget, two panel runs give the same moves and results; the pooled searches give what one process gives (`selftest --workers N`).

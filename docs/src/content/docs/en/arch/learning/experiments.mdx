@@ -1,0 +1,163 @@
+---
+title: The experiment log
+description: 'Every net and every measurement of the learning loop in time order, with the lineage of all nets: V v0''s fit, V v2''s n1, n2 and n3 with their pull and forks, the exploration temperatures, pure V''s first nets and the boss labels, the elite gauntlet''s three generations, their whole-run reports, and plan v7 so far.'
+sidebar:
+  label: The experiment log
+---
+import { Aside, Badge } from '@astrojs/starlight/components';
+import Lineage from '../../../../../components/book/Lineage.svelte';
+
+This page is the record: what was trained, on what, and what it measured, in the order it happened. The design pages say how things work now ([The value function](/en/arch/learning/value/), [Training the combat net](/en/arch/learning/combat-net/), [The loop](/en/arch/learning/loop/)); this one keeps the numbers that led there, including those of methods since removed. Dates are the data's (the ledger's, the reports', the commits'). Unless said otherwise, a *report* is 200 runs on the seeds `promotion-1`, floors are means, ± is one standard error, and a *paired* difference is challenger less champion on the same seeds.
+
+The sources are in git: the ledger `eval/silent/ledger.md`, the gauntlet leaderboard `eval/silent/gauntlet-leaderboard.md`, the reports in `eval/silent/reports/`, each net's training report (`fit`) in `weights/silent/NAME.json`, and the commit messages. The raw runs behind them are outside git ([Reference §3](/en/arch/learning/reference/#sec-3)).
+
+## 1. The lineage at a glance
+
+Every V and combat net, by the data it learned from. An arrow runs from the brain that played a net's newest data to the net; a solid one marks a net that went on from another's weights. Pick a net for its data, training report, gate and whole-run results.
+
+<Lineage client:visible lang="en" />
+
+## 2. 2026-10-27: the first leaves and V v0's fit
+
+**The NoSL champion's line** (whole runs, `promotion-1`, NoSL; [Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). With V v0's hand-set weights in the macro brain, the combat brain went from `play` (floor 11.90) to PIMC with `LeafValue` (19.34, act 1 boss reached in 177 runs; it passed its gate against `play` after 14 pairs, +8.21 floors) to PIMC with the combat net c2 (21.88, act 1 boss in 187 runs, act 2 boss in 45; passed against `LeafValue` after 77 pairs, +2.36 floors). After fixes to the simulator it was re-baselined at 22.70 (`432aa0c`), 22.58 (`32a0160`) and 22.58 (`c5ee8de`) ([Evaluation: gates §9](/en/arch/evaluation/gates/#sec-9)). That last report, act 1 boss beaten in 94 of the 190 runs that reached it and 0.39 elites a run, is the champion the V v2 nets were first gated against.
+
+**g0** (NoSL, PIMC 8 × 300 with `LeafValue`, L0 with V v0 exploring at 0.2; commits `1b80389`, `f355299`; train seeds 0–8999): 356 runs, 2 failed. c1 and c2 were trained on its 315 runs; their numbers are in [Training the combat net §5](/en/arch/learning/combat-net/#sec-5).
+
+**V v0's fit** (`learn/fit_value.py`, removed in `9b9d170`): a ridge regression of V v0's 17 features, which every macro decision in the decision logs carries ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), on the floor its run reached. *Ridge regression* is least squares with a small penalty on the size of the weights, which keeps correlated features from taking extreme weights. How it joined the logs to the runs is what every trainer since does: the run records give the floor each run reached, joined by run id, each log only with the record file its `run` wrote beside it (`--logs` and `--records` list them in the same order); a run id is a hash of the seed alone, so another run of the same seed, by another policy or in an exploration scan, can be in other files; a run id twice in one record file is refused. Each run weighs the same however many decisions it has, and every fifth run (by run id) is held out. The report gave $R^2$ on the held-out runs (the share of the floor's variance the fit explains: 1 at best, below 0 when it does worse than the mean), next to a fit on the floor alone. Refit on g0 and g1, V v0's features reach 0.315, no more than the floor alone (0.313). No fitted weights were promoted.
+
+## 3. n1: V v2's first net
+
+**g1** (NoSL, PIMC with c2 exploring at 0.003, L0 with V v0 exploring at 2; commits `11652b0`, `217af09`, `432aa0c`; train seeds 30000–34999): 508 runs, 3 failed.
+
+**First measurements** of V v2 (`learn/train_value.py`) on g0 and g1, 859 runs and 60,480 macro decisions, one fold. The held-out loss is 1.229 against the baseline's 1.291, and the $R^2$ 0.368 against 0.313. The decisions of a run share its one outcome, so there are about 700 outcomes to learn from, and the net overfits fast:
+
+- from a random head at learning rate 10⁻³ it memorizes the runs within an epoch: held-out loss 1.331 after the first, 4.12 after the sixth;
+- started at the baseline it is 1.573 at 10⁻³, 1.235 at 10⁻⁴ and 1.229 at 3 × 10⁻⁵; a weight decay of 0.1 instead of 10⁻⁴ changes nothing.
+
+**Its card sense** (`ranks` over g1's logs) puts the poison cards first in act 0: one more OUTBREAK is worth 0.77 floors, then SNAKEBITE, BUBBLE_BUBBLE, BOUNCING_FLASK and DEADLY_POISON. In act 1, which far fewer runs reach, it is noise: the curses, too rare to have ids of their own, rank near the top at +0.1.
+
+**The second head.** n1 was trained without it. With it, at weight 3, on the same runs and three training seeds, the held-out loss is 1.222 against 1.235 on average (1.208, 1.237 and 1.222 against 1.229, 1.246 and 1.232) and the $R^2$ 0.384 against 0.371, the loss lower and the $R^2$ higher in every seed; at weights 1 and 10 (one seed) 1.224 and 1.210.
+
+**n1's gate**, L0 with n1 against the champion's L0 with V v0's initial weights, the combat the same (c2), failed after 157 of the 200 seeds. On all 200 it reached floor 21.97 against 22.58 (paired −0.61 ± 1.32). It plays otherwise: it skipped 15 of 2,261 card rewards against 906 of 2,081, and fought 0.94 elites a run against 0.39. It beat the act 1 boss more often (100 of the 171 runs that reached it, against 94 of 190) but died more on the way there and in act 2, where far fewer of its training runs went: 22 runs reached the act 2 boss against 45. Taking nearly every card is what the training runs show, not what one card does: runs that won more fights took more cards and went deeper, so a bigger deck reads as a deeper floor. Exploration and more runs give the net the comparisons that tell the two apart.
+
+## 4. Counterfactual pairs, step 0
+
+More runs of the same kind do not untangle the deck from the luck ([§3](#sec-3)); the same state played on with two choices and the same luck does ([The loop §10](/en/arch/learning/loop/#sec-10)). The `afterstates` and `fork` commands were built for V v2's next generation.
+
+- **Replays.** g1's 508 runs replay exactly. g0's 356 reach the same ends on the same surfaces, but most of their observation hashes differ, since the observation has gained fields since. A replay takes about 0.7 s a run.
+- **27 forks over g1's runs.** The floors the two branches reached correlate at ρ = 0.66 (0.64 with the share of HP left), so a difference has about a third of the variance two independent runs would have. 20 of the 27 had been drawn on rewards screens, whose choice is mostly the order of taking the rewards, and 17 of those tied; rewards screens are left out by default since, and the surfaces take turns. Most pairs end the act alike (both died at the boss, or both lived); what tells them apart is the HP and the deck at the act's end. A fork takes about 70 s of one process for both branches.
+
+## 5. n2: the pull and the forks
+
+**g2** (NoSL, PIMC with c2 at 0.003, L0 with V v0 at 0.25; commits `5032064`, `f11d11c`; train seeds 40000–47999): 339 runs.
+
+**n2**, on g0–g2 (1,198 runs, 85,089 macro decisions), with the second head:
+
+- **The outcome-only net** repeats n1's pattern. On card rewards its best option is a skip in 0.2% of the held-out decisions, against V v0's 14.4%; its best is V v0's in 56% of the decisions, 35% on card rewards and 26% in shops.
+- **The pull** ([The value function §5](/en/arch/learning/value/#sec-5)). Its temperature comes from the slope of V's values on V v0's within a decision, 0.031: V v0's 0.25 is about 0.008 floors, so the pull runs at 0.01. At that temperature its gradient is about β / 0.01 times the outcome loss's. At β = 1 the held-out outcome loss did not move in three epochs: V copied V v0's ranking. At β = 0.1 it is 1.319 against the floor-only 1.350 ($R^2$ 0.330 against 0.312); V's best is V v0's in 93.5% of the decisions, and it skips 13.1% of the card rewards (V v0: 13.8%). At β = 0.03: 1.318, 89.9% and 15.9%. At β = 0.01: 1.317, 84.4% and 14.1% ($R^2$ 0.335).
+- **Forks**: 651 over g1's and g2's runs (about 111 s of one process each). The two branches' floors reached plus HP share left correlate at ρ = 0.62; in 303 pairs both died (all but a few at the act 1 boss), in 226 both lived, in 122 one did. L0's best did better than the other action by 0.24 on the map, 0.10 at rest sites, 0.08 on card rewards and 0.07 in shops, in floors reached within the act plus HP share left: within its act, one choice moves little. On the held-out forks the sign of V's predicted difference matched the played one 0.605 of the time for β = 0.1 and 0.658 for β = 0.03, against V v0's 0.605 and 0.615 on the same forks (54 and 74 of them: these two nets were trained while the forks were still being played); for β = 0.01, on all 114, 0.698 against 0.643.
+- **Forks and pull together** (β = 0.1, fork and pair weights 1): the held-out outcome loss is 1.359, above the floor-only 1.350 ($R^2$ 0.273), though the held-out forks' sign accuracy is 0.685 against V v0's 0.643. Why the forks hurt the fit to the self-play outcomes is open; one guess is that the branches, which the greedy champion plays, die at other rates than the exploring self-play. It was not gated.
+- **The off-policy check** (inverse propensity scoring) cannot rank these nets: on 4,703 held-out decisions, another draw than V v0's best reached −0.37 ± 1.23 floors against the best, while every net expects about −0.02.
+
+**n2-b0.1's gate**, L0 with it against the champion's, the combat the same (c2), passed after 122 of the 200 seeds at +2.00 floors (LLR 2.95). On all 200 it reached floor 23.96 against 22.58 (paired +1.39 ± 0.65). It beat the act 1 boss in 117 of the 186 runs that reached it, against 94 of 190, and reached the act 2 boss 62 times against 45; it skipped 36% of the card rewards against 44%, and fought 0.44 elites a run against 0.39. It was the NoSL champion's V from 2026-10-28 until n2-b0.03 replaced it the same day.
+
+**n2-b0.03's gate**, against n2-b0.1, passed after 136 of the 200 seeds at +1.78 floors (LLR 2.99). On all 200 it reached floor 26.16 against 23.96 (paired +2.20 ± 0.63). It beat the act 1 boss in 137 of the 190 runs that reached it, against 117 of 186, and reached the act 2 boss 83 times against 62; it skipped 34% of the card rewards against 36%. Its first play, on the build before two fixes, had one failed and two truncated runs: a rest site's smithing that V then declined to use, which went back to the rest site and chose smithing again, and a builder that could not give WATERFALL_GIANT's eruption a value past 99 ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1), [Simulator: combats §5](/en/arch/simulator/combat/#sec-5)). Played again on the fixed build, the verdict is the same, and 182 of the 200 seeds end as in the first play. It was the NoSL champion's V from 2026-10-28 to 2026-10-30, and the SL champion's from 2026-10-28 (report at `3699fc1`: floor 28.25, act 1 boss reached 192 times, act 2 boss 105, act 3 boss 4, 0.47 elites a run, 194.8 s a run) to 2026-10-29. Its NoSL report (`377e180`): 26.16, 190 / 83 / 3 bosses reached, 0.47 elites, 33.8% card rewards skipped, 159.6 s a run.
+
+**n2-b0.01**'s gate was stopped halfway. Each n2 net has one training seed; the ablations (the pull alone, forks alone, both, against the outcome-only net) would need three each, and were not run before V v2's trainer was removed.
+
+## 6. Exploration temperatures (2026-10-27/28)
+
+The softmax temperatures of [The loop §9](/en/arch/learning/loop/#sec-9), as measured:
+
+- **PIMC with the c2 leaf**: T = 0.003 gives up about 1.0 HP per combat by the search's own values, over 54 combats of self-play (T = 0.002: 0.5 HP; 0.005: 2.3 HP). In g1's logs that is 0.85 HP per hallway combat, with 3.1 of its 22 searched decisions explored; 1.13 HP per elite; 1.85 HP per boss, with 8.3 of 34 explored.
+- **L0 with V v0's initial weights** (in HP), PIMC c2 at T = 0.003 in combat, 8 runs per temperature: T = 0.25 explores 4.8% of L0's decisions (7 of 49 card rewards), 0.4 explores 7.1%, 0.7 explores 13.5%. T = 0.25 was chosen. The floor differences (−1.75, −2.00, −4.38) are noise at 8 runs.
+- **L0 with n2-b0.03** (in floors): its options lie about 40 times closer than V v0's, so T = 0.25 explored 45% of its macro decisions in g3's first runs (2026-10-28), close to random play, and those runs were stopped and voided (`void/nosl/selfplay/g3/b1`, 58 runs; `void/sl/selfplay/g3/t025`, 33). Over n2-b0.03's values on 2,355 of their decisions, the share explored is 8.5% at T = 0.01, 6.9% at 0.008, 5.3% at 0.006 and 4.5% at 0.005, against V v0's 5.4% at 0.25 over g2's; T = 0.006 was chosen.
+- **The earlier rule** for L0, the highest T that costs at most 1 floor, chose T = 2 with the placeholder `play` combat policy: 0.90 ± 0.39 floors less over 600 paired runs. Under PIMC the deck matters more, and T = 2 cost more. g1's first runs played combat 0.003 and macro 2 and reached floor 17.1 on average, against the c2 champion's 21.80 over 199 runs (act 1 boss won 85 of 181). Paired on g1's first 56 seeds: no exploration, floor 21.68, act 1 boss won 25 of 51; combat only (T = 0.003), 0.89 ± 1.82 floors less, boss won 17 of 53, within the rule; macro only (T = 2), 3.10 ± 2.10 floors less over 40 runs, boss won 9 of 35; both, as g1 played, 4.65 ± 2.01 floors less, boss won 5 of 48. Macro at T = 2 explored 24.9% of 3,009 L0 decisions, 55% of the card rewards. g1's first 56 runs stay in the data under their own champion name (`macro l0 explore 2`).
+- **The trainer's temperature.** Each pure V's report gives the temperature at which it would explore the held-out logged decisions as often as their brains did (`explore_temperature`): pure-1 0.0077, pure-1-b 0.0120, pure-1-d 0.0202, pure-1-g 0.0170, n3-ctl 0.0138. Even draws replaced the softmax for V's self-play from plan v6 on, so none of these was played.
+
+## 7. n3: the last V v2 nets
+
+**SL g3 batch 1** (2026-10-28; the SL planner with c2 at beam 8 × 300, L0 with n2-b0.03 exploring at 0.006; commit `377e180`; train seeds 61020–65999): 419 runs. The records of its shards say commit `a2643cf` or `ff9aa3f`, the checkouts' HEAD that an old build script stamped; all were played by `377e180`.
+
+**n3**, on g0–g3 (1,617 runs: g0–g2 and SL g3's batch 1; 132,688 decisions, 296 runs held out), with the floor reached and the next combats, no boss labels:
+
+- **n3-ctl**, with the pull (β = 0.03, towards V v0's choices on g0–g2): held-out loss 1.5065 against the floor-only 1.5786, $R^2$ 0.376; V's best is V v0's in 89.8% of the held-out decisions. Not gated.
+- **n3-free-ctl**, with no pull, read only 9 of V v0's 17 features (the floor, HP, max HP, gold and the map ahead; `--features`), so none of its deck summaries: held-out loss 1.4429, $R^2$ 0.457. Its SL gate against the SL champion, for non-inferiority (`--not-worse`, δ = 1.5 floors), failed at 33 pairs; over all 200 seeds it went 5.77 ± 0.64 floors less far and reached the act 2 boss 12 times against 105; 76 of its runs died in act 2's hallway fights and 45 in elites, against the champion's 38 and 7.
+
+On 2026-10-28 (`9b9d170`) `train_value.py`, `fit_value.py`, `spsa.py` and `curselab.py` were removed, and pure V was built the same evening (`d5e4fe1`, `59af0bf`, `4a0e215`); `train_combat.py` followed on 2026-10-29 (`455d437`), replaced by `learn/combat/` (`d290783`, `3a95439`).
+
+## 8. Pure V on whole runs (2026-10-29)
+
+Pure V's first nets, all on the list `v-g0-g3` (1,617 whole runs, 132,688 decisions, 296 runs held out; the floor-only baseline's held-out loss 1.5786; 234,784 weights), each judged by a 200-run SL report on `promotion-1` at `6ce07fc`, the SL planner at medium effort, afterstates predicted from the screen:
+
+| net | extra labels | held-out loss ($R^2$) | floor | act 1 / 2 / 3 boss reached | elites a run | paired |
+|---|---|---|---|---|---|---|
+| pure-1 | none | 1.4517 (0.447) | 22.64 | 161 / 33 / 0 | 1.55 | +7.35 ± 0.62 against random macro decisions (15.29) |
+| pure-1-b | boss sims of 2,358 act 0 card rewards | 1.4496 (0.463) | 21.44 | 175 / 14 / 1 | 1.33 | −1.21 ± 0.67 against pure-1 |
+| pure-1-d | door states of 1,891 real runs at the act 0 and act 1 bosses | 1.4421 (0.463) | 24.77 | 176 / 49 / 1 | 1.64 | +2.12 ± 0.70 against pure-1 |
+| pure-1-g | the boss gauntlet pilot's doors (acts 0–2) on top | 1.4439 (0.456) | 25.69 | 177 / 52 / 2 | 1.80 | +0.93 ± 0.58 against pure-1-d, +3.04 ± 0.69 against pure-1 |
+
+- **Boss sims at the decision do not help; doors do.** pure-1-b's boss sims (`boss_worth` act 0 13.51, act 1 9.22, act 2 0; `boss_agree` 0.497, `boss_corr` 0.581) lowered the floor. The sims' absolute odds are far from real play's: the fights were won 2.6% of the time in act 2 (742 fights, the first 92 decisions played) and 24% in act 1 (a sample of 30 decisions), while 359 of the 413 g3 SL runs that reached the act 1 boss beat it (87%). pure-1-d's doors (`door_corr` act 0: second head 0.847, V 0.493; act 1: 0.568, 0.292) and pure-1-g's (act 0 0.852 / 0.547, act 1 0.608 / 0.420, act 2 0.746 / 0.466) raised it.
+- **The boss gauntlet pilot** (`run --auto-win`, not self-play): train seeds 200000–202999 (`sl/forks/2026-10-29-gauntlet`), and a second batch 203000–205399 with V pure-1-g (`sl/forks/2026-10-29-gauntlet-2`). The ledger and the commit (`365dc1e`) count 900 pilot doors; pure-1-g's file counts 2,763 doors in training against pure-1-d's 1,891, so 872 more entered it (doors without fights or a logged view are dropped, `learn/v/data.py:192-213`).
+- **pure-1-g became the SL champion's V** on 2026-10-29 with no gate, as the first of a new line judged by its own report ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)), below n2-b0.03's 28.25, which read V v0's features. It fought 1.80 elites a run against n2-b0.03's 0.47, and 23 of its runs died before the act 1 boss, against 8. It stayed the SL champion's V until 2026-10-30.
+
+## 9. Plan v6: the elite gauntlet (2026-10-29/30)
+
+The **elite gauntlet** (`run --gauntlet`) is the simplified run plan v6 trained and judged V in: every macro decision is made as usual, by L0 on the node's clone; a plain monster combat is won at its start, with its rewards; elites and bosses are fought by the SL planner, HP and potions carried in and out, and a death ends the run ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1), [Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). Why it was chosen:
+
+- bosses and elites killed most runs: the SL champion's runs then died at a boss in 134 of 200, while a plain monster combat cost 3% (act 1) to 18% of max HP on average;
+- a gauntlet run takes 45–53 s of a slot at the low budget, a fraction of a whole SL run;
+- elites are fought, so an elite costs HP; a first version that won elites at their start was dropped before it ran, since V would learn that more elites are better.
+
+**The budget.** On 515 boss doors at full HP, two seeds at the low budget correlate 0.83, and the low and the medium budget on the same seed 0.94: the cheaper budget ranks doors as well as a second seed of the same one.
+
+**Reference lines** (2026-10-29, the 500 evaluation seeds 300000–300499 at `b013f95`; `sl/eval/2026-10-29-gauntlet-ref`):
+
+| V | progress | act 1 / 2 / 3 boss beaten (of reached) | won | elites a run | elite deaths | paired |
+|---|---|---|---|---|---|---|
+| pure-1-g | 34.47 ± 0.33 | 469/497, 97/412, 2/61 | 2 | 2.37 | 95 | – |
+| n2-b0.03 | 33.71 ± 0.35 | 441/499, 81/429, 1/56 | 1 | 0.64 | 27 | −0.76 ± 0.45 against pure-1-g |
+| pure-1-g, every macro decision drawn evenly (`--explore 1.0`) | 21.89 ± 0.35 | 178/442, 5/109, 0/2 | 0 | 1.54 | 125 | −12.58 ± 0.46 against pure-1-g |
+
+**The generations** (`v.train --gauntlet`, [The value function §7](/en/arch/learning/value/#sec-7); the gate: the paired 95% lower bound on progress, [The loop §8](/en/arch/learning/loop/#sec-8)):
+
+| | played by | ε tiers | train seeds | runs (decisions) | net | held-out loss (baseline), $R^2$ | progress | bosses beaten (of reached) | won | elites, deaths | paired |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| g1 | pure-1-g | 1.0 / 0.5 / 0.15 | 206000–228499 | 5,775 (624,955) | v6-1, scratch | 2.0543 (2.2457), 0.490 | 36.07 ± 0.34 | 475/499, 122/454, 10/103 | 10 | 1.21, 39 | +1.60 ± 0.44 against pure-1-g (lower +0.88) |
+| g2 | v6-1 | 1.0 / 0.5 / 0.15 | 229000–240999 | 6,080 | v6-2, scratch on g1–g2 (11,855 runs, 1,291,026 decisions) | 1.9542 (2.1916), 0.515 | 40.69 ± 0.38 | 483/500, 262/479, 68/244 | 68 | 1.25, 21 | +4.62 ± 0.46 against v6-1 (lower +3.86) |
+| g3 | v6-2 | 0.3 / 0.15 / 0.05 | 241000–276999 | 14,828 (2,160,792) | v6-3-1, scratch on g3 alone | 1.7926 (1.9558), 0.355; best epoch 3 of 9 | 42.42 ± 0.43 | 469/496, 335/458, 154/324 | 154 | 1.41, 26 | +1.73 ± 0.54 against v6-2 (lower +0.85) |
+| | | | | | v6-3-2, `--init` v6-2 on g3 alone | 1.7736 (1.9558), 0.369; best epoch 1 of 7 | 43.36 ± 0.38 | 480/499, 352/471, 173/341 | 173 | 1.37, 21 | +2.67 ± 0.49 against v6-2 (lower +1.87); +0.94 ± 0.49 against v6-3-1 (lower +0.12) |
+
+- **Generation 1** (1,803 / 1,856 / 2,116 runs in the three tiers, 0 failed, four boxes) was stopped early, at 5,775 of the 10,000 runs planned. In the gauntlet, pure-1-g, trained on whole runs, fought 2.37 elites a run and died in one in 95 of its 500 evaluation runs; v6-1 fought 1.21 and died in 39.
+- **Generation 2** (1,895 / 1,892 / 2,293 runs) was one 1.5-hour box. v6-1 had 6 won runs in its data, v6-2 34.
+- **Generation 3** (5,402 / 4,546 / 4,880 runs, 0 failed; three boxes of 1.5 h, 2.5 h and 45 min) reached a progress of 36.01 ± 0.08 with 781 runs won. Its tiers were lowered from 1.0 / 0.5 / 0.15 to 0.3 / 0.15 / 0.05: at ε = 1.0 a run barely depends on V (progress 21.8 with pure-1-g, 21.2 with v6-1, while ε = 0.15 rose from 31.9 to 34.1), and about 69% of the training weight sat in act 1, whose boss the champion already beat 95% of the time. In its second box the three tiers reached 32.8, 36.4 and 39.1: the same state is labelled lower in a run that explores more ([The loop §9](/en/arch/learning/loop/#sec-9)). It was trained on alone, since a weaker V's runs label states lower than the champion would play them, from scratch (v6-3-1) and from v6-2's weights (v6-3-2).
+- **Draws.** At ε = 0.15 a gauntlet run has about 102 decisions that can be drawn, 15 of them drawn; rewards screens take more than half of the draws, card rewards about an eighth, the map about an eighth. A gauntlet run has 108 macro decisions on average in generation 1 and 146 in generation 3.
+- **Memory.** Generation 3's 2,160,792 decisions took about 117 GB a training with every run view kept, so v6-3-1's and v6-3-2's first trainings died while reading; with samples keeping their tokens and state only (`f0f47e7`), 20.9 GB ([Macro brain: from hazards to value §4](/en/arch/macro-brain/value/#sec-4)).
+- **Weights.** v6-1 has 267,552 (504 card ids in its tables), v6-2 and v6-3-2 267,872 (509; v6-3-2 kept v6-2's tables), v6-3-1 267,072 (497): the differences are the vocabulary's sizes.
+- **Bosses.** v6-3-2 beats the bosses of acts 1–3 in 96%, 75% and 51% of the gauntlet runs that reach them, and wins 173 of 500. It is the gauntlet's champion since 2026-10-30, the last of plan v6.
+
+## 10. The gauntlet's nets in whole runs (2026-10-30)
+
+Whole SL runs on `promotion-1-300` at `b013f95`, the SL champion's planner at medium effort, `--afterstates clone` (`sl/eval/2026-10-30-eval-NAME-clone`):
+
+| V | floor | won of 300 | act 1 / 2 / 3 boss beaten (of reached) | elites a run | s a run | paired against v6-2 |
+|---|---|---|---|---|---|---|
+| v6-2 | 31.37 ± 0.48 | 1 | 272/298 (91%), 59/161 (37%), 1/25 (4%) | 0.97 | 517 | – |
+| v6-3-1 | 31.11 ± 0.63 | 13 | 248/284 (87%), 75/144 (52%), 13/51 (25%) | 1.04 | 241 | −0.26 ± 0.70 (lower −1.40) |
+| v6-3-2 | 33.56 ± 0.58 | 23 (7.7%, Wilson 5.2–11.2%) | 276/290 (95%), 94/171 (55%), 23/65 (35%) | 1.08 | 271 | +2.20 ± 0.62 (lower +1.18); +2.46 ± 0.69 against v6-3-1 (lower +1.33) |
+
+- v6-2's report's first 200 seeds are `promotion-1`'s: there it reached 31.61, +5.92 ± 0.74 paired against pure-1-g's screen report at `6ce07fc` (the afterstates and the code differ), and 30.89 ± 0.77 on the other 100.
+- **v6-3-2 became the V of both champions** on 2026-10-30 by this report, with no gate (`dc4ee30`); the NoSL file names the SL report, since no NoSL report of it exists ([Learning §5](/en/arch/learning/#sec-5)).
+- **The gauntlet's order does not always carry over.** v6-3-1 is +1.73 ± 0.54 against v6-2 in the gauntlet and −0.26 ± 0.70 floors in whole runs, with 13 wins against 1 ([Macro brain: self-play §5](/en/arch/macro-brain/selfplay/#sec-5)).
+- **Losses between bosses.** About 144 of v6-3-2's 277 losses come between two bosses (10 before the act 1 boss, about 105 in act 2 before its boss, about 29 in act 3), where the gauntlet's monster fights were free. In v6-2's whole runs 106 of the 299 losses died in a plain monster fight, and offered a monster and a rest site on the map, v6-2 took the monster in 46% of the cases at 40% of max HP or less (24 of 52) and in 50% at 70–90% ([Macro brain: weaknesses and next steps §1](/en/arch/macro-brain/next/#sec-1)).
+
+## 11. Plan v7 so far
+
+Plan v7 trains and gates V in whole SL runs by its chance to win ([Learning §4](/en/arch/learning/#sec-4)). What exists so far:
+
+- **The code** (2026-10-30): `7ce03bd` (`--objective win`, the Brier score, views kept only where needed, `learn/gauntlet.py` on whole runs with the wins gate, `promotion-1-500`), `4c36cad` (deadline files for time-boxed jobs), `b0ec4b7` (`--encoders`, `RunNet`'s route), `d4ae095` (a batch's card and route tensors built as lists: 120 → 18 ms a batch of 256 for the encoders' net, 21 → 11 ms for pure V's; the encoders' smoke training had taken about 3.5 s an epoch against about 1 s for pure V's). Tests: `pytest` 69 passed, `dotnet test` 117 passed.
+- **The wins gate, checked** on v6-3-2's and v6-2's whole-run reports: 300 pairs, 23 won against 1, +0.073 ± 0.016 wins, lower bound +0.047, floors +2.20 ± 0.62.
+- **Inference cost.** A full-size untrained encoders' net takes 0.44 ms a call in C#, v6-3-2 0.093 ms, against 70–90 ms a macro decision with the clone.
+- **The first whole-run self-play test** (`sl/forks/2026-10-31-deadline-test`, train seeds from 199000, V v6-3-2, low budget, `--explore 0.15`): 28 runs, no game error; a run took 43–52 s of a slot on one host and 83 s on another; 0.161 of 2,347 macro decisions with a choice were explored. Smoke trainings on these runs (`--objective win --init` v6-3-2, and `--encoders`) ran; there were no wins in the data, so their Brier scores say nothing, and they are not kept in `weights/`.
+- **Generation 1** is being played by v6-3-2 (low budget, clone, `--workers 4`): ε 0.3, 0.15 and 0.05 on the train seeds 100000–119999, 120000–139999 and 140000–159999 (`sl/selfplay/v7g1/e030`, `e015`, `e005`), one time-boxed job each under one deadline. The next generations take seeds from 160000.
+- **Planned per generation** <Badge text="planned" variant="caution" />: v7-k, pure V `--objective win --init` the champion (v7-1 from v6-3-2), and v7-ke, `--encoders` (v7-1e from scratch, later ones from the last encoders' net); both gated on `promotion-1-500` at the champion's medium planner (v6-3-2's side: its `promotion-1-300` report and the last 200 seeds played once); promoted on `wins_lower_95 > 0`, the one with more wins if both pass; a pass rewrites both champion files.

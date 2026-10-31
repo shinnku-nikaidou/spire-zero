@@ -84,7 +84,7 @@ public sealed record MacroDecisionResult(
 ## 4. Open questions
 
 1. A cut point per run, so that a decision's label carries no later draws: draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained.
-2. How to check P(win)'s calibration once V decides by it: of the states V gives 30%, about 30% should be won ([Learning §7](/en/arch/learning/#sec-7)).
+2. How to check P(win)'s calibration once V decides by it: of the states V gives 30%, about 30% should be won ([Learning: reference §12](/en/arch/learning/reference/#sec-12)).
 3. How much path planning V learns from the map with the route encoder, against the bag of tokens.
 4. The horizon H of L1 (the next boss or the next act), and how strong the rollout's combat policy must be.
 5. In NoSL, the shop as one decision or a sequence; in SL the clone searches it as a sequence.

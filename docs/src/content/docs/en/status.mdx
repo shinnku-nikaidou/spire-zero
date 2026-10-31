@@ -24,10 +24,10 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 | NoSL combat brain | built: PIMC over sampled worlds with the combat net c2 as its leaf; the NoSL champion's combat brain since 2026-10-27 ([NoSL PIMC](/en/arch/pimc/)) |
 | SL combat brain | built: the SL planner, a beam search over whole turns on the node's clone; on the combat panel it wins every combat PIMC wins and 9 more of 120 ([The SL planner](/en/arch/sl-planner/)) |
 | macro brain | built: L0 values each option's afterstate with V, predicted from the screen in NoSL or played on the node's clone in SL; V is pure V, read from the run's ids and raw state alone ([Macro brain](/en/arch/macro-brain/)) |
-| learning | built: self-play with even-draw exploration, V's and the combat net's training, the gauntlet's report and gate, the wins gate for plan v7. Planned: TD(λ), ExIt for the combat net, SPSA in the loop, the LLM loop ([Learning](/en/arch/learning/)) |
+| learning | built: self-play with even-draw exploration, V's and the combat net's training, the gauntlet's report and gate, the wins gate for plan v7. Planned: TD(λ), expert iteration, LLM patch proposals; SPSA removed ([Learning: the loop](/en/arch/learning/loop/)) |
 | evaluation | built: reports, leaderboards per environment, seed sets, the paired full-run gate, champion files ([Evaluation](/en/arch/evaluation/)) |
 | mod | assist mode built on every surface, in both environments: the panel, the map and combat marks, the settings tab, the SL record. In the real game 89 of 90 SL decisions asked the same on their clones (the other one's cause is fixed); a combat's first SL decision waits 3–15 s for the planner. Not yet watched through a whole real run; auto-play planned ([Mod](/en/arch/mod/), [Output](/en/arch/output/)) |
-| compute | time-boxed jobs on several remote hosts, about 50 SL runs at once; data kept on a storage host, analysed and trained on a lab host with two GPUs ([Learning](/en/arch/learning/)) |
+| compute | time-boxed jobs on several remote hosts, about 50 SL runs at once; data kept on a storage host, analysed and trained on a lab host with two GPUs ([Learning: reference §1](/en/arch/learning/reference/#sec-1)) |
 
 **The champions' results** (`eval/silent/leaderboard.md`):
 
@@ -46,8 +46,8 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 5. **New game code that touches Godot nodes** without the TestMode guard, outside events (where the transpiler covers it), shows up only as game errors in `run` batches ([Simulator: headless host §4](/en/arch/simulator/headless/#sec-4)).
 6. **Harmony patches in the real game against tiered JIT**: the runtime may recompile a method and silently drop a patch ([Mod: auto-play and safety §5](/en/arch/mod/auto/#sec-5)).
 7. **The combat brains' blind spots.** Card prompts are answered by a fixed rule (`p0`), not searched; NoSL's search sees this turn only; the SL planner proves few of its plans, and an unproved loss gets at most 3 plans in a row, so a combat that only a later plan would win is lost ([The SL planner: beam §5](/en/arch/sl-planner/beam/#sec-5)–[§6](/en/arch/sl-planner/beam/#sec-6)).
-8. **V's training game.** v6-3-2 was trained where plain monster combats are free; about half of its losses in whole runs come between two bosses, and the gauntlet's order of two nets did not always hold in whole runs. Plan v7 trains on whole runs again ([Learning](/en/arch/learning/)).
-9. **V's labels carry the later exploration draws of their runs**, and V is not told a run's ε ([Learning](/en/arch/learning/)).
+8. **V's training game.** v6-3-2 was trained where plain monster combats are free; about half of its losses in whole runs come between two bosses, and the gauntlet's order of two nets did not always hold in whole runs. Plan v7 trains on whole runs again ([Learning: the value function §7](/en/arch/learning/value/#sec-7)).
+9. **V's labels carry the later exploration draws of their runs**, and V is not told a run's ε ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)).
 10. **SL in the real game without the node's clone**: the mod holds back only combat decisions, so a brain whose macro side plays on the clone would use the previous node's ([Mod: the SL record §6](/en/arch/mod/sl-record/#sec-6)).
 
 ## 4. What comes next

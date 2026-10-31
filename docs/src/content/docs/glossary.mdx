@@ -88,13 +88,13 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 
 | 术语 | 含义 |
 |---|---|
-| 价值函数 V（value function V） | 宏观大脑对一局状态的评判。在 bot 偶尔能赢之前，它的目标一直是期望层数（进度），之后是 P(win)（[学习](/arch/learning/)、[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
+| 价值函数 V（value function V） | 宏观大脑对一局状态的评判。在 bot 偶尔能赢之前，它的目标一直是期望层数（进度），之后是 P(win)（[学习：价值函数](/arch/learning/value/)、[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
 | 纯 V（pure V） | 只从这一局的 id 和原始状态读出的 V，没有任何手工特征（[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
 | 自我对弈（self-play） | 冠军在模拟器里打完整局，产生训练数据（[宏观大脑：自我对弈](/arch/macro-brain/selfplay/)）。 |
-| 冠军（champion）、挑战者（challenger） | 冠军是某个环境里当前最好的版本；挑战者必须通过晋级门槛才能取代它（[评估](/arch/evaluation/)）。 |
-| MC、TD(λ) | 设定价值目标的方法：用最终结果（蒙特卡洛），或与下一个状态的价值混合（时序差分）（[学习](/arch/learning/)）。 |
-| ExIt | 专家迭代（expert iteration）：训练学到的部分去模仿搜索选出的东西（[学习](/arch/learning/)）。 |
-| SPSA | 同时扰动随机逼近（simultaneous perturbation stochastic approximation）：把许多参数一起扰动，一次调好它们。 |
+| 冠军（champion）、挑战者（challenger） | 冠军是某个环境里当前最好的版本；挑战者必须通过晋级门槛才能取代它（[评估：冠军与基线](/arch/evaluation/champions/)）。 |
+| MC、TD(λ) | 设定价值目标的方法：用最终结果（蒙特卡洛），或与下一个状态的价值混合（时序差分）（[学习：循环 §3](/arch/learning/loop/#sec-3)）。 |
+| ExIt | 专家迭代（expert iteration）：训练学到的部分去模仿搜索选出的东西（[学习：循环 §5](/arch/learning/loop/#sec-5)）。 |
+| SPSA | 同时扰动随机逼近（simultaneous perturbation stochastic approximation）：把许多参数一起扰动，一次调好它们；在 V v0 和叶子的权重上试过，已移除（[学习：循环 §6](/arch/learning/loop/#sec-6)）。 |
 | 特权信息（privileged information） | 只在训练中用来降低噪声的隐藏状态；永远不是部署后策略的输入。 |
 | 探索（exploration）、均匀抽取（even draws）、ε | 自我对弈的探索（`run --explore ε`）：一个宏观决策以概率 ε 在它的选项中均匀抽取，不管 V 怎么说。 |
 | 精英连战（elite gauntlet）、进度（progress） | 计划 v6 中 V 的训练玩法（`run --gauntlet`）：普通怪物战斗一开始就判赢，精英和 Boss 真打；进度是到达的层数，加上这一局死去的那场战斗里打掉的敌人生命比例（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。 |
@@ -104,11 +104,11 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 
 | 术语 | 含义 |
 |---|---|
-| R1–R4 | 仿真到实机阶梯：从模拟器对局（R1）到装了 Mod 的 Steam 游戏（R4）的四级，每级只多一个新变量（[评估](/arch/evaluation/)）。 |
+| R1–R4 | 仿真到实机阶梯：从模拟器对局（R1）到装了 Mod 的 Steam 游戏（R4）的四级，每级只多一个新变量（[评估 §2](/arch/evaluation/#sec-2)）。 |
 | 排行榜（leaderboard） | 按角色、进阶、种子集和环境分开的成绩；NoSL 和 SL 从不放在一起排名（`eval/silent/leaderboard.md`）。 |
-| 报告（report）、对局记录（run record） | 一批对局的结果，JSON 格式，带每一局的记录：它的种子、结果、层数、战斗和大脑（[评估](/arch/evaluation/)）。 |
-| 晋级门槛（gate） | 挑战者要晋级必须通过的配对检验（[评估](/arch/evaluation/)）。 |
-| CRN、配对（pairing） | 公共随机数（common random numbers）：冠军和挑战者打相同的种子，所以两者的差别噪声更小。 |
+| 报告（report）、对局记录（run record） | 一批对局的结果，JSON 格式，带每一局的记录：它的种子、结果、层数、战斗和大脑（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)）。 |
+| 晋级门槛（gate） | 挑战者要晋级必须通过的配对检验（[评估：晋级门槛](/arch/evaluation/gates/)）。 |
+| CRN、配对（pairing） | 共同随机数（common random numbers）：冠军和挑战者打相同的种子，所以两者的差别噪声更小。 |
 | SPRT | 序贯概率比检验（sequential probability ratio test）：只要证据在任一方向上足够强，就停止比较。 |
 | Wilson 区间（Wilson interval） | 胜率的一种置信区间，在接近 0% 和 100% 时仍然合理。 |
 | 种子集（seed sets） | 用于晋级和最终检验的固定种子列表，与训练种子分开（`eval/seeds/`）。 |
@@ -118,7 +118,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 名称 | 是什么 |
 |---|---|
 | V v0 | 第一个 V：在这一局视图的手工特征上手设的权重；已移除。 |
-| n1、n2-b0.01、n2-b0.03、n2-b0.1、n3-ctl、n3-free-ctl | V v2 网络（在 V v0 的特征上的网络，以权重 β 拉向 V v0）：n2-b0.03 从 2026-10-28 起是两个冠军的 V（[学习](/arch/learning/)）。 |
+| n1、n2-b0.01、n2-b0.03、n2-b0.1、n3-ctl、n3-free-ctl | V v2 网络（在 V v0 的特征上的网络，以权重 β 拉向 V v0）：n2-b0.03 从 2026-10-28 起是两个冠军的 V（[学习：价值函数 §5](/arch/learning/value/#sec-5)）。 |
 | pure-1、pure-1-b、pure-1-d、pure-1-g | 第一批纯 V 网络，依次是只用对局的、带决策时 Boss 模拟的、带门口状态的，以及带 Boss 连战试点门口的；pure-1-g 是 2026-10-29 时 SL 冠军的 V。 |
 | v6-1、v6-2、v6-3-1、v6-3-2 | 在精英连战的三代里训练的纯 V；v6-3-2 从 2026-10-30 起是两个冠军的 V。 |
 | c1、c2、c3、c4 | 战斗网络；c2 是两个冠军的战斗大脑的叶子。 |
@@ -129,5 +129,5 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | `data/silent/{sl,nosl}/…` | 数据目录里的自我对弈和评估文件夹，在存储主机上，不在 git 里。 |
 | `tmp/build.sh REV`、`sim.sh` | 本地启动器，构建一个固定的提交并运行它（[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）。 |
 | `run`、`brain`、`serve`、`clones`、`gate`、`report`、`leaderboard` | SimWorker 命令（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。 |
-| `v.train`、`combat.train`、`gauntlet.py` | 训练 V 和战斗网络的 Python，以及连战的报告和门槛（[学习](/arch/learning/)）。 |
+| `v.train`、`combat.train`、`gauntlet.py` | 训练 V 和战斗网络的 Python，以及连战的报告和门槛（[学习：参考 §9](/arch/learning/reference/#sec-9)）。 |
 | `0SSL7NS01MU6` | 本书例子那一局的种子，在第 48 层赢下（[游戏 §1](/arch/game/#sec-1)）。 |

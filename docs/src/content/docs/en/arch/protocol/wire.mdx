@@ -106,7 +106,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | field | meaning |
 |---|---|
 | `action` | one of the decision's legal actions; for a card prompt, `pick:i,j,…` |
-| `brain` | the brain that chose it, as the champion's routing table names it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)); the host counts decisions per brain for the run record, where placeholder decisions must be none ([Evaluation §3](/en/arch/evaluation/#sec-3)) |
+| `brain` | the brain that chose it, as the champion's routing table names it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)); the host counts decisions per brain for the run record, where placeholder decisions must be none ([Evaluation: metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2)) |
 | `plan` | what the brain planned after this action: the rest of the turn from a searching combat brain, the rest of the act's route from the macro brain on the map |
 | `candidates` | from a searching brain only: the first actions it scored, best first |
 

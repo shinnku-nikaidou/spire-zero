@@ -34,7 +34,7 @@ Two facts about the game shaped everything else:
 
 A worker process has three roles:
 
-1. **Hosting the run.** In self-play and in evaluation the simulator, not the real game, plays the run: rungs R1–R3 of the [sim-to-real ladder](/en/arch/evaluation/#sec-1). The host worker holds the one true run and asks the brain for every decision, exactly as the mod does in the real game.
+1. **Hosting the run.** In self-play and in evaluation the simulator, not the real game, plays the run: rungs R1–R3 of the [sim-to-real ladder](/en/arch/evaluation/#sec-2). The host worker holds the one true run and asks the brain for every decision, exactly as the mod does in the real game.
 2. **Search worlds.** The combat brain and the macro brain try lines of play in worlds: NoSL samples built from an observation, and SL clones of the current node ([Environments: worlds §1](/en/arch/environments/worlds/#sec-1)). Each search request goes to a worker of the pool, which builds or loads the world, searches it and replies.
 3. **Benchmarks and checks.** `bench`, `selftest`, `forkbench`, `fidelity` and the combat panel run here too ([Reference](/en/arch/simulator/reference/)).
 

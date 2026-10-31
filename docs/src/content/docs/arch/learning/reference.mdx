@@ -1,0 +1,296 @@
+---
+title: '参考：基础设施、文件与脚本'
+description: '循环在哪里运行、数据怎么保存：算力和限时作业，learn/ 项目，数据目录及其 manifest，清单，账本和种子区段，权重的命名，两种网络文件格式的逐个字段，C# 里的推理，learn/ 的每个脚本及其选项和输出，循环用到的模拟器命令，测试，以及未决问题。'
+sidebar:
+  label: 参考
+---
+import { Badge } from '@astrojs/starlight/components';
+import NetFileAnatomy from '../../../../components/book/NetFileAnatomy.svelte';
+
+本页供查阅。前面几页讲学习循环；这一页列出它的机制。所有内容都对照了本页写成时那个提交的代码（`learn/`、`src/Sts2Ai.Brain`、`src/Sts2Ai.SimWorker`、`weights/`、`eval/`）；代码说的和这里不一样时，以代码为准。Python 文件的路径相对于仓库，C# 路径相对于 `src/Sts2Ai.*`。
+
+## 1. 算力
+
+```mermaid
+flowchart LR
+  S["限时作业<br/>种子、冠军、截止时间"] --> W["远程主机<br/>槽位，每个一次打一局"]
+  W --> H["存储主机<br/>zstd 打包的文件"]
+  H --> T["实验室主机<br/>训练，2 块 GPU"]
+  T --> WT["网络文件<br/>weights/CHARACTER/NAME.json"]
+  WT --> B["Brain 加载它<br/>ONNX Runtime，CPU"]
+```
+
+- **模拟**。模拟器按进程扩展：8 个进程约 1,860 场战斗/秒，单进程为 275 场（[模拟器：战斗 §7](/arch/simulator/combat/#sec-7)）。按低预算，一局整局 SL 对局在一台主机上占一个槽位 43–52 s，在另一台上 83 s；一局精英连战 45–53 s（[实验记录 §11](/arch/learning/experiments/#sec-11)）。自我对弈和晋级门槛同时在几台远程主机上运行。
+- **限时作业**。一个作业给的是截止时间而不是局数，种子比能打完的多；每台主机到截止时间就停，作业的结果就是打完的那些。从 `4c36cad` 起，截止时间是每台主机上的一个文件 `~/sts2/deadline/NAME.txt`（一行注释，然后是一个时间）；用同一个 `NAME` 启动的作业共用它，所以改一次就挪动一代的所有作业（计划 v7：它的三个档用 `DEADLINE=v7gN`）。每个槽位在每批之前读它，打一局时还有一个监视器每 10 s 读一次；到截止时间还在打的一局会被结束并丢弃，所以只保留完整打完的对局。作业怎么启动、挪动、停止和取回，写在一个项目技能 `.claude/skills/fleet/SKILL.md` 里；SL 自我对弈、晋级门槛和评估怎么跑（选项、探索、检查），写在另一个技能 `.claude/skills/sl-selfplay/SKILL.md` 里。
+- **数据去哪里**。每台主机在作业结束时把它的文件发到一台存储主机，用 zstd 打包（日志缩小 40–80 倍）。它们在一台有两块 RTX 4080 的实验室主机上解包、分析和训练，每块 GPU 一个训练；只有结果（权重、报告文本）回到开发机，开发机负责构建、测试和运行大脑服务。在实验室主机上，训练器用一个从 `git archive REV learn/` 建出的 uv 虚拟环境运行，所以一次训练的代码就是一个提交。
+- **训练**用 Python 和 PyTorch，有空闲的 GPU 时在 GPU 上跑（`device = "cuda" if torch.cuda.is_available()`）。推理用 C#，在 CPU 上，在决策进程和工作进程里（[§8](#sec-8)）。
+
+## 2. `learn/` 项目
+
+`learn/` 是循环的 Python 项目，用 uv 管理（`learn/pyproject.toml`、`uv.lock`）：`sts2-learn` 0.1.0，Python ≥ 3.12，依赖 loguru ≥ 0.7.3、onnx ≥ 1.23.2、torch（来自 PyTorch 的 CUDA 12.8 索引）和 typer ≥ 0.27.3；开发依赖 pytest ≥ 9.1.1 和 ruff ≥ 0.17.3（行长 120，规则 E、F、W、I、B、UP）。在 `learn/` 里用 `uv run python -m v.train …` 或 `uv run python gauntlet.py …` 运行脚本。
+
+**约定**（`learn/common.py`）：
+
+- 除 `bosslab.py` 外，每个脚本只有一个 Typer 命令，帮助文本就是它的 docstring（`common.app`，`:25-27`），所以 `--help` 显示 docstring。
+- 日志通过 loguru 写到 stderr，级别为 `LOG_LEVEL`（默认 INFO），格式为 `HH:mm:ss LEVEL message`；stdout 只输出结果，报告是一行 JSON（`common.run`，`:30-42`）。
+- `LearnError`（输入有错、文件挡路、模拟器失败）让脚本报一行信息后以退出码 1 结束；其他异常都是 bug，带着 traceback 结束。模拟器的命令行也是这样（[模拟器：参考 §2](/arch/simulator/reference/#sec-2)）。
+- `bosslab.py` 只用标准库和 argparse，打印到 stdout，没有 `LearnError`：打它的任务的那些主机用普通的 `python3` 运行它。
+
+## 3. 数据目录
+
+对局记录和决策日志是原始数据，不进 git，放在 `data/CHARACTER/ENV/`（`ENV` 是 `sl` 或 `nosl`；`.gitignore:8-9`），每个作业一个文件夹。自从有了限时作业，完整的文件放在存储主机上；开发机只保留每个作业的 `manifest.json` 和小文件。
+
+| 文件夹 | 内容 | 例子 |
+|---|---|---|
+| `selfplay/gN/bK/` | 自我对弈第 N 代第 K 批（一次启动，最多几个小时）；它的后状态放在它自己的文件夹里 | `nosl/selfplay/g2/b1`、`sl/selfplay/g3/b1` |
+| `selfplay/v6gN/eXXX/`、`eXXX-b`、`-c`、`-d` | 精英连战第 N 代，每个 ε 一个文件夹（`e030` 即 ε = 0.3），一代后来的限时作业加后缀 | `sl/selfplay/v6g3/e015-b` |
+| `selfplay/v7gN/eXXX/` | 计划 v7 的第 N 代，每个 ε 一个作业 | `sl/selfplay/v7g1/e030` |
+| `eval/DATE-KIND-SUBJECT/` | 评估；KIND 是 `gate`、`rebaseline`、`eval`、`panel`、`bench`、`gauntlet`、`gauntlet-ref`、`gauntlet-smoke`，或者 `train`（一次训练的清单、脚本和日志）；SUBJECT 照它的权重名或选项写出被测的对象 | `sl/eval/2026-10-30-eval-v6-3-2-clone`、`sl/eval/2026-10-30-gauntlet-v6-2`、`sl/eval/2026-10-29-train-pure1`、`nosl/eval/2026-10-28-gate-n2-b0.03` |
+| `forks/DATE-SUBJECT/` | 反事实分叉、Boss 连战试点和测试 | `sl/forks/2026-10-29-gauntlet`、`sl/forks/2026-10-31-deadline-test` |
+| `assist/DATE-SUBJECT/` | 真实游戏里助手模式的日志（[Mod：自动游玩与安全 §3](/arch/mod/auto/#sec-3)） | – |
+| `data/CHARACTER/void/` | 不能用的数据（选项用错、停得太早），保持原来的路径，附一个 `VOID.txt` 写明原因 | `void/sl/selfplay/g3/t025` |
+| `data/CHARACTER/lists/` | 共用的训练集（[§4](#sec-4)） | `lists/v-g0-g3-logs.txt` |
+
+第 N 代在两个环境里按同样的方式计数：`sl/selfplay/g3/` 和 `nosl/selfplay/g3/` 是第三轮分别在两个环境里打的。
+
+**文件**。固定分片的作业有 `rec-SHARD.jsonl`（对局记录）、`log-SHARD.jsonl`（决策日志）和 `out-SHARD.txt`（模拟器的输出），每个进程各一份。限时作业每个槽位一套：`rec-`、`log-`、`out-` 和 `done-HOST-i`（每个槽位每批种子启动一个新的 `run` 进程），另加每台主机的 `queue-`、`counts-`、`stored-` 和 `push-` 文件。按低预算，一局整局的决策日志约 1.6 MB，一局连战约 1 MB；大部分字节是战斗观测和宏观决策的整局观测。
+
+**manifest**（`manifest.json`，每个作业一份）说明打的是什么、为什么打：`job`、`kind`、`character`、`env`、`owner`、`purpose`、`rev`（构建模拟器的提交）、`game`（游戏版本）、`options`（对局选项）、`inputs`（作业读取的 `eval/` 和 `weights/` 的副本，在模拟器的提交较旧时）、`shards`、`launched`、`status`，限时作业还有 `box`：截止时间（UTC 和 epoch、文件、它的改动）、种子范围、每批的大小、每台主机的槽位、速度、时钟偏差和队列。取回时加上 `done`（打完的局数）、`prefix`（范围中完整的开头部分）、每个槽位的结束，以及各槽位停下的时间相差多远。
+
+## 4. 清单
+
+共用的训练集是 `data/CHARACTER/lists/` 里的清单对：`NAME-logs.txt` 和 `NAME-recs.txt` 每行一个路径，相对于仓库根目录（或绝对路径），一份的第 i 行是另一份第 i 行那些对局记录的决策日志（`common.lists`，`learn/common.py:90-101`）。`v.train --list PREFIX` 和 `combat.train --list PREFIX` 读一对清单；训练器只把每份日志和同一行上的记录文件对上（[实验记录 §2](/arch/learning/experiments/#sec-2)）。文件夹里的 `manifest.json` 说明每份清单装的是什么。
+
+| 清单 | 内容 | 由谁读 |
+|---|---|---|
+| `v-g0-g3` | V 的整局自我对弈：NoSL g0–g2 和 SL g3 各自的第 1 批，分别为 1,198 局和 419 局，另有 g0–g2 里训练时不用的 5 局失败对局；69 对 | pure-1、pure-1-b、pure-1-d、pure-1-g |
+| `sl-combat` | SL 的战斗训练集：SL g3 的第 1 批（419 局），以及由规划器用 c2、以中等力度打的 SL 评估（`promotion-1` 160 局；`promotion-1b` 40 局；n3-free-ctl 的门槛 200 局），共 819 局、54,405 个回合开始局面；89 对 | `sl-c1`，规划中 |
+| `v6-1`、`v6-2`、`v6-3-1`、`v6-3-2` | 每个连战网络的各代 | 在实验室主机上，位于 `sl/eval/2026-10-29-train-v6/lists/` |
+
+fix68 的重跑不在 `sl-combat` 里，因为它们的种子是 `promotion-1` 的。
+
+## 5. 账本和种子
+
+`eval/CHARACTER/ledger.md` 在 git 里，记录谱系（[实验记录 §1](/arch/learning/experiments/#sec-1)）。运行训练循环的会话负责维护它：
+
+- 一段说明现在和以前的冠军，以及精英连战的冠军；
+- **种子区段**：训练种子是 `run --seed 1 --start K`；每个计划在开始之前登记一个 100,000 宽的区段，它的作业取其中的子范围，所以两批永远不会共用一个种子。计划 v6 取了 200000–299999 中的 205400–276999（Boss 连战试点取了 200000–205399）；计划 v7 取 100000–199999（199000–199999 用于它的第一批测试，第 1 代用 100000–159999）；300000–399999 放着精英连战的评估种子 300000–300499，固定不变，从不用来训练；下一个空闲的区段是 400000–499999；
+- **批次表**：批次、环境、打它的大脑、提交、训练种子、局数、用不用，以及它的文件夹；
+- **权重表**：名字、种类、训练所用的数据、它的门槛、它现在的角色。
+
+评估种子文件在 `eval/seeds/` 里：`promotion-1`（200 个）、`promotion-1-300`（按顺序是它的 200 个，再加接下来的 100 个）、`promotion-1-500`（`seeds --base 2 --n 500`，前 300 个就是 `promotion-1-300`，在 `7ce03bd` 加入）和 `final-1`（[评估：指标、种子与报告 §5](/arch/evaluation/metrics/#sec-5)）。`eval/CHARACTER/gauntlet-leaderboard.md` 列出连战的冠军，手工维护；`eval/CHARACTER/leaderboard.md` 由 `leaderboard` 从整局报告生成。
+
+## 6. 权重
+
+每个角色单独训练、单独评判，各有自己的大脑；同一个角色的所有进阶等级都由这一个大脑来打，它逐级往上爬。所以每个角色的文件有自己的文件夹 `weights/CHARACTER/`（静默猎手是 `weights/silent/`；`learn/weights.py`）。
+
+- **永不覆盖**。训练器写到 `weights/CHARACTER/NAME.json`，除非 `--out` 另行指定；如果某个名字的文件在任何角色文件夹里已经存在，它就拒绝（`out_path`，`learn/weights.py:18-25`），所以一个名字只用一次，永远指同一份权重。没有任何保留下来的对局用到的试验文件，用 `--out` 放到别处。
+- **角色**。训练器的 `--character`（默认 SILENT）指定角色：记录里有别的角色的对局就拒绝（`learn/common.py:83-84`），文件里也记下角色。
+- **名字**。种类加编号，变体写在短横线后面：`cN` 是到目前为止的战斗网络（都是 NoSL 的），`sl-cN` 是 SL 的（规划中），`nN` 是 V v2 的网络（`n2-b0.03`：第 2 代，牵引项 β 0.03），`pure-N` 是在整局上训练的纯 V（`pure-1-g`：带试点的门前状态），`v6-N` 是精英连战的第 N 代（`v6-3-2`：它的第二个网络），以及计划 v7 的 `v7-N` 和 `v7-Ne`（编码器网络）。
+- **在 git 里**。`weights/` 进 git：一个文件 1.3–2.0 MB，而且不会改，所以一个提交就同时确定了代码、权重和冠军文件；冠军文件直接引用权重所在的路径（[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)）。`weights/silent/history/` 和 `weights/silent/nosl/` 是旧布局的副本，被 git 忽略（`.gitignore:11-13`）。
+- **环境**。战斗网络的文件写明它的环境（`env`，SL 或 NoSL），`run`、`brain`、`gate` 和 `panel` 在另一个环境里拒绝它；c1–c4 没有写，两边都能用（[训练战斗网络 §1](/arch/learning/combat-net/#sec-1)）。
+
+`weights/silent/` 里现在的文件：c1–c4；n1、n2-b0.1、n2-b0.03、n2-b0.01、n3-ctl、n3-free-ctl；pure-1、pure-1-b、pure-1-d、pure-1-g；v6-1、v6-2、v6-3-1、v6-3-2。
+
+## 7. 网络文件
+
+网络文件是 JSON：base64 编码的 ONNX 计算图，加上 C# 喂给它所需的东西，以及加载时要核对的测试输入和训练器的输出。网络只在 Python 里定义一次；C# 只负责把一局或一个回合开始局面变成计算图的输入（[§8](#sec-8)）。
+
+**V 的文件**（`learn/v/export.py:43-66`）：
+
+| 字段 | 内容 | C# 是否读取 |
+|---|---|---|
+| `name` | 网络的名字，和冠军显示的一样（`l0 NAME`） | 是 |
+| `character` | 角色，例如 `SILENT` | 否 |
+| `objective` | `floor`、`win` 或 `progress`（任何带比例输出头的网络） | 是 |
+| `floors` | 64 | 是 |
+| `vocab` | 每张表的 id，第 0 项是 `<unk>`：`cards`、`modifiers`、`relics`、`potions`、`context`、`map`，编码器网络还有 `route` | 是 |
+| `state` | `names`（floor、hp、max_hp、gold、ascension、potion_slots）、`mean`、`std` | 是 |
+| `fit` | 训练报告（[§9](#sec-9)） | 否 |
+| `onnx` | 计算图：输入名照 `learn/v/encode.py` 的 `INPUTS` 或 `ENCODER_INPUTS`，批大小和长度维度不固定；输出 `hazards`（batch × 64，带比例时 × 128）；opset 20 | 是 |
+| `tests` | 按训练种子抽出的最多 8 个留出样本：`run`（整局观测）和 `value`（训练器在 CPU 上给的值） | 是 |
+
+V v2 的文件（n1、n2-\*、n3-\*）用 `features`（17 个或 9 个 V v0 特征的名字）、`mean` 和 `std` 代替 `state`，它们的计算图读 `features`、`costs`、`mod_amounts`、`card_scalars`、`vars`、`var_values`、`var_mask`、`relic_values`、`relic_status` 和 `extra`，没有地图词袋。
+
+**战斗网络的文件**（`learn/combat/export.py:53-78`）：
+
+| 字段 | 内容 | C# 是否读取 |
+|---|---|---|
+| `name` | 和冠军显示的一样（`pimc NAME`、`plan NAME`） | 是 |
+| `character` | 角色（c1、c2 里没有） | 否 |
+| `env` | SL 或 NoSL（c1–c4 里没有） | 是 |
+| `buckets`、`loss_min` | 50 和 −0.25（c1：20 个剩余生命的桶，没有 `loss_min`） | 是 |
+| `lags`、`round` | 之前 3 个回合的意图，以及读入的回合数 | 是 |
+| `vocab` | 每张表：`cards`、`modifiers`、`powers`、`enemies`、`intents`、`relics`、`potions`、`context`，较新的网络还有 `orbs`、`allies` | 是 |
+| `fit` | 训练报告 | 否 |
+| `onnx` | 输入名照 `learn/combat/encode.py` 的 `INPUTS`（c1–c4 有它们自己的）；输出 `outcome`（batch × 51，softmax）和 `potions_used`（batch） | 是 |
+| `tests` | 最多 8 个留出的回合开始局面：`obs`、`history`、`outcome`（51 个数）、`potions_used` | 是 |
+
+图中逐个字段打开两个冠军的文件 v6-3-2.json 和 c2.json：大小、计算图的输入和输出及其形状、它的初始化器（权重张量，只列形状）和算子，以及训练报告。
+
+<NetFileAnatomy client:visible lang="zh-CN" />
+
+## 8. C# 里的推理
+
+- **用哪个 V**。`run --value FILE`（配合 `--macro l0`，`SimWorker/Commands/Args.cs:249-253`）读 V v0 的权重或一个网络：带 `onnx` 的文件是网络（`RunNet.Load`），否则是 V v0 的 `{name, weights}`（`RunValue.Read`，`Brain/Macro/RunValue.cs:52-58`）。这个选项的帮助文本仍写着 "V v0's weights or a net file of V v2"（`Args.cs:216`）。`run --combat-net FILE` 加载战斗网络（`CombatNet.Load`）。
+- **`RunNet`**（`Brain/Macro/RunNet.cs`）用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）运行计算图，intra-op 和 inter-op 各一个线程（`:71`），因为模拟器跑很多进程，而一个宏观决策只给少数几个小输入估值。它像 `learn/v/encode.py` 那样从整局观测构建输入，只喂计算图声明的输入（`NetNumbers.Declared`，`:247`），只有计算图有 `route` 输入时才喂路线（`:225`），V v2 的特征、卡牌和遗物的数值以及 `extra` 只喂给读它们的计算图。未知的 id 读作第 0 项。`Value` 读取 objective（`:93-106`）。
+- **加载检查**。`RunNet.Load` 给每个测试对局估值，任何一个值的偏差超过 10⁻³ × max(1, |value|) 就拒绝这个文件（`:78-91`）；`CombatNet.Load` 预测每个测试状态，任何一个类别或药水数的偏差超过 10⁻³，或结局的长度不同，就拒绝它（`Brain/Combat/CombatNet.cs:65-80`）。这保证训练和对局时的编码与前向计算一致。
+- **`CombatNet`** 按位置读取输出（所以 c1 较旧的输出头会被读成损失的生命），用 `LeafValue` 的价格给它们定价，或在 `--leaf-prices v` 时用 V 的价格（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
+- **开销**。v6-3-2 每次调用 0.093 ms，一个全尺寸的编码器网络 0.44 ms，而一个用克隆的宏观决策要 70–90 ms（提交 `b0ec4b7`）；V v2 每个宏观决策约 0.9 ms（`648026c`）。战斗网络的开销淹没在游戏的模拟里：宽度 0.5、1 和 2 的网络搜索时每个动作同样花 1.58–1.76 s（[训练战斗网络 §6](/arch/learning/combat-net/#sec-6)）。
+- **`OLD NETS`**。`src/` 里只有 V v0、V v2 和战斗网络 c1–c4 用到的代码标着 `OLD NETS`（提交 `28fc273`），只要还有冠军在用其中之一就留着。2026-10-30 起没有冠军用 V v0 或 V v2；读 `costs` 的 c2（`CombatNet.cs:133-135`）是两个冠军的叶子。V v0 的特征仍写进每一条宏观日志行和每个后状态。
+
+## 9. 脚本
+
+### `learn/common.py` 和 `learn/weights.py`
+
+| 函数 | 作用 |
+|---|---|
+| `read_lines(paths, needle)` | 逗号分隔的各文件里含有 needle 的 JSON 行；跳过空行和还在写的行；缺文件是 `LearnError`（`:45-59`） |
+| `runs_by_log(logs, records, character)` | 把第 i 份日志和第 i 份记录文件配对（数量必须相同）；每份记录文件按对局 id 列出它的对局；拒绝同一文件里出现两次的对局 id 和别的角色的对局（`:62-87`） |
+| `lists(prefix)` | 一对清单，作为两个用逗号连接的字符串（`:90-101`） |
+| `start_sim`、`wait_sims` | 启动模拟器命令，输出写到日志文件；以第一个失败命令的最后 12 行日志报错（`:104-119`） |
+| `out_path(name, out, character)` | 权重文件写到哪里（[§6](#sec-6)） |
+
+### `v.train`：纯 V
+
+`uv run python -m v.train --list PREFIX --name NAME [options]`（`learn/v/train.py:177-209`）。
+
+| 选项 | 默认 | 含义 |
+|---|---|---|
+| `--list` | 必需 | 清单对 `PREFIX-logs.txt` 和 `PREFIX-recs.txt` |
+| `--name` | 必需 | 网络的名字，冠军会这样显示它 |
+| `--out` | `weights/CHARACTER/NAME.json` | 文件写到哪里 |
+| `--character` | SILENT | 这些对局的角色 |
+| `--boss-sims` | – | Boss 模拟战（`bosslab.py collect`），逗号分隔；只能和 `--boss-afterstates` 一起用 |
+| `--boss-afterstates` | – | Boss 模拟战所基于的后状态（`afterstates`） |
+| `--boss-states` | – | 门前状态（`bosslab.py states`，汇总后） |
+| `--door-logs` | – | Boss 连战试点的日志（`run --auto-win`），`--boss-states` 里的门前状态来自它们 |
+| `--afterstates` | – | 日志里各决策的选项，只用于 `explore_temperature` |
+| `--gauntlet` | 关 | 精英连战的 V，只用连战的对局（比例输出头，objective 为 `progress`） |
+| `--objective` | `floor` | 整局的价值：`floor` 或 `win` |
+| `--encoders` | 关 | 编码器网络（`net.EncoderNet`） |
+| `--init` | – | 接着训练的网络文件：沿用它的表、状态缩放和权重 |
+| `--seed` | 0 | torch 和 Python 的种子；也决定那 8 个测试对局 |
+
+**拒绝的情况**（`:211-232`）：objective 不是 `floor` 或 `win`；`--gauntlet` 与 `--objective win`、与 `--encoders` 一起用，或与 Boss 模拟战、门前状态、门前日志或后状态一起用；Boss 模拟战配 `win`；`--init` 的 objective 不对（连战要 `progress`）或不是 64 层；`--init` 和 `--encoders` 不匹配；状态名不同；`--boss-sims` 没有 `--boss-afterstates`，或反过来；训练或留出样本太少。
+
+**常量**（`:67-74`）：64 层；出现不到 3 次的 id 读作未知；最多 40 轮，连续 5 轮留出总损失没有降低 10⁻⁴ 以上就停；每批 256 个决策，每一步另加 64 个 Boss 模拟战决策和 64 个门前状态；AdamW，学习率 3 × 10⁻⁵，权重衰减 10⁻⁴；第二个输出头权重 3，Boss 模拟战和门前状态权重 1。网络的大小是 `Net` 的：嵌入 32，单牌网络 128，主干 256（`learn/v/net.py:142-157`）。
+
+**流程**。读取样本（只为 Boss 模拟战、门前状态或后状态保留整局观测）；按对局 id 划分；从训练样本建表（或取 `--init` 的），并算出状态的加权均值和标准差；基线风险值，即每一层的 $(\text{deaths} + 0.5)/(\text{alive} + 1)$，限制在 $[10^{-4}, 1 - 10^{-4}]$ 内，作为输出头的偏置（比例输出头取平均比例）；训练；保留留出总损失最好的那一轮。提前停止看的总损失是留出的风险值（和比例）损失加上 Boss 模拟战和门前状态的项；第二个输出头的接下来战斗项每轮都记日志，但不加进去（`:388-391`）。模块的 docstring 说留出对局对各项的加权「与损失相同」；代码并没有加这一项。然后是报告和文件。
+
+**报告**（一行 JSON，`:429-459`）：
+
+| 字段 | 何时有 | 内容 |
+|---|---|---|
+| `runs`、`held_out_runs`、`samples`、`won` | 总有 | 读到的对局和决策，以及获胜的对局 |
+| `gauntlet`、`objective`、`encoders`、`vocab` | 总有 | 训练的是什么，每张表的大小 |
+| `held_out_loss`、`held_out_loss_floor_only` | 总有 | 每局的留出风险值（和比例）损失，以及基线的 |
+| `held_out_next_combats` | 总有 | 第二个输出头的留出平方误差 |
+| `r2_held_out`、`r2_held_out_floor_only` | 总有 | V 的估值（期望层数或进度）对实际到达的层数（或进度）的 $R^2$ |
+| `won_held_out_runs`、`brier_held_out`、`brier_held_out_floor_only` | 整局 | 留出对局中获胜的局数，以及获胜机会的 Brier 分数，和基线的对比 |
+| `boss_sims`、`held_out_boss_sims`、`boss_worth`、`held_out_boss_loss`、`boss_decisions`、`boss_agree`、`boss_corr` | Boss 模拟战 | [价值函数 §10](/arch/learning/value/#sec-10) |
+| `doors`、`held_out_doors`、`held_out_door_loss`、`door_corr` | 门前状态 | 同上 |
+| `explore_decisions`、`explore_share_logs`、`explore_temperature` | 后状态 | 留出的日志决策，日志里的大脑探索的比例，以及这个 V 以同样频率探索时的温度 |
+
+v6 网络的文件早于 `objective`、`encoders` 和报告里的 Brier 字段。
+
+### `combat.train`：战斗网络
+
+`uv run python -m combat.train --list PREFIX --env SL|NoSL --name NAME [--out FILE] [--character SILENT] [--seed 0]`。它的样本、损失、常量和报告见[训练战斗网络 §3](/arch/learning/combat-net/#sec-3)–[§4](/arch/learning/combat-net/#sec-4)。
+
+### `learn/gauntlet.py`：一个 V 的报告和门槛
+
+`uv run python gauntlet.py --records R1,R2 [--logs L1,L2] [--against C1,C2]`（`learn/gauntlet.py:164-183`）。它读打完的对局（失败的排除，被截断的保留），全都是同一种：精英连战的或整局的，从不混用（`:42-48`）。输出一行 JSON，`{"gauntlet": …, …}`：
+
+- **来自记录**（`runs_report`，`:51-78`）：`runs`、`floor` 和 `floor_se`；连战还有 `progress` 和 `progress_se`；`won`；每幕的 `boss`（打到、打赢、比率）；`elites_per_run`、`elite_deaths`；`died_in`，按幕列出每局失败的对局死在哪种房间的战斗里，或 `outside combat`；
+- **来自日志**（`logs_report`，`:107-133`），只算有记录的对局：`rest`，休息处的选择，按生命比例分（0–40%、40–70%、70–90%、90–100%）；`monster_or_rest`，地图上同时提供怪物和休息处时的选择，按同样的比例分；`shop`，商店卖出了什么（遗物、卡牌、药水，以下一个决策的整局观测为准），以及删牌和离开；
+- **用 `--against` 时**（`paired`，`:136-161`），在双方都打完的种子上按种子配对：连战给出 `pairs`、`diff`、`diff_se`、`lower_95`（均值 − 1.645 SE）和 `promote`；整局给出 `pairs`、`won`、`champion_won`、`wins_diff`、`wins_diff_se`、`wins_lower_95`、`floor_diff`、`floor_diff_se` 和 `promote`，按胜局判定。
+
+### `learn/challenge.py`：模拟器的门槛，分批跑
+
+`uv run python challenge.py --sim CMD --champion FILE --records-dir DIR [--chunk 40] [--processes 4] [--metric floor|win] [--not-worse] [--promote PATH] -- RUN OPTIONS`（`learn/challenge.py:91-161`）。
+
+- 它读冠军文件和它的报告：种子集、它的大小，以及第一局的角色和进阶等级，挑战者也照这个打。
+- 每一批，它打 `run --seeds eval/seeds/SET.txt --start A --n N --records DIR/AAAA-BBBB.jsonl --character C --asc A RUN OPTIONS`，分到各个进程上，每个进程的日志写到它的记录文件名加 `.log`；然后运行 `gate --champion FILE --records … --metric M [--not-worse] RUN OPTIONS`，读取它的判定。
+- 遇到失败或作废的判定，或在整个种子集上都没有判定，它就以退出码 1 停下。通过之后，若有 `--promote`，它把种子集剩下的打完，用 `--promote PATH` 再跑一次门槛，并重建排行榜（`leaderboard --character C`）。它只写对局记录，不写决策日志。
+- 记录写到 `--records-dir`，即 `data/CHARACTER/ENV/eval/DATE-gate-NAME/`。路径都相对于仓库根目录，模拟器在那里运行。
+
+### `learn/bosslab.py`：Boss 标签
+
+`python3 bosslab.py SUBCOMMAND …`（只用标准库；`learn/bosslab.py:423-472`）。`tasks`、`doors` 和 `states` 共有的选项：`--seeds 2`（每个选项或每个生命档位打几场），`--budget`（默认 `--effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0`，每场约 9 s），`--combat-net weights/silent/c2.json`，`--results res`（输出写到哪里，按打这些任务的主机看到的路径），`--out`（必需）。每个子命令写出 `OUT/tasks.txt`，每个选项一条 `panel --player plan --env SL BUDGET --combat-net NET --n SEEDS --seed S --out RES/KEY.jsonl LOADOUT`（种子：对局 id 模 100000 再加决策 id，同一决策的每个选项都一样），以及 `OUT/decisions.jsonl`。
+
+| 子命令 | 选项 | 作用 |
+|---|---|---|
+| `tasks` | `--logs`、`--afterstates`、`--acts 1`、`--every 1` | 每个卡牌奖励的选项，每个选项的后状态按本幕的生命比例（0.96、0.81、0.6）和本幕的 Boss 打 |
+| `doors` | `--logs`、`--records`、`--afterstates`、`--act 1`、`--acts`、`--max-runs` | 每个选项在 Boss 门前打：用对局进 Boss 战之前的配置，带着进门时的生命，把选中的那个换成这个选项 |
+| `states` | `--logs`、`--records`、`--act 1`、`--hp-shares 0.4,0.7,1`、`--max-runs` | 只用各局在 Boss 门前的配置，按进门时的生命和各个比例打，每扇门一行 |
+| `play SIM TASKS PROCS [--root]` | – | 打输出还缺的任务行，同时 PROCS 个，nice 19，同一决策的各选项放在一起，各决策按固定的打乱顺序；中途停下不会留下不完整的文件 |
+| `collect` | `--decisions`、`--results`、`--out` | 把输出接回去：每个选项的 `fights`（是否赢、生命、开始时的生命、敌人的生命和最大生命、回合数）和 `failed` |
+| `compare DECISIONS RESULTS` | – | 在每个选项都打了两次的决策上：战斗的最好选项与 V 的最好选项、与对局的选择一致的频率，种子 1 的最好与种子 2 的最好一致的频率，以及分数的遗憾值 |
+
+配置是后状态的牌组、遗物和药水；卡牌保留升级等级和附魔；用完或失效的遗物不算在内（`loadout`，`:70-93`）。
+
+### 已删除的脚本
+
+它们留在 git 历史里；它们训练的网络仍能加载。
+
+| 脚本 | 删除于 | 做过什么 |
+|---|---|---|
+| `learn/fit_value.py` | `9b9d170` | 把 V v0 的特征岭回归到到达的层数（[实验记录 §2](/arch/learning/experiments/#sec-2)） |
+| `learn/spsa.py` | `9b9d170` | 对 V v0 的权重做 SPSA，加 `--param leaf` 时对 `LeafValue` 的权重（[循环 §6](/arch/learning/loop/#sec-6)） |
+| `learn/curselab.py` | `9b9d170` | 一次性的研究：知识恶魔「知识的诅咒」的选择，在重放的第 2 幕 Boss 战里，每种选择在每次提示时都强制选一遍 |
+| `learn/train_value.py` | `9b9d170` | V v2：n1、n2-\*、n3-\* |
+| `learn/train_combat.py` | `455d437` | c1–c4，带预测下一个意图的输出头、与 `LeafValue` 的比较，以及 `--width`、`--train-share`、`--fold`、`--lags`、`--no-round` |
+
+`train_value.py` 的选项（在 `9b9d170^`）：`--logs`、`--records`、`--name`、`--out`、`--character`、`--floors 64`、`--objective floor|win`、`--min-count 3`、`--epochs 40`、`--patience 5`、`--batch 256`、`--lr 3e-5`、`--weight-decay 1e-4`、`--aux-weight 3`（0：没有第二个输出头）、`--aux-act`（第二个输出头还学这一局有没有打赢这一幕最后一场 Boss 战，以及打完后剩下的生命比例）、`--width 1`（按比例调整宽度）、`--attention 0`（在汇总之前对牌组的牌加的自注意力块数）、`--boss-sims`、`--boss-afterstates`、`--boss-weight 1`、`--boss-states`、`--boss-state-weight 1`、`--state-out FILE`（另外存下两个头都在的 torch 网络，供分析用）、`--forks`、`--fork-weight 1`、`--pair-weight 1`、`--afterstates`、`--kl-weight 0`、`--kl-temperature 1`（单位是层）、`--side-batch 64`、`--train-share 1` 和 `--train-start 0`（只在训练对局里按对局 id 排位落在 [A, A + S) 的那些上训练，用于学习曲线和折半检验）、`--features`（读取的 V v0 特征）、`--seed 0`。它的报告另外给出：在留出的分叉上，V 预测的差值与实际打出的差值符号一致的频率（到达层数加剩余生命比例，每对按差值的大小加权，平局不算），附 V v0 的作为对比；在留出的决策上，按决策界面（surface）给出相对日志策略的 KL、V 的最佳与 V v0 的最佳一致的频率，以及卡牌奖励上各自跳过的频率；同一决策内 V 的估值对 V v0 估值的斜率；`explore_temperature`；一个用逆倾向评分的离策略检验；以及在 Boss 模拟战上打出日志的 V 的一致率（`boss_agree_logged`）。
+
+## 10. 循环用到的模拟器命令
+
+每个命令及其全部选项见[模拟器：参考 §4](/arch/simulator/reference/#sec-4)。循环调用的是这些：
+
+| 命令 | 用途 |
+|---|---|
+| `run --explore ε` | 自我对弈的均匀抽取（[循环 §9](/arch/learning/loop/#sec-9)）；需要 `--macro l0` |
+| `run --macro-explore T`、`--combat-explore T` | softmax 探索；后者需要 `--policy pimc` |
+| `run --value FILE`、`--combat-net FILE`、`--leaf-prices v` | 用哪个 V、哪个叶子来打 |
+| `run --gauntlet`、`run --auto-win` | 精英连战和 Boss 连战试点（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)） |
+| `run --log FILE --records FILE` | 决策日志和对局记录 |
+| `afterstates`、`fork` | 每个日志决策的选项及其估值；反事实配对（[循环 §10](/arch/learning/loop/#sec-10)） |
+| `panel` | 由某个策略打的一场固定战斗，`bosslab.py` 的任务就是这种命令 |
+| `report`、`gate`、`leaderboard` | 报告、SPRT 门槛、排行榜（[评估：晋级门槛 §6](/arch/evaluation/gates/#sec-6)、[评估：指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)） |
+| `ranks` | V 的卡牌感（[价值函数 §11](/arch/learning/value/#sec-11)） |
+| `weights` | 把 V v0 的初始权重写成权重文件（`--leaf`：叶子权重）；它的帮助文本仍写着 "for tuning to start from" |
+
+## 11. 测试
+
+**Python**（在 `learn/` 里 `uv run pytest`，7 个文件共 69 个测试；`uv run ruff check`）：
+
+| 文件 | 测试数 | 内容 |
+|---|---|---|
+| `test_common.py` | 9 | `read_lines` 跳过空行和不完整的行、读每个文件、找到 needle、缺文件时报错；`wait_sims` 的失败尾部和成功；`runs_by_log` 配对日志和记录文件、每份日志一份记录文件、拒绝出现两次的对局 id 和别的角色 |
+| `test_weights.py` | 3 | 默认路径；在角色文件夹里从不替换；别处的显式路径可以替换 |
+| `test_v_encode.py` | 6 | 带前方层数的可达地图，在任何访问之前和在 Boss 处；只有 id；状态的顺序；路线 |
+| `test_v_train.py` | 30 | 清单对；样本和每局权重；保留的整局观测；拒绝 Boss 连战试点；整局和连战对局互相拒绝；连战的标签和比例；`boss_worth`；门前状态；Boss 分数；从大脑名得到的温度；风险值标签和删失；期望层数、获胜机会、期望进度；`explored`、`centred`；floor、win、编码器和连战网络的 ONNX 与 torch 对比；读回的权重；`--init` 保留表和缩放；整局可以从连战网络接着训练，反过来不行；报告的字段；门前日志只提供整局观测；编码器网络的训练，以及 `--init` 只能来自编码器网络 |
+| `test_combat.py` | 8 | 卡牌词元、缩放后的状态、意图从最近的开始、结局的桶、带历史的回合开始样本、拒绝另一个环境、ONNX 与 torch 对比、训练写出它所在环境的网络文件 |
+| `test_gauntlet.py` | 6 | 进度、Boss、精英和死亡；按生命分的休息选择和商店购买；按生命分的怪物或休息；整局按胜局和层数配对、按胜局晋级；连战和整局从不配对；连战按种子配对 |
+| `test_bosslab.py` | 7 | 有效的遗物和本幕的生命比例；升级和附魔；每个决策用同样的种子；门前的替换；门前任务；赢的分数高于输；不同生命等级下的门前状态 |
+
+**C#**（[模拟器：参考 §7](/arch/simulator/reference/#sec-7)），网络在训练和部署之间的一致性，用 `Sts2Ai.Tests/Fixtures/` 里的测试数据：
+
+- `RunNetTests`（6）：一个极小、未训练的纯 V 网络带三个真实的整局观测（`pure-v-tiny.json`），被估值得和训练器给的一样；一个胜局网络（`pure-v-tiny-win.json`，同一个网络，风险值输出头的偏置降低 6：测试对局为 0.63、0.18 和 0.03），按训练器的获胜机会估值；一个极小的编码器网络（`pure-v-tiny-encoders.json`，权重 × 3），路线失去连接或前方层数时，它的估值变动达到加载检查容差的 10 倍，每种类型都读作未知时变动 3 倍；n2-b0.03 仍能加载；共用的测试地图上的地图词元和路线。
+- `CombatNetTests`（5）：一个极小、未训练的 SL 网络带三个真实的 SL 回合开始局面（`combat-sl-tiny.json`，其中一个有 4 个回合的历史，一个有盟友）；c2 仍能加载；网络只在自己的环境里打，旧网络两边都能用；V 给结局的价格；按 V 的价格算出的估值。
+- 改动一个输入时，只要输出的变化小于容差，检查就会通过，所以每个新输入都在一个让每个输入都起作用的网络上再检查了一次（[训练战斗网络 §2](/arch/learning/combat-net/#sec-2)）。
+
+**规划** <Badge text="规划中" variant="caution" />：
+
+1. **校准**，在留出的种子上：V 说 30% 的那些局面里，应该大约有 30% 赢下来。可靠性图（把预测分箱，画出预测胜率与实际胜率的对比）还没有实现；Brier 分数（预测概率与 0/1 结果之间差距的平方的均值）已经实现，在 `v.train` 的整局报告里，它必须优于基线的（ytcs，一个前人的 STS2 求解器，它的整局模型就没通过这一项）。
+2. **奖励塑形精确地逐项相消**，等有了塑形项之后（[循环 §11](/arch/learning/loop/#sec-11)）。
+3. **晋级门槛的 A/A 测试**：挑战者就是冠军自己时，门槛让它通过的频率不能高于门槛的假阳性率。`Sts2Ai.Tests/Harness/GateTests.cs` 检查 200 个零差值的配对不通过（`NoGainFails`），这是一个确定性的检查，不是测出来的比率。
+
+## 12. 未决问题
+
+1. 计划 v7 行不行得通：整局自我对弈、按 P(win) 的 V 和按胜局的门槛，目前还没有训练出任何网络（[学习 §4](/arch/learning/#sec-4)）。
+2. 一旦 V 按 P(win) 做决策，除了 Brier 分数，还能怎样检查 P(win) 的校准。
+3. 每个决策的标签都带着它那一局之后的抽取。每局一个切分点就能去掉它们：切分点之前抽取，之后取 V 的最优，只用切分点之后的决策训练，AlphaGo 的价值网络就是这样训练的（[循环 §9](/arch/learning/loop/#sec-9)）。计划 v7 又一次推迟了它。
+4. 标签只有蒙特卡洛目标的 V，TD(λ) 或专家迭代会不会对它有帮助。
+5. `--leaf-prices v` 不管 V 的 objective 是什么，都把死亡定价为这一局所在的层，这适合 `floor` 和 `progress` 网络，但不适合 `win` 网络（[循环 §10](/arch/learning/loop/#sec-10)）。
