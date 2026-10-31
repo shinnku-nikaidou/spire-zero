@@ -37,14 +37,12 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     private static readonly string[] Piles = ["hand", "draw", "discard", "exhaust"];
 
     private readonly CombatNetFile _file;
-    private readonly LeafWeights _weights;
     private readonly Dictionary<string, Dictionary<string, int>> _index;
     private readonly InferenceSession _session;
 
-    private CombatNet(CombatNetFile file, LeafWeights weights)
+    private CombatNet(CombatNetFile file)
     {
         _file = file;
-        _weights = weights;
         _index = file.Vocab.ToDictionary(t => t.Key, t => t.Value.Select((id, i) => (id, i)).ToDictionary(p => p.id, p => p.i));
         // One thread per call: search workers run side by side, and a leaf is one small input.
         using var options = new SessionOptions { IntraOpNumThreads = 1, InterOpNumThreads = 1 };
@@ -54,10 +52,9 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     public string Name => _file.Name;
 
     /// <summary>The net of a file, once it gives every test state the trainer's outcome.</summary>
-    /// <param name="weights">The prices of the endings; null for the default leaf weights.</param>
-    public static CombatNet Load(CombatNetFile file, LeafWeights? weights = null)
+    public static CombatNet Load(CombatNetFile file)
     {
-        var net = new CombatNet(file, weights ?? LeafValue.Default);
+        var net = new CombatNet(file);
         foreach (var test in file.Tests)
         {
             var outputs = net.Graph(test.Obs, test.History);
@@ -76,15 +73,16 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
     {
-        if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs, _weights);
+        if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs);
+        var w = LeafValue.Default;
         var outputs = Graph(obs, history);
         var (outcome, potionUsed) = (outputs[0], outputs[1]);
         double share = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
         double width = (1 - _file.LossMin) / _file.Buckets, value = 0;
         for (int k = 1; k < outcome.Length; k++)
-            value += outcome[k] * (_weights.WinBase + _weights.PerHp * (share - (_file.LossMin + (k - 0.5) * width)));
+            value += outcome[k] * (w.WinBase + w.PerHp * (share - (_file.LossMin + (k - 0.5) * width)));
         double kept = obs.Potions.OfType<string>().Sum(p => 1.0 - potionUsed[Index("potions", p)]);
-        return value + (1 - outcome[0]) * _weights.PerPotion * kept;
+        return value + (1 - outcome[0]) * w.PerPotion * kept;
     }
 
     public void Dispose() => _session.Dispose();

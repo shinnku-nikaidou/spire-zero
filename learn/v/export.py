@@ -1,4 +1,4 @@
-"""Pure V's net file (docs: learning/reference §7), for `run --value`: the net as ONNX, what RunNet needs to feed it (the token
+"""V's net file (docs: learning/reference §7), for `run --value`: the net as ONNX, what RunNet needs to feed it (the token
 tables, the state's mean and std), test runs that RunNet values on load to check it reads them as training did, and
 the training report.
 """
@@ -19,13 +19,10 @@ from v.net import Batch, Hazards, values
 
 
 def onnx_bytes(model, example: Batch) -> bytes:
-    """The model as an ONNX graph, its inputs model.INPUTS, every input's batch and length dimensions left free."""
+    """The model as an ONNX graph, every input's batch and length dimensions left free."""
     axes = {name: {0: "batch", 1: "cards"} for name in ("cards", "ups", "card_mask", "mods", "mod_mask")}
     for t, mask in encode.BAGS.items():
         axes[t] = axes[mask] = {0: "batch", 1: t}
-    for name in encode.ROUTE:
-        axes[name] = {0: "batch", 1: "nodes"} | ({2: "fan"} if name.startswith("route_next") else {})
-    axes = {name: a for name, a in axes.items() if name in model.INPUTS}
     axes |= {"state": {0: "batch"}, "hazards": {0: "batch"}}
     out = io.BytesIO()
     torch.onnx.export(
@@ -33,7 +30,7 @@ def onnx_bytes(model, example: Batch) -> bytes:
         example.inputs(),
         out,
         dynamo=False,
-        input_names=model.INPUTS,
+        input_names=encode.INPUTS,
         output_names=["hazards"],
         dynamic_axes=axes,
     )
@@ -41,18 +38,17 @@ def onnx_bytes(model, example: Batch) -> bytes:
 
 
 def net_file(name, character, floors, tables, mean, std, model, held, report, seed, objective="floor") -> dict:
-    """The file's content; its test runs are a few held-out decisions, valued on the CPU as RunNet values them. A net
-    with a share head is a "progress" net, any other the objective's ("floor" or "win")."""
+    """The file's content; its test runs are a few held-out decisions, valued on the CPU as RunNet values them."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     picks = random.Random(seed).sample(held, min(8, len(held)))
-    b = Batch(picks, index, mean, std, floors, "cpu", model.INPUTS)
+    b = Batch(picks, index, mean, std, floors, "cpu")
     with torch.no_grad():
         valued = values(model, b, objective)
     return {
         "name": name,
         "character": character,
-        "objective": objective if model.share_head is None else "progress",
+        "objective": objective,
         "floors": floors,
         "vocab": tables,
         "state": {"names": encode.STATE, "mean": [float(v) for v in mean], "std": [float(v) for v in std]},
@@ -64,12 +60,6 @@ def net_file(name, character, floors, tables, mean, std, model, held, report, se
             for s, v in zip(picks, valued, strict=True)
         ],
     }
-
-
-def encoders(net: dict) -> bool:
-    """Whether a net file's graph is net.EncoderNet's: it reads the route."""
-    graph = onnx.load_from_string(base64.b64decode(net["onnx"])).graph
-    return any(i.name == "route" for i in graph.input)
 
 
 def write(net: dict, path: Path) -> None:

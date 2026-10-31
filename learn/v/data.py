@@ -1,4 +1,4 @@
-"""Pure V's samples (docs: macro-brain/value §3): what was measured, never what someone judged.
+"""V's samples (docs: macro-brain/value §3): what was measured, never what someone judged.
 
 Every macro decision of the decision logs (`run --log`) is a sample: its run view, and from the run records
 (`run --records`, joined by run id) where the run ended: died on a floor, won, or stopped (censored). Its second head
@@ -15,10 +15,9 @@ The afterstates of logged decisions (`afterstates`) serve the report alone: the 
 explore as often as the logs did. A boss gauntlet pilot's runs (`run --auto-win`) are refused: their outcomes are not
 real; their logs serve only as the views of their door states (--door-logs).
 
-The boss gauntlet's V (plan v6, `run --gauntlet`: plain monster combats won at their start, elites and bosses fought)
-reads the gauntlet's runs only, and a whole run's V refuses them. Its target is the run's progress (`progress`): where
-the run ended, as a death on that floor, with the share of the enemies' HP taken in the combat it ended in as the third
-head's label; a won run ends on its last floor with its last boss all taken.
+The elite gauntlet's runs (`run --gauntlet`) are refused too, for the same reason. A run's map moves give a second sample
+each, the chosen point's afterstate (encode.entered), with the run's own outcome: what V reads when it values a map
+option, which no logged view shows.
 """
 
 import json
@@ -54,12 +53,12 @@ def sample(run: str, view: dict, floors: int, reached: int | None = None, kind: 
     }
 
 
-def next_combats(record: dict, floor: int, fought_only: bool = False) -> list[float]:
+def next_combats(record: dict, floor: int) -> list[float]:
     """The share of max HP each of the run's next combats after the floor cost, at most AUX of them (a death costs
-    what was left); with fought_only, the gauntlet's fought combats only (elites and bosses)."""
+    what was left)."""
     costs = []
     for c in record.get("combats", []):
-        if c["floor"] <= floor or len(costs) == AUX or (fought_only and c["room"] == "Monster"):
+        if c["floor"] <= floor or len(costs) == AUX:
             continue
         end = c.get("end") or {}
         lost = c["hp"] - (0 if end.get("died") else end.get("hp", c["hp"]))
@@ -83,56 +82,35 @@ def progress(record: dict) -> float:
 
 
 def read_runs(
-    logs: str,
-    records: str,
-    character: str,
-    floors: int,
-    gauntlet: bool = False,
-    keep_views: bool = True,
-    entering: bool = False,
+    logs: str, records: str, character: str, floors: int, keep_views: bool = True
 ) -> tuple[list[dict], list[dict], dict]:
     """The logged decisions as samples, the run records, and each decision's view and brain by (run, decision id),
-    which serve the boss sims, door states and logged options only (without keep_views, none: plan v7's whole runs
-    read none of them). With gauntlet, the boss gauntlet's runs, each ended where it ended (won or lost) with its share
-    (`progress`), and no views (the gauntlet's V reads none of those).
+    which serve the boss sims, door states and logged options only (without keep_views, none).
 
     A sample keeps its tokens and state, not its view: as Python objects a view is ~54 KB, ten times those (2026-10-30:
     plan v6 generation 3's 2.16M decisions took ~117 GB a training, now 21 GB); a held-out one keeps it as JSON, for
-    the net file's test runs.
-
-    With entering, a whole run's map moves give a second sample each, the chosen point's afterstate (encode.entered),
-    with the run's own outcome: what V reads when it values a map option, which no logged view shows."""
+    the net file's test runs."""
     samples, runs_seen, views = [], [], {}
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         runs = {k: r for k, r in runs.items() if not r.get("failure")}
         if any(r["config"].get("auto_win") for r in runs.values()):
             raise LearnError(f"{log}: a boss gauntlet pilot's runs (run --auto-win) say nothing of how a run fares")
-        if any(bool(r["config"].get("gauntlet")) != gauntlet for r in runs.values()):
-            raise LearnError(
-                f"{log}: the boss gauntlet's V reads the gauntlet's runs (run --gauntlet) alone, a whole run's V none of them"
-            )
+        if any(r["config"].get("gauntlet") for r in runs.values()):
+            raise LearnError(f"{log}: V reads whole runs, none of the elite gauntlet's (run --gauntlet)")
         runs_seen += runs.values()
         for e in read_lines(log, '"run_view"'):
             r = runs.get(e["run"])
             if r is None or "run_view" not in e:
                 continue
             view = e["run_view"]
-            if keep_views and not gauntlet:
+            if keep_views:
                 views[(e["run"], e["decision_id"])] = (view, e["brain"])
-            if gauntlet:
-                ended = r["outcome"] in ("won", "lost")
-                s = sample(e["run"], view, floors, r["floor"], "died" if ended else "censored")
-                s["share"] = 1.0 if r["outcome"] == "won" else death_share(r)
-            else:
-                s = sample(
-                    e["run"], view, floors, r["floor"], {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
-                )
-            nxt = next_combats(r, view["floor"], fought_only=gauntlet)
+            kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
+            s = sample(e["run"], view, floors, r["floor"], kind)
+            nxt = next_combats(r, view["floor"])
             more = []
-            if entering and e.get("surface") == "map" and e["chosen"].startswith("map:"):
-                kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
-                after = encode.entered(view, e["chosen"])
-                more.append(sample(e["run"], after, floors, r["floor"], kind))
+            if e.get("surface") == "map" and e["chosen"].startswith("map:"):
+                more.append(sample(e["run"], encode.entered(view, e["chosen"]), floors, r["floor"], kind))
             for x in [s, *more]:
                 if held_out(e["run"]):
                     x["view_json"] = json.dumps(x["view"])

@@ -1,13 +1,7 @@
-"""Pure V's net (docs: macro-brain/network §1): a set encoder over the deck, bags of ids for the rest, the raw state, then a body
-and two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the floor
-expected to be reached, or (objective "win") the chance to survive every floor. The second head learns the next
-combats' HP costs and the boss score, which shapes the body only: it is not in the net file. The boss gauntlet's V
-(`shares`) has a third head: per floor, the share of the enemies' HP taken in the combat the run ends in there; its
-value is the progress expected (`expected_progress`).
-
-EncoderNet (plan v7 §3) has the same body and heads, its inputs encode.ENCODER_INPUTS: the build encoder (the cards,
-relics and potions as one set through masked self-attention) and the route encoder (the map's points as a graph,
-valued back from the boss) instead of the deck's set encoder and the relic, potion and map bags.
+"""V's net (docs: macro-brain/network §1): a set encoder over the deck, bags of ids for the rest, the raw state, then a body and
+two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the floor expected
+to be reached, or (objective "win") the chance to survive every floor. The second head learns the next combats' HP costs
+and the boss score, which shapes the body only: it is not in the net file.
 """
 
 import math
@@ -31,37 +25,11 @@ def padded(rows, device):
     return ids.to(device), mask.to(device)
 
 
-def route_inputs(samples, index, device) -> dict:
-    """The route's tensors (encode.ROUTE): per sample, its nodes' type ids, floors ahead and quest marks, and each
-    node's next nodes' indices; nodes and next lists padded to at least one, with their masks. Built as lists, then one
-    tensor each (filling tensors element by element took six times as long)."""
-    routes = [s["tokens"]["route"] for s in samples]
-    width = max(1, max(len(r) for r in routes))
-    fan = max(1, max((len(to) for r in routes for *_, to in r), default=1))
-    table = index["route"]
-    ids, ahead, quest, mask, nxt, next_mask = [], [], [], [], [], []
-    for r in routes:
-        pad = width - len(r)
-        ids.append([table.get(kind, 0) for kind, *_ in r] + [0] * pad)
-        ahead.append([floors for _, floors, _, _ in r] + [0] * pad)
-        quest.append([float(marked) for _, _, marked, _ in r] + [0.0] * pad)
-        mask.append([1.0] * len(r) + [0.0] * pad)
-        nxt.append([to + [0] * (fan - len(to)) for *_, to in r] + [[0] * fan] * pad)
-        next_mask.append([[1.0] * len(to) + [0.0] * (fan - len(to)) for *_, to in r] + [[0.0] * fan] * pad)
-    longs = {"route": ids, "route_ahead": ahead, "route_next": nxt}
-    rows = {"route_quest": quest, "route_mask": mask, "route_next_mask": next_mask} | longs
-    return {
-        name: torch.tensor(rows[name], dtype=torch.long if name in longs else torch.float32).to(device)
-        for name in encode.ROUTE
-    }
-
-
 class Batch:
-    """Samples as tensors: the inputs a net reads (names: encode.INPUTS, or encode.ENCODER_INPUTS), the hazards'
-    targets and the second head's, and the weights."""
+    """Samples as tensors: the net's inputs (names: encode.INPUTS), the hazards' targets and the second head's, and the
+    weights."""
 
-    def __init__(self, samples, index, mean, std, floors, device, names=encode.INPUTS):
-        self.names = names
+    def __init__(self, samples, index, mean, std, floors, device):
         n, width = len(samples), max(1, max(len(s["tokens"]["cards"]) for s in samples))
         rows = {name: [] for name in ("cards", "ups", "card_mask", "mods", "mod_mask")}
         for s in samples:
@@ -77,20 +45,17 @@ class Batch:
             for name, r in rows.items()
         }
         for t, bag_mask in encode.BAGS.items():
-            if t in names:
-                feed[t], feed[bag_mask] = padded(
+            feed[t], feed[bag_mask] = padded(
+                [
                     [
-                        [
-                            index[t].get(i, 0)
-                            for i in s["tokens"][t]
-                            if t != "map" or not encode.is_entering(i) or i in index[t]
-                        ]
-                        for s in samples
-                    ],
-                    device,
-                )
-        if "route" in names:
-            feed |= route_inputs(samples, index, device)
+                        index[t].get(i, 0)
+                        for i in s["tokens"][t]
+                        if t != "map" or not encode.is_entering(i) or i in index[t]
+                    ]
+                    for s in samples
+                ],
+                device,
+            )
         x = torch.tensor([s["state"] for s in samples], dtype=torch.float64)
         feed["state"] = ((x - mean) / std).float().to(device)
         self.feed = feed
@@ -104,8 +69,6 @@ class Batch:
         # A censored sample says nothing from the floor it stopped on; one with no reach (end = start) says nothing.
         self.label_mask = ((g >= start) & (won | (g < end) | (died & (g == end)))).float().to(device)
         self.weight = torch.tensor([s["weight"] for s in samples]).to(device)
-        # The gauntlet's: the share of the enemies' HP taken in the combat the run ended in (0 for other samples).
-        self.share = torch.tensor([s.get("share", 0.0) for s in samples]).to(device)
         # A boss sim's target: its option's boss score less its decision's mean, in floors (0 for other samples).
         self.boss_target = torch.tensor([s.get("boss_target", 0.0) for s in samples], dtype=torch.float64).to(device)
         self.start = start[:, 0].to(device)
@@ -119,40 +82,15 @@ class Batch:
         self.aux, self.aux_mask = aux.to(device), aux_mask.to(device)
 
     def inputs(self):
-        """The net's inputs, in the order of its names."""
-        return tuple(self.feed[name] for name in self.names)
+        """The net's inputs, in the order of encode.INPUTS."""
+        return tuple(self.feed[name] for name in encode.INPUTS)
 
 
-class Heads(nn.Module):
-    """The heads over a net's body (`encoded`): the hazards, the second head, and the gauntlet's shares."""
-
-    def forward(self, *inputs):
-        """Per sample and floor, the logit of dying on that floor if alive there (inputs as INPUTS names them)."""
-        return self.head(self.encoded(*inputs))
-
-    def both(self, *inputs):
-        """The hazards' logits and the second head's logits."""
-        x = self.encoded(*inputs)
-        return self.head(x), self.aux_head(x)
-
-    def heads(self, *inputs):
-        """The hazards' logits, the second head's, and the share head's (None without it)."""
-        x = self.encoded(*inputs)
-        return self.head(x), self.aux_head(x), None if self.share_head is None else self.share_head(x)
-
-    def make_heads(self, width: int, floors: int, shares: bool) -> None:
-        self.body = nn.Sequential(nn.Linear(width, self.BODY), nn.ReLU(), nn.Linear(self.BODY, self.BODY), nn.ReLU())
-        self.head = nn.Linear(self.BODY, floors)
-        self.aux_head = nn.Linear(self.BODY, N_AUX)
-        self.share_head = nn.Linear(self.BODY, floors) if shares else None
-
-
-class Net(Heads):
-    INPUTS = encode.INPUTS
+class Net(nn.Module):
     DIM, HIDDEN, BODY = 32, 128, 256
     SUM_SCALE = 1 / 16  # the deck's sum next to its mean, scaled to about a mean's size
 
-    def __init__(self, sizes: dict[str, int], floors: int, shares: bool = False):
+    def __init__(self, sizes: dict[str, int], floors: int):
         super().__init__()
         d, h = self.DIM, self.HIDDEN
         self.cards = nn.Embedding(sizes["cards"], d)
@@ -162,7 +100,19 @@ class Net(Heads):
         for e in (self.cards, self.card_up, self.modifiers, *self.bags.values()):
             nn.init.normal_(e.weight, std=0.1)
         self.phi = nn.Sequential(nn.Linear(d, h), nn.ReLU(), nn.Linear(h, h), nn.ReLU())
-        self.make_heads(2 * h + len(encode.BAGS) * d + len(encode.STATE), floors, shares)
+        width = 2 * h + len(encode.BAGS) * d + len(encode.STATE)
+        self.body = nn.Sequential(nn.Linear(width, self.BODY), nn.ReLU(), nn.Linear(self.BODY, self.BODY), nn.ReLU())
+        self.head = nn.Linear(self.BODY, floors)
+        self.aux_head = nn.Linear(self.BODY, N_AUX)
+
+    def forward(self, *inputs):
+        """Per sample and floor, the logit of dying on that floor if alive there (inputs as encode.INPUTS)."""
+        return self.head(self.encoded(*inputs))
+
+    def both(self, *inputs):
+        """The hazards' logits and the second head's logits."""
+        x = self.encoded(*inputs)
+        return self.head(x), self.aux_head(x)
 
     def encoded(self, cards, ups, card_mask, mods, mod_mask, *rest):
         """The body's output, which both heads read."""
@@ -180,124 +130,15 @@ class Net(Heads):
         return self.body(torch.cat(parts + [state], 1))
 
 
-class Attention(nn.Module):
-    """A masked self-attention block over a set (pre-norm): attention among the set's present elements, then a
-    feed-forward layer, each added back. Its layer norms have no scale and shift of their own (the next Linear has
-    them): the ONNX export merges weights of equal values, which would leave their names out of the file."""
-
-    def __init__(self, d: int, heads: int, ff: int):
-        super().__init__()
-        self.d, self.heads, self.scale = d, heads, 1 / math.sqrt(d // heads)
-        self.norm1, self.norm2 = nn.LayerNorm(d, elementwise_affine=False), nn.LayerNorm(d, elementwise_affine=False)
-        self.qkv, self.out = nn.Linear(d, 3 * d), nn.Linear(d, d)
-        self.ff = nn.Sequential(nn.Linear(d, ff), nn.ReLU(), nn.Linear(ff, d))
-
-    def forward(self, x, mask):
-        b, n = x.shape[0], x.shape[1]
-        qkv = self.qkv(self.norm1(x)).reshape(b, n, 3, self.heads, self.d // self.heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv.unbind(0)
-        # A padded element is never attended to (a large negative, not -inf: a set of padding alone stays finite).
-        scores = q @ k.transpose(-1, -2) * self.scale + (mask[:, None, None, :] - 1) * 1e9
-        y = (scores.softmax(-1) @ v).transpose(1, 2).reshape(b, n, self.d)
-        x = x + self.out(y)
-        return x + self.ff(self.norm2(x))
-
-
-class EncoderNet(Heads):
-    """V with the build and route encoders (plan v7 §3). The build: each card (its id, upgrade level and modifiers, as
-    Net reads it), relic and potion is one element of a set, with its kind's vector added; LAYERS masked self-attention
-    blocks let them act on each other; then their mean and sum, as Net's deck. The route: each node (encode.route: the
-    player's point, then the reachable ones) starts from its type, floors ahead and quest mark; for ROUNDS rounds,
-    as many as an act's rows, each node is made anew from that start and the max and mean of the nodes it leads to, so
-    the boss's reaches the player's point; then the player's node and the mean of all. The context bag and the state
-    are Net's."""
-
-    INPUTS = encode.ENCODER_INPUTS
-    DIM, HEADS, LAYERS, FF = 64, 4, 2, 128  # the build encoder
-    ROUTE, ROUNDS = 32, encode.MAX_AHEAD  # the route encoder's width and rounds
-    BODY = Net.BODY
-    SUM_SCALE = Net.SUM_SCALE
-
-    def __init__(self, sizes: dict[str, int], floors: int, shares: bool = False):
-        super().__init__()
-        d, r = self.DIM, self.ROUTE
-        self.cards, self.card_up = nn.Embedding(sizes["cards"], d), nn.Embedding(sizes["cards"], d)
-        self.modifiers = nn.Embedding(sizes["modifiers"], d)
-        self.relics, self.potions = nn.Embedding(sizes["relics"], d), nn.Embedding(sizes["potions"], d)
-        self.context = nn.Embedding(sizes["context"], d)
-        self.point, self.ahead = nn.Embedding(sizes["route"], r), nn.Embedding(encode.MAX_AHEAD + 1, r)
-        for e in (
-            self.cards,
-            self.card_up,
-            self.modifiers,
-            self.relics,
-            self.potions,
-            self.context,
-            self.point,
-            self.ahead,
-        ):
-            nn.init.normal_(e.weight, std=0.1)
-        # each kind's vector, and the quest mark's (random, not zeros: the export merges weights of equal values)
-        self.card_kind, self.relic_kind, self.potion_kind = (nn.Parameter(0.1 * torch.randn(d)) for _ in range(3))
-        self.quest = nn.Parameter(0.1 * torch.randn(r))
-        self.layers = nn.ModuleList(Attention(d, self.HEADS, self.FF) for _ in range(self.LAYERS))
-        self.norm = nn.LayerNorm(d, elementwise_affine=False)
-        self.update = nn.Sequential(nn.Linear(3 * r, r), nn.ReLU())
-        self.make_heads(2 * d + d + 2 * r + len(encode.STATE), floors, shares)
-
-    def built(self, cards, ups, card_mask, mods, mod_mask, relics, relic_mask, potions, potion_mask):
-        """The build encoder: the mean and the scaled sum of the set's elements after attention."""
-        c = (
-            self.cards(cards)
-            + ups[..., None] * self.card_up(cards)
-            + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
-            + self.card_kind
-        )
-        x = torch.cat([c, self.relics(relics) + self.relic_kind, self.potions(potions) + self.potion_kind], 1)
-        mask = torch.cat([card_mask, relic_mask, potion_mask], 1)
-        for layer in self.layers:
-            x = layer(x, mask)
-        x = self.norm(x) * mask[..., None]
-        total = x.sum(1)
-        return torch.cat([total / mask.sum(1, keepdim=True).clamp_min(1), total * self.SUM_SCALE], 1)
-
-    def routed(self, route, ahead, quest, mask, nxt, next_mask):
-        """The route encoder: the player's node and the mean of all nodes, after ROUNDS rounds back from the boss."""
-        b, n, fan = nxt.shape
-        start = (self.point(route) + self.ahead(ahead) + quest[..., None] * self.quest) * mask[..., None]
-        present = next_mask[..., None]
-        count = next_mask.sum(2, keepdim=True)
-        leads = (count > 0).to(start.dtype)
-        h = start
-        for _ in range(self.ROUNDS):
-            nexts = torch.gather(h, 1, nxt.reshape(b, n * fan, 1).expand(-1, -1, h.shape[2])).reshape(b, n, fan, -1)
-            top = (nexts * present + (present - 1) * 1e9).amax(2) * leads  # 0 for a node that leads nowhere
-            mean = (nexts * present).sum(2) / count.clamp_min(1)
-            h = self.update(torch.cat([start, top, mean], 2)) * mask[..., None]
-        return torch.cat([h[:, 0], h.sum(1) / mask.sum(1, keepdim=True).clamp_min(1)], 1)
-
-    def encoded(self, cards, ups, card_mask, mods, mod_mask, relics, relic_mask, potions, potion_mask, *rest):
-        """The body's output, which the heads read."""
-        context, context_mask, *route, state = rest
-        parts = [
-            self.built(cards, ups, card_mask, mods, mod_mask, relics, relic_mask, potions, potion_mask),
-            (self.context(context) * context_mask[..., None]).sum(1),
-            self.routed(*route),
-            state,
-        ]
-        return self.body(torch.cat(parts, 1))
-
-
 class Hazards(nn.Module):
-    """The net as ONNX holds it: the hazards themselves, then for a net with a share head its shares (RunNet.Value)."""
+    """The net as ONNX holds it: the hazards themselves (RunNet.Value)."""
 
     def __init__(self, net):
         super().__init__()
         self.net = net
 
     def forward(self, *inputs):
-        hazards, _, shares = self.net.heads(*inputs)
-        return torch.sigmoid(hazards) if shares is None else torch.sigmoid(torch.cat([hazards, shares], 1))
+        return torch.sigmoid(self.net(*inputs))
 
 
 def expected_floor(hazards: torch.Tensor, start: torch.Tensor):
@@ -315,32 +156,9 @@ def win_chance(hazards: torch.Tensor, start: torch.Tensor):
     return torch.where(g >= start[:, None], 1 - h, torch.ones_like(h)).prod(1)
 
 
-def expected_progress(hazards: torch.Tensor, shares: torch.Tensor, start: torch.Tensor):
-    """As RunNet.Value for "progress": the floor expected, plus the chance to end on each floor from the start on times
-    the share of the enemies' HP taken there."""
-    h, s = hazards.double(), shares.double()
-    g = torch.arange(h.shape[1], device=h.device)
-    from_start = g >= start[:, None]
-    survive = torch.where(from_start, 1 - h, torch.ones_like(h)).cumprod(1)
-    before = torch.cat([torch.ones_like(survive[:, :1]), survive[:, :-1]], 1)
-    return expected_floor(hazards, start) + (before * h * s * from_start).sum(1)
-
-
 def values(model, b: Batch, objective: str = "floor"):
-    """V's value of a batch, as RunNet.Value gives it: the floor expected, the chance to win (objective "win"), or with
-    a share head the progress expected."""
-    hazards, _, shares = model.heads(*b.inputs())
-    if shares is not None:
-        return expected_progress(torch.sigmoid(hazards), torch.sigmoid(shares), b.start)
-    return (win_chance if objective == "win" else expected_floor)(torch.sigmoid(hazards), b.start)
-
-
-def share_loss(logits, b: Batch):
-    """Per sample, the cross-entropy of the share head at the floor the run ended on (none for a censored run)."""
-    per_floor = nn.functional.binary_cross_entropy_with_logits(
-        logits, b.share[:, None].expand_as(logits), reduction="none"
-    )
-    return (per_floor * b.target * b.label_mask).sum(1)
+    """V's value of a batch, as RunNet.Value gives it: the floor expected, or the chance to win (objective "win")."""
+    return (win_chance if objective == "win" else expected_floor)(torch.sigmoid(model(*b.inputs())), b.start)
 
 
 def hazard_loss(logits, b: Batch):

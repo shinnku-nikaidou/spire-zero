@@ -82,7 +82,8 @@ public class CliTests : IDisposable
     }
 
     [Theory]
-    [InlineData("--macro-explore", "-1", "--macro", "l0")]
+    [InlineData("--macro", "l0")]
+    [InlineData("--macro-explore", "-1", "--macro", "random")]
     [InlineData("--macro-explore", "2", "--macro", "random")]
     [InlineData("--combat-explore", "0.01")]
     [InlineData("--value", "v.json", "--macro", "random")]
@@ -95,14 +96,13 @@ public class CliTests : IDisposable
     }
 
     [Fact]
-    public void RefusesLeafWeightsWithoutPimc()
+    public void RefusesACombatNetWithoutASearch()
     {
-        var leaf = Path.Combine(_dir, "leaf.json");
-        File.WriteAllText(leaf, ProtocolJson.Serialize(LeafFile.Initial));
+        var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
         var champion = new ChampionArgs(file: false);
         var command = Opt.Command("test", "", champion.Options);
-        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--leaf", leaf, "--policy", "play"])));
-        Assert.StartsWith("combat pimc leaf0 8x300,", champion.Read(command.Parse(["--leaf", leaf, "--policy", "pimc"])).Name);
+        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--combat-net", net, "--policy", "play"])));
+        Assert.StartsWith("combat pimc combat-tiny 8x300,", champion.Read(command.Parse(["--combat-net", net, "--policy", "pimc"])).Name);
     }
 
     [Fact]
@@ -113,12 +113,13 @@ public class CliTests : IDisposable
         var config = new ParserConfiguration();
         ParseResult Parse(string[] args) => ChampionFileOption.Merge(root, args, root.Parse(args, config), config);
 
-        var played = champion.Read(Parse(["test", "--policy", "pimc", "--macro", "l0", "--worlds", "4", "--nodes", "100", "--elite-x", "2", "--halving",
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
+        var played = champion.Read(Parse(["test", "--policy", "pimc", "--macro", "l0", "--value", value, "--worlds", "4", "--nodes", "100", "--elite-x", "2", "--halving",
             "--macro-explore", "2", "--combat-explore", "0.01"]));
         var file = ChampionFile(played.Options(PlayEnvironment.NoSL));
         var again = champion.Read(Parse(["test", "--champion", file]));
 
-        Assert.Equal("combat pimc explore 0.01 4x100 elite x2 halving, combat prompts p0, macro l0 explore 2, macro prompts l0 explore 2", played.Name);
+        Assert.Equal("combat pimc explore 0.01 4x100 elite x2 halving, combat prompts p0, macro l0 pure-v-tiny-win explore 2, macro prompts l0 pure-v-tiny-win explore 2", played.Name);
         Assert.Equal(played.Name, again.Name);
         Assert.Equal(played.Options(PlayEnvironment.NoSL), again.Options(PlayEnvironment.NoSL));
         Assert.Equal(4, again.Workers);

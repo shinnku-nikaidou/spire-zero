@@ -3,8 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// The tunable numbers of <see cref="LeafValue"/>. Hand-set for v0; SPSA tunes them (docs: combat-brain/leaf §2), and a
-/// <see cref="LeafFile"/> holds the result.
+/// The numbers of <see cref="LeafValue"/>, hand-set (docs: combat-brain/leaf §2).
 /// </summary>
 public sealed record LeafWeights
 {
@@ -33,15 +32,9 @@ public interface ICombatLeaf
 }
 
 /// <summary>The hand-made leaf, <see cref="LeafValue"/>, which reads the observation alone.</summary>
-public sealed class HandLeaf(LeafWeights? weights = null) : ICombatLeaf
+public sealed class HandLeaf : ICombatLeaf
 {
-    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history) => LeafValue.Of(status, obs, weights);
-}
-
-/// <summary>Leaf weights with their name, as <c>--leaf FILE</c> reads them; the name goes into the champion's.</summary>
-public sealed record LeafFile(string Name, LeafWeights Weights)
-{
-    public static LeafFile Initial { get; } = new("leaf0", LeafValue.Default);
+    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history) => LeafValue.Of(status, obs);
 }
 
 /// <summary>
@@ -54,9 +47,9 @@ public sealed record LeafFile(string Name, LeafWeights Weights)
 /// </summary>
 public static class LeafValue
 {
-    public static double Of(CombatStatus status, CombatObservation obs, LeafWeights? weights = null)
+    public static double Of(CombatStatus status, CombatObservation obs)
     {
-        var w = weights ?? Default;
+        var w = Default;
         if (status == CombatStatus.Lost) return 0;
         int maxHp = Math.Max(1, obs.Player.MaxHp);
         double potions = w.PerPotion * obs.Potions.Count(p => p != null);

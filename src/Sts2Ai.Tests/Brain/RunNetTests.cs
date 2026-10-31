@@ -22,7 +22,6 @@ public class RunNetTests
     {
         var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny.json")));
         using var net = RunNet.Load(file);
-        Assert.Null(file.Features);
         Assert.Equal(3, file.Tests.Count);
         Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 3)).Distinct().Count());
     }
@@ -42,29 +41,14 @@ public class RunNetTests
         Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 2)).Distinct().Count());
     }
 
-    /// <summary>
-    /// An untrained encoders' net (plan v7 §3: <c>learn/v/net.py</c>'s EncoderNet at small widths, its weights scaled
-    /// up), its test runs pure-v-tiny's three real views: loading checks RunNet feeds the route as the trainer did. Its
-    /// values move 10 times the check's tolerance when a run's route loses its links or its floors ahead, and 3 times
-    /// when every node's type reads as unknown.
-    /// </summary>
+    /// <summary>The champion's own file: its test runs are the ones it plays from.</summary>
     [Fact]
-    public void ReadsAnEncodersNetsRunsAsItsTrainerDid()
+    public void ReadsV7_1fsRunsAsItsTrainerDid()
     {
-        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-encoders.json")));
+        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Repo("weights", "silent", "v7-1f.json")));
         using var net = RunNet.Load(file);
-        Assert.Contains("route", file.Vocab.Keys);
-        Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 3)).Distinct().Count());
-    }
-
-    // OLD NETS: V v2's; remove once no champion uses them.
-    [Fact]
-    public void StillReadsAV2Net()
-    {
-        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Repo("weights", "silent", "n2-b0.03.json")));
-        using var net = RunNet.Load(file);
-        Assert.Null(file.State);
-        Assert.NotEmpty(file.Features!);
+        Assert.Equal("win", file.Objective);
+        Assert.Contains(file.Vocab["map"], t => t.Contains("+0"));
     }
 
     private static MapPointView Point(int col, int row, string type, bool? quest = null, params (int Col, int Row)[] next) =>
@@ -110,17 +94,5 @@ public class RunNetTests
         var run = file.Tests[0].Run;
         Assert.DoesNotContain(file.Vocab["map"], t => t.Contains("+0"));
         Assert.Equal(net.Value(run), net.Value(run with { Map = run.Map with { Entering = true } }));
-    }
-
-    // As learn/tests/test_v_encode.py's route test.
-    [Fact]
-    public void TheRouteIsThePlayersPointThenTheReachableOnesEachWithTheNodesItLeadsTo()
-    {
-        static (string, int, bool, int[]) Node(RouteNode n) => (n.Type, n.Ahead, n.Quest, n.Next.ToArray());
-        Assert.Equal(
-            [("Ancient", 0, false, [1, 2]), ("Monster", 1, false, [3]), ("Elite", 1, true, [3]), ("RestSite", 2, false, [4]), ("Boss", 3, false, [])],
-            RunNet.Route(Map((0, 0))).Select(Node));
-        Assert.Equal([("Elite", 0, true, [1]), ("RestSite", 1, false, [2]), ("Boss", 2, false, [])], RunNet.Route(Map((0, 0), (1, 1))).Select(Node));
-        Assert.Equal([("Boss", 0, false, Array.Empty<int>())], RunNet.Route(Map((0, 0), (0, 1), (0, 2), (0, 3))).Select(Node));
     }
 }

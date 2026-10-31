@@ -33,7 +33,7 @@ internal static class Cli
             ListCommand.Command(), CombatCommand.Command(), BenchCommand.Command(), SelfTest.Command(), ForkBench.Command(),
             RunCommand.Command(), BrainCommand.Command(), Panel.Command(), Fusion.Command(), Fidelity.Command(), Serve.Command(),
             ReportCommand.Command(), GateCommand.Command(), LeaderboardCommand.Command(), SeedsCommand.Command(),
-            RanksCommand.Command(), WeightsCommand.Command(), AfterstatesCommand.Command(), ForkCommand.Command(), ClonesCommand.Command(),
+            RanksCommand.Command(), AfterstatesCommand.Command(), ForkCommand.Command(), ClonesCommand.Command(),
         ];
         foreach (var command in commands) root.Subcommands.Add(command);
         return root;

@@ -180,7 +180,7 @@ internal static class SeedsCommand
 internal static class RanksCommand
 {
     private static readonly Option<string> LogFiles = Opt.Required<string>("--logs", "decision logs, comma-separated");
-    private static readonly Option<string?> Value = Opt.Maybe<string?>("--value", "V's weights or net file (default: the initial weights)");
+    private static readonly Option<string> Value = Opt.Required<string>("--value", "V's net file");
     private static readonly Option<int> PerAct = Opt.Of("--per-act", 200, "card rewards sampled per act");
     private static readonly Option<int> Top = Opt.Of("--top", 30, "cards shown from the top");
 
@@ -193,7 +193,7 @@ internal static class RanksCommand
 
     private static int Run(ParseResult r)
     {
-        IRunValue value = r.GetValue(Value) is { } file ? RunValue.Read(File.ReadAllText(file)) : RunValue.Initial;
+        IRunValue value = RunNet.Read(r.GetValue(Value)!);
         var views = new Dictionary<int, List<RunView>>();
         var cards = new SortedDictionary<string, CardView>(StringComparer.Ordinal);
         foreach (var path in r.GetValue(LogFiles)!.Split(','))
@@ -229,21 +229,5 @@ internal static class RanksCommand
             foreach (var (id, score) in scores.TakeLast(5)) Console.WriteLine(FormattableString.Invariant($"  {score,8:+0.000;-0.000}  {id}"));
         }
         return 0;
-    }
-}
-
-// OLD NETS: V's initial weights are V v0's; remove once no champion uses them.
-/// <summary>weights: initial weights as a weights file, for tuning to start from.</summary>
-internal static class WeightsCommand
-{
-    private static readonly Option<bool> Leaf = Opt.Of("--leaf", false, "pimc's default leaf weights instead of V's");
-
-    public static Command Command()
-    {
-        var command = Opt.Command("weights", "V's initial weights as a weights file, for tuning to start from", [Leaf]);
-        command.SetAction(r => Console.WriteLine(r.GetValue(Leaf)
-            ? ProtocolJson.Serialize(LeafFile.Initial)
-            : ProtocolJson.Serialize(new ValueWeights("v0", RunValue.InitialWeights))));
-        return command;
     }
 }

@@ -7,57 +7,38 @@ namespace Sts2Ai.Brain;
 /// <summary>A run and the value the trainer computed for it, which loading checks (docs: learning/reference §7, input parity).</summary>
 public sealed record NetTest(RunView Run, double Value);
 
-/// <summary>
-/// V as <c>learn/v/export.py</c> writes it (pure V), or as the removed <c>learn/train_value.py</c> wrote it (V v2, which also read
-/// V v0's features) (docs: learning/experiments §1).
-/// </summary>
+/// <summary>V as <c>learn/v/export.py</c> writes it (docs: learning/experiments §1).</summary>
 /// <param name="Objective">What <see cref="RunNet.Value"/> returns: "floor", the floor expected to be reached, or "win",
-/// the chance to survive every floor; or "progress", the boss gauntlet's (<c>learn/v/</c>): the floor expected to be
-/// reached plus, for a death in a combat, the share of the enemies' HP taken in it, expected.</param>
+/// the chance to survive every floor.</param>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, output the hazards.</param>
-/// <param name="State">Pure V's: the run's numbers the net reads, by name, with the mean and std that standardize them.</param>
-/// <param name="Features">V v2's: the features of V v0 (<see cref="RunValue.Features"/>) the net reads, in order, with
-/// the <paramref name="Mean"/> and <paramref name="Std"/> that standardize them.</param>
-// OLD NETS: Features, Mean and Std are V v2's; remove once no champion uses them.
+/// <param name="State">The run's numbers the net reads, by name, with the mean and std that standardize them.</param>
 public sealed record NetFile(
     string Name, string Objective, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
-    IReadOnlyList<NetTest> Tests, NetState? State = null, IReadOnlyList<string>? Features = null,
-    IReadOnlyList<double>? Mean = null, IReadOnlyList<double>? Std = null);
+    IReadOnlyList<NetTest> Tests, NetState State);
 
-/// <summary>The run's numbers a pure V net reads (<c>learn/v/encode.py</c>'s STATE), and how they are standardized.</summary>
+/// <summary>The run's numbers the net reads (<c>learn/v/encode.py</c>'s STATE), and how they are standardized.</summary>
 public sealed record NetState(IReadOnlyList<string> Names, IReadOnlyList<double> Mean, IReadOnlyList<double> Std);
 
 /// <summary>A card as the net reads it: its id, upgrade level and the ids of its enchantment and affliction.</summary>
 public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers);
-
-/// <summary>
-/// A node of the route an encoders' net reads (<c>learn/v/encode.py</c>'s route): a map point's type, how many floors
-/// ahead of the player it is (at most <see cref="RunNet.MaxAhead"/>), whether a quest marks it, and the nodes it leads to.
-/// </summary>
-public sealed record RouteNode(string Type, int Ahead, bool Quest, IReadOnlyList<int> Next);
 
 /// <summary>A run's ids as the net reads them.</summary>
 public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<string> Relics, IReadOnlyList<string> Potions,
     IReadOnlyList<string> Context, IReadOnlyList<string> Map);
 
 /// <summary>
-/// V (docs: macro-brain/network), run by ONNX Runtime: a net over the run's cards, relics, potions and context, and, for pure V
-/// (<c>learn/v/encode.py</c>), the map points still reachable and the run's numbers (<see cref="NetFile.State"/>); V v2
-/// read V v0's features and the cards' and relics' numbers (<see cref="NetNumbers"/>) instead; an encoders' net (plan v7)
-/// reads the map as a graph (<see cref="Route"/>) instead of its bag. Each input is fed only if the graph declares it,
-/// so every kind of file loads. The graph gives one hazard per floor: the chance to die on that
-/// floor if still alive there. The value is read from those chances from the current floor on
-/// (<see cref="NetFile.Objective"/>). This class only turns a run into the graph's inputs.
+/// V (docs: macro-brain/network), run by ONNX Runtime: a net over the run's cards, relics, potions and context, the map
+/// points still reachable and the run's numbers (<see cref="NetFile.State"/>), read as <c>learn/v/encode.py</c> reads them.
+/// The graph gives one hazard per floor: the chance to die on that floor if still alive there. The value is read from
+/// those chances from the current floor on (<see cref="NetFile.Objective"/>). This class only turns a run into the graph's
+/// inputs.
 /// </summary>
 public sealed class RunNet : IRunValue, IDisposable
 {
     /// <summary>Upgrade levels above this read as this one.</summary>
     public const int MaxUp = 3;
-
-    /// <summary>Floors ahead above this read as this one in the route (an act's map has 16 rows after its start).</summary>
-    public const int MaxAhead = 16;
 
     private readonly NetFile _file;
     private readonly Dictionary<string, Dictionary<string, int>> _index;
@@ -73,6 +54,9 @@ public sealed class RunNet : IRunValue, IDisposable
     }
 
     public string Name => _file.Name;
+
+    /// <summary>The net of a file on disk.</summary>
+    public static RunNet Read(string path) => Load(ProtocolJson.Deserialize<NetFile>(File.ReadAllText(path)));
 
     /// <summary>The net of a file, once it gives every test run the trainer's value.</summary>
     public static RunNet Load(NetFile file)
@@ -93,17 +77,15 @@ public sealed class RunNet : IRunValue, IDisposable
 
     public double Value(RunView run)
     {
-        // A "progress" graph gives the hazards, then per floor the share of the enemies' HP taken by a death there.
         var hazards = Hazards(run);
         int from = Math.Clamp(run.Floor, 0, _file.Floors - 1);
-        double alive = 1, floor = from, taken = 0;
+        double alive = 1, floor = from;
         for (int g = from; g < _file.Floors; g++)
         {
-            if (_file.Objective == "progress") taken += alive * hazards[g] * hazards[_file.Floors + g];
             alive *= 1 - hazards[g];
             floor += alive;
         }
-        return _file.Objective switch { "win" => alive, "progress" => floor + taken, _ => floor };
+        return _file.Objective == "win" ? alive : floor;
     }
 
     public void Dispose() => _session.Dispose();
@@ -147,21 +129,6 @@ public sealed class RunNet : IRunValue, IDisposable
             .ToList();
     }
 
-    /// <summary>
-    /// The route an encoders' net reads (<c>learn/v/encode.py</c>'s route): where the player is, then the points a path
-    /// leads to from there in <see cref="MapTokens"/>' order, each with the indices of the nodes it leads to.
-    /// </summary>
-    public static IReadOnlyList<RouteNode> Route(MapView map)
-    {
-        var points = map.Points.ToDictionary(p => (p.Col, p.Row));
-        var here = Here(map, points);
-        var nodes = Reachable(points, here).Prepend(here).ToList();
-        var index = nodes.Select((k, i) => (k, i)).ToDictionary(p => p.k, p => p.i);
-        return nodes.Select(k => new RouteNode(points[k].Type, Math.Min(k.Row - here.Row, MaxAhead), points[k].Quest == true,
-                points[k].Next.Where(n => index.ContainsKey((n.Col, n.Row))).Select(n => index[(n.Col, n.Row)]).ToList()))
-            .ToList();
-    }
-
     /// <summary>Where the player is: the last visited point, or the start (the first by row, col) before any.</summary>
     private static (int Col, int Row) Here(MapView map, Dictionary<(int Col, int Row), MapPointView> points) =>
         map.Visited.Count > 0 ? (map.Visited[^1].Col, map.Visited[^1].Row) : points.Keys.MinBy(k => (k.Row, k.Col));
@@ -178,7 +145,7 @@ public sealed class RunNet : IRunValue, IDisposable
         return seen.OrderBy(k => k.Row).ThenBy(k => k.Col).ToList();
     }
 
-    /// <summary>The run's number a pure V net reads by this name (<c>learn/v/encode.py</c>'s state).</summary>
+    /// <summary>The run's number the net reads by this name (<c>learn/v/encode.py</c>'s state).</summary>
     private static double StateValue(RunView run, string name) => name switch
     {
         "floor" => run.Floor,
@@ -223,29 +190,11 @@ public sealed class RunNet : IRunValue, IDisposable
         inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
         inputs.AddRange(Bag("context", "context_mask", tokens.Context));
         inputs.AddRange(Bag("map", "map_mask", tokens.Map.Where(t => !t.Contains("+0") || _index["map"].ContainsKey(t)).ToList()));
-        if (_session.InputMetadata.ContainsKey("route")) inputs.AddRange(RouteInputs(Route(run.Map)));
-        if (_file.State is { } state)
-        {
-            var values = new DenseTensor<float>([1, state.Names.Count]);
-            for (int i = 0; i < state.Names.Count; i++)
-                values[0, i] = (float)((StateValue(run, state.Names[i]) - state.Mean[i]) / state.Std[i]);
-            inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
-        }
-        // OLD NETS: V v2's inputs, to the end of the numbers; remove once no champion uses them.
-        if (_file.Features is { } names)
-        {
-            var features = RunValue.Features(run);
-            var scalars = new DenseTensor<float>([1, names.Count]);
-            for (int i = 0; i < names.Count; i++)
-                scalars[0, i] = (float)((features.GetValueOrDefault(names[i]) - _file.Mean![i]) / _file.Std![i]);
-            inputs.Add(NamedOnnxValue.CreateFromTensor("features", scalars));
-        }
-        inputs.AddRange(NetNumbers.Cards(run.Deck, Index));
-        inputs.AddRange(NetNumbers.Relics(run.Relics, Index));
-        var extra = new DenseTensor<float>([1, 1]);
-        extra[0, 0] = (float)(run.Ascension / 10.0);
-        inputs.Add(NamedOnnxValue.CreateFromTensor("extra", extra));
-        using var results = _session.Run(NetNumbers.Declared(_session, inputs));
+        var values = new DenseTensor<float>([1, _file.State.Names.Count]);
+        for (int i = 0; i < _file.State.Names.Count; i++)
+            values[0, i] = (float)((StateValue(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);
+        inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
+        using var results = _session.Run(inputs);
         return results[0].AsEnumerable<float>().ToArray();
     }
 
@@ -263,37 +212,6 @@ public sealed class RunNet : IRunValue, IDisposable
         return [NamedOnnxValue.CreateFromTensor(table, index), NamedOnnxValue.CreateFromTensor(mask, present)];
     }
 
-    /// <summary>The route's tensors as the graph takes them (<c>learn/v/net.py</c>'s route_inputs): the next lists padded
-    /// to at least 1, with their masks.</summary>
-    private NamedOnnxValue[] RouteInputs(IReadOnlyList<RouteNode> nodes)
-    {
-        int n = Math.Max(1, nodes.Count), fan = Math.Max(1, nodes.Max(x => x.Next.Count));
-        var ids = new DenseTensor<long>([1, n]);
-        var ahead = new DenseTensor<long>([1, n]);
-        var quest = new DenseTensor<float>([1, n]);
-        var mask = new DenseTensor<float>([1, n]);
-        var next = new DenseTensor<long>([1, n, fan]);
-        var nextMask = new DenseTensor<float>([1, n, fan]);
-        for (int k = 0; k < nodes.Count; k++)
-        {
-            ids[0, k] = Index("route", nodes[k].Type);
-            ahead[0, k] = nodes[k].Ahead;
-            quest[0, k] = nodes[k].Quest ? 1 : 0;
-            mask[0, k] = 1;
-            for (int j = 0; j < nodes[k].Next.Count; j++)
-            {
-                next[0, k, j] = nodes[k].Next[j];
-                nextMask[0, k, j] = 1;
-            }
-        }
-        return
-        [
-            NamedOnnxValue.CreateFromTensor("route", ids), NamedOnnxValue.CreateFromTensor("route_ahead", ahead),
-            NamedOnnxValue.CreateFromTensor("route_quest", quest), NamedOnnxValue.CreateFromTensor("route_mask", mask),
-            NamedOnnxValue.CreateFromTensor("route_next", next), NamedOnnxValue.CreateFromTensor("route_next_mask", nextMask),
-        ];
-    }
-
-    /// <summary>An id's entry in a token table; 0 for an id the table does not list, or a table the file does not have.</summary>
-    private long Index(string table, string id) => _index.TryGetValue(table, out var ids) ? ids.GetValueOrDefault(id) : 0;
+    /// <summary>An id's entry in a token table; 0 for an id the table does not list.</summary>
+    private long Index(string table, string id) => _index[table].GetValueOrDefault(id);
 }

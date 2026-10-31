@@ -8,7 +8,7 @@ namespace Sts2Ai.Harness;
 /// beam is one request per state kept, which loads the node's clone, plays the state's path and searches its turn, so
 /// the workers split the beam by action prefix and share the best whole line found so far as the floor of their
 /// pruning. With the same budget it plans what <see cref="SlPlanner.Plan"/> plans on the node's world in one process.
-/// The workers search with the leaf they were started with (<c>serve --leaf --combat-net</c>).
+/// The workers search with the leaf they were started with (<c>serve --combat-net</c>).
 /// </summary>
 public sealed class PooledPlanner(WorkerPool pool)
 {

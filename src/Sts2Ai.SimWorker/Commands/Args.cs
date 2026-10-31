@@ -159,16 +159,15 @@ internal sealed class BudgetArgs
     }
 }
 
-/// <summary>What pimc values its leaves with (docs: combat-brain/leaf §2, §3).</summary>
+/// <summary>What the search values its leaves with (docs: combat-brain/leaf §2, §3).</summary>
 internal sealed class LeafArgs
 {
-    private readonly Option<string?> _leaf = Opt.Maybe<string?>("--leaf", "the leaf value's weights file (default: the initial weights)");
     private readonly Option<string?> _net = Opt.Maybe<string?>("--combat-net",
         "a combat net file, which values the leaves still in progress at the leaf weights' prices (docs: learning/combat-net §1)");
 
-    public IEnumerable<Option> Options => [_leaf, _net];
+    public IEnumerable<Option> Options => [_net];
 
-    public LeafChoice Read(ParseResult r) => LeafChoice.Read(r.GetValue(_leaf), r.GetValue(_net));
+    public LeafChoice Read(ParseResult r) => LeafChoice.Read(r.GetValue(_net));
 }
 
 /// <summary>--champion FILE for the commands that play a champion: the champion file's options, under the ones given.</summary>
@@ -213,7 +212,7 @@ internal sealed class ChampionArgs(bool file)
         .AcceptOnlyFromAmong("random", "l0");
     private readonly BudgetArgs _budget = new();
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's and plan's search worker processes (default: one per world, --worlds)");
-    private readonly Option<string?> _value = Opt.Maybe<string?>("--value", "l0's V: V v0's weights or a net file of V v2 (default: the initial weights)");
+    private readonly Option<string?> _value = Opt.Maybe<string?>("--value", "l0's V, a net file; --macro l0 needs it");
     private readonly LeafArgs _leaf = new();
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
@@ -240,14 +239,9 @@ internal sealed class ChampionArgs(bool file)
         policy ??= r.GetValue(_policy)!;
         var macro = r.GetValue(_macro)!;
         var budget = _budget.Read(r, policy, planElsewhere);
-        // OLD NETS: V v0 by default; remove once no champion uses them.
-        IRunValue value = RunValue.Initial;
         var valueFile = r.GetValue(_value);
-        if (valueFile != null)
-        {
-            if (macro != "l0") throw new CliException("--value weighs l0's V; it needs --macro l0");
-            value = RunValue.Read(File.ReadAllText(valueFile));
-        }
+        if ((valueFile != null) != (macro == "l0")) throw new CliException("--value and --macro l0 go together");
+        IRunValue? value = valueFile == null ? null : RunNet.Read(valueFile);
         bool clone = r.GetValue(_afterstates) == "clone";
         if (clone && macro != "l0") throw new CliException("--afterstates is l0's; it needs --macro l0");
         double macroExplore = r.GetValue(_macroExplore), combatExplore = r.GetValue(_combatExplore);
@@ -258,7 +252,7 @@ internal sealed class ChampionArgs(bool file)
         if (explore is not (>= 0 and <= 1)) throw new CliException("--explore is a share of decisions, from 0 to 1");
         if (explore > 0 && macro != "l0") throw new CliException("--explore is l0's; it needs --macro l0");
         var leaf = _leaf.Read(r);
-        if (!leaf.IsDefault && policy is not ("pimc" or "plan")) throw new CliException("--leaf and --combat-net value the search's leaves; they need --policy pimc or plan");
+        if (!leaf.IsDefault && policy is not ("pimc" or "plan")) throw new CliException("--combat-net values the search's leaves; it needs --policy pimc or plan");
         return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore, clone,
             explore);
     }

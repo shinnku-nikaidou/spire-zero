@@ -13,7 +13,7 @@ import bosslab
 import common
 from common import LearnError
 from v import data, encode, export, train
-from v.net import Batch, EncoderNet, Net, centred, expected_floor, expected_progress, explored, values, win_chance
+from v.net import Batch, Net, centred, expected_floor, explored, values, win_chance
 
 
 def record(run_id, floor, outcome="lost", combats=(), **config):
@@ -28,8 +28,7 @@ def record(run_id, floor, outcome="lost", combats=(), **config):
 
 
 def write_runs(tmp_path, runs=10, auto_win=False, gauntlet=False):
-    """A log and its records: runs of three decisions each (floors 1–3), the run i reaching floor 4 + i % 4; in the
-    gauntlet, each run dies in an elite fight on its last floor, having taken a tenth of its HP per floor reached."""
+    """A log and its records: runs of three decisions each (floors 1–3), the run i reaching floor 4 + i % 4."""
     log, recs = tmp_path / "log.jsonl", tmp_path / "rec.jsonl"
     with open(log, "w") as lf, open(recs, "w") as rf:
         for i in range(runs):
@@ -44,9 +43,6 @@ def write_runs(tmp_path, runs=10, auto_win=False, gauntlet=False):
                 for f in (2, 3)
             ]
             config = {"auto_win": True} if auto_win else {"gauntlet": True} if gauntlet else {}
-            if gauntlet:
-                end = {"died": True, "hp": 0, "enemy_hp": 100 - 10 * (4 + i % 4), "enemy_max_hp": 100}
-                combats.append({"floor": 4 + i % 4, "room": "Elite", "hp": 40, "max_hp": 70, "end": end})
             rf.write(json.dumps(record(run, 4 + i % 4, combats=combats, **config)) + "\n")
     lists = tmp_path / "smoke"
     (tmp_path / "smoke-logs.txt").write_text(f"{log}\n")
@@ -85,13 +81,9 @@ def test_a_boss_gauntlet_is_refused(tmp_path):
         data.read_runs(*common.lists(write_runs(tmp_path, auto_win=True)), "SILENT", 64)
 
 
-def test_a_whole_runs_v_refuses_the_gauntlets_runs_and_the_gauntlets_v_whole_runs(tmp_path):
-    (tmp_path / "a").mkdir()
-    (tmp_path / "b").mkdir()
+def test_v_refuses_the_elite_gauntlets_runs(tmp_path):
     with pytest.raises(LearnError, match="gauntlet"):
-        data.read_runs(*common.lists(write_runs(tmp_path / "a", gauntlet=True)), "SILENT", 64)
-    with pytest.raises(LearnError, match="gauntlet"):
-        data.read_runs(*common.lists(write_runs(tmp_path / "b")), "SILENT", 64, gauntlet=True)
+        data.read_runs(*common.lists(write_runs(tmp_path, gauntlet=True)), "SILENT", 64)
 
 
 def test_a_gauntlet_run_ends_where_it_ended_with_the_share_of_the_enemies_hp_it_took():
@@ -101,14 +93,6 @@ def test_a_gauntlet_run_ends_where_it_ended_with_the_share_of_the_enemies_hp_it_
     won = record("c", 48, "won", combats=[elite | {"end": {"died": False, "hp": 20}}])
     assert [data.death_share(r) for r in (died, event)] == [0.6, 0.0]
     assert [data.progress(r) for r in (died, event, won)] == [9.6, 12.0, 49.0]
-
-
-def test_the_gauntlets_samples_end_where_their_run_ended_with_its_share_and_their_fought_next_combats(tmp_path):
-    samples, _, views = data.read_runs(*common.lists(write_runs(tmp_path, gauntlet=True)), "SILENT", 64, gauntlet=True)
-    assert views == {}
-    first = samples[0]
-    assert (first["end"], first["kind"], first["share"]) == (4, "died", pytest.approx(0.4))
-    assert first["next"] == [40 / 70]  # the elite fight it died in, not the monsters won at their start
 
 
 def test_a_boss_is_worth_the_floors_its_winners_went_on_to():
@@ -209,87 +193,15 @@ def test_a_win_nets_test_runs_are_valued_at_their_chance_to_win():
         assert math.isclose(float(win_chance(torch.tensor(hazards), b.start)[0]), test["value"], rel_tol=1e-5)
 
 
-def test_the_encoders_onnx_graph_reads_the_route_and_gives_the_test_runs_the_values_torch_gave_them():
-    views = [make_view(floor=1), make_view(visited=((0, 0), (1, 1)), floor=2, hp=40), make_view(potions=[None])]
-    samples = [data.sample("a", v, 16, 9, "died") for v in views]
-    tables = train.vocab(samples * 3)
-    torch.manual_seed(0)
-    model = EncoderNet({t: len(ids) for t, ids in tables.items()}, 16)
-    net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
-    graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
-    assert [i.name for i in graph.graph.input] == encode.ENCODER_INPUTS
-    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
-    for test in net["tests"]:
-        b = Batch(
-            [data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu", model.INPUTS
-        )
-        feed = {name: x.numpy() for name, x in zip(model.INPUTS, b.inputs(), strict=True)}
-        [hazards] = ReferenceEvaluator(graph).run(None, feed)
-        assert math.isclose(float(expected_floor(torch.tensor(hazards), b.start)[0]), test["value"], rel_tol=1e-5)
-
-
-def test_an_encoder_nets_weights_read_back_give_its_test_runs_their_values():
+def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_the_second_head_anew():
     samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") for f in (1, 2, 3)]
     tables = train.vocab(samples * 3)
     sizes = {t: len(ids) for t, ids in tables.items()}
     torch.manual_seed(0)
-    model = EncoderNet(sizes, 16)
+    model = Net(sizes, 16)
     net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
     torch.manual_seed(1)
-    fresh = EncoderNet(sizes, 16)
-    fresh.load_state_dict(export.weights(net, fresh))
-    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
-    for test in net["tests"]:
-        b = Batch(
-            [data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu", fresh.INPUTS
-        )
-        with torch.no_grad():
-            assert math.isclose(float(values(fresh.eval(), b)[0]), test["value"], rel_tol=1e-5)
-
-
-def test_the_expected_progress_adds_the_chance_to_end_on_each_floor_times_its_share():
-    h, s = torch.tensor([[0.0, 0.5, 1.0, 0.0]]), torch.tensor([[0.9, 0.2, 0.6, 0.9]])
-    # From floor 1: ends on 1 (half the time, share 0.2) or on 2 (share 0.6).
-    assert math.isclose(float(expected_progress(h, s, torch.tensor([1]))[0]), 1.5 + 0.5 * 0.2 + 0.5 * 0.6, rel_tol=1e-6)
-
-
-def test_a_gauntlet_nets_onnx_graph_gives_the_hazards_then_the_shares_and_the_test_runs_their_progress():
-    samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") | {"share": 0.5} for f in (1, 2, 3)]
-    tables = train.vocab(samples * 3)
-    torch.manual_seed(0)
-    model = Net({t: len(ids) for t, ids in tables.items()}, 16, shares=True)
-    net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
-    assert net["objective"] == "progress"
-    graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
-    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
-    for test in net["tests"]:
-        b = Batch([data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu")
-        feed = {name: x.numpy() for name, x in zip(encode.INPUTS, b.inputs(), strict=True)}
-        [out] = ReferenceEvaluator(graph).run(None, feed)
-        assert out.shape == (1, 32)
-        out = torch.tensor(out)
-        value = float(expected_progress(out[:, :16], out[:, 16:], b.start)[0])
-        assert math.isclose(value, test["value"], rel_tol=1e-5)
-
-
-def test_training_the_gauntlets_v_writes_a_progress_net(tmp_path):
-    out = tmp_path / "net.json"
-    args = ["--list", write_runs(tmp_path, gauntlet=True), "--name", "t", "--out", str(out), "--gauntlet"]
-    result = CliRunner().invoke(train.script, args)
-    assert result.exit_code == 0, result.output
-    net = json.loads(out.read_text())
-    assert net["objective"] == "progress" and net["fit"]["gauntlet"] and net["fit"]["runs"] == 10
-
-
-def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_the_second_head_anew():
-    samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") | {"share": 0.5} for f in (1, 2, 3)]
-    tables = train.vocab(samples * 3)
-    sizes = {t: len(ids) for t, ids in tables.items()}
-    torch.manual_seed(0)
-    model = Net(sizes, 16, shares=True)
-    net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
-    torch.manual_seed(1)
-    fresh = Net(sizes, 16, shares=True)
+    fresh = Net(sizes, 16)
     weights = export.weights(net, fresh)
     assert torch.equal(weights["aux_head.weight"], fresh.state_dict()["aux_head.weight"])
     fresh.load_state_dict(weights)
@@ -302,36 +214,13 @@ def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_
 
 def test_training_goes_on_from_a_net_file_with_its_tables_and_state_scaling(tmp_path):
     first, second = tmp_path / "first.json", tmp_path / "second.json"
-    lists = write_runs(tmp_path, gauntlet=True)
+    lists = write_runs(tmp_path)
     for out, more in ((first, []), (second, ["--init", str(first)])):
-        args = ["--list", lists, "--name", out.stem, "--out", str(out), "--gauntlet", *more]
+        args = ["--list", lists, "--name", out.stem, "--out", str(out), "--objective", "win", *more]
         result = CliRunner().invoke(train.script, args)
         assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())
     assert b["vocab"] == a["vocab"] and b["state"] == a["state"]
-
-
-def test_a_whole_runs_v_goes_on_from_the_gauntlets_and_the_gauntlets_from_no_whole_runs(tmp_path):
-    (tmp_path / "g").mkdir()
-    (tmp_path / "w").mkdir()
-    gauntlet, whole = tmp_path / "gauntlet.json", tmp_path / "whole.json"
-    args = ["--list", write_runs(tmp_path / "g", gauntlet=True), "--name", "g", "--out", str(gauntlet), "--gauntlet"]
-    assert CliRunner().invoke(train.script, args).exit_code == 0
-    lists = write_runs(tmp_path / "w")
-    args = ["--list", lists, "--name", "w", "--out", str(whole), "--init", str(gauntlet), "--objective", "win"]
-    result = CliRunner().invoke(train.script, args)
-    assert result.exit_code == 0, result.output
-    a, b = json.loads(gauntlet.read_text()), json.loads(whole.read_text())
-    assert b["objective"] == "win" and b["vocab"] == a["vocab"] and b["state"] == a["state"]
-    args = ["--list", write_runs(tmp_path / "g", gauntlet=True), "--name", "t", "--gauntlet", "--init", str(whole)]
-    result = CliRunner().invoke(train.script, args)
-    assert result.exit_code != 0 and "win net" in str(result.exception)
-
-
-def test_the_gauntlets_v_takes_no_objective(tmp_path):
-    args = ["--list", write_runs(tmp_path, gauntlet=True), "--name", "t", "--gauntlet", "--objective", "win"]
-    result = CliRunner().invoke(train.script, args)
-    assert result.exit_code != 0 and "progress" in str(result.exception)
 
 
 def test_training_writes_a_net_file_with_its_report(tmp_path):
@@ -352,45 +241,6 @@ def test_a_gauntlets_logs_give_its_door_states_their_views_and_no_samples(tmp_pa
     assert list(views) == [("g1", 4)] and views[("g1", 4)][0]["floor"] == 16
 
 
-def test_training_the_encoders_net_writes_a_net_that_reads_the_route_and_goes_on_only_from_one(tmp_path):
-    first, second = tmp_path / "first.json", tmp_path / "second.json"
-    lists = write_runs(tmp_path)
-    for out, more in ((first, []), (second, ["--init", str(tmp_path / "first.json")])):
-        args = ["--list", lists, "--name", out.stem, "--out", str(out), "--encoders", "--objective", "win", *more]
-        result = CliRunner().invoke(train.script, args)
-        assert result.exit_code == 0, result.output
-    net = json.loads(second.read_text())
-    assert export.encoders(net) and net["fit"]["encoders"] and net["objective"] == "win"
-    assert net["vocab"]["route"][0] == "<unk>" and "Boss" in net["vocab"]["route"]
-    result = CliRunner().invoke(train.script, ["--list", lists, "--name", "t", "--init", str(first)])
-    assert result.exit_code != 0 and "encoders" in str(result.exception)
-
-
-def test_a_whole_runs_encoders_net_goes_on_from_the_gauntlets_without_its_share_head(tmp_path):
-    (tmp_path / "g").mkdir()
-    (tmp_path / "w").mkdir()
-    gauntlet, whole = tmp_path / "gauntlet.json", tmp_path / "whole.json"
-    lists = write_runs(tmp_path / "g", gauntlet=True)
-    args = ["--list", lists, "--name", "g", "--out", str(gauntlet), "--gauntlet", "--encoders"]
-    result = CliRunner().invoke(train.script, args)
-    assert result.exit_code == 0, result.output
-    a = json.loads(gauntlet.read_text())
-    assert export.encoders(a) and a["objective"] == "progress" and a["fit"]["gauntlet"] and a["fit"]["encoders"]
-    args = ["--list", write_runs(tmp_path / "w"), "--name", "w", "--out", str(whole), "--encoders"]
-    args += ["--objective", "win", "--init", str(gauntlet)]
-    result = CliRunner().invoke(train.script, args)
-    assert result.exit_code == 0, result.output
-    b = json.loads(whole.read_text())
-    assert export.encoders(b) and b["objective"] == "win" and b["vocab"] == a["vocab"] and b["state"] == a["state"]
-    # The share head is gone: the graph gives the hazards alone.
-    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in b["vocab"].items()}
-    mean, std = torch.tensor(b["state"]["mean"]), torch.tensor(b["state"]["std"])
-    x = Batch([data.sample("a", b["tests"][0]["run"], 64)], index, mean, std, 64, "cpu", encode.ENCODER_INPUTS)
-    feed = {name: t.numpy() for name, t in zip(encode.ENCODER_INPUTS, x.inputs(), strict=True)}
-    [out] = ReferenceEvaluator(onnx.load_from_string(base64.b64decode(b["onnx"]))).run(None, feed)
-    assert out.shape == (1, 64)
-
-
 def test_a_map_move_gives_a_sample_entering_the_point_and_grows_a_net_from_before_the_tokens(tmp_path):
     first, second = tmp_path / "first.json", tmp_path / "second.json"
     args = ["--list", write_runs(tmp_path), "--name", "first", "--out", str(first), "--objective", "win"]
@@ -404,7 +254,7 @@ def test_a_map_move_gives_a_sample_entering_the_point_and_grows_a_net_from_befor
         rows = [r | {"surface": "map", "chosen": "map:1,1"} for r in rows]
         with open(log, "w") as f:
             f.writelines(json.dumps(r) + "\n" for r in rows)
-    samples, *_ = data.read_runs(*common.lists(lists), "SILENT", 64, entering=True)
+    samples, *_ = data.read_runs(*common.lists(lists), "SILENT", 64)
     assert len(samples) == 60 and samples[1]["tokens"]["map"][0] == "Elite+0:quest"
     assert math.isclose(sum(s["weight"] for s in samples), 10)
     args = ["--list", lists, "--name", "second", "--out", str(second), "--objective", "win", "--init", str(first)]

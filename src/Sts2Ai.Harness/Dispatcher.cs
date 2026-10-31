@@ -49,11 +49,9 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Chosen">The action in text form; for a prompt, the picked option indexes.</param>
 /// <param name="Plan">What the brain planned after <paramref name="Chosen"/>: the rest of the turn in combat, the rest of
 /// the act's route on the map.</param>
-/// <param name="Features">On a macro decision, V's features of the run the brain was shown: what V is fit on
-/// (docs: learning/reference §8).</param>
 /// <param name="Obs">On a combat decision, the observation the brain was shown: the input of the learned combat parts
 /// and of the fusion panel.</param>
-/// <param name="RunView">On a macro decision, the run the brain was shown: what V v2 is trained on (docs: learning/experiments §3).</param>
+/// <param name="RunView">On a macro decision, the run the brain was shown: what V is trained on (docs: macro-brain/value §3).</param>
 /// <param name="History">On a combat decision, what each enemy of the combat showed at the start of each round so far,
 /// this one's included (<see cref="Dispatcher.History"/>).</param>
 /// <param name="Explored">True when <paramref name="Chosen"/> was drawn by self-play exploration and valued below the
@@ -63,7 +61,7 @@ public sealed record Route<T>(string Brain, T Policy);
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
-    IReadOnlyDictionary<string, double>? Features = null, CombatObservation? Obs = null, RunView? RunView = null,
+    CombatObservation? Obs = null, RunView? RunView = null,
     IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null, bool? Replanned = null);
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
@@ -170,10 +168,9 @@ public sealed class Dispatcher(
         if (!decision.Legal.Contains(action)) throw new InvalidOperationException($"{macro.Brain} chose {action} on {decision.Surface}, which is not legal");
         var plan = macro.Policy.Plan(decision, action);
         Last = new(macro.Brain, plan.Count > 0 ? plan : null);
-        // OLD NETS: the features are V v0's, which only V v2 was fit on; remove once no champion uses them.
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                action, Last.Plan, null, null, seed, ms, RunValue.Features(decision.Observation.Run), RunView: decision.Observation.Run,
+                action, Last.Plan, null, null, seed, ms, RunView: decision.Observation.Run,
                 Explored: Mark(macro.Policy.Explored)));
         return action;
     }

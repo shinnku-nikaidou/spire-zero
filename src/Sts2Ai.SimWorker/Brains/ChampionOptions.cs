@@ -6,14 +6,15 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>The champion that --policy and --macro name (docs: harness/routing §1), pimc's budget, and l0's V (--value).</summary>
-/// <param name="ValueFile">Where <paramref name="Value"/> came from; null for the initial weights.</param>
+/// <param name="Value">l0's V; null with no l0.</param>
+/// <param name="ValueFile">Where <paramref name="Value"/> came from.</param>
 /// <param name="MacroExplore">For self-play only (docs: learning/loop §9): l0's softmax temperature over V's values, in V's
 /// units (--macro-explore); 0 for none.</param>
 /// <param name="CombatExplore">The same for pimc over the search's values, in the leaf's units (--combat-explore).</param>
 /// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
 /// <param name="Explore">For self-play only (plan v6 §3): the share ε of macro decisions whose answer l0 draws evenly,
 /// whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
-internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue Value, string? ValueFile,
+internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue? Value, string? ValueFile,
     LeafChoice Leaf, double MacroExplore, double CombatExplore, bool OnClone = false, double Explore = 0)
 {
     /// <summary>Whether it explores, which only self-play does.</summary>
@@ -48,7 +49,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         Dispatcher dispatcher;
         if (Macro == "l0")
         {
-            var l0 = new MacroBrain(Value, MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null,
+            var l0 = new MacroBrain(Value!, MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null,
                 Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log,
                 OnClone ? node => new PooledClone(pool!, node) : null);
@@ -61,9 +62,9 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// <summary>The combat brain, pimc or plan by its leaf's names unless it is the default one, then its exploration if any.</summary>
     private string Combat => Policy + Leaf.Suffix + Exploration(CombatExplore);
 
-    /// <summary>l0 by its V's name, unless V has the initial weights, then "clone" if it plays on the node's clone, then its exploration if any
+    /// <summary>l0 by its V's name, then "clone" if it plays on the node's clone, then its exploration if any
     /// ("explore T" for a softmax, "eps ε" for even draws).</summary>
-    private string L0 => (Value == RunValue.Initial ? "l0" : $"l0 {Value.Name}") + (OnClone ? " clone" : "") + Exploration(MacroExplore)
+    private string L0 => $"l0 {Value?.Name}" + (OnClone ? " clone" : "") + Exploration(MacroExplore)
         + (Explore > 0 ? FormattableString.Invariant($" eps {Explore}") : "");
 
     private static string Exploration(double temperature) => temperature > 0 ? FormattableString.Invariant($" explore {temperature}") : "";
@@ -103,14 +104,13 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         if (MacroExplore > 0) options["macro-explore"] = MacroExplore.ToString(CultureInfo.InvariantCulture);
         if (Explore > 0) options["explore"] = Explore.ToString(CultureInfo.InvariantCulture);
         if (CombatExplore > 0) options["combat-explore"] = CombatExplore.ToString(CultureInfo.InvariantCulture);
-        if (Leaf.WeightsPath != null) options["leaf"] = Leaf.WeightsPath;
         if (Leaf.NetPath != null) options["combat-net"] = Leaf.NetPath;
         return options;
     }
 
     /// <summary>
     /// The options of this challenger as the character's champion, with its character and ascension. Each weights file
-    /// it plays with (V, the leaf weights, the combat net) must be in the character's weights folder, weights/CHARACTER,
+    /// it plays with (V, the combat net) must be in the character's weights folder, weights/CHARACTER,
     /// where a name is used once, so the champion file names it where it is (docs: learning/reference §6).
     /// </summary>
     public Dictionary<string, string> Promoted(PlayEnvironment env, string character, int ascension)
@@ -119,7 +119,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         options["character"] = character;
         options["asc"] = ascension.ToString(CultureInfo.InvariantCulture);
         var folder = Layout.Weights(character);
-        foreach (var key in new[] { "value", "leaf", "combat-net" })
+        foreach (var key in new[] { "value", "combat-net" })
             if (options.TryGetValue(key, out var path) && Path.GetDirectoryName(Path.GetFullPath(path)) != Path.GetFullPath(folder))
                 throw new CliException($"not promoted: {path} is not in {folder}, where a champion's weights files are (docs: learning/reference §6)");
         return options;

@@ -1,4 +1,4 @@
-"""Train pure V (docs: macro-brain/value §5) from self-play, and write its net file for `run --value`.
+"""Train V (docs: macro-brain/value §5) from self-play, and write its net file for `run --value`.
 
 The samples are v/data.py's: the logged macro decisions with where their runs ended and the next combats' HP costs,
 and optionally boss sims (--boss-sims with the afterstates they were played from, --boss-afterstates) and door states
@@ -7,22 +7,14 @@ fit of V's centred values and the door states' fit of the second head's boss sco
 runs weighs them the same way. --afterstates (the logged decisions' options) only feed the report's
 `explore_temperature`: the `run --macro-explore` at which V would explore as often as the logs' brains did.
 
---gauntlet trains the boss gauntlet's V (plan v6) on the gauntlet's runs alone (`run --gauntlet`): the same net with a
-third head, the share of the enemies' HP taken in the combat the run ends in, fitted at the floor it ended on; its value
-is the progress expected (net file objective "progress").
-
 --objective win (plan v7) values a whole run by its chance to win, the chance to survive every floor, instead of the
 floor expected: the same net and loss (a won run survived every floor), only what the net file tells RunNet.Value to
 return and the units of the report's explore_temperature change. Whichever the objective, a whole run's report gives
 the Brier score of that chance on the held-out decisions against whether their runs were won (`brier_held_out`, and
 `brier_held_out_floor_only` for the training runs' hazards whatever the state).
 
---encoders trains net.EncoderNet (plan v7 §3): the build and route encoders in place of the deck's set encoder and the
-relic, potion and map bags; the rest is the same, with --gauntlet too. Its net file is told by its graph's inputs.
-
 --init goes on from a net file instead of from scratch: its token tables, state scaling and weights, read back from its
-ONNX (the second head, not in the file, starts anew). A whole run's V may go on from the gauntlet's (plan v7: from
-v6-3-2), whose share head it drops.
+ONNX (the second head, not in the file, starts anew).
 
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
@@ -48,16 +40,13 @@ from v import data, encode, export  # noqa: E402
 from v.net import (  # noqa: E402
     BOSS_AT,
     Batch,
-    EncoderNet,
     Net,
     aux_loss,
     centred,
     expected_floor,
-    expected_progress,
     explored,
     hazard_loss,
     pearson,
-    share_loss,
     win_chance,
 )
 from weights import out_path  # noqa: E402
@@ -86,8 +75,6 @@ def vocab(samples) -> dict[str, list[str]]:
         for t in encode.BAGS:
             for i in tok[t]:
                 counts[t][i] = counts[t].get(i, 0) + 1
-        for kind, *_ in tok["route"]:
-            counts["route"][kind] = counts["route"].get(kind, 0) + 1
     return {t: ["<unk>"] + sorted(i for i, n in c.items() if n >= MIN_COUNT) for t, c in counts.items()}
 
 
@@ -193,16 +180,13 @@ def main(
     afterstates: Annotated[
         str | None, typer.Option(help="the logged decisions' options (`afterstates`), for explore_temperature")
     ] = None,
-    gauntlet: Annotated[bool, typer.Option(help="the boss gauntlet's V, on its runs (run --gauntlet) alone")] = False,
     objective: Annotated[
         str, typer.Option(help="a whole run's value: floor (the floor expected) or win (the chance to win)")
     ] = "floor",
-    encoders: Annotated[bool, typer.Option(help="the build and route encoders' net (plan v7 §3)")] = False,
     init: Annotated[
         str | None,
         typer.Option(
-            help="a net file to go on from: its token tables, state scaling and weights (the second head anew; "
-            "a whole run's V drops a gauntlet net's share head)"
+            help="a net file to go on from: its token tables, state scaling and weights (the second head anew)"
         ),
     ] = None,
     seed: int = 0,
@@ -210,32 +194,22 @@ def main(
     out_file = out_path(name, out, character)
     if objective not in ("floor", "win"):
         raise LearnError(f"--objective is floor or win, not {objective}")
-    if gauntlet and objective != "floor":
-        raise LearnError("the gauntlet's V values progress: no --objective")
     if boss_sims and objective != "floor":
         raise LearnError("the boss sims' targets are floors: --objective floor")
-    kind = EncoderNet if encoders else Net
     start = export.read(init) if init else None
-    if start and ((gauntlet and start["objective"] != "progress") or start["floors"] != FLOORS):
-        raise LearnError(f"{init} is a {start['objective']} net of {start['floors']} floors: not this training's")
-    if start and export.encoders(start) != encoders:
-        raise LearnError(
-            f"{init} is {'' if export.encoders(start) else 'not '}an encoders' net: --encoders goes with it"
-        )
+    if start and start["floors"] != FLOORS:
+        raise LearnError(f"{init} is a net of {start['floors']} floors: not this training's")
     if start and start["state"]["names"] != encode.STATE:
         raise LearnError(f"{init} reads the state {start['state']['names']}, this training {encode.STATE}")
     if bool(boss_sims) != bool(boss_afterstates):
         raise LearnError("--boss-sims and --boss-afterstates go together")
-    if gauntlet and (boss_sims or boss_states or door_logs or afterstates):
-        raise LearnError("--gauntlet trains on the gauntlet's runs alone: no boss sims, door states or afterstates")
     torch.manual_seed(seed)
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     logs, records = common.lists(list_)
     keep_views = bool(boss_sims or boss_states or afterstates)
-    entering = not (gauntlet or encoders)
-    samples, runs, views = data.read_runs(logs, records, character, FLOORS, gauntlet, keep_views, entering)
+    samples, runs, views = data.read_runs(logs, records, character, FLOORS, keep_views)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -268,7 +242,7 @@ def main(
     # and its state scaling; only the map's table grows, by the ids a net from before the entering tokens lacks, which
     # export.weights gives new vectors.
     tables = start["vocab"] if start else vocab(train)
-    if start and entering:
+    if start:
         known = set(tables["map"])
         tables = tables | {"map": tables["map"] + [i for i in vocab(train)["map"] if i not in known]}
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
@@ -283,7 +257,7 @@ def main(
         std = torch.where(std > 1e-9, std, torch.ones_like(std))
 
     def make(part):
-        return Batch(part, index, mean, std, FLOORS, device, kind.INPUTS)
+        return Batch(part, index, mean, std, FLOORS, device)
 
     def batches(part, shuffle):
         order = random.sample(range(len(part)), len(part)) if shuffle else list(range(len(part)))
@@ -331,42 +305,28 @@ def main(
         alive, deaths = alive + (m * wt).sum(0), deaths + (b.target.double().cpu() * m * wt).sum(0)
     base_hazard = ((deaths + 0.5) / (alive + 1)).clamp(1e-4, 1 - 1e-4)
     base_logits = torch.log(base_hazard / (1 - base_hazard)).float().to(device)
-    # The gauntlet's baseline share: the mean share taken where the training runs ended.
-    base_share_logit = 0.0
-    if gauntlet:
-        ended = [s for s in train if s["kind"] == "died"]
-        taken = sum(s["share"] * s["weight"] for s in ended) / max(1e-9, sum(s["weight"] for s in ended))
-        base_share = min(max(taken, 1e-4), 1 - 1e-4)
-        base_share_logit = math.log(base_share / (1 - base_share))
 
     def evaluate(model):
         total, aux_total, rows, wins = 0.0, 0.0, [], []
         with torch.no_grad():
             for b in test_batches:
                 if model:
-                    logits, aux, shares = model.heads(*b.inputs())
+                    logits, aux = model.both(*b.inputs())
                     aux_total += float((aux_loss(aux, b) * b.weight).sum())
                 else:
                     logits = base_logits.expand(len(b.weight), -1)
-                    shares = torch.full_like(logits, base_share_logit) if gauntlet else None
                 total += float((hazard_loss(logits, b) * b.weight).sum())
                 wins.append(win_chance(torch.sigmoid(logits), b.start))
-                if shares is None:
-                    rows.append(expected_floor(torch.sigmoid(logits), b.start))
-                else:
-                    total += float((share_loss(shares, b) * b.weight).sum())
-                    rows.append(expected_progress(torch.sigmoid(logits), torch.sigmoid(shares), b.start))
+                rows.append(expected_floor(torch.sigmoid(logits), b.start))
         return total / test_weight, torch.cat(rows), aux_total / test_weight, torch.cat(wins)
 
-    model = kind({t: len(ids) for t, ids in tables.items()}, FLOORS, shares=gauntlet)
+    model = Net({t: len(ids) for t, ids in tables.items()}, FLOORS)
     if start:
         model.load_state_dict(export.weights(start, model))
     else:
         # The net starts from the baseline and learns how the state moves each floor's hazard away from it.
         with torch.no_grad():
             model.head.bias.copy_(base_logits)
-            if gauntlet:
-                model.share_head.bias.fill_(base_share_logit)
     model = model.to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     boss_stream = stream(train_bosses, lambda c: grouped(make, c))
@@ -375,10 +335,8 @@ def main(
     for epoch in range(EPOCHS):
         model.train()
         for b in batches(train, True):
-            logits, aux, shares = model.heads(*b.inputs())
+            logits, aux = model.both(*b.inputs())
             per_sample = hazard_loss(logits, b) + AUX_WEIGHT * aux_loss(aux, b)
-            if shares is not None:
-                per_sample = per_sample + share_loss(shares, b)
             loss = (per_sample * b.weight).sum() / b.weight.sum()
             if train_bosses:
                 loss = loss + BOSS_WEIGHT * boss_loss(model, next(boss_stream))
@@ -412,12 +370,7 @@ def main(
     # The report: held-out loss against the baseline, and how well the expected floor predicts the floor reached.
     held, predicted, held_aux, won_chance = evaluate(model)
     base_loss, base_predicted, _, base_won_chance = evaluate(None)
-    # The gauntlet's actual is its progress: the floor, plus the share taken where the run ended.
-    actual = torch.tensor(
-        [float(s["floor"]) + (s["share"] if gauntlet and s["kind"] == "died" else 0.0) for s in test],
-        dtype=torch.float64,
-        device=predicted.device,
-    )
+    actual = torch.tensor([float(s["floor"]) for s in test], dtype=torch.float64, device=predicted.device)
     weights = torch.tensor([s["weight"] for s in test], dtype=torch.float64, device=predicted.device)
 
     def r2(pred):
@@ -434,22 +387,17 @@ def main(
         "held_out_runs": len({s["key"] for s in test}),
         "samples": len(samples),
         "won": sum(1 for r in runs if r["outcome"] == "won"),
-        "gauntlet": gauntlet,
-        "objective": "progress" if gauntlet else objective,
-        "encoders": encoders,
+        "objective": objective,
         "vocab": {t: len(ids) for t, ids in tables.items()},
         "held_out_loss": held,
         "held_out_loss_floor_only": base_loss,
         "held_out_next_combats": held_aux,
         "r2_held_out": r2(predicted),
         "r2_held_out_floor_only": r2(base_predicted),
+        "won_held_out_runs": len({s["key"] for s in test if s["kind"] == "won"}),
+        "brier_held_out": brier(won_chance),
+        "brier_held_out_floor_only": brier(base_won_chance),
     }
-    if not gauntlet:
-        report |= {
-            "won_held_out_runs": len({s["key"] for s in test if s["kind"] == "won"}),
-            "brier_held_out": brier(won_chance),
-            "brier_held_out_floor_only": brier(base_won_chance),
-        }
     if bosses:
         report |= {"boss_sims": len(bosses), "held_out_boss_sims": len(test_bosses), "boss_worth": worth}
         report |= {"held_out_boss_loss": held_side(model, test_bosses, boss_loss)}

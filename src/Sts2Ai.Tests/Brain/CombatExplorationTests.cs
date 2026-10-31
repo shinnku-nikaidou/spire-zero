@@ -12,12 +12,19 @@ public class CombatExplorationTests
     private static readonly CombatRoute Searched = new("test", (_, _, _, _) => new(Play, [CombatAction.EndTurn],
         [new(Play.ToString(), 0.5, 0, 8), new(CombatAction.EndTurn.ToString(), 0.49, 0, 8)]));
 
+    private sealed class Flat : IRunValue
+    {
+        public string Name => "flat";
+
+        public double Value(RunView run) => 0;
+    }
+
     private static CombatDecision Decision() => new([Play, CombatAction.EndTurn], Fixtures.Slugs);
 
     [Fact]
     public void AnExploringRouteDrawsByTheSearchsValuesAndTheLogMarksIt()
     {
-        var macro = new MacroBrain(RunValue.Initial);
+        var macro = new MacroBrain(new Flat());
         var dispatcher = new Dispatcher("run-1", PlayEnvironment.NoSL, Searched.Exploring(new Softmax(0.01, new Random(1))),
             new("p0", PromptBrain.Instance), new("l0", macro), new("l0", macro), log: true);
         var picks = Enumerable.Range(0, 400).Select(_ => dispatcher.Choose(Decision())).ToList();

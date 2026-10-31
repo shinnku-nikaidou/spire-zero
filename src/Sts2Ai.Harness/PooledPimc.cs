@@ -10,7 +10,7 @@ namespace Sts2Ai.Harness;
 /// node's clone, searched in one request per first action so the workers share it; each request keeps its own memo,
 /// where a search in one process shares it across first actions. With sequential halving each round is one such set
 /// of requests, with the actions still in. The workers search with the leaf they were started with
-/// (<c>serve --leaf --combat-net</c>); each request carries the combat's record of enemy moves for it.
+/// (<c>serve --combat-net</c>); each request carries the combat's record of enemy moves for it.
 /// </summary>
 public sealed class PooledPimc(WorkerPool pool)
 {
