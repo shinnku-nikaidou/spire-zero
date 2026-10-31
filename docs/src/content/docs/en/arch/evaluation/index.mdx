@@ -21,11 +21,11 @@ Built: whole runs in the simulator in both environments, rung R1 (`run --seeds F
 
 ## 1. Two questions
 
-**How strong is it?** One run says little. Strength is a rate over many runs on seeds fixed in advance: the share of runs won, with its interval, and while wins are rare the mean floor reached ([Metrics, seeds and reports §1](/en/arch/evaluation/metrics/#sec-1)). The SL champion, the SL planner with the macro brain's V v6-3-2, won 23 of the 300 seeds of `promotion-1-300`: 7.7%, with a 95% interval of 5.2–11.2%, and reached floor 33.56 on average. Every evaluation becomes a **report**, and every report goes on its environment's **leaderboard** ([§3](#sec-3)).
+**How strong is it?** One run says little. Strength is a rate over many runs on seeds fixed in advance: the share of runs won, with its interval, and while wins are rare the mean floor reached ([Metrics, seeds and reports §1](/en/arch/evaluation/metrics/#sec-1)). The SL champion, the SL planner with the macro brain's V v7-1f, won 40 of the 100 seeds of `promotion-1-100`: 40%, with a 95% interval of 30.9–49.8%, and reached floor 41.57 on average. Every evaluation becomes a **report**, and every report goes on its environment's **leaderboard** ([§3](#sec-3)).
 
 **Did a change make it stronger?** A challenger (a new V, a new search budget, a code fix) faces the **champion**, the best accepted version, on the same seeds, pair by pair. The test it must pass is a **gate** ([Gates](/en/arch/evaluation/gates/)). Pairing by seed lets the luck both sides share cancel, and a sequential test stops as soon as the evidence is clear. V n2-b0.03 passed its gate against n2-b0.1 after 136 of 200 pairs, by 1.78 floors on average.
 
-The two answers are kept apart. A leaderboard lists every complete report, accepted or not; the champion changes only through a gate or a recorded decision, written into the environment's **champion file** ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). v6-3-2 itself became the champion by its report, with no gate.
+The two answers are kept apart. A leaderboard lists every complete report, accepted or not; the champion changes only through a gate or a recorded decision, written into the environment's **champion file** ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). v6-3-2, an earlier champion, became one by its report, with no gate.
 
 ```mermaid
 flowchart TD
