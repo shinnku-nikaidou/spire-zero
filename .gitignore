@@ -8,6 +8,3 @@ obj/
 # Raw run records and decision logs, one folder per job (docs: learning §6)
 data/
 
-# The old weights layout, kept until every session uses weights/CHARACTER/NAME.json
-weights/*/history/
-weights/*/nosl/
