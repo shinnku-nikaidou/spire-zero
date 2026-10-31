@@ -25,6 +25,9 @@ public class EvalReportTests
             RunRecord[] runs = [Fixtures.Run("A", 5), Fixtures.Run("B", 5, outcome: "failed"), Fixtures.Run("C", 5)];
             File.WriteAllLines(file, runs.Select(ProtocolJson.Serialize));
             Assert.Equal(["A", "C"], RunRecord.Read(file).Select(r => r.Seed));
+            var report = EvalReport.Of(RunRecord.Read(file), "set", RunRecord.SeedsLeft(file, Seeds), "d");
+            Assert.Equal(2, report.SetSize);
+            Assert.False(report.Metrics.Void);
         }
         finally
         {

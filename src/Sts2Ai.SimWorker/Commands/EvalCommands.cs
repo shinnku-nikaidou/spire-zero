@@ -26,8 +26,9 @@ internal static class ReportCommand
         var seedFile = r.GetValue(Seeds)!;
         var outPath = r.GetValue(Out)!;
         var runs = RunRecord.Read(r.GetValue(Records)!);
+        var seeds = RunRecord.SeedsLeft(r.GetValue(Records)!, EvalReport.ReadSeeds(seedFile));
         var previous = r.GetValue(Previous) is { } previousPath ? ProtocolJson.Deserialize<EvalReport>(File.ReadAllText(previousPath)) : null;
-        var report = Of(runs, Path.GetFileNameWithoutExtension(seedFile), EvalReport.ReadSeeds(seedFile));
+        var report = Of(runs, Path.GetFileNameWithoutExtension(seedFile), seeds);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
         File.WriteAllText(outPath + ".json", report.Json());
         var markdown = report.Markdown(previous);
@@ -111,7 +112,7 @@ internal static class GateCommand
         if (result.Verdict != "pass" || r.GetValue(Promote) is not { } outPath) return result.Verdict == "pass" ? 0 : 1;
 
         var seedFile = Layout.Seeds(champion.SeedSet);
-        var report = ReportCommand.Of(runs, champion.SeedSet, EvalReport.ReadSeeds(seedFile));
+        var report = ReportCommand.Of(runs, champion.SeedSet, RunRecord.SeedsLeft(r.GetValue(Records)!, EvalReport.ReadSeeds(seedFile)));
         if (report.Runs.Count != report.SetSize)
             throw new CliException($"not promoted: {report.Runs.Count} of {champion.SeedSet}'s {report.SetSize} seeds were run; the champion's report needs them all");
         var options = challenger.Promoted(Enum.Parse<PlayEnvironment>(file.Env), report.Runs[0].Character, report.Runs[0].Ascension);
