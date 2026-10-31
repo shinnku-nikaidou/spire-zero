@@ -101,7 +101,7 @@ Several commands share groups of options, defined in `Commands/Args.cs`.
 | `--value FILE` | none | l0's V, a net file; `--value` and `--macro l0` go together |
 | `--afterstates` | `screen` | `clone` plays each option on the node's clone (SL, `l0`) |
 | the leaf options | | above; need `pimc` or `plan` |
-| `--macro-explore T` | 0 | l0 draws by a softmax of V's values at temperature T, in V's units; needs `l0` |
+| `--macro-explore T` | 0 | l0 draws by a softmax of the logs of V's values at temperature T, so T is in V's ratios; needs `l0` |
 | `--combat-explore T` | 0 | PIMC draws by a softmax of the search's values, in leaf units; needs `pimc` |
 | `--explore ε` | 0 | l0 draws a share ε of its decisions evenly among their options; needs `l0` |
 
@@ -204,7 +204,7 @@ The run line then ends with `obs <digest>`, one hash of the run's observation ha
 | `Brain/CombatExplorationTests` | an exploring route draws by the search's values and marks the draw; a tie is drawn but not marked; a route without candidates is left alone |
 | `Brain/CombatNetTests` | reads c7-2's states and a tiny net's (`combat-tiny.json`) as their trainer did; a state in progress is its endings and the potions kept; a bucket the HP held rules out has no weight; a finished state and the bound are `LeafValue`'s |
 | `Brain/LeafValueTests` | a loss is 0; a win scores by HP and potions; in progress is below a win; a projected death stays above a loss; enemy damage raises the value |
-| `Brain/MacroExplorationTests` | a removal is worth only what can be removed; without exploration l0 takes the best; the softmax draws by V and the log marks them; even draws for card rewards; at ε=1 every kind of decision is drawn evenly but the potion belt; prompts at ε=1 and 0.1; an exploring prompt keeps its minimum |
+| `Brain/MacroExplorationTests` | a removal is worth only what can be removed; without exploration l0 takes the best; the softmax draws by V's logs, at any size of V and never what is worth nothing, and the decision log marks the draws; even draws for card rewards; at ε=1 every kind of decision is drawn evenly but the potion belt; prompts at ε=1 and 0.1; an exploring prompt keeps its minimum |
 | `Brain/MacroUpgradeTests` | smithing is worth its best upgrade; the smith prompt takes the valued upgrade; the upgrade prompt takes the best preview |
 | `Brain/MoveRecordTests` | each living enemy is recorded once per round; the dead are skipped; it starts over when the round goes back; `Clear` |
 | `Brain/PimcMemoTests` | lines that look the same but rolled differently are not merged |

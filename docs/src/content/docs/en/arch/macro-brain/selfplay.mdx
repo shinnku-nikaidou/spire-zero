@@ -46,7 +46,7 @@ This covers every decision outside combat: a card reward's outcome among its car
 
 **Why even.** What is drawn depends neither on V nor on how well the run is going, so the drawn decisions' outcomes are causal evidence about the options, including the ones V thinks poor, and every kind of decision is drawn as often. A draw weighted by V's own values would try options V already likes, and seldom the counterexamples that would correct it.
 
-**The tiers.** A generation's runs are split into three tiers of ε: 0.3, 0.15 and 0.05. A higher ε covers more options per run; a lower one reaches the late floors, where the decisions that win a run are.
+**The tiers.** A generation's runs are split into three tiers of ε: 0.3, 0.15 and 0.05 in `v7g1`; 0.15, 0.08 and 0.03 in `v7g2`, where a softmax draws the decisions ε leaves to V ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)). A higher ε covers more options per run; a lower one reaches the late floors, where the decisions that win a run are.
 
 <Aside>
 

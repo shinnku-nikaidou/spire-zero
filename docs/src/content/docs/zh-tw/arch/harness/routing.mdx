@@ -54,7 +54,7 @@ combat plan c7-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-
 
 宏觀路由或提示路由是一個 `Route<T>(Brain, Policy)`。目前：
 
-- **L0**（`MacroBrain`，`--macro l0`）同時回答宏觀決策和戰鬥外的選牌提示，是同一個物件、同一個 V（[宏觀大腦：搜尋](/zh-tw/arch/macro-brain/search/)）。它的探索（`--macro-explore T`，按 V 估值的 softmax；`--explore ε`，均勻抽取）從它自己的產生器裡抽（[§5](#sec-5)）。
+- **L0**（`MacroBrain`，`--macro l0`）同時回答宏觀決策和戰鬥外的選牌提示，是同一個物件、同一個 V（[宏觀大腦：搜尋](/zh-tw/arch/macro-brain/search/)）。它的探索（`--macro-explore T`，按 V 估值的對數做 softmax；`--explore ε`，均勻抽取）從它自己的產生器裡抽（[§5](#sec-5)）。
 - **`p0`**（`PromptBrain`）回答戰鬥中的選牌提示，和搜尋世界裡的做法一樣。
 - **`random`** 佔位策略在 `--macro random` 時回答宏觀的兩側。
 

@@ -54,7 +54,7 @@ A combat route is a `CombatRoute(Brain, Decide, Budget)`: its name, a function f
 
 A macro or prompt route is a `Route<T>(Brain, Policy)`. Today:
 
-- **L0** (`MacroBrain`, `--macro l0`) answers both the macro decisions and the card prompts outside combat, as one object with one V ([Macro brain: search](/en/arch/macro-brain/search/)). Its exploration (`--macro-explore T`, a softmax over V's values; `--explore ε`, even draws) draws from its own generators ([§5](#sec-5)).
+- **L0** (`MacroBrain`, `--macro l0`) answers both the macro decisions and the card prompts outside combat, as one object with one V ([Macro brain: search](/en/arch/macro-brain/search/)). Its exploration (`--macro-explore T`, a softmax over the logs of V's values; `--explore ε`, even draws) draws from its own generators ([§5](#sec-5)).
 - **`p0`** (`PromptBrain`) answers the card prompts in combat, as the search worlds do.
 - **`random`** placeholders answer both macro sides when `--macro random`.
 

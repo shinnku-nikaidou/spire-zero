@@ -182,7 +182,7 @@ The figure opens the two net files, v7-1f.json and c7-2.json, field by field: si
 | `won_held_out_runs`, `brier_held_out`, `brier_held_out_floor_only` | always | the held-out runs won, and the Brier score of the chance to win, against the baseline's |
 | `boss_sims`, `held_out_boss_sims`, `boss_worth`, `held_out_boss_loss`, `boss_decisions`, `boss_agree`, `boss_corr` | boss sims | see below |
 | `doors`, `held_out_doors`, `held_out_door_loss`, `door_corr` | door states | see below |
-| `explore_decisions`, `explore_share_logs`, `explore_temperature` | afterstates | the held-out logged decisions, the share the logs' brains explored, and the temperature at which this V would explore as often |
+| `explore_decisions`, `explore_share_logs`, `explore_temperature` | afterstates | the held-out logged decisions, the share the logs' brains explored, and the temperature at which this V would explore as often, over V's own values and not their logs, so not a `--macro-explore` value |
 
 ### `combat.train`: the combat net
 

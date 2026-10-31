@@ -59,7 +59,7 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 | part | status | where |
 |---|---|---|
 | self-play: whole runs, even draws at ε | built | `run --explore`, [The loop §2](/en/arch/learning/loop/#sec-2) |
-| softmax exploration over V's or the search's values | built; beside even draws in the next dataset | `run --macro-explore`, `--combat-explore`, [The loop §9](/en/arch/learning/loop/#sec-9) |
+| softmax exploration over the logs of V's values or the search's values | built; L0's beside even draws in `v7g2` | `run --macro-explore`, `--combat-explore`, [The loop §9](/en/arch/learning/loop/#sec-9) |
 | V's training, Monte Carlo labels | built | `learn/v/`, [Macro brain: from hazards to value §5](/en/arch/macro-brain/value/#sec-5) |
 | the combat net's training, Monte Carlo labels | built | `learn/combat/`, [Training the combat net](/en/arch/learning/combat-net/) |
 | boss-fight labels for V (boss sims, door states) | built, unused | `learn/bosslab.py`, [Reference §9](/en/arch/learning/reference/#sec-9) |

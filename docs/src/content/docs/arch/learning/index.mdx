@@ -59,7 +59,7 @@ flowchart LR
 | 部分 | 状态 | 位置 |
 |---|---|---|
 | 自我对弈：整局，以 ε 均匀抽取 | 已实现 | `run --explore`，[循环 §2](/arch/learning/loop/#sec-2) |
-| 按 V 或搜索的估值做 softmax 探索 | 已实现；在下一个数据集里与均匀抽取并用 | `run --macro-explore`、`--combat-explore`，[循环 §9](/arch/learning/loop/#sec-9) |
+| 按 V 的估值的对数或搜索的估值做 softmax 探索 | 已实现；L0 的在 `v7g2` 里与均匀抽取并用 | `run --macro-explore`、`--combat-explore`，[循环 §9](/arch/learning/loop/#sec-9) |
 | V 的训练，蒙特卡洛标签 | 已实现 | `learn/v/`，[宏观大脑：从风险值到价值 §5](/arch/macro-brain/value/#sec-5) |
 | 战斗网络的训练，蒙特卡洛标签 | 已实现 | `learn/combat/`，[训练战斗网络](/arch/learning/combat-net/) |
 | V 的 Boss 战标签（Boss 模拟战、门前状态） | 已实现，未使用 | `learn/bosslab.py`，[参考 §9](/arch/learning/reference/#sec-9) |

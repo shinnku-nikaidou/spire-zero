@@ -59,7 +59,7 @@ flowchart LR
 | 部分 | 狀態 | 位置 |
 |---|---|---|
 | 自我對弈：整局，以 ε 均勻抽取 | 已實作 | `run --explore`，[循環 §2](/zh-tw/arch/learning/loop/#sec-2) |
-| 按 V 或搜尋的估值做 softmax 探索 | 已實作；下一個資料集裡和均勻抽取並用 | `run --macro-explore`、`--combat-explore`，[循環 §9](/zh-tw/arch/learning/loop/#sec-9) |
+| 按 V 的估值的對數或搜尋的估值做 softmax 探索 | 已實作；L0 的在 `v7g2` 裡和均勻抽取並用 | `run --macro-explore`、`--combat-explore`，[循環 §9](/zh-tw/arch/learning/loop/#sec-9) |
 | V 的訓練，蒙地卡羅標籤 | 已實作 | `learn/v/`，[宏觀大腦：從風險值到價值 §5](/zh-tw/arch/macro-brain/value/#sec-5) |
 | 戰鬥網路的訓練，蒙地卡羅標籤 | 已實作 | `learn/combat/`，[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/) |
 | V 的頭目戰標籤（頭目模擬戰、門前狀態） | 已實作，未使用 | `learn/bosslab.py`，[參考 §9](/zh-tw/arch/learning/reference/#sec-9) |

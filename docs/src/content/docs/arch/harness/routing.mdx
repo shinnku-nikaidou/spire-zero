@@ -54,7 +54,7 @@ combat plan c7-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-
 
 宏观路由或提示路由是一个 `Route<T>(Brain, Policy)`。目前：
 
-- **L0**（`MacroBrain`，`--macro l0`）既回答宏观决策，也回答战斗外的选牌提示，作为一个带一个 V 的对象（[宏观大脑：搜索](/arch/macro-brain/search/)）。它的探索（`--macro-explore T`，对 V 的值做 softmax；`--explore ε`，均匀抽取）从它自己的生成器里取随机数（[§5](#sec-5)）。
+- **L0**（`MacroBrain`，`--macro l0`）既回答宏观决策，也回答战斗外的选牌提示，作为一个带一个 V 的对象（[宏观大脑：搜索](/arch/macro-brain/search/)）。它的探索（`--macro-explore T`，对 V 的值的对数做 softmax；`--explore ε`，均匀抽取）从它自己的生成器里取随机数（[§5](#sec-5)）。
 - **`p0`**（`PromptBrain`）回答战斗中的选牌提示，和搜索世界里的做法一样。
 - **`random`** 占位策略在 `--macro random` 时回答宏观的两侧。
 

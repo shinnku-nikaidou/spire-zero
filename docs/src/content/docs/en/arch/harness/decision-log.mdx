@@ -76,7 +76,7 @@ They are sorted by the round of sequential halving they reached, then by value; 
 
 **`explored: true`** marks an answer that self-play's exploration drew instead of the brain's best ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)):
 
-- by a softmax (`--combat-explore T`, `--macro-explore T`), when the brain valued the draw below its best by more than a hundredth of the temperature. Closer than that it is a tie, such as another order of the same turn, and is not marked;
+- by a softmax (`--combat-explore T`, `--macro-explore T`), when the brain valued the draw below its best by more than a hundredth of the temperature (for L0, on the logs of V's values). Closer than that it is a tie, such as another order of the same turn, and is not marked;
 - by even draws (`--explore ε`), always, also when the draw happens to be the brain's own pick;
 - at a card prompt outside combat, when any of its steps was drawn.
 

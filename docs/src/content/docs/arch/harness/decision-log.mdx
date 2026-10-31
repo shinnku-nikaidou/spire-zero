@@ -76,7 +76,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 **`explored: true`** 标出自我对弈的探索抽出、而不是大脑最优选的回答（[学习：循环 §9](/arch/learning/loop/#sec-9)）：
 
-- 由 softmax 抽出时（`--combat-explore T`、`--macro-explore T`），当大脑给抽中项的估值比它的最优低出温度的百分之一以上时。差距比这更小就算平手，例如同一回合换了个顺序，不标；
+- 由 softmax 抽出时（`--combat-explore T`、`--macro-explore T`），当大脑给抽中项的估值比它的最优低出温度的百分之一以上时（L0 比较的是 V 的值的对数）。差距比这更小就算平手，例如同一回合换了个顺序，不标；
 - 由均匀抽取抽出时（`--explore ε`），总是标，碰巧抽中大脑自己的选择时也一样；
 - 在战斗外的选牌提示处，当它的任何一步是抽出来的时。
 

@@ -101,7 +101,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `--value FILE` | 无 | l0 的 V，一个网络文件；`--value` 和 `--macro l0` 必须一起用 |
 | `--afterstates` | `screen` | `clone` 在节点的克隆上把每个选项打一遍（SL，`l0`） |
 | 叶子选项 | | 见上；需要 `pimc` 或 `plan` |
-| `--macro-explore T` | 0 | l0 按 V 的值在温度 T 下的 softmax 抽取，T 以 V 的单位计；需要 `l0` |
+| `--macro-explore T` | 0 | l0 按 V 的值的对数在温度 T 下的 softmax 抽取，所以 T 以 V 的比值计；需要 `l0` |
 | `--combat-explore T` | 0 | PIMC 按搜索的值的 softmax 抽取，以叶子的单位计；需要 `pimc` |
 | `--explore ε` | 0 | l0 把比例为 ε 的决策在它们的选项中均匀抽取；需要 `l0` |
 
@@ -204,7 +204,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `Brain/CombatExplorationTests` | 探索中的路线按搜索的值抽取，并标记这次抽取；打平时也抽取，但不标记；没有候选的路线保持不变 |
 | `Brain/CombatNetTests` | 像训练器那样读出 c7-2 和一个极小网络（`combat-tiny.json`）的状态；进行中的状态值它的结局和留下的药水；持有的生命值排除掉的分桶没有权重；已结束的状态和上界都是 `LeafValue` 的 |
 | `Brain/LeafValueTests` | 输是 0；赢按生命值和药水计分；进行中低于赢；预计的死亡仍高于输；敌人受到的伤害会提高估值 |
-| `Brain/MacroExplorationTests` | 删牌只值能删掉的东西；没有探索时 l0 取最好的；softmax 按 V 抽取，日志标记这些抽取；卡牌奖励均匀抽取；ε=1 时除药水栏之外每种决策都均匀抽取；ε=1 和 0.1 时的提示；探索中的提示保持它的下限 |
+| `Brain/MacroExplorationTests` | 删牌只值能删掉的东西；没有探索时 l0 取最好的；softmax 按 V 的对数抽取，V 多大都一样，值为 0 的抽不到，决策日志标记这些抽取；卡牌奖励均匀抽取；ε=1 时除药水栏之外每种决策都均匀抽取；ε=1 和 0.1 时的提示；探索中的提示保持它的下限 |
 | `Brain/MacroUpgradeTests` | 锻造值它最好的那次升级；锻造提示选估值时用的那次升级；升级提示选最好的预览 |
 | `Brain/MoveRecordTests` | 每个活着的敌人每轮记录一次；死了的跳过；轮次倒退时重新开始；`Clear` |
 | `Brain/PimcMemoTests` | 看起来相同但掷骰不同的路线不会被合并 |

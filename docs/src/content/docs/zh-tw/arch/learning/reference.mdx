@@ -182,7 +182,7 @@ flowchart LR
 | `won_held_out_runs`、`brier_held_out`、`brier_held_out_floor_only` | 總是 | 留出對局中獲勝的局數，以及獲勝機率的 Brier 分數，對比基線的 |
 | `boss_sims`、`held_out_boss_sims`、`boss_worth`、`held_out_boss_loss`、`boss_decisions`、`boss_agree`、`boss_corr` | 頭目模擬戰 | 見下文 |
 | `doors`、`held_out_doors`、`held_out_door_loss`、`door_corr` | 門前狀態 | 見下文 |
-| `explore_decisions`、`explore_share_logs`、`explore_temperature` | 後狀態 | 留出的日誌決策、打出日誌的大腦探索的比例，以及讓這個 V 探索得一樣頻繁的溫度 |
+| `explore_decisions`、`explore_share_logs`、`explore_temperature` | 後狀態 | 留出的日誌決策、打出日誌的大腦探索的比例，以及讓這個 V 探索得一樣頻繁的溫度，依據 V 的值本身而不是對數，所以不是 `--macro-explore` 的值 |
 
 ### `combat.train`：戰鬥網路
 
