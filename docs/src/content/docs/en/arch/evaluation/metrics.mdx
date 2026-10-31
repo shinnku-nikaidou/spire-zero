@@ -25,13 +25,15 @@ A report is **void** when any of four counts is above zero (`Metrics.Void`, `Har
 | count | what it is | why it voids |
 |---|---|---|
 | `random_decisions` | decisions answered by the `random` placeholder, summed over the runs' `brains` | a placeholder is no policy; a champion with one is not the brain it claims ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) |
-| `failed` | runs that threw: an error in the driver, a brain or a worker | the run did not finish as the game would |
+| `failed` | runs that threw: an error in the driver, a brain or a worker | the run did not finish as the game would; 0 in a report made now, since failed runs are left out (below) |
 | `truncated` | runs still going at `--max-decisions` (20,000) | the same |
 | `game_errors` | the game's `Log.Error` lines, in the host and in the workers | the game itself reported a broken state |
 
 A void report stays on the leaderboard, marked and ranked last; a gate gives a void challenger the verdict void, whatever its runs reached ([Gates §6](/en/arch/evaluation/gates/#sec-6)). Six committed reports are void: the five NoSL ones of 2026-10-27 whose card prompts or macro decisions were still random (1,687 to 11,723 random decisions each; `pimc-random` also had 3 failed runs, and `pimc-l0` 2 failed runs and 4 game errors), and the SL random-macro baseline of 2026-10-29 (11,006).
 
-**Failed and truncated runs count as losses** in the win rate, and they are never played again: a seed fixes the run, so playing it again would only repeat it, and dropping it would pick seeds (`Harness/Reports.cs:51`). `learn/gauntlet.py` is the exception: it drops every record with a `failure` before it counts anything (`learn/gauntlet.py:44`), so a failed run there neither voids nor loses ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
+**A failed run is as if never set.** `report` and `gate` read through `RunRecord.Read`, which leaves out every record whose outcome is `failed`, and `RunRecord.SeedsLeft` takes its seed out of the set, so 2 failed of 500 make a report of 498 of 498, neither void nor partial (`Harness/RunRecords.cs:38-45`). A run fails because of the host, such as a lab machine whose memory flips bits, and says nothing of the brain. `learn/gauntlet.py` and `v.train` drop them too (`learn/gauntlet.py:44`, `learn/v/data.py:98`), and a pair needs both runs ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
+
+**Truncated runs count as losses** in the win rate, and they are never played again: a seed fixes the run, so playing it again would only repeat it, and dropping it would pick seeds (`Harness/Reports.cs:51`).
 
 Two more counts belong here and do not exist:
 
@@ -202,5 +204,5 @@ The board today (`eval/silent/leaderboard.md`) has two sections: `promotion-1` w
 
 ## 10. Tests
 
-- `Harness/EvalReportTests` (`src/Sts2Ai.Tests`), 3 tests: runs are sorted into the set's order, with their floor mean, and the report is not void; runs that break the set are rejected (none, a seed twice, a seed not in the set, another config, character or ascension); a random decision or a failed run voids it. The fixture config is `v0.111.0`, `abc1234`, NoSL, R1 (`src/Sts2Ai.Tests/Fixtures.cs:25`).
+- `Harness/EvalReportTests` (`src/Sts2Ai.Tests`), 4 tests: runs are sorted into the set's order, with their floor mean, and the report is not void; runs that break the set are rejected (none, a seed twice, a seed not in the set, another config, character or ascension); a random decision or a failed run in a report's own runs voids it; `RunRecord.Read` leaves failed runs out and `SeedsLeft` their seeds. The fixture config is `v0.111.0`, `abc1234`, NoSL, R1 (`src/Sts2Ai.Tests/Fixtures.cs:25`).
 - Nothing tests `Rate.Wilson`, the Markdown, the leaderboard or `MakeSeed`. The Wilson figure above is checked against the intervals the reports store.

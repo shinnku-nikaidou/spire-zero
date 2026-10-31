@@ -216,7 +216,7 @@ The run line then ends with `obs <digest>`, one hash of the run's observation ha
 | `Brain/SoftmaxTests` | `Best` is the first best; draws by exp(value); a cold softmax takes the best; a tie within 1/100 of T; refuses T=0 |
 | `Brain/TurnPlanTests` | a step that does not hold is replanned and marked |
 | `Harness/DispatcherTests` | the combat brain gets the moves so far; a macro decision ends the record; an illegal pick is refused; no fallback for an uncovered surface; node checkpoints are refused in NoSL; an SL node's clones keep the gauntlet's rule |
-| `Harness/EvalReportTests` | sorted in the set's order; runs that break the set are rejected; a random decision or a failure voids a run |
+| `Harness/EvalReportTests` | sorted in the set's order; runs that break the set are rejected; a random decision or a failure voids a report; `RunRecord.Read` leaves failed runs out |
 | `Harness/GateTests` | 10 tests: pass, fail and not-worse; minimum pairs; ties; a failed run voids the challenger; the win gate; pairing; refusals |
 | `Harness/WorkerPoolTests` | a worker stuck twice fails the call; one stuck once is restarted and answers |
 | `SimWorker/CliTests` | defaults; environments in any case; mistakes; `--verbose` anywhere and no response files; the champion file's options under the ones given; a champion file's character and asc; `brain` takes a champion file without its env; incoherent champions refused; leaf weights need pimc; a champion's options play it again |

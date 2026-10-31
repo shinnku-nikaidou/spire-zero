@@ -163,7 +163,7 @@ There is no fallback: a decision that cannot be answered as specified fails, and
 
 A request is mostly seconds: one world's search, one beam state's turn, or a share of a decision's probe paths. The timeout catches a stuck worker, not a slow one.
 
-**In the hosts**: in `run` any exception ends the run as `failed`, with its type and first line, and the report counts it ([Simulator: whole runs §5](/en/arch/simulator/runs/#sec-5)). Over the wire the simulator's host throws on an `error`, with the same result, and on a recommendation whose id or hash is not the request's. The mod logs a warning, ends the run with `run_end{failed}`, and lets the game go on without the brain ([Mod: the main loop §8](/en/arch/mod/loop/#sec-8)). Evaluation requires failed runs, and decisions by a brain named `random`, to be 0 ([Evaluation: metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2)).
+**In the hosts**: in `run` any exception ends the run as `failed`, with its type and first line, and reports leave it out ([Simulator: whole runs §5](/en/arch/simulator/runs/#sec-5)). Over the wire the simulator's host throws on an `error`, with the same result, and on a recommendation whose id or hash is not the request's. The mod logs a warning, ends the run with `run_end{failed}`, and lets the game go on without the brain ([Mod: the main loop §8](/en/arch/mod/loop/#sec-8)). Evaluation requires decisions by a brain named `random` to be 0, and leaves failed runs out ([Evaluation: metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2)).
 
 **Planned handling** <Badge text="planned" variant="caution" />:
 

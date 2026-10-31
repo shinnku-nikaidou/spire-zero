@@ -25,13 +25,15 @@ import DeathsByFloor from '../../../../../components/book/DeathsByFloor.svelte';
 | 計數 | 是什麼 | 為什麼作廢 |
 |---|---|---|
 | `random_decisions` | 由佔位策略 `random` 回答的決策，對各局的 `brains` 加總 | 佔位策略不是策略；用了它的冠軍就不是它聲稱的那個大腦（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)） |
-| `failed` | 拋出例外的對局：驅動程式、大腦或工作行程出錯 | 這局沒有像在遊戲裡那樣打完 |
+| `failed` | 拋出例外的對局：驅動程式、大腦或工作行程出錯 | 這局沒有像在遊戲裡那樣打完；現在產生的報告裡是 0，因為失敗的對局不計入（見下） |
 | `truncated` | 到 `--max-decisions`（20,000）時仍在進行的對局 | 同上 |
 | `game_errors` | 遊戲的 `Log.Error` 行，宿主和工作行程裡的都算 | 遊戲自己報告了損壞的狀態 |
 
 作廢的報告留在排行榜上，加上標記並排在最後；作廢的挑戰者在門檻上得到的判定是作廢，不論它的對局打到哪裡（[晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。已提交的報告中有六份作廢：2026-10-27 的五份 NoSL 報告，它們的選牌提示或宏觀決策仍是隨機的（每份 1,687 到 11,723 個隨機決策；`pimc-random` 另有 3 局失敗，`pimc-l0` 有 2 局失敗和 4 個遊戲錯誤），以及 2026-10-29 的 SL 隨機宏觀基線（11,006）。
 
-在勝率裡，**失敗和被截斷的對局算作輸局**，而且從不重打：種子決定了整局，重打只會重複它，丟掉它就等於挑選種子（`Harness/Reports.cs:51`）。`learn/gauntlet.py` 是例外：它在計算任何東西之前就丟掉每條帶 `failure` 的記錄（`learn/gauntlet.py:44`），所以失敗的對局在那裡既不造成作廢，也不算輸（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
+**失敗的對局就當從沒設定過。** `report` 和 `gate` 透過 `RunRecord.Read` 讀記錄，它會去掉每條結局為 `failed` 的記錄，`RunRecord.SeedsLeft` 再把它的種子從種子集裡去掉，所以 500 局有 2 局失敗，得到的是 498 局中的 498 局，既不作廢，也不算不完整（`Harness/RunRecords.cs:38-45`）。對局失敗的原因在主機，例如一台記憶體會翻轉位元的實驗室機器，它說明不了大腦的好壞。`learn/gauntlet.py` 和 `v.train` 同樣丟掉它們（`learn/gauntlet.py:44`、`learn/v/data.py:98`），配對也要兩邊都打完（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
+
+在勝率裡，**被截斷的對局算作輸局**，而且從不重打：種子決定了整局，重打只會重複它，丟掉它就等於挑選種子（`Harness/Reports.cs:51`）。
 
 還有兩個計數屬於這裡，但並不存在：
 
@@ -202,5 +204,5 @@ leaderboard [--character SILENT]
 
 ## 10. 測試
 
-- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），3 個測試：對局按種子集的順序排好，並算出平均層數，報告沒有作廢；破壞種子集的對局被拒絕（沒有對局、同一個種子兩次、種子不在種子集裡、另一套設定、另一個角色或晉階等級）；一個隨機決策或一局失敗的對局會讓報告作廢。測試夾具的設定是 `v0.111.0`、`abc1234`、NoSL、R1（`src/Sts2Ai.Tests/Fixtures.cs:25`）。
+- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），4 個測試：對局按種子集的順序排好，並算出平均層數，報告沒有作廢；破壞種子集的對局被拒絕（沒有對局、同一個種子兩次、種子不在種子集裡、另一套設定、另一個角色或晉階等級）；報告自身的對局裡有一個隨機決策或一局失敗的對局會讓報告作廢；`RunRecord.Read` 去掉失敗的對局，`SeedsLeft` 去掉它們的種子。測試夾具的設定是 `v0.111.0`、`abc1234`、NoSL、R1（`src/Sts2Ai.Tests/Fixtures.cs:25`）。
 - 沒有測試涵蓋 `Rate.Wilson`、Markdown、排行榜或 `MakeSeed`。上面的 Wilson 圖已用報告裡儲存的區間核對過。

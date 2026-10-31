@@ -25,13 +25,15 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 | 计数 | 是什么 | 为什么作废 |
 |---|---|---|
 | `random_decisions` | 由 `random` 占位策略回答的决策，对各局的 `brains` 求和 | 占位策略不是策略；带着它的冠军并不是它所声称的那个大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)） |
-| `failed` | 抛出异常的对局：驱动程序、某个大脑或某个工作进程出错 | 这一局没有像游戏那样打完 |
+| `failed` | 抛出异常的对局：驱动程序、某个大脑或某个工作进程出错 | 这一局没有像游戏那样打完；现在生成的报告里是 0，因为失败的对局不计入（见下） |
 | `truncated` | 到 `--max-decisions`（20,000）时仍未结束的对局 | 同上 |
 | `game_errors` | 游戏的 `Log.Error` 行，宿主里的和工作进程里的都算 | 游戏自己报告了一个损坏的状态 |
 
 作废的报告留在排行榜上，带标记，排在最后；不管挑战者的对局打到哪里，门槛都给作废的挑战者判定作废（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。已提交的报告里有六份作废：2026-10-27 那五份选牌提示或宏观决策仍是随机的 NoSL 报告（每份 1,687 到 11,723 个随机决策；`pimc-random` 还有 3 局失败，`pimc-l0` 有 2 局失败和 4 个游戏错误），以及 2026-10-29 宏观随机的 SL 基线（11,006 个）。
 
-**失败和被截断的对局在胜率里算作输局**，并且从不重打：种子决定了这一局，重打只会重复它，而丢掉它就等于挑种子（`Harness/Reports.cs:51`）。`learn/gauntlet.py` 是例外：它在计数之前就丢掉每条带 `failure` 的记录（`learn/gauntlet.py:44`），所以在那里失败的一局既不导致作废，也不算输（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
+**失败的对局就当从没设定过。** `report` 和 `gate` 通过 `RunRecord.Read` 读记录，它会去掉每条结局为 `failed` 的记录，`RunRecord.SeedsLeft` 再把它的种子从种子集里去掉，所以 500 局有 2 局失败，得到的是 498 局中的 498 局，既不作废，也不算不完整（`Harness/RunRecords.cs:38-45`）。对局失败的原因在主机，比如一台内存会翻转比特的实验室机器，它说明不了大脑的好坏。`learn/gauntlet.py` 和 `v.train` 同样丢掉它们（`learn/gauntlet.py:44`、`learn/v/data.py:98`），配对也要两边都打完（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
+
+**被截断的对局在胜率里算作输局**，并且从不重打：种子决定了这一局，重打只会重复它，而丢掉它就等于挑种子（`Harness/Reports.cs:51`）。
 
 还有两个计数应当放在这里，但并不存在：
 
@@ -202,5 +204,5 @@ leaderboard [--character SILENT]
 
 ## 10. 测试
 
-- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），3 个测试：对局按种子集的顺序排好，平均层数正确，报告不作废；破坏种子集的对局会被拒绝（没有对局、一个种子出现两次、种子不在集合里、另一种配置、角色或进阶等级）；一个随机决策或一局失败会让报告作废。测试夹具的配置是 `v0.111.0`、`abc1234`、NoSL、R1（`src/Sts2Ai.Tests/Fixtures.cs:25`）。
+- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），4 个测试：对局按种子集的顺序排好，平均层数正确，报告不作废；破坏种子集的对局会被拒绝（没有对局、一个种子出现两次、种子不在集合里、另一种配置、角色或进阶等级）；报告自身的对局里有一个随机决策或一局失败会让报告作废；`RunRecord.Read` 去掉失败的对局，`SeedsLeft` 去掉它们的种子。测试夹具的配置是 `v0.111.0`、`abc1234`、NoSL、R1（`src/Sts2Ai.Tests/Fixtures.cs:25`）。
 - 没有测试覆盖 `Rate.Wilson`、Markdown、排行榜或 `MakeSeed`。上面的 Wilson 图已用报告里存的区间核对过。

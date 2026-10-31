@@ -216,7 +216,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `Brain/SoftmaxTests` | `Best` 取第一个最好的；按 exp(value) 抽取；冷的 softmax 取最好的；在 T 的 1/100 以内算打平；拒绝 T=0 |
 | `Brain/TurnPlanTests` | 不成立的一步会重新规划并被标记 |
 | `Harness/DispatcherTests` | 战斗大脑拿到目前为止的出招记录；宏观决策结束这份记录；不合法的选择被拒绝；没有覆盖的决策界面没有兜底；NoSL 下拒绝节点检查点；SL 节点的克隆保留连战规则 |
-| `Harness/EvalReportTests` | 按种子集的顺序排序；破坏种子集的对局被拒收；随机决策或失败让一局作废 |
+| `Harness/EvalReportTests` | 按种子集的顺序排序；破坏种子集的对局被拒收；随机决策或失败让报告作废；`RunRecord.Read` 去掉失败的对局 |
 | `Harness/GateTests` | 10 个测试：通过、失败和不更差；最少配对数；打平；失败的对局让挑战者作废；胜局门槛；配对；拒绝 |
 | `Harness/WorkerPoolTests` | 卡住两次的工作进程让调用失败；卡住一次的被重启并给出回答 |
 | `SimWorker/CliTests` | 默认值；环境名不分大小写；错误输入；`--verbose` 放在任何位置都行，没有响应文件；冠军文件的选项垫在给出的选项之下；冠军文件里的 character 和 asc；`brain` 接受冠军文件，但不用其中的 env；拒绝不自洽的冠军；叶子权重需要 pimc；冠军的选项能重新打出同一个冠军 |
