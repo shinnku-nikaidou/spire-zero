@@ -111,7 +111,7 @@ No McNemar test exists in the code <Badge text="planned" variant="caution" />. W
 | combat panel | combat search and its leaf | the same fights for every player (encounter, deck, seed), so CRN; win rate and HP lost per win | built: `panel` ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)); results in [The SL planner: budget §5](/en/arch/sl-planner/budget/#sec-5) and [NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6) |
 | act-level | macro decisions | acts started from a pool of snapshots; act clear rate and HP at the act's end | planned <Badge text="planned" variant="caution" /> |
 | whole-run SPRT, `gate` | promoting a champion | paired by seed on a promotion set; SPRT on floors or on wins | built ([§6](#sec-6)) |
-| whole-run wins bound | promoting V in plan v7 | `learn/gauntlet.py --against` on whole runs: paired by seed on `promotion-1-500`; lower bound on wins | built, no result yet ([§10](#sec-10)) |
+| whole-run wins bound | promoting V in plan v7 | `learn/gauntlet.py --against` on whole runs: paired by seed on `promotion-1-100` at medium; lower bound on wins | in use ([§10](#sec-10)) |
 | elite gauntlet | promoting V in plan v6 | `learn/gauntlet.py --against` on the gauntlet: lower bound on progress | built, ended ([§11](#sec-11)) |
 
 The panel costs seconds to minutes a fight; a whole-run gate costs hours of the fleet. Version gates use whole runs: a panel can show a search is stronger in a fight, not that a run goes further ([Combat brain §5](/en/arch/combat-brain/#sec-5)).
@@ -245,7 +245,7 @@ The margin needed grows with the champion's own wins; the plan's estimate of 2�
 
 **What it does not check.** `gauntlet.py` drops every record with a `failure` before anything (`:44`), so it has no void rule; it has no minimum of pairs, and does not compare the two sides' configs, champions, environments, commits or exploration. The procedure keeps those: the challenger plays `promotion-1-500` with the champion's planner (the SL planner c2 at medium effort, `--afterstates clone`) and no `--explore`, in a time box on the fleet; v6-3-2's side is its `promotion-1-300` report's runs plus its runs on the last 200 seeds, played once (`.claude/skills/sl-selfplay/SKILL.md:39-63`).
 
-**Promotion** is by hand: the script writes nothing. A net that passes (of two that pass, the one with more wins) replaces the V of both champion files, the ledger records it, and a `report` of its runs on `promotion-1-500` goes on the leaderboard.
+**Promotion** is by hand: the script writes nothing. A net that passes (of two that pass, the one with more wins) replaces the V of both champion files, the ledger records it, and a `report` of its runs at medium goes on the leaderboard.
 
 **On the committed reports** (computed here; no such gate ran): v6-3-2 against v6-2 on `promotion-1-300`, 300 pairs, 23 won against 1, +0.073 ± 0.016 wins, lower bound +0.047, so it would pass (the floor: +2.20 ± 0.62). v6-3-1 against v6-2 would pass too, 13 against 1, lower bound +0.020, while its floor is −0.26 ± 0.70. v6-3-2 against v6-3-1, 21 against 11 with 2 seeds won by both, passes by +0.0024.
 

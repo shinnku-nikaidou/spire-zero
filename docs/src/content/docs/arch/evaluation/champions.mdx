@@ -15,14 +15,14 @@ import ChampionTimeline from '../../../../components/book/ChampionTimeline.svelt
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone",
+  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v6-3-2.json", "afterstates": "clone", "combat-net": "weights/silent/c2.json",
+    "value": "weights/silent/v7-1f.json", "afterstates": "clone", "combat-net": "weights/silent/c2.json",
     "character": "SILENT", "asc": "0"
   },
-  "report": "eval/silent/reports/2026-10-30-sl-r1-promotion-1-300-plan-c2-l0-v6-3-2-clone-p0.json",
-  "since": "2026-10-30"
+  "report": "eval/silent/reports/2026-10-31-sl-r1-promotion-1-100-plan-c2-l0-v7-1f-clone-p0.json",
+  "since": "2026-10-31"
 }
 ```
 
@@ -45,7 +45,7 @@ import ChampionTimeline from '../../../../components/book/ChampionTimeline.svelt
 
 **由 `--promote` 写入，或手工写入**。`gate --promote` 写入每一个字段，选项按挑战者的选项生成（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:86-114`）：对 SL 规划器来说是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。还没有哪个 SL 冠军是由 `gate` 晋级的；SL 文件是手写的，写的是 `"effort": "medium"`，打的是同样的预算（[SL 规划器：预算 §1](/arch/sl-planner/budget/#sec-1)）。重定基线只修改 `report`（[晋级门槛 §9](/arch/evaluation/gates/#sec-9)）。
 
-**现在**。自 2026-10-30 起，两个文件都指明 `weights/silent/v6-3-2.json`、`weights/silent/c2.json` 和上面那份报告，没有门槛。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。NoSL 文件指向的是 SL 报告，因为这个冠军还没有 NoSL 报告；针对它的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）。
+**现在**。自 2026-10-31 起，两个文件都指明 `weights/silent/v7-1f.json`、`weights/silent/c2.json` 和上面那份报告，依据是配对胜局的门槛。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。NoSL 文件指向的是 SL 报告，因为这个冠军还没有 NoSL 报告；针对它的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）。
 
 ## 2. 迄今为止的每个冠军
 
@@ -66,6 +66,8 @@ import ChampionTimeline from '../../../../components/book/ChampionTimeline.svelt
 | `e22438b`，10-29 01:44 | SL | medium 力度的 SL 规划器 c2，配 n2-b0.03 的 L0 | 28.25 | 第一个 SL 冠军，由它的基线定下，没有门槛 |
 | `7ce103b`，10-29 10:43 | SL | SL 规划器 c2 medium，配纯 V pure-1-g 的 L0，按画面所示的后状态 | 25.69 | 没有门槛：第一个纯 V，一条按自己的报告评判的新谱系的起点 |
 | `dc4ee30`，10-30 15:17 | SL 和 NoSL | SL：规划器 c2 medium，在克隆上配 v6-3-2 的 L0；NoSL：PIMC c2，配 v6-3-2 的 L0 | 33.56，300 局赢 23 局，在 `promotion-1-300` 上（两个文件） | 没有门槛：两种环境共用一个 V，按它的 SL 报告选定；NoSL 文件去掉了它的门槛 |
+| `017f210`，10-31 | SL 和 NoSL | 配 v7-1 的 L0 | 37.78，500 局赢 145 局，在 `promotion-1-500` 上（两个文件） | 通过胜局门槛：对 v6-3-2 +18.8 个百分点（标准误 2.25） |
+| `28b4c1f`，10-31 | SL 和 NoSL | 配 v7-1f 的 L0 | 41.57，100 局赢 40 局，在 `promotion-1-100` 上（两个文件） | 通过胜局门槛：对 v7-1 +16.0 个百分点（标准误 5.45） |
 
 - 四道 NoSL 门槛都是 δ = 1.5、α = β = 0.05 的层数 SPRT，它们的报告一局也没赢过；[晋级门槛 §3](/arch/evaluation/gates/#sec-3) 逐对重放了它们。
 - **v6-3-2 的证据**。在 `promotion-1` 的 200 个种子上，v6-2 的报告比 pure-1-g 的多 +5.92 层（标准误 0.74；v6-2 是在 `b013f95` 上在克隆上打的，pure-1-g 是在 `6ce07fc` 上用按画面所示的后状态打的），v6-3-2 的报告在全部 300 个种子上比 v6-2 的多 +2.20 层（标准误 0.62）。v6-2 是精英连战的冠军，从来不是整局的冠军。
@@ -151,7 +153,9 @@ v6-3-1 也通过了（对 v6-2 +1.73 ± 0.54，下界 +0.85），但没有晋级
 | plan c2，L0 v6-2 clone | SL | `promotion-1` | 1/200（0.1–2.8%） | 31.61 | 199 / 112 / 19 | 179 / 42 / 1 | 565.6 | `b013f95` | 下一行那份报告的前 200 局 |
 | plan c2，L0 v6-2 clone | SL | `promotion-1-300` | 1/300（0.1–1.9%） | 31.37 | 298 / 161 / 25 | 272 / 59 / 1 | 517.1 | `b013f95` | |
 | plan c2，L0 v6-3-1 clone | SL | `promotion-1-300` | 13/300（2.5–7.3%） | 31.11 | 284 / 144 / 51 | 248 / 75 / 13 | 240.6 | `b013f95` | |
-| plan c2，L0 v6-3-2 clone | SL | `promotion-1-300` | 23/300（5.2–11.2%） | 33.56 | 290 / 171 / 65 | 276 / 94 / 23 | 271.2 | `b013f95` | 两个文件的冠军 |
+| plan c2，L0 v6-3-2 clone | SL | `promotion-1-300` | 23/300（5.2–11.2%） | 33.56 | 290 / 171 / 65 | 276 / 94 / 23 | 271.2 | `b013f95` | |
+| plan c2，L0 v7-1 clone | SL | `promotion-1-500` | 145/500（25.2–33.1%） | 37.78 | | | | `b0ec4b7` | |
+| plan c2，L0 v7-1f clone | SL | `promotion-1-100` | 40/100（30.9–49.8%） | 41.57 | 98 / 86 / 68 | 88 / 72 / 40 | 344.5 | `e51a119` | 两个文件的冠军 |
 
 「选牌提示随机」指战斗里的选牌提示由 `random` 占位策略回答，那是在 `p0` 之前；宏观一栏的「随机」是随机的宏观占位策略。V 的名字在[学习：实验记录 §1](/arch/learning/experiments/#sec-1)里有解释。v6-2 的 `promotion-1` 报告就是它 `promotion-1-300` 报告的前 200 局，逐条记录完全相同。v6-2 是第一个整局能赢的 V；v6-3-2 是第一个能赢的冠军。
 

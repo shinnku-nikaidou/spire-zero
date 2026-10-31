@@ -15,14 +15,14 @@ A **champion** is the best accepted version of the AI in one environment: the br
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone",
+  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v6-3-2.json", "afterstates": "clone", "combat-net": "weights/silent/c2.json",
+    "value": "weights/silent/v7-1f.json", "afterstates": "clone", "combat-net": "weights/silent/c2.json",
     "character": "SILENT", "asc": "0"
   },
-  "report": "eval/silent/reports/2026-10-30-sl-r1-promotion-1-300-plan-c2-l0-v6-3-2-clone-p0.json",
-  "since": "2026-10-30"
+  "report": "eval/silent/reports/2026-10-31-sl-r1-promotion-1-100-plan-c2-l0-v7-1f-clone-p0.json",
+  "since": "2026-10-31"
 }
 ```
 
@@ -45,7 +45,7 @@ A **champion** is the best accepted version of the AI in one environment: the br
 
 **Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:86-114`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. No SL champion has been promoted by `gate`; the SL files were written by hand and say `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `report` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
 
-**Now.** Both files name `weights/silent/v6-3-2.json` and `weights/silent/c2.json`, the report above, since 2026-10-30, and no gate. SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The NoSL file names the SL report, since no NoSL report of this champion exists; a NoSL gate against it is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)).
+**Now.** Both files name `weights/silent/v7-1f.json` and `weights/silent/c2.json`, the report above, since 2026-10-31, by the gate on paired wins. SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The NoSL file names the SL report, since no NoSL report of this champion exists; a NoSL gate against it is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)).
 
 ## 2. Every champion so far
 
@@ -66,6 +66,8 @@ Each change to a champion file, in time order. Commit times in UTC; the reports 
 | `e22438b`, 10-29 01:44 | SL | the SL planner c2 at medium effort, L0 with n2-b0.03 | 28.25 | the first SL champion, set by its baseline, no gate |
 | `7ce103b`, 10-29 10:43 | SL | the SL planner c2 medium, L0 with pure V pure-1-g, screen afterstates | 25.69 | no gate: the first pure V, the start of a new line judged by its own report |
 | `dc4ee30`, 10-30 15:17 | SL and NoSL | SL: the planner c2 medium, L0 with v6-3-2 on the clone; NoSL: PIMC c2, L0 with v6-3-2 | 33.56 and 23 won of 300, on `promotion-1-300` (both files) | no gate: one V for both environments, chosen by its SL report; the NoSL file drops its gate |
+| `017f210`, 10-31 | SL and NoSL | L0 with v7-1 | 37.78 and 145 won of 500, on `promotion-1-500` (both files) | wins gate passed: +18.8 points against v6-3-2 (standard error 2.25) |
+| `28b4c1f`, 10-31 | SL and NoSL | L0 with v7-1f | 41.57 and 40 won of 100, on `promotion-1-100` (both files) | wins gate passed: +16.0 points against v7-1 (standard error 5.45) |
 
 - All four NoSL gates are the floor SPRT at δ = 1.5, α = β = 0.05, and none of their reports won a run; [Gates §3](/en/arch/evaluation/gates/#sec-3) replays them pair by pair.
 - **v6-3-2's evidence.** v6-2's report was +5.92 floors against pure-1-g's on `promotion-1`'s 200 seeds (standard error 0.74; v6-2 played on the clone at `b013f95`, pure-1-g with screen afterstates at `6ce07fc`), and v6-3-2's +2.20 against v6-2's on all 300 (standard error 0.62). v6-2 was the elite gauntlet's champion, never a whole-run one.
@@ -151,7 +153,9 @@ v6-3-1 passed too (+1.73 ± 0.54 against v6-2, lower +0.85) and was not promoted
 | plan c2, L0 v6-2 clone | SL | `promotion-1` | 1/200 (0.1–2.8%) | 31.61 | 199 / 112 / 19 | 179 / 42 / 1 | 565.6 | `b013f95` | the first 200 runs of the next |
 | plan c2, L0 v6-2 clone | SL | `promotion-1-300` | 1/300 (0.1–1.9%) | 31.37 | 298 / 161 / 25 | 272 / 59 / 1 | 517.1 | `b013f95` | |
 | plan c2, L0 v6-3-1 clone | SL | `promotion-1-300` | 13/300 (2.5–7.3%) | 31.11 | 284 / 144 / 51 | 248 / 75 / 13 | 240.6 | `b013f95` | |
-| plan c2, L0 v6-3-2 clone | SL | `promotion-1-300` | 23/300 (5.2–11.2%) | 33.56 | 290 / 171 / 65 | 276 / 94 / 23 | 271.2 | `b013f95` | champion of both files |
+| plan c2, L0 v6-3-2 clone | SL | `promotion-1-300` | 23/300 (5.2–11.2%) | 33.56 | 290 / 171 / 65 | 276 / 94 / 23 | 271.2 | `b013f95` | |
+| plan c2, L0 v7-1 clone | SL | `promotion-1-500` | 145/500 (25.2–33.1%) | 37.78 | | | | `b0ec4b7` | |
+| plan c2, L0 v7-1f clone | SL | `promotion-1-100` | 40/100 (30.9–49.8%) | 41.57 | 98 / 86 / 68 | 88 / 72 / 40 | 344.5 | `e51a119` | champion of both files |
 
 "prompts random" are card prompts in combat answered by the `random` placeholder, before `p0`; "random" in the macro column is the random macro placeholder. The V's names are explained in [Learning: the experiment log §1](/en/arch/learning/experiments/#sec-1). v6-2's `promotion-1` report is the first 200 runs of its `promotion-1-300` one, record for record. v6-2 is the first V whose whole runs won; v6-3-2 the first champion that wins.
 

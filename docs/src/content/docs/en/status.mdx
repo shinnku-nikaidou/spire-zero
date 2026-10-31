@@ -8,7 +8,7 @@ This page tracks progress. The chapters say how each part works; this page says 
 
 ## 1. In one paragraph
 
-The AI plays whole Silent A0 runs headless, in the game's own code, in both environments. In **SL** the champion, the SL planner with the combat net c2 in combat and L0 with V v6-3-2 outside it, wins **7.7%** of runs (23 of 300 on `promotion-1-300`) and reaches floor 33.6 of 48 on average; before plan v6's elite gauntlet no V had won a run. In **NoSL** no champion has won a run yet. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built. The work now is plan v7: V trained and gated on whole SL runs again, deciding by P(win), with a build and a route encoder inside the net.
+The AI plays whole Silent A0 runs headless, in the game's own code, in both environments. In **SL** the champion, the SL planner with the combat net c2 in combat and L0 with V v7-1f outside it, wins **40%** of runs (40 of 100 on `promotion-1-100`) and reaches floor 41.6 of 48 on average; before plan v6's elite gauntlet no V had won a run. In **NoSL** no champion has won a run yet. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built. The work now is plan v7: V trained and gated on whole SL runs again, deciding by P(win).
 
 ## 2. Each part
 
@@ -33,8 +33,8 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 
 | environment | champion | seed set | win rate | mean floor |
 |---|---|---|---|---|
-| SL | plan c2 (medium effort), L0 v6-3-2 on the clone | `promotion-1-300` | 7.7% (23/300, 5.2–11.2%) | 33.56 |
-| NoSL | PIMC c2 8×300, L0 v6-3-2 | | no report yet | |
+| SL | plan c2 (medium effort), L0 v7-1f on the clone | `promotion-1-100` | 40% (40/100, 30.9–49.8%) | 41.57 |
+| NoSL | PIMC c2 8×300, L0 v7-1f | | no report yet | |
 | NoSL, best report | PIMC c2 8×300, L0 n2-b0.03 | `promotion-1` | 0% (0/200) | 26.16 |
 
 ## 3. Main gaps and risks
@@ -62,7 +62,7 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 
 4. <Badge text="done 2026-10-30" variant="success" /> Pure V (pure-1-g), then plan v6's elite gauntlet: three generations of self-play with even draws, v6-1, v6-2 and v6-3-2, each passing the gauntlet's paired gate; v6-3-2 becomes both champions' V and wins 23 of 300 whole SL runs.
 
-5. **Plan v7, now**: V trained and gated on whole SL runs, with every combat fought; V decides by P(win) (`v.train --objective win`) and is gated on paired wins (`learn/gauntlet.py`, promotion-1-500). Its first generation of self-play is being played ([Macro brain: weaknesses and next steps](/en/arch/macro-brain/next/)).
+5. **Plan v7, now**: V trained and gated on whole SL runs, with every combat fought; V decides by P(win) (`v.train --objective win`) and is gated on paired wins (`learn/gauntlet.py`). Generation 1's self-play and gates are done: v7-1 won 145 of 500 against v6-3-2's 51, and v7-1f, the same data with the map input fixed, 40 of 100 against v7-1's 24, and became both champions' V. Generation 2 has not started ([Macro brain: weaknesses and next steps](/en/arch/macro-brain/next/)).
 
 6. Then: NoSL's items, waiting while SL comes first: the combat net's next generation through the gate, tuning PIMC's worlds and nodes, the fusion panel's measurement, sequential halving at the root ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7), [Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
 

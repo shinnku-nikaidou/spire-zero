@@ -11,7 +11,7 @@ import PlanTimeline from '../../../../../components/combat/PlanTimeline.svelte';
 
 In SL the combat brain gets one exact copy of the fight: the clone of the current node, with every random stream in it. The same actions always give the same outcome there, so a fight is a deterministic planning problem, with nothing to guess and nothing to average. The **SL planner** (`SlPlanner`) searches it for the best line to the end of the fight, once, and the fight then plays that line step by step.
 
-Here is what that looks like in a real run. On floor 17 of a run that the current champion went on to win (seed `E91KLB4BRWB4`, from the 300-run evaluation of v6-3-2), the act 1 boss is Vantom: 173 HP and 8 stacks of Slippery, so each hit deals 1 damage and takes a stack off. At the fight's first decision, with 65 of 70 HP, the planner searched for 5.2 seconds and returned a line of 22 actions over 6 rounds. The fight followed it without another search.
+Here is what that looks like in a real run. On floor 17 of a run that V v6-3-2 went on to win (seed `E91KLB4BRWB4`, from the 300-run evaluation of v6-3-2), the act 1 boss is Vantom: 173 HP and 8 stacks of Slippery, so each hit deals 1 damage and takes a stack off. At the fight's first decision, with 65 of 70 HP, the planner searched for 5.2 seconds and returned a line of 22 actions over 6 rounds. The fight followed it without another search.
 
 <PlanTimeline client:visible lang="en" />
 
