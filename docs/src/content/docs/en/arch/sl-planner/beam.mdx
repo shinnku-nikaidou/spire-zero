@@ -30,7 +30,7 @@ A state in progress has a **bound**: the leaf's value of winning the fight from 
 
 The **decision's bound** is the bound of the decision's own state: a win that loses no HP and no potion. A line that reaches it cannot be beaten.
 
-The bound assumes that the fight neither heals nor gives potions. A few cards, potions and relics break that (a heal, a potion generated in the fight), and then a prune can drop a line that would have been better. The leaf's own shape is what makes the bound valid otherwise: `LeafValue` never values a state in progress above the win it could reach with the same HP, and V's prices are made monotone in HP for the same reason ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+The bound assumes that the fight neither heals nor gives potions. A few cards, potions and relics break that (a heal, a potion generated in the fight), and then a prune can drop a line that would have been better. The leaf's own shape is what makes the bound valid otherwise: `LeafValue` never values a state in progress above the win it could reach with the same HP, and V's prices are made monotone in HP for the same reason ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)). Nothing makes them monotone in potions: V may price a win with one potion fewer higher, and then the bound can drop a better line too.
 
 ## 3. The greedy dive
 
@@ -110,7 +110,6 @@ Width 1 is today's dive; a later pass is a beam of that width pruned by what the
 ### 7.1 The rules
 
 - **Pruning.** An end goes when its bound is at or below the best line ([§2](#sec-2)). The bound's assumption stays: a fight that heals or gives potions can break it.
-- **A heuristic cut**, optional: an end also goes when the net's 95th-percentile outcome cannot beat the best line. This is no proof, so it comes only after `sl-c1`, with a count of how many winning lines it cuts.
 - **Top width by the leaf.** The net ranks what the bound leaves ([Combat brain: the leaf](/en/arch/combat-brain/leaf/)).
 - **Stop** when the line is proved, or won with a width of at least 4, or the fight's nodes are spent. A pass cut by the budget still improves `best` with any line it finished.
 - **A losing plan** is played for one turn and planned again, until the fight's nodes are spent; then the last plan is played to its end. There is no count of plans.

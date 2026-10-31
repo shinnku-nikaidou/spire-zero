@@ -91,7 +91,7 @@ flowchart TD
 ```
 
 - **剪枝**。上界比不过目前最好路线的状态被丢掉，和现在一样（[束搜索 §2](/arch/sl-planner/beam/#sec-2)）。
-- **网络**。留下的由叶子排序，第一个用 SL 训练的网络取代 c2（[战斗大脑：叶子 §8](/arch/combat-brain/leaf/#sec-8)）。
+- **网络**。留下的由叶子排序，SL 自己的网络 c7-1v 过门槛后取代 c2（[战斗大脑：叶子 §8](/arch/combat-brain/leaf/#sec-8)）。
 - **一种枚举**。一个回合的结束状态来自 `TurnEnds`，与 NoSL 共用（[回合搜索 §5](/arch/sl-planner/turn-search/#sec-5)）。
 - **多轮，而不是下潜和束**。宽度 1 就是下潜，之后的每一轮是更宽的束（[束搜索 §7](/arch/sl-planner/beam/#sec-7)）。
 - **一个预算**。一场战斗的节点数和一个最小宽度，取代下潜、简易束、失败计划、重新规划选项和房间倍数（[预算 §7](/arch/sl-planner/budget/#sec-7)）。

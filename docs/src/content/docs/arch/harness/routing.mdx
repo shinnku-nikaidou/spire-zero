@@ -44,7 +44,7 @@ combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-
 - **SL**：唯一的世界是节点的克隆，每个首个动作用一个 `sl_world` 请求来搜索它，这样各个工作进程分担它。每个请求保留自己的状态备忘表，而单个进程里的搜索会在各首个动作之间共用一张，所以两者并不完全相同。
 - **沿用计划**（`--follow`）：路由为这一局保留一个 `TurnPlan`。只要战斗显示的是计划在这一步之前预期的观测，计划的这一步就不经搜索直接打出；否则这个决策重新搜索，并标为重新规划（[NoSL PIMC：预算 §2](/arch/pimc/budget/#sec-2)）。
 
-**池里的 SL 规划器**（`PooledPlanner.Route`，[SL 规划器](/arch/sl-planner/)）。每局一个 `SlRoute`，把战斗剩下的部分规划一次，然后沿用这个计划，只在某一步对不上或计划用完时才重新规划（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。一个计划就是 `SlPlanner.Search`，束的每个回合按保留的每个状态发一个 `sl_turn` 请求，用房间的预算。用 `--leaf-prices v` 时，每个计划都带着 V 给这场战斗各种结局定的价格，由决策时的这一局算出（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。没有节点克隆时这个路由会抛异常（它只在 SL 下打），要用 V 的价格却没有整局观测时也会。
+**池里的 SL 规划器**（`PooledPlanner.Route`，[SL 规划器](/arch/sl-planner/)）。每局一个 `SlRoute`，把战斗剩下的部分规划一次，然后沿用这个计划，只在某一步对不上或计划用完时才重新规划（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。一个计划就是 `SlPlanner.Search`，束的每个回合按保留的每个状态发一个 `sl_turn` 请求，用房间的预算。用 `--leaf-prices v` 时，每个计划都带着 V 给这场战斗各种结局定的价格，每场战斗算一次，由第一次规划时的这一局算出（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。没有节点克隆时这个路由会抛异常（它只在 SL 下打），要用 V 的价格却没有整局观测时也会。
 
 **探索**（`CombatRoute.Exploring`，仅自我对弈，`--combat-explore T`，[学习：循环 §9](/arch/learning/loop/#sec-9)）。搜索返回两个或更多候选时，首个动作按它们值的 softmax 从中抽取：每个的概率 ∝ exp((v − best) / T)，T 以叶子的单位计（`Brain/Exploration.cs`）。如果抽中的正是搜索自己的选择，结果不变。否则打出抽中的动作，候选不变，没有计划，因为那个计划是原选择的；如果它的估值比原选择低 T/100 以上，就标为探索（差距更小时就等于平手）；它不标为重新规划。
 

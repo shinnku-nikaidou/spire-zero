@@ -64,7 +64,8 @@ flowchart LR
 | 清單 | 內容 | 讀取者 |
 |---|---|---|
 | `v-g0-g3` | V 的整局自我對弈：NoSL g0–g2 和 SL g3 各自的第 1 批，分別是 1,198 局和 419 局，另有 g0–g2 裡 5 局訓練時排除的失敗對局；69 對 | pure-1、pure-1-b、pure-1-d、pure-1-g |
-| `sl-combat` | SL 的戰鬥訓練集：SL g3 的第 1 批（419 局），加上由規劃器用 c2、medium 力度打的 SL 評估（`promotion-1` 160 局；`promotion-1b` 40 局；n3-free-ctl 的晉級門檻 200 局），共 819 局、54,405 個回合開始局面；89 對 | `sl-c1`，規劃中 |
+| `sl-combat` | SL 的戰鬥訓練集：SL g3 的第 1 批（419 局），加上由規劃器用 c2、medium 力度打的 SL 評估（`promotion-1` 160 局；`promotion-1b` 40 局；n3-free-ctl 的晉級門檻 200 局），共 819 局、54,405 個回合開始局面；89 對 | 沒有網路 |
+| `c7` | c7-1v 的訓練集：v7g1 和 `promotion-301-500` 上 600 局 medium 預算對局，放在資料旁邊；`--skip-seeds` 排除 `promotion-1-300` | c7-1v，正在訓練 |
 | `v6-1`、`v6-2`、`v6-3-1`、`v6-3-2` | 每個連戰網路的各代 | 在實驗室主機上，`sl/eval/2026-10-29-train-v6/lists/` 裡 |
 
 fix68 的重跑不算在 `sl-combat` 裡，因為它們的種子就是 `promotion-1` 的種子。
@@ -112,19 +113,19 @@ fix68 的重跑不算在 `sl-combat` 裡，因為它們的種子就是 `promotio
 
 V v2 的檔案（n1、n2-\*、n3-\*）用 `features`（17 個或 9 個 V v0 特徵名）、`mean` 和 `std` 代替 `state`，它們的計算圖接受 `features`、`costs`、`mod_amounts`、`card_scalars`、`vars`、`var_values`、`var_mask`、`relic_values`、`relic_status` 和 `extra`，沒有地圖袋。
 
-**戰鬥網路的檔案**（`learn/combat/export.py:53-78`）：
+**戰鬥網路的檔案**（`learn/combat/export.py:59-85`）：
 
 | 欄位 | 內容 | C# 是否讀取 |
 |---|---|---|
 | `name` | 和冠軍顯示的一樣（`pimc NAME`、`plan NAME`） | 是 |
 | `character` | 角色（c1、c2 沒有） | 否 |
 | `env` | SL 或 NoSL（c1–c4 沒有） | 是 |
-| `buckets`、`loss_min` | 50 和 −0.25（c1：20 個剩餘生命的桶，沒有 `loss_min`） | 是 |
+| `target`、`worth_cap` | `worth` 和 4：網路預測什麼，以及上限。c1–c4 沒有這兩個欄位，而是 `buckets` 和 `loss_min`，50 和 −0.25（c1：剩餘生命值的 20 個桶，沒有 `loss_min`） | 是 |
 | `lags`、`round` | 前 3 回合的意圖，以及是否讀回合數 | 是 |
-| `vocab` | 每張表：`cards`、`modifiers`、`powers`、`enemies`、`intents`、`relics`、`potions`、`context`，較新的網路另有 `orbs`、`allies` | 是 |
+| `vocab` | 每張表：`cards`、`modifiers`、`powers`、`enemies`、`intents`、`relics`、`potions`、`context`，較新的網路還有 `orbs`、`allies`；`learn/combat/` 的網路還有 `relic_status`，`context` 只含遭遇 | 是 |
 | `fit` | 訓練報告 | 否 |
-| `onnx` | 輸入按 `learn/combat/encode.py` 的 `INPUTS` 命名（c1–c4 用它們自己的）；輸出 `outcome`（batch × 51，softmax）和 `potions_used`（batch） | 是 |
-| `tests` | 最多 8 個留出的回合開始局面：`obs`、`history`、`outcome`（51 個數字）、`potions_used` | 是 |
+| `onnx` | 輸入按 `learn/combat/encode.py` 的 `INPUTS` 命名（c1–c4 用它們自己的）；輸出 `worth`（batch）；c1–c4：`outcome`（batch × 51，softmax）和 `potions_used`（batch） | 是 |
+| `tests` | 最多 16 個留出的回合開始局面，至少一個有多段攻擊：`obs`、`history`、`worth`；c1–c4：最多 8 個，帶 `outcome`（51 個數字）和 `potions_used` | 是 |
 
 下圖逐欄打開兩個冠軍的檔案 v6-3-2.json 和 c2.json：大小、計算圖的輸入和輸出及其形狀、它的初始化器（權重張量，只列形狀）和運算子，以及訓練報告。
 
@@ -134,11 +135,11 @@ V v2 的檔案（n1、n2-\*、n3-\*）用 `features`（17 個或 9 個 V v0 特�
 
 - **用哪個 V**。`run --value FILE`（配合 `--macro l0`，`SimWorker/Commands/Args.cs:249-253`）讀 V v0 的權重或一個網路：帶 `onnx` 的檔案是網路（`RunNet.Load`），否則是 V v0 的 `{name, weights}`（`RunValue.Read`，`Brain/Macro/RunValue.cs:52-58`）。這個選項的說明文字仍寫著「V v0's weights or a net file of V v2」（`Args.cs:216`）。`run --combat-net FILE` 載入戰鬥網路（`CombatNet.Load`）。
 - **`RunNet`**（`Brain/Macro/RunNet.cs`）用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）執行計算圖，intra-op 和 inter-op 都只用一個執行緒（`:71`），因為模擬器同時跑很多行程，而一個宏觀決策只估值少數幾個小輸入。它按 `learn/v/encode.py` 的做法從整局觀測建構輸入，只餵計算圖它宣告的輸入（`NetNumbers.Declared`，`:247`），路線只在計算圖有 `route` 輸入時才餵（`:225`），V v2 的特徵、卡牌和遺物數字以及 `extra` 只餵給接受它們的計算圖。未知的 id 讀作第 0 項。`Value` 讀取目標（`:93-106`）。
-- **載入檢查**。`RunNet.Load` 給每個測試對局估值，只要有一個值偏差超過 10⁻³ × max(1, |value|) 就拒絕這個檔案（`:78-91`）；`CombatNet.Load` 預測每個測試狀態，只要有一個類別或藥水數偏差超過 10⁻³，或結局的長度不同，就拒絕它（`Brain/Combat/CombatNet.cs:65-80`）。這保證訓練時和對局時的編碼與前向計算相同。
-- **`CombatNet`** 按位置讀它的輸出（所以 c1 較舊的輸出頭會被當作損失的生命來讀），並用 `LeafValue` 的價格定價，或在 `--leaf-prices v` 下用 V 的價格（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。
+- **載入檢查**。`RunNet.Load` 給每個測試對局估值，只要有一個值偏差超過 10⁻³ × max(1, |value|) 就拒絕這個檔案（`:78-91`）；`CombatNet.Load` 預測每個測試狀態，只要有一個類別或藥水數偏差超過 10⁻³，或結局的長度不同，就拒絕它；目標為 `worth` 的網路則看它的那個數字（`Brain/Combat/CombatNet.cs:70-92`）。這保證訓練時和對局時的編碼與前向計算相同。
+- **`CombatNet`** 按位置讀 c1–c4 的輸出（所以 c1 較舊的輸出頭會被當作損失的生命來讀），並用 `LeafValue` 的價格定價。目標為 `worth` 的網路，它唯一的輸出經 `PricedLeaf` 讀取，只能配 `--leaf-prices v`（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。
 - **開銷**。v6-3-2 每次呼叫 0.093 ms，完整大小的編碼器網路 0.44 ms，而用複本時一個宏觀決策要 70–90 ms（提交 `b0ec4b7`）；V v2 每個宏觀決策約 0.9 ms（`648026c`）。戰鬥網路的開銷淹沒在遊戲的模擬裡：寬度 0.5、1 和 2 的網路搜尋時每個動作都是同樣的 1.58–1.76 s（[訓練戰鬥網路 §6](/zh-tw/arch/learning/combat-net/#sec-6)）。
 - **V v0**（`RunValue`，`Brain/Macro/RunValue.cs`）：整局觀測的 17 個特徵乘以線性權重，`run --value` 沒有指定檔案時，它就是宏觀大腦的 V。特徵（`RunValue.cs:68-92`）：層數、生命值、最大生命值、金幣、持有的藥水、遺物、牌組裡的牌、不能打出的牌、升級過的牌；能打出的牌的平均傷害（含中毒）、格擋和抽牌；以及如果每一步都隨機選路，從目前的點到頭目為止，預期會遇到的菁英、休息處、商店、財寶和 `?` 點的數量。無論由哪個 V 做決策，它們仍然寫進決策日誌的每一行宏觀決策和每個後狀態（`RunValue.cs:15-16`；[Harness：決策日誌 §7](/zh-tw/arch/harness/decision-log/#sec-7)）。沒有冠軍用它打。
-- **`OLD NETS`**。`src/` 裡只有 V v0、V v2 和戰鬥網路 c1–c4 用到的程式碼標著 `OLD NETS`（提交 `28fc273`），只要還有冠軍用其中之一就留著。從 2026-10-30 起，沒有冠軍再用 V v0 或 V v2；讀 `costs` 的 c2（`CombatNet.cs:133-135`）是兩個冠軍的葉節點。V v0 的特徵仍寫進每一行宏觀日誌和每個後狀態。
+- **`OLD NETS`**。`src/` 裡只有 V v0、V v2 和戰鬥網路 c1–c4 用到的程式碼標著 `OLD NETS`（提交 `28fc273`），只要還有冠軍用其中之一就留著。從 2026-10-30 起，沒有冠軍再用 V v0 或 V v2；讀 `costs` 的 c2（`CombatNet.cs:130-132`）是兩個冠軍的葉節點。V v0 的特徵仍寫進每一行宏觀日誌和每個後狀態。
 
 ## 9. 腳本
 
@@ -197,7 +198,7 @@ v6 網路的檔案比 `objective`、`encoders` 和 Brier 欄位更早，所以�
 
 ### `combat.train`：戰鬥網路
 
-`uv run python -m combat.train --list PREFIX --env SL|NoSL --name NAME [--out FILE] [--character SILENT] [--seed 0]`。它的樣本、損失、常數和報告見[訓練戰鬥網路 §3](/zh-tw/arch/learning/combat-net/#sec-3)–[§4](/zh-tw/arch/learning/combat-net/#sec-4)。
+`uv run python -m combat.train --list PREFIX --env SL|NoSL --name NAME --value V_FILE [--skip-seeds FILE] [--out FILE] [--character SILENT] [--seed 0]`。它的樣本、損失、常數和報告見[訓練戰鬥網路 §3](/zh-tw/arch/learning/combat-net/#sec-3)–[§4](/zh-tw/arch/learning/combat-net/#sec-4)。
 
 ### `learn/gauntlet.py`：V 的報告和晉級門檻
 
@@ -283,7 +284,7 @@ v6 網路的檔案比 `objective`、`encoders` 和 Brier 欄位更早，所以�
 **C#**（[模擬器：參考 §7](/zh-tw/arch/simulator/reference/#sec-7)），網路在訓練和部署之間的一致性，用 `Sts2Ai.Tests/Fixtures/` 裡的固定資料：
 
 - `RunNetTests`（8 個）：要進入的點只在選路時才讀入，詞元表裡沒有它的網路把它略去；一個極小、未訓練、帶三個真實整局觀測的純 V 網路（`pure-v-tiny.json`），估值和訓練器一樣；一個 win 網路（`pure-v-tiny-win.json`，同一個網路把風險值輸出頭的偏差降低 6：測試對局在 0.63、0.18 和 0.03），給出和訓練器相同的獲勝機率；一個極小的編碼器網路（`pure-v-tiny-encoders.json`，權重 × 3），路線失去連線或前方層數時，它的值移動載入檢查容差的 10 倍，每個類型都讀作未知時移動 3 倍；n2-b0.03 仍能載入；共用測試地圖上的地圖詞元和路線。
-- `CombatNetTests`（5 個）：一個極小、未訓練、帶三個真實 SL 回合開始局面的 SL 網路（`combat-sl-tiny.json`，一個帶 4 回合的歷史，一個帶盟友）；c2 仍能載入；網路只在它自己的環境裡打，舊網路兩邊都可以；V 給各結局的價格；按 V 的價格算出的價值。
+- `CombatNetTests`（6 個）：一個極小、未訓練、帶三個真實 SL 回合開始局面的 SL 網路（`combat-sl-tiny.json`，一個帶 4 回合的歷史，一個帶盟友）；一個極小的目標為 `worth` 的網路（`combat-worth-tiny.json`），它帶數值、費用、計數、狀態、熔化和多段攻擊的狀態讀出來和訓練器一樣；c2 仍能載入；網路只在它自己的環境裡打，舊網路兩邊都可以；V 按生命值和藥水給勝利的價格；輸掉值 0、勝利值它的價格、進行中的狀態值網路的比例。
 - 改動某個輸入、而輸出的變化小於容差時，檢查照樣會通過，所以每個新輸入都在一個權重讓每個輸入都起作用的網路上再檢查了一次（[訓練戰鬥網路 §2](/zh-tw/arch/learning/combat-net/#sec-2)）。
 
 **規劃** <Badge text="規劃中" variant="caution" />：
@@ -298,4 +299,3 @@ v6 網路的檔案比 `objective`、`encoders` 和 Brier 欄位更早，所以�
 2. 一旦 V 按 P(win) 做決策，除了 Brier 分數之外，怎麼檢查它的校準。
 3. 每個決策的標籤都帶著它那一局之後的抽取。每局設一個切點就能去掉它們：切點之前抽取，切點之後用 V 的最佳，只在切點之後的決策上訓練，就像 AlphaGo 的價值網路那樣訓練（[循環 §9](/zh-tw/arch/learning/loop/#sec-9)）。在計畫 v7 中再次延後。
 4. TD(λ) 或專家迭代是否對 V 有幫助，V 的標籤目前只有蒙地卡羅目標。
-5. 不管 V 的目標是什麼，`--leaf-prices v` 都把死亡定價為這一局的層數，這適合 `floor` 和 `progress` 網路，但不適合 `win` 網路（[循環 §10](/zh-tw/arch/learning/loop/#sec-10)）。

@@ -64,7 +64,8 @@ Shared training sets are list pairs in `data/CHARACTER/lists/`: `NAME-logs.txt` 
 | list | holds | read by |
 |---|---|---|
 | `v-g0-g3` | V's whole-run self-play: batch 1 of NoSL g0–g2 and of SL g3, 1,198 and 419 runs, plus 5 failed runs in g0–g2 that training leaves out; 69 pairs | pure-1, pure-1-b, pure-1-d, pure-1-g |
-| `sl-combat` | SL's combat set: SL g3's batch 1 (419 runs) and the SL evaluations played by the planner with c2 at medium effort (`promotion-1`, 160 runs; `promotion-1b`, 40; the gate of n3-free-ctl, 200), 819 runs and 54,405 round starts; 89 pairs | `sl-c1`, planned |
+| `sl-combat` | SL's combat set: SL g3's batch 1 (419 runs) and the SL evaluations played by the planner with c2 at medium effort (`promotion-1`, 160 runs; `promotion-1b`, 40; the gate of n3-free-ctl, 200), 819 runs and 54,405 round starts; 89 pairs | no net |
+| `c7` | c7-1v's set: v7g1 and the 600 medium-budget runs on `promotion-301-500`, kept beside the data; `--skip-seeds` leaves out `promotion-1-300` | c7-1v, in training |
 | `v6-1`, `v6-2`, `v6-3-1`, `v6-3-2` | each gauntlet net's generations | on the lab host, in `sl/eval/2026-10-29-train-v6/lists/` |
 
 The fix68 reruns are left out of `sl-combat`, since their seeds are `promotion-1`'s.
@@ -112,19 +113,19 @@ A net file is JSON: the graph as base64 ONNX, plus what C# needs to feed it, and
 
 V v2's files (n1, n2-\*, n3-\*) have `features` (the 17 or 9 V v0 feature names), `mean` and `std` instead of `state`, and their graphs take `features`, `costs`, `mod_amounts`, `card_scalars`, `vars`, `var_values`, `var_mask`, `relic_values`, `relic_status` and `extra` and no map bag.
 
-**The combat net's file** (`learn/combat/export.py:53-78`):
+**The combat net's file** (`learn/combat/export.py:59-85`):
 
 | field | content | read by C# |
 |---|---|---|
 | `name` | as the champion shows it (`pimc NAME`, `plan NAME`) | yes |
 | `character` | the character (not in c1, c2) | no |
 | `env` | SL or NoSL (not in c1–c4) | yes |
-| `buckets`, `loss_min` | 50 and −0.25 (c1: 20 buckets of HP left, no `loss_min`) | yes |
+| `target`, `worth_cap` | `worth` and 4: what the net predicts, and its cap. c1–c4 have neither, but `buckets` and `loss_min`, 50 and −0.25 (c1: 20 buckets of HP left, no `loss_min`) | yes |
 | `lags`, `round` | 3 earlier rounds of intents, and the round read | yes |
-| `vocab` | per table: `cards`, `modifiers`, `powers`, `enemies`, `intents`, `relics`, `potions`, `context`, and in newer nets `orbs`, `allies` | yes |
+| `vocab` | per table: `cards`, `modifiers`, `powers`, `enemies`, `intents`, `relics`, `potions`, `context`, and in newer nets `orbs`, `allies`; in `learn/combat/`'s also `relic_status`, and `context` holds encounters only | yes |
 | `fit` | the training report | no |
-| `onnx` | inputs as `learn/combat/encode.py`'s `INPUTS` name them (c1–c4 their own); outputs `outcome` (batch × 51, softmax) and `potions_used` (batch) | yes |
-| `tests` | up to 8 held-out round starts: `obs`, `history`, `outcome` (51 numbers), `potions_used` | yes |
+| `onnx` | inputs as `learn/combat/encode.py`'s `INPUTS` name them (c1–c4 their own); output `worth` (batch); c1–c4: `outcome` (batch × 51, softmax) and `potions_used` (batch) | yes |
+| `tests` | up to 16 held-out round starts, at least one with a multi-hit attack: `obs`, `history`, `worth`; c1–c4: up to 8, with `outcome` (51 numbers) and `potions_used` | yes |
 
 The figure opens the champions' two files, v6-3-2.json and c2.json, field by field: sizes, the graph's inputs and outputs with their shapes, its initializers (the weight tensors, by shape only) and operators, and the training report.
 
@@ -134,11 +135,11 @@ The figure opens the champions' two files, v6-3-2.json and c2.json, field by fie
 
 - **Which V.** `run --value FILE` (with `--macro l0`, `SimWorker/Commands/Args.cs:249-253`) reads V v0's weights or a net: a file with `onnx` is a net (`RunNet.Load`), else V v0's `{name, weights}` (`RunValue.Read`, `Brain/Macro/RunValue.cs:52-58`). The option's help text still says "V v0's weights or a net file of V v2" (`Args.cs:216`). `run --combat-net FILE` loads a combat net (`CombatNet.Load`).
 - **`RunNet`** (`Brain/Macro/RunNet.cs`) runs the graph with ONNX Runtime (`Microsoft.ML.OnnxRuntime`), one thread intra- and inter-op (`:71`), since the simulator runs many processes and a macro decision values a handful of small inputs. It builds the inputs from the run view as `learn/v/encode.py` does, feeds a graph only the inputs it declares (`NetNumbers.Declared`, `:247`), the route only when the graph has a `route` input (`:225`), and V v2's features, card and relic numbers and `extra` only to graphs that take them. Unknown ids read as entry 0. `Value` reads the objective (`:93-106`).
-- **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than 10⁻³ × max(1, |value|) (`:78-91`); `CombatNet.Load` predicts every test state and refuses it if any class or the potions are off by more than 10⁻³, or the outcome's length differs (`Brain/Combat/CombatNet.cs:65-80`). This keeps the encoding and the forward pass the same in training and in play.
-- **`CombatNet`** reads its outputs by position (so c1's older head would be read as HP lost) and prices them with `LeafValue`'s prices or, with `--leaf-prices v`, V's ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+- **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than 10⁻³ × max(1, |value|) (`:78-91`); `CombatNet.Load` predicts every test state and refuses it if any class or the potions are off by more than 10⁻³, or the outcome's length differs, and a net of target `worth` if its number is (`Brain/Combat/CombatNet.cs:70-92`). This keeps the encoding and the forward pass the same in training and in play.
+- **`CombatNet`** reads c1–c4's outputs by position (so c1's older head would be read as HP lost) and prices them with `LeafValue`'s prices. A net of target `worth` has its one output read through `PricedLeaf`, with `--leaf-prices v` only ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
 - **Cost.** v6-3-2 takes 0.093 ms a call, a full-size encoders' net 0.44 ms, against 70–90 ms a macro decision with the clone (commit `b0ec4b7`); V v2 took about 0.9 ms a macro decision (`648026c`). The combat net's cost is lost in the game's simulation: nets of width 0.5, 1 and 2 searched at the same 1.58–1.76 s per action ([Training the combat net §6](/en/arch/learning/combat-net/#sec-6)).
 - **V v0** (`RunValue`, `Brain/Macro/RunValue.cs`): 17 features of the run view times linear weights, the macro brain's V when `run --value` names no file. The features (`RunValue.cs:68-92`): the floor, HP, max HP, gold, the potions held, the relics, the cards in the deck, the unplayable cards, the upgraded cards; the mean damage (poison included), block and draw of the playable cards; and the expected number of elites, rest sites, shops, treasures and `?` points from the current point to the boss, if each step took a random path. They are still written on every macro line of the decision log and into every afterstate, whatever V decides (`RunValue.cs:15-16`; [Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)). No champion plays it.
-- **`OLD NETS`.** Code in `src/` that only V v0, V v2 and the combat nets c1–c4 use is marked `OLD NETS` (commit `28fc273`) and stays while a champion plays one of them. No champion plays V v0 or V v2 since 2026-10-30; c2, which reads `costs` (`CombatNet.cs:133-135`), is both champions' leaf. V v0's features still go into every macro log line and afterstate.
+- **`OLD NETS`.** Code in `src/` that only V v0, V v2 and the combat nets c1–c4 use is marked `OLD NETS` (commit `28fc273`) and stays while a champion plays one of them. No champion plays V v0 or V v2 since 2026-10-30; c2, which reads `costs` (`CombatNet.cs:130-132`), is both champions' leaf. V v0's features still go into every macro log line and afterstate.
 
 ## 9. Scripts
 
@@ -197,7 +198,7 @@ The v6 nets' files predate `objective`, `encoders` and the Brier fields in their
 
 ### `combat.train`: the combat net
 
-`uv run python -m combat.train --list PREFIX --env SL|NoSL --name NAME [--out FILE] [--character SILENT] [--seed 0]`. Its samples, loss, constants and report are in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3)–[§4](/en/arch/learning/combat-net/#sec-4).
+`uv run python -m combat.train --list PREFIX --env SL|NoSL --name NAME --value V_FILE [--skip-seeds FILE] [--out FILE] [--character SILENT] [--seed 0]`. Its samples, loss, constants and report are in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3)–[§4](/en/arch/learning/combat-net/#sec-4).
 
 ### `learn/gauntlet.py`: a V's report and gate
 
@@ -283,7 +284,7 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 **C#** ([Simulator: reference §7](/en/arch/simulator/reference/#sec-7)), the train/deploy parity of the nets, on fixtures in `Sts2Ai.Tests/Fixtures/`:
 
 - `RunNetTests` (8): the point entered reads on a map move and only then, and a net whose table lacks it leaves it out; a tiny untrained pure V net with three real run views (`pure-v-tiny.json`) is valued as the trainer valued it; a win net (`pure-v-tiny-win.json`, the same with its hazard head's bias lowered by 6: test runs at 0.63, 0.18 and 0.03) at the trainer's chance to win; a tiny encoders' net (`pure-v-tiny-encoders.json`, weights × 3), whose values move 10 times the load check's tolerance when the route loses its links or floors ahead and 3 times when every type reads unknown; n2-b0.03 still loads; the map tokens and the route on a shared test map.
-- `CombatNetTests` (5): a tiny untrained SL net with three real SL round starts (`combat-sl-tiny.json`, one with 4 rounds of history, one with an ally); c2 still loads; a net plays only in its environment and an old one in either; V's prices of the endings; the value at V's prices.
+- `CombatNetTests` (6): a tiny untrained SL net with three real SL round starts (`combat-sl-tiny.json`, one with 4 rounds of history, one with an ally); a tiny net of target `worth` (`combat-worth-tiny.json`) whose states, with amounts, cost, counters, status, melting and a multi-hit attack, read as its trainer did; c2 still loads; a net plays only in its environment and an old one in either; V's prices of a win by HP and potions; a loss at nothing, a win at its price and a state in progress at the net's share.
 - A check passes when a changed input moves the output by less than its tolerance, so each new input was checked once more on a net whose weights make every input count ([Training the combat net §2](/en/arch/learning/combat-net/#sec-2)).
 
 **Planned** <Badge text="planned" variant="caution" />:
@@ -298,4 +299,3 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 2. How to check P(win)'s calibration once V decides by it, beyond the Brier score.
 3. Each decision's label carries its run's later draws. A cut point per run would remove them: draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained ([The loop §9](/en/arch/learning/loop/#sec-9)). Deferred again for plan v7.
 4. Whether TD(λ) or expert iteration would help V, whose labels are Monte Carlo only.
-5. `--leaf-prices v` prices a death at the run's floor whatever V's objective, which suits `floor` and `progress` nets but not a `win` net ([The loop §10](/en/arch/learning/loop/#sec-10)).

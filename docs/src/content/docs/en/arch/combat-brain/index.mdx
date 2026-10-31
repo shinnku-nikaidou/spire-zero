@@ -25,13 +25,13 @@ This part of the book has three chapters:
 
 **Built, and playing both champions.** SL: `SlPlanner` plans the whole combat on the node's clone and the fight follows its plan (`run --env SL --policy plan`, medium effort by default). NoSL: `PimcBrain` searches this turn in 8 sampled worlds of 300 nodes each and averages by first action (`run --policy pimc`). Both search in a pool of worker processes, and both score where they stop with the same leaf: the combat net c2, priced at `LeafValue`'s prices ([The leaf](/en/arch/combat-brain/leaf/)). Card prompts during a fight go to a fixed rule, `p0` ([Prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)). Two placeholders stay, for benchmarks and as the panel's baselines: `PlayPolicy` (plays a random playable card) and `RandomPolicy` (uniform over the legal actions).
 
-**Planned, not implemented.** A simpler design for both algorithms, which these pages describe wherever a heading or a row carries <Badge text="planned" variant="caution" />. No code of it exists and none of it has been measured; everything without the badge describes today's code.
+**Planned, not implemented.** A simpler design for both algorithms, which these pages describe wherever a heading or a row carries <Badge text="planned" variant="caution" />. None of it has been measured, and only the net's trainer and V's prices have code; everything without the badge describes today's code.
 
 | piece | built today | planned |
 |---|---|---|
 | one turn's end states | two searches: `SlPlanner.SearchTurn`, `PimcBrain.SearchWorld` | one `TurnEnds` ([§3.1](#sec-3.1)) |
-| the net | c2, trained on 315 NoSL runs, with known gaps ([The leaf §7](/en/arch/combat-brain/leaf/#sec-7)) | `sl-c1` from SL self-play, then a stricter input rule ([The leaf §8](/en/arch/combat-brain/leaf/#sec-8)) |
-| prices | `LeafValue`'s hand prices; V's prices built, unused, with a known fault | V's prices once fixed and gated ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)) |
+| the net | c2, trained on 315 NoSL runs, with known gaps ([The leaf §7](/en/arch/combat-brain/leaf/#sec-7)) | c7-1v from SL self-play, learning V's worth of a fight's end; being trained, not gated ([The leaf §8](/en/arch/combat-brain/leaf/#sec-8)) |
+| prices | `LeafValue`'s hand prices; V's prices built for a net of target `worth`, unused | V's prices with c7-1v, in one gate ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)) |
 | SL's search | a greedy dive, then a beam; easy beam, loss plans, replans, room multiples | iterative widening with one fight budget ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)) |
 | NoSL's search | PIMC, with halving, follow and room multiples built and off | the same PIMC on `TurnEnds`, budget K and nodes per world only ([NoSL PIMC: budget §8](/en/arch/pimc/budget/#sec-8)) |
 | card prompts | the fixed rule `p0` | search branches ([Prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)) |
@@ -160,12 +160,10 @@ public sealed record CombatDecisionResult(
 
 ## 6. The order of validation <Badge text="planned" variant="caution" />
 
-The design goes through gates one change at a time, so that each gate says what that change is worth:
+The design goes through gates in order, so that each gate says what its step is worth:
 
-1. **`sl-c1`.** A first net from SL's own games, today's search and hand prices ([Training the combat net §7](/en/arch/learning/combat-net/#sec-7)).
-2. **Input fixes.** The net's input rule and its masked head ([The leaf §8](/en/arch/combat-brain/leaf/#sec-8)).
-3. **Prompts** as search branches ([Prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)), **then widening** ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)), **then budgets** ([The SL planner: budget §7](/en/arch/sl-planner/budget/#sec-7)).
-4. **V's prices**, after their fault is fixed ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+1. **c7-1v.** SL's own net with V's prices, on today's search: labels, inputs and prices in one gate ([The leaf §8](/en/arch/combat-brain/leaf/#sec-8)).
+2. **Prompts** as search branches ([Prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)), **then widening** ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)), **then budgets** ([The SL planner: budget §7](/en/arch/sl-planner/budget/#sec-7)).
 
 NoSL has two conditions of its own: merging `TurnEnds` needs a NoSL gate, and prompt branches need the fusion panel first ([NoSL PIMC: search §6](/en/arch/pimc/search/#sec-6)).
 
@@ -173,7 +171,7 @@ NoSL has two conditions of its own: merging `TurnEnds` needs a NoSL gate, and pr
 
 | chapter | section | what it explains | figures |
 |---|---|---|---|
-| Combat brain | [The leaf](/en/arch/combat-brain/leaf/) | where a search stops and what that state is worth: `LeafValue`, the combat net c2, its head, prices, c2's known issues, the planned net | the hand-made leaf, live; c2's predictions on real states; the two nets' diagrams |
+| Combat brain | [The leaf](/en/arch/combat-brain/leaf/) | where a search stops and what that state is worth: `LeafValue`, the combat net c2, its head, prices, c2's known issues, the next net, c7-1v | the hand-made leaf, live; c2's predictions on real states; the two nets' diagrams |
 | | [Prompts, moves and workers](/en/arch/combat-brain/shared/) | `p0` and prompts as branches, the record of enemy moves, the worker pool | – |
 | [The SL planner](/en/arch/sl-planner/) | overview | the node clone, why the best line is right, plan once and follow, the planned shape | a real boss fight, planned at its first decision |
 | | [Turn search](/en/arch/sl-planner/turn-search/) | one turn searched in full, transpositions, sharing the nodes, `TurnEnds` | a turn's search tree |

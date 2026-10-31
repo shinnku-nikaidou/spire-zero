@@ -98,7 +98,7 @@ public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
     double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
 public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
-public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Potion, int Potions);
+public sealed record EndPrices(double Before, IReadOnlyDictionary<string, IReadOnlyList<double>> Hp, IReadOnlyList<string> Held);
 ```
 
 | 类型 | 所在位置 | 包含什么 |
@@ -107,7 +107,7 @@ public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Po
 | `TurnSearch` | `turn` | 一个回合的搜索得到的各个结束状态：`ends`，如果这个回合能到达战斗结束，先是最好的战斗结束状态，然后是下一回合开始时的各个状态，最好的在前；`nodes`，模拟的动作数；`cut`，是否有东西被略去（节点用完了，或者找到的状态比保留的多）；`bound`，被搜索的那个状态的上界 |
 | `TurnEnd` | `turn.ends` | 规划器的打法里一个回合结束处的状态：从决策处到达它的动作（最后一个结束回合）以及每个动作之前的观测哈希；它的战斗状态；叶子的值；它的上界，即它还能达到的最好结果（以它现有的生命值和药水取胜；战斗结束后就是它的值）；它的键，即它的观测和完整隐藏状态的哈希，相等的状态按它合并（战斗结束后为 0）；它的敌人出招记录 |
 | `Afterstate` | `afters` | 一条路径通向什么：那时的这一局；游戏接下来问的决策界面，一局结束后为 null；它的画面；它的合法动作。选牌提示的选项在它的画面里，所以它的合法动作列表为空；战斗的画面被略去，因为战斗会结束一次试探 |
-| `EndPrices` | `prices` | 一场战斗的结局值多少，来自决策处的 V，以 V 的单位计：`death`，死亡；`hp[h]`，剩 h 点生命取胜（生命越多，价格从不更低）；`potion`，决策时持有的 `potions` 瓶药水里，这场战斗每用掉一瓶就扣掉的值（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)） |
+| `EndPrices` | `prices` | 一场战斗的结局值多少，来自战斗第一次规划时的 V，以 V 的单位计：`before`，当时这一局的 V；`hp`，胜利的价格，先按保留的药水（`held` 的一个排好序的子集，逗号连接），再按剩下的生命，从 0 开始，生命越多，价格从不更低；`held`，那次规划时持有的药水。死亡值 0（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)） |
 
 `status` 写成数字（0 进行中，1 赢，2 输），哈希和键写成 JSON 数字（[协议 §4](/arch/protocol/#sec-4)）。
 

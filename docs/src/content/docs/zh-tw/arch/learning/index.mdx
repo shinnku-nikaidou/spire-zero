@@ -23,9 +23,9 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 **宏觀大腦的 V**。在戰鬥外，宏觀大腦把一個決策的每個選項都打一遍，看緊接在它之後的局面（*後狀態*），選後狀態被 V 估得最高的那個選項（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。V 是一個神經網路，讀這一局是什麼（它的卡牌、遺物、藥水、幕和頭目的 id，以及前方的地圖）和六個原始數字，傳回一個數字，即從這裡贏下這一局的機率（[宏觀大腦：從風險值到價值 §1](/zh-tw/arch/macro-brain/value/#sec-1)）。同一個 V 給每種決策介面（surface）評分，所以一張牌、一件遺物、一次回血和地圖上的一條路線都在同一個尺度上比較，不需要手寫的換算比例。
 
-**戰鬥網路**。戰鬥搜尋往前看一個回合或一整場戰鬥，然後必須說出它走到的狀態值多少：這就是它的*葉節點價值*。戰鬥網路讀一個回合的開始，預測戰鬥會怎樣結束：死亡，或者還要失去多少比例的最大生命值（分成 50 個桶），以及還要用掉的藥水（[戰鬥大腦：葉節點 §3](/zh-tw/arch/combat-brain/leaf/#sec-3)、[§4](/zh-tw/arch/combat-brain/leaf/#sec-4)）。它的訓練見[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/)。
+**戰鬥網路**。戰鬥搜尋往前看一個回合或一整場戰鬥，然後必須說出它走到的狀態值多少：這就是它的*葉節點價值*。戰鬥網路讀一個回合的開始，預測戰鬥會怎樣結束：死亡，或者還要失去多少比例的最大生命值（分成 50 個桶），以及還要用掉的藥水（[戰鬥大腦：葉節點 §3](/zh-tw/arch/combat-brain/leaf/#sec-3)、[§4](/zh-tw/arch/combat-brain/leaf/#sec-4)）。它的訓練見[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/)。 這是冠軍們用的 c2。SL 的下一個網路 c7-1v 只學一個數字：戰鬥後這一局的 V 占戰鬥前的 V 的比例（[§8](/zh-tw/arch/combat-brain/leaf/#sec-8)）。
 
-**設計上的同一個尺度**。設計讓兩者共用一個單位，即這一局的勝率：宏觀的 V 給一場戰鬥的每種結局定價，戰鬥網路只說出每種結局有多大可能（[循環 §10](/zh-tw/arch/learning/loop/#sec-10)）。實際實作中，兩者各有各的單位。戰鬥葉節點用手設的數字（`LeafValue` 的價格）給它的結局定價，除非 SL 規劃器帶 `--leaf-prices v` 執行，此時由 V 定價；這個選項已實作，但沒有冠軍使用它（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。
+**設計上的同一個尺度**。設計讓兩者共用一個單位，即這一局的勝率：戰鬥網路學習 V 對戰鬥結局的估價，規劃器的葉節點以 V 為單位（[循環 §10](/zh-tw/arch/learning/loop/#sec-10)）。今天實際打的時候，兩者各有各的單位：戰鬥葉節點用手設的數字（`LeafValue` 的價格）給 c2 的結局定價。`--leaf-prices v` 配目標為 `worth` 的網路已實作，但沒有冠軍使用它（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。
 
 **策略是學出來的，不是寫出來的**。兩個網路裡都沒有任何手寫的打法：沒有哪張牌被說成好牌，也沒有列出哪個怪物的出招順序。手寫的是遊戲規則（模擬器跑的是真實的遊戲）和目標（一局怎樣結束、一場戰鬥怎樣結束）。V 從零學起，從 AI 自己的對局學，不從人類的對局學。
 
@@ -61,7 +61,7 @@ flowchart LR
 | 自我對弈：整局，以 ε 均勻抽取 | 已實作 | `run --explore`，[循環 §2](/zh-tw/arch/learning/loop/#sec-2) |
 | 按 V 或搜尋的估值做 softmax 探索 | 已實作，只有較舊的作業用過 | `run --macro-explore`、`--combat-explore`，[循環 §9](/zh-tw/arch/learning/loop/#sec-9) |
 | V 的訓練，蒙地卡羅標籤 | 已實作 | `learn/v/`，[宏觀大腦：從風險值到價值 §5](/zh-tw/arch/macro-brain/value/#sec-5) |
-| 戰鬥網路的訓練，蒙地卡羅標籤 | 已實作，還沒用它訓練出任何網路 | `learn/combat/`，[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/) |
+| 戰鬥網路的訓練，蒙地卡羅標籤 | 已實作，c7-1v 正在訓練，還沒過門檻 | `learn/combat/`，[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/) |
 | V 的頭目戰標籤（頭目模擬戰、門前狀態） | 已實作，未使用 | `learn/bosslab.py`，[參考 §9](/zh-tw/arch/learning/reference/#sec-9) |
 | 反事實分叉 | 已實作為指令；目前沒有訓練器讀它們 | `fork`、`afterstates`，[循環 §10](/zh-tw/arch/learning/loop/#sec-10) |
 | 晉級門檻：模擬器的 SPRT，以及勝場的配對下界 | 已實作 | `gate`、`learn/challenge.py`、`learn/gauntlet.py`，[循環 §8](/zh-tw/arch/learning/loop/#sec-8) |

@@ -102,7 +102,7 @@ Several commands share groups of options, defined in `Commands/Args.cs`.
 | `--value FILE` | V v0's initial weights | l0's V: V v0 weights, a V v2 net or a pure V net; needs `l0` |
 | `--afterstates` | `screen` | `clone` plays each option on the node's clone (SL, `l0`) |
 | the leaf options | | above; need `pimc` or `plan` |
-| `--leaf-prices` | `leaf` | what plan prices a combat's end at: `v` needs plan, `--combat-net` and a net `--value` |
+| `--leaf-prices` | `leaf` | what plan prices a combat's end at: `v` goes with a `--combat-net` of target `worth` and with no other, and needs plan and a net `--value` |
 | `--macro-explore T` | 0 | l0 draws by a softmax of V's values at temperature T, in V's units; needs `l0` |
 | `--combat-explore T` | 0 | PIMC draws by a softmax of the search's values, in leaf units; needs `pimc` |
 | `--explore ε` | 0 | l0 draws a share ε of its decisions evenly among their options; needs `l0` |
@@ -205,7 +205,7 @@ The run line then ends with `obs <digest>`, one hash of the run's observation ha
 | `Brain/BudgetTests` | room multiples scale PIMC's nodes and plan's beam, once; names show only what is not the default |
 | `Brain/CloneSearchTests` | L0 on a toy clone: a shop is worth its best basket; an event option is worth what its next page gives; a map move is not played; a two-pick prompt finds the best pair; a skipped card reward is not opened again; a state reached twice is searched once |
 | `Brain/CombatExplorationTests` | an exploring route draws by the search's values and marks the draw; a tie is drawn but not marked; a route without candidates is left alone |
-| `Brain/CombatNetTests` | reads an SL net's states as its trainer did; still reads c2; a net plays only in its environment; V's prices of deaths, wins and potions; states in progress at V's prices |
+| `Brain/CombatNetTests` | reads an SL net's states as its trainer did, and a worth net's; still reads c2; a net plays only in its environment; V's prices of a win by HP and potions; a loss, a win and a state in progress at V's prices |
 | `Brain/LeafValueTests` | a loss is 0; a win scores by HP and potions; in progress is below a win; a projected death stays above a loss; enemy damage raises the value |
 | `Brain/MacroExplorationTests` | a removal is worth only what can be removed; without exploration l0 takes the best; the softmax draws by V and the log marks them; even draws for card rewards; at ε=1 every kind of decision is drawn evenly but the potion belt; prompts at ε=1 and 0.1; an exploring prompt keeps its minimum |
 | `Brain/MacroUpgradeTests` | smithing is worth its best upgrade; the smith prompt takes the valued upgrade; the upgrade prompt takes the best preview |

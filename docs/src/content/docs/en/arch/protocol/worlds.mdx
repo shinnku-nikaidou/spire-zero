@@ -98,7 +98,7 @@ public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
     double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
 public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
-public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Potion, int Potions);
+public sealed record EndPrices(double Before, IReadOnlyDictionary<string, IReadOnlyList<double>> Hp, IReadOnlyList<string> Held);
 ```
 
 | type | in | what it holds |
@@ -107,7 +107,7 @@ public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Po
 | `TurnSearch` | `turn` | the ends of one turn's search: `ends`, the best end of the combat if the turn can reach one, then the states at the next turn's start, best first; `nodes`, the actions simulated; `cut`, whether anything was left out (the nodes ran out, or more states were found than kept); `bound`, the bound of the state searched from |
 | `TurnEnd` | `turn.ends` | a state where a turn of the planner's line ends: the actions that reach it from the decision (the last one ending the turn) and the observation hash before each; its status; the leaf's value; its bound, the best it can still reach (a win with the HP and potions it has; once the combat is over, its value); its key, the hash of its observation and full hidden state, by which equal states are merged (0 once the combat is over); its record of enemy moves |
 | `Afterstate` | `afters` | what a path leads to: the run then; the surface the game asks next, null once the run is over; its screen; its legal actions. A card prompt's options are in its screen, so its legal list is empty; a combat's screen is left out, since a combat ends a probe |
-| `EndPrices` | `prices` | what a combat's end is worth, from V at the decision, in V's units: `death`, a death; `hp[h]`, a win with h HP left (never lower for more HP); `potion`, taken off for each of the `potions` held at the decision that the combat uses up ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)) |
+| `EndPrices` | `prices` | what a combat's ends are worth, from V at the combat's first plan, in V's units: `before`, V of the run then; `hp`, of a win, by the potions it keeps (a sorted subset of `held`, comma-joined), by the HP it leaves, from 0, never lower for more HP; `held`, the potions at that plan. A death is worth nothing ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)) |
 
 `status` is written as a number (0 in progress, 1 won, 2 lost), and hashes and keys as JSON numbers ([Overview §4](/en/arch/protocol/#sec-4)).
 

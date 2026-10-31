@@ -23,7 +23,7 @@ AI 以無頭方式、在遊戲自己的程式碼裡，在兩種環境下打完�
 | Harness | 已實作：沒有後備的路由、從 run id 得到的種子、決策日誌、大腦伺服器；`run --check` 能精確重播一局。規劃中：公開紀錄的其餘部分、隨時可停（anytime）的回答（[Harness](/zh-tw/arch/harness/)） |
 | NoSL 戰鬥大腦 | 已實作：在取樣世界上做 PIMC，以戰鬥網路 c2 為葉節點；自 2026-10-27 起是 NoSL 冠軍的戰鬥大腦（[NoSL PIMC](/zh-tw/arch/pimc/)） |
 | SL 戰鬥大腦 | 已實作：SL 規劃器，在節點複本上對整個回合做束搜尋；在戰鬥測試集上，PIMC 贏下的每場戰鬥它都贏了，120 場裡還多贏 9 場（[SL 規劃器](/zh-tw/arch/sl-planner/)） |
-| 戰鬥重新設計 | <Badge text="規劃中" variant="caution" /> 尚未實作：SL = 剪枝 + 網路，NoSL = 蒙地卡羅 + 網路，用同一個 `TurnEnds` 和同一個葉節點，每個門檻驗證一項改動（[戰鬥大腦 §3](/zh-tw/arch/combat-brain/#sec-3)、[§6](/zh-tw/arch/combat-brain/#sec-6)） |
+| 戰鬥重新設計 | <Badge text="規劃中" variant="caution" /> SL = 剪枝 + 網路，NoSL = 蒙地卡羅 + 網路，用同一個 `TurnEnds` 和同一個葉節點，逐個門檻驗證。第一步，SL 的網路 c7-1v 配 V 的價格，程式碼已實作，正在訓練；其餘尚未實作（[戰鬥大腦 §3](/zh-tw/arch/combat-brain/#sec-3)、[§6](/zh-tw/arch/combat-brain/#sec-6)） |
 | 宏觀大腦 | 已實作：L0 用 V 給每個選項的後狀態估值，後狀態在 NoSL 中從畫面預測，在 SL 中在節點複本上打出來；V 是純 V，只讀這一局的 id 和原始狀態（[宏觀大腦](/zh-tw/arch/macro-brain/)） |
 | 學習 | 已實作：帶均勻抽取探索的自我對弈、V 和戰鬥網路的訓練、連戰的報告和門檻、計畫 v7 的勝局門檻。規劃中：TD(λ)、專家迭代、LLM 補丁提案；SPSA 已移除（[學習：循環](/zh-tw/arch/learning/loop/)） |
 | 評估 | 已實作：報告、每種環境各自的排行榜、種子集、配對的整局門檻、冠軍檔案（[評估](/zh-tw/arch/evaluation/)） |
@@ -65,7 +65,7 @@ AI 以無頭方式、在遊戲自己的程式碼裡，在兩種環境下打完�
 
 5. **計畫 v7，現在**：V 在整局 SL 上訓練並過門檻，每場戰鬥都真打；V 按 P(win) 做決定（`v.train --objective win`），並用配對的勝局過門檻（`learn/gauntlet.py`）。第 1 代的自我對弈和門檻已經完成：v7-1 500 局贏 145 局，v6-3-2 贏 51 局；v7-1f，同樣的資料、修好了地圖輸入，100 局贏 40 局，v7-1 贏 24 局，並成為兩個冠軍的 V。第 2 代還沒有開始（[宏觀大腦：弱點與下一步](/zh-tw/arch/macro-brain/next/)）。
 
-6. 然後：戰鬥重新設計，每個門檻一項改動，從 SL 自己的第一個網路 `sl-c1` 開始（[戰鬥大腦 §6](/zh-tw/arch/combat-brain/#sec-6)）。NoSL 的各項在 SL 優先期間先等著：調整 PIMC 的世界數和節點數、融合測試集的測量（[NoSL PIMC：預算 §7](/zh-tw/arch/pimc/budget/#sec-7)）。
+6. **同樣在進行**：戰鬥重新設計的第一步，SL 自己的網路 c7-1v，它學習 V 對戰鬥結局的估價，並透過 V 的價格來打。它正在訓練，還沒有過門檻（[戰鬥大腦 §6](/zh-tw/arch/combat-brain/#sec-6)、[葉節點 §8](/zh-tw/arch/combat-brain/leaf/#sec-8)）。NoSL 的各項在 SL 優先期間先等著：調整 PIMC 的世界數和節點數、融合測試集的測量（[NoSL PIMC：預算 §7](/zh-tw/arch/pimc/budget/#sec-7)）。
 
 7. Mod 的自動遊玩：執行器、自動跑局驅動程式、R4 管線和 R3 ≡ R4 測試（[Mod：自動遊玩與安全](/zh-tw/arch/mod/auto/)）。
 

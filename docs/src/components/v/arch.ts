@@ -488,23 +488,23 @@ export function combatNext(lang: Lang): Diagram {
       },
       {
         title: L(w('Enemies', '敌人', '敵人')),
-        input: L(w('id · HP · block · powers ·\ncurrent intents · rounds shown', 'id · 生命 · 格挡 · 能力 ·\n当前意图 · 已显示回合数', 'id · 生命 · 格擋 · 能力 ·\n目前意圖 · 已顯示回合數')),
+        input: L(w('id · HP · block · powers ·\nintents now and 3 rounds back', 'id · 生命 · 格挡 · 能力 ·\n现在与前 3 回合的意图', 'id · 生命 · 格擋 · 能力 ·\n現在與前 3 回合的意圖')),
         items: [
           {
             kind: 'block',
-            label: L(w('32 + 64 + 32 = 128', '32 + 64 + 32 = 128', '32 + 64 + 32 = 128')),
+            label: L(w('32 + 64 + 4 × 32 = 224', '32 + 64 + 4 × 32 = 224', '32 + 64 + 4 × 32 = 224')),
             tone: 'embed',
             info: L(
               w(
-                'Per living enemy: its id and numbers, 32; its powers through the powers’ φ and summed, 64; its current intents, 32. If held-out cross-entropy keeps the 3 lagged intent slots, 3 × 32 more, 224 in all.',
-                '每个活着的敌人：id 和数值，32；它的能力经能力的 φ 后求和，64；当前意图，32。如果留出集交叉熵要求保留 3 个滞后意图槽，再加 3 × 32，共 224。',
-                '每個活著的敵人：id 和數值，32；它的能力經能力的 φ 後加總，64；目前意圖，32。如果留出集交叉熵要求保留 3 個滯後意圖槽，再加 3 × 32，共 224。',
+                'Per living enemy: its id and numbers, 32; its powers through the powers’ φ and summed, 64; 4 intent slots, its intents now and in its last 3 rounds, 32 each.',
+                '每个活着的敌人：id 和数值，32；它的能力经能力的 φ 后求和，64；4 个意图槽，当前和最近 3 回合的意图，各 32。',
+                '每個活著的敵人：id 和數值，32；它的能力經能力的 φ 後加總，64；4 個意圖槽，目前和最近 3 回合的意圖，各 32。',
               ),
             ),
           },
           {
             kind: 'block',
-            label: L(w('φ: Linear + ReLU\n128 → 128 → 128', 'φ：线性层 + ReLU\n128 → 128 → 128', 'φ：線性層 + ReLU\n128 → 128 → 128')),
+            label: L(w('φ: Linear + ReLU\n224 → 128 → 128', 'φ：线性层 + ReLU\n224 → 128 → 128', 'φ：線性層 + ReLU\n224 → 128 → 128')),
             tone: 'ff',
             info: L(w('The enemy network, applied to each enemy on its own.', '敌人网络，对每个敌人单独作用。', '敵人網路，對每個敵人單獨作用。')),
           },
@@ -546,18 +546,18 @@ export function combatNext(lang: Lang): Diagram {
       },
       {
         title: L(w('The rest', '其余', '其餘')),
-        input: L(w('relics · potions · encounter ·\norbs · allies · 2 numbers', '遗物 · 药水 · 遭遇 ·\n充能球 · 盟友 · 2 个数', '遺物 · 藥水 · 遭遇 ·\n充能球 · 盟友 · 2 個數')),
+        input: L(w('relics · potions · encounter ·\norbs · allies · 3 numbers', '遗物 · 药水 · 遭遇 ·\n充能球 · 盟友 · 3 个数', '遺物 · 藥水 · 遭遇 ·\n充能球 · 盟友 · 3 個數')),
         narrow: true,
         items: [
           {
             kind: 'block',
-            label: L(w('4 × 32 + 64 + 2', '4 × 32 + 64 + 2', '4 × 32 + 64 + 2')),
+            label: L(w('4 × 32 + 64 + 3', '4 × 32 + 64 + 3', '4 × 32 + 64 + 3')),
             tone: 'embed',
             info: L(
               w(
-                'Relics (id, counter and status), potions, the encounter and orbs, 32 each; allies through their own φ, 64; the ascension and orb slots, 2.',
-                '遗物（id、计数和状态）、药水、遭遇和充能球，各 32；盟友经自己的 φ，64；进阶和充能球栏位，2。',
-                '遺物（id、計數和狀態）、藥水、遭遇和充能球，各 32；盟友經自己的 φ，64；晉階和充能球欄位，2。',
+                'Relics (id, counter, melted and status), potions, the context (only the encounter is known; act, room and character read as unknown) and orbs, 32 each; allies through their own φ, 64; the ascension, orb slots and gold, 3.',
+                '遗物（id、计数、熔化和状态）、药水、上下文（只认识遭遇；幕、房间和角色读作未知）和充能球，各 32；盟友经自己的 φ，64；进阶、充能球栏位和金币，3。',
+                '遺物（id、計數、熔化和狀態）、藥水、上下文（只認識遭遇；幕、房間和角色讀作未知）和充能球，各 32；盟友經自己的 φ，64；晉階、充能球欄位和金幣，3。',
               ),
             ),
           },
@@ -566,26 +566,26 @@ export function combatNext(lang: Lang): Diagram {
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 256 + 128 + 64 + 8 + 194 = 650', '拼接：256 + 128 + 64 + 8 + 194 = 650', '串接：256 + 128 + 64 + 8 + 194 = 650')),
+      label: L(w('Concatenate: 256 + 128 + 64 + 8 + 195 = 651', '拼接：256 + 128 + 64 + 8 + 195 = 651', '串接：256 + 128 + 64 + 8 + 195 = 651')),
       tone: 'norm',
-      info: L(w('One vector of 650 numbers.', '一个 650 个数的向量。', '一個 650 個數的向量。')),
+      info: L(w('One vector of 651 numbers.', '一个 651 个数的向量。', '一個 651 個數的向量。')),
     },
     top: [
-      ...body(lang, 650),
+      ...body(lang, 651),
       {
         kind: 'block',
-        label: L(w('Outcome head\n256 → 51, masked', '结局输出头\n256 → 51，带遮罩', '結局輸出頭\n256 → 51，帶遮罩')),
+        label: L(w('Worth head\n256 → 1', '价值输出头\n256 → 1', '價值輸出頭\n256 → 1')),
         tone: 'head',
         info: L(
           w(
-            'A death and 50 buckets of the share of max HP still to be lost. Buckets beyond the HP held are masked, in training and in valuing. A second head, 256 → 1, gives the potions still to be used after a win. No policy head.',
-            '死亡，以及还会失去的最大生命比例的 50 个区间。超过当前生命的区间被遮罩，训练和估值时都一样。第二个输出头 256 → 1 给出获胜后还会用掉的药水数。没有策略头。',
-            '死亡，以及還會失去的最大生命比例的 50 個區間。超過目前生命的區間被遮罩，訓練和估值時都一樣。第二個輸出頭 256 → 1 給出獲勝後還會用掉的藥水數。沒有策略頭。',
+            'V of the first run view after the fight as a share of V at the last one before it, capped at 4; a death 0. No buckets, no potion head, no policy head.',
+            '战斗后第一个整局观测的 V 占战斗前最后一个的 V 的比例，上限 4；死亡为 0。没有桶，没有药水头，也没有策略头。',
+            '戰鬥後第一個整局觀測的 V 占戰鬥前最後一個的 V 的比例，上限 4；死亡為 0。沒有桶，沒有藥水頭，也沒有策略頭。',
           ),
         ),
       },
     ],
-    output: L(w('P(death) · 50 buckets of HP still to lose\n× prices = the leaf’s value', 'P(死亡) · 还会失去的生命的 50 个区间\n× 价格 = 叶子估值', 'P(死亡) · 還會失去的生命的 50 個區間\n× 價格 = 葉節點估值')),
+    output: L(w('worth: V after the fight / V before it\n× V before it = the leaf’s value', 'worth：战斗后的 V / 战斗前的 V\n× 战斗前的 V = 叶子估值', 'worth：戰鬥後的 V / 戰鬥前的 V\n× 戰鬥前的 V = 葉節點估值')),
     links: [],
   };
 }

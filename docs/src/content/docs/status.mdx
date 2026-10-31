@@ -23,7 +23,7 @@ AI 能在两种环境里，以无头方式、在游戏自己的代码里打完�
 | Harness | 已实现：没有兜底的路由，来自 run id 的种子，决策日志，大脑服务器；`run --check` 能精确重播一局。规划中：公开记录的其余部分、随时可答（[Harness](/arch/harness/)） |
 | NoSL 战斗大脑 | 已实现：在抽样世界上做 PIMC，以战斗网络 c2 为叶子；2026-10-27 起是 NoSL 冠军的战斗大脑（[NoSL PIMC](/arch/pimc/)） |
 | SL 战斗大脑 | 已实现：SL 规划器，在节点克隆上以整个回合为单位做束搜索；在战斗测试集上，PIMC 赢下的每一场它都赢了，120 场里还多赢 9 场（[SL 规划器](/arch/sl-planner/)） |
-| 战斗重新设计 | <Badge text="规划中" variant="caution" /> 尚未实现：SL = 剪枝 + 网络，NoSL = 蒙特卡洛 + 网络，基于同一个 `TurnEnds` 和同一个叶子，每个门槛验证一项改动（[战斗大脑 §3](/arch/combat-brain/#sec-3)、[§6](/arch/combat-brain/#sec-6)） |
+| 战斗重新设计 | <Badge text="规划中" variant="caution" /> SL = 剪枝 + 网络，NoSL = 蒙特卡洛 + 网络，基于同一个 `TurnEnds` 和同一个叶子，逐个门槛验证。第一步，SL 的网络 c7-1v 配 V 的价格，代码已实现，正在训练；其余尚未实现（[战斗大脑 §3](/arch/combat-brain/#sec-3)、[§6](/arch/combat-brain/#sec-6)） |
 | 宏观大脑 | 已实现：L0 用 V 给每个选项的后状态估值，后状态在 NoSL 下从画面预测，在 SL 下在节点克隆上打出来；V 是纯 V，只从这一局的 id 和原始状态读取（[宏观大脑](/arch/macro-brain/)） |
 | 学习 | 已实现：带均匀抽取探索的自我对弈、V 和战斗网络的训练、连战的报告和门槛、计划 v7 的胜局门槛。规划中：TD(λ)、专家迭代、LLM 补丁提案；SPSA 已移除（[学习：循环](/arch/learning/loop/)） |
 | 评估 | 已实现：报告、每种环境的排行榜、种子集、配对的整局门槛、冠军文件（[评估](/arch/evaluation/)） |
@@ -65,7 +65,7 @@ AI 能在两种环境里，以无头方式、在游戏自己的代码里打完�
 
 5. **计划 v7，现在**：V 在完整的 SL 对局上训练和过门槛，每场战斗都真打；V 按 P(win) 做决定（`v.train --objective win`），按配对的胜局过门槛（`learn/gauntlet.py`）。第 1 代的自我对弈和门槛已经完成：v7-1 500 局赢 145 局，v6-3-2 赢 51 局；v7-1f，同样的数据、修好了地图输入，100 局赢 40 局，v7-1 赢 24 局，并成为两个冠军的 V。第 2 代还没有开始（[宏观大脑：弱点与下一步](/arch/macro-brain/next/)）。
 
-6. 然后：战斗的重新设计，每个门槛一项改动，从 SL 自己的第一个网络 `sl-c1` 开始（[战斗大脑 §6](/arch/combat-brain/#sec-6)）。NoSL 的各项在 SL 优先期间先等着：调 PIMC 的世界数和节点数、融合测试集的测量（[NoSL PIMC：预算 §7](/arch/pimc/budget/#sec-7)）。
+6. **同样在进行**：战斗重新设计的第一步，SL 自己的网络 c7-1v，它学习 V 对战斗结局的估价，并通过 V 的价格来打。它正在训练，还没有过门槛（[战斗大脑 §6](/arch/combat-brain/#sec-6)、[叶子 §8](/arch/combat-brain/leaf/#sec-8)）。NoSL 的各项在 SL 优先期间先等着：调 PIMC 的世界数和节点数、融合测试集的测量（[NoSL PIMC：预算 §7](/arch/pimc/budget/#sec-7)）。
 
 7. Mod 的自动游玩：执行器、自动跑局驱动、R4 流水线和 R3 ≡ R4 测试（[Mod：自动游玩与安全](/arch/mod/auto/)）。
 

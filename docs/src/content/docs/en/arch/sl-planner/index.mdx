@@ -91,7 +91,7 @@ flowchart TD
 ```
 
 - **Pruning.** A state whose bound cannot beat the best line so far goes, as today ([Beam §2](/en/arch/sl-planner/beam/#sec-2)).
-- **Net.** What survives is ranked by the leaf, and the first SL-trained net takes c2's place ([Combat brain: the leaf §8](/en/arch/combat-brain/leaf/#sec-8)).
+- **Net.** What survives is ranked by the leaf, and SL's own net, c7-1v, takes c2's place once it passes its gate ([Combat brain: the leaf §8](/en/arch/combat-brain/leaf/#sec-8)).
 - **One enumeration.** A turn's ends come from `TurnEnds`, shared with NoSL ([Turn search §5](/en/arch/sl-planner/turn-search/#sec-5)).
 - **Passes, not a dive and a beam.** Width 1 is the dive, and each later pass is a wider beam ([Beam §7](/en/arch/sl-planner/beam/#sec-7)).
 - **One budget.** A fight's nodes and a minimum width replace the dive, easy beam, loss plans, replan options and room multipliers ([Budget §7](/en/arch/sl-planner/budget/#sec-7)).

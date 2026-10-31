@@ -102,7 +102,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `--value FILE` | V v0 的初始权重 | l0 的 V：V v0 权重、V v2 网络或纯 V 网络；需要 `l0` |
 | `--afterstates` | `screen` | `clone` 在节点的克隆上把每个选项打一遍（SL，`l0`） |
 | 叶子选项 | | 见上；需要 `pimc` 或 `plan` |
-| `--leaf-prices` | `leaf` | plan 按什么给一场战斗的结局定价：`v` 需要 plan、`--combat-net` 和一个网络的 `--value` |
+| `--leaf-prices` | `leaf` | plan 按什么给一场战斗的结局定价：`v` 只和目标为 `worth` 的 `--combat-net` 搭配，并需要 plan 和一个网络的 `--value` |
 | `--macro-explore T` | 0 | l0 按 V 的值在温度 T 下的 softmax 抽取，T 以 V 的单位计；需要 `l0` |
 | `--combat-explore T` | 0 | PIMC 按搜索的值的 softmax 抽取，以叶子的单位计；需要 `pimc` |
 | `--explore ε` | 0 | l0 把比例为 ε 的决策在它们的选项中均匀抽取；需要 `l0` |
@@ -205,7 +205,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `Brain/BudgetTests` | 房间倍数放大 PIMC 的节点数和 plan 的束宽，只放大一次；名字里只显示不是默认值的部分 |
 | `Brain/CloneSearchTests` | 玩具克隆上的 L0：商店值它最好的一篮购买；事件选项值它下一页给的东西；选路不去实际打出；要选两张牌的提示找到最好的一对；跳过的卡牌奖励不会再打开；到达两次的状态只搜一次 |
 | `Brain/CombatExplorationTests` | 探索中的路线按搜索的值抽取，并标记这次抽取；打平时也抽取，但不标记；没有候选的路线保持不变 |
-| `Brain/CombatNetTests` | 像训练器那样读出 SL 网络的状态；仍能读 c2；网络只在它自己的环境里打；V 给死亡、胜利和药水定的价格；按 V 的价格给进行中的状态估值 |
+| `Brain/CombatNetTests` | 像训练器那样读出 SL 网络的状态，以及 worth 网络的状态；仍能读 c2；网络只在它自己的环境里打；V 按生命和药水给胜利的价格；按 V 的价格给输掉、胜利和进行中的状态估值 |
 | `Brain/LeafValueTests` | 输是 0；赢按生命值和药水计分；进行中低于赢；预计的死亡仍高于输；敌人受到的伤害会提高估值 |
 | `Brain/MacroExplorationTests` | 删牌只值能删掉的东西；没有探索时 l0 取最好的；softmax 按 V 抽取，日志标记这些抽取；卡牌奖励均匀抽取；ε=1 时除药水栏之外每种决策都均匀抽取；ε=1 和 0.1 时的提示；探索中的提示保持它的下限 |
 | `Brain/MacroUpgradeTests` | 锻造值它最好的那次升级；锻造提示选估值时用的那次升级；升级提示选最好的预览 |
