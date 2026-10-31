@@ -219,7 +219,7 @@ internal sealed class ChampionArgs(bool file)
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
         .AcceptOnlyFromAmong("screen", "clone");
     private readonly Option<string> _leafPrices = Opt.Of("--leaf-prices", "leaf",
-            "what the SL planner's leaves price a combat's end at: leaf, the leaf weights'; v, V's at the decision, for a --combat-net with a net --value (docs: combat-brain/leaf §5)")
+            "what the SL planner's leaves price a combat's end at: leaf, the leaf weights'; v, V's at the fight's start, for a --combat-net of target worth with a net --value (docs: combat-brain/leaf §5)")
         .AcceptOnlyFromAmong("leaf", "v");
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
         "self-play only: l0 draws each answer by V's values, softmax at this temperature in V's units (0: the best)");
@@ -263,8 +263,8 @@ internal sealed class ChampionArgs(bool file)
         var leaf = _leaf.Read(r);
         if (!leaf.IsDefault && policy is not ("pimc" or "plan")) throw new CliException("--leaf and --combat-net value the search's leaves; they need --policy pimc or plan");
         bool vPrices = r.GetValue(_leafPrices) == "v";
-        if (vPrices && (policy != "plan" || leaf.Net == null || value is not RunNet))
-            throw new CliException("--leaf-prices v prices plan's combat net's endings in V's floors: it needs --policy plan, --combat-net and a net --value");
+        if (vPrices != (leaf.Net?.IsWorth == true) || (vPrices && (policy != "plan" || value is not RunNet)))
+            throw new CliException("--leaf-prices v and a --combat-net of target worth go together: they need --policy plan and a net --value");
         return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore, clone,
             explore, vPrices);
     }

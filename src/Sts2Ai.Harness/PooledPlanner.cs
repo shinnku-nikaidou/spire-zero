@@ -25,14 +25,22 @@ public sealed class PooledPlanner(WorkerPool pool)
     /// <summary>As Harness's combat route in SL, one per run (<see cref="SlRoute"/>): plans once, then follows the plan,
     /// planning again only where it does not hold or has run out.</summary>
     /// <param name="name">The brain's name in reports: plan, and its leaf's names unless it is the default one.</param>
-    /// <param name="prices">V's prices of a combat's ends from the run at the decision, made at each plan; null for the
-    /// leaf weights'.</param>
+    /// <param name="prices">V's prices of a combat's ends from the run at its first plan, kept for the combat (a floor holds
+    /// one); null for the leaf weights'.</param>
     public CombatRoute Route(Budget budget, string name = "plan", Func<RunView, EndPrices>? prices = null)
     {
         var route = new SlRoute(budget);
+        int floor = -1;
+        EndPrices? made = null;
         return new(name, (decision, _, node, history) => route.Decide(decision.Observation, decision.Legal, b =>
             Plan(node ?? throw new InvalidOperationException("the SL planner has no node clone: it plays in SL only"),
                 b.For(decision.Observation.Room), history,
-                prices?.Invoke((decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run")).Run))), budget);
+                Priced((decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run")).Run))), budget);
+
+        EndPrices? Priced(RunView run)
+        {
+            if (prices != null && run.Floor != floor) (floor, made) = (run.Floor, prices(run));
+            return made;
+        }
     }
 }

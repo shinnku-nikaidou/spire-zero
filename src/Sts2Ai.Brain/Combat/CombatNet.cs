@@ -5,7 +5,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>A round's start and what the trainer's net made of it, which loading checks (docs: learning/reference §7, input parity).</summary>
-public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, double PotionsUsed);
+public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double>? Outcome = null, double PotionsUsed = 0, double Worth = 0);
 
 /// <summary>
 /// The combat net as <c>learn/combat/export.py</c> writes it, or as the removed <c>learn/train_combat.py</c> wrote it
@@ -21,9 +21,11 @@ public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTur
 /// chance of each ending and the potions used after a win.</param>
 /// <param name="Env">The environment whose games it learned from, whose policy's endings it predicts: SL or NoSL. The
 /// files made before nets had one (c1–c4, all NoSL's) have none.</param>
+/// <param name="Target">What it predicts: "worth", V of the fight's end as a share of V before it, capped at
+/// <see cref="WorthCap"/>; none, the endings (<see cref="Buckets"/>) and the potions used.</param>
 public sealed record CombatNetFile(
     string Name, int Buckets, double LossMin, int Lags, bool Round, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
-    IReadOnlyList<CombatNetTest> Tests, string? Env = null);
+    IReadOnlyList<CombatNetTest> Tests, string? Env = null, string? Target = null, double WorthCap = 0);
 
 /// <summary>
 /// The learned combat leaf (docs: combat-brain/leaf §3): from a round's start, how the combat ends under the policy that
@@ -60,6 +62,9 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     /// <summary>The environment whose endings it predicts (<see cref="CombatNetFile.Env"/>).</summary>
     public string? Env => _file.Env;
 
+    /// <summary>Whether it predicts a fight's worth (<see cref="Worth"/>) rather than its endings.</summary>
+    public bool IsWorth => _file.Target == "worth";
+
     /// <summary>The net of a file, once it gives every test state the trainer's outcome.</summary>
     /// <param name="weights">The prices of the endings; null for the default leaf weights.</param>
     public static CombatNet Load(CombatNetFile file, LeafWeights? weights = null)
@@ -67,10 +72,17 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         var net = new CombatNet(file, weights ?? LeafValue.Default);
         foreach (var test in file.Tests)
         {
+            if (net.IsWorth)
+            {
+                double off = Math.Abs(net.Graph(test.Obs, test.History)[0][0] - test.Worth);
+                if (off <= 1e-3) continue;
+                net.Dispose();
+                throw new InvalidDataException($"net {file.Name} is {off} off a test state of the trainer's");
+            }
             var (outcome, used) = net.Predict(test.Obs, test.History);
             double error = Math.Abs(used - test.PotionsUsed);
-            for (int k = 0; k < outcome.Length; k++) error = Math.Max(error, Math.Abs(outcome[k] - test.Outcome[k]));
-            if (outcome.Length != test.Outcome.Count || error > 1e-3)
+            for (int k = 0; k < outcome.Length; k++) error = Math.Max(error, Math.Abs(outcome[k] - test.Outcome![k]));
+            if (outcome.Length != test.Outcome!.Count || error > 1e-3)
             {
                 net.Dispose();
                 throw new InvalidDataException($"net {file.Name} is {error} off a test state of the trainer's");
@@ -81,6 +93,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
     {
+        if (IsWorth) throw new InvalidOperationException($"net {Name} predicts a fight's worth: it plays through PricedLeaf");
         if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs, _weights);
         var (outcome, used) = Predict(obs, history);
         double share = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
@@ -91,40 +104,24 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return value + (1 - outcome[0]) * _weights.PerPotion * (held - used);
     }
 
-    /// <summary>
-    /// The state's worth at V's prices (<see cref="PricedLeaf"/>): a death at its price, a win at the price of the HP
-    /// it leaves, less the potions used since the prices were made and, in progress, those still to be used.
-    /// </summary>
-    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history, EndPrices prices)
-    {
-        if (status == CombatStatus.Lost) return prices.Death;
-        double maxHp = Math.Max(1, obs.Player.MaxHp);
-        int spent = prices.Potions - obs.Potions.Count(p => p != null);
-        if (status == CombatStatus.Won) return HpPrice(prices, obs.Player.Hp) - prices.Potion * spent;
-        var (outcome, used) = Predict(obs, history);
-        double share = obs.Player.Hp / maxHp, width = (1 - _file.LossMin) / _file.Buckets;
-        double value = outcome[0] * prices.Death;
-        for (int k = 1; k < outcome.Length; k++)
-            value += outcome[k] * HpPrice(prices, (share - (_file.LossMin + (k - 0.5) * width)) * maxHp);
-        return value - (1 - outcome[0]) * prices.Potion * (spent + used);
-    }
-
-    /// <summary>The price of a win with this HP left, at least 1 and at most the table's: between two HPs, in proportion.</summary>
-    private static double HpPrice(EndPrices prices, double hp)
-    {
-        double h = Math.Clamp(hp, 1, prices.Hp.Count - 1);
-        int low = (int)Math.Floor(h);
-        return low >= prices.Hp.Count - 1 ? prices.Hp[^1] : prices.Hp[low] + (h - low) * (prices.Hp[low + 1] - prices.Hp[low]);
-    }
+    /// <summary>V of the fight's end as a share of V before it, within what the net learned.</summary>
+    public double Worth(CombatObservation obs, IReadOnlyList<EnemyTurns> history) =>
+        Math.Clamp(Graph(obs, history)[0][0], 0, _file.WorthCap);
 
     public void Dispose() => _session.Dispose();
 
+    /// <summary>The chance of each ending (a death, then each bucket of HP lost) and the potions used after a win.</summary>
+    public (float[] Outcome, float PotionsUsed) Predict(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
+    {
+        var outputs = Graph(obs, history);
+        return (outputs[0], outputs[1][0]);
+    }
+
     /// <summary>
-    /// The chance of each ending (a death, then each bucket of HP lost) and the potions used after a win: the graph on a
-    /// batch of one state, read as <c>learn/combat/encode.py</c> reads it (each input fed only if the graph declares it). An enemy's slots are its intents now, then
+    /// The graph's outputs on a batch of one state, read as <c>learn/combat/encode.py</c> reads it (each input fed only if the graph declares it). An enemy's slots are its intents now, then
     /// those of its last rounds before this one, most recent first.
     /// </summary>
-    public (float[] Outcome, float PotionsUsed) Predict(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
+    private float[][] Graph(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
     {
         var cards = Piles.SelectMany((pile, p) => Pile(obs, pile).Select(c => (Card: c, Pile: p))).ToList();
         int n = Math.Max(1, cards.Count);
@@ -257,7 +254,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         extra[0, 2] = Capped(pl.Gold / 100.0);
         inputs.Add(NamedOnnxValue.CreateFromTensor("extra", extra));
         using var results = _session.Run(NetNumbers.Declared(_session, inputs));
-        return (results[0].AsEnumerable<float>().ToArray(), results[1].AsEnumerable<float>().First());
+        return results.Select(r => r.AsEnumerable<float>().ToArray()).ToArray();
     }
 
     /// <summary>The player's powers' stacks / 10 (0 where the tooltip states none apart) and kept cards.</summary>

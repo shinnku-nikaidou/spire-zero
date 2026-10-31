@@ -57,12 +57,11 @@ public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<Combat
     IReadOnlyList<EnemyTurns>? History = null, EndPrices? Prices = null) : WorkerRequest(Id);
 
 /// <summary>
-/// What a combat's end is worth, from V at the decision (docs: combat-brain/leaf §5), in V's units, the floors the run is
-/// expected to reach: a death, the run's floor, where it ends; a win, V of the run with that HP left (<see cref="Hp"/>,
-/// by HP from 0, never lower for more HP), less <see cref="Potion"/> for each of the <see cref="Potions"/> held at
-/// the decision that the combat uses up.
+/// What a combat's ends are worth, from V at the combat's first plan (docs: combat-brain/leaf §5), in V's units: V of the
+/// run then (<see cref="Before"/>), and of a win, by the potions it keeps (<see cref="Hp"/>'s keys: a sorted subset of
+/// <see cref="Held"/>, comma-joined), by the HP it leaves, from 0, never lower for more HP. A death is worth nothing.
 /// </summary>
-public sealed record EndPrices(double Death, IReadOnlyList<double> Hp, double Potion, int Potions);
+public sealed record EndPrices(double Before, IReadOnlyDictionary<string, IReadOnlyList<double>> Hp, IReadOnlyList<string> Held);
 
 /// <summary>
 /// L0's probes of a decision outside combat in a run (docs: macro-brain/search §6): <see cref="Node"/> loaded and replayed
