@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 
 from combat import data, encode
-from combat.net import Batch
+from combat.net import Batch, Outcome
 
 TESTS = 16  # test states in a net file
 # Every input's batch dimension and its length dimensions, by input name (the rest are fixed widths).
@@ -32,7 +32,7 @@ AXES = {
     **{x: {0: "batch", 1: "allies", 2: "ally_powers"} for x in ("ally_powers", "ally_power_amounts", "ally_power_mask")},
     **{x: {0: "batch", 1: "relics"} for x in ("relic_values", "relic_status")},
     "extra": {0: "batch"},
-    "worth": {0: "batch"},
+    **{x: {0: "batch"} for x in ("worth", "outcome", "potions_used")},
 }  # fmt: skip
 
 
@@ -40,12 +40,12 @@ def onnx_bytes(model, example: Batch) -> bytes:
     """The model as an ONNX graph, every input's batch and length dimensions left free."""
     out = io.BytesIO()
     torch.onnx.export(
-        model,
+        model if model.is_worth else Outcome(model),
         example.inputs(),
         out,
         dynamo=False,
         input_names=encode.INPUTS,
-        output_names=["worth"],
+        output_names=["worth"] if model.is_worth else ["outcome", "potions_used"],
         dynamic_axes=AXES,
     )
     return out.getvalue()
@@ -66,20 +66,28 @@ def net_file(name, character, env, tables, model, kept, report, seed) -> dict:
     picks[0] = rng.choice([s for s in kept if multi_hit(s)])
     b = Batch(picks, index, "cpu")
     with torch.no_grad():
-        worth = model(*b.inputs())
+        out = model(*b.inputs())
+    if model.is_worth:
+        head = {"target": "worth", "worth_cap": data.WORTH_CAP}
+        tests = [{"worth": float(out[k])} for k in range(len(picks))]
+    else:
+        probs = torch.softmax(out[0], 1)
+        head = {"buckets": data.BUCKETS, "loss_min": data.LOSS_MIN}
+        tests = [
+            {"outcome": [float(v) for v in probs[k]], "potions_used": float(out[1][k])} for k in range(len(picks))
+        ]
     return {
         "name": name,
         "character": character,
         "env": env,
-        "target": "worth",
-        "worth_cap": data.WORTH_CAP,
+        **head,
         "lags": encode.LAGS,
         "round": True,
         "vocab": tables,
         "fit": report,
         "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
         "tests": [
-            {"obs": s["obs"], "history": s["history"], "worth": float(worth[k])}
+            {"obs": s["obs"], "history": s["history"], **tests[k]}
             for k, s in enumerate(picks)
         ],
     }  # fmt: skip

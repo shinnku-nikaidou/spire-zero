@@ -1,12 +1,13 @@
 """The combat net (docs: learning/combat-net §2): set encoders over the cards (per pile), the powers, the enemies (each with its
-intent slots) and the allies, bags of ids for the rest, then a body and one head: what V makes of the fight's end, as a
-share of V before the fight (combat/data.py).
+intent slots) and the allies, bags of ids for the rest, then a body and the heads of its target (combat/data.py): the chance
+of each ending and the potions still to be used after a win, or the fight's worth.
 """
 
 import torch
 from torch import nn
 
 from combat import encode
+from combat.data import BUCKETS
 
 
 def padded(rows, device):
@@ -119,7 +120,10 @@ class Batch:
             torch.tensor([t["extra"] for t in toks]), costs, mod_amounts, relic_values, relic_status,
         ]  # fmt: skip
         self.tensors = [x.to(device) for x in tensors]
-        self.target = torch.tensor([s["worth"] for s in samples], device=device)
+        self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
+        self.used = torch.tensor([float(s["used"]) for s in samples], device=device)
+        if samples[0]["worth"] is not None:
+            self.worth = torch.tensor([s["worth"] for s in samples], device=device)
 
     def inputs(self):
         """The net's inputs, in the order of encode.INPUTS."""
@@ -138,8 +142,9 @@ class Net(nn.Module):
     SUM_SCALE = 1 / 8  # each pile's sum, scaled to about a mean's size
     N_PLAYER, N_EXTRA = 8, 3
 
-    def __init__(self, sizes: dict[str, int]):
+    def __init__(self, sizes: dict[str, int], worth: bool = False):
         super().__init__()
+        self.is_worth = worth
         d, h = self.DIM, self.HIDDEN
         for table in encode.TABLES:
             if table != "powers":
@@ -167,7 +172,9 @@ class Net(nn.Module):
         self.ally_phi = mlp(d + h, h)
         width = len(encode.PILES) * h + self.N_PLAYER + h + 2 * h + 4 * d + h + self.N_EXTRA
         self.body = mlp(width, self.BODY, self.BODY)
-        self.head = nn.Linear(self.BODY, 1)
+        self.head = nn.Linear(self.BODY, 1 if worth else 1 + BUCKETS)
+        if not worth:
+            self.potion_head = nn.Linear(self.BODY, 1)
 
     def power_sum(self, ids, amounts, mask, stacks=None, cards=None, card_mask=None):
         """The powers through power_phi, summed; with their stacks and kept cards where they are given."""
@@ -177,8 +184,10 @@ class Net(nn.Module):
         return (self.power_phi(x) * mask[..., None]).sum(-2)
 
     def forward(self, *inputs):
-        """Per sample, the fight's worth: V of its end as a share of V before it (inputs as encode.INPUTS)."""
-        return self.head(self.encode(*inputs))[:, 0]
+        """Per sample, the fight's worth, or the logits of the ending classes and the potions used after a win (inputs
+        as encode.INPUTS)."""
+        z = self.encode(*inputs)
+        return self.head(z)[:, 0] if self.is_worth else (self.head(z), self.potion_head(z)[:, 0])
 
     def encode(
         self, cards, ups, piles, mods, mod_mask, powers, power_amounts, power_mask, player,
@@ -246,6 +255,26 @@ class Net(nn.Module):
         return self.body(torch.cat(parts, 1))
 
 
-def loss(worth, b: Batch):
-    """Per sample, the squared error of the fight's worth."""
-    return (worth - b.target) ** 2
+class Outcome(nn.Module):
+    """A net of endings as ONNX holds it: the chance of each ending, and the potions used after a win."""
+
+    def __init__(self, net):
+        super().__init__()
+        self.net = net
+
+    def forward(self, *inputs):
+        logits, potions = self.net(*inputs)
+        return torch.softmax(logits, 1), potions
+
+
+POTION_WEIGHT = 0.1
+
+
+def loss(out, b: Batch):
+    """Per sample, the squared error of the fight's worth; or the endings' cross-entropy plus POTION_WEIGHT times the
+    squared error of the potions used after a win."""
+    if not isinstance(out, tuple):
+        return (out - b.worth) ** 2
+    logits, potions = out
+    won = (b.target > 0).float()
+    return nn.functional.cross_entropy(logits, b.target, reduction="none") + POTION_WEIGHT * won * (potions - b.used) ** 2

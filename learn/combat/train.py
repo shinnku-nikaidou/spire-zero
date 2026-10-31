@@ -1,11 +1,12 @@
 """Train the combat net (docs: learning/combat-net §4), the combat search's leaf, from one environment's games, and write its
 net file for `--combat-net`.
 
-The samples are combat/data.py's: each round's start in the logs of --env, with what V makes of how its combat ended. The
-loss is the squared error of that worth. The net's sizes and the training's settings are fixed below: an experiment
-changes them here, and only a result keeps the change.
+The samples are combat/data.py's: each round's start in the logs of --env. With --value the net's target is the fight's
+worth by that V, the loss its squared error; without, the endings, the loss their cross-entropy plus POTION_WEIGHT times
+the squared error of the potions used after a win. The net's sizes and the training's settings are fixed below: an
+experiment changes them here, and only a result keeps the change.
 
-    uv run python -m combat.train --list data/silent/lists/c7 --env SL --name c7-1v --value ../weights/silent/v7-1f.json \\
+    uv run python -m combat.train --list data/silent/lists/c7 --env SL --name c7-1 \\
         --skip-seeds ../eval/seeds/promotion-1-300.txt
 """
 
@@ -108,14 +109,14 @@ def ranks(x: torch.Tensor) -> torch.Tensor:
     return (ends - (counts.double() - 1) / 2)[inverse]
 
 
-def rank_within(samples, predicted: torch.Tensor) -> float:
-    """The rank correlation of the prediction with the fight's worth within each (encounter, round) of 10 or more, by
-    their sizes: what a beam ranks is the states of one fight."""
+def rank_within(samples, predicted: torch.Tensor, key: str) -> float:
+    """The rank correlation of the prediction with what the fight came to (a sample's `key`) within each (encounter,
+    round) of 10 or more, by their sizes: what a beam ranks is the states of one fight."""
     groups = defaultdict(list)
     for k, s in enumerate(samples):
         groups[(s["encounter"], s["round"])].append(k)
     total, weight = 0.0, 0
-    target = torch.tensor([s["worth"] for s in samples]).double()
+    target = torch.tensor([s[key] for s in samples]).double()
     for ix in groups.values():
         a, b = predicted[ix], target[ix]
         if len(ix) < 10 or a.std() == 0 or b.std() == 0:
@@ -130,7 +131,7 @@ def main(
     list_: Annotated[str, typer.Option("--list", help="the list pair PREFIX-logs.txt and PREFIX-recs.txt")],
     env: Annotated[str, typer.Option(help="the environment whose games these are, SL or NoSL")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
-    value: Annotated[str, typer.Option(help="the net file of the V that prices the fights' ends")],
+    value: Annotated[str | None, typer.Option(help="the net file of the V that prices the fights' ends: target worth")] = None,
     skip_seeds: Annotated[str | None, typer.Option(help="a seed file whose runs are not read: the gate's")] = None,
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")] = None,
     character: Annotated[str, typer.Option(help="the character whose runs these are")] = "SILENT",
@@ -147,7 +148,7 @@ def main(
     if skip_seeds:
         with open(skip_seeds) as f:
             skip = {x.strip() for x in f if x.strip() and not x.startswith("#")}
-    samples, skipped = data.read(*common.lists(list_), character, env, run_value(value, device), skip)
+    samples, skipped = data.read(*common.lists(list_), character, env, run_value(value, device) if value else None, skip)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -168,16 +169,27 @@ def main(
     test_batches = list(batches(test, False))
 
     def evaluate(model):
-        """The held-out loss, and each held-out sample's prediction."""
-        total, worths = 0.0, []
+        """The held-out loss, and each held-out sample's prediction: its worth, or the leaf's value, the cross-entropy and
+        the chance of death of its endings."""
+        total, parts = 0.0, []
         with torch.no_grad():
             for b in test_batches:
-                worth = model(*b.inputs())
-                total += float(loss(worth, b).sum())
-                worths.append(worth)
-        return total / len(test), torch.cat(worths).double().cpu()
+                out = model(*b.inputs())
+                total += float(loss(out, b).sum())
+                parts.append(out if model.is_worth else (*out, b.target))
+        if model.is_worth:
+            return total / len(test), torch.cat(parts).double().cpu()
+        logits = torch.cat([p[0] for p in parts]).double().cpu()
+        potions = torch.cat([p[1] for p in parts]).double().cpu()
+        target = torch.cat([p[2] for p in parts]).cpu()
+        probs = torch.softmax(logits, 1)
+        mids = data.LOSS_MIN + (torch.arange(1, data.BUCKETS + 1).double() - 0.5) * (1 - data.LOSS_MIN) / data.BUCKETS
+        hp = torch.tensor([s["share"] for s in test]).double()[:, None]
+        held = torch.tensor([s["held"] for s in test]).double()
+        value = (probs[:, 1:] * (0.2 + 0.6 * (hp - mids))).sum(1) + (1 - probs[:, 0]) * 0.02 * (held - potions)
+        return total / len(test), value, torch.nn.functional.cross_entropy(logits, target, reduction="none"), probs[:, 0]
 
-    model = Net({t: len(ids) for t, ids in tables.items()}).to(device)
+    model = Net({t: len(ids) for t, ids in tables.items()}, worth=value is not None).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     best, best_state, stale = math.inf, None, 0
     for epoch in range(EPOCHS):
@@ -188,7 +200,7 @@ def main(
             step.backward()
             opt.step()
         model.eval()
-        held, _ = evaluate(model)
+        held = evaluate(model)[0]
         logger.info("epoch {}: held-out loss {:.4f}", epoch, held)
         if held < best - 1e-4:
             best, best_state, stale = held, {k: v.clone() for k, v in model.state_dict().items()}, 0
@@ -199,22 +211,38 @@ def main(
     model.load_state_dict(best_state)
     model.eval()
 
-    # The report: the held-out squared error against the training mean's and the rank within each fight, on the whole
-    # and by act, room and encounter.
-    held, worths = evaluate(model)
-    target = torch.tensor([s["worth"] for s in test]).double()
-    mean = sum(s["worth"] for s in train) / len(train)
+    # The report: the held-out error against the training's prior and the rank within each fight, on the whole and by
+    # act, room and encounter.
+    held, *found = evaluate(model)
+    if value:
+        worths = found[0]
+        target = torch.tensor([s["worth"] for s in test]).double()
+        mean = sum(s["worth"] for s in train) / len(train)
 
-    def part(ix):
-        some = [test[k] for k in ix]
-        return {
-            "samples": len(ix),
-            "mse": float(((worths[ix] - target[ix]) ** 2).mean()),
-            "mse_mean": float(((mean - target[ix]) ** 2).mean()),
-            "rank_within": rank_within(some, worths[ix]),
-            "worth": float(target[ix].mean()),
-            "predicted": float(worths[ix].mean()),
-        }
+        def part(ix):
+            return {
+                "samples": len(ix),
+                "mse": float(((worths[ix] - target[ix]) ** 2).mean()),
+                "mse_mean": float(((mean - target[ix]) ** 2).mean()),
+                "rank_within": rank_within([test[k] for k in ix], worths[ix], "worth"),
+                "worth": float(target[ix].mean()),
+                "predicted": float(worths[ix].mean()),
+            }
+    else:
+        valued, ces, deaths = found
+        counts = torch.bincount(torch.tensor([s["class"] for s in train]), minlength=1 + data.BUCKETS).double() + 0.5
+        prior = -torch.log(counts / counts.sum())[torch.tensor([s["class"] for s in test])]
+        died = torch.tensor([s["class"] == 0 for s in test], dtype=torch.float64)
+
+        def part(ix):
+            return {
+                "samples": len(ix),
+                "ce": float(ces[ix].mean()),
+                "ce_prior": float(prior[ix].mean()),
+                "death": float(died[ix].mean()),
+                "predicted_death": float(deaths[ix].mean()),
+                "rank_within": rank_within([test[k] for k in ix], valued[ix], "price"),
+            }
 
     def by(key):
         groups = defaultdict(list)
