@@ -466,9 +466,9 @@ export function combatNext(lang: Lang): Diagram {
             tone: 'embed',
             info: L(
               w(
-                'Its id, upgrade level, modifier ids, pile and current cost; 32 numbers per card.',
-                '它的 id、升级等级、修饰的 id、所在牌堆和当前费用；每张牌 32 个数。',
-                '它的 id、升級等級、修飾的 id、所在牌堆和目前費用；每張牌 32 個數。',
+                'Its id, upgrade level, modifier ids and amounts, pile and current cost; 32 numbers per card.',
+                '它的 id、升级等级、修饰的 id 和数值、所在牌堆和当前费用；每张牌 32 个数。',
+                '它的 id、升級等級、修飾的 id 和數值、所在牌堆和目前費用；每張牌 32 個數。',
               ),
             ),
           },
@@ -555,9 +555,9 @@ export function combatNext(lang: Lang): Diagram {
             tone: 'embed',
             info: L(
               w(
-                'Relics (id and counter), potions, the encounter and orbs, 32 each; allies through their own φ, 64; the ascension and orb slots, 2.',
-                '遗物（id 和计数）、药水、遭遇和充能球，各 32；盟友经自己的 φ，64；进阶和充能球栏位，2。',
-                '遺物（id 和計數）、藥水、遭遇和充能球，各 32；盟友經自己的 φ，64；晉階和充能球欄位，2。',
+                'Relics (id, counter and status), potions, the encounter and orbs, 32 each; allies through their own φ, 64; the ascension and orb slots, 2.',
+                '遗物（id、计数和状态）、药水、遭遇和充能球，各 32；盟友经自己的 φ，64；进阶和充能球栏位，2。',
+                '遺物（id、計數和狀態）、藥水、遭遇和充能球，各 32；盟友經自己的 φ，64；晉階和充能球欄位，2。',
               ),
             ),
           },

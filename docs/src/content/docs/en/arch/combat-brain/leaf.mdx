@@ -92,7 +92,7 @@ A death costs nothing extra: it is worth 0. A fight that is already over is valu
 
 The net is not retrained for a new V: only the prices change. It needs `--policy plan`, a combat net and a net `--value`; NoSL's search keeps the leaf weights' prices.
 
-**V's prices in the design** <Badge text="planned" variant="caution" />. Prices sit outside the net: a death is worth 0, a win V at the HP left, a potion what V loses with one fewer. `Death` must be fixed first, and the prices pass their own gate before any champion uses them, as the last step of the order in [Combat brain §6](/en/arch/combat-brain/#sec-6). The first net, `sl-c1`, keeps today's hand prices.
+**V's prices in the design** <Badge text="planned" variant="caution" />. Prices sit outside the net: a death is worth 0, a win V at the HP left, a potion what V loses with one fewer. `Death` must be fixed first, and the prices pass their own gate before any champion uses them, as the last step of the order in [Combat brain §6](/en/arch/combat-brain/#sec-6). The first net, `sl-c1`, keeps today's hand prices. These prices see only HP and the number of potions, so what else a fight changes goes unpriced: gold stolen, cards taken, max HP changes, and which potion was used. Pricing SL's exact end states with V is an option to weigh at this same step.
 
 ## 6. One net per environment
 
@@ -109,6 +109,7 @@ c2 was written by `train_combat.py` at commit `b4480a1`, removed since, on 315 N
 - **What an all-unknown fight still reads.** With the act, encounter and enemy all unknown, the HP and poison slopes keep their sign: 30 poison adds 0.167, against 0.278 when known.
 - **Impossible buckets can value below a death.** Nothing masks the buckets beyond the HP held ([§4](#sec-4)).
 - **It never saw the planner play.** Its labels are PIMC's endings ([§6](#sec-6)).
+- **Hand quality barely moves it, on one state.** On the Vantom test state, in a torch rebuild of c2, 5 Strikes against 5 Wounds in hand moves the value by 0.007, while 30 less enemy HP moves it by 0.051. Whether data or structure causes this is open. Poison against enemy HP is learned sensibly. This is one state only.
 
 Not measured: c2's calibration on SL round starts, the share of unknown ids in real decks, and how many deaths a bigger beam or another leaf would turn into wins.
 
@@ -122,15 +123,19 @@ The input rule: **only what cannot be learned from an id and changes the future.
 
 | input | read | against `learn/combat/encode.py` |
 |---|---|---|
-| cards | id, upgrade, pile, modifier ids, current cost | adds the current cost, which effects change and the id does not say |
+| cards | id, upgrade, pile, modifier ids and amounts, current cost | adds the current cost, which effects change and the id does not say, and each modifier's amount (`ModifierView.Amount`), which 11 of the 23 enchantments use, Sharp among them |
 | player | HP share, HP, max HP, block, energy, max energy, stars, round | the same |
 | powers | id, amount, stacks, kept card | the same |
 | enemies | id, HP share, HP, max HP, block, rounds shown, powers, current intents | the 3 lagged intent slots go if held-out cross-entropy allows; otherwise they stay |
-| relics | id, counter | adds the counter, which the id does not say |
+| relics | id, counter, status | adds the counter and the status, which 42 relics set; the id does not say either. The status is its own input and no suffix on the id |
 | potions, encounter, orbs, allies | their ids; an ally's numbers and powers | the context narrows to the encounter |
 | 2 numbers | the ascension, orb slots | gold leaves |
 
 **Not read:** printed numbers, which follow from the id and the upgrade; gold, until it is measured useful; the act, the room and the character, which the encounter and the cards imply; the draw order, since the net reads what a player sees (SL's ordered draw is a separate, later experiment).
+
+The modifier amounts and the relic statuses go in through the graph inputs `mod_amounts` and `relic_status`, which `NetNumbers` already feeds. A card's `Vars` stay out for Silent: only Claw, Rampage, Maul, Thrash, KinglyPunch, SovereignBlade and TheBall change their own numbers in a fight, and none of them is in Silent's pool.
+
+**A limit of the observation.** Per-combat relic flags, Centennial Puzzle's for one, are not in the observation at all, so no input rule can reach them.
 
 The vocabulary is rebuilt from v7g1, which reaches act 3. A small id dropout in training makes `<unk>` a token the net has learned, so an id it has never seen no longer behaves arbitrarily.
 
@@ -144,8 +149,12 @@ Embeddings of 32. A card goes through an MLP of 32 → 64 → 64, summed per pil
 
 The head has 51 classes, a death and 50 buckets of the HP share still to lose, as today, with the buckets beyond the HP held **masked in training and in valuing**, so that the flaw of [§4](#sec-4) cannot arise. A potion head gives one number. There is no policy head.
 
-That is about 340,000 parameters on an assumed vocabulary, an estimate. Width is measured again at 1, 2 and 4 times this size on the larger data, since the old result that width does not matter came from 315–505 runs ([Training the combat net §6](/en/arch/learning/combat-net/#sec-6)).
+That is about 340,000 parameters on an assumed vocabulary, an estimate. Width is measured again at 1, 2 and 4 times this size on the larger data, since the old result that width does not matter came from 315–505 runs and rests on cross-entropy alone ([§8.4](#sec-8.4)) ([Training the combat net §6](/en/arch/learning/combat-net/#sec-6)). The two added inputs join the 32-number sums of a card and a relic, so no dimension changes; their small tables leave the estimate at about 340,000.
 
 ### 8.3 The net in a search
 
 The net reads one state at a time. `TurnEnds` lists a turn's ends, and the leaf values each: the search and the net meet only there ([Combat brain §3](/en/arch/combat-brain/#sec-3)). What it costs in time is not at issue: the game's simulation costs far more than the net ([Prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)).
+
+### 8.4 How nets are compared
+
+Overall held-out cross-entropy mostly reflects which fight it is and how much HP the player holds, while the beam ranks states of one fight. So a comparison reports two more things beside it: the **rank correlation within (encounter, round) groups**, and a **fixed probe set** that changes the hand, the draw pile, the powers and the poison of a state and reads how the value moves. These two inform; the paired gate decides.

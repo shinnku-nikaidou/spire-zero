@@ -93,6 +93,6 @@ c2 的留出交叉熵在頭目戰最低（597 個回合開始上 1.130），在�
 
 - **SL 的第一個網路 `sl-c1`** <Badge text="規劃中" variant="caution" />。還沒有任何 SL 訓練的網路過過門檻，而 c2 是從 PIMC 配 `LeafValue` 打的 NoSL 戰鬥學來的（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。第一個網路用 SL 自我對弈 v7g1（`sl/selfplay/v7g1/`）的蒙地卡羅標籤，用現有的 `combat.train` 和它的編碼器，並保留今天的手工價格：`uv run python -m combat.train --list LIST --env SL --name sl-c1`。它的詞表是 v7g1 的，會到達第 3 幕。它的標籤是規劃器在自我對弈低預算下的結局（[SL 規劃器：預算 §2](/zh-tw/arch/sl-planner/budget/#sec-2)）。它必須通過對 c2 的門檻。
 - **權重分環境，結構共用** <Badge text="規劃中" variant="caution" />。網路的程式碼只有一份，網路檔案寫明它的環境，`combat.train` 拒絕另一個環境的日誌（[§3](#sec-3)）。NoSL 目前仍用 c2。
-- **輸入規則和遮掉分桶的輸出頭** <Badge text="規劃中" variant="caution" />：`sl-c1` 之後的下一個門檻。網路讀什麼、怎麼建構，見[戰鬥大腦：葉節點 §8](/zh-tw/arch/combat-brain/leaf/#sec-8)，那裡也說明了為什麼要重新量測寬度。訓練時加上一點 id dropout，讓 `<unk>` 成為網路學過的詞元，並遮掉超過持有生命值的分桶。
+- **輸入規則和遮掉分桶的輸出頭** <Badge text="規劃中" variant="caution" />：`sl-c1` 之後的下一個門檻。網路讀什麼、怎麼建構，見[戰鬥大腦：葉節點 §8](/zh-tw/arch/combat-brain/leaf/#sec-8)，那裡也說明了為什麼要重新量測寬度。訓練時加上一點 id dropout，讓 `<unk>` 成為網路學過的詞元，並遮掉超過持有生命值的分桶。比較網路時，在交叉熵之外還報告 (遭遇, 回合) 分組內的等級相關和一組固定探針，由配對門檻決定（[戰鬥大腦：葉節點 §8.4](/zh-tw/arch/combat-brain/leaf/#sec-8.4)）。
 - **讓沒選中的束狀態繼續打來取得標籤** <Badge text="規劃中" variant="caution" />，只在第一個網路在門檻上顯出網路的效果時才做：搜尋保留但沒打出的狀態繼續打下去，用它的結局當標籤，這就得到已打路線之外的標籤。其他目標（戰鬥內的 TD(λ)、和搜尋分布的混合）不屬於這個設計（[循環 §4](/zh-tw/arch/learning/loop/#sec-4)）。
 - **以搜尋的估值作標籤，並學一個先驗**（專家迭代）也不屬於這個設計，它沒有策略輸出頭（[循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。

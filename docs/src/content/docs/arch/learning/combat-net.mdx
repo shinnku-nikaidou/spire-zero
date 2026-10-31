@@ -93,6 +93,6 @@ c2 的留出交叉熵在 Boss 战最低（597 个回合开始上 1.130），在�
 
 - **SL 的第一个网络 `sl-c1`** <Badge text="规划中" variant="caution" />。还没有哪个用 SL 训练的网络过过门槛，而 c2 学自 PIMC 配 `LeafValue` 打出的 NoSL 战斗（[战斗大脑：叶子 §6](/arch/combat-brain/leaf/#sec-6)）。第一个网络从 SL 的自我对弈 v7g1（`sl/selfplay/v7g1/`）取蒙特卡洛标签，用现有的 `combat.train` 和它的编码器，并保留现在的手设价格：`uv run python -m combat.train --list LIST --env SL --name sl-c1`。它的词表是 v7g1 的，能到第 3 幕。它的标签是规划器在自我对弈的低预算下打出的结局（[SL 规划器：预算 §2](/arch/sl-planner/budget/#sec-2)）。它必须通过一个对 c2 的门槛。
 - **权重按环境分，结构共用** <Badge text="规划中" variant="caution" />。网络的代码只有一份，网络文件写明它的环境，`combat.train` 拒收另一种环境的日志（[§3](#sec-3)）。NoSL 目前仍用 c2。
-- **输入规则和屏蔽过的输出头** <Badge text="规划中" variant="caution" />：`sl-c1` 之后的下一个门槛。网络读什么、怎样构建，见[战斗大脑：叶子 §8](/arch/combat-brain/leaf/#sec-8)，那里也说明了为什么要重新测量宽度。训练增加少量 id 丢弃（dropout），让 `<unk>` 成为网络学过的词元，并屏蔽超出现有生命的桶。
+- **输入规则和屏蔽过的输出头** <Badge text="规划中" variant="caution" />：`sl-c1` 之后的下一个门槛。网络读什么、怎样构建，见[战斗大脑：叶子 §8](/arch/combat-brain/leaf/#sec-8)，那里也说明了为什么要重新测量宽度。训练增加少量 id 丢弃（dropout），让 `<unk>` 成为网络学过的词元，并屏蔽超出现有生命的桶。比较网络时，在交叉熵之外还报告 (遭遇, 回合) 分组内的等级相关和一组固定探针，由配对门槛决定（[战斗大脑：叶子 §8.4](/arch/combat-brain/leaf/#sec-8.4)）。
 - **让未选中的束状态继续打所得的标签** <Badge text="规划中" variant="caution" />，只有当第一个网络在它的门槛上显示出净效果时才做：把搜索保留但没有打的状态继续打下去，用它的结局作标签，这就得到打出的路线之外的标签。其他目标（战斗内的 TD(λ)、与搜索分布的混合）不属于这个设计（[循环 §4](/arch/learning/loop/#sec-4)）。
 - **搜索价值作标签，以及学到的先验**（专家迭代）同样不属于这个设计，它没有策略输出头（[循环 §5](/arch/learning/loop/#sec-5)）。
