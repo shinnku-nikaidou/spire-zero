@@ -46,7 +46,7 @@ Why the chance to win rather than the floor reached: the floor weighs every floo
 
 ## 3. From a logged decision to a sample
 
-`learn/v/data.py` builds the samples. Every macro decision in the self-play logs is one: the run view at that decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), joined by run id to the run's record, which says where the run ended ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). A failed run's decisions are left out. Its targets are the run's real outcome, a **Monte Carlo (MC) target**: no estimate, no bootstrap, only what happened.
+`learn/v/data.py` builds the samples. Every macro decision in the self-play logs is one: the run view at that decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), joined by run id to the run's record, which says where the run ended ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). A failed run's decisions are left out. A map move gives a second sample, the chosen point's afterstate, since that is what V reads when it values a map option and no logged view shows it ([The value network §4](/en/arch/macro-brain/network/#sec-4)). Its targets are the run's real outcome, a **Monte Carlo (MC) target**: no estimate, no bootstrap, only what happened.
 
 A sample holds:
 
@@ -93,7 +93,7 @@ It never decides and is not in the net file. Its job is to shape the body: a com
 ## 5. Training
 
 ```text
-uv run python -m v.train --list PREFIX --name NAME --objective win --encoders [--init FILE]
+uv run python -m v.train --list PREFIX --name NAME --objective win [--init FILE]
 ```
 
 `learn/v/train.py`. The sizes and settings are fixed in the code, not options; an experiment changes them there, and only a result keeps the change:

@@ -46,7 +46,7 @@ $S_g$ 是过了第 $g$ 层仍在继续的概率，$e_g$ 是这一局恰好在第
 
 ## 3. 从记录下来的决策到样本
 
-`learn/v/data.py` 构建样本。自我对弈日志里的每个宏观决策都是一个样本：这个决策处的整局观测（[Harness：决策日志 §7](/arch/harness/decision-log/#sec-7)），按对局 id 对上这一局的对局记录，记录里写着这一局在哪里结束（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)）。失败对局的决策被排除。它的目标是这一局真实的结局，即**蒙特卡洛（MC）目标**：没有估计，没有自举，只有实际发生的事。
+`learn/v/data.py` 构建样本。自我对弈日志里的每个宏观决策都是一个样本：这个决策处的整局观测（[Harness：决策日志 §7](/arch/harness/decision-log/#sec-7)），按对局 id 对上这一局的对局记录，记录里写着这一局在哪里结束（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)）。失败对局的决策被排除。一次选路还给出第二个样本，即选中的点的后状态，因为 V 给地图选项估值时读的正是它，而记下的整局观测里都没有它（[价值网络 §4](/arch/macro-brain/network/#sec-4)）。它的目标是这一局真实的结局，即**蒙特卡洛（MC）目标**：没有估计，没有自举，只有实际发生的事。
 
 一个样本包含：
 
@@ -93,7 +93,7 @@ $$
 ## 5. 训练
 
 ```text
-uv run python -m v.train --list PREFIX --name NAME --objective win --encoders [--init FILE]
+uv run python -m v.train --list PREFIX --name NAME --objective win [--init FILE]
 ```
 
 `learn/v/train.py`。大小和设置写死在代码里，不是选项；做实验就在那里改，有结果才留下改动：

@@ -191,13 +191,6 @@ type W = Record<Lang, string>;
 const w = (en: string, cn: string, tw: string): W => ({ en, 'zh-CN': cn, 'zh-TW': tw });
 
 const T = {
-  norm: w('Norm', '归一化', '正規化'),
-  normInfo: w(
-    'Layer normalization: each element’s 64 numbers shifted and scaled to mean 0 and variance 1.',
-    '层归一化：把每个元素的 64 个数平移、缩放到均值 0、方差 1。',
-    '層正規化：把每個元素的 64 個數平移、縮放到平均 0、變異數 1。',
-  ),
-  add: w('Residual: the block’s input added back to its output.', '残差：把这一块的输入加回到它的输出上。', '殘差：把這一塊的輸入加回到它的輸出上。'),
   numbersTitle: w('Six numbers', '六个数字', '六個數字'),
   numbersInput: w('floor · HP · max HP ·\ngold · ascension ·\npotion slots', '楼层 · 生命 · 最大生命 ·\n金币 · 进阶 ·\n药水栏', '樓層 · 生命 · 最大生命 ·\n金幣 · 晉階 ·\n藥水欄'),
   standardize: w('Standardize', '标准化', '標準化'),
@@ -228,175 +221,80 @@ function body(lang: Lang, width: number): Item[] {
   ];
 }
 
-export function encodersNet(lang: Lang): Diagram {
+export function valueNet(lang: Lang): Diagram {
   const L = (x: W) => x[lang];
-  const norm = (id?: string): Block => ({ kind: 'block', id, label: L(T.norm), tone: 'norm', info: L(T.normInfo) });
+  const bag = (title: W, input: W, info: W): Column => ({
+    title: L(title),
+    input: L(input),
+    narrow: true,
+    items: [
+      { kind: 'block', label: L(w('Embeddings\n32 each', '嵌入\n每个 32', '嵌入\n每個 32')), tone: 'embed', info: L(info) },
+      {
+        kind: 'block',
+        label: L(w('Sum', '求和', '加總')),
+        tone: 'pool',
+        info: L(w('The bag’s vectors added up, padding left out: 32 numbers.', '袋里的向量相加（不含补齐位置）：32 个数。', '袋裡的向量相加（不含補齊位置）：32 個數。')),
+      },
+    ],
+  });
   return {
     columns: [
       {
-        title: L(w('Build encoder', '构筑编码器', '構築編碼器')),
-        input: L(w('cards · relics ·\npotions: one set', '卡牌 · 遗物 ·\n药水：一个集合', '卡牌 · 遺物 ·\n藥水：一個集合')),
+        title: L(w('Deck', '牌组', '牌組')),
+        input: L(w('each card: id · upgrades ·\nmodifiers', '每张牌：id · 升级 ·\n修饰', '每張牌：id · 升級 ·\n修飾')),
         items: [
           {
             kind: 'block',
-            label: L(w('Embeddings\n+ kind vectors', '嵌入\n+ 种类向量', '嵌入\n+ 種類向量')),
+            label: L(w('Card vector\nE + u·U + Σ M: 32', '牌向量\nE + u·U + Σ M：32', '牌向量\nE + u·U + Σ M：32')),
             tone: 'embed',
-            info: L(
-              w(
-                'Each card, relic and potion is one element of 64 numbers: E[c] + u·U[c] + Σ M[m] + v_card, R[r] + v_relic, P[p] + v_potion.',
-                '每张牌、每件遗物、每瓶药水都是一个 64 个数的元素：E[c] + u·U[c] + Σ M[m] + v_card、R[r] + v_relic、P[p] + v_potion。',
-                '每張牌、每件遺物、每瓶藥水都是一個 64 個數的元素：E[c] + u·U[c] + Σ M[m] + v_card、R[r] + v_relic、P[p] + v_potion。',
-              ),
-            ),
+            info: L(w('x = E[c] + u·U[c] + Σ M[m]: the id’s vector, u steps along its upgrade direction, its modifiers: 32 numbers per card.', 'x = E[c] + u·U[c] + Σ M[m]：id 的向量，沿它的升级方向走 u 步，再加修饰：每张牌 32 个数。', 'x = E[c] + u·U[c] + Σ M[m]：id 的向量，沿它的升級方向走 u 步，再加修飾：每張牌 32 個數。')),
           },
           {
             kind: 'repeat',
-            times: '×2',
-            info: L(w('Two blocks, each with its own weights.', '两个块，各有自己的权重。', '兩個區塊，各有自己的權重。')),
+            times: 'φ',
+            info: L(w('The same two layers for every card, each card on its own: no card sees another here.', '每张牌用同样的两层，各自独立：这里牌与牌互相看不到。', '每張牌用同樣的兩層，各自獨立：這裡牌與牌互相看不到。')),
             items: [
-              norm('b-n1'),
-              {
-                kind: 'block',
-                label: L(w('Masked Multi-Head\nAttention, 4 × 16', '带遮罩的\n多头注意力，4 × 16', '遮罩多頭注意力\n4 × 16')),
-                tone: 'attn',
-                info: L(
-                  w(
-                    '4 heads of 16 numbers: each element takes in a weighted mix of every present element; padding is masked out.',
-                    '4 个头，每个 16 个数：每个元素按权重混入所有存在的元素；补齐的位置被遮掉。',
-                    '4 個頭，每個 16 個數：每個元素按權重混入所有存在的元素；補齊的位置被遮掉。',
-                  ),
-                ),
-              },
-              { kind: 'add', id: 'b-a1', info: L(T.add) },
-              norm('b-n2'),
-              {
-                kind: 'block',
-                label: L(w('Feed Forward\n64 → 128 → 64', '前馈\n64 → 128 → 64', '前饋\n64 → 128 → 64')),
-                tone: 'ff',
-                info: L(w('64 → 128 → 64 with ReLU, each element on its own.', '64 → 128 → 64，ReLU，对每个元素单独作用。', '64 → 128 → 64，ReLU，對每個元素單獨作用。')),
-              },
-              { kind: 'add', id: 'b-a2', info: L(T.add) },
+              { kind: 'block', label: L(w('Linear + ReLU\n32 → 128', '线性层 + ReLU\n32 → 128', '線性層 + ReLU\n32 → 128')), tone: 'ff', info: L(w('φ’s first layer: 128 numbers per card.', 'φ 的第一层：每张牌 128 个数。', 'φ 的第一層：每張牌 128 個數。')) },
+              { kind: 'block', label: L(w('Linear + ReLU\n128 → 128', '线性层 + ReLU\n128 → 128', '線性層 + ReLU\n128 → 128')), tone: 'ff', info: L(w('φ’s second layer: 128 numbers per card, none below 0.', 'φ 的第二层：每张牌 128 个数，都不小于 0。', 'φ 的第二層：每張牌 128 個數，都不小於 0。')) },
             ],
           },
-          norm(),
           {
             kind: 'block',
             label: L(w('Mean + sum ÷ 16', '均值 + 和 ÷ 16', '平均 + 總和 ÷ 16')),
             tone: 'pool',
-            info: L(w('The set pooled two ways, padding left out: 64 + 64 = 128 numbers.', '集合用两种方式汇总（不含补齐位置）：64 + 64 = 128 个数。', '集合用兩種方式匯總（不含補齊位置）：64 + 64 = 128 個數。')),
+            info: L(w('The cards pooled two ways, padding left out: 128 + 128 = 256 numbers, the same vector at two scales, which together also give the deck’s size.', '牌用两种方式汇总（不含补齐位置）：128 + 128 = 256 个数，是同一个向量的两种比例，合起来也给出牌数。', '牌用兩種方式匯總（不含補齊位置）：128 + 128 = 256 個數，是同一個向量的兩種比例，合起來也給出牌數。')),
           },
         ],
       },
-      {
-        title: L(w('Route encoder', '路线编码器', '路線編碼器')),
-        input: L(w('player’s point ·\nreachable points', '玩家所在的点 ·\n可到达的点', '玩家所在的點 ·\n可到達的點')),
-        items: [
-          {
-            kind: 'block',
-            id: 'r-s',
-            label: L(w('Type + floors ahead\n+ quest: start s', '类型 + 前方层数\n+ 任务：起点 s', '類型 + 前方層數\n+ 任務：起點 s')),
-            tone: 'embed',
-            info: L(w('s_i = T[type] + A[ahead] + q·v_quest: 32 numbers per node.', 's_i = T[类型] + A[前方层数] + q·v_quest：每个节点 32 个数。', 's_i = T[類型] + A[前方層數] + q·v_quest：每個節點 32 個數。')),
-          },
-          {
-            kind: 'repeat',
-            times: '×16',
-            info: L(w('16 rounds with the same weights: one per row of an act’s map.', '16 轮，共用同一组权重：一幕地图的每一行一轮。', '16 輪，共用同一組權重：一幕地圖的每一列一輪。')),
-            items: [
-              {
-                kind: 'block',
-                label: L(w('Max · mean over\nnext nodes', '对下一步节点\n取最大值 · 均值', '對下一步節點\n取最大值 · 平均')),
-                tone: 'msg',
-                info: L(
-                  w(
-                    'For each node, the number-by-number max and the mean of the vectors of the nodes it leads to (0 for the boss).',
-                    '对每个节点，取它通向的节点的向量的逐数最大值和均值（Boss 为 0）。',
-                    '對每個節點，取它通往的節點的向量的逐數最大值和平均（頭目為 0）。',
-                  ),
-                ),
-              },
-              {
-                kind: 'block',
-                id: 'r-u',
-                label: L(w('[s ; max ; mean]\nLinear + ReLU', '[s ; 最大 ; 均值]\n线性层 + ReLU', '[s ; 最大 ; 平均]\n線性層 + ReLU')),
-                tone: 'linear',
-                info: L(w('h_i = ReLU(W[s_i ; max ; mean] + b): 96 → 32, the same W every round.', 'h_i = ReLU(W[s_i ; 最大 ; 均值] + b)：96 → 32，每轮同一个 W。', 'h_i = ReLU(W[s_i ; 最大 ; 平均] + b)：96 → 32，每輪同一個 W。')),
-              },
-            ],
-          },
-          {
-            kind: 'block',
-            label: L(w('Player’s node\n+ mean of all', '玩家的节点\n+ 全部的均值', '玩家的節點\n+ 全部的平均')),
-            tone: 'pool',
-            info: L(w('h_0 and the mean over all nodes: 32 + 32 = 64 numbers.', 'h_0 和所有节点的均值：32 + 32 = 64 个数。', 'h_0 和所有節點的平均：32 + 32 = 64 個數。')),
-          },
-        ],
-      },
-      {
-        title: L(w('Context', '上下文', '上下文')),
-        narrow: true,
-        input: L(w('character · act ·\nbosses · ancient', '角色 · 幕 ·\nBoss · 先古之民', '角色 · 幕 ·\n頭目 · 遠古之民')),
-        items: [
-          {
-            kind: 'block',
-            label: L(w('Embeddings', '嵌入', '嵌入')),
-            tone: 'embed',
-            info: L(w('One 64-number vector per token.', '每个词元一个 64 个数的向量。', '每個詞元一個 64 個數的向量。')),
-          },
-          {
-            kind: 'block',
-            label: L(w('Sum', '求和', '加總')),
-            tone: 'pool',
-            info: L(w('The bag’s vectors summed: 64 numbers.', '袋里的向量相加：64 个数。', '袋裡的向量相加：64 個數。')),
-          },
-        ],
-      },
+      bag(w('Relics', '遗物', '遺物'), w('each relic', '每件遗物', '每件遺物'), w('R[r]: one vector per relic id; “:used” is an id of its own.', 'R[r]：每个遗物 id 一个向量；“:used” 是单独的 id。', 'R[r]：每個遺物 id 一個向量；「:used」是單獨的 id。')),
+      bag(w('Potions', '药水', '藥水'), w('each potion', '每瓶药水', '每瓶藥水'), w('P[p]: one vector per potion id; an empty slot is no token.', 'P[p]：每个药水 id 一个向量；空栏不是词元。', 'P[p]：每個藥水 id 一個向量；空欄不是詞元。')),
+      bag(w('Context', '上下文', '上下文'), w('character · act ·\nbosses · ancient', '角色 · 幕 ·\nBoss · 先古之民', '角色 · 幕 ·\n頭目 · 遠古之民'), w('C[t]: one vector per token.', 'C[t]：每个词元一个向量。', 'C[t]：每個詞元一個向量。')),
+      bag(w('Map', '地图', '地圖'), w('type + floors ahead\nof each point', '每个点的\n类型 + 前方层数', '每個點的\n類型 + 前方層數'), w('G[t]: one vector per token such as Elite+3; on a map move, the point entered as Elite+0.', 'G[t]：每个词元一个向量，如 Elite+3；选路时，正要进入的点是 Elite+0。', 'G[t]：每個詞元一個向量，如 Elite+3；選路時，正要進入的點是 Elite+0。')),
       numbers(lang),
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 128 + 64 + 64 + 6 = 262', '拼接：128 + 64 + 64 + 6 = 262', '串接：128 + 64 + 64 + 6 = 262')),
+      label: L(w('Concatenate: 256 + 32 + 32 + 32 + 32 + 6 = 390', '拼接：256 + 32 + 32 + 32 + 32 + 6 = 390', '串接：256 + 32 + 32 + 32 + 32 + 6 = 390')),
       tone: 'norm',
-      info: L(w('One vector of 262 numbers.', '一个 262 个数的向量。', '一個 262 個數的向量。')),
+      info: L(w('One vector of 390 numbers. The parts meet only from here on.', '一个 390 个数的向量。各部分从这里才开始相遇。', '一個 390 個數的向量。各部分從這裡才開始相遇。')),
     },
     top: [
       {
         kind: 'repeat',
         times: 'MLP',
-        info: L(
-          w(
-            'The body: where the four parts meet. A second head, used only in training, reads its output too: Linear 256 → 7, not in the net file.',
-            '主干：四个部分在这里相遇。训练时另有第二个输出头也读它的输出：线性层 256 → 7，不进网络文件。',
-            '主幹：四個部分在這裡相遇。訓練時另有第二個輸出頭也讀它的輸出：線性層 256 → 7，不進網路檔案。',
-          ),
-        ),
-        items: [
-          { kind: 'block', label: L(w('Linear 262 → 256', '线性层 262 → 256', '線性層 262 → 256')), tone: 'linear', info: L(w('z ↦ W₁z + c₁: 256 numbers.', 'z ↦ W₁z + c₁：256 个数。', 'z ↦ W₁z + c₁：256 個數。')) },
-          { kind: 'block', label: 'ReLU', tone: 'linear', info: L(w('max(0, x), number by number.', 'max(0, x)，逐数计算。', 'max(0, x)，逐數計算。')) },
-          { kind: 'block', label: L(w('Linear 256 → 256', '线性层 256 → 256', '線性層 256 → 256')), tone: 'linear', info: L(w('b₁ ↦ W₂b₁ + c₂: 256 numbers.', 'b₁ ↦ W₂b₁ + c₂：256 个数。', 'b₁ ↦ W₂b₁ + c₂：256 個數。')) },
-          { kind: 'block', label: 'ReLU', tone: 'linear', info: L(w('max(0, x), number by number: the body’s output, which the heads read.', 'max(0, x)，逐数计算：主干的输出，输出头读它。', 'max(0, x)，逐數計算：主幹的輸出，輸出頭讀它。')) },
-        ],
+        info: L(w('The body: every relation between the parts is worked out here. A second head, used only in training, reads its output too: Linear 256 → 7, not in the net file.', '主干：各部分之间的关系都在这里算出来。训练时另有第二个输出头也读它的输出：线性层 256 → 7，不进网络文件。', '主幹：各部分之間的關係都在這裡算出來。訓練時另有第二個輸出頭也讀它的輸出：線性層 256 → 7，不進網路檔案。')),
+        items: body(lang, 390),
       },
       { kind: 'block', label: L(w('Hazard head\nLinear 256 → 64', '风险值输出头\n线性层 256 → 64', '風險值輸出頭\n線性層 256 → 64')), tone: 'head', info: L(w('One logit per floor, 0 to 63.', '每层一个 logit，0 到 63。', '每層一個 logit，0 到 63。')) },
       {
         kind: 'block',
         label: L(w('Sigmoid: 64 h_g', 'Sigmoid：64 个 h_g', 'Sigmoid：64 個 h_g')),
         tone: 'head',
-        info: L(
-          w(
-            'Per floor g, the chance h_g that the run ends there if still going.',
-            '对每一层 g：还在进行时在该层结束的机率 h_g。',
-            '對每一層 g：還在進行時在該層結束的機率 h_g。',
-          ),
-        ),
+        info: L(w('Per floor g, the chance h_g that the run ends there if still going.', '对每一层 g：还在进行时在该层结束的机率 h_g。', '對每一層 g：還在進行時在該層結束的機率 h_g。')),
       },
     ],
     output: L(w('P(win) = ∏ (1 − h_g), from the current floor on', 'P(win) = ∏ (1 − h_g)，从当前层算起', 'P(win) = ∏ (1 − h_g)，從目前樓層算起')),
-    links: [
-      { from: 'b-n1', at: 'below', to: 'b-a1', side: 'left' },
-      { from: 'b-n2', at: 'below', to: 'b-a2', side: 'left' },
-      { from: 'r-s', at: 'above', to: 'r-u', side: 'right' },
-    ],
+    links: [],
   };
 }
 
@@ -552,4 +450,4 @@ export function combatNet(lang: Lang): Diagram {
   };
 }
 
-export const DIAGRAMS = { encoders: encodersNet, combat: combatNet };
+export const DIAGRAMS = { value: valueNet, combat: combatNet };

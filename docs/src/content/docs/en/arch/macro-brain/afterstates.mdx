@@ -67,4 +67,4 @@ Two other designs come up naturally, and both were weighed against the single V.
 
 **A policy network.** A network that maps a screen directly to a choice, as AlphaZero's policy does, would need a teacher. Imitating L0 can at best match L0; a policy gradient on run outcomes is far noisier than V's targets; and a search stronger than the policy, which AlphaZero relies on, is what L0 already does by trying every option. A policy would save the clone's cost ([Search §6](/en/arch/macro-brain/search/#sec-6)) and lose what the clone shows. It becomes useful when NoSL needs a fast brain without a clone: distilling SL's L0 into a policy is a candidate then.
 
-So the macro brain keeps one V and one score. The distinction between building a deck and choosing a route lives inside V, as two encoders feeding one body ([The value network §1](/en/arch/macro-brain/network/#sec-1)).
+So the macro brain keeps one V and one score. The distinction between building a deck and choosing a route lives inside V, as separate inputs feeding one body ([The value network §1](/en/arch/macro-brain/network/#sec-1)).

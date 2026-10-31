@@ -62,7 +62,7 @@ AI 能在两种环境里，以无头方式、在游戏自己的代码里打完�
 
 4. <Badge text="2026-10-30 完成" variant="success" /> 纯 V（pure-1-g），然后是计划 v6 的精英连战：三代用均匀抽取的自我对弈，v6-1、v6-2 和 v6-3-2，每一代都通过了连战的配对门槛；v6-3-2 成为两个冠军的 V，在完整 SL 对局里 300 局赢 23 局。
 
-5. **计划 v7，现在**：V 在完整的 SL 对局上训练和过门槛，每场战斗都真打；V 按 P(win) 做决定（`v.train --objective win`），按配对的胜局过门槛（`learn/gauntlet.py`，promotion-1-500）；V 的网络里加上构筑编码器和路线编码器。它的第一代自我对弈正在进行（[宏观大脑：弱点与下一步](/arch/macro-brain/next/)）。
+5. **计划 v7，现在**：V 在完整的 SL 对局上训练和过门槛，每场战斗都真打；V 按 P(win) 做决定（`v.train --objective win`），按配对的胜局过门槛（`learn/gauntlet.py`，promotion-1-500）。它的第一代自我对弈正在进行（[宏观大脑：弱点与下一步](/arch/macro-brain/next/)）。
 
 6. 然后：NoSL 的各项，在 SL 优先期间先等着：战斗网络的下一代过晋级门槛、调 PIMC 的世界数和节点数、融合测试集的测量、根上的 sequential halving（[NoSL PIMC：预算 §7](/arch/pimc/budget/#sec-7)、[战斗大脑：叶子 §6](/arch/combat-brain/leaf/#sec-6)）。
 

@@ -46,7 +46,7 @@ $S_g$ 是過了第 $g$ 層還在繼續的機率，$e_g$ 是這一局恰好在第
 
 ## 3. 從記錄下來的決策到樣本
 
-`learn/v/data.py` 建出樣本。自我對弈日誌裡的每個宏觀決策都是一個樣本：那個決策處的整局觀測（[Harness：決策日誌 §7](/zh-tw/arch/harness/decision-log/#sec-7)），按對局 id 連接到這一局的記錄，記錄說明這一局在哪裡結束（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)）。失敗對局的決策不算在內。它的目標是這一局的真實結果，即**蒙地卡羅（MC）目標**：沒有估計，沒有自舉，只有實際發生的事。
+`learn/v/data.py` 建出樣本。自我對弈日誌裡的每個宏觀決策都是一個樣本：那個決策處的整局觀測（[Harness：決策日誌 §7](/zh-tw/arch/harness/decision-log/#sec-7)），按對局 id 連接到這一局的記錄，記錄說明這一局在哪裡結束（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)）。失敗對局的決策不算在內。一次選路還給出第二個樣本，也就是選中的點的後狀態，因為 V 給地圖選項估值時讀的正是它，而記錄的整局觀測裡都沒有它（[價值網路 §4](/zh-tw/arch/macro-brain/network/#sec-4)）。它的目標是這一局的真實結果，即**蒙地卡羅（MC）目標**：沒有估計，沒有自舉，只有實際發生的事。
 
 一個樣本包含：
 
@@ -93,7 +93,7 @@ $$
 ## 5. 訓練
 
 ```text
-uv run python -m v.train --list PREFIX --name NAME --objective win --encoders [--init FILE]
+uv run python -m v.train --list PREFIX --name NAME --objective win [--init FILE]
 ```
 
 `learn/v/train.py`。大小和設定寫死在程式碼裡，不是選項；實驗就在那裡改，只有有結果才保留改動：

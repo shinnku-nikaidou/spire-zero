@@ -203,7 +203,7 @@ Sts2Ai.SimWorker COMMAND [options]
 |---|---|
 | `BoundaryTests` | Brain、Protocol 和 Harness 不触及任何游戏程序集，而这项检查确实看得到 GameBridge 的 `sts2` |
 | `Brain/BudgetTests` | 房间倍数放大 PIMC 的节点数和 plan 的束宽，只放大一次；名字里只显示不是默认值的部分 |
-| `Brain/CloneSearchTests` | 玩具克隆上的 L0：商店值它最好的一篮购买；事件选项值它下一页给的东西；地图移动不去实际打出；要选两张牌的提示找到最好的一对；跳过的卡牌奖励不会再打开；到达两次的状态只搜一次 |
+| `Brain/CloneSearchTests` | 玩具克隆上的 L0：商店值它最好的一篮购买；事件选项值它下一页给的东西；选路不去实际打出；要选两张牌的提示找到最好的一对；跳过的卡牌奖励不会再打开；到达两次的状态只搜一次 |
 | `Brain/CombatExplorationTests` | 探索中的路线按搜索的值抽取，并标记这次抽取；打平时也抽取，但不标记；没有候选的路线保持不变 |
 | `Brain/CombatNetTests` | 像训练器那样读出 SL 网络的状态；仍能读 c2；网络只在它自己的环境里打；V 给死亡、胜利和药水定的价格；按 V 的价格给进行中的状态估值 |
 | `Brain/LeafValueTests` | 输是 0；赢按生命值和药水计分；进行中低于赢；预计的死亡仍高于输；敌人受到的伤害会提高估值 |
@@ -211,7 +211,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `Brain/MacroUpgradeTests` | 锻造值它最好的那次升级；锻造提示选估值时用的那次升级；升级提示选最好的预览 |
 | `Brain/MoveRecordTests` | 每个活着的敌人每轮记录一次；死了的跳过；轮次倒退时重新开始；`Clear` |
 | `Brain/PimcMemoTests` | 看起来相同但掷骰不同的路线不会被合并 |
-| `Brain/RunNetTests` | 像训练器那样读出纯 V 网络的对局，胜率网络的对局读出训练器算出的获胜概率，也能读编码器网络的；仍能读 V v2；地图是路径仍能通向的每个点，带着它前方的层数；路线是玩家所在的点，然后是可达的点，每个点带着它通向的节点 |
+| `Brain/RunNetTests` | 像训练器那样读出纯 V 网络的对局，胜率网络的对局读出训练器算出的获胜概率，也能读编码器网络的；仍能读 V v2；地图是路径仍能通向的每个点，带着它前方的层数；路线是玩家所在的点，然后是可达的点，每个点带着它通向的节点；选路读入要进入的点，词表里没有它的网络把它略去 |
 | `Brain/SlPlannerTests` | 14 个测试：完整搜索、窄束、失败计划和重新规划的回合、失败计划数、带 keep 和 floor 搜索的回合、下潜的回合、简易束和束、获胜的战斗只规划一次、每个力度对应一个预算、已证明的失败、候选的顺序、记录的历史 |
 | `Brain/SoftmaxTests` | `Best` 取第一个最好的；按 exp(value) 抽取；冷的 softmax 取最好的；在 T 的 1/100 以内算打平；拒绝 T=0 |
 | `Brain/TurnPlanTests` | 不成立的一步会重新规划并被标记 |

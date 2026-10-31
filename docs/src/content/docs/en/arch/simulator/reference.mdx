@@ -211,7 +211,7 @@ The run line then ends with `obs <digest>`, one hash of the run's observation ha
 | `Brain/MacroUpgradeTests` | smithing is worth its best upgrade; the smith prompt takes the valued upgrade; the upgrade prompt takes the best preview |
 | `Brain/MoveRecordTests` | each living enemy is recorded once per round; the dead are skipped; it starts over when the round goes back; `Clear` |
 | `Brain/PimcMemoTests` | lines that look the same but rolled differently are not merged |
-| `Brain/RunNetTests` | reads a pure V net's runs as its trainer did, a win net's at the trainer's chance to win, and an encoders net's; still reads V v2; the map is every point a path still leads to, with its floors ahead; the route is the player's point, then the reachable ones, each with the nodes it leads to |
+| `Brain/RunNetTests` | reads a pure V net's runs as its trainer did, a win net's at the trainer's chance to win, and an encoders net's; still reads V v2; the map is every point a path still leads to, with its floors ahead; the route is the player's point, then the reachable ones, each with the nodes it leads to; a map move reads the point entered, which a net whose table lacks it leaves out |
 | `Brain/SlPlannerTests` | 14 tests: full search, narrow beam, losing plans and replan turns, loss plans, a turn searched with keep and floor, the dive's turns, easy beam and beam, a winning combat planned once, each effort a budget, a proved loss, the candidates' order, the record's history |
 | `Brain/SoftmaxTests` | `Best` is the first best; draws by exp(value); a cold softmax takes the best; a tie within 1/100 of T; refuses T=0 |
 | `Brain/TurnPlanTests` | a step that does not hold is replanned and marked |

@@ -10,7 +10,7 @@ sidebar:
 
 Until run worlds exist ([Simulator: worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)), NoSL has no world to play an option in, so `MacroBrain` predicts each afterstate from the screen alone, with no game code, and takes the option with the highest V (the first legal one on a tie). The prediction, by surface:
 
-- **Map:** the point is added to the path. V then reads the map from there ([The value network §4](/en/arch/macro-brain/network/#sec-4)). L0's plan for the act is the rest of the route: each next point as it would choose it if nothing else changed, up to the boss; the mod draws it ([Mod: the main loop §6](/en/arch/mod/loop/#sec-6)).
+- **Map:** the point is added to the path and marked as being entered. V then reads the map from there ([The value network §4](/en/arch/macro-brain/network/#sec-4)). L0's plan for the act is the rest of the route: each next point as it would choose it if nothing else changed, up to the boss; the mod draws it ([Mod: the main loop §6](/en/arch/mod/loop/#sec-6)).
 - **Rewards, card reward, bundle, treasure, shop purchase:** the gold, potion, relic or cards are added and the price is paid.
 - **An option that opens a choice** (a card reward, a card removal, smithing) is worth the best pick in it, among the picks the game will offer (an Eternal card cannot be removed), so a choice that would be skipped is not opened. A card reward's cards are listed on the rewards screen, since they are rolled before it shows and opening one to look costs nothing ([Protocol: observations and actions §5](/en/arch/protocol/observation/#sec-5)).
 - **Rest:** the heal the option shows; smithing is worth its best upgrade, as at the prompt that follows.

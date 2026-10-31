@@ -33,6 +33,7 @@ export interface RunView {
   map: {
     points: Point[];
     visited: { col: number; row: number }[];
+    entering?: boolean;
     boss: string;
     second_boss?: string | null;
     ancient?: string | null;
@@ -85,8 +86,8 @@ export function mapToken(p: Point, row: number): string {
 }
 
 export function mapTokens(m: RunView['map']): string[] {
-  const row = here(m).row;
-  return reachable(m).map((p) => mapToken(p, row));
+  const at = here(m);
+  return [...(m.entering ? [at] : []), ...reachable(m)].map((p) => mapToken(p, at.row));
 }
 
 export const MAX_AHEAD = 16; // floors ahead above this read as this one (an act's map has 16 rows after its start)

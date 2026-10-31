@@ -62,7 +62,7 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 
 4. <Badge text="done 2026-10-30" variant="success" /> Pure V (pure-1-g), then plan v6's elite gauntlet: three generations of self-play with even draws, v6-1, v6-2 and v6-3-2, each passing the gauntlet's paired gate; v6-3-2 becomes both champions' V and wins 23 of 300 whole SL runs.
 
-5. **Plan v7, now**: V trained and gated on whole SL runs, with every combat fought; V decides by P(win) (`v.train --objective win`) and is gated on paired wins (`learn/gauntlet.py`, promotion-1-500); a build encoder and a route encoder inside V's net. Its first generation of self-play is being played ([Macro brain: weaknesses and next steps](/en/arch/macro-brain/next/)).
+5. **Plan v7, now**: V trained and gated on whole SL runs, with every combat fought; V decides by P(win) (`v.train --objective win`) and is gated on paired wins (`learn/gauntlet.py`, promotion-1-500). Its first generation of self-play is being played ([Macro brain: weaknesses and next steps](/en/arch/macro-brain/next/)).
 
 6. Then: NoSL's items, waiting while SL comes first: the combat net's next generation through the gate, tuning PIMC's worlds and nodes, the fusion panel's measurement, sequential halving at the root ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7), [Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
 

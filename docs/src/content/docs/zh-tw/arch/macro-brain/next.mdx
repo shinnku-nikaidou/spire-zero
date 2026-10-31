@@ -69,6 +69,6 @@ public sealed record MacroDecisionResult(
 
 1. 每局一個切點，讓一個決策的標籤不帶之後的抽取：切點之前抽取，之後用 V 的最佳，只在切點之後的決策上訓練，就像 AlphaGo 的價值網路那樣訓練。
 2. 怎麼檢查 P(win) 的校準：V 給 30% 的那些狀態，大約 30% 應該贏下（[學習：參考 §12](/zh-tw/arch/learning/reference/#sec-12)）。
-3. V 能從路線編碼器學到多少路徑規劃。
+3. V 能從不含連線的地圖袋學到多少路徑規劃（[價值網路 §8](/zh-tw/arch/macro-brain/network/#sec-8)）。
 4. L1 的視野 H（下一個頭目還是下一幕），以及推演的戰鬥策略需要多強。
 5. 在 NoSL 裡，把商店當作一個決策還是一串；在 SL 裡，複本把它當作一串來搜尋。
