@@ -1,11 +1,13 @@
 ---
 title: 'Budget, cost and results'
-description: The SL planner's effort levels and the low budget of self-play, where its time goes in whole runs, how it runs in workers, what it has measured, and its weaknesses and open questions.
+description: The SL planner's effort levels and the low budget of self-play, where its time goes in whole runs, how it runs in workers, what it has measured, its weaknesses and open questions, and the planned single budget per fight.
 sidebar:
   label: Budget
 ---
 
-The planner's budget is a few numbers: the beam $B$, the easy beam $E$, the nodes per state and turn, how many turns of a losing plan are played before planning again, and how many losing plans are allowed in a row ([Beam](/en/arch/sl-planner/beam/)). This section is how those numbers are set, what they cost, and what the planner achieves with them.
+import { Badge } from '@astrojs/starlight/components';
+
+The planner's budget today is a few numbers: the beam $B$, the easy beam $E$, the nodes per state and turn, how many turns of a losing plan are played before planning again, and how many losing plans are allowed in a row ([Beam](/en/arch/sl-planner/beam/)). [§1](#sec-1)–[§6](#sec-6) are how those numbers are set, what they cost, and what the planner achieves with them. [§7](#sec-7) is the planned budget, one number per fight.
 
 ## 1. Effort levels
 
@@ -76,10 +78,19 @@ The planner wins every fight PIMC wins, and 1, 5 and 3 more. On the fights both 
 
 ## 6. Weaknesses and open questions
 
-- **A narrow beam.** A turn ends in far more distinct states than the 8 the beam keeps, so few plans are proved (18% on act 1 hallway fights, 3% on elites, 1% on act 2) and a better line can fall outside the beam. What a wider beam or more nodes buy in whole runs (`--effort max`) is not measured. Not built: improving the plan by branch and bound until a time budget runs out, with wider beams in turn, as an anytime search.
+- **A narrow beam.** A turn ends in far more distinct states than the 8 the beam keeps, so few plans are proved (18% on act 1 hallway fights, 3% on elites, 1% on act 2) and a better line can fall outside the beam. What a wider beam or more nodes buy in whole runs (`--effort max`) is not measured. Iterative widening is the planned answer ([Beam §7](/en/arch/sl-planner/beam/#sec-7)).
 - **The bound's assumption.** A fight that heals or gives potions breaks it, and a prune can then drop the best line ([Beam §2](/en/arch/sl-planner/beam/#sec-2)).
-- **A NoSL leaf.** The leaf, c2, learned the endings of NoSL's PIMC with the hand-made leaf, a weaker player than the planner ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). SL's own net is not trained yet, and V's prices (`--leaf-prices v`) are built but not gated.
-- **Prompts are not searched.** Card prompts go to `p0`, so a plan cannot choose a better discard or pick ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
+- **A NoSL leaf.** The leaf, c2, learned the endings of NoSL's PIMC with the hand-made leaf, a weaker player than the planner, and it has no act 3 in its vocabulary ([Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7)). SL's own net is not trained yet, and V's prices (`--leaf-prices v`) are built but not gated, and wrong for today's V until a death's price is fixed ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+- **Prompts are not searched.** Card prompts go to `p0`, so a plan cannot choose a better discard or pick ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)).
 - **The fight's end is the horizon.** The search stops where the fight does, valued by the leaf; the rewards after it and the rest of the node, which SL may also see, are left to the macro brain. Searching on to the node's exit is open ([Environments: information §9](/en/arch/environments/information/#sec-9), question 1).
 - **Lost fights cost time.** A quarter of the fight time goes into the 5% of fights that are lost ([§3](#sec-3)). The limit on losing plans caps it; no cheaper test tells a lost fight from a hard one.
 - **Fair comparison with NoSL.** The planner gets the same nodes per search, not the same time. Equal wall-clock time is the fairer budget for comparing the environments ([Environments: information §9](/en/arch/environments/information/#sec-9), question 2).
+
+## 7. One budget per fight <Badge text="planned" variant="caution" />
+
+In the design a fight has one node budget, and the search has one minimum width, 4 in the stop rule of [Beam §7](/en/arch/sl-planner/beam/#sec-7). These two replace the dive, the easy beam, the loss plans, the replan options, the room multiples and the effort presets' other parts. The sizes are to be set by gates; none is chosen or measured.
+
+- **It spends where the fight is hard.** An easy fight stops at width 4 with a win or earlier on a proof. A hard one, with no win yet, goes on widening and planning again until its nodes are spent, which is what the room multiples and the loss plans were approximating.
+- **It is counted in nodes, so it stays comparable across hosts.** As a scale, about 460 nodes a second on the panel ([Beam §7.2](/en/arch/sl-planner/beam/#sec-7.2)), and 5,653–21,592 nodes for one plan of the panel's elites and bosses today ([Beam §6](/en/arch/sl-planner/beam/#sec-6)).
+- **Self-play and gates can still differ**, each with its own number, as they do now ([§2](#sec-2)).
+- **Workers stay.** Each state's `TurnEnds` is one request. A worker keeps nothing between requests today ([Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)), so the table shared across turns and passes has to live in the host or in a request's reply; that choice is left to the implementation.

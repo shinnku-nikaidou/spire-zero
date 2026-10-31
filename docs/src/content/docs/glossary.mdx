@@ -77,6 +77,8 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 策略融合（strategy fusion） | 在每个抽样世界里各挑一条不同的最佳路线的错误，就好像玩家知道哪个世界是真的。按第一步动作取平均，让它不进入选择（[环境：世界 §3](/arch/environments/worlds/#sec-3)）。 |
 | SL 规划器（SL planner） | SL 的战斗大脑：在节点的克隆上以整个回合为单位做束搜索，一直到战斗结束（[SL 规划器](/arch/sl-planner/)）。 |
 | 束搜索（beam search）、分支定界（branch-and-bound） | 每一步只保留最好的 B 个状态；丢掉上界比不过已找到的最佳路线的每个分支，所以达到上界的路线就被证明是最好的（[SL 规划器：束搜索](/arch/sl-planner/beam/)）。 |
+| TurnEnds | 规划中：两种环境共用的一个搜索步骤，枚举一个回合可能结束的各个状态（[战斗大脑 §3.1](/arch/combat-brain/#sec-3.1)）。 |
+| 迭代加宽（iterative widening） | 为 SL 规划器规划：宽度为 1、2、4、8……的多轮，每轮都打到战斗结束，并由目前最好的路线剪枝（[SL 规划器：束搜索 §7](/arch/sl-planner/beam/#sec-7)）。 |
 | 叶子（leaf）、战斗网络（combat net） | 在搜索停下的地方，由叶子给状态打分：手工的 `LeafValue`，或战斗网络，一个读整场战斗的学到的网络（[战斗大脑：叶子](/arch/combat-brain/leaf/)）。 |
 | 后状态（afterstate） | 刚做完选择、新的随机性出现之前的状态。宏观大脑按后状态给选项估值（[宏观大脑：后状态与单一 V](/arch/macro-brain/afterstates/)）。 |
 | L0 | 宏观大脑：它用 V 给每个选项的后状态估值，取最好的；在地图上它规划通往 Boss 的路线（[宏观大脑：搜索](/arch/macro-brain/search/)）。 |

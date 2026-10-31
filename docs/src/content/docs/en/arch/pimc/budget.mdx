@@ -1,19 +1,19 @@
 ---
 title: 'Budget, tools and results'
-description: How PIMC spends its worlds and nodes, the levers built on top (following the plan, sequential halving, budget by room), how it runs in workers, what it has measured, and its weaknesses and open questions.
+description: How PIMC spends its worlds and nodes, the levers built on top (following the plan, sequential halving, budget by room), how it runs in workers, what it has measured, its weaknesses and open questions, and the planned budget of K and nodes alone.
 sidebar:
   label: Budget
 ---
 
-PIMC's budget is two numbers, `Budget(Worlds, NodesPerWorld)`: $K$ worlds, each searched with a number of nodes, 8 × 300 by default, where a node is one action played ([§1](#sec-1)). On top of the plain search sit three levers, each built and measured: following the plan through the rest of a turn ([§2](#sec-2)), sequential halving at the root ([§3](#sec-3)), and more nodes in elite and boss fights ([§4](#sec-4)). None of them is on in the champion.
+import { Badge } from '@astrojs/starlight/components';
+
+PIMC's budget is two numbers, `Budget(Worlds, NodesPerWorld)`: $K$ worlds, each searched with a number of nodes, 8 × 300 by default, where a node is one action played ([§1](#sec-1)). On top of the plain search sit three levers, each built and measured: following the plan through the rest of a turn ([§2](#sec-2)), sequential halving at the root ([§3](#sec-3)), and more nodes in elite and boss fights ([§4](#sec-4)). None of them is on in the champion, and the planned design drops them ([§8](#sec-8)).
 
 ## 1. Worlds and nodes
 
 In each world the nodes are split evenly over the first actions, so each first action gets a fair look; inside a subtree, once its share is spent, the state is scored as ending the turn ([Search §1](/en/arch/pimc/search/#sec-1)). On one core a decision costs about 0.55–0.75 s; the worlds are independent, so the worker pool searches one world per worker, and with 8 workers an action takes about 70 ms, with the same result ([§5](#sec-5)).
 
 How large $K$ should be is a question of returns. Each world adds a sample to every first action's mean, so the noise falls as $1/\sqrt{K}$, but the bias of [Search §4](/en/arch/pimc/search/#sec-4)–[§5](/en/arch/pimc/search/#sec-5) does not fall at all. Elsewhere: in LoCM, a card-game study, PIMC saturates beyond 32 worlds; in ytcs, a prior-art STS2 project, $K$ = 64 gained 0.018. Here $K$ and the nodes per world are 8 × 300 for every fight, and nothing has tuned them yet. As rough numbers, 1–2 s per decision on 8 workers gives about 5,000 branches; at $K$ = 16 that is about 300 per world, enough to enumerate one turn with transpositions merged.
-
-The planned lever that decides when to stop is **CI-based allocation**: each first action's mean has a confidence interval, and once the two best are clearly apart, more worlds will not change the choice; until then, more worlds go to those two. Not built: today every first action gets every world.
 
 ## 2. Following the plan
 
@@ -77,9 +77,24 @@ PIMC raises the floor under either macro brain, and L0 under either combat polic
 
 ## 7. Weaknesses and open questions
 
-1. **$K$ and the nodes per world.** 8 × 300 for every fight, untuned. A panel can show the marginal gain in HP per added world; CI-based allocation would spend worlds where the choice is close ([§1](#sec-1)).
+1. **$K$ and the nodes per world.** 8 × 300 for every fight, untuned. A panel can show the marginal gain in HP per added world ([§1](#sec-1)).
 2. **How large fusion is.** The fusion panel is built and has had one small try ([Search §4](/en/arch/pimc/search/#sec-4)): 300–500 decisions rich in reveals would decide whether ISMCTS is worth its cost.
-3. **The leaf at the end of the turn.** The search sees the fight past this turn only through the leaf. Candidates at equal wall-clock time: c2, a rollout to the end of the fight from the leaf, and both. A rollout at every leaf is too expensive, since almost every node carries an end-turn leaf; only the two first actions that sequential halving keeps last would get one rollout per world, from their best line, as a confirmation. Searching one more turn for the best first actions, with a cheap policy or a beam, is planned too.
+3. **The leaf at the end of the turn.** The search sees the fight past this turn only through the leaf, so the leaf's gaps are the search's ([Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7)).
 4. **The sampler.** Monsters' queued moves are drawn uniformly among those that match the intent, and hidden counters have no posterior ([Search §5](/en/arch/pimc/search/#sec-5)).
-5. **Prompts** go to `p0`, as in SL ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
+5. **Prompts** go to `p0`, as in SL ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)).
 6. **No report of the current champion** in NoSL, and no NoSL combat net trained since c2 on newer, better-played fights ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
+
+## 8. K and nodes per world, and nothing else <Badge text="planned" variant="caution" />
+
+The planned budget is the two numbers of [§1](#sec-1). Everything else that has a flag today is a candidate to delete: none of it is on in the champion.
+
+| candidate | today | why it can go |
+|---|---|---|
+| sequential halving ([§3](#sec-3)) | built, off | not in the champion, and it complicates the root |
+| follow ([§2](#sec-2)) | built, off | its not-worse gate stayed open after 200 seeds |
+| room multiples ([§4](#sec-4)) | built, off | boss × 2 failed its gate |
+| `SlWorldRequest` ([§5](#sec-5)) | built, baseline only | PIMC on SL's world is a baseline, not a player |
+
+**What stays and must.** `MoveRecord` stays for building worlds even if the net stops reading it: it is what lifts the worlds' fidelity from 82–89% to 96–98% on hallway fights ([Overview §3](/en/arch/pimc/#sec-3)).
+
+**Conditions.** The merged `TurnEnds` needs a NoSL gate, and prompt branches need the fusion panel first ([Search §6](/en/arch/pimc/search/#sec-6)). NoSL's net stays c2 for now, and its known gaps with it.

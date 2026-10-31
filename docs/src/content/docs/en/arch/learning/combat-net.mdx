@@ -1,6 +1,6 @@
 ---
 title: Training the combat net
-description: 'How the combat search''s learned leaf is trained: what it reads and predicts in brief, what each generation of nets reads, its samples and labels (each round''s start and how its fight ended), the loss and fixed settings, the report and net file, and every measurement of c1 to c4.'
+description: 'How the combat search''s learned leaf is trained: what it reads and predicts in brief, what each generation of nets reads, its samples and labels (each round''s start and how its fight ended), the loss and fixed settings, the report and net file, every measurement of c1 to c4, and the planned first SL net.'
 sidebar:
   label: Training the combat net
 ---
@@ -10,7 +10,7 @@ The combat net is the combat search's learned leaf: from a round's start it pred
 
 <Aside title="Status">
 
-`learn/combat/` (`combat.train`, commits `d290783`, `3a95439`) trains a combat net from one environment's games. No net of it is trained yet: SL's first, `sl-c1`, is planned on the list `sl-combat` ([§7](#sec-7)). The nets in play, c1–c4, were trained by `learn/train_combat.py`, removed in `455d437`; c2 has been the leaf of both champions since 2026-10-27, in NoSL's PIMC and in SL's planner.
+`learn/combat/` (`combat.train`, commits `d290783`, `3a95439`) trains a combat net from one environment's games. No net of it is trained yet: SL's first, `sl-c1`, is planned ([§7](#sec-7)). The nets that exist, c1–c4, were trained by `learn/train_combat.py`, removed in `455d437`; c2, written by it at commit `b4480a1`, has been the leaf of both champions since 2026-10-27, in NoSL's PIMC and in SL's planner. Its known issues are in [Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7).
 
 </Aside>
 
@@ -91,7 +91,8 @@ c2's held-out cross-entropy is lowest at bosses (1.130 on 597 round starts) and 
 
 ## 7. Planned
 
-- **SL's own net** <Badge text="planned" variant="caution" />. c2 learned from NoSL fights played by PIMC with `LeafValue`, and it is the SL planner's leaf too, so it predicts the endings of a weaker player than the planner ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). The list `sl-combat` holds SL's training set: SL g3's batch 1 (419 runs) and the SL evaluations played by the planner with c2 at medium effort (`promotion-1`, 160 runs; `promotion-1b`, 40; the gate of n3-free-ctl, 200), 819 runs and 54,405 round starts; the fix68 reruns are left out, since their seeds are `promotion-1`'s ([Reference §4](/en/arch/learning/reference/#sec-4)). Its first net is to be `uv run python -m combat.train --list data/silent/lists/sl-combat --env SL --name sl-c1`.
-- **Other targets for the head** <Badge text="planned" variant="caution" />, to be compared through the gate: TD(λ ≈ 0.95) inside the fight, bootstrapping on the head's own distribution at the next decision, with the final bucket smoothed over its neighbours by HL-Gauss (a Gaussian of about 0.75 buckets), as the prior-art STS2 solver ytcs does (ytcs found λ = 1 worse); or 0.3 × the search's distribution + 0.7 × the outcome, as the prior-art STS2 project r33hab does ([The loop §4](/en/arch/learning/loop/#sec-4)).
-- **A head that knows the limit** <Badge text="planned" variant="caution" />: a won fight cannot lose more HP than the player holds, and c2 puts weight on such buckets in hard fights ([Combat brain: the leaf §4](/en/arch/combat-brain/leaf/#sec-4)).
-- **Search values as labels and a learned prior** (expert iteration) <Badge text="planned" variant="caution" />, with the preconditions that a learned leaf replaces `LeafValue` only after it beats both `LeafValue` and a rollout to the end of the fight ([The loop §5](/en/arch/learning/loop/#sec-5)).
+- **SL's first net, `sl-c1`** <Badge text="planned" variant="caution" />. No SL-trained net has ever been gated, and c2 learned from NoSL fights played by PIMC with `LeafValue` ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). The first net takes Monte Carlo labels from SL's self-play v7g1 (`sl/selfplay/v7g1/`), with the existing `combat.train` and its encoder, and keeps today's hand prices: `uv run python -m combat.train --list LIST --env SL --name sl-c1`. Its vocabulary is v7g1's, which reaches act 3. Its labels are the endings of the planner at self-play's low budget ([The SL planner: budget §2](/en/arch/sl-planner/budget/#sec-2)). It must pass a gate against c2.
+- **Weights per environment, structure shared** <Badge text="planned" variant="caution" />. The net's code is one, a net file names its environment, and `combat.train` refuses a log of the other ([§3](#sec-3)). NoSL stays on c2 for now.
+- **The input rule and the masked head** <Badge text="planned" variant="caution" />: the next gate after `sl-c1`. What the net reads and how it is built are in [Combat brain: the leaf §8](/en/arch/combat-brain/leaf/#sec-8), which also says why width is measured again. Training adds a small id dropout, so that `<unk>` is a token the net has learned, and masks the buckets beyond the HP held.
+- **Labels from continuing unchosen beam states** <Badge text="planned" variant="caution" />, only if the first net shows a net effect in its gate: a state the search kept and did not play is played on, and its ending labels it, which gives labels off the played line. Other targets (TD(λ) inside the fight, a mix with the search's distribution) are not part of this design ([The loop §4](/en/arch/learning/loop/#sec-4)).
+- **Search values as labels and a learned prior** (expert iteration) are not part of this design either, which has no policy head ([The loop §5](/en/arch/learning/loop/#sec-5)).

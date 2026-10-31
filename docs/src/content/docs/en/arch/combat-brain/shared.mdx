@@ -1,15 +1,17 @@
 ---
 title: 'Prompts, moves and workers'
-description: What both combat brains share besides the leaf - the fixed rule for card prompts during a fight (p0), the public record of enemy moves, and the pool of worker processes that runs their searches.
+description: What both combat brains share besides the leaf - the fixed rule for card prompts during a fight (p0) and its planned replacement by search branches, the public record of enemy moves, and the pool of worker processes that runs their searches.
 sidebar:
   label: Prompts, moves and workers
 ---
 
-Three pieces sit under both algorithms. Card prompts during a fight are answered by one fixed rule, in the real fight and in every simulated one, so a search expects the answers the run will give ([§1](#sec-1)). The record of what the enemies showed each round travels with every decision, so leaves read the same history wherever they are computed ([§2](#sec-2)). And the searches run in a pool of worker processes, with a protocol that makes the pooled answer equal to the one-process answer ([§3](#sec-3)).
+import { Badge } from '@astrojs/starlight/components';
+
+Three pieces sit under both algorithms. Card prompts during a fight are answered by one fixed rule, in the real fight and in every simulated one, so a search expects the answers the run will give ([§1](#sec-1)); search branches are to replace it ([§4](#sec-4)). The record of what the enemies showed each round travels with every decision, so leaves read the same history wherever they are computed ([§2](#sec-2)). And the searches run in a pool of worker processes, with a protocol that makes the pooled answer equal to the one-process answer ([§3](#sec-3)).
 
 ## 1. Card prompts: p0
 
-Some cards ask a question when played: Survivor asks for a card to discard, Calculated Gamble discards the hand on its own, an exhaust or a "put a card on top of your draw pile" asks which card, and a card that generates three options asks which to take. The design's goal is to treat each answer as a branch of the search, so that the search values them like any other action ([§4](#sec-4)). Until then every card prompt in a fight goes to `PromptBrain`, called `p0`, a fixed rule by what happens to the picked cards:
+Some cards ask a question when played: Survivor asks for a card to discard, Calculated Gamble discards the hand on its own, an exhaust or a "put a card on top of your draw pile" asks which card, and a card that generates three options asks which to take. Today every card prompt in a fight goes to `PromptBrain`, called `p0`, a fixed rule by what happens to the picked cards ([§4](#sec-4) is the planned replacement):
 
 - **Picks that leave the hand this turn** (a discard, an exhaust, a card put on top of the draw pile) take the least useful cards, Sly cards first in a discard, since discarding a Sly card plays it. Past the prompt's minimum it takes only the cards that are better gone: unplayable ones, and Sly ones in a discard.
 - **A prompt that makes a card free** takes the dearest one.
@@ -23,7 +25,7 @@ $$
 
 and an unplayable card (a status, a curse) has none. `p0` reads the prompt alone and never draws at random: ties go to the first option in canonical order. That is what lets a simulated world ask it too: the search's worlds answer every prompt as the run will, so a line through a prompt is valued with the answer that will really be given. In NoSL that holds in every sampled world; in SL the planner's plan replays exactly ([The SL planner §4](/en/arch/sl-planner/#sec-4)).
 
-Before `p0` (commit `c239f12`), prompts were answered at random, in the real fight and inside the worlds alike, so a search could not expect the answer the run would give. With it, PIMC's whole runs went from floor 18.50 to 19.34 on the same seeds ([NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6)). The rule is hand-written strategy, the kind the project otherwise leaves to learned values. It stays because a prompt searched as branches needs the world API's prompt branching and `ChoiceContext` ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)), not built yet.
+The rule is hand-written strategy, the kind the project otherwise leaves to learned values, and a line through a prompt can only ever be valued with this one answer. It answered 2,035 prompts in the 100 runs of v7-1f.
 
 ## 2. The record of enemy moves
 
@@ -32,6 +34,8 @@ A monster's next move depends on its moves so far: a fixed cycle, a roll that ne
 - Harness collects it from the combat observations it is shown, starting over after each macro decision, and hands it to the combat brain with every decision (`history`). The decision log keeps it with each combat decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)).
 - The search sends it to the workers in every request. A NoSL worker builds each monster's move log from it, so that a sampled world's monsters go on as the real ones would ([NoSL PIMC §2](/en/arch/pimc/#sec-2)). Both kinds of worker hand it to the leaves.
 - The combat net reads it: each enemy's intents in its last 3 rounds and how many rounds it has shown ([The leaf §3](/en/arch/combat-brain/leaf/#sec-3)). Every leaf of one decision's search follows the same record: a leaf is the next round's start, and the record holds the rounds up to the decision's. The SL planner's later turns add the rounds its own lines reach (`MoveRecord.Witness` at each turn's end).
+
+- <Badge text="planned" variant="caution" /> The record stays for NoSL's world building even if the net stops reading it: it is what lifts a built world's fidelity from 82–89% to 96–98% on hallway fights ([NoSL PIMC §3](/en/arch/pimc/#sec-3)).
 
 ## 3. The worker pool
 
@@ -58,7 +62,7 @@ sequenceDiagram
 |---|---|---|
 | `PimcWorldRequest` | PIMC in NoSL (`PooledPimc`) | builds the combat from the observation with the build seed, takes world k of the worlds drawn from the search seed, searches this turn, and replies with the best line after each first action |
 | `SlTurnRequest` | the SL planner (`PooledPlanner`) | loads the node's clone, plays the beam state's path from the decision, searches that turn in full, and replies with the turn's best ends ([The SL planner: turn search §4](/en/arch/sl-planner/turn-search/#sec-4)) |
-| `SlWorldRequest` | PIMC on the SL world, the baseline | loads the node's clone and searches this turn after one first action |
+| `SlWorldRequest` | PIMC on the SL world, the baseline | loads the node's clone and searches this turn after one first action. A candidate to delete in the planned design ([NoSL PIMC: budget §8](/en/arch/pimc/budget/#sec-8)) |
 | `SlMacroRequest` | the macro brain on the clone | plays a path of macro answers on the clone and replies with the next decision ([Macro brain: search §6](/en/arch/macro-brain/search/#sec-6)) |
 
 **Self-contained.** A request carries everything its worker needs, and nothing carries over from one request to the next, so any free worker can take any request. In NoSL only the observation and the record leave the host: the true state never reaches a worker ([NoSL PIMC §4](/en/arch/pimc/#sec-4)). In SL the node's clone does, which SL may know.
@@ -71,7 +75,8 @@ sequenceDiagram
 
 **Speed.** On 6 act 1 fights at 8 worlds × 300 nodes, 8 workers take 68.7 ms per action against 307.5 ms in one process.
 
-## 4. Planned
+## 4. Planned <Badge text="planned" variant="caution" />
 
-- **Prompts as search branches.** Inside a search, the simulator's selector (the code that answers card prompts) would be driven by the search, so each answer is a branch; a lone prompt in the real fight would be answered by valuing each option with the same search (`Choose`, [Overview §4](/en/arch/combat-brain/#sec-4)).
+- **Prompts as search branches.** Inside a search, the simulator's selector (the code that answers card prompts) is driven by the search, so each answer is a branch of `TurnEnds`, valued like any other action, and `p0` goes. A multi-pick is a sequence of single picks, so that a prompt of many cards adds depth and not a large fan of subsets. A prompt in the real fight is a decision like any other: in SL it is a step of the plan, in NoSL it is searched. It needs the world API's prompt branching and `ChoiceContext` ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)).
+- **What it costs NoSL.** A prompt's answer is chosen after the cards are seen, so branches on prompts widen strategy fusion; the fusion panel runs first ([NoSL PIMC: search §6](/en/arch/pimc/search/#sec-6)).
 - **Worlds that live in a worker.** For run worlds and for searches that outgrow one request: open a world by kind (build, clone, run host), branch on it by id, and close it; its branches go to that worker first, since a restore elsewhere costs a replay ([Simulator: the worker pool §8](/en/arch/simulator/pool/#sec-8)).

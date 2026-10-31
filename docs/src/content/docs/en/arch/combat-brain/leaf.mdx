@@ -1,14 +1,15 @@
 ---
 title: 'The leaf: what a state is worth'
-description: Where a combat search stops and how the state there is valued, by the hand-made LeafValue or by the combat net c2, whose head predicts how the fight ends; and how those endings are priced.
+description: Where a combat search stops and how the state there is valued; the hand-made LeafValue and the combat net c2, whose head predicts how the fight ends; how those endings are priced; c2's known issues; and the planned net.
 sidebar:
   label: The leaf
 ---
+import { Badge } from '@astrojs/starlight/components';
 import LeafPlayground from '../../../../../components/combat/LeafPlayground.svelte';
 import OutcomeHead from '../../../../../components/combat/OutcomeHead.svelte';
 import ArchDiagram from '../../../../../components/v/ArchDiagram.svelte';
 
-Every search stops somewhere. PIMC stops at the end of the turn; the SL planner usually reaches the end of the fight, but it too has to rank the states where its turns end before it knows how the fight goes on ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)). The state where a search stops is a **leaf**, and the function that says what it is worth is the **leaf value**. This section explains the two leaves the brain has: `LeafValue`, written by hand, and the combat net, learned from played fights. The champions of both environments play the combat net c2.
+Every search stops somewhere. PIMC stops at the end of the turn; the SL planner usually reaches the end of the fight, but it too has to rank the states where its turns end before it knows how the fight goes on ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)). The state where a search stops is a **leaf**, and the function that says what it is worth is the **leaf value**. In one line: the leaf is the net's distribution of endings times a price for each. This page explains the two leaves the brain has, `LeafValue`, written by hand, and the combat net c2, which the champions of both environments play ([§2](#sec-2)–[§6](#sec-6)); c2's known issues ([§7](#sec-7)); and the planned net, not built ([§8](#sec-8)).
 
 ## 1. What a leaf is
 
@@ -49,7 +50,7 @@ The combat net (`CombatNet`, `--combat-net FILE`) replaces the projection with a
 - each living enemy: its id, HP share, HP, max HP, block, how many rounds it has shown, its powers, and its **intent slots**: the intents it shows now, then those of its last 3 rounds, most recent first;
 - the relics, the potions, and the context (character, encounter, room, act).
 
-Nothing about a monster's moves is written by hand. From the monster's id, the round and its last intents, the net can learn each monster's move order, and where in it the monster is, from data. With a next-intent head (since dropped) it named the next round's intent type for 57.7% of the enemies, against 28.9% for repeating the current one, and most of its misses were moves the game rolls at random ([NoSL PIMC §1](/en/arch/pimc/#sec-1)).
+Nothing about a monster's moves is written by hand. From the monster's id, the round and its last intents, the net can learn each monster's move order, and where in it the monster is, from data. An experimental next-intent head named the next round's intent type for 57.7% of the enemies, against 28.9% for repeating the current one, and most of its misses were moves the game rolls at random ([NoSL PIMC §1](/en/arch/pimc/#sec-1)).
 
 **How it reads them.** A set encoder (a *Deep Set*, Zaheer et al., 2017: a function of the sum of its elements' vectors gives the same output for every order and reads sets of any size): each card is the sum of learned vectors (its id's, its upgrade level times its id's upgrade vector, its modifiers' and its pile's), a small MLP maps each card, and each pile is the sum of its cards (× 1/8). An enemy's slot is the sum of its intents (the type's vector plus damage / 10 and total damage / 20 times vectors of that type); an MLP maps each enemy with its powers and slots, and the enemies are summed. Relics, potions and the context are sums of their vectors. Two layers of 256 then give the head. A sum ignores order and reads any number of cards or enemies, which is what a pile and a fight need.
 
@@ -57,13 +58,13 @@ The diagram draws c2 as its net file's graph has it, from the inputs at the bott
 
 <ArchDiagram client:visible lang="en" net="combat" />
 
-c2, the champions' net, was trained on 315 NoSL self-play runs (13,954 round starts) and also reads each card's cost; the newer nets of `learn/combat/` read ids and raw state alone, as the macro brain's V does ([Macro brain: the value network §2](/en/arch/macro-brain/network/#sec-2)). A net file names the inputs its graph takes, and `CombatNet` feeds only those, so old and new nets load alike. The training (samples, targets, loss, held-out runs) is in [Learning: training the combat net](/en/arch/learning/combat-net/).
+c2, the champions' net, was trained on 315 NoSL self-play runs (13,954 round starts) and also reads each card's cost. The nets `learn/combat/` would train read ids and raw state alone; none is trained yet. A net file names the inputs its graph takes, and `CombatNet` feeds only those, so every net file loads alike. The training (samples, targets, loss, held-out runs) is in [Learning: training the combat net](/en/arch/learning/combat-net/).
 
 ## 4. The head: how the fight ends
 
 The head is a probability distribution over 51 classes: a **death**, or one of 50 buckets of the share of max HP **still to be lost** from this state to the end of a won fight, spanning −0.25 (a fight that heals) to 1. A second output gives the potions still to be used after a win.
 
-Why "still to be lost" and not "left at the end"? The first net, c1, predicted the share left at the end. It learned only about half of what the HP held now is worth there: one HP less now lowered its value by 0.0038, where it lowers the end by a full HP, 0.0078 at `LeafValue`'s prices. Its search then traded HP away too cheaply, lost more HP than the champion in normal and elite fights (7.8 against 6.5 and 26.4 against 18.0 HP per win) and failed its gate. Predicting what is still to come makes the HP held now count in full, since it is added back exactly when the value is formed (0.0083 per HP on the same states), and the error of the value fell from 0.0090 to 0.0077.
+Why "still to be lost" and not "left at the end"? A net that predicted the share left at the end learned only about half of what the HP held now is worth there: one HP less now lowered its value by 0.0038, where it lowers the end by a full HP, 0.0078 at `LeafValue`'s prices. Its search traded HP away too cheaply and failed its gate. Predicting what is still to come makes the HP held now count in full, since it is added back exactly when the value is formed (0.0083 per HP on the same states), and the error of the value fell from 0.0090 to 0.0077 ([Training the combat net §6](/en/arch/learning/combat-net/#sec-6)).
 
 The figure shows c2's head on the eight round starts its file carries, real states from held-out runs; loading the net checks that it gives these outcomes, as the trainer computed them ([Learning: reference §7](/en/arch/learning/reference/#sec-7)). The two boss fights at the left are the hard ones: a death in 86% and 77% of the endings.
 
@@ -71,7 +72,7 @@ The figure shows c2's head on the eight round starts its file carries, real stat
 
 On its held-out runs c2's cross-entropy is 1.32 nats, against 2.00 for always predicting the training set's frequencies; it is lowest at bosses (1.13) and highest at elites (2.64), of which there were few. The value it implies correlates 0.959 with the real ending's value, `LeafValue`'s 0.790.
 
-The figure also shows a flaw. A won fight cannot lose more HP than the player holds, so every bucket right of the dashed line is impossible for a win; nothing tells the head so. On the easy states it puts no weight there, but in the two boss fights it does: 83% of The Kin's win mass and 21% of Vantom's. At `LeafValue`'s prices, which the combat net applies linearly, those impossible wins count below a win at 0 HP (0.2), the deepest ones even below a death (0), so the state's value stays low, as it should be there, but for a wrong reason. A head that knew the limit (masking the buckets beyond the HP held) would put that mass where it belongs, on a death or on a close win.
+The figure also shows a flaw. A won fight cannot lose more HP than the player holds, so every bucket right of the dashed line is impossible for a win; nothing tells the head so. On the easy states it puts no weight there, but in the two boss fights it does: 83% of The Kin's win mass and 21% of Vantom's. At `LeafValue`'s prices, which the combat net applies linearly, those impossible wins count below a win at 0 HP (0.2), the deepest ones even below a death (0) ([§7](#sec-7)).
 
 ## 5. Pricing the endings
 
@@ -83,18 +84,68 @@ $$
 
 A death costs nothing extra: it is worth 0. A fight that is already over is valued as `LeafValue` values it.
 
-**V's prices** (`--leaf-prices v`, built, not gated yet). For the SL planner the endings can be priced by the macro brain's V instead. At each plan the host makes the prices from the run view at the decision (`EndPrices`), and the planner's workers price every leaf with them (`PricedLeaf`), in V's own unit:
+**V's prices** (`--leaf-prices v`, built, not in use). For the SL planner the endings can be priced by the macro brain's V instead. At each plan the host makes the prices from the run view at the decision (`EndPrices`), and the planner's workers price every leaf with them (`PricedLeaf`), in V's own unit:
 
-- a death is worth the run's floor (the run ends there);
+- a death is worth the run's floor (`PricedLeaf.Of` sets `Death = run.Floor`), which fits a V that predicts floors and is wrong for today's V, whose objective is to win: a death then outprices any win ([§7](#sec-7));
 - a win with $h$ HP left is worth V of the run with $h$ HP, taken as the most of it at $h$ or less, so that a win with more HP is never worth less, which the planner's bound needs;
 - a potion is worth what V gives up with one fewer of those held, on average over them, and at least 0.
 
 The net is not retrained for a new V: only the prices change. It needs `--policy plan`, a combat net and a net `--value`; NoSL's search keeps the leaf weights' prices.
 
+**V's prices in the design** <Badge text="planned" variant="caution" />. Prices sit outside the net: a death is worth 0, a win V at the HP left, a potion what V loses with one fewer. `Death` must be fixed first, and the prices pass their own gate before any champion uses them, as the last step of the order in [Combat brain §6](/en/arch/combat-brain/#sec-6). The first net, `sl-c1`, keeps today's hand prices.
+
 ## 6. One net per environment
 
-A net predicts the endings of the policy that played its games. SL's planner, which sees what NoSL's search must guess, wins more fights from the same state, so each environment needs nets of its own: a net file names its environment, and a run of the other refuses it. c1–c4 predate that field and name none.
+A net predicts the endings of the policy that played its games. SL's planner, which sees what NoSL's search must guess, wins more fights from the same state, so weights belong to one environment, while the structure is shared: a net file names its environment, and a run of the other refuses it. c1–c4 predate that field and name none.
 
-That leaves an open seam: c2 learned from NoSL fights played by PIMC with `LeafValue`, and it is the leaf of the SL planner too. Its endings are those of a weaker player than the planner, so it tends to rate hard states lower than the planner plays them. SL's first own net (`sl-c1`, from the 819 SL runs listed as `sl-combat`) is not trained yet ([The SL planner: budget §6](/en/arch/sl-planner/budget/#sec-6)).
+That leaves an open seam: c2 learned from NoSL fights played by PIMC with `LeafValue`, and it is the leaf of the SL planner too. Its endings are those of a weaker player than the planner. No SL-trained net has ever been gated. <Badge text="planned" variant="caution" /> SL's first own net is `sl-c1`, from SL self-play ([Training the combat net §7](/en/arch/learning/combat-net/#sec-7)); NoSL stays on c2 for now.
 
-Two other leaves were planned and not built: hand-made features times linear weights, seeded from bottled_ai's 42 features and tuned by SPSA, and a rollout to the end of the fight from the leaf, which in r33hab beat a value head at small budgets ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+## 7. Known issues of c2
+
+c2 was written by `train_combat.py` at commit `b4480a1`, removed since, on 315 NoSL runs. Read against whole SL runs of the champion (v7-1f, 100 runs on `promotion-1-100`, 60 deaths: 52 at bosses, 6 at elites, 2 in hallway fights), it has these gaps:
+
+- **No act 3 in its vocabulary.** Its training runs reach acts 1 and 2 only, so none of Glory's 18 encounters has an id of its own, and 32 of the 60 deaths came in encounters outside its vocabulary. 46 of 121 monsters and 195 of 268 powers are missing too; not all of those can reach Silent, and how often they appear has not been measured.
+- **Unknown powers collide.** Every power outside the vocabulary reads as the one unknown token, so Envenom, Burst, Tools of the Trade and Well-Laid Plans give identical outputs. On the Vantom test state that is worth 0.0083 of value, about 1 HP.
+- **What an all-unknown fight still reads.** With the act, encounter and enemy all unknown, the HP and poison slopes keep their sign: 30 poison adds 0.167, against 0.278 when known.
+- **Impossible buckets can value below a death.** Nothing masks the buckets beyond the HP held ([§4](#sec-4)).
+- **It never saw the planner play.** Its labels are PIMC's endings ([§6](#sec-6)).
+
+Not measured: c2's calibration on SL round starts, the share of unknown ids in real decks, and how many deaths a bigger beam or another leaf would turn into wins.
+
+## 8. The planned net <Badge text="planned" variant="caution" />
+
+Nothing in this section is built or measured. The structure is `learn/combat/net.py` with small changes.
+
+### 8.1 What it reads
+
+The input rule: **only what cannot be learned from an id and changes the future.**
+
+| input | read | against `learn/combat/encode.py` |
+|---|---|---|
+| cards | id, upgrade, pile, modifier ids, current cost | adds the current cost, which effects change and the id does not say |
+| player | HP share, HP, max HP, block, energy, max energy, stars, round | the same |
+| powers | id, amount, stacks, kept card | the same |
+| enemies | id, HP share, HP, max HP, block, rounds shown, powers, current intents | the 3 lagged intent slots go if held-out cross-entropy allows; otherwise they stay |
+| relics | id, counter | adds the counter, which the id does not say |
+| potions, encounter, orbs, allies | their ids; an ally's numbers and powers | the context narrows to the encounter |
+| 2 numbers | the ascension, orb slots | gold leaves |
+
+**Not read:** printed numbers, which follow from the id and the upgrade; gold, until it is measured useful; the act, the room and the character, which the encounter and the cards imply; the draw order, since the net reads what a player sees (SL's ordered draw is a separate, later experiment).
+
+The vocabulary is rebuilt from v7g1, which reaches act 3. A small id dropout in training makes `<unk>` a token the net has learned, so an id it has never seen no longer behaves arbitrarily.
+
+### 8.2 Its structure
+
+The diagram is the design: no net file has this graph.
+
+<ArchDiagram client:visible lang="en" net="combatNext" />
+
+Embeddings of 32. A card goes through an MLP of 32 → 64 → 64, summed per pile × 1/8: 256 numbers in all. The player is 8 numbers. Powers go through an MLP of 32 → 64 and are summed: 64. An enemy is 128 numbers (32 + 64 + 32) through an MLP of 128 → 128 → 128, summed: 128, or an input of 224 if the lags stay. Relics, potions, the encounter and orbs are 32 each, allies 64, and 2 extra numbers. A body of 650 → 256 → 256 reads them.
+
+The head has 51 classes, a death and 50 buckets of the HP share still to lose, as today, with the buckets beyond the HP held **masked in training and in valuing**, so that the flaw of [§4](#sec-4) cannot arise. A potion head gives one number. There is no policy head.
+
+That is about 340,000 parameters on an assumed vocabulary, an estimate. Width is measured again at 1, 2 and 4 times this size on the larger data, since the old result that width does not matter came from 315–505 runs ([Training the combat net §6](/en/arch/learning/combat-net/#sec-6)).
+
+### 8.3 The net in a search
+
+The net reads one state at a time. `TurnEnds` lists a turn's ends, and the leaf values each: the search and the net meet only there ([Combat brain §3](/en/arch/combat-brain/#sec-3)). What it costs in time is not at issue: the game's simulation costs far more than the net ([Prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)).

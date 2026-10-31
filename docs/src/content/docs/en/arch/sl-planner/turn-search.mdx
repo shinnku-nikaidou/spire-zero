@@ -1,9 +1,10 @@
 ---
 title: 'Turn search: one turn in full'
-description: How the SL planner searches one turn from one state - depth first, ending the turn at every step, transpositions merged by the full hidden state, and the turn's nodes shared over its first actions.
+description: How the SL planner searches one turn from one state - depth first, ending the turn at every step, transpositions merged by the full hidden state, and the turn's nodes shared over its first actions - and the planned TurnEnds, one such enumeration for both environments.
 sidebar:
   label: Turn search
 ---
+import { Badge } from '@astrojs/starlight/components';
 import TurnTree from '../../../../../components/combat/TurnTree.svelte';
 
 The planner's unit of work is one turn from one state. The [beam](/en/arch/sl-planner/beam/) decides which states get searched; this section is about what happens inside one such search (`SlPlanner.SearchTurn`). It is the same search whether it runs in the host or in a worker, which is what makes a turn one request to the worker pool ([Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)).
@@ -59,3 +60,14 @@ At each turn end the leaf values the state, and computes a **bound**: the value 
 Each end carries its line (actions, and the observation hashes the plan will follow), its status, value, bound and key, and the record of enemy moves up to it, which the next turn's search and its leaves go on from ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)).
 
 The greedy dive asks each of its turns for every end, with no floor ([Beam §3](/en/arch/sl-planner/beam/#sec-3)). When the full beam later comes to the same state, it does not search that turn again: it takes the dive's ends and keeps those its own width and floor allow (`Narrow`). A floor only drops ends, and the kept ends are the best, in the same order, so the result is the one a fresh search would give.
+
+## 5. TurnEnds <Badge text="planned" variant="caution" />
+
+The design makes this search a piece of its own, `TurnEnds`, which both environments call ([Combat brain §3.1](/en/arch/combat-brain/#sec-3.1)). What stays is what the sections above describe: depth first, ending the turn an option at every step, the enemies' turn played for real, states merged by the observation and the hidden state. What changes for the planner:
+
+- **Transpositions across turns and passes.** A table keeps every state searched for the whole of the fight's planning, not only one turn's, so a state reached by two turns' lines or met again in a wider pass is not searched twice. Each entry still holds one concrete line, so the plan still replays exactly.
+- **An order learned from earlier passes.** A later pass tries first the actions that led to the best ends in the passes before it.
+- **Prompts are branches.** An answer to a card prompt is an action like any other ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)).
+- **Nodes come from the fight's budget**, with no share per state and turn ([Budget §7](/en/arch/sl-planner/budget/#sec-7)). How the shares of [§3](#sec-3) carry over, so that a depth-first enumeration does not spend a pass's nodes under its first card, is left to the implementation and its gate.
+
+`TurnEnds` is a step of the search and not an input of the net: the net reads each end as one state.

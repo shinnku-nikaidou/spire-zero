@@ -1,12 +1,14 @@
 ---
 title: 'Beam: from turn to turn'
-description: How the SL planner carries the best states from one turn to the next, prunes with a bound, finds a floor with a greedy dive first, narrows to the easy beam, picks and proves a line, and handles plans that lose.
+description: How the SL planner carries the best states from one turn to the next, prunes with a bound, finds a floor with a greedy dive first, narrows to the easy beam, picks and proves a line, and handles plans that lose; and the planned iterative widening, which replaces the dive and the beam.
 sidebar:
   label: Beam
 ---
+import { Badge } from '@astrojs/starlight/components';
 import BeamStepper from '../../../../../components/combat/BeamStepper.svelte';
+import Widening from '../../../../../components/combat/Widening.svelte';
 
-[Turn search](/en/arch/sl-planner/turn-search/) searches one turn from one state in full. A fight is many turns, and searching every turn of every line in full would multiply without end. The planner keeps only the most promising states from each turn, and prunes those that cannot matter. This section is the beam over turns (`SlPlanner.Search`), the bound that prunes it, and the rules for picking, proving and replanning a line.
+[Turn search](/en/arch/sl-planner/turn-search/) searches one turn from one state in full. A fight is many turns, and searching every turn of every line in full would multiply without end. The planner keeps only the most promising states from each turn, and prunes those that cannot matter. [§1](#sec-1)–[§6](#sec-6) are the code as it runs: the beam over turns (`SlPlanner.Search`), the bound that prunes it, and the rules for picking, proving and replanning a line. [§7](#sec-7) is the planned search that takes the dive's and the beam's place.
 
 ## 1. A beam over turns
 
@@ -83,3 +85,47 @@ What this looks like, from a panel of act 1 elites and bosses played with Silent
 | Vantom (boss) | lost, 14 rounds | loss: 4, 28 turns, 9,596 · loss: 5, 26 turns, 7,770 · loss: 46 (to the end), 24 turns, 6,733 | 55.2 s |
 
 Every won fight was won by its first plan. Every lost fight shows the rule at work: two plans played one turn each, then the third played to its end. The starter deck at full HP is far weaker than a run's deck at the same point; in whole runs, the same rules plan a lost boss fight 2.95 times on average ([Budget §3](/en/arch/sl-planner/budget/#sec-3)).
+
+## 7. Iterative widening <Badge text="planned" variant="caution" />
+
+The design runs one loop in place of the dive, the beam and the rules around them. Nothing here is implemented or measured.
+
+```text
+best = none
+for width in 1, 2, 4, 8, ...:              # each pass runs to the fight's end
+    states = [decision]
+    while states:
+        ends = TurnEnds of each state       # shared table: a state is searched once
+        best = the better of best and the lines that ended the fight
+        drop every end with bound(end) <= best.value
+        states = the top `width` ends by the leaf
+    stop if proved, or best wins and width >= 4, or the fight's nodes are spent
+play best
+```
+
+Width 1 is today's dive; a later pass is a beam of that width pruned by what the passes before it found. The figure runs the loop on the made-up fight of [§4](#sec-4). A turn searched in an earlier pass costs no nodes again, so a wider pass pays only for what is new.
+
+<Widening client:visible lang="en" />
+
+### 7.1 The rules
+
+- **Pruning.** An end goes when its bound is at or below the best line ([§2](#sec-2)). The bound's assumption stays: a fight that heals or gives potions can break it.
+- **A heuristic cut**, optional: an end also goes when the net's 95th-percentile outcome cannot beat the best line. This is no proof, so it comes only after `sl-c1`, with a count of how many winning lines it cuts.
+- **Top width by the leaf.** The net ranks what the bound leaves ([Combat brain: the leaf](/en/arch/combat-brain/leaf/)).
+- **Stop** when the line is proved, or won with a width of at least 4, or the fight's nodes are spent. A pass cut by the budget still improves `best` with any line it finished.
+- **A losing plan** is played for one turn and planned again, until the fight's nodes are spent; then the last plan is played to its end. There is no count of plans.
+- **Proof** means what it means in [§5](#sec-5): the line reaches the decision's bound, or a pass left nothing out.
+
+### 7.2 Why widening, and not depth
+
+A pass of any width ends in a complete, real line, so the search can be stopped at any budget with something to play. The alternative, a depth-first branch and bound, may hold no complete line better than its first for a long time, and nodes here are dear: about 460 a second (11,345 nodes in 24.7 s on the panel's Byrdonis fight, [§6](#sec-6)), with restores about 88% of a worker's busy time ([Budget §3](/en/arch/sl-planner/budget/#sec-3)). Alpha-beta has nothing to offer either, since its gains come from an opponent's replies and a fight has none: the enemies' moves are fixed inside the one world. Depth-first search may be compared later.
+
+### 7.3 What it replaces
+
+| today | in the design |
+|---|---|
+| greedy dive ([§3](#sec-3)) | the pass of width 1 |
+| beam $B$ ([§1](#sec-1)), `Elite` and `Boss` multiples | widths grow until a stop; hard fights spend more because they do not stop early |
+| easy beam $E$ ([§4](#sec-4)) | stop at a win with width at least 4 |
+| `--replan`, `--loss-plans` ([§6](#sec-6)) | one turn of a losing plan, until the fight's nodes are spent |
+| one turn's transpositions ([Turn search §2](/en/arch/sl-planner/turn-search/#sec-2)), the dive's turns kept for the beam | one table across turns and passes |

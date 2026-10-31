@@ -1,15 +1,22 @@
 ---
 title: 'The SL planner: planning the whole fight'
-description: How SL's combat brain plans a whole fight on the node's exact clone, why the best line is the right answer there, and how the fight follows the plan; with a real boss fight planned at its first decision.
+description: How SL's combat brain plans a whole fight on the node's exact clone, why the best line is the right answer there, how the fight follows the plan, and the planned simpler search, pruning + net; with a real boss fight planned at its first decision.
 sidebar:
   label: Overview
   badge:
-    text: built
+    text: built, redesign planned
     variant: success
 ---
+import { Aside, Badge } from '@astrojs/starlight/components';
 import PlanTimeline from '../../../../../components/combat/PlanTimeline.svelte';
 
-In SL the combat brain gets one exact copy of the fight: the clone of the current node, with every random stream in it. The same actions always give the same outcome there, so a fight is a deterministic planning problem, with nothing to guess and nothing to average. The **SL planner** (`SlPlanner`) searches it for the best line to the end of the fight, once, and the fight then plays that line step by step.
+In SL the combat brain gets one exact copy of the fight: the clone of the current node, with every random stream in it. The same actions always give the same outcome there, so a fight is a deterministic planning problem, with nothing to guess and nothing to average. What is left is its size: SL's combat brain is **pruning + net**, a search that drops the lines that cannot matter and asks the combat net about the rest. The **SL planner** (`SlPlanner`) searches for the best line to the end of the fight, once, and the fight then plays that line step by step.
+
+<Aside title="Built and planned">
+
+[§1](#sec-1)–[§4](#sec-4) and the sections they link describe the planner that plays the SL champion: a greedy dive, then a beam, at an effort level. [§5](#sec-5) sums up the planned search, which replaces the dive and the beam with passes of growing width. It is not implemented.
+
+</Aside>
 
 Here is what that looks like in a real run. On floor 17 of a run that V v6-3-2 went on to win (seed `E91KLB4BRWB4`, from the 300-run evaluation of v6-3-2), the act 1 boss is Vantom: 173 HP and 8 stacks of Slippery, so each hit deals 1 damage and takes a stack off. At the fight's first decision, with 65 of 70 HP, the planner searched for 5.2 seconds and returned a line of 22 actions over 6 rounds. The fight followed it without another search.
 
@@ -67,10 +74,33 @@ Replans are how clone errors show up. In the first 40 SL runs with the planner, 
 
 `selftest` checks the same thing on purpose: a run's fight is planned on the node's clone, played in the run step for step, each observation as the plan expects, and it must end with the HP and potions that the plan's value says; the pooled planner must plan what one process plans.
 
-## 5. This chapter
+## 5. The planned search <Badge text="planned" variant="caution" />
+
+The planner's reasoning stays: one world, the best line, a plan followed step by step. What changes is the machinery around it, down to one loop.
+
+```mermaid
+flowchart TD
+  D["combat decision<br/>(clone at this state)"] --> W["a pass of width 1, 2, 4, 8, …<br/>to the fight's end"]
+  W --> E["TurnEnds of each state,<br/>valued by the leaf"]
+  E --> B["drop by the bound,<br/>keep the top width"]
+  B -->|"states left"| E
+  B -->|"pass done"| S{"proved? won at width ≥ 4?<br/>fight's nodes spent?"}
+  S -->|"no"| W
+  S -->|"yes"| F["follow the line"]
+  F -.->|"a losing plan:<br/>after 1 turn"| D
+```
+
+- **Pruning.** A state whose bound cannot beat the best line so far goes, as today ([Beam §2](/en/arch/sl-planner/beam/#sec-2)).
+- **Net.** What survives is ranked by the leaf, and the first SL-trained net takes c2's place ([Combat brain: the leaf §8](/en/arch/combat-brain/leaf/#sec-8)).
+- **One enumeration.** A turn's ends come from `TurnEnds`, shared with NoSL ([Turn search §5](/en/arch/sl-planner/turn-search/#sec-5)).
+- **Passes, not a dive and a beam.** Width 1 is the dive, and each later pass is a wider beam ([Beam §7](/en/arch/sl-planner/beam/#sec-7)).
+- **One budget.** A fight's nodes and a minimum width replace the dive, easy beam, loss plans, replan options and room multipliers ([Budget §7](/en/arch/sl-planner/budget/#sec-7)).
+- **Prompts** become branches of the search instead of `p0` ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)).
+
+## 6. This chapter
 
 | section | what it explains |
 |---|---|
-| [Turn search](/en/arch/sl-planner/turn-search/) | one turn searched in full: depth first, ending the turn at every step, transpositions keyed by the full hidden state, the nodes shared over the first actions |
-| [Beam](/en/arch/sl-planner/beam/) | the beam over turns, the bound and its pruning, the greedy dive, the easy beam, picking and proving a line, losing plans |
-| [Budget](/en/arch/sl-planner/budget/) | the effort levels and the low budget, where the time goes, workers, measured results, weaknesses and open questions |
+| [Turn search](/en/arch/sl-planner/turn-search/) | one turn searched in full: depth first, ending the turn at every step, transpositions keyed by the full hidden state, the nodes shared over the first actions; the planned `TurnEnds` |
+| [Beam](/en/arch/sl-planner/beam/) | the beam over turns, the bound and its pruning, the greedy dive, the easy beam, picking and proving a line, losing plans; the planned iterative widening |
+| [Budget](/en/arch/sl-planner/budget/) | the effort levels and the low budget, where the time goes, workers, measured results, weaknesses and open questions; the planned fight budget |

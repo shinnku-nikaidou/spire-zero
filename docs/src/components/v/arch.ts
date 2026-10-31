@@ -450,4 +450,144 @@ export function combatNet(lang: Lang): Diagram {
   };
 }
 
-export const DIAGRAMS = { value: valueNet, combat: combatNet };
+/** The planned combat net, as a design (docs: combat-brain/leaf §8): no net file has this graph yet. */
+export function combatNext(lang: Lang): Diagram {
+  const L = (x: W) => x[lang];
+  const sum = (info: W): Block => ({ kind: 'block', label: L(w('Sum', '求和', '加總')), tone: 'pool', info: L(info) });
+  return {
+    columns: [
+      {
+        title: L(w('Cards', '卡牌', '卡牌')),
+        input: L(w('hand · draw · discard ·\nexhaust piles', '手牌 · 抽牌堆 ·\n弃牌堆 · 消耗堆', '手牌 · 抽牌堆 ·\n棄牌堆 · 消耗堆')),
+        items: [
+          {
+            kind: 'block',
+            label: L(w('Card embeddings', '卡牌嵌入', '卡牌嵌入')),
+            tone: 'embed',
+            info: L(
+              w(
+                'Its id, upgrade level, modifier ids, pile and current cost; 32 numbers per card.',
+                '它的 id、升级等级、修饰的 id、所在牌堆和当前费用；每张牌 32 个数。',
+                '它的 id、升級等級、修飾的 id、所在牌堆和目前費用；每張牌 32 個數。',
+              ),
+            ),
+          },
+          {
+            kind: 'block',
+            label: L(w('φ: Linear + ReLU\n32 → 64 → 64', 'φ：线性层 + ReLU\n32 → 64 → 64', 'φ：線性層 + ReLU\n32 → 64 → 64')),
+            tone: 'ff',
+            info: L(w('The card network, applied to each card on its own.', '卡牌网络，对每张牌单独作用。', '卡牌網路，對每張牌單獨作用。')),
+          },
+          {
+            kind: 'block',
+            label: L(w('Sum per pile × 1/8', '每堆求和 × 1/8', '每堆加總 × 1/8')),
+            tone: 'pool',
+            info: L(w('Each pile’s cards summed, times 1/8: 4 piles × 64 = 256 numbers.', '每一堆的牌相加，乘 1/8：4 堆 × 64 = 256 个数。', '每一堆的牌相加，乘 1/8：4 堆 × 64 = 256 個數。')),
+          },
+        ],
+      },
+      {
+        title: L(w('Enemies', '敌人', '敵人')),
+        input: L(w('id · HP · block · powers ·\ncurrent intents · rounds shown', 'id · 生命 · 格挡 · 能力 ·\n当前意图 · 已显示回合数', 'id · 生命 · 格擋 · 能力 ·\n目前意圖 · 已顯示回合數')),
+        items: [
+          {
+            kind: 'block',
+            label: L(w('32 + 64 + 32 = 128', '32 + 64 + 32 = 128', '32 + 64 + 32 = 128')),
+            tone: 'embed',
+            info: L(
+              w(
+                'Per living enemy: its id and numbers, 32; its powers through the powers’ φ and summed, 64; its current intents, 32. If held-out cross-entropy keeps the 3 lagged intent slots, 3 × 32 more, 224 in all.',
+                '每个活着的敌人：id 和数值，32；它的能力经能力的 φ 后求和，64；当前意图，32。如果留出集交叉熵要求保留 3 个滞后意图槽，再加 3 × 32，共 224。',
+                '每個活著的敵人：id 和數值，32；它的能力經能力的 φ 後加總，64；目前意圖，32。如果留出集交叉熵要求保留 3 個滯後意圖槽，再加 3 × 32，共 224。',
+              ),
+            ),
+          },
+          {
+            kind: 'block',
+            label: L(w('φ: Linear + ReLU\n128 → 128 → 128', 'φ：线性层 + ReLU\n128 → 128 → 128', 'φ：線性層 + ReLU\n128 → 128 → 128')),
+            tone: 'ff',
+            info: L(w('The enemy network, applied to each enemy on its own.', '敌人网络，对每个敌人单独作用。', '敵人網路，對每個敵人單獨作用。')),
+          },
+          sum(w('The enemies summed: 128 numbers.', '敌人相加：128 个数。', '敵人相加：128 個數。')),
+        ],
+      },
+      {
+        title: L(w('Powers', '能力', '能力')),
+        input: L(w('the player’s\npowers', '玩家的\n能力', '玩家的\n能力')),
+        narrow: true,
+        items: [
+          {
+            kind: 'block',
+            label: L(w('Embeddings', '嵌入', '嵌入')),
+            tone: 'embed',
+            info: L(w('Id, amount, stacks and kept card: 32 numbers per power.', 'id、层数、堆叠数和保留的牌：每个能力 32 个数。', 'id、層數、堆疊數和保留的牌：每個能力 32 個數。')),
+          },
+          {
+            kind: 'block',
+            label: L(w('φ: Linear + ReLU\n32 → 64', 'φ：线性层 + ReLU\n32 → 64', 'φ：線性層 + ReLU\n32 → 64')),
+            tone: 'ff',
+            info: L(w('The powers’ network; the same weights read each enemy’s powers.', '能力网络；每个敌人的能力也由同一组权重读取。', '能力網路；每個敵人的能力也由同一組權重讀取。')),
+          },
+          sum(w('The powers summed: 64 numbers.', '能力相加：64 个数。', '能力相加：64 個數。')),
+        ],
+      },
+      {
+        title: L(w('Player', '玩家', '玩家')),
+        input: L(w('HP · block · energy ·\nstars · round', '生命 · 格挡 · 能量 ·\n星 · 回合', '生命 · 格擋 · 能量 ·\n星辰 · 回合')),
+        narrow: true,
+        items: [
+          {
+            kind: 'block',
+            label: L(w('Scale: 8', '缩放：8', '縮放：8')),
+            tone: 'norm',
+            info: L(w('8 numbers, scaled to about one.', '8 个数，缩放到 1 左右。', '8 個數，縮放到 1 左右。')),
+          },
+        ],
+      },
+      {
+        title: L(w('The rest', '其余', '其餘')),
+        input: L(w('relics · potions · encounter ·\norbs · allies · 2 numbers', '遗物 · 药水 · 遭遇 ·\n充能球 · 盟友 · 2 个数', '遺物 · 藥水 · 遭遇 ·\n充能球 · 盟友 · 2 個數')),
+        narrow: true,
+        items: [
+          {
+            kind: 'block',
+            label: L(w('4 × 32 + 64 + 2', '4 × 32 + 64 + 2', '4 × 32 + 64 + 2')),
+            tone: 'embed',
+            info: L(
+              w(
+                'Relics (id and counter), potions, the encounter and orbs, 32 each; allies through their own φ, 64; the ascension and orb slots, 2.',
+                '遗物（id 和计数）、药水、遭遇和充能球，各 32；盟友经自己的 φ，64；进阶和充能球栏位，2。',
+                '遺物（id 和計數）、藥水、遭遇和充能球，各 32；盟友經自己的 φ，64；晉階和充能球欄位，2。',
+              ),
+            ),
+          },
+        ],
+      },
+    ],
+    merge: {
+      kind: 'block',
+      label: L(w('Concatenate: 256 + 128 + 64 + 8 + 194 = 650', '拼接：256 + 128 + 64 + 8 + 194 = 650', '串接：256 + 128 + 64 + 8 + 194 = 650')),
+      tone: 'norm',
+      info: L(w('One vector of 650 numbers.', '一个 650 个数的向量。', '一個 650 個數的向量。')),
+    },
+    top: [
+      ...body(lang, 650),
+      {
+        kind: 'block',
+        label: L(w('Outcome head\n256 → 51, masked', '结局输出头\n256 → 51，带遮罩', '結局輸出頭\n256 → 51，帶遮罩')),
+        tone: 'head',
+        info: L(
+          w(
+            'A death and 50 buckets of the share of max HP still to be lost. Buckets beyond the HP held are masked, in training and in valuing. A second head, 256 → 1, gives the potions still to be used after a win. No policy head.',
+            '死亡，以及还会失去的最大生命比例的 50 个区间。超过当前生命的区间被遮罩，训练和估值时都一样。第二个输出头 256 → 1 给出获胜后还会用掉的药水数。没有策略头。',
+            '死亡，以及還會失去的最大生命比例的 50 個區間。超過目前生命的區間被遮罩，訓練和估值時都一樣。第二個輸出頭 256 → 1 給出獲勝後還會用掉的藥水數。沒有策略頭。',
+          ),
+        ),
+      },
+    ],
+    output: L(w('P(death) · 50 buckets of HP still to lose\n× prices = the leaf’s value', 'P(死亡) · 还会失去的生命的 50 个区间\n× 价格 = 叶子估值', 'P(死亡) · 還會失去的生命的 50 個區間\n× 價格 = 葉節點估值')),
+    links: [],
+  };
+}
+
+export const DIAGRAMS = { value: valueNet, combat: combatNet, combatNext };

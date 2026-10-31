@@ -77,6 +77,8 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | strategy fusion | The error of picking a different best line in each sampled world, as if the player knew which world is real. Averaging by first action keeps it out of the choice ([Environments: worlds §3](/en/arch/environments/worlds/#sec-3)). |
 | SL planner | SL's combat brain: a beam search over whole turns on the node's clone, to the end of the combat ([The SL planner](/en/arch/sl-planner/)). |
 | beam search, branch-and-bound | Keeping only the B best states at each step; dropping every branch whose bound cannot beat the best line found, so a line that reaches the bound is proved best ([The SL planner: beam](/en/arch/sl-planner/beam/)). |
+| TurnEnds | Planned: one search step for both environments that enumerates the states one turn can end in ([Combat brain §3.1](/en/arch/combat-brain/#sec-3.1)). |
+| iterative widening | Planned for the SL planner: passes of width 1, 2, 4, 8, …, each run to the fight's end and pruned by the best line so far ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)). |
 | leaf, combat net | Where a search stops, the leaf scores the state: a hand-made `LeafValue`, or the combat net, a learned net over the combat ([Combat brain: the leaf](/en/arch/combat-brain/leaf/)). |
 | afterstate | The state right after a choice, before new randomness. The macro brain values options by their afterstates ([Macro brain: afterstates and one V](/en/arch/macro-brain/afterstates/)). |
 | L0 | The macro brain: it values each option's afterstate with V and takes the best; on the map it plans the route to the boss ([Macro brain: search](/en/arch/macro-brain/search/)). |

@@ -1,6 +1,6 @@
 ---
 title: 訓練戰鬥網路
-description: '戰鬥搜尋學到的葉節點怎樣訓練：簡述它讀什麼、預測什麼，每一代網路讀什麼，它的樣本和標籤（每個回合的開始，以及那場戰鬥怎樣結束），損失和固定的設定，報告和網路檔案，以及 c1 到 c4 的每一次量測。'
+description: '戰鬥搜尋學到的葉節點怎樣訓練：簡述它讀什麼、預測什麼，每一代網路讀什麼，它的樣本和標籤（每個回合的開始，以及那場戰鬥怎樣結束），損失和固定的設定，報告和網路檔案，c1 到 c4 的每一次量測，以及規劃中的第一個 SL 網路。'
 sidebar:
   label: 訓練戰鬥網路
 ---
@@ -10,7 +10,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-`learn/combat/`（`combat.train`，提交 `d290783`、`3a95439`）從單一環境的對局訓練戰鬥網路。還沒用它訓練出任何網路：SL 的第一個網路 `sl-c1` 規劃在清單 `sl-combat` 上訓練（[§7](#sec-7)）。現有的網路 c1–c4 由 `learn/train_combat.py` 訓練，這個腳本已在 `455d437` 移除；c2 自 2026-10-27 起是兩個冠軍的葉節點，用在 NoSL 的 PIMC 和 SL 的規劃器裡。
+`learn/combat/`（`combat.train`，提交 `d290783`、`3a95439`）從單一環境的對局訓練戰鬥網路。還沒用它訓練出任何網路：SL 的第一個網路 `sl-c1` 在規劃中（[§7](#sec-7)）。現有的網路 c1–c4 由 `learn/train_combat.py` 訓練，這個腳本已在 `455d437` 移除；c2 由它在提交 `b4480a1` 時寫出，自 2026-10-27 起是兩個冠軍的葉節點，用在 NoSL 的 PIMC 和 SL 的規劃器裡。它的已知問題見[戰鬥大腦：葉節點 §7](/zh-tw/arch/combat-brain/leaf/#sec-7)。
 
 </Aside>
 
@@ -91,7 +91,8 @@ c2 的留出交叉熵在頭目戰最低（597 個回合開始上 1.130），在�
 
 ## 7. 規劃中
 
-- **SL 自己的網路** <Badge text="規劃中" variant="caution" />。c2 是從 PIMC 配 `LeafValue` 打的 NoSL 戰鬥學來的，卻也是 SL 規劃器的葉節點，所以它預測的是一個比規劃器弱的玩家的結局（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。清單 `sl-combat` 存放 SL 的訓練集：SL g3 的第 1 批（419 局），以及規劃器以 medium 力度配 c2 打的 SL 評估（`promotion-1`，160 局；`promotion-1b`，40 局；n3-free-ctl 的門檻，200 局），共 819 局、54,405 個回合開始；fix68 的重打不算在內，因為它們的種子就是 `promotion-1` 的（[參考 §4](/zh-tw/arch/learning/reference/#sec-4)）。它的第一個網路將是 `uv run python -m combat.train --list data/silent/lists/sl-combat --env SL --name sl-c1`。
-- **輸出頭的其他目標** <Badge text="規劃中" variant="caution" />，透過晉級門檻比較：戰鬥內的 TD(λ ≈ 0.95)，在下一個決策上用這個輸出頭自己的分布自舉，終點的桶用 HL-Gauss 向相鄰的桶平滑（約 0.75 個桶寬的高斯），這是前人的 STS2 解算器 ytcs 的做法（ytcs 發現 λ = 1 更差）；或 0.3 × 搜尋的分布 + 0.7 × 結局，這是前人的 STS2 專案 r33hab 的做法（[循環 §4](/zh-tw/arch/learning/loop/#sec-4)）。
-- **知道上限的輸出頭** <Badge text="規劃中" variant="caution" />：一場贏下的戰鬥不可能失去比玩家持有的更多的生命值，而 c2 在困難的戰鬥裡會把權重放在這樣的分桶上（[戰鬥大腦：葉節點 §4](/zh-tw/arch/combat-brain/leaf/#sec-4)）。
-- **以搜尋的估值作標籤，並學一個先驗**（專家迭代）<Badge text="規劃中" variant="caution" />，前提條件是：學到的葉節點只有在同時勝過 `LeafValue` 和推演到戰鬥結束的做法之後，才取代 `LeafValue`（[循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。
+- **SL 的第一個網路 `sl-c1`** <Badge text="規劃中" variant="caution" />。還沒有任何 SL 訓練的網路過過門檻，而 c2 是從 PIMC 配 `LeafValue` 打的 NoSL 戰鬥學來的（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。第一個網路用 SL 自我對弈 v7g1（`sl/selfplay/v7g1/`）的蒙地卡羅標籤，用現有的 `combat.train` 和它的編碼器，並保留今天的手工價格：`uv run python -m combat.train --list LIST --env SL --name sl-c1`。它的詞表是 v7g1 的，會到達第 3 幕。它的標籤是規劃器在自我對弈低預算下的結局（[SL 規劃器：預算 §2](/zh-tw/arch/sl-planner/budget/#sec-2)）。它必須通過對 c2 的門檻。
+- **權重分環境，結構共用** <Badge text="規劃中" variant="caution" />。網路的程式碼只有一份，網路檔案寫明它的環境，`combat.train` 拒絕另一個環境的日誌（[§3](#sec-3)）。NoSL 目前仍用 c2。
+- **輸入規則和遮掉分桶的輸出頭** <Badge text="規劃中" variant="caution" />：`sl-c1` 之後的下一個門檻。網路讀什麼、怎麼建構，見[戰鬥大腦：葉節點 §8](/zh-tw/arch/combat-brain/leaf/#sec-8)，那裡也說明了為什麼要重新量測寬度。訓練時加上一點 id dropout，讓 `<unk>` 成為網路學過的詞元，並遮掉超過持有生命值的分桶。
+- **讓沒選中的束狀態繼續打來取得標籤** <Badge text="規劃中" variant="caution" />，只在第一個網路在門檻上顯出網路的效果時才做：搜尋保留但沒打出的狀態繼續打下去，用它的結局當標籤，這就得到已打路線之外的標籤。其他目標（戰鬥內的 TD(λ)、和搜尋分布的混合）不屬於這個設計（[循環 §4](/zh-tw/arch/learning/loop/#sec-4)）。
+- **以搜尋的估值作標籤，並學一個先驗**（專家迭代）也不屬於這個設計，它沒有策略輸出頭（[循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。

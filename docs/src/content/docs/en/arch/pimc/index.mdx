@@ -1,17 +1,24 @@
 ---
 title: 'NoSL PIMC: searching sampled worlds'
-description: What NoSL's combat brain cannot see, how it builds complete worlds that agree with what it can, how faithful they are, and why the search never touches the true state.
+description: What NoSL's combat brain cannot see, how it builds complete worlds that agree with what it can, how faithful they are, why the search never touches the true state, and the planned simpler form of Monte Carlo + net.
 sidebar:
   label: Overview
   badge:
-    text: built
+    text: built, redesign planned
     variant: success
 ---
+import { Aside, Badge } from '@astrojs/starlight/components';
 import WorldSampler from '../../../../../components/combat/WorldSampler.svelte';
 
 In NoSL the combat brain knows only what a player knows: the screen, and what can be inferred from it. It does not know the order of the draw pile, what a random effect will roll, or which of its moves a monster has queued behind its intent. It cannot plan on the real fight, because it may not look at it.
 
-So it plans on fights it builds itself. **PIMC** (perfect-information Monte Carlo) draws $K$ complete worlds, hidden parts included, each of which agrees with everything the player has seen; searches each one as an ordinary game with nothing hidden; and averages the results. The answer is the action that is best on average over the worlds. The NoSL champion plays it with 8 worlds of 300 nodes each and the combat net c2 as its leaf (`run --policy pimc`).
+So it plans on fights it builds itself. **PIMC** (perfect-information Monte Carlo) draws $K$ complete worlds, hidden parts included, each of which agrees with everything the player has seen; searches each one as an ordinary game with nothing hidden; and averages the results. The answer is the action that is best on average over the worlds. NoSL's combat brain is **Monte Carlo + net**: the worlds are the Monte Carlo, the combat net values where each world's search stops. The NoSL champion plays it with 8 worlds of 300 nodes each and the combat net c2 as its leaf (`run --policy pimc`).
+
+<Aside title="Built and planned">
+
+This page's [§1](#sec-1)–[§4](#sec-4) describe the code as it runs, and most of them outlive the redesign. [§5](#sec-5) sums up the planned form, which is not implemented.
+
+</Aside>
 
 This chapter is in three sections: what is hidden and how the worlds are made (this page), the search in each world and the average ([Search](/en/arch/pimc/search/)), and the budget and results ([Budget](/en/arch/pimc/budget/)). Where the idea sits among the environments is in [Environments](/en/arch/environments/).
 
@@ -78,9 +85,20 @@ NoSL's rule is that a decision depends only on the public record ([Environments]
 - **The same path everywhere.** The first rung of the evaluation ladder, the simulator, builds its worlds the same way the mod will from the real game: no shortcut determinizes the true state for decisions ([Evaluation §2](/en/arch/evaluation/#sec-2)). Determinizing the true state stays for tests and benchmarks only.
 - **Planned:** a counterfactual test, the same public record with a different hidden state, which must give the same choice for a fixed brain seed.
 
-## 5. This chapter
+## 5. The planned form <Badge text="planned" variant="caution" />
+
+The design keeps PIMC and takes away what has grown around it:
+
+1. For each decision, draw $K$ worlds from the observation and the record (`CombatBuilder`, `Determinize`), as [§2](#sec-2) describes.
+2. In each world, run `TurnEnds` and the leaf, and keep the best line per first action.
+3. Take $Q(a)$, the mean over the same worlds.
+4. Play $\arg\max_a Q(a)$, one action; observe; search again.
+
+The details are in [Search §6](/en/arch/pimc/search/#sec-6), the budget in [Budget §8](/en/arch/pimc/budget/#sec-8). The worlds, their fidelity and fair play above do not change. NoSL stays on c2 for now.
+
+## 6. This chapter
 
 | section | what it explains |
 |---|---|
-| [Search](/en/arch/pimc/search/) | the search in each world, the average by first action, noise and common random numbers, strategy fusion and the sampler's bias |
-| [Budget](/en/arch/pimc/budget/) | worlds and nodes, following the plan, sequential halving, budget by room, workers, results, weaknesses and open questions |
+| [Search](/en/arch/pimc/search/) | the search in each world, the average by first action, noise and common random numbers, strategy fusion and the sampler's bias; the same search on `TurnEnds` |
+| [Budget](/en/arch/pimc/budget/) | worlds and nodes, following the plan, sequential halving, budget by room, workers, results, weaknesses and open questions; the planned budget |
