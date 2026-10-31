@@ -8,8 +8,8 @@ namespace Sts2Ai.SimWorker;
 /// <summary>The champion that --policy and --macro name (docs: harness/routing §1), pimc's budget, and l0's V (--value).</summary>
 /// <param name="Value">l0's V; null with no l0.</param>
 /// <param name="ValueFile">Where <paramref name="Value"/> came from.</param>
-/// <param name="MacroExplore">For self-play only (docs: learning/loop §9): l0's softmax temperature over V's values, in V's
-/// units (--macro-explore); 0 for none.</param>
+/// <param name="MacroExplore">For self-play only (docs: learning/loop §9): l0's softmax temperature over the log of V's
+/// values (--macro-explore); 0 for none.</param>
 /// <param name="CombatExplore">The same for pimc over the search's values, in the leaf's units (--combat-explore).</param>
 /// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
 /// <param name="Explore">For self-play only (plan v6 §3): the share ε of macro decisions whose answer l0 draws evenly,

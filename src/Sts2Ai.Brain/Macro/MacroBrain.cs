@@ -296,13 +296,18 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, Uniform
         return moved;
     }
 
-    /// <summary>The first best of <paramref name="values"/>, or a draw by them when exploring.</summary>
+    /// <summary>
+    /// The first best of <paramref name="values"/>, or, when exploring, a draw by their logs: V is a chance that spans
+    /// orders of magnitude within a run (at A10 from 1e-3 down to 1e-7), so the temperature is in its ratios, the same at
+    /// any V. An option worth nothing is never drawn, unless all are.
+    /// </summary>
     private int Pick(IReadOnlyList<double> values)
     {
         int best = Softmax.Best(values);
-        if (explore == null) return best;
-        int drawn = explore.Draw(values);
-        Explored |= explore.Explored(values[drawn], values[best]);
+        if (explore == null || values[best] <= 0) return best;
+        var logs = values.Select(v => v > 0 ? Math.Log(v) : double.NegativeInfinity).ToList();
+        int drawn = explore.Draw(logs);
+        Explored |= explore.Explored(logs[drawn], logs[best]);
         return drawn;
     }
 

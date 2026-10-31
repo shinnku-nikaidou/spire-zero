@@ -218,7 +218,7 @@ internal sealed class ChampionArgs(bool file)
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
         .AcceptOnlyFromAmong("screen", "clone");
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
-        "self-play only: l0 draws each answer by V's values, softmax at this temperature in V's units (0: the best)");
+        "self-play only: l0 draws each answer by the log of V's values, softmax at this temperature (0: the best)");
     private readonly Option<double> _combatExplore = Opt.Of("--combat-explore", 0.0,
         "self-play only: pimc draws each searched action by the search's values, softmax at this temperature in leaf units (0: the best)");
 
