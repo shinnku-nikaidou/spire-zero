@@ -76,7 +76,7 @@ Failed runs are dropped when the samples are read ([From hazards to value §3](/
 
 ## 5. The gate
 
-A new V replaces the champion only through a gate. The challenger plays the 100 seeds of `promotion-1-100` with no exploration, at the champion's medium planner budget, on the clone; the champion's runs on the same seeds are already there. It also plays the 200 seeds of `promotion-101-300` at the low budget, a reference that decides nothing. The runs are paired by seed: for seed $i$, $d_i$ is 1 or 0 for the challenger's win less 1 or 0 for the champion's, and with $n$ pairs
+A new V replaces the champion only through a gate. The challenger plays the 300 seeds of `promotion-1-300` with no exploration, at the champion's medium planner budget, on the clone, and the champion's runs on the same seeds are its record, played where it lacks them. It also plays the same seeds at the low budget, a reference that decides nothing. The runs are paired by seed: for seed $i$, $d_i$ is 1 or 0 for the challenger's win less 1 or 0 for the champion's, and with $n$ pairs
 
 $$
 \bar d = \frac{1}{n}\sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\,\mathrm{SE} > 0,
