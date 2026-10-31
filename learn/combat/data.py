@@ -1,21 +1,14 @@
 """The combat net's samples (docs: learning/combat-net §3): each round's start in the decision logs, the state a search leaf
-stands in, with how its combat ended and what V makes of it.
+stands in, with how its combat ended.
 
 A sample is the first combat decision of a round, with the public record of the enemies' moves before it (Harness's
-history, rebuilt from the earlier rounds' observations as Dispatcher builds it). A net has one of two targets.
-
-Endings: a death, or the share of max HP still to be lost in one of BUCKETS buckets spanning [LOSS_MIN, 1) (below 0: a
-combat that healed), and after a win, per potion held, whether it is gone; relative to the state, so the HP and potions it
-has now count in full.
-
-Worth: V of the run at the first macro decision after the fight, as a share of V at the last one before it, capped at
-WORTH_CAP; a death is 0, and a fight that wins the run ends at V = 1. V reads the deck, the relics, the potions, the HP and
-the gold, so what a fight spends is priced by what it means for the run.
+history, rebuilt from the earlier rounds' observations as Dispatcher builds it). Its targets: a death, or the share of max
+HP still to be lost in one of BUCKETS buckets spanning [LOSS_MIN, 1) (below 0: a combat that healed), and after a win, per
+potion held, whether it is gone; relative to the state, so the HP and potions it has now count in full.
 
 Every fifth run (by run id) is held out, for early stopping and the report.
 
-The endings are those of the policy that played, so each environment has its nets: only logs of the --env given are
-read (SL's planner sees what NoSL's search must guess, and wins more from the same state).
+The endings are those of the policy that played, so only logs of the --env given are read.
 """
 
 import json
@@ -29,7 +22,6 @@ from common import LearnError, runs_by_log
 BUCKETS = 50  # buckets of the HP share lost from the state to a win
 LOSS_MIN = -0.25  # the lowest bucket's bottom: a share healed
 WIDTH = (1 - LOSS_MIN) / BUCKETS
-WORTH_CAP = 4.0  # a run's chance can be next to nothing before a fight: 99 % of the wins lie below 3.4
 KEEP = 1000  # one held-out round start in this many keeps its observation, for the net file's test states
 HEAD = re.compile(r'\{"run":"(\w+)","decision_id":\d+,"env":"(\w+)","surface":"(\w+)"')
 
@@ -39,9 +31,9 @@ def held_out(run_id: str) -> bool:
 
 
 def combats(path: str, env: str) -> dict[str, list[dict]]:
-    """Per run, its combats in order: the observation of each round's start, the run's view before the combat and after
-    it. A combat closes at the next macro decision, or when the round goes back, as Dispatcher's history does. A line of
-    another env fails."""
+    """Per run, its combats in order: the observation of each round's start and the run's view after the combat. A combat
+    closes at the next macro decision, or when the round goes back, as Dispatcher's history does. A line of another env
+    fails."""
     runs = {}
     with open(path) as f:
         for line in f:
@@ -53,7 +45,7 @@ def combats(path: str, env: str) -> dict[str, list[dict]]:
                 raise LearnError(f"{path} holds {line_env} decisions, not {env}: each environment has its combat nets")
             if surface == "card_choice":
                 continue
-            r = runs.setdefault(run, {"fights": [], "view": None, "open": False})
+            r = runs.setdefault(run, {"fights": [], "open": False})
             try:
                 e = json.loads(line)
             except json.JSONDecodeError:
@@ -61,15 +53,13 @@ def combats(path: str, env: str) -> dict[str, list[dict]]:
             if surface != "combat":
                 r["open"] = False
                 view = e.get("run_view")
-                if view is not None:
-                    r["view"] = view
-                    if r["fights"] and r["fights"][-1]["after"] is None:
-                        r["fights"][-1]["after"] = view
+                if view is not None and r["fights"] and r["fights"][-1]["after"] is None:
+                    r["fights"][-1]["after"] = view
                 continue
             obs = e["obs"]
             fight = r["fights"][-1] if r["open"] else None
             if fight is None or obs["round"] < fight["starts"][-1]["round"]:
-                fight = {"starts": [], "before": r["view"], "after": None}
+                fight = {"starts": [], "after": None}
                 r["fights"].append(fight)
                 r["open"] = True
             if not fight["starts"] or fight["starts"][-1]["round"] != obs["round"]:
@@ -117,13 +107,12 @@ def price(end: dict) -> float:
     return 0.0 if end["died"] else 0.2 + 0.6 * share(end["hp"], end["max_hp"]) + 0.02 * end["potions"]
 
 
-def sample(run: str, obs: dict, history: list, end: dict, after: dict | None, worth: float | None = None) -> dict:
+def sample(run: str, obs: dict, history: list, end: dict, after: dict | None) -> dict:
     """A round's start; only a few held-out ones keep the observation and the history they were made from."""
     now = share(obs["player"]["hp"], obs["player"]["max_hp"])
     s = {
         "run": run,
         "tokens": encode.tokens(obs, history),
-        "worth": worth,
         "class": ending(obs, end),
         "potion_used": [0 for p in obs["potions"] if p is not None] if end["died"] else potions_used(obs, after),
         "lost": None if end["died"] else now - share(end["hp"], end["max_hp"]),
@@ -139,15 +128,13 @@ def sample(run: str, obs: dict, history: list, end: dict, after: dict | None, wo
     return s
 
 
-def read(logs: str, records: str, character: str, env: str, value, skip_seeds=frozenset(), only_seeds=None) -> tuple[list[dict], int]:
+def read(logs: str, records: str, character: str, env: str, skip_seeds=frozenset(), only_seeds=None) -> tuple[list[dict], int]:
     """The round starts of the logs' combats as samples, and how many runs were skipped: those whose combats do not
-    match their record's (a log cut short, a combat logged apart). `value` gives V of a list of run views, for a net of
-    worth; None leaves the worth out. The runs of `skip_seeds` are left out, and all but those of `only_seeds`, if
-    given. The run's last combat in a lost run counts
-    as a death even with no `end` in its record; a win with no run view after it is left out."""
+    match their record's (a log cut short, a combat logged apart). The runs of `skip_seeds` are left out, and all but
+    those of `only_seeds`, if given. The run's last combat in a lost run counts as a death even with no `end` in its
+    record; a win with no run view after it is left out."""
     samples, skipped = [], 0
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
-        todo = []
         for run, fights in combats(log, env).items():
             r = runs.get(run)
             if r is None or r.get("failure") or r.get("seed") in skip_seeds or (only_seeds is not None and r.get("seed") not in only_seeds):
@@ -159,22 +146,12 @@ def read(logs: str, records: str, character: str, env: str, value, skip_seeds=fr
                 skipped += 1
                 continue
             for k, (fight, f) in enumerate(zip(fights, ends, strict=True)):
-                last = k == len(ends) - 1
-                end = f.get("end") or ({"died": True} if last and r.get("outcome") == "lost" else None)
-                won_run = last and r.get("outcome") == "won"
-                if end is None or (not end["died"] and fight["after"] is None) or (value and fight["before"] is None):
+                end = f.get("end") or ({"died": True} if k == len(ends) - 1 and r.get("outcome") == "lost" else None)
+                if end is None or (not end["died"] and fight["after"] is None):
                     continue
-                todo.append((run, fight, end, won_run))
-        before = value([t[1]["before"] for t in todo]) if value else [None] * len(todo)
-        after = iter(value([t[1]["after"] for t in todo if not t[2]["died"] and not t[3]]) if value else [])
-        for (run, fight, end, won_run), v in zip(todo, before, strict=True):
-            worth = None
-            if value:
-                end_value = 0.0 if end["died"] else 1.0 if won_run else float(next(after))
-                worth = min(WORTH_CAP, end_value / max(float(v), 1e-9))
-            history = {}
-            for obs in fight["starts"]:
-                past = [{"uid": h["uid"], "id": h["id"], "turns": list(h["turns"])} for h in history.values()]
-                samples.append(sample(run, obs, past, end, fight["after"], worth) | {"key": (i, run)})
-                witness(history, obs)
+                history = {}
+                for obs in fight["starts"]:
+                    past = [{"uid": h["uid"], "id": h["id"], "turns": list(h["turns"])} for h in history.values()]
+                    samples.append(sample(run, obs, past, end, fight["after"]) | {"key": (i, run)})
+                    witness(history, obs)
     return samples, skipped

@@ -32,7 +32,7 @@ AXES = {
     **{x: {0: "batch", 1: "allies", 2: "ally_powers"} for x in ("ally_powers", "ally_power_amounts", "ally_power_mask")},
     **{x: {0: "batch", 1: "relics"} for x in ("relic_values", "relic_status")},
     "extra": {0: "batch"},
-    **{x: {0: "batch"} for x in ("worth", "outcome", "potion_used")},
+    **{x: {0: "batch"} for x in ("outcome", "potion_used")},
 }  # fmt: skip
 
 
@@ -40,12 +40,12 @@ def onnx_bytes(model, example: Batch) -> bytes:
     """The model as an ONNX graph, every input's batch and length dimensions left free."""
     out = io.BytesIO()
     torch.onnx.export(
-        model if model.is_worth else Outcome(model),
+        Outcome(model),
         example.inputs(),
         out,
         dynamo=False,
         input_names=encode.INPUTS,
-        output_names=["worth"] if model.is_worth else ["outcome", "potion_used"],
+        output_names=["outcome", "potion_used"],
         dynamic_axes=AXES,
     )
     return out.getvalue()
@@ -77,32 +77,28 @@ def net_file(name, character, env, tables, model, kept, report, seed) -> dict:
             picks[k] = rng.choice(found)
     b = Batch(picks, index, "cpu")
     with torch.no_grad():
-        out = model(*b.inputs())
-    if model.is_worth:
-        head = {"target": "worth", "worth_cap": data.WORTH_CAP}
-        tests = [{"worth": float(out[k])} for k in range(len(picks))]
-    else:
-        probs, gone = torch.softmax(out[0], 1), torch.sigmoid(out[1])
-        head = {"target": "each_potion", "buckets": data.BUCKETS, "loss_min": data.LOSS_MIN}
-        tests = [
-            {"outcome": [float(v) for v in probs[k]], "potion_used": [float(v) for v in gone[k]]}
-            for k in range(len(picks))
-        ]
+        logits, potions = model(*b.inputs())
+    probs, gone = torch.softmax(logits, 1), torch.sigmoid(potions)
     return {
         "name": name,
         "character": character,
         "env": env,
-        **head,
+        "buckets": data.BUCKETS,
+        "loss_min": data.LOSS_MIN,
         "lags": encode.LAGS,
-        "round": True,
         "vocab": tables,
         "fit": report,
         "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
         "tests": [
-            {"obs": s["obs"], "history": s["history"], **tests[k]}
+            {
+                "obs": s["obs"],
+                "history": s["history"],
+                "outcome": [float(v) for v in probs[k]],
+                "potion_used": [float(v) for v in gone[k]],
+            }
             for k, s in enumerate(picks)
         ],
-    }  # fmt: skip
+    }
 
 
 def write(net: dict, path: Path) -> None:

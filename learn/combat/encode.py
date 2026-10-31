@@ -1,4 +1,4 @@
-"""A round's start as the combat net reads it (docs: learning/combat-net §2), the one spec CombatNet.Predict follows.
+"""A round's start as the combat net reads it (docs: learning/combat-net §2), the one spec CombatNet follows.
 
 The ids of what is in the fight and its raw state: each card's id, upgrade level, modifiers' ids and pile; the player's
 HP, block, energy, stars and the round; each power's id and amount (and the stacks and kept card a tooltip states
@@ -16,7 +16,7 @@ CAP = 10.0  # a few states show huge numbers (an erupting WATERFALL_GIANT's HP)
 PILES = ["hand", "draw", "discard", "exhaust"]
 TABLES = ["cards", "modifiers", "powers", "enemies", "intents", "relics", "potions", "context", "orbs", "allies", "relic_status"]
 BAGS = {"relics": "relic_mask", "potions": "potion_mask", "context": "context_mask"}
-# The ONNX graph's inputs, in order: CombatNet feeds them by these names, as it feeds the older nets theirs.
+# The ONNX graph's inputs, in order: CombatNet feeds them by these names.
 INPUTS = [
     "cards",
     "ups",

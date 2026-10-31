@@ -117,7 +117,7 @@ def write_runs(tmp_path, env="SL", runs=10):
 
 
 def test_each_round_start_is_a_sample_with_the_history_before_it(tmp_path):
-    samples, skipped = data.read(*common.lists(write_runs(tmp_path)), "SILENT", "SL", None)
+    samples, skipped = data.read(*common.lists(write_runs(tmp_path)), "SILENT", "SL")
     assert skipped == 0 and len(samples) == 30  # rounds 1, 2 and 3 of each run's combat
     first, third = samples[0], samples[2]
     assert first["tokens"]["enemies"][0]["scalars"][4] == 0 and third["tokens"]["enemies"][0]["scalars"][4] == 0.2
@@ -127,7 +127,7 @@ def test_each_round_start_is_a_sample_with_the_history_before_it(tmp_path):
 
 def test_another_environments_logs_are_refused(tmp_path):
     with pytest.raises(common.LearnError, match="NoSL decisions, not SL"):
-        data.read(*common.lists(write_runs(tmp_path, env="NoSL")), "SILENT", "SL", None)
+        data.read(*common.lists(write_runs(tmp_path, env="NoSL")), "SILENT", "SL")
 
 
 def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
@@ -138,7 +138,7 @@ def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
     tables = train.vocab(samples * 3)
     torch.manual_seed(0)
     net = export.net_file("t", "SILENT", "SL", tables, Net({t: len(i) for t, i in tables.items()}), samples, {}, 0)
-    assert net["env"] == "SL" and net["target"] == "each_potion" and net["lags"] == encode.LAGS and len(net["tests"]) == 2
+    assert net["env"] == "SL" and net["lags"] == encode.LAGS and len(net["tests"]) == 2
     graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
     assert [i.name for i in graph.graph.input] == encode.INPUTS
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
