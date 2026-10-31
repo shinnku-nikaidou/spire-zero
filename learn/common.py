@@ -64,7 +64,7 @@ def runs_by_log(logs: str, records: str, character: str) -> list[tuple[str, dict
     the one its `run` wrote beside it. A run id is a hash of the seed alone, so files of other runs can hold another
     run of the same seed (another policy, an exploration scan); a log is joined only with its own records. A run id
     twice in one record file is refused, and so is a run of another character than the one being trained: each
-    character has a brain of its own (docs: learning §6)."""
+    character has a brain of its own (docs: learning/reference §6)."""
     log_paths, record_paths = logs.split(","), records.split(",")
     if len(log_paths) != len(record_paths):
         raise LearnError(

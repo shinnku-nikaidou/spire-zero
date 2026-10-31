@@ -13,7 +13,7 @@ namespace Sts2Ai.Brain;
 /// It also answers the card prompts outside combat (upgrade, remove, transform, choose a card).
 ///
 /// With <paramref name="explore"/>, for self-play, it draws each answer by the same values instead of taking the best
-/// (docs: learning §5); at a card prompt, each pick and whether to stop. With <paramref name="uniform"/>, for self-play
+/// (docs: learning/loop §9); at a card prompt, each pick and whether to stop. With <paramref name="uniform"/>, for self-play
 /// (plan v6 §3), some answers are drawn evenly whatever V says (<see cref="Uniform"/>): a card reward's outcome among
 /// its cards and skipping it, a card prompt's picks, and on every other screen its options but a potion's (the belt,
 /// which every screen offers) and those that would come back to a state already decided.

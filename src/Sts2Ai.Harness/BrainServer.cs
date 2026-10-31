@@ -7,7 +7,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// The brain's end of the wire (docs: protocol §2). Each run on a connection gets its own Harness from
+/// The brain's end of the wire (docs: harness §5). Each run on a connection gets its own Harness from
 /// <paramref name="harness"/>, made at hello (it refuses the run by throwing); each decision is routed through it and
 /// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
 /// observation that does not match its hash) gets an error instead, and the host ends the run. SL node messages get

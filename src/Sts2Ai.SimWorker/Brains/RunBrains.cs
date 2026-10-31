@@ -20,7 +20,7 @@ internal interface IRunBrain : ICombatPolicy, IChoicePolicy, IMacroPolicy
     /// <summary>Harness's <see cref="Dispatcher.Replans"/>, when Harness is in this process.</summary>
     int Replans { get; }
 
-    /// <summary>SL: the host arrived at a node (docs: protocol §2).</summary>
+    /// <summary>SL: the host arrived at a node (docs: protocol/wire §6).</summary>
     void Checkpoint(NodeCheckpoint checkpoint);
 
     /// <summary>SL: a decision taken in the current node, sent before the next decision.</summary>
@@ -46,7 +46,7 @@ internal sealed class LocalBrain(Dispatcher harness) : IRunBrain
 }
 
 /// <summary>
-/// SL (docs: environments §6): before each decision, tells the brain what it has not heard of the current node: its
+/// SL (docs: environments/information §7): before each decision, tells the brain what it has not heard of the current node: its
 /// checkpoint on arrival, then the decisions taken in it since, card prompts included. <see cref="Session"/> is the run,
 /// set once it has started.
 /// </summary>
@@ -100,7 +100,7 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
 }
 
 /// <summary>
-/// A run's brain at the other end of the wire (docs: protocol §2): hello when the run starts, each decision with its
+/// A run's brain at the other end of the wire (docs: protocol/wire): hello when the run starts, each decision with its
 /// observation, and the recommendation as the answer. An action is reported executed when the game reaches the next
 /// decision or the end of the run; run_end follows.
 /// </summary>

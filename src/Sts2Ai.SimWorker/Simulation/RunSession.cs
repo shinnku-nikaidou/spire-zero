@@ -34,7 +34,7 @@ internal sealed record RunSetup(string Character, string Seed, int Ascension = 0
     bool Gauntlet = false);
 
 /// <summary>
-/// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator §5.1).
+/// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator/runs §2).
 /// <see cref="Step"/> pumps the game until it waits for the player, then makes one decision: combat through the
 /// combat policy, card prompts through the card selector, every other screen through the macro policy. Each decision
 /// can be observed (<see cref="Observation"/>): policies build it on request, and <c>observed</c> sees all of them.
@@ -44,7 +44,7 @@ internal sealed record RunSetup(string Character, string Seed, int Ascension = 0
 /// per room. Same setup and same policy answers, same run. Like <see cref="CombatSession"/>, one live at a time.
 ///
 /// On arrival at each map point the game saves; that save is the node's checkpoint, and with the decisions since it
-/// makes the node's SL clone (<see cref="Clone"/>, <see cref="Load"/>; docs: simulator §7).
+/// makes the node's SL clone (<see cref="Clone"/>, <see cref="Load"/>; docs: simulator/worlds §3).
 /// </summary>
 internal sealed class RunSession : IDisposable
 {
@@ -184,7 +184,7 @@ internal sealed class RunSession : IDisposable
     }
 
     /// <summary>
-    /// Loads <paramref name="clone"/> (docs: simulator §7): its save as the game's Continue loads one, with the relic fields
+    /// Loads <paramref name="clone"/> (docs: simulator/worlds §4): its save as the game's Continue loads one, with the relic fields
     /// the save drops put back (<see cref="Checkpoint"/>), then its decisions replayed, before the policies answer. The
     /// clone is sealed: once it travels it is at its horizon, and stepping further throws.
     /// </summary>

@@ -164,7 +164,7 @@ internal sealed class LeafArgs
 {
     private readonly Option<string?> _leaf = Opt.Maybe<string?>("--leaf", "the leaf value's weights file (default: the initial weights)");
     private readonly Option<string?> _net = Opt.Maybe<string?>("--combat-net",
-        "a combat net file, which values the leaves still in progress at the leaf weights' prices (docs: learning §1)");
+        "a combat net file, which values the leaves still in progress at the leaf weights' prices (docs: learning/combat-net §1)");
 
     public IEnumerable<Option> Options => [_leaf, _net];
 
@@ -175,7 +175,7 @@ internal sealed class LeafArgs
 internal sealed class ChampionFileOption : Option<string?>
 {
     public ChampionFileOption() : base("--champion") =>
-        Description = "plays the champion this champion file names (docs: evaluation §5); options given override the file's";
+        Description = "plays the champion this champion file names (docs: evaluation/champions §1); options given override the file's";
 
     /// <summary>
     /// The parse again with the file's options after the ones given: each that the command has and was not given (brain
@@ -202,7 +202,7 @@ internal sealed class ChampionFileOption : Option<string?>
     }
 }
 
-/// <summary>The options that name a champion (docs: harness §4): its brains, the search's budget and workers, and weights files.</summary>
+/// <summary>The options that name a champion (docs: harness/routing §1): its brains, the search's budget and workers, and weights files.</summary>
 /// <param name="file">Whether the command also takes --champion FILE to play (run, brain; gate's --champion is the one to beat).</param>
 internal sealed class ChampionArgs(bool file)
 {

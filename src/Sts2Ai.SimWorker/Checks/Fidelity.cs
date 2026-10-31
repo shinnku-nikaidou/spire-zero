@@ -7,7 +7,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// fidelity (docs: simulator §6): how far a NoSL world built from an observation plays like the real combat, apart
+/// fidelity (docs: simulator/combat §6): how far a NoSL world built from an observation plays like the real combat, apart
 /// from what Determinize samples. At every k-th decision of the panel's combats, the real combat plays on with the
 /// placeholder policy to the end of the turn, the enemies' turn included; then a combat built from the decision's
 /// observation and the record of the enemies' intents (<see cref="CombatBuilder"/>), given the real one's sampled state

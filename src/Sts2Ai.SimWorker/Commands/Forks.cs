@@ -71,7 +71,7 @@ internal static class Logged
 }
 
 /// <summary>
-/// afterstates (docs: learning §2): replays logged runs from their seeds, answering each decision as the log did, and
+/// afterstates (docs: learning/loop §10): replays logged runs from their seeds, answering each decision as the log did, and
 /// writes each macro decision's options as L0 weighs them with the champion's V: the log keeps only the run before
 /// the decision and what was chosen.
 /// </summary>
@@ -125,7 +125,7 @@ internal static class AfterstatesCommand
 }
 
 /// <summary>
-/// fork (docs: learning §2): counterfactual pairs from logged runs. Each picked decision is reached again by replaying
+/// fork (docs: learning/loop §10): counterfactual pairs from logged runs. Each picked decision is reached again by replaying
 /// its run from the seed, then played twice from there: once with L0's best action, once with another of the screen's
 /// own actions drawn uniformly (not a potion's, which every screen offers; a decision without another is passed over).
 /// The champion plays both on to the end of the decision's act (past its boss) or of the run. The two

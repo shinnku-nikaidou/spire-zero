@@ -3,7 +3,7 @@ using MegaCrit.Sts2.Core.Modding;
 namespace Sts2Ai.Mod;
 
 /// <summary>
-/// The entry point the game's mod loader calls (docs: mod §2). It runs before the model database is ready, so it only
+/// The entry point the game's mod loader calls (docs: mod §3). It runs before the model database is ready, so it only
 /// sets things up; the work starts on the first frame.
 /// </summary>
 [ModInitializer(nameof(Init))]

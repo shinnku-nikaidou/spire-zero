@@ -1,10 +1,10 @@
-"""Challenge an environment's champion (docs: evaluation §5) with a challenger given by its run options.
+"""Challenge an environment's champion (docs: evaluation/gates §8) with a challenger given by its run options.
 
 The challenger plays the champion's seed set in chunks, and the sim's gate pairs what it has played with the champion's
 report after each chunk. A fail or a void verdict stops it there. After a pass it plays the rest of the set, which the
 champion's report must cover, and is promoted: the gate writes its report and the champion file, and the leaderboard
-is rebuilt. The challenger plays the champion's character at its ascension (docs: learning §6). Its run records and
-the sim's logs are kept in --records-dir, data/CHARACTER/ENV/eval/DATE-gate-NAME (docs: learning §6). Paths are taken
+is rebuilt. The challenger plays the champion's character at its ascension (docs: learning/reference §9). Its run records and
+the sim's logs are kept in --records-dir, data/CHARACTER/ENV/eval/DATE-gate-NAME (docs: learning/reference §3). Paths are taken
 from the repository root, where the sim runs.
 
     uv run python challenge.py --sim ../sim.sh --champion eval/silent/champions/nosl.json \\

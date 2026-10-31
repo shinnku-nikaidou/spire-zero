@@ -1,4 +1,4 @@
-"""Pure V's net file (docs: learning §6), for `run --value`: the net as ONNX, what RunNet needs to feed it (the token
+"""Pure V's net file (docs: learning/reference §7), for `run --value`: the net as ONNX, what RunNet needs to feed it (the token
 tables, the state's mean and std), test runs that RunNet values on load to check it reads them as training did, and
 the training report.
 """

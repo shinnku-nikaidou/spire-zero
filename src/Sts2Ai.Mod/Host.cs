@@ -7,10 +7,10 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Mod;
 
-/// <summary>Starts the mod and runs its per-frame loop on the game's main thread (docs: mod §3).</summary>
+/// <summary>Starts the mod and runs its per-frame loop on the game's main thread (docs: mod/loop §1).</summary>
 internal static class Host
 {
-    /// <summary>The game version GameBridge is written against; any other turns the mod off (docs: mod §2).</summary>
+    /// <summary>The game version GameBridge is written against; any other turns the mod off (docs: mod §3).</summary>
     private const string PinnedVersion = "v0.111.0";
 
     public const string Tag = "[Sts2Ai]";
@@ -30,7 +30,7 @@ internal static class Host
         }
         else
         {
-            // First, before anything else compiles game code that could inline an entry (docs: mod §10).
+            // First, before anything else compiles game code that could inline an entry (docs: mod/auto §5).
             var harmony = new Harmony("sts2ai.mod");
             ChoiceContexts.Patch(harmony);
             NodeRecord.Patch(harmony);

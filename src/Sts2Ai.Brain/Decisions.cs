@@ -23,7 +23,7 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
 
 /// <summary>
 /// What a macro policy gets at each out-of-combat decision: the surface, its legal actions in text form ("map:3,5",
-/// "reward:0", "leave", ...; grammar in docs: protocol §3), and the observation on request. In SL, Harness may add the
+/// "reward:0", "leave", ...; grammar in docs: protocol/observation §5), and the observation on request. In SL, Harness may add the
 /// node's clone at the decision (<paramref name="clone"/>).
 /// </summary>
 public sealed class MacroDecision(string surface, IReadOnlyList<string> legal, Func<Observation> observe, IMacroClone? clone = null)
@@ -44,7 +44,7 @@ public sealed class MacroDecision(string surface, IReadOnlyList<string> legal, F
 }
 
 /// <summary>
-/// A card prompt for a choice policy, and the observation it is asked in (docs: protocol §3, surface card_choice) on
+/// A card prompt for a choice policy, and the observation it is asked in (docs: protocol/observation §6, surface card_choice) on
 /// request. The observation is null where there is no run around the prompt (a combat started on its own). Outside
 /// combat in SL, Harness may add the node's clone at the prompt (<paramref name="clone"/>).
 /// </summary>

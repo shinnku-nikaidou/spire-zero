@@ -1,4 +1,4 @@
-"""Boss labels for card rewards (docs: learning §2): each option's deck fights its act's boss with the SL planner, a
+"""Boss labels for card rewards (docs: learning/value §10): each option's deck fights its act's boss with the SL planner, a
 few seeds each, the same seeds for every option of a decision, so the options share their luck.
 
   tasks    from decision logs and their afterstates (`afterstates`), one `panel` command line per (decision, option)

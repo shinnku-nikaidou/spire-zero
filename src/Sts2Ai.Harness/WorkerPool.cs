@@ -6,7 +6,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// Simulator worker processes (docs: simulator §8), each started as <c>COMMAND serve OPTIONS</c> and spoken to in JSON
+/// Simulator worker processes (docs: simulator/pool §2), each started as <c>COMMAND serve OPTIONS</c> and spoken to in JSON
 /// lines over its stdin and stdout (<see cref="WorkerHello"/>, <see cref="WorkerReply"/>). A worker serves one request
 /// at a time; <see cref="Map"/> hands each request to whichever worker is free and returns the replies in request
 /// order, whatever order they finish in, so timing cannot change a result. A worker that dies, or does not answer

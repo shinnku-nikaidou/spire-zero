@@ -7,7 +7,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// The SL world of a combat decision in a run (docs: simulator §7): the node's clone, loaded and replayed, is the real
+/// The SL world of a combat decision in a run (docs: simulator/worlds §7): the node's clone, loaded and replayed, is the real
 /// combat at the decision. Each action is one more step of the clone; a restore loads the clone again with the steps
 /// it keeps, since the game allows one live run per process. Card prompts inside the world are answered by
 /// <see cref="PromptBrain"/>, as in the run, and recorded among the steps. States are told apart by the full hidden

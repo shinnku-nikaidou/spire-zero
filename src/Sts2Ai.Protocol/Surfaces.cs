@@ -1,7 +1,7 @@
 namespace Sts2Ai.Protocol;
 
 /// <summary>
-/// Which screen is asking (docs: protocol §3): the key that routes a decision to a brain, and the "surface" field that
+/// Which screen is asking (docs: protocol/observation §5): the key that routes a decision to a brain, and the "surface" field that
 /// says which <see cref="ScreenView"/> an observation carries.
 /// </summary>
 public static class Surfaces

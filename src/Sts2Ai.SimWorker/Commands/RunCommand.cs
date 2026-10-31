@@ -11,7 +11,7 @@ namespace Sts2Ai.SimWorker;
 /// run: whole runs through Harness. Combat prompts go to p0; --macro picks the brain of every decision outside combat.
 /// --check plays each seed again over the wire, to a brain in this process, and compares: observations, records and
 /// decision logs included (each observation must survive a JSON round trip); and replays each node from its
-/// checkpoint (the SL clone, docs: simulator §7). Reports results, hashes and surface coverage.
+/// checkpoint (the SL clone, docs: simulator/worlds). Reports results, hashes and surface coverage.
 /// </summary>
 internal static class RunCommand
 {
@@ -30,7 +30,7 @@ internal static class RunCommand
     private static readonly Option<bool> Gauntlet = Opt.Of("--gauntlet", false,
         "the boss gauntlet: a plain monster encounter is won at its start (the game's win command), an event's included; the combat brain fights elites and bosses");
     private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
-    private static readonly Option<string?> Records = Opt.Maybe<string?>("--records", "writes one run record per line (docs: evaluation §6)");
+    private static readonly Option<string?> Records = Opt.Maybe<string?>("--records", "writes one run record per line (docs: evaluation/metrics §8)");
     private static readonly Option<string?> Brain = Opt.Maybe<string?>("--brain",
         "plays against the brain listening at this socket instead, which picks the champion (--check replays against it too)");
     private static readonly ChampionArgs Champion = new(file: true);
@@ -156,7 +156,7 @@ internal static class RunCommand
     }
 
     /// <summary>
-    /// Loads each node of a played run from its checkpoint and replays the node's decisions (docs: simulator §7): the
+    /// Loads each node of a played run from its checkpoint and replays the node's decisions (docs: simulator/worlds §6): the
     /// clone must show the run's observations one for one, and be at its horizon once it has travelled. Returns how
     /// many nodes did, and what went wrong in the first that did not; each node's load and replay time goes to
     /// <paramref name="ms"/>. A gauntlet run's clones keep its rule.

@@ -14,7 +14,7 @@ namespace Sts2Ai.Harness;
 /// </summary>
 public sealed class PooledPimc(WorkerPool pool)
 {
-    /// <param name="buildSeed">Seeds the combat built from the observation (docs: simulator §3).</param>
+    /// <param name="buildSeed">Seeds the combat built from the observation (docs: simulator/combat §5).</param>
     /// <param name="seed">Draws the worlds.</param>
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, string buildSeed, Budget budget, ulong seed,

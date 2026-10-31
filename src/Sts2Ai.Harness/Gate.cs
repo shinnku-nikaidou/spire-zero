@@ -3,7 +3,7 @@ using System.Globalization;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// The full-run gate (docs: evaluation §5): a challenger against the champion on the same seeds (CRN), pair by pair in
+/// The full-run gate (docs: evaluation/gates §6): a challenger against the champion on the same seeds (CRN), pair by pair in
 /// the seed set's order, with an SPRT that stops at the first pair where the evidence is clear. The champion's side is
 /// its report: runs are deterministic, so the same seed played again gives the same run.
 ///
@@ -26,7 +26,7 @@ public static class Gate
 
     /// <param name="Verdict">pass (H1: the challenger is better by delta, or not worse in a not-worse gate), fail (H0: it is
     /// not better, or worse by delta), open (the pairs ran out first), or void (the challenger's runs break a must-be-zero
-    /// rule, docs: evaluation §3).</param>
+    /// rule, docs: evaluation/metrics §2).</param>
     /// <param name="Decided">The pair at which the SPRT stopped, or every pair when it did not.</param>
     /// <param name="Llr">The log-likelihood ratio at <paramref name="Decided"/>; it passes at <paramref name="Upper"/> and
     /// fails at <paramref name="Lower"/>.</param>

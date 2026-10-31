@@ -9,7 +9,7 @@ namespace Sts2Ai.SimWorker;
 /// <param name="Act">On a macro decision, the act it was in, from its run view.</param>
 internal sealed record LoggedStep(string Surface, string Chosen, string ObsHash, int Legal, bool Explored, int? Act);
 
-/// <summary>A run of a decision log (docs: harness §6) with its setup from its run record: its decisions in order.</summary>
+/// <summary>A run of a decision log (docs: harness/decision-log) with its setup from its run record: its decisions in order.</summary>
 internal sealed record LoggedRun(string RunId, RunSetup Setup, IReadOnlyList<LoggedStep> Steps)
 {
     /// <summary>

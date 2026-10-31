@@ -2,7 +2,7 @@
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// Self-play exploration (docs: learning §5): draws one of a brain's options by the values the brain gave them, each with
+/// Self-play exploration (docs: learning/loop §9): draws one of a brain's options by the values the brain gave them, each with
 /// chance ∝ exp((v − best) / τ). Options near the best are tried often and poor ones seldom; equal ones equally often.
 /// <paramref name="temperature"/> τ is in the values' units, above 0. Never in evaluation.
 /// </summary>

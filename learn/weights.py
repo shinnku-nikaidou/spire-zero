@@ -1,7 +1,7 @@
-"""Where weights files go (docs: learning §6). Each character is trained on its own, every ascension by the same brain,
+"""Where weights files go (docs: learning/reference §6). Each character is trained on its own, every ascension by the same brain,
 so its files have a folder of their own: a trainer writes its file to weights/CHARACTER/NAME.json unless --out says
 otherwise. A file there is never replaced, so each name is used once and always means the same weights; the champion
-files name them where they are (docs: evaluation §5)."""
+files name them where they are (docs: evaluation/champions §1)."""
 
 from pathlib import Path
 

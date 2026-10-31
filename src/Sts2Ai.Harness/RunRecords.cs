@@ -9,22 +9,22 @@ namespace Sts2Ai.Harness;
 /// (failed or truncated).</param>
 public sealed record CombatEntry(int Act, int Floor, string Encounter, string Room, int Hp, int MaxHp, int Potions = 0, CombatEnd? End = null);
 
-/// <summary>How a combat ended, the target of the combat outcome head (docs: learning §1): a death, or the HP, max HP and
+/// <summary>How a combat ended, the target of the combat outcome head (docs: learning/combat-net §3): a death, or the HP, max HP and
 /// potions left after it; and the HP its enemies had left, against their max HP (how far a lost fight got; a won
 /// fight's enemies are gone, 0 of 0).</summary>
 public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions, int? EnemyHp = null, int? EnemyMaxHp = null);
 
-/// <summary>What played a run, the same for every run of one evaluation (docs: evaluation §6).</summary>
+/// <summary>What played a run, the same for every run of one evaluation (docs: evaluation/metrics §8).</summary>
 /// <param name="Champion">The brain on each side of the routing table, with its budget.</param>
-/// <param name="Rung">R1 to R4 (docs: evaluation §1).</param>
+/// <param name="Rung">R1 to R4 (docs: evaluation §2).</param>
 /// <param name="AutoWin">True for a boss gauntlet pilot's run (<c>run --auto-win</c>): every combat won at its start, so
 /// the run says nothing of how it would have fared; null otherwise.</param>
 /// <param name="Gauntlet">True for a boss gauntlet's run (<c>run --gauntlet</c>): plain monster encounters won at their
 /// start, elites and bosses fought, so the run is no whole run (no report or gate takes it); null otherwise.</param>
 public sealed record RunConfig(string Game, string Commit, string Champion, string Env, string Rung, bool? AutoWin = null, bool? Gauntlet = null);
 
-/// <summary>One run of an evaluation, as the report needs it (docs: evaluation §3).</summary>
-/// <param name="RunId">The run id the brain knew the run by, as in the decision log (docs: harness §6).</param>
+/// <summary>One run of an evaluation, as the report needs it (docs: evaluation/metrics §8).</summary>
+/// <param name="RunId">The run id the brain knew the run by, as in the decision log (docs: harness/decision-log).</param>
 /// <param name="Outcome">won, lost, truncated (the decision cap), or failed (an error in the driver or a brain; never re-run).</param>
 /// <param name="Brains">Decisions per brain name, from Harness's log.</param>
 /// <param name="CardRewards">Card rewards offered, and how many of them were left untaken (skipped, or never opened).</param>

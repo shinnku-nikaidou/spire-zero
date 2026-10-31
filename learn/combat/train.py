@@ -1,4 +1,4 @@
-"""Train the combat net (docs: learning §1–§2), the combat search's leaf, from one environment's games, and write its
+"""Train the combat net (docs: learning/combat-net §4), the combat search's leaf, from one environment's games, and write its
 net file for `--combat-net`.
 
 The samples are combat/data.py's: each round's start in the logs of --env, with how its combat ended. The loss is the

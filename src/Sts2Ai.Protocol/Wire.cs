@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Sts2Ai.Protocol;
 
 /// <summary>
-/// A message between a host (the mod in the real game, or a worker hosting a run) and the brain (docs: protocol §2),
+/// A message between a host (the mod in the real game, or a worker hosting a run) and the brain (docs: protocol/wire),
 /// one JSON line each, with its type and the protocol version. A connection carries runs one after another, each from
 /// hello to run_end.
 /// </summary>
@@ -36,7 +36,7 @@ public sealed record Hello(string GameVersion, string Env, string Role, RunHeade
 /// <param name="RunId">The run's id (<see cref="IdOf"/>).</param>
 public sealed record RunHeader(string RunId, string Character, int Ascension)
 {
-    /// <summary>A run's id: a hash of its seed, so the seed never leaves the host (docs: mod §9).</summary>
+    /// <summary>A run's id: a hash of its seed, so in NoSL the seed never leaves the host; an SL checkpoint carries it (docs: mod/auto §4).</summary>
     public static string IdOf(string seed) => ProtocolJson.Hash(seed).ToString("x16");
 }
 
@@ -45,7 +45,7 @@ public sealed record Ready(string Champion) : WireMessage;
 
 /// <summary>
 /// Host → brain, a decision point. <see cref="Legal"/> is empty for a card prompt: its answer is "pick:i,j,…", canonical
-/// indexes the prompt accepts (docs: protocol §3).
+/// indexes the prompt accepts (docs: protocol/observation §6).
 /// </summary>
 /// <param name="DecisionId">From 0, increasing within the run.</param>
 /// <param name="ObsHash"><see cref="ProtocolJson.Hash"/> of <see cref="Obs"/>, in hex.</param>
@@ -54,7 +54,7 @@ public sealed record DecisionRequest(long DecisionId, string ObsHash, string Sur
     public static string HashOf(Observation obs) => ProtocolJson.Hash(obs).ToString("x16");
 }
 
-/// <summary>Brain → host, the answer to a decision (docs: protocol §6).</summary>
+/// <summary>Brain → host, the answer to a decision (docs: protocol/wire §7).</summary>
 /// <param name="Brain">The brain that decided, from the champion's routing table.</param>
 /// <param name="Plan">What the brain planned after <paramref name="Action"/>: the rest of the turn from a searching
 /// combat brain, the rest of the act's route from the macro brain on the map.</param>
@@ -76,8 +76,8 @@ public sealed record RunEnd(bool Won, int Floor, string Reason) : WireMessage;
 public sealed record WireError(string Message) : WireMessage;
 
 /// <summary>
-/// Host → brain, SL only (docs: mod §6): the node's checkpoint on arrival, before the node's first decision: the game's
-/// save and the relic fields it drops (docs: simulator §7), opaque outside the simulator. Nodes are numbered from 0 in
+/// Host → brain, SL only (docs: mod/sl-record §7): the node's checkpoint on arrival, before the node's first decision: the game's
+/// save and the relic fields it drops (docs: simulator/worlds §6), opaque outside the simulator. Nodes are numbered from 0 in
 /// the run. <see cref="Gauntlet"/> is true in a boss gauntlet's run, whose rule the node's clones keep
 /// (<see cref="NodeClone.Gauntlet"/>).
 /// </summary>

@@ -6,7 +6,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// clones: the SL export round trip (docs: mod §6, §12). Reads what a host sent the brain (brain --wire), and for each
+/// clones: the SL export round trip (docs: mod/sl-record §8). Reads what a host sent the brain (brain --wire), and for each
 /// decision asked in SL loads its node's clone, the checkpoint and the steps sent before the decision, as the brain's
 /// search does. The clone must ask the same decision next, observation for observation; any difference is reported
 /// with the first field that differs.

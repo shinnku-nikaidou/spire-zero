@@ -6,7 +6,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Mod;
 
 /// <summary>
-/// Assist mode (docs: mod §3, §5, §6): once the game has been idle on a decision for a few frames, asks the brain about
+/// Assist mode (docs: mod/loop, mod/sl-record §7): once the game has been idle on a decision for a few frames, asks the brain about
 /// that state, and shows the answer while the state lasts. The player acts; the mod never does.
 /// One decision is in flight at a time: when the state moves on first, the mod cancels it and waits for its answer
 /// before asking about the new state, so a slow brain never falls behind.

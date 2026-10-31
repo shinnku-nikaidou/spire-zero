@@ -1,4 +1,4 @@
-"""The combat net's samples (docs: learning §2): each round's start in the decision logs, the state a search leaf
+"""The combat net's samples (docs: learning/combat-net §3): each round's start in the decision logs, the state a search leaf
 stands in, with how its combat ended in the run records.
 
 A sample is the first combat decision of a round, with the public record of the enemies' moves before it (Harness's

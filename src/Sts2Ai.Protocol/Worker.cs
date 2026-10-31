@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Sts2Ai.Protocol;
 
 /// <summary>
-/// The messages between the decision side and a simulator worker (docs: simulator §8), one JSON line each: the worker
+/// The messages between the decision side and a simulator worker (docs: simulator/pool §3), one JSON line each: the worker
 /// says hello once it has booted, then answers each request in order. A request carries everything the worker needs,
 /// so any worker can serve it and a crashed worker's request can be sent again.
 /// </summary>
@@ -36,7 +36,7 @@ public sealed record PimcWorldRequest(
     IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
 /// <summary>
-/// PIMC's search of the SL world of a combat decision in a run (docs: simulator §7): <see cref="Node"/> loaded and
+/// PIMC's search of the SL world of a combat decision in a run (docs: simulator/worlds §7): <see cref="Node"/> loaded and
 /// replayed is the real combat at the decision. The reply holds the best line after each of <see cref="First"/>, in
 /// that order, each searched with <see cref="NodesPerFirst"/> nodes, the leaves with <see cref="History"/> as in
 /// <see cref="PimcWorldRequest"/>.

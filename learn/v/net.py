@@ -1,4 +1,4 @@
-"""Pure V's net (docs: learning §1): a set encoder over the deck, bags of ids for the rest, the raw state, then a body
+"""Pure V's net (docs: learning/value §6): a set encoder over the deck, bags of ids for the rest, the raw state, then a body
 and two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the floor
 expected to be reached, or (objective "win") the chance to survive every floor. The second head learns the next
 combats' HP costs and the boss score, which shapes the body only: it is not in the net file. The boss gauntlet's V

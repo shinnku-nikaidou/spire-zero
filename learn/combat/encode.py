@@ -1,4 +1,4 @@
-"""A round's start as the combat net reads it (docs: learning §1), the one spec CombatNet.Predict follows.
+"""A round's start as the combat net reads it (docs: learning/combat-net §2), the one spec CombatNet.Predict follows.
 
 The ids of what is in the fight and its raw state: each card's id, upgrade level, modifiers' ids and pile; the player's
 HP, block, energy, stars and the round; each power's id and amount (and the stacks and kept card a tooltip states

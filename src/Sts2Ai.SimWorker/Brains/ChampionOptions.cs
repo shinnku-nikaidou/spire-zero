@@ -5,9 +5,9 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker;
 
-/// <summary>The champion that --policy and --macro name (docs: harness §4), pimc's budget, and l0's V (--value).</summary>
+/// <summary>The champion that --policy and --macro name (docs: harness/routing §1), pimc's budget, and l0's V (--value).</summary>
 /// <param name="ValueFile">Where <paramref name="Value"/> came from; null for the initial weights.</param>
-/// <param name="MacroExplore">For self-play only (docs: learning §5): l0's softmax temperature over V's values, in V's
+/// <param name="MacroExplore">For self-play only (docs: learning/loop §9): l0's softmax temperature over V's values, in V's
 /// units (--macro-explore); 0 for none.</param>
 /// <param name="CombatExplore">The same for pimc over the search's values, in the leaf's units (--combat-explore).</param>
 /// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
@@ -116,7 +116,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// <summary>
     /// The options of this challenger as the character's champion, with its character and ascension. Each weights file
     /// it plays with (V, the leaf weights, the combat net) must be in the character's weights folder, weights/CHARACTER,
-    /// where a name is used once, so the champion file names it where it is (docs: learning §6).
+    /// where a name is used once, so the champion file names it where it is (docs: learning/reference §6).
     /// </summary>
     public Dictionary<string, string> Promoted(PlayEnvironment env, string character, int ascension)
     {
@@ -126,7 +126,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         var folder = Layout.Weights(character);
         foreach (var key in new[] { "value", "leaf", "combat-net" })
             if (options.TryGetValue(key, out var path) && Path.GetDirectoryName(Path.GetFullPath(path)) != Path.GetFullPath(folder))
-                throw new CliException($"not promoted: {path} is not in {folder}, where a champion's weights files are (docs: learning §6)");
+                throw new CliException($"not promoted: {path} is not in {folder}, where a champion's weights files are (docs: learning/reference §6)");
         return options;
     }
 

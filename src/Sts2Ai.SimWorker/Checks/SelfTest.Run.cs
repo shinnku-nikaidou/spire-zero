@@ -143,7 +143,7 @@ internal static partial class SelfTest
     /// <summary>
     /// A run with random policies, to its third node, whose first relic is disabled at the start, a status that the save
     /// drops, as Lava Rock's own. The second node's clone must show every observation of the node as the run did, the
-    /// disabled relic among them (docs: simulator §7).
+    /// disabled relic among them (docs: simulator/worlds §6).
     /// </summary>
     private static void CloneKeepsRelicState(Pump pump, int seed, Action<string, bool, string> check)
     {

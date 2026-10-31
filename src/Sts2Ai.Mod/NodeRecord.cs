@@ -18,10 +18,10 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Mod;
 
 /// <summary>
-/// The current node's SL record (docs: mod §6): its checkpoint, taken when the game saves on arrival at a map point as
+/// The current node's SL record (docs: mod/sl-record): its checkpoint, taken when the game saves on arrival at a map point as
 /// the simulator takes it, and every decision taken in the node since, as the simulator's trace names them ("surface
-/// action", docs: simulator §7). The player's decisions are read where the game commits them, the entry points the
-/// simulator calls itself (docs: gamebridge §4), so a step is known exactly, before the game plays it.
+/// action", docs: simulator/worlds §3). The player's decisions are read where the game commits them, the entry points the
+/// simulator calls itself (docs: gamebridge/actions §7), so a step is known exactly, before the game plays it.
 /// The record is kept in both environments, so switching to SL works in the room the player is in; only SL sends it.
 ///
 /// A step the simulator has no decision for (a potion thrown away in combat, a card reward closed unanswered) breaks the

@@ -1,6 +1,6 @@
 # Evaluation 2026-10-27: NoSL R1, promotion-1
 
-**Void** (docs: evaluation §3): 6792 random decisions.
+**Void** (docs: evaluation/metrics §2): 6792 random decisions.
 
 | | |
 |---|---|

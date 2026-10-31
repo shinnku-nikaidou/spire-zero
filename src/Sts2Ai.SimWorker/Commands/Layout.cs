@@ -1,7 +1,7 @@
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// Where each character's files go, from the repository root (docs: learning §6, evaluation §2): each character is
+/// Where each character's files go, from the repository root (docs: learning/reference §6, evaluation/champions §5): each character is
 /// trained and judged on its own, every ascension by the same brain, so its weights and its evaluation have a folder
 /// of their own. The seed sets are shared.
 /// </summary>

@@ -6,9 +6,9 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// brain: the brain alone (docs: protocol §2), which serves the hosts that connect to the socket, one at a time, with the
+/// brain: the brain alone (docs: harness §5), which serves the hosts that connect to the socket, one at a time, with the
 /// champion its options name. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
-/// --sl-policy's (the SL planner by default), with the same macro brain (docs: harness §4). Prints a line per run, with
+/// --sl-policy's (the SL planner by default), with the same macro brain (docs: harness/routing §1). Prints a line per run, with
 /// the game errors of its search workers.
 /// </summary>
 internal static class BrainCommand
@@ -22,7 +22,7 @@ internal static class BrainCommand
 
     public static Command Command()
     {
-        var command = Opt.Command("brain", "the brain alone: serves the hosts that connect, one at a time (docs: protocol §2)", [Socket, Log, Wire, SlPolicy],
+        var command = Opt.Command("brain", "the brain alone: serves the hosts that connect, one at a time (docs: harness §5)", [Socket, Log, Wire, SlPolicy],
             Champion.Options);
         command.SetAction(Run);
         return command;

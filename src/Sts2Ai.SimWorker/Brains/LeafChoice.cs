@@ -20,7 +20,7 @@ internal sealed record LeafChoice(LeafFile? Weights, string? WeightsPath, Combat
 
     /// <summary>
     /// Fails for a combat net of another environment: it predicts the endings of another policy, and SL's planner wins
-    /// more from the same state than NoSL's search (docs: learning §2). A file without one (c1–c4) plays in either.
+    /// more from the same state than NoSL's search (docs: learning/combat-net §1). A file without one (c1–c4) plays in either.
     /// </summary>
     public void Check(PlayEnvironment env)
     {

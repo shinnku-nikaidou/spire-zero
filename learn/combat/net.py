@@ -1,4 +1,4 @@
-"""The combat net (docs: learning §1): set encoders over the cards (per pile), the powers, the enemies (each with its
+"""The combat net (docs: learning/combat-net §2): set encoders over the cards (per pile), the powers, the enemies (each with its
 intent slots) and the allies, bags of ids for the rest, then a body and two heads: the chance of each ending (a death,
 then each bucket of HP lost) and the potions still to be used after a win.
 """

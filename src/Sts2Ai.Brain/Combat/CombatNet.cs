@@ -4,12 +4,12 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
 
-/// <summary>A round's start and what the trainer's net made of it, which loading checks (docs: learning §7, input parity).</summary>
+/// <summary>A round's start and what the trainer's net made of it, which loading checks (docs: learning/reference §7, input parity).</summary>
 public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, double PotionsUsed);
 
 /// <summary>
 /// The combat net as <c>learn/combat/export.py</c> writes it, or as the removed <c>learn/train_combat.py</c> wrote it
-/// (docs: learning §1).
+/// (docs: learning/combat-net §2).
 /// </summary>
 /// <param name="Buckets">How many buckets of the share of max HP lost from the state to a win the head has, after its
 /// first class, a death.</param>

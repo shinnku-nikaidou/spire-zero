@@ -1,12 +1,12 @@
 namespace Sts2Ai.Protocol;
 
-/// <summary>What the AI may know of outcomes the game has not shown yet (docs: environments §1).</summary>
+/// <summary>What the AI may know of outcomes the game has not shown yet (docs: environments §2).</summary>
 public enum PlayEnvironment { NoSL, SL }
 
 public enum CombatStatus { InProgress, Won, Lost }
 
 /// <summary>
-/// A simulated combat that search can act in (docs: protocol §7). Search never touches a game directly: it gets
+/// A simulated combat that search can act in (docs: protocol/worlds §1). Search never touches a game directly: it gets
 /// worlds from an <see cref="IWorldSource"/>. A NoSL world is one sample of the hidden state that agrees with the
 /// observation; an SL world is an exact copy of the real combat.
 /// </summary>
@@ -44,7 +44,7 @@ public interface IWorldSource
 public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 
 /// <summary>
-/// An SL clone of the current node (docs: environments §6): the node's checkpoint at its entry (the game's save and the
+/// An SL clone of the current node (docs: environments/information §7): the node's checkpoint at its entry (the game's save and the
 /// relic fields it drops), and every decision since, as "surface action" (picks of a card prompt as the game's own
 /// indexes). Opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back
 /// and replays the decisions. <see cref="Gauntlet"/> is true for a run of the boss gauntlet (<c>run --gauntlet</c>),
@@ -54,6 +54,6 @@ public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, bool? G
 
 /// <summary>An action that search scored: its mean value over the worlds, the 95% confidence half-width, and how many worlds.</summary>
 /// <param name="Values">Its value in each world, in world order, to 4 decimals: the Q that ExIt's targets are made of
-/// (docs: learning §2).</param>
+/// (docs: learning/loop §5).</param>
 /// <param name="Nodes">The actions the search simulated below it in each world.</param>
 public sealed record Candidate(string Action, double Value, double Ci, int Samples, IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);

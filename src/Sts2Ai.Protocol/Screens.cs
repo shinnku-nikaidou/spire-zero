@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Sts2Ai.Protocol;
 
 /// <summary>
-/// The screen that asks for the decision, one variant per surface (docs: protocol §3). The JSON names the variant in
+/// The screen that asks for the decision, one variant per surface (docs: protocol/observation §5). The JSON names the variant in
 /// its "surface" field. Lists in the screen's own order are the order the UI shows, which actions index into.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "surface")]

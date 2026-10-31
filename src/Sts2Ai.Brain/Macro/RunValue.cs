@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
 
-/// <summary>V (docs: learning §1): what a run is worth, on one scale for every option of every surface.</summary>
+/// <summary>V (docs: learning/value §1): what a run is worth, on one scale for every option of every surface.</summary>
 public interface IRunValue
 {
     /// <summary>Which V this is, for the champion's name.</summary>
@@ -15,7 +15,7 @@ public interface IRunValue
 // OLD NETS: V v0 is l0's default V, the features V v2 reads and those the decision log and afterstates write; remove
 // once no champion uses them.
 /// <summary>
-/// V v0 (docs: learning §1): hand-written features of the run view times linear weights. The value is a logit of
+/// V v0 (docs: learning/value §4): hand-written features of the run view times linear weights. The value is a logit of
 /// P(win); only its order matters to the macro brain, which compares the afterstates of one decision. The initial
 /// weights are hypotheses, in units of one HP, for fitting and tuning to replace (<see cref="ValueWeights"/>).
 /// </summary>
@@ -121,6 +121,6 @@ public sealed class RunValue(IReadOnlyDictionary<string, double> weights, string
     }
 }
 
-/// <summary>V's weights as a file holds them (docs: learning §2): a name for reports, and a weight per feature. A
+/// <summary>V's weights as a file holds them (docs: learning/value §4): a name for reports, and a weight per feature. A
 /// feature it leaves out weighs nothing.</summary>
 public sealed record ValueWeights(string Name, IReadOnlyDictionary<string, double> Weights);

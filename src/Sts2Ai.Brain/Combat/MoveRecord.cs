@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// A combat's public record of enemy moves (docs: harness §3): what each living enemy showed at the first decision of
+/// A combat's public record of enemy moves (docs: harness §4): what each living enemy showed at the first decision of
 /// each round, by uid. It starts over when the round goes back; whoever keeps it clears it when the combat ends.
 /// </summary>
 public sealed class MoveRecord

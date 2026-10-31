@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
 
-/// <summary>How much search one decision may use (docs: harness §5): worlds, and actions simulated per world.</summary>
+/// <summary>How much search one decision may use (docs: harness/routing §4): worlds, and actions simulated per world.</summary>
 /// <param name="NodesPerWorld">PIMC: the actions simulated in each world's search of the turn. The SL planner: in each
 /// search of one turn from one state.</param>
 /// <param name="Elite">How many times its budget an elite's decisions get (docs: pimc/budget §4, sl-planner/budget §1): PIMC's nodes per world,

@@ -1,4 +1,4 @@
-"""The combat net's file (docs: learning §6), for `--combat-net`: the net as ONNX, its environment, what CombatNet needs
+"""The combat net's file (docs: learning/reference §7), for `--combat-net`: the net as ONNX, its environment, what CombatNet needs
 to feed it (the token tables, the buckets, the intent lags), test states that CombatNet predicts on load to check it
 reads them as training did, and the training report.
 """
