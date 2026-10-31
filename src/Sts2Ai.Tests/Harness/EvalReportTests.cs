@@ -1,4 +1,5 @@
 using Sts2Ai.Harness;
+using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Tests;
 
@@ -13,6 +14,22 @@ public class EvalReportTests
         Assert.Equal(["A", "C"], report.Runs.Select(r => r.Seed));
         Assert.Equal(15, report.Metrics.FloorMean);
         Assert.False(report.Metrics.Void);
+    }
+
+    [Fact]
+    public void ReadLeavesOutFailedRuns()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            RunRecord[] runs = [Fixtures.Run("A", 5), Fixtures.Run("B", 5, outcome: "failed"), Fixtures.Run("C", 5)];
+            File.WriteAllLines(file, runs.Select(ProtocolJson.Serialize));
+            Assert.Equal(["A", "C"], RunRecord.Read(file).Select(r => r.Seed));
+        }
+        finally
+        {
+            File.Delete(file);
+        }
     }
 
     [Fact]

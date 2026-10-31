@@ -33,7 +33,9 @@ public sealed record RunRecord(
     IReadOnlyList<CombatEntry> Combats, IReadOnlyDictionary<string, int> Surfaces, IReadOnlyDictionary<string, int> Brains,
     int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string? RunId = null)
 {
-    /// <summary>The run records in these files (comma-separated), one per line.</summary>
+    /// <summary>The run records in these files (comma-separated), one per line. A failed run is as if never set: reports and
+    /// gates see only the others (a host's memory fails runs at random: fleet SKILL.md §11).</summary>
     public static List<RunRecord> Read(string files) =>
-        files.Split(',').SelectMany(File.ReadAllLines).Where(l => l.Length > 0).Select(ProtocolJson.Deserialize<RunRecord>).ToList();
+        files.Split(',').SelectMany(File.ReadAllLines).Where(l => l.Length > 0).Select(ProtocolJson.Deserialize<RunRecord>)
+            .Where(r => r.Outcome != "failed").ToList();
 }
