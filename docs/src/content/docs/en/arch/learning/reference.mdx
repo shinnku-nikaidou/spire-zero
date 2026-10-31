@@ -268,7 +268,7 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 
 ## 12. Open questions
 
-1. What c7-2 is worth in whole runs: there is no gate result for it yet, in SL or in NoSL, where it has never been trained or gated.
+1. What c7-2 is worth in whole runs: its gate in SL is partial, 150 of 300 seeds, and does not show it better than an earlier net on the same data ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)); in NoSL it has never been trained or gated.
 2. How to check P(win)'s calibration once V decides by it, beyond the Brier score.
 3. Each decision's label carries its run's later draws. A cut point per run would remove them: draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained ([The loop §9](/en/arch/learning/loop/#sec-9)). It is not done.
 4. Whether TD(λ) or expert iteration would help V, whose labels are Monte Carlo only.

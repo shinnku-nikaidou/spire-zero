@@ -56,6 +56,17 @@ These pages describe the current champion only. The record of what came before i
 - `eval/silent/reports/` holds every committed report, as JSON and Markdown ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)).
 - `eval/silent/leaderboard.md` ranks those reports, by seed set and environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
 
+**The champion's gate** (2026-11-01; the ledger's row of c7-2). It is partial: 150 of the 300 seeds of `promotion-1-300` finished at medium, and 188 at the low budget, a reference. The others were lost with two machines and not played again, so it was read from the records, with no report. Every side plays V v7-1f on the clone, paired on the same seeds; of the games played, none failed.
+
+| c7-2 against | budget | seeds | won, c7-2 : other | points | lower 95 % | mean floor, c7-2 : other |
+|---|---|---|---|---|---|---|
+| c7-1 | medium | 150 | 88 : 88 | +0.0 ± 3.9 | −6.4 | 44.45 : 44.71 |
+| c2 | medium | 150 | 88 : 53 | +23.3 ± 3.9 | +16.8 | 44.45 : 41.13 |
+| c7-1 | low | 188 | 82 : 85 | −1.6 ± 4.0 | −8.2 | 42.01 : 42.09 |
+| c2 | low | 188 | 82 : 37 | +23.9 ± 3.8 | +17.7 | – |
+
+Against c7-1, a net on the same data, c7-2 is not shown better, so the gate's rule is not met. Against c2, the combat net it replaced as champion, the lower bound is well above 0. c7-2 became champion before this result, and the result changes nothing there.
+
 ## 3. Baselines
 
 **Other projects.** From the project's local notes on prior art:
