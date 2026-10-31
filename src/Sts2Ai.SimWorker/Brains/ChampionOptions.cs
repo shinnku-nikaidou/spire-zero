@@ -13,10 +13,8 @@ namespace Sts2Ai.SimWorker;
 /// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
 /// <param name="Explore">For self-play only (plan v6 §3): the share ε of macro decisions whose answer l0 draws evenly,
 /// whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
-/// <param name="VPrices">Whether the SL planner's leaves price a combat's ends at V's prices (--leaf-prices v,
-/// <see cref="PricedLeaf"/>) instead of the leaf weights'.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue Value, string? ValueFile,
-    LeafChoice Leaf, double MacroExplore, double CombatExplore, bool OnClone = false, double Explore = 0, bool VPrices = false)
+    LeafChoice Leaf, double MacroExplore, double CombatExplore, bool OnClone = false, double Explore = 0)
 {
     /// <summary>Whether it explores, which only self-play does.</summary>
     public bool Explores => MacroExplore > 0 || CombatExplore > 0 || Explore > 0;
@@ -43,7 +41,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         Random Rng(string stream) => new(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + stream)));
         var rng = Rng("");
         var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
-            : Policy == "plan" ? new PooledPlanner(pool).Route(Budget, Combat, VPrices ? run => PricedLeaf.Of(Value, run) : null)
+            : Policy == "plan" ? new PooledPlanner(pool).Route(Budget, Combat)
             : new PooledPimc(pool).Route(Budget, Combat);
         if (CombatExplore > 0) combat = combat.Exploring(new Softmax(CombatExplore, Rng(":explore combat")));
         var prompts = new Route<IChoicePolicy>("p0", PromptBrain.Instance);
@@ -60,9 +58,8 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         return dispatcher;
     };
 
-    /// <summary>The combat brain, pimc or plan by its leaf's names unless it is the default one, "v prices" if V prices its
-    /// leaves' ends, then its exploration if any.</summary>
-    private string Combat => Policy + Leaf.Suffix + (VPrices ? " v prices" : "") + Exploration(CombatExplore);
+    /// <summary>The combat brain, pimc or plan by its leaf's names unless it is the default one, then its exploration if any.</summary>
+    private string Combat => Policy + Leaf.Suffix + Exploration(CombatExplore);
 
     /// <summary>l0 by its V's name, unless V has the initial weights, then "clone" if it plays on the node's clone, then its exploration if any
     /// ("explore T" for a softmax, "eps ε" for even draws).</summary>
@@ -108,7 +105,6 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         if (CombatExplore > 0) options["combat-explore"] = CombatExplore.ToString(CultureInfo.InvariantCulture);
         if (Leaf.WeightsPath != null) options["leaf"] = Leaf.WeightsPath;
         if (Leaf.NetPath != null) options["combat-net"] = Leaf.NetPath;
-        if (VPrices) options["leaf-prices"] = "v";
         return options;
     }
 

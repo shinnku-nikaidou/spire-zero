@@ -46,7 +46,7 @@ internal static class Serve
                 id = request.Id;
                 var reply = request switch
                 {
-                    SlTurnRequest turn => new WorkerReply(id, null, null, [], SearchTurn(pump, turn.Prices is { } prices ? new SlPlanner(Priced(leaf, prices)) : planner, turn)),
+                    SlTurnRequest turn => new WorkerReply(id, null, null, [], SearchTurn(pump, planner, turn)),
                     SlMacroRequest macro => new WorkerReply(id, null, null, [], Afters: NodeProbe.After(pump, macro.Node, macro.Paths)),
                     _ => new WorkerReply(id, Search(pump, pimc, request), null, []),
                 };
@@ -91,10 +91,6 @@ internal static class Serve
                 throw new InvalidDataException($"no search for {request.GetType().Name}");
         }
     }
-
-    /// <summary>The leaf at V's prices: a combat net's, which the prices are for.</summary>
-    private static PricedLeaf Priced(ICombatLeaf leaf, EndPrices prices) =>
-        new(leaf as CombatNet ?? throw new InvalidOperationException("V's prices are for a combat net's endings: the worker has no --combat-net"), prices);
 
     /// <summary>The SL planner's turn from a state of the node's clone: the clone at the decision, then the path.</summary>
     private static TurnSearch SearchTurn(Pump pump, SlPlanner planner, SlTurnRequest r)

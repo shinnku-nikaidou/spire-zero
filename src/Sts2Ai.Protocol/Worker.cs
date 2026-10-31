@@ -50,18 +50,10 @@ public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<Comba
 /// reaches the state. The reply's <see cref="WorkerReply.Turn"/> holds the best ends of that turn: up to
 /// <see cref="Keep"/> states at the next turn's start, and the best end of the combat, each above <see cref="Floor"/>
 /// at best (the best whole line the planner holds), searched with <see cref="Nodes"/> nodes. <see cref="History"/> is
-/// the record of enemy moves up to the state, for the leaves. With <see cref="Prices"/>, the leaves price the combat's
-/// ends with them instead of the leaf weights.
+/// the record of enemy moves up to the state, for the leaves.
 /// </summary>
 public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep, double? Floor,
-    IReadOnlyList<EnemyTurns>? History = null, EndPrices? Prices = null) : WorkerRequest(Id);
-
-/// <summary>
-/// What a combat's ends are worth, from V at the combat's first plan (docs: combat-brain/leaf §5), in V's units: V of the
-/// run then (<see cref="Before"/>), and of a win, by the potions it keeps (<see cref="Hp"/>'s keys: a sorted subset of
-/// <see cref="Held"/>, comma-joined), by the HP it leaves, from 0, never lower for more HP. A death is worth nothing.
-/// </summary>
-public sealed record EndPrices(double Before, IReadOnlyDictionary<string, IReadOnlyList<double>> Hp, IReadOnlyList<string> Held);
+    IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
 
 /// <summary>
 /// L0's probes of a decision outside combat in a run (docs: macro-brain/search §6): <see cref="Node"/> loaded and replayed

@@ -218,9 +218,6 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
         .AcceptOnlyFromAmong("screen", "clone");
-    private readonly Option<string> _leafPrices = Opt.Of("--leaf-prices", "leaf",
-            "what the SL planner's leaves price a combat's end at: leaf, the leaf weights'; v, V's at the fight's start, for a --combat-net of target worth with a net --value (docs: combat-brain/leaf §5)")
-        .AcceptOnlyFromAmong("leaf", "v");
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
         "self-play only: l0 draws each answer by V's values, softmax at this temperature in V's units (0: the best)");
     private readonly Option<double> _combatExplore = Opt.Of("--combat-explore", 0.0,
@@ -231,7 +228,7 @@ internal sealed class ChampionArgs(bool file)
         "a card prompt's picks, every other screen's options but the potion belt's");
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, _afterstates, .. _leaf.Options, _leafPrices, _macroExplore,
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, _afterstates, .. _leaf.Options, _macroExplore,
         _combatExplore, _explore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
@@ -262,10 +259,7 @@ internal sealed class ChampionArgs(bool file)
         if (explore > 0 && macro != "l0") throw new CliException("--explore is l0's; it needs --macro l0");
         var leaf = _leaf.Read(r);
         if (!leaf.IsDefault && policy is not ("pimc" or "plan")) throw new CliException("--leaf and --combat-net value the search's leaves; they need --policy pimc or plan");
-        bool vPrices = r.GetValue(_leafPrices) == "v";
-        if (vPrices != (leaf.Net?.IsWorth == true) || (vPrices && (policy != "plan" || value is not RunNet)))
-            throw new CliException("--leaf-prices v and a --combat-net of target worth go together: they need --policy plan and a net --value");
         return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore, clone,
-            explore, vPrices);
+            explore);
     }
 }
