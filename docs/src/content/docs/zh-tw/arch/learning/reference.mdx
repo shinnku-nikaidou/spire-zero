@@ -147,7 +147,7 @@ flowchart LR
 
 ### `v.train`：V
 
-`uv run python -m v.train --list PREFIX --name NAME [options]`（`learn/v/train.py:163-193`）。
+`uv run python -m v.train --list PREFIX --name NAME [options]`（`learn/v/train.py:165-194`）。
 
 | 選項 | 預設 | 意義 |
 |---|---|---|
@@ -182,7 +182,7 @@ flowchart LR
 | `won_held_out_runs`、`brier_held_out`、`brier_held_out_floor_only` | 總是 | 留出對局中獲勝的局數，以及獲勝機率的 Brier 分數，對比基線的 |
 | `boss_sims`、`held_out_boss_sims`、`boss_worth`、`held_out_boss_loss`、`boss_decisions`、`boss_agree`、`boss_corr` | 頭目模擬戰 | 見下文 |
 | `doors`、`held_out_doors`、`held_out_door_loss`、`door_corr` | 門前狀態 | 見下文 |
-| `explore_decisions`、`explore_share_logs`、`explore_temperature` | 後狀態 | 留出的日誌決策、打出日誌的大腦探索的比例，以及讓這個 V 探索得一樣頻繁的溫度，依據 V 的值本身而不是對數，所以不是 `--macro-explore` 的值 |
+| `explore_decisions`、`explore_share_logs`、`explore_temperature` | 後狀態 | 留出的日誌決策、打出日誌的大腦探索的比例，以及讓這個 V 探索得一樣頻繁的 `--macro-explore` |
 
 ### `combat.train`：戰鬥網路
 
@@ -242,14 +242,14 @@ flowchart LR
 
 ## 11. 測試
 
-**Python**（在 `learn/` 裡 `uv run pytest`，7 個檔案共 64 個測試；`uv run ruff check`）：
+**Python**（在 `learn/` 裡 `uv run pytest`，7 個檔案共 67 個測試；`uv run ruff check`）：
 
 | 檔案 | 測試數 | 內容 |
 |---|---|---|
 | `test_common.py` | 9 | `read_lines` 跳過空行和不完整的行、讀每個檔案、找到 needle、檔案不存在時失敗；`wait_sims` 失敗時的日誌尾和成功；`runs_by_log` 配對日誌和記錄檔案、每份日誌一份記錄檔案、拒絕重複的對局 id 和別的角色 |
 | `test_weights.py` | 3 | 預設路徑；在角色資料夾裡從不替換；別處的明確路徑可以 |
 | `test_v_encode.py` | 6 | 可到達的地圖及前方層數，選路時要進入的點，在任何造訪之前和在頭目處；只用 id；state 的順序 |
-| `test_v_train.py` | 22 | 清單對；樣本和每局權重；保留整局觀測；拒絕頭目連戰試點和菁英連戰的對局；連戰對局的結束；`boss_worth`；門前狀態；頭目分數；從大腦名稱取溫度；風險值標籤和刪失；期望層數、獲勝機率；`explored`、`centred`；floor 和 win 網路的 ONNX 與 torch 對照；權重讀回；`--init` 保留表和縮放；網路檔案和它的報告；門的日誌只提供整局觀測；選路的樣本，以及 `--init` 下地圖表的增長 |
+| `test_v_train.py` | 25 | 清單對；樣本和每局權重；保留整局觀測；拒絕頭目連戰試點和菁英連戰的對局；連戰對局的結束；`boss_worth`；門前狀態；頭目分數；從大腦名稱取溫度；風險值標籤和刪失；期望層數、獲勝機率；`explored` 按對數抽取，V 多大都一樣，價值為 0 的抽不到；`centred`；floor 和 win 網路的 ONNX 與 torch 對照；權重讀回；`--init` 保留表和縮放；網路檔案和它的報告；門的日誌只提供整局觀測；選路的樣本，以及 `--init` 下地圖表的增長 |
 | `test_combat.py` | 11 | 卡牌詞元、縮放後的 state、意圖最新的在前、結局的桶、戰鬥後從觀測中消失的藥水、生命值排除掉的桶、勝利後持有藥水的藥水損失、帶歷史的回合開始樣本、拒絕另一個環境、ONNX 與 torch 對照、訓練寫出帶自己環境的網路檔案 |
 | `test_gauntlet.py` | 6 | 進度、頭目、菁英和死亡；按生命分的休息選擇和商店購買；按生命分的怪物或休息；整局按勝局和層數配對、按勝局晉級；連戰和整局從不配對；連戰按種子配對 |
 | `test_bosslab.py` | 7 | 有效的遺物和這一幕的生命比例；升級和附魔；每個決策用同樣的種子；門前的替換；門的任務；贏的分數高於輸；各生命等級的門前狀態 |

@@ -147,7 +147,7 @@ The figure opens the two net files, v7-1f.json and c7-2.json, field by field: si
 
 ### `v.train`: V
 
-`uv run python -m v.train --list PREFIX --name NAME [options]` (`learn/v/train.py:163-193`).
+`uv run python -m v.train --list PREFIX --name NAME [options]` (`learn/v/train.py:165-194`).
 
 | option | default | meaning |
 |---|---|---|
@@ -182,7 +182,7 @@ The figure opens the two net files, v7-1f.json and c7-2.json, field by field: si
 | `won_held_out_runs`, `brier_held_out`, `brier_held_out_floor_only` | always | the held-out runs won, and the Brier score of the chance to win, against the baseline's |
 | `boss_sims`, `held_out_boss_sims`, `boss_worth`, `held_out_boss_loss`, `boss_decisions`, `boss_agree`, `boss_corr` | boss sims | see below |
 | `doors`, `held_out_doors`, `held_out_door_loss`, `door_corr` | door states | see below |
-| `explore_decisions`, `explore_share_logs`, `explore_temperature` | afterstates | the held-out logged decisions, the share the logs' brains explored, and the temperature at which this V would explore as often, over V's own values and not their logs, so not a `--macro-explore` value |
+| `explore_decisions`, `explore_share_logs`, `explore_temperature` | afterstates | the held-out logged decisions, the share the logs' brains explored, and the `--macro-explore` at which this V would explore as often |
 
 ### `combat.train`: the combat net
 
@@ -242,14 +242,14 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 
 ## 11. Tests
 
-**Python** (`uv run pytest` in `learn/`, 64 tests in 7 files; `uv run ruff check`):
+**Python** (`uv run pytest` in `learn/`, 67 tests in 7 files; `uv run ruff check`):
 
 | file | tests | what |
 |---|---|---|
 | `test_common.py` | 9 | `read_lines` skips blank and partial lines, reads every file, finds the needle, fails on a missing file; `wait_sims`' failure tail and success; `runs_by_log` pairs logs and record files, one record file per log, refuses a run id twice and another character |
 | `test_weights.py` | 3 | the default path; never replaced in a character folder; an explicit path elsewhere may be |
 | `test_v_encode.py` | 6 | the reachable map with floors ahead, the point entered on a map move, before any visit and at the boss; ids only; the state's order |
-| `test_v_train.py` | 22 | list pairs; samples and per-run weights; views kept; the boss gauntlet pilot and the elite gauntlet's runs refused; a gauntlet run's end; `boss_worth`; door states; the boss score; the temperature from the brain name; hazard labels and censoring; the expected floor, the chance to win; `explored`, `centred`; ONNX against torch for floor and win nets; weights read back; `--init` keeps the tables and scaling; the net file and its report; door logs give views only; a map move's sample and the map table growing under `--init` |
+| `test_v_train.py` | 25 | list pairs; samples and per-run weights; views kept; the boss gauntlet pilot and the elite gauntlet's runs refused; a gauntlet run's end; `boss_worth`; door states; the boss score; the temperature from the brain name; hazard labels and censoring; the expected floor, the chance to win; `explored` by logs, at any scale of V, never what is worth nothing; `centred`; ONNX against torch for floor and win nets; weights read back; `--init` keeps the tables and scaling; the net file and its report; door logs give views only; a map move's sample and the map table growing under `--init` |
 | `test_combat.py` | 11 | card tokens, the scaled state, intents most recent first, the ending's buckets, potions gone from the view after the fight, buckets the HP rules out, the potion loss on held potions after wins, round-start samples with history, another environment refused, ONNX against torch, training writes a net file of its environment |
 | `test_gauntlet.py` | 6 | progress, bosses, elites and deaths; rest choices by HP and shop purchases; monster or rest by HP; whole runs pair on wins and floors and promote on wins; gauntlet and whole runs never paired; gauntlet pairing by seed |
 | `test_bosslab.py` | 7 | live relics and the act's HP share; upgrades and enchantments; the same seeds per decision; the door swap; door tasks; a win scores above a loss; door states at HP levels |
