@@ -1,0 +1,190 @@
+---
+title: The game
+description: 'Slay the Spire 2 as this project sees it: a run of three acts and 48 floors, the map and its rules, what each room offers with its odds and prices, how a combat works, the five characters and the Silent in detail, Ascension, the seed and its random streams, what a player can and cannot see, and why all this is hard for an AI.'
+sidebar:
+  label: The game
+---
+
+import RunTimeline from '../../../../components/book/RunTimeline.svelte';
+import ObservationExplorer from '../../../../components/book/ObservationExplorer.svelte';
+import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
+
+This project teaches a program to play **Slay the Spire 2** (STS2), a single-player deck-building roguelike, version v0.111.0. This page is for the reader who has never played it, or who wants the exact numbers: what a run is, what the player decides, what is random, and what is hidden. The rest of the book assumes it.
+
+Everything here was read in the game's own code, decompiled, and the game's text files. File references are relative to the decompiled tree `tmp/decompiled/sts2` (local), with the `MegaCrit.Sts2.Core.` prefix of the folder names left out: `Map/StandardActMap.cs` is `MegaCrit.Sts2.Core.Map/StandardActMap.cs`. Quoted game text is from the game's English localization.
+
+## 1. A run
+
+A **run** is one attempt to climb the Spire: three **acts**, each a map of rooms ending in a **boss**. The player picks a path through each map, room by room, fights, collects cards, relics and potions, and either beats the last boss or dies. A death ends the run: there is no saving a lost fight.
+
+- **The acts.** Act 1 is Overgrowth or Underdocks, act 2 is always Hive, act 3 is always Glory (`Models.Acts/Overgrowth.cs:49`, `Underdocks.cs:44`, `Hive.cs:49`, `Glory.cs:45`). The default list is Overgrowth, Hive, Glory; once Underdocks is unlocked, act 1 is a seeded pick between the two (`Models/ActModel.cs:538-565`).
+- **The floors.** A floor is one room. An act has its rooms plus two more floors, the Ancient's and the boss's (`Models/ActModel.cs:271-279`): Overgrowth and Underdocks have 15 rooms, Hive 14, Glory 13, so acts of 17, 16 and 15 floors and **48 floors** in all (`Models.Acts/Overgrowth.cs:47`, `Hive.cs:47`, `Glory.cs:43`).
+- **Each act starts with an Ancient**, a being that heals the player and offers a choice of three gifts: Neow in act 1; Orobas, Pael or Tezcatara in act 2; Nonupeipe, Tanx or Vakuu in act 3 (`Models.Acts/Overgrowth.cs:26`, `Hive.cs:24-29`, `Glory.cs:23-28`). Entering heals all missing HP (`Models/AncientEventModel.cs:170-191`), so each act starts at full health.
+- **Each act ends with a boss**, one of three per act: Vantom, Ceremonial Beast or The Kin in Overgrowth; The Insatiable, Knowledge Demon or Kaiser Crab in Hive; Queen, Test Subject or Aeonglass in Glory (`Models.Acts/Overgrowth.cs:19-24`, `Hive.cs:17-22`, `Glory.cs:16-21`). The act's boss is known from the start: the map shows it.
+- **Winning.** After the last boss, the player meets The Architect, a dialogue that ends the run as won (`Runs/RunManager.cs:1308-1342`). The last boss gives no rewards (`Rewards/RewardsSet.cs:88-91`). So a won run ends on floor 48.
+- **Losing.** The run is over when the player's creature is dead (`Runs/RunState.cs:190-198`); abandoning a run counts as a death.
+
+The book follows one run throughout: a Silent run on seed `0SSL7NS01MU6`, won on floor 48 by the SL champion, the run the [macro brain chapter](/en/arch/macro-brain/) follows. Here it is floor by floor:
+
+<RunTimeline client:visible lang="en" />
+
+It fought 28 combats (23 monsters, 2 elites, 3 bosses), rested 7 times (4 upgrades, 3 heals), entered 5 `?` points (4 events, 1 shop), 2 more shops and 3 treasure rooms, and took 848 decisions, 631 of them in combat.
+
+## 2. The map
+
+Each act's map is built when the act starts, and the player sees all of it at once: every point's type, and the boss at the top (`Runs/RunManager.cs:799`, `1378-1390`).
+
+- **The grid** is 7 columns wide, with the act's rooms on rows 1 to the act's room count (`Map/StandardActMap.cs:19`, `89-91`). The Ancient sits alone at row 0, column 3; the boss one row past the last room row, column 3 (`:94-95`, `:301-302`).
+- **The paths.** Seven walks start from random columns of row 1 (the second must differ from the first) and climb one row at a time, each step to the column left, the same or right, never crossing another path (`:145-218`). Every point of the last row leads to the boss, and the Ancient to every point of row 1 (`:222-233`).
+- **Fixed rows**: row 1 is all monsters; the last room row, just before the boss, all rest sites; one row in the middle (row 9 in act 1, 8 in act 2, 7 in act 3) all treasure (`:248-275`).
+- **The other points** are dealt from a bag: 5 elites, 3 shops, 10 to 14 unknowns (`?`, one fewer in acts 2 and 3) and 5 to 7 rest sites, the rest becoming monsters (`Map/MapPointTypeCounts.cs:14-32`; `Models.Acts/Overgrowth.cs:136`, `Hive.cs:119-120`, `Glory.cs:108-109`). The rules: no elite or rest site on rows 1–5; no rest site in the last three room rows except the fixed row; an elite, rest site, treasure or shop never directly after or before the same type; two points with the same parent never share a type among rest site, monster, unknown, elite and shop (`Map/StandardActMap.cs:405-485`). Duplicate path segments are then pruned (`Map/MapPathPruning.cs:11-43`).
+- **Its randomness** is a stream of its own per act, `act_N_map` (`Map/StandardActMap.cs:113`).
+
+The example run's maps had 62, 60 and 58 points; in Glory 23 monsters, 12 unknowns, 8 rest sites, 5 elites, 5 treasures and 3 shops, besides its Ancient and boss. [Output §3](/en/arch/output/#sec-3) draws that map with the route the brain chose on floor 43.
+
+## 3. Rooms
+
+A map point's type is the room's, except an unknown (`?`), which is rolled when the player enters it, and the Ancient's, which is an event room (`Runs/RunManager.cs:958`, `976-995`).
+
+**Combats** (monster, elite, boss). The encounters of each act are rolled when the run starts, as lists the act then takes in order: a few weak fights first (3 in act 1, 2 in acts 2 and 3), then regular ones, elites from their own list, and one boss, never the same encounter tag twice in a row (`Models/ActModel.cs:331-386`, `419-430`; `Rooms/RoomSet.cs:70-86`). A won combat gives a rewards screen (`Rewards/RewardsSet.cs:206-246`):
+
+| room | gold | potion | cards | relic |
+|---|---|---|---|---|
+| monster | 10–20 | a roll | choose 1 of 3, or skip | |
+| elite | 35–45 | a roll, 12.5 points likelier | choose 1 of 3, or skip | one |
+| boss | 100 | a roll | choose 1 of 3, all rare | |
+
+- **Potion rolls** start at 40%; each roll lowers the chance by 10 points if a potion came and raises it by 10 if not (`Odds/PotionRewardOdds.cs:19-71`).
+- **Card rarity** in a regular fight: rare 3% plus an offset, uncommon 37%, else common; in an elite fight rare 10% plus the offset, uncommon 40%. The offset starts at −5 points, grows a point with each non-rare card shown, up to +40, and goes back to −5 after a rare (`Odds/CardRarityOdds.cs:13-81`, `140-167`). In acts 2 and 3, each non-rare reward card is upgraded with chance 25% and 50% (`Factories/CardFactory.cs:97-102`, `288-305`).
+- **Relics** come from decks per rarity, shuffled when the run starts, and never repeat in a run; a relic's rarity is common, uncommon or rare with chance 50, 33 and 17% (`Factories/RelicFactory.cs:36-50`, `85-94`).
+
+**Rest site.** One option per visit: **Rest**, heal 30% of max HP, or **Smith**, upgrade one card (`Entities.RestSite/HealRestSiteOption.cs:90-93`, `SmithRestSiteOption.cs:29`, `58-69`). Some relics and cards add options: Train, Dig, Cook, Kindle, Clone, Hatch.
+
+**Shop** (the merchant). Stock is made when the player enters (`Rooms/MerchantRoom.cs:61`): 5 of the character's cards (2 attacks, 2 skills, 1 power, one of the five at half price), 2 colorless cards, 3 relics, 3 potions, and a card removal (`Entities.Merchant/MerchantInventory.cs:15-148`).
+
+| item | base price | varied by |
+|---|---|---|
+| card | common 50, uncommon 75, rare 150; colorless × 1.15 | × 0.95–1.05 |
+| relic | common 175, uncommon 225, rare 275, shop 200 | × 0.85–1.15 |
+| potion | common 50, uncommon 75, rare 100 | × 0.95–1.05 |
+| card removal | 75, plus 25 for each removal already bought this run | |
+
+(`Entities.Merchant/MerchantCardEntry.cs:38-50`, `MerchantRelicEntry.cs:42-45`, `MerchantPotionEntry.cs:50-71`, `MerchantCardRemovalEntry.cs:20-33`; `Models/RelicModel.cs:304-315`.)
+
+**Treasure.** 42–52 gold and one relic (`Multiplayer.Game/OneOffSynchronizer.cs:127-140`, `TreasureRoomRelicSynchronizer.cs:89-108`).
+
+**Unknown (`?`).** Rolled on entry: a monster fight (10%), a treasure (2%), a shop (3%), else an event; never an elite. After each roll the rolled type's chance goes back to its base and every other type's grows by its base again, so the longer a `?` brings no fight, the likelier the next one does; an event changes nothing. The odds start again at each act (`Odds/UnknownMapPointOdds.cs:21-35`, `159-189`).
+
+**Events.** Each act has its own events plus 18 shared ones, shuffled per act when the run starts; an event is never seen twice in a run (`Models/ModelDb.cs:157-177`; `Models/ActModel.cs:334-347`; `Rooms/RoomSet.cs:110-125`). Each event draws from a random stream of its own (`Models/EventModel.cs:234`).
+
+**The Crystal Sphere**, a shared event of acts 2 and 3 for a player with at least 100 gold, is a minigame: pay gold for 3 divinations or take a curse for 6, then uncover cells of an 11 × 11 fogged grid that hides a relic, potions, card rewards, gold and a curse; an item is won when all its cells are clear (`Models.Events/CrystalSphere.cs:24-81`; `Events.Custom.CrystalSphereEvent/CrystalSphereMinigame.cs`). It is a decision screen of its own in this project.
+
+## 4. Combat
+
+A combat alternates the player's turn and the enemies' turn.
+
+- **The player's turn** starts with energy reset to the maximum, 3, and 5 cards drawn; unused energy is lost (`Combat/CombatManager.cs:880-926`; `Models/CharacterModel.cs:97`). The player plays cards and potions in any order while energy lasts, then ends the turn.
+- **Intents.** Each enemy's next move is rolled at the start of the player's turn, and shown above it: attack for how much and how many times, block, buff, debuff, and so on (`Combat/CombatManager.cs:739-745`; `MonsterMoves.Intents/IntentType.cs:3-20`). So the player always sees what each enemy is about to do, but not what it will do after that. Moves come from each monster's state machine, with weighted random branches (`MonsterMoves.MonsterMoveStateMachine/RandomBranchState.cs:23-115`).
+- **The piles.** The deck is copied into the draw pile at each combat start and shuffled. Cards go from the draw pile to the hand, then to the discard pile, or to the exhaust pile ("removed until the end of combat"). When a draw needs a card and the draw pile is empty, the discard pile is shuffled into it (`Entities.Cards/PileType.cs:7-37`; `Commands/CardPileCmd.cs:1073-1086`, `1186-1195`). The hand holds at most 10 cards (`Entities.Cards/CardPile.cs:21`). At the turn's end the hand is discarded, except cards that retain.
+- **HP and block.** Block absorbs damage until the owner's next turn. HP carries over from combat to combat for the whole run: healing comes only from rest sites, Ancients, relics and a few cards (`Entities.Creatures/Creature.cs:686-733`).
+- **Powers** are lasting effects with stacks: Strength adds attack damage, Dexterity adds block, Vulnerable takes 50% more attack damage, Weak deals 25% less, Frail gains 25% less block, Poison loses HP equal to its stacks at its owner's turn start and then drops by one (`Models.Powers/StrengthPower.cs`, `VulnerablePower.cs:19-28`, `WeakPower.cs:19-25`, `PoisonPower.cs:55-79`). The game has 268 of them.
+
+**Cards** are attacks, skills, powers (a lasting effect for the combat), statuses and curses (clutter), and quests. Their keywords change how they move between piles (`Entities.Cards/CardKeyword.cs:18-27`):
+
+| keyword | game text |
+|---|---|
+| Exhaust | "Removed until the end of combat." |
+| Ethereal | "If this card is in your Hand at the end of this turn, it is Exhausted." |
+| Innate | "Start each combat with this card in your Hand." |
+| Retain | not discarded at the end of turn |
+| Sly | "If this card is discarded from your Hand before the end of your turn, play it for free." |
+| Unplayable | cannot be played |
+| Eternal | "Cannot be removed or transformed from your Deck." |
+
+A card can be **upgraded** once (`Models/CardModel.cs:782-795`), carry one **enchantment** (Sharp adds damage, Nimble block, and so on), and in a combat receive **afflictions** from enemies (Bound, Entangled, Galvanized, Hexed) (`Models/CardModel.cs:632-634`). Some cards cost X: all the energy left.
+
+**Potions**: 3 slots. Most can be used only in combat; a few at any time, and Fairy in a Bottle by itself (`Entities.Players/Player.cs:307`; `Entities.Potions/PotionUsage.cs`).
+
+This is a real round start as the AI sees it ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)): the hand, the piles' sizes, the enemies with their HP, intents and powers.
+
+<ObservationExplorer client:visible lang="en" />
+
+## 5. Characters
+
+Five characters can be played, each with its own card pool and starting relic; all start with 99 gold, 3 potion slots and 3 energy (`Models/ModelDb.cs:145-152`):
+
+| character | HP | starting deck | starting relic | plays with |
+|---|---|---|---|---|
+| Ironclad | 80 | 5 Strike, 4 Defend, Bash | Burning Blood: heal 6 at the end of combat | Strength, Vulnerable, self-healing |
+| Silent | 70 | 5 Strike, 5 Defend, Neutralize, Survivor | Ring of the Snake: draw 2 more cards at the start of each combat | Poison, Shivs, discards and Sly |
+| Regent | 75 | 4 Strike, 4 Defend, Falling Star, Venerate | Divine Right: gain 3 Stars at the start of each combat | Stars, a second resource; Forge and the Sovereign Blade |
+| Necrobinder | 66 | 4 Strike, 4 Defend, Bodyguard, Unleash | Bound Phylactery: Summon 1 at the start of your turn | Osty, a summoned ally |
+| Defect | 75 | 4 Strike, 4 Defend, Zap, Dualcast | Cracked Core: Channel 1 Lightning at the start of each combat | orbs: Lightning, Frost, Dark, Plasma, Glass |
+
+(`Models.Characters/Ironclad.cs:33-57`, `Silent.cs:34-60`, `Regent.cs:32-58`, `Necrobinder.cs:32-62`, `Defect.cs:27-63`.)
+
+**The Silent** is the character this project trains first. Her pool has 91 cards (27 attacks, 46 skills, 18 powers). Her starting cards: Strike (1 energy, deal 6), Defend (1, gain 5 block), Neutralize (0, deal 3 and apply 1 Weak), Survivor (1, gain 8 block, then discard a card) (`Models.Cards/StrikeSilent.cs:19-39`, `DefendSilent.cs:17-31`, `Neutralize.cs:23-52`, `Survivor.cs:17-36`). Her themes are poison, Shivs (0-cost attacks that deal 4 and exhaust) and discarding, which plays Sly cards for free.
+
+## 6. Ascension
+
+Ascension levels 1–10 make a run harder, each including the ones below (`Entities.Ascension/AscensionManager.cs:15`, `45-48`). This project plays at level 0 so far.
+
+| level | name | effect |
+|---|---|---|
+| 1 | Swarming Elites | 8 elites per map instead of 5 |
+| 2 | Weary Traveler | Ancients heal only 80% of missing HP |
+| 3 | Poverty | 25% less gold from enemies and chests |
+| 4 | Tight Belt | one potion slot less |
+| 5 | Ascender's Bane | every run starts with an unremovable curse |
+| 6 | Inflation | card removal costs 100, plus 50 per removal |
+| 7 | Scarcity | rare and upgraded cards appear less often |
+| 8 | Tough Enemies | enemies have more HP |
+| 9 | Deadly Enemies | enemies hit harder |
+| 10 | Double Boss | two bosses at the end of act 3 |
+
+(The game's `ascension.json`; `Map/MapPointTypeCounts.cs:14`; `Models/AncientEventModel.cs:180-183`; `Runs/RunManager.cs:761-765`.)
+
+## 7. Randomness, and what the player sees
+
+**The seed.** A run's seed is a 12-character string of digits and capital letters without O and I, such as `0SSL7NS01MU6` (`Helpers/SeedHelper.cs:8-33`). It is hashed to a number, and every random stream of the run is seeded from it and the stream's name (`Runs/RunRngSet.cs:104-143`). Each stream is a counter: the n-th draw of a stream is fixed by the seed. So a run is a fixed function of its seed and the player's choices, which is what lets the simulator replay it exactly ([Simulator: whole runs §6](/en/arch/simulator/runs/#sec-6)).
+
+**The streams** (`Entities.Rngs/RunRngType.cs:3-17`):
+
+| stream | decides |
+|---|---|
+| UpFront | everything rolled when the run starts: each act's fights, elites, events, boss and Ancient, and the relic decks |
+| Shuffle | the draw pile's order at each combat start and reshuffle |
+| UnknownMapPoint | what a `?` becomes |
+| MonsterAi | the monsters' moves, wherever chance is involved |
+| CombatCardGeneration, CombatPotionGeneration, CombatCardSelection, CombatEnergyCosts, CombatTargets, CombatOrbs | cards and potions made in combat, random picks, costs, targets and orbs |
+| Niche | one-off rolls, such as a monster's starting HP |
+| TreasureRoomRelics | a chest relic's rarity |
+
+Besides these, each player has streams for rewards, shops and transformations (`Entities.Rngs/PlayerRngType.cs:3-8`), each map and each event has its own (`Map/StandardActMap.cs:113`; `Models/EventModel.cs:234`), and the odds for card rarity, potions and `?` points carry over from roll to roll.
+
+**What a player sees, and what is hidden:**
+
+| visible | hidden |
+|---|---|
+| the act's whole map, every point's type, its boss | what a `?` becomes, until entered |
+| each enemy's intent for its next move | its later moves |
+| HP, block and powers of every creature | |
+| what is in the draw, discard and exhaust piles | the draw pile's order (the game's pile view is sorted) |
+| | which fight, elite or event comes next |
+| | rewards until the rewards screen; a shop's stock until entered |
+| | the Crystal Sphere's items under the fog |
+
+(`Nodes.Screens/NCardPileScreen.cs:222-228`; `Runs/RunManager.cs:907-916`; `Rooms/RoomSet.cs:70-86`.) Because everything hidden is already fixed by the seed, a program that can save and reload the game could look at it. Which of it the AI may use is the subject of [Environments](/en/arch/environments/): NoSL sees only what a player sees; SL may replay the room it is in.
+
+## 8. Why it is hard for an AI
+
+- **A long horizon.** A run takes about 555 decisions on average (166,527 decisions in 300 SL runs of the champion), the example run 848. A card taken on floor 2 still matters on floor 48, and a fight's HP loss carries to every later fight.
+- **Hidden information and chance**: the draw order, what a `?` holds, what comes next, the enemies' later moves ([§7](#sec-7)).
+- **Large, changing action sets**: a turn can play the cards in hand (up to 10) and potions in any order, each on any of its targets; a shop offers about 13 items and a removal; card prompts arrive in the middle of a card's play.
+- **One death ends the run.** HP is a resource spent across 28 or so fights, and every rest site trades healing against an upgrade.
+
+Where the decisions are, in the 300 runs of the SL champion's report:
+
+<SurfaceCounts client:visible lang="en" />
+
+Combat is 71% of all decisions; every other screen is a decision of the [macro brain](/en/arch/macro-brain/). How the AI splits them, and why it plays a real copy of the game rather than a model of it, is in [the introduction](/en/) and [Simulator](/en/arch/simulator/).

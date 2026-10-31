@@ -23,7 +23,7 @@ Exists: the headless host ([Headless host](/en/arch/simulator/headless/)); singl
 
 Every rule of Slay the Spire 2 lives in the game's C# code: hundreds of cards, relics, powers, monsters and events, each with its own hooks into the turn, the draw, the damage. A rewrite of those rules would be a second game that has to agree with the first in every detail, and would drift whenever the game is patched. A search that plans in a slightly wrong game plays slightly wrong moves in the real one.
 
-So the project's fourth constraint is that the simulator *is* the real `sts2.dll` ([Introduction §1](/en/#sec-1)). The game version is pinned at v0.111.0. What the project adds is a harness around it: a stub that stands in for the engine, patches that switch off presentation and keep the rules intact, and a driver that plays the part of the screens.
+So the project's fourth constraint is that the simulator *is* the real `sts2.dll` ([Introduction §2](/en/#sec-2)). The game version is pinned at v0.111.0. What the project adds is a harness around it: a stub that stands in for the engine, patches that switch off presentation and keep the rules intact, and a driver that plays the part of the screens.
 
 Two facts about the game shaped everything else:
 

@@ -1,101 +1,133 @@
 ---
-title: 术语表
-description: 本手册中游戏、项目、搜索、学习和评估相关术语的简短解释。
+title: 词汇表
+description: '本书用到的每个术语，按领域分组，每个都附有简短解释和指向详细介绍它的页面的链接；以及名称索引：网络、种子集、冠军文件、文件夹和命令。'
 ---
 
-术语按领域分组。每个条目都链接到详细介绍它的页面。
+术语按领域分组；每个条目都链接到深入介绍它的页面。最后一节是名称索引：本书提到的网络、种子集、文件和文件夹。
 
-## 游戏术语
-
-| 术语 | 英文 | 含义 |
-|---|---|---|
-| 一局 | run | 从开局（Neow）到胜利或死亡的一次完整游玩。 |
-| 幕、层数 | act, floor | 一局分为若干幕，每幕有自己的地图和 Boss。层数是总层数，与顶栏显示的一致。 |
-| 地图点、`?` | map point | 幕地图上的一个点：战斗、精英、休息处、商店、宝箱、事件，或 `?`（进入前未知，到达时游戏才掷骰决定它是什么）。 |
-| 遭遇、意图 | encounter, intent | 遭遇是一场战斗里的怪物组合。意图是怪物头上表示下一步打算的图标（攻击及伤害、格挡、增益……）。 |
-| 抽牌堆 / 弃牌堆 / 消耗堆 | draw / discard / exhaust pile | 战斗中卡牌所在的位置。抽牌堆的顺序对玩家是隐藏的。 |
-| 遗物、药水、能力 | relic, potion, power | 遗物是永久道具；药水是放在药水栏格子里的一次性道具；能力是生物身上持续的效果（如力量）。 |
-| Ancient 事件（Neow） | Ancient | 提供若干恩赐供选择的特殊事件。每局都以 Neow 开始。 |
-| 进阶等级（A0） | ascension | 难度等级；A0 是基础难度。 |
-| Silent（静默猎手）、Ironclad（铁甲战士） | | 可玩角色。项目从 Silent 开始。 |
-| 选牌提示 | card prompt | 游戏要求玩家选牌的时刻（弃牌、消耗、升级、变化……）。 |
-| TestMode | | 游戏自带的测试开关。它会关掉表现层，但也会改变少数规则，模拟器用补丁把这些规则改回来（[模拟器：无头宿主 §5](/arch/simulator/headless/#sec-5)）。 |
-
-## 项目组件
+## 1. 游戏
 
 | 术语 | 含义 |
 |---|---|
-| Protocol | 所有进程共享的通信类型。只有游戏 UI 显示的内容才能成为字段（[协议](/arch/protocol/)）。 |
-| GameBridge | 唯一负责把游戏对象转成协议观测、把协议动作转成游戏调用的代码（[GameBridge](/arch/gamebridge/)）。 |
+| 一局（run） | 一次完整的游玩，从先古之民涅奥开始，到打败最后一个 Boss 或玩家死亡为止（[游戏 §1](/arch/game/#sec-1)）。 |
+| 幕（act）、层（floor） | 一局有三幕，每幕是一张以 Boss 结尾的地图。一层是一个房间；赢下的一局结束在第 48 层（[游戏 §1](/arch/game/#sec-1)）。 |
+| 地图点（map point）、`?` | 一幕地图上的一个点：怪物、精英、休息处、商店、宝箱、未知（`?`）、先古之民或 Boss。`?` 在玩家进入时才掷成事件、战斗、商店或宝箱（[游戏 §2](/arch/game/#sec-2)、[§3](/arch/game/#sec-3)）。 |
+| 房间（room） | 地图点进入之后里面的东西：一场战斗、一个事件、一个休息处、一个商店、一个宝箱。 |
+| 遭遇（encounter）、意图（intent） | 遭遇是一场战斗的怪物组合。意图是怪物显示的它下一步要做的事：攻击及其伤害、格挡、增益……（[游戏 §4](/arch/game/#sec-4)）。 |
+| 抽牌堆 / 弃牌堆 / 消耗牌堆（draw / discard / exhaust pile） | 战斗中卡牌所去的地方。抽牌堆的顺序对玩家隐藏。 |
+| 遗物（relic）、药水（potion）、能力（power） | 遗物是永久的道具；药水是放在栏位里（药水栏）的一次性道具；能力是生物身上的持续效果，例如力量或中毒。 |
+| 附魔（enchantment）、苦痛（affliction） | 卡牌上的持久修饰（锋利、灵巧……）；敌人加在卡牌上、只在战斗中有效的负面修饰（魂缚、缠身……）。 |
+| Sly | 一个卡牌关键词：Sly 牌在回合结束前从手牌中被弃掉时，会被免费打出。 |
+| 先古之民（Ancient） | 每一幕开头的存在，会治疗玩家并提供三份礼物：第 1 幕是涅奥。 |
+| 进阶（Ascension，A0） | 难度等级 1–10；A0 是基础游戏（[游戏 §6](/arch/game/#sec-6)）。 |
+| 静默猎手（Silent） | 这个项目最先训练的角色（[游戏 §5](/arch/game/#sec-5)）。 |
+| 选牌提示（card prompt） | 游戏要求玩家选牌：弃牌、消耗、升级、变化……（[协议：观测与动作 §6](/arch/protocol/observation/#sec-6)）。 |
+| 种子（seed）、随机数流（random stream） | 一局的 12 位种子决定每一条随机数流（洗牌、`?` 的掷骰、怪物招式……），所以一局是它的种子和选择的确定函数（[游戏 §7](/arch/game/#sec-7)）。 |
+| TestMode | 游戏自带的测试开关。它关掉表现层，但也改变少数规则，模拟器用补丁把它们改回来（[模拟器：无头宿主 §5](/arch/simulator/headless/#sec-5)）。 |
+
+## 2. 项目组件
+
+| 术语 | 含义 |
+|---|---|
+| Protocol | 每个进程共享的类型：消息和观测。只有玩家能看到的东西才能成为字段（[协议](/arch/protocol/)）。 |
+| GameBridge | 唯一把游戏对象变成观测、把动作变成游戏调用的代码：observe、legal、start（[GameBridge](/arch/gamebridge/)）。 |
 | Brain | 策略：战斗大脑和宏观大脑。只引用 Protocol，从不引用游戏。 |
-| SimWorker | 以无头方式运行真实游戏 DLL 的进程，用于搜索世界和自我对弈（[模拟器](/arch/simulator/)）。 |
-| Mod | 真实游戏里的轻量宿主：观测、提问、显示或执行（[Mod](/arch/mod/)）。 |
-| Harness | 决策进程里的调度器：记录、路由、预算、日志（[Harness](/arch/harness/)）。 |
-| RunSession | SimWorker 里的类，以无头方式经过所有决策界面跑完整局（[模拟器：整局 §1](/arch/simulator/runs/#sec-1)）。 |
+| Harness | 宿主和大脑之间的库：每一局的调度器、大脑服务器、工作进程池、对局记录、报告和晋级门槛（[Harness](/arch/harness/)）。 |
+| 调度器（dispatcher） | 一局的 `Dispatcher`：把每个决策路由给一个大脑，保存这一局显示过的东西，抽取种子，检查答案并记入日志（[Harness §2](/arch/harness/#sec-2)）。 |
+| 大脑服务器（brain server）、`brain` | Harness 在线路上的那一端，也是为 Mod 和 `run --brain` 单独运行它的 SimWorker 命令（[Harness §5](/arch/harness/#sec-5)）。 |
+| SimWorker | 以无头方式运行真实游戏 DLL 的程序：战斗、整局、大脑、worker、评估（[模拟器](/arch/simulator/)）。 |
+| 工作进程（worker）、工作进程池（worker pool）、`serve` | 一个通过 JSON 行回答搜索请求的 SimWorker 进程；工作进程池负责启动和重启它们（[模拟器：工作进程池](/arch/simulator/pool/)）。 |
+| Mod | 真实游戏里的宿主：读取屏幕上的决策，询问大脑，显示答案（[Mod](/arch/mod/)）。 |
+| 辅助模式（assist mode）、面板（panel）、标记（marks） | Mod 目前的模式：玩家自己打，面板显示答案，标记在地图上画出路线、在战斗中画出计划的序号（[输出](/arch/output/)）。 |
+| RunSession | SimWorker 里的类，以无头方式经过每个决策画面打完整局（[模拟器：整局 §1](/arch/simulator/runs/#sec-1)）。 |
 | CombatBuilder | 根据一个观测构建模拟器里的战斗（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。 |
-| Pump | 单线程调度器，让游戏的所有异步代码都在同一个线程上运行，从而保证结果确定。 |
-| 宿主（host） | 持有真实这一局的那一方：真实游戏里是 Mod，自我对弈时是一个 SimWorker。 |
-| 无头（headless） | 只运行游戏逻辑，没有画面、窗口和输入。 |
+| Pump | 单线程调度器，在一个线程上、按同一种顺序运行游戏的所有异步代码，从而让结果确定（[模拟器：无头宿主 §7](/arch/simulator/headless/#sec-7)）。 |
+| 宿主（host） | 持有真实这一局并询问大脑的一方：真实游戏里是 Mod，自我对弈时是一个 SimWorker。 |
+| 无头（headless） | 只运行游戏的逻辑，没有画面、窗口和输入。 |
 
-## 环境与信息
+## 3. 环境与信息
 
-| 术语 | 英文 | 含义 |
-|---|---|---|
-| NoSL | | 只用公开信息的环境（[环境：信息与节点 §1](/arch/environments/information/#sec-1)）。 |
-| SL | | NoSL 加上当前节点内的真实结果，相当于允许在节点内存档读档。 |
-| 节点 | node | 在 SL 中指一个地图点，从到达开始，到离开它的移动动作为止（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。不要与 Godot 的 UI 节点（`N*` 类）混淆。 |
-| 公开历史、公开记录 | public history / record | 到目前为止屏幕上显示过的一切，加上能从中推断出的信息。Harness 把它保存为公开记录。 |
-| 确定化 | determinization | 抽取一个与公开历史一致的具体隐藏状态（抽牌顺序、怪物动作、随机数流）。 |
-| 世界 | world | 搜索可以探索的模拟器状态：NoSL 中是采样世界，SL 中是精确的节点克隆。 |
-| 克隆、检查点、封存 | clone, checkpoint, seal | SL 的世界由节点入口处的检查点加上之后的动作构建。世界在节点出口处封存：之后的动作会抛异常。 |
-| 视野边界 | horizon | 从 SL 世界内部看到的节点出口（`AtHorizon`）。 |
-| 白名单 | whitelist | 观测字段只有在 UI 显示时才能存在的规则；每个字段都有测试。 |
-| 公平规则 | fair play | AI 能看什么、能做什么的规则，汇总在本地笔记 `fair-play-spec.md` 里。 |
+| 术语 | 含义 |
+|---|---|
+| NoSL | 只有公开信息的环境（[环境：信息与节点 §1](/arch/environments/information/#sec-1)）。 |
+| SL | NoSL 加上当前节点里的真实结果，就好像在那里允许存档和读档（[环境：信息与节点 §2](/arch/environments/information/#sec-2)）。 |
+| 节点（node） | 在 SL 中指一个地图点，从到达开始，到离开它的那次移动为止（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。不要与 Godot 的 UI 节点（`N*` 类）混淆。 |
+| 公开历史（public history）、敌人出招记录（record of enemy moves） | 到目前为止显示过的一切。Harness 保存搜索需要的部分：每个敌人每一回合的意图（[Harness §4](/arch/harness/#sec-4)）。 |
+| 确定化（determinization） | 抽取一个与公开历史一致的具体隐藏状态（抽牌顺序、怪物招式、随机数流）（[环境：世界 §2](/arch/environments/worlds/#sec-2)）。 |
+| 世界（world） | 搜索可以探索的模拟器状态：NoSL 中是一个抽样的世界，SL 中是精确的节点克隆（[模拟器：世界与 SL 克隆 §1](/arch/simulator/worlds/#sec-1)）。 |
+| 检查点（checkpoint）、克隆（clone）、封存（seal） | SL 的世界是节点的检查点（到达时取下），再重播这个节点的各个步骤：这就是它的克隆。克隆在节点出口处封存：再走一步就会抛出异常（[模拟器：世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)–[§5](/arch/simulator/worlds/#sec-5)）。 |
+| 视野边界（horizon） | 从 SL 世界内部看到的节点出口（`AtHorizon`）。 |
+| SL 记录（SL record） | Mod 为了让大脑能在真实游戏里克隆节点而保存的东西：检查点和每一步，在游戏提交它的地方读取（[Mod：SL 记录](/arch/mod/sl-record/)）。 |
+| 白名单（whitelist） | 观测字段只有在游戏显示它时才存在的规则；每个字段都有一个测试（[协议 §3](/arch/protocol/#sec-3)）。 |
 
-## 决策与搜索
+## 4. 决策与搜索
 
-| 术语 | 英文 | 含义 |
-|---|---|---|
-| 决策界面 | surface | 决策画面的种类（战斗、地图、奖励、商店……）。界面名称决定一个决策交给哪个大脑（[协议：观测与动作 §5](/arch/protocol/observation/#sec-5)）。 |
-| 决策点 | decision point | 游戏在等玩家操作、可以提出下一个决策的时刻。 |
-| 观测 | observation | 玩家在决策点能看到的内容，用协议类型表示。 |
-| 合法动作 | legal actions | 玩家此刻能做的所有动作，写成文本，如 `play:C:T` 或 `map:col,row`。 |
-| uid | | 手牌中的卡牌或战斗中生物的稳定编号，动作用它来指明对象。 |
-| 推荐、事实 | recommendation, fact | 大脑的回答：一个动作、背后的计划、比较过的候选，以及用来生成解释的事实（数字）。 |
-| 兜底 | fallback | 没有大脑负责某个决策时随便选一个（比如随机）。禁止这样做：游戏改为暂停。 |
-| 分支、推演 | branch, rollout | 分支是在某个世界里尝试的一条动作序列。推演是从那里用快速策略继续往下玩，以估计结果。 |
-| 完美信息蒙特卡洛 | PIMC | 采样若干个确定化世界，在每个世界里假装一切已知去搜索，然后取平均（[NoSL PIMC §2](/arch/pimc/#sec-2)）。 |
-| 策略融合 | strategy fusion | 在每个采样世界里各自挑最优路线的错误，好像玩家知道哪个世界是真的。按第一步动作取平均可以避免它。 |
-| ISMCTS | | 信息集蒙特卡洛树搜索：如果 PIMC 残留的融合误差确实造成问题，就改用它。 |
-| 分支定界 | branch-and-bound | 保留目前找到的最好路线，丢掉上界比不过它的分支；达到上界的路线就被证明是最优的。SL 战斗规划器用它来剪自己的束（[SL 规划器：束搜索 §2](/arch/sl-planner/beam/#sec-2)）。 |
-| 束搜索 | beam search | 每一步只保留最好的 B 个状态，只展开它们。SL 规划器的一步是一个回合：它保留最好的 B 个回合结束状态（[SL 规划器：束搜索 §1](/arch/sl-planner/beam/#sec-1)）。 |
-| 后状态 | afterstate | 刚做完选择、新的随机结果出现之前的状态。宏观大脑用后状态给选项估值（[宏观大脑：后状态 §1](/arch/macro-brain/afterstates/#sec-1)）。 |
-| L0、L1 | | 宏观大脑的两个层级：L0 用 V 给每个后状态估值；L1 对难分高下的选择用成对推演复核。 |
-| 预算 | budget | 一次决策能用多少搜索：固定的分支数（可复现）或墙钟时间（[Harness：路由、预算与种子 §4](/arch/harness/routing/#sec-4)）。 |
+| 术语 | 含义 |
+|---|---|
+| 决策界面（surface） | 决策画面的一种：战斗、地图、奖励、商店、选牌提示……决策界面决定一个决策交给哪个大脑（[协议：观测与动作 §5](/arch/protocol/observation/#sec-5)）。 |
+| 决策点（decision point）、空闲（idle） | 游戏在等玩家、可以询问下一个决策的时刻；在真实游戏里，就是一个已经静止了 3 帧的画面（[Mod：主循环 §4](/arch/mod/loop/#sec-4)）。 |
+| 观测（observation） | 玩家在决策点能看到的东西，用协议类型表示（[协议：观测与动作](/arch/protocol/observation/)）。 |
+| 合法动作（legal actions） | 玩家此刻能做的每一个动作，写成文本，例如 `play:C:T` 或 `map:col,row`。 |
+| uid | 战斗中一张牌或一个生物的稳定编号，动作用它来指明对象。 |
+| 推荐（recommendation） | 大脑的回答：动作、它之后的计划，以及对一场战斗而言它打过分的候选（[输出 §1](/arch/output/#sec-1)）。 |
+| 候选（candidate） | 搜索打过分的一个第一步动作，带着它的价值、置信区间和样本数（[协议：世界与工作进程消息 §3](/arch/protocol/worlds/#sec-3)）。 |
+| 兜底（fallback） | 没有大脑负责一个决策时，（比如随机地）选一个。这是禁止的：这一局改为报错停止。 |
+| 占位策略（placeholder） | 不搜索的策略（`play`、`random`），用于测试和基线；由 `random` 做出的决策会让一次评估作废。 |
+| PIMC | 完美信息蒙特卡洛（Perfect Information Monte Carlo）：抽样若干确定化的世界，在每个世界里当作一切已知去搜索，再按第一步动作取平均（[NoSL PIMC](/arch/pimc/)）。 |
+| 策略融合（strategy fusion） | 在每个抽样世界里各挑一条不同的最佳路线的错误，就好像玩家知道哪个世界是真的。按第一步动作取平均，让它不进入选择（[环境：世界 §3](/arch/environments/worlds/#sec-3)）。 |
+| SL 规划器（SL planner） | SL 的战斗大脑：在节点的克隆上以整个回合为单位做束搜索，一直到战斗结束（[SL 规划器](/arch/sl-planner/)）。 |
+| 束搜索（beam search）、分支定界（branch-and-bound） | 每一步只保留最好的 B 个状态；丢掉上界比不过已找到的最佳路线的每个分支，所以达到上界的路线就被证明是最好的（[SL 规划器：束搜索](/arch/sl-planner/beam/)）。 |
+| 叶子（leaf）、战斗网络（combat net） | 在搜索停下的地方，由叶子给状态打分：手工的 `LeafValue`，或战斗网络，一个读整场战斗的学到的网络（[战斗大脑：叶子](/arch/combat-brain/leaf/)）。 |
+| 后状态（afterstate） | 刚做完选择、新的随机性出现之前的状态。宏观大脑按后状态给选项估值（[宏观大脑：后状态与单一 V](/arch/macro-brain/afterstates/)）。 |
+| L0 | 宏观大脑：它用 V 给每个选项的后状态估值，取最好的；在地图上它规划通往 Boss 的路线（[宏观大脑：搜索](/arch/macro-brain/search/)）。 |
+| 预算（budget）、力度（effort） | 一个决策可以用多少搜索：PIMC 是世界数和节点数，SL 规划器是束；规划器的力度是某个预算的名字（[Harness：路由、预算与种子 §4](/arch/harness/routing/#sec-4)）。 |
+| 冠军名称（champion name） | 报告给一局的各个大脑起的名字：`combat B, combat prompts B, macro B, macro prompts B`（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）。 |
+| 决策日志（decision log） | 一局的每个决策一行 JSON：大脑看到了什么，选了什么、计划了什么、打了什么分、花了多少（[Harness：决策日志](/arch/harness/decision-log/)）。 |
 
-## 学习
+## 5. 学习
 
-| 术语 | 英文 | 含义 |
-|---|---|---|
-| 价值函数 V、P(win) | value function | V(观测) = 从这里出发赢下这一局的估计概率。所有决策共用这一个尺度（[学习 §1](/arch/learning/#sec-1)）。 |
-| 叶子估值 | leaf value | 在搜索停止的地方（例如回合结束）使用的 V。 |
-| 自我对弈 | self-play | 当前冠军在模拟器里打完整局，产生训练数据。 |
-| 冠军、挑战者 | champion, challenger | 冠军是当前最好的版本；挑战者必须通过晋级门槛才能取代它。 |
-| MC、TD(λ) | | 设定价值目标的两种方法：用最终结果（蒙特卡洛），或与下一个状态的价值混合（时序差分）。 |
-| ExIt | Expert Iteration | 专家迭代：把搜索结果当作训练标签，让价值函数学会搜索发现的东西。 |
-| SPSA | | 同时扰动随机逼近：同时扰动许多参数，一次调好它们。 |
-| 特权信息 | privileged information | 只在训练时使用、用来降低噪声的隐藏状态；永远不是部署后策略的输入（[学习 §4](/arch/learning/#sec-4)）。 |
-| Boss 连战试点、门口状态 | boss gauntlet pilot, door state | 每场战斗一开始就判赢的对局（`run --auto-win`），所以很快就走到每个 Boss 的门口；门口状态是对局在那里的整套配置，由 SL 规划器去打，给 V 当作 Boss 分数的标签（[学习 §2](/arch/learning/#sec-2)）。 |
-| 精英连战、进度 | elite gauntlet, progress | 2026-10-29 起 V 训练所用的玩法（`run --gauntlet`）：普通怪物战斗一开始就判赢，精英和 Boss 用这一局当时的生命去打，死了这一局就结束。进度是到达的层数，加上这一局死去的那场战斗里打掉的敌人生命比例（[学习 §2](/arch/learning/#sec-2)）。 |
-| 均匀抽取、ε | even draws | 自我对弈里 V 用的探索（`run --explore ε`）：一个宏观决策以概率 ε 在它的选项中均匀抽取答案，不管 V 怎么说（[学习 §5](/arch/learning/#sec-5)）。 |
+| 术语 | 含义 |
+|---|---|
+| 价值函数 V（value function V） | 宏观大脑对一局状态的评判。在 bot 偶尔能赢之前，它的目标一直是期望层数（进度），之后是 P(win)（[学习](/arch/learning/)、[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
+| 纯 V（pure V） | 只从这一局的 id 和原始状态读出的 V，没有任何手工特征（[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
+| 自我对弈（self-play） | 冠军在模拟器里打完整局，产生训练数据（[宏观大脑：自我对弈](/arch/macro-brain/selfplay/)）。 |
+| 冠军（champion）、挑战者（challenger） | 冠军是某个环境里当前最好的版本；挑战者必须通过晋级门槛才能取代它（[评估](/arch/evaluation/)）。 |
+| MC、TD(λ) | 设定价值目标的方法：用最终结果（蒙特卡洛），或与下一个状态的价值混合（时序差分）（[学习](/arch/learning/)）。 |
+| ExIt | 专家迭代（expert iteration）：训练学到的部分去模仿搜索选出的东西（[学习](/arch/learning/)）。 |
+| SPSA | 同时扰动随机逼近（simultaneous perturbation stochastic approximation）：把许多参数一起扰动，一次调好它们。 |
+| 特权信息（privileged information） | 只在训练中用来降低噪声的隐藏状态；永远不是部署后策略的输入。 |
+| 探索（exploration）、均匀抽取（even draws）、ε | 自我对弈的探索（`run --explore ε`）：一个宏观决策以概率 ε 在它的选项中均匀抽取，不管 V 怎么说。 |
+| 精英连战（elite gauntlet）、进度（progress） | 计划 v6 中 V 的训练玩法（`run --gauntlet`）：普通怪物战斗一开始就判赢，精英和 Boss 真打；进度是到达的层数，加上这一局死去的那场战斗里打掉的敌人生命比例（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。 |
+| Boss 连战试点（boss gauntlet pilot）、门口状态（door state） | 每场战斗一开始就判赢的对局（`run --auto-win`），以便一下子走到每个 Boss 的门口；门口状态是一局在那里的配置（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。 |
 
-## 评估
+## 6. 评估
 
-| 术语 | 英文 | 含义 |
-|---|---|---|
-| R1–R4（仿真到实机阶梯） | sim-to-real ladder | 从纯模拟器对局（R1）到装了 Mod 的 Steam 游戏（R4）的四级阶梯，每级只多一个新变量（[评估 §1](/arch/evaluation/#sec-1)）。 |
-| 排行榜 | leaderboard | 每种环境各自的成绩；NoSL 和 SL 从不混在一起（[评估 §2](/arch/evaluation/#sec-2)）。 |
-| 晋级门槛 | gate | 挑战者要晋级必须通过的检验（[评估 §5](/arch/evaluation/#sec-5)）。 |
-| 公共随机数 | CRN | 冠军和挑战者用相同的种子和随机数来打，两者的差别噪声更小。 |
-| SPRT | | 序贯概率比检验：只要证据足够强（无论哪个方向）就停止比较。 |
-| 种子集 | seed sets | 互不相交的训练、晋级、最终种子；最终种子在使用前登记（[评估 §4](/arch/evaluation/#sec-4)）。 |
+| 术语 | 含义 |
+|---|---|
+| R1–R4 | 仿真到实机阶梯：从模拟器对局（R1）到装了 Mod 的 Steam 游戏（R4）的四级，每级只多一个新变量（[评估](/arch/evaluation/)）。 |
+| 排行榜（leaderboard） | 按角色、进阶、种子集和环境分开的成绩；NoSL 和 SL 从不放在一起排名（`eval/silent/leaderboard.md`）。 |
+| 报告（report）、对局记录（run record） | 一批对局的结果，JSON 格式，带每一局的记录：它的种子、结果、层数、战斗和大脑（[评估](/arch/evaluation/)）。 |
+| 晋级门槛（gate） | 挑战者要晋级必须通过的配对检验（[评估](/arch/evaluation/)）。 |
+| CRN、配对（pairing） | 公共随机数（common random numbers）：冠军和挑战者打相同的种子，所以两者的差别噪声更小。 |
+| SPRT | 序贯概率比检验（sequential probability ratio test）：只要证据在任一方向上足够强，就停止比较。 |
+| Wilson 区间（Wilson interval） | 胜率的一种置信区间，在接近 0% 和 100% 时仍然合理。 |
+| 种子集（seed sets） | 用于晋级和最终检验的固定种子列表，与训练种子分开（`eval/seeds/`）。 |
+
+## 7. 名称
+
+| 名称 | 是什么 |
+|---|---|
+| V v0 | 第一个 V：在这一局视图的手工特征上手设的权重；已移除。 |
+| n1、n2-b0.01、n2-b0.03、n2-b0.1、n3-ctl、n3-free-ctl | V v2 网络（在 V v0 的特征上的网络，以权重 β 拉向 V v0）：n2-b0.03 从 2026-10-28 起是两个冠军的 V（[学习](/arch/learning/)）。 |
+| pure-1、pure-1-b、pure-1-d、pure-1-g | 第一批纯 V 网络，依次是只用对局的、带决策时 Boss 模拟的、带门口状态的，以及带 Boss 连战试点门口的；pure-1-g 是 2026-10-29 时 SL 冠军的 V。 |
+| v6-1、v6-2、v6-3-1、v6-3-2 | 在精英连战的三代里训练的纯 V；v6-3-2 从 2026-10-30 起是两个冠军的 V。 |
+| c1、c2、c3、c4 | 战斗网络；c2 是两个冠军的战斗大脑的叶子。 |
+| `weights/silent/NAME.json` | 一个网络的文件；`weights/silent/history/` 保存较早的版本。 |
+| `promotion-1`、`promotion-1-300`、`promotion-1-500`、`final-1` | `eval/seeds/` 里的种子集：200、300 和 500 个晋级种子（每个更长的集合都以较短的那个开头），以及一个 300 个种子的最终集，在它上面的任何对局之前就已登记。 |
+| `eval/silent/champions/sl.json`、`nosl.json` | 冠军文件：让每种环境的冠军上场的选项，以及它的报告。 |
+| `eval/silent/ledger.md` | 谱系：哪个大脑打出了哪些数据，哪些数据训练出了哪些权重。 |
+| `data/silent/{sl,nosl}/…` | 数据目录里的自我对弈和评估文件夹，在存储主机上，不在 git 里。 |
+| `tmp/build.sh REV`、`sim.sh` | 本地启动器，构建一个固定的提交并运行它（[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）。 |
+| `run`、`brain`、`serve`、`clones`、`gate`、`report`、`leaderboard` | SimWorker 命令（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。 |
+| `v.train`、`combat.train`、`gauntlet.py` | 训练 V 和战斗网络的 Python，以及连战的报告和门槛（[学习](/arch/learning/)）。 |
+| `0SSL7NS01MU6` | 本书例子那一局的种子，在第 48 层赢下（[游戏 §1](/arch/game/#sec-1)）。 |

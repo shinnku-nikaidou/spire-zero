@@ -66,7 +66,7 @@ sequenceDiagram
 4. **Harness 检查并记日志**。不合法的回答会抛异常。大脑的名字、计划和候选成为这个决策的注记（`Dispatcher.Last`），开着日志时，还成为决策日志里的一行。
 5. **宿主得到一条推荐**：动作、大脑、它的计划和候选，并重复请求的 id 和哈希（[协议：线路 §7](/arch/protocol/wire/#sec-7)）。
 
-**进程内与通过线路**。不带 `--brain` 的 `run` 在自己的进程里给每一局一个 `Dispatcher`。`run --brain SOCKET` 和 Mod 则通过 Unix 套接字把每个决策发给 `brain` 命令，`BrainServer` 在那里同样给这一局一个 `Dispatcher`。两者的回答相同：`run --check` 把每个种子通过线路再打一遍并加以比较（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。宿主会说明自己是 Mod 还是模拟的一局（`hello.role`），但做出冠军时不读它：大脑分不出真实游戏和模拟器。这就是项目的原则「换世界，不换大脑」（[总览 §3](/#sec-3)）。
+**进程内与通过线路**。不带 `--brain` 的 `run` 在自己的进程里给每一局一个 `Dispatcher`。`run --brain SOCKET` 和 Mod 则通过 Unix 套接字把每个决策发给 `brain` 命令，`BrainServer` 在那里同样给这一局一个 `Dispatcher`。两者的回答相同：`run --check` 把每个种子通过线路再打一遍并加以比较（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。宿主会说明自己是 Mod 还是模拟的一局（`hello.role`），但做出冠军时不读它：大脑分不出真实游戏和模拟器。这就是项目的原则「换世界，不换大脑」（[前言 §3](/#sec-3)）。
 
 ## 3. Harness 为一局保存什么
 

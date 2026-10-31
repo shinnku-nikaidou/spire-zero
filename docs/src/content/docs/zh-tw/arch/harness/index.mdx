@@ -66,7 +66,7 @@ sequenceDiagram
 4. **Harness 檢查並記錄**。不合法的回答會拋出例外。大腦的名字、計畫和候選成為這個決策的註記（`Dispatcher.Last`），記錄日誌時也成為決策日誌的一行。
 5. **宿主拿到推薦**：動作、大腦、它的計畫和候選，並回送請求的 id 和雜湊（[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。
 
-**行程內與走線路**。不帶 `--brain` 的 `run` 在它自己的行程裡給每一局一個 `Dispatcher`。`run --brain SOCKET` 和 Mod 則透過 Unix socket 把每個決策送給 `brain` 指令，在那裡 `BrainServer` 同樣給這一局一個 `Dispatcher`。回答是一樣的：`run --check` 把每個種子走線路再打一遍並加以比較（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。宿主會說明自己是 Mod 還是模擬的一局（`hello.role`），但建立冠軍時不讀它：大腦分辨不出真實遊戲和模擬器。這就是專案的規則「換世界，不換大腦」（[總覽 §3](/zh-tw/#sec-3)）。
+**行程內與走線路**。不帶 `--brain` 的 `run` 在它自己的行程裡給每一局一個 `Dispatcher`。`run --brain SOCKET` 和 Mod 則透過 Unix socket 把每個決策送給 `brain` 指令，在那裡 `BrainServer` 同樣給這一局一個 `Dispatcher`。回答是一樣的：`run --check` 把每個種子走線路再打一遍並加以比較（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。宿主會說明自己是 Mod 還是模擬的一局（`hello.role`），但建立冠軍時不讀它：大腦分辨不出真實遊戲和模擬器。這就是專案的規則「換世界，不換大腦」（[前言 §3](/zh-tw/#sec-3)）。
 
 ## 3. Harness 為一局保存什麼
 

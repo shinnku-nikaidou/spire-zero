@@ -10,7 +10,7 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-The project's programs never share objects: the game, the brain and the search workers run in different processes, and the brain must not see the game at all ([Introduction §1](/en/#sec-1)). What they share is a language, the types of the assembly `Sts2Ai.Protocol` (`src/Sts2Ai.Protocol`). Everything one part tells another is one of these types, usually as a line of JSON. This chapter is that language: what each message and field means, and what may and may not be in it.
+The project's programs never share objects: the game, the brain and the search workers run in different processes, and the brain must not see the game at all ([Introduction §2](/en/#sec-2)). What they share is a language, the types of the assembly `Sts2Ai.Protocol` (`src/Sts2Ai.Protocol`). Everything one part tells another is one of these types, usually as a line of JSON. This chapter is that language: what each message and field means, and what may and may not be in it.
 
 <Aside title="Status">
 

@@ -1,101 +1,133 @@
 ---
 title: Glossary
-description: Short explanations of the game, project, search, learning and evaluation terms used across this manual.
+description: 'Every term this book uses, grouped by area, each with a short explanation and a link to the page that covers it; and an index of names: nets, seed sets, champion files, folders and commands.'
 ---
 
-Terms are grouped by area. Each entry links to the page that covers it in depth.
+Terms are grouped by area; each entry links to the page that covers it in depth. The last section is an index of names: the nets, seed sets, files and folders the book mentions.
 
-## Game terms
+## 1. The game
 
 | term | meaning |
 |---|---|
-| run | One playthrough from the start (Neow) to victory or death. |
-| act, floor | A run has several acts, each with its own map and boss. Floor is the total floor number, as the top bar shows. |
-| map point, `?` | A point on the act map: combat, elite, rest site, shop, treasure, event, or `?` (unknown until entered; the game rolls what it becomes on arrival). |
-| encounter, intent | An encounter is the set of monsters in a combat. An intent is the icon showing what a monster plans to do next (attack and its damage, block, buff …). |
-| draw / discard / exhaust pile | Where cards go during combat. The order of the draw pile is hidden from the player. |
-| relic, potion, power | Relics are permanent items. Potions are one-shot items held in slots (the belt). Powers are ongoing effects on a creature (e.g. Strength). |
-| Ancient (Neow) | Special events offering a choice of boons. Neow opens every run. |
-| ascension (A0) | Difficulty level; A0 is the base game. |
-| Silent, Ironclad | Playable characters. The project starts with the Silent. |
-| card prompt | When the game asks the player to choose cards (discard, exhaust, upgrade, transform …). |
+| run | One playthrough, from the Ancient Neow to the last boss's defeat or the player's death ([The game §1](/en/arch/game/#sec-1)). |
+| act, floor | A run has three acts, each a map ending in a boss. A floor is one room; a won run ends on floor 48 ([The game §1](/en/arch/game/#sec-1)). |
+| map point, `?` | A point on an act's map: monster, elite, rest site, shop, treasure, unknown (`?`), the Ancient or the boss. A `?` is rolled into an event, a fight, a shop or a treasure when the player enters it ([The game §2](/en/arch/game/#sec-2), [§3](/en/arch/game/#sec-3)). |
+| room | What a map point holds once entered: a combat, an event, a rest site, a shop, a treasure. |
+| encounter, intent | An encounter is the set of monsters of a combat. An intent is what a monster shows it will do next: attack and its damage, block, buff … ([The game §4](/en/arch/game/#sec-4)). |
+| draw / discard / exhaust pile | Where cards go in a combat. The draw pile's order is hidden from the player. |
+| relic, potion, power | Relics are permanent items; potions are one-use items held in slots (the belt); powers are lasting effects on a creature, such as Strength or Poison. |
+| enchantment, affliction | A lasting modifier on a card (Sharp, Nimble …); a combat-only negative one an enemy puts on cards (Bound, Entangled …). |
+| Sly | A card keyword: a Sly card discarded from the hand before the turn's end is played for free. |
+| Ancient | The being at the start of each act, who heals the player and offers three gifts: Neow in act 1. |
+| Ascension (A0) | Difficulty levels 1–10; A0 is the base game ([The game §6](/en/arch/game/#sec-6)). |
+| Silent | The character this project trains first ([The game §5](/en/arch/game/#sec-5)). |
+| card prompt | The game asking the player to choose cards: discard, exhaust, upgrade, transform … ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)). |
+| seed, random stream | A run's 12-character seed fixes every random stream (shuffles, `?` rolls, monster moves …), so a run is a fixed function of its seed and choices ([The game §7](/en/arch/game/#sec-7)). |
 | TestMode | The game's built-in test switch. It turns off presentation, but also changes a few rules, which the simulator patches back ([Simulator: headless host §5](/en/arch/simulator/headless/#sec-5)). |
 
-## Project components
+## 2. Project components
 
 | term | meaning |
 |---|---|
-| Protocol | The wire types shared by every process. A field exists only if the game UI shows it ([Protocol](/en/arch/protocol/)). |
-| GameBridge | The only code that turns game objects into protocol observations and protocol actions into game calls ([GameBridge](/en/arch/gamebridge/)). |
-| Brain | The policies: combat brain and macro brain. References Protocol only, never the game. |
-| SimWorker | A process that runs the real game DLL headless, for search worlds and self-play ([Simulator](/en/arch/simulator/)). |
-| Mod | The thin host inside the real game: observe, ask, render or execute ([Mod](/en/arch/mod/)). |
-| Harness | The dispatcher in the decision process: record, routing, budget, logs ([Harness](/en/arch/harness/)). |
-| RunSession | The SimWorker class that plays a whole run headless through every decision surface ([Simulator: whole runs §1](/en/arch/simulator/runs/#sec-1)). |
+| Protocol | The types shared by every process: the messages and the observations. A field exists only if a player could see it ([Protocol](/en/arch/protocol/)). |
+| GameBridge | The only code that turns game objects into observations and actions into game calls: observe, legal, start ([GameBridge](/en/arch/gamebridge/)). |
+| Brain | The policies: the combat brains and the macro brain. References Protocol only, never the game. |
+| Harness | The library between hosts and brains: each run's dispatcher, the brain server, the worker pool, run records, reports and the gate ([Harness](/en/arch/harness/)). |
+| dispatcher | A run's `Dispatcher`: routes each decision to one brain, keeps what the run has shown, draws the seeds, checks and logs the answers ([Harness §2](/en/arch/harness/#sec-2)). |
+| brain server, `brain` | Harness's end of the wire, and the SimWorker command that runs it alone for the mod and for `run --brain` ([Harness §5](/en/arch/harness/#sec-5)). |
+| SimWorker | The program that runs the real game DLL headless: combats, whole runs, the brain, the workers, evaluation ([Simulator](/en/arch/simulator/)). |
+| worker, worker pool, `serve` | A SimWorker process that answers search requests over JSON lines; the pool starts and restarts them ([Simulator: the worker pool](/en/arch/simulator/pool/)). |
+| Mod | The host inside the real game: reads the decision on screen, asks the brain, shows the answer ([Mod](/en/arch/mod/)). |
+| assist mode, panel, marks | The mod's mode today: the player plays, the panel shows the answer, and marks draw the route on the map and the plan's numbers in combat ([Output](/en/arch/output/)). |
+| RunSession | The SimWorker class that plays a whole run headless through every decision screen ([Simulator: whole runs §1](/en/arch/simulator/runs/#sec-1)). |
 | CombatBuilder | Builds a simulator combat from an observation ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5)). |
-| Pump | The single-threaded scheduler that runs all game async code on one thread, so results are deterministic. |
-| host | Whatever holds the true run: the mod in the real game, or a SimWorker in self-play. |
+| Pump | The single-threaded scheduler that runs all of the game's async code on one thread, in one order, so results are deterministic ([Simulator: headless host §7](/en/arch/simulator/headless/#sec-7)). |
+| host | Whatever holds the true run and asks the brain: the mod in the real game, or a SimWorker in self-play. |
 | headless | Running the game's logic without graphics, window or input. |
 
-## Environments and information
+## 3. Environments and information
 
 | term | meaning |
 |---|---|
 | NoSL | The environment with public information only ([Environments: information §1](/en/arch/environments/information/#sec-1)). |
-| SL | NoSL plus the true outcomes inside the current node, as if save & load were allowed there. |
-| node | In SL: one map point, from arrival until the travel action that leaves it ([Environments: information §3](/en/arch/environments/information/#sec-3)). Not to be confused with Godot UI nodes (`N*` classes). |
-| public history, public record | Everything shown on screen so far plus what can be inferred from it. Harness stores it as the public record. |
-| determinization | Drawing one concrete hidden state (draw order, monster moves, random streams) that agrees with the public history. |
-| world | A simulator state that search may explore: a sampled world in NoSL, the exact node clone in SL. |
-| clone, checkpoint, seal | SL builds its world from a checkpoint taken at node entry plus the actions since. The world is sealed at the node exit: further actions throw. |
-| horizon | The node exit, as seen from inside an SL world (`AtHorizon`). |
-| whitelist | The rule that an observation field exists only if the UI shows it; each field has a test. |
-| fair play | The rules for what the AI may see and do, collected in the local note `fair-play-spec.md`. |
+| SL | NoSL plus the true outcomes inside the current node, as if saving and reloading were allowed there ([Environments: information §2](/en/arch/environments/information/#sec-2)). |
+| node | In SL: one map point, from arrival until the travel that leaves it ([Environments: information §3](/en/arch/environments/information/#sec-3)). Not to be confused with Godot's UI nodes (`N*` classes). |
+| public history, record of enemy moves | Everything shown so far. Harness keeps the part search needs: each enemy's intents per round ([Harness §4](/en/arch/harness/#sec-4)). |
+| determinization | Drawing one concrete hidden state (draw order, monster moves, random streams) that agrees with the public history ([Environments: worlds §2](/en/arch/environments/worlds/#sec-2)). |
+| world | A simulator state that search may explore: a sampled world in NoSL, the exact node clone in SL ([Simulator: worlds and the SL clone §1](/en/arch/simulator/worlds/#sec-1)). |
+| checkpoint, clone, seal | SL's world is the node's checkpoint, taken on arrival, replayed through the node's steps: its clone. The clone is sealed at the node's exit: a further step throws ([Simulator: worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)–[§5](/en/arch/simulator/worlds/#sec-5)). |
+| horizon | The node's exit, as seen from inside an SL world (`AtHorizon`). |
+| SL record | What the mod keeps so the brain can clone the node in the real game: the checkpoint and every step, read where the game commits it ([Mod: the SL record](/en/arch/mod/sl-record/)). |
+| whitelist | The rule that an observation field exists only if the game shows it; each field has a test ([Protocol §3](/en/arch/protocol/#sec-3)). |
 
-## Decisions and search
-
-| term | meaning |
-|---|---|
-| surface | A kind of decision screen (combat, map, rewards, shop …). The surface name routes a decision to a brain ([Protocol: observations and actions §5](/en/arch/protocol/observation/#sec-5)). |
-| decision point | The moment the game waits for the player and the next decision can be asked. |
-| observation | What the player can see at a decision point, as protocol types. |
-| legal actions | Every action the player could take right now, as text such as `play:C:T` or `map:col,row`. |
-| uid | A stable id for a card in hand or a creature in combat, so actions can name them. |
-| recommendation, fact | The brain's answer: an action, the plan behind it, the candidates it compared, and facts (numbers) that explanations are built from. |
-| fallback | Choosing something (e.g. at random) when no brain covers a decision. Forbidden: the game pauses instead. |
-| branch, rollout | A branch is one action sequence tried in a world. A rollout plays on from there with a fast policy to estimate the outcome. |
-| PIMC | Perfect Information Monte Carlo: sample several determinized worlds, search each as if everything were known, and average ([NoSL PIMC §2](/en/arch/pimc/#sec-2)). |
-| strategy fusion | The error of picking a different best line in each sampled world, as if the player knew which world is real. Averaging by first action avoids it. |
-| ISMCTS | Information Set Monte Carlo Tree Search: the alternative to try if PIMC's remaining fusion error turns out to matter. |
-| branch-and-bound | Search that keeps the best line found so far and drops every branch whose upper bound cannot beat it; a line that reaches the bound is proved optimal. The SL combat planner prunes its beam this way ([The SL planner: beam §2](/en/arch/sl-planner/beam/#sec-2)). |
-| beam search | Search that keeps only the B best states at each step and expands only those. The SL planner's step is a turn: it keeps the B best states where a turn ends ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)). |
-| afterstate | The state right after a choice, before new randomness. The macro brain values options by their afterstates ([Macro brain: afterstates §1](/en/arch/macro-brain/afterstates/#sec-1)). |
-| L0, L1 | Macro brain levels: L0 values each afterstate with V; L1 checks close calls with paired rollouts. |
-| budget | How much search a decision may use: a fixed number of branches (reproducible) or wall-clock time ([Harness: routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)). |
-
-## Learning
+## 4. Decisions and search
 
 | term | meaning |
 |---|---|
-| value function V, P(win) | V(observation) = estimated probability of winning the run from here. The one scale for every decision ([Learning §1](/en/arch/learning/#sec-1)). |
-| leaf value | V applied where search stops, e.g. at the end of a turn. |
-| self-play | The current champion plays whole runs in the simulator to produce training data. |
-| champion, challenger | The champion is the current best version; a challenger must pass the gate to replace it. |
-| MC, TD(λ) | Ways to set value targets: from the final outcome (Monte Carlo) or blended with the next state's value (temporal difference). |
-| ExIt | Expert Iteration: use search results as training labels, so the value function learns what search found. |
-| SPSA | Simultaneous Perturbation Stochastic Approximation: tunes many parameters at once by perturbing them together. |
-| privileged information | Hidden state used only at training time to reduce noise; never an input of the deployed policy ([Learning §4](/en/arch/learning/#sec-4)). |
-| boss gauntlet pilot, door state | Runs whose every combat is won at its start (`run --auto-win`), so that they reach each boss's door at once; a door state is a run's loadout there, fought by the SL planner for V's boss-score labels ([Learning §2](/en/arch/learning/#sec-2)). |
-| elite gauntlet, progress | V's training game since 2026-10-29 (`run --gauntlet`): plain monster combats are won at their start, elites and bosses are fought with the HP the run has, and a death ends the run. Progress is the floor reached plus the share of the enemies' HP taken in the combat the run died in ([Learning §2](/en/arch/learning/#sec-2)). |
-| even draws, ε | Self-play's exploration for V (`run --explore ε`): with chance ε a macro decision's answer is drawn evenly among its options, whatever V says ([Learning §5](/en/arch/learning/#sec-5)). |
+| surface | A kind of decision screen: combat, map, rewards, shop, a card prompt … The surface routes a decision to a brain ([Protocol: observations and actions §5](/en/arch/protocol/observation/#sec-5)). |
+| decision point, idle | The moment the game waits for the player and the next decision can be asked; in the real game, a screen that has held still for 3 frames ([Mod: the main loop §4](/en/arch/mod/loop/#sec-4)). |
+| observation | What a player can see at a decision point, as protocol types ([Protocol: observations and actions](/en/arch/protocol/observation/)). |
+| legal actions | Every action the player could take now, as text such as `play:C:T` or `map:col,row`. |
+| uid | A stable id for a card or a creature in a combat, so actions can name them. |
+| recommendation | The brain's answer: the action, the plan after it, and for a combat the candidates it scored ([Output §1](/en/arch/output/#sec-1)). |
+| candidate | A first action a search scored, with its value, confidence interval and samples ([Protocol: worlds and worker messages §3](/en/arch/protocol/worlds/#sec-3)). |
+| fallback | Choosing something (at random, say) when no brain covers a decision. Forbidden: the run stops with an error instead. |
+| placeholder | A policy that does not search (`play`, `random`), for tests and baselines; a decision by `random` voids an evaluation. |
+| PIMC | Perfect Information Monte Carlo: sample several determinized worlds, search each as if everything were known, and average by first action ([NoSL PIMC](/en/arch/pimc/)). |
+| strategy fusion | The error of picking a different best line in each sampled world, as if the player knew which world is real. Averaging by first action keeps it out of the choice ([Environments: worlds §3](/en/arch/environments/worlds/#sec-3)). |
+| SL planner | SL's combat brain: a beam search over whole turns on the node's clone, to the end of the combat ([The SL planner](/en/arch/sl-planner/)). |
+| beam search, branch-and-bound | Keeping only the B best states at each step; dropping every branch whose bound cannot beat the best line found, so a line that reaches the bound is proved best ([The SL planner: beam](/en/arch/sl-planner/beam/)). |
+| leaf, combat net | Where a search stops, the leaf scores the state: a hand-made `LeafValue`, or the combat net, a learned net over the combat ([Combat brain: the leaf](/en/arch/combat-brain/leaf/)). |
+| afterstate | The state right after a choice, before new randomness. The macro brain values options by their afterstates ([Macro brain: afterstates and one V](/en/arch/macro-brain/afterstates/)). |
+| L0 | The macro brain: it values each option's afterstate with V and takes the best; on the map it plans the route to the boss ([Macro brain: search](/en/arch/macro-brain/search/)). |
+| budget, effort | How much search a decision may use: worlds and nodes for PIMC, the beam for the SL planner; the planner's effort names a budget ([Harness: routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)). |
+| champion name | A run's brains as reports name them: `combat B, combat prompts B, macro B, macro prompts B` ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)). |
+| decision log | One JSON line per decision of a run: what the brain was shown, what it chose, planned, scored and spent ([Harness: the decision log](/en/arch/harness/decision-log/)). |
 
-## Evaluation
+## 5. Learning
 
 | term | meaning |
 |---|---|
-| R1–R4 (sim-to-real ladder) | Four rungs from a pure simulator run (R1) to the Steam game with the mod (R4); each adds one new variable ([Evaluation §1](/en/arch/evaluation/#sec-1)). |
-| leaderboard | Results per environment; NoSL and SL are never mixed ([Evaluation §2](/en/arch/evaluation/#sec-2)). |
-| gate | The test a challenger must pass to be promoted ([Evaluation §5](/en/arch/evaluation/#sec-5)). |
-| CRN | Common random numbers: champion and challenger play the same seeds and randomness, so their difference has less noise. |
-| SPRT | Sequential Probability Ratio Test: stops a comparison as soon as the evidence is strong enough either way. |
-| seed sets | Disjoint train, promotion and final seeds; final seeds are registered before use ([Evaluation §4](/en/arch/evaluation/#sec-4)). |
+| value function V | The macro brain's judge of a run state. Its target has been the expected floor (progress) until the bot wins sometimes, then P(win) ([Learning](/en/arch/learning/), [Macro brain: the value network](/en/arch/macro-brain/network/)). |
+| pure V | V read from the run's ids and raw state alone, with no hand-made features ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
+| self-play | The champion plays whole runs in the simulator to produce training data ([Macro brain: self-play](/en/arch/macro-brain/selfplay/)). |
+| champion, challenger | The champion is the current best version in an environment; a challenger must pass the gate to replace it ([Evaluation](/en/arch/evaluation/)). |
+| MC, TD(λ) | Ways to set value targets: from the final outcome (Monte Carlo), or blended with the next states' values (temporal difference) ([Learning](/en/arch/learning/)). |
+| ExIt | Expert iteration: train the learned parts to imitate what the search chose ([Learning](/en/arch/learning/)). |
+| SPSA | Simultaneous perturbation stochastic approximation: tunes many parameters at once by perturbing them together. |
+| privileged information | Hidden state used only in training to reduce noise; never an input of the deployed policy. |
+| exploration, even draws, ε | Self-play's exploration (`run --explore ε`): with chance ε a macro decision is drawn evenly among its options, whatever V says. |
+| elite gauntlet, progress | V's training game in plan v6 (`run --gauntlet`): plain monster combats won at their start, elites and bosses fought; progress is the floor reached plus the share of the enemies' HP taken in the fight the run died in ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). |
+| boss gauntlet pilot, door state | Runs whose every combat is won at its start (`run --auto-win`), to reach each boss's door at once; a door state is a run's loadout there ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). |
+
+## 6. Evaluation
+
+| term | meaning |
+|---|---|
+| R1–R4 | The sim-to-real ladder: four rungs from a simulator run (R1) to the Steam game with the mod (R4), each adding one new variable ([Evaluation](/en/arch/evaluation/)). |
+| leaderboard | Results per character, ascension, seed set and environment; NoSL and SL are never ranked together (`eval/silent/leaderboard.md`). |
+| report, run record | A batch's results as JSON, with every run's record: its seed, outcome, floor, combats and brains ([Evaluation](/en/arch/evaluation/)). |
+| gate | The paired test a challenger must pass to be promoted ([Evaluation](/en/arch/evaluation/)). |
+| CRN, pairing | Common random numbers: champion and challenger play the same seeds, so their difference has less noise. |
+| SPRT | The sequential probability ratio test: stops a comparison as soon as the evidence is strong enough either way. |
+| Wilson interval | A confidence interval for a win rate that stays sensible near 0% and 100%. |
+| seed sets | Fixed lists of seeds for promotion and final checks, apart from the train seeds (`eval/seeds/`). |
+
+## 7. Names
+
+| name | what |
+|---|---|
+| V v0 | The first V: hand-set weights over hand-made features of the run view; removed. |
+| n1, n2-b0.01, n2-b0.03, n2-b0.1, n3-ctl, n3-free-ctl | V v2 nets (a net over V v0's features, pulled towards V v0 with weight β): n2-b0.03 was both champions' V from 2026-10-28 ([Learning](/en/arch/learning/)). |
+| pure-1, pure-1-b, pure-1-d, pure-1-g | The first pure V nets: from runs only, with decision-time boss sims, with door states, and with the boss gauntlet pilot's doors; pure-1-g was the SL champion's V on 2026-10-29. |
+| v6-1, v6-2, v6-3-1, v6-3-2 | Pure V trained in the elite gauntlet's three generations; v6-3-2 is the V of both champions since 2026-10-30. |
+| c1, c2, c3, c4 | Combat nets; c2 is the leaf of both champions' combat brains. |
+| `weights/silent/NAME.json` | A net's file; `weights/silent/history/` keeps earlier versions. |
+| `promotion-1`, `promotion-1-300`, `promotion-1-500`, `final-1` | Seed sets in `eval/seeds/`: 200, 300 and 500 promotion seeds (each longer set begins with the shorter), and a final set of 300 registered before any run on it. |
+| `eval/silent/champions/sl.json`, `nosl.json` | Champion files: the options that play each environment's champion, and its report. |
+| `eval/silent/ledger.md` | The lineage: which brain played which data, and which data trained which weights. |
+| `data/silent/{sl,nosl}/…` | The data directory's self-play and evaluation folders, on the storage host, not in git. |
+| `tmp/build.sh REV`, `sim.sh` | The local launcher that builds a fixed commit and runs it ([Simulator: reference §1](/en/arch/simulator/reference/#sec-1)). |
+| `run`, `brain`, `serve`, `clones`, `gate`, `report`, `leaderboard` | SimWorker commands ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). |
+| `v.train`, `combat.train`, `gauntlet.py` | The Python that trains V and the combat net, and the gauntlet's report and gate ([Learning](/en/arch/learning/)). |
+| `0SSL7NS01MU6` | The seed of the book's example run, won on floor 48 ([The game §1](/en/arch/game/#sec-1)). |

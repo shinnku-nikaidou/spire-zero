@@ -1,69 +1,71 @@
 ---
-title: 進度與路線圖
-description: 目前已經做好和測過的部分、主要缺口與風險，以及剩下部分的實施順序。
+title: 狀態與路線圖
+description: '專案目前的狀況：打得多好、每個部分今天做到什麼及其數字、主要缺口與風險，以及接下來做什麼。'
 ---
 import { Badge, Steps } from '@astrojs/starlight/components';
 
-這一頁追蹤進度。設計本身寫在各個子系統頁裡；這裡只說明每部分做到哪一步、還有哪些風險、下一步做什麼。
+這一頁追蹤進度。各章說明每個部分怎麼運作；這一頁說明每個部分進展到哪裡、還有什麼可能出錯，以及接下來做什麼。截至 2026-10-31。
 
-## 1. 進度
+## 1. 一段話說完
 
-截至 2026-10-30：
+AI 以無頭方式、在遊戲自己的程式碼裡，在兩種環境下打完整的寂靜獵手 A0 對局。在 **SL** 中，冠軍（戰鬥中是帶戰鬥網路 c2 的 SL 規劃器，戰鬥外是帶 V v6-3-2 的 L0）贏下 **7.7%** 的對局（`promotion-1-300` 上 300 局贏 23 局），平均到達 48 層中的第 33.6 層；在計畫 v6 的菁英連戰之前，沒有任何 V 贏過一局。在 **NoSL** 中，還沒有冠軍贏過一局。在真實遊戲裡，Mod 的輔助模式在兩種環境下回答每個決策畫面；自動遊玩還沒有做。現在的工作是計畫 v7：V 重新在整局 SL 上訓練並過門檻，按 P(win) 做決定，網路裡帶一個構築編碼器和一個路線編碼器。
 
-| 元件 | 狀態 |
+## 2. 各個部分
+
+| 部分 | 狀態 |
 |---|---|
-| 無頭宿主、補丁、Pump、確定性 | 完成；selftest 全綠 |
-| 戰鬥工作階段、快照/重播、Determinize | 完成；每核 319 場戰鬥/秒（SILENT），一個搜尋分支 2.8 ms |
-| CombatBuilder（觀測 → 戰鬥） | 完成；近似之處列在[模擬器：戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6) |
-| 多行程擴展 | 已測：8 個行程 ≈ 1,860 場戰鬥/秒 |
-| 整局工作階段（無頭跑完整局） | 完成：覆蓋所有決策介面，用隨機佔位策略。200/200 局在行程內和跨行程都是確定性的，0 次失敗，0 個遊戲錯誤（[模擬器：整局 §6](/zh-tw/arch/simulator/runs/#sec-6)） |
-| 整局觀測 + `ChoiceContext` | 完成：每個決策介面都有觀測；在同樣的批次裡，JSON 往返和觀測雜湊都是確定性的（[協定：觀測與動作 §5](/zh-tw/arch/protocol/observation/#sec-5)、[協定：觀測與動作 §6](/zh-tw/arch/protocol/observation/#sec-6)） |
-| SL 複本（載入存檔 + 重播 + 封存） | 模擬器裡已完成：一局的每個節點都能從檢查點載入，並重現原局的觀測；9,747 個節點全部完全一致，因為檢查點帶上了存檔丟掉的遺物欄位，正常生命下每個節點 8–11 ms。`run --env SL` 在 worker 行程池裡搜尋它，走傳輸協定也打得一樣（[模擬器：世界與 SL 複本](/zh-tw/arch/simulator/worlds/)） |
-| 戰鬥世界 API | 完成：NoSL 世界從觀測建構，SL 世界是節點複本（[模擬器：世界與 SL 複本 §2](/zh-tw/arch/simulator/worlds/#sec-2)、[模擬器：世界與 SL 複本 §7](/zh-tw/arch/simulator/worlds/#sec-7)） |
-| worker 行程池 + 行程間通訊 | PIMC 已完成：NoSL 下每個世界一個 JSON 行請求，結果與行程內相同，8 個 worker 快 4.5 倍；SL 下 PIMC 在節點複本上每個首個動作一個請求，SL 規劃器每個束狀態每個回合一個請求（[模擬器：工作行程池 §3](/zh-tw/arch/simulator/pool/#sec-3)） |
-| 戰鬥大腦 v0 | 完成：PIMC，搜尋一個回合，手工葉節點估值。與最好的佔位策略比勝率：第 1 幕弱怪 + 普通 100% 對 85%，第 1 幕菁英 36.7% 對 16.7%，第 2 幕 50% 對 16.7%（[NoSL PIMC：預算 §6](/zh-tw/arch/pimc/budget/#sec-6)）。在整局裡（`promotion-1`，200 局），局外決策隨機時平均打到第 13.68 層（對 8.09 層），局外用 L0、戰鬥內選牌提示交給 `p0` 時打到第 19.34 層（對 11.90 層）（[NoSL PIMC：預算 §6](/zh-tw/arch/pimc/budget/#sec-6)）。學到的葉節點即戰鬥網路已經實作（[學習 §1](/zh-tw/arch/learning/#sec-1)）；以它的第一代 c2 為葉節點，2026-10-27 起的 NoSL 冠軍平均打到第 21.88 層（對 19.34 層），45 局打到第 2 幕頭目（對 19 局）（[NoSL PIMC：預算 §6](/zh-tw/arch/pimc/budget/#sec-6)）。SL 下，SL 規劃器在節點複本上規劃整場戰鬥（[SL 規劃器 §3](/zh-tw/arch/sl-planner/#sec-3)）。在測試集上，PIMC 贏下的戰鬥它都贏了，120 場裡還多贏 9 場（第 1 幕菁英 46.7% 對 30.0%，第 2 幕 43.3% 對 33.3%），在贏下的戰鬥裡每個動作的耗時和 PIMC NoSL 差不多（[SL 規劃器：預算 §5](/zh-tw/arch/sl-planner/budget/#sec-5)）。在整局裡（`promotion-1` #0–39），它平均打到第 28.32 層，同樣種子上 NoSL 冠軍是 23.98 層；用此後冠軍的 V（n2-b0.03），`--effort high` 在 200 個種子上平均打到第 28.54 層，每局 412 s，預設的 `--effort medium` 走得一樣遠，用時 0.61，加上更便宜的恢復約為一半（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)、[SL 規劃器：預算 §5](/zh-tw/arch/sl-planner/budget/#sec-5)） |
-| Harness 排程 | 整局已完成：沒有後備的決策介面路由，由 run id 和決策序號得到的大腦種子，決策日誌；`run --check` 能完全重現它（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)–[Harness：決策日誌 §1](/zh-tw/arch/harness/decision-log/#sec-1)） |
-| 宿主–brain 傳輸 | 完成：[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3) 的訊息走 Unix socket。`brain` 提供服務，`run --brain` 作為宿主連上它跑整局。一局在行程內和走傳輸協定時打得完全一樣：軌跡、觀測、對局記錄和決策日誌都相同，PIMC 也是（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)） |
-| 事件、公開記錄 | 規劃中 |
-| 宏觀大腦、價值函式 | L0 加學到的 V：每個選項的後狀態從介面預測（NoSL），或在節點複本上真的打一遍，並在節點的畫面裡往下搜尋（SL，`--afterstates clone`）（[宏觀大腦：搜尋 §2](/zh-tw/arch/macro-brain/search/#sec-2)）。V 是純 V，一個只讀這一局的 id 和原始狀態的網路；自 2026-10-29 起，它在菁英連戰裡訓練和接受評判，那裡普通怪物戰一開始就判贏。它第三代的 v6-3-2 從 2026-10-30 起是兩個冠軍的 V：在 promotion-1-300 上打整局 SL，它平均打到第 33.56 層，300 局贏 23 局（7.7%），這是第一批勝局。在它之前，SL 冠軍的 V pure-1-g 在 promotion-1 上平均打到第 25.69 層，n2-b0.03（V v2，讀 V v0 的特徵）是 28.25 層，兩者都沒有一局獲勝（[學習 §1](/zh-tw/arch/learning/#sec-1)、[§2](/zh-tw/arch/learning/#sec-2)） |
-| 菁英連戰 | 完成：`run --gauntlet`、自我對弈用的均勻抽取（`--explore ε`）、連戰的 V（`v.train --gauntlet`，以進度為目標），以及它在 500 個固定種子上的報告和配對門檻（`learn/gauntlet.py`）。三代分別 5,775、6,080 和 14,828 局，把連戰的進度從 pure-1-g 的 34.47 提高到 36.07、40.69 和 43.36，勝局從 500 局中 2 局增加到 173 局（[學習 §2](/zh-tw/arch/learning/#sec-2)、[評估 §5](/zh-tw/arch/evaluation/#sec-5)） |
-| 算力 | 任務限時跑在幾台遠端主機上，同時約 50 局 SL；資料存在一台儲存主機上，分析和訓練網路在一台有兩張 GPU 的實驗室主機上進行（[學習 §6](/zh-tw/arch/learning/#sec-6)） |
-| Mod | 在 NoSL 和 SL 下覆蓋所有決策介面的輔助模式：能載入進真實遊戲，連上大腦，對每個空閒的決策發出詢問，並用遊戲裡的名字顯示答案；面板上的核取方塊選擇環境。SL 下它傳送每個節點的檢查點和玩家的步驟（在遊戲提交動作的地方讀出），SL 規劃器在節點的複本上規劃：在真實遊戲裡，90 個 SL 決策中有 89 個在複本上問出同一個決策（剩下那個的原因已經修好），一場戰鬥的第一個決策要等規劃器 3–15 秒。還沒有在真實遊戲裡看它跑完一整局（[Mod §3](/zh-tw/arch/mod/#sec-3)、[主迴圈](/zh-tw/arch/mod/loop/)、[SL 紀錄](/zh-tw/arch/mod/sl-record/)） |
+| 無頭宿主、補丁、Pump | 已實作：遊戲的 `sts2.dll` 在一個普通的 .NET 行程裡執行，具確定性；`selftest` 全綠（[模擬器：無頭宿主](/zh-tw/arch/simulator/headless/)） |
+| 戰鬥 | 已實作：每核每秒 319 場戰鬥（寂靜獵手），一個搜尋分支 2.8 ms；快照作為配方；從觀測建構的 NoSL 世界（[模擬器：戰鬥](/zh-tw/arch/simulator/combat/)）。建構器的近似之處列在[模擬器：戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6) |
+| 整局 | 已實作：每個決策畫面都能無頭執行；200 局中 200 局在行程內和跨行程都具確定性，0 次失敗，0 個遊戲錯誤（[模擬器：整局 §6](/zh-tw/arch/simulator/runs/#sec-6)） |
+| SL 複本 | 已實作：每個節點都從它的檢查點載入並重播它的步驟；9,747 個節點中 9,747 個完全一致，正常生命下每個節點 8–11 ms（[模擬器：世界與 SL 複本](/zh-tw/arch/simulator/worlds/)） |
+| 工作行程池 | 已實作：每個世界一個 JSON 行請求，結果與行程內相同；8 個行程約每秒 1,860 場戰鬥（[模擬器：工作行程池](/zh-tw/arch/simulator/pool/)） |
+| Protocol、GameBridge | 已實作：每個決策介面（surface）都能觀測，其合法動作都能列出並開始；選牌提示帶有它們的上下文（[協定](/zh-tw/arch/protocol/)、[GameBridge](/zh-tw/arch/gamebridge/)） |
+| Harness | 已實作：沒有後備的路由、從 run id 得到的種子、決策日誌、大腦伺服器；`run --check` 能精確重播一局。規劃中：公開紀錄的其餘部分、隨時可停（anytime）的回答（[Harness](/zh-tw/arch/harness/)） |
+| NoSL 戰鬥大腦 | 已實作：在取樣世界上做 PIMC，以戰鬥網路 c2 為葉節點；自 2026-10-27 起是 NoSL 冠軍的戰鬥大腦（[NoSL PIMC](/zh-tw/arch/pimc/)） |
+| SL 戰鬥大腦 | 已實作：SL 規劃器，在節點複本上對整個回合做束搜尋；在戰鬥測試集上，PIMC 贏下的每場戰鬥它都贏了，120 場裡還多贏 9 場（[SL 規劃器](/zh-tw/arch/sl-planner/)） |
+| 宏觀大腦 | 已實作：L0 用 V 給每個選項的後狀態估值，後狀態在 NoSL 中從畫面預測，在 SL 中在節點複本上打出來；V 是純 V，只讀這一局的 id 和原始狀態（[宏觀大腦](/zh-tw/arch/macro-brain/)） |
+| 學習 | 已實作：帶均勻抽取探索的自我對弈、V 和戰鬥網路的訓練、連戰的報告和門檻、計畫 v7 的勝局門檻。規劃中：TD(λ)、戰鬥網路的 ExIt、循環裡的 SPSA、LLM 循環（[學習](/zh-tw/arch/learning/)） |
+| 評估 | 已實作：報告、每種環境各自的排行榜、種子集、配對的整局門檻、冠軍檔案（[評估](/zh-tw/arch/evaluation/)） |
+| Mod | 輔助模式已在每個決策介面上實作，兩種環境都有：面板、地圖和戰鬥標示、設定分頁、SL 紀錄。在真實遊戲裡，90 個 SL 決策中有 89 個在它們的複本上問出同一個決策（另一個的原因已經修好）；一場戰鬥的第一個 SL 決策要等規劃器 3–15 s。還沒有在真實遊戲裡看它跑完一整局；自動遊玩在規劃中（[Mod](/zh-tw/arch/mod/)、[輸出](/zh-tw/arch/output/)） |
+| 算力 | 在幾台遠端主機上執行限時任務，同時約 50 局 SL；資料存在一台儲存主機上，在一台有兩張 GPU 的實驗室主機上分析和訓練（[學習](/zh-tw/arch/learning/)） |
 
-## 2. 主要缺口與風險
+**冠軍們的成績**（`eval/silent/leaderboard.md`）：
 
-1. **CombatBuilder 的近似**。回合歷史、內部計數器、費用修改的持續時間、眩暈後續動作都是近似的，而且從沒用真實遊戲的觀測驗證過（[模擬器：戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6)）。
-2. **怪物動作重取樣**目前在「顯示相同意圖」的動作裡均勻選取，需要改成根據怪物歷史得到的後驗（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
-3. **選牌提示的上下文依賴非同步入口上的 Harmony 前綴**：內嵌或 rejit 都可能繞過它們（[GameBridge：讀取遊戲 §6](/zh-tw/arch/gamebridge/observe/#sec-6)、[Mod：自動遊玩與安全 §5](/zh-tw/arch/mod/auto/#sec-5)）。
-4. **開局用的是 `UnlockState.all`**，不是使用者自己的存檔進度；晉階等級也沒有限制在角色允許的最大值以內（[模擬器：整局 §2](/zh-tw/arch/simulator/runs/#sec-2)）。
-5. **新增的遊戲程式碼如果在事件之外（事件由 transpiler 覆蓋）呼叫 Godot 節點**而沒有 TestMode 保護，只會在 `run` 批次執行裡以遊戲錯誤的形式暴露出來（[模擬器：無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)）。
-6. **真實遊戲裡的 Harmony 補丁與分層 JIT**：執行時可能重新編譯某個方法，悄悄丟掉補丁（[Mod：自動遊玩與安全 §5](/zh-tw/arch/mod/auto/#sec-5)）。
-7. **戰鬥大腦 v0 的盲區**。選牌提示按固定規則（`p0`）回答，搜尋內和真實戰鬥裡都是如此，不經過搜尋；NoSL 的搜尋只看本回合；SL 的規劃器看得到整場戰鬥，但被證明的計畫很少；沒有證明的失敗預設連續最多 3 個計畫，第三個打到結束，所以只有更晚的計畫才能贏下的戰鬥會輸掉（[SL 規劃器：束搜尋 §6](/zh-tw/arch/sl-planner/beam/#sec-6)、[SL 規劃器：束搜尋 §5](/zh-tw/arch/sl-planner/beam/#sec-5)）；葉節點是手工的，忽略了大多數能力（[戰鬥大腦：葉節點 §2](/zh-tw/arch/combat-brain/leaf/#sec-2)）。
-8. **連戰的 V 打整局**。V 在普通怪物戰不花代價的地方訓練，所以它按那種遊戲來評估路線和休息處。v6-3-2 在整局裡輸掉的對局約有一半輸在兩個頭目之間，而兩個網路在連戰裡的高下，到了整局裡並不總是成立（[學習 §2](/zh-tw/arch/learning/#sec-2)、[§8](/zh-tw/arch/learning/#sec-8)）。
-9. **V 的標籤帶著它們那一局之後的抽取**，而 V 不知道一局的 ε 是多少（[學習 §5](/zh-tw/arch/learning/#sec-5)）。
+| 環境 | 冠軍 | 種子集 | 勝率 | 平均層數 |
+|---|---|---|---|---|
+| SL | plan c2（medium 力度）、在複本上的 L0 v6-3-2 | `promotion-1-300` | 7.7%（23/300，5.2–11.2%） | 33.56 |
+| NoSL | PIMC c2 8×300、L0 v6-3-2 | | 還沒有報告 | |
+| NoSL，最好的報告 | PIMC c2 8×300、L0 n2-b0.03 | `promotion-1` | 0%（0/200） | 26.16 |
 
-## 3. 實施順序
+## 3. 主要缺口與風險
+
+1. **CombatBuilder 的近似**。回合歷史、內部計數器、費用修改的持續時間和眩暈的後續動作都是近似的，而且建構器從沒用真實遊戲的觀測核對過（[模擬器：戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6)）。
+2. **怪物招式的重取樣**在顯示相同意圖的招式之間均勻選取；根據怪物歷史得到的後驗會更好（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
+3. **選牌提示的上下文依賴非同步入口上的 Harmony 前綴**：內嵌或 rejit 可能繞過它們（[GameBridge：讀取遊戲 §6](/zh-tw/arch/gamebridge/observe/#sec-6)、[Mod：自動遊玩與安全 §5](/zh-tw/arch/mod/auto/#sec-5)）。
+4. **開局使用 `UnlockState.all`**，而不是玩家自己的進度檔，晉階也沒有限制在角色的最大值以內（[模擬器：整局 §2](/zh-tw/arch/simulator/runs/#sec-2)）。
+5. **觸碰 Godot 節點的新遊戲程式碼**，若沒有 TestMode 保護、又在事件之外（事件由 transpiler 覆蓋），只會在 `run` 批次裡以遊戲錯誤的形式出現（[模擬器：無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)）。
+6. **真實遊戲裡的 Harmony 補丁對上分層 JIT**：執行階段可能重新編譯一個方法，悄悄丟掉一個補丁（[Mod：自動遊玩與安全 §5](/zh-tw/arch/mod/auto/#sec-5)）。
+7. **戰鬥大腦的盲點**。選牌提示由固定規則（`p0`）回答，不經搜尋；NoSL 的搜尋只看這一回合；SL 規劃器能證明的計畫很少，而一個沒有證明的敗局最多連續得到 3 個計畫，所以只有更晚的計畫才能贏下的戰鬥會輸掉（[SL 規劃器：束搜尋 §5](/zh-tw/arch/sl-planner/beam/#sec-5)–[§6](/zh-tw/arch/sl-planner/beam/#sec-6)）。
+8. **V 的訓練遊戲**。v6-3-2 是在普通怪物戰不花代價的地方訓練的；它在整局裡的敗局約有一半發生在兩個頭目之間，而兩個網路在連戰裡的高下並不總是在整局裡成立。計畫 v7 重新在整局上訓練（[學習](/zh-tw/arch/learning/)）。
+9. **V 的標籤帶著它們那一局之後的探索抽取**，而 V 不知道一局的 ε（[學習](/zh-tw/arch/learning/)）。
+10. **真實遊戲裡沒有節點複本的 SL**：Mod 只扣住戰鬥決策，所以一個宏觀那一側在複本上打的大腦，會用到上一個節點的複本（[Mod：SL 紀錄 §6](/zh-tw/arch/mod/sl-record/#sec-6)）。
+
+## 4. 接下來
 
 <Steps>
 
-1. <Badge text="2026-10-26 完成" variant="success" /> 整局工作階段，所有決策介面都能無頭執行，宏觀決策用佔位策略；覆蓋率、確定性和跨行程地圖測試（[模擬器：整局 §4](/zh-tw/arch/simulator/runs/#sec-4)、[模擬器：參考 §7](/zh-tw/arch/simulator/reference/#sec-7)）。
+1. <Badge text="2026-10-26 完成" variant="success" /> 無頭執行的整局，涵蓋每個決策介面；協定的整局級型別和選牌提示上下文；每個決策介面的 GameBridge；戰鬥世界 API、PIMC 和戰鬥測試集。
 
-2. <Badge text="2026-10-26 完成" variant="success" /> 協定的整局級型別和 `ChoiceContext`；GameBridge 為每個決策介面提供 observe 和 legal。
+2. <Badge text="2026-10-27 完成" variant="success" /> 工作行程池；Harness 的分派、種子和決策日誌；帶 V v0 的 L0；第一批報告和整局門檻；戰鬥網路 c2 成為 PIMC 的葉節點。
 
-3. <Badge text="2026-10-26 完成" variant="success" /> 行程內的戰鬥世界 API、戰鬥大腦 v0（PIMC 加 v0 葉節點估值）和戰鬥測試集；v0 在每個遭遇池上都贏過佔位策略（[NoSL PIMC：預算 §6](/zh-tw/arch/pimc/budget/#sec-6)）。
+3. <Badge text="2026-10-28 前完成" variant="success" /> 行程池裡的 SL 複本和 SL 規劃器；SL 排行榜的第一個冠軍；V v2 的 n2-b0.03 晉升；真實遊戲裡 Mod 的輔助模式，帶 SL 紀錄。
 
-4. <Badge text="2026-10-27 完成" variant="success" /> worker 行程池和行程間通訊：PIMC 的 NoSL 世界在持有整局的行程旁邊的 worker 行程裡搜尋，戰鬥大腦打整局裡的每場戰鬥（[模擬器：工作行程池 §2](/zh-tw/arch/simulator/pool/#sec-2)、[NoSL PIMC：預算 §5](/zh-tw/arch/pimc/budget/#sec-5)）。
+4. <Badge text="2026-10-30 完成" variant="success" /> 純 V（pure-1-g），然後是計畫 v6 的菁英連戰：三代均勻抽取的自我對弈，v6-1、v6-2 和 v6-3-2，每一代都通過連戰的配對門檻；v6-3-2 成為兩個冠軍的 V，在整局 SL 中 300 局贏 23 局。
 
-5. <Badge text="2026-10-27 完成" variant="success" /> Harness 排程：路由、大腦種子和決策日誌，覆蓋每一局（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)–[Harness：決策日誌 §1](/zh-tw/arch/harness/decision-log/#sec-1)）。公開記錄等第一個需要它的推斷出現時再做（[Harness §4](/zh-tw/arch/harness/#sec-4)）。
+5. **計畫 v7，現在**：V 在整局 SL 上訓練並過門檻，每場戰鬥都真打；V 按 P(win) 做決定（`v.train --objective win`），並用配對的勝局過門檻（`learn/gauntlet.py`，promotion-1-500）；V 的網路裡有一個構築編碼器和一個路線編碼器。它的第一代自我對弈正在打（[宏觀大腦：弱點與下一步](/zh-tw/arch/macro-brain/next/)）。
 
-6. 宏觀大腦 L0 和 v0 價值函式；R1/R2 完整對局；評估管線。L0 v0、V v0、R1 整局和管線已完成，第一批報告在 `eval/silent/reports/`（[評估 §6](/zh-tw/arch/evaluation/#sec-6)）；還剩 R2。
+6. 然後：NoSL 的各項，在 SL 優先期間先等著：戰鬥網路的下一代過門檻、調整 PIMC 的世界數和節點數、融合測試集的測量、根上的 sequential halving（[NoSL PIMC：預算 §7](/zh-tw/arch/pimc/budget/#sec-7)、[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。
 
-7. Mod：執行器和自動開局驅動，打通 R4 管線；R3 ≡ R4 等價測試。載入、與大腦的連線和覆蓋所有決策介面的輔助面板已經完成，兩種環境都支援，包括 SL 匯出和它的往返測試（[Mod §3](/zh-tw/arch/mod/#sec-3)–[SL 紀錄](/zh-tw/arch/mod/sl-record/)、[§8](/zh-tw/arch/mod/sl-record/#sec-8)）。
-
-8. worker 行程池裡從複本載入的 SL 世界；SL 排行榜。節點檢查點、SL 複本、封存、整局裡的 SL 世界，以及在 worker 行程池裡在複本上規劃整場戰鬥的 SL 規劃器已完成（[模擬器：世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)、[模擬器：工作行程池 §3](/zh-tw/arch/simulator/pool/#sec-3)、[SL 規劃器 §3](/zh-tw/arch/sl-planner/#sec-3)）；SL 排行榜的第一個冠軍在 2026-10-28 由它的基線定下：SL 規劃器 c2 加 L0 n2-b0.03，在 `promotion-1` 上平均 28.25 層。自 2026-10-30 起，它的冠軍是 SL 規劃器 c2 加在複本上的 L0 v6-3-2：在 `promotion-1-300` 上平均 33.56 層，300 局贏 23 局（[評估 §7](/zh-tw/arch/evaluation/#sec-7)）。
-
-9. 學習循環（擬合 V、ExIt、SPSA、晉級門檻），然後是 LLM 補丁循環。用自我對弈擬合 V、用 SPSA 調 V 和葉節點的權重，整局門檻和每個環境一個的冠軍檔案，菁英和頭目戰的預算倍數（[NoSL PIMC：預算 §4](/zh-tw/arch/pimc/budget/#sec-4)），以及決策日誌和對局記錄裡的 ExIt 資料（[Harness：決策日誌 §5](/zh-tw/arch/harness/decision-log/#sec-5)），已經完成（[學習 §2](/zh-tw/arch/learning/#sec-2)，[評估 §5](/zh-tw/arch/evaluation/#sec-5)）。V v2（局外 V 網路）及其訓練、自我對弈的探索也已完成（[學習 §1](/zh-tw/arch/learning/#sec-1)、[§2](/zh-tw/arch/learning/#sec-2)），因為選卡是最弱的一環，它被提到了戰鬥相關各項的前面。戰鬥結局輸出頭也已實作，即戰鬥網路：PIMC 學到的葉節點，讀敵人至今每回合的意圖（[學習 §1](/zh-tw/arch/learning/#sec-1)）。戰鬥網路的第一代已經過了晉級門檻（c2，[NoSL PIMC：預算 §6](/zh-tw/arch/pimc/budget/#sec-6)），第二代自我對弈用它來跑，按估值探索（[學習 §5](/zh-tw/arch/learning/#sec-5)）。V v2 第一個晉升的是 n2-b0.03（[學習 §2](/zh-tw/arch/learning/#sec-2)）。純 V 取代了 V v2，先在整局上訓練（pure-1-g），再在菁英連戰裡訓練，探索用均勻抽取；它的 v6-3-2 是兩個冠軍的 V，也是第一個打得出勝局的 V（[學習 §2](/zh-tw/arch/learning/#sec-2)、[§5](/zh-tw/arch/learning/#sec-5)）。
-
-   接下來：V 的訓練和門檻回到整局 SL，每場戰鬥都真打；V 按 P(win) 做決定，用配對的勝局過門檻；V 在同一個網路裡加上構築編碼器（它的卡牌、遺物和藥水當作一個集合，用注意力處理）和路線編碼器（地圖上的路徑），共用一個主體、只出一個價值。NoSL 的各項（下一代戰鬥網路過晉級門檻、調 K 和每個世界的節點數、融合測試集的測量、根上的 Sequential Halving、先驗網路，最後是帶 PCR 和 Reanalyse 的閉迴路）先等著，SL 優先（[學習 §2](/zh-tw/arch/learning/#sec-2)、[NoSL PIMC：預算 §7](/zh-tw/arch/pimc/budget/#sec-7)、[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。
+7. Mod 的自動遊玩：執行器、自動跑局驅動程式、R4 管線和 R3 ≡ R4 測試（[Mod：自動遊玩與安全](/zh-tw/arch/mod/auto/)）。
 
 </Steps>
