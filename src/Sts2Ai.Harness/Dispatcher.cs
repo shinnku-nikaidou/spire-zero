@@ -50,10 +50,10 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Plan">What the brain planned after <paramref name="Chosen"/>: the rest of the turn in combat, the rest of
 /// the act's route on the map.</param>
 /// <param name="Features">On a macro decision, V's features of the run the brain was shown: what V is fit on
-/// (docs: learning/value §4).</param>
+/// (docs: learning/reference §8).</param>
 /// <param name="Obs">On a combat decision, the observation the brain was shown: the input of the learned combat parts
 /// and of the fusion panel.</param>
-/// <param name="RunView">On a macro decision, the run the brain was shown: what V v2 is trained on (docs: learning/value §5).</param>
+/// <param name="RunView">On a macro decision, the run the brain was shown: what V v2 is trained on (docs: learning/experiments §3).</param>
 /// <param name="History">On a combat decision, what each enemy of the combat showed at the start of each round so far,
 /// this one's included (<see cref="Dispatcher.History"/>).</param>
 /// <param name="Explored">True when <paramref name="Chosen"/> was drawn by self-play exploration and valued below the

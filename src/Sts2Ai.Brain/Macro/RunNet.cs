@@ -9,7 +9,7 @@ public sealed record NetTest(RunView Run, double Value);
 
 /// <summary>
 /// V as <c>learn/v/export.py</c> writes it (pure V), or as the removed <c>learn/train_value.py</c> wrote it (V v2, which also read
-/// V v0's features) (docs: learning/value §3).
+/// V v0's features) (docs: learning/experiments §1).
 /// </summary>
 /// <param name="Objective">What <see cref="RunNet.Value"/> returns: "floor", the floor expected to be reached, or "win",
 /// the chance to survive every floor; or "progress", the boss gauntlet's (<c>learn/v/</c>): the floor expected to be
@@ -43,7 +43,7 @@ public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<str
     IReadOnlyList<string> Context, IReadOnlyList<string> Map);
 
 /// <summary>
-/// V (docs: learning/value), run by ONNX Runtime: a net over the run's cards, relics, potions and context, and, for pure V
+/// V (docs: macro-brain/network), run by ONNX Runtime: a net over the run's cards, relics, potions and context, and, for pure V
 /// (<c>learn/v/encode.py</c>), the map points still reachable and the run's numbers (<see cref="NetFile.State"/>); V v2
 /// read V v0's features and the cards' and relics' numbers (<see cref="NetNumbers"/>) instead; an encoders' net (plan v7)
 /// reads the map as a graph (<see cref="Route"/>) instead of its bag. Each input is fed only if the graph declares it,

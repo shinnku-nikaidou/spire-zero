@@ -1,4 +1,4 @@
-"""Train pure V (docs: learning/value §6–§8) from self-play, and write its net file for `run --value`.
+"""Train pure V (docs: macro-brain/value §5) from self-play, and write its net file for `run --value`.
 
 The samples are v/data.py's: the logged macro decisions with where their runs ended and the next combats' HP costs,
 and optionally boss sims (--boss-sims with the afterstates they were played from, --boss-afterstates) and door states

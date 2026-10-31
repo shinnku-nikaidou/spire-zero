@@ -1,4 +1,4 @@
-"""Pure V's samples (docs: learning/value §6): what was measured, never what someone judged.
+"""Pure V's samples (docs: macro-brain/value §3): what was measured, never what someone judged.
 
 Every macro decision of the decision logs (`run --log`) is a sample: its run view, and from the run records
 (`run --records`, joined by run id) where the run ended: died on a floor, won, or stopped (censored). Its second head

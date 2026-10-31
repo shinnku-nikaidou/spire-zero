@@ -172,7 +172,7 @@ internal static class SeedsCommand
 }
 
 /// <summary>
-/// ranks: V's card sense, for reading (docs: learning/value §11): the run views of the logs' card rewards, per act, each
+/// ranks: V's card sense, for reading (docs: learning/reference §10): the run views of the logs' card rewards, per act, each
 /// valued with one more copy of a card and without. A card is shown as the logs' decks hold it unupgraded, and only
 /// cards some deck held are ranked. What a card is worth depends on the deck, so this is a mean, not a test.
 /// </summary>
