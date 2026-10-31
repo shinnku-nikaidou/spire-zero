@@ -1,13 +1,12 @@
 """The combat net (docs: learning/combat-net §2): set encoders over the cards (per pile), the powers, the enemies (each with its
-intent slots) and the allies, bags of ids for the rest, then a body and two heads: the chance of each ending (a death,
-then each bucket of HP lost) and the potions still to be used after a win.
+intent slots) and the allies, bags of ids for the rest, then a body and one head: what V makes of the fight's end, as a
+share of V before the fight (combat/data.py).
 """
 
 import torch
 from torch import nn
 
 from combat import encode
-from combat.data import BUCKETS
 
 
 def padded(rows, device):
@@ -41,11 +40,12 @@ class Batch:
         cards, ups = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width)
         piles = torch.zeros(n, width, len(encode.PILES))
         mods, mod_mask = torch.zeros(n, width, 2, dtype=torch.long), torch.zeros(n, width, 2)
+        costs, mod_amounts = torch.zeros(n, width), torch.zeros(n, width, 2)
         for b, t in enumerate(toks):
-            for k, (card_id, up, pile, ms) in enumerate(t["cards"]):
-                cards[b, k], ups[b, k], piles[b, k, pile] = index["cards"].get(card_id, 0), up, 1
+            for k, (card_id, up, pile, ms, cost, amounts) in enumerate(t["cards"]):
+                cards[b, k], ups[b, k], piles[b, k, pile], costs[b, k] = index["cards"].get(card_id, 0), up, 1, cost
                 for j, m in enumerate(ms[:2]):
-                    mods[b, k, j], mod_mask[b, k, j] = index["modifiers"].get(m, 0), 1
+                    mods[b, k, j], mod_mask[b, k, j], mod_amounts[b, k, j] = index["modifiers"].get(m, 0), 1, amounts[j]
         p_ids, p_amounts, p_mask, p_stacks, p_cards, p_card_mask = power_tensors([t["powers"] for t in toks], index)
 
         e_n = max(1, max(len(t["enemies"]) for t in toks))
@@ -106,15 +106,20 @@ class Batch:
                         1,
                     )
 
+        r_n = max(1, max(len(t["relics"]) for t in toks))
+        relic_values, relic_status = torch.zeros(n, r_n, 3), torch.zeros(n, r_n, dtype=torch.long)
+        for b, t in enumerate(toks):
+            for k, (values, status) in enumerate(zip(t["relic_values"], t["relic_status"], strict=True)):
+                relic_values[b, k], relic_status[b, k] = torch.tensor(values), index["relic_status"].get(status, 0)
+
         tensors = [
             cards, ups, piles, mods, mod_mask, p_ids, p_amounts, p_mask, torch.tensor([t["player"] for t in toks]),
             enemies, enemy_scalars, enemy_mask, *e_powers, intents, intent_values, intent_mask, *bags,
             p_stacks, p_cards, p_card_mask, *e_numbers, orbs, orb_mask, allies, ally_scalars, ally_mask, *a_powers,
-            torch.tensor([t["extra"] for t in toks]),
+            torch.tensor([t["extra"] for t in toks]), costs, mod_amounts, relic_values, relic_status,
         ]  # fmt: skip
         self.tensors = [x.to(device) for x in tensors]
-        self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
-        self.used = torch.tensor([float(s["used"]) for s in samples], device=device)
+        self.target = torch.tensor([s["worth"] for s in samples], device=device)
 
     def inputs(self):
         """The net's inputs, in the order of encode.INPUTS."""
@@ -136,9 +141,12 @@ class Net(nn.Module):
     def __init__(self, sizes: dict[str, int]):
         super().__init__()
         d, h = self.DIM, self.HIDDEN
-        for table in ("cards", "modifiers", "enemies", "intents", "relics", "potions", "context", "orbs", "allies"):
-            setattr(self, table, nn.Embedding(sizes[table], d))
+        for table in encode.TABLES:
+            if table != "powers":
+                setattr(self, table, nn.Embedding(sizes[table], d))
         self.card_up = nn.Embedding(sizes["cards"], d)
+        self.mod_amount = nn.Embedding(sizes["modifiers"], d)
+        self.relic_counter = nn.Embedding(sizes["relics"], d)
         self.powers = nn.Embedding(sizes["powers"], d)
         self.power_amount = nn.Embedding(sizes["powers"], d)
         self.power_stacks = nn.Embedding(sizes["powers"], d)
@@ -149,6 +157,8 @@ class Net(nn.Module):
                 nn.init.normal_(m.weight, std=0.1)
         self.pile = nn.Parameter(torch.randn(len(encode.PILES), d) * 0.1)
         self.slot = nn.Parameter(torch.randn(encode.SLOTS, d) * 0.1)
+        self.cost = nn.Parameter(torch.randn(d) * 0.1)
+        self.melted = nn.Parameter(torch.randn(d) * 0.1)
         self.card_phi = mlp(d, h, h)
         self.power_phi = mlp(d, h)
         self.enemy_scalars = nn.Linear(5, d)
@@ -157,8 +167,7 @@ class Net(nn.Module):
         self.ally_phi = mlp(d + h, h)
         width = len(encode.PILES) * h + self.N_PLAYER + h + 2 * h + 4 * d + h + self.N_EXTRA
         self.body = mlp(width, self.BODY, self.BODY)
-        self.head = nn.Linear(self.BODY, 1 + BUCKETS)
-        self.potion_head = nn.Linear(self.BODY, 1)
+        self.head = nn.Linear(self.BODY, 1)
 
     def power_sum(self, ids, amounts, mask, stacks=None, cards=None, card_mask=None):
         """The powers through power_phi, summed; with their stacks and kept cards where they are given."""
@@ -168,9 +177,8 @@ class Net(nn.Module):
         return (self.power_phi(x) * mask[..., None]).sum(-2)
 
     def forward(self, *inputs):
-        """Per sample, the logits of the ending classes and the potions used after a win (inputs as encode.INPUTS)."""
-        z = self.encode(*inputs)
-        return self.head(z), self.potion_head(z)[:, 0]
+        """Per sample, the fight's worth: V of its end as a share of V before it (inputs as encode.INPUTS)."""
+        return self.head(self.encode(*inputs))[:, 0]
 
     def encode(
         self, cards, ups, piles, mods, mod_mask, powers, power_amounts, power_mask, player,
@@ -178,12 +186,14 @@ class Net(nn.Module):
         intents, intent_values, intent_mask, relics, relic_mask, potions, potion_mask, context, context_mask,
         power_stacks, power_cards, power_card_mask, enemy_power_stacks, enemy_power_cards, enemy_power_card_mask,
         orbs, orb_mask, allies, ally_scalars, ally_mask, ally_powers, ally_power_amounts, ally_power_mask, extra,
+        costs, mod_amounts, relic_values, relic_status,
     ):  # fmt: skip
         """The body's vector of each sample."""
         x = (
             self.cards(cards)
             + ups[..., None] * self.card_up(cards)
-            + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
+            + costs[..., None] * self.cost
+            + ((self.modifiers(mods) + mod_amounts[..., None] * self.mod_amount(mods)) * mod_mask[..., None]).sum(2)
             + piles @ self.pile
         )
         per_pile = torch.bmm(piles.transpose(1, 2), self.card_phi(x)).flatten(1) * self.SUM_SCALE
@@ -210,9 +220,14 @@ class Net(nn.Module):
         )
         foes = (self.enemy_phi(e) * enemy_mask[..., None]).sum(1)
         mine = self.power_sum(powers, power_amounts, power_mask, power_stacks, power_cards, power_card_mask)
-        parts = [per_pile, player, mine, foes]
+        held = (
+            self.relics(relics)
+            + relic_values[..., 0:1] * self.relic_counter(relics)
+            + relic_values[..., 2:3] * self.melted
+            + self.relic_status(relic_status)
+        )
+        parts = [per_pile, player, mine, foes, (held * relic_mask[..., None]).sum(1)]
         for table, ids, mask in (
-            (self.relics, relics, relic_mask),
             (self.potions, potions, potion_mask),
             (self.context, context, context_mask),
             (self.orbs, orbs, orb_mask),
@@ -231,21 +246,6 @@ class Net(nn.Module):
         return self.body(torch.cat(parts, 1))
 
 
-class Outcome(nn.Module):
-    """The net as ONNX holds it: the chance of each ending, and the potions used after a win."""
-
-    def __init__(self, net):
-        super().__init__()
-        self.net = net
-
-    def forward(self, *inputs):
-        logits, potions = self.net(*inputs)
-        return torch.softmax(logits, 1), potions
-
-
-def loss(logits, potions, b: Batch, potion_weight: float):
-    """Per sample, the endings' cross-entropy plus the potions' squared error after a win."""
-    won = (b.target > 0).float()
-    return (
-        nn.functional.cross_entropy(logits, b.target, reduction="none") + potion_weight * won * (potions - b.used) ** 2
-    )
+def loss(worth, b: Batch):
+    """Per sample, the squared error of the fight's worth."""
+    return (worth - b.target) ** 2
