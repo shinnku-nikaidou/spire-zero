@@ -36,7 +36,7 @@ Harness 不做的事：
 - **读取或执行游戏**：这是宿主里的 GameBridge（[GameBridge](/arch/gamebridge/)）；
 - **构建或确定化世界**：这由工作进程来做，因为它需要游戏代码。池化的大脑发送自包含的请求，工作进程根据请求带来的东西构建世界；Harness 自己从不打开世界（[协议：世界与工作进程消息 §4](/arch/protocol/worlds/#sec-4)）；
 - **评判动作**：这由各个大脑来做（[战斗大脑](/arch/combat-brain/)、[宏观大脑](/arch/macro-brain/)）；
-- **丢弃过期请求**：这由 Mod 来做。搜索进行中画面变了时，它发出 `cancel`，等回答到来后把它丢掉；Harness 按顺序回答每个请求（[Mod §3](/arch/mod/#sec-3)）。
+- **丢弃过期请求**：这由 Mod 来做。搜索进行中画面变了时，它发出 `cancel`，等回答到来后把它丢掉；Harness 按顺序回答每个请求（[Mod：主循环 §3](/arch/mod/loop/#sec-3)）。
 
 ## 2. 一个决策，一步一步
 
@@ -139,7 +139,7 @@ public sealed class PublicRecord
 
 **回答**（`BrainServer.cs:138-154`）。战斗决策的合法动作被解析成战斗动作，大脑看到的是它画面上的战斗观测；选牌提示的回答写成 `pick:i,j`；其他每个决策界面都是宏观决策。推荐重复请求的 id 和哈希，并带上这个决策的注记：它的大脑、计划和候选（选牌提示的推荐只带大脑）。
 
-**`brain` 命令**包装了它（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。它根据自己的选项做出两个冠军，每种环境一个：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。两者共用一个工作进程池。`--log FILE` 在每一局的 `run_end` 时写出它的决策日志，所以没发这条消息就断开的宿主不留下任何行；`--wire FILE` 记录宿主发来的每条消息，`clones` 据此检查 Mod 的 SL 记录（[Mod §12](/arch/mod/#sec-12)）。
+**`brain` 命令**包装了它（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。它根据自己的选项做出两个冠军，每种环境一个：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。两者共用一个工作进程池。`--log FILE` 在每一局的 `run_end` 时写出它的决策日志，所以没发这条消息就断开的宿主不留下任何行；`--wire FILE` 记录宿主发来的每条消息，`clones` 据此检查 Mod 的 SL 记录（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
 
 ## 6. 代码
 

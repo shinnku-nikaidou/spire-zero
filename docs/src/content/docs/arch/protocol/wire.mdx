@@ -130,4 +130,4 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | 大脑发来的 `error` | 这一局失败 | `run_end` `failed`；这一局余下的部分里助手关闭 |
 | `run_end` 的原因 | `won`、`lost`、`truncated`、`failed` | `won`、`lost`、`failed`、`aborted` |
 
-Mod 一侧在 [Mod §5](/arch/mod/#sec-5) 和 [§6](/arch/mod/#sec-6) 里讲：它只在单人对局里运行，并且只在它构建时针对的游戏版本上运行。
+Mod 一侧在 [Mod：主循环 §8](/arch/mod/loop/#sec-8) 和 [Mod：SL 记录 §7](/arch/mod/sl-record/#sec-7) 里讲：它只在单人对局里运行，并且只在它构建时针对的游戏版本上运行。

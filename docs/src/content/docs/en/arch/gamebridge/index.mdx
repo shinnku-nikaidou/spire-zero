@@ -28,7 +28,7 @@ For each kind of decision screen, GameBridge has the same three jobs:
 | **legal** | the game's objects | the legal actions, as text | `MapActions.Legal(run)` → `["map:0,1", "map:3,1"]` |
 | **start** | one legal action | the game call that a click on the screen would make, started | `MapActions.Start(run, player, "map:0,1")` → a vote for the map point, as the map screen enqueues it |
 
-What it does not do is decide **which** screen is asking, or wait for the game to finish an action. Both depend on what the screen shows, which only the host tracks: the simulator plays the screens' part itself ([Simulator: whole runs §3](/en/arch/simulator/runs/#sec-3)), and the mod looks at the screen on display ([Mod §3](/en/arch/mod/#sec-3)). GameBridge keeps only pure predicates the hosts build on, such as `CombatActions.WaitingForInput` and `RewardActions.IsTerminal`.
+What it does not do is decide **which** screen is asking, or wait for the game to finish an action. Both depend on what the screen shows, which only the host tracks: the simulator plays the screens' part itself ([Simulator: whole runs §3](/en/arch/simulator/runs/#sec-3)), and the mod looks at the screen on display ([Mod: the main loop §4](/en/arch/mod/loop/#sec-4)). GameBridge keeps only pure predicates the hosts build on, such as `CombatActions.WaitingForInput` and `RewardActions.IsTerminal`.
 
 ## 2. The rules
 
@@ -42,19 +42,19 @@ What it does not do is decide **which** screen is asking, or wait for the game t
 | host | observe | legal | start |
 |---|---|---|---|
 | the simulator (`Sts2Ai.SimWorker`) | every decision | every decision | every action it plays ([Simulator: whole runs §4](/en/arch/simulator/runs/#sec-4)) |
-| the mod (`Sts2Ai.Mod`) | every decision it asks the brain about | the same | never: the mod advises and the player acts. It records the player's own actions by patching the same game entry points the simulator's starts call, so an SL record names a step exactly as the simulator would ([Mod §6](/en/arch/mod/#sec-6)) |
+| the mod (`Sts2Ai.Mod`) | every decision it asks the brain about | the same | never: the mod advises and the player acts. It records the player's own actions by patching the same game entry points the simulator's starts call, so an SL record names a step exactly as the simulator would ([Mod: the SL record §3](/en/arch/mod/sl-record/#sec-3)) |
 
 The mod compiles GameBridge's source files into itself and runs inside the game. The simulator references it as a project. CombatBuilder, the simulator's way of building a combat from an observation, reuses GameBridge's intent reader to match monsters' moves to the intents shown ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5)).
 
 ## 4. Following the game
 
-Everything this project knows about the game's code lives in three places: GameBridge, the simulator's patches ([Simulator: headless host §4](/en/arch/simulator/headless/#sec-4)), and the mod's screen adapters ([Mod §4](/en/arch/mod/#sec-4)). On a game update:
+Everything this project knows about the game's code lives in three places: GameBridge, the simulator's patches ([Simulator: headless host §4](/en/arch/simulator/headless/#sec-4)), and the mod's screen readers and hooks ([Mod: the main loop §4](/en/arch/mod/loop/#sec-4)). On a game update:
 
 1. decompile the new game and rebuild against it (`Sts2BinDir`, [Simulator: reference §1](/en/arch/simulator/reference/#sec-1));
 2. run `selftest`, then `run --check` batches, which fail on any screen the driver does not know, any illegal answer, any game error, and list the surfaces never reached ([Simulator: whole runs §5](/en/arch/simulator/runs/#sec-5));
 3. read the diff of the game's signatures that GameBridge touches; the card prompt entries are found by reflection, so a new one is patched without a change, but its arguments still need a look.
 
-The mod refuses to run on a game version it was not built for ([Mod §2](/en/arch/mod/#sec-2)).
+The mod refuses to run on a game version it was not built for ([Mod §3](/en/arch/mod/#sec-3)).
 
 ## 5. Planned: the event stream
 
@@ -74,7 +74,7 @@ Only what the player could have watched would go in: an insert at a random posit
 | GameBridge does reach the game (the control of the boundary check) | `BoundaryTests`, `selftest` |
 | every combat observation and action round-trips; builds from observations show them exactly | `selftest` ([Simulator: reference §5](/en/arch/simulator/reference/#sec-5)) |
 | every surface's observation round-trips; every answer the brains give is legal and starts without error; runs replay exactly, nodes included | `run --check` ([Simulator: whole runs §6](/en/arch/simulator/runs/#sec-6)) |
-| the mod's SL records replay on their clones with the same observations as the game showed | `clones` ([Mod §12](/en/arch/mod/#sec-12)) |
+| the mod's SL records replay on their clones with the same observations as the game showed | `clones` ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)) |
 
 Planned: a check in the mod that every enabled control on screen is one legal action, and the same seed and decisions giving the same observations in the game and in the simulator ([Evaluation §1](/en/arch/evaluation/#sec-1)).
 

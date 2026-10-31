@@ -63,7 +63,7 @@ Both hosts take checkpoints, the simulator and the mod in the game, NoSL runs in
 
 **The clone** is the checkpoint plus every decision of the node since, as trace lines (`surface action`; a card prompt's picks as the game's own indexes). Its protocol type is `NodeClone(Save, Trace, Gauntlet?)` (`Sts2Ai.Protocol/World.cs:53`), opaque to everything but the simulator. `Gauntlet` is true for a run under the elite gauntlet's rule, which the clone keeps ([Whole runs §7](/en/arch/simulator/runs/#sec-7)). `RunSession.Clone()` makes one at any point of the node (`Simulation/RunSession.cs:229-230`).
 
-**In a run**, the SL host sends the clone to the brain piece by piece: `node_checkpoint` when a new node starts, then each of the node's decisions as `node_action`, both just before the next decision is asked (`Brains/RunBrains.cs:88-99`; [Protocol: the wire §6](/en/arch/protocol/wire/#sec-6)). Harness keeps the latest checkpoint and the decisions since, which is the clone at every decision ([Harness §4](/en/arch/harness/#sec-4)). The mod sends the same messages from the game ([Mod §6](/en/arch/mod/#sec-6)).
+**In a run**, the SL host sends the clone to the brain piece by piece: `node_checkpoint` when a new node starts, then each of the node's decisions as `node_action`, both just before the next decision is asked (`Brains/RunBrains.cs:88-99`; [Protocol: the wire §6](/en/arch/protocol/wire/#sec-6)). Harness keeps the latest checkpoint and the decisions since, which is the clone at every decision ([Harness §4](/en/arch/harness/#sec-4)). The mod sends the same messages from the game ([Mod: the SL record §7](/en/arch/mod/sl-record/#sec-7)).
 
 ## 4. Loading the clone
 

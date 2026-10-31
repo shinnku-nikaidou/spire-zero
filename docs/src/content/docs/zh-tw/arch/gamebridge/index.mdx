@@ -28,7 +28,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 | **legal** | 遊戲的物件 | 合法動作，以文字表示 | `MapActions.Legal(run)` → `["map:0,1", "map:3,1"]` |
 | **start** | 一個合法動作 | 在畫面上點一下會發出的那個遊戲呼叫，並且已開始執行 | `MapActions.Start(run, player, "map:0,1")` → 對該地圖點的一次投票，和地圖畫面把它排入佇列的方式一樣 |
 
-它不做的，是判斷**哪一個**畫面在提問，或等待遊戲完成一個動作。這兩件事都取決於畫面顯示什麼，而只有宿主在追蹤這一點：模擬器自己扮演各個畫面的角色（[模擬器：整局 §3](/zh-tw/arch/simulator/runs/#sec-3)），Mod 則查看正在顯示的畫面（[Mod §3](/zh-tw/arch/mod/#sec-3)）。GameBridge 只保留宿主賴以建構的純判定函式，例如 `CombatActions.WaitingForInput` 和 `RewardActions.IsTerminal`。
+它不做的，是判斷**哪一個**畫面在提問，或等待遊戲完成一個動作。這兩件事都取決於畫面顯示什麼，而只有宿主在追蹤這一點：模擬器自己扮演各個畫面的角色（[模擬器：整局 §3](/zh-tw/arch/simulator/runs/#sec-3)），Mod 則查看正在顯示的畫面（[Mod：主迴圈 §4](/zh-tw/arch/mod/loop/#sec-4)）。GameBridge 只保留宿主賴以建構的純判定函式，例如 `CombatActions.WaitingForInput` 和 `RewardActions.IsTerminal`。
 
 ## 2. 規則
 
@@ -42,19 +42,19 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 | 宿主 | observe | legal | start |
 |---|---|---|---|
 | 模擬器（`Sts2Ai.SimWorker`） | 每個決策 | 每個決策 | 它打出的每個動作（[模擬器：整局 §4](/zh-tw/arch/simulator/runs/#sec-4)） |
-| Mod（`Sts2Ai.Mod`） | 它向大腦詢問的每個決策 | 同上 | 從不：Mod 只給建議，行動的是玩家。它給模擬器的 start 所呼叫的同一批遊戲入口打補丁，藉此記錄玩家自己的動作，所以 SL 記錄對一步的命名和模擬器完全相同（[Mod §6](/zh-tw/arch/mod/#sec-6)） |
+| Mod（`Sts2Ai.Mod`） | 它向大腦詢問的每個決策 | 同上 | 從不：Mod 只給建議，行動的是玩家。它給模擬器的 start 所呼叫的同一批遊戲入口打補丁，藉此記錄玩家自己的動作，所以 SL 記錄對一步的命名和模擬器完全相同（[Mod：SL 紀錄 §3](/zh-tw/arch/mod/sl-record/#sec-3)） |
 
 Mod 把 GameBridge 的原始碼檔案編譯進自己，在遊戲裡執行。模擬器則以專案參考的方式引用它。CombatBuilder 是模擬器從觀測建構一場戰鬥的方式，它重用 GameBridge 的意圖讀取器，把怪物的招式和顯示出來的意圖對應起來（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。
 
 ## 4. 跟上遊戲
 
-這個專案對遊戲程式碼所知道的一切，都放在三個地方：GameBridge、模擬器的補丁（[模擬器：無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)），以及 Mod 的畫面轉接器（[Mod §4](/zh-tw/arch/mod/#sec-4)）。遊戲更新時：
+這個專案對遊戲程式碼所知道的一切，都放在三個地方：GameBridge、模擬器的補丁（[模擬器：無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)），以及 Mod 讀取畫面的程式碼和鉤子（[Mod：主迴圈 §4](/zh-tw/arch/mod/loop/#sec-4)）。遊戲更新時：
 
 1. 反編譯新版遊戲，並針對它重新建置（`Sts2BinDir`，[模擬器：參考 §1](/zh-tw/arch/simulator/reference/#sec-1)）；
 2. 執行 `selftest`，再跑幾批 `run --check`，遇到驅動程式不認得的畫面、任何不合法的回答或任何遊戲錯誤，它們都會失敗，並列出從未到達的決策介面（[模擬器：整局 §5](/zh-tw/arch/simulator/runs/#sec-5)）；
 3. 閱讀 GameBridge 所碰到的遊戲簽章的差異；選牌提示的入口是用反射找到的，所以新增的入口不需改動就會被打上補丁，但它的參數仍然需要看一下。
 
-Mod 拒絕在不是它建置時所針對的遊戲版本上執行（[Mod §2](/zh-tw/arch/mod/#sec-2)）。
+Mod 拒絕在不是它建置時所針對的遊戲版本上執行（[Mod §3](/zh-tw/arch/mod/#sec-3)）。
 
 ## 5. 規劃中：事件流
 
@@ -74,7 +74,7 @@ Mod 拒絕在不是它建置時所針對的遊戲版本上執行（[Mod §2](/zh
 | GameBridge 確實觸及遊戲（邊界檢查的對照） | `BoundaryTests`、`selftest` |
 | 每個戰鬥觀測和動作都能完整往返；從觀測建構出的戰鬥會分毫不差地顯示這些觀測 | `selftest`（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)） |
 | 每種決策介面的觀測都能完整往返；大腦給出的每個回答都合法，並能無錯誤地開始執行；對局能完全重播，節點也包括在內 | `run --check`（[模擬器：整局 §6](/zh-tw/arch/simulator/runs/#sec-6)） |
-| Mod 的 SL 記錄在它們的複本上重播時，顯示的觀測和遊戲當時顯示的相同 | `clones`（[Mod §12](/zh-tw/arch/mod/#sec-12)） |
+| Mod 的 SL 記錄在它們的複本上重播時，顯示的觀測和遊戲當時顯示的相同 | `clones`（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
 
 規劃中：Mod 裡的一項檢查，確認畫面上每個啟用的控制元件都是一個合法動作；以及相同的種子和決策在遊戲和模擬器裡給出相同的觀測（[評估 §1](/zh-tw/arch/evaluation/#sec-1)）。
 

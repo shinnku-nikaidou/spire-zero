@@ -36,7 +36,7 @@ What Harness does not do:
 - **read or execute the game**: that is GameBridge, inside the host ([GameBridge](/en/arch/gamebridge/));
 - **build or determinize worlds**: a worker does, since it needs game code. The pooled brains send self-contained requests, and the worker builds the world from what a request carries; Harness never opens a world itself ([Protocol: worlds and worker messages §4](/en/arch/protocol/worlds/#sec-4));
 - **judge actions**: the brains do ([Combat brain](/en/arch/combat-brain/), [Macro brain](/en/arch/macro-brain/));
-- **drop stale requests**: the mod does. When the screen changes while a search runs, it sends `cancel`, waits for the answer and throws it away; Harness answers every request in order ([Mod §3](/en/arch/mod/#sec-3)).
+- **drop stale requests**: the mod does. When the screen changes while a search runs, it sends `cancel`, waits for the answer and throws it away; Harness answers every request in order ([Mod: the main loop §3](/en/arch/mod/loop/#sec-3)).
 
 ## 2. One decision, step by step
 
@@ -139,7 +139,7 @@ public sealed class PublicRecord
 
 **Answering** (`BrainServer.cs:138-154`). A combat decision's legal actions are parsed into combat actions and its screen's combat observation is what the brain sees; a card prompt's answer is written `pick:i,j`; every other surface is a macro decision. The recommendation echoes the request's id and hash and carries the decision's note: its brain, plan and candidates (a card prompt's carries the brain only).
 
-**The `brain` command** wraps it ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). It makes two champions, one per environment, from its options: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s, the SL planner by default ([Environments §5](/en/arch/environments/#sec-5)). Both share one worker pool. `--log FILE` writes each run's decision log at its `run_end`, so a host that drops without one leaves no lines; `--wire FILE` records every message a host sends, from which `clones` checks the mod's SL records ([Mod §12](/en/arch/mod/#sec-12)).
+**The `brain` command** wraps it ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). It makes two champions, one per environment, from its options: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s, the SL planner by default ([Environments §5](/en/arch/environments/#sec-5)). Both share one worker pool. `--log FILE` writes each run's decision log at its `run_end`, so a host that drops without one leaves no lines; `--wire FILE` records every message a host sends, from which `clones` checks the mod's SL records ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)).
 
 ## 6. The code
 

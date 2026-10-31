@@ -21,7 +21,7 @@ import { Badge } from '@astrojs/starlight/components';
 
 `CombatActions`（`Actions/CombatActions.cs`）：
 
-- **`WaitingForInput(player)`**：玩家可以行動。有戰鬥正在進行、輪到玩家一方、處於出牌階段、動作執行器空閒，而且玩家動作沒有被停用。無頭時這樣就夠了；在真實遊戲裡，畫面也必須準備好，這由 Mod 在它自己的節點上檢查（[Mod §3](/zh-tw/arch/mod/#sec-3)）。
+- **`WaitingForInput(player)`**：玩家可以行動。有戰鬥正在進行、輪到玩家一方、處於出牌階段、動作執行器空閒，而且玩家動作沒有被停用。無頭時這樣就夠了；在真實遊戲裡，畫面也必須準備好，這由 Mod 在它自己的節點上檢查（[Mod：主迴圈 §4](/zh-tw/arch/mod/loop/#sec-4)）。
 - **`Legal(state, player)`**：先是手牌，按手牌順序，然後是藥水，按槽位，最後是 `end_turn`。
   - 每張牌用 `CanPlay()` 檢查一次（它會執行四次鉤子分派，所以不按目標重複檢查）。以任一敵人為目標的牌，對它可以瞄準的每個敵人各合法一次；以任一盟友為目標的牌，對每個盟友各合法一次；其他的牌則不帶目標，只合法一次。
   - 藥水合法的條件是：玩家可以使用藥水，這個槽裡有一瓶還沒排入佇列的藥水，它通過自己的可用性檢查，並且可在戰鬥中使用（限戰鬥使用或隨時可用）；目標的處理方式相同，敵人只在活著時才算。
@@ -102,7 +102,7 @@ import { Badge } from '@astrojs/starlight/components';
 
 戰鬥以外的文字動作由 `ActionText`（`Actions/ActionText.cs`，internal 類別）解析：一個動詞和它的參數，索引只接受純數字。
 
-**SL 記錄**。Mod 不執行動作，但在 SL 下，它必須照模擬器的命名方式記錄玩家的動作，讓大腦能為這個節點做出複本（[Mod §6](/zh-tw/arch/mod/#sec-6)）。它給模擬器的 start 所呼叫的那些遊戲入口打補丁，並用 GameBridge 自己的輔助函式為每一步命名，所以記錄下來的一步，就是模擬器本來會打出的動作（`Sts2Ai.Mod/NodeRecord.cs`）：
+**SL 記錄**。Mod 不執行動作，但在 SL 下，它必須照模擬器的命名方式記錄玩家的動作，讓大腦能為這個節點做出複本（[Mod：SL 紀錄 §3](/zh-tw/arch/mod/sl-record/#sec-3)）。它給模擬器的 start 所呼叫的那些遊戲入口打補丁，並用 GameBridge 自己的輔助函式為每一步命名，所以記錄下來的一步，就是模擬器本來會打出的動作（`Sts2Ai.Mod/NodeRecord.cs`）：
 
 | 入口 | 記錄什麼 |
 |---|---|

@@ -83,7 +83,7 @@ The game has a built-in switch for its own automated tests, `TestMode`. With it 
 
 .NET normally uses *tiered compilation*: a method is first compiled quickly, and methods that run often are compiled again later, in the background, with full optimization (a *rejit*). A rejit can silently drop a Harmony patch, because the new code is compiled from the original method. It happened after a few thousand combats, when `RunManager.WriteReplay` ran unpatched. Tiering was also twice as slow on short runs, since Harmony's JIT hook makes every extra compile expensive.
 
-So the project file sets `TieredCompilation=false` (`Sts2Ai.SimWorker.csproj:12-20`): every method is compiled once, fully optimized. Launchers should also set `DOTNET_ReadyToRun=0`, which a project file cannot set: the framework's own code is then compiled fully optimized too, about 20% more combats per second. The real game runs with tiering on, which is a risk for the mod's patches ([Mod §10](/en/arch/mod/#sec-10)).
+So the project file sets `TieredCompilation=false` (`Sts2Ai.SimWorker.csproj:12-20`): every method is compiled once, fully optimized. Launchers should also set `DOTNET_ReadyToRun=0`, which a project file cannot set: the framework's own code is then compiled fully optimized too, about 20% more combats per second. The real game runs with tiering on, which is a risk for the mod's patches ([Mod: auto-play and safety §5](/en/arch/mod/auto/#sec-5)).
 
 ## 7. The Pump: one thread, one order
 

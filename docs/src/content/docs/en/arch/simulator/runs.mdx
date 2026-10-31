@@ -200,7 +200,7 @@ Both rules mark their records (`auto_win`, `gauntlet`). `report`, `gate` and a w
 
 ## 8. Runs against a brain
 
-`run` normally keeps the brain in its own process: Harness and the champion's brains are objects there, and their searches go to a worker pool it starts ([The worker pool](/en/arch/simulator/pool/)). With `run --brain SOCKET`, the brain is a separate process listening at a Unix socket instead, the one the mod talks to in the game ([Mod §5](/en/arch/mod/#sec-5)). The simulator then hosts runs exactly as the game does: each run sends `hello` with its environment and a run id hashed from the seed, every decision goes out with its observation and legal actions, and the brain's recommendation is played ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). The run id hides the seed in NoSL; in SL the seed does reach the brain, inside the node checkpoint's save, which SL may know.
+`run` normally keeps the brain in its own process: Harness and the champion's brains are objects there, and their searches go to a worker pool it starts ([The worker pool](/en/arch/simulator/pool/)). With `run --brain SOCKET`, the brain is a separate process listening at a Unix socket instead, the one the mod talks to in the game ([Mod: the main loop §8](/en/arch/mod/loop/#sec-8)). The simulator then hosts runs exactly as the game does: each run sends `hello` with its environment and a run id hashed from the seed, every decision goes out with its observation and legal actions, and the brain's recommendation is played ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). The run id hides the seed in NoSL; in SL the seed does reach the brain, inside the node checkpoint's save, which SL may know.
 
 The brain decides what plays, so `run --brain` refuses every champion option, `--log` included (`Commands/RunCommand.cs:71-72`), and so, since a champion file's options are merged in as given ones, a `--champion FILE` that names any (`Commands/Args.cs:186-202`) <Badge text="inferred" variant="caution" />. In SL the host also sends the node messages: the checkpoint when a new node starts, then the decisions not yet sent, each just before the next decision (`Brains/RunBrains.cs:53-99`).
 
@@ -212,7 +212,7 @@ brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy pimc|pla
 
 - `--socket`: by default `$XDG_STATE_HOME/sts2ai/brain.sock`, or `~/.local/state/sts2ai/brain.sock` when that variable is unset (`Sts2Ai.Protocol/Wire.cs:99-103`): Steam runs the game in a container that shares the home directory but not `$XDG_RUNTIME_DIR`.
 - A host names its environment in `hello`: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s (the SL planner by default), with the same macro brain.
-- `--log` writes the decision log; `--wire` writes every message the hosts send, which `clones` replays to check a host's SL decisions on their clones ([Mod §12](/en/arch/mod/#sec-12)).
+- `--log` writes the decision log; `--wire` writes every message the hosts send, which `clones` replays to check a host's SL decisions on their clones ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)).
 - It prints a line per run: the run id, the end, the floor, the decisions, the replans, and its workers' game errors, which the host's run records do not count.
 
 `run --check` uses the same server in-process for its second play, on an abstract Unix socket named after the process (`\0sts2ai-brain-PID`, `Brains/RunBrains.cs:200-220`), so the wire path is checked on every run that `--check` plays.

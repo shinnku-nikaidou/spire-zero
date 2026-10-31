@@ -135,7 +135,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `run` | `--seeds FILE`、`--n`、`--start`、`--seed`（1）、`--asc`（0）、`--env`（NoSL）、`--max-decisions`（20000）、`--check`、`--trace`、`--obs`、`--auto-win`、`--gauntlet`、`--log FILE`、`--records FILE`、`--brain SOCKET`；冠军、冠军文件、配置 | 打整局（[整局](/arch/simulator/runs/)）。拒绝的组合：`--auto-win` 与 `--check`、`--gauntlet` 或 `--afterstates clone`；SL 之外的 `plan`；`--brain` 与任何冠军选项或 `--log` |
 | `brain` | `--socket PATH`、`--log FILE`、`--wire FILE`、`--sl-policy`（`plan`）；冠军、冠军文件 | 单独运行的大脑，通过 Unix 套接字服务主机（[整局 §8](/arch/simulator/runs/#sec-8)） |
 | `serve` | 叶子 | 工作进程池里的一个工作进程（[工作进程池 §4](/arch/simulator/pool/#sec-4)） |
-| `clones` | `--wire`（必需） | 在各自的克隆上重播 `brain --wire` 记录下的主机 SL 决策，比较观测；有任何不同时退出码为 1（[Mod §12](/arch/mod/#sec-12)） |
+| `clones` | `--wire`（必需） | 在各自的克隆上重播 `brain --wire` 记录下的主机 SL 决策，比较观测；有任何不同时退出码为 1（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)） |
 
 **评估**（[评估](/arch/evaluation/)）
 

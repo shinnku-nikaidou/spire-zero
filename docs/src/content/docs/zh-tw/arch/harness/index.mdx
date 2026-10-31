@@ -36,7 +36,7 @@ Harness 不做的事：
 - **讀取或執行遊戲**：那是宿主裡的 GameBridge（[GameBridge](/zh-tw/arch/gamebridge/)）；
 - **建構或確定化世界**：這由工作行程做，因為它需要遊戲程式碼。池化的大腦送出自包含的請求，工作行程用請求帶來的東西建構世界；Harness 自己從不開啟世界（[協定：世界與工作行程訊息 §4](/zh-tw/arch/protocol/worlds/#sec-4)）；
 - **評判動作**：這由各個大腦做（[戰鬥大腦](/zh-tw/arch/combat-brain/)、[宏觀大腦](/zh-tw/arch/macro-brain/)）；
-- **丟棄過期請求**：這由 Mod 做。搜尋進行時畫面變了，它就送出 `cancel`，等回答到來再把它丟掉；Harness 按順序回答每個請求（[Mod §3](/zh-tw/arch/mod/#sec-3)）。
+- **丟棄過期請求**：這由 Mod 做。搜尋進行時畫面變了，它就送出 `cancel`，等回答到來再把它丟掉；Harness 按順序回答每個請求（[Mod：主迴圈 §3](/zh-tw/arch/mod/loop/#sec-3)）。
 
 ## 2. 一個決策，一步一步
 
@@ -139,7 +139,7 @@ public sealed class PublicRecord
 
 **回答**（`BrainServer.cs:138-154`）。戰鬥決策的合法動作被解析成戰鬥動作，大腦看到的是它畫面上的戰鬥觀測；選牌提示的回答寫成 `pick:i,j`；其他每種決策介面都是宏觀決策。推薦回送請求的 id 和雜湊，並帶著這個決策的註記：它的大腦、計畫和候選（選牌提示的推薦只帶大腦）。
 
-**`brain` 指令**包裝它（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。它用自己的選項做出兩個冠軍，每種環境一個：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的，預設是 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。兩者共用一個工作行程池。`--log FILE` 在每一局的 `run_end` 時寫出它的決策日誌，所以沒送出這條訊息就斷線的宿主不會留下任何一行；`--wire FILE` 記錄宿主送來的每條訊息，`clones` 據此檢查 Mod 的 SL 記錄（[Mod §12](/zh-tw/arch/mod/#sec-12)）。
+**`brain` 指令**包裝它（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。它用自己的選項做出兩個冠軍，每種環境一個：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的，預設是 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。兩者共用一個工作行程池。`--log FILE` 在每一局的 `run_end` 時寫出它的決策日誌，所以沒送出這條訊息就斷線的宿主不會留下任何一行；`--wire FILE` 記錄宿主送來的每條訊息，`clones` 據此檢查 Mod 的 SL 記錄（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 
 ## 6. 程式碼
 

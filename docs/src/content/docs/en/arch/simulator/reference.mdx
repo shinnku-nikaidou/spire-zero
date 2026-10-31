@@ -135,7 +135,7 @@ In `--help` order (`Commands/Cli.cs:31-37`).
 | `run` | `--seeds FILE`, `--n`, `--start`, `--seed` (1), `--asc` (0), `--env` (NoSL), `--max-decisions` (20000), `--check`, `--trace`, `--obs`, `--auto-win`, `--gauntlet`, `--log FILE`, `--records FILE`, `--brain SOCKET`; champion, champion file, loadout | plays whole runs ([Whole runs](/en/arch/simulator/runs/)). Refused: `--auto-win` with `--check`, `--gauntlet` or `--afterstates clone`; `plan` outside SL; any champion option or `--log` with `--brain` |
 | `brain` | `--socket PATH`, `--log FILE`, `--wire FILE`, `--sl-policy` (`plan`); champion, champion file | the brain alone, serving hosts over a Unix socket ([Whole runs §8](/en/arch/simulator/runs/#sec-8)) |
 | `serve` | leaf | a worker of the pool ([The worker pool §4](/en/arch/simulator/pool/#sec-4)) |
-| `clones` | `--wire` (required) | replays a host's SL decisions, recorded by `brain --wire`, on their clones and compares observations; exit 1 if any differs ([Mod §12](/en/arch/mod/#sec-12)) |
+| `clones` | `--wire` (required) | replays a host's SL decisions, recorded by `brain --wire`, on their clones and compares observations; exit 1 if any differs ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)) |
 
 **Evaluation** ([Evaluation](/en/arch/evaluation/))
 

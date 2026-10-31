@@ -1,0 +1,121 @@
+---
+title: SL 紀錄
+description: 'Mod 保存什麼，讓大腦能在 SL 下為節點做出複本：在遊戲到達時存檔的地方取的檢查點、在遊戲提交的地方讀取的每一步、還在演出的步驟、離開房間、什麼會讓紀錄中斷、傳送什麼以及何時傳送，以及紀錄如何在真實遊戲裡得到檢查。'
+sidebar:
+  label: SL 紀錄
+---
+
+SL 下，大腦在當前節點的精確複本上規劃戰鬥：也就是玩家到達這個地圖點時的遊戲，重播到這個決策為止（[環境：資訊與節點 §7](/zh-tw/arch/environments/information/#sec-7)）。模擬器不費吹灰之力就有這個，因為這一局就在它手上。Mod 沒有：這一局屬於真實遊戲，而大腦是另一個行程。所以 Mod 為節點保存一份紀錄，包括它的檢查點，以及玩家從那時起在節點裡走過的每一步，並在每個 SL 決策之前把它傳給大腦。然後由一個工作行程載入檢查點並重播這些步驟，和它處理自己的節點時完全一樣（[模擬器：世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)–[§4](/zh-tw/arch/simulator/worlds/#sec-4)）。本頁講的是 `NodeRecord.cs`，以及它是如何檢查的。
+
+兩種環境下都會保存這份紀錄，輔助關閉、沒有大腦時也一樣，所以在玩家所在的房間裡切換到 SL 也能用。只有 SL 會把它傳送出去。
+
+## 1. 紀錄是什麼
+
+| 成員 | 內容 |
+|---|---|
+| `Node` | 節點的編號：這一局裡 Mod 執行期間遊戲進入的第一個節點為 0（新的 `RunState` 物件會從 −1 重新開始）；在那之前是 −1 |
+| `Checkpoint` | 節點的 SL 檢查點，一個 JSON 字串；節點沒有檢查點時為 null |
+| `Steps` | 節點到目前為止的步驟，每一步是一行軌跡 `surface action`，寫法和模擬器自己的軌跡相同：`combat play:3:1`、`map map:4,10`、`card_choice 0,2` |
+| `Broken` | 節點為什麼無法做出複本，或為 null |
+| `Running(surface)` | 在那個決策介面上走的一步是否還在演出（[§4](#sec-4)） |
+| `Seen(asking)` | 每個影格被告知畫面上的決策，玩家的下一個回答就對照它來讀 |
+
+只有在節點有檢查點、而且沒有中斷時，才會新增步驟。
+
+## 2. 檢查點
+
+**在哪裡**。玩家到達一個地圖點時，遊戲會存下這一局：以沒有已完成房間的方式呼叫 `SaveManager.SaveRun`，由 `RunManager.EnterMapCoordInternal` 在離開舊房間、清掉畫面並同步戰鬥狀態之後呼叫。模擬器也在同一時刻取它的檢查點（[模擬器：世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）。Mod 掛在 `SaveRun` 上的前綴（`Saving`）在已完成房間為 null 時開始一個節點；房間裡的存檔（事件的、戰鬥的）會傳入一個房間，不算節點的開始。一局開始時，也以同樣的方式進入它的第一個點。
+
+**取什麼**。`GameBridge.Checkpoint.Take(me)`：由 `SaveManager.ToJson(RunManager.ToSave(null))` 建出的遊戲完整存檔，加上存檔漏掉的每個遺物的狀態（[GameBridge：讀取遊戲 §7](/zh-tw/arch/gamebridge/observe/#sec-7)）。除了模擬器之外，它對其他一切都是不透明的。存檔帶有這一局的種子和每條亂數流的狀態；SL 可以知道它們，因為複本重播的就是這個房間的真實結果（[環境：資訊與節點 §2](/zh-tw/arch/environments/information/#sec-2)）。
+
+**繼續的一局**。載入一局存檔時，遊戲會重新進入存檔所在的點，但不存檔（`RunManager.LoadIntoLatestMapCoord`），所以 Mod 也給它打了補丁（`Continuing`）：
+
+- 到達時存的檔（存檔裡沒有已完成的房間）：節點像到達時那樣開始，並在那裡取檢查點；
+- 房間裡較晚存的檔（打完它的戰鬥之後、遠古之民之後）：房間的開頭已經不在了，節點從一開始就是中斷的：「the run was continued from a save made after this room began」（這一局是從這個房間開始之後的存檔繼續的）。
+
+**開始一個節點**（`Enter`，`NodeRecord.cs:149-158`）：只在單人對局裡；`Node` 加一；清空步驟和畫面；取檢查點，或者把節點標為中斷。取檢查點時拋出例外，節點就沒有檢查點（「no checkpoint was taken」），並記下這個錯誤。
+
+Mod 從不寫會被雲端同步的 `current_run.save`，也不寫玩家檔案底下的任何其他檔案：前綴只讀不寫。
+
+## 3. 每一步，在遊戲提交它的地方
+
+玩家的每個決策都在遊戲提交它的地方讀取：也就是模擬器自己啟動動作時同樣會呼叫的那些入口（[GameBridge：各決策介面的動作 §7](/zh-tw/arch/gamebridge/actions/#sec-7)）。所以在遊戲執行這一步之前，就能精確知道它，並用 GameBridge 自己的輔助函式為它命名，記下來的一步因此就是模擬器本來會打出的動作。
+
+| 玩家 | 掛鉤的方法（Harmony 前綴） | 步驟 |
+|---|---|---|
+| 出牌、使用或丟棄藥水、結束回合、移動 | `ActionQueueSynchronizer.RequestEnqueue`，動作為 `PlayCardAction`、`UsePotionAction`、`DiscardPotionGameAction`、`EndPlayerTurnAction`、`VoteForMapCoordAction` | `combat play:C[:T]`、`combat potion:S[:T]`、`combat end_turn`；戰鬥外是藥水欄的 `potion:S` 或 `discard_potion:S`，記在使用它的那個畫面上；`map map:C,R` |
+| 回答選牌提示、卡牌獎勵、卡包 | `PlayerChoiceSynchronizer.SyncLocalChoice` | `card_choice I,J`（遊戲自己的索引）、`card_reward card:I` 或 `card_alt:ID`、`bundle bundle:I` |
+| 選事件選項、休息選項 | `EventSynchronizer.ChooseLocalOption`、`RestSiteSynchronizer.ChooseLocalOption` | `event event:I`、`rest rest:ID` |
+| 領取獎勵、從獎勵畫面繼續 | `RewardsSetSynchronizer.SelectLocalReward`；在獎勵畫面上的 `SkipLocalRewardsSet`、`RunManager.ProceedFromTerminalRewardsScreen`、`ActChangeSynchronizer.SetLocalPlayerReady` | `rewards reward:I`、`rewards rewards_done` |
+| 拿取或略過寶箱的遺物 | `TreasureRoomRelicSynchronizer.PickRelicLocally` | `treasure relic:I`、`treasure relic_skip` |
+| 購買、刪除一張牌 | `MerchantEntry.OnTryPurchaseWrapper`、`MerchantCardRemovalEntry.OnTryPurchaseWrapper` | `shop buy:I`、`shop remove` |
+| 占卜 | `CrystalSphereMinigame.CellClicked` | `crystal_sphere big:X,Y`、`crystal_sphere small:X,Y` |
+| 離開事件、商店、休息處 | 地圖要求選擇移動時（[§5](#sec-5)） | `event proceed`、`shop leave`、`rest leave` |
+
+讓每一步都精確的細節（`NodeRecord.cs:162-271`）：
+
+- **出牌的那張牌**取自動作的 `NetCombatCard`：動作要到執行時才去找它的牌，所以在排入佇列時讀 `PlayCardAction.Card` 會讀不到。只有會選目標的牌和藥水才保留目標，與合法動作的寫法一致（`CombatActions.PlayOf`、`PotionOf`）。
+- **藥水**在戰鬥中使用時（`WasEnqueuedInCombat`）是戰鬥的一步；在戰鬥外，它是藥水欄在使用它的那個畫面上的動作，前提是那個畫面提供這個動作。
+- **移動**必須是地圖提供的移動之一。
+- **選牌提示的選擇**是遊戲自己的索引，指向按遊戲順序排列的選項，也就是讀取提示時作為它的 `Source` 保存下來的那份；略過的單選（−1）不算選擇。大腦用規範順序的索引回答（[主迴圈 §5](/zh-tw/arch/mod/loop/#sec-5)）；軌跡則保存遊戲的索引，和模擬器的軌跡一樣。
+- **卡牌獎勵**的選擇是一個索引，先數畫面上的卡，再數它的替代選項，和遊戲及合法動作列出它們的順序一樣。
+- **獎勵**的索引是它在獎勵畫面那組獎勵裡的位置。
+- **不算一步**：什麼都沒改變的購買（金幣不夠、已售完），或者免費的購買（`ignoreCost`，由遺物替玩家購買）；什麼都沒揭開的占卜；離開寶箱、或離開沒有獎勵的戰鬥時的那些呼叫，它們和獎勵畫面的繼續是同樣的呼叫：只有在獎勵畫面上的才算一步，而且有些畫面會呼叫其中兩個，所以第一個呼叫會清掉畫面。
+- **比畫面穩定得還快**。鉤子在提交時觸發，而不是在空閒檢查時，所以玩家以不到 3 個影格的間隔走的步驟，仍會按順序記下來。
+
+為什麼用鉤子，而不是比較前後的狀態：狀態比較分不出兩張相同的牌，也會漏掉玩家在畫面穩定之前就排進佇列的動作。這就解決了如何擷取玩家動作這個未決問題。
+
+## 4. 還在演出的步驟
+
+事件選項、休息選項、獎勵、購買和占卜都作為遊戲自己的任務執行，畫面要等任務結束才顯示這一步的結果。在那之前，畫面仍顯示它已經回答過的決策：例如事件在選項之前的金幣。所以同樣那些入口上的後綴，會按這一步所在的決策介面記下它的任務（事件的任務取自同步器裡待處理的選項任務），`Running(surface)` 則說明是否還有任務在執行；任務結束之前，`Assist` 不在那個決策介面上詢問任何東西（[主迴圈 §7](/zh-tw/arch/mod/loop/#sec-7)）。模擬器在下一個決策之前，也以同樣的方式等待自己正在執行的任務（[模擬器：整局 §3](/zh-tw/arch/simulator/runs/#sec-3)）。
+
+## 5. 離開房間
+
+在模擬器裡，離開事件、商店或休息處本身就是一個決策：`proceed` 或 `leave`。在遊戲裡，玩家只是打開地圖，然後移動。所以 Mod 在地圖要求選擇移動時記下離開：在這些畫面之後第一次看到地圖時，或者在最後看到的畫面不是地圖、卻有一次移動排入佇列時，就為這個房間的決策介面加上離開這一步，前提是那個畫面提供了它（`Leave`，`NodeRecord.cs:116-133`）。移動本身接著記為 `map map:C,R`。
+
+## 6. 中斷的紀錄
+
+一個在模擬器裡沒有對應決策的步驟，會讓這個節點餘下部分的紀錄就此中斷：複本無法重播到它之後。
+
+| 日誌裡的原因 | 發生了什麼 |
+|---|---|
+| 「a potion thrown away in combat」 | 模擬器在戰鬥中不提供丟棄藥水 |
+| 「a turn end taken back」 | `UndoEndPlayerTurnAction` |
+| 「a travel to X, which the map does not offer」（移動到地圖不提供的 X） | |
+| 「potion:S on a screen that does not offer it」 | 戰鬥外在一個沒有這個動作的畫面上使用藥水欄的動作 |
+| 「a card picked outside the prompt's options」（選了提示選項以外的牌） | |
+| 「a card reward closed unanswered」（卡牌獎勵沒有回答就關掉了） | |
+| 「a T choice on S」 | 在 Mod 不讀的畫面上做的選擇，或者沒有帶上下文的選牌提示 |
+| 「a reward taken from no rewards screen」（不是從獎勵畫面領取的獎勵） | |
+| 「Type: message」 | 受保護的鉤子裡發生的例外，同時也作為錯誤記入日誌 |
+| 「no checkpoint was taken」、「the run was continued from a save made after this room began」 | 節點從來沒有過檢查點（[§2](#sec-2)） |
+
+每次中斷記一次日誌，帶上節點和它的步數：「SL record of node N broken after K steps: …」。
+
+**鉤子從不讓例外傳到遊戲裡**。鉤子在遊戲自己的呼叫裡執行，所以由 `Guard` 捕捉例外，改為讓紀錄中斷：它包住存檔和繼續的鉤子、動作佇列、各種選擇、休息選項、購買和占卜。事件選項、獎勵、繼續和遺物的鉤子，以及任務的後綴，只是新增一行或一個任務，沒有被包住。
+
+**中斷的節點意味著什麼**。這個節點裡不詢問 SL 的戰鬥決策：面板顯示「No SL clone of this room」，附上原因和「the next room has one」（下一個房間會有）。選牌提示和戰鬥以外的決策照樣詢問，而且不為它們傳送任何節點訊息。這適合 Mod 通常搭配的大腦，也就是用 NoSL 冠軍檔案加 SL 規劃器的大腦（提示用 `p0`，L0 用畫面上的後狀態，都不需要複本）。宏觀那一側在複本上試打的大腦（`--afterstates clone`，SL 冠軍的設定）這時會用前一個節點的檢查點和步驟來建它的複本，而在還沒有任何檢查點之前，會以「an SL decision before any node checkpoint」失敗，這會讓 Mod 關閉到下一個 `hello` 為止（`Harness/Dispatcher.cs:200-206`）。若把中斷節點裡的每個 SL 決策都扣住不問，就能補上這個缺口。
+
+## 7. 傳送什麼，何時傳送
+
+在每個 SL 決策之前，`Assist.SendNode`（`Assist.cs:165-174`）傳送大腦還沒拿到的東西（[協定：線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）：
+
+1. `node_checkpoint`，帶上節點的編號和檢查點，每個節點一次：在節點和這一局最後傳送的那個不同時；
+2. `node_action`，每個還沒傳送的步驟一則，帶上節點的編號和這一步在節點裡的編號，從 0 開始。
+
+然後才是 `decision`。節點最後一個決策之後的步驟（例如它的移動）永遠用不到，也從不傳送。沒有檢查點的節點什麼都不傳。`gauntlet` 從不設定：真實遊戲沒有連戰（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。重新連線或新的 `hello` 之後，當前節點會從它的檢查點重新傳送。
+
+大腦的 Harness 保存最新的檢查點和它的軌跡，並要求一局之內的節點編號遞增（[Harness §4](/zh-tw/arch/harness/#sec-4)）。NoSL 下紀錄照樣保存，但從不傳送；如果有宿主真的傳了，會收到一個 `error`，因為 Harness 在 NoSL 下拒收節點檢查點。
+
+## 8. 在遊戲裡檢查
+
+**往返**。`brain --wire FILE` 寫下宿主傳來的每則訊息。`clones --wire FILE` 把它們讀回來：`hello` 設定環境，`node_checkpoint` 開始一個節點，`node_action` 各行必須按順序跟在後面。對每個 SL `decision`，它載入複本，也就是檢查點加上這個決策之前傳送的步驟（`RunSession.Load`），並檢查複本接下來問的是同一個決策，觀測逐項相同；有差異時，指出第一個不同的 JSON 路徑，以及遊戲的值和複本的值。在任何檢查點之前的決策另外計數。它印出有多少個 SL 決策問的相同，除非全部相同，否則以結束代碼 1 退出（`Commands/Clones.cs`；[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。
+
+**結果**。
+
+- 在模擬器自己的匯出上（一局對 `brain` 託管的 SL 對局，455 個決策），每個決策都相同。
+- 在真實遊戲裡，開著輔助玩的一局 SL 的第 2–5 層（4 個節點：3 場戰鬥和一個事件），90 個 SL 決策中有 89 個相同。另一個是在事件選項還在執行時問的，所以畫面上仍是選項之前的金幣；Mod 現在會等這一步的任務結束（[§4](#sec-4)）。
+- 更早一次第 1–2 層的擷取曾發現出牌沒有被記下來，因為排入佇列的出牌要到執行時才去找它的牌（[§3](#sec-3)）。
+- 加入任務等待之後的一次擷取（2026-10-28，`tmp/assist/`，在本機）包含大腦眼中的三局：SL、NoSL，然後又是 SL；共 150 個決策，其中 149 個是 SL（戰鬥 87、獎勵 21、地圖 11、選牌提示 11、卡牌獎勵 6、事件 5、商店 4、休息處 2、卡包 1、財寶 1），12 個節點檢查點和 137 個節點動作；最後一局 SL 走了 11 個節點，到第 11 層。有沒有對它跑過 `clones`，沒有記錄。
+
+**SL 規劃器的等待時間**，取自把第 2–5 層的擷取，對執行遊戲那台機器上一個新啟動的大腦重播（`plan` c2，8 個工作行程上 beam 8×300）：一場戰鬥的第一個決策要 3–15 秒，因為它規劃整場戰鬥；抽牌或敵人偏離計畫時的重新規劃要 1–11 秒；66 個戰鬥決策中其餘的 56 個不到 50 毫秒，因為它們照計畫走。戰鬥以外的決策不到 20 毫秒。

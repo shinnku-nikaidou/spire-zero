@@ -200,7 +200,7 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 
 ## 8. 连到大脑上的对局
 
-`run` 通常把大脑放在自己的进程里：Harness 和冠军的各个大脑都是那里的对象，它们的搜索交给 `run` 启动的工作进程池（[工作进程池](/arch/simulator/pool/)）。用 `run --brain SOCKET` 时，大脑则是另一个进程，在一个 Unix 套接字上监听，也就是 Mod 在游戏里与之通信的那个（[Mod §5](/arch/mod/#sec-5)）。这时模拟器完全像游戏那样作为对局的主机：每局发送 `hello`，带上它的环境和由种子哈希得到的对局 id，每个决策都连同它的观测和合法动作一起发出，然后打出大脑推荐的动作（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。NoSL 下对局 id 隐藏了种子；SL 下种子确实会到达大脑，就在节点检查点的存档里，而这是 SL 可以知道的。
+`run` 通常把大脑放在自己的进程里：Harness 和冠军的各个大脑都是那里的对象，它们的搜索交给 `run` 启动的工作进程池（[工作进程池](/arch/simulator/pool/)）。用 `run --brain SOCKET` 时，大脑则是另一个进程，在一个 Unix 套接字上监听，也就是 Mod 在游戏里与之通信的那个（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。这时模拟器完全像游戏那样作为对局的主机：每局发送 `hello`，带上它的环境和由种子哈希得到的对局 id，每个决策都连同它的观测和合法动作一起发出，然后打出大脑推荐的动作（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。NoSL 下对局 id 隐藏了种子；SL 下种子确实会到达大脑，就在节点检查点的存档里，而这是 SL 可以知道的。
 
 打什么由大脑决定，所以 `run --brain` 拒绝所有冠军选项，包括 `--log`（`Commands/RunCommand.cs:71-72`）；又因为冠军文件的选项会像给出的选项一样并入，所以指明了任何冠军选项的 `--champion FILE` 也会被拒绝（`Commands/Args.cs:186-202`） <Badge text="推断" variant="caution" />。SL 下主机还发送节点消息：新节点开始时发送检查点，然后是还没发送的决策，每个都在下一个决策之前发出（`Brains/RunBrains.cs:53-99`）。
 
@@ -212,7 +212,7 @@ brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy pimc|pla
 
 - `--socket`：默认是 `$XDG_STATE_HOME/sts2ai/brain.sock`，这个变量没设时是 `~/.local/state/sts2ai/brain.sock`（`Sts2Ai.Protocol/Wire.cs:99-103`）：Steam 在一个容器里运行游戏，这个容器共享主目录，但不共享 `$XDG_RUNTIME_DIR`。
 - 主机在 `hello` 里写明它的环境：NoSL 主机得到 `--policy` 的战斗大脑，SL 主机得到 `--sl-policy` 的（默认是 SL 规划器），宏观大脑相同。
-- `--log` 写出决策日志；`--wire` 写出主机发来的每条消息，`clones` 重播这些消息，在各自的克隆上检查主机的 SL 决策（[Mod §12](/arch/mod/#sec-12)）。
+- `--log` 写出决策日志；`--wire` 写出主机发来的每条消息，`clones` 重播这些消息，在各自的克隆上检查主机的 SL 决策（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
 - 它每局打印一行：对局 id、结局、层数、决策数、重新规划次数，以及它的工作进程的游戏错误，主机的对局记录不计入这些错误。
 
 `run --check` 的第二遍在进程内使用同一个服务端，用一个以进程命名的抽象 Unix 套接字（`\0sts2ai-brain-PID`，`Brains/RunBrains.cs:200-220`），所以 `--check` 打的每一局都会检查线路这条路径。

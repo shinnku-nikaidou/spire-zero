@@ -135,7 +135,7 @@ Sts2Ai.SimWorker COMMAND [options]
 | `run` | `--seeds FILE`、`--n`、`--start`、`--seed`（1）、`--asc`（0）、`--env`（NoSL）、`--max-decisions`（20000）、`--check`、`--trace`、`--obs`、`--auto-win`、`--gauntlet`、`--log FILE`、`--records FILE`、`--brain SOCKET`；冠軍選項、冠軍檔案、配置 | 打整局（[整局](/zh-tw/arch/simulator/runs/)）。會被拒絕的：`--auto-win` 與 `--check`、`--gauntlet` 或 `--afterstates clone` 同用；SL 之外的 `plan`；與 `--brain` 同用的任何冠軍選項或 `--log` |
 | `brain` | `--socket PATH`、`--log FILE`、`--wire FILE`、`--sl-policy`（`plan`）；冠軍選項、冠軍檔案 | 單獨的大腦，透過 Unix socket 服務宿主（[整局 §8](/zh-tw/arch/simulator/runs/#sec-8)） |
 | `serve` | 葉節點 | 行程池的一個工作行程（[工作行程池 §4](/zh-tw/arch/simulator/pool/#sec-4)） |
-| `clones` | `--wire`（必填） | 把宿主的 SL 決策（由 `brain --wire` 記錄）放到它們的複本上重播並比較觀測；有任何不同時以 1 結束（[Mod §12](/zh-tw/arch/mod/#sec-12)） |
+| `clones` | `--wire`（必填） | 把宿主的 SL 決策（由 `brain --wire` 記錄）放到它們的複本上重播並比較觀測；有任何不同時以 1 結束（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
 
 **評估**（[評估](/zh-tw/arch/evaluation/)）
 

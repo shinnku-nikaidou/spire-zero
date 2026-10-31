@@ -1,0 +1,185 @@
+---
+title: 'Mod：游戏内宿主'
+description: '把 AI 带进真实游戏的 Mod：它做什么、不碰什么，一个决策如何从画面走到面板，游戏如何加载它，如何连着大脑运行它，它的操作和设置，面板可能显示的每条消息，以及它的代码。'
+sidebar:
+  label: 概览
+  badge:
+    text: 部分实现
+    variant: tip
+---
+
+import { Aside, Badge, FileTree } from '@astrojs/starlight/components';
+
+本书其余部分都以无头方式运行：模拟器在没有窗口的情况下运行游戏自己的 `sts2.dll`，由各个大脑回答它。**Mod** 是唯一在真实游戏里运行的部分：游戏从 Steam 启动，有一位玩家坐在键盘前。它是 AI 在那里的宿主，就像自我对弈时的模拟器一样（[协议：线路 §8](/arch/protocol/wire/#sec-8)）：它读取画面上的决策，通过本机套接字询问大脑，并把答案显示在游戏之上。本章写给想在游戏里使用 Mod 或修改它的人。如果观测、决策界面（surface）和合法动作这些术语还陌生，请先读[协议](/arch/protocol/)和 [GameBridge](/arch/gamebridge/)。
+
+<Aside title="状态">
+
+已实现：两种环境下、每个决策界面上的辅助模式。`src/Sts2Ai.Mod` 能在真实游戏（v0.111.0）里加载，连上大脑，在最上层的画面空闲满 3 帧后询问每个决策（战斗、选牌提示、地图、奖励、卡牌奖励、卡包、事件、商店、休息处、宝箱、水晶球），并在一个面板里用游戏里的名字显示答案，同时在地图上、在战斗中的卡牌和目标上画出标记（[输出](/arch/output/)）。面板上的一个开关选择 SL 或 NoSL。SL 下 Mod 发送节点的检查点和在节点里走过的每一步，大脑因此在节点的克隆上规划每场战斗（[SL 记录](/arch/mod/sl-record/)）；在真实游戏里，90 个 SL 决策放到各自的克隆上重播，有 89 个问出了同一个决策，另一个的原因已经修好（[SL 记录 §8](/arch/mod/sl-record/#sec-8)）。还没有人在真实游戏里看着 Mod 跑完一整局。规划中：自己游玩（执行适配器和自动跑局驱动），以及它自己的决策日志（[自动游玩与安全](/arch/mod/auto/)）。
+
+</Aside>
+
+## 1. Mod 做什么，不做什么
+
+Mod 做四件事，都在游戏的主线程上：
+
+1. **读取画面上的决策**：哪个画面在最上层，它是否空闲，以及它提供的观测和合法动作，用的是模拟器所用的同一批 GameBridge 调用（[主循环 §4](/arch/mod/loop/#sec-4)）。
+2. **询问大脑**：通过 Unix 套接字一次发一条 `decision` 消息，画面先变了就发 `cancel`（[主循环 §3](/arch/mod/loop/#sec-3)、[§8](/arch/mod/loop/#sec-8)）。
+3. **显示答案**：面板、地图上的路线，以及战斗中计划的标记（[输出](/arch/output/)）。
+4. **维护 SL 记录**：节点的检查点，以及玩家在节点里做出的每个决策，都在游戏提交它的地方读取；SL 在每个决策之前把它们发出去（[SL 记录](/arch/mod/sl-record/)）。
+
+它不做的事：
+
+- **思考**：游戏进程里不运行任何搜索、学习或策略。大脑是一个单独的进程 `brain`，由玩家启动（[§4](#sec-4)）；
+- **行动**：辅助模式下，每一步都由玩家来走。清单里也这么写：「Assist only: it never acts on the game」（只做辅助：从不对游戏执行操作）。自己游玩还在规划中（[自动游玩与安全 §1](/arch/mod/auto/#sec-1)）；
+- **多人模式**：游戏在多人大厅里仍会加载 Mod，把它当作不影响游戏玩法的 Mod，但多于一名玩家的对局得不到帮助：面板显示「Off in multiplayer」（多人模式下关闭），SL 记录也忽略这类对局的节点；
+- **写游戏的文件**：不写游戏档案下的任何东西，不存档，不用控制台命令，不读档。它只写自己的设置文件（在大脑的套接字旁边，[§5](#sec-5)），以及它在游戏日志里的行（[自动游玩与安全 §3](/arch/mod/auto/#sec-3)）。
+
+## 2. 一个决策，从画面到面板
+
+以本书示例对局里的一个决策为例，看它在游戏里的样子：第 43 层的地图（第三幕，玩家生命值 24/66），有两个点可去。
+
+
+```mermaid
+flowchart LR
+  G["游戏的画面<br/>NMapScreen"] -->|"Screens.Read"| A["Assist.Tick<br/>（主线程）"]
+  A -->|"decision<br/>观测 + 合法动作"| L["BrainLink<br/>（套接字线程）"]
+  L <-->|"JSON lines<br/>brain.sock"| B["brain<br/>BrainServer + Harness"]
+  L -->|"recommendation"| A
+  A -->|"Describe"| P["面板、地图圆圈<br/>与路线"]
+```
+
+1. 每一帧，`Screens.Read` 向游戏询问哪个画面在最上层（`ActiveScreenContext.GetCurrentScreen()`）。可以移动的地图画面就是 `map` 决策界面；动作队列一空，就用 GameBridge 的 `MapActions` 读出它的观测和合法动作，和模拟器的读法一样：这里是 `map:4,10` 和 `map:6,10`，有药水时再加上药水栏的动作。
+2. `Assist.Tick` 对观测取哈希。观测和它的合法动作保持 3 帧不变，且没有别的决策还开着时，它发送 `decision`，带上哈希、决策界面、观测和合法动作。
+3. 大脑里的 Harness 把这个决策路由给宏观大脑，宏观大脑用 V 评估每个选项的后状态，回答 `map:4,10`，并把本幕剩下的路线作为它的计划（[宏观大脑：搜索 §1](/arch/macro-brain/search/#sec-1)）。
+4. 这个答案只对应那个哈希和那组合法动作。只要它们还成立，面板就说出这个房间（「go to」加上地图图例里它的名字）以及通往 Boss 的路线上的各个房间，地图上则在这个点上出现一个脉动的圆圈，并沿路线画出一条线（[输出 §3](/arch/output/#sec-3)）。
+5. 玩家点击一个点。Mod 在游戏把这次移动加入队列的地方读到它，并记进 SL 记录（[SL 记录 §3](/arch/mod/sl-record/#sec-3)）；画面变化，下一个决策从头开始。
+
+## 3. 安装与加载
+
+游戏如何发现并启动一个 Mod。本节内容都在游戏源码里读过，并且对本机游戏里的这个 Mod 成立 <Badge text="已核实" variant="success" />。
+
+游戏递归扫描自己的 `mods/` 文件夹寻找清单（manifest），并加载每个清单旁边名为 `<id>.dll` 的 DLL（`Modding/ModManager.cs`）。本机的游戏文件夹是 `~/.local/share/Steam/steamapps/common/Slay the Spire 2`，其中：
+
+<FileTree>
+
+- mods/
+  - Sts2Ai/
+    - Sts2Ai.json 清单
+    - Sts2Ai.dll Mod 本体（`<id>.dll`），GameBridge 和 Protocol 都在里面
+
+</FileTree>
+
+**安装**：`dotnet build src/Sts2Ai.Mod/Sts2Ai.Mod.csproj -t:Install` 构建 Mod，并把 `Sts2Ai.dll` 和 `Sts2Ai.json` 复制到 `mods/Sts2Ai/`（`Sts2Ai.Mod.csproj:23-26`；游戏文件夹由 `Sts2GameDir` 属性指定）。游戏在下次启动时发现新 Mod，并默认启用。
+
+**清单**（`Sts2Ai.json`）：
+
+| 字段 | 值 | 原因 |
+|---|---|---|
+| `id` | `Sts2Ai` | 指定加载器要找的 DLL |
+| `name`、`author`、`description` | `STS2 AI`、…、「Shows the AI's recommended action. Assist only: it never acts on the game.」（显示 AI 推荐的动作。只做辅助：从不对游戏执行操作。） | 显示在游戏的 Mod 列表里 |
+| `version` | `0.1.0` | |
+| `has_dll`、`has_pck` | `true`、`false` | 有一个 DLL，没有 Godot 资源包 |
+| `affects_gameplay` | `false` | 只在多人模式握手时起作用，而 Mod 在多人模式下保持关闭 |
+| `dependencies` | `[]` | |
+| `min_game_version` | `0.111.0` | |
+
+**游戏怎样处理它**：
+
+- **同意**。玩家在游戏里点一次，同意加载 Mod。这个回答 `PlayerAgreedToModLoading` 存在 `settings.save` 里，记作 `mods_enabled`。Mod 只在启动时加载。
+- **档案**。带 Mod 的对局使用单独的档案文件夹 `modded/`，第一次使用时从原版（不带 Mod）的档案复制而来。
+- **入口**。加载器调用一个标了 `[ModInitializer(nameof(Init))]` 的静态方法：`ModEntry.Init`，它再调用 `Host.Start`。它在 `ModelDb.Init`（游戏的卡牌、遗物和怪物数据库）之前运行，所以 `Start` 只做准备，真正的工作从第一帧开始。
+- **单个 DLL**。加载器在调用入口之前先列出 Mod 的类型（`Assembly.GetTypes`），而游戏的程序集加载上下文（.NET 里决定到哪里寻找程序集依赖的机制）不会去 Mod 的文件夹里找。只要有一个类型需要放在 `Sts2Ai.dll` 旁边的 DLL，这次列举就会失败，Mod 也就不会被加载；由 `Init` 安装的解析器又来得太晚。所以 Mod 项目把 GameBridge 和 Protocol 的源码编译进 `Sts2Ai.dll`（`Sts2Ai.Mod.csproj:19`），不引用项目里的其他任何东西。
+
+**`Host.Start` 做什么**（`Host.cs:23-42`）：
+
+1. **版本守卫**。如果 `NGame.GetGameVersion()` 不是 `v0.111.0`（GameBridge 所针对的版本），Mod 保持关闭：它什么补丁都不打，面板显示「off: game V, the mod is for v0.111.0」（已关闭：游戏版本为 V，本 Mod 适用于 v0.111.0）。
+2. **先打补丁**。赶在其他任何东西编译可能内联被补丁方法的游戏代码之前：选牌提示的上下文（[GameBridge：读取游戏 §6](/arch/gamebridge/observe/#sec-6)）、SL 记录的钩子（[SL 记录 §3](/arch/mod/sl-record/#sec-3)）和设置标签页（[输出 §2](/arch/output/#sec-2)）。为什么要先打：[自动游玩与安全 §5](/arch/mod/auto/#sec-5)。
+3. **大脑连接**，它在自己的线程上开始连接（[主循环 §8](/arch/mod/loop/#sec-8)）。
+4. **帧回调**：`Tick`，挂在场景树的 `ProcessFrame` 上（[主循环 §1](/arch/mod/loop/#sec-1)）。
+
+## 4. 连着大脑运行
+
+Mod 需要一个在它的套接字 `~/.local/state/sts2ai/brain.sock`（设置了 `$XDG_STATE_HOME` 时在它下面）上监听的大脑。大脑就是 SimWorker 的 `brain` 命令（[模拟器：整局 §8](/arch/simulator/runs/#sec-8)），在游戏之前或之后启动都可以；Mod 每 2 秒重试一次，直到连上。
+
+```bash
+dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/silent/champions/nosl.json
+```
+
+- `--champion` 指定它所用的冠军：NoSL 宿主得到这个文件里的战斗大脑（带战斗网络的 PIMC）和宏观大脑（带 V 的 L0）；SL 宿主得到 `--sl-policy` 的战斗大脑（默认是 SL 规划器），宏观大脑相同（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）。所以一个大脑同时服务两种环境，切换面板上的开关不需要重启。
+- 这一点对 NoSL 冠军的文件成立，它的宏观大脑在根据画面预测出的后状态上评估每个选项。SL 冠军的文件（`sl.json`）让 L0 在节点的克隆上把它的选项实际走一遍（`afterstates: clone`），这只有 SL 允许：用它启动的 `brain` 会以 `error` 拒绝 NoSL 宿主（「l0 plays on the node's clone in SL only」，`Brains/ChampionOptions.cs:42`），而在 SL 下，战斗以外的决策也需要节点的克隆（[SL 记录 §6](/arch/mod/sl-record/#sec-6)）。
+- `--log FILE` 写出 Harness 的决策日志；`--wire FILE` 写出宿主发来的每条消息，供 `clones` 重播（[SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
+- 通过固定构建的启动脚本（`tmp/builds/REV/sim.sh`）启动的大脑，`HOME` 指向 `tmp/home`，所以它需要 `--socket ~/.local/state/sts2ai/brain.sock` 才能在游戏寻找的位置监听（[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）。
+- 大脑每局打印一行：对局 id、宿主的身份（`mod`）、这一局如何结束、它到达的层、它的决策数，以及重新规划和工作进程里的游戏错误（如果有）。
+
+然后从 Steam 启动游戏，同意一次加载 Mod，开始或继续一局单人对局。大脑读到这一局的 `hello` 之后，面板就显示大脑的冠军。
+
+## 5. 操作与设置
+
+| 操作 | 位置 | 作用 |
+|---|---|---|
+| F8 | 任何地方 | 隐藏或显示面板和所有标记 |
+| SL / NoSL | 面板的头部 | 环境（[环境](/arch/environments/)）；切换会结束大脑眼中的这一局，下一个决策从那里开始新的一局 |
+| AI 标签页 | 游戏的设置画面，排在通用、图形、声音和输入之后 | Mod 的设置 |
+
+设置（`Settings.cs`，AI 标签页的各行在 `SettingsTab.cs` 里）保存在 `~/.local/state/sts2ai/settings.json`，在大脑的套接字旁边，不在游戏的档案里。启动时读一次，每次改动时写入；读不了的文件给出默认值。
+
+| 行 | 取值 | 默认 | 含义 |
+|---|---|---|---|
+| AI assist | off, on | on | off：Mod 什么都不问、什么都不画，大脑眼中的这一局随之结束 |
+| Environment | SL, NoSL | SL | 与面板开关相同的选择 |
+| Panel | off, on | on | 面板卡片；标记各有自己的行 |
+| Considered options | off, values, values + bars | values + bars | 大脑打过分的那些动作，显示在面板里 |
+| Order numbers on cards | off, on | on | 计划在本回合打出的牌上显示步骤编号 |
+| Target and end-turn marks | off, on | on | 计划的目标上和结束回合按钮上的圆圈 |
+| Map route | off, next point, whole route | whole route | 下一个点上的圆圈，以及沿路线的线 |
+| Panel opacity | 60% 到 100%，步长 2% | 92% | 卡片的背景 |
+
+最后一个按钮「Reset AI settings」（重置 AI 设置）恢复默认值。为自己游玩规划的按键（暂停、单步、半自动）见[自动游玩与安全 §4](/arch/mod/auto/#sec-4)。
+
+## 6. 面板显示什么
+
+面板的头部显示大脑的冠军（在大脑报出它的名字之后）、一个状态词和开关。主体显示答案，或者一条说明为什么没有答案的消息，下面是较淡的第二行（`Assist.cs:61-162`、`Host.cs:44-63`）：
+
+| 状态 | 消息 | 第二行 | 何时 |
+|---|---|---|---|
+| `starting` | Connecting to the brain | 套接字的路径 | 第一次连接之前 |
+| `offline` | No brain running | 原因 · trying again every 2 s | 连接失败或断开 |
+| `ready` | Start or continue a run | single-player only | 没有对局 |
+| `off` | Off in multiplayer | | 多于一名玩家的对局；开关上两种环境都不选中 |
+| `run sent` | Waiting for the brain | it loads the champion for this run | 已发送 `hello`，`ready` 还没回来 |
+| `off for this run` | Brain error | 大脑的消息 · back on at the next run | 大脑回答了 `error`，直到下一个 `hello`（[主循环 §8](/arch/mod/loop/#sec-8)） |
+| `ready` | Waiting for a decision | 先要做什么，例如「open the chest」 | 画面上没有可决策的东西，或者还有东西在动 |
+| `ready` | No SL clone of this room | 原因 · the next room has one | SL 下的战斗，而节点的记录缺失或已中断（[SL 记录 §6](/arch/mod/sl-record/#sec-6)） |
+| `ready` | Thinking… | 到目前为止的秒数，只要画面上的决策就是所问的那个 | 决策已经发出、还没得到答案，或者一个更早的决策已被取消、它的答案还没回来（[主循环 §3](/arch/mod/loop/#sec-3)） |
+| `ready` | 答案 | 大脑及其用时 | （[输出 §2](/arch/output/#sec-2)） |
+| `off` | off: game V, the mod is for v0.111.0 | | 版本守卫（[§3](#sec-3)）；没有开关，也没有 AI 标签页 |
+| `error` | Mod error | 异常的消息 | 这一帧抛了异常；每种不同的错误只记一次日志 |
+
+辅助关闭时，面板和标记都隐藏。
+
+## 7. 代码
+
+`src/Sts2Ai.Mod`，12 个源文件。它针对游戏的 DLL 和 GodotSharp（Godot 引擎的 C# API）构建，用的是和模拟器同一份快照（`src/GameReferences.props`），并把 GameBridge 和 Protocol 一起编译进来（[§3](#sec-3)）。它不引用 Brain 或 Harness。
+
+| 文件 | 行数 | 内容 |
+|---|---|---|
+| `ModEntry.cs` | 13 | 加载器调用的入口 |
+| `Host.cs` | 64 | 版本守卫、补丁、帧回调和错误 |
+| `BrainLink.cs` | 101 | 套接字：连接、重连、一个读线程和一个写线程、收件箱（[主循环 §8](/arch/mod/loop/#sec-8)） |
+| `Assist.cs` | 226 | 辅助模式，每帧一次：大脑眼中的这一局、空闲、同时只有一个决策在途、面板显示什么（[主循环](/arch/mod/loop/)） |
+| `Screens.cs` | 168 | 最上层画面要求的决策（[主循环 §4](/arch/mod/loop/#sec-4)） |
+| `NodeRecord.cs` | 299 | SL 记录及其钩子（[SL 记录](/arch/mod/sl-record/)） |
+| `UI/Panel.cs` | 356 | 面板卡片，以及它管理的标记（[输出 §2](/arch/output/#sec-2)） |
+| `UI/Describe.cs` | 189 | 用游戏里的名字说出答案（[主循环 §6](/arch/mod/loop/#sec-6)） |
+| `UI/MapMark.cs` | 93 | 地图上的圆圈和路线（[输出 §3](/arch/output/#sec-3)） |
+| `UI/CombatMark.cs` | 137 | 战斗中计划的标记（[输出 §3](/arch/output/#sec-3)） |
+| `UI/Settings.cs` | 66 | 设置及其文件（[§5](#sec-5)） |
+| `UI/SettingsTab.cs` | 217 | 游戏设置画面里的 AI 标签页（[输出 §2](/arch/output/#sec-2)） |
+
+项目文件是 `Sts2Ai.Mod.csproj`（27 行），清单是 `Sts2Ai.json`（12 行）。Mod 没有自己的单元测试：它与模拟器共用的部分，即 GameBridge 和 Protocol，在模拟器那边测试，其余部分在游戏里检查（[自动游玩与安全 §7](/arch/mod/auto/#sec-7)）。
+
+## 8. 本章
+
+- [主循环](/arch/mod/loop/)：游戏只有一个线程，逐步拆解每一帧，同时只有一个决策在途，每种画面的空闲判定，选牌提示，答案，以及大脑连接。
+- [SL 记录](/arch/mod/sl-record/)：节点的检查点，在游戏提交的地方读取的每一步，中断的记录，发送什么，以及如何在游戏里检查它。
+- [自动游玩与安全](/arch/mod/auto/)：规划中的执行器和自动跑局驱动，日志，操作与安全，补丁与 JIT，已有工作，测试和未决问题。

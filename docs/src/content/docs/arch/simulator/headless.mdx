@@ -83,7 +83,7 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 .NET 通常使用*分层编译*：方法先被快速编译一遍，常运行的方法之后再在后台带完整优化重新编译（*rejit*）。一次 rejit 可能悄无声息地丢掉 Harmony 补丁，因为新代码是从原方法编译的。这在几千场战斗之后发生过：`RunManager.WriteReplay` 在没有补丁的情况下运行了。在运行时间短的批次上，分层编译还慢一倍，因为 Harmony 的 JIT 钩子让每次额外的编译都很昂贵。
 
-所以项目文件设了 `TieredCompilation=false`（`Sts2Ai.SimWorker.csproj:12-20`）：每个方法只编译一次，带完整优化。启动程序还应设 `DOTNET_ReadyToRun=0`，这是项目文件设不了的：这样框架自己的代码也会以完整优化编译，每秒多跑约 20% 的战斗。真实游戏开着分层编译运行，这对 Mod 的补丁是个风险（[Mod §10](/arch/mod/#sec-10)）。
+所以项目文件设了 `TieredCompilation=false`（`Sts2Ai.SimWorker.csproj:12-20`）：每个方法只编译一次，带完整优化。启动程序还应设 `DOTNET_ReadyToRun=0`，这是项目文件设不了的：这样框架自己的代码也会以完整优化编译，每秒多跑约 20% 的战斗。真实游戏开着分层编译运行，这对 Mod 的补丁是个风险（[Mod：自动游玩与安全 §5](/arch/mod/auto/#sec-5)）。
 
 ## 7. Pump：一个线程，一种顺序
 

@@ -130,4 +130,4 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | 大腦送來的 `error` | 這一局失敗 | `run_end` `failed`；這一局剩下的部分助手都關閉 |
 | `run_end` 的原因 | `won`、`lost`、`truncated`、`failed` | `won`、`lost`、`failed`、`aborted` |
 
-Mod 那一側在 [Mod §5](/zh-tw/arch/mod/#sec-5) 和 [§6](/zh-tw/arch/mod/#sec-6) 裡說明：它只在單人遊戲的對局裡執行，並且只在它建置時所針對的遊戲版本上執行。
+Mod 那一側在 [Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8) 和 [Mod：SL 紀錄 §7](/zh-tw/arch/mod/sl-record/#sec-7) 裡說明：它只在單人遊戲的對局裡執行，並且只在它建置時所針對的遊戲版本上執行。

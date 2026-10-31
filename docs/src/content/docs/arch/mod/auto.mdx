@@ -1,0 +1,139 @@
+---
+title: 自动游玩与安全
+description: 'Mod 要自己游玩还缺什么，又是什么让它保持公平：规划中的执行器和自动跑局驱动，它写的日志，R3 = R4，操作与安全规则，它的 Harmony 补丁与 JIT，它借鉴的已有工作，它的测试和未决问题。'
+sidebar:
+  label: 自动游玩与安全
+  badge:
+    text: 大多规划中
+    variant: caution
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+辅助模式显示大脑的答案，每一次点击都留给玩家。还规划了另外两种模式：**自动游玩**，由 Mod 自己打出答案；**半自动**，玩家按一个键，它就打出下一步。自动游玩是评估真实游戏的方式：仿真到实机阶梯的最后一级 R4，用与模拟器相同的种子在真实游戏里打完整局（[评估 §1](/arch/evaluation/#sec-1)）。本页先描述规划中的部分，再讲已经实现、如今成立的部分：日志、安全规则、补丁和测试。
+
+§1–§2 的内容都还没有实现：没有执行器，没有适配器，没有自动跑局驱动，除了 F8 也没有别的按键。
+
+## 1. 执行适配器 <Badge text="规划中" variant="caution" />
+
+适配器把一个决策界面的动作和画面上的 Godot 节点连起来。GameBridge 从不接触 Godot 节点（[GameBridge §2](/arch/gamebridge/#sec-2)），所以这部分节点一侧的工作放在 Mod 里。一个接口将同时服务规划中的高亮和自动游玩：高亮问一个动作在画面上的哪里，自动游玩让适配器执行它。
+
+```csharp
+// One adapter per surface; highlight and auto-play share the action → node mapping.
+interface ISurfaceAdapter
+{
+    string Surface { get; }
+    bool Matches();                       // current screen/room is this surface
+    Control? AnchorFor(string action);    // node to highlight; null = panel only
+    bool Execute(string action);          // same entry point a human click reaches
+}
+```
+
+`Execute` 在各类决策界面上会调用什么：
+
+| 决策界面 | `Execute` |
+|---|---|
+| 战斗 | `CombatActions.Start`（GameBridge）；只有 `CanTurnBeEnded` 时才结束回合 |
+| 按钮 | 按钮的处理函数，但要先检查 `IsEnabled && IsVisibleInTree()`。`ForceClick` 两样都不检查 <Badge text="已核实" variant="success" /> |
+| 商店 | `entry.OnTryPurchaseWrapper(inv)`。对商人节点调用 `ForceClick` 没有任何效果 |
+| 地图 | `NMapScreen.OnMapPointSelectedLocally(point)` |
+| 选牌提示 | 点击卡牌槽，再点确认。走这条 UI 路径，`PlayerChoice` 会留在重播记录里（[GameBridge：各决策界面的动作 §7](/arch/gamebridge/actions/#sec-7)） |
+
+要打出的一步是推荐的 `action`；它的 `plan` 是之后的部分（[协议：线路 §7](/arch/protocol/wire/#sec-7)）。`Execute` 之后，Mod 会期望观测的键在超时之内变化（游戏速度为 Fast 时 10 秒，Instant 时 3 秒）；如果没变，就重新观测，连续失败 3 次则暂停并记日志。如果没有适配器匹配，或者画面空闲却没有合法动作，自动游玩会暂停，面板显示「manual needed」（需要手动操作），Mod 记一个覆盖率 bug：绝不打出随机动作。
+
+如今，标记是自己找到它们的节点的（`CombatMark`、`MapMark`），不经过适配器（[输出 §3](/arch/output/#sec-3)）。每个决策界面上 Mod 的路径和模拟器的路径，在 [GameBridge：各决策界面的动作](/arch/gamebridge/actions/) 里并排列出。
+
+## 2. 自动跑局驱动 <Badge text="规划中" variant="caution" />
+
+驱动会在真实游戏里自己打完一整局又一整局，用于 R4。
+
+- **按种子开局**：`NGame.StartNewSingleplayerRun(character, shouldSave: false, acts, modifiers, seed, GameMode.Standard, ascensionLevel)`（`Nodes/NGame.cs:1137`），幕的选择与大厅会做的相同（[模拟器：整局 §2](/arch/simulator/runs/#sec-2)）。另一种办法是在按下 Confirm 按钮之前设置 `NGame.DebugSeedOverride`，游戏自己的 AutoSlayer 就是这么做的（`AutoSlay/AutoSlayer.cs:501`）。`shouldSave: false` 时 `current_run.save` 不会被改动，参数的文档这样写（`NGame.cs:1130`） <Badge text="已核实" variant="success" />。局历史和进度大概仍会写入 <Badge text="推断" variant="caution" />，所以自动跑局只会用带 Mod 的档案。
+- **一局结束**：检测到死亡（所有玩家都死了）或胜利；发送 `run_end`；回到主菜单；从预先登记的列表里取下一个种子。
+- **速度**：只在自动跑局进行期间把 `PrefsSave.FastMode` 设为 Instant（`Saves/PrefsSave.cs:21`）。有两个游戏行为要注意：编辑器之外的构建在启动时会把 Instant 降为 Fast，而偏好设置会在退出时保存。所以在自动跑局停止时和游戏退出时，都要把用户自己的值恢复回去。
+- **放弃或崩溃**：这个种子记为 `aborted`，并写明原因。绝不为了挑一个更好的结果而重跑一个种子。
+
+## 3. 日志与 R3 = R4
+
+**Mod 如今写什么**。它的行写进游戏自己的日志，所以落在游戏的日志文件里（本机是 `~/.local/share/SlayTheSpire2/logs/godot.log`，以前的会话另有带日期的副本）。每一行都以 `[Sts2Ai]` 开头：
+
+| 级别 | 行 |
+|---|---|
+| info | 「assist mode, ENV, brain at PATH」；「environment ENV」；「connected to the brain」；「no brain: REASON」（每种不同的原因一次） |
+| warning | 「off: game V, the mod is for v0.111.0」；「brain: MESSAGE」（一个 `error`）；「unexpected TYPE from the brain」；「a card prompt (TYPE) without its context, left to the player」；「SL record of node N broken after K steps: REASON」；设置文件的两条警告 |
+| error | 一帧的异常，每种不同的文本一次；「SL record: EXCEPTION」；「no AI settings tab: EXCEPTION」 |
+
+它写的唯一一个文件是它的设置文件（[概览 §5](/arch/mod/#sec-5)）。它没有自己的决策日志。真实游戏里的一次会话改由大脑一侧记录：`brain --log FILE` 写出 Harness 的决策日志（每个决策的观测、合法动作、选择、计划、候选、环境和用时，[Harness：决策日志](/arch/harness/decision-log/)），`brain --wire FILE` 写出宿主发来的每条消息，包括带有游戏版本的 `hello`。2026-10-28 的记录就是这样的一对文件，保存在本地的 `tmp/assist/`（[SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
+
+**规划中：Mod 的决策日志**。每个决策记录：观测、合法动作、推荐、打出的动作、延迟、环境、游戏和 Mod 的版本，以及必须为 0 的 `NumReloads`（[环境：信息与节点 §8](/arch/environments/information/#sec-8)）。如今没有东西读 `NumReloads`。
+
+**规划中：R3 = R4**。同一个种子、同一串决策，在模拟器（R3）和游戏（R4）里打出来，必须给出相同的观测；出现差异就是 GameBridge 或模拟器的 bug，测试会报告第一个差异。现有的检查范围更窄：`clones` 针对 SL 记录，逐个决策检查节点的克隆问的是否就是游戏问的（[SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
+
+## 4. 操作与安全
+
+| 操作 | 状态 | 作用 |
+|---|---|---|
+| F8 | 已实现 | 隐藏或显示面板和所有标记；Mod 关闭时也有效 |
+| SL / NoSL 开关 | 已实现 | 在面板的头部和 AI 标签页里（[概览 §5](/arch/mod/#sec-5)） |
+| AI 标签页 | 已实现 | Mod 的设置 |
+| F9 | 规划中 | 暂停或继续自动游玩 |
+| 单步模式 | 规划中 | 每按一次键执行一个动作 |
+| 空格（半自动） | 规划中 | 标记显示计划；按空格打出下一步 |
+
+**规则**，如今都成立，规划中的模式也受其约束：
+
+- **Mod 不对任何东西执行操作**。辅助模式下它从不发起游戏动作。规划中的自动游玩只会打出决策合法列表里的动作。大脑的答案由 Harness 对照这个列表检查，不合法就抛异常（[Harness：路由、预算与种子 §6](/arch/harness/routing/#sec-6)）。
+- **不修改状态，不用控制台，不读档，不写存档**。Mod 没有做其中任何一件事的接口。
+- **只限单人**。在多人对局里辅助会自行关闭，规划中的自动游玩会拒绝任何多人大厅。
+- **什么会离开游戏**。套接字只传输协议消息。对局 id 是种子的哈希，观测里不含种子（`RunView` 没有种子），所以在 NoSL 下种子从不离开宿主。SL 下会离开：节点的检查点是游戏的完整存档，带着种子和每条随机数流的状态，而这些是 SL 可以知道的（[SL 记录 §2](/arch/mod/sl-record/#sec-2)）。NoSL 从不发送检查点。
+- **游戏的设置画面**是 Mod 唯一改动游戏节点的地方：它加上自己的标签页和面板，并把标签栏移动半格，让它保持居中（[输出 §2](/arch/output/#sec-2)）。它画的其他所有东西都在它自己的图层里。
+
+## 5. 补丁与 JIT
+
+**Harmony 补丁**在运行时改写一个游戏方法：Harmony 是一个 .NET 库，能让 Mod 在原方法之前（前缀，*prefix*）、之后（后缀，*postfix*）或围绕它的异常（终结器，*finalizer*）运行自己的代码。Mod 不订阅任何游戏事件：它每帧轮询（[主循环 §1](/arch/mod/loop/#sec-1)），只在必须的地方打补丁。它的所有补丁共用一个 Harmony id `sts2ai.mod`，在 `Host.Start` 里按这个顺序安装：
+
+| 补丁 | 种类 | 用途 |
+|---|---|---|
+| `CardSelectCmd.From*`，除 `FromChooseABundleScreen` 之外的 15 个公开静态重载 | 前缀和终结器 | 每个选牌提示的上下文（[GameBridge：读取游戏 §6](/arch/gamebridge/observe/#sec-6)） |
+| `SaveManager.SaveRun`、`RunManager.LoadIntoLatestMapCoord`，以及 SL 记录的 12 个入口 | 前缀；另有 6 个后缀，用于步骤的任务 | SL 记录（[SL 记录 §3](/arch/mod/sl-record/#sec-3)） |
+| `NSettingsTabManager._Ready` | 后缀 | AI 标签页，在下一次空闲时加上（[输出 §2](/arch/output/#sec-2)） |
+
+**为什么最先安装**。上下文补丁在其他任何东西编译游戏代码之前安装：在补丁之前编译的调用方可能把入口内联进去，从而绕过补丁。这在无头运行时见过：SapphireSeed 在另一个补丁重新编译它的时候被内联了。
+
+**JIT**。游戏在 .NET 的*分层编译*下运行：方法先被快速编译一遍，常用的方法之后再带优化重新编译一次（即「rejit」）。一次 rejit 可能悄无声息地丢掉补丁；这在无头运行几千场战斗之后见过，所以模拟器关掉了分层编译（[模拟器：无头宿主 §6](/arch/simulator/headless/#sec-6)）。Mod 无法选择游戏如何编译。它有的是：
+
+- **缺少上下文会记日志**：没带上下文的提示留给玩家，并在游戏日志里写一条警告（[主循环 §5](/arch/mod/loop/#sec-5)）。面板上还不显示警告。
+- **规划中：心跳**，每个补丁触发时给一个计数器加一，用来发现失效的补丁。
+- **规划中：启动参数**：用 `DOTNET_TieredCompilation=0` 启动游戏 <Badge text="推断" variant="caution" />，前提是游戏内托管的运行时认这个变量（未决问题 2，[§8](#sec-8)）。
+
+## 6. 已有工作
+
+STS2MCP（MIT 许可）是一个现成的 Mod，让外部程序通过 HTTP 操控 STS2。
+
+**照搬**：
+
+- 在 `ProcessFrame` 上取空的主线程队列（[主循环 §1](/arch/mod/loop/#sec-1)）；
+- 它按画面写的动作代码，作为参考。
+
+**避开**：
+
+- 直接 `new PlayCardAction`：它跳过 `CanPlayTargeting` 和出牌效果；
+- 直接结束回合；
+- 暴露种子或地图的路径；
+- 带 CORS `*` 的 HTTP：任何网页都能操控游戏。Mod 只用 Unix 套接字。
+
+## 7. 测试
+
+Mod 没有单元测试。它与模拟器共用的部分在模拟器那边测试：GameBridge 的观测和动作，以及 Protocol 的消息（[模拟器：参考 §7](/arch/simulator/reference/#sec-7)）。Mod 在解决方案里，所以构建解决方案时会编译它，但没有东西运行它。在游戏里检查的有：
+
+| 检查 | 状态 |
+|---|---|
+| **SL 往返**：`brain --wire` 和 `clones` | 已实现并运行过（[SL 记录 §8](/arch/mod/sl-record/#sec-8)） |
+| **加载**：Mod 能初始化，版本守卫生效，面板能显示 | 手动 |
+| **真实游戏里的决策界面覆盖**：脚本化的 R4 对局走遍每一种决策界面，没有一个决策因为缺少读取代码而留给玩家 | 规划中 |
+| **空闲**：动画进行中从不发出决策；决策日志带上帧号，检查没有一条与排队中的动作重叠 | 规划中 |
+| **速度恢复**：停止和退出时都把 Instant 或 Fast 恢复原样 | 规划中，随驱动一起 |
+
+## 8. 未决问题
+
+1. 辅助模式下捕获玩家的动作：已解决，在游戏提交动作的地方挂钩子（[SL 记录 §3](/arch/mod/sl-record/#sec-3)）。
+2. 游戏是否认分层编译的环境变量？

@@ -28,7 +28,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 | **legal** | 游戏的对象 | 合法动作，以文本表示 | `MapActions.Legal(run)` → `["map:0,1", "map:3,1"]` |
 | **start** | 一个合法动作 | 在画面上点击一下会发出的那个游戏调用，已经启动 | `MapActions.Start(run, player, "map:0,1")` → 对这个地图点的一次投票，与地图画面把它加入队列的方式相同 |
 
-它不做的，是判断**哪个**画面在提问，或者等待游戏把一个动作做完。这两件事都取决于画面显示什么，而只有宿主在跟踪这一点：模拟器自己扮演各个画面的角色（[模拟器：整局 §3](/arch/simulator/runs/#sec-3)），Mod 则查看正在显示的画面（[Mod §3](/arch/mod/#sec-3)）。GameBridge 只保留宿主在其上构建的纯判定函数，例如 `CombatActions.WaitingForInput` 和 `RewardActions.IsTerminal`。
+它不做的，是判断**哪个**画面在提问，或者等待游戏把一个动作做完。这两件事都取决于画面显示什么，而只有宿主在跟踪这一点：模拟器自己扮演各个画面的角色（[模拟器：整局 §3](/arch/simulator/runs/#sec-3)），Mod 则查看正在显示的画面（[Mod：主循环 §4](/arch/mod/loop/#sec-4)）。GameBridge 只保留宿主在其上构建的纯判定函数，例如 `CombatActions.WaitingForInput` 和 `RewardActions.IsTerminal`。
 
 ## 2. 规则
 
@@ -42,19 +42,19 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 | 宿主 | observe | legal | start |
 |---|---|---|---|
 | 模拟器（`Sts2Ai.SimWorker`） | 每个决策 | 每个决策 | 它打出的每个动作（[模拟器：整局 §4](/arch/simulator/runs/#sec-4)） |
-| Mod（`Sts2Ai.Mod`） | 它向大脑询问的每个决策 | 同上 | 从不：Mod 只提建议，由玩家行动。它给模拟器的 start 所调用的同一批游戏入口打补丁，以此记录玩家自己的动作，所以 SL 记录给一步起的名字和模拟器给的完全一样（[Mod §6](/arch/mod/#sec-6)） |
+| Mod（`Sts2Ai.Mod`） | 它向大脑询问的每个决策 | 同上 | 从不：Mod 只提建议，由玩家行动。它给模拟器的 start 所调用的同一批游戏入口打补丁，以此记录玩家自己的动作，所以 SL 记录给一步起的名字和模拟器给的完全一样（[Mod：SL 记录 §3](/arch/mod/sl-record/#sec-3)） |
 
 Mod 把 GameBridge 的源文件编译进自身，在游戏内部运行。模拟器以项目引用的方式引用它。CombatBuilder 是模拟器从观测构建战斗的办法，它复用 GameBridge 读取意图的代码，把怪物的招式与显示出的意图对应起来（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。
 
 ## 4. 跟上游戏
 
-这个项目关于游戏代码的全部知识都在三个地方：GameBridge、模拟器的补丁（[模拟器：无头宿主 §4](/arch/simulator/headless/#sec-4)），以及 Mod 的画面适配器（[Mod §4](/arch/mod/#sec-4)）。游戏更新时：
+这个项目关于游戏代码的全部知识都在三个地方：GameBridge、模拟器的补丁（[模拟器：无头宿主 §4](/arch/simulator/headless/#sec-4)），以及 Mod 读取画面的代码和钩子（[Mod：主循环 §4](/arch/mod/loop/#sec-4)）。游戏更新时：
 
 1. 反编译新版游戏，并针对它重新构建（`Sts2BinDir`，[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）；
 2. 运行 `selftest`，然后跑几批 `run --check`，它们遇到驱动程序不认识的画面、不合法的回答或任何游戏错误就会失败，并列出从未到达的决策界面（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）；
 3. 阅读 GameBridge 触及的那些游戏签名的差异；选牌提示的入口是用反射找到的，所以新增的入口不用改代码就会被打上补丁，但它的参数仍需要看一看。
 
-Mod 拒绝在不是为之构建的游戏版本上运行（[Mod §2](/arch/mod/#sec-2)）。
+Mod 拒绝在不是为之构建的游戏版本上运行（[Mod §3](/arch/mod/#sec-3)）。
 
 ## 5. 规划中：事件流
 
@@ -74,7 +74,7 @@ Mod 拒绝在不是为之构建的游戏版本上运行（[Mod §2](/arch/mod/#s
 | GameBridge 确实触及游戏（边界检查的对照） | `BoundaryTests`、`selftest` |
 | 每个战斗观测和动作都能往返；从观测构建出的战斗精确地显示这些观测 | `selftest`（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)） |
 | 每个决策界面的观测都能往返；大脑给出的每个回答都合法，且启动时不出错；对局精确重播，节点也一样 | `run --check`（[模拟器：整局 §6](/arch/simulator/runs/#sec-6)） |
-| Mod 的 SL 记录在各自的克隆上重播，观测与游戏当时显示的相同 | `clones`（[Mod §12](/arch/mod/#sec-12)） |
+| Mod 的 SL 记录在各自的克隆上重播，观测与游戏当时显示的相同 | `clones`（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)） |
 
 规划中：Mod 里的一项检查，确认画面上每个启用的控件都是一个合法动作；以及相同的种子和决策在游戏里和模拟器里给出相同的观测（[评估 §1](/arch/evaluation/#sec-1)）。
 

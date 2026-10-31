@@ -89,7 +89,7 @@ The Wilson interval is a confidence interval for a proportion such as a win rate
 
 - Three disjoint sets: train, promotion and final.
 - Final seeds are generated and registered in the repo beforehand (method and date). All of them are run and all are reported, so no one can pick seeds that happen to look good. A formal claim needs at least 300 runs.
-- A seed is the game's run seed string. R1–R3 runs are started by the worker, R4 runs by the mod with the same seed ([Mod §7](/en/arch/mod/#sec-7)).
+- A seed is the game's run seed string. R1–R3 runs are started by the worker, R4 runs by the mod with the same seed ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)).
 - Train seeds are unlimited. Promotion seeds are rotated, to avoid overfitting to them.
 
 A seed set is a text file in `eval/seeds/`, one seed per line, with a header comment giving the method and the date. `seeds --base B --n K` writes the K seeds `MakeSeed(B, i)` for i = 0…K−1: 12 characters drawn from a generator seeded with B × 1,000,003 + i × 7,919 (32-bit). Two of the bases below share a generator seed only hundreds of millions of seeds in, so the sets are disjoint. The bases are fixed:

@@ -1,0 +1,874 @@
+{
+ "combat": {
+  "source": {
+   "run": "034f8a6ab80c494f",
+   "seed": "3TZ33JATH5R5",
+   "floor": 15,
+   "outcome": "lost",
+   "rev": "b013f95",
+   "champion": "combat pimc c2 8x300, combat prompts p0, macro l0 v6-3-2, macro prompts l0 v6-3-2",
+   "job": "a NoSL run of the NoSL champion (pimc c2 8x300, L0 v6-3-2) on promotion-1-300 #0",
+   "how": "one combat decision of that run, as its decision log holds it",
+   "from": "src/data/combat-examples.json nosl"
+  },
+  "brain": "pimc c2",
+  "hand": [
+   {
+    "id": "DEFEND_SILENT",
+    "cost": 1,
+    "uid": 0
+   },
+   {
+    "id": "LEG_SWEEP",
+    "cost": 2,
+    "uid": 1
+   },
+   {
+    "id": "SLICE",
+    "cost": 0,
+    "uid": 2
+   },
+   {
+    "id": "CALCULATED_GAMBLE",
+    "cost": 0,
+    "uid": 3
+   },
+   {
+    "id": "NEOWS_FURY",
+    "cost": 1,
+    "uid": 4
+   },
+   {
+    "id": "STRIKE_SILENT",
+    "cost": 1,
+    "uid": 5
+   },
+   {
+    "id": "POISONED_STAB",
+    "cost": 1,
+    "uid": 6
+   }
+  ],
+  "enemies": [
+   {
+    "uid": 1,
+    "id": "TERROR_EEL",
+    "hp": 140
+   }
+  ],
+  "chosen": "play:1:1",
+  "plan": [
+   "play:2:1",
+   "play:4:1",
+   "play:2:1",
+   "play:3",
+   "end_turn"
+  ],
+  "candidates": [
+   {
+    "action": "play:1:1",
+    "value": 0.1708,
+    "ci": 0.0113
+   },
+   {
+    "action": "play:0",
+    "value": 0.1512,
+    "ci": 0.0018
+   },
+   {
+    "action": "play:2:1",
+    "value": 0.1512,
+    "ci": 0.0018
+   },
+   {
+    "action": "play:6:1",
+    "value": 0.1492,
+    "ci": 0.0067
+   },
+   {
+    "action": "play:4:1",
+    "value": 0.135,
+    "ci": 0.0064
+   },
+   {
+    "action": "play:3",
+    "value": 0.1282,
+    "ci": 0.0076
+   },
+   {
+    "action": "play:5:1",
+    "value": 0.1273,
+    "ci": 0.0069
+   },
+   {
+    "action": "end_turn",
+    "value": 0.0604,
+    "ci": 0.0012
+   }
+  ],
+  "elapsed_ms": 494.2
+ },
+ "map": {
+  "source": {
+   "job": "data/silent/sl/eval/2026-10-30-eval-v6-3-2-clone",
+   "run": "ce13ba5116b7f48a",
+   "seed": "0SSL7NS01MU6",
+   "outcome": "won",
+   "floor": 43,
+   "rev": "b013f95",
+   "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone",
+   "values": "sim afterstates --macro l0 --value weights/silent/v6-3-2.json: each option valued on its afterstate as predicted from the screen",
+   "from": "src/data/macro-examples.json decisions.map and series",
+   "decision": 696,
+   "hp": 24,
+   "max_hp": 66,
+   "act_id": "GLORY",
+   "route": "the points the run then travelled to, from its later map decisions; L0 plans its route again at each one"
+  },
+  "brain": "l0 v6-3-2 clone",
+  "points": [
+   {
+    "col": 3,
+    "row": 0,
+    "type": "Ancient",
+    "next": [
+     {
+      "col": 0,
+      "row": 1
+     },
+     {
+      "col": 3,
+      "row": 1
+     },
+     {
+      "col": 4,
+      "row": 1
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 1,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 0,
+      "row": 2
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 1,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 3,
+      "row": 2
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 1,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 5,
+      "row": 2
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 2,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 0,
+      "row": 3
+     },
+     {
+      "col": 1,
+      "row": 3
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 2,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 3,
+      "row": 3
+     },
+     {
+      "col": 4,
+      "row": 3
+     }
+    ]
+   },
+   {
+    "col": 5,
+    "row": 2,
+    "type": "Shop",
+    "next": [
+     {
+      "col": 6,
+      "row": 3
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 3,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 0,
+      "row": 4
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 3,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 1,
+      "row": 4
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 3,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 3,
+      "row": 4
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 3,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 5,
+      "row": 4
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 3,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 6,
+      "row": 4
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 4,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 0,
+      "row": 5
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 4,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 1,
+      "row": 5
+     },
+     {
+      "col": 2,
+      "row": 5
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 4,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 4,
+      "row": 5
+     }
+    ]
+   },
+   {
+    "col": 5,
+    "row": 4,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 5,
+      "row": 5
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 4,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 6,
+      "row": 5
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 5,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 0,
+      "row": 6
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 5,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 0,
+      "row": 6
+     }
+    ]
+   },
+   {
+    "col": 2,
+    "row": 5,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 2,
+      "row": 6
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 5,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 4,
+      "row": 6
+     }
+    ]
+   },
+   {
+    "col": 5,
+    "row": 5,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 6,
+      "row": 6
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 5,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 6,
+      "row": 6
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 6,
+    "type": "Elite",
+    "next": [
+     {
+      "col": 0,
+      "row": 7
+     },
+     {
+      "col": 1,
+      "row": 7
+     }
+    ]
+   },
+   {
+    "col": 2,
+    "row": 6,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 2,
+      "row": 7
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 6,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 4,
+      "row": 7
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 6,
+    "type": "Shop",
+    "next": [
+     {
+      "col": 6,
+      "row": 7
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 7,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 0,
+      "row": 8
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 7,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 2,
+      "row": 8
+     }
+    ]
+   },
+   {
+    "col": 2,
+    "row": 7,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 2,
+      "row": 8
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 7,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 5,
+      "row": 8
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 7,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 5,
+      "row": 8
+     },
+     {
+      "col": 6,
+      "row": 8
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 8,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 0,
+      "row": 9
+     },
+     {
+      "col": 1,
+      "row": 9
+     }
+    ]
+   },
+   {
+    "col": 2,
+    "row": 8,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 3,
+      "row": 9
+     }
+    ]
+   },
+   {
+    "col": 5,
+    "row": 8,
+    "type": "Elite",
+    "next": [
+     {
+      "col": 5,
+      "row": 9
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 8,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 5,
+      "row": 9
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 9,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 0,
+      "row": 10
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 9,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 2,
+      "row": 10
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 9,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 2,
+      "row": 10
+     },
+     {
+      "col": 3,
+      "row": 10
+     }
+    ]
+   },
+   {
+    "col": 5,
+    "row": 9,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 4,
+      "row": 10
+     },
+     {
+      "col": 6,
+      "row": 10
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 10,
+    "type": "Elite",
+    "next": [
+     {
+      "col": 1,
+      "row": 11
+     }
+    ]
+   },
+   {
+    "col": 2,
+    "row": 10,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 2,
+      "row": 11
+     },
+     {
+      "col": 3,
+      "row": 11
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 10,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 3,
+      "row": 11
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 10,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 4,
+      "row": 11
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 10,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 6,
+      "row": 11
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 11,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 1,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 2,
+    "row": 11,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 1,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 11,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 3,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 11,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 3,
+      "row": 12
+     },
+     {
+      "col": 4,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 11,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 6,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 12,
+    "type": "Shop",
+    "next": [
+     {
+      "col": 1,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 12,
+    "type": "Elite",
+    "next": [
+     {
+      "col": 3,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 12,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 5,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 12,
+    "type": "Elite",
+    "next": [
+     {
+      "col": 5,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 13,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 3,
+      "row": 14
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 13,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 3,
+      "row": 14
+     }
+    ]
+   },
+   {
+    "col": 5,
+    "row": 13,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 3,
+      "row": 14
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 14,
+    "type": "Boss",
+    "next": []
+   }
+  ],
+  "visited": [
+   {
+    "col": 3,
+    "row": 0
+   },
+   {
+    "col": 3,
+    "row": 1
+   },
+   {
+    "col": 3,
+    "row": 2
+   },
+   {
+    "col": 4,
+    "row": 3
+   },
+   {
+    "col": 5,
+    "row": 4
+   },
+   {
+    "col": 5,
+    "row": 5
+   },
+   {
+    "col": 6,
+    "row": 6
+   },
+   {
+    "col": 6,
+    "row": 7
+   },
+   {
+    "col": 5,
+    "row": 8
+   },
+   {
+    "col": 5,
+    "row": 9
+   }
+  ],
+  "boss": "QUEEN_BOSS",
+  "ancient": "TANX",
+  "chosen": "map:4,10",
+  "options": [
+   {
+    "action": "map:4,10",
+    "value": 48.05051772691392
+   },
+   {
+    "action": "map:6,10",
+    "value": 47.935601017659
+   }
+  ],
+  "route": [
+   "map:4,11",
+   "map:3,12",
+   "map:3,13",
+   "map:3,14"
+  ]
+ }
+}

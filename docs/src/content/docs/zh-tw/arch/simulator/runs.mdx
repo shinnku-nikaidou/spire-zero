@@ -200,7 +200,7 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 
 ## 8. 連到大腦的對局
 
-`run` 通常把大腦留在自己的行程裡：Harness 和冠軍的各個大腦是這個行程裡的物件，它們的搜尋交給 `run` 啟動的工作行程池（[工作行程池](/zh-tw/arch/simulator/pool/)）。用 `run --brain SOCKET` 時，大腦則是另一個行程，在一個 Unix socket 上監聽，也就是 Mod 在遊戲裡連的那個（[Mod §5](/zh-tw/arch/mod/#sec-5)）。這時模擬器託管對局的方式和遊戲完全一樣：每局傳送 `hello`，帶上它的環境和由種子雜湊得到的對局 id，每個決策都連同它的觀測和合法動作一起發出，然後打出大腦推薦的動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。NoSL 下對局 id 隱藏了種子；SL 下種子確實會到達大腦，在節點檢查點的存檔裡，這是 SL 可以知道的。
+`run` 通常把大腦留在自己的行程裡：Harness 和冠軍的各個大腦是這個行程裡的物件，它們的搜尋交給 `run` 啟動的工作行程池（[工作行程池](/zh-tw/arch/simulator/pool/)）。用 `run --brain SOCKET` 時，大腦則是另一個行程，在一個 Unix socket 上監聽，也就是 Mod 在遊戲裡連的那個（[Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8)）。這時模擬器託管對局的方式和遊戲完全一樣：每局傳送 `hello`，帶上它的環境和由種子雜湊得到的對局 id，每個決策都連同它的觀測和合法動作一起發出，然後打出大腦推薦的動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。NoSL 下對局 id 隱藏了種子；SL 下種子確實會到達大腦，在節點檢查點的存檔裡，這是 SL 可以知道的。
 
 由大腦決定打什麼，所以 `run --brain` 拒絕每個冠軍選項，包括 `--log`（`Commands/RunCommand.cs:71-72`）；而且因為冠軍檔案的選項是當作給出的選項合併進來的，它也拒絕指定了任何冠軍選項的 `--champion FILE`（`Commands/Args.cs:186-202`）<Badge text="推斷" variant="caution" />。SL 下宿主還會傳送節點訊息：新節點開始時傳送檢查點，然後是還沒傳送的決策，每個都在下一個決策之前傳送（`Brains/RunBrains.cs:53-99`）。
 
@@ -212,7 +212,7 @@ brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy pimc|pla
 
 - `--socket`：預設是 `$XDG_STATE_HOME/sts2ai/brain.sock`，這個變數未設定時是 `~/.local/state/sts2ai/brain.sock`（`Sts2Ai.Protocol/Wire.cs:99-103`）：Steam 在一個容器裡執行遊戲，這個容器共用家目錄，但不共用 `$XDG_RUNTIME_DIR`。
 - 宿主在 `hello` 裡說明它的環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（預設是 SL 規劃器），宏觀大腦則相同。
-- `--log` 寫出決策日誌；`--wire` 寫出宿主傳來的每條訊息，`clones` 會重播這些訊息，在複本上檢查宿主的 SL 決策（[Mod §12](/zh-tw/arch/mod/#sec-12)）。
+- `--log` 寫出決策日誌；`--wire` 寫出宿主傳來的每條訊息，`clones` 會重播這些訊息，在複本上檢查宿主的 SL 決策（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 - 它每局印出一行：對局 id、結局、層數、決策數、重新規劃次數，以及它的工作行程的遊戲錯誤，宿主的對局記錄不計入這些錯誤。
 
 `run --check` 在第二遍時在行程內使用同一個伺服器，用一個以行程命名的抽象 Unix socket（`\0sts2ai-brain-PID`，`Brains/RunBrains.cs:200-220`），所以 `--check` 打的每一局都會檢查線路這條路徑。

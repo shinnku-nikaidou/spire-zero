@@ -1,155 +1,182 @@
 ---
 title: 'Output: panel, highlight, auto'
-description: How one recommendation from the brain becomes a text panel, on-screen highlights or an executed action, and how its explanation is written.
+description: 'How the brain''s answer becomes something the player sees: the recommendation the output reads, the panel as Panel.cs draws it, its settings and the AI tab, the marks on the map and in combat, and the planned auto loop, narration and per-surface highlights, with fair play and tests.'
 sidebar:
   label: Output
   badge:
-    text: planned
-    variant: caution
+    text: partly built
+    variant: tip
 ---
-import { Aside, Badge, Steps } from '@astrojs/starlight/components';
 
-The output layer turns the brain's answer into something the player sees, or something the game does. It runs inside the [mod](/en/arch/mod/), in the game process. Every output mode reads the same `Recommendation` message from Harness, and the brain never knows which mode is on.
+import { Aside, Badge, Steps } from '@astrojs/starlight/components';
+import PanelMock from '../../../../components/book/PanelMock.svelte';
+import MapRoute from '../../../../components/book/MapRoute.svelte';
+
+The brain answers a decision with an action, a plan and, for a combat, the actions it scored. The **output layer** turns that answer into something the player sees, or, later, something the game does. It runs inside the [mod](/en/arch/mod/), in the game process, and every output mode reads the same `Recommendation`: the brain never knows which mode is on. This page is for whoever wants to change what the player sees. [Mod: the main loop](/en/arch/mod/loop/) says when an answer is asked for and how long it is shown.
 
 <Aside title="Status">
 
-A first stand-in is built: the mod's text panel shows the recommended action, the rest of the turn's plan and the top candidates on every surface, named as the game names them ([Mod §3](/en/arch/mod/#sec-3)). The first highlight is built too: on the map, a ring on the recommended point and a line along the route the brain plans after it, up to the boss ([§3](#sec-3)). The rest is planned. Background notes are in the local note `tmp/notes/output-design.md`; the Godot node names in it were verified in the game source. Godot node classes (`N*` types) are cited by class name only: each name is unique in the decompiled source, so find the file by name.
+Built, and run in the real game (2026-10-28): the **panel**, a card over the game with the next action, the plan after it and, for a combat, the three actions the brain scored best ([§2](#sec-2)); its **settings**, in an "AI" tab the mod adds to the game's settings screen; and two kinds of **marks** ([§3](#sec-3)): on the map, a ring on the recommended point and a line along the route the brain plans after it, up to the boss; in combat, the plan's step numbers on the cards it plays this turn and on its targets and the end turn button. Planned: highlights on the other surfaces, auto-play ([§4](#sec-4)), narration ([§5](#sec-5)), and the facts it needs. Godot node classes (`N*` types) are cited by class name only: each name is unique in the decompiled source, so find the file by name. Background notes are in the local note `tmp/notes/output-design.md`.
 
 </Aside>
 
-## 1. Contract
+## 1. The contract
 
-Three consumers read one `Recommendation` ([Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)); semi-auto combines two of them. The brain never knows which mode is on. The parts of the recommendation they use:
+The output reads one message, `Recommendation` ([Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)), as built (`Sts2Ai.Protocol/Wire.cs:62-63`):
 
-- `Plan`: the rest of the turn or screen, or on the map the rest of the act's route, as a list of actions (`plan[0]` is the next one);
-- `Candidates`: the actions considered, each with its value, confidence interval and sample count;
-- `Facts`: the numbers an explanation may use; the only source for explanations.
-
-| mode | consumer | needs |
+| field | what | from whom |
 |---|---|---|
-| panel (assist, simple) | one text panel for all surfaces | `Plan`, `Candidates`, `Facts` |
-| highlight (assist, advanced) | per-surface `ISurfaceAdapter.AnchorFor` ([Mod §4](/en/arch/mod/#sec-4)) | action → node |
-| auto | `ISurfaceAdapter.Execute(plan[0])`, then re-observe | action → entry point |
-| semi-auto | highlight + Space executes `plan[0]` | both |
+| `decision_id`, `obs_hash` | the decision it answers | |
+| `action` | the action to take now | every brain |
+| `brain` | the brain that answered, as Harness names it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) | |
+| `plan`? | what the brain planned after `action` | PIMC: the rest of the turn, in the first world; the SL planner: the rest of the combat; L0 on the map: the route to the boss; no other screen, and no card prompt |
+| `candidates`? | the first actions the brain scored, each with its value, the half-width of its 95% confidence interval, its sample count and more ([Protocol: worlds and worker messages §3](/en/arch/protocol/worlds/#sec-3)) | the combat brains only |
+
+`plan` comes *after* `action`: the next step is `action`, and `plan[0]` is the one after it.
+
+**The consumers.** The brain never knows which mode is on.
+
+| mode | consumer | state |
+|---|---|---|
+| panel (assist, simple) | one card for every surface ([§2](#sec-2)) | built |
+| marks (assist) | the map's ring and route; the combat plan's numbers and rings ([§3](#sec-3)) | built |
+| highlight (assist, advanced) | the other surfaces' nodes, through adapters ([Mod: auto-play and safety §1](/en/arch/mod/auto/#sec-1)) | planned |
+| auto | the adapter plays `action`, then the mod observes again ([§4](#sec-4)) | planned |
+| semi-auto | the marks show the plan, and a key plays `action` | planned |
 
 A *surface* is the kind of decision screen being shown (combat, map, shop, a card prompt and so on). An *anchor* is the Godot node on screen that an action belongs to, such as the card holder of the card to play.
 
-**Stale guard.** A recommendation is rendered or executed only if its `obs_hash` equals the current one; otherwise the output is cleared. While waiting, the panel shows "thinking…". In assist mode the brain answers *anytime*: it sends its best answer so far and then better ones ([Harness: routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)), and each update replaces the content.
+**Stale answers.** An answer is matched to the open decision by its id, and kept for the key it was asked for: the observation's hash and its legal actions. It is drawn only on the frames that key lasts; when the screen moves on, the panel shows "Thinking…" for the new state, and the mod asks again ([Mod: the main loop §3](/en/arch/mod/loop/#sec-3)). The mod never reads the answer's `obs_hash`.
 
-## 2. Panel
+**Planned.**
 
-The panel has its own `CanvasLayer`, a Godot node that draws its children on a separate layer; here a high layer, above the game UI. It is a card near the top left corner (`Panel`), and F8 hides and shows it with every mark:
+- **Facts**: the numbers an explanation may use, as a field of the recommendation; the only source narration would have ([§5](#sec-5)). No `Facts` exist in the code.
+- **Anytime answers**: in assist mode, the brain sending its best answer so far and then better ones, each replacing the last ([Harness: routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)). Today the brain sends one answer per decision, and the mod clears the decision at the first.
 
-- **Head:** the champion, the status, an SL/NoSL switch ([Mod §5](/en/arch/mod/#sec-5)) and the F8 hint.
-- **Body:** the next action, then the numbered plan up to the turn's end (on the map, the route's rooms) and how many more turns are planned; the best three actions the brain scored, each with its value ± confidence interval, as bars on one shared scale; and a foot line with the brain that answered and how long it took.
-- **Without an answer:** one line saying why, with a quieter reason under it: connecting; no brain running, trying again every 2 s; start or continue a run; off in multiplayer; brain error, back on at the next run; waiting for the brain; waiting for a decision; no SL clone of this room, the next room has one; or thinking, with the seconds so far.
+## 2. The panel
 
-**Settings.** The player's choices are kept in `~/.local/state/sts2ai/settings.json`, beside the brain's socket and outside the game's profile:
+The panel is a card over the game, near its top left corner (`UI/Panel.cs`). It has its own `CanvasLayer`, a Godot node that draws its children on a separate layer: layer 100, above the game's UI, which every mark shares. The card takes no clicks but its switch's, so the game under it gets them. F8 hides and shows it with every mark.
 
-- assist on or off: off asks the brain nothing and draws nothing, and ends the run as the brain sees it, as switching the environment does;
-- the environment, SL or NoSL;
-- the panel;
-- the considered actions: off, values, or values with bars;
-- the order numbers on the cards, and the target and end-turn marks;
-- the map route: off, the next point, or the whole route;
-- the panel's opacity.
+<PanelMock client:visible lang="en" />
 
-They are set in an "AI" tab that the mod adds to the game's settings screen, after General, Graphics, Sound and Input (`SettingsTab`). A postfix on `NSettingsTabManager._Ready`, run at the next idle, builds it from a copy of the Input tab and an emptied copy of the Sound panel; its rows are the mod's own controls in the game's font, `<  value  >` steppers and an opacity slider, with a button that resets them. If building it fails, the screen stays as the game built it and the error is logged.
+**The layout** (`Panel.cs:44-250`):
 
-The card, the settings and the tab are built but not yet run in the real game.
+- **The card**: at (24, 132), at least 420 px wide, 16 px of padding (18 at the sides), corner radius 14, a dark purple border, a shadow, and a near-black fill at the opacity setting.
+- **The head**: a purple "AI" badge; the champion's name and, under it, the status, each one line cut with an ellipsis where its space ends; the SL/NoSL switch, the selected side filled purple (neither side in multiplayer, and no switch when the mod is off); and "F8".
+- **An answer**: the next action after a filled "1" badge, in large type; on the map a ring instead of the badge, then "ROUTE TO THE BOSS" and the route's rooms joined by dots; elsewhere the plan's steps, numbered from 2 in ring badges; then the plan's later turns, "2 more turns planned" ([Mod: the main loop §6](/en/arch/mod/loop/#sec-6)).
+- **The considered actions**, under a rule: "CONSIDERED" and "value ±CI", then the first three candidates in the brain's order, best first, the first in purple. Each value prints to one decimal, `0.0 ±0.0`. With bars, each row also has a 96 px track, the confidence interval as a strip on it and a tick at the value, on one scale for the three: from the lowest value minus its interval to the highest plus its, widened by a tenth on each side. Shown only when the brain scored more than one action, which today means a combat.
+- **The foot**: the brain that answered and the seconds the mod waited for it, from sending to receiving.
+- **A message** instead of an answer: a dot, the message, and a quieter second line; amber for something the player can fix or wait out, red for an error. Every message is listed in [Mod §6](/en/arch/mod/#sec-6).
 
-What it shows depends on the surface, and all of it comes from `Recommendation`. ΔP(win) is the difference in the estimated probability of winning the run.
+The body is built again only when what it shows changes, or a setting it is drawn with; the marks follow their nodes every frame.
 
-| surface | panel content |
+**Settings.** The player's choices are kept in `~/.local/state/sts2ai/settings.json`, beside the brain's socket and outside the game's profile; every row, its values and its default are in [Mod §5](/en/arch/mod/#sec-5). The panel and the marks read the settings live, so a change applies at once.
+
+**The AI tab** (`UI/SettingsTab.cs`) sits in the game's settings screen after General, Graphics, Sound and Input. The game builds its four tabs in `NSettingsTabManager._Ready` from nodes in its scene. A postfix there, run at the next idle so the screen is whole, copies the Input tab for the tab's button and the Sound panel, emptied, for its panel, so both look and switch like the game's own; the copies take the nodes and their scripts, not the game's signal connections. It moves the tab row half a step left so it stays centred, wires the button to the manager's own tab switch, and adds the pair to the manager's tabs. The rows are the mod's own controls in the font of the game's settings rows: `<  value  >` steppers and an opacity slider, and a button that resets them. Everything is built before any of it joins the screen, so if building fails, the screen stays as the game built it and the error is logged.
+
+**Planned for the panel:**
+
+| surface | content |
 |---|---|
-| combat | numbered plan with targets; 1–2 facts (expected HP loss vs the alternative, lethal next turn); the top alternative with its ΔP(win) |
-| card reward / choices | the options, each with ΔP(win) vs skip or the baseline |
-| map | next point and a path preview |
-| event / rest / shop | same format |
+| combat | 1–2 facts (expected HP loss against the alternative, lethal next turn); the top alternative with its ΔP(win), the difference in the estimated probability of winning the run |
+| card reward and choices | each option with its ΔP(win) against skipping or the baseline |
+| map, event, rest, shop | the same format |
 
-- The panel is the fallback display for every surface that has no highlight adapter.
-- Optional zero-UI variant: the brain serves a local web page, shown on a second screen. Only for the earliest testing; the Unix socket stays the link to the game.
+Today every surface uses the one layout above, with values only from a combat's candidates; V's values are not sent. A zero-UI variant, where the brain serves a local web page for a second screen, was considered for the earliest testing only.
 
 ## 3. Highlight
 
-**Follow overlay.** Highlights are drawn by the mod's own nodes, which live only in the mod's `CanvasLayer`, on top of the game. Each frame, each marker reads its target node's rectangle on screen (`GetGlobalRect()`) and moves to follow it; when the target is gone or hidden, the marker hides. The mod never writes into game nodes, for two reasons: `NHandCardHolder.UpdateCard()` resets `CardHighlight` on every state change (`Nodes.Cards.Holders/NHandCardHolder.cs:613-640`) <Badge text="verified" variant="success" />, and the cyan, gold and red glows already mean something in the game (`NCardHighlight`).
+**The follow overlay.** Marks are drawn by the mod's own nodes, which live only in the mod's `CanvasLayer`, on top of the game. Each frame, each mark reads its target node's transform on screen (`GetGlobalTransformWithCanvas()`) with the node's size, so it follows a card that turns, fans out or scales, and moves with it; when the target is gone or hidden, the mark hides. The mod never writes into the game's nodes to draw, for two reasons: `NHandCardHolder.UpdateCard()` resets `CardHighlight` on every state change (`Nodes.Cards.Holders/NHandCardHolder.cs:613-640`) <Badge text="verified" variant="success" />, and the cyan, gold and red glows already mean something in the game (`NCardHighlight`). The one place the mod changes the game's nodes is the settings screen ([§2](#sec-2)).
 
-**Style.** Order badges ①②③, plus an outline in a color the game does not use (purple).
+**The style**: purple, a color the game does not use for its own glows: outlines, rings and round purple badges with plain digits and a dark ring.
 
-**Built so far.** `CombatMark` marks the plan's current turn in combat: each card the plan plays is outlined in purple on its holder's hitbox with its step's number, each target creature (`NCreature.Hitbox`) is ringed with the numbers of the steps aimed at it, and the end turn button is ringed with its step's number. Potions have no mark yet. On the map, `MapMark` shows the route as the settings say. Like the panel, the combat marks are built but not yet run in the real game.
+**On the map** (`UI/MapMark.cs`): a pulsing purple ring on the next point, and a purple line along each path of the route after it, from where the player is to the route's end. The map screen keeps its point nodes and each path's dots in private dictionaries, which a new act replaces; a line runs from a path's first dot to its last, so it stops short of the points' icons. The ring's radius is half the point's larger side plus 14, scaled with the map, and pulses by ±10% once a second. The route setting shows the whole route, only the ring, or nothing:
 
-**Anchors.** The node that each surface's marks attach to, verified (local note `tmp/notes/output-design.md` §3.2) <Badge text="verified" variant="success" />:
+<MapRoute client:visible lang="en" />
 
-| surface | node | mark |
-|---|---|---|
-| hand | `NPlayerHand.Instance.GetCardHolder(card)` | badge + outline; hover = reason |
-| target | `NCombatRoom.Instance.GetCreatureNode(creature)` | crosshair with the card's number |
-| potion | `NPotionHolder` | badge |
-| end turn | `NEndTurnButton` | pulse when the plan is done |
-| in-combat card select | hand select mode, `NCombatPileCardSelectScreen` | check marks |
-| card reward | `NCardRewardSelectionScreen` holders + skip | ΔP per card, best outlined |
-| rewards | `NRewardButton` | claim order / skip |
-| map | `NMapPoint` in `NMapScreen` + our own `Line2D` path (not `NMapDrawings`, which is shared in multiplayer) | next point + path |
-| event | `NEventOptionButton` | best outlined, ΔP on the others |
-| rest | `NRestSiteButton` | same |
-| shop | `NMerchantCard/Relic/Potion/CardRemoval` | buy order |
-| grid select | `NCardGridSelectionScreen` family, `NCardGrid` | check marks |
+**In combat** (`UI/CombatMark.cs`): the plan as the panel shows it, from `action` to this turn's end.
 
-**Order of work:**
+- each card the plan plays is outlined in purple on its holder's hitbox, with its step's number at its top right corner;
+- each target, an enemy or an ally, is outlined on its creature node's hitbox, 10 px outside it, with the numbers of every step aimed at it in one badge at the top edge's middle;
+- the end turn button is outlined with its step's number.
 
-1. hand + targets;
-2. card reward;
-3. map;
-4. event / rest / shop;
-5. grid prompts.
+A card or creature that is gone has no mark. "Order numbers on cards" turns the card outlines and their numbers off together; "Target and end-turn marks" the rest. A potion has no mark of its own, but its target gets its step's number.
+
+**Anchors.** Each surface's node, verified in the game's source (local note `tmp/notes/output-design.md` §3.2) <Badge text="verified" variant="success" />:
+
+| surface | node | mark | state |
+|---|---|---|---|
+| hand | `NPlayerHand.Instance.GetCardHolder(card).Hitbox`, the card from `NetCombatCardDb` by its uid | outline + step number | built |
+| target | `NCombatRoom.Instance.GetCreatureNode(creature).Hitbox` | outline + the steps' numbers | built |
+| end turn | `NCombatRoom.Instance.Ui.EndTurnButton` | outline + step number | built |
+| map | `NMapPoint` in `NMapScreen`, and our own `Line2D` along its paths' dots (not `NMapDrawings`, which is shared in multiplayer) | ring + route | built |
+| potion | `NPotionHolder` | badge | planned |
+| in-combat card select | hand select mode, `NCombatPileCardSelectScreen` | check marks | planned |
+| card reward | `NCardRewardSelectionScreen` holders + skip | ΔP per card, best outlined | planned |
+| rewards | `NRewardButton` | claim order / skip | planned |
+| event | `NEventOptionButton` | best outlined, ΔP on the others | planned |
+| rest | `NRestSiteButton` | same | planned |
+| shop | `NMerchantCard/Relic/Potion/CardRemoval` | buy order | planned |
+| grid select | `NCardGridSelectionScreen` family, `NCardGrid` | check marks | planned |
+
+**Order of work:** hand and targets (done); card reward; map (done); event, rest and shop; grid prompts.
 
 **Pitfalls:**
 
-- Holder nodes are pooled (reused) and re-parented, and they animate. The follow overlay handles this.
-- Screen resolution, UI scale and controller input: use only global rectangles.
-- Re-planning after every action renumbers the badges.
+- Holder nodes are pooled (reused) and re-parented, and they animate: the follow overlay handles this by looking them up every frame.
+- Screen resolution, UI scale and controller input: only screen transforms, never local positions.
+- The brain plans again after every action, so the numbers start again from 1 at each answer.
 
-## 4. Auto
+## 4. Auto <Badge text="planned" variant="caution" />
 
-The auto loop runs on the mod's per-frame loop ([Mod §3](/en/arch/mod/#sec-3)):
+The auto loop would run on the mod's per-frame loop ([Mod: the main loop §1](/en/arch/mod/loop/#sec-1)):
 
 <Steps>
 
 1. Wait until the surface is idle.
 2. Observe.
 3. Get the recommendation.
-4. Check that its hash matches the current observation and that its action is legal.
-5. Execute `plan[0]`, and only that.
-6. Wait for the hash to change, or for the timeout.
+4. Check that it is for the current key, and that its action is legal.
+5. Play `action`, and only that.
+6. Wait for the key to change, or for the timeout.
 7. Repeat.
 
 </Steps>
 
-The brain re-plans after every action, because draws and random results feed the next decision. Speed comes from the game's FastMode set to Instant, plus an optional delay per step ([Mod §7](/en/arch/mod/#sec-7)).
+The brain plans again after every action, because draws and random results feed the next decision. Speed would come from the game's FastMode set to Instant, plus an optional delay per step ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)).
 
-## 5. Narration
+## 5. Narration <Badge text="planned" variant="caution" />
 
-Narration is the text that explains a recommendation.
+Narration is the text that would explain a recommendation.
 
-- It is built only from `Facts` and `Candidates`, never from free reasoning about the state. NoSL facts are probabilities and expectations; SL facts may be exact ("A then B → draws X").
-- Templates come first, one per fact kind.
-- Optionally, a cheap LLM polishes the text, offline or asynchronously (the project's LLM gateway, cheap models only). Its input is the facts JSON and the template text. Its output is checked: every number in the text must equal a fact value (string match after formatting); if not, the template text is shown instead.
+- It is built only from the facts and the candidates, never from free reasoning about the state. NoSL facts are probabilities and expectations; SL facts may be exact ("A then B draws X").
+- Templates come first, one per kind of fact.
+- Optionally, a cheap LLM polishes the text, offline or asynchronously (the project's LLM gateway, cheap models only). Its input is the facts as JSON and the template's text. Its output is checked: every number in the text must equal a fact's value (a string match after formatting); if not, the template's text is shown instead.
 - The LLM never sees game state beyond the facts, and never affects the action.
+
+Nothing of it is built: the recommendation carries no facts yet ([§1](#sec-1)).
 
 ## 6. Fair play in output
 
-- The executor accepts only actions from `legal[]`.
-- There is no interface for state edits, the console or reloads.
-- `NumReloads` is logged.
-- The mod never exports anything beyond protocol messages; the SL export is gated by environment ([Mod §6](/en/arch/mod/#sec-6)).
+| rule | state |
+|---|---|
+| The mod plays nothing in assist mode; a planned executor would play only actions from the decision's legal list. The brain's answer is checked against that list by Harness ([Harness: routing, budgets and seeds §6](/en/arch/harness/routing/#sec-6)) | holds |
+| There is no interface for state edits, the console or reloads | holds |
+| The socket carries only protocol messages. The SL export is sent only in SL, and carries the node's save, the seed and random streams included ([Mod: auto-play and safety §4](/en/arch/mod/auto/#sec-4)) | holds |
+| The mod writes only its settings file and its lines in the game's log | holds |
+| `NumReloads` is logged, and must be 0 | planned |
+
+A new field of a protocol message gets a row here when it changes what may leave the game.
 
 ## 7. Tests
 
-- **Anchor resolution per surface:** every legal action of an adapted surface resolves to a visible node (checked in a debug overlay mode).
-- **Stale:** delayed recommendations never render after a state change.
-- **Narration number check.**
+None of these is built; the panel and the marks ran in the game in the session of 2026-10-28 ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)).
+
+- **Anchor resolution per surface**: every legal action of an adapted surface resolves to a visible node, checked in a debug overlay mode.
+- **Stale answers**: a delayed answer never draws after a state change.
+- **Narration's number check.**
 
 ## 8. Open questions
 
-1. Highlights for plans with several targets, when a target dies mid-plan: renumber, or keep?
-2. How to show NoSL uncertainty (the confidence interval) without clutter.
+1. Marks for plans with several targets, when a target dies mid-plan: number again, or keep?
+2. How to show NoSL's uncertainty (the confidence interval) without clutter. Today: a value to one decimal and a bar.
