@@ -183,12 +183,14 @@ def segment_log_softmax(values: torch.Tensor, group: torch.Tensor, groups: int):
 
 
 def explored(values, temperature, group, groups) -> torch.Tensor:
-    """Per group, the chance a softmax at the temperature (one per option) draws an option more than temperature / 100
-    below the group's best: what self-play counts as explored (Softmax.Explored)."""
+    """Per group, the chance MacroBrain.Pick explores at the temperature (one per option): a softmax over the logs of V's
+    values that draws an option more than temperature / 100 below the group's best log. An option worth nothing is
+    never drawn, and a group worth nothing draws nothing."""
     best = torch.full((groups,), -math.inf, dtype=values.dtype, device=values.device)
-    best = best.scatter_reduce(0, group, values, reduce="amax")
-    p = segment_log_softmax(values / temperature, group, groups).exp()
-    below = best[group] - values > temperature / 100
+    best = best.scatter_reduce(0, group, values, reduce="amax")[group]
+    logs = torch.where(best > 0, values / best, torch.ones_like(values)).clamp_min(0).log()  # 0 at the best
+    p = segment_log_softmax(logs / temperature, group, groups).exp()
+    below = -logs > temperature / 100
     return torch.zeros(groups, dtype=p.dtype, device=p.device).index_add(0, group, p * below)
 
 

@@ -5,11 +5,12 @@ and optionally boss sims (--boss-sims with the afterstates they were played from
 (--boss-states). The loss is the hazards' cross-entropy, plus the second head's squared errors, plus the boss sims'
 fit of V's centred values and the door states' fit of the second head's boss score; early stopping on the held-out
 runs weighs them the same way. --afterstates (the logged decisions' options) only feed the report's
-`explore_temperature`: the `run --macro-explore` at which V would explore as often as the logs' brains did.
+`explore_temperature`: the `run --macro-explore`, over the logs of V's values, at which V would explore as often as the
+logs' brains did.
 
 --objective win (plan v7) values a whole run by its chance to win, the chance to survive every floor, instead of the
 floor expected: the same net and loss (a won run survived every floor), only what the net file tells RunNet.Value to
-return and the units of the report's explore_temperature change. Whichever the objective, a whole run's report gives
+return changes. Whichever the objective, a whole run's report gives
 the Brier score of that chance on the held-out decisions against whether their runs were won (`brier_held_out`, and
 `brier_held_out_floor_only` for the training runs' hazards whatever the state).
 
@@ -132,9 +133,9 @@ def door_report(model, doors, make) -> dict:
 
 
 def explore_report(model, groups, make, value) -> dict:
-    """The self-play temperature for V: the one at which V would explore the held-out logged decisions as often as
-    the logs' brains did (the chance of drawing an option more than the temperature / 100 below the best), so that the
-    next generation explores as this one did."""
+    """The self-play temperature for V: the --macro-explore at which V would explore the held-out logged decisions as
+    often as the logs' brains did (v.net.explored, as MacroBrain.Pick draws), so that the next generation explores as
+    this one did. Logs from before Pick drew by logs (37a204a) are read as if they had."""
     valued, logs_explored = [], 0.0
     with torch.no_grad():
         for i in range(0, len(groups), SIDE_BATCH):

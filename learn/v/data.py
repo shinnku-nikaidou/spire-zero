@@ -214,7 +214,7 @@ def temperature(brain: str) -> float | None:
 
 def read_options(paths: str, views: dict, floors: int) -> list[dict]:
     """The logged decisions with two options or more whose brain explored: each option's afterstate as a sample, the
-    values the logging V gave them, and its exploration temperature (in its own units)."""
+    values the logging V gave them, and its exploration temperature."""
     groups = []
     for e in read_lines(paths):
         key = (e["run"], e["decision_id"])

@@ -1,6 +1,7 @@
 import base64
 import json
 import math
+from types import SimpleNamespace
 
 import onnx
 import pytest
@@ -146,11 +147,57 @@ def test_the_chance_to_win_is_the_chance_to_survive_every_floor_from_the_start()
     assert win_chance(h, torch.tensor([1])).tolist() == [pytest.approx(0.5 * 0.8)]
 
 
-def test_explored_is_the_chance_of_a_draw_below_the_best_by_more_than_a_hundredth_of_the_temperature():
-    values = torch.tensor([1.0, 0.0, 2.0, 2.0, 2.0 - 1e-4], dtype=torch.float64)
-    share = explored(values, torch.ones_like(values), torch.tensor([0, 0, 1, 1, 1]), 2)
-    assert math.isclose(float(share[0]), 1 / (1 + math.e))
+def test_explored_is_the_chance_of_a_draw_by_logs_below_the_best_by_more_than_a_hundredth_of_the_temperature():
+    # At temperature 1 the weights are V's values themselves, whatever their scale.
+    v = torch.tensor([3e-6, 1e-6, 2.0, 2.0, 2.0 * (1 - 1e-4)], dtype=torch.float64)
+    share = explored(v, torch.ones_like(v), torch.tensor([0, 0, 1, 1, 1]), 2)
+    assert math.isclose(float(share[0]), 1 / 4)
     assert float(share[1]) == 0  # ties, and an option closer than 1 / 100, are as good as the best
+
+
+def test_an_option_worth_nothing_is_never_drawn_and_a_group_worth_nothing_draws_nothing():
+    v = torch.tensor([2e-5, 0.0, 0.0, 0.0], dtype=torch.float64)
+    share = explored(v, torch.full_like(v, 0.05), torch.tensor([0, 0, 1, 1]), 2)
+    assert share.tolist() == [0.0, 0.0]
+
+
+def explore_report(logged, playing, temperature):
+    """train.explore_report on decisions of the logged values, played at the temperature, with V giving `playing`."""
+    groups = [
+        {"samples": [{"v": v} for v in new], "values": old, "temperature": temperature}
+        for old, new in zip(logged, playing, strict=True)
+    ]
+
+    def make(samples):
+        return SimpleNamespace(inputs=list, start=torch.tensor([s["v"] for s in samples], dtype=torch.float64))
+
+    return train.explore_report(lambda: torch.zeros(1), groups, make, lambda _, start: start)
+
+
+def test_the_report_gives_the_macro_explore_that_keeps_the_share_whatever_vs_scale():
+    logged = [[1e-3, 9e-4, 4e-4], [2e-5, 1.5e-5, 1e-6, 0.0], [5e-7, 5e-7], [0.0, 0.0]]
+    same = explore_report(logged, logged, 0.05)
+    assert same["explore_decisions"] == 4 and 0 < same["explore_share_logs"] < 1
+    assert math.isclose(same["explore_temperature"], 0.05, rel_tol=1e-3)
+    smaller = explore_report(logged, [[v * 1e-3 for v in g] for g in logged], 0.05)
+    assert math.isclose(smaller["explore_temperature"], 0.05, rel_tol=1e-3)
+    # V sees its options twice as far apart in logs: the same share takes twice the temperature.
+    wider = explore_report(logged, [[v**2 for v in g] for g in logged], 0.05)
+    assert math.isclose(wider["explore_temperature"], 0.1, rel_tol=1e-3)
+
+
+def test_training_reports_the_temperature_from_the_logged_options(tmp_path):
+    lists, out, after = write_runs(tmp_path), tmp_path / "net.json", tmp_path / "after.jsonl"
+    rows = [json.loads(line) for line in open(common.lists(lists)[0])]
+    options = [{"value": 2e-4, "after": {"gold": 1}}, {"value": 1e-4, "after": {"gold": 2}}]
+    after.write_text(
+        "".join(json.dumps({"run": r["run"], "decision_id": r["decision_id"], "options": options}) + "\n" for r in rows)
+    )
+    args = ["--list", lists, "--name", "t", "--out", str(out), "--objective", "win", "--afterstates", str(after)]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code == 0, result.output
+    fit = json.loads(out.read_text())["fit"]
+    assert fit["explore_decisions"] == 6 and 0 < fit["explore_share_logs"] < 1 and fit["explore_temperature"] > 0
 
 
 def test_centred_values_lose_their_groups_mean():
