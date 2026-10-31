@@ -7,7 +7,7 @@ namespace Sts2Ai.Brain;
 /// <summary>A run and the value the trainer computed for it, which loading checks (docs: learning/reference §7, input parity).</summary>
 public sealed record NetTest(RunView Run, double Value);
 
-/// <summary>V as <c>learn/v/export.py</c> writes it (docs: learning/experiments §1).</summary>
+/// <summary>V as <c>learn/v/export.py</c> writes it.</summary>
 /// <param name="Objective">What <see cref="RunNet.Value"/> returns: "floor", the floor expected to be reached, or "win",
 /// the chance to survive every floor.</param>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
