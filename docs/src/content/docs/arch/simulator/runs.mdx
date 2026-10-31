@@ -117,7 +117,7 @@ flowchart TD
 
 **战斗决策和宏观决策**带着它们的合法动作，以及按需构建的观测（`CombatDecision`、`MacroDecision`）：不看观测的策略就永远不用为它付出代价。回答必须合法，否则这一局抛异常。
 
-**选牌提示**经过 `PolicySelector`，也就是一局进行时游戏的选牌器（`Simulation/PolicySelector.cs:20-89`）：
+**选牌提示**经过 `PolicySelector`，也就是一局进行时游戏的选牌器（`Simulation/PolicySelector.cs:21-80`）：
 
 - 它按规范顺序给出选项（`CardChoices.Canonical`），所以无论游戏列表是什么顺序，同样的牌都构成同样的提示；这个顺序里打平的，由一条以提示编号为种子的随机数流决定，它不知道任何隐藏的东西，重播时也相同；
 - 它把回答记为游戏自己列表里的下标，这正是重播时交回的形式；

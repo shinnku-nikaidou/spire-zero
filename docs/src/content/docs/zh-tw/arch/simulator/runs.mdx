@@ -117,7 +117,7 @@ flowchart TD
 
 **戰鬥決策和宏觀決策**帶著它們的合法動作，以及按需建構的觀測（`CombatDecision`、`MacroDecision`）：不看觀測的策略永遠不必為它付出代價。答案必須合法，否則這一局拋出例外。
 
-**選牌提示**經過 `PolicySelector`，它在一局進行時就是遊戲的選牌器（`Simulation/PolicySelector.cs:20-89`）：
+**選牌提示**經過 `PolicySelector`，它在一局進行時就是遊戲的選牌器（`Simulation/PolicySelector.cs:21-80`）：
 
 - 它按標準順序顯示選項（`CardChoices.Canonical`），所以不管遊戲的清單是什麼順序，同樣的牌構成同樣的提示；這個順序裡的平手，用一條以提示編號為種子的亂數流來打破，這條亂數流不知道任何隱藏的東西，重播時也相同；
 - 它把答案記成遊戲自己清單裡的索引，也就是重播時交回的形式；

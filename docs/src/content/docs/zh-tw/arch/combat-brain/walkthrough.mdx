@@ -17,18 +17,16 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 寂靜獵手，在第三幕的普通戰鬥**一些咬噬卷軸**（<code>{walk.state.encounter}</code>）裡，第 {walk.state.round} 回合開始。
 
-| | |
-|---|---|
-| 生命值 | {walk.state.hp} / {walk.state.max_hp}，格擋 {walk.state.block} |
-| 能量 | {walk.state.energy}（最大 {walk.state.max_energy}） |
-| 金幣 | {walk.state.gold} |
-| 能力 | 毒霧 {walk.state.powers[0].amount} |
-| 手牌 | {walk.state.piles.hand.join(', ')} |
-| 抽牌堆 | {walk.state.piles.draw.join(', ')} |
-| 棄牌堆 | 空 |
-| 消耗堆 | {walk.state.piles.exhaust.join(', ')} |
-| 遺物 | {walk.state.relics.map((r) => r.id).join(', ')} |
-| 藥水 | {walk.tokens.potions[0]}，兩個槽空著 |
+- **生命值**：{walk.state.hp} / {walk.state.max_hp}，格擋 {walk.state.block}
+- **能量**：{walk.state.energy}（最大 {walk.state.max_energy}）
+- **金幣**：{walk.state.gold}
+- **能力**：毒霧 {walk.state.powers[0].amount}
+- **手牌**：{walk.state.piles.hand.join(', ')}
+- **抽牌堆**：{walk.state.piles.draw.join(', ')}
+- **棄牌堆**：空
+- **消耗堆**：{walk.state.piles.exhaust.join(', ')}
+- **遺物**：{walk.state.relics.map((r) => r.id).join(', ')}
+- **藥水**：{walk.tokens.potions[0]}，兩個槽空著
 
 兩個敵人：
 

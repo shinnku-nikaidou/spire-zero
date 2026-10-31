@@ -17,18 +17,16 @@ The state is a round start from the file's own held-out test states (`weights/si
 
 Silent, in the third act's hallway fight **Scrolls of Biting** (<code>{walk.state.encounter}</code>), at the start of round {walk.state.round}.
 
-| | |
-|---|---|
-| HP | {walk.state.hp} / {walk.state.max_hp}, block {walk.state.block} |
-| energy | {walk.state.energy} (max {walk.state.max_energy}) |
-| gold | {walk.state.gold} |
-| powers | Noxious Fumes {walk.state.powers[0].amount} |
-| hand | {walk.state.piles.hand.join(', ')} |
-| draw pile | {walk.state.piles.draw.join(', ')} |
-| discard pile | empty |
-| exhaust pile | {walk.state.piles.exhaust.join(', ')} |
-| relics | {walk.state.relics.map((r) => r.id).join(', ')} |
-| potions | {walk.tokens.potions[0]}, two slots empty |
+- **HP**: {walk.state.hp} / {walk.state.max_hp}, block {walk.state.block}
+- **energy**: {walk.state.energy} (max {walk.state.max_energy})
+- **gold**: {walk.state.gold}
+- **powers**: Noxious Fumes {walk.state.powers[0].amount}
+- **hand**: {walk.state.piles.hand.join(', ')}
+- **draw pile**: {walk.state.piles.draw.join(', ')}
+- **discard pile**: empty
+- **exhaust pile**: {walk.state.piles.exhaust.join(', ')}
+- **relics**: {walk.state.relics.map((r) => r.id).join(', ')}
+- **potions**: {walk.tokens.potions[0]}, two slots empty
 
 Two enemies:
 

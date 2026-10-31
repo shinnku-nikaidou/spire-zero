@@ -17,18 +17,16 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 静默猎手，在第三幕的普通战斗**咬人卷轴**（<code>{walk.state.encounter}</code>）里，第 {walk.state.round} 回合开始时。
 
-| | |
-|---|---|
-| 生命值 | {walk.state.hp} / {walk.state.max_hp}，格挡 {walk.state.block} |
-| 能量 | {walk.state.energy}（最大 {walk.state.max_energy}） |
-| 金币 | {walk.state.gold} |
-| 能力 | 毒雾 {walk.state.powers[0].amount} |
-| 手牌 | {walk.state.piles.hand.join(', ')} |
-| 抽牌堆 | {walk.state.piles.draw.join(', ')} |
-| 弃牌堆 | 空 |
-| 消耗堆 | {walk.state.piles.exhaust.join(', ')} |
-| 遗物 | {walk.state.relics.map((r) => r.id).join(', ')} |
-| 药水 | {walk.tokens.potions[0]}，两个栏位为空 |
+- **生命值**：{walk.state.hp} / {walk.state.max_hp}，格挡 {walk.state.block}
+- **能量**：{walk.state.energy}（最大 {walk.state.max_energy}）
+- **金币**：{walk.state.gold}
+- **能力**：毒雾 {walk.state.powers[0].amount}
+- **手牌**：{walk.state.piles.hand.join(', ')}
+- **抽牌堆**：{walk.state.piles.draw.join(', ')}
+- **弃牌堆**：空
+- **消耗堆**：{walk.state.piles.exhaust.join(', ')}
+- **遗物**：{walk.state.relics.map((r) => r.id).join(', ')}
+- **药水**：{walk.tokens.potions[0]}，两个栏位为空
 
 两个敌人：
 

@@ -117,7 +117,7 @@ How often a run meets each screen, over the 300 SL runs of the champion's promot
 
 **Combat and macro decisions** come with their legal actions and an observation built on request (`CombatDecision`, `MacroDecision`): a policy that does not look at the observation never pays for it. The answer must be legal, or the run throws.
 
-**Card prompts** go through `PolicySelector`, the game's card selector while a run is live (`Simulation/PolicySelector.cs:20-89`):
+**Card prompts** go through `PolicySelector`, the game's card selector while a run is live (`Simulation/PolicySelector.cs:21-80`):
 
 - it shows the options in canonical order (`CardChoices.Canonical`), so the same cards make the same prompt whatever order the game's list has; ties in that order are broken by a random stream seeded with the prompt's number, which knows nothing hidden and is the same on replay;
 - it records the answer as indexes into the game's own list, the form a replay gives back;
