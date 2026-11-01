@@ -57,10 +57,12 @@ def next_combats(record: dict, floor: int) -> list[float]:
     """The share of max HP each of the run's next combats after the floor cost, at most AUX of them (a death costs
     what was left)."""
     costs = []
-    for c in record.get("combats", []):
+    combats = record.get("combats", [])
+    for c in combats:
         if c["floor"] <= floor or len(costs) == AUX:
             continue
-        end = c.get("end") or {}
+        # a death inside the player's own action (a card in hand at the turn's end, a play) leaves the fight no end
+        end = c.get("end") or ({"died": True} if c is combats[-1] and record.get("outcome") == "lost" else {})
         lost = c["hp"] - (0 if end.get("died") else end.get("hp", c["hp"]))
         costs.append(min(max(lost / max(c["max_hp"], 1), 0.0), 1.0))
     return costs

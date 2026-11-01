@@ -96,6 +96,12 @@ def test_a_gauntlet_run_ends_where_it_ended_with_the_share_of_the_enemies_hp_it_
     assert [data.progress(r) for r in (died, event, won)] == [9.6, 12.0, 49.0]
 
 
+def test_a_lost_runs_last_fight_with_no_end_costs_what_was_left():
+    fight = {"floor": 5, "room": "Boss", "hp": 35, "max_hp": 70}
+    assert data.next_combats(record("a", 5, combats=[fight]), 4) == [0.5]
+    assert data.next_combats(record("a", 5, "failed", combats=[fight]), 4) == [0.0]
+
+
 def test_a_boss_is_worth_the_floors_its_winners_went_on_to():
     win = {"act": 1, "room": "Boss", "hp": 50, "max_hp": 80, "end": {"died": False, "hp": 40, "max_hp": 80}}
     runs = [record("a", 40, combats=[win]), record("b", 36, combats=[win])]
