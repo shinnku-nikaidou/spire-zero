@@ -14,7 +14,7 @@ From a round's start, two things:
 - **The ending**: a distribution over 51 classes, a death or one of 50 buckets of the share of max HP still to be lost from this state, the buckets the HP held rules out closed.
 - **The potions**: after a win, each held potion's chance of being gone.
 
-`learn/combat/` trains it (`combat.train`, `learn/combat/train.py:41`). `--combat-net FILE` plays it, in the SL planner (shown as `plan NAME`) or in PIMC (`pimc NAME`).
+`learn/combat/` trains it (`combat.train`, `learn/combat/train.py:40`). `--combat-net FILE` plays it, in the SL planner (shown as `plan NAME`) or in PIMC (`pimc NAME`).
 
 ## 2. What it reads
 
@@ -28,18 +28,18 @@ Everything is in [The combat net §2](/en/arch/combat-brain/network/#sec-2). `le
 - **The enemies' history** before it is rebuilt from the earlier rounds' starts, each living enemy's intents by its uid, as Harness's `Dispatcher` builds it (`witness`, `learn/combat/data.py:70-77`).
 - **The ending's label is relative to the state**: a death, or the bucket of the HP share at this state less the share at the fight's end (`ending`, `learn/combat/data.py:97-102`). A heal larger than the lowest bucket falls into it. So every round start of a fight has one end, but its own label. Monte Carlo: it is what really happened under the policy that played ([The loop §3](/en/arch/learning/loop/#sec-3)).
 - **A potion's label** comes from the first run view after the fight, per copy: a potion held at this state and absent there is gone (`potions_used`, `learn/combat/data.py:80-90`). Not from the actions, which miss a Fairy in a Bottle spent with no action, 6.2 % of all potions gone. Not from the last round's start, which misses a potion drunk at the last action. A potion gained later in the fight is no potion of this state. A death trains only the ending.
-- **What is left out** (`read`, `learn/combat/data.py:131-158`): failed runs; the runs of a seed file given to `--skip-seeds`; a combat with no `end` in its record, unless it is a lost run's last, which counts as a death; a win with no run view after it; and every run whose logged combats do not match its record's, in number or in encounters, which the trainer counts and reports.
+- **What is left out** (`read`, `learn/combat/data.py:131-157`): failed runs; a combat with no `end` in its record, unless it is a lost run's last, which counts as a death; a win with no run view after it; and every run whose logged combats do not match its record's, in number or in encounters, which the trainer counts and reports.
 - **One environment.** `--env SL|NoSL` reads only that environment's lines; a log line of the other fails the training. The net is trained on `--env SL` ([The leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
 - **Weights and split.** Every round start weighs the same, and every fifth run by run id is held out, with all its round starts, for early stopping and the report. One held-out round start in 1,000 keeps its observation and history for the net file's test states (`KEEP`).
 
-**The data** the champion's weights last learned from is whole SL self-play at ascension 10, the 8,087 runs of `v8g1`, every combat fought at the medium budget. That makes 548,939 round starts, of which 105,494 are held out. The seeds of self-play and of the gates never overlap. c8-2 went on from c8-1, whose weights learned at ascension 0: 21,263 self-play runs, most of them at the low budget ([The SL planner: budget §2](/en/arch/sl-planner/budget/#sec-2)), plus 600 runs at medium budget on the seeds `promotion-301-500`.
+**The data** the champion's weights last learned from is whole SL self-play at ascension 10, the 8,087 runs of `v8g1`, every combat fought at the medium budget. That makes 548,939 round starts, of which 105,494 are held out. Self-play's seeds and the gates' never meet, and `--list` refuses a list holding an eval job's runs (`common.train_lists`). c8-2 went on from c8-1, whose weights learned at ascension 0: 21,263 self-play runs, most of them at the low budget ([The SL planner: budget §2](/en/arch/sl-planner/budget/#sec-2)), plus 600 runs at medium budget on the seeds `promotion-301-500`, which is why `promotion-1-500` no longer serves as a test set ([Evaluation: metrics, seeds and reports §5](/en/arch/evaluation/metrics/#sec-5)).
 
 Of the wins' round starts, the mask never closes the true bucket, and 98 of 1,479,991 heal beyond the lowest bucket. 9.4 % of the round starts hold a potion.
 
 ## 4. Loss and training
 
 ```bash
-uv run python -m combat.train --list data/silent/lists/c7 --env SL --name NAME --skip-seeds ../eval/seeds/promotion-1-300.txt --test-list data/silent/lists/medium
+uv run python -m combat.train --list data/silent/lists/v8g1 --env SL --name NAME --test-list data/silent/lists/medium
 ```
 
 The loss of a sample is (`loss`, `learn/combat/net.py:300-307`)
@@ -50,11 +50,11 @@ $$
 
 The potions' term has weight 1 (`POTION_WEIGHT`), which is about 1 % of the loss: 0.045 potion rows per won sample at about 0.36 nats, against a cross-entropy of about 1.39. So the body stays the endings'.
 
-The settings are fixed in the code (`learn/combat/train.py:35-37`): AdamW at learning rate 10⁻³ and weight decay 10⁻⁴; batches of 256; at most 20 epochs, ending after 3 without a held-out loss lower by 10⁻⁴. An experiment changes the code, and only a result keeps the change. The token tables are the game's, fixed ([The combat net §2](/en/arch/combat-brain/network/#sec-2)).
+The settings are fixed in the code (`learn/combat/train.py:34-36`): AdamW at learning rate 10⁻³ and weight decay 10⁻⁴; batches of 256; at most 20 epochs, ending after 3 without a held-out loss lower by 10⁻⁴. An experiment changes the code, and only a result keeps the change. The token tables are the game's, fixed ([The combat net §2](/en/arch/combat-brain/network/#sec-2)).
 
 **Going on from a net (`--init FILE`).** Training can start from a net file's weights, read back from its ONNX graph (`export.weights`), at the lower learning rate 3 × 10⁻⁴. The file's weights stand unless an epoch beats their held-out loss. A file with other tables than the game's is refused. c8-2 went on from c8-1 this way, on the 8,087 runs of `v8g1` alone: its best epoch was 2 of 6, and the held-out loss fell from c8-1's 1.5513 to 1.4084.
 
-**The report** (`learn/combat/report.py`), one JSON line on stdout, also kept as the net file's `fit`: `env`, `runs`, `held_out_runs`, `samples`, `held_out_samples`, `vocab`, then `held_out` and the same by act, room, encounter, HP (below 30 % or not) and potion id. With `--test-list`, `medium` holds the same for the runs of `--skip-seeds`' seeds in that list, which are reported and never trained on.
+**The report** (`learn/combat/report.py`), one JSON line on stdout, also kept as the net file's `fit`: `env`, `runs`, `held_out_runs`, `samples`, `held_out_samples`, `vocab`, then `held_out` and the same by act, room, encounter, HP (below 30 % or not) and potion id. With `--test-list`, `medium` holds the same for that whole list, which is reported and never trained on.
 
 | field | what it says |
 |---|---|

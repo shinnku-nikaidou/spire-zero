@@ -83,7 +83,7 @@ The figure computes the interval with a port of `Rate.Wilson`, which gives every
 
 A seed is the game's run seed string, 12 characters such as `3TZ33JATH5R5`. It fixes the map, the encounters, the rewards and every draw the game makes, so a seed set is a fixed set of games. Three kinds, kept disjoint:
 
-- **train** seeds, unlimited, for self-play;
+- **train** seeds, unlimited, for self-play and fork jobs only;
 - **promotion** seeds, for gates and leaderboards;
 - **final** seeds, generated and registered in the repo before any run on them, to be run in full and reported in full, so that no one can pick seeds that happen to look good. A formal claim needs at least 300 runs.
 
@@ -95,12 +95,14 @@ A seed set is a text file in `eval/seeds/`, one seed per line; `#` starts a comm
 | `promotion-1-300.txt` | 300: `promotion-1`'s 200 in its order, then 100 more | `seeds --base 2 --n 300` | the wins gate, at medium and at the low budget |
 | `promotion-1-100.txt`, `promotion-101-300.txt` | 100 and 200: `promotion-1-300` cut in two, in its order | cut from `promotion-1-300.txt` | runs on part of that set; a report on the first part |
 | `promotion-1-200.txt` | 200: `promotion-1-300`'s first 200, the same seeds as `promotion-1` | cut from `promotion-1-300.txt` | the reports of the A10 gate |
-| `promotion-1-500.txt` | 500: `promotion-1-300`'s 300 in its order, then 200 more | `seeds --base 2 --n 500` | reports on the larger set |
+| `a10-check-1.txt` | 200 | `seeds --base 4 --n 200` | A10 win rates of nets that trained on, or went on from, other sets' data; registered before any run on it |
 | `final-1.txt` | 300 | `seeds --base 3 --n 300` | never run |
 | `check-clone-loop.txt` | 29 of `promotion-1`'s seeds, picked by index | by hand | a development check; not a report set |
 
+- **Train seeds and test seeds never meet.** A self-play or fork job plays train seeds only, and an eval job a file of `eval/seeds/` only; the job launcher `box.py` refuses anything else, and training refuses a list holding an eval job's runs ([Learning: reference §5](/en/arch/learning/reference/#sec-5)). `promotion-1-300` and its parts, `final-1` and `a10-check-1` have never been trained on.
+- **`eval/seeds/retired/`** holds what can no longer test: `promotion-1-500` (`seeds --base 2 --n 500`, `promotion-1-300` and then 200 more), since the medium runs on its last 200 seeds are in the data of earlier combat nets, and so in the line of c8-1 and c8-2. Results reported on it stand as history.
 - **Train seeds** are `MakeSeed(1, i)`, what `run --seed 1 --start K` plays. The ledger hands them out in blocks of 100,000, one block per batch, so no two batches share a seed (`eval/silent/ledger.md`, [Learning: reference §5](/en/arch/learning/reference/#sec-5)).
-- **Promotion sets nest.** Each larger set keeps the smaller one's seeds first, in the same order, so a report on the larger set pairs with reports on the smaller one on the shared seeds. `promotion-1.txt`'s header says to rotate to a `promotion-2` (base 4) once it is used up; no `promotion-2` exists.
+- **Promotion sets nest.** Each larger set keeps the smaller one's seeds first, in the same order, so a report on the larger set pairs with reports on the smaller one on the shared seeds. `promotion-1.txt`'s header says to rotate to a `promotion-2` (base 4) once it is used up; no `promotion-2` exists, and base 4 went to `a10-check-1`.
 - **`final-1` has never been played**: every committed report is on a promotion set.
 - R1–R3 runs are started by the simulator; R4 runs would be started by the mod with the same seed ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)).
 
@@ -118,7 +120,7 @@ public static string MakeSeed(int seed, int index)
 }
 ```
 
-The generator's seed is base × 1,000,003 + index × 7,919, wrapped to 32 bits, XORed with `0x5eed`. .NET's `new Random(int)` then takes its absolute value (with `int.MinValue` read as `int.MaxValue`), so two pairs (base, index) give the same seed string exactly when those absolute values agree. 7,919 is odd, so within one base no two indices below 2³² collide; across bases they can. Computed here for the sets in use: the train generator (base 1) first reaches a generator seed of `promotion-1-500` at train index 242,435,318, and one of `final-1` at index 1,100,994,758; `promotion-1-500` and `final-1` share none. So the sets are disjoint for any block the ledger will hand out. `promotion-1.txt`'s header says that bases differing by less than 7,919 never share a generator seed; that holds only for small indices, since the arithmetic wraps.
+The generator's seed is base × 1,000,003 + index × 7,919, wrapped to 32 bits, XORed with `0x5eed`. .NET's `new Random(int)` then takes its absolute value (with `int.MinValue` read as `int.MaxValue`), so two pairs (base, index) give the same seed string exactly when those absolute values agree. 7,919 is odd, so within one base no two indices below 2³² collide; across bases they can. Computed here for the sets in use: the train generator (base 1) first reaches a generator seed of `a10-check-1` at train index 40,134,134, one of `promotion-1-300` at index 242,435,318, and one of `final-1` at index 1,100,994,758; the three share none. So the sets are disjoint for any block the ledger will hand out. `promotion-1.txt`'s header says that bases differing by less than 7,919 never share a generator seed; that holds only for small indices, since the arithmetic wraps.
 
 A run's own randomness (the placeholders, the brains' seeds, exploration) comes from a hash of the seed string, never from the game's streams, so the seed alone fixes the whole run, whatever the set or the position in it ([Harness: routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)). That is what makes a champion's report reusable as its side of every later gate ([Gates §2](/en/arch/evaluation/gates/#sec-2)).
 

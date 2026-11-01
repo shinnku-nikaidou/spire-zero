@@ -56,14 +56,14 @@ flowchart LR
 
 ## 4. 清單
 
-共用的訓練集是 `data/CHARACTER/lists/` 裡成對的清單：`NAME-logs.txt` 和 `NAME-recs.txt` 每行一個路徑，相對於儲存庫的根目錄（或絕對路徑），一份的第 i 行，就是另一份第 i 行那些對局記錄的決策日誌（`common.lists`，`learn/common.py:90-101`）。`v.train --list PREFIX` 和 `combat.train --list PREFIX` 讀一對清單；訓練器只把每份日誌和同一行的記錄檔案對上。資料夾裡的 `manifest.json` 說明每份清單裝的是什麼。
+共用的訓練集是 `data/CHARACTER/lists/` 裡成對的清單：`NAME-logs.txt` 和 `NAME-recs.txt` 每行一個路徑，相對於儲存庫的根目錄（或絕對路徑），一份的第 i 行，就是另一份第 i 行那些對局記錄的決策日誌（`common.lists`，`learn/common.py:91-102`）。`v.train --list PREFIX` 和 `combat.train --list PREFIX` 讀一對清單；訓練器只把每份日誌和同一行的記錄檔案對上。資料夾裡的 `manifest.json` 說明每份清單裝的是什麼。
 
 | 清單 | 內容 | 讀取者 |
 |---|---|---|
 | `v8g1` | 晉階 10 的完整 SL 自我對弈，即 `v7g2` 這一代，用的是它的訓練給它的名字 | `v.train` 和 `combat.train --list`，用於 v8-2 和 c8-2 |
 | `v7g1` | 第 `v7g1` 代的完整 SL 自我對弈 | `v.train`，用於 v8-1 的權重 |
-| `c7` | 戰鬥網路的訓練集：完整的 SL 自我對弈和 `promotion-301-500` 上 600 局 medium 預算對局，放在資料旁邊；`--skip-seeds` 排除 `promotion-1-300` | `combat.train --list`，用於 c8-1 的權重 |
-| `medium` | medium 預算的對局，其中在 `--skip-seeds` 種子上的對局只報告，從不用來訓練 | `combat.train --test-list` |
+| `c7` | 戰鬥網路較早的訓練集：完整的 SL 自我對弈和 `promotion-301-500` 上 600 局 medium 預算對局，放在資料旁邊 | `combat.train --list`，用於 c8-1 的權重 |
+| `medium` | medium 預算的對局，全部只報告，從不用來訓練 | `combat.train --test-list` |
 | `v-g0-g3`、`sl-combat` | 較早的自我對弈和評估對局，和資料放在一起 | `weights/` 裡沒有用它們的網路 |
 
 ## 5. 帳本和種子
@@ -72,10 +72,11 @@ flowchart LR
 
 - 一段說明冠軍；
 - **種子區段**：訓練種子是 `run --seed 1 --start K`；每個資料集在開始之前登記一個 100,000 寬的區段，它的作業取其中的子範圍，所以兩批永遠不會共用一個種子。100000–199999 裝著 `v7g1`（第 1 代用 100000–159999，測試用 199000–199999）；200000–299999 裝著連戰的對局；300000–399999 裝著菁英連戰的評估種子 300000–300499，固定不變，從不用來訓練；400000–499999 屬於 A10 資料集 `v7g2`（它的訓練稱為 `v8g1`）；下一個空閒的區段是 500000–599999；
+- **規則**：訓練種子和測試種子從不相遇。自我對弈和分叉作業打訓練種子，評估作業打 `eval/seeds/` 裡的檔案；`box.py` 拒絕其他做法。兩個訓練器都拒絕含有評估作業對局的清單（`common.train_lists`）；
 - **批次表**：批次、環境、打它的大腦、提交、訓練種子、局數、是否使用，以及它的資料夾；
 - **權重表**：名稱、種類、在什麼上訓練、它的晉級門檻、它的角色。
 
-評估種子檔案在 `eval/seeds/`：`promotion-1`（200 個）、`promotion-1-300`（按順序是它的 200 個，再加接下來的 100 個）、`promotion-1-500`（`seeds --base 2 --n 500`，前 300 個就是 `promotion-1-300`）、它的切片 `promotion-1-100`、`promotion-1-200` 和 `promotion-101-300`，以及 `final-1`（[評估：指標、種子與報告 §5](/zh-tw/arch/evaluation/metrics/#sec-5)）。`eval/CHARACTER/gauntlet-leaderboard.md` 保存菁英連戰的結果，手動維護；`eval/CHARACTER/leaderboard.md` 由 `leaderboard` 從整局報告產生。
+評估種子檔案在 `eval/seeds/`：`promotion-1`（200 個）、`promotion-1-300`（按順序是它的 200 個，再加接下來的 100 個）、它的切片 `promotion-1-100`、`promotion-1-200` 和 `promotion-101-300`、`final-1` 和 `a10-check-1`；`eval/seeds/retired/` 存放 `promotion-1-500`，它後 200 個種子在訓練資料裡（[評估：指標、種子與報告 §5](/zh-tw/arch/evaluation/metrics/#sec-5)）。`eval/CHARACTER/gauntlet-leaderboard.md` 保存菁英連戰的結果，手動維護；`eval/CHARACTER/leaderboard.md` 由 `leaderboard` 從整局報告產生。
 
 ## 6. 權重
 
@@ -84,7 +85,7 @@ flowchart LR
 `weights/silent/` 裡有 `v8-2.json`，宏觀大腦的 V，以及 `c8-2.json`，戰鬥網路，兩個冠軍，SL 的和 NoSL 的，都打它們（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。旁邊是 `v8-1.json` 和 `c8-1.json`，它們接著訓練的網路，測試會讀；以及 `v7-1f.json` 和 `c7-2.json`，是和那兩個相同的權重配上較小的表，留作它們訓練的記錄；`CombatNet` 不再載入 `c7-2.json`。
 
 - **永不覆蓋**。訓練器寫到 `weights/CHARACTER/NAME.json`，除非 `--out` 另行指定；任何角色資料夾裡已有同名檔案時，它拒絕這個名字（`out_path`，`learn/weights.py:18-25`），所以一個名字只用一次，永遠指同一份權重。沒有任何保留下來的對局會用到的試驗檔案，用 `--out` 放到別處。
-- **角色**。訓練器的 `--character`（預設 SILENT）指定角色：記錄裡有別的角色的對局會被拒絕（`learn/common.py:83-84`），檔案裡也記下這個角色。
+- **角色**。訓練器的 `--character`（預設 SILENT）指定角色：記錄裡有別的角色的對局會被拒絕（`learn/common.py:84-85`），檔案裡也記下這個角色。
 - **名稱**。`vN-M` 是 V，`cN-M` 是戰鬥網路，有變體時在編號後面加字母（`v7-1f`）。`vNgM` 指一代的資料，從不指網路。
 - **在 git 裡**。`weights/` 在 git 裡：一個檔案 1.4–2.5 MB，而且從不改變，所以一個提交就同時確定了程式碼、權重和冠軍檔案；冠軍檔案直接引用權重所在的路徑。不再使用的網路檔案留在 git 的歷史裡（最後在 `20970d9`），`eval/silent/ledger.md` 說明每個檔案是什麼。
 - **環境**。戰鬥網路檔案記下它學習的環境（`env`），C# 不讀它：SL 和 NoSL 打同一個檔案（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。c8-2 的權重從 SL 的對局學習；在 NoSL 下它能載入、能打，但從沒在那裡訓練過或過過門檻。
@@ -140,10 +141,11 @@ flowchart LR
 
 | 函式 | 做什麼 |
 |---|---|
-| `read_lines(paths, needle)` | 逗號分隔的那些檔案裡含有 needle 的 JSON 行；空行和還在寫的行會跳過；檔案不存在是 `LearnError`（`:45-59`） |
-| `runs_by_log(logs, records, character)` | 把第 i 份日誌和第 i 份記錄檔案配對（份數必須相同）；每份記錄檔案按對局 id 列出它的對局；拒絕同一檔案裡出現兩次的對局 id 和別的角色的對局（`:62-87`） |
-| `lists(prefix)` | 一對清單，以兩個用逗號連起來的字串給出（`:90-101`） |
-| `start_sim`、`wait_sims` | 啟動模擬器指令，輸出寫到日誌檔案；失敗時給出第一個失敗者日誌的最後 12 行（`:104-119`） |
+| `read_lines(paths, needle)` | 逗號分隔的那些檔案裡含有 needle 的 JSON 行；空行和還在寫的行會跳過；檔案不存在是 `LearnError`（`:46-60`） |
+| `runs_by_log(logs, records, character)` | 把第 i 份日誌和第 i 份記錄檔案配對（份數必須相同）；每份記錄檔案按對局 id 列出它的對局；拒絕同一檔案裡出現兩次的對局 id 和別的角色的對局（`:63-88`） |
+| `lists(prefix)` | 一對清單，以兩個用逗號連起來的字串給出（`:91-102`） |
+| `train_lists(prefix)` | 網路訓練用的一對清單：和 `lists` 一樣，但拒絕評估作業裡的路徑（`:105-111`） |
+| `start_sim`、`wait_sims` | 啟動模擬器指令，輸出寫到日誌檔案；失敗時給出第一個失敗者日誌的最後 12 行（`:114-129`） |
 | `out_path(name, out, character)` | 權重檔案寫到哪裡（[§6](#sec-6)） |
 
 ### `v.train`：V
@@ -187,7 +189,7 @@ flowchart LR
 
 ### `combat.train`：戰鬥網路
 
-`uv run python -m combat.train --list data/silent/lists/c7 --env SL --name NAME --skip-seeds ../eval/seeds/promotion-1-300.txt --test-list data/silent/lists/medium`，另有可選的 `--out`、`--character`（SILENT）、`--init`（接著訓練的網路檔案）和 `--seed`（0）。`--skip-seeds` 指明一個種子檔案，其中的對局不讀；`--test-list` 指明一對清單，其中在這些種子上的對局只報告，標為 `medium`。`learn/combat/report.py` 負責報告（`ranks`、`rank_within`、`auc_within`、`potion_rates`、`log_loss`、`predict`、`summary`）。它的樣本、損失、常數和報告見[訓練戰鬥網路 §3](/zh-tw/arch/learning/combat-net/#sec-3)–[§4](/zh-tw/arch/learning/combat-net/#sec-4)。
+`uv run python -m combat.train --list data/silent/lists/v8g1 --env SL --name NAME --test-list data/silent/lists/medium`，另有可選的 `--out`、`--character`（SILENT）、`--init`（接著訓練的網路檔案）和 `--seed`（0）。`--list` 含有評估作業的對局就拒絕；`--test-list` 指明一對清單，其中的對局只報告，標為 `medium`。`learn/combat/report.py` 負責報告（`ranks`、`rank_within`、`auc_within`、`potion_rates`、`log_loss`、`predict`、`summary`）。它的樣本、損失、常數和報告見[訓練戰鬥網路 §3](/zh-tw/arch/learning/combat-net/#sec-3)–[§4](/zh-tw/arch/learning/combat-net/#sec-4)。
 
 ### `learn/gauntlet.py`：V 的報告和晉級門檻
 
@@ -243,11 +245,11 @@ flowchart LR
 
 ## 11. 測試
 
-**Python**（在 `learn/` 裡 `uv run pytest`，8 個檔案共 76 個測試；`uv run ruff check`）：
+**Python**（在 `learn/` 裡 `uv run pytest`，8 個檔案共 79 個測試；`uv run ruff check`）：
 
 | 檔案 | 測試數 | 內容 |
 |---|---|---|
-| `test_common.py` | 9 | `read_lines` 跳過空行和不完整的行、讀每個檔案、找到 needle、檔案不存在時失敗；`wait_sims` 失敗時的日誌尾和成功；`runs_by_log` 配對日誌和記錄檔案、每份日誌一份記錄檔案、拒絕重複的對局 id 和別的角色 |
+| `test_common.py` | 12 | `train_lists` 拒絕任一環境中評估作業的對局，接受自我對弈和分叉；`read_lines` 跳過空行和不完整的行、讀每個檔案、找到 needle、檔案不存在時失敗；`wait_sims` 失敗時的日誌尾和成功；`runs_by_log` 配對日誌和記錄檔案、每份日誌一份記錄檔案、拒絕重複的對局 id 和別的角色 |
 | `test_weights.py` | 3 | 預設路徑；在角色資料夾裡從不替換；別處的明確路徑可以 |
 | `test_v_encode.py` | 6 | 可到達的地圖及前方層數，選路時要進入的點，在任何造訪之前和在頭目處；只用 id；state 的順序 |
 | `test_v_train.py` | 27 | 清單對；樣本和每局權重；保留整局觀測；拒絕頭目連戰試點和菁英連戰的對局；連戰對局的結束；`boss_worth`；門前狀態；頭目分數；從大腦名稱取溫度；風險值標籤和刪失；期望層數、獲勝機率；`explored` 按對數抽取，V 多大都一樣，價值為 0 的抽不到；`centred`；floor 和 win 網路的 ONNX 與 torch 對照；權重讀回；`--init` 保留縮放並拒絕其他的表；網路檔案和它的報告；門的日誌只提供整局觀測；選路的樣本；輸掉的對局最後一場沒有結束的戰鬥，代價是剩下的生命值 |
