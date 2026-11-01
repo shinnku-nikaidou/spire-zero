@@ -4,7 +4,8 @@ net file for `--combat-net`.
 The samples are combat/data.py's: each round's start in the logs of --env. The loss is the endings' cross-entropy plus
 POTION_WEIGHT times each held potion's cross-entropy of being gone after a win. The net's sizes and the training's settings
 are fixed below: an experiment changes them here, and only a result keeps the change. --test-list's games on the seeds of
---skip-seeds, never trained on, are only reported, as `medium`.
+--skip-seeds, never trained on, are only reported, as `medium`. --init goes on from a net file instead of from scratch, at
+the lower LR_INIT, and keeps the file's weights unless a later epoch beats them on the held-out loss.
 
     uv run python -m combat.train --list data/silent/lists/c7 --env SL --name c7-2 \\
         --skip-seeds ../eval/seeds/promotion-1-300.txt --test-list data/silent/lists/medium
@@ -33,7 +34,7 @@ script = common.app()
 
 EPOCHS, PATIENCE = 20, 3  # at most, and without a better held-out loss before stopping
 BATCH = 256
-LR, WEIGHT_DECAY = 1e-3, 1e-4
+LR, LR_INIT, WEIGHT_DECAY = 1e-3, 3e-4, 1e-4
 
 
 @script.command(help=__doc__)
@@ -45,6 +46,7 @@ def main(
     test_list: Annotated[str | None, typer.Option(help="a list pair whose games on --skip-seeds' seeds are only reported, as `medium`")] = None,
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")] = None,
     character: Annotated[str, typer.Option(help="the character whose runs these are")] = "SILENT",
+    init: Annotated[str | None, typer.Option(help="a net file to go on from: its weights, read back from its ONNX")] = None,
     seed: int = 0,
 ) -> None:
     if env not in ("SL", "NoSL"):
@@ -69,6 +71,9 @@ def main(
     )  # fmt: skip
 
     tables = game_ids.combat_tables()
+    start = export.read(init) if init else None
+    if start and start["vocab"] != tables:
+        raise LearnError(f"{init} holds other tables than learn/game_ids.json's")
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
 
     def batches(part, shuffle):
@@ -83,8 +88,13 @@ def main(
             return sum(float(loss(model(*b.inputs()), b).sum()) for b in test_batches) / len(test)
 
     model = Net({t: len(ids) for t, ids in tables.items()}).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     best, best_state, stale = math.inf, None, 0
+    if start:
+        model.load_state_dict(export.weights(start, model))
+        model.eval()
+        best, best_state = held_out_loss(model), {k: v.clone() for k, v in model.state_dict().items()}
+        logger.info("the file's held-out loss {:.4f}", best)
+    opt = torch.optim.AdamW(model.parameters(), lr=LR_INIT if start else LR, weight_decay=WEIGHT_DECAY)
     for epoch in range(EPOCHS):
         model.train()
         for b in batches(train, True):

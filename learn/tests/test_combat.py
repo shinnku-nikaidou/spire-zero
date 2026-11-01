@@ -1,5 +1,6 @@
 import base64
 import json
+from pathlib import Path
 
 import onnx
 import pytest
@@ -190,6 +191,34 @@ def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
     assert set(net["fit"]["held_out"]) >= {"rank_lost", "rank_lost_share", "auc_death", "auc_death_share", "potions"}
     assert net["fit"]["by_hp"] and net["fit"]["by_potion"]
     assert net["fit"]["medium"]["held_out"]["samples"] == 12  # the four skipped runs' three rounds
+
+
+def test_c8_1s_weights_read_back_give_its_test_states_their_endings():
+    net = export.read(str(Path(__file__).parents[2] / "weights" / "silent" / "c8-1.json"))
+    tables = net["vocab"]
+    model = Net({t: len(i) for t, i in tables.items()}).eval()
+    model.load_state_dict(export.weights(net, model))
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    for test in net["tests"][:3]:
+        b = Batch([data.sample("a", test["obs"], test["history"], {"died": True, "potions": 0}, None)], index, "cpu")
+        with torch.no_grad():
+            outcome = torch.softmax(model(*b.inputs())[0], 1)[0]
+        assert outcome.tolist() == pytest.approx(test["outcome"], abs=1e-5)
+
+
+def test_training_goes_on_from_a_net_file_and_keeps_it_unless_an_epoch_beats_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(data, "KEEP", 1)
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    runs = write_runs(tmp_path, runs=14)
+    args = ["--list", runs, "--env", "SL", "--name", "first", "--out", str(first)]
+    assert CliRunner().invoke(train.script, args).exit_code == 0
+    monkeypatch.setattr(train, "EPOCHS", 0)
+    args = ["--list", runs, "--env", "SL", "--name", "second", "--out", str(second), "--init", str(first)]
+    result = CliRunner().invoke(train.script, args)
+    assert result.exit_code == 0, result.output
+    a, b = json.loads(first.read_text()), json.loads(second.read_text())
+    assert a["vocab"] == b["vocab"]
+    assert b["tests"][0]["outcome"] == pytest.approx(a["tests"][0]["outcome"], abs=1e-5) or a["tests"][0]["obs"] != b["tests"][0]["obs"]
 
 
 def test_a_combat_the_run_died_in_before_its_first_decision_leaves_the_run_in(tmp_path):
