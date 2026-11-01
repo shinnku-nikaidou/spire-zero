@@ -118,9 +118,10 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 
 | 名稱 | 是什麼 |
 |---|---|
-| v7-1f | V，兩個冠軍都在用：在整局資料 `v7g1` 上訓練（[宏觀大腦：價值網路](/zh-tw/arch/macro-brain/network/)）。 |
-| c7-2 | 戰鬥網路，兩個冠軍都在用（[戰鬥網路](/zh-tw/arch/combat-brain/network/)）。 |
-| `weights/silent/NAME.json` | 一個網路的檔案；這個資料夾裡有 `v7-1f.json` 和 `c7-2.json`。 |
+| v8-1 | V，兩個冠軍都在用：它的權重從整局資料 `v7g1` 學習（[宏觀大腦：價值網路](/zh-tw/arch/macro-brain/network/)）。 |
+| c8-1 | 戰鬥網路，兩個冠軍都在用（[戰鬥網路](/zh-tw/arch/combat-brain/network/)）。 |
+| 詞元表（token table） | 網路裡一種 id（牌、遺物……）的清單，每個 id 有學到的列：這個遊戲版本的每個 id，每個角色的網路都相同；第 0 項 `<unk>` 讀任何其他 id（[戰鬥網路 §2](/zh-tw/arch/combat-brain/network/#sec-2)）。 |
+| `weights/silent/NAME.json` | 一個網路的檔案；冠軍打 `v8-1.json` 和 `c8-1.json`（[學習：參考 §6](/zh-tw/arch/learning/reference/#sec-6)）。 |
 | `promotion-1`, `promotion-1-300`, `promotion-1-500`, `final-1` | `eval/seeds/` 裡的種子集：200、300 和 500 個晉級種子（每個較長的集合都以較短的那個開頭），以及一個在任何對局用到它之前就登記好的、300 個種子的最終集合。 |
 | `eval/silent/champions/sl.json`, `nosl.json` | 冠軍檔案：打出每種環境冠軍的選項，以及它的報告。 |
 | `eval/silent/ledger.md` | 譜系，也是網路唯一的歷史：哪個大腦打出了哪些資料，哪些資料訓練了哪些權重。 |

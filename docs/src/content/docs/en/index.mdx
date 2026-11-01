@@ -9,9 +9,9 @@ This project builds an AI that plays **Slay the Spire 2** (STS2), a single-playe
 - **Assist**: the mod shows the player what the AI would do, its plan for the turn and the options it weighed. This is built ([Mod](/en/arch/mod/), [Output](/en/arch/output/)).
 - **Auto-play**: the AI plays whole runs by itself in the real game. This is planned.
 
-The strategy is learned from zero by self-play; it is not built from anyone's recorded games, and it is not written by hand. The first target is the Silent at Ascension 0, single-player only. The game version is pinned at **v0.111.0**; the game runs on Godot 4.5.1 and .NET 9.0.7, and mods change its code at runtime with Harmony patches.
+The strategy is learned from zero by self-play; it is not built from anyone's recorded games, and it is not written by hand. The first target is the Silent, single-player only: Ascension 0, then Ascension 10. The game version is pinned at **v0.111.0**; the game runs on Godot 4.5.1 and .NET 9.0.7, and mods change its code at runtime with Harmony patches.
 
-**How well it plays today.** In SL, where the AI may replay the room it is in, the champion wins **7.7%** of whole Silent A0 runs (23 of 300 seeds, 95% interval 5.2–11.2%) and reaches floor 33.6 of 48 on average. In NoSL, where it sees only what a player sees, no champion has won a run yet; the best report reached floor 26.2 on average, with an older value function ([Evaluation](/en/arch/evaluation/)).
+**How well it plays today.** In SL, where the AI may replay the room it is in, the champion wins **58.7%** of whole Silent A0 runs (88 of the 150 seeds its gate finished, 95% interval 50.7–66.2%) and reaches floor 44.5 of 48 on average. In NoSL, where it sees only what a player sees, no champion has won a run yet; the best report reached floor 26.2 on average, with an older value function ([Evaluation](/en/arch/evaluation/)).
 
 If you have never played the game, read [The game](/en/arch/game/) first.
 

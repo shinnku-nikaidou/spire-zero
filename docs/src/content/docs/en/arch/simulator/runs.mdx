@@ -49,7 +49,7 @@ Three things are deliberately not done the way a test setup would do them:
 
 ## 3. Step, settle, decide
 
-`Step()` makes one decision (`Simulation/RunSession.cs:233-243`). It settles, and if the run is not over, calls `Decide()`, which either asks a question and starts its answer, or does one automatic step a screen would do without asking anything. After an automatic step it settles again. More than 20 automatic steps in a row with no decision is a driver bug, and throws.
+`Step()` makes one decision (`Simulation/RunSession.cs:233-248`). It settles, and if the run is not over, calls `Decide()`, which either asks a question and starts its answer, or does one automatic step a screen would do without asking anything. After an automatic step it settles again. More than 20 automatic steps in a row with no decision is a driver bug, and throws.
 
 ```mermaid
 flowchart TD
@@ -63,21 +63,21 @@ flowchart TD
   D -->|"automatic step"| T
 ```
 
-**Settle** (`Simulation/RunSession.cs:246-267`) pumps the game until the player can act ([Headless host §7](/en/arch/simulator/headless/#sec-7)):
+**Settle** (`Simulation/RunSession.cs:251-264`) pumps the game until the player can act ([Headless host §7](/en/arch/simulator/headless/#sec-7)):
 
 - in combat, until `CombatActions.WaitingForInput` holds (the player's turn, in the play phase, the action executor idle); after the player ended a turn, on a later turn, so the enemies' turn plays out first;
 - elsewhere, until the pump's queue is empty and the action executor is idle.
 
-Then it notes what the run record needs: a combat that just ended gets its end (HP, max HP, potions, the enemies' HP left), and a new act's map gets its hash. Last, it collects the game tasks the driver started (a purchase, a rest option, a reward, a divination) that are done; a task that faulted throws.
+Then it notes what the run record needs: a combat that just ended gets its end (HP, max HP, potions, the enemies' HP left), a death inside the player's own action included, and a new act's map gets its hash. A combat the run died in before its first decision gets an entry at 0 HP. Last, it collects the game tasks the driver started (a purchase, a rest option, a reward, a divination) that are done; a task that faulted throws.
 
-**Decide** (`Simulation/RunSession.cs:286-313`) looks in this order:
+**Decide** (`Simulation/RunSession.cs:304-331`) looks in this order:
 
 1. The open rewards screens: a set that is not the room's last and has everything taken closes by itself; otherwise the newest open set is the decision.
 2. A driver task still running with nothing to answer is a bug, and throws: rewards are the only screen a started task can wait on.
 3. The map, in a `MapRoom` or once the current room is left.
 4. The room: combat, event (the crystal sphere minigame first, when one is open), shop, rest site, treasure. Any other kind of room throws.
 
-**What a screen would remember** is kept per room in `RoomProgress` (`Simulation/RunSession.cs:604-614`): whether the room was left, the combat entered, how many times it was auto-won, the rewards offered, a rest option succeeded, the chest opened, the relic picked. It starts over when the current room changes, which also happens when an event's combat ends and the event resumes.
+**What a screen would remember** is kept per room in `RoomProgress` (`Simulation/RunSession.cs:620-630`): whether the room was left, the combat entered, how many times it was auto-won, the rewards offered, a rest option succeeded, the chest opened, the relic picked. It starts over when the current room changes, which also happens when an event's combat ends and the event resumes.
 
 **Automatic steps**, the things a screen does without a decision:
 
@@ -103,7 +103,7 @@ A **surface** is the kind of decision screen; the protocol names eleven (`Sts2Ai
 | `rest` | the enabled options, by id (`rest:HEAL`); `leave` after an option succeeded, or when none is enabled | `RestSiteSynchronizer.ChooseLocalOption` | |
 | `treasure` | `relic:i`, `relic_skip` | `PickRelicLocally`, `SkipRelicLocally` | the chest opens by itself; in single player, skipping leaves the relics listed, hence `RoomProgress.RelicPicked` |
 
-**The potion belt.** A potion that can be used at any time (`potion:S`) and a discard (`discard_potion:S`) are offered on map, rewards, event, shop, rest, treasure and crystal sphere screens, after the screen's own actions (`Simulation/RunSession.cs:476-483`). Card rewards, bundles and card prompts get none. A belt action is applied at once and the screen is asked again. With a full belt, potion rewards and potion purchases are not legal until a slot frees. In combat potions are combat actions; combat has no discard.
+**The potion belt.** A potion that can be used at any time (`potion:S`) and a discard (`discard_potion:S`) are offered on map, rewards, event, shop, rest, treasure and crystal sphere screens, after the screen's own actions (`Simulation/RunSession.cs:492-499`). Card rewards, bundles and card prompts get none. A belt action is applied at once and the screen is asked again. With a full belt, potion rewards and potion purchases are not legal until a slot frees. In combat potions are combat actions; combat has no discard.
 
 **No fallback.** A screen the driver does not know throws, and the run fails: an unknown room, a reward or shop entry or crystal sphere item of an unknown type, a linked reward set, a task left waiting with no screen. So does an answer that is not in the legal list. A failure is never covered over by a default choice, so a run that finishes has answered every decision through its policies.
 
@@ -188,7 +188,7 @@ The clone's own check, over every node of 880 runs on five characters, is in [Wo
 
 ## 7. The two gauntlets
 
-Two rules shorten a run by winning some combats at their start, as the game's `win` console command does (`DevConsole.ConsoleCommands/WinConsoleCmd.cs:31-47`): each enemy loses its powers and is killed, then the game checks for the win (`Simulation/RunSession.cs:377-385`). An enemy that comes back or calls others when killed is killed again, at most 5 times. The combat's rewards follow as after any win, and no combat decision is asked.
+Two rules shorten a run by winning some combats at their start, as the game's `win` console command does (`DevConsole.ConsoleCommands/WinConsoleCmd.cs:31-47`): each enemy loses its powers and is killed, then the game checks for the win (`Simulation/RunSession.cs:393-401`). An enemy that comes back or calls others when killed is killed again, at most 5 times. The combat's rewards follow as after any win, and no combat decision is asked.
 
 **The boss gauntlet pilot**, `run --auto-win`, wins every combat, bosses included. A run so reaches every boss's door in about a second, with only its macro decisions played: 5 runs took 3.1 s in all, passing the bosses of all three acts with no game error. It was built so that `bosslab.py states` could collect the states at the bosses' doors and fight them there ([Learning: reference §9](/en/arch/learning/reference/#sec-9)). `--check` is refused with it, and so is `--afterstates clone`: a node's checkpoint does not keep the rule.
 

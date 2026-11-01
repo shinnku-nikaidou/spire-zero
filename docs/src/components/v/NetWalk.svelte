@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One real run through net.Net, step by step: v7-1f's test run at a map move (floor 4), values as the trainer gave
+  // One real run through net.Net, step by step: v8-1's test run at a map move (floor 4), values as the trainer gave
   // them. Vectors show their first four numbers (docs: macro-brain/network §9).
   import type { Lang } from './names.ts';
 
@@ -35,7 +35,7 @@
       title: w('Table entries', '表项', '表項'),
       text: w('Each token becomes its row in its table.', '每个词元换成它在表里的行号。', '每個詞元換成它在表裡的行號。'),
       rows: [
-        ['DEFEND_SILENT', '129'], ['STRIKE_SILENT', '445'], ['DEADLY_POISON', '121'], ['RING_OF_THE_SNAKE', '185'], ['character:SILENT', '25'], ['Shop+0', '140'], ['Monster+1', '45'],
+        ['DEFEND_SILENT', '150'], ['STRIKE_SILENT', '518'], ['DEADLY_POISON', '137'], ['RING_OF_THE_SNAKE', '228'], ['character:SILENT', '31'], ['Shop+0', '211'], ['Monster+1', '129'],
       ],
     },
     {

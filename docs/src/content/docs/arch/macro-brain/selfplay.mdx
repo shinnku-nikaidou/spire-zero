@@ -27,7 +27,7 @@ flowchart LR
 ```text
 run --env SL --policy plan --macro l0 --afterstates clone --workers 4 \
     --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 \
-    --combat-net weights/silent/c7-2.json --value weights/silent/V.json --explore ε --seed 1
+    --combat-net weights/silent/c8-1.json --value weights/silent/V.json --explore ε --seed 1
 ```
 
 **预算**。规划器用它的 low 预算打，而晋级门槛用冠军的 medium 力度打。便宜的预算在同样的算力下给出多得多的对局，而且给配置排序的能力相差不大：在满 HP 下打的 515 个 Boss 门口上，同一个种子上 low 和 medium 预算相关 0.94，low 预算下两个种子相关 0.83（[SL 规划器：预算、开销与结果 §2](/arch/sl-planner/budget/#sec-2)）。一局用一个槽位约 45–85 s，取决于主机，它的日志约 1.6 MB。

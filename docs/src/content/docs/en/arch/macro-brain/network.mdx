@@ -16,6 +16,8 @@ Six parts read six kinds of input, each on its own: the **deck**, the **relics**
 
 Only the deck has layers of its own. The other bags are plain sums of learned vectors, and everything that relates one part to another is worked out after the join.
 
+All five characters use this one structure, layer for layer, with the same token tables; only the weights are a character's own (`weights/CHARACTER/`).
+
 The diagram reads from the bottom up: inputs at the bottom, the value at the top. A frame marks a group of layers. Point at a block for what it computes.
 
 <ArchDiagram client:visible lang="en" net="value" />
@@ -51,7 +53,7 @@ Everything comes from the run view that Harness logs at every decision ([Harness
 
 **What it does not read.** A card's cost and numbers, an enchantment's amount, a relic's counter and other state. Two runs that differ only there are one input.
 
-**Token tables.** The net file holds one table of ids per kind of token. A table is built from the training samples: an id that occurs fewer than 3 times there reads as entry 0, one shared *unknown* id. The count is per sample, so a card seen at three decisions of one run has its own entry. A net that goes on from an earlier net keeps that net's tables, and ids it never saw read as unknown; only the map's table grows, by the ids the earlier net lacks, each with a new vector.
+**Token tables.** The net file holds one table of ids per kind of token. Each lists every id of the game build, sorted, after entry 0, one shared *unknown* id, which reads any other id, such as one newer than the file (`learn/game_ids.py`, from `learn/game_ids.json`, which the simulator's `tables` command writes). So the tables do not depend on the training data, and every character's net has the same ones. The context's lists the game's acts, ancients, bosses and characters; the map's lists every type of point at 0 to 20 floors ahead, each with and without `:quest`.
 
 **The numbers** are standardized, $(x - \mu)/\sigma$, by the mean and standard deviation of the training samples, each sample weighted by one over its run's samples. A standard deviation under $10^{-9}$ reads as 1. The net file keeps $\mu$ and $\sigma$.
 
@@ -120,8 +122,6 @@ So each map move also gives a training sample of its own, the chosen point's aft
 
 <EnteringFork client:visible lang="en" />
 
-A net file whose map table lacks these tokens leaves them out, and reads a map move as a bag of the points after it.
-
 ## 5. The body and the heads
 
 **The numbers** are read as they are, standardized ([§2](#sec-2)).
@@ -156,14 +156,16 @@ The hazards of floors before $f$ are computed and not used ([From hazards to val
 
 | part | shape | weights |
 |---|---|---|
-| card, upgrade, modifier embeddings | 509 × 32, 509 × 32, 21 × 32 | 33,248 |
-| relic, potion, context, map embeddings | 260, 53, 26, 144 × 32 | 15,456 |
+| card, upgrade, modifier embeddings | 597 × 32, 597 × 32, 31 × 32 | 39,200 |
+| relic, potion, context, map embeddings | 310, 66, 32, 379 × 32 | 25,184 |
 | $\varphi$ | 32 → 128 → 128 | 20,736 |
 | body | 390 → 256 → 256 | 165,888 |
 | hazard head | 256 → 64 | 16,448 |
-| **total** | | **251,776** |
+| **total** | | **267,456** |
 
-The embeddings' sizes depend on the token tables, which depend on the training data; the table counts those of v7-1f. The training-only head adds 1,799.
+The token tables are fixed, so these sizes are the same for every character's net on this game build. The training-only head adds 1,799.
+
+**What the file holds.** The file is `weights/silent/v8-1.json`. An id its training data never held, as most of the other characters' are, holds the row of the unknown id; such a map token for the point entered, like `Unassigned+0`, is zero.
 
 A call takes about 0.09 ms in C# on one thread, batch of one. A macro decision on the clone takes 70–90 ms, most of it in the game ([Search §6](/en/arch/macro-brain/search/#sec-6)), so V's own cost does not matter.
 
@@ -180,15 +182,15 @@ The trainer computes the net in PyTorch; the brain runs it in C#. They must agre
 These follow from the structure alone.
 
 - **No card sees another before the sum.** A relation between cards reaches the body only as numbers that survive adding up. Counting a kind of card is easy; a relation among specific cards has to find numbers of its own, among 128 shared by all.
-- **The relics' bag is linear.** 260 relics share 32 numbers, with no layer before the join. A relation between two relics, or a relic and a card, is the body's alone to work out.
+- **The relics' bag is linear.** 310 relics share 32 numbers, with no layer before the join. A relation between two relics, or a relic and a card, is the body's alone to work out.
 - **The map bag holds no links.** It lists what lies at each distance, not which points lead to which. An elite and a rest site on two different paths read just like both on one path. The choice in front of the player is seen through each option's own bag; a choice further ahead is not.
 - **The map ends with the act.** The net reads the current act's remaining points. Of later acts it knows only what the floor implies; their maps, bosses and ancients are not in the run view's map.
 - **What is behind is gone.** Points already passed and points off every path ahead are not tokens. What the run gained there is in its loadout, HP and gold.
-- **Ids, not rules.** The net knows a card only by the runs whose decks held it. A card the training data holds fewer than 3 times reads as the shared unknown id, whatever it does.
+- **Ids, not rules.** The net knows a card only by the runs whose decks held it. A card the training data never held has learned nothing, whatever it does.
 - **One number for each kind of risk.** The hazards say how likely the run is to end on each floor, not why. A single head has to carry every way of dying.
 
 ## 9. One run through the net
 
-A real sample from v7-1f's file, an afterstate of a map move on floor 4, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
+A real sample from v8-1's file, an afterstate of a map move on floor 4, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
 
 <NetWalk client:visible lang="en" />

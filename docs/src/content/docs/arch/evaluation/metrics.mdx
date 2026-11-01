@@ -31,7 +31,7 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 作废的报告留在排行榜上，带标记，排在最后；不管挑战者的对局打到哪里，门槛都给作废的挑战者判定作废（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。
 
-**失败的对局就当从没设定过**。`report` 和 `gate` 通过 `RunRecord.Read` 读记录，它会去掉每条结局为 `failed` 的记录，`RunRecord.SeedsLeft` 再把它的种子从种子集里去掉，所以 500 局有 2 局失败，得到的是 498 局中的 498 局，既不作废，也不算不完整（`Harness/RunRecords.cs:38-45`）。对局失败的原因在主机，比如一台内存会翻转比特的机器，它说明不了大脑的好坏。`learn/gauntlet.py` 和 `v.train` 同样丢掉它们（`learn/gauntlet.py:44`、`learn/v/data.py:89`），配对也要两边都打完（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
+**失败的对局就当从没设定过**。`report` 和 `gate` 通过 `RunRecord.Read` 读记录，它会去掉每条结局为 `failed` 的记录，`RunRecord.SeedsLeft` 再把它的种子从种子集里去掉，所以 500 局有 2 局失败，得到的是 498 局中的 498 局，既不作废，也不算不完整（`Harness/RunRecords.cs:38-45`）。对局失败的原因在主机，比如一台内存会翻转比特的机器，它说明不了大脑的好坏。`learn/gauntlet.py` 和 `v.train` 同样丢掉它们（`learn/gauntlet.py:44`、`learn/v/data.py:91`），配对也要两边都打完（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
 
 **被截断的对局在胜率里算作输局**，并且从不重打：种子决定了这一局，重打只会重复它，而丢掉它就等于挑种子（`Harness/Reports.cs:51`）。
 
@@ -57,7 +57,7 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 **规划中** <Badge text="规划中" variant="caution" />，还不在任何报告里：
 
-- **校准**：V 预测的获胜机会与实际结局有多接近。Brier 分数（预测机会与这一局的 1 或 0 之间的均方差）只出现在 `v.train` 对整局的留出报告里，即 `brier_held_out` 对比 `brier_held_out_floor_only`，后者是一个只知道层数的模型（`learn/v/train.py:377-401`）；没有哪次评估计算它，也没有任何东西拿它和常数预测比较。
+- **校准**：V 预测的获胜机会与实际结局有多接近。Brier 分数（预测机会与这一局的 1 或 0 之间的均方差）只出现在 `v.train` 对整局的留出报告里，即 `brier_held_out` 对比 `brier_held_out_floor_only`，后者是一个只知道层数的模型（`learn/v/train.py:359-383`）；没有哪次评估计算它，也没有任何东西拿它和常数预测比较。
 - **搜索计算量**：每个决策搜索的分支数和克隆查询次数。报告里只有墙钟时间。
 - **囤积药水**：持有而未用的药水。
 
@@ -159,7 +159,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 - **Auxiliary**（辅助）：每局精英数、跳过的卡牌奖励、结束时的金币；每局秒数和每个决策的毫秒数；各决策界面；
 - **Against DATE (CHAMPION, commit X)**，在给出 `--previous OLD.json` 时，或在 `gate --promote` 写出冠军的继任者时出现：胜率、层数均值、每一幕打到 Boss 的局数、随机决策和失败局数的前后对比；种子集、环境或级别不同时则写「Not comparable」。
 
-**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全部小写，NAME 写明是谁打的：在 `DATE-sl-r1-promotion-1-300-plan-c7-2-l0-v7-1f-clone-p0` 里，是配战斗网络 `c7-2` 的 SL 规划器、在克隆上配 V `v7-1f` 的 L0、由 `p0` 回答选牌提示。这只是约定；`--out` 接受任何路径。
+**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全部小写，NAME 写明是谁打的：在 `DATE-sl-r1-promotion-1-300-plan-c8-1-l0-v8-1-clone-p0` 里，是配战斗网络 `c8-1` 的 SL 规划器、在克隆上配 V `v8-1` 的 L0、由 `p0` 回答选牌提示。这只是约定；`--out` 接受任何路径。
 
 ## 8. 对局记录
 

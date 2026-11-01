@@ -11,7 +11,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 本頁拿一個真實的狀態，用手帶它走過戰鬥網路，附上網路為它算出的數字。設計請讀[戰鬥網路](/zh-tw/arch/combat-brain/network/)；這裡每一步都顯示那個設計對一場戰鬥做了什麼。向量只顯示前四個數。
 
-這個狀態是檔案自己留出的測試狀態之一，一個回合開始（`weights/silent/c7-2.json`，`tests[1]`）。載入網路時會檢查它給這個狀態的正是這些輸出（[戰鬥網路 §9](/zh-tw/arch/combat-brain/network/#sec-9)）。數字來自 `docs/scripts/combat-walk.py`，如果它的各層算不出檔案裡的輸出，它就會停下。
+這個狀態是檔案自己留出的測試狀態之一，一個回合開始（`weights/silent/c8-1.json`，`tests[1]`）。載入網路時會檢查它給這個狀態的正是這些輸出（[戰鬥網路 §9](/zh-tw/arch/combat-brain/network/#sec-9)）。數字來自 `docs/scripts/combat-walk.py`，如果它的各層算不出檔案裡的輸出，它就會停下。
 
 ## 1. 畫面顯示什麼
 
@@ -39,7 +39,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 2. 詞元
 
-`encode.tokens`（`learn/combat/encode.py:113-155`）把畫面丟掉，只留下 id 和縮放後的數字。
+`encode.tokens`（`learn/combat/encode.py:118-161`）把畫面丟掉，只留下 id 和縮放後的數字。
 
 **玩家**是 8 個數：<code>{v(walk.tokens.player.slice(0, 4))}</code> 等等。完整的是：
 
@@ -70,7 +70,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 | 輸入 | 形狀 | 原因 |
 |---|---|---|
-| `cards`、`ups`、`costs` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 一共 22 張牌 |
+| `cards`、`ups`、`costs`、`damages` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 一共 22 張牌 |
 | `piles` | <code>{JSON.stringify(walk.shapes.piles)}</code> | 4 個牌堆上的 one-hot |
 | `powers` | <code>{JSON.stringify(walk.shapes.powers)}</code> | 一個能力 |
 | `enemies` | <code>{JSON.stringify(walk.shapes.enemies)}</code> | 兩個敵人 |
@@ -82,17 +82,18 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 4. 一張牌，然後是牌堆
 
-這張牌的向量是 `Net.encode`（`learn/combat/net.py:202-265`）開頭的幾行。看手牌裡的 **{walk.card.id}+**。它在牌表裡的項是 {walk.card.entry}，升級次數 {walk.card.up}，費用 0。
+這張牌的向量是 `Net.encode`（`learn/combat/net.py:211-282`）開頭的幾行。看手牌裡的 **{walk.card.id}+**。它在牌表裡的項是 {walk.card.entry}，升級次數 {walk.card.up}；費用 0，傷害 4 讀作 {walk.card.damage}。
 
 | 部分 | 向量 |
 |---|---|
 | 它 id 的向量 $E[c]$ | <code>{v(walk.card.id_vector)}</code> |
 | 它的升級方向 $U[c]$，乘以 {walk.card.up} | <code>{v(walk.card.up_vector)}</code> |
 | 費用向量 $K$，乘以 {walk.card.cost} | <code>{v(walk.card.cost_vector)}</code> |
+| 傷害向量 $D$，乘以 {walk.card.damage} | <code>{v(walk.card.damage_vector)}</code> |
 | 手牌的向量 $P[l]$ | <code>{v(walk.card.pile_vector)}</code> |
 | 它們的總和 $x$ | <code>{v(walk.card.x)}</code> |
 
-把第一個數加起來核對：−0.134 + 0.108 + 0 − 0.132 = −0.158。
+把第一個數加起來核對：−0.134 + 0.108 + 0 + 0 − 0.132 = −0.158。這個檔案裡 $D$ 全為零，所以傷害目前什麼也沒加（[戰鬥網路 §8](/zh-tw/arch/combat-brain/network/#sec-8)）。
 
 $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</code>。這是 ReLU 的輸出，所以沒有一個低於 0，而 64 個裡有 {walk.card.phi.zeros} 個恰好為 0。
 
@@ -178,7 +179,7 @@ $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</co
 - 底部：一場戰鬥回的血不可能超過缺少的生命值。{walk.state.max_hp} 點裡缺 {walk.state.max_hp - walk.state.hp} 點，比例是 0.113，所以低於 {walk.head.open_from} 的分桶都關閉。
 - 頂部：一場勝利不可能失去全部持有的生命值，所以從 {walk.head.open_to} 起往上的分桶都關閉。
 
-於是 **50 個分桶中有 {walk.head.open} 個開放**。其他的 logit 是 $-10^4$（`Net.reachable`，`learn/combat/net.py:194-200`），softmax 給它們恰好 0。
+於是 **50 個分桶中有 {walk.head.open} 個開放**。其他的 logit 是 $-10^4$（`Net.reachable`，`learn/combat/net.py:203-209`），softmax 給它們恰好 0。
 
 對其餘的做 softmax，就給出機率。死亡是 {walk.head.death}，幾乎沒有。最可能的分桶：
 
@@ -195,7 +196,7 @@ $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</co
 
 同樣的 256 個數經過第二個線性層，256 → {walk.potion.outputs}，藥水表的每一項一個輸出。攻擊藥水是第 {walk.potion.entry} 項。它的 logit 是 {walk.potion.logit}，sigmoid 把它變成 **{walk.potion.chance}**：網路預期這瓶藥水在戰鬥後還在。
 
-其他 {walk.potion.outputs - 1} 個輸出會算出來，但不讀。這裡最大的是 {walk.potion.most_likely[0].id}，{walk.potion.most_likely[0].chance}，和 `<unk>`，{walk.potion.most_likely[1].chance}：這個狀態兩者都沒有，所以它們沒有意義，也不訓練任何東西。
+其他 {walk.potion.outputs - 1} 個輸出會算出來，但不讀。這裡最大的是 {walk.potion.most_likely[0].id}，{walk.potion.most_likely[0].chance}，和 `<unk>`，{walk.potion.most_likely[1].chance}：這個狀態兩者都沒有，所以它們沒有意義，也不訓練任何東西。訓練資料裡從未有過的藥水，例如 {walk.potion.most_likely[2].id}，保存的是 `<unk>` 那一列，顯示同樣的機率。
 
 ## 13. 搜尋讀到的數字
 

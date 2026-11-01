@@ -152,7 +152,7 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
    - 每個可擾動的欄位都需要一個測試，證明當前節點從不讀它。
 10. 每個決策的複本查詢都記入日誌。規劃中。目前 `brain --wire FILE` 會記錄宿主的節點訊息，`clones` 據此重建並檢查每個 SL 決策的複本（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）；L0 在複本上的試探沒有記入日誌。
 
-除了這些守護，還有測試環境本身管線的測試：Harness 在 NoSL 下拒絕節點檢查點，也不給 NoSL 任何複本（xUnit `DispatcherTests`）；晉級門檻拒絕來自另一個環境的挑戰者（`GateTests`）；`--env` 預設為 NoSL 且大小寫皆可，`brain` 忽略冠軍檔案的環境（`CliTests`）；`selftest` 檢查複本保留了存檔會丟掉的遺物狀態（`Checks/SelfTest.Run.cs:140-180`）。
+除了這些守護，還有測試環境本身管線的測試：Harness 在 NoSL 下拒絕節點檢查點，也不給 NoSL 任何複本（xUnit `DispatcherTests`）；晉級門檻拒絕來自另一個環境的挑戰者（`GateTests`）；`--env` 預設為 NoSL 且大小寫皆可，`brain` 忽略冠軍檔案的環境（`CliTests`）；`selftest` 檢查複本保留了存檔會丟掉的遺物狀態（`Checks/SelfTest.Run.cs:190-230`）。
 
 ## 9. 未決問題
 

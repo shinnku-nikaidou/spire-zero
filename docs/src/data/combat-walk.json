@@ -1,5 +1,5 @@
 {
- "source": "c7-2.json, tests[1]",
+ "source": "c8-1.json, tests[1]",
  "state": {
   "encounter": "SCROLLS_OF_BITING_WEAK",
   "room": "Monster",
@@ -162,7 +162,7 @@
   ],
   "context_entries": [
    0,
-   57,
+   59,
    0,
    0
   ],
@@ -408,6 +408,15 @@
   "relic_status": [
    1,
    5
+  ],
+  "damages": [
+   1,
+   22
+  ],
+  "orb_values": [
+   1,
+   1,
+   2
   ]
  },
  "card": {
@@ -415,7 +424,8 @@
   "pile": "hand",
   "up": 1,
   "cost": 0.0,
-  "entry": 307,
+  "damage": 0.2,
+  "entry": 355,
   "mods": [],
   "id_vector": [
    -0.134,
@@ -434,6 +444,12 @@
    -0.238,
    0.226,
    0.056
+  ],
+  "damage_vector": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
   ],
   "pile_vector": [
    -0.132,
@@ -536,7 +552,7 @@
  "enemies": [
   {
    "id": "SCROLL_OF_BITING",
-   "entry": 70,
+   "entry": 79,
    "numbers": [
     0.758,
     0.25,
@@ -620,7 +636,7 @@
   },
   {
    "id": "SCROLL_OF_BITING",
-   "entry": 70,
+   "entry": 79,
    "numbers": [
     0.528,
     0.19,
@@ -1054,10 +1070,10 @@
  },
  "potion": {
   "id": "ATTACK_POTION",
-  "entry": 2,
+  "entry": 3,
   "logit": -6.48,
   "chance": 0.0015,
-  "outputs": 53,
+  "outputs": 66,
   "most_likely": [
    {
     "id": "ENTROPIC_BREW",
@@ -1068,8 +1084,8 @@
     "chance": 0.297
    },
    {
-    "id": "AMBERGRIS",
-    "chance": 0.016
+    "id": "ASHWATER",
+    "chance": 0.297
    }
   ]
  },
@@ -2943,6 +2959,12 @@
    ],
    "weights": 32
   },
+  "damage": {
+   "shape": [
+    32
+   ],
+   "weights": 32
+  },
   "melted": {
    "shape": [
     32
@@ -2951,52 +2973,52 @@
   },
   "cards.weight": {
    "shape": [
-    519,
+    597,
     32
    ],
-   "weights": 16608
+   "weights": 19104
   },
   "modifiers.weight": {
    "shape": [
-    29,
+    31,
     32
    ],
-   "weights": 928
+   "weights": 992
   },
   "enemies.weight": {
    "shape": [
-    107,
+    121,
     32
    ],
-   "weights": 3424
+   "weights": 3872
   },
   "intents.weight": {
    "shape": [
-    14,
+    16,
     32
    ],
-   "weights": 448
+   "weights": 512
   },
   "relics.weight": {
    "shape": [
-    258,
+    310,
     32
    ],
-   "weights": 8256
+   "weights": 9920
   },
   "potions.weight": {
    "shape": [
-    53,
+    66,
     32
    ],
-   "weights": 1696
+   "weights": 2112
   },
   "context.weight": {
    "shape": [
-    87,
+    91,
     32
    ],
-   "weights": 2784
+   "weights": 2912
   },
   "orbs.weight": {
    "shape": [
@@ -3007,10 +3029,10 @@
   },
   "allies.weight": {
    "shape": [
-    4,
+    121,
     32
    ],
-   "weights": 128
+   "weights": 3872
   },
   "relic_status.weight": {
    "shape": [
@@ -3021,59 +3043,80 @@
   },
   "card_up.weight": {
    "shape": [
-    519,
+    597,
     32
    ],
-   "weights": 16608
+   "weights": 19104
   },
   "mod_amount.weight": {
    "shape": [
-    29,
+    31,
     32
    ],
-   "weights": 928
+   "weights": 992
   },
   "relic_counter.weight": {
    "shape": [
-    258,
+    310,
     32
    ],
-   "weights": 8256
+   "weights": 9920
   },
   "powers.weight": {
    "shape": [
-    186,
+    266,
     32
    ],
-   "weights": 5952
+   "weights": 8512
   },
   "power_amount.weight": {
    "shape": [
-    186,
+    266,
     32
    ],
-   "weights": 5952
+   "weights": 8512
   },
   "power_stacks.weight": {
    "shape": [
-    186,
+    266,
     32
    ],
-   "weights": 5952
+   "weights": 8512
   },
   "intent_damage.weight": {
    "shape": [
-    14,
+    16,
     32
    ],
-   "weights": 448
+   "weights": 512
   },
   "intent_total.weight": {
    "shape": [
-    14,
+    16,
     32
    ],
-   "weights": 448
+   "weights": 512
+  },
+  "orb_passive.weight": {
+   "shape": [
+    6,
+    32
+   ],
+   "weights": 192
+  },
+  "orb_evoke.weight": {
+   "shape": [
+    6,
+    32
+   ],
+   "weights": 192
+  },
+  "orb_at.weight": {
+   "shape": [
+    60,
+    32
+   ],
+   "weights": 1920
   },
   "card_phi.0.weight": {
    "shape": [
@@ -3220,30 +3263,30 @@
   },
   "potion_head.weight": {
    "shape": [
-    53,
+    66,
     256
    ],
-   "weights": 13568
+   "weights": 16896
   },
   "potion_head.bias": {
    "shape": [
-    53
+    66
    ],
-   "weights": 53
+   "weights": 66
   }
  },
- "total_weights": 399144,
+ "total_weights": 425877,
  "vocab": {
-  "cards": 519,
-  "modifiers": 29,
-  "powers": 186,
-  "enemies": 107,
-  "intents": 14,
-  "relics": 258,
-  "potions": 53,
-  "context": 87,
+  "cards": 597,
+  "modifiers": 31,
+  "powers": 266,
+  "enemies": 121,
+  "intents": 16,
+  "relics": 310,
+  "potions": 66,
+  "context": 91,
   "orbs": 6,
-  "allies": 4,
+  "allies": 121,
   "relic_status": 4
  },
  "fit": {

@@ -118,9 +118,10 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 
 | name | what |
 |---|---|
-| v7-1f | V, played by both champions: trained on the whole-run data `v7g1` ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
-| c7-2 | The combat net, played by both champions ([The combat net](/en/arch/combat-brain/network/)). |
-| `weights/silent/NAME.json` | A net's file; the folder holds `v7-1f.json` and `c7-2.json`. |
+| v8-1 | V, played by both champions: its weights learned from the whole-run data `v7g1` ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
+| c8-1 | The combat net, played by both champions ([The combat net](/en/arch/combat-brain/network/)). |
+| token table | A net's list of ids of one kind (cards, relics, …), with learned rows per id: every id of the game build, the same for every character's net; entry 0, `<unk>`, reads any other ([The combat net §2](/en/arch/combat-brain/network/#sec-2)). |
+| `weights/silent/NAME.json` | A net's file; the champions play `v8-1.json` and `c8-1.json` ([Learning: reference §6](/en/arch/learning/reference/#sec-6)). |
 | `promotion-1`, `promotion-1-300`, `promotion-1-500`, `final-1` | Seed sets in `eval/seeds/`: 200, 300 and 500 promotion seeds (each longer set begins with the shorter), and a final set of 300 registered before any run on it. |
 | `eval/silent/champions/sl.json`, `nosl.json` | Champion files: the options that play each environment's champion, and its report. |
 | `eval/silent/ledger.md` | The lineage, and the only history of the nets: which brain played which data, and which data trained which weights. |

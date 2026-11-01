@@ -5,45 +5,31 @@ if its layers do not end in the outputs the file's tests hold.
     uv run --project learn python docs/scripts/combat-walk.py
 """
 
-import base64
 import json
 import math
 import sys
 from pathlib import Path
 
-import onnx
 import torch
-from onnx import numpy_helper
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "learn"))
 
-from combat import data, encode  # noqa: E402
+from combat import data, encode, export  # noqa: E402
 from combat.net import Batch, Net  # noqa: E402
 
-FILE = ROOT / "weights/silent/c7-2.json"
+FILE = ROOT / "weights/silent/c8-1.json"
 OUT = ROOT / "docs/src/data/combat-walk.json"
 MAIN = 1  # the only test state holding a potion: every step has something to show
 OTHERS = {"danger": 5, "mask": 15}  # a boss fight at 42 of 70 HP, and a state at 10 of 70 HP
 WIN_BASE, PER_HP, PER_POTION = 0.2, 0.6, 0.02  # LeafWeights' defaults
 LOST_HP = 10  # the sibling state of the search step
-# The Linear weights the export leaves unnamed, in the graph's order; the file's tests check them.
-MATMULS = ["card_phi.0.weight", "card_phi.2.weight", "enemy_scalars.weight", "power_phi.0.weight", "enemy_phi.0.weight", "enemy_phi.2.weight", "ally_scalars.weight", "ally_phi.0.weight"]
 
 
 def load(file: dict) -> tuple[Net, dict]:
     """The file's graph back in the trainer's Net."""
-    model = onnx.load_model_from_string(base64.b64decode(file["onnx"]))
     net = Net({t: len(ids) for t, ids in file["vocab"].items()})
-    weights, unnamed = {}, []
-    for i in model.graph.initializer:
-        t = torch.tensor(numpy_helper.to_array(i).copy())
-        if i.name.startswith("net."):
-            weights[i.name.removeprefix("net.")] = t
-        elif i.name.startswith("onnx::MatMul"):
-            unnamed.append(t.T)  # the export folds a Linear's weight into its MatMul, transposed and without its name
-    weights |= dict(zip(MATMULS, unnamed, strict=True))
-    net.load_state_dict({k: weights[k] for k in net.state_dict()})
+    net.load_state_dict(export.weights(file, net))
     index = {t: {x: k for k, x in enumerate(ids)} for t, ids in file["vocab"].items()}
     return net.eval(), index
 
@@ -138,24 +124,27 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         net.cards(x["cards"])
         + x["ups"][..., None] * net.card_up(x["cards"])
         + x["costs"][..., None] * net.cost
+        + x["damages"][..., None] * net.damage
         + ((net.modifiers(x["mods"]) + x["mod_amounts"][..., None] * net.mod_amount(x["mods"])) * x["mod_mask"][..., None]).sum(2)
         + x["piles"] @ net.pile
     )
     card_phi = net.card_phi(card_x)
     per_pile = torch.bmm(x["piles"].transpose(1, 2), card_phi).flatten(1) * net.SUM_SCALE
     example = next(k for k, c in enumerate(tok["cards"]) if c[1] > 0)
-    c_id, c_up, c_pile, c_mods, c_cost, _ = tok["cards"][example]
+    c_id, c_up, c_pile, c_mods, c_cost, _, c_damage = tok["cards"][example]
     t = x["cards"][0, example]
     card = {
         "id": c_id,
         "pile": encode.PILES[c_pile],
         "up": c_up,
         "cost": round(c_cost, 3),
+        "damage": round(c_damage, 3),
         "entry": int(t),
         "mods": c_mods,
         "id_vector": four(net.cards(t)),
         "up_vector": four(net.card_up(t)),
         "cost_vector": four(net.cost),
+        "damage_vector": four(net.damage),
         "pile_vector": four(net.pile[c_pile]),
         "x": four(card_x[0, example]),
         "phi": vec(card_phi[0, example]),
@@ -208,7 +197,14 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     relics = (held * x["relic_mask"][..., None]).sum(1)
     potions = (net.potions(x["potions"]) * x["potion_mask"][..., None]).sum(1)
     context = (net.context(x["context"]) * x["context_mask"][..., None]).sum(1)
-    orbs = (net.orbs(x["orbs"]) * x["orb_mask"][..., None]).sum(1)
+    places = torch.arange(x["orbs"].shape[1]).clamp_max(encode.MAX_ORBS - 1)[None, :]
+    orb = (
+        net.orbs(x["orbs"])
+        + x["orb_values"][..., 0:1] * net.orb_passive(x["orbs"])
+        + x["orb_values"][..., 1:2] * net.orb_evoke(x["orbs"])
+        + net.orb_at(places * net.orbs.num_embeddings + x["orbs"])
+    )
+    orbs = (orb * x["orb_mask"][..., None]).sum(1)
     ally = net.ally_phi(torch.cat([net.allies(x["allies"]) + net.ally_scalars(x["ally_scalars"]), net.power_sum(x["ally_powers"], x["ally_power_amounts"], x["ally_power_mask"])], 2))
     allies = (ally * x["ally_mask"][..., None]).sum(1)
 

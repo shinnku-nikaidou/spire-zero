@@ -31,7 +31,7 @@ import DeathsByFloor from '../../../../../components/book/DeathsByFloor.svelte';
 
 作廢的報告留在排行榜上，加上標記並排在最後；作廢的挑戰者在門檻上得到的判定是作廢，不論它的對局打到哪裡（[晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。
 
-**失敗的對局就當從沒設定過。** `report` 和 `gate` 透過 `RunRecord.Read` 讀記錄，它會去掉每條結局為 `failed` 的記錄，`RunRecord.SeedsLeft` 再把它的種子從種子集裡去掉，所以 500 局有 2 局失敗，得到的是 498 局中的 498 局，既不作廢，也不算不完整（`Harness/RunRecords.cs:38-45`）。對局失敗的原因在主機，例如一台記憶體會翻轉位元的機器，它說明不了大腦的好壞。`learn/gauntlet.py` 和 `v.train` 同樣丟掉它們（`learn/gauntlet.py:44`、`learn/v/data.py:89`），配對也要兩邊都打完（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
+**失敗的對局就當從沒設定過。** `report` 和 `gate` 透過 `RunRecord.Read` 讀記錄，它會去掉每條結局為 `failed` 的記錄，`RunRecord.SeedsLeft` 再把它的種子從種子集裡去掉，所以 500 局有 2 局失敗，得到的是 498 局中的 498 局，既不作廢，也不算不完整（`Harness/RunRecords.cs:38-45`）。對局失敗的原因在主機，例如一台記憶體會翻轉位元的機器，它說明不了大腦的好壞。`learn/gauntlet.py` 和 `v.train` 同樣丟掉它們（`learn/gauntlet.py:44`、`learn/v/data.py:91`），配對也要兩邊都打完（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
 
 在勝率裡，**被截斷的對局算作輸局**，而且從不重打：種子決定了整局，重打只會重複它，丟掉它就等於挑選種子（`Harness/Reports.cs:51`）。
 
@@ -57,7 +57,7 @@ import DeathsByFloor from '../../../../../components/book/DeathsByFloor.svelte';
 
 **規劃中** <Badge text="規劃中" variant="caution" />，不在任何報告裡：
 
-- **校準**：V 預測的獲勝機率與實際結果有多接近。Brier 分數（預測機率與這局的 1 或 0 之間差距平方的平均）只出現在 `v.train` 對整局的留出報告裡：`brier_held_out` 對比 `brier_held_out_floor_only`，後者是只知道層數的模型（`learn/v/train.py:377-401`）；沒有任何評估計算它，也沒有東西拿它和常數預測比較。
+- **校準**：V 預測的獲勝機率與實際結果有多接近。Brier 分數（預測機率與這局的 1 或 0 之間差距平方的平均）只出現在 `v.train` 對整局的留出報告裡：`brier_held_out` 對比 `brier_held_out_floor_only`，後者是只知道層數的模型（`learn/v/train.py:359-383`）；沒有任何評估計算它，也沒有東西拿它和常數預測比較。
 - **搜尋計算量**：每個決策搜尋的分支數和複本查詢次數。報告只有掛鐘時間。
 - **囤積藥水**：持有而未使用的藥水。
 
@@ -159,7 +159,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 - **Auxiliary**：每局的菁英戰數、跳過的卡牌獎勵、結束時的金幣；每局秒數和每個決策的毫秒數；各決策介面；
 - **Against DATE (CHAMPION, commit X)**，在給了 `--previous OLD.json` 時，或在 `gate --promote` 寫出冠軍的接任者時出現：勝率、平均層數、每一幕到達頭目的局數、隨機決策和失敗對局的前後對比；種子集、環境或級別不同時則寫「Not comparable」。
 
-**名稱**。報告放進 `eval/CHARACTER/reports/`，檔名為 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全小寫，NAME 指明是什麼在打：在 `DATE-sl-r1-promotion-1-300-plan-c7-2-l0-v7-1f-clone-p0` 裡，是用戰鬥網路 `c7-2` 的 SL 規劃器、在複本上用 V `v7-1f` 的 L0、由 `p0` 回答選牌提示。這只是慣例；`--out` 接受任何路徑。
+**名稱**。報告放進 `eval/CHARACTER/reports/`，檔名為 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全小寫，NAME 指明是什麼在打：在 `DATE-sl-r1-promotion-1-300-plan-c8-1-l0-v8-1-clone-p0` 裡，是用戰鬥網路 `c8-1` 的 SL 規劃器、在複本上用 V `v8-1` 的 L0、由 `p0` 回答選牌提示。這只是慣例；`--out` 接受任何路徑。
 
 ## 8. 對局記錄
 

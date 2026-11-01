@@ -27,7 +27,7 @@ Self-play plays the whole game, SL: every macro decision is made by L0 on the no
 ```text
 run --env SL --policy plan --macro l0 --afterstates clone --workers 4 \
     --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 \
-    --combat-net weights/silent/c7-2.json --value weights/silent/V.json --explore ε --seed 1
+    --combat-net weights/silent/c8-1.json --value weights/silent/V.json --explore ε --seed 1
 ```
 
 **Budget.** The planner plays at its low budget, while gates play at the champion's medium effort. A cheap budget gives far more runs for the same compute, and it ranks loadouts about as well: on 515 boss doors fought at full HP, the low and the medium budget on one seed correlated 0.94, and two seeds of the low budget 0.83 ([The SL planner: budget, cost and results §2](/en/arch/sl-planner/budget/#sec-2)). A run takes about 45–85 s of one slot, depending on the host, and its log about 1.6 MB.

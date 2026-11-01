@@ -14,10 +14,10 @@ sidebar:
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c7-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone",
+  "champion": "combat plan c8-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-1 clone, macro prompts l0 v8-1 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v7-1f.json", "afterstates": "clone", "combat-net": "weights/silent/c7-2.json",
+    "value": "weights/silent/v8-1.json", "afterstates": "clone", "combat-net": "weights/silent/c8-1.json",
     "character": "SILENT", "asc": "0"
   },
   "report": "eval/silent/reports/DATE-sl-r1-SET-NAME.json",
@@ -44,7 +44,7 @@ sidebar:
 
 **由 `--promote` 写入，或手工写入**。`gate --promote` 写入每一个字段，选项按挑战者的选项生成（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:83-108`）：对 SL 规划器来说是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。胜局门槛什么也不写，所以由它晋级的网络靠手工写入（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)），SL 文件写的是 `"effort": "medium"`，打的是同样的预算（[SL 规划器：预算 §1](/arch/sl-planner/budget/#sec-1)）。重定基线只修改 `report`（[晋级门槛 §9](/arch/evaluation/gates/#sec-9)）。
 
-**两个文件**。两个文件都指明同样的两个网络，`weights/silent/v7-1f.json`（V）和 `weights/silent/c7-2.json`（战斗网络），也是 `weights/silent/` 里仅有的文件。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。两者指明的 `report` 是一份较早的 SL 报告，用更早的战斗网络打的；在有这个冠军的报告之前，它继续有效。由于它是 SL 报告，针对 NoSL 文件的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）。
+**两个文件**。两个文件都指明同样的两个网络，`weights/silent/v8-1.json`（V）和 `weights/silent/c8-1.json`（战斗网络）。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。两者指明的 `report` 是一份较早的 SL 报告，用更早的战斗网络打的；在有这个冠军的报告之前，它继续有效。由于它是 SL 报告，针对 NoSL 文件的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）。
 
 每个角色有自己的文件夹，`eval/CHARACTER/`、`weights/CHARACTER/` 和 `data/CHARACTER/`，所有进阶等级共用一个大脑（[学习：参考 §3](/arch/learning/reference/#sec-3)）；`eval/seeds/` 里的种子集是共用的。
 
@@ -56,7 +56,9 @@ sidebar:
 - `eval/silent/reports/` 存放每一份已提交的报告，有 JSON 和 Markdown 两种（[指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)）。
 - `eval/silent/leaderboard.md` 按种子集和环境给这些报告排名（[指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9)）。
 
-**冠军的门槛**（2026-11-01；ledger 里 c7-2 那一行）。这是部分结果：`promotion-1-300` 的 300 个种子里，medium 打完了 150 个，低预算打完了 188 个，后者只作参考。其余的随两台机器一起丢失，没有重打，所以结果读自记录，没有报告。每一方都用克隆上的 V v7-1f，在相同种子上配对；打完的对局没有一局失败。
+**冠军的网络和它们的门槛**。v8-1 和 c8-1 就是 v7-1f 和 c7-2，换上游戏的完整词元表，新输入的权重为零，没有训练。在 A10 的相同种子上与那两个网络对打，覆盖全部五个角色，也包括 NoSL，它们做出的决策全都相同（medium 2,864 个，低预算 3,490 个），所以它们没有单独过门槛，c7-2 的门槛就算 c8-1 的。
+
+c7-2 的门槛（2026-11-01；ledger 里它那一行）是部分结果：`promotion-1-300` 的 300 个种子里，medium 打完了 150 个，低预算打完了 188 个，后者只作参考。其余的随两台机器一起丢失，没有重打，所以结果读自记录，没有报告。每一方都用克隆上的 V v7-1f，在相同种子上配对；打完的对局没有一局失败。
 
 | c7-2 对 | 预算 | 种子 | 胜局，c7-2 : 对方 | 百分点 | 95 % 下界 | 平均层数，c7-2 : 对方 |
 |---|---|---|---|---|---|---|

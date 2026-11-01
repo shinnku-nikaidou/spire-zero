@@ -104,7 +104,7 @@ uv run python -m v.train --list PREFIX --name NAME --objective win [--init FILE]
 | optimizer | AdamW, learning rate $3 \times 10^{-5}$, weight decay $10^{-4}$ |
 | batch | 256 samples, shuffled anew each epoch |
 | epochs | at most 40, stopping after 5 without a held-out hazard loss lower by $10^{-4}$; the best epoch's weights are kept |
-| unknown ids | ids seen fewer than 3 times |
+| token tables | the game's, fixed ([The value network §2](/en/arch/macro-brain/network/#sec-2)) |
 | second head | weight 3 |
 | start | the hazard head's biases at the baseline ([below](#sec-5)) |
 
@@ -116,7 +116,7 @@ $$
 
 both counted by the samples' weights, and the net only has to learn how the run moves each floor's hazard away from that average. It moves slowly enough for held-out runs to say when to stop.
 
-**Going on from a net (`--init`).** Training can start from an earlier net file instead of from scratch: its token tables, its standardization and its weights, read back from its ONNX graph (`export.weights`). The second head, not in the file, starts anew. A net of this structure goes on only from a net of this structure.
+**Going on from a net (`--init`).** Training can start from an earlier net file instead of from scratch: its standardization and its weights, read back from its ONNX graph (`export.weights`). The second head, not in the file, starts anew. A net of this structure goes on only from a net of this structure, and a file with other tables than the game's is refused.
 
 **On the GPU**, a batch's tensors are built from the samples as lists, then one tensor each. Each training runs on one GPU.
 

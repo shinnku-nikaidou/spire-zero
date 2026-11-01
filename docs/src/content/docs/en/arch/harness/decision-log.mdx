@@ -36,7 +36,7 @@ Who reads the log:
 | `decision_id` | int | the decision's number in the run, from 0, the three kinds counted together ([§4](#sec-4)) | the same | the same |
 | `env` | string | `NoSL` or `SL` | the same | the same |
 | `surface` | string | `combat` | `card_choice`, on either side | the decision's surface |
-| `brain` | string | the combat route's name: `pimc`, `plan c7-2`, `pimc c7-2 explore 0.003`, … | the prompt side's: `p0` in combat; L0's name or `random` outside | the macro route's |
+| `brain` | string | the combat route's name: `pimc`, `plan c8-1`, `pimc c8-1 explore 0.003`, … | the prompt side's: `p0` in combat; L0's name or `random` outside | the macro route's |
 | `obs_hash` | hex string | the hash of the combat observation | the hash of the card prompt | the hash of the whole observation ([§4](#sec-4)) |
 | `legal` | int | the legal actions | the prompt's options | the legal actions |
 | `chosen` | string | the combat action's text: `play:C[:T]`, `potion:S[:T]`, `end_turn` ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)) | the picked option indexes joined by commas, without `pick:` | the action |

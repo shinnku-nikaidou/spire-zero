@@ -11,7 +11,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 This page takes one real state and walks it through the combat net by hand, with the numbers the net computes for it. Read [The combat net](/en/arch/combat-brain/network/) for the design; here each step shows what that design does to one fight. Vectors show their first four numbers.
 
-The state is a round start from the file's own held-out test states (`weights/silent/c7-2.json`, `tests[1]`). Loading the net checks that it gives this state exactly these outputs ([The combat net §9](/en/arch/combat-brain/network/#sec-9)). The numbers come from `docs/scripts/combat-walk.py`, which stops if its layers do not end in the file's outputs.
+The state is a round start from the file's own held-out test states (`weights/silent/c8-1.json`, `tests[1]`). Loading the net checks that it gives this state exactly these outputs ([The combat net §9](/en/arch/combat-brain/network/#sec-9)). The numbers come from `docs/scripts/combat-walk.py`, which stops if its layers do not end in the file's outputs.
 
 ## 1. What the screen shows
 
@@ -39,7 +39,7 @@ The question the search asks: if it stops here, what is this state worth?
 
 ## 2. Tokens
 
-`encode.tokens` (`learn/combat/encode.py:113-155`) throws away the screen and keeps ids and scaled numbers.
+`encode.tokens` (`learn/combat/encode.py:118-161`) throws away the screen and keeps ids and scaled numbers.
 
 **The player** is 8 numbers: <code>{v(walk.tokens.player.slice(0, 4))}</code> and so on. In full:
 
@@ -70,7 +70,7 @@ The tensors have these shapes for this state, with a batch of 1:
 
 | input | shape | why |
 |---|---|---|
-| `cards`, `ups`, `costs` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 22 cards in all |
+| `cards`, `ups`, `costs`, `damages` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 22 cards in all |
 | `piles` | <code>{JSON.stringify(walk.shapes.piles)}</code> | one-hot over 4 piles |
 | `powers` | <code>{JSON.stringify(walk.shapes.powers)}</code> | one power |
 | `enemies` | <code>{JSON.stringify(walk.shapes.enemies)}</code> | two enemies |
@@ -82,17 +82,18 @@ The tensors have these shapes for this state, with a batch of 1:
 
 ## 4. One card, then the piles
 
-The card's vector is the first lines of `Net.encode` (`learn/combat/net.py:202-265`). Take **{walk.card.id}+** in the hand. Its entry in the card table is {walk.card.entry}, its upgrade level {walk.card.up}, and it costs 0.
+The card's vector is the first lines of `Net.encode` (`learn/combat/net.py:211-282`). Take **{walk.card.id}+** in the hand. Its entry in the card table is {walk.card.entry}, its upgrade level {walk.card.up}; it costs 0, and its damage of 4 reads as {walk.card.damage}.
 
 | part | vector |
 |---|---|
 | its id's vector $E[c]$ | <code>{v(walk.card.id_vector)}</code> |
 | its upgrade direction $U[c]$, times {walk.card.up} | <code>{v(walk.card.up_vector)}</code> |
 | the cost vector $K$, times {walk.card.cost} | <code>{v(walk.card.cost_vector)}</code> |
+| the damage vector $D$, times {walk.card.damage} | <code>{v(walk.card.damage_vector)}</code> |
 | the hand's vector $P[l]$ | <code>{v(walk.card.pile_vector)}</code> |
 | their sum $x$ | <code>{v(walk.card.x)}</code> |
 
-Add the first numbers up to check: −0.134 + 0.108 + 0 − 0.132 = −0.158.
+Add the first numbers up to check: −0.134 + 0.108 + 0 + 0 − 0.132 = −0.158. $D$ is all zeros in this file, so the damage adds nothing yet ([The combat net §8](/en/arch/combat-brain/network/#sec-8)).
 
 $\varphi$ then maps $x$ to 64 numbers, <code>{v(walk.card.phi.first)}</code>. Being a ReLU's output, none is below 0, and {walk.card.phi.zeros} of the 64 are exactly 0.
 
@@ -178,7 +179,7 @@ The HP share is {walk.value.share}. A bucket $[l, l + 0.025)$ stays open if $l <
 - The bottom: a fight cannot heal more than the HP missing. {walk.state.max_hp - walk.state.hp} of {walk.state.max_hp} HP is a share of 0.113, so the buckets below {walk.head.open_from} are closed.
 - The top: a win cannot lose all the HP held, so the buckets from {walk.head.open_to} up are closed.
 
-That leaves **{walk.head.open} of the 50 buckets open**. The others get a logit of $-10^4$ (`Net.reachable`, `learn/combat/net.py:194-200`), and the softmax gives them exactly 0.
+That leaves **{walk.head.open} of the 50 buckets open**. The others get a logit of $-10^4$ (`Net.reachable`, `learn/combat/net.py:203-209`), and the softmax gives them exactly 0.
 
 The softmax over the rest gives the chances. A death has {walk.head.death}, next to nothing. The most likely buckets:
 
@@ -195,7 +196,7 @@ The net is close to certain that this fight is won with at most a scratch. The s
 
 The same 256 numbers go through a second linear layer, of 256 → {walk.potion.outputs}, one output per entry of the potion table. Attack Potion is entry {walk.potion.entry}. Its logit is {walk.potion.logit}, and the sigmoid makes that **{walk.potion.chance}**: the net expects the potion to still be there after the fight.
 
-The other {walk.potion.outputs - 1} outputs are computed and not read. The largest here are {walk.potion.most_likely[0].id} at {walk.potion.most_likely[0].chance} and `<unk>` at {walk.potion.most_likely[1].chance}: this state holds neither, so they mean nothing and train nothing.
+The other {walk.potion.outputs - 1} outputs are computed and not read. The largest here are {walk.potion.most_likely[0].id} at {walk.potion.most_likely[0].chance} and `<unk>` at {walk.potion.most_likely[1].chance}: this state holds neither, so they mean nothing and train nothing. A potion its training data never held, such as {walk.potion.most_likely[2].id}, holds `<unk>`'s row and shows the same chance.
 
 ## 13. The number the search reads
 

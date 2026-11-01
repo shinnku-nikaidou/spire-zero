@@ -8,7 +8,7 @@ This page tracks progress. The chapters say how each part works; this page says 
 
 ## 1. In one paragraph
 
-The AI plays whole Silent A0 runs headless, in the game's own code, in both environments. In **SL** the champion is the SL planner with the combat net c7-2 in combat and L0 with V v7-1f outside it; on the 150 seeds its gate finished it won 88 runs, as many as the net before it, so it is not shown better ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). In **NoSL** the champion is PIMC with the same two nets, which it has never been gated or trained with. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built. The net structure and the environment's inputs and outputs are settled; the code and these pages are being reduced to these two nets.
+The AI plays whole Silent runs headless, in the game's own code, in both environments. In **SL** the champion is the SL planner with the combat net c8-1 in combat and L0 with V v8-1 outside it; on the 150 A0 seeds its gate finished these weights won 88 runs, as many as the net before them, so they are not shown better ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). In **NoSL** the champion is PIMC with the same two nets, which it has never been gated or trained with. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built. Both nets have one structure for all five characters, with weights per character, and only the Silent has weights so far. 8,091 SL runs at A10 are played and not yet trained on.
 
 ## 2. Each part
 
@@ -34,8 +34,8 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 
 | environment | champion | seed set | win rate | mean floor |
 |---|---|---|---|---|
-| SL | plan c7-2 (medium effort), L0 v7-1f on the clone | 150 of `promotion-1-300` | 58.7 % (88 of 150) | 44.45 |
-| NoSL | PIMC c7-2 8×300, L0 v7-1f | | no report yet | |
+| SL | plan c8-1 (medium effort), L0 v8-1 on the clone | 150 of `promotion-1-300` | 58.7 % (88 of 150) | 44.45 |
+| NoSL | PIMC c8-1 8×300, L0 v8-1 | | no report yet | |
 
 ## 3. Main gaps and risks
 
@@ -59,12 +59,14 @@ The AI plays whole Silent A0 runs headless, in the game's own code, in both envi
 
 3. <Badge text="done by 2026-10-28" variant="success" /> The SL clone in the pool and the SL planner; the mod's assist mode in the real game, with the SL record.
 
-4. <Badge text="done 2026-10-31" variant="success" /> V read from the run's ids and raw state alone, trained on whole runs and deciding by P(win): V v7-1f. How each step measured is in `eval/silent/ledger.md`.
+4. <Badge text="done 2026-10-31" variant="success" /> V read from the run's ids and raw state alone, trained on whole runs and deciding by P(win). How each step measured is in `eval/silent/ledger.md`.
 
-5. <Badge text="done 2026-11-01" variant="success" /> The combat net c7-2, for SL and NoSL alike ([The combat net](/en/arch/combat-brain/network/)); only V v7-1f and c7-2 remain in the code and in `weights/`.
+5. <Badge text="done 2026-11-01" variant="success" /> The combat net for SL and NoSL alike ([The combat net](/en/arch/combat-brain/network/)); only one V and one combat net remain in the code.
 
-6. **Next:** data at ascension 10 played by these two nets. NoSL's items wait while SL comes first: tuning PIMC's worlds and nodes, the fusion panel's measurement ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+6. <Badge text="done 2026-11-01" variant="success" /> One net structure for all five characters, on token tables of every id in the game; the combat net also reads each card's damage and each orb's numbers and place. V v8-1 and the combat net c8-1 carry the earlier weights over with no training, making the same decisions. SL data at ascension 10: `v7g2`, 8,091 runs, 27 won, floor 25.04 on average ([Learning: the loop §2](/en/arch/learning/loop/#sec-2)).
 
-7. The mod's auto-play: the executor, the auto-run driver, the R4 pipeline and the R3 ≡ R4 test ([Mod: auto-play and safety](/en/arch/mod/auto/)).
+7. **Next:** a V and a combat net trained on that data, judged apart at ascension 10. NoSL's items wait while SL comes first: tuning PIMC's worlds and nodes, the fusion panel's measurement ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+
+8. The mod's auto-play: the executor, the auto-run driver, the R4 pipeline and the R3 ≡ R4 test ([Mod: auto-play and safety](/en/arch/mod/auto/)).
 
 </Steps>

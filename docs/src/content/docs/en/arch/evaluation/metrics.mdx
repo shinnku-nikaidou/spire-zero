@@ -31,7 +31,7 @@ A report is **void** when any of four counts is above zero (`Metrics.Void`, `Har
 
 A void report stays on the leaderboard, marked and ranked last; a gate gives a void challenger the verdict void, whatever its runs reached ([Gates §6](/en/arch/evaluation/gates/#sec-6)).
 
-**A failed run is as if never set.** `report` and `gate` read through `RunRecord.Read`, which leaves out every record whose outcome is `failed`, and `RunRecord.SeedsLeft` takes its seed out of the set, so 2 failed of 500 make a report of 498 of 498, neither void nor partial (`Harness/RunRecords.cs:38-45`). A run fails because of the host, such as a machine whose memory flips bits, and says nothing of the brain. `learn/gauntlet.py` and `v.train` drop them too (`learn/gauntlet.py:44`, `learn/v/data.py:89`), and a pair needs both runs ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
+**A failed run is as if never set.** `report` and `gate` read through `RunRecord.Read`, which leaves out every record whose outcome is `failed`, and `RunRecord.SeedsLeft` takes its seed out of the set, so 2 failed of 500 make a report of 498 of 498, neither void nor partial (`Harness/RunRecords.cs:38-45`). A run fails because of the host, such as a machine whose memory flips bits, and says nothing of the brain. `learn/gauntlet.py` and `v.train` drop them too (`learn/gauntlet.py:44`, `learn/v/data.py:91`), and a pair needs both runs ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
 
 **Truncated runs count as losses** in the win rate, and they are never played again: a seed fixes the run, so playing it again would only repeat it, and dropping it would pick seeds (`Harness/Reports.cs:51`).
 
@@ -57,7 +57,7 @@ The elites taken, the skip rate, the gold and the HP at each boss are the conser
 
 **Planned** <Badge text="planned" variant="caution" />, and in no report:
 
-- **Calibration**: how close V's predicted chance to win comes to the outcomes. A Brier score (the mean squared gap between the predicted chance and the run's 1 or 0) exists only in `v.train`'s held-out report for whole runs, `brier_held_out` against `brier_held_out_floor_only`, a model that knows only the floor (`learn/v/train.py:377-401`); no evaluation computes it, and nothing compares it with a constant prediction.
+- **Calibration**: how close V's predicted chance to win comes to the outcomes. A Brier score (the mean squared gap between the predicted chance and the run's 1 or 0) exists only in `v.train`'s held-out report for whole runs, `brier_held_out` against `brier_held_out_floor_only`, a model that knows only the floor (`learn/v/train.py:359-383`); no evaluation computes it, and nothing compares it with a constant prediction.
 - **Search compute**: branches searched and clone queries per decision. Reports have wall time only.
 - **Potion hoarding**: potions held unused.
 
@@ -159,7 +159,7 @@ Because the report embeds every run record, combats included, the per-run data o
 - **Auxiliary**: elites per run, card rewards skipped, gold at the end; seconds per run and milliseconds per decision; the surfaces;
 - **Against DATE (CHAMPION, commit X)**, with `--previous OLD.json`, or when `gate --promote` writes the champion's successor: then and now for the win rate, the floor's mean, each act's boss reached, random decisions and failed runs; or "Not comparable" when the seed set, the environment or the rung differ.
 
-**Names.** Reports go into `eval/CHARACTER/reports/` as `DATE-ENV-RUNG-SET-NAME.json` and `.md`, in lower case, NAME naming what played: in `DATE-sl-r1-promotion-1-300-plan-c7-2-l0-v7-1f-clone-p0`, the SL planner with the combat net `c7-2`, L0 with V `v7-1f` on the clone, prompts by `p0`. This is a convention; `--out` takes any path.
+**Names.** Reports go into `eval/CHARACTER/reports/` as `DATE-ENV-RUNG-SET-NAME.json` and `.md`, in lower case, NAME naming what played: in `DATE-sl-r1-promotion-1-300-plan-c8-1-l0-v8-1-clone-p0`, the SL planner with the combat net `c8-1`, L0 with V `v8-1` on the clone, prompts by `p0`. This is a convention; `--out` takes any path.
 
 ## 8. The run record
 

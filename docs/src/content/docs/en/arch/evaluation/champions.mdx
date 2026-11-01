@@ -14,10 +14,10 @@ A **champion** is the best accepted version of the AI in one environment: the br
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c7-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone",
+  "champion": "combat plan c8-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-1 clone, macro prompts l0 v8-1 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v7-1f.json", "afterstates": "clone", "combat-net": "weights/silent/c7-2.json",
+    "value": "weights/silent/v8-1.json", "afterstates": "clone", "combat-net": "weights/silent/c8-1.json",
     "character": "SILENT", "asc": "0"
   },
   "report": "eval/silent/reports/DATE-sl-r1-SET-NAME.json",
@@ -44,7 +44,7 @@ A **champion** is the best accepted version of the AI in one environment: the br
 
 **Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:83-108`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. The wins gate writes nothing, so a net it promotes is written by hand ([Gates §10](/en/arch/evaluation/gates/#sec-10)), and the SL file says `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `report` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
 
-**The two files.** Both name the same two nets, `weights/silent/v7-1f.json` (V) and `weights/silent/c7-2.json` (the combat net), the only files in `weights/silent/`. SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The `report` both name is an older SL report, played with an earlier combat net; it stands until a report of this champion exists. Since it is an SL report, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)).
+**The two files.** Both name the same two nets, `weights/silent/v8-1.json` (V) and `weights/silent/c8-1.json` (the combat net). SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The `report` both name is an older SL report, played with an earlier combat net; it stands until a report of this champion exists. Since it is an SL report, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)).
 
 Each character has folders of its own, `eval/CHARACTER/`, `weights/CHARACTER/` and `data/CHARACTER/`, and one brain for all its ascensions ([Learning: reference §3](/en/arch/learning/reference/#sec-3)); the seed sets in `eval/seeds/` are shared.
 
@@ -56,7 +56,9 @@ These pages describe the current champion only. The record of what came before i
 - `eval/silent/reports/` holds every committed report, as JSON and Markdown ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)).
 - `eval/silent/leaderboard.md` ranks those reports, by seed set and environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
 
-**The champion's gate** (2026-11-01; the ledger's row of c7-2). It is partial: 150 of the 300 seeds of `promotion-1-300` finished at medium, and 188 at the low budget, a reference. The others were lost with two machines and not played again, so it was read from the records, with no report. Every side plays V v7-1f on the clone, paired on the same seeds; of the games played, none failed.
+**The champion's nets and their gate.** v8-1 and c8-1 are v7-1f and c7-2 on the game's full tables, with the new inputs at zero weight and no training. Played against those two on the same seeds at A10, on all five characters and in NoSL as well, they made every decision the same (2,864 at medium, 3,490 at low), so they took no gate of their own, and c7-2's stands for c8-1.
+
+c7-2's gate (2026-11-01; its row in the ledger) is partial: 150 of the 300 seeds of `promotion-1-300` finished at medium, and 188 at the low budget, a reference. The others were lost with two machines and not played again, so it was read from the records, with no report. Every side plays V v7-1f on the clone, paired on the same seeds; of the games played, none failed.
 
 | c7-2 against | budget | seeds | won, c7-2 : other | points | lower 95 % | mean floor, c7-2 : other |
 |---|---|---|---|---|---|---|
