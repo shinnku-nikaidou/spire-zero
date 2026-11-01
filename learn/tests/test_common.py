@@ -2,7 +2,7 @@ import sys
 
 import pytest
 
-from common import LearnError, read_lines, runs_by_log, start_sim, wait_sims
+from common import LearnError, read_lines, runs_by_log, start_sim, train_lists, wait_sims
 
 
 def test_read_lines_skips_blank_and_partial_lines(tmp_path):
@@ -16,6 +16,20 @@ def test_read_lines_reads_every_file_and_filters_by_needle(tmp_path):
     a.write_text('{"run_view": 1}\n{"x": 1}\n')
     b.write_text('{"run_view": 2}\n')
     assert list(read_lines(f"{a},{b}", '"run_view"')) == [{"run_view": 1}, {"run_view": 2}]
+
+
+@pytest.mark.parametrize("env", ["sl", "nosl"])
+def test_train_lists_refuses_test_runs(tmp_path, env):
+    (tmp_path / "x-logs.txt").write_text(f"/d/{env}/selfplay/g/log-a.jsonl\n/d/{env}/eval/gate/log-a.jsonl\n")
+    (tmp_path / "x-recs.txt").write_text(f"/d/{env}/selfplay/g/rec-a.jsonl\n/d/{env}/eval/gate/rec-a.jsonl\n")
+    with pytest.raises(LearnError, match="test runs"):
+        train_lists(str(tmp_path / "x"))
+
+
+def test_train_lists_takes_self_play_and_forks(tmp_path):
+    (tmp_path / "x-logs.txt").write_text("/d/sl/selfplay/g/log-a.jsonl\n/d/sl/forks/f/log-a.jsonl\n")
+    (tmp_path / "x-recs.txt").write_text("/d/sl/selfplay/g/rec-a.jsonl\n/d/sl/forks/f/rec-a.jsonl\n")
+    assert train_lists(str(tmp_path / "x"))[1] == "/d/sl/selfplay/g/rec-a.jsonl,/d/sl/forks/f/rec-a.jsonl"
 
 
 def test_read_lines_names_a_missing_file(tmp_path):

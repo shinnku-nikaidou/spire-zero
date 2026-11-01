@@ -193,7 +193,7 @@ def main(
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    logs, records = common.lists(list_)
+    logs, records = common.train_lists(list_)
     keep_views = bool(boss_sims or boss_states or afterstates)
     samples, runs, views = data.read_runs(logs, records, character, FLOORS, keep_views)
     train = [s for s in samples if not data.held_out(s["run"])]

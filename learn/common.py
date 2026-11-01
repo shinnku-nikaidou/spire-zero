@@ -6,6 +6,7 @@ exit code 1; anything else is a bug and ends it with a traceback.
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -99,6 +100,15 @@ def lists(prefix: str) -> tuple[str, str]:
         lines = [x.strip() for x in path.read_text().splitlines() if x.strip()]
         out.append(",".join(x if Path(x).is_absolute() else str(ROOT / x) for x in lines))
     return out[0], out[1]
+
+
+def train_lists(prefix: str) -> tuple[str, str]:
+    """The list pair a net trains on. Test runs are never trained on: a path inside an eval job is refused."""
+    logs, records = lists(prefix)
+    for path in f"{logs},{records}".split(","):
+        if re.search(r"/(sl|nosl)/eval/", path):
+            raise LearnError(f"{prefix} holds test runs, which no net trains on: {path}")
+    return logs, records
 
 
 def start_sim(cmd: Sequence[str], log: Path, cwd: Path | None = None) -> subprocess.Popen:

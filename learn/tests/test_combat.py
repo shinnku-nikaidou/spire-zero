@@ -182,15 +182,14 @@ def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
     monkeypatch.setattr(data, "KEEP", 1)
     out = tmp_path / "net.json"
     runs = write_runs(tmp_path, runs=14)
-    (tmp_path / "seeds.txt").write_text("S10\nS11\nS12\nS13\n")
-    args = ["--list", runs, "--env", "SL", "--name", "t", "--out", str(out), "--skip-seeds", str(tmp_path / "seeds.txt"), "--test-list", runs]
+    args = ["--list", runs, "--env", "SL", "--name", "t", "--out", str(out), "--test-list", runs]
     result = CliRunner().invoke(train.script, args)
     assert result.exit_code == 0, result.output
     net = json.loads(out.read_text())
-    assert net["env"] == "SL" and net["fit"]["runs"] == 10 and net["fit"]["held_out_runs"] == 2 and net["tests"]
+    assert net["env"] == "SL" and net["fit"]["runs"] == 14 and net["fit"]["held_out_runs"] == 3 and net["tests"]
     assert set(net["fit"]["held_out"]) >= {"rank_lost", "rank_lost_share", "auc_death", "auc_death_share", "potions"}
     assert net["fit"]["by_hp"] and net["fit"]["by_potion"]
-    assert net["fit"]["medium"]["held_out"]["samples"] == 12  # the four skipped runs' three rounds
+    assert net["fit"]["medium"]["held_out"]["samples"] == 42  # the 14 runs' three rounds
 
 
 def test_c8_1s_weights_read_back_give_its_test_states_their_endings():

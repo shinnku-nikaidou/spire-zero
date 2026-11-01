@@ -128,16 +128,15 @@ def sample(run: str, obs: dict, history: list, end: dict, after: dict | None) ->
     return s
 
 
-def read(logs: str, records: str, character: str, env: str, skip_seeds=frozenset(), only_seeds=None) -> tuple[list[dict], int]:
+def read(logs: str, records: str, character: str, env: str) -> tuple[list[dict], int]:
     """The round starts of the logs' combats as samples, and how many runs were skipped: those whose combats do not
-    match their record's (a log cut short, a combat logged apart). The runs of `skip_seeds` are left out, and all but
-    those of `only_seeds`, if given. The run's last combat in a lost run counts as a death even with no `end` in its
-    record; a win with no run view after it is left out."""
+    match their record's (a log cut short, a combat logged apart). The run's last combat in a lost run counts as a death
+    even with no `end` in its record; a win with no run view after it is left out."""
     samples, skipped = [], 0
     for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
         for run, fights in combats(log, env).items():
             r = runs.get(run)
-            if r is None or r.get("failure") or r.get("seed") in skip_seeds or (only_seeds is not None and r.get("seed") not in only_seeds):
+            if r is None or r.get("failure"):
                 continue
             # a combat the run died in before its first decision (entered at 0 HP) has no round start in the log
             ends = [c for c in r["combats"] if c.get("hp") != 0]
