@@ -126,6 +126,48 @@ internal static partial class SelfTest
             $"first hurt {hurt}, first unasked {unasked}, last {combats.LastOrDefault()}");
     }
 
+    /// <summary>
+    /// A death that no enemy's turn deals still ends its combat in the record, with the enemies' HP: cards in hand at the
+    /// turn's end kill inside the end-turn action, and Royal Poison kills as the first turn starts, before any decision.
+    /// </summary>
+    private static void DeathsOutsideTheEnemysTurnEndTheirCombat(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        (string What, string? Deck, string? Relics, bool Asked)[] deaths =
+        [
+            ("cards in hand at the turn's end", "BECKON*10", null, true),
+            ("a relic before the first decision", null, "RING_OF_THE_SNAKE,ROYAL_POISON", false),
+        ];
+        foreach (var (what, deck, relics, asked) in deaths)
+        {
+            var rng = new Random(seed + 7);
+            var policy = new EndsTurns();
+            var setup = new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 7, 0), Loadout: Loadout.Parse(deck, relics, null, null, null));
+            using var session = RunSession.Start(pump, setup, PromptBrain.Instance, policy, new RandomMacro(rng));
+            var creature = session.Player.Creature;
+            for (int i = 0; i < 5000 && !session.IsOver; i++)
+            {
+                // Before each decision outside the fight, as Neow may heal.
+                if (session.Combats.Count == 0) creature.SetCurrentHpInternal(2);
+                session.Step();
+            }
+            check($"a death by {what} ends its combat with the enemies' HP",
+                session.IsOver && !session.Won && policy.Asked == asked && session.Combats is [{ End: { Died: true, Hp: 0, EnemyMaxHp: > 0 } }],
+                $"over {session.IsOver}, asked {policy.Asked}, combats [{string.Join(", ", session.Combats)}]");
+        }
+    }
+
+    /// <summary>A combat policy that only ends the turn, and keeps whether it was asked.</summary>
+    private sealed class EndsTurns : ICombatPolicy
+    {
+        public bool Asked { get; private set; }
+
+        public CombatAction Choose(CombatDecision decision)
+        {
+            Asked = true;
+            return CombatAction.EndTurn;
+        }
+    }
+
     /// <summary>A combat policy that keeps the rooms and encounters it was asked in.</summary>
     private sealed class Asked(ICombatPolicy policy) : ICombatPolicy
     {

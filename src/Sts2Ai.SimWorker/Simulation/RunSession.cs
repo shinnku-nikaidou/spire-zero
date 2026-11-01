@@ -238,7 +238,12 @@ internal sealed class RunSession : IDisposable
             Settle();
             if (IsOver) return;
             if (auto > MaxAutoSteps) throw new InvalidOperationException($"no decision after {MaxAutoSteps} automatic steps: {Describe()}");
-            if (Decide()) return;
+            if (Decide())
+            {
+                // A death inside the action itself (a card in hand at the turn's end, a play) ends the run before any next Settle.
+                if (IsOver) NoteCombatEnd();
+                return;
+            }
         }
     }
 
@@ -253,17 +258,30 @@ internal sealed class RunSession : IDisposable
         }, Describe);
         _pump.Drain();
         _endedTurn = null;
-        if (_combats.Count > 0 && _combats[^1].End == null && (!CombatManager.Instance.IsInProgress || IsOver))
-        {
-            var enemies = _combatState!.Enemies;
-            _combats[^1] = _combats[^1] with
-            {
-                End = new(IsOver && !Won, Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions(),
-                    enemies.Where(e => e.IsAlive).Sum(e => e.CurrentHp), enemies.Sum(e => e.MaxHp)),
-            };
-        }
+        NoteCombatEnd();
         if (_mapHashes.Count == Run.CurrentActIndex && Run.Map is not NullActMap) _mapHashes.Add(MapHash(Run.Map));
         Collect();
+    }
+
+    /// <summary>Writes the end of the run's last combat, once it has one. A combat the run died in before its first decision
+    /// (a relic's damage as the first turn starts) gets its entry here, at no HP.</summary>
+    private void NoteCombatEnd()
+    {
+        if (IsOver && !Won && Run.CurrentRoom is CombatRoom room && room != _room) EnterCombat(room);
+        if (_combats.Count == 0 || _combats[^1].End != null || (CombatManager.Instance.IsInProgress && !IsOver)) return;
+        var enemies = _combatState!.Enemies;
+        _combats[^1] = _combats[^1] with
+        {
+            End = new(IsOver && !Won, Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions(),
+                enemies.Where(e => e.IsAlive).Sum(e => e.CurrentHp), enemies.Sum(e => e.MaxHp)),
+        };
+    }
+
+    private void EnterCombat(CombatRoom room)
+    {
+        _combatState = CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
+        _combats.Add(new(Run.CurrentActIndex, Run.TotalFloor, room.Encounter.Id.Entry, room.Encounter.RoomType.ToString(),
+            Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions()));
     }
 
     private int Potions() => Player.PotionSlots.Count(p => p != null);
@@ -352,9 +370,7 @@ internal sealed class RunSession : IDisposable
             if (!_progress.CombatEntered)
             {
                 _progress.CombatEntered = true;
-                _combatState = CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
-                _combats.Add(new(Run.CurrentActIndex, Run.TotalFloor, room.Encounter.Id.Entry, room.Encounter.RoomType.ToString(),
-                    Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions()));
+                EnterCombat(room);
             }
             if (!Setup.AutoWin && !(Setup.Gauntlet && room.Encounter.RoomType == RoomType.Monster)) return CombatDecision();
             // An enemy that comes back or calls others when killed keeps the combat going: kill again, a few times.

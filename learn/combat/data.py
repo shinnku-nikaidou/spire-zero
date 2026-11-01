@@ -139,7 +139,8 @@ def read(logs: str, records: str, character: str, env: str, skip_seeds=frozenset
             r = runs.get(run)
             if r is None or r.get("failure") or r.get("seed") in skip_seeds or (only_seeds is not None and r.get("seed") not in only_seeds):
                 continue
-            ends = r["combats"]
+            # a combat the run died in before its first decision (entered at 0 HP) has no round start in the log
+            ends = [c for c in r["combats"] if c.get("hp") != 0]
             if len(fights) != len(ends) or any(
                 b["starts"][0]["encounter"] != f["encounter"] for b, f in zip(fights, ends, strict=True)
             ):

@@ -164,3 +164,13 @@ def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
     assert set(net["fit"]["held_out"]) >= {"rank_lost", "rank_lost_share", "auc_death", "auc_death_share", "potions"}
     assert net["fit"]["by_hp"] and net["fit"]["by_potion"]
     assert net["fit"]["medium"]["held_out"]["samples"] == 12  # the four skipped runs' three rounds
+
+
+def test_a_combat_the_run_died_in_before_its_first_decision_leaves_the_run_in(tmp_path):
+    prefix = write_runs(tmp_path, runs=3)
+    recs = tmp_path / "rec.jsonl"
+    entered = {"encounter": "BOSS", "hp": 0, "end": {"died": True, "hp": 0, "max_hp": 70, "potions": 0}}
+    lines = [json.loads(line) for line in recs.read_text().splitlines()]
+    recs.write_text("".join(json.dumps(r | {"combats": r["combats"] + [entered]}) + "\n" for r in lines))
+    samples, skipped = data.read(*common.lists(prefix), "SILENT", "SL")
+    assert skipped == 0 and len(samples) == 9

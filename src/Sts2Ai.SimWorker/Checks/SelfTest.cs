@@ -139,6 +139,7 @@ internal static partial class SelfTest
         CloneKeepsRelicState(pump, seed, Check);
         AutoWinWinsEveryCombat(pump, seed, Check);
         GauntletFightsElitesAndBosses(pump, seed, Check);
+        DeathsOutsideTheEnemysTurnEndTheirCombat(pump, seed, Check);
         int workers = r.GetValue(Workers);
         PlanHoldsInTheRun(pump, seed, workers, Check);
         if (workers > 0) PooledMatches(pump, combats, seed, workers, Check);
