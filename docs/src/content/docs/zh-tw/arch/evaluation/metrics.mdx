@@ -94,6 +94,7 @@ $$
 | `promotion-1.txt` | 200 | `seeds --base 2 --n 200` | 較舊的報告 |
 | `promotion-1-300.txt` | 300：`promotion-1` 的 200 個，順序不變，再加 100 個 | `seeds --base 2 --n 300` | 勝局門檻，用 medium 和低預算 |
 | `promotion-1-100.txt`、`promotion-101-300.txt` | 100 個和 200 個：把 `promotion-1-300` 切成兩段，順序不變 | 從 `promotion-1-300.txt` 切出 | 打這個種子集一部分的對局；第一段上的一份報告 |
+| `promotion-1-200.txt` | 200：`promotion-1-300` 的前 200 個，和 `promotion-1` 是相同的種子 | 從 `promotion-1-300.txt` 切出 | A10 門檻的報告 |
 | `promotion-1-500.txt` | 500：`promotion-1-300` 的 300 個，順序不變，再加 200 個 | `seeds --base 2 --n 500` | 較大種子集上的報告 |
 | `final-1.txt` | 300 | `seeds --base 3 --n 300` | 從未跑過 |
 | `check-clone-loop.txt` | `promotion-1` 的 29 個種子，按索引挑選 | 人工 | 開發時的檢查；不是報告用的種子集 |
@@ -153,13 +154,13 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 **Markdown**（`EvalReport.Markdown`，`Harness/Reports.cs:96-150`）是一頁：
 
 - `# Evaluation DATE: ENV RUNG, SET`，接著在適用時有一行列出原因的 **Void**，以及一行 **Partial**；
-- 一張表：遊戲、提交、冠軍、環境和級別，以及寫成 `SET: N of M runs, CHARACTER A0` 的種子集；
+- 一張表：遊戲、提交、冠軍、環境和級別，以及寫成 `SET: N of M runs, CHARACTER AN` 的種子集；
 - **Main**：勝率、層數的平均數和中位數，以及每一幕到達頭目的局數和進入頭目戰時的生命值；
 - **Must be zero**：四個計數，然後是每條失敗訊息及它結束了多少局；
 - **Auxiliary**：每局的菁英戰數、跳過的卡牌獎勵、結束時的金幣；每局秒數和每個決策的毫秒數；各決策介面；
 - **Against DATE (CHAMPION, commit X)**，在給了 `--previous OLD.json` 時，或在 `gate --promote` 寫出冠軍的接任者時出現：勝率、平均層數、每一幕到達頭目的局數、隨機決策和失敗對局的前後對比；種子集、環境或級別不同時則寫「Not comparable」。
 
-**名稱**。報告放進 `eval/CHARACTER/reports/`，檔名為 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全小寫，NAME 指明是什麼在打：在 `DATE-sl-r1-promotion-1-300-plan-c8-1-l0-v8-1-clone-p0` 裡，是用戰鬥網路 `c8-1` 的 SL 規劃器、在複本上用 V `v8-1` 的 L0、由 `p0` 回答選牌提示。這只是慣例；`--out` 接受任何路徑。
+**名稱**。報告放進 `eval/CHARACTER/reports/`，檔名為 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全小寫，NAME 指明是什麼在打：在 `DATE-sl-r1-promotion-1-300-plan-c8-2-l0-v8-2-clone-p0` 裡，是用戰鬥網路 `c8-2` 的 SL 規劃器、在複本上用 V `v8-2` 的 L0、由 `p0` 回答選牌提示。晉階 10 的報告在級別的位置寫 `a10`，例如 `DATE-sl-a10-promotion-1-200-plan-c8-2-l0-v8-2-clone-p0`。這只是慣例；`--out` 接受任何路徑。
 
 ## 8. 對局記錄
 

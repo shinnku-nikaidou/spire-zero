@@ -18,10 +18,10 @@ sys.path.insert(0, str(ROOT / "learn"))
 from combat import data, encode, export  # noqa: E402
 from combat.net import Batch, Net  # noqa: E402
 
-FILE = ROOT / "weights/silent/c8-1.json"
+FILE = ROOT / "weights/silent/c8-2.json"
 OUT = ROOT / "docs/src/data/combat-walk.json"
-MAIN = 1  # the only test state holding a potion: every step has something to show
-OTHERS = {"danger": 5, "mask": 15}  # a boss fight at 42 of 70 HP, and a state at 10 of 70 HP
+MAIN = 7  # the only test state holding a potion: every step has something to show
+OTHERS = {"danger": 5, "mask": 2}  # a boss fight at 68 of 70 HP, and a state at 16 of 70 HP
 WIN_BASE, PER_HP, PER_POTION = 0.2, 0.6, 0.02  # LeafWeights' defaults
 LOST_HP = 10  # the sibling state of the search step
 
@@ -130,7 +130,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     )
     card_phi = net.card_phi(card_x)
     per_pile = torch.bmm(x["piles"].transpose(1, 2), card_phi).flatten(1) * net.SUM_SCALE
-    example = next(k for k, c in enumerate(tok["cards"]) if c[1] > 0)
+    example = next(k for k, c in enumerate(tok["cards"]) if c[6] > 0 and not c[3])  # a plain card with damage, so the damage vector shows
     c_id, c_up, c_pile, c_mods, c_cost, _, c_damage = tok["cards"][example]
     t = x["cards"][0, example]
     card = {
@@ -263,7 +263,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         }
 
     # A label, for an ending this state's file does not hold.
-    end_hp = 55
+    end_hp = 12
     lost = share - end_hp / obs["player"]["max_hp"]
     label = data.ending(obs, {"died": False, "hp": end_hp, "max_hp": obs["player"]["max_hp"]})
     logits = net.reachable(raw, x["player"])
@@ -338,6 +338,8 @@ def walk(file: dict, net: Net, index: dict) -> dict:
             "chance": round(float(gone[entry]), 4),
             "outputs": len(table),
             "most_likely": [{"id": table[k], "chance": round(float(gone[k]), 3)} for k in ranked[:3]],
+            "unk": round(float(gone[0]), 3),
+            "unheld": next(table[k] for k in range(1, len(table)) if torch.equal(net.potions.weight[k], net.potions.weight[0])),
         },
         "value": valued(outcome, gone, obs, index, width),
         "siblings": siblings,

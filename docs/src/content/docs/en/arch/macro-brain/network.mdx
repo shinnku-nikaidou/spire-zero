@@ -165,7 +165,7 @@ The hazards of floors before $f$ are computed and not used ([From hazards to val
 
 The token tables are fixed, so these sizes are the same for every character's net on this game build. The training-only head adds 1,799.
 
-**What the file holds.** The file is `weights/silent/v8-1.json`. An id its training data never held, as most of the other characters' are, holds the row of the unknown id; such a map token for the point entered, like `Unassigned+0`, is zero.
+**What the file holds.** The file is `weights/silent/v8-2.json`. Its $\mu$ and $\sigma$ are those of the net it went on from, whose training runs were all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that neither training held, such as `DEFEND_IRONCLAD`, has the row of the unknown id; such a map token for the point entered, like `Unassigned+0`, is zero.
 
 A call takes about 0.09 ms in C# on one thread, batch of one. A macro decision on the clone takes 70–90 ms, most of it in the game ([Search §6](/en/arch/macro-brain/search/#sec-6)), so V's own cost does not matter.
 
@@ -191,6 +191,6 @@ These follow from the structure alone.
 
 ## 9. One run through the net
 
-A real sample from v8-1's file, an afterstate of a map move on floor 4, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
+A real sample from v8-2's file, an afterstate of a map move on floor 3, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
 
 <NetWalk client:visible lang="en" />

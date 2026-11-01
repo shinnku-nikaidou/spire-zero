@@ -94,6 +94,7 @@ A seed set is a text file in `eval/seeds/`, one seed per line; `#` starts a comm
 | `promotion-1.txt` | 200 | `seeds --base 2 --n 200` | the older reports |
 | `promotion-1-300.txt` | 300: `promotion-1`'s 200 in its order, then 100 more | `seeds --base 2 --n 300` | the wins gate, at medium and at the low budget |
 | `promotion-1-100.txt`, `promotion-101-300.txt` | 100 and 200: `promotion-1-300` cut in two, in its order | cut from `promotion-1-300.txt` | runs on part of that set; a report on the first part |
+| `promotion-1-200.txt` | 200: `promotion-1-300`'s first 200, the same seeds as `promotion-1` | cut from `promotion-1-300.txt` | the reports of the A10 gate |
 | `promotion-1-500.txt` | 500: `promotion-1-300`'s 300 in its order, then 200 more | `seeds --base 2 --n 500` | reports on the larger set |
 | `final-1.txt` | 300 | `seeds --base 3 --n 300` | never run |
 | `check-clone-loop.txt` | 29 of `promotion-1`'s seeds, picked by index | by hand | a development check; not a report set |
@@ -153,13 +154,13 @@ Because the report embeds every run record, combats included, the per-run data o
 **The Markdown** (`EvalReport.Markdown`, `Harness/Reports.cs:96-150`) is one page:
 
 - `# Evaluation DATE: ENV RUNG, SET`, then a **Void** line with its reasons and a **Partial** line when they apply;
-- a table: game, commit, champion, environment and rung, and the seed set as `SET: N of M runs, CHARACTER A0`;
+- a table: game, commit, champion, environment and rung, and the seed set as `SET: N of M runs, CHARACTER AN`;
 - **Main**: the win rate, the floor's mean and median, and each act's boss reached and the HP entering it;
 - **Must be zero**: the four counts, then each failure message with how many runs it ended;
 - **Auxiliary**: elites per run, card rewards skipped, gold at the end; seconds per run and milliseconds per decision; the surfaces;
 - **Against DATE (CHAMPION, commit X)**, with `--previous OLD.json`, or when `gate --promote` writes the champion's successor: then and now for the win rate, the floor's mean, each act's boss reached, random decisions and failed runs; or "Not comparable" when the seed set, the environment or the rung differ.
 
-**Names.** Reports go into `eval/CHARACTER/reports/` as `DATE-ENV-RUNG-SET-NAME.json` and `.md`, in lower case, NAME naming what played: in `DATE-sl-r1-promotion-1-300-plan-c8-1-l0-v8-1-clone-p0`, the SL planner with the combat net `c8-1`, L0 with V `v8-1` on the clone, prompts by `p0`. This is a convention; `--out` takes any path.
+**Names.** Reports go into `eval/CHARACTER/reports/` as `DATE-ENV-RUNG-SET-NAME.json` and `.md`, in lower case, NAME naming what played: in `DATE-sl-r1-promotion-1-300-plan-c8-2-l0-v8-2-clone-p0`, the SL planner with the combat net `c8-2`, L0 with V `v8-2` on the clone, prompts by `p0`. A report at ascension 10 has `a10` in the rung's place, as in `DATE-sl-a10-promotion-1-200-plan-c8-2-l0-v8-2-clone-p0`. This is a convention; `--out` takes any path.
 
 ## 8. The run record
 

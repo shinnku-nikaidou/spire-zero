@@ -211,7 +211,7 @@ The potion head has a fixed width and no new dynamic axis, and it shares only th
 
 ## 8. Sizes
 
-The file is `weights/silent/c8-1.json`.
+The file is `weights/silent/c8-2.json`.
 
 | part | shape | weights |
 |---|---|---|
@@ -235,7 +235,7 @@ The file is `weights/silent/c8-1.json`.
 
 The token tables are fixed, so these sizes are the same for every character's net on this game build.
 
-**What this file holds.** Its weights have not yet been trained on a card's damage or on the orbs' numbers and places: $D$, $O_g$, $O_h$ and $O_j$ are all zero, so these inputs change no output yet. An id its training data never held, as most of the other characters' are, holds the row of `<unk>`.
+**What this file holds.** Its weights have learned from a card's damage, a little: the largest number in $D$ is 0.05. $O_g$ and $O_h$ have moved off zero for all five orb ids, and $O_j$ for 6 of its 60 rows, every orb's first place and Lightning's second; its other rows are still zero. An id that neither its training nor the one it went on from held, such as `DEFEND_IRONCLAD`, has the row of `<unk>`.
 
 ## 9. One forward pass, two implementations
 

@@ -14,13 +14,13 @@ sidebar:
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c8-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-1 clone, macro prompts l0 v8-1 clone",
+  "champion": "combat plan c8-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-2 clone, macro prompts l0 v8-2 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v8-1.json", "afterstates": "clone", "combat-net": "weights/silent/c8-1.json",
-    "character": "SILENT", "asc": "0"
+    "value": "weights/silent/v8-2.json", "afterstates": "clone", "combat-net": "weights/silent/c8-2.json",
+    "character": "SILENT", "asc": "10"
   },
-  "report": "eval/silent/reports/DATE-sl-r1-SET-NAME.json",
+  "report": "eval/silent/reports/DATE-sl-a10-SET-NAME.json",
   "since": "DATE"
 }
 ```
@@ -44,7 +44,7 @@ sidebar:
 
 **由 `--promote` 写入，或手工写入**。`gate --promote` 写入每一个字段，选项按挑战者的选项生成（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:83-108`）：对 SL 规划器来说是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。胜局门槛什么也不写，所以由它晋级的网络靠手工写入（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)），SL 文件写的是 `"effort": "medium"`，打的是同样的预算（[SL 规划器：预算 §1](/arch/sl-planner/budget/#sec-1)）。重定基线只修改 `report`（[晋级门槛 §9](/arch/evaluation/gates/#sec-9)）。
 
-**两个文件**。两个文件都指明同样的两个网络，`weights/silent/v8-1.json`（V）和 `weights/silent/c8-1.json`（战斗网络）。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。两者指明的 `report` 是一份较早的 SL 报告，用更早的战斗网络打的；在有这个冠军的报告之前，它继续有效。由于它是 SL 报告，针对 NoSL 文件的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）。
+**两个文件**。两个文件都指明同样的两个网络，`weights/silent/v8-2.json`（V）和 `weights/silent/c8-2.json`（战斗网络），在进阶 10 上。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。两者指明的 `report` 是这个 SL 冠军自己的报告，在 `promotion-1-200` 上以 A10 打了 200 局。由于它是 SL 报告，针对 NoSL 文件的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）；这两个网络都没有在 NoSL 下过过门槛。
 
 每个角色有自己的文件夹，`eval/CHARACTER/`、`weights/CHARACTER/` 和 `data/CHARACTER/`，所有进阶等级共用一个大脑（[学习：参考 §3](/arch/learning/reference/#sec-3)）；`eval/seeds/` 里的种子集是共用的。
 
@@ -56,18 +56,32 @@ sidebar:
 - `eval/silent/reports/` 存放每一份已提交的报告，有 JSON 和 Markdown 两种（[指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)）。
 - `eval/silent/leaderboard.md` 按种子集和环境给这些报告排名（[指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9)）。
 
-**冠军的网络和它们的门槛**。v8-1 和 c8-1 就是 v7-1f 和 c7-2，换上游戏的完整词元表，新输入的权重为零，没有训练。在 A10 的相同种子上与那两个网络对打，覆盖全部五个角色，也包括 NoSL，它们做出的决策全都相同（medium 2,864 个，低预算 3,490 个），所以它们没有单独过门槛，c7-2 的门槛就算 c8-1 的。
+**冠军的网络和它们的门槛**。v8-2 和 c8-2 只用 `v7g2` 的 A10 对局（8,087 局）训练，从 v8-1 和 c8-1 接着训练。它们的门槛在进阶 10 上打新旧的四种配对，medium 200 个种子，低预算 200 个，都在 `promotion-1-200` 上，由层数决定。1,600 局里没有游戏错误。medium 下：
 
-c7-2 的门槛（2026-11-01；ledger 里它那一行）是部分结果：`promotion-1-300` 的 300 个种子里，medium 打完了 150 个，低预算打完了 188 个，后者只作参考。其余的随两台机器一起丢失，没有重打，所以结果读自记录，没有报告。每一方都用克隆上的 V v7-1f，在相同种子上配对；打完的对局没有一局失败。
+| V | 战斗网络 | 200 局中赢下 | 平均层数 |
+|---|---|---|---|
+| v8-1 | c8-1 | 2 | 30.77 |
+| v8-2 | c8-1 | 4 | 27.41 |
+| v8-1 | c8-2 | 4 | 31.43 |
+| v8-2 | c8-2 | 10 | 28.84 |
 
-| c7-2 对 | 预算 | 种子 | 胜局，c7-2 : 对方 | 百分点 | 95 % 下界 | 平均层数，c7-2 : 对方 |
-|---|---|---|---|---|---|---|
-| c7-1 | medium | 150 | 88 : 88 | +0.0 ± 3.9 | −6.4 | 44.45 : 44.71 |
-| c2 | medium | 150 | 88 : 53 | +23.3 ± 3.9 | +16.8 | 44.45 : 41.13 |
-| c7-1 | low | 188 | 82 : 85 | −1.6 ± 4.0 | −8.2 | 42.01 : 42.09 |
-| c2 | low | 188 | 82 : 37 | +23.9 ± 3.8 | +17.7 | – |
+每个网络的效果，覆盖另一类的两个网络，按种子配对：
 
-对 c7-1（同样数据上的网络），c7-2 没有被证明更好，所以没有达到门槛的规则。对 c2（它取代的冠军战斗网络），下界远高于 0。c7-2 在这个结果之前就成了冠军，这个结果不改变这一点。
+| 网络 | 预算 | 层数 | 95 % 下界 | 胜局，百分点 |
+|---|---|---|---|---|
+| c8-2 | medium | +1.04 ± 0.60 | +0.05 | +2.0 ± 0.99 |
+| c8-2 | low | +0.89 ± 0.54 | +0.01 | −0.25 ± 0.75 |
+| v8-2 | medium | −2.97 ± 1.04 | | +2.0 ± 1.11 |
+| v8-2 | low | −4.09 ± 0.96 | | +0.75 ± 0.56 |
+
+c8-2 通过了。**v8-2 没有通过门槛**：它按层数没有通过，是凭胜局成为冠军的。配 c8-2 以 medium 在相同种子上与 v8-1 对打，它赢了 200 局中的 10 局，对方 4 局，+3.0 ± 1.72 个百分点，95 % 下界 +0.17，这是事后读出的，不是按事先定好的规则；它的平均层数是 28.84，对方 31.43。它到达的 Boss 更少，但更常打败靠后的 Boss。到达的 Boss 中打败的比例：
+
+| V | 第 1 幕 | 第 2 幕 | 第 3 幕，第一个 | 第 3 幕，第二个 |
+|---|---|---|---|---|
+| v8-2 | 74.2 %（151 个中 112 个） | 73.1 %（93 个中 68 个） | 46.8 %（47 个中 22 个） | 45.5 %（22 个中 10 个） |
+| v8-1 | 83.2 %（167 个中 139 个） | 70.4 %（108 个中 76 个） | 41.4 %（58 个中 24 个） | 16.7 %（24 个中 4 个） |
+
+现在，A10 门槛读配对胜局，层数列在旁边（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
 
 ## 3. 基线
 

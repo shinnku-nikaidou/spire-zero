@@ -8,7 +8,6 @@ sidebar:
 ## 1. Known weaknesses
 
 - **Labels carry the later draws.** A state's label in a run that explores more is lower, and V is not told the run's ε ([Self-play §3](/en/arch/macro-brain/selfplay/#sec-3)). A cut point per run would remove this ([§3](#sec-3)).
-- **Self-play and the gate play different budgets.** Runs train V at the planner's low budget and judge it at medium ([Self-play §2](/en/arch/macro-brain/selfplay/#sec-2)). V's chance to win is therefore a chance under the low budget, and its order of options is what carries over.
 - **What the net cannot express.** The route sees no build, the max mixes paths, and the route ends with the act ([The value network §8](/en/arch/macro-brain/network/#sec-8)).
 - **One outcome per run.** A run's decisions share one label, so telling which decision made the difference takes many runs ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
 

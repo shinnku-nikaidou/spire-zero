@@ -118,10 +118,10 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 
 | 名称 | 是什么 |
 |---|---|
-| v8-1 | V，两个冠军都打它：它的权重学自整局数据 `v7g1`（[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
-| c8-1 | 战斗网络，两个冠军都用它来打（[战斗网络](/arch/combat-brain/network/)）。 |
+| v8-2 | V，两个冠军都打它：它在整局 A10 数据 `v7g2` 上从 v8-1 接着训练（[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
+| c8-2 | 战斗网络，两个冠军都用它来打：它在同样的数据上从 c8-1 接着训练（[战斗网络](/arch/combat-brain/network/)）。 |
 | 词元表（token table） | 一个网络里某一种 id（牌、遗物……）的列表，每个 id 有学到的行：这个游戏版本的每个 id，每个角色的网络都相同；第 0 项 `<unk>` 读任何其他 id（[战斗网络 §2](/arch/combat-brain/network/#sec-2)）。 |
-| `weights/silent/NAME.json` | 一个网络的文件；冠军打的是 `v8-1.json` 和 `c8-1.json`（[学习：参考 §6](/arch/learning/reference/#sec-6)）。 |
+| `weights/silent/NAME.json` | 一个网络的文件；冠军打的是 `v8-2.json` 和 `c8-2.json`（[学习：参考 §6](/arch/learning/reference/#sec-6)）。 |
 | `promotion-1`、`promotion-1-300`、`promotion-1-500`、`final-1` | `eval/seeds/` 里的种子集：200、300 和 500 个晋级种子（每个更长的集合都以较短的那个开头），以及一个 300 个种子的最终集，在它上面的任何对局之前就已登记。 |
 | `eval/silent/champions/sl.json`、`nosl.json` | 冠军文件：让每种环境的冠军上场的选项，以及它的报告。 |
 | `eval/silent/ledger.md` | 谱系，也是网络唯一的历史：哪个大脑打出了哪些数据，哪些数据训练出了哪些权重。 |

@@ -11,29 +11,28 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 本頁拿一個真實的狀態，用手帶它走過戰鬥網路，附上網路為它算出的數字。設計請讀[戰鬥網路](/zh-tw/arch/combat-brain/network/)；這裡每一步都顯示那個設計對一場戰鬥做了什麼。向量只顯示前四個數。
 
-這個狀態是檔案自己留出的測試狀態之一，一個回合開始（`weights/silent/c8-1.json`，`tests[1]`）。載入網路時會檢查它給這個狀態的正是這些輸出（[戰鬥網路 §9](/zh-tw/arch/combat-brain/network/#sec-9)）。數字來自 `docs/scripts/combat-walk.py`，如果它的各層算不出檔案裡的輸出，它就會停下。
+這個狀態是檔案自己留出的測試狀態之一，一個回合開始（`weights/silent/c8-2.json`，`tests[7]`）。載入網路時會檢查它給這個狀態的正是這些輸出（[戰鬥網路 §9](/zh-tw/arch/combat-brain/network/#sec-9)）。數字來自 `docs/scripts/combat-walk.py`，如果它的各層算不出檔案裡的輸出，它就會停下。
 
 ## 1. 畫面顯示什麼
 
-寂靜獵手，在第三幕的普通戰鬥**一些咬噬卷軸**（<code>{walk.state.encounter}</code>）裡，第 {walk.state.round} 回合開始。
+寂靜獵手，晉階 {walk.state.ascension}，在第二幕的頭目戰**知識惡魔**（<code>{walk.state.encounter}</code>）裡，第 {walk.state.round} 回合開始。
 
 - **生命值**：{walk.state.hp} / {walk.state.max_hp}，格擋 {walk.state.block}
 - **能量**：{walk.state.energy}（最大 {walk.state.max_energy}）
 - **金幣**：{walk.state.gold}
-- **能力**：毒霧 {walk.state.powers[0].amount}
+- **能力**：毒霧 {walk.state.powers[0].amount}、崩解 {walk.state.powers[1].amount}
 - **手牌**：{walk.state.piles.hand.join(', ')}
 - **抽牌堆**：{walk.state.piles.draw.join(', ')}
 - **棄牌堆**：空
 - **消耗堆**：{walk.state.piles.exhaust.join(', ')}
 - **遺物**：{walk.state.relics.map((r) => r.id).join(', ')}
-- **藥水**：{walk.tokens.potions[0]}，兩個槽空著
+- **藥水**：{walk.tokens.potions[0]}，一個槽空著
 
-兩個敵人：
+一個敵人：
 
 | 敵人 | 生命值 | 能力 | 現在顯示 |
 |---|---|---|---|
-| 咬噬卷軸 | {walk.state.enemies[0].hp} / {walk.state.enemies[0].max_hp} | 紙片割傷 2、力量 2、中毒 7 | 增益 |
-| 咬噬卷軸 | {walk.state.enemies[1].hp} / {walk.state.enemies[1].max_hp} | 紙片割傷 2、中毒 16、力量 1 | 攻擊，6 × 2 |
+| 知識惡魔 | {walk.state.enemies[0].hp} / {walk.state.enemies[0].max_hp} | 中毒 {walk.state.enemies[0].powers[0].amount}、力量 {walk.state.enemies[0].powers[1].amount} | 減益 |
 
 搜尋問的問題：如果它停在這裡，這個狀態值多少？
 
@@ -49,7 +48,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 **3 個數字**：晉階 / 10、充能球欄位 / 10 和金幣 / 100 是 {walk.tokens.extra.join(', ')}。
 
-**第一個敵人**的數字是 {walk.enemies[0].numbers.join(', ')}：生命值比例、生命值 / 100、最大生命值 / 100、格擋 / 20，以及已顯示 3 個回合 / 10。它的四個意圖槽來自畫面和它先前出招的記錄：
+**敵人**的數字是 {walk.enemies[0].numbers.join(', ')}：生命值比例、生命值 / 100、最大生命值 / 100、格擋 / 20，以及已顯示 4 個回合 / 10。它的四個意圖槽來自畫面和它先前出招的記錄。上個回合它顯示了三個意圖，表裡列出第一個：
 
 | 槽 | 什麼時候 | 類型 | 傷害 / 10 | 總傷害 / 20 |
 |---|---|---|---|---|
@@ -58,7 +57,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 | 2 | 2 個回合前 | {walk.enemies[0].slots[2][0].type} | {walk.enemies[0].slots[2][0].damage} | {walk.enemies[0].slots[2][0].total} |
 | 3 | 3 個回合前 | {walk.enemies[0].slots[3][0].type} | {walk.enemies[0].slots[3][0].damage} | {walk.enemies[0].slots[3][0].total} |
 
-**遺物**帶著它們的計數：只有花粉核心顯示一個，0，所以它的 `relic_values` 是 <code>{JSON.stringify(walk.tokens.relic_values[3])}</code>，而每件遺物的狀態都是 `Normal`。
+**遺物**帶著它們的計數：只有壺鈴顯示一個，0，所以它的 `relic_values` 是 <code>{JSON.stringify(walk.tokens.relic_values[2])}</code>，而每件遺物的狀態都是 `Normal`。
 
 **上下文**是 4 個詞元：{walk.tokens.context.join(', ')}。
 
@@ -70,19 +69,19 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 | 輸入 | 形狀 | 原因 |
 |---|---|---|
-| `cards`、`ups`、`costs`、`damages` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 一共 22 張牌 |
+| `cards`、`ups`、`costs`、`damages` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 一共 27 張牌 |
 | `piles` | <code>{JSON.stringify(walk.shapes.piles)}</code> | 4 個牌堆上的 one-hot |
-| `powers` | <code>{JSON.stringify(walk.shapes.powers)}</code> | 一個能力 |
-| `enemies` | <code>{JSON.stringify(walk.shapes.enemies)}</code> | 兩個敵人 |
-| `enemy_powers` | <code>{JSON.stringify(walk.shapes.enemy_powers)}</code> | 各三個能力 |
-| `intents` | <code>{JSON.stringify(walk.shapes.intents)}</code> | 4 個槽，各一個意圖 |
-| `relics` | <code>{JSON.stringify(walk.shapes.relics)}</code> | 五件遺物 |
+| `powers` | <code>{JSON.stringify(walk.shapes.powers)}</code> | 兩個能力 |
+| `enemies` | <code>{JSON.stringify(walk.shapes.enemies)}</code> | 一個敵人 |
+| `enemy_powers` | <code>{JSON.stringify(walk.shapes.enemy_powers)}</code> | 兩個能力 |
+| `intents` | <code>{JSON.stringify(walk.shapes.intents)}</code> | 4 個槽，每個最多 3 個意圖 |
+| `relics` | <code>{JSON.stringify(walk.shapes.relics)}</code> | 七件遺物 |
 | `potions` | <code>{JSON.stringify(walk.shapes.potions)}</code> | 一瓶藥水：空槽不是詞元 |
 | `orbs`、`allies` | <code>{JSON.stringify(walk.shapes.orbs)}</code> | 沒有，所以是遮罩為 0 的一列補齊 |
 
 ## 4. 一張牌，然後是牌堆
 
-這張牌的向量是 `Net.encode`（`learn/combat/net.py:211-282`）開頭的幾行。看手牌裡的 **{walk.card.id}+**。它在牌表裡的項是 {walk.card.entry}，升級次數 {walk.card.up}；費用 0，傷害 4 讀作 {walk.card.damage}。
+這張牌的向量是 `Net.encode`（`learn/combat/net.py:211-282`）開頭的幾行。看手牌裡的 **{walk.card.id}**。它在牌表裡的項是 {walk.card.entry}，升級次數 {walk.card.up}；費用 0，傷害 6 讀作 {walk.card.damage}。
 
 | 部分 | 向量 |
 |---|---|
@@ -93,7 +92,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 | 手牌的向量 $P[l]$ | <code>{v(walk.card.pile_vector)}</code> |
 | 它們的總和 $x$ | <code>{v(walk.card.x)}</code> |
 
-把第一個數加起來核對：−0.134 + 0.108 + 0 + 0 − 0.132 = −0.158。這個檔案裡 $D$ 全為零，所以傷害目前什麼也沒加（[戰鬥網路 §8](/zh-tw/arch/combat-brain/network/#sec-8)）。
+把第一個數加起來核對：0.065 + 0 + 0 − 0.004 − 0.138 = −0.078，差一點是四捨五入造成的。這個檔案裡 $D$ 很小，所以傷害加得不多（[戰鬥網路 §8](/zh-tw/arch/combat-brain/network/#sec-8)）。
 
 $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</code>。這是 ReLU 的輸出，所以沒有一個低於 0，而 64 個裡有 {walk.card.phi.zeros} 個恰好為 0。
 
@@ -110,29 +109,27 @@ $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</co
 
 ## 5. 能力
 
-玩家有一個能力，毒霧，數值 {walk.state.powers[0].amount}，縮放成 0.3。它的向量是它 id 的向量加上 0.3 乘以它的數值方向。一層 32 → 64 映射它，而只有一個能力時，總和就是這一個輸出：<code>{v(walk.powers.first)}</code>，64 個裡有 {walk.powers.zeros} 個為 0。
+玩家有兩個能力，毒霧和崩解，數值都是 {walk.state.powers[0].amount}，縮放成 0.6。各自的向量是它 id 的向量加上 0.6 乘以它的數值方向。一層 32 → 64 分別映射它們，兩個輸出的總和是 <code>{v(walk.powers.first)}</code>，64 個裡有 {walk.powers.zeros} 個為 0。
 
 ## 6. 敵人
 
-每個敵人串接三個部分，同一個 $\varphi$ 讀兩者：
+敵人串接三個部分，同一個 $\varphi$ 讀每個敵人：
 
-| | 第一個卷軸 | 第二個卷軸 |
-|---|---|---|
-| id + 數字（32） | <code>{v(walk.enemies[0].numbers_vector)}</code> | <code>{v(walk.enemies[1].numbers_vector)}</code> |
-| 能力的總和（64） | <code>{v(walk.enemies[0].powers_vector)}</code> | <code>{v(walk.enemies[1].powers_vector)}</code> |
-| 槽 0，共 4 個槽（各 32） | <code>{v(walk.enemies[0].slot_vector)}</code> | <code>{v(walk.enemies[1].slot_vector)}</code> |
-| 經過 $\varphi$ 後（128）：長度 | {walk.enemies[0].phi.norm} | {walk.enemies[1].phi.norm} |
-| 經過 $\varphi$ 後：為 0 的數 | {walk.enemies[0].phi.zeros} | {walk.enemies[1].phi.zeros} |
+| | 知識惡魔 |
+|---|---|
+| id + 數字（32） | <code>{v(walk.enemies[0].numbers_vector)}</code> |
+| 能力的總和（64） | <code>{v(walk.enemies[0].powers_vector)}</code> |
+| 槽 0，共 4 個槽（各 32） | <code>{v(walk.enemies[0].slot_vector)}</code> |
+| 經過 $\varphi$ 後（128）：長度 | {walk.enemies[0].phi.norm} |
+| 經過 $\varphi$ 後：為 0 的數 | {walk.enemies[0].phi.zeros} |
 
-兩個敵人的 id 相同，所以共用第 {walk.enemies[0].entry} 項。它們的差別在數字、能力的數值和意圖，所以它們的向量不同。
-
-兩者的總和就是敵人的部分：128 個數，長度 {walk.foes.norm}，其中 {walk.foes.zeros} 個為 0。只有兩者都為 0 的數才會留在 0。
+它在敵人表裡是第 {walk.enemies[0].entry} 項。敵人的部分是所有敵人的總和。只有一個敵人時就是這個向量：128 個數，長度 {walk.foes.norm}，其中 {walk.foes.zeros} 個為 0。
 
 ## 7. 袋
 
 | 部分 | 大小 | 開頭的數 | 長度 |
 |---|---|---|---|
-| 遺物，5 件 | 32 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
+| 遺物，7 件 | 32 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
 | 藥水，1 瓶 | 32 | <code>{v(walk.bags.potions.first)}</code> | {walk.bags.potions.norm} |
 | 上下文，4 個詞元 | 32 | <code>{v(walk.bags.context.first)}</code> | {walk.bags.context.norm} |
 | 充能球，沒有 | 32 | <code>{v(walk.bags.orbs.first)}</code> | {walk.bags.orbs.norm} |
@@ -174,29 +171,29 @@ $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</co
 
 ## 11. 遮罩，然後是 softmax
 
-生命值比例是 {walk.value.share}。分桶 $[l, l + 0.025)$ 開放的條件是 $l < 0.8873$ 且 $l + 0.025 > 0.8873 - 1$。這裡：
+生命值比例是 {walk.value.share}。分桶 $[l, l + 0.025)$ 開放的條件是 $l < 0.5571$ 且 $l + 0.025 > 0.5571 - 1$。這裡：
 
-- 底部：一場戰鬥回的血不可能超過缺少的生命值。{walk.state.max_hp} 點裡缺 {walk.state.max_hp - walk.state.hp} 點，比例是 0.113，所以低於 {walk.head.open_from} 的分桶都關閉。
+- 底部：一場戰鬥回的血不可能超過缺少的生命值。{walk.state.max_hp} 點裡缺 {walk.state.max_hp - walk.state.hp} 點，比例是 0.443，超過最低分桶的 {walk.head.open_from}，所以這裡沒有分桶關閉。
 - 頂部：一場勝利不可能失去全部持有的生命值，所以從 {walk.head.open_to} 起往上的分桶都關閉。
 
 於是 **50 個分桶中有 {walk.head.open} 個開放**。其他的 logit 是 $-10^4$（`Net.reachable`，`learn/combat/net.py:203-209`），softmax 給它們恰好 0。
 
-對其餘的做 softmax，就給出機率。死亡是 {walk.head.death}，幾乎沒有。最可能的分桶：
+對其餘的做 softmax，就給出機率。死亡是 {walk.head.death}。最可能的分桶：
 
 | 還會失去的最大生命值比例 | 換算生命值 | 機率 |
 |---|---|---|
-| {walk.head.tops[0].low} 到 {walk.head.tops[0].high} | 0 到 1.8 | {pct(walk.head.tops[0].chance)} |
-| {walk.head.tops[1].low} 到 {walk.head.tops[1].high} | 回血最多 1.8 | {pct(walk.head.tops[1].chance)} |
-| {walk.head.tops[2].low} 到 {walk.head.tops[2].high} | 回血 1.8 到 3.6 | {pct(walk.head.tops[2].chance)} |
-| {walk.head.tops[3].low} 到 {walk.head.tops[3].high} | 1.8 到 3.6 | {pct(walk.head.tops[3].chance)} |
+| {walk.head.tops[0].low} 到 {walk.head.tops[0].high} | 21 到 22.8 | {pct(walk.head.tops[0].chance)} |
+| {walk.head.tops[1].low} 到 {walk.head.tops[1].high} | 22.8 到 24.5 | {pct(walk.head.tops[1].chance)} |
+| {walk.head.tops[2].low} 到 {walk.head.tops[2].high} | 17.5 到 19.3 | {pct(walk.head.tops[2].chance)} |
+| {walk.head.tops[3].low} 到 {walk.head.tops[3].high} | 24.5 到 26.3 | {pct(walk.head.tops[3].chance)} |
 
-網路幾乎確定這場戰鬥會贏，最多只受一點擦傷。第二個卷軸以 19 點生命值帶著 16 層中毒，玩家的毒霧每回合還會加更多；網路讀到了這些數字，不過這裡沒有任何東西說明哪些輸入最影響它。
+網路預期這場戰鬥會贏，但要付出實在的代價，大約是最大生命值的三分之一。敵人有 334 點生命值，帶著 25 層中毒，玩家的毒霧每回合還會加更多；網路讀到了這些數字，不過這裡沒有任何東西說明哪些輸入最影響它。
 
 ## 12. 藥水輸出頭
 
-同樣的 256 個數經過第二個線性層，256 → {walk.potion.outputs}，藥水表的每一項一個輸出。攻擊藥水是第 {walk.potion.entry} 項。它的 logit 是 {walk.potion.logit}，sigmoid 把它變成 **{walk.potion.chance}**：網路預期這瓶藥水在戰鬥後還在。
+同樣的 256 個數經過第二個線性層，256 → {walk.potion.outputs}，藥水表的每一項一個輸出。瓶中精靈是第 {walk.potion.entry} 項。它的 logit 是 {walk.potion.logit}，sigmoid 把它變成 **{walk.potion.chance}**：網路預期勝利後這瓶藥水已經不在了。
 
-其他 {walk.potion.outputs - 1} 個輸出會算出來，但不讀。這裡最大的是 {walk.potion.most_likely[0].id}，{walk.potion.most_likely[0].chance}，和 `<unk>`，{walk.potion.most_likely[1].chance}：這個狀態兩者都沒有，所以它們沒有意義，也不訓練任何東西。訓練資料裡從未有過的藥水，例如 {walk.potion.most_likely[2].id}，保存的是 `<unk>` 那一列，顯示同樣的機率。
+其他 {walk.potion.outputs - 1} 個輸出會算出來，但不讀。這裡最大的是 {walk.potion.most_likely[0].id} 和 {walk.potion.most_likely[1].id}，都接近 {walk.potion.most_likely[0].chance}：這個狀態兩者都沒有，所以它們沒有意義，也不訓練任何東西。兩次訓練都沒有過的藥水，例如 {walk.potion.unheld}，保存的是 `<unk>` 那一列，顯示它的機率 {walk.potion.unk}。
 
 ## 13. 搜尋讀到的數字
 
@@ -213,7 +210,7 @@ $$
 | 它們的項，$(1 - p_0) \times 0.02 \times$ 上一列 | {walk.value.potion_term} |
 | **估值** | **{walk.value.value}** |
 
-規劃器給這個狀態的**上界**是一場沒有失去生命值或藥水的勝利：0.2 + 0.6 × {walk.value.share} + 0.02 = {walk.value.bound}。估值略低於它，因為網路預期幾乎什麼都不會失去。
+規劃器給這個狀態的**上界**是一場沒有失去生命值或藥水的勝利：0.2 + 0.6 × {walk.value.share} + 0.02 = {walk.value.bound}。估值遠低於它，因為網路預期會失去三分之一的最大生命值和這瓶藥水。
 
 ## 14. 搜尋看到什麼
 
@@ -225,13 +222,13 @@ $$
 | 少 {walk.lost_hp} 點生命值 | {walk.siblings.less_hp.share} | {walk.siblings.less_hp.win_term} | {walk.siblings.less_hp.potion_term} | {walk.siblings.less_hp.value} |
 | 藥水不在了 | {walk.siblings.no_potion.share} | {walk.siblings.no_potion.win_term} | {walk.siblings.no_potion.potion_term} | {walk.siblings.no_potion.value} |
 
-{walk.lost_hp} 點生命值是 71 的 0.141，乘以 0.6 是 0.0845，估值正好降這麼多。持有的生命值完整計入，它就是這樣建構的（[戰鬥網路 §7](/zh-tw/arch/combat-brain/network/#sec-7)）。在這個狀態上，藥水值它的統一價 0.02，相當於 2.4 點生命值。
+{walk.lost_hp} 點生命值是 70 的 0.143，乘以 0.6 是 0.086，而估值只降 0.041。持有的生命值完整計入（[戰鬥網路 §7](/zh-tw/arch/combat-brain/network/#sec-7)），網路也有所回應：它現在預期失去得較少，最可能的分桶下移到 {walk.siblings.less_hp.tops[0].low} 到 {walk.siblings.less_hp.tops[0].high}，死亡的機率是 {pct(walk.siblings.less_hp.death)}。
 
-所以當束比較同一個回合的兩個結束狀態時，多留 10 點生命值的那個，在網路對接下來的事形成任何看法之前，就已經領先這麼多。
+藥水的統一價在這裡說明不了什麼，因為網路預期它會被用掉。然而沒有它，死亡的機率從 {pct(walk.value.death)} 變成 {pct(walk.siblings.no_potion.death)}，估值降到 {walk.siblings.no_potion.value}。網路從持有它的對局的結局，學到了瓶中精靈在這場戰鬥裡有什麼作用。
 
 ## 15. 兩個更難的狀態
 
-這場戰鬥快結束了，所以它展示的是機制，不是網路的判斷。同一個檔案裡的另外兩個狀態展示了判斷：
+同一個檔案裡的另外兩個狀態，展示了這個狀態沒有展示的東西：一場生命值幾乎全滿、仍可能輸掉的戰鬥，以及關閉大多數分桶的低生命值：
 
 | | {walk.others.danger.encounter} | {walk.others.mask.encounter} |
 |---|---|---|
@@ -243,16 +240,16 @@ $$
 | 估值 | {walk.others.danger.value} | {walk.others.mask.value} |
 | 上界 | {walk.others.danger.bound} | {walk.others.mask.bound} |
 
-在頭目戰裡，估值遠低於上界：死亡的機率拿走估值的那一份，勝利又分散在許多分桶上。在 10 點生命值時只有 {walk.others.mask.open} 個分桶開放，所以機率不可能落在失去比持有更多生命值的勝利上。
+在頭目戰裡，估值遠低於上界：死亡的機率拿走估值的那一份，勝利又分散在許多分桶上。在 {walk.others.mask.hp} 點生命值時只有 {walk.others.mask.open} 個分桶開放，所以機率不可能落在失去比持有更多生命值的勝利上。
 
 [葉節點 §4](/zh-tw/arch/combat-brain/leaf/#sec-4) 畫出檔案的全部 16 個狀態。
 
 ## 16. 標籤
 
-到這裡為止，網路都在預測。訓練時，這個狀態還有一個答案，來自它的戰鬥真正怎樣結束。檔案沒有保存那個結局，所以拿一個來舉例：**假設這場戰鬥以 71 點中的 {walk.label.end_hp} 點生命值獲勝，藥水還留著**。
+到這裡為止，網路都在預測。訓練時，這個狀態還有一個答案，來自它的戰鬥真正怎樣結束。檔案沒有保存那個結局，所以拿一個來舉例：**假設這場戰鬥以 70 點中的 {walk.label.end_hp} 點生命值獲勝，藥水還留著**。
 
-- **結局的類別**。從這個狀態失去的比例是 63/71 − {walk.label.end_hp}/71 = {walk.label.lost}，落在 {walk.label.low} 到 {walk.label.high} 的分桶：類別 {walk.label.class}。那場戰鬥的每個回合開始都會得到自己的類別，來自它自己的生命值。
+- **結局的類別**。從這個狀態失去的比例是 39/70 − {walk.label.end_hp}/70 = {walk.label.lost}，落在 {walk.label.low} 到 {walk.label.high} 的分桶：類別 {walk.label.class}。那場戰鬥的每個回合開始都會得到自己的類別，來自它自己的生命值。
 - **藥水的標籤**。它還在戰鬥後第一個整局觀測裡，所以標籤是 0。
 - **損失**。類別 {walk.label.class} 的機率是 {walk.label.chance}，所以結局的交叉熵是 {walk.label.ending_loss}。藥水的是 {walk.label.potion_loss}。樣本的損失是它們的和，一步梯度會把那個分桶的機率往上推。
 
-像這樣大的損失就是意外的樣子：在這個假設的結局下，網路錯得很厲害。整份對局清單的標籤怎樣產生，見[訓練戰鬥網路 §3](/zh-tw/arch/learning/combat-net/#sec-3)。
+像藥水這樣大的損失就是意外的樣子：在這個假設的結局下，網路對藥水錯得很厲害，對生命值則不然。整份對局清單的標籤怎樣產生，見[訓練戰鬥網路 §3](/zh-tw/arch/learning/combat-net/#sec-3)。

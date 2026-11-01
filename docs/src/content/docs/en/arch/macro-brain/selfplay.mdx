@@ -1,6 +1,6 @@
 ---
 title: 'Self-play: runs, generations and the gate'
-description: 'How V learns from runs the champion plays by itself: whole SL runs at a low budget, even draws for exploration, what a generation is, and the gate on paired wins that decides whether a new V replaces the champion.'
+description: 'How V learns from runs the champion plays by itself: whole SL runs, even draws for exploration, what a generation is, and the gate on paired wins that decides whether a new V replaces the champion.'
 sidebar:
   label: Self-play
 ---
@@ -25,12 +25,11 @@ flowchart LR
 Self-play plays the whole game, SL: every macro decision is made by L0 on the node's clone ([Search §2](/en/arch/macro-brain/search/#sec-2)), and every combat, plain monster fights included, is fought by the SL combat planner with its combat net.
 
 ```text
-run --env SL --policy plan --macro l0 --afterstates clone --workers 4 \
-    --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 \
-    --combat-net weights/silent/c8-1.json --value weights/silent/V.json --explore ε --seed 1
+run --env SL --policy plan --macro l0 --afterstates clone --workers 4 --effort medium --asc 10 \
+    --combat-net weights/silent/c8-2.json --value weights/silent/V.json --explore ε --macro-explore 0.05 --seed 1
 ```
 
-**Budget.** The planner plays at its low budget, while gates play at the champion's medium effort. A cheap budget gives far more runs for the same compute, and it ranks loadouts about as well: on 515 boss doors fought at full HP, the low and the medium budget on one seed correlated 0.94, and two seeds of the low budget 0.83 ([The SL planner: budget, cost and results §2](/en/arch/sl-planner/budget/#sec-2)). A run takes about 45–85 s of one slot, depending on the host, and its log about 1.6 MB.
+**Budget.** The newest generation, `v7g2`, plays at the champion's medium effort, which gates play too, at about 240 s per run. `v7g1` played at the planner's low budget, at about 45–85 s of one slot per run. A cheap budget gives far more runs for the same compute, and it ranks loadouts about as well: on 515 boss doors fought at full HP, the low and the medium budget on one seed correlated 0.94, and two seeds of the low budget 0.83 ([The SL planner: budget, cost and results §2](/en/arch/sl-planner/budget/#sec-2)).
 
 ## 3. Exploration: even draws
 
@@ -67,21 +66,23 @@ The size of a generation, from the latest one played:
 
 | ε | runs |
 |---|---|
-| 0.3 | 8,100 |
-| 0.15 | 6,872 |
-| 0.05 | 6,303 |
-| **all** | **21,275**, of which 286 won and 12 failed |
+| 0.15 | 3,293 |
+| 0.08 | 2,590 |
+| 0.03 | 2,208 |
+| **all** | **8,091**, of which 27 won and 4 failed |
 
 Failed runs are dropped when the samples are read ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
 
 ## 5. The gate
 
-A new V replaces the champion only through a gate. The challenger plays the 300 seeds of `promotion-1-300` with no exploration, at the champion's medium planner budget, on the clone, and the champion's runs on the same seeds are its record, played where it lacks them. It also plays the same seeds at the low budget, a reference that decides nothing. The runs are paired by seed: for seed $i$, $d_i$ is 1 or 0 for the challenger's win less 1 or 0 for the champion's, and with $n$ pairs
+A new V is judged by a gate. v8-2, the champion's V, failed its gate by floors and became champion for its wins ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). The challenger plays the 300 seeds of `promotion-1-300` with no exploration, at the champion's medium planner budget, on the clone, and the champion's runs on the same seeds are its record, played where it lacks them. It also plays the same seeds at the low budget, a reference that decides nothing. The runs are paired by seed: for seed $i$, $d_i$ is 1 or 0 for the challenger's win less 1 or 0 for the champion's, and with $n$ pairs
 
 $$
 \bar d = \frac{1}{n}\sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\,\mathrm{SE} > 0,
 $$
 
 that is, when the 95% one-sided lower bound of the mean difference is above 0. A seed fixes the map, the encounters and the rewards up to where the two policies diverge, so most of a run's luck is shared by both sides and cancels in $d_i$ (common random numbers). At 500 seeds this takes about 2–3 percentage points more wins. If two nets pass, the one with more wins goes on.
+
+At ascension 10 the gate plays the first 200 of those seeds, and reads the same paired wins with the floors listed beside them.
 
 `learn/gauntlet.py --against` computes it ([Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)). Its report also keeps what the wins do not show: the mean floor, each act's boss reached and beaten, where the lost runs died (boss, elite, monster or outside combat, per act), the elites per run, the rest sites' choices and the map's choices between a monster and a rest site by HP share, and what the shops sold.

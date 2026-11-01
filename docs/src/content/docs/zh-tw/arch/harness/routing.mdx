@@ -25,10 +25,10 @@ import { Badge } from '@astrojs/starlight/components';
 **冠軍的名字**。一局的各個大腦合起來就是它的冠軍，由 `Dispatcher.Champion` 命名：
 
 ```text
-combat plan c8-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-1 clone, macro prompts l0 v8-1 clone
+combat plan c8-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-2 clone, macro prompts l0 v8-2 clone
 ```
 
-這是 SL 冠軍：葉節點用戰鬥網路 c8-1、用 medium 預算的 SL 規劃器，戰鬥中的提示用 `p0`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V v8-1，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：戰鬥大腦指名它的戰鬥網路（有的話）和它的探索（`explore T`）；L0 指名它的 V、`clone`，以及它的探索（softmax 是 `explore T`，均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:37-60`）。
+這是 SL 冠軍：葉節點用戰鬥網路 c8-2、用 medium 預算的 SL 規劃器，戰鬥中的提示用 `p0`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V v8-2，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：戰鬥大腦指名它的戰鬥網路（有的話）和它的探索（`explore T`）；L0 指名它的 V、`clone`，以及它的探索（softmax 是 `explore T`，均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:37-60`）。
 
 **環境決定戰鬥大腦**。宏觀大腦在兩種環境裡是同一個；戰鬥大腦不是（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。冠軍工廠在 SL 之外拒絕 `plan` 和 `--afterstates clone`。`brain` 指令同時服務兩種環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 

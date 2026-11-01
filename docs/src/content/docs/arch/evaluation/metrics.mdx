@@ -94,6 +94,7 @@ $$
 | `promotion-1.txt` | 200 | `seeds --base 2 --n 200` | 较早的报告 |
 | `promotion-1-300.txt` | 300：先是 `promotion-1` 的 200 个，顺序不变，再加 100 个 | `seeds --base 2 --n 300` | 胜局门槛，用 medium 和 low 预算 |
 | `promotion-1-100.txt`、`promotion-101-300.txt` | 100 和 200：把 `promotion-1-300` 切成两段，顺序不变 | 从 `promotion-1-300.txt` 切出 | 打这个种子集一部分的对局；前一段上的一份报告 |
+| `promotion-1-200.txt` | 200：`promotion-1-300` 的前 200 个，和 `promotion-1` 是同样的种子 | 从 `promotion-1-300.txt` 切出 | A10 门槛的报告 |
 | `promotion-1-500.txt` | 500：先是 `promotion-1-300` 的 300 个，顺序不变，再加 200 个 | `seeds --base 2 --n 500` | 较大种子集上的报告 |
 | `final-1.txt` | 300 | `seeds --base 3 --n 300` | 从未跑过 |
 | `check-clone-loop.txt` | `promotion-1` 的 29 个种子，按序号挑选 | 手工 | 一次开发检查；不是报告用的种子集 |
@@ -153,13 +154,13 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 **Markdown**（`EvalReport.Markdown`，`Harness/Reports.cs:96-150`）是一页：
 
 - `# Evaluation DATE: ENV RUNG, SET`，然后在适用时，有一行写明原因的 **Void**（作废）和一行 **Partial**（不完整）；
-- 一张表：游戏、提交、冠军、环境和级别，以及写成 `SET: N of M runs, CHARACTER A0` 的种子集；
+- 一张表：游戏、提交、冠军、环境和级别，以及写成 `SET: N of M runs, CHARACTER AN` 的种子集；
 - **Main**（主要）：胜率，层数的均值和中位数，以及每一幕打到 Boss 的局数和进入 Boss 战时的生命值；
 - **Must be zero**（必须为零）：四个计数，然后是每条失败信息及它结束了多少局；
 - **Auxiliary**（辅助）：每局精英数、跳过的卡牌奖励、结束时的金币；每局秒数和每个决策的毫秒数；各决策界面；
 - **Against DATE (CHAMPION, commit X)**，在给出 `--previous OLD.json` 时，或在 `gate --promote` 写出冠军的继任者时出现：胜率、层数均值、每一幕打到 Boss 的局数、随机决策和失败局数的前后对比；种子集、环境或级别不同时则写「Not comparable」。
 
-**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全部小写，NAME 写明是谁打的：在 `DATE-sl-r1-promotion-1-300-plan-c8-1-l0-v8-1-clone-p0` 里，是配战斗网络 `c8-1` 的 SL 规划器、在克隆上配 V `v8-1` 的 L0、由 `p0` 回答选牌提示。这只是约定；`--out` 接受任何路径。
+**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全部小写，NAME 写明是谁打的：在 `DATE-sl-r1-promotion-1-300-plan-c8-2-l0-v8-2-clone-p0` 里，是配战斗网络 `c8-2` 的 SL 规划器、在克隆上配 V `v8-2` 的 L0、由 `p0` 回答选牌提示。进阶 10 的报告在级别的位置上写 `a10`，比如 `DATE-sl-a10-promotion-1-200-plan-c8-2-l0-v8-2-clone-p0`。这只是约定；`--out` 接受任何路径。
 
 ## 8. 对局记录
 

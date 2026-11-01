@@ -42,7 +42,7 @@ For a fight still in progress the leaf asks the combat net. It reads a round's s
 
 **The potions.** After a win, each held potion's chance of being gone.
 
-The figure shows them on the 16 round starts the net file carries, real states from held-out runs; loading the net checks that it gives these outputs, as the trainer computed them. The shaded bands are the closed buckets. Weights: `weights/silent/c8-1.json`.
+The figure shows them on the 16 round starts the net file carries, real states from held-out runs; loading the net checks that it gives these outputs, as the trainer computed them. The shaded bands are the closed buckets. Weights: `weights/silent/c8-2.json`.
 
 <OutcomeHead client:visible lang="en" />
 
@@ -75,4 +75,4 @@ These follow from the prices and the labels.
 - **Max HP.** It enters only through the share: 70/70 to 66/66 reads as nothing lost, so Paper Cuts and Brightest Flame are free, on finished lines too.
 - **The rest of the run.** A finished line sees only HP and potions. What a fight's deck, relics or rewards mean for the run is outside the leaf.
 - **Siblings.** The logs hold one ending per fight, so no label separates two states a search compares within one round. What separates them is HP held, counted in full, and what the net learned across fights.
-- **Its own player.** The endings are those of the policy that played the training games, mostly at a cheaper budget than the one that plays gates ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)).
+- **Its own player.** The endings are those of the policy that played the training games: earlier nets, exploring, at the medium budget that also plays gates ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)).

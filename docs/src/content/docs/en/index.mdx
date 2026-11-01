@@ -11,7 +11,7 @@ This project builds an AI that plays **Slay the Spire 2** (STS2), a single-playe
 
 The strategy is learned from zero by self-play; it is not built from anyone's recorded games, and it is not written by hand. The first target is the Silent, single-player only: Ascension 0, then Ascension 10. The game version is pinned at **v0.111.0**; the game runs on Godot 4.5.1 and .NET 9.0.7, and mods change its code at runtime with Harmony patches.
 
-**How well it plays today.** In SL, where the AI may replay the room it is in, the champion wins **58.7%** of whole Silent A0 runs (88 of the 150 seeds its gate finished, 95% interval 50.7–66.2%) and reaches floor 44.5 of 48 on average. In NoSL, where it sees only what a player sees, no champion has won a run yet; the best report reached floor 26.2 on average, with an older value function ([Evaluation](/en/arch/evaluation/)).
+**How well it plays today.** In SL, where the AI may replay the room it is in, the champion wins **5.0%** of whole Silent A10 runs (10 of 200 seeds, 95% interval 2.7–9.0%) and reaches floor 28.8 on average; at A0, an earlier pair of nets won 88 of the 150 seeds their gate finished. In NoSL, where it sees only what a player sees, no champion has won a run yet; the best report reached floor 26.2 on average, with an older value function ([Evaluation](/en/arch/evaluation/)).
 
 If you have never played the game, read [The game](/en/arch/game/) first.
 
