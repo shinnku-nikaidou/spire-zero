@@ -41,10 +41,11 @@ class Batch:
         cards, ups = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width)
         piles = torch.zeros(n, width, len(encode.PILES))
         mods, mod_mask = torch.zeros(n, width, 2, dtype=torch.long), torch.zeros(n, width, 2)
-        costs, mod_amounts = torch.zeros(n, width), torch.zeros(n, width, 2)
+        costs, mod_amounts, damages = torch.zeros(n, width), torch.zeros(n, width, 2), torch.zeros(n, width)
         for b, t in enumerate(toks):
-            for k, (card_id, up, pile, ms, cost, amounts) in enumerate(t["cards"]):
+            for k, (card_id, up, pile, ms, cost, amounts, damage) in enumerate(t["cards"]):
                 cards[b, k], ups[b, k], piles[b, k, pile], costs[b, k] = index["cards"].get(card_id, 0), up, 1, cost
+                damages[b, k] = damage
                 for j, m in enumerate(ms[:2]):
                     mods[b, k, j], mod_mask[b, k, j], mod_amounts[b, k, j] = index["modifiers"].get(m, 0), 1, amounts[j]
         p_ids, p_amounts, p_mask, p_stacks, p_cards, p_card_mask = power_tensors([t["powers"] for t in toks], index)
@@ -85,6 +86,10 @@ class Batch:
             for x in padded([[index[table].get(i, 0) for i in t[table]] for t in toks], "cpu")
         ]
         orbs, orb_mask = padded([[index["orbs"].get(o, 0) for o in t["orbs"]] for t in toks], "cpu")
+        orb_values = torch.zeros(n, orbs.shape[1], 2)
+        for b, t in enumerate(toks):
+            if t["orb_values"]:
+                orb_values[b, : len(t["orb_values"])] = torch.tensor(t["orb_values"])
         a_n = max(1, max(len(t["allies"]) for t in toks))
         aq_n = max(1, max((len(a["powers"]) for t in toks for a in t["allies"]), default=0))
         allies, ally_scalars, ally_mask = (
@@ -117,7 +122,7 @@ class Batch:
             cards, ups, piles, mods, mod_mask, p_ids, p_amounts, p_mask, torch.tensor([t["player"] for t in toks]),
             enemies, enemy_scalars, enemy_mask, *e_powers, intents, intent_values, intent_mask, *bags,
             p_stacks, p_cards, p_card_mask, *e_numbers, orbs, orb_mask, allies, ally_scalars, ally_mask, *a_powers,
-            torch.tensor([t["extra"] for t in toks]), costs, mod_amounts, relic_values, relic_status,
+            torch.tensor([t["extra"] for t in toks]), costs, mod_amounts, relic_values, relic_status, damages, orb_values,
         ]  # fmt: skip
         self.tensors = [x.to(device) for x in tensors]
         self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
@@ -159,12 +164,16 @@ class Net(nn.Module):
         self.power_stacks = nn.Embedding(sizes["powers"], d)
         self.intent_damage = nn.Embedding(sizes["intents"], d)
         self.intent_total = nn.Embedding(sizes["intents"], d)
+        self.orb_passive = nn.Embedding(sizes["orbs"], d)
+        self.orb_evoke = nn.Embedding(sizes["orbs"], d)
+        self.orb_at = nn.Embedding(encode.MAX_ORBS * sizes["orbs"], d)  # an orb's kind at its place in the queue
         for m in self.modules():
             if isinstance(m, nn.Embedding):
                 nn.init.normal_(m.weight, std=0.1)
         self.pile = nn.Parameter(torch.randn(len(encode.PILES), d) * 0.1)
         self.slot = nn.Parameter(torch.randn(encode.SLOTS, d) * 0.1)
         self.cost = nn.Parameter(torch.randn(d) * 0.1)
+        self.damage = nn.Parameter(torch.randn(d) * 0.1)
         self.melted = nn.Parameter(torch.randn(d) * 0.1)
         self.card_phi = mlp(d, h, h)
         self.power_phi = mlp(d, h)
@@ -205,13 +214,14 @@ class Net(nn.Module):
         intents, intent_values, intent_mask, relics, relic_mask, potions, potion_mask, context, context_mask,
         power_stacks, power_cards, power_card_mask, enemy_power_stacks, enemy_power_cards, enemy_power_card_mask,
         orbs, orb_mask, allies, ally_scalars, ally_mask, ally_powers, ally_power_amounts, ally_power_mask, extra,
-        costs, mod_amounts, relic_values, relic_status,
+        costs, mod_amounts, relic_values, relic_status, damages, orb_values,
     ):  # fmt: skip
         """The body's vector of each sample."""
         x = (
             self.cards(cards)
             + ups[..., None] * self.card_up(cards)
             + costs[..., None] * self.cost
+            + damages[..., None] * self.damage
             + ((self.modifiers(mods) + mod_amounts[..., None] * self.mod_amount(mods)) * mod_mask[..., None]).sum(2)
             + piles @ self.pile
         )
@@ -249,9 +259,16 @@ class Net(nn.Module):
         for table, ids, mask in (
             (self.potions, potions, potion_mask),
             (self.context, context, context_mask),
-            (self.orbs, orbs, orb_mask),
         ):
             parts.append((table(ids) * mask[..., None]).sum(1))
+        places = torch.arange(orbs.shape[1], device=orbs.device).clamp_max(encode.MAX_ORBS - 1)[None, :]
+        orb = (
+            self.orbs(orbs)
+            + orb_values[..., 0:1] * self.orb_passive(orbs)
+            + orb_values[..., 1:2] * self.orb_evoke(orbs)
+            + self.orb_at(places * self.orbs.num_embeddings + orbs)
+        )
+        parts.append((orb * orb_mask[..., None]).sum(1))
         ally = self.ally_phi(
             torch.cat(
                 [

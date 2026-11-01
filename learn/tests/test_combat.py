@@ -9,6 +9,7 @@ from onnx.reference import ReferenceEvaluator
 from typer.testing import CliRunner
 
 import common
+import game_ids
 from combat import data, encode, export, train
 from combat.net import Batch, Net, loss
 
@@ -22,9 +23,12 @@ def obs(round=1, hp=50, **over):
     return o | over
 
 
-def test_cards_are_ids_upgrades_piles_and_modifiers_without_their_numbers():
+def test_cards_are_ids_upgrades_piles_modifiers_costs_and_damage():
     t = encode.tokens(obs(), [])
-    assert t["cards"] == [("STRIKE", encode.MAX_UP, 0, ["enchant:SHARP"], 1 / 3, [0.2]), ("DEFEND", 0, 1, [], 1 / 3, [])]
+    assert t["cards"] == [
+        ("STRIKE", encode.MAX_UP, 0, ["enchant:SHARP"], 1 / 3, [0.2], 0.3),
+        ("DEFEND", 0, 1, [], 1 / 3, [], 0.0),
+    ]
     assert t["relics"] == ["RING", "VASE:used"] and t["potions"] == ["FIRE"]
     assert t["powers"] == [("STRENGTH_POWER", 0.2, 0.0, None)]
 
@@ -64,7 +68,7 @@ def test_a_win_cannot_end_in_a_bucket_the_hp_held_rules_out():
         data.sample("a", obs(hp=hp), [], {"died": False, "hp": end, "max_hp": 70, "potions": 0}, {"potions": []})
         for hp, end in ((70, 70), (70, 1), (7, 1), (7, 70), (1, 1), (1, 70), (35, 34))
     ]
-    tables = train.vocab(samples * 3)
+    tables = game_ids.combat_tables()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     b = Batch(samples, index, "cpu")
     net = Net({t: len(i) for t, i in tables.items()})
@@ -79,12 +83,34 @@ def test_a_win_cannot_end_in_a_bucket_the_hp_held_rules_out():
     assert torch.softmax(logits, 1)[closed].max() == 0
 
 
+def test_a_cards_damage_and_the_orbs_numbers_and_order_move_the_output():
+    tables = game_ids.combat_tables()
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    torch.manual_seed(0)
+    net = Net({t: len(i) for t, i in tables.items()}).eval()
+
+    def outcome(hand_damage=6, orbs=()):
+        o = obs()
+        o["hand"][0]["vars"]["Damage"] = hand_damage
+        o["player"]["orbs"] = [{"id": i, "passive": p, "evoke": e} for i, p, e in orbs]
+        s = data.sample("a", o, [], {"died": True, "potions": 0}, None)
+        with torch.no_grad():
+            return net(*Batch([s], index, "cpu").inputs())[0]
+
+    dark, frost = ("DARK_ORB", 6, 6), ("FROST_ORB", 2, 5)
+    assert not torch.equal(outcome(), outcome(hand_damage=30))
+    assert not torch.equal(outcome(orbs=[dark, frost]), outcome(orbs=[("DARK_ORB", 6, 18), frost]))
+    assert not torch.equal(outcome(orbs=[dark, frost]), outcome(orbs=[("DARK_ORB", 9, 6), frost]))
+    assert not torch.equal(outcome(orbs=[dark, frost]), outcome(orbs=[frost, dark]))
+    assert not torch.equal(outcome(orbs=[dark] * 12), outcome(orbs=[dark] * 11))
+
+
 def test_the_potion_loss_reads_held_potions_after_wins_only():
     end = {"died": False, "hp": 40, "max_hp": 70, "potions": 0}
     won = data.sample("a", obs(), [], end, {"potions": []})
     dead = data.sample("a", obs(), [], {"died": True, "potions": 0}, None)
     plain = data.sample("a", obs(potions=(None, None, None)), [], end, {"potions": []})
-    tables = train.vocab([won] * 3)
+    tables = game_ids.combat_tables()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     b = Batch([won, dead, plain], index, "cpu")
     assert b.potion_used.tolist() == [[1], [0], [0]] and b.potion_mask.tolist() == [[1], [1], [0]]
@@ -135,7 +161,7 @@ def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
     end = {"died": False, "hp": 30, "max_hp": 70, "potions": 0}
     samples = [data.sample("a", obs(round=r, hp=40 + r), history, end, {"potions": []})
                | {"obs": obs(round=r, hp=40 + r), "history": history} for r in (2, 3)]  # fmt: skip
-    tables = train.vocab(samples * 3)
+    tables = game_ids.combat_tables()
     torch.manual_seed(0)
     net = export.net_file("t", "SILENT", "SL", tables, Net({t: len(i) for t, i in tables.items()}), samples, {}, 0)
     assert net["env"] == "SL" and net["lags"] == encode.LAGS and len(net["tests"]) == 2

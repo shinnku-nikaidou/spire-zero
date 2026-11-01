@@ -17,7 +17,7 @@ from combat.net import Batch, Outcome
 TESTS = 16  # test states in a net file
 # Every input's batch dimension and its length dimensions, by input name (the rest are fixed widths).
 AXES = {
-    **{x: {0: "batch", 1: "cards"} for x in ("cards", "ups", "piles", "mods", "mod_mask", "costs", "mod_amounts")},
+    **{x: {0: "batch", 1: "cards"} for x in ("cards", "ups", "piles", "mods", "mod_mask", "costs", "mod_amounts", "damages")},
     **{x: {0: "batch", 1: "powers"} for x in ("powers", "power_amounts", "power_mask", "power_stacks", "power_cards",
                                               "power_card_mask")},
     "player": {0: "batch"},
@@ -27,7 +27,7 @@ AXES = {
                                                                   "enemy_power_cards", "enemy_power_card_mask")},
     **{x: {0: "batch", 1: "enemies", 3: "intents"} for x in ("intents", "intent_values", "intent_mask")},
     **{x: {0: "batch", 1: t} for t, mask in encode.BAGS.items() for x in (t, mask)},
-    **{x: {0: "batch", 1: "orbs"} for x in ("orbs", "orb_mask")},
+    **{x: {0: "batch", 1: "orbs"} for x in ("orbs", "orb_mask", "orb_values")},
     **{x: {0: "batch", 1: "allies"} for x in ("allies", "ally_scalars", "ally_mask")},
     **{x: {0: "batch", 1: "allies", 2: "ally_powers"} for x in ("ally_powers", "ally_power_amounts", "ally_power_mask")},
     **{x: {0: "batch", 1: "relics"} for x in ("relic_values", "relic_status")},

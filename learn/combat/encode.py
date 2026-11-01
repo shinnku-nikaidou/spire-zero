@@ -4,14 +4,16 @@ The ids of what is in the fight and its raw state: each card's id, upgrade level
 HP, block, energy, stars and the round; each power's id and amount (and the stacks and kept card a tooltip states
 apart); each enemy's id, HP, block, how many rounds it has shown, its powers, and its intents now and in its last LAGS
 rounds (type, damage per hit, total damage); the relics with their counters and statuses, potions, orbs, allies and the
-encounter; the ascension, orb slots and gold. A card's current cost and its modifiers' amounts are state too; no other
-numbers printed on cards, relics or orbs: what matters in them is the net's to learn. Numbers are scaled to about one
+encounter; the ascension, orb slots and gold. A card's current cost and damage, its modifiers' amounts and each orb's
+passive, evoke and place in the queue are state too; no other numbers printed on cards or relics: what matters in them is
+the net's to learn. Numbers are scaled to about one
 (HP / 100, block / 20, …) and capped at ±CAP; CombatNet scales them the same way.
 """
 
 MAX_UP = 3  # RunNet.MaxUp: upgrade levels above this read as this one
 LAGS = 3  # the earlier rounds of each enemy's intents the net reads
 SLOTS = 1 + LAGS
+MAX_ORBS = 10  # the places of the orb queue the net tells apart: later ones read as the last
 CAP = 10.0  # a few states show huge numbers (an erupting WATERFALL_GIANT's HP)
 PILES = ["hand", "draw", "discard", "exhaust"]
 TABLES = ["cards", "modifiers", "powers", "enemies", "intents", "relics", "potions", "context", "orbs", "allies", "relic_status"]
@@ -56,6 +58,8 @@ INPUTS = [
     "mod_amounts",
     "relic_values",
     "relic_status",
+    "damages",
+    "orb_values",
 ]
 
 
@@ -64,8 +68,8 @@ def cap(x: float) -> float:
 
 
 def card(c: dict, pile: int):
-    """A card: its id, upgrade level, pile, its enchantment's and affliction's ids, its cost / 3 (0 for X or none), and
-    those modifiers' amounts / 10."""
+    """A card: its id, upgrade level, pile, its enchantment's and affliction's ids, its cost / 3 (0 for X or none),
+    those modifiers' amounts / 10, and its damage / 20 (0 for none)."""
     held = [(kind, c[kind]) for kind in ("enchant", "affliction") if c.get(kind)]
     cost = c["cost"] / 3 if c.get("cost") and c["cost"] > 0 else 0.0
     return (
@@ -75,6 +79,7 @@ def card(c: dict, pile: int):
         [f"{kind}:{m['id']}" for kind, m in held],
         cost,
         [cap(m["amount"] / 10) for _, m in held],
+        cap(float((c.get("vars") or {}).get("Damage", 0)) / 20),
     )
 
 
@@ -146,6 +151,7 @@ def tokens(obs: dict, history: list) -> dict:
             f"act:{obs['act']}",
         ],
         "orbs": [o["id"] for o in pl.get("orbs") or []],
+        "orb_values": [[cap(float(o["passive"]) / 10), cap(float(o["evoke"]) / 10)] for o in pl.get("orbs") or []],
         "allies": [
             {"id": a.get("id") or "<player>", "scalars": creature(a), "powers": powers(a["powers"])}
             for a in obs.get("allies") or []

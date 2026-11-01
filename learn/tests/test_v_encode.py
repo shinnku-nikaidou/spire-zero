@@ -12,7 +12,6 @@ def test_a_map_move_reads_the_point_entered_and_only_then():
     after = encode.entered(view(), "map:1,1")
     assert encode.tokens(after)["map"] == ["Elite+0:quest", "RestSite+1", "Boss+2"]
     assert encode.tokens(view(visited=((0, 0), (1, 1))))["map"] == ["RestSite+1", "Boss+2"]
-    assert encode.is_entering("Elite+0:quest") and not encode.is_entering("Elite+10")
 
 
 def test_before_any_visit_the_map_is_seen_from_the_start():

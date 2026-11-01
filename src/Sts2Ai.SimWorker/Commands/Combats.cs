@@ -1,7 +1,11 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Text.Json;
+using MegaCrit.Sts2.Core.Entities.Relics;
+using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.MonsterMoves.Intents;
+using MegaCrit.Sts2.Core.Rooms;
 using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
@@ -9,6 +13,52 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>list: what this game build knows.</summary>
+internal static class TablesCommand
+{
+    private static readonly Option<string> Out = Opt.Of("--out", "learn/game_ids.json", "where the file goes");
+
+    public static Command Command()
+    {
+        var command = Opt.Command("tables", "every id of this game build the nets' tables hold, as JSON (learn/game_ids.py)");
+        command.Options.Add(Out);
+        command.SetAction(Cli.Game((r, _) => Run(r.GetValue(Out)!)));
+        return command;
+    }
+
+    private static int Run(string path)
+    {
+        var relics = Real<RelicModel>().ToList();
+        var ids = new Dictionary<string, IEnumerable<string>>
+        {
+            ["cards"] = Entries<CardModel>(),
+            ["enchantments"] = Entries<EnchantmentModel>(),
+            ["afflictions"] = Entries<AfflictionModel>(),
+            ["powers"] = Entries<PowerModel>(),
+            ["monsters"] = Entries<MonsterModel>(),
+            ["relics"] = relics.Select(r => r.Id.Entry),
+            ["used_up_relics"] = relics.Where(r => r.GetType().GetProperty(nameof(RelicModel.IsUsedUp))!.DeclaringType != typeof(RelicModel)).Select(r => r.Id.Entry),
+            ["potions"] = Entries<PotionModel>(),
+            ["encounters"] = Entries<EncounterModel>(),
+            ["bosses"] = Real<EncounterModel>().Where(e => e.RoomType == RoomType.Boss).Select(e => e.Id.Entry),
+            ["orbs"] = Entries<OrbModel>(),
+            ["acts"] = Entries<ActModel>(),
+            ["ancients"] = Entries<AncientEventModel>(),
+            ["characters"] = ModelDb.AllCharacters.Select(c => c.Id.Entry),
+            ["intents"] = Enum.GetNames<IntentType>(),
+            ["relic_status"] = Enum.GetNames<RelicStatus>(),
+            ["points"] = Enum.GetNames<MapPointType>(),
+        };
+        var sorted = ids.ToDictionary(kv => kv.Key, kv => kv.Value.Distinct().Order(StringComparer.Ordinal).ToList());
+        File.WriteAllText(path, JsonSerializer.Serialize(sorted, new JsonSerializerOptions { WriteIndented = true }) + "\n");
+        Console.WriteLine($"wrote {path}: game {HeadlessGame.GameVersion}, {sorted["cards"].Count} cards");
+        return 0;
+
+        static IEnumerable<string> Entries<T>() where T : AbstractModel => Real<T>().Select(m => m.Id.Entry);
+        // The game's own test models sit in namespaces of their own (Models.Cards.Mocks).
+        static IEnumerable<T> Real<T>() where T : AbstractModel => ModelDb.All.OfType<T>().Where(m => m.GetType().Namespace?.Contains(".Mock") != true);
+    }
+}
+
 internal static class ListCommand
 {
     public static Command Command()

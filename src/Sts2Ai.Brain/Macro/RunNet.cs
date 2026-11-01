@@ -189,7 +189,7 @@ public sealed class RunNet : IRunValue, IDisposable
         inputs.AddRange(Bag("relics", "relic_mask", tokens.Relics));
         inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
         inputs.AddRange(Bag("context", "context_mask", tokens.Context));
-        inputs.AddRange(Bag("map", "map_mask", tokens.Map.Where(t => !t.Contains("+0") || _index["map"].ContainsKey(t)).ToList()));
+        inputs.AddRange(Bag("map", "map_mask", tokens.Map));
         var values = new DenseTensor<float>([1, _file.State.Names.Count]);
         for (int i = 0; i < _file.State.Names.Count; i++)
             values[0, i] = (float)((StateValue(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);

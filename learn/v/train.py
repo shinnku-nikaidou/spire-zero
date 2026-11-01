@@ -14,8 +14,8 @@ return changes. Whichever the objective, a whole run's report gives
 the Brier score of that chance on the held-out decisions against whether their runs were won (`brier_held_out`, and
 `brier_held_out_floor_only` for the training runs' hazards whatever the state).
 
---init goes on from a net file instead of from scratch: its token tables, state scaling and weights, read back from its
-ONNX (the second head, not in the file, starts anew).
+--init goes on from a net file instead of from scratch: its state scaling and weights, read back from its ONNX (the
+second head, not in the file, starts anew).
 
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
@@ -36,6 +36,7 @@ warnings.filterwarnings("ignore", message="Failed to initialize NumPy")
 import torch  # noqa: E402
 
 import common  # noqa: E402
+import game_ids  # noqa: E402
 from common import LearnError  # noqa: E402
 from v import data, encode, export  # noqa: E402
 from v.net import (  # noqa: E402
@@ -55,28 +56,12 @@ from weights import out_path  # noqa: E402
 script = common.app()
 
 FLOORS = 64  # the hazard head's floors, from floor 0
-MIN_COUNT = 3  # ids seen fewer times in the training runs read as unknown
 EPOCHS, PATIENCE = 40, 5  # at most, and without a better held-out loss before stopping
 BATCH, SIDE_BATCH = 256, 64  # decisions per step; boss sim decisions or doors per step
 LR, WEIGHT_DECAY = 3e-5, 1e-4
 AUX_WEIGHT = 3.0  # the second head's squared errors, per decision
 BOSS_WEIGHT = 1.0  # the boss sims' fit, per decision, all its options together
 DOOR_WEIGHT = 1.0  # the door states' fit, per door, all its HP levels together
-
-
-def vocab(samples) -> dict[str, list[str]]:
-    """Per table, the ids seen at least MIN_COUNT times in these samples; entry 0 reads every other id."""
-    counts = {t: {} for t in encode.TABLES}
-    for s in samples:
-        tok = s["tokens"]
-        for card_id, _, mods in tok["cards"]:
-            counts["cards"][card_id] = counts["cards"].get(card_id, 0) + 1
-            for m in mods:
-                counts["modifiers"][m] = counts["modifiers"].get(m, 0) + 1
-        for t in encode.BAGS:
-            for i in tok[t]:
-                counts[t][i] = counts[t].get(i, 0) + 1
-    return {t: ["<unk>"] + sorted(i for i, n in c.items() if n >= MIN_COUNT) for t, c in counts.items()}
 
 
 def stream(part, make):
@@ -187,7 +172,7 @@ def main(
     init: Annotated[
         str | None,
         typer.Option(
-            help="a net file to go on from: its token tables, state scaling and weights (the second head anew)"
+            help="a net file to go on from: its state scaling and weights (the second head anew)"
         ),
     ] = None,
     seed: int = 0,
@@ -239,13 +224,10 @@ def main(
         len(options),
     )
 
-    # Going on from a net keeps what its weights were fitted to read: its tables (ids it never saw read as unknown)
-    # and its state scaling; only the map's table grows, by the ids a net from before the entering tokens lacks, which
-    # export.weights gives new vectors.
-    tables = start["vocab"] if start else vocab(train)
-    if start:
-        known = set(tables["map"])
-        tables = tables | {"map": tables["map"] + [i for i in vocab(train)["map"] if i not in known]}
+    # Going on from a net keeps its state scaling; every net's tables are the game's.
+    tables = game_ids.macro_tables()
+    if start and start["vocab"] != tables:
+        raise LearnError(f"{init} holds other tables than learn/game_ids.json's")
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     if start:
         mean = torch.tensor(start["state"]["mean"], dtype=torch.float64)

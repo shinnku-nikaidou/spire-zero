@@ -76,7 +76,7 @@ def read(path: str) -> dict:
 def weights(net: dict, model) -> dict[str, torch.Tensor]:
     """A net file's weights by model's parameter names, from its ONNX: the named initializers, and the Linear layers the
     export turned into MatMul + Add (their weights transposed, named by their Add's bias). The second head is not in the
-    file and keeps model's own, as do the map table's vectors the file lacks (a table grown by v.train)."""
+    file and keeps model's own."""
     graph = onnx.load_from_string(base64.b64decode(net["onnx"])).graph
     inits = {i.name: torch.from_numpy(numpy_helper.to_array(i).copy()) for i in graph.initializer}
     found = {k.removeprefix("net."): v for k, v in inits.items() if k.startswith("net.")}
@@ -89,8 +89,6 @@ def weights(net: dict, model) -> dict[str, torch.Tensor]:
     for k, v in own.items():
         if k.startswith("aux_head."):
             found[k] = v
-        elif k == "bags.map.weight" and k in found and len(found[k]) < len(v):
-            found[k] = torch.cat([found[k], v[len(found[k]) :]])
         elif k not in found or found[k].shape != v.shape:
             raise LearnError(f"the net file has no weight {k} of shape {tuple(v.shape)}")
     return {k: found[k] for k in own}

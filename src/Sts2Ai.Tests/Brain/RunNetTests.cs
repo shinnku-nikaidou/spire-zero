@@ -43,9 +43,9 @@ public class RunNetTests
 
     /// <summary>The champion's own file: its test runs are the ones it plays from.</summary>
     [Fact]
-    public void ReadsV7_1fsRunsAsItsTrainerDid()
+    public void ReadsV8_1sRunsAsV7_1fsTrainerDid()
     {
-        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Repo("weights", "silent", "v7-1f.json")));
+        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Repo("weights", "silent", "v8-1.json")));
         using var net = RunNet.Load(file);
         Assert.Equal("win", file.Objective);
         Assert.Contains(file.Vocab["map"], t => t.Contains("+0"));
@@ -83,16 +83,5 @@ public class RunNetTests
     {
         Assert.Equal(["Elite+0:quest", "RestSite+1", "Boss+2"], RunNet.MapTokens(Map((0, 0), (1, 1)) with { Entering = true }));
         Assert.Equal(["RestSite+1", "Boss+2"], RunNet.MapTokens(Map((0, 0), (1, 1))));
-    }
-
-    /// <summary>A net from before the entering tokens has none in its map table: it reads a map move as it always did.</summary>
-    [Fact]
-    public void ANetWhoseTableLacksThePointEnteredLeavesItOut()
-    {
-        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny.json")))!;
-        using var net = RunNet.Load(file);
-        var run = file.Tests[0].Run;
-        Assert.DoesNotContain(file.Vocab["map"], t => t.Contains("+0"));
-        Assert.Equal(net.Value(run), net.Value(run with { Map = run.Map with { Entering = true } }));
     }
 }

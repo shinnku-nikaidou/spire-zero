@@ -103,6 +103,13 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         inputs.AddRange(Bag("context", "context_mask",
             ["character:" + pl.Character, "encounter:" + (obs.Encounter ?? "<none>"), "room:" + (obs.Room ?? "<none>"), $"act:{obs.Act}"]));
         inputs.AddRange(Bag("orbs", "orb_mask", pl.Orbs.Select(o => o.Id).ToList()));
+        var orbValues = new DenseTensor<float>([1, Math.Max(1, pl.Orbs.Count), 2]);
+        for (int k = 0; k < pl.Orbs.Count; k++)
+        {
+            orbValues[0, k, 0] = Capped((double)pl.Orbs[k].Passive / 10.0);
+            orbValues[0, k, 1] = Capped((double)pl.Orbs[k].Evoke / 10.0);
+        }
+        inputs.Add(NamedOnnxValue.CreateFromTensor("orb_values", orbValues));
         inputs.AddRange(Allies(obs.Allies.Where(a => a.Hp > 0).ToList()));
         var extra = new DenseTensor<float>([1, 3]);
         extra[0, 0] = (float)(obs.Ascension / 10.0);
@@ -113,8 +120,8 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return results.Select(r => r.AsEnumerable<float>().ToArray()).ToArray();
     }
 
-    /// <summary>The cards of every pile: id, upgrade level, pile, cost / 3 (0 for X or none), and the enchantment's and
-    /// affliction's ids and amounts / 10.</summary>
+    /// <summary>The cards of every pile: id, upgrade level, pile, cost / 3 (0 for X or none), the enchantment's and
+    /// affliction's ids and amounts / 10, and damage / 20 (0 for none).</summary>
     private NamedOnnxValue[] Cards(CombatObservation obs)
     {
         var cards = Piles.SelectMany((pile, p) => Pile(obs, pile).Select(c => (Card: c, Pile: p))).ToList();
@@ -122,6 +129,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         var ids = new DenseTensor<long>([1, n]);
         var ups = new DenseTensor<float>([1, n]);
         var costs = new DenseTensor<float>([1, n]);
+        var damages = new DenseTensor<float>([1, n]);
         var piles = new DenseTensor<float>([1, n, Piles.Length]);
         var mods = new DenseTensor<long>([1, n, 2]);
         var modMask = new DenseTensor<float>([1, n, 2]);
@@ -133,6 +141,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
             ups[0, k] = Math.Min(card.Up ?? 0, RunNet.MaxUp);
             costs[0, k] = card.Cost is { } cost && cost > 0 ? (float)(cost / 3.0) : 0;
             piles[0, k, pile] = 1;
+            damages[0, k] = card.Vars?.TryGetValue("Damage", out var damage) == true ? Capped((double)damage / 20.0) : 0;
             var modifiers = new List<(string Id, int Amount)>();
             if (card.Enchant != null) modifiers.Add(("enchant:" + card.Enchant.Id, card.Enchant.Amount));
             if (card.Affliction != null) modifiers.Add(("affliction:" + card.Affliction.Id, card.Affliction.Amount));
@@ -148,7 +157,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
             NamedOnnxValue.CreateFromTensor("cards", ids), NamedOnnxValue.CreateFromTensor("ups", ups),
             NamedOnnxValue.CreateFromTensor("costs", costs), NamedOnnxValue.CreateFromTensor("piles", piles),
             NamedOnnxValue.CreateFromTensor("mods", mods), NamedOnnxValue.CreateFromTensor("mod_mask", modMask),
-            NamedOnnxValue.CreateFromTensor("mod_amounts", modAmounts),
+            NamedOnnxValue.CreateFromTensor("mod_amounts", modAmounts), NamedOnnxValue.CreateFromTensor("damages", damages),
         ];
     }
 

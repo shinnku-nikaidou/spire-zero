@@ -30,7 +30,7 @@ internal static class Cli
         var root = new RootCommand("The real sts2.dll headless: combats, runs, the brain and evaluation (docs: simulator)") { Verbose };
         Command[] commands =
         [
-            ListCommand.Command(), CombatCommand.Command(), BenchCommand.Command(), SelfTest.Command(), ForkBench.Command(),
+            ListCommand.Command(), TablesCommand.Command(), CombatCommand.Command(), BenchCommand.Command(), SelfTest.Command(), ForkBench.Command(),
             RunCommand.Command(), BrainCommand.Command(), Panel.Command(), Fusion.Command(), Fidelity.Command(), Serve.Command(),
             ReportCommand.Command(), GateCommand.Command(), LeaderboardCommand.Command(), SeedsCommand.Command(),
             RanksCommand.Command(), AfterstatesCommand.Command(), ForkCommand.Command(), ClonesCommand.Command(),

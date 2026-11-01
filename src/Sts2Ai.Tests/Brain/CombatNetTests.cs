@@ -15,15 +15,15 @@ public class CombatNetTests
     /// <summary>
     /// An untrained net with small widths, made by <c>learn/combat/export.py</c>'s net_file: real SL round starts, with four
     /// rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5 % HP and a multi-hit
-    /// attack: a change to <c>learn/combat/encode.py</c> or to CombatNet that reads a state otherwise fails on loading.
+    /// attack, orbs on and off the table past the places the net tells apart: a change to <c>learn/combat/encode.py</c> or to CombatNet that reads a state otherwise fails on loading.
     /// </summary>
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
 
     /// <summary>The champion's own file: its test states are the ones it plays from.</summary>
     [Fact]
-    public void ReadsC7_2sStatesAsItsTrainerDid()
+    public void ReadsC8_1sStatesAsC7_2sTrainerDid()
     {
-        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Repo("weights", "silent", "c7-2.json")));
+        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Repo("weights", "silent", "c8-1.json")));
         using var net = CombatNet.Load(file);
         Assert.Equal(16, file.Tests.Count);
     }
@@ -37,6 +37,8 @@ public class CombatNetTests
         Assert.True(file.Tests[0].PotionUsed.Distinct().Count() > 1);
         Assert.Contains(file.Tests, t => t.Obs.Potions.Count(p => p == "FIRE_POTION") == 2);
         Assert.Contains(file.Tests, t => t.Obs.Allies.Any(a => a.Hp > 0));
+        Assert.Contains(file.Tests, t => t.Obs.Player.Orbs.Count > 10);
+        Assert.Contains(file.Tests, t => t.Obs.Hand.Any(c => c.Vars?.ContainsKey("Damage") == true));
     }
 
     [Fact]

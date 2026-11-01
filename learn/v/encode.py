@@ -8,7 +8,7 @@ computed from the deck: what matters in them is the net's to learn.
 A map move's afterstate (`entered`) is marked as entering the point: the point's own type reads as "Elite+0", so that
 options with the same points after them differ. The mark never stands for a room already played: a run view logged in
 a room comes after its combat, and a run that died there logs none, so a net that read the type of the room it is in
-would take entering an elite for having beaten it. A net whose map table lacks the token leaves it out.
+would take entering an elite for having beaten it.
 """
 
 MAX_UP = 3  # RunNet.MaxUp: upgrade levels above this read as this one
@@ -47,11 +47,6 @@ def map_tokens(m: dict) -> list[str]:
     points = {(p["col"], p["row"]): p for p in m["points"]}
     nodes = ([points[here(m, points)]] if m.get("entering") else []) + reachable(m)
     return [f"{p['type']}+{p['row'] - row}" + (":quest" if p.get("quest") else "") for p in nodes]
-
-
-def is_entering(token: str) -> bool:
-    """Whether a map token is the point being entered, which a net whose table lacks it leaves out."""
-    return "+0" in token
 
 
 def entered(view: dict, action: str) -> dict:

@@ -46,14 +46,7 @@ class Batch:
         }
         for t, bag_mask in encode.BAGS.items():
             feed[t], feed[bag_mask] = padded(
-                [
-                    [
-                        index[t].get(i, 0)
-                        for i in s["tokens"][t]
-                        if t != "map" or not encode.is_entering(i) or i in index[t]
-                    ]
-                    for s in samples
-                ],
+                [[index[t].get(i, 0) for i in s["tokens"][t]] for s in samples],
                 device,
             )
         x = torch.tensor([s["state"] for s in samples], dtype=torch.float64)

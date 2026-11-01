@@ -23,54 +23,17 @@ warnings.filterwarnings("ignore", message="Failed to initialize NumPy")
 import torch  # noqa: E402
 
 import common  # noqa: E402
-from combat import data, encode, export, report  # noqa: E402
+import game_ids  # noqa: E402
+from combat import data, export, report  # noqa: E402
 from combat.net import Batch, Net, loss  # noqa: E402
 from common import LearnError  # noqa: E402
 from weights import out_path  # noqa: E402
 
 script = common.app()
 
-MIN_COUNT = 3  # ids seen fewer times in the training runs read as unknown
 EPOCHS, PATIENCE = 20, 3  # at most, and without a better held-out loss before stopping
 BATCH = 256
 LR, WEIGHT_DECAY = 1e-3, 1e-4
-
-
-def vocab(samples) -> dict[str, list[str]]:
-    """Per table, the ids seen at least MIN_COUNT times in these samples; entry 0 reads every other id."""
-    counts = {t: {} for t in encode.TABLES}
-
-    def count(t, i):
-        # the encounter says the room, the act and, per character's net, the character: they read as unknown
-        if t != "context" or i.startswith("encounter:"):
-            counts[t][i] = counts[t].get(i, 0) + 1
-
-    def count_powers(ps):
-        for pid, _, _, card in ps:
-            count("powers", pid)
-            if card:
-                count("cards", card)
-
-    for s in samples:
-        tok = s["tokens"]
-        for card_id, _, _, mods, _, _ in tok["cards"]:
-            count("cards", card_id)
-            for m in mods:
-                count("modifiers", m)
-        count_powers(tok["powers"])
-        for e in tok["enemies"]:
-            count("enemies", e["id"])
-            count_powers(e["powers"])
-            for slot in e["slots"]:
-                for kind, _, _ in slot:
-                    count("intents", kind)
-        for t in (*encode.BAGS, "orbs", "relic_status"):
-            for i in tok[t]:
-                count(t, i)
-        for a in tok["allies"]:
-            count("allies", a["id"])
-            count_powers(a["powers"])
-    return {t: ["<unk>"] + sorted(i for i, n in c.items() if n >= MIN_COUNT) for t, c in counts.items()}
 
 
 @script.command(help=__doc__)
@@ -105,7 +68,7 @@ def main(
         len(samples), len({s["key"] for s in samples}), skipped,
     )  # fmt: skip
 
-    tables = vocab(train)
+    tables = game_ids.combat_tables()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
 
     def batches(part, shuffle):

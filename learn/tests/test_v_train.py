@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 
 import bosslab
 import common
+import game_ids
 from common import LearnError
 from v import data, encode, export, train
 from v.net import Batch, Net, centred, expected_floor, explored, values, win_chance
@@ -212,7 +213,7 @@ def test_centred_values_lose_their_groups_mean():
 
 def test_the_onnx_graph_gives_the_test_runs_the_values_torch_gave_them():
     samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") for f in (1, 2, 3)]
-    tables = train.vocab(samples * 3)
+    tables = game_ids.macro_tables()
     torch.manual_seed(0)
     model = Net({t: len(ids) for t, ids in tables.items()}, 16)
     net = export.net_file("t", "SILENT", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
@@ -230,7 +231,7 @@ def test_the_onnx_graph_gives_the_test_runs_the_values_torch_gave_them():
 
 def test_a_win_nets_test_runs_are_valued_at_their_chance_to_win():
     samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") for f in (1, 2, 3)]
-    tables = train.vocab(samples * 3)
+    tables = game_ids.macro_tables()
     torch.manual_seed(0)
     model = Net({t: len(ids) for t, ids in tables.items()}, 16)
     net = export.net_file(
@@ -248,7 +249,7 @@ def test_a_win_nets_test_runs_are_valued_at_their_chance_to_win():
 
 def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_the_second_head_anew():
     samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") for f in (1, 2, 3)]
-    tables = train.vocab(samples * 3)
+    tables = game_ids.macro_tables()
     sizes = {t: len(ids) for t, ids in tables.items()}
     torch.manual_seed(0)
     model = Net(sizes, 16)
@@ -294,12 +295,7 @@ def test_a_gauntlets_logs_give_its_door_states_their_views_and_no_samples(tmp_pa
     assert list(views) == [("g1", 4)] and views[("g1", 4)][0]["floor"] == 16
 
 
-def test_a_map_move_gives_a_sample_entering_the_point_and_grows_a_net_from_before_the_tokens(tmp_path):
-    first, second = tmp_path / "first.json", tmp_path / "second.json"
-    args = ["--list", write_runs(tmp_path), "--name", "first", "--out", str(first), "--objective", "win"]
-    assert CliRunner().invoke(train.script, args).exit_code == 0
-    a = json.loads(first.read_text())
-    assert not any(encode.is_entering(i) for i in a["vocab"]["map"])
+def test_a_map_move_gives_a_sample_entering_the_point(tmp_path):
     lists = write_runs(tmp_path)
     logs = common.lists(lists)[0].split(",")
     for log in logs:
@@ -310,8 +306,15 @@ def test_a_map_move_gives_a_sample_entering_the_point_and_grows_a_net_from_befor
     samples, *_ = data.read_runs(*common.lists(lists), "SILENT", 64)
     assert len(samples) == 60 and samples[1]["tokens"]["map"][0] == "Elite+0:quest"
     assert math.isclose(sum(s["weight"] for s in samples), 10)
-    args = ["--list", lists, "--name", "second", "--out", str(second), "--objective", "win", "--init", str(first)]
-    result = CliRunner().invoke(train.script, args)
-    assert result.exit_code == 0, result.output
-    b = json.loads(second.read_text())
-    assert b["vocab"]["map"][: len(a["vocab"]["map"])] == a["vocab"]["map"] and "Elite+0:quest" in b["vocab"]["map"]
+    assert "Elite+0:quest" in game_ids.macro_tables()["map"]
+
+
+def test_training_refuses_to_go_on_from_a_net_of_other_tables(tmp_path):
+    first = tmp_path / "first.json"
+    lists = write_runs(tmp_path)
+    args = ["--list", lists, "--name", "first", "--out", str(first), "--objective", "win"]
+    assert CliRunner().invoke(train.script, args).exit_code == 0
+    net = json.loads(first.read_text())
+    first.write_text(json.dumps(net | {"vocab": net["vocab"] | {"cards": net["vocab"]["cards"][:-1]}}))
+    args = ["--list", lists, "--name", "second", "--out", str(tmp_path / "second.json"), "--objective", "win", "--init", str(first)]
+    assert CliRunner().invoke(train.script, args).exit_code != 0
