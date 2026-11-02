@@ -50,7 +50,7 @@ flowchart LR
 | `data/CHARACTER/void/` | 不能用的数据（选项用错、停得太早），保持原来的路径，附一个 `VOID.txt` 写明原因 | `void/sl/selfplay/g3/t025` |
 | `data/CHARACTER/lists/` | 共用的训练集（[§4](#sec-4)） | `lists/c7-logs.txt` |
 
-**文件**。固定分片的作业有 `rec-SHARD.jsonl`（对局记录）、`log-SHARD.jsonl`（决策日志）和 `out-SHARD.txt`（模拟器的输出），每个进程各一份。限时作业每个槽位一套：`rec-`、`log-`、`out-` 和 `done-HOST-i`（每个槽位每批种子启动一个新的 `run` 进程），另加每台主机的 `queue-`、`counts-`、`stored-` 和 `push-` 文件。按低预算，一局整局的决策日志约 1.6 MB，一局连战约 1 MB；大部分字节是战斗观测和宏观决策的整局观测。
+**文件**。作业的文件夹里每批种子一套文件，文件名是打这批的分片加这批的第一个序号：`rec-SHARD-INDEX.jsonl`（对局记录）、`log-SHARD-INDEX.jsonl`（决策日志）、`counts-SHARD-INDEX.txt`（这两个文件的行数），最后写 `done-SHARD-INDEX.txt`（这批对局的序号）。所以一批要么完整，要么不存在；读作业时，没有 `done-` 文件的批会被排除。每个分片另有一个 `out-SHARD.txt`，是模拟器的输出。较早的作业还是每个分片一套：`rec-SHARD.jsonl`、`log-SHARD.jsonl`，限时作业还有 `done-SHARD.txt`。无论哪种，决策日志都和同名的记录文件成对，清单对把这两个文件放在同一行（[§4](#sec-4)）。按低预算，一局整局的决策日志约 1.6 MB，一局连战约 1 MB；大部分字节是战斗观测和宏观决策的整局观测。
 
 **manifest**（`manifest.json`，每个作业一份）说明打的是什么、为什么打：`job`、`kind`、`character`、`env`、`owner`、`purpose`、`rev`（构建模拟器的提交）、`game`（游戏版本）、`options`（对局选项）、`inputs`（作业读取的 `eval/` 和 `weights/` 的副本，在模拟器的提交较旧时）、`shards`、`launched`、`status`，限时作业还有 `box`：截止时间（UTC 和 epoch、文件、它的改动）、种子范围、每批的大小、每台主机的槽位、速度、时钟偏差和队列。取回时加上 `done`（打完的局数）、`prefix`（范围中完整的开头部分）、每个槽位的结束，以及各槽位停下的时间相差多远。
 

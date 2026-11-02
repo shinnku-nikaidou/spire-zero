@@ -50,7 +50,7 @@ flowchart LR
 | `data/CHARACTER/void/` | 不能用的資料（用錯了選項、停得太早），放在它原來的路徑下，附一個寫明原因的 `VOID.txt` | `void/sl/selfplay/g3/t025` |
 | `data/CHARACTER/lists/` | 共用的訓練集（[§4](#sec-4)） | `lists/c7-logs.txt` |
 
-**檔案**。固定分片的作業有 `rec-SHARD.jsonl`（對局記錄）、`log-SHARD.jsonl`（決策日誌）和 `out-SHARD.txt`（模擬器的輸出），每個行程各一份。限時作業每個執行槽一組：`rec-`、`log-`、`out-` 和 `done-HOST-i`（每個執行槽每批種子啟動一個新的 `run` 行程），另加每台主機的 `queue-`、`counts-`、`stored-` 和 `push-` 檔案。以低預算，一局整局的決策日誌約 1.6 MB，一局連戰約 1 MB；大部分位元組是戰鬥觀測和宏觀決策的整局觀測。
+**檔案**。作業的資料夾裡每批種子一組檔案，檔名是打這批的分片加這批的第一個序號：`rec-SHARD-INDEX.jsonl`（對局記錄）、`log-SHARD-INDEX.jsonl`（決策日誌）、`counts-SHARD-INDEX.txt`（這兩個檔案的行數），最後寫 `done-SHARD-INDEX.txt`（這批對局的序號）。所以一批要麼完整，要麼不存在；讀作業時，沒有 `done-` 檔案的批會被排除。每個分片另有一個 `out-SHARD.txt`，是模擬器的輸出。較早的作業還是每個分片一組：`rec-SHARD.jsonl`、`log-SHARD.jsonl`，限時作業還有 `done-SHARD.txt`。無論哪種，決策日誌都和同名的記錄檔案成對，清單對把這兩個檔案放在同一行（[§4](#sec-4)）。以低預算，一局整局的決策日誌約 1.6 MB，一局連戰約 1 MB；大部分位元組是戰鬥觀測和宏觀決策的整局觀測。
 
 **manifest**（`manifest.json`，每個作業一份）說明打的是什麼、為什麼打：`job`、`kind`、`character`、`env`、`owner`、`purpose`、`rev`（建置模擬器所用的提交）、`game`（遊戲版本）、`options`（對局選項）、`inputs`（作業讀取的 `eval/` 和 `weights/` 的副本，在模擬器的提交較舊時才有）、`shards`、`launched`、`status`，限時作業還有 `box`：截止時間（UTC 和 epoch、檔案、它的變更）、種子範圍、每批大小、每台主機的執行槽、速度、時鐘偏差和佇列。取回時再加上 `done`（打完的局數）、`prefix`（範圍裡完整的開頭一段）、每個執行槽的結束，以及各執行槽停下的時間相差多少。
 
