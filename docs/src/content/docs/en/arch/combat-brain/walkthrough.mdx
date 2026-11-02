@@ -11,28 +11,29 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 This page takes one real state and walks it through the combat net by hand, with the numbers the net computes for it. Read [The combat net](/en/arch/combat-brain/network/) for the design; here each step shows what that design does to one fight. Vectors show their first four numbers.
 
-The state is a round start from the file's own held-out test states (`weights/silent/c8-2.json`, `tests[7]`). Loading the net checks that it gives this state exactly these outputs ([The combat net §9](/en/arch/combat-brain/network/#sec-9)). The numbers come from `docs/scripts/combat-walk.py`, which stops if its layers do not end in the file's outputs.
+The state is a round start from the file's own held-out test states (`weights/silent/c8-3.json`, `tests[10]`). Loading the net checks that it gives this state exactly these outputs ([The combat net §9](/en/arch/combat-brain/network/#sec-9)). The numbers come from `docs/scripts/combat-walk.py`, which stops if its layers do not end in the file's outputs.
 
 ## 1. What the screen shows
 
-Silent at ascension {walk.state.ascension}, in the second act's boss fight **Knowledge Demon** (<code>{walk.state.encounter}</code>), at the start of round {walk.state.round}.
+Silent at ascension {walk.state.ascension}, in the third act's elite fight **Mecha Knight** (<code>{walk.state.encounter}</code>), at the start of round {walk.state.round}.
 
 - **HP**: {walk.state.hp} / {walk.state.max_hp}, block {walk.state.block}
 - **energy**: {walk.state.energy} (max {walk.state.max_energy})
 - **gold**: {walk.state.gold}
-- **powers**: Noxious Fumes {walk.state.powers[0].amount}, Disintegration {walk.state.powers[1].amount}
+- **powers**: Thorns {walk.state.powers[0].amount}, Dexterity {walk.state.powers[1].amount}, Noxious Fumes {walk.state.powers[2].amount}
 - **hand**: {walk.state.piles.hand.join(', ')}
 - **draw pile**: {walk.state.piles.draw.join(', ')}
-- **discard pile**: empty
+- **discard pile**: {walk.state.piles.discard.join(', ')}
 - **exhaust pile**: {walk.state.piles.exhaust.join(', ')}
 - **relics**: {walk.state.relics.map((r) => r.id).join(', ')}
 - **potions**: {walk.tokens.potions[0]}, one slot empty
+- **orbs**: {walk.tokens.orbs[0]}, {walk.state.orb_slots} slot
 
 One enemy:
 
 | enemy | HP | powers | shows now |
 |---|---|---|---|
-| Knowledge Demon | {walk.state.enemies[0].hp} / {walk.state.enemies[0].max_hp} | Poison {walk.state.enemies[0].powers[0].amount}, Strength {walk.state.enemies[0].powers[1].amount} | a debuff |
+| Mecha Knight | {walk.state.enemies[0].hp} / {walk.state.enemies[0].max_hp} | Strength {walk.state.enemies[0].powers[0].amount}, Poison {walk.state.enemies[0].powers[1].amount}, Weak {walk.state.enemies[0].powers[2].amount} | an attack of 16 and a status card |
 
 The question the search asks: if it stops here, what is this state worth?
 
@@ -48,7 +49,7 @@ The question the search asks: if it stops here, what is this state worth?
 
 **The 3 numbers**: ascension / 10, orb slots / 10 and gold / 100 are {walk.tokens.extra.join(', ')}.
 
-**The enemy** has the numbers {walk.enemies[0].numbers.join(', ')}: HP share, HP / 100, max HP / 100, block / 20, and 4 rounds shown / 10. Its four intent slots come from the screen and from the record of its earlier moves. Last round it showed three intents, and the table gives the first:
+**The enemy** has the numbers {walk.enemies[0].numbers.join(', ')}: HP share, HP / 100, max HP / 100, block / 20, and 7 rounds shown / 10. Its four intent slots come from the screen and from the record of its earlier moves. Slots 0, 2 and 3 hold two intents each, and the table gives the first:
 
 | slot | what | type | damage / 10 | total / 20 |
 |---|---|---|---|---|
@@ -57,7 +58,7 @@ The question the search asks: if it stops here, what is this state worth?
 | 2 | 2 rounds ago | {walk.enemies[0].slots[2][0].type} | {walk.enemies[0].slots[2][0].damage} | {walk.enemies[0].slots[2][0].total} |
 | 3 | 3 rounds ago | {walk.enemies[0].slots[3][0].type} | {walk.enemies[0].slots[3][0].damage} | {walk.enemies[0].slots[3][0].total} |
 
-**The relics** carry their counters: only Girya shows one, 0, so its `relic_values` are <code>{JSON.stringify(walk.tokens.relic_values[2])}</code>, and every relic's status is `Normal`.
+**The relics** carry their counters: only Pollinous Core shows one, 3, so its `relic_values` are <code>{JSON.stringify(walk.tokens.relic_values[5])}</code>, and its status is `Active`; every other relic's is `Normal`.
 
 **The context** is 4 tokens: {walk.tokens.context.join(', ')}.
 
@@ -69,19 +70,20 @@ The tensors have these shapes for this state, with a batch of 1:
 
 | input | shape | why |
 |---|---|---|
-| `cards`, `ups`, `costs`, `damages` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 27 cards in all |
+| `cards`, `ups`, `costs`, `damages` | <code>{JSON.stringify(walk.shapes.cards)}</code> | 35 cards in all |
 | `piles` | <code>{JSON.stringify(walk.shapes.piles)}</code> | one-hot over 4 piles |
-| `powers` | <code>{JSON.stringify(walk.shapes.powers)}</code> | two powers |
+| `powers` | <code>{JSON.stringify(walk.shapes.powers)}</code> | three powers |
 | `enemies` | <code>{JSON.stringify(walk.shapes.enemies)}</code> | one enemy |
-| `enemy_powers` | <code>{JSON.stringify(walk.shapes.enemy_powers)}</code> | two powers |
-| `intents` | <code>{JSON.stringify(walk.shapes.intents)}</code> | 4 slots, up to 3 intents in each |
-| `relics` | <code>{JSON.stringify(walk.shapes.relics)}</code> | seven relics |
+| `enemy_powers` | <code>{JSON.stringify(walk.shapes.enemy_powers)}</code> | three powers |
+| `intents` | <code>{JSON.stringify(walk.shapes.intents)}</code> | 4 slots, up to 2 intents in each |
+| `relics` | <code>{JSON.stringify(walk.shapes.relics)}</code> | eleven relics |
 | `potions` | <code>{JSON.stringify(walk.shapes.potions)}</code> | one potion: an empty slot is no token |
-| `orbs`, `allies` | <code>{JSON.stringify(walk.shapes.orbs)}</code> | none, so one padded row with mask 0 |
+| `orbs` | <code>{JSON.stringify(walk.shapes.orbs)}</code> | one orb |
+| `allies` | <code>{JSON.stringify(walk.shapes.allies)}</code> | none, so one padded row with mask 0 |
 
 ## 4. One card, then the piles
 
-The card's vector is the first lines of `Net.encode` (`learn/combat/net.py:211-282`). Take **{walk.card.id}** in the hand. Its entry in the card table is {walk.card.entry}, its upgrade level {walk.card.up}; it costs 0, and its damage of 6 reads as {walk.card.damage}.
+The card's vector is the first lines of `Net.encode` (`learn/combat/net.py:211-282`). Take **{walk.card.id}** in the discard pile. Its entry in the card table is {walk.card.entry}, its upgrade level {walk.card.up}; it costs 1, which reads as {walk.card.cost}, and its damage of 6 reads as {walk.card.damage}.
 
 | part | vector |
 |---|---|
@@ -89,10 +91,10 @@ The card's vector is the first lines of `Net.encode` (`learn/combat/net.py:211-2
 | its upgrade direction $U[c]$, times {walk.card.up} | <code>{v(walk.card.up_vector)}</code> |
 | the cost vector $K$, times {walk.card.cost} | <code>{v(walk.card.cost_vector)}</code> |
 | the damage vector $D$, times {walk.card.damage} | <code>{v(walk.card.damage_vector)}</code> |
-| the hand's vector $P[l]$ | <code>{v(walk.card.pile_vector)}</code> |
+| the discard pile's vector $P[l]$ | <code>{v(walk.card.pile_vector)}</code> |
 | their sum $x$ | <code>{v(walk.card.x)}</code> |
 
-Add the first numbers up to check: 0.065 + 0 + 0 − 0.004 − 0.138 = −0.078, off by the rounding. $D$ is small in this file, so the damage adds little ([The combat net §8](/en/arch/combat-brain/network/#sec-8)).
+Add the first numbers up to check: 0.060 + 0 + 0.144 − 0.007 + 0.192 = 0.389. $D$ is small in this file, so the damage adds little ([The combat net §8](/en/arch/combat-brain/network/#sec-8)).
 
 $\varphi$ then maps $x$ to 64 numbers, <code>{v(walk.card.phi.first)}</code>. Being a ReLU's output, none is below 0, and {walk.card.phi.zeros} of the 64 are exactly 0.
 
@@ -109,13 +111,13 @@ An empty pile is exactly the zero vector. These four join into the 256 numbers o
 
 ## 5. The powers
 
-The player has two powers, Noxious Fumes and Disintegration, each with amount {walk.state.powers[0].amount}, scaled to 0.6. Each one's vector is its id's vector plus 0.6 times its amount direction. One layer of 32 → 64 maps each, and the sum of the two outputs is <code>{v(walk.powers.first)}</code>, with {walk.powers.zeros} of 64 at 0.
+The player has three powers, Thorns, Dexterity and Noxious Fumes, with amounts 3, 1 and 3, scaled to 0.3, 0.1 and 0.3. Each one's vector is its id's vector plus its scaled amount times its amount direction. One layer of 32 → 64 maps each, and the sum of the three outputs is <code>{v(walk.powers.first)}</code>, with {walk.powers.zeros} of 64 at 0.
 
 ## 6. The enemies
 
 An enemy joins three parts, and one $\varphi$ reads every enemy:
 
-| | Knowledge Demon |
+| | Mecha Knight |
 |---|---|
 | id + numbers (32) | <code>{v(walk.enemies[0].numbers_vector)}</code> |
 | powers' sum (64) | <code>{v(walk.enemies[0].powers_vector)}</code> |
@@ -129,10 +131,10 @@ Its entry in the enemy table is {walk.enemies[0].entry}. The enemies' part is th
 
 | part | size | first numbers | length |
 |---|---|---|---|
-| relics, 7 | 32 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
+| relics, 11 | 32 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
 | potions, 1 | 32 | <code>{v(walk.bags.potions.first)}</code> | {walk.bags.potions.norm} |
 | context, 4 tokens | 32 | <code>{v(walk.bags.context.first)}</code> | {walk.bags.context.norm} |
-| orbs, none | 32 | <code>{v(walk.bags.orbs.first)}</code> | {walk.bags.orbs.norm} |
+| orbs, 1 | 32 | <code>{v(walk.bags.orbs.first)}</code> | {walk.bags.orbs.norm} |
 | allies, none | 64 | <code>{v(walk.bags.allies.first)}</code> | {walk.bags.allies.norm} |
 
 A bag has no layer, so its numbers can be below 0. With one potion, the potions' bag is exactly that potion's vector.
@@ -171,9 +173,9 @@ One linear layer gives 51 raw numbers. The first is the death's, {walk.head.deat
 
 ## 11. The mask, then the softmax
 
-The HP share is {walk.value.share}. A bucket $[l, l + 0.025)$ stays open if $l < 0.5571$ and $l + 0.025 > 0.5571 - 1$. Here:
+The HP share is {walk.value.share}. A bucket $[l, l + 0.025)$ stays open if $l < 0.506$ and $l + 0.025 > 0.506 - 1$. Here:
 
-- The bottom: a fight cannot heal more than the HP missing. {walk.state.max_hp - walk.state.hp} of {walk.state.max_hp} HP is a share of 0.443, more than the lowest bucket's {walk.head.open_from}, so no bucket closes here.
+- The bottom: a fight cannot heal more than the HP missing. {walk.state.max_hp - walk.state.hp} of {walk.state.max_hp} HP is a share of 0.494, more than the lowest bucket's {walk.head.open_from}, so no bucket closes here.
 - The top: a win cannot lose all the HP held, so the buckets from {walk.head.open_to} up are closed.
 
 That leaves **{walk.head.open} of the 50 buckets open**. The others get a logit of $-10^4$ (`Net.reachable`, `learn/combat/net.py:203-209`), and the softmax gives them exactly 0.
@@ -182,18 +184,18 @@ The softmax over the rest gives the chances. A death has {walk.head.death}. The 
 
 | share of max HP still to be lost | in HP | chance |
 |---|---|---|
-| {walk.head.tops[0].low} to {walk.head.tops[0].high} | 21 to 22.8 | {pct(walk.head.tops[0].chance)} |
-| {walk.head.tops[1].low} to {walk.head.tops[1].high} | 22.8 to 24.5 | {pct(walk.head.tops[1].chance)} |
-| {walk.head.tops[2].low} to {walk.head.tops[2].high} | 17.5 to 19.3 | {pct(walk.head.tops[2].chance)} |
-| {walk.head.tops[3].low} to {walk.head.tops[3].high} | 24.5 to 26.3 | {pct(walk.head.tops[3].chance)} |
+| {walk.head.tops[0].low} to {walk.head.tops[0].high} | 0 to 2.1 | {pct(walk.head.tops[0].chance)} |
+| {walk.head.tops[1].low} to {walk.head.tops[1].high} | 2.1 to 4.2 | {pct(walk.head.tops[1].chance)} |
+| {walk.head.tops[2].low} to {walk.head.tops[2].high} | 4.2 to 6.2 | {pct(walk.head.tops[2].chance)} |
+| {walk.head.tops[3].low} to {walk.head.tops[3].high} | 6.2 to 8.3 | {pct(walk.head.tops[3].chance)} |
 
-The net expects this fight to be won at a real cost, about a third of max HP. The enemy holds 334 HP with 25 poison, and the player's Noxious Fumes adds more each turn; the net read those numbers, though nothing here says which inputs moved it most.
+The net expects this fight to be won at little cost: more than half of the chance falls on the bucket that loses at most 2 HP. The enemy holds 136 HP with 25 poison, and the player's Noxious Fumes adds more each turn; the net read those numbers, though nothing here says which inputs moved it most.
 
 ## 12. The potion head
 
-The same 256 numbers go through a second linear layer, of 256 → {walk.potion.outputs}, one output per entry of the potion table. Fairy in a Bottle is entry {walk.potion.entry}. Its logit is {walk.potion.logit}, and the sigmoid makes that **{walk.potion.chance}**: the net expects the potion to be gone after a win.
+The same 256 numbers go through a second linear layer, of 256 → {walk.potion.outputs}, one output per entry of the potion table. Potion-Shaped Rock is entry {walk.potion.entry}. Its logit is {walk.potion.logit}, and the sigmoid makes that **{walk.potion.chance}**: the net expects the potion to be still held after a win.
 
-The other {walk.potion.outputs - 1} outputs are computed and not read. The largest here are {walk.potion.most_likely[0].id} and {walk.potion.most_likely[1].id}, both near {walk.potion.most_likely[0].chance}: this state holds neither, so they mean nothing and train nothing. A potion that neither training held, such as {walk.potion.unheld}, has `<unk>`'s row and shows its chance, {walk.potion.unk}.
+The other {walk.potion.outputs - 1} outputs are computed and not read. The largest here are {walk.potion.most_likely[0].id} and {walk.potion.most_likely[1].id}, at {walk.potion.most_likely[0].chance} and {walk.potion.most_likely[1].chance}: this state holds neither, so they mean nothing and train nothing. A potion that no training held, such as {walk.potion.unheld}, has `<unk>`'s row and shows its chance, {walk.potion.unk}.
 
 ## 13. The number the search reads
 
@@ -210,7 +212,7 @@ $$
 | their term, $(1 - p_0) \times 0.02 \times$ that | {walk.value.potion_term} |
 | **the value** | **{walk.value.value}** |
 
-The planner's **bound** for this state is a win with no HP or potion lost: 0.2 + 0.6 × {walk.value.share} + 0.02 = {walk.value.bound}. The value sits far below it, since the net expects a third of max HP and the potion to be lost.
+The planner's **bound** for this state is a win with no HP or potion lost: 0.2 + 0.6 × {walk.value.share} + 0.02 = {walk.value.bound}. The value sits 0.043 below it, since the net expects about 5.5 HP lost and a small chance of the potion gone.
 
 ## 14. What a search sees
 
@@ -222,13 +224,13 @@ A search compares states. Change one thing at a time and run the net again:
 | {walk.lost_hp} HP less | {walk.siblings.less_hp.share} | {walk.siblings.less_hp.win_term} | {walk.siblings.less_hp.potion_term} | {walk.siblings.less_hp.value} |
 | the potion gone | {walk.siblings.no_potion.share} | {walk.siblings.no_potion.win_term} | {walk.siblings.no_potion.potion_term} | {walk.siblings.no_potion.value} |
 
-{walk.lost_hp} HP is a share of 0.143 of 70, which at 0.6 is 0.086, while the value falls by 0.041. The HP held counts in full ([The combat net §7](/en/arch/combat-brain/network/#sec-7)), and the net answers as well: it now expects less to be lost, the likeliest bucket moving down to {walk.siblings.less_hp.tops[0].low} to {walk.siblings.less_hp.tops[0].high}, with a death at {pct(walk.siblings.less_hp.death)}.
+{walk.lost_hp} HP is a share of 0.120 of 83, which at 0.6 is 0.072, and the value falls by 0.073. The HP held counts in full ([The combat net §7](/en/arch/combat-brain/network/#sec-7)), and the net's answer hardly moves: the likeliest bucket stays at {walk.siblings.less_hp.tops[0].low} to {walk.siblings.less_hp.tops[0].high}, with a death at {pct(walk.siblings.less_hp.death)}.
 
-The potion's flat price says nothing here, since the net expects it to be used. Yet without it a death goes from {pct(walk.value.death)} to {pct(walk.siblings.no_potion.death)}, and the value falls to {walk.siblings.no_potion.value}. The net has learned what Fairy in a Bottle does in this fight, from the endings of runs that held it.
+The potion's flat price here is {walk.value.potion_term}. Yet without it the value falls to {walk.siblings.no_potion.value}, by 0.038: a death goes from {pct(walk.value.death)} to {pct(walk.siblings.no_potion.death)}, and the likeliest bucket's chance from {pct(walk.head.tops[0].chance)} to {pct(walk.siblings.no_potion.tops[0].chance)}. The net has learned this from the endings of runs that held the potion, though it expects this one to be kept; nothing here says why.
 
 ## 15. Two harder states
 
-Two other states of the same file show what this one does not, a fight at nearly full HP that may still be lost, and a low HP that closes most of the buckets:
+Two other states of the same file show what this one does not, a boss fight more likely lost than won, and a low HP that closes most of the buckets:
 
 | | {walk.others.danger.encounter} | {walk.others.mask.encounter} |
 |---|---|---|
@@ -246,10 +248,10 @@ In the boss fight the value is far below the bound: a chance of death takes that
 
 ## 16. The label
 
-So far the net has predicted. In training this state also has an answer, from how its fight really ended. The file does not keep that ending, so take one for illustration: **suppose the fight is won at {walk.label.end_hp} of 70 HP, with the potion still held**.
+So far the net has predicted. In training this state also has an answer, from how its fight really ended. The file does not keep that ending, so take one for illustration: **suppose the fight is won at {walk.label.end_hp} of 83 HP, with the potion still held**.
 
-- **The ending's class.** The share lost from this state is 39/70 − {walk.label.end_hp}/70 = {walk.label.lost}, in the bucket from {walk.label.low} to {walk.label.high}: class {walk.label.class}. Every round start of that fight would get its own class, from its own HP.
+- **The ending's class.** The share lost from this state is 42/83 − {walk.label.end_hp}/83 = {walk.label.lost}, in the bucket from {walk.label.low} to {walk.label.high}: class {walk.label.class}. Every round start of that fight would get its own class, from its own HP.
 - **The potion's label.** It is still in the first run view after the fight, so its label is 0.
 - **The loss.** The chance of class {walk.label.class} was {walk.label.chance}, so the endings' cross-entropy is {walk.label.ending_loss}. The potion's is {walk.label.potion_loss}. The sample's loss is their sum, and a gradient step would push that bucket's chance up.
 
-A large loss like the potion's is what a surprise looks like: under this supposed ending, the net was badly wrong about the potion, and not about the HP. How labels are made across a whole list of runs is in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3).
+A large loss like the ending's is what a surprise looks like: under this supposed ending, the net was badly wrong about the HP, and not about the potion. How labels are made across a whole list of runs is in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3).

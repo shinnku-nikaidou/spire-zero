@@ -59,7 +59,7 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 | part | status | where |
 |---|---|---|
 | self-play: whole runs, even draws at ε | built | `run --explore`, [The loop §2](/en/arch/learning/loop/#sec-2) |
-| softmax exploration over the logs of V's values or the search's values | built; L0's beside even draws in `v7g2` | `run --macro-explore`, `--combat-explore`, [The loop §9](/en/arch/learning/loop/#sec-9) |
+| softmax exploration over the logs of V's values or the search's values | built; L0's beside even draws in `v8g2` | `run --macro-explore`, `--combat-explore`, [The loop §9](/en/arch/learning/loop/#sec-9) |
 | V's training, Monte Carlo labels | built | `learn/v/`, [Macro brain: from hazards to value §5](/en/arch/macro-brain/value/#sec-5) |
 | the combat net's training, Monte Carlo labels | built | `learn/combat/`, [Training the combat net](/en/arch/learning/combat-net/) |
 | boss-fight labels for V (boss sims, door states) | built, unused | `learn/bosslab.py`, [Reference §9](/en/arch/learning/reference/#sec-9) |
@@ -77,4 +77,4 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 - [The loop](/en/arch/learning/loop/): self-play, Monte Carlo, TD(λ), expert iteration, SPSA, LLM patches and gates, exploration, credit assignment, shaping, privileged information and local optima, each with what is built.
 - [Reference](/en/arch/learning/reference/): compute, the data directory, lists, the ledger, weight names, net files, C# inference, every script with its options, tests and open questions.
 
-The champions are in [Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1). The project plays two nets, V v8-2 and the combat net c8-2, on a structure all five characters share, with weights per character; the history of its nets and data is the ledger, `eval/silent/ledger.md`.
+The champions are in [Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1). The project plays two nets, V v8-3 and the combat net c8-3, on a structure all five characters share, with weights per character; the history of its nets and data is the ledger, `eval/silent/ledger.md`.

@@ -60,6 +60,7 @@ flowchart LR
 
 | 清單 | 內容 | 讀取者 |
 |---|---|---|
+| `v8g2` | `v8g2` 這一代在晉階 10 的完整 SL 自我對弈 | `v.train` 和 `combat.train --list`，用於 v8-3 和 c8-3 |
 | `v8g1` | 晉階 10 的完整 SL 自我對弈，即 `v7g2` 這一代，用的是它的訓練給它的名字 | `v.train` 和 `combat.train --list`，用於 v8-2 和 c8-2 |
 | `v7g1` | 第 `v7g1` 代的完整 SL 自我對弈 | `v.train`，用於 v8-1 的權重 |
 | `c7` | 戰鬥網路較早的訓練集：完整的 SL 自我對弈和 `promotion-301-500` 上 600 局 medium 預算對局，放在資料旁邊 | `combat.train --list`，用於 c8-1 的權重 |
@@ -71,7 +72,7 @@ flowchart LR
 `eval/CHARACTER/ledger.md` 在 git 裡，是本專案關於網路和資料唯一的歷史：哪個大腦打了哪些資料，哪些資料訓練了哪些權重，每次門檻的結果如何。由執行訓練循環的那個工作階段維護它：
 
 - 一段說明冠軍；
-- **種子區段**：訓練種子是 `run --seed 1 --start K`；每個資料集在開始之前登記一個 100,000 寬的區段，它的作業取其中的子範圍，所以兩批永遠不會共用一個種子。100000–199999 裝著 `v7g1`（第 1 代用 100000–159999，測試用 199000–199999）；200000–299999 裝著連戰的對局；300000–399999 裝著菁英連戰的評估種子 300000–300499，固定不變，從不用來訓練；400000–499999 屬於 A10 資料集 `v7g2`（它的訓練稱為 `v8g1`）；下一個空閒的區段是 500000–599999；
+- **種子區段**：訓練種子是 `run --seed 1 --start K`；每個資料集在開始之前登記一個 100,000 寬的區段，它的作業取其中的子範圍，所以兩批永遠不會共用一個種子。100000–199999 裝著 `v7g1`（第 1 代用 100000–159999，測試用 199000–199999）；200000–299999 裝著連戰的對局；300000–399999 裝著菁英連戰的評估種子 300000–300499，固定不變，從不用來訓練；400000–499999 屬於 A10 資料集 `v7g2`（它的訓練稱為 `v8g1`）；500000–599999 屬於 `v8g2`；下一個空閒的區段是 600000–699999；
 - **規則**：訓練種子和測試種子從不相遇。自我對弈和分叉作業打訓練種子，評估作業打 `eval/seeds/` 裡的檔案；`box.py` 拒絕其他做法。兩個訓練器都拒絕含有評估作業對局的清單（`common.train_lists`）；
 - **批次表**：批次、環境、打它的大腦、提交、訓練種子、局數、是否使用，以及它的資料夾；
 - **權重表**：名稱、種類、在什麼上訓練、它的晉級門檻、它的角色。
@@ -82,13 +83,13 @@ flowchart LR
 
 每個角色單獨訓練、單獨評判，各有自己的大腦；同一個角色的每個晉階等級都由這一個大腦來打，它逐級往上爬。所以每個角色的檔案有一個資料夾 `weights/CHARACTER/`（寂靜獵手是 `weights/silent/`；`learn/weights.py`）。
 
-`weights/silent/` 裡有 `v8-2.json`，宏觀大腦的 V，以及 `c8-2.json`，戰鬥網路，兩個冠軍，SL 的和 NoSL 的，都打它們（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。旁邊是 `v8-1.json` 和 `c8-1.json`，它們接著訓練的網路，測試會讀；以及 `v7-1f.json` 和 `c7-2.json`，是和那兩個相同的權重配上較小的表，留作它們訓練的記錄；`CombatNet` 不再載入 `c7-2.json`。
+`weights/silent/` 裡有 `v8-3.json`，宏觀大腦的 V，以及 `c8-3.json`，戰鬥網路，兩個冠軍，SL 的和 NoSL 的，都打它們（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。旁邊是 `v8-2.json` 和 `c8-2.json`，它們接著訓練的網路；`v8-1.json` 和 `c8-1.json`，那兩個網路接著訓練的對象，測試會讀；以及 `v7-1f.json` 和 `c7-2.json`，是和那兩個相同的權重配上較小的表，留作它們訓練的記錄；`CombatNet` 不再載入 `c7-2.json`。
 
 - **永不覆蓋**。訓練器寫到 `weights/CHARACTER/NAME.json`，除非 `--out` 另行指定；任何角色資料夾裡已有同名檔案時，它拒絕這個名字（`out_path`，`learn/weights.py:18-25`），所以一個名字只用一次，永遠指同一份權重。沒有任何保留下來的對局會用到的試驗檔案，用 `--out` 放到別處。
 - **角色**。訓練器的 `--character`（預設 SILENT）指定角色：記錄裡有別的角色的對局會被拒絕（`learn/common.py:84-85`），檔案裡也記下這個角色。
 - **名稱**。`vN-M` 是 V，`cN-M` 是戰鬥網路，有變體時在編號後面加字母（`v7-1f`）。`vNgM` 指一代的資料，從不指網路。
 - **在 git 裡**。`weights/` 在 git 裡：一個檔案 1.4–2.5 MB，而且從不改變，所以一個提交就同時確定了程式碼、權重和冠軍檔案；冠軍檔案直接引用權重所在的路徑。不再使用的網路檔案留在 git 的歷史裡（最後在 `20970d9`），`eval/silent/ledger.md` 說明每個檔案是什麼。
-- **環境**。戰鬥網路檔案記下它學習的環境（`env`），C# 不讀它：SL 和 NoSL 打同一個檔案（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。c8-2 的權重從 SL 的對局學習；在 NoSL 下它能載入、能打，但從沒在那裡訓練過或過過門檻。
+- **環境**。戰鬥網路檔案記下它學習的環境（`env`），C# 不讀它：SL 和 NoSL 打同一個檔案（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。c8-3 的權重從 SL 的對局學習；在 NoSL 下它能載入、能打，但從沒在那裡訓練過或過過門檻。
 
 ## 7. 網路檔案
 
@@ -100,7 +101,7 @@ flowchart LR
 |---|---|---|
 | `name` | 網路的名字，和冠軍顯示的一樣（`l0 NAME`） | 是 |
 | `character` | 角色，例如 `SILENT` | 否 |
-| `objective` | `floor` 或 `win`；v8-2 的是 `win` | 是 |
+| `objective` | `floor` 或 `win`；v8-3 的是 `win` | 是 |
 | `floors` | 64 | 是 |
 | `vocab` | 每張表列出這個遊戲版本的每個 id（`learn/game_ids.py`），第 0 項是 `<unk>`：`cards`、`modifiers`、`relics`、`potions`、`context`、`map` | 是 |
 | `state` | `names`（floor、hp、max_hp、gold、ascension、potion_slots）、`mean`、`std` | 是 |
@@ -122,7 +123,7 @@ flowchart LR
 | `onnx` | 輸入按 `learn/combat/encode.py` 的 `INPUTS` 命名；輸出 `outcome`（batch × 51，softmax，關閉的桶為 0）和 `potion_used`（batch × 藥水 id，sigmoid） | 是 |
 | `tests` | 最多 16 個留出的回合開始局面，其中有多段攻擊、持有藥水和低生命值的狀態：`obs`、`history`、`outcome`、`potion_used` | 是 |
 
-下圖逐欄打開兩個網路檔案 v8-2.json 和 c8-2.json：大小、計算圖的輸入和輸出及其形狀、它的初始化器（權重張量，只列形狀）和運算子，以及訓練報告。
+下圖逐欄打開兩個網路檔案 v8-3.json 和 c8-3.json：大小、計算圖的輸入和輸出及其形狀、它的初始化器（權重張量，只列形狀）和運算子，以及訓練報告。
 
 <NetFileAnatomy client:visible lang="zh-TW" />
 
@@ -189,7 +190,7 @@ flowchart LR
 
 ### `combat.train`：戰鬥網路
 
-`uv run python -m combat.train --list data/silent/lists/v8g1 --env SL --name NAME --test-list data/silent/lists/medium`，另有可選的 `--out`、`--character`（SILENT）、`--init`（接著訓練的網路檔案）和 `--seed`（0）。`--list` 含有評估作業的對局就拒絕；`--test-list` 指明一對清單，其中的對局只報告，標為 `medium`。`learn/combat/report.py` 負責報告（`ranks`、`rank_within`、`auc_within`、`potion_rates`、`log_loss`、`predict`、`summary`）。它的樣本、損失、常數和報告見[訓練戰鬥網路 §3](/zh-tw/arch/learning/combat-net/#sec-3)–[§4](/zh-tw/arch/learning/combat-net/#sec-4)。
+`uv run python -m combat.train --list data/silent/lists/v8g2 --env SL --name NAME --test-list data/silent/lists/medium`，另有可選的 `--out`、`--character`（SILENT）、`--init`（接著訓練的網路檔案）和 `--seed`（0）。`--list` 含有評估作業的對局就拒絕；`--test-list` 指明一對清單，其中的對局只報告，標為 `medium`。`learn/combat/report.py` 負責報告（`ranks`、`rank_within`、`auc_within`、`potion_rates`、`log_loss`、`predict`、`summary`）。它的樣本、損失、常數和報告見[訓練戰鬥網路 §3](/zh-tw/arch/learning/combat-net/#sec-3)–[§4](/zh-tw/arch/learning/combat-net/#sec-4)。
 
 ### `learn/gauntlet.py`：V 的報告和晉級門檻
 
@@ -272,7 +273,7 @@ flowchart LR
 
 ## 12. 未決問題
 
-1. v8-2 和 c8-2 在整局中值多少：v8-2 的勝局建立在雙方合計 14 局勝局、200 個種子上，是事後讀出的，而且它按層數沒有通過門檻（[評估：冠軍與基線 §2](/zh-tw/arch/evaluation/champions/#sec-2)）；在 NoSL 下兩者都沒有訓練過，也沒過過門檻。
+1. v8-3 和 c8-3 在整局中值多少：v8-3 在 200 個種子上按配對勝局通過，c8-3 單獨看沒有顯出提升，這一對單獨對上 v8-2 和 c8-2 差一點才通過（95 % 下界 −0.26），兩個網路也都沒有見過循環的結局（[評估：冠軍與基線 §2](/zh-tw/arch/evaluation/champions/#sec-2)）；在 NoSL 下兩者都沒有訓練過，也沒過過門檻。
 2. 一旦 V 按 P(win) 做決策，除了 Brier 分數之外，怎麼檢查它的校準。
 3. 每個決策的標籤都帶著它那一局之後的抽取。每局設一個切點就能去掉它們：切點之前抽取，切點之後用 V 的最佳，只在切點之後的決策上訓練，就像 AlphaGo 的價值網路那樣訓練（[循環 §9](/zh-tw/arch/learning/loop/#sec-9)）。這件事沒有做。
 4. TD(λ) 或專家迭代是否對 V 有幫助，V 的標籤目前只有蒙地卡羅目標。

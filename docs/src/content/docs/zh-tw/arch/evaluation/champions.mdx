@@ -14,10 +14,10 @@ sidebar:
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c8-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-2 clone, macro prompts l0 v8-2 clone",
+  "champion": "combat plan c8-3 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-3 clone, macro prompts l0 v8-3 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v8-2.json", "afterstates": "clone", "combat-net": "weights/silent/c8-2.json",
+    "value": "weights/silent/v8-3.json", "afterstates": "clone", "combat-net": "weights/silent/c8-3.json",
     "character": "SILENT", "asc": "10"
   },
   "report": "eval/silent/reports/DATE-sl-a10-SET-NAME.json",
@@ -44,7 +44,7 @@ sidebar:
 
 **由 `--promote` 寫入，或由人工寫入**。`gate --promote` 寫入每個欄位，選項按挑戰者的選項產生（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:83-108`）：對 SL 規劃器是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。勝局門檻什麼也不寫，所以它晉級的網路由人工寫入（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)），SL 檔案寫著 `"effort": "medium"`，打的是同樣的預算（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。重定基線只改 `report`（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）。
 
-**兩個檔案**。兩個檔案都指明同樣兩個網路：`weights/silent/v8-2.json`（V）和 `weights/silent/c8-2.json`（戰鬥網路），都在晉階 10。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。兩個檔案指明的 `report` 是這個 SL 冠軍自己的，在 `promotion-1-200` 上打的 200 局 A10。因為它是 SL 報告，對 NoSL 檔案的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；兩個網路都沒有在 NoSL 下過過門檻。
+**兩個檔案**。兩個檔案都指明同樣兩個網路：`weights/silent/v8-3.json`（V）和 `weights/silent/c8-3.json`（戰鬥網路），都在晉階 10。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。兩個檔案指明的 `report` 是這個 SL 冠軍自己的，在 `promotion-1-200` 上打的 200 局 A10。因為它是 SL 報告，對 NoSL 檔案的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；兩個網路都沒有在 NoSL 下過過門檻。
 
 每個角色都有自己的資料夾 `eval/CHARACTER/`、`weights/CHARACTER/` 和 `data/CHARACTER/`，所有晉階等級共用一個大腦（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）；`eval/seeds/` 裡的種子集是共用的。
 
@@ -56,32 +56,32 @@ sidebar:
 - `eval/silent/reports/` 保存每一份已提交的報告，有 JSON 和 Markdown 兩種（[指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)）。
 - `eval/silent/leaderboard.md` 為這些報告排名，按種子集和環境分（[指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9)）。
 
-**冠軍的網路和它們的門檻**。v8-2 和 c8-2 只用 `v7g2` 的 A10 對局訓練（8,087 局），從 v8-1 和 c8-1 接著訓練。它們的門檻在晉階 10 打新舊的四種配對，在 `promotion-1-200` 上，medium 200 個種子、低預算 200 個種子，由層數決定。1,600 局裡沒有遊戲錯誤。medium 的結果：
+**冠軍的網路和它們的門檻**。v8-3 和 c8-3 只用 `v8g2` 的 A10 對局訓練（10,038 局），從 v8-2 和 c8-2 接著訓練。`v8g2` 是在搜尋能在一回合內打循環之前打的，所以兩個網路都沒有見過循環的結局。它們的門檻在晉階 10 打新舊的四種配對，在 `promotion-1-200` 上，medium 200 個種子、低預算 200 個種子，用的就是那個搜尋，讀配對勝局。1,600 局中有一局失敗並被丟棄，所以 v8-3 配 c8-2 在 medium 下是 199 局；沒有遊戲錯誤。medium 的結果：
 
-| V | 戰鬥網路 | 200 局贏幾局 | 平均層數 |
+| V | 戰鬥網路 | 贏下 | 平均層數 |
 |---|---|---|---|
-| v8-1 | c8-1 | 2 | 30.77 |
-| v8-2 | c8-1 | 4 | 27.41 |
-| v8-1 | c8-2 | 4 | 31.43 |
-| v8-2 | c8-2 | 10 | 28.84 |
+| v8-2 | c8-2 | 200 局中 10 局 | 28.84 |
+| v8-3 | c8-2 | 199 局中 15 局 | 32.54 |
+| v8-2 | c8-3 | 200 局中 8 局 | 29.27 |
+| v8-3 | c8-3 | 200 局中 17 局 | 33.09 |
 
 每個網路的效果，涵蓋另一類的兩個網路，按種子配對：
 
-| 網路 | 預算 | 層數 | 95 % 下界 | 勝局，百分點 |
+| 網路 | 預算 | 勝局，百分點 | 95 % 下界 | 層數 |
 |---|---|---|---|---|
-| c8-2 | medium | +1.04 ± 0.60 | +0.05 | +2.0 ± 0.99 |
-| c8-2 | low | +0.89 ± 0.54 | +0.01 | −0.25 ± 0.75 |
-| v8-2 | medium | −2.97 ± 1.04 | | +2.0 ± 1.11 |
-| v8-2 | low | −4.09 ± 0.96 | | +0.75 ± 0.56 |
+| v8-3 | medium | +3.52 ± 1.76 | +0.62 | +3.74 ± 1.06 |
+| v8-3 | low | +2.00 ± 0.86 | +0.59 | +5.15 ± 0.95 |
+| c8-3 | medium | +0.00 ± 1.47 | −2.42 | +0.45 ± 0.71 |
+| c8-3 | low | −1.00 ± 1.00 | −2.65 | −0.16 ± 0.54 |
 
-c8-2 通過了。**v8-2 沒有通過門檻**：它按層數沒過，靠勝局成為冠軍。配 c8-2 在 medium 下和 v8-1 打相同的種子，它 200 局贏 10 局，對方贏 4 局，+3.0 ± 1.72 百分點，95 % 下界 +0.17，這是事後讀出的，不是按事先定好的規則；它的平均層數是 28.84 對 31.43。它到達的頭目較少，打贏後面頭目的比例較高。到達的頭目中被打敗的比例：
+v8-3 通過了。**c8-3 單獨看沒有顯出提升**：它和 v8-3 一起成為冠軍，這是勝局最多的配對。**這一對單獨對上 v8-2 和 c8-2 沒有通過**：在相同的種子上以 medium 對打，它 200 局贏 17 局，對方 10 局，+3.50 ± 2.28 百分點，95 % 下界 −0.26（14 個種子只有它贏，7 個只有對方贏，3 個都贏）；它的平均層數是 33.09 對 28.84。它到達的頭目較多，除了最後一個都更常打贏。到達的頭目中被打敗的比例：
 
-| V | 第 1 幕 | 第 2 幕 | 第 3 幕，第一個 | 第 3 幕，第二個 |
+| V，戰鬥網路 | 第 1 幕 | 第 2 幕 | 第 3 幕，第一個 | 第 3 幕，第二個 |
 |---|---|---|---|---|
-| v8-2 | 74.2 %（151 個中 112 個） | 73.1 %（93 個中 68 個） | 46.8 %（47 個中 22 個） | 45.5 %（22 個中 10 個） |
-| v8-1 | 83.2 %（167 個中 139 個） | 70.4 %（108 個中 76 個） | 41.4 %（58 個中 24 個） | 16.7 %（24 個中 4 個） |
+| v8-3，c8-3 | 77.9 %（172 個中 134 個） | 84.1 %（113 個中 95 個） | 58.1 %（74 個中 43 個） | 39.5 %（43 個中 17 個） |
+| v8-2，c8-2 | 74.2 %（151 個中 112 個） | 73.1 %（93 個中 68 個） | 46.8 %（47 個中 22 個） | 45.5 %（22 個中 10 個） |
 
-A10 的門檻現在讀配對勝局，層數列在旁邊（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
+A10 的門檻讀配對勝局，層數列在旁邊（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
 
 ## 3. 基線
 

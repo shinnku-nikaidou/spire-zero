@@ -14,10 +14,10 @@ A **champion** is the best accepted version of the AI in one environment: the br
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c8-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-2 clone, macro prompts l0 v8-2 clone",
+  "champion": "combat plan c8-3 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-3 clone, macro prompts l0 v8-3 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v8-2.json", "afterstates": "clone", "combat-net": "weights/silent/c8-2.json",
+    "value": "weights/silent/v8-3.json", "afterstates": "clone", "combat-net": "weights/silent/c8-3.json",
     "character": "SILENT", "asc": "10"
   },
   "report": "eval/silent/reports/DATE-sl-a10-SET-NAME.json",
@@ -44,7 +44,7 @@ A **champion** is the best accepted version of the AI in one environment: the br
 
 **Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:83-108`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. The wins gate writes nothing, so a net it promotes is written by hand ([Gates §10](/en/arch/evaluation/gates/#sec-10)), and the SL file says `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `report` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
 
-**The two files.** Both name the same two nets, `weights/silent/v8-2.json` (V) and `weights/silent/c8-2.json` (the combat net), at ascension 10. SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The `report` both name is this SL champion's own, 200 runs at A10 on `promotion-1-200`. Since it is an SL report, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)); neither net has been gated in NoSL.
+**The two files.** Both name the same two nets, `weights/silent/v8-3.json` (V) and `weights/silent/c8-3.json` (the combat net), at ascension 10. SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The `report` both name is this SL champion's own, 200 runs at A10 on `promotion-1-200`. Since it is an SL report, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)); neither net has been gated in NoSL.
 
 Each character has folders of its own, `eval/CHARACTER/`, `weights/CHARACTER/` and `data/CHARACTER/`, and one brain for all its ascensions ([Learning: reference §3](/en/arch/learning/reference/#sec-3)); the seed sets in `eval/seeds/` are shared.
 
@@ -56,32 +56,32 @@ These pages describe the current champion only. The record of what came before i
 - `eval/silent/reports/` holds every committed report, as JSON and Markdown ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)).
 - `eval/silent/leaderboard.md` ranks those reports, by seed set and environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
 
-**The champion's nets and their gate.** v8-2 and c8-2 trained on the A10 runs of `v7g2` alone (8,087 runs), going on from v8-1 and c8-1. Their gate played the four pairings of old and new at ascension 10, 200 seeds at medium and 200 at the low budget, on `promotion-1-200`, with floors deciding. Over 1,600 runs there were no game errors. At medium:
+**The champion's nets and their gate.** v8-3 and c8-3 trained on the A10 runs of `v8g2` alone (10,038 runs), going on from v8-2 and c8-2. `v8g2` was played before the search played cycles inside a turn, so neither net has seen a cycle's outcome. Their gate played the four pairings of old and new at ascension 10, 200 seeds at medium and 200 at the low budget, on `promotion-1-200`, with that search, and read paired wins. Of 1,600 runs one failed and was dropped, so v8-3 with c8-2 has 199 at medium; there were no game errors. At medium:
 
-| V | combat net | won of 200 | mean floor |
+| V | combat net | won | mean floor |
 |---|---|---|---|
-| v8-1 | c8-1 | 2 | 30.77 |
-| v8-2 | c8-1 | 4 | 27.41 |
-| v8-1 | c8-2 | 4 | 31.43 |
-| v8-2 | c8-2 | 10 | 28.84 |
+| v8-2 | c8-2 | 10 of 200 | 28.84 |
+| v8-3 | c8-2 | 15 of 199 | 32.54 |
+| v8-2 | c8-3 | 8 of 200 | 29.27 |
+| v8-3 | c8-3 | 17 of 200 | 33.09 |
 
 Each net's effect, over both of the other kind's nets, paired by seed:
 
-| net | budget | floors | lower 95 % | wins, points |
+| net | budget | wins, points | lower 95 % | floors |
 |---|---|---|---|---|
-| c8-2 | medium | +1.04 ± 0.60 | +0.05 | +2.0 ± 0.99 |
-| c8-2 | low | +0.89 ± 0.54 | +0.01 | −0.25 ± 0.75 |
-| v8-2 | medium | −2.97 ± 1.04 | | +2.0 ± 1.11 |
-| v8-2 | low | −4.09 ± 0.96 | | +0.75 ± 0.56 |
+| v8-3 | medium | +3.52 ± 1.76 | +0.62 | +3.74 ± 1.06 |
+| v8-3 | low | +2.00 ± 0.86 | +0.59 | +5.15 ± 0.95 |
+| c8-3 | medium | +0.00 ± 1.47 | −2.42 | +0.45 ± 0.71 |
+| c8-3 | low | −1.00 ± 1.00 | −2.65 | −0.16 ± 0.54 |
 
-c8-2 passed. **v8-2 did not pass a gate:** it failed by floors, and it became champion for its wins. Played with c8-2 at medium against v8-1 on the same seeds, it won 10 of 200 against 4, +3.0 ± 1.72 points, with a lower 95 % bound of +0.17, read after the fact and not by a rule set beforehand; its mean floor was 28.84 against 31.43. It reaches fewer bosses and beats the late ones more often. Bosses beaten of those reached:
+v8-3 passed. **c8-3 showed no gain apart:** it became champion beside v8-3, the pairing with the most wins. **The pair does not pass against v8-2 and c8-2 alone:** on the same seeds at medium it won 17 of 200 against 10, +3.50 ± 2.28 points, with a lower 95 % bound of −0.26 (14 seeds won only by it, 7 only by them, 3 by both); its mean floor was 33.09 against 28.84. It reaches more bosses, and beats all but the last more often. Bosses beaten of those reached:
 
-| V | act 1 | act 2 | act 3, first | act 3, second |
+| V, combat net | act 1 | act 2 | act 3, first | act 3, second |
 |---|---|---|---|---|
-| v8-2 | 74.2 % (112 of 151) | 73.1 % (68 of 93) | 46.8 % (22 of 47) | 45.5 % (10 of 22) |
-| v8-1 | 83.2 % (139 of 167) | 70.4 % (76 of 108) | 41.4 % (24 of 58) | 16.7 % (4 of 24) |
+| v8-3, c8-3 | 77.9 % (134 of 172) | 84.1 % (95 of 113) | 58.1 % (43 of 74) | 39.5 % (17 of 43) |
+| v8-2, c8-2 | 74.2 % (112 of 151) | 73.1 % (68 of 93) | 46.8 % (22 of 47) | 45.5 % (10 of 22) |
 
-An A10 gate now reads paired wins, with floors listed beside them ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
+An A10 gate reads paired wins, with floors listed beside them ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
 
 ## 3. Baselines
 

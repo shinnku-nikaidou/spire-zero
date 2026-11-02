@@ -100,7 +100,7 @@ $$
 | `check-clone-loop.txt` | `promotion-1` 的 29 个种子，按序号挑选 | 手工 | 一次开发检查；不是报告用的种子集 |
 
 - **训练种子和测试种子从不相遇**。自我对弈和分叉作业只打训练种子，评估作业只打 `eval/seeds/` 里的文件；作业启动器 `box.py` 拒绝其他做法，训练也拒绝含有评估作业对局的清单（[学习：参考 §5](/arch/learning/reference/#sec-5)）。`promotion-1-300` 及其各部分、`final-1` 和 `a10-check-1` 从未用于训练。
-- **`eval/seeds/retired/`** 存放不能再用来测试的种子集：`promotion-1-500`（`seeds --base 2 --n 500`，先是 `promotion-1-300`，再加 200 个），因为它后 200 个种子上的中等预算对局在较早战斗网络的数据里，也就进了 c8-1 和 c8-2 这一脉。在它上面报告过的结果仍作为历史保留。
+- **`eval/seeds/retired/`** 存放不能再用来测试的种子集：`promotion-1-500`（`seeds --base 2 --n 500`，先是 `promotion-1-300`，再加 200 个），因为它后 200 个种子上的中等预算对局在较早战斗网络的数据里，也就进了 c8-1、c8-2 和 c8-3 这一脉。在它上面报告过的结果仍作为历史保留。
 - **训练种子**是 `MakeSeed(1, i)`，即 `run --seed 1 --start K` 所打的种子。账本以 100,000 个为一块分发它们，每批一块，所以没有两批共用一个种子（`eval/silent/ledger.md`，[学习：参考 §5](/arch/learning/reference/#sec-5)）。
 - **晋级种子集是嵌套的**。每个较大的种子集都把较小的那个的种子放在前面，顺序不变，所以较大种子集上的报告能在共有的种子上与较小种子集上的报告配对。`promotion-1.txt` 的文件头写着用完之后轮换到 `promotion-2`（基数 4）；但 `promotion-2` 并不存在，基数 4 给了 `a10-check-1`。
 - **`final-1` 从未打过**：每份已提交的报告都在某个晋级种子集上。
@@ -162,7 +162,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 - **Auxiliary**（辅助）：每局精英数、跳过的卡牌奖励、结束时的金币；每局秒数和每个决策的毫秒数；各决策界面；
 - **Against DATE (CHAMPION, commit X)**，在给出 `--previous OLD.json` 时，或在 `gate --promote` 写出冠军的继任者时出现：胜率、层数均值、每一幕打到 Boss 的局数、随机决策和失败局数的前后对比；种子集、环境或级别不同时则写「Not comparable」。
 
-**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全部小写，NAME 写明是谁打的：在 `DATE-sl-r1-promotion-1-300-plan-c8-2-l0-v8-2-clone-p0` 里，是配战斗网络 `c8-2` 的 SL 规划器、在克隆上配 V `v8-2` 的 L0、由 `p0` 回答选牌提示。进阶 10 的报告在级别的位置上写 `a10`，比如 `DATE-sl-a10-promotion-1-200-plan-c8-2-l0-v8-2-clone-p0`。这只是约定；`--out` 接受任何路径。
+**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全部小写，NAME 写明是谁打的：在 `DATE-sl-r1-promotion-1-300-plan-c8-3-l0-v8-3-clone-p0` 里，是配战斗网络 `c8-3` 的 SL 规划器、在克隆上配 V `v8-3` 的 L0、由 `p0` 回答选牌提示。进阶 10 的报告在级别的位置上写 `a10`，比如 `DATE-sl-a10-promotion-1-200-plan-c8-3-l0-v8-3-clone-p0`。这只是约定；`--out` 接受任何路径。
 
 ## 8. 对局记录
 

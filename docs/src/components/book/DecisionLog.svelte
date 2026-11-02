@@ -25,7 +25,7 @@
   const HASH = (what: Words): Field => ({ key: 'obs_hash', value: '"…"', note: what });
   const SEED = (s: string): Field => ({ key: 'seed', value: s, note: w('Drawn from the run id and the decision’s number (SplitMix64). Logged on every line; only NoSL PIMC reads it.', '由 run id 和决策编号抽出（SplitMix64）。每一行都记下；只有 NoSL PIMC 会用到它。', '由 run id 和決策編號抽出（SplitMix64）。每一行都記下；只有 NoSL PIMC 會用到它。') });
   const MS = (ms: string): Field => ({ key: 'elapsed_ms', value: ms, note: w('How long the brain took, in milliseconds.', '大脑用了多久，单位毫秒。', '大腦用了多久，單位毫秒。') });
-  const L0 = '"l0 v8-2 clone"';
+  const L0 = '"l0 v8-3 clone"';
 
   const LINES: Line[] = [
     {
@@ -35,7 +35,7 @@
         ID(4),
         ENV,
         { key: 'surface', value: '"combat"', note: w('The floor-2 fight, SLIMES_WEAK: its first decision.', '第 2 层的战斗 SLIMES_WEAK：它的第一个决策。', '第 2 層的戰鬥 SLIMES_WEAK：它的第一個決策。') },
-        { key: 'brain', value: '"plan c8-2"', note: w('The SL planner with the combat net c8-2 in its leaves.', 'SL 规划器，叶节点用战斗网络 c8-2。', 'SL 規劃器，葉節點用戰鬥網路 c8-2。') },
+        { key: 'brain', value: '"plan c8-3"', note: w('The SL planner with the combat net c8-3 in its leaves.', 'SL 规划器，叶节点用战斗网络 c8-3。', 'SL 規劃器，葉節點用戰鬥網路 c8-3。') },
         HASH(w('The hash of the combat observation the brain was shown. Not the wire’s obs_hash, which hashes the whole observation.', '大脑看到的战斗观测的哈希。不是线路上的 obs_hash，那个是整个观测的哈希。', '大腦看到的戰鬥觀測的雜湊。不是線路上的 obs_hash，那個是整個觀測的雜湊。')),
         { key: 'legal', value: '7', note: w('How many legal actions there were.', '合法动作有几个。', '合法動作有幾個。') },
         { key: 'chosen', value: '"play:3:1"', note: w('The action in text form: play the card with uid 3 at the creature with uid 1.', '文本形式的动作：把 uid 为 3 的牌打向 uid 为 1 的生物。', '文字形式的動作：把 uid 為 3 的牌打向 uid 為 1 的生物。') },
@@ -70,7 +70,7 @@
         ID(378),
         ENV,
         { key: 'surface', value: '"rest"', note: w('A rest site on floor 25, at 38 of 70 HP.', '第 25 层的休息处，HP 38/70。', '第 25 層的休息處，HP 38/70。') },
-        { key: 'brain', value: L0, note: w('L0 with V v8-2, each option played on the node’s clone.', 'L0 用 V v8-2，每个选项都在节点克隆上打一遍。', 'L0 用 V v8-2，每個選項都在節點複本上打一遍。') },
+        { key: 'brain', value: L0, note: w('L0 with V v8-3, each option played on the node’s clone.', 'L0 用 V v8-3，每个选项都在节点克隆上打一遍。', 'L0 用 V v8-3，每個選項都在節點複本上打一遍。') },
         HASH(w('The hash of the whole observation: here the same as the wire’s obs_hash.', '整个观测的哈希：这里与线路上的 obs_hash 相同。', '整個觀測的雜湊：這裡與線路上的 obs_hash 相同。')),
         { key: 'legal', value: '2', note: w('rest:HEAL and rest:SMITH; no potions, so no belt actions.', 'rest:HEAL 和 rest:SMITH；没有药水，所以没有药水栏动作。', 'rest:HEAL 和 rest:SMITH；沒有藥水，所以沒有藥水欄動作。') },
         { key: 'chosen', value: '"rest:HEAL"', note: w('The run’s V valued healing a little above smithing (42.62 against 42.20 floors).', '这一局的 V 认为休息略好于锻造（42.62 对 42.20 层）。', '這一局的 V 認為休息略好於鍛造（42.62 對 42.20 層）。') },

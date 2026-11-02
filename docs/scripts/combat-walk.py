@@ -18,10 +18,10 @@ sys.path.insert(0, str(ROOT / "learn"))
 from combat import data, encode, export  # noqa: E402
 from combat.net import Batch, Net  # noqa: E402
 
-FILE = ROOT / "weights/silent/c8-2.json"
+FILE = ROOT / "weights/silent/c8-3.json"
 OUT = ROOT / "docs/src/data/combat-walk.json"
-MAIN = 7  # the only test state holding a potion: every step has something to show
-OTHERS = {"danger": 5, "mask": 2}  # a boss fight at 68 of 70 HP, and a state at 16 of 70 HP
+MAIN = 10  # the only test state holding a potion: every step has something to show
+OTHERS = {"danger": 3, "mask": 6}  # a boss fight more likely lost than won, and a state at 4 of 70 HP
 WIN_BASE, PER_HP, PER_POTION = 0.2, 0.6, 0.02  # LeafWeights' defaults
 LOST_HP = 10  # the sibling state of the search step
 
@@ -130,7 +130,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     )
     card_phi = net.card_phi(card_x)
     per_pile = torch.bmm(x["piles"].transpose(1, 2), card_phi).flatten(1) * net.SUM_SCALE
-    example = next(k for k, c in enumerate(tok["cards"]) if c[6] > 0 and not c[3])  # a plain card with damage, so the damage vector shows
+    example = next(k for k, c in enumerate(tok["cards"]) if c[0] == "STRIKE_SILENT" and not c[1] and not c[3])  # a plain Strike, so the cost and damage vectors show
     c_id, c_up, c_pile, c_mods, c_cost, _, c_damage = tok["cards"][example]
     t = x["cards"][0, example]
     card = {

@@ -32,14 +32,14 @@ Everything is in [The combat net §2](/en/arch/combat-brain/network/#sec-2). `le
 - **One environment.** `--env SL|NoSL` reads only that environment's lines; a log line of the other fails the training. The net is trained on `--env SL` ([The leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
 - **Weights and split.** Every round start weighs the same, and every fifth run by run id is held out, with all its round starts, for early stopping and the report. One held-out round start in 1,000 keeps its observation and history for the net file's test states (`KEEP`).
 
-**The data** the champion's weights last learned from is whole SL self-play at ascension 10, the 8,087 runs of `v8g1`, every combat fought at the medium budget. That makes 548,939 round starts, of which 105,494 are held out. Self-play's seeds and the gates' never meet, and `--list` refuses a list holding an eval job's runs (`common.train_lists`). c8-2 went on from c8-1, whose weights learned at ascension 0: 21,263 self-play runs, most of them at the low budget ([The SL planner: budget §2](/en/arch/sl-planner/budget/#sec-2)), plus 600 runs at medium budget on the seeds `promotion-301-500`, which is why `promotion-1-500` no longer serves as a test set ([Evaluation: metrics, seeds and reports §5](/en/arch/evaluation/metrics/#sec-5)).
+**The data** the champion's weights last learned from is whole SL self-play at ascension 10, the 10,038 runs of `v8g2`, every combat fought at the medium budget. That makes 736,075 round starts, of which 153,718 are held out. Self-play's seeds and the gates' never meet, and `--list` refuses a list holding an eval job's runs (`common.train_lists`). c8-3 went on from c8-2, which learned from the 8,087 A10 runs of `v8g1` and went on from c8-1, whose weights learned at ascension 0: 21,263 self-play runs, most of them at the low budget ([The SL planner: budget §2](/en/arch/sl-planner/budget/#sec-2)), plus 600 runs at medium budget on the seeds `promotion-301-500`, which is why `promotion-1-500` no longer serves as a test set ([Evaluation: metrics, seeds and reports §5](/en/arch/evaluation/metrics/#sec-5)).
 
-Of the wins' round starts, the mask never closes the true bucket, and 98 of 1,479,991 heal beyond the lowest bucket. 9.4 % of the round starts hold a potion.
+On the set `c7` of those weights, of the wins' round starts, the mask never closes the true bucket, and 98 of 1,479,991 heal beyond the lowest bucket. 9.4 % of the round starts hold a potion.
 
 ## 4. Loss and training
 
 ```bash
-uv run python -m combat.train --list data/silent/lists/v8g1 --env SL --name NAME --test-list data/silent/lists/medium
+uv run python -m combat.train --list data/silent/lists/v8g2 --env SL --name NAME --test-list data/silent/lists/medium
 ```
 
 The loss of a sample is (`loss`, `learn/combat/net.py:300-307`)
@@ -48,11 +48,11 @@ $$
 \text{loss} = \text{CE}(\text{masked endings}, \text{class}) + \text{won} \sum_{\text{held}} \text{BCE}(u_{\text{id}}, \text{gone}).
 $$
 
-The potions' term has weight 1 (`POTION_WEIGHT`), which is about 1 % of the loss: 0.045 potion rows per won sample at about 0.36 nats, against a cross-entropy of about 1.39. So the body stays the endings'.
+The potions' term has weight 1 (`POTION_WEIGHT`), which is about 1 % of the loss: 0.051 potion rows per won sample at about 0.33 nats, against a cross-entropy of about 1.24. So the body stays the endings'.
 
 The settings are fixed in the code (`learn/combat/train.py:34-36`): AdamW at learning rate 10⁻³ and weight decay 10⁻⁴; batches of 256; at most 20 epochs, ending after 3 without a held-out loss lower by 10⁻⁴. An experiment changes the code, and only a result keeps the change. The token tables are the game's, fixed ([The combat net §2](/en/arch/combat-brain/network/#sec-2)).
 
-**Going on from a net (`--init FILE`).** Training can start from a net file's weights, read back from its ONNX graph (`export.weights`), at the lower learning rate 3 × 10⁻⁴. The file's weights stand unless an epoch beats their held-out loss. A file with other tables than the game's is refused. c8-2 went on from c8-1 this way, on the 8,087 runs of `v8g1` alone: its best epoch was 2 of 6, and the held-out loss fell from c8-1's 1.5513 to 1.4084.
+**Going on from a net (`--init FILE`).** Training can start from a net file's weights, read back from its ONNX graph (`export.weights`), at the lower learning rate 3 × 10⁻⁴. The file's weights stand unless an epoch beats their held-out loss. A file with other tables than the game's is refused. c8-3 went on from c8-2 this way, on the 10,038 runs of `v8g2` alone: its best epoch was 2 of 6, and the held-out loss fell from c8-2's 1.2913 to 1.2579.
 
 **The report** (`learn/combat/report.py`), one JSON line on stdout, also kept as the net file's `fit`: `env`, `runs`, `held_out_runs`, `samples`, `held_out_samples`, `vocab`, then `held_out` and the same by act, room, encounter, HP (below 30 % or not) and potion id. With `--test-list`, `medium` holds the same for that whole list, which is reported and never trained on.
 
@@ -69,16 +69,16 @@ The settings are fixed in the code (`learn/combat/train.py:34-36`): AdamW at lea
 
 ## 5. What it measures
 
-The numbers are the report in `weights/silent/c8-2.json`. "Held out" is every fifth run of the training list, 1,531 runs at ascension 10 with 105,494 round starts, played at the medium budget.
+The numbers are the report in `weights/silent/c8-3.json`. "Held out" is every fifth run of the training list, 2,044 runs at ascension 10 with 153,718 round starts, played at the medium budget.
 
 | metric | held out | the HP share alone |
 |---|---|---|
-| endings' cross-entropy (the prior's) | 1.393 (2.348) | – |
-| deaths, actual and predicted | 6.75 %, 6.52 % | – |
-| rank with the end's price | 0.917 | 0.795 |
-| rank of HP lost, on wins | 0.675 | 0.121 |
-| AUC of a death | 0.937 | 0.718 |
-| potions' log loss (per id and room) | 0.357 (0.550) | – |
+| endings' cross-entropy (the prior's) | 1.242 (2.110) | – |
+| deaths, actual and predicted | 5.15 %, 5.16 % | – |
+| rank with the end's price | 0.927 | 0.833 |
+| rank of HP lost, on wins | 0.662 | 0.148 |
+| AUC of a death | 0.923 | 0.693 |
+| potions' log loss (per id and room) | 0.328 (0.575) | – |
 
 **What to read.** The rank with the end's price says little: the HP share alone gets most of it, since the end's price follows the HP held. The rank of HP lost and the AUC of a death are what the net adds beyond the HP held.
 
@@ -86,14 +86,14 @@ By room, on the held-out runs:
 
 | room | round starts | cross-entropy (prior) | deaths, actual and predicted | rank of HP lost | AUC of a death (HP share) |
 |---|---|---|---|---|---|
-| hallway | 67,909 | 1.083 (1.873) | 0.9 %, 0.8 % | 0.641 | 0.968 (0.884) |
-| elite | 21,176 | 1.963 (3.004) | 9.0 %, 8.0 % | 0.748 | 0.951 (0.758) |
-| boss | 16,409 | 1.943 (3.466) | 28.1 %, 28.1 % | 0.754 | 0.927 (0.684) |
+| hallway | 101,898 | 0.957 (1.671) | 0.6 %, 0.6 % | 0.627 | 0.956 (0.887) |
+| elite | 28,893 | 1.740 (2.758) | 7.0 %, 7.3 % | 0.747 | 0.949 (0.727) |
+| boss | 22,927 | 1.881 (3.243) | 23.0 %, 22.6 % | 0.737 | 0.909 (0.661) |
 
-**Low HP**, below 30 % of max HP, where 16.2 % of the held-out round starts die: the AUC of a death is 0.919 against the HP share's 0.562.
+**Low HP**, below 30 % of max HP, where 12.2 % of the held-out round starts die: the AUC of a death is 0.896 against the HP share's 0.576.
 
-**The potion head by id.** On the held-out runs Fairy in a Bottle is used 26.7 % of the time and predicted at 23.7 %, with a log loss of 0.276 against 0.465 per id and room. Across all rows, 33.6 % are used, and 32.6 % predicted.
+**The potion head by id.** On the held-out runs Fairy in a Bottle is used 21.3 % of the time and predicted at 22.3 %, with a log loss of 0.182 against 0.434 per id and room. Across all rows, 29.5 % are used, and 29.4 % predicted.
 
-**The hardest fight.** On Test Subject, where 79.4 % of the held-out round starts die, the net predicts 77.4 %, and its AUC of a death is 0.930 against 0.737. There are too few wins there to measure anything about HP lost.
+**The hardest fight.** On Test Subject, where 56.0 % of the held-out round starts die, the net predicts 52.3 %, and its AUC of a death is 0.881 against 0.662. Its rank of HP lost, on wins, is 0.747 against 0.432.
 
-Which of these translates to more won runs is for a gate to say ([Evaluation: gates §5](/en/arch/evaluation/gates/#sec-5)). At ascension 10, over both Vs, it reached 1.04 floors more than c8-1 at medium, ± 0.60 ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).
+Which of these translates to more won runs is for a gate to say ([Evaluation: gates §5](/en/arch/evaluation/gates/#sec-5)). At ascension 10, over both Vs, it reached 0.45 floors more than c8-2 at medium, ± 0.71, and won no more, +0.00 ± 1.47 points ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).

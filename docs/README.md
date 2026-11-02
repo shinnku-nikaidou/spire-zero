@@ -15,10 +15,9 @@ pnpm check          # build, then check links, anchors, locale triplets, unrende
 The sidebar is the book's table of contents (`astro.config.mjs`): an overview, four parts and the appendices. A
 chapter of several pages lives in a folder (`arch/macro-brain/`, its first page `index.mdx` at the chapter's URL).
 
-**Figures.** The macro brain's interactive figures are Svelte islands in `src/components/v/`, drawn with D3. They run
-the champion's V in the page: `src/lib/v/` reads `weights/silent/v6-3-2.json` at build time (served as
-`/data/v6-3-2.json` and `.bin`) and runs its forward pass in TypeScript; `pnpm check` makes it value the net file's
-test runs and the real decisions in `src/data/macro-examples.json` as the trainer and `sim afterstates` did. Cards,
+**Figures.** The macro brain's interactive figures are Svelte islands in `src/components/v/`, drawn with D3.
+`src/lib/v/` holds V's forward pass in TypeScript; `pnpm check` makes it value the test runs of
+`weights/silent/v8-3.json` as the trainer did. Cards,
 relics and potions show the game's own names (`src/data/names/`, written by
 `node scripts/game-names.mjs PATH/SlayTheSpire2.pck`), followed by the id in brackets.
 

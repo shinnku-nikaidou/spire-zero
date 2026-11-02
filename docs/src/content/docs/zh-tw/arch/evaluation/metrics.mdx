@@ -100,7 +100,7 @@ $$
 | `check-clone-loop.txt` | `promotion-1` 的 29 個種子，按索引挑選 | 人工 | 開發時的檢查；不是報告用的種子集 |
 
 - **訓練種子和測試種子從不相遇**。自我對弈和分叉作業只打訓練種子，評估作業只打 `eval/seeds/` 裡的檔案；作業啟動器 `box.py` 拒絕其他做法，訓練也拒絕含有評估作業對局的清單（[學習：參考 §5](/zh-tw/arch/learning/reference/#sec-5)）。`promotion-1-300` 及其各部分、`final-1` 和 `a10-check-1` 從未用於訓練。
-- **`eval/seeds/retired/`** 存放不能再用來測試的種子集：`promotion-1-500`（`seeds --base 2 --n 500`，先是 `promotion-1-300`，再加 200 個），因為它後 200 個種子上的 medium 預算對局在較早戰鬥網路的資料裡，也就進了 c8-1 和 c8-2 這一脈。在它上面報告過的結果仍作為歷史保留。
+- **`eval/seeds/retired/`** 存放不能再用來測試的種子集：`promotion-1-500`（`seeds --base 2 --n 500`，先是 `promotion-1-300`，再加 200 個），因為它後 200 個種子上的 medium 預算對局在較早戰鬥網路的資料裡，也就進了 c8-1、c8-2 和 c8-3 這一脈。在它上面報告過的結果仍作為歷史保留。
 - **訓練種子**是 `MakeSeed(1, i)`，也就是 `run --seed 1 --start K` 所打的種子。帳本以每塊 100,000 個的區塊分配它們，每個批次一塊，所以任何兩個批次都不共用種子（`eval/silent/ledger.md`，[學習：參考 §5](/zh-tw/arch/learning/reference/#sec-5)）。
 - **晉級種子集是巢狀的**。每個較大的種子集都把較小那個的種子按原順序放在前面，所以較大種子集上的報告能在共用的種子上和較小種子集上的報告配對。`promotion-1.txt` 的檔頭寫著用完之後輪換到 `promotion-2`（基數 4）；但 `promotion-2` 並不存在，基數 4 給了 `a10-check-1`。
 - **`final-1` 從未打過**：每份已提交的報告都在晉級種子集上。
@@ -162,7 +162,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 - **Auxiliary**：每局的菁英戰數、跳過的卡牌獎勵、結束時的金幣；每局秒數和每個決策的毫秒數；各決策介面；
 - **Against DATE (CHAMPION, commit X)**，在給了 `--previous OLD.json` 時，或在 `gate --promote` 寫出冠軍的接任者時出現：勝率、平均層數、每一幕到達頭目的局數、隨機決策和失敗對局的前後對比；種子集、環境或級別不同時則寫「Not comparable」。
 
-**名稱**。報告放進 `eval/CHARACTER/reports/`，檔名為 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全小寫，NAME 指明是什麼在打：在 `DATE-sl-r1-promotion-1-300-plan-c8-2-l0-v8-2-clone-p0` 裡，是用戰鬥網路 `c8-2` 的 SL 規劃器、在複本上用 V `v8-2` 的 L0、由 `p0` 回答選牌提示。晉階 10 的報告在級別的位置寫 `a10`，例如 `DATE-sl-a10-promotion-1-200-plan-c8-2-l0-v8-2-clone-p0`。這只是慣例；`--out` 接受任何路徑。
+**名稱**。報告放進 `eval/CHARACTER/reports/`，檔名為 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全小寫，NAME 指明是什麼在打：在 `DATE-sl-r1-promotion-1-300-plan-c8-3-l0-v8-3-clone-p0` 裡，是用戰鬥網路 `c8-3` 的 SL 規劃器、在複本上用 V `v8-3` 的 L0、由 `p0` 回答選牌提示。晉階 10 的報告在級別的位置寫 `a10`，例如 `DATE-sl-a10-promotion-1-200-plan-c8-3-l0-v8-3-clone-p0`。這只是慣例；`--out` 接受任何路徑。
 
 ## 8. 對局記錄
 
