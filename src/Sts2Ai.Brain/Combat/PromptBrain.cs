@@ -25,7 +25,7 @@ public sealed class PromptBrain : IChoicePolicy
         var choice = decision.Choice;
         var context = choice.Context;
         var options = Enumerable.Range(0, choice.Options.Count);
-        if (context.Purpose == "hand_for_discard" || context.PromptKey == "card_selection.TO_EXHAUST" || PutOnTop.Contains(context.Source ?? ""))
+        if (LeavesTheHand(choice))
         {
             bool discard = context.Purpose == "hand_for_discard";
             // Worst first; beyond the minimum, only cards that are better gone.
@@ -38,6 +38,10 @@ public sealed class PromptBrain : IChoicePolicy
             return options.OrderByDescending(i => choice.Options[i].Cost ?? 0).ThenByDescending(i => Worth(choice.Options[i])).Take(choice.Max).ToList();
         return options.OrderByDescending(i => Worth(choice.Options[i])).Take(choice.Max).ToList();
     }
+
+    /// <summary>Whether the picked cards leave the hand this turn.</summary>
+    public static bool LeavesTheHand(CardChoice choice) =>
+        choice.Context.Purpose == "hand_for_discard" || choice.Context.PromptKey == "card_selection.TO_EXHAUST" || PutOnTop.Contains(choice.Context.Source ?? "");
 
     /// <summary>
     /// How useful a card is to hold: its numbers, a draw worth a few points, and a flat part for what the numbers
@@ -52,4 +56,31 @@ public sealed class PromptBrain : IChoicePolicy
     }
 
     private static bool Has(CardView card, string keyword) => card.Keywords?.Contains(keyword) == true;
+}
+
+/// <summary>
+/// A search world's prompts (docs: combat-brain/shared §1): <paramref name="policy"/> answers them, as in the run, unless the
+/// action being played carries its own answer to its first (<see cref="CombatAction.Pick"/>). It notes what that first prompt
+/// offered, which is how search learns there was a choice worth a look: one card, and not one that leaves the hand, since
+/// another card leaving gives the search nothing to play that it did not have.
+/// </summary>
+public sealed class SearchPrompts(IChoicePolicy policy) : IChoicePolicy
+{
+    private int? _pick;
+    private bool _asked;
+
+    /// <summary>The first prompt of the action being played, or of the last one played.</summary>
+    public PromptSeen? Seen { get; private set; }
+
+    /// <summary>A new action is about to be played, with this answer to its first prompt, if any.</summary>
+    public void Arm(int? pick) => (_pick, _asked, Seen) = (pick, false, null);
+
+    public IReadOnlyList<int> Choose(ChoiceDecision decision)
+    {
+        var answer = policy.Choose(decision);
+        if (_asked) return answer;
+        _asked = true;
+        if (decision.Choice.Max == 1 && answer.Count == 1 && !PromptBrain.LeavesTheHand(decision.Choice)) Seen = new(decision.Choice.Options.Count, answer[0]);
+        return _pick is int pick && decision.Choice.Accepts([pick]) ? [pick] : answer;
+    }
 }

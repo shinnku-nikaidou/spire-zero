@@ -124,21 +124,30 @@ public sealed class Dispatcher(
     /// </summary>
     public IReadOnlyList<EnemyTurns> History => _moves.History;
 
+    /// <summary>The steps of a plan that are logged and shown.</summary>
+    private const int ShownPlan = 256;
+
+    /// <summary>What the combat brain answered for the first prompt of the action it just chose (<see cref="CombatAction.Pick"/>).</summary>
+    private int? _pick;
+
     public CombatAction Choose(CombatDecision decision)
     {
+        _pick = null;
         _moves.Witness(decision.Observation);
         var history = History;
         var (id, seed, clock) = Begin(combat.Brain);
         var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null, history);
         double ms = clock.Elapsed.TotalMilliseconds;
-        if (!decision.Legal.Contains(result.First)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
+        if (!decision.Legal.Contains(result.First.Plain)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
         if (result.Replanned) Replans++;
-        Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
+        // A plan that repeats a cycle may have thousands of steps left, at each of them.
+        Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: history,
                 Explored: Mark(result.Explored), Replanned: Mark(result.Replanned)));
-        return result.First;
+        _pick = result.First.Pick;
+        return result.First.Plain;
     }
 
     public IReadOnlyList<int> Choose(ChoiceDecision decision)
@@ -147,7 +156,9 @@ public sealed class Dispatcher(
         var route = choice.Context.InCombat ? combatChoices : macroChoices;
         var (id, seed, clock) = Begin(route.Brain);
         if (!choice.Context.InCombat && MacroClone() is { } node) decision = decision.With(node);
-        var picks = route.Policy.Choose(decision);
+        // The answer search played its line with, for the action just chosen; the host never sees it.
+        var picks = choice.Context.InCombat && _pick is int pick && choice.Accepts([pick]) ? [pick] : route.Policy.Choose(decision);
+        _pick = null;
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!choice.Accepts(picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", picks)}], which the prompt does not accept");
         Last = new(route.Brain);

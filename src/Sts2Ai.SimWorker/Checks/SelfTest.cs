@@ -134,6 +134,7 @@ internal static partial class SelfTest
         ThornsKillDuringSlyPlay(pump, pool, act, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
+        CyclesKillInOneTurn(pump, pool, act, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);
         CloneKeepsRelicState(pump, seed, Check);

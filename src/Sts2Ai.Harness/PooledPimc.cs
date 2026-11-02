@@ -37,16 +37,15 @@ public sealed class PooledPimc(WorkerPool pool)
     }
 
     /// <summary>As Harness's combat route, one per run: NoSL draws the build seed from the decision's seed; SL searches
-    /// the clone. With <see cref="Budget.Follow"/>, the route keeps the run's <see cref="TurnPlan"/>.</summary>
+    /// the clone. The route keeps the run's <see cref="TurnPlan"/>: every plan with <see cref="Budget.Follow"/>, else the ones that repeat a cycle.</summary>
     /// <param name="name">The brain's name in reports: pimc, and its leaf's names unless it is the default one.</param>
     public CombatRoute Route(Budget budget, string name = "pimc")
     {
-        var plan = budget.Follow ? new TurnPlan() : null;
+        var plan = new TurnPlan(budget.Follow);
         CombatDecisionResult Search(CombatDecision decision, ulong seed, NodeClone? node, IReadOnlyList<EnemyTurns> history) => node == null
             ? Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed, history)
             : Decide(node, decision.Legal, budget.For(decision.Observation.Room), history);
-        return new(name, (decision, seed, node, history) => plan == null
-            ? Search(decision, seed, node, history)
-            : plan.Decide(decision.Observation, decision.Legal, () => Search(decision, seed, node, history)), budget);
+        return new(name, (decision, seed, node, history) =>
+            plan.Decide(decision.Observation, decision.Legal, () => Search(decision, seed, node, history)), budget);
     }
 }

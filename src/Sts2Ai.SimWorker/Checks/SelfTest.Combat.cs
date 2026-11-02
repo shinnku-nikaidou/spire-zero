@@ -240,4 +240,48 @@ internal static partial class SelfTest
             check("world restores after prompts", ProtocolJson.Serialize(world.Observe()) == after, $"{pool[0].Id.Entry}: {string.Join(" ", played.Steps)}");
         }
     }
+
+    /// <summary>
+    /// On the real game, with the default leaf and the champion's nodes, against 535 HP: Monologue and two Flash of Steel,
+    /// which draw each other. A plain search does not get past the first chain, in either world. Then with a prompt in front
+    /// of the cycle: Particle Wall costs stars this character has none of until Touch of Insanity makes it free, and the
+    /// prompt policy would give that to Haze.
+    /// </summary>
+    private static void CyclesKillInOneTurn(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        void Case(string name, string[] deck, string[] potions)
+        {
+            var loadout = new Loadout(Deck: deck.Select(id => new CardSpec(id)).ToList(), Relics: [], Potions: potions, Hp: 70, MaxHp: 70);
+            var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
+            CombatObservation obs;
+            using (var session = CombatSession.Start(pump, setup, PromptBrain.Instance))
+            {
+                var seen = session.Observation();
+                obs = seen with { Enemies = [seen.Enemies[0] with { Hp = 535, MaxHp = 535 }] };
+            }
+            CombatSnapshot root;
+            IReadOnlyList<CombatAction> legal;
+            using (var session = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), PromptBrain.Instance))
+            {
+                root = session.Snapshot();
+                legal = session.LegalActions();
+            }
+            using (var worlds = SimWorlds.SL(pump, root))
+            {
+                var world = worlds.Worlds(1, 0)[0];
+                var plan = new SlPlanner().Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 8));
+                check($"SL planner repeats a cycle to lethal ({name})", plan.End == CombatStatus.Won && plan.Result.First != CombatAction.EndTurn && plan.Result.Plan.Count(a => a == CombatAction.EndTurn) <= 1, $"{plan.End}: {plan.Result.Plan.Count + 1} actions");
+                world.Restore(new([]));
+                foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
+                check($"SL world ends a cycle as planned ({name})", world.Status == plan.End, $"{world.Status}, planned {plan.End}");
+            }
+            using (var worlds = SimWorlds.NoSL(pump, obs, setup.Seed))
+            {
+                var pimc = new PimcBrain().Decide(obs, legal, worlds, new Budget(Worlds: 2, NodesPerWorld: 300), 1);
+                check($"PIMC finds a cycle ({name})", pimc.Repeats, $"{pimc.First} [{string.Join(" ", pimc.Plan.Take(8))}...]");
+            }
+        }
+        Case("draws", ["MONOLOGUE", "FLASH_OF_STEEL", "FLASH_OF_STEEL"], []);
+        Case("prompt", ["MONOLOGUE", "PARTICLE_WALL", "NEUTRALIZE", "HAZE", "HAZE"], ["TOUCH_OF_INSANITY"]);
+    }
 }

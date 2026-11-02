@@ -13,20 +13,21 @@ namespace Sts2Ai.SimWorker;
 /// combat, and each is determinized with its own seed. The SL world is the real combat itself, replayed exactly, and
 /// tells states apart by the full hidden state (<see cref="HiddenState.Full"/>).
 /// Card prompts inside a world are answered by <see cref="PromptBrain"/>, the run's own prompt brain, so search
-/// expects the picks the run will make; an SL world may be given the prompt policy of its real combat instead.
+/// expects the picks the run will make, unless an action carries its own answer; an SL world may be given the prompt
+/// policy of its real combat instead.
 /// </summary>
 internal sealed class SimWorlds : IWorldSource, IDisposable
 {
     private readonly Pump _pump;
     private readonly CombatSnapshot _root;
-    private readonly IChoicePolicy _prompts;
+    private readonly SearchPrompts _prompts;
     private CombatSession? _live;
     private World? _owner;
 
     private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, IChoicePolicy? prompts = null)
     {
         _pump = pump;
-        _prompts = prompts ?? PromptBrain.Instance;
+        _prompts = new(prompts ?? PromptBrain.Instance);
         Environment = environment;
         _root = root;
     }
@@ -111,9 +112,13 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
 
         public void Execute(CombatAction action)
         {
-            Live.Execute(action);
+            var live = Live;
+            source._prompts.Arm(action.Pick);
+            live.Execute(action.Plain);
             Sync();
         }
+
+        public PromptSeen? LastPrompt => source._prompts.Seen;
 
         public WorldSnapshot Snapshot() => new(trace.Select(e => e.ToString()).ToList());
 
