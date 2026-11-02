@@ -63,7 +63,8 @@ internal sealed record LoggedRun(string RunId, RunSetup Setup, IReadOnlyList<Log
 /// Answers a logged run's decisions in order, card prompts included, and checks each against the log: the same surface
 /// (else it throws), and the same observation, by hash (else it counts a mismatch: the observation's format may have
 /// changed since). <paramref name="seen"/> sees each macro decision it answers. Past the log, <paramref name="next"/>
-/// answers the first decision, which must be a macro one, then <paramref name="then"/> the rest.
+/// answers the first decision, which must be a macro one, then <paramref name="then"/> the rest. A logged combat action
+/// goes to the game plain: the answer it carries for its prompt has a logged step of its own.
 /// </summary>
 internal sealed class Script(IReadOnlyList<LoggedStep> steps, IRunBrain? then, Func<MacroDecision, string>? next = null,
     Action<MacroDecision, int>? seen = null) : ICombatPolicy, IChoicePolicy, IMacroPolicy
@@ -77,7 +78,7 @@ internal sealed class Script(IReadOnlyList<LoggedStep> steps, IRunBrain? then, F
     public int Mismatches { get; private set; }
 
     public CombatAction Choose(CombatDecision decision) =>
-        _done < steps.Count ? CombatAction.Parse(Step(Surfaces.Combat, ProtocolJson.Hash(decision.Observation))) : Then().Choose(decision);
+        _done < steps.Count ? CombatAction.Parse(Step(Surfaces.Combat, ProtocolJson.Hash(decision.Observation))).Plain : Then().Choose(decision);
 
     public IReadOnlyList<int> Choose(ChoiceDecision decision) =>
         _done < steps.Count

@@ -1,3 +1,4 @@
+using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 using Sts2Ai.SimWorker;
 
@@ -19,6 +20,16 @@ public class ForkTests : IDisposable
         Assert.Equal(run.Gold + 10, (int)changes["gold"]!);
         Assert.Equal(["visited"], changes["map"]!.AsObject().Select(c => c.Key));
         Assert.Empty(Logged.Changes(run, run));
+    }
+
+    [Fact]
+    public void AScriptPlaysALoggedPickPlain()
+    {
+        var obs = Fixtures.Slugs();
+        var script = new Script([new LoggedStep(Surfaces.Combat, "play:27:1@2", ProtocolJson.Hash(obs).ToString("x16"), 2, false, null)], null);
+        var action = script.Choose(new CombatDecision([CombatAction.Play(27, 1)], () => obs));
+        Assert.Equal(CombatAction.Play(27, 1), action);
+        Assert.Equal(0, script.Mismatches);
     }
 
     [Fact]
