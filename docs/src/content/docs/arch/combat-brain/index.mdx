@@ -72,7 +72,7 @@ $n = 5$ 时是 326 对 32，$n = 8$ 时是 109,601 对 256。在杀戮尖塔里�
 | 机会节点 | 每次揭示处 | 没有 |
 | 什么是最优 | 在各世界上平均最好的动作 | 这一个世界里最好的路线 |
 | 现在的搜索 | 每个世界搜到本回合结束，再按第一动作取均值（[NoSL PIMC：搜索](/arch/pimc/search/)） | 跨战斗各回合的束，每个回合完整搜索（[SL 规划器：束搜索](/arch/sl-planner/beam/)） |
-| 规划中的搜索 <Badge text="规划中" variant="caution" /> | 同样的搜索，基于 `TurnEnds`（[NoSL PIMC：搜索 §6](/arch/pimc/search/#sec-6)） | 宽度不断增长的多轮，每轮都打到战斗结束（[SL 规划器：束搜索 §7](/arch/sl-planner/beam/#sec-7)） |
+| 规划中的搜索 <Badge text="规划中" variant="caution" /> | 同样的搜索，基于 `TurnEnds`（[NoSL PIMC：搜索 §7](/arch/pimc/search/#sec-7)） | 宽度不断增长的多轮，每轮都打到战斗结束（[SL 规划器：束搜索 §7](/arch/sl-planner/beam/#sec-7)） |
 | 多久搜索一次 | 每个动作 | 每场战斗一次，除非计划会输（[SL 规划器：束搜索 §6](/arch/sl-planner/beam/#sec-6)） |
 | 置换的键 | 观测和这个世界采样出的隐藏状态 | 观测和完整的隐藏状态 |
 | 叶子 | 下一回合的开始 | 大多是战斗结束 |
@@ -162,7 +162,7 @@ public sealed record CombatDecisionResult(
 
 1. **提示**变成搜索分支（[提示、招式与 worker §4](/arch/combat-brain/shared/#sec-4)），**然后是加宽**（[SL 规划器：束搜索 §7](/arch/sl-planner/beam/#sec-7)），**然后是预算**（[SL 规划器：预算 §7](/arch/sl-planner/budget/#sec-7)）。
 
-NoSL 有两个自己的条件：合并 `TurnEnds` 需要一个 NoSL 门槛，提示分支需要先跑融合测试集（[NoSL PIMC：搜索 §6](/arch/pimc/search/#sec-6)）。
+NoSL 有两个自己的条件：合并 `TurnEnds` 需要一个 NoSL 门槛，提示分支需要先跑融合测试集（[NoSL PIMC：搜索 §7](/arch/pimc/search/#sec-7)）。
 
 ## 7. 三个章节
 

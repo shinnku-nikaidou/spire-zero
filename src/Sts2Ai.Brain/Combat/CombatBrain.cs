@@ -59,7 +59,7 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, double Elit
 /// that order, per world in world order, each first action with <paramref name="nodesPerFirst"/> nodes.</summary>
 public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyList<CombatAction> first, int nodesPerFirst);
 
-/// <param name="First">One of the legal actions.</param>
+/// <param name="First">One of the legal actions, with <see cref="CombatAction.Pick"/> if search chose its prompt's answer.</param>
 /// <param name="Plan">The rest of the turn after <paramref name="First"/>, in the first world (for narration and highlight).</param>
 /// <param name="Candidates">Every first action, best first.</param>
 /// <param name="PlanHashes">When every world planned the same <paramref name="Plan"/> and expected the same observation
@@ -68,8 +68,10 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// search's pick (<see cref="Softmax.Explored"/>; Harness's <c>CombatRoute.Exploring</c>).</param>
 /// <param name="Replanned">Whether this search replaced a step of a plan that the combat did not show
 /// (<see cref="TurnPlan"/>). In SL that means the clone differs from the real combat.</param>
+/// <param name="Repeats">Whether the line repeats a cycle (<see cref="LoopSearch"/>): PIMC follows such a plan whatever
+/// <see cref="Budget.Follow"/> says, since searching again before each of hundreds of repeats would only find it again.</param>
 public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
-    IReadOnlyList<ulong>? PlanHashes = null, bool Explored = false, bool Replanned = false);
+    IReadOnlyList<ulong>? PlanHashes = null, bool Explored = false, bool Replanned = false, bool Repeats = false);
 
 /// <summary>
 /// The rest of the plan that a search made, played without searching again (docs: pimc/budget §2, sl-planner §4). A step is
@@ -78,7 +80,9 @@ public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<Comb
 /// is searched. The SL planner's plan is the rest of the combat in its one exact world, so it ends only with the
 /// combat; a step that does not hold there means the world differs from the real combat. One per combat route.
 /// </summary>
-public sealed class TurnPlan
+/// <param name="all">Whether to keep every plan a search makes (<see cref="Budget.Follow"/>), or only one that repeats a cycle
+/// (<see cref="CombatDecisionResult.Repeats"/>).</param>
+public sealed class TurnPlan(bool all = true)
 {
     private readonly Queue<(CombatAction Action, ulong Hash)> _steps = new();
 
@@ -87,12 +91,12 @@ public sealed class TurnPlan
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<CombatDecisionResult> search)
     {
         bool pending = _steps.TryDequeue(out var step);
-        if (pending && step.Hash == ProtocolJson.Hash(observation) && legal.Contains(step.Action))
+        if (pending && step.Hash == ProtocolJson.Hash(observation) && legal.Contains(step.Action.Plain))
             return new(step.Action, _steps.Select(s => s.Action).ToList(), [], _steps.Select(s => s.Hash).ToList());
         _steps.Clear();
         var result = search();
         if (pending) result = result with { Replanned = true };
-        if (result.PlanHashes is { } hashes)
+        if ((all || result.Repeats) && result.PlanHashes is { } hashes)
             foreach (var s in result.Plan.Zip(hashes)) _steps.Enqueue(s);
         return result;
     }
@@ -193,7 +197,9 @@ public sealed class PimcBrain(ICombatLeaf? leaf = null) : ICombatBrain
         var line = worlds[0][order[0]];
         bool agreed = line.Hashes != null && worlds.All(lines =>
             lines[order[0]].Actions.SequenceEqual(line.Actions) && lines[order[0]].Hashes!.SequenceEqual(line.Hashes));
-        return new(first[order[0]], line.Actions.Skip(1).ToList(), order.Select(a => candidates[a]).ToList(), agreed ? line.Hashes!.Skip(1).ToList() : null);
+        // A line may start with the first action and an answer to its prompt, which the first world's line gives.
+        var pick = line.Actions.Count > 0 ? line.Actions[0] : first[order[0]];
+        return new(pick, line.Actions.Skip(1).ToList(), order.Select(a => candidates[a]).ToList(), agreed ? line.Hashes!.Skip(1).ToList() : null, Repeats: line.Repeats);
     }
 
     /// <summary>Search order: ending the turn first (the fallback a spent budget leaves), then cards in hand order, then potions.</summary>
@@ -212,35 +218,89 @@ public sealed class PimcBrain(ICombatLeaf? leaf = null) : ICombatBrain
     private sealed class WorldSearch(ICombatWorld world, int round, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodesPerFirst)
     {
         private readonly Dictionary<(ulong Obs, ulong Hidden), PlannedLine> _memo = [];
+        private readonly List<LoopPoint> _path = [];
+        private readonly List<CombatAction> _actions = [];
+        private readonly List<ulong> _hashes = [];
+        private readonly LoopSearch _loops = new(world, round, (status, obs, actions, hashes) =>
+            new([.. actions], [.. hashes], status, leaf.Value(status, obs, history), 0, 0, history));
+        private WorldSnapshot _root = new([]);
+        private ulong _rootHash;
+        private PromptSeen? _firstPrompt;
         private int _nodes;
         /// <summary>States cut short by the budget so far: a state whose subtree has none is searched in full.</summary>
         private int _cuts;
 
         public PlannedLine[] Root(IReadOnlyList<CombatAction> first)
         {
-            var root = world.Snapshot();
-            ulong rootHash = ProtocolJson.Hash(world.Observe());
+            _root = world.Snapshot();
+            var obs = world.Observe();
+            _rootHash = ProtocolJson.Hash(obs);
+            _path.Add(new(obs, 0, _root));
             var lines = new PlannedLine[first.Count];
             for (int a = 0; a < first.Count; a++)
             {
-                if (a > 0) world.Restore(root);
-                _nodes = 0;
-                var after = After(first[a]);
-                lines[a] = new(after.Value, [first[a], .. after.Actions], _nodes, [rootHash, .. after.Hashes!]);
+                if (a > 0) world.Restore(_root);
+                lines[a] = First(first[a]);
+                // Another answer to the first action's prompt gets a line of its own only if it opens a cycle (docs: pimc/search §6).
+                if (first[a].Kind == CombatActionKind.EndTurn || _firstPrompt is not { Options: > 1 } prompt) continue;
+                for (int pick = 0; pick < prompt.Options; pick++)
+                {
+                    if (pick == prompt.Answer) continue;
+                    var picked = first[a] with { Pick = pick };
+                    world.Restore(_root);
+                    world.Execute(picked);
+                    var after = world.Observe();
+                    if (world.Status != CombatStatus.InProgress || after.Round != round || !_loops.OpensCycle(after)) continue;
+                    world.Restore(_root);
+                    var line = First(picked);
+                    if (line.Value > lines[a].Value) lines[a] = line;
+                }
             }
             return lines;
         }
 
+        /// <summary>The best line that starts with <paramref name="action"/>: the search's, then the cycles it found.</summary>
+        private PlannedLine First(CombatAction action)
+        {
+            _nodes = 0;
+            var after = After(action, _rootHash);
+            var line = new PlannedLine(after.Value, [action, .. after.Actions], _nodes, [_rootHash, .. after.Hashes!]);
+            foreach (var end in _loops.RunFound())
+                if (end.Value > line.Value) line = new(end.Value, end.Actions, _nodes, end.Hashes, Repeats: true);
+            if (!double.IsNegativeInfinity(line.Value)) return line;
+            // The move was a cycle at once and no budget was left for it: what is left is ending the turn.
+            world.Restore(_root);
+            world.Execute(action);
+            var obs = world.Observe();
+            if (world.Status == CombatStatus.InProgress && obs.Round == round)
+            {
+                world.Execute(CombatAction.EndTurn);
+                return new(leaf.Value(world.Status, world.Observe(), history), [action, CombatAction.EndTurn], _nodes, [_rootHash, ProtocolJson.Hash(obs)]);
+            }
+            return new(leaf.Value(world.Status, obs, history), [action], _nodes, [_rootHash]);
+        }
+
         /// <summary>Plays <paramref name="action"/> and returns the best line from there.</summary>
-        private PlannedLine After(CombatAction action)
+        private PlannedLine After(CombatAction action, ulong hash)
         {
             _nodes++;
             world.Execute(action);
+            if (_actions.Count == 0) _firstPrompt = world.LastPrompt;
+            _actions.Add(action);
+            _hashes.Add(hash);
+            var line = Reached(action);
+            _actions.RemoveAt(_actions.Count - 1);
+            _hashes.RemoveAt(_hashes.Count - 1);
+            return line;
+        }
+
+        private PlannedLine Reached(CombatAction action)
+        {
             var status = world.Status;
             var obs = world.Observe();
             if (status != CombatStatus.InProgress || action.Kind == CombatActionKind.EndTurn || obs.Round != round)
                 return new(leaf.Value(status, obs, history), [], 0, []);
-            return Best(obs);
+            return _loops.Intercept(_path, obs, _actions, _hashes) ? new(double.NegativeInfinity, [], 0, []) : Best(obs);
         }
 
         /// <summary>The best line from the current state, where the player is still on this turn.</summary>
@@ -250,6 +310,7 @@ public sealed class PimcBrain(ICombatLeaf? leaf = null) : ICombatBrain
             var key = (hash, world.HiddenKey());
             if (_memo.TryGetValue(key, out var known)) return known;
             var here = world.Snapshot();
+            _path.Add(new(obs, _actions.Count, here));
             var best = new PlannedLine(double.NegativeInfinity, [], 0, []);
             bool moved = false;
             int cuts = _cuts;
@@ -262,9 +323,10 @@ public sealed class PimcBrain(ICombatLeaf? leaf = null) : ICombatBrain
                 }
                 if (moved) world.Restore(here);
                 moved = true;
-                var after = After(action);
+                var after = After(action, hash);
                 if (after.Value > best.Value) best = new(after.Value, [action, .. after.Actions], 0, [hash, .. after.Hashes!]);
             }
+            _path.RemoveAt(_path.Count - 1);
             if (_cuts == cuts) _memo[key] = best;
             return best;
         }

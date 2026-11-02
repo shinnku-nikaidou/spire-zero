@@ -72,7 +72,7 @@ $n = 5$ 時是 326 對 32，$n = 8$ 時是 109,601 對 256。在殺戮尖塔裡�
 | 機會節點 | 每次揭示 | 沒有 |
 | 什麼是最佳 | 在各世界上平均最好的動作 | 那一個世界裡最好的路線 |
 | 今天的搜尋 | 每個世界搜到本回合結束，再按第一動作取平均（[NoSL PIMC：搜尋](/zh-tw/arch/pimc/search/)） | 跨戰鬥各回合的束，每個回合完整搜尋（[SL 規劃器：束搜尋](/zh-tw/arch/sl-planner/beam/)） |
-| 規劃中的搜尋 <Badge text="規劃中" variant="caution" /> | 同樣的搜尋，跑在 `TurnEnds` 上（[NoSL PIMC：搜尋 §6](/zh-tw/arch/pimc/search/#sec-6)） | 寬度逐漸增加的多輪，每輪都打到戰鬥結束（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)） |
+| 規劃中的搜尋 <Badge text="規劃中" variant="caution" /> | 同樣的搜尋，跑在 `TurnEnds` 上（[NoSL PIMC：搜尋 §7](/zh-tw/arch/pimc/search/#sec-7)） | 寬度逐漸增加的多輪，每輪都打到戰鬥結束（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)） |
 | 多久搜尋一次 | 每個動作 | 每場戰鬥一次，除非計畫會輸（[SL 規劃器：束搜尋 §6](/zh-tw/arch/sl-planner/beam/#sec-6)） |
 | 置換的鍵 | 觀測和這個世界取樣出的隱藏狀態 | 觀測和完整的隱藏狀態 |
 | 葉節點 | 下一回合的開始 | 大多是戰鬥結束 |
@@ -162,7 +162,7 @@ public sealed record CombatDecisionResult(
 
 1. **提示**當作搜尋分支（[提示、招式與 worker §4](/zh-tw/arch/combat-brain/shared/#sec-4)），**接著是加寬**（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)），**再接著是預算**（[SL 規劃器：預算 §7](/zh-tw/arch/sl-planner/budget/#sec-7)）。
 
-NoSL 有兩個自己的條件：合併 `TurnEnds` 需要一次 NoSL 門檻，提示分支需要先跑融合測試集（[NoSL PIMC：搜尋 §6](/zh-tw/arch/pimc/search/#sec-6)）。
+NoSL 有兩個自己的條件：合併 `TurnEnds` 需要一次 NoSL 門檻，提示分支需要先跑融合測試集（[NoSL PIMC：搜尋 §7](/zh-tw/arch/pimc/search/#sec-7)）。
 
 ## 7. 三個章節
 

@@ -91,6 +91,8 @@ Observation{run: RunView, screen: ScreenView}
 | `potion:S` 或 `potion:S:T` | 使用槽位 S 的藥水，需要目標時以 T 為目標 |
 | `end_turn` | 結束回合 |
 
+搜尋的路線可以在動作後面帶上提示的回答（`potion:0@3`，第一個提示選索引 3 的選項；[回合搜尋 §5](/zh-tw/arch/sl-planner/turn-search/#sec-5)）。這只出現在搜尋和日誌裡，宿主收到的動作不帶它。
+
 戰鬥裡沒有丟棄藥水：協定的戰鬥動作就是這三種。
 
 ## 4. 身份與順序

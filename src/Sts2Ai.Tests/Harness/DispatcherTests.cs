@@ -83,6 +83,36 @@ public class DispatcherTests
         Assert.True(seen is { Save: "{}", Gauntlet: true } && seen.Trace.SequenceEqual(["event event:1"]));
     }
 
+    private static ChoiceDecision Prompt(bool inCombat = true) => new(new CardChoice
+    {
+        Options = [new CardView { Id = "A" }, new CardView { Id = "B" }, new CardView { Id = "C" }],
+        Min = 0,
+        Max = 1,
+        Context = new() { Purpose = "hand", Cancelable = false, InCombat = inCombat },
+    });
+
+    [Fact]
+    public void AnswersThePromptOfTheActionWithTheBrainsPickAndHidesItFromTheHost()
+    {
+        var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = 2 }, [], [])));
+
+        Assert.Equal(CombatAction.Play(0, 1), dispatcher.Choose(Decision(Fixtures.Slugs())));
+        Assert.Equal([2], dispatcher.Choose(Prompt()));
+        // Only the action's first prompt: the next goes to the prompt policy, as does one out of combat, or one after another action.
+        Assert.Empty(dispatcher.Choose(Prompt()));
+        dispatcher.Choose(Decision(Fixtures.Slugs()));
+        Assert.Empty(dispatcher.Choose(Prompt(inCombat: false)));
+    }
+
+    [Fact]
+    public void APickThePromptDoesNotAcceptGoesToThePolicy()
+    {
+        var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = 7 }, [], [])));
+
+        dispatcher.Choose(Decision(Fixtures.Slugs()));
+        Assert.Empty(dispatcher.Choose(Prompt()));
+    }
+
     private sealed class EndTurns : ICombatPolicy
     {
         public CombatAction Choose(CombatDecision decision) => CombatAction.EndTurn;

@@ -10,17 +10,18 @@ namespace Sts2Ai.SimWorker;
 /// The SL world of a combat decision in a run (docs: simulator/worlds §7): the node's clone, loaded and replayed, is the real
 /// combat at the decision. Each action is one more step of the clone; a restore loads the clone again with the steps
 /// it keeps, since the game allows one live run per process. Card prompts inside the world are answered by
-/// <see cref="PromptBrain"/>, as in the run, and recorded among the steps. States are told apart by the full hidden
+/// <see cref="PromptBrain"/>, as in the run, unless the action carries its own answer, and recorded among the steps. States are told apart by the full hidden
 /// state (<see cref="HiddenState.Full"/>).
 /// </summary>
 internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisposable
 {
     private readonly List<string> _steps = [];
     private readonly NextAction _next = new();
+    private readonly SearchPrompts _prompts = new(PromptBrain.Instance);
     private readonly Checkpoint.Opened _checkpoint = Checkpoint.Open(root.Save);
     private RunSession? _live;
 
-    private RunSession Live => _live ??= RunSession.Load(pump, root with { Trace = [.. root.Trace, .. _steps] }, PromptBrain.Instance, _next, _next,
+    private RunSession Live => _live ??= RunSession.Load(pump, root with { Trace = [.. root.Trace, .. _steps] }, _prompts, _next, _next,
         opened: _checkpoint);
 
     /// <summary>The live combat, once the clone is loaded.</summary>
@@ -57,13 +58,17 @@ internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisp
 
     public void Execute(CombatAction action)
     {
-        _next.Action = action;
-        Live.Step();
+        var live = Live;
+        _next.Action = action.Plain;
+        _prompts.Arm(action.Pick);
+        live.Step();
         if (_next.Action != null) throw new InvalidOperationException($"no combat decision to play {action} at: {Live.Describe()}");
         Live.Settle();
         _steps.Clear();
         _steps.AddRange(Live.Trace.Skip(root.Trace.Count));
     }
+
+    public PromptSeen? LastPrompt => _prompts.Seen;
 
     public WorldSnapshot Snapshot() => new(_steps.ToList());
 

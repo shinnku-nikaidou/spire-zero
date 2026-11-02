@@ -81,7 +81,8 @@ public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen
 /// <param name="Nodes">The actions the search simulated after the line's first action, itself included.</param>
 /// <param name="Hashes">For each of <paramref name="Actions"/>, the hash of the observation it is played at
 /// (<see cref="ProtocolJson.Hash"/>): what the line expects to see before each step.</param>
-public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0, IReadOnlyList<ulong>? Hashes = null);
+/// <param name="Repeats">Whether the line repeats a cycle the search found (docs: pimc/search §6).</param>
+public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0, IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
 
 /// <summary>What the SL planner's search of one turn found (docs: sl-planner/turn-search §4).</summary>
 /// <param name="Ends">The best end of the combat, if the turn can reach one, then the states at the next turn's start, best first.</param>

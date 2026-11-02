@@ -72,7 +72,7 @@ The macro brain and the value function V are the same in both environments ([Env
 | chance nodes | at every reveal | none |
 | what is optimal | the action best on average over the worlds | the best line in the one world |
 | search today | each world to the end of this turn, then the mean by first action ([NoSL PIMC: search](/en/arch/pimc/search/)) | a beam over the fight's turns, each turn searched in full ([The SL planner: beam](/en/arch/sl-planner/beam/)) |
-| search planned <Badge text="planned" variant="caution" /> | the same, on `TurnEnds` ([NoSL PIMC: search §6](/en/arch/pimc/search/#sec-6)) | passes of growing width, each to the fight's end ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)) |
+| search planned <Badge text="planned" variant="caution" /> | the same, on `TurnEnds` ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)) | passes of growing width, each to the fight's end ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)) |
 | how often it searches | at every action | once a fight, unless a plan loses ([The SL planner: beam §6](/en/arch/sl-planner/beam/#sec-6)) |
 | transpositions keyed by | observation and the world's sampled hidden state | observation and the full hidden state |
 | leaf | the start of the next turn | mostly the end of the fight |
@@ -162,7 +162,7 @@ The design goes through gates in order, so that each gate says what its step is 
 
 1. **Prompts** as search branches ([Prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)), **then widening** ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)), **then budgets** ([The SL planner: budget §7](/en/arch/sl-planner/budget/#sec-7)).
 
-NoSL has two conditions of its own: merging `TurnEnds` needs a NoSL gate, and prompt branches need the fusion panel first ([NoSL PIMC: search §6](/en/arch/pimc/search/#sec-6)).
+NoSL has two conditions of its own: merging `TurnEnds` needs a NoSL gate, and prompt branches need the fusion panel first ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)).
 
 ## 7. The three chapters
 

@@ -7,7 +7,7 @@ sidebar:
 import { Badge } from '@astrojs/starlight/components';
 import WorldsTable from '../../../../../components/combat/WorldsTable.svelte';
 
-With $K$ worlds in hand ([Overview §2](/en/arch/pimc/#sec-2)), PIMC searches each one as a game with nothing hidden, to the end of the turn, and averages ([§1](#sec-1)–[§2](#sec-2)). The average is an estimate, with noise ([§3](#sec-3)) and two biases: strategy fusion ([§4](#sec-4)) and the sampler's ([§5](#sec-5)). All of that is the code as it runs; [§6](#sec-6) is what the planned design changes in it.
+With $K$ worlds in hand ([Overview §2](/en/arch/pimc/#sec-2)), PIMC searches each one as a game with nothing hidden, to the end of the turn, and averages ([§1](#sec-1)–[§2](#sec-2)). The average is an estimate, with noise ([§3](#sec-3)) and two biases: strategy fusion ([§4](#sec-4)) and the sampler's ([§5](#sec-5)). All of that is the code as it runs; [§6](#sec-7) is what the planned design changes in it.
 
 ## 1. The search in one world
 
@@ -76,7 +76,16 @@ The worlds should follow the posterior $P(s \mid h)$, the distribution of the hi
 
 A more exact sampler lowers this bias without changing the search. The fidelity numbers say where it would pay: after the turn ends, on the few monsters whose moves hang on hidden counters.
 
-## 6. The search on TurnEnds <Badge text="planned" variant="caution" />
+## 6. Cycles inside a turn
+
+The search in a world treats cycles as the SL turn search does ([SL planner: turn search §5](/en/arch/sl-planner/turn-search/#sec-5)): a move back to a state on the path does not go down, is set aside, and after that first action's search is repeated and cashed out on a budget of 4,000 actions per world. A line it finds becomes that first action's line if it is better.
+
+It differs from SL in two ways:
+
+- **The other answers to a prompt are tried on the first action only.** Further on, an answer in a world is chosen after that world's own draws, which is exactly strategy fusion ([§4](#sec-4)), while the first action's prompt is the same question in every world. The pick and its answer come from the first world's line.
+- **A plan that repeats a cycle is followed**, whether `Follow` is on or not. Otherwise each repeat would search again first, and hundreds of repeats would find the same cycle hundreds of times. The condition is `Follow`'s: every world planned the same actions and expects the same observations ([Budget §2](/en/arch/pimc/budget/#sec-2)). A cycle that reveals something, as a draw does, does not agree between worlds and goes back to a search per step.
+
+## 7. The search on TurnEnds <Badge text="planned" variant="caution" />
 
 For each decision:
 

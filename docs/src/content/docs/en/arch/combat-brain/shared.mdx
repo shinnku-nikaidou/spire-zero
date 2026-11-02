@@ -25,6 +25,8 @@ $$
 
 and an unplayable card (a status, a curse) has none. `p0` reads the prompt alone and never draws at random: ties go to the first option in canonical order. That is what lets a simulated world ask it too: the search's worlds answer every prompt as the run will, so a line through a prompt is valued with the answer that will really be given. In NoSL that holds in every sampled world; in SL the planner's plan replays exactly ([The SL planner §4](/en/arch/sl-planner/#sec-4)).
 
+There is one exception: when another answer opens a cycle inside the turn, search takes that answer and writes it on the action (`potion:0@3`, the option's index in the prompt). The host is told only `potion:0`, and Harness gives that answer to the first prompt that follows ([SL planner: turn search §5](/en/arch/sl-planner/turn-search/#sec-5)).
+
 The rule is hand-written strategy, the kind the project otherwise leaves to learned values, and a line through a prompt can only ever be valued with this one answer. It answered 2,035 prompts in 100 whole runs of the champion's V.
 
 ## 2. The record of enemy moves
@@ -78,5 +80,5 @@ sequenceDiagram
 ## 4. Planned <Badge text="planned" variant="caution" />
 
 - **Prompts as search branches.** Inside a search, the simulator's selector (the code that answers card prompts) is driven by the search, so each answer is a branch of `TurnEnds`, valued like any other action, and `p0` goes. A multi-pick is a sequence of single picks, so that a prompt of many cards adds depth and not a large fan of subsets. A prompt in the real fight is a decision like any other: in SL it is a step of the plan, in NoSL it is searched. It needs the world API's prompt branching and `ChoiceContext` ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)).
-- **What it costs NoSL.** A prompt's answer is chosen after the cards are seen, so branches on prompts widen strategy fusion; the fusion panel runs first ([NoSL PIMC: search §6](/en/arch/pimc/search/#sec-6)).
+- **What it costs NoSL.** A prompt's answer is chosen after the cards are seen, so branches on prompts widen strategy fusion; the fusion panel runs first ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)).
 - **Worlds that live in a worker.** For run worlds and for searches that outgrow one request: open a world by kind (build, clone, run host), branch on it by id, and close it; its branches go to that worker first, since a restore elsewhere costs a replay ([Simulator: the worker pool §8](/en/arch/simulator/pool/#sec-8)).

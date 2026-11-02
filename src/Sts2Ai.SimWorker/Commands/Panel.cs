@@ -179,9 +179,10 @@ internal static class Panel
         bool trace)
     {
         var moves = new MoveRecord();
-        var plan = budget.Follow && pimc != null ? new TurnPlan() : null;
+        var plan = pimc != null ? new TurnPlan(budget.Follow) : null;
         var route = pimc == null ? new SlRoute(budget) : null;
-        CombatSession? session = CombatSession.Start(pump, setup, choices);
+        var prompts = new SearchPrompts(choices);
+        CombatSession? session = CombatSession.Start(pump, setup, prompts);
         try
         {
             int hpStart = session.Player.Creature.CurrentHp;
@@ -206,7 +207,7 @@ internal static class Panel
                         result = search(worlds, clock);
                     searched.Plans++;
                     searched.Ms += clock.Elapsed.TotalMilliseconds;
-                    session = CombatSession.Restore(pump, real, choices);
+                    session = CombatSession.Restore(pump, real, prompts);
                     return result;
                 }
                 CombatDecisionResult Search()
@@ -225,12 +226,13 @@ internal static class Panel
                                           $"{(made.Proved ? ", proved" : "")}, {clock.ElapsedMilliseconds} ms");
                     return made;
                 });
-                var result = route != null ? route.Decide(obs, legal, Plan) : plan == null ? Search() : plan.Decide(obs, legal, Search);
+                var result = route != null ? route.Decide(obs, legal, Plan) : plan!.Decide(obs, legal, Search);
                 if (result.Replanned) searched.Replans++;
                 if (trace)
                     Console.WriteLine($"  {session.Summary()}\n    -> {result.First} then [{string.Join(" ", result.Plan)}]; " +
                                       string.Join(" ", result.Candidates.Take(4).Select(c => $"{c.Action}={c.Value:F3}±{c.Ci:F3}")));
-                session.Execute(result.First);
+                prompts.Arm(result.First.Pick);
+                session.Execute(result.First.Plain);
             }
             return Ended(session, hpStart);
         }

@@ -22,12 +22,20 @@ public interface ICombatWorld
     /// states apart for search, within this world.
     /// </summary>
     ulong HiddenKey();
-    /// <summary>Card prompts raised by the action are answered inside the world (docs: combat-brain/shared §1).</summary>
+    /// <summary>Card prompts raised by the action are answered inside the world (docs: combat-brain/shared §1), the first
+    /// by <see cref="CombatAction.Pick"/> if it has one.</summary>
     void Execute(CombatAction action);
+    /// <summary>The first card prompt the last <see cref="Execute"/> raised, if another answer to it could be worth a look; else null.</summary>
+    PromptSeen? LastPrompt => null;
     WorldSnapshot Snapshot();
     /// <summary>Goes back to a snapshot taken from this same world.</summary>
     void Restore(WorldSnapshot snapshot);
 }
+
+/// <summary>A card prompt that asks for one card, as a world met it.</summary>
+/// <param name="Options">How many cards it offered.</param>
+/// <param name="Answer">The option the world's prompt policy gave.</param>
+public readonly record struct PromptSeen(int Options, int Answer);
 
 /// <summary>Hands out the worlds for one decision.</summary>
 public interface IWorldSource
