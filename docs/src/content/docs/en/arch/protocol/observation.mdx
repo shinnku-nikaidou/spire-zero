@@ -91,6 +91,8 @@ Click through a real one, the start of a round from NoSL self-play:
 | `potion:S` or `potion:S:T` | use the potion in slot S, at T if it needs a target |
 | `end_turn` | end the turn |
 
+A line of search may carry the answer to a prompt after an action (`potion:0@3`: option 3 for its first prompt; [Turn search §5](/en/arch/sl-planner/turn-search/#sec-5)). This appears only in search and in the logs: the action a host is told has none.
+
 Combat has no potion discard: the protocol's combat actions are these three kinds.
 
 ## 4. Identity and order

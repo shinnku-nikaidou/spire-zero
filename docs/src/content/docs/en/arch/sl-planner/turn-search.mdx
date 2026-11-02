@@ -61,7 +61,28 @@ Each end carries its line (actions, and the observation hashes the plan will fol
 
 The greedy dive asks each of its turns for every end, with no floor ([Beam §3](/en/arch/sl-planner/beam/#sec-3)). When the full beam later comes to the same state, it does not search that turn again: it takes the dive's ends and keeps those its own width and floor allow (`Narrow`). A floor only drops ends, and the kept ends are the best, in the same order, so the result is the one a fresh search would give.
 
-## 5. TurnEnds <Badge text="planned" variant="caution" />
+## 5. Cycles inside a turn
+
+Some cards come back to the hand or draw each other, so a turn has no end of its own. A depth-first search does not get out of such a chain: it spends its share on the same card, the nodes run out, every action left at every state on the path is dropped, and the card that would have dealt the damage is never played. More budget does not help, since the repeats grow with it. Nor does the leaf: it only sees the next turn's start, where this turn's strength is gone, so a few more repeats barely move the value. And a state in the middle of a turn cannot just be given to the net: it was trained on turn starts, and its value is not monotonic there.
+
+So the search does not go down a cycle (`LoopSearch`).
+
+**Finding one.** After an action, the moves may be a cycle if the state brings back a state on the path: the same round, the same potions and living enemies, every card of that hand back (the same id and upgrade will do, and no dearer), no less energy or stars, and some number changed. The other piles are not compared: Aeonglass adds a Wither every 6 cards, the piles change and the cycle goes on. A candidate is repeated a little further to confirm it (4 times in all). One that holds is set aside and the search does not go down; one that runs out by itself is an ordinary line and the search goes on as usual. So a deck with no cycle is played move for move as before.
+
+**Repeating and cashing out.** After the search, the cycles set aside run on a budget of their own (4,000 actions per search, not nodes, and up to as many again to shorten a win), the ones with the most playable cards first. Each is repeated 1, 2, 4... times, and each count is cashed out: a small search (60 nodes) without the cycle's own moves plays to the end of the turn, and the leaf values the next turn's start, the state the net knows. It stops when:
+
+- it wins, and a bisection then cuts the repeats to the fewest;
+- neither the value nor the enemies' HP and block improve twice in a row;
+- a move is gone, as when a full hand sends the returning card to the discard pile;
+- it reaches 4,096 repeats.
+
+Without a win, the counts just before the piles change are cashed out as well (up to 8), since a boss's next curse may cost more than one more repeat gives. A new cycle found while cashing out is treated the same, at most two levels deep. Every repeat is played in the world, so what the game does to a cycle follows the game's rules. The turn counts as cut ([§3](#sec-3)).
+
+**Cycles behind a prompt.** Some cycles sit behind a prompt: Particle Wall costs stars, Touch of Insanity can make it free, but `p0` gives that to the most expensive card ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)). So after the search, each other answer to a prompt that asks for one card, and does not take it out of the hand, is tried once, and only an answer from which one more free card makes a cycle gets a line (40 nodes, plus its cycle). The other answers are not looked at: more lines are no better by themselves, and each is one more chance for the leaf's mistakes to win.
+
+Neither net changed. With c8-2, Monologue and two Flash of Steel kill the 535 HP Aeonglass in the first turn at no HP lost; the old search lost that fight. V does not yet know what such decks are worth, which is for it to learn.
+
+## 6. TurnEnds <Badge text="planned" variant="caution" />
 
 The design makes this search a piece of its own, `TurnEnds`, which both environments call ([Combat brain §3.1](/en/arch/combat-brain/#sec-3.1)). What stays is what the sections above describe: depth first, ending the turn an option at every step, the enemies' turn played for real, states merged by the observation and the hidden state. What changes for the planner:
 
