@@ -81,7 +81,7 @@ class Batch:
 
 
 class Net(nn.Module):
-    DIM, HIDDEN, BODY = 32, 128, 256
+    DIM, HIDDEN, BODY = 64, 256, 512
     SUM_SCALE = 1 / 16  # the deck's sum next to its mean, scaled to about a mean's size
 
     def __init__(self, sizes: dict[str, int], floors: int):

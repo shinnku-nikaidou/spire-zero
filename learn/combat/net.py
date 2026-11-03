@@ -155,7 +155,7 @@ def mlp(*sizes):
 
 
 class Net(nn.Module):
-    DIM, HIDDEN, BODY = 32, 64, 256
+    DIM, HIDDEN, BODY = 64, 128, 512
     SUM_SCALE = 1 / 8  # each pile's sum, scaled to about a mean's size
     N_PLAYER, N_EXTRA = 8, 3
     CLOSED = -1e4  # the logit of an ending the state rules out: no weight in float32's softmax
