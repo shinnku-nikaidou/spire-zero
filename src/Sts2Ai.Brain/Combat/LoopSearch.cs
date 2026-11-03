@@ -16,10 +16,10 @@ public sealed record LoopPoint(CombatObservation Obs, int Depth, WorldSnapshot S
 ///
 /// So the search does not go down a cycle. A move that brings back the cards of a state on the path, with no less energy
 /// or stars, no fewer copies of those cards left and something changed, is tried a few more times, each of which must
-/// bring them back too; if it holds, it is set aside (<see cref="Intercept"/>). What the piles do to other cards does not matter: a curse a boss deals every six
-/// cards changes them, and the cycle goes on. A move that runs out by itself, or uses up its own cards, is an ordinary
-/// line, and the search goes on as it always did, so a deck with no cycle is played move for move as it would be without
-/// this class.
+/// bring them back too; if it holds, it is set aside (<see cref="Intercept"/>). What the piles do to other cards does not
+/// matter: a curse a boss deals every six cards changes them, and the cycle goes on. A move that runs out by itself, or
+/// uses up its own cards, is an ordinary line, and the search goes on as it always did, so a deck with no cycle is played
+/// move for move as it would be without this class.
 ///
 /// After the search (<see cref="RunFound"/>), on a budget of its own, each cycle is repeated 1, 2, 4... times, and each
 /// count is cashed out: a small search with the cycle's moves left out, to the leaf at the next turn's start, which is
