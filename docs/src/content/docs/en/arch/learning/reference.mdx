@@ -274,7 +274,7 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 ## 12. Open questions
 
 1. What the champion's weights are worth in whole runs: as v8-3 and c8-3 they were gated with the Silent at ascension 10, V passed by paired wins on 200 seeds, the combat net showed no gain apart, the pair falls short of passing against v8-2 and c8-2 alone (lower 95 % −0.26), and neither net has seen a cycle's outcome ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)); in NoSL neither has been trained or gated.
-2. How much a net that learns all five characters keeps of what it knew of one, and whether it needs to be wider for them: on the Silent's data alone a wider net gave no lower held-out loss (V at 1×, 1.5× and 2× its widths: 2.3162, 2.3187, 2.3227; the combat net at 1× and 2×: 1.3375, 1.3418), and a net can be widened with its outputs kept.
+2. How much a net that learns all five characters keeps of what it knew of one, and whether it needs to be wider for them: only data of all five can say, and a net can be widened with its outputs kept.
 3. How to check P(win)'s calibration once V decides by it, beyond the Brier score.
 4. Each decision's label carries its run's later draws. A cut point per run would remove them: draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained ([The loop §9](/en/arch/learning/loop/#sec-9)). It is not done.
 5. Whether TD(λ) or expert iteration would help V, whose labels are Monte Carlo only.
