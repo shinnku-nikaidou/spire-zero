@@ -61,7 +61,7 @@ sequenceDiagram
 ```
 
 1. **宿主提问**。通过线路时，宿主发来一条 `decision` 消息：观测、它的哈希和合法动作（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。`BrainServer` 检查它属于一局、它的 id 大于上一个、哈希确实是这个观测的，然后把它作为战斗、选牌提示或宏观决策交给这一局的 `Dispatcher`（[§5](#sec-5)）。在进程内时，模拟器直接询问 `Dispatcher`。
-2. **Harness 记下它**。战斗决策的观测加入敌人出招记录（`MoveRecord.Witness`）；宏观决策结束这场战斗的记录（[§4](#sec-4)）。这个决策得到它在这一局里的序号，它的大脑的计数加一，并抽取它的种子（`Dispatcher.cs:205-210`）。
+2. **Harness 记下它**。战斗决策的观测加入敌人出招记录（`MoveRecord.Witness`）；宏观决策结束这场战斗的记录（[§4](#sec-4)）。这个决策得到它在这一局里的序号，它的大脑的计数加一，并抽取它的种子（`Dispatcher.cs:189-194`）。
 3. **一个大脑做决定**。这个决策界面的路由拿到决策、种子、SL 下节点的克隆，以及这场战斗至今的出招。会搜索的大脑把搜索拆成工作进程请求，再合并回复，回复按请求的顺序返回（[路由、预算与种子 §2](/arch/harness/routing/#sec-2)）。
 4. **Harness 检查并记日志**。不合法的回答会抛异常。大脑的名字、计划和候选成为这个决策的注记（`Dispatcher.Last`），开着日志时，还成为决策日志里的一行。
 5. **宿主得到一条推荐**：动作、大脑、它的计划和候选，并重复请求的 id 和哈希（[协议：线路 §7](/arch/protocol/wire/#sec-7)）。
@@ -79,7 +79,7 @@ sequenceDiagram
 | 敌人出招记录（`History`） | 战斗大脑的叶子，以及各世界里怪物的出招日志（[§4](#sec-4)） | 宏观决策时，或回合数倒退时 |
 | SL 节点：检查点和轨迹 | 节点的克隆，交给战斗大脑，用 `--afterstates clone` 时也交给宏观一侧 | 每个节点检查点 |
 | 决策日志 | 这一局的各行，一局结束前都留在内存里 | 一局之内从不 |
-| 各路由自己的状态 | PIMC 沿用的计划（`TurnPlan`）和 SL 规划器的路由（`SlRoute`），每局一个 | 从不：战斗结束时不，宏观决策时也不 |
+| 各路由自己的状态 | PIMC 沿用的循环计划（`TurnPlan`）和 SL 规划器的路由（`SlRoute`），每局一个 | 从不：战斗结束时不，宏观决策时也不 |
 
 ## 4. 公开记录
 
@@ -97,7 +97,7 @@ sequenceDiagram
 
 - `Checkpoint` 拒收 NoSL 下的检查点，以及节点下标没有递增的检查点；它让节点的轨迹重新开始。
 - `Act` 拒收 NoSL 下的动作，以及不属于当前节点、或序号不等于轨迹长度的动作；它把动作加到轨迹上。
-- 在需要它的决策处，节点的克隆就是检查点的存档、轨迹的一份副本，以及这一局按精英连战规则进行时的这条规则（`NodeClone`）。需要克隆的 SL 决策若出现在任何检查点之前，会抛异常。需要克隆的是每个 SL 战斗决策，用 `--afterstates clone` 时还有每个宏观决策和每个战斗外的选牌提示（[路由、预算与种子 §3](/arch/harness/routing/#sec-3)）。
+- 在需要它的决策处，节点的克隆就是检查点的存档和轨迹的一份副本（`NodeClone`）。需要克隆的 SL 决策若出现在任何检查点之前，会抛异常。需要克隆的是每个 SL 战斗决策，用 `--afterstates clone` 时还有每个宏观决策和每个战斗外的选牌提示（[路由、预算与种子 §3](/arch/harness/routing/#sec-3)）。
 
 **规划中：记录的其余部分** <Badge text="规划中" variant="caution" />。要让 NoSL 的信念涵盖怪物招式以外的东西，需要更多公开过的内容：
 
@@ -150,14 +150,14 @@ public sealed class PublicRecord
 | `Dispatcher.cs` | `CombatRoute`、`Route<T>`、`DecisionEntry`、`DecisionNote`、`Dispatcher` | 一局的路由、种子、检查、SL 节点和日志（[路由、预算与种子](/arch/harness/routing/)、[决策日志](/arch/harness/decision-log/)） |
 | `BrainServer.cs` | `BrainServer` | 线路的大脑一端（[§5](#sec-5)） |
 | `WorkerPool.cs` | `WorkerPool` | 搜索用的工作进程（[模拟器：工作进程池](/arch/simulator/pool/)） |
-| `PooledPimc.cs` | `PooledPimc` | 在池里搜索各个世界的 PIMC，NoSL 或 SL |
+| `PooledPimc.cs` | `PooledPimc` | NoSL 下在池里搜索各个世界的 PIMC |
 | `PooledPlanner.cs` | `PooledPlanner` | 在池里搜索各个回合的 SL 规划器 |
 | `PooledClone.cs` | `PooledClone` | 给宏观一侧的节点克隆，它的试探在池里打 |
 | `RunRecords.cs` | `RunConfig`、`RunRecord`、`CombatEntry`、`CombatEnd` | 对局记录（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)） |
 | `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 报告和排行榜（[评估：指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)） |
 | `Gate.cs` | `Gate`、`ChampionFile` | 配对的晋级门槛和冠军文件（[评估：晋级门槛 §6](/arch/evaluation/gates/#sec-6)） |
 
-**`Dispatcher`**（`Dispatcher.cs:80-225`），创建时给定 run id、环境、四个路由、是否记日志，以及在 `--afterstates clone` 下如何为宏观一侧打开节点的克隆：
+**`Dispatcher`**（`Dispatcher.cs:55-209`），创建时给定 run id、环境、四个路由、是否记日志，以及在 `--afterstates clone` 下如何为宏观一侧打开节点的克隆：
 
 | 成员 | 内容 |
 |---|---|
@@ -167,7 +167,7 @@ public sealed class PublicRecord
 | `Choose(MacroDecision)` → 动作 | 一个战斗外的决策；未覆盖的决策界面会抛异常 |
 | `Checkpoint(NodeCheckpoint)`、`Act(NodeAction)` | SL：节点的检查点和在其中做出的每个决策（[§4](#sec-4)） |
 | `Log` | 开着日志时，这一局到目前为止的决策日志 |
-| `Env`、`Last`、`Brains`、`Replans`、`History` | 环境，以及 [§3](#sec-3) 里的状态 |
+| `Last`、`Brains`、`Replans`、`History` | [§3](#sec-3) 里的状态 |
 | `Champion` | 报告里这一局各个大脑的名字：`combat B[ budget], combat prompts B, macro B, macro prompts B`（[路由、预算与种子 §1](/arch/harness/routing/#sec-1)） |
 
 **Harness 调用的 Brain 部分**（`Brain/Decisions.cs`、`Brain/Combat/`）：
@@ -176,7 +176,7 @@ public sealed class PublicRecord
 |---|---|
 | `ICombatPolicy`、`IChoicePolicy`、`IMacroPolicy` | 每种决策一个策略；`IChoicePolicy` 和 `IMacroPolicy` 还会说出它们上一个回答是否是探索出来的，`IMacroPolicy` 还会说出它在回答之后的计划 |
 | `CombatDecision`、`ChoiceDecision`、`MacroDecision` | 一个决策：它的合法动作（或它的提示）、按需生成的观测，以及对宏观一侧来说，若有打开的节点克隆，就带上这个克隆（`IMacroClone`） |
-| `CombatDecisionResult` | 战斗大脑的回答：首个动作、它之后的计划、候选、计划的观测哈希、是否探索、是否重新规划 |
+| `CombatDecisionResult` | 战斗大脑的回答：首个动作、它之后的计划、候选、计划的观测哈希、是否重新规划、它的路线是否重复一个循环 |
 | `Budget`、`TurnPlan`、`SlRoute`、`MoveRecord` | 搜索预算、沿用计划、规划器的路由、敌人出招记录 |
 
 ## 7. 本章

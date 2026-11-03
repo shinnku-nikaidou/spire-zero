@@ -15,7 +15,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-已有：無頭宿主（[無頭宿主](/zh-tw/arch/simulator/headless/)）；帶快照、確定化和 CombatBuilder 的單場戰鬥工作階段（[戰鬥](/zh-tw/arch/simulator/combat/)）；走過每個決策畫面的整局、兩種連戰，以及透過線路對接大腦來託管的對局（[整局](/zh-tw/arch/simulator/runs/)）；NoSL 戰鬥世界和 SL 節點複本（[世界與 SL 複本](/zh-tw/arch/simulator/worlds/)）；工作行程池及其四種請求（[工作行程池](/zh-tw/arch/simulator/pool/)）。規劃中：整局世界，它能讓 NoSL 搜尋看到當前地圖點之後的東西（[世界與 SL 複本 §8](/zh-tw/arch/simulator/worlds/#sec-8)）。
+已有：無頭宿主（[無頭宿主](/zh-tw/arch/simulator/headless/)）；帶快照、確定化和 CombatBuilder 的單場戰鬥工作階段（[戰鬥](/zh-tw/arch/simulator/combat/)）；走過每個決策畫面的整局，以及透過線路對接大腦來託管的對局（[整局](/zh-tw/arch/simulator/runs/)）；NoSL 戰鬥世界和 SL 節點複本（[世界與 SL 複本](/zh-tw/arch/simulator/worlds/)）；工作行程池及其三種請求（[工作行程池](/zh-tw/arch/simulator/pool/)）。規劃中：整局世界，它能讓 NoSL 搜尋看到當前地圖點之後的東西（[世界與 SL 複本 §8](/zh-tw/arch/simulator/worlds/#sec-8)）。
 
 </Aside>
 
@@ -36,7 +36,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 1. **託管這一局**。在自我對弈和評估中，由模擬器而不是真實遊戲來打這一局，也就是[模擬到實機階梯](/zh-tw/arch/evaluation/#sec-2)的 R1–R3 級。宿主工作行程持有唯一真實的那一局，並就每個決策詢問大腦，和 Mod 在真實遊戲裡的做法完全一樣。
 2. **搜尋世界**。戰鬥大腦和宏觀大腦在世界裡嘗試各種打法：NoSL 下是從觀測建出的樣本，SL 下是當前節點的複本（[環境：世界 §1](/zh-tw/arch/environments/worlds/#sec-1)）。每個搜尋請求都送到池裡的一個工作行程，由它建構或載入世界、在其中搜尋，然後回覆。
-3. **基準測試與檢查**。`bench`、`selftest`、`forkbench`、`fidelity` 和戰鬥測試集也在這裡執行（[參考](/zh-tw/arch/simulator/reference/)）。
+3. **基準測試與檢查**。`bench` 和 `selftest` 也在這裡執行（[參考](/zh-tw/arch/simulator/reference/)）。
 
 決策行程（Harness 和各個大腦在其中執行）從不載入遊戲，它透過訊息和工作行程溝通（[前言 §3](/zh-tw/#sec-3)）。在真實遊戲裡，Mod 是宿主，工作行程只負責搜尋；在自我對弈中，宿主也是一個工作行程。Harness 分辨不出這兩者：「換世界，不換大腦」。
 
@@ -59,7 +59,7 @@ flowchart LR
   H -->|"每個世界、回合<br/>或試探一個請求"| POOL
 ```
 
-在打整局的指令 `run` 裡，宿主和決策行程是同一個行程：這一局在其中一直活著，大腦則在它啟動的工作行程池裡搜尋。用 `run --brain SOCKET` 時，大腦改為一個獨立的行程，也就是 Mod 所連接的那一個（[整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。
+在打整局的指令 `run` 裡，宿主和決策行程是同一個行程：這一局在其中一直活著，大腦則在它啟動的工作行程池裡搜尋。用 `run --brain SOCKET` 時，大腦改為一個獨立的行程，也就是 Mod 所連接的那一個（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。
 
 ## 4. 程式碼
 
@@ -69,10 +69,10 @@ flowchart LR
 |---|---|
 | （根目錄） | `Program.cs`：找到遊戲的二進位檔，以本行程的副本形式啟動工作行程 |
 | `Runtime/` | 讓遊戲脫離引擎執行：`HeadlessGame`（啟動）、`GodotNativeStub`、`Pump`、各個補丁（`Runtime/Patches/`）、`FastHookListeners`、日誌 |
-| `Simulation/` | 戰鬥和整局的遊戲一側：`CombatSession`、`CombatBuilder`、`RunSession`、`SimWorlds`、`NodeWorld`、`PolicySelector`、`Loadout`、`GameSeeds` |
-| `Brains/` | 一局的大腦需要的東西：冠軍的選項（`ChampionOptions`、`LeafChoice`）、大腦連線和節點匯出（`RunBrains`）、記錄下來的對局 |
+| `Simulation/` | 戰鬥和整局的遊戲一側：`CombatSession`、`CombatBuilder`、`RunSession`、`SimWorlds`、`NodeWorld`、`NodeProbe`（在複本上回答 L0 的試探）、`PolicySelector`、`Loadout`、`GameSeeds` |
+| `Brains/` | 一局的大腦需要的東西：冠軍的選項（`ChampionOptions`、`LeafChoice`），以及大腦連線和節點匯出（`RunBrains`） |
 | `Commands/` | 命令列：每個指令一個類別，共用的選項組在 `Args.cs` 裡 |
-| `Checks/` | 診斷（`selftest`、`fidelity`、`forkbench`），以及在複本上回答 L0 試探的 `NodeProbe` |
+| `Checks/` | `selftest`，它的檢查分在四個檔案裡：指令本身，以及戰鬥、規則和整局的檢查 |
 
 `Simulation/` 和 `Runtime/` 不使用 `Commands/` 裡的任何東西。不需要遊戲的 xUnit 測試在 `src/Sts2Ai.Tests` 裡（[參考 §7](/zh-tw/arch/simulator/reference/#sec-7)）。
 
@@ -82,9 +82,9 @@ flowchart LR
 |---|---|
 | [無頭宿主](/zh-tw/arch/simulator/headless/) | 遊戲如何在沒有引擎的情況下啟動：原生存根、補丁、TestMode、JIT，以及讓它具有確定性的單執行緒 `Pump` |
 | [戰鬥](/zh-tw/arch/simulator/combat/) | 戰鬥工作階段、作為配方的快照、確定化、從觀測建構戰鬥（CombatBuilder）、保真度與速度 |
-| [整局](/zh-tw/arch/simulator/runs/) | `RunSession`：開始一局、「步進—穩定—決策」迴圈、每個決策畫面、確定性、兩種連戰、對接大腦託管對局 |
+| [整局](/zh-tw/arch/simulator/runs/) | `RunSession`：開始一局、「步進—穩定—決策」迴圈、每個決策畫面、確定性、對接大腦託管對局 |
 | [世界與 SL 複本](/zh-tw/arch/simulator/worlds/) | NoSL 戰鬥世界、節點檢查點、SL 複本的載入與封存、SL 世界、整局世界 |
-| [工作行程池](/zh-tw/arch/simulator/pool/) | 池、它的四種請求、跨行程的確定性、當機與速度 |
+| [工作行程池](/zh-tw/arch/simulator/pool/) | 池、它的三種請求、跨行程的確定性、當機與速度 |
 | [參考](/zh-tw/arch/simulator/reference/) | 建置與執行、每個指令和選項、結束代碼、每個測試 |
 
 像 `Runs/RunManager.cs:295-312` 這樣的檔案引用，指向反編譯出的遊戲組件 `MegaCrit.Sts2.Core`（資料夾 `Runs/` 就是它的命名空間 `MegaCrit.Sts2.Core.Runs`）；像 `Simulation/RunSession.cs` 這樣的專案路徑，除非寫明是別的專案，都在 `src/Sts2Ai.SimWorker/` 之下。Godot 節點檔案（`NGame.cs`、`NRestSiteRoom.cs`）按檔名唯一，所以只寫檔名。

@@ -7,7 +7,7 @@ sidebar:
 
 import WireExchange from '../../../../../components/book/WireExchange.svelte';
 
-大腦從不在遊戲裡面執行。遊戲那一側，也就是**宿主**，每個決策問它一個問題，得到一個回答。宿主是真實遊戲裡的 Mod，或承載一局的模擬器（`run --brain`）；**大腦**是 Harness 加上冠軍的各個大腦，由 `brain` 指令提供服務（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。兩端用同一批型別（`Sts2Ai.Protocol/Wire.cs`），所以不管是哪個宿主在問，一局都打得一樣。
+大腦從不在遊戲裡面執行。遊戲那一側，也就是**宿主**，每個決策問它一個問題，得到一個回答。宿主是真實遊戲裡的 Mod，或承載一局的模擬器（`run --brain`）；**大腦**是 Harness 加上冠軍的各個大腦，由 `brain` 指令提供服務（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。兩端用同一批型別（`Sts2Ai.Protocol/Wire.cs`），所以不管是哪個宿主在問，一局都打得一樣。
 
 ## 1. 連線
 
@@ -38,7 +38,7 @@ import WireExchange from '../../../../../components/book/WireExchange.svelte';
 | `cancel` | 宿主 → 大腦 | `decision_id` | 回答到來之前，遊戲已經往前走了 |
 | `run_end` | 宿主 → 大腦 | `won`、`floor`、`reason` | 一局結束；`reason` 是 `won`、`lost`、`truncated`（決策上限）、`failed` 或 `aborted` |
 | `error` | 大腦 → 宿主 | `message` | 代替 `ready` 或 `recommendation`：大腦接不了這一局，或答不了這個決策；宿主結束這一局 |
-| `node_checkpoint` | 宿主 → 大腦 | `node_index`、`checkpoint`、`gauntlet`? | 僅 SL：一個節點開始（[§6](#sec-6)） |
+| `node_checkpoint` | 宿主 → 大腦 | `node_index`、`checkpoint` | 僅 SL：一個節點開始（[§6](#sec-6)） |
 | `node_action` | 宿主 → 大腦 | `node_index`、`seq`、`action` | 僅 SL：在節點內做出的一個決策（[§6](#sec-6)） |
 
 `run_id` 是種子 JSON 字串的 `ProtocolJson.Hash`，寫成 16 位十六進位數字（`RunHeader.IdOf`）：大腦可以用這個 id 區分各局、為自己的亂數流設定種子，卻無法從中得知種子（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。`decision_id` 在每局裡從 0 開始計數。`obs_hash` 是觀測的雜湊，寫成 16 位十六進位數字。
@@ -84,12 +84,12 @@ sequenceDiagram
 
 SL 下大腦可以確切知道當前節點；一個節點是一個地圖點，從抵達開始，到離開它的那次移動為止（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。宿主用兩種訊息送出大腦重建它所需要的東西，也就是節點的複本（[模擬器：世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）：
 
-- **`node_checkpoint`**，在節點開始時送出：`node_index`（從 0 起算，從宿主看到的第一個節點算起；Mod 可能中途才加入一局）；`checkpoint`，一個本身就是一份 JSON 的字串，包含抵達時遊戲的存檔和每個遺物的簡單欄位；以及 `gauntlet`，在按菁英連戰規則進行的一局裡為 true，讓複本保留這條規則。Mod 從不設定它。
+- **`node_checkpoint`**，在節點開始時送出：`node_index`（從 0 起算，從宿主看到的第一個節點算起；Mod 可能中途才加入一局）；以及 `checkpoint`，一個本身就是一份 JSON 的字串，包含抵達時遊戲的存檔和每個遺物的簡單欄位。
 - **`node_action`**，節點內做出的每個決策一條：`seq`，在節點內從 0 起算；以及決策的軌跡形式：決策介面、一個空格，然後是動作（`map 0,1`、`combat play:7:1`）。選牌提示的一步是 `card_choice`，選擇用遊戲自己的索引表示，而不是 `pick:` 的規範索引（[觀測與動作 §4](/zh-tw/arch/protocol/observation/#sec-4)），因為複本透過遊戲的選牌器重播它。
 
 **時機**。兩者都是延後送出的，就在下一個決策之前：如果此後開始了新節點，先送檢查點，再送節點裡每個還沒送出的決策（`Brains/RunBrains.cs:88-99`）。因此一個節點的移動，也就是它的最後一個決策，永遠不會被送出：下一個決策在下一個節點裡，而那個節點以它自己的檢查點開始。
 
-**規則**（`Sts2Ai.Harness/Dispatcher.cs:179-194`）：NoSL 的一局裡的節點訊息會被拒絕；節點索引必須遞增；`seq` 必須等於節點到目前為止的動作數；在任何檢查點之前出現的 SL 戰鬥決策是錯誤。大腦不回答節點訊息：被它拒絕的節點訊息，會讓這一局的下一個決策帶著原因失敗。
+**規則**（`Sts2Ai.Harness/Dispatcher.cs:162-177`）：NoSL 的一局裡的節點訊息會被拒絕；節點索引必須遞增；`seq` 必須等於節點到目前為止的動作數；在任何檢查點之前出現的 SL 戰鬥決策是錯誤。大腦不回答節點訊息：被它拒絕的節點訊息，會讓這一局的下一個決策帶著原因失敗。
 
 **SL 放行了什麼**。檢查點承載遊戲的存檔，而存檔包含這一局的種子和亂數流，所以在 SL 下，種子終究還是到了大腦這裡。SL 可以知道它：節點的結果就是遊戲自己的結果（[環境：資訊與節點 §2](/zh-tw/arch/environments/information/#sec-2)）。大腦只透過在工作行程裡載入檢查點來讀它，也就是作為一個在節點出口封存的複本。
 
@@ -100,7 +100,7 @@ public sealed record Recommendation(long DecisionId, string ObsHash, string Acti
     IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null) : WireMessage;
 
 public sealed record Candidate(string Action, double Value, double Ci, int Samples,
-    IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+    IReadOnlyList<double>? Values = null);
 ```
 
 | 欄位 | 含義 |
@@ -110,7 +110,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | `plan` | 大腦在這個動作之後的計畫：會搜尋的戰鬥大腦給出本回合剩下的部分，地圖上的宏觀大腦給出本幕剩下的路線 |
 | `candidates` | 只來自會搜尋的大腦：它評過分的第一個動作，最好的在前 |
 
-一個 `Candidate`（`World.cs:59`）是一個評過分的動作：`value`，它在各個世界上的平均值；`ci`，它 95% 信賴區間的半寬；`samples`，世界的個數；以及搜尋保留了它們時的 `values`，它在每個世界裡的值，和 `nodes`，它在每個世界裡用掉的搜尋節點數。計畫和候選動作也正是決策日誌所保存的（[Harness：決策日誌 §5](/zh-tw/arch/harness/decision-log/#sec-5)），以及輸出顯示給玩家的（[輸出 §2](/zh-tw/arch/output/#sec-2)）。
+一個 `Candidate`（`World.cs:65`）是一個評過分的動作：`value`，它在各個世界上的平均值；`ci`，它 95% 信賴區間的半寬；`samples`，世界的個數；以及搜尋保留了它們時的 `values`，它在每個世界裡的值。計畫和候選動作也正是決策日誌所保存的（[Harness：決策日誌 §5](/zh-tw/arch/harness/decision-log/#sec-5)），以及輸出顯示給玩家的（[輸出 §2](/zh-tw/arch/output/#sec-2)）。
 
 **規劃中**：
 

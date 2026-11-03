@@ -64,7 +64,6 @@ sequenceDiagram
 |---|---|---|
 | `PimcWorldRequest` | NoSL 下的 PIMC（`PooledPimc`） | 用构建种子从观测构建战斗，在由搜索种子抽出的世界中取第 k 个，搜索本回合，回复每个第一动作之后的最佳路线 |
 | `SlTurnRequest` | SL 规划器（`PooledPlanner`） | 加载节点克隆，从决策处打出束状态的路径，完整搜索那个回合，回复这个回合最好的几个结束状态（[SL 规划器：回合搜索 §4](/arch/sl-planner/turn-search/#sec-4)） |
-| `SlWorldRequest` | SL 世界上的 PIMC，即基线 | 加载节点克隆，在一个第一动作之后搜索本回合。在规划中的设计里是可以删除的候选（[NoSL PIMC：预算 §8](/arch/pimc/budget/#sec-8)） |
 | `SlMacroRequest` | 克隆上的宏观大脑 | 在克隆上打出一条宏观回答的路径，回复下一个决策（[宏观大脑：搜索 §6](/arch/macro-brain/search/#sec-6)） |
 
 **自包含**。一个请求带着它的 worker 需要的一切，请求之间不留下任何东西，所以任何空闲的 worker 都能接任何请求。在 NoSL 下，离开主机的只有观测和记录：真实状态永远到不了 worker（[NoSL PIMC §4](/arch/pimc/#sec-4)）。在 SL 下，节点克隆会离开主机，这是 SL 可以知道的。
@@ -80,5 +79,5 @@ sequenceDiagram
 ## 4. 规划中 <Badge text="规划中" variant="caution" />
 
 - **把提示变成搜索分支**。在搜索里，模拟器的选择器（回答选牌提示的代码）由搜索驱动，于是每个回答都是 `TurnEnds` 的一个分支，像其他动作一样估值，`p0` 也就去掉了。多选是一串单选，这样有很多张牌的提示增加的是深度，而不是一大片子集。真实战斗里的提示和其他决策一样：在 SL 下它是计划的一步，在 NoSL 下它要搜索。这需要世界 API 的提示分支和 `ChoiceContext`（[协议：观测与动作 §6](/arch/protocol/observation/#sec-6)）。
-- **这对 NoSL 的代价**。提示的回答是在看到牌之后选的，所以提示上的分支会扩大策略融合；要先跑融合测试集（[NoSL PIMC：搜索 §7](/arch/pimc/search/#sec-7)）。
+- **这对 NoSL 的代价**。提示的回答是在看到牌之后选的，所以提示上的分支会扩大策略融合；要先测量它（[NoSL PIMC：搜索 §7](/arch/pimc/search/#sec-7)）。
 - **常驻 worker 的世界**。用于对局世界，以及超出一个请求的搜索：按种类（构建、克隆、对局宿主）打开一个世界，按 id 在它上面分支，再关闭它；它的分支优先发往那个 worker，因为在别处恢复要付出一次重放（[模拟器：工作进程池 §8](/arch/simulator/pool/#sec-8)）。

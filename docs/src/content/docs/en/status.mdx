@@ -22,7 +22,7 @@ The AI plays whole runs headless, in the game's own code, in both environments. 
 | Protocol, GameBridge | built: every surface observed, its legal actions listed and started; card prompts with their context ([Protocol](/en/arch/protocol/), [GameBridge](/en/arch/gamebridge/)) |
 | Harness | built: routing with no fallback, seeds from the run id, the decision log, the brain server; `run --check` replays a run exactly. Planned: the rest of the public record, anytime answers ([Harness](/en/arch/harness/)) |
 | NoSL combat brain | built: PIMC over sampled worlds with the combat net as its leaf ([NoSL PIMC](/en/arch/pimc/)) |
-| SL combat brain | built: the SL planner, a beam search over whole turns on the node's clone; on the combat panel it wins every combat PIMC wins and 9 more of 120 ([The SL planner](/en/arch/sl-planner/)) |
+| SL combat brain | built: the SL planner, a beam search over whole turns on the node's clone; on a fixed panel of 120 combats it won every combat PIMC won and 9 more ([The SL planner](/en/arch/sl-planner/)) |
 | combat redesign | <Badge text="planned" variant="caution" /> SL = pruning + net, NoSL = Monte Carlo + net, on one `TurnEnds`, validated by one gate at a time; not implemented ([Combat brain §3](/en/arch/combat-brain/#sec-3), [§6](/en/arch/combat-brain/#sec-6)) |
 | macro brain | built: L0 values each option's afterstate with V, predicted from the screen in NoSL or played on the node's clone in SL; V is pure V, read from the run's ids and raw state alone ([Macro brain](/en/arch/macro-brain/)) |
 | learning | built: self-play with even-draw exploration, V's and the combat net's training, the wins gate. Planned: TD(λ), expert iteration, LLM patch proposals ([Learning: the loop](/en/arch/learning/loop/)) |
@@ -54,7 +54,7 @@ The AI plays whole runs headless, in the game's own code, in both environments. 
 
 <Steps>
 
-1. <Badge text="done 2026-10-26" variant="success" /> Whole runs headless with every surface; Protocol's run-level types and card prompt context; GameBridge for every surface; the combat world API, PIMC and the combat panel.
+1. <Badge text="done 2026-10-26" variant="success" /> Whole runs headless with every surface; Protocol's run-level types and card prompt context; GameBridge for every surface; the combat world API and PIMC.
 
 2. <Badge text="done 2026-10-27" variant="success" /> The worker pool; Harness's dispatch, seeds and decision log; L0; the first reports and the full-run gate; a combat net as PIMC's leaf.
 
@@ -74,7 +74,7 @@ The AI plays whole runs headless, in the game's own code, in both environments. 
 
 10. <Badge text="in progress" variant="note" /> `v9g0`: the first SL self-play of all five characters, at ascension 0 and the low budget, 6,000 runs each, with V's decisions drawn evenly at ε 0.3, 0.1 and 0.02 ([Learning: the loop §2](/en/arch/learning/loop/#sec-2)).
 
-11. **Waiting:** NoSL's items, while SL comes first: tuning PIMC's worlds and nodes, the fusion panel's measurement ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+11. **Waiting:** NoSL's items, while SL comes first: tuning PIMC's worlds and nodes, measuring how large strategy fusion is ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
 
 12. The mod's auto-play: the executor, the auto-run driver, the R4 pipeline and the R3 ≡ R4 test ([Mod: auto-play and safety](/en/arch/mod/auto/)).
 

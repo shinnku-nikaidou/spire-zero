@@ -71,7 +71,7 @@ Mod 拒绝在不是为之构建的游戏版本上运行（[Mod §3](/arch/mod/#s
 
 | 测什么 | 在哪里 |
 |---|---|
-| GameBridge 确实触及游戏（边界检查的对照） | `BoundaryTests`、`selftest` |
+| GameBridge 确实触及游戏（边界检查的对照） | `BoundaryTests` |
 | 每个战斗观测和动作都能往返；从观测构建出的战斗精确地显示这些观测 | `selftest`（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)） |
 | 每个决策界面的观测都能往返；大脑给出的每个回答都合法，且启动时不出错；对局精确重播，节点也一样 | `run --check`（[模拟器：整局 §6](/arch/simulator/runs/#sec-6)） |
 | Mod 的 SL 记录在各自的克隆上重播，观测与游戏当时显示的相同 | `clones`（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)） |

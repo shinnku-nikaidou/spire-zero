@@ -1,6 +1,6 @@
 ---
 title: 世界與工作行程訊息
-description: '搜尋使用的型別：戰鬥搜尋在其中打的世界 API、節點複本、敵人出招記錄、評過分的候選動作，以及四種工作行程請求和它們帶回的回答。'
+description: '搜尋使用的型別：戰鬥搜尋在其中打的世界 API、節點複本、敵人出招記錄、評過分的候選動作，以及三種工作行程請求和它們帶回的回答。'
 sidebar:
   label: 世界與工作行程訊息
 ---
@@ -54,12 +54,12 @@ public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 ## 2. 節點複本與敵人出招記錄
 
 ```csharp
-public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, bool? Gauntlet = null);
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
 public sealed record EnemyTurns(uint Uid, string? Id, IReadOnlyList<EnemyTurn> Turns);
 public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 ```
 
-**`NodeClone`** 是當前節點的一個 SL 複本：節點的檢查點（`Save`，抵達時遊戲的存檔，加上存檔丟掉的遺物欄位）、此後節點裡的每個決策，以軌跡行表示（`surface action`，選牌提示的選擇用遊戲自己的索引），以及這一局按菁英連戰規則進行時的那條規則。它在模擬器之外是不透明的；模擬器像遊戲的「繼續」那樣載入存檔，把遺物欄位放回去，然後重播這些決策（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。Harness 從線路的節點訊息做出一個複本（[線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。
+**`NodeClone`** 是當前節點的一個 SL 複本：節點的檢查點（`Save`，抵達時遊戲的存檔，加上存檔丟掉的遺物欄位），以及此後節點裡的每個決策，以軌跡行表示（`surface action`，選牌提示的選擇用遊戲自己的索引）。它在模擬器之外是不透明的；模擬器像遊戲的「繼續」那樣載入存檔，把遺物欄位放回去，然後重播這些決策（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。Harness 從線路的節點訊息做出一個複本（[線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。
 
 **`EnemyTurns`** 是一個敵人在當前戰鬥裡招式的公開紀錄：到目前為止的每個回合，最舊的在前，它的圖示在該回合第一個決策時顯示的意圖。看著這場戰鬥的玩家全都看到了。Harness 從觀測按戰鬥保存它（`MoveRecord`），並隨每個決策交給戰鬥大腦；搜尋從它建構怪物的招式日誌（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)），學習得到的葉節點也會讀它（[戰鬥大腦：葉節點 §3](/zh-tw/arch/combat-brain/leaf/#sec-3)）。
 
@@ -67,10 +67,10 @@ public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 
 ```csharp
 public sealed record Candidate(string Action, double Value, double Ci, int Samples,
-    IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+    IReadOnlyList<double>? Values = null);
 ```
 
-一次搜尋評過分的一個動作：它在各個世界上的平均值、95% 信賴區間的半寬、世界的個數，以及在保留時，它在每個世界裡的值（四位小數，按世界順序）和在每個世界裡花在它下面的搜尋節點數。推薦把它們按好壞排列，最好的在前（[線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）；各世界的值正是戰鬥網路的 ExIt 目標的材料（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。
+一次搜尋評過分的一個動作：它在各個世界上的平均值、95% 信賴區間的半寬、世界的個數，以及在保留時，它在每個世界裡的值（四位小數，按世界順序）。推薦把它們按好壞排列，最好的在前（[線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）；各世界的值正是戰鬥網路的 ExIt 目標的材料（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。
 
 ## 4. 工作行程訊息
 
@@ -81,33 +81,30 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | 訊息 | JSON `type` | 欄位 | 要求什麼 |
 |---|---|---|---|
 | `WorkerHello` | （無） | `game` | 工作行程啟動完成後的第一行：它執行的遊戲版本 |
-| `PimcWorldRequest` | `pimc_world` | `id`、`observation`、`first`、`build_seed`、`search_seed`、`world`、`worlds`、`nodes_per_first`、`history`? | PIMC 對一個 NoSL 世界的搜尋：用 `build_seed` 從 `observation` 建構戰鬥，取由 `search_seed` 抽出的 `worlds` 個世界中的第 `world` 個，在 `first` 的每個動作之後搜尋本回合，每個用 `nodes_per_first` 個節點 |
-| `SlWorldRequest` | `sl_world` | `id`、`node`、`first`、`nodes_per_first`、`history`? | PIMC 對 SL 世界的搜尋：載入複本 `node`，然後在 `first` 的每個動作之後搜尋本回合 |
-| `SlTurnRequest` | `sl_turn` | `id`、`node`、`path`、`nodes`、`keep`、`floor`?、`history`?、`prices`? | SL 規劃器的一個回合：載入複本，從決策處打 `path`，到達束裡的一個狀態，再用 `nodes` 個節點搜尋那個回合剩下的部分，在下一回合開始處保留至多 `keep` 個狀態，以及戰鬥的最佳結局，但不保留上界勝不過 `floor` 的任何一個 |
+| `PimcWorldRequest` | `pimc_world` | `id`、`observation`、`first`、`build_seed`、`search_seed`、`world`、`worlds`、`nodes_per_first`、`history` | PIMC 對一個 NoSL 世界的搜尋：用 `build_seed` 從 `observation` 建構戰鬥，取由 `search_seed` 抽出的 `worlds` 個世界中的第 `world` 個，在 `first` 的每個動作之後搜尋本回合，每個用 `nodes_per_first` 個節點 |
+| `SlTurnRequest` | `sl_turn` | `id`、`node`、`path`、`nodes`、`keep`、`floor`?、`history` | SL 規劃器的一個回合：載入複本，從決策處打 `path`，到達束裡的一個狀態，再用 `nodes` 個節點搜尋那個回合剩下的部分，在下一回合開始處保留至多 `keep` 個狀態，以及戰鬥的最佳結局，但不保留上界勝不過 `floor` 的任何一個 |
 | `SlMacroRequest` | `sl_macro` | `id`、`node`、`paths` | 宏觀大腦的試探：對每條答案路徑，載入複本，從決策處打這條路徑，記下遊戲接著問什麼；一條路徑是文字形式的宏觀動作，對選牌提示則是 `pick:` 加上它按規範順序的選擇 |
-| `WorkerReply` | （無） | `id`、`lines`?、`error`?、`game_errors`、`turn`?、`afters`? | 對請求 `id` 的回答：兩種 PIMC 請求用 `lines`，`sl_turn` 用 `turn`，`sl_macro` 用 `afters`；請求失敗時改為 `error`；`game_errors`，服務它期間記錄下的遊戲錯誤行 |
+| `WorkerReply` | （無） | `id`、`lines`?、`error`?、`game_errors`、`turn`?、`afters`? | 對請求 `id` 的回答：`pimc_world` 用 `lines`，`sl_turn` 用 `turn`，`sl_macro` 用 `afters`；請求失敗時改為 `error`；`game_errors`，服務它期間記錄下的遊戲錯誤行 |
 
-`history` 是這場戰鬥的敵人出招記錄（[§2](#sec-2)），給葉節點用；在 `sl_turn` 裡，是到被搜尋的那個狀態為止的記錄。`prices` 是 V 對這場戰鬥各種結局的定價（[§5](#sec-5)），在規劃器用 V 為它的葉節點定價時帶上。
+`history` 是這場戰鬥的敵人出招記錄（[§2](#sec-2)），給葉節點用；在 `sl_turn` 裡，是到被搜尋的那個狀態為止的記錄。
 
 ## 5. 回答
 
 ```csharp
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
-    IReadOnlyList<ulong>? Hashes = null);
+    IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
 public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
     double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
 public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
-public sealed record EndPrices(double Before, IReadOnlyDictionary<string, IReadOnlyList<double>> Hp, IReadOnlyList<string> Held);
 ```
 
 | 型別 | 位於 | 包含什麼 |
 |---|---|---|
-| `PlannedLine` | `lines` | 搜尋找到的一條打法路線，從它的第一個動作起：它的值、它的動作、第一個動作之後模擬的節點數（包括第一個動作本身），以及每個動作被打出時的戰鬥觀測雜湊，被遵循的計畫在每一步之前都會核對它。`lines[i]` 是 `first[i]` 之後的最佳路線 |
+| `PlannedLine` | `lines` | 搜尋找到的一條打法路線，從它的第一個動作起：它的值、它的動作、第一個動作之後模擬的節點數（包括第一個動作本身），以及每個動作被打出時的戰鬥觀測雜湊，被遵循的計畫在每一步之前都會核對它；以及它是否重複搜尋找到的一個循環。`lines[i]` 是 `first[i]` 之後的最佳路線 |
 | `TurnSearch` | `turn` | 一個回合搜尋的各個結尾：`ends`，如果這個回合能到達戰鬥的結局，先是最佳結局，然後是下一回合開始處的狀態，最好的在前；`nodes`，模擬的動作數；`cut`，是否有東西被略掉（節點用完了，或找到的狀態比保留的多）；`bound`，被搜尋的那個狀態的上界 |
 | `TurnEnd` | `turn.ends` | 規劃器路線上一個回合結束的狀態：從決策到達它的動作（最後一個結束回合）和每個動作之前的觀測雜湊；它的勝負狀態；葉節點的值；它的上界，即它還能達到的最好結果（以它現有的生命值和藥水獲勝；戰鬥結束後就是它的值）；它的鍵，即它的觀測和完整隱藏狀態的雜湊，相等的狀態按它合併（戰鬥結束後為 0）；它的敵人出招記錄 |
 | `Afterstate` | `afters` | 一條路徑通往的地方：那時的一局；遊戲接著詢問的決策介面，一局結束時為 null；它的畫面；它的合法動作。選牌提示的選項在它的畫面裡，所以它的合法清單為空；戰鬥的畫面被省略，因為一場戰鬥會結束一次試探 |
-| `EndPrices` | `prices` | 一場戰鬥的結局值多少，取自戰鬥第一次規劃時的 V，以 V 的單位表示：`before`，當時這一局的 V；`hp`，勝利的價格，先按保留的藥水（`held` 的一個排好序的子集，逗號連接），再按剩下的生命值，從 0 開始，生命值越多，絕不會越低；`held`，那次規劃時持有的藥水。死亡值 0（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)） |
 
 `status` 寫成數字（0 進行中、1 贏、2 輸），雜湊和鍵寫成 JSON 數字（[概覽 §4](/zh-tw/arch/protocol/#sec-4)）。
 

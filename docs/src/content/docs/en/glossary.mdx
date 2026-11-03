@@ -98,8 +98,6 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | SPSA | Simultaneous perturbation stochastic approximation: tunes many parameters at once by perturbing them together; the project does not use it ([Learning: the loop §6](/en/arch/learning/loop/#sec-6)). |
 | privileged information | Hidden state used only in training to reduce noise; never an input of the deployed policy. |
 | exploration, even draws, ε | Self-play's exploration (`run --explore ε`): with chance ε a macro decision is drawn evenly among its options, whatever V says. |
-| elite gauntlet, progress | A rule for runs (`run --gauntlet`): plain monster combats won at their start, elites and bosses fought; progress is the floor reached plus the share of the enemies' HP taken in the fight the run died in ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). |
-| boss gauntlet pilot, door state | Runs whose every combat is won at its start (`run --auto-win`), to reach each boss's door at once; a door state is a run's loadout there ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). |
 
 ## 6. Evaluation
 
@@ -128,5 +126,5 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | `data/silent/{sl,nosl}/…` | The data directory's self-play and evaluation folders, on the storage host, not in git. |
 | `tmp/build.sh REV`, `sim.sh` | The local launcher that builds a fixed commit and runs it ([Simulator: reference §1](/en/arch/simulator/reference/#sec-1)). |
 | `run`, `brain`, `serve`, `clones`, `gate`, `report`, `leaderboard` | SimWorker commands ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). |
-| `v.train`, `combat.train`, `gauntlet.py` | The Python that trains V and the combat net, and the gauntlet's report and gate ([Learning: reference §9](/en/arch/learning/reference/#sec-9)). |
+| `v.train`, `combat.train`, `gate.py` | The Python that trains V and the combat net, and the wins gate's report and verdict ([Learning: reference §9](/en/arch/learning/reference/#sec-9)). |
 | `0SSL7NS01MU6` | The seed of the book's example run, won on floor 48 ([The game §1](/en/arch/game/#sec-1)). |

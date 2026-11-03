@@ -14,7 +14,7 @@ The project's programs never share objects: the game, the brain and the search w
 
 <Aside title="Status">
 
-Exist: the observation of every decision screen, combat and card prompts included; the actions in text form; the host–brain wire with its SL node messages, over which the simulator plays whole runs and the mod in the game advises; the combat world API; the four worker requests. Planned: the event stream of the public history, facts for explanations, and the `degraded` flag of a recommendation ([§6](#sec-6)).
+Exist: the observation of every decision screen, combat and card prompts included; the actions in text form; the host–brain wire with its SL node messages, over which the simulator plays whole runs and the mod in the game advises; the combat world API; the three worker requests. Planned: the event stream of the public history, facts for explanations, and the `degraded` flag of a recommendation ([§6](#sec-6)).
 
 </Aside>
 
@@ -58,7 +58,7 @@ The observation and the actions, which all three carry, have a page of their own
 | `Sts2Ai.SimWorker` | all of the above |
 | `Sts2Ai.Mod` | compiles GameBridge's and Protocol's source files into itself, and runs inside the game |
 
-The boundary is checked twice: `BoundaryTests` (xUnit, without the game) and the first two `selftest` checks walk the compiled references of Brain, Protocol and Harness and fail if any reaches a game assembly, with GameBridge as the control that does ([Simulator: reference §5](/en/arch/simulator/reference/#sec-5)).
+The boundary is checked by `BoundaryTests` (xUnit, without the game), which walks the compiled references of Brain, Protocol and Harness and fails if any reaches a game assembly, with GameBridge as the control that does ([Simulator: reference §7](/en/arch/simulator/reference/#sec-7)).
 
 ## 3. What may be in it
 
@@ -91,11 +91,11 @@ Two functions give identities:
 
 | what | where |
 |---|---|
-| the boundary: Brain, Protocol and Harness reach no game assembly | `BoundaryTests`; `selftest` |
+| the boundary: Brain, Protocol and Harness reach no game assembly | `BoundaryTests` |
 | every combat observation and every combat action survive a JSON round trip, as text and as JSON | `selftest`, per combat ([Simulator: reference §5](/en/arch/simulator/reference/#sec-5)) |
 | every observation of a run survives a JSON round trip, and the same run gives the same observation hashes | `run --check` ([Simulator: whole runs §6](/en/arch/simulator/runs/#sec-6)) |
 | a run plays the same in process and over the wire: trace, observations, run record, decision log | `run --check` |
-| the brain refuses node messages in NoSL; a node's clone keeps the gauntlet's rule | `DispatcherTests` |
+| the brain refuses node messages in NoSL; an SL node's clone is its checkpoint and the decisions since | `DispatcherTests` |
 | the wire version: a message of another `v` is refused when read | `WireStream.Receive` |
 | the SL decisions a host sent replay on their clones with the same observations | `clones` over a `brain --wire` log ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)) |
 
@@ -111,7 +111,7 @@ Two functions give identities:
 |---|---|
 | [The wire](/en/arch/protocol/wire/) | the host–brain conversation: its socket, every message and field, one run step by step, the rules, the SL node messages, the recommendation, how the two hosts differ |
 | [Observations and actions](/en/arch/protocol/observation/) | the observation of every decision: the run, a combat, card identity and canonical order, every screen with its actions, card prompts and their context, what is left out |
-| [Worlds and worker messages](/en/arch/protocol/worlds/) | the world API search plays in, the node clone and the record of enemy moves, and the four worker requests with their answers |
+| [Worlds and worker messages](/en/arch/protocol/worlds/) | the world API search plays in, the node clone and the record of enemy moves, and the three worker requests with their answers |
 
 Open questions:
 

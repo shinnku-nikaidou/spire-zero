@@ -77,9 +77,9 @@
   {/if}
   <p class="v-caption">
     {say(lang, w(
-      `${lost} lost runs of ${r.runs}, ${r.won} won (an earlier champion, ${r.env}, ${r.seedSet}). Bosses reached ${r.bossesReached.join(' / ')}, beaten ${r.bossesBeaten.join(' / ')} (acts 1 / 2 / 3). A lost run died in a combat when its last combat is on the floor it ended on and that combat ended in a death or has no end; ${r.deaths.noEnd} of these deaths have no end in the record, and learn/gauntlet.py counts those as outside combat.`,
-      `${r.runs} 局里输了 ${lost} 局，通关 ${r.won} 局（一个较早的冠军，${r.env}，${r.seedSet}）。Boss 到达 ${r.bossesReached.join(' / ')}，击败 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。输掉的一局若最后一场战斗就在它结束的楼层，且那场战斗以死亡结束或没有 end，就算死在那场战斗里；其中 ${r.deaths.noEnd} 场死亡在记录里没有 end，learn/gauntlet.py 把它们算成战斗之外。`,
-      `${r.runs} 局裡輸了 ${lost} 局，通關 ${r.won} 局（一個較早的冠軍，${r.env}，${r.seedSet}）。Boss 到達 ${r.bossesReached.join(' / ')}，擊敗 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。輸掉的一局若最後一場戰鬥就在它結束的樓層，且那場戰鬥以死亡結束或沒有 end，就算死在那場戰鬥裡；其中 ${r.deaths.noEnd} 場死亡在紀錄裡沒有 end，learn/gauntlet.py 把它們算成戰鬥之外。`,
+      `${lost} lost runs of ${r.runs}, ${r.won} won (an earlier champion, ${r.env}, ${r.seedSet}). Bosses reached ${r.bossesReached.join(' / ')}, beaten ${r.bossesBeaten.join(' / ')} (acts 1 / 2 / 3). A lost run died in a combat when its last combat is on the floor it ended on and that combat ended in a death or has no end; ${r.deaths.noEnd} of these deaths have no end in the record, and learn/gate.py counts those as outside combat.`,
+      `${r.runs} 局里输了 ${lost} 局，通关 ${r.won} 局（一个较早的冠军，${r.env}，${r.seedSet}）。Boss 到达 ${r.bossesReached.join(' / ')}，击败 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。输掉的一局若最后一场战斗就在它结束的楼层，且那场战斗以死亡结束或没有 end，就算死在那场战斗里；其中 ${r.deaths.noEnd} 场死亡在记录里没有 end，learn/gate.py 把它们算成战斗之外。`,
+      `${r.runs} 局裡輸了 ${lost} 局，通關 ${r.won} 局（一個較早的冠軍，${r.env}，${r.seedSet}）。Boss 到達 ${r.bossesReached.join(' / ')}，擊敗 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。輸掉的一局若最後一場戰鬥就在它結束的樓層，且那場戰鬥以死亡結束或沒有 end，就算死在那場戰鬥裡；其中 ${r.deaths.noEnd} 場死亡在紀錄裡沒有 end，learn/gate.py 把它們算成戰鬥之外。`,
     ))}
   </p>
 </div>

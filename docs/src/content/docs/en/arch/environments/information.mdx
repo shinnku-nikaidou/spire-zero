@@ -64,7 +64,7 @@ The figure walks through the first three nodes of one real run, the won SL run t
 
 <NodeTimeline client:visible lang="en" />
 
-Search that would cross the exit, for example to ask what a card is worth in the next fight, may use only determinized samples seeded by the search, never the true streams. No search does this today. The clone enforces the line: once the travel is recorded it stops and refuses any further step (`Simulation/RunSession.cs:235`), a macro probe that travels throws (`Checks/NodeProbe.cs:29`), and L0 values a map move by predicting its afterstate from the screen instead of playing it ([Macro brain: search §2](/en/arch/macro-brain/search/#sec-2)).
+Search that would cross the exit, for example to ask what a card is worth in the next fight, may use only determinized samples seeded by the search, never the true streams. No search does this today. The clone enforces the line: once the travel is recorded it stops and refuses any further step (`Simulation/RunSession.cs:228`), a macro probe that travels throws (`Simulation/NodeProbe.cs:29`), and L0 values a map move by predicting its afterstate from the screen instead of playing it ([Macro brain: search §2](/en/arch/macro-brain/search/#sec-2)).
 
 ## 4. Why the node, and not the game's own saves
 
@@ -122,7 +122,7 @@ An SL search needs the node as it was at arrival, plus everything done in it sin
 
 **A loaded save is not the same as uninterrupted play.** Loading a save re-runs the map's hooks (`Runs/RunManager.cs:815-816`) and `OnRunLoaded` (562-565), and drops every relic field that is not marked as saved: a relic saves only its `[SavedProperty]` members (`Models/RelicModel.cs:556-576`). The relic fields mattered: a relic's status or counter that the save dropped changed every observation of the clone, the clone then no longer matched the real combat, and the SL planner planned again at every step ([Simulator: worlds and the SL clone §6](/en/arch/simulator/worlds/#sec-6)). So the checkpoint carries each relic's plain fields (numbers, flags and enums) and puts them back after loading, and `run --check` now finds no node whose clone differs from its run. There is no checksum and no fallback: a game quirk that breaks our correctness is fixed where it enters our code ([Introduction §2](/en/#sec-2), rule 7).
 
-**NoSL closes this channel.** Both hosts take the checkpoint and keep the node's steps in both environments (`Simulation/RunSession.cs:143-148`; in the mod `NodeRecord`), so that switching to SL in the middle of a room works; only an SL run sends them (`Brains/RunBrains.cs:48-100`, the mod's `Assist.cs:159`). A NoSL brain refuses them: Harness throws on a node message in NoSL, the brain server answers the run's next decision with an error, and the host ends the run as failed, which voids its report ([Overview §5](/en/arch/environments/#sec-5)).
+**NoSL closes this channel.** Both hosts take the checkpoint and keep the node's steps in both environments (`Simulation/RunSession.cs:137-142`; in the mod `NodeRecord`), so that switching to SL in the middle of a room works; only an SL run sends them (`Brains/RunBrains.cs:48-100`, the mod's `Assist.cs:159`). A NoSL brain refuses them: Harness throws on a node message in NoSL, the brain server answers the run's next decision with an error, and the host ends the run as failed, which voids its report ([Overview §5](/en/arch/environments/#sec-5)).
 
 **The decision process never reads saves.** Brain has no reference to the game's assembly, which the compiler enforces and a test checks ([§8](#sec-8)). A save reaches a worker only inside an SL request, as an opaque string.
 
@@ -132,8 +132,8 @@ Each rule above has, or will have, a test that keeps it true. "Exists" names whe
 
 **Both environments**
 
-1. Brain and Protocol reference no game assembly. Exists: `selftest` (with GameBridge as the negative control) and the xUnit `BoundaryTests`, which also covers Harness ([Simulator: reference §5](/en/arch/simulator/reference/#sec-5)).
-2. Search randomness comes from the caller only, never from the game's random streams. Holds by construction, with no test: a brain's seed is mixed from the run id (itself a hash of the seed string) and the decision's index (`Harness/Dispatcher.cs:205-224`), and a world's build and sample seeds come from it ([Harness: routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)).
+1. Brain and Protocol reference no game assembly. Exists: the xUnit `BoundaryTests`, which also covers Harness, with GameBridge as the negative control ([Simulator: reference §7](/en/arch/simulator/reference/#sec-7)).
+2. Search randomness comes from the caller only, never from the game's random streams. Holds by construction, with no test: a brain's seed is mixed from the run id (itself a hash of the seed string) and the decision's index (`Harness/Dispatcher.cs:189-208`), and a world's build and sample seeds come from it ([Harness: routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)).
 3. The number of fallback decisions is 0. Exists in effect: there is no fallback code, Harness throws on an uncovered surface (xUnit `DispatcherTests`), and a decision made by a random placeholder voids a report (`Harness/Reports.cs:35-38`, xUnit `EvalReportTests`; [Evaluation: metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2)).
 4. `NumReloads == 0` in the real game. Planned, as a field of the mod's decision log ([Mod: auto-play and safety §3](/en/arch/mod/auto/#sec-3)); nothing reads it today. Clones load a save, so their count is 1 or more, wherever they are loaded (workers, and the host process in `run --check`, `selftest` and `clones`).
 5. Every observation field has a whitelist test. Planned; the closest checks today are the JSON round trips of every observation in `run --check` and `selftest` ([Protocol §3](/en/arch/protocol/#sec-3)).
@@ -152,7 +152,7 @@ Each rule above has, or will have, a test that keeps it true. "Exists" names whe
    - Each perturbable field needs a test showing that the current node never reads it.
 10. Clone queries are logged per decision. Planned. Today `brain --wire FILE` logs the host's node messages, from which `clones` rebuilds and checks each SL decision's clone ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)); L0's probes on the clone are not logged.
 
-Tests of the environment's own plumbing, besides the guards: Harness refuses node checkpoints in NoSL and hands NoSL no clone (xUnit `DispatcherTests`); the gate refuses a challenger from another environment (`GateTests`); `--env` defaults to NoSL and reads any case, and `brain` ignores a champion file's environment (`CliTests`); `selftest` checks that the clone keeps the relic state the save drops (`Checks/SelfTest.Run.cs:190-230`).
+Tests of the environment's own plumbing, besides the guards: Harness refuses node checkpoints in NoSL and hands NoSL no clone (xUnit `DispatcherTests`); the gate refuses a challenger from another environment (`GateTests`); `--env` defaults to NoSL and reads any case, and `brain` ignores a champion file's environment (`CliTests`); `selftest` checks that the clone keeps the relic state the save drops (`Checks/SelfTest.Run.cs:134-174`).
 
 ## 9. Open questions
 

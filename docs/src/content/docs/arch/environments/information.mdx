@@ -64,7 +64,7 @@ SL **不能**知道的：关于后面节点的任何东西。一个 `?` 点会�
 
 <NodeTimeline client:visible lang="zh-CN" />
 
-会越过出口的搜索，比如想问一张牌在下一场战斗里值多少，只能使用由搜索播种的确定化样本，绝不能用真实的随机数流。如今没有搜索这样做。克隆强制守住这条线：一旦记录了移动，它就停下并拒绝再走任何一步（`Simulation/RunSession.cs:235`），一次会移动的宏观试探会抛出异常（`Checks/NodeProbe.cs:29`），而 L0 给地图移动估值时，是根据画面预测它的后状态，而不是把它打出来（[宏观大脑：搜索 §2](/arch/macro-brain/search/#sec-2)）。
+会越过出口的搜索，比如想问一张牌在下一场战斗里值多少，只能使用由搜索播种的确定化样本，绝不能用真实的随机数流。如今没有搜索这样做。克隆强制守住这条线：一旦记录了移动，它就停下并拒绝再走任何一步（`Simulation/RunSession.cs:228`），一次会移动的宏观试探会抛出异常（`Simulation/NodeProbe.cs:29`），而 L0 给地图移动估值时，是根据画面预测它的后状态，而不是把它打出来（[宏观大脑：搜索 §2](/arch/macro-brain/search/#sec-2)）。
 
 ## 4. 为什么以节点为界，而不是游戏自己的存档
 
@@ -122,7 +122,7 @@ SL 搜索需要节点在抵达时的样子，加上此后在节点里做过的�
 
 **载入的存档与不间断的游玩并不相同**。载入存档会重新执行地图的钩子（`Runs/RunManager.cs:815-816`）和 `OnRunLoaded`（562-565），并丢掉每个没有标记为保存的遗物字段：遗物只保存它的 `[SavedProperty]` 成员（`Models/RelicModel.cs:556-576`）。这些遗物字段确实有影响：存档丢掉的遗物状态或计数改变了克隆的每个观测，克隆于是不再和真实战斗一致，SL 规划器每一步都要重新规划（[模拟器：世界与 SL 克隆 §6](/arch/simulator/worlds/#sec-6)）。所以检查点带上每个遗物的简单字段（数字、标志和枚举），在载入之后放回去，`run --check` 现在找不到任何克隆与其对局不同的节点。不做校验和，也不做兜底：破坏我们正确性的游戏怪癖，在它进入我们代码的地方修掉（[前言 §2](/#sec-2)，规则 7）。
 
-**NoSL 关闭这个通道**。两种宿主在两种环境下都会取检查点并保存节点的步骤（`Simulation/RunSession.cs:143-148`；在 Mod 里是 `NodeRecord`），这样在一个房间中途切换到 SL 也能工作；只有 SL 对局会把它们发出去（`Brains/RunBrains.cs:48-100`，Mod 的 `Assist.cs:159`）。NoSL 大脑会拒绝它们：Harness 在 NoSL 下收到节点消息就抛出异常，大脑服务器用一个错误回应这一局的下一个决策，宿主把这一局作为失败结束，这会使它的报告作废（[环境 §5](/arch/environments/#sec-5)）。
+**NoSL 关闭这个通道**。两种宿主在两种环境下都会取检查点并保存节点的步骤（`Simulation/RunSession.cs:137-142`；在 Mod 里是 `NodeRecord`），这样在一个房间中途切换到 SL 也能工作；只有 SL 对局会把它们发出去（`Brains/RunBrains.cs:48-100`，Mod 的 `Assist.cs:159`）。NoSL 大脑会拒绝它们：Harness 在 NoSL 下收到节点消息就抛出异常，大脑服务器用一个错误回应这一局的下一个决策，宿主把这一局作为失败结束，这会使它的报告作废（[环境 §5](/arch/environments/#sec-5)）。
 
 **决策进程从不读存档**。Brain 不引用游戏的程序集，这由编译器强制保证，并有一个测试检查（[§8](#sec-8)）。存档只会装在一个 SL 请求里、作为一个不透明的字符串到达工作进程。
 
@@ -132,8 +132,8 @@ SL 搜索需要节点在抵达时的样子，加上此后在节点里做过的�
 
 **两种环境**
 
-1. Brain 和 Protocol 不引用任何游戏程序集。已有：`selftest`（以 GameBridge 作为反面对照）和 xUnit 的 `BoundaryTests`，后者也覆盖 Harness（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)）。
-2. 搜索的随机性只来自调用方，绝不来自游戏的随机数流。由构造保证，没有测试：大脑的种子由对局 id（它本身是种子字符串的哈希）和决策的序号混合而成（`Harness/Dispatcher.cs:205-224`），世界的构建种子和采样种子都来自它（[Harness：路由、预算与种子 §5](/arch/harness/routing/#sec-5)）。
+1. Brain 和 Protocol 不引用任何游戏程序集。已有：xUnit 的 `BoundaryTests`，它也覆盖 Harness，并以 GameBridge 作为反面对照（[模拟器：参考 §7](/arch/simulator/reference/#sec-7)）。
+2. 搜索的随机性只来自调用方，绝不来自游戏的随机数流。由构造保证，没有测试：大脑的种子由对局 id（它本身是种子字符串的哈希）和决策的序号混合而成（`Harness/Dispatcher.cs:189-208`），世界的构建种子和采样种子都来自它（[Harness：路由、预算与种子 §5](/arch/harness/routing/#sec-5)）。
 3. 兜底决策的数量为 0。实际上已有：没有兜底代码，Harness 遇到未覆盖的画面（surface）就抛出异常（xUnit `DispatcherTests`），由随机占位策略做出的决策会使报告作废（`Harness/Reports.cs:35-38`，xUnit `EvalReportTests`；[评估：指标、种子与报告 §2](/arch/evaluation/metrics/#sec-2)）。
 4. 真实游戏里 `NumReloads == 0`。规划中，作为 Mod 决策日志的一个字段（[Mod：自动游玩与安全 §3](/arch/mod/auto/#sec-3)）；如今没有东西读它。克隆会载入存档，所以无论在哪里载入（工作进程，以及 `run --check`、`selftest` 和 `clones` 中的宿主进程），它们的计数都是 1 或更多。
 5. 观测的每个字段都有白名单测试。规划中；如今最接近的检查，是 `run --check` 和 `selftest` 里对每个观测做的 JSON 往返（[协议 §3](/arch/protocol/#sec-3)）。
@@ -152,7 +152,7 @@ SL 搜索需要节点在抵达时的样子，加上此后在节点里做过的�
    - 每个可扰动的字段都需要一个测试，证明当前节点从不读它。
 10. 每个决策的克隆查询都记入日志。规划中。如今 `brain --wire FILE` 记录宿主的节点消息，`clones` 据此重建并检查每个 SL 决策的克隆（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）；L0 在克隆上的试探不记入日志。
 
-除了这些守护之外，还有对环境自身管道的测试：Harness 在 NoSL 下拒绝节点检查点，也不给 NoSL 克隆（xUnit `DispatcherTests`）；晋级门槛拒绝来自另一种环境的挑战者（`GateTests`）；`--env` 默认是 NoSL 且大小写不限，`brain` 忽略冠军文件里的环境（`CliTests`）；`selftest` 检查克隆保留了存档丢掉的遗物状态（`Checks/SelfTest.Run.cs:190-230`）。
+除了这些守护之外，还有对环境自身管道的测试：Harness 在 NoSL 下拒绝节点检查点，也不给 NoSL 克隆（xUnit `DispatcherTests`）；晋级门槛拒绝来自另一种环境的挑战者（`GateTests`）；`--env` 默认是 NoSL 且大小写不限，`brain` 忽略冠军文件里的环境（`CliTests`）；`selftest` 检查克隆保留了存档丢掉的遗物状态（`Checks/SelfTest.Run.cs:134-174`）。
 
 ## 9. 未决问题
 

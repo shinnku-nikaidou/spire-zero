@@ -1,6 +1,6 @@
 ---
 title: 工作行程池
-description: 為什麼搜尋在其他行程裡執行、WorkerPool 如何啟動它們並和它們通訊、工作行程回答的四種請求、為什麼結果不能取決於時序、工作行程崩潰或卡住時會怎樣，以及它有多快。
+description: 為什麼搜尋在其他行程裡執行、WorkerPool 如何啟動它們並和它們通訊、工作行程回答的三種請求、為什麼結果不能取決於時序、工作行程崩潰或卡住時會怎樣，以及它有多快。
 sidebar:
   label: 工作行程池
 ---
@@ -14,11 +14,11 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 
 三個理由，按輕重排列：
 
-- **每個行程一個活的遊戲**。正在打的這一局活在宿主裡。搜尋世界是它自己的一場戰鬥或一局，所以需要一個沒有其他東西活著的行程。行程內的搜尋必須在每個決策時把真實的戰鬥放到一邊、再透過重播放回來，只有測試集這樣做（[世界與 SL 複本 §2](/zh-tw/arch/simulator/worlds/#sec-2)）。
+- **每個行程一個活的遊戲**。正在打的這一局活在宿主裡。搜尋世界是它自己的一場戰鬥或一局，所以需要一個沒有其他東西活著的行程。行程內的搜尋就得在每個決策時把真實的戰鬥放到一邊、再透過重播放回來（[世界與 SL 複本 §2](/zh-tw/arch/simulator/worlds/#sec-2)）。
 - **平行**。一個決策的各個世界彼此獨立，所以 K 個世界放在 K 個工作行程上，大約只花一個世界的時間。遊戲的模型層不是執行緒安全的，pump 也是單執行緒的（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)），所以單位是行程，不是執行緒。
 - **可知範圍的邊界**。NoSL 下工作行程拿到的是觀測，從不是真實狀態，它從觀測建構自己的世界（[§5](#sec-5)）。傳給工作行程的是一條協定訊息，所以可以讀取和檢查。
 
-`WorkerPool` 在 `Sts2Ai.Harness` 裡（`Sts2Ai.Harness/WorkerPool.cs`），這個專案只透過協定型別看到遊戲；工作行程那一端是模擬器的 `serve` 指令（`Commands/Serve.cs`）。戰鬥大腦會搜尋（`pimc`，或 SL 下的 `plan`）或宏觀大腦會在複本上打（`--afterstates clone`）的冠軍會得到一個行程池，有 `--workers` 個行程，預設每個世界一個（`--worlds`，8）（`Brains/ChampionOptions.cs:24`）。
+`WorkerPool` 在 `Sts2Ai.Harness` 裡（`Sts2Ai.Harness/WorkerPool.cs`），這個專案只透過協定型別看到遊戲；工作行程那一端是模擬器的 `serve` 指令（`Commands/Serve.cs`）。戰鬥大腦會搜尋（`pimc`，或 SL 下的 `plan`）或宏觀大腦會在複本上打（`--afterstates clone`）的冠軍會得到一個行程池，有 `--workers` 個行程，預設每個世界一個（`--worlds`，8）（`Brains/ChampionOptions.cs:22`）。
 
 ## 2. 行程池
 
@@ -32,21 +32,19 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 
 行程池在整個生命週期裡保留每個工作行程。釋放（dispose）它時，會關閉每個工作行程的 stdin，這會結束工作行程的迴圈；5 s 內沒有結束的就被殺掉。
 
-## 3. 四種請求
+## 3. 三種請求
 
 每種請求都是 `Sts2Ai.Protocol/Worker.cs` 裡的一個 record。三個進行搜尋的大腦會送出它們，透過它們自己在 Harness 裡的池化版本：
 
 | 請求 | 由誰送出 | 工作行程 | 回覆 |
 |---|---|---|---|
 | `PimcWorldRequest` | `PooledPimc`，NoSL | 用建構種子從觀測建構戰鬥（`SimWorlds.NoSL`），取由搜尋種子抽出的 `Worlds` 個世界裡的第 `World` 個，在給定的每個第一個動作之後搜尋本回合，每個用 `NodesPerFirst` 個節點 | 每個第一個動作之後的最佳路線（`Lines`） |
-| `SlWorldRequest` | `PooledPimc`，SL | 載入節點的複本（`NodeWorld`），在給定的第一個動作之後搜尋本回合 | 同上 |
 | `SlTurnRequest` | `PooledPlanner` | 載入節點的複本，從決策處走完這個狀態的路徑，用 `Nodes` 個節點搜尋那個回合，在下一回合開始處最多保留 `Keep` 個勝過 `Floor` 的狀態 | 這個回合最好的幾個結尾（`Turn`） |
 | `SlMacroRequest` | `PooledClone` | 對每條答案路徑，載入複本，從決策處打完這條路徑，記下遊戲接著問什麼（`NodeProbe`） | 每條路徑一個後狀態（`Afters`）：對局狀態、決策介面、畫面和合法動作 |
 
 各個大腦怎麼拆分它們的工作：
 
-- **NoSL 下的 PIMC** 每個世界送一個請求，每個請求帶著所有第一個動作，再像行程內的 PIMC 那樣合併回覆（[NoSL PIMC：搜尋 §2](/zh-tw/arch/pimc/search/#sec-2)）。用逐次減半時，每一輪送一組這樣的請求，只帶還留著的第一個動作。
-- **SL 下的 PIMC** 只有一個世界，所以改為按第一個動作拆分：每個第一個動作一個請求，每個請求拿到那個動作在一次搜尋裡會分到的那份預算。每個請求有自己的換位備忘表，而一個行程裡的一次搜尋會在各個第一個動作之間共用它，所以答案可能和行程內的搜尋不同。
+- **PIMC** 每個世界送一個請求，每個請求帶著所有第一個動作，再像行程內的 PIMC 那樣合併回覆（[NoSL PIMC：搜尋 §2](/zh-tw/arch/pimc/search/#sec-2)）。
 - **SL 規劃器**在它束的每個回合裡，對每個保留的狀態送一個請求，帶上目前最好的完整路線作為剪枝的下限。一個回合的搜尋整個在一個請求裡，所以計畫就是單一行程會做出的那個（[SL 規劃器：束搜尋 §1](/zh-tw/arch/sl-planner/beam/#sec-1)）。
 - **複本上的 L0** 把一個決策的各條路徑按順序拆成 `min(paths, workers)` 個請求（`Sts2Ai.Harness/PooledClone.cs:14-24`）。一條路徑的後狀態只取決於複本和這條路徑，所以怎麼拆都不會改變結果（[宏觀大腦：搜尋 §6](/zh-tw/arch/macro-brain/search/#sec-6)）。
 
@@ -56,7 +54,7 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 
 - **stdout 就是線路**。遊戲啟動之前，`serve` 把真正的 stdout 留給線路，並把 `Console.Out` 指向 stderr，所以遊戲或任何函式庫印出的東西都進不了這條流（`Commands/Serve.cs:23-28`）。它的日誌也寫到 stderr；行程池為每個工作行程保留 stderr 的最後 20 行，供它死掉時的錯誤訊息使用。
 - **每種大腦一個，只建一次**：PIMC 和 SL 規劃器，用工作行程的葉節點。
-- **失敗的請求會結束工作行程**。如果請求拋出例外，工作行程會回覆這個錯誤並以代碼 1 結束（`Commands/Serve.cs:55-59`）：遊戲可能停在已搭好的狀態（一場戰鬥還活著），之後的每個請求都會失敗。錯誤寫明例外的型別、最內層例外最上面的三個堆疊框以及它訊息的第一行，接下來幾行是完整的例外。
+- **失敗的請求會結束工作行程**。如果請求拋出例外，工作行程會回覆這個錯誤並以代碼 1 結束（`Commands/Serve.cs:57-61`）：遊戲可能停在已搭好的狀態（一場戰鬥還活著），之後的每個請求都會失敗。錯誤寫明例外的型別、最內層例外最上面的三個堆疊框以及它訊息的第一行，接下來幾行是完整的例外。
 - **每個請求的遊戲錯誤**。服務一個請求時記錄下的遊戲 `Log.Error` 行和未被觀察的任務錯誤，會隨它的回覆送回；宿主把它們和自己的一起計數（[無頭宿主 §8](/zh-tw/arch/simulator/headless/#sec-8)）。
 
 ## 5. 自包含的請求
@@ -65,7 +63,7 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 
 **傳過去的是什麼**。NoSL 下離開宿主的只有觀測和敵人出招記錄；真實狀態永遠不會到達工作行程。SL 下傳過去的是節點的複本，這是 SL 可以知道的（[環境：世界 §4](/zh-tw/arch/environments/worlds/#sec-4)）。每個戰鬥請求還帶著這場戰鬥到目前為止的敵人出招記錄：NoSL 的工作行程用它建構怪物的招式日誌（[戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)），兩種環境的葉節點都會讀它（[戰鬥大腦：葉節點 §3](/zh-tw/arch/combat-brain/leaf/#sec-3)）。
 
-**確定性**。回覆按請求順序合併，從不按完成順序，而每個請求的搜尋只取決於這個請求。所以種子相同時，池化的搜尋給出的結果和行程內的搜尋完全相同，連數值也相同（SL PIMC 每個請求各自的備忘表除外，[§3](#sec-3)）。`selftest --workers N` 在 4 個決策上檢查這一點，每個決策用 4 個世界 × 120 個節點的平均分配預算，也用逐次減半；它還檢查池化的 SL 規劃器做出的計畫和規劃器在單一行程裡做出的一樣，連節點數都相同（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。一個 6 場戰鬥的測試集軌跡，用 8 個工作行程和行程內的相比，diff 為空。
+**確定性**。回覆按請求順序合併，從不按完成順序，而每個請求的搜尋只取決於這個請求。所以種子相同時，池化的搜尋給出的結果和行程內的搜尋完全相同，連數值也相同。`selftest --workers N` 在 4 個決策上檢查這一點，每個決策用 4 個世界 × 120 個節點的預算；它還檢查池化的 SL 規劃器做出的計畫和規劃器在單一行程裡做出的一樣，連節點數都相同（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。在 6 場戰鬥上量測過：用 8 個工作行程時 PIMC 的軌跡和行程內的相比，diff 為空。
 
 ## 6. 失敗
 
@@ -89,7 +87,6 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 用預設預算（8 個世界 × 300 個節點）測得：
 
 - **NoSL PIMC**，6 場第 1 幕戰鬥：8 個工作行程每個動作 68.7 ms，單一行程是 307.5 ms（總共 9.4 s 對 42.1 s）。用 `pimc` 打一整局約 19.9 s，同時跑兩局，每局 8 個工作行程。
-- **SL PIMC** 搜尋一個世界而不是八個：在前三個種子上，8 個工作行程下一局 6–9 s，戰鬥決策的中位數是 47 ms。這裡一次還原的代價是載入加重播這個節點（[世界與 SL 複本 §7](/zh-tw/arch/simulator/worlds/#sec-7)）。
 - **SL 冠軍**（SL 規劃器和使用複本後狀態的 L0，預設預算）：在它晉級報告的 300 局裡，平均一局 271 s、一個決策 489 ms，在機群的各台主機上。
 
 一台機器上吞吐量如何隨行程數增長，見 [戰鬥 §7](/zh-tw/arch/simulator/combat/#sec-7)：直到實體核心數為止幾乎是線性的，每個工作行程約 160 MB。

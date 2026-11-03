@@ -7,7 +7,7 @@ sidebar:
 import { Badge } from '@astrojs/starlight/components';
 import WorldsTable from '../../../../../components/combat/WorldsTable.svelte';
 
-With $K$ worlds in hand ([Overview §2](/en/arch/pimc/#sec-2)), PIMC searches each one as a game with nothing hidden, to the end of the turn, and averages ([§1](#sec-1)–[§2](#sec-2)). The average is an estimate, with noise ([§3](#sec-3)) and two biases: strategy fusion ([§4](#sec-4)) and the sampler's ([§5](#sec-5)). All of that is the code as it runs; [§6](#sec-7) is what the planned design changes in it.
+With $K$ worlds in hand ([Overview §2](/en/arch/pimc/#sec-2)), PIMC searches each one as a game with nothing hidden, to the end of the turn, and averages ([§1](#sec-1)–[§2](#sec-2)). The average is an estimate, with noise ([§3](#sec-3)) and two biases: strategy fusion ([§4](#sec-4)) and the sampler's ([§5](#sec-5)). All of that is the code as it runs; [§7](#sec-7) is what the planned design changes in it.
 
 ## 1. The search in one world
 
@@ -64,7 +64,7 @@ Two things keep it small. PIMC aggregates over the first action only and plays o
 
 The alternative that avoids fusion altogether is **ISMCTS** (information-set Monte Carlo tree search): one search tree over information sets (the groups of states a player cannot tell apart), a different world sampled on each pass, so that no choice in the tree can depend on hidden information. It costs about 3–4 depth-first nodes per tree simulation (an estimate), and in games whose information is mostly public, fusion-aware variants of PIMC changed little: αμ changed 1.3–3% of decisions, and EPIMC gained nothing. So ISMCTS is held in reserve until fusion is measured to matter.
 
-The measurement is a **fusion panel** (built: `fusion --log FILE[,…] [--k 32] [--max-nodes 5000]`). It takes NoSL combat decisions from the decision logs, rich in reveals within the turn, builds their worlds as PIMC does with $K$ = 32–64, enumerates the turn in full, and compares PIMC's value of each first action with the value when backups are merged by observation history (the max over actions, the mean over the worlds consistent with that history). Worlds count as showing the same observation when they differ only in card ids, since a drawn card's id is its place in that world's shuffle. If the two disagree on fewer than about 3% of the decisions and the loss is within the noise, there is no ISMCTS. A first try on 36 decisions from two runs ($K$ = 16) found 8 with a reveal and one pick worse, with a mean loss of 0.00002; a complex turn takes about a minute.
+The measurement that decides it takes NoSL combat decisions from the decision logs, rich in reveals within the turn, builds their worlds as PIMC does with $K$ = 32–64, enumerates the turn in full, and compares PIMC's value of each first action with the value when backups are merged by observation history (the max over actions, the mean over the worlds consistent with that history). Worlds count as showing the same observation when they differ only in card ids, since a drawn card's id is its place in that world's shuffle. If the two disagree on fewer than about 3% of the decisions and the loss is within the noise, there is no ISMCTS. A first try on 36 decisions from two runs ($K$ = 16) found 8 with a reveal and one pick worse, with a mean loss of 0.00002; a complex turn took about a minute.
 
 ## 5. The sampler's bias
 
@@ -83,7 +83,7 @@ The search in a world treats cycles as the SL turn search does ([SL planner: tur
 It differs from SL in two ways:
 
 - **The other answers to a prompt are tried on the first action only.** Further on, an answer in a world is chosen after that world's own draws, which is exactly strategy fusion ([§4](#sec-4)), while the first action's prompt is the same question in every world. The pick and its answer come from the first world's line.
-- **A plan that repeats a cycle is followed**, whether `Follow` is on or not. Otherwise each repeat would search again first, and hundreds of repeats would find the same cycle hundreds of times. The condition is `Follow`'s: every world planned the same actions and expects the same observations ([Budget §2](/en/arch/pimc/budget/#sec-2)). A cycle that reveals something, as a draw does, does not agree between worlds and goes back to a search per step.
+- **A plan that repeats a cycle is followed** without searching again, while every world planned the same actions and expects the same observations ([Budget §2](/en/arch/pimc/budget/#sec-2)). Otherwise each repeat would search again first, and hundreds of repeats would find the same cycle hundreds of times. A cycle that reveals something, as a draw does, does not agree between worlds and goes back to a search per step.
 
 ## 7. The search on TurnEnds <Badge text="planned" variant="caution" />
 
@@ -103,6 +103,6 @@ The formula is [§2](#sec-2)'s, with its search step named. What stays is what m
 What changes, with what it risks:
 
 - **The merged `TurnEnds`** replaces `WorldSearch` ([Combat brain §3.1](/en/arch/combat-brain/#sec-3.1)). PIMC's nodes then stop being split evenly over the first actions as [§1](#sec-1) describes, so the merge needs a NoSL gate.
-- **Prompts as branches** ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)) put one more choice after a reveal into each world's line, which widens strategy fusion ([§4](#sec-4)). The fusion panel measures it first, on NoSL decisions with prompts.
+- **Prompts as branches** ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)) put one more choice after a reveal into each world's line, which widens strategy fusion ([§4](#sec-4)). It is measured first, on NoSL decisions with prompts.
 
 What does not change: **ISMCTS** stays in reserve, on the same condition as in [§4](#sec-4). **The sampler** stays as it is, since its bias is not measured as worth fixing ([§5](#sec-5)).

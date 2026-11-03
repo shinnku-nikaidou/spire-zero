@@ -15,7 +15,7 @@ Read first: [Environments](/en/arch/environments/) for SL and NoSL, and [Simulat
 
 <Aside title="Status">
 
-Built: whole runs in the simulator in both environments, rung R1 (`run --seeds FILE --records FILE`); the report (`report`) with its void rule; the leaderboards (`leaderboard`); seed files and their generator (`seeds`); the paired SPRT gate (`gate`) with champion files and `--promote`; the combat panel (`panel`); and `learn/gauntlet.py`'s paired lower-bound gate on whole runs, by wins. Planned: rungs R2–R4, the act-level gate, an A/A test, `NumReloads` and a NoSL save-export count among the must-be-zero metrics, calibration and search-compute numbers in reports, a run of the final set.
+Built: whole runs in the simulator in both environments, rung R1 (`run --seeds FILE --records FILE`); the report (`report`) with its void rule; the leaderboards (`leaderboard`); seed files and their generator (`seeds`); the paired SPRT gate (`gate`) with champion files and `--promote`; and `learn/gate.py`'s paired lower-bound gate on whole runs, by wins. Planned: rungs R2–R4, the act-level gate, an A/A test, `NumReloads` and a NoSL save-export count among the must-be-zero metrics, calibration and search-compute numbers in reports, a run of the final set.
 
 </Aside>
 
@@ -60,7 +60,7 @@ If R1 jumped straight to the real game, a lower win rate could have any of these
 
 - R4 runs in real time, so it is for confirmation, not for tuning.
 - In NoSL, R1 decisions already go through the Build path, which builds worlds from observations ([Simulator: worlds and the SL clone §2](/en/arch/simulator/worlds/#sec-2)), so for decisions NoSL's R1 is about R2. In SL it is not: the combat planner and `--afterstates clone` search the node's clone, the game's save and the decisions since, not worlds built from an observation ([Harness: routing, budgets and seeds §2](/en/arch/harness/routing/#sec-2)).
-- Every run record says `R1`: `run` writes the rung as a constant (`SimWorker/Commands/RunCommand.cs:285`).
+- No run record names a rung: its `config` holds the game, the commit, the champion and the environment (`Harness/RunRecords.cs:18`), and every run the simulator plays is R1.
 
 ## 3. Two leaderboards
 
@@ -91,13 +91,12 @@ Never put both environments in one table or in one promotion decision. The gate 
 | reports, the void rule, the Wilson interval | built | [Metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2), [§7](/en/arch/evaluation/metrics/#sec-7) |
 | the seed sets, `promotion-1` and its extensions, `final-1` and `a10-check-1`, and their generator | built; `final-1` never run | [Metrics, seeds and reports §5](/en/arch/evaluation/metrics/#sec-5) |
 | leaderboards | built; the SL − NoSL section never shown | [Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9) |
-| the combat panel | built | [Gates §5](/en/arch/evaluation/gates/#sec-5) |
 | the paired SPRT gate `gate`, champion files, promotion | built | [Gates §6](/en/arch/evaluation/gates/#sec-6) |
-| the wins gate, `learn/gauntlet.py --against` on whole runs | built, in use | [Gates §10](/en/arch/evaluation/gates/#sec-10) |
+| the wins gate, `learn/gate.py --against` on whole runs | built, in use | [Gates §10](/en/arch/evaluation/gates/#sec-10) |
 | act-level gate, A/A test, McNemar's test | planned | [Gates §4](/en/arch/evaluation/gates/#sec-4), [§5](/en/arch/evaluation/gates/#sec-5) |
 | R2–R4 | planned | [§2](#sec-2) |
 
-**How a new net is gated.** A net is trained and judged in whole SL runs, by its chance to win ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)). Its gate plays the challenger on the 300 seeds of `promotion-1-300` with the champion's planner at medium effort (`--afterstates clone`, no exploration), pairs its runs with the champion's by seed, and promotes it when the 95% one-sided lower bound of the mean difference in wins, 1 or 0 per run, is above 0. The same seeds at the low budget are played for reference and decide nothing. If both nets of a generation pass, the one with more wins is promoted. So two gates coexist: the C# SPRT `gate`, sequential, on floors or on wins; and `learn/gauntlet.py`'s fixed-sample lower bound on wins.
+**How a new net is gated.** A net is trained and judged in whole SL runs, by its chance to win ([Macro brain: self-play §1](/en/arch/macro-brain/selfplay/#sec-1)). Its gate plays the challenger on the 300 seeds of `promotion-1-300` with the champion's planner at medium effort (`--afterstates clone`, no exploration), pairs its runs with the champion's by seed, and promotes it when the 95% one-sided lower bound of the mean difference in wins, 1 or 0 per run, is above 0. The same seeds at the low budget are played for reference and decide nothing. If both nets of a generation pass, the one with more wins is promoted. So two gates coexist: the C# SPRT `gate`, sequential, on floors or on wins; and `learn/gate.py`'s fixed-sample lower bound on wins.
 
 ## 5. This chapter
 

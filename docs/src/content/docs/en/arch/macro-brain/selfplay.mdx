@@ -14,7 +14,7 @@ V learns from runs the champion plays by itself. This section describes that loo
 flowchart LR
   C["champion V"] --> P["self-play<br/>whole SL runs,<br/>even draws at ε"]
   P --> D["decision logs<br/>+ run records"]
-  D --> T["train a new V<br/>--objective win"]
+  D --> T["train a new V<br/>v.train"]
   T --> G{"gate<br/>500 paired seeds,<br/>wins"}
   G -->|"lower bound > 0"| C
   G -->|"else"| X["discard"]
@@ -46,7 +46,7 @@ This covers every decision outside combat: a card reward's outcome among its car
 
 **Why even.** What is drawn depends neither on V nor on how well the run is going, so the drawn decisions' outcomes are causal evidence about the options, including the ones V thinks poor, and every kind of decision is drawn as often. A draw weighted by V's own values would try options V already likes, and seldom the counterexamples that would correct it.
 
-**The tiers.** A generation's runs are split into three tiers of ε: 0.3, 0.15 and 0.05 in `v7g1`; 0.15, 0.08 and 0.03 in `v7g2`; 0.06, 0.03 and 0.01 in `v8g2`; 0.3, 0.1 and 0.02 in `v9g0`, wide again since for four of the characters it is the first data. In `v7g2` and `v8g2` a softmax draws the decisions ε leaves to V; `v9g0` draws evenly alone ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)). A higher ε covers more options per run; a lower one reaches the late floors, where the decisions that win a run are.
+**The tiers.** A generation's runs are split into three tiers of ε: 0.3, 0.15 and 0.05 in `v7g1`; 0.15, 0.08 and 0.03 in `v7g2`; 0.06, 0.03 and 0.01 in `v8g2`; 0.3, 0.1 and 0.02 in `v9g0`, wide again since for four of the characters it is the first data. A higher ε covers more options per run; a lower one reaches the late floors, where the decisions that win a run are.
 
 <Aside>
 
@@ -86,4 +86,4 @@ that is, when the 95% one-sided lower bound of the mean difference is above 0. A
 
 At ascension 10 the gate plays the first 200 of those seeds, and reads the same paired wins with the floors listed beside them.
 
-`learn/gauntlet.py --against` computes it ([Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)). Its report also keeps what the wins do not show: the mean floor, each act's boss reached and beaten, where the lost runs died (boss, elite, monster or outside combat, per act), the elites per run, the rest sites' choices and the map's choices between a monster and a rest site by HP share, and what the shops sold.
+`learn/gate.py --against` computes it ([Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)). Its report also keeps what the wins do not show: the mean floor, each act's boss reached and beaten, where the lost runs died (boss, elite, monster or outside combat, per act), the elites per run, the rest sites' choices and the map's choices between a monster and a rest site by HP share, and what the shops sold.

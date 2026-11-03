@@ -1,6 +1,6 @@
 ---
 title: Worlds and worker messages
-description: 'The types search works with: the world API a combat search plays in, the node clone, the record of enemy moves, the scored candidate, and the four worker requests with the answers they bring back.'
+description: 'The types search works with: the world API a combat search plays in, the node clone, the record of enemy moves, the scored candidate, and the three worker requests with the answers they bring back.'
 sidebar:
   label: Worlds and worker messages
 ---
@@ -54,12 +54,12 @@ The world API covers combats only: the combat brain is its only user. The macro 
 ## 2. The node clone and the record of enemy moves
 
 ```csharp
-public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, bool? Gauntlet = null);
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
 public sealed record EnemyTurns(uint Uid, string? Id, IReadOnlyList<EnemyTurn> Turns);
 public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 ```
 
-**`NodeClone`** is an SL clone of the current node: the node's checkpoint (`Save`, the game's save on arrival with the relic fields it drops), every decision of the node since as trace lines (`surface action`, a card prompt's picks as the game's own indexes), and the elite gauntlet's rule when the run plays by it. It is opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back, and replays the decisions ([Simulator: worlds and the SL clone §4](/en/arch/simulator/worlds/#sec-4)). Harness makes one from the wire's node messages ([The wire §6](/en/arch/protocol/wire/#sec-6)).
+**`NodeClone`** is an SL clone of the current node: the node's checkpoint (`Save`, the game's save on arrival with the relic fields it drops) and every decision of the node since as trace lines (`surface action`, a card prompt's picks as the game's own indexes). It is opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back, and replays the decisions ([Simulator: worlds and the SL clone §4](/en/arch/simulator/worlds/#sec-4)). Harness makes one from the wire's node messages ([The wire §6](/en/arch/protocol/wire/#sec-6)).
 
 **`EnemyTurns`** is the public record of one enemy's moves in the current combat: for each round so far, oldest first, the intents its icons showed at the round's first decision. A player who watched the fight saw all of it. Harness keeps it per combat from the observations (`MoveRecord`), and gives it to the combat brain with each decision; search builds the monsters' move logs from it ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5)), and the learned leaves read it ([Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3)).
 
@@ -67,10 +67,10 @@ public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 
 ```csharp
 public sealed record Candidate(string Action, double Value, double Ci, int Samples,
-    IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+    IReadOnlyList<double>? Values = null);
 ```
 
-One action a search scored: its mean value over the worlds, the half-width of the 95% confidence interval, the number of worlds, and, when kept, its value in each world (to 4 decimals, in world order) and the search nodes spent below it in each. A recommendation lists them best first ([The wire §7](/en/arch/protocol/wire/#sec-7)); the per-world values are what the combat net's ExIt targets are made of ([Learning: the loop §5](/en/arch/learning/loop/#sec-5)).
+One action a search scored: its mean value over the worlds, the half-width of the 95% confidence interval, the number of worlds, and, when kept, its value in each world (to 4 decimals, in world order). A recommendation lists them best first ([The wire §7](/en/arch/protocol/wire/#sec-7)); the per-world values are what the combat net's ExIt targets are made of ([Learning: the loop §5](/en/arch/learning/loop/#sec-5)).
 
 ## 4. The worker messages
 
@@ -81,33 +81,30 @@ A worker is the simulator started as `serve`; the brain's pool sends it requests
 | message | JSON `type` | fields | asks for |
 |---|---|---|---|
 | `WorkerHello` | (none) | `game` | the worker's first line, once booted: the game version it runs |
-| `PimcWorldRequest` | `pimc_world` | `id`, `observation`, `first`, `build_seed`, `search_seed`, `world`, `worlds`, `nodes_per_first`, `history`? | PIMC's search of one NoSL world: build the combat from `observation` with `build_seed`, take world `world` of the `worlds` drawn from `search_seed`, and search this turn after each action of `first`, with `nodes_per_first` nodes each |
-| `SlWorldRequest` | `sl_world` | `id`, `node`, `first`, `nodes_per_first`, `history`? | PIMC's search of the SL world: load the clone `node`, then search this turn after each action of `first` |
-| `SlTurnRequest` | `sl_turn` | `id`, `node`, `path`, `nodes`, `keep`, `floor`?, `history`?, `prices`? | one turn of the SL planner: load the clone, play `path` from the decision to reach a state of the beam, and search the rest of that turn with `nodes` nodes, keeping up to `keep` states at the next turn's start and the best end of the combat, none whose bound cannot beat `floor` |
+| `PimcWorldRequest` | `pimc_world` | `id`, `observation`, `first`, `build_seed`, `search_seed`, `world`, `worlds`, `nodes_per_first`, `history` | PIMC's search of one NoSL world: build the combat from `observation` with `build_seed`, take world `world` of the `worlds` drawn from `search_seed`, and search this turn after each action of `first`, with `nodes_per_first` nodes each |
+| `SlTurnRequest` | `sl_turn` | `id`, `node`, `path`, `nodes`, `keep`, `floor`?, `history` | one turn of the SL planner: load the clone, play `path` from the decision to reach a state of the beam, and search the rest of that turn with `nodes` nodes, keeping up to `keep` states at the next turn's start and the best end of the combat, none whose bound cannot beat `floor` |
 | `SlMacroRequest` | `sl_macro` | `id`, `node`, `paths` | the macro brain's probes: for each path of answers, load the clone, play the path from the decision, and record what the game asks next; a path is macro actions in text form and, for a card prompt, `pick:` and its picks in canonical order |
-| `WorkerReply` | (none) | `id`, `lines`?, `error`?, `game_errors`, `turn`?, `afters`? | the answer to request `id`: `lines` for the two PIMC requests, `turn` for `sl_turn`, `afters` for `sl_macro`; `error` instead when the request failed; `game_errors`, the game's error lines logged while serving it |
+| `WorkerReply` | (none) | `id`, `lines`?, `error`?, `game_errors`, `turn`?, `afters`? | the answer to request `id`: `lines` for `pimc_world`, `turn` for `sl_turn`, `afters` for `sl_macro`; `error` instead when the request failed; `game_errors`, the game's error lines logged while serving it |
 
-`history` is the combat's record of enemy moves ([§2](#sec-2)) for the leaves; in `sl_turn`, up to the state searched from. `prices` are V's prices of the combat's ends ([§5](#sec-5)), when the planner prices its leaves by V.
+`history` is the combat's record of enemy moves ([§2](#sec-2)) for the leaves; in `sl_turn`, up to the state searched from.
 
 ## 5. The answers
 
 ```csharp
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
-    IReadOnlyList<ulong>? Hashes = null);
+    IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
 public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
     double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
 public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
-public sealed record EndPrices(double Before, IReadOnlyDictionary<string, IReadOnlyList<double>> Hp, IReadOnlyList<string> Held);
 ```
 
 | type | in | what it holds |
 |---|---|---|
-| `PlannedLine` | `lines` | a line of play a search found, from its first action: its value, its actions, the nodes simulated after the first action (itself included), and for each action the hash of the combat observation it is played at, which a followed plan checks before each step. `lines[i]` is the best line after `first[i]` |
+| `PlannedLine` | `lines` | a line of play a search found, from its first action: its value, its actions, the nodes simulated after the first action (itself included), and for each action the hash of the combat observation it is played at, which a followed plan checks before each step; and whether it repeats a cycle the search found. `lines[i]` is the best line after `first[i]` |
 | `TurnSearch` | `turn` | the ends of one turn's search: `ends`, the best end of the combat if the turn can reach one, then the states at the next turn's start, best first; `nodes`, the actions simulated; `cut`, whether anything was left out (the nodes ran out, or more states were found than kept); `bound`, the bound of the state searched from |
 | `TurnEnd` | `turn.ends` | a state where a turn of the planner's line ends: the actions that reach it from the decision (the last one ending the turn) and the observation hash before each; its status; the leaf's value; its bound, the best it can still reach (a win with the HP and potions it has; once the combat is over, its value); its key, the hash of its observation and full hidden state, by which equal states are merged (0 once the combat is over); its record of enemy moves |
 | `Afterstate` | `afters` | what a path leads to: the run then; the surface the game asks next, null once the run is over; its screen; its legal actions. A card prompt's options are in its screen, so its legal list is empty; a combat's screen is left out, since a combat ends a probe |
-| `EndPrices` | `prices` | what a combat's ends are worth, from V at the combat's first plan, in V's units: `before`, V of the run then; `hp`, of a win, by the potions it keeps (a sorted subset of `held`, comma-joined), by the HP it leaves, from 0, never lower for more HP; `held`, the potions at that plan. A death is worth nothing ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)) |
 
 `status` is written as a number (0 in progress, 1 won, 2 lost), and hashes and keys as JSON numbers ([Overview §4](/en/arch/protocol/#sec-4)).
 

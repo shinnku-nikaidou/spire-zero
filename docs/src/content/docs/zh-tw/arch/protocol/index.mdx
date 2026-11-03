@@ -14,7 +14,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-已有：每個決策畫面的觀測，包括戰鬥和選牌提示；文字形式的動作；宿主與大腦之間的線路及其 SL 節點訊息，模擬器透過它打完整局，遊戲裡的 Mod 透過它給出建議；戰鬥世界 API；四種工作行程請求。規劃中：公開歷史的事件流、用於解釋的事實，以及推薦的 `degraded` 旗標（[§6](#sec-6)）。
+已有：每個決策畫面的觀測，包括戰鬥和選牌提示；文字形式的動作；宿主與大腦之間的線路及其 SL 節點訊息，模擬器透過它打完整局，遊戲裡的 Mod 透過它給出建議；戰鬥世界 API；三種工作行程請求。規劃中：公開歷史的事件流、用於解釋的事實，以及推薦的 `degraded` 旗標（[§6](#sec-6)）。
 
 </Aside>
 
@@ -58,7 +58,7 @@ flowchart LR
 | `Sts2Ai.SimWorker` | 以上全部 |
 | `Sts2Ai.Mod` | 把 GameBridge 和 Protocol 的原始檔編譯進自己裡面，並在遊戲內部執行 |
 
-這條邊界檢查兩次：`BoundaryTests`（xUnit，不需要遊戲）和 `selftest` 的前兩項檢查，都會走訪 Brain、Protocol 和 Harness 編譯後的引用，只要其中任何一個連到遊戲組件就失敗；GameBridge 是對照組，它確實連到了（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
+這條邊界由 `BoundaryTests`（xUnit，不需要遊戲）檢查：它走訪 Brain、Protocol 和 Harness 編譯後的引用，只要其中任何一個連到遊戲組件就失敗；GameBridge 是對照組，它確實連到了（[模擬器：參考 §7](/zh-tw/arch/simulator/reference/#sec-7)）。
 
 ## 3. 裡面可以有什麼
 
@@ -91,11 +91,11 @@ flowchart LR
 
 | 檢查什麼 | 在哪裡 |
 |---|---|
-| 邊界：Brain、Protocol 和 Harness 連不到任何遊戲組件 | `BoundaryTests`；`selftest` |
+| 邊界：Brain、Protocol 和 Harness 連不到任何遊戲組件 | `BoundaryTests` |
 | 每個戰鬥觀測和每個戰鬥動作都能通過 JSON 往返，以文字和以 JSON 形式皆然 | `selftest`，每場戰鬥（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)） |
 | 一局的每個觀測都能通過 JSON 往返，而且同一局給出相同的觀測雜湊 | `run --check`（[模擬器：整局 §6](/zh-tw/arch/simulator/runs/#sec-6)） |
 | 一局在行程內和透過線路打出來一樣：軌跡、觀測、對局記錄、決策日誌 | `run --check` |
-| 大腦在 NoSL 下拒絕節點訊息；節點複本保留連戰的規則 | `DispatcherTests` |
+| 大腦在 NoSL 下拒絕節點訊息；SL 節點的複本就是它的檢查點加上此後的決策 | `DispatcherTests` |
 | 線路版本：讀取時拒絕另一個 `v` 的訊息 | `WireStream.Receive` |
 | 宿主送出的 SL 決策在它們的複本上重播時，得到相同的觀測 | 對 `brain --wire` 日誌執行 `clones`（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
 
@@ -111,7 +111,7 @@ flowchart LR
 |---|---|
 | [線路](/zh-tw/arch/protocol/wire/) | 宿主與大腦之間的對話：它的 socket、每條訊息和每個欄位、一步一步走完的一局、規則、SL 節點訊息、推薦、兩種宿主有何不同 |
 | [觀測與動作](/zh-tw/arch/protocol/observation/) | 每個決策的觀測：一局、一場戰鬥、卡牌身份與規範順序、每個畫面及其動作、選牌提示及其情境、省略了什麼 |
-| [世界與工作行程訊息](/zh-tw/arch/protocol/worlds/) | 搜尋在其中打的世界 API、節點複本和敵人出招記錄，以及四種工作行程請求和它們的回答 |
+| [世界與工作行程訊息](/zh-tw/arch/protocol/worlds/) | 搜尋在其中打的世界 API、節點複本和敵人出招記錄，以及三種工作行程請求和它們的回答 |
 
 未決問題：
 

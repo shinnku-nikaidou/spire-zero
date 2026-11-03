@@ -1,6 +1,6 @@
 ---
 title: 路由、预算与种子
-description: '哪个大脑回答每个决策界面，一局的冠军如何命名；战斗路由（占位策略、在工作进程池里运行的 PIMC 和 SL 规划器、探索、沿用计划）和带节点克隆的宏观路由；预算；每个种子如何抽取；以及出故障时会怎样。'
+description: '哪个大脑回答每个决策界面，一局的冠军如何命名；战斗路由（占位策略、在工作进程池里运行的 PIMC 和 SL 规划器、沿用计划）和带节点克隆的宏观路由；预算；每个种子如何抽取；以及出故障时会怎样。'
 sidebar:
   label: 路由、预算与种子
 ---
@@ -15,7 +15,7 @@ import { Badge } from '@astrojs/starlight/components';
 
 | 决策界面 | 一侧 | 目前的大脑 |
 |---|---|---|
-| `combat` | 战斗 | `plan`（SL 规划器，仅 SL）、`pimc`（NoSL，或在 SL 克隆上只搜本回合），或占位策略 `play` 和 `random` |
+| `combat` | 战斗 | `plan`（SL 规划器，仅 SL）、`pimc`（仅 NoSL），或占位策略 `play` |
 | 战斗中提出的 `card_choice`（`ChoiceContext.InCombat`） | 战斗提示 | `p0`，即提示大脑（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)） |
 | 战斗外提出的 `card_choice`（升级、变化、附魔、移除……） | 宏观提示 | L0，即宏观大脑本身，或 `random` |
 | `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere` | 宏观 | L0（[宏观大脑](/arch/macro-brain/)），或 `random` |
@@ -28,33 +28,30 @@ import { Badge } from '@astrojs/starlight/components';
 combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone
 ```
 
-这是 SL 冠军：叶子里用战斗网络 c9-0、用 medium 预算的 SL 规划器；战斗中的提示用 `p0`；宏观决策和战斗外的选牌提示用 L0，它带着 V v9-0，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：战斗大脑说出它的战斗网络（如果有的话）和它的探索（`explore T`）；L0 说出它的 V、`clone`，以及它的探索（softmax 为 `explore T`，均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:37-60`）。
+这是 SL 冠军：叶子里用战斗网络 c9-0、用 medium 预算的 SL 规划器；战斗中的提示用 `p0`；宏观决策和战斗外的选牌提示用 L0，它带着 V v9-0，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：搜索的战斗大脑说出它的战斗网络；L0 说出它的 V、`clone`，以及它的探索（均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:34-56`）。
 
-**环境决定战斗大脑**。宏观大脑在两种环境里是同一个；战斗大脑则不是（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。冠军工厂在 SL 之外拒绝 `plan` 和 `--afterstates clone`。`brain` 命令同时服务两种环境：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的（[概览 §5](/arch/harness/#sec-5)）。
+**环境决定战斗大脑**。宏观大脑在两种环境里是同一个；战斗大脑则不是（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。冠军工厂在 SL 之外拒绝 `plan` 和 `--afterstates clone`，在 NoSL 之外拒绝 `pimc`。`brain` 命令同时服务两种环境：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的（[概览 §5](/arch/harness/#sec-5)）。
 
 ## 2. 战斗路由
 
 战斗路由是一个 `CombatRoute(Brain, Decide, Budget)`：它的名字；一个从（决策、种子、节点的克隆或 null、这场战斗至今的出招）到 `CombatDecisionResult` 的函数；以及它的预算，用于日志和名字。
 
-**占位策略**。`CombatRoute.Of(name, policy)` 包装一个不搜索的策略（`play`、`random`）：它给出自己的选择，没有计划，也没有候选。
+**占位策略**。`CombatRoute.Of(name, policy)` 包装一个不搜索的策略（`play`）：它给出自己的选择，没有计划，也没有候选。
 
-**池里的 PIMC**（`PooledPimc.Route`，[NoSL PIMC](/arch/pimc/)）。只有一个合法动作时，它立即回答。否则预算取房间的预算（[§4](#sec-4)），并且：
+**池里的 PIMC**（`PooledPimc.Route`，[NoSL PIMC](/arch/pimc/)），仅在 NoSL 下。只有一个合法动作时，它立即回答。否则：
 
-- **NoSL**：每个世界一个 `pimc_world` 请求，每个世界都在它的工作进程里由观测、敌人出招记录和构建种子重建，所以真实状态的任何东西都不会离开宿主。用逐次减半时，每一轮就是一组这样的请求，带着还留着的动作。种子相同时，它给出的回答和在一个进程里对各世界做的 PIMC 相同，`selftest` 检查这一点。
-- **SL**：唯一的世界是节点的克隆，每个首个动作用一个 `sl_world` 请求来搜索它，这样各个工作进程分担它。每个请求保留自己的状态备忘表，而单个进程里的搜索会在各首个动作之间共用一张，所以两者并不完全相同。
-- **沿用计划**（`--follow`）：路由为这一局保留一个 `TurnPlan`。只要战斗显示的是计划在这一步之前预期的观测，计划的这一步就不经搜索直接打出；否则这个决策重新搜索，并标为重新规划（[NoSL PIMC：预算 §2](/arch/pimc/budget/#sec-2)）。
+- **各个世界**：每个世界一个 `pimc_world` 请求，每个世界都在它的工作进程里由观测、敌人出招记录和构建种子重建，所以真实状态的任何东西都不会离开宿主。每个世界的节点平均分给各个首个动作。种子相同时，它给出的回答和在一个进程里对各世界做的 PIMC 相同，`selftest` 检查这一点。
+- **沿用循环**：路由为这一局保留一个 `TurnPlan`，它只保留重复一个循环、并且每个世界都规划得一样的计划，因为每次重复之前都再搜一遍只会重新找到同一个循环（[NoSL PIMC：搜索 §6](/arch/pimc/search/#sec-6)）。只要战斗显示的是计划在这一步之前预期的观测，计划的这一步就不经搜索直接打出；否则这个决策重新搜索，并标为重新规划。
 
-**池里的 SL 规划器**（`PooledPlanner.Route`，[SL 规划器](/arch/sl-planner/)）。每局一个 `SlRoute`，把战斗剩下的部分规划一次，然后沿用这个计划，只在某一步对不上或计划用完时才重新规划（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。一个计划就是 `SlPlanner.Search`，束的每个回合按保留的每个状态发一个 `sl_turn` 请求，用房间的预算。没有节点克隆时这个路由会抛异常（它只在 SL 下打）。
+**池里的 SL 规划器**（`PooledPlanner.Route`，[SL 规划器](/arch/sl-planner/)）。每局一个 `SlRoute`，把战斗剩下的部分规划一次，然后沿用这个计划，只在某一步对不上或计划用完时才重新规划（[SL 规划器 §4](/arch/sl-planner/#sec-4)）。一个计划就是 `SlPlanner.Search`，束的每个回合按保留的每个状态发一个 `sl_turn` 请求，用路由的预算。没有节点克隆时这个路由会抛异常（它只在 SL 下打）。
 
-**探索**（`CombatRoute.Exploring`，仅自我对弈，`--combat-explore T`，[学习：循环 §9](/arch/learning/loop/#sec-9)）。搜索返回两个或更多候选时，首个动作按它们值的 softmax 从中抽取：每个的概率 ∝ exp((v − best) / T)，T 以叶子的单位计（`Brain/Exploration.cs`）。如果抽中的正是搜索自己的选择，结果不变。否则打出抽中的动作，候选不变，没有计划，因为那个计划是原选择的；如果它的估值比原选择低 T/100 以上，就标为探索（差距更小时就等于平手）；它不标为重新规划。
-
-**两样持续整局的东西**。`TurnPlan` 和 `SlRoute` 每局只做一次，从不清空，战斗结束时不清，宏观决策时也不清；规划器对连续未证明的失败计划的计数跨决策延续（[SL 规划器：束搜索 §6](/arch/sl-planner/beam/#sec-6)）。另外，探索和沿用计划会相互影响：探索出的一步会让原选择的计划留在队列里，所以下一个决策通常会发现那个计划的这一步对不上，于是重新搜索，并作为重新规划记进日志和计数。
+**两样持续整局的东西**。`TurnPlan` 和 `SlRoute` 每局只做一次，从不清空，战斗结束时不清，宏观决策时也不清；规划器对连续未证明的失败计划的计数跨决策延续（[SL 规划器：束搜索 §6](/arch/sl-planner/beam/#sec-6)）。
 
 ## 3. 宏观路由与提示路由
 
 宏观路由或提示路由是一个 `Route<T>(Brain, Policy)`。目前：
 
-- **L0**（`MacroBrain`，`--macro l0`）既回答宏观决策，也回答战斗外的选牌提示，作为一个带一个 V 的对象（[宏观大脑：搜索](/arch/macro-brain/search/)）。它的探索（`--macro-explore T`，对 V 的值的对数做 softmax；`--explore ε`，均匀抽取）从它自己的生成器里取随机数（[§5](#sec-5)）。
+- **L0**（`MacroBrain`，`--macro l0`）既回答宏观决策，也回答战斗外的选牌提示，作为一个带一个 V 的对象（[宏观大脑：搜索](/arch/macro-brain/search/)）。它的探索（`--explore ε`，均匀抽取，仅自我对弈）从它自己的生成器里取随机数（[§5](#sec-5)）。
 - **`p0`**（`PromptBrain`）回答战斗中的选牌提示，和搜索世界里的做法一样。
 - **`random`** 占位策略在 `--macro random` 时回答宏观的两侧。
 
@@ -62,19 +59,16 @@ combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-
 
 **计划**。宏观回答检查过之后，`Dispatcher` 问策略在它之后有什么计划（`IMacroPolicy.Plan`）：L0 的计划在地图上是本幕剩下的路线，在别处为空。它的用时不计入这个决策的 `elapsed_ms`。
 
-**探索标记**。当策略说它上一个回答是探索出来的时，提示或宏观回答就标为探索：对 L0 来说，就是均匀抽取，或估值低于最佳的 softmax 抽取（在选牌提示处，是它的任何一步）。
+**探索标记**。当策略说它上一个回答是抽取出来的时，提示或宏观回答就标为探索：对 L0 来说，就是它的均匀抽取（[决策日志 §6](/arch/harness/decision-log/#sec-6)）。
 
 ## 4. 预算
 
-一次战斗搜索能花多少，由一个 `Budget` 规定（`Brain/Combat/CombatBrain.cs:23-56`）。它的单位是**节点**：在一个世界里模拟的一个动作。没有墙钟预算，也没有别的单位。
+一次战斗搜索能花多少，由一个 `Budget` 规定（`Brain/Combat/CombatBrain.cs:15-36`）。它的单位是**节点**：在一个世界里模拟的一个动作。没有墙钟预算，也没有别的单位。
 
 | 字段（JSON） | 默认 | 含义 |
 |---|---|---|
 | `worlds` | 8 | PIMC 每个决策的世界数；规划器只有一个世界，忽略它 |
 | `nodes_per_world` | 300 | PIMC：每个世界里搜索本回合时模拟的动作数。规划器：从一个状态出发、搜索一个回合时，每次搜索模拟的动作数 |
-| `elite`、`boss` | 1 | 精英战或 Boss 战的决策得到几倍的预算：PIMC 的每世界节点数，或规划器的束和简易束 |
-| `halving` | false | PIMC 的各个首个动作按逐次减半而不是平均分配来分享每个世界的节点（[NoSL PIMC：预算 §3](/arch/pimc/budget/#sec-3)） |
-| `follow` | false | 每个世界都规划得一样的本回合剩余部分，PIMC 不再搜索就打出 |
 | `beam` | 0 | 规划器从一个回合到下一个回合保留的状态数；0 表示 PIMC |
 | `replan` | 1 | 规划器在重新规划之前，把未证明的失败计划打几个回合；0 表示打到结束 |
 | `loss_plans` | 0 | 在一场战斗里，规划器连续做出未证明的失败计划的最大数目，达到后最后一个打到结束；0 表示不限 |
@@ -89,9 +83,7 @@ combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-
 | `high` | 8 | 300 | – | – |
 | `max` | 16 | 300 | – | – |
 
-**房间的预算**（`Budget.For(room)`）：在精英或 Boss 房间里，倍数作用于规划器的束和简易束（至少为 1），或作用于 PIMC 的每世界节点数，然后各倍数被设为 1，所以用两次也不会有任何变化。
-
-**作为名字**（`Budget.ToString`）：PIMC 是 `8x300`（规划器是 `beam 16x300`），然后是不为 1 的倍数（`elite x2`），开着时的 `halving` 和 `follow`，以及规划器的 `easy N`、不为 1 时的 `replan N`，和有限制时的 `loss plans N`。
+**作为名字**（`Budget.ToString`）：PIMC 是 `8x300`（规划器是 `beam 16x300`），然后是规划器的 `easy N`、不为 1 时的 `replan N`，和有限制时的 `loss plans N`。
 
 **规划中：按模式的预算** <Badge text="规划中" variant="caution" />。目前每种模式都用固定的节点预算。设计给每种模式各自的单位：
 
@@ -101,7 +93,7 @@ combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-
 | 辅助 | 墙钟时间，随时可停 | 有人在等：先发出目前最好的答案，再逐步改进 |
 | 自动游玩（R4） | 墙钟时间上限和最少节点数 | 既不卡住，也不搜得太浅 |
 
-「随时可停」（anytime）是指搜索在任何时刻被停下，都仍有一个最好的答案可以给出。一种规划中的分配方式，会在排名前两位的候选之差超出它们的置信区间时停下，否则增加样本或深度。已实现的则是：平均分配或逐次减半、房间的倍数，以及沿用计划（[NoSL PIMC：预算 §1](/arch/pimc/budget/#sec-1)）。
+「随时可停」（anytime）是指搜索在任何时刻被停下，都仍有一个最好的答案可以给出。一种规划中的分配方式，会在排名前两位的候选之差超出它们的置信区间时停下，否则增加样本或深度。已实现的则是：固定的节点数，平均分给各个首个动作，以及沿用计划（[NoSL PIMC：预算 §1](/arch/pimc/budget/#sec-1)）。
 
 ## 5. 种子与确定性
 
@@ -109,7 +101,7 @@ combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-
 
 **run id** 是这一局种子作为 JSON 字符串（含引号）的 FNV-1a 64 位哈希，写成十六进制：种子 `0SSL7NS01MU6` 得到 run `ce13ba5116b7f48a`。大脑看到的是 run id，从来不是种子（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。
 
-**一个决策的种子**由 run id 和决策的序号抽取；序号从 0 开始计这一局的每个决策，战斗决策、选牌提示和宏观决策都一样（`Dispatcher.cs:205-224`）：
+**一个决策的种子**由 run id 和决策的序号抽取；序号从 0 开始计这一局的每个决策，战斗决策、选牌提示和宏观决策都一样（`Dispatcher.cs:189-208`）：
 
 ```text
 H        = FNV-1a 64 of the JSON string run_id
@@ -126,11 +118,11 @@ seed(i)  = z xor (z >> 31)
 - **构建种子**是这个种子的大写十六进制形式（`X16`）；工作进程用一个以它的哈希为种子的生成器，重新采样观测没有确定的东西（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）；
 - 第 k 个世界用 `"{seed}:{k}"` 的哈希确定化（[模拟器：战斗 §3](/arch/simulator/combat/#sec-3)）。
 
-SL PIMC 和规划器搜索唯一的精确世界，忽略它；宏观策略和提示策略从不收到它。
+SL 规划器搜索唯一的精确世界，忽略它；宏观策略和提示策略从不收到它。
 
-**占位策略和探索**从按局播种的 .NET 生成器里取随机数，每个流一个：`Random(FNV(run_id + stream))`，占位策略的流是 `""`，战斗路由的 softmax 是 `:explore combat`，L0 的 softmax 是 `:explore`，L0 的均匀抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:41-53`）。所以一局在任何进程里、通过线路时都打得一样，不管是否记日志。
+**占位策略和探索**从按局播种的 .NET 生成器里取随机数，每个流一个：`Random(FNV(run_id + stream))`，占位策略的流是 `""`，L0 的均匀抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:40-49`）。所以一局在任何进程里、通过线路时都打得一样，不管是否记日志。
 
-**看顺序，不看时序**。一次搜索的各个请求并行运行，但池按请求的顺序返回它们的回复（[模拟器：工作进程池 §2](/arch/simulator/pool/#sec-2)），候选先按它们到达的减半轮次排序，再按值排序，平手时保持合法动作的顺序（结束回合，然后是牌，然后是药水）。哪个工作进程先完成，从来改变不了回答。`run --check` 让整局都遵守这一点（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。
+**看顺序，不看时序**。一次搜索的各个请求并行运行，但池按请求的顺序返回它们的回复（[模拟器：工作进程池 §2](/arch/simulator/pool/#sec-2)），候选按值排序，平手时保持合法动作的顺序（结束回合，然后是牌，然后是药水）。哪个工作进程先完成，从来改变不了回答。`run --check` 让整局都遵守这一点（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。
 
 ## 6. 故障
 
@@ -148,7 +140,7 @@ SL PIMC 和规划器搜索唯一的精确世界，忽略它；宏观策略和提
 | NoSL 下的节点检查点或节点动作 | `InvalidOperationException` |
 | 节点下标没有递增的检查点；属于另一个节点或顺序不对的动作 | `InvalidDataException` |
 
-**在线路上**（`BrainServer`）：被拒绝的 `hello`（冠军工厂抛了异常：未知的环境、SL 之外的 `plan` 或 `--afterstates clone`、对不上的冠军名字）、对局之外或被拒绝的节点消息之后的决策、没有递增的 id、与哈希不符的观测、没有对应画面的战斗或提示决策、未知的消息：每种都得到一个 `error`。被拒绝的节点消息会让这一局的下一个决策失败。对不上的协议版本，或 I/O 或 JSON 错误，会让宿主被丢弃（[概览 §5](/arch/harness/#sec-5)）。
+**在线路上**（`BrainServer`）：被拒绝的 `hello`（冠军工厂抛了异常：未知的环境、SL 之外的 `plan` 或 `--afterstates clone`、NoSL 之外的 `pimc`、对不上的冠军名字）、对局之外或被拒绝的节点消息之后的决策、没有递增的 id、与哈希不符的观测、没有对应画面的战斗或提示决策、未知的消息：每种都得到一个 `error`。被拒绝的节点消息会让这一局的下一个决策失败。对不上的协议版本，或 I/O 或 JSON 错误，会让宿主被丢弃（[概览 §5](/arch/harness/#sec-5)）。
 
 **在工作进程池里**（[模拟器：工作进程池 §6](/arch/simulator/pool/#sec-6)）：
 

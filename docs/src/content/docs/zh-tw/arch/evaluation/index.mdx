@@ -15,7 +15,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-已有：模擬器裡兩種環境的整局，即 R1 級（`run --seeds FILE --records FILE`）；報告（`report`）及其作廢規則；排行榜（`leaderboard`）；種子檔案及其生成器（`seeds`）；配對 SPRT 門檻（`gate`），連同冠軍檔案和 `--promote`；戰鬥測試集（`panel`）；還有 `learn/gauntlet.py` 在整局上按勝局的配對下界門檻。規劃中：R2–R4 級、幕級門檻、A/A 測試、把 `NumReloads` 和 NoSL 存檔匯出次數列入必須為零的指標、報告裡的校準和搜尋計算量數字、跑一次最終種子集。
+已有：模擬器裡兩種環境的整局，即 R1 級（`run --seeds FILE --records FILE`）；報告（`report`）及其作廢規則；排行榜（`leaderboard`）；種子檔案及其生成器（`seeds`）；配對 SPRT 門檻（`gate`），連同冠軍檔案和 `--promote`；還有 `learn/gate.py` 在整局上按勝局的配對下界門檻。規劃中：R2–R4 級、幕級門檻、A/A 測試、把 `NumReloads` 和 NoSL 存檔匯出次數列入必須為零的指標、報告裡的校準和搜尋計算量數字、跑一次最終種子集。
 
 </Aside>
 
@@ -60,7 +60,7 @@ flowchart TD
 
 - R4 按真實時間執行，所以用於確認，不用於調參。
 - 在 NoSL 裡，R1 的決策已經走 Build 路徑，即由觀測建構世界（[模擬器：世界與 SL 複本 §2](/zh-tw/arch/simulator/worlds/#sec-2)），所以就決策而言，NoSL 的 R1 約等於 R2。SL 則不然：戰鬥規劃器和 `--afterstates clone` 搜尋的是節點的複本，即遊戲的存檔加上此後的決策，而不是由觀測建構的世界（[Harness：路由、預算與種子 §2](/zh-tw/arch/harness/routing/#sec-2)）。
-- 每條對局記錄都寫著 `R1`：`run` 把級別當作常數寫入（`SimWorker/Commands/RunCommand.cs:285`）。
+- 對局記錄不寫級別：它的 `config` 只有遊戲、提交、冠軍和環境（`Harness/RunRecords.cs:18`），模擬器打的每一局都是 R1。
 
 ## 3. 兩個排行榜
 
@@ -91,13 +91,12 @@ flowchart TD
 | 報告、作廢規則、Wilson 區間 | 已有 | [指標、種子與報告 §2](/zh-tw/arch/evaluation/metrics/#sec-2)、[§7](/zh-tw/arch/evaluation/metrics/#sec-7) |
 | 種子集，即 `promotion-1` 及其擴充、`final-1` 和 `a10-check-1`，以及它們的生成器 | 已有；`final-1` 從未跑過 | [指標、種子與報告 §5](/zh-tw/arch/evaluation/metrics/#sec-5) |
 | 排行榜 | 已有；SL − NoSL 一節從未出現過 | [指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9) |
-| 戰鬥測試集 | 已有 | [晉級門檻 §5](/zh-tw/arch/evaluation/gates/#sec-5) |
 | 配對 SPRT 門檻 `gate`、冠軍檔案、晉級 | 已有 | [晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6) |
-| 勝局門檻，即在整局上用 `learn/gauntlet.py --against` | 已有，使用中 | [晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10) |
+| 勝局門檻，即在整局上用 `learn/gate.py --against` | 已有，使用中 | [晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10) |
 | 幕級門檻、A/A 測試、McNemar 檢定 | 規劃中 | [晉級門檻 §4](/zh-tw/arch/evaluation/gates/#sec-4)、[§5](/zh-tw/arch/evaluation/gates/#sec-5) |
 | R2–R4 | 規劃中 | [§2](#sec-2) |
 
-**新網路如何過門檻**。網路在整局 SL 中訓練和接受評判，依據是它獲勝的機率（[宏觀大腦：自我對弈 §1](/zh-tw/arch/macro-brain/selfplay/#sec-1)）。它的門檻讓挑戰者用冠軍的規劃器，以 medium 力度（`--afterstates clone`、不探索）在 `promotion-1-300` 的 300 個種子上打，把它的對局和冠軍的按種子配對；當勝局（每局 1 或 0）平均差的 95% 單側下界大於 0 時，挑戰者晉級。相同的種子也用低預算打，只供參考，不決定任何事。如果一代的兩個網路都通過，贏得較多的那個晉級。所以有兩種門檻並存：C# 的 SPRT `gate`，序列式，按層數或按勝局；以及 `learn/gauntlet.py` 按勝局的固定樣本下界。
+**新網路如何過門檻**。網路在整局 SL 中訓練和接受評判，依據是它獲勝的機率（[宏觀大腦：自我對弈 §1](/zh-tw/arch/macro-brain/selfplay/#sec-1)）。它的門檻讓挑戰者用冠軍的規劃器，以 medium 力度（`--afterstates clone`、不探索）在 `promotion-1-300` 的 300 個種子上打，把它的對局和冠軍的按種子配對；當勝局（每局 1 或 0）平均差的 95% 單側下界大於 0 時，挑戰者晉級。相同的種子也用低預算打，只供參考，不決定任何事。如果一代的兩個網路都通過，贏得較多的那個晉級。所以有兩種門檻並存：C# 的 SPRT `gate`，序列式，按層數或按勝局；以及 `learn/gate.py` 按勝局的固定樣本下界。
 
 ## 5. 本章
 

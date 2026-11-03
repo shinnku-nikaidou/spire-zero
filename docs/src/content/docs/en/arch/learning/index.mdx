@@ -15,7 +15,7 @@ Read first: [Macro brain](/en/arch/macro-brain/) for what V is used for, and [Co
 
 <Aside title="Status">
 
-Built: V's trainer `learn/v/` (`v.train`) and the combat net's trainer `learn/combat/` (`combat.train`), both Monte Carlo (each decision labelled by how its run really ended); the even-draw exploration of self-play (`run --explore ε`); `learn/gauntlet.py`, the report and paired gate of a V's runs; `learn/challenge.py`, which drives the simulator's sequential gate; `learn/bosslab.py`, the boss-fight labels. Planned, not built: TD(λ) targets, expert iteration, LLM patch proposals, reward shaping, privileged training, and the mechanisms against local optima beyond even draws ([The loop](/en/arch/learning/loop/)).
+Built: V's trainer `learn/v/` (`v.train`) and the combat net's trainer `learn/combat/` (`combat.train`), both Monte Carlo (each decision labelled by how its run really ended); the even-draw exploration of self-play (`run --explore ε`); `learn/gate.py`, the report and paired gate of a V's runs. Planned, not built: TD(λ) targets, expert iteration, LLM patch proposals, reward shaping, privileged training, and the mechanisms against local optima beyond even draws ([The loop](/en/arch/learning/loop/)).
 
 </Aside>
 
@@ -59,12 +59,10 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 | part | status | where |
 |---|---|---|
 | self-play: whole runs, even draws at ε | built | `run --explore`, [The loop §2](/en/arch/learning/loop/#sec-2) |
-| softmax exploration over the logs of V's values or the search's values | built; L0's beside even draws in `v8g2` | `run --macro-explore`, `--combat-explore`, [The loop §9](/en/arch/learning/loop/#sec-9) |
 | V's training, Monte Carlo labels | built | `learn/v/`, [Macro brain: from hazards to value §5](/en/arch/macro-brain/value/#sec-5) |
 | the combat net's training, Monte Carlo labels | built | `learn/combat/`, [Training the combat net](/en/arch/learning/combat-net/) |
-| boss-fight labels for V (boss sims, door states) | built, unused | `learn/bosslab.py`, [Reference §9](/en/arch/learning/reference/#sec-9) |
-| counterfactual forks | built as commands; no trainer reads them now | `fork`, `afterstates`, [The loop §10](/en/arch/learning/loop/#sec-10) |
-| gates: the simulator's SPRT, the paired lower bound on wins | built | `gate`, `learn/challenge.py`, `learn/gauntlet.py`, [The loop §8](/en/arch/learning/loop/#sec-8) |
+| counterfactual forks | <Badge text="planned" variant="caution" /> | [The loop §10](/en/arch/learning/loop/#sec-10) |
+| gates: the simulator's SPRT, the paired lower bound on wins | built | `gate`, `learn/gate.py`, [The loop §8](/en/arch/learning/loop/#sec-8) |
 | TD(λ) targets | <Badge text="planned" variant="caution" /> | [The loop §4](/en/arch/learning/loop/#sec-4) |
 | expert iteration (search values as labels, a learned prior) | <Badge text="planned" variant="caution" /> | [The loop §5](/en/arch/learning/loop/#sec-5) |
 | SPSA tuning of hand-set weights | not used | [The loop §6](/en/arch/learning/loop/#sec-6) |

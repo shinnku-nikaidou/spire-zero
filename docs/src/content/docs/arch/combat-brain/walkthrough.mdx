@@ -39,7 +39,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 2. 词元
 
-`encode.tokens`（`learn/combat/encode.py:118-161`）扔掉屏幕，只留下 id 和缩放后的数。
+`encode.tokens`（`learn/combat/encode.py:145-186`）扔掉屏幕，只留下 id 和缩放后的数。
 
 **玩家**是 8 个数：<code>{v(walk.tokens.player.slice(0, 4))}</code>，以此类推。完整如下：
 
@@ -83,7 +83,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 4. 一张牌，然后是牌堆
 
-牌的向量是 `Net.encode`（`learn/combat/net.py:211-282`）的头几行。取弃牌堆里的 **{walk.card.id}**。它在牌表里的表项是 {walk.card.entry}，升级次数 {walk.card.up}；费用 1 读作 {walk.card.cost}，伤害 6 读作 {walk.card.damage}。
+牌的向量是 `Net.encode`（`learn/combat/net.py:229-308`）的头几行。取弃牌堆里的 **{walk.card.id}**。它在牌表里的表项是 {walk.card.entry}，升级次数 {walk.card.up}；费用 1 读作 {walk.card.cost}，伤害 6 读作 {walk.card.damage}。
 
 | 部分 | 向量 |
 |---|---|
@@ -178,7 +178,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 - 下端：一场战斗回的血不能超过损失的生命值。{walk.state.max_hp} 中的 {walk.state.max_hp - walk.state.hp} 点生命值是比例 0.494，超过最低分桶的 {walk.head.open_from}，所以这里没有分桶关闭。
 - 上端：一场胜利不能失去全部持有的生命值，所以从 {walk.head.open_to} 起的分桶关闭。
 
-这样 **50 个分桶中有 {walk.head.open} 个开启**。其他分桶的 logit 是 $-10^4$（`Net.reachable`，`learn/combat/net.py:203-209`），softmax 给它们恰好 0。
+这样 **50 个分桶中有 {walk.head.open} 个开启**。其他分桶的 logit 是 $-10^4$（`Net.reachable`，`learn/combat/net.py:221-227`），softmax 给它们恰好 0。
 
 对其余的做 softmax，得到概率。死亡是 {walk.head.death}。最可能的分桶：
 
@@ -199,7 +199,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 13. 搜索读到的数
 
-`CombatNet.Value`（`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-86`）给 51 个概率定价（[叶子 §5](/arch/combat-brain/leaf/#sec-5)）：
+`CombatNet.Value`（`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-85`）给 51 个概率定价（[叶子 §5](/arch/combat-brain/leaf/#sec-5)）：
 
 $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})

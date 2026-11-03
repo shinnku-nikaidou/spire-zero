@@ -31,7 +31,7 @@ import StrategyFusion from '../../../../components/book/StrategyFusion.svelte';
 
 NoSL 的搜索看不到隐藏状态，但可以猜。**确定化**就是把玩家不可能知道的一切，换成一个与玩家看到的一切都一致的具体样本。在一个样本上，游戏重新变成一个完全信息的游戏，搜索可以像对待任何其他模拟一样去打它。
 
-一个 NoSL 世界起初是一场构建得恰好显示出该观测的战斗（`CombatBuilder.Setup`，[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。然后 `Determinize(seed)` 从种子抽取隐藏的部分（`Simulation/CombatSession.cs:237-283`）：
+一个 NoSL 世界起初是一场构建得恰好显示出该观测的战斗（`CombatBuilder.Setup`，[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。然后 `Determinize(seed)` 从种子抽取隐藏的部分（`Simulation/CombatSession.cs:231-277`）：
 
 - 本局、玩家和每个怪物的每条有种子的随机数流都重新播种：洗牌、生成的卡牌、随机目标、怪物 AI；
 - 抽牌堆先被排成一个只取决于玩家所见内容的顺序（按卡牌键排序），再用这个种子洗牌；
@@ -59,7 +59,7 @@ NoSL 的搜索看不到隐藏状态，但可以猜。**确定化**就是把玩�
 
 <StrategyFusion client:visible lang="zh-CN" />
 
-这在真实战斗里代价有多大，由融合测试集来测量：取决策日志中的 NoSL 战斗决策，把 PIMC 的价值与另一种价值对比，后者在各个世界还无法区分的地方把打法合并起来（[NoSL PIMC：搜索 §4](/arch/pimc/search/#sec-4)）。如果剩下的误差被证明很重要，替代方案是 ISMCTS（信息集蒙特卡洛树搜索），它在所有世界上只搜索一棵树，因此在玩家看来相同的世界之间共享同一个选择。
+这在真实战斗里代价有多大，要在决策日志中的 NoSL 战斗决策上测量：把 PIMC 的价值与另一种价值对比，后者在各个世界还无法区分的地方把打法合并起来（[NoSL PIMC：搜索 §4](/arch/pimc/search/#sec-4)）。如果剩下的误差被证明很重要，替代方案是 ISMCTS（信息集蒙特卡洛树搜索），它在所有世界上只搜索一棵树，因此在玩家看来相同的世界之间共享同一个选择。
 
 ## 4. SL：一个精确的世界
 
@@ -73,7 +73,7 @@ SL 的世界就是节点的克隆：真实战斗的一份精确拷贝，带着�
 
 ## 5. 一个宏观大脑，两种战斗算法
 
-所以两种环境提出了两个不同的战斗问题：NoSL 必须选出在它无法区分的各个世界上平均最好的动作，SL 必须在一个已知的世界里找到最好的打法。每个问题都有自己的算法。冠军的选项按环境挑选算法：一局用 `run --policy`（SL 规划器 `plan` 在 SL 之外会被拒绝），而在 `brain` 命令里，NoSL 宿主用 `--policy`，SL 宿主用 `--sl-policy`，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。然后 Harness 在每个战斗决策里把对应的输入交给战斗那条路由：SL 下是节点的克隆，NoSL 下只有观测，工作进程根据它构建自己的世界（`Harness/Dispatcher.cs:132`）。在单个进程里，比如在战斗测试集里，同样的两种算法运行在同一个接口 `ICombatBrain` 后面，所用的世界来自一个 `IWorldSource`（[协议：世界与工作进程消息 §1](/arch/protocol/worlds/#sec-1)）：
+所以两种环境提出了两个不同的战斗问题：NoSL 必须选出在它无法区分的各个世界上平均最好的动作，SL 必须在一个已知的世界里找到最好的打法。每个问题都有自己的算法。冠军的选项按环境挑选算法：一局用 `run --policy`（SL 规划器 `plan` 在 SL 之外会被拒绝，PIMC `pimc` 在 NoSL 之外会被拒绝），而在 `brain` 命令里，NoSL 宿主用 `--policy`，SL 宿主用 `--sl-policy`，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。然后 Harness 在每个战斗决策里把对应的输入交给战斗那条路由：SL 下是节点的克隆，NoSL 下只有观测，工作进程根据它构建自己的世界（`Harness/Dispatcher.cs:112`）。在单个进程里，比如在 `selftest` 里，PIMC 搜索一个 `IWorldSource` 提供的世界（`PimcBrain.Decide`），规划器在它唯一的世界里规划（`SlPlanner.Plan`）（[协议：世界与工作进程消息 §1](/arch/protocol/worlds/#sec-1)）：
 
 ```mermaid
 flowchart LR
@@ -102,8 +102,6 @@ flowchart LR
 
 两种搜索的叶节点都只根据公开信息估值：观测和怪物到目前为止的意图记录（[战斗大脑：叶子 §1](/arch/combat-brain/leaf/#sec-1)）。所以真实的随机数流不可能通过估值泄漏进来。宏观大脑和 V 也从不读取环境；在 SL 下加上 `--afterstates clone` 时，Harness 把节点的克隆交给宏观一侧，所以 L0 的搜索不同，而大脑保持不变。
 
-克隆上的 PIMC（`--policy pimc` 配合 `--env SL`）也存在：它只搜索那一个世界的当前回合，每个第一个动作发一个请求（[模拟器：工作进程池 §3](/arch/simulator/pool/#sec-3)），作为 SL 规划器的基线保留下来。
-
 ## 6. 两种环境共用一个 V
 
 原则上，SL 对战斗之外的状态也会有不同的估值。从同一个状态出发，SL 赢得更多，因为它在之后的每个节点都打得更好，所以为 SL 做的价值函数会接受更多风险：更多的精英、事件，以及高方差的卡牌。这一点被有意忽略。一个 V 服务两种环境，它用战斗由 SL 战斗大脑来打的对局训练（[宏观大脑：自我对弈 §2](/arch/macro-brain/selfplay/#sec-2)）。
@@ -112,7 +110,7 @@ flowchart LR
 
 ## 7. 排行榜、晋级门槛与解释
 
-- **冠军、晋级门槛和排行榜仍按环境分开**。每种环境有自己的冠军文件，晋级门槛只把挑战者与它自己环境的冠军配对，拒绝来自另一种环境的对局（`Harness/Gate.cs:44-52`）；`gate --promote` 只改写交给它的那个文件（[评估：晋级门槛 §8](/arch/evaluation/gates/#sec-8)）。共用一个 V 并不改变这一点：新的 V 只有通过某种环境自己的文件，才会进入那种环境的冠军。两个文件都指向同一个 V，即 v9-0，以及同一个战斗网络 c9-0。在它们的 NoSL 报告出现之前，NoSL 文件指向的是 SL 报告，所以 NoSL 晋级门槛会拒绝与它配对（[评估 §3](/arch/evaluation/#sec-3)）。
+- **冠军、晋级门槛和排行榜仍按环境分开**。每种环境有自己的冠军文件，晋级门槛只把挑战者与它自己环境的冠军配对，拒绝来自另一种环境的对局（`Harness/Gate.cs:44-50`）；`gate --promote` 只改写交给它的那个文件（[评估：晋级门槛 §8](/arch/evaluation/gates/#sec-8)）。共用一个 V 并不改变这一点：新的 V 只有通过某种环境自己的文件，才会进入那种环境的冠军。两个文件都指向同一个 V，即 v9-0，以及同一个战斗网络 c9-0。在它们的 NoSL 报告出现之前，NoSL 文件指向的是 SL 报告，所以 NoSL 晋级门槛会拒绝与它配对（[评估 §3](/arch/evaluation/#sec-3)）。
 - **同一组种子供给两个排行榜**，每种环境一张表，从不放在一起排名。在它们下面，排行榜为每个在两种环境下都有同名报告的冠军给出 SL − NoSL 差值（[环境 §3](/arch/environments/#sec-3)）。
 - **解释会有所不同**。推荐目前还没有事实；有了之后，NoSL 的事实会是一个概率或期望（「平均挡下 6 点生命」），SL 的事实可能是一个确切结果（「先打 A 再打 B，你会抽到 X」）（[输出 §5](/arch/output/#sec-5)）。
 
@@ -120,7 +118,7 @@ flowchart LR
 
 | 子系统 | NoSL | SL 额外需要 |
 |---|---|---|
-| 协议 | 观测、动作、选牌提示、推荐、世界 API、NoSL 工作进程请求 | `node_checkpoint` 和 `node_action`；克隆类型 `NodeClone`；SL 工作进程请求（`SlWorldRequest`、`SlTurnRequest`、`SlMacroRequest`） |
+| 协议 | 观测、动作、选牌提示、推荐、世界 API、NoSL 工作进程请求 | `node_checkpoint` 和 `node_action`；克隆类型 `NodeClone`；SL 工作进程请求（`SlTurnRequest`、`SlMacroRequest`） |
 | GameBridge | 白名单内的观测、合法动作、发起动作 | 节点检查点（`Checkpoint.Take`、`Open`、`RestoreRelics`）；SL 的换位键（`HiddenState.Full`） |
 | 模拟器 | 根据观测构建战斗，确定化 | 节点检查点（两种环境下都会取）、载入存档并重放、封存（`AtHorizon`） |
 | Mod | 观测、询问、显示答案（辅助模式；它从不执行） | 节点的检查点和步骤，两种环境下都记录，只在 SL 下发送 |

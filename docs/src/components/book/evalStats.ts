@@ -1,6 +1,6 @@
 // The evaluation chapter's statistics, ported from the project's code so the figures give its numbers (docs:
 // evaluation/metrics §4, evaluation/gates §3, §10): Rate.Wilson (src/Sts2Ai.Harness/Reports.cs:10-17), Gate.Sprt
-// (src/Sts2Ai.Harness/Gate.cs:62-107) and gauntlet.py's mean_se and paired lower bound (learn/gauntlet.py:34-39, 136-161).
+// (src/Sts2Ai.Harness/Gate.cs:60-105) and gate.py's mean_se and paired lower bound (learn/gate.py:32-37, 130-151).
 
 export type Rate = { hits: number; of: number; value: number; low: number; high: number };
 
@@ -85,7 +85,7 @@ export function sprt(pairs: Pair[], metric: 'floor' | 'win', delta: number, alph
   return { verdict, pairs: pairs.length, decided, llr, lower, upper, floorDiffMean: decided === 0 ? 0 : sum / decided, challengerOnly: only, championOnly, path };
 }
 
-/** gauntlet.py's mean_se: the mean and its standard error (sample SD / √n); NaN for an empty list, SE NaN for one value. */
+/** gate.py's mean_se: the mean and its standard error (sample SD / √n); NaN for an empty list, SE NaN for one value. */
 export function meanSe(xs: number[]): { mean: number; se: number } {
   const n = xs.length;
   if (n === 0) return { mean: NaN, se: NaN };
@@ -94,7 +94,7 @@ export function meanSe(xs: number[]): { mean: number; se: number } {
   return { mean, se };
 }
 
-/** gauntlet.py's paired verdict: the 95% one-sided lower bound mean − 1.645·SE, promote when above 0. */
+/** gate.py's paired verdict: the 95% one-sided lower bound mean − 1.645·SE, promote when above 0. */
 export function lowerBound(diffs: number[]): { mean: number; se: number; lower: number; promote: boolean } {
   const { mean, se } = meanSe(diffs);
   const lower = mean - 1.645 * se;

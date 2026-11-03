@@ -17,7 +17,7 @@ A leaf is either a state at the start of a turn, after the enemies' turn has bee
 
 ## 2. The prices of an ending
 
-Prices are numbers set by hand in `LeafValue` (`LeafValue.Of`, `src/Sts2Ai.Brain/Combat/LeafValue.cs:50-77`):
+Prices are numbers set by hand in `LeafValue` (`LeafValue.Of`, `src/Sts2Ai.Brain/Combat/LeafValue.cs:20-31`):
 
 - A lost fight is 0.
 - A won fight with HP share $s$ left (HP over max HP) and $q$ potions held is worth
@@ -26,15 +26,15 @@ $$
 \text{Win}(s, q) = 0.2 + 0.6\,s + 0.02\,q.
 $$
 
-They are the only hand-set numbers in the leaf with a net. A fight that is already over is valued by them directly, with no net: the end of every finished line, and so every plan's final score, is this formula on the state the line ends in.
+They are the leaf's only hand-set numbers. A fight that is already over is valued by them directly, with no net: the end of every finished line, and so every plan's final score, is this formula on the state the line ends in.
 
-With no `--combat-net`, a fight in progress goes to `LeafValue` too (`HandLeaf`, `src/Sts2Ai.SimWorker/Brains/LeafChoice.cs:20`): it projects the rest of the fight from what is on the screen, with a few more numbers set by hand. No champion plays that way.
+`LeafValue.Of` values a finished fight only, and refuses one still going (`src/Sts2Ai.Brain/Combat/LeafValue.cs:30`): a fight in progress is the combat net's ([§3](#sec-3)). So every search's leaf is a net, and `pimc` and `plan` need `--combat-net` (`src/Sts2Ai.SimWorker/Brains/LeafChoice.cs:18`).
 
 ## 3. The combat net
 
 For a fight still in progress the leaf asks the combat net. It reads a round's start and predicts how the fight will end under the policy that played its training games. Its inputs and layers are in [The combat net](/en/arch/combat-brain/network/), a real state followed through it is in [One state through the net](/en/arch/combat-brain/walkthrough/), and its training is in [Training the combat net](/en/arch/learning/combat-net/).
 
-`--combat-net FILE` plays it, in the planner (shown as `plan NAME`) or in PIMC (`pimc NAME`).
+`--combat-net FILE` gives it to the search: to the planner (shown as `plan NAME`) or to PIMC (`pimc NAME`).
 
 ## 4. The two outputs
 
@@ -54,7 +54,7 @@ $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})
 $$
 
-A death adds nothing, since it is worth 0 (`CombatNet.Value`, `src/Sts2Ai.Brain/Combat/CombatNet.cs:74-86`). Term by term, on a real state, in [One state through the net §13](/en/arch/combat-brain/walkthrough/#sec-13).
+A death adds nothing, since it is worth 0 (`CombatNet.Value`, `src/Sts2Ai.Brain/Combat/CombatNet.cs:74-85`). Term by term, on a real state, in [One state through the net §13](/en/arch/combat-brain/walkthrough/#sec-13).
 
 The form is **what the state holds, exactly, plus what the net says is still to come**. $s$ enters exactly, so states of one beam differ by their true HP before the net says anything. A potion drunk leaves the sum exactly.
 

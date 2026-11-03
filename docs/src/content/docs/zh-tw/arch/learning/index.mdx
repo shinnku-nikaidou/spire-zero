@@ -15,7 +15,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-已實作：V 的訓練器 `learn/v/`（`v.train`）和戰鬥網路的訓練器 `learn/combat/`（`combat.train`），兩者都用蒙地卡羅目標（每個決策都以它那一局實際的結局作標籤）；自我對弈的均勻抽取探索（`run --explore ε`）；`learn/gauntlet.py`，一個 V 的對局的報告和配對門檻；`learn/challenge.py`，它驅動模擬器的序列門檻；`learn/bosslab.py`，頭目戰的標籤。規劃中、尚未實作：TD(λ) 目標、專家迭代、LLM 補丁提案、獎勵塑形、特權訓練，以及均勻抽取之外對抗局部最佳解的機制（[循環](/zh-tw/arch/learning/loop/)）。
+已實作：V 的訓練器 `learn/v/`（`v.train`）和戰鬥網路的訓練器 `learn/combat/`（`combat.train`），兩者都用蒙地卡羅目標（每個決策都以它那一局實際的結局作標籤）；自我對弈的均勻抽取探索（`run --explore ε`）；`learn/gate.py`，一個 V 的對局的報告和配對門檻。規劃中、尚未實作：TD(λ) 目標、專家迭代、LLM 補丁提案、獎勵塑形、特權訓練，以及均勻抽取之外對抗局部最佳解的機制（[循環](/zh-tw/arch/learning/loop/)）。
 
 </Aside>
 
@@ -59,12 +59,10 @@ flowchart LR
 | 部分 | 狀態 | 位置 |
 |---|---|---|
 | 自我對弈：整局，以 ε 均勻抽取 | 已實作 | `run --explore`，[循環 §2](/zh-tw/arch/learning/loop/#sec-2) |
-| 按 V 的估值的對數或搜尋的估值做 softmax 探索 | 已實作；L0 的在 `v8g2` 裡和均勻抽取並用 | `run --macro-explore`、`--combat-explore`，[循環 §9](/zh-tw/arch/learning/loop/#sec-9) |
 | V 的訓練，蒙地卡羅標籤 | 已實作 | `learn/v/`，[宏觀大腦：從風險值到價值 §5](/zh-tw/arch/macro-brain/value/#sec-5) |
 | 戰鬥網路的訓練，蒙地卡羅標籤 | 已實作 | `learn/combat/`，[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/) |
-| V 的頭目戰標籤（頭目模擬戰、門前狀態） | 已實作，未使用 | `learn/bosslab.py`，[參考 §9](/zh-tw/arch/learning/reference/#sec-9) |
-| 反事實分叉 | 已實作為指令；目前沒有訓練器讀它們 | `fork`、`afterstates`，[循環 §10](/zh-tw/arch/learning/loop/#sec-10) |
-| 晉級門檻：模擬器的 SPRT，以及勝場的配對下界 | 已實作 | `gate`、`learn/challenge.py`、`learn/gauntlet.py`，[循環 §8](/zh-tw/arch/learning/loop/#sec-8) |
+| 反事實分叉 | <Badge text="規劃中" variant="caution" /> | [循環 §10](/zh-tw/arch/learning/loop/#sec-10) |
+| 晉級門檻：模擬器的 SPRT，以及勝場的配對下界 | 已實作 | `gate`、`learn/gate.py`，[循環 §8](/zh-tw/arch/learning/loop/#sec-8) |
 | TD(λ) 目標 | <Badge text="規劃中" variant="caution" /> | [循環 §4](/zh-tw/arch/learning/loop/#sec-4) |
 | 專家迭代（以搜尋的估值作標籤，學到的先驗） | <Badge text="規劃中" variant="caution" /> | [循環 §5](/zh-tw/arch/learning/loop/#sec-5) |
 | 用 SPSA 調校手設的權重 | 未使用 | [循環 §6](/zh-tw/arch/learning/loop/#sec-6) |

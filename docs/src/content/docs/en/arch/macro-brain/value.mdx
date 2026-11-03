@@ -33,8 +33,7 @@ $$
 
 $S_g$ is the chance to be still going after floor $g$, and $e_g$ the chance that the run ends exactly on floor $g$. Then:
 
-- **P(win)** is the chance to survive every floor: $S_{63}$. A won run is labelled as surviving them all ([§3](#sec-3)), so this is the chance that the run is won. This is V's value: the net file's `objective` is `win`, and `RunNet.Value` computes the product.
-- **The expected floor reached** comes from the same hazards: $\mathbb{E}[F] = f + \sum_{g \ge f} S_g$. The training report uses it ([§6](#sec-6)); nothing decides by it.
+- **P(win)** is the chance to survive every floor: $S_{63}$. A won run is labelled as surviving them all ([§3](#sec-3)), so this is the chance that the run is won. This is V's value: `RunNet.Value` computes the product.
 
 Why hazards rather than one output for the chance to win:
 
@@ -86,14 +85,14 @@ where $c_k$ is the share of max HP the $k$-th next combat cost, and $\hat c_k$ t
 
 ## 4. The second head
 
-A second head, used only in training, predicts the share of max HP each of the run's next six combats cost, as six sigmoid outputs. A death costs what was left; a run with fewer than six combats ahead has targets for those it has. Its squared error joins the loss at weight 3. Its seventh output serves simulated boss fights as extra labels, which whole-run training does not use, so it has no target there.
+A second head, used only in training, predicts the share of max HP each of the run's next six combats cost, as six sigmoid outputs. A death costs what was left; a run with fewer than six combats ahead has targets for those it has. Its squared error joins the loss at weight 3.
 
 It never decides and is not in the net file. Its job is to shape the body: a combat's HP cost is measured several times per run, so it gives the body many more targets than the one outcome, all about the same thing V must judge, how strong the run is for the fights ahead.
 
 ## 5. Training
 
 ```text
-uv run python -m v.train --list PREFIX --name NAME --objective win [--init FILE]
+uv run python -m v.train --list PREFIX --name NAME [--init FILE]
 ```
 
 `learn/v/train.py`. The sizes and settings are fixed in the code, not options; an experiment changes them there, and only a result keeps the change:
@@ -130,8 +129,7 @@ The trainer prints a report and writes it into the net file (`fit`). All of it i
 | `vocab` | each token table's size |
 | `held_out_loss`, `held_out_loss_floor_only` | the hazards' loss, against the baseline's, which knows only the floor |
 | `held_out_next_combats` | the second head's error |
-| `r2_held_out`, `r2_held_out_floor_only` | the $R^2$ of the expected floor against the floor reached, and the baseline's |
 | `brier_held_out`, `brier_held_out_floor_only` | the Brier score of P(win): the weighted mean of (predicted chance − won)², and the baseline's |
 | `won_held_out_runs` | how many held-out runs were won |
 
-$R^2$ and the Brier score measure how well V tells apart states of different runs. A decision only needs V to order the options of one state correctly, which neither measures. That is why every net is judged by playing ([Self-play §5](/en/arch/macro-brain/selfplay/#sec-5)).
+The Brier score measures how well V tells apart states of different runs. A decision only needs V to order the options of one state correctly, which it does not measure. That is why every net is judged by playing ([Self-play §5](/en/arch/macro-brain/selfplay/#sec-5)).

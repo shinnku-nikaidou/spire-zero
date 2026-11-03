@@ -16,7 +16,7 @@ The `Dispatcher` keeps the run's lines in memory (`Dispatcher.Log`) when it is m
 - `run --log FILE` appends each run's lines after the run ends ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). A run killed midway leaves none. `--log` is refused together with `--brain`, whose decisions are logged by the brain.
 - `brain --log FILE` writes a run's lines at its `run_end`, so a host that drops without one leaves none ([Overview §5](/en/arch/harness/#sec-5)).
 
-The lines are `DecisionEntry` records (`Dispatcher.cs:61-65`) serialized like every Protocol type: snake_case names, fields that are null left out ([Protocol §4](/en/arch/protocol/#sec-4)). Logs are kept beside the run records, in the data directory ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
+The lines are `DecisionEntry` records (`Dispatcher.cs:36-40`) serialized like every Protocol type: snake_case names, fields that are null left out ([Protocol §4](/en/arch/protocol/#sec-4)). Logs are kept beside the run records, in the data directory ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
 
 Who reads the log:
 
@@ -36,19 +36,19 @@ Who reads the log:
 | `decision_id` | int | the decision's number in the run, from 0, the three kinds counted together ([§4](#sec-4)) | the same | the same |
 | `env` | string | `NoSL` or `SL` | the same | the same |
 | `surface` | string | `combat` | `card_choice`, on either side | the decision's surface |
-| `brain` | string | the combat route's name: `pimc`, `plan c9-0`, `pimc c9-0 explore 0.003`, … | the prompt side's: `p0` in combat; L0's name or `random` outside | the macro route's |
+| `brain` | string | the combat route's name: `pimc c9-0`, `plan c9-0`, `play` | the prompt side's: `p0` in combat; L0's name or `random` outside | the macro route's |
 | `obs_hash` | hex string | the hash of the combat observation | the hash of the card prompt | the hash of the whole observation ([§4](#sec-4)) |
 | `legal` | int | the legal actions | the prompt's options | the legal actions |
 | `chosen` | string | the combat action's text: `play:C[:T]`, `potion:S[:T]`, `end_turn` ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)) | the picked option indexes joined by commas, without `pick:` | the action |
 | `plan` | string[]? | the brain's plan after `chosen`, if any ([§5](#sec-5)) | never | what the policy plans after `chosen`, if any: L0's route on the map |
 | `candidates` | Candidate[]? | the search's candidates, if any ([§5](#sec-5)) | never | never |
-| `budget` | Budget? | the route's budget as configured, before the room's multiple, on every line of a route that has one, including steps with one legal action and followed steps ([Routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)) | never | never |
+| `budget` | Budget? | the route's budget, on every line of a route that has one, including steps with one legal action and followed steps ([Routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)) | never | never |
 | `seed` | integer | the decision's seed ([Routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)) | the same, though the policy does not read it | the same, though the policy does not read it |
 | `elapsed_ms` | number | the route's time | the policy's time | the policy's time; its plan is asked afterwards, and not timed |
 | `obs` | CombatObservation? | always | – | – |
 | `run_view` | RunView? | – | – | always |
 | `history` | EnemyTurns[]? | always, possibly empty ([§7](#sec-7)) | – | – |
-| `explored` | `true`? | the step was drawn by exploration ([§6](#sec-6)) | the policy's last answer was explored | the same |
+| `explored` | `true`? | – | the policy's last answer was drawn by exploration ([§6](#sec-6)) | the same |
 | `replanned` | `true`? | the step was searched again because the plan did not hold ([§6](#sec-6)) | – | – |
 
 ## 4. Numbers and hashes
@@ -63,32 +63,31 @@ Who reads the log:
 - `value`: its mean over the worlds;
 - `ci`: the half-width of its 95% confidence interval, 1.96·s/√n over its worlds, 0 under 2 worlds;
 - `samples`: its worlds;
-- `values`: its value in each world, in world order, to 4 decimals. These are the Q of ExIt's policy target ([Learning: the loop §5](/en/arch/learning/loop/#sec-5));
-- `nodes`: the search nodes spent after it in each world, counting the action itself.
+- `values`: its value in each world, in world order, to 4 decimals. These are the Q of ExIt's policy target ([Learning: the loop §5](/en/arch/learning/loop/#sec-5)).
 
-They are sorted by the round of sequential halving they reached, then by value; without halving every candidate reaches the same round, so the best comes first. PIMC's `plan` is the rest of the turn after `chosen`, in the first world.
+They are sorted by value, best first. PIMC's `plan` is the rest of the turn after `chosen`, in the first world.
 
-**The SL planner's candidates** are each first action that its kept lines began with, valued by the best of those lines, with `ci` 0, `samples` 1, `values` the one value and no `nodes`: the pick first, then by value. Its `plan` is the rest of the combat on its line. For an unproved losing pick, the plan stops after the turns that `replan` says to play before planning again, and a line has at most 40 turns ([The SL planner: beam §6](/en/arch/sl-planner/beam/#sec-6)).
+**The SL planner's candidates** are each first action that its kept lines began with, valued by the best of those lines, with `ci` 0, `samples` 1 and `values` the one value: the pick first, then by value. Its `plan` is the rest of the combat on its line. For an unproved losing pick, the plan stops after the turns that `replan` says to play before planning again, and a line has at most 40 turns ([The SL planner: beam §6](/en/arch/sl-planner/beam/#sec-6)).
 
-**Lines without candidates.** A decision with one legal action has neither. A step played from a followed plan ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2), [The SL planner §4](/en/arch/sl-planner/#sec-4)) has the plan's rest as its `plan` (none on the plan's last step) and no `candidates`. A placeholder logs neither. On the map, L0 logs its `plan`, the rest of the act's route after `chosen` ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)).
+**Lines without candidates.** A decision with one legal action has neither. A step played from a followed plan ([NoSL PIMC: search §6](/en/arch/pimc/search/#sec-6), [The SL planner §4](/en/arch/sl-planner/#sec-4)) has the plan's rest as its `plan` (none on the plan's last step) and no `candidates`. A placeholder logs neither. On the map, L0 logs its `plan`, the rest of the act's route after `chosen` ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)).
 
 ## 6. Explored and replanned steps
 
-**`explored: true`** marks an answer that self-play's exploration drew instead of the brain's best ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)):
+**`explored: true`** marks an answer that self-play's exploration drew (`--explore ε`, [Learning: the loop §9](/en/arch/learning/loop/#sec-9)), which L0 draws with chance ε whatever V says:
 
-- by a softmax (`--combat-explore T`, `--macro-explore T`), when the brain valued the draw below its best by more than a hundredth of the temperature (for L0, on the logs of V's values). Closer than that it is a tie, such as another order of the same turn, and is not marked;
-- by even draws (`--explore ε`), always, also when the draw happens to be the brain's own pick;
-- at a card prompt outside combat, when any of its steps was drawn.
+- an option of a screen, drawn evenly among those that are not a potion's: always, also when the draw happens to be V's own pick;
+- a card reward's outcome, one of its cards or skipping it, drawn once per card reward: when the drawn outcome is the answer, or the answer is valued below V's best;
+- the picks of a card prompt outside combat, drawn evenly: always.
 
-A combat step drawn instead of the search's pick keeps its `candidates` but has no `plan`, since the plan was the pick's. Other steps have no `explored`.
+Combat steps have no `explored`, nor does an answer that was not drawn.
 
-**`replanned: true`** marks a combat step searched again because a step of the brain's plan did not hold: the combat did not show the observation the plan expected before it. With PIMC's `--follow`, that is the turn revealing something; with the SL planner, it means the clone differs from the real combat ([The SL planner §4](/en/arch/sl-planner/#sec-4)). After an explored step the pick's plan is still queued, so the next step is usually replanned too ([Routing, budgets and seeds §2](/en/arch/harness/routing/#sec-2)). A run's line in `run` and `brain` prints the run's count (`replans`); the run record does not keep it.
+**`replanned: true`** marks a combat step searched again because a step of the brain's plan did not hold: the combat did not show the observation the plan expected before it. With PIMC, which follows only a plan that repeats a cycle, that is something the turn revealed breaking the cycle; with the SL planner, it means the clone differs from the real combat ([The SL planner §4](/en/arch/sl-planner/#sec-4)). A run's line in `run` and `brain` prints the run's count (`replans`); the run record does not keep it.
 
 ## 7. What else a line carries
 
-**A combat's decisions come in one block**, between two macro decisions, in the order of the combats in the run's record ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). That is how a decision finds how its combat ended. In a gauntlet run, the combats won at their start are in the run record but have no decisions.
+**A combat's decisions come in one block**, between two macro decisions, in the order of the combats in the run's record ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). That is how a decision finds how its combat ended.
 
-**`obs`**, on every combat line: the combat observation the brain was shown, about 1.6 KB ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)). It is the input of the learned combat parts and of the fusion panel ([NoSL PIMC: search §4](/en/arch/pimc/search/#sec-4)).
+**`obs`**, on every combat line: the combat observation the brain was shown, about 1.6 KB ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)). It is the combat net's input ([The combat net §2](/en/arch/combat-brain/network/#sec-2)).
 
 **`history`**, on every combat line: the combat's record of enemy moves so far, this round included, as Harness hands it to the combat brain ([Overview §4](/en/arch/harness/#sec-4)). An entry is `{uid, id, turns: [{round, intents}]}`. The combat net reads it, with the round, to learn each monster's move order from data ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)).
 
@@ -115,9 +114,10 @@ Card prompts outside combat get no `run_view`.
 | `DispatcherTests.RefusesAnIllegalPick` | an illegal combat answer throws |
 | `DispatcherTests.HasNoFallbackForAnUncoveredSurface` | an uncovered surface throws |
 | `DispatcherTests.RefusesNodeCheckpointsInNoSL` | node checkpoints are refused in NoSL |
-| `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | the clone keeps the elite gauntlet's rule |
+| `DispatcherTests.AnSLNodesCloneIsItsCheckpointAndTheDecisionsSince` | an SL node's clone is its checkpoint and the decisions taken since |
+| `DispatcherTests.AnswersThePromptOfTheActionWithTheBrainsPickAndHidesItFromTheHost`, `APickThePromptDoesNotAcceptGoesToThePolicy` | the first prompt of the action just chosen gets the search's answer, which the host never sees; an answer the prompt does not accept leaves it to the prompt policy |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`, `AWorkerStuckTwiceFailsTheCall` | the pool's one retry |
-| `GateTests` (10), `EvalReportTests` (2) | evaluation's gate and reports ([Evaluation: gates §11](/en/arch/evaluation/gates/#sec-11)) |
+| `GateTests` (10), `EvalReportTests` (4) | evaluation's gate and reports ([Evaluation: gates §11](/en/arch/evaluation/gates/#sec-11)) |
 
 **Planned tests:**
 

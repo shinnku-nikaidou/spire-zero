@@ -9,7 +9,7 @@ sidebar:
 
 ## 1. 冠军文件
 
-`eval/CHARACTER/champions/ENV.json`（`nosl.json`、`sl.json`）为每个角色、每种环境存一个冠军，格式是 `ChampionFile` 记录（`Harness/Gate.cs:116-117`）。SL 冠军的文件：
+`eval/CHARACTER/champions/ENV.json`（`nosl.json`、`sl.json`）为每个角色、每种环境存一个冠军，格式是 `ChampionFile` 记录（`Harness/Gate.cs:114-115`）。SL 冠军的文件：
 
 ```json
 {
@@ -38,11 +38,11 @@ sidebar:
 
 **谁读取它**。
 
-- `run`、`brain`、`afterstates` 和 `fork` 接受 `--champion FILE`，打它指明的冠军（`SimWorker/Commands/Args.cs:172-201`，[模拟器：参考 §3](/arch/simulator/reference/#sec-3)）。文件里的选项排在命令行给出的选项之后，所以给出的优先；命令没有的选项会被跳过（`brain` 没有 `--env`：每个宿主自己指明）；给出的 `--policy` 若与文件里的不同，就保留它自己的预算。
+- `run` 和 `brain` 接受 `--champion FILE`，打它指明的冠军（`SimWorker/Commands/Args.cs:164-192`，[模拟器：参考 §3](/arch/simulator/reference/#sec-3)）。文件里的选项排在命令行给出的选项之后，所以给出的优先；命令没有的选项会被跳过（`brain` 没有 `--env`：每个宿主自己指明）；给出的 `--policy` 若与文件里的不同，就保留它自己的预算。
 - `gate --champion FILE` 是要击败的冠军：它读取文件的 `env` 和 `report`（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。
 - `leaderboard` 在文件所属环境的榜上，标出每个文件指明的报告（[指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9)）。
 
-**由 `--promote` 写入，或手工写入**。`gate --promote` 写入每一个字段，选项按挑战者的选项生成（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:83-108`）：对 SL 规划器来说是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。胜局门槛什么也不写，所以由它晋级的网络靠手工写入（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)），SL 文件写的是 `"effort": "medium"`，打的是同样的预算（[SL 规划器：预算 §1](/arch/sl-planner/budget/#sec-1)）。重定基线只修改 `report`（[晋级门槛 §9](/arch/evaluation/gates/#sec-9)）。
+**由 `--promote` 写入，或手工写入**。`gate --promote` 写入每一个字段，选项按挑战者的选项生成（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:75-91`）：对 SL 规划器来说是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。胜局门槛什么也不写，所以由它晋级的网络靠手工写入（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)），SL 文件写的是 `"effort": "medium"`，打的是同样的预算（[SL 规划器：预算 §1](/arch/sl-planner/budget/#sec-1)）。重定基线只修改 `report`（[晋级门槛 §9](/arch/evaluation/gates/#sec-9)）。
 
 **两个文件**。两个文件都指明同样的两个网络，`weights/all/v9-0.json`（V）和 `weights/all/c9-0.json`（战斗网络），在进阶 10 上。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。两者指明的 `report` 是这个 SL 冠军自己的报告，在 `promotion-1-200` 上以 A10 打了 200 局。由于它是 SL 报告，针对 NoSL 文件的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）；这两个网络都没有在 NoSL 下过过门槛。
 

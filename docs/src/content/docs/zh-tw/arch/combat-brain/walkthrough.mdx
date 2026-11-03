@@ -39,7 +39,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 2. 詞元
 
-`encode.tokens`（`learn/combat/encode.py:118-161`）把畫面丟掉，只留下 id 和縮放後的數字。
+`encode.tokens`（`learn/combat/encode.py:145-186`）把畫面丟掉，只留下 id 和縮放後的數字。
 
 **玩家**是 8 個數：<code>{v(walk.tokens.player.slice(0, 4))}</code> 等等。完整的是：
 
@@ -83,7 +83,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 4. 一張牌，然後是牌堆
 
-這張牌的向量是 `Net.encode`（`learn/combat/net.py:211-282`）開頭的幾行。看棄牌堆裡的 **{walk.card.id}**。它在牌表裡的項是 {walk.card.entry}，升級次數 {walk.card.up}；費用 1 讀作 {walk.card.cost}，傷害 6 讀作 {walk.card.damage}。
+這張牌的向量是 `Net.encode`（`learn/combat/net.py:229-308`）開頭的幾行。看棄牌堆裡的 **{walk.card.id}**。它在牌表裡的項是 {walk.card.entry}，升級次數 {walk.card.up}；費用 1 讀作 {walk.card.cost}，傷害 6 讀作 {walk.card.damage}。
 
 | 部分 | 向量 |
 |---|---|
@@ -178,7 +178,7 @@ $\varphi$ 接著把 $x$ 映射到 128 個數，<code>{v(walk.card.phi.first)}</c
 - 底部：一場戰鬥回的血不可能超過缺少的生命值。{walk.state.max_hp} 點裡缺 {walk.state.max_hp - walk.state.hp} 點，比例是 0.494，超過最低分桶的 {walk.head.open_from}，所以這裡沒有分桶關閉。
 - 頂部：一場勝利不可能失去全部持有的生命值，所以從 {walk.head.open_to} 起往上的分桶都關閉。
 
-於是 **50 個分桶中有 {walk.head.open} 個開放**。其他的 logit 是 $-10^4$（`Net.reachable`，`learn/combat/net.py:203-209`），softmax 給它們恰好 0。
+於是 **50 個分桶中有 {walk.head.open} 個開放**。其他的 logit 是 $-10^4$（`Net.reachable`，`learn/combat/net.py:221-227`），softmax 給它們恰好 0。
 
 對其餘的做 softmax，就給出機率。死亡是 {walk.head.death}。最可能的分桶：
 
@@ -199,7 +199,7 @@ $\varphi$ 接著把 $x$ 映射到 128 個數，<code>{v(walk.card.phi.first)}</c
 
 ## 13. 搜尋讀到的數字
 
-`CombatNet.Value`（`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-86`）給 51 個機率定價（[葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）：
+`CombatNet.Value`（`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-85`）給 51 個機率定價（[葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）：
 
 $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})

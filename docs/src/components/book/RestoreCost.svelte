@@ -1,6 +1,6 @@
 <script lang="ts">
   // What a restore costs by how deep it replays (docs: simulator/combat §2), from the measured models: a NoSL combat
-  // world (forkbench, 2026-10-26) and the SL world on the node's clone (2026-10-28).
+  // world (2026-10-26) and the SL world on the node's clone (2026-10-28).
   import { scaleLinear } from 'd3';
   import type { Lang } from '../v/names.ts';
   import { fmt } from '../v/i18n.ts';
@@ -20,7 +20,7 @@
   const x = scaleLinear().domain([0, MAX]).range([M.l, W - M.r]);
   const y = scaleLinear().domain([0, cost(SL, MAX)]).range([H - M.b, M.t]);
   const line = (m: { base: number; per: number }) => `M${x(0)},${y(cost(m, 0))}L${x(MAX)},${y(cost(m, MAX))}`;
-  const ROOT = 15.8; // forkbench's mean root depth
+  const ROOT = 15.8; // the measured mean root depth
 </script>
 
 <div class="vfig">
@@ -55,9 +55,9 @@
   </div>
   <p class="v-caption">
     {say(lang, w(
-      'Measured models: a NoSL combat world restores in 0.28 ms + 0.073 ms per replayed action (forkbench, 2026-10-26); the SL world loads the node’s checkpoint in about 0.5 ms and replays about 0.1 ms per step since the node’s entry (2026-10-28), so late in a long fight it takes 10–20 ms.',
-      '实测模型：NoSL 战斗世界还原要 0.28 ms + 每个重播动作 0.073 ms（forkbench，2026-10-26）；SL 世界载入节点的检查点约 0.5 ms，再按节点开始以来的每一步约 0.1 ms 重播（2026-10-28），所以长战斗的后段要 10–20 ms。',
-      '實測模型：NoSL 戰鬥世界還原要 0.28 ms + 每個重播動作 0.073 ms（forkbench，2026-10-26）；SL 世界載入節點的檢查點約 0.5 ms，再按節點開始以來的每一步約 0.1 ms 重播（2026-10-28），所以長戰鬥的後段要 10–20 ms。',
+      'Measured models: a NoSL combat world restores in 0.28 ms + 0.073 ms per replayed action (2026-10-26); the SL world loads the node’s checkpoint in about 0.5 ms and replays about 0.1 ms per step since the node’s entry (2026-10-28), so late in a long fight it takes 10–20 ms.',
+      '实测模型：NoSL 战斗世界还原要 0.28 ms + 每个重播动作 0.073 ms（2026-10-26）；SL 世界载入节点的检查点约 0.5 ms，再按节点开始以来的每一步约 0.1 ms 重播（2026-10-28），所以长战斗的后段要 10–20 ms。',
+      '實測模型：NoSL 戰鬥世界還原要 0.28 ms + 每個重播動作 0.073 ms（2026-10-26）；SL 世界載入節點的檢查點約 0.5 ms，再按節點開始以來的每一步約 0.1 ms 重播（2026-10-28），所以長戰鬥的後段要 10–20 ms。',
     ))}
   </p>
 </div>

@@ -98,8 +98,6 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | SPSA | 同时扰动随机逼近（simultaneous perturbation stochastic approximation）：把许多参数一起扰动，一次调好它们；本项目不使用它（[学习：循环 §6](/arch/learning/loop/#sec-6)）。 |
 | 特权信息（privileged information） | 只在训练中用来降低噪声的隐藏状态；永远不是部署后策略的输入。 |
 | 探索（exploration）、均匀抽取（even draws）、ε | 自我对弈的探索（`run --explore ε`）：一个宏观决策以概率 ε 在它的选项中均匀抽取，不管 V 怎么说。 |
-| 精英连战（elite gauntlet）、进度（progress） | 一种对局规则（`run --gauntlet`）：普通怪物战斗一开始就判赢，精英和 Boss 真打；进度是到达的层数，加上这一局死去的那场战斗里打掉的敌人生命比例（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。 |
-| Boss 连战试点（boss gauntlet pilot）、门口状态（door state） | 每场战斗一开始就判赢的对局（`run --auto-win`），以便一下子走到每个 Boss 的门口；门口状态是一局在那里的配置（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。 |
 
 ## 6. 评估
 
@@ -128,5 +126,5 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | `data/silent/{sl,nosl}/…` | 数据目录里的自我对弈和评估文件夹，在存储主机上，不在 git 里。 |
 | `tmp/build.sh REV`、`sim.sh` | 本地启动器，构建一个固定的提交并运行它（[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）。 |
 | `run`、`brain`、`serve`、`clones`、`gate`、`report`、`leaderboard` | SimWorker 命令（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。 |
-| `v.train`、`combat.train`、`gauntlet.py` | 训练 V 和战斗网络的 Python，以及连战的报告和门槛（[学习：参考 §9](/arch/learning/reference/#sec-9)）。 |
+| `v.train`、`combat.train`、`gate.py` | 训练 V 和战斗网络的 Python，以及胜局门槛的报告和判定（[学习：参考 §9](/arch/learning/reference/#sec-9)）。 |
 | `0SSL7NS01MU6` | 本书例子那一局的种子，在第 48 层赢下（[游戏 §1](/arch/game/#sec-1)）。 |

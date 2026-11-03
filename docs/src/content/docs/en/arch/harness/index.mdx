@@ -61,7 +61,7 @@ sequenceDiagram
 ```
 
 1. **The host asks.** Over the wire, the host sends a `decision` message: the observation, its hash and the legal actions ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). `BrainServer` checks that it belongs to a run, that its id is above the last one, and that the hash is the observation's, then hands it to the run's `Dispatcher` as a combat, card-prompt or macro decision ([§5](#sec-5)). In process, the simulator asks the `Dispatcher` directly.
-2. **Harness notes it.** A combat decision's observation joins the record of enemy moves (`MoveRecord.Witness`); a macro decision ends the combat's record ([§4](#sec-4)). The decision gets its number in the run, its brain's count goes up, and its seed is drawn (`Dispatcher.cs:205-210`).
+2. **Harness notes it.** A combat decision's observation joins the record of enemy moves (`MoveRecord.Witness`); a macro decision ends the combat's record ([§4](#sec-4)). The decision gets its number in the run, its brain's count goes up, and its seed is drawn (`Dispatcher.cs:189-194`).
 3. **One brain decides.** The route for the surface gets the decision, the seed, in SL the node's clone, and the combat's moves so far. A searching brain splits its search into worker requests and merges the replies, which come back in request order ([Routing, budgets and seeds §2](/en/arch/harness/routing/#sec-2)).
 4. **Harness checks and logs.** An answer that is not legal throws. The brain's name, plan and candidates become the decision's note (`Dispatcher.Last`), and, when logging, one line of the decision log.
 5. **The host gets a recommendation**: the action, the brain, its plan and candidates, with the request's id and hash echoed ([Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)).
@@ -79,7 +79,7 @@ sequenceDiagram
 | the record of enemy moves (`History`) | the combat brain's leaves, and the worlds' monster move logs ([§4](#sec-4)) | at a macro decision, or when the round goes back |
 | the SL node: checkpoint and trace | the node's clone, handed to the combat brain and, with `--afterstates clone`, to the macro side | at each node checkpoint |
 | the decision log | the run's lines, in memory until the run ends | never in a run |
-| the routes' own state | PIMC's followed plan (`TurnPlan`) and the SL planner's route (`SlRoute`), one per run | never: not at a combat's end, not at a macro decision |
+| the routes' own state | PIMC's followed cycle (`TurnPlan`) and the SL planner's route (`SlRoute`), one per run | never: not at a combat's end, not at a macro decision |
 
 ## 4. The public record
 
@@ -97,7 +97,7 @@ sequenceDiagram
 
 - `Checkpoint` refuses a checkpoint in NoSL, and one whose node index does not rise; it starts the node's trace over.
 - `Act` refuses an action in NoSL, and one that is not for the current node or whose sequence number is not the trace's length; it adds the action to the trace.
-- At a decision that needs it, the node's clone is the checkpoint's save, a copy of the trace, and the elite gauntlet's rule if the run plays by it (`NodeClone`). An SL decision that needs a clone before any checkpoint throws. That is every SL combat decision, and with `--afterstates clone` every macro decision and every card prompt outside combat ([Routing, budgets and seeds §3](/en/arch/harness/routing/#sec-3)).
+- At a decision that needs it, the node's clone is the checkpoint's save and a copy of the trace (`NodeClone`). An SL decision that needs a clone before any checkpoint throws. That is every SL combat decision, and with `--afterstates clone` every macro decision and every card prompt outside combat ([Routing, budgets and seeds §3](/en/arch/harness/routing/#sec-3)).
 
 **Planned: the rest of the record** <Badge text="planned" variant="caution" />. A NoSL belief about more than the monsters' moves needs more of what was public:
 
@@ -150,14 +150,14 @@ public sealed class PublicRecord
 | `Dispatcher.cs` | `CombatRoute`, `Route<T>`, `DecisionEntry`, `DecisionNote`, `Dispatcher` | one run's routing, seeds, checks, SL node and log ([Routing, budgets and seeds](/en/arch/harness/routing/), [The decision log](/en/arch/harness/decision-log/)) |
 | `BrainServer.cs` | `BrainServer` | the brain's end of the wire ([§5](#sec-5)) |
 | `WorkerPool.cs` | `WorkerPool` | the search's worker processes ([Simulator: the worker pool](/en/arch/simulator/pool/)) |
-| `PooledPimc.cs` | `PooledPimc` | PIMC with its worlds searched in the pool, NoSL or SL |
+| `PooledPimc.cs` | `PooledPimc` | PIMC in NoSL, with its worlds searched in the pool |
 | `PooledPlanner.cs` | `PooledPlanner` | the SL planner with its turns searched in the pool |
 | `PooledClone.cs` | `PooledClone` | the node's clone for the macro side, its probes played in the pool |
 | `RunRecords.cs` | `RunConfig`, `RunRecord`, `CombatEntry`, `CombatEnd` | the run record ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)) |
 | `Reports.cs` | `Rate`, `BossEntry`, `Metrics`, `EvalReport`, `Leaderboard` | reports and the leaderboard ([Evaluation: metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)) |
 | `Gate.cs` | `Gate`, `ChampionFile` | the paired gate and champion files ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)) |
 
-**`Dispatcher`** (`Dispatcher.cs:80-225`), made with the run id, the environment, the four routes, whether to log, and, for `--afterstates clone`, how to open the node's clone for the macro side:
+**`Dispatcher`** (`Dispatcher.cs:55-209`), made with the run id, the environment, the four routes, whether to log, and, for `--afterstates clone`, how to open the node's clone for the macro side:
 
 | member | what |
 |---|---|
@@ -167,7 +167,7 @@ public sealed class PublicRecord
 | `Choose(MacroDecision)` → action | a decision outside combat; an uncovered surface throws |
 | `Checkpoint(NodeCheckpoint)`, `Act(NodeAction)` | SL: the node's checkpoint and each decision taken in it ([§4](#sec-4)) |
 | `Log` | the run's decision log so far, when logging |
-| `Env`, `Last`, `Brains`, `Replans`, `History` | the environment, and the state of [§3](#sec-3) |
+| `Last`, `Brains`, `Replans`, `History` | the state of [§3](#sec-3) |
 | `Champion` | the run's brains as reports name them: `combat B[ budget], combat prompts B, macro B, macro prompts B` ([Routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) |
 
 **What Harness calls in Brain** (`Brain/Decisions.cs`, `Brain/Combat/`):
@@ -176,7 +176,7 @@ public sealed class PublicRecord
 |---|---|
 | `ICombatPolicy`, `IChoicePolicy`, `IMacroPolicy` | a policy for each kind of decision; `IChoicePolicy` and `IMacroPolicy` also say whether their last answer was explored, and `IMacroPolicy` what it plans after its answer |
 | `CombatDecision`, `ChoiceDecision`, `MacroDecision` | a decision: its legal actions (or its prompt), its observation made on demand, and for the macro side the node's clone if one is open (`IMacroClone`) |
-| `CombatDecisionResult` | a combat brain's answer: the first action, the plan after it, the candidates, the plan's observation hashes, explored, replanned |
+| `CombatDecisionResult` | a combat brain's answer: the first action, the plan after it, the candidates, the plan's observation hashes, replanned, and whether its line repeats a cycle |
 | `Budget`, `TurnPlan`, `SlRoute`, `MoveRecord` | the search budget, following a plan, the planner's route, the record of enemy moves |
 
 ## 7. This chapter

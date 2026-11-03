@@ -31,7 +31,7 @@ import StrategyFusion from '../../../../../components/book/StrategyFusion.svelte
 
 NoSL 的搜尋看不到隱藏狀態，但可以猜。**確定化**就是把玩家無法知道的一切，換成一個與玩家所見一切都一致的具體樣本。在一個樣本上，遊戲又成了完全資訊的遊戲，搜尋可以像對待其他任何模擬一樣去打它。
 
-NoSL 世界一開始是一場被建構成恰好顯示這個觀測的戰鬥（`CombatBuilder.Setup`，[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。接著 `Determinize(seed)` 用種子抽取隱藏的部分（`Simulation/CombatSession.cs:237-283`）：
+NoSL 世界一開始是一場被建構成恰好顯示這個觀測的戰鬥（`CombatBuilder.Setup`，[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。接著 `Determinize(seed)` 用種子抽取隱藏的部分（`Simulation/CombatSession.cs:231-277`）：
 
 - 這一局、玩家和每個怪物的每條帶種子的亂數流都重新播種：洗牌、生成的牌、隨機目標、怪物 AI；
 - 抽牌堆先排成只取決於玩家所見內容的順序（按卡牌鍵排序），再用種子洗牌；
@@ -59,7 +59,7 @@ NoSL 世界一開始是一場被建構成恰好顯示這個觀測的戰鬥（`Co
 
 <StrategyFusion client:visible lang="zh-TW" />
 
-這在真實戰鬥中代價多大，由融合面板來測量：取決策日誌中的 NoSL 戰鬥決策，把 PIMC 的估值，和在各世界還無法區分之處把路線合併後的估值相比較（[NoSL PIMC：搜尋 §4](/zh-tw/arch/pimc/search/#sec-4)）。如果剩下的誤差被證明確實重要，替代方案是 ISMCTS（資訊集蒙地卡羅樹搜尋），它在所有世界上搜尋同一棵樹，因此在玩家看來相同的世界之間共用同一個選擇。
+這在真實戰鬥中代價多大，要在決策日誌中的 NoSL 戰鬥決策上量測：把 PIMC 的估值，和在各世界還無法區分之處把路線合併後的估值相比較（[NoSL PIMC：搜尋 §4](/zh-tw/arch/pimc/search/#sec-4)）。如果剩下的誤差被證明確實重要，替代方案是 ISMCTS（資訊集蒙地卡羅樹搜尋），它在所有世界上搜尋同一棵樹，因此在玩家看來相同的世界之間共用同一個選擇。
 
 ## 4. SL：一個精確的世界
 
@@ -73,7 +73,7 @@ SL 的世界是節點的複本：真實戰鬥的一份精確複製，帶著真�
 
 ## 5. 一個宏觀大腦，兩種戰鬥演算法
 
-所以兩種環境提出了兩個不同的戰鬥問題：NoSL 必須選出在它無法區分的各個世界上平均最好的動作，SL 則必須在一個已知的世界裡找出最好的路線。兩者各有自己的演算法。冠軍的選項按環境選擇演算法：一局用 `run --policy`（SL 規劃器 `plan` 在 SL 以外會被拒絕）；在 `brain` 指令裡，NoSL 宿主用 `--policy`，SL 宿主用 `--sl-policy`，預設為 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。接著 Harness 在每個戰鬥決策都把對應的輸入交給戰鬥路由：SL 下是節點的複本，NoSL 下只有觀測，工作行程再據此建構它們的世界（`Harness/Dispatcher.cs:132`）。在單一行程裡，例如戰鬥面板中，同樣的兩種演算法在同一個介面 `ICombatBrain` 後面執行，使用來自 `IWorldSource` 的世界（[協定：世界與工作行程訊息 §1](/zh-tw/arch/protocol/worlds/#sec-1)）：
+所以兩種環境提出了兩個不同的戰鬥問題：NoSL 必須選出在它無法區分的各個世界上平均最好的動作，SL 則必須在一個已知的世界裡找出最好的路線。兩者各有自己的演算法。冠軍的選項按環境選擇演算法：一局用 `run --policy`（SL 規劃器 `plan` 在 SL 以外會被拒絕，PIMC `pimc` 在 NoSL 以外會被拒絕）；在 `brain` 指令裡，NoSL 宿主用 `--policy`，SL 宿主用 `--sl-policy`，預設為 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。接著 Harness 在每個戰鬥決策都把對應的輸入交給戰鬥路由：SL 下是節點的複本，NoSL 下只有觀測，工作行程再據此建構它們的世界（`Harness/Dispatcher.cs:112`）。在單一行程裡，例如 `selftest` 中，PIMC 搜尋一個 `IWorldSource` 提供的世界（`PimcBrain.Decide`），規劃器在它唯一的世界裡規劃（`SlPlanner.Plan`）（[協定：世界與工作行程訊息 §1](/zh-tw/arch/protocol/worlds/#sec-1)）：
 
 ```mermaid
 flowchart LR
@@ -102,8 +102,6 @@ flowchart LR
 
 兩種搜尋的葉節點都只根據公開資訊估值：觀測和怪物至今的意圖紀錄（[戰鬥大腦：葉節點 §1](/zh-tw/arch/combat-brain/leaf/#sec-1)）。所以真實的亂數流不可能經由估值洩漏進來。宏觀大腦和 V 也從不讀取環境；在 SL 下使用 `--afterstates clone` 時，Harness 把節點的複本交給宏觀這一側，所以 L0 的搜尋不同，大腦卻還是同一個。
 
-在複本上跑的 PIMC（`--policy pimc` 搭配 `--env SL`）也存在：它只搜尋唯一世界的當前回合，每個第一個動作送出一個請求（[模擬器：工作行程池 §3](/zh-tw/arch/simulator/pool/#sec-3)），並保留作為 SL 規劃器的基線。
-
 ## 6. 兩種環境共用一個 V
 
 原則上，SL 對戰鬥之外的狀態也會有不同的估值。從同一個狀態出發，SL 更常獲勝，因為它在之後的每個節點都打得更好，所以為 SL 做的價值會願意承擔更多風險：更多菁英、更多結果波動大的事件和卡牌。這一點被刻意忽略。一個 V 服務兩種環境，它用戰鬥由 SL 戰鬥大腦來打的對局訓練（[宏觀大腦：自我對弈 §2](/zh-tw/arch/macro-brain/selfplay/#sec-2)）。
@@ -112,7 +110,7 @@ flowchart LR
 
 ## 7. 排行榜、晉級門檻與解釋
 
-- **冠軍、晉級門檻和排行榜仍然按環境分開**。每種環境都有自己的冠軍檔案，晉級門檻只把挑戰者和它自己環境的冠軍配對，並拒絕來自另一種環境的對局（`Harness/Gate.cs:44-52`）；`gate --promote` 只改寫給定的那個檔案（[評估：晉級門檻 §8](/zh-tw/arch/evaluation/gates/#sec-8)）。共用一個 V 並不改變這一點：新的 V 只有經由某個環境的檔案，才會進入那個環境的冠軍。兩個檔案都寫著同一個 V，v9-0，和同一個戰鬥網路，c9-0。在它們有 NoSL 報告之前，NoSL 檔案寫的是 SL 報告，所以 NoSL 晉級門檻會拒絕與它配對（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
+- **冠軍、晉級門檻和排行榜仍然按環境分開**。每種環境都有自己的冠軍檔案，晉級門檻只把挑戰者和它自己環境的冠軍配對，並拒絕來自另一種環境的對局（`Harness/Gate.cs:44-50`）；`gate --promote` 只改寫給定的那個檔案（[評估：晉級門檻 §8](/zh-tw/arch/evaluation/gates/#sec-8)）。共用一個 V 並不改變這一點：新的 V 只有經由某個環境的檔案，才會進入那個環境的冠軍。兩個檔案都寫著同一個 V，v9-0，和同一個戰鬥網路，c9-0。在它們有 NoSL 報告之前，NoSL 檔案寫的是 SL 報告，所以 NoSL 晉級門檻會拒絕與它配對（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
 - **同一組種子餵給兩個排行榜**，每種環境一張表，從不放在一起排名。在它們下方，排行榜為每個在兩種環境下都有同名報告的冠軍列出 SL − NoSL 的差值（[環境 §3](/zh-tw/arch/environments/#sec-3)）。
 - **解釋會有所不同**。推薦目前還沒有事實；有了之後，NoSL 的事實會是一個機率或期望值（「平均擋下 6 點生命值」），而 SL 的事實可能是一個確切結果（「先打 A 再打 B，你就會抽到 X」）（[輸出 §5](/zh-tw/arch/output/#sec-5)）。
 
@@ -120,7 +118,7 @@ flowchart LR
 
 | 子系統 | NoSL | SL 額外的部分 |
 |---|---|---|
-| 協定 | 觀測、動作、選牌提示、推薦、世界 API、NoSL 工作行程請求 | `node_checkpoint` 和 `node_action`；複本型別 `NodeClone`；SL 工作行程請求（`SlWorldRequest`、`SlTurnRequest`、`SlMacroRequest`） |
+| 協定 | 觀測、動作、選牌提示、推薦、世界 API、NoSL 工作行程請求 | `node_checkpoint` 和 `node_action`；複本型別 `NodeClone`；SL 工作行程請求（`SlTurnRequest`、`SlMacroRequest`） |
 | GameBridge | 白名單內的觀測、合法動作、啟動動作 | 節點檢查點（`Checkpoint.Take`、`Open`、`RestoreRelics`）；SL 的換位鍵（`HiddenState.Full`） |
 | 模擬器 | 從觀測建構戰鬥、確定化 | 節點檢查點（兩種環境下都會取）、載入存檔並重播、封存（`AtHorizon`） |
 | Mod | 觀測、詢問、顯示答案（輔助；從不執行） | 節點的檢查點和各步，在兩種環境下都記錄，只在 SL 下送出 |

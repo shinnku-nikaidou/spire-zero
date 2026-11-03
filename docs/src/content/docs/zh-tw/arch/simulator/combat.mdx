@@ -28,9 +28,9 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 
 有 `From` 時，接著讓這場戰鬥顯示那份觀測（[§5](#sec-5)），`History` 則給它的怪物之前出過的招式。
 
-這**不是**一局進入戰鬥的方式：它跳過了擲出 `?` 會變成什麼，也跳過了這一局的房間生成（`GenerateRooms`）<Badge text="已核實" variant="success" />。對單獨的一場戰鬥（戰鬥測試集、基準測試、搜尋世界）這沒有問題，對整局則是錯的，整局以遊戲開局的方式開始（[整局 §2](/zh-tw/arch/simulator/runs/#sec-2)）。
+這**不是**一局進入戰鬥的方式：它跳過了擲出 `?` 會變成什麼，也跳過了這一局的房間生成（`GenerateRooms`）<Badge text="已核實" variant="success" />。對單獨的一場戰鬥（基準測試、`selftest`、搜尋世界）這沒有問題，對整局則是錯的，整局以遊戲開局的方式開始（[整局 §2](/zh-tw/arch/simulator/runs/#sec-2)）。
 
-**遊玩**。`Execute(action)` 透過 `CombatActions.Start` 發起一個動作，也就是 UI 所用的同一批入口（[GameBridge：各決策介面的動作 §1](/zh-tw/arch/gamebridge/actions/#sec-1)），然後穩定下來：一直推動 Pump，直到遊戲再次等待玩家（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)）。結束回合之後，它等到之後的某個回合；戰鬥結束之後，則等到佇列為空且執行器閒置（`CombatSession.cs:223-230`、333-341）。由策略打完的戰鬥（`PlayOut`，推演和基準測試都這樣做）在 50 回合或 1,000 個動作時停止；這時它的結果是 `Truncated`，戰鬥結束時仍有敵人活著也是如此（`CombatSession.cs:79-80`、192-200）。
+**遊玩**。`Execute(action)` 透過 `CombatActions.Start` 發起一個動作，也就是 UI 所用的同一批入口（[GameBridge：各決策介面的動作 §1](/zh-tw/arch/gamebridge/actions/#sec-1)），然後穩定下來：一直推動 Pump，直到遊戲再次等待玩家（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)）。結束回合之後，它等到之後的某個回合；戰鬥結束之後，則等到佇列為空且執行器閒置（`CombatSession.cs:217-224`、333-341）。由策略打完的戰鬥（`PlayOut`，推演和基準測試都這樣做）在 50 回合或 1,000 個動作時停止；這時它的結果是 `Truncated`，戰鬥結束時仍有敵人活著也是如此（`CombatSession.cs:73-74`、192-200）。
 
 **uid**。動作用 **uid** 指稱卡牌和生物，uid 是取自遊戲的穩定 id，而不是在清單中的位置：手牌用它的 `NetCombatCardDb` id，生物用它的 `CombatId`。`play:7:2` 表示把 7 號牌打向 2 號生物。遊戲以固定的順序給牌編號，所以重播會保留同樣的編號（[協定：觀測與動作 §4](/zh-tw/arch/protocol/observation/#sec-4)）。
 
@@ -42,7 +42,7 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 - `Choice`：對選牌提示的回答，用遊戲自己的選項索引表示；
 - `Determinize(seed)`：一個確定化步驟（[§3](#sec-3)），文字形式為 `determinize:SEED`。
 
-**還原**一個快照，就是從它的設定開一場新戰鬥，再重播軌跡（`CombatSession.cs:110-131`）。同樣的設定和軌跡總是給出同樣的狀態，因為每次隨機抽取都來自帶種子的亂數流，而 Pump 以同樣的順序執行每個後續。唯一用時鐘做種子的產生器 `Rng.Chaotic` 只供給外觀 <Badge text="已核實" variant="success" />：怪物造型、螢幕震動、假商人的對白、審判（Trial）事件的參賽者編號、美味餅乾（YummyCookie）的圖示、加牌動畫的時間點、茂密植被（DenseVegetation）的視覺偏移。另有三條後備路徑也會用到它，模擬器一條都不會碰到：並非場上實例的怪物模型（場上的怪物都有帶種子的流）、沒有種子就開始的一局（模擬器總會傳入種子），以及在地化文字的隨機變體（在地化回傳的是鍵名，[無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)）。
+**還原**一個快照，就是從它的設定開一場新戰鬥，再重播軌跡（`CombatSession.cs:104-125`）。同樣的設定和軌跡總是給出同樣的狀態，因為每次隨機抽取都來自帶種子的亂數流，而 Pump 以同樣的順序執行每個後續。唯一用時鐘做種子的產生器 `Rng.Chaotic` 只供給外觀 <Badge text="已核實" variant="success" />：怪物造型、螢幕震動、假商人的對白、審判（Trial）事件的參賽者編號、美味餅乾（YummyCookie）的圖示、加牌動畫的時間點、茂密植被（DenseVegetation）的視覺偏移。另有三條後備路徑也會用到它，模擬器一條都不會碰到：並非場上實例的怪物模型（場上的怪物都有帶種子的流）、沒有種子就開始的一局（模擬器總會傳入種子），以及在地化文字的隨機變體（在地化回傳的是鍵名，[無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)）。
 
 重播花的時間與它的長度成正比。2026-10-26 測得：一次還原花 0.28 ms，外加每個重播動作 0.073 ms。SL 世界載入的是節點的檢查點，而不是開一場新戰鬥，它約為 0.5 ms，外加自進入節點以來每一步 0.1 ms（[世界與 SL 複本 §7](/zh-tw/arch/simulator/worlds/#sec-7)）。下圖把這兩種成本模型並排；拖動滑桿，可以還原到戰鬥中更深的位置。
 
@@ -52,14 +52,14 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 
 ## 3. 確定化
 
-`Determinize(seed)` 把玩家不可能知道的一切換成由 `seed` 抽出的樣本，玩家看得到的東西則保持不變（`CombatSession.cs:237-283`）。NoSL 的搜尋就是這樣猜測隱藏狀態的；[環境：世界 §2](/zh-tw/arch/environments/worlds/#sec-2) 說明了原因，並附有一張以真實抽牌堆為例的圖。它做的事：
+`Determinize(seed)` 把玩家不可能知道的一切換成由 `seed` 抽出的樣本，玩家看得到的東西則保持不變（`CombatSession.cs:231-277`）。NoSL 的搜尋就是這樣猜測隱藏狀態的；[環境：世界 §2](/zh-tw/arch/environments/worlds/#sec-2) 說明了原因，並附有一張以真實抽牌堆為例的圖。它做的事：
 
 - 為每條整局亂數流（`RunRngType`）、每條玩家亂數流（`PlayerRngType`）以及每個場上怪物的亂數流重新播種，盟友和寵物也包括在內；
 - 重排抽牌堆：先按卡牌鍵排序（這個順序只取決於玩家看得到的東西），再用樣本做一次 Fisher–Yates 洗牌；
 - 重新給手牌以外的牌編號（`CombatBuilder.NumberCards`）：遊戲按抽牌順序給牌編號，舊的編號會洩漏真實的順序；
 - 對每個敵人，在顯示相同意圖的招式中均勻地重新抽取它排定的招式，並把它招式日誌的最後一項（`StateLog[^1]`）改寫成與之一致。
 
-種子只來自呼叫方，絕不來自這一局。尚未建模的：玩家知道位置的抽牌堆卡牌（例如剛放到頂上的那張），以及怪物的歷史如何讓某些招式比其他招式更可能出現（`CombatSession.cs:248-249`）。
+種子只來自呼叫方，絕不來自這一局。尚未建模的：玩家知道位置的抽牌堆卡牌（例如剛放到頂上的那張），以及怪物的歷史如何讓某些招式比其他招式更可能出現（`CombatSession.cs:242-243`）。
 
 ## 4. 隱藏狀態與換位
 
@@ -69,7 +69,7 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 
 在 NoSL 下，搜尋不可以從真實的戰鬥出發：那會把真實的隱藏狀態帶進搜尋。它從一場**顯示這份觀測**、除此之外別無其他的戰鬥出發。`CombatBuilder.Setup(obs, seed, history)`（`Simulation/CombatBuilder.cs:57-105`）建構這樣一場戰鬥：
 
-1. 用觀測裡的牌組、遺物和生命值**開始**觀測中的遭遇。開戰時的效果可能殺死生命值很低的玩家（王室毒藥在第一回合開始時造成 4 點傷害，而每次建構都從第一回合開始），死去的玩家的遺物、能力和卡牌就不再起作用。這樣的戰鬥會以滿生命值重新開始（`CombatSession.cs:164-168`），下一步再照常設成觀測到的生命值。按開戰時的生命值記下一個旗標的遺物（紅頭骨的力量）這時可能不對，只有這種罕見的開局才有這個風險。
+1. 用觀測裡的牌組、遺物和生命值**開始**觀測中的遭遇。開戰時的效果可能殺死生命值很低的玩家（王室毒藥在第一回合開始時造成 4 點傷害，而每次建構都從第一回合開始），死去的玩家的遺物、能力和卡牌就不再起作用。這樣的戰鬥會以滿生命值重新開始（`CombatSession.cs:158-162`），下一步再照常設成觀測到的生命值。按開戰時的生命值記下一個旗標的遺物（紅頭骨的力量）這時可能不對，只有這種罕見的開局才有這個風險。
 2. **`Apply`** 覆寫一切可見的東西：回合數；敵人（新增、移除、重新排序）；生命值和格擋；能量、最大能量和星辰；金幣；藥水；充能球欄位和充能球，連同它們顯示的數值；遺物計數器（顯示的或隱藏的）、狀態、熔化的和用盡的遺物；遺物保存的牌（佩爾之牙的牌，它的計數就是牌數），用標準副本，因為提示框不顯示升級，而且這些牌要到戰鬥之後才回來；能力，圖示顯示另一個數字時連同其層數，以及能力保存的牌；四個牌堆，一張一張地，連同每張牌的修改；意圖。
 3. **`Resample(StableHash(seed))`** 抽取隱藏狀態，和確定化的做法一樣。
 4. **`BuildDifferences`** 按 JSON 路徑比較輸入的觀測和重建後戰鬥的觀測。為空就表示完全一致。NoSL 世界拒絕任何不完全一致的建構（`Simulation/SimWorlds.cs:34-44`）。
@@ -91,7 +91,7 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 
 ## 6. 保真度：建出的戰鬥能信任到什麼程度
 
-建出的戰鬥顯示了這份觀測，但它打起來和真實的那場一樣嗎？`fidelity`（`Checks/Fidelity.cs`）衡量這一點，確定化刻意取樣的部分除外。在測試集戰鬥的每第 k 個決策處，真實戰鬥用佔位策略繼續打到回合結束，包括敵人的回合（最多 12 個動作）。一場由該決策的觀測和紀錄建出的戰鬥，被賦予真實戰鬥中被取樣的那部分狀態（抽牌順序、亂數流、每個怪物的流和下一招：`CombatSession.Mirror`），並打出同樣的動作。第一份出現差異的觀測（uid 不算）按它的 JSON 路徑計數。
+建出的戰鬥顯示了這份觀測，但它打起來和真實的那場一樣嗎？量測時不算確定化刻意取樣的部分。在一組戰鬥的每第 k 個決策處，真實戰鬥用佔位策略繼續打到回合結束，包括敵人的回合（最多 12 個動作）。一場由該決策的觀測和紀錄建出的戰鬥，被賦予真實戰鬥中被取樣的那部分狀態（抽牌順序、亂數流、每個怪物的流和下一招），並打出同樣的動作。第一份出現差異的觀測（uid 不算）按它的 JSON 路徑計數。
 
 寂靜獵手的初始牌組，策略 `play`，每隔一個決策（2026-10-27）：
 
@@ -117,7 +117,7 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 
 短批次（200 場戰鬥）每場約 6.7 ms：主要耗在啟動和 JIT 預熱上。
 
-**分支**（`forkbench`）。這裡的一個搜尋分支是一次還原、一次確定化，以及用佔位策略推演到戰鬥結束：
+**分支**。這裡的一個搜尋分支是一次還原、一次確定化，以及用佔位策略推演到戰鬥結束，從戰鬥中途的切點量測：
 
 | 指標 | 數值 |
 |---|---|

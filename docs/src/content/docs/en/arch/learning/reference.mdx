@@ -27,14 +27,13 @@ flowchart LR
 
 ## 2. The `learn/` project
 
-`learn/` is the Python project for the loop, managed with uv (`learn/pyproject.toml`, `uv.lock`): `sts2-learn` 0.1.0, Python ≥ 3.12, dependencies loguru ≥ 0.7.3, onnx ≥ 1.23.2, torch (from the PyTorch CUDA 12.8 index) and typer ≥ 0.27.3; development pytest ≥ 9.1.1 and ruff ≥ 0.17.3 (line length 120, rules E, F, W, I, B, UP). Run a script with `uv run python -m v.train …` or `uv run python gauntlet.py …` from `learn/`.
+`learn/` is the Python project for the loop, managed with uv (`learn/pyproject.toml`, `uv.lock`): `sts2-learn` 0.1.0, Python ≥ 3.12, dependencies loguru ≥ 0.7.3, onnx ≥ 1.23.2, torch (from the PyTorch CUDA 12.8 index) and typer ≥ 0.27.3; development pytest ≥ 9.1.1 and ruff ≥ 0.17.3 (line length 120, rules E, F, W, I, B, UP). Run a script with `uv run python -m v.train …` or `uv run python gate.py …` from `learn/`.
 
 **Conventions** (`learn/common.py`):
 
-- Every script but `bosslab.py` has one Typer command whose help is its docstring (`common.app`, `:25-27`), so `--help` shows the docstring.
-- Logs go to stderr through loguru at `LOG_LEVEL` (INFO by default), as `HH:mm:ss LEVEL message`; stdout carries only results, a JSON line for reports (`common.run`, `:30-42`).
+- Every script has one Typer command whose help is its docstring (`common.app`, `:24-26`), so `--help` shows the docstring.
+- Logs go to stderr through loguru at `LOG_LEVEL` (INFO by default), as `HH:mm:ss LEVEL message`; stdout carries only results, a JSON line for reports (`common.run`, `:29-41`).
 - A `LearnError` (bad input, a file in the way, a simulator that failed) ends a script in one line with exit code 1; anything else is a bug and ends with a traceback. The simulator's command line works the same way ([Simulator: reference §2](/en/arch/simulator/reference/#sec-2)).
-- `bosslab.py` uses only the standard library and argparse, prints to stdout and has no `LearnError`: the hosts that play its tasks run it with a plain `python3`.
 
 ## 3. The data directory
 
@@ -50,13 +49,13 @@ Run records and decision logs are raw data, kept outside git in `data/CHARACTER/
 | `data/CHARACTER/void/` | data that must not be used (played with a wrong option, stopped too early), under its old path, with a `VOID.txt` that says why | `void/sl/selfplay/g3/t025` |
 | `data/CHARACTER/lists/` | shared training sets ([§4](#sec-4)) | `lists/c7-logs.txt` |
 
-**Files.** A job's folder holds one set of files per chunk of seeds, named by the shard that played it and the chunk's first index: `rec-SHARD-INDEX.jsonl` (run records), `log-SHARD-INDEX.jsonl` (decision logs), `counts-SHARD-INDEX.txt` (both files' line counts) and, written last, `done-SHARD-INDEX.txt` (the indices of its runs), so a chunk is whole or absent, and a chunk with no `done-` file is left out when the job is read. Each shard also has `out-SHARD.txt`, the simulator's output. Older jobs keep one set per shard: `rec-SHARD.jsonl`, `log-SHARD.jsonl` and, if time-boxed, `done-SHARD.txt`. Either way a log file goes with the record file of the same name, and a list pair holds the two on the same line ([§4](#sec-4)). A whole run's decision log is about 1.6 MB at the low budget, a gauntlet run's about 1 MB; most of the bytes are combat observations and macro run views.
+**Files.** A job's folder holds one set of files per chunk of seeds, named by the shard that played it and the chunk's first index: `rec-SHARD-INDEX.jsonl` (run records), `log-SHARD-INDEX.jsonl` (decision logs), `counts-SHARD-INDEX.txt` (both files' line counts) and, written last, `done-SHARD-INDEX.txt` (the indices of its runs), so a chunk is whole or absent, and a chunk with no `done-` file is left out when the job is read. Each shard also has `out-SHARD.txt`, the simulator's output. Older jobs keep one set per shard: `rec-SHARD.jsonl`, `log-SHARD.jsonl` and, if time-boxed, `done-SHARD.txt`. Either way a log file goes with the record file of the same name, and a list pair holds the two on the same line ([§4](#sec-4)). A whole run's decision log is about 1.6 MB at the low budget; most of the bytes are combat observations and macro run views.
 
 **The manifest** (`manifest.json`, one per job) says what played and why: `job`, `kind`, `character`, `env`, `owner`, `purpose`, `rev` (the commit the simulator was built from), `game` (the game version), `options` (the run options), `inputs` (a copy of `eval/` and `weights/` the job reads, when the simulator's commit is older), `shards`, `launched`, `status`, and for a box job `box`: the deadline (UTC and epoch, the file, its changes), the seed range, the chunk, each host's slots, speed, clock offset and queue. Fetching adds `done` (runs finished), `prefix` (the complete head of the range), each slot's end and how far apart the slots stopped.
 
 ## 4. Lists
 
-Shared training sets are list pairs in `data/CHARACTER/lists/`: `NAME-logs.txt` and `NAME-recs.txt` hold one path per line, relative to the repository's root (or absolute), and line i of one is the decision log of the run records on line i of the other (`common.lists`, `learn/common.py:91-102`). `v.train --list PREFIX` and `combat.train --list PREFIX` read a pair; the trainers join each log only with the record file on its own line. The folder's `manifest.json` says what each list holds.
+Shared training sets are list pairs in `data/CHARACTER/lists/`: `NAME-logs.txt` and `NAME-recs.txt` hold one path per line, relative to the repository's root (or absolute), and line i of one is the decision log of the run records on line i of the other (`common.lists`, `learn/common.py:84-95`). `v.train --list PREFIX` and `combat.train --list PREFIX` read a pair; the trainers join each log only with the record file on its own line. The folder's `manifest.json` says what each list holds.
 
 | list | holds | read by |
 |---|---|---|
@@ -83,25 +82,23 @@ The evaluation seed files are in `eval/seeds/`: `promotion-1` (200), `promotion-
 
 The combat net and V are each one net for every character, every ascension and both environments, so their files share one folder, `weights/all/` (`learn/weights.py`). Each character is still judged on its own: its champion files, reports and ledger are in `eval/CHARACTER/`, its data in `data/CHARACTER/` ([§3](#sec-3)).
 
-`weights/all/` holds `v9-0.json`, the macro brain's V, and `c9-0.json`, the combat net, which both champions, SL's and NoSL's, play for every character ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). `weights/silent/` holds the Silent's nets from before the nets were shared, kept as the record of their training: `v8-3.json` and `c8-3.json`, whose weights v9-0 and c9-0 carry, and the nets those went on from. The brain loads none of them.
+`weights/all/` holds the only two net files: `v9-0.json`, the macro brain's V, and `c9-0.json`, the combat net, which both champions, SL's and NoSL's, play for every character ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). Their weights are those of v8-3 and c8-3, which learned from the Silent's runs alone.
 
-- **Never overwritten.** A trainer writes to `weights/all/NAME.json` unless `--out` says otherwise, and refuses a name whose file exists in any folder of `weights/` (`out_path`, `learn/weights.py:14-20`), so a name is used once and always means the same weights. A trial that no kept run plays goes elsewhere, with `--out`.
-- **The character.** A trainer's `--character` (SILENT by default) names the character of its runs: a run of another character in its records is refused (`learn/common.py:84-85`), and the file records it. The shared files record `ALL`.
+- **Never overwritten.** A trainer writes to `weights/all/NAME.json` unless `--out` says otherwise, and refuses a name whose file is already in `weights/all/` (`out_path`, `learn/weights.py:14-20`), so a name is used once and always means the same weights. A trial that no kept run plays goes elsewhere, with `--out`.
+- **Every character.** Both trainers read the runs of every character in their lists (`runs_by_log`, `learn/common.py:61-81`), since the nets are shared, and a net file records no character.
 - **Names.** `vN-M` is a V and `cN-M` a combat net, with a variant's letter after the number when there is one (`v7-1f`). `vNgM` names a generation's data, never a net.
-- **In git.** `weights/` is in git: a file is 1.4–2.7 MB and never changes, so a commit fixes the code, the weights and the champion files together; the champion files name the weights where they are. Net files that are no longer in use stay in git's history (last at `20970d9`), and `eval/silent/ledger.md` says what each was.
+- **In git.** `weights/` is in git: a file is 4.9–8.8 MB and never changes, so a commit fixes the code, the weights and the champion files together; the champion files name the weights where they are. Earlier net files are in git's history (the last commit holding them is `a27e4ad`), and `eval/silent/ledger.md` says what each was.
 - **The environment.** A combat net file records the environment it learned from (`env`), and C# does not read it: SL and NoSL play the same file ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). c9-0's weights learned from SL's games; in NoSL it loads and plays, and it has never been trained or gated there.
 
 ## 7. Net files
 
 A net file is JSON: the graph as base64 ONNX, plus what C# needs to feed it, and test inputs with the trainer's outputs that loading checks. A net is defined once, in Python; C# only turns a run or a round start into the graph's inputs ([§8](#sec-8)).
 
-**V's file** (`learn/v/export.py:40-62`):
+**V's file** (`learn/v/export.py:41-61`):
 
 | field | content | read by C# |
 |---|---|---|
 | `name` | the net's name, as the champion shows it (`l0 NAME`) | yes |
-| `character` | the character, e.g. `SILENT` | no |
-| `objective` | `floor` or `win`; v9-0's is `win` | yes |
 | `floors` | 64 | yes |
 | `vocab` | per table, every id of the game build (`learn/game_ids.py`), entry 0 `<unk>`: `cards`, `modifiers`, `relics`, `potions`, `context`, `map` | yes |
 | `state` | `names` (floor, hp, max_hp, gold, ascension, potion_slots), `mean`, `std` | yes |
@@ -109,12 +106,11 @@ A net file is JSON: the graph as base64 ONNX, plus what C# needs to feed it, and
 | `onnx` | the graph: inputs as `learn/v/encode.py`'s `INPUTS` name them, with free batch and length dimensions; output `hazards` (batch × 64); opset 20 | yes |
 | `tests` | up to 8 held-out samples drawn by the training seed: `run` (the run view) and `value` (the trainer's value on the CPU) | yes |
 
-**The combat net's file** (`learn/combat/export.py:62-88`):
+**The combat net's file** (`learn/combat/export.py:72-105`):
 
 | field | content | read by C# |
 |---|---|---|
 | `name` | as the champion shows it (`pimc NAME`, `plan NAME`) | yes |
-| `character` | the character | no |
 | `env` | the environment whose games it learned from, written as a record | no |
 | `buckets`, `loss_min` | 50 buckets from −0.25: what the net predicts | yes |
 | `lags` | 3 earlier rounds of intents | yes |
@@ -129,11 +125,11 @@ The figure opens the two net files, v9-0.json and c9-0.json, field by field: siz
 
 ## 8. Inference in C#
 
-- **Which nets.** `run --value FILE` reads V's net file (`RunNet.Read`); `--value` and `--macro l0` go together (`SimWorker/Commands/Args.cs:243`). `run --combat-net FILE` loads a combat net (`CombatNet.Load`), which needs `--policy pimc` or `plan`. Without a combat net, a search values its leaves with the hand-made leaf, `HandLeaf`, which is `LeafValue` with its in-progress projection ([Combat brain: the leaf §2](/en/arch/combat-brain/leaf/#sec-2)).
+- **Which nets.** `run --value FILE` reads V's net file (`RunNet.Read`); `--value` and `--macro l0` go together (`SimWorker/Commands/Args.cs:228`). `run --combat-net FILE` loads the combat net (`CombatNet.Load`), the leaf of every combat search: `--combat-net` and `--policy pimc` or `plan` go together (`:236`).
 - **`IRunValue`** (`Brain/Macro/RunValue.cs`) is the macro brain's view of V: a name and a value of a run view. `RunNet` implements it.
-- **`RunNet`** (`Brain/Macro/RunNet.cs`) runs the graph with ONNX Runtime (`Microsoft.ML.OnnxRuntime`), one thread intra- and inter-op (`:71`), since the simulator runs many processes and a macro decision values a handful of small inputs. It builds the inputs from the run view as `learn/v/encode.py` does. Unknown ids read as entry 0. `Value` reads the objective (`:93-106`).
+- **`RunNet`** (`Brain/Macro/RunNet.cs`) runs the graph with ONNX Runtime (`Microsoft.ML.OnnxRuntime`), one thread intra- and inter-op (`:49`), since the simulator runs many processes and a macro decision values a handful of small inputs. It builds the inputs from the run view as `learn/v/encode.py` does. Unknown ids read as entry 0. `Value` is the chance to survive every floor from the run's current floor on (`:75-82`).
 - **`CombatNet`** (`Brain/Combat/CombatNet.cs`) does the same for a state, with one thread as well. `Graph` builds the inputs from `Cards`, `Player`, `Enemies`, `PowerNumbers`, `RelicNumbers`, `Allies`, `Bag` and `Powers`, as `learn/combat/encode.py` reads a state, and returns the two outputs; `Value` prices them with `LeafValue`'s prices ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
-- **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than the larger of 10⁻³ × |value| and 10⁻⁶ (`:78-91`); `CombatNet.Load` predicts every test state and refuses it if any class or potion chance is off by more than 10⁻³, or an output's length differs. This keeps the encoding and the forward pass the same in training and in play.
+- **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than the larger of 10⁻³ × |value| and 10⁻⁶ (`:59-73`); `CombatNet.Load` predicts every test state and refuses it if any class or potion chance is off by more than 10⁻³, or an output's length differs. This keeps the encoding and the forward pass the same in training and in play.
 - **Cost.** An earlier V of the same structure takes 0.093 ms a call, against 70–90 ms a macro decision with the clone (commit `b0ec4b7`).
 
 ## 9. Scripts
@@ -142,91 +138,51 @@ The figure opens the two net files, v9-0.json and c9-0.json, field by field: siz
 
 | function | what |
 |---|---|
-| `read_lines(paths, needle)` | the JSON lines of comma-separated files that contain the needle; blank lines and a line still being written are skipped; a missing file is a `LearnError` (`:46-60`) |
-| `runs_by_log(logs, records, character)` | pairs log i with record file i (the counts must match); per record file, its runs by run id; refuses a run id twice in one file and a run of another character (`:63-88`) |
-| `lists(prefix)` | a list pair as two comma-joined strings (`:91-102`) |
-| `train_lists(prefix)` | a list pair a net trains on: as `lists`, refusing a path inside an eval job (`:105-111`) |
-| `start_sim`, `wait_sims` | start simulator commands with their output in a log file; fail with the first failed one's last 12 log lines (`:114-129`) |
-| `out_path(name, out, character)` | where a weights file goes ([§6](#sec-6)) |
+| `read_lines(paths, needle)` | the JSON lines of comma-separated files that contain the needle; blank lines and a line still being written are skipped; a missing file is a `LearnError` (`:44-58`) |
+| `runs_by_log(logs, records)` | pairs log i with record file i (the counts must match); per record file, its runs by run id; refuses a run id twice in one file; every character's runs (`:61-81`) |
+| `lists(prefix)` | a list pair as two comma-joined strings (`:84-95`) |
+| `train_lists(prefix)` | a list pair a net trains on: as `lists`, refusing a path inside an eval job (`:98-104`) |
+| `out_path(name, out)` | where a weights file goes ([§6](#sec-6)) |
 
 ### `v.train`: V
 
-`uv run python -m v.train --list PREFIX --name NAME [options]` (`learn/v/train.py:150-179`).
+`uv run python -m v.train --list PREFIX --name NAME [options]` (`learn/v/train.py:46-58`).
 
 | option | default | meaning |
 |---|---|---|
 | `--list` | required | the list pair `PREFIX-logs.txt` and `PREFIX-recs.txt` |
 | `--name` | required | the net's name, as the champion will show it |
 | `--out` | `weights/all/NAME.json` | where the file goes |
-| `--character` | SILENT | the character whose runs these are |
-| `--boss-sims` | – | boss sims (`bosslab.py collect`), comma-separated; with `--boss-afterstates` only |
-| `--boss-afterstates` | – | the afterstates (`afterstates`) the boss sims were played from |
-| `--boss-states` | – | door states (`bosslab.py states`, collected), comma-separated |
-| `--door-logs` | – | boss gauntlet pilot logs (`run --auto-win`) whose door states `--boss-states` holds |
-| `--afterstates` | – | the logged decisions' options, for `explore_temperature` only |
-| `--objective` | `floor` | a whole run's value: `floor` (the floor expected) or `win` (the chance to win) |
 | `--init` | – | a net file to go on from: its state scaling and weights, the second head anew |
 | `--seed` | 0 | torch's and Python's seeds; also picks the 8 test runs |
 
-**Refusals** (`:181-202`, `:229-230`): an objective other than `floor` or `win`; boss sims with `win`; `--init` not of 64 floors, with other state names, or with other tables than the game's; `--boss-sims` without `--boss-afterstates` or the reverse; too few train or held-out samples.
+**Refusals** (`:69-70`, `:80-81`): too few train or held-out samples; `--init` with other tables than the game's, or without one of the net's weights at its shape (`export.weights`, `learn/v/export.py:91-92`).
 
-**Constants** (`:58-64`): 64 floors; at most 40 epochs, stopping after 5 without a held-out total lower by 10⁻⁴; batches of 256 decisions, plus 64 boss-sim decisions and 64 doors a step; AdamW, learning rate 3 × 10⁻⁵, weight decay 10⁻⁴; the second head at weight 3, the boss sims and doors at 1. The net's sizes are `Net`'s: embeddings 32, card net 128, body 256 (`learn/v/net.py:83-99`).
+**Constants** (`:39-43`): 64 floors; at most 40 epochs, stopping after 5 without a held-out loss lower by 10⁻⁴; batches of 256 decisions; AdamW, learning rate 3 × 10⁻⁵, weight decay 10⁻⁴; the second head at weight 3. The net's sizes are `Net`'s: embeddings 64, card net 256, body 512 (`learn/v/net.py:74-91`).
 
-**The flow.** Read the samples (views kept only for boss sims, door states or afterstates); split by run id; take the game's tables (`learn/game_ids.py`), and the state's weighted mean and standard deviation (or `--init`'s); the baseline hazards, each floor's $(\text{deaths} + 0.5)/(\text{alive} + 1)$ clamped to $[10^{-4}, 1 - 10^{-4}]$, as the head's biases; train; keep the epoch with the best held-out total. The early-stopping total is the held-out hazard loss plus the boss sims' and doors' terms; the second head's next-combats term is logged each epoch but not added (`:335`). The module docstring says the held-out runs weigh the terms "the same way" as the loss; the code does not add that term. Then the report and the file.
+**The flow.** Read the samples; split by run id; take the game's tables (`learn/game_ids.py`), and the state's weighted mean and standard deviation (or `--init`'s); the baseline hazards, each floor's $(\text{deaths} + 0.5)/(\text{alive} + 1)$ clamped to $[10^{-4}, 1 - 10^{-4}]$, as the head's biases; train; keep the epoch with the best held-out hazard loss. The second head's next-combats term is logged each epoch but not added to it (`:145-148`). The module docstring says early stopping weighs the terms the same way as the loss; the code does not add that term. Then the report and the file.
 
-**The report** (one JSON line, `:368-394`):
+**The report** (one JSON line, `:165-177`):
 
 | field | when | what |
 |---|---|---|
 | `runs`, `held_out_runs`, `samples`, `won` | always | the runs and decisions read, and the runs won |
-| `objective`, `vocab` | always | what was trained, each table's size |
+| `vocab` | always | each table's size |
 | `held_out_loss`, `held_out_loss_floor_only` | always | the held-out hazard loss per run, against the baseline's |
 | `held_out_next_combats` | always | the second head's held-out squared error |
-| `r2_held_out`, `r2_held_out_floor_only` | always | $R^2$ of the expected floor against the floor reached |
 | `won_held_out_runs`, `brier_held_out`, `brier_held_out_floor_only` | always | the held-out runs won, and the Brier score of the chance to win, against the baseline's |
-| `boss_sims`, `held_out_boss_sims`, `boss_worth`, `held_out_boss_loss`, `boss_decisions`, `boss_agree`, `boss_corr` | boss sims | see below |
-| `doors`, `held_out_doors`, `held_out_door_loss`, `door_corr` | door states | see below |
-| `explore_decisions`, `explore_share_logs`, `explore_temperature` | afterstates | the held-out logged decisions, the share the logs' brains explored, and the `--macro-explore` at which this V would explore as often |
 
 ### `combat.train`: the combat net
 
-`uv run python -m combat.train --list data/silent/lists/v8g2 --env SL --name NAME --test-list data/silent/lists/medium`, plus optional `--out`, `--character` (SILENT), `--init` (a net file to go on from) and `--seed` (0). `--list` is refused if it holds an eval job's runs; `--test-list` names a list pair whose games are only reported, as `medium`. `learn/combat/report.py` holds the report (`ranks`, `rank_within`, `auc_within`, `potion_rates`, `log_loss`, `predict`, `summary`). Its samples, loss, constants and report are in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3)–[§4](/en/arch/learning/combat-net/#sec-4).
+`uv run python -m combat.train --list data/silent/lists/v8g2 --env SL --name NAME --test-list data/silent/lists/medium`, plus optional `--out`, `--init` (a net file to go on from) and `--seed` (0); it reads every character's runs. `--list` is refused if it holds an eval job's runs; `--test-list` names a list pair whose games are only reported, as `medium`. `learn/combat/report.py` holds the report (`ranks`, `rank_within`, `auc_within`, `potion_rates`, `log_loss`, `predict`, `summary`). Its samples, loss, constants and report are in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3)–[§4](/en/arch/learning/combat-net/#sec-4).
 
-### `learn/gauntlet.py`: a V's report and gate
+### `learn/gate.py`: a V's report and gate
 
-`uv run python gauntlet.py --records R1,R2 [--logs L1,L2] [--against C1,C2]` (`learn/gauntlet.py:164-183`). It reads finished runs (failed ones out, truncated kept), all of one kind: the elite gauntlet's or whole runs, never both (`:42-48`). One JSON line, `{"gauntlet": …, …}`:
+`uv run python gate.py --records R1,R2 [--logs L1,L2] [--against C1,C2]` (`learn/gate.py:154-170`). It reads finished runs, failed ones out, truncated kept (`:40-42`). One JSON line:
 
-- **from the records** (`runs_report`, `:51-78`): `runs`, `floor` and `floor_se`; for the gauntlet `progress` and `progress_se`; `won`; per act `boss` (reached, beaten, rate); `elites_per_run`, `elite_deaths`; `died_in`, per act, the room of the combat each lost run died in, or `outside combat`;
-- **from the logs** (`logs_report`, `:107-133`), for runs with a record: `rest`, the rest sites' choices by HP share (0–40%, 40–70%, 70–90%, 90–100%); `monster_or_rest`, the map's choices where a monster and a rest site were both offered, by the same shares; `shop`, what the shops sold (a relic, a card, a potion, as the next decision's run view shows) and the removals and leaves;
-- **with `--against`** (`paired`, `:136-161`), pairing by seed on the seeds both finished: for the gauntlet `pairs`, `diff`, `diff_se`, `lower_95` (mean − 1.645 SE) and `promote`; for whole runs `pairs`, `won`, `champion_won`, `wins_diff`, `wins_diff_se`, `wins_lower_95`, `floor_diff`, `floor_diff_se` and `promote`, on the wins.
-
-### `learn/challenge.py`: the simulator's gate, in chunks
-
-`uv run python challenge.py --sim CMD --champion FILE --records-dir DIR [--chunk 40] [--processes 4] [--metric floor|win] [--not-worse] [--promote PATH] -- RUN OPTIONS` (`learn/challenge.py:91-161`).
-
-- It reads the champion file and its report: the seed set, its size, and the first run's character and ascension, which the challenger plays too.
-- For each chunk it plays `run --seeds eval/seeds/SET.txt --start A --n N --records DIR/AAAA-BBBB.jsonl --character C --asc A RUN OPTIONS`, split over the processes, each logging to its record file's name with `.log`; then runs `gate --champion FILE --records … --metric M [--not-worse] RUN OPTIONS` and reads its verdict.
-- It stops with exit code 1 at a fail or a void verdict, or with no verdict on the whole set. After a pass, with `--promote`, it plays the rest of the set, gates again with `--promote PATH`, and rebuilds the leaderboard (`leaderboard --character C`). It writes run records only, no decision logs.
-- The records go to `--records-dir`, `data/CHARACTER/ENV/eval/DATE-gate-NAME/`. Paths are the repository root's, where the simulator runs.
-
-### `learn/bosslab.py`: boss labels
-
-`python3 bosslab.py SUBCOMMAND …` (standard library only; `learn/bosslab.py:423-472`). Common to `tasks`, `doors` and `states`: `--seeds 2` (fights per option or HP level), `--budget` (default `--effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0`, about 9 s a fight), `--combat-net weights/silent/c8-1.json`, `--results res` (where the outputs go, as the playing host sees it), `--out` (required). Each writes `OUT/tasks.txt`, one `panel --player plan --env SL BUDGET --combat-net NET --n SEEDS --seed S --out RES/KEY.jsonl LOADOUT` per option (the seed: the run id mod 100000 plus the decision id, the same for every option of a decision), and `OUT/decisions.jsonl`.
-
-| subcommand | options | what |
-|---|---|---|
-| `tasks` | `--logs`, `--afterstates`, `--acts 1`, `--every 1` | each card reward's options, each option's afterstate fighting its act's boss at the act's HP share (0.96, 0.81, 0.6) |
-| `doors` | `--logs`, `--records`, `--afterstates`, `--act 1`, `--acts`, `--max-runs` | each option fights at the boss's door: the run's loadout before its boss fight, at the HP it entered with, the pick swapped for the option |
-| `states` | `--logs`, `--records`, `--act 1`, `--hp-shares 0.4,0.7,1`, `--max-runs` | the runs' loadouts at a boss's door alone, at the HP entered with and at the shares, one line per door |
-| `play SIM TASKS PROCS [--root]` | – | plays the task lines whose output is missing, PROCS at a time at nice 19, each decision's options together, the decisions in a fixed shuffled order; a stopped play leaves no partial file |
-| `collect` | `--decisions`, `--results`, `--out` | joins the outputs back: each option's `fights` (won, HP, HP at the start, the enemy's HP and max HP, rounds) and `failed` |
-| `compare DECISIONS RESULTS` | – | on the decisions with every option played twice: how often the fights' best is V's best and the run's pick, how often seed 1's best is seed 2's, and the score regrets |
-
-**Boss sims** (`v.train --boss-sims FILES --boss-afterstates FILES`; `tasks`, `play`, `collect`). At a card reward, each option's afterstate fights its act's boss a few times with the SL planner, at a fixed share of max HP, with the same seeds for every option of a decision. The fights' absolute odds are far from real play's, so they give no hazard label, and only the options' differences within a decision count. The **boss score** (`bosslab.py:378-383`): a win is 0.5 plus half the share of max HP left, a loss half the share of the boss's HP taken. V's expected floors less the decision's mean are fitted to the scores less the decision's mean, times $2k$ floors per unit of score, where $k$, one per act, is the mean floor reached by the runs that beat that boss, less the boss floor (`boss_worth`, `learn/v/data.py:129-136`). The score is also the second head's seventh target. A `win` net refuses boss sims, whose targets are floors.
-
-**Door states** (`v.train --boss-states FILES`; `doors`, `states`). A run's whole loadout at an act boss's door fights the boss at the HP it entered with and at shares of max HP. The second head learns their boss scores, which shapes the body only. Door states came mostly from the boss gauntlet pilot (`run --auto-win`, [Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)), whose records never count as runs (`--door-logs FILES` reads only their views).
-
-A loadout is the afterstate's deck, relics and potions; cards keep their upgrade levels and enchantments; used-up or disabled relics are left out (`loadout`, `:69-86`).
+- **from the records** (`runs_report`, `:45-72`): `runs`, `floor` and `floor_se`; `won`; per act `boss` (reached, beaten, rate); `elites_per_run`, `elite_deaths`; `died_in`, per act, the room of the combat each lost run died in, or `outside combat`;
+- **from the logs** (`logs_report`, `:101-127`), for runs with a record: `rest`, the rest sites' choices by HP share (0–40%, 40–70%, 70–90%, 90–100%); `monster_or_rest`, the map's choices where a monster and a rest site were both offered, by the same shares; `shop`, what the shops sold (a relic, a card, a potion, as the next decision's run view shows) and the removals and leaves;
+- **with `--against`** (`paired`, `:130-151`), under `against`, pairing by seed on the seeds both finished: `pairs`, `won`, `champion_won`, `wins_diff`, `wins_diff_se`, `wins_lower_95` (mean − 1.645 SE), `floor_diff`, `floor_diff_se` and `promote`, on the wins.
 
 ## 10. Simulator commands the loop uses
 
@@ -235,34 +191,28 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 | command | for |
 |---|---|
 | `run --explore ε` | self-play's even draws ([The loop §9](/en/arch/learning/loop/#sec-9)); needs `--macro l0` |
-| `run --macro-explore T`, `--combat-explore T` | softmax exploration; the second needs `--policy pimc` |
 | `run --value FILE`, `--combat-net FILE` | which V and which leaf play |
-| `run --gauntlet`, `run --auto-win` | the elite gauntlet and the boss gauntlet pilot ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)) |
 | `run --log FILE --records FILE` | the decision log and the run records |
-| `afterstates`, `fork` | every logged decision's options with their values; counterfactual pairs ([The loop §10](/en/arch/learning/loop/#sec-10)) |
-| `panel` | a fixed fight played by a policy, which `bosslab.py`'s tasks are |
 | `report`, `gate`, `leaderboard` | reports, the SPRT gate, the leaderboards ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6), [Evaluation: metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)) |
-| `ranks` | V's card sense: `ranks --logs LOGS --value FILE [--per-act 200] [--top 30]` (`SimWorker/Commands/EvalCommands.cs:175-232`): per act, each card's mean change of V when one more copy joins the decks of a sample of the logs' card rewards. A mean for reading, not a test |
 
 ## 11. Tests
 
-**Python** (`uv run pytest` in `learn/`, 79 tests in 8 files; `uv run ruff check`):
+**Python** (`uv run pytest` in `learn/`, 55 tests in 7 files; `uv run ruff check`):
 
 | file | tests | what |
 |---|---|---|
-| `test_common.py` | 12 | `train_lists` refuses an eval job's runs in either environment and takes self-play and forks; `read_lines` skips blank and partial lines, reads every file, finds the needle, fails on a missing file; `wait_sims`' failure tail and success; `runs_by_log` pairs logs and record files, one record file per log, refuses a run id twice and another character |
-| `test_weights.py` | 3 | the default path; never replaced in a character folder; an explicit path elsewhere may be |
-| `test_v_encode.py` | 6 | the reachable map with floors ahead, the point entered on a map move, before any visit and at the boss; ids only; the state's order |
-| `test_v_train.py` | 27 | list pairs; samples and per-run weights; views kept; the boss gauntlet pilot and the elite gauntlet's runs refused; a gauntlet run's end; `boss_worth`; door states; the boss score; the temperature from the brain name; hazard labels and censoring; the expected floor, the chance to win; `explored` by logs, at any scale of V, never what is worth nothing; `centred`; ONNX against torch for floor and win nets; weights read back; `--init` keeps the scaling and refuses other tables; the net file and its report; door logs give views only; a map move's sample; a lost run's last fight with no end costs what was left |
+| `test_common.py` | 11 | `train_lists` refuses an eval job's runs in either environment and takes self-play and forks; `read_lines` skips blank and partial lines, reads every file, finds the needle, fails on a missing file; a list pair gives the logs and records in the same order; `runs_by_log` joins each log with its own records, wants one record file per log, refuses a run id twice and reads every character's runs |
+| `test_weights.py` | 3 | the default path in `weights/all/`; a file there never replaced; an explicit path elsewhere may be |
+| `test_v_encode.py` | 7 | the reachable map with floors ahead, the point entered on a map move and only then, before any visit and at the boss; ids only; a card's keywords and what Tinker Time made of it; the state's order |
+| `test_v_train.py` | 10 | samples and per-run weights; a lost run's last fight with no end costs what was left; hazard labels and censoring; the chance to win; ONNX against torch; a net file's weights read back, the second head anew; `--init` keeps the tables and the state scaling, and refuses other tables; the net file and its report; a map move's sample |
 | `test_game_ids.py` | 3 | each table starts with `<unk>` and holds each id once, in order; every character and what the nets read are there; none of the game's test models |
-| `test_combat.py` | 15 | card tokens with cost and damage, the scaled state, intents most recent first, the ending's buckets, potions gone from the view after the fight, buckets the HP rules out, the potion loss on held potions after wins, round-start samples with history, another environment refused, ONNX against torch, a card's damage and the orbs' numbers and order moving the output, `c8-1.json`'s weights read back giving its test states, training going on from a net file and keeping it unless an epoch beats it, a combat the run died in before its first decision, training writes a net file of its environment |
-| `test_gauntlet.py` | 6 | progress, bosses, elites and deaths; rest choices by HP and shop purchases; monster or rest by HP; whole runs pair on wins and floors and promote on wins; gauntlet and whole runs never paired; gauntlet pairing by seed |
-| `test_bosslab.py` | 7 | live relics and the act's HP share; upgrades and enchantments; the same seeds per decision; the door swap; door tasks; a win scores above a loss; door states at HP levels |
+| `test_combat.py` | 17 | card tokens: ids, upgrades, piles, modifiers, costs and numbers; a card's keywords, Tinker, spent enchantment and gathered numbers; a power's moved number and stolen card, a relic's effect spent; the player's and each enemy's raw state, scaled; intents most recent first; the ending's buckets; potions gone from the view after the fight; buckets the HP rules out; a card's numbers and modifiers and the orbs' numbers and order moving the output; the potion loss on held potions after wins; round-start samples with history; another environment refused; ONNX against torch; training writes a net file of its environment; `c9-0.json`'s weights read back giving its test states; training going on from a net file and keeping it unless an epoch beats it; a combat the run died in before its first decision |
+| `test_gate.py` | 4 | bosses, elites and deaths; rest choices by HP and shop purchases; monster or rest by HP; whole runs pair on wins and floors and promote on wins |
 
 **C#** ([Simulator: reference §7](/en/arch/simulator/reference/#sec-7)), the train/deploy parity of the nets, on fixtures in `Sts2Ai.Tests/Fixtures/` and the two net files themselves:
 
-- `RunNetTests` (5): a tiny untrained net with three real run views (`pure-v-tiny.json`) is valued as the trainer valued it; a win net (`pure-v-tiny-win.json`, the same with its hazard head's bias lowered by 6) at the trainer's chance to win; `v8-1.json` loads, its test runs at the values of the training its weights come from; the map tokens on a shared test map; the point entered reads on a map move and only then.
-- `CombatNetTests` (5): `c8-1.json` loads, its 16 test states as the training its weights come from read them; a tiny untrained net (`combat-tiny.json`) whose test states, real SL round starts with four rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5% HP, a multi-hit attack, cards with damage and orbs on and off the table past the places the net tells apart, read as its trainer did; a state in progress is its endings and the potions kept; a bucket the HP held rules out has no weight; a finished state and the bound are `LeafValue`'s.
+- `RunNetTests` (4): a tiny untrained net (`pure-v-tiny-win.json`, its hazard head's bias lowered by 6) values three real run views at the trainer's chance to win; `v9-0.json` loads, its test runs at its trainer's values; the map tokens on a shared test map; the point entered reads on a map move and only then.
+- `CombatNetTests` (5): `c9-0.json` loads, its 16 test states as its trainer read them; a tiny untrained net (`combat-tiny.json`) whose test states, real SL round starts with four rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5% HP, a multi-hit attack, cards with damage and orbs on and off the table past the places the net tells apart, read as its trainer did; a state in progress is its endings and the potions kept; a bucket the HP held rules out has no weight; a finished state and the bound are `LeafValue`'s.
 - A check passes when a changed input moves the output by less than its tolerance, so each new input was checked once more on a net whose weights make every input count ([The combat net §9](/en/arch/combat-brain/network/#sec-9)).
 
 **Planned** <Badge text="planned" variant="caution" />:

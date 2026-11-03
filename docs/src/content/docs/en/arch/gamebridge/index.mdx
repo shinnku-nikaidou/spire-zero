@@ -71,7 +71,7 @@ Only what the player could have watched would go in: an insert at a random posit
 
 | what | where |
 |---|---|
-| GameBridge does reach the game (the control of the boundary check) | `BoundaryTests`, `selftest` |
+| GameBridge does reach the game (the control of the boundary check) | `BoundaryTests` |
 | every combat observation and action round-trips; builds from observations show them exactly | `selftest` ([Simulator: reference §5](/en/arch/simulator/reference/#sec-5)) |
 | every surface's observation round-trips; every answer the brains give is legal and starts without error; runs replay exactly, nodes included | `run --check` ([Simulator: whole runs §6](/en/arch/simulator/runs/#sec-6)) |
 | the mod's SL records replay on their clones with the same observations as the game showed | `clones` ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)) |

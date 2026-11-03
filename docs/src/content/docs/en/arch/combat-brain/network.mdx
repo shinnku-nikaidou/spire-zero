@@ -247,8 +247,8 @@ The token tables are fixed, so these sizes depend only on the game build.
 
 The trainer computes the net in PyTorch; the brain runs it in C#. They must agree, and they do so through the net file ([Learning: reference §7](/en/arch/learning/reference/#sec-7)):
 
-- **Export.** `learn/combat/export.py` (`net_file`, `:72-106`) writes the net as an ONNX graph inside the file, with the mask, the softmax and the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, the buckets, the training report and 16 held-out round starts with the outputs the trainer gave them, among them an attack of several hits, a held potion and low HP.
-- **Inference.** `CombatNet` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) follows `encode.py`: `Graph` (`:91-121`) builds the same tensors, and ONNX Runtime runs the graph.
+- **Export.** `learn/combat/export.py` (`net_file`, `:72-105`) writes the net as an ONNX graph inside the file, with the mask, the softmax and the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, the buckets, the training report and 16 held-out round starts with the outputs the trainer gave them, among them an attack of several hits, a held potion and low HP.
+- **Inference.** `CombatNet` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) follows `encode.py`: `Graph` (`:90-120`) builds the same tensors, and ONNX Runtime runs the graph.
 - **The check.** `CombatNet.Load` (`:55-72`) refuses the file unless it gives the 16 states the trainer's outputs to within $10^{-3}$. A difference in how either side reads a state stops the file from loading.
 
 ## 10. What the structure cannot express

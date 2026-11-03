@@ -64,7 +64,6 @@ sequenceDiagram
 |---|---|---|
 | `PimcWorldRequest` | PIMC in NoSL (`PooledPimc`) | builds the combat from the observation with the build seed, takes world k of the worlds drawn from the search seed, searches this turn, and replies with the best line after each first action |
 | `SlTurnRequest` | the SL planner (`PooledPlanner`) | loads the node's clone, plays the beam state's path from the decision, searches that turn in full, and replies with the turn's best ends ([The SL planner: turn search §4](/en/arch/sl-planner/turn-search/#sec-4)) |
-| `SlWorldRequest` | PIMC on the SL world, the baseline | loads the node's clone and searches this turn after one first action. A candidate to delete in the planned design ([NoSL PIMC: budget §8](/en/arch/pimc/budget/#sec-8)) |
 | `SlMacroRequest` | the macro brain on the clone | plays a path of macro answers on the clone and replies with the next decision ([Macro brain: search §6](/en/arch/macro-brain/search/#sec-6)) |
 
 **Self-contained.** A request carries everything its worker needs, and nothing carries over from one request to the next, so any free worker can take any request. In NoSL only the observation and the record leave the host: the true state never reaches a worker ([NoSL PIMC §4](/en/arch/pimc/#sec-4)). In SL the node's clone does, which SL may know.
@@ -80,5 +79,5 @@ sequenceDiagram
 ## 4. Planned <Badge text="planned" variant="caution" />
 
 - **Prompts as search branches.** Inside a search, the simulator's selector (the code that answers card prompts) is driven by the search, so each answer is a branch of `TurnEnds`, valued like any other action, and `p0` goes. A multi-pick is a sequence of single picks, so that a prompt of many cards adds depth and not a large fan of subsets. A prompt in the real fight is a decision like any other: in SL it is a step of the plan, in NoSL it is searched. It needs the world API's prompt branching and `ChoiceContext` ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)).
-- **What it costs NoSL.** A prompt's answer is chosen after the cards are seen, so branches on prompts widen strategy fusion; the fusion panel runs first ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)).
+- **What it costs NoSL.** A prompt's answer is chosen after the cards are seen, so branches on prompts widen strategy fusion; it is measured first ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)).
 - **Worlds that live in a worker.** For run worlds and for searches that outgrow one request: open a world by kind (build, clone, run host), branch on it by id, and close it; its branches go to that worker first, since a restore elsewhere costs a replay ([Simulator: the worker pool §8](/en/arch/simulator/pool/#sec-8)).

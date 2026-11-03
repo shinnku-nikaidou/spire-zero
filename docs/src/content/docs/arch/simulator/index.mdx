@@ -15,7 +15,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-已有：无头宿主（[无头宿主](/arch/simulator/headless/)）；带快照、确定化和 CombatBuilder 的单场战斗会话（[战斗](/arch/simulator/combat/)）；经过每个决策画面的整局、两种连战，以及作为宿主、通过线路对接大脑来跑的对局（[整局](/arch/simulator/runs/)）；NoSL 战斗世界和 SL 节点克隆（[世界与 SL 克隆](/arch/simulator/worlds/)）；带四种请求的工作进程池（[工作进程池](/arch/simulator/pool/)）。规划中：整局世界，它能让 NoSL 搜索看到当前地图点之后的东西（[世界与 SL 克隆 §8](/arch/simulator/worlds/#sec-8)）。
+已有：无头宿主（[无头宿主](/arch/simulator/headless/)）；带快照、确定化和 CombatBuilder 的单场战斗会话（[战斗](/arch/simulator/combat/)）；经过每个决策画面的整局，以及作为宿主、通过线路对接大脑来跑的对局（[整局](/arch/simulator/runs/)）；NoSL 战斗世界和 SL 节点克隆（[世界与 SL 克隆](/arch/simulator/worlds/)）；带三种请求的工作进程池（[工作进程池](/arch/simulator/pool/)）。规划中：整局世界，它能让 NoSL 搜索看到当前地图点之后的东西（[世界与 SL 克隆 §8](/arch/simulator/worlds/#sec-8)）。
 
 </Aside>
 
@@ -36,7 +36,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 1. **做这一局的宿主**。在自我对弈和评估中，玩这一局的是模拟器而不是真实游戏：这是[仿真到实机阶梯](/arch/evaluation/#sec-2)的 R1–R3 几级。宿主工作进程持有唯一真实的这一局，每个决策都去问大脑，和 Mod 在真实游戏里的做法完全一样。
 2. **搜索世界**。战斗大脑和宏观大脑在世界里试各种打法：NoSL 下是从观测构建的样本，SL 下是当前节点的克隆（[环境：世界 §1](/arch/environments/worlds/#sec-1)）。每个搜索请求发给池里的一个工作进程，由它构建或载入世界、在里面搜索，然后回复。
-3. **基准测试和检查**。`bench`、`selftest`、`forkbench`、`fidelity` 和战斗测试集也在这里运行（[参考](/arch/simulator/reference/)）。
+3. **基准测试和检查**。`bench` 和 `selftest` 也在这里运行（[参考](/arch/simulator/reference/)）。
 
 决策进程（Harness 和各个大脑在其中运行）从不加载游戏，它通过消息与工作进程通信（[前言 §3](/#sec-3)）。在真实游戏里，Mod 是宿主，工作进程只做搜索；在自我对弈中，宿主也是一个工作进程。Harness 分不出两者：“换世界，不换大脑”。
 
@@ -59,7 +59,7 @@ flowchart LR
   H -->|"每个世界、回合或<br/>试探一个请求"| POOL
 ```
 
-在打整局的命令 `run` 里，宿主和决策进程是同一个进程：这一局在其中保持运行，各个大脑在它启动的工作进程池里搜索。用 `run --brain SOCKET` 时，大脑则是一个单独的进程，也就是 Mod 与之通信的那一个（[整局 §8](/arch/simulator/runs/#sec-8)）。
+在打整局的命令 `run` 里，宿主和决策进程是同一个进程：这一局在其中保持运行，各个大脑在它启动的工作进程池里搜索。用 `run --brain SOCKET` 时，大脑则是一个单独的进程，也就是 Mod 与之通信的那一个（[整局 §7](/arch/simulator/runs/#sec-7)）。
 
 ## 4. 代码
 
@@ -69,10 +69,10 @@ flowchart LR
 |---|---|
 | （根目录） | `Program.cs`：找到游戏的二进制文件，以本进程的副本启动工作进程 |
 | `Runtime/` | 脱离引擎运行游戏：`HeadlessGame`（启动）、`GodotNativeStub`、`Pump`、各个补丁（`Runtime/Patches/`）、`FastHookListeners`、日志 |
-| `Simulation/` | 战斗和整局的游戏一侧：`CombatSession`、`CombatBuilder`、`RunSession`、`SimWorlds`、`NodeWorld`、`PolicySelector`、`Loadout`、`GameSeeds` |
-| `Brains/` | 一局的大脑需要的东西：冠军的选项（`ChampionOptions`、`LeafChoice`）、大脑连接和节点导出（`RunBrains`）、记录在日志里的对局 |
+| `Simulation/` | 战斗和整局的游戏一侧：`CombatSession`、`CombatBuilder`、`RunSession`、`SimWorlds`、`NodeWorld`、`NodeProbe`（在克隆上回答 L0 的试探）、`PolicySelector`、`Loadout`、`GameSeeds` |
+| `Brains/` | 一局的大脑需要的东西：冠军的选项（`ChampionOptions`、`LeafChoice`），以及大脑连接和节点导出（`RunBrains`） |
 | `Commands/` | 命令行：每个命令一个类，共用的选项组在 `Args.cs` 里 |
-| `Checks/` | 诊断（`selftest`、`fidelity`、`forkbench`），以及在克隆上回答 L0 试探的 `NodeProbe` |
+| `Checks/` | `selftest`，它的检查分在四个文件里：命令本身，以及战斗、规则和整局的检查 |
 
 `Simulation/` 和 `Runtime/` 不用 `Commands/` 里的任何东西。不需要游戏的 xUnit 测试在 `src/Sts2Ai.Tests` 里（[参考 §7](/arch/simulator/reference/#sec-7)）。
 
@@ -82,9 +82,9 @@ flowchart LR
 |---|---|
 | [无头宿主](/arch/simulator/headless/) | 游戏怎样脱离引擎启动：原生桩、补丁、TestMode、JIT，以及让游戏具有确定性的单线程 `Pump` |
 | [战斗](/arch/simulator/combat/) | 战斗会话、作为配方的快照、确定化、从观测构建战斗（CombatBuilder）、保真度和速度 |
-| [整局](/arch/simulator/runs/) | `RunSession`：开局、“步进—稳定—决策”循环、每个决策画面、确定性、两种连战、作为宿主对接大脑跑对局 |
+| [整局](/arch/simulator/runs/) | `RunSession`：开局、“步进—稳定—决策”循环、每个决策画面、确定性、作为宿主对接大脑跑对局 |
 | [世界与 SL 克隆](/arch/simulator/worlds/) | NoSL 战斗世界、节点检查点、SL 克隆的载入与封存、SL 世界、整局世界 |
-| [工作进程池](/arch/simulator/pool/) | 进程池、它的四种请求、跨进程的确定性、崩溃和速度 |
+| [工作进程池](/arch/simulator/pool/) | 进程池、它的三种请求、跨进程的确定性、崩溃和速度 |
 | [参考](/arch/simulator/reference/) | 构建与运行、每个命令和选项、退出码、每个测试 |
 
 像 `Runs/RunManager.cs:295-312` 这样的文件引用指向反编译出的游戏程序集 `MegaCrit.Sts2.Core`（文件夹 `Runs/` 就是它的命名空间 `MegaCrit.Sts2.Core.Runs`）；像 `Simulation/RunSession.cs` 这样的项目路径，除非写明了别的项目，都在 `src/Sts2Ai.SimWorker/` 下。Godot 节点文件（`NGame.cs`、`NRestSiteRoom.cs`）按名字唯一，只给出文件名。

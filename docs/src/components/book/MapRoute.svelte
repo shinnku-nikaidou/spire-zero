@@ -1,7 +1,7 @@
 <script lang="ts">
   // A map answer's marks (docs: output §3): the act-3 map of the example run's floor 43, the path so far, a pulsing ring on
   // the point the brain picked, and a line along each path of the route after it, as MapMark draws them; the map
-  // route setting picks how much shows. Each option is labelled with V's value of its predicted afterstate.
+  // route setting picks how much shows.
   import data from '../../data/book/panel-examples.json';
   import { COLOUR, GLYPH } from '../v/map.ts';
   import { loadNames, type Lang, type Names } from '../v/names.ts';
@@ -31,7 +31,6 @@
   const at = M.visited[M.visited.length - 1];
   const stops = [[at.col, at.row], ...[M.chosen, ...M.route].map(coord)];
   const next = coord(M.chosen);
-  const value = Object.fromEntries(M.options.map((o) => [o.action.slice(4), o.value]));
 
   let t = $state(0);
   $effect(() => {
@@ -77,10 +76,6 @@
     {#if route !== 'off'}
       <circle cx={px(next[0])} cy={py(next[1])} r={17 * pulse} fill="none" stroke="#bf59ff" stroke-width="4" />
     {/if}
-    {#each Object.entries(value) as [c, v] (c)}
-      {@const [col, row] = c.split(',').map(Number)}
-      <text x={px(col) + 22} y={py(row) + 4} class="val">V {v.toFixed(2)}</text>
-    {/each}
     <text x={px(at.col) + 16} y={py(at.row) + 18} class="val muted">{say(lang, w('you are here', '你在这里', '你在這裡'))}</text>
   </svg>
   <div class="legend">
@@ -90,9 +85,9 @@
   </div>
   <p class="v-caption">
     {say(lang, w(
-      `The example run (seed ${M.source.seed}) on floor ${M.source.floor}, act 3 (${M.source.hp} of ${M.source.max_hp} HP), at the map’s row 9. Grey: the path so far. The brain picks the monster at row 10 over the rest site beside it; the purple line is the route the run then took, through an elite and a rest site to the boss. V’s values are its expected floor on each option’s afterstate, as predicted from the screen (sim afterstates); the panel does not show them.`,
-      `贯穿全书那一局（种子 ${M.source.seed}）在第 ${M.source.floor} 层，第三幕（HP ${M.source.hp}/${M.source.max_hp}），位于地图第 9 行。灰线：走过的路。大脑在第 10 行选了普通战斗，而不是旁边的休息处；紫线是这一局后来实际走的路线，经过一场精英战和一个休息处到 Boss。V 的值是每个选项的后继状态的预期楼层，由画面预测（sim afterstates）；面板不显示这些值。`,
-      `貫穿全書那一局（種子 ${M.source.seed}）在第 ${M.source.floor} 層，第三幕（HP ${M.source.hp}/${M.source.max_hp}），位於地圖第 9 行。灰線：走過的路。大腦在第 10 行選了普通戰鬥，而不是旁邊的休息處；紫線是這一局後來實際走的路線，經過一場菁英戰和一個休息處到頭目。V 的值是每個選項的後繼狀態的預期樓層，由畫面預測（sim afterstates）；面板不顯示這些值。`,
+      `The example run (seed ${M.source.seed}) on floor ${M.source.floor}, act 3 (${M.source.hp} of ${M.source.max_hp} HP), at the map’s row 9. Grey: the path so far. The brain picks the monster at row 10 over the rest site beside it; the purple line is the route the run then took, through an elite and a rest site to the boss.`,
+      `贯穿全书那一局（种子 ${M.source.seed}）在第 ${M.source.floor} 层，第三幕（HP ${M.source.hp}/${M.source.max_hp}），位于地图第 9 行。灰线：走过的路。大脑在第 10 行选了普通战斗，而不是旁边的休息处；紫线是这一局后来实际走的路线，经过一场精英战和一个休息处到 Boss。`,
+      `貫穿全書那一局（種子 ${M.source.seed}）在第 ${M.source.floor} 層，第三幕（HP ${M.source.hp}/${M.source.max_hp}），位於地圖第 9 行。灰線：走過的路。大腦在第 10 行選了普通戰鬥，而不是旁邊的休息處；紫線是這一局後來實際走的路線，經過一場菁英戰和一個休息處到頭目。`,
     ))}
   </p>
 </div>

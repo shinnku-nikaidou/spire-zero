@@ -247,8 +247,8 @@ $$
 
 训练器在 PyTorch 里计算网络；大脑在 C# 里运行它。两者必须一致，靠的是网络文件（[学习：参考 §7](/arch/learning/reference/#sec-7)）：
 
-- **导出**。`learn/combat/export.py`（`net_file`，`:72-106`）把网络作为 ONNX 计算图写进文件，掩码、softmax 和 sigmoid 都包括在内，输入按 [§2](#sec-2) 命名，每个长度都不固定。旁边是词元表、分桶、训练报告，以及 16 个留出的回合开始和训练器给它们的输出，其中有多段攻击、持有药水和低生命值的状态。
-- **推理**。`CombatNet`（`src/Sts2Ai.Brain/Combat/CombatNet.cs`）遵循 `encode.py`：`Graph`（`:91-121`）构建同样的张量，由 ONNX Runtime 运行计算图。
+- **导出**。`learn/combat/export.py`（`net_file`，`:72-105`）把网络作为 ONNX 计算图写进文件，掩码、softmax 和 sigmoid 都包括在内，输入按 [§2](#sec-2) 命名，每个长度都不固定。旁边是词元表、分桶、训练报告，以及 16 个留出的回合开始和训练器给它们的输出，其中有多段攻击、持有药水和低生命值的状态。
+- **推理**。`CombatNet`（`src/Sts2Ai.Brain/Combat/CombatNet.cs`）遵循 `encode.py`：`Graph`（`:90-120`）构建同样的张量，由 ONNX Runtime 运行计算图。
 - **检查**。`CombatNet.Load`（`:55-72`）只有在这 16 个状态的输出与训练器的相差不超过 $10^{-3}$ 时才接受这个文件。两边读状态的方式只要有差别，文件就加载不了。
 
 ## 10. 这个结构表达不了什么

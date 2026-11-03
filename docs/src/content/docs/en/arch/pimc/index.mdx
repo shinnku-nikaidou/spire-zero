@@ -62,7 +62,7 @@ The figure takes a real NoSL decision, the first turn of an elite fight against 
 
 ## 3. How faithful a world is
 
-A world built from the observation should play like the real fight, apart from what `Determinize` samples on purpose. `fidelity` measures it: at every second decision of a panel's fights, the real fight plays on with a placeholder policy to the end of the turn, the enemies' turn included, and a fight built from the decision's observation and record is given the real one's sampled state and plays the same actions; the first observation that differs is counted ([Simulator: combats §6](/en/arch/simulator/combat/#sec-6)). With Silent's starter deck (2026-10-27):
+A world built from the observation should play like the real fight, apart from what `Determinize` samples on purpose. A measurement shows how far it does: at every second decision of a set of fights, the real fight played on with a placeholder policy to the end of the turn, the enemies' turn included, while a fight built from the decision's observation and record, given the real one's sampled state, played the same actions; the first observation that differed was counted ([Simulator: combats §6](/en/arch/simulator/combat/#sec-6)). With Silent's starter deck (2026-10-27):
 
 | fights | decisions | the same through the enemies' turn, without the record → with it |
 |---|---|---|
@@ -101,4 +101,4 @@ The details are in [Search §7](/en/arch/pimc/search/#sec-7), the budget in [Bud
 | section | what it explains |
 |---|---|
 | [Search](/en/arch/pimc/search/) | the search in each world, the average by first action, noise and common random numbers, strategy fusion and the sampler's bias; the same search on `TurnEnds` |
-| [Budget](/en/arch/pimc/budget/) | worlds and nodes, following the plan, sequential halving, budget by room, workers, results, weaknesses and open questions; the planned budget |
+| [Budget](/en/arch/pimc/budget/) | worlds and nodes, following a cycle's plan, one share per first action, the same budget in every room, workers, results, weaknesses and open questions; the planned budget |

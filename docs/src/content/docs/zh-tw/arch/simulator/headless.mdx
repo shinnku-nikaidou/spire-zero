@@ -36,7 +36,7 @@ import PumpDemo from '../../../../../components/book/PumpDemo.svelte';
 
 接著它訂閱遊戲的日誌（`Log.LogCallback`，Error 及以上的每一行）以及沒有人 await 的任務所產生的錯誤（`TaskHelper.UnobservedFault`），把兩者都收集為**遊戲錯誤**（[§8](#sec-8)）。啟動約需 1.2 s。
 
-不需要遊戲的指令（`brain`、`report`、`gate`、`leaderboard`、`seeds`、`ranks`）從不啟動它（[參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。
+不需要遊戲的指令（`brain`、`report`、`gate`、`leaderboard`、`seeds`）從不啟動它（[參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。
 
 ## 3. 原生存根
 

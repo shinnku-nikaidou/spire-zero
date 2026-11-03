@@ -99,14 +99,14 @@ flowchart LR
 
 ## 4. 搭配大腦執行
 
-Mod 需要一個在它的 socket `~/.local/state/sts2ai/brain.sock`（設定了 `$XDG_STATE_HOME` 時在它底下）上監聽的大腦。大腦就是 SimWorker 的 `brain` 指令（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)），在遊戲之前或之後啟動都可以；Mod 每 2 秒重試一次，直到連上為止。
+Mod 需要一個在它的 socket `~/.local/state/sts2ai/brain.sock`（設定了 `$XDG_STATE_HOME` 時在它底下）上監聽的大腦。大腦就是 SimWorker 的 `brain` 指令（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)），在遊戲之前或之後啟動都可以；Mod 每 2 秒重試一次，直到連上為止。
 
 ```bash
 dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/silent/champions/nosl.json
 ```
 
 - `--champion` 指定它要用的冠軍：NoSL 宿主得到檔案裡的戰鬥大腦（PIMC 加戰鬥網路）和宏觀大腦（L0 加 V）；SL 宿主得到 `--sl-policy` 的戰鬥大腦（預設是 SL 規劃器），宏觀大腦相同（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）。所以一個大腦就能服務兩種環境，切換面板上的開關也不需要重新啟動。
-- 這對 NoSL 冠軍的檔案成立：它的宏觀大腦在從畫面預測出的後狀態上為每個選項估值。SL 冠軍的檔案（`sl.json`）則讓 L0 在節點的複本上試打它的選項（`afterstates: clone`），這只有 SL 允許：用它啟動的 `brain` 會以一個 `error` 拒絕 NoSL 宿主（「l0 plays on the node's clone in SL only」，`Brains/ChampionOptions.cs:41`），而且在 SL 下，戰鬥以外的決策也需要節點的複本（[SL 紀錄 §6](/zh-tw/arch/mod/sl-record/#sec-6)）。
+- 這對 NoSL 冠軍的檔案成立：它的宏觀大腦在從畫面預測出的後狀態上為每個選項估值。SL 冠軍的檔案（`sl.json`）則讓 L0 在節點的複本上試打它的選項（`afterstates: clone`），這只有 SL 允許：用它啟動的 `brain` 會以一個 `error` 拒絕 NoSL 宿主（「l0 plays on the node's clone in SL only」，`Brains/ChampionOptions.cs:39`），而且在 SL 下，戰鬥以外的決策也需要節點的複本（[SL 紀錄 §6](/zh-tw/arch/mod/sl-record/#sec-6)）。
 - `--log FILE` 寫出 Harness 的決策日誌；`--wire FILE` 寫出宿主傳來的每則訊息，`clones` 會重播它們（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 - 透過固定建置的啟動程式（`tmp/builds/REV/sim.sh`）啟動的大腦，它的 `HOME` 指向 `tmp/home`，所以需要 `--socket ~/.local/state/sts2ai/brain.sock` 才會在遊戲尋找的地方監聽（[模擬器：參考 §1](/zh-tw/arch/simulator/reference/#sec-1)）。
 - 大腦每局印出一行：對局 id、宿主的身分（`mod`）、這一局怎麼結束、它的層數、決策數，以及重新規劃次數和工作行程裡的遊戲錯誤（如果有）。

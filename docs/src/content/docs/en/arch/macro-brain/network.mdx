@@ -150,7 +150,7 @@ $$
 
 The hazards of floors before $f$ are computed and not used ([From hazards to value §2](/en/arch/macro-brain/value/#sec-2)).
 
-**The second head** is one linear layer on $b_2$ of 7 outputs, used only in training. It predicts the next combats' HP costs, which shapes the body; it never decides, and it is not in the net file ([From hazards to value §4](/en/arch/macro-brain/value/#sec-4)).
+**The second head** is one linear layer on $b_2$ of 6 outputs, used only in training. It predicts the next combats' HP costs, which shapes the body; it never decides, and it is not in the net file ([From hazards to value §4](/en/arch/macro-brain/value/#sec-4)).
 
 ## 6. Sizes and cost
 
@@ -163,7 +163,7 @@ The hazards of floors before $f$ are computed and not used ([From hazards to val
 | hazard head | 512 → 64 | 32,832 |
 | **total** | | **905,152** |
 
-The token tables are fixed, so these sizes depend only on the game build. The training-only head adds 3,591.
+The token tables are fixed, so these sizes depend only on the game build. The training-only head adds 3,078.
 
 **What the file holds.** The file is `weights/all/v9-0.json`. Its weights have learned from the Silent's runs alone, in the first half of every width: the second half of each embedding and each layer has learned nothing yet, its units reading small random weights and read by zeros, so V gives what the first halves alone give. Its $\mu$ and $\sigma$ are kept from its first training runs, all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training held, such as `DEFEND_IRONCLAD` or `character:IRONCLAD`, has the first half of the unknown id's row, so V reads the other four characters alike until it trains on their runs; such a map token for the point entered, like `Unassigned+0`, is zero, and so are the keyword and Tinker tokens' rows.
 
@@ -173,7 +173,7 @@ A call takes about 0.08 ms in C# on one thread, batch of one. A macro decision o
 
 The trainer computes the net in PyTorch; the brain runs it in C#. They must agree exactly, and they do so through the net file (`weights/all/NAME.json`, [Learning: reference §7](/en/arch/learning/reference/#sec-7)):
 
-- **Export.** `learn/v/export.py` writes the net as an ONNX graph inside the file, with the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, $\mu$ and $\sigma$, the objective `win`, the training report and 8 held-out samples with the values the trainer gave them.
+- **Export.** `learn/v/export.py` writes the net as an ONNX graph inside the file, with the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, $\mu$ and $\sigma$, the training report and 8 held-out samples with the values the trainer gave them.
 - **Inference.** `RunNet` (`src/Sts2Ai.Brain/Macro/RunNet.cs`) follows `encode.py`: its `Tokens` and state build the same tensors, and ONNX Runtime runs the graph. It feeds an input only if the graph declares it. `Value` multiplies the hazards from the current floor on.
 - **The check.** `RunNet.Load` refuses the file unless it gives the 8 samples the trainer's values, to within 0.1% (and $10^{-6}$ for the smallest values, where the floats' noise is larger). A difference in how either side reads a run stops the file from loading. Values of P(win) are mostly below 0.1, so a tolerance that was not relative would pass nearly anything.
 

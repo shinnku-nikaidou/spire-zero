@@ -61,7 +61,7 @@ sequenceDiagram
 ```
 
 1. **宿主發問**。走線路時，宿主送出一條 `decision` 訊息：觀測、它的雜湊和合法動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。`BrainServer` 檢查它屬於一局、它的 id 大於上一個，並且雜湊確實是這個觀測的，然後把它作為戰鬥決策、選牌提示或宏觀決策交給這一局的 `Dispatcher`（[§5](#sec-5)）。在行程內時，模擬器直接詢問 `Dispatcher`。
-2. **Harness 記下它**。戰鬥決策的觀測加入敵人出招紀錄（`MoveRecord.Witness`）；宏觀決策結束這場戰鬥的紀錄（[§4](#sec-4)）。決策得到它在這一局裡的編號，它的大腦的計數加一，並抽取它的種子（`Dispatcher.cs:205-210`）。
+2. **Harness 記下它**。戰鬥決策的觀測加入敵人出招紀錄（`MoveRecord.Witness`）；宏觀決策結束這場戰鬥的紀錄（[§4](#sec-4)）。決策得到它在這一局裡的編號，它的大腦的計數加一，並抽取它的種子（`Dispatcher.cs:189-194`）。
 3. **一個大腦做決定**。這個決策介面的路由拿到決策、種子、SL 下節點的複本，以及這場戰鬥至今的出招。會搜尋的大腦把搜尋拆成工作行程請求，再合併回覆，回覆按請求順序回來（[路由、預算與種子 §2](/zh-tw/arch/harness/routing/#sec-2)）。
 4. **Harness 檢查並記錄**。不合法的回答會拋出例外。大腦的名字、計畫和候選成為這個決策的註記（`Dispatcher.Last`），記錄日誌時也成為決策日誌的一行。
 5. **宿主拿到推薦**：動作、大腦、它的計畫和候選，並回送請求的 id 和雜湊（[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。
@@ -79,7 +79,7 @@ sequenceDiagram
 | 敵人出招紀錄（`History`） | 戰鬥大腦的葉節點，以及世界裡怪物的出招日誌（[§4](#sec-4)） | 宏觀決策時，或回合數倒退時 |
 | SL 節點：檢查點和軌跡 | 節點的複本，交給戰鬥大腦，加上 `--afterstates clone` 時也交給宏觀一側 | 每個節點檢查點 |
 | 決策日誌 | 這一局的各行，在記憶體裡保存到這一局結束 | 一局內從不 |
-| 各路由自己的狀態 | PIMC 照著打的計畫（`TurnPlan`）和 SL 規劃器的路由（`SlRoute`），每局一個 | 從不：戰鬥結束時不會，宏觀決策時也不會 |
+| 各路由自己的狀態 | PIMC 照著打的循環計畫（`TurnPlan`）和 SL 規劃器的路由（`SlRoute`），每局一個 | 從不：戰鬥結束時不會，宏觀決策時也不會 |
 
 ## 4. 公開紀錄
 
@@ -97,7 +97,7 @@ sequenceDiagram
 
 - `Checkpoint` 拒收 NoSL 下的檢查點，以及節點索引沒有遞增的檢查點；它讓節點的軌跡重新開始。
 - `Act` 拒收 NoSL 下的動作，以及不屬於當前節點、或序號不等於軌跡長度的動作；它把動作加到軌跡上。
-- 在需要它的決策處，節點的複本由檢查點的存檔、軌跡的一份拷貝，以及菁英連戰的規則（如果這一局按它打）組成（`NodeClone`）。在任何檢查點之前就需要複本的 SL 決策會拋出例外。需要複本的是每個 SL 戰鬥決策，加上 `--afterstates clone` 時還有每個宏觀決策和每個戰鬥外的選牌提示（[路由、預算與種子 §3](/zh-tw/arch/harness/routing/#sec-3)）。
+- 在需要它的決策處，節點的複本由檢查點的存檔和軌跡的一份拷貝組成（`NodeClone`）。在任何檢查點之前就需要複本的 SL 決策會拋出例外。需要複本的是每個 SL 戰鬥決策，加上 `--afterstates clone` 時還有每個宏觀決策和每個戰鬥外的選牌提示（[路由、預算與種子 §3](/zh-tw/arch/harness/routing/#sec-3)）。
 
 **規劃中：紀錄的其餘部分** <Badge text="規劃中" variant="caution" />。NoSL 下一個不只關於怪物出招的信念，需要更多公開過的東西：
 
@@ -150,14 +150,14 @@ public sealed class PublicRecord
 | `Dispatcher.cs` | `CombatRoute`、`Route<T>`、`DecisionEntry`、`DecisionNote`、`Dispatcher` | 一局的路由、種子、檢查、SL 節點和日誌（[路由、預算與種子](/zh-tw/arch/harness/routing/)、[決策日誌](/zh-tw/arch/harness/decision-log/)） |
 | `BrainServer.cs` | `BrainServer` | 線路的大腦端（[§5](#sec-5)） |
 | `WorkerPool.cs` | `WorkerPool` | 搜尋用的工作行程（[模擬器：工作行程池](/zh-tw/arch/simulator/pool/)） |
-| `PooledPimc.cs` | `PooledPimc` | 在行程池裡搜尋各個世界的 PIMC，NoSL 或 SL |
+| `PooledPimc.cs` | `PooledPimc` | NoSL 下在行程池裡搜尋各個世界的 PIMC |
 | `PooledPlanner.cs` | `PooledPlanner` | 在行程池裡搜尋各個回合的 SL 規劃器 |
 | `PooledClone.cs` | `PooledClone` | 給宏觀一側用的節點複本，它的試探在行程池裡打 |
 | `RunRecords.cs` | `RunConfig`、`RunRecord`、`CombatEntry`、`CombatEnd` | 對局記錄（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)） |
 | `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 報告和排行榜（[評估：指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)） |
 | `Gate.cs` | `Gate`、`ChampionFile` | 配對的晉級門檻和冠軍檔案（[評估：晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)） |
 
-**`Dispatcher`**（`Dispatcher.cs:80-225`）建立時需要 run id、環境、四條路由、是否記錄日誌，以及在 `--afterstates clone` 下如何為宏觀一側開啟節點的複本：
+**`Dispatcher`**（`Dispatcher.cs:55-209`）建立時需要 run id、環境、四條路由、是否記錄日誌，以及在 `--afterstates clone` 下如何為宏觀一側開啟節點的複本：
 
 | 成員 | 內容 |
 |---|---|
@@ -167,7 +167,7 @@ public sealed class PublicRecord
 | `Choose(MacroDecision)` → 動作 | 一個戰鬥外的決策；未覆蓋的決策介面會拋出例外 |
 | `Checkpoint(NodeCheckpoint)`、`Act(NodeAction)` | SL：節點的檢查點和在其中做出的每個決策（[§4](#sec-4)） |
 | `Log` | 記錄日誌時，這一局到目前為止的決策日誌 |
-| `Env`、`Last`、`Brains`、`Replans`、`History` | 環境，以及 [§3](#sec-3) 的狀態 |
+| `Last`、`Brains`、`Replans`、`History` | [§3](#sec-3) 的狀態 |
 | `Champion` | 報告裡對這一局各個大腦的稱呼：`combat B[ budget], combat prompts B, macro B, macro prompts B`（[路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)） |
 
 **Harness 呼叫的 Brain 部分**（`Brain/Decisions.cs`、`Brain/Combat/`）：
@@ -176,7 +176,7 @@ public sealed class PublicRecord
 |---|---|
 | `ICombatPolicy`、`IChoicePolicy`、`IMacroPolicy` | 每種決策一種策略；`IChoicePolicy` 和 `IMacroPolicy` 還會說明它們上一個回答是否經過探索，`IMacroPolicy` 還會說明它在回答之後的計畫 |
 | `CombatDecision`、`ChoiceDecision`、`MacroDecision` | 一個決策：它的合法動作（或它的提示）、按需建構的觀測，以及宏觀一側在有開啟的複本時的節點複本（`IMacroClone`） |
-| `CombatDecisionResult` | 戰鬥大腦的回答：第一個動作、它之後的計畫、候選、計畫的觀測雜湊、是否經過探索、是否重新規劃 |
+| `CombatDecisionResult` | 戰鬥大腦的回答：第一個動作、它之後的計畫、候選、計畫的觀測雜湊、是否重新規劃、它的路線是否重複一個循環 |
 | `Budget`、`TurnPlan`、`SlRoute`、`MoveRecord` | 搜尋預算、照計畫打、規劃器的路由、敵人出招紀錄 |
 
 ## 7. 本章

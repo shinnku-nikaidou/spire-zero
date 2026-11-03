@@ -1,13 +1,13 @@
 ---
 title: 'Budget, tools and results'
-description: How PIMC spends its worlds and nodes, the levers built on top (following the plan, sequential halving, budget by room), how it runs in workers, what it has measured, its weaknesses and open questions, and the planned budget of K and nodes alone.
+description: How PIMC spends its worlds and nodes, when it follows a plan without searching, why every first action and every room gets the same share, how it runs in workers, what it has measured, its weaknesses and open questions, and the planned budget on TurnEnds.
 sidebar:
   label: Budget
 ---
 
 import { Badge } from '@astrojs/starlight/components';
 
-PIMC's budget is two numbers, `Budget(Worlds, NodesPerWorld)`: $K$ worlds, each searched with a number of nodes, 8 × 300 by default, where a node is one action played ([§1](#sec-1)). On top of the plain search sit three levers, each built and measured: following the plan through the rest of a turn ([§2](#sec-2)), sequential halving at the root ([§3](#sec-3)), and more nodes in elite and boss fights ([§4](#sec-4)). None of them is on in the champion, and the planned design drops them ([§8](#sec-8)).
+PIMC's budget is two numbers, `Budget(Worlds, NodesPerWorld)`: $K$ worlds, each searched with a number of nodes, 8 × 300 by default, where a node is one action played ([§1](#sec-1)). Nothing else sets it: a plan is followed without a search only when it repeats a cycle ([§2](#sec-2)), a world's nodes go to the first actions evenly ([§3](#sec-3)), and every room gets the same budget ([§4](#sec-4)).
 
 ## 1. Worlds and nodes
 
@@ -17,35 +17,25 @@ How large $K$ should be is a question of returns. Each world adds a sample to ev
 
 ## 2. Following the plan
 
-When every world plans the same rest of the turn, and expects the same observation before each of its steps, the plan can be played without searching again, one step at a time, for as long as the fight shows what the worlds expected (`--follow`, `TurnPlan`, [Combat brain §4](/en/arch/combat-brain/#sec-4)). A draw, a random result or a disagreement between the worlds sends the decision back to search.
+PIMC searches again before every action, with one exception. When the best line repeats a cycle ([Search §6](/en/arch/pimc/search/#sec-6)), and every world plans the same rest of the turn and expects the same observation before each of its steps, the plan is played without searching again, one step at a time, for as long as the fight shows what the worlds expected (`TurnPlan`, [Combat brain §4](/en/arch/combat-brain/#sec-4)). A draw, a random result or a disagreement between the worlds sends the decision back to search.
 
-On the first 6 act 1 panel fights, 66 of 142 decisions were played without a search, every action the same, in 27% less time. In whole runs of the champion on 16 train seeds, a run took 31% less time. Its not-worse gate ([Evaluation: gates §7](/en/arch/evaluation/gates/#sec-7)) was still open after all 200 seeds, −0.72 ± 0.92 floors with 126 seeds to the same floor, so it is built (`--follow`) but not used.
+Following every plan the worlds agree on, not only a cycle's, saves time but did not pass its gate. On the first 6 act 1 panel fights, 66 of 142 decisions went without a search, every action the same, in 27% less time; in whole runs of the champion on 16 train seeds, a run took 31% less time. Its not-worse gate ([Evaluation: gates §7](/en/arch/evaluation/gates/#sec-7)) was still open after all 200 seeds, −0.72 ± 0.92 floors with 126 seeds to the same floor.
 
-## 3. Sequential halving
+## 3. One share per first action
 
-An even split gives a hopeless first action as many nodes as the best. **Sequential halving** spends them where the choice is made: over $m$ first actions it runs $R = \lceil \log_2 m \rceil$ rounds; each round splits every world's share of the nodes evenly over the first actions still in, and then drops the worse half by their mean over the same worlds (common random numbers again). The pick is the better of the last two. It is the root selection of Gumbel AlphaZero when the prior is uniform.
+Each world's $N$ nodes are split evenly over its $m$ first actions: each gets $\max(1, \lfloor N/m \rfloor)$ (`PimcBrain.Root`), and a share left unspent is not passed on. Inside its subtree a first action's search goes depth first until the share is spent, and the state there is scored as ending the turn, the option tried first ([Search §1](/en/arch/pimc/search/#sec-1)). Another answer to the first action's card prompt, when it opens a cycle, gets a share of its own ([Search §6](/en/arch/pimc/search/#sec-6)).
 
-In round $r$, each of the $m_r$ actions still in gets $N / (R\, m_r)$ more nodes per world, $N$ being the nodes per world. A worker keeps nothing between requests, so each round searches the actions left again from the root, with all the nodes each has had so far, rather than resuming. That costs up to about 1.5 times the nodes of resuming: 1.25 at 4 first actions, 1.4 at 8, 1.5 at 16.
+An even split gives a hopeless first action as many nodes as the best one. Spending them where the choice is made is open ([§7](#sec-7)).
 
-On the Terror Eel decision of [Search §3](/en/arch/pimc/search/#sec-3), with its 8 first actions, it would go as below. The values are the even search's, standing in for what each round would find:
+## 4. The same budget in every room
 
-| round | first actions in | nodes each, per world | dropped by the round's mean |
-|---|---|---|---|
-| 0 | 8 | 12 | Neow's Fury, Calculated Gamble, Strike, End turn |
-| 1 | 4 | 37 | Slice, Poisoned Stab |
-| 2 | 2 | 87 | Defend; the pick is Leg Sweep |
-
-The worlds search $8 \times 12 + 4 \times 37 + 2 \times 87 = 418$ nodes each instead of 300, and Leg Sweep gets 87 of them instead of 37. Built (`--halving`), off by default; assist mode, whose time is open-ended, is meant to use its anytime variant.
-
-## 4. Budget by room
-
-Elite and boss fights decide runs, so they could get more search: `--elite-x` and `--boss-x` multiply PIMC's nodes per world in those rooms (by the observation's room type). The evidence elsewhere is strong: in spire-mentor, raising the boss budget from 1,000 to 4,000 lifted the act 1 clear rate from 21.5% to over 65%. Here boss × 2 failed its gate on seeds 0–99 (2026-10-28): 90 of the 100 pairs tied, the mean difference was −0.39 ± 0.32 floors, 43 runs passed the act 1 boss against the champion's 45, and runs took 15% longer. It is not used; × 4 is untried.
+Elite and boss fights decide runs, so they could get more search. The evidence elsewhere is strong: in spire-mentor, raising the boss budget from 1,000 to 4,000 lifted the act 1 clear rate from 21.5% to over 65%. Here twice the nodes per world in boss fights failed its gate on seeds 0–99 (2026-10-28): 90 of the 100 pairs tied, the mean difference was −0.39 ± 0.32 floors, 43 runs passed the act 1 boss against the champion's 45, and runs took 15% longer. So every room gets 8 × 300; four times the nodes is untried.
 
 ## 5. Workers
 
-Each world of a decision is one request to the worker pool (`PimcWorldRequest`, [Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)): the worker builds the fight from the observation with the build seed, takes world $k$ of the worlds drawn from the search seed, searches this turn and returns the best line after each first action. `PooledPimc` sends one request per world and merges the replies in world order; with sequential halving it sends one such set per round, with the first actions still in. On 6 act 1 fights, 8 workers take 68.7 ms per action against 307.5 ms in one process, with the same moves.
+Each world of a decision is one request to the worker pool (`PimcWorldRequest`, [Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)): the worker builds the fight from the observation with the build seed, takes world $k$ of the worlds drawn from the search seed, searches this turn and returns the best line after each first action. `PooledPimc` sends one request per world and merges the replies in world order. On 6 act 1 fights, 8 workers take 68.7 ms per action against 307.5 ms in one process, with the same moves.
 
-PIMC can also run on SL's one exact world (`--policy pimc --env SL`), the planner's baseline. SL has one world, so `PooledPimc` splits it by first action instead (`SlWorldRequest`): one request per first action, each with that action's share of the budget. Each request keeps its own memo of transpositions, where one process shares it across first actions, so the answer can differ from a search in one process.
+PIMC plays in NoSL only: SL's one exact world is the planner's ([The SL planner](/en/arch/sl-planner/)), and a champion that plays `pimc` refuses an SL run (`src/Sts2Ai.SimWorker/Brains/ChampionOptions.cs:38`).
 
 ## 6. Results
 
@@ -77,24 +67,17 @@ PIMC raises the floor under either macro brain, and L0 under either combat polic
 
 ## 7. Weaknesses and open questions
 
-1. **$K$ and the nodes per world.** 8 × 300 for every fight, untuned. A panel can show the marginal gain in HP per added world ([§1](#sec-1)).
-2. **How large fusion is.** The fusion panel is built and has had one small try ([Search §4](/en/arch/pimc/search/#sec-4)): 300–500 decisions rich in reveals would decide whether ISMCTS is worth its cost.
+1. **$K$ and the nodes per world.** 8 × 300 for every fight, untuned, split evenly over the first actions ([§3](#sec-3)). A fixed set of fights can show the marginal gain in HP per added world ([§1](#sec-1)).
+2. **How large fusion is.** It has had one small measurement ([Search §4](/en/arch/pimc/search/#sec-4)): 300–500 decisions rich in reveals would decide whether ISMCTS is worth its cost.
 3. **The leaf at the end of the turn.** The search sees the fight past this turn only through the leaf, so the leaf's gaps are the search's ([Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7)).
 4. **The sampler.** Monsters' queued moves are drawn uniformly among those that match the intent, and hidden counters have no posterior ([Search §5](/en/arch/pimc/search/#sec-5)).
 5. **Prompts** go to `p0`, as in SL ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)).
 6. **No report of the current champion** in NoSL, and its combat net learned from SL's games and has never been trained or gated in NoSL ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
 
-## 8. K and nodes per world, and nothing else <Badge text="planned" variant="caution" />
+## 8. The budget on TurnEnds <Badge text="planned" variant="caution" />
 
-The planned budget is the two numbers of [§1](#sec-1). Everything else that has a flag today is a candidate to delete: none of it is on in the champion.
-
-| candidate | today | why it can go |
-|---|---|---|
-| sequential halving ([§3](#sec-3)) | built, off | not in the champion, and it complicates the root |
-| follow ([§2](#sec-2)) | built, off | its not-worse gate stayed open after 200 seeds |
-| room multiples ([§4](#sec-4)) | built, off | boss × 2 failed its gate |
-| `SlWorldRequest` ([§5](#sec-5)) | built, baseline only | PIMC on SL's world is a baseline, not a player |
+The planned budget stays the two numbers of [§1](#sec-1). What the planned search changes is how a world's nodes are spent: the merged `TurnEnds` ([Search §7](/en/arch/pimc/search/#sec-7)) does not give each first action its own share, as [§3](#sec-3) does.
 
 **What stays and must.** `MoveRecord` stays for building worlds even if the net stops reading it: it is what lifts the worlds' fidelity from 82–89% to 96–98% on hallway fights ([Overview §3](/en/arch/pimc/#sec-3)).
 
-**Conditions.** The merged `TurnEnds` needs a NoSL gate, and prompt branches need the fusion panel first ([Search §7](/en/arch/pimc/search/#sec-7)).
+**Conditions.** The merged `TurnEnds` needs a NoSL gate, and prompt branches need strategy fusion measured first ([Search §7](/en/arch/pimc/search/#sec-7)).

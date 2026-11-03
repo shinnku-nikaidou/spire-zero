@@ -17,7 +17,7 @@ import OutcomeHead from '../../../../components/combat/OutcomeHead.svelte';
 
 ## 2. 结局的价格
 
-价格是 `LeafValue`（`LeafValue.Of`，`src/Sts2Ai.Brain/Combat/LeafValue.cs:50-77`）里手设的数：
+价格是 `LeafValue`（`LeafValue.Of`，`src/Sts2Ai.Brain/Combat/LeafValue.cs:20-31`）里手设的数：
 
 - 输掉的战斗为 0。
 - 赢下的战斗剩下生命值比例 $s$（生命值除以最大生命值）、持有 $q$ 瓶药水时，值
@@ -26,15 +26,15 @@ $$
 \text{Win}(s, q) = 0.2 + 0.6\,s + 0.02\,q.
 $$
 
-它们是带网络的叶子里仅有的手设的数。已经结束的战斗直接按它们估值，不用网络：每条打完的路线的终点，因而每个计划的最终得分，都是这个公式作用在路线结束的状态上。
+它们是叶子里仅有的手设的数。已经结束的战斗直接按它们估值，不用网络：每条打完的路线的终点，因而每个计划的最终得分，都是这个公式作用在路线结束的状态上。
 
-没有 `--combat-net` 时，进行中的战斗也交给 `LeafValue`（`HandLeaf`，`src/Sts2Ai.SimWorker/Brains/LeafChoice.cs:20`）：它根据画面上的内容预估战斗剩下的部分，另外用到几个手设的数。没有冠军这样打。
+`LeafValue.Of` 只给打完的战斗估值，遇到还在进行的战斗就拒绝（`src/Sts2Ai.Brain/Combat/LeafValue.cs:30`）：进行中的战斗归战斗网络（[§3](#sec-3)）。所以每个搜索的叶子都是网络，`pimc` 和 `plan` 都需要 `--combat-net`（`src/Sts2Ai.SimWorker/Brains/LeafChoice.cs:18`）。
 
 ## 3. 战斗网络
 
 对还在进行的战斗，叶子去问战斗网络。它读一个回合的开始，预测在打出它训练对局的那个策略下，这场战斗会怎样结束。它的输入和各层见[战斗网络](/arch/combat-brain/network/)，跟着一个真实状态走过它见[一个状态走过网络](/arch/combat-brain/walkthrough/)，它的训练见[训练战斗网络](/arch/learning/combat-net/)。
 
-`--combat-net FILE` 让它来打，用在规划器里（显示为 `plan NAME`）或 PIMC 里（`pimc NAME`）。
+`--combat-net FILE` 把它交给搜索，用在规划器里（显示为 `plan NAME`）或 PIMC 里（`pimc NAME`）。
 
 ## 4. 两个输出
 
@@ -54,7 +54,7 @@ $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})
 $$
 
-死亡不加任何东西，因为它值 0（`CombatNet.Value`，`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-86`）。在一个真实状态上逐项计算，见[一个状态走过网络 §13](/arch/combat-brain/walkthrough/#sec-13)。
+死亡不加任何东西，因为它值 0（`CombatNet.Value`，`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-85`）。在一个真实状态上逐项计算，见[一个状态走过网络 §13](/arch/combat-brain/walkthrough/#sec-13)。
 
 这个形式是**状态持有的东西（精确计入），加上网络说的还要发生的事**。$s$ 被精确计入，所以同一束里的状态在网络开口之前，就已经按真实的生命值分出了差别。喝掉的药水也被精确地从求和里去掉。
 

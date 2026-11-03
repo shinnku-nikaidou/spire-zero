@@ -77,7 +77,6 @@ import { Aside } from '@astrojs/starlight/components';
 | 位置 | 方式 | 默认 |
 |---|---|---|
 | `run`（在模拟器里打完整的对局） | `--env NoSL\|SL`，大小写不限（`Commands/RunCommand.cs:23`）；冠军文件里的 `env` 会填上它 | NoSL |
-| `panel`（固定的战斗测试集） | `--env NoSL\|SL`；`--player plan` 需要 SL，`--workers` 需要 NoSL 并配合 pimc（`Commands/Panel.cs:29-58`） | NoSL |
 | 线路上 | `hello{env: "NoSL"\|"SL"}`，由宿主在每局开始时发送（[协议：线路 §3](/arch/protocol/wire/#sec-3)） | – |
 | `brain`（单独的决策进程） | 两种都服务：NoSL 宿主用 `--policy` 的战斗大脑，SL 宿主用 `--sl-policy` 的（`Commands/BrainCommand.cs:19`） | `--sl-policy plan` |
 | Mod | 面板顶部的 SL/NoSL 开关，保存在 `~/.local/state/sts2ai/settings.json`（[Mod §5](/arch/mod/#sec-5)） | SL |
@@ -86,11 +85,11 @@ import { Aside } from '@astrojs/starlight/components';
 
 拒绝错误环境的地方：
 
-- `--policy plan`（SL 规划器）和 `--afterstates clone`（L0 在克隆上把选项打出来）只在 SL 里使用：NoSL 的 `hello` 会被拒绝（`Brains/ChampionOptions.cs:39-41`），用使用它们的冠军执行 `run --env NoSL` 同样会被拒绝（`Commands/RunCommand.cs:74`）。
+- `--policy plan`（SL 规划器）和 `--afterstates clone`（L0 在克隆上把选项打出来）只在 SL 里使用，`--policy pimc` 只在 NoSL 里使用：另一种环境的 `hello` 会被拒绝（`Brains/ChampionOptions.cs:37-39`），`run` 也会在开始之前拒绝在 SL 之外用规划器（`Commands/RunCommand.cs:66`）。
 - SL 和 NoSL 打同一个战斗网络文件，它学自 SL 的对局（[战斗大脑：叶子 §6](/arch/combat-brain/leaf/#sec-6)）。
-- 在 NoSL 对局里，Harness 拒绝 SL 消息 `node_checkpoint` 和 `node_action`（`Harness/Dispatcher.cs:181`、`:190`）；大脑服务器记下这次拒绝，用一个错误回应这一局的下一个决策，宿主把这一局作为失败结束，`run` 以退出码 1 结束，而失败的一局不计入它的报告（`Harness/BrainServer.cs:112-123`、`Harness/RunRecords.cs:38`）。SL 规划器拒绝不属于 SL 的世界（`Brain/Combat/SlPlanner.cs:82`）。
+- 在 NoSL 对局里，Harness 拒绝 SL 消息 `node_checkpoint` 和 `node_action`（`Harness/Dispatcher.cs:165`、`:174`）；大脑服务器记下这次拒绝，用一个错误回应这一局的下一个决策，宿主把这一局作为失败结束，`run` 以退出码 1 结束，而失败的一局不计入它的报告（`Harness/BrainServer.cs:112-123`、`Harness/RunRecords.cs:32`）。
 - 战斗网络训练器只读给定环境的日志，遇到另一个环境的日志就失败（`learn/combat/data.py`）。
-- 晋级门槛拒绝把在不同环境、不同阶梯级别或不同游戏版本下打的对局配对（`Harness/Gate.cs:51`）。
+- 晋级门槛拒绝把在不同环境或不同游戏版本下打的对局配对（`Harness/Gate.cs:49-50`）。
 
 ## 6. 本章
 

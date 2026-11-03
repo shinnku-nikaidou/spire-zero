@@ -15,7 +15,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-已实现：两种环境下在模拟器里打整局，即 R1 级（`run --seeds FILE --records FILE`）；报告（`report`）及其作废规则；排行榜（`leaderboard`）；种子文件及其生成器（`seeds`）；配对 SPRT 门槛（`gate`），连同冠军文件和 `--promote`；战斗测试集（`panel`）；还有 `learn/gauntlet.py` 在整局上按胜局的配对下界门槛。规划中：R2–R4 级、幕级门槛、A/A 测试、在必须为零的指标里加上 `NumReloads` 和 NoSL 存档导出计数、在报告里加上校准和搜索计算量的数字、把最终种子集跑一遍。
+已实现：两种环境下在模拟器里打整局，即 R1 级（`run --seeds FILE --records FILE`）；报告（`report`）及其作废规则；排行榜（`leaderboard`）；种子文件及其生成器（`seeds`）；配对 SPRT 门槛（`gate`），连同冠军文件和 `--promote`；还有 `learn/gate.py` 在整局上按胜局的配对下界门槛。规划中：R2–R4 级、幕级门槛、A/A 测试、在必须为零的指标里加上 `NumReloads` 和 NoSL 存档导出计数、在报告里加上校准和搜索计算量的数字、把最终种子集跑一遍。
 
 </Aside>
 
@@ -60,7 +60,7 @@ flowchart TD
 
 - R4 按真实时间运行，所以用于确认，不用于调参。
 - 在 NoSL 中，R1 的决策已经走 Build 路径，即由观测构建世界（[模拟器：世界与 SL 克隆 §2](/arch/simulator/worlds/#sec-2)），所以就决策而言，NoSL 的 R1 约等于 R2。SL 则不然：战斗规划器和 `--afterstates clone` 搜索的是节点的克隆，即游戏的存档加上此后的决策，而不是由观测构建的世界（[Harness：路由、预算与种子 §2](/arch/harness/routing/#sec-2)）。
-- 每条对局记录写的都是 `R1`：`run` 把级别写成一个常量（`SimWorker/Commands/RunCommand.cs:285`）。
+- 对局记录不写级别：它的 `config` 只有游戏、提交、冠军和环境（`Harness/RunRecords.cs:18`），模拟器打的每一局都是 R1。
 
 ## 3. 两个排行榜
 
@@ -91,13 +91,12 @@ flowchart TD
 | 报告、作废规则、Wilson 区间 | 已实现 | [指标、种子与报告 §2](/arch/evaluation/metrics/#sec-2)、[§7](/arch/evaluation/metrics/#sec-7) |
 | 种子集，即 `promotion-1` 及其扩充、`final-1` 和 `a10-check-1`，以及它们的生成器 | 已实现；`final-1` 从未跑过 | [指标、种子与报告 §5](/arch/evaluation/metrics/#sec-5) |
 | 排行榜 | 已实现；SL − NoSL 一节从未出现过 | [指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9) |
-| 战斗测试集 | 已实现 | [晋级门槛 §5](/arch/evaluation/gates/#sec-5) |
 | 配对 SPRT 门槛 `gate`、冠军文件、晋级 | 已实现 | [晋级门槛 §6](/arch/evaluation/gates/#sec-6) |
-| 胜局门槛，即用在整局上的 `learn/gauntlet.py --against` | 已实现，使用中 | [晋级门槛 §10](/arch/evaluation/gates/#sec-10) |
+| 胜局门槛，即用在整局上的 `learn/gate.py --against` | 已实现，使用中 | [晋级门槛 §10](/arch/evaluation/gates/#sec-10) |
 | 幕级门槛、A/A 测试、McNemar 检验 | 规划中 | [晋级门槛 §4](/arch/evaluation/gates/#sec-4)、[§5](/arch/evaluation/gates/#sec-5) |
 | R2–R4 | 规划中 | [§2](#sec-2) |
 
-**新网络如何过门槛**。网络在 SL 整局里训练和评判，依据是它获胜的机会（[宏观大脑：自我对弈 §1](/arch/macro-brain/selfplay/#sec-1)）。它的门槛让挑战者用冠军的规划器、按 medium 力度（`--afterstates clone`，不探索）打 `promotion-1-300` 的 300 个种子，把它的对局和冠军的按种子配对，当胜局之差（每局 1 或 0）的均值的 95% 单侧下界大于 0 时晋级它。同样的种子也用 low 预算打一遍，只作参考，不决定任何事。如果一代的两个网络都通过，就晋级胜局更多的那个。所以有两种门槛并存：C# 的 SPRT `gate`，序贯，按层数或按胜局；以及 `learn/gauntlet.py` 按胜局的固定样本下界。
+**新网络如何过门槛**。网络在 SL 整局里训练和评判，依据是它获胜的机会（[宏观大脑：自我对弈 §1](/arch/macro-brain/selfplay/#sec-1)）。它的门槛让挑战者用冠军的规划器、按 medium 力度（`--afterstates clone`，不探索）打 `promotion-1-300` 的 300 个种子，把它的对局和冠军的按种子配对，当胜局之差（每局 1 或 0）的均值的 95% 单侧下界大于 0 时晋级它。同样的种子也用 low 预算打一遍，只作参考，不决定任何事。如果一代的两个网络都通过，就晋级胜局更多的那个。所以有两种门槛并存：C# 的 SPRT `gate`，序贯，按层数或按胜局；以及 `learn/gate.py` 按胜局的固定样本下界。
 
 ## 5. 本章内容
 

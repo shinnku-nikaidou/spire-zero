@@ -22,7 +22,7 @@ Everything is in [The combat net §2](/en/arch/combat-brain/network/#sec-2). `le
 
 ## 3. Samples and labels
 
-`learn/combat/data.py` makes the samples from a list of decision logs and run records ([Reference §4](/en/arch/learning/reference/#sec-4)).
+`learn/combat/data.py` makes the samples from a list of decision logs and run records, of every character ([Reference §4](/en/arch/learning/reference/#sec-4)).
 
 - **A sample is a round's start**: the first combat decision of each round in the logs, the state a search leaf stands in, since the search's leaves are the starts of the next round ([The leaf §1](/en/arch/combat-brain/leaf/#sec-1)). A combat's decisions close at the next macro decision, or when the round goes back; card-prompt lines are skipped (`combats`, `learn/combat/data.py:33-67`).
 - **The enemies' history** before it is rebuilt from the earlier rounds' starts, each living enemy's intents by its uid, as Harness's `Dispatcher` builds it (`witness`, `learn/combat/data.py:70-77`).
@@ -42,7 +42,7 @@ On the set `c7` of those weights, of the wins' round starts, the mask never clos
 uv run python -m combat.train --list data/silent/lists/v8g2 --env SL --name NAME --test-list data/silent/lists/medium
 ```
 
-The loss of a sample is (`loss`, `learn/combat/net.py:300-307`)
+The loss of a sample is (`loss`, `learn/combat/net.py:326-333`)
 
 $$
 \text{loss} = \text{CE}(\text{masked endings}, \text{class}) + \text{won} \sum_{\text{held}} \text{BCE}(u_{\text{id}}, \text{gone}).

@@ -133,7 +133,7 @@ Notes on the fields:
 
 **The potion belt.** On `map`, `rewards`, `event`, `shop`, `rest`, `treasure` and `crystal_sphere` the legal actions also include the belt: `potion:S` for a potion usable at any time, and `discard_potion:S`. Card rewards, bundles and card prompts get none.
 
-**Inside the brain**, the macro surfaces reach a policy as `MacroDecision{surface, legal, observation}`, a card prompt as `ChoiceDecision{choice, observation}`, a combat decision as `CombatDecision{legal, observation}`. A combat played on its own, outside a run (the panel), has no run, so its decisions and prompts carry the combat only.
+**Inside the brain**, the macro surfaces reach a policy as `MacroDecision{surface, legal, observation}`, a card prompt as `ChoiceDecision{choice, observation}`, a combat decision as `CombatDecision{legal, observation}`. A combat played on its own, outside a run (`combat`, `bench`, `selftest`), has no run, so its decisions and prompts carry the combat only.
 
 ## 6. Card prompts
 

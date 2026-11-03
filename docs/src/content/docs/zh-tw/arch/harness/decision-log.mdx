@@ -16,7 +16,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 - `run --log FILE` 在每一局結束後追加它的各行（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。中途被殺掉的一局不會留下任何一行。`--log` 和 `--brain` 一起用時會被拒絕，因為後者的決策由大腦記錄。
 - `brain --log FILE` 在一局的 `run_end` 時寫出它的各行，所以沒送出這條訊息就斷線的宿主不會留下任何一行（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
-每一行是一個 `DecisionEntry` record（`Dispatcher.cs:61-65`），和每個 Protocol 型別一樣序列化：snake_case 的名字，值為 null 的欄位省略（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。日誌和對局記錄放在一起，在資料目錄裡（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）。
+每一行是一個 `DecisionEntry` record（`Dispatcher.cs:36-40`），和每個 Protocol 型別一樣序列化：snake_case 的名字，值為 null 的欄位省略（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。日誌和對局記錄放在一起，在資料目錄裡（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）。
 
 誰讀這份日誌：
 
@@ -36,19 +36,19 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `decision_id` | int | 決策在這一局裡的編號，從 0 起，三種決策一起計數（[§4](#sec-4)） | 同上 | 同上 |
 | `env` | string | `NoSL` 或 `SL` | 同上 | 同上 |
 | `surface` | string | `combat` | `card_choice`，不論哪一側 | 這個決策的決策介面 |
-| `brain` | string | 戰鬥路由的名字：`pimc`、`plan c9-0`、`pimc c9-0 explore 0.003`…… | 提示那一側的：戰鬥中是 `p0`；戰鬥外是 L0 的名字或 `random` | 宏觀路由的名字 |
+| `brain` | string | 戰鬥路由的名字：`pimc c9-0`、`plan c9-0`、`play` | 提示那一側的：戰鬥中是 `p0`；戰鬥外是 L0 的名字或 `random` | 宏觀路由的名字 |
 | `obs_hash` | string（十六進位） | 戰鬥觀測的雜湊 | 選牌提示的雜湊 | 整個觀測的雜湊（[§4](#sec-4)） |
 | `legal` | int | 合法動作數 | 提示的選項數 | 合法動作數 |
 | `chosen` | string | 戰鬥動作的文字：`play:C[:T]`、`potion:S[:T]`、`end_turn`（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)） | 選中的選項索引，用逗號連接，不帶 `pick:` | 動作 |
 | `plan` | string[]? | 大腦在 `chosen` 之後的計畫，如果有（[§5](#sec-5)） | 從不 | 策略在 `chosen` 之後的計畫，如果有：L0 在地圖上的路線 |
 | `candidates` | Candidate[]? | 搜尋的候選，如果有（[§5](#sec-5)） | 從不 | 從不 |
-| `budget` | Budget? | 路由設定的預算，套用房間倍數之前的，出現在有預算的路由的每一行上，包括只有一個合法動作的步驟和照計畫打出的步驟（[路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)） | 從不 | 從不 |
+| `budget` | Budget? | 路由設定的預算，出現在有預算的路由的每一行上，包括只有一個合法動作的步驟和照計畫打出的步驟（[路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)） | 從不 | 從不 |
 | `seed` | integer | 決策的種子（[路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)） | 同上，雖然策略不讀它 | 同上，雖然策略不讀它 |
 | `elapsed_ms` | number | 路由的用時 | 策略的用時 | 策略的用時；它的計畫是之後才問的，不計時 |
 | `obs` | CombatObservation? | 總是有 | – | – |
 | `run_view` | RunView? | – | – | 總是有 |
 | `history` | EnemyTurns[]? | 總是有，可能為空（[§7](#sec-7)） | – | – |
-| `explored` | `true`? | 這一步由探索抽出（[§6](#sec-6)） | 策略的上一個回答是探索出來的 | 同上 |
+| `explored` | `true`? | – | 策略的上一個回答由探索抽出（[§6](#sec-6)） | 同上 |
 | `replanned` | `true`? | 因為計畫不成立，這一步重新搜尋過（[§6](#sec-6)） | – | – |
 
 ## 4. 編號與雜湊
@@ -63,32 +63,31 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 - `value`：它在各個世界上的平均值；
 - `ci`：它 95% 信賴區間的半寬，在它的各個世界上算 1.96·s/√n，不到 2 個世界時為 0；
 - `samples`：它的世界數；
-- `values`：它在每個世界裡的估值，按世界順序，保留 4 位小數。它們就是 ExIt 的 policy 目標裡的 Q（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）；
-- `nodes`：每個世界裡搜尋在它之後花掉的節點數，包括這個動作本身。
+- `values`：它在每個世界裡的估值，按世界順序，保留 4 位小數。它們就是 ExIt 的 policy 目標裡的 Q（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。
 
-它們先按到達的逐次減半輪次排序，再按估值排序；不用減半時每個候選都到達同一輪，所以最好的排在最前。PIMC 的 `plan` 是第一個世界裡 `chosen` 之後本回合剩下的部分。
+它們按估值排序，最好的排在最前。PIMC 的 `plan` 是第一個世界裡 `chosen` 之後本回合剩下的部分。
 
-**SL 規劃器的候選**是它保留的各條路線開頭的每個第一個動作，估值取這些路線中最好的那條，`ci` 為 0，`samples` 為 1，`values` 是那唯一的估值，沒有 `nodes`：選中的排第一，其餘按估值排序。它的 `plan` 是它那條路線上這場戰鬥剩下的部分。如果選中的是沒有證明的失敗路線，計畫停在 `replan` 規定重新規劃之前要打的那些回合之後；一條路線最多 40 個回合（[SL 規劃器：束搜尋 §6](/zh-tw/arch/sl-planner/beam/#sec-6)）。
+**SL 規劃器的候選**是它保留的各條路線開頭的每個第一個動作，估值取這些路線中最好的那條，`ci` 為 0，`samples` 為 1，`values` 是那唯一的估值：選中的排第一，其餘按估值排序。它的 `plan` 是它那條路線上這場戰鬥剩下的部分。如果選中的是沒有證明的失敗路線，計畫停在 `replan` 規定重新規劃之前要打的那些回合之後；一條路線最多 40 個回合（[SL 規劃器：束搜尋 §6](/zh-tw/arch/sl-planner/beam/#sec-6)）。
 
-**沒有候選的行**。只有一個合法動作的決策既沒有計畫也沒有候選。照計畫打出的一步（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)、[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）以計畫剩下的部分作為它的 `plan`（計畫的最後一步沒有），沒有 `candidates`。佔位策略兩者都不記。在地圖上，L0 會記下它的 `plan`：`chosen` 之後本幕剩下的路線（[宏觀大腦：搜尋 §1](/zh-tw/arch/macro-brain/search/#sec-1)）。
+**沒有候選的行**。只有一個合法動作的決策既沒有計畫也沒有候選。照計畫打出的一步（[NoSL PIMC：搜尋 §6](/zh-tw/arch/pimc/search/#sec-6)、[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）以計畫剩下的部分作為它的 `plan`（計畫的最後一步沒有），沒有 `candidates`。佔位策略兩者都不記。在地圖上，L0 會記下它的 `plan`：`chosen` 之後本幕剩下的路線（[宏觀大腦：搜尋 §1](/zh-tw/arch/macro-brain/search/#sec-1)）。
 
 ## 6. 經探索與重新規劃的步驟
 
-**`explored: true`** 標出自我對弈的探索抽出、取代了大腦最佳選擇的回答（[學習：循環 §9](/zh-tw/arch/learning/loop/#sec-9)）：
+**`explored: true`** 標出自我對弈的探索抽出的回答（`--explore ε`，[學習：循環 §9](/zh-tw/arch/learning/loop/#sec-9)），L0 以 ε 的機率抽取，不管 V 怎麼說：
 
-- 用 softmax 抽取（`--combat-explore T`、`--macro-explore T`）時，大腦給抽中者的估值比它的最佳低出溫度的百分之一以上才標（L0 比較的是 V 的值的對數）。差距比這更小就算平手，例如同一回合換了個出牌順序，不標；
-- 用均勻抽取（`--explore ε`）時，總是標，即使抽中的碰巧就是大腦自己的選擇；
-- 在戰鬥外的選牌提示上，只要它的任何一步是抽出來的就標。
+- 畫面上的一個選項，從藥水以外的選項裡均勻抽出：總是標，即使抽中的碰巧就是 V 自己的選擇；
+- 卡牌獎勵的結果，它的某張牌或略過，每個卡牌獎勵抽一次：抽出的結果就是回答，或回答的估值低於 V 的最佳時才標；
+- 戰鬥外選牌提示的選取，均勻抽出：總是標。
 
-抽中而取代了搜尋首選的戰鬥步驟保留它的 `candidates`，但沒有 `plan`，因為那個計畫是首選的。其他步驟沒有 `explored`。
+戰鬥步驟沒有 `explored`，沒有經過抽取的回答也沒有。
 
-**`replanned: true`** 標出因為大腦計畫裡的一步不成立而重新搜尋的戰鬥步驟：戰鬥沒有顯示計畫在那一步之前預期的觀測。用 PIMC 的 `--follow` 時，這表示這個回合揭示了新東西；用 SL 規劃器時，表示複本和真實戰鬥不同（[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）。經探索的一步之後，首選的計畫仍在佇列裡，所以下一步通常也會重新規劃（[路由、預算與種子 §2](/zh-tw/arch/harness/routing/#sec-2)）。`run` 和 `brain` 為每一局印出的那一行，會印出這一局的次數（`replans`）；對局記錄不保存它。
+**`replanned: true`** 標出因為大腦計畫裡的一步不成立而重新搜尋的戰鬥步驟：戰鬥沒有顯示計畫在那一步之前預期的觀測。用 PIMC 時（它只照著重複一個循環的計畫打），表示這個回合揭示的新東西打斷了循環；用 SL 規劃器時，表示複本和真實戰鬥不同（[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）。`run` 和 `brain` 為每一局印出的那一行，會印出這一局的次數（`replans`）；對局記錄不保存它。
 
 ## 7. 一行還帶著什麼
 
-**一場戰鬥的決策連成一塊**，位於兩個宏觀決策之間，順序與對局記錄裡的戰鬥一致（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)）。決策就是靠這個找到它那場戰鬥是怎麼結束的。在連戰對局裡，一開始就判勝的戰鬥在對局記錄裡，但沒有決策。
+**一場戰鬥的決策連成一塊**，位於兩個宏觀決策之間，順序與對局記錄裡的戰鬥一致（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)）。決策就是靠這個找到它那場戰鬥是怎麼結束的。
 
-**`obs`**，在每一行戰鬥決策上：大腦看到的戰鬥觀測，約 1.6 KB（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)）。它是學習得到的戰鬥部件和融合測試集的輸入（[NoSL PIMC：搜尋 §4](/zh-tw/arch/pimc/search/#sec-4)）。
+**`obs`**，在每一行戰鬥決策上：大腦看到的戰鬥觀測，約 1.6 KB（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)）。它是戰鬥網路的輸入（[戰鬥網路 §2](/zh-tw/arch/combat-brain/network/#sec-2)）。
 
 **`history`**，在每一行戰鬥決策上：這場戰鬥至今的敵人出招紀錄，包括本回合，和 Harness 交給戰鬥大腦的一樣（[概覽 §4](/zh-tw/arch/harness/#sec-4)）。一個條目是 `{uid, id, turns: [{round, intents}]}`。戰鬥網路讀取它和回合數，從資料學到每個怪物的出招順序（[戰鬥大腦：提示、招式與 worker §2](/zh-tw/arch/combat-brain/shared/#sec-2)）。
 
@@ -115,9 +114,10 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `DispatcherTests.RefusesAnIllegalPick` | 不合法的戰鬥回答拋出例外 |
 | `DispatcherTests.HasNoFallbackForAnUncoveredSurface` | 未覆蓋的決策介面拋出例外 |
 | `DispatcherTests.RefusesNodeCheckpointsInNoSL` | NoSL 下拒收節點檢查點 |
-| `DispatcherTests.AnSLNodesClonesKeepTheGauntletsRule` | 複本保留菁英連戰的規則 |
+| `DispatcherTests.AnSLNodesCloneIsItsCheckpointAndTheDecisionsSince` | SL 節點的複本就是它的檢查點加上之後做出的決策 |
+| `DispatcherTests.AnswersThePromptOfTheActionWithTheBrainsPickAndHidesItFromTheHost`、`APickThePromptDoesNotAcceptGoesToThePolicy` | 剛選的動作的第一個提示得到搜尋的回答，宿主從不看到它；提示不接受的回答就交給提示策略 |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`、`AWorkerStuckTwiceFailsTheCall` | 行程池的那一次重試 |
-| `GateTests`（10）、`EvalReportTests`（2） | 評估的晉級門檻和報告（[評估：晉級門檻 §11](/zh-tw/arch/evaluation/gates/#sec-11)） |
+| `GateTests`（10）、`EvalReportTests`（4） | 評估的晉級門檻和報告（[評估：晉級門檻 §11](/zh-tw/arch/evaluation/gates/#sec-11)） |
 
 **規劃中的測試**：
 

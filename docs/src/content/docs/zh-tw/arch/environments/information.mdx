@@ -64,7 +64,7 @@ SL **不能**知道的：關於之後節點的任何東西。一個 `?` 點最�
 
 <NodeTimeline client:visible lang="zh-TW" />
 
-會越過出口的搜尋，例如想問一張牌在下一場戰鬥裡值多少，只能使用由搜尋播種的確定化樣本，絕不能用真實的亂數流。目前沒有任何搜尋這樣做。複本強制守住這條線：一旦記錄了移動，它就停止並拒絕再走任何一步（`Simulation/RunSession.cs:235`），會移動的宏觀試探會拋出例外（`Checks/NodeProbe.cs:29`），而 L0 給地圖移動估值時，是從畫面預測它的後狀態，而不是把它打出來（[宏觀大腦：搜尋 §2](/zh-tw/arch/macro-brain/search/#sec-2)）。
+會越過出口的搜尋，例如想問一張牌在下一場戰鬥裡值多少，只能使用由搜尋播種的確定化樣本，絕不能用真實的亂數流。目前沒有任何搜尋這樣做。複本強制守住這條線：一旦記錄了移動，它就停止並拒絕再走任何一步（`Simulation/RunSession.cs:228`），會移動的宏觀試探會拋出例外（`Simulation/NodeProbe.cs:29`），而 L0 給地圖移動估值時，是從畫面預測它的後狀態，而不是把它打出來（[宏觀大腦：搜尋 §2](/zh-tw/arch/macro-brain/search/#sec-2)）。
 
 ## 4. 為什麼是節點，而不是遊戲自己的存檔
 
@@ -122,7 +122,7 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
 
 **載入的存檔和不中斷的遊玩並不相同**。載入存檔會重新執行地圖的鉤子（`Runs/RunManager.cs:815-816`）和 `OnRunLoaded`（562-565），並丟掉每個沒有標記為要儲存的遺物欄位：遺物只儲存它的 `[SavedProperty]` 成員（`Models/RelicModel.cs:556-576`）。這些遺物欄位確實有影響：存檔丟掉的遺物狀態或計數改變了複本的每個觀測，複本於是不再和真實戰鬥一致，SL 規劃器每一步都要重新規劃（[模擬器：世界與 SL 複本 §6](/zh-tw/arch/simulator/worlds/#sec-6)）。所以檢查點帶上每個遺物的簡單欄位（數字、旗標和列舉），在載入後放回去，`run --check` 現在找不到任何複本與其對局不同的節點。沒有檢查碼，也沒有後備：破壞我們正確性的遊戲怪癖，在它進入我們程式碼的地方修正（[前言 §2](/zh-tw/#sec-2)，規則 7）。
 
-**NoSL 關閉這個通道**。兩種宿主在兩種環境下都會取檢查點並保留節點內的各步（`Simulation/RunSession.cs:143-148`；Mod 裡是 `NodeRecord`），好讓在房間中途切換到 SL 也能運作；只有 SL 對局才會送出它們（`Brains/RunBrains.cs:48-100`、Mod 的 `Assist.cs:159`）。NoSL 大腦會拒絕它們：NoSL 下 Harness 遇到節點訊息就拋出例外，大腦伺服器對這一局的下一個決策回覆錯誤，宿主把這一局當作失敗結束，這會讓它的報告作廢（[環境 §5](/zh-tw/arch/environments/#sec-5)）。
+**NoSL 關閉這個通道**。兩種宿主在兩種環境下都會取檢查點並保留節點內的各步（`Simulation/RunSession.cs:137-142`；Mod 裡是 `NodeRecord`），好讓在房間中途切換到 SL 也能運作；只有 SL 對局才會送出它們（`Brains/RunBrains.cs:48-100`、Mod 的 `Assist.cs:159`）。NoSL 大腦會拒絕它們：NoSL 下 Harness 遇到節點訊息就拋出例外，大腦伺服器對這一局的下一個決策回覆錯誤，宿主把這一局當作失敗結束，這會讓它的報告作廢（[環境 §5](/zh-tw/arch/environments/#sec-5)）。
 
 **決策行程從不讀存檔**。Brain 沒有引用遊戲組件，這由編譯器強制、由一個測試檢查（[§8](#sec-8)）。存檔只會包在 SL 請求裡、作為一個不透明字串送到工作行程。
 
@@ -132,8 +132,8 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
 
 **兩種環境**
 
-1. Brain 和 Protocol 不引用任何遊戲組件。已有：`selftest`（以 GameBridge 作為陰性對照）和 xUnit 的 `BoundaryTests`，後者也涵蓋 Harness（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
-2. 搜尋的隨機性只來自呼叫方，從不來自遊戲的亂數流。由構造保證，沒有測試：大腦的種子由對局 id（本身就是種子字串的雜湊）和決策的索引混合而成（`Harness/Dispatcher.cs:205-224`），世界的建構種子和取樣種子則由它而來（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。
+1. Brain 和 Protocol 不引用任何遊戲組件。已有：xUnit 的 `BoundaryTests`，它也涵蓋 Harness，並以 GameBridge 作為陰性對照（[模擬器：參考 §7](/zh-tw/arch/simulator/reference/#sec-7)）。
+2. 搜尋的隨機性只來自呼叫方，從不來自遊戲的亂數流。由構造保證，沒有測試：大腦的種子由對局 id（本身就是種子字串的雜湊）和決策的索引混合而成（`Harness/Dispatcher.cs:189-208`），世界的建構種子和取樣種子則由它而來（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。
 3. 後備決策的數量為 0。實際上已有：不存在後備程式碼，Harness 遇到沒有涵蓋的畫面（surface）就拋出例外（xUnit `DispatcherTests`），而由隨機佔位策略做出的決策會讓報告作廢（`Harness/Reports.cs:35-38`、xUnit `EvalReportTests`；[評估：指標、種子與報告 §2](/zh-tw/arch/evaluation/metrics/#sec-2)）。
 4. 真實遊戲裡 `NumReloads == 0`。規劃中，作為 Mod 決策日誌的一個欄位（[Mod：自動遊玩與安全 §3](/zh-tw/arch/mod/auto/#sec-3)）；目前沒有東西讀它。複本會載入存檔，所以無論在哪裡載入（工作行程，以及 `run --check`、`selftest` 和 `clones` 裡的宿主行程），它們的次數都是 1 或更多。
 5. 每個觀測欄位都有白名單測試。規劃中；目前最接近的檢查，是 `run --check` 和 `selftest` 對每個觀測做的 JSON 往返（[協定 §3](/zh-tw/arch/protocol/#sec-3)）。
@@ -152,7 +152,7 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
    - 每個可擾動的欄位都需要一個測試，證明當前節點從不讀它。
 10. 每個決策的複本查詢都記入日誌。規劃中。目前 `brain --wire FILE` 會記錄宿主的節點訊息，`clones` 據此重建並檢查每個 SL 決策的複本（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）；L0 在複本上的試探沒有記入日誌。
 
-除了這些守護，還有測試環境本身管線的測試：Harness 在 NoSL 下拒絕節點檢查點，也不給 NoSL 任何複本（xUnit `DispatcherTests`）；晉級門檻拒絕來自另一個環境的挑戰者（`GateTests`）；`--env` 預設為 NoSL 且大小寫皆可，`brain` 忽略冠軍檔案的環境（`CliTests`）；`selftest` 檢查複本保留了存檔會丟掉的遺物狀態（`Checks/SelfTest.Run.cs:190-230`）。
+除了這些守護，還有測試環境本身管線的測試：Harness 在 NoSL 下拒絕節點檢查點，也不給 NoSL 任何複本（xUnit `DispatcherTests`）；晉級門檻拒絕來自另一個環境的挑戰者（`GateTests`）；`--env` 預設為 NoSL 且大小寫皆可，`brain` 忽略冠軍檔案的環境（`CliTests`）；`selftest` 檢查複本保留了存檔會丟掉的遺物狀態（`Checks/SelfTest.Run.cs:134-174`）。
 
 ## 9. 未決問題
 

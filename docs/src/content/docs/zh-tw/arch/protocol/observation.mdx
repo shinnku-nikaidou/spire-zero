@@ -133,7 +133,7 @@ Observation{run: RunView, screen: ScreenView}
 
 **藥水欄**。在 `map`、`rewards`、`event`、`shop`、`rest`、`treasure` 和 `crystal_sphere` 上，合法動作也包括藥水欄：可隨時使用的藥水的 `potion:S`，以及 `discard_potion:S`。卡牌獎勵、卡包和選牌提示都沒有。
 
-**在大腦內部**，宏觀決策介面以 `MacroDecision{surface, legal, observation}` 的形式交給策略，選牌提示以 `ChoiceDecision{choice, observation}` 的形式，戰鬥決策以 `CombatDecision{legal, observation}` 的形式。在一局之外單獨打的戰鬥（測試集）沒有一局，所以它的決策和提示只帶著戰鬥。
+**在大腦內部**，宏觀決策介面以 `MacroDecision{surface, legal, observation}` 的形式交給策略，選牌提示以 `ChoiceDecision{choice, observation}` 的形式，戰鬥決策以 `CombatDecision{legal, observation}` 的形式。在一局之外單獨打的戰鬥（`combat`、`bench`、`selftest`）沒有一局，所以它的決策和提示只帶著戰鬥。
 
 ## 6. 選牌提示
 

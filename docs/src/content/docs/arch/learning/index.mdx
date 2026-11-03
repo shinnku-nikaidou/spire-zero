@@ -15,7 +15,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-已实现：V 的训练器 `learn/v/`（`v.train`）和战斗网络的训练器 `learn/combat/`（`combat.train`），两者都用蒙特卡洛目标（每个决策的标签是它所在对局真实的结局）；自我对弈的均匀抽取探索（`run --explore ε`）；`learn/gauntlet.py`，一个 V 的对局的报告和配对门槛；`learn/challenge.py`，驱动模拟器的序贯门槛；`learn/bosslab.py`，Boss 战标签。规划中、尚未实现：TD(λ) 目标、专家迭代、LLM 补丁提案、奖励塑形、特权训练，以及均匀抽取之外对抗局部最优的机制（[循环](/arch/learning/loop/)）。
+已实现：V 的训练器 `learn/v/`（`v.train`）和战斗网络的训练器 `learn/combat/`（`combat.train`），两者都用蒙特卡洛目标（每个决策的标签是它所在对局真实的结局）；自我对弈的均匀抽取探索（`run --explore ε`）；`learn/gate.py`，一个 V 的对局的报告和配对门槛。规划中、尚未实现：TD(λ) 目标、专家迭代、LLM 补丁提案、奖励塑形、特权训练，以及均匀抽取之外对抗局部最优的机制（[循环](/arch/learning/loop/)）。
 
 </Aside>
 
@@ -59,12 +59,10 @@ flowchart LR
 | 部分 | 状态 | 位置 |
 |---|---|---|
 | 自我对弈：整局，以 ε 均匀抽取 | 已实现 | `run --explore`，[循环 §2](/arch/learning/loop/#sec-2) |
-| 按 V 的估值的对数或搜索的估值做 softmax 探索 | 已实现；L0 的在 `v8g2` 里与均匀抽取并用 | `run --macro-explore`、`--combat-explore`，[循环 §9](/arch/learning/loop/#sec-9) |
 | V 的训练，蒙特卡洛标签 | 已实现 | `learn/v/`，[宏观大脑：从风险值到价值 §5](/arch/macro-brain/value/#sec-5) |
 | 战斗网络的训练，蒙特卡洛标签 | 已实现 | `learn/combat/`，[训练战斗网络](/arch/learning/combat-net/) |
-| V 的 Boss 战标签（Boss 模拟战、门前状态） | 已实现，未使用 | `learn/bosslab.py`，[参考 §9](/arch/learning/reference/#sec-9) |
-| 反事实分叉 | 作为命令已实现；现在没有训练器读它们 | `fork`、`afterstates`，[循环 §10](/arch/learning/loop/#sec-10) |
-| 门槛：模拟器的 SPRT，胜局的配对下界 | 已实现 | `gate`、`learn/challenge.py`、`learn/gauntlet.py`，[循环 §8](/arch/learning/loop/#sec-8) |
+| 反事实分叉 | <Badge text="规划中" variant="caution" /> | [循环 §10](/arch/learning/loop/#sec-10) |
+| 门槛：模拟器的 SPRT，胜局的配对下界 | 已实现 | `gate`、`learn/gate.py`，[循环 §8](/arch/learning/loop/#sec-8) |
 | TD(λ) 目标 | <Badge text="规划中" variant="caution" /> | [循环 §4](/arch/learning/loop/#sec-4) |
 | 专家迭代（搜索价值作标签，学到的先验） | <Badge text="规划中" variant="caution" /> | [循环 §5](/arch/learning/loop/#sec-5) |
 | 用 SPSA 调手设的权重 | 未使用 | [循环 §6](/arch/learning/loop/#sec-6) |

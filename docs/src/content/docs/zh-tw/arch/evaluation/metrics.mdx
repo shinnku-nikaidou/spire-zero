@@ -31,14 +31,14 @@ import DeathsByFloor from '../../../../../components/book/DeathsByFloor.svelte';
 
 作廢的報告留在排行榜上，加上標記並排在最後；作廢的挑戰者在門檻上得到的判定是作廢，不論它的對局打到哪裡（[晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。
 
-**失敗的對局就當從沒設定過。** `report` 和 `gate` 透過 `RunRecord.Read` 讀記錄，它會去掉每條結局為 `failed` 的記錄，`RunRecord.SeedsLeft` 再把它的種子從種子集裡去掉，所以 500 局有 2 局失敗，得到的是 498 局中的 498 局，既不作廢，也不算不完整（`Harness/RunRecords.cs:38-45`）。對局失敗的原因在主機，例如一台記憶體會翻轉位元的機器，它說明不了大腦的好壞。`learn/gauntlet.py` 和 `v.train` 同樣丟掉它們（`learn/gauntlet.py:44`、`learn/v/data.py:91`），配對也要兩邊都打完（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
+**失敗的對局就當從沒設定過。** `report` 和 `gate` 透過 `RunRecord.Read` 讀記錄，它會去掉每條結局為 `failed` 的記錄，`RunRecord.SeedsLeft` 再把它的種子從種子集裡去掉，所以 500 局有 2 局失敗，得到的是 498 局中的 498 局，既不作廢，也不算不完整（`Harness/RunRecords.cs:32-39`）。對局失敗的原因在主機，例如一台記憶體會翻轉位元的機器，它說明不了大腦的好壞。`learn/gate.py` 和 `v.train` 同樣丟掉它們（`learn/gate.py:42`、`learn/v/data.py:64`），配對也要兩邊都打完（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
 
 在勝率裡，**被截斷的對局算作輸局**，而且從不重打：種子決定了整局，重打只會重複它，丟掉它就等於挑選種子（`Harness/Reports.cs:51`）。
 
 還有兩個計數屬於這裡，但並不存在：
 
 - **`NumReloads`**，遊戲對真實重新載入的計數，在真實遊戲裡必須為 0 <Badge text="規劃中" variant="caution" />。它規劃為 Mod 決策日誌的一個欄位；目前沒有東西讀它（[環境：資訊與節點 §8](/zh-tw/arch/environments/information/#sec-8)）。
-- **NoSL 對局中的存檔匯出**沒有計數器。模擬的 NoSL 對局從不匯出節點檢查點（`SimWorker/Commands/RunCommand.cs:248`），NoSL 的 `Dispatcher` 也會拒絕匯出（`Harness/Dispatcher.cs:181`），所以一次匯出會讓這一局以錯誤結束，而不是變成一個計數。
+- **NoSL 對局中的存檔匯出**沒有計數器。模擬的 NoSL 對局從不匯出節點檢查點（`SimWorker/Commands/RunCommand.cs:239`），NoSL 的 `Dispatcher` 也會拒絕匯出（`Harness/Dispatcher.cs:165`），所以一次匯出會讓這一局以錯誤結束，而不是變成一個計數。
 
 ## 3. 次要指標
 
@@ -57,7 +57,7 @@ import DeathsByFloor from '../../../../../components/book/DeathsByFloor.svelte';
 
 **規劃中** <Badge text="規劃中" variant="caution" />，不在任何報告裡：
 
-- **校準**：V 預測的獲勝機率與實際結果有多接近。Brier 分數（預測機率與這局的 1 或 0 之間差距平方的平均）只出現在 `v.train` 對整局的留出報告裡：`brier_held_out` 對比 `brier_held_out_floor_only`，後者是只知道層數的模型（`learn/v/train.py:359-383`）；沒有任何評估計算它，也沒有東西拿它和常數預測比較。
+- **校準**：V 預測的獲勝機率與實際結果有多接近。Brier 分數（預測機率與這局的 1 或 0 之間差距平方的平均）只出現在 `v.train` 對整局的留出報告裡：`brier_held_out` 對比 `brier_held_out_floor_only`，後者是只知道層數的模型（`learn/v/train.py:160-177`）；沒有任何評估計算它，也沒有東西拿它和常數預測比較。
 - **搜尋計算量**：每個決策搜尋的分支數和複本查詢次數。報告只有掛鐘時間。
 - **囤積藥水**：持有而未使用的藥水。
 
@@ -83,7 +83,7 @@ $$
 
 種子就是遊戲的對局種子字串，12 個字元，例如 `3TZ33JATH5R5`。它決定了地圖、遭遇、獎勵和遊戲做的每一次隨機抽取，所以一個種子集就是一組固定的遊戲。種子分三類，互不相交：
 
-- **訓練**種子，不限量，只用於自我對弈和分叉作業；
+- **訓練**種子，不限量，只用於自我對弈；
 - **晉級**種子，用於晉級門檻和排行榜；
 - **最終**種子，在用它們跑任何一局之前就生成並登記在儲存庫裡，要全部跑完、全部報告，這樣誰也沒辦法挑那些碰巧好看的種子。正式結論至少需要 300 局。
 
@@ -99,7 +99,7 @@ $$
 | `final-1.txt` | 300 | `seeds --base 3 --n 300` | 從未跑過 |
 | `check-clone-loop.txt` | `promotion-1` 的 29 個種子，按索引挑選 | 人工 | 開發時的檢查；不是報告用的種子集 |
 
-- **訓練種子和測試種子從不相遇**。自我對弈和分叉作業只打訓練種子，評估作業只打 `eval/seeds/` 裡的檔案；作業啟動器 `box.py` 拒絕其他做法，訓練也拒絕含有評估作業對局的清單（[學習：參考 §5](/zh-tw/arch/learning/reference/#sec-5)）。`promotion-1-300` 及其各部分、`final-1` 和 `a10-check-1` 從未用於訓練。
+- **訓練種子和測試種子從不相遇**。自我對弈作業只打訓練種子，評估作業只打 `eval/seeds/` 裡的檔案；作業啟動器 `box.py` 拒絕其他做法，訓練也拒絕含有評估作業對局的清單（[學習：參考 §5](/zh-tw/arch/learning/reference/#sec-5)）。`promotion-1-300` 及其各部分、`final-1` 和 `a10-check-1` 從未用於訓練。
 - **`eval/seeds/retired/`** 存放不能再用來測試的種子集：`promotion-1-500`（`seeds --base 2 --n 500`，先是 `promotion-1-300`，再加 200 個），因為它後 200 個種子上的 medium 預算對局在較早戰鬥網路的資料裡，也就進了 c8-1、c8-2、c8-3 和 c9-0 這一脈。在它上面報告過的結果仍作為歷史保留。
 - **訓練種子**是 `MakeSeed(1, i)`，也就是 `run --seed 1 --start K` 所打的種子。帳本以每塊 100,000 個的區塊分配它們，每個批次一塊，所以任何兩個批次都不共用種子（`eval/silent/ledger.md`，[學習：參考 §5](/zh-tw/arch/learning/reference/#sec-5)）。
 - **晉級種子集是巢狀的**。每個較大的種子集都把較小那個的種子按原順序放在前面，所以較大種子集上的報告能在共用的種子上和較小種子集上的報告配對。`promotion-1.txt` 的檔頭寫著用完之後輪換到 `promotion-2`（基數 4）；但 `promotion-2` 並不存在，基數 4 給了 `a10-check-1`。
@@ -108,7 +108,7 @@ $$
 
 ## 6. 種子怎麼產生
 
-`seeds --base B --n K`（K 預設 300）對 i = 0…K−1 印出 `MakeSeed(B, i)`（`SimWorker/Commands/EvalCommands.cs:158-172`）：
+`seeds --base B --n K`（K 預設 300）對 i = 0…K−1 印出 `MakeSeed(B, i)`（`SimWorker/Commands/EvalCommands.cs:156-170`）：
 
 ```csharp
 // SimWorker/Simulation/GameSeeds.cs:7-12
@@ -130,10 +130,10 @@ public static string MakeSeed(int seed, int index)
 report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 ```
 
-這個指令寫出 `PATH.json` 和 `PATH.md`，並印出 Markdown（`SimWorker/Commands/EvalCommands.cs:10-53`）。種子集的名稱就是種子檔案去掉副檔名後的名稱。記錄可以來自多個行程。`report` 會把以下情形當作命令列錯誤而拒絕（結束代碼 2）：
+這個指令寫出 `PATH.json` 和 `PATH.md`，並印出 Markdown（`SimWorker/Commands/EvalCommands.cs:10-51`）。種子集的名稱就是種子檔案去掉副檔名後的名稱。記錄可以來自多個行程。`report` 會把以下情形當作命令列錯誤而拒絕（結束代碼 2）：
 
-- 設定裡帶 `auto_win` 或 `gauntlet` 的記錄：其中有些戰鬥根本沒打；
-- 沒有對局；對局由兩套設定打出（`config` 在遊戲、提交、冠軍、環境、級別或規則上不同）；兩個角色或兩個晉階等級；同一個種子跑了兩次；種子不在種子集裡（`EvalReport.Of`，`Harness/Reports.cs:81-94`）。
+- 沒有對局，或對局由兩套設定打出（`config` 在遊戲、提交、冠軍或環境上不同）；
+- 兩個角色或兩個晉階等級；同一個種子跑了兩次；種子不在種子集裡（`EvalReport.Of`，`Harness/Reports.cs:81-94`）。
 
 它把對局按種子集的順序排好，並以產生報告的那一天作為報告的日期，格式為 `yyyy-MM-dd`，用機器的本地時間。局數少於種子集的報告是**不完整的**：它的 Markdown 會註明，排行榜不列入它，`gate --promote` 也拒絕它。
 
@@ -141,7 +141,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 
 | 欄位 | 內容 |
 |---|---|
-| `config` | `game`（遊戲版本，`v0.111.0`）、`commit`（模擬器的完整 SHA；建置時 `src/` 有未提交的改動，後面就加上 `-dirty`，`SimWorker/Sts2Ai.SimWorker.csproj:40-48`；這樣的報告只用於開發）、`champion`（大腦的名稱，[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）、`env`、`rung`；`auto_win` 或 `gauntlet` 從不出現，因為這樣的記錄會被拒收 |
+| `config` | `game`（遊戲版本，`v0.111.0`）、`commit`（模擬器的完整 SHA；建置時 `src/` 有未提交的改動，後面就加上 `-dirty`，`SimWorker/Sts2Ai.SimWorker.csproj:40-48`；這樣的報告只用於開發）、`champion`（大腦的名稱，[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）和 `env` |
 | `seed_set`、`set_size`、`date` | 種子檔案的名稱和它有幾個種子；報告的日期 |
 | `metrics.wins` | `{hits, of, value, low, high}`：贏下的局數，附 Wilson 區間 |
 | `metrics.floor_mean`、`floor_median` | 到達的層數；局數為偶數時，中位數是中間兩個值的平均 |
@@ -155,37 +155,37 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 
 **Markdown**（`EvalReport.Markdown`，`Harness/Reports.cs:96-150`）是一頁：
 
-- `# Evaluation DATE: ENV RUNG, SET`，接著在適用時有一行列出原因的 **Void**，以及一行 **Partial**；
-- 一張表：遊戲、提交、冠軍、環境和級別，以及寫成 `SET: N of M runs, CHARACTER AN` 的種子集；
+- `# Evaluation DATE: ENV, SET`，接著在適用時有一行列出原因的 **Void**，以及一行 **Partial**；
+- 一張表：遊戲、提交、冠軍和環境，以及寫成 `SET: N of M runs, CHARACTER AN` 的種子集；
 - **Main**：勝率、層數的平均數和中位數，以及每一幕到達頭目的局數和進入頭目戰時的生命值；
 - **Must be zero**：四個計數，然後是每條失敗訊息及它結束了多少局；
 - **Auxiliary**：每局的菁英戰數、跳過的卡牌獎勵、結束時的金幣；每局秒數和每個決策的毫秒數；各決策介面；
-- **Against DATE (CHAMPION, commit X)**，在給了 `--previous OLD.json` 時，或在 `gate --promote` 寫出冠軍的接任者時出現：勝率、平均層數、每一幕到達頭目的局數、隨機決策和失敗對局的前後對比；種子集、環境或級別不同時則寫「Not comparable」。
+- **Against DATE (CHAMPION, commit X)**，在給了 `--previous OLD.json` 時，或在 `gate --promote` 寫出冠軍的接任者時出現：勝率、平均層數、每一幕到達頭目的局數、隨機決策和失敗對局的前後對比；種子集或環境不同時則寫「Not comparable」。
 
-**名稱**。報告放進 `eval/CHARACTER/reports/`，檔名為 `DATE-ENV-RUNG-SET-NAME.json` 和 `.md`，全小寫，NAME 指明是什麼在打：在 `DATE-sl-r1-promotion-1-300-plan-c9-0-l0-v9-0-clone-p0` 裡，是用戰鬥網路 `c9-0` 的 SL 規劃器、在複本上用 V `v9-0` 的 L0、由 `p0` 回答選牌提示。晉階 10 的報告在級別的位置寫 `a10`，例如 `DATE-sl-a10-promotion-1-200-plan-c9-0-l0-v9-0-clone-p0`。這只是慣例；`--out` 接受任何路徑。
+**名稱**。報告放進 `eval/CHARACTER/reports/`，檔名為 `DATE-ENV-LEVEL-SET-NAME.json` 和 `.md`，全小寫：LEVEL 在晉階 10 時是 `a10`，在晉階 0 時是級別 `r1`；NAME 指明是什麼在打：在 `DATE-sl-a10-promotion-1-200-plan-c9-0-l0-v9-0-clone-p0` 裡，是用戰鬥網路 `c9-0` 的 SL 規劃器、在複本上用 V `v9-0` 的 L0、由 `p0` 回答選牌提示。這只是慣例；`--out` 接受任何路徑。
 
 ## 8. 對局記錄
 
-`run --records FILE` 每行寫一條對局記錄，每局結束時就寫出；中途停下的對局什麼也不寫（[模擬器：整局 §5](/zh-tw/arch/simulator/runs/#sec-5)）。記錄（`RunRecord`，`Harness/RunRecords.cs:31-34`；在 `SimWorker/Commands/RunCommand.cs:281-294` 建構）：
+`run --records FILE` 每行寫一條對局記錄，每局結束時就寫出；中途停下的對局什麼也不寫（[模擬器：整局 §5](/zh-tw/arch/simulator/runs/#sec-5)）。記錄（`RunRecord`，`Harness/RunRecords.cs:25-28`；在 `SimWorker/Commands/RunCommand.cs:272-284` 建構）：
 
 | 欄位 | 內容 |
 |---|---|
-| `config` | `RunConfig`（`Harness/RunRecords.cs:24`）：`game`、`commit`、`champion`（大腦給自己取的名稱，走線路時也一樣）、`env`、`rung`（總是 `R1`），有些戰鬥一開始就判贏的對局還有 `auto_win: true` 或 `gauntlet: true` |
+| `config` | `RunConfig`（`Harness/RunRecords.cs:18`）：`game`、`commit`、`champion`（大腦給自己取的名稱，走線路時也一樣）和 `env` |
 | `seed`、`character`、`ascension` | 這一局 |
 | `run_id` | 種子的雜湊，大腦用它來識別這一局，即決策日誌裡的 `run`（[Harness：決策日誌 §3](/zh-tw/arch/harness/decision-log/#sec-3)）；學習時靠它把兩者連起來 |
 | `outcome` | `won`、`lost`、`truncated`（觸及決策上限）或 `failed`（拋出例外） |
 | `act`、`floor`、`hp`、`max_hp`、`gold` | 在哪裡、以什麼狀態結束：`act` 從 0 起算，`floor` 是這局的總層數（到目前為止每局勝局都是 48）；勝局的生命值寫 0，因為遊戲會在勝利房間裡殺死玩家 |
 | `combats[]` | 進入的每場戰鬥：`act`、`floor`、`encounter`、`room`（`Monster`、`Elite`、`Boss`），以及第一次看到它進行中、在它的第一個決策之前時的 `hp`、`max_hp`、`potions`；然後是 `end` |
-| `combats[].end` | `died`、`hp`、`max_hp`、剩下的 `potions`，以及 `enemy_hp`（存活敵人的生命值總和）對 `enemy_max_hp`（所有敵人的最大生命值）；贏下的戰鬥裡敵人都已消失，為 0 對 0（`Harness/RunRecords.cs:15`） |
+| `combats[].end` | `died`，以及剩下的 `hp`、`max_hp` 和 `potions`（`Harness/RunRecords.cs:14`） |
 | `surfaces`、`brains` | 每個決策介面的決策數，以及每個回答了決策的大腦的決策數 |
 | `card_rewards`、`card_rewards_skipped` | 提供的卡牌獎勵，以及其中沒拿牌就離開的 |
 | `game_errors`、`failure`、`elapsed_ms` | 遊戲錯誤、失敗對局的例外（`Type: first line`），以及這局的掛鐘時間 |
 
-`end` 是戰鬥網路結局輸出頭的目標（[學習：訓練戰鬥網路 §1](/zh-tw/arch/learning/combat-net/#sec-1)）。每一局的 end 裡都有敵人的生命值（`SimWorker/Simulation/RunSession.cs:256-263`）；最舊的已提交報告，end 裡沒有敵人的生命值，或根本沒有 `end`。
+`end` 是戰鬥網路結局輸出頭的目標（[學習：訓練戰鬥網路 §1](/zh-tw/arch/learning/combat-net/#sec-1)）。最舊的已提交報告根本沒有 `end`。
 
-**缺少的 end**。依記錄型別的說明，只有當一局因死亡以外的原因（失敗、截斷）停在戰鬥中時，才會缺少 `end`。已提交的報告顯示的不止於此：`end` 是在工作階段穩定下來時、也就是它下一步開始時才寫出的（`SimWorker/Simulation/RunSession.cs:233-263`），而 `run` 一旦這局結束就停止步進（`SimWorker/Commands/RunCommand.cs:260`），所以在一個決策自己的動作執行期間發生的死亡，會讓那場戰鬥沒有 `end`。每份有 end 的報告都有 1 到 13 局這樣的對局，每局都在那場戰鬥所在的層以 0 生命值輸掉；在範例報告裡，277 局輸局中有 8 局。
+**缺少的 end**。依記錄型別的說明，只有當一局因死亡以外的原因（失敗、截斷）停在戰鬥中時，才會缺少 `end`。`RunSession` 在工作階段穩定下來時寫出 `end`，在一個決策自己的動作結束了這一局之後（例如回合結束時手上的牌，或一次扣生命值的出牌）也立即寫出；一局在第一個決策之前就死在其中的戰鬥，這時以 0 生命值得到它的條目（`SimWorker/Simulation/RunSession.cs:234-238, 254, 259-266`）。已提交的晉階 0 報告是由不為決策自身動作中的死亡寫出 `end` 的程式碼打出的：其中每份有 end 的報告都有 1 到 13 局輸局的最後一場戰鬥沒有 `end`，每局都在那場戰鬥所在的層以 0 生命值輸掉；在範例報告裡，277 局輸局中有 8 局。晉階 10 的報告沒有這樣的對局。
 
-**對局死在哪裡**。記錄給出報告沒有印出的東西。如果一局輸掉的對局的最後一場戰鬥就在它結束的那一層，而且那場戰鬥以死亡結束或沒有 end，它就是死在戰鬥中；否則它死在戰鬥之外（例如死在事件裡）。範例報告的 277 局輸局：133 局死在頭目戰，39 局死在菁英戰，103 局死在普通怪物戰，2 局死在戰鬥之外。`learn/gauntlet.py` 用同樣的規則，但把缺少的 end 讀作「戰鬥之外」，所以對這份報告它給出 10 局死在戰鬥之外，其中 8 局其實是死在戰鬥中（`learn/gauntlet.py:61-68`）。從 end 算出的擊敗頭目數，三幕依次為：290 局中 276 局、171 局中 94 局、65 局中 23 局。
+**對局死在哪裡**。記錄給出報告沒有印出的東西。如果一局輸掉的對局的最後一場戰鬥就在它結束的那一層，而且那場戰鬥以死亡結束或沒有 end，它就是死在戰鬥中；否則它死在戰鬥之外（例如死在事件裡）。範例報告的 277 局輸局：133 局死在頭目戰，39 局死在菁英戰，103 局死在普通怪物戰，2 局死在戰鬥之外。`learn/gate.py` 用同樣的規則，但把缺少的 end 讀作「戰鬥之外」，所以對這份報告它給出 10 局死在戰鬥之外，其中 8 局其實是死在戰鬥中（`learn/gate.py:55-62`）。從 end 算出的擊敗頭目數，三幕依次為：290 局中 276 局、171 局中 94 局、65 局中 23 局。
 
 <DeathsByFloor client:visible lang="zh-TW" />
 
@@ -195,9 +195,9 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 leaderboard [--character SILENT]
 ```
 
-這個指令讀取 `eval/CHARACTER/reports/` 裡的每份報告和 `eval/CHARACTER/champions/` 裡的每個冠軍檔案，寫出 `eval/CHARACTER/leaderboard.md` 並印出它（`SimWorker/Commands/EvalCommands.cs:129-155`，`Leaderboard.Markdown`，`Harness/Reports.cs:174-237`）。它由人工執行，排行榜和報告一起提交。
+這個指令讀取 `eval/CHARACTER/reports/` 裡的每份報告和 `eval/CHARACTER/champions/` 裡的每個冠軍檔案，寫出 `eval/CHARACTER/leaderboard.md` 並印出它（`SimWorker/Commands/EvalCommands.cs:127-153`，`Leaderboard.Markdown`，`Harness/Reports.cs:174-237`）。它由人工執行，排行榜和報告一起提交。
 
-- **榜**。不完整的報告不列入。其餘的按角色、晉階等級、種子集和級別分組，依此順序，每組一個 `##` 小節；小節內每個環境一張 `###` 表，NoSL 在前。兩個角色、兩個晉階等級或兩種環境從不放在一起排名。
+- **榜**。不完整的報告不列入。其餘的按角色、晉階等級和種子集分組，依此順序，每組一個 `##` 小節；小節內每個環境一張 `###` 表，NoSL 在前。兩個角色、兩個晉階等級或兩種環境從不放在一起排名。
 - **欄**：冠軍、日期、提交（7 個字元，保留 `-dirty`）、勝率（比率加區間）、平均層數、到達第 1 幕頭目的局數、每局秒數。
 - **順序**：作廢的報告排在最後，其餘按勝率，再按平均層數。作廢的報告在名稱後面加「(void)」；冠軍檔案指明的報告加「**(champion)**」。冠軍檔案若指向另一個環境的報告，就不在這個榜上標出任何東西，這就是今天的 NoSL 榜沒有標出冠軍的原因。
 - **SL − NoSL**：在一個榜的表格之後，對這個榜上兩種環境都有報告的每個冠軍名稱（各取最新的一份），把對局按種子配對，給出：以百分點計的勝率差和層數差，各寫成平均 ± 1.96 SD/√n，雙方各自的勝局數，以及有多少個種子 SL 打得更遠、一樣遠、較近。還沒有哪個榜出現過這一節（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
@@ -206,5 +206,5 @@ leaderboard [--character SILENT]
 
 ## 10. 測試
 
-- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），4 個測試：對局按種子集的順序排好，並算出平均層數，報告沒有作廢；破壞種子集的對局被拒絕（沒有對局、同一個種子兩次、種子不在種子集裡、另一套設定、另一個角色或晉階等級）；報告自身的對局裡有一個隨機決策或一局失敗的對局會讓報告作廢；`RunRecord.Read` 去掉失敗的對局，`SeedsLeft` 去掉它們的種子。測試夾具的設定是 `v0.111.0`、`abc1234`、NoSL、R1（`src/Sts2Ai.Tests/Fixtures.cs:25`）。
+- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），4 個測試：對局按種子集的順序排好，並算出平均層數，報告沒有作廢；破壞種子集的對局被拒絕（沒有對局、同一個種子兩次、種子不在種子集裡、另一套設定、另一個角色或晉階等級）；報告自身的對局裡有一個隨機決策或一局失敗的對局會讓報告作廢；`RunRecord.Read` 去掉失敗的對局，`SeedsLeft` 去掉它們的種子。測試夾具的設定是 `v0.111.0`、`abc1234`、NoSL（`src/Sts2Ai.Tests/Fixtures.cs:26`）。
 - 沒有測試涵蓋 `Rate.Wilson`、Markdown、排行榜或 `MakeSeed`。上面的 Wilson 圖已用報告裡儲存的區間核對過。

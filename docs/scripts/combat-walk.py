@@ -22,7 +22,7 @@ FILE = ROOT / "weights/all/c9-0.json"
 OUT = ROOT / "docs/src/data/combat-walk.json"
 MAIN = 10  # the only test state holding a potion: every step has something to show
 OTHERS = {"danger": 3, "mask": 6}  # a boss fight more likely lost than won, and a state at 4 of 70 HP
-WIN_BASE, PER_HP, PER_POTION = 0.2, 0.6, 0.02  # LeafWeights' defaults
+WIN_BASE, PER_HP, PER_POTION = 0.2, 0.6, 0.02  # LeafValue's
 LOST_HP = 10  # the sibling state of the search step
 
 

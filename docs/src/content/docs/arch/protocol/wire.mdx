@@ -7,7 +7,7 @@ sidebar:
 
 import WireExchange from '../../../../components/book/WireExchange.svelte';
 
-大脑从不在游戏里运行。游戏一侧，即**宿主**，每个决策问它一个问题，得到一个回答。宿主是真实游戏里的 Mod，或承载一局的模拟器（`run --brain`）；**大脑**是带着冠军各个大脑的 Harness，由 `brain` 命令提供服务（[模拟器：整局 §8](/arch/simulator/runs/#sec-8)）。两端使用相同的类型（`Sts2Ai.Protocol/Wire.cs`），所以不管是哪个宿主在问，一局都打得一样。
+大脑从不在游戏里运行。游戏一侧，即**宿主**，每个决策问它一个问题，得到一个回答。宿主是真实游戏里的 Mod，或承载一局的模拟器（`run --brain`）；**大脑**是带着冠军各个大脑的 Harness，由 `brain` 命令提供服务（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。两端使用相同的类型（`Sts2Ai.Protocol/Wire.cs`），所以不管是哪个宿主在问，一局都打得一样。
 
 ## 1. 连接
 
@@ -38,7 +38,7 @@ import WireExchange from '../../../../components/book/WireExchange.svelte';
 | `cancel` | 宿主 → 大脑 | `decision_id` | 回答到达之前，游戏已经往前走了 |
 | `run_end` | 宿主 → 大脑 | `won`、`floor`、`reason` | 一局结束；`reason` 是 `won`、`lost`、`truncated`（触及决策上限）、`failed` 或 `aborted` |
 | `error` | 大脑 → 宿主 | `message` | 代替 `ready` 或 `recommendation`：大脑接不了这一局，或答不了这个决策；宿主随即结束这一局 |
-| `node_checkpoint` | 宿主 → 大脑 | `node_index`、`checkpoint`、`gauntlet`? | 仅 SL：一个节点开始（[§6](#sec-6)） |
+| `node_checkpoint` | 宿主 → 大脑 | `node_index`、`checkpoint` | 仅 SL：一个节点开始（[§6](#sec-6)） |
 | `node_action` | 宿主 → 大脑 | `node_index`、`seq`、`action` | 仅 SL：节点内做出的一个决策（[§6](#sec-6)） |
 
 `run_id` 是对种子的 JSON 字符串计算的 `ProtocolJson.Hash`，写成 16 位十六进制数（`RunHeader.IdOf`）：大脑能凭这个 id 区分各局，并用它给自己的随机数流播种，却无法从中得知种子（[Harness：路由、预算与种子 §5](/arch/harness/routing/#sec-5)）。`decision_id` 在每一局里从 0 开始计数。`obs_hash` 是观测的哈希，写成 16 位十六进制数。
@@ -84,12 +84,12 @@ sequenceDiagram
 
 SL 下大脑可以精确地知道当前节点；节点就是一个地图点，从到达开始，到离开它的移动为止（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。宿主分两条消息，发出大脑重建它所需的东西，即节点的克隆（[模拟器：世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)）：
 
-- **`node_checkpoint`**，在节点开始时发出：`node_index`（从 0 开始，即宿主看到的第一个节点；Mod 可能中途才加入一局）；`checkpoint`，一个自成一体的 JSON 字符串，装着到达时游戏的存档和每个遗物的简单字段；以及 `gauntlet`，在处于精英连战规则下的对局里为 true，好让克隆保留这条规则。Mod 从不设置它。
+- **`node_checkpoint`**，在节点开始时发出：`node_index`（从 0 开始，即宿主看到的第一个节点；Mod 可能中途才加入一局）；以及 `checkpoint`，一个自成一体的 JSON 字符串，装着到达时游戏的存档和每个遗物的简单字段。
 - **`node_action`**，节点内做出的每个决策发一条：`seq`，在节点内从 0 开始；以及这个决策的轨迹形式，即决策界面、一个空格、然后是动作（`map 0,1`、`combat play:7:1`）。选牌提示的步骤是 `card_choice`，选择用游戏自己的下标，而不是 `pick:` 的规范下标（[观测与动作 §4](/arch/protocol/observation/#sec-4)），因为克隆通过游戏的选牌器重播它。
 
 **时机**。两者都是惰性发送的，就在下一个决策之前：如果此后开始了新节点，先发检查点，再发节点里每个还没发过的决策（`Brains/RunBrains.cs:88-99`）。因此节点的移动，也就是它的最后一个决策，从来不会发出：下一个决策在下一个节点里，而那个节点以它自己的检查点开始。
 
-**规则**（`Sts2Ai.Harness/Dispatcher.cs:179-194`）：NoSL 对局里的节点消息会被拒绝；节点下标必须递增；`seq` 必须等于节点到目前为止的动作数；在任何检查点之前出现的 SL 战斗决策是错误。大脑不回答节点消息：它拒绝的节点消息会让这一局的下一个决策失败，并给出原因。
+**规则**（`Sts2Ai.Harness/Dispatcher.cs:162-177`）：NoSL 对局里的节点消息会被拒绝；节点下标必须递增；`seq` 必须等于节点到目前为止的动作数；在任何检查点之前出现的 SL 战斗决策是错误。大脑不回答节点消息：它拒绝的节点消息会让这一局的下一个决策失败，并给出原因。
 
 **SL 放行的东西**。检查点带着游戏的存档，存档里有这一局的种子和随机数流，所以在 SL 下种子终究还是到了大脑这里。SL 可以知道它：节点的结果就是游戏自己的结果（[环境：信息与节点 §2](/arch/environments/information/#sec-2)）。大脑读取检查点的唯一方式，是在工作进程里把它加载成一个在节点出口处封存的克隆。
 
@@ -100,7 +100,7 @@ public sealed record Recommendation(long DecisionId, string ObsHash, string Acti
     IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null) : WireMessage;
 
 public sealed record Candidate(string Action, double Value, double Ci, int Samples,
-    IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+    IReadOnlyList<double>? Values = null);
 ```
 
 | 字段 | 含义 |
@@ -110,7 +110,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | `plan` | 大脑在这个动作之后的计划：会搜索的战斗大脑给出本回合剩下的部分，地图上的宏观大脑给出本幕剩下的路线 |
 | `candidates` | 只来自会搜索的大脑：它打过分的各个首个动作，最好的在前 |
 
-`Candidate`（`World.cs:59`）是一个打过分的动作：`value`，它在各个世界上的平均值；`ci`，它的 95% 置信区间的半宽；`samples`，世界的个数；以及在搜索保留了它们时，`values`，它在每个世界里的值，和 `nodes`，它在每个世界里用掉的搜索节点。计划和候选动作也是决策日志保存的内容（[Harness：决策日志 §5](/arch/harness/decision-log/#sec-5)），也是输出展示给玩家的内容（[输出 §2](/arch/output/#sec-2)）。
+`Candidate`（`World.cs:65`）是一个打过分的动作：`value`，它在各个世界上的平均值；`ci`，它的 95% 置信区间的半宽；`samples`，世界的个数；以及在搜索保留了它们时，`values`，它在每个世界里的值。计划和候选动作也是决策日志保存的内容（[Harness：决策日志 §5](/arch/harness/decision-log/#sec-5)），也是输出展示给玩家的内容（[输出 §2](/arch/output/#sec-2)）。
 
 **规划中**：
 

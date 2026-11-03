@@ -1,6 +1,6 @@
 ---
 title: Routing, budgets and seeds
-description: 'Which brain answers each surface and how a run''s champion is named; the combat routes (placeholders, PIMC and the SL planner in the worker pool, exploration, following a plan) and the macro routes with the node''s clone; the budget; how every seed is drawn; and what happens when something fails.'
+description: 'Which brain answers each surface and how a run''s champion is named; the combat routes (the placeholder, PIMC and the SL planner in the worker pool, following a plan) and the macro routes with the node''s clone; the budget; how every seed is drawn; and what happens when something fails.'
 sidebar:
   label: Routing, budgets and seeds
 ---
@@ -15,7 +15,7 @@ Every decision goes to exactly one side:
 
 | surface | side | brains today |
 |---|---|---|
-| `combat` | combat | `plan` (the SL planner, SL only), `pimc` (NoSL, or this turn on the SL clone), or the placeholders `play` and `random` |
+| `combat` | combat | `plan` (the SL planner, SL only), `pimc` (NoSL only), or the placeholder `play` |
 | `card_choice` asked during a combat (`ChoiceContext.InCombat`) | combat prompts | `p0`, the prompt brain ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)) |
 | `card_choice` asked outside combat (upgrade, transform, enchant, remove, …) | macro prompts | L0, the macro brain itself, or `random` |
 | `map`, `rewards`, `card_reward`, `bundle`, `event`, `shop`, `rest`, `treasure`, `crystal_sphere` | macro | L0 ([Macro brain](/en/arch/macro-brain/)), or `random` |
@@ -28,33 +28,30 @@ The potion belt has no surface of its own: its actions are part of each macro sc
 combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone
 ```
 
-That is the SL champion: the SL planner with the combat net c9-0 in its leaves at the medium budget, `p0` for prompts in combat, and L0 with V v9-0 playing each option on the node's clone, for the macro decisions and the card prompts outside combat. Each brain names its parts: the combat brain its combat net, if it has one, and its exploration (`explore T`); L0 its V, `clone`, and its exploration (`explore T` for a softmax, `eps ε` for even draws); the budget as [§4](#sec-4) writes it. SimWorker's `ChampionOptions` makes the routes from the command's options and refuses to run if the name it makes is not the one champion files use (`Brains/ChampionOptions.cs:37-60`).
+That is the SL champion: the SL planner with the combat net c9-0 in its leaves at the medium budget, `p0` for prompts in combat, and L0 with V v9-0 playing each option on the node's clone, for the macro decisions and the card prompts outside combat. Each brain names its parts: a searching combat brain its combat net; L0 its V, `clone`, and its exploration (`eps ε` for even draws); the budget as [§4](#sec-4) writes it. SimWorker's `ChampionOptions` makes the routes from the command's options and refuses to run if the name it makes is not the one champion files use (`Brains/ChampionOptions.cs:34-56`).
 
-**The environment picks the combat brain.** The macro brain is the same in both environments; the combat brain is not ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). The champion factory refuses `plan` and `--afterstates clone` outside SL. The `brain` command serves both environments: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s ([Overview §5](/en/arch/harness/#sec-5)).
+**The environment picks the combat brain.** The macro brain is the same in both environments; the combat brain is not ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). The champion factory refuses `plan` and `--afterstates clone` outside SL, and `pimc` outside NoSL. The `brain` command serves both environments: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s ([Overview §5](/en/arch/harness/#sec-5)).
 
 ## 2. Combat routes
 
 A combat route is a `CombatRoute(Brain, Decide, Budget)`: its name, a function from (decision, seed, the node's clone or null, the combat's moves so far) to a `CombatDecisionResult`, and its budget for the log and the name.
 
-**Placeholders.** `CombatRoute.Of(name, policy)` wraps a policy that does not search (`play`, `random`): it gives its pick, with no plan and no candidates.
+**Placeholders.** `CombatRoute.Of(name, policy)` wraps a policy that does not search (`play`): it gives its pick, with no plan and no candidates.
 
-**PIMC in the pool** (`PooledPimc.Route`, [NoSL PIMC](/en/arch/pimc/)). With one legal action it answers at once. Otherwise the budget is the room's ([§4](#sec-4)) and:
+**PIMC in the pool** (`PooledPimc.Route`, [NoSL PIMC](/en/arch/pimc/)), in NoSL only. With one legal action it answers at once. Otherwise:
 
-- **NoSL**: one `pimc_world` request per world, each rebuilt in its worker from the observation, the record of enemy moves and the build seed, so nothing of the true state leaves the host. With sequential halving, each round is one such set of requests, with the actions still in. With the same seeds it gives the same answer as PIMC over worlds in one process, which `selftest` checks.
-- **SL**: the one world is the node's clone, searched in one `sl_world` request per first action, so the workers share it. Each request keeps its own memo of states, where a search in one process shares it across first actions, so the two are not identical.
-- **Following** (`--follow`): the route keeps one `TurnPlan` for the run. A step of the plan is played without searching while the combat shows the observation the plan expected before it; otherwise the decision is searched again and marked replanned ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2)).
+- **The worlds**: one `pimc_world` request per world, each rebuilt in its worker from the observation, the record of enemy moves and the build seed, so nothing of the true state leaves the host. Each world's nodes are shared evenly over the first actions. With the same seeds it gives the same answer as PIMC over worlds in one process, which `selftest` checks.
+- **Following a cycle**: the route keeps one `TurnPlan` for the run, which keeps a search's plan only when it repeats a cycle and every world planned it the same, since searching again before each repeat would only find the same cycle again ([NoSL PIMC: search §6](/en/arch/pimc/search/#sec-6)). A step of the plan is played without searching while the combat shows the observation the plan expected before it; otherwise the decision is searched again and marked replanned.
 
-**The SL planner in the pool** (`PooledPlanner.Route`, [The SL planner](/en/arch/sl-planner/)). One `SlRoute` per run plans the rest of the combat once and then follows the plan, planning again only where a step does not hold or the plan has run out ([The SL planner §4](/en/arch/sl-planner/#sec-4)). A plan is `SlPlanner.Search` with each turn of the beam sent as one `sl_turn` request per state kept, at the room's budget. The route throws without a node clone (it plays in SL only).
+**The SL planner in the pool** (`PooledPlanner.Route`, [The SL planner](/en/arch/sl-planner/)). One `SlRoute` per run plans the rest of the combat once and then follows the plan, planning again only where a step does not hold or the plan has run out ([The SL planner §4](/en/arch/sl-planner/#sec-4)). A plan is `SlPlanner.Search` with each turn of the beam sent as one `sl_turn` request per state kept, at the route's budget. The route throws without a node clone (it plays in SL only).
 
-**Exploration** (`CombatRoute.Exploring`, self-play only, `--combat-explore T`, [Learning: the loop §9](/en/arch/learning/loop/#sec-9)). When the search returns two candidates or more, the first action is drawn from them by a softmax over their values: each with chance ∝ exp((v − best) / T), T in the leaf's units (`Brain/Exploration.cs`). If the draw is the search's own pick, the result is unchanged. Otherwise the drawn action is played with the same candidates and no plan, since the plan was the pick's; it is marked explored if it is valued below the pick by more than T/100 (closer, it is as good as tied); and it is not marked replanned.
-
-**Two things that last the whole run.** `TurnPlan` and `SlRoute` are made once per run and never cleared, neither at a combat's end nor at a macro decision; the planner's count of unproved losing plans in a row runs across decisions ([The SL planner: beam §6](/en/arch/sl-planner/beam/#sec-6)). And exploration and following interact: an explored step leaves the pick's plan queued, so the next decision usually finds that plan's step does not hold, is searched again, and is logged and counted as replanned.
+**Two things that last the whole run.** `TurnPlan` and `SlRoute` are made once per run and never cleared, neither at a combat's end nor at a macro decision; the planner's count of unproved losing plans in a row runs across decisions ([The SL planner: beam §6](/en/arch/sl-planner/beam/#sec-6)).
 
 ## 3. Macro and prompt routes
 
 A macro or prompt route is a `Route<T>(Brain, Policy)`. Today:
 
-- **L0** (`MacroBrain`, `--macro l0`) answers both the macro decisions and the card prompts outside combat, as one object with one V ([Macro brain: search](/en/arch/macro-brain/search/)). Its exploration (`--macro-explore T`, a softmax over the logs of V's values; `--explore ε`, even draws) draws from its own generators ([§5](#sec-5)).
+- **L0** (`MacroBrain`, `--macro l0`) answers both the macro decisions and the card prompts outside combat, as one object with one V ([Macro brain: search](/en/arch/macro-brain/search/)). Its exploration (`--explore ε`, even draws, self-play only) draws from its own generator ([§5](#sec-5)).
 - **`p0`** (`PromptBrain`) answers the card prompts in combat, as the search worlds do.
 - **`random`** placeholders answer both macro sides when `--macro random`.
 
@@ -62,19 +59,16 @@ A macro or prompt route is a `Route<T>(Brain, Policy)`. Today:
 
 **The plan.** After the macro answer is checked, the `Dispatcher` asks the policy what it plans after it (`IMacroPolicy.Plan`): L0's is the rest of the act's route on the map, empty elsewhere. Its time is not in the decision's `elapsed_ms`.
 
-**Explored.** A prompt or macro answer is marked explored when the policy says its last answer was: for L0, an even draw, or a softmax draw valued below the best (at a card prompt, any of its steps).
+**Explored.** A prompt or macro answer is marked explored when the policy says its last answer was drawn: for L0, by its even draws ([The decision log §6](/en/arch/harness/decision-log/#sec-6)).
 
 ## 4. The budget
 
-What a combat search may spend is a `Budget` (`Brain/Combat/CombatBrain.cs:23-56`). Its unit is the **node**: one action simulated in a world. There is no wall-clock budget and no other unit.
+What a combat search may spend is a `Budget` (`Brain/Combat/CombatBrain.cs:15-36`). Its unit is the **node**: one action simulated in a world. There is no wall-clock budget and no other unit.
 
 | field (JSON) | default | meaning |
 |---|---|---|
 | `worlds` | 8 | PIMC's worlds per decision; the planner has one world and ignores it |
 | `nodes_per_world` | 300 | PIMC: the actions simulated in each world's search of the turn. The planner: in each search of one turn from one state |
-| `elite`, `boss` | 1 | how many times its budget an elite's or a boss's decisions get: PIMC's nodes per world, or the planner's beam and easy beam |
-| `halving` | false | PIMC's first actions share each world's nodes by sequential halving instead of evenly ([NoSL PIMC: budget §3](/en/arch/pimc/budget/#sec-3)) |
-| `follow` | false | PIMC plays the rest of a turn that every world planned the same without searching again |
 | `beam` | 0 | the planner's states kept from one turn to the next; 0 means PIMC |
 | `replan` | 1 | the planner's turns of an unproved losing plan played before planning again; 0 plays it to its end |
 | `loss_plans` | 0 | the most unproved losing plans the planner makes in a row, in one combat, before the last is played to its end; 0 is no limit |
@@ -89,9 +83,7 @@ What a combat search may spend is a `Budget` (`Brain/Combat/CombatBrain.cs:23-56
 | `high` | 8 | 300 | – | – |
 | `max` | 16 | 300 | – | – |
 
-**The room's budget** (`Budget.For(room)`): in an elite or boss room, the multiple is applied to the planner's beam and easy beam (at least 1) or to PIMC's nodes per world, and the multiples are then set to 1, so applying it twice changes nothing.
-
-**As a name** (`Budget.ToString`): `8x300` for PIMC (`beam 16x300` for the planner), then the multiples that are not 1 (`elite x2`), `halving` and `follow` if on, and the planner's `easy N`, `replan N` when not 1, and `loss plans N` when limited.
+**As a name** (`Budget.ToString`): `8x300` for PIMC (`beam 16x300` for the planner), then the planner's `easy N`, `replan N` when not 1, and `loss plans N` when limited.
 
 **Planned: budgets by mode** <Badge text="planned" variant="caution" />. Today every mode uses the fixed node budget. The design gives each mode its own unit:
 
@@ -101,7 +93,7 @@ What a combat search may spend is a `Budget` (`Brain/Combat/CombatBrain.cs:23-56
 | assist | wall clock, anytime | a human is waiting: send the best answer so far, then refine it |
 | auto-play (R4) | a wall-clock cap and a minimum number of nodes | do not stall, and do not go shallow |
 
-"Anytime" means the search can be stopped at any moment and still has a best answer to give. A planned allocation would stop when the top two candidates are separated by more than their confidence intervals, and otherwise add samples or depth. What is built instead: an even split or sequential halving, the room's multiples, and following a plan ([NoSL PIMC: budget §1](/en/arch/pimc/budget/#sec-1)).
+"Anytime" means the search can be stopped at any moment and still has a best answer to give. A planned allocation would stop when the top two candidates are separated by more than their confidence intervals, and otherwise add samples or depth. What is built instead: a fixed number of nodes, shared evenly over the first actions, and following a plan ([NoSL PIMC: budget §1](/en/arch/pimc/budget/#sec-1)).
 
 ## 5. Seeds and determinism
 
@@ -109,7 +101,7 @@ A decision's search must give the same answer every time it is asked the same th
 
 **The run id** is the FNV-1a 64-bit hash of the run's seed as a JSON string (quotes included), in hex: seed `0SSL7NS01MU6` gives run `ce13ba5116b7f48a`. The brain sees the run id, never the seed ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)).
 
-**A decision's seed** is drawn from the run id and the decision's number, which counts every decision of the run from 0, combat decisions, card prompts and macro decisions alike (`Dispatcher.cs:205-224`):
+**A decision's seed** is drawn from the run id and the decision's number, which counts every decision of the run from 0, combat decisions, card prompts and macro decisions alike (`Dispatcher.cs:189-208`):
 
 ```text
 H        = FNV-1a 64 of the JSON string run_id
@@ -126,11 +118,11 @@ This is SplitMix64's step. The decision's number is Harness's own counter, not t
 - the **build seed** is the seed in upper-case hex (`X16`); the worker resamples what the observation does not fix with a generator seeded by its hash ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5));
 - world k is determinized with the hash of `"{seed}:{k}"` ([Simulator: combats §3](/en/arch/simulator/combat/#sec-3)).
 
-SL PIMC and the planner search the one exact world and ignore it; the macro and prompt policies never receive it.
+The SL planner searches the one exact world and ignores it; the macro and prompt policies never receive it.
 
-**Placeholders and exploration** draw from .NET generators seeded per run, one per stream: `Random(FNV(run_id + stream))` with the stream `""` for the placeholders, `:explore combat` for the combat route's softmax, `:explore` for L0's softmax and `:explore uniform` for L0's even draws (`Brains/ChampionOptions.cs:41-53`). So a run plays the same in any process and over the wire, whether or not it is logged.
+**Placeholders and exploration** draw from .NET generators seeded per run, one per stream: `Random(FNV(run_id + stream))` with the stream `""` for the placeholders and `:explore uniform` for L0's even draws (`Brains/ChampionOptions.cs:40-49`). So a run plays the same in any process and over the wire, whether or not it is logged.
 
-**Order, not timing.** A search's requests run in parallel, but the pool returns their replies in request order ([Simulator: the worker pool §2](/en/arch/simulator/pool/#sec-2)), and candidates are sorted by the halving round they reached, then by value, with ties kept in the legal order (end turn, then cards, then potions). Which worker finishes first never changes an answer. `run --check` holds a whole run to this ([The decision log §8](/en/arch/harness/decision-log/#sec-8)).
+**Order, not timing.** A search's requests run in parallel, but the pool returns their replies in request order ([Simulator: the worker pool §2](/en/arch/simulator/pool/#sec-2)), and candidates are sorted by value, with ties kept in the legal order (end turn, then cards, then potions). Which worker finishes first never changes an answer. `run --check` holds a whole run to this ([The decision log §8](/en/arch/harness/decision-log/#sec-8)).
 
 ## 6. Failures
 
@@ -148,7 +140,7 @@ There is no fallback: a decision that cannot be answered as specified fails, and
 | a node checkpoint or action in NoSL | `InvalidOperationException` |
 | a checkpoint whose node index does not rise; an action for another node or out of sequence | `InvalidDataException` |
 
-**On the wire** (`BrainServer`): a refused `hello` (the champion factory threw: an unknown environment, `plan` or `--afterstates clone` outside SL, a champion's name that does not match), a decision outside a run or after a refused node message, an id that does not rise, an observation that does not match its hash, a combat or prompt decision without its screen, an unknown message: each gets an `error`. A refused node message fails the run's next decision. A protocol version that does not match, or an I/O or JSON error, drops the host ([Overview §5](/en/arch/harness/#sec-5)).
+**On the wire** (`BrainServer`): a refused `hello` (the champion factory threw: an unknown environment, `plan` or `--afterstates clone` outside SL, `pimc` outside NoSL, a champion's name that does not match), a decision outside a run or after a refused node message, an id that does not rise, an observation that does not match its hash, a combat or prompt decision without its screen, an unknown message: each gets an `error`. A refused node message fails the run's next decision. A protocol version that does not match, or an I/O or JSON error, drops the host ([Overview §5](/en/arch/harness/#sec-5)).
 
 **In the worker pool** ([Simulator: the worker pool §6](/en/arch/simulator/pool/#sec-6)):
 

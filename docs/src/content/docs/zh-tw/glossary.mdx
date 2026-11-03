@@ -98,8 +98,6 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | SPSA | 同時擾動隨機逼近（simultaneous perturbation stochastic approximation）：把許多參數一起擾動，同時調整它們；本專案不使用它（[學習：循環 §6](/zh-tw/arch/learning/loop/#sec-6)）。 |
 | 特權資訊（privileged information） | 只在訓練時用來降低雜訊的隱藏狀態；從不是部署後策略的輸入。 |
 | 探索（exploration）、均勻抽取（even draws）、ε | 自我對弈的探索（`run --explore ε`）：一個宏觀決策以機率 ε 在它的選項中均勻抽取，不管 V 怎麼說。 |
-| 菁英連戰（elite gauntlet）、進度（progress） | 一種對局規則（`run --gauntlet`）：普通怪物戰一開始就判贏，菁英和頭目真打；進度是到達的層數，加上這一局死在其中的那場戰鬥裡打掉的敵人生命比例（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。 |
-| 頭目連戰試驗（boss gauntlet pilot）、門口狀態（door state） | 每場戰鬥一開始就判贏的對局（`run --auto-win`），為了一下子走到每個頭目的門口；門口狀態是一局在那裡的配置（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。 |
 
 ## 6. 評估
 
@@ -128,5 +126,5 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | `data/silent/{sl,nosl}/…` | 資料目錄的自我對弈和評估資料夾，在儲存主機上，不在 git 裡。 |
 | `tmp/build.sh REV`, `sim.sh` | 本地的啟動器，建置一個固定的提交並執行它（[模擬器：參考 §1](/zh-tw/arch/simulator/reference/#sec-1)）。 |
 | `run`, `brain`, `serve`, `clones`, `gate`, `report`, `leaderboard` | SimWorker 指令（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。 |
-| `v.train`, `combat.train`, `gauntlet.py` | 訓練 V 和戰鬥網路的 Python，以及連戰的報告和門檻（[學習：參考 §9](/zh-tw/arch/learning/reference/#sec-9)）。 |
+| `v.train`, `combat.train`, `gate.py` | 訓練 V 和戰鬥網路的 Python，以及勝局門檻的報告和判定（[學習：參考 §9](/zh-tw/arch/learning/reference/#sec-9)）。 |
 | `0SSL7NS01MU6` | 本書範例對局的種子，在第 48 層獲勝（[遊戲 §1](/zh-tw/arch/game/#sec-1)）。 |

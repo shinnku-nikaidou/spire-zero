@@ -14,7 +14,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-已有：每个决策画面的观测，包括战斗和选牌提示；文本形式的动作；宿主与大脑之间的线路及其 SL 节点消息，模拟器通过它跑整局，游戏里的 Mod 通过它给出建议；战斗世界 API；四种工作进程请求。规划中：公开历史的事件流、用于解说的事实，以及推荐的 `degraded` 标志（[§6](#sec-6)）。
+已有：每个决策画面的观测，包括战斗和选牌提示；文本形式的动作；宿主与大脑之间的线路及其 SL 节点消息，模拟器通过它跑整局，游戏里的 Mod 通过它给出建议；战斗世界 API；三种工作进程请求。规划中：公开历史的事件流、用于解说的事实，以及推荐的 `degraded` 标志（[§6](#sec-6)）。
 
 </Aside>
 
@@ -58,7 +58,7 @@ flowchart LR
 | `Sts2Ai.SimWorker` | 以上全部 |
 | `Sts2Ai.Mod` | 把 GameBridge 和 Protocol 的源文件编译进自身，并在游戏内运行 |
 
-这条边界检查两次：`BoundaryTests`（xUnit，不需要游戏）和 `selftest` 的前两项检查都会遍历 Brain、Protocol 和 Harness 编译后的引用，只要有一个够到游戏程序集就失败；GameBridge 作为对照，它确实够得到（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)）。
+这条边界由 `BoundaryTests`（xUnit，不需要游戏）检查：它遍历 Brain、Protocol 和 Harness 编译后的引用，只要有一个够到游戏程序集就失败；GameBridge 作为对照，它确实够得到（[模拟器：参考 §7](/arch/simulator/reference/#sec-7)）。
 
 ## 3. 其中可以有什么
 
@@ -91,11 +91,11 @@ Protocol 类型就是大脑被允许知道的东西，所以往里面放什么�
 
 | 检查什么 | 在哪里 |
 |---|---|
-| 边界：Brain、Protocol 和 Harness 够不到任何游戏程序集 | `BoundaryTests`；`selftest` |
+| 边界：Brain、Protocol 和 Harness 够不到任何游戏程序集 | `BoundaryTests` |
 | 每个战斗观测和每个战斗动作都能经受 JSON 往返，作为文本和作为 JSON 都是 | `selftest`，每场战斗（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)） |
 | 一局的每个观测都能经受 JSON 往返，同一局给出相同的观测哈希 | `run --check`（[模拟器：整局 §6](/arch/simulator/runs/#sec-6)） |
 | 一局在进程内和通过线路打出来一样：轨迹、观测、对局记录、决策日志 | `run --check` |
-| 大脑在 NoSL 下拒绝节点消息；节点的克隆保留连战规则 | `DispatcherTests` |
+| 大脑在 NoSL 下拒绝节点消息；SL 节点的克隆就是它的检查点加上此后的决策 | `DispatcherTests` |
 | 线路版本：读取时拒绝 `v` 不同的消息 | `WireStream.Receive` |
 | 宿主发出的 SL 决策在它们的克隆上重播，得到相同的观测 | 在 `brain --wire` 日志上运行的 `clones`（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)） |
 
@@ -111,7 +111,7 @@ Protocol 类型就是大脑被允许知道的东西，所以往里面放什么�
 |---|---|
 | [线路](/arch/protocol/wire/) | 宿主与大脑之间的对话：它的套接字、每条消息和每个字段、一步一步走完的一局、规则、SL 节点消息、推荐，以及两种宿主有何不同 |
 | [观测与动作](/arch/protocol/observation/) | 每个决策的观测：这一局、一场战斗、卡牌身份和规范顺序、每个画面及其动作、选牌提示及其上下文，以及哪些东西被排除在外 |
-| [世界与工作进程消息](/arch/protocol/worlds/) | 搜索在其中进行的世界 API、节点克隆和敌人出招记录，以及四种工作进程请求和它们的回答 |
+| [世界与工作进程消息](/arch/protocol/worlds/) | 搜索在其中进行的世界 API、节点克隆和敌人出招记录，以及三种工作进程请求和它们的回答 |
 
 未决问题：
 

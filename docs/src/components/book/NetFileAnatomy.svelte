@@ -30,8 +30,6 @@
 
   const NOTE: Record<string, Words> = {
     name: w('The net’s name, as the champion shows it (l0 v9-0, plan c9-0).', '网络的名字，冠军名称里就这样显示（l0 v9-0、plan c9-0）。', '網路的名字，冠軍名稱裡就這樣顯示（l0 v9-0、plan c9-0）。'),
-    character: w('ALL: one net plays every character, which it reads as a context token. C# does not read this field.', 'ALL：一个网络打所有角色，角色作为 context token 读入。C# 不读这个字段。', 'ALL：一個網路打所有角色，角色作為 context token 讀入。C# 不讀這個欄位。'),
-    objective: w('What RunNet.Value returns: floor, win, or progress (a net with a share head).', 'RunNet.Value 返回什么：floor、win，或 progress（带比例输出头的网络）。', 'RunNet.Value 回傳什麼：floor、win，或 progress（帶比例輸出頭的網路）。'),
     floors: w('The hazard head’s floors, from floor 0.', '风险值输出头覆盖的楼层数，从第 0 层起。', '風險值輸出頭涵蓋的樓層數，從第 0 層起。'),
     vocab: w('Each token table’s ids, every id of the game build; entry 0 is <unk>, which reads any other id.', '每张 token 表的 id，即游戏这个版本的全部 id；第 0 项是 <unk>，读其他任何 id。', '每張 token 表的 id，即遊戲這個版本的全部 id；第 0 項是 <unk>，讀其他任何 id。'),
     state: w('The six raw numbers V reads, with the training data’s mean and standard deviation that standardize them.', 'V 读的六个原始数字，以及用来标准化它们的训练数据均值和标准差。', 'V 讀的六個原始數字，以及用來標準化它們的訓練資料平均值和標準差。'),

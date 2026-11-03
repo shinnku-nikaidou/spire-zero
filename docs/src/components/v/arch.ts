@@ -282,7 +282,7 @@ export function valueNet(lang: Lang): Diagram {
       {
         kind: 'repeat',
         times: 'MLP',
-        info: L(w('The body: every relation between the parts is worked out here. A second head, used only in training, reads its output too: Linear 512 → 7, not in the net file.', '主干：各部分之间的关系都在这里算出来。训练时另有第二个输出头也读它的输出：线性层 512 → 7，不进网络文件。', '主幹：各部分之間的關係都在這裡算出來。訓練時另有第二個輸出頭也讀它的輸出：線性層 512 → 7，不進網路檔案。')),
+        info: L(w('The body: every relation between the parts is worked out here. A second head, used only in training, reads its output too: Linear 512 → 6, not in the net file.', '主干：各部分之间的关系都在这里算出来。训练时另有第二个输出头也读它的输出：线性层 512 → 6，不进网络文件。', '主幹：各部分之間的關係都在這裡算出來。訓練時另有第二個輸出頭也讀它的輸出：線性層 512 → 6，不進網路檔案。')),
         items: body(lang, 774),
       },
       { kind: 'block', label: L(w('Hazard head\nLinear 512 → 64', '风险值输出头\n线性层 512 → 64', '風險值輸出頭\n線性層 512 → 64')), tone: 'head', info: L(w('One logit per floor, 0 to 63.', '每层一个 logit，0 到 63。', '每層一個 logit，0 到 63。')) },

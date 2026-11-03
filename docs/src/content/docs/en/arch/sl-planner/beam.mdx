@@ -20,7 +20,7 @@ $$
 
 where $\operatorname{ends}(s)$ is what the turn's search from $s$ returns, $\operatorname{top}_B$ takes the $B$ best by the leaf's value, distinct by key, and every end that finishes the fight updates $v^{\star}$ instead. The sort is stable, so ties keep the order in which their states were searched, and the beam does not depend on which worker answered first. The beam goes on until no state is left, or for at most 40 turns.
 
-$B$ is `Budget.Beam` (`--beam`): 8 at every effort level but max, which has 16 ([Budget §1](/en/arch/sl-planner/budget/#sec-1)). Each kept state's turn is searched with the budget's nodes per state and turn. In elite and boss fights, `--elite-x` and `--boss-x` multiply $B$ and the easy beam $E$ of [§4](#sec-4); both are 1 by default.
+$B$ is `Budget.Beam` (`--beam`): 8 at every effort level but max, which has 16 ([Budget §1](/en/arch/sl-planner/budget/#sec-1)). Each kept state's turn is searched with the budget's nodes per state and turn; $B$ and the nodes are the same in every room.
 
 A turn usually ends in many more states than the beam keeps: of a turn's distinct ends, only the best 8 survive across all 8 kept states. That is the planner's main approximation, and why most of its plans are not proved ([§5](#sec-5)).
 
@@ -37,7 +37,7 @@ The bound assumes that the fight neither heals nor gives potions. A few cards, p
 Pruning needs a floor, and the full beam has none at its first turn. So before the full beam, the planner runs a beam of one: at each turn it keeps the single best state by the leaf. This **greedy dive** reaches the end of the fight in one line, usually a win (in a 300-run evaluation, the first plan won 99.8% of the hallway fights that were won, [Budget §3](/en/arch/sl-planner/budget/#sec-3)). Its value is the floor that prunes the full beam from its first turn on.
 
 - When the dive reaches the decision's bound, nothing can beat it, and the full beam is skipped.
-- The dive asks each of its turns for every end, with no floor, and keeps them. The full beam passes through the same states early on (its first turn always), and takes those turns' ends from the dive instead of searching them again ([Turn search §4](/en/arch/sl-planner/turn-search/#sec-4)). On the panel's unproved plans that saved 14–16% of the nodes, and every plan stayed the same.
+- The dive asks each of its turns for every end, with no floor, and keeps them. The full beam passes through the same states early on (its first turn always), and takes those turns' ends from the dive instead of searching them again ([Turn search §4](/en/arch/sl-planner/turn-search/#sec-4)). On a fixed set of fights it saved 14–16% of the nodes of the unproved plans, and every plan stayed the same.
 
 ## 4. The easy beam
 
@@ -58,7 +58,7 @@ A plan is **proved** when nothing better can exist, as far as the bound holds:
 - its line reaches the decision's bound; or
 - the full beam left nothing out: no turn's search was cut (out of nodes, or more ends than it kept), no state was dropped from the beam, and every line ended the fight or was pruned.
 
-Proofs are rare. On the panel of 2026-10-28, 18% of the searches were proved on act 1 hallway fights, 3% on elites and 1% on act 2's fights: a turn yields many more states than the beam keeps. In the panel below, none of 21 plans was proved.
+Proofs are rare. On the fights of [Budget §5](/en/arch/sl-planner/budget/#sec-5) (2026-10-28), 18% of the searches were proved on act 1 hallway fights, 3% on elites and 1% on act 2's fights: a turn yields many more states than the beam keeps. In the fights below, none of 21 plans was proved.
 
 ## 6. Losing plans
 
@@ -70,7 +70,7 @@ A plan that loses and is not proved may be wrong: the beam may have dropped the 
 
 The route keeps the count (`SlRoute`): a fight ends its run of losing plans with its first plan that is not an unproved loss.
 
-What this looks like, from a panel of act 1 elites and bosses played with Silent's starter deck at full HP (an earlier combat net, medium effort, 2026-10-30; `panel --player plan --env SL --combat-net FILE --effort medium --act 0 --rooms elite|boss --trace`). Each plan is listed as: how it ends, the actions of it that were played, the turns the dive and the beam searched, and the nodes:
+What this looks like, on act 1 elites and bosses played with Silent's starter deck at full HP (an earlier combat net, medium effort, 2026-10-30). Each plan is listed as: how it ends, the actions of it that were played, the turns the dive and the beam searched, and the nodes:
 
 | fight | result | plans | time |
 |---|---|---|---|
@@ -117,14 +117,14 @@ Width 1 is today's dive; a later pass is a beam of that width pruned by what the
 
 ### 7.2 Why widening, and not depth
 
-A pass of any width ends in a complete, real line, so the search can be stopped at any budget with something to play. The alternative, a depth-first branch and bound, may hold no complete line better than its first for a long time, and nodes here are dear: about 460 a second (11,345 nodes in 24.7 s on the panel's Byrdonis fight, [§6](#sec-6)), with restores about 88% of a worker's busy time ([Budget §3](/en/arch/sl-planner/budget/#sec-3)). Alpha-beta has nothing to offer either, since its gains come from an opponent's replies and a fight has none: the enemies' moves are fixed inside the one world. Depth-first search may be compared later.
+A pass of any width ends in a complete, real line, so the search can be stopped at any budget with something to play. The alternative, a depth-first branch and bound, may hold no complete line better than its first for a long time, and nodes here are dear: about 460 a second (11,345 nodes in 24.7 s on the Byrdonis fight of [§6](#sec-6)), with restores about 88% of a worker's busy time ([Budget §3](/en/arch/sl-planner/budget/#sec-3)). Alpha-beta has nothing to offer either, since its gains come from an opponent's replies and a fight has none: the enemies' moves are fixed inside the one world. Depth-first search may be compared later.
 
 ### 7.3 What it replaces
 
 | today | in the design |
 |---|---|
 | greedy dive ([§3](#sec-3)) | the pass of width 1 |
-| beam $B$ ([§1](#sec-1)), `Elite` and `Boss` multiples | widths grow until a stop; hard fights spend more because they do not stop early |
+| beam $B$ ([§1](#sec-1)) | widths grow until a stop; hard fights spend more because they do not stop early |
 | easy beam $E$ ([§4](#sec-4)) | stop at a win with width at least 4 |
 | `--replan`, `--loss-plans` ([§6](#sec-6)) | one turn of a losing plan, until the fight's nodes are spent |
 | one turn's transpositions ([Turn search §2](/en/arch/sl-planner/turn-search/#sec-2)), the dive's turns kept for the beam | one table across turns and passes |

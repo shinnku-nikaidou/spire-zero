@@ -7,7 +7,7 @@ sidebar:
 
 import WireExchange from '../../../../../components/book/WireExchange.svelte';
 
-The brain never runs inside the game. The game's side, the **host**, asks it one question per decision and gets one answer back. The host is the mod in the real game, or the simulator hosting a run (`run --brain`); the **brain** is Harness with the champion's brains, served by the `brain` command ([Simulator: whole runs §8](/en/arch/simulator/runs/#sec-8)). Both ends use the same types (`Sts2Ai.Protocol/Wire.cs`), so a run plays the same whichever host asks.
+The brain never runs inside the game. The game's side, the **host**, asks it one question per decision and gets one answer back. The host is the mod in the real game, or the simulator hosting a run (`run --brain`); the **brain** is Harness with the champion's brains, served by the `brain` command ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). Both ends use the same types (`Sts2Ai.Protocol/Wire.cs`), so a run plays the same whichever host asks.
 
 ## 1. The connection
 
@@ -38,7 +38,7 @@ The version is bumped on any breaking change. A reader refuses a message whose `
 | `cancel` | host → brain | `decision_id` | the game moved on before the answer came |
 | `run_end` | host → brain | `won`, `floor`, `reason` | the run is over; `reason` is `won`, `lost`, `truncated` (the decision cap), `failed` or `aborted` |
 | `error` | brain → host | `message` | instead of `ready` or a `recommendation`: the brain cannot take the run or answer the decision; the host ends the run |
-| `node_checkpoint` | host → brain | `node_index`, `checkpoint`, `gauntlet`? | SL only: a node starts ([§6](#sec-6)) |
+| `node_checkpoint` | host → brain | `node_index`, `checkpoint` | SL only: a node starts ([§6](#sec-6)) |
 | `node_action` | host → brain | `node_index`, `seq`, `action` | SL only: a decision taken in the node ([§6](#sec-6)) |
 
 `run_id` is `ProtocolJson.Hash` of the seed's JSON string, as 16 hex digits (`RunHeader.IdOf`): the brain can tell runs apart and seed its own random streams from the id, without learning the seed from it ([Harness: routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)). `decision_id` counts from 0 in each run. `obs_hash` is the observation's hash as 16 hex digits.
@@ -84,12 +84,12 @@ The opening of the book's example run, as the simulator hosting it in SL would s
 
 In SL the brain may know the current node exactly, a node being a map point from arrival to the travel that leaves it ([Environments: information §3](/en/arch/environments/information/#sec-3)). The host sends what the brain needs to rebuild it, the node's clone ([Simulator: worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)), in two messages:
 
-- **`node_checkpoint`** when a node starts: `node_index` (from 0, the first node the host saw; a mod can join a run late), `checkpoint`, a JSON string of its own holding the game's save on arrival and each relic's plain fields, and `gauntlet`, true in a run under the elite gauntlet's rule, so the clone keeps it. The mod never sets it.
+- **`node_checkpoint`** when a node starts: `node_index` (from 0, the first node the host saw; a mod can join a run late), and `checkpoint`, a JSON string of its own holding the game's save on arrival and each relic's plain fields.
 - **`node_action`** for each decision taken in the node: `seq` from 0 within the node, and the decision in its trace form, the surface, a space, then the action (`map 0,1`, `combat play:7:1`). A card prompt's step is `card_choice` with the picks as the game's own indexes, not the canonical indexes of `pick:` ([Observations and actions §4](/en/arch/protocol/observation/#sec-4)), since the clone replays it through the game's card selector.
 
 **Timing.** Both are sent lazily, just before the next decision: the checkpoint if a new node has started since, then each decision of the node not yet sent (`Brains/RunBrains.cs:88-99`). A node's travel, its last decision, is therefore never sent: the next decision is in the next node, which starts with its own checkpoint.
 
-**Rules** (`Sts2Ai.Harness/Dispatcher.cs:179-194`): node messages in a NoSL run are refused; node indexes must increase; `seq` must equal the number of actions the node has so far; an SL combat decision before any checkpoint is an error. The brain does not answer node messages: one it refuses fails the run's next decision with the reason.
+**Rules** (`Sts2Ai.Harness/Dispatcher.cs:162-177`): node messages in a NoSL run are refused; node indexes must increase; `seq` must equal the number of actions the node has so far; an SL combat decision before any checkpoint is an error. The brain does not answer node messages: one it refuses fails the run's next decision with the reason.
 
 **What SL lets through.** The checkpoint carries the game's save, which holds the run's seed and random streams, so in SL the seed reaches the brain after all. SL may know it: the node's outcomes are the game's own ([Environments: information §2](/en/arch/environments/information/#sec-2)). The brain reads the checkpoint only by loading it in a worker, as a clone sealed at the node's exit.
 
@@ -100,7 +100,7 @@ public sealed record Recommendation(long DecisionId, string ObsHash, string Acti
     IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null) : WireMessage;
 
 public sealed record Candidate(string Action, double Value, double Ci, int Samples,
-    IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+    IReadOnlyList<double>? Values = null);
 ```
 
 | field | meaning |
@@ -110,7 +110,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | `plan` | what the brain planned after this action: the rest of the turn from a searching combat brain, the rest of the act's route from the macro brain on the map |
 | `candidates` | from a searching brain only: the first actions it scored, best first |
 
-A `Candidate` (`World.cs:59`) is one scored action: `value`, its mean over the worlds; `ci`, the half-width of its 95% confidence interval; `samples`, the worlds; and, when the search kept them, `values`, its value in each world, and `nodes`, the search nodes it took in each. The plan and the candidates are what the decision log keeps too ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)), and what the output shows the player ([Output §2](/en/arch/output/#sec-2)).
+A `Candidate` (`World.cs:65`) is one scored action: `value`, its mean over the worlds; `ci`, the half-width of its 95% confidence interval; `samples`, the worlds; and, when the search kept them, `values`, its value in each world. The plan and the candidates are what the decision log keeps too ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)), and what the output shows the player ([Output §2](/en/arch/output/#sec-2)).
 
 **Planned:**
 

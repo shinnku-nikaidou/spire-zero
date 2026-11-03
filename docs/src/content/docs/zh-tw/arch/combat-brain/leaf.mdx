@@ -17,7 +17,7 @@ import OutcomeHead from '../../../../../components/combat/OutcomeHead.svelte';
 
 ## 2. 結局的價格
 
-價格是 `LeafValue`（`LeafValue.Of`，`src/Sts2Ai.Brain/Combat/LeafValue.cs:50-77`）裡手工設定的數字：
+價格是 `LeafValue`（`LeafValue.Of`，`src/Sts2Ai.Brain/Combat/LeafValue.cs:20-31`）裡手工設定的數字：
 
 - 輸掉的戰鬥為 0。
 - 贏下的戰鬥，剩下生命值比例 $s$（生命值除以最大生命值）、持有 $q$ 瓶藥水時，值
@@ -26,15 +26,15 @@ $$
 \text{Win}(s, q) = 0.2 + 0.6\,s + 0.02\,q.
 $$
 
-它們是帶網路的葉節點裡僅有的手工設定的數字。已經結束的戰鬥直接由它們估值，不經過網路：每條打完的路線的結尾，也就是每個計畫的最終分數，都是這條公式套在路線結束時的狀態上。
+它們是葉節點裡僅有的手工設定的數字。已經結束的戰鬥直接由它們估值，不經過網路：每條打完的路線的結尾，也就是每個計畫的最終分數，都是這條公式套在路線結束時的狀態上。
 
-沒有 `--combat-net` 時，進行中的戰鬥也交給 `LeafValue`（`HandLeaf`，`src/Sts2Ai.SimWorker/Brains/LeafChoice.cs:20`）：它從畫面上的內容投影戰鬥剩下的部分，另外多用幾個手工設定的數字。沒有冠軍這樣打。
+`LeafValue.Of` 只給打完的戰鬥估值，遇到還在進行的戰鬥就拒絕（`src/Sts2Ai.Brain/Combat/LeafValue.cs:30`）：進行中的戰鬥歸戰鬥網路（[§3](#sec-3)）。所以每個搜尋的葉節點都是網路，`pimc` 和 `plan` 都需要 `--combat-net`（`src/Sts2Ai.SimWorker/Brains/LeafChoice.cs:18`）。
 
 ## 3. 戰鬥網路
 
 對還在進行的戰鬥，葉節點去問戰鬥網路。它讀一個回合的開始，預測在打出它訓練對局的那個策略下，戰鬥會怎樣結束。它的輸入和各層見[戰鬥網路](/zh-tw/arch/combat-brain/network/)，一個真實狀態走過它的全程見[一個狀態走過網路](/zh-tw/arch/combat-brain/walkthrough/)，它的訓練見[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/)。
 
-`--combat-net FILE` 讓它上場，在規劃器裡（顯示為 `plan NAME`）或在 PIMC 裡（`pimc NAME`）。
+`--combat-net FILE` 把它交給搜尋，在規劃器裡（顯示為 `plan NAME`）或在 PIMC 裡（`pimc NAME`）。
 
 ## 4. 兩個輸出
 
@@ -54,7 +54,7 @@ $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})
 $$
 
-死亡不增加任何東西，因為它值 0（`CombatNet.Value`，`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-86`）。在一個真實狀態上逐項計算，見[一個狀態走過網路 §13](/zh-tw/arch/combat-brain/walkthrough/#sec-13)。
+死亡不增加任何東西，因為它值 0（`CombatNet.Value`，`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-85`）。在一個真實狀態上逐項計算，見[一個狀態走過網路 §13](/zh-tw/arch/combat-brain/walkthrough/#sec-13)。
 
 這個形式是**狀態持有的東西，一點不差，加上網路說還會發生的事**。$s$ 一點不差地進入公式，所以同一個束裡的狀態在網路開口之前，就已經按真實的生命值分出差別。喝掉的藥水也一點不差地從總和裡消失。
 

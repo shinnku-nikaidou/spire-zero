@@ -31,14 +31,14 @@ A report is **void** when any of four counts is above zero (`Metrics.Void`, `Har
 
 A void report stays on the leaderboard, marked and ranked last; a gate gives a void challenger the verdict void, whatever its runs reached ([Gates §6](/en/arch/evaluation/gates/#sec-6)).
 
-**A failed run is as if never set.** `report` and `gate` read through `RunRecord.Read`, which leaves out every record whose outcome is `failed`, and `RunRecord.SeedsLeft` takes its seed out of the set, so 2 failed of 500 make a report of 498 of 498, neither void nor partial (`Harness/RunRecords.cs:38-45`). A run fails because of the host, such as a machine whose memory flips bits, and says nothing of the brain. `learn/gauntlet.py` and `v.train` drop them too (`learn/gauntlet.py:44`, `learn/v/data.py:91`), and a pair needs both runs ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
+**A failed run is as if never set.** `report` and `gate` read through `RunRecord.Read`, which leaves out every record whose outcome is `failed`, and `RunRecord.SeedsLeft` takes its seed out of the set, so 2 failed of 500 make a report of 498 of 498, neither void nor partial (`Harness/RunRecords.cs:32-39`). A run fails because of the host, such as a machine whose memory flips bits, and says nothing of the brain. `learn/gate.py` and `v.train` drop them too (`learn/gate.py:42`, `learn/v/data.py:64`), and a pair needs both runs ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
 
 **Truncated runs count as losses** in the win rate, and they are never played again: a seed fixes the run, so playing it again would only repeat it, and dropping it would pick seeds (`Harness/Reports.cs:51`).
 
 Two more counts belong here and do not exist:
 
 - **`NumReloads`**, the game's count of real reloads, must be 0 in the real game <Badge text="planned" variant="caution" />. It is planned as a field of the mod's decision log; nothing reads it ([Environments: information §8](/en/arch/environments/information/#sec-8)).
-- **Save exports in NoSL runs** have no counter. A simulated NoSL run never exports a node checkpoint (`SimWorker/Commands/RunCommand.cs:248`), and a NoSL `Dispatcher` refuses one (`Harness/Dispatcher.cs:181`), so an export would end the run as an error, not as a count.
+- **Save exports in NoSL runs** have no counter. A simulated NoSL run never exports a node checkpoint (`SimWorker/Commands/RunCommand.cs:239`), and a NoSL `Dispatcher` refuses one (`Harness/Dispatcher.cs:165`), so an export would end the run as an error, not as a count.
 
 ## 3. Secondary metrics
 
@@ -57,7 +57,7 @@ The elites taken, the skip rate, the gold and the HP at each boss are the conser
 
 **Planned** <Badge text="planned" variant="caution" />, and in no report:
 
-- **Calibration**: how close V's predicted chance to win comes to the outcomes. A Brier score (the mean squared gap between the predicted chance and the run's 1 or 0) exists only in `v.train`'s held-out report for whole runs, `brier_held_out` against `brier_held_out_floor_only`, a model that knows only the floor (`learn/v/train.py:359-383`); no evaluation computes it, and nothing compares it with a constant prediction.
+- **Calibration**: how close V's predicted chance to win comes to the outcomes. A Brier score (the mean squared gap between the predicted chance and the run's 1 or 0) exists only in `v.train`'s held-out report for whole runs, `brier_held_out` against `brier_held_out_floor_only`, a model that knows only the floor (`learn/v/train.py:160-177`); no evaluation computes it, and nothing compares it with a constant prediction.
 - **Search compute**: branches searched and clone queries per decision. Reports have wall time only.
 - **Potion hoarding**: potions held unused.
 
@@ -83,7 +83,7 @@ The figure computes the interval with a port of `Rate.Wilson`, which gives every
 
 A seed is the game's run seed string, 12 characters such as `3TZ33JATH5R5`. It fixes the map, the encounters, the rewards and every draw the game makes, so a seed set is a fixed set of games. Three kinds, kept disjoint:
 
-- **train** seeds, unlimited, for self-play and fork jobs only;
+- **train** seeds, unlimited, for self-play only;
 - **promotion** seeds, for gates and leaderboards;
 - **final** seeds, generated and registered in the repo before any run on them, to be run in full and reported in full, so that no one can pick seeds that happen to look good. A formal claim needs at least 300 runs.
 
@@ -99,7 +99,7 @@ A seed set is a text file in `eval/seeds/`, one seed per line; `#` starts a comm
 | `final-1.txt` | 300 | `seeds --base 3 --n 300` | never run |
 | `check-clone-loop.txt` | 29 of `promotion-1`'s seeds, picked by index | by hand | a development check; not a report set |
 
-- **Train seeds and test seeds never meet.** A self-play or fork job plays train seeds only, and an eval job a file of `eval/seeds/` only; the job launcher `box.py` refuses anything else, and training refuses a list holding an eval job's runs ([Learning: reference §5](/en/arch/learning/reference/#sec-5)). `promotion-1-300` and its parts, `final-1` and `a10-check-1` have never been trained on.
+- **Train seeds and test seeds never meet.** A self-play job plays train seeds only, and an eval job a file of `eval/seeds/` only; the job launcher `box.py` refuses anything else, and training refuses a list holding an eval job's runs ([Learning: reference §5](/en/arch/learning/reference/#sec-5)). `promotion-1-300` and its parts, `final-1` and `a10-check-1` have never been trained on.
 - **`eval/seeds/retired/`** holds what can no longer test: `promotion-1-500` (`seeds --base 2 --n 500`, `promotion-1-300` and then 200 more), since the medium runs on its last 200 seeds are in the data of earlier combat nets, and so in the line of c8-1, c8-2, c8-3 and c9-0. Results reported on it stand as history.
 - **Train seeds** are `MakeSeed(1, i)`, what `run --seed 1 --start K` plays. The ledger hands them out in blocks of 100,000, one block per batch, so no two batches share a seed (`eval/silent/ledger.md`, [Learning: reference §5](/en/arch/learning/reference/#sec-5)).
 - **Promotion sets nest.** Each larger set keeps the smaller one's seeds first, in the same order, so a report on the larger set pairs with reports on the smaller one on the shared seeds. `promotion-1.txt`'s header says to rotate to a `promotion-2` (base 4) once it is used up; no `promotion-2` exists, and base 4 went to `a10-check-1`.
@@ -108,7 +108,7 @@ A seed set is a text file in `eval/seeds/`, one seed per line; `#` starts a comm
 
 ## 6. How the seeds are made
 
-`seeds --base B --n K` (default 300) prints `MakeSeed(B, i)` for i = 0…K−1 (`SimWorker/Commands/EvalCommands.cs:158-172`):
+`seeds --base B --n K` (default 300) prints `MakeSeed(B, i)` for i = 0…K−1 (`SimWorker/Commands/EvalCommands.cs:156-170`):
 
 ```csharp
 // SimWorker/Simulation/GameSeeds.cs:7-12
@@ -130,10 +130,10 @@ A run's own randomness (the placeholders, the brains' seeds, exploration) comes 
 report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 ```
 
-writes `PATH.json` and `PATH.md` and prints the Markdown (`SimWorker/Commands/EvalCommands.cs:10-53`). The seed set's name is the seed file's name without its extension. The records may come from several processes. `report` refuses, as a command-line mistake (exit 2):
+writes `PATH.json` and `PATH.md` and prints the Markdown (`SimWorker/Commands/EvalCommands.cs:10-51`). The seed set's name is the seed file's name without its extension. The records may come from several processes. `report` refuses, as a command-line mistake (exit 2):
 
-- a record with `auto_win` or `gauntlet` in its config: some of its combats were never played;
-- no runs; runs played by two configs (`config` differs in game, commit, champion, environment, rung or rule); two characters or ascensions; a seed run twice; a seed not in the set (`EvalReport.Of`, `Harness/Reports.cs:81-94`).
+- no runs, or runs played by two configs (`config` differs in game, commit, champion or environment);
+- two characters or ascensions; a seed run twice; a seed not in the set (`EvalReport.Of`, `Harness/Reports.cs:81-94`).
 
 It sorts the runs into the set's order and dates the report with the day it was made, `yyyy-MM-dd` in the machine's local time. A report with fewer runs than the set is **partial**: its Markdown says so, the leaderboard leaves it out, and `gate --promote` refuses it.
 
@@ -141,7 +141,7 @@ It sorts the runs into the set's order and dates the report with the day it was 
 
 | field | what it holds |
 |---|---|
-| `config` | `game` (the game's version, `v0.111.0`), `commit` (the simulator's full SHA; `-dirty` after it when `src/` had uncommitted changes at build, `SimWorker/Sts2Ai.SimWorker.csproj:40-48`; such a report is for development only), `champion` (the brains' name, [Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)), `env`, `rung`; `auto_win` or `gauntlet` never appear, since such records are refused |
+| `config` | `game` (the game's version, `v0.111.0`), `commit` (the simulator's full SHA; `-dirty` after it when `src/` had uncommitted changes at build, `SimWorker/Sts2Ai.SimWorker.csproj:40-48`; such a report is for development only), `champion` (the brains' name, [Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) and `env` |
 | `seed_set`, `set_size`, `date` | the seed file's name and how many seeds it has; the report's date |
 | `metrics.wins` | `{hits, of, value, low, high}`: runs won, with the Wilson interval |
 | `metrics.floor_mean`, `floor_median` | the floor reached; the median of an even count is the mean of the two middle values |
@@ -155,37 +155,37 @@ Because the report embeds every run record, combats included, the per-run data o
 
 **The Markdown** (`EvalReport.Markdown`, `Harness/Reports.cs:96-150`) is one page:
 
-- `# Evaluation DATE: ENV RUNG, SET`, then a **Void** line with its reasons and a **Partial** line when they apply;
-- a table: game, commit, champion, environment and rung, and the seed set as `SET: N of M runs, CHARACTER AN`;
+- `# Evaluation DATE: ENV, SET`, then a **Void** line with its reasons and a **Partial** line when they apply;
+- a table: game, commit, champion and environment, and the seed set as `SET: N of M runs, CHARACTER AN`;
 - **Main**: the win rate, the floor's mean and median, and each act's boss reached and the HP entering it;
 - **Must be zero**: the four counts, then each failure message with how many runs it ended;
 - **Auxiliary**: elites per run, card rewards skipped, gold at the end; seconds per run and milliseconds per decision; the surfaces;
-- **Against DATE (CHAMPION, commit X)**, with `--previous OLD.json`, or when `gate --promote` writes the champion's successor: then and now for the win rate, the floor's mean, each act's boss reached, random decisions and failed runs; or "Not comparable" when the seed set, the environment or the rung differ.
+- **Against DATE (CHAMPION, commit X)**, with `--previous OLD.json`, or when `gate --promote` writes the champion's successor: then and now for the win rate, the floor's mean, each act's boss reached, random decisions and failed runs; or "Not comparable" when the seed set or the environment differs.
 
-**Names.** Reports go into `eval/CHARACTER/reports/` as `DATE-ENV-RUNG-SET-NAME.json` and `.md`, in lower case, NAME naming what played: in `DATE-sl-r1-promotion-1-300-plan-c9-0-l0-v9-0-clone-p0`, the SL planner with the combat net `c9-0`, L0 with V `v9-0` on the clone, prompts by `p0`. A report at ascension 10 has `a10` in the rung's place, as in `DATE-sl-a10-promotion-1-200-plan-c9-0-l0-v9-0-clone-p0`. This is a convention; `--out` takes any path.
+**Names.** Reports go into `eval/CHARACTER/reports/` as `DATE-ENV-LEVEL-SET-NAME.json` and `.md`, in lower case: LEVEL is `a10` at ascension 10 and `r1`, the rung, at ascension 0; NAME names what played: in `DATE-sl-a10-promotion-1-200-plan-c9-0-l0-v9-0-clone-p0`, the SL planner with the combat net `c9-0`, L0 with V `v9-0` on the clone, prompts by `p0`. This is a convention; `--out` takes any path.
 
 ## 8. The run record
 
-`run --records FILE` writes one run record per line, flushed as each run ends; a run stopped midway writes nothing ([Simulator: whole runs §5](/en/arch/simulator/runs/#sec-5)). The record (`RunRecord`, `Harness/RunRecords.cs:31-34`; built at `SimWorker/Commands/RunCommand.cs:281-294`):
+`run --records FILE` writes one run record per line, flushed as each run ends; a run stopped midway writes nothing ([Simulator: whole runs §5](/en/arch/simulator/runs/#sec-5)). The record (`RunRecord`, `Harness/RunRecords.cs:25-28`; built at `SimWorker/Commands/RunCommand.cs:272-284`):
 
 | field | what it holds |
 |---|---|
-| `config` | `RunConfig` (`Harness/RunRecords.cs:24`): `game`, `commit`, `champion` (the brain's own name for itself, over the wire too), `env`, `rung` (always `R1`), and `auto_win: true` or `gauntlet: true` on a run in which some combats were won at their start |
+| `config` | `RunConfig` (`Harness/RunRecords.cs:18`): `game`, `commit`, `champion` (the brain's own name for itself, over the wire too) and `env` |
 | `seed`, `character`, `ascension` | the run |
 | `run_id` | the hash of the seed the brain knows the run by, the decision log's `run` ([Harness: the decision log §3](/en/arch/harness/decision-log/#sec-3)); it joins the two for learning |
 | `outcome` | `won`, `lost`, `truncated` (the decision cap) or `failed` (it threw) |
 | `act`, `floor`, `hp`, `max_hp`, `gold` | where and how it ended: `act` from 0, `floor` the run's total floor (48 for every won run so far); a won run says HP 0, since the game kills the players in the victory room |
 | `combats[]` | each combat entered: `act`, `floor`, `encounter`, `room` (`Monster`, `Elite`, `Boss`), and `hp`, `max_hp`, `potions` when it was first seen in progress, before its first decision; then `end` |
-| `combats[].end` | `died`, `hp`, `max_hp`, `potions` left, and `enemy_hp` (the living enemies' HP summed) of `enemy_max_hp` (every enemy's max HP); a won combat's enemies are gone, 0 of 0 (`Harness/RunRecords.cs:15`) |
+| `combats[].end` | `died`, and the `hp`, `max_hp` and `potions` left (`Harness/RunRecords.cs:14`) |
 | `surfaces`, `brains` | decisions per surface, and per brain that answered them |
 | `card_rewards`, `card_rewards_skipped` | card rewards offered, and those left with no card taken |
 | `game_errors`, `failure`, `elapsed_ms` | the game errors, the exception (`Type: first line`) of a failed run, and the run's wall time |
 
-`end` is the target of the combat net's outcome head ([Learning: training the combat net §1](/en/arch/learning/combat-net/#sec-1)). It holds the enemies' HP on every run (`SimWorker/Simulation/RunSession.cs:256-263`); the oldest committed reports have no enemy HP in their ends, or no `end` at all.
+`end` is the target of the combat net's outcome head ([Learning: training the combat net §1](/en/arch/learning/combat-net/#sec-1)). The oldest committed reports have no `end` at all.
 
-**A missing end.** The record type says an `end` is missing only when a run stopped in the combat for another reason than a death (failed, truncated). The committed reports show more: `end` is written when the session settles, at the start of its next step (`SimWorker/Simulation/RunSession.cs:233-263`), and `run` stops stepping as soon as the run is over (`SimWorker/Commands/RunCommand.cs:260`), so a death that happens while a decision's own action runs leaves its combat with no `end`. Every report with ends has 1 to 13 such runs, each lost at 0 HP on the floor of that combat; in the example report, 8 of its 277 losses.
+**A missing end.** The record type says an `end` is missing only when a run stopped in the combat for another reason than a death (failed, truncated). `RunSession` writes the `end` when it settles, and right after a decision whose own action ended the run, such as a card in hand at the turn's end or a play that costs HP; a combat the run died in before its first decision gets its entry then, at 0 HP (`SimWorker/Simulation/RunSession.cs:234-238, 254, 259-266`). The committed reports at ascension 0 were played by code that wrote no `end` for a death inside a decision's own action: each of them with ends has 1 to 13 lost runs whose last combat has none, each lost at 0 HP on the floor of that combat; in the example report, 8 of its 277 losses. The reports at ascension 10 have none.
 
-**Where runs die.** The records give what the report does not print. A lost run died in a combat when its last combat is on the floor it ended on and that combat ended in a death or has no end; otherwise it died outside combat (an event, for one). The example report's 277 losses: 133 at a boss, 39 at an elite, 103 in a monster fight, 2 outside combat. `learn/gauntlet.py` uses the same rule but reads a missing end as "outside combat", so for this report it gives 10 outside combat, 8 of them deaths in a fight (`learn/gauntlet.py:61-68`). Bosses beaten, counted from the ends: 276 of 290, 94 of 171 and 23 of 65 for the three acts.
+**Where runs die.** The records give what the report does not print. A lost run died in a combat when its last combat is on the floor it ended on and that combat ended in a death or has no end; otherwise it died outside combat (an event, for one). The example report's 277 losses: 133 at a boss, 39 at an elite, 103 in a monster fight, 2 outside combat. `learn/gate.py` uses the same rule but reads a missing end as "outside combat", so for this report it gives 10 outside combat, 8 of them deaths in a fight (`learn/gate.py:55-62`). Bosses beaten, counted from the ends: 276 of 290, 94 of 171 and 23 of 65 for the three acts.
 
 <DeathsByFloor client:visible lang="en" />
 
@@ -195,9 +195,9 @@ Because the report embeds every run record, combats included, the per-run data o
 leaderboard [--character SILENT]
 ```
 
-reads every report in `eval/CHARACTER/reports/` and every champion file in `eval/CHARACTER/champions/`, writes `eval/CHARACTER/leaderboard.md` and prints it (`SimWorker/Commands/EvalCommands.cs:129-155`, `Leaderboard.Markdown`, `Harness/Reports.cs:174-237`). It is run by hand, and the board committed with the reports.
+reads every report in `eval/CHARACTER/reports/` and every champion file in `eval/CHARACTER/champions/`, writes `eval/CHARACTER/leaderboard.md` and prints it (`SimWorker/Commands/EvalCommands.cs:127-153`, `Leaderboard.Markdown`, `Harness/Reports.cs:174-237`). It is run by hand, and the board committed with the reports.
 
-- **Boards.** Partial reports are left out. The others are grouped by character, ascension, seed set and rung, one `##` section each, in that order; inside, one `###` table per environment, NoSL first. Two characters, two ascensions or two environments are never ranked together.
+- **Boards.** Partial reports are left out. The others are grouped by character, ascension and seed set, one `##` section each, in that order; inside, one `###` table per environment, NoSL first. Two characters, two ascensions or two environments are never ranked together.
 - **Columns**: champion, date, commit (7 characters, `-dirty` kept), win rate (as a rate with its interval), floor mean, act 1 boss reached, seconds per run.
 - **Order**: void reports last, then by win rate, then by mean floor. A void report gets "(void)" after its name; the report a champion file names gets "**(champion)**". A champion file that names a report of the other environment marks nothing on that board, which is why the NoSL board marks no champion today.
 - **SL − NoSL**: after a board's tables, for each champion name with a report in both environments on that board (the latest of each), the runs paired by seed: the win-rate difference in percentage points and the floor difference, each as mean ± 1.96 SD/√n, the wins of each side, and how many seeds SL took further, as far and less far. No board has had one ([Evaluation §3](/en/arch/evaluation/#sec-3)).
@@ -206,5 +206,5 @@ The board, `eval/silent/leaderboard.md`, has one section per seed set and lists 
 
 ## 10. Tests
 
-- `Harness/EvalReportTests` (`src/Sts2Ai.Tests`), 4 tests: runs are sorted into the set's order, with their floor mean, and the report is not void; runs that break the set are rejected (none, a seed twice, a seed not in the set, another config, character or ascension); a random decision or a failed run in a report's own runs voids it; `RunRecord.Read` leaves failed runs out and `SeedsLeft` their seeds. The fixture config is `v0.111.0`, `abc1234`, NoSL, R1 (`src/Sts2Ai.Tests/Fixtures.cs:25`).
+- `Harness/EvalReportTests` (`src/Sts2Ai.Tests`), 4 tests: runs are sorted into the set's order, with their floor mean, and the report is not void; runs that break the set are rejected (none, a seed twice, a seed not in the set, another config, character or ascension); a random decision or a failed run in a report's own runs voids it; `RunRecord.Read` leaves failed runs out and `SeedsLeft` their seeds. The fixture config is `v0.111.0`, `abc1234`, NoSL (`src/Sts2Ai.Tests/Fixtures.cs:26`).
 - Nothing tests `Rate.Wilson`, the Markdown, the leaderboard or `MakeSeed`. The Wilson figure above is checked against the intervals the reports store.

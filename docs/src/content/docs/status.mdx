@@ -22,7 +22,7 @@ AI 能在两种环境里，以无头方式、在游戏自己的代码里打完�
 | Protocol、GameBridge | 已实现：每个决策界面都能观测，它的合法动作都能列出并发起；选牌提示带着它们的上下文（[协议](/arch/protocol/)、[GameBridge](/arch/gamebridge/)） |
 | Harness | 已实现：没有兜底的路由，来自 run id 的种子，决策日志，大脑服务器；`run --check` 能精确重播一局。规划中：公开记录的其余部分、随时可答（[Harness](/arch/harness/)） |
 | NoSL 战斗大脑 | 已实现：在抽样世界上做 PIMC，以战斗网络为叶子（[NoSL PIMC](/arch/pimc/)） |
-| SL 战斗大脑 | 已实现：SL 规划器，在节点克隆上以整个回合为单位做束搜索；在战斗测试集上，PIMC 赢下的每一场它都赢了，120 场里还多赢 9 场（[SL 规划器](/arch/sl-planner/)） |
+| SL 战斗大脑 | 已实现：SL 规划器，在节点克隆上以整个回合为单位做束搜索；在一个 120 场的固定战斗测试集上，PIMC 赢下的每一场它都赢了，还多赢 9 场（[SL 规划器](/arch/sl-planner/)） |
 | 战斗重新设计 | <Badge text="规划中" variant="caution" /> SL = 剪枝 + 网络，NoSL = 蒙特卡洛 + 网络，基于同一个 `TurnEnds`，逐个门槛验证；尚未实现（[战斗大脑 §3](/arch/combat-brain/#sec-3)、[§6](/arch/combat-brain/#sec-6)） |
 | 宏观大脑 | 已实现：L0 用 V 给每个选项的后状态估值，后状态在 NoSL 下从画面预测，在 SL 下在节点克隆上打出来；V 是纯 V，只从这一局的 id 和原始状态读取（[宏观大脑](/arch/macro-brain/)） |
 | 学习 | 已实现：带均匀抽取探索的自我对弈、V 和战斗网络的训练、胜局门槛。规划中：TD(λ)、专家迭代、LLM 补丁提案（[学习：循环](/arch/learning/loop/)） |
@@ -54,7 +54,7 @@ AI 能在两种环境里，以无头方式、在游戏自己的代码里打完�
 
 <Steps>
 
-1. <Badge text="2026-10-26 完成" variant="success" /> 所有决策界面都能无头跑完整局；协议的整局级类型和选牌提示上下文；每个决策界面的 GameBridge；战斗世界 API、PIMC 和战斗测试集。
+1. <Badge text="2026-10-26 完成" variant="success" /> 所有决策界面都能无头跑完整局；协议的整局级类型和选牌提示上下文；每个决策界面的 GameBridge；战斗世界 API 和 PIMC。
 
 2. <Badge text="2026-10-27 完成" variant="success" /> 工作进程池；Harness 的调度、种子和决策日志；L0；第一批报告和整局门槛；一个战斗网络成为 PIMC 的叶子。
 
@@ -74,7 +74,7 @@ AI 能在两种环境里，以无头方式、在游戏自己的代码里打完�
 
 10. <Badge text="进行中" variant="note" /> `v9g0`：全部五个角色的第一次 SL 自我对弈，在进阶 0、用低预算，每个角色 6,000 局，V 的决策以 ε 0.3、0.1 和 0.02 均匀抽取（[学习：循环 §2](/arch/learning/loop/#sec-2)）。
 
-11. **等待中**：NoSL 的各项，在 SL 优先期间先等着：调 PIMC 的世界数和节点数、融合测试集的测量（[NoSL PIMC：预算 §7](/arch/pimc/budget/#sec-7)）。
+11. **等待中**：NoSL 的各项，在 SL 优先期间先等着：调 PIMC 的世界数和节点数、测量策略融合有多大（[NoSL PIMC：预算 §7](/arch/pimc/budget/#sec-7)）。
 
 12. Mod 的自动游玩：执行器、自动跑局驱动、R4 流水线和 R3 ≡ R4 测试（[Mod：自动游玩与安全](/arch/mod/auto/)）。
 

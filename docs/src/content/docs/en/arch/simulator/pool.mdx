@@ -1,6 +1,6 @@
 ---
 title: The worker pool
-description: Why searches run in other processes, how WorkerPool starts and talks to them, the four requests a worker answers, why the result cannot depend on timing, what happens when a worker crashes or hangs, and how fast it is.
+description: Why searches run in other processes, how WorkerPool starts and talks to them, the three requests a worker answers, why the result cannot depend on timing, what happens when a worker crashes or hangs, and how fast it is.
 sidebar:
   label: The worker pool
 ---
@@ -14,11 +14,11 @@ A search plays thousands of actions per decision, in worlds that are copies of t
 
 Three reasons, in order of weight:
 
-- **One live game per process.** The run being played is live in the host. A search world is a combat or a run of its own, so it needs a process where nothing else is live. In-process search has to put the real combat aside and back by replay at every decision, which only the panel does ([Worlds and the SL clone §2](/en/arch/simulator/worlds/#sec-2)).
+- **One live game per process.** The run being played is live in the host. A search world is a combat or a run of its own, so it needs a process where nothing else is live. In-process search would have to put the real combat aside and bring it back by replay at every decision ([Worlds and the SL clone §2](/en/arch/simulator/worlds/#sec-2)).
 - **Parallelism.** The worlds of a decision are independent, so K worlds on K workers take about the time of one. The game's model layer is not thread-safe and the pump is single-threaded ([Headless host §7](/en/arch/simulator/headless/#sec-7)), so processes, not threads, are the unit.
 - **A boundary for what may be known.** In NoSL a worker gets the observation, never the true state, and builds its worlds from it ([§5](#sec-5)). What crosses to a worker is a protocol message, so it can be read and checked.
 
-`WorkerPool` lives in `Sts2Ai.Harness` (`Sts2Ai.Harness/WorkerPool.cs`), which sees the game only through protocol types; the worker side is the `serve` command of the simulator (`Commands/Serve.cs`). A champion whose combat brain searches (`pimc`, or `plan` in SL) or whose macro brain plays on the clone (`--afterstates clone`) gets a pool, of `--workers` processes, by default one per world (`--worlds`, 8) (`Brains/ChampionOptions.cs:24`).
+`WorkerPool` lives in `Sts2Ai.Harness` (`Sts2Ai.Harness/WorkerPool.cs`), which sees the game only through protocol types; the worker side is the `serve` command of the simulator (`Commands/Serve.cs`). A champion whose combat brain searches (`pimc`, or `plan` in SL) or whose macro brain plays on the clone (`--afterstates clone`) gets a pool, of `--workers` processes, by default one per world (`--worlds`, 8) (`Brains/ChampionOptions.cs:22`).
 
 ## 2. The pool
 
@@ -32,21 +32,19 @@ Three reasons, in order of weight:
 
 The pool keeps each worker for its lifetime. Disposing it closes each worker's stdin, which ends the worker's loop; one that does not exit within 5 s is killed.
 
-## 3. The four requests
+## 3. The three requests
 
 Each request is a record in `Sts2Ai.Protocol/Worker.cs`. Three searching brains send them, through a pooled version of themselves in Harness:
 
 | request | sent by | the worker | replies with |
 |---|---|---|---|
 | `PimcWorldRequest` | `PooledPimc`, NoSL | builds the combat from the observation with the build seed (`SimWorlds.NoSL`), takes world `World` of the `Worlds` drawn from the search seed, and searches this turn after each of the first actions given, with `NodesPerFirst` nodes each | the best line after each first action (`Lines`) |
-| `SlWorldRequest` | `PooledPimc`, SL | loads the node's clone (`NodeWorld`) and searches this turn after the first actions given | the same |
 | `SlTurnRequest` | `PooledPlanner` | loads the node's clone, plays the state's path from the decision, and searches that turn with `Nodes` nodes, keeping up to `Keep` states at the next turn's start that beat `Floor` | the best ends of the turn (`Turn`) |
 | `SlMacroRequest` | `PooledClone` | for each path of answers, loads the clone, plays the path from the decision, and records what the game asks next (`NodeProbe`) | one afterstate per path (`Afters`): the run, the surface, the screen and the legal actions |
 
 How each brain splits its work:
 
-- **PIMC in NoSL** sends one request per world, each with every first action, and merges the replies as in-process PIMC does ([NoSL PIMC: search §2](/en/arch/pimc/search/#sec-2)). With sequential halving it sends one such set per round, with the first actions still in.
-- **PIMC in SL** has one world, so it splits by first action instead: one request per first action, each with the share of the budget that action would get in one search. Each request keeps its own memo of transpositions, where one search in one process would share it across first actions, so the answer can differ from an in-process search.
+- **PIMC** sends one request per world, each with every first action, and merges the replies as in-process PIMC does ([NoSL PIMC: search §2](/en/arch/pimc/search/#sec-2)).
 - **The SL planner** sends, for each turn of its beam, one request per state kept, with the best whole line so far as the floor of the pruning. A turn's search lives in one request, so the plan is the one a single process makes ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)).
 - **L0 on the clone** splits a decision's paths into `min(paths, workers)` requests, in order (`Sts2Ai.Harness/PooledClone.cs:14-24`). A path's afterstate depends on the clone and the path only, so the split cannot change a result ([Macro brain: search §6](/en/arch/macro-brain/search/#sec-6)).
 
@@ -56,7 +54,7 @@ How each brain splits its work:
 
 - **stdout is the wire.** Before the game boots, `serve` keeps the real stdout for the wire and points `Console.Out` at stderr, so nothing the game or a library prints can get into the stream (`Commands/Serve.cs:23-28`). Its logs go to stderr too; the pool keeps the last 20 lines of each worker's stderr for the error message if it dies.
 - **One brain of each kind, made once:** PIMC and the SL planner with the worker's leaf.
-- **A failed request ends the worker.** If a request throws, the worker replies with the error and exits with code 1 (`Commands/Serve.cs:55-59`): the game may be left set up (a combat still live), and every later request would fail. The error names the exception's type, the innermost exception's top three frames and its message's first line, then the whole exception on the following lines.
+- **A failed request ends the worker.** If a request throws, the worker replies with the error and exits with code 1 (`Commands/Serve.cs:57-61`): the game may be left set up (a combat still live), and every later request would fail. The error names the exception's type, the innermost exception's top three frames and its message's first line, then the whole exception on the following lines.
 - **Game errors per request.** The game's `Log.Error` lines and unobserved task faults logged while serving a request go back in its reply; the host counts them with its own ([Headless host §8](/en/arch/simulator/headless/#sec-8)).
 
 ## 5. Self-contained requests
@@ -65,7 +63,7 @@ A request carries everything the worker needs, and nothing carries over from one
 
 **What crosses.** In NoSL only the observation and the record of enemy moves leave the host; the true state never reaches a worker. In SL the node's clone does, which SL may know ([Environments: worlds §4](/en/arch/environments/worlds/#sec-4)). Every combat request also carries the combat's record of enemy moves so far: a NoSL worker builds the monsters' move logs from it ([Combats §5](/en/arch/simulator/combat/#sec-5)), and the leaves of both read it ([Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3)).
 
-**Determinism.** Replies are merged in request order, never in completion order, and each request's search depends only on the request. So with the same seeds a pooled search gives exactly what an in-process search gives, values included (SL PIMC's per-request memo aside, [§3](#sec-3)). `selftest --workers N` checks it on 4 decisions, each with an even budget of 4 worlds × 120 nodes and with sequential halving, and checks that the pooled SL planner plans what the planner plans in one process, nodes included ([Reference §5](/en/arch/simulator/reference/#sec-5)). A 6-combat panel's trace with 8 workers diffed empty against the in-process one.
+**Determinism.** Replies are merged in request order, never in completion order, and each request's search depends only on the request. So with the same seeds a pooled search gives exactly what an in-process search gives, values included. `selftest --workers N` checks it on 4 decisions, each with a budget of 4 worlds × 120 nodes, and checks that the pooled SL planner plans what the planner plans in one process, nodes included ([Reference §5](/en/arch/simulator/reference/#sec-5)). Measured on 6 combats, PIMC's trace with 8 workers diffed empty against the in-process one.
 
 ## 6. Failures
 
@@ -89,7 +87,6 @@ A failed call fails the decision, and so the run, with the error in the run's `f
 Measured with the default budget (8 worlds × 300 nodes):
 
 - **NoSL PIMC**, 6 act-1 combats: 8 workers take 68.7 ms per action against 307.5 ms in one process (9.4 s against 42.1 s in all). A whole run with `pimc` takes about 19.9 s, with two runs at a time on 8 workers each.
-- **SL PIMC** searches one world instead of eight: on the first three seeds a run took 6–9 s on 8 workers, with combat decisions at a median of 47 ms. There a restore costs a load and a replay of the node ([Worlds and the SL clone §7](/en/arch/simulator/worlds/#sec-7)).
 - **The SL champion** (the SL planner and L0 with clone afterstates, at the default budget): over the 300 runs of its promotion report, 271 s a run and 489 ms a decision on average, on the fleet's hosts.
 
 How throughput grows with processes on one machine is in [Combats §7](/en/arch/simulator/combat/#sec-7): almost linearly up to the physical cores, at about 160 MB per worker.

@@ -22,7 +22,7 @@ sidebar:
 
 ## 3. 樣本和標籤
 
-`learn/combat/data.py` 從一份決策日誌和對局記錄的清單產生樣本（[參考 §4](/zh-tw/arch/learning/reference/#sec-4)）。
+`learn/combat/data.py` 從一份決策日誌和對局記錄的清單產生樣本，每個角色的都讀（[參考 §4](/zh-tw/arch/learning/reference/#sec-4)）。
 
 - **一個樣本是一個回合的開始**：日誌裡每個回合的第一個戰鬥決策，也就是搜尋的葉節點所代表的狀態，因為搜尋的葉節點是下一個回合的開始（[葉節點 §1](/zh-tw/arch/combat-brain/leaf/#sec-1)）。一場戰鬥的決策在下一個宏觀決策處結束，或在回合數倒退時結束；選牌提示的行會跳過（`combats`，`learn/combat/data.py:33-67`）。
 - 在它之前的**敵人歷史**由先前各回合的開始重建，按每個活著的敵人的 uid 取它的意圖，和 Harness 的 `Dispatcher` 建出的方式一樣（`witness`，`learn/combat/data.py:70-77`）。
@@ -42,7 +42,7 @@ sidebar:
 uv run python -m combat.train --list data/silent/lists/v8g2 --env SL --name NAME --test-list data/silent/lists/medium
 ```
 
-一個樣本的損失是（`loss`，`learn/combat/net.py:300-307`）
+一個樣本的損失是（`loss`，`learn/combat/net.py:326-333`）
 
 $$
 \text{loss} = \text{CE}(\text{masked endings}, \text{class}) + \text{won} \sum_{\text{held}} \text{BCE}(u_{\text{id}}, \text{gone}).
