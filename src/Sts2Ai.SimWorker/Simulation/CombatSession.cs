@@ -285,7 +285,7 @@ internal sealed class CombatSession : IDisposable
 
     /// <summary>This combat's <see cref="HiddenDraw"/>.</summary>
     public HiddenDraw Hidden() => new(
-        Pcs.DrawPile.Cards.Select(Observe.CardKey).ToList(),
+        Pcs.DrawPile.Cards.Select(Observe.BuiltKey).ToList(),
         Enum.GetValues<RunRngType>().Select(t => Run.Rng.GetRng(t).ToSerializable()).ToList(),
         Enum.GetValues<PlayerRngType>().Select(t => Player.PlayerRng.GetRng(t).ToSerializable()).ToList(),
         State.Enemies.Concat(State.Allies).Where(c => c.CombatId != null && c.Monster is { IsMutable: true })
@@ -314,7 +314,7 @@ internal sealed class CombatSession : IDisposable
         var left = draw.Cards.ToList();
         foreach (var key in hidden.Draw)
         {
-            int i = left.FindIndex(c => Observe.CardKey(c) == key);
+            int i = left.FindIndex(c => Observe.BuiltKey(c) == key);
             if (i < 0) continue;
             draw.MoveToBottomInternal(left[i]);
             left.RemoveAt(i);

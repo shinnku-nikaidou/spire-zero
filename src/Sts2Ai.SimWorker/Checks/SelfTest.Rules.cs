@@ -59,6 +59,25 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// The observation states what a card gathers in a combat, and a combat built from it still reads as built: Murder's
+    /// number, the replay of a Spiral, Glam spent once the card is played.
+    /// </summary>
+    private static void GatheredCardState(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        var loadout = new Loadout(Deck: [new CardSpec("MURDER"), new CardSpec("STRIKE_SILENT", Enchant: "SPIRAL", EnchantAmount: 1), new CardSpec("STRIKE_SILENT", Enchant: "GLAM", EnchantAmount: 1)]);
+        var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
+        using var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0)));
+        var obs = session.Observation();
+        var cards = obs.Hand.Concat(obs.Draw).ToList();
+        CombatAction? glam = session.LegalActions().Where(a => a.Kind == CombatActionKind.PlayCard && obs.Hand.Any(c => c.Uid == a.Card && c.Enchant?.Id == "GLAM")).Cast<CombatAction?>().FirstOrDefault();
+        if (glam is { } play) session.Execute(play);
+        var after = session.Observation();
+        var seen = after.Hand.Concat(after.Draw).Concat(after.Discard).ToList();
+        check("gathered card state", cards.Any(c => c.Id == "MURDER" && c.Calc != null) && cards.Any(c => c.Enchant?.Id == "SPIRAL" && c.Replay == 1)
+            && (glam == null || seen.Any(c => c.Enchant?.Id == "GLAM" && c.Spent == true)), $"{ProtocolJson.Serialize(cards)}; after {ProtocolJson.Serialize(seen)}");
+    }
+
+    /// <summary>
     /// A loadout whose relics give potion slots holds more potions than the base three: the slots are what the game
     /// gives for those relics (3 + Potion Belt's 2 + Alchemical Coffer's 4 + Phial Holster's 1), in a combat and at
     /// the start of a run, where ascension 4 (Tight Belt) takes one away, and the relics' pickups do not run again.

@@ -1,6 +1,8 @@
+using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Enchantments;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -8,10 +10,13 @@ using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Enchantments;
+using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.ValueProps;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.GameBridge;
@@ -118,12 +123,67 @@ public static class Observe
             Cost = x ? null : card.EnergyCost.GetWithModifiers(CostModifiers.All),
             XCost = x ? true : null,
             Stars = card.CanonicalStarCost >= 0 ? card.GetStarCostWithModifiers() : null,
-            Enchant = card.Enchantment is { } e ? new ModifierView(e.Id.Entry, e.Amount) : null,
+            Enchant = card.Enchantment is { } e ? new ModifierView(e.Id.Entry, e.Amount, e is Momentum && (int)e.EnchantDamageAdditive(0m, ValueProp.Move) is > 0 and var extra ? extra : null) : null,
             Affliction = card.Affliction is { } a ? new ModifierView(a.Id.Entry, a.Amount) : null,
             Tinker = card is MadScience mad ? new TinkerView(mad.TinkerTimeType.ToString(), mad.TinkerTimeRider.ToString()) : null,
             Keywords = card.Keywords.Count > 0 ? card.Keywords.Select(k => k.ToString()).Order(StringComparer.Ordinal).ToList() : null,
             Vars = Vars(card) is { Count: > 0 } vars ? vars : null,
+            Lasting = x ? null : Lasting(card),
+            StarsLasting = card.CanonicalStarCost >= 0 && !card.HasStarCostX ? StarsLasting(card) : null,
+            Replay = card.GetEnchantedReplayCount() is > 0 and var replay ? replay : null,
+            Spent = card.Enchantment?.Status == EnchantmentStatus.Disabled ? true : null,
+            Calc = card.CombatState != null ? card.DynamicVars.Values.OfType<CalculatedVar>().FirstOrDefault()?.Calculate(null) : null,
         };
+    }
+
+    private static readonly FieldInfo LocalModifiers = typeof(CardEnergyCost).GetField("_localModifiers", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    private static readonly FieldInfo StarCosts = typeof(CardModel).GetField("_temporaryStarCosts", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    private static readonly PropertyInfo CanonicalPower = typeof(PowerModel).GetProperty("CanonicalInstance", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    private static readonly Dictionary<Type, FieldInfo[]> OnceFlags = [];
+
+    /// <summary>The energy cost without the card's changes that end when it is played or when the turn ends. The game keeps them apart only inside the cost.</summary>
+    private static int? Lasting(CardModel card)
+    {
+        var cost = card.EnergyCost;
+        if (!cost.HasLocalModifiers) return null;
+        int lasting = cost.GetWithModifiers(CostModifiers.None);
+        if (lasting < 0) return null;
+        foreach (var modifier in (List<LocalCostModifier>)LocalModifiers.GetValue(cost)!)
+            if (modifier.Expiration == LocalCostModifierExpiration.EndOfCombat) lasting = modifier.Modify(lasting);
+        int gone = lasting - cost.GetWithModifiers(CostModifiers.Local);
+        return gone == 0 ? null : Math.Max(0, cost.GetWithModifiers(CostModifiers.All) + gone);
+    }
+
+    /// <summary>The same as <see cref="Lasting"/> for the star cost.</summary>
+    private static int? StarsLasting(CardModel card)
+    {
+        var temporary = (List<TemporaryCardCost>)StarCosts.GetValue(card)!;
+        if (temporary.Count == 0) return null;
+        int lasting = temporary.LastOrDefault(c => !c.ClearsWhenTurnEnds && !c.ClearsWhenCardIsPlayed)?.Cost ?? card.BaseStarCost;
+        int gone = lasting - card.CurrentStarCost;
+        return gone == 0 ? null : Math.Max(0, card.GetStarCostWithModifiers() + gone);
+    }
+
+    /// <summary>The power's numbers that have moved from its canonical ones. One moves at a time, Slow's two summed.</summary>
+    private static decimal? Detail(PowerModel power)
+    {
+        if (power.DynamicVars.Count == 0 || CanonicalPower.GetValue(power) is not PowerModel canonical) return null;
+        decimal? moved = null;
+        foreach (var (name, v) in power.DynamicVars)
+            if (v is not CalculatedVar && canonical.DynamicVars.TryGetValue(name, out var c) && c.BaseValue != v.BaseValue) moved = (moved ?? 0) + v.BaseValue;
+        return moved;
+    }
+
+    /// <summary>A relic's own flag of an effect spent for this combat: a private field the game names so, on the relics that have one.</summary>
+    private static bool? Spent(RelicModel relic)
+    {
+        lock (OnceFlags)
+        {
+            if (!OnceFlags.TryGetValue(relic.GetType(), out var flags))
+                OnceFlags[relic.GetType()] = flags = relic.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Where(f => f.FieldType == typeof(bool) && f.Name.EndsWith("ThisCombat", StringComparison.Ordinal)).ToArray();
+            return flags.Any(f => (bool)f.GetValue(relic)!) ? true : null;
+        }
     }
 
     /// <summary>A card of the deck: <see cref="Card"/> with the upgrade preview the deck view shows, if it can be upgraded.</summary>
@@ -143,6 +203,13 @@ public static class Observe
 
     /// <summary>See <see cref="ProtocolJson.CardKey"/>.</summary>
     public static string CardKey(CardModel card) => ProtocolJson.CardKey(Card(card));
+
+    /// <summary>The key of the card as a combat built from an observation has it: without what a build does not set.</summary>
+    public static string BuiltKey(CardModel card) => ProtocolJson.CardKey(Card(card) with
+    {
+        Lasting = null, StarsLasting = null, Replay = null, Spent = null, Calc = null,
+        Enchant = card.Enchantment is { } e ? new ModifierView(e.Id.Entry, e.Amount) : null,
+    });
 
     /// <summary>
     /// The card's numbers, but for calculated ones: the card shows those as their base number plus their extra number
@@ -166,7 +233,7 @@ public static class Observe
         MaxHp = c.MaxHp,
         Block = c.Block,
         Powers = Powers(c),
-        Intents = c.Monster is { } monster && c.IsAlive && c.Side != CombatSide.Player ? Intents(monster.NextMove, c, targets) : null,
+        Intents = c.Monster is { } monster && c.Side != CombatSide.Player ? Intents(monster.NextMove, c, targets) : null,
     };
 
     /// <summary>The intents <paramref name="move"/> would show above <paramref name="owner"/>, aimed at <paramref name="targets"/>.</summary>
@@ -179,7 +246,7 @@ public static class Observe
 
     private static List<PowerView> Powers(Creature c) =>
         c.Powers.Where(p => p.IsVisible).Select(p => new PowerView(p.Id.Entry, p.DisplayAmount, p.DisplayAmount != p.Amount ? p.Amount : null,
-            HeldCards.Get(p) is { } card ? Card(card) : null)).ToList();
+            HeldCards.Get(p) is { } card ? Card(card) : null, Detail(p), p is SwipePower { StolenCard: { } stolen } ? Card(stolen) : null)).ToList();
 
     public static RelicView Relic(RelicModel r) => new()
     {
@@ -188,6 +255,7 @@ public static class Observe
         Status = r.Status != RelicStatus.Normal ? r.Status.ToString() : null,
         Melted = r.IsMelted ? true : null,
         UsedUp = r.IsUsedUp ? true : null,
+        Spent = Spent(r),
         Cards = r is PaelsTooth { SerializableCards.Count: > 0 } tooth ? tooth.SerializableCards.Select(c => c.Id!.Entry).ToList() : null,
     };
 }

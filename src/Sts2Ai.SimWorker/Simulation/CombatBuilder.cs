@@ -189,7 +189,7 @@ internal static class CombatBuilder
         int shown = 0;
         foreach (var (enemy, view) in st.Enemies.Zip(views))
         {
-            if (view.Intents == null || enemy.Monster?.MoveStateMachine is not { } machine) { shown++; continue; }
+            if (view.Intents == null || view.Hp <= 0 || enemy.Monster?.MoveStateMachine is not { } machine) { shown++; continue; }
             var intents = Key(view.Intents);
             if (Shows(enemy.Monster.NextMove, enemy, targets) != intents)
             {
@@ -239,9 +239,12 @@ internal static class CombatBuilder
         foreach (var card in pcs.AllPiles.SelectMany(p => p.Cards)) db.IdCardForTesting(card);
     }
 
+    /// <summary>What a build does not set: the state a combat gathers as it goes, and which a built combat starts without.</summary>
+    private static readonly HashSet<string> NotBuilt = ["lasting", "stars_lasting", "replay", "spent", "calc", "extra", "detail", "stolen"];
+
     /// <summary>
     /// Where <paramref name="actual"/> differs from <paramref name="expected"/>, as JSON paths: what the built
-    /// combat failed to reproduce.
+    /// combat failed to reproduce, leaving out <see cref="NotBuilt"/> and the moves of the dead.
     /// </summary>
     public static List<string> Differences(CombatObservation expected, CombatObservation actual)
     {
@@ -254,7 +257,7 @@ internal static class CombatBuilder
             if (a is JsonObject oa && b is JsonObject ob)
             {
                 foreach (var key in oa.Select(kv => kv.Key).Union(ob.Select(kv => kv.Key)))
-                    Walk($"{path}.{key}", oa[key], ob[key]);
+                    if (!NotBuilt.Contains(key) && !(key == "intents" && oa["hp"]?.GetValue<int>() <= 0)) Walk($"{path}.{key}", oa[key], ob[key]);
             }
             else if (a is JsonArray aa && b is JsonArray ab && aa.Count == ab.Count)
             {

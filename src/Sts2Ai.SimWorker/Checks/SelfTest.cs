@@ -132,6 +132,7 @@ internal static partial class SelfTest
         BuildsAGrownEruption(pump, Check);
         RollingBoulder(pump, pool, act, Check);
         ThornsKillDuringSlyPlay(pump, pool, act, Check);
+        GatheredCardState(pump, pool, act, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         CyclesKillInOneTurn(pump, pool, act, Check);

@@ -79,20 +79,33 @@ public sealed record CardView
     /// <summary>The card after one more upgrade, as the game's upgrade preview shows it (the deck view's and the upgrade
     /// prompt's): only on a card of the deck that can be upgraded, in the run's deck and in a deck prompt's options.</summary>
     public CardView? Upgraded { get; init; }
+    /// <summary>The energy cost once its temporary changes end (when played, when the turn ends), when that is another.</summary>
+    public int? Lasting { get; init; }
+    /// <summary>The same for the star cost.</summary>
+    public int? StarsLasting { get; init; }
+    /// <summary>How many extra times a play runs the card, when any: the "Replay" its text states.</summary>
+    public int? Replay { get; init; }
+    /// <summary>Set when its enchantment's once-a-combat effect is spent, which the enchantment's greyed icon shows.</summary>
+    public bool? Spent { get; init; }
+    /// <summary>The number its text prints from the state of the combat (no target picked), for a card in combat that has one.</summary>
+    public decimal? Calc { get; init; }
 }
 
 /// <summary>What Tinker Time made of a Mad Science: its card type (Attack, Skill, Power) and its rider effect.</summary>
 public sealed record TinkerView(string Type, string Rider);
 
 /// <summary>An enchantment or affliction on a card.</summary>
-public sealed record ModifierView(string Id, int Amount);
+/// <param name="Extra">The damage it has gathered beyond its amount, which the card's number shows: Momentum's.</param>
+public sealed record ModifierView(string Id, int Amount, int? Extra = null);
 
 /// <summary>A power as its icon and its tooltip show it.</summary>
 /// <param name="Amount">The number on the icon.</param>
 /// <param name="Stacks">The power's own amount, which its tooltip states, when the icon shows another number: Sloth's
 /// icon counts the cards played this turn, and its stacks are the limit.</param>
 /// <param name="Card">The card the power keeps, which its tooltip names: the card Nightmare adds copies of.</param>
-public sealed record PowerView(string Id, int Amount, int? Stacks = null, CardView? Card = null);
+/// <param name="Detail">The number its tooltip states that has moved from the power's own, when one has: Toric Toughness's block.</param>
+/// <param name="Stolen">The card it took, which its tooltip names: Swipe's.</param>
+public sealed record PowerView(string Id, int Amount, int? Stacks = null, CardView? Card = null, decimal? Detail = null, CardView? Stolen = null);
 
 public sealed record OrbView(string Id, decimal Passive, decimal Evoke);
 
@@ -107,6 +120,8 @@ public sealed record RelicView
     public bool? UsedUp { get; init; }
     /// <summary>The cards the relic keeps, by id, as its tip lists them: PAELS_TOOTH's, given back one after each combat.</summary>
     public IReadOnlyList<string>? Cards { get; init; }
+    /// <summary>Set when its once-a-combat effect is spent, for what the player remembers and its status does not say: CENTENNIAL_PUZZLE's.</summary>
+    public bool? Spent { get; init; }
 }
 
 public sealed record CreatureView
@@ -118,7 +133,7 @@ public sealed record CreatureView
     public required int MaxHp { get; init; }
     public required int Block { get; init; }
     public required IReadOnlyList<PowerView> Powers { get; init; }
-    /// <summary>What the icons above a living enemy show.</summary>
+    /// <summary>What the icons above an enemy show, one that lies dead until it revives included: its revival is a move.</summary>
     public IReadOnlyList<IntentView>? Intents { get; init; }
 }
 
