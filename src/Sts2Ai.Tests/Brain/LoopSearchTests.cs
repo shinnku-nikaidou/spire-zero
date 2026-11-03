@@ -9,9 +9,10 @@ public class LoopSearchTests
     /// A turn with a card that comes back: R (free) gives 1 strength for the turn and returns to the hand, H (1 energy)
     /// deals 6 plus the strength. The enemies' turn hits for 10. Every <paramref name="junkEvery"/> plays a junk card comes,
     /// to the discard pile, or to the hand if <paramref name="handCap"/> is set, and then a full hand sends R to the discard
-    /// pile, which ends the cycle. <paramref name="runsOut"/> ends it after that many plays.
+    /// pile, which ends the cycle. <paramref name="runsOut"/> ends it after that many plays. With <paramref name="souls"/>, R
+    /// is exhausted instead and draws the next of that many R in the draw pile, as a Soul does.
     /// </summary>
-    private sealed class Loop(int enemyHp, int junkEvery = 0, int handCap = 0, int runsOut = int.MaxValue, Loop.Prompted prompted = Loop.Prompted.No) : ICombatWorld
+    private sealed class Loop(int enemyHp, int junkEvery = 0, int handCap = 0, int runsOut = int.MaxValue, Loop.Prompted prompted = Loop.Prompted.No, int souls = 0) : ICombatWorld
     {
         /// <summary>A potion that offers three cards, with answer 0 the policy's; the last gives R, or a strong one-off card.</summary>
         public enum Prompted { No, GivesR, GivesStrike }
@@ -21,7 +22,7 @@ public class LoopSearchTests
         private readonly List<string> _steps = [];
         private List<(uint Uid, string Id)> _hand = prompted == Prompted.No ? [(1, "R"), (2, "H")] : [(2, "H")];
         private List<string> _discard = [];
-        private int _enemy = enemyHp, _hp = 30, _energy = 1, _strength, _round = 1, _plays;
+        private int _enemy = enemyHp, _hp = 30, _energy = 1, _strength, _round = 1, _plays, _drawn;
         private bool _potion = prompted != Prompted.No;
 
         /// <summary>The actions played, not counting the ones a restore plays again.</summary>
@@ -34,7 +35,7 @@ public class LoopSearchTests
             Round = _round,
             Player = Start.Player with { Hp = Math.Max(0, _hp), MaxHp = 30, Block = 0, Energy = _energy, Powers = _strength > 0 ? [new PowerView("STRENGTH_POWER", _strength)] : [] },
             Hand = _hand.Select(c => new CardView { Id = c.Id, Uid = c.Uid, Cost = c.Id == "H" ? 1 : 0 }).ToList(),
-            Draw = [],
+            Draw = Enumerable.Repeat(new CardView { Id = "R" }, souls - _drawn).ToList(),
             Discard = _discard.Select(id => new CardView { Id = id }).ToList(),
             Potions = [_potion ? "P" : null, null, null],
             Enemies = [Start.Enemies[0] with { Uid = 1, Hp = Math.Max(0, _enemy), MaxHp = enemyHp, Block = 0, Powers = [],
@@ -88,7 +89,11 @@ public class LoopSearchTests
             {
                 case "R":
                     _strength++;
-                    if ((handCap == 0 || _hand.Count < handCap) && _plays < runsOut) _hand.Add(card);
+                    if (souls > 0)
+                    {
+                        if (_drawn < souls) _hand.Add((200 + (uint)_drawn++, "R"));
+                    }
+                    else if ((handCap == 0 || _hand.Count < handCap) && _plays < runsOut) _hand.Add(card);
                     else _discard.Add("R");
                     break;
                 case "H":
@@ -109,7 +114,7 @@ public class LoopSearchTests
             _steps.Clear();
             _hand = prompted == Prompted.No ? [(1, "R"), (2, "H")] : [(2, "H")];
             _discard = [];
-            (_enemy, _hp, _energy, _strength, _round, _plays, _potion) = (enemyHp, 30, 1, 0, 1, 0, prompted != Prompted.No);
+            (_enemy, _hp, _energy, _strength, _round, _plays, _drawn, _potion) = (enemyHp, 30, 1, 0, 1, 0, 0, prompted != Prompted.No);
             foreach (var step in snapshot.Steps) Apply(CombatAction.Parse(step));
         }
     }
@@ -187,6 +192,24 @@ public class LoopSearchTests
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.Equal(1, plan.Turns);
         Assert.Equal([R, R, R, H], Line(plan));
+    }
+
+    [Fact]
+    public void CardsThatUseThemselvesUpAreAnOrdinaryLine()
+    {
+        // Each R is exhausted and draws the next of 8, as a Soul does: one fewer is left each time, so it is no cycle.
+        var cycle = new Loop(15);
+        var souls = new Loop(15, souls: 8);
+        var (before, soulsBefore) = (cycle.Observe(), souls.Observe());
+        cycle.Execute(R);
+        souls.Execute(R);
+        Assert.True(LoopSearch.Recurs(before, cycle.Observe()));
+        Assert.False(LoopSearch.Recurs(soulsBefore, souls.Observe()));
+
+        // The search plays the nine R and H out on its nodes.
+        var plan = Plan(new Loop(15, souls: 8));
+        Assert.Equal(CombatStatus.Won, plan.End);
+        Assert.Equal(1, plan.Turns);
     }
 
     [Fact]
