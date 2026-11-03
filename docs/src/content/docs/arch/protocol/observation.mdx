@@ -64,16 +64,16 @@ Observation{run: RunView, screen: ScreenView}
 | `draw` | 抽牌堆，按卡牌键排序：玩家知道里面有什么，不知道它的顺序 |
 | `discard`、`exhaust` | 弃牌堆和消耗堆，按牌堆顺序 |
 | `potions` | 每个槽位一项，与这一局里一样 |
-| `relics` | `RelicView`：`id`，以及它的图标和提示框显示的东西：`counter`、`status`（不是正常状态时）、`melted`、`used_up`、`cards`（它保存的牌，例如佩尔之牙的） |
+| `relics` | `RelicView`：`id`，以及它的图标和提示框显示的东西：`counter`、`status`（不是正常状态时）、`melted`、`used_up`、`cards`（它保存的牌，例如佩尔之牙的）、`spent`（一场一次的效果已用掉，而它的状态没有说：百年拼图的） |
 | `allies` | 玩家这一方除玩家以外的生物：其他玩家、召唤物 |
-| `enemies` | `CreatureView`：`uid`、`id`（怪物的）、`hp`、`max_hp`、`block`、`powers`，以及活着的敌人的 `intents` |
+| `enemies` | `CreatureView`：`uid`、`id`（怪物的）、`hp`、`max_hp`、`block`、`powers`，以及 `intents`：倒下、等着复活的敌人留在列表里，HP 是 0，复活也是一个招式 |
 
 嵌套的视图：
 
 | 类型 | 字段 | 说明 |
 |---|---|---|
-| `CardView` | `id`、`uid`?、`up`?、`cost`? 或 `x_cost`?、`stars`?、`enchant`?、`affliction`?、`tinker`?、`keywords`?、`vars`?、`upgraded`? | `cost` 是计入所有修正之后的能量费用；`stars` 是星辰费用，只有有星辰费用的牌才有；`enchant` 和 `affliction` 是 `{id, amount}`；`tinker` 是 Tinker Time 事件把一张疯狂科学做成了什么，即它的类型和附加效果，牌框显示这两项，id 却不显示；`keywords` 排好序；`vars` 是卡牌自己的数值，按名字给出（[§7](#sec-7)）；`upgraded` 是这张牌再升一级之后的样子，与游戏的升级预览显示的一致，只有可升级的牌组卡牌才有 |
-| `PowerView` | `id`、`amount`、`stacks`?、`card`? | `amount` 是图标上的数字；`stacks` 是能力自己的数量，在图标显示另一个数字时才有（懒惰的图标数的是本回合的牌数，它的层数才是上限）；`card` 是能力保存的牌，与它的提示框里写出的一致（夜魇的） |
+| `CardView` | `id`、`uid`?、`up`?、`cost`? 或 `x_cost`?、`stars`?、`enchant`?、`affliction`?、`tinker`?、`keywords`?、`vars`?、`upgraded`?、`lasting`?、`stars_lasting`?、`replay`?、`spent`?、`calc`? | `cost` 是计入所有修正之后的能量费用；`stars` 是星辰费用，只有有星辰费用的牌才有；`enchant` 和 `affliction` 是 `{id, amount}`；`tinker` 是 Tinker Time 事件把一张疯狂科学做成了什么，即它的类型和附加效果，牌框显示这两项，id 却不显示；`keywords` 排好序；`vars` 是卡牌自己的数值，按名字给出（[§7](#sec-7)）；`upgraded` 是这张牌再升一级之后的样子，与游戏的升级预览显示的一致，只有可升级的牌组卡牌才有 |
+| `PowerView` | `id`、`amount`、`stacks`?、`card`?、`detail`?、`stolen`? | `amount` 是图标上的数字；`stacks` 是能力自己的数量，在图标显示另一个数字时才有（懒惰的图标数的是本回合的牌数，它的层数才是上限）；`card` 是能力保存的牌，与它的提示框里写出的一致（夜魇的）；`detail` 是提示框上的数字，在它离开能力原本的数值时才有（Toric Toughness 的格挡）；`stolen` 是它拿走的牌（Swipe 的） |
 | `IntentView` | `type`、`damage`?、`hits`? | 敌人头上的一个意图图标：它的类型，攻击还带着对玩家的每段伤害和段数 |
 | `OrbView` | `id`、`passive`、`evoke` | 一个充能球和它显示的数字 |
 

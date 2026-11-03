@@ -39,11 +39,11 @@ import { Badge } from '@astrojs/starlight/components';
 | `map.visited` | `RunState.VisitedMapCoords` |
 | `map.boss`、`second_boss`、`ancient` | `Act.BossEncounter`；`Act.SecondBossEncounter`，只在地图有第二个 Boss 点时；`Act.Ancient` |
 
-**顺序**。在游戏里，一个点的子节点是一个哈希集合，它的顺序在不同进程之间不一样；所以各个点按先行后列的顺序排列，每个点的 `next` 也同样排序，这样同一张地图在任何进程里都给出相同的观测（`Observe.cs:47-67`）。
+**顺序**。在游戏里，一个点的子节点是一个哈希集合，它的顺序在不同进程之间不一样；所以各个点按先行后列的顺序排列，每个点的 `next` 也同样排序，这样同一张地图在任何进程里都给出相同的观测（`Observe.cs:52-72`）。
 
 ## 3. 卡牌、能力、遗物和意图
 
-**卡牌**（`Observe.Card`，`Observe.cs:110-127`）：
+**卡牌**（`Observe.Card`，`Observe.cs:115-137`）：
 
 | 字段 | 读自 |
 |---|---|
@@ -55,22 +55,26 @@ import { Badge } from '@astrojs/starlight/components';
 | `tinker` | 疯狂科学的 `TinkerTimeType` 和 `TinkerTimeRider` |
 | `keywords` | `Keywords`，排序后 |
 | `vars` | 卡牌中不是计算得出的 `DynamicVars`，按名字，各取其 `BaseValue` |
+| `lasting`、`stars_lasting` | 卡牌在打出时或回合结束时失效的改动消失之后的能量和星辰费用，与现在不同时才有：游戏只在费用内部把它们分开，在 `_localModifiers` 和 `_temporaryStarCosts` 里 |
+| `replay` | `GetEnchantedReplayCount()`，大于 0 时才有：牌面写的额外打出次数 |
+| `spent` | 附魔的 `Status` 是 `Disabled`：一场一次的效果已用掉 |
+| `calc` | 卡牌的计算数字 `Calculate(null)`：没选目标时牌面印出的值，用于战斗中的牌 |
 
-**`vars` 是基础值**。也就是卡牌的数字在力量、敏捷或易伤作用于它们之前的样子。计算得出的数字（完美打击的伤害）被略去：卡牌把它显示为一个基础值，加上状态里某样东西每有一个就多出的一份，而这些组成部分都在 vars 里；计算出的值本身只是照搬它的基础值，降级之后就会过时。vars 按名字顺序加入，因为序列化器按字典被填入的顺序写出它。
+**`vars` 是基础值**。也就是卡牌的数字在力量、敏捷或易伤作用于它们之前的样子。计算得出的数字（完美打击的伤害）被略去：卡牌把它显示为一个基础值，加上状态里某样东西每有一个就多出的一份，而这些组成部分都在 vars 里；计算出的值本身只是照搬它的基础值，降级之后就会过时。vars 按名字顺序加入，因为序列化器按字典被填入的顺序写出它。`enchant.extra` 是 Momentum 累积的伤害。
 
-**升级预览**（`DeckCard`）：对牌组里可以升级的卡牌，给出再升级一次之后的卡牌，与游戏自己在牌组视图和升级提示里显示的预览一样。它的做法与游戏做预览的方式相同，在副本上进行：`MutableClone()`，然后 `UpgradeInternal()` 和 `FinalizeUpgradeInternal()`。可变副本没有原卡牌的任何事件订阅者，升级也不运行任何钩子，所以这一局里什么都不会改变（`Observe.cs:130-142`）。
+**升级预览**（`DeckCard`）：对牌组里可以升级的卡牌，给出再升级一次之后的卡牌，与游戏自己在牌组视图和升级提示里显示的预览一样。它的做法与游戏做预览的方式相同，在副本上进行：`MutableClone()`，然后 `UpgradeInternal()` 和 `FinalizeUpgradeInternal()`。可变副本没有原卡牌的任何事件订阅者，升级也不运行任何钩子，所以这一局里什么都不会改变（`Observe.cs:190-202`）。
 
-**能力**（`Observe.cs:180-182`）：只取 `IsVisible` 的能力；`amount` 是 `DisplayAmount`，即图标上的数字；`stacks` 是 `Amount`，在它与前者不同时给出；`card` 是能力保存的那张牌。那张牌在能力的私有数据里，游戏没有公开它，尽管悬停提示会说出它的名字（夜魇的牌），所以 `HeldCards` 用反射找到它：能力的 `_internalData` 里第一个卡牌类型的字段（`HeldCards.cs:12-27`）。模拟器的 CombatBuilder 构建战斗时，用 `HeldCards.Set` 把这样的牌放回去。
+**能力**（`Observe.cs:247-249`）：只取 `IsVisible` 的能力；`amount` 是 `DisplayAmount`，即图标上的数字；`stacks` 是 `Amount`，在它与前者不同时给出；`card` 是能力保存的那张牌；`detail` 是能力的 `DynamicVars` 里离开原本数值的那些的总和；`stolen` 是 Swipe 的 `StolenCard`。那张牌在能力的私有数据里，游戏没有公开它，尽管悬停提示会说出它的名字（夜魇的牌），所以 `HeldCards` 用反射找到它：能力的 `_internalData` 里第一个卡牌类型的字段（`HeldCards.cs:12-27`）。模拟器的 CombatBuilder 构建战斗时，用 `HeldCards.Set` 把这样的牌放回去。
 
-**遗物**（`Observe.cs:184-192`）：`ShowCounter` 时，`counter` 是 `DisplayAmount`；`status`，不是正常状态时给出；`melted`（`IsMelted`）；`used_up`（`IsUsedUp`）；`cards`，佩尔之牙保存的牌。
+**遗物**（`Observe.cs:251-260`）：`ShowCounter` 时，`counter` 是 `DisplayAmount`；`status`，不是正常状态时给出；`melted`（`IsMelted`）；`used_up`（`IsUsedUp`）；`cards`，佩尔之牙保存的牌；`spent`，遗物名称以 `ThisCombat` 结尾的私有布尔字段成立时才有。
 
-**意图**（`Observe.cs:173-178`）：怪物的 `NextMove` 的意图，针对不在玩家一方的存活怪物。攻击的伤害是针对玩家的 `AttackIntent.GetSingleDamage(targets, owner)`，也就是图标上的数字所来自的同一个调用，攻击次数是 `max(1, Repeats)`。招式本身从不发出去，发出的只有它的意图。
+**意图**（`Observe.cs:240-245`）：怪物的 `NextMove` 的意图，针对不在玩家一方的怪物，倒下、等着复活的也算。攻击的伤害是针对玩家的 `AttackIntent.GetSingleDamage(targets, owner)`，也就是图标上的数字所来自的同一个调用，攻击次数是 `max(1, Repeats)`。招式本身从不发出去，发出的只有它的意图。
 
 **uid**：生物的 uid 是它的 `CombatId`；手牌的 uid 是它在 `NetCombatCardDb` 里的 id（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)）。
 
 ## 4. 一场战斗
 
-`Observe.Combat(state, player)`（`Observe.cs:71-107`）：
+`Observe.Combat(state, player)`（`Observe.cs:76-112`）：
 
 | 字段 | 读自 |
 |---|---|
