@@ -44,7 +44,7 @@ NoSL 世界是一个**确定化样本**：一场完整的战斗，与玩家见�
 - 世界里的**选牌提示**交给 `p0`，也就是这一局自己的提示大脑，所以搜索预期的正是这一局会做出的选择（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)）。
 - **世界的轨迹取自活的战斗**，包括战斗开始时问到的提示（每回合开始时都会提问的遗物）。重播按顺序发放记录下的选择，缺了这些，后面某个提示的选择就会被它们拿走（`Simulation/SimWorlds.cs:88-98`）。`selftest` 检查世界在选牌提示之后能精确还原，用烘焙手套和生存者，跑 6 个世界（[参考 §5](/arch/simulator/reference/#sec-5)）。
 
-NoSL 世界把碰到会话上限（50 轮或 1,000 个动作，[战斗 §1](/arch/simulator/combat/#sec-1)）的战斗报告为赢（`Simulation/SimWorlds.cs:105-110`）；没有哪条被搜索的路线接近这些上限。
+NoSL 世界把碰到会话动作上限（1,000 个动作，[战斗 §1](/arch/simulator/combat/#sec-1)）的战斗报告为赢（`Simulation/SimWorlds.cs:105-110`）；没有哪条被搜索的路线接近这个上限。超过战斗回合上限的战斗在两种世界里都算输，和对局里一样（[整局 §3](/arch/simulator/runs/#sec-3)）。
 
 **世界在哪里**。在一局里，一个决策的各个世界在工作进程池的工作进程里，每个世界一个请求，而真实的这一局一直活在主机里（[工作进程池 §3](/arch/simulator/pool/#sec-3)）。只有 `selftest` 在自己的进程里搜索，用的是它自己的战斗，没有活着的对局（[参考 §5](/arch/simulator/reference/#sec-5)）；一局的主机若要这样做，就得在每个决策处把真实战斗放到一边，再通过重播放回来。
 
@@ -86,7 +86,7 @@ NoSL 世界把碰到会话上限（50 轮或 1,000 个动作，[战斗 §1](/arc
 
 ## 5. 封存
 
-移动到下一个地图点是节点的最后一个决策。克隆记录它，但不移动：停在那里并设置 `AtHorizon`，之后任何 `Step` 都会抛异常（「sealed: the clone has left its node」，`Simulation/RunSession.cs:226-228, 344-350`）。在节点里结束的一局（死亡或胜利），克隆也随之结束。所以在克隆上的搜索能看到它所在节点的每一种结果，而看不到下一个节点的任何东西，这就是 SL 的边界（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。
+移动到下一个地图点是节点的最后一个决策。克隆记录它，但不移动：停在那里并设置 `AtHorizon`，之后任何 `Step` 都会抛异常（「sealed: the clone has left its node」，`Simulation/RunSession.cs:226-228, 350-356`）。在节点里结束的一局（死亡或胜利），克隆也随之结束。所以在克隆上的搜索能看到它所在节点的每一种结果，而看不到下一个节点的任何东西，这就是 SL 的边界（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。
 
 `selftest` 从两方面检查封存：记下了移动的节点克隆，加载后停在视野边界，并拒绝再走一步（[参考 §5](/arch/simulator/reference/#sec-5)）；`run --check` 则在它重播的每个节点上检查（[整局 §6](/arch/simulator/runs/#sec-6)）。
 

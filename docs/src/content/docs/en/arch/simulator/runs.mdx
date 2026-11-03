@@ -63,21 +63,23 @@ flowchart TD
   D -->|"automatic step"| T
 ```
 
-**Settle** (`Simulation/RunSession.cs:244-257`) pumps the game until the player can act ([Headless host §7](/en/arch/simulator/headless/#sec-7)):
+**Settle** (`Simulation/RunSession.cs:245-263`) pumps the game until the player can act ([Headless host §7](/en/arch/simulator/headless/#sec-7)):
 
 - in combat, until `CombatActions.WaitingForInput` holds (the player's turn, in the play phase, the action executor idle); after the player ended a turn, on a later turn, so the enemies' turn plays out first;
 - elsewhere, until the pump's queue is empty and the action executor is idle.
 
+**The round cap.** The game puts no limit on a fight's rounds, and a fight can have no end: a player who can no longer hurt the enemies, behind a block the enemies cannot get through, would play it for ever. So a fight still going when round 81 starts is lost. When settle reaches the player's turn in round 81, it kills the player the way the game's own kill command does: `CreatureCmd.Kill`, forced so that nothing revives them (Fairy in a Bottle and the like), then the game's win check, which ends the combat (`Simulation/FightCap.cs:14-35`). The run is over, `lost`, and its record shows a death in that combat, at 0 HP, like any other. The combat sessions behind the search worlds settle the same way, so a search sees the same loss ([Combats §1](/en/arch/simulator/combat/#sec-1)).
+
 Then it notes what the run record needs: a combat that just ended gets its end (HP, max HP, potions), a death inside the player's own action included, and a new act's map gets its hash. A combat the run died in before its first decision gets an entry at 0 HP. Last, it collects the game tasks the driver started (a purchase, a rest option, a reward, a divination) that are done; a task that faulted throws.
 
-**Decide** (`Simulation/RunSession.cs:292-319`) looks in this order:
+**Decide** (`Simulation/RunSession.cs:298-325`) looks in this order:
 
 1. The open rewards screens: a set that is not the room's last and has everything taken closes by itself; otherwise the newest open set is the decision.
 2. A driver task still running with nothing to answer is a bug, and throws: rewards are the only screen a started task can wait on.
 3. The map, in a `MapRoom` or once the current room is left.
 4. The room: combat, event (the crystal sphere minigame first, when one is open), shop, rest site, treasure. Any other kind of room throws.
 
-**What a screen would remember** is kept per room in `RoomProgress` (`Simulation/RunSession.cs:593-602`): whether the room was left, the combat entered, the rewards offered, a rest option succeeded, the chest opened, the relic picked. It starts over when the current room changes, which also happens when an event's combat ends and the event resumes.
+**What a screen would remember** is kept per room in `RoomProgress` (`Simulation/RunSession.cs:599-608`): whether the room was left, the combat entered, the rewards offered, a rest option succeeded, the chest opened, the relic picked. It starts over when the current room changes, which also happens when an event's combat ends and the event resumes.
 
 **Automatic steps**, the things a screen does without a decision:
 
@@ -102,7 +104,7 @@ A **surface** is the kind of decision screen; the protocol names eleven (`Sts2Ai
 | `rest` | the enabled options, by id (`rest:HEAL`); `leave` after an option succeeded, or when none is enabled | `RestSiteSynchronizer.ChooseLocalOption` | |
 | `treasure` | `relic:i`, `relic_skip` | `PickRelicLocally`, `SkipRelicLocally` | the chest opens by itself; in single player, skipping leaves the relics listed, hence `RoomProgress.RelicPicked` |
 
-**The potion belt.** A potion that can be used at any time (`potion:S`) and a discard (`discard_potion:S`) are offered on map, rewards, event, shop, rest, treasure and crystal sphere screens, after the screen's own actions (`Simulation/RunSession.cs:465-472`). Card rewards, bundles and card prompts get none. A belt action is applied at once and the screen is asked again. With a full belt, potion rewards and potion purchases are not legal until a slot frees. In combat potions are combat actions; combat has no discard.
+**The potion belt.** A potion that can be used at any time (`potion:S`) and a discard (`discard_potion:S`) are offered on map, rewards, event, shop, rest, treasure and crystal sphere screens, after the screen's own actions (`Simulation/RunSession.cs:471-478`). Card rewards, bundles and card prompts get none. A belt action is applied at once and the screen is asked again. With a full belt, potion rewards and potion purchases are not legal until a slot frees. In combat potions are combat actions; combat has no discard.
 
 **No fallback.** A screen the driver does not know throws, and the run fails: an unknown room, a reward or shop entry or crystal sphere item of an unknown type, a linked reward set, a task left waiting with no screen. So does an answer that is not in the legal list. A failure is never covered over by a default choice, so a run that finishes has answered every decision through its policies.
 
@@ -110,7 +112,7 @@ How often a run meets each screen, over the 300 SL runs of the champion's promot
 
 <SurfaceCounts client:visible lang="en" />
 
-**Legitimate game behavior** seen in runs at 9999 HP, which are not bugs: kill mechanics such as THE_INSATIABLE's Sandpit `Kill`, THE_LOST_AND_FORGOTTEN stealing strength and dexterity until the fight is lost (about 156 turns), and PunchOff's "event not finished" warning, whose combat has `shouldResumeAfterCombat: false` (`Models.Events/PunchOff.cs:138`); the real game warns the same way.
+**Legitimate game behavior** seen in runs at 9999 HP, which are not bugs: kill mechanics such as THE_INSATIABLE's Sandpit `Kill`, THE_LOST_AND_FORGOTTEN stealing strength and dexterity until the fight is lost (at 9999 HP it would take about 156 turns; the round cap ends it at round 81), and PunchOff's "event not finished" warning, whose combat has `shouldResumeAfterCombat: false` (`Models.Events/PunchOff.cs:138`); the real game warns the same way.
 
 ## 5. Who answers, and what a run reports
 

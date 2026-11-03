@@ -44,7 +44,7 @@ NoSL 世界是一個**確定化樣本**：一場完整的戰鬥，和玩家見�
 - 世界裡的**選牌提示**交給 `p0`，也就是這一局自己的提示大腦，所以搜尋預期的就是這一局會做的選擇（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。
 - **世界的軌跡就是活戰鬥的軌跡**，包括它開始時問到的提示（在每回合開始時提問的遺物）。重播按順序發放記錄下的選擇，少了這些，後面某個提示的選擇就會被它們拿走（`Simulation/SimWorlds.cs:88-98`）。`selftest` 檢查一個世界在選牌提示之後能精確還原，用的是暖烘烘手套和生存者，6 個世界（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
 
-NoSL 世界把觸及工作階段上限（50 回合或 1,000 個動作，[戰鬥 §1](/zh-tw/arch/simulator/combat/#sec-1)）的戰鬥報告為贏（`Simulation/SimWorlds.cs:105-110`）；沒有哪條被搜尋的路線接近這些上限。
+NoSL 世界把觸及工作階段動作上限（1,000 個動作，[戰鬥 §1](/zh-tw/arch/simulator/combat/#sec-1)）的戰鬥報告為贏（`Simulation/SimWorlds.cs:105-110`）；沒有哪條被搜尋的路線接近這個上限。超過戰鬥回合上限的戰鬥在兩種世界裡都算輸，和對局裡一樣（[整局 §3](/zh-tw/arch/simulator/runs/#sec-3)）。
 
 **世界在哪裡**。一局裡，一個決策的各個世界住在行程池的工作行程裡，每個世界一個請求，而真實的這一局一直活在宿主裡（[工作行程池 §3](/zh-tw/arch/simulator/pool/#sec-3)）。只有 `selftest` 在自己的行程裡搜尋，用的是它自己的戰鬥，沒有活著的一局（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）；一局的宿主若要這樣做，就得在每個決策時把真實的戰鬥放到一邊，再透過重播放回來。
 
@@ -86,7 +86,7 @@ NoSL 世界把觸及工作階段上限（50 回合或 1,000 個動作，[戰鬥 
 
 ## 5. 封存
 
-移動到下一個地圖點是一個節點的最後一個決策。複本會記錄它，但不移動：它停在那裡並設定 `AtHorizon`，之後任何 `Step` 都會拋出例外（「sealed: the clone has left its node」，`Simulation/RunSession.cs:226-228, 344-350`）。如果一局在節點內結束（死亡或勝利），複本也隨之結束。所以在複本上的搜尋可以看到它所在節點的每個結果，卻看不到下一個節點的任何東西，這就是 SL 的邊界（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。
+移動到下一個地圖點是一個節點的最後一個決策。複本會記錄它，但不移動：它停在那裡並設定 `AtHorizon`，之後任何 `Step` 都會拋出例外（「sealed: the clone has left its node」，`Simulation/RunSession.cs:226-228, 350-356`）。如果一局在節點內結束（死亡或勝利），複本也隨之結束。所以在複本上的搜尋可以看到它所在節點的每個結果，卻看不到下一個節點的任何東西，這就是 SL 的邊界（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。
 
 `selftest` 從兩方面檢查封存：一個節點的複本，記下了它的移動，載入後停在視野邊界，並拒絕再走一步（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）；`run --check` 在它重播的每個節點上都檢查這一點（[整局 §6](/zh-tw/arch/simulator/runs/#sec-6)）。
 

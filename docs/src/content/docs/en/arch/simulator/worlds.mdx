@@ -44,7 +44,7 @@ Two details keep the replays exact:
 - **Card prompts** inside a world go to `p0`, the run's own prompt brain, so the search expects the picks the run will make ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
 - **A world's trace is the live combat's**, prompts asked while it starts included (a relic that asks at the start of each turn). Replay hands out the recorded picks in order, and without those, a later prompt's pick would go to them (`Simulation/SimWorlds.cs:88-98`). `selftest` checks that a world restores exactly after card prompts, with Toasty Mittens and Survivor over 6 worlds ([Reference §5](/en/arch/simulator/reference/#sec-5)).
 
-A NoSL world reports a combat that hit the session's caps (50 rounds or 1,000 actions, [Combats §1](/en/arch/simulator/combat/#sec-1)) as won (`Simulation/SimWorlds.cs:105-110`); no searched line gets near them.
+A NoSL world reports a combat that hit the session's action cap (1,000 actions, [Combats §1](/en/arch/simulator/combat/#sec-1)) as won (`Simulation/SimWorlds.cs:105-110`); no searched line gets near it. A fight past the round cap is lost in both kinds of world, as in the run ([Whole runs §3](/en/arch/simulator/runs/#sec-3)).
 
 **Where the worlds live.** In a run, the worlds of a decision live in the pool's workers, one request per world, while the real run stays live in the host ([The worker pool §3](/en/arch/simulator/pool/#sec-3)). Only `selftest` searches in its own process, in combats of its own with no run live ([Reference §5](/en/arch/simulator/reference/#sec-5)); a run's host would have to put the real combat aside at each decision and bring it back by replay.
 
@@ -86,7 +86,7 @@ After the replay the clone stands at the same decision as the run, with the same
 
 ## 5. The seal
 
-The travel to the next map point is a node's last decision. A clone records it but does not travel: it stops there and sets `AtHorizon`, and any later `Step` throws ("sealed: the clone has left its node", `Simulation/RunSession.cs:226-228, 344-350`). A run that ends inside the node, by a death or the victory, ends the clone with it. So a search on the clone can see every outcome of the node it is in and nothing of the next, which is the SL boundary ([Environments: information §3](/en/arch/environments/information/#sec-3)).
+The travel to the next map point is a node's last decision. A clone records it but does not travel: it stops there and sets `AtHorizon`, and any later `Step` throws ("sealed: the clone has left its node", `Simulation/RunSession.cs:226-228, 350-356`). A run that ends inside the node, by a death or the victory, ends the clone with it. So a search on the clone can see every outcome of the node it is in and nothing of the next, which is the SL boundary ([Environments: information §3](/en/arch/environments/information/#sec-3)).
 
 `selftest` checks the seal both ways: a node's clone, its travel recorded, loads at its horizon and refuses another step ([Reference §5](/en/arch/simulator/reference/#sec-5)); `run --check` checks it on every node it replays ([Whole runs §6](/en/arch/simulator/runs/#sec-6)).
 

@@ -30,7 +30,7 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 
 这**不是**一局进入战斗的方式：它跳过了掷出 `?` 变成什么，也跳过了这一局的房间生成（`GenerateRooms`）<Badge text="已核实" variant="success" />。对单独的一场战斗（基准测试、`selftest`、搜索世界）这没问题，对整局则是错的；整局按游戏自己的方式开局（[整局 §2](/arch/simulator/runs/#sec-2)）。
 
-**执行动作**。`Execute(action)` 通过 `CombatActions.Start` 发起一个动作，这和 UI 用的是同样的入口（[GameBridge：各决策界面的动作 §1](/arch/gamebridge/actions/#sec-1)），然后稳定下来：让 Pump 一直运行，直到游戏再次等待玩家（[无头宿主 §7](/arch/simulator/headless/#sec-7)）。结束回合之后，它等到之后的某个回合；战斗一结束，则等到队列为空、执行器闲置（`CombatSession.cs:217-224`、333-341）。由策略打完的战斗（`PlayOut`，推演和基准测试都这样做）在 50 回合或 1,000 个动作时停下；这时它的结果是 `Truncated`，敌人还活着而战斗已结束时也是这个结果（`CombatSession.cs:73-74`、192-200）。
+**执行动作**。`Execute(action)` 通过 `CombatActions.Start` 发起一个动作，这和 UI 用的是同样的入口（[GameBridge：各决策界面的动作 §1](/arch/gamebridge/actions/#sec-1)），然后稳定下来：让 Pump 一直运行，直到游戏再次等待玩家（[无头宿主 §7](/arch/simulator/headless/#sec-7)）。结束回合之后，它等到之后的某个回合；战斗一结束，则等到队列为空、执行器闲置（`CombatSession.cs:216-223`、287-302）。超过战斗回合上限的战斗也在稳定下来时算输，和整局里一样：一到第 81 回合玩家的回合，玩家就死去（[整局 §3](/arch/simulator/runs/#sec-3)）。由策略打完的战斗（`PlayOut`，推演和基准测试都这样做）还会在 1,000 个动作时停下；这时它的结果是 `Truncated`，敌人还活着而战斗已结束时也是这个结果（`CombatSession.cs:73`、185-193）。
 
 **uid**。动作用 **uid** 指称卡牌和生物：uid 是取自游戏的稳定 id，而不是列表里的位置。手牌用它的 `NetCombatCardDb` id，生物用它的 `CombatId`。`play:7:2` 表示把 7 号牌打向 2 号生物。游戏按固定的顺序给牌编号，所以重播时编号保持不变（[协议：观测与动作 §4](/arch/protocol/observation/#sec-4)）。
 
@@ -42,7 +42,7 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 - `Choice`：对选牌提示的回答，用游戏自己的选项下标；
 - `Determinize(seed)`：一个确定化步骤（[§3](#sec-3)），文本形式为 `determinize:SEED`。
 
-**还原**一个快照，就是按设置开一场新战斗，再重播轨迹（`CombatSession.cs:104-125`）。同样的设置和轨迹总是得到同样的状态，因为每次随机抽取都来自带种子的随机数流，而 Pump 以同样的顺序运行每个续体。唯一用时钟做种子的生成器 `Rng.Chaotic` 只影响外观 <Badge text="已核实" variant="success" />：怪物皮肤、屏幕震动、假商人的对白、Trial 事件的参赛者编号、美味饼干的图标、加牌动画的时机、DenseVegetation 的视觉偏移。还有三种后备情况也会用到它，但模拟器一种都碰不到：不是活副本的怪物模型（活着的怪物有带种子的流）、不带种子开始的一局（模拟器总会传入一个种子），以及本地化文本的随机变体（本地化返回的是键，[无头宿主 §4](/arch/simulator/headless/#sec-4)）。
+**还原**一个快照，就是按设置开一场新战斗，再重播轨迹（`CombatSession.cs:103-124`）。同样的设置和轨迹总是得到同样的状态，因为每次随机抽取都来自带种子的随机数流，而 Pump 以同样的顺序运行每个续体。唯一用时钟做种子的生成器 `Rng.Chaotic` 只影响外观 <Badge text="已核实" variant="success" />：怪物皮肤、屏幕震动、假商人的对白、Trial 事件的参赛者编号、美味饼干的图标、加牌动画的时机、DenseVegetation 的视觉偏移。还有三种后备情况也会用到它，但模拟器一种都碰不到：不是活副本的怪物模型（活着的怪物有带种子的流）、不带种子开始的一局（模拟器总会传入一个种子），以及本地化文本的随机变体（本地化返回的是键，[无头宿主 §4](/arch/simulator/headless/#sec-4)）。
 
 重播的耗时与它的长度成正比。2026-10-26 实测：一次还原耗时 0.28 ms，外加每个重播动作 0.073 ms。SL 世界载入节点的检查点，而不是新开一场战斗，它约为 0.5 ms，外加自进入节点以来每一步 0.1 ms（[世界与 SL 克隆 §7](/arch/simulator/worlds/#sec-7)）。下图把两种开销模型并排放在一起；拖动滑块，就能还原到战斗中更深的位置。
 
@@ -52,14 +52,14 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 
 ## 3. 确定化
 
-`Determinize(seed)` 把玩家无从知道的一切换成由 `seed` 抽出的样本，玩家看到的东西保持不变（`CombatSession.cs:231-277`）。NoSL 的搜索就是这样猜测隐藏状态的；[环境：世界 §2](/arch/environments/worlds/#sec-2) 解释了为什么，并配有一张基于真实抽牌堆的图。它做的事：
+`Determinize(seed)` 把玩家无从知道的一切换成由 `seed` 抽出的样本，玩家看到的东西保持不变（`CombatSession.cs:230-276`）。NoSL 的搜索就是这样猜测隐藏状态的；[环境：世界 §2](/arch/environments/worlds/#sec-2) 解释了为什么，并配有一张基于真实抽牌堆的图。它做的事：
 
 - 为每条整局流（`RunRngType`）、每条玩家流（`PlayerRngType`）以及每个活着的怪物（包括盟友和宠物）的流重新播种；
 - 重排抽牌堆：先按卡牌键排序（这个顺序只取决于玩家看到的东西），再用这个样本做一次 Fisher–Yates 洗牌；
 - 给手牌以外的牌重新编号（`CombatBuilder.NumberCards`）：游戏按抽牌顺序给牌编号，旧编号会泄露真实的顺序；
 - 在显示相同意图的招式中，均匀地重新抽取每个敌人排定的下一招，并改写它出招日志的最后一项（`StateLog[^1]`），使之与新的一招一致。
 
-种子只来自调用方，绝不来自这一局。尚未建模的有：玩家知道位置的抽牌堆里的牌（刚放到顶上的那张），以及怪物的历史怎样让某些招比其他招更可能出现（`CombatSession.cs:242-243`）。
+种子只来自调用方，绝不来自这一局。尚未建模的有：玩家知道位置的抽牌堆里的牌（刚放到顶上的那张），以及怪物的历史怎样让某些招比其他招更可能出现（`CombatSession.cs:241-242`）。
 
 ## 4. 隐藏状态与换位
 
@@ -69,7 +69,7 @@ CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string See
 
 在 NoSL 下，搜索不能从真实的战斗出发：那会把真实的隐藏状态带进搜索。它从一场**显示该观测**、此外什么也不多的战斗出发。`CombatBuilder.Setup(obs, seed, history)`（`Simulation/CombatBuilder.cs:57-105`）构建这样一场战斗：
 
-1. **开始**观测中的遭遇，带上它的牌组、遗物和生命值。开战效果可能杀死生命值低的玩家（王室猛毒在第一回合开始时造成 4 点伤害，而每次构建都从第一回合开始），死去的玩家的遗物、能力和卡牌就不再起作用。这样的战斗会以满生命值重新开始（`CombatSession.cs:158-162`），下一步照常设成观测到的生命值。按开战时的生命值记下标志的遗物（红头骨的力量）这时可能不对，只有这种罕见的开局才有这个风险。
+1. **开始**观测中的遭遇，带上它的牌组、遗物和生命值。开战效果可能杀死生命值低的玩家（王室猛毒在第一回合开始时造成 4 点伤害，而每次构建都从第一回合开始），死去的玩家的遗物、能力和卡牌就不再起作用。这样的战斗会以满生命值重新开始（`CombatSession.cs:157-161`），下一步照常设成观测到的生命值。按开战时的生命值记下标志的遗物（红头骨的力量）这时可能不对，只有这种罕见的开局才有这个风险。
 2. **`Apply`** 覆盖一切可见的东西：回合数；敌人（增加、移除、重排）；生命值和格挡；能量、最大能量和星辰；金币；药水；充能球栏位和充能球，连同它们显示的数值；遗物的计数（显示的或隐藏的）、状态、熔化和用尽的遗物；遗物保存的牌（佩尔之牙的牌，它的计数就是牌的张数），用标准副本，因为提示框不显示升级，而且这些牌要到战斗之后才回来；能力，在图标显示另一个数字时连同它的层数，以及能力保存的牌；四个牌堆，逐张牌，连同每张牌的修改；意图。
 3. **`Resample(StableHash(seed))`** 抽取隐藏状态，和确定化的做法一样。
 4. **`BuildDifferences`** 按 JSON 路径比较输入的观测与重建后战斗的观测。结果为空就表示完全一致。NoSL 世界拒绝不完全一致的构建（`Simulation/SimWorlds.cs:34-44`）。

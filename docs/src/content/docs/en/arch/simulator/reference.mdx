@@ -136,7 +136,7 @@ In `--help` order (`Commands/Cli.cs:31-36`).
 
 ## 5. `selftest`
 
-`selftest` plays `--n` combats of the pool (20 by default) and runs these checks, by the names it reports (`Checks/SelfTest*.cs`; the order is `Checks/SelfTest.cs:73-145`). Its searches value their leaves with the net `--combat-net` names, which it requires. Exit 1 if any check fails.
+`selftest` plays `--n` combats of the pool (20 by default) and runs these checks, by the names it reports (`Checks/SelfTest*.cs`; the order is `Checks/SelfTest.cs:73-146`). Its searches value their leaves with the net `--combat-net` names, which it requires. Exit 1 if any check fails.
 
 The boundary, that Brain, Protocol and Harness reach no game assembly, is checked without the game by the unit test `BoundaryTests` ([§7](#sec-7)).
 
@@ -146,7 +146,7 @@ The boundary, that Brain, Protocol and Harness reach no game assembly, is checke
 
 **Builds of numbers only a model holds** (Defect): a worn Glass orb (3 of 6), a used-up Silver Crucible, Pael's Tooth keeping 2 cards, Sloth with 1 of 3, Nightmare, a Hardened Shell at 14 of 20; the build keeps a power's stacks (Sloth still lets a card be played) and a power's card (Nightmare's copies next turn). Then: a player built at 3 HP with Royal Poison survives the start; the Waterfall Giant's eruption past 100 (`DeathBlow` 150) is found.
 
-**Rules**: Rolling Boulder hits one enemy after another (Ironclad with 10 Rolling Boulders against the pool's first multi-enemy encounter; the check fails if the pool has none); Thorns kill during a Sly play with no game error; a loadout's relics give their potion slots, in a combat and in a run at ascension 4; a death inside the player's own action, or as the first turn starts, still ends its combat in the record; the observation shows what a card gathers in a combat: Murder's number, a Spiral's replay, a Glam spent once its card is played.
+**Rules**: Rolling Boulder hits one enemy after another (Ironclad with 10 Rolling Boulders against the pool's first multi-enemy encounter; the check fails if the pool has none); Thorns kill during a Sly play with no game error; a loadout's relics give their potion slots, in a combat and in a run at ascension 4; a death inside the player's own action, or as the first turn starts, still ends its combat in the record; a fight past the round cap is lost (built at round 80 at 999 HP, it is still on there and lost once that turn ends); the observation shows what a card gathers in a combat: Murder's number, a Spiral's replay, a Glam spent once its card is played.
 
 **Worlds and clones**: a world restores after card prompts (Toasty Mittens and Survivor, 6 worlds); the SL world shows the run's combat, plays as the run does, and restores; the SL clone stops at its node's exit and refuses to step past it; the SL clone keeps relic state the save drops (the first relic set to disabled by hand).
 

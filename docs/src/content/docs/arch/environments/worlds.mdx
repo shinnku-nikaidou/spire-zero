@@ -31,7 +31,7 @@ import StrategyFusion from '../../../../components/book/StrategyFusion.svelte';
 
 NoSL 的搜索看不到隐藏状态，但可以猜。**确定化**就是把玩家不可能知道的一切，换成一个与玩家看到的一切都一致的具体样本。在一个样本上，游戏重新变成一个完全信息的游戏，搜索可以像对待任何其他模拟一样去打它。
 
-一个 NoSL 世界起初是一场构建得恰好显示出该观测的战斗（`CombatBuilder.Setup`，[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。然后 `Determinize(seed)` 从种子抽取隐藏的部分（`Simulation/CombatSession.cs:231-277`）：
+一个 NoSL 世界起初是一场构建得恰好显示出该观测的战斗（`CombatBuilder.Setup`，[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。然后 `Determinize(seed)` 从种子抽取隐藏的部分（`Simulation/CombatSession.cs:230-276`）：
 
 - 本局、玩家和每个怪物的每条有种子的随机数流都重新播种：洗牌、生成的卡牌、随机目标、怪物 AI；
 - 抽牌堆先被排成一个只取决于玩家所见内容的顺序（按卡牌键排序），再用这个种子洗牌；

@@ -31,7 +31,7 @@ Both are built in worker processes from what the request carries ([Simulator: th
 
 NoSL's search cannot see the hidden state, but it can guess it. To **determinize** is to replace everything the player cannot know with a concrete sample that agrees with everything the player has seen. On one sample, the game is again a game of perfect information, and search can play it like any other simulation.
 
-A NoSL world starts as a combat built to show the observation exactly (`CombatBuilder.Setup`, [Simulator: combats §5](/en/arch/simulator/combat/#sec-5)). Then `Determinize(seed)` draws the hidden part from the seed (`Simulation/CombatSession.cs:231-277`):
+A NoSL world starts as a combat built to show the observation exactly (`CombatBuilder.Setup`, [Simulator: combats §5](/en/arch/simulator/combat/#sec-5)). Then `Determinize(seed)` draws the hidden part from the seed (`Simulation/CombatSession.cs:230-276`):
 
 - every seeded random stream of the run, of the player and of each monster is reseeded: shuffles, generated cards, random targets, monster AI;
 - the draw pile is put in an order that depends only on what the player sees (sorted by card key), then shuffled with the seed;
