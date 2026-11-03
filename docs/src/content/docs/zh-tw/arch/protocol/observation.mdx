@@ -64,7 +64,7 @@ Observation{run: RunView, screen: ScreenView}
 | `draw` | 抽牌堆，按卡牌鍵排序：玩家知道裡面有什麼，不知道它的順序 |
 | `discard`、`exhaust` | 棄牌堆和消耗堆，按牌堆順序 |
 | `potions` | 每個槽一項，和一局裡的一樣 |
-| `relics` | `RelicView`：`id`，以及它的圖示和提示框顯示的內容：`counter`、`status`（不是正常狀態時）、`melted`、`used_up`、`cards`（它保存的牌，例如佩爾之牙保存的）、`spent`（一場一次的效果已用掉，而它的狀態沒有說：百年拼圖的） |
+| `relics` | `RelicView`：`id`，以及它的圖示和提示框顯示的內容：`counter`、`status`（不是正常狀態時）、`melted`、`used_up`、`cards`（它保存的牌，例如佩爾之牙保存的）、`spent`（一場一次或一回合一次的效果已用掉，而它的狀態沒有說：百年拼圖的，或皇室礦這個回合的） |
 | `allies` | 玩家這一方除了玩家以外的生物：其他玩家、召喚物 |
 | `enemies` | `CreatureView`：`uid`、`id`（怪物的）、`hp`、`max_hp`、`block`、`powers`，以及 `intents`：倒下、等著復活的敵人留在列表裡，HP 是 0，復活也是一個招式 |
 
@@ -72,8 +72,8 @@ Observation{run: RunView, screen: ScreenView}
 
 | 型別 | 欄位 | 說明 |
 |---|---|---|
-| `CardView` | `id`、`uid`?、`up`?、`cost`? 或 `x_cost`?、`stars`?、`enchant`?、`affliction`?、`tinker`?、`keywords`?、`vars`?、`upgraded`?、`lasting`?、`stars_lasting`?、`replay`?、`spent`?、`calc`? | `cost` 是套用所有修正之後的能量費用；`stars` 是星辰費用，用於有星辰費用的牌；`enchant` 和 `affliction` 是 `{id, amount}`；`tinker` 是 Tinker Time 事件把一張瘋狂科學做成的樣子，即它的類型和附加效果，牌框會顯示這些，而它的 id 不會；`keywords` 排過序；`vars` 是這張牌自己的數字，按名稱列出（[§7](#sec-7)）；`upgraded` 是這張牌再升級一次之後的樣子，和遊戲的升級預覽顯示的一樣，只出現在可升級的牌組卡牌上 |
-| `PowerView` | `id`、`amount`、`stacks`?、`card`?、`detail`?、`stolen`? | `amount` 是圖示上的數字；`stacks` 是能力本身的數值，在圖示顯示另一個數字時才有（怠惰的圖示數的是本回合的牌數，它的層數是上限）；`card` 是能力保存的牌，提示框會寫出它的名字（夢魘的）；`detail` 是提示框上的數字，在它離開能力原本的數值時才有（Toric Toughness 的格擋）；`stolen` 是它拿走的牌（Swipe 的） |
+| `CardView` | `id`、`uid`?、`up`?、`cost`? 或 `x_cost`?、`stars`?、`enchant`?、`affliction`?、`tinker`?、`keywords`?、`this_turn`?、`vars`?、`upgraded`?、`lasting`?、`stars_lasting`?、`replay`?、`spent`?、`calc`? | `cost` 是套用所有修正之後的能量費用；`stars` 是星辰費用，用於有星辰費用的牌；`enchant` 和 `affliction` 是 `{id, amount}`；`tinker` 是 Tinker Time 事件把一張瘋狂科學做成的樣子，即它的類型和附加效果，牌框會顯示這些，而它的 id 不會；`keywords` 排過序；`this_turn` 是某個效果只在這個回合給它的關鍵字，回合結束時會拿走（專業知識的保留、掌上戲法的 Sly）；`vars` 是這張牌自己的數字，按名稱列出（[§7](#sec-7)）；`upgraded` 是這張牌再升級一次之後的樣子，和遊戲的升級預覽顯示的一樣，只出現在可升級的牌組卡牌上 |
+| `PowerView` | `id`、`amount`、`stacks`?、`card`?、`detail`?、`stolen`? | `amount` 是圖示上的數字；`stacks` 是能力本身的數值，在圖示顯示另一個數字時才有（怠惰的圖示數的是本回合的牌數，它的層數是上限）；`card` 是能力保存的牌，提示框會寫出它的名字（夢魘的）；`detail` 是提示框上的數字離開能力原本的數值多遠，在它有離開時才有（環狀韌性的格擋、炸彈的傷害）；`stolen` 是它拿走的牌（順手一揮的） |
 | `IntentView` | `type`、`damage`?、`hits`? | 敵人頭上的一個意圖圖示：它的類型，攻擊的話還有對玩家每段的傷害和段數 |
 | `OrbView` | `id`、`passive`、`evoke` | 一個充能球和它顯示的數字 |
 

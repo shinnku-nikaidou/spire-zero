@@ -174,7 +174,7 @@ promoted: eval/silent/champions/nosl.json now names NAME
 通过时，`--promote PATH`（`SimWorker/Commands/EvalCommands.cs:113-123`）：
 
 1. 用挑战者的记录在冠军的种子集（`eval/seeds/SET.txt`）上生成它的报告，日期为当天；不完整的报告会被拒绝，因为新报告要面对之后的挑战者，必须覆盖整个种子集；
-2. 生成冠军文件里的选项：挑战者在该文件所属环境下的选项，加上它的角色和进阶等级。每个权重文件（`value`、`combat-net`）都必须在这个角色的权重文件夹 `weights/CHARACTER/` 里，那里一个名字永远指同一个文件；有文件放在别处的晋级，会在写入任何东西之前就被拒绝（`SimWorker/Brains/ChampionOptions.cs:116-126`，[学习：参考 §6](/arch/learning/reference/#sec-6)）；
+2. 生成冠军文件里的选项：挑战者在该文件所属环境下的选项，加上它的角色和进阶等级。每个权重文件（`value`、`combat-net`）都必须在共用的权重文件夹 `weights/all/` 里，那里一个名字永远指同一个文件；有文件放在别处的晋级，会在写入任何东西之前就被拒绝（`SimWorker/Brains/ChampionOptions.cs:116-126`，[学习：参考 §6](/arch/learning/reference/#sec-6)）；
 3. 写出 `PATH.json` 和 `PATH.md`，Markdown 里有一节针对冠军报告的「Against」；
 4. 改写冠军文件：环境、挑战者的名字和选项、新报告，`since` 为报告的日期，`gate` 为这次的结果（[冠军与基线 §1](/arch/evaluation/champions/#sec-1)）。
 

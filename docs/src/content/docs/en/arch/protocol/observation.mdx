@@ -64,7 +64,7 @@ Each point is a `MapPointView`: `col`, `row`, `type`, the map icon (`Monster`, `
 | `draw` | the draw pile, sorted by card key: the player knows what is in it, not its order |
 | `discard`, `exhaust` | the discard and exhaust piles, in pile order |
 | `potions` | one entry per slot, as in the run |
-| `relics` | `RelicView`: `id`, and what its icon and tip show: `counter`, `status` (when not normal), `melted`, `used_up`, `cards` (the cards it keeps, such as Pael's Tooth's), `spent` (its once-a-combat effect is spent, when its status does not say so: Centennial Puzzle's) |
+| `relics` | `RelicView`: `id`, and what its icon and tip show: `counter`, `status` (when not normal), `melted`, `used_up`, `cards` (the cards it keeps, such as Pael's Tooth's), `spent` (its once-a-combat or once-a-turn effect is spent, when its status does not say so: Centennial Puzzle's, or Regalite's this turn) |
 | `allies` | creatures on the player's side other than the player: other players, summons |
 | `enemies` | `CreatureView`: `uid`, `id` (the monster's), `hp`, `max_hp`, `block`, `powers`, and `intents`: an enemy that lies dead until it revives stays in the list with 0 HP, and its revival is a move |
 
@@ -72,8 +72,8 @@ The nested views:
 
 | type | fields | notes |
 |---|---|---|
-| `CardView` | `id`, `uid`?, `up`?, `cost`? or `x_cost`?, `stars`?, `enchant`?, `affliction`?, `tinker`?, `keywords`?, `vars`?, `upgraded`?, `lasting`?, `stars_lasting`?, `replay`?, `spent`?, `calc`? | `cost` is the energy cost with every modifier; `stars` the star cost, for cards that have one; `enchant` and `affliction` are `{id, amount}`; `tinker` is what the Tinker Time event made of a Mad Science, its type and rider, which its frame shows and its id does not; `keywords` sorted; `vars` the card's own numbers by name ([§7](#sec-7)); `upgraded` the card after one more upgrade, as the game's upgrade preview shows it, on upgradable deck cards only |
-| `PowerView` | `id`, `amount`, `stacks`?, `card`?, `detail`?, `stolen`? | `amount` is the number on the icon; `stacks` the power's own amount when the icon shows another number (Sloth's icon counts this turn's cards; its stacks are the limit); `card` the card the power keeps, as its tooltip names it (Nightmare's); `detail` the number its tooltip states when it has moved from the power's own (Toric Toughness's block); `stolen` the card it took (Swipe's) |
+| `CardView` | `id`, `uid`?, `up`?, `cost`? or `x_cost`?, `stars`?, `enchant`?, `affliction`?, `tinker`?, `keywords`?, `this_turn`?, `vars`?, `upgraded`?, `lasting`?, `stars_lasting`?, `replay`?, `spent`?, `calc`? | `cost` is the energy cost with every modifier; `stars` the star cost, for cards that have one; `enchant` and `affliction` are `{id, amount}`; `tinker` is what the Tinker Time event made of a Mad Science, its type and rider, which its frame shows and its id does not; `keywords` sorted; `this_turn` the keywords an effect gave it for this turn only, which the turn's end takes away (Expertise's Retain, Hand Trick's Sly); `vars` the card's own numbers by name ([§7](#sec-7)); `upgraded` the card after one more upgrade, as the game's upgrade preview shows it, on upgradable deck cards only |
+| `PowerView` | `id`, `amount`, `stacks`?, `card`?, `detail`?, `stolen`? | `amount` is the number on the icon; `stacks` the power's own amount when the icon shows another number (Sloth's icon counts this turn's cards; its stacks are the limit); `card` the card the power keeps, as its tooltip names it (Nightmare's); `detail` how far the number its tooltip states has moved from the power's own, when it has (Toric Toughness's block, The Bomb's damage); `stolen` the card it took (Swipe's) |
 | `IntentView` | `type`, `damage`?, `hits`? | an intent icon above an enemy: its type, and for an attack the damage per hit against the player and the number of hits |
 | `OrbView` | `id`, `passive`, `evoke` | an orb and the numbers it shows |
 

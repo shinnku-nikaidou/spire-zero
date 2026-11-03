@@ -107,7 +107,7 @@ Reading the rows:
 Rulings for cases the table does not settle, the same in both environments. They come from the fair-play spec, a local note (`tmp/notes/fair-play-spec.md`) that the observation whitelist ([Protocol](/en/arch/protocol/)) implements:
 
 - exact damage math is allowed: the game shows the numbers, and computing with them is what a careful player does;
-- powers only if the game shows them (`IsVisible`), with the amount on the icon; the power's own stacks only where its tooltip states them apart from the icon, and the card a power keeps, which its tooltip names (`GameBridge/Observe.cs:180-182`);
+- powers only if the game shows them (`IsVisible`), with the amount on the icon; the power's own stacks only where its tooltip states them apart from the icon, and the card a power keeps, which its tooltip names (`GameBridge/Observe.cs:259-261`);
 - no monster move id is exported (`move_id`): the intent is what the player sees;
 - the draw pile only as a multiset, never its order;
 - the hidden cells of the Crystal Sphere event (`CRYSTAL_SPHERE`, a minigame) are exported only as hidden (`#`); only uncovered cells show what is under them (`GameBridge/Actions/CrystalSphereActions.cs:24-25`).

@@ -82,7 +82,7 @@ flowchart TD
 `src/` 之外：
 
 - `learn/`：訓練 V（`learn/v/`）和戰鬥網路（`learn/combat/`）的 Python，以及門檻和連戰的腳本，用 uv 執行（[學習](/zh-tw/arch/learning/)）；
-- `weights/`：訓練好的網路，每個一個 JSON 檔案，按角色分（`weights/silent/`）；
+- `weights/`：訓練好的網路，每個一個 JSON 檔案；每個角色共用的網路在 `weights/all/`；
 - `eval/`：種子集、報告、排行榜、冠軍檔案和帳本，按角色分（[評估](/zh-tw/arch/evaluation/)）；
 - `docs/`：這本書；
 - 資料目錄（`data/`）存放自我對弈和評估的日誌，保存在專案的儲存主機上，不在 git 裡。

@@ -314,9 +314,9 @@ export function combatNet(lang: Lang): Diagram {
             tone: 'embed',
             info: L(
               w(
-                'Its id, upgrade level, modifier ids and amounts, pile, current cost and damage; 32 numbers per card.',
-                '它的 id、升级等级、修饰的 id 和数值、所在牌堆、当前费用和伤害；每张牌 32 个数。',
-                '它的 id、升級等級、修飾的 id 和數值、所在牌堆、目前費用和傷害；每張牌 32 個數。',
+                'Its id, upgrade level, modifier tokens (enchantment, affliction, keywords, Tinker, spent) and amounts, pile, current energy and star costs, damage, block, calculated number, replays and gathered damage; 32 numbers per card.',
+                '它的 id、升级等级、修饰词元（附魔、诅咒、关键词、Tinker、已用）和数值、所在牌堆、当前能量与星辰费用、伤害、格挡、计算出的数字、额外打出次数和附魔累积的伤害；每张牌 32 个数。',
+                '它的 id、升級等級、修飾詞元（附魔、詛咒、關鍵字、Tinker、已用）和數值、所在牌堆、目前能量與星辰費用、傷害、格擋、計算出的數字、額外打出次數和附魔累積的傷害；每張牌 32 個數。',
               ),
             ),
           },
@@ -368,7 +368,7 @@ export function combatNet(lang: Lang): Diagram {
             kind: 'block',
             label: L(w('Embeddings', '嵌入', '嵌入')),
             tone: 'embed',
-            info: L(w('Id, amount, stacks and kept card: 32 numbers per power.', 'id、层数、堆叠数和保留的牌：每个能力 32 个数。', 'id、層數、堆疊數和保留的牌：每個能力 32 個數。')),
+            info: L(w('Id, amount, stacks, moved number and kept or stolen card: 32 numbers per power.', 'id、层数、堆叠数、偏移量和保留或偷走的牌：每个能力 32 个数。', 'id、層數、堆疊數、移動的數字和保留或偷走的牌：每個能力 32 個數。')),
           },
           {
             kind: 'block',
@@ -403,9 +403,9 @@ export function combatNet(lang: Lang): Diagram {
             tone: 'embed',
             info: L(
               w(
-                'Relics (id, counter, melted and status), potions, the context (only the encounter is known; act, room and character read as unknown) and orbs (id, passive, evoke and place in the queue), 32 each; allies through their own φ, 64; the ascension, orb slots and gold, 3.',
-                '遗物（id、计数、熔化和状态）、药水、上下文（只认识遭遇；幕、房间和角色读作未知）和充能球（id、被动值、激发值和队列中的位置），各 32；盟友经自己的 φ，64；进阶、充能球栏位和金币，3。',
-                '遺物（id、計數、熔化和狀態）、藥水、上下文（只認識遭遇；幕、房間和角色讀作未知）和充能球（id、被動值、激發值和佇列中的位置），各 32；盟友經自己的 φ，64；晉階、充能球欄位和金幣，3。',
+                'Relics (id, counter, melted and status), potions, the context (the encounter and the character; act and room read as unknown) and orbs (id, passive, evoke and place in the queue), 32 each; allies through their own φ, 64; the ascension, orb slots and gold, 3.',
+                '遗物（id、计数、熔化和状态）、药水、上下文（遭遇和角色；幕和房间读作未知）和充能球（id、被动值、激发值和队列中的位置），各 32；盟友经自己的 φ，64；进阶、充能球栏位和金币，3。',
+                '遺物（id、計數、熔化和狀態）、藥水、上下文（遭遇和角色；幕和房間讀作未知）和充能球（id、被動值、激發值和佇列中的位置），各 32；盟友經自己的 φ，64；晉階、充能球欄位和金幣，3。',
               ),
             ),
           },

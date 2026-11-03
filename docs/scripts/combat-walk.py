@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "learn"))
 from combat import data, encode, export  # noqa: E402
 from combat.net import Batch, Net  # noqa: E402
 
-FILE = ROOT / "weights/silent/c8-3.json"
+FILE = ROOT / "weights/all/c9-0.json"
 OUT = ROOT / "docs/src/data/combat-walk.json"
 MAIN = 10  # the only test state holding a potion: every step has something to show
 OTHERS = {"danger": 3, "mask": 6}  # a boss fight more likely lost than won, and a state at 4 of 70 HP
@@ -103,7 +103,6 @@ def shown(test: dict, net: Net, index: dict, width: float) -> dict:
         "enemies": [
             {"id": e["id"], "hp": e["hp"], "max_hp": e["max_hp"], "intents": e.get("intents") or [], "powers": [{"id": p["id"], "amount": p["amount"]} for p in e["powers"]]}
             for e in obs["enemies"]
-            if e["hp"] > 0
         ],
         "potions": [{"id": p, "gone": round(float(gone[index["potions"].get(p, 0)]), 4)} for p in obs["potions"] if p is not None],
         "outcome": [round(float(v), 5) for v in outcome],
@@ -124,14 +123,19 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         net.cards(x["cards"])
         + x["ups"][..., None] * net.card_up(x["cards"])
         + x["costs"][..., None] * net.cost
-        + x["damages"][..., None] * net.damage
+        + x["damages"][..., None] * (net.damage + net.card_damage(x["cards"]))
+        + x["numbers"][..., 0:1] * net.card_block(x["cards"])
+        + x["numbers"][..., 1:2] * net.card_calc(x["cards"])
+        + x["numbers"][..., 2:3] * net.card_replay(x["cards"])
+        + x["numbers"][..., 3:4] * net.stars
+        + x["numbers"][..., 4:5] * net.gathered
         + ((net.modifiers(x["mods"]) + x["mod_amounts"][..., None] * net.mod_amount(x["mods"])) * x["mod_mask"][..., None]).sum(2)
         + x["piles"] @ net.pile
     )
     card_phi = net.card_phi(card_x)
     per_pile = torch.bmm(x["piles"].transpose(1, 2), card_phi).flatten(1) * net.SUM_SCALE
     example = next(k for k, c in enumerate(tok["cards"]) if c[0] == "STRIKE_SILENT" and not c[1] and not c[3])  # a plain Strike, so the cost and damage vectors show
-    c_id, c_up, c_pile, c_mods, c_cost, _, c_damage = tok["cards"][example]
+    c_id, c_up, c_pile, c_mods, c_cost, _, c_damage, c_numbers = tok["cards"][example]
     t = x["cards"][0, example]
     card = {
         "id": c_id,
@@ -139,6 +143,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         "up": c_up,
         "cost": round(c_cost, 3),
         "damage": round(c_damage, 3),
+        "numbers": [round(v, 3) for v in c_numbers],
         "entry": int(t),
         "mods": c_mods,
         "id_vector": four(net.cards(t)),
@@ -156,7 +161,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     ]
 
     # Powers: the player's.
-    mine = net.power_sum(x["powers"], x["power_amounts"], x["power_mask"], x["power_stacks"], x["power_cards"], x["power_card_mask"])
+    mine = net.power_sum(x["powers"], x["power_amounts"], x["power_mask"], x["power_stacks"], x["power_cards"], x["power_card_mask"], x["power_details"])
 
     # Enemies: a slot is the sum of its intents plus the slot's own vector.
     i = (
@@ -167,7 +172,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     slot_vectors = (i * x["intent_mask"][..., None]).sum(3) + net.slot
     slots = slot_vectors.flatten(2)
     numbers = net.enemies(x["enemies"]) + net.enemy_scalars(x["enemy_scalars"])
-    e_powers = net.power_sum(x["enemy_powers"], x["enemy_power_amounts"], x["enemy_power_mask"], x["enemy_power_stacks"], x["enemy_power_cards"], x["enemy_power_card_mask"])
+    e_powers = net.power_sum(x["enemy_powers"], x["enemy_power_amounts"], x["enemy_power_mask"], x["enemy_power_stacks"], x["enemy_power_cards"], x["enemy_power_card_mask"], x["enemy_power_details"])
     e_in = torch.cat([numbers, e_powers, slots], 2)
     e_phi = net.enemy_phi(e_in)
     foes = (e_phi * x["enemy_mask"][..., None]).sum(1)
@@ -255,7 +260,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
             "round": other["obs"]["round"],
             "hp": pl["hp"],
             "max_hp": pl["max_hp"],
-            "enemies": [e["id"] for e in other["obs"]["enemies"] if e["hp"] > 0],
+            "enemies": [e["id"] for e in other["obs"]["enemies"]],
             "open": sum(float(v) > 0 for v in o[1:]),
             "open_from": round(data.LOSS_MIN + min(j for j in range(50) if float(o[j + 1]) > 0) * width, 3),
             "open_to": round(data.LOSS_MIN + (max(j for j in range(50) if float(o[j + 1]) > 0) + 1) * width, 3),
@@ -292,7 +297,6 @@ def walk(file: dict, net: Net, index: dict) -> dict:
             "enemies": [
                 {"id": e["id"], "hp": e["hp"], "max_hp": e["max_hp"], "block": e["block"], "powers": [{"id": p["id"], "amount": p["amount"]} for p in e["powers"]], "intents": e.get("intents") or []}
                 for e in obs["enemies"]
-                if e["hp"] > 0
             ],
             "relics": [{"id": r["id"], "counter": r.get("counter"), "status": r.get("status")} for r in obs["relics"]],
             "potions": obs["potions"],

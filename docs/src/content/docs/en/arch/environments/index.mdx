@@ -46,9 +46,10 @@ One more thing makes the line hard to draw: the game itself lets a player peek. 
 | the worlds search plays in | K sampled worlds, built from the observation | one exact clone of the node |
 | combat brain | PIMC: search each world to the end of the turn, average | the SL planner: plan the whole combat in the one world |
 | macro brain and value V | one brain, one V | the same brain and V |
+| combat net | one net, the search's leaf | the same net |
 | champions and leaderboards | NoSL's own | SL's own, never mixed with NoSL's |
 
-The macro brain is the part that makes every decision outside combat ([Macro brain](/en/arch/macro-brain/)); V is the learned value it scores options with. Both are shared, and only the combat brain differs, because only in combat do the two environments pose different problems ([Worlds §5](/en/arch/environments/worlds/#sec-5)).
+The macro brain is the part that makes every decision outside combat ([Macro brain](/en/arch/macro-brain/)); V is the learned value it scores options with. Both are shared, and so is the combat net, the learned value at the combat search's leaves: the two environments play the same two nets with the same weights. Only the combat search in front of the combat net differs, because only in combat do the two environments pose different problems ([Worlds §5](/en/arch/environments/worlds/#sec-5)).
 
 ## 3. Why two environments
 

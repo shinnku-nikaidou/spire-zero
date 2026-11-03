@@ -25,11 +25,12 @@ flowchart LR
 自我对弈打完整的游戏，SL：每个宏观决策由节点克隆上的 L0 做出（[搜索 §2](/arch/macro-brain/search/#sec-2)），每场战斗，包括普通怪物战，都由 SL 战斗规划器配它的战斗网络去打。
 
 ```text
-run --env SL --policy plan --macro l0 --afterstates clone --workers 4 --effort medium --asc 10 \
-    --combat-net weights/silent/c8-3.json --value weights/silent/V.json --explore ε --macro-explore 0.03 --seed 1
+run --env SL --policy plan --macro l0 --afterstates clone --workers 4 --character CHARACTER --asc 0 \
+    --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 \
+    --combat-net weights/all/c9-0.json --value weights/all/V.json --explore ε --seed 1
 ```
 
-**预算**。最新一代 `v8g2` 用冠军的 medium 力度打，晋级门槛也是这个力度，每局约 290 s。`v7g1` 用规划器的 low 预算打，每局占一个槽位约 45–85 s。便宜的预算在同样的算力下给出多得多的对局，而且给配置排序的能力相差不大：在满 HP 下打的 515 个 Boss 门口上，同一个种子上 low 和 medium 预算相关 0.94，low 预算下两个种子相关 0.83（[SL 规划器：预算、开销与结果 §2](/arch/sl-planner/budget/#sec-2)）。
+**预算**。正在打的一代 `v9g0` 用规划器的 low 预算，在进阶 0 上打全部五个角色，如上所示。`v8g2` 用冠军的 medium 力度在进阶 10 上打静默猎手，晋级门槛也是这个力度，每局约 290 s；`v7g1` 用 low 预算打，每局占一个槽位约 45–85 s。便宜的预算在同样的算力下给出多得多的对局，而且给配置排序的能力相差不大：在满 HP 下打的 515 个 Boss 门口上，同一个种子上 low 和 medium 预算相关 0.94，low 预算下两个种子相关 0.83（[SL 规划器：预算、开销与结果 §2](/arch/sl-planner/budget/#sec-2)）。
 
 ## 3. 探索：均匀抽取
 
@@ -45,7 +46,7 @@ $$
 
 **为什么要均匀**。抽到什么既不取决于 V，也不取决于这一局打得好不好，所以被抽中的决策的结局是关于各选项的因果证据，包括 V 认为差的那些选项，而且每种决策被抽中的频率相同。按 V 自己的估值加权的抽取，只会去试 V 已经喜欢的选项，很少试到能纠正它的反例。
 
-**档位**。一代的对局按 ε 分为三档：`v7g1` 是 0.3、0.15 和 0.05；`v7g2` 是 0.15、0.08 和 0.03；`v8g2` 是 0.06、0.03 和 0.01。后两者 ε 留给 V 的决策由 softmax 抽取（[学习：循环 §9](/arch/learning/loop/#sec-9)）。较高的 ε 每局覆盖更多选项；较低的 ε 能打到靠后的层，赢下一局的决策就在那里。
+**档位**。一代的对局按 ε 分为三档：`v7g1` 是 0.3、0.15 和 0.05；`v7g2` 是 0.15、0.08 和 0.03；`v8g2` 是 0.06、0.03 和 0.01；`v9g0` 是 0.3、0.1 和 0.02，又变宽了，因为对其中四个角色来说这是第一批数据。`v7g2` 和 `v8g2` 中 ε 留给 V 的决策由 softmax 抽取；`v9g0` 只做均匀抽取（[学习：循环 §9](/arch/learning/loop/#sec-9)）。较高的 ε 每局覆盖更多选项；较低的 ε 能打到靠后的层，赢下一局的决策就在那里。
 
 <Aside>
 
@@ -75,7 +76,7 @@ $$
 
 ## 5. 晋级门槛
 
-新的 V 由晋级门槛评判。冠军的 V，也就是 v8-3，在进阶 10 上按配对胜局通过了门槛，覆盖两个战斗网络（[评估：冠军与基线 §2](/arch/evaluation/champions/#sec-2)）。挑战者在 `promotion-1-300` 的 300 个种子上打，不探索，用冠军的 medium 规划器预算，在克隆上；冠军在同样种子上的对局就是它的记录，缺的再补打。它还用低预算打同样的种子，作为参考，不决定任何事。对局按种子配对：对种子 $i$，$d_i$ 是挑战者的胜负（1 或 0）减去冠军的胜负（1 或 0），有 $n$ 对时
+新的 V 由晋级门槛评判。冠军的 V 是 v9-0，它的权重在进阶 10 上按配对胜局通过了门槛，覆盖两个战斗网络（[评估：冠军与基线 §2](/arch/evaluation/champions/#sec-2)）。挑战者在 `promotion-1-300` 的 300 个种子上打，不探索，用冠军的 medium 规划器预算，在克隆上；冠军在同样种子上的对局就是它的记录，缺的再补打。它还用低预算打同样的种子，作为参考，不决定任何事。对局按种子配对：对种子 $i$，$d_i$ 是挑战者的胜负（1 或 0）减去冠军的胜负（1 或 0），有 $n$ 对时
 
 $$
 \bar d = \frac{1}{n}\sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\,\mathrm{SE} > 0,

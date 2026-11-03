@@ -14,10 +14,10 @@ A **champion** is the best accepted version of the AI in one environment: the br
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c8-3 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v8-3 clone, macro prompts l0 v8-3 clone",
+  "champion": "combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/silent/v8-3.json", "afterstates": "clone", "combat-net": "weights/silent/c8-3.json",
+    "value": "weights/all/v9-0.json", "afterstates": "clone", "combat-net": "weights/all/c9-0.json",
     "character": "SILENT", "asc": "10"
   },
   "report": "eval/silent/reports/DATE-sl-a10-SET-NAME.json",
@@ -31,7 +31,7 @@ A **champion** is the best accepted version of the AI in one environment: the br
 |---|---|
 | `env` | `NoSL` or `SL`; a gate refuses a challenger's `--env` that is not this |
 | `champion` | the champion's name as the reports show it, the brains on each side of the routing table with the budget ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) |
-| `options` | the run options that play it, without their `--`, the character and ascension among them; weights files by their path in `weights/CHARACTER/` |
+| `options` | the run options that play it, without their `--`, the character and ascension among them; weights files by their path in `weights/all/` |
 | `report` | the report a challenger is paired with: the champion's side of every gate |
 | `since` | the date it became champion (the promoted report's date, or the date written by hand) |
 | `gate` | the gate it passed, absent for a champion set without one: `metric`, `delta`, `alpha`, `beta`, `pairs`, `decided`, `llr`, `lower`, `upper`, `floor_diff_mean`, `challenger_only_wins`, `champion_only_wins`, `verdict`, `void_reason` when there is one, and `not_worse` |
@@ -44,9 +44,9 @@ A **champion** is the best accepted version of the AI in one environment: the br
 
 **Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:83-108`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. The wins gate writes nothing, so a net it promotes is written by hand ([Gates §10](/en/arch/evaluation/gates/#sec-10)), and the SL file says `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `report` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
 
-**The two files.** Both name the same two nets, `weights/silent/v8-3.json` (V) and `weights/silent/c8-3.json` (the combat net), at ascension 10. SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The `report` both name is this SL champion's own, 200 runs at A10 on `promotion-1-200`. Since it is an SL report, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)); neither net has been gated in NoSL.
+**The two files.** Both name the same two nets, `weights/all/v9-0.json` (V) and `weights/all/c9-0.json` (the combat net), at ascension 10. SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The `report` both name is this SL champion's own, 200 runs at A10 on `promotion-1-200`. Since it is an SL report, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)); neither net has been gated in NoSL.
 
-Each character has folders of its own, `eval/CHARACTER/`, `weights/CHARACTER/` and `data/CHARACTER/`, and one brain for all its ascensions ([Learning: reference §3](/en/arch/learning/reference/#sec-3)); the seed sets in `eval/seeds/` are shared.
+Each character has folders of its own, `eval/CHARACTER/` and `data/CHARACTER/`, with its own champion files, reports and ledger ([Learning: reference §3](/en/arch/learning/reference/#sec-3)). The nets are shared: every character's champion plays the files in `weights/all/`. The seed sets in `eval/seeds/` are shared too.
 
 ## 2. History and reports
 
@@ -56,7 +56,7 @@ These pages describe the current champion only. The record of what came before i
 - `eval/silent/reports/` holds every committed report, as JSON and Markdown ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)).
 - `eval/silent/leaderboard.md` ranks those reports, by seed set and environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
 
-**The champion's nets and their gate.** v8-3 and c8-3 trained on the A10 runs of `v8g2` alone (10,038 runs), going on from v8-2 and c8-2. `v8g2` was played before the search played cycles inside a turn, so neither net has seen a cycle's outcome. Their gate played the four pairings of old and new at ascension 10, 200 seeds at medium and 200 at the low budget, on `promotion-1-200`, with that search, and read paired wins. Of 1,600 runs one failed and was dropped, so v8-3 with c8-2 has 199 at medium; there were no game errors. At medium:
+**The champion's nets and their gate.** v9-0 and c9-0 are v8-3 and c8-3 carried with no training to the nets all characters share, their new inputs at zero weight. On the same seeds they take the same decisions, but where they read something the old nets did not (Swipe's stolen card, an Osty attack's damage), so the champion files keep v8-3 and c8-3's report and gate. v8-3 and c8-3 trained on the A10 runs of `v8g2` alone (10,038 runs), going on from v8-2 and c8-2. `v8g2` was played before the search played cycles inside a turn, so neither net has seen a cycle's outcome. Their gate played the four pairings of old and new at ascension 10, 200 seeds at medium and 200 at the low budget, on `promotion-1-200`, with that search, and read paired wins. Of 1,600 runs one failed and was dropped, so v8-3 with c8-2 has 199 at medium; there were no game errors. At medium:
 
 | V | combat net | won | mean floor |
 |---|---|---|---|

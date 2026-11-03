@@ -65,11 +65,11 @@ $$
 | `auc_death`、`auc_death_share` | 在每個死亡和存活各有 3 個或更多的（遭遇, 回合）內，死亡的回合開始得分高於存活的回合開始的機率；旁邊是生命值比例的 |
 | `potions` | `rows`、`used`、`predicted`、`log_loss`，以及 `log_loss_id` 和 `log_loss_id_room`，即按 id、按 id 和房間取比率時的對數損失 |
 
-**網路檔案**寫到 `weights/CHARACTER/NAME.json`，從不覆蓋（[參考 §6](/zh-tw/arch/learning/reference/#sec-6)）。它的欄位見[參考 §7](/zh-tw/arch/learning/reference/#sec-7)。
+**網路檔案**寫到 `weights/all/NAME.json`，從不覆蓋（[參考 §6](/zh-tw/arch/learning/reference/#sec-6)）。它的欄位見[參考 §7](/zh-tw/arch/learning/reference/#sec-7)。
 
 ## 5. 它量測到什麼
 
-數字是 `weights/silent/c8-3.json` 裡的報告。「留出」是訓練清單裡每五局一局，2,044 局，都在晉階 10，有 153,718 個回合開始，以 medium 預算打。
+數字是 `weights/all/c9-0.json` 裡的報告，它保留的是 c8-3 的：c9-0 沿用它的權重。「留出」是訓練清單裡每五局一局，2,044 局，都在晉階 10，有 153,718 個回合開始，以 medium 預算打。
 
 | 指標 | 留出 | 只用生命值比例 |
 |---|---|---|

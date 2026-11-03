@@ -43,7 +43,7 @@ The hosts fetch the game objects (the run state, the player, the current event, 
 
 ## 3. Cards, powers, relics and intents
 
-**A card** (`Observe.Card`, `Observe.cs:115-137`):
+**A card** (`Observe.Card`, `Observe.cs:115-138`):
 
 | field | read from |
 |---|---|
@@ -54,6 +54,7 @@ The hosts fetch the game objects (the run state, the player, the current event, 
 | `enchant`, `affliction` | the card's enchantment and affliction, with their amounts |
 | `tinker` | a Mad Science's `TinkerTimeType` and `TinkerTimeRider` |
 | `keywords` | `Keywords`, sorted |
+| `this_turn` | Retain or Sly that `ShouldRetainThisTurn` or `IsSlyThisTurn` holds beside `Keywords`: the game keeps a keyword given for one turn (Expertise, Hand Trick) in flags of its own, which the turn's end clears |
 | `vars` | the card's `DynamicVars` that are not calculated, by name, each its `BaseValue` |
 | `lasting`, `stars_lasting` | the energy and star cost once the card's changes that end when it is played or when the turn ends are gone, when that is another: the game keeps them apart only inside the cost, in `_localModifiers` and `_temporaryStarCosts` |
 | `replay` | `GetEnchantedReplayCount()`, when above 0: the extra plays its text states |
@@ -62,13 +63,13 @@ The hosts fetch the game objects (the run state, the player, the current event, 
 
 **`vars` are base values.** The card's numbers before Strength, Dexterity or Vulnerable act on them. A calculated number (Perfected Strike's damage) is left out: the card shows it as a base plus an extra per count of something in the state, and those parts are among the vars; the calculated value itself only mirrors its base and goes stale after a downgrade. The vars are added in name order, since the serializer writes a dictionary in the order it was filled. `enchant.extra` is the damage Momentum has gathered.
 
-**The upgrade preview** (`DeckCard`): for an upgradable card in the deck, the card after one more upgrade, as the game's own preview shows it in the deck view and in an upgrade prompt. It is made the way the game makes its preview, on a copy: `MutableClone()`, then `UpgradeInternal()` and `FinalizeUpgradeInternal()`. A mutable clone has none of the original's event subscribers and the upgrade runs no hooks, so nothing in the run changes (`Observe.cs:190-202`).
+**The upgrade preview** (`DeckCard`): for an upgradable card in the deck, the card after one more upgrade, as the game's own preview shows it in the deck view and in an upgrade prompt. It is made the way the game makes its preview, on a copy: `MutableClone()`, then `UpgradeInternal()` and `FinalizeUpgradeInternal()`. A mutable clone has none of the original's event subscribers and the upgrade runs no hooks, so nothing in the run changes (`Observe.cs:202-214`).
 
-**A power** (`Observe.cs:247-249`): only powers with `IsVisible`; `amount` is `DisplayAmount`, the number on the icon; `stacks` is `Amount` when it differs from it; `card` is the card the power keeps; `detail` is the sum of the power's `DynamicVars` that have moved from its canonical ones; `stolen` is Swipe's `StolenCard`. That card is in the power's private data, which the game does not expose although the tooltip names it (Nightmare's card), so `HeldCards` finds it by reflection: the first field of card type in the power's `_internalData` (`HeldCards.cs:12-27`). The simulator's CombatBuilder uses `HeldCards.Set` to put such a card back when it builds a combat.
+**A power** (`Observe.cs:259-261`): only powers with `IsVisible`; `amount` is `DisplayAmount`, the number on the icon; `stacks` is `Amount` when it differs from it; `card` is the card the power keeps; `detail` is how far the power's `DynamicVars` have moved from its canonical ones, summed (one moves at a time); `stolen` is Swipe's `StolenCard`. That card is in the power's private data, which the game does not expose although the tooltip names it (Nightmare's card), so `HeldCards` finds it by reflection: the first field of card type in the power's `_internalData` (`HeldCards.cs:12-27`). The simulator's CombatBuilder uses `HeldCards.Set` to put such a card back when it builds a combat.
 
-**A relic** (`Observe.cs:251-260`): `counter` is `DisplayAmount` when `ShowCounter`; `status` when not normal; `melted` (`IsMelted`); `used_up` (`IsUsedUp`); `cards`, Pael's Tooth's kept cards; `spent`, a private bool field of the relic whose name ends in `ThisCombat` is set.
+**A relic** (`Observe.cs:263-272`): `counter` is `DisplayAmount` when `ShowCounter`; `status` when not normal; `melted` (`IsMelted`); `used_up` (`IsUsedUp`); `cards`, Pael's Tooth's kept cards; `spent`, a private bool field of the relic whose name ends in `ThisCombat` or `ThisTurn` is set.
 
-**Intents** (`Observe.cs:240-245`): the intents of the monster's `NextMove`, for a monster not on the player's side, one lying dead until it revives too. An attack's damage is `AttackIntent.GetSingleDamage(targets, owner)` against the player, the same call the icon's number comes from, and its hits `max(1, Repeats)`. The move itself never goes out, only its intents.
+**Intents** (`Observe.cs:252-257`): the intents of the monster's `NextMove`, for a monster not on the player's side, one lying dead until it revives too. An attack's damage is `AttackIntent.GetSingleDamage(targets, owner)` against the player, the same call the icon's number comes from, and its hits `max(1, Repeats)`. The move itself never goes out, only its intents.
 
 **Uids**: a creature's is its `CombatId`; a hand card's its id in `NetCombatCardDb` ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)).
 

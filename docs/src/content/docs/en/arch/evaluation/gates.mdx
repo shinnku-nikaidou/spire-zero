@@ -174,7 +174,7 @@ The project uses it for one more case: a challenger that only removes a hand-wri
 On a pass, `--promote PATH` (`SimWorker/Commands/EvalCommands.cs:113-123`):
 
 1. makes the challenger's report from its records on the champion's seed set (`eval/seeds/SET.txt`), dated today; refuses a partial one, since the new report faces the next challengers and must cover the whole set;
-2. makes the champion file's options: the challenger's options for the file's environment, plus its character and ascension. Each weights file (`value`, `combat-net`) must be in the character's weights folder, `weights/CHARACTER/`, where a name always means the same file; a promotion with a file elsewhere is refused before anything is written (`SimWorker/Brains/ChampionOptions.cs:116-126`, [Learning: reference §6](/en/arch/learning/reference/#sec-6));
+2. makes the champion file's options: the challenger's options for the file's environment, plus its character and ascension. Each weights file (`value`, `combat-net`) must be in the shared weights folder, `weights/all/`, where a name always means the same file; a promotion with a file elsewhere is refused before anything is written (`SimWorker/Brains/ChampionOptions.cs:116-126`, [Learning: reference §6](/en/arch/learning/reference/#sec-6));
 3. writes `PATH.json` and `PATH.md`, the Markdown with an "Against" section on the champion's report;
 4. rewrites the champion file: the environment, the challenger's name and options, the new report, `since` the report's date, and `gate` the result ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)).
 

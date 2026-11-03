@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The combat net's outputs on the test states its file carries (weights/silent/c8-3.json): the chance of a death and
+  // The combat net's outputs on the test states its file carries (weights/all/c9-0.json): the chance of a death and
   // of each bucket of the HP share still to be lost, each held potion's chance of being gone, and the leaf value, as
   // CombatNet.Value computes it (docs: combat-brain/leaf §4–§5).
   import { onMount } from 'svelte';

@@ -134,7 +134,7 @@ export class V {
       const e = this.row('cards.weight', index);
       const u = this.row('card_up.weight', index);
       for (let i = 0; i < d; i++) x[i] = e[i] + up * u[i];
-      for (const m of mods.slice(0, 2)) {
+      for (const m of mods) {
         const v = this.row('modifiers.weight', this.id('modifiers', m));
         for (let i = 0; i < d; i++) x[i] += v[i];
       }

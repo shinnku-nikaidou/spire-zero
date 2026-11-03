@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One real run through net.Net, step by step: v8-3's test run at a map move (floor 41), values as the trainer gave
+  // One real run through net.Net, step by step: v9-0's test run at a map move (floor 41), values as the trainer gave
   // them. Vectors show their first four numbers (docs: macro-brain/network §9).
   import type { Lang } from './names.ts';
 

@@ -77,7 +77,7 @@ for (const [what, view, value] of valued) {
 }
 
 // The combat net's walkthrough must hold what the net file's test states hold (docs: combat-brain/walkthrough).
-const combat = JSON.parse(readFileSync(new URL('../../weights/silent/c8-3.json', import.meta.url), 'utf8'));
+const combat = JSON.parse(readFileSync(new URL('../../weights/all/c9-0.json', import.meta.url), 'utf8'));
 const walk = JSON.parse(readFileSync(new URL('../src/data/combat-walk.json', import.meta.url), 'utf8'));
 combat.tests.forEach((t, i) => {
   const off = Math.max(...t.outcome.map((p, k) => Math.abs(p - walk.tests[i].outcome[k])));

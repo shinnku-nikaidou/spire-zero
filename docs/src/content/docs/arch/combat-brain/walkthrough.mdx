@@ -11,7 +11,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 本页取一个真实的状态，手工走过战斗网络，用的是网络为它算出的数字。设计见[战斗网络](/arch/combat-brain/network/)；这里每一步展示那个设计对一场战斗做了什么。向量只显示前四个数。
 
-这个状态是一个回合开始，来自文件自带的留出测试状态（`weights/silent/c8-3.json`，`tests[10]`）。加载网络时会核对它给这个状态的输出正是这些（[战斗网络 §9](/arch/combat-brain/network/#sec-9)）。这些数字来自 `docs/scripts/combat-walk.py`，如果它的各层算不出文件里的输出，脚本就会停下。
+这个状态是一个回合开始，来自文件自带的留出测试状态（`weights/all/c9-0.json`，`tests[10]`）。加载网络时会核对它给这个状态的输出正是这些（[战斗网络 §9](/arch/combat-brain/network/#sec-9)）。这些数字来自 `docs/scripts/combat-walk.py`，如果它的各层算不出文件里的输出，脚本就会停下。
 
 ## 1. 屏幕显示什么
 

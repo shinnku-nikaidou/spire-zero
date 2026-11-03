@@ -1,5 +1,6 @@
 // A run view as pure V reads it: a port of learn/v/encode.py, the one spec RunNet follows (docs: macro-brain/network §1).
-// Only what the run is and its raw state: each card's id, upgrade level and modifiers' ids; the relics and potions;
+// Only what the run is and its raw state: each card's id, upgrade level and modifiers (enchantment, affliction, keywords,
+// what Tinker Time made of it); the relics and potions;
 // the character, act, boss(es) and ancient; the map points the player can still reach, each as its type and how many
 // floors ahead it is; and six numbers. The encoders' net reads the same points as a graph instead (route).
 
@@ -16,6 +17,8 @@ export interface Card {
   up?: number;
   enchant?: { id: string } | null;
   affliction?: { id: string } | null;
+  keywords?: string[] | null;
+  tinker?: { type: string; rider: string } | null;
 }
 
 export interface RunView {
@@ -113,6 +116,8 @@ export function route(m: RunView['map']): RouteNode[] {
 export function tokens(view: RunView): Tokens {
   const cards: CardToken[] = view.deck.map((c) => {
     const mods = (['enchant', 'affliction'] as const).filter((kind) => c[kind]).map((kind) => `${kind}:${c[kind]!.id}`);
+    mods.push(...(c.keywords ?? []).map((k) => `keyword:${k}`));
+    if (c.tinker) mods.push(`tinker:${c.tinker.type}`, `rider:${c.tinker.rider}`);
     return [c.id, Math.min(c.up ?? 0, MAX_UP), mods];
   });
   const m = view.map;

@@ -174,7 +174,7 @@ promoted: eval/silent/champions/nosl.json now names NAME
 通過時，`--promote PATH`（`SimWorker/Commands/EvalCommands.cs:113-123`）：
 
 1. 用挑戰者的記錄在冠軍的種子集（`eval/seeds/SET.txt`）上做出它的報告，日期為今天；拒絕不完整的報告，因為新報告要面對之後的挑戰者，必須涵蓋整個種子集；
-2. 做出冠軍檔案的選項：挑戰者在檔案所屬環境下的選項，加上它的角色和晉階等級。每個權重檔案（`value`、`combat-net`）都必須在這個角色的權重資料夾 `weights/CHARACTER/` 裡，那裡一個名稱永遠指同一個檔案；有檔案在別處的晉級，在寫入任何東西之前就被拒絕（`SimWorker/Brains/ChampionOptions.cs:116-126`，[學習：參考 §6](/zh-tw/arch/learning/reference/#sec-6)）；
+2. 做出冠軍檔案的選項：挑戰者在檔案所屬環境下的選項，加上它的角色和晉階等級。每個權重檔案（`value`、`combat-net`）都必須在共用的權重資料夾 `weights/all/` 裡，那裡一個名稱永遠指同一個檔案；有檔案在別處的晉級，在寫入任何東西之前就被拒絕（`SimWorker/Brains/ChampionOptions.cs:116-126`，[學習：參考 §6](/zh-tw/arch/learning/reference/#sec-6)）；
 3. 寫出 `PATH.json` 和 `PATH.md`，Markdown 裡有一節對比冠軍報告的「Against」；
 4. 改寫冠軍檔案：環境、挑戰者的名稱和選項、新報告、`since` 為報告的日期，`gate` 為這次門檻的結果（[冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。
 

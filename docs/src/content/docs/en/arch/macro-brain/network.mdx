@@ -16,7 +16,7 @@ Six parts read six kinds of input, each on its own: the **deck**, the **relics**
 
 Only the deck has layers of its own. The other bags are plain sums of learned vectors, and everything that relates one part to another is worked out after the join.
 
-All five characters use this one structure, layer for layer, with the same token tables; only the weights are a character's own (`weights/CHARACTER/`).
+One V values every run: all five characters, every ascension, both environments, with one set of weights (`weights/all/`). The character is one of the context tokens and the ascension one of the six numbers.
 
 The diagram reads from the bottom up: inputs at the bottom, the value at the top. A frame marks a group of layers. Point at a block for what it computes.
 
@@ -44,7 +44,7 @@ V reads **what the run is and its raw state, nothing else**. There is no feature
 
 Everything comes from the run view that Harness logs at every decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)), by `encode.tokens` and `encode.state`:
 
-- **Each card of the deck:** its id, its upgrade level (higher levels read as 3) and the ids of its enchantment and affliction, if any, as `enchant:ID` and `affliction:ID`.
+- **Each card of the deck:** its id, its upgrade level (higher levels read as 3) and its modifier tokens: its enchantment and affliction, if any, as `enchant:ID` and `affliction:ID`, its keywords as `keyword:K`, and what Tinker Time made of a Mad Science, as `tinker:TYPE` and `rider:RIDER`.
 - **Each relic:** its id, with `:used` added once it is used up.
 - **Each potion held:** its id. Empty slots are not tokens; the number of slots is one of the six numbers.
 - **The context:** `character:ID`, `act:ID`, `boss:ID`, a second `boss:ID` when the act has two, and `ancient:ID` when it has an ancient.
@@ -53,7 +53,7 @@ Everything comes from the run view that Harness logs at every decision ([Harness
 
 **What it does not read.** A card's cost and numbers, an enchantment's amount, a relic's counter and other state. Two runs that differ only there are one input.
 
-**Token tables.** The net file holds one table of ids per kind of token. Each lists every id of the game build, sorted, after entry 0, one shared *unknown* id, which reads any other id, such as one newer than the file (`learn/game_ids.py`, from `learn/game_ids.json`, which the simulator's `tables` command writes). So the tables do not depend on the training data, and every character's net has the same ones. The context's lists the game's acts, ancients, bosses and characters; the map's lists every type of point at 0 to 20 floors ahead, each with and without `:quest`.
+**Token tables.** The net file holds one table of ids per kind of token. Each lists every id of the game build, sorted, after entry 0, one shared *unknown* id, which reads any other id, such as one newer than the file (`learn/game_ids.py`, from `learn/game_ids.json`, which the simulator's `tables` command writes). So the tables do not depend on the training data. `modifiers` lists the enchantments, afflictions and keywords, Tinker Time's card types and riders, and `spent`, which V is never given; the context's lists the game's acts, ancients, bosses and characters; the map's lists every type of point at 0 to 20 floors ahead, each with and without `:quest`.
 
 **The numbers** are standardized, $(x - \mu)/\sigma$, by the mean and standard deviation of the training samples, each sample weighted by one over its run's samples. A standard deviation under $10^{-9}$ reads as 1. The net file keeps $\mu$ and $\sigma$.
 
@@ -64,8 +64,8 @@ Everything comes from the run view that Harness logs at every decision ([Harness
 | `cards` | $B \times n$ | int | each card's table entry |
 | `ups` | $B \times n$ | float | its upgrade level, 0 to 3 |
 | `card_mask` | $B \times n$ | float | present or padding |
-| `mods` | $B \times n \times 2$ | int | its modifiers' table entries, at most 2 |
-| `mod_mask` | $B \times n \times 2$ | float | which modifiers are present |
+| `mods` | $B \times n \times m$ | int | its modifier tokens' table entries, $m$ the most a card has |
+| `mod_mask` | $B \times n \times m$ | float | which modifier tokens are present |
 | `relics`, `relic_mask` | $B \times r$ | int, float | each relic's entry, and its mask |
 | `potions`, `potion_mask` | $B \times p$ | int, float | each potion's entry, and its mask |
 | `context`, `context_mask` | $B \times c$ | int, float | each context token's entry, and its mask |
@@ -156,22 +156,22 @@ The hazards of floors before $f$ are computed and not used ([From hazards to val
 
 | part | shape | weights |
 |---|---|---|
-| card, upgrade, modifier embeddings | 597 × 32, 597 × 32, 31 × 32 | 39,200 |
+| card, upgrade, modifier embeddings | 597 × 32, 597 × 32, 57 × 32 | 40,032 |
 | relic, potion, context, map embeddings | 310, 66, 32, 379 × 32 | 25,184 |
 | $\varphi$ | 32 → 128 → 128 | 20,736 |
 | body | 390 → 256 → 256 | 165,888 |
 | hazard head | 256 → 64 | 16,448 |
-| **total** | | **267,456** |
+| **total** | | **268,288** |
 
-The token tables are fixed, so these sizes are the same for every character's net on this game build. The training-only head adds 1,799.
+The token tables are fixed, so these sizes depend only on the game build. The training-only head adds 1,799.
 
-**What the file holds.** The file is `weights/silent/v8-3.json`. Its $\mu$ and $\sigma$ are kept from the nets it went on from, the first of whose training runs were all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training held, such as `DEFEND_IRONCLAD`, has the row of the unknown id; such a map token for the point entered, like `Unassigned+0`, is zero.
+**What the file holds.** The file is `weights/all/v9-0.json`. Its weights have learned from the Silent's runs alone. Its $\mu$ and $\sigma$ are kept from its first training runs, all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training held, such as `DEFEND_IRONCLAD` or `character:IRONCLAD`, has the row of the unknown id, so V reads the other four characters alike until it trains on their runs; such a map token for the point entered, like `Unassigned+0`, is zero, and so are the keyword and Tinker tokens' rows.
 
 A call takes about 0.09 ms in C# on one thread, batch of one. A macro decision on the clone takes 70–90 ms, most of it in the game ([Search §6](/en/arch/macro-brain/search/#sec-6)), so V's own cost does not matter.
 
 ## 7. One forward pass, two implementations
 
-The trainer computes the net in PyTorch; the brain runs it in C#. They must agree exactly, and they do so through the net file (`weights/silent/NAME.json`, [Learning: reference §7](/en/arch/learning/reference/#sec-7)):
+The trainer computes the net in PyTorch; the brain runs it in C#. They must agree exactly, and they do so through the net file (`weights/all/NAME.json`, [Learning: reference §7](/en/arch/learning/reference/#sec-7)):
 
 - **Export.** `learn/v/export.py` writes the net as an ONNX graph inside the file, with the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, $\mu$ and $\sigma$, the objective `win`, the training report and 8 held-out samples with the values the trainer gave them.
 - **Inference.** `RunNet` (`src/Sts2Ai.Brain/Macro/RunNet.cs`) follows `encode.py`: its `Tokens` and state build the same tensors, and ONNX Runtime runs the graph. It feeds an input only if the graph declares it. `Value` multiplies the hazards from the current floor on.
@@ -191,6 +191,6 @@ These follow from the structure alone.
 
 ## 9. One run through the net
 
-A real sample from v8-3's file, an afterstate of a map move on floor 41, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
+A real sample from v9-0's file, an afterstate of a map move on floor 41, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
 
 <NetWalk client:visible lang="en" />

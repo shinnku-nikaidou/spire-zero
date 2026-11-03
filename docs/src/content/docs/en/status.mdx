@@ -8,7 +8,7 @@ This page tracks progress. The chapters say how each part works; this page says 
 
 ## 1. In one paragraph
 
-The AI plays whole Silent runs headless, in the game's own code, in both environments. In **SL** the champion is the SL planner with the combat net c8-3 in combat and L0 with V v8-3 outside it; at ascension 10, on the 200 seeds of `promotion-1-200`, it won 17 runs, 8.5 % (5.4–13.2 %), and reached floor 33.09 on average. v8-3 passed its gate by paired wins, over both combat nets; c8-3 showed no gain apart, and the pair alone falls short of passing against the two nets before it ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). In **NoSL** the champion is PIMC with the same two nets, which it has never been gated or trained with. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built. Both nets have one structure for all five characters, with weights per character, and only the Silent has weights so far.
+The AI plays whole runs headless, in the game's own code, in both environments. Two nets do all its learned work: one combat net, c9-0, and one V, v9-0, each a single set of weights for all five characters, every ascension and both environments; SL and NoSL differ only in the search in front of them. Their weights have learned from the Silent's runs alone. In **SL** the champion is the SL planner with c9-0 in combat and L0 with v9-0 outside it; with the Silent at ascension 10, on the 200 seeds of `promotion-1-200`, it won 17 runs, 8.5 % (5.4–13.2 %), and reached floor 33.09 on average ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). In **NoSL** the champion is PIMC with the same two nets, which it has never been gated or trained with. The first data of all five characters, `v9g0` (ascension 0, 6,000 runs each), is being played. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built.
 
 ## 2. Each part
 
@@ -34,8 +34,8 @@ The AI plays whole Silent runs headless, in the game's own code, in both environ
 
 | environment | champion | seed set | win rate | mean floor |
 |---|---|---|---|---|
-| SL | plan c8-3 (medium effort), L0 v8-3 on the clone | `promotion-1-200`, ascension 10 | 8.5 % (17 of 200) | 33.09 |
-| NoSL | PIMC c8-3 8×300, L0 v8-3 | | no report yet | |
+| SL | plan c9-0 (medium effort), L0 v9-0 on the clone | `promotion-1-200`, the Silent at ascension 10 | 8.5 % (17 of 200) | 33.09 |
+| NoSL | PIMC c9-0 8×300, L0 v9-0 | | no report yet | |
 
 ## 3. Main gaps and risks
 
@@ -47,7 +47,8 @@ The AI plays whole Silent runs headless, in the game's own code, in both environ
 6. **Harmony patches in the real game against tiered JIT**: the runtime may recompile a method and silently drop a patch ([Mod: auto-play and safety §5](/en/arch/mod/auto/#sec-5)).
 7. **The combat brains' blind spots.** Card prompts are answered by a fixed rule (`p0`), not searched; NoSL's search sees this turn only; the SL planner proves few of its plans, and an unproved loss gets at most 3 plans in a row, so a combat that only a later plan would win is lost ([The SL planner: beam §5](/en/arch/sl-planner/beam/#sec-5)–[§6](/en/arch/sl-planner/beam/#sec-6)).
 8. **V's labels carry the later exploration draws of their runs**, and V is not told a run's ε ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)).
-9. **SL in the real game without the node's clone**: the mod holds back only combat decisions, so a brain whose macro side plays on the clone would use the previous node's ([Mod: the SL record §6](/en/arch/mod/sl-record/#sec-6)).
+9. **Four characters the nets have not learned.** The nets' weights have learned from the Silent's runs alone; the other characters read as the unknown character, and their cards, relics and enemies as ids no training held, until the nets train on `v9g0` ([The combat net §8](/en/arch/combat-brain/network/#sec-8)).
+10. **SL in the real game without the node's clone**: the mod holds back only combat decisions, so a brain whose macro side plays on the clone would use the previous node's ([Mod: the SL record §6](/en/arch/mod/sl-record/#sec-6)).
 
 ## 4. What comes next
 
@@ -69,8 +70,12 @@ The AI plays whole Silent runs headless, in the game's own code, in both environ
 
 8. <Badge text="done 2026-11-02" variant="success" /> V v8-3 and the combat net c8-3, trained on the A10 data `v8g2` alone (10,038 runs, 165 won, floor 25.92 on average) and judged apart at ascension 10, with the search that plays cycles inside a turn. v8-3 passed by paired wins; c8-3 showed no gain apart. Together they are the pairing with the most wins ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).
 
-9. **Waiting:** NoSL's items, while SL comes first: tuning PIMC's worlds and nodes, the fusion panel's measurement ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+9. <Badge text="done 2026-11-03" variant="success" /> One combat net and one V for all five characters, every ascension and both environments, with the character among the context tokens: c9-0 and v9-0, carrying the Silent's weights with no training. The combat net reads every state the observation gathers on cards, powers, relics and enemies: keywords, Tinker, an enchantment spent, calculated numbers, replays, star costs, Momentum's damage, a power's moved number, Swipe's stolen card, a relic's effect spent, an enemy lying dead until it revives ([The combat net §2](/en/arch/combat-brain/network/#sec-2)).
 
-10. The mod's auto-play: the executor, the auto-run driver, the R4 pipeline and the R3 ≡ R4 test ([Mod: auto-play and safety](/en/arch/mod/auto/)).
+10. <Badge text="in progress" variant="note" /> `v9g0`: the first SL self-play of all five characters, at ascension 0 and the low budget, 6,000 runs each, with V's decisions drawn evenly at ε 0.3, 0.1 and 0.02 ([Learning: the loop §2](/en/arch/learning/loop/#sec-2)).
+
+11. **Waiting:** NoSL's items, while SL comes first: tuning PIMC's worlds and nodes, the fusion panel's measurement ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+
+12. The mod's auto-play: the executor, the auto-run driver, the R4 pipeline and the R3 ≡ R4 test ([Mod: auto-play and safety](/en/arch/mod/auto/)).
 
 </Steps>

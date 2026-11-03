@@ -65,11 +65,11 @@ The settings are fixed in the code (`learn/combat/train.py:34-36`): AdamW at lea
 | `auc_death`, `auc_death_share` | the chance that a death's round start scores above a survivor's within each (encounter, round) with 3 or more of each; beside it, the HP share's |
 | `potions` | `rows`, `used`, `predicted`, `log_loss`, and `log_loss_id` and `log_loss_id_room`, those of a rate per id and per id and room |
 
-**The net file** goes to `weights/CHARACTER/NAME.json` and is never overwritten ([Reference §6](/en/arch/learning/reference/#sec-6)). Its fields are in [Reference §7](/en/arch/learning/reference/#sec-7).
+**The net file** goes to `weights/all/NAME.json` and is never overwritten ([Reference §6](/en/arch/learning/reference/#sec-6)). Its fields are in [Reference §7](/en/arch/learning/reference/#sec-7).
 
 ## 5. What it measures
 
-The numbers are the report in `weights/silent/c8-3.json`. "Held out" is every fifth run of the training list, 2,044 runs at ascension 10 with 153,718 round starts, played at the medium budget.
+The numbers are the report in `weights/all/c9-0.json`, which keeps c8-3's: c9-0 carries its weights. "Held out" is every fifth run of the training list, 2,044 runs at ascension 10 with 153,718 round starts, played at the medium budget.
 
 | metric | held out | the HP share alone |
 |---|---|---|

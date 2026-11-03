@@ -11,7 +11,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 This page takes one real state and walks it through the combat net by hand, with the numbers the net computes for it. Read [The combat net](/en/arch/combat-brain/network/) for the design; here each step shows what that design does to one fight. Vectors show their first four numbers.
 
-The state is a round start from the file's own held-out test states (`weights/silent/c8-3.json`, `tests[10]`). Loading the net checks that it gives this state exactly these outputs ([The combat net §9](/en/arch/combat-brain/network/#sec-9)). The numbers come from `docs/scripts/combat-walk.py`, which stops if its layers do not end in the file's outputs.
+The state is a round start from the file's own held-out test states (`weights/all/c9-0.json`, `tests[10]`). Loading the net checks that it gives this state exactly these outputs ([The combat net §9](/en/arch/combat-brain/network/#sec-9)). The numbers come from `docs/scripts/combat-walk.py`, which stops if its layers do not end in the file's outputs.
 
 ## 1. What the screen shows
 
