@@ -70,7 +70,6 @@ internal sealed record CombatSnapshot(CombatSetup Setup, IReadOnlyList<TraceEven
 /// </summary>
 internal sealed class CombatSession : IDisposable
 {
-    private const int MaxRounds = 50;
     private const int MaxActions = 1000;
 
     private readonly Pump _pump;
@@ -199,12 +198,12 @@ internal sealed class CombatSession : IDisposable
 
     public CombatObservation Observation() => Observe.Combat(State, Player);
 
-    /// <summary>Whether the combat is over or at the round/action cap.</summary>
-    public bool IsCapped => IsOver || State.RoundNumber > MaxRounds || ActionsExecuted >= MaxActions;
+    /// <summary>Whether the combat is over or at the action cap.</summary>
+    public bool IsCapped => IsOver || ActionsExecuted >= MaxActions;
 
     public CombatDecision Decision() => new(LegalActions(), Observation);
 
-    /// <summary>Plays until the combat ends or hits the round/action cap. Calls <paramref name="beforeAction"/> before each action.</summary>
+    /// <summary>Plays until the combat ends or hits the action cap. Calls <paramref name="beforeAction"/> before each action.</summary>
     public void PlayOut(ICombatPolicy policy, Action<CombatSession>? beforeAction = null)
     {
         while (!IsCapped)
@@ -285,15 +284,21 @@ internal sealed class CombatSession : IDisposable
         return hash;
     }
 
-    /// <summary>Pumps until the player can act again (on a later turn, if given) or the combat has ended.</summary>
+    /// <summary>Pumps until the player can act again (on a later turn, if given) or the combat has ended. A fight past the
+    /// round cap is lost there (<see cref="FightCap"/>).</summary>
     private void Settle(int? afterTurn = null)
     {
-        _pump.RunUntil(() =>
+        void Pump()
         {
-            if (IsOver) return _pump.Pending == 0 && !RunManager.Instance.ActionExecutor.IsRunning;
-            return WaitingForInput && (afterTurn == null || Pcs.TurnNumber > afterTurn);
-        }, Describe);
-        _pump.Drain();
+            _pump.RunUntil(() =>
+            {
+                if (IsOver) return _pump.Pending == 0 && !RunManager.Instance.ActionExecutor.IsRunning;
+                return WaitingForInput && (afterTurn == null || Pcs.TurnNumber > afterTurn);
+            }, Describe);
+            _pump.Drain();
+        }
+        Pump();
+        if (FightCap.Enforce(_pump, Player, Describe)) Pump();
     }
 
     public string Describe()

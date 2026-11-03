@@ -59,6 +59,26 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// The fight round cap (<see cref="FightCap"/>): a combat built at the cap's last round, at 999 HP that no enemy turn
+    /// takes, is still on there; ending that turn starts round <see cref="FightCap.MaxRounds"/> + 1, and the fight is lost.
+    /// </summary>
+    private static void FightCapLoses(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: new Loadout(Hp: 999, MaxHp: 999));
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
+            obs = session.Observation();
+        obs = obs with { Round = FightCap.MaxRounds };
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
+        bool onAtCap = !built.IsOver && built.State.RoundNumber == FightCap.MaxRounds;
+        built.Execute(built.LegalActions().First(a => a.Kind == CombatActionKind.EndTurn));
+        var errors = HeadlessGame.TakeErrors();
+        check("a fight past the round cap is lost", onAtCap && built.Outcome == CombatOutcome.Loss && errors.Count == 0,
+            $"{pool[0].Id.Entry}: on at round {FightCap.MaxRounds} {onAtCap}, then {built.Outcome} at round {built.State.RoundNumber}, " +
+            $"hp {built.Player.Creature.CurrentHp}, errors {errors.FirstOrDefault()}");
+    }
+
+    /// <summary>
     /// The observation states what a card gathers in a combat, and a combat built from it still reads as built: Murder's
     /// number, the replay of a Spiral, Glam spent once the card is played.
     /// </summary>

@@ -240,16 +240,22 @@ internal sealed class RunSession : IDisposable
         }
     }
 
-    /// <summary>Pumps until the player can act: in combat, their turn (a later one after ending a turn); elsewhere, the game idle.</summary>
+    /// <summary>Pumps until the player can act: in combat, their turn (a later one after ending a turn); elsewhere, the game
+    /// idle. A fight past the round cap is lost there (<see cref="FightCap"/>).</summary>
     public void Settle()
     {
-        _pump.RunUntil(() =>
+        void Pump()
         {
-            if (CombatManager.Instance.IsInProgress)
-                return CombatActions.WaitingForInput(Player) && (_endedTurn == null || Player.PlayerCombatState!.TurnNumber > _endedTurn);
-            return _pump.Pending == 0 && !RunManager.Instance.ActionExecutor.IsRunning;
-        }, Describe);
-        _pump.Drain();
+            _pump.RunUntil(() =>
+            {
+                if (CombatManager.Instance.IsInProgress)
+                    return CombatActions.WaitingForInput(Player) && (_endedTurn == null || Player.PlayerCombatState!.TurnNumber > _endedTurn);
+                return _pump.Pending == 0 && !RunManager.Instance.ActionExecutor.IsRunning;
+            }, Describe);
+            _pump.Drain();
+        }
+        Pump();
+        if (FightCap.Enforce(_pump, Player, Describe)) Pump();
         _endedTurn = null;
         NoteCombatEnd();
         if (_mapHashes.Count == Run.CurrentActIndex && Run.Map is not NullActMap) _mapHashes.Add(MapHash(Run.Map));
