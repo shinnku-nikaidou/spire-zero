@@ -40,16 +40,16 @@
     },
     {
       title: w('Card vectors', '牌向量', '牌向量'),
-      text: w('x = E + u·U + Σ M, 32 numbers. A plain card’s x is E alone; an upgraded one adds U, and ACCELERANT+ also its enchantment’s M.', 'x = E + u·U + Σ M，32 个数。普通牌的 x 就是 E；升级过的再加上 U，ACCELERANT+ 还加上它的附魔的 M。', 'x = E + u·U + Σ M，32 個數。普通牌的 x 就是 E；升級過的再加上 U，ACCELERANT+ 還加上它的附魔的 M。'),
+      text: w('x = E + u·U + Σ M, 64 numbers. A plain card’s x is E alone; an upgraded one adds U, and ACCELERANT+ also its enchantment’s M.', 'x = E + u·U + Σ M，64 个数。普通牌的 x 就是 E；升级过的再加上 U，ACCELERANT+ 还加上它的附魔的 M。', 'x = E + u·U + Σ M，64 個數。普通牌的 x 就是 E；升級過的再加上 U，ACCELERANT+ 還加上它的附魔的 M。'),
       rows: [
         ['DEFEND_SILENT', '[−0.106, −0.196, 0.149, 0.139, …]'], ['STRIKE_SILENT', '[0.116, 0.020, −0.003, −0.149, …]'], ['SNAKEBITE+', '[0.259, 0.497, 0.264, −0.191, …]'], ['ACCELERANT+ (SWIFT)', '[−0.263, 0.333, −0.793, 0.159, …]'],
       ],
     },
     {
       title: w('φ, card by card', 'φ，逐张计算', 'φ，逐張計算'),
-      text: w('The same two layers for each card, 128 numbers, none below 0. Equal cards give equal vectors; no card sees another. The length is the vector’s norm.', '每张牌用同样的两层，128 个数，都不小于 0。相同的牌得到相同的向量，牌与牌互相看不到。长度是向量的范数。', '每張牌用同樣的兩層，128 個數，都不小於 0。相同的牌得到相同的向量，牌與牌互相看不到。長度是向量的範數。'),
+      text: w('The same two layers for each card, 256 numbers, none below 0. Equal cards give equal vectors; no card sees another. The length is the vector’s norm.', '每张牌用同样的两层，256 个数，都不小于 0。相同的牌得到相同的向量，牌与牌互相看不到。长度是向量的范数。', '每張牌用同樣的兩層，256 個數，都不小於 0。相同的牌得到相同的向量，牌與牌互相看不到。長度是向量的範數。'),
       rows: [
-        ['DEFEND_SILENT', '[0.248, 0.182, 0.444, 0.137, …] |3.88|'], ['STRIKE_SILENT', '[0.165, 0.319, 0.280, 0.142, …] |3.54|'], ['SNAKEBITE+', '[1.052, 1.448, 1.035, 0.839, …] |14.80|'], ['ACCELERANT+ (SWIFT)', '[0.298, 0, 0, 0, …] |8.56|'],
+        ['DEFEND_SILENT', '[0.248, 0.182, 0.444, 0.137, …] |3.92|'], ['STRIKE_SILENT', '[0.165, 0.319, 0.280, 0.142, …] |3.58|'], ['SNAKEBITE+', '[1.052, 1.448, 1.035, 0.839, …] |14.86|'], ['ACCELERANT+ (SWIFT)', '[0.298, 0, 0, 0, …] |8.66|'],
       ],
     },
     {
@@ -59,8 +59,8 @@
     },
     {
       title: w('The bags', '四个袋', '四個袋'),
-      text: w('Each bag’s embeddings added up, 32 numbers each, with no layer in between. No potion: the zero vector.', '每个袋的嵌入直接相加，各 32 个数，中间没有任何一层。没有药水，就是零向量。', '每個袋的嵌入直接相加，各 32 個數，中間沒有任何一層。沒有藥水，就是零向量。'),
-      rows: [['relics', '[0.298, −0.681, 0.519, 0.636, …] |2.48|'], ['potions', '[0, 0, 0, 0, …] |0|'], ['context', '[0.083, 0.533, −1.454, 0.369, …] |4.74|'], ['map', '[2.050, 0.177, −0.747, −0.880, …] |3.62|']],
+      text: w('Each bag’s embeddings added up, 64 numbers each, with no layer in between. No potion: the zero vector.', '每个袋的嵌入直接相加，各 64 个数，中间没有任何一层。没有药水，就是零向量。', '每個袋的嵌入直接相加，各 64 個數，中間沒有任何一層。沒有藥水，就是零向量。'),
+      rows: [['relics', '[0.298, −0.681, 0.519, 0.636, …] |3.04|'], ['potions', '[0, 0, 0, 0, …] |0|'], ['context', '[0.083, 0.533, −1.454, 0.369, …] |4.89|'], ['map', '[2.050, 0.177, −0.747, −0.880, …] |3.92|']],
     },
     {
       title: w('Six numbers', '六个数字', '六個數字'),
@@ -69,8 +69,8 @@
     },
     {
       title: w('Join and body', '拼接与主干', '串接與主幹'),
-      text: w('256 + 4 × 32 + 6 = 390 numbers, then two ReLU layers. Here 200 of the first layer’s 256 numbers and 101 of the second’s are above 0.', '256 + 4 × 32 + 6 = 390 个数，再经过两层 ReLU。这里第一层 256 个数有 200 个大于 0，第二层有 101 个。', '256 + 4 × 32 + 6 = 390 個數，再經過兩層 ReLU。這裡第一層 256 個數有 200 個大於 0，第二層有 101 個。'),
-      rows: [['z', '390'], ['b₁', '256 (200 > 0)'], ['b₂', '256 (101 > 0)']],
+      text: w('512 + 4 × 64 + 6 = 774 numbers, then two ReLU layers. Here 349 of the first layer’s 512 numbers and 231 of the second’s are above 0.', '512 + 4 × 64 + 6 = 774 个数，再经过两层 ReLU。这里第一层 512 个数有 349 个大于 0，第二层有 231 个。', '512 + 4 × 64 + 6 = 774 個數，再經過兩層 ReLU。這裡第一層 512 個數有 349 個大於 0，第二層有 231 個。'),
+      rows: [['z', '774'], ['b₁', '512 (349 > 0)'], ['b₂', '512 (231 > 0)']],
     },
     {
       title: w('Hazards and the value', '风险值与价值', '風險值與價值'),

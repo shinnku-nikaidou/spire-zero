@@ -98,9 +98,9 @@
 
   // The body's input, in the order net.py concatenates it.
   const zParts = $derived([
-    { name: t('mean'), size: 128 },
-    { name: t('sum'), size: 128 },
-    ...BAGS.map((b) => ({ name: b, size: 32 })),
+    { name: t('mean'), size: 256 },
+    { name: t('sum'), size: 256 },
+    ...BAGS.map((b) => ({ name: b, size: 64 })),
     { name: t('numbers'), size: 6 },
   ]);
   const unknown = (table: string, ids: string[]) => (v ? ids.filter((id) => !v!.index[table].has(id)).length : 0);
@@ -153,8 +153,8 @@
       <!-- 1. Each card through phi -->
       <div class="grid">
         <div class="head">{t('deck')} ({view.deck.length})</div>
-        <div class="head">x (32)</div>
-        <div class="head">φ(x) (128)</div>
+        <div class="head">x (64)</div>
+        <div class="head">φ(x) (256)</div>
         <div class="head">{t('gain')}</div>
         {#each groups as g (key(g.card))}
           <div class="name" title={names.card(g.card.id, g.card.up ?? 0)}>
@@ -207,11 +207,11 @@
 
       <!-- 3. The body and the heads -->
       <div class="stack">
-        <div class="v-ink2">z = [{zParts.map((p) => `${p.name} ${p.size}`).join(' | ')}] (390)</div>
+        <div class="v-ink2">z = [{zParts.map((p) => `${p.name} ${p.size}`).join(' | ')}] (774)</div>
         <Heat rows={[trace.z]} cell={1.5} height={12} diverging onhover={hover('z')} />
-        <div class="v-ink2">{t('body')}: ReLU(W₁z + b₁) (256)</div>
+        <div class="v-ink2">{t('body')}: ReLU(W₁z + b₁) (512)</div>
         <Heat rows={[trace.body1]} cell={2} height={12} onhover={hover('body₁')} />
-        <div class="v-ink2">{t('body')}: ReLU(W₂h₁ + b₂) (256)</div>
+        <div class="v-ink2">{t('body')}: ReLU(W₂h₁ + b₂) (512)</div>
         <Heat rows={[trace.body2]} cell={2} height={12} onhover={hover('body₂')} />
         <div class="v-ink2">{t('heads')}: σ(hazard) (64) · σ(share) (64)</div>
         <Heat rows={[trace.hazards]} cell={8} height={12} max={1} onhover={hover('hazard')} />

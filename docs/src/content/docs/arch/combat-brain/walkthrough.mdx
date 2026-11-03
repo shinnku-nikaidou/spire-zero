@@ -64,7 +64,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 3. 表项和张量
 
-每个词元变成它在自己的表里的行。上下文能说明这些表怎样工作：它的表项是 <code>{JSON.stringify(walk.tokens.context_entries)}</code>。遭遇的表项是 {walk.tokens.context_entries[1]}；角色、房间和幕不在表里，所以都读作第 0 项 `<unk>`，共三次。
+每个词元变成它在自己的表里的行。上下文能说明这些表怎样工作：它的表项是 <code>{JSON.stringify(walk.tokens.context_entries)}</code>。角色的表项是 {walk.tokens.context_entries[0]}，遭遇的是 {walk.tokens.context_entries[1]}；房间和幕不在表里，所以都读作第 0 项 `<unk>`，共两次。
 
 对这个状态，批次为 1 时，各张量的形状如下：
 
@@ -96,7 +96,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 把第一个数加起来核对一下：0.060 + 0 + 0.144 − 0.007 + 0.192 = 0.389。这个文件里的 $D$ 很小，所以伤害加上的不多（[战斗网络 §8](/arch/combat-brain/network/#sec-8)）。
 
-然后 $\varphi$ 把 $x$ 映射到 64 个数，<code>{v(walk.card.phi.first)}</code>。作为 ReLU 的输出，没有一个低于 0，64 个中有 {walk.card.phi.zeros} 个恰好为 0。
+然后 $\varphi$ 把 $x$ 映射到 128 个数，<code>{v(walk.card.phi.first)}</code>。作为 ReLU 的输出，没有一个低于 0，128 个中有 {walk.card.phi.zeros} 个恰好为 0。
 
 每张牌都经过同一个 $\varphi$，每个牌堆把它的牌加起来并缩放 1/8：
 
@@ -107,11 +107,11 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 | 弃牌堆 | {walk.piles[2].cards} | <code>{v(walk.piles[2].vector.first)}</code> | {walk.piles[2].vector.norm} | {walk.piles[2].vector.zeros} |
 | 消耗堆 | {walk.piles[3].cards} | <code>{v(walk.piles[3].vector.first)}</code> | {walk.piles[3].vector.norm} | {walk.piles[3].vector.zeros} |
 
-空牌堆恰好是零向量。这四个拼接成牌的 256 个数。
+空牌堆恰好是零向量。这四个拼接成牌的 512 个数。
 
 ## 5. 能力
 
-玩家有三个能力，荆棘、敏捷和毒雾，数值是 3、1 和 3，缩放到 0.3、0.1 和 0.3。每个能力的向量是它的 id 的向量加上缩放后的数值乘以它的数值方向。一层 32 → 64 分别映射它们，三个输出之和是 <code>{v(walk.powers.first)}</code>，64 个中有 {walk.powers.zeros} 个为 0。
+玩家有三个能力，荆棘、敏捷和毒雾，数值是 3、1 和 3，缩放到 0.3、0.1 和 0.3。每个能力的向量是它的 id 的向量加上缩放后的数值乘以它的数值方向。一层 64 → 128 分别映射它们，三个输出之和是 <code>{v(walk.powers.first)}</code>，64 个中有 {walk.powers.zeros} 个为 0。
 
 ## 6. 敌人
 
@@ -119,23 +119,23 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 | | 机甲骑士 |
 |---|---|
-| id + 数值（32） | <code>{v(walk.enemies[0].numbers_vector)}</code> |
-| 能力之和（64） | <code>{v(walk.enemies[0].powers_vector)}</code> |
-| 槽 0，4 个槽之一（各 32） | <code>{v(walk.enemies[0].slot_vector)}</code> |
-| 经过 $\varphi$（128）后：长度 | {walk.enemies[0].phi.norm} |
+| id + 数值（64） | <code>{v(walk.enemies[0].numbers_vector)}</code> |
+| 能力之和（128） | <code>{v(walk.enemies[0].powers_vector)}</code> |
+| 槽 0，4 个槽之一（各 64） | <code>{v(walk.enemies[0].slot_vector)}</code> |
+| 经过 $\varphi$（256）后：长度 | {walk.enemies[0].phi.norm} |
 | 经过 $\varphi$ 后：为 0 的数 | {walk.enemies[0].phi.zeros} |
 
-它在敌人表里的表项是 {walk.enemies[0].entry}。敌人的部分是对所有敌人求和。只有一个敌人时就是这个向量：128 个数，长度 {walk.foes.norm}，其中 {walk.foes.zeros} 个为 0。
+它在敌人表里的表项是 {walk.enemies[0].entry}。敌人的部分是对所有敌人求和。只有一个敌人时就是这个向量：256 个数，长度 {walk.foes.norm}，其中 {walk.foes.zeros} 个为 0。
 
 ## 7. 袋
 
 | 部分 | 大小 | 前几个数 | 长度 |
 |---|---|---|---|
-| 遗物，11 件 | 32 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
-| 药水，1 瓶 | 32 | <code>{v(walk.bags.potions.first)}</code> | {walk.bags.potions.norm} |
-| 上下文，4 个词元 | 32 | <code>{v(walk.bags.context.first)}</code> | {walk.bags.context.norm} |
-| 充能球，1 个 | 32 | <code>{v(walk.bags.orbs.first)}</code> | {walk.bags.orbs.norm} |
-| 盟友，没有 | 64 | <code>{v(walk.bags.allies.first)}</code> | {walk.bags.allies.norm} |
+| 遗物，11 件 | 64 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
+| 药水，1 瓶 | 64 | <code>{v(walk.bags.potions.first)}</code> | {walk.bags.potions.norm} |
+| 上下文，4 个词元 | 64 | <code>{v(walk.bags.context.first)}</code> | {walk.bags.context.norm} |
+| 充能球，1 个 | 64 | <code>{v(walk.bags.orbs.first)}</code> | {walk.bags.orbs.norm} |
+| 盟友，没有 | 128 | <code>{v(walk.bags.allies.first)}</code> | {walk.bags.allies.norm} |
 
 袋没有层，所以它的数可以低于 0。只有一瓶药水时，药水的袋恰好是那瓶药水的向量。
 
@@ -162,10 +162,10 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 | 层 | 前几个数 | 长度 | 为 0 的数 |
 |---|---|---|---|
-| 651 → 256 | <code>{v(walk.body[0].first)}</code> | {walk.body[0].norm} | {walk.body[0].zeros} |
-| 256 → 256 | <code>{v(walk.body[1].first)}</code> | {walk.body[1].norm} | {walk.body[1].zeros} |
+| 1291 → 512 | <code>{v(walk.body[0].first)}</code> | {walk.body[0].norm} | {walk.body[0].zeros} |
+| 512 → 512 | <code>{v(walk.body[1].first)}</code> | {walk.body[1].norm} | {walk.body[1].zeros} |
 
-对这个状态，256 个数大多是 0；不为 0 的 {256 - walk.body[1].zeros} 个承载了输出头要读的一切。
+对这个状态，512 个数大多是 0；不为 0 的 {512 - walk.body[1].zeros} 个承载了输出头要读的一切。
 
 ## 10. 结局输出头：51 个 logit
 
@@ -193,7 +193,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 12. 药水输出头
 
-同样的 256 个数经过第二个线性层，256 → {walk.potion.outputs}，药水表的每一项一个输出。药水形状的石头是第 {walk.potion.entry} 项。它的 logit 是 {walk.potion.logit}，sigmoid 把它变成 **{walk.potion.chance}**：网络预计赢下之后这瓶药水还在。
+同样的 512 个数经过第二个线性层，512 → {walk.potion.outputs}，药水表的每一项一个输出。药水形状的石头是第 {walk.potion.entry} 项。它的 logit 是 {walk.potion.logit}，sigmoid 把它变成 **{walk.potion.chance}**：网络预计赢下之后这瓶药水还在。
 
 其他 {walk.potion.outputs - 1} 个输出会算出来，但不读。这里最大的是 {walk.potion.most_likely[0].id} 和 {walk.potion.most_likely[1].id}，分别是 {walk.potion.most_likely[0].chance} 和 {walk.potion.most_likely[1].chance}：这个状态两者都没有，所以它们没有意义，也不训练任何东西。没有哪次训练见过的药水，比如 {walk.potion.unheld}，是 `<unk>` 那一行，显示它的概率 {walk.potion.unk}。
 

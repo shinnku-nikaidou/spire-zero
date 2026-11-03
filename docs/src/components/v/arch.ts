@@ -199,10 +199,10 @@ const T = {
     '(x − μ)/σ，用网络文件里存的训练数据均值和标准差：6 个数。',
     '(x − μ)/σ，用網路檔案裡存的訓練資料平均和標準差：6 個數。',
   ),
-  body1: (n: number) => w(`Linear + ReLU\n${n} → 256`, `线性层 + ReLU\n${n} → 256`, `線性層 + ReLU\n${n} → 256`),
-  body1Info: w('The body’s first layer: 256 numbers.', '主干第一层：256 个数。', '主幹第一層：256 個數。'),
-  body2: w('Linear + ReLU\n256 → 256', '线性层 + ReLU\n256 → 256', '線性層 + ReLU\n256 → 256'),
-  body2Info: w('The body’s second layer: 256 numbers, which the heads read.', '主干第二层：256 个数，输出头读它。', '主幹第二層：256 個數，輸出頭讀它。'),
+  body1: (n: number) => w(`Linear + ReLU\n${n.toLocaleString('en-US')} → 512`, `线性层 + ReLU\n${n.toLocaleString('en-US')} → 512`, `線性層 + ReLU\n${n.toLocaleString('en-US')} → 512`),
+  body1Info: w('The body’s first layer: 512 numbers.', '主干第一层：512 个数。', '主幹第一層：512 個數。'),
+  body2: w('Linear + ReLU\n512 → 512', '线性层 + ReLU\n512 → 512', '線性層 + ReLU\n512 → 512'),
+  body2Info: w('The body’s second layer: 512 numbers, which the heads read.', '主干第二层：512 个数，输出头读它。', '主幹第二層：512 個數，輸出頭讀它。'),
 };
 
 function numbers(lang: Lang): Column {
@@ -228,12 +228,12 @@ export function valueNet(lang: Lang): Diagram {
     input: L(input),
     narrow: true,
     items: [
-      { kind: 'block', label: L(w('Embeddings\n32 each', '嵌入\n每个 32', '嵌入\n每個 32')), tone: 'embed', info: L(info) },
+      { kind: 'block', label: L(w('Embeddings\n64 each', '嵌入\n每个 64', '嵌入\n每個 64')), tone: 'embed', info: L(info) },
       {
         kind: 'block',
         label: L(w('Sum', '求和', '加總')),
         tone: 'pool',
-        info: L(w('The bag’s vectors added up, padding left out: 32 numbers.', '袋里的向量相加（不含补齐位置）：32 个数。', '袋裡的向量相加（不含補齊位置）：32 個數。')),
+        info: L(w('The bag’s vectors added up, padding left out: 64 numbers.', '袋里的向量相加（不含补齐位置）：64 个数。', '袋裡的向量相加（不含補齊位置）：64 個數。')),
       },
     ],
   });
@@ -245,24 +245,24 @@ export function valueNet(lang: Lang): Diagram {
         items: [
           {
             kind: 'block',
-            label: L(w('Card vector\nE + u·U + Σ M: 32', '牌向量\nE + u·U + Σ M：32', '牌向量\nE + u·U + Σ M：32')),
+            label: L(w('Card vector\nE + u·U + Σ M: 64', '牌向量\nE + u·U + Σ M：64', '牌向量\nE + u·U + Σ M：64')),
             tone: 'embed',
-            info: L(w('x = E[c] + u·U[c] + Σ M[m]: the id’s vector, u steps along its upgrade direction, its modifiers: 32 numbers per card.', 'x = E[c] + u·U[c] + Σ M[m]：id 的向量，沿它的升级方向走 u 步，再加修饰：每张牌 32 个数。', 'x = E[c] + u·U[c] + Σ M[m]：id 的向量，沿它的升級方向走 u 步，再加修飾：每張牌 32 個數。')),
+            info: L(w('x = E[c] + u·U[c] + Σ M[m]: the id’s vector, u steps along its upgrade direction, its modifiers: 64 numbers per card.', 'x = E[c] + u·U[c] + Σ M[m]：id 的向量，沿它的升级方向走 u 步，再加修饰：每张牌 64 个数。', 'x = E[c] + u·U[c] + Σ M[m]：id 的向量，沿它的升級方向走 u 步，再加修飾：每張牌 64 個數。')),
           },
           {
             kind: 'repeat',
             times: 'φ',
             info: L(w('The same two layers for every card, each card on its own: no card sees another here.', '每张牌用同样的两层，各自独立：这里牌与牌互相看不到。', '每張牌用同樣的兩層，各自獨立：這裡牌與牌互相看不到。')),
             items: [
-              { kind: 'block', label: L(w('Linear + ReLU\n32 → 128', '线性层 + ReLU\n32 → 128', '線性層 + ReLU\n32 → 128')), tone: 'ff', info: L(w('φ’s first layer: 128 numbers per card.', 'φ 的第一层：每张牌 128 个数。', 'φ 的第一層：每張牌 128 個數。')) },
-              { kind: 'block', label: L(w('Linear + ReLU\n128 → 128', '线性层 + ReLU\n128 → 128', '線性層 + ReLU\n128 → 128')), tone: 'ff', info: L(w('φ’s second layer: 128 numbers per card, none below 0.', 'φ 的第二层：每张牌 128 个数，都不小于 0。', 'φ 的第二層：每張牌 128 個數，都不小於 0。')) },
+              { kind: 'block', label: L(w('Linear + ReLU\n64 → 256', '线性层 + ReLU\n64 → 256', '線性層 + ReLU\n64 → 256')), tone: 'ff', info: L(w('φ’s first layer: 256 numbers per card.', 'φ 的第一层：每张牌 256 个数。', 'φ 的第一層：每張牌 256 個數。')) },
+              { kind: 'block', label: L(w('Linear + ReLU\n256 → 256', '线性层 + ReLU\n256 → 256', '線性層 + ReLU\n256 → 256')), tone: 'ff', info: L(w('φ’s second layer: 256 numbers per card, none below 0.', 'φ 的第二层：每张牌 256 个数，都不小于 0。', 'φ 的第二層：每張牌 256 個數，都不小於 0。')) },
             ],
           },
           {
             kind: 'block',
             label: L(w('Mean + sum ÷ 16', '均值 + 和 ÷ 16', '平均 + 總和 ÷ 16')),
             tone: 'pool',
-            info: L(w('The cards pooled two ways, padding left out: 128 + 128 = 256 numbers, the same vector at two scales, which together also give the deck’s size.', '牌用两种方式汇总（不含补齐位置）：128 + 128 = 256 个数，是同一个向量的两种比例，合起来也给出牌数。', '牌用兩種方式匯總（不含補齊位置）：128 + 128 = 256 個數，是同一個向量的兩種比例，合起來也給出牌數。')),
+            info: L(w('The cards pooled two ways, padding left out: 256 + 256 = 512 numbers, the same vector at two scales, which together also give the deck’s size.', '牌用两种方式汇总（不含补齐位置）：256 + 256 = 512 个数，是同一个向量的两种比例，合起来也给出牌数。', '牌用兩種方式匯總（不含補齊位置）：256 + 256 = 512 個數，是同一個向量的兩種比例，合起來也給出牌數。')),
           },
         ],
       },
@@ -274,18 +274,18 @@ export function valueNet(lang: Lang): Diagram {
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 256 + 32 + 32 + 32 + 32 + 6 = 390', '拼接：256 + 32 + 32 + 32 + 32 + 6 = 390', '串接：256 + 32 + 32 + 32 + 32 + 6 = 390')),
+      label: L(w('Concatenate: 512 + 64 + 64 + 64 + 64 + 6 = 774', '拼接：512 + 64 + 64 + 64 + 64 + 6 = 774', '串接：512 + 64 + 64 + 64 + 64 + 6 = 774')),
       tone: 'norm',
-      info: L(w('One vector of 390 numbers. The parts meet only from here on.', '一个 390 个数的向量。各部分从这里才开始相遇。', '一個 390 個數的向量。各部分從這裡才開始相遇。')),
+      info: L(w('One vector of 774 numbers. The parts meet only from here on.', '一个 774 个数的向量。各部分从这里才开始相遇。', '一個 774 個數的向量。各部分從這裡才開始相遇。')),
     },
     top: [
       {
         kind: 'repeat',
         times: 'MLP',
-        info: L(w('The body: every relation between the parts is worked out here. A second head, used only in training, reads its output too: Linear 256 → 7, not in the net file.', '主干：各部分之间的关系都在这里算出来。训练时另有第二个输出头也读它的输出：线性层 256 → 7，不进网络文件。', '主幹：各部分之間的關係都在這裡算出來。訓練時另有第二個輸出頭也讀它的輸出：線性層 256 → 7，不進網路檔案。')),
-        items: body(lang, 390),
+        info: L(w('The body: every relation between the parts is worked out here. A second head, used only in training, reads its output too: Linear 512 → 7, not in the net file.', '主干：各部分之间的关系都在这里算出来。训练时另有第二个输出头也读它的输出：线性层 512 → 7，不进网络文件。', '主幹：各部分之間的關係都在這裡算出來。訓練時另有第二個輸出頭也讀它的輸出：線性層 512 → 7，不進網路檔案。')),
+        items: body(lang, 774),
       },
-      { kind: 'block', label: L(w('Hazard head\nLinear 256 → 64', '风险值输出头\n线性层 256 → 64', '風險值輸出頭\n線性層 256 → 64')), tone: 'head', info: L(w('One logit per floor, 0 to 63.', '每层一个 logit，0 到 63。', '每層一個 logit，0 到 63。')) },
+      { kind: 'block', label: L(w('Hazard head\nLinear 512 → 64', '风险值输出头\n线性层 512 → 64', '風險值輸出頭\n線性層 512 → 64')), tone: 'head', info: L(w('One logit per floor, 0 to 63.', '每层一个 logit，0 到 63。', '每層一個 logit，0 到 63。')) },
       {
         kind: 'block',
         label: L(w('Sigmoid: 64 h_g', 'Sigmoid：64 个 h_g', 'Sigmoid：64 個 h_g')),
@@ -314,15 +314,15 @@ export function combatNet(lang: Lang): Diagram {
             tone: 'embed',
             info: L(
               w(
-                'Its id, upgrade level, modifier tokens (enchantment, affliction, keywords, Tinker, spent) and amounts, pile, current energy and star costs, damage, block, calculated number, replays and gathered damage; 32 numbers per card.',
-                '它的 id、升级等级、修饰词元（附魔、诅咒、关键词、Tinker、已用）和数值、所在牌堆、当前能量与星辰费用、伤害、格挡、计算出的数字、额外打出次数和附魔累积的伤害；每张牌 32 个数。',
-                '它的 id、升級等級、修飾詞元（附魔、詛咒、關鍵字、Tinker、已用）和數值、所在牌堆、目前能量與星辰費用、傷害、格擋、計算出的數字、額外打出次數和附魔累積的傷害；每張牌 32 個數。',
+                'Its id, upgrade level, modifier tokens (enchantment, affliction, keywords, Tinker, spent) and amounts, pile, current energy and star costs, damage, block, calculated number, replays and gathered damage; 64 numbers per card.',
+                '它的 id、升级等级、修饰词元（附魔、诅咒、关键词、Tinker、已用）和数值、所在牌堆、当前能量与星辰费用、伤害、格挡、计算出的数字、额外打出次数和附魔累积的伤害；每张牌 64 个数。',
+                '它的 id、升級等級、修飾詞元（附魔、詛咒、關鍵字、Tinker、已用）和數值、所在牌堆、目前能量與星辰費用、傷害、格擋、計算出的數字、額外打出次數和附魔累積的傷害；每張牌 64 個數。',
               ),
             ),
           },
           {
             kind: 'block',
-            label: L(w('φ: Linear + ReLU\n32 → 64 → 64', 'φ：线性层 + ReLU\n32 → 64 → 64', 'φ：線性層 + ReLU\n32 → 64 → 64')),
+            label: L(w('φ: Linear + ReLU\n64 → 128 → 128', 'φ：线性层 + ReLU\n64 → 128 → 128', 'φ：線性層 + ReLU\n64 → 128 → 128')),
             tone: 'ff',
             info: L(w('The card network, applied to each card on its own.', '卡牌网络，对每张牌单独作用。', '卡牌網路，對每張牌單獨作用。')),
           },
@@ -330,7 +330,7 @@ export function combatNet(lang: Lang): Diagram {
             kind: 'block',
             label: L(w('Sum per pile × 1/8', '每堆求和 × 1/8', '每堆加總 × 1/8')),
             tone: 'pool',
-            info: L(w('Each pile’s cards summed, times 1/8: 4 piles × 64 = 256 numbers.', '每一堆的牌相加，乘 1/8：4 堆 × 64 = 256 个数。', '每一堆的牌相加，乘 1/8：4 堆 × 64 = 256 個數。')),
+            info: L(w('Each pile’s cards summed, times 1/8: 4 piles × 128 = 512 numbers.', '每一堆的牌相加，乘 1/8：4 堆 × 128 = 512 个数。', '每一堆的牌相加，乘 1/8：4 堆 × 128 = 512 個數。')),
           },
         ],
       },
@@ -340,23 +340,23 @@ export function combatNet(lang: Lang): Diagram {
         items: [
           {
             kind: 'block',
-            label: L(w('32 + 64 + 4 × 32 = 224', '32 + 64 + 4 × 32 = 224', '32 + 64 + 4 × 32 = 224')),
+            label: L(w('64 + 128 + 4 × 64 = 448', '64 + 128 + 4 × 64 = 448', '64 + 128 + 4 × 64 = 448')),
             tone: 'embed',
             info: L(
               w(
-                'Per living enemy: its id and numbers, 32; its powers through the powers’ φ and summed, 64; 4 intent slots, its intents now and in its last 3 rounds, 32 each.',
-                '每个活着的敌人：id 和数值，32；它的能力经能力的 φ 后求和，64；4 个意图槽，当前和最近 3 回合的意图，各 32。',
-                '每個活著的敵人：id 和數值，32；它的能力經能力的 φ 後加總，64；4 個意圖槽，目前和最近 3 回合的意圖，各 32。',
+                'Per enemy: its id and numbers, 64; its powers through the powers’ φ and summed, 128; 4 intent slots, its intents now and in its last 3 rounds, 64 each.',
+                '每个敌人：id 和数值，64；它的能力经能力的 φ 后求和，128；4 个意图槽，当前和最近 3 回合的意图，各 64。',
+                '每個敵人：id 和數值，64；它的能力經能力的 φ 後加總，128；4 個意圖槽，目前和最近 3 回合的意圖，各 64。',
               ),
             ),
           },
           {
             kind: 'block',
-            label: L(w('φ: Linear + ReLU\n224 → 128 → 128', 'φ：线性层 + ReLU\n224 → 128 → 128', 'φ：線性層 + ReLU\n224 → 128 → 128')),
+            label: L(w('φ: Linear + ReLU\n448 → 256 → 256', 'φ：线性层 + ReLU\n448 → 256 → 256', 'φ：線性層 + ReLU\n448 → 256 → 256')),
             tone: 'ff',
             info: L(w('The enemy network, applied to each enemy on its own.', '敌人网络，对每个敌人单独作用。', '敵人網路，對每個敵人單獨作用。')),
           },
-          sum(w('The enemies summed: 128 numbers.', '敌人相加：128 个数。', '敵人相加：128 個數。')),
+          sum(w('The enemies summed: 256 numbers.', '敌人相加：256 个数。', '敵人相加：256 個數。')),
         ],
       },
       {
@@ -368,15 +368,15 @@ export function combatNet(lang: Lang): Diagram {
             kind: 'block',
             label: L(w('Embeddings', '嵌入', '嵌入')),
             tone: 'embed',
-            info: L(w('Id, amount, stacks, moved number and kept or stolen card: 32 numbers per power.', 'id、层数、堆叠数、偏移量和保留或偷走的牌：每个能力 32 个数。', 'id、層數、堆疊數、移動的數字和保留或偷走的牌：每個能力 32 個數。')),
+            info: L(w('Id, amount, stacks, moved number and kept or stolen card: 64 numbers per power.', 'id、层数、堆叠数、偏移量和保留或偷走的牌：每个能力 64 个数。', 'id、層數、堆疊數、移動的數字和保留或偷走的牌：每個能力 64 個數。')),
           },
           {
             kind: 'block',
-            label: L(w('φ: Linear + ReLU\n32 → 64', 'φ：线性层 + ReLU\n32 → 64', 'φ：線性層 + ReLU\n32 → 64')),
+            label: L(w('φ: Linear + ReLU\n64 → 128', 'φ：线性层 + ReLU\n64 → 128', 'φ：線性層 + ReLU\n64 → 128')),
             tone: 'ff',
             info: L(w('The powers’ network; the same weights read each enemy’s powers.', '能力网络；每个敌人的能力也由同一组权重读取。', '能力網路；每個敵人的能力也由同一組權重讀取。')),
           },
-          sum(w('The powers summed: 64 numbers.', '能力相加：64 个数。', '能力相加：64 個數。')),
+          sum(w('The powers summed: 128 numbers.', '能力相加：128 个数。', '能力相加：128 個數。')),
         ],
       },
       {
@@ -399,13 +399,13 @@ export function combatNet(lang: Lang): Diagram {
         items: [
           {
             kind: 'block',
-            label: L(w('4 × 32 + 64 + 3', '4 × 32 + 64 + 3', '4 × 32 + 64 + 3')),
+            label: L(w('4 × 64 + 128 + 3', '4 × 64 + 128 + 3', '4 × 64 + 128 + 3')),
             tone: 'embed',
             info: L(
               w(
-                'Relics (id, counter, melted and status), potions, the context (the encounter and the character; act and room read as unknown) and orbs (id, passive, evoke and place in the queue), 32 each; allies through their own φ, 64; the ascension, orb slots and gold, 3.',
-                '遗物（id、计数、熔化和状态）、药水、上下文（遭遇和角色；幕和房间读作未知）和充能球（id、被动值、激发值和队列中的位置），各 32；盟友经自己的 φ，64；进阶、充能球栏位和金币，3。',
-                '遺物（id、計數、熔化和狀態）、藥水、上下文（遭遇和角色；幕和房間讀作未知）和充能球（id、被動值、激發值和佇列中的位置），各 32；盟友經自己的 φ，64；晉階、充能球欄位和金幣，3。',
+                'Relics (id, counter, melted and status), potions, the context (the encounter and the character; act and room read as unknown) and orbs (id, passive, evoke and place in the queue), 64 each; allies through their own φ, 128; the ascension, orb slots and gold, 3.',
+                '遗物（id、计数、熔化和状态）、药水、上下文（遭遇和角色；幕和房间读作未知）和充能球（id、被动值、激发值和队列中的位置），各 64；盟友经自己的 φ，128；进阶、充能球栏位和金币，3。',
+                '遺物（id、計數、熔化和狀態）、藥水、上下文（遭遇和角色；幕和房間讀作未知）和充能球（id、被動值、激發值和佇列中的位置），各 64；盟友經自己的 φ，128；晉階、充能球欄位和金幣，3。',
               ),
             ),
           },
@@ -414,15 +414,15 @@ export function combatNet(lang: Lang): Diagram {
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 256 + 128 + 64 + 8 + 195 = 651', '拼接：256 + 128 + 64 + 8 + 195 = 651', '串接：256 + 128 + 64 + 8 + 195 = 651')),
+      label: L(w('Concatenate: 512 + 256 + 128 + 8 + 387 = 1,291', '拼接：512 + 256 + 128 + 8 + 387 = 1,291', '串接：512 + 256 + 128 + 8 + 387 = 1,291')),
       tone: 'norm',
-      info: L(w('One vector of 651 numbers.', '一个 651 个数的向量。', '一個 651 個數的向量。')),
+      info: L(w('One vector of 1,291 numbers.', '一个 1,291 个数的向量。', '一個 1,291 個數的向量。')),
     },
     top: [
-      ...body(lang, 651),
+      ...body(lang, 1291),
       {
         kind: 'block',
-        label: L(w('Endings head\n256 → 51', '结局输出头\n256 → 51', '結局輸出頭\n256 → 51')),
+        label: L(w('Endings head\n512 → 51', '结局输出头\n512 → 51', '結局輸出頭\n512 → 51')),
         tone: 'head',
         info: L(
           w(
@@ -446,18 +446,18 @@ export function combatNet(lang: Lang): Diagram {
       },
       {
         kind: 'block',
-        label: L(w('Potion head\n256 → 53, sigmoid', '药水输出头\n256 → 53，sigmoid', '藥水輸出頭\n256 → 53，sigmoid')),
+        label: L(w('Potion head\n512 → 66, sigmoid', '药水输出头\n512 → 66，sigmoid', '藥水輸出頭\n512 → 66，sigmoid')),
         tone: 'head',
         info: L(
           w(
-            'Beside the endings, from the same 256 numbers: one chance per potion id of being gone after a win. Only the potions held are read.',
-            '和结局并列，读同样的 256 个数：每个药水 id 一个机率，表示获胜后它已不在。只读现在持有的药水。',
-            '和結局並列，讀同樣的 256 個數：每個藥水 id 一個機率，表示獲勝後它已不在。只讀現在持有的藥水。',
+            'Beside the endings, from the same 512 numbers: one chance per potion id of being gone after a win. Only the potions held are read.',
+            '和结局并列，读同样的 512 个数：每个药水 id 一个机率，表示获胜后它已不在。只读现在持有的药水。',
+            '和結局並列，讀同樣的 512 個數：每個藥水 id 一個機率，表示獲勝後它已不在。只讀現在持有的藥水。',
           ),
         ),
       },
     ],
-    output: L(w('outcome: 51 chances · potion_used: 53 chances\n→ priced into the leaf’s value', 'outcome：51 个机率 · potion_used：53 个机率\n→ 定价成叶子估值', 'outcome：51 個機率 · potion_used：53 個機率\n→ 定價成葉節點估值')),
+    output: L(w('outcome: 51 chances · potion_used: 66 chances\n→ priced into the leaf’s value', 'outcome：51 个机率 · potion_used：66 个机率\n→ 定价成叶子估值', 'outcome：51 個機率 · potion_used：66 個機率\n→ 定價成葉節點估值')),
     links: [],
   };
 }

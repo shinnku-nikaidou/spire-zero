@@ -343,7 +343,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
             "outputs": len(table),
             "most_likely": [{"id": table[k], "chance": round(float(gone[k]), 3)} for k in ranked[:3]],
             "unk": round(float(gone[0]), 3),
-            "unheld": next(table[k] for k in range(1, len(table)) if torch.equal(net.potions.weight[k], net.potions.weight[0])),
+            "unheld": next(table[k] for k in range(1, len(table)) if torch.equal(net.potion_head.weight[k], net.potion_head.weight[0])),
         },
         "value": valued(outcome, gone, obs, index, width),
         "siblings": siblings,

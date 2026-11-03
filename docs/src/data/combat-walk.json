@@ -558,15 +558,15 @@
    0.146
   ],
   "phi": {
-   "size": 64,
+   "size": 128,
    "first": [
     0.0,
     0.0,
     0.0,
     0.0
    ],
-   "norm": 1.385,
-   "zeros": 59
+   "norm": 1.542,
+   "zeros": 89
   }
  },
  "twin_in_another_pile": false,
@@ -575,73 +575,73 @@
    "pile": "hand",
    "cards": 5,
    "vector": {
-    "size": 64,
+    "size": 128,
     "first": [
      0.0,
      0.0,
      0.145,
      0.144
     ],
-    "norm": 2.762,
-    "zeros": 29
+    "norm": 2.819,
+    "zeros": 45
    }
   },
   {
    "pile": "draw",
    "cards": 2,
    "vector": {
-    "size": 64,
+    "size": 128,
     "first": [
      0.0,
      0.0,
      0.0,
      0.0
     ],
-    "norm": 0.411,
-    "zeros": 47
+    "norm": 0.437,
+    "zeros": 67
    }
   },
   {
    "pile": "discard",
    "cards": 24,
    "vector": {
-    "size": 64,
+    "size": 128,
     "first": [
      0.0,
      0.0,
      0.018,
      0.108
     ],
-    "norm": 2.785,
-    "zeros": 20
+    "norm": 3.21,
+    "zeros": 22
    }
   },
   {
    "pile": "exhaust",
    "cards": 4,
    "vector": {
-    "size": 64,
+    "size": 128,
     "first": [
      0.0,
      0.0,
      0.092,
      0.0
     ],
-    "norm": 0.753,
-    "zeros": 43
+    "norm": 0.817,
+    "zeros": 61
    }
   }
  ],
  "powers": {
-  "size": 64,
+  "size": 128,
   "first": [
    0.0,
    0.0,
    0.358,
    0.322
   ],
-  "norm": 1.629,
-  "zeros": 37
+  "norm": 2.155,
+  "zeros": 56
  },
  "enemies": [
   {
@@ -732,76 +732,76 @@
     -0.177
    ],
    "phi": {
-    "size": 128,
+    "size": 256,
     "first": [
      0.0,
      0.0,
      0.0,
      0.0
     ],
-    "norm": 5.652,
-    "zeros": 107
+    "norm": 6.072,
+    "zeros": 163
    }
   }
  ],
  "foes": {
-  "size": 128,
+  "size": 256,
   "first": [
    0.0,
    0.0,
    0.0,
    0.0
   ],
-  "norm": 5.652,
-  "zeros": 107
+  "norm": 6.072,
+  "zeros": 163
  },
  "bags": {
   "relics": {
-   "size": 32,
+   "size": 64,
    "first": [
     0.437,
     0.132,
     -1.528,
     0.109
    ],
-   "norm": 3.674,
+   "norm": 6.651,
    "zeros": 0
   },
   "potions": {
-   "size": 32,
+   "size": 64,
    "first": [
     0.0,
     -0.214,
     0.188,
     0.324
    ],
-   "norm": 1.103,
+   "norm": 1.187,
    "zeros": 0
   },
   "context": {
-   "size": 32,
+   "size": 64,
    "first": [
     -0.094,
     0.301,
     -0.024,
     -0.21
    ],
-   "norm": 1.424,
+   "norm": 1.919,
    "zeros": 0
   },
   "orbs": {
-   "size": 32,
+   "size": 64,
    "first": [
     -0.234,
     -0.186,
     -0.024,
     -0.045
    ],
-   "norm": 0.888,
+   "norm": 1.135,
    "zeros": 0
   },
   "allies": {
-   "size": 64,
+   "size": 128,
    "first": [
     0.0,
     0.0,
@@ -809,13 +809,13 @@
     0.0
    ],
    "norm": 0.0,
-   "zeros": 64
+   "zeros": 128
   }
  },
  "join": [
   {
    "part": "cards",
-   "size": 256,
+   "size": 512,
    "first": [
     0.0,
     0.0,
@@ -835,7 +835,7 @@
   },
   {
    "part": "powers",
-   "size": 64,
+   "size": 128,
    "first": [
     0.0,
     0.0,
@@ -845,7 +845,7 @@
   },
   {
    "part": "enemies",
-   "size": 128,
+   "size": 256,
    "first": [
     0.0,
     0.0,
@@ -855,7 +855,7 @@
   },
   {
    "part": "relics",
-   "size": 32,
+   "size": 64,
    "first": [
     0.437,
     0.132,
@@ -865,7 +865,7 @@
   },
   {
    "part": "potions",
-   "size": 32,
+   "size": 64,
    "first": [
     0.0,
     -0.214,
@@ -875,7 +875,7 @@
   },
   {
    "part": "context",
-   "size": 32,
+   "size": 64,
    "first": [
     -0.094,
     0.301,
@@ -885,7 +885,7 @@
   },
   {
    "part": "orbs",
-   "size": 32,
+   "size": 64,
    "first": [
     -0.234,
     -0.186,
@@ -895,7 +895,7 @@
   },
   {
    "part": "allies",
-   "size": 64,
+   "size": 128,
    "first": [
     0.0,
     0.0,
@@ -914,38 +914,38 @@
   }
  ],
  "z": {
-  "size": 651,
+  "size": 1291,
   "first": [
    0.0,
    0.0,
    0.145,
    0.144
   ],
-  "norm": 9.142,
-  "zeros": 349
+  "norm": 11.251,
+  "zeros": 544
  },
  "body": [
   {
-   "size": 256,
+   "size": 512,
    "first": [
     0.369,
     0.0,
     0.0,
     0.0
    ],
-   "norm": 8.775,
-   "zeros": 209
+   "norm": 8.964,
+   "zeros": 318
   },
   {
-   "size": 256,
+   "size": 512,
    "first": [
     0.0,
     0.0,
     0.0,
     0.0
    ],
-   "norm": 6.4,
-   "zeros": 220
+   "norm": 6.905,
+   "zeros": 340
   }
  ],
  "head": {
@@ -2934,365 +2934,365 @@
   "pile": {
    "shape": [
     4,
-    32
+    64
    ],
-   "weights": 128
+   "weights": 256
   },
   "slot": {
    "shape": [
     4,
-    32
+    64
    ],
-   "weights": 128
+   "weights": 256
   },
   "cost": {
    "shape": [
-    32
+    64
    ],
-   "weights": 32
+   "weights": 64
   },
   "damage": {
    "shape": [
-    32
+    64
    ],
-   "weights": 32
+   "weights": 64
   },
   "stars": {
    "shape": [
-    32
+    64
    ],
-   "weights": 32
+   "weights": 64
   },
   "gathered": {
    "shape": [
-    32
+    64
    ],
-   "weights": 32
+   "weights": 64
   },
   "melted": {
    "shape": [
-    32
+    64
    ],
-   "weights": 32
+   "weights": 64
   },
   "cards.weight": {
    "shape": [
     597,
-    32
+    64
    ],
-   "weights": 19104
+   "weights": 38208
   },
   "modifiers.weight": {
    "shape": [
     57,
-    32
+    64
    ],
-   "weights": 1824
+   "weights": 3648
   },
   "enemies.weight": {
    "shape": [
     121,
-    32
+    64
    ],
-   "weights": 3872
+   "weights": 7744
   },
   "intents.weight": {
    "shape": [
     16,
-    32
+    64
    ],
-   "weights": 512
+   "weights": 1024
   },
   "relics.weight": {
    "shape": [
     310,
-    32
+    64
    ],
-   "weights": 9920
+   "weights": 19840
   },
   "potions.weight": {
    "shape": [
     66,
-    32
+    64
    ],
-   "weights": 2112
+   "weights": 4224
   },
   "context.weight": {
    "shape": [
     96,
-    32
+    64
    ],
-   "weights": 3072
+   "weights": 6144
   },
   "orbs.weight": {
    "shape": [
     6,
-    32
+    64
    ],
-   "weights": 192
+   "weights": 384
   },
   "allies.weight": {
    "shape": [
     121,
-    32
+    64
    ],
-   "weights": 3872
+   "weights": 7744
   },
   "relic_status.weight": {
    "shape": [
     5,
-    32
+    64
    ],
-   "weights": 160
+   "weights": 320
   },
   "card_up.weight": {
    "shape": [
     597,
-    32
+    64
    ],
-   "weights": 19104
+   "weights": 38208
   },
   "card_damage.weight": {
    "shape": [
     597,
-    32
+    64
    ],
-   "weights": 19104
+   "weights": 38208
   },
   "card_block.weight": {
    "shape": [
     597,
-    32
+    64
    ],
-   "weights": 19104
+   "weights": 38208
   },
   "card_calc.weight": {
    "shape": [
     597,
-    32
+    64
    ],
-   "weights": 19104
+   "weights": 38208
   },
   "card_replay.weight": {
    "shape": [
     597,
-    32
+    64
    ],
-   "weights": 19104
+   "weights": 38208
   },
   "mod_amount.weight": {
    "shape": [
     57,
-    32
+    64
    ],
-   "weights": 1824
+   "weights": 3648
   },
   "relic_counter.weight": {
    "shape": [
     310,
-    32
+    64
    ],
-   "weights": 9920
+   "weights": 19840
   },
   "powers.weight": {
    "shape": [
     266,
-    32
+    64
    ],
-   "weights": 8512
+   "weights": 17024
   },
   "power_amount.weight": {
    "shape": [
     266,
-    32
+    64
    ],
-   "weights": 8512
+   "weights": 17024
   },
   "power_stacks.weight": {
    "shape": [
     266,
-    32
+    64
    ],
-   "weights": 8512
+   "weights": 17024
   },
   "power_detail.weight": {
    "shape": [
     266,
-    32
+    64
    ],
-   "weights": 8512
+   "weights": 17024
   },
   "intent_damage.weight": {
    "shape": [
     16,
-    32
+    64
    ],
-   "weights": 512
+   "weights": 1024
   },
   "intent_total.weight": {
    "shape": [
     16,
-    32
+    64
    ],
-   "weights": 512
+   "weights": 1024
   },
   "orb_passive.weight": {
    "shape": [
     6,
-    32
+    64
    ],
-   "weights": 192
+   "weights": 384
   },
   "orb_evoke.weight": {
    "shape": [
     6,
-    32
+    64
    ],
-   "weights": 192
+   "weights": 384
   },
   "orb_at.weight": {
    "shape": [
     60,
-    32
+    64
    ],
-   "weights": 1920
+   "weights": 3840
   },
   "card_phi.0.weight": {
    "shape": [
-    64,
-    32
+    128,
+    64
    ],
-   "weights": 2048
+   "weights": 8192
   },
   "card_phi.0.bias": {
-   "shape": [
-    64
-   ],
-   "weights": 64
-  },
-  "card_phi.2.weight": {
-   "shape": [
-    64,
-    64
-   ],
-   "weights": 4096
-  },
-  "card_phi.2.bias": {
-   "shape": [
-    64
-   ],
-   "weights": 64
-  },
-  "power_phi.0.weight": {
-   "shape": [
-    64,
-    32
-   ],
-   "weights": 2048
-  },
-  "power_phi.0.bias": {
-   "shape": [
-    64
-   ],
-   "weights": 64
-  },
-  "enemy_scalars.weight": {
-   "shape": [
-    32,
-    5
-   ],
-   "weights": 160
-  },
-  "enemy_scalars.bias": {
-   "shape": [
-    32
-   ],
-   "weights": 32
-  },
-  "enemy_phi.0.weight": {
-   "shape": [
-    128,
-    224
-   ],
-   "weights": 28672
-  },
-  "enemy_phi.0.bias": {
    "shape": [
     128
    ],
    "weights": 128
   },
-  "enemy_phi.2.weight": {
+  "card_phi.2.weight": {
    "shape": [
     128,
     128
    ],
    "weights": 16384
   },
-  "enemy_phi.2.bias": {
+  "card_phi.2.bias": {
    "shape": [
     128
    ],
    "weights": 128
   },
-  "ally_scalars.weight": {
+  "power_phi.0.weight": {
    "shape": [
-    32,
-    4
+    128,
+    64
+   ],
+   "weights": 8192
+  },
+  "power_phi.0.bias": {
+   "shape": [
+    128
    ],
    "weights": 128
   },
-  "ally_scalars.bias": {
-   "shape": [
-    32
-   ],
-   "weights": 32
-  },
-  "ally_phi.0.weight": {
+  "enemy_scalars.weight": {
    "shape": [
     64,
-    96
+    5
    ],
-   "weights": 6144
+   "weights": 320
   },
-  "ally_phi.0.bias": {
+  "enemy_scalars.bias": {
    "shape": [
     64
    ],
    "weights": 64
   },
-  "body.0.weight": {
+  "enemy_phi.0.weight": {
    "shape": [
     256,
-    651
+    448
    ],
-   "weights": 166656
+   "weights": 114688
   },
-  "body.0.bias": {
+  "enemy_phi.0.bias": {
    "shape": [
     256
    ],
    "weights": 256
   },
-  "body.2.weight": {
+  "enemy_phi.2.weight": {
    "shape": [
     256,
     256
    ],
    "weights": 65536
   },
-  "body.2.bias": {
+  "enemy_phi.2.bias": {
    "shape": [
     256
    ],
    "weights": 256
   },
+  "ally_scalars.weight": {
+   "shape": [
+    64,
+    4
+   ],
+   "weights": 256
+  },
+  "ally_scalars.bias": {
+   "shape": [
+    64
+   ],
+   "weights": 64
+  },
+  "ally_phi.0.weight": {
+   "shape": [
+    128,
+    192
+   ],
+   "weights": 24576
+  },
+  "ally_phi.0.bias": {
+   "shape": [
+    128
+   ],
+   "weights": 128
+  },
+  "body.0.weight": {
+   "shape": [
+    512,
+    1291
+   ],
+   "weights": 660992
+  },
+  "body.0.bias": {
+   "shape": [
+    512
+   ],
+   "weights": 512
+  },
+  "body.2.weight": {
+   "shape": [
+    512,
+    512
+   ],
+   "weights": 262144
+  },
+  "body.2.bias": {
+   "shape": [
+    512
+   ],
+   "weights": 512
+  },
   "head.weight": {
    "shape": [
     51,
-    256
+    512
    ],
-   "weights": 13056
+   "weights": 26112
   },
   "head.bias": {
    "shape": [
@@ -3303,9 +3303,9 @@
   "potion_head.weight": {
    "shape": [
     66,
-    256
+    512
    ],
-   "weights": 16896
+   "weights": 33792
   },
   "potion_head.bias": {
    "shape": [
@@ -3314,7 +3314,7 @@
    "weights": 66
   }
  },
- "total_weights": 512725,
+ "total_weights": 1602869,
  "vocab": {
   "cards": 597,
   "modifiers": 57,

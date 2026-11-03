@@ -12,7 +12,7 @@ V is a neural network that reads a run and predicts how it will end. This sectio
 
 ## 1. The whole net
 
-Six parts read six kinds of input, each on its own: the **deck**, the **relics**, the **potions**, the **context**, the **map** and **six numbers**. Their outputs are joined into one vector of 390 numbers, and an MLP (a *multi-layer perceptron*: linear layers with a non-linearity between them) turns it into one hazard per floor. Those hazards give the value, P(win).
+Six parts read six kinds of input, each on its own: the **deck**, the **relics**, the **potions**, the **context**, the **map** and **six numbers**. Their outputs are joined into one vector of 774 numbers, and an MLP (a *multi-layer perceptron*: linear layers with a non-linearity between them) turns it into one hazard per floor. Those hazards give the value, P(win).
 
 Only the deck has layers of its own. The other bags are plain sums of learned vectors, and everything that relates one part to another is worked out after the join.
 
@@ -26,16 +26,16 @@ The shapes along the way, with $B$ runs in a batch, $n$ cards, $r$ relics, $p$ p
 
 | step | what | shape |
 |---|---|---|
-| deck | each card as one vector | $B \times n \times 32$ |
-| | $\varphi$, card by card | $B \times n \times 128$ |
-| | mean and sum ÷ 16, joined | $B \times 256$ |
-| relics | the relics' vectors, summed | $B \times 32$ |
-| potions | the potions' vectors, summed | $B \times 32$ |
-| context | the tokens' vectors, summed | $B \times 32$ |
-| map | the tokens' vectors, summed | $B \times 32$ |
+| deck | each card as one vector | $B \times n \times 64$ |
+| | $\varphi$, card by card | $B \times n \times 256$ |
+| | mean and sum ÷ 16, joined | $B \times 512$ |
+| relics | the relics' vectors, summed | $B \times 64$ |
+| potions | the potions' vectors, summed | $B \times 64$ |
+| context | the tokens' vectors, summed | $B \times 64$ |
+| map | the tokens' vectors, summed | $B \times 64$ |
 | numbers | standardized | $B \times 6$ |
-| join | all six | $B \times 390$ |
-| body | two layers | $B \times 256$ |
+| join | all six | $B \times 774$ |
+| body | two layers | $B \times 512$ |
 | head | one hazard per floor | $B \times 64$ |
 
 ## 2. What it reads
@@ -76,7 +76,7 @@ Everything comes from the run view that Harness logs at every decision ([Harness
 
 A deck is a *multiset*: the order of its cards means nothing, and its size varies from about 10 to 40. Reading it in a sequence would make the net learn that every order is the same; a vector of counts per card would have hundreds of mostly empty slots and nothing shared between similar cards. So each card goes through the same small network on its own, and the results are added up: a Deep Set (Zaheer et al., 2017).
 
-**The card's vector.** A card with id $c$, upgrade level $u$ and modifiers $m$ becomes 32 numbers:
+**The card's vector.** A card with id $c$, upgrade level $u$ and modifiers $m$ becomes 64 numbers:
 
 $$
 x = E[c] + u\, U[c] + \sum_{m} M[m].
@@ -90,7 +90,7 @@ $$
 \varphi(x) = \mathrm{ReLU}\big(W_2\, \mathrm{ReLU}(W_1 x + b_1) + b_2\big),
 $$
 
-with $W_1$ of 32 → 128 and $W_2$ of 128 → 128. ReLU is $\max(0, x)$, number by number, so all 128 outputs are at least 0. Here $\varphi$ sees one card: two copies of a card give the same vector, and no card knows what else is in the deck.
+with $W_1$ of 64 → 256 and $W_2$ of 256 → 256. ReLU is $\max(0, x)$, number by number, so all 256 outputs are at least 0. Here $\varphi$ sees one card: two copies of a card give the same vector, and no card knows what else is in the deck.
 
 **Pooling.** The vectors are added up, padded slots left out, and read two ways:
 
@@ -98,13 +98,13 @@ $$
 \bar h = \frac{1}{n}\sum_{k=1}^{n} \varphi(x_k), \qquad \tilde h = \frac{1}{16}\sum_{k=1}^{n} \varphi(x_k).
 $$
 
-The mean says what the deck is made of. It alone would read a deck and that deck doubled as the same, so the scaled sum says how much of it there is (the factor $1/16$ keeps it about a mean's size). The two are one vector at two scales, so the 256 numbers hold 128 numbers' worth of direction plus the deck's size.
+The mean says what the deck is made of. It alone would read a deck and that deck doubled as the same, so the scaled sum says how much of it there is (the factor $1/16$ keeps it about a mean's size). The two are one vector at two scales, so the 512 numbers hold 256 numbers' worth of direction plus the deck's size.
 
 **How cards relate.** Because the pooled vector is a sum, a relation between cards is not computed in $\varphi$. It comes in two steps: $\varphi$ can give a kind of card a number of its own, so that the sum counts those cards, and the body after the join can then combine such counts with each other and with the relics. "Many Shivs and a Shuriken" takes only that. The cost of this is in [§8](#sec-8).
 
 ## 4. The bags: relics, potions, context, map
 
-Each of the four is a **bag**: every token has a learned vector of 32 numbers, and the vectors are added up. There is no layer in between and no mean. A token that appears twice counts twice.
+Each of the four is a **bag**: every token has a learned vector of 64 numbers, and the vectors are added up. There is no layer in between and no mean. A token that appears twice counts twice.
 
 $$
 \text{bag}(t_1, \dots, t_k) = \sum_{i=1}^{k} T[t_i].
@@ -126,9 +126,9 @@ So each map move also gives a training sample of its own, the chosen point's aft
 
 **The numbers** are read as they are, standardized ([§2](#sec-2)).
 
-**The join.** The six outputs are concatenated into one vector $z$ of $256 + 32 + 32 + 32 + 32 + 6 = 390$ numbers.
+**The join.** The six outputs are concatenated into one vector $z$ of $512 + 64 + 64 + 64 + 64 + 6 = 774$ numbers.
 
-**The body** is an MLP of two layers, 256 numbers each:
+**The body** is an MLP of two layers, 512 numbers each:
 
 $$
 b_1 = \mathrm{ReLU}(W_3 z + c_1), \qquad b_2 = \mathrm{ReLU}(W_4 b_1 + c_2).
@@ -156,18 +156,18 @@ The hazards of floors before $f$ are computed and not used ([From hazards to val
 
 | part | shape | weights |
 |---|---|---|
-| card, upgrade, modifier embeddings | 597 × 32, 597 × 32, 57 × 32 | 40,032 |
-| relic, potion, context, map embeddings | 310, 66, 32, 379 × 32 | 25,184 |
-| $\varphi$ | 32 → 128 → 128 | 20,736 |
-| body | 390 → 256 → 256 | 165,888 |
-| hazard head | 256 → 64 | 16,448 |
-| **total** | | **268,288** |
+| card, upgrade, modifier embeddings | 597 × 64, 597 × 64, 57 × 64 | 80,064 |
+| relic, potion, context, map embeddings | 310, 66, 32, 379 × 64 | 50,368 |
+| $\varphi$ | 64 → 256 → 256 | 82,432 |
+| body | 774 → 512 → 512 | 659,456 |
+| hazard head | 512 → 64 | 32,832 |
+| **total** | | **905,152** |
 
-The token tables are fixed, so these sizes depend only on the game build. The training-only head adds 1,799.
+The token tables are fixed, so these sizes depend only on the game build. The training-only head adds 3,591.
 
-**What the file holds.** The file is `weights/all/v9-0.json`. Its weights have learned from the Silent's runs alone. Its $\mu$ and $\sigma$ are kept from its first training runs, all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training held, such as `DEFEND_IRONCLAD` or `character:IRONCLAD`, has the row of the unknown id, so V reads the other four characters alike until it trains on their runs; such a map token for the point entered, like `Unassigned+0`, is zero, and so are the keyword and Tinker tokens' rows.
+**What the file holds.** The file is `weights/all/v9-0.json`. Its weights have learned from the Silent's runs alone, in the first half of every width: the second half of each embedding and each layer has learned nothing yet, its units reading small random weights and read by zeros, so V gives what the first halves alone give. Its $\mu$ and $\sigma$ are kept from its first training runs, all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training held, such as `DEFEND_IRONCLAD` or `character:IRONCLAD`, has the first half of the unknown id's row, so V reads the other four characters alike until it trains on their runs; such a map token for the point entered, like `Unassigned+0`, is zero, and so are the keyword and Tinker tokens' rows.
 
-A call takes about 0.09 ms in C# on one thread, batch of one. A macro decision on the clone takes 70–90 ms, most of it in the game ([Search §6](/en/arch/macro-brain/search/#sec-6)), so V's own cost does not matter.
+A call takes about 0.08 ms in C# on one thread, batch of one. A macro decision on the clone takes 70–90 ms, most of it in the game ([Search §6](/en/arch/macro-brain/search/#sec-6)), so V's own cost does not matter.
 
 ## 7. One forward pass, two implementations
 
@@ -181,8 +181,8 @@ The trainer computes the net in PyTorch; the brain runs it in C#. They must agre
 
 These follow from the structure alone.
 
-- **No card sees another before the sum.** A relation between cards reaches the body only as numbers that survive adding up. Counting a kind of card is easy; a relation among specific cards has to find numbers of its own, among 128 shared by all.
-- **The relics' bag is linear.** 310 relics share 32 numbers, with no layer before the join. A relation between two relics, or a relic and a card, is the body's alone to work out.
+- **No card sees another before the sum.** A relation between cards reaches the body only as numbers that survive adding up. Counting a kind of card is easy; a relation among specific cards has to find numbers of its own, among 256 shared by all.
+- **The relics' bag is linear.** 310 relics share 64 numbers, with no layer before the join. A relation between two relics, or a relic and a card, is the body's alone to work out.
 - **The map bag holds no links.** It lists what lies at each distance, not which points lead to which. An elite and a rest site on two different paths read just like both on one path. The choice in front of the player is seen through each option's own bag; a choice further ahead is not.
 - **The map ends with the act.** The net reads the current act's remaining points. Of later acts it knows only what the floor implies; their maps, bosses and ancients are not in the run view's map.
 - **What is behind is gone.** Points already passed and points off every path ahead are not tokens. What the run gained there is in its loadout, HP and gold.

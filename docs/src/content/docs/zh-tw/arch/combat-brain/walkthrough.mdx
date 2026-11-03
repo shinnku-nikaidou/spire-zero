@@ -64,7 +64,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 3. 表裡的項和張量
 
-每個詞元變成它在表裡的那一列。上下文顯示了表怎麼運作：它的項是 <code>{JSON.stringify(walk.tokens.context_entries)}</code>。遭遇的項是 {walk.tokens.context_entries[1]}；角色、房間和幕不在表裡，所以它們讀作第 0 項 `<unk>`，共三次。
+每個詞元變成它在表裡的那一列。上下文顯示了表怎麼運作：它的項是 <code>{JSON.stringify(walk.tokens.context_entries)}</code>。角色的項是 {walk.tokens.context_entries[0]}，遭遇的是 {walk.tokens.context_entries[1]}；房間和幕不在表裡，所以它們讀作第 0 項 `<unk>`，共兩次。
 
 這個狀態的張量形狀如下，批次為 1：
 
@@ -96,7 +96,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 把第一個數加起來核對：0.060 + 0 + 0.144 − 0.007 + 0.192 = 0.389。這個檔案裡 $D$ 很小，所以傷害加得不多（[戰鬥網路 §8](/zh-tw/arch/combat-brain/network/#sec-8)）。
 
-$\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</code>。這是 ReLU 的輸出，所以沒有一個低於 0，而 64 個裡有 {walk.card.phi.zeros} 個恰好為 0。
+$\varphi$ 接著把 $x$ 映射到 128 個數，<code>{v(walk.card.phi.first)}</code>。這是 ReLU 的輸出，所以沒有一個低於 0，而 128 個裡有 {walk.card.phi.zeros} 個恰好為 0。
 
 每張牌都經過同一個 $\varphi$，每個牌堆把它的牌加起來，再乘 1/8：
 
@@ -107,11 +107,11 @@ $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</co
 | 棄牌堆 | {walk.piles[2].cards} | <code>{v(walk.piles[2].vector.first)}</code> | {walk.piles[2].vector.norm} | {walk.piles[2].vector.zeros} |
 | 消耗堆 | {walk.piles[3].cards} | <code>{v(walk.piles[3].vector.first)}</code> | {walk.piles[3].vector.norm} | {walk.piles[3].vector.zeros} |
 
-空牌堆恰好是零向量。這四個串接成牌的 256 個數。
+空牌堆恰好是零向量。這四個串接成牌的 512 個數。
 
 ## 5. 能力
 
-玩家有三個能力，荊棘、敏捷和毒霧，數值是 3、1 和 3，縮放成 0.3、0.1 和 0.3。各自的向量是它 id 的向量加上縮放後的數值乘以它的數值方向。一層 32 → 64 分別映射它們，三個輸出的總和是 <code>{v(walk.powers.first)}</code>，64 個裡有 {walk.powers.zeros} 個為 0。
+玩家有三個能力，荊棘、敏捷和毒霧，數值是 3、1 和 3，縮放成 0.3、0.1 和 0.3。各自的向量是它 id 的向量加上縮放後的數值乘以它的數值方向。一層 64 → 128 分別映射它們，三個輸出的總和是 <code>{v(walk.powers.first)}</code>，64 個裡有 {walk.powers.zeros} 個為 0。
 
 ## 6. 敵人
 
@@ -119,23 +119,23 @@ $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</co
 
 | | 機甲騎士 |
 |---|---|
-| id + 數字（32） | <code>{v(walk.enemies[0].numbers_vector)}</code> |
-| 能力的總和（64） | <code>{v(walk.enemies[0].powers_vector)}</code> |
-| 槽 0，共 4 個槽（各 32） | <code>{v(walk.enemies[0].slot_vector)}</code> |
-| 經過 $\varphi$ 後（128）：長度 | {walk.enemies[0].phi.norm} |
+| id + 數字（64） | <code>{v(walk.enemies[0].numbers_vector)}</code> |
+| 能力的總和（128） | <code>{v(walk.enemies[0].powers_vector)}</code> |
+| 槽 0，共 4 個槽（各 64） | <code>{v(walk.enemies[0].slot_vector)}</code> |
+| 經過 $\varphi$ 後（256）：長度 | {walk.enemies[0].phi.norm} |
 | 經過 $\varphi$ 後：為 0 的數 | {walk.enemies[0].phi.zeros} |
 
-它在敵人表裡是第 {walk.enemies[0].entry} 項。敵人的部分是所有敵人的總和。只有一個敵人時就是這個向量：128 個數，長度 {walk.foes.norm}，其中 {walk.foes.zeros} 個為 0。
+它在敵人表裡是第 {walk.enemies[0].entry} 項。敵人的部分是所有敵人的總和。只有一個敵人時就是這個向量：256 個數，長度 {walk.foes.norm}，其中 {walk.foes.zeros} 個為 0。
 
 ## 7. 袋
 
 | 部分 | 大小 | 開頭的數 | 長度 |
 |---|---|---|---|
-| 遺物，11 件 | 32 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
-| 藥水，1 瓶 | 32 | <code>{v(walk.bags.potions.first)}</code> | {walk.bags.potions.norm} |
-| 上下文，4 個詞元 | 32 | <code>{v(walk.bags.context.first)}</code> | {walk.bags.context.norm} |
-| 充能球，1 個 | 32 | <code>{v(walk.bags.orbs.first)}</code> | {walk.bags.orbs.norm} |
-| 盟友，沒有 | 64 | <code>{v(walk.bags.allies.first)}</code> | {walk.bags.allies.norm} |
+| 遺物，11 件 | 64 | <code>{v(walk.bags.relics.first)}</code> | {walk.bags.relics.norm} |
+| 藥水，1 瓶 | 64 | <code>{v(walk.bags.potions.first)}</code> | {walk.bags.potions.norm} |
+| 上下文，4 個詞元 | 64 | <code>{v(walk.bags.context.first)}</code> | {walk.bags.context.norm} |
+| 充能球，1 個 | 64 | <code>{v(walk.bags.orbs.first)}</code> | {walk.bags.orbs.norm} |
+| 盟友，沒有 | 128 | <code>{v(walk.bags.allies.first)}</code> | {walk.bags.allies.norm} |
 
 袋沒有層，所以它的數可以低於 0。只有一瓶藥水時，藥水的袋恰好就是那瓶藥水的向量。
 
@@ -162,10 +162,10 @@ $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</co
 
 | 層 | 開頭的數 | 長度 | 為 0 的數 |
 |---|---|---|---|
-| 651 → 256 | <code>{v(walk.body[0].first)}</code> | {walk.body[0].norm} | {walk.body[0].zeros} |
-| 256 → 256 | <code>{v(walk.body[1].first)}</code> | {walk.body[1].norm} | {walk.body[1].zeros} |
+| 1291 → 512 | <code>{v(walk.body[0].first)}</code> | {walk.body[0].norm} | {walk.body[0].zeros} |
+| 512 → 512 | <code>{v(walk.body[1].first)}</code> | {walk.body[1].norm} | {walk.body[1].zeros} |
 
-對這個狀態，256 個數大多是 0；不是 0 的那 {256 - walk.body[1].zeros} 個，承載輸出頭會讀到的一切。
+對這個狀態，512 個數大多是 0；不是 0 的那 {512 - walk.body[1].zeros} 個，承載輸出頭會讀到的一切。
 
 ## 10. 結局輸出頭：51 個 logit
 
@@ -193,7 +193,7 @@ $\varphi$ 接著把 $x$ 映射到 64 個數，<code>{v(walk.card.phi.first)}</co
 
 ## 12. 藥水輸出頭
 
-同樣的 256 個數經過第二個線性層，256 → {walk.potion.outputs}，藥水表的每一項一個輸出。藥水形狀的石頭是第 {walk.potion.entry} 項。它的 logit 是 {walk.potion.logit}，sigmoid 把它變成 **{walk.potion.chance}**：網路預期勝利後這瓶藥水還在。
+同樣的 512 個數經過第二個線性層，512 → {walk.potion.outputs}，藥水表的每一項一個輸出。藥水形狀的石頭是第 {walk.potion.entry} 項。它的 logit 是 {walk.potion.logit}，sigmoid 把它變成 **{walk.potion.chance}**：網路預期勝利後這瓶藥水還在。
 
 其他 {walk.potion.outputs - 1} 個輸出會算出來，但不讀。這裡最大的是 {walk.potion.most_likely[0].id} 和 {walk.potion.most_likely[1].id}，分別是 {walk.potion.most_likely[0].chance} 和 {walk.potion.most_likely[1].chance}：這個狀態兩者都沒有，所以它們沒有意義，也不訓練任何東西。沒有哪次訓練有過的藥水，例如 {walk.potion.unheld}，保存的是 `<unk>` 那一列，顯示它的機率 {walk.potion.unk}。
 

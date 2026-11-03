@@ -30,22 +30,22 @@ export const SUM_SCALE = 1 / 16; // the deck's sum next to its mean, scaled to a
 export interface CardTrace {
   token: Tokens['cards'][number];
   index: number; // its id's row in the card table, 0 for an id the net never saw
-  x: Float64Array; // id vector + up × upgrade vector + modifiers' vectors (32)
-  hidden: Float64Array; // phi's first layer (128)
-  h: Float64Array; // phi's output (128)
+  x: Float64Array; // id vector + up × upgrade vector + modifiers' vectors (64)
+  hidden: Float64Array; // phi's first layer (256)
+  h: Float64Array; // phi's output (256)
 }
 
 export interface Trace {
   tokens: Tokens;
   cards: CardTrace[];
-  mean: Float64Array; // the deck's mean of h (128)
-  sum: Float64Array; // the deck's sum of h × 1/16 (128)
+  mean: Float64Array; // the deck's mean of h (256)
+  sum: Float64Array; // the deck's sum of h × 1/16 (256)
   bags: Record<(typeof BAGS)[number], { indexes: number[]; vector: Float64Array }>;
   raw: number[]; // the six numbers
   scaled: Float64Array; // standardized
-  z: Float64Array; // the body's input (390)
+  z: Float64Array; // the body's input (774)
   body1: Float64Array;
-  body2: Float64Array; // what the heads read (256)
+  body2: Float64Array; // what the heads read (512)
   hazards: Float64Array; // per floor, the chance to die there if alive there
   shares: Float64Array | null; // per floor, the share of the enemies' HP taken in a combat the run ends in there
 }
