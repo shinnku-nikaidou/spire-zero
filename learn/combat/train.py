@@ -42,14 +42,14 @@ def main(
     env: Annotated[str, typer.Option(help="the environment whose games these are, SL or NoSL")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
     test_list: Annotated[str | None, typer.Option(help="a list pair whose games are only reported, as `medium`")] = None,
-    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")] = None,
+    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
     character: Annotated[str, typer.Option(help="the character whose runs these are")] = "SILENT",
     init: Annotated[str | None, typer.Option(help="a net file to go on from: its weights, read back from its ONNX")] = None,
     seed: int = 0,
 ) -> None:
     if env not in ("SL", "NoSL"):
         raise LearnError(f"--env is SL or NoSL, not {env}")
-    out_file = out_path(name, out, character)
+    out_file = out_path(name, out)
     torch.manual_seed(seed)
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"

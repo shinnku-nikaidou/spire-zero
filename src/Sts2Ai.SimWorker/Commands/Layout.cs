@@ -1,9 +1,9 @@
 namespace Sts2Ai.SimWorker;
 
 /// <summary>
-/// Where each character's files go, from the repository root (docs: learning/reference §6, evaluation/champions §5): each character is
-/// trained and judged on its own, every ascension by the same brain, so its weights and its evaluation have a folder
-/// of their own. The seed sets are shared.
+/// Where the files go, from the repository root (docs: learning/reference §6, evaluation/champions §5): each character is
+/// judged on its own, so its evaluation has a folder of its own; the combat net and V are each one net for every
+/// character and ascension, so their weights share one folder. The seed sets are shared.
 /// </summary>
 internal static class Layout
 {
@@ -13,8 +13,8 @@ internal static class Layout
     /// <summary>eval/CHARACTER: champions/ENV.json, reports/ and leaderboard.md.</summary>
     public static string Eval(string character) => Path.Combine("eval", Folder(character));
 
-    /// <summary>weights/CHARACTER: every weights file of the character, NAME.json, each name used once.</summary>
-    public static string Weights(string character) => Path.Combine("weights", Folder(character));
+    /// <summary>weights/all: every weights file the champions may play, NAME.json, each name used once.</summary>
+    public static string Weights => Path.Combine("weights", "all");
 
     public static string Seeds(string seedSet) => Path.Combine("eval", "seeds", seedSet + ".txt");
 }

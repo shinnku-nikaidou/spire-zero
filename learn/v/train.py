@@ -20,7 +20,7 @@ second head, not in the file, starts anew).
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
 
-    uv run python -m v.train --list data/silent/lists/v7g1 --name v7-1f --objective win --init ../weights/silent/CHAMPION.json
+    uv run python -m v.train --list data/silent/lists/v7g1 --name v7-1f --objective win --init ../weights/all/CHAMPION.json
 """
 
 import json
@@ -151,7 +151,7 @@ def explore_report(model, groups, make, value) -> dict:
 def main(
     list_: Annotated[str, typer.Option("--list", help="the list pair PREFIX-logs.txt and PREFIX-recs.txt")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
-    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/CHARACTER/NAME.json)")] = None,
+    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
     character: Annotated[str, typer.Option(help="the character whose runs these are")] = "SILENT",
     boss_sims: Annotated[str | None, typer.Option(help="boss sims (`bosslab.py collect`), comma-separated")] = None,
     boss_afterstates: Annotated[
@@ -177,7 +177,7 @@ def main(
     ] = None,
     seed: int = 0,
 ) -> None:
-    out_file = out_path(name, out, character)
+    out_file = out_path(name, out)
     if objective not in ("floor", "win"):
         raise LearnError(f"--objective is floor or win, not {objective}")
     if boss_sims and objective != "floor":

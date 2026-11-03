@@ -10,7 +10,7 @@ from the repository root, where the sim runs.
     uv run python challenge.py --sim ../sim.sh --champion eval/silent/champions/nosl.json \\
         --records-dir data/silent/nosl/eval/DATE-gate-s1 \\
         --promote eval/silent/reports/DATE-nosl-r1-promotion-1-NAME \\
-        -- --policy pimc --macro l0 --value weights/silent/s1.json
+        -- --policy pimc --macro l0 --value weights/all/s1.json
 """
 
 import json

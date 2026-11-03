@@ -11,22 +11,23 @@ def root(tmp_path, monkeypatch):
     return path
 
 
-def test_the_default_is_the_name_in_the_characters_folder(root):
-    assert weights.out_path("c1", None, "SILENT") == root / "silent" / "c1.json"
-    assert (root / "silent").is_dir()
+def test_the_default_is_the_name_in_the_shared_folder(root):
+    assert weights.out_path("c1", None) == root / "all" / "c1.json"
+    assert (root / "all").is_dir()
 
 
-def test_a_file_in_a_characters_folder_is_never_replaced(root):
-    weights.out_path("c1", None, "SILENT").write_text("{}")
+def test_a_file_in_a_weights_folder_is_never_replaced(root):
+    weights.out_path("c1", None).write_text("{}")
     with pytest.raises(LearnError, match="another --name"):
-        weights.out_path("c1", None, "SILENT")
+        weights.out_path("c1", None)
+    (root / "silent").mkdir()
+    (root / "silent" / "c0.json").write_text("{}")
     with pytest.raises(LearnError):
-        weights.out_path("other", str(root / "silent" / "c1.json"), "IRONCLAD")
-    assert weights.out_path("c1", None, "IRONCLAD") == root / "ironclad" / "c1.json"
+        weights.out_path("other", str(root / "silent" / "c0.json"))
 
 
 def test_an_explicit_path_elsewhere_may_be_replaced(root, tmp_path):
     out = tmp_path / "scratch" / "t.json"
     out.parent.mkdir()
     out.write_text("{}")
-    assert weights.out_path("t", str(out), "SILENT") == out
+    assert weights.out_path("t", str(out)) == out
