@@ -1,9 +1,11 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Text.Json;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Rooms;
 using Microsoft.Extensions.Logging;
@@ -46,6 +48,10 @@ internal static class TablesCommand
             ["characters"] = ModelDb.AllCharacters.Select(c => c.Id.Entry),
             ["intents"] = Enum.GetNames<IntentType>(),
             ["relic_status"] = Enum.GetNames<RelicStatus>(),
+            ["keywords"] = Enum.GetNames<CardKeyword>(),
+            // what Tinker Time makes of a Mad Science: its card type and rider
+            ["card_types"] = Enum.GetNames<CardType>(),
+            ["riders"] = Enum.GetNames<TinkerTime.RiderEffect>(),
             ["points"] = Enum.GetNames<MapPointType>(),
         };
         var sorted = ids.ToDictionary(kv => kv.Key, kv => kv.Value.Distinct().Order(StringComparer.Ordinal).ToList());

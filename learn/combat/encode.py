@@ -1,13 +1,14 @@
 """A round's start as the combat net reads it (docs: combat-brain/network), the one spec CombatNet follows.
 
-The ids of what is in the fight and its raw state: each card's id, upgrade level, modifiers' ids and pile; the player's
-HP, block, energy, stars and the round; each power's id and amount (and the stacks and kept card a tooltip states
-apart); each enemy's id, HP, block, how many rounds it has shown, its powers, and its intents now and in its last LAGS
-rounds (type, damage per hit, total damage); the relics with their counters and statuses, potions, orbs, allies and the
-encounter; the ascension, orb slots and gold. A card's current cost and damage, its modifiers' amounts and each orb's
-passive, evoke and place in the queue are state too; no other numbers printed on cards or relics: what matters in them is
-the net's to learn. Numbers are scaled to about one
-(HP / 100, block / 20, …) and capped at ±CAP; CombatNet scales them the same way.
+The ids of what is in the fight and its raw state: each card's id, upgrade level, modifiers (enchantment, affliction,
+keywords, what Tinker Time made of it, its enchantment spent) and pile; the player's HP, block, energy, stars and the
+round; each power's id and amount (and the stacks, kept or stolen card and moved number a tooltip states apart); each
+enemy's id, HP, block, how many rounds it has shown, its powers, and its intents now and in its last LAGS rounds (type,
+damage per hit, total damage), one lying dead until it revives included; the relics with their counters and statuses,
+potions, orbs, allies, the encounter and the character; the ascension, orb slots and gold. A card's current cost, damage,
+block, calculated number, replays and star cost, its modifiers' amounts and each orb's passive, evoke and place in the
+queue are state too; no other numbers printed on cards or relics: what matters in them is the net's to learn. Numbers
+are scaled to about one (HP / 100, block / 20, …) and capped at ±CAP; CombatNet scales them the same way.
 """
 
 MAX_UP = 3  # RunNet.MaxUp: upgrade levels above this read as this one
@@ -16,6 +17,7 @@ SLOTS = 1 + LAGS
 MAX_ORBS = 10  # the places of the orb queue the net tells apart: later ones read as the last
 CAP = 10.0  # a few states show huge numbers (an erupting WATERFALL_GIANT's HP)
 PILES = ["hand", "draw", "discard", "exhaust"]
+NUMBERS = 5  # a card's numbers beyond its cost and damage (card)
 TABLES = ["cards", "modifiers", "powers", "enemies", "intents", "relics", "potions", "context", "orbs", "allies", "relic_status"]
 BAGS = {"relics": "relic_mask", "potions": "potion_mask", "context": "context_mask"}
 # The ONNX graph's inputs, in order: CombatNet feeds them by these names.
@@ -60,6 +62,9 @@ INPUTS = [
     "relic_status",
     "damages",
     "orb_values",
+    "numbers",
+    "power_details",
+    "enemy_power_details",
 ]
 
 
@@ -67,19 +72,40 @@ def cap(x: float) -> float:
     return max(-CAP, min(CAP, x))
 
 
+def modifiers(c: dict) -> list[str]:
+    """A card's modifier tokens: its enchantment and affliction first (in this order, as their amounts), then its
+    keywords, its own and those it has for this turn only, the card type and rider Tinker Time made of it, and "spent"
+    for its enchantment's effect used."""
+    tokens = [f"{kind}:{c[kind]['id']}" for kind in ("enchant", "affliction") if c.get(kind)]
+    tokens += [f"keyword:{k}" for k in (c.get("keywords") or []) + (c.get("this_turn") or [])]
+    if c.get("tinker"):
+        tokens += [f"tinker:{c['tinker']['type']}", f"rider:{c['tinker']['rider']}"]
+    return tokens + (["spent"] if c.get("spent") else [])
+
+
 def card(c: dict, pile: int):
-    """A card: its id, upgrade level, pile, its enchantment's and affliction's ids, its cost / 3 (0 for X or none),
-    those modifiers' amounts / 10, and its damage / 20 (0 for none)."""
-    held = [(kind, c[kind]) for kind in ("enchant", "affliction") if c.get(kind)]
+    """A card: its id, upgrade level, pile, its modifiers' tokens, its cost / 3 (0 for X or none), its enchantment's and
+    affliction's amounts / 10, its damage / 20 (Osty's for an Osty attack, 0 for none), and its NUMBERS: block / 20,
+    calculated number / 20, replays / 2, star cost / 5 and the damage its enchantment gathered / 20 (Momentum's)."""
+    held = [c[kind] for kind in ("enchant", "affliction") if c.get(kind)]
     cost = c["cost"] / 3 if c.get("cost") and c["cost"] > 0 else 0.0
+    v = c.get("vars") or {}
+    numbers = (
+        float(v.get("Block", 0)) / 20,
+        float(c.get("calc") or 0) / 20,
+        (c.get("replay") or 0) / 2,
+        (c.get("stars") or 0) / 5,
+        ((c.get("enchant") or {}).get("extra") or 0) / 20,
+    )
     return (
         c["id"],
         min(c.get("up") or 0, MAX_UP),
         pile,
-        [f"{kind}:{m['id']}" for kind, m in held],
+        modifiers(c),
         cost,
-        [cap(m["amount"] / 10) for _, m in held],
-        cap(float((c.get("vars") or {}).get("Damage", 0)) / 20),
+        [cap(m["amount"] / 10) for m in held],
+        cap(float(v.get("Damage", v.get("OstyDamage", 0))) / 20),
+        [cap(x) for x in numbers],
     )
 
 
@@ -91,14 +117,15 @@ def intent(i: dict):
 
 
 def powers(ps: list):
-    """Each power: its id, its amount / 10, the stacks its tooltip states apart from its icon / 10 (else 0), and the id
-    of the card it keeps (Nightmare's), if any."""
+    """Each power: its id, its amount / 10, the stacks its tooltip states apart from its icon / 10 (else 0), the id of
+    the card it keeps (Nightmare's) or stole (Swipe's), if any, and the number moved from its own / 20 (else 0)."""
     return [
         (
             p["id"],
             cap(p["amount"] / 10),
             cap(p["stacks"] / 10) if p.get("stacks") is not None else 0.0,
-            (p.get("card") or {}).get("id"),
+            (p.get("card") or p.get("stolen") or {}).get("id"),
+            cap(float(p["detail"]) / 20) if p.get("detail") is not None else 0.0,
         )
         for p in ps
     ]
@@ -122,8 +149,6 @@ def tokens(obs: dict, history: list) -> dict:
     past = {h["uid"]: h["turns"] for h in history}
     enemies = []
     for e in obs["enemies"]:
-        if e["hp"] <= 0:
-            continue
         turns = past.get(e.get("uid"), [])
         slots = [e.get("intents") or []] + [t["intents"] for t in reversed(turns[-LAGS:])]
         enemies.append(
@@ -142,7 +167,7 @@ def tokens(obs: dict, history: list) -> dict:
         "enemies": enemies,
         "relics": [r["id"] + (":used" if r.get("used_up") else "") for r in obs["relics"]],
         "relic_values": [relic_values(r) for r in obs["relics"]],
-        "relic_status": [r.get("status") or "Normal" for r in obs["relics"]],
+        "relic_status": [r.get("status") or ("Spent" if r.get("spent") else "Normal") for r in obs["relics"]],
         "potions": [p for p in obs["potions"] if p is not None],
         "context": [
             "character:" + pl["character"],

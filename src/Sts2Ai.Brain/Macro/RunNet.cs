@@ -91,7 +91,8 @@ public sealed class RunNet : IRunValue, IDisposable
     public void Dispose() => _session.Dispose();
 
     /// <summary>
-    /// The net's tokens of a run, which <c>learn/v/encode.py</c> reads the same way: each card; each relic, with ":used"
+    /// The net's tokens of a run, which <c>learn/v/encode.py</c> reads the same way: each card with its modifiers
+    /// (enchantment, affliction, keywords, what Tinker Time made of it); each relic, with ":used"
     /// once used up; each potion; the context: character, act, boss(es) and the act's ancient; and the map (<see cref="MapTokens"/>).
     /// </summary>
     public static RunTokens Tokens(RunView run)
@@ -111,6 +112,8 @@ public sealed class RunNet : IRunValue, IDisposable
             var ids = new List<string>();
             if (card.Enchant != null) ids.Add("enchant:" + card.Enchant.Id);
             if (card.Affliction != null) ids.Add("affliction:" + card.Affliction.Id);
+            ids.AddRange((card.Keywords ?? []).Select(k => "keyword:" + k));
+            if (card.Tinker != null) ids.AddRange(["tinker:" + card.Tinker.Type, "rider:" + card.Tinker.Rider]);
             return ids;
         }
     }
@@ -163,18 +166,19 @@ public sealed class RunNet : IRunValue, IDisposable
         var tokens = Tokens(run);
         // Every length is at least 1, its padding masked out, as in training.
         int n = Math.Max(1, tokens.Cards.Count);
+        int m = Math.Max(1, tokens.Cards.Select(c => c.Modifiers.Count).DefaultIfEmpty(0).Max());
         var cards = new DenseTensor<long>([1, n]);
         var ups = new DenseTensor<float>([1, n]);
         var cardMask = new DenseTensor<float>([1, n]);
-        var mods = new DenseTensor<long>([1, n, 2]);
-        var modMask = new DenseTensor<float>([1, n, 2]);
+        var mods = new DenseTensor<long>([1, n, m]);
+        var modMask = new DenseTensor<float>([1, n, m]);
         for (int k = 0; k < tokens.Cards.Count; k++)
         {
             var card = tokens.Cards[k];
             cards[0, k] = Index("cards", card.Id);
             ups[0, k] = Math.Min(card.Up, MaxUp);
             cardMask[0, k] = 1;
-            for (int j = 0; j < Math.Min(2, card.Modifiers.Count); j++)
+            for (int j = 0; j < card.Modifiers.Count; j++)
             {
                 mods[0, k, j] = Index("modifiers", card.Modifiers[j]);
                 modMask[0, k, j] = 1;

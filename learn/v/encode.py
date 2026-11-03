@@ -1,6 +1,7 @@
 """A run view as V reads it (docs: macro-brain/network §2), the one spec RunNet follows (Tokens, MapTokens, state).
 
-Only what the run is and its raw state: each card's id, upgrade level and modifiers' ids; the relics and potions; the
+Only what the run is and its raw state: each card's id, upgrade level and modifiers (enchantment, affliction, keywords,
+what Tinker Time made of it); the relics and potions; the
 character, act, boss(es) and ancient; the map points the player can still reach, each as its type and how many floors
 ahead it is; and six numbers (floor, HP, max HP, gold, ascension, potion slots). No card or relic numbers and nothing
 computed from the deck: what matters in them is the net's to learn.
@@ -62,6 +63,9 @@ def tokens(view: dict) -> dict:
     cards = []
     for c in view["deck"]:
         mods = [f"{kind}:{c[kind]['id']}" for kind in ("enchant", "affliction") if c.get(kind)]
+        mods += [f"keyword:{k}" for k in c.get("keywords") or []]
+        if c.get("tinker"):
+            mods += [f"tinker:{c['tinker']['type']}", f"rider:{c['tinker']['rider']}"]
         cards.append((c["id"], min(c.get("up") or 0, MAX_UP), mods))
     m = view["map"]
     context = ["character:" + view["character"], "act:" + view["act_id"], "boss:" + m["boss"]]

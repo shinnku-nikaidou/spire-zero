@@ -13,7 +13,8 @@ public class RunNetTests
     }
 
     /// <summary>
-    /// An untrained V net with small widths, its test runs real views (Fixtures' floor 1 and two of g3), made by
+    /// An untrained V net with small widths, its test runs real views (Fixtures' floor 1 and two of g3, one with a Mad
+    /// Science of Tinker Time and cards with keywords), made by
     /// <c>learn/v/export.py</c>'s net_file; loading checks RunNet gives each the trainer's value, so a change to
     /// <c>learn/v/encode.py</c> or to RunNet that reads a run otherwise fails here.
     /// </summary>
@@ -43,9 +44,9 @@ public class RunNetTests
 
     /// <summary>The champion's own file: its test runs are the ones it plays from.</summary>
     [Fact]
-    public void ReadsV8_1sRunsAsV7_1fsTrainerDid()
+    public void ReadsV9_0sRunsAsV8_3sTrainerDid()
     {
-        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Repo("weights", "silent", "v8-1.json")));
+        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Repo("weights", "all", "v9-0.json")));
         using var net = RunNet.Load(file);
         Assert.Equal("win", file.Objective);
         Assert.Contains(file.Vocab["map"], t => t.Contains("+0"));

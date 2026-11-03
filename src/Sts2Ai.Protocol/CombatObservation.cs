@@ -74,6 +74,9 @@ public sealed record CardView
     public TinkerView? Tinker { get; init; }
     /// <summary>Sorted.</summary>
     public IReadOnlyList<string>? Keywords { get; init; }
+    /// <summary>The keywords an effect gave it for this turn only, which the turn's end takes away: Expertise's Retain,
+    /// Hand Trick's Sly.</summary>
+    public IReadOnlyList<string>? ThisTurn { get; init; }
     /// <summary>The card's numbers (damage, block, magic number, ...), by name, sorted by name; a calculated number by its parts.</summary>
     public IReadOnlyDictionary<string, decimal>? Vars { get; init; }
     /// <summary>The card after one more upgrade, as the game's upgrade preview shows it (the deck view's and the upgrade
@@ -103,7 +106,8 @@ public sealed record ModifierView(string Id, int Amount, int? Extra = null);
 /// <param name="Stacks">The power's own amount, which its tooltip states, when the icon shows another number: Sloth's
 /// icon counts the cards played this turn, and its stacks are the limit.</param>
 /// <param name="Card">The card the power keeps, which its tooltip names: the card Nightmare adds copies of.</param>
-/// <param name="Detail">The number its tooltip states that has moved from the power's own, when one has: Toric Toughness's block.</param>
+/// <param name="Detail">How far the number its tooltip states has moved from the power's own, when one has: Toric
+/// Toughness's block, The Bomb's damage.</param>
 /// <param name="Stolen">The card it took, which its tooltip names: Swipe's.</param>
 public sealed record PowerView(string Id, int Amount, int? Stacks = null, CardView? Card = null, decimal? Detail = null, CardView? Stolen = null);
 
@@ -120,7 +124,8 @@ public sealed record RelicView
     public bool? UsedUp { get; init; }
     /// <summary>The cards the relic keeps, by id, as its tip lists them: PAELS_TOOTH's, given back one after each combat.</summary>
     public IReadOnlyList<string>? Cards { get; init; }
-    /// <summary>Set when its once-a-combat effect is spent, for what the player remembers and its status does not say: CENTENNIAL_PUZZLE's.</summary>
+    /// <summary>Set when its once-a-combat or once-a-turn effect is spent, for what the player remembers and its status does
+    /// not say: CENTENNIAL_PUZZLE's, or REGALITE's this turn.</summary>
     public bool? Spent { get; init; }
 }
 

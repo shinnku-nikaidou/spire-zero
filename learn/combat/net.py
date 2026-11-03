@@ -20,16 +20,19 @@ def padded(rows, device):
 
 
 def power_tensors(rows, index):
-    """Powers (encode.powers) as ids, amounts, stacks, kept cards and their masks, padded to the most any row has."""
+    """Powers (encode.powers) as ids, amounts, stacks, kept cards and their masks, and moved numbers, padded to the most
+    any row has."""
     n, width = len(rows), max(1, max(len(r) for r in rows))
     ids, amounts, mask = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width), torch.zeros(n, width)
     stacks, cards, card_mask = torch.zeros(n, width), torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width)
+    details = torch.zeros(n, width)
     for b, r in enumerate(rows):
-        for k, (pid, amount, st, card) in enumerate(r):
+        for k, (pid, amount, st, card, detail) in enumerate(r):
             ids[b, k], amounts[b, k], mask[b, k], stacks[b, k] = index["powers"].get(pid, 0), amount, 1, st
+            details[b, k] = detail
             if card:
                 cards[b, k], card_mask[b, k] = index["cards"].get(card, 0), 1
-    return ids, amounts, mask, stacks, cards, card_mask
+    return ids, amounts, mask, stacks, cards, card_mask, details
 
 
 class Batch:
@@ -40,15 +43,20 @@ class Batch:
         width = max(1, max(len(t["cards"]) for t in toks))
         cards, ups = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width)
         piles = torch.zeros(n, width, len(encode.PILES))
-        mods, mod_mask = torch.zeros(n, width, 2, dtype=torch.long), torch.zeros(n, width, 2)
-        costs, mod_amounts, damages = torch.zeros(n, width), torch.zeros(n, width, 2), torch.zeros(n, width)
+        m_n = max(1, max((len(c[3]) for t in toks for c in t["cards"]), default=0))
+        mods, mod_mask = torch.zeros(n, width, m_n, dtype=torch.long), torch.zeros(n, width, m_n)
+        costs, mod_amounts, damages = torch.zeros(n, width), torch.zeros(n, width, m_n), torch.zeros(n, width)
+        numbers = torch.zeros(n, width, encode.NUMBERS)
         for b, t in enumerate(toks):
-            for k, (card_id, up, pile, ms, cost, amounts, damage) in enumerate(t["cards"]):
+            for k, (card_id, up, pile, ms, cost, amounts, damage, nums) in enumerate(t["cards"]):
                 cards[b, k], ups[b, k], piles[b, k, pile], costs[b, k] = index["cards"].get(card_id, 0), up, 1, cost
-                damages[b, k] = damage
-                for j, m in enumerate(ms[:2]):
-                    mods[b, k, j], mod_mask[b, k, j], mod_amounts[b, k, j] = index["modifiers"].get(m, 0), 1, amounts[j]
-        p_ids, p_amounts, p_mask, p_stacks, p_cards, p_card_mask = power_tensors([t["powers"] for t in toks], index)
+                damages[b, k], numbers[b, k] = damage, torch.tensor(nums)
+                for j, m in enumerate(ms):
+                    mods[b, k, j], mod_mask[b, k, j] = index["modifiers"].get(m, 0), 1
+                mod_amounts[b, k, : len(amounts)] = torch.tensor(amounts)
+        p_ids, p_amounts, p_mask, p_stacks, p_cards, p_card_mask, p_details = power_tensors(
+            [t["powers"] for t in toks], index
+        )
 
         e_n = max(1, max(len(t["enemies"]) for t in toks))
         q_n = max(1, max((len(e["powers"]) for t in toks for e in t["enemies"]), default=0))
@@ -60,19 +68,20 @@ class Batch:
         )
         e_powers = [torch.zeros(n, e_n, q_n, dtype=torch.long), torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n)]
         e_numbers = [torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n, dtype=torch.long), torch.zeros(n, e_n, q_n)]
+        e_details = torch.zeros(n, e_n, q_n)
         intents = torch.zeros(n, e_n, encode.SLOTS, i_n, dtype=torch.long)
         intent_values, intent_mask = torch.zeros(n, e_n, encode.SLOTS, i_n, 2), torch.zeros(n, e_n, encode.SLOTS, i_n)
         for b, t in enumerate(toks):
             for k, e in enumerate(t["enemies"]):
                 enemies[b, k], enemy_mask[b, k] = index["enemies"].get(e["id"], 0), 1
                 enemy_scalars[b, k] = torch.tensor(e["scalars"])
-                for j, (pid, amount, st, card) in enumerate(e["powers"]):
+                for j, (pid, amount, st, card, detail) in enumerate(e["powers"]):
                     e_powers[0][b, k, j], e_powers[1][b, k, j], e_powers[2][b, k, j] = (
                         index["powers"].get(pid, 0),
                         amount,
                         1,
                     )
-                    e_numbers[0][b, k, j] = st
+                    e_numbers[0][b, k, j], e_details[b, k, j] = st, detail
                     if card:
                         e_numbers[1][b, k, j], e_numbers[2][b, k, j] = index["cards"].get(card, 0), 1
                 for s, slot in enumerate(e["slots"][: encode.SLOTS]):
@@ -105,7 +114,7 @@ class Batch:
                     torch.tensor(a["scalars"]),
                     1,
                 )
-                for j, (pid, amount, _, _) in enumerate(a["powers"]):
+                for j, (pid, amount, _, _, _) in enumerate(a["powers"]):
                     a_powers[0][b, k, j], a_powers[1][b, k, j], a_powers[2][b, k, j] = (
                         index["powers"].get(pid, 0),
                         amount,
@@ -123,6 +132,7 @@ class Batch:
             enemies, enemy_scalars, enemy_mask, *e_powers, intents, intent_values, intent_mask, *bags,
             p_stacks, p_cards, p_card_mask, *e_numbers, orbs, orb_mask, allies, ally_scalars, ally_mask, *a_powers,
             torch.tensor([t["extra"] for t in toks]), costs, mod_amounts, relic_values, relic_status, damages, orb_values,
+            numbers, p_details, e_details,
         ]  # fmt: skip
         self.tensors = [x.to(device) for x in tensors]
         self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
@@ -157,11 +167,16 @@ class Net(nn.Module):
             if table != "powers":
                 setattr(self, table, nn.Embedding(sizes[table], d))
         self.card_up = nn.Embedding(sizes["cards"], d)
+        self.card_damage = nn.Embedding(sizes["cards"], d)
+        self.card_block = nn.Embedding(sizes["cards"], d)
+        self.card_calc = nn.Embedding(sizes["cards"], d)
+        self.card_replay = nn.Embedding(sizes["cards"], d)
         self.mod_amount = nn.Embedding(sizes["modifiers"], d)
         self.relic_counter = nn.Embedding(sizes["relics"], d)
         self.powers = nn.Embedding(sizes["powers"], d)
         self.power_amount = nn.Embedding(sizes["powers"], d)
         self.power_stacks = nn.Embedding(sizes["powers"], d)
+        self.power_detail = nn.Embedding(sizes["powers"], d)
         self.intent_damage = nn.Embedding(sizes["intents"], d)
         self.intent_total = nn.Embedding(sizes["intents"], d)
         self.orb_passive = nn.Embedding(sizes["orbs"], d)
@@ -174,6 +189,8 @@ class Net(nn.Module):
         self.slot = nn.Parameter(torch.randn(encode.SLOTS, d) * 0.1)
         self.cost = nn.Parameter(torch.randn(d) * 0.1)
         self.damage = nn.Parameter(torch.randn(d) * 0.1)
+        self.stars = nn.Parameter(torch.randn(d) * 0.1)
+        self.gathered = nn.Parameter(torch.randn(d) * 0.1)
         self.melted = nn.Parameter(torch.randn(d) * 0.1)
         self.card_phi = mlp(d, h, h)
         self.power_phi = mlp(d, h)
@@ -187,11 +204,12 @@ class Net(nn.Module):
         self.potion_head = nn.Linear(self.BODY, sizes["potions"])
         self.register_buffer("bottoms", LOSS_MIN + torch.arange(BUCKETS) * WIDTH)
 
-    def power_sum(self, ids, amounts, mask, stacks=None, cards=None, card_mask=None):
-        """The powers through power_phi, summed; with their stacks and kept cards where they are given."""
+    def power_sum(self, ids, amounts, mask, stacks=None, cards=None, card_mask=None, details=None):
+        """The powers through power_phi, summed; with their stacks, kept cards and moved numbers where they are given."""
         x = self.powers(ids) + amounts[..., None] * self.power_amount(ids)
         if stacks is not None:
             x = x + stacks[..., None] * self.power_stacks(ids) + self.cards(cards) * card_mask[..., None]
+            x = x + details[..., None] * self.power_detail(ids)
         return (self.power_phi(x) * mask[..., None]).sum(-2)
 
     def forward(self, *inputs):
@@ -214,14 +232,19 @@ class Net(nn.Module):
         intents, intent_values, intent_mask, relics, relic_mask, potions, potion_mask, context, context_mask,
         power_stacks, power_cards, power_card_mask, enemy_power_stacks, enemy_power_cards, enemy_power_card_mask,
         orbs, orb_mask, allies, ally_scalars, ally_mask, ally_powers, ally_power_amounts, ally_power_mask, extra,
-        costs, mod_amounts, relic_values, relic_status, damages, orb_values,
+        costs, mod_amounts, relic_values, relic_status, damages, orb_values, numbers, power_details, enemy_power_details,
     ):  # fmt: skip
         """The body's vector of each sample."""
         x = (
             self.cards(cards)
             + ups[..., None] * self.card_up(cards)
             + costs[..., None] * self.cost
-            + damages[..., None] * self.damage
+            + damages[..., None] * (self.damage + self.card_damage(cards))
+            + numbers[..., 0:1] * self.card_block(cards)
+            + numbers[..., 1:2] * self.card_calc(cards)
+            + numbers[..., 2:3] * self.card_replay(cards)
+            + numbers[..., 3:4] * self.stars
+            + numbers[..., 4:5] * self.gathered
             + ((self.modifiers(mods) + mod_amounts[..., None] * self.mod_amount(mods)) * mod_mask[..., None]).sum(2)
             + piles @ self.pile
         )
@@ -242,13 +265,16 @@ class Net(nn.Module):
                     enemy_power_stacks,
                     enemy_power_cards,
                     enemy_power_card_mask,
+                    enemy_power_details,
                 ),  # fmt: skip
                 slots,
             ],
             2,
         )
         foes = (self.enemy_phi(e) * enemy_mask[..., None]).sum(1)
-        mine = self.power_sum(powers, power_amounts, power_mask, power_stacks, power_cards, power_card_mask)
+        mine = self.power_sum(
+            powers, power_amounts, power_mask, power_stacks, power_cards, power_card_mask, power_details
+        )
         held = (
             self.relics(relics)
             + relic_values[..., 0:1] * self.relic_counter(relics)

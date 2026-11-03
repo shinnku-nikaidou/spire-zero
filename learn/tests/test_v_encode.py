@@ -1,5 +1,6 @@
 from conftest import make_view as view
 
+import game_ids
 from v import encode
 
 
@@ -28,6 +29,14 @@ def test_cards_relics_potions_and_context_are_ids_only():
     assert t["relics"] == ["RING", "VASE:used"]
     assert t["potions"] == ["FIRE"]
     assert t["context"] == ["character:SILENT", "act:OVERGROWTH", "boss:B", "ancient:NEOW"]
+
+
+def test_a_card_reads_its_keywords_and_what_tinker_time_made_of_it():
+    v = view()
+    v["deck"] = [{"id": "MAD_SCIENCE", "keywords": ["Ethereal"], "tinker": {"type": "Skill", "rider": "Wisdom"}}]
+    [card] = encode.tokens(v)["cards"]
+    assert card == ("MAD_SCIENCE", 0, ["keyword:Ethereal", "tinker:Skill", "rider:Wisdom"])
+    assert all(m in game_ids.macro_tables()["modifiers"] for m in card[2])
 
 
 def test_the_state_is_the_raw_numbers_in_their_order():

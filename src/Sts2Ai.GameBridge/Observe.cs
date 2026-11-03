@@ -127,6 +127,7 @@ public static class Observe
             Affliction = card.Affliction is { } a ? new ModifierView(a.Id.Entry, a.Amount) : null,
             Tinker = card is MadScience mad ? new TinkerView(mad.TinkerTimeType.ToString(), mad.TinkerTimeRider.ToString()) : null,
             Keywords = card.Keywords.Count > 0 ? card.Keywords.Select(k => k.ToString()).Order(StringComparer.Ordinal).ToList() : null,
+            ThisTurn = ThisTurn(card),
             Vars = Vars(card) is { Count: > 0 } vars ? vars : null,
             Lasting = x ? null : Lasting(card),
             StarsLasting = card.CanonicalStarCost >= 0 && !card.HasStarCostX ? StarsLasting(card) : null,
@@ -164,26 +165,37 @@ public static class Observe
         return gone == 0 ? null : Math.Max(0, card.GetStarCostWithModifiers() + gone);
     }
 
-    /// <summary>The power's numbers that have moved from its canonical ones. One moves at a time, Slow's two summed.</summary>
+    /// <summary>How far the power's numbers have moved from its canonical ones. One moves at a time, Slow's two summed.</summary>
     private static decimal? Detail(PowerModel power)
     {
         if (power.DynamicVars.Count == 0 || CanonicalPower.GetValue(power) is not PowerModel canonical) return null;
         decimal? moved = null;
         foreach (var (name, v) in power.DynamicVars)
-            if (v is not CalculatedVar && canonical.DynamicVars.TryGetValue(name, out var c) && c.BaseValue != v.BaseValue) moved = (moved ?? 0) + v.BaseValue;
+            if (v is not CalculatedVar && canonical.DynamicVars.TryGetValue(name, out var c) && c.BaseValue != v.BaseValue) moved = (moved ?? 0) + v.BaseValue - c.BaseValue;
         return moved;
     }
 
-    /// <summary>A relic's own flag of an effect spent for this combat: a private field the game names so, on the relics that have one.</summary>
+    /// <summary>A relic's own flag of an effect spent for this combat or this turn: a private field the game names so, on the
+    /// relics that have one.</summary>
     private static bool? Spent(RelicModel relic)
     {
         lock (OnceFlags)
         {
             if (!OnceFlags.TryGetValue(relic.GetType(), out var flags))
                 OnceFlags[relic.GetType()] = flags = relic.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
-                    .Where(f => f.FieldType == typeof(bool) && f.Name.EndsWith("ThisCombat", StringComparison.Ordinal)).ToArray();
+                    .Where(f => f.FieldType == typeof(bool) && (f.Name.EndsWith("ThisCombat", StringComparison.Ordinal) || f.Name.EndsWith("ThisTurn", StringComparison.Ordinal)))
+                    .ToArray();
             return flags.Any(f => (bool)f.GetValue(relic)!) ? true : null;
         }
+    }
+
+    /// <summary>The keywords an effect gave the card for this turn only, beside its own.</summary>
+    private static List<string>? ThisTurn(CardModel card)
+    {
+        List<string> kept = [];
+        if (card.ShouldRetainThisTurn && !card.Keywords.Contains(CardKeyword.Retain)) kept.Add(nameof(CardKeyword.Retain));
+        if (card.IsSlyThisTurn && !card.Keywords.Contains(CardKeyword.Sly)) kept.Add(nameof(CardKeyword.Sly));
+        return kept.Count > 0 ? kept : null;
     }
 
     /// <summary>A card of the deck: <see cref="Card"/> with the upgrade preview the deck view shows, if it can be upgraded.</summary>
@@ -207,7 +219,7 @@ public static class Observe
     /// <summary>The key of the card as a combat built from an observation has it: without what a build does not set.</summary>
     public static string BuiltKey(CardModel card) => ProtocolJson.CardKey(Card(card) with
     {
-        Lasting = null, StarsLasting = null, Replay = null, Spent = null, Calc = null,
+        Lasting = null, StarsLasting = null, Replay = null, Spent = null, Calc = null, ThisTurn = null,
         Enchant = card.Enchantment is { } e ? new ModifierView(e.Id.Entry, e.Amount) : null,
     });
 

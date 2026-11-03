@@ -15,15 +15,18 @@ public class CombatNetTests
     /// <summary>
     /// An untrained net with small widths, made by <c>learn/combat/export.py</c>'s net_file: real SL round starts, with four
     /// rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5 % HP and a multi-hit
-    /// attack, orbs on and off the table past the places the net tells apart: a change to <c>learn/combat/encode.py</c> or to CombatNet that reads a state otherwise fails on loading.
+    /// attack, orbs on and off the table past the places the net tells apart, and every card, power, relic and enemy state
+    /// the observation gathers (keywords, Tinker, an enchantment spent, Momentum, calculated numbers, replays, star costs,
+    /// a moved number, Swipe's card, a relic spent, an enemy lying dead, another character), every weight nonzero: a
+    /// change to <c>learn/combat/encode.py</c> or to CombatNet that reads a state otherwise fails on loading.
     /// </summary>
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
 
     /// <summary>The champion's own file: its test states are the ones it plays from.</summary>
     [Fact]
-    public void ReadsC8_1sStatesAsC7_2sTrainerDid()
+    public void ReadsC9_0sStatesAsC8_3sTrainerDid()
     {
-        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Repo("weights", "silent", "c8-1.json")));
+        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Repo("weights", "all", "c9-0.json")));
         using var net = CombatNet.Load(file);
         Assert.Equal(16, file.Tests.Count);
     }
@@ -39,6 +42,12 @@ public class CombatNetTests
         Assert.Contains(file.Tests, t => t.Obs.Allies.Any(a => a.Hp > 0));
         Assert.Contains(file.Tests, t => t.Obs.Player.Orbs.Count > 10);
         Assert.Contains(file.Tests, t => t.Obs.Hand.Any(c => c.Vars?.ContainsKey("Damage") == true));
+        Assert.Contains(file.Tests, t => t.Obs.Hand.Any(c => c.Keywords != null && c.Calc != null && c.Replay != null && c.Stars != null));
+        Assert.Contains(file.Tests, t => t.Obs.Hand.Any(c => c.Spent == true && c.Enchant?.Extra != null));
+        Assert.Contains(file.Tests, t => t.Obs.Draw.Any(c => c.Tinker != null));
+        Assert.Contains(file.Tests, t => t.Obs.Player.Powers.Any(p => p.Detail != null) && t.Obs.Relics.Any(r => r.Spent == true));
+        Assert.Contains(file.Tests, t => t.Obs.Enemies.Any(e => e.Powers.Any(p => p.Stolen != null)));
+        Assert.Contains(file.Tests, t => t.Obs.Enemies.Any(e => e.Hp <= 0 && e.Intents?.Count > 0) && t.Obs.Player.Character == "IRONCLAD");
     }
 
     [Fact]

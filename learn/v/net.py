@@ -31,15 +31,16 @@ class Batch:
 
     def __init__(self, samples, index, mean, std, floors, device):
         n, width = len(samples), max(1, max(len(s["tokens"]["cards"]) for s in samples))
+        m_n = max(1, max((len(ms) for s in samples for _, _, ms in s["tokens"]["cards"]), default=0))
         rows = {name: [] for name in ("cards", "ups", "card_mask", "mods", "mod_mask")}
         for s in samples:
             deck, pad = s["tokens"]["cards"], width - len(s["tokens"]["cards"])
             rows["cards"].append([index["cards"].get(card_id, 0) for card_id, _, _ in deck] + [0] * pad)
             rows["ups"].append([float(up) for _, up, _ in deck] + [0.0] * pad)
             rows["card_mask"].append([1.0] * len(deck) + [0.0] * pad)
-            mods = [[index["modifiers"].get(m, 0) for m in ms[:2]] for _, _, ms in deck]
-            rows["mods"].append([m + [0] * (2 - len(m)) for m in mods] + [[0, 0]] * pad)
-            rows["mod_mask"].append([[1.0] * len(m) + [0.0] * (2 - len(m)) for m in mods] + [[0.0, 0.0]] * pad)
+            mods = [[index["modifiers"].get(m, 0) for m in ms] for _, _, ms in deck]
+            rows["mods"].append([m + [0] * (m_n - len(m)) for m in mods] + [[0] * m_n] * pad)
+            rows["mod_mask"].append([[1.0] * len(m) + [0.0] * (m_n - len(m)) for m in mods] + [[0.0] * m_n] * pad)
         feed = {
             name: torch.tensor(r, dtype=torch.long if name in ("cards", "mods") else torch.float32).to(device)
             for name, r in rows.items()

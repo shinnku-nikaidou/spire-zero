@@ -24,27 +24,57 @@ def obs(round=1, hp=50, **over):
     return o | over
 
 
-def test_cards_are_ids_upgrades_piles_modifiers_costs_and_damage():
+def test_cards_are_ids_upgrades_piles_modifiers_costs_and_numbers():
     t = encode.tokens(obs(), [])
     assert t["cards"] == [
-        ("STRIKE", encode.MAX_UP, 0, ["enchant:SHARP"], 1 / 3, [0.2], 0.3),
-        ("DEFEND", 0, 1, [], 1 / 3, [], 0.0),
+        ("STRIKE", encode.MAX_UP, 0, ["enchant:SHARP"], 1 / 3, [0.2], 0.3, [0, 0, 0, 0, 0]),
+        ("DEFEND", 0, 1, [], 1 / 3, [], 0.0, [0.25, 0, 0, 0, 0]),
     ]
     assert t["relics"] == ["RING", "VASE:used"] and t["potions"] == ["FIRE"]
-    assert t["powers"] == [("STRENGTH_POWER", 0.2, 0.0, None)]
+    assert t["relic_status"] == ["Normal", "Normal"]
+    assert t["powers"] == [("STRENGTH_POWER", 0.2, 0.0, None, 0.0)]
 
 
-def test_the_player_and_each_living_enemy_are_their_raw_state_scaled():
+def test_a_card_reads_its_keywords_tinker_spent_enchantment_and_gathered_numbers():
+    o = obs()
+    o["hand"] = [
+        {"id": "MAD_SCIENCE", "cost": 1, "stars": 2, "keywords": ["Exhaust", "Retain"], "calc": 12, "replay": 1,
+         "tinker": {"type": "Attack", "rider": "Violence"}, "affliction": {"id": "HEXED", "amount": 1}},
+        {"id": "PUNCH_DAGGER", "cost": 1, "enchant": {"id": "MOMENTUM", "amount": 2, "extra": 4}, "spent": True,
+         "this_turn": ["Sly"]},
+        {"id": "BONE_SHARDS", "cost": 1, "vars": {"OstyDamage": 9}},
+    ]  # fmt: skip
+    mad, dagger, osty, _ = encode.tokens(o, [])["cards"]
+    assert mad[3] == ["affliction:HEXED", "keyword:Exhaust", "keyword:Retain", "tinker:Attack", "rider:Violence"]
+    assert mad[5] == [0.1] and mad[7] == pytest.approx([0, 0.6, 0.5, 0.4, 0])
+    assert osty[6] == pytest.approx(0.45)
+    assert dagger[3] == ["enchant:MOMENTUM", "keyword:Sly", "spent"] and dagger[7] == pytest.approx([0, 0, 0, 0, 0.2])
+    tables = game_ids.combat_tables()
+    assert all(m in tables["modifiers"] for m in mad[3] + dagger[3])
+
+
+def test_a_power_reads_its_moved_number_and_the_card_it_stole_and_a_relic_its_effect_spent():
+    o = obs()
+    o["enemies"][0]["powers"] = [{"id": "SWIPE_POWER", "amount": 1, "stolen": {"id": "DEFEND"}, "detail": 10}]
+    o["relics"] = [{"id": "CENTENNIAL_PUZZLE", "spent": True}, {"id": "RING", "status": "Active"}]
+    t = encode.tokens(o, [])
+    assert t["enemies"][0]["powers"] == [("SWIPE_POWER", 0.1, 0.0, "DEFEND", 0.5)]
+    assert t["relic_status"] == ["Spent", "Active"] and "Spent" in game_ids.combat_tables()["relic_status"]
+
+
+def test_the_player_and_each_enemy_are_their_raw_state_scaled():
     t = encode.tokens(obs(round=4), [])
     assert t["player"] == pytest.approx([50 / 70, 0.5, 0.7, 0, 1, 1, 0, 0.4])
-    [enemy] = t["enemies"]  # the dead one is left out
+    [enemy, dead] = t["enemies"]  # one lying dead is read: it may revive
     assert enemy["id"] == "M" and enemy["scalars"] == pytest.approx([12 / 20, 0.12, 0.2, 0, 0])
     assert enemy["slots"] == [[("Attack", 0.6, 0.3)]]
+    assert dead["scalars"][:2] == [0, 0]
+    assert "character:SILENT" in t["context"] and "character:SILENT" in game_ids.combat_tables()["context"]
 
 
 def test_an_enemy_reads_its_last_rounds_intents_most_recent_first():
     history = [{"uid": 1, "id": "M", "turns": [{"round": r, "intents": [{"type": f"T{r}"}]} for r in range(1, 6)]}]
-    [enemy] = encode.tokens(obs(round=6), history)["enemies"]
+    enemy = encode.tokens(obs(round=6), history)["enemies"][0]
     assert [s[0][0] if s else None for s in enemy["slots"]] == ["Attack", "T5", "T4", "T3"]
     assert enemy["scalars"][4] == 0.5  # five rounds shown
 
@@ -84,15 +114,16 @@ def test_a_win_cannot_end_in_a_bucket_the_hp_held_rules_out():
     assert torch.softmax(logits, 1)[closed].max() == 0
 
 
-def test_a_cards_damage_and_the_orbs_numbers_and_order_move_the_output():
+def test_a_cards_numbers_and_modifiers_and_the_orbs_numbers_and_order_move_the_output():
     tables = game_ids.combat_tables()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     torch.manual_seed(0)
     net = Net({t: len(i) for t, i in tables.items()}).eval()
 
-    def outcome(hand_damage=6, orbs=()):
+    def outcome(hand_damage=6, orbs=(), **card):
         o = obs()
         o["hand"][0]["vars"]["Damage"] = hand_damage
+        o["hand"][0] |= card
         o["player"]["orbs"] = [{"id": i, "passive": p, "evoke": e} for i, p, e in orbs]
         s = data.sample("a", o, [], {"died": True, "potions": 0}, None)
         with torch.no_grad():
@@ -100,6 +131,8 @@ def test_a_cards_damage_and_the_orbs_numbers_and_order_move_the_output():
 
     dark, frost = ("DARK_ORB", 6, 6), ("FROST_ORB", 2, 5)
     assert not torch.equal(outcome(), outcome(hand_damage=30))
+    for field, value in (("calc", 20), ("replay", 1), ("stars", 3), ("keywords", ["Retain"]), ("this_turn", ["Sly"]), ("spent", True)):
+        assert not torch.equal(outcome(), outcome(**{field: value})), field
     assert not torch.equal(outcome(orbs=[dark, frost]), outcome(orbs=[("DARK_ORB", 6, 18), frost]))
     assert not torch.equal(outcome(orbs=[dark, frost]), outcome(orbs=[("DARK_ORB", 9, 6), frost]))
     assert not torch.equal(outcome(orbs=[dark, frost]), outcome(orbs=[frost, dark]))
@@ -192,8 +225,8 @@ def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
     assert net["fit"]["medium"]["held_out"]["samples"] == 42  # the 14 runs' three rounds
 
 
-def test_c8_1s_weights_read_back_give_its_test_states_their_endings():
-    net = export.read(str(Path(__file__).parents[2] / "weights" / "silent" / "c8-1.json"))
+def test_c9_0s_weights_read_back_give_its_test_states_their_endings():
+    net = export.read(str(Path(__file__).parents[2] / "weights" / "all" / "c9-0.json"))
     tables = net["vocab"]
     model = Net({t: len(i) for t, i in tables.items()}).eval()
     model.load_state_dict(export.weights(net, model))

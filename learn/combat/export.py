@@ -20,14 +20,16 @@ from common import LearnError
 TESTS = 16  # test states in a net file
 # Every input's batch dimension and its length dimensions, by input name (the rest are fixed widths).
 AXES = {
-    **{x: {0: "batch", 1: "cards"} for x in ("cards", "ups", "piles", "mods", "mod_mask", "costs", "mod_amounts", "damages")},
+    **{x: {0: "batch", 1: "cards"} for x in ("cards", "ups", "piles", "costs", "damages", "numbers")},
+    **{x: {0: "batch", 1: "cards", 2: "card_mods"} for x in ("mods", "mod_mask", "mod_amounts")},
     **{x: {0: "batch", 1: "powers"} for x in ("powers", "power_amounts", "power_mask", "power_stacks", "power_cards",
-                                              "power_card_mask")},
+                                              "power_card_mask", "power_details")},
     "player": {0: "batch"},
     **{x: {0: "batch", 1: "enemies"} for x in ("enemies", "enemy_scalars", "enemy_mask")},
     **{x: {0: "batch", 1: "enemies", 2: "enemy_powers"} for x in ("enemy_powers", "enemy_power_amounts",
                                                                   "enemy_power_mask", "enemy_power_stacks",
-                                                                  "enemy_power_cards", "enemy_power_card_mask")},
+                                                                  "enemy_power_cards", "enemy_power_card_mask",
+                                                                  "enemy_power_details")},
     **{x: {0: "batch", 1: "enemies", 3: "intents"} for x in ("intents", "intent_values", "intent_mask")},
     **{x: {0: "batch", 1: t} for t, mask in encode.BAGS.items() for x in (t, mask)},
     **{x: {0: "batch", 1: "orbs"} for x in ("orbs", "orb_mask", "orb_values")},

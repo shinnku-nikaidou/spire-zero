@@ -240,7 +240,7 @@ internal static class CombatBuilder
     }
 
     /// <summary>What a build does not set: the state a combat gathers as it goes, and which a built combat starts without.</summary>
-    private static readonly HashSet<string> NotBuilt = ["lasting", "stars_lasting", "replay", "spent", "calc", "extra", "detail", "stolen"];
+    private static readonly HashSet<string> NotBuilt = ["lasting", "stars_lasting", "replay", "spent", "calc", "extra", "detail", "stolen", "this_turn"];
 
     /// <summary>
     /// Where <paramref name="actual"/> differs from <paramref name="expected"/>, as JSON paths: what the built
