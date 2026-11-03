@@ -10,9 +10,10 @@ public class LoopSearchTests
     /// deals 6 plus the strength. The enemies' turn hits for 10. Every <paramref name="junkEvery"/> plays a junk card comes,
     /// to the discard pile, or to the hand if <paramref name="handCap"/> is set, and then a full hand sends R to the discard
     /// pile, which ends the cycle. <paramref name="runsOut"/> ends it after that many plays. With <paramref name="souls"/>, R
-    /// is exhausted instead and draws the next of that many R in the draw pile, as a Soul does.
+    /// is exhausted instead and draws the next of that many R in the draw pile, as a Soul does. The hand starts with
+    /// <paramref name="copies"/> R.
     /// </summary>
-    private sealed class Loop(int enemyHp, int junkEvery = 0, int handCap = 0, int runsOut = int.MaxValue, Loop.Prompted prompted = Loop.Prompted.No, int souls = 0) : ICombatWorld
+    private sealed class Loop(int enemyHp, int junkEvery = 0, int handCap = 0, int runsOut = int.MaxValue, Loop.Prompted prompted = Loop.Prompted.No, int souls = 0, int copies = 1) : ICombatWorld
     {
         /// <summary>A potion that offers three cards, with answer 0 the policy's; the last gives R, or a strong one-off card.</summary>
         public enum Prompted { No, GivesR, GivesStrike }
@@ -20,7 +21,7 @@ public class LoopSearchTests
         private static readonly CombatObservation Start = Fixtures.Slugs();
 
         private readonly List<string> _steps = [];
-        private List<(uint Uid, string Id)> _hand = prompted == Prompted.No ? [(1, "R"), (2, "H")] : [(2, "H")];
+        private List<(uint Uid, string Id)> _hand = Hand(prompted, copies);
         private List<string> _discard = [];
         private int _enemy = enemyHp, _hp = 30, _energy = 1, _strength, _round = 1, _plays, _drawn;
         private bool _potion = prompted != Prompted.No;
@@ -107,12 +108,15 @@ public class LoopSearchTests
             }
         }
 
+        private static List<(uint Uid, string Id)> Hand(Prompted prompted, int copies) =>
+            prompted == Prompted.No ? [(1, "R"), .. Enumerable.Range(1, copies - 1).Select(i => (10u + (uint)i, "R")), (2, "H")] : [(2, "H")];
+
         public WorldSnapshot Snapshot() => new(_steps.ToList());
 
         public void Restore(WorldSnapshot snapshot)
         {
             _steps.Clear();
-            _hand = prompted == Prompted.No ? [(1, "R"), (2, "H")] : [(2, "H")];
+            _hand = Hand(prompted, copies);
             _discard = [];
             (_enemy, _hp, _energy, _strength, _round, _plays, _drawn, _potion) = (enemyHp, 30, 1, 0, 1, 0, 0, prompted != Prompted.No);
             foreach (var step in snapshot.Steps) Apply(CombatAction.Parse(step));
@@ -210,6 +214,22 @@ public class LoopSearchTests
         var plan = Plan(new Loop(15, souls: 8));
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.Equal(1, plan.Turns);
+    }
+
+    [Fact]
+    public void CopiesInTheHandDoNotMakeACycle()
+    {
+        // The first R comes back once, as Music Box copies the first attack of a turn; three more R in the hand would let
+        // the probe repeat it, but the hand is not back after the second play.
+        var world = new Loop(1_000, runsOut: 2, copies: 4);
+        var start = world.Observe();
+        List<LoopPoint> path = [new(start, 0, world.Snapshot())];
+        world.Execute(R);
+        var loops = new LoopSearch(world, 1, (_, _, _, _) => throw new InvalidOperationException("no line ends in a probe"));
+
+        Assert.True(LoopSearch.Recurs(start, world.Observe()));
+        Assert.False(loops.Intercept(path, world.Observe(), [R], [ProtocolJson.Hash(start)]));
+        Assert.False(loops.Found);
     }
 
     [Fact]

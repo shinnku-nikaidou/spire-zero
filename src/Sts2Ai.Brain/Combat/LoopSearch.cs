@@ -15,8 +15,8 @@ public sealed record LoopPoint(CombatObservation Obs, int Depth, WorldSnapshot S
 /// left at every state above it, and the attack that should come after the repeats is never tried.
 ///
 /// So the search does not go down a cycle. A move that brings back the cards of a state on the path, with no less energy
-/// or stars, no fewer copies of those cards left and something changed, is tried a few more times; if it holds, it is set
-/// aside (<see cref="Intercept"/>). What the piles do to other cards does not matter: a curse a boss deals every six
+/// or stars, no fewer copies of those cards left and something changed, is tried a few more times, each of which must
+/// bring them back too; if it holds, it is set aside (<see cref="Intercept"/>). What the piles do to other cards does not matter: a curse a boss deals every six
 /// cards changes them, and the cycle goes on. A move that runs out by itself, or uses up its own cards, is an ordinary
 /// line, and the search goes on as it always did, so a deck with no cycle is played move for move as it would be without
 /// this class.
@@ -73,7 +73,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         var here = world.Snapshot();
         int done = 1;
         var scratch = new Line([], []);
-        if (Repeat(cycle, scratch, ref done, ProbeRepeats, null, out var status) && status == CombatStatus.InProgress)
+        if (Repeat(cycle, scratch, ref done, ProbeRepeats, null, out var status, back.Obs) && status == CombatStatus.InProgress)
         {
             _found.Add(cycle);
             Found = true;
@@ -232,7 +232,10 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
 
     /// <summary>Plays the cycle until <paramref name="done"/> reaches <paramref name="to"/>; false if a move is not there, or the combat or the budget ended.</summary>
     /// <param name="breaks">Takes the repeats done before one that changed the piles.</param>
-    private bool Repeat(Cycle cycle, Line line, ref int done, int to, List<int>? breaks, out CombatStatus status)
+    /// <param name="back">For a probe, the state each repeat must bring back (<see cref="Recurs"/>): a hand that holds a few
+    /// copies of the card can play them once each, as when Music Box copies the first attack of the turn and two more
+    /// Neutralize are in the hand, and that is no cycle.</param>
+    private bool Repeat(Cycle cycle, Line line, ref int done, int to, List<int>? breaks, out CombatStatus status, CombatObservation? back = null)
     {
         status = world.Status;
         while (done < to)
@@ -246,6 +249,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
                 status = world.Status;
             }
             if (status == CombatStatus.InProgress && breaks is { Count: < MaxBreaks } && done >= 1 && Piles(world.Observe()) != piles) breaks.Add(done);
+            if (back != null && status == CombatStatus.InProgress && !Recurs(back, world.Observe())) return false;
             done++;
         }
         return true;
