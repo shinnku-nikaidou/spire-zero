@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 using Sts2Ai.SimWorker;
@@ -22,10 +23,25 @@ internal static class Fixtures
     public static CombatObservation WithEnemyHp(this CombatObservation obs, uint uid, int hp) =>
         obs with { Enemies = obs.Enemies.Select(e => e.Uid == uid ? e with { Hp = hp } : e).ToList() };
 
-    public static readonly RunConfig Config = new("v0.111.0", "abc1234", "combat pimc 8x300, combat prompts p0, macro l0, macro prompts l0", "NoSL", "R1");
+    public static readonly RunConfig Config = new("v0.111.0", "abc1234", "combat pimc 8x300, combat prompts p0, macro l0, macro prompts l0", "NoSL");
 
     public static RunRecord Run(string seed, int floor, string outcome = "lost", RunConfig? config = null, int randomDecisions = 0) =>
         new(config ?? Config, seed, "SILENT", 0, outcome, floor / 17, floor, 0, 70, 99, [], new Dictionary<string, int> { ["map"] = 10 },
             randomDecisions > 0 ? new Dictionary<string, int> { [Metrics.RandomBrain] = randomDecisions } : new Dictionary<string, int>(),
-            0, 0, 0, outcome == "failed" ? "boom" : null, 1000);
+            0, 0, 0, outcome == "failed" ? "boom" : null, 1000, $"run-{seed}");
+}
+
+/// <summary>
+/// A leaf for the search tests, which have no combat net: a finished combat as <see cref="LeafValue"/> scores it, and a
+/// combat still going below any win, higher for more HP kept and more of the enemies' HP taken.
+/// </summary>
+internal sealed class ToyLeaf : ICombatLeaf
+{
+    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
+    {
+        if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs);
+        double kept = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
+        double taken = 1 - obs.Enemies.Sum(e => Math.Max(0, e.Hp)) / (double)Math.Max(1, obs.Enemies.Sum(e => e.MaxHp));
+        return LeafValue.WinBase * (kept + taken) / 2;
+    }
 }

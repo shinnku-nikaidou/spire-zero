@@ -25,13 +25,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker;
 
 /// <summary>How a run starts: a new singleplayer run of <see cref="Character"/>; a loadout replaces the starting one.</summary>
-/// <param name="AutoWin">The boss gauntlet pilot's rule: every combat, bosses included, is won at its start as the game's
-/// <c>win</c> console command wins it, and its rewards follow as after any win; no combat decision is asked.</param>
-/// <param name="Gauntlet">The boss gauntlet's rule (gauntlet-elite): a combat whose encounter is a plain monster
-/// encounter is won at its start as with <paramref name="AutoWin"/>, an event's included; elites and bosses, an event's
-/// included, are fought by the combat policy.</param>
-internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null, bool AutoWin = false,
-    bool Gauntlet = false);
+internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null);
 
 /// <summary>
 /// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator/runs §2).
@@ -198,7 +192,7 @@ internal sealed class RunSession : IDisposable
         var run = RunState.FromSerializable(save);
         var player = run.Players[0];
         var replay = new Replay(clone.Trace, combat, macro);
-        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel, Gauntlet: clone.Gauntlet == true);
+        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel);
         var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = true, _checkpoint = clone.Save };
         session._selector.QueueReplay(clone.Trace.Where(s => s.StartsWith(Surfaces.CardChoice + " ", StringComparison.Ordinal))
             .Select(s => s[(Surfaces.CardChoice.Length + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray()));
@@ -225,9 +219,8 @@ internal sealed class RunSession : IDisposable
         }
     }
 
-    /// <summary>The current node's SL clone: its checkpoint and the decisions since, and the gauntlet's rule if the run plays by it.</summary>
-    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), _trace.Skip(NodeStart).ToList(),
-        Setup.Gauntlet ? true : null);
+    /// <summary>The current node's SL clone: its checkpoint and the decisions since.</summary>
+    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), _trace.Skip(NodeStart).ToList());
 
     /// <summary>Makes one decision, after anything the game or the driver does on its own. Does nothing once the run is over.</summary>
     public void Step()
@@ -269,12 +262,7 @@ internal sealed class RunSession : IDisposable
     {
         if (IsOver && !Won && Run.CurrentRoom is CombatRoom room && room != _room) EnterCombat(room);
         if (_combats.Count == 0 || _combats[^1].End != null || (CombatManager.Instance.IsInProgress && !IsOver)) return;
-        var enemies = _combatState!.Enemies;
-        _combats[^1] = _combats[^1] with
-        {
-            End = new(IsOver && !Won, Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions(),
-                enemies.Where(e => e.IsAlive).Sum(e => e.CurrentHp), enemies.Sum(e => e.MaxHp)),
-        };
+        _combats[^1] = _combats[^1] with { End = new(IsOver && !Won, Player.Creature.CurrentHp, Player.Creature.MaxHp, Potions()) };
     }
 
     private void EnterCombat(CombatRoom room)
@@ -372,11 +360,7 @@ internal sealed class RunSession : IDisposable
                 _progress.CombatEntered = true;
                 EnterCombat(room);
             }
-            if (!Setup.AutoWin && !(Setup.Gauntlet && room.Encounter.RoomType == RoomType.Monster)) return CombatDecision();
-            // An enemy that comes back or calls others when killed keeps the combat going: kill again, a few times.
-            if (++_progress.AutoWins > 5) throw new InvalidOperationException($"auto-win: the combat goes on after 5 wins: {Describe()}");
-            Await(Win());
-            return false;
+            return CombatDecision();
         }
         if (_progress.RewardsOffered) throw new InvalidOperationException($"combat over and no screen: {Describe()}");
         _progress.RewardsOffered = true;
@@ -387,17 +371,6 @@ internal sealed class RunSession : IDisposable
             _progress.Left = true;
         }
         return false;
-    }
-
-    /// <summary>The game's <c>WinConsoleCmd</c>: each enemy loses its powers and is killed, then the game checks for the win.</summary>
-    private static async Task Win()
-    {
-        foreach (var enemy in CombatManager.Instance.DebugOnlyGetState()!.Enemies.ToList())
-        {
-            enemy.RemoveAllPowersInternalExcept();
-            await CreatureCmd.Kill(enemy);
-        }
-        await CombatManager.Instance.CheckWinCondition();
     }
 
     private bool CombatDecision()
@@ -622,7 +595,6 @@ internal sealed class RunSession : IDisposable
         /// <summary>Proceeded: the map is open.</summary>
         public bool Left;
         public bool CombatEntered;
-        public int AutoWins;
         public bool RewardsOffered;
         public bool RestSucceeded;
         public bool ChestOpened;

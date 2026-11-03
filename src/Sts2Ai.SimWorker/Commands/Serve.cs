@@ -25,16 +25,17 @@ internal static class Serve
             // stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
             var wire = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
             Console.SetOut(Console.Error);
-            return Cli.Game((_, pump) => Run(pump, wire, Leaf.Read(r).Leaf))(r);
+            return Cli.Game((_, pump) => Run(pump, wire, Leaf.Read(r).Net))(r);
         });
         return command;
     }
 
-    /// <param name="leaf">The leaf to search with.</param>
-    private static int Run(Pump pump, TextWriter wire, ICombatLeaf leaf)
+    /// <param name="leaf">The leaf to search with; null for a worker that only probes l0's options on the clone.</param>
+    private static int Run(Pump pump, TextWriter wire, ICombatLeaf? leaf)
     {
-        var pimc = new PimcBrain(leaf);
-        var planner = new SlPlanner(leaf);
+        var pimc = leaf == null ? null : new PimcBrain(leaf);
+        var planner = leaf == null ? null : new SlPlanner(leaf);
+        Exception NoLeaf() => new InvalidOperationException("a search request to a worker with no --combat-net");
         HeadlessGame.TakeErrors();
         wire.WriteLine(ProtocolJson.Serialize(new WorkerHello(HeadlessGame.GameVersion)));
         while (Console.In.ReadLine() is { } line)
@@ -46,9 +47,10 @@ internal static class Serve
                 id = request.Id;
                 var reply = request switch
                 {
-                    SlTurnRequest turn => new WorkerReply(id, null, null, [], SearchTurn(pump, planner, turn)),
+                    SlTurnRequest turn => new WorkerReply(id, null, null, [], SearchTurn(pump, planner ?? throw NoLeaf(), turn)),
                     SlMacroRequest macro => new WorkerReply(id, null, null, [], Afters: NodeProbe.After(pump, macro.Node, macro.Paths)),
-                    _ => new WorkerReply(id, Search(pump, pimc, request), null, []),
+                    PimcWorldRequest world => new WorkerReply(id, Search(pump, pimc ?? throw NoLeaf(), world), null, []),
+                    _ => throw new InvalidDataException($"no search for {request.GetType().Name}"),
                 };
                 wire.WriteLine(ProtocolJson.Serialize(reply with { GameErrors = HeadlessGame.TakeErrors() }));
             }
@@ -73,23 +75,10 @@ internal static class Serve
         return $"{e.GetType().Name} at {string.Join(" from ", frames)}: {Logs.FirstLine(e.Message)}\n{e}";
     }
 
-    private static IReadOnlyList<PlannedLine> Search(Pump pump, PimcBrain brain, WorkerRequest request)
+    private static IReadOnlyList<PlannedLine> Search(Pump pump, PimcBrain brain, PimcWorldRequest r)
     {
-        switch (request)
-        {
-            case PimcWorldRequest r:
-            {
-                using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, r.History);
-                return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst, r.History);
-            }
-            case SlWorldRequest r:
-            {
-                using var world = new NodeWorld(pump, r.Node);
-                return brain.SearchWorld(world, world.Observe().Round, r.First, r.NodesPerFirst, r.History);
-            }
-            default:
-                throw new InvalidDataException($"no search for {request.GetType().Name}");
-        }
+        using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, r.History);
+        return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst, r.History);
     }
 
     /// <summary>The SL planner's turn from a state of the node's clone: the clone at the decision, then the path.</summary>
@@ -97,6 +86,6 @@ internal static class Serve
     {
         using var world = new NodeWorld(pump, r.Node);
         foreach (var action in r.Path) world.Execute(action);
-        return planner.SearchTurn(world, r.History ?? [], r.Nodes, r.Keep, r.Floor);
+        return planner.SearchTurn(world, r.History, r.Nodes, r.Keep, r.Floor);
     }
 }

@@ -14,30 +14,6 @@ public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, NodeC
 {
     /// <summary>A placeholder policy: it gives its pick and no candidates.</summary>
     public static CombatRoute Of(string brain, ICombatPolicy policy) => new(brain, (decision, _, _, _) => new(policy.Choose(decision), [], []));
-
-    /// <summary>
-    /// Self-play exploration (docs: learning/loop §9): this route with its first action drawn by <paramref name="explore"/>
-    /// over the search's candidates by value, where there are two or more. One that is not the search's pick is played
-    /// without a plan, as the plan was the pick's, and is marked explored if it is valued below the pick
-    /// (<see cref="Softmax.Explored"/>). The caller names the brain with its exploration.
-    /// </summary>
-    public CombatRoute Exploring(Softmax explore)
-    {
-        var decide = Decide;
-        return this with
-        {
-            Decide = (decision, seed, node, history) =>
-            {
-                var result = decide(decision, seed, node, history);
-                if (result.Candidates.Count < 2) return result;
-                var candidates = result.Candidates;
-                int drawn = explore.Draw(candidates.Select(c => c.Value).ToList());
-                if (drawn == 0) return result;
-                bool explored = explore.Explored(candidates[drawn].Value, candidates[0].Value);
-                return new(CombatAction.Parse(candidates[drawn].Action), [], candidates, Explored: explored);
-            },
-        };
-    }
 }
 
 /// <summary>A brain for one side of the routing table, with its name for the log.</summary>
@@ -49,13 +25,12 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Chosen">The action in text form; for a prompt, the picked option indexes.</param>
 /// <param name="Plan">What the brain planned after <paramref name="Chosen"/>: the rest of the turn in combat, the rest of
 /// the act's route on the map.</param>
-/// <param name="Obs">On a combat decision, the observation the brain was shown: the input of the learned combat parts
-/// and of the fusion panel.</param>
+/// <param name="Obs">On a combat decision, the observation the brain was shown: the combat net's input.</param>
 /// <param name="RunView">On a macro decision, the run the brain was shown: what V is trained on (docs: macro-brain/value §3).</param>
 /// <param name="History">On a combat decision, what each enemy of the combat showed at the start of each round so far,
 /// this one's included (<see cref="Dispatcher.History"/>).</param>
-/// <param name="Explored">True when <paramref name="Chosen"/> was drawn by self-play exploration and valued below the
-/// brain's best (docs: learning/loop §9; <see cref="Softmax.Explored"/>); absent otherwise.</param>
+/// <param name="Explored">True when <paramref name="Chosen"/> was drawn by self-play exploration (docs: learning/loop §9;
+/// <see cref="Uniform"/>); absent otherwise.</param>
 /// <param name="Replanned">True when the combat brain searched again because a step of its plan did not hold
 /// (<see cref="CombatDecisionResult.Replanned"/>); absent otherwise.</param>
 public sealed record DecisionEntry(
@@ -98,8 +73,6 @@ public sealed class Dispatcher(
 
     /// <summary>The run's decisions so far, when logging.</summary>
     public IReadOnlyList<DecisionEntry> Log => _log;
-
-    public PlayEnvironment Env => env;
 
     /// <summary>The latest decision's brain, plan and candidates.</summary>
     public DecisionNote? Last { get; private set; }
@@ -145,7 +118,7 @@ public sealed class Dispatcher(
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: history,
-                Explored: Mark(result.Explored), Replanned: Mark(result.Replanned)));
+                Replanned: Mark(result.Replanned)));
         _pick = result.First.Pick;
         return result.First.Plain;
     }
@@ -210,7 +183,7 @@ public sealed class Dispatcher(
     private NodeClone Clone()
     {
         var node = _node ?? throw new InvalidOperationException("an SL decision before any node checkpoint");
-        return new(node.Checkpoint, _nodeTrace.ToList(), node.Gauntlet);
+        return new(node.Checkpoint, _nodeTrace.ToList());
     }
 
     private (int Id, ulong Seed, Stopwatch Clock) Begin(string brain)

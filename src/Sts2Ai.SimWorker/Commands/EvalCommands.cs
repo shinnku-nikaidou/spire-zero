@@ -40,8 +40,6 @@ internal static class ReportCommand
     /// <summary><see cref="EvalReport.Of"/> dated today, its refusal of the records a mistake in the command line.</summary>
     public static EvalReport Of(IReadOnlyList<RunRecord> runs, string seedSet, IReadOnlyList<string> seeds)
     {
-        if (runs.FirstOrDefault(r => r.Config.AutoWin == true || r.Config.Gauntlet == true) is { } gauntlet)
-            throw new CliException($"run {gauntlet.Seed} is a boss gauntlet's (combats won at their start): no evaluation reports it");
         try
         {
             return EvalReport.Of(runs, seedSet, seeds, DateTime.Now.ToString("yyyy-MM-dd"));
@@ -57,8 +55,8 @@ internal static class ReportCommand
 /// gate: the full-run gate (docs: evaluation/gates §6), the challenger's records against the champion's report, paired by
 /// seed, with an SPRT. The challenger is named by its run options, which must be the ones its records were played
 /// with, and its runs must be of the champion's character and ascension. On a pass, --promote PATH writes the
-/// challenger's report to PATH and makes it the champion, naming its weights files where they are, in the character's
-/// weights folder (<see cref="ChampionOptions.Promoted"/>); its report faces the next challengers, so it must cover the
+/// challenger's report to PATH and makes it the champion, naming its weights files where they are, in weights/all
+/// (<see cref="ChampionOptions.Promoted"/>); its report faces the next challengers, so it must cover the
 /// whole seed set. The SPRT may pass early: play the rest, then promote.
 /// </summary>
 internal static class GateCommand
@@ -169,65 +167,5 @@ internal static class SeedsCommand
             foreach (int i in Enumerable.Range(0, r.GetValue(N))) Console.WriteLine(GameSeeds.MakeSeed(r.GetValue(Base), i));
         });
         return command;
-    }
-}
-
-/// <summary>
-/// ranks: V's card sense, for reading (docs: learning/reference §10): the run views of the logs' card rewards, per act, each
-/// valued with one more copy of a card and without. A card is shown as the logs' decks hold it unupgraded, and only
-/// cards some deck held are ranked. What a card is worth depends on the deck, so this is a mean, not a test.
-/// </summary>
-internal static class RanksCommand
-{
-    private static readonly Option<string> LogFiles = Opt.Required<string>("--logs", "decision logs, comma-separated");
-    private static readonly Option<string> Value = Opt.Required<string>("--value", "V's net file");
-    private static readonly Option<int> PerAct = Opt.Of("--per-act", 200, "card rewards sampled per act");
-    private static readonly Option<int> Top = Opt.Of("--top", 30, "cards shown from the top");
-
-    public static Command Command()
-    {
-        var command = Opt.Command("ranks", "V's card sense: per act, each card's mean change of V when one more copy joins the logs' decks", [LogFiles, Value, PerAct, Top]);
-        command.SetAction(Run);
-        return command;
-    }
-
-    private static int Run(ParseResult r)
-    {
-        IRunValue value = RunNet.Read(r.GetValue(Value)!);
-        var views = new Dictionary<int, List<RunView>>();
-        var cards = new SortedDictionary<string, CardView>(StringComparer.Ordinal);
-        foreach (var path in r.GetValue(LogFiles)!.Split(','))
-            foreach (var line in File.ReadLines(path))
-            {
-                if (!line.Contains("\"run_view\"")) continue;
-                RunView view;
-                try
-                {
-                    using var doc = JsonDocument.Parse(line);
-                    view = doc.RootElement.GetProperty("run_view").Deserialize<RunView>(ProtocolJson.Options)!;
-                    if (doc.RootElement.GetProperty("surface").GetString() == Surfaces.CardReward)
-                        (views.TryGetValue(view.Act, out var list) ? list : views[view.Act] = []).Add(view);
-                }
-                catch (JsonException)
-                {
-                    continue; // a line still being written
-                }
-                foreach (var card in view.Deck.Where(c => c.Up is null or 0 && c.Enchant == null && c.Affliction == null))
-                    cards.TryAdd(card.Id, card with { Uid = null });
-            }
-        var rng = new Random(0);
-        int top = r.GetValue(Top);
-        foreach (var (act, all) in views.OrderBy(kv => kv.Key))
-        {
-            var sample = all.OrderBy(_ => rng.Next()).Take(r.GetValue(PerAct)).ToList();
-            var before = sample.Select(value.Value).ToList();
-            var scores = cards.Values.Select(card => (card.Id, Score: sample.Select((v, k) =>
-                value.Value(v with { Deck = [.. v.Deck, card] }) - before[k]).Average())).OrderByDescending(t => t.Score).ToList();
-            Console.WriteLine($"act {act}: {sample.Count} card rewards, {value.Name}, mean change from one more copy");
-            foreach (var (id, score) in scores.Take(top)) Console.WriteLine(FormattableString.Invariant($"  {score,8:+0.000;-0.000}  {id}"));
-            Console.WriteLine("  ...");
-            foreach (var (id, score) in scores.TakeLast(5)) Console.WriteLine(FormattableString.Invariant($"  {score,8:+0.000;-0.000}  {id}"));
-        }
-        return 0;
     }
 }

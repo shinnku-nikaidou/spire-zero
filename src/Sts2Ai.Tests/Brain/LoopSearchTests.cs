@@ -114,7 +114,7 @@ public class LoopSearchTests
         }
     }
 
-    private static readonly HandLeaf Leaf = new();
+    private static readonly ToyLeaf Leaf = new();
     private static readonly CombatAction R = CombatAction.Play(1), H = CombatAction.Play(2, 1);
 
     private static SlPlan Plan(Loop world) => new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 8));

@@ -22,9 +22,9 @@ public class CombatNetTests
     /// </summary>
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
 
-    /// <summary>The champion's own file: its test states are the ones it plays from.</summary>
+    /// <summary>The champion's own file: loading checks CombatNet gives its test states the trainer's endings.</summary>
     [Fact]
-    public void ReadsC9_0sStatesAsC8_3sTrainerDid()
+    public void ReadsC9_0sTestStatesAsItsTrainerDid()
     {
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Repo("weights", "all", "c9-0.json")));
         using var net = CombatNet.Load(file);

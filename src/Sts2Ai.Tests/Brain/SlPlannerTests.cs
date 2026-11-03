@@ -90,7 +90,7 @@ public class SlPlannerTests
         }
     }
 
-    private static readonly HandLeaf Leaf = new();
+    private static readonly ToyLeaf Leaf = new();
 
     /// <summary>The best end of the combat by trying every line; each state once, as the toy shows all of it but the draw.</summary>
     private static double BruteForce(Toy world, Dictionary<(ulong, ulong), double> known)

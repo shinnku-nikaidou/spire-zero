@@ -16,12 +16,12 @@ internal static partial class SelfTest
 
     /// <summary>
     /// A few decisions, each searched here and in a pool of <paramref name="workers"/> serve processes with the same
-    /// seeds, with the nodes shared evenly and by halving: the candidates, their values and the plan must be the same.
+    /// seeds and the same combat net: the candidates, their values and the plan must be the same.
     /// </summary>
-    private static void PooledMatches(Pump pump, CombatPool combats, int seed, int workers, Action<string, bool, string> check)
+    private static void PooledMatches(Pump pump, CombatPool combats, int seed, int workers, LeafChoice net, Action<string, bool, string> check)
     {
-        var brain = new PimcBrain();
-        using var workerPool = new WorkerPool(Program.SelfCommand(), workers);
+        var brain = new PimcBrain(net.Leaf);
+        using var workerPool = new WorkerPool(Program.SelfCommand(), workers, net.WorkerOptions());
         var pooled = new PooledPimc(workerPool);
         for (int i = 0; i < 4; i++)
         {
@@ -38,15 +38,13 @@ internal static partial class SelfTest
             }
             ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{i}");
             string buildSeed = GameSeeds.MakeSeed((int)decisionSeed, 0);
-            foreach (var budget in new Budget[] { new(4, 120), new(4, 120, Halving: true) })
-            {
-                CombatDecisionResult here;
-                using (var worlds = SimWorlds.NoSL(pump, obs, buildSeed))
-                    here = brain.Decide(obs, legal, worlds, budget, decisionSeed);
-                var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed);
-                check("pooled search matches in-process search",
-                    Show(here) == Show(there), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; pooled {Show(there)}");
-            }
+            var budget = new Budget(4, 120);
+            CombatDecisionResult here;
+            using (var worlds = SimWorlds.NoSL(pump, obs, buildSeed))
+                here = brain.Decide(obs, legal, worlds, budget, decisionSeed, []);
+            var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed, []);
+            check("pooled search matches in-process search",
+                Show(here) == Show(there), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; pooled {Show(there)}");
             var errors = workerPool.TakeGameErrors();
             check("no game errors in workers", errors.Count == 0, $"#{i}: {errors.FirstOrDefault()}");
         }
@@ -247,7 +245,7 @@ internal static partial class SelfTest
     /// of the cycle: Particle Wall costs stars this character has none of until Touch of Insanity makes it free, and the
     /// prompt policy would give that to Haze.
     /// </summary>
-    private static void CyclesKillInOneTurn(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    private static void CyclesKillInOneTurn(Pump pump, List<EncounterModel> pool, int act, ICombatLeaf leaf, Action<string, bool, string> check)
     {
         void Case(string name, string[] deck, string[] potions)
         {
@@ -269,7 +267,7 @@ internal static partial class SelfTest
             using (var worlds = SimWorlds.SL(pump, root))
             {
                 var world = worlds.Worlds(1, 0)[0];
-                var plan = new SlPlanner().Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 8));
+                var plan = new SlPlanner(leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 8));
                 check($"SL planner repeats a cycle to lethal ({name})", plan.End == CombatStatus.Won && plan.Result.First != CombatAction.EndTurn && plan.Result.Plan.Count(a => a == CombatAction.EndTurn) <= 1, $"{plan.End}: {plan.Result.Plan.Count + 1} actions");
                 world.Restore(new([]));
                 foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
@@ -277,7 +275,7 @@ internal static partial class SelfTest
             }
             using (var worlds = SimWorlds.NoSL(pump, obs, setup.Seed))
             {
-                var pimc = new PimcBrain().Decide(obs, legal, worlds, new Budget(Worlds: 2, NodesPerWorld: 300), 1);
+                var pimc = new PimcBrain(leaf).Decide(obs, legal, worlds, new Budget(Worlds: 2, NodesPerWorld: 300), 1);
                 check($"PIMC finds a cycle ({name})", pimc.Repeats, $"{pimc.First} [{string.Join(" ", pimc.Plan.Take(8))}...]");
             }
         }

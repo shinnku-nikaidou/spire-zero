@@ -69,25 +69,16 @@ public sealed class SlRoute(Budget budget)
 /// the run, unless another answer opens a cycle; a cycle goes to <see cref="LoopSearch"/>. The turns' searches are independent, so a turn is one <see cref="TurnSearcher"/> call that can run them
 /// apart: <see cref="Plan"/> runs them here, Harness's pooled planner in workers.
 /// </summary>
-public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
+public sealed class SlPlanner(ICombatLeaf leaf)
 {
     /// <summary>How many turns a plan may look ahead; a line still going after them ends there, and is planned again.</summary>
     public const int MaxTurns = 40;
-
-    private readonly ICombatLeaf _leaf = leaf ?? new HandLeaf();
-
-    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IWorldSource worlds, Budget budget, ulong seed,
-        IReadOnlyList<EnemyTurns>? history = null)
-    {
-        if (worlds.Environment != PlayEnvironment.SL) throw new InvalidOperationException($"the SL planner in {worlds.Environment}");
-        return legal.Count == 1 ? PimcBrain.Only(legal[0]) : Plan(observation, worlds.Worlds(1, 0)[0], budget, history).Result;
-    }
 
     /// <summary>Plans the rest of the combat in <paramref name="world"/>, the SL world at the decision, searching here.</summary>
     public SlPlan Plan(CombatObservation observation, ICombatWorld world, Budget budget, IReadOnlyList<EnemyTurns>? history = null)
     {
         var root = world.Snapshot();
-        return Search(budget.For(observation.Room), history ?? [], (jobs, nodes, keep, floor) => jobs.Select(job =>
+        return Search(budget, history ?? [], (jobs, nodes, keep, floor) => jobs.Select(job =>
         {
             world.Restore(root);
             foreach (var action in job.Path) world.Execute(action);
@@ -96,7 +87,7 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
     }
 
     /// <summary>
-    /// The beam over turns, from the decision's state, with the budget of its room (<see cref="Budget.For"/>). A greedy
+    /// The beam over turns, from the decision's state. A greedy
     /// dive comes first, a beam of one: its line, often a win, is the floor that prunes the full beam from its first
     /// turn on, and when it already reaches the decision's bound the full beam is not needed. When the dive wins, the
     /// full beam keeps <see cref="Budget.EasyBeam"/> states, if set: it only improves a win already found.
@@ -254,7 +245,7 @@ public sealed class SlPlanner(ICombatLeaf? leaf = null) : ICombatBrain
     /// </summary>
     /// <param name="history">The record of enemy moves up to the world's state; each end's goes on from it.</param>
     public TurnSearch SearchTurn(ICombatWorld world, IReadOnlyList<EnemyTurns> history, int nodes, int keep, double? floor) =>
-        new TurnDfs(world, _leaf, history, nodes, floor).Run(keep);
+        new TurnDfs(world, leaf, history, nodes, floor).Run(keep);
 
     private sealed class TurnDfs(ICombatWorld world, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodes, double? floor)
     {

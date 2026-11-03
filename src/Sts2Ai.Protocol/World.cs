@@ -55,13 +55,11 @@ public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 /// An SL clone of the current node (docs: environments/information §7): the node's checkpoint at its entry (the game's save and the
 /// relic fields it drops), and every decision since, as "surface action" (picks of a card prompt as the game's own
 /// indexes). Opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back
-/// and replays the decisions. <see cref="Gauntlet"/> is true for a run of the boss gauntlet (<c>run --gauntlet</c>),
-/// whose rule the clone keeps: a plain monster encounter won at its start.
+/// and replays the decisions.
 /// </summary>
-public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, bool? Gauntlet = null);
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
 
 /// <summary>An action that search scored: its mean value over the worlds, the 95% confidence half-width, and how many worlds.</summary>
 /// <param name="Values">Its value in each world, in world order, to 4 decimals: the Q that ExIt's targets are made of
 /// (docs: learning/loop §5).</param>
-/// <param name="Nodes">The actions the search simulated below it in each world.</param>
-public sealed record Candidate(string Action, double Value, double Ci, int Samples, IReadOnlyList<double>? Values = null, IReadOnlyList<int>? Nodes = null);
+public sealed record Candidate(string Action, double Value, double Ci, int Samples, IReadOnlyList<double>? Values = null);

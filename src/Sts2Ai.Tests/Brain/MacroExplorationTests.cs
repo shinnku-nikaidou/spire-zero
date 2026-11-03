@@ -50,32 +50,6 @@ public class MacroExplorationTests
         Assert.False(l0.Explored);
     }
 
-    [Fact]
-    public void ExploringItDrawsByVAndTheLogMarksWhatIsNotTheBest()
-    {
-        var l0 = new MacroBrain(V, new Softmax(1, new Random(1)));
-        var dispatcher = new Dispatcher("run-1", PlayEnvironment.NoSL, CombatRoute.Of("test", new PlayPolicy(new Random(1))),
-            new("p0", PromptBrain.Instance), new("l0", l0), new("l0", l0), log: true);
-        var picks = Enumerable.Range(0, 1000).Select(_ => dispatcher.Choose(Treasure())).ToList();
-
-        // By their logs, weights 1 : 3 : 2.9 for A, B, C.
-        Assert.InRange(picks.Count(p => p == "relic:0"), 110, 180);
-        Assert.InRange(picks.Count(p => p == "relic:1"), 390, 480);
-        Assert.All(dispatcher.Log, e => Assert.Equal(e.Chosen != "relic:1" ? true : null, e.Explored));
-    }
-
-    [Fact]
-    public void ExploringReadsVsRatiosAtAnySizeAndNeverDrawsWhatIsWorthNothing()
-    {
-        var l0 = new MacroBrain(new Worth(new() { ["A"] = 1e-7, ["B"] = 3e-7, ["C"] = 0 }), new Softmax(1, new Random(1)));
-        var dispatcher = new Dispatcher("run-1", PlayEnvironment.NoSL, CombatRoute.Of("test", new PlayPolicy(new Random(1))),
-            new("p0", PromptBrain.Instance), new("l0", l0), new("l0", l0), log: true);
-        var picks = Enumerable.Range(0, 1000).Select(_ => dispatcher.Choose(Treasure())).ToList();
-
-        Assert.InRange(picks.Count(p => p == "relic:0"), 200, 300);
-        Assert.Equal(0, picks.Count(p => p == "relic:2"));
-    }
-
     private static List<CardView> Cards(string[] ids) => ids.Select(id => new CardView { Id = id }).ToList();
 
     private static MacroDecision Rewards(params string[] cards) => new(Surfaces.Rewards, ["reward:0", "rewards_done"], () => new Observation
@@ -158,18 +132,5 @@ public class MacroExplorationTests
         // V's best 90 % plus a third of the draws.
         Assert.InRange(treasure.Count(p => p.Item1 == "relic:1"), 900, 960);
         Assert.InRange(treasure.Count(p => p.Explored), 70, 130);
-    }
-
-    [Fact]
-    public void ExploringAPromptItMayStopOrPickButNotBelowTheMinimum()
-    {
-        // Stopping is worth 1, what its relic gives; so by their logs the weights stay those below.
-        var worth = new Worth(new() { [Fixtures.Floor1().Relics[0].Id] = 1, ["BAD"] = Math.Exp(-2) - 1, ["WORSE"] = Math.Exp(-3) - 1 });
-        var l0 = new MacroBrain(worth, new Softmax(1, new Random(1)));
-        var skippable = Enumerable.Range(0, 1000).Select(_ => (l0.Choose(Prompt(0, "BAD", "WORSE")), l0.Explored)).ToList();
-        // Weights 1 : e^-2 : e^-3 for stopping, BAD, WORSE.
-        Assert.InRange(skippable.Count(p => p.Item1.Count == 1), 100, 220);
-        Assert.All(skippable, p => Assert.Equal(p.Item1.Count == 1, p.Explored));
-        Assert.All(Enumerable.Range(0, 100), _ => Assert.Single(l0.Choose(Prompt(1, "BAD", "WORSE"))));
     }
 }

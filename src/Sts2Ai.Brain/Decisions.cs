@@ -89,8 +89,7 @@ public interface IChoicePolicy
     /// <summary>Indexes into <see cref="CardChoice.Options"/>; must satisfy <see cref="CardChoice.Accepts"/>.</summary>
     IReadOnlyList<int> Choose(ChoiceDecision decision);
 
-    /// <summary>Whether the last answer was drawn by self-play exploration and valued below the policy's best
-    /// (<see cref="Softmax.Explored"/>); never by default.</summary>
+    /// <summary>Whether the last answer was drawn by self-play exploration (<see cref="Uniform"/>); never by default.</summary>
     bool Explored => false;
 }
 

@@ -8,14 +8,12 @@ namespace Sts2Ai.Brain;
 public sealed record NetTest(RunView Run, double Value);
 
 /// <summary>V as <c>learn/v/export.py</c> writes it.</summary>
-/// <param name="Objective">What <see cref="RunNet.Value"/> returns: "floor", the floor expected to be reached, or "win",
-/// the chance to survive every floor.</param>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, output the hazards.</param>
 /// <param name="State">The run's numbers the net reads, by name, with the mean and std that standardize them.</param>
 public sealed record NetFile(
-    string Name, string Objective, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
+    string Name, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
     IReadOnlyList<NetTest> Tests, NetState State);
 
 /// <summary>The run's numbers the net reads (<c>learn/v/encode.py</c>'s STATE), and how they are standardized.</summary>
@@ -31,9 +29,8 @@ public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<str
 /// <summary>
 /// V (docs: macro-brain/network), run by ONNX Runtime: a net over the run's cards, relics, potions and context, the map
 /// points still reachable and the run's numbers (<see cref="NetFile.State"/>), read as <c>learn/v/encode.py</c> reads them.
-/// The graph gives one hazard per floor: the chance to die on that floor if still alive there. The value is read from
-/// those chances from the current floor on (<see cref="NetFile.Objective"/>). This class only turns a run into the graph's
-/// inputs.
+/// The graph gives one hazard per floor: the chance to die on that floor if still alive there. The value is the chance to
+/// survive every floor from the current one on, the chance to win. This class only turns a run into the graph's inputs.
 /// </summary>
 public sealed class RunNet : IRunValue, IDisposable
 {
@@ -79,13 +76,9 @@ public sealed class RunNet : IRunValue, IDisposable
     {
         var hazards = Hazards(run);
         int from = Math.Clamp(run.Floor, 0, _file.Floors - 1);
-        double alive = 1, floor = from;
-        for (int g = from; g < _file.Floors; g++)
-        {
-            alive *= 1 - hazards[g];
-            floor += alive;
-        }
-        return _file.Objective == "win" ? alive : floor;
+        double alive = 1;
+        for (int g = from; g < _file.Floors; g++) alive *= 1 - hazards[g];
+        return alive;
     }
 
     public void Dispose() => _session.Dispose();

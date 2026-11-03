@@ -74,15 +74,14 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
     {
         if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs);
-        var w = LeafValue.Default;
         var outputs = Graph(obs, history);
         var (outcome, potionUsed) = (outputs[0], outputs[1]);
         double share = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
         double width = (1 - _file.LossMin) / _file.Buckets, value = 0;
         for (int k = 1; k < outcome.Length; k++)
-            value += outcome[k] * (w.WinBase + w.PerHp * (share - (_file.LossMin + (k - 0.5) * width)));
+            value += outcome[k] * (LeafValue.WinBase + LeafValue.PerHp * (share - (_file.LossMin + (k - 0.5) * width)));
         double kept = obs.Potions.OfType<string>().Sum(p => 1.0 - potionUsed[Index("potions", p)]);
-        return value + (1 - outcome[0]) * w.PerPotion * kept;
+        return value + (1 - outcome[0]) * LeafValue.PerPotion * kept;
     }
 
     public void Dispose() => _session.Dispose();

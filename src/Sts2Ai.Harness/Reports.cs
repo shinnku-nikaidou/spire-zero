@@ -99,7 +99,7 @@ public sealed record EvalReport(RunConfig Config, string SeedSet, int SetSize, s
         var md = new StringBuilder();
         void Line(FormattableString text) => md.AppendLine(text.ToString(CultureInfo.InvariantCulture));
 
-        Line($"# Evaluation {Date}: {Config.Env} {Config.Rung}, {SeedSet}");
+        Line($"# Evaluation {Date}: {Config.Env}, {SeedSet}");
         md.AppendLine();
         if (m.Void) Line($"**Void** (docs: evaluation/metrics §2): {VoidReasons()}.");
         if (Runs.Count < SetSize) Line($"**Partial:** {Runs.Count} of the set's {SetSize} seeds were run.");
@@ -108,7 +108,7 @@ public sealed record EvalReport(RunConfig Config, string SeedSet, int SetSize, s
         Line($"| game | {Config.Game} |");
         Line($"| commit | `{Config.Commit}` |");
         Line($"| champion | {Config.Champion} |");
-        Line($"| environment, rung | {Config.Env}, {Config.Rung} |");
+        Line($"| environment | {Config.Env} |");
         Line($"| seed set | {SeedSet}: {Runs.Count} of {SetSize} runs, {string.Join(" ", Runs.Select(r => r.Character).Distinct())} A{Runs[0].Ascension} |");
         md.AppendLine();
         md.AppendLine("## Main").AppendLine();
@@ -132,8 +132,8 @@ public sealed record EvalReport(RunConfig Config, string SeedSet, int SetSize, s
         {
             md.AppendLine();
             md.AppendLine($"## Against {previous.Date} ({previous.Config.Champion}, commit `{previous.Config.Commit}`)").AppendLine();
-            if (previous.SeedSet != SeedSet || previous.Config.Env != Config.Env || previous.Config.Rung != Config.Rung)
-                Line($"Not comparable: that one is {previous.Config.Env} {previous.Config.Rung} on {previous.SeedSet}.");
+            if (previous.SeedSet != SeedSet || previous.Config.Env != Config.Env)
+                Line($"Not comparable: that one is {previous.Config.Env} on {previous.SeedSet}.");
             else
             {
                 var p = previous.Metrics;
@@ -185,10 +185,10 @@ public static class Leaderboard
         md.AppendLine("reports are left out; a void one is marked, and so is each environment's champion (`eval/CHARACTER/champions/`).");
         md.AppendLine("The two environments are never ranked together, nor two characters or ascensions.");
         foreach (var board in reports.Where(r => r.Runs.Count == r.SetSize)
-                     .GroupBy(r => (r.Runs[0].Character, r.Runs[0].Ascension, r.SeedSet, r.Config.Rung)).OrderBy(g => g.Key))
+                     .GroupBy(r => (r.Runs[0].Character, r.Runs[0].Ascension, r.SeedSet)).OrderBy(g => g.Key))
         {
             md.AppendLine();
-            Line($"## {board.Key.Character}, ascension {board.Key.Ascension}: {board.Key.SeedSet}, {board.Key.Rung}");
+            Line($"## {board.Key.Character}, ascension {board.Key.Ascension}: {board.Key.SeedSet}");
             foreach (var env in board.GroupBy(r => r.Config.Env).OrderBy(g => g.Key == "SL"))
             {
                 md.AppendLine();

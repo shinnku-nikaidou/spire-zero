@@ -78,10 +78,9 @@ public sealed record WireError(string Message) : WireMessage;
 /// <summary>
 /// Host → brain, SL only (docs: mod/sl-record §7): the node's checkpoint on arrival, before the node's first decision: the game's
 /// save and the relic fields it drops (docs: simulator/worlds §6), opaque outside the simulator. Nodes are numbered from 0 in
-/// the run. <see cref="Gauntlet"/> is true in a boss gauntlet's run, whose rule the node's clones keep
-/// (<see cref="NodeClone.Gauntlet"/>).
+/// the run.
 /// </summary>
-public sealed record NodeCheckpoint(int NodeIndex, string Checkpoint, bool? Gauntlet = null) : WireMessage;
+public sealed record NodeCheckpoint(int NodeIndex, string Checkpoint) : WireMessage;
 
 /// <summary>
 /// Host → brain, SL only: a decision taken in the node, numbered by <see cref="Seq"/> from 0, as "surface action" (a

@@ -2,12 +2,6 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
 
-/// <summary>Uniform over the legal actions. Ends turns early a lot.</summary>
-public sealed class RandomPolicy(Random rng) : ICombatPolicy
-{
-    public CombatAction Choose(CombatDecision decision) => decision.Legal[rng.Next(decision.Legal.Count)];
-}
-
 /// <summary>
 /// Keeps playing random cards, uses a potion now and then, and ends the turn only when nothing else is left.
 /// A placeholder that wins most easy combats, for benchmarks and tests until search exists.
@@ -43,12 +37,11 @@ public sealed class RandomMacro(Random rng) : IMacroPolicy
 
 public static class Policies
 {
-    public static readonly string[] CombatNames = ["play", "random"];
+    public static readonly string[] CombatNames = ["play"];
 
     public static ICombatPolicy Combat(string name, Random rng) => name switch
     {
         "play" => new PlayPolicy(rng),
-        "random" => new RandomPolicy(rng),
         _ => throw new ArgumentException($"unknown policy {name} (one of {string.Join(", ", CombatNames)})"),
     };
 }

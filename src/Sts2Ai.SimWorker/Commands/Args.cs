@@ -112,14 +112,10 @@ internal sealed class BudgetArgs
 
     /// <summary>The budget options' names in a champion file: they belong to the file's combat brain.</summary>
     public static readonly IReadOnlySet<string> Keys = new HashSet<string>
-        { "worlds", "nodes", "elite-x", "boss-x", "halving", "follow", "effort", "beam", "easy-beam", "replan", "loss-plans" };
+        { "worlds", "nodes", "effort", "beam", "easy-beam", "replan", "loss-plans" };
 
     private readonly Option<int> _worlds = Opt.Of("--worlds", 8, "pimc's determinized worlds per decision");
     private readonly Option<int?> _nodes = Opt.Maybe<int?>("--nodes", "search nodes per world (default 300; plan: per state and turn, default by --effort)");
-    private readonly Option<double?> _elite = Opt.Maybe<double?>("--elite-x", "multiplies the budget in elite rooms: pimc's nodes per world, plan's beam (default 1; plan: by --effort)");
-    private readonly Option<double?> _boss = Opt.Maybe<double?>("--boss-x", "multiplies the budget in boss rooms: pimc's nodes per world, plan's beam (default 1; plan: by --effort)");
-    private readonly Option<bool> _halving = Opt.Of("--halving", false, "shares the nodes over the first actions by sequential halving");
-    private readonly Option<bool> _follow = Opt.Of("--follow", false, "plays the rest of a turn every world planned the same without searching again");
     private readonly Option<string?> _effort = Opt.Maybe<string?>("--effort", $"plan's budget preset: {string.Join(", ", Budget.Efforts)} (default {DefaultEffort})")
         .AcceptOnlyFromAmong([.. Budget.Efforts]);
     private readonly Option<int?> _beam = Opt.Maybe<int?>("--beam", "plan's states kept from one turn to the next (default by --effort)");
@@ -128,33 +124,28 @@ internal sealed class BudgetArgs
     private readonly Option<int?> _lossPlans = Opt.Maybe<int?>("--loss-plans",
         "plan's unproved losing plans in a row in one combat, the last played to its end; 0: no limit (default by --effort)");
 
-    public IEnumerable<Option> Options => [_worlds, _nodes, _elite, _boss, _halving, _follow, _effort, _beam, _easyBeam, _replan, _lossPlans];
+    public IEnumerable<Option> Options => [_worlds, _nodes, _effort, _beam, _easyBeam, _replan, _lossPlans];
 
     /// <summary>The budget of the combat brain <paramref name="brain"/> (pimc, plan, or a placeholder).</summary>
     /// <param name="planElsewhere">Whether plan's options belong to another brain of the command (brain's SL hosts).</param>
     public Budget Read(ParseResult r, string brain, bool planElsewhere = false)
     {
-        var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes) ?? 300, r.GetValue(_elite) ?? 1, r.GetValue(_boss) ?? 1, r.GetValue(_halving),
-            r.GetValue(_follow));
+        var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes) ?? 300);
         bool planOptions = r.GetValue(_effort) != null || r.GetValue(_beam) != null || r.GetValue(_easyBeam) != null || r.GetValue(_replan) != null
             || r.GetValue(_lossPlans) != null;
         if (brain != "plan")
             return planElsewhere || !planOptions ? budget
                 : throw new CliException("--effort, --beam, --easy-beam, --replan and --loss-plans are plan's; they need --policy plan");
-        if (budget.Halving || budget.Follow) throw new CliException("--halving and --follow are pimc's; plan follows its plan always");
         var effort = Budget.Effort(r.GetValue(_effort) ?? DefaultEffort);
         budget = budget with
         {
             NodesPerWorld = r.GetValue(_nodes) ?? effort.NodesPerWorld,
-            Elite = r.GetValue(_elite) ?? effort.Elite,
-            Boss = r.GetValue(_boss) ?? effort.Boss,
             Beam = r.GetValue(_beam) ?? effort.Beam,
             EasyBeam = r.GetValue(_easyBeam) ?? effort.EasyBeam,
             Replan = r.GetValue(_replan) ?? effort.Replan,
             LossPlans = r.GetValue(_lossPlans) ?? effort.LossPlans,
         };
         if (budget.Beam < 1 || budget.EasyBeam < 0) throw new CliException("--beam is at least 1, --easy-beam at least 0");
-        if (budget.Elite <= 0 || budget.Boss <= 0) throw new CliException("--elite-x and --boss-x are above 0");
         return budget.Replan >= 0 && budget.LossPlans >= 0 ? budget : throw new CliException("--replan and --loss-plans are at least 0");
     }
 }
@@ -163,7 +154,7 @@ internal sealed class BudgetArgs
 internal sealed class LeafArgs
 {
     private readonly Option<string?> _net = Opt.Maybe<string?>("--combat-net",
-        "a combat net file, which values the leaves still in progress at LeafValue's prices (docs: learning/combat-net §1)");
+        "the combat net file, which values the search's leaves; pimc and plan need it (docs: learning/combat-net §1)");
 
     public IEnumerable<Option> Options => [_net];
 
@@ -217,18 +208,12 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
         .AcceptOnlyFromAmong("screen", "clone");
-    private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
-        "self-play only: l0 draws each answer by the log of V's values, softmax at this temperature (0: the best)");
-    private readonly Option<double> _combatExplore = Opt.Of("--combat-explore", 0.0,
-        "self-play only: pimc draws each searched action by the search's values, softmax at this temperature in leaf units (0: the best)");
-
     private readonly Option<double> _explore = Opt.Of("--explore", 0.0,
         "self-play only: the chance ε that l0 draws a decision's answer evenly, whatever V says: a card reward's outcome among its cards and skipping, " +
         "a card prompt's picks, every other screen's options but the potion belt's");
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, _afterstates, .. _leaf.Options, _macroExplore,
-        _combatExplore, _explore];
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, _afterstates, .. _leaf.Options, _explore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -244,16 +229,11 @@ internal sealed class ChampionArgs(bool file)
         IRunValue? value = valueFile == null ? null : RunNet.Read(valueFile);
         bool clone = r.GetValue(_afterstates) == "clone";
         if (clone && macro != "l0") throw new CliException("--afterstates is l0's; it needs --macro l0");
-        double macroExplore = r.GetValue(_macroExplore), combatExplore = r.GetValue(_combatExplore);
-        if (macroExplore is not >= 0 || combatExplore is not >= 0) throw new CliException("--macro-explore and --combat-explore are temperatures, from 0");
-        if (macroExplore > 0 && macro != "l0") throw new CliException("--macro-explore is l0's; it needs --macro l0");
-        if (combatExplore > 0 && policy != "pimc") throw new CliException("--combat-explore is pimc's; it needs --policy pimc");
         double explore = r.GetValue(_explore);
         if (explore is not (>= 0 and <= 1)) throw new CliException("--explore is a share of decisions, from 0 to 1");
         if (explore > 0 && macro != "l0") throw new CliException("--explore is l0's; it needs --macro l0");
         var leaf = _leaf.Read(r);
-        if (!leaf.IsDefault && policy is not ("pimc" or "plan")) throw new CliException("--combat-net values the search's leaves; it needs --policy pimc or plan");
-        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, macroExplore, combatExplore, clone,
-            explore);
+        if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
+        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, clone, explore);
     }
 }

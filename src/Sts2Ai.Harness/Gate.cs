@@ -41,15 +41,13 @@ public static class Gate
     }
 
     /// <summary>The pairs: every seed of <paramref name="champion"/> that the challenger played too, in the champion's order.</summary>
-    /// <exception cref="ArgumentException">The two sides played in different environments, rungs or games, or as
+    /// <exception cref="ArgumentException">The two sides played in different environments or games, or as
     /// different characters or at different ascensions.</exception>
     public static IReadOnlyList<(RunRecord Champion, RunRecord Challenger)> Pairs(EvalReport champion, IReadOnlyList<RunRecord> challenger)
     {
         var c = champion.Config;
-        if (challenger.FirstOrDefault(r => r.Config.AutoWin == true || r.Config.Gauntlet == true) is { } gauntlet)
-            throw new ArgumentException($"run {gauntlet.Seed} is a boss gauntlet's (combats won at their start), not a played run");
-        if (challenger.FirstOrDefault(r => (r.Config.Game, r.Config.Env, r.Config.Rung) != (c.Game, c.Env, c.Rung)) is { } other)
-            throw new ArgumentException($"run {other.Seed} was played in {other.Config.Game} {other.Config.Env} {other.Config.Rung}, the champion in {c.Game} {c.Env} {c.Rung}");
+        if (challenger.FirstOrDefault(r => (r.Config.Game, r.Config.Env) != (c.Game, c.Env)) is { } other)
+            throw new ArgumentException($"run {other.Seed} was played in {other.Config.Game} {other.Config.Env}, the champion in {c.Game} {c.Env}");
         // A report holds one character at one ascension (EvalReport.Of).
         var (character, ascension) = (champion.Runs[0].Character, champion.Runs[0].Ascension);
         if (challenger.FirstOrDefault(r => (r.Character, r.Ascension) != (character, ascension)) is { } stranger)

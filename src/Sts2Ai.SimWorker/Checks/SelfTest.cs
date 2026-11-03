@@ -24,11 +24,12 @@ namespace Sts2Ai.SimWorker;
 ///  - SL plan: the planner's plan of a run's combat holds in the real run, step for step, to the end it planned (and,
 ///    with --workers N, the pooled planner plans the same);
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
-///  - protocol: observations and actions survive a round trip through their wire form, and the brain's and harness's
-///    assemblies reach no game assembly;
+///  - protocol: observations and actions survive a round trip through their wire form (the brain's and harness's
+///    assemblies reaching no game assembly is a unit test, BoundaryTests);
 ///  - worker pool (with --workers N): PIMC over worlds searched in serve processes picks what it picks here, with the
 ///    same values.
-/// The checks are in the files next to this one: of combats, of rules, and of runs and their SL worlds.
+/// The searches value their leaves with --combat-net's net. The checks are in the files next to this one: of combats,
+/// of rules, and of runs and their SL worlds.
 /// </summary>
 internal static partial class SelfTest
 {
@@ -40,9 +41,12 @@ internal static partial class SelfTest
 
     private static readonly PoolArgs Pool = new();
 
+    private static readonly LeafArgs Leaf = new();
+
     public static Command Command()
     {
-        var command = Opt.Command("selftest", "checks determinism, restore and determinize over an encounter pool", [N, Seed, Workers], Pool.Options);
+        var command = Opt.Command("selftest", "checks determinism, restore and determinize over an encounter pool", [N, Seed, Workers],
+            Pool.Options, Leaf.Options);
         command.SetAction(Cli.Game(Run));
         return command;
     }
@@ -52,6 +56,8 @@ internal static partial class SelfTest
         int n = r.GetValue(N);
         int seed = r.GetValue(Seed);
         var combats = Pool.Read(r);
+        var net = Leaf.Read(r);
+        if (net.Net == null) throw new CliException("selftest searches with the combat net: --combat-net FILE");
         var (act, rooms, pool) = (combats.Act, combats.Rooms, combats.Encounters);
         var results = new SortedDictionary<string, (int Pass, int Fail)>();
         int drawCompared = 0, drawResampled = 0, drawMovedFromTrue = 0;
@@ -64,12 +70,6 @@ internal static partial class SelfTest
         }
 
         Console.WriteLine($"selftest: {n} combats, act {act} ({rooms}: {pool.Count} encounters), game {HeadlessGame.GameVersion}");
-        foreach (var root in new[] { typeof(ICombatPolicy).Assembly, typeof(CombatObservation).Assembly, typeof(WorkerPool).Assembly })
-        {
-            var reached = GameAssemblies.ReachedFrom(root);
-            Check("brain and harness reach no game assembly", reached.Count == 0, $"{root.GetName().Name} reaches {string.Join(", ", reached)}");
-        }
-        Check("reference check sees the bridge's game references", GameAssemblies.ReachedFrom(typeof(Observe).Assembly).Contains("sts2"), "sts2 not found");
         for (int i = 0; i < n; i++)
         {
             var setup = combats.Setup(i, GameSeeds.MakeSeed(seed, i));
@@ -135,16 +135,14 @@ internal static partial class SelfTest
         GatheredCardState(pump, pool, act, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
-        CyclesKillInOneTurn(pump, pool, act, Check);
+        CyclesKillInOneTurn(pump, pool, act, net.Leaf, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);
         CloneKeepsRelicState(pump, seed, Check);
-        AutoWinWinsEveryCombat(pump, seed, Check);
-        GauntletFightsElitesAndBosses(pump, seed, Check);
         DeathsOutsideTheEnemysTurnEndTheirCombat(pump, seed, Check);
         int workers = r.GetValue(Workers);
-        PlanHoldsInTheRun(pump, seed, workers, Check);
-        if (workers > 0) PooledMatches(pump, combats, seed, workers, Check);
+        PlanHoldsInTheRun(pump, seed, workers, net, Check);
+        if (workers > 0) PooledMatches(pump, combats, seed, workers, net, Check);
 
         Console.WriteLine($"draw order resampled by a different determinize seed: {drawResampled}/{drawCompared}; differs from the true order: {drawMovedFromTrue}/{drawCompared}");
         foreach (var (name, (pass, fail)) in results)

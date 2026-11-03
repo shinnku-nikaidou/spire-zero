@@ -10,18 +10,12 @@ namespace Sts2Ai.Harness;
 public sealed record CombatEntry(int Act, int Floor, string Encounter, string Room, int Hp, int MaxHp, int Potions = 0, CombatEnd? End = null);
 
 /// <summary>How a combat ended, the target of the combat outcome head (docs: learning/combat-net §3): a death, or the HP, max HP and
-/// potions left after it; and the HP its enemies had left, against their max HP (how far a lost fight got; a won
-/// fight's enemies are gone, 0 of 0).</summary>
-public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions, int? EnemyHp = null, int? EnemyMaxHp = null);
+/// potions left after it.</summary>
+public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions);
 
 /// <summary>What played a run, the same for every run of one evaluation (docs: evaluation/metrics §8).</summary>
 /// <param name="Champion">The brain on each side of the routing table, with its budget.</param>
-/// <param name="Rung">R1 to R4 (docs: evaluation §2).</param>
-/// <param name="AutoWin">True for a boss gauntlet pilot's run (<c>run --auto-win</c>): every combat won at its start, so
-/// the run says nothing of how it would have fared; null otherwise.</param>
-/// <param name="Gauntlet">True for a boss gauntlet's run (<c>run --gauntlet</c>): plain monster encounters won at their
-/// start, elites and bosses fought, so the run is no whole run (no report or gate takes it); null otherwise.</param>
-public sealed record RunConfig(string Game, string Commit, string Champion, string Env, string Rung, bool? AutoWin = null, bool? Gauntlet = null);
+public sealed record RunConfig(string Game, string Commit, string Champion, string Env);
 
 /// <summary>One run of an evaluation, as the report needs it (docs: evaluation/metrics §8).</summary>
 /// <param name="RunId">The run id the brain knew the run by, as in the decision log (docs: harness/decision-log).</param>
@@ -31,7 +25,7 @@ public sealed record RunConfig(string Game, string Commit, string Champion, stri
 public sealed record RunRecord(
     RunConfig Config, string Seed, string Character, int Ascension, string Outcome, int Act, int Floor, int Hp, int MaxHp, int Gold,
     IReadOnlyList<CombatEntry> Combats, IReadOnlyDictionary<string, int> Surfaces, IReadOnlyDictionary<string, int> Brains,
-    int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string? RunId = null)
+    int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string RunId)
 {
     /// <summary>The run records in these files (comma-separated), one per line. A failed run is as if never set: reports and
     /// gates see only the others (a host's memory fails runs at random: fleet references/maintenance.md).</summary>

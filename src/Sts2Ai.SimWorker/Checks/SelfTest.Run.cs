@@ -85,50 +85,8 @@ internal static partial class SelfTest
     }
 
     /// <summary>
-    /// The boss gauntlet (<c>run --auto-win</c>): a run with a random macro brain, and a combat brain that must never be
-    /// asked, into the second act. Every combat entered, the first act's boss among them, must end won at no HP lost.
-    /// </summary>
-    private static void AutoWinWinsEveryCombat(Pump pump, int seed, Action<string, bool, string> check)
-    {
-        var rng = new Random(seed + 5);
-        using var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 5, 0), AutoWin: true), PromptBrain.Instance,
-            RunCommand.Unasked.Instance, new RandomMacro(rng));
-        for (int i = 0; i < 5000 && !session.IsOver && session.Run.CurrentActIndex < 1; i++) session.Step();
-        var combats = session.Combats;
-        bool boss = combats.Any(c => c.Act == 0 && c.Room == "Boss");
-        var hurt = combats.FirstOrDefault(c => c.End is not { Died: false } end || end.Hp < c.Hp);
-        check("auto-win wins every combat at no HP lost, the first act's boss included", boss && hurt == null && session.Run.CurrentActIndex >= 1,
-            $"act {session.Run.CurrentActIndex}, {combats.Count} combats, boss {boss}, first hurt {hurt}");
-    }
-
-    /// <summary>
-    /// The boss gauntlet (<c>run --gauntlet</c>): a run with random macro and combat brains, into the second act or to its
-    /// end. The combat brain is asked in elite and boss fights only, in each of them entered, and in one at least; every
-    /// plain monster combat ends won at no HP lost; a lost run died in its last combat, a fought one, whose end has the
-    /// enemies' HP (a won combat's are gone: 0 of 0).
-    /// </summary>
-    private static void GauntletFightsElitesAndBosses(Pump pump, int seed, Action<string, bool, string> check)
-    {
-        var rng = new Random(seed + 6);
-        var asked = new Asked(new PlayPolicy(rng));
-        using var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 6, 0), Gauntlet: true), PromptBrain.Instance,
-            asked, new RandomMacro(rng));
-        for (int i = 0; i < 5000 && !session.IsOver && session.Run.CurrentActIndex < 1; i++) session.Step();
-        var combats = session.Combats;
-        var fought = combats.Where(c => c.Room != "Monster").ToList();
-        var hurt = combats.FirstOrDefault(c => c.Room == "Monster" && (c.End is not { Died: false } end || end.Hp < c.Hp));
-        var unasked = fought.FirstOrDefault(c => !asked.Encounters.Contains(c.Encounter));
-        bool died = session.IsOver && !session.Won;
-        bool deathSeen = !died || combats is [.., { Room: not "Monster", End: { Died: true, EnemyMaxHp: > 0 } }];
-        check("gauntlet asks the combat brain in elite and boss fights only and wins the rest at no HP lost; a death has the enemies' HP",
-            fought.Count > 0 && hurt == null && unasked == null && deathSeen && asked.Rooms.All(r => r is "Elite" or "Boss"),
-            $"act {session.Run.CurrentActIndex}, {combats.Count} combats ({fought.Count} fought), died {died}, rooms asked [{string.Join(",", asked.Rooms)}], " +
-            $"first hurt {hurt}, first unasked {unasked}, last {combats.LastOrDefault()}");
-    }
-
-    /// <summary>
-    /// A death that no enemy's turn deals still ends its combat in the record, with the enemies' HP: cards in hand at the
-    /// turn's end kill inside the end-turn action, and Royal Poison kills as the first turn starts, before any decision.
+    /// A death that no enemy's turn deals still ends its combat in the record: cards in hand at the turn's end kill inside
+    /// the end-turn action, and Royal Poison kills as the first turn starts, before any decision.
     /// </summary>
     private static void DeathsOutsideTheEnemysTurnEndTheirCombat(Pump pump, int seed, Action<string, bool, string> check)
     {
@@ -150,8 +108,8 @@ internal static partial class SelfTest
                 if (session.Combats.Count == 0) creature.SetCurrentHpInternal(2);
                 session.Step();
             }
-            check($"a death by {what} ends its combat with the enemies' HP",
-                session.IsOver && !session.Won && policy.Asked == asked && session.Combats is [{ End: { Died: true, Hp: 0, EnemyMaxHp: > 0 } }],
+            check($"a death by {what} ends its combat",
+                session.IsOver && !session.Won && policy.Asked == asked && session.Combats is [{ End: { Died: true, Hp: 0 } }],
                 $"over {session.IsOver}, asked {policy.Asked}, combats [{string.Join(", ", session.Combats)}]");
         }
     }
@@ -165,20 +123,6 @@ internal static partial class SelfTest
         {
             Asked = true;
             return CombatAction.EndTurn;
-        }
-    }
-
-    /// <summary>A combat policy that keeps the rooms and encounters it was asked in.</summary>
-    private sealed class Asked(ICombatPolicy policy) : ICombatPolicy
-    {
-        public readonly HashSet<string?> Rooms = [];
-        public readonly HashSet<string?> Encounters = [];
-
-        public CombatAction Choose(CombatDecision decision)
-        {
-            Rooms.Add(decision.Observation.Room);
-            Encounters.Add(decision.Observation.Encounter);
-            return policy.Choose(decision);
         }
     }
 
@@ -229,7 +173,7 @@ internal static partial class SelfTest
     /// must find the observation the plan expects, and the combat must end where the plan ends, as the plan says (docs:
     /// combat-brain §7, test 6).
     /// </summary>
-    private static void PlanHoldsInTheRun(Pump pump, int seed, int workers, Action<string, bool, string> check)
+    private static void PlanHoldsInTheRun(Pump pump, int seed, int workers, LeafChoice net, Action<string, bool, string> check)
     {
         var budget = new Budget(NodesPerWorld: 150, Beam: 4);
         string label = $"run {GameSeeds.MakeSeed(seed + 2, 0)}";
@@ -254,7 +198,7 @@ internal static partial class SelfTest
         SlPlan plan;
         using (var world = new NodeWorld(pump, clone))
         {
-            plan = new SlPlanner().Plan(at, world, budget.For(at.Room), history);
+            plan = new SlPlanner(net.Leaf).Plan(at, world, budget, history);
             world.Restore(new([]));
             foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
             check("SL world ends its combat as planned", plan.End == CombatStatus.Won && world.Status == plan.End, $"{label}: {world.Status}, planned {plan.End}");
@@ -262,8 +206,8 @@ internal static partial class SelfTest
         }
         if (workers > 0)
         {
-            using var workerPool = new WorkerPool(Program.SelfCommand(), workers);
-            var pooled = new PooledPlanner(workerPool).Plan(clone, budget.For(at.Room), history);
+            using var workerPool = new WorkerPool(Program.SelfCommand(), workers, net.WorkerOptions());
+            var pooled = new PooledPlanner(workerPool).Plan(clone, budget, history);
             check("pooled planner plans what the planner plans here", Show(pooled) == Show(plan), $"{label}: here {Show(plan)}; pooled {Show(pooled)}");
             check("no game errors in workers", workerPool.TakeGameErrors() is [], label);
         }
@@ -280,8 +224,8 @@ internal static partial class SelfTest
         });
         check("SL plan holds in the run", broke == null && steps.Count == 0 && plan.Result.Plan.Count >= 2,
             $"{label}: {broke ?? $"{steps.Count} steps left of {plan.Result.Plan.Count + 1}"}");
-        var w = LeafValue.Default;
-        check("SL plan ends the run's combat as planned", end is { Died: false } e && Math.Abs(w.WinBase + w.PerHp * e.Hp / e.MaxHp + w.PerPotion * e.Potions - plan.Value) < 1e-9,
+        check("SL plan ends the run's combat as planned",
+            end is { Died: false } e && Math.Abs(LeafValue.WinBase + LeafValue.PerHp * e.Hp / e.MaxHp + LeafValue.PerPotion * e.Potions - plan.Value) < 1e-9,
             $"{label}: {end}, planned {plan.End} at {plan.Value:F4}");
 
         // Plays the run to the first decision of its second combat, then asks follow at each combat decision of that

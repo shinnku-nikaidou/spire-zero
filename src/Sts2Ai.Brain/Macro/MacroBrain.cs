@@ -12,19 +12,16 @@ namespace Sts2Ai.Brain;
 /// choice (a card reward, a removal, smithing) is valued as the best pick in it, so a choice that would be skipped is not opened.
 /// It also answers the card prompts outside combat (upgrade, remove, transform, choose a card).
 ///
-/// With <paramref name="explore"/>, for self-play, it draws each answer by the same values instead of taking the best
-/// (docs: learning/loop §9); at a card prompt, each pick and whether to stop. With <paramref name="uniform"/>, for self-play
-/// (plan v6 §3), some answers are drawn evenly whatever V says (<see cref="Uniform"/>): a card reward's outcome among
+/// With <paramref name="uniform"/>, for self-play (docs: learning/loop §9), some answers are drawn evenly whatever V says (<see cref="Uniform"/>): a card reward's outcome among
 /// its cards and skipping it, a card prompt's picks, and on every other screen its options but a potion's (the belt,
 /// which every screen offers) and those that would come back to a state already decided.
 /// </summary>
-public sealed class MacroBrain(IRunValue value, Softmax? explore = null, Uniform? uniform = null) : IMacroPolicy, IChoicePolicy
+public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacroPolicy, IChoicePolicy
 {
     /// <summary>Each card reward's draw by <c>uniform</c> (null: none), by its floor and cards, made when it is first seen.</summary>
     private readonly Dictionary<string, int?> _draws = [];
 
-    /// <summary>Whether the last answer was drawn: by <c>explore</c> and valued below the best (<see cref="Softmax.Explored"/>;
-    /// at a card prompt, any of its steps), or by <c>uniform</c>.</summary>
+    /// <summary>Whether the last answer was drawn by <c>uniform</c>.</summary>
     public bool Explored { get; private set; }
 
     /// <summary>
@@ -51,15 +48,15 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, Uniform
         int pick;
         if (Drawn(decision.Observation, options) is { } drawn)
         {
-            pick = Softmax.Best(drawn);
-            Explored = double.IsPositiveInfinity(drawn[pick]) || values[pick] < values[Softmax.Best(values)];
+            pick = Best(drawn);
+            Explored = double.IsPositiveInfinity(drawn[pick]) || values[pick] < values[Best(values)];
         }
         else if (Even(decision.Observation, options) is { } even)
         {
             pick = even;
             Explored = true;
         }
-        else pick = Pick(values);
+        else pick = Best(values);
         var option = options[pick];
         _opened = option.Opens;
         if (decision.Clone != null) _decided.Add(CloneSearch.Key(Root(decision)));
@@ -216,7 +213,7 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, Uniform
                 .ToList();
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
             if (picks.Count >= min) options.Insert(0, (-1, current, state));
-            var taken = options[Pick(options.Select(o => o.Value).ToList())];
+            var taken = options[Best(options.Select(o => o.Value).ToList())];
             if (taken.Index < 0) break;
             picks.Add(taken.Index);
             (current, state) = (taken.Value, taken.State);
@@ -265,7 +262,7 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, Uniform
                 var found = new CloneSearch(value, clone, _decided).Search(root, fresh.Select(a => (IReadOnlyList<string>)[a]).ToList());
                 for (int i = 0; i < fresh.Count; i++) worth[fresh[i]] = found[i].Value;
             }
-            var taken = near[Pick(near.Select(c => worth[Answer(c)]).ToList())];
+            var taken = near[Best(near.Select(c => worth[Answer(c)]).ToList())];
             if (taken == current) break;
             counts = taken;
         }
@@ -296,19 +293,13 @@ public sealed class MacroBrain(IRunValue value, Softmax? explore = null, Uniform
         return moved;
     }
 
-    /// <summary>
-    /// The first best of <paramref name="values"/>, or, when exploring, a draw by their logs: V is a chance that spans
-    /// orders of magnitude within a run (at A10 from 1e-3 down to 1e-7), so the temperature is in its ratios, the same at
-    /// any V. An option worth nothing is never drawn, unless all are.
-    /// </summary>
-    private int Pick(IReadOnlyList<double> values)
+    /// <summary>The first best of <paramref name="values"/>.</summary>
+    private static int Best(IReadOnlyList<double> values)
     {
-        int best = Softmax.Best(values);
-        if (explore == null || values[best] <= 0) return best;
-        var logs = values.Select(v => v > 0 ? Math.Log(v) : double.NegativeInfinity).ToList();
-        int drawn = explore.Draw(logs);
-        Explored |= explore.Explored(logs[drawn], logs[best]);
-        return drawn;
+        int best = 0;
+        for (int i = 1; i < values.Count; i++)
+            if (values[i] > values[best]) best = i;
+        return best;
     }
 
     private double Value(Observation obs, string action) => value.Value(After(obs, action));

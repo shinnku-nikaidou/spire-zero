@@ -68,7 +68,7 @@ public class DispatcherTests
         Assert.Throws<InvalidOperationException>(() => Make(CombatRoute.Of("test", new EndTurns())).Checkpoint(new(0, "{}")));
 
     [Fact]
-    public void AnSLNodesClonesKeepTheGauntletsRule()
+    public void AnSLNodesCloneIsItsCheckpointAndTheDecisionsSince()
     {
         NodeClone? seen = null;
         var macro = new Fixed("map:0,1");
@@ -77,10 +77,10 @@ public class DispatcherTests
             seen = clone;
             return new(CombatAction.EndTurn, [], []);
         }), new("p0", macro), new("l0", macro), new("l0", macro));
-        dispatcher.Checkpoint(new(0, "{}", Gauntlet: true));
+        dispatcher.Checkpoint(new(0, "{}"));
         dispatcher.Act(new(0, 0, "event event:1"));
         dispatcher.Choose(Decision(Fixtures.Slugs()));
-        Assert.True(seen is { Save: "{}", Gauntlet: true } && seen.Trace.SequenceEqual(["event event:1"]));
+        Assert.True(seen is { Save: "{}" } && seen.Trace.SequenceEqual(["event event:1"]));
     }
 
     private static ChoiceDecision Prompt(bool inCombat = true) => new(new CardChoice

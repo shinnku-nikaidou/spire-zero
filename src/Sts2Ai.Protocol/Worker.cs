@@ -12,7 +12,6 @@ public sealed record WorkerHello(string Game);
 /// <summary>A request, with its type; its reply carries the same id.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(PimcWorldRequest), "pimc_world")]
-[JsonDerivedType(typeof(SlWorldRequest), "sl_world")]
 [JsonDerivedType(typeof(SlTurnRequest), "sl_turn")]
 [JsonDerivedType(typeof(SlMacroRequest), "sl_macro")]
 public abstract record WorkerRequest(long Id);
@@ -33,16 +32,7 @@ public sealed record PimcWorldRequest(
     int World,
     int Worlds,
     int NodesPerFirst,
-    IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
-
-/// <summary>
-/// PIMC's search of the SL world of a combat decision in a run (docs: simulator/worlds §7): <see cref="Node"/> loaded and
-/// replayed is the real combat at the decision. The reply holds the best line after each of <see cref="First"/>, in
-/// that order, each searched with <see cref="NodesPerFirst"/> nodes, the leaves with <see cref="History"/> as in
-/// <see cref="PimcWorldRequest"/>.
-/// </summary>
-public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> First, int NodesPerFirst,
-    IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
+    IReadOnlyList<EnemyTurns> History) : WorkerRequest(Id);
 
 /// <summary>
 /// The SL planner's search of one turn from one state of a combat decision in a run (docs: sl-planner/budget §4):
@@ -53,7 +43,7 @@ public sealed record SlWorldRequest(long Id, NodeClone Node, IReadOnlyList<Comba
 /// the record of enemy moves up to the state, for the leaves.
 /// </summary>
 public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep, double? Floor,
-    IReadOnlyList<EnemyTurns>? History = null) : WorkerRequest(Id);
+    IReadOnlyList<EnemyTurns> History) : WorkerRequest(Id);
 
 /// <summary>
 /// L0's probes of a decision outside combat in a run (docs: macro-brain/search §6): <see cref="Node"/> loaded and replayed
