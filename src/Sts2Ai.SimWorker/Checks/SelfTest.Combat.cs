@@ -240,7 +240,7 @@ internal static partial class SelfTest
     }
 
     /// <summary>
-    /// On the real game, with the default leaf and the champion's nodes, against 535 HP: Monologue and two Flash of Steel,
+    /// On the real game, with --combat-net's leaf and the champion's nodes, against 535 HP: Monologue and two Flash of Steel,
     /// which draw each other. A plain search does not get past the first chain, in either world. Then with a prompt in front
     /// of the cycle: Particle Wall costs stars this character has none of until Touch of Insanity makes it free, and the
     /// prompt policy would give that to Haze.

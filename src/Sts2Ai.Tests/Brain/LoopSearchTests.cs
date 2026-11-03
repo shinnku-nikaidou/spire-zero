@@ -245,7 +245,7 @@ public class LoopSearchTests
     }
 
     [Fact]
-    public void WithoutFollowOnlyAPlanThatRepeatsIsKept()
+    public void PimcKeepsOnlyAPlanThatRepeats()
     {
         var world = new Loop(50);
         var repeating = new TurnPlan(all: false);

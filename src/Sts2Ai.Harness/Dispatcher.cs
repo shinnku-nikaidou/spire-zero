@@ -81,8 +81,8 @@ public sealed class Dispatcher(
     public IReadOnlyDictionary<string, int> Brains => _brains;
 
     /// <summary>
-    /// How many combat decisions were searched again because a step of the brain's plan did not hold. With PIMC's
-    /// --follow that is a turn revealing something; with the SL planner, a clone that differs from the real combat.
+    /// How many combat decisions were searched again because a step of the brain's plan did not hold. With PIMC that is a
+    /// plan repeating a cycle that something revealed broke; with the SL planner, a clone that differs from the real combat.
     /// </summary>
     public int Replans { get; private set; }
 

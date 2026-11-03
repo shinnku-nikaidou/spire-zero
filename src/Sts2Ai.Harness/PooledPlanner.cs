@@ -13,7 +13,6 @@ namespace Sts2Ai.Harness;
 public sealed class PooledPlanner(WorkerPool pool)
 {
     /// <summary>Plans the rest of the combat at the decision that <paramref name="node"/> stands at.</summary>
-    /// <param name="budget">The room's budget already (<see cref="Budget.For"/>).</param>
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
     public SlPlan Plan(NodeClone node, Budget budget, IReadOnlyList<EnemyTurns> history) =>
         SlPlanner.Search(budget, history, (jobs, nodes, keep, floor) => pool.Map(jobs
