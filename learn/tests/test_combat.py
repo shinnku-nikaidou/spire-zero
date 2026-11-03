@@ -177,7 +177,7 @@ def write_runs(tmp_path, env="SL", runs=10):
 
 
 def test_each_round_start_is_a_sample_with_the_history_before_it(tmp_path):
-    samples, skipped = data.read(*common.lists(write_runs(tmp_path)), "SILENT", "SL")
+    samples, skipped = data.read(*common.lists(write_runs(tmp_path)), "SL")
     assert skipped == 0 and len(samples) == 30  # rounds 1, 2 and 3 of each run's combat
     first, third = samples[0], samples[2]
     assert first["tokens"]["enemies"][0]["scalars"][4] == 0 and third["tokens"]["enemies"][0]["scalars"][4] == 0.2
@@ -187,7 +187,7 @@ def test_each_round_start_is_a_sample_with_the_history_before_it(tmp_path):
 
 def test_another_environments_logs_are_refused(tmp_path):
     with pytest.raises(common.LearnError, match="NoSL decisions, not SL"):
-        data.read(*common.lists(write_runs(tmp_path, env="NoSL")), "SILENT", "SL")
+        data.read(*common.lists(write_runs(tmp_path, env="NoSL")), "SL")
 
 
 def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
@@ -197,7 +197,7 @@ def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
                | {"obs": obs(round=r, hp=40 + r), "history": history} for r in (2, 3)]  # fmt: skip
     tables = game_ids.combat_tables()
     torch.manual_seed(0)
-    net = export.net_file("t", "SILENT", "SL", tables, Net({t: len(i) for t, i in tables.items()}), samples, {}, 0)
+    net = export.net_file("t", "SL", tables, Net({t: len(i) for t, i in tables.items()}), samples, {}, 0)
     assert net["env"] == "SL" and net["lags"] == encode.LAGS and len(net["tests"]) == 2
     graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
     assert [i.name for i in graph.graph.input] == encode.INPUTS
@@ -250,7 +250,8 @@ def test_training_goes_on_from_a_net_file_and_keeps_it_unless_an_epoch_beats_it(
     assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())
     assert a["vocab"] == b["vocab"]
-    assert b["tests"][0]["outcome"] == pytest.approx(a["tests"][0]["outcome"], abs=1e-5) or a["tests"][0]["obs"] != b["tests"][0]["obs"]
+    assert b["tests"][0]["obs"] == a["tests"][0]["obs"]  # the same held-out states, picked by the same seed
+    assert b["tests"][0]["outcome"] == pytest.approx(a["tests"][0]["outcome"], abs=1e-5)
 
 
 def test_a_combat_the_run_died_in_before_its_first_decision_leaves_the_run_in(tmp_path):
@@ -259,5 +260,5 @@ def test_a_combat_the_run_died_in_before_its_first_decision_leaves_the_run_in(tm
     entered = {"encounter": "BOSS", "hp": 0, "end": {"died": True, "hp": 0, "max_hp": 70, "potions": 0}}
     lines = [json.loads(line) for line in recs.read_text().splitlines()]
     recs.write_text("".join(json.dumps(r | {"combats": r["combats"] + [entered]}) + "\n" for r in lines))
-    samples, skipped = data.read(*common.lists(prefix), "SILENT", "SL")
+    samples, skipped = data.read(*common.lists(prefix), "SL")
     assert skipped == 0 and len(samples) == 9

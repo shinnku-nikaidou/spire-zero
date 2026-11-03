@@ -38,18 +38,16 @@ def onnx_bytes(model, example: Batch) -> bytes:
     return out.getvalue()
 
 
-def net_file(name, character, floors, tables, mean, std, model, held, report, seed, objective="floor") -> dict:
+def net_file(name, floors, tables, mean, std, model, held, report, seed) -> dict:
     """The file's content; its test runs are a few held-out decisions, valued on the CPU as RunNet values them."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     picks = random.Random(seed).sample(held, min(8, len(held)))
     b = Batch(picks, index, mean, std, floors, "cpu")
     with torch.no_grad():
-        valued = values(model, b, objective)
+        valued = values(model, b)
     return {
         "name": name,
-        "character": character,
-        "objective": objective,
         "floors": floors,
         "vocab": tables,
         "state": {"names": encode.STATE, "mean": [float(v) for v in mean], "std": [float(v) for v in std]},

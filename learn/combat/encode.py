@@ -175,12 +175,12 @@ def tokens(obs: dict, history: list) -> dict:
             "room:" + (obs.get("room") or "<none>"),
             f"act:{obs['act']}",
         ],
-        "orbs": [o["id"] for o in pl.get("orbs") or []],
-        "orb_values": [[cap(float(o["passive"]) / 10), cap(float(o["evoke"]) / 10)] for o in pl.get("orbs") or []],
+        "orbs": [o["id"] for o in pl["orbs"]],
+        "orb_values": [[cap(float(o["passive"]) / 10), cap(float(o["evoke"]) / 10)] for o in pl["orbs"]],
         "allies": [
             {"id": a.get("id") or "<player>", "scalars": creature(a), "powers": powers(a["powers"])}
-            for a in obs.get("allies") or []
+            for a in obs["allies"]
             if a["hp"] > 0
         ],
-        "extra": [obs.get("ascension", 0) / 10, pl.get("orb_slots", 0) / 10, cap(pl.get("gold", 0) / 100)],
+        "extra": [obs["ascension"] / 10, pl["orb_slots"] / 10, cap(pl["gold"] / 100)],
     }

@@ -1,6 +1,6 @@
 """What a trained combat net's report says (docs: learning/combat-net §4), held-out or on the gate's seeds: the error against
 the training's prior and the rank within each fight, on the whole and by act, room, encounter, HP and potion. Beside a
-net's ranks stand those of the HP share held now: the end's price follows it (0.82 on v7g1).
+net's ranks stand those of the HP share held now: the end's price follows it.
 """
 
 import math

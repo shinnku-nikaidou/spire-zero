@@ -89,6 +89,6 @@ def state(view: dict) -> list[float]:
         float(view["hp"]),
         float(view["max_hp"]),
         float(view["gold"]),
-        float(view.get("ascension", 0)),
+        float(view["ascension"]),
         float(len(view["potions"])),
     ]

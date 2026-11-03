@@ -16,14 +16,12 @@ def test_the_default_is_the_name_in_the_shared_folder(root):
     assert (root / "all").is_dir()
 
 
-def test_a_file_in_a_weights_folder_is_never_replaced(root):
+def test_a_file_in_the_shared_folder_is_never_replaced(root):
     weights.out_path("c1", None).write_text("{}")
     with pytest.raises(LearnError, match="another --name"):
         weights.out_path("c1", None)
-    (root / "silent").mkdir()
-    (root / "silent" / "c0.json").write_text("{}")
     with pytest.raises(LearnError):
-        weights.out_path("other", str(root / "silent" / "c0.json"))
+        weights.out_path("other", str(root / "all" / "c1.json"))
 
 
 def test_an_explicit_path_elsewhere_may_be_replaced(root, tmp_path):

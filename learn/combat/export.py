@@ -69,7 +69,7 @@ def low_hp(s: dict) -> bool:
     return s["share"] < 0.3
 
 
-def net_file(name, character, env, tables, model, kept, report, seed) -> dict:
+def net_file(name, env, tables, model, kept, report, seed) -> dict:
     """The file's content; its test states are TESTS of the held-out round starts kept with their observations, among
     them, where the states kept hold one, a multi-hit attack, a potion and low HP, predicted on the CPU as CombatNet does."""
     model = model.cpu().eval()
@@ -86,7 +86,6 @@ def net_file(name, character, env, tables, model, kept, report, seed) -> dict:
     probs, gone = torch.softmax(logits, 1), torch.sigmoid(potions)
     return {
         "name": name,
-        "character": character,
         "env": env,
         "buckets": data.BUCKETS,
         "loss_min": data.LOSS_MIN,
@@ -112,9 +111,8 @@ def read(path: str) -> dict:
 
 
 def weights(net: dict, model) -> dict[str, torch.Tensor]:
-    """A net file's weights by model's parameter names, from its ONNX: the named initializers, the Linear layers the
-    export turned into MatMul + Add (their weights transposed, named by their Add's bias), and parameters the export
-    merged into an equal one by an Identity. The buffers are model's own."""
+    """A net file's weights by model's parameter names, from its ONNX: the named initializers, and the Linear layers the
+    export turned into MatMul + Add (their weights transposed, named by their Add's bias). The buffers are model's own."""
     graph = onnx.load_from_string(base64.b64decode(net["onnx"])).graph
     inits = {i.name: torch.from_numpy(numpy_helper.to_array(i).copy()) for i in graph.initializer}
     found = {k.removeprefix("net."): v for k, v in inits.items() if k.startswith("net.")}
@@ -123,8 +121,6 @@ def weights(net: dict, model) -> dict[str, torch.Tensor]:
         if n.op_type == "MatMul" and n.input[1] in inits and not n.input[1].startswith("net."):
             bias = next(i for i in adds[n.output[0]].input if i.startswith("net."))
             found[bias.removeprefix("net.").removesuffix(".bias") + ".weight"] = inits[n.input[1]].T
-        if n.op_type == "Identity" and n.input[0] in inits:
-            found[n.output[0].removeprefix("net.")] = inits[n.input[0]]
     own = model.state_dict()
     for k, v in own.items():
         if k in dict(model.named_buffers()):

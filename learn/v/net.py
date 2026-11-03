@@ -1,19 +1,14 @@
 """V's net (docs: macro-brain/network §1): a set encoder over the deck, bags of ids for the rest, the raw state, then a body and
-two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the floor expected
-to be reached, or (objective "win") the chance to survive every floor. The second head learns the next combats' HP costs
-and the boss score, which shapes the body only: it is not in the net file.
+two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the chance to
+survive every floor. The second head learns the next combats' HP costs, which shapes the body only: it is not in the net
+file.
 """
-
-import math
 
 import torch
 from torch import nn
 
 from v import encode
 from v.data import AUX
-
-N_AUX = AUX + 1  # the second head: the next combats' HP costs, then the boss score
-BOSS_AT = AUX
 
 
 def padded(rows, device):
@@ -63,16 +58,12 @@ class Batch:
         # A censored sample says nothing from the floor it stopped on; one with no reach (end = start) says nothing.
         self.label_mask = ((g >= start) & (won | (g < end) | (died & (g == end)))).float().to(device)
         self.weight = torch.tensor([s["weight"] for s in samples]).to(device)
-        # A boss sim's target: its option's boss score less its decision's mean, in floors (0 for other samples).
-        self.boss_target = torch.tensor([s.get("boss_target", 0.0) for s in samples], dtype=torch.float64).to(device)
         self.start = start[:, 0].to(device)
 
-        aux, aux_mask = torch.zeros(n, N_AUX), torch.zeros(n, N_AUX)
+        aux, aux_mask = torch.zeros(n, AUX), torch.zeros(n, AUX)
         for b, s in enumerate(samples):
             for k, cost in enumerate(s["next"]):
                 aux[b, k], aux_mask[b, k] = cost, 1
-            if s["boss_score"] is not None:
-                aux[b, BOSS_AT], aux_mask[b, BOSS_AT] = s["boss_score"], 1
         self.aux, self.aux_mask = aux.to(device), aux_mask.to(device)
 
     def inputs(self):
@@ -97,7 +88,7 @@ class Net(nn.Module):
         width = 2 * h + len(encode.BAGS) * d + len(encode.STATE)
         self.body = nn.Sequential(nn.Linear(width, self.BODY), nn.ReLU(), nn.Linear(self.BODY, self.BODY), nn.ReLU())
         self.head = nn.Linear(self.BODY, floors)
-        self.aux_head = nn.Linear(self.BODY, N_AUX)
+        self.aux_head = nn.Linear(self.BODY, AUX)
 
     def forward(self, *inputs):
         """Per sample and floor, the logit of dying on that floor if alive there (inputs as encode.INPUTS)."""
@@ -135,24 +126,16 @@ class Hazards(nn.Module):
         return torch.sigmoid(self.net(*inputs))
 
 
-def expected_floor(hazards: torch.Tensor, start: torch.Tensor):
-    """As RunNet.Value: the start floor plus the chance to survive each floor from it on."""
-    h = hazards.double()
-    g = torch.arange(h.shape[1], device=h.device)
-    survive = torch.where(g >= start[:, None], 1 - h, torch.ones_like(h)).cumprod(1)
-    return start.double() + (survive * (g >= start[:, None])).sum(1)
-
-
 def win_chance(hazards: torch.Tensor, start: torch.Tensor):
-    """As RunNet.Value for "win": the chance to survive every floor from the start on (a won run survived them all)."""
+    """As RunNet.Value: the chance to survive every floor from the start on (a won run survived them all)."""
     h = hazards.double()
     g = torch.arange(h.shape[1], device=h.device)
     return torch.where(g >= start[:, None], 1 - h, torch.ones_like(h)).prod(1)
 
 
-def values(model, b: Batch, objective: str = "floor"):
-    """V's value of a batch, as RunNet.Value gives it: the floor expected, or the chance to win (objective "win")."""
-    return (win_chance if objective == "win" else expected_floor)(torch.sigmoid(model(*b.inputs())), b.start)
+def values(model, b: Batch):
+    """V's value of a batch, as RunNet.Value gives it: the chance to win."""
+    return win_chance(torch.sigmoid(model(*b.inputs())), b.start)
 
 
 def hazard_loss(logits, b: Batch):
@@ -165,36 +148,3 @@ def aux_loss(aux_logits, b: Batch):
     """Per sample, the squared error of the second head over the targets it has."""
     return ((torch.sigmoid(aux_logits) - b.aux) ** 2 * b.aux_mask).sum(1)
 
-
-def segment_log_softmax(values: torch.Tensor, group: torch.Tensor, groups: int):
-    """The log-softmax of values within each group (group[i] is value i's group, groups in 0..groups-1)."""
-    top = torch.full((groups,), -math.inf, dtype=values.dtype, device=values.device).scatter_reduce(
-        0, group, values, "amax"
-    )
-    shifted = values - top[group]
-    total = torch.zeros(groups, dtype=values.dtype, device=values.device).index_add(0, group, shifted.exp())
-    return shifted - total.log()[group]
-
-
-def explored(values, temperature, group, groups) -> torch.Tensor:
-    """Per group, the chance MacroBrain.Pick explores at the temperature (one per option): a softmax over the logs of V's
-    values that draws an option more than temperature / 100 below the group's best log. An option worth nothing is
-    never drawn, and a group worth nothing draws nothing."""
-    best = torch.full((groups,), -math.inf, dtype=values.dtype, device=values.device)
-    best = best.scatter_reduce(0, group, values, reduce="amax")[group]
-    logs = torch.where(best > 0, values / best, torch.ones_like(values)).clamp_min(0).log()  # 0 at the best
-    p = segment_log_softmax(logs / temperature, group, groups).exp()
-    below = -logs > temperature / 100
-    return torch.zeros(groups, dtype=p.dtype, device=p.device).index_add(0, group, p * below)
-
-
-def centred(values: torch.Tensor, group: torch.Tensor, groups: int) -> torch.Tensor:
-    """Values less their group's mean."""
-    total = torch.zeros(groups, dtype=values.dtype, device=values.device).index_add(0, group, values)
-    count = torch.zeros(groups, dtype=values.dtype, device=values.device).index_add(0, group, torch.ones_like(values))
-    return values - (total / count)[group]
-
-
-def pearson(x: torch.Tensor, y: torch.Tensor) -> float:
-    x, y = x - x.mean(), y - y.mean()
-    return float((x * y).sum() / ((x * x).sum() * (y * y).sum()).sqrt().clamp_min(1e-12))

@@ -1,19 +1,18 @@
-"""A V's SL report and gate, of the elite gauntlet's runs (`run --gauntlet`, plan v6 §5) or of whole runs (plan v7
-§4): what the runs reached, and, against the champion's runs on the same seeds, the paired difference and the verdict.
+"""A V's SL report and gate: what the runs reached, and, against the champion's runs on the same seeds, the paired
+difference and the verdict.
 
-From the run records: the runs, the runs won, their mean floor, for the gauntlet its mean progress (v/data.py's
-`progress`: the floor reached, plus the share of the enemies' HP taken in the combat a lost run died in, a won run +1),
-each act's boss reached and beaten, the elite fights per run and the deaths in them, and per act where the lost runs
-died (the room of the combat, or outside combat). From the decision logs (--logs): the rest sites' choices by the HP
-share they were made at, the map's choices between a monster and a rest site by the same shares, and what the shops
-sold (a purchase is told by what the next decision's run gained: a relic, a card, a potion). A time-boxed job finished
-only some runs; a log's runs without a record are left out.
+From the run records: the runs, the runs won, their mean floor, each act's boss reached and beaten, the elite fights
+per run and the deaths in them, and per act where the lost runs died (the room of the combat, or outside combat). From
+the decision logs (--logs): the rest sites' choices by the HP share they were made at, the map's choices between a
+monster and a rest site by the same shares, and what the shops sold (a purchase is told by what the next decision's run
+gained: a relic, a card, a potion). A time-boxed job finished only some runs; a log's runs without a record are left
+out.
 
 --against pairs the runs with the champion's by seed, on the seeds both finished: the challenger less the champion,
-the mean, its standard error and the 95 % one-sided lower bound, of the gauntlet's progress, or of a whole run's wins
-(1 or 0) and floors; promote when the bound of the progress, or of the wins, is above 0.
+the mean, its standard error and the 95 % one-sided lower bound, of the wins (1 or 0) and the floors; promote when the
+bound of the wins is above 0.
 
-    uv run python gauntlet.py --records R1,R2 --logs L1,L2 [--against C1,C2]
+    uv run python gate.py --records R1,R2 --logs L1,L2 [--against C1,C2]
 """
 
 import json
@@ -24,7 +23,6 @@ import typer
 
 import common
 from common import LearnError, read_lines
-from v.data import progress
 
 script = common.app()
 
@@ -39,16 +37,12 @@ def mean_se(xs: list[float]) -> tuple[float, float]:
     return m, (math.sqrt(sum((x - m) ** 2 for x in xs) / (n - 1) / n) if n > 1 else math.nan)
 
 
-def read_records(paths: str) -> tuple[list[dict], bool]:
-    """The finished runs, and whether they are the gauntlet's (`run --gauntlet`) or whole runs; never both."""
-    runs = [r for r in read_lines(paths) if not r.get("failure")]
-    kinds = {bool(r["config"].get("gauntlet")) for r in runs}
-    if len(kinds) > 1:
-        raise LearnError(f"{paths}: the gauntlet's runs (run --gauntlet) and whole runs together")
-    return runs, kinds == {True}
+def read_records(paths: str) -> list[dict]:
+    """The finished runs."""
+    return [r for r in read_lines(paths) if not r.get("failure")]
 
 
-def runs_report(runs: list[dict], gauntlet: bool = True) -> dict:
+def runs_report(runs: list[dict]) -> dict:
     """The records' numbers."""
     floor, floor_se = mean_se([float(r["floor"]) for r in runs])
     acts = {}
@@ -66,10 +60,10 @@ def runs_report(runs: list[dict], gauntlet: bool = True) -> dict:
             )
             act = died_in.setdefault(str(r["act"]), {})
             act[where] = act.get(where, 0) + 1
-    report = {"runs": len(runs), "floor": floor, "floor_se": floor_se}
-    if gauntlet:
-        report["progress"], report["progress_se"] = mean_se([progress(r) for r in runs])
-    return report | {
+    return {
+        "runs": len(runs),
+        "floor": floor,
+        "floor_se": floor_se,
         "won": sum(1 for r in runs if r["outcome"] == "won"),
         "boss": acts,
         "elites_per_run": len(elites) / max(1, len(runs)),
@@ -133,9 +127,8 @@ def logs_report(paths: str, runs: set[str]) -> dict:
     return {"rest": dict(sorted(rest.items())), "monster_or_rest": dict(sorted(monster_or_rest.items())), "shop": shop}
 
 
-def paired(runs: list[dict], champion: list[dict], gauntlet: bool = True) -> dict:
-    """The challenger less the champion on the seeds both finished: the gauntlet's progress, or a whole run's wins and
-    floors; the verdict on the progress, or on the wins."""
+def paired(runs: list[dict], champion: list[dict]) -> dict:
+    """The challenger less the champion on the seeds both finished: the wins and the floors; the verdict on the wins."""
     theirs = {r["seed"]: r for r in champion}
     both = [(r, theirs[r["seed"]]) for r in runs if r["seed"] in theirs]
 
@@ -143,9 +136,6 @@ def paired(runs: list[dict], champion: list[dict], gauntlet: bool = True) -> dic
         m, se = mean_se([value(a) - value(b) for a, b in both])
         return m, se, m - 1.645 * se
 
-    if gauntlet:
-        m, se, lower = diff(progress)
-        return {"pairs": len(both), "diff": m, "diff_se": se, "lower_95": lower, "promote": bool(lower > 0)}
     m, se, lower = diff(lambda r: float(r["outcome"] == "won"))
     floor, floor_se, _ = diff(lambda r: float(r["floor"]))
     return {
@@ -166,20 +156,17 @@ def main(
     records: Annotated[str, typer.Option(help="the V's run records, comma-separated")],
     logs: Annotated[str | None, typer.Option(help="their decision logs, for the rest sites, map and shops")] = None,
     against: Annotated[
-        str | None, typer.Option(help="the champion's run records, of the same kind, to pair with")
+        str | None, typer.Option(help="the champion's run records, to pair with")
     ] = None,
 ) -> None:
-    runs, gauntlet = read_records(records)
+    runs = read_records(records)
     if not runs:
         raise LearnError(f"no finished run in {records}")
-    report = {"gauntlet": gauntlet} | runs_report(runs, gauntlet)
+    report = runs_report(runs)
     if logs:
         report |= logs_report(logs, {r["run_id"] for r in runs})
     if against:
-        champion, theirs = read_records(against)
-        if champion and theirs != gauntlet:
-            raise LearnError("the champion's runs and these are not of the same kind (run --gauntlet or whole runs)")
-        report["against"] = paired(runs, champion, gauntlet)
+        report["against"] = paired(runs, read_records(against))
     print(json.dumps(report))
 
 

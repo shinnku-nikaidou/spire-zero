@@ -1,13 +1,13 @@
 """Train the combat net (docs: learning/combat-net §4), the combat search's leaf, from one environment's games, and write its
 net file for `--combat-net`.
 
-The samples are combat/data.py's: each round's start in the logs of --env. The loss is the endings' cross-entropy plus
-POTION_WEIGHT times each held potion's cross-entropy of being gone after a win. The net's sizes and the training's settings
-are fixed below: an experiment changes them here, and only a result keeps the change. --list refuses test runs (eval jobs);
---test-list's games are only reported, as `medium`. --init goes on from a net file instead of from scratch, at the lower
+The samples are combat/data.py's: each round's start in the logs of --env, every character's. The loss is the
+endings' cross-entropy plus POTION_WEIGHT times each held potion's cross-entropy of being gone after a win. The net's
+sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps the change.
+--list refuses test runs (eval jobs); --test-list's games are only reported, as `medium`. --init goes on from a net file instead of from scratch, at the lower
 LR_INIT, and keeps the file's weights unless a later epoch beats them on the held-out loss.
 
-    uv run python -m combat.train --list data/silent/lists/c7 --env SL --name c7-2 --test-list data/silent/lists/medium
+    uv run python -m combat.train --list PREFIX --env SL --name NAME [--test-list PREFIX] [--init ../weights/all/CHAMPION.json]
 """
 
 import json
@@ -43,7 +43,6 @@ def main(
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
     test_list: Annotated[str | None, typer.Option(help="a list pair whose games are only reported, as `medium`")] = None,
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
-    character: Annotated[str, typer.Option(help="the character whose runs these are")] = "SILENT",
     init: Annotated[str | None, typer.Option(help="a net file to go on from: its weights, read back from its ONNX")] = None,
     seed: int = 0,
 ) -> None:
@@ -54,7 +53,7 @@ def main(
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    samples, skipped = data.read(*common.train_lists(list_), character, env)
+    samples, skipped = data.read(*common.train_lists(list_), env)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -118,12 +117,12 @@ def main(
         **report.summary(model, test, test_batches, train),
     }
     if test_list:
-        medium, _ = data.read(*common.lists(test_list), character, env)
+        medium, _ = data.read(*common.lists(test_list), env)
         fit["medium"] = report.summary(model, medium, list(batches(medium, False)), train)
     print(json.dumps(fit))
 
     kept = [s for s in test if "obs" in s]
-    export.write(export.net_file(name, character, env, tables, model, kept, fit, seed), out_file)
+    export.write(export.net_file(name, env, tables, model, kept, fit, seed), out_file)
     logger.info("wrote {}", out_file)
 
 

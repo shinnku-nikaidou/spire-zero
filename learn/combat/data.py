@@ -128,12 +128,12 @@ def sample(run: str, obs: dict, history: list, end: dict, after: dict | None) ->
     return s
 
 
-def read(logs: str, records: str, character: str, env: str) -> tuple[list[dict], int]:
+def read(logs: str, records: str, env: str) -> tuple[list[dict], int]:
     """The round starts of the logs' combats as samples, and how many runs were skipped: those whose combats do not
     match their record's (a log cut short, a combat logged apart). The run's last combat in a lost run counts as a death
     even with no `end` in its record; a win with no run view after it is left out."""
     samples, skipped = [], 0
-    for i, (log, runs) in enumerate(runs_by_log(logs, records, character)):
+    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
         for run, fights in combats(log, env).items():
             r = runs.get(run)
             if r is None or r.get("failure"):

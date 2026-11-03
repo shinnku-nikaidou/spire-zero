@@ -1,18 +1,10 @@
 """Train V (docs: macro-brain/value §5) from self-play, and write its net file for `run --value`.
 
-The samples are v/data.py's: the logged macro decisions with where their runs ended and the next combats' HP costs,
-and optionally boss sims (--boss-sims with the afterstates they were played from, --boss-afterstates) and door states
-(--boss-states). The loss is the hazards' cross-entropy, plus the second head's squared errors, plus the boss sims'
-fit of V's centred values and the door states' fit of the second head's boss score; early stopping on the held-out
-runs weighs them the same way. --afterstates (the logged decisions' options) only feed the report's
-`explore_temperature`: the `run --macro-explore`, over the logs of V's values, at which V would explore as often as the
-logs' brains did.
-
---objective win (plan v7) values a whole run by its chance to win, the chance to survive every floor, instead of the
-floor expected: the same net and loss (a won run survived every floor), only what the net file tells RunNet.Value to
-return changes. Whichever the objective, a whole run's report gives
-the Brier score of that chance on the held-out decisions against whether their runs were won (`brier_held_out`, and
-`brier_held_out_floor_only` for the training runs' hazards whatever the state).
+The samples are v/data.py's: the logged macro decisions of every character with where their runs ended and the next
+combats' HP costs. The loss is the hazards' cross-entropy plus the second head's squared errors; early stopping on the
+held-out runs weighs them the same way. A run is valued by its chance to win, the chance to survive every floor; the
+report gives the Brier score of that chance on the held-out decisions against whether their runs were won
+(`brier_held_out`, and `brier_held_out_floor_only` for the training runs' hazards whatever the state).
 
 --init goes on from a net file instead of from scratch: its state scaling and weights, read back from its ONNX (the
 second head, not in the file, starts anew).
@@ -20,7 +12,7 @@ second head, not in the file, starts anew).
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
 
-    uv run python -m v.train --list data/silent/lists/v7g1 --name v7-1f --objective win --init ../weights/all/CHAMPION.json
+    uv run python -m v.train --list PREFIX --name NAME [--init ../weights/all/CHAMPION.json]
 """
 
 import json
@@ -38,113 +30,17 @@ import torch  # noqa: E402
 import common  # noqa: E402
 import game_ids  # noqa: E402
 from common import LearnError  # noqa: E402
-from v import data, encode, export  # noqa: E402
-from v.net import (  # noqa: E402
-    BOSS_AT,
-    Batch,
-    Net,
-    aux_loss,
-    centred,
-    expected_floor,
-    explored,
-    hazard_loss,
-    pearson,
-    win_chance,
-)
+from v import data, export  # noqa: E402
+from v.net import Batch, Net, aux_loss, hazard_loss, win_chance  # noqa: E402
 from weights import out_path  # noqa: E402
 
 script = common.app()
 
 FLOORS = 64  # the hazard head's floors, from floor 0
 EPOCHS, PATIENCE = 40, 5  # at most, and without a better held-out loss before stopping
-BATCH, SIDE_BATCH = 256, 64  # decisions per step; boss sim decisions or doors per step
+BATCH = 256  # decisions per step
 LR, WEIGHT_DECAY = 3e-5, 1e-4
 AUX_WEIGHT = 3.0  # the second head's squared errors, per decision
-BOSS_WEIGHT = 1.0  # the boss sims' fit, per decision, all its options together
-DOOR_WEIGHT = 1.0  # the door states' fit, per door, all its HP levels together
-
-
-def stream(part, make):
-    """Endless chunks of boss sim decisions or doors, shuffled anew on each pass."""
-    while part:
-        order = random.sample(part, len(part))
-        for i in range(0, len(order), SIDE_BATCH):
-            yield make(order[i : i + SIDE_BATCH])
-
-
-def grouped(make, chunk):
-    """Groups' samples as one batch, each sample's group, and how many groups."""
-    group = [k for k, g in enumerate(chunk) for _ in g["samples"]]
-    return make([s for g in chunk for s in g["samples"]]), torch.tensor(group), len(chunk)
-
-
-def boss_report(model, groups, make) -> dict:
-    """On held-out boss sims: how often V's best option is the sims' best (decisions with one best only), and the
-    correlation of V's centred values with the targets."""
-    agree = n = 0
-    vs, ts = [], []
-    with torch.no_grad():
-        for g in groups:
-            b = make(g["samples"])
-            values = expected_floor(torch.sigmoid(model(*b.inputs())), b.start).cpu()
-            vs.append(values - values.mean())
-            ts.append(torch.tensor([s["boss_target"] for s in g["samples"]], dtype=torch.float64))
-            scores = [s["boss_score"] for s in g["samples"]]
-            if scores.count(max(scores)) == 1:
-                n += 1
-                agree += scores[int(values.argmax())] == max(scores)
-    return {"boss_decisions": n, "boss_agree": agree / max(n, 1), "boss_corr": pearson(torch.cat(vs), torch.cat(ts))}
-
-
-def door_report(model, doors, make) -> dict:
-    """On held-out doors, per act: the correlation of the sims' boss scores with the second head's, and with V's chance
-    to live through the boss floor."""
-    report = {}
-    with torch.no_grad():
-        for act, floor in data.BOSS_FLOORS.items():
-            samples = [s for g in doors if g["act"] == act for s in g["samples"]]
-            if len(samples) < 3:
-                continue
-            logits, aux = model.both(*make(samples).inputs())
-            target = torch.tensor([s["boss_score"] for s in samples], dtype=torch.float64)
-            head = torch.sigmoid(aux[:, BOSS_AT]).double().cpu()
-            alive = 1 - torch.sigmoid(logits[:, floor]).double().cpu()
-            report[str(act)] = {
-                "samples": len(samples),
-                "corr_head": pearson(head, target),
-                "corr_v": pearson(alive, target),
-            }
-    return {"door_corr": report}
-
-
-def explore_report(model, groups, make, value) -> dict:
-    """The self-play temperature for V: the --macro-explore at which V would explore the held-out logged decisions as
-    often as the logs' brains did (v.net.explored, as MacroBrain.Pick draws), so that the next generation explores as
-    this one did. Logs from before Pick drew by logs (37a204a) are read as if they had."""
-    valued, logs_explored = [], 0.0
-    with torch.no_grad():
-        for i in range(0, len(groups), SIDE_BATCH):
-            chunk = groups[i : i + SIDE_BATCH]
-            b, group, n = grouped(make, chunk)
-            values = value(torch.sigmoid(model(*b.inputs())), b.start).cpu()
-            logged = torch.tensor([v for g in chunk for v in g["values"]], dtype=torch.float64)
-            t = torch.tensor([g["temperature"] for g in chunk for _ in g["values"]], dtype=torch.float64)
-            logs_explored += float(explored(logged, t, group, n).sum())
-            valued.append((values, group, n))
-
-    def share(t: float) -> float:
-        return sum(float(explored(v, torch.full_like(v, t), g, n).sum()) for v, g, n in valued) / len(groups)
-
-    # The share grows with the temperature: bisect on its log.
-    target, lo, hi = logs_explored / len(groups), math.log(1e-6), math.log(10.0)
-    for _ in range(40):
-        mid = (lo + hi) / 2
-        lo, hi = (mid, hi) if share(math.exp(mid)) < target else (lo, mid)
-    return {
-        "explore_decisions": len(groups),
-        "explore_share_logs": target,
-        "explore_temperature": math.exp((lo + hi) / 2),
-    }
 
 
 @script.command(help=__doc__)
@@ -152,23 +48,6 @@ def main(
     list_: Annotated[str, typer.Option("--list", help="the list pair PREFIX-logs.txt and PREFIX-recs.txt")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
-    character: Annotated[str, typer.Option(help="the character whose runs these are")] = "SILENT",
-    boss_sims: Annotated[str | None, typer.Option(help="boss sims (`bosslab.py collect`), comma-separated")] = None,
-    boss_afterstates: Annotated[
-        str | None, typer.Option(help="the afterstates (`afterstates`) the boss sims were played from")
-    ] = None,
-    boss_states: Annotated[
-        str | None, typer.Option(help="door states (`bosslab.py states`, collected), comma-separated")
-    ] = None,
-    door_logs: Annotated[
-        str | None, typer.Option(help="boss gauntlet logs (`run --auto-win`) whose door states --boss-states holds")
-    ] = None,
-    afterstates: Annotated[
-        str | None, typer.Option(help="the logged decisions' options (`afterstates`), for explore_temperature")
-    ] = None,
-    objective: Annotated[
-        str, typer.Option(help="a whole run's value: floor (the floor expected) or win (the chance to win)")
-    ] = "floor",
     init: Annotated[
         str | None,
         typer.Option(
@@ -178,50 +57,22 @@ def main(
     seed: int = 0,
 ) -> None:
     out_file = out_path(name, out)
-    if objective not in ("floor", "win"):
-        raise LearnError(f"--objective is floor or win, not {objective}")
-    if boss_sims and objective != "floor":
-        raise LearnError("the boss sims' targets are floors: --objective floor")
     start = export.read(init) if init else None
-    if start and start["floors"] != FLOORS:
-        raise LearnError(f"{init} is a net of {start['floors']} floors: not this training's")
-    if start and start["state"]["names"] != encode.STATE:
-        raise LearnError(f"{init} reads the state {start['state']['names']}, this training {encode.STATE}")
-    if bool(boss_sims) != bool(boss_afterstates):
-        raise LearnError("--boss-sims and --boss-afterstates go together")
     torch.manual_seed(seed)
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     logs, records = common.train_lists(list_)
-    keep_views = bool(boss_sims or boss_states or afterstates)
-    samples, runs, views = data.read_runs(logs, records, character, FLOORS, keep_views)
+    samples, runs = data.read_runs(logs, records, FLOORS)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
         raise LearnError(f"{len(train)} train and {len(test)} held-out samples: too few runs")
-    worth = data.boss_worth(runs, FLOORS)
-    bosses = data.read_boss_sims(boss_sims, boss_afterstates, views, FLOORS, worth) if boss_sims else []
-    door_views = views | data.read_views(door_logs) if door_logs else views
-    doors = data.read_boss_states(boss_states, door_views, FLOORS) if boss_states else []
-    options = data.read_options(afterstates, views, FLOORS) if afterstates else []
-    train_bosses, test_bosses = (
-        [g for g in bosses if not data.held_out(g["run"])],
-        [g for g in bosses if data.held_out(g["run"])],
-    )
-    train_doors, test_doors = (
-        [g for g in doors if not data.held_out(g["run"])],
-        [g for g in doors if data.held_out(g["run"])],
-    )
-    test_options = [g for g in options if data.held_out(g["run"])]
     logger.info(
-        "{} decisions of {} runs ({} held out), {} boss sim decisions, {} doors, {} logged decisions with options",
+        "{} decisions of {} runs ({} held out)",
         len(samples),
         len({s["key"] for s in samples}),
         len({s["key"] for s in test}),
-        len(bosses),
-        len(doors),
-        len(options),
     )
 
     # Going on from a net keeps its state scaling; every net's tables are the game's.
@@ -250,37 +101,6 @@ def main(
     test_batches = list(batches(test, False))
     test_weight = sum(s["weight"] for s in test)
 
-    # The boss sims are fitted in units of their targets' mean square, the doors in units of their scores' variance,
-    # so the weights do not depend on the labels' scale.
-    boss_scale = max(
-        1e-4,
-        sum(s["boss_target"] ** 2 * s["weight"] for g in train_bosses for s in g["samples"])
-        / max(1, len(train_bosses)),
-    )
-    door_samples = [s for g in train_doors for s in g["samples"]]
-    door_mean = sum(s["boss_score"] * s["weight"] for s in door_samples) / max(1, len(train_doors))
-    door_scale = max(
-        1e-4, sum((s["boss_score"] - door_mean) ** 2 * s["weight"] for s in door_samples) / max(1, len(train_doors))
-    )
-
-    def boss_loss(model, chunk):
-        """Per decision: V's centred values against the targets, plus the second head's boss score."""
-        b, group, n = chunk
-        logits, aux = model.both(*b.inputs())
-        values = centred(expected_floor(torch.sigmoid(logits), b.start), group.to(device), n)
-        fit = ((values - b.boss_target) ** 2 * b.weight).sum() / boss_scale
-        return (fit + AUX_WEIGHT * (aux_loss(aux, b) * b.weight).sum()) / n
-
-    def door_loss(model, chunk):
-        """Per door: the second head's boss scores against the sims'."""
-        b, _, n = chunk
-        _, aux = model.both(*b.inputs())
-        return (aux_loss(aux, b) * b.weight).sum() / door_scale / n
-
-    def held_side(model, groups, loss):
-        with torch.no_grad():
-            return sum(float(loss(model, grouped(make, [g]))) for g in groups) / max(1, len(groups))
-
     # Baseline: per floor, the hazard the training runs show, whatever the state.
     alive, deaths = torch.zeros(FLOORS, dtype=torch.float64), torch.zeros(FLOORS, dtype=torch.float64)
     for b in batches(train, False):
@@ -290,7 +110,7 @@ def main(
     base_logits = torch.log(base_hazard / (1 - base_hazard)).float().to(device)
 
     def evaluate(model):
-        total, aux_total, rows, wins = 0.0, 0.0, [], []
+        total, aux_total, wins = 0.0, 0.0, []
         with torch.no_grad():
             for b in test_batches:
                 if model:
@@ -300,8 +120,7 @@ def main(
                     logits = base_logits.expand(len(b.weight), -1)
                 total += float((hazard_loss(logits, b) * b.weight).sum())
                 wins.append(win_chance(torch.sigmoid(logits), b.start))
-                rows.append(expected_floor(torch.sigmoid(logits), b.start))
-        return total / test_weight, torch.cat(rows), aux_total / test_weight, torch.cat(wins)
+        return total / test_weight, aux_total / test_weight, torch.cat(wins)
 
     model = Net({t: len(ids) for t, ids in tables.items()}, FLOORS)
     if start:
@@ -312,8 +131,6 @@ def main(
             model.head.bias.copy_(base_logits)
     model = model.to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
-    boss_stream = stream(train_bosses, lambda c: grouped(make, c))
-    door_stream = stream(train_doors, lambda c: grouped(make, c))
     best, best_state, stale = math.inf, None, 0
     for epoch in range(EPOCHS):
         model.train()
@@ -321,28 +138,14 @@ def main(
             logits, aux = model.both(*b.inputs())
             per_sample = hazard_loss(logits, b) + AUX_WEIGHT * aux_loss(aux, b)
             loss = (per_sample * b.weight).sum() / b.weight.sum()
-            if train_bosses:
-                loss = loss + BOSS_WEIGHT * boss_loss(model, next(boss_stream))
-            if train_doors:
-                loss = loss + DOOR_WEIGHT * door_loss(model, next(door_stream))
             opt.zero_grad()
             loss.backward()
             opt.step()
         model.eval()
-        held, _, held_aux, _ = evaluate(model)
-        held_boss = held_side(model, test_bosses, boss_loss) if test_bosses else 0.0
-        held_door = held_side(model, test_doors, door_loss) if test_doors else 0.0
-        total = held + BOSS_WEIGHT * held_boss + DOOR_WEIGHT * held_door
-        logger.info(
-            "epoch {}: held-out loss {:.4f}, next combats {:.4f}, boss sims {:.4f}, doors {:.4f}",
-            epoch,
-            held,
-            held_aux,
-            held_boss,
-            held_door,
-        )
-        if total < best - 1e-4:
-            best, best_state, stale = total, {k: v.clone() for k, v in model.state_dict().items()}, 0
+        held, held_aux, _ = evaluate(model)
+        logger.info("epoch {}: held-out loss {:.4f}, next combats {:.4f}", epoch, held, held_aux)
+        if held < best - 1e-4:
+            best, best_state, stale = held, {k: v.clone() for k, v in model.state_dict().items()}, 0
         else:
             stale += 1
             if stale >= PATIENCE:
@@ -350,17 +153,11 @@ def main(
     model.load_state_dict(best_state)
     model.eval()
 
-    # The report: held-out loss against the baseline, and how well the expected floor predicts the floor reached.
-    held, predicted, held_aux, won_chance = evaluate(model)
-    base_loss, base_predicted, _, base_won_chance = evaluate(None)
-    actual = torch.tensor([float(s["floor"]) for s in test], dtype=torch.float64, device=predicted.device)
-    weights = torch.tensor([s["weight"] for s in test], dtype=torch.float64, device=predicted.device)
-
-    def r2(pred):
-        m = (weights * actual).sum() / weights.sum()
-        return float(1 - (weights * (actual - pred) ** 2).sum() / (weights * (actual - m) ** 2).sum())
-
-    won = torch.tensor([float(s["kind"] == "won") for s in test], dtype=torch.float64, device=predicted.device)
+    # The report: held-out loss against the baseline, and how well the chance to win predicts the runs won.
+    held, held_aux, won_chance = evaluate(model)
+    base_loss, _, base_won_chance = evaluate(None)
+    weights = torch.tensor([s["weight"] for s in test], dtype=torch.float64, device=won_chance.device)
+    won = torch.tensor([float(s["kind"] == "won") for s in test], dtype=torch.float64, device=won_chance.device)
 
     def brier(chance):
         return float((weights * (chance - won) ** 2).sum() / weights.sum())
@@ -370,30 +167,17 @@ def main(
         "held_out_runs": len({s["key"] for s in test}),
         "samples": len(samples),
         "won": sum(1 for r in runs if r["outcome"] == "won"),
-        "objective": objective,
         "vocab": {t: len(ids) for t, ids in tables.items()},
         "held_out_loss": held,
         "held_out_loss_floor_only": base_loss,
         "held_out_next_combats": held_aux,
-        "r2_held_out": r2(predicted),
-        "r2_held_out_floor_only": r2(base_predicted),
         "won_held_out_runs": len({s["key"] for s in test if s["kind"] == "won"}),
         "brier_held_out": brier(won_chance),
         "brier_held_out_floor_only": brier(base_won_chance),
     }
-    if bosses:
-        report |= {"boss_sims": len(bosses), "held_out_boss_sims": len(test_bosses), "boss_worth": worth}
-        report |= {"held_out_boss_loss": held_side(model, test_bosses, boss_loss)}
-        report |= boss_report(model, test_bosses, make)
-    if doors:
-        report |= {"doors": len(doors), "held_out_doors": len(test_doors)}
-        report |= {"held_out_door_loss": held_side(model, test_doors, door_loss)}
-        report |= door_report(model, test_doors, make)
-    if test_options:
-        report |= explore_report(model, test_options, make, win_chance if objective == "win" else expected_floor)
     print(json.dumps(report))
 
-    net = export.net_file(name, character, FLOORS, tables, mean, std, model, test, report, seed, objective)
+    net = export.net_file(name, FLOORS, tables, mean, std, model, test, report, seed)
     export.write(net, out_file)
     logger.info("wrote {}", out_file)
 

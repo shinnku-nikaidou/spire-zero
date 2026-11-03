@@ -1,4 +1,4 @@
-"""What the scripts of learn/ share: logging, errors, reading JSON lines, and running the sim.
+"""What the scripts of learn/ share: logging, errors, reading JSON lines and list pairs.
 
 Logs go to stderr, so that a script's stdout carries only its result. A LearnError ends a script with its message and
 exit code 1; anything else is a bug and ends it with a traceback.
@@ -7,10 +7,8 @@ exit code 1; anything else is a bug and ends it with a traceback.
 import json
 import os
 import re
-import shlex
-import subprocess
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from pathlib import Path
 
 import typer
@@ -60,12 +58,11 @@ def read_lines(paths: str, needle: str | None = None) -> Iterator[dict]:
                     pass
 
 
-def runs_by_log(logs: str, records: str, character: str) -> list[tuple[str, dict[str, dict]]]:
+def runs_by_log(logs: str, records: str) -> list[tuple[str, dict[str, dict]]]:
     """Each decision log (comma-separated) with the runs, by run id, of the record file at the same place in records:
     the one its `run` wrote beside it. A run id is a hash of the seed alone, so files of other runs can hold another
     run of the same seed (another policy, an exploration scan); a log is joined only with its own records. A run id
-    twice in one record file is refused, and so is a run of another character than the one being trained: each
-    character has a brain of its own (docs: learning/reference §6)."""
+    twice in one record file is refused. Every character's runs are read: the nets are shared by all of them."""
     log_paths, record_paths = logs.split(","), records.split(",")
     if len(log_paths) != len(record_paths):
         raise LearnError(
@@ -76,13 +73,9 @@ def runs_by_log(logs: str, records: str, character: str) -> list[tuple[str, dict
     for log, path in zip(log_paths, record_paths, strict=True):
         runs = {}
         for r in read_lines(path):
-            run_id = r.get("run_id")
-            if not run_id:
-                continue
+            run_id = r["run_id"]
             if run_id in runs:
                 raise LearnError(f"run {run_id} is in {path} twice")
-            if r.get("character") != character:
-                raise LearnError(f"run {run_id} in {path} was played as {r.get('character')}, not {character}")
             runs[run_id] = r
         pairs.append((log, runs))
     return pairs
@@ -110,20 +103,3 @@ def train_lists(prefix: str) -> tuple[str, str]:
             raise LearnError(f"{prefix} holds test runs, which no net trains on: {path}")
     return logs, records
 
-
-def start_sim(cmd: Sequence[str], log: Path, cwd: Path | None = None) -> subprocess.Popen:
-    """Starts a sim command, its output (stdout and stderr) in a log file."""
-    with open(log, "w") as out:
-        return subprocess.Popen(list(cmd), cwd=cwd, stdout=out, stderr=subprocess.STDOUT)
-
-
-def wait_sims(procs: Sequence[tuple[subprocess.Popen, Path]]) -> None:
-    """Waits for every sim process, then fails if any did, with the end of the first one's log."""
-    failed = [(proc, log) for proc, log in procs if proc.wait() != 0]
-    if failed:
-        proc, log = failed[0]
-        tail = "".join(log.read_text(errors="replace").splitlines(keepends=True)[-12:])
-        raise LearnError(
-            f"{len(failed)} of {len(procs)} sim processes failed; the first, {shlex.join(proc.args)}, "
-            f"logged to {log}:\n{tail}"
-        )
