@@ -34,7 +34,7 @@ flowchart TD
   RR --> REP["report: JSON + Markdown"]
   REP --> LB["leaderboard.md"]
   RR --> G["gate"]
-  CF["champion file<br/>eval/CHARACTER/champions/ENV.json"] -->|names| CR["the champion's report"]
+  CF["champion file<br/>eval/champions/ENV.json"] -->|names| CR["the champion's report"]
   CR --> G
   G -->|"pass + --promote:<br/>the new report"| CF
 ```

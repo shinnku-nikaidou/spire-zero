@@ -80,7 +80,7 @@ Where the environment is set, as the code has it:
 | the wire | `hello{env: "NoSL"\|"SL"}`, which the host sends at the start of each run ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)) | – |
 | `brain` (the decision process alone) | serves both: NoSL hosts with `--policy`'s combat brain, SL hosts with `--sl-policy`'s (`Commands/BrainCommand.cs:19`) | `--sl-policy plan` |
 | the mod | the SL/NoSL switch in the panel's head, kept in `~/.local/state/sts2ai/settings.json` ([Mod §5](/en/arch/mod/#sec-5)) | SL |
-| champion files | one per character and environment, `eval/CHARACTER/champions/nosl.json` and `sl.json`; `gate --env` must match the file's ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)) | – |
+| champion files | one per environment, every character's, `eval/champions/nosl.json` and `sl.json`; `gate --env` must match the file's ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)) | – |
 | combat net training | `combat.train --env SL\|NoSL`, required; the net file records it (`learn/combat/train.py`, `export.py`) | – |
 
 What refuses the wrong environment:

@@ -121,8 +121,8 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | token table | A net's list of ids of one kind (cards, relics, …), with learned rows per id: every id of the game build; entry 0, `<unk>`, reads any other ([The combat net §2](/en/arch/combat-brain/network/#sec-2)). |
 | `weights/all/NAME.json` | A net's file; the champions play `v9-0.json` and `c9-0.json` ([Learning: reference §6](/en/arch/learning/reference/#sec-6)). |
 | `promotion-1`, `promotion-1-300`, `final-1`, `a10-check-1` | Seed sets in `eval/seeds/`: 200 and 300 promotion seeds (the longer begins with the shorter), a final set of 300 registered before any run on it, and 200 seeds for A10 win rates, in no training data. |
-| `eval/silent/champions/sl.json`, `nosl.json` | Champion files: the options that play each environment's champion, and its report. |
-| `eval/silent/ledger.md` | The lineage, and the only history of the nets: which brain played which data, and which data trained which weights. |
+| `eval/champions/sl.json`, `nosl.json` | Champion files: the options that play each environment's champion, every character's, and its report of each character. |
+| `eval/ledger.md` | The lineage, and the only history of the nets, every character's: which brain played which data, and which data trained which weights. |
 | `data/silent/{sl,nosl}/…` | The data directory's self-play and evaluation folders, on the storage host, not in git. |
 | `tmp/build.sh REV`, `sim.sh` | The local launcher that builds a fixed commit and runs it ([Simulator: reference §1](/en/arch/simulator/reference/#sec-1)). |
 | `run`, `brain`, `serve`, `clones`, `gate`, `report`, `leaderboard` | SimWorker commands ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). |

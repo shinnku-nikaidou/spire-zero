@@ -117,15 +117,15 @@ A panel costs seconds to minutes a fight; a whole-run gate costs hours of comput
 ## 6. The whole-run gate
 
 ```text
-gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challenger's run options]
+gate --champion eval/champions/ENV.json --records A[,B…] [the challenger's run options]
      [--metric floor|win] [--delta D] [--alpha A] [--beta B] [--not-worse] [--promote PATH] [--env ENV]
 ```
 
-(`SimWorker/Commands/EvalCommands.cs:61-124`, `Harness/Gate.cs`)
+(`SimWorker/Commands/EvalCommands.cs:62-131`, `Harness/Gate.cs`)
 
 | option | default | what it does |
 |---|---|---|
-| `--champion FILE` | required | the champion file to beat; its `report` is the champion's side |
+| `--champion FILE` | required | the champion file to beat; its report of the records' character is the champion's side, and a character it has no report of is refused |
 | `--records A[,B…]` | required | the challenger's run record files, comma-separated |
 | `--metric` | `floor` | `floor` or `win` ([§3](#sec-3)) |
 | `--delta D` | 1.5 for `floor`, 0.1 for `win` (`:96`) | the difference the SPRT tells from none |
@@ -155,12 +155,12 @@ gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challe
 champion: NAME (eval/silent/reports/REPORT.json)
 challenger: NAME, 200 runs
 gate pass: floor, delta 1.5, after 136 of 200 pairs; LLR 2.99 in [-2.94, 2.94]; floor difference +1.78; wins only by the challenger 0, only by the champion 0
-promoted: eval/silent/champions/nosl.json now names NAME
+promoted: eval/champions/nosl.json now names NAME
 ```
 
 (the shape of a real floor gate's output, the `Summary` form, `Harness/Gate.cs:37-40`, with its names and paths left out). The exit code is 0 on a pass, promoted or not; 1 on fail, open or void; 2 on a command-line mistake, a refused promotion, or a file that cannot be read (`SimWorker/Commands/Cli.cs:49-60`).
 
-**Time boxes.** Evaluations run in time boxes: the job gets a deadline and more seeds than fit, seeds are dealt from the front of the file, and what finished is the result (`.claude/skills/sl-selfplay/SKILL.md:106-110`). Runs that die early finish first, so a set cut short leans towards short runs. The two sides of a comparison of two time-boxed jobs are therefore given the same machines and the same box, so they are cut alike.
+**Time boxes.** Evaluations run in time boxes: the job gets a deadline and more seeds than fit, seeds are dealt from the front of the file, and what finished is the result (`.claude/skills/sl-selfplay/SKILL.md:115-119`). Runs that die early finish first, so a set cut short leans towards short runs. The two sides of a comparison of two time-boxed jobs are therefore given the same machines and the same box, so they are cut alike.
 
 ## 7. Not worse
 
@@ -170,12 +170,12 @@ The project uses it for one more case: a challenger that only removes a hand-wri
 
 ## 8. Promotion
 
-On a pass, `--promote PATH` (`SimWorker/Commands/EvalCommands.cs:112-122`):
+On a pass, `--promote PATH` (`SimWorker/Commands/EvalCommands.cs:116-128`):
 
 1. makes the challenger's report from its records on the champion's seed set (`eval/seeds/SET.txt`), dated today; refuses a partial one, since the new report faces the next challengers and must cover the whole set;
-2. makes the champion file's options: the challenger's options for the file's environment, plus its character and ascension. Each weights file (`value`, `combat-net`) must be in the shared weights folder, `weights/all/`, where a name always means the same file; a promotion with a file elsewhere is refused before anything is written (`SimWorker/Brains/ChampionOptions.cs:99-109`, [Learning: reference §6](/en/arch/learning/reference/#sec-6));
+2. makes the champion file's options: the challenger's options for the file's environment, with no character or ascension, which each job gives. Each weights file (`value`, `combat-net`) must be in the shared weights folder, `weights/all/`, where a name always means the same file; a promotion with a file elsewhere is refused before anything is written (`SimWorker/Brains/ChampionOptions.cs:93-107`, [Learning: reference §6](/en/arch/learning/reference/#sec-6));
 3. writes `PATH.json` and `PATH.md`, the Markdown with an "Against" section on the champion's report;
-4. rewrites the champion file: the environment, the challenger's name and options, the new report, `since` the report's date, and `gate` the result ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)).
+4. rewrites the champion file: the environment, the challenger's name and options, the new report as its only one, under its character (the old champion's other reports were played by other nets), `since` the report's date, and `gate` the result ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)).
 
 The SPRT can pass early, and a promotion needs the whole set. So a challenger can be played in chunks and gated after each: stop at a fail, and after a pass play the rest of the set and gate again with `--promote`.
 ## 9. Re-baselining
@@ -219,11 +219,11 @@ the 95% one-sided lower bound of the mean difference (1.645 is the normal distri
 
 The margin needed grows with the champion's own wins. With few discordant seeds the normal bound is lenient: 3 seeds won by the challenger alone and none by the champion pass, where an exact McNemar (sign) test gives a one-sided p of 1/8.
 
-**What it does not check.** `gate.py` drops every record with a `failure` before anything (`:42`), so it has no void rule; it has no minimum of pairs, and does not compare the two sides' configs, champions, environments, commits or exploration. The procedure keeps those: the challenger plays `promotion-1-300` at medium with the champion's planner, `--afterstates clone` and no `--explore`, in a time box, and the champion plays in the same box any of those seeds it has no runs on (`.claude/skills/sl-selfplay/SKILL.md:80-93`). Both also play the same seeds at the low budget: that comparison is for reference and decides nothing.
+**What it does not check.** `gate.py` drops every record with a `failure` before anything (`:42`), so it has no void rule; it has no minimum of pairs, and does not compare the two sides' configs, champions, environments, commits or exploration. The procedure keeps those: both sides play the same seeds with the champion's planner, `--afterstates clone` and no `--explore`, in the same time box (`.claude/skills/sl-selfplay/SKILL.md:75-80`). It pairs records by seed alone, so it reads one character at a time.
 
-**At ascension 10** the gate plays 200 seeds at medium and 200 at the low budget, the first 200 of `promotion-1-300`, with the reports on `promotion-1-200`. A V and a combat net are judged apart, in the four pairings of old and new. A net is judged by its paired wins, with its floors listed beside them, and fewer floors do not block a net that wins more: at A10, strength late in a run is paid for with early floors. The first A10 gate went by floors, as the ledger records. The latest is on [Champions and baselines §2](/en/arch/evaluation/champions/#sec-2).
+**Every character.** The nets are shared, so a new pair of them is gated on all five characters, each at the ascension its data was played at: 200 seeds at the low budget, `promotion-1-200`, and 100 at medium, `promotion-1-100`. The champion's pair plays against the new pair; a V and a combat net are not judged apart. Each character's runs are read on their own, by paired wins with the floors listed beside them, and fewer floors do not block a net that wins more: late strength is paid for with early floors. The champion's own gate is on [Champions and baselines §2](/en/arch/evaluation/champions/#sec-2).
 
-**Promotion** is by hand: the script writes nothing. A net that passes (of two that pass, the one with more wins) replaces its net in both champion files, the ledger records it, and a `report` of its runs at medium goes on the leaderboard.
+**Promotion** is by hand: the script writes nothing. A pair that passes replaces the champion's nets in both champion files, the ledger records it, and a `report` of its runs at medium goes on each character's leaderboard.
 
 **On committed reports** (computed here; no such gate ran), with A, B and C of [§2](#sec-2) on `promotion-1-300`: C against A, 300 pairs, 23 won against 1, +0.073 ± 0.016 wins, lower bound +0.047, so it would pass (the floor: +2.20 ± 0.62). B against A would pass too, 13 against 1, lower bound +0.020, while its floor is −0.26 ± 0.70: floors and wins can disagree. C against B, 21 against 11 with 2 seeds won by both, passes by +0.0024.
 

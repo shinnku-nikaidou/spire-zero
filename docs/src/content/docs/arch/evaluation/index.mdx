@@ -34,7 +34,7 @@ flowchart TD
   RR --> REP["报告：JSON + Markdown"]
   REP --> LB["leaderboard.md"]
   RR --> G["gate"]
-  CF["冠军文件<br/>eval/CHARACTER/champions/ENV.json"] -->|指明| CR["冠军的报告"]
+  CF["冠军文件<br/>eval/champions/ENV.json"] -->|指明| CR["冠军的报告"]
   CR --> G
   G -->|"通过 + --promote：<br/>新报告"| CF
 ```

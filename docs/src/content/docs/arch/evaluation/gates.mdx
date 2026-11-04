@@ -117,15 +117,15 @@ $$
 ## 6. 整局门槛
 
 ```text
-gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challenger's run options]
+gate --champion eval/champions/ENV.json --records A[,B…] [the challenger's run options]
      [--metric floor|win] [--delta D] [--alpha A] [--beta B] [--not-worse] [--promote PATH] [--env ENV]
 ```
 
-（`SimWorker/Commands/EvalCommands.cs:61-124`，`Harness/Gate.cs`）
+（`SimWorker/Commands/EvalCommands.cs:62-131`，`Harness/Gate.cs`）
 
 | 选项 | 默认 | 作用 |
 |---|---|---|
-| `--champion FILE` | 必填 | 要击败的冠军文件；它的 `report` 就是冠军一方 |
+| `--champion FILE` | 必填 | 要击败的冠军文件；它为记录所属角色存的那份报告就是冠军一方，它没有报告的角色会被拒绝 |
 | `--records A[,B…]` | 必填 | 挑战者的对局记录文件，用逗号分隔 |
 | `--metric` | `floor` | `floor` 或 `win`（[§3](#sec-3)） |
 | `--delta D` | `floor` 为 1.5，`win` 为 0.1（`:96`） | SPRT 要与零区分开的差值 |
@@ -155,12 +155,12 @@ gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challe
 champion: NAME (eval/silent/reports/REPORT.json)
 challenger: NAME, 200 runs
 gate pass: floor, delta 1.5, after 136 of 200 pairs; LLR 2.99 in [-2.94, 2.94]; floor difference +1.78; wins only by the challenger 0, only by the champion 0
-promoted: eval/silent/champions/nosl.json now names NAME
+promoted: eval/champions/nosl.json now names NAME
 ```
 
 （这是一道真实层数门槛的输出形式，即 `Summary` 的格式，`Harness/Gate.cs:37-40`，略去了它的名字和路径。）通过时退出码为 0，不论是否晋级；失败、未定或作废时为 1；命令行错误、晋级被拒绝或文件读不出来时为 2（`SimWorker/Commands/Cli.cs:49-60`）。
 
-**限时作业**。评估以限时作业的方式运行：作业有一个截止时间，给它的种子比时间内能打完的多，各主机从文件开头依次领取种子，打完的部分就是结果（`.claude/skills/sl-selfplay/SKILL.md:106-110`）。早死的对局先打完，所以被截短的种子集偏向短的对局。因此，比较两个限时作业时，双方被分配同样的主机和同样的时限，这样截断的方式也相同。
+**限时作业**。评估以限时作业的方式运行：作业有一个截止时间，给它的种子比时间内能打完的多，各主机从文件开头依次领取种子，打完的部分就是结果（`.claude/skills/sl-selfplay/SKILL.md:115-119`）。早死的对局先打完，所以被截短的种子集偏向短的对局。因此，比较两个限时作业时，双方被分配同样的主机和同样的时限，这样截断的方式也相同。
 
 ## 7. 不更差
 
@@ -170,12 +170,12 @@ promoted: eval/silent/champions/nosl.json now names NAME
 
 ## 8. 晋级
 
-通过时，`--promote PATH`（`SimWorker/Commands/EvalCommands.cs:112-122`）：
+通过时，`--promote PATH`（`SimWorker/Commands/EvalCommands.cs:116-128`）：
 
 1. 用挑战者的记录在冠军的种子集（`eval/seeds/SET.txt`）上生成它的报告，日期为当天；不完整的报告会被拒绝，因为新报告要面对之后的挑战者，必须覆盖整个种子集；
-2. 生成冠军文件里的选项：挑战者在该文件所属环境下的选项，加上它的角色和进阶等级。每个权重文件（`value`、`combat-net`）都必须在共用的权重文件夹 `weights/all/` 里，那里一个名字永远指同一个文件；有文件放在别处的晋级，会在写入任何东西之前就被拒绝（`SimWorker/Brains/ChampionOptions.cs:99-109`，[学习：参考 §6](/arch/learning/reference/#sec-6)）；
+2. 生成冠军文件里的选项：挑战者在该文件所属环境下的选项，不含角色和进阶等级，它们由每个任务给出。每个权重文件（`value`、`combat-net`）都必须在共用的权重文件夹 `weights/all/` 里，那里一个名字永远指同一个文件；有文件放在别处的晋级，会在写入任何东西之前就被拒绝（`SimWorker/Brains/ChampionOptions.cs:93-107`，[学习：参考 §6](/arch/learning/reference/#sec-6)）；
 3. 写出 `PATH.json` 和 `PATH.md`，Markdown 里有一节针对冠军报告的「Against」；
-4. 改写冠军文件：环境、挑战者的名字和选项、新报告，`since` 为报告的日期，`gate` 为这次的结果（[冠军与基线 §1](/arch/evaluation/champions/#sec-1)）。
+4. 改写冠军文件：环境、挑战者的名字和选项、新报告，作为唯一的一份，记在它的角色下（旧冠军的其他报告是别的网络打的），`since` 为报告的日期，`gate` 为这次的结果（[冠军与基线 §1](/arch/evaluation/champions/#sec-1)）。
 
 SPRT 可能提前通过，而晋级需要整个种子集。所以挑战者可以分批打，每批之后过一次门槛：失败就停；通过之后把种子集剩下的打完，再带 `--promote` 过一次门槛。
 ## 9. 重定基线
@@ -219,11 +219,11 @@ $$
 
 所需的差距随冠军自己的胜局增长。不一致的种子很少时，正态下界很宽松：只有挑战者赢的种子 3 个、只有冠军赢的 0 个就能通过，而精确的 McNemar（符号）检验给出的单侧 p 值是 1/8。
 
-**它不检查什么**。`gate.py` 在做任何事之前就丢掉每条带 `failure` 的记录（`:42`），所以它没有作废规则；它没有最少配对数，也不比较双方的配置、冠军、环境、提交或探索。这些由流程来保证：挑战者用 medium 力度和冠军的规划器、`--afterstates clone`、不带 `--explore`，以限时作业的方式打 `promotion-1-300`，冠军在同一个时限里打这些种子中它还没有对局的部分（`.claude/skills/sl-selfplay/SKILL.md:80-93`）。双方还都用 low 预算打同样的种子：这个比较只作参考，不决定任何事。
+**它不检查什么**。`gate.py` 在做任何事之前就丢掉每条带 `failure` 的记录（`:42`），所以它没有作废规则；它没有最少配对数，也不比较双方的配置、冠军、环境、提交或探索。这些由流程来保证：双方用冠军的规划器、`--afterstates clone`、不带 `--explore`，在同一个时限里打同样的种子（`.claude/skills/sl-selfplay/SKILL.md:75-80`）。它只按种子配对记录，所以一次只读一个角色。
 
-**在进阶 10 上**，门槛用 medium 打 200 个种子，用 low 预算打 200 个，即 `promotion-1-300` 的前 200 个，报告用 `promotion-1-200`。V 和战斗网络分开评判，打新旧的四种配对。网络按配对胜局评判，层数列在旁边，层数更少并不阻止一个赢得更多的网络：在 A10 上，对局后期的强度是用前面的层数换来的。第一次 A10 门槛按层数决定，账本里有记录。最近一次见[冠军与基线 §2](/arch/evaluation/champions/#sec-2)。
+**每个角色**。网络是共用的，所以新的一对网络要在全部五个角色上过门槛，每个角色用它的数据所打的进阶等级：用 low 预算打 200 个种子，即 `promotion-1-200`，用 medium 打 100 个，即 `promotion-1-100`。冠军的那对网络对新的那对；V 和战斗网络不分开评判。每个角色的对局单独读，按配对胜局评判，层数列在旁边，层数更少并不阻止一个赢得更多的网络：后期的强度是用前面的层数换来的。冠军自己的门槛见[冠军与基线 §2](/arch/evaluation/champions/#sec-2)。
 
-**晋级**靠手工：脚本什么也不写。通过的网络（两个都通过时取胜局更多的那个）替换两个冠军文件里它对应的网络，账本记下这件事，它用 medium 力度打的对局做成一份 `report`，列上排行榜。
+**晋级**靠手工：脚本什么也不写。通过的一对网络替换两个冠军文件里冠军的网络，账本记下这件事，它用 medium 力度打的对局做成一份 `report`，列上每个角色的排行榜。
 
 **在已提交的报告上**（在这里算出；并没有真的跑过这样的门槛），用 [§2](#sec-2) 的 A、B 和 C，在 `promotion-1-300` 上：C 对 A，300 对，23 胜对 1 胜，胜局 +0.073 ± 0.016，下界 +0.047，所以它会通过（层数：+2.20 ± 0.62）。B 对 A 也会通过，13 对 1，下界 +0.020，而它的层数是 −0.26 ± 0.70：层数和胜局可能不一致。C 对 B，21 对 11，另有 2 个种子双方都赢，以 +0.0024 通过。
 

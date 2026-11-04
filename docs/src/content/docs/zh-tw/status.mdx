@@ -30,7 +30,7 @@ AI 以無頭方式、在遊戲自己的程式碼裡，在兩種環境下打完�
 | Mod | 輔助模式已在每個決策介面上實作，兩種環境都有：面板、地圖和戰鬥標示、設定分頁、SL 紀錄。在真實遊戲裡，90 個 SL 決策中有 89 個在它們的複本上問出同一個決策（另一個的原因已經修好）；一場戰鬥的第一個 SL 決策要等規劃器 3–15 s。還沒有在真實遊戲裡看它跑完一整局；自動遊玩在規劃中（[Mod](/zh-tw/arch/mod/)、[輸出](/zh-tw/arch/output/)） |
 | 算力 | 在幾台遠端主機上執行限時任務，同時約 50 局 SL；資料存在一台儲存主機上，並在存放的地方分析，網路在一台 GPU 機器上訓練（[學習：參考 §1](/zh-tw/arch/learning/reference/#sec-1)） |
 
-**冠軍們的成績**（`eval/silent/ledger.md`）：
+**冠軍們的成績**（`eval/ledger.md`）：
 
 | 環境 | 冠軍 | 種子集 | 勝率 | 平均層數 |
 |---|---|---|---|---|
@@ -60,7 +60,7 @@ AI 以無頭方式、在遊戲自己的程式碼裡，在兩種環境下打完�
 
 3. <Badge text="2026-10-28 前完成" variant="success" /> 行程池裡的 SL 複本和 SL 規劃器；真實遊戲裡 Mod 的輔助模式，帶 SL 紀錄。
 
-4. <Badge text="2026-10-31 完成" variant="success" /> 只從這一局的 id 和原始狀態讀取、在整局上訓練、按 P(win) 做決定的 V。每一步怎麼量的，記在 `eval/silent/ledger.md` 裡。
+4. <Badge text="2026-10-31 完成" variant="success" /> 只從這一局的 id 和原始狀態讀取、在整局上訓練、按 P(win) 做決定的 V。每一步怎麼量的，記在 `eval/ledger.md` 裡。
 
 5. <Badge text="2026-11-01 完成" variant="success" /> 戰鬥網路，SL 和 NoSL 都用它（[戰鬥網路](/zh-tw/arch/combat-brain/network/)）；程式碼裡只剩一個 V 和一個戰鬥網路。
 

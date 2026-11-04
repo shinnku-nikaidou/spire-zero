@@ -101,14 +101,14 @@ $$
 
 - **訓練種子和測試種子從不相遇**。自我對弈作業只打訓練種子，評估作業只打 `eval/seeds/` 裡的檔案；作業啟動器 `box.py` 拒絕其他做法，訓練也拒絕含有評估作業對局的清單（[學習：參考 §5](/zh-tw/arch/learning/reference/#sec-5)）。`promotion-1-300` 及其各部分、`final-1` 和 `a10-check-1` 從未用於訓練。
 - **`eval/seeds/retired/`** 存放不能再用來測試的種子集：`promotion-1-500`（`seeds --base 2 --n 500`，先是 `promotion-1-300`，再加 200 個），因為它後 200 個種子上的 medium 預算對局在較早戰鬥網路的資料裡，也就進了 c8-1、c8-2、c8-3 和 c9-0 這一脈。在它上面報告過的結果仍作為歷史保留。
-- **訓練種子**是 `MakeSeed(1, i)`，也就是 `run --seed 1 --start K` 所打的種子。帳本以每塊 100,000 個的區塊分配它們，每個批次一塊，所以任何兩個批次都不共用種子（`eval/silent/ledger.md`，[學習：參考 §5](/zh-tw/arch/learning/reference/#sec-5)）。
+- **訓練種子**是 `MakeSeed(1, i)`，也就是 `run --seed 1 --start K` 所打的種子。帳本以每塊 100,000 個的區塊分配它們，每個批次一塊，所以任何兩個批次都不共用種子（`eval/ledger.md`，[學習：參考 §5](/zh-tw/arch/learning/reference/#sec-5)）。
 - **晉級種子集是巢狀的**。每個較大的種子集都把較小那個的種子按原順序放在前面，所以較大種子集上的報告能在共用的種子上和較小種子集上的報告配對。`promotion-1.txt` 的檔頭寫著用完之後輪換到 `promotion-2`（基數 4）；但 `promotion-2` 並不存在，基數 4 給了 `a10-check-1`。
 - **`final-1` 從未打過**：每份已提交的報告都在晉級種子集上。
 - R1–R3 的對局由模擬器開局；R4 的對局將由 Mod 用同樣的種子開局（[Mod：自動遊玩與安全 §2](/zh-tw/arch/mod/auto/#sec-2)）。
 
 ## 6. 種子怎麼產生
 
-`seeds --base B --n K`（K 預設 300）對 i = 0…K−1 印出 `MakeSeed(B, i)`（`SimWorker/Commands/EvalCommands.cs:156-170`）：
+`seeds --base B --n K`（K 預設 300）對 i = 0…K−1 印出 `MakeSeed(B, i)`（`SimWorker/Commands/EvalCommands.cs:164-179`）：
 
 ```csharp
 // SimWorker/Simulation/GameSeeds.cs:7-12
@@ -195,11 +195,11 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 leaderboard [--character SILENT]
 ```
 
-這個指令讀取 `eval/CHARACTER/reports/` 裡的每份報告和 `eval/CHARACTER/champions/` 裡的每個冠軍檔案，寫出 `eval/CHARACTER/leaderboard.md` 並印出它（`SimWorker/Commands/EvalCommands.cs:127-153`，`Leaderboard.Markdown`，`Harness/Reports.cs:174-237`）。它由人工執行，排行榜和報告一起提交。
+這個指令讀取 `eval/CHARACTER/reports/` 裡的每份報告和 `eval/champions/` 裡的每個冠軍檔案，寫出 `eval/CHARACTER/leaderboard.md` 並印出它（`SimWorker/Commands/EvalCommands.cs:133-162`，`Leaderboard.Markdown`，`Harness/Reports.cs:174-237`）。它由人工執行，排行榜和報告一起提交。
 
 - **榜**。不完整的報告不列入。其餘的按角色、晉階等級和種子集分組，依此順序，每組一個 `##` 小節；小節內每個環境一張 `###` 表，NoSL 在前。兩個角色、兩個晉階等級或兩種環境從不放在一起排名。
 - **欄**：冠軍、日期、提交（7 個字元，保留 `-dirty`）、勝率（比率加區間）、平均層數、到達第 1 幕頭目的局數、每局秒數。
-- **順序**：作廢的報告排在最後，其餘按勝率，再按平均層數。作廢的報告在名稱後面加「(void)」；冠軍檔案指明的報告加「**(champion)**」。冠軍檔案若指向另一個環境的報告，就不在這個榜上標出任何東西，這就是今天的 NoSL 榜沒有標出冠軍的原因。
+- **順序**：作廢的報告排在最後，其餘按勝率，再按平均層數。作廢的報告在名稱後面加「(void)」；冠軍檔案為這個角色指明的報告加「**(champion)**」。冠軍檔案若指向另一個環境的報告，就不在這個榜上標出任何東西，這就是今天的 NoSL 榜沒有標出冠軍的原因。
 - **SL − NoSL**：在一個榜的表格之後，對這個榜上兩種環境都有報告的每個冠軍名稱（各取最新的一份），把對局按種子配對，給出：以百分點計的勝率差和層數差，各寫成平均 ± 1.96 SD/√n，雙方各自的勝局數，以及有多少個種子 SL 打得更遠、一樣遠、較近。還沒有哪個榜出現過這一節（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）。
 
 排行榜 `eval/silent/leaderboard.md` 每個種子集一個小節，列出每一份完整的報告，而不只是冠軍的。冠軍檔案見[冠軍與基線](/zh-tw/arch/evaluation/champions/)。

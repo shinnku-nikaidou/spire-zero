@@ -117,15 +117,15 @@ $$
 ## 6. 整局門檻
 
 ```text
-gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challenger's run options]
+gate --champion eval/champions/ENV.json --records A[,B…] [the challenger's run options]
      [--metric floor|win] [--delta D] [--alpha A] [--beta B] [--not-worse] [--promote PATH] [--env ENV]
 ```
 
-（`SimWorker/Commands/EvalCommands.cs:61-124`，`Harness/Gate.cs`）
+（`SimWorker/Commands/EvalCommands.cs:62-131`，`Harness/Gate.cs`）
 
 | 選項 | 預設 | 作用 |
 |---|---|---|
-| `--champion FILE` | 必填 | 要打敗的冠軍檔案；它的 `report` 就是冠軍那一方 |
+| `--champion FILE` | 必填 | 要打敗的冠軍檔案；它對記錄所屬角色的報告就是冠軍那一方，它沒有報告的角色會被拒絕 |
 | `--records A[,B…]` | 必填 | 挑戰者的對局記錄檔案，以逗號分隔 |
 | `--metric` | `floor` | `floor` 或 `win`（[§3](#sec-3)） |
 | `--delta D` | `floor` 為 1.5，`win` 為 0.1（`:96`） | SPRT 要和「沒有差別」分開的那個差值 |
@@ -155,12 +155,12 @@ gate --champion eval/CHARACTER/champions/ENV.json --records A[,B…] [the challe
 champion: NAME (eval/silent/reports/REPORT.json)
 challenger: NAME, 200 runs
 gate pass: floor, delta 1.5, after 136 of 200 pairs; LLR 2.99 in [-2.94, 2.94]; floor difference +1.78; wins only by the challenger 0, only by the champion 0
-promoted: eval/silent/champions/nosl.json now names NAME
+promoted: eval/champions/nosl.json now names NAME
 ```
 
 （一次真實層數門檻的輸出形式，`Summary` 格式，`Harness/Gate.cs:37-40`，略去其中的名稱和路徑）。結束代碼：通過時為 0，不論是否晉級；失敗、未定或作廢時為 1；命令列錯誤、晉級被拒或檔案無法讀取時為 2（`SimWorker/Commands/Cli.cs:49-60`）。
 
-**限時作業**。評估以限時作業的方式執行：作業拿到一個截止時間和多於時間內能打完的種子，種子從檔案前端依序分取，到時打完的就是結果（`.claude/skills/sl-selfplay/SKILL.md:106-110`）。早死的對局先打完，所以被截短的種子集偏向短的對局。因此，比較兩個限時作業時，雙方會分配到相同的主機和相同的時限，這樣它們被截的方式相同。
+**限時作業**。評估以限時作業的方式執行：作業拿到一個截止時間和多於時間內能打完的種子，種子從檔案前端依序分取，到時打完的就是結果（`.claude/skills/sl-selfplay/SKILL.md:115-119`）。早死的對局先打完，所以被截短的種子集偏向短的對局。因此，比較兩個限時作業時，雙方會分配到相同的主機和相同的時限，這樣它們被截的方式相同。
 
 ## 7. 不更差
 
@@ -170,12 +170,12 @@ promoted: eval/silent/champions/nosl.json now names NAME
 
 ## 8. 晉級
 
-通過時，`--promote PATH`（`SimWorker/Commands/EvalCommands.cs:112-122`）：
+通過時，`--promote PATH`（`SimWorker/Commands/EvalCommands.cs:116-128`）：
 
 1. 用挑戰者的記錄在冠軍的種子集（`eval/seeds/SET.txt`）上做出它的報告，日期為今天；拒絕不完整的報告，因為新報告要面對之後的挑戰者，必須涵蓋整個種子集；
-2. 做出冠軍檔案的選項：挑戰者在檔案所屬環境下的選項，加上它的角色和晉階等級。每個權重檔案（`value`、`combat-net`）都必須在共用的權重資料夾 `weights/all/` 裡，那裡一個名稱永遠指同一個檔案；有檔案在別處的晉級，在寫入任何東西之前就被拒絕（`SimWorker/Brains/ChampionOptions.cs:99-109`，[學習：參考 §6](/zh-tw/arch/learning/reference/#sec-6)）；
+2. 做出冠軍檔案的選項：挑戰者在檔案所屬環境下的選項，不含角色和晉階等級，這兩者由每個作業自己給。每個權重檔案（`value`、`combat-net`）都必須在共用的權重資料夾 `weights/all/` 裡，那裡一個名稱永遠指同一個檔案；有檔案在別處的晉級，在寫入任何東西之前就被拒絕（`SimWorker/Brains/ChampionOptions.cs:93-107`，[學習：參考 §6](/zh-tw/arch/learning/reference/#sec-6)）；
 3. 寫出 `PATH.json` 和 `PATH.md`，Markdown 裡有一節對比冠軍報告的「Against」；
-4. 改寫冠軍檔案：環境、挑戰者的名稱和選項、新報告、`since` 為報告的日期，`gate` 為這次門檻的結果（[冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。
+4. 改寫冠軍檔案：環境、挑戰者的名稱和選項、新報告（作為它唯一的一份，放在它的角色之下；舊冠軍的其他報告是別的網路打的）、`since` 為報告的日期，`gate` 為這次門檻的結果（[冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。
 
 SPRT 可能提前通過，而晉級需要整個種子集。所以挑戰者可以分批打，每批之後過一次門檻：失敗就停；通過之後把種子集剩下的打完，再帶 `--promote` 過一次門檻。
 ## 9. 重定基線
@@ -219,11 +219,11 @@ $$
 
 需要的差距隨冠軍自己的勝局增加。不一致的種子很少時，常態下界很寬鬆：只有挑戰者贏的 3 個種子、冠軍一個也沒有，就能通過，而精確的 McNemar（符號）檢定給出的單側 p 值是 1/8。
 
-**它不檢查什麼**。`gate.py` 在做任何事之前就丟掉每條帶 `failure` 的記錄（`:42`），所以它沒有作廢規則；它沒有最少配對數，也不比較雙方的設定、冠軍、環境、提交或探索。這些由流程來保證：挑戰者用冠軍的規劃器、`--afterstates clone`、不帶 `--explore`，在限時作業裡以 medium 力度打 `promotion-1-300`，冠軍則在同一個限時作業裡打這些種子中它還沒有對局的部分（`.claude/skills/sl-selfplay/SKILL.md:80-93`）。雙方也用低預算打相同的種子：這個比較只供參考，不決定任何事。
+**它不檢查什麼**。`gate.py` 在做任何事之前就丟掉每條帶 `failure` 的記錄（`:42`），所以它沒有作廢規則；它沒有最少配對數，也不比較雙方的設定、冠軍、環境、提交或探索。這些由流程來保證：雙方用冠軍的規劃器、`--afterstates clone`、不帶 `--explore`，在同一個限時作業裡打相同的種子（`.claude/skills/sl-selfplay/SKILL.md:75-80`）。`gate.py` 只按種子配對記錄，所以一次只讀一個角色。
 
-**在晉階 10**，門檻打 200 個種子的 medium 和 200 個種子的低預算，也就是 `promotion-1-300` 的前 200 個，報告用 `promotion-1-200`。V 和戰鬥網路分開評判，打新舊的四種配對。網路按配對勝局評判，層數列在旁邊，層數較少不會擋下勝局較多的網路：在 A10，一局後段的強度是拿前面的層數換來的。第一次 A10 門檻是按層數決定的，帳本裡有記錄。最近一次見[冠軍與基線 §2](/zh-tw/arch/evaluation/champions/#sec-2)。
+**每個角色**。網路是共用的，所以一對新網路要在全部五個角色上過門檻，每個角色用它的資料打的那個晉階等級：低預算 200 個種子，`promotion-1-200`，以及 medium 100 個種子，`promotion-1-100`。冠軍的那一對網路對上新的那一對；V 和戰鬥網路不分開評判。每個角色的對局各自讀，按配對勝局評判，層數列在旁邊，層數較少不會擋下勝局較多的網路：後段的強度是拿前面的層數換來的。冠軍自己的門檻見[冠軍與基線 §2](/zh-tw/arch/evaluation/champions/#sec-2)。
 
-**晉級**是人工的：腳本什麼也不寫。通過的網路（兩個都通過時取勝局多的那個）取代兩個冠軍檔案裡它對應的網路，帳本記下這件事，它用 medium 力度打的對局做成的 `report` 放上排行榜。
+**晉級**是人工的：腳本什麼也不寫。通過的一對網路取代兩個冠軍檔案裡冠軍的網路，帳本記下這件事，它用 medium 力度打的對局做成的 `report` 放上每個角色的排行榜。
 
 **在已提交的報告上**（在這裡算出；沒有真的跑過這樣的門檻），用 [§2](#sec-2) 的 A、B、C，在 `promotion-1-300` 上：C 對 A，300 對，23 勝對 1 勝，+0.073 ± 0.016 勝，下界 +0.047，所以會通過（層數：+2.20 ± 0.62）。B 對 A 也會通過，13 對 1，下界 +0.020，而它的層數是 −0.26 ± 0.70：層數和勝局可能不一致。C 對 B，21 對 11，有 2 個種子雙方都贏，以 +0.0024 通過。
 

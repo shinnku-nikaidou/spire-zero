@@ -241,13 +241,13 @@ export function valueNet(lang: Lang): Diagram {
     columns: [
       {
         title: L(w('Deck', '牌组', '牌組')),
-        input: L(w('each card: id · upgrades ·\nmodifiers', '每张牌：id · 升级 ·\n修饰', '每張牌：id · 升級 ·\n修飾')),
+        input: L(w('each card: id · upgrades ·\nmodifiers · grown numbers', '每张牌：id · 升级 ·\n修饰 · 成长的数字', '每張牌：id · 升級 ·\n修飾 · 成長的數字')),
         items: [
           {
             kind: 'block',
-            label: L(w('Card vector\nE + u·U + Σ M: 64', '牌向量\nE + u·U + Σ M：64', '牌向量\nE + u·U + Σ M：64')),
+            label: L(w('Card vector\nE + u·U + d·D + k·K + Σ (M + a·A): 64', '牌向量\nE + u·U + d·D + k·K + Σ (M + a·A)：64', '牌向量\nE + u·U + d·D + k·K + Σ (M + a·A)：64')),
             tone: 'embed',
-            info: L(w('x = E[c] + u·U[c] + Σ M[m]: the id’s vector, u steps along its upgrade direction, its modifiers: 64 numbers per card.', 'x = E[c] + u·U[c] + Σ M[m]：id 的向量，沿它的升级方向走 u 步，再加修饰：每张牌 64 个数。', 'x = E[c] + u·U[c] + Σ M[m]：id 的向量，沿它的升級方向走 u 步，再加修飾：每張牌 64 個數。')),
+            info: L(w('x = E[c] + u·U[c] + d·D[c] + k·K[c] + Σ (M[m] + a·A[m]): the id’s vector, u steps along its upgrade direction, its damage and block along its own directions, its modifiers with their amounts: 64 numbers per card.', 'x = E[c] + u·U[c] + d·D[c] + k·K[c] + Σ (M[m] + a·A[m])：id 的向量，沿它的升级方向走 u 步，伤害和格挡沿它自己的方向走，再加修饰和它们的数值：每张牌 64 个数。', 'x = E[c] + u·U[c] + d·D[c] + k·K[c] + Σ (M[m] + a·A[m])：id 的向量，沿它的升級方向走 u 步，傷害和格擋沿它自己的方向走，再加修飾和它們的數值：每張牌 64 個數。')),
           },
           {
             kind: 'repeat',

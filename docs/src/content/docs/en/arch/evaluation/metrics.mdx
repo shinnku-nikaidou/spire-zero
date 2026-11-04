@@ -101,14 +101,14 @@ A seed set is a text file in `eval/seeds/`, one seed per line; `#` starts a comm
 
 - **Train seeds and test seeds never meet.** A self-play job plays train seeds only, and an eval job a file of `eval/seeds/` only; the job launcher `box.py` refuses anything else, and training refuses a list holding an eval job's runs ([Learning: reference §5](/en/arch/learning/reference/#sec-5)). `promotion-1-300` and its parts, `final-1` and `a10-check-1` have never been trained on.
 - **`eval/seeds/retired/`** holds what can no longer test: `promotion-1-500` (`seeds --base 2 --n 500`, `promotion-1-300` and then 200 more), since the medium runs on its last 200 seeds are in the data of earlier combat nets, and so in the line of c8-1, c8-2, c8-3 and c9-0. Results reported on it stand as history.
-- **Train seeds** are `MakeSeed(1, i)`, what `run --seed 1 --start K` plays. The ledger hands them out in blocks of 100,000, one block per batch, so no two batches share a seed (`eval/silent/ledger.md`, [Learning: reference §5](/en/arch/learning/reference/#sec-5)).
+- **Train seeds** are `MakeSeed(1, i)`, what `run --seed 1 --start K` plays. The ledger hands them out in blocks of 100,000, one block per batch, so no two batches share a seed (`eval/ledger.md`, [Learning: reference §5](/en/arch/learning/reference/#sec-5)).
 - **Promotion sets nest.** Each larger set keeps the smaller one's seeds first, in the same order, so a report on the larger set pairs with reports on the smaller one on the shared seeds. `promotion-1.txt`'s header says to rotate to a `promotion-2` (base 4) once it is used up; no `promotion-2` exists, and base 4 went to `a10-check-1`.
 - **`final-1` has never been played**: every committed report is on a promotion set.
 - R1–R3 runs are started by the simulator; R4 runs would be started by the mod with the same seed ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)).
 
 ## 6. How the seeds are made
 
-`seeds --base B --n K` (default 300) prints `MakeSeed(B, i)` for i = 0…K−1 (`SimWorker/Commands/EvalCommands.cs:156-170`):
+`seeds --base B --n K` (default 300) prints `MakeSeed(B, i)` for i = 0…K−1 (`SimWorker/Commands/EvalCommands.cs:164-179`):
 
 ```csharp
 // SimWorker/Simulation/GameSeeds.cs:7-12
@@ -195,11 +195,11 @@ Because the report embeds every run record, combats included, the per-run data o
 leaderboard [--character SILENT]
 ```
 
-reads every report in `eval/CHARACTER/reports/` and every champion file in `eval/CHARACTER/champions/`, writes `eval/CHARACTER/leaderboard.md` and prints it (`SimWorker/Commands/EvalCommands.cs:127-153`, `Leaderboard.Markdown`, `Harness/Reports.cs:174-237`). It is run by hand, and the board committed with the reports.
+reads every report in `eval/CHARACTER/reports/` and every champion file in `eval/champions/`, writes `eval/CHARACTER/leaderboard.md` and prints it (`SimWorker/Commands/EvalCommands.cs:133-162`, `Leaderboard.Markdown`, `Harness/Reports.cs:174-237`). It is run by hand, and the board committed with the reports.
 
 - **Boards.** Partial reports are left out. The others are grouped by character, ascension and seed set, one `##` section each, in that order; inside, one `###` table per environment, NoSL first. Two characters, two ascensions or two environments are never ranked together.
 - **Columns**: champion, date, commit (7 characters, `-dirty` kept), win rate (as a rate with its interval), floor mean, act 1 boss reached, seconds per run.
-- **Order**: void reports last, then by win rate, then by mean floor. A void report gets "(void)" after its name; the report a champion file names gets "**(champion)**". A champion file that names a report of the other environment marks nothing on that board, which is why the NoSL board marks no champion today.
+- **Order**: void reports last, then by win rate, then by mean floor. A void report gets "(void)" after its name; the report a champion file names for the character gets "**(champion)**". A champion file that names a report of the other environment marks nothing on that board, which is why the NoSL board marks no champion today.
 - **SL − NoSL**: after a board's tables, for each champion name with a report in both environments on that board (the latest of each), the runs paired by seed: the win-rate difference in percentage points and the floor difference, each as mean ± 1.96 SD/√n, the wins of each side, and how many seeds SL took further, as far and less far. No board has had one ([Evaluation §3](/en/arch/evaluation/#sec-3)).
 
 The board, `eval/silent/leaderboard.md`, has one section per seed set and lists every complete report, not only the champions'. The champion files are on [Champions and baselines](/en/arch/evaluation/champions/).

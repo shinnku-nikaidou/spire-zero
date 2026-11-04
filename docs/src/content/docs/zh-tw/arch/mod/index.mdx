@@ -102,7 +102,7 @@ flowchart LR
 Mod 需要一個在它的 socket `~/.local/state/sts2ai/brain.sock`（設定了 `$XDG_STATE_HOME` 時在它底下）上監聽的大腦。大腦就是 SimWorker 的 `brain` 指令（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)），在遊戲之前或之後啟動都可以；Mod 每 2 秒重試一次，直到連上為止。
 
 ```bash
-dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/silent/champions/nosl.json
+dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/champions/nosl.json
 ```
 
 - `--champion` 指定它要用的冠軍：NoSL 宿主得到檔案裡的戰鬥大腦（PIMC 加戰鬥網路）和宏觀大腦（L0 加 V）；SL 宿主得到 `--sl-policy` 的戰鬥大腦（預設是 SL 規劃器），宏觀大腦相同（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）。所以一個大腦就能服務兩種環境，切換面板上的開關也不需要重新啟動。

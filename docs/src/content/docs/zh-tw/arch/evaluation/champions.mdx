@@ -9,7 +9,7 @@ sidebar:
 
 ## 1. 冠軍檔案
 
-`eval/CHARACTER/champions/ENV.json`（`nosl.json`、`sl.json`）為每個角色和環境保存一個冠軍，格式為 `ChampionFile` 記錄（`Harness/Gate.cs:114-115`）。SL 冠軍的檔案：
+`eval/champions/ENV.json`（`nosl.json`、`sl.json`）為每個環境保存一個冠軍，涵蓋每個角色，格式為 `ChampionFile` 記錄（`Harness/Gate.cs:114-115`）。冠軍是兩個網路和它們的打法，對每個角色都一樣；角色和晉階等級由每個作業自己給（`--character`、`--asc`）。SL 冠軍的檔案：
 
 ```json
 {
@@ -17,10 +17,9 @@ sidebar:
   "champion": "combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/all/v9-0.json", "afterstates": "clone", "combat-net": "weights/all/c9-0.json",
-    "character": "SILENT", "asc": "10"
+    "value": "weights/all/v9-0.json", "afterstates": "clone", "combat-net": "weights/all/c9-0.json"
   },
-  "report": "eval/silent/reports/DATE-sl-a10-SET-NAME.json",
+  "reports": { "SILENT": "eval/silent/reports/DATE-sl-a10-SET-NAME.json" },
   "since": "DATE"
 }
 ```
@@ -31,28 +30,28 @@ sidebar:
 |---|---|
 | `env` | `NoSL` 或 `SL`；挑戰者的 `--env` 與它不同時，門檻會拒絕 |
 | `champion` | 冠軍在報告裡顯示的名稱，即路由表每一側的大腦加上預算（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)） |
-| `options` | 打出這個冠軍的對局選項，不帶 `--`，其中包括角色和晉階等級；權重檔案寫成它們在 `weights/all/` 裡的路徑 |
-| `report` | 挑戰者與之配對的報告：每次門檻中冠軍那一方 |
+| `options` | 打出這個冠軍的對局選項，不帶 `--`，不含角色和晉階等級；權重檔案寫成它們在 `weights/all/` 裡的路徑 |
+| `reports` | 按角色，該角色的挑戰者與之配對的報告：每次門檻中冠軍那一方。一份報告是一個角色在一個晉階等級上的，所以沒有報告的角色還不能對這個檔案過門檻 |
 | `since` | 它成為冠軍的日期（晉級報告的日期，或人工寫入的日期） |
 | `gate` | 它通過的門檻，沒有經過門檻而定下的冠軍則沒有這一欄：`metric`、`delta`、`alpha`、`beta`、`pairs`、`decided`、`llr`、`lower`、`upper`、`floor_diff_mean`、`challenger_only_wins`、`champion_only_wins`、`verdict`，有的話還有 `void_reason`，以及 `not_worse` |
 
 **誰讀它**。
 
 - `run` 和 `brain` 接受 `--champion FILE`，打它指明的冠軍（`SimWorker/Commands/Args.cs:164-192`，[模擬器：參考 §3](/zh-tw/arch/simulator/reference/#sec-3)）。檔案的選項排在給定的選項之後，所以給定的優先；指令沒有的選項會被略過（`brain` 沒有 `--env`：每個宿主自己指明）；給定了與檔案不同的 `--policy` 時，保留它自己的預算。
-- `gate --champion FILE` 是要打敗的冠軍：它讀取檔案的 `env` 和 `report`（[晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。
-- `leaderboard` 在檔案所屬環境的榜上，標出每個檔案指明的報告（[指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9)）。
+- `gate --champion FILE` 是要打敗的冠軍：它讀取檔案的 `env`，以及它對記錄所屬角色的報告（[晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。
+- `leaderboard --character C` 在檔案所屬環境的榜上，標出每個檔案為 C 指明的報告（[指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9)）。
 
-**由 `--promote` 寫入，或由人工寫入**。`gate --promote` 寫入每個欄位，選項按挑戰者的選項產生（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:75-91`）：對 SL 規劃器是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。勝局門檻什麼也不寫，所以它晉級的網路由人工寫入（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)），SL 檔案寫著 `"effort": "medium"`，打的是同樣的預算（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。重定基線只改 `report`（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）。
+**由 `--promote` 寫入，或由人工寫入**。`gate --promote` 寫入每個欄位，選項按挑戰者的選項產生（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:75-91`）：對 SL 規劃器是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。勝局門檻什麼也不寫，所以它晉級的網路由人工寫入（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)），SL 檔案寫著 `"effort": "medium"`，打的是同樣的預算（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。重定基線只改 `reports`（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）。
 
-**兩個檔案**。兩個檔案都指明同樣兩個網路：`weights/all/v9-0.json`（V）和 `weights/all/c9-0.json`（戰鬥網路），都在晉階 10。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。兩個檔案指明的 `report` 是這個 SL 冠軍自己的，在 `promotion-1-200` 上打的 200 局 A10。因為它是 SL 報告，對 NoSL 檔案的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；兩個網路都沒有在 NoSL 下過過門檻。
+**兩個檔案**。兩個檔案都指明同樣兩個網路：`weights/all/v9-0.json`（V）和 `weights/all/c9-0.json`（戰鬥網路）。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。兩個檔案指明的唯一一份報告是寂靜獵手的，也是這個 SL 冠軍自己的，在 `promotion-1-200` 上打的 200 局 A10。因為它是 SL 報告，對 NoSL 檔案的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；兩個網路都沒有在 NoSL 下過過門檻。
 
-每個角色都有自己的資料夾 `eval/CHARACTER/` 和 `data/CHARACTER/`，有自己的冠軍檔案、報告和帳本（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）。網路是共用的：每個角色的冠軍都打 `weights/all/` 裡的檔案。`eval/seeds/` 裡的種子集也是共用的。
+每個角色都有自己的資料夾 `eval/CHARACTER/` 和 `data/CHARACTER/`，有自己的報告、排行榜和對局（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)），因為一個結果只對一個角色成立。其餘的是共用的：`weights/all/` 裡的網路、`eval/champions/` 裡的冠軍檔案、帳本 `eval/ledger.md`，以及 `eval/seeds/` 裡的種子集。
 
 ## 2. 歷史與報告
 
 這些頁面只描述現在的冠軍。之前的紀錄另外保存：
 
-- `eval/silent/ledger.md` 是歷史：每個網路、它在什麼上訓練、它的門檻，以及它後來怎麼樣了。
+- `eval/ledger.md` 是歷史，涵蓋每個角色：每個網路、它在什麼上訓練、它的門檻，以及它後來怎麼樣了。
 - `eval/silent/reports/` 保存每一份已提交的報告，有 JSON 和 Markdown 兩種（[指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)）。
 - `eval/silent/leaderboard.md` 為這些報告排名，按種子集和環境分（[指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9)）。
 

@@ -19,9 +19,9 @@
     {
       title: w('Tokens', '词元', '詞元'),
       text: w(
-        'Ids only: a card’s cost and numbers are gone. The map is 10 tokens; repeats stay.',
-        '只留下 id：牌的费用和数值都不读。地图有 10 个词元，重复的也保留。',
-        '只留下 id：牌的費用和數值都不讀。地圖有 10 個詞元，重複的也保留。',
+        'Ids, and three numbers a card can grow, its modifiers’ amounts, damage and block, each read through rows of its own; a card’s cost is gone. The map is 10 tokens; repeats stay.',
+        'id，加上牌会成长的三个数字：修饰的数值、伤害和格挡，各由自己的那一行读取；牌的费用不读。地图有 10 个词元，重复的也保留。',
+        'id，加上牌會成長的三個數字：修飾的數值、傷害和格擋，各由自己的那一列讀取；牌的費用不讀。地圖有 10 個詞元，重複的也保留。',
       ),
       rows: [
         ['cards', 'DEFEND_SILENT ×5, BACKFLIP ×2, STRIKE_SILENT ×2, ACCELERANT+ (SWIFT), ADRENALINE, ASCENDERS_BANE, CALCULATED_GAMBLE, CLUMSY, DEFLECT, LEG_SWEEP, MALAISE+, MIRAGE, NEUTRALIZE+, OUTBREAK+, PREDATOR+, SNAKEBITE, SNAKEBITE+, SUCKER_PUNCH+, SURVIVOR'],

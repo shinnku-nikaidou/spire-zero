@@ -102,7 +102,7 @@ The game scans its `mods/` folder recursively for manifests, and loads the DLL n
 The mod needs a brain listening at its socket, `~/.local/state/sts2ai/brain.sock` (under `$XDG_STATE_HOME` when that is set). The brain is SimWorker's `brain` command ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)), started before or after the game; the mod tries again every 2 s until it connects.
 
 ```bash
-dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/silent/champions/nosl.json
+dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/champions/nosl.json
 ```
 
 - `--champion` names the champion it plays: NoSL hosts get the file's combat brain (PIMC with the combat net) and macro brain (L0 with V); SL hosts get `--sl-policy`'s combat brain, the SL planner by default, with the same macro brain ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)). So one brain serves both environments, and the panel's switch needs no restart.

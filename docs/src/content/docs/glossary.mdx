@@ -121,8 +121,8 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 词元表（token table） | 一个网络里某一种 id（牌、遗物……）的列表，每个 id 有学到的行：这个游戏版本的每个 id；第 0 项 `<unk>` 读任何其他 id（[战斗网络 §2](/arch/combat-brain/network/#sec-2)）。 |
 | `weights/all/NAME.json` | 一个网络的文件；冠军打的是 `v9-0.json` 和 `c9-0.json`（[学习：参考 §6](/arch/learning/reference/#sec-6)）。 |
 | `promotion-1`、`promotion-1-300`、`final-1`、`a10-check-1` | `eval/seeds/` 里的种子集：200 和 300 个晋级种子（较长的以较短的开头），一个 300 个种子的最终集，在它上面的任何对局之前就已登记，以及 200 个用来测 A10 胜率的种子，不在任何训练数据里。 |
-| `eval/silent/champions/sl.json`、`nosl.json` | 冠军文件：让每种环境的冠军上场的选项，以及它的报告。 |
-| `eval/silent/ledger.md` | 谱系，也是网络唯一的历史：哪个大脑打出了哪些数据，哪些数据训练出了哪些权重。 |
+| `eval/champions/sl.json`、`nosl.json` | 冠军文件：让每种环境的冠军上场的选项，所有角色共用，以及它为每个角色存的报告。 |
+| `eval/ledger.md` | 谱系，也是网络唯一的历史，所有角色共用：哪个大脑打出了哪些数据，哪些数据训练出了哪些权重。 |
 | `data/silent/{sl,nosl}/…` | 数据目录里的自我对弈和评估文件夹，在存储主机上，不在 git 里。 |
 | `tmp/build.sh REV`、`sim.sh` | 本地启动器，构建一个固定的提交并运行它（[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）。 |
 | `run`、`brain`、`serve`、`clones`、`gate`、`report`、`leaderboard` | SimWorker 命令（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。 |

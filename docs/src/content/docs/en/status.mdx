@@ -30,7 +30,7 @@ The AI plays whole runs headless, in the game's own code, in both environments. 
 | mod | assist mode built on every surface, in both environments: the panel, the map and combat marks, the settings tab, the SL record. In the real game 89 of 90 SL decisions asked the same on their clones (the other one's cause is fixed); a combat's first SL decision waits 3–15 s for the planner. Not yet watched through a whole real run; auto-play planned ([Mod](/en/arch/mod/), [Output](/en/arch/output/)) |
 | compute | time-boxed jobs on several remote hosts, about 50 SL runs at once; data kept on a storage host and analysed where it is kept, nets trained on a GPU machine ([Learning: reference §1](/en/arch/learning/reference/#sec-1)) |
 
-**The champions' results** (`eval/silent/ledger.md`):
+**The champions' results** (`eval/ledger.md`):
 
 | environment | champion | seed set | win rate | mean floor |
 |---|---|---|---|---|
@@ -60,7 +60,7 @@ The AI plays whole runs headless, in the game's own code, in both environments. 
 
 3. <Badge text="done by 2026-10-28" variant="success" /> The SL clone in the pool and the SL planner; the mod's assist mode in the real game, with the SL record.
 
-4. <Badge text="done 2026-10-31" variant="success" /> V read from the run's ids and raw state alone, trained on whole runs and deciding by P(win). How each step measured is in `eval/silent/ledger.md`.
+4. <Badge text="done 2026-10-31" variant="success" /> V read from the run's ids and raw state alone, trained on whole runs and deciding by P(win). How each step measured is in `eval/ledger.md`.
 
 5. <Badge text="done 2026-11-01" variant="success" /> The combat net for SL and NoSL alike ([The combat net](/en/arch/combat-brain/network/)); only one V and one combat net remain in the code.
 

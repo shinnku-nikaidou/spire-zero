@@ -80,7 +80,7 @@ import { Aside } from '@astrojs/starlight/components';
 | 線路上 | `hello{env: "NoSL"\|"SL"}`，由宿主在每一局開始時送出（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)） | – |
 | `brain`（單獨的決策行程） | 兩者都服務：NoSL 宿主用 `--policy` 的戰鬥大腦，SL 宿主用 `--sl-policy` 的（`Commands/BrainCommand.cs:19`） | `--sl-policy plan` |
 | Mod | 面板頂部的 SL/NoSL 切換，保存在 `~/.local/state/sts2ai/settings.json`（[Mod §5](/zh-tw/arch/mod/#sec-5)） | SL |
-| 冠軍檔案 | 每個角色和環境一個，`eval/CHARACTER/champions/nosl.json` 和 `sl.json`；`gate --env` 必須與檔案的一致（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)） | – |
+| 冠軍檔案 | 每個環境一個，涵蓋每個角色，`eval/champions/nosl.json` 和 `sl.json`；`gate --env` 必須與檔案的一致（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)） | – |
 | 戰鬥網路訓練 | `combat.train --env SL\|NoSL`，必填；網路檔案會記錄它（`learn/combat/train.py`、`export.py`） | – |
 
 拒絕錯誤環境的地方：
