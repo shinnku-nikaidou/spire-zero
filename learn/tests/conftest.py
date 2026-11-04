@@ -76,7 +76,7 @@ def make_view(visited=((0, 0),), **over):
         "gold": 99,
         "deck": [
             {"id": "STRIKE", "up": 5, "enchant": {"id": "SHARP", "amount": 2}},
-            {"id": "NEUTRALIZE", "affliction": {"id": "HEX"}},
+            {"id": "NEUTRALIZE", "affliction": {"id": "HEX", "amount": 1}},
         ],
         "relics": [{"id": "RING", "counter": 3}, {"id": "VASE", "used_up": True}],
         "potions": ["FIRE", None, None],

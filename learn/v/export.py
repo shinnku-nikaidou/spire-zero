@@ -21,7 +21,8 @@ from v.net import Batch, Hazards, values
 def onnx_bytes(model, example: Batch) -> bytes:
     """The model as an ONNX graph, every input's batch and length dimensions left free."""
     axes = {name: {0: "batch", 1: "cards"} for name in ("cards", "ups", "card_mask")}
-    axes |= {name: {0: "batch", 1: "cards", 2: "card_mods"} for name in ("mods", "mod_mask")}
+    axes |= {name: {0: "batch", 1: "cards", 2: "card_mods"} for name in ("mods", "mod_mask", "mod_amounts")}
+    axes["numbers"] = {0: "batch", 1: "cards"}
     for t, mask in encode.BAGS.items():
         axes[t] = axes[mask] = {0: "batch", 1: t}
     axes |= {"state": {0: "batch"}, "hazards": {0: "batch"}}

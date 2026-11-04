@@ -127,6 +127,10 @@ def test_training_goes_on_from_a_net_file_with_its_tables_and_state_scaling(tmp_
         assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())
     assert b["vocab"] == a["vocab"] and b["state"] == a["state"]
+    # the report gives the file's own held-out numbers, on the same held-out decisions
+    assert "init_held_out_loss" not in a["fit"]
+    assert math.isclose(b["fit"]["init_held_out_loss"], a["fit"]["held_out_loss"], rel_tol=1e-4)
+    assert math.isclose(b["fit"]["init_brier_held_out"], a["fit"]["brier_held_out"], rel_tol=1e-4)
 
 
 def test_training_writes_a_net_file_with_its_report(tmp_path):

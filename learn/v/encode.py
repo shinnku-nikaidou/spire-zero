@@ -3,8 +3,11 @@
 Only what the run is and its raw state: each card's id, upgrade level and modifiers (enchantment, affliction, keywords,
 what Tinker Time made of it); the relics and potions; the
 character, act, boss(es) and ancient; the map points the player can still reach, each as its type and how many floors
-ahead it is; and six numbers (floor, HP, max HP, gold, ascension, potion slots). No card or relic numbers and nothing
-computed from the deck: what matters in them is the net's to learn.
+ahead it is; and six numbers (floor, HP, max HP, gold, ascension, potion slots). A card's numbers come in only through
+its own id's row: its enchantment's and affliction's amounts / 10 (each modifier's), its damage / 20 (Osty's for an Osty
+attack) and block / 20 (each card's), scaled as the combat net scales them, for what a run grows on a card and its id
+cannot say (Goopy's amount, The Scythe's damage, Genetic Algorithm's block); no relic numbers and nothing computed from
+the deck: what matters in them is the net's to learn.
 
 A map move's afterstate (`entered`) is marked as entering the point: the point's own type reads as "Elite+0", so that
 options with the same points after them differ. The mark never stands for a room already played: a run view logged in
@@ -13,11 +16,15 @@ would take entering an elite for having beaten it.
 """
 
 MAX_UP = 3  # RunNet.MaxUp: upgrade levels above this read as this one
+CAP = 10.0  # RunNet.Cap: a card's numbers, scaled, are capped at ±CAP
 TABLES = ["cards", "modifiers", "relics", "potions", "context", "map"]
 BAGS = {"relics": "relic_mask", "potions": "potion_mask", "context": "context_mask", "map": "map_mask"}  # and masks
 STATE = ["floor", "hp", "max_hp", "gold", "ascension", "potion_slots"]
 # The ONNX graph's inputs, in order (RunNet feeds them by these names).
-INPUTS = ["cards", "ups", "card_mask", "mods", "mod_mask", *(x for bag in BAGS.items() for x in bag), "state"]
+INPUTS = [
+    "cards", "ups", "card_mask", "mods", "mod_mask", "mod_amounts", "numbers",
+    *(x for bag in BAGS.items() for x in bag), "state",
+]  # fmt: skip
 
 
 def here(m: dict, points: dict) -> tuple[int, int]:
@@ -58,15 +65,32 @@ def entered(view: dict, action: str) -> dict:
     return view | {"map": m}
 
 
+def cap(x: float) -> float:
+    return max(-CAP, min(CAP, x))
+
+
+def card(c: dict) -> tuple:
+    """A card: its id, upgrade level, modifiers (its enchantment and affliction first, in this order, as their amounts),
+    its enchantment's and affliction's amounts / 10, and its damage / 20 and block / 20."""
+    held = [c[kind] for kind in ("enchant", "affliction") if c.get(kind)]
+    mods = [f"{kind}:{c[kind]['id']}" for kind in ("enchant", "affliction") if c.get(kind)]
+    mods += [f"keyword:{k}" for k in c.get("keywords") or []]
+    if c.get("tinker"):
+        mods += [f"tinker:{c['tinker']['type']}", f"rider:{c['tinker']['rider']}"]
+    v = c.get("vars") or {}
+    damage = float(v.get("Damage", v.get("OstyDamage", 0)))
+    return (
+        c["id"],
+        min(c.get("up") or 0, MAX_UP),
+        mods,
+        [cap(m["amount"] / 10) for m in held],
+        (cap(damage / 20), cap(float(v.get("Block", 0)) / 20)),
+    )
+
+
 def tokens(view: dict) -> dict:
-    """The ids the net reads: cards as (id, upgrade level, modifiers), and the bags of BAGS."""
-    cards = []
-    for c in view["deck"]:
-        mods = [f"{kind}:{c[kind]['id']}" for kind in ("enchant", "affliction") if c.get(kind)]
-        mods += [f"keyword:{k}" for k in c.get("keywords") or []]
-        if c.get("tinker"):
-            mods += [f"tinker:{c['tinker']['type']}", f"rider:{c['tinker']['rider']}"]
-        cards.append((c["id"], min(c.get("up") or 0, MAX_UP), mods))
+    """The ids the net reads: cards as card() gives them, and the bags of BAGS."""
+    cards = [card(c) for c in view["deck"]]
     m = view["map"]
     context = ["character:" + view["character"], "act:" + view["act_id"], "boss:" + m["boss"]]
     if m.get("second_boss"):

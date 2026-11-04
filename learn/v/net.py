@@ -26,16 +26,18 @@ class Batch:
 
     def __init__(self, samples, index, mean, std, floors, device):
         n, width = len(samples), max(1, max(len(s["tokens"]["cards"]) for s in samples))
-        m_n = max(1, max((len(ms) for s in samples for _, _, ms in s["tokens"]["cards"]), default=0))
-        rows = {name: [] for name in ("cards", "ups", "card_mask", "mods", "mod_mask")}
+        m_n = max(1, max((len(c[2]) for s in samples for c in s["tokens"]["cards"]), default=0))
+        rows = {name: [] for name in ("cards", "ups", "card_mask", "mods", "mod_mask", "mod_amounts", "numbers")}
         for s in samples:
             deck, pad = s["tokens"]["cards"], width - len(s["tokens"]["cards"])
-            rows["cards"].append([index["cards"].get(card_id, 0) for card_id, _, _ in deck] + [0] * pad)
-            rows["ups"].append([float(up) for _, up, _ in deck] + [0.0] * pad)
+            rows["cards"].append([index["cards"].get(c[0], 0) for c in deck] + [0] * pad)
+            rows["ups"].append([float(c[1]) for c in deck] + [0.0] * pad)
             rows["card_mask"].append([1.0] * len(deck) + [0.0] * pad)
-            mods = [[index["modifiers"].get(m, 0) for m in ms] for _, _, ms in deck]
+            mods = [[index["modifiers"].get(m, 0) for m in c[2]] for c in deck]
             rows["mods"].append([m + [0] * (m_n - len(m)) for m in mods] + [[0] * m_n] * pad)
             rows["mod_mask"].append([[1.0] * len(m) + [0.0] * (m_n - len(m)) for m in mods] + [[0.0] * m_n] * pad)
+            rows["mod_amounts"].append([c[3] + [0.0] * (m_n - len(c[3])) for c in deck] + [[0.0] * m_n] * pad)
+            rows["numbers"].append([list(c[4]) for c in deck] + [[0.0] * N_NUMBERS] * pad)
         feed = {
             name: torch.tensor(r, dtype=torch.long if name in ("cards", "mods") else torch.float32).to(device)
             for name, r in rows.items()
@@ -71,6 +73,9 @@ class Batch:
         return tuple(self.feed[name] for name in encode.INPUTS)
 
 
+N_NUMBERS = 2  # a card's damage and block (encode.card)
+
+
 class Net(nn.Module):
     DIM, HIDDEN, BODY = 64, 256, 512
     SUM_SCALE = 1 / 16  # the deck's sum next to its mean, scaled to about a mean's size
@@ -80,9 +85,13 @@ class Net(nn.Module):
         d, h = self.DIM, self.HIDDEN
         self.cards = nn.Embedding(sizes["cards"], d)
         self.card_up = nn.Embedding(sizes["cards"], d)
+        self.card_damage = nn.Embedding(sizes["cards"], d)
+        self.card_block = nn.Embedding(sizes["cards"], d)
         self.modifiers = nn.Embedding(sizes["modifiers"], d)
+        self.mod_amount = nn.Embedding(sizes["modifiers"], d)
         self.bags = nn.ModuleDict({t: nn.Embedding(sizes[t], d) for t in encode.BAGS})
-        for e in (self.cards, self.card_up, self.modifiers, *self.bags.values()):
+        for e in (self.cards, self.card_up, self.card_damage, self.card_block, self.modifiers, self.mod_amount,
+                  *self.bags.values()):  # fmt: skip
             nn.init.normal_(e.weight, std=0.1)
         self.phi = nn.Sequential(nn.Linear(d, h), nn.ReLU(), nn.Linear(h, h), nn.ReLU())
         width = 2 * h + len(encode.BAGS) * d + len(encode.STATE)
@@ -99,13 +108,15 @@ class Net(nn.Module):
         x = self.encoded(*inputs)
         return self.head(x), self.aux_head(x)
 
-    def encoded(self, cards, ups, card_mask, mods, mod_mask, *rest):
+    def encoded(self, cards, ups, card_mask, mods, mod_mask, mod_amounts, numbers, *rest):
         """The body's output, which both heads read."""
         *bags, state = rest
         x = (
             self.cards(cards)
             + ups[..., None] * self.card_up(cards)
-            + (self.modifiers(mods) * mod_mask[..., None]).sum(2)
+            + numbers[..., 0:1] * self.card_damage(cards)
+            + numbers[..., 1:2] * self.card_block(cards)
+            + ((self.modifiers(mods) + mod_amounts[..., None] * self.mod_amount(mods)) * mod_mask[..., None]).sum(2)
         )
         h = self.phi(x) * card_mask[..., None]
         total = h.sum(1)

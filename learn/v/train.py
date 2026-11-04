@@ -7,7 +7,8 @@ report gives the Brier score of that chance on the held-out decisions against wh
 (`brier_held_out`, and `brier_held_out_floor_only` for the training runs' hazards whatever the state).
 
 --init goes on from a net file instead of from scratch: its state scaling and weights, read back from its ONNX (the
-second head, not in the file, starts anew).
+second head, not in the file, starts anew). The report then also gives the file's own held-out loss and Brier score
+(`init_held_out_loss`, `init_brier_held_out`), on the same held-out decisions.
 
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
@@ -130,6 +131,10 @@ def main(
         with torch.no_grad():
             model.head.bias.copy_(base_logits)
     model = model.to(device)
+    if start:
+        model.eval()
+        init_loss, _, init_won_chance = evaluate(model)
+        logger.info("the file's held-out loss {:.4f}", init_loss)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     best, best_state, stale = math.inf, None, 0
     for epoch in range(EPOCHS):
@@ -175,6 +180,8 @@ def main(
         "brier_held_out": brier(won_chance),
         "brier_held_out_floor_only": brier(base_won_chance),
     }
+    if start:
+        report |= {"init_held_out_loss": init_loss, "init_brier_held_out": brier(init_won_chance)}
     print(json.dumps(report))
 
     net = export.net_file(name, FLOORS, tables, mean, std, model, test, report, seed)

@@ -19,8 +19,9 @@ public sealed record NetFile(
 /// <summary>The run's numbers the net reads (<c>learn/v/encode.py</c>'s STATE), and how they are standardized.</summary>
 public sealed record NetState(IReadOnlyList<string> Names, IReadOnlyList<double> Mean, IReadOnlyList<double> Std);
 
-/// <summary>A card as the net reads it: its id, upgrade level and the ids of its enchantment and affliction.</summary>
-public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers);
+/// <summary>A card as the net reads it: its id, upgrade level, modifiers (its enchantment and affliction first, as
+/// <paramref name="Amounts"/>), its enchantment's and affliction's amounts / 10, and its damage / 20 and block / 20.</summary>
+public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers, IReadOnlyList<double> Amounts, double Damage, double Block);
 
 /// <summary>A run's ids as the net reads them.</summary>
 public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<string> Relics, IReadOnlyList<string> Potions,
@@ -36,6 +37,9 @@ public sealed class RunNet : IRunValue, IDisposable
 {
     /// <summary>Upgrade levels above this read as this one.</summary>
     public const int MaxUp = 3;
+
+    /// <summary>A card's numbers, scaled, are capped at ±Cap.</summary>
+    public const double Cap = 10;
 
     private readonly NetFile _file;
     private readonly Dictionary<string, Dictionary<string, int>> _index;
@@ -85,7 +89,8 @@ public sealed class RunNet : IRunValue, IDisposable
 
     /// <summary>
     /// The net's tokens of a run, which <c>learn/v/encode.py</c> reads the same way: each card with its modifiers
-    /// (enchantment, affliction, keywords, what Tinker Time made of it); each relic, with ":used"
+    /// (enchantment, affliction, keywords, what Tinker Time made of it), its modifiers' amounts, its damage (Osty's for an
+    /// Osty attack) and block, which only its own id's row reads; each relic, with ":used"
     /// once used up; each potion; the context: character, act, boss(es) and the act's ancient; and the map (<see cref="MapTokens"/>).
     /// </summary>
     public static RunTokens Tokens(RunView run)
@@ -94,11 +99,20 @@ public sealed class RunNet : IRunValue, IDisposable
         if (run.Map.SecondBoss != null) context.Add("boss:" + run.Map.SecondBoss);
         if (run.Map.Ancient != null) context.Add("ancient:" + run.Map.Ancient);
         return new(
-            run.Deck.Select(c => new CardToken(c.Id, c.Up ?? 0, Modifiers(c))).ToList(),
+            run.Deck.Select(Card).ToList(),
             run.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id).ToList(),
             run.Potions.OfType<string>().ToList(),
             context,
             MapTokens(run.Map));
+
+        static CardToken Card(CardView card)
+        {
+            var vars = card.Vars ?? new Dictionary<string, decimal>();
+            decimal damage = vars.TryGetValue("Damage", out var d) ? d : vars.GetValueOrDefault("OstyDamage");
+            return new(card.Id, card.Up ?? 0, Modifiers(card),
+                [.. new[] { card.Enchant, card.Affliction }.OfType<ModifierView>().Select(m => Capped(m.Amount / 10.0))],
+                Capped((double)damage / 20.0), Capped((double)vars.GetValueOrDefault("Block") / 20.0));
+        }
 
         static IReadOnlyList<string> Modifiers(CardView card)
         {
@@ -165,6 +179,8 @@ public sealed class RunNet : IRunValue, IDisposable
         var cardMask = new DenseTensor<float>([1, n]);
         var mods = new DenseTensor<long>([1, n, m]);
         var modMask = new DenseTensor<float>([1, n, m]);
+        var modAmounts = new DenseTensor<float>([1, n, m]);
+        var numbers = new DenseTensor<float>([1, n, 2]);
         for (int k = 0; k < tokens.Cards.Count; k++)
         {
             var card = tokens.Cards[k];
@@ -176,12 +192,16 @@ public sealed class RunNet : IRunValue, IDisposable
                 mods[0, k, j] = Index("modifiers", card.Modifiers[j]);
                 modMask[0, k, j] = 1;
             }
+            for (int j = 0; j < card.Amounts.Count; j++) modAmounts[0, k, j] = (float)card.Amounts[j];
+            numbers[0, k, 0] = (float)card.Damage;
+            numbers[0, k, 1] = (float)card.Block;
         }
         var inputs = new List<NamedOnnxValue>
         {
             NamedOnnxValue.CreateFromTensor("cards", cards), NamedOnnxValue.CreateFromTensor("ups", ups),
             NamedOnnxValue.CreateFromTensor("card_mask", cardMask), NamedOnnxValue.CreateFromTensor("mods", mods),
-            NamedOnnxValue.CreateFromTensor("mod_mask", modMask),
+            NamedOnnxValue.CreateFromTensor("mod_mask", modMask), NamedOnnxValue.CreateFromTensor("mod_amounts", modAmounts),
+            NamedOnnxValue.CreateFromTensor("numbers", numbers),
         };
         inputs.AddRange(Bag("relics", "relic_mask", tokens.Relics));
         inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
@@ -208,6 +228,8 @@ public sealed class RunNet : IRunValue, IDisposable
         }
         return [NamedOnnxValue.CreateFromTensor(table, index), NamedOnnxValue.CreateFromTensor(mask, present)];
     }
+
+    private static double Capped(double x) => Math.Clamp(x, -Cap, Cap);
 
     /// <summary>An id's entry in a token table; 0 for an id the table does not list.</summary>
     private long Index(string table, string id) => _index[table].GetValueOrDefault(id);
