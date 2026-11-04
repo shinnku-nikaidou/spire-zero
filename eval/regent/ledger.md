@@ -22,7 +22,7 @@ smoke 779000–779999. v9g0 played at two revs (the user, 2026-11-03): first `e9
 
 | batch | env | played by | commits | train seeds | runs | used | folder (under `data/regent/`) |
 |---|---|---|---|---|---|---|---|
-| v9 g0 | SL, A0 | plan c9-0 low budget (beam 4x150, replan 0), clone, L0 v9-0, `--asc 0`, `--explore` 0.3 / 0.1 / 0.02 (a job each), uniform draws only; c9-0 / v9-0 at 1x in the first box, 2x in the second (see above) | `e905a6a` (first box), `db96e56` (second) | 760000–765999 (see above) | running | – | `sl/selfplay/v9g0/e030`, `e010`, `e002`, each with `-b` |
+| v9 g0 | SL, A0 | plan c9-0 low budget (beam 4x150, replan 0), clone, L0 v9-0, `--asc 0`, `--explore` 0.3 / 0.1 / 0.02 (a job each), uniform draws only; c9-0 / v9-0 at 1x in the first box, 2x in the second (see above) | `e905a6a` (first box), `db96e56` (second) | 760000–765999 (see above) | 5,998 (2,000 / 1,999 / 1,999; the first box 258, the second 5,740; 0 game errors, worker restarts, replans; 763411 and 764125 dropped: endless fights after p0 turned the hand into Minion Sacrifice for Guards, ended by hand), two boxes, 2026-11-03 06:18–07:21 UTC and 07:30 UTC to 2026-11-04 01:33 UTC, every chunk given before the deadline: floor 19.52 (18.46 / 19.46 / 20.64), 12 won (0 / 2 / 10) | not yet | `sl/selfplay/v9g0/e030`, `e010`, `e002`, each with `-b` |
 
 ## Weights
 
