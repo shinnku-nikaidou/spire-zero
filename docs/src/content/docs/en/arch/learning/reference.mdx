@@ -82,13 +82,13 @@ The evaluation seed files are in `eval/seeds/`: `promotion-1` (200), `promotion-
 
 The combat net and V are each one net for every character, every ascension and both environments, so their files share one folder, `weights/all/` (`learn/weights.py`). Each character is still judged on its own: its reports and leaderboard are in `eval/CHARACTER/`, its data in `data/CHARACTER/` ([§3](#sec-3)); the champion files and the ledger are every character's, `eval/champions/` and `eval/ledger.md`.
 
-`weights/all/` holds `v9-0.json`, the macro brain's V, and `c9-0.json`, the combat net, which both champions, SL's and NoSL's, play for every character ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)); their weights are those of v8-3 and c8-3, which learned from the Silent's runs alone. Beside them are `v9-1.json` and `c9-1.json`, the first nets trained on every character's runs (`v9g0`), going on from v9-0 and c9-0.
+`weights/all/` holds `v9-1.json`, the macro brain's V, and `c9-1.json`, the combat net, which both champions, SL's and NoSL's, play for every character ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)): the first nets trained on every character's runs (`v9g0`), going on from `v9-0.json` and `c9-0.json` beside them, whose weights are those of v8-3 and c8-3, which learned from the Silent's runs alone.
 
 - **Never overwritten.** A trainer writes to `weights/all/NAME.json` unless `--out` says otherwise, and refuses a name whose file is already in `weights/all/` (`out_path`, `learn/weights.py:14-20`), so a name is used once and always means the same weights. A trial that no kept run plays goes elsewhere, with `--out`.
 - **Every character.** Both trainers read the runs of every character in their lists (`runs_by_log`, `learn/common.py:61-81`), since the nets are shared, and a net file records no character.
 - **Names.** `vN-M` is a V and `cN-M` a combat net, with a variant's letter after the number when there is one (`v7-1f`). `vNgM` names a generation's data, never a net.
 - **In git.** `weights/` is in git: a file is 4.9–8.8 MB and never changes, so a commit fixes the code, the weights and the champion files together; the champion files name the weights where they are. Earlier net files are in git's history (the last commit holding them is `a27e4ad`), and `eval/ledger.md` says what each was.
-- **The environment.** A combat net file records the environment it learned from (`env`), and C# does not read it: SL and NoSL play the same file ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). c9-0's weights learned from SL's games; in NoSL it loads and plays, and it has never been trained or gated there.
+- **The environment.** A combat net file records the environment it learned from (`env`), and C# does not read it: SL and NoSL play the same file ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). c9-1's weights learned from SL's games; in NoSL it loads and plays, and it has never been trained or gated there.
 
 ## 7. Net files
 
@@ -119,7 +119,7 @@ A net file is JSON: the graph as base64 ONNX, plus what C# needs to feed it, and
 | `onnx` | inputs as `learn/combat/encode.py`'s `INPUTS` name them; outputs `outcome` (batch × 51, softmax, the closed buckets 0) and `potion_used` (batch × potion ids, sigmoid) | yes |
 | `tests` | up to 16 held-out round starts, among them a multi-hit attack, a held potion and low HP: `obs`, `history`, `outcome`, `potion_used` | yes |
 
-The figure opens the two net files, v9-0.json and c9-0.json, field by field: sizes, the graph's inputs and outputs with their shapes, its initializers (the weight tensors, by shape only) and operators, and the training report.
+The figure opens the two net files, v9-1.json and c9-1.json, field by field: sizes, the graph's inputs and outputs with their shapes, its initializers (the weight tensors, by shape only) and operators, and the training report.
 
 <NetFileAnatomy client:visible lang="en" />
 

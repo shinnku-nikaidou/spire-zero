@@ -82,13 +82,13 @@ flowchart LR
 
 战斗网络和 V 各是一个网络，用于每个角色、每个进阶和两种环境，所以它们的文件共用一个文件夹 `weights/all/`（`learn/weights.py`）。每个角色仍然单独评判：它的报告和排行榜在 `eval/CHARACTER/` 里，它的数据在 `data/CHARACTER/` 里（[§3](#sec-3)）；冠军文件和账本是所有角色共用的，即 `eval/champions/` 和 `eval/ledger.md`。
 
-`weights/all/` 里有 `v9-0.json`，宏观大脑的 V，和 `c9-0.json`，战斗网络，SL 和 NoSL 的两个冠军都为每个角色打它们（[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)）；它们的权重就是 v8-3 和 c8-3 的，只学过静默猎手的对局。旁边是 `v9-1.json` 和 `c9-1.json`，第一批用所有角色的对局（`v9g0`）训练的网络，从 v9-0 和 c9-0 接着训练。
+`weights/all/` 里有 `v9-1.json`，宏观大脑的 V，和 `c9-1.json`，战斗网络，SL 和 NoSL 的两个冠军都为每个角色打它们（[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)）：第一批用所有角色的对局（`v9g0`）训练的网络，从旁边的 `v9-0.json` 和 `c9-0.json` 接着训练；后两者的权重就是 v8-3 和 c8-3 的，只学过静默猎手的对局。
 
 - **永不覆盖**。训练器写到 `weights/all/NAME.json`，除非 `--out` 另行指定；如果某个名字的文件在 `weights/all/` 里已经存在，它就拒绝（`out_path`，`learn/weights.py:14-20`），所以一个名字只用一次，永远指同一份权重。没有任何保留下来的对局用到的试验文件，用 `--out` 放到别处。
 - **每个角色**。两个训练器都读清单里每个角色的对局（`runs_by_log`，`learn/common.py:61-81`），因为网络是共用的；网络文件不记录角色。
 - **名字**。`vN-M` 是 V，`cN-M` 是战斗网络，有变体时在编号后面加字母（`v7-1f`）。`vNgM` 指一代的数据，从不指网络。
 - **在 git 里**。`weights/` 进 git：一个文件 4.9–8.8 MB，而且不会改，所以一个提交就同时确定了代码、权重和冠军文件；冠军文件直接引用权重所在的路径。更早的网络文件在 git 历史里（最后一个还保存它们的提交是 `a27e4ad`），`eval/ledger.md` 写明每个是什么。
-- **环境**。战斗网络的文件写明它学自哪个环境（`env`），C# 不读它：SL 和 NoSL 打同一个文件（[战斗大脑：叶子 §6](/arch/combat-brain/leaf/#sec-6)）。c9-0 的权重学自 SL 的对局；它在 NoSL 下能加载、能打，但从没有在那里训练过，也没有过过门槛。
+- **环境**。战斗网络的文件写明它学自哪个环境（`env`），C# 不读它：SL 和 NoSL 打同一个文件（[战斗大脑：叶子 §6](/arch/combat-brain/leaf/#sec-6)）。c9-1 的权重学自 SL 的对局；它在 NoSL 下能加载、能打，但从没有在那里训练过，也没有过过门槛。
 
 ## 7. 网络文件
 
@@ -119,7 +119,7 @@ flowchart LR
 | `onnx` | 输入名照 `learn/combat/encode.py` 的 `INPUTS`；输出 `outcome`（batch × 51，softmax，关闭的分桶为 0）和 `potion_used`（batch × 药水 id，sigmoid） | 是 |
 | `tests` | 最多 16 个留出的回合开始局面，其中有多段攻击、持有药水和低生命的状态：`obs`、`history`、`outcome`、`potion_used` | 是 |
 
-图中逐个字段打开两个网络文件 v9-0.json 和 c9-0.json：大小、计算图的输入和输出及其形状、它的初始化器（权重张量，只列形状）和算子，以及训练报告。
+图中逐个字段打开两个网络文件 v9-1.json 和 c9-1.json：大小、计算图的输入和输出及其形状、它的初始化器（权重张量，只列形状）和算子，以及训练报告。
 
 <NetFileAnatomy client:visible lang="zh-CN" />
 

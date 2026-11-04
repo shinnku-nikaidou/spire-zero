@@ -25,10 +25,10 @@ import { Badge } from '@astrojs/starlight/components';
 **冠军的名字**。一局的各个大脑合起来就是它的冠军，名字由 `Dispatcher.Champion` 给出：
 
 ```text
-combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone
+combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone
 ```
 
-这是 SL 冠军：叶子里用战斗网络 c9-0、用 medium 预算的 SL 规划器；战斗中的提示用 `p0`；宏观决策和战斗外的选牌提示用 L0，它带着 V v9-0，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：搜索的战斗大脑说出它的战斗网络；L0 说出它的 V、`clone`，以及它的探索（均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:34-56`）。
+这是 SL 冠军：叶子里用战斗网络 c9-1、用 medium 预算的 SL 规划器；战斗中的提示用 `p0`；宏观决策和战斗外的选牌提示用 L0，它带着 V v9-1，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：搜索的战斗大脑说出它的战斗网络；L0 说出它的 V、`clone`，以及它的探索（均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:34-56`）。
 
 **环境决定战斗大脑**。宏观大脑在两种环境里是同一个；战斗大脑则不是（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。冠军工厂在 SL 之外拒绝 `plan` 和 `--afterstates clone`，在 NoSL 之外拒绝 `pimc`。`brain` 命令同时服务两种环境：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的（[概览 §5](/arch/harness/#sec-5)）。
 

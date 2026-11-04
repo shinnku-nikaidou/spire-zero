@@ -14,17 +14,21 @@ sidebar:
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone",
+  "champion": "combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/all/v9-0.json", "afterstates": "clone", "combat-net": "weights/all/c9-0.json"
+    "value": "weights/all/v9-1.json", "afterstates": "clone", "combat-net": "weights/all/c9-1.json"
   },
-  "reports": { "SILENT": "eval/silent/reports/DATE-sl-a10-SET-NAME.json" },
+  "reports": {
+    "SILENT": "eval/silent/reports/DATE-sl-a0-SET-NAME.json",
+    "IRONCLAD": "eval/ironclad/reports/DATE-sl-a0-SET-NAME.json",
+    "DEFECT": "…", "REGENT": "…", "NECROBINDER": "…"
+  },
   "since": "DATE"
 }
 ```
 
-（在文件里是一行，这里展开了，报告的路径和日期写成了模式。）
+（在文件里是一行，这里展开了，各份报告的路径和日期写成了模式。）
 
 | 字段 | 内容 |
 |---|---|
@@ -43,7 +47,7 @@ sidebar:
 
 **由 `--promote` 写入，或手工写入**。`gate --promote` 写入每一个字段，选项按挑战者的选项生成（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:75-91`）：对 SL 规划器来说是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。胜局门槛什么也不写，所以由它晋级的网络靠手工写入（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)），SL 文件写的是 `"effort": "medium"`，打的是同样的预算（[SL 规划器：预算 §1](/arch/sl-planner/budget/#sec-1)）。重定基线只修改 `reports`（[晋级门槛 §9](/arch/evaluation/gates/#sec-9)）。
 
-**两个文件**。两个文件都指明同样的两个网络，`weights/all/v9-0.json`（V）和 `weights/all/c9-0.json`（战斗网络）。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。两者指明的唯一一份报告是静默猎手的，即这个 SL 冠军自己的报告，在 `promotion-1-200` 上以 A10 打了 200 局。由于它是 SL 报告，针对 NoSL 文件的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）；这两个网络都没有在 NoSL 下过过门槛。
+**两个文件**。两个文件都指明同样的两个网络，`weights/all/v9-1.json`（V）和 `weights/all/c9-1.json`（战斗网络）。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。两者指明同样的五份报告，每个角色一份，都是这个 SL 冠军自己的：在 `promotion-1-100` 上以进阶 0、medium 打了 100 局。由于它们是 SL 报告，针对 NoSL 文件的 NoSL 门槛会被拒绝（[评估 §3](/arch/evaluation/#sec-3)）；这两个网络都没有在 NoSL 下过过门槛。
 
 每个角色有自己的文件夹，`eval/CHARACTER/` 和 `data/CHARACTER/`，里面有它自己的报告、排行榜和对局（[学习：参考 §3](/arch/learning/reference/#sec-3)），因为一个结果只对一个角色成立。其余的都是共用的：`weights/all/` 里的网络、`eval/champions/` 里的冠军文件、账本 `eval/ledger.md`，以及 `eval/seeds/` 里的种子集。
 
@@ -52,35 +56,22 @@ sidebar:
 这些页面只描述当前的冠军。之前的记录另外保存：
 
 - `eval/ledger.md` 是历史，所有角色共用：每个网络，它用什么训练，它的门槛，以及它后来怎样了。
-- `eval/silent/reports/` 存放每一份已提交的报告，有 JSON 和 Markdown 两种（[指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)）。
-- `eval/silent/leaderboard.md` 按种子集和环境给这些报告排名（[指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9)）。
+- `eval/CHARACTER/reports/` 存放一个角色已提交的报告，有 JSON 和 Markdown 两种（[指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)）。
+- `eval/CHARACTER/leaderboard.md` 按进阶、种子集和环境给它们排名（[指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9)）。
 
-**冠军的网络和它们的门槛**。v9-0 和 c9-0 是 v8-3 和 c8-3 不经训练搬到所有角色共用的网络上，新输入的权重为零。在同样的种子上，它们做出同样的决策，只有读到旧网络不读的东西时例外（顺走偷走的牌、奥斯提攻击牌的伤害），所以冠军文件沿用 v8-3 和 c8-3 的报告和门槛。v8-3 和 c8-3 只用 `v8g2` 的 A10 对局（10,038 局）训练，从 v8-2 和 c8-2 接着训练。`v8g2` 是在搜索能于一回合内打循环之前打的，所以两个网络都没有见过循环的结局。它们的门槛在进阶 10 上打新旧的四种配对，medium 200 个种子，低预算 200 个，都在 `promotion-1-200` 上，用的就是那个搜索，读配对胜局。1,600 局中有一局失败并被丢弃，所以 v8-3 配 c8-2 在 medium 下是 199 局；没有游戏错误。medium 下：
+**冠军的网络和它们的门槛**。v9-1 和 c9-1 从 v9-0 和 c9-0 接着训练，只用 `v9g0` 训练：全部五个角色的第一批 SL 自我对弈，进阶 0、低预算，29,987 局，其中赢下 2,057 局，1,981 局是静默猎手赢的（[学习：循环 §2](/arch/learning/loop/#sec-2)）。v9-0 和 c9-0 就是 v8-3 和 c8-3，它们学过静默猎手在进阶 10 的对局，再不经训练搬到所有角色共用的网络上。门槛让 v9-0 + c9-0 对 v9-1 + c9-1，在每个角色上以进阶 0 来打，双方用同样的种子、冠军的规划器，不做探索：medium 在 `promotion-1-100` 上 100 个种子，低预算在 `promotion-1-200` 上 200 个。V 和战斗网络一起评判：一对网络对另一对。3,000 局中没有一局失败，也没有游戏错误。medium 下，按种子配对（新的一对减去旧的）：
 
-| V | 战斗网络 | 赢下 | 平均层数 |
-|---|---|---|---|
-| v8-2 | c8-2 | 200 局中 10 局 | 28.84 |
-| v8-3 | c8-2 | 199 局中 15 局 | 32.54 |
-| v8-2 | c8-3 | 200 局中 8 局 | 29.27 |
-| v8-3 | c8-3 | 200 局中 17 局 | 33.09 |
+| 角色 | v9-0 + c9-0 赢下 | v9-1 + c9-1 赢下 | 胜局，百分点 | 95 % 下界 | 层数 |
+|---|---|---|---|---|---|
+| 静默猎手 | 100 局中 86 局 | 100 局中 74 局 | −12.0 ± 5.6 | −21.1 | −1.35 ± 0.94 |
+| 铁甲战士 | 100 局中 1 局 | 100 局中 46 局 | +45.0 ± 5.0 | +36.8 | +16.38 ± 1.42 |
+| 故障机器人 | 100 局中 1 局 | 100 局中 31 局 | +30.0 ± 4.8 | +22.1 | +7.60 ± 1.53 |
+| 储君 | 100 局中 2 局 | 100 局中 35 局 | +33.0 ± 4.9 | +24.9 | +19.73 ± 1.40 |
+| 亡灵契约师 | 100 局中 0 局 | 100 局中 9 局 | +9.0 ± 2.9 | +4.3 | +16.68 ± 1.45 |
 
-每个网络的效果，覆盖另一类的两个网络，按种子配对：
+低预算下，200 局中：静默猎手 140 局和 141 局（+0.5 ± 4.4 个百分点），铁甲战士 1 局和 61 局，故障机器人 2 局和 44 局，储君 1 局和 47 局，亡灵契约师 0 局和 18 局；那四个角色在这里也都通过。
 
-| 网络 | 预算 | 胜局，百分点 | 95 % 下界 | 层数 |
-|---|---|---|---|---|
-| v8-3 | medium | +3.52 ± 1.76 | +0.62 | +3.74 ± 1.06 |
-| v8-3 | low | +2.00 ± 0.86 | +0.59 | +5.15 ± 0.95 |
-| c8-3 | medium | +0.00 ± 1.47 | −2.42 | +0.45 ± 0.71 |
-| c8-3 | low | −1.00 ± 1.00 | −2.65 | −0.16 ± 0.54 |
-
-v8-3 通过了。**c8-3 单独看没有显出提升**：它和 v8-3 一起成为冠军，这是胜局最多的配对。**这一对单独对上 v8-2 和 c8-2 没有通过**：在相同种子上以 medium 对打，它赢了 200 局中的 17 局，对方 10 局，+3.50 ± 2.28 个百分点，95 % 下界 −0.26（14 个种子只有它赢，7 个只有对方赢，3 个都赢）；它的平均层数是 33.09，对方 28.84。它到达的 Boss 更多，除最后一个外都更常打败。到达的 Boss 中打败的比例：
-
-| V，战斗网络 | 第 1 幕 | 第 2 幕 | 第 3 幕，第一个 | 第 3 幕，第二个 |
-|---|---|---|---|---|
-| v8-3，c8-3 | 77.9 %（172 个中 134 个） | 84.1 %（113 个中 95 个） | 58.1 %（74 个中 43 个） | 39.5 %（43 个中 17 个） |
-| v8-2，c8-2 | 74.2 %（151 个中 112 个） | 73.1 %（93 个中 68 个） | 46.8 %（47 个中 22 个） | 45.5 %（22 个中 10 个） |
-
-A10 门槛读配对胜局，层数列在旁边（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
+新的一对在四个角色上通过；用静默猎手时，它在 medium 下退步了，在低预算下则打平。一个冠军打每一个角色，所以它成了全部五个角色的冠军。它在 medium 下的平均层数是：静默猎手 45.40，铁甲战士 41.39，故障机器人 42.81，储君 42.30，亡灵契约师 35.94，此前分别是 46.75、25.01、35.21、22.57 和 19.26。门槛读配对胜局，层数列在旁边（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
 
 ## 3. 基线
 

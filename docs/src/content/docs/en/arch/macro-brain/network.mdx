@@ -167,7 +167,7 @@ The hazards of floors before $f$ are computed and not used ([From hazards to val
 
 The token tables are fixed, so these sizes depend only on the game build. The training-only head adds 3,078.
 
-**What the file holds.** The file is `weights/all/v9-0.json`. Its weights have learned from the Silent's runs alone, in the first half of every width: the second half of each embedding and each layer has learned nothing yet, its units reading small random weights and read by zeros, so V gives what the first halves alone give. Its damage, block and amount rows ($D$, $K$, $A$) are zero: it reads those numbers and gives them no weight. Its $\mu$ and $\sigma$ are kept from its first training runs, all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training held, such as `DEFEND_IRONCLAD` or `character:IRONCLAD`, has the first half of the unknown id's row, so V reads the other four characters alike until it trains on their runs; such a map token for the point entered, like `Unassigned+0`, is zero, and so are the keyword and Tinker tokens' rows.
+**What the file holds.** The file is `weights/all/v9-1.json`. It went on from v9-0 and learned from v9g0: 29,987 SL runs of all five characters at ascension 0, played at the low budget, 2,057 of them won. Every width has learned. So have the damage, block and amount rows ($D$, $K$, $A$) wherever a training run gave a card such a number: 170 cards' damage rows, 68 cards' block rows and 20 enchantments' amount rows. The other rows of the three are zero, so V gives those numbers no weight. Its $\mu$ and $\sigma$ are kept from the first net of its line, whose training runs were all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training run held, such as `SHIV`, the afflictions or the `FAKE_` relics, has learned nothing: for most, its row holds the unknown id's first half (zero for a few tokens, such as the map's `Unassigned+0`) and random numbers in the second half.
 
 A call takes about 0.08 ms in C# on one thread, batch of one. A macro decision on the clone takes 70–90 ms, most of it in the game ([Search §6](/en/arch/macro-brain/search/#sec-6)), so V's own cost does not matter.
 
@@ -193,6 +193,6 @@ These follow from the structure alone.
 
 ## 9. One run through the net
 
-A real sample from v9-0's file, an afterstate of a map move on floor 41, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
+A real sample from v9-1's file, a Defect run at ascension 0: the afterstate of a map move on floor 42, into an unknown room, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
 
 <NetWalk client:visible lang="en" />

@@ -217,7 +217,7 @@ The potion head has a fixed width and no new dynamic axis, and it shares only th
 
 ## 8. Sizes
 
-The file is `weights/all/c9-0.json`.
+The file is `weights/all/c9-1.json`.
 
 | part | shape | weights |
 |---|---|---|
@@ -241,7 +241,7 @@ The file is `weights/all/c9-0.json`.
 
 The token tables are fixed, so these sizes depend only on the game build.
 
-**What this file holds.** Its weights have learned from the Silent's fights at ascension 10, in the first half of every width: the second half of each embedding and each layer has learned nothing yet, its units reading small random weights and read by zeros, so the net gives what the first halves alone give. What those fights never showed is still zero: $D_c$, $B$, $Z$, $R$, $K^\star$, $J$ and $X$, and the rows of the keyword, Tinker and `spent` tokens. Each character's context row is `<unk>`'s in its first half, and the status `Spent` reads as `Normal`, so the net reads every character alike until it trains on their fights. A card's damage has taught the shared $D$ a little: its largest number is 0.07. $O_g$ and $O_h$ have moved off zero for all five orb ids, and $O_j$ for 6 of its 60 rows, every orb's first place and Lightning's second; its other rows are still zero. An id that no training held, such as `DEFEND_IRONCLAD`, has the first half of `<unk>`'s row.
+**What this file holds.** Its weights have learned from the fights of all five characters at ascension 0, going on from weights that had learned from the Silent's fights at ascension 10 in the first half of every width. The second half has learned with the rest and is read, but for a few units of the allies: 22 of the ally layer's 192 inputs and 4 of the allies' 128 numbers at the body are still read by zeros, all in their second halves. The parts the Silent's fights never fed start at zero in their first half, and have moved off it where the five characters' fights hold them: $D_c$ for 180 of its 597 rows, $R$ for 155, $B$ for 69 and $Z$ for 38; $X$ for 8 of its 266 rows; $K^\star$ and $J$; and the keyword, Tinker and `spent` tokens, all but `keyword:None` and the Tinker tokens None, Curse, Quest and Status. Each character's context row is its own, so the net tells the five characters apart, and the status `Spent` reads apart from `Normal`. $O_g$ and $O_h$ have moved off zero for all five orb ids, and $O_j$ for 35 of its 60 rows, every orb in the queue's first five places and some in the sixth to ninth; its other rows are still zero in their first half. An id that no training held, such as `BEACON_OF_HOPE`, has the first half of `<unk>`'s row, and small random numbers of its own in the second.
 
 ## 9. One forward pass, two implementations
 

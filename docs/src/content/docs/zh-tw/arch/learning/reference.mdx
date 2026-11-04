@@ -82,13 +82,13 @@ flowchart LR
 
 戰鬥網路和 V 各是一個網路，用於每個角色、每個晉階和兩種環境，所以它們的檔案共用一個資料夾 `weights/all/`（`learn/weights.py`）。每個角色仍然單獨評判：它的報告和排行榜在 `eval/CHARACTER/` 裡，資料在 `data/CHARACTER/` 裡（[§3](#sec-3)）；冠軍檔案和帳本是所有角色共用的，`eval/champions/` 和 `eval/ledger.md`。
 
-`weights/all/` 裡有 `v9-0.json`，宏觀大腦的 V，以及 `c9-0.json`，戰鬥網路，兩個冠軍，SL 的和 NoSL 的，都為每個角色打它們（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）；它們的權重就是 v8-3 和 c8-3 的，只學過寂靜獵手的對局。旁邊是 `v9-1.json` 和 `c9-1.json`，第一批用每個角色的對局（`v9g0`）訓練的網路，從 v9-0 和 c9-0 接著訓練。
+`weights/all/` 裡有 `v9-1.json`，宏觀大腦的 V，以及 `c9-1.json`，戰鬥網路，兩個冠軍，SL 的和 NoSL 的，都為每個角色打它們（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）：第一批用每個角色的對局（`v9g0`）訓練的網路，從旁邊的 `v9-0.json` 和 `c9-0.json` 接著訓練；那兩個的權重就是 v8-3 和 c8-3 的，只學過寂靜獵手的對局。
 
 - **永不覆蓋**。訓練器寫到 `weights/all/NAME.json`，除非 `--out` 另行指定；`weights/all/` 裡已有同名檔案時，它拒絕這個名字（`out_path`，`learn/weights.py:14-20`），所以一個名字只用一次，永遠指同一份權重。沒有任何保留下來的對局會用到的試驗檔案，用 `--out` 放到別處。
 - **每個角色**。兩個訓練器都讀清單裡每個角色的對局（`runs_by_log`，`learn/common.py:61-81`），因為網路是共用的；網路檔案不記錄角色。
 - **名稱**。`vN-M` 是 V，`cN-M` 是戰鬥網路，有變體時在編號後面加字母（`v7-1f`）。`vNgM` 指一代的資料，從不指網路。
 - **在 git 裡**。`weights/` 在 git 裡：一個檔案 4.9–8.8 MB，而且從不改變，所以一個提交就同時確定了程式碼、權重和冠軍檔案；冠軍檔案直接引用權重所在的路徑。更早的網路檔案在 git 的歷史裡（最後一個還保存它們的提交是 `a27e4ad`），`eval/ledger.md` 說明每個檔案是什麼。
-- **環境**。戰鬥網路檔案記下它學習的環境（`env`），C# 不讀它：SL 和 NoSL 打同一個檔案（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。c9-0 的權重從 SL 的對局學習；在 NoSL 下它能載入、能打，但從沒在那裡訓練過或過過門檻。
+- **環境**。戰鬥網路檔案記下它學習的環境（`env`），C# 不讀它：SL 和 NoSL 打同一個檔案（[戰鬥大腦：葉節點 §6](/zh-tw/arch/combat-brain/leaf/#sec-6)）。c9-1 的權重從 SL 的對局學習；在 NoSL 下它能載入、能打，但從沒在那裡訓練過或過過門檻。
 
 ## 7. 網路檔案
 
@@ -119,7 +119,7 @@ flowchart LR
 | `onnx` | 輸入按 `learn/combat/encode.py` 的 `INPUTS` 命名；輸出 `outcome`（batch × 51，softmax，關閉的桶為 0）和 `potion_used`（batch × 藥水 id，sigmoid） | 是 |
 | `tests` | 最多 16 個留出的回合開始局面，其中有多段攻擊、持有藥水和低生命值的狀態：`obs`、`history`、`outcome`、`potion_used` | 是 |
 
-下圖逐欄打開兩個網路檔案 v9-0.json 和 c9-0.json：大小、計算圖的輸入和輸出及其形狀、它的初始化器（權重張量，只列形狀）和運算子，以及訓練報告。
+下圖逐欄打開兩個網路檔案 v9-1.json 和 c9-1.json：大小、計算圖的輸入和輸出及其形狀、它的初始化器（權重張量，只列形狀）和運算子，以及訓練報告。
 
 <NetFileAnatomy client:visible lang="zh-TW" />
 

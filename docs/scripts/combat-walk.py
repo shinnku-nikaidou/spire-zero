@@ -18,10 +18,12 @@ sys.path.insert(0, str(ROOT / "learn"))
 from combat import data, encode, export  # noqa: E402
 from combat.net import Batch, Net  # noqa: E402
 
-FILE = ROOT / "weights/all/c9-0.json"
+FILE = ROOT / "weights/all/c9-1.json"
 OUT = ROOT / "docs/src/data/combat-walk.json"
-MAIN = 10  # the only test state holding a potion: every step has something to show
-OTHERS = {"danger": 3, "mask": 6}  # a boss fight more likely lost than won, and a state at 4 of 70 HP
+MAIN = 9  # the only test state holding a potion (the Ironclad against three Exoskeletons): every step has something to show
+# The boss fight with the largest chance of a death (the Defect against The Kin at full HP; no test state is more likely
+# lost than won), and the lowest HP of the 16 (the Defect at 10 of 77 HP against a Phrog Parasite)
+OTHERS = {"danger": 8, "mask": 4}
 WIN_BASE, PER_HP, PER_POTION = 0.2, 0.6, 0.02  # LeafValue's
 LOST_HP = 10  # the sibling state of the search step
 
@@ -134,7 +136,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     )
     card_phi = net.card_phi(card_x)
     per_pile = torch.bmm(x["piles"].transpose(1, 2), card_phi).flatten(1) * net.SUM_SCALE
-    example = next(k for k, c in enumerate(tok["cards"]) if c[0] == "STRIKE_SILENT" and not c[1] and not c[3])  # a plain Strike, so the cost and damage vectors show
+    example = next(k for k, c in enumerate(tok["cards"]) if c[0].startswith("STRIKE_") and not c[1] and not c[3])  # a plain Strike, so the cost and damage vectors show
     c_id, c_up, c_pile, c_mods, c_cost, _, c_damage, c_numbers = tok["cards"][example]
     t = x["cards"][0, example]
     card = {
@@ -150,6 +152,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         "up_vector": four(net.card_up(t)),
         "cost_vector": four(net.cost),
         "damage_vector": four(net.damage),
+        "card_damage_vector": four(net.card_damage(t)),
         "pile_vector": four(net.pile[c_pile]),
         "x": four(card_x[0, example]),
         "phi": vec(card_phi[0, example]),
@@ -268,7 +271,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         }
 
     # A label, for an ending this state's file does not hold.
-    end_hp = 12
+    end_hp = 70
     lost = share - end_hp / obs["player"]["max_hp"]
     label = data.ending(obs, {"died": False, "hp": end_hp, "max_hp": obs["player"]["max_hp"]})
     logits = net.reachable(raw, x["player"])

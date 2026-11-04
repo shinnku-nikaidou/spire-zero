@@ -1,6 +1,6 @@
 <script lang="ts">
-  // One real run through net.Net, step by step: v9-0's test run at a map move (floor 41), values as the trainer gave
-  // them. Vectors show their first four numbers (docs: macro-brain/network §9).
+  // One real run through net.Net, step by step: v9-1's tests[0], a Defect run at A0 at a map move (floor 42), values as
+  // the trainer gave them. Vectors show their first four numbers (docs: macro-brain/network §9).
   import type { Lang } from './names.ts';
 
   let { lang = 'en' }: { lang?: Lang } = $props();
@@ -10,72 +10,82 @@
     {
       title: w('The run', '这一局', '這一局'),
       text: w(
-        'The afterstate of a map move: a rest site is about to be entered. Nothing else has changed.',
-        '一次选路的 afterstate：正要进入一个休息处，其他都没变。',
-        '一次選路的 afterstate：正要進入一個休息處，其他都沒變。',
+        'The afterstate of a map move: an unknown room is about to be entered. Nothing else has changed.',
+        '一次选路的 afterstate：正要进入一个未知房间，其他都没变。',
+        '一次選路的 afterstate：正要進入一個未知房間，其他都沒變。',
       ),
-      rows: [['floor', '41'], ['HP', '75 / 85'], ['gold', '53'], ['deck', '25'], ['relics', '10'], ['potions', '0 / 2 slots']],
+      rows: [['character', 'DEFECT'], ['floor', '42'], ['HP', '46 / 65'], ['gold', '78'], ['deck', '22'], ['relics', '7'], ['potions', '0 / 3 slots']],
     },
     {
       title: w('Tokens', '词元', '詞元'),
       text: w(
-        'Ids, and three numbers a card can grow, its modifiers’ amounts, damage and block, each read through rows of its own; a card’s cost is gone. The map is 10 tokens; repeats stay.',
-        'id，加上牌会成长的三个数字：修饰的数值、伤害和格挡，各由自己的那一行读取；牌的费用不读。地图有 10 个词元，重复的也保留。',
-        'id，加上牌會成長的三個數字：修飾的數值、傷害和格擋，各由自己的那一列讀取；牌的費用不讀。地圖有 10 個詞元，重複的也保留。',
+        'Ids, and three numbers a card can grow, its enchantment’s and affliction’s amounts, damage and block, each read through rows of its own; a card’s cost is gone. No card here has an enchantment or affliction. The map is 10 tokens; repeats stay.',
+        'id，加上牌会成长的三个数字：附魔和诅咒的数值、伤害和格挡，各由自己的那一行读取；牌的费用不读。这里没有牌带附魔或诅咒。地图有 10 个词元，重复的也保留。',
+        'id，加上牌會成長的三個數字：附魔和詛咒的數值、傷害和格擋，各由自己的那一列讀取；牌的費用不讀。這裡沒有牌帶附魔或詛咒。地圖有 10 個詞元，重複的也保留。',
       ),
       rows: [
-        ['cards', 'DEFEND_SILENT ×5, BACKFLIP ×2, STRIKE_SILENT ×2, ACCELERANT+ (SWIFT), ADRENALINE, ASCENDERS_BANE, CALCULATED_GAMBLE, CLUMSY, DEFLECT, LEG_SWEEP, MALAISE+, MIRAGE, NEUTRALIZE+, OUTBREAK+, PREDATOR+, SNAKEBITE, SNAKEBITE+, SUCKER_PUNCH+, SURVIVOR'],
-        ['relics', 'RING_OF_THE_SNAKE, PRECISE_SCISSORS, CHOSEN_CHEESE, WHETSTONE, ODDLY_SMOOTH_STONE, PANTOGRAPH, PAELS_LEGION, EMBER_TEA:used, MUSIC_BOX, SNECKO_SKULL'],
+        ['cards', 'DEFEND_DEFECT+ ×2, NULL+ ×2, UPROAR ×2, BEAM_CELL+, BULK_UP, CHARGE_BATTERY, CHILL+, CLAW, CLUMSY (Ethereal, Unplayable), DARKNESS+, DEFEND_DEFECT, DUALCAST, FINESSE+, FOLLY (Eternal, Ethereal, Innate, Unplayable), MOMENTUM_STRIKE, MOMENTUM_STRIKE+, NULL, STRIKE_DEFECT, SUPERCRITICAL (Exhaust)'],
+        ['damage ÷ 20', 'BEAM_CELL+ 0.20, CLAW 0.15, MOMENTUM_STRIKE 0.55, MOMENTUM_STRIKE+ 0.75, NULL 0.50, NULL+ 0.65 ×2, STRIKE_DEFECT 0.30, UPROAR 0.30 ×2'],
+        ['block ÷ 20', 'CHARGE_BATTERY 0.35, DEFEND_DEFECT 0.25, DEFEND_DEFECT+ 0.40 ×2, FINESSE+ 0.35'],
+        ['relics', 'CRACKED_CORE, FISHING_ROD, RED_MASK, MINIATURE_CANNON, VERY_HOT_COCOA, GORGET, PRESERVED_FOG'],
         ['potions', '–'],
-        ['context', 'character:SILENT, act:GLORY, boss:QUEEN_BOSS, boss:TEST_SUBJECT_BOSS, ancient:VAKUU'],
-        ['map', 'RestSite+0, Monster+1, Unknown+2, Elite+2, Monster+3, Elite+4, Unknown+4, RestSite+5, Boss+6, Boss+7'],
+        ['context', 'character:DEFECT, act:GLORY, boss:AEONGLASS_BOSS, ancient:VAKUU'],
+        ['map', 'Unknown+0, Elite+1, Monster+2, Monster+2, Elite+3, Unknown+3, Monster+3, RestSite+4, RestSite+4, Boss+5'],
       ],
     },
     {
       title: w('Table entries', '表项', '表項'),
       text: w('Each token becomes its row in its table.', '每个词元换成它在表里的行号。', '每個詞元換成它在表裡的行號。'),
       rows: [
-        ['DEFEND_SILENT', '150'], ['STRIKE_SILENT', '518'], ['SNAKEBITE', '482'], ['RING_OF_THE_SNAKE', '228'], ['character:SILENT', '31'], ['RestSite+0', '169'], ['Monster+1', '129'],
+        ['DEFEND_DEFECT', '146'], ['STRIKE_DEFECT', '514'], ['MOMENTUM_STRIKE', '346'], ['keyword:Ethereal', '32'], ['CRACKED_CORE', '53'], ['character:DEFECT', '27'], ['Unknown+0', '337'], ['Elite+1', '87'],
       ],
     },
     {
       title: w('Card vectors', '牌向量', '牌向量'),
-      text: w('x = E + u·U + Σ M, 64 numbers. A plain card’s x is E alone; an upgraded one adds U, and ACCELERANT+ also its enchantment’s M.', 'x = E + u·U + Σ M，64 个数。普通牌的 x 就是 E；升级过的再加上 U，ACCELERANT+ 还加上它的附魔的 M。', 'x = E + u·U + Σ M，64 個數。普通牌的 x 就是 E；升級過的再加上 U，ACCELERANT+ 還加上它的附魔的 M。'),
+      text: w(
+        'x = E + u·U + d·D + k·K + Σ (M + a·A), 64 numbers; each card adds the terms it has. A keyword has no amount, so CLUMSY adds its two keywords’ M alone.',
+        'x = E + u·U + d·D + k·K + Σ (M + a·A)，64 个数；每张牌只加上它有的项。关键词没有数值，所以 CLUMSY 只加上它两个关键词的 M。',
+        'x = E + u·U + d·D + k·K + Σ (M + a·A)，64 個數；每張牌只加上它有的項。關鍵字沒有數值，所以 CLUMSY 只加上它兩個關鍵字的 M。',
+      ),
       rows: [
-        ['DEFEND_SILENT', '[−0.106, −0.196, 0.149, 0.139, …]'], ['STRIKE_SILENT', '[0.116, 0.020, −0.003, −0.149, …]'], ['SNAKEBITE+', '[0.259, 0.497, 0.264, −0.191, …]'], ['ACCELERANT+ (SWIFT)', '[−0.263, 0.333, −0.793, 0.159, …]'],
+        ['STRIKE_DEFECT', 'E + 0.30·D = [−0.015, −0.013, 0.039, 0.016, …]'],
+        ['DEFEND_DEFECT', 'E + 0.25·K = [−0.011, −0.032, −0.006, 0.016, …]'],
+        ['DEFEND_DEFECT+', 'E + U + 0.40·K = [0.073, −0.187, 0.011, −0.020, …]'],
+        ['MOMENTUM_STRIKE+', 'E + U + 0.75·D = [−0.338, 0.381, 0.035, 0.213, …]'],
+        ['CLUMSY', 'E + M[keyword:Ethereal] + M[keyword:Unplayable] = [−0.127, −0.032, 0.068, 0.120, …]'],
       ],
     },
     {
       title: w('φ, card by card', 'φ，逐张计算', 'φ，逐張計算'),
       text: w('The same two layers for each card, 256 numbers, none below 0. Equal cards give equal vectors; no card sees another. The length is the vector’s norm.', '每张牌用同样的两层，256 个数，都不小于 0。相同的牌得到相同的向量，牌与牌互相看不到。长度是向量的范数。', '每張牌用同樣的兩層，256 個數，都不小於 0。相同的牌得到相同的向量，牌與牌互相看不到。長度是向量的範數。'),
       rows: [
-        ['DEFEND_SILENT', '[0.248, 0.182, 0.444, 0.137, …] |3.92|'], ['STRIKE_SILENT', '[0.165, 0.319, 0.280, 0.142, …] |3.58|'], ['SNAKEBITE+', '[1.052, 1.448, 1.035, 0.839, …] |14.86|'], ['ACCELERANT+ (SWIFT)', '[0.298, 0, 0, 0, …] |8.66|'],
+        ['STRIKE_DEFECT', '[0.165, 0.337, 0.372, 0.157, …] |3.21|'], ['DEFEND_DEFECT', '[0.153, 0.239, 0.283, 0.096, …] |2.80|'], ['DEFEND_DEFECT+', '[0.222, 0.297, 0.231, 0.092, …] |3.47|'], ['MOMENTUM_STRIKE+', '[0.648, 1.069, 1.259, 0.817, …] |8.07|'], ['CLUMSY', '[0.143, 0.216, 0.273, 0.148, …] |3.35|'],
       ],
     },
     {
       title: w('Pooling the deck', '汇总牌组', '匯聚牌組'),
-      text: w('All 25 vectors added up, then divided by 25 for the mean and by 16 for the scaled sum. Their ratio is how the body can read the deck’s size.', '25 个向量全部相加，再除以 25 得到平均，除以 16 得到缩放后的和。两者的比值就是主干读到牌数的方式。', '25 個向量全部相加，再除以 25 得到平均，除以 16 得到縮放後的和。兩者的比值就是主幹讀到牌數的方式。'),
-      rows: [['mean', '[0.357, 0.340, 0.412, 0.265, …]'], ['sum ÷ 16', '[0.558, 0.532, 0.643, 0.414, …]']],
+      text: w('All 22 vectors added up, then divided by 22 for the mean and by 16 for the scaled sum. The 16 is a fixed factor in the code that keeps the sum about a mean’s size; the two differ by 22/16, which is how the body can read the deck’s size.', '22 个向量全部相加，再除以 22 得到平均，除以 16 得到缩放后的和。16 是代码里固定的因子，让和保持在平均值的量级；两者相差 22/16 倍，这就是主干读到牌数的方式。', '22 個向量全部相加，再除以 22 得到平均，除以 16 得到縮放後的和。16 是程式碼裡固定的係數，讓和大約和平均值一樣大；兩者相差 22/16 倍，這就是主幹讀到牌數的方式。'),
+      rows: [['mean', '[0.418, 0.453, 0.530, 0.390, …]'], ['sum ÷ 16', '[0.574, 0.623, 0.728, 0.536, …]']],
     },
     {
       title: w('The bags', '四个袋', '四個袋'),
       text: w('Each bag’s embeddings added up, 64 numbers each, with no layer in between. No potion: the zero vector.', '每个袋的嵌入直接相加，各 64 个数，中间没有任何一层。没有药水，就是零向量。', '每個袋的嵌入直接相加，各 64 個數，中間沒有任何一層。沒有藥水，就是零向量。'),
-      rows: [['relics', '[0.298, −0.681, 0.519, 0.636, …] |3.04|'], ['potions', '[0, 0, 0, 0, …] |0|'], ['context', '[0.083, 0.533, −1.454, 0.369, …] |4.89|'], ['map', '[2.050, 0.177, −0.747, −0.880, …] |3.92|']],
+      rows: [['relics', '[−0.261, 0.347, 0.341, 0.303, …] |2.30|'], ['potions', '[0, 0, 0, 0, …] |0|'], ['context', '[0.172, 0.260, −1.734, 0.047, …] |4.42|'], ['map', '[1.431, −0.289, −0.830, −1.145, …] |4.65|']],
     },
     {
       title: w('Six numbers', '六个数字', '六個數字'),
-      text: w('(x − μ)/σ, by the net file’s μ and σ, kept from the nets it went on from. Ascension has μ 0 and σ read as 1, since the first of those nets’ training runs were all A0, so A10 reads as 10.', '(x − μ)/σ，用网络文件里的 μ 和 σ，它们沿用自它接着训练的那些网络。其中最早那个的训练局都是 A0，所以进阶的 μ 是 0、σ 读作 1，A10 就读作 10。', '(x − μ)/σ，用網路檔案裡的 μ 和 σ，它們沿用自它接著訓練的那些網路。其中最早那個的訓練局都是 A0，所以晉階的 μ 是 0、σ 讀作 1，A10 就讀作 10。'),
-      rows: [['floor', '41 → 2.910'], ['HP', '75 → 0.791'], ['max HP', '85 → 2.737'], ['gold', '53 → −0.885'], ['ascension', '10 → 10'], ['potion slots', '2 → −2.244']],
+      text: w('(x − μ)/σ, by the net file’s μ and σ, kept from the nets it went on from. Ascension has μ 0 and σ read as 1, since the first of those nets’ training runs were all A0: this A0 run reads 0, and A10 would read 10.', '(x − μ)/σ，用网络文件里的 μ 和 σ，它们沿用自它接着训练的那些网络。其中最早那个的训练局都是 A0，所以进阶的 μ 是 0、σ 读作 1：这一局是 A0，读作 0，A10 则会读作 10。', '(x − μ)/σ，用網路檔案裡的 μ 和 σ，它們沿用自它接著訓練的那些網路。其中最早那個的訓練局都是 A0，所以晉階的 μ 是 0、σ 讀作 1：這一局是 A0，讀作 0，A10 則會讀作 10。'),
+      rows: [['floor', '42 → 3.016'], ['HP', '46 → −0.983'], ['max HP', '65 → −1.132'], ['gold', '78 → −0.697'], ['ascension', '0 → 0'], ['potion slots', '3 → −0.229']],
     },
     {
       title: w('Join and body', '拼接与主干', '串接與主幹'),
-      text: w('512 + 4 × 64 + 6 = 774 numbers, then two ReLU layers. Here 349 of the first layer’s 512 numbers and 231 of the second’s are above 0.', '512 + 4 × 64 + 6 = 774 个数，再经过两层 ReLU。这里第一层 512 个数有 349 个大于 0，第二层有 231 个。', '512 + 4 × 64 + 6 = 774 個數，再經過兩層 ReLU。這裡第一層 512 個數有 349 個大於 0，第二層有 231 個。'),
-      rows: [['z', '774'], ['b₁', '512 (349 > 0)'], ['b₂', '512 (231 > 0)']],
+      text: w('512 + 4 × 64 + 6 = 774 numbers, then two ReLU layers. Here 356 of the first layer’s 512 numbers and 274 of the second’s are above 0.', '512 + 4 × 64 + 6 = 774 个数，再经过两层 ReLU。这里第一层 512 个数有 356 个大于 0，第二层有 274 个。', '512 + 4 × 64 + 6 = 774 個數，再經過兩層 ReLU。這裡第一層 512 個數有 356 個大於 0，第二層有 274 個。'),
+      rows: [['z', '774'], ['b₁', '512 (356 > 0)'], ['b₂', '512 (274 > 0)']],
     },
     {
       title: w('Hazards and the value', '风险值与价值', '風險值與價值'),
-      text: w('One chance per floor. Floors 48 and 49 are the third act’s two bosses. The product of every (1 − h) from floor 41 on is the value.', '每层一个概率。第 48、49 层是第三幕的两个 Boss。从第 41 层起所有 (1 − h) 的连乘就是价值。', '每層一個機率。第 48、49 層是第三幕的兩個頭目。從第 41 層起所有 (1 − h) 的連乘就是價值。'),
-      rows: [['h₄₁ … h₄₇', '0.0000, 0.0058, 0.0088, 0.0065, 0.0176, 0.0372, 0.0000'], ['h₄₈, h₄₉', '0.4296, 0.8943'], ['h₅₀', '0.0001'], ['P(win)', '0.0558']],
+      text: w('One chance per floor. Floor 48 is the third act’s boss. The product of every (1 − h) from floor 42 on is the value.', '每层一个概率。第 48 层是第三幕的 Boss。从第 42 层起所有 (1 − h) 的连乘就是价值。', '每層一個機率。第 48 層是第三幕的頭目。從第 42 層起所有 (1 − h) 的連乘就是價值。'),
+      rows: [['h₄₂ … h₄₇', '0.0537, 0.0596, 0.1202, 0.2785, 0.3748, 0.0000'], ['h₄₈', '0.9933'], ['h₄₉ … h₆₃', '0.0000, 0.0022, 0.0000 ×13'], ['P(win)', '0.00235']],
     },
   ];
   let k = $state(0);

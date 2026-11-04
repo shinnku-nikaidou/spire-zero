@@ -4,11 +4,11 @@ description: 'Where the project stands: how well it plays, what each part does t
 ---
 import { Badge, Steps } from '@astrojs/starlight/components';
 
-This page tracks progress. The chapters say how each part works; this page says how far along each part is, what could still go wrong, and what comes next. As of 2026-11-02.
+This page tracks progress. The chapters say how each part works; this page says how far along each part is, what could still go wrong, and what comes next. As of 2026-11-04.
 
 ## 1. In one paragraph
 
-The AI plays whole runs headless, in the game's own code, in both environments. Two nets do all its learned work: one combat net, c9-0, and one V, v9-0, each a single set of weights for all five characters, every ascension and both environments; SL and NoSL differ only in the search in front of them. Their weights have learned from the Silent's runs alone. In **SL** the champion is the SL planner with c9-0 in combat and L0 with v9-0 outside it; with the Silent at ascension 10, on the 200 seeds of `promotion-1-200`, it won 17 runs, 8.5 % (5.4–13.2 %), and reached floor 33.09 on average ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). In **NoSL** the champion is PIMC with the same two nets, which it has never been gated or trained with. The first data of all five characters, `v9g0` (ascension 0, 6,000 runs each), is being played. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built.
+The AI plays whole runs headless, in the game's own code, in both environments. Two nets do all its learned work: one combat net, c9-1, and one V, v9-1, each a single set of weights for all five characters, every ascension and both environments; SL and NoSL differ only in the search in front of them. Their weights learned first from the Silent's runs at ascension 10, then from `v9g0`, the first SL self-play of all five characters (ascension 0, about 6,000 runs each). In **SL** the champion is the SL planner with c9-1 in combat and L0 with v9-1 outside it; at ascension 0, on the 100 seeds of `promotion-1-100`, it wins 74 % of runs with the Silent, 46 % with the Ironclad, 35 % with the Regent, 31 % with the Defect and 9 % with the Necrobinder ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). In **NoSL** the champion is PIMC with the same two nets, which it has never been gated or trained with. In the real game the mod's assist mode answers every decision screen in both environments; auto-play is not built.
 
 ## 2. Each part
 
@@ -32,10 +32,14 @@ The AI plays whole runs headless, in the game's own code, in both environments. 
 
 **The champions' results** (`eval/ledger.md`):
 
-| environment | champion | seed set | win rate | mean floor |
-|---|---|---|---|---|
-| SL | plan c9-0 (medium effort), L0 v9-0 on the clone | `promotion-1-200`, the Silent at ascension 10 | 8.5 % (17 of 200) | 33.09 |
-| NoSL | PIMC c9-0 8×300, L0 v9-0 | | no report yet | |
+| environment | champion | character | seed set | win rate | mean floor |
+|---|---|---|---|---|---|
+| SL | plan c9-1 (medium effort), L0 v9-1 on the clone | Silent | `promotion-1-100`, ascension 0 | 74 % (74 of 100) | 45.40 |
+| | | Ironclad | | 46 % (46 of 100) | 41.39 |
+| | | Defect | | 31 % (31 of 100) | 42.81 |
+| | | Regent | | 35 % (35 of 100) | 42.30 |
+| | | Necrobinder | | 9 % (9 of 100) | 35.94 |
+| NoSL | PIMC c9-1 8×300, L0 v9-1 | | | no report yet | |
 
 ## 3. Main gaps and risks
 
@@ -47,7 +51,7 @@ The AI plays whole runs headless, in the game's own code, in both environments. 
 6. **Harmony patches in the real game against tiered JIT**: the runtime may recompile a method and silently drop a patch ([Mod: auto-play and safety §5](/en/arch/mod/auto/#sec-5)).
 7. **The combat brains' blind spots.** Card prompts are answered by a fixed rule (`p0`), not searched; NoSL's search sees this turn only; the SL planner proves few of its plans, and an unproved loss gets at most 3 plans in a row, so a combat that only a later plan would win is lost ([The SL planner: beam §5](/en/arch/sl-planner/beam/#sec-5)–[§6](/en/arch/sl-planner/beam/#sec-6)).
 8. **V's labels carry the later exploration draws of their runs**, and V is not told a run's ε ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)).
-9. **Four characters the nets have not learned.** The nets' weights have learned from the Silent's runs alone; the other characters read as the unknown character, and their cards, relics and enemies as ids no training held, until the nets train on `v9g0` ([The combat net §8](/en/arch/combat-brain/network/#sec-8)).
+9. **Four characters with little data.** The nets learned the Ironclad, the Defect, the Regent and the Necrobinder from one generation of ascension-0 runs, `v9g0`, in which they won 76 runs of about 24,000, so V has seen few of their runs reach a win; at ascension 0 the champion wins 9–46 % with them against 74 % with the Silent, and none of them has been played above ascension 0 ([Learning: the loop §2](/en/arch/learning/loop/#sec-2)).
 10. **SL in the real game without the node's clone**: the mod holds back only combat decisions, so a brain whose macro side plays on the clone would use the previous node's ([Mod: the SL record §6](/en/arch/mod/sl-record/#sec-6)).
 
 ## 4. What comes next
@@ -72,10 +76,12 @@ The AI plays whole runs headless, in the game's own code, in both environments. 
 
 9. <Badge text="done 2026-11-03" variant="success" /> One combat net and one V for all five characters, every ascension and both environments, with the character among the context tokens: c9-0 and v9-0, carrying the Silent's weights with no training. The combat net reads every state the observation gathers on cards, powers, relics and enemies: keywords, Tinker, an enchantment spent, calculated numbers, replays, star costs, Momentum's damage, a power's moved number, Swipe's stolen card, a relic's effect spent, an enemy lying dead until it revives ([The combat net §2](/en/arch/combat-brain/network/#sec-2)).
 
-10. <Badge text="in progress" variant="note" /> `v9g0`: the first SL self-play of all five characters, at ascension 0 and the low budget, 6,000 runs each, with V's decisions drawn evenly at ε 0.3, 0.1 and 0.02 ([Learning: the loop §2](/en/arch/learning/loop/#sec-2)).
+10. <Badge text="done 2026-11-04" variant="success" /> `v9g0`: the first SL self-play of all five characters, at ascension 0 and the low budget, 29,987 runs, about 6,000 each, with V's decisions drawn evenly at ε 0.3, 0.1 and 0.02. The Silent won 1,981 of its runs, the Defect 48, the Ironclad 14, the Regent 12 and the Necrobinder 2 ([Learning: the loop §2](/en/arch/learning/loop/#sec-2)).
 
-11. **Waiting:** NoSL's items, while SL comes first: tuning PIMC's worlds and nodes, measuring how large strategy fusion is ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+11. <Badge text="done 2026-11-04" variant="success" /> V v9-1 and the combat net c9-1, trained on `v9g0` alone, going on from v9-0 and c9-0; V now reads the numbers a card grows (its modifiers' amounts, its damage and block). Gated together on every character at ascension 0 against v9-0 and c9-0, at medium the Ironclad's wins went from 1 of 100 to 46, the Regent's from 2 to 35, the Defect's from 1 to 31 and the Necrobinder's from 0 to 9, while the Silent's went from 86 to 74. They became the one champion of all five ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).
 
-12. The mod's auto-play: the executor, the auto-run driver, the R4 pipeline and the R3 ≡ R4 test ([Mod: auto-play and safety](/en/arch/mod/auto/)).
+12. **Waiting:** NoSL's items, while SL comes first: tuning PIMC's worlds and nodes, measuring how large strategy fusion is ([NoSL PIMC: budget §7](/en/arch/pimc/budget/#sec-7)).
+
+13. The mod's auto-play: the executor, the auto-run driver, the R4 pipeline and the R3 ≡ R4 test ([Mod: auto-play and safety](/en/arch/mod/auto/)).
 
 </Steps>

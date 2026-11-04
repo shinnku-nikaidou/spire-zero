@@ -69,16 +69,16 @@ The settings are fixed in the code (`learn/combat/train.py:34-36`): AdamW at lea
 
 ## 5. What it measures
 
-The numbers are the report in `weights/all/c9-0.json`, which keeps c8-3's: c9-0 carries its weights. "Held out" is every fifth run of the training list, 2,044 runs at ascension 10 with 153,718 round starts, played at the medium budget.
+The numbers are the report in `weights/all/c9-1.json`. "Held out" is every fifth run of the training list, 6,004 runs of all five characters at ascension 0 with 407,042 round starts, played at the low budget.
 
 | metric | held out | the HP share alone |
 |---|---|---|
-| endings' cross-entropy (the prior's) | 1.242 (2.110) | – |
-| deaths, actual and predicted | 5.15 %, 5.16 % | – |
-| rank with the end's price | 0.927 | 0.833 |
-| rank of HP lost, on wins | 0.662 | 0.148 |
-| AUC of a death | 0.923 | 0.693 |
-| potions' log loss (per id and room) | 0.328 (0.575) | – |
+| endings' cross-entropy (the prior's) | 1.249 (2.352) | – |
+| deaths, actual and predicted | 9.27 %, 10.03 % | – |
+| rank with the end's price | 0.929 | 0.778 |
+| rank of HP lost, on wins | 0.727 | 0.121 |
+| AUC of a death | 0.957 | 0.679 |
+| potions' log loss (per id and room) | 0.340 (0.564) | – |
 
 **What to read.** The rank with the end's price says little: the HP share alone gets most of it, since the end's price follows the HP held. The rank of HP lost and the AUC of a death are what the net adds beyond the HP held.
 
@@ -86,14 +86,16 @@ By room, on the held-out runs:
 
 | room | round starts | cross-entropy (prior) | deaths, actual and predicted | rank of HP lost | AUC of a death (HP share) |
 |---|---|---|---|---|---|
-| hallway | 101,898 | 0.957 (1.671) | 0.6 %, 0.6 % | 0.627 | 0.956 (0.887) |
-| elite | 28,893 | 1.740 (2.758) | 7.0 %, 7.3 % | 0.747 | 0.949 (0.727) |
-| boss | 22,927 | 1.881 (3.243) | 23.0 %, 22.6 % | 0.737 | 0.909 (0.661) |
+| hallway | 264,191 | 0.988 (1.958) | 0.9 %, 1.0 % | 0.702 | 0.973 (0.848) |
+| elite | 66,949 | 1.786 (2.955) | 9.6 %, 10.1 % | 0.784 | 0.968 (0.728) |
+| boss | 75,902 | 1.684 (3.191) | 38.2 %, 41.4 % | 0.792 | 0.953 (0.655) |
 
-**Low HP**, below 30 % of max HP, where 12.2 % of the held-out round starts die: the AUC of a death is 0.896 against the HP share's 0.576.
+**Low HP**, below 30 % of max HP, where 27.3 % of the held-out round starts die: the AUC of a death is 0.945 against the HP share's 0.519.
 
-**The potion head by id.** On the held-out runs Fairy in a Bottle is used 21.3 % of the time and predicted at 22.3 %, with a log loss of 0.182 against 0.434 per id and room. Across all rows, 29.5 % are used, and 29.4 % predicted.
+**The potion head by id.** On the held-out runs Fairy in a Bottle is used 17.7 % of the time and predicted at 18.9 %, with a log loss of 0.155 against 0.381 per id and room. Across all rows, 31.2 % are used, and 32.1 % predicted.
 
-**The hardest fight.** On Test Subject, where 56.0 % of the held-out round starts die, the net predicts 52.3 %, and its AUC of a death is 0.881 against 0.662. Its rank of HP lost, on wins, is 0.747 against 0.432.
+**The hardest fight.** On Knowledge Demon, where 53.2 % of the held-out round starts die, the net predicts 55.3 %, and its AUC of a death is 0.970 against 0.675. Its rank of HP lost, on wins, is 0.799 against 0.116.
 
-Which of these translates to more won runs is for a gate to say ([Evaluation: gates §5](/en/arch/evaluation/gates/#sec-5)). At ascension 10, over both Vs, it reached 0.45 floors more than c8-2 at medium, ± 0.71, and won no more, +0.00 ± 1.47 points ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).
+**Against the net it went on from.** On the same held-out round starts c9-0, which had learned from the Silent's runs alone, has a loss of 4.33 against c9-1's 1.27. The gap is the other characters': the Silent's round starts go from 1.27 to 1.20, the Ironclad's from 9.72 to 1.54, the Regent's from 5.87 to 1.23, the Necrobinder's from 4.34 to 1.13 and the Defect's from 4.17 to 1.30.
+
+Which of these translates to more won runs is for a gate to say ([Evaluation: gates §5](/en/arch/evaluation/gates/#sec-5)). With V v9-1, at ascension 0 and medium, it won 46, 35, 31 and 9 of 100 runs with the Ironclad, the Regent, the Defect and the Necrobinder, where v9-0 with c9-0 won 1, 2, 1 and 0, and 74 with the Silent against 86 ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).

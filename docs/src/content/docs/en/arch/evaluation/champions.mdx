@@ -14,17 +14,21 @@ A **champion** is the best accepted version of the AI in one environment: the br
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone",
+  "champion": "combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/all/v9-0.json", "afterstates": "clone", "combat-net": "weights/all/c9-0.json"
+    "value": "weights/all/v9-1.json", "afterstates": "clone", "combat-net": "weights/all/c9-1.json"
   },
-  "reports": { "SILENT": "eval/silent/reports/DATE-sl-a10-SET-NAME.json" },
+  "reports": {
+    "SILENT": "eval/silent/reports/DATE-sl-a0-SET-NAME.json",
+    "IRONCLAD": "eval/ironclad/reports/DATE-sl-a0-SET-NAME.json",
+    "DEFECT": "…", "REGENT": "…", "NECROBINDER": "…"
+  },
   "since": "DATE"
 }
 ```
 
-(one line in the file, spread out here, with the report's path and the date as patterns).
+(one line in the file, spread out here, with the reports' paths and the date as patterns).
 
 | field | what it holds |
 |---|---|
@@ -43,7 +47,7 @@ A **champion** is the best accepted version of the AI in one environment: the br
 
 **Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:75-91`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. The wins gate writes nothing, so a net it promotes is written by hand ([Gates §10](/en/arch/evaluation/gates/#sec-10)), and the SL file says `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `reports` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
 
-**The two files.** Both name the same two nets, `weights/all/v9-0.json` (V) and `weights/all/c9-0.json` (the combat net). SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The one report both name is the Silent's, this SL champion's own, 200 runs at A10 on `promotion-1-200`. Since it is an SL report, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)); neither net has been gated in NoSL.
+**The two files.** Both name the same two nets, `weights/all/v9-1.json` (V) and `weights/all/c9-1.json` (the combat net). SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). Both name the same five reports, one per character, this SL champion's own: 100 runs at medium at ascension 0 on `promotion-1-100`. Since they are SL reports, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)); neither net has been gated in NoSL.
 
 Each character has folders of its own, `eval/CHARACTER/` and `data/CHARACTER/`, with its own reports, leaderboard and runs ([Learning: reference §3](/en/arch/learning/reference/#sec-3)), since a result holds for one character. The rest is shared: the nets in `weights/all/`, the champion files in `eval/champions/`, the ledger `eval/ledger.md` and the seed sets in `eval/seeds/`.
 
@@ -52,35 +56,22 @@ Each character has folders of its own, `eval/CHARACTER/` and `data/CHARACTER/`, 
 These pages describe the current champion only. The record of what came before is kept apart:
 
 - `eval/ledger.md` is the history, every character's: every net, what it was trained on, its gate and what became of it.
-- `eval/silent/reports/` holds every committed report, as JSON and Markdown ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)).
-- `eval/silent/leaderboard.md` ranks those reports, by seed set and environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
+- `eval/CHARACTER/reports/` holds a character's committed reports, as JSON and Markdown ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)).
+- `eval/CHARACTER/leaderboard.md` ranks them, by ascension, seed set and environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
 
-**The champion's nets and their gate.** v9-0 and c9-0 are v8-3 and c8-3 carried with no training to the nets all characters share, their new inputs at zero weight. On the same seeds they take the same decisions, but where they read something the old nets did not (Swipe's stolen card, an Osty attack's damage), so the champion files keep v8-3 and c8-3's report and gate. v8-3 and c8-3 trained on the A10 runs of `v8g2` alone (10,038 runs), going on from v8-2 and c8-2. `v8g2` was played before the search played cycles inside a turn, so neither net has seen a cycle's outcome. Their gate played the four pairings of old and new at ascension 10, 200 seeds at medium and 200 at the low budget, on `promotion-1-200`, with that search, and read paired wins. Of 1,600 runs one failed and was dropped, so v8-3 with c8-2 has 199 at medium; there were no game errors. At medium:
+**The champion's nets and their gate.** v9-1 and c9-1 went on from v9-0 and c9-0 and trained on `v9g0` alone: the first SL self-play of all five characters, at ascension 0 and the low budget, 29,987 runs, 2,057 of them won, 1,981 by the Silent ([Learning: the loop §2](/en/arch/learning/loop/#sec-2)). v9-0 and c9-0 were v8-3 and c8-3, which had learned from the Silent's runs at ascension 10, carried with no training to the nets all characters share. The gate played v9-0 + c9-0 against v9-1 + c9-1 on every character at ascension 0, both sides on the same seeds with the champion's planner and no exploration: 100 seeds at medium on `promotion-1-100` and 200 at the low budget on `promotion-1-200`. V and the combat net were judged together, pair against pair. Of 3,000 runs none failed, and there were no game errors. At medium, paired by seed (the new pair less the old):
 
-| V | combat net | won | mean floor |
-|---|---|---|---|
-| v8-2 | c8-2 | 10 of 200 | 28.84 |
-| v8-3 | c8-2 | 15 of 199 | 32.54 |
-| v8-2 | c8-3 | 8 of 200 | 29.27 |
-| v8-3 | c8-3 | 17 of 200 | 33.09 |
+| character | v9-0 + c9-0 won | v9-1 + c9-1 won | wins, points | lower 95 % | floors |
+|---|---|---|---|---|---|
+| Silent | 86 of 100 | 74 of 100 | −12.0 ± 5.6 | −21.1 | −1.35 ± 0.94 |
+| Ironclad | 1 of 100 | 46 of 100 | +45.0 ± 5.0 | +36.8 | +16.38 ± 1.42 |
+| Defect | 1 of 100 | 31 of 100 | +30.0 ± 4.8 | +22.1 | +7.60 ± 1.53 |
+| Regent | 2 of 100 | 35 of 100 | +33.0 ± 4.9 | +24.9 | +19.73 ± 1.40 |
+| Necrobinder | 0 of 100 | 9 of 100 | +9.0 ± 2.9 | +4.3 | +16.68 ± 1.45 |
 
-Each net's effect, over both of the other kind's nets, paired by seed:
+At the low budget, of 200: the Silent 140 and 141 (+0.5 ± 4.4 points), the Ironclad 1 and 61, the Defect 2 and 44, the Regent 1 and 47, the Necrobinder 0 and 18; each of the four passes there too.
 
-| net | budget | wins, points | lower 95 % | floors |
-|---|---|---|---|---|
-| v8-3 | medium | +3.52 ± 1.76 | +0.62 | +3.74 ± 1.06 |
-| v8-3 | low | +2.00 ± 0.86 | +0.59 | +5.15 ± 0.95 |
-| c8-3 | medium | +0.00 ± 1.47 | −2.42 | +0.45 ± 0.71 |
-| c8-3 | low | −1.00 ± 1.00 | −2.65 | −0.16 ± 0.54 |
-
-v8-3 passed. **c8-3 showed no gain apart:** it became champion beside v8-3, the pairing with the most wins. **The pair does not pass against v8-2 and c8-2 alone:** on the same seeds at medium it won 17 of 200 against 10, +3.50 ± 2.28 points, with a lower 95 % bound of −0.26 (14 seeds won only by it, 7 only by them, 3 by both); its mean floor was 33.09 against 28.84. It reaches more bosses, and beats all but the last more often. Bosses beaten of those reached:
-
-| V, combat net | act 1 | act 2 | act 3, first | act 3, second |
-|---|---|---|---|---|
-| v8-3, c8-3 | 77.9 % (134 of 172) | 84.1 % (95 of 113) | 58.1 % (43 of 74) | 39.5 % (17 of 43) |
-| v8-2, c8-2 | 74.2 % (112 of 151) | 73.1 % (68 of 93) | 46.8 % (22 of 47) | 45.5 % (10 of 22) |
-
-An A10 gate reads paired wins, with floors listed beside them ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
+The new pair passed on four characters and lost ground with the Silent at medium, while tying it at the low budget. One champion plays every character, so it became champion for all five. Its mean floors at medium are 45.40 with the Silent, 41.39 with the Ironclad, 42.81 with the Defect, 42.30 with the Regent and 35.94 with the Necrobinder, against 46.75, 25.01, 35.21, 22.57 and 19.26 before. A gate reads paired wins, with floors listed beside them ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
 
 ## 3. Baselines
 

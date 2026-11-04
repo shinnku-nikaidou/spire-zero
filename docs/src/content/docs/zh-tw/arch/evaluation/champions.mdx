@@ -14,17 +14,21 @@ sidebar:
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone",
+  "champion": "combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/all/v9-0.json", "afterstates": "clone", "combat-net": "weights/all/c9-0.json"
+    "value": "weights/all/v9-1.json", "afterstates": "clone", "combat-net": "weights/all/c9-1.json"
   },
-  "reports": { "SILENT": "eval/silent/reports/DATE-sl-a10-SET-NAME.json" },
+  "reports": {
+    "SILENT": "eval/silent/reports/DATE-sl-a0-SET-NAME.json",
+    "IRONCLAD": "eval/ironclad/reports/DATE-sl-a0-SET-NAME.json",
+    "DEFECT": "…", "REGENT": "…", "NECROBINDER": "…"
+  },
   "since": "DATE"
 }
 ```
 
-（檔案裡是一行，這裡展開排版，報告的路徑和日期寫成樣式）。
+（檔案裡是一行，這裡展開排版，各報告的路徑和日期寫成樣式）。
 
 | 欄位 | 內容 |
 |---|---|
@@ -43,7 +47,7 @@ sidebar:
 
 **由 `--promote` 寫入，或由人工寫入**。`gate --promote` 寫入每個欄位，選項按挑戰者的選項產生（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:75-91`）：對 SL 規劃器是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。勝局門檻什麼也不寫，所以它晉級的網路由人工寫入（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)），SL 檔案寫著 `"effort": "medium"`，打的是同樣的預算（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。重定基線只改 `reports`（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）。
 
-**兩個檔案**。兩個檔案都指明同樣兩個網路：`weights/all/v9-0.json`（V）和 `weights/all/c9-0.json`（戰鬥網路）。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。兩個檔案指明的唯一一份報告是寂靜獵手的，也是這個 SL 冠軍自己的，在 `promotion-1-200` 上打的 200 局 A10。因為它是 SL 報告，對 NoSL 檔案的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；兩個網路都沒有在 NoSL 下過過門檻。
+**兩個檔案**。兩個檔案都指明同樣兩個網路：`weights/all/v9-1.json`（V）和 `weights/all/c9-1.json`（戰鬥網路）。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。兩個檔案指明同樣五份報告，每個角色一份，都是這個 SL 冠軍自己的：在 `promotion-1-100` 上以 medium 打的 100 局晉階 0。因為它們是 SL 報告，對 NoSL 檔案的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；兩個網路都沒有在 NoSL 下過過門檻。
 
 每個角色都有自己的資料夾 `eval/CHARACTER/` 和 `data/CHARACTER/`，有自己的報告、排行榜和對局（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)），因為一個結果只對一個角色成立。其餘的是共用的：`weights/all/` 裡的網路、`eval/champions/` 裡的冠軍檔案、帳本 `eval/ledger.md`，以及 `eval/seeds/` 裡的種子集。
 
@@ -52,35 +56,22 @@ sidebar:
 這些頁面只描述現在的冠軍。之前的紀錄另外保存：
 
 - `eval/ledger.md` 是歷史，涵蓋每個角色：每個網路、它在什麼上訓練、它的門檻，以及它後來怎麼樣了。
-- `eval/silent/reports/` 保存每一份已提交的報告，有 JSON 和 Markdown 兩種（[指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)）。
-- `eval/silent/leaderboard.md` 為這些報告排名，按種子集和環境分（[指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9)）。
+- `eval/CHARACTER/reports/` 保存一個角色已提交的報告，有 JSON 和 Markdown 兩種（[指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)）。
+- `eval/CHARACTER/leaderboard.md` 為這些報告排名，按晉階、種子集和環境分（[指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9)）。
 
-**冠軍的網路和它們的門檻**。v9-0 和 c9-0 就是 v8-3 和 c8-3，不經訓練搬到所有角色共用的網路上，新輸入的權重為零。在同樣的種子上它們做同樣的決策，只有讀到舊網路不讀的東西時例外（順手一揮偷走的牌、奧斯提攻擊的傷害），所以冠軍檔案保留 v8-3 和 c8-3 的報告和門檻。v8-3 和 c8-3 只用 `v8g2` 的 A10 對局訓練（10,038 局），從 v8-2 和 c8-2 接著訓練。`v8g2` 是在搜尋能在一回合內打循環之前打的，所以兩個網路都沒有見過循環的結局。它們的門檻在晉階 10 打新舊的四種配對，在 `promotion-1-200` 上，medium 200 個種子、低預算 200 個種子，用的就是那個搜尋，讀配對勝局。1,600 局中有一局失敗並被丟棄，所以 v8-3 配 c8-2 在 medium 下是 199 局；沒有遊戲錯誤。medium 的結果：
+**冠軍的網路和它們的門檻**。v9-1 和 c9-1 從 v9-0 和 c9-0 接著訓練，只用 `v9g0` 訓練：全部五個角色的第一次 SL 自我對弈，在晉階 0、用低預算，29,987 局，贏下 2,057 局，其中 1,981 局是寂靜獵手贏的（[學習：循環 §2](/zh-tw/arch/learning/loop/#sec-2)）。v9-0 和 c9-0 就是 v8-3 和 c8-3，它們學過寂靜獵手在晉階 10 的對局，不經訓練搬到所有角色共用的網路上。門檻讓 v9-0 + c9-0 對上 v9-1 + c9-1，在晉階 0 打每個角色，雙方在相同的種子上打，用冠軍的規劃器、不探索：medium 在 `promotion-1-100` 上打 100 個種子，低預算在 `promotion-1-200` 上打 200 個。V 和戰鬥網路一起評判，一對對一對。3,000 局沒有一局失敗，也沒有遊戲錯誤。medium 的結果，按種子配對（新的一對減去舊的）：
 
-| V | 戰鬥網路 | 贏下 | 平均層數 |
-|---|---|---|---|
-| v8-2 | c8-2 | 200 局中 10 局 | 28.84 |
-| v8-3 | c8-2 | 199 局中 15 局 | 32.54 |
-| v8-2 | c8-3 | 200 局中 8 局 | 29.27 |
-| v8-3 | c8-3 | 200 局中 17 局 | 33.09 |
+| 角色 | v9-0 + c9-0 贏下 | v9-1 + c9-1 贏下 | 勝局，百分點 | 95 % 下界 | 層數 |
+|---|---|---|---|---|---|
+| 寂靜獵手 | 100 局中 86 局 | 100 局中 74 局 | −12.0 ± 5.6 | −21.1 | −1.35 ± 0.94 |
+| 鐵甲戰士 | 100 局中 1 局 | 100 局中 46 局 | +45.0 ± 5.0 | +36.8 | +16.38 ± 1.42 |
+| 故障機器人 | 100 局中 1 局 | 100 局中 31 局 | +30.0 ± 4.8 | +22.1 | +7.60 ± 1.53 |
+| 儲君 | 100 局中 2 局 | 100 局中 35 局 | +33.0 ± 4.9 | +24.9 | +19.73 ± 1.40 |
+| 縛亡者 | 100 局中 0 局 | 100 局中 9 局 | +9.0 ± 2.9 | +4.3 | +16.68 ± 1.45 |
 
-每個網路的效果，涵蓋另一類的兩個網路，按種子配對：
+低預算下，200 局中：寂靜獵手 140 局和 141 局（+0.5 ± 4.4 百分點），鐵甲戰士 1 局和 61 局，故障機器人 2 局和 44 局，儲君 1 局和 47 局，縛亡者 0 局和 18 局；那四個角色在這裡也都通過。
 
-| 網路 | 預算 | 勝局，百分點 | 95 % 下界 | 層數 |
-|---|---|---|---|---|
-| v8-3 | medium | +3.52 ± 1.76 | +0.62 | +3.74 ± 1.06 |
-| v8-3 | low | +2.00 ± 0.86 | +0.59 | +5.15 ± 0.95 |
-| c8-3 | medium | +0.00 ± 1.47 | −2.42 | +0.45 ± 0.71 |
-| c8-3 | low | −1.00 ± 1.00 | −2.65 | −0.16 ± 0.54 |
-
-v8-3 通過了。**c8-3 單獨看沒有顯出提升**：它和 v8-3 一起成為冠軍，這是勝局最多的配對。**這一對單獨對上 v8-2 和 c8-2 沒有通過**：在相同的種子上以 medium 對打，它 200 局贏 17 局，對方 10 局，+3.50 ± 2.28 百分點，95 % 下界 −0.26（14 個種子只有它贏，7 個只有對方贏，3 個都贏）；它的平均層數是 33.09 對 28.84。它到達的頭目較多，除了最後一個都更常打贏。到達的頭目中被打敗的比例：
-
-| V，戰鬥網路 | 第 1 幕 | 第 2 幕 | 第 3 幕，第一個 | 第 3 幕，第二個 |
-|---|---|---|---|---|
-| v8-3，c8-3 | 77.9 %（172 個中 134 個） | 84.1 %（113 個中 95 個） | 58.1 %（74 個中 43 個） | 39.5 %（43 個中 17 個） |
-| v8-2，c8-2 | 74.2 %（151 個中 112 個） | 73.1 %（93 個中 68 個） | 46.8 %（47 個中 22 個） | 45.5 %（22 個中 10 個） |
-
-A10 的門檻讀配對勝局，層數列在旁邊（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
+新的一對在四個角色上通過，在 medium 下打寂靜獵手則退步了，低預算下與舊的一對持平。一個冠軍打每個角色，所以它成為全部五個角色的冠軍。它在 medium 下的平均層數是寂靜獵手 45.40、鐵甲戰士 41.39、故障機器人 42.81、儲君 42.30、縛亡者 35.94，之前是 46.75、25.01、35.21、22.57 和 19.26。門檻讀配對勝局，層數列在旁邊（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)）。
 
 ## 3. 基線
 

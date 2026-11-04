@@ -116,11 +116,11 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 
 | name | what |
 |---|---|
-| v9-0 | V, the one value net of every character, played by both champions ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
-| c9-0 | The combat net, the one of every character, played by both champions ([The combat net](/en/arch/combat-brain/network/)). |
+| v9-1 | V, the one value net of every character, played by both champions ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
+| c9-1 | The combat net, the one of every character, played by both champions ([The combat net](/en/arch/combat-brain/network/)). |
 | token table | A net's list of ids of one kind (cards, relics, …), with learned rows per id: every id of the game build; entry 0, `<unk>`, reads any other ([The combat net §2](/en/arch/combat-brain/network/#sec-2)). |
-| `weights/all/NAME.json` | A net's file; the champions play `v9-0.json` and `c9-0.json` ([Learning: reference §6](/en/arch/learning/reference/#sec-6)). |
-| `promotion-1`, `promotion-1-300`, `final-1`, `a10-check-1` | Seed sets in `eval/seeds/`: 200 and 300 promotion seeds (the longer begins with the shorter), a final set of 300 registered before any run on it, and 200 seeds for A10 win rates, in no training data. |
+| `weights/all/NAME.json` | A net's file; the champions play `v9-1.json` and `c9-1.json` ([Learning: reference §6](/en/arch/learning/reference/#sec-6)). |
+| `promotion-1-100`, `promotion-1-200`, `promotion-1-300`, `final-1`, `a10-check-1` | Seed sets in `eval/seeds/`: 100, 200 and 300 promotion seeds (each longer one begins with the shorter; `promotion-1` holds the same 200 as `promotion-1-200`), a final set of 300 registered before any run on it, and 200 seeds for A10 win rates, in no training data. |
 | `eval/champions/sl.json`, `nosl.json` | Champion files: the options that play each environment's champion, every character's, and its report of each character. |
 | `eval/ledger.md` | The lineage, and the only history of the nets, every character's: which brain played which data, and which data trained which weights. |
 | `data/silent/{sl,nosl}/…` | The data directory's self-play and evaluation folders, on the storage host, not in git. |
