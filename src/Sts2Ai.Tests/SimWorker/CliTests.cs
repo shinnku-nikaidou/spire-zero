@@ -15,7 +15,7 @@ public class CliTests : IDisposable
     private string ChampionFile(Dictionary<string, string> options)
     {
         var path = Path.Combine(_dir, "champion.json");
-        File.WriteAllText(path, ProtocolJson.Serialize(new ChampionFile("SL", "test", options, "report.json", "2026-10-27")));
+        File.WriteAllText(path, ProtocolJson.Serialize(new ChampionFile("SL", "test", options, new Dictionary<string, string> { ["SILENT"] = "report.json" }, "2026-10-27")));
         return path;
     }
 

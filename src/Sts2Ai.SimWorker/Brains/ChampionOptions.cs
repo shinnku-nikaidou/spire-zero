@@ -92,15 +92,13 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     }
 
     /// <summary>
-    /// The options of this challenger as the character's champion, with its character and ascension. Each weights file
-    /// it plays with (V, the combat net) must be in the shared weights folder, weights/all, where a name is used once,
-    /// so the champion file names it where it is (docs: learning/reference §6).
+    /// The options of this challenger as the champion, every character's: no character or ascension, which each job
+    /// gives. Each weights file it plays with (V, the combat net) must be in the shared weights folder, weights/all, where
+    /// a name is used once, so the champion file names it where it is (docs: learning/reference §6).
     /// </summary>
-    public Dictionary<string, string> Promoted(PlayEnvironment env, string character, int ascension)
+    public Dictionary<string, string> Promoted(PlayEnvironment env)
     {
         var options = Options(env);
-        options["character"] = character;
-        options["asc"] = ascension.ToString(CultureInfo.InvariantCulture);
         var folder = Layout.Weights;
         foreach (var key in new[] { "value", "combat-net" })
             if (options.TryGetValue(key, out var path) && Path.GetDirectoryName(Path.GetFullPath(path)) != Path.GetFullPath(folder))

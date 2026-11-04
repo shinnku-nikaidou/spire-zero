@@ -106,10 +106,10 @@ public static class Gate
 }
 
 /// <summary>
-/// The champion of one character in one environment, as <c>eval/CHARACTER/champions/ENV.json</c> holds it (docs:
-/// evaluation §5): the run options that play it (<c>run --champion FILE</c>), its character and ascension included, its
-/// name as the reports show it, the report that challengers are paired against, and the gate it passed (none for the
-/// first champion).
+/// The champion of one environment, every character's, as <c>eval/champions/ENV.json</c> holds it (docs: evaluation §5):
+/// the run options that play it (<c>run --champion FILE</c>; a job gives its own character and ascension), its name as
+/// the reports show it, by character the report that challengers of that character are paired against (a report is one
+/// character at one ascension), and the gate it passed (none for the first champion).
 /// </summary>
-public sealed record ChampionFile(string Env, string Champion, IReadOnlyDictionary<string, string> Options, string Report, string Since,
-    Gate.Result? Gate = null);
+public sealed record ChampionFile(string Env, string Champion, IReadOnlyDictionary<string, string> Options,
+    IReadOnlyDictionary<string, string> Reports, string Since, Gate.Result? Gate = null);
