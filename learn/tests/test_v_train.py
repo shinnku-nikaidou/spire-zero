@@ -118,6 +118,20 @@ def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_
             assert math.isclose(float(values(fresh.eval(), b)[0]), test["value"], rel_tol=1e-5)
 
 
+def test_weights_the_export_merged_as_equal_read_back_apart():
+    samples = [data.sample("a", make_view(floor=f, hp=30 + f), 16, 9, "died") for f in (1, 2, 3)]
+    tables = game_ids.macro_tables()
+    sizes = {t: len(ids) for t, ids in tables.items()}
+    model = Net(sizes, 16)
+    with torch.no_grad():  # as v9-0's: the damage and block rows all zero, so the ONNX keeps one of them
+        model.card_damage.weight.zero_()
+        model.card_block.weight.zero_()
+    net = export.net_file("t", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
+    weights = export.weights(net, Net(sizes, 16))
+    assert torch.equal(weights["card_block.weight"], torch.zeros(sizes["cards"], Net.DIM))
+    assert torch.equal(weights["cards.weight"], model.cards.weight)
+
+
 def test_training_goes_on_from_a_net_file_with_its_tables_and_state_scaling(tmp_path):
     first, second = tmp_path / "first.json", tmp_path / "second.json"
     lists = write_runs(tmp_path)
