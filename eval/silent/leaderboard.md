@@ -42,8 +42,10 @@ The two environments are never ranked together, nor two characters or ascensions
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
+| combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-2 clone, macro prompts l0 v9-2 clone **(champion)** | 2026-11-06 | `6f1e040` | 92.0 % (92/100, 85.0 %–95.9 %) | 46.45 | 99 | 335.9 |
 | combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone | 2026-11-04 | `c1fbfd3` | 86.0 % (86/100, 77.9 %–91.5 %) | 46.75 | 99 | 274.6 |
-| combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone **(champion)** | 2026-11-04 | `c1fbfd3` | 74.0 % (74/100, 64.6 %–81.6 %) | 45.40 | 100 | 270.4 |
+| combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-04 | `c1fbfd3` | 74.0 % (74/100, 64.6 %–81.6 %) | 45.40 | 100 | 270.4 |
+| combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-06 | `6f1e040` | 74.0 % (74/100, 64.6 %–81.6 %) | 45.40 | 100 | 409.7 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1f clone, macro prompts l0 v7-1f clone | 2026-10-31 | `e51a119` | 40.0 % (40/100, 30.9 %–49.8 %) | 41.57 | 98 | 344.5 |
 
 ## SILENT, ascension 0: promotion-1-300
