@@ -47,3 +47,7 @@ Windows; installing it is copying that folder into the game's `mods/` folder.
 Machine addresses and keys never go into git. Scripts that need them read the repository's `.env` (ignored by git):
 the work pool's hub and hosts (`pool/README.md`) and `STS2_MAC`, the Mac that signs the macOS launcher
 (`distro/build.sh`).
+
+## License
+
+MIT ([LICENSE](LICENSE)). Slay the Spire 2 and its assets belong to Mega Crit and are not covered by this license.
