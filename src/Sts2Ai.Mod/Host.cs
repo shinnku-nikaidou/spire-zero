@@ -35,8 +35,12 @@ internal static class Host
             ChoiceContexts.Patch(harmony);
             NodeRecord.Patch(harmony);
             SettingsTab.Patch(harmony);
-            _assist = new Assist(BrainLink.Start(BrainSocket.DefaultPath), version);
-            Log.Info($"{Tag} assist mode, {Settings.Current.Env}, brain at {BrainSocket.DefaultPath}");
+            // The brain shipped beside the mod plays with the running game's own assemblies, and logs beside the settings.
+            var bundled = BundledBrain.Find(Path.GetDirectoryName(typeof(Host).Assembly.Location)!, Path.GetDirectoryName(typeof(NGame).Assembly.Location)!,
+                Path.Combine(Settings.Dir, "brain.log"));
+            var link = BrainLink.Start(bundled);
+            _assist = new Assist(link, version);
+            Log.Info($"{Tag} assist mode, {Settings.Current.Env}, brain: {link.Where}");
         }
         ((SceneTree)Engine.GetMainLoop()).ProcessFrame += Tick;
     }

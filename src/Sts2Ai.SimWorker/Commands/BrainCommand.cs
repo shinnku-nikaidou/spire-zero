@@ -6,15 +6,14 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
-/// brain: the brain alone (docs: harness §5), which serves the hosts that connect to the socket, one at a time, with the
-/// champion its options name. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
+/// brain: the brain alone (docs: harness §5), which serves the host that started it, the mod, on its stdin and stdout,
+/// with the champion its options name, and ends when stdin closes. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
 /// --sl-policy's (the SL planner by default), with the same macro brain (docs: harness/routing §1). A host may ask for
 /// another effort of the SL planner for its run (<see cref="Hello.Effort"/>), which then plays with that preset's
-/// budget. Prints a line per run, with the game errors of its search workers.
+/// budget. Prints a line per run on stderr, with the game errors of its search workers.
 /// </summary>
 internal static class BrainCommand
 {
-    private static readonly Option<string> Socket = Opt.Of("--socket", BrainSocket.DefaultPath, "the Unix socket to listen at");
     private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
     private static readonly Option<string?> Wire = Opt.Maybe<string?>("--wire", "writes every message the hosts send, one JSON line each (what clones replays)");
     private static readonly Option<string> SlPolicy = Opt.Of("--sl-policy", "plan", "the combat brain of SL hosts; --policy is NoSL hosts'")
@@ -23,7 +22,7 @@ internal static class BrainCommand
 
     public static Command Command()
     {
-        var command = Opt.Command("brain", "the brain alone: serves the hosts that connect, one at a time (docs: harness §5)", [Socket, Log, Wire, SlPolicy],
+        var command = Opt.Command("brain", "the brain alone: serves the host that starts it on stdin and stdout, until stdin closes (docs: harness §5)", [Log, Wire, SlPolicy],
             Champion.Options);
         command.SetAction(Run);
         return command;
@@ -31,7 +30,9 @@ internal static class BrainCommand
 
     private static int Run(ParseResult r)
     {
-        var path = r.GetValue(Socket)!;
+        // The wire owns stdout: every other line goes to stderr, from the first.
+        var wireOut = Console.OpenStandardOutput();
+        Console.SetOut(Console.Error);
         var slPolicy = r.GetValue(SlPolicy)!;
         var champion = Champion.Read(r, planElsewhere: slPolicy == "plan");
         var sl = Champion.Read(r, slPolicy);
@@ -50,7 +51,7 @@ internal static class BrainCommand
             return harnesses[(hello.Env, hello.Effort)] = options.Harness(workerPool, logFile != null, explain: true);
         }
         var server = new BrainServer(hello => HarnessFor(hello)(hello),
-            log: Logs.Factory.CreateLogger("brain"), received: wireFile == null ? null : message => wireFile.WriteLine(ProtocolJson.Serialize(message)),
+            received: wireFile == null ? null : message => wireFile.WriteLine(ProtocolJson.Serialize(message)),
             ended: (hello, harness, end) =>
         {
             foreach (var entry in harness.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
@@ -60,8 +61,8 @@ internal static class BrainCommand
                               (errors.Count > 0 ? $", game Log.Error lines in workers: {errors.Count}" : ""));
             foreach (var e in errors.Take(3)) Console.WriteLine($"  game error: {Logs.FirstLine(e)}");
         });
-        Console.WriteLine($"brain: NoSL {champion}; SL {sl}; listening on {path}");
-        server.Listen(path);
+        Console.WriteLine($"brain: NoSL {champion}; SL {sl}; serving stdin and stdout");
+        server.Serve(new WireStream(Console.OpenStandardInput(), wireOut));
         return 0;
     }
 }

@@ -1,15 +1,23 @@
 #!/bin/sh
-# Publishes the brain for every platform the Workshop item ships (plan tmp/plans/2026-11-07-1333-steam-workshop-release.md):
-# one self-contained folder per runtime identifier, all from one commit ($1, default HEAD), into tmp/brain/REV/RID/.
-# The settings are the publish profile src/Sts2Ai.SimWorker/Properties/PublishProfiles/brain.pubxml.
-# The game's assemblies are only compiled against; the brain loads the player's own at run time (STS2_BIN_DIR).
+# Builds the Workshop item from one commit ($1, default HEAD) into out/Sts2Ai/, ready to upload (plan
+# tmp/plans/2026-11-07-1333-steam-workshop-release.md); out/commit names the commit. Intermediate files: tmp/item/REV/.
+#
+#   out/Sts2Ai/Sts2Ai.json, Sts2Ai.dll    the mod (one build, for every platform: it runs on the game's own .NET)
+#   out/Sts2Ai/brain/RID/                 the brain for each platform, self-contained (BundledBrain starts it)
+#   out/Sts2Ai/brain/champion.json        the SL champion's file, its nets under brain/nets/
+#
+# The brain is a dotnet publish -r RID each with the profile Properties/PublishProfiles/brain.pubxml; the game's
+# assemblies are only compiled against, and the brain loads the player's own at run time (STS2_BIN_DIR).
+# The nets lose their .json: the game reads every .json under a mod's folder as a possible manifest, and a net's
+# "name" field makes it log an error.
 # Apple silicon runs only signed code, and the launcher made here is unsigned (macOS kills it, exit 137), so it is signed
 # ad-hoc on a Mac with Xcode's codesign: MAC=user@host, reached by ssh.
 set -e
 : "${MAC:?set MAC=user@host, a Mac to sign the osx-arm64 launcher on}"
 R=$(cd "$(dirname "$0")/.." && pwd)
 rev=$(git -C "$R" rev-parse --short "${1:-HEAD}")
-B=$R/tmp/brain/$rev
+B=$R/tmp/item/$rev
+I=$R/out/Sts2Ai
 rids="linux-x64 osx-arm64 win-x64"
 
 rm -rf "$B"
@@ -17,19 +25,32 @@ mkdir -p "$B/src"
 git -C "$R" archive "$rev" | tar -x -C "$B/src"
 export DOTNET_ROOT="$HOME/.dotnet" DOTNET_CLI_TELEMETRY_OPTOUT=1
 dotnet="$HOME/.dotnet/dotnet"
-project=$B/src/src/Sts2Ai.SimWorker
 # The archive sits inside this checkout, so left alone the build would stamp the checkout's HEAD, not REV.
 set -- -p:Sts2BinDir="$R/tmp/gamebin/v0.111.0" -p:SourceRevisionId="$(git -C "$R" rev-parse "$rev")" \
-  -p:PublishProfile=brain -p:UseArtifactsOutput=true -p:ArtifactsPath="$B/art" -v q -nologo
+  -p:UseArtifactsOutput=true -p:ArtifactsPath="$B/art" -v q -nologo
 
+"$dotnet" build "$B/src/src/Sts2Ai.Mod" -c Release "$@"
 # One after another, as they share the libraries' outputs.
 for rid in $rids; do
-  "$dotnet" publish "$project" "$@" -r "$rid" -o "$B/$rid"
+  "$dotnet" publish "$B/src/src/Sts2Ai.SimWorker" "$@" -p:PublishProfile=brain -r "$rid" -o "$B/brain/$rid"
 done
 
-launcher=$B/osx-arm64/Sts2Ai.SimWorker
+launcher=$B/brain/osx-arm64/Sts2Ai.SimWorker
 ssh "$MAC" 'f=$(mktemp) && cat > "$f" && codesign -s - -f "$f" && codesign -v "$f" && cat "$f" && rm -f "$f"' \
   < "$launcher" > "$launcher.signed"
 mv "$launcher.signed" "$launcher"
 chmod +x "$launcher"
-du -sh "$B"/*-*/
+
+champion=$B/src/eval/champions/sl.json
+mkdir -p "$B/brain/nets"
+for net in $(grep -o 'weights/all/[^"]*\.json' "$champion" | sort -u); do
+  cp "$B/src/$net" "$B/brain/nets/$(basename "$net" .json).net"
+done
+sed 's#weights/all/\([^"]*\)\.json#nets/\1.net#g' "$champion" > "$B/brain/champion.json"
+
+rm -rf "$R/out"
+mkdir -p "$I"
+cp "$B/art/bin/Sts2Ai.Mod/release/Sts2Ai.dll" "$B/art/bin/Sts2Ai.Mod/release/Sts2Ai.json" "$I/"
+mv "$B/brain" "$I/brain"
+echo "$rev" > "$R/out/commit"
+du -sh "$I" "$I"/brain/*/

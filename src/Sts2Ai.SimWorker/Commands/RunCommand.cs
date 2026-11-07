@@ -27,15 +27,13 @@ internal static class RunCommand
     private static readonly Option<bool> Obs = Opt.Of("--obs", false, "prints every observation");
     private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
     private static readonly Option<string?> Records = Opt.Maybe<string?>("--records", "writes one run record per line (docs: evaluation/metrics §8)");
-    private static readonly Option<string?> Brain = Opt.Maybe<string?>("--brain",
-        "plays against the brain listening at this socket instead, which picks the champion (--check replays against it too)");
     private static readonly ChampionArgs Champion = new(file: true);
     private static readonly LoadoutArgs Loadout = new();
 
     public static Command Command()
     {
         var command = Opt.Command("run", "whole runs through Harness",
-            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records, Brain], Champion.Options, Loadout.Options);
+            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records], Champion.Options, Loadout.Options);
         command.SetAction(Cli.Game(Run));
         return command;
     }
@@ -59,20 +57,16 @@ internal static class RunCommand
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;
         using var records = r.GetValue(Records) is { } recordsPath ? new StreamWriter(recordsPath) { AutoFlush = true } : null;
         bool log = check || logFile != null;
-        var brainPath = r.GetValue(Brain);
-        if (brainPath != null && Champion.Champion.Append(Log).FirstOrDefault(o => r.GetResult(o) is { Implicit: false }) is { } brainOption)
-            throw new CliException($"{brainOption.Name} belongs to the brain at {brainPath}, not to this host");
-        var champion = brainPath == null ? Champion.Read(r) : null;
-        if (champion?.Policy == "plan" && env != PlayEnvironment.SL) throw new CliException("plan plays in SL only (--env SL)");
-        using var workerPool = champion?.Pool();
-        var harness = champion?.Harness(workerPool, log);
-        using var remote = brainPath == null ? null : new BrainConnection(brainPath);
-        // --check plays each seed again over the wire: to the same brain if it is remote, else to a brain server in
-        // this process with the same champion, whose decision log is compared too.
+        var champion = Champion.Read(r);
+        if (champion.Policy == "plan" && env != PlayEnvironment.SL) throw new CliException("plan plays in SL only (--env SL)");
+        using var workerPool = champion.Pool();
+        var harness = champion.Harness(workerPool, log);
+        // --check plays each seed again over the wire, to a brain server in this process with the same champion, whose
+        // decision log is compared too.
         Dispatcher? served = null;
-        using var checkWire = check && remote == null ? BrainConnection.InProcess(new BrainServer(hello => served = harness!(hello))) : null;
-        Func<Hello, IRunBrain> firstBrain = remote != null ? hello => WireBrain.Start(remote.Wire, hello) : hello => new LocalBrain(harness!(hello));
-        IRunBrain secondBrain(Hello hello) => WireBrain.Start((remote ?? checkWire)!.Wire, hello);
+        using var checkWire = check ? BrainConnection.InProcess(new BrainServer(hello => served = harness(hello))) : null;
+        Func<Hello, IRunBrain> firstBrain = hello => new LocalBrain(harness(hello));
+        IRunBrain secondBrain(Hello hello) => WireBrain.Start(checkWire!.Wire, hello);
         string character = Loadout.Character(r);
         var loadout = Loadout.Loadout(r);
 
@@ -82,7 +76,7 @@ internal static class RunCommand
         var failures = new Dictionary<string, int>();
         int mismatches = 0, gameErrors = 0, nodes = 0, nodesExact = 0, replans = 0;
         var cloneMs = new List<double>();
-        Console.WriteLine($"run: {n} runs in {env}, {(champion?.ToString() ?? $"brain at {brainPath}")}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
+        Console.WriteLine($"run: {n} runs in {env}, {champion}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
@@ -111,7 +105,7 @@ internal static class RunCommand
             if (cloneMismatch != null) Console.WriteLine($"  CLONE MISMATCH: {cloneMismatch}");
             var second = PlayRun(pump, setup, env, secondBrain, maxDecisions, trace: false, observe, printObservations: false);
             workerPool?.TakeGameErrors();
-            var secondLog = served?.Log ?? second.Log;
+            var secondLog = served!.Log;
             // Each decision's observation is shown before its action, so they pair up by index.
             int diverged = Enumerable.Range(0, Math.Min(first.Trace.Count, second.Trace.Count)).FirstOrDefault(k =>
                 first.Trace[k] != second.Trace[k] || first.Observations.ElementAtOrDefault(k) != second.Observations.ElementAtOrDefault(k), -1);
@@ -142,7 +136,7 @@ internal static class RunCommand
                                      $"{nodesExact}/{nodes} nodes replay exactly from their checkpoint" +
                                      (cloneMs.Count > 0 ? $" ({cloneMs.Average():F0} ms each, max {cloneMs.Max():F0})" : ""));
         Console.WriteLine($"game Log.Error lines: {gameErrors}" + (workerPool != null ? $"; worker restarts: {workerPool.Restarts}" : "") +
-                          (champion?.Policy == "plan" ? $"; replans: {replans}" : ""));
+                          (champion.Policy == "plan" ? $"; replans: {replans}" : ""));
         return failures.Count == 0 && mismatches == 0 && nodesExact == nodes && gameErrors == 0 ? 0 : 1;
     }
 

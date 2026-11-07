@@ -1,6 +1,4 @@
 using System.Net.Sockets;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
@@ -12,53 +10,14 @@ namespace Sts2Ai.Harness;
 /// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
 /// observation that does not match its hash) gets an error instead, and the host ends the run. SL node messages get
 /// no answer: one that Harness refuses fails the run's next decision. <paramref name="ended"/> gets each run's Harness at
-/// run_end. <paramref name="log"/> gets the hosts it drops; <paramref name="received"/> every message a host sends.
+/// run_end; <paramref name="received"/> every message a host sends.
 /// </summary>
-public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, Dispatcher, RunEnd>? ended = null, ILogger? log = null,
+public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, Dispatcher, RunEnd>? ended = null,
     Action<WireMessage>? received = null)
 {
-    private readonly ILogger _log = log ?? NullLogger.Instance;
-
-    /// <summary>Serves the hosts that connect to the Unix socket at <paramref name="path"/>, one at a time, forever.</summary>
-    public void Listen(string path)
-    {
-        using var listener = Bind(path);
-        while (true)
-        {
-            using var socket = listener.Accept();
-            try
-            {
-                Serve(socket);
-            }
-            catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException)
-            {
-                _log.LogWarning("dropped a host: {Type}: {Message}", e.GetType().Name, e.Message);
-            }
-        }
-    }
-
-    /// <summary>
-    /// A Unix socket listening at <paramref name="path"/> (a leading NUL names an abstract socket, which has no file).
-    /// A socket file left by a brain that is gone is replaced; one a brain still listens on is not.
-    /// </summary>
+    /// <summary>A Unix socket listening at the abstract name <paramref name="path"/> (a leading NUL: no file), for a host in the same process.</summary>
     public static Socket Bind(string path)
     {
-        if (!path.StartsWith('\0') && File.Exists(path))
-        {
-            using var probe = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            try
-            {
-                probe.Connect(new UnixDomainSocketEndPoint(path));
-                throw new IOException($"a brain is already listening at {path}");
-            }
-            catch (SocketException)
-            {
-                File.Delete(path);
-            }
-        }
-        // Only the user may connect.
-        else if (!path.StartsWith('\0') && !OperatingSystem.IsWindows())
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         listener.Bind(new UnixDomainSocketEndPoint(path));
         listener.Listen();

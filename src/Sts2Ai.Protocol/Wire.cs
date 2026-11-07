@@ -90,25 +90,15 @@ public sealed record NodeCheckpoint(int NodeIndex, string Checkpoint) : WireMess
 /// </summary>
 public sealed record NodeAction(int NodeIndex, int Seq, string Action) : WireMessage;
 
-/// <summary>Where the brain listens and the mod connects, unless told otherwise.</summary>
-public static class BrainSocket
-{
-    /// <summary>
-    /// Under the user's state directory: Steam runs the game in a container that shares the home directory with the
-    /// host, but not $XDG_RUNTIME_DIR.
-    /// </summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetEnvironmentVariable("XDG_STATE_HOME") is { Length: > 0 } state
-            ? state
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "state"),
-        "sts2ai", "brain.sock");
-}
 
-/// <summary>One end of a connection: messages as JSON lines.</summary>
-public sealed class WireStream(Stream stream)
+/// <summary>One end of a connection: messages as JSON lines, read from <paramref name="input"/> and written to <paramref name="output"/>.</summary>
+public sealed class WireStream(Stream input, Stream output)
 {
-    private readonly StreamReader _reader = new(stream, new UTF8Encoding(false));
-    private readonly StreamWriter _writer = new(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+    private readonly StreamReader _reader = new(input, new UTF8Encoding(false));
+    private readonly StreamWriter _writer = new(output, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+
+    /// <summary>Both ways on one stream, such as a socket's.</summary>
+    public WireStream(Stream stream) : this(stream, stream) { }
 
     public void Send(WireMessage message) => _writer.WriteLine(ProtocolJson.Serialize(message));
 

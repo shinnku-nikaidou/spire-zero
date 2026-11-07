@@ -1,4 +1,6 @@
 tmp/
+# The Workshop item distro/build.sh makes, ready to upload
+out/
 .env
 
 # .NET build output

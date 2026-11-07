@@ -187,7 +187,7 @@ internal sealed class Assist(BrainLink link, string gameVersion)
         string champion = _champion ?? "—";
         if (!_connected)
         {
-            if (_down == null) panel.Show(champion, L10n.T("starting"), _env, L10n.T("Connecting to the brain"), BrainSocket.DefaultPath);
+            if (_down == null) panel.Show(champion, L10n.T("starting"), _env, L10n.T("Connecting to the brain"), link.Where);
             else panel.Show(champion, L10n.T("offline"), _env, L10n.T("No brain running"), L10n.T("{0} · trying again every 2 s", _down), Tone.Warn);
             return;
         }

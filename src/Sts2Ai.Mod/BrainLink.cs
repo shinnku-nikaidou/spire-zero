@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using System.Net.Sockets;
+using System.ComponentModel;
 using System.Text.Json;
 using Sts2Ai.Protocol;
 
@@ -16,24 +16,30 @@ internal sealed record LinkDown(string Reason) : LinkEvent;
 internal sealed record Received(WireMessage Message) : LinkEvent;
 
 /// <summary>
-/// The mod's end of the wire (docs: mod/loop §1, §8). All socket IO runs on background threads, which never touch the game:
+/// The mod's end of the wire (docs: mod/loop §1, §8). All IO runs on background threads, which never touch the game:
 /// they send what the main thread queues and queue what arrives, and <see cref="Inbox"/> is drained once per frame.
-/// The link connects to the brain, and reconnects whenever the connection drops.
+/// The brain is the one shipped beside the mod (<see cref="BundledBrain"/>), a child process of the game; the link starts
+/// it again whenever it ends or the connection drops.
 /// </summary>
 internal sealed class BrainLink
 {
     private static readonly TimeSpan Retry = TimeSpan.FromSeconds(2);
 
-    private readonly string _path;
+    private readonly BundledBrain? _bundled;
     private volatile BlockingCollection<WireMessage>? _outbox;
 
-    private BrainLink(string path) => _path = path;
+    private BrainLink(BundledBrain? bundled) => _bundled = bundled;
 
     public ConcurrentQueue<LinkEvent> Inbox { get; } = new();
 
-    public static BrainLink Start(string path)
+    /// <summary>Where the brain comes from, as the panel says it while connecting.</summary>
+    public string Where => _bundled?.Launcher ?? NoBrain;
+
+    private static string NoBrain => "no brain ships with this copy of the mod for this platform";
+
+    public static BrainLink Start(BundledBrain? bundled)
     {
-        var link = new BrainLink(path);
+        var link = new BrainLink(bundled);
         new Thread(link.Run) { IsBackground = true, Name = "sts2ai brain link" }.Start();
         return link;
     }
@@ -58,32 +64,35 @@ internal sealed class BrainLink
             string reason;
             try
             {
-                using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-                socket.Connect(new UnixDomainSocketEndPoint(_path));
-                using var stream = new NetworkStream(socket);
-                var wire = new WireStream(stream);
-                var outbox = new BlockingCollection<WireMessage>();
-                var writer = new Thread(() => Write(wire, outbox)) { IsBackground = true, Name = "sts2ai brain writer" };
-                _outbox = outbox;
-                Inbox.Enqueue(new LinkUp());
-                writer.Start();
-                try
-                {
-                    while (wire.Receive() is { } message) Inbox.Enqueue(new Received(message));
-                    reason = "the brain closed the connection";
-                }
-                finally
-                {
-                    _outbox = null;
-                    outbox.CompleteAdding();
-                }
+                reason = _bundled?.Run(Session) ?? NoBrain;
             }
-            catch (Exception e) when (e is SocketException or IOException or InvalidDataException or JsonException or NotSupportedException)
+            catch (Exception e) when (e is IOException or InvalidDataException or JsonException or NotSupportedException or Win32Exception
+                                          or UnauthorizedAccessException)
             {
                 reason = e.Message;
             }
             Inbox.Enqueue(new LinkDown(reason));
             Thread.Sleep(Retry);
+        }
+    }
+
+    /// <summary>Talks to the brain until it closes the connection; why it ended.</summary>
+    private string Session(WireStream wire)
+    {
+        var outbox = new BlockingCollection<WireMessage>();
+        var writer = new Thread(() => Write(wire, outbox)) { IsBackground = true, Name = "sts2ai brain writer" };
+        _outbox = outbox;
+        Inbox.Enqueue(new LinkUp());
+        writer.Start();
+        try
+        {
+            while (wire.Receive() is { } message) Inbox.Enqueue(new Received(message));
+            return "the brain closed the connection";
+        }
+        finally
+        {
+            _outbox = null;
+            outbox.CompleteAdding();
         }
     }
 
