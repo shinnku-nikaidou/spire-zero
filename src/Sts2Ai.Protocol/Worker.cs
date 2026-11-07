@@ -93,5 +93,7 @@ public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut
 /// <param name="Key">The state's observation and its full hidden state, hashed: states with the same key are the same
 /// state. 0 once the combat is over.</param>
 /// <param name="History">The record of enemy moves up to the state.</param>
+/// <param name="Win">The chance to win the combat from the state, as the leaf predicts it: 1 or 0 once the combat is over.</param>
+/// <param name="Hp">The HP held at the end of a win from the state, as the leaf expects it: the HP held once the combat is won.</param>
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, double Value, double Bound,
-    ulong Key, IReadOnlyList<EnemyTurns> History);
+    ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);

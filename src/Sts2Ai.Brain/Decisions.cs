@@ -91,6 +91,10 @@ public interface IChoicePolicy
 
     /// <summary>Whether the last answer was drawn by self-play exploration (<see cref="Uniform"/>); never by default.</summary>
     bool Explored => false;
+
+    /// <summary>The answers the last one was chosen among, as "pick:I,J", each with its value, the chosen first and
+    /// then best first; none by default.</summary>
+    IReadOnlyList<Candidate> Scored => [];
 }
 
 /// <summary>Picks an out-of-combat action (map, rewards, events, shop, rest, treasure, card rewards, bundles).</summary>
@@ -104,4 +108,8 @@ public interface IMacroPolicy
 
     /// <summary>As <see cref="IChoicePolicy.Explored"/>.</summary>
     bool Explored => false;
+
+    /// <summary>The legal actions the last answer was chosen among, each with its value, the chosen first and then
+    /// best first; none by default.</summary>
+    IReadOnlyList<Candidate> Scored => [];
 }

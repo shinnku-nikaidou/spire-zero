@@ -24,6 +24,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
     /// <summary>Whether the last answer was drawn by <c>uniform</c>.</summary>
     public bool Explored { get; private set; }
 
+    /// <summary>The options of the last answer, valued by V, to show; none when it was drawn by <c>uniform</c>.</summary>
+    public IReadOnlyList<Candidate> Scored { get; private set; } = [];
+
     /// <summary>
     /// Whether the last macro answer opens a card prompt it was valued by (smithing, a removal). Stopping that prompt
     /// without a pick would not leave things as they are: it cancels back to the screen that opened it, where the same
@@ -58,6 +61,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
         }
         else pick = Best(values);
         var option = options[pick];
+        Scored = Explored ? [] : Rank(options.Select(o => (o.Action, o.Value)), option.Action);
         _opened = option.Opens;
         if (decision.Clone != null) _decided.Add(CloneSearch.Key(Root(decision)));
         return option.Action;
@@ -198,6 +202,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
         int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
         _opened = false;
         Explored = false;
+        Scored = [];
         if (Even(choice, min) is { } even)
         {
             Explored = true;
@@ -206,6 +211,8 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
         var picks = new List<int>();
         var state = run;
         double current = value.Value(state);
+        // The first step's answers, one pick or none, to show beside the answer.
+        var first = new List<(string Action, double Value)>();
         while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
             var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
@@ -213,13 +220,21 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
                 .ToList();
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
             if (picks.Count >= min) options.Insert(0, (-1, current, state));
+            if (picks.Count == 0) first.AddRange(options.Select(o => (CloneSearch.Pick(o.Index < 0 ? [] : [o.Index]), o.Value)));
             var taken = options[Best(options.Select(o => o.Value).ToList())];
             if (taken.Index < 0) break;
             picks.Add(taken.Index);
             (current, state) = (taken.Value, taken.State);
         }
+        string answer = CloneSearch.Pick(picks);
+        Scored = Rank(first.Where(o => o.Action != answer).Append((answer, current)), answer);
         return picks;
     }
+
+    /// <summary>Options to show: the chosen first, then best first; a value that is not finite (a state already decided) left out.</summary>
+    private static List<Candidate> Rank(IEnumerable<(string Action, double Value)> options, string chosen) =>
+        options.Where(o => double.IsFinite(o.Value)).OrderByDescending(o => o.Action == chosen).ThenByDescending(o => o.Value)
+            .Select(o => new Candidate(o.Action, o.Value, 0, 1)).ToList();
 
     /// <summary>
     /// SL: a card prompt answered on the node's clone. A local search over the answers the prompt accepts, from no pick
@@ -235,6 +250,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
         _opened = false;
         Explored = false;
         var root = new Afterstate(obs.Run, Surfaces.CardChoice, obs.Screen, []);
+        Scored = [];
         if (Even(choice, min) is { } even)
         {
             _decided.Add(CloneSearch.Key(root));
@@ -267,6 +283,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
             counts = taken;
         }
         _decided.Add(CloneSearch.Key(root));
+        Scored = Rank(worth.Select(kv => (kv.Key, kv.Value)), Answer(counts));
         return counts.SelectMany((n, g) => groups[g].Take(n)).Order().ToList();
     }
 

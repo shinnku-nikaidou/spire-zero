@@ -51,10 +51,14 @@ public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = nu
 /// In SL the host also sends the current node's checkpoint and each decision taken in it (docs: protocol/wire §6), which
 /// make the node's clone for the combat brain and, with <paramref name="clones"/>, for the macro side, which gets it
 /// opened at each of its decisions (<see cref="MacroDecision.Clone"/>). In NoSL they are refused.
+///
+/// With <paramref name="explain"/> (a host that shows the answers: the mod), each map option the macro brain scored
+/// carries the route it would take after it.
 /// </summary>
 public sealed class Dispatcher(
     string runId, PlayEnvironment env, CombatRoute combat, Route<IChoicePolicy> combatChoices, Route<IMacroPolicy> macro,
-    Route<IChoicePolicy> macroChoices, bool log = false, Func<NodeClone, IMacroClone>? clones = null) : ICombatPolicy, IChoicePolicy, IMacroPolicy
+    Route<IChoicePolicy> macroChoices, bool log = false, Func<NodeClone, IMacroClone>? clones = null, bool explain = false)
+    : ICombatPolicy, IChoicePolicy, IMacroPolicy
 {
     /// <summary>Every surface outside combat that has a route (docs: harness/routing §3).</summary>
     public static readonly IReadOnlySet<string> MacroSurfaces = new HashSet<string>
@@ -134,7 +138,9 @@ public sealed class Dispatcher(
         _pick = null;
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!choice.Accepts(picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", picks)}], which the prompt does not accept");
-        Last = new(route.Brain);
+        // The answer search played its line with was not chosen by the prompt's policy, so its options do not show.
+        IReadOnlyList<Candidate> scored = choice.Context.InCombat ? [] : route.Policy.Scored;
+        Last = new(route.Brain, null, scored.Count > 0 ? scored : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.CardChoice, route.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
                 string.Join(",", picks), null, null, null, seed, ms, Explored: Mark(route.Policy.Explored)));
@@ -151,7 +157,9 @@ public sealed class Dispatcher(
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(action)) throw new InvalidOperationException($"{macro.Brain} chose {action} on {decision.Surface}, which is not legal");
         var plan = macro.Policy.Plan(decision, action);
-        Last = new(macro.Brain, plan.Count > 0 ? plan : null);
+        var scored = macro.Policy.Scored;
+        if (explain && decision.Surface == Surfaces.Map) scored = scored.Select(c => c with { Plan = macro.Policy.Plan(decision, c.Action) }).ToList();
+        Last = new(macro.Brain, plan.Count > 0 ? plan : null, scored.Count > 0 ? scored : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 action, Last.Plan, null, null, seed, ms, RunView: decision.Observation.Run,

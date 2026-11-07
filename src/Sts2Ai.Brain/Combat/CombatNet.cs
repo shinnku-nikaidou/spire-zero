@@ -71,17 +71,28 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return net;
     }
 
-    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
+    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history) => Outcome(status, obs, history).Value;
+
+    /// <summary>The value, the chance not to die (1 less the death class), and the HP held at a win: the HP share now
+    /// less each win bucket's middle, weighted by the buckets.</summary>
+    public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
     {
-        if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs);
+        if (status != CombatStatus.InProgress)
+            return new(LeafValue.Of(status, obs), status == CombatStatus.Won ? 1 : 0, status == CombatStatus.Won ? obs.Player.Hp : 0);
         var outputs = Graph(obs, history);
         var (outcome, potionUsed) = (outputs[0], outputs[1]);
         double share = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
-        double width = (1 - _file.LossMin) / _file.Buckets, value = 0;
+        double width = (1 - _file.LossMin) / _file.Buckets, value = 0, left = 0;
         for (int k = 1; k < outcome.Length; k++)
-            value += outcome[k] * (LeafValue.WinBase + LeafValue.PerHp * (share - (_file.LossMin + (k - 0.5) * width)));
+        {
+            double after = share - (_file.LossMin + (k - 0.5) * width);
+            value += outcome[k] * (LeafValue.WinBase + LeafValue.PerHp * after);
+            left += outcome[k] * after;
+        }
         double kept = obs.Potions.OfType<string>().Sum(p => 1.0 - potionUsed[Index("potions", p)]);
-        return value + (1 - outcome[0]) * LeafValue.PerPotion * kept;
+        double win = 1 - outcome[0];
+        double hp = win > 0 ? Math.Clamp(left / win, 0, 1) * obs.Player.MaxHp : 0;
+        return new(value + win * LeafValue.PerPotion * kept, win, hp);
     }
 
     public void Dispose() => _session.Dispose();

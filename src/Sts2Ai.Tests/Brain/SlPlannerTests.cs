@@ -142,6 +142,22 @@ public class SlPlannerTests
     }
 
     [Fact]
+    public void EachCandidateShowsHowItsBestLineEnds()
+    {
+        var world = new Toy();
+        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+
+        var chosen = plan.Result.Candidates[0];
+        Assert.Equal(plan.Result.First.ToString(), chosen.Action);
+        Assert.Equal(1, chosen.Win);
+        var end = new Toy();
+        foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) end.Execute(step);
+        Assert.Equal(end.Observe().Player.Hp, chosen.Hp);
+        // Every line here reaches the combat's end: a win with its HP, or a loss.
+        Assert.All(plan.Result.Candidates, c => Assert.True(c.Win == 1 ? c.Hp > 0 : c is { Win: 0, Hp: 0 }));
+    }
+
+    [Fact]
     public void ANarrowBeamProvesNothingAndStillPlaysItsLine()
     {
         var world = new Toy();

@@ -38,7 +38,7 @@ internal static class BrainCommand
         using var workerPool = champion.Pool() ?? sl.Pool();
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;
         using var wireFile = r.GetValue(Wire) is { } wirePath ? new StreamWriter(wirePath) { AutoFlush = true } : null;
-        var (noSlHarness, slHarness) = (champion.Harness(workerPool, logFile != null), sl.Harness(workerPool, logFile != null));
+        var (noSlHarness, slHarness) = (champion.Harness(workerPool, logFile != null, explain: true), sl.Harness(workerPool, logFile != null, explain: true));
         var server = new BrainServer(hello => (hello.Env == nameof(PlayEnvironment.SL) ? slHarness : noSlHarness)(hello),
             log: Logs.Factory.CreateLogger("brain"), received: wireFile == null ? null : message => wireFile.WriteLine(ProtocolJson.Serialize(message)),
             ended: (hello, harness, end) =>

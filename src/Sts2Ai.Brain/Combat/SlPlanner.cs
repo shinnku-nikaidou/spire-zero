@@ -104,7 +104,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
     {
         /// <summary>The dive's turns, each searched in full (every end, no floor), by the path to the turn's state.</summary>
         private readonly Dictionary<string, TurnSearch> _searched = [];
-        private readonly Dictionary<CombatAction, double> _byFirst = [];
+        private readonly Dictionary<CombatAction, TurnEnd> _byFirst = [];
         private TurnEnd? _best;
         private double _bestFrom = double.NegativeInfinity, _bound = double.PositiveInfinity;
         private List<TurnEnd> _left = [];
@@ -202,8 +202,9 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             // The best end of the combat, unless the search stopped first at a state the leaf values higher.
             var pick = (_left.Count > 0 && (_best == null || _left[0].Value > _best.Value) ? _left[0] : _best)
                 ?? throw new InvalidOperationException("the planner found no line");
-            var candidates = _byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value)
-                .Select(kv => new Candidate(kv.Key.ToString(), kv.Value, 0, 1, [Math.Round(kv.Value, 4)])).ToList();
+            var candidates = _byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value.Value)
+                .Select(kv => new Candidate(kv.Key.ToString(), kv.Value.Value, 0, 1, [Math.Round(kv.Value.Value, 4)],
+                    Math.Round(kv.Value.Win, 4), Math.Round(kv.Value.Hp, 1))).ToList();
             // A loss the search may have been wrong about is played replan turns at a time; a proved one has nothing better.
             int played = pick.Actions.Count;
             if (pick.Status == CombatStatus.Lost && !Proved && replan > 0)
@@ -219,10 +220,10 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         }
     }
 
-    /// <summary>Keeps the best value of the lines that start with each first action, for the candidates.</summary>
-    private static void Note(Dictionary<CombatAction, double> byFirst, TurnEnd line)
+    /// <summary>Keeps the best of the lines that start with each first action, for the candidates.</summary>
+    private static void Note(Dictionary<CombatAction, TurnEnd> byFirst, TurnEnd line)
     {
-        if (!byFirst.TryGetValue(line.Actions[0], out var value) || line.Value > value) byFirst[line.Actions[0]] = line.Value;
+        if (!byFirst.TryGetValue(line.Actions[0], out var best) || line.Value > best.Value) byFirst[line.Actions[0]] = line;
     }
 
     /// <summary>
@@ -356,10 +357,10 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             var record = new MoveRecord(history);
             if (going) record.Witness(obs);
             var turns = record.History;
-            double value = leaf.Value(status, obs, turns);
-            double bound = going ? leaf.Value(CombatStatus.Won, obs, turns) : value;
+            var outcome = leaf.Outcome(status, obs, turns);
+            double bound = going ? leaf.Value(CombatStatus.Won, obs, turns) : outcome.Value;
             ulong key = going ? Mix(ProtocolJson.Hash(obs), world.HiddenKey()) : 0;
-            return new([.. actions], [.. hashes], status, value, bound, key, turns);
+            return new([.. actions], [.. hashes], status, outcome.Value, bound, key, turns, outcome.Win, outcome.Hp);
         }
 
         private void Add(TurnEnd end)

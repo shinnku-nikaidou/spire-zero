@@ -59,7 +59,13 @@ public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 /// </summary>
 public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
 
-/// <summary>An action that search scored: its mean value over the worlds, the 95% confidence half-width, and how many worlds.</summary>
+/// <summary>An action that search scored: its mean value over the worlds, the 95% confidence half-width, and how many worlds.
+/// On a macro decision or a card prompt outside combat the value is V's, the chance to win the run.</summary>
 /// <param name="Values">Its value in each world, in world order, to 4 decimals: the Q that ExIt's targets are made of
 /// (docs: learning/loop §5).</param>
-public sealed record Candidate(string Action, double Value, double Ci, int Samples, IReadOnlyList<double>? Values = null);
+/// <param name="Win">The SL planner's: the chance to win the combat on the action's best line, 1 or 0 where the line
+/// reaches the combat's end, else the combat net's.</param>
+/// <param name="Hp">With <paramref name="Win"/>: the HP held at the end of a win on that line, expected where it is the net's.</param>
+/// <param name="Plan">On the map, the route to the boss after the action, as the macro brain would take it.</param>
+public sealed record Candidate(string Action, double Value, double Ci, int Samples, IReadOnlyList<double>? Values = null,
+    double? Win = null, double? Hp = null, IReadOnlyList<string>? Plan = null);

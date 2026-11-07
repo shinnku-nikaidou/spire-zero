@@ -9,7 +9,17 @@ namespace Sts2Ai.Brain;
 public interface ICombatLeaf
 {
     double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
+
+    /// <summary>
+    /// The value with how the combat is expected to end, from one evaluation: what the SL planner keeps for each line, to
+    /// show. A leaf that predicts no ending gives a combat still going no chance to win.
+    /// </summary>
+    LeafOutcome Outcome(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history) =>
+        new(Value(status, obs, history), status == CombatStatus.Won ? 1 : 0, status == CombatStatus.Won ? obs.Player.Hp : 0);
 }
+
+/// <summary>A leaf's value of a state, the chance to win the combat from it, and the HP held at the end of a win.</summary>
+public readonly record struct LeafOutcome(double Value, double Win, double Hp);
 
 /// <summary>
 /// What a finished combat is worth (docs: combat-brain/leaf §2): a loss nothing, a win by the HP share and the potions
