@@ -54,6 +54,9 @@ internal sealed class BundledBrain
         start.Environment["STS2_BIN_DIR"] = _gameBin;
         // As every launcher of the simulator sets it (docs: simulator/reference §1).
         start.Environment["DOTNET_ReadyToRun"] = "0";
+        // The game's Sentry extension sets this in the game's process. Inherited, it makes sts2.dll's module
+        // initializer in each search worker load that extension outside Godot and call into it: SIGSEGV at boot.
+        start.Environment.Remove("SENTRY_GODOT_LIB_PATH");
 
         // The game session's first brain starts the log; a brain started again after it ended adds to it.
         Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
