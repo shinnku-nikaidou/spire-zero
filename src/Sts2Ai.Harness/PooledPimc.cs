@@ -19,7 +19,7 @@ public sealed class PooledPimc(WorkerPool pool)
         IReadOnlyList<EnemyTurns> history, RunView run)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
-        return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) => [.. pool.Map([.. Enumerable.Range(0, budget.Worlds)
+        return PimcBrain.Root(PimcBrain.Ordered(legal, observation), budget, (first, nodes) => [.. pool.Map([.. Enumerable.Range(0, budget.Worlds)
                 .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes, history, run))])
             .Select(r => r.Lines!)]);
     }

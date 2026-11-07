@@ -82,9 +82,10 @@ public sealed class TurnPlan(bool all = true)
 
 /// <summary>
 /// Combat brain v0 (docs: pimc/search §1): PIMC over K worlds. In each world, a depth-first search over this turn's
-/// action sequences, with ending the turn an option at every step; states are merged by their observation and the
-/// world's hidden state (<see cref="ICombatWorld.HiddenKey"/>), so each transposition is expanded once, and two lines
-/// that look the same but drew or rolled differently are not. A line ends when the turn ends (after the enemies'
+/// action sequences, with ending the turn an option at every step, one action of each that are the same
+/// (<see cref="Ordered"/>); states are merged by <see cref="StateKey"/> and the world's hidden state
+/// (<see cref="ICombatWorld.HiddenKey"/>), so each transposition is expanded once, and two lines that look the same but
+/// drew or rolled differently are not. A line ends when the turn ends (after the enemies'
 /// turn) or the combat does, and is scored by the leaf (<see cref="ICombatLeaf"/>, the combat net). Each first action is scored
 /// by its best line in each world, then averaged over the worlds; never the max across worlds, which is strategy fusion. Only the first action is played: the
 /// caller asks again after it. In SL there is one exact world, so this is plain planning.
@@ -107,7 +108,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         if (legal.Count == 1) return Only(legal[0]);
         var live = worlds.Worlds(budget.Worlds, seed);
         var roots = live.Select(w => w.Snapshot()).ToList();
-        return Root(Ordered(legal), budget, (first, nodes) => [.. live.Select((w, k) =>
+        return Root(Ordered(legal, observation), budget, (first, nodes) => [.. live.Select((w, k) =>
         {
             w.Restore(roots[k]);
             return SearchWorld(w, observation.Round, first, nodes, history);
@@ -141,9 +142,43 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         return new(pick, [.. line.Actions.Skip(1)], [.. order.Select(a => candidates[a])], agreed ? line.Hashes!.Skip(1).ToList() : null, Repeats: line.Repeats);
     }
 
-    /// <summary>Search order: ending the turn first (the fallback a spent budget leaves), then cards in hand order, then potions.</summary>
-    public static List<CombatAction> Ordered(IReadOnlyList<CombatAction> legal) =>
-        [.. legal.OrderBy(a => a.Kind switch { CombatActionKind.EndTurn => 0, CombatActionKind.PlayCard => 1, _ => 2 })];
+    /// <summary>
+    /// The actions search tries at <paramref name="obs"/>, in its order: ending the turn first (the fallback a spent budget
+    /// leaves), then cards in hand order, then potions. Of the actions that are the same (docs: combat-brain/shared §5),
+    /// only the first: the same card, by <see cref="ProtocolJson.CardKey"/>, or the same potion, at the same target.
+    /// </summary>
+    public static List<CombatAction> Ordered(IReadOnlyList<CombatAction> legal, CombatObservation obs)
+    {
+        var seen = new HashSet<string>();
+        return [.. legal.OrderBy(a => a.Kind switch { CombatActionKind.EndTurn => 0, CombatActionKind.PlayCard => 1, _ => 2 })
+            .Where(a => seen.Add(Same(a, obs)))];
+    }
+
+    /// <summary>What makes an action the one it is to search: its card's key or its potion's id, its target, its answer.</summary>
+    private static string Same(CombatAction action, CombatObservation obs) => action.Kind switch
+    {
+        CombatActionKind.PlayCard => "play " + ProtocolJson.CardKey(obs.Hand.FirstOrDefault(c => c.Uid == action.Card)
+            ?? throw new InvalidOperationException($"{action} plays a card not in the hand")) + $" {action.Target}@{action.Pick}",
+        CombatActionKind.UsePotion => $"potion {obs.Potions[action.PotionSlot!.Value]} {action.Target}@{action.Pick}",
+        _ => action.ToString(),
+    };
+
+    /// <summary>
+    /// A state as search tells states apart (docs: combat-brain/shared §5), with the world's hidden key beside it: the
+    /// observation with the hand, the discard and the exhaust pile each as a multiset of cards, with no uids, and the
+    /// potions as a multiset, so the same cards played in another order, or another copy of one, meet as one state. The
+    /// draw pile is one already; its order is in the hidden key.
+    /// </summary>
+    public static ulong StateKey(CombatObservation obs) => ProtocolJson.Hash(obs with
+    {
+        Hand = Cards(obs.Hand),
+        Discard = Cards(obs.Discard),
+        Exhaust = Cards(obs.Exhaust),
+        Potions = [.. obs.Potions.OrderBy(p => p == null).ThenBy(p => p, StringComparer.Ordinal)],
+    });
+
+    private static List<CardView> Cards(IReadOnlyList<CardView> cards) =>
+        [.. cards.Select(c => c.Uid == null ? c : c with { Uid = null }).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)];
 
     /// <param name="lines">The action's best line in each world.</param>
     private static Candidate Summarize(string action, IReadOnlyList<PlannedLine> lines)
@@ -248,14 +283,14 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         private PlannedLine Best(CombatObservation obs)
         {
             ulong hash = ProtocolJson.Hash(obs);
-            var key = (hash, world.HiddenKey());
+            var key = (StateKey(obs), world.HiddenKey());
             if (_memo.TryGetValue(key, out var known)) return known;
             var here = world.Snapshot();
             _path.Add(new(obs, _actions.Count, here));
             var best = new PlannedLine(double.NegativeInfinity, [], 0, []);
             bool moved = false;
             int cuts = _cuts;
-            var todo = Ordered(world.Legal());
+            var todo = Ordered(world.Legal(), obs);
             for (int i = 0; i < todo.Count; i++)
             {
                 var action = todo[i];

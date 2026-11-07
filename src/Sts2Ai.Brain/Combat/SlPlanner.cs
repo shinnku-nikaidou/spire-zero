@@ -52,10 +52,11 @@ public sealed class SlRoute(Budget budget)
 /// over worlds; it is planned once and then played as planned (Harness's route follows it with a <see cref="TurnPlan"/>).
 ///
 /// A beam over turns. Each state kept is searched to the end of its turn (<see cref="SearchTurn"/>): a depth-first
-/// search over the turn's actions, ending the turn an option at every step, with transpositions merged by the
-/// observation and the world's full hidden state (<see cref="ICombatWorld.HiddenKey"/>). Each distinct state where the
-/// turn ends, after the enemies' turn, is scored by the leaf (<see cref="ICombatLeaf"/>, which reads the observation
-/// alone); the best <see cref="Budget.Beam"/> of all the states' ends, distinct by key, are the next turn's states. A
+/// search over the turn's actions, ending the turn an option at every step, one action of each that are the same and
+/// transpositions merged by the state as search tells it (<see cref="PimcBrain.StateKey"/>: the same cards in another
+/// order, or another copy of one, are one state) and the world's full hidden state (<see cref="ICombatWorld.HiddenKey"/>).
+/// Each distinct state where the turn ends, after the enemies' turn, is scored by the leaf (<see cref="ICombatLeaf"/>,
+/// which reads the observation alone); the best <see cref="Budget.Beam"/> of all the states' ends, distinct by key, are the next turn's states. A
 /// line that ends the combat is scored by the leaf at its end. The beam stops when no state is left, or after
 /// <see cref="MaxTurns"/> turns. Nothing else prunes it: the leaf prices a win by V on the run the combat leaves, which a
 /// line can still raise past winning now with what the state holds (max HP or gold gained, a card grown, a potion drunk
@@ -272,7 +273,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         /// <summary>
         /// Tries every action from the current state, where the player is still on this turn, once per state, each
         /// followed by the other answers of the first card prompt it met. At the turn's start the nodes are shared over
-        /// the legal actions, each with an even share plus what the ones before it left, so every first action is looked
+        /// the actions (<see cref="PimcBrain.Ordered"/>), each with an even share plus what the ones before it left, so every first action is looked
         /// at however many states the turn has, and an action's share goes evenly to its prompt's answers; below, a
         /// subtree spends its share depth first. A move back to a state on the path with something gained is a cycle,
         /// which would spend every node on its own repeats: it goes to <see cref="LoopSearch"/> instead of down.
@@ -280,11 +281,11 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private void Visit(CombatObservation obs, bool root = false)
         {
             ulong hash = ProtocolJson.Hash(obs);
-            if (!_seen.Add((hash, world.HiddenKey()))) return;
+            if (!_seen.Add((PimcBrain.StateKey(obs), world.HiddenKey()))) return;
             var here = world.Snapshot();
             _path.Add(new(obs, _actions.Count, here));
             bool moved = false;
-            var todo = PimcBrain.Ordered(world.Legal());
+            var todo = PimcBrain.Ordered(world.Legal(), obs);
             // At the turn's start: the first action's nodes, from and to, and which of its answers is played, of how many.
             int legal = todo.Count, first = 0, from = 0, to = 0, answer = 0, answers = 0;
             for (int i = 0; i < todo.Count; i++)
@@ -326,7 +327,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             if (going) record.Witness(obs);
             var turns = record.History;
             var outcome = leaf.Outcome(status, obs, world.Run(), turns);
-            ulong key = going ? Mix(ProtocolJson.Hash(obs), world.HiddenKey()) : 0;
+            ulong key = going ? Mix(PimcBrain.StateKey(obs), world.HiddenKey()) : 0;
             return new([.. actions], [.. hashes], status, outcome.Value, key, turns, outcome.Win, outcome.Hp);
         }
 

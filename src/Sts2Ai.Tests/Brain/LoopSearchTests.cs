@@ -148,7 +148,8 @@ public class LoopSearchTests
 
     private static CombatDecisionResult Pimc(int worlds, Func<Loop> make)
     {
-        var first = PimcBrain.Ordered(make().Legal());
+        var world = make();
+        var first = PimcBrain.Ordered(world.Legal(), world.Observe());
         var budget = new Budget(Worlds: worlds, NodesPerWorld: 100);
         return PimcBrain.Root(first, budget, (f, nodes) => [.. Enumerable.Range(0, worlds).Select(_ => new PimcBrain(Leaf).SearchWorld(make(), 1, f, nodes))]);
     }

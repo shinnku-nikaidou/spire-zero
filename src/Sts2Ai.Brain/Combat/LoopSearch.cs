@@ -233,11 +233,11 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         void Note(CombatStatus status, CombatObservation obs) => ends.Add(end(status, obs, line.Actions, line.Hashes));
         void Go(CombatObservation obs, List<LoopPoint> stack)
         {
-            if (!seen.Add((ProtocolJson.Hash(obs), world.HiddenKey()))) return;
+            if (!seen.Add((PimcBrain.StateKey(obs), world.HiddenKey()))) return;
             var here = world.Snapshot();
             List<LoopPoint> path = [.. stack, new(obs, line.Actions.Count, here)];
             bool moved = false;
-            var todo = PimcBrain.Ordered(world.Legal()).Where(a => !banned.Contains(a)).ToList();
+            var todo = PimcBrain.Ordered(world.Legal(), obs).Where(a => !banned.Contains(a)).ToList();
             for (int i = 0; i < todo.Count; i++)
             {
                 var action = todo[i];
