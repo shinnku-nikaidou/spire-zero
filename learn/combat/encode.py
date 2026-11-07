@@ -5,7 +5,7 @@ keywords, what Tinker Time made of it, its enchantment spent) and pile; the play
 round; each power's id and amount (and the stacks, kept or stolen card and moved number a tooltip states apart); each
 enemy's id, HP, block, how many rounds it has shown, its powers, and its intents now and in its last LAGS rounds (type,
 damage per hit, total damage), one lying dead until it revives included; the relics with their counters and statuses,
-potions, orbs, allies, the encounter and the character; the ascension, orb slots and gold. A card's current cost, damage,
+potions, orbs, allies, the encounter and the character; the ascension, orb slots, potion slots and gold. A card's current cost, damage,
 block, calculated number, replays and star cost, its modifiers' amounts and each orb's passive, evoke and place in the
 queue are state too; no other numbers printed on cards or relics: what matters in them is the net's to learn. Numbers
 are scaled to about one (HP / 100, block / 20, …) and capped at ±CAP; CombatNet scales them the same way.
@@ -137,9 +137,14 @@ def creature(c: dict) -> list[float]:
 
 
 def relic_values(r: dict) -> list[float]:
-    """A relic's counter / 10 (0 when none shows), whether one shows, whether it is melted."""
+    """A relic's counter / 10 (0 when none shows), whether one shows, whether it is melted (V reads them so too)."""
     counter = r.get("counter")
     return [cap(counter / 10) if counter is not None else 0.0, float(counter is not None), float(bool(r.get("melted")))]
+
+
+def relic_status(r: dict) -> str:
+    """A relic's status: the game's when not the normal one, else Spent for a once-a-combat effect used, else Normal."""
+    return r.get("status") or ("Spent" if r.get("spent") else "Normal")
 
 
 def tokens(obs: dict, history: list) -> dict:
@@ -167,7 +172,7 @@ def tokens(obs: dict, history: list) -> dict:
         "enemies": enemies,
         "relics": [r["id"] + (":used" if r.get("used_up") else "") for r in obs["relics"]],
         "relic_values": [relic_values(r) for r in obs["relics"]],
-        "relic_status": [r.get("status") or ("Spent" if r.get("spent") else "Normal") for r in obs["relics"]],
+        "relic_status": [relic_status(r) for r in obs["relics"]],
         "potions": [p for p in obs["potions"] if p is not None],
         "context": [
             "character:" + pl["character"],
@@ -182,5 +187,5 @@ def tokens(obs: dict, history: list) -> dict:
             for a in obs["allies"]
             if a["hp"] > 0
         ],
-        "extra": [obs["ascension"] / 10, pl["orb_slots"] / 10, cap(pl["gold"] / 100)],
+        "extra": [obs["ascension"] / 10, pl["orb_slots"] / 10, cap(pl["gold"] / 100), len(obs["potions"]) / 10],
     }

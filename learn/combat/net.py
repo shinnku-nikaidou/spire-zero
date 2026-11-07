@@ -1,13 +1,14 @@
 """The combat net (docs: combat-brain/network): set encoders over the cards (per pile), the powers, the enemies (each with its
 intent slots) and the allies, bags of ids for the rest, then a body and two heads (combat/data.py): the chance of each ending and,
-after a win, each potion's of being gone.
+after a win in each group of buckets (data.POTION_GROUPS), each potion's of being gone, so the leaf weighs the HP lost and
+the potions drunk together.
 """
 
 import torch
 from torch import nn
 
 from combat import encode
-from combat.data import BUCKETS, LOSS_MIN, WIDTH
+from combat.data import BUCKETS, LOSS_MIN, POTION_GROUPS, WIDTH, potion_group
 
 
 def padded(rows, device):
@@ -157,7 +158,7 @@ def mlp(*sizes):
 class Net(nn.Module):
     DIM, HIDDEN, BODY = 64, 128, 512
     SUM_SCALE = 1 / 8  # each pile's sum, scaled to about a mean's size
-    N_PLAYER, N_EXTRA = 8, 3
+    N_PLAYER, N_EXTRA = 8, 4
     CLOSED = -1e4  # the logit of an ending the state rules out: no weight in float32's softmax
 
     def __init__(self, sizes: dict[str, int]):
@@ -201,7 +202,7 @@ class Net(nn.Module):
         width = len(encode.PILES) * h + self.N_PLAYER + h + 2 * h + 4 * d + h + self.N_EXTRA
         self.body = mlp(width, self.BODY, self.BODY)
         self.head = nn.Linear(self.BODY, 1 + BUCKETS)
-        self.potion_head = nn.Linear(self.BODY, sizes["potions"])
+        self.potion_head = nn.Linear(self.BODY, POTION_GROUPS * sizes["potions"])
         self.register_buffer("bottoms", LOSS_MIN + torch.arange(BUCKETS) * WIDTH)
 
     def power_sum(self, ids, amounts, mask, stacks=None, cards=None, card_mask=None, details=None):
@@ -213,10 +214,11 @@ class Net(nn.Module):
         return (self.power_phi(x) * mask[..., None]).sum(-2)
 
     def forward(self, *inputs):
-        """Per sample, the logits of the ending classes and, after a win, of each potion id being gone (inputs as
-        encode.INPUTS)."""
+        """Per sample, the logits of the ending classes and, after a win in each group of buckets, of each potion id
+        being gone, as (sample, group, potion) (inputs as encode.INPUTS)."""
         z = self.encode(*inputs)
-        return self.reachable(self.head(z), inputs[encode.INPUTS.index("player")]), self.potion_head(z)
+        potions = self.potion_head(z).view(z.shape[0], POTION_GROUPS, -1)
+        return self.reachable(self.head(z), inputs[encode.INPUTS.index("player")]), potions
 
     def reachable(self, logits, player):
         """The ending classes with the buckets the HP held rules out closed: a win ends with an HP share in (0, 1], so
@@ -309,7 +311,8 @@ class Net(nn.Module):
 
 
 class Outcome(nn.Module):
-    """The net as ONNX holds it: the chance of each ending, and after a win each potion id's of being gone."""
+    """The net as ONNX holds it: the chance of each ending, and after a win in each group of buckets each potion id's of
+    being gone."""
 
     def __init__(self, net):
         super().__init__()
@@ -323,11 +326,16 @@ class Outcome(nn.Module):
 POTION_WEIGHT = 1
 
 
+def won_group(potions, target):
+    """Per sample, the potion logits of the group of buckets its ending falls in (group 0 for a death, which no loss reads)."""
+    return potions[torch.arange(potions.shape[0], device=potions.device), potion_group(target.clamp_min(1))]
+
+
 def loss(out, b: Batch):
     """Per sample, the endings' cross-entropy plus, after a win, POTION_WEIGHT times each held potion's cross-entropy of
-    being gone."""
+    being gone, by the potion head of the win's group of buckets."""
     logits, potions = out
     won = (b.target > 0).float()
-    gone = nn.functional.binary_cross_entropy_with_logits(potions.gather(1, b.potions), b.potion_used, reduction="none")
+    gone = nn.functional.binary_cross_entropy_with_logits(won_group(potions, b.target).gather(1, b.potions), b.potion_used, reduction="none")
     used = (gone * b.potion_mask).sum(1)
     return nn.functional.cross_entropy(logits, b.target, reduction="none") + POTION_WEIGHT * won * used

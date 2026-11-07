@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 import common
 import game_ids
 from combat import data, encode, export, train
-from combat.net import Batch, Net, loss
+from combat.net import Batch, Net, loss, won_group
 
 
 def obs(round=1, hp=50, **over):
@@ -104,7 +104,7 @@ def test_a_win_cannot_end_in_a_bucket_the_hp_held_rules_out():
     b = Batch(samples, index, "cpu")
     net = Net({t: len(i) for t, i in tables.items()})
     logits, potions = net(*b.inputs())
-    assert potions.shape[1] == len(tables["potions"])
+    assert potions.shape[1:] == (data.POTION_GROUPS, len(tables["potions"]))
     closed = logits < Net.CLOSED / 2
     assert not closed.gather(1, b.target[:, None]).any()  # the truth stays open
     assert not closed[:, 0].any()  # a death always can be
@@ -154,6 +154,14 @@ def test_the_potion_loss_reads_held_potions_after_wins_only():
     ces = torch.nn.functional.cross_entropy(out[0], b.target, reduction="none")
     assert per[0] > ces[0]
     assert per[1:].tolist() == pytest.approx(ces[1:].tolist())
+
+
+def test_a_wins_potion_chances_are_those_of_its_group_of_buckets():
+    potions = torch.arange(2 * data.POTION_GROUPS * 3).float().view(2, data.POTION_GROUPS, 3)
+    got = won_group(potions, torch.tensor([1, data.BUCKETS]))
+    assert got.tolist() == [potions[0, 0].tolist(), potions[1, data.POTION_GROUPS - 1].tolist()]
+    per = data.BUCKETS // data.POTION_GROUPS
+    assert [data.potion_group(c) for c in (1, per, per + 1, data.BUCKETS)] == [0, 0, 1, data.POTION_GROUPS - 1]
 
 
 def write_runs(tmp_path, env="SL", runs=10):
@@ -207,7 +215,7 @@ def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
         feed = {name: x.numpy() for name, x in zip(encode.INPUTS, b.inputs(), strict=True)}
         outcome, used = ReferenceEvaluator(graph).run(None, feed)
         assert outcome[0].tolist() == pytest.approx(test["outcome"], abs=1e-5)
-        assert used[0].tolist() == pytest.approx(test["potion_used"], abs=1e-5)
+        assert used[0].flatten().tolist() == pytest.approx(test["potion_used"], abs=1e-5)
         assert 0 <= min(test["potion_used"]) and max(test["potion_used"]) <= 1
 
 

@@ -37,7 +37,7 @@ AXES = {
     **{x: {0: "batch", 1: "allies", 2: "ally_powers"} for x in ("ally_powers", "ally_power_amounts", "ally_power_mask")},
     **{x: {0: "batch", 1: "relics"} for x in ("relic_values", "relic_status")},
     "extra": {0: "batch"},
-    **{x: {0: "batch"} for x in ("outcome", "potion_used")},
+    **{x: {0: "batch"} for x in ("outcome", "potion_used")},  # potion_used: (batch, group, potion)
 }  # fmt: skip
 
 
@@ -89,6 +89,7 @@ def net_file(name, env, tables, model, kept, report, seed) -> dict:
         "env": env,
         "buckets": data.BUCKETS,
         "loss_min": data.LOSS_MIN,
+        "potion_groups": data.POTION_GROUPS,
         "lags": encode.LAGS,
         "vocab": tables,
         "fit": report,
@@ -98,7 +99,7 @@ def net_file(name, env, tables, model, kept, report, seed) -> dict:
                 "obs": s["obs"],
                 "history": s["history"],
                 "outcome": [float(v) for v in probs[k]],
-                "potion_used": [float(v) for v in gone[k]],
+                "potion_used": [float(v) for v in gone[k].flatten()],
             }
             for k, s in enumerate(picks)
         ],

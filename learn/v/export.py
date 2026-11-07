@@ -25,6 +25,8 @@ def onnx_bytes(model, example: Batch) -> bytes:
     axes["numbers"] = {0: "batch", 1: "cards"}
     for t, mask in encode.BAGS.items():
         axes[t] = axes[mask] = {0: "batch", 1: t}
+    axes["relic_values"] = axes["relic_status"] = {0: "batch", 1: "relics"}
+    axes["held"] = axes["held_mask"] = {0: "batch", 1: "held"}
     axes |= {"state": {0: "batch"}, "hazards": {0: "batch"}}
     out = io.BytesIO()
     torch.onnx.export(

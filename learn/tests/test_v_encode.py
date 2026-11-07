@@ -34,6 +34,21 @@ def test_cards_are_ids_and_their_modifiers_amounts_and_relics_potions_and_contex
     assert t["context"] == ["character:SILENT", "act:OVERGROWTH", "boss:B", "ancient:NEOW"]
 
 
+def test_relics_read_their_counters_statuses_and_the_cards_they_keep_as_the_combat_net_reads_them():
+    v = view()
+    v["relics"] = [
+        {"id": "RING", "counter": 25, "status": "Disabled"},
+        {"id": "VASE", "used_up": True, "melted": True},
+        {"id": "PAELS_TOOTH", "counter": 0, "cards": ["STRIKE", "DASH"]},
+        {"id": "PUZZLE", "spent": True},
+    ]
+    t = encode.tokens(v)
+    assert t["relics"] == ["RING", "VASE:used", "PAELS_TOOTH", "PUZZLE"]
+    assert t["relic_values"] == [[2.5, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]]
+    assert t["relic_status"] == ["Disabled", "Normal", "Normal", "Spent"]
+    assert t["held"] == ["STRIKE", "DASH"]
+
+
 def test_a_card_reads_its_keywords_and_what_tinker_time_made_of_it():
     v = view()
     v["deck"] = [{"id": "MAD_SCIENCE", "keywords": ["Ethereal"], "tinker": {"type": "Skill", "rider": "Wisdom"}}]

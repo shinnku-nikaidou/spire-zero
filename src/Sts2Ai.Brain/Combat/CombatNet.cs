@@ -15,20 +15,23 @@ public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTur
 /// <param name="Lags">How many earlier rounds of each enemy's intents the net reads.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
 /// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="CombatNet"/> feeds them, outputs the
-/// chance of each ending (those the HP held rules out at 0) and each potion id's chance of being gone after a win.</param>
+/// chance of each ending (those the HP held rules out at 0) and, after a win in each group of buckets, each potion id's
+/// chance of being gone, group by group.</param>
+/// <param name="PotionGroups">How many groups of buckets in a row the potion chances are given for, the buckets split evenly.</param>
 public sealed record CombatNetFile(
     string Name, int Buckets, double LossMin, int Lags, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
-    IReadOnlyList<CombatNetTest> Tests);
+    IReadOnlyList<CombatNetTest> Tests, int PotionGroups);
 
 /// <summary>
 /// The learned combat leaf (docs: combat-brain/leaf §3): from a round's start, how the combat ends under the policy that
 /// played the training games. The net, run by ONNX Runtime, reads the cards in each pile, the player, each enemy with
-/// its intents now and in its last rounds, the powers, relics, potions, orbs and allies, the encounter and the character. It predicts
+/// its intents now and in its last rounds, the powers, relics, potions and potion slots, orbs and allies, the encounter and the character. It predicts
 /// what is still to come: the HP share lost from here and which potions go, so the HP and potions held now count in full.
 /// Every ending is priced by V (<see cref="IRunValue"/>) on the run it leaves: a death ends the run, a win is worth V of
 /// the run then. That run is the one the leaf state stands in (<see cref="ICombatWorld.Run"/>: the deck, relics, max HP
 /// and gold as the combat has left them so far) with the HP the bucket leaves and the potions kept, each subset of those
-/// held by the chance the net gives it (each potion's taken apart from the others'). A finished combat is V of its run.
+/// held by the chance the net gives it after a win in the bucket's group (each potion's taken apart from the others'). A
+/// finished combat is V of its run.
 /// This class only turns a state into the graph's inputs, and its endings into runs for V.
 /// </summary>
 public sealed class CombatNet : ICombatLeaf, IDisposable
@@ -92,7 +95,10 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         var outputs = Graph(obs, history);
         var (outcome, potionUsed) = (outputs[0], outputs[1]);
         var held = Enumerable.Range(0, run.Potions.Count).Where(s => run.Potions[s] != null).ToList();
-        var kept = held.Select(s => 1.0 - potionUsed[Index("potions", run.Potions[s]!)]).ToList();
+        // Each held potion's chance of being kept after a win in each group of buckets.
+        int table = _file.Vocab["potions"].Count, perGroup = _file.Buckets / _file.PotionGroups;
+        var kept = Enumerable.Range(0, _file.PotionGroups)
+            .Select(g => held.Select(s => 1.0 - potionUsed[g * table + (int)Index("potions", run.Potions[s]!)]).ToList()).ToList();
         int maxHp = Math.Max(1, run.MaxHp);
         double share = run.Hp / (double)maxHp;
         double width = (1 - _file.LossMin) / _file.Buckets, value = 0, left = 0;
@@ -108,7 +114,8 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
                 for (int i = 0; i < held.Count; i++)
                 {
                     bool keeps = (mask >> i & 1) == 1;
-                    chance *= keeps ? kept[i] : 1 - kept[i];
+                    double keptHere = kept[(k - 1) / perGroup][i];
+                    chance *= keeps ? keptHere : 1 - keptHere;
                     if (!keeps) potions[held[i]] = null;
                 }
                 if (chance > 0) value += chance * Price(run, key, hp, potions);
@@ -157,10 +164,11 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         }
         inputs.Add(NamedOnnxValue.CreateFromTensor("orb_values", orbValues));
         inputs.AddRange(Allies([.. obs.Allies.Where(a => a.Hp > 0)]));
-        var extra = new DenseTensor<float>([1, 3]);
+        var extra = new DenseTensor<float>([1, 4]);
         extra[0, 0] = (float)(obs.Ascension / 10.0);
         extra[0, 1] = (float)(pl.OrbSlots / 10.0);
         extra[0, 2] = Capped(pl.Gold / 100.0);
+        extra[0, 3] = (float)(obs.Potions.Count / 10.0);
         inputs.Add(NamedOnnxValue.CreateFromTensor("extra", extra));
         using var results = _session.Run(inputs);
         return [.. results.Select(r => r.AsEnumerable<float>().ToArray())];
@@ -339,20 +347,28 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         ];
     }
 
-    /// <summary>The relics' numbers, in the relics' order: counter / 10 (0 when none shows), whether one shows, whether the
-    /// relic is melted, and its status (when none, Spent for a once-a-combat effect used, else Normal).</summary>
-    private NamedOnnxValue[] RelicNumbers(IReadOnlyList<RelicView> relics)
+    /// <summary>The relics' numbers and statuses (<see cref="RelicValues"/>, <see cref="RelicStatus"/>), in the relics' order.</summary>
+    private NamedOnnxValue[] RelicNumbers(IReadOnlyList<RelicView> relics) => RelicInputs(relics, status => Index("relic_status", status));
+
+    /// <summary>A relic's numbers as both nets read them: counter / 10 (0 when none shows), whether one shows, whether it is melted.</summary>
+    public static float[] RelicValues(RelicView relic) =>
+        [relic.Counter is { } counter ? Capped(counter / 10.0) : 0, relic.Counter != null ? 1 : 0, relic.Melted == true ? 1 : 0];
+
+    /// <summary>A relic's status as both nets read it: the game's when not the normal one, else Spent for a once-a-combat
+    /// effect used, else Normal.</summary>
+    public static string RelicStatus(RelicView relic) => relic.Status ?? (relic.Spent == true ? "Spent" : "Normal");
+
+    /// <summary>The graph inputs relic_values and relic_status of <paramref name="relics"/>, a status's row by <paramref name="index"/>.</summary>
+    public static NamedOnnxValue[] RelicInputs(IReadOnlyList<RelicView> relics, Func<string, long> index)
     {
         int n = Math.Max(1, relics.Count);
         var values = new DenseTensor<float>([1, n, 3]);
         var status = new DenseTensor<long>([1, n]);
         for (int k = 0; k < relics.Count; k++)
         {
-            var relic = relics[k];
-            values[0, k, 0] = relic.Counter is { } counter ? Capped(counter / 10.0) : 0;
-            values[0, k, 1] = relic.Counter != null ? 1 : 0;
-            values[0, k, 2] = relic.Melted == true ? 1 : 0;
-            status[0, k] = Index("relic_status", relic.Status ?? (relic.Spent == true ? "Spent" : "Normal"));
+            var numbers = RelicValues(relics[k]);
+            for (int j = 0; j < numbers.Length; j++) values[0, k, j] = numbers[j];
+            status[0, k] = index(RelicStatus(relics[k]));
         }
         return [NamedOnnxValue.CreateFromTensor("relic_values", values), NamedOnnxValue.CreateFromTensor("relic_status", status)];
     }

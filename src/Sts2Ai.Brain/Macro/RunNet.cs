@@ -23,13 +23,14 @@ public sealed record NetState(IReadOnlyList<string> Names, IReadOnlyList<double>
 /// <paramref name="Amounts"/>), its enchantment's and affliction's amounts / 10, and its damage / 20 and block / 20.</summary>
 public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers, IReadOnlyList<double> Amounts, double Damage, double Block);
 
-/// <summary>A run's ids as the net reads them.</summary>
+/// <summary>A run's ids as the net reads them; <paramref name="Held"/>, the cards its relics keep, by id.</summary>
 public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<string> Relics, IReadOnlyList<string> Potions,
-    IReadOnlyList<string> Context, IReadOnlyList<string> Map);
+    IReadOnlyList<string> Context, IReadOnlyList<string> Map, IReadOnlyList<string> Held);
 
 /// <summary>
-/// V (docs: macro-brain/network), run by ONNX Runtime: a net over the run's cards, relics, potions and context, the map
-/// points still reachable and the run's numbers (<see cref="NetFile.State"/>), read as <c>learn/v/encode.py</c> reads them.
+/// V (docs: macro-brain/network), run by ONNX Runtime: a net over the run's cards, relics (with their numbers and
+/// statuses, as the combat net reads them, and the cards they keep), potions and context, the map points still reachable
+/// and the run's numbers (<see cref="NetFile.State"/>), read as <c>learn/v/encode.py</c> reads them.
 /// The graph gives one hazard per floor: the chance to die on that floor if still alive there. The value is the chance to
 /// survive every floor from the current one on, the chance to win. This class only turns a run into the graph's inputs.
 /// </summary>
@@ -91,7 +92,8 @@ public sealed class RunNet : IRunValue, IDisposable
     /// The net's tokens of a run, which <c>learn/v/encode.py</c> reads the same way: each card with its modifiers
     /// (enchantment, affliction, keywords, what Tinker Time made of it), its modifiers' amounts, its damage (Osty's for an
     /// Osty attack) and block, which only its own id's row reads; each relic, with ":used"
-    /// once used up; each potion; the context: character, act, boss(es) and the act's ancient; and the map (<see cref="MapTokens"/>).
+    /// once used up; each potion; the context: character, act, boss(es) and the act's ancient; the map (<see cref="MapTokens"/>);
+    /// and the cards the relics keep (Pael's Tooth's). The relics' numbers and statuses are fed apart (<see cref="CombatNet.RelicInputs"/>).
     /// </summary>
     public static RunTokens Tokens(RunView run)
     {
@@ -103,7 +105,8 @@ public sealed class RunNet : IRunValue, IDisposable
             [.. run.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id)],
             [.. run.Potions.OfType<string>()],
             context,
-            MapTokens(run.Map));
+            MapTokens(run.Map),
+            [.. run.Relics.SelectMany(r => r.Cards ?? [])]);
 
         static CardToken Card(CardView card)
         {
@@ -211,12 +214,17 @@ public sealed class RunNet : IRunValue, IDisposable
         for (int i = 0; i < _file.State.Names.Count; i++)
             values[0, i] = (float)((StateValue(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);
         inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
+        inputs.AddRange(CombatNet.RelicInputs(run.Relics, status => Index("relic_status", status)));
+        inputs.AddRange(Bag("cards", "held", "held_mask", tokens.Held));
         using var results = _session.Run(inputs);
         return [.. results[0].AsEnumerable<float>()];
     }
 
     /// <summary>A token table's ids as the graph takes them: padded to at least 1, with their mask.</summary>
-    private NamedOnnxValue[] Bag(string table, string mask, IReadOnlyList<string> ids)
+    private NamedOnnxValue[] Bag(string table, string mask, IReadOnlyList<string> ids) => Bag(table, table, mask, ids);
+
+    /// <summary>Ids of <paramref name="table"/> as the graph's input <paramref name="input"/>, padded to at least 1, with their mask.</summary>
+    private NamedOnnxValue[] Bag(string table, string input, string mask, IReadOnlyList<string> ids)
     {
         int n = Math.Max(1, ids.Count);
         var index = new DenseTensor<long>([1, n]);
@@ -226,7 +234,7 @@ public sealed class RunNet : IRunValue, IDisposable
             index[0, k] = Index(table, ids[k]);
             present[0, k] = 1;
         }
-        return [NamedOnnxValue.CreateFromTensor(table, index), NamedOnnxValue.CreateFromTensor(mask, present)];
+        return [NamedOnnxValue.CreateFromTensor(input, index), NamedOnnxValue.CreateFromTensor(mask, present)];
     }
 
     private static double Capped(double x) => Math.Clamp(x, -Cap, Cap);

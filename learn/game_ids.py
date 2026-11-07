@@ -48,11 +48,12 @@ def combat_tables() -> dict[str, list[str]]:
 
 
 def macro_tables() -> dict[str, list[str]]:
-    """V's."""
+    """V's; a relic's status as the combat net's."""
     return {
         "cards": table(IDS["cards"]),
         "modifiers": table(modifiers()),
         "relics": table(relics()),
+        "relic_status": table([*IDS["relic_status"], "Spent"]),
         "potions": table(IDS["potions"]),
         "context": table(
             [f"act:{i}" for i in IDS["acts"]]

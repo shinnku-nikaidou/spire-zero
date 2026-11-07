@@ -1,5 +1,5 @@
-"""V's net (docs: macro-brain/network §1): a set encoder over the deck, bags of ids for the rest, the raw state, then a body and
-two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the chance to
+"""V's net (docs: macro-brain/network §1): a set encoder over the deck, bags of ids for the rest (each relic with its
+numbers and status), the cards the relics keep through the deck's card encoder, the raw state, then a body and two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the chance to
 survive every floor. The second head learns the next combats' HP costs, which shapes the body only: it is not in the net
 file.
 """
@@ -49,6 +49,13 @@ class Batch:
             )
         x = torch.tensor([s["state"] for s in samples], dtype=torch.float64)
         feed["state"] = ((x - mean) / std).float().to(device)
+        r_n = max(1, max(len(s["tokens"]["relics"]) for s in samples))
+        relic_values, relic_status = torch.zeros(n, r_n, 3), torch.zeros(n, r_n, dtype=torch.long)
+        for b, s in enumerate(samples):
+            for k, (v, status) in enumerate(zip(s["tokens"]["relic_values"], s["tokens"]["relic_status"], strict=True)):
+                relic_values[b, k], relic_status[b, k] = torch.tensor(v), index["relic_status"].get(status, 0)
+        feed["relic_values"], feed["relic_status"] = relic_values.to(device), relic_status.to(device)
+        feed["held"], feed["held_mask"] = padded([[index["cards"].get(c, 0) for c in s["tokens"]["held"]] for s in samples], device)
         self.feed = feed
 
         g = torch.arange(floors)
@@ -90,11 +97,15 @@ class Net(nn.Module):
         self.modifiers = nn.Embedding(sizes["modifiers"], d)
         self.mod_amount = nn.Embedding(sizes["modifiers"], d)
         self.bags = nn.ModuleDict({t: nn.Embedding(sizes[t], d) for t in encode.BAGS})
+        self.relic_counter = nn.Embedding(sizes["relics"], d)
+        self.relic_status = nn.Embedding(sizes["relic_status"], d)
         for e in (self.cards, self.card_up, self.card_damage, self.card_block, self.modifiers, self.mod_amount,
-                  *self.bags.values()):  # fmt: skip
+                  *self.bags.values(), self.relic_counter, self.relic_status):  # fmt: skip
             nn.init.normal_(e.weight, std=0.1)
+        self.melted = nn.Parameter(torch.randn(d) * 0.1)
         self.phi = nn.Sequential(nn.Linear(d, h), nn.ReLU(), nn.Linear(h, h), nn.ReLU())
-        width = 2 * h + len(encode.BAGS) * d + len(encode.STATE)
+        # the deck's mean and scaled sum, the bags, the state, then the kept cards' sum
+        width = 2 * h + len(encode.BAGS) * d + len(encode.STATE) + h
         self.body = nn.Sequential(nn.Linear(width, self.BODY), nn.ReLU(), nn.Linear(self.BODY, self.BODY), nn.ReLU())
         self.head = nn.Linear(self.BODY, floors)
         self.aux_head = nn.Linear(self.BODY, AUX)
@@ -109,8 +120,9 @@ class Net(nn.Module):
         return self.head(x), self.aux_head(x)
 
     def encoded(self, cards, ups, card_mask, mods, mod_mask, mod_amounts, numbers, *rest):
-        """The body's output, which both heads read."""
-        *bags, state = rest
+        """The body's output, which both heads read. A relic reads as the combat net reads it: its id's row, its counter
+        times its id's counter row, the melted row if melted, and its status's row."""
+        *bags, state, relic_values, relic_status, held, held_mask = rest
         x = (
             self.cards(cards)
             + ups[..., None] * self.card_up(cards)
@@ -122,8 +134,17 @@ class Net(nn.Module):
         total = h.sum(1)
         parts = [total / card_mask.sum(1, keepdim=True).clamp_min(1), total * self.SUM_SCALE]
         for t, (ids, mask) in zip(encode.BAGS, zip(bags[::2], bags[1::2], strict=True), strict=True):
-            parts.append((self.bags[t](ids) * mask[..., None]).sum(1))
-        return self.body(torch.cat(parts + [state], 1))
+            rows = self.bags[t](ids)
+            if t == "relics":
+                rows = (
+                    rows
+                    + relic_values[..., 0:1] * self.relic_counter(ids)
+                    + relic_values[..., 2:3] * self.melted
+                    + self.relic_status(relic_status)
+                )
+            parts.append((rows * mask[..., None]).sum(1))
+        kept = (self.phi(self.cards(held)) * held_mask[..., None]).sum(1)
+        return self.body(torch.cat(parts + [state, kept], 1))
 
 
 class Hazards(nn.Module):

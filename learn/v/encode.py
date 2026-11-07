@@ -1,13 +1,14 @@
 """A run view as V reads it (docs: macro-brain/network §2), the one spec RunNet follows (Tokens, MapTokens, state).
 
 Only what the run is and its raw state: each card's id, upgrade level and modifiers (enchantment, affliction, keywords,
-what Tinker Time made of it); the relics and potions; the
-character, act, boss(es) and ancient; the map points the player can still reach, each as its type and how many floors
-ahead it is; and six numbers (floor, HP, max HP, gold, ascension, potion slots). A card's numbers come in only through
-its own id's row: its enchantment's and affliction's amounts / 10 (each modifier's), its damage / 20 (Osty's for an Osty
-attack) and block / 20 (each card's), scaled as the combat net scales them, for what a run grows on a card and its id
-cannot say (Goopy's amount, The Scythe's damage, Genetic Algorithm's block); no relic numbers and nothing computed from
-the deck: what matters in them is the net's to learn.
+what Tinker Time made of it); the relics, each with its counter, whether it is melted and its status, as the combat net
+reads them (combat/encode.py), and the cards a relic keeps (Pael's Tooth's, by id); the potions; the character, act,
+boss(es) and ancient; the map points the player can still reach, each as its type and how many floors ahead it is; and
+six numbers (floor, HP, max HP, gold, ascension, potion slots). A card's numbers come in only through its own id's row:
+its enchantment's and affliction's amounts / 10 (each modifier's), its damage / 20 (Osty's for an Osty attack) and
+block / 20 (each card's), scaled as the combat net scales them, for what a run grows on a card and its id cannot say
+(Goopy's amount, The Scythe's damage, Genetic Algorithm's block); nothing computed from the deck: what matters in it is
+the net's to learn.
 
 A map move's afterstate (`entered`) is marked as entering the point: the point's own type reads as "Elite+0", so that
 options with the same points after them differ. The mark never stands for a room already played: a run view logged in
@@ -15,15 +16,17 @@ a room comes after its combat, and a run that died there logs none, so a net tha
 would take entering an elite for having beaten it.
 """
 
+from combat.encode import relic_status, relic_values
+
 MAX_UP = 3  # RunNet.MaxUp: upgrade levels above this read as this one
 CAP = 10.0  # RunNet.Cap: a card's numbers, scaled, are capped at ±CAP
-TABLES = ["cards", "modifiers", "relics", "potions", "context", "map"]
+TABLES = ["cards", "modifiers", "relics", "potions", "context", "map", "relic_status"]
 BAGS = {"relics": "relic_mask", "potions": "potion_mask", "context": "context_mask", "map": "map_mask"}  # and masks
 STATE = ["floor", "hp", "max_hp", "gold", "ascension", "potion_slots"]
 # The ONNX graph's inputs, in order (RunNet feeds them by these names).
 INPUTS = [
     "cards", "ups", "card_mask", "mods", "mod_mask", "mod_amounts", "numbers",
-    *(x for bag in BAGS.items() for x in bag), "state",
+    *(x for bag in BAGS.items() for x in bag), "state", "relic_values", "relic_status", "held", "held_mask",
 ]  # fmt: skip
 
 
@@ -89,7 +92,8 @@ def card(c: dict) -> tuple:
 
 
 def tokens(view: dict) -> dict:
-    """The ids the net reads: cards as card() gives them, and the bags of BAGS."""
+    """The ids the net reads: cards as card() gives them, the bags of BAGS, each relic's numbers and status in the
+    relics' order, and the cards the relics keep."""
     cards = [card(c) for c in view["deck"]]
     m = view["map"]
     context = ["character:" + view["character"], "act:" + view["act_id"], "boss:" + m["boss"]]
@@ -100,6 +104,9 @@ def tokens(view: dict) -> dict:
     return {
         "cards": cards,
         "relics": [r["id"] + (":used" if r.get("used_up") else "") for r in view["relics"]],
+        "relic_values": [relic_values(r) for r in view["relics"]],
+        "relic_status": [relic_status(r) for r in view["relics"]],
+        "held": [c for r in view["relics"] for c in r.get("cards") or []],
         "potions": [p for p in view["potions"] if p is not None],
         "context": context,
         "map": map_tokens(m),

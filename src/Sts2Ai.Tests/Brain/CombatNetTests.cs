@@ -50,8 +50,10 @@ public class CombatNetTests
     {
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
         using var net = CombatNet.Load(file, new Linear());
-        Assert.Equal(file.Vocab["potions"].Count, file.Tests[0].PotionUsed.Count);
+        Assert.Equal(file.PotionGroups * file.Vocab["potions"].Count, file.Tests[0].PotionUsed.Count);
         Assert.True(file.Tests[0].PotionUsed.Distinct().Count() > 1);
+        // Each group of buckets has potion chances of its own.
+        Assert.NotEqual(file.Tests[0].PotionUsed.Take(file.Vocab["potions"].Count), file.Tests[0].PotionUsed.Skip(file.Vocab["potions"].Count).Take(file.Vocab["potions"].Count));
         Assert.Contains(file.Tests, t => t.Obs.Potions.Count(p => p == "FIRE_POTION") == 2);
         Assert.Contains(file.Tests, t => t.Obs.Allies.Any(a => a.Hp > 0));
         Assert.Contains(file.Tests, t => t.Obs.Player.Orbs.Count > 10);
@@ -71,14 +73,18 @@ public class CombatNetTests
         using var net = CombatNet.Load(file, new Linear());
         double width = (1 - file.LossMin) / file.Buckets;
         var potions = file.Vocab["potions"].ToList();
+        int perGroup = file.Buckets / file.PotionGroups;
         foreach (var test in file.Tests)
         {
             int maxHp = test.Obs.Player.MaxHp;
-            double share = test.Obs.Player.Hp / (double)maxHp, value = 0;
+            double share = test.Obs.Player.Hp / (double)maxHp, expected = 0;
             for (int k = 1; k <= file.Buckets; k++)
-                value += test.Outcome[k] * 0.5 * Math.Clamp((int)Math.Round((share - (file.LossMin + (k - 0.5) * width)) * maxHp), 1, maxHp) / maxHp;
-            double kept = test.Obs.Potions.OfType<string>().Sum(p => 1 - test.PotionUsed[Math.Max(0, potions.IndexOf(p))]);
-            double expected = value + (1 - test.Outcome[0]) * 0.1 * kept;
+            {
+                int g = (k - 1) / perGroup;
+                double kept = test.Obs.Potions.OfType<string>().Sum(p => 1 - test.PotionUsed[g * potions.Count + Math.Max(0, potions.IndexOf(p))]);
+                double hp = Math.Clamp((int)Math.Round((share - (file.LossMin + (k - 0.5) * width)) * maxHp), 1, maxHp) / (double)maxHp;
+                expected += test.Outcome[k] * (0.5 * hp + 0.1 * kept);
+            }
             Assert.InRange(((ICombatLeaf)net).Value(CombatStatus.InProgress, test.Obs, Fixtures.Around(test.Obs), test.History) - expected, -1e-3, 1e-3);
         }
     }
@@ -86,14 +92,20 @@ public class CombatNetTests
     [Fact]
     public void EachPotionIsKeptByItsOwnChance()
     {
-        // Two Fire Potions: V is 1 only if both are kept, a chance of the first's times the second's.
+        // Two Fire Potions: V is 1 only if both are kept, at each bucket its chance times the first's and the second's in its group.
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
         var test = file.Tests.First(t => t.Obs.Potions.Count(p => p == "FIRE_POTION") == 2);
         int held = test.Obs.Potions.Count(p => p != null);
         using var net = CombatNet.Load(file, new AllKept(held));
         var potions = file.Vocab["potions"].ToList();
-        double expected = 1 - test.Outcome[0];
-        foreach (var p in test.Obs.Potions.OfType<string>()) expected *= 1 - test.PotionUsed[Math.Max(0, potions.IndexOf(p))];
+        int perGroup = file.Buckets / file.PotionGroups;
+        double expected = 0;
+        for (int k = 1; k <= file.Buckets; k++)
+        {
+            double all = test.Outcome[k];
+            foreach (var p in test.Obs.Potions.OfType<string>()) all *= 1 - test.PotionUsed[(k - 1) / perGroup * potions.Count + Math.Max(0, potions.IndexOf(p))];
+            expected += all;
+        }
         Assert.InRange(((ICombatLeaf)net).Value(CombatStatus.InProgress, test.Obs, Fixtures.Around(test.Obs), test.History) - expected, -1e-3, 1e-3);
     }
 

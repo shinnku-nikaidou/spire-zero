@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 import torch
 
 from combat import data
+from combat.net import won_group
 
 
 def ranks(x: torch.Tensor) -> torch.Tensor:
@@ -76,12 +77,12 @@ def log_loss(chance: float, used: int) -> float:
 
 def predict(model, part, part_batches):
     """Each sample's prediction: the cross-entropy, the chance of death, the HP share expected lost after a win, and its
-    held potions' chances of being gone."""
+    held potions' chances of being gone, by the potion head of the group of buckets the sample's win ended in."""
     rows = []
     with torch.no_grad():
         for b in part_batches:
             logits, potions = model(*b.inputs())
-            rows.append((logits, potions.gather(1, b.potions).sigmoid()))
+            rows.append((logits, won_group(potions, b.target).gather(1, b.potions).sigmoid()))
     logits = torch.cat([r[0] for r in rows]).double().cpu()
     wide = [c for r in rows for c in r[1].cpu().tolist()]
     chances = [c[: len(s["potion_used"])] for c, s in zip(wide, part, strict=True)]

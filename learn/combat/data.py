@@ -22,6 +22,12 @@ from common import LearnError, runs_by_log
 BUCKETS = 50  # buckets of the HP share lost from the state to a win
 LOSS_MIN = -0.25  # the lowest bucket's bottom: a share healed
 WIDTH = (1 - LOSS_MIN) / BUCKETS
+POTION_GROUPS = 5  # groups of BUCKETS / POTION_GROUPS buckets in a row, each with its own chances of the potions going
+
+
+def potion_group(cls: int) -> int:
+    """The group of buckets a win's ending class (1 to BUCKETS) falls in, whose potion chances go with it."""
+    return (cls - 1) // (BUCKETS // POTION_GROUPS)
 KEEP = 1000  # one held-out round start in this many keeps its observation, for the net file's test states
 HEAD = re.compile(r'\{"run":"(\w+)","decision_id":\d+,"env":"(\w+)","surface":"(\w+)"')
 
