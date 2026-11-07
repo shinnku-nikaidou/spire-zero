@@ -15,7 +15,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-已有：无头宿主（[无头宿主](/arch/simulator/headless/)）；带快照、确定化和 CombatBuilder 的单场战斗会话（[战斗](/arch/simulator/combat/)）；经过每个决策画面的整局，以及作为宿主、通过线路对接大脑来跑的对局（[整局](/arch/simulator/runs/)）；NoSL 战斗世界和 SL 节点克隆（[世界与 SL 克隆](/arch/simulator/worlds/)）；带三种请求的工作进程池（[工作进程池](/arch/simulator/pool/)）。规划中：整局世界，它能让 NoSL 搜索看到当前地图点之后的东西（[世界与 SL 克隆 §8](/arch/simulator/worlds/#sec-8)）。
+已有：无头宿主（[无头宿主](/arch/simulator/headless/)）；带快照、确定化和 CombatBuilder 的单场战斗会话（[战斗](/arch/simulator/combat/)）；经过每个决策画面的整局，在进程内打，在 `run --check` 下再通过线路打一遍（[整局](/arch/simulator/runs/)）；NoSL 战斗世界和 SL 节点克隆（[世界与 SL 克隆](/arch/simulator/worlds/)）；带三种请求的工作进程池（[工作进程池](/arch/simulator/pool/)）。规划中：整局世界，它能让 NoSL 搜索看到当前地图点之后的东西（[世界与 SL 克隆 §8](/arch/simulator/worlds/#sec-8)）。
 
 </Aside>
 
@@ -59,7 +59,7 @@ flowchart LR
   H -->|"每个世界、回合或<br/>试探一个请求"| POOL
 ```
 
-在打整局的命令 `run` 里，宿主和决策进程是同一个进程：这一局在其中保持运行，各个大脑在它启动的工作进程池里搜索。用 `run --brain SOCKET` 时，大脑则是一个单独的进程，也就是 Mod 与之通信的那一个（[整局 §7](/arch/simulator/runs/#sec-7)）。
+在打整局的命令 `run` 里，宿主和决策进程是同一个进程：这一局在其中保持运行，各个大脑在它启动的工作进程池里搜索。`brain` 是同样的 Harness 和大脑，单独作为一个进程：Mod 启动它，并通过它的 stdin 和 stdout 与它通信（[整局 §7](/arch/simulator/runs/#sec-7)）。
 
 ## 4. 代码
 
@@ -82,9 +82,9 @@ flowchart LR
 |---|---|
 | [无头宿主](/arch/simulator/headless/) | 游戏怎样脱离引擎启动：原生桩、补丁、TestMode、JIT，以及让游戏具有确定性的单线程 `Pump` |
 | [战斗](/arch/simulator/combat/) | 战斗会话、作为配方的快照、确定化、从观测构建战斗（CombatBuilder）、保真度和速度 |
-| [整局](/arch/simulator/runs/) | `RunSession`：开局、“步进—稳定—决策”循环、每个决策画面、确定性、作为宿主对接大脑跑对局 |
+| [整局](/arch/simulator/runs/) | `RunSession`：开局、“步进—稳定—决策”循环、每个决策画面、确定性、作为单独进程的大脑 |
 | [世界与 SL 克隆](/arch/simulator/worlds/) | NoSL 战斗世界、节点检查点、SL 克隆的载入与封存、SL 世界、整局世界 |
 | [工作进程池](/arch/simulator/pool/) | 进程池、它的三种请求、跨进程的确定性、崩溃和速度 |
 | [参考](/arch/simulator/reference/) | 构建与运行、每个命令和选项、退出码、每个测试 |
 
-像 `Runs/RunManager.cs:295-312` 这样的文件引用指向反编译出的游戏程序集 `MegaCrit.Sts2.Core`（文件夹 `Runs/` 就是它的命名空间 `MegaCrit.Sts2.Core.Runs`）；像 `Simulation/RunSession.cs` 这样的项目路径，除非写明了别的项目，都在 `src/Sts2Ai.SimWorker/` 下。Godot 节点文件（`NGame.cs`、`NRestSiteRoom.cs`）按名字唯一，只给出文件名。
+像 `Runs/RunManager.cs:295-312` 这样的文件引用指向反编译出的游戏程序集 `MegaCrit.Sts2.Core`，它不在仓库里（文件夹 `Runs/` 就是它的命名空间 `MegaCrit.Sts2.Core.Runs`）；像 `Simulation/RunSession.cs` 这样的项目路径，除非写明了别的项目，都在 `src/Sts2Ai.SimWorker/` 下。Godot 节点文件（`NGame.cs`、`NRestSiteRoom.cs`）按名字唯一，只给出文件名。

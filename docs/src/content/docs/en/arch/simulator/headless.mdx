@@ -48,7 +48,7 @@ The stub keeps stray calls harmless; it does not make them meaningful. Code that
 
 ## 4. The patches
 
-A **Harmony patch** rewrites a game method at runtime. Harmony is a .NET library: a *prefix* runs before the original method and may skip it, a *postfix* runs after it, and a *transpiler* rewrites the method's IL (its compiled instructions) instead of wrapping it. `HeadlessPatches.Apply` (`Runtime/Patches/HeadlessPatches.cs:26-33`) installs GameBridge's `ChoiceContexts` first, then every patch class of the assembly. The order matters: patching compiles each replaced method, and a method compiled before the card-prompt patches could inline one of the small `CardSelectCmd` entries and bypass its patch, as SapphireSeed's planting (rewritten by the event transpiler) once did ([GameBridge: reading the game §6](/en/arch/gamebridge/observe/#sec-6)).
+A **Harmony patch** rewrites a game method at runtime. Harmony is a .NET library: a *prefix* runs before the original method and may skip it, a *postfix* runs after it, and a *transpiler* rewrites the method's IL (its compiled instructions) instead of wrapping it. `HeadlessPatches.Apply` (`Runtime/Patches/HeadlessPatches.cs:26-33`) installs GameBridge's `ChoiceContexts` first, then every patch class of the assembly. The order matters: patching compiles each replaced method, and a method compiled before the card-prompt patches could inline one of the small `CardSelectCmd` entries and bypass its patch. SapphireSeed's planting, which the event transpiler rewrites, is such a method ([GameBridge: reading the game §6](/en/arch/gamebridge/observe/#sec-6)).
 
 None of the patches changes a game rule, except the rule-fidelity group, which puts back the shipped rules where TestMode changed them or where the game checks them through screens that do not exist headless. The groups, by file in `Runtime/Patches/`:
 
@@ -70,7 +70,7 @@ None of the patches changes a game rule, except the rule-fidelity group, which p
 
 ## 5. TestMode
 
-The game has a built-in switch for its own automated tests, `TestMode`. With it on, most model code skips presentation (each such place checks `TestMode.IsOn` first), rewards are claimed through a test selector instead of a screen, and a few rules change. The simulator turns it on because it removes most of the presentation for free. The rules it changes are put back, or handled, one by one. The branches that matter for runs (from the local audit `tmp/notes/testmode-audit.md`):
+The game has a built-in switch for its own automated tests, `TestMode`. With it on, most model code skips presentation (each such place checks `TestMode.IsOn` first), rewards are claimed through a test selector instead of a screen, and a few rules change. The simulator turns it on because it removes most of the presentation for free. The rules it changes are put back, or handled, one by one. The branches that matter for runs:
 
 | TestMode branch | handled by |
 |---|---|
@@ -83,7 +83,7 @@ The game has a built-in switch for its own automated tests, `TestMode`. With it 
 
 ## 6. The JIT
 
-.NET normally uses *tiered compilation*: a method is first compiled quickly, and methods that run often are compiled again later, in the background, with full optimization (a *rejit*). A rejit can silently drop a Harmony patch, because the new code is compiled from the original method. It happened after a few thousand combats, when `RunManager.WriteReplay` ran unpatched. Tiering was also twice as slow on short runs, since Harmony's JIT hook makes every extra compile expensive.
+.NET normally uses *tiered compilation*: a method is first compiled quickly, and methods that run often are compiled again later, in the background, with full optimization (a *rejit*). A rejit can silently drop a Harmony patch, because the new code is compiled from the original method: a patched method would then run unpatched, at a time no one chose. Tiering is also slower on short runs, since Harmony's JIT hook makes every extra compile expensive.
 
 So the project file sets `TieredCompilation=false` (`Sts2Ai.SimWorker.csproj:12-20`): every method is compiled once, fully optimized. Launchers should also set `DOTNET_ReadyToRun=0`, which a project file cannot set: the framework's own code is then compiled fully optimized too, about 20% more combats per second. The real game runs with tiering on, which is a risk for the mod's patches ([Mod: auto-play and safety §5](/en/arch/mod/auto/#sec-5)).
 
@@ -109,6 +109,6 @@ The figure steps through a card play as the Pump runs it, and then through the s
 
 The simulator's own rule is that the game logs no errors: a game `Log.Error` line or an unobserved task fault means something ran that should not have. Boot collects both ([§2](#sec-2)), the commands report them per combat or run, `selftest` requires none, and a run with any fails (exit code 1). A worker sends the game errors it saw while serving a request back in its reply, and the host counts them with its own ([The worker pool §6](/en/arch/simulator/pool/#sec-6)).
 
-Some errors are the shipped game's own, and the game quirks group fixes those so that every game error stays a real one. The one fixed so far: a card play in which the player dies (an enemy's Thorns killing the player while a Sly card is played) returns early and leaves the card on its choice context (`PlayerChoiceContext`); the hook that started the play then logs an error. `PopCardAfterEarlyReturn` pops the card, also when the card has left combat (`Runtime/Patches/GameQuirks.cs:18-42`). This is the project's rule for game bugs: no checksum and no fallback, but a quirk that breaks our correctness is fixed where it enters our code ([Introduction §2](/en/#sec-2)).
+Some errors are the shipped game's own, and the game quirks group fixes those so that every game error stays a real one. The group holds one fix: a card play in which the player dies (an enemy's Thorns killing the player while a Sly card is played) returns early and leaves the card on its choice context (`PlayerChoiceContext`); the hook that started the play then logs an error. `PopCardAfterEarlyReturn` pops the card, also when the card has left combat (`Runtime/Patches/GameQuirks.cs:18-42`). This is the project's rule for game bugs: no checksum and no fallback, but a quirk that breaks our correctness is fixed where it enters our code ([Introduction §2](/en/#sec-2)).
 
 The game's log lines go to the simulator's log (`Runtime/Patches/Text.cs:43-58`): the game's errors and warnings at Error and Warning, its other lines at Debug, which only `--verbose` shows. How the command line logs is in [Reference §2](/en/arch/simulator/reference/#sec-2).

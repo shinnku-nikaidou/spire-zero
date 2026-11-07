@@ -108,11 +108,11 @@ A **surface** is the kind of decision screen; the protocol names eleven (`Sts2Ai
 
 **No fallback.** A screen the driver does not know throws, and the run fails: an unknown room, a reward or shop entry or crystal sphere item of an unknown type, a linked reward set, a task left waiting with no screen. So does an answer that is not in the legal list. A failure is never covered over by a default choice, so a run that finishes has answered every decision through its policies.
 
-How often a run meets each screen, over the 300 SL runs of the champion's promotion report:
+How often a run meets each screen, over the 100 SL runs of the champion's Silent report ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)):
 
 <SurfaceCounts client:visible lang="en" />
 
-**Legitimate game behavior** seen in runs at 9999 HP, which are not bugs: kill mechanics such as THE_INSATIABLE's Sandpit `Kill`, THE_LOST_AND_FORGOTTEN stealing strength and dexterity until the fight is lost (at 9999 HP it would take about 156 turns; the round cap ends it at round 81), and PunchOff's "event not finished" warning, whose combat has `shouldResumeAfterCombat: false` (`Models.Events/PunchOff.cs:138`); the real game warns the same way.
+**Legitimate game behavior.** Some of what runs at 9999 HP meet looks like a bug and is not: kill mechanics such as THE_INSATIABLE's Sandpit `Kill`, THE_LOST_AND_FORGOTTEN stealing strength and dexterity until the fight is lost (at 9999 HP it would take about 156 turns; the round cap ends it at round 81), and PunchOff's "event not finished" warning, whose combat has `shouldResumeAfterCombat: false` (`Models.Events/PunchOff.cs:138`); the real game warns the same way.
 
 ## 5. Who answers, and what a run reports
 
@@ -148,7 +148,7 @@ with `replans N` before `maps` when the SL planner planned again, and `obs <dige
 | `determinism:` | with `--check`: runs identical on replay over the wire, and nodes that replay exactly from their checkpoints, with the time per node |
 | `game Log.Error lines:` | game errors, then `worker restarts` when a pool was used and `replans` with the SL planner |
 
-**Exit code** 1 when a run failed, a replay differed, a node did not replay exactly, or a game error was logged; 0 otherwise. Surfaces never reached and idle waits are printed only (`Commands/RunCommand.cs:146`).
+**Exit code** 1 when a run failed, a replay differed, a node did not replay exactly, or a game error was logged; 0 otherwise. Surfaces never reached and idle waits are printed only (`Commands/RunCommand.cs:140`).
 
 **Records and logs.** `--records FILE` writes one run record per line, the input of `report` and `gate` ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)):
 
@@ -171,38 +171,28 @@ Everything downstream needs a run to be a function of its setup and its answers.
 **`run --check`** checks it on every run it plays (`Commands/RunCommand.cs:94-130`):
 
 - it observes every decision: each observation must survive a JSON round trip exactly, and its hash is kept;
-- it plays each seed a second time over the wire ([Protocol: the wire §1](/en/arch/protocol/wire/#sec-1)), to a brain in a thread of the same process with the same champion (or to the `--brain` given), and compares the two plays: the trace, the observation hashes, the summary, the map hashes, the run record and the decision log, timings aside; in SL the second play also carries the node messages;
+- it plays each seed a second time over the wire ([Protocol: the wire §1](/en/arch/protocol/wire/#sec-1)), to a brain in a thread of the same process with the same champion, and compares the two plays: the trace, the observation hashes, the summary, the map hashes, the run record and the decision log, timings aside; in SL the second play also carries the node messages;
 - it loads every node of the first play from its checkpoint, replays the node's decisions, and requires the clone to show the run's observations one for one, to be at its horizon once it has travelled, and to refuse another step ([Worlds and the SL clone §5](/en/arch/simulator/worlds/#sec-5)).
 
-**Measured** on 2026-10-26 with 200 seeds (Silent, ascension 0, 9999 HP, random macro policy and the `play` combat policy):
+**What a batch that passes guarantees.** `run --check` exits 1 on any difference ([§5](#sec-5)), so in a batch that passes every run played the same over the wire, every observation survived its round trip, and every node replayed exactly from its checkpoint. A run's seed comes from its index (`--start`, `GameSeeds.MakeSeed`), not from the process that plays it, so a batch can be split over processes; the `obs <digest>` on each run line compares runs played in different processes. A map point's children are sorted by `MapActions` whatever order the game keeps them in ([§4](#sec-4)). The clone's check, and what a node costs to load and replay, are in [Worlds and the SL clone §6](/en/arch/simulator/worlds/#sec-6).
 
-- `--check`: 200 of 200 identical on replay (trace, summary, map hashes); every observation round-tripped exactly, and the per-decision observation hashes matched;
-- across process partitions: the same 200 seeds as 8 processes of 25 runs and as 4 of 50 gave identical lines (outcome, summary, decision count, map hashes, observation digest), so the order of a map point's children never came out differently, though `MapActions` sorts anyway;
-- the other four characters (Ironclad, Defect, Regent, Necrobinder), 25 runs each with `--check`: identical on replay;
-- 0 failures, 0 game errors, 0 idle waits; every surface was reached, the rarest being `bundle`, in 9 of 200 runs.
+**Real-time waits.** Model code must not wait on the clock. A `Task.Delay` leaves the pump's queue empty until a timer thread posts, so settling cannot tell an idle game from a waiting one ([Headless host §7](/en/arch/simulator/headless/#sec-7)). Amalgamator's event waits that way, and is patched. Others are not reached headless: `ActionExecutor.WaitForUnpause` polls every 50 ms while the game is paused (`GameActions/ActionExecutor.cs:227-242`), `CombatState.GodotTimerTask` times out a creature lookup by net id (`Combat/CombatState.cs:603-609`), and the rest site's hover messages are UI. The guard is the idle-wait count of [§5](#sec-5), which must be 0 in every batch.
 
-The clone's own check, over every node of 880 runs on five characters, is in [Worlds and the SL clone §6](/en/arch/simulator/worlds/#sec-6).
-
-**Real-time waits.** Model code must not wait on the clock. A `Task.Delay` leaves the pump's queue empty until a timer thread posts, so settling cannot tell an idle game from a waiting one ([Headless host §7](/en/arch/simulator/headless/#sec-7)). Amalgamator's event waits that way, and is patched. Others are not reached headless: `ActionExecutor.WaitForUnpause` polls every 50 ms while the game is paused (`GameActions/ActionExecutor.cs:227-242`), `CombatState.GodotTimerTask` times out a creature lookup by net id (`Combat/CombatState.cs:603-609`), and the rest site's hover messages are UI. The guard is the idle-wait count above, 0 over the 200-run batch.
-
-**Inline execution.** Headless, the game runs in `NonInteractiveMode`, where actions run inline instead of yielding once per frame, so fire-and-forget work may run in a different order than in the real game. Whether this changes anything a player sees is open until runs in the game can be compared with runs here ([Evaluation §2](/en/arch/evaluation/#sec-2)).
+**Inline execution.** Headless, the game runs in `NonInteractiveMode`, where actions run inline instead of yielding once per frame, so fire-and-forget work may run in a different order than in the real game. Whether this changes anything a player sees is open: it needs runs in the game compared with runs here ([Evaluation §2](/en/arch/evaluation/#sec-2)).
 
 ## 7. Runs against a brain
 
-`run` normally keeps the brain in its own process: Harness and the champion's brains are objects there, and their searches go to a worker pool it starts ([The worker pool](/en/arch/simulator/pool/)). With `run --brain SOCKET`, the brain is a separate process listening at a Unix socket instead, the one the mod talks to in the game ([Mod: the main loop §8](/en/arch/mod/loop/#sec-8)). The simulator then hosts runs exactly as the game does: each run sends `hello` with its environment and a run id hashed from the seed, every decision goes out with its observation and legal actions, and the brain's recommendation is played ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). The run id hides the seed in NoSL; in SL the seed does reach the brain, inside the node checkpoint's save, which SL may know.
+`run` keeps the brain in its own process: Harness and the champion's brains are objects there, and their searches go to a worker pool it starts ([The worker pool](/en/arch/simulator/pool/)). In the game the brain is a process of its own, `brain`, which the mod starts and talks to over its stdin and stdout ([Mod: the main loop §8](/en/arch/mod/loop/#sec-8)). Over the wire a host plays a run exactly as `run` does in-process: each run sends `hello` with its environment and a run id hashed from the seed, every decision goes out with its observation and legal actions, and the brain's recommendation is played ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). The run id hides the seed in NoSL; in SL the seed does reach the brain, inside the node checkpoint's save, which SL may know. In SL the host also sends the node messages: the checkpoint when a new node starts, then the decisions not yet sent, each just before the next decision (`Brains/RunBrains.cs:53-99`). The simulator plays runs over the wire only under `run --check` (end of this section).
 
-The brain decides what plays, so `run --brain` refuses every champion option, `--log` included (`Commands/RunCommand.cs:63-64`), and so, since a champion file's options are merged in as given ones, a `--champion FILE` that names any (`Commands/Args.cs:178-194`) <Badge text="inferred" variant="caution" />. In SL the host also sends the node messages: the checkpoint when a new node starts, then the decisions not yet sent, each just before the next decision (`Brains/RunBrains.cs:53-99`).
-
-`brain` is that process (`Commands/BrainCommand.cs`): Harness alone, serving the hosts that connect, one at a time. It needs no game of its own; the searches' workers boot theirs.
+`brain` is that process (`Commands/BrainCommand.cs`): Harness alone, serving the host that started it on its stdin and stdout, until stdin closes. It needs no game of its own; the searches' workers boot theirs. Its stdout carries the wire and nothing else: every other line it prints goes to stderr.
 
 ```text
-brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy plan|play] [--log FILE] [--wire FILE]
+brain [--champion FILE] [champion options] [--sl-policy plan|pimc|play] [--log FILE] [--wire FILE]
 ```
 
-- `--socket`: by default `$XDG_STATE_HOME/sts2ai/brain.sock`, or `~/.local/state/sts2ai/brain.sock` when that variable is unset (`Sts2Ai.Protocol/Wire.cs:100-104`): Steam runs the game in a container that shares the home directory but not `$XDG_RUNTIME_DIR`.
-- A host names its environment in `hello`: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s (the SL planner by default), with the same macro brain. A host may also name an effort (`low`, `medium`, `high`, `max`), with which the run's SL planner then plays ([Harness §5](/en/arch/harness/#sec-5)).
+- A host names its environment in `hello`: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s (the SL planner by default), with the same macro brain, whose afterstates the environment sets, whatever `--afterstates` says: L0 predicts them from the screen for NoSL hosts, and plays its options on the node's clone for SL hosts when the champion has a combat net, which values a fight an option starts. So one champion file serves both (`BrainCommand.Champions`). A host may also name an effort (`low`, `medium`, `high`, `max`), with which the run's SL planner then plays ([Harness §5](/en/arch/harness/#sec-5)).
 - Its answers carry the options the brain scored, and on the map each option's route, for the mod to show ([Output §2](/en/arch/output/#sec-2)).
-- `--log` writes the decision log; `--wire` writes every message the hosts send, which `clones` replays to check a host's SL decisions on their clones ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)).
-- It prints a line per run: the run id, the end, the floor, the decisions, the replans, and its workers' game errors, which the host's run records do not count.
+- `--log` writes the decision log; `--wire` writes every message the host sends, which `clones` replays to check a host's SL decisions on their clones ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)). The mod passes both only when its settings file turns `Record` on: a pair of files per brain it starts, under `captures/` beside the brain's log.
+- It prints a line per run on stderr: the run id, the end, the floor, the decisions, the replans, and its workers' game errors, which the host's run records do not count.
 
 `run --check` uses the same server in-process for its second play, on an abstract Unix socket named after the process (`\0sts2ai-brain-PID`, `Brains/RunBrains.cs:200-220`), so the wire path is checked on every run that `--check` plays.

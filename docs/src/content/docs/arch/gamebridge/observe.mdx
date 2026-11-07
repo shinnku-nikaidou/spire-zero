@@ -7,7 +7,7 @@ sidebar:
 
 import { Badge } from '@astrojs/starlight/components';
 
-本页把协议的每个字段追溯到它所来自的游戏对象。像 `Runs/RunManager.cs` 这样的路径在反编译出的游戏（`MegaCrit.Sts2.Core`）里；项目路径都在 `src/Sts2Ai.GameBridge/` 下。这里提到的每个游戏来源都已在游戏代码中读过 <Badge text="已核实" variant="success" />。
+本页把协议的每个字段追溯到它所来自的游戏对象。像 `Runs/RunManager.cs` 这样的路径在反编译出的游戏（`MegaCrit.Sts2.Core`）里，它不在仓库里；项目路径都在 `src/Sts2Ai.GameBridge/` 下。这里提到的每个游戏来源都已在游戏代码中读过 <Badge text="已核实" variant="success" />。
 
 ## 1. 入口
 
@@ -112,7 +112,7 @@ import { Badge } from '@astrojs/starlight/components';
 - **前缀**把入口的参数读进一个 `ChoiceContext`（`ChoiceContexts.cs:47-68`）：`CardSelectorPrefs`（是否可取消、提示的文本），`source` 参数，没有时取 `PlayerChoiceContext` 最后涉及的模型，一个 `CardPile`（它使用途成为 `<pile>_pile`），一个 `EnchantmentModel` 及其 `amount`，`canSkip`。用途是入口的名字去掉 `From`，写成 snake_case。`in_combat` 表示是否有战斗正在进行。
 - **最外层的入口生效**。一个入口可以调用另一个入口（删牌会经过通用的牌组提示）：一个深度计数器保留第一个上下文，直到最外层的入口返回。
 - **`Current` 和 `Last`**。入口运行期间，`Current` 按线程保存上下文；模拟器的选牌器在入口内部运行，就在那里读取它。在真实游戏里，提示的画面在入口第一次 await 之后才打开，那时 `Current` 已经没了，所以前缀还把上下文存进 `Last`，一直保留到下一个入口，Mod 从那里读取画面上那个提示的上下文（[Mod：主循环 §5](/arch/mod/loop/#sec-5)）。新的上下文对象意味着一个新的提示。
-- **最先打这个补丁**。每个宿主在任何其他补丁之前调用一次 `ChoiceContexts.Patch`（模拟器里在 `HeadlessPatches.Apply`，Mod 里在 `Host`）。入口那个很小的 async 存根，可能被内联进更早编译的调用方，例如在另一个补丁编译它的替换方法时，而内联进去的副本会绕过前缀。无头运行时 SapphireSeed 就发生过这种事。
+- **最先打这个补丁**。每个宿主在任何其他补丁之前调用一次 `ChoiceContexts.Patch`（模拟器里在 `HeadlessPatches.Apply`，Mod 里在 `Host`）。入口那个很小的 async 存根，可能被内联进更早编译的调用方，例如在另一个补丁编译它的替换方法时，而内联进去的副本会绕过前缀。
 
 没有上下文的提示在模拟器里会抛异常；Mod 则把它留给玩家。
 

@@ -13,7 +13,7 @@ import { Badge } from '@astrojs/starlight/components';
 
 每个决策都恰好交给一侧：
 
-| 决策界面 | 一侧 | 目前的大脑 |
+| 决策界面 | 一侧 | 大脑 |
 |---|---|---|
 | `combat` | 战斗 | `plan`（SL 规划器，仅 SL）、`pimc`（仅 NoSL），或占位策略 `play` |
 | 战斗中提出的 `card_choice`（`ChoiceContext.InCombat`） | 战斗提示 | 战斗大脑上一个动作带着的答案，如果有的话；否则是 `first`，即最前面的选项（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)） |
@@ -25,12 +25,12 @@ import { Badge } from '@astrojs/starlight/components';
 **冠军的名字**。一局的各个大脑合起来就是它的冠军，名字由 `Dispatcher.Champion` 给出：
 
 ```text
-combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone
+combat plan COMBAT beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 VALUE clone, macro prompts l0 VALUE clone
 ```
 
-这是这份代码命名的 SL 冠军：叶子里用战斗网络 c9-2（它的结局由 V v9-2 定价）、用 medium 预算的 SL 规划器；战斗中没有搜索回答的提示用 `first`；宏观决策和战斗外的选牌提示用 L0，它带着 V v9-2，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：搜索的战斗大脑说出它的战斗网络；L0 说出它的 V、`clone`，以及它的探索（均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:36-60`）。
+这是这份代码命名的 SL 冠军，其中 `COMBAT` 和 `VALUE` 代表冠军的战斗网络和 V 的名字（[评估：冠军与基线](/arch/evaluation/champions/)）：叶子里用这个战斗网络（它的结局由 V 定价）、用 medium 预算的 SL 规划器；战斗中没有搜索回答的提示用 `first`；宏观决策和战斗外的选牌提示用 L0，它带着 V，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：搜索的战斗大脑说出它的战斗网络；L0 说出它的 V、`clone`，以及它的探索（均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:36-60`）。
 
-**环境决定战斗大脑**。宏观大脑在两种环境里是同一个；战斗大脑则不是（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。冠军工厂在 SL 之外拒绝 `plan` 和 `--afterstates clone`，在 NoSL 之外拒绝 `pimc`。`brain` 命令同时服务两种环境：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的（[概览 §5](/arch/harness/#sec-5)）。
+**环境决定战斗大脑**。宏观大脑在两种环境里是同一个；战斗大脑则不是（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。冠军工厂在 SL 之外拒绝 `plan` 和 `--afterstates clone`，在 NoSL 之外拒绝 `pimc`，在 SL 下还拒绝不在节点的克隆上打的 L0，因为它从画面预测的后状态是 NoSL 的。`run` 按给定的选项打，所以带 L0 的 SL 对局要用 `--afterstates clone`。`brain` 命令同时服务两种环境：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的，而且它按宿主的环境设定 L0 的后状态，NoSL 宿主从画面预测，SL 宿主在节点的克隆上打，所以一个冠军文件就能服务两者（[概览 §5](/arch/harness/#sec-5)）。
 
 ## 2. 战斗路由
 
@@ -142,7 +142,7 @@ SL 规划器搜索唯一的精确世界，忽略它；宏观策略和提示策�
 | NoSL 下的节点检查点或节点动作 | `InvalidOperationException` |
 | 节点下标没有递增的检查点；属于另一个节点或顺序不对的动作 | `InvalidDataException` |
 
-**在线路上**（`BrainServer`）：被拒绝的 `hello`（冠军工厂抛了异常：未知的环境、SL 之外的 `plan` 或 `--afterstates clone`、NoSL 之外的 `pimc`、对不上的冠军名字）、对局之外或被拒绝的节点消息之后的决策、没有递增的 id、与哈希不符的观测、没有对应画面的战斗或提示决策、未知的消息：每种都得到一个 `error`。被拒绝的节点消息会让这一局的下一个决策失败。对不上的协议版本，或 I/O 或 JSON 错误，会让宿主被丢弃（[概览 §5](/arch/harness/#sec-5)）。
+**在线路上**（`BrainServer`）：被拒绝的 `hello`（冠军工厂抛了异常：未知的环境、SL 之外的 `plan` 或 `--afterstates clone`、NoSL 之外的 `pimc`、SL 下不在节点克隆上打的 L0、对不上的冠军名字）、对局之外或被拒绝的节点消息之后的决策、没有递增的 id、与哈希不符的观测、没有对应画面的战斗或提示决策、未知的消息：每种都得到一个 `error`。被拒绝的节点消息会让这一局的下一个决策失败。对不上的协议版本，或 I/O 或 JSON 错误，会让大脑的 `Serve` 结束，大脑也随之结束：它只服务一个宿主，所以没有下一个，Mod 会再启动它（[概览 §5](/arch/harness/#sec-5)）。
 
 **在工作进程池里**（[模拟器：工作进程池 §6](/arch/simulator/pool/#sec-6)）：
 

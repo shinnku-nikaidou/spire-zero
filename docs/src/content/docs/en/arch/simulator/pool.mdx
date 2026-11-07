@@ -22,7 +22,7 @@ Three reasons, in order of weight:
 
 ## 2. The pool
 
-**Starting.** The pool starts its workers in parallel and waits until each has booted (`Sts2Ai.Harness/WorkerPool.cs:33-50`). A worker is the same program started again, as its apphost or as `dotnet` with its dll if that is how the host was started (`Program.cs:20-24`), with `serve` and the champion's `--combat-net`, the leaf every search of that worker uses. Booting takes about 1.2 s ([Headless host §2](/en/arch/simulator/headless/#sec-2)). When it is done, the worker writes its hello, `{"game": "v0.111.0"}`, the game version it runs.
+**Starting.** The pool starts its workers in parallel and waits until each has booted (`Sts2Ai.Harness/WorkerPool.cs:33-50`). A worker is the same program started again, as its apphost or as `dotnet` with its dll if that is how the host was started (`Program.cs:20-24`), with `serve` and the champion's `--combat-net` and `--value`, the leaf every search of that worker uses. Booting takes about 1.2 s ([Headless host §2](/en/arch/simulator/headless/#sec-2)). When it is done, the worker writes its hello, `{"game": "v0.111.0"}`, the game version it runs.
 
 **The wire** is one JSON line per message over the worker's stdin and stdout ([Protocol: worlds and worker messages §4](/en/arch/protocol/worlds/#sec-4)). A request carries its type and an id; the reply carries the same id, the answer, an error if the request failed, and the game errors logged while serving it. Worker messages have no protocol version field: the host and its workers are always the same build.
 
@@ -50,7 +50,7 @@ How each brain splits its work:
 
 ## 4. The worker: `serve`
 
-`serve [--combat-net FILE]` (`Commands/Serve.cs`) boots the game, writes its hello, then reads one request per line and writes one reply per line until stdin closes.
+`serve [--combat-net FILE --value FILE]` (`Commands/Serve.cs`) boots the game, writes its hello, then reads one request per line and writes one reply per line until stdin closes.
 
 - **stdout is the wire.** Before the game boots, `serve` keeps the real stdout for the wire and points `Console.Out` at stderr, so nothing the game or a library prints can get into the stream (`Commands/Serve.cs:23-28`). Its logs go to stderr too; the pool keeps the last 20 lines of each worker's stderr for the error message if it dies.
 - **One brain of each kind, made once:** PIMC and the SL planner with the worker's leaf.
@@ -78,19 +78,19 @@ A request carries everything the worker needs, and nothing carries over from one
 
 Sources: `Sts2Ai.Harness/WorkerPool.cs:21, 47, 70-117, 173-190`. `WorkerPoolTests` checks the first three rows with a shell script as the worker and a 1 s timeout: a worker stuck once is restarted and answers; one stuck twice fails the call ([Reference §7](/en/arch/simulator/reference/#sec-7)).
 
-Two gaps remain. A worker that dies and then fails to boot again leaves the call failed, and the dead worker goes back into the pool, so later calls on it fail without a retry (`Sts2Ai.Harness/WorkerPool.cs:81-84, 112-114`). And the 5-minute timeout also covers the boot of a restarted worker.
+The pool has two gaps. A worker that dies and then fails to boot again leaves the call failed, and the dead worker goes back into the pool, so later calls on it fail without a retry (`Sts2Ai.Harness/WorkerPool.cs:81-84, 112-114`). And the 5-minute timeout also covers the boot of a restarted worker.
 
 A failed call fails the decision, and so the run, with the error in the run's `failure` line ([Whole runs §5](/en/arch/simulator/runs/#sec-5)). There is no fallback to another brain: a run that finishes was played by its champion throughout.
 
 ## 7. Speed
 
-Measured with the default budget (8 worlds × 300 nodes):
+Measured with each brain's default budget: PIMC's 8 worlds × 300 nodes, the SL planner's `medium` (a beam of 8, 300 nodes per state and turn).
 
-- **NoSL PIMC**, 6 act-1 combats: 8 workers take 68.7 ms per action against 307.5 ms in one process (9.4 s against 42.1 s in all). A whole run with `pimc` takes about 19.9 s, with two runs at a time on 8 workers each.
-- **The SL champion** (the SL planner and L0 with clone afterstates, at the default budget): over the 300 runs of its promotion report, 271 s a run and 489 ms a decision on average, on the fleet's hosts.
+- **NoSL PIMC**, 6 act-1 combats: 8 workers take 68.7 ms per action against 307.5 ms in one process (9.4 s against 42.1 s in all).
+- **The SL champion** (the SL planner and L0 with clone afterstates): its reports record the speed, on each character's 100 runs (`ms_per_decision`, `seconds_per_run`). On average a decision takes 405 ms and a run 336 s for the Silent, 431 ms and 286 s for the Ironclad, 560 ms and 423 s for the Defect, 1,202 ms and 906 s for the Regent, 1,358 ms and 1,046 s for the Necrobinder ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).
 
-How throughput grows with processes on one machine is in [Combats §7](/en/arch/simulator/combat/#sec-7): almost linearly up to the physical cores, at about 160 MB per worker.
+How throughput grows with processes on one machine is in [Combats §7](/en/arch/simulator/combat/#sec-7): almost linearly up to the physical cores.
 
 ## 8. Planned: worlds that stay in a worker <Badge text="planned" variant="caution" />
 
-Today a request is a whole search, so a worker needs no memory between requests. A search that outgrows one request, such as a search over run worlds ([Worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)), would instead open a world in a worker by kind (built, clone, run host) and get a world id; then snapshot, restore, execute, list the legal actions, observe and branch on it, one message each; then close it. Such a world keeps live state in its worker, so its branches should go to that worker first, since a restore elsewhere costs a replay; snapshots stay portable, so any worker can take over. A crash would reopen the worker's worlds from their snapshots.
+A request is a whole search, so a worker needs no memory between requests. A search that outgrows one request, such as a search over run worlds ([Worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)), would instead open a world in a worker by kind (built, clone, run host) and get a world id; then snapshot, restore, execute, list the legal actions, observe and branch on it, one message each; then close it. Such a world keeps live state in its worker, so its branches should go to that worker first, since a restore elsewhere costs a replay; snapshots stay portable, so any worker can take over. A crash would reopen the worker's worlds from their snapshots.

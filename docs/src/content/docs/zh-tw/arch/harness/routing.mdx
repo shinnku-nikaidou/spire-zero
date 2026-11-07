@@ -13,7 +13,7 @@ import { Badge } from '@astrojs/starlight/components';
 
 每個決策都只交給恰好一側：
 
-| 決策介面（surface） | 側 | 目前的大腦 |
+| 決策介面（surface） | 側 | 大腦 |
 |---|---|---|
 | `combat` | 戰鬥 | `plan`（SL 規劃器，僅 SL）、`pimc`（僅 NoSL），或佔位策略 `play` |
 | 戰鬥中問的 `card_choice`（`ChoiceContext.InCombat`） | 戰鬥提示 | 戰鬥大腦上一個動作帶著的回答，如果有的話；否則是 `first`，取最前面的選項（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)） |
@@ -25,12 +25,12 @@ import { Badge } from '@astrojs/starlight/components';
 **冠軍的名字**。一局的各個大腦合起來就是它的冠軍，由 `Dispatcher.Champion` 命名：
 
 ```text
-combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone
+combat plan COMBAT beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 VALUE clone, macro prompts l0 VALUE clone
 ```
 
-這是這份程式碼所命名的 SL 冠軍：葉節點用戰鬥網路 c9-2（它的結局由 V v9-2 定價）、用 medium 預算的 SL 規劃器，戰鬥中沒有搜尋回答的提示用 `first`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V v9-2，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：會搜尋的戰鬥大腦指名它的戰鬥網路；L0 指名它的 V、`clone`，以及它的探索（均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:36-60`）。
+這是這份程式碼所命名的 SL 冠軍，其中 `COMBAT` 和 `VALUE` 代表冠軍的戰鬥網路和 V 的名字（[評估：冠軍與基線](/zh-tw/arch/evaluation/champions/)）：葉節點用這個戰鬥網路（它的結局由 V 定價）、用 medium 預算的 SL 規劃器，戰鬥中沒有搜尋回答的提示用 `first`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：會搜尋的戰鬥大腦指名它的戰鬥網路；L0 指名它的 V、`clone`，以及它的探索（均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:36-60`）。
 
-**環境決定戰鬥大腦**。宏觀大腦在兩種環境裡是同一個；戰鬥大腦不是（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。冠軍工廠在 SL 之外拒絕 `plan` 和 `--afterstates clone`，在 NoSL 之外拒絕 `pimc`。`brain` 指令同時服務兩種環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
+**環境決定戰鬥大腦**。宏觀大腦在兩種環境裡是同一個；戰鬥大腦不是（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。冠軍工廠在 SL 之外拒絕 `plan` 和 `--afterstates clone`，在 NoSL 之外拒絕 `pimc`，在 SL 下還拒絕不在節點的複本上打的 L0，因為它從畫面預測的後狀態是 NoSL 的。`run` 照給定的選項打，所以帶 L0 的 SL 對局要用 `--afterstates clone`。`brain` 指令同時服務兩種環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的，而且它按宿主的環境設定 L0 的後狀態，NoSL 宿主從畫面預測，SL 宿主在節點的複本上打，所以一個冠軍檔案就能服務兩者（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
 ## 2. 戰鬥路由
 
@@ -142,7 +142,7 @@ SL 規劃器搜尋唯一的那個確切世界，忽略它；宏觀策略和提�
 | NoSL 下的節點檢查點或節點動作 | `InvalidOperationException` |
 | 節點索引沒有遞增的檢查點；屬於別的節點或序號不對的動作 | `InvalidDataException` |
 
-**在線路上**（`BrainServer`）：被拒絕的 `hello`（冠軍工廠拋出例外：未知的環境、SL 之外的 `plan` 或 `--afterstates clone`、NoSL 之外的 `pimc`、對不上的冠軍名字）、在一局之外或在被拒收的節點訊息之後的決策、沒有遞增的 id、與雜湊不符的觀測、沒有對應畫面的戰鬥決策或提示決策、未知的訊息：每一種都得到一個 `error`。被拒收的節點訊息會讓這一局的下一個決策失敗。不相符的協定版本，或 I/O 或 JSON 錯誤，會讓宿主被丟棄（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
+**在線路上**（`BrainServer`）：被拒絕的 `hello`（冠軍工廠拋出例外：未知的環境、SL 之外的 `plan` 或 `--afterstates clone`、NoSL 之外的 `pimc`、SL 下不在節點複本上打的 L0、對不上的冠軍名字）、在一局之外或在被拒收的節點訊息之後的決策、沒有遞增的 id、與雜湊不符的觀測、沒有對應畫面的戰鬥決策或提示決策、未知的訊息：每一種都得到一個 `error`。被拒收的節點訊息會讓這一局的下一個決策失敗。不相符的協定版本，或 I/O 或 JSON 錯誤，會讓大腦的 `Serve` 結束，大腦也隨之結束：它只服務一個宿主，所以沒有下一個，Mod 會再啟動它（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
 **在工作行程池裡**（[模擬器：工作行程池 §6](/zh-tw/arch/simulator/pool/#sec-6)）：
 

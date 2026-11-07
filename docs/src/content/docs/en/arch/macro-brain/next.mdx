@@ -8,7 +8,7 @@ sidebar:
 ## 1. Known weaknesses
 
 - **Labels carry the later draws.** A state's label in a run that explores more is lower, and V is not told the run's ε ([Self-play §3](/en/arch/macro-brain/selfplay/#sec-3)). A cut point per run would remove this ([§3](#sec-3)).
-- **What the net cannot express.** The route sees no build, the max mixes paths, and the route ends with the act ([The value network §8](/en/arch/macro-brain/network/#sec-8)).
+- **What the net cannot express.** The map bag holds no links, and the map ends with the act ([The value network §8](/en/arch/macro-brain/network/#sec-8)).
 - **One outcome per run.** A run's decisions share one label, so telling which decision made the difference takes many runs ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
 
 ## 2. Planned, not built
@@ -29,14 +29,14 @@ These counterfactual paired rollouts would also be training signal for V at key 
 
 ### NoSL: run worlds
 
-NoSL has no run worlds yet, so its L0 predicts afterstates from the screen ([Search §1](/en/arch/macro-brain/search/#sec-1)). With run worlds, it would apply each option in K sampled worlds and average V over them, and search multi-step screens as SL's clone does, deduplicating states by observation.
+Run worlds are not built, so NoSL's L0 predicts afterstates from the screen ([Search §1](/en/arch/macro-brain/search/#sec-1)). With run worlds, it would apply each option in K sampled worlds and average V over them, and search multi-step screens as SL's clone does, deduplicating states by observation.
 
 ### Interface
 
 The planned C# interface. One entry point serves every non-combat surface; Harness routes by surface name ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)).
 
 ```csharp
-// Planned. One entry for every non-combat surface; routing by surface name (docs: harness §4).
+// Planned. One entry for every non-combat surface; routing by surface name (docs: harness/routing §1).
 public interface IMacroBrain
 {
     MacroDecisionResult Decide(MacroRequest request, IWorldSource worlds, Budget budget);
@@ -59,7 +59,7 @@ public sealed record MacroDecisionResult(
 
 ### Tests
 
-1. Coverage: every macro surface is reached in simulated runs, and the fallback count is 0.
+1. Coverage: every macro surface is reached in simulated runs.
 2. Decision panels: a fixed set of (run state, options) cases whose ground truth comes from large paired rollouts; how often L0 agrees, per surface, shows where V is weakest.
 3. NoSL counterfactual: the same public record with different hidden state (`RoomSet` tails, odds, streams) gives the same decision.
 4. Determinism with a fixed budget.

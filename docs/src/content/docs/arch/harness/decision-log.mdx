@@ -13,8 +13,8 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 `Dispatcher` 若在创建时开着日志，就会把这一局的各行留在内存里（`Dispatcher.Log`），一局结束后由它的宿主写出：
 
-- `run --log FILE` 在每一局结束后追加它的各行（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。中途被杀掉的一局什么都不留。`--log` 和 `--brain` 同时给出时会被拒绝，因为后者的决策由大脑记日志。
-- `brain --log FILE` 在一局的 `run_end` 时写出它的各行，所以没发这条消息就断开的宿主什么都不留（[概览 §5](/arch/harness/#sec-5)）。
+- `run --log FILE` 在每一局结束后追加它的各行（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。中途被杀掉的一局什么都不留。
+- `brain --log FILE` 在一局的 `run_end` 时写出它的各行，所以没发这条消息就断开的宿主什么都不留。只有在 Mod 设置的 `Record` 打开时，Mod 才传入它，连同 `--wire`（[概览 §5](/arch/harness/#sec-5)）。
 
 这些行是 `DecisionEntry` record（`Dispatcher.cs:36-40`），像每个协议类型一样序列化：snake_case 的名字，值为 null 的字段省略（[协议 §4](/arch/protocol/#sec-4)）。日志和对局记录放在一起，在数据目录里（[学习：参考 §3](/arch/learning/reference/#sec-3)）。
 
@@ -36,7 +36,7 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 | `decision_id` | int | 这个决策在这一局里的序号，从 0 开始，三种决策一起计数（[§4](#sec-4)） | 同上 | 同上 |
 | `env` | string | `NoSL` 或 `SL` | 同上 | 同上 |
 | `surface` | string | `combat` | `card_choice`，两侧都是 | 这个决策的决策界面 |
-| `brain` | string | 战斗路由的名字：`pimc c9-1`、`plan c9-1`、`play` | 提示一侧的：战斗中是 `first`，不论它的答案是随战斗大脑的动作而来，还是取自最前面的选项；战斗外是 L0 的名字或 `random` | 宏观路由的 |
+| `brain` | string | 战斗路由的名字：`pimc NAME` 或 `plan NAME`，带上它的战斗网络的名字，或 `play` | 提示一侧的：战斗中是 `first`，不论它的答案是随战斗大脑的动作而来，还是取自最前面的选项；战斗外是 L0 的名字或 `random` | 宏观路由的 |
 | `obs_hash` | 十六进制 string | 战斗观测的哈希 | 选牌提示的哈希 | 整个观测的哈希（[§4](#sec-4)） |
 | `legal` | int | 合法动作的个数 | 提示的选项个数 | 合法动作的个数 |
 | `chosen` | string | 战斗动作的文本：`play:C[:T]`、`potion:S[:T]`、`end_turn`，搜索为它的第一个选牌提示选了答案时，答案跟在 `@` 之后（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)） | 选中的选项下标，用逗号连接，不带 `pick:` | 动作 |
@@ -97,13 +97,13 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 ## 8. 测试
 
-**`run --check`** 让整局遵守 Harness 的确定性（[模拟器：参考 §6](/arch/simulator/reference/#sec-6)）。它打每个种子，然后从检查点重播每个节点，再通过线路把这个种子打第二遍，连到同一进程里带同一个冠军的 `BrainServer`（或连到 `--brain` 的套接字），并要求两遍一致：
+**`run --check`** 让整局遵守 Harness 的确定性（[模拟器：参考 §6](/arch/simulator/reference/#sec-6)）。它打每个种子，然后从检查点重播每个节点，再通过线路把这个种子打第二遍，连到同一进程里带同一个冠军的 `BrainServer`，并要求两遍一致：
 
 - 轨迹，逐个决策；
 - 每个决策的观测哈希，每个还必须经得起一次 JSON 往返；
 - 这一局的摘要和每一幕的地图哈希；
 - 对局记录，去掉游戏错误和用时；
-- 决策日志，除 `elapsed_ms` 外的每个字段。第二份日志是进程内服务器的；用 `--brain` 时两份都是空的，所以不比较。
+- 决策日志，除 `elapsed_ms` 外的每个字段。第二份日志是进程内服务器的。
 
 **xUnit**（`Sts2Ai.Tests/Harness/`，[模拟器：参考 §7](/arch/simulator/reference/#sec-7)）：
 
@@ -117,7 +117,8 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 | `DispatcherTests.AnSLNodesCloneIsItsCheckpointAndTheDecisionsSince` | SL 节点的克隆就是它的检查点加上此后做出的决策 |
 | `DispatcherTests.AnswersThePromptOfTheActionWithTheBrainsPickAndHidesItFromTheHost`、`APickThePromptDoesNotAcceptGoesToThePolicy` | 刚选的动作的第一个提示得到搜索的回答，宿主从不看到它；提示不接受的回答就交给提示策略 |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`、`AWorkerStuckTwiceFailsTheCall` | 池的那一次重试 |
-| `GateTests`（10）、`EvalReportTests`（4） | 评估的晋级门槛和报告（[评估：晋级门槛 §11](/arch/evaluation/gates/#sec-11)） |
+| `ExplainTests.AMacroAnswerCarriesEachOptionsValueTheChosenFirst`、`WithExplainEachMapOptionCarriesItsRouteToTheBoss` | 宏观回答的候选是它的各个选项及其估值，选中的在前；带 `explain` 时、也只有那时，每个地图选项带上它通往 Boss 的路线（[概览 §5](/arch/harness/#sec-5)） |
+| `GateTests`（8）、`EvalReportTests`（4） | 评估的晋级门槛和报告（[评估：晋级门槛 §11](/arch/evaluation/gates/#sec-11)） |
 
 **规划中的测试**：
 

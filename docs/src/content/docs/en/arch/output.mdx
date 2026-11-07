@@ -16,7 +16,7 @@ The brain answers a decision with an action, a plan and the options it scored. T
 
 <Aside title="Status">
 
-Built: the **panel** ([§2](#sec-2)), a card over the game with a toolbar that lets the AI play, V's chance to win the run, the next action with how the fight or the run is expected to go after it, the plan after it, and the options the brain scored with their chances to win (on the map with each option's route); its **settings**, in an "AI" tab the mod adds to the game's settings screen; the mod's words in six languages; two kinds of **marks** ([§3](#sec-3)): on the map, a ring on the recommended point and a line along the route the brain plans after it, up to the boss; in combat, the plan's step numbers on the cards it plays this turn and on its targets and the end turn button; and **auto** ([§4](#sec-4)), the AI playing the answers when the player asks. Planned: highlights on the other surfaces, narration ([§5](#sec-5)), and the facts it needs. Godot node classes (`N*` types) are cited by class name only: each name is unique in the decompiled source, so find the file by name. Background notes are in the local note `tmp/notes/output-design.md`.
+Built: the **panel** ([§2](#sec-2)), a card over the game with a toolbar that lets the AI play, V's chance to win the run, the next action with how the fight or the run is expected to go after it, the plan after it, and the options the brain scored with their chances to win (on the map with each option's route); its **settings**, in an "AI" tab the mod adds to the game's settings screen; the mod's words in six languages; two kinds of **marks** ([§3](#sec-3)): on the map, a ring on the recommended point and a line along the route the brain plans after it, up to the boss; in combat, the plan's step numbers on the cards it plays this turn and on its targets and the end turn button; and **auto** ([§4](#sec-4)), the AI playing the answers when the player asks. Planned: highlights on the other surfaces, narration ([§5](#sec-5)), and the facts it needs. Godot node classes (`N*` types) are cited by class name only: each name is unique in the decompiled source, so find the file by name.
 
 </Aside>
 
@@ -84,17 +84,17 @@ The panel is a card over the game, near its top left corner (`UI/Panel.cs`). It 
 
 The strip and the recent actions show with a message too. The body is built again only when what it shows changes, or a setting it is drawn with; the toolbar's labels follow a change of the game's language at once; the marks follow their nodes every frame.
 
-**Settings.** The player's choices are kept in `~/.local/state/sts2ai/settings.json`, beside the brain's socket and outside the game's profile; every row, its values and its default are in [Mod §5](/en/arch/mod/#sec-5). The panel and the marks read the settings live, so a change applies at once.
+**Settings.** The player's choices are kept in `settings.json` in `$XDG_STATE_HOME/sts2ai` (by default `~/.local/state/sts2ai`), beside the brain's log and outside the game's profile; every row, its values and its default are in [Mod §5](/en/arch/mod/#sec-5). The panel and the marks read the settings live, so a change applies at once.
 
 **The AI tab** (`UI/SettingsTab.cs`) sits in the game's settings screen after General, Graphics, Sound and Input. The game builds its four tabs in `NSettingsTabManager._Ready` from nodes in its scene. A postfix there, run at the next idle so the screen is whole, copies the Input tab for the tab's button and the Sound panel, emptied, for its panel, so both look and switch like the game's own; the copies take the nodes and their scripts, not the game's signal connections. It moves the tab row half a step left so it stays centred, wires the button to the manager's own tab switch, and adds the pair to the manager's tabs. The rows are the mod's own controls in the font of the game's settings rows, under two headers, "Assist" and "Auto-play": `<  value  >` steppers and an opacity slider, and a button that resets them. Everything is built before any of it joins the screen, so if building fails, the screen stays as the game built it and the error is logged.
 
 **Languages** (`UI/L10n.cs`). The mod's own words follow the language the game is set to: English, French, Spanish (both of the game's Spanish languages), Simplified Chinese, Traditional Chinese and Japanese; any other language reads English. A line is looked up by its English text, which is also what a line missing from the table shows. Names (cards, relics, potions, monsters, characters, events, rest options, the map legend's room types) come from the game's own tables instead ([Mod: the main loop §6](/en/arch/mod/loop/#sec-6)). What the mod does not write stays as it comes: the brain's name and its error messages, an exception's text, and the version guard's line.
 
-**Planned for the panel:** 1–2 facts per answer (expected HP loss against the alternative, lethal next turn), the only numbers narration would use ([§5](#sec-5)); and the per-surface highlights of [§3](#sec-3), such as each card reward's chance to win on its card. A zero-UI variant, where the brain serves a local web page for a second screen, was considered for the earliest testing only.
+**Planned for the panel:** 1–2 facts per answer (expected HP loss against the alternative, lethal next turn), the only numbers narration would use ([§5](#sec-5)); and the per-surface highlights of [§3](#sec-3), such as each card reward's chance to win on its card.
 
 ## 3. Highlight
 
-**The follow overlay.** Marks are drawn by the mod's own nodes, which live only in the mod's `CanvasLayer`, on top of the game. Each frame, each mark reads its target node's transform on screen (`GetGlobalTransformWithCanvas()`) with the node's size, so it follows a card that turns, fans out or scales, and moves with it; when the target is gone or hidden, the mark hides. The mod never writes into the game's nodes to draw, for two reasons: `NHandCardHolder.UpdateCard()` resets `CardHighlight` on every state change (`Nodes.Cards.Holders/NHandCardHolder.cs:613-640`) <Badge text="verified" variant="success" />, and the cyan, gold and red glows already mean something in the game (`NCardHighlight`). The one place the mod changes the game's nodes to draw is the settings screen ([§2](#sec-2)); when the AI plays, the executor presses the game's own buttons as a click does ([Mod: auto-play and safety §1](/en/arch/mod/auto/#sec-1)).
+**The follow overlay.** Marks are drawn by the mod's own nodes, which live only in the mod's `CanvasLayer`, on top of the game. Each frame, each mark reads its target node's transform on screen (`GetGlobalTransformWithCanvas()`) with the node's size, so it follows a card that turns, fans out or scales, and moves with it; when the target is gone or hidden, the mark hides. The mod never writes into the game's nodes to draw, for two reasons: `NHandCardHolder.UpdateCard()` resets `CardHighlight` on every state change <Badge text="verified" variant="success" />, and the cyan, gold and red glows already mean something in the game (`NCardHighlight`). The one place the mod changes the game's nodes to draw is the settings screen ([§2](#sec-2)); when the AI plays, the executor presses the game's own buttons as a click does ([Mod: auto-play and safety §1](/en/arch/mod/auto/#sec-1)).
 
 **The style**: purple, a color the game does not use for its own glows: outlines, rings and round purple badges with plain digits and a dark ring.
 
@@ -110,7 +110,7 @@ The strip and the recent actions show with a message too. The body is built agai
 
 A card or creature that is gone has no mark. "Order numbers on cards" turns the card outlines and their numbers off together; "Target and end-turn marks" the rest. A potion has no mark of its own, but its target gets its step's number.
 
-**Anchors.** Each surface's node, verified in the game's source (local note `tmp/notes/output-design.md` §3.2) <Badge text="verified" variant="success" />:
+**Anchors.** Each surface's node, verified in the decompiled game's source <Badge text="verified" variant="success" />:
 
 | surface | node | mark | state |
 |---|---|---|---|
@@ -126,8 +126,6 @@ A card or creature that is gone has no mark. "Order numbers on cards" turns the 
 | rest | `NRestSiteButton` | same | planned |
 | shop | `NMerchantCard/Relic/Potion/CardRemoval` | buy order | planned |
 | grid select | `NCardGridSelectionScreen` family, `NCardGrid` | check marks | planned |
-
-**Order of work:** hand and targets (done); card reward; map (done); event, rest and shop; grid prompts.
 
 **Pitfalls:**
 
@@ -158,7 +156,7 @@ Narration is the text that would explain a recommendation.
 
 - It is built only from the facts and the candidates, never from free reasoning about the state. NoSL facts are probabilities and expectations; SL facts may be exact ("A then B draws X").
 - Templates come first, one per kind of fact.
-- Optionally, a cheap LLM polishes the text, offline or asynchronously (the project's LLM gateway, cheap models only). Its input is the facts as JSON and the template's text. Its output is checked: every number in the text must equal a fact's value (a string match after formatting); if not, the template's text is shown instead.
+- Optionally, a cheap LLM polishes the text, offline or asynchronously. Its input is the facts as JSON and the template's text. Its output is checked: every number in the text must equal a fact's value (a string match after formatting); if not, the template's text is shown instead.
 - The LLM never sees game state beyond the facts, and never affects the action.
 
 Nothing of it is built: the recommendation carries no facts yet ([§1](#sec-1)).
@@ -170,15 +168,15 @@ Nothing of it is built: the recommendation carries no facts yet ([§1](#sec-1)).
 | The AI plays only when the player asks, and only the brain's answer to the decision on screen, once per state. The answer is checked against the decision's legal list by Harness ([Harness: routing, budgets and seeds §6](/en/arch/harness/routing/#sec-6)) | holds |
 | Besides answers, auto-play presses only screens that are no decision: a chest, a proceed button, an ancient's dialogue ([Mod: auto-play and safety §1](/en/arch/mod/auto/#sec-1)) | holds |
 | There is no interface for state edits, the console or reloads | holds |
-| The socket carries only protocol messages. The SL export is sent only in SL, and carries the node's save, the seed and random streams included ([Mod: auto-play and safety §4](/en/arch/mod/auto/#sec-4)) | holds |
-| The mod writes only its settings file and its lines in the game's log | holds |
+| The wire (the brain's stdin and stdout) carries only protocol messages. The SL export is sent only in SL, and carries the node's save, the seed and random streams included ([Mod: auto-play and safety §4](/en/arch/mod/auto/#sec-4)) | holds |
+| The mod writes only its settings file, the brain's log (`brain.log`, what the brain writes to its stderr) and its lines in the game's log; with the settings' `Record` on, the brain it starts also writes the messages it gets and its decision log, in `captures/` beside them | holds |
 | `NumReloads` is logged, and must be 0 | planned |
 
 A new field of a protocol message gets a row here when it changes what may leave the game.
 
 ## 7. Tests
 
-None of these is built. The panel and the marks ran in the game in the session of 2026-10-28 ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)); the executor's and the panel's game calls were reviewed against the decompiled game ([Mod: auto-play and safety §7](/en/arch/mod/auto/#sec-7)).
+None of these is built. The executor's and the panel's game calls are checked against the decompiled game ([Mod: auto-play and safety §7](/en/arch/mod/auto/#sec-7)).
 
 - **Anchor resolution per surface**: every legal action of an adapted surface resolves to a visible node, checked in a debug overlay mode.
 - **Stale answers**: a delayed answer never draws after a state change.

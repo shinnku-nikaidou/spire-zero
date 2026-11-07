@@ -29,7 +29,7 @@ Built: V's trainer `learn/v/` (`v.train`) and the combat net's trainer `learn/co
 
 **Strategy is learned, not written.** Nothing about how to play is written by hand into either net: no card is called good, no monster's move order is listed. What is written by hand is the game's rules (the simulator plays the real game) and the targets (how a run ended, how a fight ended). V learns from zero, from the AI's own runs, not from human play.
 
-**Offline only.** Training happens in separate processes, on other machines, from logged runs. Online, every decision is search plus the learned values; nothing learns during a decision. A language model was to take part only offline, proposing patches for the gate to judge, never in a decision; that part is planned ([The loop §7](/en/arch/learning/loop/#sec-7)).
+**Offline only.** Training happens in separate processes, from logged runs. Online, every decision is search plus the learned values; nothing learns during a decision. A language model would take part only offline, proposing patches for the gate to judge, never in a decision; that part is planned ([The loop §7](/en/arch/learning/loop/#sec-7)).
 
 ## 2. The loop in one picture
 
@@ -73,6 +73,6 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 
 - [Training the combat net](/en/arch/learning/combat-net/): what it reads and predicts in brief, its samples, labels and training, and its measurements.
 - [The loop](/en/arch/learning/loop/): self-play, Monte Carlo, TD(λ), expert iteration, SPSA, LLM patches and gates, exploration, credit assignment, shaping, privileged information and local optima, each with what is built.
-- [Reference](/en/arch/learning/reference/): compute, the data directory, lists, the ledger, weight names, net files, C# inference, every script with its options, tests and open questions.
+- [Reference](/en/arch/learning/reference/): processes and outputs, the data directory, lists, seeds, weight names, net files, C# inference, every script with its options, tests and open questions.
 
-The champions are in [Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1). The project plays two nets, V v9-1 and the combat net c9-1, each one set of weights for all five characters, every ascension and both environments; the history of its nets and data is the ledger, `eval/ledger.md`, every character's.
+The champions are in [Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1). Both play the same two nets, the champion's V and the champion's combat net, each one set of weights for all five characters, every ascension and both environments.

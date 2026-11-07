@@ -1,6 +1,6 @@
 ---
 title: 前言
-description: '這個專案做什麼、它現在打得多好、設計所依據的五個想法、每個決策都遵循的七條規則、各個行程以及資料如何在它們之間流動、程式碼，以及這本書的地圖和閱讀路線。'
+description: '這個專案做什麼、它打得多好、設計所依據的五個想法、每個決策都遵循的七條規則、各個行程以及資料如何在它們之間流動、程式碼，以及這本書的地圖和閱讀路線。'
 ---
 import { Badge, LinkCard } from '@astrojs/starlight/components';
 
@@ -9,9 +9,9 @@ import { Badge, LinkCard } from '@astrojs/starlight/components';
 - **輔助**：Mod 向玩家顯示 AI 會怎麼做、它這一回合的計畫，以及它權衡過的選項，各帶獲勝機率。這部分已經做好（[Mod](/zh-tw/arch/mod/)、[輸出](/zh-tw/arch/output/)）。
 - **自動遊玩**：AI 在真實遊戲裡自己打出回答。玩家要求時，它打一步、打完一個回合或一個房間的剩餘部分，或者一直打到被暫停為止；這部分已經做好。在沒有人坐在鍵盤前的情況下打完整局，還在規劃中（[Mod：自動遊玩與安全](/zh-tw/arch/mod/auto/)）。
 
-策略透過自我對弈從零學起；它不是從任何人錄下的對局建構的，也不是手寫的。第一個目標是寂靜獵手，只限單人：先晉階 0，再晉階 10。遊戲版本固定在 **v0.111.0**；遊戲執行在 Godot 4.5.1 和 .NET 9.0.7 上，Mod 用 Harmony 補丁在執行時修改它的程式碼。
+策略透過自我對弈從零學起；它不是從任何人錄下的對局建構的，也不是手寫的。它只限單人，同一套網路服務全部五個角色和每個晉階等級。遊戲版本固定在 **v0.111.0**；遊戲執行在 Godot 4.5.1 和 .NET 9.0.7 上，Mod 用 Harmony 補丁在執行時修改它的程式碼。
 
-**它現在打得多好**：在 SL 中，AI 可以重播它所在的房間，冠軍贏下 **74%** 的寂靜獵手 A0 整局（100 個種子中 74 個，95% 區間 64.6–81.6%），用鐵甲戰士、儲君、故障機器人和縛亡者分別贏下 46%、35%、31% 和 9%；在 A10 打寂靜獵手，它接著訓練的那兩個網路贏下 8.5%（200 個種子中 17 個）。在 NoSL 中，AI 只看得到玩家看得到的，還沒有冠軍贏過一局；最好的報告平均到達第 26.2 層，用的是一個較舊的價值函數（[評估](/zh-tw/arch/evaluation/)）。
+**它打得多好**：在 SL 中，AI 可以重播它所在的房間，冠軍在晉階 0 贏下 **92%** 的寂靜獵手整局（100 個種子中 92 個，95% 區間 85.0–95.9%），用鐵甲戰士、儲君、故障機器人和縛亡者分別贏下 82%、71%、68% 和 47%（[評估：冠軍與基線 §2](/zh-tw/arch/evaluation/champions/#sec-2)）。在 NoSL 中，AI 只看得到玩家看得到的，它打的是同樣的兩個網路，它們從 SL 的對局學來，不在 NoSL 中訓練，也不在 NoSL 中過門檻；NoSL 冠軍沒有報告（[評估](/zh-tw/arch/evaluation/)）。
 
 如果你從沒玩過這款遊戲，請先讀[遊戲](/zh-tw/arch/game/)。
 
@@ -21,7 +21,7 @@ import { Badge, LinkCard } from '@astrojs/starlight/components';
 2. **兩種環境**：遊戲充滿隱藏資訊。在 **NoSL** 中，AI 只知道玩家知道的。在 **SL** 中，它還可以看到當前地圖點內的真實結果，就像一個會存檔讀檔的玩家能做到的那樣；兩種環境裡，之後的房間都仍然隱藏。每種環境有自己的冠軍和排行榜（[環境](/zh-tw/arch/environments/)）。
 3. **換世界，不換大腦**：同樣的大腦在自我對弈時回答模擬器，在真實遊戲裡回答 Mod，用的是同樣的訊息（[協定](/zh-tw/arch/protocol/)、[Harness](/zh-tw/arch/harness/)）。只有宿主會變。
 4. **真實的遊戲，無頭執行**：模擬器不是遊戲的模型：它在一個普通的 .NET 行程裡執行遊戲自己的 `sts2.dll`，沒有圖形，規則原封不動（[模擬器](/zh-tw/arch/simulator/)）。
-5. **不設後備**：沒有任何大腦負責的決策會讓這一局帶著錯誤停下；它從不被隨機做出。一個隨機決策會讓一次評估作廢。
+5. **不設後備**：沒有任何大腦負責的決策會讓這一局帶著錯誤停下；它從不被隨機做出。一個隨機佔位策略做的決策會讓一次評估作廢。
 
 ## 2. 七條規則
 
@@ -52,14 +52,14 @@ flowchart TD
   subgraph W["SimWorker × N（真實 sts2.dll，無頭）"]
     WS["世界 · SL 複本<br/>搜尋 · 整局"]
   end
-  G <-->|"JSON 行<br/>Unix socket"| D
+  G <-->|"JSON 行<br/>stdin / stdout"| D
   D <-->|"JSON 行<br/>子行程管道"| W
   D -.->|"決策日誌<br/>對局記錄"| OFF["離線<br/>訓練 V 和戰鬥網路<br/>門檻 · 晉升"]
   OFF -.->|"權重"| D
 ```
 
 - **遊戲行程**：真實遊戲加上 Mod。Mod 用 GameBridge 讀取畫面上的決策（observe、列出合法動作；模擬器也用它開始動作），詢問大腦，並畫出答案（[Mod](/zh-tw/arch/mod/)）。
-- **大腦行程**：SimWorker 的 `brain` 指令，或在 `run` 裡面的同一批物件。它不載入任何遊戲程式碼。Harness 給每一局一個 dispatcher，把每個決策路由給一個大腦，抽出它的種子，檢查它的答案並記錄下來（[Harness](/zh-tw/arch/harness/)）。
+- **大腦行程**：SimWorker 的 `brain` 指令（Mod 把它當作子行程啟動，透過它的 stdin 和 stdout 和它對話），或在 `run` 裡面的同一批物件。它不載入任何遊戲程式碼。Harness 給每一局一個 dispatcher，把每個決策路由給一個大腦，抽出它的種子，檢查它的答案並記錄下來（[Harness](/zh-tw/arch/harness/)）。
 - **SimWorker 行程**：每個都以無頭方式執行真實的 `sts2.dll`。它們建構供搜尋在其中進行的世界、載入 SL 複本、執行搜尋，並在自我對弈和評估中擔任整局的宿主（[模擬器](/zh-tw/arch/simulator/)）。遊戲把它的一局放在單例裡，所以一個行程只持有一局活的遊戲：搜尋分散到許多行程上（[模擬器：工作行程池](/zh-tw/arch/simulator/pool/)）。
 - **離線**：`learn/` 下的 Python 從決策日誌和對局記錄訓練 V 和戰鬥網路，並由一個晉級門檻決定新網路是否取代冠軍（[學習](/zh-tw/arch/learning/)、[評估](/zh-tw/arch/evaluation/)）。
 
@@ -83,20 +83,21 @@ flowchart TD
 
 - `learn/`：訓練 V（`learn/v/`）和戰鬥網路（`learn/combat/`）的 Python，以及門檻的腳本，用 uv 執行（[學習](/zh-tw/arch/learning/)）；
 - `weights/`：訓練好的網路，每個一個 JSON 檔案；每個角色共用的網路在 `weights/all/`；
-- `eval/`：種子集、冠軍檔案和帳本，以及每個角色的報告和排行榜（[評估](/zh-tw/arch/evaluation/)）；
+- `eval/`：種子集、冠軍檔案，以及每個角色的報告和排行榜（[評估](/zh-tw/arch/evaluation/)）；
+- `distro/`：Mod 的打包；`distro/build.sh` 把工作坊物品建置到 `out/Sts2Ai/`（不在 git 裡）：Mod、每個平台一個自包含的大腦，以及 NoSL 冠軍檔案和它的網路，這一個檔案服務兩種環境（[Mod §3](/zh-tw/arch/mod/#sec-3)）；
 - `docs/`：這本書；
-- 資料目錄（`data/`）存放自我對弈和評估的日誌，保存在專案的儲存主機上，不在 git 裡。
+- `data/`：自我對弈和評估寫入日誌和對局記錄的地方；不在 git 裡。
 
 ## 5. 這本書
 
-這本書有一篇前言、四部和兩個附錄，順序與側邊欄相同。頁面的徽章表示它的狀態。
+這本書有一篇前言、四部和一個附錄，順序與側邊欄相同。頁面的徽章表示它的狀態。
 
 **第一部：問題**
 
 | 章 | 內容 | 狀態 |
 |---|---|---|
 | [遊戲](/zh-tw/arch/game/) | 一局、地圖、房間、戰鬥、角色、晉階、隨機性，以及隱藏了什麼 | |
-| [環境](/zh-tw/arch/environments/) | AI 在 NoSL 和 SL 中能知道什麼、節點、世界和兩種戰鬥演算法 | <Badge text="已定" variant="success" /> |
+| [環境](/zh-tw/arch/environments/) | AI 在 NoSL 和 SL 中能知道什麼、節點、世界和兩種戰鬥演算法 | <Badge text="已實作" variant="success" /> |
 
 **第二部：決策**
 
@@ -125,14 +126,14 @@ flowchart TD
 | [Mod](/zh-tw/arch/mod/) | 遊戲內宿主：主迴圈、SL 紀錄、自動遊玩與安全 | <Badge text="部分實作" variant="tip" /> |
 | [輸出](/zh-tw/arch/output/) | 面板、標示、規劃中的自動迴圈和解說 | <Badge text="部分實作" variant="tip" /> |
 
-**附錄**：[狀態與路線圖](/zh-tw/status/)和[詞彙表](/zh-tw/glossary/)。
+**附錄**：[詞彙表](/zh-tw/glossary/)。
 
 **閱讀路線**：
 
 - *想在遊戲裡使用 AI*：[遊戲](/zh-tw/arch/game/)、[環境](/zh-tw/arch/environments/)，然後是 [Mod](/zh-tw/arch/mod/) 和[輸出](/zh-tw/arch/output/)。
 - *想訓練一個網路*：[宏觀大腦](/zh-tw/arch/macro-brain/)、[學習](/zh-tw/arch/learning/)、[評估](/zh-tw/arch/evaluation/)，然後是[模擬器：整局](/zh-tw/arch/simulator/runs/)。
 - *想加一個決策畫面，或跟上遊戲更新*：[協定：觀測與動作](/zh-tw/arch/protocol/observation/)、[GameBridge](/zh-tw/arch/gamebridge/)、[模擬器：整局 §4](/zh-tw/arch/simulator/runs/#sec-4)、[Mod：主迴圈 §4](/zh-tw/arch/mod/loop/#sec-4)。
-- *想看它有多強*：[評估](/zh-tw/arch/evaluation/)和[狀態](/zh-tw/status/)。
+- *想看它有多強*：[評估](/zh-tw/arch/evaluation/)和[評估：冠軍與基線](/zh-tw/arch/evaluation/champions/)。
 
 <LinkCard title="從這裡開始：遊戲" description="殺戮尖塔 2 的一局是什麼，其中又隱藏了什麼。其他每一頁都建立在它之上。" href="/zh-tw/arch/game/" />
 
@@ -141,13 +142,7 @@ flowchart TD
 **怎麼讀這些頁面**
 
 - <Badge text="已核實" variant="success" /> 表示這條說法已在遊戲原始碼裡核對過。<Badge text="推斷" variant="caution" /> 表示它是推斷出來的，在任何東西依賴它之前必須先核對。
-- 像 `Runs/RunManager.cs:670-709` 這樣的遊戲原始碼位置，是反編譯遊戲裡的路徑，省去了其資料夾名稱的 `MegaCrit.Sts2.Core.` 前綴。反編譯程式碼留在本地（`tmp/decompiled/sts2/`），不在儲存庫裡。Godot 節點類別（`N*`）按檔名查找，檔名是唯一的。
+- 像 `Runs/RunManager.cs:670-709` 這樣的遊戲原始碼位置，是反編譯遊戲裡的路徑，省去了其資料夾名稱的 `MegaCrit.Sts2.Core.` 前綴。反編譯的遊戲不在儲存庫裡。Godot 節點類別（`N*`）按檔名查找，檔名是唯一的。
 - 我們自己的程式碼按它在 `src/` 或 `learn/` 下的路徑引用；在章節已經清楚指明是哪個專案時，常常省去 `src/Sts2Ai.` 前綴。
-- 「Harness §3」指向某一頁的一個編號小節。它的錨點在三種語言裡都是 `#sec-3`（`/zh-tw/arch/harness/#sec-3`）。由好幾頁組成的一章還要寫出頁名：「宏觀大腦：搜尋 §2」就是 `/zh-tw/arch/macro-brain/search/#sec-2`。程式碼註解也用同樣的方式引用小節：`docs: harness §3`、`docs: macro-brain/search §2`。
-- 中文的背景筆記保存在本地 `tmp/notes/` 下，不在儲存庫裡。
-
-**怎麼維護**
-
-- 英文頁是參考版本，Claude 把它們當作設計手冊來讀。簡體和繁體中文頁說的是同一件事。三種語言在同一次提交裡一起修改。
-- 保持小節編號穩定：程式碼註解會引用它們。
-- 提交前在 `docs/` 下執行 `pnpm check`：它會建置網站，並檢查每個內部連結和錨點。
+- 「Harness §3」指向某一頁的一個編號小節。它的錨點在三種語言裡都是 `#sec-3`（`/zh-tw/arch/harness/#sec-3`）。由好幾頁組成的一章還要寫出頁名：「宏觀大腦：搜尋 §2」就是 `/zh-tw/arch/macro-brain/search/#sec-2`。程式碼註解也用同樣的方式引用小節，`docs: harness §3`、`docs: macro-brain/search §2`，所以小節的編號保持不變。
+- 英文頁是參考版本；簡體和繁體中文頁說的是同一件事。

@@ -108,11 +108,11 @@ flowchart TD
 
 **没有兜底**。驱动程序不认识的画面会抛异常，这一局就失败：未知的房间，未知类型的奖励、商店条目或水晶球物品，链接的奖励组，没有画面却还在等待的任务。不在合法清单里的回答也一样。失败从不被一个默认选择掩盖，所以打完的一局，每个决策都是经由它的策略回答的。
 
-一局遇到每种画面的频率，取自冠军晋级报告里的 300 局 SL 对局：
+一局遇到每种画面的频率，取自冠军的静默猎手报告里的 100 局 SL 对局（[评估：冠军与基线 §2](/arch/evaluation/champions/#sec-2)）：
 
 <SurfaceCounts client:visible lang="zh-CN" />
 
-在 9999 生命值的对局里见到的**正常游戏行为**，不是 bug：击杀机制，例如无厌沙虫（THE_INSATIABLE）的沙坑 `Kill`；失落与遗忘之物（THE_LOST_AND_FORGOTTEN）不断偷取力量和敏捷，直到这场战斗输掉（在 9999 生命值下约要 156 回合；战斗回合上限让它在第 81 回合结束）；以及 PunchOff 的「event not finished」警告，它的战斗带有 `shouldResumeAfterCombat: false`（`Models.Events/PunchOff.cs:138`），真实游戏也会同样警告。
+**正常游戏行为**。9999 生命值的对局遇到的一些情况看起来像 bug，其实不是：击杀机制，例如无厌沙虫（THE_INSATIABLE）的沙坑 `Kill`；失落与遗忘之物（THE_LOST_AND_FORGOTTEN）不断偷取力量和敏捷，直到这场战斗输掉（在 9999 生命值下约要 156 回合；战斗回合上限让它在第 81 回合结束）；以及 PunchOff 的「event not finished」警告，它的战斗带有 `shouldResumeAfterCombat: false`（`Models.Events/PunchOff.cs:138`），真实游戏也会同样警告。
 
 ## 5. 谁来回答，一局报告什么
 
@@ -148,7 +148,7 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 | `determinism:` | 用 `--check` 时：走传输协议重播后完全相同的局数，以及从检查点精确重播的节点数，附每个节点的用时 |
 | `game Log.Error lines:` | 游戏错误；用了工作进程池时其后是 `worker restarts`，用 SL 规划器时是 `replans` |
 
-**退出码**：有一局失败、重播结果不同、有节点没有精确重播，或者记下了游戏错误时为 1；否则为 0。从未到达的决策界面和空闲等待只打印出来（`Commands/RunCommand.cs:146`）。
+**退出码**：有一局失败、重播结果不同、有节点没有精确重播，或者记下了游戏错误时为 1；否则为 0。从未到达的决策界面和空闲等待只打印出来（`Commands/RunCommand.cs:140`）。
 
 **记录与日志**。`--records FILE` 每行写一条对局记录，作为 `report` 和 `gate` 的输入（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)）：
 
@@ -171,38 +171,28 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 **`run --check`** 在它打的每一局上检查这一点（`Commands/RunCommand.cs:94-130`）：
 
 - 它观测每个决策：每个观测都必须完全不变地经过 JSON 往返，并保留它的哈希；
-- 它把每个种子再打一遍，这一遍走传输协议（[协议：线路 §1](/arch/protocol/wire/#sec-1)），连到同一进程里一个线程上的大脑，冠军相同（或者连到给定的 `--brain`），然后比较两遍：轨迹、观测哈希、概况、地图哈希、对局记录和决策日志，耗时除外；SL 下第二遍还带着节点消息；
+- 它把每个种子再打一遍，这一遍走传输协议（[协议：线路 §1](/arch/protocol/wire/#sec-1)），连到同一进程里一个线程上的大脑，冠军相同，然后比较两遍：轨迹、观测哈希、概况、地图哈希、对局记录和决策日志，耗时除外；SL 下第二遍还带着节点消息；
 - 它把第一遍的每个节点从检查点加载出来，重播这个节点的决策，要求克隆逐个显示这一局的观测，移动之后停在视野边界上，并拒绝再走一步（[世界与 SL 克隆 §5](/arch/simulator/worlds/#sec-5)）。
 
-**实测**于 2026-10-26，200 个种子（静默猎手，进阶 0，9999 生命值，随机宏观策略和 `play` 战斗策略）：
+**通过的一批保证什么**。`run --check` 遇到任何不同都以 1 退出（[§5](#sec-5)），所以在通过的一批里，每一局走传输协议都打得一样，每个观测都经过了往返，每个节点都从检查点精确重播。一局的种子来自它的下标（`--start`、`GameSeeds.MakeSeed`），而不是来自打它的进程，所以一批对局可以分到多个进程上打；每局那一行上的 `obs <digest>` 用来比较在不同进程里打的对局。不管游戏以什么顺序存放一个地图点的子节点，`MapActions` 都会给它们排序（[§4](#sec-4)）。克隆的检查，以及载入和重播一个节点的开销，见[世界与 SL 克隆 §6](/arch/simulator/worlds/#sec-6)。
 
-- `--check`：重播 200 局全部相同（轨迹、概况、地图哈希）；每个观测都精确地完成了往返，每个决策的观测哈希都一致；
-- 跨进程划分：同样的 200 个种子，分成 8 个进程各 25 局和 4 个进程各 50 局，输出的行完全相同（结局、概况、决策数、地图哈希、观测摘要），所以地图点子节点的顺序从未出现不同，尽管 `MapActions` 反正也会排序；
-- 其他四个角色（铁甲战士、故障机器人、储君、亡灵契约师），各 25 局，用 `--check`：重播相同；
-- 0 失败，0 游戏错误，0 次空闲等待；每个决策界面都到达过，最少见的是 `bundle`，200 局里出现在 9 局。
+**真实时间等待**。模型代码不能等待时钟。`Task.Delay` 会让 pump 的队列一直空着，直到计时器线程投递工作，于是稳定下来时分不清游戏是空闲还是在等待（[无头宿主 §7](/arch/simulator/headless/#sec-7)）。Amalgamator 事件就是这样等待的，已经打了补丁。其他几处在无头时不会走到：`ActionExecutor.WaitForUnpause` 在游戏暂停时每 50 ms 轮询一次（`GameActions/ActionExecutor.cs:227-242`），`CombatState.GodotTimerTask` 给按 net id 查找生物设了超时（`Combat/CombatState.cs:603-609`），休息处的悬停提示是 UI。守护手段是 [§5](#sec-5) 的空闲等待计数，每一批都必须为 0。
 
-克隆自己的检查覆盖了五个角色 880 局的每个节点，见[世界与 SL 克隆 §6](/arch/simulator/worlds/#sec-6)。
-
-**真实时间等待**。模型代码不能等待时钟。`Task.Delay` 会让 pump 的队列一直空着，直到计时器线程投递工作，于是稳定下来时分不清游戏是空闲还是在等待（[无头宿主 §7](/arch/simulator/headless/#sec-7)）。Amalgamator 事件就是这样等待的，已经打了补丁。其他几处在无头时不会走到：`ActionExecutor.WaitForUnpause` 在游戏暂停时每 50 ms 轮询一次（`GameActions/ActionExecutor.cs:227-242`），`CombatState.GodotTimerTask` 给按 net id 查找生物设了超时（`Combat/CombatState.cs:603-609`），休息处的悬停提示是 UI。守护手段是上面的空闲等待计数，在 200 局的那批里是 0。
-
-**内联执行**。无头时游戏运行在 `NonInteractiveMode` 下，动作内联执行，而不是每帧让出一次，所以「发出即不管」（fire-and-forget）的工作，执行顺序可能和真实游戏不同。这是否会改变玩家看到的任何东西，在能把游戏里的对局和这里的对局相比较之前，还没有定论（[评估 §2](/arch/evaluation/#sec-2)）。
+**内联执行**。无头时游戏运行在 `NonInteractiveMode` 下，动作内联执行，而不是每帧让出一次，所以「发出即不管」（fire-and-forget）的工作，执行顺序可能和真实游戏不同。这是否会改变玩家看到的任何东西，还没有定论：这需要把游戏里的对局和这里的对局相比较（[评估 §2](/arch/evaluation/#sec-2)）。
 
 ## 7. 连到大脑上的对局
 
-`run` 通常把大脑放在自己的进程里：Harness 和冠军的各个大脑都是那里的对象，它们的搜索交给它启动的工作进程池（[工作进程池](/arch/simulator/pool/)）。用 `run --brain SOCKET` 时，大脑则是另一个进程，在一个 Unix 套接字上监听，也就是 Mod 在游戏里与之通信的那个（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。这时模拟器完全像游戏那样作为对局的主机：每局发送 `hello`，带上它的环境和由种子哈希得到的对局 id，每个决策都连同它的观测和合法动作一起发出，然后打出大脑推荐的动作（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。NoSL 下对局 id 隐藏了种子；SL 下种子确实会到达大脑，就在节点检查点的存档里，而这是 SL 可以知道的。
+`run` 把大脑放在自己的进程里：Harness 和冠军的各个大脑都是那里的对象，它们的搜索交给它启动的工作进程池（[工作进程池](/arch/simulator/pool/)）。在游戏里，大脑是一个单独的进程 `brain`，由 Mod 启动，并通过它的 stdin 和 stdout 与它通信（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。走传输协议时，主机打一局的方式和 `run` 在进程内完全一样：每局发送 `hello`，带上它的环境和由种子哈希得到的对局 id，每个决策都连同它的观测和合法动作一起发出，然后打出大脑推荐的动作（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。NoSL 下对局 id 隐藏了种子；SL 下种子确实会到达大脑，就在节点检查点的存档里，而这是 SL 可以知道的。SL 下主机还发送节点消息：新节点开始时发送检查点，然后是还没发送的决策，每个都在下一个决策之前发出（`Brains/RunBrains.cs:53-99`）。模拟器只在 `run --check` 下走传输协议打对局（见本节末尾）。
 
-打什么由大脑决定，所以 `run --brain` 拒绝所有冠军选项，包括 `--log`（`Commands/RunCommand.cs:63-64`）；又因为冠军文件的选项会像给出的选项一样并入，所以指明了任何冠军选项的 `--champion FILE` 也会被拒绝（`Commands/Args.cs:178-194`） <Badge text="推断" variant="caution" />。SL 下主机还发送节点消息：新节点开始时发送检查点，然后是还没发送的决策，每个都在下一个决策之前发出（`Brains/RunBrains.cs:53-99`）。
-
-`brain` 就是那个进程（`Commands/BrainCommand.cs`）：单独运行的 Harness，一次服务一个连上来的主机。它自己不需要游戏；搜索用的工作进程各自启动自己的游戏。
+`brain` 就是那个进程（`Commands/BrainCommand.cs`）：单独运行的 Harness，在 stdin 和 stdout 上服务启动它的那个主机，直到 stdin 关闭。它自己不需要游戏；搜索用的工作进程各自启动自己的游戏。它的 stdout 只承载传输协议，别的每一行输出都写到 stderr。
 
 ```text
-brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy plan|play] [--log FILE] [--wire FILE]
+brain [--champion FILE] [champion options] [--sl-policy plan|pimc|play] [--log FILE] [--wire FILE]
 ```
 
-- `--socket`：默认是 `$XDG_STATE_HOME/sts2ai/brain.sock`，这个变量没设时是 `~/.local/state/sts2ai/brain.sock`（`Sts2Ai.Protocol/Wire.cs:100-104`）：Steam 在一个容器里运行游戏，这个容器共享主目录，但不共享 `$XDG_RUNTIME_DIR`。
-- 主机在 `hello` 里写明它的环境：NoSL 主机得到 `--policy` 的战斗大脑，SL 主机得到 `--sl-policy` 的（默认是 SL 规划器），宏观大脑相同。主机还可以写明一个力度（`low`、`medium`、`high`、`max`），这一局的 SL 规划器就用它来打（[Harness §5](/arch/harness/#sec-5)）。
+- 主机在 `hello` 里写明它的环境：NoSL 主机得到 `--policy` 的战斗大脑，SL 主机得到 `--sl-policy` 的（默认是 SL 规划器），宏观大脑相同，而它的后续状态（afterstate）由环境决定，不管 `--afterstates` 怎么写：对 NoSL 主机，L0 从画面预测它们；对 SL 主机，冠军带有战斗网络时，L0 在节点的克隆上打出它的选项，由战斗网络给选项引发的战斗估值。所以一个冠军文件就能服务两种环境（`BrainCommand.Champions`）。主机还可以写明一个力度（`low`、`medium`、`high`、`max`），这一局的 SL 规划器就用它来打（[Harness §5](/arch/harness/#sec-5)）。
 - 它的回答带着大脑打过分的选项，在地图上还带每个选项的路线，供 Mod 显示（[输出 §2](/arch/output/#sec-2)）。
-- `--log` 写出决策日志；`--wire` 写出主机发来的每条消息，`clones` 重播这些消息，在各自的克隆上检查主机的 SL 决策（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
-- 它每局打印一行：对局 id、结局、层数、决策数、重新规划次数，以及它的工作进程的游戏错误，主机的对局记录不计入这些错误。
+- `--log` 写出决策日志；`--wire` 写出主机发来的每条消息，`clones` 重播这些消息，在各自的克隆上检查主机的 SL 决策（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。只有当设置文件打开 `Record` 时，Mod 才传这两个选项：它启动的每个大脑一对文件，放在大脑日志旁边的 `captures/` 里。
+- 它每局在 stderr 上打印一行：对局 id、结局、层数、决策数、重新规划次数，以及它的工作进程的游戏错误，主机的对局记录不计入这些错误。
 
 `run --check` 的第二遍在进程内使用同一个服务端，用一个以进程命名的抽象 Unix 套接字（`\0sts2ai-brain-PID`，`Brains/RunBrains.cs:200-220`），所以 `--check` 打的每一局都会检查线路这条路径。

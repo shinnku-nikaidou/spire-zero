@@ -15,7 +15,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-L0 已经实现：Brain 里的 `MacroBrain`，用 `run --macro l0` 来跑（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）。它回答所有宏观决策界面和战斗外的选牌提示，用 V 给选项估值，V 从网络文件读入（[价值网络](/arch/macro-brain/network/)）。SL 下加上 `--afterstates clone` 时，L0 在节点克隆上把每个选项打一遍，并在节点的各个画面里继续往下搜（[搜索 §2](/arch/macro-brain/search/#sec-2)）；NoSL 下对局世界还不存在，它根据画面预测每个后状态（[搜索 §1](/arch/macro-brain/search/#sec-1)）。供自我对弈用的 `--explore ε` 把比例为 ε 的决策改为均匀抽取（[自我对弈 §3](/arch/macro-brain/selfplay/#sec-3)）。规划中：NoSL 下从对局世界得到后状态和多步搜索、L1 推演复核，以及 `IMacroBrain` 接口（[弱点与下一步 §2](/arch/macro-brain/next/#sec-2)）。
+L0 已经实现：Brain 里的 `MacroBrain`，用 `run --macro l0` 来跑（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）。它回答所有宏观决策界面和战斗外的选牌提示，用 V 给选项估值，V 从网络文件读入（[价值网络](/arch/macro-brain/network/)）。SL 下加上 `--afterstates clone` 时，L0 在节点克隆上把每个选项打一遍，并在节点的各个画面里继续往下搜（[搜索 §2](/arch/macro-brain/search/#sec-2)）；NoSL 下它根据画面预测每个后状态（[搜索 §1](/arch/macro-brain/search/#sec-1)）。供自我对弈用的 `--explore ε` 把比例为 ε 的决策改为均匀抽取（[自我对弈 §3](/arch/macro-brain/selfplay/#sec-3)）。规划中：NoSL 下从对局世界得到后状态和多步搜索、L1 推演复核，以及 `IMacroBrain` 接口（[弱点与下一步 §2](/arch/macro-brain/next/#sec-2)）。
 
 </Aside>
 

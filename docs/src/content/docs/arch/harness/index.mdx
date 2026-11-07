@@ -14,7 +14,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-已有：`Dispatcher`，每局一个，它负责路由，保存敌人出招记录和 SL 节点，抽取种子，检查回答，并写决策日志；`BrainServer`，宿主–大脑线路上 Harness 的一端；工作进程池和在其中搜索的大脑（`PooledPimc`、`PooledPlanner`、`PooledClone`）；以及评估使用的类型（对局记录、报告、晋级门槛、冠军文件，[评估](/arch/evaluation/)）。SimWorker 的 `run` 让每一局都经过它，在进程内或通过线路。规划中：公开记录的其余部分（[§4](#sec-4)）；在搜索进行中丢弃过期请求；墙钟预算；降级回答（[路由、预算与种子 §4](/arch/harness/routing/#sec-4)、[§6](/arch/harness/routing/#sec-6)）。
+已有：`Dispatcher`，每局一个，它负责路由，保存敌人出招记录和 SL 节点，抽取种子，检查回答，并写决策日志；`BrainServer`，宿主–大脑线路上 Harness 的一端；工作进程池和在其中搜索的大脑（`PooledPimc`、`PooledPlanner`、`PooledClone`）；以及评估使用的类型（对局记录、报告、晋级门槛、冠军文件，[评估](/arch/evaluation/)）。SimWorker 的 `run` 让每一局都在自己的进程里经过它，用 `run --check` 时再通过线路打一遍；`brain` 命令通过线路为 Mod 提供服务（[§5](#sec-5)）。规划中：公开记录的其余部分（[§4](#sec-4)）；在搜索进行中丢弃过期请求；墙钟预算；降级回答（[路由、预算与种子 §4](/arch/harness/routing/#sec-4)、[§6](/arch/harness/routing/#sec-6)）。
 
 </Aside>
 
@@ -66,7 +66,7 @@ sequenceDiagram
 4. **Harness 检查并记日志**。不合法的回答会抛异常。大脑的名字、计划和候选成为这个决策的注记（`Dispatcher.Last`），开着日志时，还成为决策日志里的一行。在战斗外，候选是宏观策略或提示策略打过分的选项（`Scored`），只有注记保存它们。
 5. **宿主得到一条推荐**：动作、大脑、它的计划和候选，并重复请求的 id 和哈希（[协议：线路 §7](/arch/protocol/wire/#sec-7)）。
 
-**进程内与通过线路**。不带 `--brain` 的 `run` 在自己的进程里给每一局一个 `Dispatcher`。`run --brain SOCKET` 和 Mod 则通过 Unix 套接字把每个决策发给 `brain` 命令，`BrainServer` 在那里同样给这一局一个 `Dispatcher`。两者的回答相同：`run --check` 把每个种子通过线路再打一遍并加以比较（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。宿主会说明自己是 Mod 还是模拟的一局（`hello.role`），但做出冠军时不读它：大脑分不出真实游戏和模拟器。这就是项目的原则「换世界，不换大脑」（[前言 §3](/#sec-3)）。
+**进程内与通过线路**。`run` 在自己的进程里给每一局一个 `Dispatcher`。Mod 则把 `brain` 命令作为子进程启动，通过大脑的 stdin 和 stdout 把每个决策发给它，`BrainServer` 在那里同样给这一局一个 `Dispatcher`（[协议：线路 §1](/arch/protocol/wire/#sec-1)）。两者的回答相同：`run --check` 把每个种子通过线路再打一遍，打给它自己进程里的一个 `BrainServer`，并加以比较（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。宿主会说明自己是 Mod 还是模拟的一局（`hello.role`），但做出冠军时不读它：大脑分不出真实游戏和模拟器。这就是项目的原则「换世界，不换大脑」（[前言 §1](/#sec-1)）。
 
 ## 3. Harness 为一局保存什么
 
@@ -122,11 +122,11 @@ public sealed class PublicRecord
 
 ## 5. 大脑服务器
 
-`BrainServer`（`BrainServer.cs`）是线路的大脑一端（[协议：线路](/arch/protocol/wire/)）。它拿到一个工厂，由宿主的 `hello` 做出一局的 `Dispatcher`；还可以选择性地拿到每次 `run_end` 时要做的事、一个日志记录器，以及一个能看到每条消息的钩子。
+`BrainServer`（`BrainServer.cs`）是线路的大脑一端（[协议：线路](/arch/protocol/wire/)）。它拿到一个工厂，由宿主的 `hello` 做出一局的 `Dispatcher`；还可以选择性地拿到每次 `run_end` 时要做的事，以及一个能看到每条消息的钩子。
 
-**监听**。`Listen(path)` 为连到一个 Unix 套接字的宿主提供服务，一次一个，一直如此。连接出错的宿主（I/O 错误、格式错误的消息、坏的 JSON、对不上的协议版本）会被丢弃并给出警告，然后服务下一个。`Bind(path)` 创建套接字：以 NUL 字节开头的路径表示一个抽象套接字，它没有文件；已经退出的大脑留下的套接字文件会被替换，还有大脑在监听的则会抛异常；套接字所在的目录创建为只让当前用户可读。
+**服务**。`Serve(wire)` 从一个 `WireStream` 读宿主的消息并在上面回答，一次一条，直到宿主关闭它那一端。`brain` 命令在自己的 stdin 和 stdout 上服务启动它的那一个宿主：stdin 关闭时，大脑就结束。I/O 错误、格式错误的消息、坏的 JSON 或对不上的协议版本会让 `Serve` 抛异常结束，大脑也随之结束；Mod 随后会再启动它（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。只有 `run --check` 用套接字：`Bind(path)` 在一个抽象名字上创建 Unix 套接字（以 NUL 字节开头的路径，它没有文件），同一进程里的一个线程服务检查的第二遍对局建立的那一个连接。
 
-**消息循环**（`BrainServer.cs:75-136`）：
+**消息循环**（`BrainServer.cs:40-94`）：
 
 | 宿主发来的消息 | 服务器做什么 |
 |---|---|
@@ -137,15 +137,15 @@ public sealed class PublicRecord
 | `executed`、`cancel` | 忽略：每个决策都在读下一条消息之前答完，所以没有需要丢弃的搜索 |
 | 其他任何消息 | `error` |
 
-**回答**（`BrainServer.cs:138-154`）。战斗决策的合法动作被解析成战斗动作，大脑看到的是它画面上的战斗观测；选牌提示的回答写成 `pick:i,j`；其他每个决策界面都是宏观决策。推荐重复请求的 id 和哈希，并带上这个决策的注记：它的大脑、计划和候选。选牌提示的推荐不带计划，在战斗中也不带候选；在战斗外，它的候选是 L0 权衡过的那些回答。
+**回答**（`BrainServer.cs:97-113`）。战斗决策的合法动作被解析成战斗动作，大脑看到的是它画面上的战斗观测；选牌提示的回答写成 `pick:i,j`；其他每个决策界面都是宏观决策。推荐重复请求的 id 和哈希，并带上这个决策的注记：它的大脑、计划和候选。选牌提示的推荐不带计划，在战斗中也不带候选；在战斗外，它的候选是 L0 权衡过的那些回答。
 
 **带解释的回答**。`brain` 命令用 `explain` 创建它的 `Dispatcher`，供显示答案的宿主使用：在地图决策处，宏观大脑打过分的每个选项还会带上它在这个选项之后会走的、通往 Boss 的路线，每个选项问一次 `IMacroPolicy.Plan`（`Candidate.plan`，[协议：线路 §7](/arch/protocol/wire/#sec-7)）。进程内的 `run` 创建它们时不带它。
 
-**`brain` 命令**包装了它（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。它根据自己的选项做出两个冠军，每种环境一个：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。两者共用一个工作进程池。宿主可以在 `hello` 里要求 SL 规划器的某一档力度（`low`、`medium`、`high`、`max`，[SL 规划器：预算、开销与结果 §1](/arch/sl-planner/budget/#sec-1)）：这一局的 SL 规划器就用这个预设的预算来打，`ready` 里冠军的名字也会写明；别的战斗大脑照原样打，不认识的力度会以 `error` 拒绝。每种环境和力度的 `Dispatcher` 创建器，在第一个要求它的对局到来时才创建。`--log FILE` 在每一局的 `run_end` 时写出它的决策日志，所以没发这条消息就断开的宿主不留下任何行；`--wire FILE` 记录宿主发来的每条消息，`clones` 据此检查 Mod 的 SL 记录（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
+**`brain` 命令**包装了它（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）：它在自己的 stdin 和 stdout 上服务启动它的宿主，直到 stdin 关闭（`SimWorker/Commands/BrainCommand.cs`）。stdout 归线路所有，所以它打印的其他一切都去 stderr：第一行写明两个冠军，之后每局一行，写明这一局怎样结束、到了哪一层、做了多少决策；Mod 把这些行保存在 `brain.log` 里（[Mod §4](/arch/mod/#sec-4)）。它根据自己的选项做出两个冠军，每种环境一个：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。两者的宏观大脑相同，它的后状态由宿主的环境决定，不管 `--afterstates` 怎么写：对 NoSL 宿主，L0 从画面预测后状态；对 SL 宿主，L0 在节点的克隆上把每个选项打一遍；这是冠军工厂唯一接受的两种搭配（`BrainCommand.Champions`；克隆需要战斗网络，没有的话 SL 宿主会被拒绝）。所以一个冠军文件就能服务两种宿主：Mod 自带的是 NoSL 冠军的文件，它的 SL 宿主得到用同样网络的 SL 规划器和在克隆上打的 L0，名字就是 SL 冠军的名字（[路由、预算与种子 §1](/arch/harness/routing/#sec-1)）。两者共用一个工作进程池。宿主可以在 `hello` 里要求 SL 规划器的某一档力度（`low`、`medium`、`high`、`max`，[SL 规划器：预算、开销与结果 §1](/arch/sl-planner/budget/#sec-1)）：这一局的 SL 规划器就用这个预设的预算来打，`ready` 里冠军的名字也会写明；别的战斗大脑照原样打，不认识的力度会以 `error` 拒绝。每种环境和力度的 `Dispatcher` 创建器，在第一个要求它的对局到来时才创建。有两个选项用来记录一次会话；只有在 Mod 设置的 `Record` 打开时，Mod 才同时传入这两个选项，对应 `brain.log` 旁边 `captures/` 里的一对文件。`--log FILE` 在每一局的 `run_end` 时写出它的决策日志，所以没发这条消息就断开的宿主不留下任何行；`--wire FILE` 记录宿主发来的每条消息，`clones` 据此检查 Mod 的 SL 记录（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
 
 ## 6. 代码
 
-`Sts2Ai.Harness` 引用 Brain（并经由它引用 Protocol）和 `Microsoft.Extensions.Logging.Abstractions` 9.0.22，不引用游戏的任何东西；`selftest` 检查它编译后的引用（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)）。
+`Sts2Ai.Harness` 引用 Brain（并经由它引用 Protocol），不引用游戏的任何东西；`selftest` 检查它编译后的引用（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)）。
 
 | 文件 | 类型 | 内容 |
 |---|---|---|

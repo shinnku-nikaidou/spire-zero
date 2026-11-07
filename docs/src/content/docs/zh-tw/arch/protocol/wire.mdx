@@ -1,19 +1,20 @@
 ---
 title: '線路：宿主與大腦'
-description: '執行遊戲的行程與大腦之間的對話：socket、每條訊息及其欄位、一步一步走完的一局、讓回答與遊戲保持同步的規則、SL 節點訊息、推薦，以及模擬器和 Mod 這兩種宿主有何不同。'
+description: '執行遊戲的行程與大腦之間的對話：連線、每條訊息及其欄位、一步一步走完的一局、讓回答與遊戲保持同步的規則、SL 節點訊息、推薦，以及模擬器和 Mod 這兩種宿主有何不同。'
 sidebar:
   label: 線路
 ---
 
 import WireExchange from '../../../../../components/book/WireExchange.svelte';
 
-大腦從不在遊戲裡面執行。遊戲那一側，也就是**宿主**，每個決策問它一個問題，得到一個回答。宿主是真實遊戲裡的 Mod，或承載一局的模擬器（`run --brain`）；**大腦**是 Harness 加上冠軍的各個大腦，由 `brain` 指令提供服務（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。兩端用同一批型別（`Sts2Ai.Protocol/Wire.cs`），所以不管是哪個宿主在問，一局都打得一樣。
+大腦從不在遊戲裡面執行。遊戲那一側，也就是**宿主**，每個決策問它一個問題，得到一個回答。宿主是真實遊戲裡的 Mod，或承載一局的模擬器（`run --check`）；**大腦**是 Harness 加上冠軍的各個大腦，由 `brain` 指令提供服務（[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。兩端用同一批型別（`Sts2Ai.Protocol/Wire.cs`），所以不管是哪個宿主在問，一局都打得一樣。
 
 ## 1. 連線
 
-- **Unix domain socket**，從不用 TCP，所以本機以外的任何東西都碰不到大腦。預設是 `$XDG_STATE_HOME/sts2ai/brain.sock`，那個變數沒有設定時是 `~/.local/state/sts2ai/brain.sock`（`BrainSocket.DefaultPath`）：Steam 在一個容器裡執行遊戲，這個容器和主機系統共用家目錄，但不共用 `$XDG_RUNTIME_DIR`。
-- **大腦負責監聽**（`BrainServer.Listen`，`Sts2Ai.Harness/BrainServer.cs`）。它建立 socket 所在的目錄，只有使用者本人可讀；取代已經不在的大腦留下的 socket 檔案；如果還有大腦在那裡監聽，就拒絕啟動。以 NUL 位元組開頭的路徑指名一個抽象 socket，它沒有檔案：`run --check` 為它的行程內大腦用的就是這種。
-- **一次一個宿主**。大腦服務一條連線，直到宿主關閉它，再接下一條。位元組不是有效訊息的連線會被丟棄並留下一條警告，大腦則繼續監聽。
+- **大腦是 Mod 的子行程**。Mod 把它自帶的大腦（Mod 資料夾裡的 `brain/RID/`）以 `brain --champion champion.json --workers N` 啟動，工作資料夾是 `brain/`，透過這個子行程的 stdin 和 stdout 和它交談：送給大腦的訊息走它的 stdin，回答走它的 stdout（`Sts2Ai.Mod/BundledBrain.cs`）。`champion.json` 是 NoSL 冠軍的檔案，大腦為 NoSL 宿主打它，並配上 SL 規劃器和在節點複本上打的 L0，為 SL 宿主打它（[Harness §5](/zh-tw/arch/harness/#sec-5)）。用的是管道，不是 socket 也不是連接埠：只有啟動大腦的那個遊戲能和它交談。大腦的 stderr 寫進 `$XDG_STATE_HOME/sts2ai`（預設是 `~/.local/state/sts2ai`）裡的 `brain.log`，和 Mod 的 `settings.json` 放在一起（[Mod §4](/zh-tw/arch/mod/#sec-4)）。
+- **記錄一次工作階段**。Mod 設定的 `Record` 開啟時，Mod 還會給大腦 `--wire` 和 `--log`：同一個資料夾的 `captures/` 裡、按大腦啟動時間（UTC）命名的一對檔案，分別是 Mod 送出的每條訊息和決策日誌，`clones` 據此重播 SL 決策（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
+- **一個宿主，直到 stdin 關閉**。`brain` 指令服務啟動它的那一個宿主（`SimWorker/Commands/BrainCommand.cs`、`Sts2Ai.Harness/BrainServer.cs`），stdin 關閉時就結束。它讀不了的訊息（壞掉的 JSON、別的協定版本）或斷掉的管道也會讓它結束。大腦結束或管道斷掉時，Mod 殺掉它剩下的部分，包括它的搜尋工作行程，等 2 s，再啟動它（[Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8)）。
+- **模擬器走線路**。`run --check` 把每個種子走線路再打一遍，打給它自己行程裡的一個大腦伺服器，用的是一個抽象名稱上的 Unix socket：以 NUL 位元組開頭的路徑，它沒有檔案（`BrainServer.Bind`，[模擬器：整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。
 - **一局接一局**。一條連線依序承載多局，每局從 `hello` 到 `run_end`。
 
 ## 2. 格式
@@ -24,7 +25,7 @@ import WireExchange from '../../../../../components/book/WireExchange.svelte';
 {"type":"executed","v":1,"decision_id":0,"action":"event:0","ok":true}
 ```
 
-任何不相容的改動都會提升版本號。讀取方拒絕 `v` 不是自己版本的訊息。在同一個版本內，一方不認識的欄位會在讀取時被丟掉；這時觀測雜湊就會不同，所以從與大腦不同的 commit 建置的宿主，會在它的第一個決策就失敗，並附上說明原因的訊息（[§5](#sec-5)）。
+任何不相容的改動都會提升版本號。讀取方拒絕 `v` 不是自己版本的訊息。在同一個版本內，一方不認識的欄位會在讀取時被丟掉；這時觀測雜湊就會不同，所以來自與大腦不同的建置的宿主，會在它的第一個決策就失敗，並附上說明原因的訊息（[§5](#sec-5)）。
 
 ## 3. 訊息
 
@@ -69,12 +70,12 @@ sequenceDiagram
 
 **回答與遊戲保持同步**。
 
-- 大腦按順序回答決策，每個都在讀下一條訊息之前回答。`decision_id` 不大於上一個的決策會得到 `error`（`BrainServer.cs:101-105`）。
-- 大腦檢查 `obs_hash` 是不是它收到的 `obs` 的雜湊。不符表示觀測在傳輸途中走了樣，最常見的原因是兩端從不同的 commit 建置，這會得到一條說明這一點的 `error`。
+- 大腦按順序回答決策，每個都在讀下一條訊息之前回答。`decision_id` 不大於上一個的決策會得到 `error`（`BrainServer.cs:62`）。
+- 大腦檢查 `obs_hash` 是不是它收到的 `obs` 的雜湊。不符表示觀測在傳輸途中走了樣，最常見的原因是兩端來自不同的建置，這會得到一條說明這一點的 `error`。
 - 推薦會重複決策的 id 和雜湊。只要其中一個不同，模擬器這個宿主就讓這一局失敗；Mod 按決策 id 保存回答，只有在遊戲仍然顯示同一個觀測和同一份合法清單時才顯示它（[§8](#sec-8)）。
 - 動作必須是這個決策的合法動作之一（對選牌提示來說，是提示接受的選擇）；Harness 拒絕其他任何東西，所以不合法的回答會以 `error` 的形式到達宿主。
 
-**`error` 的含義**。大腦拒絕這一局時（一個它的冠軍打不了的環境，例如 NoSL 的一局裡的 SL 規劃器，或一個它不認得的力度），送出 `error` 代替 `ready`；答不了時，送出它代替推薦：一局之外的決策、沒有涵蓋的決策介面（surface）、不合法的選擇、對不上的雜湊、在被拒絕的節點訊息之後的決策。宿主隨後結束這一局：模擬器的這一局失敗；Mod 送出帶 `failed` 的 `run_end`，並在這一局裡關閉助手。
+**`error` 的含義**。大腦拒絕這一局時（一個它的冠軍打不了的環境，例如 `--policy` 是 SL 規劃器的大腦遇到 NoSL 宿主，或一個它不認得的力度；Mod 附帶的大腦兩種環境都接），送出 `error` 代替 `ready`；答不了時，送出它代替推薦：一局之外的決策、沒有涵蓋的決策介面（surface）、不合法的選擇、對不上的雜湊、在被拒絕的節點訊息之後的決策。宿主隨後結束這一局：模擬器的這一局失敗；Mod 送出帶 `failed` 的 `run_end`，並在這一局裡關閉助手。
 
 **`executed` 和 `cancel`**。模擬器這個宿主在遊戲到達下一個決策或一局結束之後，才為一個決策送出 `executed`；只有這一局失敗時 `ok` 才為 false。大腦讀取這兩種訊息，然後忽略它們：它在往下讀之前就回答了每個決策，所以永遠沒有需要丟棄的搜尋。Mod 為 AI 應玩家要求打出的每個回答送出 `executed`，`ok` 為 true（[Mod：自動遊玩與安全 §2](/zh-tw/arch/mod/auto/#sec-2)），玩家自己的動作則一個都不送；回答到達之前遊戲已經往前走時，它送出 `cancel`，並等到那個回答到了才再問。
 
@@ -130,10 +131,10 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 
 ## 8. 兩種宿主
 
-| | 模擬器（`run --brain`、`run --check`） | 遊戲裡的 Mod |
+| | 模擬器（`run --check`） | 遊戲裡的 Mod |
 |---|---|---|
 | `role` | `worker` | `mod` |
-| 何時提問 | 在一局到達的每個決策 | 畫面靜止 3 個影格之後（同一個觀測雜湊和同一份合法清單），一次一個決策 |
+| 何時提問 | 在一局到達的每個決策 | 畫面靜止 3 個影格之後（同一個觀測雜湊和同一份合法清單），一次一個決策；SL 下只在它能複製的節點裡，也就是有檢查點、紀錄沒有斷的節點（[Mod：SL 紀錄 §6](/zh-tw/arch/mod/sl-record/#sec-6)） |
 | 對回答做什麼 | 打出它 | 顯示它；玩家要求時由 AI 打出它（[Mod：自動遊玩與安全 §2](/zh-tw/arch/mod/auto/#sec-2)） |
 | `executed` | 每個動作之後 | AI 打出的每個動作之後 |
 | `cancel` | 從不 | 畫面先變了的時候 |

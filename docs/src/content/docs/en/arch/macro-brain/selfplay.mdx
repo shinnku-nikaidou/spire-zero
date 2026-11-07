@@ -1,36 +1,44 @@
 ---
 title: 'Self-play: runs, generations and the gate'
-description: 'How V learns from runs the champion plays by itself: whole SL runs, even draws for exploration, what a generation is, and the gate on paired wins that decides whether a new V replaces the champion.'
+description: 'How V learns from runs the champion plays by itself: whole SL runs, even draws for exploration, how a generation is played and trained, and the gate on paired wins that decides whether a new V replaces the champion.'
 sidebar:
   label: Self-play
 ---
 import { Aside } from '@astrojs/starlight/components';
 
-V learns from runs the champion plays by itself. This section describes that loop for V: the runs, how they explore, how a generation trains a net, and how the net is judged. The general loop, and the combat net's side of it, are in [Learning: the loop](/en/arch/learning/loop/).
+V learns from runs the champion plays by itself. This section is that procedure, step by step: the runs, how they explore, how a generation is played and trained, and how the new nets are judged. The general loop, and the combat net's side of it, are in [Learning: the loop](/en/arch/learning/loop/).
 
 ## 1. The loop
 
 ```mermaid
 flowchart LR
-  C["champion V"] --> P["self-play<br/>whole SL runs,<br/>even draws at ε"]
+  C["champion<br/>V + combat net"] --> P["self-play<br/>whole SL runs,<br/>even draws at ε"]
   P --> D["decision logs<br/>+ run records"]
-  D --> T["train a new V<br/>v.train"]
-  T --> G{"gate<br/>500 paired seeds,<br/>wins"}
-  G -->|"lower bound > 0"| C
+  D --> T["train a new pair<br/>v.train, combat.train"]
+  T --> G{"gate<br/>100 paired seeds<br/>per character, wins"}
+  G -->|"passes"| C
   G -->|"else"| X["discard"]
 ```
 
 ## 2. The runs
 
-Self-play plays the whole game, SL: every macro decision is made by L0 on the node's clone ([Search §2](/en/arch/macro-brain/search/#sec-2)), and every combat, plain monster fights included, is fought by the SL combat planner with its combat net.
+Self-play plays the whole game, SL: every macro decision is made by L0 on the node's clone ([Search §2](/en/arch/macro-brain/search/#sec-2)), and every combat, plain monster fights included, is fought by the SL combat planner with its combat net. It plays the champion as it is, with one option added, `--explore`:
 
 ```text
-run --env SL --policy plan --macro l0 --afterstates clone --workers 4 --character CHARACTER --asc 0 \
-    --effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0 \
-    --combat-net weights/all/c9-1.json --value weights/all/V.json --explore ε --seed 1
+run --champion eval/champions/sl.json --character CHARACTER --asc N --workers 4 \
+    --explore ε --seed 1 --start K --n RUNS --log DIR/log.jsonl --records DIR/rec.jsonl
 ```
 
-**Budget.** The latest generation, `v9g0`, played all five characters at ascension 0 at the planner's low budget, as above. `v8g2` played the Silent at ascension 10 at the champion's medium effort, which gates play too, at about 290 s per run; `v7g1` played at the low budget, at about 45–85 s of one slot per run. A cheap budget gives far more runs for the same compute, and it ranks loadouts about as well: on 515 boss doors fought at full HP, the low and the medium budget on one seed correlated 0.94, and two seeds of the low budget 0.83 ([The SL planner: budget, cost and results §2](/en/arch/sl-planner/budget/#sec-2)).
+- `--champion` takes the champion file's options: SL, the planner at the medium budget, L0 on the clone, the champion's V and combat net ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). An option given on the command line wins over the file's.
+- `--character` and `--asc` are the job's: every character, at every ascension from 0 to 10 ([§4](#sec-4)).
+- `--explore ε` is the share of macro decisions drawn evenly ([§3](#sec-3)).
+- `--seed 1 --start K --n RUNS` plays the train seeds with indices K to K + RUNS − 1 ([§4](#sec-4)).
+- `--log` and `--records` write the decision log and the run records, one JSON line per decision and one per run ([Harness: the decision log](/en/arch/harness/decision-log/), [Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). `DIR` is the job's folder under `data/CHARACTER/sl/` ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
+- `--workers` is how many search processes a run uses (by default 8).
+
+How to build and start the simulator is in [Simulator: reference §1](/en/arch/simulator/reference/#sec-1).
+
+**Budget.** Self-play plays at the champion's own budget, medium, the one it is judged at. V is the chance to win under the champion's play ([From hazards to value §1](/en/arch/macro-brain/value/#sec-1)), so its labels come from runs played as the champion plays them.
 
 ## 3. Exploration: even draws
 
@@ -46,7 +54,7 @@ This covers every decision outside combat: a card reward's outcome among its car
 
 **Why even.** What is drawn depends neither on V nor on how well the run is going, so the drawn decisions' outcomes are causal evidence about the options, including the ones V thinks poor, and every kind of decision is drawn as often. A draw weighted by V's own values would try options V already likes, and seldom the counterexamples that would correct it.
 
-**The tiers.** A generation's runs are split into three tiers of ε: 0.3, 0.15 and 0.05 in `v7g1`; 0.15, 0.08 and 0.03 in `v7g2`; 0.06, 0.03 and 0.01 in `v8g2`; 0.3, 0.1 and 0.02 in `v9g0`, wide again since for four of the characters it is the first data. A higher ε covers more options per run; a lower one reaches the late floors, where the decisions that win a run are.
+**The tiers.** A generation's runs are split into three tiers of ε, a third of the runs each: 0.3, 0.1 and 0.02. A higher ε covers more options per run; a lower one reaches the late floors, where the decisions that win a run are.
 
 <Aside>
 
@@ -56,32 +64,26 @@ This covers every decision outside combat: a card reward's outcome among its car
 
 ## 4. A generation
 
-A *generation* is one turn of the loop.
+A *generation* is one turn of the loop: one dataset, played by one champion.
 
-1. **Play.** The champion plays one time-boxed job per tier, side by side. The number of runs is not fixed: every slot keeps playing until a deadline, which sits in a file on each host and can be moved while the job runs. Train seeds come from a block entered in the ledger before the job starts, far more per tier than can be played (20,000), and never overlap the gate's seeds.
-2. **Train.** A new V is trained on this generation's runs alone. Runs played by a weaker V label states lower than the champion would now play them, so older generations are not mixed in. It goes on from the previous net's weights (`--init`) when there is one of this structure, and starts from scratch otherwise ([From hazards to value §5](/en/arch/macro-brain/value/#sec-5)).
-3. **Gate.** The new V faces the champion ([§5](#sec-5)).
-4. **Promote.** A net that passes replaces the V of both champion files ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)), and the next generation plays with it.
+1. **Play.** The champion plays one job per character, tier and ascension (5 × 3 × 11 jobs), side by side, each with the command of [§2](#sec-2). The number of runs is not fixed: a job may be given more seeds than it plays, and the generation is the runs its jobs finished.
+2. **Seeds.** Train seeds are `run --seed 1 --start K`, the seed of index K. Each generation takes a block of 100,000 indices of its own, and each job plays its own range in it, so no two runs of a generation share a seed. The evaluation's seed files are made from other bases, and the trainers refuse a list that holds an evaluation job's runs (`common.train_lists`), so a train seed never meets a test seed ([Learning: reference §5](/en/arch/learning/reference/#sec-5)).
+3. **List.** The jobs' decision logs and run records go into a list pair, `PREFIX-logs.txt` and `PREFIX-recs.txt`, one file per line, line i of one the log of the records on line i of the other ([Learning: reference §4](/en/arch/learning/reference/#sec-4)).
+4. **Train.** A new V and a new combat net are trained on this generation's runs alone, each going on from the champion's file (`--init`), run from `learn/`:
 
-The size of a generation, from the latest one played:
+   ```text
+   uv run python -m v.train --list PREFIX --name NAME --init ../VALUE
+   uv run python -m combat.train --list PREFIX --env SL --name NAME --init ../COMBAT_NET
+   ```
 
-| ε | runs |
-|---|---|
-| 0.06 | 3,603 |
-| 0.03 | 3,283 |
-| 0.01 | 3,152 |
-| **all** | **10,038**, of which 165 won and none failed |
+   `VALUE` and `COMBAT_NET` are the champion file's `value` and `combat-net`, paths from the repository's root; `NAME` is a new name, never one already used ([Learning: reference §6](/en/arch/learning/reference/#sec-6)). Each writes `weights/all/NAME.json` ([From hazards to value §5](/en/arch/macro-brain/value/#sec-5), [Learning: the combat net §4](/en/arch/learning/combat-net/#sec-4)). Runs played by a weaker champion label states lower than the champion would now play them, so older generations are not mixed in.
+5. **Gate.** The new pair faces the champion's ([§5](#sec-5)).
+6. **Promote.** A pair that passes replaces the V and the combat net of both champion files ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)), and the next generation plays with it.
 
 Failed runs are dropped when the samples are read ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
 
 ## 5. The gate
 
-A new V is judged by a gate, together with the combat net trained on the same data: the champion's pair of nets against the new pair. The champion's V, v9-1, passed its gate with c9-1 on every character at ascension 0 ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). Each character plays at the ascension its data was played at, both pairs on the same seeds with no exploration and on the clone: 100 seeds of `promotion-1-100` at the champion's medium planner budget and 200 of `promotion-1-200` at the low budget. The runs are paired by seed, one character at a time: for seed $i$, $d_i$ is 1 or 0 for the challenger's win less 1 or 0 for the champion's, and with $n$ pairs
+A new V is judged together with the combat net trained on the same data: the champion's pair of nets and the new pair both play the same 100 seeds of `promotion-1-100` with every character, with no exploration, and each character's runs are paired by seed and compared by wins. The five characters are read together, since one champion plays them all. The procedure, its commands and its rule are in [Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10).
 
-$$
-\bar d = \frac{1}{n}\sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\,\mathrm{SE} > 0,
-$$
-
-that is, when the 95% one-sided lower bound of the mean difference is above 0. A seed fixes the map, the encounters and the rewards up to where the two policies diverge, so most of a run's luck is shared by both sides and cancels in $d_i$ (common random numbers). At 500 seeds this takes about 2–3 percentage points more wins. The floors are listed beside the wins, and the five characters are read together, since one champion plays them all ([Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)).
-
-`learn/gate.py --against` computes it ([Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)). Its report also keeps what the wins do not show: the mean floor, each act's boss reached and beaten, where the lost runs died (boss, elite, monster or outside combat, per act), the elites per run, the rest sites' choices and the map's choices between a monster and a rest site by HP share, and what the shops sold.
+The gate plays because no held-out score can decide: the Brier score measures how well V tells apart states of different runs, not whether it orders one state's options correctly ([From hazards to value §6](/en/arch/macro-brain/value/#sec-6)).

@@ -1,11 +1,11 @@
 ---
 title: The SL record
-description: 'What the mod keeps so the brain can clone the node in SL: the checkpoint taken where the game saves on arrival, every step read where the game commits it, steps that play out, leaving a room, what breaks the record, what is sent and when, and how the record was checked in the real game.'
+description: 'What the mod keeps so the brain can clone the node in SL: the checkpoint taken where the game saves on arrival, every step read where the game commits it, steps that play out, leaving a room, what breaks the record, what is sent and when, and the round trip that checks it.'
 sidebar:
   label: The SL record
 ---
 
-In SL the brain plans a combat on an exact clone of the current node: the game as it was when the player arrived at the map point, replayed to the decision ([Environments: information §7](/en/arch/environments/information/#sec-7)). The simulator has that for free, since it holds the run. The mod does not: the run is the real game's, and the brain is another process. So the mod keeps a record of the node, its checkpoint and every step the player took in it since, and sends it to the brain before each SL decision. A worker then loads the checkpoint and replays the steps, exactly as it would for a node of its own ([Simulator: worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)–[§4](/en/arch/simulator/worlds/#sec-4)). This page is `NodeRecord.cs`, and how it was checked.
+In SL the brain plans a combat, and values each option outside combat, on an exact clone of the current node: the game as it was when the player arrived at the map point, replayed to the decision ([Environments: information §7](/en/arch/environments/information/#sec-7)). The simulator has that for free, since it holds the run. The mod does not: the run is the real game's, and the brain is another process. So the mod keeps a record of the node, its checkpoint and every step the player took in it since, and sends it to the brain before each SL decision. A worker then loads the checkpoint and replays the steps, exactly as it would for a node of its own ([Simulator: worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)–[§4](/en/arch/simulator/worlds/#sec-4)). This page is `NodeRecord.cs`, and how it is checked.
 
 The record is kept in both environments, with assist off and with no brain too, so switching to SL works in the room the player is in. Only SL sends it.
 
@@ -63,7 +63,7 @@ The details that make each step exact (`NodeRecord.cs:162-271`):
 - **No step**: a purchase that changes nothing (too little gold, sold out), or a free one (`ignoreCost`, a relic buying for the player); a divination that uncovers nothing; the calls that leave a chest, or a fight without rewards, which are the same calls as a rewards screen's proceed: only those on a rewards screen are steps, and some screens call two of them, so the first clears the screen.
 - **Faster than the screen settles.** The hooks fire at the commit, not at the idle check, so steps the player takes faster than 3 frames apart are still recorded, in order.
 
-Why hooks and not a diff of the states before and after: a diff cannot tell two copies of a card apart, and misses the actions a player queues faster than the screen settles. This settled the open question of how to capture the player's actions.
+Why hooks and not a diff of the states before and after: a diff cannot tell two copies of a card apart, and misses the actions a player queues faster than the screen settles.
 
 ## 4. Steps that play out
 
@@ -94,28 +94,19 @@ A break is logged once, with the node and its step count: "SL record of node N b
 
 **A hook never lets an exception reach the game.** It runs inside the game's own call, so `Guard` catches it and breaks the record instead: around the save and continue hooks, the action queue, the choices, the rest option, the purchases and the divination. The event option, reward, proceed and relic hooks and the task postfixes only add a line or a task, and are not wrapped.
 
-**What a broken node means.** SL combat decisions are not asked in that node: the panel says "No SL clone of this room", with the reason, "the next room has one". Card prompts and the decisions outside combat are still asked, and no node message is sent for them. That suits the brain the mod usually runs, the NoSL champion's file with the SL planner (`first` for combat prompts, L0 on screen afterstates, which need no clone). A brain whose macro side plays on the clone (`--afterstates clone`, the SL champion's) would then build its clones from the previous node's checkpoint and steps, and before any checkpoint fails with "an SL decision before any node checkpoint", which turns the mod off until the next `hello` (`Harness/Dispatcher.cs:191-195`). Holding back every SL decision of a broken node would close that gap.
+**What a broken node means.** No SL decision is asked in that node, combat, card prompt or any other: the panel says "No SL clone of this room", with the reason, "the next room has one", and no node message is sent (`Assist.cs:238-246`). In SL the planner plans each combat on the node's clone, and L0 values each option outside combat on it, so without the clone there is nothing to play on: before any checkpoint the brain would refuse the run ("an SL decision before any node checkpoint", `Harness/Dispatcher.cs:189-195`), and with a record cut at its break it would value the options on the record's last state, not the screen's.
 
 ## 7. What is sent, and when
 
-Before each SL decision, `Assist.SendNode` (`Assist.cs:396-405`) sends what the brain has not had yet ([Protocol: the wire §6](/en/arch/protocol/wire/#sec-6)):
+Before each SL decision, `Assist.SendNode` (`Assist.cs:398-407`) sends what the brain has not had yet ([Protocol: the wire §6](/en/arch/protocol/wire/#sec-6)):
 
 1. `node_checkpoint` with the node's number and checkpoint, once per node: when the node differs from the last one sent in this run;
 2. `node_action` for each step not sent yet, with the node's number and the step's number in the node, from 0.
 
-Then the `decision`. Steps after the node's last decision, such as its travel, are never needed and never sent. A node without a checkpoint sends nothing. After a reconnect or a new `hello`, the current node is sent again from its checkpoint.
+Then the `decision`. Steps after the node's last decision, such as its travel, are never needed and never sent. A node without a checkpoint sends nothing. After a new `hello` (a new run, a switch, or a brain started again), the current node is sent again from its checkpoint.
 
 The brain's Harness keeps the latest checkpoint and its trace, and requires node numbers to rise within a run ([Harness §4](/en/arch/harness/#sec-4)). In NoSL the record is kept but never sent; a host that did send one would get an `error`, since Harness refuses node checkpoints in NoSL.
 
 ## 8. Checking it in the game
 
-**The round trip.** `brain --wire FILE` writes every message the hosts send. `clones --wire FILE` reads them back: a `hello` sets the environment, a `node_checkpoint` starts a node, and `node_action` lines must follow in order. For each SL `decision` it loads the clone, the checkpoint and the steps sent before the decision (`RunSession.Load`), and checks that the clone asks the same decision next, observation for observation; a difference names the first JSON path that differs, the game's value and the clone's. Decisions before any checkpoint are counted apart. It prints how many of the SL decisions asked the same, and exits 1 unless all did (`Commands/Clones.cs`; [Simulator: reference §4](/en/arch/simulator/reference/#sec-4)).
-
-**Results.**
-
-- On the simulator's own export (one SL run hosted against `brain`, 455 decisions), every decision is the same.
-- In the real game, on floors 2–5 of one SL run played with assist on (4 nodes: 3 combats and an event), 89 of 90 SL decisions were the same. The other was asked while an event option was still running, so the screen still showed the gold from before it; the mod now waits for the step's task ([§4](#sec-4)).
-- An earlier capture of floors 1–2 had found that card plays were not recorded, because a queued play looks its card up only when it runs ([§3](#sec-3)).
-- A later capture with the task wait in place (2026-10-28, `tmp/assist/`, local) holds three runs as the brain saw them, SL, NoSL and SL again: 150 decisions, 149 of them SL (combat 87, rewards 21, map 11, card prompts 11, card reward 6, event 5, shop 4, rest 2, bundle 1, treasure 1), 12 node checkpoints and 137 node actions; the last SL run went 11 nodes to floor 11. Whether `clones` was run on it is not recorded.
-
-**The SL planner's wait**, from the floors 2–5 capture replayed against a fresh brain on the machine that runs the game (`plan` with an earlier combat net, beam 8×300 on 8 workers): a combat's first decision took 3–15 s, as it plans the whole combat; a replan, when a draw or an enemy leaves the plan, 1–11 s; the other 56 of 66 combat decisions under 50 ms, as they follow the plan. Decisions outside combat took under 20 ms.
+**The round trip.** `brain --wire FILE` writes every message its host sends. A capture of a session in the game is made by turning on `Record` in the mod's settings file: each brain the mod starts then writes its wire and its decision log into `captures/` ([The overview §4](/en/arch/mod/#sec-4)); a brain started by hand takes `--wire FILE` itself. `clones --wire FILE` reads the messages back: a `hello` sets the environment, a `node_checkpoint` starts a node, and `node_action` lines must follow in order. For each SL `decision` it loads the clone, the checkpoint and the steps sent before the decision (`RunSession.Load`), and checks that the clone asks the same decision next, observation for observation; a difference names the first JSON path that differs, the game's value and the clone's, and a clone that fails says why. Decisions before any checkpoint are counted apart. It prints how many of the SL decisions asked the same, and exits 1 unless all did (`Commands/Clones.cs`; [Simulator: reference §4](/en/arch/simulator/reference/#sec-4)).

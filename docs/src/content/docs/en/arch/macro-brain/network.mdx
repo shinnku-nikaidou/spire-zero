@@ -189,7 +189,7 @@ The hazards of floors before $f$ are computed and not used ([From hazards to val
 
 The token tables are fixed, so these sizes depend only on the game build. The training-only head adds 3,078.
 
-**What the file holds.** The file is `weights/all/v9-1.json`. It went on from v9-0 and learned from v9g0: 29,987 SL runs of all five characters at ascension 0, played at the low budget, 2,057 of them won. Every width has learned. So have the damage, block and amount rows ($D$, $K$, $A$) wherever a training run gave a card such a number: 170 cards' damage rows, 68 cards' block rows and 20 enchantments' amount rows. The other rows of the three are zero, so V gives those numbers no weight. So are the relics' counter, status and melted vectors, and the body's 256 columns that read the cards the relics keep: V gives these inputs no weight either. Its $\mu$ and $\sigma$ are kept from the first net of its line, whose training runs were all at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training run held, such as `SHIV`, the afflictions or the `FAKE_` relics, has learned nothing: for most, its row holds the unknown id's first half (zero for a few tokens, such as the map's `Unassigned+0`) and random numbers in the second half.
+**What the file holds.** The champion's file is `weights/all/v9-2.json`. It learned from SL self-play of all five characters at ascension 0, at the medium budget: 21,272 runs, 5,608 of them won, 4,310 of them held out (its `fit`, [From hazards to value §6](/en/arch/macro-brain/value/#sec-6)). The damage, block and amount rows ($D$, $K$, $A$) have learned wherever a training run gave a card such a number: 170 cards' damage rows, 68 cards' block rows and 20 enchantments' amount rows. The other rows of the three are zero, so V gives those numbers no weight. So are the relics' counter, status and melted vectors, and the body's 256 columns that read the cards the relics keep: V gives these inputs no weight either. Its $\mu$ and $\sigma$ come from runs at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training run held, such as `SHIV`, the afflictions or the `FAKE_` relics, has learned nothing: its row is still the one it started with.
 
 A call takes about 0.08 ms in C# on one thread, batch of one. A macro decision on the clone takes 70–90 ms, most of it in the game ([Search §6](/en/arch/macro-brain/search/#sec-6)), so V's own cost does not matter.
 
@@ -199,7 +199,7 @@ The trainer computes the net in PyTorch; the brain runs it in C#. They must agre
 
 - **Export.** `learn/v/export.py` writes the net as an ONNX graph inside the file, with the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, $\mu$ and $\sigma$, the training report and 8 held-out samples with the values the trainer gave them.
 - **Inference.** `RunNet` (`src/Sts2Ai.Brain/Macro/RunNet.cs`) follows `encode.py`: its `Tokens` and state, and the combat net's `CombatNet.RelicInputs` for the relics' numbers and statuses, build the same tensors (`Hazards`, `:174-221`), and ONNX Runtime runs the graph. `Value` multiplies the hazards from the current floor on.
-- **The check.** `RunNet.Load` refuses the file unless it gives the 8 samples the trainer's values, to within 0.1% (and $10^{-6}$ for the smallest values, where the floats' noise is larger). A difference in how either side reads a run stops the file from loading. Values of P(win) are mostly below 0.1, so a tolerance that was not relative would pass nearly anything.
+- **The check.** `RunNet.Load` refuses the file unless it gives the 8 samples the trainer's values, to within 0.1% (and $10^{-6}$ for the smallest values, where the floats' noise is larger). A difference in how either side reads a run stops the file from loading. A value of P(win) can be a few hundredths, late in a hard run, and a tolerance that was not relative would pass nearly anything there.
 
 ## 8. What the structure cannot express
 
@@ -216,6 +216,6 @@ These follow from the structure alone.
 
 ## 9. One run through the net
 
-A real sample from v9-1's file, a Defect run at ascension 0: the afterstate of a map move on floor 42, into an unknown room, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
+A real sample from a net file's test runs, a Defect run at ascension 0: the afterstate of a map move on floor 42, into an unknown room, with the numbers the net computes for it. Vectors show their first four numbers. Drag through the steps.
 
 <NetWalk client:visible lang="en" />

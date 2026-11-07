@@ -41,7 +41,7 @@ For a fight still in progress the leaf asks the combat net. It reads a round's s
 
 **The potions.** After a win, each held potion's chance of being gone, one for each of 5 groups of 10 buckets in a row: a win that costs little HP and one that costs much can drink different potions ([The combat net §7](/en/arch/combat-brain/network/#sec-7)).
 
-The figure shows them on the 16 round starts the net file carries, real states from held-out runs; loading the net checks that it gives these outputs, as the trainer computed them. The shaded bands are the closed buckets. A potion's chance shown is its chance at a win, each group's chance weighted by the chances of its buckets. Weights: `weights/all/c9-1.json`.
+The figure shows them on the 16 round starts the net file carries, real states from held-out runs; loading the net checks that it gives these outputs, as the trainer computed them. The shaded bands are the closed buckets. A potion's chance shown is its chance at a win, each group's chance weighted by the chances of its buckets. Weights: the champion's file, `weights/all/c9-2.json`.
 
 <OutcomeHead client:visible lang="en" />
 
@@ -83,4 +83,4 @@ These follow from the two heads, their labels and the prices.
 - **A bucket's width.** An ending's HP is its bucket's middle: HP within one bucket, a share of 0.025 of max HP, is priced alike.
 - **V's own view.** Every price is V's: what V misreads about a run, the leaf misreads about a fight: a potion V rates below an empty slot is one the search will drink for nothing. In NoSL the world's run keeps the decision's deck, so what the fight does to the deck shows in SL only.
 - **Siblings.** The logs hold one ending per fight, so no label separates two states a search compares within one round. What separates them is HP held, counted in full, and what the net learned across fights.
-- **Its own player.** The endings are those of the policy that played the training games: earlier nets, exploring, at the medium budget that also plays gates ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)).
+- **Its own player.** The endings are those of the player of its training games: the SL planner and L0 with the nets that played them, exploring, at the medium budget that also plays gates ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)).

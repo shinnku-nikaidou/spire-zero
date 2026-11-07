@@ -1,11 +1,11 @@
 ---
 title: 冠军与基线
-description: '冠军文件的每个字段以及谁读取它；历史和报告放在哪里；外部基线；未决问题。'
+description: '冠军文件的每个字段以及谁读取它；冠军的报告，以及晋级如何改写这两个文件；外部基线；未决问题。'
 sidebar:
   label: 冠军与基线
 ---
 
-**冠军**是 AI 在一种环境里已接受的最好版本：各个大脑、它们的预算和权重，以及代表它们的那份报告。本页讲指明冠军的文件，说明结果的记录放在哪里，并列出其他项目达到了什么成绩。门槛如何运作见[晋级门槛](/arch/evaluation/gates/)。
+**冠军**是 AI 在一种环境里已接受的最好版本：各个大脑、它们的预算和权重，以及代表它们的那份报告。本页讲指明冠军的文件，给出冠军的报告，并列出其他项目达到了什么成绩。门槛如何运作见[晋级门槛](/arch/evaluation/gates/)。
 
 ## 1. 冠军文件
 
@@ -37,56 +37,56 @@ sidebar:
 | `options` | 打出这个冠军的对局选项，去掉了 `--`，不含角色和进阶等级；权重文件用它在 `weights/all/` 里的路径表示 |
 | `reports` | 按角色分，与该角色的挑战者配对的报告：每道门槛的冠军一方。一份报告是一个角色在一个进阶等级上的结果，所以没有报告的角色暂时还不能对这个文件过门槛 |
 | `since` | 成为冠军的日期（晋级报告的日期，或手写的日期） |
-| `gate` | 它通过的门槛，没有经过门槛就确定的冠军没有这一项：`metric`、`delta`、`alpha`、`beta`、`pairs`、`decided`、`llr`、`lower`、`upper`、`floor_diff_mean`、`challenger_only_wins`、`champion_only_wins`、`verdict`，有的话还有 `void_reason`，以及 `not_worse` |
+| `gate` | 它通过的门槛，没有经过门槛就确定的冠军没有这一项：`delta`、`alpha`、`beta`、`pairs`、`decided`、`llr`、`lower`、`upper`、`floor_diff_mean`、`challenger_only_wins`、`champion_only_wins`、`verdict`，有的话还有 `void_reason`，以及 `not_worse` |
 
 **谁读取它**。
 
 - `run` 和 `brain` 接受 `--champion FILE`，打它指明的冠军（`SimWorker/Commands/Args.cs:166-194`，[模拟器：参考 §3](/arch/simulator/reference/#sec-3)）。文件里的选项排在命令行给出的选项之后，所以给出的优先；命令没有的选项会被跳过（`brain` 没有 `--env`：每个宿主自己指明）；给出的 `--policy` 若与文件里的不同，就保留它自己的预算。
+- `brain` 用一个文件服务两种宿主：NoSL 宿主得到文件里的战斗大脑，SL 宿主得到 SL 规划器（`--sl-policy`，默认 `plan`），两者都用文件里的两个网络和 L0，L0 的后状态由宿主的环境决定：NoSL 下按画面预测，SL 下在节点的克隆上打出（`BrainCommand.Champions`，`SimWorker/Commands/BrainCommand.cs:72-79`）。Mod 的大脑就是这样打 NoSL 文件的（[Mod §4](/arch/mod/#sec-4)）。
 - `gate --champion FILE` 是要击败的冠军：它读取文件的 `env`，以及文件里记录所属角色的那份报告（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。
 - `leaderboard --character C` 在文件所属环境的榜上，标出每个文件为 C 指明的报告（[指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9)）。
 
 **由 `--promote` 写入，或手工写入**。`gate --promote` 写入每一个字段，选项按挑战者的选项生成（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:79-95`）：对 SL 规划器来说是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。胜局门槛什么也不写，所以由它晋级的网络靠手工写入（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)），SL 文件写的是 `"effort": "medium"`，打的是同样的预算（[SL 规划器：预算 §1](/arch/sl-planner/budget/#sec-1)）。重定基线只修改 `reports`（[晋级门槛 §9](/arch/evaluation/gates/#sec-9)）。
 
-**两个文件**。两个文件都指明同样的两个网络，`weights/all/v9-2.json`（V）和 `weights/all/c9-2.json`（战斗网络）。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。SL 文件指明五份报告，每个角色一份，都是这个冠军自己的：在 `promotion-1-100` 上以进阶 0、medium 打了 100 局。NoSL 文件一份报告也不指明：这两个网络都没有在 NoSL 下为一份报告打过，所以针对它的 NoSL 门槛对每个角色都会被拒绝（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。
+**两个文件**。两个文件都指明同样的两个网络，`weights/all/v9-2.json`（V）和 `weights/all/c9-2.json`（战斗网络）。SL 打的是 medium 力度的 SL 规划器，加上在克隆上的 L0；NoSL 打的是 8 个世界 × 300 个节点的 PIMC，加上用按画面所示的后状态的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。SL 文件指明五份报告，每个角色一份，都是这个冠军自己的：在 `promotion-1-100` 上以进阶 0、medium 打了 100 局。NoSL 文件一份报告也不指明：这两个网络都没有在 NoSL 下为一份报告打过，所以针对它的 NoSL 门槛对每个角色都会被拒绝（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。两个网络都只学自 SL 的对局：NoSL 目前不训练。
 
-每个角色有自己的文件夹，`eval/CHARACTER/` 和 `data/CHARACTER/`，里面有它自己的报告、排行榜和对局（[学习：参考 §3](/arch/learning/reference/#sec-3)），因为一个结果只对一个角色成立。其余的都是共用的：`weights/all/` 里的网络、`eval/champions/` 里的冠军文件、账本 `eval/ledger.md`，以及 `eval/seeds/` 里的种子集。
+每个角色有自己的文件夹，`eval/CHARACTER/` 和 `data/CHARACTER/`，里面有它自己的报告、排行榜和对局（[学习：参考 §3](/arch/learning/reference/#sec-3)），因为一个结果只对一个角色成立。其余的都是共用的：`weights/all/` 里的网络、`eval/champions/` 里的冠军文件，以及 `eval/seeds/` 里的种子集。
 
-## 2. 历史和报告
+## 2. 报告
 
-这些页面只描述当前的冠军。之前的记录另外保存：
+`eval/CHARACTER/reports/` 存放一个角色已提交的报告，有 JSON 和 Markdown 两种（[指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)），`eval/CHARACTER/leaderboard.md` 按进阶、种子集和环境给它们排名（[指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9)）。
 
-- `eval/ledger.md` 是历史，所有角色共用：每个网络，它用什么训练，它的门槛，以及它后来怎样了。
-- `eval/CHARACTER/reports/` 存放一个角色已提交的报告，有 JSON 和 Markdown 两种（[指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)）。
-- `eval/CHARACTER/leaderboard.md` 按进阶、种子集和环境给它们排名（[指标、种子与报告 §9](/arch/evaluation/metrics/#sec-9)）。
+**冠军的报告**。SL 文件指明五份，每个角色一份：冠军在该角色每道门槛里的一方。每份是冠军的两个网络在 `promotion-1-100` 上以进阶 0、medium 预算打的 100 局 SL 对局。没有一份有随机决策、失败或截断的对局或游戏错误，所以没有一份作废（[指标、种子与报告 §2](/arch/evaluation/metrics/#sec-2)）：
 
-**冠军的网络和它们的门槛**。v9-1 和 c9-1 从 v9-0 和 c9-0 接着训练，只用 `v9g0` 训练：全部五个角色的第一批 SL 自我对弈，进阶 0、低预算，29,987 局，其中赢下 2,057 局，1,981 局是静默猎手赢的（[学习：循环 §2](/arch/learning/loop/#sec-2)）。v9-0 和 c9-0 就是 v8-3 和 c8-3，它们学过静默猎手在进阶 10 的对局，再不经训练搬到所有角色共用的网络上。门槛让 v9-0 + c9-0 对 v9-1 + c9-1，在每个角色上以进阶 0 来打，双方用同样的种子、冠军的规划器，不做探索：medium 在 `promotion-1-100` 上 100 个种子，低预算在 `promotion-1-200` 上 200 个。V 和战斗网络一起评判：一对网络对另一对。3,000 局中没有一局失败，也没有游戏错误。medium 下，按种子配对（新的一对减去旧的）：
-
-| 角色 | v9-0 + c9-0 赢下 | v9-1 + c9-1 赢下 | 胜局，百分点 | 95 % 下界 | 层数 |
+| 角色 | 100 局中赢下 | 95 % Wilson 区间 | 平均层数 | 每个决策 ms | 每局 s |
 |---|---|---|---|---|---|
-| 静默猎手 | 100 局中 86 局 | 100 局中 74 局 | −12.0 ± 5.6 | −21.1 | −1.35 ± 0.94 |
-| 铁甲战士 | 100 局中 1 局 | 100 局中 46 局 | +45.0 ± 5.0 | +36.8 | +16.38 ± 1.42 |
-| 故障机器人 | 100 局中 1 局 | 100 局中 31 局 | +30.0 ± 4.8 | +22.1 | +7.60 ± 1.53 |
-| 储君 | 100 局中 2 局 | 100 局中 35 局 | +33.0 ± 4.9 | +24.9 | +19.73 ± 1.40 |
-| 亡灵契约师 | 100 局中 0 局 | 100 局中 9 局 | +9.0 ± 2.9 | +4.3 | +16.68 ± 1.45 |
+| 静默猎手 | 92 | 85.0–95.9 % | 46.45 | 405 | 336 |
+| 铁甲战士 | 82 | 73.3–88.3 % | 46.00 | 431 | 286 |
+| 储君 | 71 | 61.5–79.0 % | 45.57 | 1,202 | 906 |
+| 故障机器人 | 68 | 58.3–76.3 % | 46.44 | 560 | 423 |
+| 亡灵契约师 | 47 | 37.5–56.7 % | 41.55 | 1,358 | 1,046 |
 
-低预算下，200 局中：静默猎手 140 局和 141 局（+0.5 ± 4.4 个百分点），铁甲战士 1 局和 61 局，故障机器人 2 局和 44 局，储君 1 局和 47 局，亡灵契约师 0 局和 18 局；那四个角色在这里也都通过。
+NoSL 文件不指明任何报告（[§1](#sec-1)）。
 
-新的一对在四个角色上通过；用静默猎手时，它在 medium 下退步了，在低预算下则打平。一个冠军打每一个角色，所以它成了全部五个角色的冠军。它在 medium 下的平均层数是：静默猎手 45.40，铁甲战士 41.39，故障机器人 42.81，储君 42.30，亡灵契约师 35.94，此前分别是 46.75、25.01、35.21、22.57 和 19.26。门槛读配对胜局，层数列在旁边（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
+**晋级如何改写这两个文件**。
+
+- `gate --promote PATH` 改写给它的那一个文件（[晋级门槛 §8](/arch/evaluation/gates/#sec-8)）：挑战者的名字和选项，它的新报告作为唯一的一份，放在它的角色下，`since` 为报告的日期，`gate` 为结果。旧冠军的其他报告是别的网络打的，所以都去掉。
+- 胜局门槛通过的一对网络靠手工写进两个文件，因为两个文件打同样的两个网络（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。在每个文件里，`value` 和 `combat-net` 指明新的一对在 `weights/all/` 里的文件，`champion` 是它的选项组成的名字，`since` 是日期。SL 文件的 `reports` 指明用新的一对在门槛中自己打的对局做成的五份报告；NoSL 文件不指明任何报告，因为新网络没有在 NoSL 下打过报告。旧网络的文件留在 `weights/all/` 里，名字永不重用（[学习：参考 §6](/arch/learning/reference/#sec-6)）。
 
 ## 3. 基线
 
-**其他项目**。取自本项目关于前人工作的本地笔记：
+**其他项目**。取自它们发布的结果：
 
 | 来源 | 结果 | 备注 |
 |---|---|---|
-| FableBot | 铁甲战士 A0 20.7%（343 局中 71 局，Wilson 16.7–25.3%） | 唯一一个公平、在真实游戏上、样本量足够的结果；没有静默猎手（`tmp/notes/refs/prior-art-rl.md:343`） |
+| FableBot | 铁甲战士 A0 20.7%（343 局中 71 局，Wilson 16.7–25.3%） | 唯一一个公平、在真实游戏上、样本量足够的结果；没有静默猎手 |
 | AgenticSTS | 静默猎手 A0 约 35%（125 局中 44 局，混合多个游戏版本）；A8 及以上 25 局中 0 局 | LLM 加一份人写的静默猎手攻略；从它公布的对局历史数出 |
-| spire-mentor | 去掉作弊后胜率 −22.8 和 −25.5 pp | 它的排序器和它的 PPO 策略，关掉覆盖整局的作弊；SL − NoSL 的参照（[评估 §3](/arch/evaluation/#sec-3)；`tmp/notes/refs/strong-bots.md:42`） |
+| spire-mentor | 去掉作弊后胜率 −22.8 和 −25.5 pp | 它的排序器和它的 PPO 策略，关掉覆盖整局的作弊；SL − NoSL 的参照（[评估 §3](/arch/evaluation/#sec-3)） |
 
 ## 4. 未决问题
 
 1. **R4 的吞吐量**：在游戏的 Instant 速度下一局要几分钟，由此能负担多少局 R4。
 2. **不一致种子很少时的胜局门槛**：它的下界让 3 胜对 0 胜通过（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）；是否要求一个最少的不一致种子数，或者改用精确检验。
 3. **门槛的错误率**：两种门槛的误通过率都没有测量过；A/A 测试需要一种只改变冠军自身随机性的办法（[晋级门槛 §4](/arch/evaluation/gates/#sec-4)）。
-4. **冠军的 NoSL 报告**，让 NoSL 榜重新有冠军，也让同一个 V 的 SL − NoSL 能够测量。
+4. **冠军的 NoSL 报告**，让 NoSL 榜有冠军，也让同一个 V 的 SL − NoSL 能够测量。
 5. **`final-1`**：何时在它上面做出第一个正式结论。

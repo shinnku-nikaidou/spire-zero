@@ -11,7 +11,7 @@ import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
 
 This project teaches a program to play **Slay the Spire 2** (STS2), a single-player deck-building roguelike, version v0.111.0. This page is for the reader who has never played it, or who wants the exact numbers: what a run is, what the player decides, what is random, and what is hidden. The rest of the book assumes it.
 
-Everything here was read in the game's own code, decompiled, and the game's text files. File references are relative to the decompiled tree `tmp/decompiled/sts2` (local), with the `MegaCrit.Sts2.Core.` prefix of the folder names left out: `Map/StandardActMap.cs` is `MegaCrit.Sts2.Core.Map/StandardActMap.cs`. Quoted game text is from the game's English localization.
+Everything here was read in the game's own code, decompiled, and the game's text files. File references are paths in the decompiled game, which is not in the repository, with the `MegaCrit.Sts2.Core.` prefix of the folder names left out: `Map/StandardActMap.cs` is `MegaCrit.Sts2.Core.Map/StandardActMap.cs`. Quoted game text is from the game's English localization.
 
 ## 1. A run
 
@@ -24,7 +24,7 @@ A **run** is one attempt to climb the Spire: three **acts**, each a map of rooms
 - **Winning.** After the last boss, the player meets The Architect, a dialogue that ends the run as won (`Runs/RunManager.cs:1308-1342`). The last boss gives no rewards (`Rewards/RewardsSet.cs:88-91`). So a won run ends on floor 48.
 - **Losing.** The run is over when the player's creature is dead (`Runs/RunState.cs:190-198`); abandoning a run counts as a death.
 
-The book follows one run throughout: a Silent run on seed `0SSL7NS01MU6`, won on floor 48 by the SL champion, the run the [macro brain chapter](/en/arch/macro-brain/) follows. Here it is floor by floor:
+The book follows one run throughout: an SL run of the Silent on seed `0SSL7NS01MU6`, won on floor 48, the run the [macro brain chapter](/en/arch/macro-brain/) follows. Here it is floor by floor:
 
 <RunTimeline client:visible lang="en" />
 
@@ -123,11 +123,11 @@ Five characters can be played, each with its own card pool and starting relic; a
 
 (`Models.Characters/Ironclad.cs:33-57`, `Silent.cs:34-60`, `Regent.cs:32-58`, `Necrobinder.cs:32-62`, `Defect.cs:27-63`.)
 
-**The Silent** is the character this project trains first. Her pool has 91 cards (27 attacks, 46 skills, 18 powers). Her starting cards: Strike (1 energy, deal 6), Defend (1, gain 5 block), Neutralize (0, deal 3 and apply 1 Weak), Survivor (1, gain 8 block, then discard a card) (`Models.Cards/StrikeSilent.cs:19-39`, `DefendSilent.cs:17-31`, `Neutralize.cs:23-52`, `Survivor.cs:17-36`). Her themes are poison, Shivs (0-cost attacks that deal 4 and exhaust) and discarding, which plays Sly cards for free.
+**The Silent** is the character of the book's example run. Her pool has 91 cards (27 attacks, 46 skills, 18 powers). Her starting cards: Strike (1 energy, deal 6), Defend (1, gain 5 block), Neutralize (0, deal 3 and apply 1 Weak), Survivor (1, gain 8 block, then discard a card) (`Models.Cards/StrikeSilent.cs:19-39`, `DefendSilent.cs:17-31`, `Neutralize.cs:23-52`, `Survivor.cs:17-36`). Her themes are poison, Shivs (0-cost attacks that deal 4 and exhaust) and discarding, which plays Sly cards for free.
 
 ## 6. Ascension
 
-Ascension levels 1–10 make a run harder, each including the ones below (`Entities.Ascension/AscensionManager.cs:15`, `45-48`). This project plays at level 0 so far.
+Ascension levels 1–10 make a run harder, each including the ones below (`Entities.Ascension/AscensionManager.cs:15`, `45-48`). The champion's reports are at level 0; self-play covers levels 0 to 10 ([Macro brain: self-play](/en/arch/macro-brain/selfplay/)), and `run --asc N` plays any level.
 
 | level | name | effect |
 |---|---|---|
@@ -178,12 +178,12 @@ Besides these, each player has streams for rewards, shops and transformations (`
 
 ## 8. Why it is hard for an AI
 
-- **A long horizon.** A run takes about 555 decisions on average (166,527 decisions in 300 SL runs of the champion), the example run 848. A card taken on floor 2 still matters on floor 48, and a fight's HP loss carries to every later fight.
+- **A long horizon.** A run takes about 555 decisions on average (166,527 decisions in 300 SL runs of the Silent), the example run 848. A card taken on floor 2 still matters on floor 48, and a fight's HP loss carries to every later fight.
 - **Hidden information and chance**: the draw order, what a `?` holds, what comes next, the enemies' later moves ([§7](#sec-7)).
 - **Large, changing action sets**: a turn can play the cards in hand (up to 10) and potions in any order, each on any of its targets; a shop offers about 13 items and a removal; card prompts arrive in the middle of a card's play.
 - **One death ends the run.** HP is a resource spent across 28 or so fights, and every rest site trades healing against an upgrade.
 
-Where the decisions are, in the 300 runs of the SL champion's report:
+Where the decisions are, in those 300 SL runs:
 
 <SurfaceCounts client:visible lang="en" />
 

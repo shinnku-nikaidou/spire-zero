@@ -8,7 +8,7 @@ sidebar:
 ## 1. 已知弱点
 
 - **标签带着之后的抽取**。在探索更多的对局里，一个局面的标签更低，而 V 不知道这一局的 ε（[自我对弈 §3](/arch/macro-brain/selfplay/#sec-3)）。每局设一个切分点可以消除这个问题（[§3](#sec-3)）。
-- **网络无法表达的东西**。路线看不到构筑，最大值混合了不同路径，路线止于本幕（[价值网络 §8](/arch/macro-brain/network/#sec-8)）。
+- **网络无法表达的东西**。地图的袋不含连线，地图止于本幕（[价值网络 §8](/arch/macro-brain/network/#sec-8)）。
 - **一局一个结局**。一局的决策共享一个标签，所以要分辨哪个决策起了作用，需要很多局（[从风险值到价值 §3](/arch/macro-brain/value/#sec-3)）。
 
 ## 2. 规划中，尚未实现
@@ -29,14 +29,14 @@ L0 每次都做决定；L1 将是给难分高下的选择加的额外复核，�
 
 ### NoSL：对局世界
 
-NoSL 还没有对局世界，所以它的 L0 根据画面预测后状态（[搜索 §1](/arch/macro-brain/search/#sec-1)）。有了对局世界，它会在 K 个采样世界里执行每个选项，对它们的 V 取平均，并像 SL 的克隆那样搜索多步画面，按观测给状态去重。
+对局世界没有实现，所以 NoSL 的 L0 根据画面预测后状态（[搜索 §1](/arch/macro-brain/search/#sec-1)）。有了对局世界，它会在 K 个采样世界里执行每个选项，对它们的 V 取平均，并像 SL 的克隆那样搜索多步画面，按观测给状态去重。
 
 ### 接口
 
 规划中的 C# 接口。所有非战斗决策界面共用一个入口；Harness 按决策界面名称分派（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）。
 
 ```csharp
-// Planned. One entry for every non-combat surface; routing by surface name (docs: harness §4).
+// Planned. One entry for every non-combat surface; routing by surface name (docs: harness/routing §1).
 public interface IMacroBrain
 {
     MacroDecisionResult Decide(MacroRequest request, IWorldSource worlds, Budget budget);
@@ -59,7 +59,7 @@ public sealed record MacroDecisionResult(
 
 ### 测试
 
-1. 覆盖：模拟对局能到达每一个宏观决策界面，兜底次数为 0。
+1. 覆盖：模拟对局能到达每一个宏观决策界面。
 2. 决策测试集（decision panel）：一组固定的（局面，选项）题目，标准答案来自大规模配对推演；按决策界面统计 L0 与标准答案的一致率，由此看出 V 在哪里最弱。
 3. NoSL 反事实：公开记录相同、隐藏状态不同（`RoomSet` 尾部、概率计数、随机数流）时，决策相同。
 4. 在固定预算下结果确定。

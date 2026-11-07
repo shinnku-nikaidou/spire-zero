@@ -15,7 +15,7 @@ This chapter explains how the game is made to run that way, what it can do once 
 
 <Aside title="Status">
 
-Exists: the headless host ([Headless host](/en/arch/simulator/headless/)); single-combat sessions with snapshots, determinization and CombatBuilder ([Combats](/en/arch/simulator/combat/)); whole runs through every decision screen, and runs hosted against a brain over the wire ([Whole runs](/en/arch/simulator/runs/)); NoSL combat worlds and the SL node clone ([Worlds and the SL clone](/en/arch/simulator/worlds/)); the worker pool with its three requests ([The worker pool](/en/arch/simulator/pool/)). Planned: run worlds, which would let a NoSL search look past the current map point ([Worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)).
+Exists: the headless host ([Headless host](/en/arch/simulator/headless/)); single-combat sessions with snapshots, determinization and CombatBuilder ([Combats](/en/arch/simulator/combat/)); whole runs through every decision screen, played in-process or, under `run --check`, again over the wire ([Whole runs](/en/arch/simulator/runs/)); NoSL combat worlds and the SL node clone ([Worlds and the SL clone](/en/arch/simulator/worlds/)); the worker pool with its three requests ([The worker pool](/en/arch/simulator/pool/)). Planned: run worlds, which would let a NoSL search look past the current map point ([Worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)).
 
 </Aside>
 
@@ -59,7 +59,7 @@ flowchart LR
   H -->|"one request per<br/>world, turn or probe"| POOL
 ```
 
-In `run`, the command that plays whole runs, the host and the decision process are one process: the run stays live in it, and the brains search in a pool of worker processes it starts. With `run --brain SOCKET` the brain is a separate process instead, the same one the mod talks to ([Whole runs §7](/en/arch/simulator/runs/#sec-7)).
+In `run`, the command that plays whole runs, the host and the decision process are one process: the run stays live in it, and the brains search in a pool of worker processes it starts. `brain` is the same Harness and brains as a process of their own: the mod starts it and talks to it on its stdin and stdout ([Whole runs §7](/en/arch/simulator/runs/#sec-7)).
 
 ## 4. The code
 
@@ -82,9 +82,9 @@ In `run`, the command that plays whole runs, the host and the decision process a
 |---|---|
 | [Headless host](/en/arch/simulator/headless/) | how the game boots without its engine: the native stub, the patches, TestMode, the JIT, and the single-threaded `Pump` that makes it deterministic |
 | [Combats](/en/arch/simulator/combat/) | a combat session, snapshots as recipes, determinization, building a combat from an observation (CombatBuilder), fidelity and speed |
-| [Whole runs](/en/arch/simulator/runs/) | `RunSession`: starting a run, the step-settle-decide loop, every decision screen, determinism, hosting runs against a brain |
+| [Whole runs](/en/arch/simulator/runs/) | `RunSession`: starting a run, the step-settle-decide loop, every decision screen, determinism, the brain as a process of its own |
 | [Worlds and the SL clone](/en/arch/simulator/worlds/) | NoSL combat worlds, the node checkpoint, loading and sealing the SL clone, the SL world, run worlds |
 | [The worker pool](/en/arch/simulator/pool/) | the pool, its three requests, determinism across processes, crashes and speed |
 | [Reference](/en/arch/simulator/reference/) | building and running, every command and option, the exit codes, every test |
 
-File references such as `Runs/RunManager.cs:295-312` point into the decompiled game assembly, `MegaCrit.Sts2.Core` (the folder `Runs/` is its namespace `MegaCrit.Sts2.Core.Runs`); project paths such as `Simulation/RunSession.cs` are under `src/Sts2Ai.SimWorker/` unless they name another project. Godot node files (`NGame.cs`, `NRestSiteRoom.cs`) are unique by name and given by file name only.
+File references such as `Runs/RunManager.cs:295-312` point into the decompiled game assembly, `MegaCrit.Sts2.Core`, which is not in the repository (the folder `Runs/` is its namespace `MegaCrit.Sts2.Core.Runs`); project paths such as `Simulation/RunSession.cs` are under `src/Sts2Ai.SimWorker/` unless they name another project. Godot node files (`NGame.cs`, `NRestSiteRoom.cs`) are unique by name and given by file name only.

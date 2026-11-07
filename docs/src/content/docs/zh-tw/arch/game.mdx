@@ -11,7 +11,7 @@ import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
 
 這個專案教一個程式玩**殺戮尖塔 2**（Slay the Spire 2，簡稱 STS2），一款單人牌組構築 roguelike 遊戲，版本 v0.111.0。這一頁寫給從沒玩過它的讀者，或想知道確切數字的讀者：一局是什麼，玩家要決定什麼，什麼是隨機的，什麼是隱藏的。本書其餘部分都以它為前提。
 
-這裡的一切都是從遊戲自己的程式碼（經過反編譯）和遊戲的文字檔裡讀出來的。檔案引用相對於反編譯樹 `tmp/decompiled/sts2`（本地），並省去資料夾名稱的 `MegaCrit.Sts2.Core.` 前綴：`Map/StandardActMap.cs` 就是 `MegaCrit.Sts2.Core.Map/StandardActMap.cs`。引用的遊戲文字出自遊戲的本地化檔案，本頁用的是繁體中文版的原文。
+這裡的一切都是從遊戲自己的程式碼（經過反編譯）和遊戲的文字檔裡讀出來的。檔案引用是反編譯的遊戲裡的路徑（它不在儲存庫裡），並省去資料夾名稱的 `MegaCrit.Sts2.Core.` 前綴：`Map/StandardActMap.cs` 就是 `MegaCrit.Sts2.Core.Map/StandardActMap.cs`。引用的遊戲文字出自遊戲的本地化檔案，本頁用的是繁體中文版的原文。
 
 ## 1. 一局
 
@@ -24,7 +24,7 @@ import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
 - **勝利**：打倒最後一個頭目之後，玩家會遇見建築師，一段對話，對話結束時這一局判為勝利（`Runs/RunManager.cs:1308-1342`）。最後一個頭目不給獎勵（`Rewards/RewardsSet.cs:88-91`）。所以獲勝的一局結束在第 48 層。
 - **失敗**：玩家的生物死亡時，這一局就結束了（`Runs/RunState.cs:190-198`）；放棄一局也算死亡。
 
-本書從頭到尾跟著同一局：一局寂靜獵手的對局，種子 `0SSL7NS01MU6`，由 SL 冠軍在第 48 層獲勝，也就是[宏觀大腦一章](/zh-tw/arch/macro-brain/)跟著的那一局。下面逐層列出：
+本書從頭到尾跟著同一局：一局寂靜獵手的 SL 對局，種子 `0SSL7NS01MU6`，在第 48 層獲勝，也就是[宏觀大腦一章](/zh-tw/arch/macro-brain/)跟著的那一局。下面逐層列出：
 
 <RunTimeline client:visible lang="zh-TW" />
 
@@ -123,11 +123,11 @@ import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
 
 （`Models.Characters/Ironclad.cs:33-57`、`Silent.cs:34-60`、`Regent.cs:32-58`、`Necrobinder.cs:32-62`、`Defect.cs:27-63`。）
 
-**寂靜獵手**是這個專案最先訓練的角色。她的卡池有 91 張牌（27 張攻擊、46 張技能、18 張能力）。她的初始牌是：打擊（1 能量，造成 6 點傷害）、防禦（1，獲得 5 點格擋）、中和（0，造成 3 點傷害並施加 1 層虛弱）、生存者（1，獲得 8 點格擋，然後棄一張牌）（`Models.Cards/StrikeSilent.cs:19-39`、`DefendSilent.cs:17-31`、`Neutralize.cs:23-52`、`Survivor.cs:17-36`）。她的主題是中毒、小刀（0 費、造成 4 點傷害並消耗的攻擊牌）和棄牌，棄牌會免費打出 Sly 牌。
+**寂靜獵手**是本書範例對局的角色。她的卡池有 91 張牌（27 張攻擊、46 張技能、18 張能力）。她的初始牌是：打擊（1 能量，造成 6 點傷害）、防禦（1，獲得 5 點格擋）、中和（0，造成 3 點傷害並施加 1 層虛弱）、生存者（1，獲得 8 點格擋，然後棄一張牌）（`Models.Cards/StrikeSilent.cs:19-39`、`DefendSilent.cs:17-31`、`Neutralize.cs:23-52`、`Survivor.cs:17-36`）。她的主題是中毒、小刀（0 費、造成 4 點傷害並消耗的攻擊牌）和棄牌，棄牌會免費打出 Sly 牌。
 
 ## 6. 晉階
 
-晉階等級 1–10 讓一局變得更難，每一級都包含它下面的各級（`Entities.Ascension/AscensionManager.cs:15`、`45-48`）。這個專案目前在 0 級打。
+晉階等級 1–10 讓一局變得更難，每一級都包含它下面的各級（`Entities.Ascension/AscensionManager.cs:15`、`45-48`）。冠軍的報告在 0 級；自我對弈涵蓋 0 到 10 級（[宏觀大腦：自我對弈](/zh-tw/arch/macro-brain/selfplay/)），`run --asc N` 可以打任何一級。
 
 | 等級 | 名稱 | 效果 |
 |---|---|---|
@@ -178,12 +178,12 @@ import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
 
 ## 8. 為什麼這對 AI 很難
 
-- **很長的視野**：一局平均約 555 個決策（冠軍的 300 局 SL 共 166,527 個決策），範例對局是 848 個。第 2 層拿的一張牌到第 48 層仍然重要，一場戰鬥損失的生命會帶到之後的每一場戰鬥。
+- **很長的視野**：一局平均約 555 個決策（寂靜獵手的 300 局 SL 共 166,527 個決策），範例對局是 848 個。第 2 層拿的一張牌到第 48 層仍然重要，一場戰鬥損失的生命會帶到之後的每一場戰鬥。
 - **隱藏資訊與機率**：抽牌順序、一個 `?` 裡是什麼、接下來會出現什麼、敵人之後的招式（[§7](#sec-7)）。
 - **龐大且不斷變化的動作集合**：一個回合可以按任意順序打出手牌（最多 10 張）和藥水，每張牌、每瓶藥水都可以選它的任一目標；一個商店提供約 13 件商品和一次刪牌；選牌提示會在一張牌打出的途中出現。
 - **一次死亡就結束這一局**：生命是一種要分配到大約 28 場戰鬥上的資源，每個休息處都要在回血和升級之間取捨。
 
-決策都在哪裡，以 SL 冠軍報告裡的 300 局來看：
+決策都在哪裡，以這 300 局 SL 來看：
 
 <SurfaceCounts client:visible lang="zh-TW" />
 

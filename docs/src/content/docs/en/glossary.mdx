@@ -20,7 +20,7 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | Sly | A card keyword: a Sly card discarded from the hand before the turn's end is played for free. |
 | Ancient | The being at the start of each act, who heals the player and offers three gifts: Neow in act 1. |
 | Ascension (A0) | Difficulty levels 1–10; A0 is the base game ([The game §6](/en/arch/game/#sec-6)). |
-| Silent | The character this project trains first ([The game §5](/en/arch/game/#sec-5)). |
+| Silent | One of the five characters; the book's example run is hers ([The game §5](/en/arch/game/#sec-5)). |
 | card prompt | The game asking the player to choose cards: discard, exhaust, upgrade, transform … ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)). |
 | seed, random stream | A run's 12-character seed fixes every random stream (shuffles, `?` rolls, monster moves …), so a run is a fixed function of its seed and choices ([The game §7](/en/arch/game/#sec-7)). |
 | TestMode | The game's built-in test switch. It turns off presentation, but also changes a few rules, which the simulator patches back ([Simulator: headless host §5](/en/arch/simulator/headless/#sec-5)). |
@@ -34,7 +34,7 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | Brain | The policies: the combat brains and the macro brain. References Protocol only, never the game. |
 | Harness | The library between hosts and brains: each run's dispatcher, the brain server, the worker pool, run records, reports and the gate ([Harness](/en/arch/harness/)). |
 | dispatcher | A run's `Dispatcher`: routes each decision to one brain, keeps what the run has shown, draws the seeds, checks and logs the answers ([Harness §2](/en/arch/harness/#sec-2)). |
-| brain server, `brain` | Harness's end of the wire, and the SimWorker command that runs it alone for the mod and for `run --brain` ([Harness §5](/en/arch/harness/#sec-5)). |
+| brain server, `brain` | Harness's end of the wire, and the SimWorker command that runs it alone: the mod starts `brain` as a child process and talks to it on its stdin and stdout ([Harness §5](/en/arch/harness/#sec-5)). |
 | SimWorker | The program that runs the real game DLL headless: combats, whole runs, the brain, the workers, evaluation ([Simulator](/en/arch/simulator/)). |
 | worker, worker pool, `serve` | A SimWorker process that answers search requests over JSON lines; the pool starts and restarts them ([Simulator: the worker pool](/en/arch/simulator/pool/)). |
 | Mod | The host inside the real game: reads the decision on screen, asks the brain, shows the answer, and plays it when the player asks ([Mod](/en/arch/mod/)). |
@@ -59,7 +59,7 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | checkpoint, clone, seal | SL's world is the node's checkpoint, taken on arrival, replayed through the node's steps: its clone. The clone is sealed at the node's exit: a further step throws ([Simulator: worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)–[§5](/en/arch/simulator/worlds/#sec-5)). |
 | horizon | The node's exit, as seen from inside an SL world (`AtHorizon`). |
 | SL record | What the mod keeps so the brain can clone the node in the real game: the checkpoint and every step, read where the game commits it ([Mod: the SL record](/en/arch/mod/sl-record/)). |
-| whitelist | The rule that an observation field exists only if the game shows it; each field has a test ([Protocol §3](/en/arch/protocol/#sec-3)). |
+| whitelist | The rule that an observation field exists only if the game shows it; JSON round trips check every observation (`run --check`, `selftest`) ([Protocol §3](/en/arch/protocol/#sec-3)). |
 
 ## 4. Decisions and search
 
@@ -73,7 +73,7 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | recommendation | The brain's answer: the action, the plan after it, and the candidates it scored ([Output §1](/en/arch/output/#sec-1)). |
 | candidate | An option a brain scored, with its value, confidence interval and samples: a search's first action, with the SL planner's chance to win the fight and HP left, or outside combat an option with V's chance to win the run ([Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)). |
 | fallback | Choosing something (at random, say) when no brain covers a decision. Forbidden: the run stops with an error instead. |
-| placeholder | A policy that does not search (`play`, `random`), for tests and baselines; a decision by `random` voids an evaluation. |
+| placeholder | A policy that does not search (`play`, `random`), for tests and baselines; a decision by a placeholder voids an evaluation. |
 | PIMC | Perfect Information Monte Carlo: sample several determinized worlds, search each as if everything were known, and average by first action ([NoSL PIMC](/en/arch/pimc/)). |
 | strategy fusion | The error of picking a different best line in each sampled world, as if the player knew which world is real. Averaging by first action keeps it out of the choice ([Environments: worlds §3](/en/arch/environments/worlds/#sec-3)). |
 | SL planner | SL's combat brain: a beam search over whole turns on the node's clone, to the end of the combat ([The SL planner](/en/arch/sl-planner/)). |
@@ -105,7 +105,7 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | term | meaning |
 |---|---|
 | R1–R4 | The sim-to-real ladder: four rungs from a simulator run (R1) to the Steam game with the mod (R4), each adding one new variable ([Evaluation §2](/en/arch/evaluation/#sec-2)). |
-| leaderboard | Results per character, ascension, seed set and environment; NoSL and SL are never ranked together (`eval/silent/leaderboard.md`). |
+| leaderboard | Results per character, ascension, seed set and environment; NoSL and SL are never ranked together (`eval/CHARACTER/leaderboard.md`). |
 | report, run record | A batch's results as JSON, with every run's record: its seed, outcome, floor, combats and brains ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). |
 | gate | The paired test a challenger must pass to be promoted ([Evaluation: gates](/en/arch/evaluation/gates/)). |
 | CRN, pairing | Common random numbers: champion and challenger play the same seeds, so their difference has less noise. |
@@ -117,15 +117,13 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 
 | name | what |
 |---|---|
-| v9-1 | V, the one value net of every character, played by both champions ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
-| c9-1 | The combat net, the one of every character, played by both champions ([The combat net](/en/arch/combat-brain/network/)). |
+| v9-2 | The champion's V, the one value net of every character, played by both champions ([Macro brain: the value network](/en/arch/macro-brain/network/)). |
+| c9-2 | The champion's combat net, the one of every character, played by both champions ([The combat net](/en/arch/combat-brain/network/)). |
 | token table | A net's list of ids of one kind (cards, relics, …), with learned rows per id: every id of the game build; entry 0, `<unk>`, reads any other ([The combat net §2](/en/arch/combat-brain/network/#sec-2)). |
-| `weights/all/NAME.json` | A net's file; the champions play `v9-1.json` and `c9-1.json` ([Learning: reference §6](/en/arch/learning/reference/#sec-6)). |
+| `weights/all/NAME.json` | A net's file; the champions play `v9-2.json` and `c9-2.json`, and a net's name is never reused ([Learning: reference §6](/en/arch/learning/reference/#sec-6)). |
 | `promotion-1-100`, `promotion-1-200`, `promotion-1-300`, `final-1`, `a10-check-1` | Seed sets in `eval/seeds/`: 100, 200 and 300 promotion seeds (each longer one begins with the shorter; `promotion-1` holds the same 200 as `promotion-1-200`), a final set of 300 registered before any run on it, and 200 seeds for A10 win rates, in no training data. |
-| `eval/champions/sl.json`, `nosl.json` | Champion files: the options that play each environment's champion, every character's, and its report of each character. |
-| `eval/ledger.md` | The lineage, and the only history of the nets, every character's: which brain played which data, and which data trained which weights. |
-| `data/silent/{sl,nosl}/…` | The data directory's self-play and evaluation folders, on the storage host, not in git. |
-| `tmp/build.sh REV`, `sim.sh` | The local launcher that builds a fixed commit and runs it ([Simulator: reference §1](/en/arch/simulator/reference/#sec-1)). |
+| `eval/champions/sl.json`, `nosl.json` | Champion files: the options that play each environment's champion, every character's, and the reports behind it (the NoSL file names none). |
+| `data/CHARACTER/{sl,nosl}/…` | The data directory's self-play and evaluation folders; not in git. |
 | `run`, `brain`, `serve`, `clones`, `gate`, `report`, `leaderboard` | SimWorker commands ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). |
 | `v.train`, `combat.train`, `gate.py` | The Python that trains V and the combat net, and the wins gate's report and verdict ([Learning: reference §9](/en/arch/learning/reference/#sec-9)). |
 | `0SSL7NS01MU6` | The seed of the book's example run, won on floor 48 ([The game §1](/en/arch/game/#sec-1)). |

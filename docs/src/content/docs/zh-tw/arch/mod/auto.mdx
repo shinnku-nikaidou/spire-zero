@@ -10,14 +10,14 @@ sidebar:
 
 import { Badge } from '@astrojs/starlight/components';
 
-輔助模式顯示大腦的答案。玩家自己打出它，或者請 AI 來打：透過面板的工具列或它的按鍵，AI 打出下一個動作、回合或房間的剩餘部分，或者自己一直打下去，直到被暫停（[§2](#sec-2)）。每個動作都像玩家的點選那樣執行（[§1](#sec-1)）。在沒有人坐在鍵盤前的情況下打完整局，是模擬到實機階梯的最後一級 R4：它在真實遊戲裡打按種子開局的對局，拿來和模擬器的對局比較（[評估 §2](/zh-tw/arch/evaluation/#sec-2)）；它的驅動程式還在規劃中（[§2](#sec-2)）。本頁先描述執行器和各個目標，再說明日誌、操作與安全規則、補丁和測試。
+輔助模式顯示大腦的答案。玩家自己打出它，或者請 AI 來打：透過面板的工具列或它的按鍵，AI 打出下一個動作、回合或房間的剩餘部分，或者自己一直打下去，直到被暫停（[§2](#sec-2)）。每個動作都像玩家的點選那樣執行（[§1](#sec-1)）。在沒有人坐在鍵盤前的情況下打完整局，是模擬到實機階梯的最後一級 R4：它在真實遊戲裡打按種子開局的對局，拿來和模擬器的對局比較（[評估 §2](/zh-tw/arch/evaluation/#sec-2)）；它的驅動程式在規劃中（[§2](#sec-2)）。本頁先描述執行器和各個目標，再說明日誌、操作與安全規則、補丁和測試。
 
 ## 1. 執行器
 
 `Executor.Run`（`Executor.cs`）執行一個動作：大腦對畫面上那個決策的答案，所以一定是那個決策的合法動作之一。GameBridge 從不碰 Godot 節點（[GameBridge §2](/zh-tw/arch/gamebridge/#sec-2)），所以這部分節點端的工作放在 Mod 裡。執行器打出每個動作的方式和玩家的點選相同，好讓遊戲的畫面像點選之後那樣接著走。它走三條路徑之一：
 
-- **GameBridge 的 start**，在點選做的就是這個呼叫的地方：戰鬥、地圖、購買、寶箱的遺物、水晶球和藥水欄。
-- **按鈕自己的處理函式**，在點選做的不只是開始動作的地方：獎勵畫面、休息處和事件房間會更新它們自己的按鈕，而每一條離開房間的路都會打開地圖。只有在按鈕已啟用而且在畫面上時（`IsEnabled && IsVisibleInTree()`）才按下它（`ForceClick`），`ForceClick` 自己不檢查這些 <Badge text="已核實" variant="success" />。
+- **GameBridge 的 start**，在點選做的就是這個呼叫的地方：戰鬥、購買、寶箱的遺物、水晶球和藥水欄。
+- **按鈕自己的處理函式**，在點選做的不只是開始動作的地方：地圖畫面對一個點的處理函式、獎勵畫面、休息處和事件房間會更新它們自己的按鈕，而每一條離開房間的路都會打開地圖。只有在按鈕已啟用而且在畫面上時（`IsEnabled && IsVisibleInTree()`）才按下它（`ForceClick`），`ForceClick` 自己不檢查這些 <Badge text="已核實" variant="success" />。
 - **畫面等待的任務**，用於選牌提示、卡牌獎勵和卡包。這些畫面把它們的答案交給一個遊戲在 await 的任務（一個 `TaskCompletionSource`）；執行器用大腦的選擇完成那個任務，就像畫面自己的確認那樣。
 
 | 決策介面 | 執行器呼叫什麼 |
@@ -66,7 +66,7 @@ import { Badge } from '@astrojs/starlight/components';
 - **下一個是菁英或頭目**：地圖的答案要移動到菁英或頭目的點；
 - **獲勝機率下降了**：V 對贏下這一局的機率，取自最近一個戰鬥外的答案（[輸出 §2](/zh-tw/arch/output/#sec-2)），比自動遊玩開始以來的最好值低超過 3 個百分點。之後最好值就設為下降後的值，所以下一次停下需要一次新的下降。
 
-在玩家開始自動遊玩的那個決策處，兩者都不會讓它停下：在它停下的地方再按一次自動，它就會繼續打。每個目標也會在以下情況結束：一局結束時；一個動作讓狀態保持原樣 10 秒時；動作的按鈕 10 秒都沒準備好時（「AI 按不了」）；執行器拋出例外時；以及與大腦的連線中斷時，這會連工具列一起帶走：之後 AI 只在玩家要求時才重新開始。面板的橫條用琥珀色說明 AI 為什麼停下（[輸出 §2](/zh-tw/arch/output/#sec-2)）。
+在玩家開始自動遊玩的那個決策處，兩者都不會讓它停下：在它停下的地方再按一次自動，它就會繼續打。每個目標也會在以下情況結束：一局結束時；一個動作讓狀態保持原樣 10 秒時；動作的按鈕 10 秒都沒準備好時（「AI 按不了」）；執行器拋出例外時；以及大腦結束時，這會連工具列一起帶走：之後 AI 只在玩家要求時才重新開始。面板的橫條用琥珀色說明 AI 為什麼停下（[輸出 §2](/zh-tw/arch/output/#sec-2)）。
 
 **AI 做了什麼**。每打出一個動作，Mod 就送出帶有決策 id 的 `executed`，面板則列出 AI 最近的四個動作，連同層數和答案的值。
 
@@ -79,17 +79,17 @@ import { Badge } from '@astrojs/starlight/components';
 
 ## 3. 日誌，以及 R3 = R4
 
-**Mod 目前寫什麼**。它的每一行都寫進遊戲自己的日誌，所以會出現在遊戲的日誌檔裡（本機上是 `~/.local/share/SlayTheSpire2/logs/godot.log`，另有較早工作階段的帶日期副本）。每一行都以 `[Sts2Ai]` 開頭：
+**Mod 寫什麼**。它的每一行都寫進遊戲自己的日誌，所以會出現在遊戲的日誌檔裡（在 Linux 上預設是 `~/.local/share/SlayTheSpire2/logs/godot.log`，另有較早工作階段的帶日期副本）。每一行都以 `[Sts2Ai]` 開頭：
 
 | 等級 | 內容 |
 |---|---|
-| info | 「assist mode, ENV, brain at PATH」；「environment ENV」；「effort EFFORT」；「connected to the brain」；「no brain: REASON」（每種不同的原因一次）；「AI stopped: REASON」；「auto-play pressed the chest」、「… the proceed」、「… the dialogue」 |
+| info | 「assist mode, ENV, brain: LAUNCHER」（或者說明沒有為這個平台隨附大腦）；「environment ENV」；「effort EFFORT」；「connected to the brain」；「no brain: REASON」（每種不同的原因一次）；「AI stopped: REASON」；「auto-play pressed the chest」、「… the proceed」、「… the dialogue」 |
 | warning | 「off: game V, the mod is for v0.111.0」；「brain: MESSAGE」（一個 `error`）；「unexpected TYPE from the brain」；「a card prompt (TYPE) without its context, left to the player」；「SL record of node N broken after K steps: REASON」；「could not play ACTION: EXCEPTION」；設定檔的兩條警告 |
 | error | 一個影格的例外，每種不同的文字一次；「SL record: EXCEPTION」；「no AI settings tab: EXCEPTION」 |
 
-它唯一寫的檔案是自己的設定檔（[概覽 §5](/zh-tw/arch/mod/#sec-5)）。它沒有自己的決策日誌。真實遊戲裡的一個工作階段改由大腦那一側記錄：`brain --log FILE` 寫出 Harness 的決策日誌（每個決策的觀測、合法動作、選擇、計畫、候選、環境和時間，[Harness：決策日誌](/zh-tw/arch/harness/decision-log/)），`brain --wire FILE` 則寫出宿主傳來的每則訊息，包括帶有遊戲版本的 `hello`，以及 AI 打出的每個動作的 `executed`。2026-10-28 的擷取就是這樣的一對，保存在本機的 `tmp/assist/` 裡（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
+除了這些行，它還在自己的狀態資料夾裡寫：它的設定（[概覽 §5](/zh-tw/arch/mod/#sec-5)），以及 `brain.log`，也就是大腦的 stderr，每局一行（[概覽 §4](/zh-tw/arch/mod/#sec-4)）。它沒有自己的決策日誌。遊戲裡的一個工作階段在大腦那一側記錄，前提是設定檔裡的 `Record` 打開：這時 Mod 啟動的每個大腦都在 `captures/` 裡得到一對檔案（[概覽 §4](/zh-tw/arch/mod/#sec-4)），來自 `brain --log FILE`，它寫出 Harness 的決策日誌（每個決策的觀測、合法動作、選擇、計畫、候選、環境和時間，[Harness：決策日誌](/zh-tw/arch/harness/decision-log/)），以及 `brain --wire FILE`，它寫出宿主傳來的每則訊息，包括帶有遊戲版本的 `hello`，以及 AI 打出的每個動作的 `executed`（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 
-**規劃中：Mod 的決策日誌**。每個決策記下：觀測、合法動作、推薦、實際打出的動作和由誰打出、延遲、環境、遊戲和 Mod 的版本，以及必須為 0 的 `NumReloads`（[環境：資訊與節點 §8](/zh-tw/arch/environments/information/#sec-8)）。目前沒有東西讀 `NumReloads`。
+**規劃中：Mod 的決策日誌**。每個決策記下：觀測、合法動作、推薦、實際打出的動作和由誰打出、延遲、環境、遊戲和 Mod 的版本，以及必須為 0 的 `NumReloads`（[環境：資訊與節點 §8](/zh-tw/arch/environments/information/#sec-8)）。沒有東西讀 `NumReloads`。
 
 **規劃中：R3 = R4**。同一個種子、同一串決策，在模擬器（R3）和遊戲（R4）裡打出來，必須得到相同的觀測；出現差異就是 GameBridge 或模擬器的 bug，測試會報告第一個差異。目前有的東西範圍較窄：`clones` 為 SL 紀錄逐個決策檢查，節點的複本問的是不是遊戲問過的那個決策（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 
@@ -114,7 +114,7 @@ import { Badge } from '@astrojs/starlight/components';
 - **AI 只在玩家要求時行動**，而且只打大腦對畫面上那個決策的答案，每個狀態一次。那個答案是決策的合法動作之一：Harness 對照那份清單檢查它，遇到不合法的就拋出例外（[Harness：路由、預算與種子 §6](/zh-tw/arch/harness/routing/#sec-6)）。除了答案之外，自動遊玩只按不是決策的畫面：寶箱、繼續按鈕、遠古之民的對話（[§1](#sec-1)）。沒有目標時，Mod 不啟動任何遊戲動作。
 - **不修改狀態、不用主控台、不讀檔、不寫存檔**。Mod 沒有做這些事的任何介面。
 - **只限單人**。輔助和它的工具列在多人對局裡會自行關閉，規劃中的驅動程式則會拒絕任何多人大廳。
-- **什麼會離開遊戲**。socket 只傳輸協定訊息。對局 id 是種子的雜湊，觀測裡也不含種子（`RunView` 沒有種子），所以在 NoSL 下，種子從不離開宿主。SL 下則會：節點的檢查點是遊戲的完整存檔，帶有種子和每條亂數流的狀態，這是 SL 可以知道的（[SL 紀錄 §2](/zh-tw/arch/mod/sl-record/#sec-2)）。NoSL 從不傳送檢查點。
+- **什麼會離開遊戲**。沒有東西離開這台機器：大腦是 Mod 自己的子行程，通往它的管線只傳輸協定訊息。對局 id 是種子的雜湊，觀測裡也不含種子（`RunView` 沒有種子），所以在 NoSL 下，種子從不離開宿主。SL 下則會：節點的檢查點是遊戲的完整存檔，帶有種子和每條亂數流的狀態，這是 SL 可以知道的（[SL 紀錄 §2](/zh-tw/arch/mod/sl-record/#sec-2)）。NoSL 從不傳送檢查點。
 - **遊戲的設定畫面**是 Mod 唯一會為了繪製而改動遊戲節點的地方：它加上自己的分頁和面板，並把分頁列移動半格，讓它保持置中（[輸出 §2](/zh-tw/arch/output/#sec-2)）。它畫的其他所有東西都在自己的圖層裡。
 
 ## 5. 補丁與 JIT
@@ -127,13 +127,13 @@ import { Badge } from '@astrojs/starlight/components';
 | `SaveManager.SaveRun`、`RunManager.LoadIntoLatestMapCoord`，以及 SL 紀錄的 12 個入口 | 前綴；另有 6 個後綴，用於步驟的任務 | SL 紀錄（[SL 紀錄 §3](/zh-tw/arch/mod/sl-record/#sec-3)） |
 | `NSettingsTabManager._Ready` | 後綴 | AI 分頁，在下一次空閒時加上（[輸出 §2](/zh-tw/arch/output/#sec-2)） |
 
-**為什麼最先安裝**。上下文補丁要在任何其他東西編譯遊戲程式碼之前安裝：在補丁之前編譯的呼叫方，可能把入口內嵌進去而繞過補丁。這在無頭執行時見過：另一個補丁重新編譯 SapphireSeed 時，發生了這種內嵌。
+**為什麼最先安裝**。上下文補丁要在任何其他東西編譯遊戲程式碼之前安裝：在補丁之前編譯的呼叫方，可能把入口內嵌進去而繞過補丁。
 
-**JIT**。遊戲在 .NET 的*分層編譯*下執行：方法先被快速編譯一次，常用的方法之後再帶最佳化重新編譯（「rejit」）。一次 rejit 可能悄悄丟掉一個補丁；這在無頭執行幾千場戰鬥之後見過，這也是模擬器關掉分層編譯的原因（[模擬器：無頭宿主 §6](/zh-tw/arch/simulator/headless/#sec-6)）。Mod 無法選擇遊戲如何編譯。它有的是：
+**JIT**。遊戲在 .NET 的*分層編譯*下執行：方法先被快速編譯一次，常用的方法之後再帶最佳化重新編譯（「rejit」）。一次 rejit 可能悄悄丟掉一個補丁，這是模擬器關掉分層編譯的原因（[模擬器：無頭宿主 §6](/zh-tw/arch/simulator/headless/#sec-6)）。Mod 無法選擇遊戲如何編譯。它有的是：
 
-- **缺少上下文會記入日誌**：沒有帶上下文就到來的提示會留給玩家，並在遊戲日誌裡寫一條警告（[主迴圈 §5](/zh-tw/arch/mod/loop/#sec-5)）。面板目前還不顯示警告。
+- **缺少上下文會記入日誌**：沒有帶上下文就到來的提示會留給玩家，並在遊戲日誌裡寫一條警告（[主迴圈 §5](/zh-tw/arch/mod/loop/#sec-5)）。面板不顯示警告。
 - **規劃中：心跳**，每個補丁觸發時給一個計數器加一，用來發現補丁失效。
-- **規劃中：啟動參數**：用 `DOTNET_TieredCompilation=0` 啟動遊戲 <Badge text="推斷" variant="caution" />，前提是遊戲託管的執行時認這個變數（未決問題 2，[§8](#sec-8)）。
+- **規劃中：啟動參數**：用 `DOTNET_TieredCompilation=0` 啟動遊戲 <Badge text="推斷" variant="caution" />，前提是遊戲託管的執行時認這個變數（未決問題 1，[§8](#sec-8)）。
 
 ## 6. 已有工作
 
@@ -149,7 +149,7 @@ STS2MCP（MIT 授權）是一個現成的 Mod，讓外部程式透過 HTTP 操�
 - 直接 `new PlayCardAction`：它會跳過 `CanPlayTargeting` 和出牌效果。執行器像手牌那樣，透過 `TryManualPlay` 打出一張牌；
 - 直接結束回合：執行器像結束回合按鈕那樣，透過遊戲的動作佇列排入回合結束；
 - 暴露種子或地圖的路徑；
-- 帶 CORS `*` 的 HTTP：任何網頁都能操控遊戲。Mod 只用 Unix socket。
+- 帶 CORS `*` 的 HTTP：任何網頁都能操控遊戲。Mod 不開任何連接埠：它透過大腦的 stdin 和 stdout 與它啟動的大腦溝通。
 
 ## 7. 測試
 
@@ -157,14 +157,13 @@ Mod 沒有單元測試。它和模擬器共用的部分在模擬器那邊測試�
 
 | 檢查 | 狀態 |
 |---|---|
-| **SL 往返**：`brain --wire` 和 `clones` | 已實作並執行過（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
+| **SL 往返**：一次 `Record` 錄製（`brain --wire`）和 `clones` | 已實作（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
 | **載入**：Mod 能初始化、版本守衛有效、面板會顯示 | 手動 |
-| **執行器和各個目標**：AI 打每種決策介面、每種停止條件 | 手動；反射用到的名稱和型別、選牌提示的索引對應表，以及 Godot 呼叫，都已經對照反編譯的遊戲審查過 |
+| **執行器和各個目標**：AI 打每種決策介面、每種停止條件 | 手動；反射用到的名稱和型別、選牌提示的索引對應表，以及 Godot 呼叫，都對照反編譯的遊戲檢查 |
 | **真實遊戲裡的決策介面覆蓋**：腳本化的 R4 對局走遍每種決策介面，沒有任何決策因為缺少讀取器而留給玩家 | 規劃中，與驅動程式一起 |
 | **空閒**：動畫進行中從不送出決策；記錄決策時帶上影格編號，並檢查沒有一個與排隊中的動作重疊 | 規劃中 |
 | **速度恢復**：停止時和結束遊戲時都把 Instant 或 Fast 恢復回去 | 規劃中，與驅動程式一起 |
 
 ## 8. 未決問題
 
-1. 輔助模式下擷取玩家的動作：已定，在遊戲提交動作的地方掛鉤子（[SL 紀錄 §3](/zh-tw/arch/mod/sl-record/#sec-3)）。
-2. 遊戲是否認分層編譯的環境變數？
+1. 遊戲是否認分層編譯的環境變數？

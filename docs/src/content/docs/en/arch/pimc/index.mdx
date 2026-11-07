@@ -32,7 +32,7 @@ The monsters are the subtle part. Each picks its moves with a move state machine
 - a **weighted roll with constraints**: 60% attack and 40% buff, say, but never the same move three times in a row, or one move always followed by another;
 - a **condition**: another move set below half HP, or enemies taking turns.
 
-The rolls draw from the monster's own random stream, which the run's seed fixes: the same seed gives the same moves, which SL may use. A player never sees the stream, so a roll stays unknown until its intent shows. This round's move is always known, since its intent shows. Players learn a monster quickly because the constraints leave the rolls little room, and what stays unknown is exactly the rolls. The combat net shows the same picture: from the record it names the next round's intent type for 57.7% of the enemies, against 28.9% for repeating the current one, and its misses fall mostly on the rolls ([Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3)).
+The rolls draw from the monster's own random stream, which the run's seed fixes: the same seed gives the same moves, which SL may use. A player never sees the stream, so a roll stays unknown until its intent shows. This round's move is always known, since its intent shows. Players learn a monster quickly because the constraints leave the rolls little room, and what stays unknown is exactly the rolls.
 
 ## 2. Sampled worlds
 
@@ -62,7 +62,7 @@ The figure takes a real NoSL decision, the first turn of an elite fight against 
 
 ## 3. How faithful a world is
 
-A world built from the observation should play like the real fight, apart from what `Determinize` samples on purpose. A measurement shows how far it does: at every second decision of a set of fights, the real fight played on with a placeholder policy to the end of the turn, the enemies' turn included, while a fight built from the decision's observation and record, given the real one's sampled state, played the same actions; the first observation that differed was counted ([Simulator: combats §6](/en/arch/simulator/combat/#sec-6)). With Silent's starter deck (2026-10-27):
+A world built from the observation should play like the real fight, apart from what `Determinize` samples on purpose. A measurement shows how far it does: at every second decision of a set of fights, the real fight played on with a placeholder policy to the end of the turn, the enemies' turn included, while a fight built from the decision's observation and record, given the real one's sampled state, played the same actions; the first observation that differed was counted ([Simulator: combats §6](/en/arch/simulator/combat/#sec-6)). With Silent's starter deck:
 
 | fights | decisions | the same through the enemies' turn, without the record → with it |
 |---|---|---|
@@ -71,9 +71,9 @@ A world built from the observation should play like the real fight, apart from w
 | act 0 boss, 9 | 201 | 96.5% → 96.5% |
 | act 0 elite, 15 | 289 | 99.0% → 99.0% |
 
-No fight was built wrong, and no action was illegal in a built one. Within the turn at most 1% differ. The rest differ after the turn ends, on counters inside a few monsters (a rat's summons, a giant's growing damage) that no observation shows. The record of moves is what lifts the hallway fights from 82–89% to 96–98%. What the builder still approximates: this turn's history and the counters inside powers and monsters, how long cost modifiers last, the player's debuffs wearing off, and a deck taken as every card seen.
+No fight was built wrong, and no action was illegal in a built one. Within the turn at most 1% differ. The rest differ after the turn ends, on counters inside a few monsters (a rat's summons, a giant's growing damage) that no observation shows. The record of moves is what lifts the hallway fights from 82–89% to 96–98%. What the builder approximates: this turn's history and the counters inside powers and monsters, how long cost modifiers last, the player's debuffs wearing off, and a deck taken as every card seen.
 
-In whole runs a world built wrong fails the decision. Five of the first 400 PIMC runs failed that way: a spent Silver Crucible's hidden counter (three runs), a Glass orb's numbers, and Sloth's limit, which only its tooltip shows (the world allowed fewer cards a turn than the real fight, and a legal play was illegal in it). All three are fixed ([Simulator: combats §6](/en/arch/simulator/combat/#sec-6)).
+In whole runs a world built wrong fails the decision, rather than let the search explore some other fight (`SimWorlds.NoSL`, [Harness: routing, budgets and seeds §6](/en/arch/harness/routing/#sec-6)).
 
 ## 4. Fair play
 
@@ -82,7 +82,7 @@ NoSL's rule is that a decision depends only on the public record ([Environments]
 - **Only the observation leaves the host.** A worker gets the observation, the record and the seeds, never the true fight ([Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)). Every world is built from the observation, never from the real fight, so the hidden state in a world is the world's own sample, and nothing in it is the real game's.
 - **The seeds are the caller's.** `Determinize` takes its seed from the search, never from the run.
 - **The leaf reads the observation.** Neither the combat net nor the V that prices its endings reads hidden state: the net reads the observation and the record, V the run around the fight ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)).
-- **The same path everywhere.** The first rung of the evaluation ladder, the simulator, builds its worlds the same way the mod will from the real game: no shortcut determinizes the true state for decisions ([Evaluation §2](/en/arch/evaluation/#sec-2)). Determinizing the true state stays for tests and benchmarks only.
+- **The same path everywhere.** The first rung of the evaluation ladder, the simulator, builds its worlds the same way the mod does from the real game: no shortcut determinizes the true state for decisions ([Evaluation §2](/en/arch/evaluation/#sec-2)). Determinizing the true state stays for tests and benchmarks only.
 - **Planned:** a counterfactual test, the same public record with a different hidden state, which must give the same choice for a fixed brain seed.
 
 ## 5. The planned form <Badge text="planned" variant="caution" />
@@ -101,4 +101,4 @@ The details are in [Search §7](/en/arch/pimc/search/#sec-7), the budget in [Bud
 | section | what it explains |
 |---|---|
 | [Search](/en/arch/pimc/search/) | the search in each world, the average by first action, noise and common random numbers, strategy fusion and the sampler's bias; the same search on `TurnEnds` |
-| [Budget](/en/arch/pimc/budget/) | worlds and nodes, following a cycle's plan, one share per first action, the same budget in every room, workers, results, weaknesses and open questions; the planned budget |
+| [Budget](/en/arch/pimc/budget/) | worlds and nodes, following a cycle's plan, one share per first action, the same budget in every room, workers, the champion, weaknesses and open questions; the planned budget |

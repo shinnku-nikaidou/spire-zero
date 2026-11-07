@@ -6,7 +6,7 @@ import mermaid from 'astro-mermaid';
 import katex from 'katex';
 
 // The sidebar is the book's table of contents, as the overview's doc map lists it: an overview, four parts and the
-// appendices. Labels and status badges come from each page's own frontmatter, so every locale shows its own text.
+// appendix. Labels and status badges come from each page's own frontmatter, so every locale shows its own text.
 const environments = ['arch/environments', 'arch/environments/information', 'arch/environments/worlds'];
 const simulator = [
   'arch/simulator',
@@ -58,7 +58,7 @@ const book = [
     translations: { 'zh-TW': '第四部　機器', en: 'Part IV: The machinery' },
     items: [{ label: '模拟器', translations: { 'zh-TW': '模擬器', en: 'Simulator' }, items: simulator }, { label: 'Harness', translations: { 'zh-TW': 'Harness', en: 'Harness' }, items: harness }, { label: '协议', translations: { 'zh-TW': '協定', en: 'Protocol' }, items: protocol }, { label: 'GameBridge', translations: { 'zh-TW': 'GameBridge', en: 'GameBridge' }, items: gamebridge }, { label: 'Mod', translations: { 'zh-TW': 'Mod', en: 'Mod' }, items: mod }, 'arch/output'],
   },
-  { label: '附录', translations: { 'zh-TW': '附錄', en: 'Appendices' }, items: ['status', 'glossary'] },
+  { label: '附录', translations: { 'zh-TW': '附錄', en: 'Appendix' }, items: ['glossary'] },
 ];
 
 // Numbered headings ("## 5." / "### 5.1") get the id "sec-5" / "sec-5.1" in every

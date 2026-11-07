@@ -20,7 +20,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | Sly | 一个卡牌关键词：Sly 牌在回合结束前从手牌中被弃掉时，会被免费打出。 |
 | 先古之民（Ancient） | 每一幕开头的存在，会治疗玩家并提供三份礼物：第 1 幕是涅奥。 |
 | 进阶（Ascension，A0） | 难度等级 1–10；A0 是基础游戏（[游戏 §6](/arch/game/#sec-6)）。 |
-| 静默猎手（Silent） | 这个项目最先训练的角色（[游戏 §5](/arch/game/#sec-5)）。 |
+| 静默猎手（Silent） | 五个角色之一；本书例子那一局是她的（[游戏 §5](/arch/game/#sec-5)）。 |
 | 选牌提示（card prompt） | 游戏要求玩家选牌：弃牌、消耗、升级、变化……（[协议：观测与动作 §6](/arch/protocol/observation/#sec-6)）。 |
 | 种子（seed）、随机数流（random stream） | 一局的 12 位种子决定每一条随机数流（洗牌、`?` 的掷骰、怪物招式……），所以一局是它的种子和选择的确定函数（[游戏 §7](/arch/game/#sec-7)）。 |
 | TestMode | 游戏自带的测试开关。它关掉表现层，但也改变少数规则，模拟器用补丁把它们改回来（[模拟器：无头宿主 §5](/arch/simulator/headless/#sec-5)）。 |
@@ -34,7 +34,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | Brain | 策略：战斗大脑和宏观大脑。只引用 Protocol，从不引用游戏。 |
 | Harness | 宿主和大脑之间的库：每一局的调度器、大脑服务器、工作进程池、对局记录、报告和晋级门槛（[Harness](/arch/harness/)）。 |
 | 调度器（dispatcher） | 一局的 `Dispatcher`：把每个决策路由给一个大脑，保存这一局显示过的东西，抽取种子，检查答案并记入日志（[Harness §2](/arch/harness/#sec-2)）。 |
-| 大脑服务器（brain server）、`brain` | Harness 在线路上的那一端，也是为 Mod 和 `run --brain` 单独运行它的 SimWorker 命令（[Harness §5](/arch/harness/#sec-5)）。 |
+| 大脑服务器（brain server）、`brain` | Harness 在线路上的那一端，也是单独运行它的 SimWorker 命令：Mod 把 `brain` 作为子进程启动，通过它的 stdin 和 stdout 和它对话（[Harness §5](/arch/harness/#sec-5)）。 |
 | SimWorker | 以无头方式运行真实游戏 DLL 的程序：战斗、整局、大脑、worker、评估（[模拟器](/arch/simulator/)）。 |
 | 工作进程（worker）、工作进程池（worker pool）、`serve` | 一个通过 JSON 行回答搜索请求的 SimWorker 进程；工作进程池负责启动和重启它们（[模拟器：工作进程池](/arch/simulator/pool/)）。 |
 | Mod | 真实游戏里的宿主：读取屏幕上的决策，询问大脑，显示答案，并在玩家要求时打出它（[Mod](/arch/mod/)）。 |
@@ -59,7 +59,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 检查点（checkpoint）、克隆（clone）、封存（seal） | SL 的世界是节点的检查点（到达时取下），再重播这个节点的各个步骤：这就是它的克隆。克隆在节点出口处封存：再走一步就会抛出异常（[模拟器：世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)–[§5](/arch/simulator/worlds/#sec-5)）。 |
 | 视野边界（horizon） | 从 SL 世界内部看到的节点出口（`AtHorizon`）。 |
 | SL 记录（SL record） | Mod 为了让大脑能在真实游戏里克隆节点而保存的东西：检查点和每一步，在游戏提交它的地方读取（[Mod：SL 记录](/arch/mod/sl-record/)）。 |
-| 白名单（whitelist） | 观测字段只有在游戏显示它时才存在的规则；每个字段都有一个测试（[协议 §3](/arch/protocol/#sec-3)）。 |
+| 白名单（whitelist） | 观测字段只有在游戏显示它时才存在的规则；JSON 往返检查每个观测（`run --check`、`selftest`）（[协议 §3](/arch/protocol/#sec-3)）。 |
 
 ## 4. 决策与搜索
 
@@ -73,7 +73,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 推荐（recommendation） | 大脑的回答：动作、它之后的计划，以及它打过分的候选（[输出 §1](/arch/output/#sec-1)）。 |
 | 候选（candidate） | 大脑打过分的一个选项，带着它的价值、置信区间和样本数：搜索的一个第一步动作，带着 SL 规划器给出的这场战斗的胜率和剩下的生命值；或者战斗外的一个选项，带着 V 给出的这一局的胜率（[协议：线路 §7](/arch/protocol/wire/#sec-7)）。 |
 | 兜底（fallback） | 没有大脑负责一个决策时，（比如随机地）选一个。这是禁止的：这一局改为报错停止。 |
-| 占位策略（placeholder） | 不搜索的策略（`play`、`random`），用于测试和基线；由 `random` 做出的决策会让一次评估作废。 |
+| 占位策略（placeholder） | 不搜索的策略（`play`、`random`），用于测试和基线；由占位策略做出的决策会让一次评估作废。 |
 | PIMC | 完美信息蒙特卡洛（Perfect Information Monte Carlo）：抽样若干确定化的世界，在每个世界里当作一切已知去搜索，再按第一步动作取平均（[NoSL PIMC](/arch/pimc/)）。 |
 | 策略融合（strategy fusion） | 在每个抽样世界里各挑一条不同的最佳路线的错误，就好像玩家知道哪个世界是真的。按第一步动作取平均，让它不进入选择（[环境：世界 §3](/arch/environments/worlds/#sec-3)）。 |
 | SL 规划器（SL planner） | SL 的战斗大脑：在节点的克隆上以整个回合为单位做束搜索，一直到战斗结束（[SL 规划器](/arch/sl-planner/)）。 |
@@ -105,7 +105,7 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 术语 | 含义 |
 |---|---|
 | R1–R4 | 仿真到实机阶梯：从模拟器对局（R1）到装了 Mod 的 Steam 游戏（R4）的四级，每级只多一个新变量（[评估 §2](/arch/evaluation/#sec-2)）。 |
-| 排行榜（leaderboard） | 按角色、进阶、种子集和环境分开的成绩；NoSL 和 SL 从不放在一起排名（`eval/silent/leaderboard.md`）。 |
+| 排行榜（leaderboard） | 按角色、进阶、种子集和环境分开的成绩；NoSL 和 SL 从不放在一起排名（`eval/CHARACTER/leaderboard.md`）。 |
 | 报告（report）、对局记录（run record） | 一批对局的结果，JSON 格式，带每一局的记录：它的种子、结果、层数、战斗和大脑（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)）。 |
 | 晋级门槛（gate） | 挑战者要晋级必须通过的配对检验（[评估：晋级门槛](/arch/evaluation/gates/)）。 |
 | CRN、配对（pairing） | 共同随机数（common random numbers）：冠军和挑战者打相同的种子，所以两者的差别噪声更小。 |
@@ -117,15 +117,13 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 
 | 名称 | 是什么 |
 |---|---|
-| v9-1 | V，每个角色的那一个价值网络，两个冠军都打它（[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
-| c9-1 | 战斗网络，每个角色的那一个，两个冠军都用它来打（[战斗网络](/arch/combat-brain/network/)）。 |
+| v9-2 | 冠军的 V，每个角色的那一个价值网络，两个冠军都打它（[宏观大脑：价值网络](/arch/macro-brain/network/)）。 |
+| c9-2 | 冠军的战斗网络，每个角色的那一个，两个冠军都用它来打（[战斗网络](/arch/combat-brain/network/)）。 |
 | 词元表（token table） | 一个网络里某一种 id（牌、遗物……）的列表，每个 id 有学到的行：这个游戏版本的每个 id；第 0 项 `<unk>` 读任何其他 id（[战斗网络 §2](/arch/combat-brain/network/#sec-2)）。 |
-| `weights/all/NAME.json` | 一个网络的文件；冠军打的是 `v9-1.json` 和 `c9-1.json`（[学习：参考 §6](/arch/learning/reference/#sec-6)）。 |
+| `weights/all/NAME.json` | 一个网络的文件；冠军打的是 `v9-2.json` 和 `c9-2.json`，网络的名字从不重复使用（[学习：参考 §6](/arch/learning/reference/#sec-6)）。 |
 | `promotion-1-100`、`promotion-1-200`、`promotion-1-300`、`final-1`、`a10-check-1` | `eval/seeds/` 里的种子集：100、200 和 300 个晋级种子（每个较长的都以较短的开头；`promotion-1` 和 `promotion-1-200` 是同样的 200 个），一个 300 个种子的最终集，在它上面的任何对局之前就已登记，以及 200 个用来测 A10 胜率的种子，不在任何训练数据里。 |
-| `eval/champions/sl.json`、`nosl.json` | 冠军文件：让每种环境的冠军上场的选项，所有角色共用，以及它为每个角色存的报告。 |
-| `eval/ledger.md` | 谱系，也是网络唯一的历史，所有角色共用：哪个大脑打出了哪些数据，哪些数据训练出了哪些权重。 |
-| `data/silent/{sl,nosl}/…` | 数据目录里的自我对弈和评估文件夹，在存储主机上，不在 git 里。 |
-| `tmp/build.sh REV`、`sim.sh` | 本地启动器，构建一个固定的提交并运行它（[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）。 |
+| `eval/champions/sl.json`、`nosl.json` | 冠军文件：让每种环境的冠军上场的选项，所有角色共用，以及它背后的报告（NoSL 文件不指向任何报告）。 |
+| `data/CHARACTER/{sl,nosl}/…` | 数据目录里的自我对弈和评估文件夹；不在 git 里。 |
 | `run`、`brain`、`serve`、`clones`、`gate`、`report`、`leaderboard` | SimWorker 命令（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。 |
 | `v.train`、`combat.train`、`gate.py` | 训练 V 和战斗网络的 Python，以及胜局门槛的报告和判定（[学习：参考 §9](/arch/learning/reference/#sec-9)）。 |
 | `0SSL7NS01MU6` | 本书例子那一局的种子，在第 48 层赢下（[游戏 §1](/arch/game/#sec-1)）。 |

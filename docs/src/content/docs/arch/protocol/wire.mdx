@@ -1,19 +1,20 @@
 ---
 title: '线路：宿主与大脑'
-description: '运行游戏的进程与大脑之间的对话：套接字、每条消息及其字段、一步一步走完的一局、让回答与游戏保持同步的规则、SL 节点消息、推荐，以及模拟器和 Mod 这两种宿主有何不同。'
+description: '运行游戏的进程与大脑之间的对话：连接、每条消息及其字段、一步一步走完的一局、让回答与游戏保持同步的规则、SL 节点消息、推荐，以及模拟器和 Mod 这两种宿主有何不同。'
 sidebar:
   label: 线路
 ---
 
 import WireExchange from '../../../../components/book/WireExchange.svelte';
 
-大脑从不在游戏里运行。游戏一侧，即**宿主**，每个决策问它一个问题，得到一个回答。宿主是真实游戏里的 Mod，或承载一局的模拟器（`run --brain`）；**大脑**是带着冠军各个大脑的 Harness，由 `brain` 命令提供服务（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。两端使用相同的类型（`Sts2Ai.Protocol/Wire.cs`），所以不管是哪个宿主在问，一局都打得一样。
+大脑从不在游戏里运行。游戏一侧，即**宿主**，每个决策问它一个问题，得到一个回答。宿主是真实游戏里的 Mod，或承载一局的模拟器（`run --check`）；**大脑**是带着冠军各个大脑的 Harness，由 `brain` 命令提供服务（[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。两端使用相同的类型（`Sts2Ai.Protocol/Wire.cs`），所以不管是哪个宿主在问，一局都打得一样。
 
 ## 1. 连接
 
-- **Unix 域套接字**，从不用 TCP，所以本机以外的任何东西都够不到大脑。默认是 `$XDG_STATE_HOME/sts2ai/brain.sock`，该变量未设置时是 `~/.local/state/sts2ai/brain.sock`（`BrainSocket.DefaultPath`）：Steam 在一个容器里运行游戏，这个容器与主机系统共享主目录，但不共享 `$XDG_RUNTIME_DIR`。
-- **大脑负责监听**（`BrainServer.Listen`，`Sts2Ai.Harness/BrainServer.cs`）。它创建套接字所在的目录，只让当前用户可读；替换已经退出的大脑留下的套接字文件；如果那里还有大脑在监听，就拒绝启动。以 NUL 字节开头的路径表示一个抽象套接字，它没有文件：`run --check` 为它的进程内大脑使用一个这样的套接字。
-- **一次一个宿主**。大脑服务一个连接，直到宿主关闭它，再接下一个。字节不是有效消息的连接会被丢弃并给出警告，大脑继续监听。
+- **大脑是 Mod 的子进程**。Mod 把它自带的大脑（Mod 文件夹里的 `brain/RID/`）作为 `brain --champion champion.json --workers N` 启动，工作文件夹是 `brain/`，通过这个子进程的 stdin 和 stdout 与它交谈：发给大脑的消息走它的 stdin，回答走它的 stdout（`Sts2Ai.Mod/BundledBrain.cs`）。`champion.json` 是 NoSL 冠军的文件，大脑为 NoSL 宿主打它，并配上 SL 规划器和在节点克隆上打的 L0，为 SL 宿主打它（[Harness §5](/arch/harness/#sec-5)）。用的是管道，不是套接字也不是端口：只有启动大脑的那个游戏能和它交谈。大脑的 stderr 写进 `$XDG_STATE_HOME/sts2ai`（默认是 `~/.local/state/sts2ai`）里的 `brain.log`，与 Mod 的 `settings.json` 放在一起（[Mod §4](/arch/mod/#sec-4)）。
+- **记录一次会话**。Mod 设置的 `Record` 打开时，Mod 还会给大脑 `--wire` 和 `--log`：同一个文件夹的 `captures/` 里、按大脑启动时间（UTC）命名的一对文件，分别是 Mod 发出的每条消息和决策日志，`clones` 据此重播 SL 决策（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
+- **一个宿主，直到 stdin 关闭**。`brain` 命令服务启动它的那一个宿主（`SimWorker/Commands/BrainCommand.cs`、`Sts2Ai.Harness/BrainServer.cs`），stdin 关闭时就结束。它读不了的消息（坏的 JSON、别的协议版本）或断掉的管道也会让它结束。大脑结束或管道断掉时，Mod 杀掉它剩下的部分，包括它的搜索工作进程，等 2 s，再启动它（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。
+- **模拟器通过线路**。`run --check` 把每个种子通过线路再打一遍，打给它自己进程里的一个大脑服务器，用的是一个抽象名字上的 Unix 套接字：以 NUL 字节开头的路径，它没有文件（`BrainServer.Bind`，[模拟器：整局 §7](/arch/simulator/runs/#sec-7)）。
 - **一局接一局**。一个连接依次承载多局，每局从 `hello` 到 `run_end`。
 
 ## 2. 格式
@@ -24,7 +25,7 @@ import WireExchange from '../../../../components/book/WireExchange.svelte';
 {"type":"executed","v":1,"decision_id":0,"action":"event:0","ok":true}
 ```
 
-任何不兼容的改动都会升版本号。读取方会拒绝 `v` 与自己不同的消息。在同一个版本内，一方不认识的字段在读取时会被丢掉；这时观测哈希就会不同，所以用与大脑不同的提交构建的宿主，会在它的第一个决策处失败，并给出一条说明这一点的消息（[§5](#sec-5)）。
+任何不兼容的改动都会升版本号。读取方会拒绝 `v` 与自己不同的消息。在同一个版本内，一方不认识的字段在读取时会被丢掉；这时观测哈希就会不同，所以来自与大脑不同的构建的宿主，会在它的第一个决策处失败，并给出一条说明这一点的消息（[§5](#sec-5)）。
 
 ## 3. 消息
 
@@ -69,12 +70,12 @@ sequenceDiagram
 
 **回答与游戏保持同步**。
 
-- 大脑按顺序回答决策，每个都在读下一条消息之前答完。不大于上一个的 `decision_id` 会得到一个 `error`（`BrainServer.cs:101-105`）。
-- 大脑检查 `obs_hash` 是否就是它收到的 `obs` 的哈希。对不上说明观测在传输中走了样，最常见的原因是两端用不同的提交构建；这时会得到一个说明这一点的 `error`。
+- 大脑按顺序回答决策，每个都在读下一条消息之前答完。不大于上一个的 `decision_id` 会得到一个 `error`（`BrainServer.cs:62`）。
+- 大脑检查 `obs_hash` 是否就是它收到的 `obs` 的哈希。对不上说明观测在传输中走了样，最常见的原因是两端来自不同的构建；这时会得到一个说明这一点的 `error`。
 - 推荐重复决策的 id 和哈希。两者任一不同时，模拟器这个宿主会让这一局失败；Mod 按决策 id 保存回答，只在游戏仍显示相同的观测和合法动作列表时才显示它（[§8](#sec-8)）。
 - 动作必须是该决策的合法动作之一（对选牌提示来说，是提示接受的选择）；Harness 拒绝其他任何东西，所以不合法的回答会以 `error` 的形式到达宿主。
 
-**`error` 的含义**。大脑拒绝这一局时（冠军打不了的环境，例如 NoSL 对局里的 SL 规划器，或者它不认识的力度），发 `error` 代替 `ready`；答不了时，发它代替推荐：对局之外的决策、未覆盖的决策界面、不合法的选择、对不上的哈希、被拒绝的节点消息之后的决策。宿主随即结束这一局：模拟器的这一局失败；Mod 发出带 `failed` 的 `run_end`，并在这一局里关闭助手。
+**`error` 的含义**。大脑拒绝这一局时（冠军打不了的环境，例如 `--policy` 是 SL 规划器的大脑遇到 NoSL 宿主，或者它不认识的力度；Mod 自带的大脑两种环境都接），发 `error` 代替 `ready`；答不了时，发它代替推荐：对局之外的决策、未覆盖的决策界面、不合法的选择、对不上的哈希、被拒绝的节点消息之后的决策。宿主随即结束这一局：模拟器的这一局失败；Mod 发出带 `failed` 的 `run_end`，并在这一局里关闭助手。
 
 **`executed` 和 `cancel`**。游戏走到下一个决策或一局结束时，模拟器这个宿主才为一个决策发出 `executed`；只有这一局失败时 `ok` 才为 false。大脑读取这两种消息，然后忽略它们：它答完每个决策才往下读，所以从来没有需要丢弃的搜索。Mod 为 AI 应玩家要求打出的每个回答发送 `executed`，`ok` 为 true（[Mod：自动游玩与安全 §2](/arch/mod/auto/#sec-2)），玩家自己的动作则不发；回答到达之前游戏就往前走时，它发 `cancel`，并等那个回答到了才再次提问。
 
@@ -130,10 +131,10 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 
 ## 8. 两种宿主
 
-| | 模拟器（`run --brain`、`run --check`） | 游戏里的 Mod |
+| | 模拟器（`run --check`） | 游戏里的 Mod |
 |---|---|---|
 | `role` | `worker` | `mod` |
-| 何时提问 | 在这一局走到的每个决策处 | 画面静止 3 帧之后（相同的观测哈希和合法动作列表），一次一个决策 |
+| 何时提问 | 在这一局走到的每个决策处 | 画面静止 3 帧之后（相同的观测哈希和合法动作列表），一次一个决策；SL 下只在它能克隆的节点里，即有检查点、记录没有断的节点（[Mod：SL 记录 §6](/arch/mod/sl-record/#sec-6)） |
 | 对回答怎么做 | 打出它 | 显示它；玩家要求时由 AI 打出它（[Mod：自动游玩与安全 §2](/arch/mod/auto/#sec-2)） |
 | `executed` | 每个动作之后 | AI 打出的每个动作之后 |
 | `cancel` | 从不 | 画面先变了的时候 |

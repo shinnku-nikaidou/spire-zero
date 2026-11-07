@@ -7,7 +7,7 @@ sidebar:
 
 import { Badge } from '@astrojs/starlight/components';
 
-本頁是用來查閱的。前面各頁解釋各部件做什麼；這一頁把它們列出來。這裡的一切都對照過撰寫本頁時那個提交的程式碼；程式碼和這裡說得不一樣時，以程式碼為準。
+本頁是用來查閱的。前面各頁解釋各部件做什麼；這一頁把它們列出來。本頁和程式碼說得不一樣時，以程式碼為準。
 
 ## 1. 建置與執行
 
@@ -15,15 +15,22 @@ import { Badge } from '@astrojs/starlight/components';
 
 | 設定 | 在哪裡 | 作用 |
 |---|---|---|
-| `Sts2BinDir` | MSBuild 屬性，預設 `tmp/gamebin/v0.111.0` | 建置所參考的遊戲快照，會寫進程式裡 |
+| `Sts2BinDir` | MSBuild 屬性，預設是儲存庫下的 `tmp/gamebin/v0.111.0`（一個你自己建立的資料夾，不在 git 裡） | 建置所參考的遊戲快照，會寫進程式裡 |
 | `STS2_BIN_DIR` | 環境變數，執行時 | 覆蓋寫進程式的快照；如果那裡沒有 `sts2.dll`，程式拒絕啟動（`Program.cs:35-48`） |
-| `TieredCompilation` | `Sts2Ai.SimWorker.csproj:12-20`，關閉 | 每個方法只編譯一次，完全最佳化：分層編譯會在背景重新 JIT 熱門方法，Harmony 補丁可能悄悄失效（在幾千場戰鬥之後見過）；它在短的對局上也慢了 2 倍 |
-| `DOTNET_ReadyToRun=0` | 環境變數，由啟動腳本設定 | 框架程式碼也以完全最佳化的方式 JIT 編譯，每秒多約 20% 的戰鬥；缺少它時，輸出的第一行會說明 |
+| `TieredCompilation` | `Sts2Ai.SimWorker.csproj:12-20`，關閉 | 每個方法只編譯一次，完全最佳化：分層編譯會在背景重新 JIT 熱門方法，Harmony 補丁可能悄悄失效；Harmony 的 JIT 鉤子也讓每次額外的編譯都很慢，所以開著它時短的執行比較慢（[無頭宿主 §6](/zh-tw/arch/simulator/headless/#sec-6)） |
+| `DOTNET_ReadyToRun=0` | 環境變數，執行程式時設定 | 框架程式碼也以完全最佳化的方式 JIT 編譯，每秒多約 20% 的戰鬥；缺少它時，輸出的第一行會說明 |
 | `SourceRevisionId` | MSBuild，來自 git | 寫進程式的提交，記錄和報告都帶著它；`src/` 下有未提交改動的建置會加上 `-dirty`（`Sts2Ai.SimWorker.csproj:36-48`） |
 
 遊戲的組件由一個解析器找到，它在任何遊戲型別被編譯之前就已安裝好；所以使用這些組件的進入點 `Cli.Run` 不能被內嵌到 `Main` 裡（`Program.cs:10-12`、`Commands/Cli.cs:44`）。
 
-**啟動腳本**。批次和機群執行的是某個固定提交的建置，而不是工作樹：`tmp/build.sh REV`（一個本地腳本）把這個提交打包，以 Release 建置，把 `SourceRevisionId` 設為這個提交，並寫出 `tmp/builds/REV/sim.sh`；它用 `DOTNET_ReadyToRun=0` 執行那個建置的 dll，並把 `HOME` 指向 `tmp/home`。所以透過它啟動的 `brain`，除非 `--socket` 另行指定，否則在 `tmp/home/.local/state/sts2ai/brain.sock` 監聽（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。機群的主機拿到同樣的建置和它們自己的啟動腳本（fleet 技能，`.claude/skills/fleet/SKILL.md`）。
+**建置與執行**。在儲存庫根目錄下，以 Release 建置，再用 `DOTNET_ReadyToRun=0` 執行 dll：
+
+```sh
+dotnet build src/Sts2Ai.SimWorker -c Release -p:Sts2BinDir=DIR
+DOTNET_ReadyToRun=0 dotnet src/Sts2Ai.SimWorker/bin/Release/net9.0/Sts2Ai.SimWorker.dll --help
+```
+
+`DIR` 是 v0.111.0 版遊戲裡放著 `sts2.dll` 的資料夾；不給 `-p:Sts2BinDir` 時，建置會去上表裡的預設資料夾找。建置把簽出的提交寫進程式（`SourceRevisionId`，`src/` 有改動時加上 `-dirty`），每條對局記錄和每份報告都帶著它（[整局 §5](/zh-tw/arch/simulator/runs/#sec-5)），所以結果要保留的一批對局，應該用一棵已提交的程式碼樹的建置來跑。
 
 ## 2. 命令列
 
@@ -114,14 +121,14 @@ Sts2Ai.SimWorker COMMAND [options]
 | `tables` | `--out FILE`（`learn/game_ids.json`） | 把網路詞元表保存的這個遊戲版本的每個 id 寫成 JSON（`learn/game_ids.py`） |
 | `combat` | `--encounter ID` 或 `--from OBS.json`；`--seed`（1）；`--policy`（`play`）；`--obs`；配置 | 打一場戰鬥並把它印出來；`--from` 從一個觀測建構戰鬥，忽略配置 |
 | `bench` | `--n`（200）、`--start`、`--seed`（1）、`--policy`、`--out FILE`；戰鬥池 | 盡可能快地打戰鬥，報告每秒戰鬥數（[戰鬥 §7](/zh-tw/arch/simulator/combat/#sec-7)） |
-| `selftest` | `--combat-net FILE`（必填）、`--n`（20）、`--seed`（1）、`--workers N`（0）；戰鬥池 | [§5](#sec-5) 的檢查 |
+| `selftest` | `--combat-net FILE` 和 `--value FILE`（必填）、`--n`（20）、`--seed`（1）、`--workers N`（0）；戰鬥池 | [§5](#sec-5) 的檢查 |
 
 **對局**
 
 | 指令 | 選項 | 作用 |
 |---|---|---|
-| `run` | `--seeds FILE`、`--n`、`--start`、`--seed`（1）、`--asc`（0）、`--env`（NoSL）、`--max-decisions`（20000）、`--check`、`--trace`、`--obs`、`--log FILE`、`--records FILE`、`--brain SOCKET`；冠軍選項、冠軍檔案、配置 | 打整局（[整局](/zh-tw/arch/simulator/runs/)）。會被拒絕的：SL 之外的 `plan`；與 `--brain` 同用的任何冠軍選項或 `--log`。`pimc` 只在 NoSL 下打：在 SL 下它的對局一開始就失敗 |
-| `brain` | `--socket PATH`、`--log FILE`、`--wire FILE`、`--sl-policy`（`plan`）；冠軍選項、冠軍檔案 | 單獨的大腦，透過 Unix socket 服務宿主（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)） |
+| `run` | `--seeds FILE`、`--n`、`--start`、`--seed`（1）、`--asc`（0）、`--env`（NoSL）、`--max-decisions`（20000）、`--check`、`--trace`、`--obs`、`--log FILE`、`--records FILE`；冠軍選項、冠軍檔案、配置 | 打整局（[整局](/zh-tw/arch/simulator/runs/)）。會被拒絕的：SL 之外的 `plan`。`pimc` 只在 NoSL 下打：在 SL 下它的對局一開始就失敗 |
+| `brain` | `--log FILE`、`--wire FILE`、`--sl-policy`（`plan`）；冠軍選項、冠軍檔案 | 單獨的大腦，在 stdin 和 stdout 上服務啟動它的那個宿主，直到 stdin 關閉；不管 `--afterstates` 怎麼寫，L0 對 NoSL 宿主用畫面預測的後續狀態，對 SL 宿主（有戰鬥網路時）在節點的複本上打（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)） |
 | `serve` | 葉節點 | 行程池的一個工作行程（[工作行程池 §4](/zh-tw/arch/simulator/pool/#sec-4)） |
 | `clones` | `--wire`（必填） | 把宿主的 SL 決策（由 `brain --wire` 記錄）放到它們的複本上重播並比較觀測；有任何不同時以 1 結束（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
 
@@ -136,13 +143,13 @@ Sts2Ai.SimWorker COMMAND [options]
 
 ## 5. `selftest`
 
-`selftest` 打戰鬥池裡的 `--n` 場戰鬥（預設 20 場），並執行下列檢查，按它報告時使用的名稱列出（`Checks/SelfTest*.cs`；順序見 `Checks/SelfTest.cs:73-147`）。其中的搜尋用 `--combat-net` 指定的網路評估葉節點，所以必須給出它。任何一項失敗就以 1 結束。
+`selftest` 打戰鬥池裡的 `--n` 場戰鬥（預設 20 場），並執行下列檢查，按它報告時使用的名稱列出（`Checks/SelfTest*.cs`；順序見 `Checks/SelfTest.cs:73-147`）。其中的搜尋用 `--combat-net` 指定的網路評估葉節點，由 `--value` 的 V 定價；兩者都必須給出。任何一項失敗就以 1 結束。
 
 邊界，即 Brain、Protocol 和 Harness 不觸及任何遊戲組件，由單元測試 `BoundaryTests` 在不啟動遊戲的情況下檢查（[§7](#sec-7)）。
 
 **每場戰鬥**，打兩次：確定性（觀測、隱藏狀態和軌跡）、協定往返（觀測，以及動作的文字形式和 JSON 形式）、沒有例外、沒有遊戲錯誤。
 
-**每場戰鬥最多三個隨機切點**（所以在預設的 `--n 20` 下有 60 次建構檢查）：還原；隱藏狀態的還原，逐位元組相同；快速鉤子監聽器給出遊戲原本的結果；確定化保持觀測不變（種子 11 和 22）；確定化之後能重播；確定化之後能繼續打；然後是在切點的觀測上用 `CombatBuilder`：建構出的戰鬥顯示這個觀測，建構出的戰鬥能還原，建構之後能繼續打。
+**每場戰鬥最多三個隨機切點**（所以在預設的 `--n 20` 下最多 60 次建構檢查；抽到兩次的切點只算一次）：還原；隱藏狀態的還原，逐位元組相同；快速鉤子監聽器給出遊戲原本的結果；確定化保持觀測不變（種子 11 和 22）；確定化之後能重播；確定化之後能繼續打；然後是在切點的觀測上用 `CombatBuilder`：建構出的戰鬥顯示這個觀測，建構出的戰鬥能還原，建構之後能繼續打。
 
 **只存在模型裡的數值的建構**（故障機器人）：一個磨損的玻璃充能球（3/6）、一個用完的白銀坩堝、留著 2 張牌的佩爾之牙、1/3 的怠惰、夢魘、14/20 的硬殼；建構保留一個能力的層數（怠惰仍然允許打出一張牌）和一個能力所帶的牌（夢魘下回合的複製牌）。然後：以 3 點生命值、帶著王室毒藥建構的玩家能活過開局；能找到瀑布巨獸超過 100 的噴發（`DeathBlow` 150）。
 
@@ -156,7 +163,7 @@ Sts2Ai.SimWorker COMMAND [options]
 
 **使用 `--workers N` 時**：池化的 PIMC 在 4 個決策上與行程內的 PIMC 相符，每個決策用 4 個世界 × 120 個節點的預算；池化的規劃器做出的計畫和規劃器在單一行程裡做出的一樣；工作行程裡沒有遊戲錯誤；沒有工作行程重啟。
 
-最後它印出抽牌順序的統計，這不是一項檢查。2026-10-27 的結果：每項檢查都通過，寂靜獵手 60 次建構裡成功 60 次，鐵甲戰士 58 次裡成功 58 次，寂靜獵手第 1、2、3 幕的菁英戰和頭目戰分別是 57、57 和 58 次（[戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。
+最後它印出抽牌順序的統計，這不是一項檢查。
 
 ## 6. `run --check`
 
@@ -165,29 +172,29 @@ Sts2Ai.SimWorker COMMAND [options]
 | 檢查 | 要求 |
 |---|---|
 | 每個觀測的 JSON 往返 | 完全相同 |
-| 透過線路打第二遍，連到行程內的大腦或給定的 `--brain` | 相同的軌跡、觀測雜湊、摘要、地圖雜湊、對局記錄和決策日誌（耗時除外） |
+| 透過線路打第二遍，連到行程內的大腦 | 相同的軌跡、觀測雜湊、摘要、地圖雜湊、對局記錄和決策日誌（耗時除外） |
 | 第一遍的每個節點，從檢查點載入並重播它的決策 | 逐一顯示這一局的觀測；移動之後停在視野邊界；拒絕再走一步 |
 | 遊戲錯誤 | 沒有 |
 
-這時每局的結果行以 `obs <digest>` 結尾，這是由這一局所有觀測雜湊算出的一個雜湊，用來跨行程比較對局；總計裡會多出 `determinism:` 一行。用 `--brain` 時，大腦的決策日誌不在這個行程裡，所以日誌比較是在比較兩份空日誌。
+這時每局的結果行以 `obs <digest>` 結尾，這是由這一局所有觀測雜湊算出的一個雜湊，用來跨行程比較對局；總計裡會多出 `determinism:` 一行。
 
 ## 7. xUnit 測試
 
-`src/Sts2Ai.Tests` 收納不需要遊戲就能執行的部分，共 21 個類別、105 個測試方法：`dotnet test src/Sts2Ai.Tests`。每個受測專案一個資料夾（`Brain/`、`Harness/`、`SimWorker/`），根目錄有 `BoundaryTests.cs`，共用的 JSON 測試資料在 `Fixtures.cs` 和 `Fixtures/` 裡。
+`src/Sts2Ai.Tests` 收納不需要遊戲就能執行的部分，共 21 個類別、106 個測試方法：`dotnet test src/Sts2Ai.Tests`。每個受測專案一個資料夾（`Brain/`、`Harness/`、`SimWorker/`），根目錄有 `BoundaryTests.cs`，共用的 JSON 測試資料在 `Fixtures.cs` 和 `Fixtures/` 裡。
 
 | 類別 | 檢查什麼 |
 |---|---|
 | `BoundaryTests` | Brain、Protocol 和 Harness 不觸及任何遊戲組件，而這項檢查確實看得到 GameBridge 的 `sts2` |
 | `Brain/BudgetTests` | 名稱只顯示不是預設值的部分 |
 | `Brain/CloneSearchTests` | L0 在一個玩具複本上：商店值它最好的一籃購買；事件選項值它下一頁給的東西；戰鬥值戰鬥葉節點所說的，死亡值 0，贏下的一局值 1，而不是生命值為 0 那一局的 V，沒有葉節點的戰鬥會拋出例外；地圖上的移動不會真的打出；要選兩張牌的提示找到最好的一對；跳過的卡牌獎勵不會再被打開；到達兩次的狀態只搜尋一次；藥水欄滿時，事件給的藥水值獎勵畫面上丟棄一瓶為它騰出位置之後的狀態 |
-| `Brain/CombatNetTests` | 像它們的訓練器那樣讀取 c9-0 的測試狀態和一個極小網路（`combat-tiny.json`）的狀態；進行中的狀態是它的各個結局留下的那些局的 V；每瓶藥水按它自己在分桶那一組的機率保留；持有的生命值排除掉的分桶沒有權重；贏下的戰鬥是它那一局的 V，輸掉的是 0 |
+| `Brain/CombatNetTests` | 像它們的訓練器那樣讀取 `weights/all/c9-0.json` 的測試狀態和一個極小網路（`combat-tiny.json`）的狀態；進行中的狀態是它的各個結局留下的那些局的 V；每瓶藥水按它自己在分桶那一組的機率保留；持有的生命值排除掉的分桶沒有權重；贏下的戰鬥是它那一局的 V，輸掉的是 0 |
 | `Brain/LoopSearchTests` | 16 個測試：會回到手裡的牌被反覆打出，直到一回合內斬殺，不管它對牌堆做了什麼，循環在遊戲結束它的地方結束；會用完的牌，或會把自己耗盡的牌，只是一條普通路線；手牌裡的複製品不構成循環；沒有斬殺的循環不超出它的預算；能打開循環的提示回答會被找到並採用，規劃器和 PIMC 都是；提示的每個回答都會被搜尋；PIMC 也重複循環，它的回合計畫只保留會重複的計畫；提示由策略回答，除非動作自帶回答；沒有搜尋權衡的提示取它需要的最前面的選項；其他回答選的是玩家分辨得出的牌；選擇是動作文字的一部分 |
 | `Brain/MacroExplorationTests` | 刪牌只值能刪掉的東西；不探索時 l0 取最好的；均勻抽取時，卡牌獎勵的結果在它的牌和跳過之間抽取，卡牌介面保留這次抽取；ε=1 時每種決策都在它的選項之間均勻抽取，要喝的藥水也在其中，而不為任何藥水騰位置的丟棄不在其中；ε=1 時提示的選擇均勻抽取，ε=0.1 時大多數回答是 V 的 |
 | `Brain/MacroPotionTests` | 只有為了給畫面上的藥水騰出位置，才會提供丟棄藥水；在地圖上，藥水選項值它之後最好的移動，而不是它停留的那個狀態 |
 | `Brain/MacroUpgradeTests` | 鍛造值它最好的升級；鍛造提示選取估值時的那個升級；升級提示取最好的預覽 |
 | `Brain/MoveRecordTests` | 每個活著的敵人每輪記錄一次；跳過死掉的；輪次倒回時重新開始；`Clear` |
 | `Brain/PimcMemoTests` | 看起來相同、但擲出的結果不同的路線不會被合併 |
-| `Brain/RunNetTests` | 一個極小網路的對局，估值與訓練器算出的獲勝機率相同；像訓練器那樣讀取 v9-0 的測試對局；地圖是路徑仍能通往的每個點，附上它前方的層數；選路讀入要進入的點，也只有選路才讀入 |
+| `Brain/RunNetTests` | 一個極小網路的對局，估值與訓練器算出的獲勝機率相同；像訓練器那樣讀取 `weights/all/v9-0.json` 的測試對局；地圖是路徑仍能通往的每個點，附上它前方的層數；選路讀入要進入的點，也只有選路才讀入 |
 | `Brain/SameCardsTests` | 一張牌的幾張複製品在每個目標上是同一個動作，升級過的複製品是另一個；同樣的牌換個順序、換一張複製品，或藥水放在不同的槽位，都是同一個狀態，雖然它們的觀測不同 |
 | `Brain/SlPlannerTests` | 15 個測試：完整搜尋、每個候選的結局、窄束、失敗計畫和重新規劃的回合數、失敗計畫數、完整搜尋過的一個回合用 keep 縮窄後和帶 keep 的搜尋相同、下潛的回合、簡易束和束、一場會贏的戰鬥只規劃一次、每個力度一個預算、已證明的失敗、候選的順序、記錄的歷史 |
 | `Brain/TurnPlanTests` | 不成立的步驟會重新規劃並被標記 |
@@ -196,11 +203,11 @@ Sts2Ai.SimWorker COMMAND [options]
 | `Harness/ExplainTests` | 宏觀回答帶著每個選項的估值，選中的在前；對顯示這些回答的宿主，每個地圖選項帶著它通往頭目的路線 |
 | `Harness/GateTests` | 8 個測試，以勝場計：通過、失敗和不劣於；雙方都贏或都輸的配對不決定任何事；失敗的一局讓挑戰者作廢；配對；拒絕 |
 | `Harness/WorkerPoolTests` | 卡住兩次的工作行程讓呼叫失敗；卡住一次的會被重啟並回答 |
-| `SimWorker/CliTests` | 預設值；不分大小寫的環境名稱；錯誤輸入；任何位置的 `--verbose`，以及沒有回應檔案；冠軍檔案的選項墊在給出的選項之下；冠軍檔案的 character 和 asc；`brain` 接受冠軍檔案但不用它的 env；拒絕不一致的冠軍；戰鬥網路與搜尋一起用，並出現在名稱裡；冠軍的選項能重新打出它 |
+| `SimWorker/CliTests` | 預設值；不分大小寫的環境名稱；錯誤輸入；任何位置的 `--verbose`，以及沒有回應檔案；冠軍檔案的選項墊在給出的選項之下；冠軍檔案的 character 和 asc；`brain` 接受冠軍檔案但不用它的 env；不管檔案裡的後續狀態怎麼寫，`brain` 的 L0 對 NoSL 宿主在畫面上打，對 SL 宿主在複本上打；拒絕不一致的冠軍；戰鬥網路與搜尋一起用，並出現在名稱裡；冠軍的選項能重新打出它 |
 | `SimWorker/LoadoutTests` | 帶升級和附魔的牌組語法；附魔需要它的數量 |
 
 ## 8. 未決問題
 
 1. **複製還是重播**。快照是一份配方，還原就是重播它（[戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)）。對遊戲的物件圖做深複製可以省掉重播的代價，AlphaZero 式的搜尋會需要這一點。等效能剖析顯示還原佔了搜尋的大部分時間時再決定。
 2. **整局世界**：房間池和機率計數器有多少能從公開紀錄推斷，有多少必須來自先驗（[世界與 SL 複本 §8](/zh-tw/arch/simulator/worlds/#sec-8)）。
-3. **內嵌執行**：無頭時內嵌執行動作，而不是每影格一次，是否會改變玩家看得到的任何東西；要等遊戲裡的對局能和這裡的對局比較時才知道（[整局 §6](/zh-tw/arch/simulator/runs/#sec-6)）。
+3. **內嵌執行**：無頭時內嵌執行動作，而不是每影格一次，是否會改變玩家看得到的任何東西；回答它需要把遊戲裡的對局和這裡的對局比較（[整局 §6](/zh-tw/arch/simulator/runs/#sec-6)）。

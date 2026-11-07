@@ -13,7 +13,7 @@ A run's `Dispatcher` holds four routes, one per side of the routing table, each 
 
 Every decision goes to exactly one side:
 
-| surface | side | brains today |
+| surface | side | brains |
 |---|---|---|
 | `combat` | combat | `plan` (the SL planner, SL only), `pimc` (NoSL only), or the placeholder `play` |
 | `card_choice` asked during a combat (`ChoiceContext.InCombat`) | combat prompts | the answer the combat brain's last action carries, if any; else `first`, the first options ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)) |
@@ -25,12 +25,12 @@ The potion belt has no surface of its own: its actions are part of each macro sc
 **The champion's name.** A run's brains together are its champion, named by `Dispatcher.Champion`:
 
 ```text
-combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone
+combat plan COMBAT beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 VALUE clone, macro prompts l0 VALUE clone
 ```
 
-That is the SL champion as this code names it: the SL planner with the combat net c9-2 in its leaves (its endings priced by V v9-2) at the medium budget, `first` for the prompts in combat that no search answered, and L0 with V v9-2 playing each option on the node's clone, for the macro decisions and the card prompts outside combat. Each brain names its parts: a searching combat brain its combat net; L0 its V, `clone`, and its exploration (`eps ε` for even draws); the budget as [§4](#sec-4) writes it. SimWorker's `ChampionOptions` makes the routes from the command's options and refuses to run if the name it makes is not the one champion files use (`Brains/ChampionOptions.cs:36-60`).
+That is the SL champion as this code names it, where `COMBAT` and `VALUE` stand for the names of the champion's combat net and V ([Evaluation: champions and baselines](/en/arch/evaluation/champions/)): the SL planner with the combat net in its leaves (its endings priced by V) at the medium budget, `first` for the prompts in combat that no search answered, and L0 with V playing each option on the node's clone, for the macro decisions and the card prompts outside combat. Each brain names its parts: a searching combat brain its combat net; L0 its V, `clone`, and its exploration (`eps ε` for even draws); the budget as [§4](#sec-4) writes it. SimWorker's `ChampionOptions` makes the routes from the command's options and refuses to run if the name it makes is not the one champion files use (`Brains/ChampionOptions.cs:36-60`).
 
-**The environment picks the combat brain.** The macro brain is the same in both environments; the combat brain is not ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). The champion factory refuses `plan` and `--afterstates clone` outside SL, and `pimc` outside NoSL. The `brain` command serves both environments: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s ([Overview §5](/en/arch/harness/#sec-5)).
+**The environment picks the combat brain.** The macro brain is the same in both environments; the combat brain is not ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). The champion factory refuses `plan` and `--afterstates clone` outside SL, `pimc` outside NoSL, and in SL an L0 that does not play on the node's clone, since the afterstates it would predict from the screen are NoSL's. `run` plays its options as given, so SL runs with L0 take `--afterstates clone`. The `brain` command serves both environments: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s, and it sets L0's afterstates by the host's environment, from the screen for NoSL hosts and on the node's clone for SL hosts, so one champion file serves both ([Overview §5](/en/arch/harness/#sec-5)).
 
 ## 2. Combat routes
 
@@ -142,7 +142,7 @@ There is no fallback: a decision that cannot be answered as specified fails, and
 | a node checkpoint or action in NoSL | `InvalidOperationException` |
 | a checkpoint whose node index does not rise; an action for another node or out of sequence | `InvalidDataException` |
 
-**On the wire** (`BrainServer`): a refused `hello` (the champion factory threw: an unknown environment, `plan` or `--afterstates clone` outside SL, `pimc` outside NoSL, a champion's name that does not match), a decision outside a run or after a refused node message, an id that does not rise, an observation that does not match its hash, a combat or prompt decision without its screen, an unknown message: each gets an `error`. A refused node message fails the run's next decision. A protocol version that does not match, or an I/O or JSON error, drops the host ([Overview §5](/en/arch/harness/#sec-5)).
+**On the wire** (`BrainServer`): a refused `hello` (the champion factory threw: an unknown environment, `plan` or `--afterstates clone` outside SL, `pimc` outside NoSL, L0 off the node's clone in SL, a champion's name that does not match), a decision outside a run or after a refused node message, an id that does not rise, an observation that does not match its hash, a combat or prompt decision without its screen, an unknown message: each gets an `error`. A refused node message fails the run's next decision. A protocol version that does not match, or an I/O or JSON error, ends the brain's `Serve`, and the brain with it: it serves one host, so there is no next one, and the mod starts it again ([Overview §5](/en/arch/harness/#sec-5)).
 
 **In the worker pool** ([Simulator: the worker pool §6](/en/arch/simulator/pool/#sec-6)):
 

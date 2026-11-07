@@ -14,7 +14,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-已有：`Dispatcher`，每局一個，負責路由、保存敵人出招紀錄和 SL 節點、抽取種子、檢查回答並寫決策日誌；`BrainServer`，Harness 這一端的宿主–大腦線路；工作行程池和在其中搜尋的大腦（`PooledPimc`、`PooledPlanner`、`PooledClone`）；以及評估用到的型別（對局記錄、報告、晉級門檻、冠軍檔案，[評估](/zh-tw/arch/evaluation/)）。SimWorker 的 `run` 讓每一局都經過它，在行程內或走線路。規劃中：公開紀錄的其餘部分（[§4](#sec-4)）；搜尋進行時丟棄過期請求；掛鐘時間預算；降級回答（[路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)、[§6](/zh-tw/arch/harness/routing/#sec-6)）。
+已有：`Dispatcher`，每局一個，負責路由、保存敵人出招紀錄和 SL 節點、抽取種子、檢查回答並寫決策日誌；`BrainServer`，Harness 這一端的宿主–大腦線路；工作行程池和在其中搜尋的大腦（`PooledPimc`、`PooledPlanner`、`PooledClone`）；以及評估用到的型別（對局記錄、報告、晉級門檻、冠軍檔案，[評估](/zh-tw/arch/evaluation/)）。SimWorker 的 `run` 讓每一局都在它自己的行程裡經過它，用 `run --check` 時再走線路打一遍；`brain` 指令走線路服務 Mod（[§5](#sec-5)）。規劃中：公開紀錄的其餘部分（[§4](#sec-4)）；搜尋進行時丟棄過期請求；掛鐘時間預算；降級回答（[路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)、[§6](/zh-tw/arch/harness/routing/#sec-6)）。
 
 </Aside>
 
@@ -66,7 +66,7 @@ sequenceDiagram
 4. **Harness 檢查並記錄**。不合法的回答會拋出例外。大腦的名字、計畫和候選成為這個決策的註記（`Dispatcher.Last`），記錄日誌時也成為決策日誌的一行。在戰鬥以外，候選是宏觀策略或提示策略打過分的選項（`Scored`），只有註記保存它們。
 5. **宿主拿到推薦**：動作、大腦、它的計畫和候選，並回送請求的 id 和雜湊（[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。
 
-**行程內與走線路**。不帶 `--brain` 的 `run` 在它自己的行程裡給每一局一個 `Dispatcher`。`run --brain SOCKET` 和 Mod 則透過 Unix socket 把每個決策送給 `brain` 指令，在那裡 `BrainServer` 同樣給這一局一個 `Dispatcher`。回答是一樣的：`run --check` 把每個種子走線路再打一遍並加以比較（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。宿主會說明自己是 Mod 還是模擬的一局（`hello.role`），但建立冠軍時不讀它：大腦分辨不出真實遊戲和模擬器。這就是專案的規則「換世界，不換大腦」（[前言 §3](/zh-tw/#sec-3)）。
+**行程內與走線路**。`run` 在它自己的行程裡給每一局一個 `Dispatcher`。Mod 則把 `brain` 指令當作子行程啟動，透過大腦的 stdin 和 stdout 把每個決策送給它，在那裡 `BrainServer` 同樣給這一局一個 `Dispatcher`（[協定：線路 §1](/zh-tw/arch/protocol/wire/#sec-1)）。回答是一樣的：`run --check` 把每個種子走線路再打一遍，打給它自己行程裡的一個 `BrainServer`，並加以比較（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。宿主會說明自己是 Mod 還是模擬的一局（`hello.role`），但建立冠軍時不讀它：大腦分辨不出真實遊戲和模擬器。這就是專案的規則「換世界，不換大腦」（[前言 §1](/zh-tw/#sec-1)）。
 
 ## 3. Harness 為一局保存什麼
 
@@ -122,11 +122,11 @@ public sealed class PublicRecord
 
 ## 5. 大腦伺服器
 
-`BrainServer`（`BrainServer.cs`）是線路的大腦端（[協定：線路](/zh-tw/arch/protocol/wire/)）。建立它時要給它一個工廠，用宿主的 `hello` 做出一局的 `Dispatcher`；還可以再給它每個 `run_end` 時要做的事、一個日誌記錄器，以及一個看得到每條訊息的鉤子。
+`BrainServer`（`BrainServer.cs`）是線路的大腦端（[協定：線路](/zh-tw/arch/protocol/wire/)）。建立它時要給它一個工廠，用宿主的 `hello` 做出一局的 `Dispatcher`；還可以再給它每個 `run_end` 時要做的事，以及一個看得到每條訊息的鉤子。
 
-**監聽**。`Listen(path)` 服務連到一個 Unix socket 的宿主，一次一個，永不停止。連線失敗的宿主（I/O 錯誤、格式錯誤的訊息、壞掉的 JSON、不相符的協定版本）會被丟棄並留下一條警告，然後服務下一個。`Bind(path)` 建立 socket：以 NUL 位元組開頭的路徑指名一個抽象 socket，它沒有檔案；已經不在的大腦留下的 socket 檔案會被取代，還有大腦在監聽的則拋出例外；socket 所在的目錄建立時只有使用者本人可讀。
+**服務**。`Serve(wire)` 從一個 `WireStream` 讀宿主的訊息並在上面回答，一次一條，直到宿主關閉它那一端。`brain` 指令在它自己的 stdin 和 stdout 上服務啟動它的那一個宿主：stdin 關閉時，大腦就結束。I/O 錯誤、格式錯誤的訊息、壞掉的 JSON 或不相符的協定版本會讓 `Serve` 拋出例外而結束，大腦也隨之結束；Mod 接著會再啟動它（[Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8)）。只有 `run --check` 用 socket：`Bind(path)` 在一個抽象名稱上建立 Unix socket（以 NUL 位元組開頭的路徑，它沒有檔案），同一行程裡的一條執行緒服務檢查的第二遍對局建立的那一個連線。
 
-**訊息迴圈**（`BrainServer.cs:75-136`）：
+**訊息迴圈**（`BrainServer.cs:40-94`）：
 
 | 宿主送來的訊息 | 伺服器做什麼 |
 |---|---|
@@ -137,15 +137,15 @@ public sealed class PublicRecord
 | `executed`、`cancel` | 忽略：每個決策都在讀下一條訊息之前回答，所以沒有可以丟棄的搜尋 |
 | 其他任何訊息 | `error` |
 
-**回答**（`BrainServer.cs:138-154`）。戰鬥決策的合法動作被解析成戰鬥動作，大腦看到的是它畫面上的戰鬥觀測；選牌提示的回答寫成 `pick:i,j`；其他每種決策介面都是宏觀決策。推薦回送請求的 id 和雜湊，並帶著這個決策的註記：它的大腦、計畫和候選。選牌提示的推薦不帶計畫，在戰鬥中也不帶候選；在戰鬥以外，它的候選是 L0 權衡過的回答。
+**回答**（`BrainServer.cs:97-113`）。戰鬥決策的合法動作被解析成戰鬥動作，大腦看到的是它畫面上的戰鬥觀測；選牌提示的回答寫成 `pick:i,j`；其他每種決策介面都是宏觀決策。推薦回送請求的 id 和雜湊，並帶著這個決策的註記：它的大腦、計畫和候選。選牌提示的推薦不帶計畫，在戰鬥中也不帶候選；在戰鬥以外，它的候選是 L0 權衡過的回答。
 
 **附帶說明的回答**。`brain` 指令建立它的 `Dispatcher` 時帶上 `explain`，給會顯示回答的宿主用：在地圖決策時，宏觀大腦打過分的每個選項，還會帶上選了它之後要走的、通往頭目的路線，每個選項問一次 `IMacroPolicy.Plan`（`Candidate.plan`，[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。行程內的 `run` 建立它們時不帶這個。
 
-**`brain` 指令**包裝它（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。它用自己的選項做出兩個冠軍，每種環境一個：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的，預設是 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。兩者共用一個工作行程池。宿主可以在 `hello` 裡要求 SL 規劃器的某個力度（`low`、`medium`、`high`、`max`，[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）：那一局的 SL 規劃器就用該等級的預算來打，`ready` 裡的冠軍名稱也會寫出這一點；其他戰鬥大腦照原樣打，不認得的力度則以一個 `error` 拒絕。每種環境和力度的 `Dispatcher` 工廠，在第一個要求它的一局時才建立。`--log FILE` 在每一局的 `run_end` 時寫出它的決策日誌，所以沒送出這條訊息就斷線的宿主不會留下任何一行；`--wire FILE` 記錄宿主送來的每條訊息，`clones` 據此檢查 Mod 的 SL 記錄（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
+**`brain` 指令**包裝它（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）：它在自己的 stdin 和 stdout 上服務啟動它的宿主，直到 stdin 關閉（`SimWorker/Commands/BrainCommand.cs`）。stdout 歸線路所有，所以它印出的其他一切都送到 stderr：第一行寫出兩個冠軍，之後每局一行，寫出這一局怎麼結束、到了哪一層、做了多少決策；Mod 把這些行保存在 `brain.log` 裡（[Mod §4](/zh-tw/arch/mod/#sec-4)）。它用自己的選項做出兩個冠軍，每種環境一個：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的，預設是 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。兩者的宏觀大腦相同，它的後狀態由宿主的環境決定，不管 `--afterstates` 怎麼寫：對 NoSL 宿主，L0 從畫面預測後狀態；對 SL 宿主，L0 在節點的複本上把每個選項打一遍；這是冠軍工廠唯一接受的兩種搭配（`BrainCommand.Champions`；複本需要戰鬥網路，沒有的話 SL 宿主會被拒絕）。所以一個冠軍檔案就能服務兩種宿主：Mod 附帶的是 NoSL 冠軍的檔案，它的 SL 宿主得到用同樣網路的 SL 規劃器和在複本上打的 L0，名字就是 SL 冠軍的名字（[路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）。兩者共用一個工作行程池。宿主可以在 `hello` 裡要求 SL 規劃器的某個力度（`low`、`medium`、`high`、`max`，[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）：那一局的 SL 規劃器就用該等級的預算來打，`ready` 裡的冠軍名稱也會寫出這一點；其他戰鬥大腦照原樣打，不認得的力度則以一個 `error` 拒絕。每種環境和力度的 `Dispatcher` 工廠，在第一個要求它的一局時才建立。有兩個選項用來記錄一次工作階段；只有在 Mod 設定的 `Record` 開啟時，Mod 才同時傳入這兩個選項，對應 `brain.log` 旁邊 `captures/` 裡的一對檔案。`--log FILE` 在每一局的 `run_end` 時寫出它的決策日誌，所以沒送出這條訊息就斷線的宿主不會留下任何一行；`--wire FILE` 記錄宿主送來的每條訊息，`clones` 據此檢查 Mod 的 SL 記錄（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 
 ## 6. 程式碼
 
-`Sts2Ai.Harness` 引用 Brain（並透過它引用 Protocol）和 `Microsoft.Extensions.Logging.Abstractions` 9.0.22，不引用遊戲的任何東西；`selftest` 檢查它編譯後的引用（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
+`Sts2Ai.Harness` 引用 Brain（並透過它引用 Protocol），不引用遊戲的任何東西；`selftest` 檢查它編譯後的引用（[模擬器：參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）。
 
 | 檔案 | 型別 | 內容 |
 |---|---|---|

@@ -21,13 +21,13 @@ Some cards ask a question when played: Survivor asks for a card to discard, an e
 
 ## 2. The record of enemy moves
 
-A monster's next move depends on its moves so far: a fixed cycle, a roll that never repeats a move three times, a move always followed by another ([NoSL PIMC §1](/en/arch/pimc/#sec-1)). A player remembers what each enemy did. So does the brain: `MoveRecord` keeps, for each enemy of the fight, the intents it showed at the first decision of each round, by uid. It is the part of the public record that is built today ([Harness §4](/en/arch/harness/#sec-4)).
+A monster's next move depends on its moves so far: a fixed cycle, a roll that never repeats a move three times, a move always followed by another ([NoSL PIMC §1](/en/arch/pimc/#sec-1)). A player remembers what each enemy did. So does the brain: `MoveRecord` keeps, for each enemy of the fight, the intents it showed at the first decision of each round, by uid. It is the one part of the public record that is built ([Harness §4](/en/arch/harness/#sec-4)).
 
 - Harness collects it from the combat observations it is shown, starting over after each macro decision, and hands it to the combat brain with every decision (`history`). The decision log keeps it with each combat decision ([Harness: the decision log §7](/en/arch/harness/decision-log/#sec-7)).
 - The search sends it to the workers in every request. A NoSL worker builds each monster's move log from it, so that a sampled world's monsters go on as the real ones would ([NoSL PIMC §2](/en/arch/pimc/#sec-2)). Both kinds of worker hand it to the leaves.
 - The combat net reads it: each enemy's intents in its last 3 rounds and how many rounds it has shown ([The leaf §3](/en/arch/combat-brain/leaf/#sec-3)). Every leaf of one decision's search follows the same record: a leaf is the next round's start, and the record holds the rounds up to the decision's. The SL planner's later turns add the rounds its own lines reach (`MoveRecord.Witness` at each turn's end).
 
-- <Badge text="planned" variant="caution" /> The record stays for NoSL's world building even if the net stops reading it: it is what lifts a built world's fidelity from 82–89% to 96–98% on hallway fights ([NoSL PIMC §3](/en/arch/pimc/#sec-3)).
+- <Badge text="planned" variant="caution" /> The record stays for NoSL's world building even if the net stops reading it: a built world's monsters take their move logs from it ([NoSL PIMC §3](/en/arch/pimc/#sec-3)).
 
 ## 3. The worker pool
 
@@ -58,13 +58,11 @@ sequenceDiagram
 
 **Self-contained.** A request carries everything its worker needs, and nothing carries over from one request to the next, so any free worker can take any request. In NoSL only the observation and the record leave the host: the true state never reaches a worker ([NoSL PIMC §4](/en/arch/pimc/#sec-4)). In SL the node's clone does, which SL may know.
 
-**Deterministic.** Replies are merged in request order, never in the order they finish. With the same seeds the answer equals that of a search in one process exactly, values included: `selftest --workers N` checks it, and a 6-combat panel trace with 8 workers diffs empty against the in-process one.
+**Deterministic.** Replies are merged in request order, never in the order they finish. With the same seeds the answer equals that of a search in one process exactly, values included: `selftest --workers N` checks it.
 
 **Failures.** A worker that closes its output or breaks the pipe is restarted and gets the request once more; so is one that does not answer within 5 minutes (a request takes seconds), after it is killed. A second failure is an error. A worker that throws exits after sending the error, since a request that threw can leave the game set up and fail every later one ([Simulator: the worker pool §6](/en/arch/simulator/pool/#sec-6)).
 
-**Where the time goes.** Not in the leaf. A NoSL worker sampled for 40 s during a whole-run gate searched 87% of the time; restoring worlds took 48% (starting the combat from its setup 38%, replaying the line 7%, resampling 4%), playing the searched actions 16%, building observations 16%, and the combat net 5% ([Simulator: combats §7](/en/arch/simulator/combat/#sec-7)). An SL planner's worker spends about 88% of its busy time on restores: loading the node's clone and replaying a path to the state it searches. That is why the planner's levers are the beam and the number of plans rather than the nodes ([The SL planner: budget §3](/en/arch/sl-planner/budget/#sec-3)). Each worker holds about 160 MB.
-
-**Speed.** On 6 act 1 fights at 8 worlds × 300 nodes, 8 workers take 68.7 ms per action against 307.5 ms in one process.
+**Where the time goes.** Not in the leaf. Restoring states is the largest share of a worker's time ([Simulator: combats §7](/en/arch/simulator/combat/#sec-7)): a NoSL worker builds each world from the observation and replays its line, an SL worker loads the node's clone and replays a path to the state it searches, and both restore again at every step back of a search ([The SL planner: budget §3](/en/arch/sl-planner/budget/#sec-3)).
 
 ## 4. Planned <Badge text="planned" variant="caution" />
 
@@ -86,4 +84,4 @@ What a plan is checked against does not change: the observation hashes it carrie
 
 **Enemies stay apart.** Two enemies of the same kind are two enemies: each has its own random stream and its own place in the turn order.
 
-**What it gives up.** The game picks some random cards by their place in a pile: Mummified Hand picks a random card in the hand with the combat's card-selection stream, and Drain Power takes random cards from the discard pile. In SL, where search knows the random streams, which copy is played, and so the order the hand and the discard pile are left in, could steer such a pick. Search no longer tells those lines apart: of two that differ only there, it keeps the first it found.
+**What it gives up.** The game picks some random cards by their place in a pile: Mummified Hand picks a random card in the hand with the combat's card-selection stream, and Drain Power takes random cards from the discard pile. In SL, where search knows the random streams, which copy is played, and so the order the hand and the discard pile are left in, could steer such a pick. Search does not tell those lines apart: of two that differ only there, it keeps the first it found.

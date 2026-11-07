@@ -108,11 +108,11 @@ flowchart TD
 
 **沒有後備**。驅動程式不認得的畫面會拋出例外，這一局就失敗：未知的房間、未知類型的獎勵、商店條目或水晶球物品、連結的獎勵組、沒有畫面卻還在等待的任務。不在合法清單裡的答案也一樣。失敗從不被一個預設選擇蓋過去，所以打完的一局，每個決策都是由它的策略回答的。
 
-一局遇到每種畫面的頻率，取自冠軍晉級報告裡的 300 局 SL 對局：
+一局遇到每種畫面的頻率，取自冠軍的寂靜獵手報告裡的 100 局 SL 對局（[評估：冠軍與基線 §2](/zh-tw/arch/evaluation/champions/#sec-2)）：
 
 <SurfaceCounts client:visible lang="zh-TW" />
 
-在 9999 生命值的對局裡見到的**正常遊戲行為**，不是 bug：擊殺機制，例如無饜沙蟲（THE_INSATIABLE）的沙坑 `Kill`，以及迷失之物與遺忘之物（THE_LOST_AND_FORGOTTEN）一直偷取力量和敏捷，直到這場戰鬥輸掉（在 9999 生命值下約要 156 回合；戰鬥回合上限讓它在第 81 回合結束）；還有 PunchOff 的「event not finished」警告，它的戰鬥帶有 `shouldResumeAfterCombat: false`（`Models.Events/PunchOff.cs:138`）；真實遊戲也會同樣警告。
+**正常遊戲行為**。9999 生命值的對局遇到的一些情況看起來像 bug，其實不是：擊殺機制，例如無饜沙蟲（THE_INSATIABLE）的沙坑 `Kill`，以及迷失之物與遺忘之物（THE_LOST_AND_FORGOTTEN）一直偷取力量和敏捷，直到這場戰鬥輸掉（在 9999 生命值下約要 156 回合；戰鬥回合上限讓它在第 81 回合結束）；還有 PunchOff 的「event not finished」警告，它的戰鬥帶有 `shouldResumeAfterCombat: false`（`Models.Events/PunchOff.cs:138`）；真實遊戲也會同樣警告。
 
 ## 5. 誰來回答，以及一局報告什麼
 
@@ -148,7 +148,7 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 | `determinism:` | 用 `--check` 時：透過線路重播後完全相同的局數，以及能從檢查點精確重播的節點數，附上每個節點的時間 |
 | `game Log.Error lines:` | 遊戲錯誤，接著用了行程池時是 `worker restarts`，用 SL 規劃器時是 `replans` |
 
-**結束代碼**：有一局失敗、有一次重播不同、有一個節點沒有精確重播，或記錄到遊戲錯誤時為 1；否則為 0。從未到達的決策介面和空閒等待只會印出來（`Commands/RunCommand.cs:146`）。
+**結束代碼**：有一局失敗、有一次重播不同、有一個節點沒有精確重播，或記錄到遊戲錯誤時為 1；否則為 0。從未到達的決策介面和空閒等待只會印出來（`Commands/RunCommand.cs:140`）。
 
 **記錄與日誌**。`--records FILE` 每行寫一條對局記錄，是 `report` 和 `gate` 的輸入（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)）：
 
@@ -171,38 +171,28 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 **`run --check`** 在它打的每一局上檢查這一點（`Commands/RunCommand.cs:94-130`）：
 
 - 它觀測每個決策：每個觀測都必須能完全不變地經過 JSON 往返，並保留它的雜湊；
-- 它把每個種子透過線路再打一遍（[協定：線路 §1](/zh-tw/arch/protocol/wire/#sec-1)），連到同一行程中一個執行緒裡、冠軍相同的大腦（或連到給定的 `--brain`），然後比較兩遍：軌跡、觀測雜湊、摘要、地圖雜湊、對局記錄和決策日誌，耗時除外；SL 下第二遍還帶著節點訊息；
+- 它把每個種子透過線路再打一遍（[協定：線路 §1](/zh-tw/arch/protocol/wire/#sec-1)），連到同一行程中一個執行緒裡、冠軍相同的大腦，然後比較兩遍：軌跡、觀測雜湊、摘要、地圖雜湊、對局記錄和決策日誌，耗時除外；SL 下第二遍還帶著節點訊息；
 - 它從檢查點載入第一遍的每個節點，重播節點的決策，要求複本逐一顯示這一局的觀測，在移動之後停在視野邊界，並拒絕再走一步（[世界與 SL 複本 §5](/zh-tw/arch/simulator/worlds/#sec-5)）。
 
-**實測**於 2026-10-26，200 個種子（寂靜獵手、晉階 0、9999 生命值、隨機宏觀策略和 `play` 戰鬥策略）：
+**通過的一批保證什麼**。`run --check` 遇到任何不同都以 1 結束（[§5](#sec-5)），所以在通過的一批裡，每一局透過線路都打得一樣，每個觀測都經過了往返，每個節點都從檢查點精確重播。一局的種子來自它的索引（`--start`、`GameSeeds.MakeSeed`），而不是來自打它的行程，所以一批對局可以分到多個行程上打；每局那一行上的 `obs <digest>` 用來比較在不同行程裡打的對局。不管遊戲以什麼順序保存一個地圖點的子節點，`MapActions` 都會把它們排序（[§4](#sec-4)）。複本的檢查，以及載入和重播一個節點的成本，見 [世界與 SL 複本 §6](/zh-tw/arch/simulator/worlds/#sec-6)。
 
-- `--check`：200 局裡 200 局重播完全相同（軌跡、摘要、地圖雜湊）；每個觀測都完全不變地經過往返，每個決策的觀測雜湊都相符；
-- 跨行程劃分：同樣的 200 個種子，分成 8 個行程各 25 局，和分成 4 個行程各 50 局，給出相同的行（結果、摘要、決策數、地圖雜湊、觀測總雜湊），所以地圖點子節點的順序從沒出現過不同，雖然 `MapActions` 還是會排序；
-- 其他四個角色（鐵甲戰士、故障機器人、儲君、縛亡者），各 25 局，用 `--check`：重播相同；
-- 0 失敗、0 遊戲錯誤、0 次空閒等待；每種決策介面都到達過，最少見的是 `bundle`，200 局裡出現在 9 局。
+**真實時間等待**。模型程式碼不能等待時鐘。`Task.Delay` 會讓 pump 的佇列一直是空的，直到計時器執行緒投遞工作，所以穩定時無法分辨遊戲是空閒還是在等待（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)）。Amalgamator 的事件就是這樣等待的，已打上補丁。其他幾處在無頭時走不到：`ActionExecutor.WaitForUnpause` 在遊戲暫停時每 50 ms 輪詢一次（`GameActions/ActionExecutor.cs:227-242`），`CombatState.GodotTimerTask` 為按 net id 查找生物設了超時（`Combat/CombatState.cs:603-609`），休息處的懸停訊息屬於 UI。守護手段是 [§5](#sec-5) 的空閒等待計數，每一批都必須為 0。
 
-複本自己的檢查，涵蓋五個角色 880 局裡的每個節點，見 [世界與 SL 複本 §6](/zh-tw/arch/simulator/worlds/#sec-6)。
-
-**真實時間等待**。模型程式碼不能等待時鐘。`Task.Delay` 會讓 pump 的佇列一直是空的，直到計時器執行緒投遞工作，所以穩定時無法分辨遊戲是空閒還是在等待（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)）。Amalgamator 的事件就是這樣等待的，已打上補丁。其他幾處在無頭時走不到：`ActionExecutor.WaitForUnpause` 在遊戲暫停時每 50 ms 輪詢一次（`GameActions/ActionExecutor.cs:227-242`），`CombatState.GodotTimerTask` 為按 net id 查找生物設了超時（`Combat/CombatState.cs:603-609`），休息處的懸停訊息屬於 UI。守護手段是上面的空閒等待計數，在 200 局的批次裡為 0。
-
-**內嵌執行**。無頭時，遊戲在 `NonInteractiveMode` 下執行，動作內嵌執行，而不是每影格讓出一次，所以「發出即不管」（fire-and-forget）的工作順序可能與真實遊戲不同。這是否改變玩家看得到的任何東西，要等到遊戲裡的對局能和這裡的對局比較時才知道（[評估 §2](/zh-tw/arch/evaluation/#sec-2)）。
+**內嵌執行**。無頭時，遊戲在 `NonInteractiveMode` 下執行，動作內嵌執行，而不是每影格讓出一次，所以「發出即不管」（fire-and-forget）的工作順序可能與真實遊戲不同。這是否改變玩家看得到的任何東西，還沒有定論：這需要把遊戲裡的對局和這裡的對局比較（[評估 §2](/zh-tw/arch/evaluation/#sec-2)）。
 
 ## 7. 連到大腦的對局
 
-`run` 通常把大腦留在自己的行程裡：Harness 和冠軍的各個大腦是這個行程裡的物件，它們的搜尋交給它啟動的工作行程池（[工作行程池](/zh-tw/arch/simulator/pool/)）。用 `run --brain SOCKET` 時，大腦則是另一個行程，在一個 Unix socket 上監聽，也就是 Mod 在遊戲裡連的那個（[Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8)）。這時模擬器託管對局的方式和遊戲完全一樣：每局傳送 `hello`，帶上它的環境和由種子雜湊得到的對局 id，每個決策都連同它的觀測和合法動作一起發出，然後打出大腦推薦的動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。NoSL 下對局 id 隱藏了種子；SL 下種子確實會到達大腦，在節點檢查點的存檔裡，這是 SL 可以知道的。
+`run` 把大腦留在自己的行程裡：Harness 和冠軍的各個大腦是這個行程裡的物件，它們的搜尋交給它啟動的工作行程池（[工作行程池](/zh-tw/arch/simulator/pool/)）。在遊戲裡，大腦是一個獨立的行程 `brain`，由 Mod 啟動，並透過它的 stdin 和 stdout 與它溝通（[Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8)）。透過線路時，宿主打一局的方式和 `run` 在行程內完全一樣：每局傳送 `hello`，帶上它的環境和由種子雜湊得到的對局 id，每個決策都連同它的觀測和合法動作一起發出，然後打出大腦推薦的動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。NoSL 下對局 id 隱藏了種子；SL 下種子確實會到達大腦，在節點檢查點的存檔裡，這是 SL 可以知道的。SL 下宿主還會傳送節點訊息：新節點開始時傳送檢查點，然後是還沒傳送的決策，每個都在下一個決策之前傳送（`Brains/RunBrains.cs:53-99`）。模擬器只在 `run --check` 下透過線路打對局（見本節最後）。
 
-由大腦決定打什麼，所以 `run --brain` 拒絕每個冠軍選項，包括 `--log`（`Commands/RunCommand.cs:63-64`）；而且因為冠軍檔案的選項是當作給出的選項合併進來的，它也拒絕指定了任何冠軍選項的 `--champion FILE`（`Commands/Args.cs:178-194`）<Badge text="推斷" variant="caution" />。SL 下宿主還會傳送節點訊息：新節點開始時傳送檢查點，然後是還沒傳送的決策，每個都在下一個決策之前傳送（`Brains/RunBrains.cs:53-99`）。
-
-`brain` 就是那個行程（`Commands/BrainCommand.cs`）：單獨的 Harness，服務連上來的宿主，一次一個。它自己不需要遊戲；搜尋的工作行程各自啟動自己的遊戲。
+`brain` 就是那個行程（`Commands/BrainCommand.cs`）：單獨的 Harness，在 stdin 和 stdout 上服務啟動它的那個宿主，直到 stdin 關閉。它自己不需要遊戲；搜尋的工作行程各自啟動自己的遊戲。它的 stdout 只承載線路，其他每一行輸出都寫到 stderr。
 
 ```text
-brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy plan|play] [--log FILE] [--wire FILE]
+brain [--champion FILE] [champion options] [--sl-policy plan|pimc|play] [--log FILE] [--wire FILE]
 ```
 
-- `--socket`：預設是 `$XDG_STATE_HOME/sts2ai/brain.sock`，這個變數未設定時是 `~/.local/state/sts2ai/brain.sock`（`Sts2Ai.Protocol/Wire.cs:100-104`）：Steam 在一個容器裡執行遊戲，這個容器共用家目錄，但不共用 `$XDG_RUNTIME_DIR`。
-- 宿主在 `hello` 裡說明它的環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（預設是 SL 規劃器），宏觀大腦則相同。宿主也可以指定一個力度（`low`、`medium`、`high`、`max`），這一局的 SL 規劃器就用它來打（[Harness §5](/zh-tw/arch/harness/#sec-5)）。
+- 宿主在 `hello` 裡說明它的環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（預設是 SL 規劃器），宏觀大腦則相同，而它的後續狀態（afterstate）由環境決定，不管 `--afterstates` 怎麼寫：對 NoSL 宿主，L0 從畫面預測它們；對 SL 宿主，冠軍帶有戰鬥網路時，L0 在節點的複本上打出它的選項，由戰鬥網路為選項引發的戰鬥估值。所以一個冠軍檔案就能服務兩種環境（`BrainCommand.Champions`）。宿主也可以指定一個力度（`low`、`medium`、`high`、`max`），這一局的 SL 規劃器就用它來打（[Harness §5](/zh-tw/arch/harness/#sec-5)）。
 - 它的回答帶著大腦打過分的選項，在地圖上還有每個選項的路線，供 Mod 顯示（[輸出 §2](/zh-tw/arch/output/#sec-2)）。
-- `--log` 寫出決策日誌；`--wire` 寫出宿主傳來的每條訊息，`clones` 會重播這些訊息，在複本上檢查宿主的 SL 決策（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
-- 它每局印出一行：對局 id、結局、層數、決策數、重新規劃次數，以及它的工作行程的遊戲錯誤，宿主的對局記錄不計入這些錯誤。
+- `--log` 寫出決策日誌；`--wire` 寫出宿主傳來的每條訊息，`clones` 會重播這些訊息，在複本上檢查宿主的 SL 決策（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。只有在設定檔打開 `Record` 時，Mod 才會傳這兩個選項：它啟動的每個大腦一對檔案，放在大腦日誌旁邊的 `captures/` 裡。
+- 它每局在 stderr 上印出一行：對局 id、結局、層數、決策數、重新規劃次數，以及它的工作行程的遊戲錯誤，宿主的對局記錄不計入這些錯誤。
 
 `run --check` 在第二遍時在行程內使用同一個伺服器，用一個以行程命名的抽象 Unix socket（`\0sts2ai-brain-PID`，`Brains/RunBrains.cs:200-220`），所以 `--check` 打的每一局都會檢查線路這條路徑。

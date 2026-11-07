@@ -14,7 +14,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-已有：每個決策畫面的觀測，包括戰鬥和選牌提示；文字形式的動作；宿主與大腦之間的線路及其 SL 節點訊息，模擬器透過它打完整局，遊戲裡的 Mod 透過它給出建議；戰鬥世界 API；三種工作行程請求。規劃中：公開歷史的事件流、用於解釋的事實，以及推薦的 `degraded` 旗標（[§6](#sec-6)）。
+已有：每個決策畫面的觀測，包括戰鬥和選牌提示；文字形式的動作；宿主與大腦之間的線路及其 SL 節點訊息，遊戲裡的 Mod 透過它給出建議，`run --check` 透過它把模擬器的對局再打一遍；戰鬥世界 API；三種工作行程請求。規劃中：公開歷史的事件流、用於解釋的事實，以及推薦的 `degraded` 旗標（[§6](#sec-6)）。
 
 </Aside>
 
@@ -31,7 +31,7 @@ flowchart LR
   B["大腦：<br/>Harness + 各個大腦"]
   W["工作行程"]
   X["搜尋"]
-  M -- "線路：JSON lines<br/>經 Unix socket" --> B
+  M -- "線路：JSON lines<br/>經大腦的 stdin 和 stdout" --> B
   S -- "線路" --> B
   B -- "請求：JSON lines<br/>經 stdin 和 stdout" --> W
   X -- "世界 API：<br/>行程內介面" --> W
@@ -84,7 +84,7 @@ flowchart LR
 
 兩個函式給出身份：
 
-- `ProtocolJson.Hash(value)` 是 FNV-1a 64，一種快速的非加密雜湊，作用在值的 JSON 的 UTF-8 位元組上。它為一個觀測命名（`obs_hash`，16 位十六進位數字）、為一局命名（`run_id`，取自種子的 JSON 字串），也為一場戰鬥的隱藏狀態命名（世界的隱藏鍵）。因為它雜湊的是 JSON，所以它取決於序列化：型別相差一個欄位的兩個建置，會把同一個觀測雜湊成不同的值，大腦就是用這一點來抓出從另一個 commit 建置的宿主（[線路 §5](/zh-tw/arch/protocol/wire/#sec-5)）。
+- `ProtocolJson.Hash(value)` 是 FNV-1a 64，一種快速的非加密雜湊，作用在值的 JSON 的 UTF-8 位元組上。它為一個觀測命名（`obs_hash`，16 位十六進位數字）、為一局命名（`run_id`，取自種子的 JSON 字串），也為一場戰鬥的隱藏狀態命名（世界的隱藏鍵）。因為它雜湊的是 JSON，所以它取決於序列化：型別相差一個欄位的兩個建置，會把同一個觀測雜湊成不同的值，大腦就是用這一點來抓出來自另一個建置的宿主（[線路 §5](/zh-tw/arch/protocol/wire/#sec-5)）。
 - `ProtocolJson.CardKey(card)` 是這張牌去掉 uid 的 JSON：玩家看得到的這張牌的一切。鍵相同的兩張牌，對玩家來說是同一張牌；每份順序不得取決於隱藏狀態的清單，都按它排序。
 
 ## 5. 測試
@@ -97,7 +97,7 @@ flowchart LR
 | 一局在行程內和透過線路打出來一樣：軌跡、觀測、對局記錄、決策日誌 | `run --check` |
 | 大腦在 NoSL 下拒絕節點訊息；SL 節點的複本就是它的檢查點加上此後的決策 | `DispatcherTests` |
 | 線路版本：讀取時拒絕另一個 `v` 的訊息 | `WireStream.Receive` |
-| 宿主送出的 SL 決策在它們的複本上重播時，得到相同的觀測 | 對 `brain --wire` 日誌執行 `clones`（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
+| 宿主送出的 SL 決策在它們的複本上重播時，得到相同的觀測 | 對 `brain --wire` 日誌執行 `clones`，例如 Mod 在 `Record` 開啟時錄下的那份（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
 
 ## 6. 規劃中
 
@@ -109,7 +109,7 @@ flowchart LR
 
 | 頁面 | 講什麼 |
 |---|---|
-| [線路](/zh-tw/arch/protocol/wire/) | 宿主與大腦之間的對話：它的 socket、每條訊息和每個欄位、一步一步走完的一局、規則、SL 節點訊息、推薦、兩種宿主有何不同 |
+| [線路](/zh-tw/arch/protocol/wire/) | 宿主與大腦之間的對話：它的連線、每條訊息和每個欄位、一步一步走完的一局、規則、SL 節點訊息、推薦、兩種宿主有何不同 |
 | [觀測與動作](/zh-tw/arch/protocol/observation/) | 每個決策的觀測：一局、一場戰鬥、卡牌身份與規範順序、每個畫面及其動作、選牌提示及其情境、省略了什麼 |
 | [世界與工作行程訊息](/zh-tw/arch/protocol/worlds/) | 搜尋在其中打的世界 API、節點複本和敵人出招記錄，以及三種工作行程請求和它們的回答 |
 

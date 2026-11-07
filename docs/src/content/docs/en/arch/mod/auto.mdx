@@ -10,14 +10,14 @@ sidebar:
 
 import { Badge } from '@astrojs/starlight/components';
 
-Assist mode shows the brain's answer. The player plays it, or asks the AI to: from the panel's toolbar or its keys, the AI plays the next action, the rest of the turn or the room, or goes on by itself until it is paused ([§2](#sec-2)). Each action is carried out as the player's click would carry it out ([§1](#sec-1)). Playing whole runs with no one at the keyboard is the last rung of the sim-to-real ladder, R4, which plays seeded runs in the real game to compare them with the simulator's ([Evaluation §2](/en/arch/evaluation/#sec-2)); its driver is still planned ([§2](#sec-2)). This page describes the executor and the goals, then the logs, the controls and the safety rules, the patches and the tests.
+Assist mode shows the brain's answer. The player plays it, or asks the AI to: from the panel's toolbar or its keys, the AI plays the next action, the rest of the turn or the room, or goes on by itself until it is paused ([§2](#sec-2)). Each action is carried out as the player's click would carry it out ([§1](#sec-1)). Playing whole runs with no one at the keyboard is the last rung of the sim-to-real ladder, R4, which plays seeded runs in the real game to compare them with the simulator's ([Evaluation §2](/en/arch/evaluation/#sec-2)); its driver is planned ([§2](#sec-2)). This page describes the executor and the goals, then the logs, the controls and the safety rules, the patches and the tests.
 
 ## 1. The executor
 
 `Executor.Run` (`Executor.cs`) carries out one action: the brain's answer to the decision on screen, so always one of that decision's legal actions. GameBridge never touches Godot nodes ([GameBridge §2](/en/arch/gamebridge/#sec-2)), so this node-side work lives in the mod. The executor plays each action the way the player's click does, so that the game's screens follow as they would after a click. It takes one of three paths:
 
-- **GameBridge's start**, where that is the call the click makes: combat, the map, a purchase, a chest's relic, the crystal sphere and the potion belt.
-- **The button's own handler**, where the click does more than start the action: the rewards screen, the rest site and the event room update their own buttons, and every way out of a room opens the map. A button is pressed (`ForceClick`) only when it is enabled and on screen (`IsEnabled && IsVisibleInTree()`), which `ForceClick` does not check itself <Badge text="verified" variant="success" />.
+- **GameBridge's start**, where that is the call the click makes: combat, a purchase, a chest's relic, the crystal sphere and the potion belt.
+- **The button's own handler**, where the click does more than start the action: the map screen's handler for a point, the rewards screen, the rest site and the event room update their own buttons, and every way out of a room opens the map. A button is pressed (`ForceClick`) only when it is enabled and on screen (`IsEnabled && IsVisibleInTree()`), which `ForceClick` does not check itself <Badge text="verified" variant="success" />.
 - **The task the screen awaits**, for a card prompt, a card reward and a bundle. These screens hand their answer to a task the game awaits (a `TaskCompletionSource`); the executor completes that task with the brain's picks, as the screen's own confirm would.
 
 | surface | what the executor calls |
@@ -66,7 +66,7 @@ The step and finish buttons do nothing while auto-play runs; otherwise each star
 - **an elite or a boss is next**: the map answer travels to an elite's or the boss's point;
 - **the win chance fell**: V's chance to win the run, read from the latest answer outside combat ([Output §2](/en/arch/output/#sec-2)), is more than 3 points below its best since auto-play started. The best is then set to the fallen value, so the next stop needs a new fall.
 
-Neither stops auto-play at the decision where the player started it: pressing auto again where it stopped plays on. Every goal also ends at the run's end; when an action leaves the state as it was for 10 s; when the action's button stays unready for 10 s ("the AI cannot press this"); when the executor throws; and when the brain's connection drops, which takes the toolbar with it: the AI then starts again only when the player asks. The panel's strip says why the AI stopped, in amber ([Output §2](/en/arch/output/#sec-2)).
+Neither stops auto-play at the decision where the player started it: pressing auto again where it stopped plays on. Every goal also ends at the run's end; when an action leaves the state as it was for 10 s; when the action's button stays unready for 10 s ("the AI cannot press this"); when the executor throws; and when the brain ends, which takes the toolbar with it: the AI then starts again only when the player asks. The panel's strip says why the AI stopped, in amber ([Output §2](/en/arch/output/#sec-2)).
 
 **What the AI did.** For each action played, the mod sends `executed` with the decision's id, and the panel lists the AI's last four actions, with the floor and the answer's value.
 
@@ -74,22 +74,22 @@ Neither stops auto-play at the decision where the player started it: pressing au
 
 - **Seeded start:** `NGame.StartNewSingleplayerRun(character, shouldSave: false, acts, modifiers, seed, GameMode.Standard, ascensionLevel)` (`Nodes/NGame.cs:1137`), with the act selection the lobby would make ([Simulator: whole runs §2](/en/arch/simulator/runs/#sec-2)). The alternative is to set `NGame.DebugSeedOverride` before the Confirm button is pressed, as the game's own AutoSlayer does (`AutoSlay/AutoSlayer.cs:501`). With `shouldSave: false`, `current_run.save` stays untouched, as the parameter's doc says (`NGame.cs:1130`) <Badge text="verified" variant="success" />. Run history and progress are probably still written <Badge text="inferred" variant="caution" />, so auto-runs would use the modded profile only.
 - **Run end:** detect death (all players dead) or the win; send `run_end`; return to the main menu; take the next seed from the pre-registered list.
-- **Speed:** set `PrefsSave.FastMode` to Instant only while auto-run is active (`Saves/PrefsSave.cs:21`), and auto-play's wait to none. Two game behaviors matter: builds outside the editor downgrade Instant to Fast at startup, and the preferences are saved on quit. So the user's own value is restored both when auto-run stops and when the game quits.
+- **Speed:** set `PrefsSave.FastMode` to Instant only while auto-run is active (`Saves/PrefsSave.cs:21`), and auto-play's wait to none. Two game behaviors matter: builds outside the editor downgrade Instant to Fast at startup, and the preferences are saved on quit. So the player's own value is restored both when auto-run stops and when the game quits.
 - **Abandon or crash:** the seed is recorded as `aborted`, with the reason. A seed is never run again to pick a better result.
 
 ## 3. Logs, and R3 = R4
 
-**What the mod writes today.** Its lines go to the game's own log, so they land in the game's log file (on this machine `~/.local/share/SlayTheSpire2/logs/godot.log`, with dated copies of earlier sessions). Every line starts with `[Sts2Ai]`:
+**What the mod writes.** Its lines go to the game's own log, so they land in the game's log file (on Linux, by default `~/.local/share/SlayTheSpire2/logs/godot.log`, with dated copies of earlier sessions). Every line starts with `[Sts2Ai]`:
 
 | level | lines |
 |---|---|
-| info | "assist mode, ENV, brain at PATH"; "environment ENV"; "effort EFFORT"; "connected to the brain"; "no brain: REASON" (once per distinct reason); "AI stopped: REASON"; "auto-play pressed the chest", "… the proceed", "… the dialogue" |
+| info | "assist mode, ENV, brain: LAUNCHER" (or that no brain ships for the platform); "environment ENV"; "effort EFFORT"; "connected to the brain"; "no brain: REASON" (once per distinct reason); "AI stopped: REASON"; "auto-play pressed the chest", "… the proceed", "… the dialogue" |
 | warning | "off: game V, the mod is for v0.111.0"; "brain: MESSAGE" (an `error`); "unexpected TYPE from the brain"; "a card prompt (TYPE) without its context, left to the player"; "SL record of node N broken after K steps: REASON"; "could not play ACTION: EXCEPTION"; the settings file's two warnings |
 | error | a frame's exception, once per distinct text; "SL record: EXCEPTION"; "no AI settings tab: EXCEPTION" |
 
-The only file it writes is its settings file ([The overview §5](/en/arch/mod/#sec-5)). It keeps no decision log of its own. A session in the real game is recorded on the brain's side instead: `brain --log FILE` writes Harness's decision log (each decision's observation, legal actions, pick, plan, candidates, environment and time, [Harness: the decision log](/en/arch/harness/decision-log/)), and `brain --wire FILE` every message the host sent, `hello` with its game version included, and `executed` for each action the AI played. The 2026-10-28 capture is such a pair, kept locally in `tmp/assist/` ([The SL record §8](/en/arch/mod/sl-record/#sec-8)).
+Besides those lines, it writes in its state folder: its settings ([The overview §5](/en/arch/mod/#sec-5)) and `brain.log`, the brain's stderr, with a line per run ([The overview §4](/en/arch/mod/#sec-4)). It keeps no decision log of its own. A session in the game is recorded on the brain's side, when the settings file's `Record` is on: each brain the mod starts then gets a pair of files in `captures/` ([The overview §4](/en/arch/mod/#sec-4)), from `brain --log FILE`, which writes Harness's decision log (each decision's observation, legal actions, pick, plan, candidates, environment and time, [Harness: the decision log](/en/arch/harness/decision-log/)), and `brain --wire FILE` every message the host sent, `hello` with its game version included, and `executed` for each action the AI played ([The SL record §8](/en/arch/mod/sl-record/#sec-8)).
 
-**Planned: the mod's decision log.** Per decision: the observation, the legal actions, the recommendation, the action played and by whom, the latency, the environment, the game's and the mod's versions, and `NumReloads`, which must be 0 ([Environments: information §8](/en/arch/environments/information/#sec-8)). Nothing reads `NumReloads` today.
+**Planned: the mod's decision log.** Per decision: the observation, the legal actions, the recommendation, the action played and by whom, the latency, the environment, the game's and the mod's versions, and `NumReloads`, which must be 0 ([Environments: information §8](/en/arch/environments/information/#sec-8)). Nothing reads `NumReloads`.
 
 **Planned: R3 = R4.** The same seed and the same decisions, played in the simulator (R3) and in the game (R4), must give the same observations; a difference is a bug in the bridge or the simulator, and the test would report the first one. What exists is narrower: `clones` checks that the node's clone asks what the game asked, decision by decision, for the SL record ([The SL record §8](/en/arch/mod/sl-record/#sec-8)).
 
@@ -114,7 +114,7 @@ The toolbar and its keys are there only in a single-player run that the brain ha
 - **The AI acts only when the player asks**, and only the brain's answer to the decision on screen, once per state. That answer is one of the decision's legal actions: Harness checks it against that list and throws on an illegal one ([Harness: routing, budgets and seeds §6](/en/arch/harness/routing/#sec-6)). Besides answers, auto-play presses only the screens that are no decision: the chest, a proceed button, an ancient's dialogue ([§1](#sec-1)). With no goal, the mod starts no game action.
 - **No state edits, console, reloads or save writes.** The mod has no interface for any of them.
 - **Single player only.** Assist and its toolbar turn themselves off in a multiplayer run, and the planned driver would refuse any multiplayer lobby.
-- **What leaves the game.** The socket carries only protocol messages. The run id is the seed's hash, and the observation leaves out the seed (`RunView` has none), so in NoSL the seed never leaves the host. In SL it does: the node's checkpoint is the game's whole save, with the seed and every random stream's state, which SL may know ([The SL record §2](/en/arch/mod/sl-record/#sec-2)). NoSL never sends a checkpoint.
+- **What leaves the game.** Nothing leaves the machine: the brain is the mod's own child process, and the pipes to it carry only protocol messages. The run id is the seed's hash, and the observation leaves out the seed (`RunView` has none), so in NoSL the seed never leaves the host. In SL it does: the node's checkpoint is the game's whole save, with the seed and every random stream's state, which SL may know ([The SL record §2](/en/arch/mod/sl-record/#sec-2)). NoSL never sends a checkpoint.
 - **The game's settings screen** is the one place the mod changes the game's nodes to draw: it adds its tab and panel, and moves the tab row half a step to keep it centred ([Output §2](/en/arch/output/#sec-2)). Everything else it draws lives in its own layer.
 
 ## 5. Patches and the JIT
@@ -127,13 +127,13 @@ A **Harmony patch** rewrites a game method at runtime: Harmony is a .NET library
 | `SaveManager.SaveRun`, `RunManager.LoadIntoLatestMapCoord`, and the 12 entry points of the SL record | prefixes; 6 postfixes for the steps' tasks | the SL record ([The SL record §3](/en/arch/mod/sl-record/#sec-3)) |
 | `NSettingsTabManager._Ready` | postfix | the AI tab, added at the next idle ([Output §2](/en/arch/output/#sec-2)) |
 
-**Why first.** The context patches are installed before anything else compiles game code: a caller compiled before the patch can inline an entry and bypass it. This was seen headless, where SapphireSeed was inlined while another patch recompiled it.
+**Why first.** The context patches are installed before anything else compiles game code: a caller compiled before the patch can inline an entry and bypass it.
 
-**The JIT.** The game runs with .NET *tiered compilation*: a method is first compiled quickly, and frequently used methods are later compiled again with optimizations (a "rejit"). A rejit can drop a patch silently; this was seen headless after a few thousand combats, which is why the simulator turns tiering off ([Simulator: headless host §6](/en/arch/simulator/headless/#sec-6)). The mod cannot choose how the game is compiled. What it has:
+**The JIT.** The game runs with .NET *tiered compilation*: a method is first compiled quickly, and frequently used methods are later compiled again with optimizations (a "rejit"). A rejit can drop a patch silently, which is why the simulator turns tiering off ([Simulator: headless host §6](/en/arch/simulator/headless/#sec-6)). The mod cannot choose how the game is compiled. What it has:
 
-- **Missing context is logged**: a prompt that arrives without its context is left to the player, with a warning in the game's log ([The main loop §5](/en/arch/mod/loop/#sec-5)). The panel shows no warning yet.
+- **Missing context is logged**: a prompt that arrives without its context is left to the player, with a warning in the game's log ([The main loop §5](/en/arch/mod/loop/#sec-5)). The panel shows no warning.
 - **Planned: a heartbeat**, a counter each patch bumps, to see a patch go silent.
-- **Planned: a launch flag**: launching the game with `DOTNET_TieredCompilation=0` <Badge text="inferred" variant="caution" />, if the game's hosted runtime honors it (open question 2, [§8](#sec-8)).
+- **Planned: a launch flag**: launching the game with `DOTNET_TieredCompilation=0` <Badge text="inferred" variant="caution" />, if the game's hosted runtime honors it (open question 1, [§8](#sec-8)).
 
 ## 6. Prior art
 
@@ -149,7 +149,7 @@ STS2MCP (MIT license) is an existing mod that lets outside programs drive STS2 o
 - a raw `new PlayCardAction`: it skips `CanPlayTargeting` and the play effects. The executor plays a card through `TryManualPlay`, as the hand does;
 - ending the turn directly: the executor queues the end of the turn through the game's action queue, as the end turn button does;
 - exposing the seed or the map's path;
-- HTTP with CORS `*`: any web page could drive the game. The mod uses a Unix socket only.
+- HTTP with CORS `*`: any web page could drive the game. The mod opens no port: it talks to the brain it started over the brain's stdin and stdout.
 
 ## 7. Tests
 
@@ -157,14 +157,13 @@ The mod has no unit tests. What it shares with the simulator is tested there: Ga
 
 | check | state |
 |---|---|
-| **SL round trip**: `brain --wire` and `clones` | built and run ([The SL record §8](/en/arch/mod/sl-record/#sec-8)) |
+| **SL round trip**: a `Record` capture (`brain --wire`) and `clones` | built ([The SL record §8](/en/arch/mod/sl-record/#sec-8)) |
 | **Load**: the mod initializes, the version guard works, the panel shows | by hand |
-| **The executor and the goals**: each surface played by the AI, each stop | by hand; the reflection names and types, the card prompt index map and the Godot calls were reviewed against the decompiled game |
+| **The executor and the goals**: each surface played by the AI, each stop | by hand; the reflection names and types, the card prompt index map and the Godot calls checked against the decompiled game |
 | **Surface coverage in the real game**: scripted R4 runs hit every surface, with no decision left to the player for lack of a reader | planned, with the driver |
 | **Idle**: no decision sent mid-animation; log decisions with the frame index, and check that none overlaps queued actions | planned |
 | **Speed restore**: Instant or Fast put back on stop and on quit | planned, with the driver |
 
 ## 8. Open questions
 
-1. Capturing the player's actions in assist mode: settled, with hooks where the game commits them ([The SL record §3](/en/arch/mod/sl-record/#sec-3)).
-2. Does the game honor the environment variable for tiered compilation?
+1. Does the game honor the environment variable for tiered compilation?

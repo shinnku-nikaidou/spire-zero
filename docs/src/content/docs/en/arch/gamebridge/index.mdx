@@ -42,7 +42,7 @@ What it does not do is decide **which** screen is asking, or wait for the game t
 | host | observe | legal | start |
 |---|---|---|---|
 | the simulator (`Sts2Ai.SimWorker`) | every decision | every decision | every action it plays ([Simulator: whole runs §4](/en/arch/simulator/runs/#sec-4)) |
-| the mod (`Sts2Ai.Mod`) | every decision it asks the brain about | the same | never: the mod advises and the player acts. It records the player's own actions by patching the same game entry points the simulator's starts call, so an SL record names a step exactly as the simulator would ([Mod: the SL record §3](/en/arch/mod/sl-record/#sec-3)) |
+| the mod (`Sts2Ai.Mod`) | every decision it asks the brain about | the same | only when the player asks the AI to play: GameBridge's start where that is the call the click makes (combat, a purchase, a chest's relic, the crystal sphere, the potion belt), else the screen's own handler or the task it awaits ([Mod: auto-play and safety §1](/en/arch/mod/auto/#sec-1)). It records every step, the player's or the AI's, by patching the same game entry points the simulator's starts call, so an SL record names a step exactly as the simulator would ([Mod: the SL record §3](/en/arch/mod/sl-record/#sec-3)) |
 
 The mod compiles GameBridge's source files into itself and runs inside the game. The simulator references it as a project. CombatBuilder, the simulator's way of building a combat from an observation, reuses GameBridge's intent reader to match monsters' moves to the intents shown ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5)).
 
@@ -74,7 +74,7 @@ Only what the player could have watched would go in: an insert at a random posit
 | GameBridge does reach the game (the control of the boundary check) | `BoundaryTests` |
 | every combat observation and action round-trips; builds from observations show them exactly | `selftest` ([Simulator: reference §5](/en/arch/simulator/reference/#sec-5)) |
 | every surface's observation round-trips; every answer the brains give is legal and starts without error; runs replay exactly, nodes included | `run --check` ([Simulator: whole runs §6](/en/arch/simulator/runs/#sec-6)) |
-| the mod's SL records replay on their clones with the same observations as the game showed | `clones` ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)) |
+| the mod's SL records, captured in the game with the mod's `Record` setting, replay on their clones with the same observations as the game showed | `clones` ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)) |
 
 Planned: a check in the mod that every enabled control on screen is one legal action, and the same seed and decisions giving the same observations in the game and in the simulator ([Evaluation §2](/en/arch/evaluation/#sec-2)).
 

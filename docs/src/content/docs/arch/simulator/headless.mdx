@@ -48,7 +48,7 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 ## 4. 补丁
 
-**Harmony 补丁**在运行时改写游戏的方法。Harmony 是一个 .NET 库：*前缀*（prefix）在原方法之前运行，可以跳过原方法；*后缀*（postfix）在原方法之后运行；*转译器*（transpiler）则不包裹方法，而是直接改写方法的 IL（编译后的指令）。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安装 GameBridge 的 `ChoiceContexts`，再安装程序集里的每个补丁类。顺序很重要：打补丁会编译每个被替换的方法，而在选牌提示补丁之前编译的方法，可能把某个很小的 `CardSelectCmd` 入口内联进去，从而绕过它的补丁；SapphireSeed 的种植（被事件转译器改写过）就曾这样（[GameBridge：读取游戏 §6](/arch/gamebridge/observe/#sec-6)）。
+**Harmony 补丁**在运行时改写游戏的方法。Harmony 是一个 .NET 库：*前缀*（prefix）在原方法之前运行，可以跳过原方法；*后缀*（postfix）在原方法之后运行；*转译器*（transpiler）则不包裹方法，而是直接改写方法的 IL（编译后的指令）。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安装 GameBridge 的 `ChoiceContexts`，再安装程序集里的每个补丁类。顺序很重要：打补丁会编译每个被替换的方法，而在选牌提示补丁之前编译的方法，可能把某个很小的 `CardSelectCmd` 入口内联进去，从而绕过它的补丁。SapphireSeed 的种植就是这样的方法，事件转译器会改写它（[GameBridge：读取游戏 §6](/arch/gamebridge/observe/#sec-6)）。
 
 除了规则保真这一组，没有任何补丁改变游戏规则；规则保真组把正式版规则放回去：被 TestMode 改掉的，以及游戏通过画面检查、而无头时画面并不存在的。各组补丁，按 `Runtime/Patches/` 里的文件：
 
@@ -70,7 +70,7 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 ## 5. TestMode
 
-游戏为自己的自动化测试内置了一个开关 `TestMode`。打开它之后，大部分模型代码会跳过表现层（每个这样的地方都先检查 `TestMode.IsOn`），奖励通过一个测试选择器领取而不是通过画面，还有几条规则会改变。模拟器打开它，是因为它白白去掉了大部分表现层。它改变的规则则逐条放回或处理。对整局有影响的分支（取自本地的审查记录 `tmp/notes/testmode-audit.md`）：
+游戏为自己的自动化测试内置了一个开关 `TestMode`。打开它之后，大部分模型代码会跳过表现层（每个这样的地方都先检查 `TestMode.IsOn`），奖励通过一个测试选择器领取而不是通过画面，还有几条规则会改变。模拟器打开它，是因为它白白去掉了大部分表现层。它改变的规则则逐条放回或处理。对整局有影响的分支：
 
 | TestMode 分支 | 处理方式 |
 |---|---|
@@ -83,7 +83,7 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 ## 6. JIT
 
-.NET 通常使用*分层编译*：方法先被快速编译一遍，常运行的方法之后再在后台带完整优化重新编译（*rejit*）。一次 rejit 可能悄无声息地丢掉 Harmony 补丁，因为新代码是从原方法编译的。这在几千场战斗之后发生过：`RunManager.WriteReplay` 在没有补丁的情况下运行了。在运行时间短的批次上，分层编译还慢一倍，因为 Harmony 的 JIT 钩子让每次额外的编译都很昂贵。
+.NET 通常使用*分层编译*：方法先被快速编译一遍，常运行的方法之后再在后台带完整优化重新编译（*rejit*）。一次 rejit 可能悄无声息地丢掉 Harmony 补丁，因为新代码是从原方法编译的：打了补丁的方法就会在谁也没选定的时刻以没有补丁的样子运行。在运行时间短的批次上，分层编译也更慢，因为 Harmony 的 JIT 钩子让每次额外的编译都很昂贵。
 
 所以项目文件设了 `TieredCompilation=false`（`Sts2Ai.SimWorker.csproj:12-20`）：每个方法只编译一次，带完整优化。启动程序还应设 `DOTNET_ReadyToRun=0`，这是项目文件设不了的：这样框架自己的代码也会以完整优化编译，每秒多跑约 20% 的战斗。真实游戏开着分层编译运行，这对 Mod 的补丁是个风险（[Mod：自动游玩与安全 §5](/arch/mod/auto/#sec-5)）。
 
@@ -109,6 +109,6 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 模拟器自己的规则是：游戏不记任何错误。一行游戏的 `Log.Error`，或一次未被观察到的任务错误，都意味着运行了不该运行的东西。启动时会收集这两者（[§2](#sec-2)），各个命令按战斗或按局报告它们，`selftest` 要求一个都没有，出现任何一个的对局都算失败（退出码 1）。工作进程把它在处理请求时看到的游戏错误放在回复里发回，宿主把它们和自己的一起计数（[工作进程池 §6](/arch/simulator/pool/#sec-6)）。
 
-有些错误是正式版游戏自己的，游戏怪癖组把它们修掉，好让每个游戏错误都仍是真问题。目前修掉的只有一个：玩家在其中死亡的出牌（打出一张 Sly 牌时，敌人的荆棘杀死了玩家）会提前返回，把这张牌留在它的选择上下文（`PlayerChoiceContext`）上；随后，发起这次出牌的钩子就记下一条错误。`PopCardAfterEarlyReturn` 把这张牌弹出，即使这张牌已经离开战斗也是如此（`Runtime/Patches/GameQuirks.cs:18-42`）。这是项目对待游戏 bug 的规则：不做校验和，也不做兜底，但破坏我们正确性的怪癖，在它进入我们代码的地方修掉（[前言 §2](/#sec-2)）。
+有些错误是正式版游戏自己的，游戏怪癖组把它们修掉，好让每个游戏错误都仍是真问题。这一组只有一处修复：玩家在其中死亡的出牌（打出一张 Sly 牌时，敌人的荆棘杀死了玩家）会提前返回，把这张牌留在它的选择上下文（`PlayerChoiceContext`）上；随后，发起这次出牌的钩子就记下一条错误。`PopCardAfterEarlyReturn` 把这张牌弹出，即使这张牌已经离开战斗也是如此（`Runtime/Patches/GameQuirks.cs:18-42`）。这是项目对待游戏 bug 的规则：不做校验和，也不做兜底，但破坏我们正确性的怪癖，在它进入我们代码的地方修掉（[前言 §2](/#sec-2)）。
 
 游戏的日志行转到模拟器的日志里（`Runtime/Patches/Text.cs:43-58`）：游戏的错误和警告分别记为 Error 和 Warning，其他行记为 Debug，只有 `--verbose` 才显示。命令行怎样记日志见[参考 §2](/arch/simulator/reference/#sec-2)。

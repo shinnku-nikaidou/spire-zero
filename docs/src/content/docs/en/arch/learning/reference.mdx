@@ -1,29 +1,28 @@
 ---
 title: 'Reference: infrastructure, files and scripts'
-description: 'Where the loop runs and how its data is kept: compute and time-boxed jobs, the learn/ project, the data directory and its manifests, lists, the ledger and seed blocks, weight names, the two net file formats field by field, inference in C#, every learn/ script with its options and output, the simulator commands the loop uses, the tests, and the open questions.'
+description: 'How the loop runs and how its data is kept: processes and outputs, the learn/ project, the data directory and its manifests, lists, seeds, weight names, the two net file formats field by field, inference in C#, every learn/ script with its options and output, the simulator commands the loop uses, the tests, and the open questions.'
 sidebar:
   label: Reference
 ---
 import { Badge } from '@astrojs/starlight/components';
 import NetFileAnatomy from '../../../../../components/book/NetFileAnatomy.svelte';
 
-This page is for looking things up. The pages before it explain the learning loop; this one lists its machinery. Everything was checked against the code at the commit the page was written at (`learn/`, `src/Sts2Ai.Brain`, `src/Sts2Ai.SimWorker`, `weights/`, `eval/`); where the code says otherwise, the code is right. Paths of Python files are relative to the repository, C# paths to `src/Sts2Ai.*`.
+This page is for looking things up. The pages before it explain the learning loop; this one lists its machinery. Where the page and the code (`learn/`, `src/Sts2Ai.Brain`, `src/Sts2Ai.SimWorker`, `weights/`, `eval/`) disagree, the code is right. Paths of Python files are relative to the repository, C# paths to `src/Sts2Ai.*`.
 
-## 1. Compute
+## 1. Processes and outputs
 
 ```mermaid
 flowchart LR
-  S["box job<br/>seeds, champion, deadline"] --> W["remote hosts<br/>slots, each one run at a time"]
-  W --> H["storage hub<br/>zstd-packed files"]
-  H --> T["GPU machine<br/>training"]
+  R["run --records --log<br/>simulator processes,<br/>one run at a time each"] --> D["data/CHARACTER/ENV/JOB/<br/>records, logs, manifest"]
+  D --> L["list pair<br/>data/CHARACTER/lists/"]
+  L --> T["v.train, combat.train<br/>PyTorch, GPU when present"]
   T --> WT["net file<br/>weights/all/NAME.json"]
   WT --> B["Brain loads it<br/>ONNX Runtime, CPU"]
 ```
 
-- **Simulation.** The simulator scales over processes: 8 processes reach about 1,860 combats/s, against 275 in a single process ([Simulator: combats §7](/en/arch/simulator/combat/#sec-7)). A whole SL run at the low budget takes 43–52 s of a slot on one host and 83 s on another. Self-play and gates run on several remote hosts at once.
-- **Time-boxed jobs.** A job gets a deadline instead of a number of runs, and more seeds than fit; every host stops at the deadline, and the job is what finished. The deadline is a file on every host, `~/sts2/deadline/NAME.txt` (a comment line, then one time); jobs launched with the same `NAME` share it, so one edit moves every job of a generation. Each slot reads it before each chunk, and a watcher every 10 s while a run plays; a run still going at the deadline is ended and dropped, so only whole finished runs are kept. How jobs are launched, moved, stopped and fetched is a project skill, `.claude/skills/fleet/SKILL.md`; how SL self-play, gates and evaluations are run (options, exploration, checks) is another, `.claude/skills/sl-selfplay/SKILL.md`.
-- **Where data goes.** Each host sends a job's files to a storage host when it ends, packed with zstd (logs shrink 40–80 times). They are unpacked and analysed where they are kept, and a net is trained on a GPU machine, one training per GPU; only the results (weights, report text) reach the development machine, which builds, tests and serves the brain. The trainers run with a uv virtual environment from `git archive REV learn/`, so a training's code is a commit.
-- **Training** is Python with PyTorch, on a GPU when one is free (`device = "cuda" if torch.cuda.is_available()`). Inference is C#, on the CPU, in the decision process and the workers ([§8](#sec-8)).
+- **Simulation.** Self-play and evaluations are `run` processes of the simulator ([§10](#sec-10)). Each plays its seeds one run at a time, with the search on its own worker processes (`--workers`); a job's seeds are shared out among several such processes, each writing its own files ([§3](#sec-3)). The simulator scales over processes: 8 processes reach about 1,860 combats/s, against 275 in a single process ([Simulator: combats §7](/en/arch/simulator/combat/#sec-7)). A whole SL run at the champion's medium budget takes 5 to 17 minutes of one process, by character ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).
+- **Outputs.** `--records FILE` and `--log FILE` write the run records and the decision log, one JSON line each, each flushed as it is written, so a process stopped midway loses at most the line being written. A job's files go into its own folder under `data/`, outside git ([§3](#sec-3)).
+- **Training** is Python with PyTorch, on a GPU when one is present (`device = "cuda" if torch.cuda.is_available()`), from a list pair ([§4](#sec-4)); its result is one net file in `weights/all/`, which is in git ([§6](#sec-6)). Inference is C#, on the CPU, in the decision process and the workers ([§8](#sec-8)).
 
 ## 2. The `learn/` project
 
@@ -37,58 +36,42 @@ flowchart LR
 
 ## 3. The data directory
 
-Run records and decision logs are raw data, kept outside git in `data/CHARACTER/ENV/` (`ENV` is `sl` or `nosl`; `.gitignore:8-9`), one folder per job. The full files live on the storage host; the development machine keeps each job's `manifest.json` and small files.
+Run records and decision logs are raw data, kept outside git in `data/CHARACTER/ENV/` (`ENV` is `sl` or `nosl`; `.gitignore:10-11`), one folder per job.
 
 | folder | what | example |
 |---|---|---|
-| `selfplay/gN/bK/` | an early self-play generation N, batch K (one launch of a few hours at most) | `sl/selfplay/g3/b1` |
-| `selfplay/vNgM/eXXX/`, `eXXX-b`, `-c`, `-d` | a generation's jobs, one folder per ε (`e030` is ε = 0.3), later boxes of a generation with a suffix; `vNgM` names the data, never a net | `sl/selfplay/v7g1/e030` |
-| `eval/DATE-KIND-SUBJECT/` | evaluations; KIND is `gate`, `rebaseline`, `eval`, `panel`, `bench`, `gauntlet`, `gauntlet-ref`, `gauntlet-smoke`, or `train` for a training's lists, scripts and logs; SUBJECT names what was tested as its weights or options do | `sl/eval/2026-10-31-eval-v7-1f-clone`, `sl/eval/2026-10-31-train-v7` |
-| `forks/DATE-SUBJECT/` | counterfactual forks, the boss gauntlet pilot, and tests | `sl/forks/2026-10-31-deadline-test` |
-| `assist/DATE-SUBJECT/` | the logs of the assist mode in the real game ([Mod: auto-play and safety §3](/en/arch/mod/auto/#sec-3)) | – |
-| `data/CHARACTER/void/` | data that must not be used (played with a wrong option, stopped too early), under its old path, with a `VOID.txt` that says why | `void/sl/selfplay/g3/t025` |
-| `data/CHARACTER/lists/` | shared training sets ([§4](#sec-4)) | `lists/c7-logs.txt` |
+| `selfplay/vNgM/aAA-eXXX/` | a generation's jobs, one folder per ascension and ε (`a00-e030` is ascension 0 at ε = 0.3); `vNgM` names the data, never a net | `sl/selfplay/vNgM/a00-e030` |
+| `eval/DATE-SUBJECT/` | evaluations and gates, one folder per character and side; SUBJECT names what played, the ascension and the two nets | `sl/eval/DATE-a0-V-C` |
+| `forks/DATE-SUBJECT/` | trial runs, such as a smoke test of a build or of options | – |
+| `data/CHARACTER/void/` | data that must not be used (played with a wrong option, stopped too early), under its old path, with a `VOID.txt` that says why | `void/sl/selfplay/vNgM/a00-e030` |
+| `data/CHARACTER/lists/` | shared training sets ([§4](#sec-4)) | `lists/NAME-logs.txt` |
 
-**Files.** A job's folder holds one set of files per chunk of seeds, named by the shard that played it and the chunk's first index: `rec-SHARD-INDEX.jsonl` (run records), `log-SHARD-INDEX.jsonl` (decision logs), `counts-SHARD-INDEX.txt` (both files' line counts) and, written last, `done-SHARD-INDEX.txt` (the indices of its runs), so a chunk is whole or absent, and a chunk with no `done-` file is left out when the job is read. Each shard also has `out-SHARD.txt`, the simulator's output. Older jobs keep one set per shard: `rec-SHARD.jsonl`, `log-SHARD.jsonl` and, if time-boxed, `done-SHARD.txt`. Either way a log file goes with the record file of the same name, and a list pair holds the two on the same line ([§4](#sec-4)). A whole run's decision log is about 1.6 MB at the low budget; most of the bytes are combat observations and macro run views.
+**Files.** A job's folder holds one set of files per chunk of seeds, named by the shard (the process) that played it and the chunk's first index: `rec-SHARD-INDEX.jsonl` (run records), `log-SHARD-INDEX.jsonl` (decision logs), `out-SHARD-INDEX.txt` (the simulator's output), `tally-SHARD-INDEX.txt` (each run's outcome, act and floor), `counts-SHARD-INDEX.txt` (each file's line count) and, written last, `done-SHARD-INDEX.txt` (the indices of its runs), so a chunk is whole or absent, and a chunk with no `done-` file is left out when the job is read. A log file goes with the record file of the same name, and a list pair holds the two on the same line ([§4](#sec-4)). Most of a decision log's bytes are combat observations and macro run views.
 
-**The manifest** (`manifest.json`, one per job) says what played and why: `job`, `kind`, `character`, `env`, `owner`, `purpose`, `rev` (the commit the simulator was built from), `game` (the game version), `options` (the run options), `inputs` (a copy of `eval/` and `weights/` the job reads, when the simulator's commit is older), `shards`, `launched`, `status`, and for a box job `box`: the deadline (UTC and epoch, the file, its changes), the seed range, the chunk, each host's slots, speed, clock offset and queue. Fetching adds `done` (runs finished), `prefix` (the complete head of the range), each slot's end and how far apart the slots stopped.
+**The manifest** (`manifest.json`, one per job) says what played and why: `job`, `kind`, `character`, `env`, `owner`, `purpose`, `rev` (the commit the simulator was built from), `game` (the game version), `options` (the run options, the seed file or the train seeds among them), `inputs` (where the `eval/` and `weights/` files it reads come from), `launched` and `status`.
 
 ## 4. Lists
 
-Shared training sets are list pairs in `data/CHARACTER/lists/`: `NAME-logs.txt` and `NAME-recs.txt` hold one path per line, relative to the repository's root (or absolute), and line i of one is the decision log of the run records on line i of the other (`common.lists`, `learn/common.py:84-95`). `v.train --list PREFIX` and `combat.train --list PREFIX` read a pair; the trainers join each log only with the record file on its own line. The folder's `manifest.json` says what each list holds.
+Shared training sets are list pairs in `data/CHARACTER/lists/`: `NAME-logs.txt` and `NAME-recs.txt` hold one path per line, relative to the repository's root (or absolute), and line i of one is the decision log of the run records on line i of the other (`common.lists`, `learn/common.py:84-95`). `v.train --list PREFIX` and `combat.train --list PREFIX` read a pair; the trainers join each log only with the record file on its own line. A list a net trains on holds one generation's self-play of every character ([The loop §2](/en/arch/learning/loop/#sec-2)); a list read with `combat.train --test-list` is only reported, never trained on. The folder's `manifest.json` says what each list holds.
 
-| list | holds | read by |
-|---|---|---|
-| `v8g2` | the whole SL self-play at ascension 10 of generation `v8g2` | `v.train` and `combat.train --list`, for v8-3 and c8-3 |
-| `v8g1` | the whole SL self-play at ascension 10, generation `v7g2` under the name its training gave it | `v.train` and `combat.train --list`, for v8-2 and c8-2 |
-| `v7g1` | the whole SL self-play of generation `v7g1` | `v.train`, for the weights of v8-1 |
-| `c7` | the combat net's earlier set: whole SL self-play and 600 medium-budget runs on `promotion-301-500`, kept beside the data | `combat.train --list`, for the weights of c8-1 |
-| `medium` | medium-budget runs, all reported and never trained on | `combat.train --test-list` |
-| `v-g0-g3`, `sl-combat` | earlier self-play and evaluation runs, kept with the data | no net in `weights/` |
+## 5. Seeds
 
-## 5. The ledger and the seeds
+- **Train seeds** are `run --seed 1 --start K`, the seeds `MakeSeed(1, i)` from index K on ([Evaluation: metrics, seeds and reports §6](/en/arch/evaluation/metrics/#sec-6)). Each dataset plays its own block of 100,000 indices, and each of its jobs its own range in it, so no two runs share a seed.
+- **The rule**: train seeds and test seeds never meet. A self-play job plays train seeds, and an eval job a file of `eval/seeds/`; no train index below 40,134,134 gives the generator seed of an evaluation seed ([Evaluation: metrics, seeds and reports §6](/en/arch/evaluation/metrics/#sec-6)), and both trainers refuse a list holding an eval job's runs (`common.train_lists`).
 
-`eval/ledger.md`, in git, one for every character, is the project's only history of its nets and data: which brain played which data, which data trained which weights, and what each gate said. The session that runs the training loop keeps it:
-
-- a paragraph on the champions;
-- the **seed blocks**: train seeds are `run --seed 1 --start K`; each dataset takes a block of 100,000 entered before it starts, and its jobs take sub-ranges of it, so two batches never share a seed. 100000–199999 holds `v7g1` (generation 1 on 100000–159999, tests on 199000–199999); 200000–299999 holds the gauntlets' runs; 300000–399999 holds the elite gauntlet's evaluation seeds 300000–300499, fixed, never trained on; 400000–499999 is the A10 dataset's, `v7g2` (`v8g1` to its training); 500000–599999 is `v8g2`'s; 600000–699999 is `v8g3`'s; 700000–799999 is `v9g0`'s, 20,000 seeds a character; the next free block is 800000–899999;
-- the **rule**: train seeds and test seeds never meet. A self-play or fork job plays train seeds, and an eval job a file of `eval/seeds/`; `box.py` refuses anything else. Both trainers refuse a list holding an eval job's runs (`common.train_lists`);
-- a **batch table**: batch, character, environment, the brain that played it, commits, train seeds, runs, whether it is used, and its folder;
-- a **weights table**: name, kind, what it was trained on, its gate, its role.
-
-The evaluation seed files are in `eval/seeds/`: `promotion-1` (200), `promotion-1-300` (its 200 in order, then the next 100), its slices `promotion-1-100`, `promotion-1-200` and `promotion-101-300`, `final-1` and `a10-check-1`; `eval/seeds/retired/` holds `promotion-1-500`, whose last 200 seeds are in training data ([Evaluation: metrics, seeds and reports §5](/en/arch/evaluation/metrics/#sec-5)). `eval/CHARACTER/gauntlet-leaderboard.md` holds the elite gauntlet's results, kept by hand; `eval/CHARACTER/leaderboard.md` is generated by `leaderboard` from whole-run reports.
+The evaluation seed files are in `eval/seeds/`: `promotion-1` (200), `promotion-1-300` (its 200 in order, then the next 100), its slices `promotion-1-100`, `promotion-1-200` and `promotion-101-300`, `final-1` and `a10-check-1`; `eval/seeds/retired/` holds `promotion-1-500`, whose last 200 seeds are in training data ([Evaluation: metrics, seeds and reports §5](/en/arch/evaluation/metrics/#sec-5)). `eval/CHARACTER/leaderboard.md` is generated by `leaderboard` from whole-run reports.
 
 ## 6. Weights
 
-The combat net and V are each one net for every character, every ascension and both environments, so their files share one folder, `weights/all/` (`learn/weights.py`). Each character is still judged on its own: its reports and leaderboard are in `eval/CHARACTER/`, its data in `data/CHARACTER/` ([§3](#sec-3)); the champion files and the ledger are every character's, `eval/champions/` and `eval/ledger.md`.
+The combat net and V are each one net for every character, every ascension and both environments, so their files share one folder, `weights/all/` (`learn/weights.py`). Each character is still judged on its own: its reports and leaderboard are in `eval/CHARACTER/`, its data in `data/CHARACTER/` ([§3](#sec-3)); the champion files are every character's, in `eval/champions/`.
 
-`weights/all/` holds `v9-1.json`, the macro brain's V, and `c9-1.json`, the combat net, which both champions, SL's and NoSL's, play for every character ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)): the first nets trained on every character's runs (`v9g0`), going on from `v9-0.json` and `c9-0.json` beside them, whose weights are those of v8-3 and c8-3, which learned from the Silent's runs alone.
+`weights/all/` holds V's files `v9-0.json`, `v9-1.json` and `v9-2.json` and the combat net's `c9-0.json`, `c9-1.json` and `c9-2.json`. Both champion files, SL's and NoSL's, name the champion's two files, `weights/all/v9-2.json` and `weights/all/c9-2.json`, for every character ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)).
 
 - **Never overwritten.** A trainer writes to `weights/all/NAME.json` unless `--out` says otherwise, and refuses a name whose file is already in `weights/all/` (`out_path`, `learn/weights.py:14-20`), so a name is used once and always means the same weights. A trial that no kept run plays goes elsewhere, with `--out`.
 - **Every character.** Both trainers read the runs of every character in their lists (`runs_by_log`, `learn/common.py:61-81`), since the nets are shared, and a net file records no character.
-- **Names.** `vN-M` is a V and `cN-M` a combat net, with a variant's letter after the number when there is one (`v7-1f`). `vNgM` names a generation's data, never a net.
-- **In git.** `weights/` is in git: a file is 4.9–8.8 MB and never changes, so a commit fixes the code, the weights and the champion files together; the champion files name the weights where they are. Earlier net files are in git's history (the last commit holding them is `a27e4ad`), and `eval/ledger.md` says what each was.
-- **The environment.** A combat net file records the environment it learned from (`env`), and C# does not read it: SL and NoSL play the same file ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). c9-1's weights learned from SL's games; in NoSL it loads and plays, and it has never been trained or gated there.
+- **Names.** `vN-M` is a V and `cN-M` a combat net, with a variant's letter after the number when there is one (`vN-Ma`). `vNgM` names a generation's data, never a net.
+- **In git.** `weights/` is in git: a file is 6.0–9.6 MB and never changes, so a commit fixes the code, the weights and the champion files together; the champion files name the weights where they are.
+- **The environment.** A combat net file records the environment it learned from (`env`), and C# does not read it: SL and NoSL play the same file ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)). The champion's combat net learned from SL's games; in NoSL it loads and plays, and it has never been trained or gated there.
 
 ## 7. Net files
 
@@ -120,18 +103,17 @@ A net file is JSON: the graph as base64 ONNX, plus what C# needs to feed it, and
 | `onnx` | inputs as `learn/combat/encode.py`'s `INPUTS` name them; `extra` of 4 numbers; outputs `outcome` (batch × 51, softmax, the closed buckets 0) and `potion_used` (batch × 5 groups × potion ids, sigmoid) | yes |
 | `tests` | up to 16 held-out round starts, among them a multi-hit attack, a held potion and low HP: `obs`, `history`, `outcome`, `potion_used` (5 × 66 numbers, group by group) | yes |
 
-The figure opens the two net files, v9-1.json and c9-1.json, field by field: sizes, the graph's inputs and outputs with their shapes, its initializers (the weight tensors, by shape only) and operators, and the training report.
+The figure opens two net files, a V's and a combat net's, field by field: sizes, the graph's inputs and outputs with their shapes, its initializers (the weight tensors, by shape only) and operators, and the training report.
 
 <NetFileAnatomy client:visible lang="en" />
 
 ## 8. Inference in C#
 
-- **Which nets.** `run --value FILE` reads V's net file (`RunNet.Read`); `--value` goes with `--macro l0` or `--combat-net`, which both need it (`SimWorker/Commands/Args.cs:234`). `run --combat-net FILE` loads the combat net (`CombatNet.Load`), the leaf of every combat search, its endings priced by that V: `--combat-net` and `--policy pimc` or `plan` go together (`:233`).
+- **Which nets.** `run --value FILE` reads V's net file (`RunNet.Read`); `--value` goes with `--macro l0` or `--combat-net`, which both need it (`SimWorker/Commands/Args.cs:235`). `run --combat-net FILE` loads the combat net (`CombatNet.Load`), the leaf of every combat search, its endings priced by that V: `--combat-net` and `--policy pimc` or `plan` go together (`:234`).
 - **`IRunValue`** (`Brain/Macro/RunValue.cs`) is the macro brain's view of V: a name and a value of a run view. `RunNet` implements it.
 - **`RunNet`** (`Brain/Macro/RunNet.cs`) runs the graph with ONNX Runtime (`Microsoft.ML.OnnxRuntime`), one thread intra- and inter-op (`:53-54`), since the simulator runs many processes and a macro decision values a handful of small inputs. It builds the inputs from the run view as `learn/v/encode.py` does, the relics' numbers and statuses by `CombatNet.RelicInputs`, which both nets share. Unknown ids read as entry 0. `Value` is the chance to survive every floor from the run's current floor on (`:80-87`).
 - **`CombatNet`** (`Brain/Combat/CombatNet.cs`) does the same for a state, with one thread as well. `Graph` builds the inputs from `Cards`, `Player`, `Enemies`, `PowerNumbers`, `RelicNumbers`, `Allies`, `Bag` and `Powers`, as `learn/combat/encode.py` reads a state, and returns the two outputs; `Outcome` prices each ending with V on the run it would leave, a death at 0, each held potion kept by its chance in the ending bucket's group ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
 - **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than the larger of 10⁻³ × |value| and 10⁻⁶ (`:64-78`); `CombatNet.Load` predicts every test state and refuses it if any class or potion chance is off by more than 10⁻³, or an output's length differs. This keeps the encoding and the forward pass the same in training and in play.
-- **Cost.** An earlier V of the same structure takes 0.093 ms a call, against 70–90 ms a macro decision with the clone (commit `b0ec4b7`).
 
 ## 9. Scripts
 
@@ -147,7 +129,7 @@ The figure opens the two net files, v9-1.json and c9-1.json, field by field: siz
 
 ### `v.train`: V
 
-`uv run python -m v.train --list PREFIX --name NAME [options]` (`learn/v/train.py:46-58`).
+`uv run python -m v.train --list PREFIX --name NAME [options]` (`learn/v/train.py:48-59`).
 
 | option | default | meaning |
 |---|---|---|
@@ -157,13 +139,13 @@ The figure opens the two net files, v9-1.json and c9-1.json, field by field: siz
 | `--init` | – | a net file to go on from: its state scaling and weights, the second head anew |
 | `--seed` | 0 | torch's and Python's seeds; also picks the 8 test runs |
 
-**Refusals** (`:69-70`, `:80-81`): too few train or held-out samples; `--init` with other tables than the game's, or without one of the net's weights at its shape (`export.weights`, `learn/v/export.py:97-98`).
+**Refusals** (`:70-71`, `:81-82`): too few train or held-out samples; `--init` with other tables than the game's, or without one of the net's weights at its shape (`export.weights`, `learn/v/export.py:97-98`).
 
-**Constants** (`:39-43`): 64 floors; at most 40 epochs, stopping after 5 without a held-out loss lower by 10⁻⁴; batches of 256 decisions; AdamW, learning rate 3 × 10⁻⁵, weight decay 10⁻⁴; the second head at weight 3. The net's sizes are `Net`'s: embeddings 64, card net 256, body 512 (`learn/v/net.py:86-111`).
+**Constants** (`:40-44`): 64 floors; at most 40 epochs, stopping after 5 without a held-out loss lower by 10⁻⁴; batches of 256 decisions; AdamW, learning rate 3 × 10⁻⁵, weight decay 10⁻⁴; the second head at weight 3. The net's sizes are `Net`'s: embeddings 64, card net 256, body 512 (`learn/v/net.py:86-111`).
 
-**The flow.** Read the samples; split by run id; take the game's tables (`learn/game_ids.py`), and the state's weighted mean and standard deviation (or `--init`'s); the baseline hazards, each floor's $(\text{deaths} + 0.5)/(\text{alive} + 1)$ clamped to $[10^{-4}, 1 - 10^{-4}]$, as the head's biases; train; keep the epoch with the best held-out hazard loss. The second head's next-combats term is logged each epoch but not added to it (`:145-148`). The module docstring says early stopping weighs the terms the same way as the loss; the code does not add that term. Then the report and the file.
+**The flow.** Read the samples; split by run id; take the game's tables (`learn/game_ids.py`), and the state's weighted mean and standard deviation (or `--init`'s); the baseline hazards, each floor's $(\text{deaths} + 0.5)/(\text{alive} + 1)$ clamped to $[10^{-4}, 1 - 10^{-4}]$, as the head's biases; train; keep the epoch with the best held-out hazard loss. The second head's next-combats term is logged each epoch but not added to it (`:150-153`). The module docstring says early stopping weighs the terms the same way as the loss; the code does not add that term. Then the report and the file.
 
-**The report** (one JSON line, `:165-177`):
+**The report** (one JSON line, `:170-185`):
 
 | field | when | what |
 |---|---|---|
@@ -172,10 +154,11 @@ The figure opens the two net files, v9-1.json and c9-1.json, field by field: siz
 | `held_out_loss`, `held_out_loss_floor_only` | always | the held-out hazard loss per run, against the baseline's |
 | `held_out_next_combats` | always | the second head's held-out squared error |
 | `won_held_out_runs`, `brier_held_out`, `brier_held_out_floor_only` | always | the held-out runs won, and the Brier score of the chance to win, against the baseline's |
+| `init_held_out_loss`, `init_brier_held_out` | with `--init` | the file's own held-out hazard loss and Brier score, before training |
 
 ### `combat.train`: the combat net
 
-`uv run python -m combat.train --list data/silent/lists/v8g2 --env SL --name NAME --test-list data/silent/lists/medium`, plus optional `--out`, `--init` (a net file to go on from) and `--seed` (0); it reads every character's runs. `--list` is refused if it holds an eval job's runs; `--test-list` names a list pair whose games are only reported, as `medium`. `learn/combat/report.py` holds the report (`ranks`, `rank_within`, `auc_within`, `potion_rates`, `log_loss`, `predict`, `summary`). Its samples, loss, constants and report are in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3)–[§4](/en/arch/learning/combat-net/#sec-4).
+`uv run python -m combat.train --list data/CHARACTER/lists/NAME --env SL --name NAME`, plus optional `--test-list LIST`, `--out`, `--init` (a net file to go on from) and `--seed` (0); it reads every character's runs. `--list` is refused if it holds an eval job's runs; `--test-list` names a list pair whose games are only reported, as `medium`. `learn/combat/report.py` holds the report (`ranks`, `rank_within`, `auc_within`, `potion_rates`, `log_loss`, `predict`, `summary`). Its samples, loss, constants and report are in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3)–[§4](/en/arch/learning/combat-net/#sec-4).
 
 ### `learn/gate.py`: a V's report and gate
 
@@ -224,8 +207,8 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 
 ## 12. Open questions
 
-1. What the champion's weights are worth in whole runs: as v8-3 and c8-3 they were gated with the Silent at ascension 10, V passed by paired wins on 200 seeds, the combat net showed no gain apart, the pair falls short of passing against v8-2 and c8-2 alone (lower 95 % −0.26), and neither net has seen a cycle's outcome ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)); in NoSL neither has been trained or gated.
-2. How much a net that learns all five characters keeps of what it knew of one, and whether it needs to be wider for them: only data of all five can say, and a net can be widened with its outputs kept.
+1. What the champion's nets are worth in NoSL: neither has been trained or gated there, and the NoSL champion file names no report ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)).
+2. Whether the nets, one set of weights for all five characters, need to be wider for them; a net can be widened with its outputs kept.
 3. How to check P(win)'s calibration once V decides by it, beyond the Brier score.
 4. Each decision's label carries its run's later draws. A cut point per run would remove them: draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained ([The loop §9](/en/arch/learning/loop/#sec-9)). It is not done.
 5. Whether TD(λ) or expert iteration would help V, whose labels are Monte Carlo only.

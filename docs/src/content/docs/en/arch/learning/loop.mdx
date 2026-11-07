@@ -8,7 +8,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 import TdTargets from '../../../../../components/book/TdTargets.svelte';
 import ShapingToy from '../../../../../components/book/ShapingToy.svelte';
 
-The loop turns the champion's own runs into a challenger, and a gate decides whether the challenger replaces the champion. This page goes through the loop as it was designed, step by step, and says for each step what is built. Several steps rest on methods from reinforcement learning (Monte Carlo targets, TD(λ), expert iteration, SPSA, reward shaping); each is explained from scratch where it first appears. Read [Learning](/en/arch/learning/) first for what is learned; the macro brain's side of the loop is told in [Macro brain: self-play](/en/arch/macro-brain/selfplay/).
+The loop turns the champion's own runs into a challenger, and a gate decides whether the challenger replaces the champion. This page goes through the loop as designed, step by step, and says for each step what is built. Several steps rest on methods from reinforcement learning (Monte Carlo targets, TD(λ), expert iteration, SPSA, reward shaping); each is explained from scratch where it first appears. Read [Learning](/en/arch/learning/) first for what is learned; the macro brain's side of the loop is told in [Macro brain: self-play](/en/arch/macro-brain/selfplay/).
 
 <Aside title="Status">
 
@@ -47,23 +47,23 @@ flowchart TD
 | LLM patches ([§7](#sec-7)) | propose code changes from clustered failures | <Badge text="planned" variant="caution" /> |
 | gate ([§8](#sec-8)) | keep a challenger only if it beats the champion on paired seeds | built |
 
-The loop runs offline, in processes and on machines separate from any decision; an LLM was never to take part in a decision. Every generation goes through the gate. AlphaZero dropped its gate because its signal was clean and its games many; a run here has a high variance and runs are few.
+The loop runs offline, in processes separate from any decision; an LLM never takes part in a decision. Every generation goes through the gate. AlphaZero dropped its gate because its signal was clean and its games many; a run here has a high variance and runs are few.
 
 ## 2. Self-play
 
 In self-play the champion plays runs by itself on *train seeds*, seeds kept apart from the evaluation seeds the gates use ([Reference §5](/en/arch/learning/reference/#sec-5)). Each run is the real game running headless in the simulator: the host process plays the run's one live game, and the worker pool runs the searches ([Simulator: whole runs](/en/arch/simulator/runs/), [Simulator: the worker pool](/en/arch/simulator/pool/)). Every decision goes into the decision log, the observation and options with the brain's values ([Harness: the decision log](/en/arch/harness/decision-log/)), and every run's outcome into its run record, with how each combat ended ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). Joined by run id, the two are the training data.
 
-**What it plays.** Whole SL runs: the SL planner, with the combat net in its leaves, fights every combat, and L0 on the node's clone makes every macro decision ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)). The champion plays, so a generation's data is played by the V and the combat net it follows. The newest dataset is `v9g0`: 29,987 whole SL runs of all five characters at ascension 0 and the low budget, about 6,000 each, played by v9-0 and c9-0. The Silent won 1,981 of its runs, the Defect 48, the Ironclad 14, the Regent 12 and the Necrobinder 2; their mean floors were 37.89, 29.40, 21.27, 19.52 and 16.56. V v9-1 and the combat net c9-1 went on from those two nets on all its runs, and are the champions' nets ([Reference §5](/en/arch/learning/reference/#sec-5)).
+**What it plays.** Whole SL runs: the SL planner, with the combat net in its leaves, fights every combat, and L0 on the node's clone makes every macro decision ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)). The champion plays, so a generation's data is played by the V and the combat net it follows, with all five characters at ascensions 0 to 10 ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
 
 **Exploration.** Self-play draws some decisions on purpose instead of taking V's best, so that the data shows what the other options lead to ([§9](#sec-9)).
 
-**The newest generation.** A net trains on the newest generation's runs alone: runs played by a weaker V label states lower than the champion would now play them ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)). Each generation's runs are one time-boxed job per exploration tier, under one deadline that can be moved while it plays ([Reference §1](/en/arch/learning/reference/#sec-1)).
+**The newest generation.** A net trains on the newest generation's runs alone, going on from the champion's file (`--init`): runs played by a weaker V label states lower than the champion would now play them ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
 
-**Budget.** `v7g1` was played at the SL planner's low budget (`--effort low --nodes 150 --beam 4 --easy-beam 0 --loss-plans 0 --replan 0`), `v7g2` and `v8g2` at the champion's medium, and `v9g0` at the low budget again; the gates play at medium, with the low budget as a reference ([The SL planner: budget, cost and results §2](/en/arch/sl-planner/budget/#sec-2)).
+**Budget.** Self-play plays the champion's own medium budget, as the gates do ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)).
 
 ## 3. Fit: Monte Carlo targets
 
-A trained value function needs a target for each training state: the number it should have predicted there. The simplest is the **Monte Carlo (MC) target**: play the run to its end and use its real outcome $G$ (win 1, loss 0; or the proxy, the floor reached) as the label of every decision $k$ in it,
+A trained value function needs a target for each training state: the number it should have predicted there. The simplest is the **Monte Carlo (MC) target**: play the run to its end and use its real outcome $G$ (win 1, loss 0) as the label of every decision $k$ in it,
 
 $$
 y_k = G .
@@ -74,9 +74,7 @@ Its expectation, over the luck of the rest of the run, is exactly the value of d
 **As built, both trainers use MC targets only.** V's are the masked hazard labels of the floor each run ended on ([Macro brain: from hazards to value §3](/en/arch/macro-brain/value/#sec-3)); the combat net's are how each fight really ended ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)). Nothing in `learn/` bootstraps on a value. Two measures keep MC's noise in check:
 
 - **every run weighs the same** however many decisions it has (each sample weighs one over its run's decisions), and the held-out runs are split by run, not by decision;
-- **a second head** with denser targets, the next six combats' HP costs, shapes the body ([Macro brain: from hazards to value §4](/en/arch/macro-brain/value/#sec-4)). The design had a rule from r33hab, a prior-art STS2 project: never mix HP targets and win targets in one backward pass. V's training does mix them, the second head's squared errors added to the hazards' loss at weight 3 (`learn/v/train.py:139`); it lowered the held-out loss in every training seed it was tried with.
-
-**A proxy is accepted only through the gate.** A dense target such as the floor reached is a stopgap ([Macro brain: from hazards to value §2](/en/arch/macro-brain/value/#sec-2)). A change it brings is accepted only through the gate on real outcomes, and only after it reproduces on several training seeds: in a GuanDan study (arXiv 2610.29411) one lineage looked strong, and none of its 5 pre-registered replication seeds came out positive.
+- **a second head** with denser targets, the next six combats' HP costs, shapes the body ([Macro brain: from hazards to value §4](/en/arch/macro-brain/value/#sec-4)). r33hab, a prior-art STS2 project, never mixes HP targets and win targets in one backward pass. V's training does mix them, the second head's squared errors added to the hazards' loss at weight 3 (`learn/v/train.py:44`, `:144`), since that lowers the held-out loss.
 
 ## 4. TD(λ) targets <Badge text="planned" variant="caution" />
 
@@ -94,7 +92,7 @@ $$
 
 $\lambda$, between 0 and 1, sets the mix. $\lambda = 1$ gives $G^\lambda_k = G$, pure MC; $\lambda = 0$ gives TD(0). In between, the label looks about $1/(1-\lambda)$ decisions ahead: at $\lambda = 0.9$, about ten. The point is variance: the further ahead a label looks, the more luck it carries, and a decision's label should mostly reflect what happened soon after it. TD also gives a learning signal at every transition, which helps credit assignment ([§10](#sec-10)).
 
-The figure computes these targets on the book's example run, the whole SL run on seed `0SSL7NS01MU6` that an earlier V won on floor 48 ([Macro brain §1](/en/arch/macro-brain/#sec-1)). That V valued a run in expected progress, roughly the floor it would reach, so a won run's outcome is 48 + 1 = 49. Each dot is the λ-return of one of its 181 macro decisions, against V's own values.
+The figure computes these targets on the book's example run, the whole SL run on seed `0SSL7NS01MU6`, won on floor 48 ([Macro brain §1](/en/arch/macro-brain/#sec-1)). The figure's V values a run in expected progress, roughly the floor it would reach, so a won run's outcome is 48 + 1 = 49. Each dot is the λ-return of one of its 181 macro decisions, against V's own values.
 
 <TdTargets client:visible lang="en" />
 
@@ -127,23 +125,23 @@ The project does not use it. No tool tunes V, and the leaf has no prices of its 
 
 ## 7. LLM patch proposals <Badge text="planned" variant="caution" />
 
-The input would be pre-aggregated failure clusters (runs grouped by how and where they were lost) plus death summaries; the output K candidate patches (features, pruning rules, parameters). Candidates are filtered by compiling, unit tests and fair-play tests, then gated like any challenger. Only cheap models through the project's LLM gateway, and never in a decision. Nothing of it is built.
+The input would be pre-aggregated failure clusters (runs grouped by how and where they were lost) plus death summaries; the output K candidate patches (features, pruning rules, parameters). Candidates are filtered by compiling, unit tests and fair-play tests, then gated like any challenger. Only cheap models through an LLM API, and never in a decision. Nothing of it is built.
 
 ## 8. Gates
 
 A gate is the test a challenger must pass to replace the champion: it plays seeds it was never trained on, paired seed by seed with the champion's runs, so that most of a run's luck is shared by both and cancels in the difference (common random numbers, [Evaluation: gates §2](/en/arch/evaluation/gates/#sec-2)). Exploring challengers are refused: exploration is for self-play (`SimWorker/Commands/EvalCommands.cs:95`).
 
-**The paired lower bound on wins** (`learn/gate.py --against`) is the gate V faces. The challenger plays the 300 seeds of `promotion-1-300` (at ascension 10, the first 200: [Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)) at the champion's medium budget, and again at the low budget, a reference that decides nothing. For seed $i$, $d_i$ is 1 − 0, 0 − 1 or 0: whether the challenger won seed $i$ less whether the champion did. With $n$ pairs on the seeds both finished,
+**The paired lower bound on wins** (`learn/gate.py --against`) is the gate a new V and combat net face, played as [Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10) describes: the champion's pair and the challenger's play the same evaluation seeds with every character. For seed $i$, $d_i$ is 1 − 0, 0 − 1 or 0: whether the challenger won seed $i$ less whether the champion did. With $n$ pairs on the seeds both finished,
 
 $$
 \bar d = \frac1n \sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\, \mathrm{SE} > 0,
 $$
 
-the 95% one-sided lower bound above 0 (`learn/gate.py:130-151`; [Macro brain: self-play §5](/en/arch/macro-brain/selfplay/#sec-5)). The report also pairs the floors.
+the 95% one-sided lower bound above 0 (`learn/gate.py:130-151`; [Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)). The report also pairs the floors.
 
-**The simulator's SPRT** (`gate`, `Harness/Gate.cs`). A sequential test of the challenger's run records against the champion's report, paired by seed, that stops at the first clear verdict: by floor (δ = 1.5 floors) or by wins, α = β = 0.05, or for non-inferiority with `--not-worse` ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)). The challenger first plays the champion's seed set with `run`; the gate reads only the records.
+**The simulator's SPRT** (`gate`, `Harness/Gate.cs`). A sequential test of the challenger's run records against the champion's report, paired by seed, that stops at the first clear verdict: on wins, δ = 0.1 and α = β = 0.05, or for non-inferiority with `--not-worse` ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)). The challenger first plays the champion's seed set with `run`; the gate reads only the records.
 
-**Promotion.** The simulator's gate writes the champion file on a pass. `learn/gate.py` only gives the verdict, and a promotion rewrites the champion files by hand; both environments' files name the same V and the same combat net ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). A gate's A/A test, the champion against itself to measure how often a gate passes with nothing to gain, is planned ([Reference §11](/en/arch/learning/reference/#sec-11)).
+**Promotion.** The simulator's gate writes the champion file on a pass. `learn/gate.py` only gives the verdict, and a promotion rewrites the champion files by hand; both environments' files name the same V and the same combat net ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). A gate's A/A test, the champion against itself to measure how often a gate passes with nothing to gain, is planned ([Reference §11](/en/arch/learning/reference/#sec-11)).
 
 ## 9. Exploration
 
@@ -157,9 +155,9 @@ $$
 
 It covers every decision outside combat: a card reward's outcome among its cards and skipping (a skip drawn is never opened, a card drawn is opened and taken); a card prompt's picks (how many, evenly, then which); every other screen's options, a potion's among them, but those that would come back to a state already decided. A potion's options are those L0 weighs: a potion usable out of combat, such as Fruit Juice or the Foul Potion at a merchant, and a discard only where it makes room for a potion the screen offers ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)). ε is fixed per run. What is drawn depends neither on V nor on how strong the run is, so its outcomes are causal evidence about the options, and every kind of decision is drawn as often. Every drawn answer is marked `explored` in the log ([Harness: the decision log §6](/en/arch/harness/decision-log/#sec-6)), and the champion's name ends in `eps ε`.
 
-- **The tiers.** A generation's runs are split into three tiers of ε, a third of the runs each: 0.3, 0.15 and 0.05 in `v7g1`, 0.15, 0.08 and 0.03 in `v7g2`, 0.06, 0.03 and 0.01 in `v8g2`, and 0.3, 0.1 and 0.02 in `v9g0`.
+- **The tiers.** A generation's runs are split into three tiers of ε, a third of the runs each: 0.3, 0.1 and 0.02 ([Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3)).
 - **A label carries the later draws.** A decision's label is how its run ended, the draws made after it included, and V is not told the run's ε; the same state is labelled lower in a run that explores more. A *cut point* per run would remove this (draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained on one position per game); it is not done ([Macro brain: weaknesses and next steps §3](/en/arch/macro-brain/next/#sec-3)).
-- **Check.** The share of `explored` decisions among those with two or more options should be about ε: 0.161 at ε = 0.15 over 2,347 decisions in one test.
+- **Check.** The share of `explored` decisions among those with two or more options should be about ε.
 
 **Thompson sampling** <Badge text="planned" variant="caution" /> would draw a plausible value for each option from V's uncertainty and pick the best draw, so that an option is tried about as often as it might really be the best. V has no uncertainty estimate to draw from yet.
 
@@ -195,7 +193,7 @@ Nothing in `learn/` shapes rewards: V's labels are the outcomes alone. A test th
 
 ## 12. Privileged information <Badge text="planned" variant="caution" />
 
-*Privileged information* is hidden state the player cannot see: the draw order, the monsters' queued moves, the random streams. The project's fair-play specification (a local note, `tmp/notes/fair-play-spec.md`, not in git) allows it at training time, as long as the deployed policy reads only observations ([Environments: information and the node](/en/arch/environments/information/)):
+*Privileged information* is hidden state the player cannot see: the draw order, the monsters' queued moves, the random streams. The project's fair-play rules allow it at training time, as long as the deployed policy reads only observations ([Environments: information and the node](/en/arch/environments/information/)):
 
 - an **oracle critic**, a value branch used only in training, would see hidden state to reduce the variance of the targets; only the observation branch is deployed;
 - **counterfactual labels**: fork the same decision with the same randomness, play both lines to the end, and get an unbiased label for the difference ([§10](#sec-10));

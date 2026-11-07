@@ -1,11 +1,11 @@
 ---
 title: Champions and baselines
-description: 'The champion file field by field and who reads it; where the history and the reports live; external baselines; open questions.'
+description: 'The champion file field by field and who reads it; the champion''s reports and how a promotion rewrites the files; external baselines; open questions.'
 sidebar:
   label: Champions and baselines
 ---
 
-A **champion** is the best accepted version of the AI in one environment: the brains, their budget and their weights, and the report that stands for them. This page describes the file that names a champion, says where the record of results is kept, and lists what other projects have reached. How gates work is on [Gates](/en/arch/evaluation/gates/).
+A **champion** is the best accepted version of the AI in one environment: the brains, their budget and their weights, and the report that stands for them. This page describes the file that names a champion, gives the champion's reports, and lists what other projects have reached. How gates work is on [Gates](/en/arch/evaluation/gates/).
 
 ## 1. The champion file
 
@@ -37,56 +37,56 @@ A **champion** is the best accepted version of the AI in one environment: the br
 | `options` | the run options that play it, without their `--`, and no character or ascension; weights files by their path in `weights/all/` |
 | `reports` | by character, the report a challenger of that character is paired with: the champion's side of every gate. A report is one character at one ascension, so a character with none cannot be gated against this file yet |
 | `since` | the date it became champion (the promoted report's date, or the date written by hand) |
-| `gate` | the gate it passed, absent for a champion set without one: `metric`, `delta`, `alpha`, `beta`, `pairs`, `decided`, `llr`, `lower`, `upper`, `floor_diff_mean`, `challenger_only_wins`, `champion_only_wins`, `verdict`, `void_reason` when there is one, and `not_worse` |
+| `gate` | the gate it passed, absent for a champion set without one: `delta`, `alpha`, `beta`, `pairs`, `decided`, `llr`, `lower`, `upper`, `floor_diff_mean`, `challenger_only_wins`, `champion_only_wins`, `verdict`, `void_reason` when there is one, and `not_worse` |
 
 **Who reads it.**
 
 - `run` and `brain` take `--champion FILE` and play the champion it names (`SimWorker/Commands/Args.cs:166-194`, [Simulator: reference §3](/en/arch/simulator/reference/#sec-3)). The file's options come after the ones given, so given ones win; an option the command does not have is skipped (`brain` has no `--env`: each host names its own); a `--policy` given that is not the file's keeps its own budget.
+- `brain` serves both kinds of host from one file: a NoSL host gets the file's combat brain, an SL host the SL planner (`--sl-policy`, `plan` by default), both with the file's two nets and L0, whose afterstates the host's environment sets: predicted from the screen in NoSL, played on the node's clone in SL (`BrainCommand.Champions`, `SimWorker/Commands/BrainCommand.cs:72-79`). The mod's brain plays the NoSL file this way ([Mod §4](/en/arch/mod/#sec-4)).
 - `gate --champion FILE` is the champion to beat: it reads the file's `env` and its report of the records' character ([Gates §6](/en/arch/evaluation/gates/#sec-6)).
 - `leaderboard --character C` marks the report each file names for C, on the board of the file's environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
 
 **Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:79-95`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. The wins gate writes nothing, so a net it promotes is written by hand ([Gates §10](/en/arch/evaluation/gates/#sec-10)), and the SL file says `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `reports` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
 
-**The two files.** Both name the same two nets, `weights/all/v9-2.json` (V) and `weights/all/c9-2.json` (the combat net). SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The SL file names five reports, one per character, this champion's own: 100 runs at medium at ascension 0 on `promotion-1-100`. The NoSL file names none: neither net has been played in NoSL for a report, so a NoSL gate against it is refused for every character ([Gates §6](/en/arch/evaluation/gates/#sec-6)).
+**The two files.** Both name the same two nets, `weights/all/v9-2.json` (V) and `weights/all/c9-2.json` (the combat net). SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The SL file names five reports, one per character, this champion's own: 100 runs at medium at ascension 0 on `promotion-1-100`. The NoSL file names none: neither net has been played in NoSL for a report, so a NoSL gate against it is refused for every character ([Gates §6](/en/arch/evaluation/gates/#sec-6)). Both nets learned from SL's games only: NoSL is not trained for now.
 
-Each character has folders of its own, `eval/CHARACTER/` and `data/CHARACTER/`, with its own reports, leaderboard and runs ([Learning: reference §3](/en/arch/learning/reference/#sec-3)), since a result holds for one character. The rest is shared: the nets in `weights/all/`, the champion files in `eval/champions/`, the ledger `eval/ledger.md` and the seed sets in `eval/seeds/`.
+Each character has folders of its own, `eval/CHARACTER/` and `data/CHARACTER/`, with its own reports, leaderboard and runs ([Learning: reference §3](/en/arch/learning/reference/#sec-3)), since a result holds for one character. The rest is shared: the nets in `weights/all/`, the champion files in `eval/champions/` and the seed sets in `eval/seeds/`.
 
-## 2. History and reports
+## 2. Reports
 
-These pages describe the current champion only. The record of what came before is kept apart:
+`eval/CHARACTER/reports/` holds a character's committed reports, as JSON and Markdown ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)), and `eval/CHARACTER/leaderboard.md` ranks them, by ascension, seed set and environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
 
-- `eval/ledger.md` is the history, every character's: every net, what it was trained on, its gate and what became of it.
-- `eval/CHARACTER/reports/` holds a character's committed reports, as JSON and Markdown ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)).
-- `eval/CHARACTER/leaderboard.md` ranks them, by ascension, seed set and environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
+**The champion's reports.** The SL file names five, one per character: the champion's side of every gate of that character. Each holds 100 SL runs at ascension 0 at the medium budget on `promotion-1-100`, played by the champion's two nets. None has a random decision, a failed or truncated run or a game error, so none is void ([Metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2)):
 
-**The champion's nets and their gate.** v9-1 and c9-1 went on from v9-0 and c9-0 and trained on `v9g0` alone: the first SL self-play of all five characters, at ascension 0 and the low budget, 29,987 runs, 2,057 of them won, 1,981 by the Silent ([Learning: the loop §2](/en/arch/learning/loop/#sec-2)). v9-0 and c9-0 were v8-3 and c8-3, which had learned from the Silent's runs at ascension 10, carried with no training to the nets all characters share. The gate played v9-0 + c9-0 against v9-1 + c9-1 on every character at ascension 0, both sides on the same seeds with the champion's planner and no exploration: 100 seeds at medium on `promotion-1-100` and 200 at the low budget on `promotion-1-200`. V and the combat net were judged together, pair against pair. Of 3,000 runs none failed, and there were no game errors. At medium, paired by seed (the new pair less the old):
-
-| character | v9-0 + c9-0 won | v9-1 + c9-1 won | wins, points | lower 95 % | floors |
+| character | won of 100 | 95 % Wilson interval | mean floor | ms per decision | s per run |
 |---|---|---|---|---|---|
-| Silent | 86 of 100 | 74 of 100 | −12.0 ± 5.6 | −21.1 | −1.35 ± 0.94 |
-| Ironclad | 1 of 100 | 46 of 100 | +45.0 ± 5.0 | +36.8 | +16.38 ± 1.42 |
-| Defect | 1 of 100 | 31 of 100 | +30.0 ± 4.8 | +22.1 | +7.60 ± 1.53 |
-| Regent | 2 of 100 | 35 of 100 | +33.0 ± 4.9 | +24.9 | +19.73 ± 1.40 |
-| Necrobinder | 0 of 100 | 9 of 100 | +9.0 ± 2.9 | +4.3 | +16.68 ± 1.45 |
+| Silent | 92 | 85.0–95.9 % | 46.45 | 405 | 336 |
+| Ironclad | 82 | 73.3–88.3 % | 46.00 | 431 | 286 |
+| Regent | 71 | 61.5–79.0 % | 45.57 | 1,202 | 906 |
+| Defect | 68 | 58.3–76.3 % | 46.44 | 560 | 423 |
+| Necrobinder | 47 | 37.5–56.7 % | 41.55 | 1,358 | 1,046 |
 
-At the low budget, of 200: the Silent 140 and 141 (+0.5 ± 4.4 points), the Ironclad 1 and 61, the Defect 2 and 44, the Regent 1 and 47, the Necrobinder 0 and 18; each of the four passes there too.
+The NoSL file names no report ([§1](#sec-1)).
 
-The new pair passed on four characters and lost ground with the Silent at medium, while tying it at the low budget. One champion plays every character, so it became champion for all five. Its mean floors at medium are 45.40 with the Silent, 41.39 with the Ironclad, 42.81 with the Defect, 42.30 with the Regent and 35.94 with the Necrobinder, against 46.75, 25.01, 35.21, 22.57 and 19.26 before. A gate reads paired wins, with floors listed beside them ([Gates §10](/en/arch/evaluation/gates/#sec-10)).
+**How a promotion rewrites the files.**
+
+- `gate --promote PATH` rewrites the one file it is given ([Gates §8](/en/arch/evaluation/gates/#sec-8)): the challenger's name and options, its new report as the only one, under its character, `since` the report's date and `gate` the result. The old champion's other reports were played by other nets, so they go.
+- A pair of nets the wins gate passes is written by hand into both files, since both play the same two nets ([Gates §10](/en/arch/evaluation/gates/#sec-10)). In each, `value` and `combat-net` name the new pair's files in `weights/all/`, `champion` the name its options make, and `since` the date. The SL file's `reports` names the five reports made from the new pair's own runs in the gate; the NoSL file names none, since no report of the new nets was played in NoSL. The old nets' files stay in `weights/all/`, where a name is never reused ([Learning: reference §6](/en/arch/learning/reference/#sec-6)).
 
 ## 3. Baselines
 
-**Other projects.** From the project's local notes on prior art:
+**Other projects.** From their published results:
 
 | source | result | note |
 |---|---|---|
-| FableBot | Ironclad A0 20.7% (71 of 343, Wilson 16.7–25.3%) | the only fair, real-game, adequately sampled result; no Silent (`tmp/notes/refs/prior-art-rl.md:343`) |
+| FableBot | Ironclad A0 20.7% (71 of 343, Wilson 16.7–25.3%) | the only fair, real-game, adequately sampled result; no Silent |
 | AgenticSTS | Silent A0 about 35% (44 of 125, mixed game versions); A8 and above 0 of 25 | an LLM with a human-written Silent guide; counted from its published run history |
-| spire-mentor | −22.8 and −25.5 pp of win rate without its cheat | its ranker and its PPO policy, with the whole-run cheat switched off; the reference for SL − NoSL ([Evaluation §3](/en/arch/evaluation/#sec-3); `tmp/notes/refs/strong-bots.md:42`) |
+| spire-mentor | −22.8 and −25.5 pp of win rate without its cheat | its ranker and its PPO policy, with the whole-run cheat switched off; the reference for SL − NoSL ([Evaluation §3](/en/arch/evaluation/#sec-3)) |
 
 ## 4. Open questions
 
 1. **R4 throughput:** how many minutes one run takes at the game's Instant speed, and so how many R4 runs are affordable.
 2. **The wins gate at few discordant seeds:** its bound passes 3 wins against none ([Gates §10](/en/arch/evaluation/gates/#sec-10)); whether to require a minimum of discordant seeds, or an exact test.
 3. **The gates' error rates:** neither gate's false-pass rate has been measured; an A/A test needs a way to vary the champion's own randomness alone ([Gates §4](/en/arch/evaluation/gates/#sec-4)).
-4. **A NoSL report of the champion**, so that the NoSL board has a champion again and SL − NoSL can be measured for one V.
+4. **A NoSL report of the champion**, so that the NoSL board has a champion and SL − NoSL can be measured for one V.
 5. **`final-1`**: when the first formal claim is made on it.

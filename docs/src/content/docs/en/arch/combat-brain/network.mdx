@@ -217,7 +217,7 @@ The potion head has a fixed shape and no new dynamic axis, and it shares only th
 
 ## 8. Sizes
 
-The file is `weights/all/c9-1.json`.
+The file is the champion's, `weights/all/c9-2.json`.
 
 | part | shape | weights |
 |---|---|---|
@@ -241,7 +241,7 @@ The file is `weights/all/c9-1.json`.
 
 The token tables are fixed, so these sizes depend only on the game build.
 
-**What this file holds.** Its weights have learned from the fights of all five characters at ascension 0, going on from weights that had learned from the Silent's fights at ascension 10 in the first half of every width. The second half has learned with the rest and is read, but for a few units of the allies: 22 of the ally layer's 192 inputs and 4 of the allies' 128 numbers at the body are still read by zeros, all in their second halves. The parts the Silent's fights never fed start at zero in their first half, and have moved off it where the five characters' fights hold them: $D_c$ for 180 of its 597 rows, $R$ for 155, $B$ for 69 and $Z$ for 38; $X$ for 8 of its 266 rows; $K^\star$ and $J$; and the keyword, Tinker and `spent` tokens, all but `keyword:None` and the Tinker tokens None, Curse, Quest and Status. Each character's context row is its own, so the net tells the five characters apart, and the status `Spent` reads apart from `Normal`. $O_g$ and $O_h$ have moved off zero for all five orb ids, and $O_j$ for 35 of its 60 rows, every orb in the queue's first five places and some in the sixth to ninth; its other rows are still zero in their first half. An id that no training held, such as `BEACON_OF_HOPE`, has the first half of `<unk>`'s row, and small random numbers of its own in the second. The body reads the potion slots through a column of zeros, and the potion head's five groups hold the same weights, so the potion slots move nothing and every group gives a potion the same chance.
+**What this file holds.** The champion's file learned from SL self-play of all five characters at ascension 0, every fight at the medium budget: 21,272 runs with 2,118,826 round starts, and 4,310 runs with 430,142 round starts held out ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)). Not every weight has learned. A row of a table that training never fed holds zeros in the first 32 of its 64 numbers and small random numbers in the other 32. $D_c$ has learned in 180 of its 597 rows, $R$ in 261, $B$ in 69 and $Z$ in 39; $X$ in 9 of its 266 rows; $O_g$ and $O_h$ for all five orbs; and $O_j$ in 44 of its 60 rows: every orb at the queue's first six places and at the eighth, four of them at the seventh and the ninth, and the Lightning orb alone from the tenth on. Of the modifier tokens, all have learned but `keyword:None`, `rider:None` and the Tinker tokens None, Curse, Quest and Status. An id that training never held, such as `BEACON_OF_HOPE`, has the first 32 numbers of `<unk>`'s row and small random numbers of its own in the rest. Some inputs are read through weights of exactly zero, so they move nothing: 22 of the ally layer's 192 inputs, all of them in the allies' powers, 2 of the allies' 128 numbers at the body, and the potion slots, whose column at the body is zero. The potion head's five groups hold the same weights, so every group gives a potion the same chance.
 
 ## 9. One forward pass, two implementations
 

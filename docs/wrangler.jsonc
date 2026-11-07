@@ -1,7 +1,7 @@
-// The site as static assets on Cloudflare Workers, in the "shinnku" account: `pnpm run deploy` builds dist/ and uploads it.
+// The site as static assets on Cloudflare Workers: `pnpm run deploy` builds dist/ and uploads it. The account comes
+// from CLOUDFLARE_ACCOUNT_ID in the environment.
 {
   "name": "sts2-docs",
-  "account_id": "<cloudflare-account-id>",
   "compatibility_date": "2026-10-12",
   "assets": {
     "directory": "./dist",

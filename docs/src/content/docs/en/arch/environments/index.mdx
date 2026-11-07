@@ -4,7 +4,7 @@ description: The two environments the AI plays in, NoSL and SL, why there are tw
 sidebar:
   label: Overview
   badge:
-    text: decided
+    text: built
     variant: success
 ---
 import { Aside } from '@astrojs/starlight/components';
@@ -15,7 +15,7 @@ So every part of this project takes one parameter that says how much the AI may 
 
 <Aside title="Status">
 
-Decided, and in force in every part of the code that exists. In NoSL, search plays on worlds built from the observation ([Worlds §2](/en/arch/environments/worlds/#sec-2)); in SL, on an exact clone of the current node, which a worker makes from a checkpoint and the node's steps, in self-play as in the real game through the mod ([Information and the node §7](/en/arch/environments/information/#sec-7)). Of the ten guards that keep the rules true, four have tests today (the code boundary, no fallback, the observation round trip and the seal); the counterfactual tests and the reload count are planned ([Information and the node §8](/en/arch/environments/information/#sec-8)).
+Built, and in force in every part of the code. In NoSL, search plays on worlds built from the observation ([Worlds §2](/en/arch/environments/worlds/#sec-2)); in SL, on an exact clone of the current node, which a worker makes from a checkpoint and the node's steps, in self-play as in the real game through the mod ([Information and the node §7](/en/arch/environments/information/#sec-7)). Of the ten guards that keep the rules true, four have tests (the code boundary, no fallback, the observation round trip and the seal); the counterfactual tests and the reload count are planned ([Information and the node §8](/en/arch/environments/information/#sec-8)).
 
 </Aside>
 
@@ -55,11 +55,11 @@ The macro brain is the part that makes every decision outside combat ([Macro bra
 
 **NoSL is the goal.** It is what a fair player knows, and the mod's assist mode can offer it to a player who never quits and reloads.
 
-**SL is a stepping stone, and a measure.** Inside a node SL faces no chance at all: the clone holds the true random streams, so a combat is a deterministic puzzle that can be searched to its end, and every line has one outcome instead of a distribution. That makes SL's combat brain much stronger for the same compute ([Combat brain](/en/arch/combat-brain/)), and SL's runs reach the late acts where V has to learn to value them. V is trained on runs whose combats the SL planner played, and serves both environments ([Worlds §6](/en/arch/environments/worlds/#sec-6)).
+**SL is the training environment, and a measure.** Inside a node SL faces no chance at all: the clone holds the true random streams, so a combat is a deterministic puzzle that can be searched to its end, and every line has one outcome instead of a distribution. That makes SL's combat brain much stronger for the same compute ([Combat brain](/en/arch/combat-brain/)), and SL's runs reach the late acts where V has to learn to value them. V is trained on runs whose combats the SL planner played, and serves both environments ([Worlds §6](/en/arch/environments/worlds/#sec-6)).
 
-The two environments play the same pre-registered seeds, so their difference on the same seeds is a clean measurement of what in-node information is worth: the SL − NoSL difference in win rate and floor reached, paired by seed. The leaderboard computes it for every champion that has a report in both environments under the same name ([Evaluation §3](/en/arch/evaluation/#sec-3)); today's two champions differ in their combat brains, so it shows none yet. It is the formal version of an "omniscient against resampled" comparison. For scale: spire-mentor, a prior-art Slay the Spire bot, lost 22.8–25.5 percentage points of win rate without its cheat, which saw the whole run; SL sees one node, so its gain should be smaller.
+The two environments play the same pre-registered seeds, so their difference on the same seeds is a clean measurement of what in-node information is worth: the SL − NoSL difference in win rate and floor reached, paired by seed. The leaderboard computes it for every champion that has a report in both environments under the same name ([Evaluation §3](/en/arch/evaluation/#sec-3)); the two champions differ in their combat brains, so it shows none. It is the formal version of an "omniscient against resampled" comparison. For scale: spire-mentor, a prior-art Slay the Spire bot, lost 22.8–25.5 percentage points of win rate without its cheat, which saw the whole run; SL sees one node, so its gain should be smaller.
 
-**A whole-run horizon was rejected.** An environment that knew the whole order of the run (every future encounter, reward and shop) was considered and rejected: it would make the run itself a deterministic puzzle, and teach nothing that carries over to fair play. It is not to be built.
+**There is no whole-run environment.** An environment that knew the whole order of the run (every future encounter, reward and shop) would make the run itself a deterministic puzzle, and teach nothing that carries over to fair play.
 
 ## 4. What both environments share
 
@@ -78,16 +78,16 @@ Where the environment is set, as the code has it:
 |---|---|---|
 | `run` (whole runs in the simulator) | `--env NoSL\|SL`, in any case (`Commands/RunCommand.cs:23`); a champion file's `env` fills it | NoSL |
 | the wire | `hello{env: "NoSL"\|"SL"}`, which the host sends at the start of each run ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)) | – |
-| `brain` (the decision process alone) | serves both: NoSL hosts with `--policy`'s combat brain, SL hosts with `--sl-policy`'s (`Commands/BrainCommand.cs:20`) | `--sl-policy plan` |
-| the mod | the SL/NoSL switch in the panel's head, kept in `~/.local/state/sts2ai/settings.json` ([Mod §5](/en/arch/mod/#sec-5)) | SL |
+| `brain` (the decision process alone) | serves both: NoSL hosts with `--policy`'s combat brain and L0 on the screen's afterstates, SL hosts with `--sl-policy`'s and L0 on the node's clone (`Commands/BrainCommand.cs:20`, `BrainCommand.Champions`) | `--sl-policy plan` |
+| the mod | the SL/NoSL switch in the panel's head, kept in `settings.json` in `$XDG_STATE_HOME/sts2ai` (by default `~/.local/state/sts2ai`) ([Mod §5](/en/arch/mod/#sec-5)) | SL |
 | champion files | one per environment, every character's, `eval/champions/nosl.json` and `sl.json`; `gate --env` must match the file's ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)) | – |
 | combat net training | `combat.train --env SL\|NoSL`, required; the net file records it (`learn/combat/train.py`, `export.py`) | – |
 
 What refuses the wrong environment:
 
-- `--policy plan` (the SL planner) and `--afterstates clone` (L0 playing options on the clone) play in SL only, `--policy pimc` in NoSL only: a `hello` from the other environment is refused (`Brains/ChampionOptions.cs:39-41`), and `run` refuses the planner outside SL before it starts (`Commands/RunCommand.cs:66`).
+- `--policy plan` (the SL planner) and `--afterstates clone` (L0 playing options on the clone) play in SL only, `--policy pimc` in NoSL only: a `hello` from the other environment is refused (`Brains/ChampionOptions.cs:39-41`), and `run` refuses the planner outside SL before it starts (`Commands/RunCommand.cs:61`).
 - SL and NoSL play the same combat net file, which learned from SL's games ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
-- Harness refuses the SL messages `node_checkpoint` and `node_action` in a NoSL run (`Harness/Dispatcher.cs:173`, `:174`); the brain server keeps the refusal and answers the run's next decision with an error, the host ends the run as failed and `run` exits 1, and a failed run is left out of its report (`Harness/BrainServer.cs:112-123`, `Harness/RunRecords.cs:32`).
+- Harness refuses the SL messages `node_checkpoint` and `node_action` in a NoSL run (`Harness/Dispatcher.cs:173`, `:182`); the brain server keeps the refusal and answers the run's next decision with an error, the host ends the run as failed and `run` exits 1, and a failed run is left out of its report (`Harness/BrainServer.cs:61`, `:71-81`, `Harness/RunRecords.cs:32`).
 - The combat net trainer reads only the logs of the environment it is given, and fails on the other's (`learn/combat/data.py`).
 - The gate refuses to pair runs played in different environments or games (`Harness/Gate.cs:40-41`).
 

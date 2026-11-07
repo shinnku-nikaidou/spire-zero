@@ -7,7 +7,7 @@ sidebar:
 
 import { Badge } from '@astrojs/starlight/components';
 
-本页供查阅。前面几页讲各个部分做什么；本页把它们列出来。这里的一切都对照过撰写本页时那次提交的代码；代码与本页不符时，以代码为准。
+本页供查阅。前面几页讲各个部分做什么；本页把它们列出来。本页与代码不符时，以代码为准。
 
 ## 1. 构建与运行
 
@@ -15,15 +15,22 @@ import { Badge } from '@astrojs/starlight/components';
 
 | 设置 | 在哪里 | 作用 |
 |---|---|---|
-| `Sts2BinDir` | MSBuild 属性，默认 `tmp/gamebin/v0.111.0` | 构建所引用的游戏快照，写进程序里 |
+| `Sts2BinDir` | MSBuild 属性，默认是仓库下的 `tmp/gamebin/v0.111.0`（一个你自己建的文件夹，不在 git 里） | 构建所引用的游戏快照，写进程序里 |
 | `STS2_BIN_DIR` | 环境变量，运行时 | 覆盖写进程序的快照；`sts2.dll` 不在那里时程序拒绝启动（`Program.cs:35-48`） |
-| `TieredCompilation` | `Sts2Ai.SimWorker.csproj:12-20`，关闭 | 每个方法只编译一次，完全优化：分层编译会在后台重新 JIT 热点方法，Harmony 补丁可能悄悄失效（在几千场战斗之后见过）；而且开着它时，短的运行还慢了一倍 |
-| `DOTNET_ReadyToRun=0` | 环境变量，由启动脚本设置 | 框架代码也以完全优化的方式 JIT 编译，每秒战斗数多约 20%；缺少它时，输出的第一行会写明 |
+| `TieredCompilation` | `Sts2Ai.SimWorker.csproj:12-20`，关闭 | 每个方法只编译一次，完全优化：分层编译会在后台重新 JIT 热点方法，Harmony 补丁可能悄悄失效；Harmony 的 JIT 钩子还让每次额外的编译都很慢，所以开着它时短的运行更慢（[无头宿主 §6](/arch/simulator/headless/#sec-6)） |
+| `DOTNET_ReadyToRun=0` | 环境变量，运行程序时设置 | 框架代码也以完全优化的方式 JIT 编译，每秒战斗数多约 20%；缺少它时，输出的第一行会写明 |
 | `SourceRevisionId` | MSBuild，来自 git | 写进程序的提交号，记录和报告都带着它；`src/` 下有未提交改动的构建会带 `-dirty`（`Sts2Ai.SimWorker.csproj:36-48`） |
 
 游戏的程序集由一个解析器找到，它在任何游戏类型被编译之前安装，所以使用这些程序集的入口 `Cli.Run` 不能被内联进 `Main`（`Program.cs:10-12`、`Commands/Cli.cs:44`）。
 
-**启动脚本**。批量任务和集群运行的是某个固定提交的构建，而不是工作区：`tmp/build.sh REV`（一个本地脚本）把这次提交打包归档，以 Release 构建，`SourceRevisionId` 设为这次提交，并写出 `tmp/builds/REV/sim.sh`，它用 `DOTNET_ReadyToRun=0` 运行这个构建的 dll，并把 `HOME` 指向 `tmp/home`。所以通过它启动的 `brain` 监听在 `tmp/home/.local/state/sts2ai/brain.sock`，除非 `--socket` 另行指定（[整局 §7](/arch/simulator/runs/#sec-7)）。集群的主机拿到同样的构建，以及它们自己的启动脚本（fleet 技能，`.claude/skills/fleet/SKILL.md`）。
+**构建与运行**。在仓库根目录下，以 Release 构建，再用 `DOTNET_ReadyToRun=0` 运行 dll：
+
+```sh
+dotnet build src/Sts2Ai.SimWorker -c Release -p:Sts2BinDir=DIR
+DOTNET_ReadyToRun=0 dotnet src/Sts2Ai.SimWorker/bin/Release/net9.0/Sts2Ai.SimWorker.dll --help
+```
+
+`DIR` 是 v0.111.0 版游戏里放着 `sts2.dll` 的文件夹；不给 `-p:Sts2BinDir` 时，构建去上表里的默认文件夹找。构建把检出的提交写进程序（`SourceRevisionId`，`src/` 有改动时带 `-dirty`），每条对局记录和每份报告都带着它（[整局 §5](/arch/simulator/runs/#sec-5)），所以结果要保留的一批对局，应该用一棵已提交的代码树的构建来跑。
 
 ## 2. 命令行
 
@@ -114,14 +121,14 @@ Sts2Ai.SimWorker COMMAND [options]
 | `tables` | `--out FILE`（`learn/game_ids.json`） | 把这个游戏版本里网络词元表所含的每个 id 写成 JSON（`learn/game_ids.py`） |
 | `combat` | `--encounter ID` 或 `--from OBS.json`；`--seed`（1）；`--policy`（`play`）；`--obs`；配置 | 打一场战斗并把它打印出来；`--from` 从一个观测构建这场战斗，并忽略配置 |
 | `bench` | `--n`（200）、`--start`、`--seed`（1）、`--policy`、`--out FILE`；遭遇池 | 尽可能快地打战斗，报告每秒战斗数（[战斗 §7](/arch/simulator/combat/#sec-7)） |
-| `selftest` | `--combat-net FILE`（必需）、`--n`（20）、`--seed`（1）、`--workers N`（0）；遭遇池 | [§5](#sec-5) 的各项检查 |
+| `selftest` | `--combat-net FILE` 和 `--value FILE`（必需）、`--n`（20）、`--seed`（1）、`--workers N`（0）；遭遇池 | [§5](#sec-5) 的各项检查 |
 
 **整局**
 
 | 命令 | 选项 | 作用 |
 |---|---|---|
-| `run` | `--seeds FILE`、`--n`、`--start`、`--seed`（1）、`--asc`（0）、`--env`（NoSL）、`--max-decisions`（20000）、`--check`、`--trace`、`--obs`、`--log FILE`、`--records FILE`、`--brain SOCKET`；冠军、冠军文件、配置 | 打整局（[整局](/arch/simulator/runs/)）。拒绝的组合：SL 之外的 `plan`；`--brain` 与任何冠军选项或 `--log`。`pimc` 只在 NoSL 下打：在 SL 下它的对局一开始就失败 |
-| `brain` | `--socket PATH`、`--log FILE`、`--wire FILE`、`--sl-policy`（`plan`）；冠军、冠军文件 | 单独运行的大脑，通过 Unix 套接字服务主机（[整局 §7](/arch/simulator/runs/#sec-7)） |
+| `run` | `--seeds FILE`、`--n`、`--start`、`--seed`（1）、`--asc`（0）、`--env`（NoSL）、`--max-decisions`（20000）、`--check`、`--trace`、`--obs`、`--log FILE`、`--records FILE`；冠军、冠军文件、配置 | 打整局（[整局](/arch/simulator/runs/)）。拒绝的组合：SL 之外的 `plan`。`pimc` 只在 NoSL 下打：在 SL 下它的对局一开始就失败 |
+| `brain` | `--log FILE`、`--wire FILE`、`--sl-policy`（`plan`）；冠军、冠军文件 | 单独运行的大脑，在 stdin 和 stdout 上服务启动它的那个主机，直到 stdin 关闭；不管 `--afterstates` 怎么写，L0 对 NoSL 主机用画面预测的后续状态，对 SL 主机（有战斗网络时）在节点的克隆上打（[整局 §7](/arch/simulator/runs/#sec-7)） |
 | `serve` | 叶子 | 工作进程池里的一个工作进程（[工作进程池 §4](/arch/simulator/pool/#sec-4)） |
 | `clones` | `--wire`（必需） | 在各自的克隆上重播 `brain --wire` 记录下的主机 SL 决策，比较观测；有任何不同时退出码为 1（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)） |
 
@@ -136,13 +143,13 @@ Sts2Ai.SimWorker COMMAND [options]
 
 ## 5. `selftest`
 
-`selftest` 打遭遇池里的 `--n` 场战斗（默认 20），并运行下面这些检查，按它报告时用的名称列出（`Checks/SelfTest*.cs`；顺序见 `Checks/SelfTest.cs:73-147`）。其中的搜索用 `--combat-net` 指定的网络给叶子估值，所以必须给出它。任何一项失败，退出码就是 1。
+`selftest` 打遭遇池里的 `--n` 场战斗（默认 20），并运行下面这些检查，按它报告时用的名称列出（`Checks/SelfTest*.cs`；顺序见 `Checks/SelfTest.cs:73-147`）。其中的搜索用 `--combat-net` 指定的网络给叶子估值，由 `--value` 的 V 定价；两者都必须给出。任何一项失败，退出码就是 1。
 
 边界，即 Brain、Protocol 和 Harness 不触及任何游戏程序集，由单元测试 `BoundaryTests` 在不启动游戏的情况下检查（[§7](#sec-7)）。
 
 **每场战斗**，打两遍：确定性（观测、隐藏状态和轨迹），协议往返（观测，以及以文本和 JSON 表示的动作），没有异常，没有游戏错误。
 
-**每场战斗最多三个随机切点**（所以默认 `--n 20` 时有 60 次构建检查）：还原；隐藏状态逐字节还原；快速钩子监听器给出与游戏相同的结果；确定化保持观测不变（种子 11 和 22）；确定化之后能重播；确定化之后能继续打下去；然后在切点的观测上运行 `CombatBuilder`：构建出的战斗显示这个观测，构建出的战斗能还原，构建之后能继续打下去。
+**每场战斗最多三个随机切点**（所以默认 `--n 20` 时最多 60 次构建检查；抽到两次的切点只算一次）：还原；隐藏状态逐字节还原；快速钩子监听器给出与游戏相同的结果；确定化保持观测不变（种子 11 和 22）；确定化之后能重播；确定化之后能继续打下去；然后在切点的观测上运行 `CombatBuilder`：构建出的战斗显示这个观测，构建出的战斗能还原，构建之后能继续打下去。
 
 **只存在于模型里的数值的构建**（故障机器人）：磨损的玻璃充能球（3/6）、用完的白银熔炉、保存着 2 张牌的佩尔之牙、1/3 的懒惰、夜魇、14/20 的硬化外壳；构建保留能力的层数（懒惰仍允许打出一张牌）和能力保存的牌（夜魇下回合的复制品）。然后：以 3 点生命、带着王室猛毒构建的玩家能活过开局；瀑布巨兽超过 100 的喷发（`DeathBlow` 150）能被找到。
 
@@ -156,7 +163,7 @@ Sts2Ai.SimWorker COMMAND [options]
 
 **带 `--workers N` 时**：池化的 PIMC 在 4 个决策上与进程内 PIMC 一致，每个决策用 4 个世界 × 120 个节点的预算；池化的规划器做出的计划与规划器在单个进程里做出的相同；工作进程里没有游戏错误；没有工作进程重启。
 
-最后它打印抽牌顺序的统计，这不是一项检查。2026-10-27 的结果：所有检查都通过，静默猎手 60/60 次构建，铁甲战士 58/58，静默猎手第 1、2、3 幕的精英战和 Boss 战分别是 57、57 和 58（[战斗 §5](/arch/simulator/combat/#sec-5)）。
+最后它打印抽牌顺序的统计，这不是一项检查。
 
 ## 6. `run --check`
 
@@ -165,29 +172,29 @@ Sts2Ai.SimWorker COMMAND [options]
 | 检查 | 要求 |
 |---|---|
 | 每个观测的 JSON 往返 | 完全一致 |
-| 第二遍走传输协议，连到进程内的大脑或给定的 `--brain` | 相同的轨迹、观测哈希、概况、地图哈希、对局记录和决策日志（耗时除外） |
+| 第二遍走传输协议，连到进程内的大脑 | 相同的轨迹、观测哈希、概况、地图哈希、对局记录和决策日志（耗时除外） |
 | 第一遍的每个节点，从检查点加载并重播它的决策 | 逐个给出这一局的观测；移动之后停在视野边界；拒绝再走一步 |
 | 游戏错误 | 没有 |
 
-这时每局的结果行以 `obs <digest>` 结尾，它是这一局所有观测哈希的一个哈希，用来跨进程比较对局；汇总里加上 `determinism:` 一行。用 `--brain` 时，大脑的决策日志不在这个进程里，所以日志的比较是在比较两份空日志。
+这时每局的结果行以 `obs <digest>` 结尾，它是这一局所有观测哈希的一个哈希，用来跨进程比较对局；汇总里加上 `determinism:` 一行。
 
 ## 7. xUnit 测试
 
-`src/Sts2Ai.Tests` 收着不需要游戏就能运行的测试，21 个类、105 个测试方法：`dotnet test src/Sts2Ai.Tests`。按被测的项目每个一个文件夹（`Brain/`、`Harness/`、`SimWorker/`），`BoundaryTests.cs` 在根目录，共用的 JSON 测试夹具在 `Fixtures.cs` 和 `Fixtures/` 里。
+`src/Sts2Ai.Tests` 收着不需要游戏就能运行的测试，21 个类、106 个测试方法：`dotnet test src/Sts2Ai.Tests`。按被测的项目每个一个文件夹（`Brain/`、`Harness/`、`SimWorker/`），`BoundaryTests.cs` 在根目录，共用的 JSON 测试夹具在 `Fixtures.cs` 和 `Fixtures/` 里。
 
 | 类 | 检查什么 |
 |---|---|
 | `BoundaryTests` | Brain、Protocol 和 Harness 不触及任何游戏程序集，而这项检查确实看得到 GameBridge 的 `sts2` |
 | `Brain/BudgetTests` | 名字里只显示不是默认值的部分 |
 | `Brain/CloneSearchTests` | 玩具克隆上的 L0：商店值它最好的一篮购买；事件选项值它下一页给的东西；战斗值战斗叶子给出的价值，死亡值 0，赢下的一局值 1，而不是生命值为 0 的这一局的 V，没有叶子的战斗会抛出异常；选路不去实际打出；要选两张牌的提示找到最好的一对；跳过的卡牌奖励不会再打开；到达两次的状态只搜一次；药水栏满时，事件给的药水值奖励画面上丢弃一瓶为它腾出位置之后的状态 |
-| `Brain/CombatNetTests` | 像它们的训练器那样读出 c9-0 的测试状态和一个极小网络（`combat-tiny.json`）的状态；进行中的状态值它的各个结局留下的那些局的 V；每瓶药水按它自己在分桶那一组的概率保留；持有的生命值排除掉的分桶没有权重；赢下的战斗值它所在这一局的 V，输掉的值 0 |
+| `Brain/CombatNetTests` | 像它们的训练器那样读出 `weights/all/c9-0.json` 的测试状态和一个极小网络（`combat-tiny.json`）的状态；进行中的状态值它的各个结局留下的那些局的 V；每瓶药水按它自己在分桶那一组的概率保留；持有的生命值排除掉的分桶没有权重；赢下的战斗值它所在这一局的 V，输掉的值 0 |
 | `Brain/LoopSearchTests` | 16 个测试：会回到手里的牌被反复打出，直到一回合内斩杀，不管它对牌堆做了什么，循环在游戏结束它的地方结束；会用完的牌，或者会把自己用掉的牌，只是一条普通路线；手里的副本不构成循环；没有斩杀的循环不超出它的预算；能打开循环的提示回答会被找到并采用，规划器和 PIMC 都是；提示的每个回答都会被搜索；PIMC 也重复循环，它的回合计划只保留会重复的计划；提示由策略回答，除非动作自带回答；没有搜索权衡的提示取它需要的前几个选项；其他回答所选的是玩家能分辨的牌；选择是动作文本的一部分 |
 | `Brain/MacroExplorationTests` | 删牌只值能删掉的东西；没有探索时 l0 取最好的；均匀抽取时，卡牌奖励的结果在它的牌和跳过之中抽取，卡牌界面保留这次抽取；ε=1 时每种决策都在它的选项中均匀抽取，要喝的药水也在其中，而不为任何药水腾位置的丢弃不在其中；ε=1 时提示的选择均匀抽取，ε=0.1 时大多数回答是 V 的 |
 | `Brain/MacroPotionTests` | 只有为了给画面上的一瓶药水腾位置，才提供丢弃药水；在地图上，药水的选项值它之后最好的那步移动，而不是它停留的那个状态 |
 | `Brain/MacroUpgradeTests` | 锻造值它最好的那次升级；锻造提示选估值时用的那次升级；升级提示选最好的预览 |
 | `Brain/MoveRecordTests` | 每个活着的敌人每轮记录一次；死了的跳过；轮次倒退时重新开始；`Clear` |
 | `Brain/PimcMemoTests` | 看起来相同但掷骰不同的路线不会被合并 |
-| `Brain/RunNetTests` | 一个极小网络的对局，估值与训练器算出的获胜概率相同；像训练器那样读出 v9-0 的测试对局；地图是路径仍能通向的每个点，带着它前方的层数；选路读入要进入的点，而且只有这时才读入 |
+| `Brain/RunNetTests` | 一个极小网络的对局，估值与训练器算出的获胜概率相同；像训练器那样读出 `weights/all/v9-0.json` 的测试对局；地图是路径仍能通向的每个点，带着它前方的层数；选路读入要进入的点，而且只有这时才读入 |
 | `Brain/SameCardsTests` | 一张牌的几个副本在每个目标上是同一个动作，升级过的副本是另一个；同样的牌换个顺序、换一个副本，或者药水放在别的槽位，都是同一个状态，尽管它们的观测不同 |
 | `Brain/SlPlannerTests` | 15 个测试：完整搜索、每个候选的结局、窄束、失败计划和重新规划的回合、失败计划数、完整搜索过的回合收窄到带 keep 的搜索、下潜的回合、简易束和束、获胜的战斗只规划一次、每个力度对应一个预算、已证明的失败、候选的顺序、记录的历史 |
 | `Brain/TurnPlanTests` | 不成立的一步会重新规划并被标记 |
@@ -196,11 +203,11 @@ Sts2Ai.SimWorker COMMAND [options]
 | `Harness/ExplainTests` | 宏观回答带着每个选项的估值，选中的在前；对显示回答的宿主，每个地图选项带着它通往 Boss 的路线 |
 | `Harness/GateTests` | 8 个测试，都在胜局上：通过、失败和不更差；双方都赢或都输的配对不起决定作用；失败的对局让挑战者作废；配对；拒绝 |
 | `Harness/WorkerPoolTests` | 卡住两次的工作进程让调用失败；卡住一次的被重启并给出回答 |
-| `SimWorker/CliTests` | 默认值；环境名不分大小写；错误输入；`--verbose` 放在任何位置都行，没有响应文件；冠军文件的选项垫在给出的选项之下；冠军文件里的 character 和 asc；`brain` 接受冠军文件，但不用其中的 env；拒绝不自洽的冠军；战斗网络与搜索一起用，并出现在名字里；冠军的选项能重新打出同一个冠军 |
+| `SimWorker/CliTests` | 默认值；环境名不分大小写；错误输入；`--verbose` 放在任何位置都行，没有响应文件；冠军文件的选项垫在给出的选项之下；冠军文件里的 character 和 asc；`brain` 接受冠军文件，但不用其中的 env；不管文件里的后续状态怎么写，`brain` 的 L0 对 NoSL 主机在画面上打，对 SL 主机在克隆上打；拒绝不自洽的冠军；战斗网络与搜索一起用，并出现在名字里；冠军的选项能重新打出同一个冠军 |
 | `SimWorker/LoadoutTests` | 带升级和附魔的牌组语法；附魔需要它的数值 |
 
 ## 8. 未决问题
 
 1. **复制还是重播**。快照是一份配方，还原就是重播它（[战斗 §2](/arch/simulator/combat/#sec-2)）。对游戏的对象图做深拷贝能消除重播的开销，AlphaZero 式的搜索会需要它。等性能剖析表明还原占了搜索的大部分时间时再定。
 2. **对局世界**：房间池和概率计数器有多少能从公开记录推断出来，有多少只能取先验（[世界与 SL 克隆 §8](/arch/simulator/worlds/#sec-8)）。
-3. **内联执行**：无头时内联执行动作、而不是每帧执行一次，是否会改变玩家看到的任何东西；在能把游戏里的对局和这里的对局相比较之前，这个问题悬而未决（[整局 §6](/arch/simulator/runs/#sec-6)）。
+3. **内联执行**：无头时内联执行动作、而不是每帧执行一次，是否会改变玩家看到的任何东西；回答它需要把游戏里的对局和这里的对局相比较（[整局 §6](/arch/simulator/runs/#sec-6)）。

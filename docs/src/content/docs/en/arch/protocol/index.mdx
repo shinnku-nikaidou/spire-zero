@@ -14,7 +14,7 @@ The project's programs never share objects: the game, the brain and the search w
 
 <Aside title="Status">
 
-Exist: the observation of every decision screen, combat and card prompts included; the actions in text form; the host–brain wire with its SL node messages, over which the simulator plays whole runs and the mod in the game advises; the combat world API; the three worker requests. Planned: the event stream of the public history, facts for explanations, and the `degraded` flag of a recommendation ([§6](#sec-6)).
+Exist: the observation of every decision screen, combat and card prompts included; the actions in text form; the host–brain wire with its SL node messages, over which the mod in the game advises and `run --check` plays the simulator's runs a second time; the combat world API; the three worker requests. Planned: the event stream of the public history, facts for explanations, and the `degraded` flag of a recommendation ([§6](#sec-6)).
 
 </Aside>
 
@@ -31,7 +31,7 @@ flowchart LR
   B["brain:<br/>Harness + brains"]
   W["worker processes"]
   X["search"]
-  M -- "wire: JSON lines<br/>over a Unix socket" --> B
+  M -- "wire: JSON lines<br/>over the brain's stdin and stdout" --> B
   S -- "wire" --> B
   B -- "requests: JSON lines<br/>over stdin and stdout" --> W
   X -- "world API:<br/>in-process interface" --> W
@@ -84,7 +84,7 @@ Every Protocol message is JSON written by `ProtocolJson` (`ProtocolJson.cs`):
 
 Two functions give identities:
 
-- `ProtocolJson.Hash(value)` is FNV-1a 64, a fast non-cryptographic hash, over the UTF-8 bytes of the value's JSON. It names an observation (`obs_hash`, as 16 hex digits), a run (`run_id`, from the seed's JSON string), and a combat's hidden state (a world's hidden key). Since it hashes the JSON, it depends on the serialization: two builds whose types differ by one field hash the same observation differently, which the brain uses to catch a host built from another commit ([The wire §5](/en/arch/protocol/wire/#sec-5)).
+- `ProtocolJson.Hash(value)` is FNV-1a 64, a fast non-cryptographic hash, over the UTF-8 bytes of the value's JSON. It names an observation (`obs_hash`, as 16 hex digits), a run (`run_id`, from the seed's JSON string), and a combat's hidden state (a world's hidden key). Since it hashes the JSON, it depends on the serialization: two builds whose types differ by one field hash the same observation differently, which the brain uses to catch a host from another build ([The wire §5](/en/arch/protocol/wire/#sec-5)).
 - `ProtocolJson.CardKey(card)` is the card's JSON without its uid: everything the player sees of the card. Two cards with the same key are the same card to the player, and every list whose order must not depend on hidden state is sorted by it.
 
 ## 5. Tests
@@ -97,7 +97,7 @@ Two functions give identities:
 | a run plays the same in process and over the wire: trace, observations, run record, decision log | `run --check` |
 | the brain refuses node messages in NoSL; an SL node's clone is its checkpoint and the decisions since | `DispatcherTests` |
 | the wire version: a message of another `v` is refused when read | `WireStream.Receive` |
-| the SL decisions a host sent replay on their clones with the same observations | `clones` over a `brain --wire` log ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)) |
+| the SL decisions a host sent replay on their clones with the same observations | `clones` over a `brain --wire` log, such as the mod's capture with `Record` on ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)) |
 
 ## 6. Planned
 
@@ -109,7 +109,7 @@ Two functions give identities:
 
 | page | what it explains |
 |---|---|
-| [The wire](/en/arch/protocol/wire/) | the host–brain conversation: its socket, every message and field, one run step by step, the rules, the SL node messages, the recommendation, how the two hosts differ |
+| [The wire](/en/arch/protocol/wire/) | the host–brain conversation: its connection, every message and field, one run step by step, the rules, the SL node messages, the recommendation, how the two hosts differ |
 | [Observations and actions](/en/arch/protocol/observation/) | the observation of every decision: the run, a combat, card identity and canonical order, every screen with its actions, card prompts and their context, what is left out |
 | [Worlds and worker messages](/en/arch/protocol/worlds/) | the world API search plays in, the node clone and the record of enemy moves, and the three worker requests with their answers |
 

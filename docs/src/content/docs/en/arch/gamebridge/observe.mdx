@@ -7,7 +7,7 @@ sidebar:
 
 import { Badge } from '@astrojs/starlight/components';
 
-This page follows each Protocol field back to the game object it comes from. Paths such as `Runs/RunManager.cs` are in the decompiled game (`MegaCrit.Sts2.Core`); project paths are under `src/Sts2Ai.GameBridge/`. Every game source named here was read in the game's code <Badge text="verified" variant="success" />.
+This page follows each Protocol field back to the game object it comes from. Paths such as `Runs/RunManager.cs` are in the decompiled game (`MegaCrit.Sts2.Core`), which is not in the repository; project paths are under `src/Sts2Ai.GameBridge/`. Every game source named here was read in the game's code <Badge text="verified" variant="success" />.
 
 ## 1. The entry points
 
@@ -112,7 +112,7 @@ Every card prompt goes through one of the game's `CardSelectCmd.From*` entries, 
 - **The prefix** reads the entry's arguments into a `ChoiceContext` (`ChoiceContexts.cs:47-68`): the `CardSelectorPrefs` (cancelable, the prompt's text), the `source` argument or else the `PlayerChoiceContext`'s last involved model, a `CardPile` (which makes the purpose `<pile>_pile`), an `EnchantmentModel` and its `amount`, `canSkip`. The purpose is the entry's name without `From`, in snake_case. `in_combat` is whether a combat is in progress.
 - **The outermost entry wins.** An entry can call another (a removal goes through the generic deck prompt): a depth counter keeps the first context until the outermost entry returns.
 - **`Current` and `Last`.** `Current` holds the context while the entry runs, per thread; the simulator's card selector runs inside the entry and reads it there. In the real game the prompt's screen opens after the entry's first await, when `Current` is gone, so the prefix also keeps the context in `Last` until the next entry, and the mod reads the prompt on screen from there ([Mod: the main loop §5](/en/arch/mod/loop/#sec-5)). A new context object means a new prompt.
-- **Patch it first.** Each host calls `ChoiceContexts.Patch` once, before any other patch (`HeadlessPatches.Apply` in the simulator, `Host` in the mod). An entry's small async stub can be inlined into a caller compiled earlier, such as while another patch compiles its replacement, and the inlined copy bypasses the prefix. This happened headless with SapphireSeed.
+- **Patch it first.** Each host calls `ChoiceContexts.Patch` once, before any other patch (`HeadlessPatches.Apply` in the simulator, `Host` in the mod). An entry's small async stub can be inlined into a caller compiled earlier, such as while another patch compiles its replacement, and the inlined copy bypasses the prefix.
 
 A prompt that arrives without a context throws in the simulator; the mod leaves it to the player.
 

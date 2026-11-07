@@ -8,7 +8,7 @@ sidebar:
 
 ## 1. Afterstates predicted from the screen
 
-Until run worlds exist ([Simulator: worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)), NoSL has no world to play an option in, so `MacroBrain` predicts each afterstate from the screen alone, with no game code, and takes the option with the highest V (the first legal one on a tie). The prediction, by surface:
+NoSL has no world to play an option in (run worlds are planned, [Simulator: worlds and the SL clone §8](/en/arch/simulator/worlds/#sec-8)), so `MacroBrain` predicts each afterstate from the screen alone, with no game code, and takes the option with the highest V (the first legal one on a tie). The prediction, by surface:
 
 - **Map:** the point is added to the path and marked as being entered. V then reads the map from there ([The value network §4](/en/arch/macro-brain/network/#sec-4)). L0's plan for the act is the rest of the route: each next point as it would choose it if nothing else changed, up to the boss; the mod draws it ([Mod: the main loop §6](/en/arch/mod/loop/#sec-6)).
 - **Rewards, card reward, bundle, treasure, shop purchase:** the gold, potion, relic or cards are added and the price is paid.
@@ -80,8 +80,7 @@ Without this rule the search loops. Skipping a card reward returns to the reward
 
 A probe is a load of the clone plus a replay of its path of answers. Probes run in the worker pool: the paths of a level are split into one request per worker, each worker loads the clone once per path ([Simulator: the worker pool §3](/en/arch/simulator/pool/#sec-3)).
 
-- With the SL planner in whole runs, a macro decision took 40 ms on average (median 13 ms, at most 0.5 s): 9 s of a 187 s two-run total.
-- At the low budget, a macro decision on the clone takes 70–90 ms, against 1–2 ms from the screen.
+- A macro decision on the clone takes 70–90 ms, against 1–2 ms from the screen.
 - V itself is a small part of this: one call takes 0.08 ms in C# ([The value network §6](/en/arch/macro-brain/network/#sec-6)).
 
-Checked: `run --check` plays the same over the wire and replays every node exactly, with no game error (17 runs with `play` in combat, 2 with the SL planner and an earlier combat net).
+Checked: `run --check` plays each seed again over the wire and compares the two plays, their observations, records and decision logs, and replays every node from its checkpoint; any difference or game error fails the batch ([Simulator: reference §6](/en/arch/simulator/reference/#sec-6)).

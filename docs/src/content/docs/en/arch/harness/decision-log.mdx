@@ -13,8 +13,8 @@ Every decision a brain makes in a run can be written down: what it was shown, wh
 
 The `Dispatcher` keeps the run's lines in memory (`Dispatcher.Log`) when it is made with logging on, and its host writes them once the run has ended:
 
-- `run --log FILE` appends each run's lines after the run ends ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). A run killed midway leaves none. `--log` is refused together with `--brain`, whose decisions are logged by the brain.
-- `brain --log FILE` writes a run's lines at its `run_end`, so a host that drops without one leaves none ([Overview §5](/en/arch/harness/#sec-5)).
+- `run --log FILE` appends each run's lines after the run ends ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). A run killed midway leaves none.
+- `brain --log FILE` writes a run's lines at its `run_end`, so a host that drops without one leaves none. The mod passes it, with `--wire`, only when its settings' `Record` is on ([Overview §5](/en/arch/harness/#sec-5)).
 
 The lines are `DecisionEntry` records (`Dispatcher.cs:36-40`) serialized like every Protocol type: snake_case names, fields that are null left out ([Protocol §4](/en/arch/protocol/#sec-4)). Logs are kept beside the run records, in the data directory ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
 
@@ -36,7 +36,7 @@ Who reads the log:
 | `decision_id` | int | the decision's number in the run, from 0, the three kinds counted together ([§4](#sec-4)) | the same | the same |
 | `env` | string | `NoSL` or `SL` | the same | the same |
 | `surface` | string | `combat` | `card_choice`, on either side | the decision's surface |
-| `brain` | string | the combat route's name: `pimc c9-1`, `plan c9-1`, `play` | the prompt side's: `first` in combat, whether its answer came with the combat brain's action or from the first options; L0's name or `random` outside | the macro route's |
+| `brain` | string | the combat route's name: `pimc NAME` or `plan NAME`, with the name of its combat net, or `play` | the prompt side's: `first` in combat, whether its answer came with the combat brain's action or from the first options; L0's name or `random` outside | the macro route's |
 | `obs_hash` | hex string | the hash of the combat observation | the hash of the card prompt | the hash of the whole observation ([§4](#sec-4)) |
 | `legal` | int | the legal actions | the prompt's options | the legal actions |
 | `chosen` | string | the combat action's text: `play:C[:T]`, `potion:S[:T]`, `end_turn`, with the answer to its first card prompt after `@` when the search chose one ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)) | the picked option indexes joined by commas, without `pick:` | the action |
@@ -97,13 +97,13 @@ Card prompts outside combat get no `run_view`.
 
 ## 8. Tests
 
-**`run --check`** holds a whole run to Harness's determinism ([Simulator: reference §6](/en/arch/simulator/reference/#sec-6)). It plays each seed, then replays every node from its checkpoint, then plays the seed a second time over the wire, to a `BrainServer` in the same process with the same champion (or to the `--brain` socket), and requires the two plays to agree:
+**`run --check`** holds a whole run to Harness's determinism ([Simulator: reference §6](/en/arch/simulator/reference/#sec-6)). It plays each seed, then replays every node from its checkpoint, then plays the seed a second time over the wire, to a `BrainServer` in the same process with the same champion, and requires the two plays to agree:
 
 - the traces, decision by decision;
 - each decision's observation hash, each of which must also survive a JSON round trip;
 - the run's summary and each act's map hash;
 - the run records, with game errors and times left out;
-- the decision logs, every field but `elapsed_ms`. The second log is the in-process server's; with `--brain` both are empty, so they are not compared.
+- the decision logs, every field but `elapsed_ms`. The second log is the in-process server's.
 
 **xUnit** (`Sts2Ai.Tests/Harness/`, [Simulator: reference §7](/en/arch/simulator/reference/#sec-7)):
 
@@ -117,7 +117,8 @@ Card prompts outside combat get no `run_view`.
 | `DispatcherTests.AnSLNodesCloneIsItsCheckpointAndTheDecisionsSince` | an SL node's clone is its checkpoint and the decisions taken since |
 | `DispatcherTests.AnswersThePromptOfTheActionWithTheBrainsPickAndHidesItFromTheHost`, `APickThePromptDoesNotAcceptGoesToThePolicy` | the first prompt of the action just chosen gets the search's answer, which the host never sees; an answer the prompt does not accept leaves it to the prompt policy |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`, `AWorkerStuckTwiceFailsTheCall` | the pool's one retry |
-| `GateTests` (10), `EvalReportTests` (4) | evaluation's gate and reports ([Evaluation: gates §11](/en/arch/evaluation/gates/#sec-11)) |
+| `ExplainTests.AMacroAnswerCarriesEachOptionsValueTheChosenFirst`, `WithExplainEachMapOptionCarriesItsRouteToTheBoss` | a macro answer's candidates are its options with their values, the chosen first; with `explain`, and only then, each map option carries its route to the boss ([Overview §5](/en/arch/harness/#sec-5)) |
+| `GateTests` (8), `EvalReportTests` (4) | evaluation's gate and reports ([Evaluation: gates §11](/en/arch/evaluation/gates/#sec-11)) |
 
 **Planned tests:**
 

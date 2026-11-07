@@ -42,7 +42,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 | 宿主 | observe | legal | start |
 |---|---|---|---|
 | 模拟器（`Sts2Ai.SimWorker`） | 每个决策 | 每个决策 | 它打出的每个动作（[模拟器：整局 §4](/arch/simulator/runs/#sec-4)） |
-| Mod（`Sts2Ai.Mod`） | 它向大脑询问的每个决策 | 同上 | 从不：Mod 只提建议，由玩家行动。它给模拟器的 start 所调用的同一批游戏入口打补丁，以此记录玩家自己的动作，所以 SL 记录给一步起的名字和模拟器给的完全一样（[Mod：SL 记录 §3](/arch/mod/sl-record/#sec-3)） |
+| Mod（`Sts2Ai.Mod`） | 它向大脑询问的每个决策 | 同上 | 只在玩家要求 AI 来打时：点击会调用 GameBridge 的 start 的地方就用它（战斗、购买、宝箱的遗物、水晶球、药水栏），否则用画面自己的处理函数或它等待的任务（[Mod：自动游玩与安全 §1](/arch/mod/auto/#sec-1)）。它给模拟器的 start 所调用的同一批游戏入口打补丁，以此记录每一步，不论是玩家的还是 AI 的，所以 SL 记录给一步起的名字和模拟器给的完全一样（[Mod：SL 记录 §3](/arch/mod/sl-record/#sec-3)） |
 
 Mod 把 GameBridge 的源文件编译进自身，在游戏内部运行。模拟器以项目引用的方式引用它。CombatBuilder 是模拟器从观测构建战斗的办法，它复用 GameBridge 读取意图的代码，把怪物的招式与显示出的意图对应起来（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。
 
@@ -74,7 +74,7 @@ Mod 拒绝在不是为之构建的游戏版本上运行（[Mod §3](/arch/mod/#s
 | GameBridge 确实触及游戏（边界检查的对照） | `BoundaryTests` |
 | 每个战斗观测和动作都能往返；从观测构建出的战斗精确地显示这些观测 | `selftest`（[模拟器：参考 §5](/arch/simulator/reference/#sec-5)） |
 | 每个决策界面的观测都能往返；大脑给出的每个回答都合法，且启动时不出错；对局精确重播，节点也一样 | `run --check`（[模拟器：整局 §6](/arch/simulator/runs/#sec-6)） |
-| Mod 的 SL 记录在各自的克隆上重播，观测与游戏当时显示的相同 | `clones`（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)） |
+| Mod 的 SL 记录（在游戏里用 Mod 的 `Record` 设置录下）在各自的克隆上重播，观测与游戏当时显示的相同 | `clones`（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)） |
 
 规划中：Mod 里的一项检查，确认画面上每个启用的控件都是一个合法动作；以及相同的种子和决策在游戏里和模拟器里给出相同的观测（[评估 §2](/arch/evaluation/#sec-2)）。
 

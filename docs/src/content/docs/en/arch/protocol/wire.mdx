@@ -1,19 +1,20 @@
 ---
 title: 'The wire: host and brain'
-description: 'The conversation between the process that runs the game and the brain: the socket, every message and its fields, one run step by step, the rules that keep answers in step with the game, the SL node messages, the recommendation, and how the simulator and the mod host differ.'
+description: 'The conversation between the process that runs the game and the brain: the connection, every message and its fields, one run step by step, the rules that keep answers in step with the game, the SL node messages, the recommendation, and how the simulator and the mod host differ.'
 sidebar:
   label: The wire
 ---
 
 import WireExchange from '../../../../../components/book/WireExchange.svelte';
 
-The brain never runs inside the game. The game's side, the **host**, asks it one question per decision and gets one answer back. The host is the mod in the real game, or the simulator hosting a run (`run --brain`); the **brain** is Harness with the champion's brains, served by the `brain` command ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). Both ends use the same types (`Sts2Ai.Protocol/Wire.cs`), so a run plays the same whichever host asks.
+The brain never runs inside the game. The game's side, the **host**, asks it one question per decision and gets one answer back. The host is the mod in the real game, or the simulator hosting a run (`run --check`); the **brain** is Harness with the champion's brains, served by the `brain` command ([Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)). Both ends use the same types (`Sts2Ai.Protocol/Wire.cs`), so a run plays the same whichever host asks.
 
 ## 1. The connection
 
-- **A Unix domain socket**, never TCP, so nothing outside the machine can reach the brain. By default `$XDG_STATE_HOME/sts2ai/brain.sock`, or `~/.local/state/sts2ai/brain.sock` when that variable is unset (`BrainSocket.DefaultPath`): Steam runs the game in a container that shares the home directory with the host system, but not `$XDG_RUNTIME_DIR`.
-- **The brain listens** (`BrainServer.Listen`, `Sts2Ai.Harness/BrainServer.cs`). It creates the socket's directory readable by the user only, replaces a socket file left by a brain that is gone, and refuses to start if a brain still listens there. A path starting with a NUL byte names an abstract socket, which has no file: `run --check` uses one for its in-process brain.
-- **One host at a time.** The brain serves one connection until the host closes it, then takes the next. A connection whose bytes are not valid messages is dropped with a warning, and the brain goes on listening.
+- **The brain is the mod's child process.** The mod starts the brain it ships (`brain/RID/` in the mod's folder) as `brain --champion champion.json --workers N`, in the working folder `brain/`, and talks to it over the child's stdin and stdout: messages to the brain on its stdin, answers on its stdout (`Sts2Ai.Mod/BundledBrain.cs`). `champion.json` is the NoSL champion's file, which the brain plays for NoSL hosts and, with the SL planner and L0 on the node's clone, for SL hosts ([Harness §5](/en/arch/harness/#sec-5)). Pipes, not a socket or a port: only the game that started the brain can talk to it. The brain's stderr goes to `brain.log` in `$XDG_STATE_HOME/sts2ai` (by default `~/.local/state/sts2ai`), beside the mod's `settings.json` ([Mod §4](/en/arch/mod/#sec-4)).
+- **A session on record.** With the settings' `Record` on, the mod also gives the brain `--wire` and `--log`: a pair of files named by the brain's start (UTC) in `captures/` in the same folder, every message the mod sent and the decision log, from which `clones` replays the SL decisions ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)).
+- **One host, until stdin closes.** The `brain` command serves the one host that started it (`SimWorker/Commands/BrainCommand.cs`, `Sts2Ai.Harness/BrainServer.cs`), and ends when its stdin closes. A message it cannot read (bad JSON, another protocol version) or a broken pipe ends it too. When the brain ends or the pipes break, the mod kills what is left of it, its search workers included, waits 2 s and starts it again ([Mod: the main loop §8](/en/arch/mod/loop/#sec-8)).
+- **The simulator over the wire.** `run --check` plays each seed a second time over the wire, to a brain server in its own process, on a Unix socket at an abstract name: a path that starts with a NUL byte, which has no file (`BrainServer.Bind`, [Simulator: whole runs §7](/en/arch/simulator/runs/#sec-7)).
 - **Runs one after another.** A connection carries runs in sequence, each from `hello` to `run_end`.
 
 ## 2. The format
@@ -24,7 +25,7 @@ Every message is one line of UTF-8 JSON (`WireStream`). The first property is `t
 {"type":"executed","v":1,"decision_id":0,"action":"event:0","ok":true}
 ```
 
-The version is bumped on any breaking change. A reader refuses a message whose `v` is not its own. Within a version, a field one side does not know is dropped on reading; the observation hash then differs, so a host built from another commit than the brain fails at its first decision with a message saying so ([§5](#sec-5)).
+The version is bumped on any breaking change. A reader refuses a message whose `v` is not its own. Within a version, a field one side does not know is dropped on reading; the observation hash then differs, so a host from another build than the brain fails at its first decision with a message saying so ([§5](#sec-5)).
 
 ## 3. The messages
 
@@ -69,12 +70,12 @@ The opening of the book's example run, as the simulator hosting it in SL would s
 
 **Answers stay in step with the game.**
 
-- The brain answers decisions in order, each before it reads the next message. A `decision_id` not greater than the last one gets an `error` (`BrainServer.cs:101-105`).
-- The brain checks that `obs_hash` is the hash of the `obs` it received. A mismatch means the observation did not survive the trip, most often because the two ends were built from different commits, and gets an `error` saying so.
+- The brain answers decisions in order, each before it reads the next message. A `decision_id` not greater than the last one gets an `error` (`BrainServer.cs:62`).
+- The brain checks that `obs_hash` is the hash of the `obs` it received. A mismatch means the observation did not survive the trip, most often because the two ends come from different builds, and gets an `error` saying so.
 - The recommendation repeats the decision's id and hash. The simulator's host fails the run if either differs; the mod keeps answers by decision id and shows one only while the game still shows the same observation and legal list ([§8](#sec-8)).
 - The action must be one of the decision's legal actions (for a card prompt, picks the prompt accepts); Harness refuses anything else, so an illegal answer reaches the host as an `error`.
 
-**What `error` means.** The brain sends `error` instead of `ready` when it refuses the run (an environment its champion cannot play, such as the SL planner in a NoSL run, or an effort it does not know), and instead of a recommendation when it cannot answer: a decision outside a run, an uncovered surface, an illegal pick, a hash that does not match, a decision after a refused node message. The host then ends the run: the simulator's run fails; the mod sends `run_end` with `failed` and turns the assistant off for that run.
+**What `error` means.** The brain sends `error` instead of `ready` when it refuses the run (an environment its champion cannot play, such as a NoSL host of a brain whose `--policy` is the SL planner, or an effort it does not know; the brain the mod ships takes both environments), and instead of a recommendation when it cannot answer: a decision outside a run, an uncovered surface, an illegal pick, a hash that does not match, a decision after a refused node message. The host then ends the run: the simulator's run fails; the mod sends `run_end` with `failed` and turns the assistant off for that run.
 
 **`executed` and `cancel`.** The simulator's host sends `executed` for a decision once the game has reached the next decision or the end of the run; `ok` is false only when the run failed. The brain reads both messages and ignores them: it answers each decision before reading on, so there is never a search to drop. The mod sends `executed`, with `ok` true, for each answer the AI played at the player's request ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)), and none for the player's own actions; it sends `cancel` when the game moves on before the answer arrives, and waits for that answer before asking again.
 
@@ -130,10 +131,10 @@ The plan and a combat's candidates are what the decision log keeps too ([Harness
 
 ## 8. The two hosts
 
-| | the simulator (`run --brain`, `run --check`) | the mod in the game |
+| | the simulator (`run --check`) | the mod in the game |
 |---|---|---|
 | `role` | `worker` | `mod` |
-| when it asks | at each decision the run reaches | once the screen has been still for 3 frames (the same observation hash and legal list), one decision at a time |
+| when it asks | at each decision the run reaches | once the screen has been still for 3 frames (the same observation hash and legal list), one decision at a time; in SL only in a node it can clone, one with a checkpoint and an unbroken record ([Mod: the SL record §6](/en/arch/mod/sl-record/#sec-6)) |
 | acts on the answer | plays it | shows it; the AI plays it when the player asks ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)) |
 | `executed` | after each action | after each action the AI played |
 | `cancel` | never | when the screen changes first |

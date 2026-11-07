@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: 'What this project builds and how well it plays today, the five ideas the design rests on, the seven rules every decision follows, the processes and how data flows between them, the code, and a map of this book with reading routes.'
+description: 'What this project builds and how well it plays, the five ideas the design rests on, the seven rules every decision follows, the processes and how data flows between them, the code, and a map of this book with reading routes.'
 ---
 import { Badge, LinkCard } from '@astrojs/starlight/components';
 
@@ -9,9 +9,9 @@ This project builds an AI that plays **Slay the Spire 2** (STS2), a single-playe
 - **Assist**: the mod shows the player what the AI would do, its plan for the turn and the options it weighed, with each one's chance to win. This is built ([Mod](/en/arch/mod/), [Output](/en/arch/output/)).
 - **Auto-play**: the AI plays the answers itself in the real game. When the player asks, it plays a step, the rest of a turn or a room, or goes on until paused; this is built. Playing whole runs with no one at the keyboard is planned ([Mod: auto-play and safety](/en/arch/mod/auto/)).
 
-The strategy is learned from zero by self-play; it is not built from anyone's recorded games, and it is not written by hand. The first target is the Silent, single-player only: Ascension 0, then Ascension 10. The game version is pinned at **v0.111.0**; the game runs on Godot 4.5.1 and .NET 9.0.7, and mods change its code at runtime with Harmony patches.
+The strategy is learned from zero by self-play; it is not built from anyone's recorded games, and it is not written by hand. It is single-player only, and one set of nets serves all five characters at every Ascension level. The game version is pinned at **v0.111.0**; the game runs on Godot 4.5.1 and .NET 9.0.7, and mods change its code at runtime with Harmony patches.
 
-**How well it plays today.** In SL, where the AI may replay the room it is in, the champion wins **74%** of whole Silent A0 runs (74 of 100 seeds, 95% interval 64.6–81.6%), and 46%, 35%, 31% and 9% with the Ironclad, the Regent, the Defect and the Necrobinder; with the Silent at A10, the nets it went on from won 8.5% (17 of 200 seeds). In NoSL, where it sees only what a player sees, no champion has won a run yet; the best report reached floor 26.2 on average, with an older value function ([Evaluation](/en/arch/evaluation/)).
+**How well it plays.** In SL, where the AI may replay the room it is in, the champion wins **92%** of whole Silent runs at Ascension 0 (92 of 100 seeds, 95% interval 85.0–95.9%), and 82%, 71%, 68% and 47% with the Ironclad, the Regent, the Defect and the Necrobinder ([Evaluation: champions and baselines §2](/en/arch/evaluation/champions/#sec-2)). In NoSL, where it sees only what a player sees, it plays the same two nets, which learned from SL's games and are not trained or gated in NoSL; the NoSL champion has no report ([Evaluation](/en/arch/evaluation/)).
 
 If you have never played the game, read [The game](/en/arch/game/) first.
 
@@ -21,7 +21,7 @@ If you have never played the game, read [The game](/en/arch/game/) first.
 2. **Two environments.** The game is full of hidden information. In **NoSL** the AI knows only what a player knows. In **SL** it may also see the true outcomes inside the current map point, as a player who saves and reloads could; later rooms stay hidden in both. Each environment has its own champions and leaderboard ([Environments](/en/arch/environments/)).
 3. **Swap the world, not the brain.** The same brains answer the simulator in self-play and the mod in the real game, through the same messages ([Protocol](/en/arch/protocol/), [Harness](/en/arch/harness/)). Only the host changes.
 4. **The real game, headless.** The simulator is not a model of the game: it runs the game's own `sts2.dll` in a plain .NET process, without graphics, with its rules untouched ([Simulator](/en/arch/simulator/)).
-5. **No fallback.** A decision that no brain covers stops the run with an error; it is never made at random. A random decision voids an evaluation.
+5. **No fallback.** A decision that no brain covers stops the run with an error; it is never made at random. A decision by a random placeholder voids an evaluation.
 
 ## 2. Seven rules
 
@@ -52,14 +52,14 @@ flowchart TD
   subgraph W["SimWorker × N (real sts2.dll, headless)"]
     WS["worlds · SL clones<br/>searches · whole runs"]
   end
-  G <-->|"JSON lines<br/>Unix socket"| D
+  G <-->|"JSON lines<br/>stdin / stdout"| D
   D <-->|"JSON lines<br/>child pipes"| W
   D -.->|"decision logs<br/>run records"| OFF["offline<br/>train V and the combat net<br/>gate · promote"]
   OFF -.->|"weights"| D
 ```
 
 - **The game process**: the real game with the mod. The mod reads the decision on screen with GameBridge (observe, list the legal actions; the simulator also starts actions with it), asks the brain, and draws the answer ([Mod](/en/arch/mod/)).
-- **The brain process**: SimWorker's `brain` command, or the same objects inside `run`. It loads no game code. Harness gives each run a dispatcher that routes each decision to a brain, draws its seed, checks its answer and logs it ([Harness](/en/arch/harness/)).
+- **The brain process**: SimWorker's `brain` command, which the mod starts as a child process and talks to on its stdin and stdout, or the same objects inside `run`. It loads no game code. Harness gives each run a dispatcher that routes each decision to a brain, draws its seed, checks its answer and logs it ([Harness](/en/arch/harness/)).
 - **SimWorker processes**: each runs the real `sts2.dll` headless. They build the worlds a search plays in, load SL clones, run searches, and host whole runs in self-play and evaluation ([Simulator](/en/arch/simulator/)). The game keeps its run in singletons, so one process holds one live game: search spreads over many processes ([Simulator: the worker pool](/en/arch/simulator/pool/)).
 - **Offline**: Python under `learn/` trains V and the combat net from decision logs and run records, and a gate decides whether a new net replaces the champion ([Learning](/en/arch/learning/), [Evaluation](/en/arch/evaluation/)).
 
@@ -83,20 +83,21 @@ Beside `src/`:
 
 - `learn/`: the Python that trains V (`learn/v/`) and the combat net (`learn/combat/`), and the gate script, run with uv ([Learning](/en/arch/learning/));
 - `weights/`: the trained nets, one JSON file each; the nets every character shares in `weights/all/`;
-- `eval/`: seed sets, the champion files and the ledger, and each character's reports and leaderboard ([Evaluation](/en/arch/evaluation/));
+- `eval/`: seed sets, the champion files, and each character's reports and leaderboard ([Evaluation](/en/arch/evaluation/));
+- `distro/`: the mod's packaging; `distro/build.sh` builds the Workshop item into `out/Sts2Ai/` (not in git): the mod, a self-contained brain for each platform, and the NoSL champion's file with its nets, which serves both environments ([Mod §3](/en/arch/mod/#sec-3));
 - `docs/`: this book;
-- the data directory (`data/`), with self-play and evaluation logs, is kept on the project's storage host, not in git.
+- `data/`: where self-play and evaluation write their logs and records; not in git.
 
 ## 5. This book
 
-The book has an introduction, four parts and two appendices, in the order of the sidebar. A page's badge shows its status.
+The book has an introduction, four parts and an appendix, in the order of the sidebar. A page's badge shows its status.
 
 **Part I: The problem**
 
 | chapter | what it covers | status |
 |---|---|---|
 | [The game](/en/arch/game/) | runs, the map, rooms, combat, characters, Ascension, randomness and what is hidden | |
-| [Environments](/en/arch/environments/) | what the AI may know in NoSL and SL, the node, worlds and the two combat algorithms | <Badge text="decided" variant="success" /> |
+| [Environments](/en/arch/environments/) | what the AI may know in NoSL and SL, the node, worlds and the two combat algorithms | <Badge text="built" variant="success" /> |
 
 **Part II: Deciding**
 
@@ -125,14 +126,14 @@ The book has an introduction, four parts and two appendices, in the order of the
 | [Mod](/en/arch/mod/) | the in-game host: the main loop, the SL record, auto-play and safety | <Badge text="partly built" variant="tip" /> |
 | [Output](/en/arch/output/) | the panel, the marks, the planned auto loop and narration | <Badge text="partly built" variant="tip" /> |
 
-**Appendices**: [Status and roadmap](/en/status/) and the [Glossary](/en/glossary/).
+**Appendix**: the [Glossary](/en/glossary/).
 
 **Reading routes:**
 
 - *To use the AI in the game*: [The game](/en/arch/game/), [Environments](/en/arch/environments/), then [Mod](/en/arch/mod/) and [Output](/en/arch/output/).
 - *To train a net*: [Macro brain](/en/arch/macro-brain/), [Learning](/en/arch/learning/), [Evaluation](/en/arch/evaluation/), then [Simulator: whole runs](/en/arch/simulator/runs/).
 - *To add a decision screen, or follow a game update*: [Protocol: observations and actions](/en/arch/protocol/observation/), [GameBridge](/en/arch/gamebridge/), [Simulator: whole runs §4](/en/arch/simulator/runs/#sec-4), [Mod: the main loop §4](/en/arch/mod/loop/#sec-4).
-- *To see how strong it is*: [Evaluation](/en/arch/evaluation/) and [Status](/en/status/).
+- *To see how strong it is*: [Evaluation](/en/arch/evaluation/) and [Evaluation: champions and baselines](/en/arch/evaluation/champions/).
 
 <LinkCard title="Start here: The game" description="What a run of Slay the Spire 2 is, and what is hidden in it. Every other page builds on it." href="/en/arch/game/" />
 
@@ -141,13 +142,7 @@ The book has an introduction, four parts and two appendices, in the order of the
 **Reading the pages**
 
 - <Badge text="verified" variant="success" /> means the claim was checked in the game's source. <Badge text="inferred" variant="caution" /> means it was inferred and must be checked before anything relies on it.
-- Game source locations such as `Runs/RunManager.cs:670-709` are paths in the decompiled game, with the `MegaCrit.Sts2.Core.` prefix of its folder names left out. The decompiled code stays local (`tmp/decompiled/sts2/`) and is not in the repository. Godot node classes (`N*`) are found by file name, which is unique.
+- Game source locations such as `Runs/RunManager.cs:670-709` are paths in the decompiled game, with the `MegaCrit.Sts2.Core.` prefix of its folder names left out. The decompiled game is not in the repository. Godot node classes (`N*`) are found by file name, which is unique.
 - Our own code is cited by its path under `src/` or `learn/`, often without the `src/Sts2Ai.` prefix where the chapter makes the project clear.
-- "Harness §3" points to a numbered section of a page. Its anchor is `#sec-3` in all three languages (`/en/arch/harness/#sec-3`). A chapter of several pages names the page as well: "Macro brain: search §2" is `/en/arch/macro-brain/search/#sec-2`. Code comments cite sections the same way: `docs: harness §3`, `docs: macro-brain/search §2`.
-- Background notes, in Chinese, are kept locally under `tmp/notes/` and are not in the repository.
-
-**Maintaining it**
-
-- The English pages are the reference version, and Claude reads them as its design manual. The Simplified and Traditional Chinese pages say the same thing. Change all three in the same commit.
-- Keep section numbers stable: code comments cite them.
-- Before committing, run `pnpm check` in `docs/`: it builds the site and checks every internal link and anchor.
+- "Harness §3" points to a numbered section of a page. Its anchor is `#sec-3` in all three languages (`/en/arch/harness/#sec-3`). A chapter of several pages names the page as well: "Macro brain: search §2" is `/en/arch/macro-brain/search/#sec-2`. Code comments cite sections the same way, `docs: harness §3`, `docs: macro-brain/search §2`, so a section keeps its number.
+- The English pages are the reference version; the Simplified and Traditional Chinese pages say the same thing.

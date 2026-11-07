@@ -37,8 +37,8 @@ $S_g$ is the chance to be still going after floor $g$, and $e_g$ the chance that
 
 Why hazards rather than one output for the chance to win:
 
-- **Every floor gets a label.** Few runs are won: 286 of the 21,275 runs of a generation's self-play ([Self-play §4](/en/arch/macro-brain/selfplay/#sec-4)). As a single target, almost every sample would say only "lost". A sample that survived floors 5 to 32 and died on 33 says something about each of those floors.
-- **Stopped runs still count.** A run cut short (*censored*: truncated, or its time box ended) says nothing about the floors after it stopped, and the mask simply leaves them out. A single target would have to guess.
+- **Every floor gets a label.** Most runs are lost: about three in four of the runs the champion's V learned from ([The value network §6](/en/arch/macro-brain/network/#sec-6)). As a single target, most samples would say only "lost". A sample that survived floors 5 to 32 and died on 33 says something about each of those floors.
+- **Stopped runs still count.** A run cut short (*censored*: truncated at `run --max-decisions`) says nothing about the floors after it stopped, and the mask simply leaves them out. A single target would have to guess.
 - **The whole distribution.** The same head gives where the run is likely to end, which a report can read.
 
 Why the chance to win rather than the floor reached: the floor weighs every floor the same, so it can prefer a safe line that reliably reaches act 2 to a riskier one that sometimes wins. Winning is the goal, and runs win often enough for it to be measured.
@@ -115,7 +115,7 @@ $$
 
 both counted by the samples' weights, and the net only has to learn how the run moves each floor's hazard away from that average. It moves slowly enough for held-out runs to say when to stop.
 
-**Going on from a net (`--init`).** Training can start from an earlier net file instead of from scratch: its standardization and its weights, read back from its ONNX graph (`export.weights`). The second head, not in the file, starts anew. A net of this structure goes on only from a net of this structure, and a file with other tables than the game's is refused.
+**Going on from a net (`--init`).** Training can start from a net file instead of from scratch: its standardization and its weights, read back from its ONNX graph (`export.weights`). The second head, not in the file, starts anew. A net of this structure goes on only from a net of this structure, and a file with other tables than the game's is refused.
 
 **On the GPU**, a batch's tensors are built from the samples as lists, then one tensor each. Each training runs on one GPU.
 
@@ -131,5 +131,6 @@ The trainer prints a report and writes it into the net file (`fit`). All of it i
 | `held_out_next_combats` | the second head's error |
 | `brier_held_out`, `brier_held_out_floor_only` | the Brier score of P(win): the weighted mean of (predicted chance − won)², and the baseline's |
 | `won_held_out_runs` | how many held-out runs were won |
+| `init_held_out_loss`, `init_brier_held_out` | with `--init`: the starting file's hazard loss and Brier score on the same held-out decisions |
 
 The Brier score measures how well V tells apart states of different runs. A decision only needs V to order the options of one state correctly, which it does not measure. That is why every net is judged by playing ([Self-play §5](/en/arch/macro-brain/selfplay/#sec-5)).

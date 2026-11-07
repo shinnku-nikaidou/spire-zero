@@ -15,7 +15,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-已有：無頭宿主（[無頭宿主](/zh-tw/arch/simulator/headless/)）；帶快照、確定化和 CombatBuilder 的單場戰鬥工作階段（[戰鬥](/zh-tw/arch/simulator/combat/)）；走過每個決策畫面的整局，以及透過線路對接大腦來託管的對局（[整局](/zh-tw/arch/simulator/runs/)）；NoSL 戰鬥世界和 SL 節點複本（[世界與 SL 複本](/zh-tw/arch/simulator/worlds/)）；工作行程池及其三種請求（[工作行程池](/zh-tw/arch/simulator/pool/)）。規劃中：整局世界，它能讓 NoSL 搜尋看到當前地圖點之後的東西（[世界與 SL 複本 §8](/zh-tw/arch/simulator/worlds/#sec-8)）。
+已有：無頭宿主（[無頭宿主](/zh-tw/arch/simulator/headless/)）；帶快照、確定化和 CombatBuilder 的單場戰鬥工作階段（[戰鬥](/zh-tw/arch/simulator/combat/)）；走過每個決策畫面的整局，在行程內打，在 `run --check` 下再透過線路打一遍（[整局](/zh-tw/arch/simulator/runs/)）；NoSL 戰鬥世界和 SL 節點複本（[世界與 SL 複本](/zh-tw/arch/simulator/worlds/)）；工作行程池及其三種請求（[工作行程池](/zh-tw/arch/simulator/pool/)）。規劃中：整局世界，它能讓 NoSL 搜尋看到當前地圖點之後的東西（[世界與 SL 複本 §8](/zh-tw/arch/simulator/worlds/#sec-8)）。
 
 </Aside>
 
@@ -59,7 +59,7 @@ flowchart LR
   H -->|"每個世界、回合<br/>或試探一個請求"| POOL
 ```
 
-在打整局的指令 `run` 裡，宿主和決策行程是同一個行程：這一局在其中一直活著，大腦則在它啟動的工作行程池裡搜尋。用 `run --brain SOCKET` 時，大腦改為一個獨立的行程，也就是 Mod 所連接的那一個（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。
+在打整局的指令 `run` 裡，宿主和決策行程是同一個行程：這一局在其中一直活著，大腦則在它啟動的工作行程池裡搜尋。`brain` 是同樣的 Harness 和大腦，獨立成一個行程：Mod 啟動它，並透過它的 stdin 和 stdout 與它溝通（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)）。
 
 ## 4. 程式碼
 
@@ -82,9 +82,9 @@ flowchart LR
 |---|---|
 | [無頭宿主](/zh-tw/arch/simulator/headless/) | 遊戲如何在沒有引擎的情況下啟動：原生存根、補丁、TestMode、JIT，以及讓它具有確定性的單執行緒 `Pump` |
 | [戰鬥](/zh-tw/arch/simulator/combat/) | 戰鬥工作階段、作為配方的快照、確定化、從觀測建構戰鬥（CombatBuilder）、保真度與速度 |
-| [整局](/zh-tw/arch/simulator/runs/) | `RunSession`：開始一局、「步進—穩定—決策」迴圈、每個決策畫面、確定性、對接大腦託管對局 |
+| [整局](/zh-tw/arch/simulator/runs/) | `RunSession`：開始一局、「步進—穩定—決策」迴圈、每個決策畫面、確定性、獨立成行程的大腦 |
 | [世界與 SL 複本](/zh-tw/arch/simulator/worlds/) | NoSL 戰鬥世界、節點檢查點、SL 複本的載入與封存、SL 世界、整局世界 |
 | [工作行程池](/zh-tw/arch/simulator/pool/) | 池、它的三種請求、跨行程的確定性、當機與速度 |
 | [參考](/zh-tw/arch/simulator/reference/) | 建置與執行、每個指令和選項、結束代碼、每個測試 |
 
-像 `Runs/RunManager.cs:295-312` 這樣的檔案引用，指向反編譯出的遊戲組件 `MegaCrit.Sts2.Core`（資料夾 `Runs/` 就是它的命名空間 `MegaCrit.Sts2.Core.Runs`）；像 `Simulation/RunSession.cs` 這樣的專案路徑，除非寫明是別的專案，都在 `src/Sts2Ai.SimWorker/` 之下。Godot 節點檔案（`NGame.cs`、`NRestSiteRoom.cs`）按檔名唯一，所以只寫檔名。
+像 `Runs/RunManager.cs:295-312` 這樣的檔案引用，指向反編譯出的遊戲組件 `MegaCrit.Sts2.Core`，它不在儲存庫裡（資料夾 `Runs/` 就是它的命名空間 `MegaCrit.Sts2.Core.Runs`）；像 `Simulation/RunSession.cs` 這樣的專案路徑，除非寫明是別的專案，都在 `src/Sts2Ai.SimWorker/` 之下。Godot 節點檔案（`NGame.cs`、`NRestSiteRoom.cs`）按檔名唯一，所以只寫檔名。

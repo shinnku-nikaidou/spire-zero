@@ -8,15 +8,15 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 import WilsonInterval from '../../../../components/book/WilsonInterval.svelte';
 import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
-一次评估用一个冠军打一个种子集，并写出一份报告。本页讲报告里有什么：数字、种子和文件。两份报告如何比较，见下一页[晋级门槛](/arch/evaluation/gates/)。下面用作算例的数字来自一份已提交的报告，即**示例报告**：一个较早的冠军在 `promotion-1-300` 上，300 局赢 23 局。
+一次评估用一个冠军打一个种子集，并写出一份报告。本页讲报告里有什么：数字、种子和文件。两份报告如何比较，见下一页[晋级门槛](/arch/evaluation/gates/)。下面用作算例的数字来自一份已提交的报告，即**示例报告**：冠军的亡灵契约师在 `promotion-1-100` 上，100 局赢 47 局。
 
 ## 1. 主要指标
 
 **胜率**是获胜局数所占的比例，附它的 Wilson 95% 区间（[§4](#sec-4)）。这是游戏对玩家的要求，也是 V 做决定所依据的、胜局门槛所比较的指标（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
 
-**平均到达层数**在胜局稀少时充当替代。0 胜对 0 胜的差什么也说明不了，而层数仍能把两个大脑区分开，所以 C# 门槛默认比较层数（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。层数是一局结束时的 `TotalFloor`。赢下的一局结束在第 48 层，死在第 3 幕 Boss 的一局也一样：示例报告有 65 局打到这个 Boss，23 局赢了，42 局死在那里，65 局都记为 48。层数分不清胜利和倒在最后一道门前。
+**平均到达层数**在胜局稀少时充当替代。0 胜对 0 胜的差什么也说明不了，而层数仍能把两个大脑区分开，所以两种门槛都在它们按胜局的判定旁边列出层数之差（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)、[§10](/arch/evaluation/gates/#sec-10)）。层数是一局结束时的 `TotalFloor`。赢下的一局结束在第 48 层，死在第 3 幕 Boss 的一局也一样：示例报告有 74 局打到这个 Boss，47 局赢了，27 局死在那里，74 局都记为 48。层数分不清胜利和倒在最后一道门前。
 
-**进入每幕 Boss 战时的生命值**。对每一幕，报告取每个打到 Boss 战的对局里的第一场 Boss 战，给出有多少局打到那里，以及战斗开始时它们的生命值，包括绝对值和占最大生命值的比例（`Harness/Reports.cs:46-48`）。示例报告的 300 局里有 290 局进入第 1 幕 Boss 战，平均生命值 63.4（最大值的 87%）。打赢的 Boss 不在报告里；对局记录里有（[§8](#sec-8)）。
+**进入每幕 Boss 战时的生命值**。对每一幕，报告取每个打到 Boss 战的对局里的第一场 Boss 战，给出有多少局打到那里，以及战斗开始时它们的生命值，包括绝对值和占最大生命值的比例（`Harness/Reports.cs:46-48`）。示例报告的 100 局里有 95 局进入第 1 幕 Boss 战，平均生命值 48.7（最大值的 69%）。打赢的 Boss 不在报告里；对局记录里有（[§8](#sec-8)）。
 
 ## 2. 必须为零的项
 
@@ -31,14 +31,14 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 作废的报告留在排行榜上，带标记，排在最后；不管挑战者的对局打到哪里，门槛都给作废的挑战者判定作废（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。
 
-**失败的对局就当从没设定过**。`report` 和 `gate` 通过 `RunRecord.Read` 读记录，它会去掉每条结局为 `failed` 的记录，`RunRecord.SeedsLeft` 再把它的种子从种子集里去掉，所以 500 局有 2 局失败，得到的是 498 局中的 498 局，既不作废，也不算不完整（`Harness/RunRecords.cs:32-39`）。对局失败的原因在主机，比如一台内存会翻转比特的机器，它说明不了大脑的好坏。`learn/gate.py` 和 `v.train` 同样丢掉它们（`learn/gate.py:42`、`learn/v/data.py:64`），配对也要两边都打完（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
+**失败的对局就当从没设定过**。`report` 和 `gate` 通过 `RunRecord.Read` 读记录，它会去掉每条结局为 `failed` 的记录，`RunRecord.SeedsLeft` 再把它的种子从种子集里去掉，所以 500 局有 2 局失败，得到的是 498 局中的 498 局，既不作废，也不算不完整（`Harness/RunRecords.cs:32-39`）。对局失败的原因在大脑之外，比如进程崩溃或机器故障，它说明不了大脑的好坏。`learn/gate.py` 和 `v.train` 同样丢掉它们（`learn/gate.py:42`、`learn/v/data.py:64`），配对也要两边都打完（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
 
 **被截断的对局在胜率里算作输局**，并且从不重打：种子决定了这一局，重打只会重复它，而丢掉它就等于挑种子（`Harness/Reports.cs:54`）。
 
 还有两个计数应当放在这里，但并不存在：
 
 - **`NumReloads`**，游戏对真实读档次数的计数，在真实游戏里必须为 0 <Badge text="规划中" variant="caution" />。它计划作为 Mod 决策日志的一个字段；目前没有任何东西读取它（[环境：信息与节点 §8](/arch/environments/information/#sec-8)）。
-- **NoSL 对局里的存档导出**没有计数器。模拟的 NoSL 对局从不导出节点检查点（`SimWorker/Commands/RunCommand.cs:239`），NoSL 的 `Dispatcher` 也会拒绝导出（`Harness/Dispatcher.cs:173`），所以一次导出会以错误结束这一局，而不是变成一个计数。
+- **NoSL 对局里的存档导出**没有计数器。模拟的 NoSL 对局从不导出节点检查点（`SimWorker/Commands/RunCommand.cs:233`），NoSL 的 `Dispatcher` 也会拒绝导出（`Harness/Dispatcher.cs:173`），所以一次导出会以错误结束这一局，而不是变成一个计数。
 
 ## 3. 辅助指标
 
@@ -46,18 +46,18 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 | 指标 | 怎么算 | 示例报告 |
 |---|---|---|
-| `elites_per_run` | 每局的精英战场数 | 1.08 |
-| `card_reward_skips` | 在提供的卡牌奖励里，一张牌也没拿就离开的比例，附 Wilson 区间 | 29.7%（5,351 次中的 1,588 次） |
-| `gold_mean` | 一局结束时的金币 | 208 |
-| `seconds_per_run` | 各局墙钟时间除以局数 | 271.2 s |
-| `ms_per_decision` | 各局墙钟时间除以它们的全部决策数 | 488.6 ms |
-| `surfaces` | 每个决策界面的决策数，求和，从多到少 | combat 118,832、rewards 15,676、map 11,260、…（[模拟器：整局 §4](/arch/simulator/runs/#sec-4)） |
+| `elites_per_run` | 每局的精英战场数 | 3.36 |
+| `card_reward_skips` | 在提供的卡牌奖励里，一张牌也没拿就离开的比例，附 Wilson 区间 | 35.4%（1,983 次中的 701 次） |
+| `gold_mean` | 一局结束时的金币 | 182 |
+| `seconds_per_run` | 各局墙钟时间除以局数 | 1,045.7 s |
+| `ms_per_decision` | 各局墙钟时间除以它们的全部决策数 | 1,358.4 ms |
+| `surfaces` | 每个决策界面的决策数，求和，从多到少 | combat 59,579、rewards 5,668、map 4,237、…（[模拟器：整局 §4](/arch/simulator/runs/#sec-4)） |
 
-打的精英数、跳过率、金币和每个 Boss 前的生命值是保守程度的监测指标：一个学会规避风险的大脑，会先在这些数字上表现出来，然后才体现在层数上（[学习：循环 §13](/arch/learning/loop/#sec-13)）。对局记录给出的比报告打印的更多：打赢的 Boss，以及每一局死在哪里、什么房间（[§8](#sec-8)）。墙钟时间取决于主机和它的负载，所以 `seconds_per_run` 只能比较同时并排打的对局。
+打的精英数、跳过率、金币和每个 Boss 前的生命值是保守程度的监测指标：一个学会规避风险的大脑，会先在这些数字上表现出来，然后才体现在层数上（[学习：循环 §13](/arch/learning/loop/#sec-13)）。对局记录给出的比报告打印的更多：打赢的 Boss，以及每一局死在哪里、什么房间（[§8](#sec-8)）。墙钟时间取决于机器和它的负载，所以 `seconds_per_run` 只能比较同时并排打的对局。
 
 **规划中** <Badge text="规划中" variant="caution" />，还不在任何报告里：
 
-- **校准**：V 预测的获胜机会与实际结局有多接近。Brier 分数（预测机会与这一局的 1 或 0 之间的均方差）只出现在 `v.train` 对整局的留出报告里，即 `brier_held_out` 对比 `brier_held_out_floor_only`，后者是一个只知道层数的模型（`learn/v/train.py:160-177`）；没有哪次评估计算它，也没有任何东西拿它和常数预测比较。
+- **校准**：V 预测的获胜机会与实际结局有多接近。Brier 分数（预测机会与这一局的 1 或 0 之间的均方差）只出现在 `v.train` 对整局的留出报告里，即 `brier_held_out` 对比 `brier_held_out_floor_only`，后者是一个只知道层数的模型（`learn/v/train.py:167-182`）；没有哪次评估计算它，也没有任何东西拿它和常数预测比较。
 - **搜索计算量**：每个决策搜索的分支数和克隆查询次数。报告里只有墙钟时间。
 - **囤积药水**：持有而未用的药水。
 
@@ -73,7 +73,7 @@ h = \frac{z\sqrt{\frac{\hat p(1-\hat p)}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{
 [\,\max(0, c - h),\ \min(1, c + h)\,].
 $$
 
-中心向二分之一移动，区间也永远不会超出 [0, 1]。200 局 0 胜给出 0–1.9%：即使一个在这些种子上从未赢过的大脑，也可能赢下多达 1.9% 的对局。300 局 1 胜给出 0.1–1.9%，而正态区间会给出 −0.3% 到 1.0%。代码是 `Rate.Wilson`（`Harness/Reports.cs:10-17`；0 局给出区间 0–1），每份报告和排行榜都把比率打印成 `7.7 % (23/300, 5.2 %–11.2 %)` 这样的形式（`Rate.ToString`，`:19`）。
+中心向二分之一移动，区间也永远不会超出 [0, 1]。200 局 0 胜给出 0–1.9%：即使一个在这些种子上从未赢过的大脑，也可能赢下多达 1.9% 的对局。300 局 1 胜给出 0.1–1.9%，而正态区间会给出 −0.3% 到 1.0%。代码是 `Rate.Wilson`（`Harness/Reports.cs:10-17`；0 局给出区间 0–1），每份报告和排行榜都把比率打印成 `47.0 % (47/100, 37.5 %–56.7 %)` 这样的形式（`Rate.ToString`，`:19`）。
 
 <WilsonInterval client:visible lang="zh-CN" />
 
@@ -91,18 +91,18 @@ $$
 
 | 文件 | 种子 | 生成方式 | 用于 |
 |---|---|---|---|
-| `promotion-1.txt` | 200 | `seeds --base 2 --n 200` | 较早的报告 |
-| `promotion-1-300.txt` | 300：先是 `promotion-1` 的 200 个，顺序不变，再加 100 个 | `seeds --base 2 --n 300` | 胜局门槛，用 medium 和 low 预算 |
-| `promotion-1-100.txt`、`promotion-101-300.txt` | 100 和 200：把 `promotion-1-300` 切成两段，顺序不变 | 从 `promotion-1-300.txt` 切出 | 打这个种子集一部分的对局；前一段上的一份报告 |
-| `promotion-1-200.txt` | 200：`promotion-1-300` 的前 200 个，和 `promotion-1` 是同样的种子 | 从 `promotion-1-300.txt` 切出 | A10 门槛的报告 |
+| `promotion-1.txt` | 200 | `seeds --base 2 --n 200` | 200 个种子上的报告 |
+| `promotion-1-300.txt` | 300：先是 `promotion-1` 的 200 个，顺序不变，再加 100 个 | `seeds --base 2 --n 300` | 300 个种子上的报告 |
+| `promotion-1-100.txt`、`promotion-101-300.txt` | 100 和 200：把 `promotion-1-300` 切成两段，顺序不变 | 从 `promotion-1-300.txt` 切出 | 前一段：胜局门槛，每个角色，以及冠军的报告（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）；后一段：打这个种子集其余部分的对局 |
+| `promotion-1-200.txt` | 200：`promotion-1-300` 的前 200 个，和 `promotion-1` 是同样的种子 | 从 `promotion-1-300.txt` 切出 | 200 个种子上的报告 |
 | `a10-check-1.txt` | 200 | `seeds --base 4 --n 200` | 在其他种子集的数据上训练或接着训练的网络的 A10 胜率；在它上面的任何对局之前就已登记 |
 | `final-1.txt` | 300 | `seeds --base 3 --n 300` | 从未跑过 |
 | `check-clone-loop.txt` | `promotion-1` 的 29 个种子，按序号挑选 | 手工 | 一次开发检查；不是报告用的种子集 |
 
-- **训练种子和测试种子从不相遇**。自我对弈作业只打训练种子，评估作业只打 `eval/seeds/` 里的文件；作业启动器 `box.py` 拒绝其他做法，训练也拒绝含有评估作业对局的清单（[学习：参考 §5](/arch/learning/reference/#sec-5)）。`promotion-1-300` 及其各部分、`final-1` 和 `a10-check-1` 从未用于训练。
-- **`eval/seeds/retired/`** 存放不能再用来测试的种子集：`promotion-1-500`（`seeds --base 2 --n 500`，先是 `promotion-1-300`，再加 200 个），因为它后 200 个种子上的中等预算对局在较早战斗网络的数据里，也就进了 c8-1、c8-2、c8-3、c9-0 和 c9-1 这一脉。在它上面报告过的结果仍作为历史保留。
-- **训练种子**是 `MakeSeed(1, i)`，即 `run --seed 1 --start K` 所打的种子。账本以 100,000 个为一块分发它们，每批一块，所以没有两批共用一个种子（`eval/ledger.md`，[学习：参考 §5](/arch/learning/reference/#sec-5)）。
-- **晋级种子集是嵌套的**。每个较大的种子集都把较小的那个的种子放在前面，顺序不变，所以较大种子集上的报告能在共有的种子上与较小种子集上的报告配对。`promotion-1.txt` 的文件头写着用完之后轮换到 `promotion-2`（基数 4）；但 `promotion-2` 并不存在，基数 4 给了 `a10-check-1`。
+- **训练种子和测试种子从不相遇**。自我对弈作业只打训练种子，评估作业只打 `eval/seeds/` 里的文件；训练拒绝含有评估作业对局的清单（[学习：参考 §5](/arch/learning/reference/#sec-5)）。`promotion-1-300` 及其各部分、`final-1` 和 `a10-check-1` 从未用于训练。
+- **`eval/seeds/retired/`** 存放不能再用来测试的种子集：`promotion-1-500`（`seeds --base 2 --n 500`，先是 `promotion-1-300`，再加 200 个），因为它后 200 个种子上的中等预算对局在冠军的战斗网络学过的数据里。
+- **训练种子**是 `MakeSeed(1, i)`，即 `run --seed 1 --start K` 所打的种子。每个数据集打自己的一个 100,000 宽的区段，所以没有两个数据集共用一个种子（[学习：参考 §5](/arch/learning/reference/#sec-5)）。
+- **晋级种子集是嵌套的**。每个较大的种子集都把较小的那个的种子放在前面，顺序不变，所以较大种子集上的报告能在共有的种子上与较小种子集上的报告配对。
 - **`final-1` 从未打过**：每份已提交的报告都在某个晋级种子集上。
 - R1–R3 的对局由模拟器开局；R4 的对局将由 Mod 用同样的种子开局（[Mod：自动游玩与安全 §2](/arch/mod/auto/#sec-2)）。
 
@@ -120,7 +120,7 @@ public static string MakeSeed(int seed, int index)
 }
 ```
 
-生成器的种子是 基数 × 1,000,003 + 序号 × 7,919，按 32 位回绕，再与 `0x5eed` 做异或。.NET 的 `new Random(int)` 接着取它的绝对值（`int.MinValue` 当作 `int.MaxValue`），所以两组（基数，序号）给出相同的种子字符串，当且仅当这两个绝对值相等。7,919 是奇数，所以在同一个基数之内，2³² 以下的任何两个序号都不会相撞；不同基数之间则可能相撞。这里对正在使用的种子集算过：训练生成器（基数 1）第一次碰到 `a10-check-1` 的某个生成器种子是在训练序号 40,134,134，碰到 `promotion-1-300` 的是在序号 242,435,318，碰到 `final-1` 的是在序号 1,100,994,758；这三者没有共同的生成器种子。所以对账本将来会分发的任何一块，这些种子集都互不相交。`promotion-1.txt` 的文件头说，相差小于 7,919 的基数永远不会共用生成器种子；由于运算会回绕，这只在序号较小时成立。
+生成器的种子是 基数 × 1,000,003 + 序号 × 7,919，按 32 位回绕，再与 `0x5eed` 做异或。.NET 的 `new Random(int)` 接着取它的绝对值（`int.MinValue` 当作 `int.MaxValue`），所以两组（基数，序号）给出相同的种子字符串，当且仅当这两个绝对值相等。7,919 是奇数，所以在同一个基数之内，2³² 以下的任何两个序号都不会相撞；不同基数之间则可能相撞。这里对正在使用的种子集算过：训练生成器（基数 1）第一次碰到 `a10-check-1` 的某个生成器种子是在训练序号 40,134,134，碰到 `promotion-1-300` 的是在序号 242,435,318，碰到 `final-1` 的是在序号 1,100,994,758；这三者没有共同的生成器种子。所以对低于 40,134,134 的任何训练序号，这些种子集都互不相交。`promotion-1.txt` 的文件头说，相差小于 7,919 的基数永远不会共用生成器种子；由于运算会回绕，这只在序号较小时成立。
 
 一局自己的随机性（占位策略、各大脑的种子、探索）来自种子字符串的哈希，从不来自游戏的随机数流，所以单凭种子就决定了整局，不论它在哪个种子集里、排第几（[Harness：路由、预算与种子 §5](/arch/harness/routing/#sec-5)）。正因如此，冠军的报告才能在之后的每一道门槛里重复用作冠军一方（[晋级门槛 §2](/arch/evaluation/gates/#sec-2)）。
 
@@ -162,11 +162,11 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 - **Auxiliary**（辅助）：每局精英数、跳过的卡牌奖励、结束时的金币；每局秒数和每个决策的毫秒数；各决策界面；
 - **Against DATE (CHAMPION, commit X)**，在给出 `--previous OLD.json` 时，或在 `gate --promote` 写出冠军的继任者时出现：胜率、层数均值、每一幕打到 Boss 的局数、随机决策和失败局数的前后对比；种子集或环境不同时则写「Not comparable」。
 
-**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-LEVEL-SET-NAME.json` 和 `.md`，全部小写：LEVEL 是进阶等级，`a0` 或 `a10`（较早的名字里是 `r1`，即进阶 0）；NAME 写明是谁打的：在 `DATE-sl-a0-promotion-1-100-plan-c9-2-l0-v9-2-clone-first` 里，是配战斗网络 `c9-2` 的 SL 规划器、在克隆上配 V `v9-2` 的 L0、没有搜索权衡的战斗提示由 `first` 回答。这只是约定；`--out` 接受任何路径。
+**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-LEVEL-SET-NAME.json` 和 `.md`，全部小写：LEVEL 是进阶等级，`a0` 或 `a10`；NAME 写明是谁打的：在 `DATE-sl-a0-promotion-1-100-plan-C-l0-V-clone-first` 里，是配战斗网络 `C` 的 SL 规划器、在克隆上配 V `V` 的 L0、没有搜索权衡的战斗提示由 `first` 回答。这只是约定；`--out` 接受任何路径。
 
 ## 8. 对局记录
 
-`run --records FILE` 每行写一条对局记录，每局结束时立即刷新写入；中途停下的一局什么也不写（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）。记录（`RunRecord`，`Harness/RunRecords.cs:25-28`；在 `SimWorker/Commands/RunCommand.cs:272-284` 构建）：
+`run --records FILE` 每行写一条对局记录，每局结束时立即刷新写入；中途停下的一局什么也不写（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）。记录（`RunRecord`，`Harness/RunRecords.cs:25-28`；在 `SimWorker/Commands/RunCommand.cs:270-275` 构建）：
 
 | 字段 | 内容 |
 |---|---|
@@ -181,11 +181,11 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 | `card_rewards`、`card_rewards_skipped` | 提供的卡牌奖励，以及其中一张牌也没拿就离开的 |
 | `game_errors`、`failure`、`elapsed_ms` | 游戏错误、失败对局的异常（`Type: first line`），以及这一局的墙钟时间 |
 
-`end` 是战斗网络结局输出头的目标（[学习：训练战斗网络 §1](/arch/learning/combat-net/#sec-1)）。最早提交的那些报告根本没有 `end`。
+`end` 是战斗网络结局输出头的目标（[学习：训练战斗网络 §1](/arch/learning/combat-net/#sec-1)）。
 
-**缺失的 end**。按记录类型的说法，只有当一局因为死亡以外的原因（失败、截断）停在战斗中时，`end` 才会缺失。`RunSession` 在会话稳定下来时写 `end`，在某个决策自己的动作结束了这一局之后（比如回合结束时手里的牌，或一次扣生命值的出牌）也立即写；一局在第一个决策之前就死在其中的战斗，这时以 0 生命值得到它的条目（`SimWorker/Simulation/RunSession.cs:234-238, 260, 265-272`）。已提交的进阶 0 报告是由不为决策自身动作中的死亡写 `end` 的代码打出的：其中每份带 end 的报告都有 1 到 13 局输局的最后一场战斗没有 `end`，每一局都在那场战斗所在的层以 0 生命值告负；在示例报告里，277 局输局中有 8 局。进阶 10 的报告里没有这样的对局。
+**缺失的 end**。按记录类型的说法，只有当一局因为死亡以外的原因（失败、截断）停在战斗中时，`end` 才会缺失。`RunSession` 在会话稳定下来时写 `end`，在某个决策自己的动作结束了这一局之后（比如回合结束时手里的牌，或一次扣生命值的出牌）也立即写；一局在第一个决策之前就死在其中的战斗，这时以 0 生命值得到它的条目（`SimWorker/Simulation/RunSession.cs:234-238, 260, 265-272`）。示例报告里没有哪局输局的最后一场战斗缺少 `end`。
 
-**对局死在哪里**。记录给出了报告没有打印的东西。如果一局输局的最后一场战斗在它结束的那一层上，并且那场战斗以死亡结束或没有 end，它就是死在战斗里；否则就是死在战斗之外（例如事件里）。示例报告的 277 局输局：133 局死在 Boss 战，39 局死在精英战，103 局死在普通怪物战，2 局死在战斗之外。`learn/gate.py` 用同样的规则，但把缺失的 end 当作「战斗之外」，所以对这份报告它给出 10 局死在战斗之外，其中 8 局其实死在战斗里（`learn/gate.py:55-62`）。从 end 数出的打赢的 Boss：三幕分别是 290 场中的 276 场、171 场中的 94 场和 65 场中的 23 场。
+**对局死在哪里**。记录给出了报告没有打印的东西。如果一局输局的最后一场战斗在它结束的那一层上，并且那场战斗以死亡结束或没有 end，它就是死在战斗里；否则就是死在战斗之外（例如事件里）。示例报告的 53 局输局：43 局死在 Boss 战，8 局死在精英战，2 局死在普通怪物战，没有一局死在战斗之外。`learn/gate.py` 用同样的规则，但把缺失的 end 当作「战斗之外」（`learn/gate.py:55-62`）；没有缺失的 end 时，它给出同样的计数。从 end 数出的打赢的 Boss：三幕分别是 95 场中的 87 场、83 场中的 75 场和 74 场中的 47 场。
 
 <DeathsByFloor client:visible lang="zh-CN" />
 
@@ -199,12 +199,12 @@ leaderboard [--character SILENT]
 
 - **分榜**。不完整的报告不列入。其余的依次按角色、进阶等级和种子集分组，每组一个 `##` 小节；小节里每个环境一张 `###` 表，NoSL 在前。两个角色、两个进阶等级或两种环境从不放在一起排名。
 - **列**：冠军、日期、提交（7 个字符，保留 `-dirty`）、胜率（比率加区间）、平均层数、打到第 1 幕 Boss 的局数、每局秒数。
-- **顺序**：作废的报告排在最后，其余先按胜率、再按平均层数排。作废的报告在名字后面加「(void)」；冠军文件为该角色指明的报告加「**(champion)**」。冠军文件若指向另一种环境的报告，就不会在这个榜上标出任何东西，这就是今天 NoSL 榜上没有标出冠军的原因。
+- **顺序**：作废的报告排在最后，其余先按胜率、再按平均层数排。作废的报告在名字后面加「(void)」；冠军文件为该角色指明的报告加「**(champion)**」。冠军文件若指向另一种环境的报告，就不会在这个榜上标出任何东西；NoSL 文件不指明任何报告，所以 NoSL 榜上没有标出冠军。
 - **SL − NoSL**：在一个榜的各张表之后，对这个榜上在两种环境下都有报告的每个冠军名称（各取最新的一份），把对局按种子配对：胜率差（百分点）和层数差，各写成 均值 ± 1.96 SD/√n，双方各自的胜局，以及有多少个种子 SL 打得更远、一样远和没那么远。还没有哪个榜出现过这一节（[评估 §3](/arch/evaluation/#sec-3)）。
 
-排行榜 `eval/silent/leaderboard.md` 每个种子集一个小节，列出每一份完整的报告，而不只是冠军的。冠军文件见[冠军与基线](/arch/evaluation/champions/)。
+每个角色的排行榜 `eval/CHARACTER/leaderboard.md` 每个进阶和种子集一个小节，列出每一份完整的报告，而不只是冠军的。冠军文件见[冠军与基线](/arch/evaluation/champions/)。
 
 ## 10. 测试
 
-- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），4 个测试：对局按种子集的顺序排好，平均层数正确，报告不作废；破坏种子集的对局会被拒绝（没有对局、一个种子出现两次、种子不在集合里、另一种配置、角色或进阶等级）；报告自身的对局里有一个占位策略的决策（`random` 或 `play`）或一局失败会让报告作废；`RunRecord.Read` 去掉失败的对局，`SeedsLeft` 去掉它们的种子。测试夹具的配置是 `v0.111.0`、`abc1234`、NoSL（`src/Sts2Ai.Tests/Fixtures.cs:32`）。
+- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），4 个测试：对局按种子集的顺序排好，平均层数正确，报告不作废；破坏种子集的对局会被拒绝（没有对局、一个种子出现两次、种子不在集合里、另一种配置、角色或进阶等级）；报告自身的对局里有一个占位策略的决策（`random` 或 `play`）或一局失败会让报告作废；`RunRecord.Read` 去掉失败的对局，`SeedsLeft` 去掉它们的种子。测试夹具的配置是 `v0.111.0`、一个占位提交 `abc1234`、NoSL（`src/Sts2Ai.Tests/Fixtures.cs:32`）。
 - 没有测试覆盖 `Rate.Wilson`、Markdown、排行榜或 `MakeSeed`。上面的 Wilson 图已用报告里存的区间核对过。

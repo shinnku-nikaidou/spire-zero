@@ -44,11 +44,11 @@ A search must go back: try a line, return to the decision, try another. The game
 
 To **restore** a snapshot is to start a new combat from the setup and replay the trace (`CombatSession.cs:103-124`). The same setup and trace always give the same state, because every random draw comes from a seeded stream and the Pump runs every continuation in the same order. The one clock-seeded generator, `Rng.Chaotic`, feeds only cosmetics <Badge text="verified" variant="success" />: monster skins, screen shake, a fake merchant's dialogue, the Trial event's entrant number, the YummyCookie icon, the timing of card-add animations, DenseVegetation's visual offsets. Three fallbacks reach it too, none of which the simulator hits: a monster model that is not a live copy (live monsters have seeded streams), a run started with no seed (the simulator always passes one), and a random variant of a localized text (localization returns keys, [Headless host §4](/en/arch/simulator/headless/#sec-4)).
 
-Replay costs time proportional to its length. Measured on 2026-10-26: a restore costs 0.28 ms plus 0.073 ms per replayed action. For an SL world, which loads the node's checkpoint instead of starting a fresh combat, it is about 0.5 ms plus 0.1 ms per step since the node's entry ([Worlds and the SL clone §7](/en/arch/simulator/worlds/#sec-7)). The figure puts the two cost models side by side; drag the slider to restore deeper into a combat.
+Replay costs time proportional to its length: a restore costs 0.28 ms plus 0.073 ms per replayed action. For an SL world, which loads the node's checkpoint instead of starting a fresh combat, it is about 0.5 ms plus 0.1 ms per step since the node's entry ([Worlds and the SL clone §7](/en/arch/simulator/worlds/#sec-7)). The figure puts the two cost models side by side; drag the slider to restore deeper into a combat.
 
 <RestoreCost client:visible lang="en" />
 
-A search that stays inside one line replays only when it backtracks, so depth-first search pays these costs once per branch. A copy of the object graph would remove the replay cost, and is a lever kept for later ([§7](#sec-7)).
+A search that stays inside one line replays only when it backtracks, so depth-first search pays these costs once per branch. A copy of the object graph would remove the replay cost; it is one of the levers of [§7](#sec-7).
 
 ## 3. Determinize
 
@@ -59,7 +59,7 @@ A search that stays inside one line replays only when it backtracks, so depth-fi
 - numbers the cards outside the hand again (`CombatBuilder.NumberCards`): the game numbers cards in draw order, so the old numbers would leak the true order;
 - redraws each enemy's queued move uniformly among the moves that show the same intents, and rewrites the last entry of its move log (`StateLog[^1]`) to match.
 
-The seed comes only from the caller, never from the run. Not modelled yet: a draw-pile card whose place the player knows (one just put on top), and how a monster's history makes some moves likelier than others (`CombatSession.cs:241-242`).
+The seed comes only from the caller, never from the run. Not modelled: a draw-pile card whose place the player knows (one just put on top), and how a monster's history makes some moves likelier than others (`CombatSession.cs:241-242`).
 
 ## 4. Hidden state and transpositions
 
@@ -79,57 +79,34 @@ The hard parts, each solved in the builder:
 - **Knob solving.** A number on screen is computed from internal numbers, differently for each power or relic. The builder tries internal numbers (the amount, dynamic variables, fields, and the int and decimal fields of a power's internal data, such as `HARDENED_SHELL_POWER`'s damage taken this turn) until the display matches (`CombatBuilder.cs:418-460`). A relic seen as used up (a spent `LIZARD_TAIL`, `WINGED_BOOTS` with no flights left) gets its int and bool fields tried the same way, after its counter, until the rebuilt relic is used up too with the counter as observed: `SILVER_CRUCIBLE` is used up only once its counter has run out and a treasure room has been entered.
 - **Intents.** The builder chooses among the moves that show the observed intents (`CombatBuilder.cs:164-213`). A stunned enemy gets a synthesized stun move, made the way `Creature.StunInternal` makes one (`FollowUpStateId = StateLog.Last().Id`). Hidden enum switches in powers (`SurroundedPower._facing`), then the monsters' own int fields, are searched to match as many enemies as possible: values 0–99 first, then 100–999, which is how the Waterfall Giant's eruption damage, which grows each time it fires, is found past 100.
 - **Uids** match the observation's; the other cards are numbered above them. Cards are taken from the fresh deck by id, upgrade and enchantment before new ones are made (`CombatBuilder.cs:510-537`).
-- **Allies.** Creatures on the player's side are built like enemies: a relic's pet, which joins at the start, is matched by monster id; a missing one joins as the player's pet, as a summon makes it (`CombatBuilder.cs:312-339`). Any character can summon Osty with a card from another character's pool (`KALEIDOSCOPE` offers those), which failed one run in 165 of generation 1's self-play before allies were built.
-- **Costs.** A card's own cost is set so that the modifiers on top of it (powers, relics) give the cost shown, and it may be below 0 (`CombatBuilder.cs:578-586`). A `PINPOINT` that an Attack Potion made free this turn costs 1 less again for each Skill played this turn, and under Tangled (`TANGLED_POWER` adds 1) it still shows 0. Clamping the card's own cost at 0 failed one run in 452.
+- **Allies.** Creatures on the player's side are built like enemies: a relic's pet, which joins at the start, is matched by monster id; a missing one joins as the player's pet, as a summon makes it (`CombatBuilder.cs:312-339`). Any character can summon Osty with a card from another character's pool (`KALEIDOSCOPE` offers those).
+- **Costs.** A card's own cost is set so that the modifiers on top of it (powers, relics) give the cost shown, and it may be below 0 (`CombatBuilder.cs:578-586`). A `PINPOINT` that an Attack Potion made free this turn costs 1 less again for each Skill played this turn, and under Tangled (`TANGLED_POWER` adds 1) it still shows 0.
 - **Mad Science.** A card from the Tinker Time event gets back the type and rider the event chose, which its frame and text show (`CombatBuilder.cs:553-557`, [Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)).
 - **Move logs.** A monster picks its next move by the moves it made (not the same one three times in a row, a fixed cycle), and a fresh combat's log holds none. With the record of what each enemy showed at the start of each round ([Harness §4](/en/arch/harness/#sec-4)), each monster gets its log: each earlier round's move, then the current one (`CombatBuilder.cs:119-154`). An earlier round matches the move that shows the same intents, else the same intent types and hits, else the same types, since the numbers grow with the monster's strength. A monster with a round that no move matches keeps a fresh log. A stun is not logged, as in the game: a round shown stunned is left out, and a monster stunned now goes on, after the stun, with the move it showed at this round's start. Without the record, every monster has a fresh log.
 - **The first move.** From round 2 on the builder marks that the monsters have made their first move (`_performedFirstMove`).
 
-**Approximations.** What the builder cannot see it approximates: this turn's history and the counters inside powers and monsters; how long a cost modifier lasts; the decay of the player's debuffs; a stun's follow-up without the record; and the deck, which is every card seen, generated ones included. [§6](#sec-6) measures what they cost; they have never been checked against observations from the real game.
+**Approximations.** What the builder cannot see it approximates: this turn's history and the counters inside powers and monsters; how long a cost modifier lasts; the decay of the player's debuffs; a stun's follow-up without the record; and the deck, which is every card seen, generated ones included. [§6](#sec-6) says where they show; they are not checked against observations from the real game.
 
-**Checked by `selftest`**, which cuts each of its combats at up to three random points and builds a combat from each cut's observation; the build must show the observation, restore, and play on. On 2026-10-27 every check passed: Silent 60 of 60 builds, Ironclad 58 of 58, the Silent's elite and boss fights of acts 1, 2 and 3 57, 57 and 58. Other `selftest` builds show numbers only a model's own state holds: a worn Glass orb, a spent Silver Crucible, a Pael's Tooth keeping two cards, Sloth with 1 of 3, Nightmare's copies, a Hardened Shell after damage this turn, a start at 3 HP with Royal Poison, an eruption past 100 ([Reference §5](/en/arch/simulator/reference/#sec-5)).
+**Checked by `selftest`**, which cuts each of its combats at up to three random points and builds a combat from each cut's observation; the build must show the observation, restore, and play on, and `selftest` fails if any build does not. Other `selftest` builds show numbers only a model's own state holds: a worn Glass orb, a spent Silver Crucible, a Pael's Tooth keeping two cards, Sloth with 1 of 3, Nightmare's copies, a Hardened Shell after damage this turn, a start at 3 HP with Royal Poison, an eruption past 100 ([Reference §5](/en/arch/simulator/reference/#sec-5)).
 
 ## 6. Fidelity: how far a built combat can be trusted
 
-A built combat shows the observation, but does it play like the real one? The measurement leaves out what determinization samples on purpose. At every k-th decision of a set of combats, the real combat played on with a placeholder policy to the end of the turn, the enemies' turn included (at most 12 actions). A combat built from the decision's observation and record was given the real one's sampled state (the draw order, the random streams, each monster's stream and next move) and played the same actions. The first observation that differed, uids aside, was counted by its JSON path.
+A built combat shows the observation: its `BuildDifferences` are empty, or a NoSL world refuses it ([§5](#sec-5)), and `selftest` fails on any build that does not show its observation ([Reference §5](/en/arch/simulator/reference/#sec-5)). Whether it then plays like the real combat is a separate question, with two parts. Some differences are there by design: determinization draws the draw order, the random streams and each monster's next move ([§3](#sec-3)), so every world differs from the real combat in those on purpose. The others come from the builder's approximations ([§5](#sec-5)): what the observation does not show and the builder does not solve for, it leaves as a fresh combat has it.
 
-The Silent's starter deck, policy `play`, every second decision (2026-10-27):
-
-| combats | decisions | the same through the enemies' turn, without the record → with it |
-|---|---|---|
-| act 1 weak + regular, 30 | 459 | 82.4% → 96.3%; 97.4% with stuns' follow-ups |
-| act 2 weak + regular, 30 | 478 | 88.7% → 98.1%; 99.0% with stuns' follow-ups |
-| act 1 boss, 9 | 201 | 96.5% → 96.5% |
-| act 1 elite, 15 | 289 | 99.0% → 99.0% |
-
-No combat was built wrong, and no action was illegal in a built one. Within the turn at most 1% differ. The rest differ after the turn ends: in act 1 the intents of `TWO_TAILED_RAT`, whose summon depends on counters inside the monster (turns until it may summon, summons so far); in act 2 `PARAFRIGHT`'s; in the boss fights the Waterfall Giant's damage. A stunned `CORPSE_SLUG` (another slug died) went on with the wrong move until stuns took their follow-up from the record.
+The approximations do not show at the decision, since the build matches the observation; they show later, mostly in the enemies' turn, through counters kept inside monsters that no screen shows. `TWO_TAILED_RAT` is the plain case: whether it may call for backup depends on its turns until it may summon and its summons so far (`Models.Monsters/TwoTailedRat.cs:40-42`). The builder touches a monster's own fields only when no move would show its intent otherwise ([§5](#sec-5)), so a built rat usually holds a fresh rat's counts, and its next intent can differ from the real one's. Without the record of enemy moves ([Harness §4](/en/arch/harness/#sec-4)) more is guessed: every monster starts with a fresh move log, and a stunned one's follow-up is approximated.
 
 ## 7. Speed
 
-Measured on 2026-10-26, a Release build with `DOTNET_ReadyToRun=0` ([Headless host §6](/en/arch/simulator/headless/#sec-6)). Acts are counted from 1 here, as the game shows them; the command line's `--act` counts from 0.
+Measured on a Release build with `DOTNET_ReadyToRun=0` ([Headless host §6](/en/arch/simulator/headless/#sec-6)). Acts are counted from 1 here, as the game shows them; the command line's `--act` counts from 0.
 
-**Combats** (`bench`, act 1 weak + regular encounters, `play` policy):
+**Combats.** `bench` plays combats over an encounter pool as fast as it can with a placeholder policy and prints combats and actions per second, the time per combat and its peak memory ([Reference §4](/en/arch/simulator/reference/#sec-4)). With the act 1 weak and regular encounters and `play`, one process plays about 275 combats a second over 3,000 combats, boot included (the figure below). Short batches take longer per combat: boot and the JIT's warm-up weigh more in them.
 
-| character | combats | combats/s | actions/s | time per combat |
-|---|---|---|---|---|
-| SILENT | 5,000 | 319 | 10.3k | 3.1 ms |
-| IRONCLAD | 2,000 | 379 | | |
+**Branching.** A search branch here is a restore, a determinization and a rollout to the end of the combat with the placeholder policy. Its restore costs 0.28 ms plus 0.073 ms per replayed action ([§2](#sec-2)), so the deeper in the combat a branch starts, the more of its time is replay.
 
-Short runs (200 combats) take about 6.7 ms per combat: boot and JIT warm-up dominate.
+**Where a search worker's time goes.** A search worker spends most of its time searching, and restoring worlds is the largest share of that: starting the combat from its setup (entering the room, applying the observation, resampling), replaying the line and determinizing. Playing the searched actions, building observations and the combat net take the rest. A restore does not compare the build with the observation: the request's first build has checked it ([Worlds and the SL clone §2](/en/arch/simulator/worlds/#sec-2)).
 
-**Branching.** A search branch here is a restore, a determinization and a rollout to the end of the combat with the placeholder policy, measured from mid-combat cut points:
-
-| measure | value |
-|---|---|
-| restore | 0.28 ms + 0.073 ms per replayed action |
-| branch | median 2.78 ms, p90 3.97 ms |
-| mean root depth / mean rollout | 15.8 / 16.6 actions |
-| throughput | 329 branches/s per core |
-
-**Where a search worker's time goes.** Sampled for 40 s in a worker of a whole-run gate (2026-10-27: NoSL worlds built from observations, an earlier combat net, 4 runs of 8 workers each on 16 threads), the worker searched 87% of the time and waited for requests the rest. Restoring worlds took 48%: starting the combat from its setup 38% (entering the room 9%, applying the observation 8%, resampling 4%, comparing the build with the observation 10%), replaying the line 7%, determinizing 4%. Playing the searched actions took 16%, observations 16% (11% besides that comparison), the combat net 5%. A restore no longer compares the build, which the request's first build has checked (commit `5032064`): the champion's runs are the same, 7% faster under that load.
-
-**More processes** (`bench` with 3,000 combats per process; the wall time includes about 1.2 s of boot each). The machine has 8 physical cores; hyperthreading adds about 8%. The default pool is 8 processes, about 160 MB each.
+**More processes** (`bench` with 3,000 combats per process; the wall time includes about 1.2 s of boot each). The machine has 8 physical cores; hyperthreading adds about 8%. The default pool is 8 processes (`--workers`, one per world).
 
 <Scaling client:visible lang="en" />
 
-**Levers**, in order: avoid deep replays (reuse prefixes in depth-first search; node checkpoints, [Worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)); filter hook listeners per hook (needs a profiler, `perf`, not installed); a deep copy of the object graph, which removes the replay cost and would be needed for AlphaZero-style search. Whether to copy or replay is decided once profiles show that restoring dominates ([Reference §8](/en/arch/simulator/reference/#sec-8)).
+**Levers**, in order: avoid deep replays (reuse prefixes in depth-first search; node checkpoints, [Worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)); filter hook listeners per hook, which needs a profile of hook dispatch (a profiler such as `perf`); a deep copy of the object graph, which removes the replay cost and which AlphaZero-style search would need. Whether to copy or replay is an open question ([Reference §8](/en/arch/simulator/reference/#sec-8)).

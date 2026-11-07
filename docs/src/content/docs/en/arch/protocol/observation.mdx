@@ -162,7 +162,7 @@ Two details of the bounds (`ChoiceContexts.Bounds`): `max` is never more than th
 
 - **Text is sent as loc keys** (`table.key`), never as the resolved string: event pages, event options by their text key, prompt texts. A brain that wants words looks them up.
 - **A card's `vars`** are its own numbers, damage, block, magic number, by name: the base values, not what Strength or Dexterity make of them at play. A number the card calculates from the state (Perfected Strike's damage) is left out; the card shows it as a base plus an extra per count, and both parts are listed.
-- **Event numbers** are not included yet: some events keep values among their numbers that the page does not show, so they need a whitelist per event first.
+- **Event numbers** are not included: some events keep values among their numbers that the page does not show, so including them needs a whitelist per event.
 - **Never included**: seeds and random streams, what a `?` holds before it is entered, which move a monster has queued, what a reroll or a transform will give, the draw pile's order ([Overview §3](/en/arch/protocol/#sec-3)).
 
 ## 8. Planned: the event stream <Badge text="planned" variant="caution" />

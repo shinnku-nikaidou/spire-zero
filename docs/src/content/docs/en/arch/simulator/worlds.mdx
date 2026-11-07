@@ -1,6 +1,6 @@
 ---
 title: Worlds and the SL clone
-description: The states a search plays forward in. NoSL combat worlds built from the observation and determinized; the node checkpoint; loading, replaying and sealing the SL clone; the relic state the save drops; the SL world; run worlds, still planned.
+description: The states a search plays forward in. NoSL combat worlds built from the observation and determinized; the node checkpoint; loading, replaying and sealing the SL clone; the relic state the save drops; the SL world; run worlds, which are planned.
 sidebar:
   label: Worlds and the SL clone
 ---
@@ -14,7 +14,7 @@ A search needs somewhere to try things: a state it can play an action in, look a
 
 To a search, a world is the interface `ICombatWorld` of the world API ([Protocol: worlds and worker messages §1](/en/arch/protocol/worlds/#sec-1)): observe it, list its legal actions, execute one, read its status (in progress, won, lost) and its hidden key, take a snapshot, restore one. A source of worlds, `IWorldSource`, gives the worlds of one decision: `Worlds(k, searchSeed)`. The combat brains search through this interface only, so the same search code runs on any kind of world ([Combat brain §4](/en/arch/combat-brain/#sec-4)).
 
-Every world today is a **combat world**: one combat, at a combat decision. The simulator makes them in two ways:
+Every world is a **combat world**: one combat, at a combat decision. The simulator makes them in two ways:
 
 | | NoSL world | SL world |
 |---|---|---|
@@ -33,7 +33,7 @@ A NoSL world is a **determinized sample**: a complete combat that agrees with ev
 1. **The root** is a combat built from the observation by `CombatBuilder.Setup`, with the build seed and the record of the enemies' intents so far, which gives the monsters their move logs ([Combats §5](/en/arch/simulator/combat/#sec-5)). It is built from the observation, never from the real combat, so nothing the player cannot see gets in. The build must show the observation exactly; if it does not, the call throws, since a search would explore some other combat ([Harness: routing, budgets and seeds §6](/en/arch/harness/routing/#sec-6)).
 2. **World k** is the root plus one determinize step, with a seed mixed from the search seed and k (`Simulation/SimWorlds.cs:56-62`). The step shuffles what the player cannot know and reseeds every random stream ([Combats §3](/en/arch/simulator/combat/#sec-3)).
 
-How far such a world plays like the real combat, apart from what the step samples, is in [Combats §6](/en/arch/simulator/combat/#sec-6): within the decision's turn, at most 1% of observations differed (2026-10-27).
+How far such a world plays like the real combat, apart from what the step samples, is in [Combats §6](/en/arch/simulator/combat/#sec-6).
 
 **One live combat for all worlds.** The game allows one live combat per process, so the K worlds take turns on it. Each world keeps its own trace, and its snapshot is that trace ([Combats §2](/en/arch/simulator/combat/#sec-2)). A world used while another is live rebuilds itself: a fresh combat from the root, its trace replayed. A search that stays inside one world replays only when it backtracks. The figure shows the difference the order of a search makes:
 
@@ -92,13 +92,13 @@ The travel to the next map point is a node's last decision. A clone records it b
 
 ## 6. What the save drops, and the checks
 
-A save is meant to continue a run, not to copy it. It keeps a relic's fields only where the relic marks them as saved, and loading sets the rest as a new relic would. For relics whose state shows, that difference reaches the observation: KUSARIGAMA and WHETSTONE in their counters, and LAVA_ROCK, which disables itself after the first act's boss rewards and saves only that it triggered. Every clone after that showed the relic as normal. The SL planner's steps then met observations they did not expect, and each later combat decision was planned again: 148 and 120 replans in 2 of 40 SL runs ([The SL planner §4](/en/arch/sl-planner/#sec-4)).
+A save is meant to continue a run, not to copy it. It keeps a relic's fields only where the relic marks them as saved, and loading sets the rest as a new relic would. For relics whose state shows, that difference reaches the observation: KUSARIGAMA and WHETSTONE in their counters, and LAVA_ROCK, which disables itself after the first act's boss rewards and saves only that it triggered. Loaded from the save alone, a clone would show such a relic as new. The SL planner, which plans on the clone, would then meet observations its plan did not expect, and plan again at each later combat decision ([The SL planner §4](/en/arch/sl-planner/#sec-4)).
 
-So the checkpoint carries every relic's plain fields, and loading puts them back after the save is loaded (2026-10-28). `RestoreRelics` throws if the loaded run's relics are not the checkpoint's, in order (`Sts2Ai.GameBridge/Checkpoint.cs:34-42`). Fields that hold a reference (a card, a list) are not carried; `run --check` would show one that mattered. `selftest` sets the first relic to disabled by hand and checks that the clone keeps it ([Reference §5](/en/arch/simulator/reference/#sec-5)).
+So the checkpoint carries every relic's plain fields, and loading puts them back after the save is loaded. `RestoreRelics` throws if the loaded run's relics are not the checkpoint's, in order (`Sts2Ai.GameBridge/Checkpoint.cs:34-42`). Fields that hold a reference (a card, a list) are not carried; `run --check` would show one that mattered. `selftest` sets the first relic to disabled by hand and checks that the clone keeps it ([Reference §5](/en/arch/simulator/reference/#sec-5)).
 
-**Checked** on every node of a run by `run --check`, which allows no difference: the clone must show the run's observations one for one, stand at its horizon after the travel and refuse another step. On five characters, 86 runs each at 9999 HP with the random macro policy and 90 each at normal HP with L0, `play` in combat: 9,747 nodes, all replayed exactly, and no game error (2026-10-28). Before the checkpoint carried the relic fields, 35 of 7,335 nodes differed in relic state.
+**Checked** on every node of a run by `run --check`, which allows no difference: the clone must show the run's observations one for one, stand at its horizon after the travel and refuse another step, and a batch with a node that does not exits 1 ([Whole runs §5](/en/arch/simulator/runs/#sec-5)).
 
-**What a node costs to load and replay** in that check: 8–11 ms on average at normal HP (241 ms at most); at 9999 HP, where bosses last long, 25–38 ms (8.8 s at most, a long boss node). These include building an observation at every step, which the check compares and a search does not ([§7](#sec-7)).
+**What a node costs to load and replay** in that check, over runs of the five characters: 8–11 ms on average at normal HP (241 ms at most); at 9999 HP, where bosses last long, 25–38 ms (8.8 s at most, a long boss node). These include building an observation at every step, which the check compares and a search does not ([§7](#sec-7)).
 
 ## 7. The SL world
 
@@ -109,7 +109,7 @@ So the checkpoint carries every relic's plain fields, and loading puts them back
 - **It stays in the combat.** A decision outside the combat throws ("search left the combat"); once the combat is over, the world lists no legal actions and refuses to execute one (`Simulation/NodeWorld.cs:51-67, 103`). So a search on it ends at the combat's end, where its leaf values the outcome ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)).
 - **Its hidden key** is `HiddenState.Full`: besides what a NoSL world's key holds, each monster's moves so far and what the combat's history holds of this turn, as a multiset; two states with the same observation but different futures are never merged ([Combats §4](/en/arch/simulator/combat/#sec-4)).
 
-**Cost.** A restore costs about 0.5 ms to load the checkpoint plus about 0.1 ms per step since the node's entry (2026-10-28), so late in a long fight it takes 10–20 ms. The figure in [Combats §2](/en/arch/simulator/combat/#sec-2) puts it beside a NoSL world's. This is the price of exactness: a NoSL world replays from its root, built at the decision, while the SL world replays the whole node up to it. The SL planner works with it by searching one turn per request from a state of its beam, so a request replays once and then searches forward ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)).
+**Cost.** A restore costs about 0.5 ms to load the checkpoint plus about 0.1 ms per step since the node's entry, so late in a long fight it takes 10–20 ms. The figure in [Combats §2](/en/arch/simulator/combat/#sec-2) puts it beside a NoSL world's. This is the price of exactness: a NoSL world replays from its root, built at the decision, while the SL world replays the whole node up to it. The SL planner works with it by searching one turn per request from a state of its beam, so a request replays once and then searches forward ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)).
 
 ## 8. Run worlds <Badge text="planned" variant="caution" />
 

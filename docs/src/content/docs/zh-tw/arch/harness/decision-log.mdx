@@ -13,8 +13,8 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 `Dispatcher` 在建立時開啟了日誌記錄的話，會把這一局的各行保存在記憶體裡（`Dispatcher.Log`），它的宿主在這一局結束後把它們寫出：
 
-- `run --log FILE` 在每一局結束後追加它的各行（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。中途被殺掉的一局不會留下任何一行。`--log` 和 `--brain` 一起用時會被拒絕，因為後者的決策由大腦記錄。
-- `brain --log FILE` 在一局的 `run_end` 時寫出它的各行，所以沒送出這條訊息就斷線的宿主不會留下任何一行（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
+- `run --log FILE` 在每一局結束後追加它的各行（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。中途被殺掉的一局不會留下任何一行。
+- `brain --log FILE` 在一局的 `run_end` 時寫出它的各行，所以沒送出這條訊息就斷線的宿主不會留下任何一行。只有在 Mod 設定的 `Record` 開啟時，Mod 才傳入它，連同 `--wire`（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
 每一行是一個 `DecisionEntry` record（`Dispatcher.cs:36-40`），和每個 Protocol 型別一樣序列化：snake_case 的名字，值為 null 的欄位省略（[協定 §4](/zh-tw/arch/protocol/#sec-4)）。日誌和對局記錄放在一起，在資料目錄裡（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)）。
 
@@ -36,7 +36,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `decision_id` | int | 決策在這一局裡的編號，從 0 起，三種決策一起計數（[§4](#sec-4)） | 同上 | 同上 |
 | `env` | string | `NoSL` 或 `SL` | 同上 | 同上 |
 | `surface` | string | `combat` | `card_choice`，不論哪一側 | 這個決策的決策介面 |
-| `brain` | string | 戰鬥路由的名字：`pimc c9-1`、`plan c9-1`、`play` | 提示那一側的：戰鬥中是 `first`，不論它的回答是隨戰鬥大腦的動作而來，還是取最前面的選項；戰鬥外是 L0 的名字或 `random` | 宏觀路由的名字 |
+| `brain` | string | 戰鬥路由的名字：`pimc NAME` 或 `plan NAME`，帶上它的戰鬥網路的名字，或 `play` | 提示那一側的：戰鬥中是 `first`，不論它的回答是隨戰鬥大腦的動作而來，還是取最前面的選項；戰鬥外是 L0 的名字或 `random` | 宏觀路由的名字 |
 | `obs_hash` | string（十六進位） | 戰鬥觀測的雜湊 | 選牌提示的雜湊 | 整個觀測的雜湊（[§4](#sec-4)） |
 | `legal` | int | 合法動作數 | 提示的選項數 | 合法動作數 |
 | `chosen` | string | 戰鬥動作的文字：`play:C[:T]`、`potion:S[:T]`、`end_turn`，搜尋選了它的第一個選牌提示的回答時，回答寫在 `@` 之後（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)） | 選中的選項索引，用逗號連接，不帶 `pick:` | 動作 |
@@ -97,13 +97,13 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 ## 8. 測試
 
-**`run --check`** 讓整局受 Harness 的確定性檢驗（[模擬器：參考 §6](/zh-tw/arch/simulator/reference/#sec-6)）。它打每個種子，然後從檢查點重播每個節點，再走線路把這個種子打第二遍，連到同一行程裡帶同一個冠軍的 `BrainServer`（或連到 `--brain` 的 socket），並要求兩遍一致：
+**`run --check`** 讓整局受 Harness 的確定性檢驗（[模擬器：參考 §6](/zh-tw/arch/simulator/reference/#sec-6)）。它打每個種子，然後從檢查點重播每個節點，再走線路把這個種子打第二遍，連到同一行程裡帶同一個冠軍的 `BrainServer`，並要求兩遍一致：
 
 - 軌跡，逐個決策比較；
 - 每個決策的觀測雜湊，每一個還必須經得起 JSON 往返；
 - 這一局的摘要和每一幕的地圖雜湊；
 - 對局記錄，去掉遊戲錯誤和時間；
-- 決策日誌，除 `elapsed_ms` 外的每個欄位。第二份日誌是行程內伺服器的；用 `--brain` 時兩份都是空的，所以不比較。
+- 決策日誌，除 `elapsed_ms` 外的每個欄位。第二份日誌是行程內伺服器的。
 
 **xUnit**（`Sts2Ai.Tests/Harness/`，[模擬器：參考 §7](/zh-tw/arch/simulator/reference/#sec-7)）：
 
@@ -117,7 +117,8 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `DispatcherTests.AnSLNodesCloneIsItsCheckpointAndTheDecisionsSince` | SL 節點的複本就是它的檢查點加上之後做出的決策 |
 | `DispatcherTests.AnswersThePromptOfTheActionWithTheBrainsPickAndHidesItFromTheHost`、`APickThePromptDoesNotAcceptGoesToThePolicy` | 剛選的動作的第一個提示得到搜尋的回答，宿主從不看到它；提示不接受的回答就交給提示策略 |
 | `WorkerPoolTests.AWorkerStuckOnceIsRestartedAndAnswers`、`AWorkerStuckTwiceFailsTheCall` | 行程池的那一次重試 |
-| `GateTests`（10）、`EvalReportTests`（4） | 評估的晉級門檻和報告（[評估：晉級門檻 §11](/zh-tw/arch/evaluation/gates/#sec-11)） |
+| `ExplainTests.AMacroAnswerCarriesEachOptionsValueTheChosenFirst`、`WithExplainEachMapOptionCarriesItsRouteToTheBoss` | 宏觀回答的候選是它的各個選項和它們的估值，選中的排第一；帶 `explain` 時、也只有這時，每個地圖選項帶上它通往頭目的路線（[概覽 §5](/zh-tw/arch/harness/#sec-5)） |
+| `GateTests`（8）、`EvalReportTests`（4） | 評估的晉級門檻和報告（[評估：晉級門檻 §11](/zh-tw/arch/evaluation/gates/#sec-11)） |
 
 **規劃中的測試**：
 

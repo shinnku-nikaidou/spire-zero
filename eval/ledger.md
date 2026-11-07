@@ -1,7 +1,7 @@
 # Ledger
 
 The lineage of the brain the five characters share: which brain played which data, and which data trained which weights
-(docs: learning §6). The session that runs the training loop keeps it, one row per self-play batch and character and one
+(docs: learning/reference §3). The session that runs the training loop keeps it, one row per self-play batch and character and one
 per weights file. Raw data is in `data/CHAR/ENV/` (outside git); evaluations are in `eval/CHAR/leaderboard.md` and
 `eval/CHAR/reports/`; the champion files, every character's, in `eval/champions/`. Until 2026-11-04 each character had a
 ledger of its own, `eval/CHAR/ledger.md`; the user had them merged into this one. Every batch and net before v9g0 is the
