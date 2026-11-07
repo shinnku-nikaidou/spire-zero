@@ -108,7 +108,7 @@ The run was won, so its MC target, 49, is far above V's early values: V started 
 
 - **A fair teacher.** The teacher is a search in the same environment, one that obeys that environment's information rules. No behaviour cloning (training a model to copy a teacher's moves) of an omniscient teacher, which failed in several projects.
 - **The combat policy target** is $\mathrm{softmax}(\text{prior logits} + c \cdot \mathrm{minmax}(Q))$, not the search's visit counts. $Q$ is each first action's mean value over the worlds, which PIMC already computes; minmax rescales one decision's $Q$ to $[0, 1]$; the prior logits are 0 while the prior is uniform; $c$ is tuned by how well the target predicts the choice of a search with a much larger budget (log-likelihood). Visit counts would be a poor target: common random numbers at the root flatten them (r33hab), and with mctx's transform (a Gumbel MuZero library), at our 300 nodes per world, the target is almost one-hot.
-- **What the logs hold for it now.** PIMC's candidates in the decision log carry every first action's value in every world and the nodes spent on it ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)), and each combat's end is in the run record. The SL planner, which plays the SL champion's fights, logs one value per candidate and no nodes (`Brain/Combat/SlPlanner.cs:205-206`), so SL's data has no per-world Q.
+- **What the logs hold for it now.** PIMC's candidates in the decision log carry every first action's value in every world and the nodes spent on it ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)), and each combat's end is in the run record. The SL planner, which plays the SL champion's fights, logs one value per candidate and no nodes (`Brain/Combat/SlPlanner.cs:204-206`), so SL's data has no per-world Q.
 - **Two preconditions.** A learned prior steers the search only after it beats the uniform prior in the gate. A learned leaf should beat a rollout to the end of the fight: in r33hab, at 15 simulations, the value head lost 10.6 HP more than rollouts. No rollout leaf is built.
 - **PCR** (playout cap randomization, from KataGo): 25% of the decisions get the full budget and give policy targets; the other 75% get a quarter of it and give value targets only.
 - **Reanalyse** (from MuZero): after each new net, a share of old positions is replayed from seed and trace and searched again with it, which refreshes their policy targets and bootstrapped value targets.
@@ -123,7 +123,7 @@ $$
 
 It needs two measurements per step however many parameters there are, and no gradient, which suits weights whose only test is playing games; Stockfish tunes its search this way.
 
-The project does not use it. No tool tunes V or the leaf's hand-set prices ([Combat brain: the leaf §2](/en/arch/combat-brain/leaf/#sec-2)): strategy is left to the nets. The search's own parameters (budgets, K, beam widths, thresholds) could be tuned this way; none is.
+The project does not use it. No tool tunes V, and the leaf has no prices of its own to tune: it prices a fight's endings by V ([Combat brain: the leaf §2](/en/arch/combat-brain/leaf/#sec-2)). Strategy is left to the nets. The search's own parameters (budgets, K, beam widths, thresholds) could be tuned this way; none is.
 
 ## 7. LLM patch proposals <Badge text="planned" variant="caution" />
 
@@ -131,7 +131,7 @@ The input would be pre-aggregated failure clusters (runs grouped by how and wher
 
 ## 8. Gates
 
-A gate is the test a challenger must pass to replace the champion: it plays seeds it was never trained on, paired seed by seed with the champion's runs, so that most of a run's luck is shared by both and cancels in the difference (common random numbers, [Evaluation: gates §2](/en/arch/evaluation/gates/#sec-2)). Exploring challengers are refused: exploration is for self-play (`SimWorker/Commands/EvalCommands.cs:91-92`).
+A gate is the test a challenger must pass to replace the champion: it plays seeds it was never trained on, paired seed by seed with the champion's runs, so that most of a run's luck is shared by both and cancels in the difference (common random numbers, [Evaluation: gates §2](/en/arch/evaluation/gates/#sec-2)). Exploring challengers are refused: exploration is for self-play (`SimWorker/Commands/EvalCommands.cs:95`).
 
 **The paired lower bound on wins** (`learn/gate.py --against`) is the gate V faces. The challenger plays the 300 seeds of `promotion-1-300` (at ascension 10, the first 200: [Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)) at the champion's medium budget, and again at the low budget, a reference that decides nothing. For seed $i$, $d_i$ is 1 − 0, 0 − 1 or 0: whether the challenger won seed $i$ less whether the champion did. With $n$ pairs on the seeds both finished,
 

@@ -91,7 +91,7 @@ Click through a real one, the start of a round from NoSL self-play:
 | `potion:S` or `potion:S:T` | use the potion in slot S, at T if it needs a target |
 | `end_turn` | end the turn |
 
-A line of search may carry the answer to a prompt after an action (`potion:0@3`: option 3 for its first prompt; [Turn search §5](/en/arch/sl-planner/turn-search/#sec-5)). This appears only in search and in the logs: the action a host is told has none.
+A line of search may carry the answer to the action's first card prompt after an `@`: the picked options' places in canonical order, comma-separated (`potion:0@3`, `play:12:3@1,3`; `end_turn@2` for a prompt the turn's end or the next turn's start brings; `play:12@` for no pick). It appears only in search and in the logs: the action a host is told has none, and Harness gives the answer to the prompt when it comes ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
 
 Combat has no potion discard: the protocol's combat actions are these three kinds.
 
@@ -152,7 +152,7 @@ The options alone do not say what the prompt is for: the same five cards mean di
 | `purpose` | the kind of prompt: the entry's name without `From`, in snake_case (`deck_for_upgrade`, `deck_for_transformation`, `deck_for_enchantment`, `deck_for_removal`, `deck_generic`, `hand`, `hand_for_discard`, `hand_for_upgrade`, `choose_a_card_screen`, `simple_grid`, `simple_grid_for_rewards`), or for a prompt over a combat pile the pile's name, `draw_pile` or `discard_pile` (in this game version only those two piles are asked from) |
 | `source`? | the id of the card, relic, power or event that asks, when the game names one: the entry's `source` argument, else the last model the choice involved |
 | `cancelable` | a cancel or skip button closes the prompt: the prompt's own setting, or a choose-a-card screen's `canSkip` |
-| `in_combat` | asked during a combat (a card or power resolving), rather than at a rest site, an event or a shop; Harness routes the prompt by it: in combat to `p0`, outside to the macro brain ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) |
+| `in_combat` | asked during a combat (a card or power resolving), rather than at a rest site, an event or a shop; Harness routes the prompt by it: in combat to the answer the combat brain's action carries, or else the first options (`first`), outside to the macro brain ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)) |
 | `prompt_key`? | the prompt text's loc key, `table.key` |
 | `enchantment`? | for `deck_for_enchantment`: the enchantment the picked cards get, `{id, amount}` |
 

@@ -45,7 +45,7 @@ import PoolTimeline from '../../../../components/book/PoolTimeline.svelte';
 各个大脑如何拆分工作：
 
 - **PIMC** 每个世界发一个请求，每个请求带着所有首个动作，再像进程内 PIMC 那样合并回复（[NoSL PIMC：搜索 §2](/arch/pimc/search/#sec-2)）。
-- **SL 规划器**在束的每个回合里，对每个保留的状态发一个请求，带上目前最好的完整路线作为剪枝的下限。一个回合的搜索整个在一个请求里，所以计划和单个进程做出的一样（[SL 规划器：束搜索 §1](/arch/sl-planner/beam/#sec-1)）。
+- **SL 规划器**在束的每个回合里，对每个保留的状态发一个请求。一个回合的搜索整个在一个请求里，所以计划和单个进程做出的一样（[SL 规划器：束搜索 §1](/arch/sl-planner/beam/#sec-1)）。
 - **克隆上的 L0** 把一个决策的路径按顺序分成 `min(paths, workers)` 个请求（`Sts2Ai.Harness/PooledClone.cs:14-24`）。一条路径的后状态只取决于克隆和路径，所以怎么分都不会改变结果（[宏观大脑：搜索 §6](/arch/macro-brain/search/#sec-6)）。
 
 ## 4. 工作进程：`serve`

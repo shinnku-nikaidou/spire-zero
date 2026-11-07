@@ -1,7 +1,7 @@
 <script lang="ts">
   // The SL planner's beam over turns (docs: sl-planner/beam) on a made-up fight: a greedy dive first, then a beam of
-  // B states a turn (E when the dive won), pruned by the best line that ends the fight. The same seeded fight for every
-  // setting, so the settings can be compared.
+  // B states a turn (E when the dive won), the best by the leaf. The same seeded fight for every setting, so the settings
+  // can be compared.
   import { scaleLinear } from 'd3';
   import type { Lang } from '../v/names.ts';
   import { children, root, type Node } from './madeUpFight.ts';
@@ -10,7 +10,7 @@
   let { lang = 'en' }: { lang?: Lang } = $props();
   const t = $derived(words(lang));
 
-  type Dot = { n: Node; mark: 'kept' | 'dropped' | 'pruned' | 'end' };
+  type Dot = { n: Node; mark: 'kept' | 'dropped' | 'end' };
   // One beam of this width; `best` is the best line that ends the fight so far (the dive's, for the full beam).
   function run(width: number, start: Node | null) {
     let best: Node | null = start;
@@ -23,10 +23,6 @@
       for (const s of states)
         for (const c of children(s)) {
           nodes++;
-          if (best && c.bound <= best.value) {
-            dots.push({ n: c, mark: 'pruned' });
-            continue;
-          }
           if (c.status !== 'going') {
             dots.push({ n: c, mark: 'end' });
             if (!best || c.value > best.value) best = c;
@@ -35,8 +31,7 @@
       next.sort((a, b) => b.value - a.value);
       states = [];
       for (const c of next) {
-        if (best && c.bound <= best.value) dots.push({ n: c, mark: 'pruned' });
-        else if (states.length < width) {
+        if (states.length < width) {
           states.push(c);
           dots.push({ n: c, mark: 'kept' });
         } else {
@@ -55,14 +50,11 @@
 
   const plan = $derived.by(() => {
     const dive = diveFirst ? run(1, null) : null;
-    const decisionBound = root.bound;
-    if (dive?.best && dive.best.value >= decisionBound) return { dive, full: null, best: dive.best, proved: true, width: 0 };
     const width = dive?.best?.status === 'won' && easy > 0 ? easy : beam;
     const full = run(width, dive?.best ?? null);
-    const best = full.best;
-    return { dive, full, best, proved: full.complete || (!!best && best.value >= decisionBound), width };
+    return { dive, full, best: full.best, proved: full.complete, width };
   });
-  const turns = $derived(Math.max(1, ...(plan.full?.dots ?? plan.dive?.dots ?? []).map((d) => d.n.turn)));
+  const turns = $derived(Math.max(1, ...plan.full.dots.map((d) => d.n.turn)));
   const lineOf = (n: Node | null) => {
     const pts: Node[] = [];
     for (let m = n; m; m = m.parent) pts.unshift(m);
@@ -82,7 +74,6 @@
     shown: w('turns shown', '显示到第几回合', '顯示到第幾回合'),
     kept: w('kept', '保留', '保留'),
     dropped: w('beyond the width', '超出宽度', '超出寬度'),
-    pruned: w('pruned by the bound', '被上界剪掉', '被上界剪掉'),
     end: w('fight over', '战斗结束', '戰鬥結束'),
     diveLine: w('the dive’s line', '下潜的路线', '下潛的路線'),
     bestLine: w('the pick', '选中的线', '選中的線'),
@@ -94,9 +85,8 @@
     proved: w('proved', '已证明', '已證明'),
     notProved: w('not proved', '未证明', '未證明'),
     width: w('the full beam’s width', '完整束的宽度', '完整束的寬度'),
-    skipped: w('the dive reached the decision’s bound: no full beam', '下潜已达决策的上界：不跑完整的束', '下潛已達決策的上界：不跑完整的束'),
   };
-  const COLORS = { kept: 'var(--v-s1)', dropped: 'var(--v-muted)', pruned: 'var(--v-s8)', end: 'var(--v-s3)' } as const;
+  const COLORS = { kept: 'var(--v-s1)', dropped: 'var(--v-muted)', end: 'var(--v-s3)' } as const;
 </script>
 
 <div class="vfig">
@@ -116,17 +106,10 @@
     {/each}
     <text x={CW - 12} y={CH - 32} text-anchor="end">{say(lang, L.xAxis)}</text>
     <text x="44" y="12">{say(lang, L.yAxis)}</text>
-    {#if plan.dive?.best}
-      <line x1="42" x2={CW - 12} y1={y(plan.dive.best.value)} y2={y(plan.dive.best.value)} stroke="var(--v-s4)" stroke-dasharray="2 3" />
-    {/if}
-    {#each plan.full?.dots ?? [] as d (d.n.id)}
+    {#each plan.full.dots as d (d.n.id)}
       {#if d.n.turn <= shown}
-        {#if d.mark === 'pruned'}
-          <path d="M{x(d.n.turn) - 3},{y(d.n.value) - 3}l6,6m0,-6l-6,6" stroke={COLORS.pruned} stroke-width="1.2" opacity="0.7" />
-        {:else}
-          <circle cx={x(d.n.turn)} cy={y(d.n.value)} r={d.mark === 'end' ? 4 : 3} fill={d.mark === 'dropped' ? 'none' : COLORS[d.mark]}
-            stroke={COLORS[d.mark]} opacity={d.mark === 'dropped' ? 0.6 : 0.85} />
-        {/if}
+        <circle cx={x(d.n.turn)} cy={y(d.n.value)} r={d.mark === 'end' ? 4 : 3} fill={d.mark === 'dropped' ? 'none' : COLORS[d.mark]}
+          stroke={COLORS[d.mark]} opacity={d.mark === 'dropped' ? 0.6 : 0.85} />
       {/if}
     {/each}
     {#if plan.dive}
@@ -139,7 +122,6 @@
   <div class="v-row" style="font-size: 0.75rem;">
     <span><span class="v-key" style="background: {COLORS.kept}"></span> {say(lang, L.kept)}</span>
     <span><span class="v-key" style="border: 1px solid {COLORS.dropped}"></span> {say(lang, L.dropped)}</span>
-    <span style="color: {COLORS.pruned}">×</span><span style="margin-left: -0.75rem;">{say(lang, L.pruned)}</span>
     <span><span class="v-key" style="background: {COLORS.end}"></span> {say(lang, L.end)}</span>
     <span><span class="v-line-key" style="background: var(--v-s4)"></span> {say(lang, L.diveLine)}</span>
     <span><span class="v-line-key" style="background: var(--v-ink)"></span> {say(lang, L.bestLine)}</span>
@@ -148,9 +130,8 @@
     <div class="v-stat"><span class="v-label">{say(lang, L.result)}</span>
       <span class="v-value">{plan.best?.status === 'won' ? `${say(lang, L.wins)} ${plan.best.h} HP` : say(lang, L.loses)}</span></div>
     <div class="v-stat"><span class="v-label">{t('nodes')}</span><span class="v-value v-num">{(plan.dive?.nodes ?? 0) + (plan.full?.nodes ?? 0)}</span></div>
-    <div class="v-stat"><span class="v-label">{say(lang, L.width)}</span><span class="v-value v-num">{plan.full ? plan.width : '–'}</span></div>
+    <div class="v-stat"><span class="v-label">{say(lang, L.width)}</span><span class="v-value v-num">{plan.width}</span></div>
     <div class="v-stat"><span class="v-label">&nbsp;</span><span class="v-value">{say(lang, plan.proved ? L.proved : L.notProved)}</span></div>
   </div>
-  {#if !plan.full}<p class="v-caption">{say(lang, L.skipped)}</p>{/if}
   <p class="v-caption">{t('illustrative')}</p>
 </div>

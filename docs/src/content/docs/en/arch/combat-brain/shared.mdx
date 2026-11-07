@@ -1,33 +1,23 @@
 ---
 title: 'Prompts, moves and workers'
-description: What both combat brains share besides the leaf - the fixed rule for card prompts during a fight (p0) and its planned replacement by search branches, the public record of enemy moves, and the pool of worker processes that runs their searches.
+description: What both combat brains share besides the leaf - card prompts during a fight as branches of the search (each answer of an action's first prompt a line of its own, the first options where nothing searched), the public record of enemy moves, the pool of worker processes that runs their searches, and what search counts as the same action and the same state.
 sidebar:
   label: Prompts, moves and workers
 ---
 
 import { Badge } from '@astrojs/starlight/components';
 
-Three pieces sit under both algorithms. Card prompts during a fight are answered by one fixed rule, in the real fight and in every simulated one, so a search expects the answers the run will give ([§1](#sec-1)); search branches are to replace it ([§4](#sec-4)). The record of what the enemies showed each round travels with every decision, so leaves read the same history wherever they are computed ([§2](#sec-2)). And the searches run in a pool of worker processes, with a protocol that makes the pooled answer equal to the one-process answer ([§3](#sec-3)).
+Four pieces sit under both algorithms. A card prompt during a fight is a branch of the search: each answer of an action's first prompt is a line of its own, valued by the leaf like any other, and the answer the search picks is the one the run gives ([§1](#sec-1)). The record of what the enemies showed each round travels with every decision, so leaves read the same history wherever they are computed ([§2](#sec-2)). And the searches run in a pool of worker processes, with a protocol that makes the pooled answer equal to the one-process answer ([§3](#sec-3)). Last, search counts copies of a card as one action and the same cards in another order as one state ([§5](#sec-5)).
 
-## 1. Card prompts: p0
+## 1. Card prompts: answers as branches
 
-Some cards ask a question when played: Survivor asks for a card to discard, Calculated Gamble discards the hand on its own, an exhaust or a "put a card on top of your draw pile" asks which card, and a card that generates three options asks which to take. Today every card prompt in a fight goes to `PromptBrain`, called `p0`, a fixed rule by what happens to the picked cards ([§4](#sec-4) is the planned replacement):
+Some cards ask a question when played: Survivor asks for a card to discard, an exhaust or a "put a card on top of your draw pile" asks which card, and a card that generates three options asks which to take. So do some potions, Touch of Insanity among them, which asks which card in the hand to make free, and some effects at the end of a turn or the start of the next. Such a question is a **card prompt**: options in canonical order (sorted by what the card is, never by the game's order, which can reflect the hidden draw order), and a least and most number of picks ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)).
 
-- **Picks that leave the hand this turn** (a discard, an exhaust, a card put on top of the draw pile) take the least useful cards, Sly cards first in a discard, since discarding a Sly card plays it. Past the prompt's minimum it takes only the cards that are better gone: unplayable ones, and Sly ones in a discard.
-- **A prompt that makes a card free** takes the dearest one.
-- **Any other prompt** adds or improves cards (a card into the hand, a copy, an upgrade), so it takes the most useful ones, as many as it may.
+**Every answer is a line.** In a search world, an action's first prompt is a branch of the search (`PromptAnswers.Others`, `src/Sts2Ai.Brain/Combat/Prompts.cs`). Once the action is played, the world tells the search which prompt it met and how it was answered (`ICombatWorld.LastPrompt`, a `PromptSeen`). Each other answer the prompt takes becomes an action of its own, the same action carrying that answer, tried right after it from the same state; each line is valued by the leaf like any other, and the best wins. The answers are listed once per choice of cards the player can tell apart (`PromptSeen.Others`, `src/Sts2Ai.Protocol/World.cs`): two copies of one card are one card twice, so picking one of them is picking the first. They come with the fewest picks first, then in the options' order: a discard of one or two cards from a hand of A, A and B, first answered with one A, tries B, then both A, then A and B. How many are tried is the action's share of the search's nodes, each answer at least one node: the search's own budget, not a judgment on the cards ([The SL planner: turn search §3](/en/arch/sl-planner/turn-search/#sec-3), [NoSL PIMC: search §1](/en/arch/pimc/search/#sec-1)).
 
-A card's use is a sum of its numbers plus a flat part:
+**The answer is part of the action.** An action that carries its answer writes it after an `@`: the picked options' places in the prompt, in order and comma-separated, `play:12:3@1,3`, `potion:0@2`, `end_turn@0`, and `play:12@` for a prompt answered with no pick (`CombatAction.Pick`, `src/Sts2Ai.Protocol/CombatAction.cs`). It answers the first prompt the action raises, the card's or potion's own, or for `end_turn` the first one the end of the turn or the start of the next brings. The game never sees it: the host is told the plain action, and Harness hands the answer to the first card prompt in the fight that follows (`Dispatcher`, `src/Sts2Ai.Harness/Dispatcher.cs`). A plan replays the same way, in the real fight as on the clone.
 
-$$
-\text{worth} = 5 + \text{damage} + 1.5\,\text{poison} + \text{block} + 4\,\text{cards drawn} + 4\,\text{energy} + 2\,(\text{Weak} + \text{Vulnerable}) + 2\,\text{upgrades}
-$$
-
-and an unplayable card (a status, a curse) has none. `p0` reads the prompt alone and never draws at random: ties go to the first option in canonical order. That is what lets a simulated world ask it too: the search's worlds answer every prompt as the run will, so a line through a prompt is valued with the answer that will really be given. In NoSL that holds in every sampled world; in SL the planner's plan replays exactly ([The SL planner §4](/en/arch/sl-planner/#sec-4)).
-
-There is one exception: when another answer opens a cycle inside the turn, search takes that answer and writes it on the action (`potion:0@3`, the option's index in the prompt). The host is told only `potion:0`, and Harness gives that answer to the first prompt that follows ([SL planner: turn search §5](/en/arch/sl-planner/turn-search/#sec-5)).
-
-The rule is hand-written strategy, the kind the project otherwise leaves to learned values, and a line through a prompt can only ever be valued with this one answer. It answered 2,035 prompts in 100 whole runs of the champion's V.
+**Where nothing searched.** A prompt that no search weighs, the second prompt of one action or a prompt the search had no node left for, is answered by `FirstPicks`: the first options in canonical order, as few as the prompt takes (`src/Sts2Ai.Brain/Combat/Prompts.cs`). It holds no view of what a card is worth; it only fixes an answer, the same in the real fight and in every simulated one, so a search expects what the run will do. In the champion's name the combat prompts route is `first` ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)).
 
 ## 2. The record of enemy moves
 
@@ -78,6 +68,22 @@ sequenceDiagram
 
 ## 4. Planned <Badge text="planned" variant="caution" />
 
-- **Prompts as search branches.** Inside a search, the simulator's selector (the code that answers card prompts) is driven by the search, so each answer is a branch of `TurnEnds`, valued like any other action, and `p0` goes. A multi-pick is a sequence of single picks, so that a prompt of many cards adds depth and not a large fan of subsets. A prompt in the real fight is a decision like any other: in SL it is a step of the plan, in NoSL it is searched. It needs the world API's prompt branching and `ChoiceContext` ([Protocol: observations and actions §6](/en/arch/protocol/observation/#sec-6)).
-- **What it costs NoSL.** A prompt's answer is chosen after the cards are seen, so branches on prompts widen strategy fusion; it is measured first ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)).
 - **Worlds that live in a worker.** For run worlds and for searches that outgrow one request: open a world by kind (build, clone, run host), branch on it by id, and close it; its branches go to that worker first, since a restore elsewhere costs a replay ([Simulator: the worker pool §8](/en/arch/simulator/pool/#sec-8)).
+
+## 5. What search counts as the same
+
+A hand often holds copies: two Strikes, three Defends. To the player they are one card twice; to the game each copy has its own id (`uid`), so two lines that play different copies, or the same cards in another order, reach observations that differ only in those ids or in the order of a pile. Search counts such actions and such states as one (`src/Sts2Ai.Brain/Combat/CombatBrain.cs:145-181`).
+
+**The same action.** At every state, search tries one action of each that are the same (`PimcBrain.Ordered`): the same card, by everything the observation shows of it but its id (`ProtocolJson.CardKey`), or the same potion, at the same target, with the same answer to its prompt. The first in search order is kept: ending the turn, then the cards in hand order, then potions. An upgraded Strike is another card than a plain one; a second plain Strike is the first one again. So the root's shares of the nodes go to the distinct actions only ([The SL planner: turn search §3](/en/arch/sl-planner/turn-search/#sec-3), [NoSL PIMC: search §1](/en/arch/pimc/search/#sec-1)). A prompt's answers are listed the same way, once per choice of cards the player can tell apart ([§1](#sec-1)).
+
+**The same state.** Where search remembers the states it has seen, a state's key is the observation as search tells it apart (`PimcBrain.StateKey`), with the world's hidden key beside it: the hand, the discard pile and the exhaust pile each as a multiset of cards without ids (sorted by card key), and the potions as a multiset. The draw pile is a multiset in the observation already, and its order is in the hidden key ([Protocol: worlds and worker messages §1](/en/arch/protocol/worlds/#sec-1)). So the same cards played in any order, or another copy of one, meet as one state. The key is used:
+
+- by the SL planner's turn search, for the states it has seen and for each turn end's key, by which the beam keeps distinct states ([The SL planner: turn search §2](/en/arch/sl-planner/turn-search/#sec-2));
+- by PIMC's memo in each world ([NoSL PIMC: search §1](/en/arch/pimc/search/#sec-1));
+- by LoopSearch's cash-out ([The SL planner: turn search §5](/en/arch/sl-planner/turn-search/#sec-5)).
+
+What a plan is checked against does not change: the observation hashes it carries for each step, which the run compares as it follows the plan, are the real observation's (`TurnPlan`).
+
+**Enemies stay apart.** Two enemies of the same kind are two enemies: each has its own random stream and its own place in the turn order.
+
+**What it gives up.** The game picks some random cards by their place in a pile: Mummified Hand picks a random card in the hand with the combat's card-selection stream, and Drain Power takes random cards from the discard pile. In SL, where search knows the random streams, which copy is played, and so the order the hand and the discard pile are left in, could steer such a pick. Search no longer tells those lines apart: of two that differ only there, it keeps the first it found.

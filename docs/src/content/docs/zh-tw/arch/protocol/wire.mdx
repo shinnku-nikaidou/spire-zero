@@ -111,7 +111,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | `plan` | 大腦在這個動作之後的計畫：PIMC 給出本回合剩下的部分，SL 規劃器給出這場戰鬥剩下的部分，地圖上的宏觀大腦給出本幕剩下的路線 |
 | `candidates` | 大腦評過分的選項，選中的排第一，其餘最好的在前：會搜尋的戰鬥大腦的第一個動作；L0 在戰鬥外的決策或選牌提示處的選項，由 V 估值（回答由探索抽出時沒有）。選牌提示的選項是回答（`pick:i,j`）；戰鬥中的選牌提示沒有候選 |
 
-一個 `Candidate`（`World.cs:70`）是一個評過分的選項：
+一個 `Candidate`（`World.cs:106`）是一個評過分的選項：
 
 | 欄位 | 含義 |
 |---|---|

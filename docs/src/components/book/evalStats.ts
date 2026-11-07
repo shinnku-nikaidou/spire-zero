@@ -1,6 +1,6 @@
 // The evaluation chapter's statistics, ported from the project's code so the figures give its numbers (docs:
 // evaluation/metrics §4, evaluation/gates §3, §10): Rate.Wilson (src/Sts2Ai.Harness/Reports.cs:10-17), Gate.Sprt
-// (src/Sts2Ai.Harness/Gate.cs:60-105) and gate.py's mean_se and paired lower bound (learn/gate.py:32-37, 130-151).
+// (src/Sts2Ai.Harness/Gate.cs:51-82) and gate.py's mean_se and paired lower bound (learn/gate.py:32-37, 130-151).
 
 export type Rate = { hits: number; of: number; value: number; low: number; high: number };
 
@@ -36,45 +36,29 @@ export type SprtResult = {
   floorDiffMean: number;
   challengerOnly: number;
   championOnly: number;
-  /** The LLR after each pair up to the decided one; null while a floor SPRT has fewer than MinPairs differing pairs. */
-  path: (number | null)[];
+  /** The LLR after each pair up to the decided one. */
+  path: number[];
 };
 
-export const MIN_PAIRS = 10;
-
-/** Gate.Sprt: the paired SPRT on floors (Gaussian, variance from the pairs so far) or on wins (discordant pairs only). */
-export function sprt(pairs: Pair[], metric: 'floor' | 'win', delta: number, alpha = 0.05, beta = 0.05, notWorse = false): SprtResult {
+/** Gate.Sprt: the paired SPRT on wins, from the pairs where exactly one side won; the floor difference listed beside it. */
+export function sprt(pairs: Pair[], delta: number, alpha = 0.05, beta = 0.05, notWorse = false): SprtResult {
   const upper = Math.log((1 - beta) / alpha);
   const lower = Math.log(beta / (1 - alpha));
-  const shift = notWorse ? delta : 0;
+  const p0 = notWorse ? 0.5 - delta : 0.5;
+  const p1 = p0 + delta;
   let sum = 0;
-  let sumSq = 0;
   let llr = 0;
   let only = 0;
   let championOnly = 0;
-  let differing = 0;
   let decided = pairs.length;
   let verdict: SprtResult['verdict'] = 'open';
-  const path: (number | null)[] = [];
+  const path: number[] = [];
   for (let n = 1; n <= pairs.length; n++) {
     const { d, championWon, challengerWon } = pairs[n - 1];
     sum += d;
-    sumSq += d * d;
-    if (d !== 0) differing++;
     if (challengerWon && !championWon) only++;
     if (championWon && !challengerWon) championOnly++;
-    if (metric === 'floor') {
-      if (differing < MIN_PAIRS) {
-        path.push(null);
-        continue;
-      }
-      const variance = Math.max(1, (sumSq - (sum * sum) / n) / (n - 1));
-      llr = (delta / variance) * (sum + n * shift - (n * delta) / 2);
-    } else {
-      const p0 = 0.5 - shift;
-      const p1 = p0 + delta;
-      llr = only * Math.log(p1 / p0) + championOnly * Math.log((1 - p1) / (1 - p0));
-    }
+    llr = only * Math.log(p1 / p0) + championOnly * Math.log((1 - p1) / (1 - p0));
     path.push(llr);
     if (llr >= upper || llr <= lower) {
       verdict = llr >= upper ? 'pass' : 'fail';

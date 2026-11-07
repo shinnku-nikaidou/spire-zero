@@ -125,10 +125,10 @@ flowchart LR
 
 ## 8. C# 里的推理
 
-- **用哪些网络**。`run --value FILE` 读 V 的网络文件（`RunNet.Read`）；`--value` 和 `--macro l0` 必须一起用（`SimWorker/Commands/Args.cs:228`）。`run --combat-net FILE` 加载战斗网络（`CombatNet.Load`），每个战斗搜索的叶子：`--combat-net` 和 `--policy pimc` 或 `plan` 必须一起用（`:236`）。
+- **用哪些网络**。`run --value FILE` 读 V 的网络文件（`RunNet.Read`）；`--value` 和 `--macro l0` 或 `--combat-net` 一起用，两者都需要它（`SimWorker/Commands/Args.cs:234`）。`run --combat-net FILE` 加载战斗网络（`CombatNet.Load`），即每个战斗搜索的叶子，它的结局由那个 V 定价：`--combat-net` 和 `--policy pimc` 或 `plan` 必须一起用（`:233`）。
 - **`IRunValue`**（`Brain/Macro/RunValue.cs`）是宏观大脑眼中的 V：一个名字，以及对整局观测的估值。`RunNet` 实现了它。
 - **`RunNet`**（`Brain/Macro/RunNet.cs`）用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）运行计算图，intra-op 和 inter-op 各一个线程（`:49`），因为模拟器跑很多进程，而一个宏观决策只给少数几个小输入估值。它像 `learn/v/encode.py` 那样从整局观测构建输入。未知的 id 读作第 0 项。`Value` 是从这一局当前的层起每一层都活下来的机会（`:75-82`）。
-- **`CombatNet`**（`Brain/Combat/CombatNet.cs`）对状态做同样的事，也是一个线程。`Graph` 从 `Cards`、`Player`、`Enemies`、`PowerNumbers`、`RelicNumbers`、`Allies`、`Bag` 和 `Powers` 构建输入，与 `learn/combat/encode.py` 读状态的方式相同，并返回两个输出；`Value` 用 `LeafValue` 的价格给它们定价（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
+- **`CombatNet`**（`Brain/Combat/CombatNet.cs`）对状态做同样的事，也是一个线程。`Graph` 从 `Cards`、`Player`、`Enemies`、`PowerNumbers`、`RelicNumbers`、`Allies`、`Bag` 和 `Powers` 构建输入，与 `learn/combat/encode.py` 读状态的方式相同，并返回两个输出；`Outcome` 按每个结局会留下的那局游戏用 V 给它定价，死亡为 0（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
 - **加载检查**。`RunNet.Load` 给每个测试对局估值，任何一个值的偏差超过 10⁻³ × |value| 和 10⁻⁶ 中较大的那个，就拒绝这个文件（`:59-73`）；`CombatNet.Load` 预测每个测试状态，任何一个类别或药水概率的偏差超过 10⁻³，或某个输出的长度不同，就拒绝它。这保证训练和对局时的编码与前向计算一致。
 - **开销**。一个结构相同的较早的 V 每次调用 0.093 ms，而一个用克隆的宏观决策要 70–90 ms（提交 `b0ec4b7`）。
 
@@ -212,14 +212,14 @@ flowchart LR
 **C#**（[模拟器：参考 §7](/arch/simulator/reference/#sec-7)），网络在训练和部署之间的一致性，用 `Sts2Ai.Tests/Fixtures/` 里的测试数据和这两个网络文件本身：
 
 - `RunNetTests`（4）：一个极小、未训练的网络（`pure-v-tiny-win.json`，风险值输出头的偏置降低 6），给三个真实的整局观测按训练器的获胜机会估值；`v9-0.json` 能加载，它的测试对局得到训练器给的估值；共用的测试地图上的地图词元；要进入的点只在选路时才读入。
-- `CombatNetTests`（5）：`c9-0.json` 能加载，它的 16 个测试状态读出来和训练器一样；一个极小、未训练的网络（`combat-tiny.json`），它的测试状态是真实的 SL 回合开始，带一个敌人四个回合的历史、一个盟友、同一 id 的两瓶药水、表外的一瓶药水、一个 5% 生命的状态、一次多段攻击、带伤害的牌，以及表内和表外、超过网络能分辨的位置的充能球，读出来和训练器一样；进行中的状态值它的结局和留下的药水；持有的生命值排除掉的分桶没有权重；已结束的状态和上界都是 `LeafValue` 的。
+- `CombatNetTests`（6）：`c9-0.json` 能加载，它的 16 个测试状态读出来和训练器一样；一个极小、未训练的网络（`combat-tiny.json`），它的测试状态是真实的 SL 回合开始，带一个敌人四个回合的历史、一个盟友、同一 id 的两瓶药水、表外的一瓶药水、一个 5% 生命的状态、一次多段攻击、带伤害的牌，以及表内和表外、超过网络能分辨的位置的充能球，读出来和训练器一样；进行中的状态值它的结局所留下的那些局的 V；每瓶药水按它自己的概率保留；持有的生命值排除掉的分桶没有权重；赢下的战斗值它那局游戏的 V，输掉的为 0。
 - 改动一个输入时，只要输出的变化小于容差，检查就会通过，所以每个新输入都在一个让每个输入都起作用的网络上再检查了一次（[战斗网络 §9](/arch/combat-brain/network/#sec-9)）。
 
 **规划** <Badge text="规划中" variant="caution" />：
 
 1. **校准**，在留出的种子上：V 说 30% 的那些局面里，应该大约有 30% 赢下来。可靠性图（把预测分箱，画出预测胜率与实际胜率的对比）还没有实现；Brier 分数（预测概率与 0/1 结果之间差距的平方的均值）已经实现，在 `v.train` 的整局报告里，它必须优于基线的（ytcs，一个前人的 STS2 求解器，它的整局模型就没通过这一项）。
 2. **奖励塑形精确地逐项相消**，等有了塑形项之后（[循环 §11](/arch/learning/loop/#sec-11)）。
-3. **晋级门槛的 A/A 测试**：挑战者就是冠军自己时，门槛让它通过的频率不能高于门槛的假阳性率。`Sts2Ai.Tests/Harness/GateTests.cs` 检查 200 个零差值的配对不通过（`NoGainFails`），这是一个确定性的检查，不是测出来的比率。
+3. **晋级门槛的 A/A 测试**：挑战者就是冠军自己时，门槛让它通过的频率不能高于门槛的假阳性率。`Sts2Ai.Tests/Harness/GateTests.cs` 检查 400 个各自只有一方获胜、两方轮流获胜的配对不通过（`NoGainFails`），这是一个确定性的检查，不是测出来的比率。
 
 ## 12. 未决问题
 

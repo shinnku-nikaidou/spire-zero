@@ -157,4 +157,4 @@ AI 打的時候，等的也是同樣這些東西：它只打出畫面上那個�
 
 **一個大腦服務兩種環境**。`hello` 帶著環境，而且在大腦眼中的這一局裡保持不變。`brain` 給 NoSL 對局它的冠軍的戰鬥大腦，給 SL 對局 `--sl-policy` 的戰鬥大腦，宏觀大腦相同（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)），所以只要宏觀大腦在兩種環境下都能用（[概覽 §4](/zh-tw/arch/mod/#sec-4)），面板的開關就不需要第二個大腦。
 
-**大腦印出什麼**。啟動時印出 `brain: NoSL C; SL C; listening on PATH`，之後每個 `run_end` 一行：`RUN_ID (mod) REASON floor F, N decisions`，有重新規劃和工作行程的遊戲錯誤時也一併印出（`Commands/BrainCommand.cs:48-53`）。
+**大腦印出什麼**。啟動時印出 `brain: NoSL C; SL C; listening on PATH`，之後每個 `run_end` 一行：`RUN_ID (mod) REASON floor F, N decisions`，有重新規劃和工作行程的遊戲錯誤時也一併印出（`Commands/BrainCommand.cs:58-63`）。

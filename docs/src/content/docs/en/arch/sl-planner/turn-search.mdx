@@ -1,6 +1,6 @@
 ---
 title: 'Turn search: one turn in full'
-description: How the SL planner searches one turn from one state - depth first, ending the turn at every step, transpositions merged by the full hidden state, and the turn's nodes shared over its first actions - and the planned TurnEnds, one such enumeration for both environments.
+description: How the SL planner searches one turn from one state - depth first, ending the turn at every step, each card prompt's answers as lines of their own, copies of a card tried once, transpositions merged by the full hidden state, the turn's nodes shared over its first actions, and cycles - and the planned TurnEnds, one such enumeration for both environments.
 sidebar:
   label: Turn search
 ---
@@ -11,38 +11,48 @@ The planner's unit of work is one turn from one state. The [beam](/en/arch/sl-pl
 
 ## 1. Depth first over the turn
 
-From the state, the search tries every legal action, and from each resulting state every legal action again, depth first: it follows one sequence to its end, then backs up and tries the next. The order at each state is fixed: **ending the turn first**, then the cards in hand order, then potions. Ending the turn is an option at every step, an idea from bottled_ai (a prior-art Slay the Spire bot), so a line can stop after any number of cards.
+From the state, the search tries every legal action, and from each resulting state every legal action again, depth first: it follows one sequence to its end, then backs up and tries the next. The order at each state is fixed: **ending the turn first**, then the cards in hand order, then potions. Of the actions that are the same, copies of a card played at the same target with the same answer, only the first is tried (`PimcBrain.Ordered`, [Combat brain: prompts, moves and workers §5](/en/arch/combat-brain/shared/#sec-5)). Ending the turn is an option at every step, an idea from bottled_ai (a prior-art Slay the Spire bot), so a line can stop after any number of cards.
 
 A line ends in one of two ways:
 
 - **The turn ends.** The enemies' turn that follows is played for real, in the same world, so the turn's end is the state at the next turn's first decision, after the enemies have acted (and, in SL, exactly as they will act).
 - **The fight ends**, won or lost, at any point of the line.
 
-Card prompts on the way go to `p0`, as in the run ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)). Every action played is one **node** of the budget.
+An action that raises a card prompt is a branch point: after the action as the run would answer it (its first options), each other answer of its first prompt is tried as an action of its own, the same action carrying that answer, right after it and from the same state. A later prompt of the same action takes its first options ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)). Every action played, each answer included, is one **node** of the budget.
 
 ## 2. Transpositions and the full hidden state
 
 Different orders of the same cards often reach the same state, and a search that expanded each order would spend most of its nodes on repeats ([Combat brain §2](/en/arch/combat-brain/#sec-2)). So each state is searched once: the search keeps the states it has seen, keyed by
 
 $$
-\text{key}(s) = \big(\,\mathrm{hash}(\text{observation}),\ \mathrm{hash}(\text{hidden state})\,\big),
+\text{key}(s) = \big(\,\mathrm{hash}(\text{observation, piles as multisets}),\ \mathrm{hash}(\text{hidden state})\,\big),
 $$
 
-and a state seen before is not expanded again. In SL the hidden part is the full one (`HiddenState.Full`): the draw pile's order, the position of every random stream, each monster's queued move and its moves so far, and what the combat's history holds of this turn, as a multiset.
+and a state seen before is not expanded again. The first half is the observation with the hand, the discard pile and the exhaust pile each as a multiset of cards without their ids, and the potions as a multiset (`PimcBrain.StateKey`), so the same cards played in another order, or another copy of one, meet as one state ([Combat brain: prompts, moves and workers §5](/en/arch/combat-brain/shared/#sec-5)). In SL the hidden part is the full one (`HiddenState.Full`): the draw pile's order, the position of every random stream, each monster's queued move and its moves so far, and what the combat's history holds of this turn, as a multiset.
 
-Why the full hidden state, and not the observation alone? Two orders can reach the same observation with the random streams in different places: after a reshuffle, a random target or a generated card, one order has drawn from a stream that the other has not. They then draw different futures. Keyed by the observation alone, the first of them would give its value to the other. Keyed by the hidden state as well, they stay apart, and the search sees, for free, which order sets the streams up best: that is the manipulation of the random streams that SL allows ([Overview §1](/en/arch/sl-planner/#sec-1)). The turn's history enters as a multiset, without its order, so the same plays in another order still meet.
+Why the full hidden state, and not the observation alone? Two orders can reach the same observation with the random streams in different places: after a reshuffle, a random target or a generated card, one order has drawn from a stream that the other has not. They then draw different futures. Keyed by what the player sees alone, the first of them would give its value to the other. Keyed by the hidden state as well, they stay apart, and the search sees, for free, which order sets the streams up best: that is the manipulation of the random streams that SL allows ([Overview §1](/en/arch/sl-planner/#sec-1)). The turn's history enters as a multiset, without its order, so the same plays in another order still meet.
 
 Only one turn's transpositions are merged. A state kept at the end of a turn is therefore always the end of one concrete line of actions from the decision, and the plan replays exactly in the world it was searched in.
 
 ## 3. Sharing the nodes over the first actions
 
-A turn's search has a budget of $N$ nodes, 300 at every effort level (150 at the low budget, [Budget §2](/en/arch/sl-planner/budget/#sec-2)). Depth first, an unbounded search would spend all of them under the first card it tries. So at the turn's start the nodes are shared over its $m$ first actions: the $k$-th of them may search until
+A turn's search has a budget of $N$ nodes, 300 at every effort level (150 at the low budget, [Budget §2](/en/arch/sl-planner/budget/#sec-2)). Depth first, an unbounded search would spend all of them under the first card it tries. So at the turn's start the nodes are shared over its $m$ distinct first actions ([§1](#sec-1)): the $k$-th of them may search until
 
 $$
 \text{limit}_k = \max\!\Big(\text{used} + 1,\ \Big\lfloor \frac{N k}{m} \Big\rfloor\Big)
 $$
 
-nodes are used in all. A first action that needs fewer than its share leaves the rest to the ones after it. Below the first action, a subtree spends its share depth first; once the limit is reached, the remaining actions at that state are not tried and the turn is marked **cut**. A cut turn may have missed a better end, which matters for proofs ([Beam §5](/en/arch/sl-planner/beam/#sec-5)).
+nodes are used in all. A first action that needs fewer than its share leaves the rest to the ones after it.
+
+**A first action's prompt.** When the $k$-th first action raises a card prompt with $a$ other answers, its share goes to them evenly: from $\text{used}_k$, the nodes used before it, the $j$-th of its $a + 1$ lines (the first options first, then the other answers in their order) may search until
+
+$$
+\text{used}_k + \Big\lfloor \frac{(\text{limit}_k - \text{used}_k)\,(j + 1)}{a + 1} \Big\rfloor
+$$
+
+nodes are used in all, a line that needs fewer leaving the rest to the next. Each answer costs at least its own node, so a prompt with more answers than its action's share holds is tried only as far as the share goes, and the turn is marked cut. A potion that offers three cards to take, played with 60 nodes to its share, gives each of its three answers about 20 (`TurnDfs.Visit`, `src/Sts2Ai.Brain/Combat/SlPlanner.cs`).
+
+Below the first action, a subtree spends its share depth first, an action's other answers right after it; once the limit is reached, the remaining actions at that state are not tried and the turn is marked **cut**. A cut turn may have missed a better end, which matters for proofs ([Beam §5](/en/arch/sl-planner/beam/#sec-5)).
 
 The figure runs this search on a made-up turn small enough to show whole: two energy, four cards (one of them free), one enemy. Each row is a node, in the order the search plays it, indented by depth and coloured by its first action. Rows marked *merged* reached a state seen before and stop there; rows marked *same end* reached a turn end already found by another order. Lower the budget to see the shares cut the later first actions, and change how many states are kept.
 
@@ -50,16 +60,15 @@ The figure runs this search on a made-up turn small enough to show whole: two en
 
 ## 4. What a turn's search returns
 
-At each turn end the leaf values the state, and computes a **bound**: the value of winning the fight with the HP and potions that state has now, which no continuation of it can beat as long as the fight neither heals nor gives potions ([Beam §2](/en/arch/sl-planner/beam/#sec-2)). The search returns (`TurnSearch`):
+At each turn end the leaf values the state ([Combat brain: the leaf](/en/arch/combat-brain/leaf/)). The search returns (`TurnSearch`):
 
 - the best end **of the fight** that the turn can reach, won or lost, if any;
 - the best `keep` distinct states **at the next turn's start**, by the leaf's value;
-- none whose bound cannot beat the floor it was given (the best whole line so far);
 - the nodes it used, and whether it was cut (out of nodes, or more ends found than kept).
 
-Each end carries its line (actions, and the observation hashes the plan will follow), its status, value, bound and key, and the record of enemy moves up to it, which the next turn's search and its leaves go on from ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)). It also carries how the leaf expects the fight to end from it, from the same net call as the value (`ICombatLeaf.Outcome`): the chance to win and the HP held at a win, exact once the fight is over ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)). The planner keeps them for the host to show ([Beam §5](/en/arch/sl-planner/beam/#sec-5)).
+Each end carries its line (actions, the answers they carry, and the observation hashes the plan will follow), its status, value and key, and the record of enemy moves up to it, which the next turn's search and its leaves go on from ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)). It also carries how the leaf expects the fight to end from it, from the same net call as the value (`ICombatLeaf.Outcome`): the chance to win and the HP held at a win, exact once the fight is over ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)). The planner keeps them for the host to show ([Beam §5](/en/arch/sl-planner/beam/#sec-5)).
 
-The greedy dive asks each of its turns for every end, with no floor ([Beam §3](/en/arch/sl-planner/beam/#sec-3)). When the full beam later comes to the same state, it does not search that turn again: it takes the dive's ends and keeps those its own width and floor allow (`Narrow`). A floor only drops ends, and the kept ends are the best, in the same order, so the result is the one a fresh search would give.
+The greedy dive asks each of its turns for every end ([Beam §3](/en/arch/sl-planner/beam/#sec-3)). When the full beam later comes to the same state, it does not search that turn again: it takes the dive's ends and keeps those its own width allows (`Narrow`). The kept ends are the best, in the same order, so the result is the one a fresh search would give.
 
 ## 5. Cycles inside a turn
 
@@ -69,26 +78,25 @@ So the search does not go down a cycle (`LoopSearch`).
 
 **Finding one.** After an action, the moves may be a cycle if the state brings back a state on the path: the same round, the same potions and living enemies, every card of that hand back (the same id and upgrade will do, and no dearer), no less energy or stars, and some number changed. The other piles are not compared: Aeonglass adds a Wither every 6 cards, the piles change and the cycle goes on. A candidate is repeated a little further to confirm it (4 times in all). One that holds is set aside and the search does not go down; one that runs out by itself is an ordinary line and the search goes on as usual. So a deck with no cycle is played move for move as before.
 
-**Repeating and cashing out.** After the search, the cycles set aside run on a budget of their own (4,000 actions per search, not nodes, and up to as many again to shorten a win), the ones with the most playable cards first. Each is repeated 1, 2, 4... times, and each count is cashed out: a small search (60 nodes) without the cycle's own moves plays to the end of the turn, and the leaf values the next turn's start, the state the net knows. It stops when:
+**Repeating and cashing out.** After the search, the cycles set aside run on a budget of their own (4,000 actions per search, not nodes, and up to as many again to shorten a win), in the order they were found. Each is repeated 1, 2, 4... times, and each count is cashed out: a small search (60 nodes) without the cycle's own moves plays to the end of the turn, a prompt's other answers tried right after their action as in [§1](#sec-1), and the leaf values the next turn's start, the state the net knows. The cash-out's best line is the count's. It stops when:
 
 - it wins, and a bisection then cuts the repeats to the fewest;
-- neither the value nor the enemies' HP and block improve twice in a row;
+- neither the cashed line's value nor its chance to win, both from the leaf, improves twice in a row: on a fight the leaf calls nearly hopeless the value barely moves until the repeats near lethal, and the chance to win shows they are getting there;
 - a move is gone, as when a full hand sends the returning card to the discard pile;
 - it reaches 4,096 repeats.
 
 Without a win, the counts just before the piles change are cashed out as well (up to 8), since a boss's next curse may cost more than one more repeat gives. A new cycle found while cashing out is treated the same, at most two levels deep. Every repeat is played in the world, so what the game does to a cycle follows the game's rules. The turn counts as cut ([§3](#sec-3)).
 
-**Cycles behind a prompt.** Some cycles sit behind a prompt: Particle Wall costs stars, Touch of Insanity can make it free, but `p0` gives that to the most expensive card ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)). So after the search, each other answer to a prompt that asks for one card, and does not take it out of the hand, is tried once, and only an answer from which one more free card makes a cycle gets a line (40 nodes, plus its cycle). The other answers are not looked at: more lines are no better by themselves, and each is one more chance for the leaf's mistakes to win.
+**Cycles behind a prompt.** Some cycles sit behind a prompt: Particle Wall costs stars, and Touch of Insanity can make it free, but its first answer makes another card free. The answer that frees Particle Wall is one of the potion's lines ([§3](#sec-3)), and on it the cycle is found like any other.
 
-Neither net changed. With c8-2, Monologue and two Flash of Steel kill the 535 HP Aeonglass in the first turn at no HP lost; the old search lost that fight. V does not yet know what such decks are worth, which is for it to learn.
+The simulator's self-test plays both on the real game against 535 HP, at the champion's budget (`selftest`, [Simulator: reference §5](/en/arch/simulator/reference/#sec-5)): Monologue and two Flash of Steel, which draw each other, kill in the first turn; behind Touch of Insanity, the planner wins through the potion's answer that frees Particle Wall, a turn later, on the part of the potion's nodes that answer gets. What such decks are worth to a run is V's to learn.
 
 ## 6. TurnEnds <Badge text="planned" variant="caution" />
 
-The design makes this search a piece of its own, `TurnEnds`, which both environments call ([Combat brain §3.1](/en/arch/combat-brain/#sec-3.1)). What stays is what the sections above describe: depth first, ending the turn an option at every step, the enemies' turn played for real, states merged by the observation and the hidden state. What changes for the planner:
+The design makes this search a piece of its own, `TurnEnds`, which both environments call ([Combat brain §3.1](/en/arch/combat-brain/#sec-3.1)). What stays is what the sections above describe: depth first, ending the turn an option at every step, the enemies' turn played for real, states merged by the observation, piles as multisets, and the hidden state. What changes for the planner:
 
 - **Transpositions across turns and passes.** A table keeps every state searched for the whole of the fight's planning, not only one turn's, so a state reached by two turns' lines or met again in a wider pass is not searched twice. Each entry still holds one concrete line, so the plan still replays exactly.
 - **An order learned from earlier passes.** A later pass tries first the actions that led to the best ends in the passes before it.
-- **Prompts are branches.** An answer to a card prompt is an action like any other ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)).
 - **Nodes come from the fight's budget**, with no share per state and turn ([Budget §7](/en/arch/sl-planner/budget/#sec-7)). How the shares of [§3](#sec-3) carry over, so that a depth-first enumeration does not spend a pass's nodes under its first card, is left to the implementation and its gate.
 
 `TurnEnds` is a step of the search and not an input of the net: the net reads each end as one state.

@@ -157,4 +157,4 @@ AI 打的时候，它等的是同样的东西：它只打出对画面上那个�
 
 **一个大脑服务两种环境**。`hello` 带有环境，它在大脑眼中的这一局里保持不变。`brain` 给 NoSL 对局它的冠军的战斗大脑，给 SL 对局 `--sl-policy` 的战斗大脑，宏观大脑相同（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)），所以面板上的开关不需要第二个大脑，只要宏观大脑在两种环境里都能下（[概览 §4](/arch/mod/#sec-4)）。
 
-**大脑打印什么**。启动时打印 `brain: NoSL C; SL C; listening on PATH`，之后每个 `run_end` 一行：`RUN_ID (mod) REASON floor F, N decisions`，有重新规划和工作进程的游戏错误时也一并附上（`Commands/BrainCommand.cs:48-53`）。
+**大脑打印什么**。启动时打印 `brain: NoSL C; SL C; listening on PATH`，之后每个 `run_end` 一行：`RUN_ID (mod) REASON floor F, N decisions`，有重新规划和工作进程的游戏错误时也一并附上（`Commands/BrainCommand.cs:58-63`）。

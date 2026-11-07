@@ -14,7 +14,7 @@ Until run worlds exist ([Simulator: worlds and the SL clone §8](/en/arch/simula
 - **Rewards, card reward, bundle, treasure, shop purchase:** the gold, potion, relic or cards are added and the price is paid.
 - **An option that opens a choice** (a card reward, a card removal, smithing) is worth the best pick in it, among the picks the game will offer (an Eternal card cannot be removed), so a choice that would be skipped is not opened. A card reward's cards are listed on the rewards screen, since they are rolled before it shows and opening one to look costs nothing ([Protocol: observations and actions §5](/en/arch/protocol/observation/#sec-5)).
 - **Rest:** the heal the option shows; smithing is worth its best upgrade, as at the prompt that follows.
-- **Event:** the option's relic, or death if the button warns of it. Any other option is valued as no change.
+- **Event:** the option's relic. An option whose button warns that it kills ends the run, lost, and is worth 0 (`MacroBrain.cs:147, 202-204`), not V of a run at 0 HP. Any other option is valued as no change.
 - **Card prompts:** greedy, one pick at a time while V rises (or while the prompt needs more picks). Removal and transform take the card out, upgrade puts in its upgrade preview (`CardView.upgraded`, [Protocol: observations and actions §2](/en/arch/protocol/observation/#sec-2)) with the numbers and cost it will have, choose-a-card adds it. A prompt that L0's own answer opened (smithing, a removal) takes at least the one pick that answer was valued by: stopping it would not leave the run as it is but cancel back to the screen that opened it, where the same answer comes again. At a rest site, which must be used, that would loop until the run was truncated, with a V that valued the run unchanged above both the heal and every upgrade.
 
 What the screen does not show, this prediction cannot see. An event option's costs and gains are not on the screen as data, so a costly option ties with leaving and wins when listed first: Tablet of Truth takes max HP for every decipher, down to 1. Nor does it see what a relic does beyond being one more relic, or what a transform gives. Playing the options removes all three.
@@ -28,8 +28,9 @@ In SL, with `--afterstates clone` (and `--macro l0`), Harness hands L0 the node'
 - **Afterstates are played.** Each option is played on the clone, and what the game asks next is its afterstate: the event's real outcome, the card the transform really gave, the shop after the purchase. V values that.
 - **The map is still predicted.** Travel is the node's exit, which the clone cannot play past: the next node's contents are not the current node's to see ([Environments: information §2](/en/arch/environments/information/#sec-2)). So a map move's afterstate is predicted as in [§1](#sec-1), the point added to the path.
 - **The search goes on.** While an afterstate is still a screen of the node, not the map, a combat or the run's end, the brain does not stop at it: it searches on over that screen's own actions ([§3](#sec-3)).
+- **Where it stops, the game's rules come first** (`CloneSearch.Value`, `src/Sts2Ai.Brain/Macro/CloneSearch.cs:81-92`). A run that is over is worth 1 if won and 0 if lost, as the game ended it (`Afterstate.Won`): the game kills the players when it records a win too, so a won run also ends at 0 HP, and V would read it as lost. A combat about to start, such as an event's fight, is valued by the combat leaf at its first round's start: the HP it will cost and each ending priced by V ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)). V alone would not do: it reads a run in a room as the state after that room, so it would take the fight as won at no cost. Any other afterstate is worth V.
 
-The champion's name says `l0 NAME clone`, and a champion file `"afterstates": "clone"`. NoSL and `--afterstates screen` predict from the screen as in [§1](#sec-1).
+The champion's name says `l0 NAME clone`, and a champion file `"afterstates": "clone"`. `--afterstates clone` needs `--combat-net`, for the fights an option starts (`SimWorker/Commands/Args.cs:236`), and in SL, L0 plays only on the clone: the predicted afterstates of [§1](#sec-1) are NoSL's (`SimWorker/Brains/ChampionOptions.cs:42-43`). NoSL predicts from the screen as in [§1](#sec-1).
 
 ## 3. Searching through a node's screens
 
@@ -47,12 +48,12 @@ When the frontier is empty or the probes are spent, every state gets a **worth**
 $$
 W(n) =
 \begin{cases}
-V(n) & \text{if } n \text{ has no children,}\\[2pt]
+U(n) & \text{if } n \text{ has no children,}\\[2pt]
 \max\left( \max_{c \,\in\, \mathrm{children}(n)} W(c),\; [\,n \text{ cut}\,]\, V(n) \right) & \text{otherwise,}
 \end{cases}
 $$
 
-where $[\,n\text{ cut}\,]V(n)$ is $V(n)$ for a state some of whose answers were never played, and $-\infty$ otherwise: a state whose answers were all played is worth its best answer, while a cut one may also stop where it is. An option is worth its afterstate's $W$, and L0 takes the best. The search is a beam search over the node, in the sense of classical AI search: breadth-first, but keeping only the most promising states at each depth.
+where $U(n)$ is the value where the search stops ([§2](#sec-2)): 1 or 0 for the run's end, the combat leaf for a fight about to start, V for any other state; and $[\,n\text{ cut}\,]V(n)$ is $V(n)$ for a state some of whose answers were never played, and $-\infty$ otherwise: a state whose answers were all played is worth its best answer, while a cut one may also stop where it is. An option is worth its afterstate's $W$, and L0 takes the best. The search is a beam search over the node, in the sense of classical AI search: breadth-first, but keeping only the most promising states at each depth.
 
 In a shop, the one-step values from the screen can put removing a card first and a relic third. The search on the clone follows each purchase with what the remaining gold can still do, and plays the removal prompt itself, so it can buy the relic.
 

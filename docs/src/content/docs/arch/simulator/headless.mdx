@@ -42,7 +42,7 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 游戏的 C# 代码通过 GodotSharp（引擎的 C# 绑定）访问引擎；GodotSharp 通过一张函数指针表调用引擎的原生函数，这张表由引擎在启动时填好。没有引擎，这张表就是空的，第一次调用就会崩溃。
 
-`GodotNativeStub.Install`（`Runtime/GodotNativeStub.cs:23-51`）把表里的每个槽都填成同一个很小的函数 `mov rax, imm64; ret`，它返回一个指针，指向某个清零页面的上半部分。于是碰到 Godot 的托管代码可以一路跑过去：它拿回的是清零的内存，读出来就是空对象、空字符串和零，什么也不会发生。它是为 linux-x64 写的。
+`GodotNativeStub.Install`（`Runtime/GodotNativeStub.cs:20-41`）把表里的每个槽都填成同一个很小的函数 `mov rax, imm64; ret`，它返回一个指针，指向某个清零页面的上半部分。于是碰到 Godot 的托管代码可以一路跑过去：它拿回的是清零的内存，读出来就是空对象、空字符串和零，什么也不会发生。它是为 linux-x64 写的。
 
 桩让零散的调用无害，但不让它们有意义。需要引擎给出真实答案的代码（操作系统、时钟、资源、本地化）打了补丁，改从托管代码得到答案（[§4](#sec-4)）。
 

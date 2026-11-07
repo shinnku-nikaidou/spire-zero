@@ -39,11 +39,11 @@ The hosts fetch the game objects (the run state, the player, the current event, 
 | `map.visited` | `RunState.VisitedMapCoords` |
 | `map.boss`, `second_boss`, `ancient` | `Act.BossEncounter`; `Act.SecondBossEncounter`, only when the map has a second boss point; `Act.Ancient` |
 
-**Order.** A point's children are a hash set in the game, whose order differs from one process to another; the points are put in row-then-column order and each point's `next` sorted the same way, so the same map gives the same observation in any process (`Observe.cs:52-72`).
+**Order.** A point's children are a hash set in the game, whose order differs from one process to another; the points are put in row-then-column order and each point's `next` sorted the same way, so the same map gives the same observation in any process (`Observe.cs:54-74`).
 
 ## 3. Cards, powers, relics and intents
 
-**A card** (`Observe.Card`, `Observe.cs:115-138`):
+**A card** (`Observe.Card`, `Observe.cs:117-140`):
 
 | field | read from |
 |---|---|
@@ -63,19 +63,19 @@ The hosts fetch the game objects (the run state, the player, the current event, 
 
 **`vars` are base values.** The card's numbers before Strength, Dexterity or Vulnerable act on them. A calculated number (Perfected Strike's damage) is left out: the card shows it as a base plus an extra per count of something in the state, and those parts are among the vars; the calculated value itself only mirrors its base and goes stale after a downgrade. The vars are added in name order, since the serializer writes a dictionary in the order it was filled. `enchant.extra` is the damage Momentum has gathered.
 
-**The upgrade preview** (`DeckCard`): for an upgradable card in the deck, the card after one more upgrade, as the game's own preview shows it in the deck view and in an upgrade prompt. It is made the way the game makes its preview, on a copy: `MutableClone()`, then `UpgradeInternal()` and `FinalizeUpgradeInternal()`. A mutable clone has none of the original's event subscribers and the upgrade runs no hooks, so nothing in the run changes (`Observe.cs:202-214`).
+**The upgrade preview** (`DeckCard`): for an upgradable card in the deck, the card after one more upgrade, as the game's own preview shows it in the deck view and in an upgrade prompt. It is made the way the game makes its preview, on a copy: `MutableClone()`, then `UpgradeInternal()` and `FinalizeUpgradeInternal()`. A mutable clone has none of the original's event subscribers and the upgrade runs no hooks, so nothing in the run changes (`Observe.cs:204-216`).
 
 **A power** (`Observe.cs:259-261`): only powers with `IsVisible`; `amount` is `DisplayAmount`, the number on the icon; `stacks` is `Amount` when it differs from it; `card` is the card the power keeps; `detail` is how far the power's `DynamicVars` have moved from its canonical ones, summed (one moves at a time); `stolen` is Swipe's `StolenCard`. That card is in the power's private data, which the game does not expose although the tooltip names it (Nightmare's card), so `HeldCards` finds it by reflection: the first field of card type in the power's `_internalData` (`HeldCards.cs:12-27`). The simulator's CombatBuilder uses `HeldCards.Set` to put such a card back when it builds a combat.
 
-**A relic** (`Observe.cs:263-272`): `counter` is `DisplayAmount` when `ShowCounter`; `status` when not normal; `melted` (`IsMelted`); `used_up` (`IsUsedUp`); `cards`, Pael's Tooth's kept cards; `spent`, a private bool field of the relic whose name ends in `ThisCombat` or `ThisTurn` is set.
+**A relic** (`Observe.cs:265-274`): `counter` is `DisplayAmount` when `ShowCounter`; `status` when not normal; `melted` (`IsMelted`); `used_up` (`IsUsedUp`); `cards`, Pael's Tooth's kept cards; `spent`, a private bool field of the relic whose name ends in `ThisCombat` or `ThisTurn` is set.
 
-**Intents** (`Observe.cs:252-257`): the intents of the monster's `NextMove`, for a monster not on the player's side, one lying dead until it revives too. An attack's damage is `AttackIntent.GetSingleDamage(targets, owner)` against the player, the same call the icon's number comes from, and its hits `max(1, Repeats)`. The move itself never goes out, only its intents.
+**Intents** (`Observe.cs:254-259`): the intents of the monster's `NextMove`, for a monster not on the player's side, one lying dead until it revives too. An attack's damage is `AttackIntent.GetSingleDamage(targets, owner)` against the player, the same call the icon's number comes from, and its hits `max(1, Repeats)`. The move itself never goes out, only its intents.
 
 **Uids**: a creature's is its `CombatId`; a hand card's its id in `NetCombatCardDb` ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)).
 
 ## 4. A combat
 
-`Observe.Combat(state, player)` (`Observe.cs:76-112`):
+`Observe.Combat(state, player)` (`Observe.cs:78-114`):
 
 | field | read from |
 |---|---|

@@ -25,7 +25,7 @@ Built: V's trainer `learn/v/` (`v.train`) and the combat net's trainer `learn/co
 
 **The combat net.** A combat search looks a turn or a fight ahead and must then say what the state it reached is worth: its *leaf value*. The combat net reads a round's start and predicts how the fight will end: a death, or how much of max HP is still to be lost, in 50 buckets, and each held potion's chance of being gone after a win ([The combat net](/en/arch/combat-brain/network/), [Combat brain: the leaf §4](/en/arch/combat-brain/leaf/#sec-4)). Its training is in [Training the combat net](/en/arch/learning/combat-net/).
 
-**Two units.** V's unit is the run's chance to win. The combat leaf keeps its own: it prices the net's endings with hand-set numbers ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+**One unit.** V's unit is the run's chance to win, and the combat leaf's is the same: it prices each ending the combat net predicts by V on the run that ending leaves, a death at 0 ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
 
 **Strategy is learned, not written.** Nothing about how to play is written by hand into either net: no card is called good, no monster's move order is listed. What is written by hand is the game's rules (the simulator plays the real game) and the targets (how a run ended, how a fight ended). V learns from zero, from the AI's own runs, not from human play.
 

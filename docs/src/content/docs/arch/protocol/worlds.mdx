@@ -24,25 +24,30 @@ public interface IWorldSource                     // the worlds of one decision
 public interface ICombatWorld                     // one simulated combat
 {
     CombatObservation Observe();
+    RunView Run();                                // the run around the combat, as it stands in this world
     IReadOnlyList<CombatAction> Legal();          // empty once the combat is over
     CombatStatus Status { get; }
     ulong HiddenKey();
     void Execute(CombatAction action);            // card prompts are answered inside the world
+    PromptSeen? LastPrompt => null;               // the first prompt the last action raised, and its answer
     WorldSnapshot Snapshot();
     void Restore(WorldSnapshot snapshot);         // a snapshot taken from this same world
 }
 
 public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
+public sealed record PromptSeen(IReadOnlyList<IReadOnlyList<int>> Groups, int Min, int Max, string Answer);
 ```
 
 | 成员 | 做什么 |
 |---|---|
 | `Worlds(k, searchSeed)` | 一个决策的各个世界：NoSL 下是 k 个与观测相符的隐藏状态样本，由搜索种子抽出；SL 下是真实战斗唯一的那份精确副本 |
 | `Observe()` | 世界里的战斗在玩家眼中的样子：一个 `CombatObservation`（[观测与动作 §3](/arch/protocol/observation/#sec-3)） |
+| `Run()` | 这场战斗所在的这一局在这个世界里的现状，按 V 读它的方式：SL 下是实时游戏的这一局，带着战斗已经永久改变的东西；NoSL 下是请求带来的这一局，换上构建出的战斗里的遗物、药水、生命值、最大生命值和金币。叶子在它上面给战斗的结局定价（[战斗大脑：叶子 §2](/arch/combat-brain/leaf/#sec-2)） |
 | `Legal()` | 合法的战斗动作；战斗结束后为空 |
 | `Status` | 进行中、赢或输 |
 | `HiddenKey()` | 观测所隐藏的、会改变同样的打法从这里往后如何展开的那些东西的哈希：抽牌堆的顺序、每条随机数流的位置、每个怪物排定的招式。它和观测一起，在这个世界之内区分两个状态 |
-| `Execute(action)` | 打出一个合法动作；它弹出的选牌提示在世界内部由 `p0` 回答，和这一局回答它们的方式一样（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)） |
+| `Execute(action)` | 打出一个合法动作；它弹出的选牌提示在世界内部回答：第一个用动作带着的回答（如果有），其余每个都取它的前几个选项，和这一局回答它们的方式一样（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)） |
+| `LastPrompt` | 上一个动作弹出的第一个选牌提示（如果有）：它的选项按玩家能分辨的东西分组，它最少和最多的选择数，以及它得到的回答。搜索会尝试这个提示的其他回答（`PromptSeen.Others`） |
 | `Snapshot()`、`Restore(s)` | 世界里的一个时间点，以及回到它的办法 |
 
 **快照是一份配方**：世界从开始以来走过的步骤（确定化步骤、动作、提示的回答），以文本形式保存。搜索把它当作不透明的东西；只有生成它的那个世界会读它，并通过重播这些步骤来还原它（[模拟器：战斗 §2](/arch/simulator/combat/#sec-2)）。因为是文本，它可以传到另一个进程去。
@@ -82,8 +87,8 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | 消息 | JSON `type` | 字段 | 要求做什么 |
 |---|---|---|---|
 | `WorkerHello` | （无） | `game` | 工作进程启动完毕后的第一行：它运行的游戏版本 |
-| `PimcWorldRequest` | `pimc_world` | `id`、`observation`、`first`、`build_seed`、`search_seed`、`world`、`worlds`、`nodes_per_first`、`history` | PIMC 对一个 NoSL 世界的搜索：用 `build_seed` 从 `observation` 构建战斗，在由 `search_seed` 抽出的 `worlds` 个世界里取第 `world` 个，在 `first` 的每个动作之后搜索本回合，每个用 `nodes_per_first` 个节点 |
-| `SlTurnRequest` | `sl_turn` | `id`、`node`、`path`、`nodes`、`keep`、`floor`?、`history` | SL 规划器的一个回合：加载克隆，从决策处打出 `path`，到达束里的一个状态，再用 `nodes` 个节点搜索那个回合剩下的部分，在下一回合开始时最多保留 `keep` 个状态，外加最好的战斗结束状态，上界赢不过 `floor` 的一个都不保留 |
+| `PimcWorldRequest` | `pimc_world` | `id`、`observation`、`first`、`build_seed`、`search_seed`、`world`、`worlds`、`nodes_per_first`、`history`、`run` | PIMC 对一个 NoSL 世界的搜索：用 `build_seed` 从 `observation` 构建战斗，在由 `search_seed` 抽出的 `worlds` 个世界里取第 `world` 个，在 `first` 的每个动作之后搜索本回合，每个用 `nodes_per_first` 个节点；`run` 是这场战斗所在的这一局，供叶子定价用 |
+| `SlTurnRequest` | `sl_turn` | `id`、`node`、`path`、`nodes`、`keep`、`history` | SL 规划器的一个回合：加载克隆，从决策处打出 `path`，到达束里的一个状态，再用 `nodes` 个节点搜索那个回合剩下的部分，在下一回合开始时最多保留 `keep` 个状态，外加最好的战斗结束状态 |
 | `SlMacroRequest` | `sl_macro` | `id`、`node`、`paths` | 宏观大脑的试探：对每条答案路径，加载克隆，从决策处打出这条路径，记下游戏接下来问什么；一条路径是文本形式的宏观动作，对选牌提示来说是 `pick:` 加上按规范顺序给出的选择 |
 | `WorkerReply` | （无） | `id`、`lines`?、`error`?、`game_errors`、`turn`?、`afters`? | 对请求 `id` 的回答：`pimc_world` 用 `lines`，`sl_turn` 用 `turn`，`sl_macro` 用 `afters`；请求失败时改为 `error`；`game_errors`，处理它期间记下的游戏错误行 |
 
@@ -94,18 +99,18 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 ```csharp
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
     IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
-public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
-    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);
-public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
+    double Value, ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal, bool? Won = null);
 ```
 
 | 类型 | 所在位置 | 包含什么 |
 |---|---|---|
 | `PlannedLine` | `lines` | 搜索找到的一条打法，从它的首个动作开始：它的值、它的动作、首个动作之后模拟的节点数（包括首个动作本身），以及每个动作被打出时所在的战斗观测的哈希，被跟随的计划在每一步之前核对它；以及它是否重复搜索找到的一个循环。`lines[i]` 是 `first[i]` 之后最好的打法 |
-| `TurnSearch` | `turn` | 一个回合的搜索得到的各个结束状态：`ends`，如果这个回合能到达战斗结束，先是最好的战斗结束状态，然后是下一回合开始时的各个状态，最好的在前；`nodes`，模拟的动作数；`cut`，是否有东西被略去（节点用完了，或者找到的状态比保留的多）；`bound`，被搜索的那个状态的上界 |
-| `TurnEnd` | `turn.ends` | 规划器的打法里一个回合结束处的状态：从决策处到达它的动作（最后一个结束回合）以及每个动作之前的观测哈希；它的战斗状态；叶子的值；它的上界，即它还能达到的最好结果（以它现有的生命值和药水取胜；战斗结束后就是它的值）；它的键，即它的观测和完整隐藏状态的哈希，相等的状态按它合并（战斗结束后为 0）；它的敌人出招记录；以及与值来自同一次叶子调用的、从它出发赢下这场战斗的概率和赢下时持有的生命值（战斗结束后为 1 或 0 和持有的生命值） |
-| `Afterstate` | `afters` | 一条路径通向什么：那时的这一局；游戏接下来问的决策界面，一局结束后为 null；它的画面；它的合法动作。选牌提示的选项在它的画面里，所以它的合法动作列表为空；战斗的画面被略去，因为战斗会结束一次试探 |
+| `TurnSearch` | `turn` | 一个回合的搜索得到的各个结束状态：`ends`，如果这个回合能到达战斗结束，先是最好的战斗结束状态，然后是下一回合开始时的各个状态，最好的在前；`nodes`，模拟的动作数；`cut`，是否有东西被略去（节点用完了，某个提示的回答比节点多，或者找到的状态比保留的多） |
+| `TurnEnd` | `turn.ends` | 规划器的打法里一个回合结束处的状态：从决策处到达它的动作（最后一个结束回合），每个都带着它的提示回答，以及每个动作之前的观测哈希；它的战斗状态；叶子的值；它的键，由它的观测（各牌堆当作多重集，`PimcBrain.StateKey`）和完整隐藏状态算出，相等的状态按它合并（战斗结束后为 0）；它的敌人出招记录；以及与值来自同一次叶子调用的、从它出发赢下这场战斗的概率和赢下时持有的生命值（战斗结束后为 1 或 0 和持有的生命值） |
+| `Afterstate` | `afters` | 一条路径通向什么：那时的这一局；游戏接下来问的决策界面，一局结束后为 null，这时由 `won` 说明它怎样结束（游戏记下胜利时也会杀死玩家，所以从这一局的生命值看不出来）；它的画面；它的合法动作。选牌提示的选项在它的画面里，所以它的合法动作列表为空；战斗的画面装着它的第一个观测，它的动作被略去，因为战斗会结束一次试探 |
 
 `status` 写成数字（0 进行中，1 赢，2 输），哈希和键写成 JSON 数字（[协议 §4](/arch/protocol/#sec-4)）。
 

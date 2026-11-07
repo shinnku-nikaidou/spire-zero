@@ -1,7 +1,7 @@
 <script lang="ts">
   // The planned search of the SL planner (docs: sl-planner/beam §7) on the same made-up fight as the beam's figure:
-  // passes of width 1, 2, 4, ..., each to the fight's end, each pruned by the best line so far. A turn searched in an
-  // earlier pass costs nothing again. The pass stops on a proof, on a win at the minimum width, or when the fight's
+  // passes of width 1, 2, 4, ..., each to the fight's end, each keeping the best states by the leaf. A turn searched in
+  // an earlier pass costs nothing again. The pass stops on a proof, on a win at the minimum width, or when the fight's
   // nodes are spent.
   import { scaleLinear } from 'd3';
   import type { Lang } from '../v/names.ts';
@@ -11,7 +11,7 @@
   let { lang = 'en' }: { lang?: Lang } = $props();
   const t = $derived(words(lang));
 
-  type Dot = { n: Node; mark: 'kept' | 'dropped' | 'pruned' | 'end' };
+  type Dot = { n: Node; mark: 'kept' | 'dropped' | 'end' };
   type Pass = { width: number; nodes: number; total: number; dots: Dot[]; best: Node | null; complete: boolean; cut: boolean };
   type Stop = 'proved' | 'won' | 'spent';
 
@@ -41,8 +41,7 @@
             nodes += CHILDREN;
           }
           for (const c of children(s)) {
-            if (best && c.bound <= best.value) dots.push({ n: c, mark: 'pruned' });
-            else if (c.status !== 'going') {
+            if (c.status !== 'going') {
               dots.push({ n: c, mark: 'end' });
               if (!best || c.value > best.value) best = c;
             } else next.push(c);
@@ -51,8 +50,7 @@
         next.sort((a, b) => b.value - a.value);
         states = [];
         for (const c of next) {
-          if (best && c.bound <= best.value) dots.push({ n: c, mark: 'pruned' });
-          else if (states.length < width) {
+          if (states.length < width) {
             states.push(c);
             dots.push({ n: c, mark: 'kept' });
           } else {
@@ -63,7 +61,7 @@
       }
       total += nodes;
       passes.push({ width, nodes, total, dots, best, complete: complete && !cut, cut });
-      const proved = (complete && !cut) || (!!best && best.value >= root.bound);
+      const proved = complete && !cut;
       const stop: Stop | null = proved ? 'proved' : cut ? 'spent' : best?.status === 'won' && width >= least ? 'won' : null;
       if (stop) return { passes, best, stop };
     }
@@ -95,7 +93,6 @@
     bestSoFar: w('best line', '最佳线', '最佳線'),
     kept: w('kept', '保留', '保留'),
     dropped: w('beyond the width', '超出宽度', '超出寬度'),
-    pruned: w('dropped by the bound', '被上界剪掉', '被上界剪掉'),
     end: w('fight over', '战斗结束', '戰鬥結束'),
     line: w('the best line after this pass', '这一轮后的最佳线', '這一輪後的最佳線'),
     yAxis: w('leaf value', '叶子估值', '葉節點估值'),
@@ -110,7 +107,7 @@
     spent: w('the fight’s nodes are spent', '这场战斗的节点已用完', '這場戰鬥的節點已用完'),
     planned: w('Planned design, not running code: the fight is made up, and the numbers are no measurement.', '规划中的设计，不是运行中的程序：战斗是虚构的，数字不是测量结果。', '規劃中的設計，不是執行中的程式：戰鬥是虛構的，數字不是測量結果。'),
   };
-  const COLORS = { kept: 'var(--v-s1)', dropped: 'var(--v-muted)', pruned: 'var(--v-s8)', end: 'var(--v-s3)' } as const;
+  const COLORS = { kept: 'var(--v-s1)', dropped: 'var(--v-muted)', end: 'var(--v-s3)' } as const;
   const lineText = (n: Node | null) => (!n ? say(lang, L.none) : n.status === 'won' ? `${say(lang, L.wins)} ${n.h} HP` : say(lang, L.loses));
 </script>
 
@@ -130,12 +127,8 @@
     <text x={CW - 12} y={CH - 32} text-anchor="end">{say(lang, L.xAxis)}</text>
     <text x="44" y="12">{say(lang, L.yAxis)}</text>
     {#each pass.dots as d (d.n.id)}
-      {#if d.mark === 'pruned'}
-        <path d="M{x(d.n.turn) - 3},{y(d.n.value) - 3}l6,6m0,-6l-6,6" stroke={COLORS.pruned} stroke-width="1.2" opacity="0.7" />
-      {:else}
-        <circle cx={x(d.n.turn)} cy={y(d.n.value)} r={d.mark === 'end' ? 4 : 3} fill={d.mark === 'dropped' ? 'none' : COLORS[d.mark]}
-          stroke={COLORS[d.mark]} opacity={d.mark === 'dropped' ? 0.6 : 0.85} />
-      {/if}
+      <circle cx={x(d.n.turn)} cy={y(d.n.value)} r={d.mark === 'end' ? 4 : 3} fill={d.mark === 'dropped' ? 'none' : COLORS[d.mark]}
+        stroke={COLORS[d.mark]} opacity={d.mark === 'dropped' ? 0.6 : 0.85} />
     {/each}
     {#if pass.best}
       <path d={path(lineOf(pass.best))} fill="none" stroke="var(--v-ink)" stroke-width="1.5" />
@@ -144,7 +137,6 @@
   <div class="v-row" style="font-size: 0.75rem;">
     <span><span class="v-key" style="background: {COLORS.kept}"></span> {say(lang, L.kept)}</span>
     <span><span class="v-key" style="border: 1px solid {COLORS.dropped}"></span> {say(lang, L.dropped)}</span>
-    <span style="color: {COLORS.pruned}">×</span><span style="margin-left: -0.75rem;">{say(lang, L.pruned)}</span>
     <span><span class="v-key" style="background: {COLORS.end}"></span> {say(lang, L.end)}</span>
     <span><span class="v-line-key" style="background: var(--v-ink)"></span> {say(lang, L.line)}</span>
   </div>

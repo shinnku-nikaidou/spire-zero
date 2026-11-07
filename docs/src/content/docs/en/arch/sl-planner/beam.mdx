@@ -1,6 +1,6 @@
 ---
 title: 'Beam: from turn to turn'
-description: How the SL planner carries the best states from one turn to the next, prunes with a bound, finds a floor with a greedy dive first, narrows to the easy beam, picks and proves a line, and handles plans that lose; and the planned iterative widening, which replaces the dive and the beam.
+description: How the SL planner carries the best states from one turn to the next, why no state is pruned by its value, runs a greedy dive first, narrows to the easy beam, picks and proves a line, and handles plans that lose; and the planned iterative widening, which replaces the dive and the beam.
 sidebar:
   label: Beam
 ---
@@ -8,44 +8,42 @@ import { Badge } from '@astrojs/starlight/components';
 import BeamStepper from '../../../../../components/combat/BeamStepper.svelte';
 import Widening from '../../../../../components/combat/Widening.svelte';
 
-[Turn search](/en/arch/sl-planner/turn-search/) searches one turn from one state in full. A fight is many turns, and searching every turn of every line in full would multiply without end. The planner keeps only the most promising states from each turn, and prunes those that cannot matter. [§1](#sec-1)–[§6](#sec-6) are the code as it runs: the beam over turns (`SlPlanner.Search`), the bound that prunes it, and the rules for picking, proving and replanning a line. [§7](#sec-7) is the planned search that takes the dive's and the beam's place.
+[Turn search](/en/arch/sl-planner/turn-search/) searches one turn from one state in full. A fight is many turns, and searching every turn of every line in full would multiply without end. The planner keeps only the most promising states from each turn, by the leaf's value. [§1](#sec-1)–[§6](#sec-6) are the code as it runs: the beam over turns (`SlPlanner.Search`), why nothing else cuts it, and the rules for picking, proving and replanning a line. [§7](#sec-7) is the planned search that takes the dive's and the beam's place.
 
 ## 1. A beam over turns
 
-**Beam search** is breadth-first search that keeps only the best $B$ states at each depth and expands only those. Here a depth is a turn. With $S_0 = \{s_0\}$, the decision's state, and $v^{\star}$ the value of the best line that has ended the fight so far:
+**Beam search** is breadth-first search that keeps only the best $B$ states at each depth and expands only those. Here a depth is a turn. With $S_0 = \{s_0\}$, the decision's state:
 
 $$
-S_{t+1} = \operatorname{top}_B \Big\{\, e \in \bigcup_{s \in S_t} \operatorname{ends}(s) \ :\ e \text{ still in progress},\ \ \operatorname{bound}(e) > v^{\star} \Big\}
+S_{t+1} = \operatorname{top}_B \Big\{\, e \in \bigcup_{s \in S_t} \operatorname{ends}(s) \ :\ e \text{ still in progress} \Big\}
 $$
 
-where $\operatorname{ends}(s)$ is what the turn's search from $s$ returns, $\operatorname{top}_B$ takes the $B$ best by the leaf's value, distinct by key, and every end that finishes the fight updates $v^{\star}$ instead. The sort is stable, so ties keep the order in which their states were searched, and the beam does not depend on which worker answered first. The beam goes on until no state is left, or for at most 40 turns.
+where $\operatorname{ends}(s)$ is what the turn's search from $s$ returns, $\operatorname{top}_B$ takes the $B$ best by the leaf's value, distinct by key, and every end that finishes the fight is a line for the pick instead ([§5](#sec-5)). The sort is stable, so ties keep the order in which their states were searched, and the beam does not depend on which worker answered first. The beam goes on until no state is left, or for at most 40 turns.
 
 $B$ is `Budget.Beam` (`--beam`): 8 at every effort level but max, which has 16 ([Budget §1](/en/arch/sl-planner/budget/#sec-1)). Each kept state's turn is searched with the budget's nodes per state and turn; $B$ and the nodes are the same in every room.
 
 A turn usually ends in many more states than the beam keeps: of a turn's distinct ends, only the best 8 survive across all 8 kept states. That is the planner's main approximation, and why most of its plans are not proved ([§5](#sec-5)).
 
-## 2. The bound
+## 2. No bound
 
-A state in progress has a **bound**: the leaf's value of winning the fight from it with the HP and potions it has now. At `LeafValue`'s prices that is $0.2 + 0.6\,s + 0.02\,q$ for HP share $s$ and $q$ potions ([Combat brain: the leaf §2](/en/arch/combat-brain/leaf/#sec-2)). If the rest of the fight can only lose HP and use up potions, no line through the state can end higher than its bound. So once a line has ended the fight with value $v^{\star}$, every state whose bound is at most $v^{\star}$ is dropped, from the beam and already inside the turn's search: it could at best tie.
+The beam's width is the only cut. A state is never dropped because its lines could not beat the best line found so far, since no value of a state caps what its lines can reach. The leaf prices a win by V of the run the fight leaves ([Combat brain: the leaf §2](/en/arch/combat-brain/leaf/#sec-2)), and a line can still raise that past winning now with what the state holds: max HP or gold gained in the fight, a card grown, a potion drunk that V rates below an empty slot. A bound that assumed the fight can only lose HP and use up potions would prune lines better than the best (`SlPlanner`, `src/Sts2Ai.Brain/Combat/SlPlanner.cs`).
 
-The **decision's bound** is the bound of the decision's own state: a win that loses no HP and no potion. A line that reaches it cannot be beaten.
-
-The bound assumes that the fight neither heals nor gives potions. A few cards, potions and relics break that (a heal, a potion generated in the fight), and then a prune can drop a line that would have been better. The leaf's own shape is what makes the bound valid otherwise: a win is priced by the HP and potions it ends with, and the net adds to a state in progress only what is still to come, so a state rises above its bound only by predicted healing ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+So every state the beam keeps is searched on, every line that ends the fight is weighed for the pick, and a plan is proved only by a full beam that left nothing out ([§5](#sec-5)).
 
 ## 3. The greedy dive
 
-Pruning needs a floor, and the full beam has none at its first turn. So before the full beam, the planner runs a beam of one: at each turn it keeps the single best state by the leaf. This **greedy dive** reaches the end of the fight in one line, usually a win (in a 300-run evaluation, the first plan won 99.8% of the hallway fights that were won, [Budget §3](/en/arch/sl-planner/budget/#sec-3)). Its value is the floor that prunes the full beam from its first turn on.
+Before the full beam, the planner runs a beam of one: at each turn it keeps the single best state by the leaf. This **greedy dive** reaches the end of the fight in one line, usually a win (in a 300-run evaluation, the first plan won 99.8% of the hallway fights that were won, [Budget §3](/en/arch/sl-planner/budget/#sec-3)). It does two things for the full beam:
 
-- When the dive reaches the decision's bound, nothing can beat it, and the full beam is skipped.
-- The dive asks each of its turns for every end, with no floor, and keeps them. The full beam passes through the same states early on (its first turn always), and takes those turns' ends from the dive instead of searching them again ([Turn search §4](/en/arch/sl-planner/turn-search/#sec-4)). On a fixed set of fights it saved 14–16% of the nodes of the unproved plans, and every plan stayed the same.
+- When the dive wins, the fight is already won, and the full beam narrows to the easy beam ([§4](#sec-4)). When the dive proves its line, which takes turns searched in full that each leave a single state going on, the full beam is skipped.
+- The dive asks each of its turns for every end and keeps them. The full beam passes through the same states early on (its first turn always), and takes those turns' ends from the dive instead of searching them again ([Turn search §4](/en/arch/sl-planner/turn-search/#sec-4)). On a fixed set of fights it saved 14–16% of the nodes of the unproved plans, and every plan stayed the same.
 
 ## 4. The easy beam
 
-When the dive wins short of the bound, the fight is already won; the full beam can only find a win that keeps more HP or potions. So it keeps $E$ states a turn instead of $B$ (`Budget.EasyBeam`, `--easy-beam`; 4 at medium effort, 2 at low). When the dive loses, the full beam keeps $B$: then it is looking for a win at all.
+When the dive wins, the full beam can only find a win that leaves the run better. So it keeps $E$ states a turn instead of $B$ (`Budget.EasyBeam`, `--easy-beam`; 4 at medium effort, 2 at low). When the dive loses, the full beam keeps $B$: then it is looking for a win at all.
 
 The easy beam is most of medium effort's saving over high, which keeps $B$ always: medium spends 9.5 s on a won hallway fight against high's 13.8 s and reaches the same floors ([Budget §1](/en/arch/sl-planner/budget/#sec-1)). A narrower beam in every hallway fight saved as much time but missed the line that loses no HP in hallway fights at low HP or at 1 max HP; the easy beam keeps the full width whenever the dive loses.
 
-The figure runs the dive and the beam on a made-up fight whose turns are drawn from a fixed seed, so that every setting sees the same fight. The dashed line is the dive's, and its value the floor; crosses are states pruned by the bound; hollow circles fell beyond the beam's width.
+The figure runs the dive and the beam on a made-up fight whose turns are drawn from a fixed seed, so that every setting sees the same fight. The dashed line is the dive's; hollow circles fell beyond the beam's width.
 
 <BeamStepper client:visible lang="en" />
 
@@ -53,14 +51,11 @@ The figure runs the dive and the beam on a made-up fight whose turns are drawn f
 
 The pick is the best line that ends the fight, unless the beam stopped at its turn cap at a state the leaf values higher. Every loss is worth 0, so among losing lines the pick is the one that died from the turn start the leaf valued highest: the line that lasted in the best shape, where the fight is most likely to turn if the plan was wrong.
 
-A plan is **proved** when nothing better can exist, as far as the bound holds:
-
-- its line reaches the decision's bound; or
-- the full beam left nothing out: no turn's search was cut (out of nodes, or more ends than it kept), no state was dropped from the beam, and every line ended the fight or was pruned.
+A plan is **proved** when nothing better can exist: the last beam left nothing out. No turn's search was cut (out of nodes, or more ends than it kept), no state was dropped from the beam, and every line ended the fight (`Beam.Proved`).
 
 **What the host is shown.** Besides the pick, the planner keeps, for each first action its kept lines began with, the best of those lines. Those are its candidates, the pick first: each with the line's value, its chance to win the fight and the HP held at a win, where the line ends the fight 1 or 0 and the exact HP, elsewhere the leaf's expectation ([Turn search §4](/en/arch/sl-planner/turn-search/#sec-4)). The mod shows them as the fight's chance to win and HP left ([Output §2](/en/arch/output/#sec-2)). Often there is one: in the book's example seed played by the SL champion at ca1fad5, 23 of the 24 fights' plans had a single candidate, every line the planner kept beginning with its pick.
 
-Proofs are rare. On the fights of [Budget §5](/en/arch/sl-planner/budget/#sec-5) (2026-10-28), 18% of the searches were proved on act 1 hallway fights, 3% on elites and 1% on act 2's fights: a turn yields many more states than the beam keeps. In the fights below, none of 21 plans was proved.
+Proofs are rare: a turn yields many more states than the beam keeps. In the fights below, none of 21 plans was proved.
 
 ## 6. Losing plans
 
@@ -99,23 +94,21 @@ for width in 1, 2, 4, 8, ...:              # each pass runs to the fight's end
     while states:
         ends = TurnEnds of each state       # shared table: a state is searched once
         best = the better of best and the lines that ended the fight
-        drop every end with bound(end) <= best.value
         states = the top `width` ends by the leaf
     stop if proved, or best wins and width >= 4, or the fight's nodes are spent
 play best
 ```
 
-Width 1 is today's dive; a later pass is a beam of that width pruned by what the passes before it found. The figure runs the loop on the made-up fight of [§4](#sec-4). A turn searched in an earlier pass costs no nodes again, so a wider pass pays only for what is new.
+Width 1 is today's dive; a later pass is a beam of that width, which takes the turns the passes before it searched from them. The figure runs the loop on the made-up fight of [§4](#sec-4). A turn searched in an earlier pass costs no nodes again, so a wider pass pays only for what is new.
 
 <Widening client:visible lang="en" />
 
 ### 7.1 The rules
 
-- **Pruning.** An end goes when its bound is at or below the best line ([§2](#sec-2)). The bound's assumption stays: a fight that heals or gives potions can break it.
-- **Top width by the leaf.** The net ranks what the bound leaves ([Combat brain: the leaf](/en/arch/combat-brain/leaf/)).
+- **Top width by the leaf.** The leaf ranks the ends, and nothing is pruned by value ([§2](#sec-2), [Combat brain: the leaf](/en/arch/combat-brain/leaf/)).
 - **Stop** when the line is proved, or won with a width of at least 4, or the fight's nodes are spent. A pass cut by the budget still improves `best` with any line it finished.
 - **A losing plan** is played for one turn and planned again, until the fight's nodes are spent; then the last plan is played to its end. There is no count of plans.
-- **Proof** means what it means in [§5](#sec-5): the line reaches the decision's bound, or a pass left nothing out.
+- **Proof** means what it means in [§5](#sec-5): a pass left nothing out.
 
 ### 7.2 Why widening, and not depth
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   // The combat net's outputs on the test states its file carries (weights/all/c9-1.json): the chance of a death and
-  // of each bucket of the HP share still to be lost, each held potion's chance of being gone, and the leaf value, as
-  // CombatNet.Value computes it (docs: combat-brain/leaf §4–§5).
+  // of each bucket of the HP share still to be lost, each held potion's chance of being gone, and the HP expected at a
+  // win, as CombatNet.Outcome computes it (docs: combat-brain/leaf §4–§5).
   import { onMount } from 'svelte';
   import { scaleLinear } from 'd3';
   import walk from '../../data/combat-walk.json';
@@ -40,7 +40,7 @@
       if (isOpen(k, share)) open++;
     }
     const lossIfWon = won > 0 ? lost / won : 0;
-    return { death: p[0], share, lossIfWon, open, endHp: (share - lossIfWon) * s.player.max_hp, value: s.value };
+    return { death: p[0], share, lossIfWon, open, endHp: (share - lossIfWon) * s.player.max_hp };
   });
 
   const CW = 520;
@@ -55,7 +55,6 @@
     death: w('P(death)', 'P(死亡)', 'P(死亡)'),
     lossIfWon: w('expected share lost, if won', '若获胜，预期失去的比例', '若獲勝，預期失去的比例'),
     endHp: w('expected HP at the end, if won', '若获胜，预期结束时的 HP', '若獲勝，預期結束時的 HP'),
-    value: w('leaf value', '叶子估值', '葉節點估值'),
     heals: w('heals', '回血', '回血'),
     held: w('HP held now', '现在的 HP', '現在的 HP'),
     open: w('buckets open, of 50', '开着的桶（共 50 个）', '開著的桶（共 50 個）'),
@@ -124,7 +123,6 @@
       {#each s.potions as p, k (k)}
         <div class="v-stat"><span class="v-label">{names.name('potion', p.id)}: {say(lang, L.gone)}</span><span class="v-value v-num">{fmt(lang, p.gone, 3)}</span></div>
       {/each}
-      <div class="v-stat"><span class="v-label">{say(lang, L.value)}</span><span class="v-value v-num">{fmt(lang, r.value, 4)}</span></div>
     </div>
   {/if}
 </div>

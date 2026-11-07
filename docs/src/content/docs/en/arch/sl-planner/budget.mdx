@@ -16,13 +16,13 @@ The planner's budget today is a few numbers: the beam $B$, the easy beam $E$, th
 | effort | beam $B$ | easy beam $E$ | losing plans $L$ | whole runs, paired by seed with high |
 |---|---|---|---|---|
 | low | 8 | 2 | 3 | 200 seeds: −0.76 ± 0.89 floors (95%), further on 33, as far on 113, less far on 54; 0.40 of the time |
-| medium | 8 | 4 | 3 | 171 seeds: −0.04 ± 0.87 floors, further on 25, as far on 115, less far on 31; 0.61 of the time; passed the not-worse gate after 33 pairs |
+| medium | 8 | 4 | 3 | 171 seeds: −0.04 ± 0.87 floors, further on 25, as far on 115, less far on 31; 0.61 of the time; passed the not-worse gate on floors after 33 pairs |
 | high | 8 | 8 | no limit | the reference: 200 seeds, mean floor 28.54, 412 s per run |
 | max | 16 | 16 | no limit | not measured in whole runs |
 
 The runs were SL runs with the macro brain of the time (L0 with an earlier V) on the seeds `promotion-1`, both sides of a pair side by side under the same load; the gate is [Evaluation: gates §7](/en/arch/evaluation/gates/#sec-7)'s. Two later changes cut the cost of a restore and left every plan the same (high replays its runs on the same seeds bit for bit): the full beam takes the dive's turns ([Beam §3](/en/arch/sl-planner/beam/#sec-3)), and a world reads its node's checkpoint once instead of at every restore. With both, medium reached the same floor as before on all 84 seeds it played, in 0.84 of its time: 174 s per run against high's 320 s on those seeds.
 
-**The same in every room.** A beam of 4, twice as wide in elite and boss fights, with 3 losing plans, went −0.72 ± 0.95 floors against high on 171 seeds in 0.61 of its time and failed the not-worse gate after 92 pairs; medium is as fast and passed, and gives every room the same beam.
+**The same in every room.** A beam of 4, twice as wide in elite and boss fights, with 3 losing plans, went −0.72 ± 0.95 floors against high on 171 seeds in 0.61 of its time and failed the not-worse gate on floors after 92 pairs; medium is as fast and passed, and gives every room the same beam.
 
 ## 2. The low budget
 
@@ -58,11 +58,11 @@ That is a beam of 4 at 150 nodes per state and turn, the full width always (an e
 
 ## 4. Workers
 
-The turns' searches of one beam step are independent, so each kept state's turn is one request to the worker pool (`SlTurnRequest`, [Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)): the worker loads the node's clone, plays the state's path from the decision, searches the turn and returns its best ends. `PooledPlanner` sends one request per kept state for each turn of the beam, with the best whole line so far as the floor of each request's pruning, and merges the replies in request order. A turn's search lives in one request, so a plan is the same on any number of workers as in one process, which `selftest --workers N` checks. The SL champion's runs use 4 workers each.
+The turns' searches of one beam step are independent, so each kept state's turn is one request to the worker pool (`SlTurnRequest`, [Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)): the worker loads the node's clone, plays the state's path from the decision, searches the turn and returns its best ends. `PooledPlanner` sends one request per kept state for each turn of the beam and merges the replies in request order. A turn's search lives in one request, so a plan is the same on any number of workers as in one process, which `selftest --workers N` checks. The SL champion's runs use 4 workers each.
 
 ## 5. Results
 
-**The panel (2026-10-28).** Silent's starter deck at full HP, one fight per seed, the same fights for every player, prompts by `p0`, an earlier combat net as everyone's leaf. PIMC searches 8 worlds × 300 nodes, the planner beam 8 × 300 (then high effort). Each cell is the win rate and, in brackets, the HP lost per win:
+**The panel (2026-10-28).** Silent's starter deck at full HP, one fight per seed, the same fights for every player, prompts by the fixed rule of the time, an earlier combat net as everyone's leaf. PIMC searches 8 worlds × 300 nodes, the planner beam 8 × 300 (then high effort). Each cell is the win rate and, in brackets, the HP lost per win:
 
 | pool | fights | PIMC NoSL | PIMC SL | SL planner |
 |---|---|---|---|---|
@@ -78,10 +78,9 @@ The planner wins every fight PIMC wins, and 1, 5 and 3 more. On the fights both 
 
 ## 6. Weaknesses and open questions
 
-- **A narrow beam.** A turn ends in far more distinct states than the 8 the beam keeps, so few plans are proved (18% on act 1 hallway fights, 3% on elites, 1% on act 2) and a better line can fall outside the beam. What a wider beam or more nodes buy in whole runs (`--effort max`) is not measured. Iterative widening is the planned answer ([Beam §7](/en/arch/sl-planner/beam/#sec-7)).
-- **The bound's assumption.** A fight that heals or gives potions breaks it, and a prune can then drop the best line ([Beam §2](/en/arch/sl-planner/beam/#sec-2)).
-- **What the leaf cannot see.** A flat price per potion, no price on gold or max HP ([Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7)).
-- **Prompts are not searched.** Card prompts go to `p0`, so a plan cannot choose a better discard or pick ([Combat brain: prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)).
+- **A narrow beam.** A turn ends in far more distinct states than the 8 the beam keeps, so few plans are proved and a better line can fall outside the beam. What a wider beam or more nodes buy in whole runs (`--effort max`) is not measured. Iterative widening is the planned answer ([Beam §7](/en/arch/sl-planner/beam/#sec-7)).
+- **What the leaf cannot see.** The HP and the potions a fight ends with are predicted apart and multiplied as independent, and what is still to come in the fight besides them (gold stolen, max HP lost) is priced only once it has happened ([Combat brain: the leaf §7](/en/arch/combat-brain/leaf/#sec-7)).
+- **Prompts on a share.** The answers of an action's first card prompt share that action's nodes, so a prompt with many answers is searched thinly, and a second prompt of the same action takes its first options ([Turn search §3](/en/arch/sl-planner/turn-search/#sec-3), [Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
 - **The fight's end is the horizon.** The search stops where the fight does, valued by the leaf; the rewards after it and the rest of the node, which SL may also see, are left to the macro brain. Searching on to the node's exit is open ([Environments: information §9](/en/arch/environments/information/#sec-9), question 1).
 - **Lost fights cost time.** A quarter of the fight time goes into the 5% of fights that are lost ([§3](#sec-3)). The limit on losing plans caps it; no cheaper test tells a lost fight from a hard one.
 - **Fair comparison with NoSL.** The planner gets the same nodes per search, not the same time. Equal wall-clock time is the fairer budget for comparing the environments ([Environments: information §9](/en/arch/environments/information/#sec-9), question 2).

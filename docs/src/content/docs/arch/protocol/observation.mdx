@@ -91,7 +91,7 @@ Observation{run: RunView, screen: ScreenView}
 | `potion:S` 或 `potion:S:T` | 使用槽位 S 的药水；如果需要目标，就以 T 为目标 |
 | `end_turn` | 结束回合 |
 
-搜索的路线可以在动作后面带上提示的回答（`potion:0@3`，第一个提示选下标 3 的选项；[回合搜索 §5](/arch/sl-planner/turn-search/#sec-5)）。这只出现在搜索和日志里，宿主收到的动作不带它。
+搜索的路线可以在 `@` 后面带上动作的第一个选牌提示的回答：选中的选项按规范顺序的位置，用逗号分隔（`potion:0@3`、`play:12:3@1,3`；`end_turn@2` 用于回合结束或下一回合开始带来的提示；`play:12@` 表示什么都不选）。它只出现在搜索和日志里：宿主收到的动作不带它，提示到来时由 Harness 把回答交给它（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)）。
 
 战斗里没有丢弃药水：协议的战斗动作只有这三种。
 
@@ -152,7 +152,7 @@ CardChoice{options: CardView[] (canonical order), min, max, context: ChoiceConte
 | `purpose` | 提示的种类：入口的名字去掉 `From`，转成 snake_case（`deck_for_upgrade`、`deck_for_transformation`、`deck_for_enchantment`、`deck_for_removal`、`deck_generic`、`hand`、`hand_for_discard`、`hand_for_upgrade`、`choose_a_card_screen`、`simple_grid`、`simple_grid_for_rewards`）；针对战斗牌堆的提示则是牌堆的名字，`draw_pile` 或 `discard_pile`（在这个游戏版本里，只会从这两个牌堆提问） |
 | `source`? | 发起询问的卡牌、遗物、能力或事件的 id，在游戏指明时给出：入口的 `source` 参数，否则是这次选择最近涉及的模型 |
 | `cancelable` | 取消或跳过按钮会关闭提示：提示自己的设置，或选卡画面的 `canSkip` |
-| `in_combat` | 在战斗中提问（某张牌或某个能力正在结算），而不是在休息处、事件或商店里；Harness 按它路由提示：战斗中交给 `p0`，战斗外交给宏观大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)） |
+| `in_combat` | 在战斗中提问（某张牌或某个能力正在结算），而不是在休息处、事件或商店里；Harness 按它路由提示：战斗中用战斗大脑的动作带着的回答，没有就取前几个选项（`first`），战斗外交给宏观大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)） |
 | `prompt_key`? | 提示文本的本地化键，`table.key` |
 | `enchantment`? | 用于 `deck_for_enchantment`：被选中的牌获得的附魔，`{id, amount}` |
 

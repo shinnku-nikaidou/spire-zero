@@ -118,14 +118,14 @@ flowchart TD
 
 **戰鬥決策和宏觀決策**帶著它們的合法動作，以及按需建構的觀測（`CombatDecision`、`MacroDecision`）：不看觀測的策略永遠不必為它付出代價。答案必須合法，否則這一局拋出例外。
 
-**選牌提示**經過 `PolicySelector`，它在一局進行時就是遊戲的選牌器（`Simulation/PolicySelector.cs:21-80`）：
+**選牌提示**經過 `PolicySelector`，它在一局進行時就是遊戲的選牌器（`Simulation/PolicySelector.cs:20-76`）：
 
 - 它按標準順序顯示選項（`CardChoices.Canonical`），所以不管遊戲的清單是什麼順序，同樣的牌構成同樣的提示；這個順序裡的平手，用一條以提示編號為種子的亂數流來打破，這條亂數流不知道任何隱藏的東西，重播時也相同；
 - 它把答案記成遊戲自己清單裡的索引，也就是重播時交回的形式；
-- 卡牌獎勵和卡包是整局層級的決策，由驅動程式的處理器回答；沒有這些處理器，卡牌獎勵會被跳過，卡包則拿第一個；
+- 卡牌獎勵和卡包是整局層級的決策，由驅動程式的處理器回答；單獨的一場戰鬥沒有這些處理器，在那裡詢問卡牌獎勵或卡包會拋出例外；
 - 每次進入節點，提示都從 0 重新編號，因為節點的複本也是自己編號的（[世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）。
 
-在 `run` 裡，三個介面是同一個物件：Harness 的 `Dispatcher`，它把每個決策交給回答它的大腦（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）：戰鬥交給戰鬥大腦，戰鬥中的選牌提示交給 `p0`，其他一切（包括戰鬥外的選牌提示）交給宏觀大腦（[宏觀大腦](/zh-tw/arch/macro-brain/)）。
+在 `run` 裡，三個介面是同一個物件：Harness 的 `Dispatcher`，它把每個決策交給回答它的大腦（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）：戰鬥交給戰鬥大腦，戰鬥中的選牌提示交給 `first`（`FirstPicks`），除非戰鬥大腦的動作帶著它自己的回答，其他一切（包括戰鬥外的選牌提示）交給宏觀大腦（[宏觀大腦](/zh-tw/arch/macro-brain/)）。
 
 **結果**。一局結束時是 `won`（結束於勝利房間）、`lost`（結束於其他任何地方）、`truncated`（超過 `--max-decisions` 仍未結束，預設 20,000）或 `failed`（拋出了例外）。勝局的記錄寫著生命值 0：一到勝利房間，遊戲就殺死玩家。範例對局的記錄是：won、第 2 幕（從 0 算起）、第 48 層、生命值 0/66。
 
@@ -191,7 +191,7 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 
 `run` 通常把大腦留在自己的行程裡：Harness 和冠軍的各個大腦是這個行程裡的物件，它們的搜尋交給它啟動的工作行程池（[工作行程池](/zh-tw/arch/simulator/pool/)）。用 `run --brain SOCKET` 時，大腦則是另一個行程，在一個 Unix socket 上監聽，也就是 Mod 在遊戲裡連的那個（[Mod：主迴圈 §8](/zh-tw/arch/mod/loop/#sec-8)）。這時模擬器託管對局的方式和遊戲完全一樣：每局傳送 `hello`，帶上它的環境和由種子雜湊得到的對局 id，每個決策都連同它的觀測和合法動作一起發出，然後打出大腦推薦的動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。NoSL 下對局 id 隱藏了種子；SL 下種子確實會到達大腦，在節點檢查點的存檔裡，這是 SL 可以知道的。
 
-由大腦決定打什麼，所以 `run --brain` 拒絕每個冠軍選項，包括 `--log`（`Commands/RunCommand.cs:63-64`）；而且因為冠軍檔案的選項是當作給出的選項合併進來的，它也拒絕指定了任何冠軍選項的 `--champion FILE`（`Commands/Args.cs:176-192`）<Badge text="推斷" variant="caution" />。SL 下宿主還會傳送節點訊息：新節點開始時傳送檢查點，然後是還沒傳送的決策，每個都在下一個決策之前傳送（`Brains/RunBrains.cs:53-99`）。
+由大腦決定打什麼，所以 `run --brain` 拒絕每個冠軍選項，包括 `--log`（`Commands/RunCommand.cs:63-64`）；而且因為冠軍檔案的選項是當作給出的選項合併進來的，它也拒絕指定了任何冠軍選項的 `--champion FILE`（`Commands/Args.cs:178-194`）<Badge text="推斷" variant="caution" />。SL 下宿主還會傳送節點訊息：新節點開始時傳送檢查點，然後是還沒傳送的決策，每個都在下一個決策之前傳送（`Brains/RunBrains.cs:53-99`）。
 
 `brain` 就是那個行程（`Commands/BrainCommand.cs`）：單獨的 Harness，服務連上來的宿主，一次一個。它自己不需要遊戲；搜尋的工作行程各自啟動自己的遊戲。
 

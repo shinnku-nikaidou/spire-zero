@@ -36,10 +36,10 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 | `decision_id` | int | 这个决策在这一局里的序号，从 0 开始，三种决策一起计数（[§4](#sec-4)） | 同上 | 同上 |
 | `env` | string | `NoSL` 或 `SL` | 同上 | 同上 |
 | `surface` | string | `combat` | `card_choice`，两侧都是 | 这个决策的决策界面 |
-| `brain` | string | 战斗路由的名字：`pimc c9-1`、`plan c9-1`、`play` | 提示一侧的：战斗中是 `p0`；战斗外是 L0 的名字或 `random` | 宏观路由的 |
+| `brain` | string | 战斗路由的名字：`pimc c9-1`、`plan c9-1`、`play` | 提示一侧的：战斗中是 `first`，不论它的答案是随战斗大脑的动作而来，还是取自最前面的选项；战斗外是 L0 的名字或 `random` | 宏观路由的 |
 | `obs_hash` | 十六进制 string | 战斗观测的哈希 | 选牌提示的哈希 | 整个观测的哈希（[§4](#sec-4)） |
 | `legal` | int | 合法动作的个数 | 提示的选项个数 | 合法动作的个数 |
-| `chosen` | string | 战斗动作的文本：`play:C[:T]`、`potion:S[:T]`、`end_turn`（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)） | 选中的选项下标，用逗号连接，不带 `pick:` | 动作 |
+| `chosen` | string | 战斗动作的文本：`play:C[:T]`、`potion:S[:T]`、`end_turn`，搜索为它的第一个选牌提示选了答案时，答案跟在 `@` 之后（[协议：观测与动作 §3](/arch/protocol/observation/#sec-3)） | 选中的选项下标，用逗号连接，不带 `pick:` | 动作 |
 | `plan` | string[]? | 大脑在 `chosen` 之后的计划，如果有（[§5](#sec-5)） | 从不 | 策略在 `chosen` 之后的计划，如果有：L0 在地图上的路线 |
 | `candidates` | Candidate[]? | 搜索的候选，如果有（[§5](#sec-5)） | 从不 | 从不 |
 | `budget` | Budget? | 路由的预算；有预算的路由的每一行都有，包括只有一个合法动作的步骤和沿用计划的步骤（[路由、预算与种子 §4](/arch/harness/routing/#sec-4)） | 从不 | 从不 |

@@ -45,7 +45,7 @@ Each request is a record in `Sts2Ai.Protocol/Worker.cs`. Three searching brains 
 How each brain splits its work:
 
 - **PIMC** sends one request per world, each with every first action, and merges the replies as in-process PIMC does ([NoSL PIMC: search §2](/en/arch/pimc/search/#sec-2)).
-- **The SL planner** sends, for each turn of its beam, one request per state kept, with the best whole line so far as the floor of the pruning. A turn's search lives in one request, so the plan is the one a single process makes ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)).
+- **The SL planner** sends, for each turn of its beam, one request per state kept. A turn's search lives in one request, so the plan is the one a single process makes ([The SL planner: beam §1](/en/arch/sl-planner/beam/#sec-1)).
 - **L0 on the clone** splits a decision's paths into `min(paths, workers)` requests, in order (`Sts2Ai.Harness/PooledClone.cs:14-24`). A path's afterstate depends on the clone and the path only, so the split cannot change a result ([Macro brain: search §6](/en/arch/macro-brain/search/#sec-6)).
 
 ## 4. The worker: `serve`

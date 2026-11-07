@@ -24,25 +24,30 @@ public interface IWorldSource                     // the worlds of one decision
 public interface ICombatWorld                     // one simulated combat
 {
     CombatObservation Observe();
+    RunView Run();                                // the run around the combat, as it stands in this world
     IReadOnlyList<CombatAction> Legal();          // empty once the combat is over
     CombatStatus Status { get; }
     ulong HiddenKey();
     void Execute(CombatAction action);            // card prompts are answered inside the world
+    PromptSeen? LastPrompt => null;               // the first prompt the last action raised, and its answer
     WorldSnapshot Snapshot();
     void Restore(WorldSnapshot snapshot);         // a snapshot taken from this same world
 }
 
 public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
+public sealed record PromptSeen(IReadOnlyList<IReadOnlyList<int>> Groups, int Min, int Max, string Answer);
 ```
 
 | member | what it does |
 |---|---|
 | `Worlds(k, searchSeed)` | the worlds of one decision: in NoSL, k samples of the hidden state that agree with the observation, drawn from the search seed; in SL, the one exact copy of the real combat |
 | `Observe()` | the world's combat as the player would see it: a `CombatObservation` ([Observations and actions §3](/en/arch/protocol/observation/#sec-3)) |
+| `Run()` | the run around the combat as it stands in this world, as V reads it: in SL the live game's, with what the combat has changed for good; in NoSL the run the request carries, with the built combat's relics, potions, HP, max HP and gold. The leaf prices the combat's endings on it ([Combat brain: the leaf §2](/en/arch/combat-brain/leaf/#sec-2)) |
 | `Legal()` | the legal combat actions; empty once the combat is over |
 | `Status` | in progress, won or lost |
 | `HiddenKey()` | a hash of what the observation hides that changes how the same plays turn out from here: the draw pile's order, the position of each random stream, each monster's queued move. With the observation, it tells two states apart, within this world |
-| `Execute(action)` | plays a legal action; card prompts it raises are answered inside the world, by `p0`, as the run answers them ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)) |
+| `Execute(action)` | plays a legal action; card prompts it raises are answered inside the world: the first by the answer the action carries, if it has one, every other by its first options, as the run answers them ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)) |
+| `LastPrompt` | the first card prompt the last action raised, if any: its options grouped by what the player can tell apart, its least and most picks, and the answer it got. Search tries the prompt's other answers (`PromptSeen.Others`) |
 | `Snapshot()`, `Restore(s)` | a point in the world and the way back to it |
 
 **A snapshot is a recipe**: the steps the world has taken since it began (determinize steps, actions, prompt answers), as text. Search treats it as opaque; only the world that made it reads it, and restores it by replaying the steps ([Simulator: combats §2](/en/arch/simulator/combat/#sec-2)). Being text, it can travel to another process.
@@ -82,8 +87,8 @@ A worker is the simulator started as `serve`; the brain's pool sends it requests
 | message | JSON `type` | fields | asks for |
 |---|---|---|---|
 | `WorkerHello` | (none) | `game` | the worker's first line, once booted: the game version it runs |
-| `PimcWorldRequest` | `pimc_world` | `id`, `observation`, `first`, `build_seed`, `search_seed`, `world`, `worlds`, `nodes_per_first`, `history` | PIMC's search of one NoSL world: build the combat from `observation` with `build_seed`, take world `world` of the `worlds` drawn from `search_seed`, and search this turn after each action of `first`, with `nodes_per_first` nodes each |
-| `SlTurnRequest` | `sl_turn` | `id`, `node`, `path`, `nodes`, `keep`, `floor`?, `history` | one turn of the SL planner: load the clone, play `path` from the decision to reach a state of the beam, and search the rest of that turn with `nodes` nodes, keeping up to `keep` states at the next turn's start and the best end of the combat, none whose bound cannot beat `floor` |
+| `PimcWorldRequest` | `pimc_world` | `id`, `observation`, `first`, `build_seed`, `search_seed`, `world`, `worlds`, `nodes_per_first`, `history`, `run` | PIMC's search of one NoSL world: build the combat from `observation` with `build_seed`, take world `world` of the `worlds` drawn from `search_seed`, and search this turn after each action of `first`, with `nodes_per_first` nodes each; `run` is the run around the combat, for the leaves' prices |
+| `SlTurnRequest` | `sl_turn` | `id`, `node`, `path`, `nodes`, `keep`, `history` | one turn of the SL planner: load the clone, play `path` from the decision to reach a state of the beam, and search the rest of that turn with `nodes` nodes, keeping up to `keep` states at the next turn's start and the best end of the combat |
 | `SlMacroRequest` | `sl_macro` | `id`, `node`, `paths` | the macro brain's probes: for each path of answers, load the clone, play the path from the decision, and record what the game asks next; a path is macro actions in text form and, for a card prompt, `pick:` and its picks in canonical order |
 | `WorkerReply` | (none) | `id`, `lines`?, `error`?, `game_errors`, `turn`?, `afters`? | the answer to request `id`: `lines` for `pimc_world`, `turn` for `sl_turn`, `afters` for `sl_macro`; `error` instead when the request failed; `game_errors`, the game's error lines logged while serving it |
 
@@ -94,18 +99,18 @@ A worker is the simulator started as `serve`; the brain's pool sends it requests
 ```csharp
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
     IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
-public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
-    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);
-public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
+    double Value, ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal, bool? Won = null);
 ```
 
 | type | in | what it holds |
 |---|---|---|
 | `PlannedLine` | `lines` | a line of play a search found, from its first action: its value, its actions, the nodes simulated after the first action (itself included), and for each action the hash of the combat observation it is played at, which a followed plan checks before each step; and whether it repeats a cycle the search found. `lines[i]` is the best line after `first[i]` |
-| `TurnSearch` | `turn` | the ends of one turn's search: `ends`, the best end of the combat if the turn can reach one, then the states at the next turn's start, best first; `nodes`, the actions simulated; `cut`, whether anything was left out (the nodes ran out, or more states were found than kept); `bound`, the bound of the state searched from |
-| `TurnEnd` | `turn.ends` | a state where a turn of the planner's line ends: the actions that reach it from the decision (the last one ending the turn) and the observation hash before each; its status; the leaf's value; its bound, the best it can still reach (a win with the HP and potions it has; once the combat is over, its value); its key, the hash of its observation and full hidden state, by which equal states are merged (0 once the combat is over); its record of enemy moves; and, from the same leaf call as the value, the chance to win the combat from it and the HP held at a win (1 or 0 and the HP held once the combat is over) |
-| `Afterstate` | `afters` | what a path leads to: the run then; the surface the game asks next, null once the run is over; its screen; its legal actions. A card prompt's options are in its screen, so its legal list is empty; a combat's screen is left out, since a combat ends a probe |
+| `TurnSearch` | `turn` | the ends of one turn's search: `ends`, the best end of the combat if the turn can reach one, then the states at the next turn's start, best first; `nodes`, the actions simulated; `cut`, whether anything was left out (the nodes ran out, a prompt had more answers than nodes, or more states were found than kept) |
+| `TurnEnd` | `turn.ends` | a state where a turn of the planner's line ends: the actions that reach it from the decision (the last one ending the turn), each with the prompt answer it carries, and the observation hash before each; its status; the leaf's value; its key, from its observation with the piles as multisets (`PimcBrain.StateKey`) and its full hidden state, by which equal states are merged (0 once the combat is over); its record of enemy moves; and, from the same leaf call as the value, the chance to win the combat from it and the HP held at a win (1 or 0 and the HP held once the combat is over) |
+| `Afterstate` | `afters` | what a path leads to: the run then; the surface the game asks next, null once the run is over, and `won` then says how it ended (the game kills the players when it records a win too, so the run's HP cannot tell); its screen; its legal actions. A card prompt's options are in its screen, so its legal list is empty; a combat's screen holds its first observation, and its actions are left out, since a combat ends a probe |
 
 `status` is written as a number (0 in progress, 1 won, 2 lost), and hashes and keys as JSON numbers ([Overview §4](/en/arch/protocol/#sec-4)).
 

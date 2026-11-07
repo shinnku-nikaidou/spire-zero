@@ -16,11 +16,11 @@ function rng(seed: string) {
   };
 }
 
-export type Node = { id: string; turn: number; h: number; f: number; status: 'going' | 'won' | 'lost'; value: number; bound: number; parent: Node | null };
+export type Node = { id: string; turn: number; h: number; f: number; status: 'going' | 'won' | 'lost'; value: number; parent: Node | null };
 const node = (id: string, turn: number, h: number, f: number, parent: Node | null): Node => {
   const status = f <= 0 ? 'won' : h <= 0 ? 'lost' : 'going';
   const value = status === 'lost' ? 0 : status === 'won' ? win(h / MAX_HP) : win((h - (9 * f) / 17) / MAX_HP);
-  return { id, turn, h, f, status, value, bound: status === 'lost' ? 0 : win(h / MAX_HP), parent };
+  return { id, turn, h, f, status, value, parent };
 };
 
 /** A turn's ends from a state: more damage dealt costs more HP. */

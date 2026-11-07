@@ -1,6 +1,6 @@
 ---
 title: One state through the net
-description: "A real round start followed by hand through the combat net: from what the screen shows to tokens, tensors, every layer, the mask, the potion chance, the value the search reads, and what a training label looks like."
+description: "A real round start followed by hand through the combat net: from what the screen shows to tokens, tensors, every layer, the mask, the potion chance, how the search turns them into a value, and what a training label looks like."
 sidebar:
   label: One state through the net
 ---
@@ -177,7 +177,7 @@ One linear layer gives 51 raw numbers. The first is the death's, {walk.head.deat
 
 ## 11. The mask, then the softmax
 
-The HP share is {walk.value.share}. A bucket $[l, l + 0.025)$ stays open if $l < 0.839$ and $l + 0.025 > 0.839 - 1$. Here:
+The HP share is {walk.ended.share}. A bucket $[l, l + 0.025)$ stays open if $l < 0.839$ and $l + 0.025 > 0.839 - 1$. Here:
 
 - The bottom: a fight cannot heal more than the HP missing. {walk.state.max_hp - walk.state.hp} of {walk.state.max_hp} HP is a share of 0.161, so the 3 buckets below {walk.head.open_from} are closed.
 - The top: a win cannot lose all the HP held, so the buckets from {walk.head.open_to} up are closed.
@@ -203,34 +203,37 @@ The other {walk.potion.outputs - 1} outputs are computed and not read. The large
 
 ## 13. The number the search reads
 
-`CombatNet.Outcome` (`src/Sts2Ai.Brain/Combat/CombatNet.cs:78-96`) prices the 51 chances ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)):
+The search does not read the 51 chances or the potion's: it reads one number, the leaf value ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)). `CombatNet.Outcome` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) makes it by pricing every ending the net still allows with V, the macro brain's chance to win the run, on the run that ending would leave:
 
 $$
-\text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})
+\text{value} = \sum_{k=1}^{50} p_k \sum_{S \subseteq H} \Big(\prod_{i \in S} (1 - u_i) \prod_{i \in H \setminus S} u_i\Big)\, V\big(\text{the run at } h_k \text{ HP, holding } S\big)
 $$
 
-| term | number |
+Here $H$ is the potions held, $u_i$ the potion head's chance that potion $i$ is gone after a win, and $h_k$ the HP the player holds after bucket $k$: the HP share now less the bucket's middle, times max HP, kept between 1 and max HP.
+
+For this state, $H$ is Fairy in a Bottle alone, so each open bucket gives two runs: with the potion, at a chance of $1 - u$, all but about 2.5 in a million ([§12](#sec-12)), and without it. The {walk.head.open} open buckets make {2 * walk.head.open} runs for V, and a closed bucket, whose chance is exactly 0, makes none. The rest of each run is the run around the fight as it stands: the deck, the relics, max HP, gold, the map ahead. The file's test states hold a round start and no run, so this page cannot give V's numbers or the value; what the same call returns beside the value does not need them ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)):
+
+| | number |
 |---|---|
-| the endings, summed over the open buckets | {walk.value.win_term} |
-| potions expected to be kept, $\sum (1 - u)$ | {walk.value.kept} |
-| their term, $(1 - p_0) \times 0.02 \times$ that | {walk.value.potion_term} |
-| **the value** | **{walk.value.value}** |
+| chance to win, $1 - p_0$ | {walk.ended.win} |
+| HP held at a win, averaged over the win buckets | {walk.ended.hp_at_win} of {walk.state.max_hp} |
+| potions expected to be kept, $\sum (1 - u)$ | {walk.ended.kept} |
 
-The planner's **bound** for this state is a win with no HP or potion lost: 0.2 + 0.6 × {walk.value.share} + 0.02 = {walk.value.bound}. The value sits 0.034 above it, since the net expects the fight to end about 5 HP above where it stands: a share of 0.056, which at 0.6 is 0.034. This is the case [The leaf §5](/en/arch/combat-brain/leaf/#sec-5) allows for: a net that predicts healing can rise above the bound.
+So V is asked about runs that leave this fight at around 83 HP of 93, still holding the potion, and the value is close to V of that run. Whether that is worth more than another state's ending is V's to say, from everything it reads of the run.
 
 ## 14. What a search sees
 
 A search compares states. Change one thing at a time and run the net again:
 
-| state | HP share | endings | potions | value |
+| state | HP share | chance of a death | the likeliest bucket | HP held at a win |
 |---|---|---|---|---|
-| as it is | {walk.value.share} | {walk.value.win_term} | {walk.value.potion_term} | {walk.value.value} |
-| {walk.lost_hp} HP less | {walk.siblings.less_hp.share} | {walk.siblings.less_hp.win_term} | {walk.siblings.less_hp.potion_term} | {walk.siblings.less_hp.value} |
-| the potion gone | {walk.siblings.no_potion.share} | {walk.siblings.no_potion.win_term} | {walk.siblings.no_potion.potion_term} | {walk.siblings.no_potion.value} |
+| as it is | {walk.ended.share} | {pct(walk.head.death)} | {walk.head.tops[0].low} to {walk.head.tops[0].high}, {pct(walk.head.tops[0].chance)} | {walk.ended.hp_at_win} |
+| {walk.lost_hp} HP less | {walk.siblings.less_hp.share} | {pct(walk.siblings.less_hp.death)} | {walk.siblings.less_hp.tops[0].low} to {walk.siblings.less_hp.tops[0].high}, {pct(walk.siblings.less_hp.tops[0].chance)} | {walk.siblings.less_hp.hp_at_win} |
+| the potion gone | {walk.siblings.no_potion.share} | {pct(walk.siblings.no_potion.death)} | {walk.siblings.no_potion.tops[0].low} to {walk.siblings.no_potion.tops[0].high}, {pct(walk.siblings.no_potion.tops[0].chance)} | {walk.siblings.no_potion.hp_at_win} |
 
-{walk.lost_hp} HP is a share of 0.108 of 93, which at 0.6 is 0.065, and the value falls by 0.064. The HP held counts in full ([The combat net §7](/en/arch/combat-brain/network/#sec-7)), and the net's answer hardly moves: the likeliest bucket stays at {walk.siblings.less_hp.tops[0].low} to {walk.siblings.less_hp.tops[0].high}, at {pct(walk.siblings.less_hp.tops[0].chance)}, with a death at {pct(walk.siblings.less_hp.death)}.
+With {walk.lost_hp} HP less the net's answer hardly moves: the same likeliest bucket, about as likely. The buckets are shares still to be lost from the HP held now, so the HP held at a win falls by about the HP taken away, from {walk.ended.hp_at_win} to {walk.siblings.less_hp.hp_at_win}: the HP held counts in full ([The combat net §7](/en/arch/combat-brain/network/#sec-7)), and V prices every ending of this state at about 10 HP less.
 
-The potion's flat price here is {walk.value.potion_term}. Without it the value falls to {walk.siblings.no_potion.value}, by 0.019, a little less than that price: the endings' term rises from {walk.value.win_term} to {walk.siblings.no_potion.win_term}, as the likeliest bucket's chance goes from {pct(walk.head.tops[0].chance)} to {pct(walk.siblings.no_potion.tops[0].chance)}, and a death stays at {pct(walk.siblings.no_potion.death)}. Fairy in a Bottle acts only on a death, which the net does not expect here; nothing here says why the endings move at all.
+Without the potion the endings move a little, the likeliest bucket's chance from {pct(walk.head.tops[0].chance)} to {pct(walk.siblings.no_potion.tops[0].chance)}, and the HP held at a win barely changes. Fairy in a Bottle acts only on a death, which the net does not expect here; nothing here says why the endings move at all. The difference between the two states is then mostly V's: the same HP, one run holding the potion and one not. What a potion is worth is not a number set for the fight but what V makes of holding it in this run.
 
 ## 15. Two harder states
 
@@ -243,10 +246,9 @@ Two other states of the same file show what this one does not, a boss fight at f
 | open buckets | {walk.others.danger.open} ({walk.others.danger.open_from} to {walk.others.danger.open_to}) | {walk.others.mask.open} ({walk.others.mask.open_from} to {walk.others.mask.open_to}) |
 | chance of a death | {pct(walk.others.danger.death)} | {pct(walk.others.mask.death)} |
 | the likeliest bucket | {walk.others.danger.tops[0].low} to {walk.others.danger.tops[0].high}, {pct(walk.others.danger.tops[0].chance)} | {walk.others.mask.tops[0].low} to {walk.others.mask.tops[0].high}, {pct(walk.others.mask.tops[0].chance)} |
-| the value | {walk.others.danger.value} | {walk.others.mask.value} |
-| the bound | {walk.others.danger.bound} | {walk.others.mask.bound} |
+| HP held at a win | {walk.others.danger.hp_at_win} | {walk.others.mask.hp_at_win} |
 
-In the boss fight against The Kin the value is far below the bound: the net expects a win to cost 0.55 of max HP, about 53 of {walk.others.danger.max_hp} HP, spread over many buckets, none above 6 %, and the chance of a death takes that share of the value away. Against the Phrog Parasite, at {walk.others.mask.hp} HP only {walk.others.mask.open} buckets are open, so no share of the chances can fall on a win that loses more HP than the player holds, and a death takes almost a third of the chance.
+In the boss fight against The Kin the net expects a win to cost 0.55 of max HP, about 53 of {walk.others.danger.max_hp} HP, spread over many buckets, none above 6 %. V prices each of those {walk.others.danger.open} endings at its own HP, so the value spreads over runs from full HP down to a few, and the chance of a death takes its share away at 0. Against the Phrog Parasite, at {walk.others.mask.hp} HP only {walk.others.mask.open} buckets are open, so no share of the chances can fall on a win that loses more HP than the player holds, and a death takes almost a third of the chance.
 
 [The leaf §4](/en/arch/combat-brain/leaf/#sec-4) draws all 16 of the file's states.
 

@@ -111,7 +111,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | `plan` | 大脑在这个动作之后的计划：PIMC 给出本回合剩下的部分，SL 规划器给出这场战斗剩下的部分，地图上的宏观大脑给出本幕剩下的路线 |
 | `candidates` | 大脑打过分的选项，选中的在前，其余从好到差：会搜索的战斗大脑的各个首个动作；战斗外的决策或选牌提示处 L0 的选项，由 V 估值（回答是探索抽出来的时就没有）。选牌提示的选项是回答（`pick:i,j`）；战斗中的选牌提示没有 |
 
-`Candidate`（`World.cs:70`）是一个打过分的选项：
+`Candidate`（`World.cs:106`）是一个打过分的选项：
 
 | 字段 | 含义 |
 |---|---|

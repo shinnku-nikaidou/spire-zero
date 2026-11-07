@@ -9,15 +9,15 @@ sidebar:
 
 ## 1. 冠軍檔案
 
-`eval/champions/ENV.json`（`nosl.json`、`sl.json`）為每個環境保存一個冠軍，涵蓋每個角色，格式為 `ChampionFile` 記錄（`Harness/Gate.cs:114-115`）。冠軍是兩個網路和它們的打法，對每個角色都一樣；角色和晉階等級由每個作業自己給（`--character`、`--asc`）。SL 冠軍的檔案：
+`eval/champions/ENV.json`（`nosl.json`、`sl.json`）為每個環境保存一個冠軍，涵蓋每個角色，格式為 `ChampionFile` 記錄（`Harness/Gate.cs:91-92`）。冠軍是兩個網路和它們的打法，對每個角色都一樣；角色和晉階等級由每個作業自己給（`--character`、`--asc`）。SL 冠軍的檔案：
 
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone",
+  "champion": "combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/all/v9-1.json", "afterstates": "clone", "combat-net": "weights/all/c9-1.json"
+    "value": "weights/all/v9-2.json", "afterstates": "clone", "combat-net": "weights/all/c9-2.json"
   },
   "reports": {
     "SILENT": "eval/silent/reports/DATE-sl-a0-SET-NAME.json",
@@ -41,13 +41,13 @@ sidebar:
 
 **誰讀它**。
 
-- `run` 和 `brain` 接受 `--champion FILE`，打它指明的冠軍（`SimWorker/Commands/Args.cs:164-192`，[模擬器：參考 §3](/zh-tw/arch/simulator/reference/#sec-3)）。檔案的選項排在給定的選項之後，所以給定的優先；指令沒有的選項會被略過（`brain` 沒有 `--env`：每個宿主自己指明）；給定了與檔案不同的 `--policy` 時，保留它自己的預算。
+- `run` 和 `brain` 接受 `--champion FILE`，打它指明的冠軍（`SimWorker/Commands/Args.cs:166-194`，[模擬器：參考 §3](/zh-tw/arch/simulator/reference/#sec-3)）。檔案的選項排在給定的選項之後，所以給定的優先；指令沒有的選項會被略過（`brain` 沒有 `--env`：每個宿主自己指明）；給定了與檔案不同的 `--policy` 時，保留它自己的預算。
 - `gate --champion FILE` 是要打敗的冠軍：它讀取檔案的 `env`，以及它對記錄所屬角色的報告（[晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。
 - `leaderboard --character C` 在檔案所屬環境的榜上，標出每個檔案為 C 指明的報告（[指標、種子與報告 §9](/zh-tw/arch/evaluation/metrics/#sec-9)）。
 
-**由 `--promote` 寫入，或由人工寫入**。`gate --promote` 寫入每個欄位，選項按挑戰者的選項產生（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:75-91`）：對 SL 規劃器是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。勝局門檻什麼也不寫，所以它晉級的網路由人工寫入（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)），SL 檔案寫著 `"effort": "medium"`，打的是同樣的預算（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。重定基線只改 `reports`（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）。
+**由 `--promote` 寫入，或由人工寫入**。`gate --promote` 寫入每個欄位，選項按挑戰者的選項產生（`ChampionOptions.Options`，`SimWorker/Brains/ChampionOptions.cs:79-95`）：對 SL 規劃器是 `beam`、`easy-beam`、`replan`、`loss-plans` 和 `nodes`，而不是 `effort`。勝局門檻什麼也不寫，所以它晉級的網路由人工寫入（[晉級門檻 §10](/zh-tw/arch/evaluation/gates/#sec-10)），SL 檔案寫著 `"effort": "medium"`，打的是同樣的預算（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。重定基線只改 `reports`（[晉級門檻 §9](/zh-tw/arch/evaluation/gates/#sec-9)）。
 
-**兩個檔案**。兩個檔案都指明同樣兩個網路：`weights/all/v9-1.json`（V）和 `weights/all/c9-1.json`（戰鬥網路）。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。兩個檔案指明同樣五份報告，每個角色一份，都是這個 SL 冠軍自己的：在 `promotion-1-100` 上以 medium 打的 100 局晉階 0。因為它們是 SL 報告，對 NoSL 檔案的 NoSL 門檻會被拒絕（[評估 §3](/zh-tw/arch/evaluation/#sec-3)）；兩個網路都沒有在 NoSL 下過過門檻。
+**兩個檔案**。兩個檔案都指明同樣兩個網路：`weights/all/v9-2.json`（V）和 `weights/all/c9-2.json`（戰鬥網路）。SL 打的是 medium 力度的 SL 規劃器，加上在複本上的 L0；NoSL 打的是 8 個世界 × 300 個節點的 PIMC，加上用從畫面預測的後狀態的 L0（`"policy": "pimc", "worlds": "8", "nodes": "300"`）。SL 檔案指明五份報告，每個角色一份，都是這個冠軍自己的：在 `promotion-1-100` 上以 medium 打的 100 局晉階 0。NoSL 檔案一份也不指明：兩個網路都沒有在 NoSL 下打過任何報告，所以對它的 NoSL 門檻對每個角色都會被拒絕（[晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。
 
 每個角色都有自己的資料夾 `eval/CHARACTER/` 和 `data/CHARACTER/`，有自己的報告、排行榜和對局（[學習：參考 §3](/zh-tw/arch/learning/reference/#sec-3)），因為一個結果只對一個角色成立。其餘的是共用的：`weights/all/` 裡的網路、`eval/champions/` 裡的冠軍檔案、帳本 `eval/ledger.md`，以及 `eval/seeds/` 裡的種子集。
 

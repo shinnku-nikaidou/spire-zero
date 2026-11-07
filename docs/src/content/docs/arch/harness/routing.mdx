@@ -16,7 +16,7 @@ import { Badge } from '@astrojs/starlight/components';
 | 决策界面 | 一侧 | 目前的大脑 |
 |---|---|---|
 | `combat` | 战斗 | `plan`（SL 规划器，仅 SL）、`pimc`（仅 NoSL），或占位策略 `play` |
-| 战斗中提出的 `card_choice`（`ChoiceContext.InCombat`） | 战斗提示 | `p0`，即提示大脑（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)） |
+| 战斗中提出的 `card_choice`（`ChoiceContext.InCombat`） | 战斗提示 | 战斗大脑上一个动作带着的答案，如果有的话；否则是 `first`，即最前面的选项（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)） |
 | 战斗外提出的 `card_choice`（升级、变化、附魔、移除……） | 宏观提示 | L0，即宏观大脑本身，或 `random` |
 | `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere` | 宏观 | L0（[宏观大脑](/arch/macro-brain/)），或 `random` |
 
@@ -25,10 +25,10 @@ import { Badge } from '@astrojs/starlight/components';
 **冠军的名字**。一局的各个大脑合起来就是它的冠军，名字由 `Dispatcher.Champion` 给出：
 
 ```text
-combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone
+combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone
 ```
 
-这是 SL 冠军：叶子里用战斗网络 c9-1、用 medium 预算的 SL 规划器；战斗中的提示用 `p0`；宏观决策和战斗外的选牌提示用 L0，它带着 V v9-1，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：搜索的战斗大脑说出它的战斗网络；L0 说出它的 V、`clone`，以及它的探索（均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:34-56`）。
+这是这份代码命名的 SL 冠军：叶子里用战斗网络 c9-2（它的结局由 V v9-2 定价）、用 medium 预算的 SL 规划器；战斗中没有搜索回答的提示用 `first`；宏观决策和战斗外的选牌提示用 L0，它带着 V v9-2，在节点的克隆上把每个选项打一遍。每个大脑都说出自己的组成部分：搜索的战斗大脑说出它的战斗网络；L0 说出它的 V、`clone`，以及它的探索（均匀抽取为 `eps ε`）；预算按 [§4](#sec-4) 的写法。SimWorker 的 `ChampionOptions` 根据命令的选项做出各个路由，如果它做出的名字不是冠军文件使用的那个，就拒绝运行（`Brains/ChampionOptions.cs:36-60`）。
 
 **环境决定战斗大脑**。宏观大脑在两种环境里是同一个；战斗大脑则不是（[环境：世界 §5](/arch/environments/worlds/#sec-5)）。冠军工厂在 SL 之外拒绝 `plan` 和 `--afterstates clone`，在 NoSL 之外拒绝 `pimc`。`brain` 命令同时服务两种环境：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的（[概览 §5](/arch/harness/#sec-5)）。
 
@@ -52,7 +52,7 @@ combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-
 宏观路由或提示路由是一个 `Route<T>(Brain, Policy)`。目前：
 
 - **L0**（`MacroBrain`，`--macro l0`）既回答宏观决策，也回答战斗外的选牌提示，作为一个带一个 V 的对象（[宏观大脑：搜索](/arch/macro-brain/search/)）。它的探索（`--explore ε`，均匀抽取，仅自我对弈）从它自己的生成器里取随机数（[§5](#sec-5)）。
-- **`p0`**（`PromptBrain`）回答战斗中的选牌提示，和搜索世界里的做法一样。
+- **`first`**（`FirstPicks`）回答战斗大脑的动作没有回答的战斗中选牌提示：按规范顺序取最前面的选项，取提示允许的最少个数，和搜索世界里的做法一样。动作带着的答案交给它之后的第一个战斗中提示（`Dispatcher`），不接受这个答案的提示也交给 `first`（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)）。
 - **`random`** 占位策略在 `--macro random` 时回答宏观的两侧。
 
 **给宏观一侧的节点克隆**。在 SL 下用 `--afterstates clone` 时，`Dispatcher` 在每个宏观决策和每个战斗外的选牌提示处打开节点的克隆，作为这一局工作进程池上的一个 `PooledClone`（`MacroDecision.With`、`ChoiceDecision.With`）。L0 再向它要后状态：每条答案路径之后游戏接着问什么。`PooledClone` 把路径分成 min(paths, workers) 个连续的 `sl_macro` 请求，每个工作进程为每条路径加载一次克隆，并检查每条路径都得到了一个后状态；因为后状态只取决于克隆和路径，所以怎么分都改变不了结果（[宏观大脑：搜索 §6](/arch/macro-brain/search/#sec-6)）。
@@ -103,7 +103,7 @@ combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-
 
 **run id** 是这一局种子作为 JSON 字符串（含引号）的 FNV-1a 64 位哈希，写成十六进制：种子 `0SSL7NS01MU6` 得到 run `ce13ba5116b7f48a`。大脑看到的是 run id，从来不是种子（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。
 
-**一个决策的种子**由 run id 和决策的序号抽取；序号从 0 开始计这一局的每个决策，战斗决策、选牌提示和宏观决策都一样（`Dispatcher.cs:189-208`）：
+**一个决策的种子**由 run id 和决策的序号抽取；序号从 0 开始计这一局的每个决策，战斗决策、选牌提示和宏观决策都一样（`Dispatcher.cs:197-216`）：
 
 ```text
 H        = FNV-1a 64 of the JSON string run_id
@@ -122,7 +122,7 @@ seed(i)  = z xor (z >> 31)
 
 SL 规划器搜索唯一的精确世界，忽略它；宏观策略和提示策略从不收到它。
 
-**占位策略和探索**从按局播种的 .NET 生成器里取随机数，每个流一个：`Random(FNV(run_id + stream))`，占位策略的流是 `""`，L0 的均匀抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:40-49`）。所以一局在任何进程里、通过线路时都打得一样，不管是否记日志。
+**占位策略和探索**从按局播种的 .NET 生成器里取随机数，每个流一个：`Random(FNV(run_id + stream))`，占位策略的流是 `""`，L0 的均匀抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:44-53`）。所以一局在任何进程里、通过线路时都打得一样，不管是否记日志。
 
 **看顺序，不看时序**。一次搜索的各个请求并行运行，但池按请求的顺序返回它们的回复（[模拟器：工作进程池 §2](/arch/simulator/pool/#sec-2)），候选按值排序，平手时保持合法动作的顺序（结束回合，然后是牌，然后是药水）。哪个工作进程先完成，从来改变不了回答。`run --check` 让整局都遵守这一点（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。
 

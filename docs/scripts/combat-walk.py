@@ -24,7 +24,6 @@ MAIN = 9  # the only test state holding a potion (the Ironclad against three Exo
 # The boss fight with the largest chance of a death (the Defect against The Kin at full HP; no test state is more likely
 # lost than won), and the lowest HP of the 16 (the Defect at 10 of 77 HP against a Phrog Parasite)
 OTHERS = {"danger": 8, "mask": 4}
-WIN_BASE, PER_HP, PER_POTION = 0.2, 0.6, 0.02  # LeafValue's
 LOST_HP = 10  # the sibling state of the search step
 
 
@@ -60,22 +59,23 @@ def outputs(net: Net, b: Batch) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.softmax(logits, 1)[0], torch.sigmoid(potions)[0]
 
 
-def valued(outcome: torch.Tensor, gone: torch.Tensor, obs: dict, index: dict, width: float) -> dict:
-    """CombatNet.Value's sum, term by term."""
+def ended(outcome: torch.Tensor, gone: torch.Tensor, obs: dict, index: dict, width: float) -> dict:
+    """How the fight is expected to end, as CombatNet.Outcome gives it beside the value: the chance to win, the HP held at
+    a win (the HP share after each win bucket, averaged over the win buckets, kept in [0, 1], times max HP); and the
+    potions expected to be kept after a win. The value itself prices each ending by V on the run around the fight, which
+    the file's test states do not hold."""
     pl = obs["player"]
     share = pl["hp"] / max(1, pl["max_hp"])
-    win = sum(float(outcome[k]) * (WIN_BASE + PER_HP * (share - (data.LOSS_MIN + (k - 0.5) * width))) for k in range(1, len(outcome)))
+    win = 1 - float(outcome[0])
+    left = sum(float(outcome[k]) * (share - (data.LOSS_MIN + (k - 0.5) * width)) for k in range(1, len(outcome)))
     held = [p for p in obs["potions"] if p is not None]
     kept = sum(1 - float(gone[index["potions"].get(p, 0)]) for p in held)
-    potion = (1 - float(outcome[0])) * PER_POTION * kept
     return {
         "share": round(share, 4),
         "death": round(float(outcome[0]), 4),
-        "win_term": round(win, 4),
+        "win": round(win, 4),
+        "hp_at_win": round(min(1.0, max(0.0, left / win)) * pl["max_hp"], 1) if win > 0 else 0.0,
         "kept": round(kept, 4),
-        "potion_term": round(potion, 4),
-        "value": round(win + potion, 4),
-        "bound": round(WIN_BASE + PER_HP * share + PER_POTION * len(held), 4),
     }
 
 
@@ -108,7 +108,6 @@ def shown(test: dict, net: Net, index: dict, width: float) -> dict:
         ],
         "potions": [{"id": p, "gone": round(float(gone[index["potions"].get(p, 0)]), 4)} for p in obs["potions"] if p is not None],
         "outcome": [round(float(v), 5) for v in outcome],
-        "value": valued(outcome, gone, obs, index, width)["value"],
     }
 
 
@@ -250,14 +249,14 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     siblings = {}
     for name, sibling in (("less_hp", less), ("no_potion", no_potion)):
         o, g = outputs(net, batch_of(sibling, index))
-        siblings[name] = valued(o, g, sibling["obs"], index, width) | {"tops": tops(o, 3, width)}
+        siblings[name] = ended(o, g, sibling["obs"], index, width) | {"tops": tops(o, 3, width)}
 
     others = {}
     for name, k in OTHERS.items():
         other = file["tests"][k]
         o, g = outputs(net, batch_of(other, index))
         pl = other["obs"]["player"]
-        others[name] = valued(o, g, other["obs"], index, width) | {
+        others[name] = ended(o, g, other["obs"], index, width) | {
             "encounter": other["obs"]["encounter"],
             "room": other["obs"]["room"],
             "round": other["obs"]["round"],
@@ -348,7 +347,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
             "unk": round(float(gone[0]), 3),
             "unheld": next(table[k] for k in range(1, len(table)) if torch.equal(net.potion_head.weight[k], net.potion_head.weight[0])),
         },
-        "value": valued(outcome, gone, obs, index, width),
+        "ended": ended(outcome, gone, obs, index, width),
         "siblings": siblings,
         "lost_hp": LOST_HP,
         "others": others,
@@ -369,8 +368,8 @@ def main() -> None:
     net, index = load(file)
     with torch.no_grad():
         out = walk(file, net, index)
-    if not math.isfinite(out["value"]["value"]):
-        raise SystemExit("no value")
+    if not math.isfinite(out["ended"]["hp_at_win"]):
+        raise SystemExit("no HP at a win")
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n")
     print(f"wrote {OUT}: {OUT.stat().st_size} bytes")
 

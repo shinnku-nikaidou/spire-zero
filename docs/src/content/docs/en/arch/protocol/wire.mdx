@@ -111,7 +111,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | `plan` | what the brain planned after this action: the rest of the turn from PIMC, the rest of the combat from the SL planner, the rest of the act's route from the macro brain on the map |
 | `candidates` | the options the brain scored, the chosen first, then best first: a searching combat brain's first actions; L0's options at a decision or card prompt outside combat, valued by V (none when its answer was drawn by exploration). A card prompt's options are answers (`pick:i,j`); a card prompt in combat has none |
 
-A `Candidate` (`World.cs:70`) is one scored option:
+A `Candidate` (`World.cs:106`) is one scored option:
 
 | field | meaning |
 |---|---|

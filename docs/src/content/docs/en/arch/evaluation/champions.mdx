@@ -9,15 +9,15 @@ A **champion** is the best accepted version of the AI in one environment: the br
 
 ## 1. The champion file
 
-`eval/champions/ENV.json` (`nosl.json`, `sl.json`) holds one champion per environment, every character's, as the `ChampionFile` record (`Harness/Gate.cs:114-115`). The champion is two nets and the way they play, which are the same for every character; the character and the ascension are each job's own (`--character`, `--asc`). The SL champion's file:
+`eval/champions/ENV.json` (`nosl.json`, `sl.json`) holds one champion per environment, every character's, as the `ChampionFile` record (`Harness/Gate.cs:91-92`). The champion is two nets and the way they play, which are the same for every character; the character and the ascension are each job's own (`--character`, `--asc`). The SL champion's file:
 
 ```json
 {
   "env": "SL",
-  "champion": "combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone",
+  "champion": "combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone",
   "options": {
     "env": "SL", "policy": "plan", "macro": "l0", "effort": "medium",
-    "value": "weights/all/v9-1.json", "afterstates": "clone", "combat-net": "weights/all/c9-1.json"
+    "value": "weights/all/v9-2.json", "afterstates": "clone", "combat-net": "weights/all/c9-2.json"
   },
   "reports": {
     "SILENT": "eval/silent/reports/DATE-sl-a0-SET-NAME.json",
@@ -41,13 +41,13 @@ A **champion** is the best accepted version of the AI in one environment: the br
 
 **Who reads it.**
 
-- `run` and `brain` take `--champion FILE` and play the champion it names (`SimWorker/Commands/Args.cs:164-192`, [Simulator: reference §3](/en/arch/simulator/reference/#sec-3)). The file's options come after the ones given, so given ones win; an option the command does not have is skipped (`brain` has no `--env`: each host names its own); a `--policy` given that is not the file's keeps its own budget.
+- `run` and `brain` take `--champion FILE` and play the champion it names (`SimWorker/Commands/Args.cs:166-194`, [Simulator: reference §3](/en/arch/simulator/reference/#sec-3)). The file's options come after the ones given, so given ones win; an option the command does not have is skipped (`brain` has no `--env`: each host names its own); a `--policy` given that is not the file's keeps its own budget.
 - `gate --champion FILE` is the champion to beat: it reads the file's `env` and its report of the records' character ([Gates §6](/en/arch/evaluation/gates/#sec-6)).
 - `leaderboard --character C` marks the report each file names for C, on the board of the file's environment ([Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9)).
 
-**Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:75-91`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. The wins gate writes nothing, so a net it promotes is written by hand ([Gates §10](/en/arch/evaluation/gates/#sec-10)), and the SL file says `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `reports` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
+**Written by `--promote`, or by hand.** `gate --promote` writes every field, the options as the challenger's options make them (`ChampionOptions.Options`, `SimWorker/Brains/ChampionOptions.cs:79-95`): for the SL planner that is `beam`, `easy-beam`, `replan`, `loss-plans` and `nodes`, not `effort`. The wins gate writes nothing, so a net it promotes is written by hand ([Gates §10](/en/arch/evaluation/gates/#sec-10)), and the SL file says `"effort": "medium"`, which plays the same budget ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). Re-baselines edit only `reports` ([Gates §9](/en/arch/evaluation/gates/#sec-9)).
 
-**The two files.** Both name the same two nets, `weights/all/v9-1.json` (V) and `weights/all/c9-1.json` (the combat net). SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). Both name the same five reports, one per character, this SL champion's own: 100 runs at medium at ascension 0 on `promotion-1-100`. Since they are SL reports, a NoSL gate against the NoSL file is refused ([Evaluation §3](/en/arch/evaluation/#sec-3)); neither net has been gated in NoSL.
+**The two files.** Both name the same two nets, `weights/all/v9-2.json` (V) and `weights/all/c9-2.json` (the combat net). SL plays the SL planner at medium effort with L0 on the clone; NoSL plays PIMC with 8 worlds × 300 nodes and L0 with screen afterstates (`"policy": "pimc", "worlds": "8", "nodes": "300"`). The SL file names five reports, one per character, this champion's own: 100 runs at medium at ascension 0 on `promotion-1-100`. The NoSL file names none: neither net has been played in NoSL for a report, so a NoSL gate against it is refused for every character ([Gates §6](/en/arch/evaluation/gates/#sec-6)).
 
 Each character has folders of its own, `eval/CHARACTER/` and `data/CHARACTER/`, with its own reports, leaderboard and runs ([Learning: reference §3](/en/arch/learning/reference/#sec-3)), since a result holds for one character. The rest is shared: the nets in `weights/all/`, the champion files in `eval/champions/`, the ledger `eval/ledger.md` and the seed sets in `eval/seeds/`.
 

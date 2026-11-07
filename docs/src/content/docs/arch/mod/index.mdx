@@ -107,7 +107,7 @@ dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/ch
 ```
 
 - `--champion` 指定它所用的冠军：NoSL 宿主得到这个文件里的战斗大脑（带战斗网络的 PIMC）和宏观大脑（带 V 的 L0）；SL 宿主得到 `--sl-policy` 的战斗大脑（默认是 SL 规划器），宏观大脑相同（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）。所以一个大脑同时服务两种环境，切换面板上的开关不需要重启。
-- 这一点对 NoSL 冠军的文件成立，它的宏观大脑在根据画面预测出的后状态上评估每个选项。SL 冠军的文件（`sl.json`）让 L0 在节点的克隆上把它的选项实际走一遍（`afterstates: clone`），这只有 SL 允许：用它启动的 `brain` 会以 `error` 拒绝 NoSL 宿主（「l0 plays on the node's clone in SL only」，`Brains/ChampionOptions.cs:39`），而在 SL 下，战斗以外的决策也需要节点的克隆（[SL 记录 §6](/arch/mod/sl-record/#sec-6)）。
+- 这一点对 NoSL 冠军的文件成立，它的宏观大脑在根据画面预测出的后状态上评估每个选项。SL 冠军的文件（`sl.json`）让 L0 在节点的克隆上把它的选项实际走一遍（`afterstates: clone`），这只有 SL 允许：用它启动的 `brain` 会以 `error` 拒绝 NoSL 宿主（「l0 plays on the node's clone in SL only」，`Brains/ChampionOptions.cs:41`），而在 SL 下，战斗以外的决策也需要节点的克隆（[SL 记录 §6](/arch/mod/sl-record/#sec-6)）。
 - Mod 的力度设置（[§5](#sec-5)）在 `hello` 里向大脑要求这一局用 SL 规划器的某个预设：`low`、`medium`、`high` 或 `max`（[SL 规划器：预算、开销与结果 §1](/arch/sl-planner/budget/#sec-1)）。大脑就用这个预设的预算来打这一局的 SL 规划器，并在它发回的冠军里写明；没有要求时，它打自己的。别的战斗大脑（PIMC）照原样打（[Harness §5](/arch/harness/#sec-5)）。
 - `--log FILE` 写出 Harness 的决策日志；`--wire FILE` 写出宿主发来的每条消息，供 `clones` 重播（[SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
 - 通过固定构建的启动脚本（`tmp/builds/REV/sim.sh`）启动的大脑，`HOME` 指向 `tmp/home`，所以它需要 `--socket ~/.local/state/sts2ai/brain.sock` 才能在游戏寻找的位置监听（[模拟器：参考 §1](/arch/simulator/reference/#sec-1)）。

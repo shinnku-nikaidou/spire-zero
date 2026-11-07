@@ -125,10 +125,10 @@ flowchart LR
 
 ## 8. C# 中的推論
 
-- **用哪些網路**。`run --value FILE` 讀 V 的網路檔案（`RunNet.Read`）；`--value` 和 `--macro l0` 一起用（`SimWorker/Commands/Args.cs:228`）。`run --combat-net FILE` 載入戰鬥網路（`CombatNet.Load`），每個戰鬥搜尋的葉節點：`--combat-net` 和 `--policy pimc` 或 `plan` 一起用（`:236`）。
+- **用哪些網路**。`run --value FILE` 讀 V 的網路檔案（`RunNet.Read`）；`--value` 和 `--macro l0` 或 `--combat-net` 一起用，兩者都需要它（`SimWorker/Commands/Args.cs:234`）。`run --combat-net FILE` 載入戰鬥網路（`CombatNet.Load`），每個戰鬥搜尋的葉節點，它的結局由那個 V 定價：`--combat-net` 和 `--policy pimc` 或 `plan` 一起用（`:233`）。
 - **`IRunValue`**（`Brain/Macro/RunValue.cs`）是宏觀大腦眼中的 V：一個名字，加上對整局觀測的估值。`RunNet` 實作它。
 - **`RunNet`**（`Brain/Macro/RunNet.cs`）用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）執行計算圖，intra-op 和 inter-op 都只用一個執行緒（`:49`），因為模擬器同時跑很多行程，而一個宏觀決策只估值少數幾個小輸入。它按 `learn/v/encode.py` 的做法從整局觀測建構輸入。未知的 id 讀作第 0 項。`Value` 是從這一局目前的層起每一層都活下來的機率（`:75-82`）。
-- **`CombatNet`**（`Brain/Combat/CombatNet.cs`）對狀態做同樣的事，也只用一個執行緒。`Graph` 從 `Cards`、`Player`、`Enemies`、`PowerNumbers`、`RelicNumbers`、`Allies`、`Bag` 和 `Powers` 建構輸入，和 `learn/combat/encode.py` 讀取狀態的方式相同，並回傳兩個輸出；`Value` 用 `LeafValue` 的價格為它們定價（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。
+- **`CombatNet`**（`Brain/Combat/CombatNet.cs`）對狀態做同樣的事，也只用一個執行緒。`Graph` 從 `Cards`、`Player`、`Enemies`、`PowerNumbers`、`RelicNumbers`、`Allies`、`Bag` 和 `Powers` 建構輸入，和 `learn/combat/encode.py` 讀取狀態的方式相同，並回傳兩個輸出；`Outcome` 把每種結局按它會留下的那一局用 V 定價，死亡為 0（[戰鬥大腦：葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。
 - **載入檢查**。`RunNet.Load` 給每個測試對局估值，只要有一個值的偏差超過 10⁻³ × |value| 和 10⁻⁶ 中較大的那個，就拒絕這個檔案（`:59-73`）；`CombatNet.Load` 預測每個測試狀態，只要有一個類別或藥水機率偏差超過 10⁻³，或某個輸出的長度不同，就拒絕它。這保證訓練時和對局時的編碼與前向計算相同。
 - **開銷**。一個結構相同的較早的 V 每次呼叫 0.093 ms，而用複本時一個宏觀決策要 70–90 ms（提交 `b0ec4b7`）。
 
@@ -212,14 +212,14 @@ flowchart LR
 **C#**（[模擬器：參考 §7](/zh-tw/arch/simulator/reference/#sec-7)），網路在訓練和部署之間的一致性，用 `Sts2Ai.Tests/Fixtures/` 裡的固定資料和兩個網路檔案本身：
 
 - `RunNetTests`（4 個）：一個極小、未訓練的網路（`pure-v-tiny-win.json`，風險值輸出頭的偏差降低 6），給三個真實的整局觀測按訓練器的獲勝機率估值；`v9-0.json` 能載入，它的測試對局給出訓練器的值；共用測試地圖上的地圖詞元；要進入的點只在選路時才讀入。
-- `CombatNetTests`（5 個）：`c9-0.json` 能載入，它的 16 個測試狀態讀出來和訓練器一樣；一個極小的未訓練網路（`combat-tiny.json`），它的測試狀態是真實的 SL 回合開始局面，帶四個回合的敵人歷史、一個盟友、同一個 id 的兩瓶藥水、一瓶表外的藥水、一個生命值 5% 的狀態、一次多段攻擊、帶傷害的牌，以及表內和表外、超過網路能區分的位置的充能球，讀出來和訓練器一樣；進行中的狀態是它的結局加上留下的藥水；持有的生命值排除掉的桶沒有權重；結束的狀態和上界是 `LeafValue` 的。
+- `CombatNetTests`（6 個）：`c9-0.json` 能載入，它的 16 個測試狀態讀出來和訓練器一樣；一個極小的未訓練網路（`combat-tiny.json`），它的測試狀態是真實的 SL 回合開始局面，帶四個回合的敵人歷史、一個盟友、同一個 id 的兩瓶藥水、一瓶表外的藥水、一個生命值 5% 的狀態、一次多段攻擊、帶傷害的牌，以及表內和表外、超過網路能區分的位置的充能球，讀出來和訓練器一樣；進行中的狀態是它的結局所留下的各局的 V；每瓶藥水按它自己的機率保住；持有的生命值排除掉的桶沒有權重；贏下的戰鬥是它那一局的 V，輸掉的是 0。
 - 改動某個輸入、而輸出的變化小於容差時，檢查照樣會通過，所以每個新輸入都在一個權重讓每個輸入都起作用的網路上再檢查了一次（[戰鬥網路 §9](/zh-tw/arch/combat-brain/network/#sec-9)）。
 
 **規劃** <Badge text="規劃中" variant="caution" />：
 
 1. 在留出種子上檢驗**校準**：V 說 30% 的那些狀態裡，應該大約有 30% 贏下來。可靠性圖（把預測分箱，畫出預測勝率對實際勝率）還沒有實作；Brier 分數（預測機率與 0/1 結果之間差距的平方平均）已實作，在 `v.train` 的整局報告裡，而且必須優於基線的（ytcs 是一個先前的 STS2 求解器，它的整局模型就沒通過這一項）。
 2. **獎勵塑形精確逐項相消**，等塑形項存在之後（[循環 §11](/zh-tw/arch/learning/loop/#sec-11)）。
-3. **晉級門檻的 A/A 測試**：挑戰者就是冠軍自己時，通過的頻率不能高於門檻的偽陽性率。`Sts2Ai.Tests/Harness/GateTests.cs` 檢查 200 個零差值的配對不會通過（`NoGainFails`），這是確定性的檢查，不是量出的比率。
+3. **晉級門檻的 A/A 測試**：挑戰者就是冠軍自己時，通過的頻率不能高於門檻的偽陽性率。`Sts2Ai.Tests/Harness/GateTests.cs` 檢查 400 個各由一方單獨獲勝、兩方輪流的配對不會通過（`NoGainFails`），這是確定性的檢查，不是量出的比率。
 
 ## 12. 未決問題
 

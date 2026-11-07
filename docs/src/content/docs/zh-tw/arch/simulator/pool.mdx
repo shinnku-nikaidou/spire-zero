@@ -45,7 +45,7 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 各個大腦怎麼拆分它們的工作：
 
 - **PIMC** 每個世界送一個請求，每個請求帶著所有第一個動作，再像行程內的 PIMC 那樣合併回覆（[NoSL PIMC：搜尋 §2](/zh-tw/arch/pimc/search/#sec-2)）。
-- **SL 規劃器**在它束的每個回合裡，對每個保留的狀態送一個請求，帶上目前最好的完整路線作為剪枝的下限。一個回合的搜尋整個在一個請求裡，所以計畫就是單一行程會做出的那個（[SL 規劃器：束搜尋 §1](/zh-tw/arch/sl-planner/beam/#sec-1)）。
+- **SL 規劃器**在它束的每個回合裡，對每個保留的狀態送一個請求。一個回合的搜尋整個在一個請求裡，所以計畫就是單一行程會做出的那個（[SL 規劃器：束搜尋 §1](/zh-tw/arch/sl-planner/beam/#sec-1)）。
 - **複本上的 L0** 把一個決策的各條路徑按順序拆成 `min(paths, workers)` 個請求（`Sts2Ai.Harness/PooledClone.cs:14-24`）。一條路徑的後狀態只取決於複本和這條路徑，所以怎麼拆都不會改變結果（[宏觀大腦：搜尋 §6](/zh-tw/arch/macro-brain/search/#sec-6)）。
 
 ## 4. 工作行程：`serve`

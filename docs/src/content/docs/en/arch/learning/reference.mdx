@@ -125,10 +125,10 @@ The figure opens the two net files, v9-1.json and c9-1.json, field by field: siz
 
 ## 8. Inference in C#
 
-- **Which nets.** `run --value FILE` reads V's net file (`RunNet.Read`); `--value` and `--macro l0` go together (`SimWorker/Commands/Args.cs:228`). `run --combat-net FILE` loads the combat net (`CombatNet.Load`), the leaf of every combat search: `--combat-net` and `--policy pimc` or `plan` go together (`:236`).
+- **Which nets.** `run --value FILE` reads V's net file (`RunNet.Read`); `--value` goes with `--macro l0` or `--combat-net`, which both need it (`SimWorker/Commands/Args.cs:234`). `run --combat-net FILE` loads the combat net (`CombatNet.Load`), the leaf of every combat search, its endings priced by that V: `--combat-net` and `--policy pimc` or `plan` go together (`:233`).
 - **`IRunValue`** (`Brain/Macro/RunValue.cs`) is the macro brain's view of V: a name and a value of a run view. `RunNet` implements it.
 - **`RunNet`** (`Brain/Macro/RunNet.cs`) runs the graph with ONNX Runtime (`Microsoft.ML.OnnxRuntime`), one thread intra- and inter-op (`:49`), since the simulator runs many processes and a macro decision values a handful of small inputs. It builds the inputs from the run view as `learn/v/encode.py` does. Unknown ids read as entry 0. `Value` is the chance to survive every floor from the run's current floor on (`:75-82`).
-- **`CombatNet`** (`Brain/Combat/CombatNet.cs`) does the same for a state, with one thread as well. `Graph` builds the inputs from `Cards`, `Player`, `Enemies`, `PowerNumbers`, `RelicNumbers`, `Allies`, `Bag` and `Powers`, as `learn/combat/encode.py` reads a state, and returns the two outputs; `Value` prices them with `LeafValue`'s prices ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+- **`CombatNet`** (`Brain/Combat/CombatNet.cs`) does the same for a state, with one thread as well. `Graph` builds the inputs from `Cards`, `Player`, `Enemies`, `PowerNumbers`, `RelicNumbers`, `Allies`, `Bag` and `Powers`, as `learn/combat/encode.py` reads a state, and returns the two outputs; `Outcome` prices each ending with V on the run it would leave, a death at 0 ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
 - **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than the larger of 10⁻³ × |value| and 10⁻⁶ (`:59-73`); `CombatNet.Load` predicts every test state and refuses it if any class or potion chance is off by more than 10⁻³, or an output's length differs. This keeps the encoding and the forward pass the same in training and in play.
 - **Cost.** An earlier V of the same structure takes 0.093 ms a call, against 70–90 ms a macro decision with the clone (commit `b0ec4b7`).
 
@@ -212,14 +212,14 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 **C#** ([Simulator: reference §7](/en/arch/simulator/reference/#sec-7)), the train/deploy parity of the nets, on fixtures in `Sts2Ai.Tests/Fixtures/` and the two net files themselves:
 
 - `RunNetTests` (4): a tiny untrained net (`pure-v-tiny-win.json`, its hazard head's bias lowered by 6) values three real run views at the trainer's chance to win; `v9-0.json` loads, its test runs at its trainer's values; the map tokens on a shared test map; the point entered reads on a map move and only then.
-- `CombatNetTests` (5): `c9-0.json` loads, its 16 test states as its trainer read them; a tiny untrained net (`combat-tiny.json`) whose test states, real SL round starts with four rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5% HP, a multi-hit attack, cards with damage and orbs on and off the table past the places the net tells apart, read as its trainer did; a state in progress is its endings and the potions kept; a bucket the HP held rules out has no weight; a finished state and the bound are `LeafValue`'s.
+- `CombatNetTests` (6): `c9-0.json` loads, its 16 test states as its trainer read them; a tiny untrained net (`combat-tiny.json`) whose test states, real SL round starts with four rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5% HP, a multi-hit attack, cards with damage and orbs on and off the table past the places the net tells apart, read as its trainer did; a state in progress is V of the runs its endings leave; each potion is kept by its own chance; a bucket the HP held rules out has no weight; a won combat is V of its run, a lost one 0.
 - A check passes when a changed input moves the output by less than its tolerance, so each new input was checked once more on a net whose weights make every input count ([The combat net §9](/en/arch/combat-brain/network/#sec-9)).
 
 **Planned** <Badge text="planned" variant="caution" />:
 
 1. **Calibration** on held-out seeds: of the states where V says 30%, about 30% should be won. A reliability plot (predictions grouped into bins, predicted against actual win rate) is not built; the Brier score (the mean squared gap between the predicted chance and the 0/1 result) is, in `v.train`'s whole-run report, and must beat the baseline's (the run model of ytcs, a prior-art STS2 solver, failed this).
 2. **Shaping telescopes exactly**, once shaping terms exist ([The loop §11](/en/arch/learning/loop/#sec-11)).
-3. **A gate's A/A test**: a challenger that is the champion itself must not pass more often than the gate's false-positive rate. `Sts2Ai.Tests/Harness/GateTests.cs` checks that 200 zero-difference pairs fail (`NoGainFails`), a deterministic check, not a measured rate.
+3. **A gate's A/A test**: a challenger that is the champion itself must not pass more often than the gate's false-positive rate. `Sts2Ai.Tests/Harness/GateTests.cs` checks that 400 pairs each won by one side alone, the two sides in turn, fail (`NoGainFails`), a deterministic check, not a measured rate.
 
 ## 12. Open questions
 

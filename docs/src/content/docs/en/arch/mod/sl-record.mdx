@@ -94,11 +94,11 @@ A break is logged once, with the node and its step count: "SL record of node N b
 
 **A hook never lets an exception reach the game.** It runs inside the game's own call, so `Guard` catches it and breaks the record instead: around the save and continue hooks, the action queue, the choices, the rest option, the purchases and the divination. The event option, reward, proceed and relic hooks and the task postfixes only add a line or a task, and are not wrapped.
 
-**What a broken node means.** SL combat decisions are not asked in that node: the panel says "No SL clone of this room", with the reason, "the next room has one". Card prompts and the decisions outside combat are still asked, and no node message is sent for them. That suits the brain the mod usually runs, the NoSL champion's file with the SL planner (`p0` for prompts, L0 on screen afterstates, which need no clone). A brain whose macro side plays on the clone (`--afterstates clone`, the SL champion's) would then build its clones from the previous node's checkpoint and steps, and before any checkpoint fails with "an SL decision before any node checkpoint", which turns the mod off until the next `hello` (`Harness/Dispatcher.cs:183-187`). Holding back every SL decision of a broken node would close that gap.
+**What a broken node means.** SL combat decisions are not asked in that node: the panel says "No SL clone of this room", with the reason, "the next room has one". Card prompts and the decisions outside combat are still asked, and no node message is sent for them. That suits the brain the mod usually runs, the NoSL champion's file with the SL planner (`first` for combat prompts, L0 on screen afterstates, which need no clone). A brain whose macro side plays on the clone (`--afterstates clone`, the SL champion's) would then build its clones from the previous node's checkpoint and steps, and before any checkpoint fails with "an SL decision before any node checkpoint", which turns the mod off until the next `hello` (`Harness/Dispatcher.cs:191-195`). Holding back every SL decision of a broken node would close that gap.
 
 ## 7. What is sent, and when
 
-Before each SL decision, `Assist.SendNode` (`Assist.cs:165-174`) sends what the brain has not had yet ([Protocol: the wire §6](/en/arch/protocol/wire/#sec-6)):
+Before each SL decision, `Assist.SendNode` (`Assist.cs:396-405`) sends what the brain has not had yet ([Protocol: the wire §6](/en/arch/protocol/wire/#sec-6)):
 
 1. `node_checkpoint` with the node's number and checkpoint, once per node: when the node differs from the last one sent in this run;
 2. `node_action` for each step not sent yet, with the node's number and the step's number in the node, from 0.

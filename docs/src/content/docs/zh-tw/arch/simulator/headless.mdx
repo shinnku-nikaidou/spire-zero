@@ -42,7 +42,7 @@ import PumpDemo from '../../../../../components/book/PumpDemo.svelte';
 
 遊戲的 C# 透過 GodotSharp（引擎的 C# 繫結）存取引擎；GodotSharp 經由一張函式指標表呼叫引擎的原生函式，這張表由引擎在啟動時填好。沒有引擎時，這張表會是空的，第一次呼叫就會當掉。
 
-`GodotNativeStub.Install`（`Runtime/GodotNativeStub.cs:23-51`）把表的每個槽都填成同一個極小的函式 `mov rax, imm64; ret`，它回傳一個指向某個清零記憶體分頁上半部的指標。於是碰到 Godot 的受控程式碼能照常跑過去：它拿回的是清零的記憶體，讀起來就是 null 物件、空字串和零，什麼事也不會發生。它是為 linux-x64 寫的。
+`GodotNativeStub.Install`（`Runtime/GodotNativeStub.cs:20-41`）把表的每個槽都填成同一個極小的函式 `mov rax, imm64; ret`，它回傳一個指向某個清零記憶體分頁上半部的指標。於是碰到 Godot 的受控程式碼能照常跑過去：它拿回的是清零的記憶體，讀起來就是 null 物件、空字串和零，什麼事也不會發生。它是為 linux-x64 寫的。
 
 存根讓零星的呼叫無害，但不會讓它們有意義。需要引擎給出真正答案的程式碼（作業系統、時鐘、資源、在地化），會被打上補丁，改從受控程式碼取得答案（[§4](#sec-4)）。
 

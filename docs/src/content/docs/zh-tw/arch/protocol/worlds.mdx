@@ -24,25 +24,30 @@ public interface IWorldSource                     // the worlds of one decision
 public interface ICombatWorld                     // one simulated combat
 {
     CombatObservation Observe();
+    RunView Run();                                // the run around the combat, as it stands in this world
     IReadOnlyList<CombatAction> Legal();          // empty once the combat is over
     CombatStatus Status { get; }
     ulong HiddenKey();
     void Execute(CombatAction action);            // card prompts are answered inside the world
+    PromptSeen? LastPrompt => null;               // the first prompt the last action raised, and its answer
     WorldSnapshot Snapshot();
     void Restore(WorldSnapshot snapshot);         // a snapshot taken from this same world
 }
 
 public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
+public sealed record PromptSeen(IReadOnlyList<IReadOnlyList<int>> Groups, int Min, int Max, string Answer);
 ```
 
 | 成員 | 做什麼 |
 |---|---|
 | `Worlds(k, searchSeed)` | 一個決策的各個世界：NoSL 下是 k 個與觀測一致的隱藏狀態樣本，從搜尋種子抽出；SL 下是真實戰鬥唯一的一份精確副本 |
 | `Observe()` | 世界裡的戰鬥在玩家眼中的樣子：一個 `CombatObservation`（[觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)） |
+| `Run()` | 這個世界裡戰鬥周圍的這一局此刻的樣子，按 V 讀它的形式：SL 下是正在進行的遊戲裡的那一局，帶著戰鬥已經永久改變的東西；NoSL 下是請求帶來的那一局，換上建構出的戰鬥的遺物、藥水、生命值、最大生命值和金幣。葉節點在它上面為戰鬥的結局定價（[戰鬥大腦：葉節點 §2](/zh-tw/arch/combat-brain/leaf/#sec-2)） |
 | `Legal()` | 合法的戰鬥動作；戰鬥結束後為空 |
 | `Status` | 進行中、贏或輸 |
 | `HiddenKey()` | 觀測所隱藏、又會改變相同打法從此處起如何收場的東西的雜湊：抽牌堆的順序、每條亂數流的位置、每個怪物排定的招式。和觀測一起，它能在這個世界之內區分兩個狀態 |
-| `Execute(action)` | 打出一個合法動作；它彈出的選牌提示在世界內部由 `p0` 回答，和這一局回答它們的方式一樣（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)） |
+| `Execute(action)` | 打出一個合法動作；它彈出的選牌提示在世界內部回答：第一個用動作帶著的回答（如果有），其他每一個都取它最前面的選項，和這一局回答它們的方式一樣（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)） |
+| `LastPrompt` | 上一個動作彈出的第一個選牌提示（如果有）：按玩家分辨得出的東西分組的選項、它最少和最多的選擇數，以及它得到的回答。搜尋由此試提示的其他回答（`PromptSeen.Others`） |
 | `Snapshot()`、`Restore(s)` | 世界裡的一個點，以及回到那裡的方法 |
 
 **快照是一份配方**：世界從開始以來走過的步驟（確定化步驟、動作、提示的回答），以文字表示。搜尋把它當作不透明的；只有產生它的那個世界會讀它，並透過重播這些步驟來還原它（[模擬器：戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)）。因為是文字，它可以傳到另一個行程。
@@ -82,8 +87,8 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | 訊息 | JSON `type` | 欄位 | 要求什麼 |
 |---|---|---|---|
 | `WorkerHello` | （無） | `game` | 工作行程啟動完成後的第一行：它執行的遊戲版本 |
-| `PimcWorldRequest` | `pimc_world` | `id`、`observation`、`first`、`build_seed`、`search_seed`、`world`、`worlds`、`nodes_per_first`、`history` | PIMC 對一個 NoSL 世界的搜尋：用 `build_seed` 從 `observation` 建構戰鬥，取由 `search_seed` 抽出的 `worlds` 個世界中的第 `world` 個，在 `first` 的每個動作之後搜尋本回合，每個用 `nodes_per_first` 個節點 |
-| `SlTurnRequest` | `sl_turn` | `id`、`node`、`path`、`nodes`、`keep`、`floor`?、`history` | SL 規劃器的一個回合：載入複本，從決策處打 `path`，到達束裡的一個狀態，再用 `nodes` 個節點搜尋那個回合剩下的部分，在下一回合開始處保留至多 `keep` 個狀態，以及戰鬥的最佳結局，但不保留上界勝不過 `floor` 的任何一個 |
+| `PimcWorldRequest` | `pimc_world` | `id`、`observation`、`first`、`build_seed`、`search_seed`、`world`、`worlds`、`nodes_per_first`、`history`、`run` | PIMC 對一個 NoSL 世界的搜尋：用 `build_seed` 從 `observation` 建構戰鬥，取由 `search_seed` 抽出的 `worlds` 個世界中的第 `world` 個，在 `first` 的每個動作之後搜尋本回合，每個用 `nodes_per_first` 個節點；`run` 是戰鬥周圍的這一局，供葉節點定價用 |
+| `SlTurnRequest` | `sl_turn` | `id`、`node`、`path`、`nodes`、`keep`、`history` | SL 規劃器的一個回合：載入複本，從決策處打 `path`，到達束裡的一個狀態，再用 `nodes` 個節點搜尋那個回合剩下的部分，在下一回合開始處保留至多 `keep` 個狀態，以及戰鬥的最佳結局 |
 | `SlMacroRequest` | `sl_macro` | `id`、`node`、`paths` | 宏觀大腦的試探：對每條答案路徑，載入複本，從決策處打這條路徑，記下遊戲接著問什麼；一條路徑是文字形式的宏觀動作，對選牌提示則是 `pick:` 加上它按規範順序的選擇 |
 | `WorkerReply` | （無） | `id`、`lines`?、`error`?、`game_errors`、`turn`?、`afters`? | 對請求 `id` 的回答：`pimc_world` 用 `lines`，`sl_turn` 用 `turn`，`sl_macro` 用 `afters`；請求失敗時改為 `error`；`game_errors`，服務它期間記錄下的遊戲錯誤行 |
 
@@ -94,18 +99,18 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 ```csharp
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0,
     IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
-public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
-    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);
-public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
+    double Value, ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal, bool? Won = null);
 ```
 
 | 型別 | 位於 | 包含什麼 |
 |---|---|---|
 | `PlannedLine` | `lines` | 搜尋找到的一條打法路線，從它的第一個動作起：它的值、它的動作、第一個動作之後模擬的節點數（包括第一個動作本身），以及每個動作被打出時的戰鬥觀測雜湊，被遵循的計畫在每一步之前都會核對它；以及它是否重複搜尋找到的一個循環。`lines[i]` 是 `first[i]` 之後的最佳路線 |
-| `TurnSearch` | `turn` | 一個回合搜尋的各個結尾：`ends`，如果這個回合能到達戰鬥的結局，先是最佳結局，然後是下一回合開始處的狀態，最好的在前；`nodes`，模擬的動作數；`cut`，是否有東西被略掉（節點用完了，或找到的狀態比保留的多）；`bound`，被搜尋的那個狀態的上界 |
-| `TurnEnd` | `turn.ends` | 規劃器路線上一個回合結束的狀態：從決策到達它的動作（最後一個結束回合）和每個動作之前的觀測雜湊；它的勝負狀態；葉節點的值；它的上界，即它還能達到的最好結果（以它現有的生命值和藥水獲勝；戰鬥結束後就是它的值）；它的鍵，即它的觀測和完整隱藏狀態的雜湊，相等的狀態按它合併（戰鬥結束後為 0）；它的敵人出招記錄；以及和值出自同一次葉節點呼叫的、從它出發贏下這場戰鬥的機率和勝利時保有的生命值（戰鬥結束後是 1 或 0，以及保有的生命值） |
-| `Afterstate` | `afters` | 一條路徑通往的地方：那時的一局；遊戲接著詢問的決策介面，一局結束時為 null；它的畫面；它的合法動作。選牌提示的選項在它的畫面裡，所以它的合法清單為空；戰鬥的畫面被省略，因為一場戰鬥會結束一次試探 |
+| `TurnSearch` | `turn` | 一個回合搜尋的各個結尾：`ends`，如果這個回合能到達戰鬥的結局，先是最佳結局，然後是下一回合開始處的狀態，最好的在前；`nodes`，模擬的動作數；`cut`，是否有東西被略掉（節點用完了、某個提示的回答比節點還多，或找到的狀態比保留的多） |
+| `TurnEnd` | `turn.ends` | 規劃器路線上一個回合結束的狀態：從決策到達它的動作（最後一個結束回合），每個帶著它的提示回答，以及每個動作之前的觀測雜湊；它的勝負狀態；葉節點的值；它的鍵，由它的觀測（牌堆作為多重集，`PimcBrain.StateKey`）和完整隱藏狀態得出，相等的狀態按它合併（戰鬥結束後為 0）；它的敵人出招記錄；以及和值出自同一次葉節點呼叫的、從它出發贏下這場戰鬥的機率和勝利時保有的生命值（戰鬥結束後是 1 或 0，以及保有的生命值） |
+| `Afterstate` | `afters` | 一條路徑通往的地方：那時的一局；遊戲接著詢問的決策介面，一局結束時為 null，這時由 `won` 說明它是怎麼結束的（遊戲記下勝利時也會殺死玩家，所以這一局的生命值分辨不出來）；它的畫面；它的合法動作。選牌提示的選項在它的畫面裡，所以它的合法清單為空；戰鬥的畫面裝著它的第一個觀測，它的動作則被省略，因為一場戰鬥會結束一次試探 |
 
 `status` 寫成數字（0 進行中、1 贏、2 輸），雜湊和鍵寫成 JSON 數字（[概覽 §4](/zh-tw/arch/protocol/#sec-4)）。
 

@@ -1,6 +1,6 @@
 ---
 title: 一个状态走过网络
-description: 跟着一个真实的回合开始，手工走过战斗网络：从屏幕显示的内容到词元、张量、每一层、掩码、药水概率、搜索读到的估值，以及一个训练标签是什么样子。
+description: 跟着一个真实的回合开始，手工走过战斗网络：从屏幕显示的内容到词元、张量、每一层、掩码、药水概率、搜索怎样把它们变成一个估值，以及一个训练标签是什么样子。
 sidebar:
   label: 一个状态走过网络
 ---
@@ -177,7 +177,7 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 11. 掩码，然后是 softmax
 
-生命值比例是 {walk.value.share}。分桶 $[l, l + 0.025)$ 保持开启的条件是 $l < 0.839$ 且 $l + 0.025 > 0.839 - 1$。在这里：
+生命值比例是 {walk.ended.share}。分桶 $[l, l + 0.025)$ 保持开启的条件是 $l < 0.839$ 且 $l + 0.025 > 0.839 - 1$。在这里：
 
 - 下端：一场战斗回的血不能超过损失的生命值。{walk.state.max_hp} 中的 {walk.state.max_hp - walk.state.hp} 点生命值是比例 0.161，所以低于 {walk.head.open_from} 的 3 个分桶关闭。
 - 上端：一场胜利不能失去全部持有的生命值，所以从 {walk.head.open_to} 起的分桶关闭。
@@ -203,34 +203,37 @@ export const pct = (x) => (100 * x).toFixed(2) + ' %';
 
 ## 13. 搜索读到的数
 
-`CombatNet.Outcome`（`src/Sts2Ai.Brain/Combat/CombatNet.cs:78-96`）给 51 个概率定价（[叶子 §5](/arch/combat-brain/leaf/#sec-5)）：
+搜索不读这 51 个概率，也不读药水的概率：它读一个数，即叶子估值（[叶子 §5](/arch/combat-brain/leaf/#sec-5)）。`CombatNet.Outcome`（`src/Sts2Ai.Brain/Combat/CombatNet.cs`）这样得出它：网络仍允许的每个结局，都按它会留下的那局游戏由 V（宏观大脑赢下这一局的概率）定价：
 
 $$
-\text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})
+\text{value} = \sum_{k=1}^{50} p_k \sum_{S \subseteq H} \Big(\prod_{i \in S} (1 - u_i) \prod_{i \in H \setminus S} u_i\Big)\, V\big(\text{生命值为 } h_k \text{、持有 } S \text{ 的这一局}\big)
 $$
 
-| 项 | 数 |
+这里 $H$ 是持有的药水，$u_i$ 是药水输出头给出的药水 $i$ 赢下后没有了的概率，$h_k$ 是分桶 $k$ 之后玩家持有的生命值：现在的生命值比例减去分桶的中点，乘以最大生命值，限制在 1 到最大生命值之间。
+
+对这个状态，$H$ 只有瓶中精灵，所以每个开启的分桶给出两局：带着药水的一局，概率为 $1 - u$，只差约百万分之 2.5（[§12](#sec-12)），以及没有药水的一局。{walk.head.open} 个开启的分桶给 V 带来 {2 * walk.head.open} 局，而概率恰好为 0 的关闭分桶一局也不带来。每一局的其余部分，是这场战斗周围的这一局当前的样子：牌组、遗物、最大生命值、金币、前面的地图。文件里的测试状态只有一个回合开始，没有这一局，所以本页给不出 V 的数，也给不出估值；同一次调用在估值旁边返回的东西不需要它们（[叶子 §5](/arch/combat-brain/leaf/#sec-5)）：
+
+| | 数 |
 |---|---|
-| 结局，对开启的分桶求和 | {walk.value.win_term} |
-| 预计留下的药水，$\sum (1 - u)$ | {walk.value.kept} |
-| 它们的项，$(1 - p_0) \times 0.02 \times$ 上面的数 | {walk.value.potion_term} |
-| **估值** | **{walk.value.value}** |
+| 胜率，$1 - p_0$ | {walk.ended.win} |
+| 赢下时持有的生命值，在各获胜分桶上取平均 | {walk.ended.hp_at_win} / {walk.state.max_hp} |
+| 预计留下的药水，$\sum (1 - u)$ | {walk.ended.kept} |
 
-规划器对这个状态的**上界**是一场不失去生命值和药水的胜利：0.2 + 0.6 × {walk.value.share} + 0.02 = {walk.value.bound}。估值比它高 0.034，因为网络预计这场战斗结束时的生命值比现在高约 5 点：比例 0.056，乘 0.6 是 0.034。这正是[叶子 §5](/arch/combat-brain/leaf/#sec-5)预留的情况：预测会回血的网络可以高出上界。
+所以 V 被问到的，是以 93 点中约 83 点生命值离开这场战斗、仍持有药水的那些局，估值接近那一局的 V。这是否比另一个状态的结局更值，要由 V 根据它从这一局读到的一切来说。
 
 ## 14. 搜索看到什么
 
 搜索比较状态。每次只改一样东西，再跑一遍网络：
 
-| 状态 | 生命值比例 | 结局 | 药水 | 估值 |
+| 状态 | 生命值比例 | 死亡的概率 | 最可能的分桶 | 赢下时持有的生命值 |
 |---|---|---|---|---|
-| 原样 | {walk.value.share} | {walk.value.win_term} | {walk.value.potion_term} | {walk.value.value} |
-| 少 {walk.lost_hp} 点生命值 | {walk.siblings.less_hp.share} | {walk.siblings.less_hp.win_term} | {walk.siblings.less_hp.potion_term} | {walk.siblings.less_hp.value} |
-| 药水没有了 | {walk.siblings.no_potion.share} | {walk.siblings.no_potion.win_term} | {walk.siblings.no_potion.potion_term} | {walk.siblings.no_potion.value} |
+| 原样 | {walk.ended.share} | {pct(walk.head.death)} | {walk.head.tops[0].low} 到 {walk.head.tops[0].high}，{pct(walk.head.tops[0].chance)} | {walk.ended.hp_at_win} |
+| 少 {walk.lost_hp} 点生命值 | {walk.siblings.less_hp.share} | {pct(walk.siblings.less_hp.death)} | {walk.siblings.less_hp.tops[0].low} 到 {walk.siblings.less_hp.tops[0].high}，{pct(walk.siblings.less_hp.tops[0].chance)} | {walk.siblings.less_hp.hp_at_win} |
+| 药水没有了 | {walk.siblings.no_potion.share} | {pct(walk.siblings.no_potion.death)} | {walk.siblings.no_potion.tops[0].low} 到 {walk.siblings.no_potion.tops[0].high}，{pct(walk.siblings.no_potion.tops[0].chance)} | {walk.siblings.no_potion.hp_at_win} |
 
-{walk.lost_hp} 点生命值是 93 的比例 0.108，乘 0.6 是 0.065，而估值下降 0.064。持有的生命值被完整计入（[战斗网络 §7](/arch/combat-brain/network/#sec-7)），网络的回答几乎不变：最可能的分桶仍是 {walk.siblings.less_hp.tops[0].low} 到 {walk.siblings.less_hp.tops[0].high}，概率 {pct(walk.siblings.less_hp.tops[0].chance)}，死亡为 {pct(walk.siblings.less_hp.death)}。
+少 {walk.lost_hp} 点生命值时，网络的回答几乎不变：最可能的分桶相同，概率也差不多。分桶是从现在持有的生命值里还要失去的比例，所以赢下时持有的生命值大约下降被拿走的那么多，从 {walk.ended.hp_at_win} 降到 {walk.siblings.less_hp.hp_at_win}：持有的生命值被完整计入（[战斗网络 §7](/arch/combat-brain/network/#sec-7)），V 给这个状态的每个结局定价时，都少了约 10 点生命值。
 
-药水的统一价在这里是 {walk.value.potion_term}。没有它，估值降到 {walk.siblings.no_potion.value}，下降 0.019，比那个价格略少：结局项从 {walk.value.win_term} 升到 {walk.siblings.no_potion.win_term}，因为最可能的分桶的概率从 {pct(walk.head.tops[0].chance)} 变成 {pct(walk.siblings.no_potion.tops[0].chance)}，死亡则仍是 {pct(walk.siblings.no_potion.death)}。瓶中精灵只在死亡时起作用，而网络在这里并不预计会死；这里没有什么能说明结局为什么会变。
+没有药水时，结局略有变动，最可能的分桶的概率从 {pct(walk.head.tops[0].chance)} 变成 {pct(walk.siblings.no_potion.tops[0].chance)}，赢下时持有的生命值几乎不变。瓶中精灵只在死亡时起作用，而网络在这里并不预计会死；这里没有什么能说明结局为什么会变。于是两个状态之间的差别主要来自 V：生命值相同，一局持有药水，一局没有。一瓶药水值多少，不是为这场战斗设定的一个数，而是 V 认为在这一局里持有它值多少。
 
 ## 15. 两个更难的状态
 
@@ -243,10 +246,9 @@ $$
 | 开启的分桶 | {walk.others.danger.open}（{walk.others.danger.open_from} 到 {walk.others.danger.open_to}） | {walk.others.mask.open}（{walk.others.mask.open_from} 到 {walk.others.mask.open_to}） |
 | 死亡的概率 | {pct(walk.others.danger.death)} | {pct(walk.others.mask.death)} |
 | 最可能的分桶 | {walk.others.danger.tops[0].low} 到 {walk.others.danger.tops[0].high}，{pct(walk.others.danger.tops[0].chance)} | {walk.others.mask.tops[0].low} 到 {walk.others.mask.tops[0].high}，{pct(walk.others.mask.tops[0].chance)} |
-| 估值 | {walk.others.danger.value} | {walk.others.mask.value} |
-| 上界 | {walk.others.danger.bound} | {walk.others.mask.bound} |
+| 赢下时持有的生命值 | {walk.others.danger.hp_at_win} | {walk.others.mask.hp_at_win} |
 
-在对同族小队的 Boss 战里，估值远低于上界：网络预计一场胜利要花掉最大生命值的 0.55，即 {walk.others.danger.max_hp} 点中的约 53 点，分散在许多分桶上，没有一个超过 6 %；死亡的概率又拿走了估值的那一部分。对异蛙寄生虫时，在 {walk.others.mask.hp} 点生命值下只有 {walk.others.mask.open} 个分桶开启，所以任何概率都不会落在失去的生命值超过玩家持有的胜利上，而死亡拿走了将近三分之一的概率。
+在对同族小队的 Boss 战里，网络预计一场胜利要花掉最大生命值的 0.55，即 {walk.others.danger.max_hp} 点中的约 53 点，分散在许多分桶上，没有一个超过 6 %。V 按各自的生命值给这 {walk.others.danger.open} 个结局分别定价，所以估值分散在从满生命值到只剩几点生命值的各局上，而死亡的概率以 0 的价格拿走它那一份。对异蛙寄生虫时，在 {walk.others.mask.hp} 点生命值下只有 {walk.others.mask.open} 个分桶开启，所以任何概率都不会落在失去的生命值超过玩家持有的胜利上，而死亡拿走了将近三分之一的概率。
 
 [叶子 §4](/arch/combat-brain/leaf/#sec-4) 画出了文件全部 16 个状态。
 

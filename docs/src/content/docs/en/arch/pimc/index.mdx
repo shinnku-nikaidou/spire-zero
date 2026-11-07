@@ -81,7 +81,7 @@ NoSL's rule is that a decision depends only on the public record ([Environments]
 
 - **Only the observation leaves the host.** A worker gets the observation, the record and the seeds, never the true fight ([Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)). Every world is built from the observation, never from the real fight, so the hidden state in a world is the world's own sample, and nothing in it is the real game's.
 - **The seeds are the caller's.** `Determinize` takes its seed from the search, never from the run.
-- **The leaf reads the observation.** Neither `LeafValue` nor the combat net reads hidden state ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)).
+- **The leaf reads the observation.** Neither the combat net nor the V that prices its endings reads hidden state: the net reads the observation and the record, V the run around the fight ([Combat brain: the leaf §1](/en/arch/combat-brain/leaf/#sec-1)).
 - **The same path everywhere.** The first rung of the evaluation ladder, the simulator, builds its worlds the same way the mod will from the real game: no shortcut determinizes the true state for decisions ([Evaluation §2](/en/arch/evaluation/#sec-2)). Determinizing the true state stays for tests and benchmarks only.
 - **Planned:** a counterfactual test, the same public record with a different hidden state, which must give the same choice for a fixed brain seed.
 

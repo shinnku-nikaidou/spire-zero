@@ -81,13 +81,14 @@ Several commands share groups of options, defined in `Commands/Args.cs`.
 | `--replan` | the preset's | turns an unproved losing plan is followed before planning again (0: to its end) |
 | `--loss-plans` | the preset's | unproved losing plans in a row per combat (0: no limit) |
 
-**Leaf** (`Args.cs:154-162`): what values a search's unfinished lines.
+**Leaf** (`Args.cs:153-164`): what values a search's lines and l0's options.
 
 | option | meaning |
 |---|---|
-| `--combat-net FILE` | the combat net file, which values the leaves still in progress; a finished combat is scored at `LeafValue`'s prices. `pimc` and `plan` need it, and so does `selftest` |
+| `--combat-net FILE` | the combat net file, which values the search's leaves ([Combat brain: the leaf](/en/arch/combat-brain/leaf/)). `pimc` and `plan` need it, and so do `selftest` and `--afterstates clone` |
+| `--value FILE` | V, a net file: l0 values its options by it, and it prices the combat net's endings, a win at V of the run it leaves and a death at 0. `--macro l0` and `--combat-net` need it (`LeafChoice.cs:16`) |
 
-**Champion** (`Args.cs:197-238`): the options that make a champion, in `run`, `brain` and `gate`.
+**Champion** (`Args.cs:196-238`): the options that make a champion, in `run`, `brain` and `gate`.
 
 | option | default | meaning |
 |---|---|---|
@@ -95,12 +96,11 @@ Several commands share groups of options, defined in `Commands/Args.cs`.
 | `--macro` | `random` | the brain outside combat: `l0` (the macro brain with V) or `random` |
 | the budget options | | above |
 | `--workers` | `--worlds` | worker processes, for `pimc`, `plan` or `--afterstates clone` |
-| `--value FILE` | none | l0's V, a net file; `--value` and `--macro l0` go together |
-| `--afterstates` | `screen` | `clone` plays each option on the node's clone (SL, `l0`) |
-| the leaf options | | above; `pimc` and `plan` need them, and only they take them |
+| `--afterstates` | `screen` | `clone` plays each option on the node's clone (SL, `l0`, and it needs `--combat-net`: a fight an option starts is valued by the combat net); in SL, `l0` plays only on the clone |
+| the leaf options | | above: `--combat-net` with `pimc` or `plan` and only with them, `--value` with `l0` or `--combat-net` |
 | `--explore ε` | 0 | l0 draws a share ε of its decisions evenly among their options, for self-play; needs `l0`, and `gate` refuses it |
 
-**Champion file**, `--champion FILE` (`Args.cs:165-192`), in `run` and `brain`: plays the champion a champion file names ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). The file's options come after the ones given, so given ones win; they include its `character` and `asc`. A command without `--env` (`brain`) skips the file's `env`, and a `--policy` given that differs from the file's keeps its own budget. `gate`'s `--champion` is a different option: the champion to beat.
+**Champion file**, `--champion FILE` (`Args.cs:166-194`), in `run` and `brain`: plays the champion a champion file names ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). The file's options come after the ones given, so given ones win; they include its `character` and `asc`. A command without `--env` (`brain`) skips the file's `env`, and a `--policy` given that differs from the file's keeps its own budget. `gate`'s `--champion` is a different option: the champion to beat.
 
 ## 4. Commands
 
@@ -130,7 +130,7 @@ In `--help` order (`Commands/Cli.cs:31-36`).
 | command | options | what it does |
 |---|---|---|
 | `report` | `--seeds`, `--records` (comma-separated), `--out` (a path without extension: writes `.json` and `.md`), all required; `--previous FILE` | a report of a seed set's runs |
-| `gate` | `--champion` (required: the file to beat), `--records` (required), `--metric` `floor`\|`win`, `--delta` (1.5 floors or 0.1 wins), `--alpha` (0.05), `--beta` (0.05), `--not-worse`, `--promote PATH`, `--env`; champion options | the challenger's records against the champion's report, paired by seed, with a sequential test; refuses a challenger with `--explore`; exit 1 when it does not pass |
+| `gate` | `--champion` (required: the file to beat), `--records` (required), `--delta` (0.1), `--alpha` (0.05), `--beta` (0.05), `--not-worse`, `--promote PATH`, `--env`; champion options | the challenger's records against the champion's report, paired by seed, with a sequential test on wins; refuses a challenger with `--explore`; exit 1 when it does not pass |
 | `leaderboard` | `--character` (`SILENT`) | a character's leaderboards over every report in `eval/CHARACTER/reports`, written to `eval/CHARACTER/leaderboard.md` |
 | `seeds` | `--base` (required), `--n` (300) | a seed file's seeds, `MakeSeed(base, 0..n-1)`, one per line |
 
@@ -150,9 +150,9 @@ The boundary, that Brain, Protocol and Harness reach no game assembly, is checke
 
 **Worlds and clones**: a world restores after card prompts (Toasty Mittens and Survivor, 6 worlds); the SL world shows the run's combat, plays as the run does, and restores; the SL clone stops at its node's exit and refuses to step past it; the SL clone keeps relic state the save drops (the first relic set to disabled by hand).
 
-**Cycles** (the Silent against 535 HP, 300 nodes): Monologue and two Flash of Steel draw each other; the SL planner (beam 8) repeats the cycle to a win and the SL world ends the combat as planned, and PIMC over 2 worlds finds that its line repeats. Then the same with a prompt in front of the cycle: Particle Wall costs stars until Touch of Insanity makes it free, which `p0` would give to Haze.
+**Cycles** (the Silent against 535 HP, 300 nodes): Monologue and two Flash of Steel draw each other; the SL planner (beam 8) repeats the cycle to a win and the SL world ends the combat as planned, and PIMC over 2 worlds finds that its line repeats. Then, in SL, with a prompt in front of the cycle: Particle Wall costs stars this character has none of until Touch of Insanity makes it free, which the potion's first answer does not; the planner wins by drinking the potion with the answer that frees Particle Wall, a turn later than without the prompt, on the part of the potion's nodes that answer gets.
 
-**The SL plan holds** (the second combat of a run, 150 nodes, beam 4): the SL world ends its combat as planned (a win) and refuses to step past it; the run, played again to that decision, follows the plan step for step; the combat ends as the plan's value says, within 1e-9.
+**The SL plan holds** (the second combat of a run, 150 nodes, beam 4): the SL world ends its combat as planned (a win) and refuses to step past it; the run, played again to that decision, follows the plan step for step and ends the combat with the HP, max HP and potions the plan left on the clone; the plan is worth V of the run its combat leaves, within 1e-9.
 
 **With `--workers N`**: pooled PIMC matches in-process PIMC on 4 decisions, each with a budget of 4 worlds × 120 nodes; the pooled planner plans what the planner plans in one process; no game errors in workers; no worker restarts.
 
@@ -173,26 +173,28 @@ The run line then ends with `obs <digest>`, one hash of the run's observation ha
 
 ## 7. The xUnit tests
 
-`src/Sts2Ai.Tests` holds what runs without the game, 19 classes and 97 test methods: `dotnet test src/Sts2Ai.Tests`. One folder per project tested (`Brain/`, `Harness/`, `SimWorker/`), `BoundaryTests.cs` at the root, and the shared JSON fixtures in `Fixtures.cs` and `Fixtures/`.
+`src/Sts2Ai.Tests` holds what runs without the game, 21 classes and 104 test methods: `dotnet test src/Sts2Ai.Tests`. One folder per project tested (`Brain/`, `Harness/`, `SimWorker/`), `BoundaryTests.cs` at the root, and the shared JSON fixtures in `Fixtures.cs` and `Fixtures/`.
 
 | class | what it checks |
 |---|---|
 | `BoundaryTests` | Brain, Protocol and Harness reach no game assembly, and the check does see GameBridge's `sts2` |
 | `Brain/BudgetTests` | names show only what is not the default |
-| `Brain/CloneSearchTests` | L0 on a toy clone: a shop is worth its best basket; an event option is worth what its next page gives; a map move is not played; a two-pick prompt finds the best pair; a skipped card reward is not opened again; a state reached twice is searched once |
-| `Brain/CombatNetTests` | reads c9-0's test states and a tiny net's (`combat-tiny.json`) as their trainers did; a state in progress is its endings and the potions kept; a bucket the HP held rules out has no weight; a finished state and the bound are `LeafValue`'s |
-| `Brain/LeafValueTests` | a loss is 0; a win scores by HP and potions; a combat still going is the combat net's to value, and `LeafValue` refuses it |
-| `Brain/LoopSearchTests` | 13 tests: a card that comes back is played again until it kills in one turn, whatever it does to the piles, and the cycle ends where the game ends it; a card that runs out is an ordinary line; a cycle with no lethal stays on its budget; another answer to a prompt is taken if it opens a cycle, and left if not; PIMC repeats a cycle too, and takes such an answer; PIMC's turn plan keeps only a plan that repeats; a prompt is answered by the policy unless the action carries an answer; a prompt that takes cards away or asks for more is no choice for cycles; a pick is part of an action's text |
+| `Brain/CloneSearchTests` | L0 on a toy clone: a shop is worth its best basket; an event option is worth what its next page gives; a fight is worth what the combat leaf says, a death 0 and a won run 1, not V of the run at HP 0, and a fight with no leaf throws; a map move is not played; a two-pick prompt finds the best pair; a skipped card reward is not opened again; a state reached twice is searched once |
+| `Brain/CombatNetTests` | reads c9-0's test states and a tiny net's (`combat-tiny.json`) as their trainers did; a state in progress is V of the runs its endings leave; each potion is kept by its own chance; a bucket the HP held rules out has no weight; a won combat is V of its run, a lost one 0 |
+| `Brain/LoopSearchTests` | 16 tests: a card that comes back is played again until it kills in one turn, whatever it does to the piles, and the cycle ends where the game ends it; a card that runs out, or cards that use themselves up, are an ordinary line; copies in the hand make no cycle; a cycle with no lethal stays on its budget; an answer to a prompt that opens a cycle is found and taken, by the planner and by PIMC; every answer to a prompt is searched; PIMC repeats a cycle too, and its turn plan keeps only a plan that repeats; a prompt is answered by the policy unless the action carries an answer; a prompt no search weighs takes the first options it needs; the other answers pick cards the player can tell apart; a pick is part of an action's text |
 | `Brain/MacroExplorationTests` | a removal is worth only what can be removed; without exploration l0 takes the best; drawn evenly, a card reward's outcome is drawn among its cards and skipping, and the card screen keeps the draw; at ε=1 every kind of decision is drawn evenly among its options but the potion belt; a prompt's picks are drawn evenly at ε=1, and at ε=0.1 most answers are V's |
+| `Brain/MacroPotionTests` | a potion discard is offered only to make room for a potion on the screen; on the map, a potion's option is worth the best move after it, not the state it stays in |
 | `Brain/MacroUpgradeTests` | smithing is worth its best upgrade; the smith prompt takes the valued upgrade; the upgrade prompt takes the best preview |
 | `Brain/MoveRecordTests` | each living enemy is recorded once per round; the dead are skipped; it starts over when the round goes back; `Clear` |
 | `Brain/PimcMemoTests` | lines that look the same but rolled differently are not merged |
 | `Brain/RunNetTests` | a tiny net's runs are valued at the trainer's chance to win, and v9-0's test runs read as its trainer read them; the map is every point a path still leads to, with its floors ahead; a map move reads the point entered, and only then |
-| `Brain/SlPlannerTests` | 14 tests: full search, narrow beam, losing plans and replan turns, loss plans, a turn searched with keep and floor, the dive's turns, easy beam and beam, a winning combat planned once, each effort a budget, a proved loss, the candidates' order, the record's history |
+| `Brain/SameCardsTests` | copies of a card are one action at each target, an upgraded copy another; the same cards in another order, another copy, or potions in other slots are one state, though their observations differ |
+| `Brain/SlPlannerTests` | 15 tests: full search, each candidate's ending, narrow beam, losing plans and replan turns, loss plans, a turn searched in full narrows to the search with a keep, the dive's turns, easy beam and beam, a winning combat planned once, each effort a budget, a proved loss, the candidates' order, the record's history |
 | `Brain/TurnPlanTests` | a step that does not hold is replanned and marked |
 | `Harness/DispatcherTests` | the combat brain gets the moves so far; a macro decision ends the record; an illegal pick is refused; no fallback for an uncovered surface; node checkpoints are refused in NoSL; an SL node's clone is its checkpoint and the decisions since; an action's prompt is answered with the brain's pick, hidden from the host; a pick the prompt does not accept goes to the policy |
-| `Harness/EvalReportTests` | sorted in the set's order; runs that break the set are rejected; a random decision or a failure voids a report; `RunRecord.Read` leaves failed runs out |
-| `Harness/GateTests` | 10 tests: pass, fail and not-worse; minimum pairs; ties; a failed run voids the challenger; the win gate; pairing; refusals |
+| `Harness/EvalReportTests` | sorted in the set's order; runs that break the set are rejected; a placeholder's decision (`random` or `play`) or a failure voids a report; `RunRecord.Read` leaves failed runs out |
+| `Harness/ExplainTests` | a macro answer carries each option's value, the chosen first; for a host that shows the answers, each map option carries its route to the boss |
+| `Harness/GateTests` | 8 tests, on wins: pass, fail and not-worse; pairs both sides won or both lost decide nothing; a failed run voids the challenger; pairing; refusals |
 | `Harness/WorkerPoolTests` | a worker stuck twice fails the call; one stuck once is restarted and answers |
 | `SimWorker/CliTests` | defaults; environments in any case; mistakes; `--verbose` anywhere and no response files; the champion file's options under the ones given; a champion file's character and asc; `brain` takes a champion file without its env; incoherent champions refused; a combat net goes with a search and is in the name; a champion's options play it again |
 | `SimWorker/LoadoutTests` | the deck syntax with upgrades and enchantments; an enchantment needs its amount |

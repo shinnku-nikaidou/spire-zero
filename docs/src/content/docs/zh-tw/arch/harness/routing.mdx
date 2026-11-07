@@ -16,7 +16,7 @@ import { Badge } from '@astrojs/starlight/components';
 | 決策介面（surface） | 側 | 目前的大腦 |
 |---|---|---|
 | `combat` | 戰鬥 | `plan`（SL 規劃器，僅 SL）、`pimc`（僅 NoSL），或佔位策略 `play` |
-| 戰鬥中問的 `card_choice`（`ChoiceContext.InCombat`） | 戰鬥提示 | `p0`，提示大腦（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)） |
+| 戰鬥中問的 `card_choice`（`ChoiceContext.InCombat`） | 戰鬥提示 | 戰鬥大腦上一個動作帶著的回答，如果有的話；否則是 `first`，取最前面的選項（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)） |
 | 戰鬥外問的 `card_choice`（升級、轉化、附魔、移除……） | 宏觀提示 | L0，也就是宏觀大腦本身，或 `random` |
 | `map`、`rewards`、`card_reward`、`bundle`、`event`、`shop`、`rest`、`treasure`、`crystal_sphere` | 宏觀 | L0（[宏觀大腦](/zh-tw/arch/macro-brain/)），或 `random` |
 
@@ -25,10 +25,10 @@ import { Badge } from '@astrojs/starlight/components';
 **冠軍的名字**。一局的各個大腦合起來就是它的冠軍，由 `Dispatcher.Champion` 命名：
 
 ```text
-combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone
+combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone
 ```
 
-這是 SL 冠軍：葉節點用戰鬥網路 c9-1、用 medium 預算的 SL 規劃器，戰鬥中的提示用 `p0`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V v9-1，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：會搜尋的戰鬥大腦指名它的戰鬥網路；L0 指名它的 V、`clone`，以及它的探索（均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:34-56`）。
+這是這份程式碼所命名的 SL 冠軍：葉節點用戰鬥網路 c9-2（它的結局由 V v9-2 定價）、用 medium 預算的 SL 規劃器，戰鬥中沒有搜尋回答的提示用 `first`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V v9-2，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：會搜尋的戰鬥大腦指名它的戰鬥網路；L0 指名它的 V、`clone`，以及它的探索（均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:36-60`）。
 
 **環境決定戰鬥大腦**。宏觀大腦在兩種環境裡是同一個；戰鬥大腦不是（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。冠軍工廠在 SL 之外拒絕 `plan` 和 `--afterstates clone`，在 NoSL 之外拒絕 `pimc`。`brain` 指令同時服務兩種環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
@@ -52,7 +52,7 @@ combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-
 宏觀路由或提示路由是一個 `Route<T>(Brain, Policy)`。目前：
 
 - **L0**（`MacroBrain`，`--macro l0`）同時回答宏觀決策和戰鬥外的選牌提示，是同一個物件、同一個 V（[宏觀大腦：搜尋](/zh-tw/arch/macro-brain/search/)）。它的探索（`--explore ε`，均勻抽取，僅自我對弈）從它自己的產生器裡抽（[§5](#sec-5)）。
-- **`p0`**（`PromptBrain`）回答戰鬥中的選牌提示，和搜尋世界裡的做法一樣。
+- **`first`**（`FirstPicks`）回答戰鬥大腦的動作沒有回答的戰鬥中選牌提示：按規範順序取最前面的選項，取提示允許的最少數量，和搜尋世界裡的做法一樣。動作帶著的回答會交給它之後的第一個戰鬥中提示（`Dispatcher`），不接受這個回答的提示也交給 `first`（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。
 - **`random`** 佔位策略在 `--macro random` 時回答宏觀的兩側。
 
 **給宏觀一側的節點複本**。在 SL 下加上 `--afterstates clone` 時，`Dispatcher` 在每個宏觀決策和每個戰鬥外的選牌提示處開啟節點的複本，作為這一局工作行程池上的一個 `PooledClone`（`MacroDecision.With`、`ChoiceDecision.With`）。L0 再向它要後狀態：每條答案路徑之後遊戲接著問什麼。`PooledClone` 把各條路徑拆成 min(paths, workers) 個連續的 `sl_macro` 請求，每個工作行程對每條路徑載入一次複本，並檢查每條路徑都得到了後狀態；由於後狀態只取決於複本和路徑，怎麼拆都不會改變結果（[宏觀大腦：搜尋 §6](/zh-tw/arch/macro-brain/search/#sec-6)）。
@@ -103,7 +103,7 @@ combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-
 
 **run id** 是這一局的種子作為 JSON 字串（含引號）的 FNV-1a 64 位元雜湊，以十六進位表示：種子 `0SSL7NS01MU6` 得到 run `ce13ba5116b7f48a`。大腦看到的是 run id，從不是種子（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。
 
-**一個決策的種子**由 run id 和決策的編號抽出，編號從 0 起計入這一局的每個決策，戰鬥決策、選牌提示和宏觀決策都算（`Dispatcher.cs:189-208`）：
+**一個決策的種子**由 run id 和決策的編號抽出，編號從 0 起計入這一局的每個決策，戰鬥決策、選牌提示和宏觀決策都算（`Dispatcher.cs:197-216`）：
 
 ```text
 H        = FNV-1a 64 of the JSON string run_id
@@ -122,7 +122,7 @@ seed(i)  = z xor (z >> 31)
 
 SL 規劃器搜尋唯一的那個確切世界，忽略它；宏觀策略和提示策略從不收到它。
 
-**佔位策略和探索**從每局各自設定種子的 .NET 產生器裡抽，每條流一個：`Random(FNV(run_id + stream))`，佔位策略的流是 `""`，L0 的均勻抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:40-49`）。所以一局不管在哪個行程裡、走不走線路、記不記日誌，都打得一樣。
+**佔位策略和探索**從每局各自設定種子的 .NET 產生器裡抽，每條流一個：`Random(FNV(run_id + stream))`，佔位策略的流是 `""`，L0 的均勻抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:44-53`）。所以一局不管在哪個行程裡、走不走線路、記不記日誌，都打得一樣。
 
 **看順序，不看時序**。一次搜尋的請求平行執行，但行程池按請求順序回傳回覆（[模擬器：工作行程池 §2](/zh-tw/arch/simulator/pool/#sec-2)），候選按估值排序，平手時保持合法動作的順序（先結束回合，再是牌，再是藥水）。哪個工作行程先完成，永遠不會改變答案。`run --check` 讓整局都受這一點檢驗（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。
 

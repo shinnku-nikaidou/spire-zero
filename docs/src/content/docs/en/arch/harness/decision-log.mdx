@@ -36,10 +36,10 @@ Who reads the log:
 | `decision_id` | int | the decision's number in the run, from 0, the three kinds counted together ([§4](#sec-4)) | the same | the same |
 | `env` | string | `NoSL` or `SL` | the same | the same |
 | `surface` | string | `combat` | `card_choice`, on either side | the decision's surface |
-| `brain` | string | the combat route's name: `pimc c9-1`, `plan c9-1`, `play` | the prompt side's: `p0` in combat; L0's name or `random` outside | the macro route's |
+| `brain` | string | the combat route's name: `pimc c9-1`, `plan c9-1`, `play` | the prompt side's: `first` in combat, whether its answer came with the combat brain's action or from the first options; L0's name or `random` outside | the macro route's |
 | `obs_hash` | hex string | the hash of the combat observation | the hash of the card prompt | the hash of the whole observation ([§4](#sec-4)) |
 | `legal` | int | the legal actions | the prompt's options | the legal actions |
-| `chosen` | string | the combat action's text: `play:C[:T]`, `potion:S[:T]`, `end_turn` ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)) | the picked option indexes joined by commas, without `pick:` | the action |
+| `chosen` | string | the combat action's text: `play:C[:T]`, `potion:S[:T]`, `end_turn`, with the answer to its first card prompt after `@` when the search chose one ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)) | the picked option indexes joined by commas, without `pick:` | the action |
 | `plan` | string[]? | the brain's plan after `chosen`, if any ([§5](#sec-5)) | never | what the policy plans after `chosen`, if any: L0's route on the map |
 | `candidates` | Candidate[]? | the search's candidates, if any ([§5](#sec-5)) | never | never |
 | `budget` | Budget? | the route's budget, on every line of a route that has one, including steps with one legal action and followed steps ([Routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)) | never | never |

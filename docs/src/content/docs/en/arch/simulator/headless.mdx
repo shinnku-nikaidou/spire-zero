@@ -42,7 +42,7 @@ Commands that need no game (`brain`, `report`, `gate`, `leaderboard`, `seeds`) n
 
 The game's C# reaches the engine through GodotSharp, the engine's C# binding, which calls native engine functions through a table of function pointers that the engine fills at startup. With no engine, the table would be empty and the first call would crash.
 
-`GodotNativeStub.Install` (`Runtime/GodotNativeStub.cs:23-51`) fills every slot of the table with one tiny function, `mov rax, imm64; ret`, which returns a pointer into the upper half of a zeroed page. Managed code that touches Godot then runs through: it gets zeroed memory back, which reads as null objects, empty strings and zero numbers, and nothing happens. It is written for linux-x64.
+`GodotNativeStub.Install` (`Runtime/GodotNativeStub.cs:20-41`) fills every slot of the table with one tiny function, `mov rax, imm64; ret`, which returns a pointer into the upper half of a zeroed page. Managed code that touches Godot then runs through: it gets zeroed memory back, which reads as null objects, empty strings and zero numbers, and nothing happens. It is written for linux-x64.
 
 The stub keeps stray calls harmless; it does not make them meaningful. Code that needs a real answer from the engine (the OS, the clock, resources, localization) is patched to get one from managed code ([§4](#sec-4)).
 

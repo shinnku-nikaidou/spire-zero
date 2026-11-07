@@ -157,4 +157,4 @@ A continued run gets the same run id as before, since the id is the seed's hash;
 
 **One brain for both environments.** `hello` carries the environment, and it holds for the run as the brain sees it. `brain` gives a NoSL run its champion's combat brain and an SL run `--sl-policy`'s, with the same macro brain ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)), so the panel's switch needs no second brain, as long as the macro brain may play in both ([The overview §4](/en/arch/mod/#sec-4)).
 
-**What the brain prints.** `brain: NoSL C; SL C; listening on PATH` at start, then a line per `run_end`: `RUN_ID (mod) REASON floor F, N decisions`, with the replans and the workers' game errors when there are any (`Commands/BrainCommand.cs:48-53`).
+**What the brain prints.** `brain: NoSL C; SL C; listening on PATH` at start, then a line per `run_end`: `RUN_ID (mod) REASON floor F, N decisions`, with the replans and the workers' game errors when there are any (`Commands/BrainCommand.cs:58-63`).

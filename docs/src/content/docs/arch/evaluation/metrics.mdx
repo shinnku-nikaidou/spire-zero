@@ -16,15 +16,15 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 **平均到达层数**在胜局稀少时充当替代。0 胜对 0 胜的差什么也说明不了，而层数仍能把两个大脑区分开，所以 C# 门槛默认比较层数（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。层数是一局结束时的 `TotalFloor`。赢下的一局结束在第 48 层，死在第 3 幕 Boss 的一局也一样：示例报告有 65 局打到这个 Boss，23 局赢了，42 局死在那里，65 局都记为 48。层数分不清胜利和倒在最后一道门前。
 
-**进入每幕 Boss 战时的生命值**。对每一幕，报告取每个打到 Boss 战的对局里的第一场 Boss 战，给出有多少局打到那里，以及战斗开始时它们的生命值，包括绝对值和占最大生命值的比例（`Harness/Reports.cs:43-45`）。示例报告的 300 局里有 290 局进入第 1 幕 Boss 战，平均生命值 63.4（最大值的 87%）。打赢的 Boss 不在报告里；对局记录里有（[§8](#sec-8)）。
+**进入每幕 Boss 战时的生命值**。对每一幕，报告取每个打到 Boss 战的对局里的第一场 Boss 战，给出有多少局打到那里，以及战斗开始时它们的生命值，包括绝对值和占最大生命值的比例（`Harness/Reports.cs:46-48`）。示例报告的 300 局里有 290 局进入第 1 幕 Boss 战，平均生命值 63.4（最大值的 87%）。打赢的 Boss 不在报告里；对局记录里有（[§8](#sec-8)）。
 
 ## 2. 必须为零的项
 
-四个计数中任何一个大于零，报告就**作废**（`Metrics.Void`，`Harness/Reports.cs:38`）：
+四个计数中任何一个大于零，报告就**作废**（`Metrics.Void`，`Harness/Reports.cs:41`）：
 
 | 计数 | 是什么 | 为什么作废 |
 |---|---|---|
-| `random_decisions` | 由 `random` 占位策略回答的决策，对各局的 `brains` 求和 | 占位策略不是策略；带着它的冠军并不是它所声称的那个大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)） |
+| `random_decisions` | 由占位策略（宏观一方的 `random` 或战斗一方的 `play`）回答的决策，对各局的 `brains` 求和（`Metrics.Placeholders`，`Harness/Reports.cs:39`） | 占位策略不是策略；带着它的冠军并不是它所声称的那个大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)） |
 | `failed` | 抛出异常的对局：驱动程序、某个大脑或某个工作进程出错 | 这一局没有像游戏那样打完；现在生成的报告里是 0，因为失败的对局不计入（见下） |
 | `truncated` | 到 `--max-decisions`（20,000）时仍未结束的对局 | 同上 |
 | `game_errors` | 游戏的 `Log.Error` 行，宿主里的和工作进程里的都算 | 游戏自己报告了一个损坏的状态 |
@@ -33,16 +33,16 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 **失败的对局就当从没设定过**。`report` 和 `gate` 通过 `RunRecord.Read` 读记录，它会去掉每条结局为 `failed` 的记录，`RunRecord.SeedsLeft` 再把它的种子从种子集里去掉，所以 500 局有 2 局失败，得到的是 498 局中的 498 局，既不作废，也不算不完整（`Harness/RunRecords.cs:32-39`）。对局失败的原因在主机，比如一台内存会翻转比特的机器，它说明不了大脑的好坏。`learn/gate.py` 和 `v.train` 同样丢掉它们（`learn/gate.py:42`、`learn/v/data.py:64`），配对也要两边都打完（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
 
-**被截断的对局在胜率里算作输局**，并且从不重打：种子决定了这一局，重打只会重复它，而丢掉它就等于挑种子（`Harness/Reports.cs:51`）。
+**被截断的对局在胜率里算作输局**，并且从不重打：种子决定了这一局，重打只会重复它，而丢掉它就等于挑种子（`Harness/Reports.cs:54`）。
 
 还有两个计数应当放在这里，但并不存在：
 
 - **`NumReloads`**，游戏对真实读档次数的计数，在真实游戏里必须为 0 <Badge text="规划中" variant="caution" />。它计划作为 Mod 决策日志的一个字段；目前没有任何东西读取它（[环境：信息与节点 §8](/arch/environments/information/#sec-8)）。
-- **NoSL 对局里的存档导出**没有计数器。模拟的 NoSL 对局从不导出节点检查点（`SimWorker/Commands/RunCommand.cs:239`），NoSL 的 `Dispatcher` 也会拒绝导出（`Harness/Dispatcher.cs:165`），所以一次导出会以错误结束这一局，而不是变成一个计数。
+- **NoSL 对局里的存档导出**没有计数器。模拟的 NoSL 对局从不导出节点检查点（`SimWorker/Commands/RunCommand.cs:239`），NoSL 的 `Dispatcher` 也会拒绝导出（`Harness/Dispatcher.cs:173`），所以一次导出会以错误结束这一局，而不是变成一个计数。
 
 ## 3. 辅助指标
 
-报告里的辅助数字（`Harness/Reports.cs:46-64`）：
+报告里的辅助数字（`Harness/Reports.cs:49-67`）：
 
 | 指标 | 怎么算 | 示例报告 |
 |---|---|---|
@@ -87,7 +87,7 @@ $$
 - **晋级**种子，用于门槛和排行榜；
 - **最终**种子，在用它们打任何一局之前就生成并登记在仓库里，要全部打完、全部报告，这样谁也没法挑那些碰巧好看的种子。正式结论至少需要 300 局。
 
-种子集是 `eval/seeds/` 里的一个文本文件，每行一个种子；`#` 开始一条注释，空行被跳过（`EvalReport.ReadSeeds`，`Harness/Reports.cs:164-165`）。每个文件的开头写明它是怎么生成的。这些种子集：
+种子集是 `eval/seeds/` 里的一个文本文件，每行一个种子；`#` 开始一条注释，空行被跳过（`EvalReport.ReadSeeds`，`Harness/Reports.cs:166-168`）。每个文件的开头写明它是怎么生成的。这些种子集：
 
 | 文件 | 种子 | 生成方式 | 用于 |
 |---|---|---|---|
@@ -108,7 +108,7 @@ $$
 
 ## 6. 种子是怎么生成的
 
-`seeds --base B --n K`（默认 300）对 i = 0…K−1 打印 `MakeSeed(B, i)`（`SimWorker/Commands/EvalCommands.cs:164-179`）：
+`seeds --base B --n K`（默认 300）对 i = 0…K−1 打印 `MakeSeed(B, i)`（`SimWorker/Commands/EvalCommands.cs:161-176`）：
 
 ```csharp
 // SimWorker/Simulation/GameSeeds.cs:7-12
@@ -133,11 +133,11 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 这条命令写出 `PATH.json` 和 `PATH.md`，并打印 Markdown（`SimWorker/Commands/EvalCommands.cs:10-51`）。种子集的名字是种子文件去掉扩展名后的文件名。记录可以来自多个进程。`report` 会把以下情况当作命令行错误拒绝（退出码 2）：
 
 - 没有对局，或对局来自两种配置（`config` 在游戏、提交、冠军或环境上不同）；
-- 两个角色或两个进阶等级；一个种子打了两次；一个不在种子集里的种子（`EvalReport.Of`，`Harness/Reports.cs:81-94`）。
+- 两个角色或两个进阶等级；一个种子打了两次；一个不在种子集里的种子（`EvalReport.Of`，`Harness/Reports.cs:84-97`）。
 
 它把各局按种子集的顺序排好，并以生成当天的日期标注报告，格式为 `yyyy-MM-dd`，按机器的本地时间。局数少于种子集的报告是**不完整的**：它的 Markdown 会写明这一点，排行榜不收它，`gate --promote` 也拒绝它。
 
-**JSON** 就是 `EvalReport` 记录（`Harness/Reports.cs:73`），字段名用 snake case，省略 null 值：
+**JSON** 就是 `EvalReport` 记录（`Harness/Reports.cs:76`），字段名用 snake case，省略 null 值：
 
 | 字段 | 内容 |
 |---|---|
@@ -153,7 +153,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 
 由于报告内嵌了每一条对局记录，连同其中的战斗，每次整局评估的逐局数据都在 git 里，同样种子上的任意两份报告事后都能配对；本章的每张图都是这样做的。不进 git 的是决策日志，以及没有带来晋级的门槛的记录，它们放在 `data/CHARACTER/ENV/` 下（[学习：参考 §3](/arch/learning/reference/#sec-3)）。
 
-**Markdown**（`EvalReport.Markdown`，`Harness/Reports.cs:96-150`）是一页：
+**Markdown**（`EvalReport.Markdown`，`Harness/Reports.cs:99-150`）是一页：
 
 - `# Evaluation DATE: ENV, SET`，然后在适用时，有一行写明原因的 **Void**（作废）和一行 **Partial**（不完整）；
 - 一张表：游戏、提交、冠军和环境，以及写成 `SET: N of M runs, CHARACTER AN` 的种子集；
@@ -162,7 +162,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 - **Auxiliary**（辅助）：每局精英数、跳过的卡牌奖励、结束时的金币；每局秒数和每个决策的毫秒数；各决策界面；
 - **Against DATE (CHAMPION, commit X)**，在给出 `--previous OLD.json` 时，或在 `gate --promote` 写出冠军的继任者时出现：胜率、层数均值、每一幕打到 Boss 的局数、随机决策和失败局数的前后对比；种子集或环境不同时则写「Not comparable」。
 
-**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-LEVEL-SET-NAME.json` 和 `.md`，全部小写：LEVEL 是进阶等级，`a0` 或 `a10`（较早的名字里是 `r1`，即进阶 0）；NAME 写明是谁打的：在 `DATE-sl-a0-promotion-1-100-plan-c9-1-l0-v9-1-clone-p0` 里，是配战斗网络 `c9-1` 的 SL 规划器、在克隆上配 V `v9-1` 的 L0、由 `p0` 回答选牌提示。这只是约定；`--out` 接受任何路径。
+**命名**。报告放在 `eval/CHARACTER/reports/`，文件名为 `DATE-ENV-LEVEL-SET-NAME.json` 和 `.md`，全部小写：LEVEL 是进阶等级，`a0` 或 `a10`（较早的名字里是 `r1`，即进阶 0）；NAME 写明是谁打的：在 `DATE-sl-a0-promotion-1-100-plan-c9-2-l0-v9-2-clone-first` 里，是配战斗网络 `c9-2` 的 SL 规划器、在克隆上配 V `v9-2` 的 L0、没有搜索权衡的战斗提示由 `first` 回答。这只是约定；`--out` 接受任何路径。
 
 ## 8. 对局记录
 
@@ -195,7 +195,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 leaderboard [--character SILENT]
 ```
 
-这条命令读取 `eval/CHARACTER/reports/` 里的每份报告和 `eval/champions/` 里的每个冠军文件，写出 `eval/CHARACTER/leaderboard.md` 并打印它（`SimWorker/Commands/EvalCommands.cs:133-162`，`Leaderboard.Markdown`，`Harness/Reports.cs:174-237`）。它由手工运行，排行榜和报告一起提交。
+这条命令读取 `eval/CHARACTER/reports/` 里的每份报告和 `eval/champions/` 里的每个冠军文件，写出 `eval/CHARACTER/leaderboard.md` 并打印它（`SimWorker/Commands/EvalCommands.cs:130-159`，`Leaderboard.Markdown`，`Harness/Reports.cs:177-237`）。它由手工运行，排行榜和报告一起提交。
 
 - **分榜**。不完整的报告不列入。其余的依次按角色、进阶等级和种子集分组，每组一个 `##` 小节；小节里每个环境一张 `###` 表，NoSL 在前。两个角色、两个进阶等级或两种环境从不放在一起排名。
 - **列**：冠军、日期、提交（7 个字符，保留 `-dirty`）、胜率（比率加区间）、平均层数、打到第 1 幕 Boss 的局数、每局秒数。
@@ -206,5 +206,5 @@ leaderboard [--character SILENT]
 
 ## 10. 测试
 
-- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），4 个测试：对局按种子集的顺序排好，平均层数正确，报告不作废；破坏种子集的对局会被拒绝（没有对局、一个种子出现两次、种子不在集合里、另一种配置、角色或进阶等级）；报告自身的对局里有一个随机决策或一局失败会让报告作废；`RunRecord.Read` 去掉失败的对局，`SeedsLeft` 去掉它们的种子。测试夹具的配置是 `v0.111.0`、`abc1234`、NoSL（`src/Sts2Ai.Tests/Fixtures.cs:26`）。
+- `Harness/EvalReportTests`（`src/Sts2Ai.Tests`），4 个测试：对局按种子集的顺序排好，平均层数正确，报告不作废；破坏种子集的对局会被拒绝（没有对局、一个种子出现两次、种子不在集合里、另一种配置、角色或进阶等级）；报告自身的对局里有一个占位策略的决策（`random` 或 `play`）或一局失败会让报告作废；`RunRecord.Read` 去掉失败的对局，`SeedsLeft` 去掉它们的种子。测试夹具的配置是 `v0.111.0`、`abc1234`、NoSL（`src/Sts2Ai.Tests/Fixtures.cs:32`）。
 - 没有测试覆盖 `Rate.Wilson`、Markdown、排行榜或 `MakeSeed`。上面的 Wilson 图已用报告里存的区间核对过。

@@ -60,8 +60,7 @@ The settings are fixed in the code (`learn/combat/train.py:34-36`): AdamW at lea
 |---|---|
 | `ce`, `ce_prior` | the endings' cross-entropy, and that of the training set's frequencies |
 | `death`, `predicted_death` | the means, actual and predicted |
-| `rank_within`, `rank_within_share` | rank correlation with the end's price within each (encounter, round) of 10 or more, by their sizes; beside it, the HP share's |
-| `rank_lost`, `rank_lost_share` | the same with the HP lost, on wins: what a net adds to the HP held |
+| `rank_lost`, `rank_lost_share` | rank correlation with the HP lost, on wins, within each (encounter, round) of 10 or more, by their sizes; beside it, the HP share's: what a net adds to the HP held |
 | `auc_death`, `auc_death_share` | the chance that a death's round start scores above a survivor's within each (encounter, round) with 3 or more of each; beside it, the HP share's |
 | `potions` | `rows`, `used`, `predicted`, `log_loss`, and `log_loss_id` and `log_loss_id_room`, those of a rate per id and per id and room |
 
@@ -75,12 +74,11 @@ The numbers are the report in `weights/all/c9-1.json`. "Held out" is every fifth
 |---|---|---|
 | endings' cross-entropy (the prior's) | 1.249 (2.352) | – |
 | deaths, actual and predicted | 9.27 %, 10.03 % | – |
-| rank with the end's price | 0.929 | 0.778 |
 | rank of HP lost, on wins | 0.727 | 0.121 |
 | AUC of a death | 0.957 | 0.679 |
 | potions' log loss (per id and room) | 0.340 (0.564) | – |
 
-**What to read.** The rank with the end's price says little: the HP share alone gets most of it, since the end's price follows the HP held. The rank of HP lost and the AUC of a death are what the net adds beyond the HP held.
+**What to read.** The rank of HP lost and the AUC of a death are what the net adds beyond the HP held, so each stands beside the HP share's own. How a run values the endings is V's, not the report's ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
 
 By room, on the held-out runs:
 

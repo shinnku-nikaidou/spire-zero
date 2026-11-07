@@ -16,7 +16,7 @@ Every decision goes to exactly one side:
 | surface | side | brains today |
 |---|---|---|
 | `combat` | combat | `plan` (the SL planner, SL only), `pimc` (NoSL only), or the placeholder `play` |
-| `card_choice` asked during a combat (`ChoiceContext.InCombat`) | combat prompts | `p0`, the prompt brain ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)) |
+| `card_choice` asked during a combat (`ChoiceContext.InCombat`) | combat prompts | the answer the combat brain's last action carries, if any; else `first`, the first options ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)) |
 | `card_choice` asked outside combat (upgrade, transform, enchant, remove, …) | macro prompts | L0, the macro brain itself, or `random` |
 | `map`, `rewards`, `card_reward`, `bundle`, `event`, `shop`, `rest`, `treasure`, `crystal_sphere` | macro | L0 ([Macro brain](/en/arch/macro-brain/)), or `random` |
 
@@ -25,10 +25,10 @@ The potion belt has no surface of its own: its actions are part of each macro sc
 **The champion's name.** A run's brains together are its champion, named by `Dispatcher.Champion`:
 
 ```text
-combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone
+combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone
 ```
 
-That is the SL champion: the SL planner with the combat net c9-1 in its leaves at the medium budget, `p0` for prompts in combat, and L0 with V v9-1 playing each option on the node's clone, for the macro decisions and the card prompts outside combat. Each brain names its parts: a searching combat brain its combat net; L0 its V, `clone`, and its exploration (`eps ε` for even draws); the budget as [§4](#sec-4) writes it. SimWorker's `ChampionOptions` makes the routes from the command's options and refuses to run if the name it makes is not the one champion files use (`Brains/ChampionOptions.cs:34-56`).
+That is the SL champion as this code names it: the SL planner with the combat net c9-2 in its leaves (its endings priced by V v9-2) at the medium budget, `first` for the prompts in combat that no search answered, and L0 with V v9-2 playing each option on the node's clone, for the macro decisions and the card prompts outside combat. Each brain names its parts: a searching combat brain its combat net; L0 its V, `clone`, and its exploration (`eps ε` for even draws); the budget as [§4](#sec-4) writes it. SimWorker's `ChampionOptions` makes the routes from the command's options and refuses to run if the name it makes is not the one champion files use (`Brains/ChampionOptions.cs:36-60`).
 
 **The environment picks the combat brain.** The macro brain is the same in both environments; the combat brain is not ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). The champion factory refuses `plan` and `--afterstates clone` outside SL, and `pimc` outside NoSL. The `brain` command serves both environments: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s ([Overview §5](/en/arch/harness/#sec-5)).
 
@@ -52,7 +52,7 @@ A combat route is a `CombatRoute(Brain, Decide, Budget)`: its name, a function f
 A macro or prompt route is a `Route<T>(Brain, Policy)`. Today:
 
 - **L0** (`MacroBrain`, `--macro l0`) answers both the macro decisions and the card prompts outside combat, as one object with one V ([Macro brain: search](/en/arch/macro-brain/search/)). Its exploration (`--explore ε`, even draws, self-play only) draws from its own generator ([§5](#sec-5)).
-- **`p0`** (`PromptBrain`) answers the card prompts in combat, as the search worlds do.
+- **`first`** (`FirstPicks`) answers the card prompts in combat that the combat brain's action does not: the first options in canonical order, as few as the prompt takes, as the search worlds do. The answer an action carries reaches the first in-combat prompt after it (`Dispatcher`), and a prompt that does not accept it goes to `first` too ([Combat brain: prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
 - **`random`** placeholders answer both macro sides when `--macro random`.
 
 **The node's clone for the macro side.** In SL with `--afterstates clone`, the `Dispatcher` opens the node's clone at each macro decision and each card prompt outside combat, as a `PooledClone` on the run's worker pool (`MacroDecision.With`, `ChoiceDecision.With`). L0 then asks it for afterstates: what the game asks next after each path of answers. `PooledClone` splits the paths into min(paths, workers) contiguous `sl_macro` requests, each worker loading the clone once per path, and checks that every path got an afterstate; since an afterstate depends only on the clone and the path, the split cannot change a result ([Macro brain: search §6](/en/arch/macro-brain/search/#sec-6)).
@@ -103,7 +103,7 @@ A decision's search must give the same answer every time it is asked the same th
 
 **The run id** is the FNV-1a 64-bit hash of the run's seed as a JSON string (quotes included), in hex: seed `0SSL7NS01MU6` gives run `ce13ba5116b7f48a`. The brain sees the run id, never the seed ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)).
 
-**A decision's seed** is drawn from the run id and the decision's number, which counts every decision of the run from 0, combat decisions, card prompts and macro decisions alike (`Dispatcher.cs:189-208`):
+**A decision's seed** is drawn from the run id and the decision's number, which counts every decision of the run from 0, combat decisions, card prompts and macro decisions alike (`Dispatcher.cs:197-216`):
 
 ```text
 H        = FNV-1a 64 of the JSON string run_id
@@ -122,7 +122,7 @@ This is SplitMix64's step. The decision's number is Harness's own counter, not t
 
 The SL planner searches the one exact world and ignores it; the macro and prompt policies never receive it.
 
-**Placeholders and exploration** draw from .NET generators seeded per run, one per stream: `Random(FNV(run_id + stream))` with the stream `""` for the placeholders and `:explore uniform` for L0's even draws (`Brains/ChampionOptions.cs:40-49`). So a run plays the same in any process and over the wire, whether or not it is logged.
+**Placeholders and exploration** draw from .NET generators seeded per run, one per stream: `Random(FNV(run_id + stream))` with the stream `""` for the placeholders and `:explore uniform` for L0's even draws (`Brains/ChampionOptions.cs:44-53`). So a run plays the same in any process and over the wire, whether or not it is logged.
 
 **Order, not timing.** A search's requests run in parallel, but the pool returns their replies in request order ([Simulator: the worker pool §2](/en/arch/simulator/pool/#sec-2)), and candidates are sorted by value, with ties kept in the legal order (end turn, then cards, then potions). Which worker finishes first never changes an answer. `run --check` holds a whole run to this ([The decision log §8](/en/arch/harness/decision-log/#sec-8)).
 

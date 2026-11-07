@@ -39,11 +39,11 @@ import { Badge } from '@astrojs/starlight/components';
 | `map.visited` | `RunState.VisitedMapCoords` |
 | `map.boss`、`second_boss`、`ancient` | `Act.BossEncounter`；`Act.SecondBossEncounter`，只在地圖有第二個頭目點時才有；`Act.Ancient` |
 
-**順序**。在遊戲裡，一個點的子節點是一個雜湊集合，它的順序在不同行程之間各不相同；所以這些點按先列後行的順序排好，每個點的 `next` 也同樣排序，於是同一張地圖在任何行程裡都給出相同的觀測（`Observe.cs:52-72`）。
+**順序**。在遊戲裡，一個點的子節點是一個雜湊集合，它的順序在不同行程之間各不相同；所以這些點按先列後行的順序排好，每個點的 `next` 也同樣排序，於是同一張地圖在任何行程裡都給出相同的觀測（`Observe.cs:54-74`）。
 
 ## 3. 卡牌、能力、遺物與意圖
 
-**一張牌**（`Observe.Card`，`Observe.cs:115-138`）：
+**一張牌**（`Observe.Card`，`Observe.cs:117-140`）：
 
 | 欄位 | 讀取來源 |
 |---|---|
@@ -63,19 +63,19 @@ import { Badge } from '@astrojs/starlight/components';
 
 **`vars` 是基礎值**。也就是力量、敏捷或易傷作用在它們身上之前的卡牌數字。計算得出的數字（完美打擊的傷害）不收錄：卡牌把它顯示為一個基礎值，加上狀態中某樣東西每有一個就多出的額外值，而這些部分都在 vars 裡；計算值本身只是照抄它的基礎值，降級之後就過時了。vars 按名稱順序加入，因為序列化器寫出字典時，是按填入的順序寫的。`enchant.extra` 是 Momentum 累積的傷害。
 
-**升級預覽**（`DeckCard`）：對牌組裡一張可升級的牌，給出它再升級一次之後的樣子，和遊戲自己在牌組檢視和升級提示裡顯示的預覽一樣。它的做法和遊戲做預覽的方式相同，在副本上做：`MutableClone()`，然後 `UpgradeInternal()` 和 `FinalizeUpgradeInternal()`。可變副本沒有原物的任何事件訂閱者，升級也不執行任何鉤子，所以這一局裡什麼都不會改變（`Observe.cs:202-214`）。
+**升級預覽**（`DeckCard`）：對牌組裡一張可升級的牌，給出它再升級一次之後的樣子，和遊戲自己在牌組檢視和升級提示裡顯示的預覽一樣。它的做法和遊戲做預覽的方式相同，在副本上做：`MutableClone()`，然後 `UpgradeInternal()` 和 `FinalizeUpgradeInternal()`。可變副本沒有原物的任何事件訂閱者，升級也不執行任何鉤子，所以這一局裡什麼都不會改變（`Observe.cs:204-216`）。
 
 **一個能力**（`Observe.cs:259-261`）：只收錄 `IsVisible` 的能力；`amount` 是 `DisplayAmount`，即圖示上的數字；`stacks` 是 `Amount`，在它和前者不同時才有；`card` 是能力保存的那張牌；`detail` 是能力的 `DynamicVars` 離開原本數值多遠，加總起來（一次只有一個會移動）；`stolen` 是 順手一揮的 `StolenCard`。這張牌在能力的私有資料裡，遊戲雖然在提示框裡寫出了它（夢魘的牌），卻沒有公開它，所以 `HeldCards` 用反射找到它：能力的 `_internalData` 裡第一個卡牌型別的欄位（`HeldCards.cs:12-27`）。模擬器的 CombatBuilder 建構戰鬥時，用 `HeldCards.Set` 把這樣的牌放回去。
 
-**一個遺物**（`Observe.cs:263-272`）：`ShowCounter` 時，`counter` 是 `DisplayAmount`；`status`，不是正常狀態時才有；`melted`（`IsMelted`）；`used_up`（`IsUsedUp`）；`cards`，佩爾之牙保存的牌；`spent`，遺物名稱以 `ThisCombat` 或 `ThisTurn` 結尾的私有布林欄位成立時才有。
+**一個遺物**（`Observe.cs:265-274`）：`ShowCounter` 時，`counter` 是 `DisplayAmount`；`status`，不是正常狀態時才有；`melted`（`IsMelted`）；`used_up`（`IsUsedUp`）；`cards`，佩爾之牙保存的牌；`spent`，遺物名稱以 `ThisCombat` 或 `ThisTurn` 結尾的私有布林欄位成立時才有。
 
-**意圖**（`Observe.cs:252-257`）：怪物的 `NextMove` 的意圖，針對不在玩家一方的怪物，倒下、等著復活的也算。攻擊的傷害是針對玩家的 `AttackIntent.GetSingleDamage(targets, owner)`，也就是圖示上的數字所來自的同一個呼叫，次數則是 `max(1, Repeats)`。招式本身從不送出，只送出它的意圖。
+**意圖**（`Observe.cs:254-259`）：怪物的 `NextMove` 的意圖，針對不在玩家一方的怪物，倒下、等著復活的也算。攻擊的傷害是針對玩家的 `AttackIntent.GetSingleDamage(targets, owner)`，也就是圖示上的數字所來自的同一個呼叫，次數則是 `max(1, Repeats)`。招式本身從不送出，只送出它的意圖。
 
 **uid**：生物的 uid 是它的 `CombatId`；手牌的 uid 是它在 `NetCombatCardDb` 裡的 id（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)）。
 
 ## 4. 一場戰鬥
 
-`Observe.Combat(state, player)`（`Observe.cs:76-112`）：
+`Observe.Combat(state, player)`（`Observe.cs:78-114`）：
 
 | 欄位 | 讀取來源 |
 |---|---|

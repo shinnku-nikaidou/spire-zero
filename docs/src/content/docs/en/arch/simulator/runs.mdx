@@ -118,14 +118,14 @@ How often a run meets each screen, over the 300 SL runs of the champion's promot
 
 **Combat and macro decisions** come with their legal actions and an observation built on request (`CombatDecision`, `MacroDecision`): a policy that does not look at the observation never pays for it. The answer must be legal, or the run throws.
 
-**Card prompts** go through `PolicySelector`, the game's card selector while a run is live (`Simulation/PolicySelector.cs:21-80`):
+**Card prompts** go through `PolicySelector`, the game's card selector while a run is live (`Simulation/PolicySelector.cs:20-76`):
 
 - it shows the options in canonical order (`CardChoices.Canonical`), so the same cards make the same prompt whatever order the game's list has; ties in that order are broken by a random stream seeded with the prompt's number, which knows nothing hidden and is the same on replay;
 - it records the answer as indexes into the game's own list, the form a replay gives back;
-- card rewards and bundles are run-level decisions answered by the driver's handlers; without them a card reward would be skipped and the first bundle taken;
+- card rewards and bundles are run-level decisions answered by the driver's handlers; a combat on its own has none, and a card reward or bundle asked there throws;
 - prompts are numbered from 0 again at each node's entry, as a clone of the node numbers its own ([Worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)).
 
-In `run` all three interfaces are one object, Harness's `Dispatcher`, which routes each decision to the brain that answers it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)): combat to the combat brain, card prompts in combat to `p0`, everything else, card prompts outside combat included, to the macro brain ([Macro brain](/en/arch/macro-brain/)).
+In `run` all three interfaces are one object, Harness's `Dispatcher`, which routes each decision to the brain that answers it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)): combat to the combat brain, card prompts in combat to `first` (`FirstPicks`) unless the combat brain's action carries its own answer, everything else, card prompts outside combat included, to the macro brain ([Macro brain](/en/arch/macro-brain/)).
 
 **Outcomes.** A run ends `won` (over, in the victory room), `lost` (over anywhere else), `truncated` (still going after `--max-decisions`, 20,000 by default) or `failed` (it threw). A won run's record says HP 0: once the victory room is reached, the game kills the players. The example run's record reads won, act 2 (counted from 0), floor 48, HP 0 of 66.
 
@@ -191,7 +191,7 @@ The clone's own check, over every node of 880 runs on five characters, is in [Wo
 
 `run` normally keeps the brain in its own process: Harness and the champion's brains are objects there, and their searches go to a worker pool it starts ([The worker pool](/en/arch/simulator/pool/)). With `run --brain SOCKET`, the brain is a separate process listening at a Unix socket instead, the one the mod talks to in the game ([Mod: the main loop §8](/en/arch/mod/loop/#sec-8)). The simulator then hosts runs exactly as the game does: each run sends `hello` with its environment and a run id hashed from the seed, every decision goes out with its observation and legal actions, and the brain's recommendation is played ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). The run id hides the seed in NoSL; in SL the seed does reach the brain, inside the node checkpoint's save, which SL may know.
 
-The brain decides what plays, so `run --brain` refuses every champion option, `--log` included (`Commands/RunCommand.cs:63-64`), and so, since a champion file's options are merged in as given ones, a `--champion FILE` that names any (`Commands/Args.cs:176-192`) <Badge text="inferred" variant="caution" />. In SL the host also sends the node messages: the checkpoint when a new node starts, then the decisions not yet sent, each just before the next decision (`Brains/RunBrains.cs:53-99`).
+The brain decides what plays, so `run --brain` refuses every champion option, `--log` included (`Commands/RunCommand.cs:63-64`), and so, since a champion file's options are merged in as given ones, a `--champion FILE` that names any (`Commands/Args.cs:178-194`) <Badge text="inferred" variant="caution" />. In SL the host also sends the node messages: the checkpoint when a new node starts, then the decisions not yet sent, each just before the next decision (`Brains/RunBrains.cs:53-99`).
 
 `brain` is that process (`Commands/BrainCommand.cs`): Harness alone, serving the hosts that connect, one at a time. It needs no game of its own; the searches' workers boot theirs.
 

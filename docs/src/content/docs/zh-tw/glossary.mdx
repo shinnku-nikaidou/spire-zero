@@ -77,10 +77,10 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | PIMC | 完美資訊蒙地卡羅（Perfect Information Monte Carlo）：取樣幾個確定化世界，在每個世界裡當作一切已知去搜尋，再按第一步動作取平均（[NoSL PIMC](/zh-tw/arch/pimc/)）。 |
 | 策略融合（strategy fusion） | 在每個取樣世界裡挑一條不同的最佳路線的錯誤，好像玩家知道哪個世界是真的。按第一步動作取平均，讓它不進入選擇（[環境：世界 §3](/zh-tw/arch/environments/worlds/#sec-3)）。 |
 | SL 規劃器（SL planner） | SL 的戰鬥大腦：在節點複本上對整個回合做束搜尋，一直到戰鬥結束（[SL 規劃器](/zh-tw/arch/sl-planner/)）。 |
-| 束搜尋（beam search）、分支定界（branch-and-bound） | 每一步只保留最好的 B 個狀態；丟掉每個上界贏不了已找到的最佳路線的分支，所以達到上界的路線就被證明是最佳的（[SL 規劃器：束搜尋](/zh-tw/arch/sl-planner/beam/)）。 |
+| 束搜尋（beam search） | 每一步只保留最好的 B 個狀態。SL 規劃器的束是它唯一的剪裁：沒有分支因為上界而被丟掉，因為沒有任何狀態的估值能給它的路線所能到達的地方設上限（[SL 規劃器：束搜尋 §2](/zh-tw/arch/sl-planner/beam/#sec-2)）。 |
 | TurnEnds | 規劃中：兩種環境共用的一個搜尋步驟，列舉一個回合可能結束在哪些狀態（[戰鬥大腦 §3.1](/zh-tw/arch/combat-brain/#sec-3.1)）。 |
-| 迭代加寬（iterative widening） | 為 SL 規劃器規劃中：寬度 1、2、4、8、…的多輪，每輪都打到戰鬥結束，並用目前最好的路線剪枝（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)）。 |
-| 葉節點（leaf）、戰鬥網路（combat net） | 在搜尋停下的地方，由葉節點給狀態評分：戰鬥網路的結局，按 `LeafValue` 手設的數字定價（[戰鬥大腦：葉節點](/zh-tw/arch/combat-brain/leaf/)）。 |
+| 迭代加寬（iterative widening） | 為 SL 規劃器規劃中：寬度 1、2、4、8、…的多輪，每輪都打到戰鬥結束（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)）。 |
+| 葉節點（leaf）、戰鬥網路（combat net） | 在搜尋停下的地方，由葉節點給狀態評分：戰鬥網路的結局，每種結局按它會留下的那一局由 V 定價，死亡為 0（[戰鬥大腦：葉節點](/zh-tw/arch/combat-brain/leaf/)）。 |
 | 後狀態（afterstate） | 剛做完選擇、新的隨機性出現之前的狀態。宏觀大腦按選項的後狀態給它們估值（[宏觀大腦：後狀態與單一 V](/zh-tw/arch/macro-brain/afterstates/)）。 |
 | L0 | 宏觀大腦：它用 V 給每個選項的後狀態估值，取最好的那個；在地圖上，它規劃通往頭目的路線（[宏觀大腦：搜尋](/zh-tw/arch/macro-brain/search/)）。 |
 | 預算（budget）、力度（effort） | 一個決策可以用多少搜尋：PIMC 是世界數和節點數，SL 規劃器是束；規劃器的力度指名一個預算（[Harness：路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)）。 |

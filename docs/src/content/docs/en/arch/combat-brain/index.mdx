@@ -13,7 +13,7 @@ The **combat brain** plays the fights. On the player's turn it chooses the next 
 
 A fight is a search problem. The game's own code can play any line of actions from any state, so the brain does not need to know the rules as data: it tries lines in a simulated copy of the fight and keeps the best. What differs between the two environments ([Environments](/en/arch/environments/)) is how many copies there are and how much each one knows. SL (save and load) may see the true outcome of anything in the current room, so it gets one exact copy. NoSL sees only what a player sees, so it gets several sampled copies that agree with what is visible.
 
-That gives the combat brain its shape, in two lines: **SL = pruning + net. NoSL = Monte Carlo + net.** In SL there is one world and the problem is its size, so the search drops what cannot matter. In NoSL the problem is what is hidden, so the search averages over worlds. Under both sit two shared pieces: enumerating one turn's end states, and valuing a state by the combat net's distribution of endings at a set of prices ([§3](#sec-3)).
+That gives the combat brain its shape, in two lines: **SL = pruning + net. NoSL = Monte Carlo + net.** In SL there is one world and the problem is its size, so the search drops what cannot matter. In NoSL the problem is what is hidden, so the search averages over worlds. Under both sit two shared pieces: enumerating one turn's end states, and valuing a state by the combat net's distribution of endings, each priced by V on the run it would leave ([§3](#sec-3)).
 
 This part of the book has three chapters:
 
@@ -23,7 +23,7 @@ This part of the book has three chapters:
 
 <Aside title="Status">
 
-**Built, and playing both champions.** SL: `SlPlanner` plans the whole combat on the node's clone and the fight follows its plan (`run --env SL --policy plan`, medium effort by default). NoSL: `PimcBrain` searches this turn in 8 sampled worlds of 300 nodes each and averages by first action (`run --policy pimc`). Both search in a pool of worker processes, and both score where they stop with the same leaf: the combat net, its endings priced by hand-set numbers ([The leaf](/en/arch/combat-brain/leaf/)). Card prompts during a fight go to a fixed rule, `p0` ([Prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)). A placeholder serves benchmarks and tests: `PlayPolicy` (`--policy play`, plays a random playable card).
+**Built, and playing both champions.** SL: `SlPlanner` plans the whole combat on the node's clone and the fight follows its plan (`run --env SL --policy plan`, medium effort by default). NoSL: `PimcBrain` searches this turn in 8 sampled worlds of 300 nodes each and averages by first action (`run --policy pimc`). Both search in a pool of worker processes, and both score where they stop with the same leaf: the combat net, its endings priced by V ([The leaf](/en/arch/combat-brain/leaf/)). The answers of an action's first card prompt are branches of both searches; a prompt no search weighs takes its first options ([Prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)). A placeholder serves benchmarks and tests: `PlayPolicy` (`--policy play`, plays a random playable card).
 
 **Planned, not implemented.** A simpler design for both algorithms, which these pages describe wherever a heading or a row carries <Badge text="planned" variant="caution" />. None of it has been measured or has code; everything without the badge describes today's code.
 
@@ -32,7 +32,6 @@ This part of the book has three chapters:
 | one turn's end states | two searches: `SlPlanner.SearchTurn`, `PimcBrain.SearchWorld` | one `TurnEnds` ([§3.1](#sec-3.1)) |
 | SL's search | a greedy dive, then a beam; easy beam, loss plans, replans | iterative widening with one fight budget ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)) |
 | NoSL's search | PIMC, budget K and nodes per world | the same PIMC on `TurnEnds` ([NoSL PIMC: budget §8](/en/arch/pimc/budget/#sec-8)) |
-| card prompts | the fixed rule `p0` | search branches ([Prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)) |
 
 </Aside>
 
@@ -41,7 +40,7 @@ This part of the book has three chapters:
 The combat brain answers two kinds of question:
 
 1. **The player's turn.** Which action next: play a card from the hand (on a target, if it needs one), use a potion, or end the turn. The legal actions come from the game, as Harness lists them ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)).
-2. **Card prompts during play.** Some cards ask a question when played: which card to discard, to exhaust, to put on top of the draw pile, which of three generated cards to take. Today these go to a fixed rule, `p0`, in the real fight and inside every simulated one ([Prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
+2. **Card prompts during play.** Some cards ask a question when played: which card to discard, to exhaust, to put on top of the draw pile, which of three generated cards to take. The answers of an action's first prompt are branches of the search, and the answer chosen travels with the action ([Prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
 
 A decision with one legal action is answered without a search. Every other one returns three things: the first action, the rest of the plan after it, and every first action the search looked at with its value (the *candidates*, which the decision log keeps and the mod shows, [Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)); the SL planner's also say how each one's best line ends, the chance to win and the HP left ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)). The plan matters: the SL planner's plan is the rest of the fight, and the fight plays it without searching again while the game shows what the plan expected; PIMC's plan is the rest of the turn, played without a search only when it repeats a cycle and every world agrees on it ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2)).
 
@@ -74,20 +73,20 @@ The macro brain and the value function V are the same in both environments ([Env
 | search today | each world to the end of this turn, then the mean by first action ([NoSL PIMC: search](/en/arch/pimc/search/)) | a beam over the fight's turns, each turn searched in full ([The SL planner: beam](/en/arch/sl-planner/beam/)) |
 | search planned <Badge text="planned" variant="caution" /> | the same, on `TurnEnds` ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)) | passes of growing width, each to the fight's end ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)) |
 | how often it searches | at every action | once a fight, unless a plan loses ([The SL planner: beam §6](/en/arch/sl-planner/beam/#sec-6)) |
-| transpositions keyed by | observation and the world's sampled hidden state | observation and the full hidden state |
+| transpositions keyed by | observation, piles as multisets ([Prompts, moves and workers §5](/en/arch/combat-brain/shared/#sec-5)), and the world's sampled hidden state | observation, piles as multisets, and the full hidden state |
 | leaf | the start of the next turn | mostly the end of the fight |
 
 Why not one algorithm for both? On the panel, PIMC run on SL's one exact world played almost exactly like PIMC in NoSL: the same outcome in 112 of 120 fights, within 5 HP in the other 8 ([NoSL PIMC: budget §6](/en/arch/pimc/budget/#sec-6)). Its search ends where the turn does, and within one turn little is revealed, so the true world tells it little that eight sampled ones do not. Knowing the future pays only for a search that looks past the turn, which is what the planner does: it wins 9 more of the same 120 fights ([The SL planner: budget §5](/en/arch/sl-planner/budget/#sec-5)). So PIMC plays in NoSL only.
 
 ### 3.1 TurnEnds <Badge text="planned" variant="caution" />
 
-`TurnEnds` enumerates the states one turn can end in, from one state: depth first, ending the turn an option at every step, states merged by the observation and the hidden state. Both planned algorithms call it, in one world at a time. It is a step of the search and not an input of the net, which reads one state at a time.
+`TurnEnds` enumerates the states one turn can end in, from one state: depth first, ending the turn an option at every step, states merged by the observation, piles as multisets, and the hidden state. Both planned algorithms call it, in one world at a time. It is a step of the search and not an input of the net, which reads one state at a time.
 
 Today two searches do this job, and they differ. `SlPlanner`'s turn search shares a turn's nodes over its first actions, a share left unspent passing on, and returns the distinct ends ([The SL planner: turn search](/en/arch/sl-planner/turn-search/)). `PimcBrain`'s world search gives every first action an equal share, keeps a memo of values across them, and returns the best line after each ([NoSL PIMC: search §1](/en/arch/pimc/search/#sec-1)). Merging them changes how PIMC's nodes are shared, so the merged search must pass a NoSL gate.
 
 ### 3.2 Leaf
 
-The leaf turns a state into one number: the net's distribution over how the fight ends, times a price for each ending ([The leaf §3–§5](/en/arch/combat-brain/leaf/#sec-3)).
+The leaf turns a state into one number: the net's distribution over how the fight ends, each ending priced by V on the run it would leave ([The leaf §2–§5](/en/arch/combat-brain/leaf/#sec-2)).
 
 ```mermaid
 flowchart TB
@@ -97,12 +96,12 @@ flowchart TB
     N --> A["mean over the<br/>same worlds"]
   end
   subgraph SL["SL = pruning + net"]
-    C["the node's clone:<br/>1 exact world"] --> S["passes: drop by the bound,<br/>top width by the leaf"]
+    C["the node's clone:<br/>1 exact world"] --> S["passes: top width<br/>by the leaf"]
     S --> F["follow the line"]
   end
   N -.-> T["TurnEnds:<br/>one turn's end states"]
   S -.-> T
-  T --> L["Leaf:<br/>endings × prices"]
+  T --> L["Leaf:<br/>endings priced by V"]
 ```
 
 The figure is the planned shape; today's code differs in the search boxes, as the table above says.
@@ -126,24 +125,25 @@ public sealed class PimcBrain(ICombatLeaf leaf)
 
 public sealed class SlPlanner(ICombatLeaf leaf)
 {
-    // SL: plan the rest of the combat in the one exact world.
-    public SlPlan Plan(CombatObservation observation, ICombatWorld world, Budget budget,
-                       IReadOnlyList<EnemyTurns>? history = null);
+    // SL: plan the rest of the combat in the one exact world, from its state.
+    public SlPlan Plan(ICombatWorld world, Budget budget, IReadOnlyList<EnemyTurns>? history = null);
 }
 
 public interface ICombatLeaf
 {
-    // A search leaf: the state after the turn ends, or after the combat does.
-    double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
+    // A search leaf: the state after the turn ends, or after the combat does, with the run around it as it stands.
+    double Value(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history);
     // The value with the chance to win the combat and the HP held at a win, from one evaluation.
-    LeafOutcome Outcome(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
+    LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history);
 }
 
 public sealed record CombatDecisionResult(
-    CombatAction First,                  // one of legal
+    CombatAction First,                  // one of legal, carrying its prompt's answer if search chose one
     IReadOnlyList<CombatAction> Plan,    // the rest of the plan after First
     IReadOnlyList<Candidate> Candidates, // every first action scored, the pick first
-    IReadOnlyList<ulong>? PlanHashes);   // the observation each step of Plan expects, when it can be followed
+    IReadOnlyList<ulong>? PlanHashes,    // the observation each step of Plan expects, when it can be followed
+    bool Replanned = false,              // a step of the plan did not hold, and this search replaced it
+    bool Repeats = false);               // the line repeats a cycle
 ```
 
 - `PimcBrain` searches in NoSL, `SlPlanner` in SL; the champion's `--policy` names one (`pimc` or `plan`), and each refuses the other environment's runs ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)). In a run they search in the worker pool through `PooledPimc` and `PooledPlanner`, which send the same searches to worker processes and merge the replies in a fixed order, so the answer is the one a single process would give ([Prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)).
@@ -161,28 +161,28 @@ public sealed record CombatDecisionResult(
 3. **NoSL counterfactual** (planned): the same public record with a different hidden state must give the same choice, for a fixed brain seed.
 4. **SL seal**: any step past the node's exit throws. Holds (`selftest`): a node's clone loads at its horizon and refuses another step, and the SL world refuses any action after its combat's end.
 5. **Reproducible**: with a fixed budget, two runs on the same seed give the same moves and results; the pooled searches give what one process gives (`selftest --workers N`).
-6. **SL plan fidelity**: a plan made on the node's clone is played in the run step for step, each observation as the plan expects, and the fight ends with the HP and potions the plan's value says. Holds (`selftest`); in runs a step that does not hold counts as a replan.
+6. **SL plan fidelity**: a plan made on the node's clone is played in the run step for step, each observation as the plan expects, and the fight ends with the HP, max HP and potions the plan left on the clone, where the plan is worth V of the run its combat leaves. Holds (`selftest`); in runs a step that does not hold counts as a replan.
 7. **The planner without the game** (`Sts2Ai.Tests`): on a small exact combat, a full search finds the best line that trying every line finds, the line replays to the value it claims, a losing plan stops after its first turn unless it is proved, and a proved loss replays to its end.
 
 ## 6. The order of validation <Badge text="planned" variant="caution" />
 
 The design goes through gates in order, so that each gate says what its step is worth:
 
-1. **Prompts** as search branches ([Prompts, moves and workers §4](/en/arch/combat-brain/shared/#sec-4)), **then widening** ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)), **then budgets** ([The SL planner: budget §7](/en/arch/sl-planner/budget/#sec-7)).
+1. **Widening** ([The SL planner: beam §7](/en/arch/sl-planner/beam/#sec-7)), **then budgets** ([The SL planner: budget §7](/en/arch/sl-planner/budget/#sec-7)).
 
-NoSL has two conditions of its own: merging `TurnEnds` needs a NoSL gate, and prompt branches need strategy fusion measured first ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)).
+NoSL has a condition of its own: merging `TurnEnds` needs a NoSL gate ([NoSL PIMC: search §7](/en/arch/pimc/search/#sec-7)).
 
 ## 7. The three chapters
 
 | chapter | section | what it explains | figures |
 |---|---|---|---|
-| Combat brain | [The leaf](/en/arch/combat-brain/leaf/) | where a search stops and what that state is worth: the net's two outputs, the prices, the bound, what the value cannot see | the net's outputs on real states |
+| Combat brain | [The leaf](/en/arch/combat-brain/leaf/) | where a search stops and what that state is worth: the net's two outputs, each ending priced by V, what the value cannot see | the net's outputs on real states |
 | | [The combat net](/en/arch/combat-brain/network/) | the net from input to output: every tensor, each encoder, the body, the two heads and the mask, sizes | the net's diagram |
 | | [One state through the net](/en/arch/combat-brain/walkthrough/) | a real round start followed by hand through every layer, to the value and a label | – |
-| | [Prompts, moves and workers](/en/arch/combat-brain/shared/) | `p0` and prompts as branches, the record of enemy moves, the worker pool | – |
+| | [Prompts, moves and workers](/en/arch/combat-brain/shared/) | card prompts as branches of the search, the record of enemy moves, the worker pool | – |
 | [The SL planner](/en/arch/sl-planner/) | overview | the node clone, why the best line is right, plan once and follow, the planned shape | a real boss fight, planned at its first decision |
 | | [Turn search](/en/arch/sl-planner/turn-search/) | one turn searched in full, transpositions, sharing the nodes, `TurnEnds` | a turn's search tree |
-| | [Beam](/en/arch/sl-planner/beam/) | the beam over turns, the bound, the dive, the easy beam, proved and losing plans; planned iterative widening | the beam, turn by turn; widening, pass by pass |
+| | [Beam](/en/arch/sl-planner/beam/) | the beam over turns, why nothing is pruned by value, the dive, the easy beam, proved and losing plans; planned iterative widening | the beam, turn by turn; widening, pass by pass |
 | | [Budget](/en/arch/sl-planner/budget/) | effort levels, the low budget, where the time goes, results, weaknesses; the planned fight budget | – |
 | [NoSL PIMC](/en/arch/pimc/) | overview | what is hidden, sampled worlds, how faithful they are, fair play, the planned shape | sampled draw orders |
 | | [Search](/en/arch/pimc/search/) | one world's search, the average, noise and common random numbers, strategy fusion; the same search on `TurnEnds` | a real decision in 8 worlds |

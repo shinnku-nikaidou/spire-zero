@@ -122,7 +122,7 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
 
 **載入的存檔和不中斷的遊玩並不相同**。載入存檔會重新執行地圖的鉤子（`Runs/RunManager.cs:815-816`）和 `OnRunLoaded`（562-565），並丟掉每個沒有標記為要儲存的遺物欄位：遺物只儲存它的 `[SavedProperty]` 成員（`Models/RelicModel.cs:556-576`）。這些遺物欄位確實有影響：存檔丟掉的遺物狀態或計數改變了複本的每個觀測，複本於是不再和真實戰鬥一致，SL 規劃器每一步都要重新規劃（[模擬器：世界與 SL 複本 §6](/zh-tw/arch/simulator/worlds/#sec-6)）。所以檢查點帶上每個遺物的簡單欄位（數字、旗標和列舉），在載入後放回去，`run --check` 現在找不到任何複本與其對局不同的節點。沒有檢查碼，也沒有後備：破壞我們正確性的遊戲怪癖，在它進入我們程式碼的地方修正（[前言 §2](/zh-tw/#sec-2)，規則 7）。
 
-**NoSL 關閉這個通道**。兩種宿主在兩種環境下都會取檢查點並保留節點內的各步（`Simulation/RunSession.cs:137-142`；Mod 裡是 `NodeRecord`），好讓在房間中途切換到 SL 也能運作；只有 SL 對局才會送出它們（`Brains/RunBrains.cs:48-100`、Mod 的 `Assist.cs:159`）。NoSL 大腦會拒絕它們：NoSL 下 Harness 遇到節點訊息就拋出例外，大腦伺服器對這一局的下一個決策回覆錯誤，宿主把這一局當作失敗結束，這會讓它的報告作廢（[環境 §5](/zh-tw/arch/environments/#sec-5)）。
+**NoSL 關閉這個通道**。兩種宿主在兩種環境下都會取檢查點並保留節點內的各步（`Simulation/RunSession.cs:137-142`；Mod 裡是 `NodeRecord`），好讓在房間中途切換到 SL 也能運作；只有 SL 對局才會送出它們（`Brains/RunBrains.cs:48-100`、Mod 的 `Assist.cs:275`）。NoSL 大腦會拒絕它們：NoSL 下 Harness 遇到節點訊息就拋出例外，大腦伺服器對這一局的下一個決策回覆錯誤，宿主把這一局當作失敗結束，這會讓它的報告作廢（[環境 §5](/zh-tw/arch/environments/#sec-5)）。
 
 **決策行程從不讀存檔**。Brain 沒有引用遊戲組件，這由編譯器強制、由一個測試檢查（[§8](#sec-8)）。存檔只會包在 SL 請求裡、作為一個不透明字串送到工作行程。
 
@@ -133,19 +133,19 @@ SL 搜尋需要節點在到達時的樣子，再加上之後在節點內做過�
 **兩種環境**
 
 1. Brain 和 Protocol 不引用任何遊戲組件。已有：xUnit 的 `BoundaryTests`，它也涵蓋 Harness，並以 GameBridge 作為陰性對照（[模擬器：參考 §7](/zh-tw/arch/simulator/reference/#sec-7)）。
-2. 搜尋的隨機性只來自呼叫方，從不來自遊戲的亂數流。由構造保證，沒有測試：大腦的種子由對局 id（本身就是種子字串的雜湊）和決策的索引混合而成（`Harness/Dispatcher.cs:189-208`），世界的建構種子和取樣種子則由它而來（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。
-3. 後備決策的數量為 0。實際上已有：不存在後備程式碼，Harness 遇到沒有涵蓋的畫面（surface）就拋出例外（xUnit `DispatcherTests`），而由隨機佔位策略做出的決策會讓報告作廢（`Harness/Reports.cs:35-38`、xUnit `EvalReportTests`；[評估：指標、種子與報告 §2](/zh-tw/arch/evaluation/metrics/#sec-2)）。
+2. 搜尋的隨機性只來自呼叫方，從不來自遊戲的亂數流。由構造保證，沒有測試：大腦的種子由對局 id（本身就是種子字串的雜湊）和決策的索引混合而成（`Harness/Dispatcher.cs:197-216`），世界的建構種子和取樣種子則由它而來（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。
+3. 後備決策的數量為 0。實際上已有：不存在後備程式碼，Harness 遇到沒有涵蓋的畫面（surface）就拋出例外（xUnit `DispatcherTests`），而由佔位策略（`random` 或 `play`）做出的決策會讓報告作廢（`Harness/Reports.cs:39-41`、xUnit `EvalReportTests`；[評估：指標、種子與報告 §2](/zh-tw/arch/evaluation/metrics/#sec-2)）。
 4. 真實遊戲裡 `NumReloads == 0`。規劃中，作為 Mod 決策日誌的一個欄位（[Mod：自動遊玩與安全 §3](/zh-tw/arch/mod/auto/#sec-3)）；目前沒有東西讀它。複本會載入存檔，所以無論在哪裡載入（工作行程，以及 `run --check`、`selftest` 和 `clones` 裡的宿主行程），它們的次數都是 1 或更多。
 5. 每個觀測欄位都有白名單測試。規劃中；目前最接近的檢查，是 `run --check` 和 `selftest` 對每個觀測做的 JSON 往返（[協定 §3](/zh-tw/arch/protocol/#sec-3)）。
 
 **NoSL**
 
 6. 反事實：相同的公開紀錄配上不同的隱藏狀態（抽牌順序、每條亂數流、怪物招式及其私有 AI 欄位、生成池），在固定的大腦種子下給出相同的決策。規劃中；最接近的檢查是 `selftest` 的「確定化後觀測不變」。
-7. 往返：狀態 → 觀測 → 建構 → 觀測′，得到完全相同的觀測。戰鬥部分已有：`selftest` 從觀測建構戰鬥，並要求它們再次顯示出這個觀測（[模擬器：戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6)），而每個 NoSL 世界都會拒絕做不到這一點的建構（`Simulation/SimWorlds.cs:34-44`，在工作行程裡也一樣）。
+7. 往返：狀態 → 觀測 → 建構 → 觀測′，得到完全相同的觀測。戰鬥部分已有：`selftest` 從觀測建構戰鬥，並要求它們再次顯示出這個觀測（[模擬器：戰鬥 §6](/zh-tw/arch/simulator/combat/#sec-6)），而每個 NoSL 世界都會拒絕做不到這一點的建構（`Simulation/SimWorlds.cs:37-48`，在工作行程裡也一樣）。
 
 **SL**
 
-8. 封存：出口動作之後的任何一步都會拋出例外。已有：`selftest` 載入一個已記錄移動的複本，要求它停在自己的視野邊界並拒絕再走一步（`Checks/SelfTest.Run.cs:55-85`）；`run --check` 對一局的每個節點做同樣的事；執行期間，試探和 SL 世界會拋出例外（`NodeProbe.cs:29`、`NodeWorld.cs:96`）。戰鬥的 SL 世界也拒絕越過戰鬥的結束，所以搜尋永遠不會離開這個房間（`selftest`）。
+8. 封存：出口動作之後的任何一步都會拋出例外。已有：`selftest` 載入一個已記錄移動的複本，要求它停在自己的視野邊界並拒絕再走一步（`Checks/SelfTest.Run.cs:55-85`）；`run --check` 對一局的每個節點做同樣的事；執行期間，試探和 SL 世界會拋出例外（`NodeProbe.cs:29`、`NodeWorld.cs:103`）。戰鬥的 SL 世界也拒絕越過戰鬥的結束，所以搜尋永遠不會離開這個房間（`selftest`）。
 9. 視野邊界反事實：只擾動出口之後才會讀到的狀態，給出相同的決策。規劃中。
    - 可以擾動的 <Badge text="已核實" variant="success" />：每一幕的 `RoomSet` 中超過其計數器的條目（事件、弱遭遇、普通遭遇和菁英遭遇、頭目、第二個頭目、遠古之民；在開局時由 `GenerateRooms` 預先一次抽好，`Runs/RunManager.cs:743-767`，再透過計數器消耗，`Rooms/RoomSet.cs:70-108`）；UnknownMapPoint 亂數流（只在進入 `?` 時使用：`Odds/UnknownMapPointOdds.cs:123-177`，從 `Runs/RunManager.cs:985` 呼叫）；TreasureRoomRelics 亂數流（只在 `Runs/RunManager.cs:486` 使用）和共享遺物抽取袋的尾端；之後各幕的地圖種子（`Rng(seed, "act_N_map")`，`Map/StandardActMap.cs:113`）。
    - 不能擾動的，因為當前節點也共用它們：Shuffle、MonsterAi 和 Niche 亂數流、六條 Combat* 亂數流，以及玩家的 Rewards、Shops 和 Transformations 亂數流。

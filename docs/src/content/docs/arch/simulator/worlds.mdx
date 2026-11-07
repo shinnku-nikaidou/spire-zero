@@ -28,10 +28,10 @@ import WorldTurns from '../../../../components/book/WorldTurns.svelte';
 
 ## 2. NoSL 战斗世界
 
-NoSL 世界是一个**确定化样本**：一场完整的战斗，与玩家见过的一切相符，玩家看不到的东西则随机抽取（[环境：世界 §2](/arch/environments/worlds/#sec-2)）。`SimWorlds.NoSL(pump, observation, buildSeed, history)` 做出一个决策的各个世界（`Simulation/SimWorlds.cs:37-44`）：
+NoSL 世界是一个**确定化样本**：一场完整的战斗，与玩家见过的一切相符，玩家看不到的东西则随机抽取（[环境：世界 §2](/arch/environments/worlds/#sec-2)）。`SimWorlds.NoSL(pump, observation, buildSeed, run, history)` 做出一个决策的各个世界（`Simulation/SimWorlds.cs:37-48`）：
 
 1. **根**是 `CombatBuilder.Setup` 从观测构建的一场战斗，用的是构建种子和敌人至今的意图记录，后者给出怪物的出招日志（[战斗 §5](/arch/simulator/combat/#sec-5)）。它从观测构建，从不取自真实战斗，所以玩家看不到的东西一样也进不来。构建出的战斗必须精确地显示这个观测；否则调用会抛异常，因为搜索会去探索另一场战斗（[Harness：路由、预算与种子 §6](/arch/harness/routing/#sec-6)）。
-2. **第 k 个世界**是根加上一步确定化，种子由搜索种子和 k 混合得到（`Simulation/SimWorlds.cs:51-57`）。这一步打乱玩家不可能知道的东西，并给每条随机数流重新播种（[战斗 §3](/arch/simulator/combat/#sec-3)）。
+2. **第 k 个世界**是根加上一步确定化，种子由搜索种子和 k 混合得到（`Simulation/SimWorlds.cs:56-62`）。这一步打乱玩家不可能知道的东西，并给每条随机数流重新播种（[战斗 §3](/arch/simulator/combat/#sec-3)）。
 
 除了这一步采样的部分之外，这样的世界打起来和真实战斗有多接近，见[战斗 §6](/arch/simulator/combat/#sec-6)：在决策所在的回合内，最多 1% 的观测不同（2026-10-27）。
 
@@ -41,10 +41,10 @@ NoSL 世界是一个**确定化样本**：一场完整的战斗，与玩家见�
 
 有两个细节让重播保持精确：
 
-- 世界里的**选牌提示**交给 `p0`，也就是这一局自己的提示大脑，所以搜索预期的正是这一局会做出的选择（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)）。
-- **世界的轨迹取自活的战斗**，包括战斗开始时问到的提示（每回合开始时都会提问的遗物）。重播按顺序发放记录下的选择，缺了这些，后面某个提示的选择就会被它们拿走（`Simulation/SimWorlds.cs:88-98`）。`selftest` 检查世界在选牌提示之后能精确还原，用烘焙手套和生存者，跑 6 个世界（[参考 §5](/arch/simulator/reference/#sec-5)）。
+- 世界里的**选牌提示**按这一局回答它们的方式回答：一个动作的第一个提示用动作带着的回答（如果有），其余每个都取它的前几个选项（`FirstPicks`），所以搜索预期的正是这一局会做出的选择。世界记下第一个提示和它的回答（`LastPrompt`），这样搜索可以尝试其他回答（[战斗大脑：提示、招式与 worker §1](/arch/combat-brain/shared/#sec-1)）。
+- **世界的轨迹取自活的战斗**，包括战斗开始时问到的提示（每回合开始时都会提问的遗物）。重播按顺序发放记录下的选择，缺了这些，后面某个提示的选择就会被它们拿走（`Simulation/SimWorlds.cs:93-103`）。`selftest` 检查世界在选牌提示之后能精确还原，用烘焙手套和生存者，跑 6 个世界（[参考 §5](/arch/simulator/reference/#sec-5)）。
 
-NoSL 世界把碰到会话动作上限（1,000 个动作，[战斗 §1](/arch/simulator/combat/#sec-1)）的战斗报告为赢（`Simulation/SimWorlds.cs:105-110`）；没有哪条被搜索的路线接近这个上限。超过战斗回合上限的战斗在两种世界里都算输，和对局里一样（[整局 §3](/arch/simulator/runs/#sec-3)）。
+NoSL 世界把碰到会话动作上限（1,000 个动作，[战斗 §1](/arch/simulator/combat/#sec-1)）的战斗报告为赢（`Simulation/SimWorlds.cs:126-131`）；没有哪条被搜索的路线接近这个上限。超过战斗回合上限的战斗在两种世界里都算输，和对局里一样（[整局 §3](/arch/simulator/runs/#sec-3)）。
 
 **世界在哪里**。在一局里，一个决策的各个世界在工作进程池的工作进程里，每个世界一个请求，而真实的这一局一直活在主机里（[工作进程池 §3](/arch/simulator/pool/#sec-3)）。只有 `selftest` 在自己的进程里搜索，用的是它自己的战斗，没有活着的对局（[参考 §5](/arch/simulator/reference/#sec-5)）；一局的主机若要这样做，就得在每个决策处把真实战斗放到一边，再通过重播放回来。
 
@@ -61,7 +61,7 @@ NoSL 世界把碰到会话动作上限（1,000 个动作，[战斗 §1](/arch/si
 
 两种主机都会取检查点，即模拟器和游戏里的 Mod，NoSL 对局也不例外；只有 SL 对局会把它们发给大脑（[环境：信息与节点 §7](/arch/environments/information/#sec-7)）。
 
-**克隆**是检查点，加上此后这个节点的每个决策，以轨迹行的形式（`surface action`；选牌提示的选择用游戏自己的下标）。它的协议类型是 `NodeClone(Save, Trace)`（`Sts2Ai.Protocol/World.cs:60`），除了模拟器，谁都不解读它的内容。`RunSession.Clone()` 可以在节点的任何时刻生成一个克隆（`Simulation/RunSession.cs:223`）。
+**克隆**是检查点，加上此后这个节点的每个决策，以轨迹行的形式（`surface action`；选牌提示的选择用游戏自己的下标）。它的协议类型是 `NodeClone(Save, Trace)`（`Sts2Ai.Protocol/World.cs:96`），除了模拟器，谁都不解读它的内容。`RunSession.Clone()` 可以在节点的任何时刻生成一个克隆（`Simulation/RunSession.cs:223`）。
 
 **在一局里**，SL 主机把克隆一块一块地发给大脑：新节点开始时发 `node_checkpoint`，然后把节点的每个决策作为 `node_action` 发送，两者都在问下一个决策之前发出（`Brains/RunBrains.cs:88-99`；[协议：线路 §6](/arch/protocol/wire/#sec-6)）。Harness 保留最新的检查点和此后的决策，在每个决策处这就是克隆（[Harness §4](/arch/harness/#sec-4)）。Mod 从游戏里发送同样的消息（[Mod：SL 记录 §7](/arch/mod/sl-record/#sec-7)）。
 
@@ -104,9 +104,9 @@ NoSL 世界把碰到会话动作上限（1,000 个动作，[战斗 §1](/arch/si
 
 `NodeWorld(pump, clone)`（`Simulation/NodeWorld.cs`）把节点的克隆当作一个战斗世界。加载并重播之后，它就是决策时的真实战斗，带着真实的抽牌顺序和随机数流。
 
-- **一个动作**是克隆的又一步：世界把这个动作交给克隆的战斗策略，让会话走一步，然后稳定下来。世界里的选牌提示和在这一局里一样交给 `p0`，并记在步骤之中。
-- **还原**无法倒回一局活的对局，而一个进程只能持有一局，所以它丢掉活的会话，保留那些步骤；下次使用时连同这些步骤再加载一次克隆（`Simulation/NodeWorld.cs:23-24, 70-76`）。检查点每个世界只读一次，而不是每次加载都读。
-- **它只待在这场战斗里**。战斗之外的决策会抛异常（「search left the combat」）；战斗结束后，世界不列出任何合法动作，也拒绝执行动作（`Simulation/NodeWorld.cs:48-62, 96`）。所以在它上面的搜索止于战斗结束，由叶子给结局估值（[战斗大脑：叶子 §1](/arch/combat-brain/leaf/#sec-1)）。
+- **一个动作**是克隆的又一步：世界把这个动作交给克隆的战斗策略，让会话走一步，然后稳定下来。世界里的选牌提示和在这一局里一样回答，第一个用动作带着的回答，并记在步骤之中。
+- **还原**无法倒回一局活的对局，而一个进程只能持有一局，所以它丢掉活的会话，保留那些步骤；下次使用时连同这些步骤再加载一次克隆（`Simulation/NodeWorld.cs:24-25, 77-83`）。检查点每个世界只读一次，而不是每次加载都读。
+- **它只待在这场战斗里**。战斗之外的决策会抛异常（「search left the combat」）；战斗结束后，世界不列出任何合法动作，也拒绝执行动作（`Simulation/NodeWorld.cs:51-67, 103`）。所以在它上面的搜索止于战斗结束，由叶子给结局估值（[战斗大脑：叶子 §1](/arch/combat-brain/leaf/#sec-1)）。
 - **它的隐藏键**是 `HiddenState.Full`：除了 NoSL 世界的键里有的，还有每个怪物至今出过的招，以及战斗历史里本回合的内容（作为多重集）；观测相同但未来不同的两个状态永远不会被合并（[战斗 §4](/arch/simulator/combat/#sec-4)）。
 
 **开销**。一次还原约需 0.5 ms 加载检查点，加上从进入节点起每一步约 0.1 ms（2026-10-28），所以在一场长战斗的后段，一次还原要 10–20 ms。[战斗 §2](/arch/simulator/combat/#sec-2) 的图把它和 NoSL 世界的开销放在一起。这是精确的代价：NoSL 世界从它在决策处构建的根开始重播，而 SL 世界要重播整个节点，直到这个决策。SL 规划器的应对办法是每个请求从束里的一个状态出发只搜索一个回合，所以一个请求重播一次，然后向前搜索（[SL 规划器：束搜索 §1](/arch/sl-planner/beam/#sec-1)）。

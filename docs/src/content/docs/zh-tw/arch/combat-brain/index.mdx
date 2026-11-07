@@ -13,7 +13,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 一場戰鬥是一個搜尋問題。遊戲自己的程式碼可以從任何狀態打出任何一串動作，所以大腦不需要把規則當作資料來掌握：它在戰鬥的模擬副本裡嘗試各條路線，保留最好的那條。兩種環境（[環境](/zh-tw/arch/environments/)）的差別在於副本有幾份、每份知道多少。SL（存檔讀檔）可以看到當前房間裡任何事情的真實結果，所以它拿到一份精確的副本。NoSL 只看得到玩家看得到的東西，所以它拿到幾份與可見資訊一致的取樣副本。
 
-這就給了戰鬥大腦它的形狀，用兩句話說：**SL = 剪枝 + 網路。NoSL = 蒙地卡羅 + 網路**。SL 下只有一個世界，問題在於它的大小，所以搜尋丟掉不可能影響結果的東西。NoSL 下問題在於隱藏的東西，所以搜尋對各個世界取平均。兩者底下有兩個共用的部分：列舉一個回合的各個結束狀態，以及用戰鬥網路的結局分布、按一組價格給狀態估值（[§3](#sec-3)）。
+這就給了戰鬥大腦它的形狀，用兩句話說：**SL = 剪枝 + 網路。NoSL = 蒙地卡羅 + 網路**。SL 下只有一個世界，問題在於它的大小，所以搜尋丟掉不可能影響結果的東西。NoSL 下問題在於隱藏的東西，所以搜尋對各個世界取平均。兩者底下有兩個共用的部分：列舉一個回合的各個結束狀態，以及用戰鬥網路的結局分布給狀態估值，每種結局都按它會留下的那一局由 V 定價（[§3](#sec-3)）。
 
 本書的這一部分有三章：
 
@@ -23,7 +23,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-**已實作，兩個冠軍都在用**。SL：`SlPlanner` 在節點複本上規劃整場戰鬥，戰鬥照著它的計畫打（`run --env SL --policy plan`，預設 medium 力度）。NoSL：`PimcBrain` 在 8 個取樣世界裡各用 300 個節點搜尋本回合，再按第一動作取平均（`run --policy pimc`）。兩者都在一個 worker 行程池裡搜尋，也都用同一個葉節點給停下的地方評分：戰鬥網路，它的結局按手工設定的數字定價（[葉節點](/zh-tw/arch/combat-brain/leaf/)）。戰鬥中的選牌提示交給一條固定規則 `p0`（[提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。一個佔位策略供基準測試和測試使用：`PlayPolicy`（`--policy play`，隨機打出一張能打的牌）。
+**已實作，兩個冠軍都在用**。SL：`SlPlanner` 在節點複本上規劃整場戰鬥，戰鬥照著它的計畫打（`run --env SL --policy plan`，預設 medium 力度）。NoSL：`PimcBrain` 在 8 個取樣世界裡各用 300 個節點搜尋本回合，再按第一動作取平均（`run --policy pimc`）。兩者都在一個 worker 行程池裡搜尋，也都用同一個葉節點給停下的地方評分：戰鬥網路，它的結局由 V 定價（[葉節點](/zh-tw/arch/combat-brain/leaf/)）。一個動作的第一個選牌提示的各個答案，是兩種搜尋的分支；沒有搜尋權衡的提示取它最前面的選項（[提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。一個佔位策略供基準測試和測試使用：`PlayPolicy`（`--policy play`，隨機打出一張能打的牌）。
 
 **規劃中，尚未實作**。兩個演算法的一個更簡單的設計，只要標題或表格列帶有 <Badge text="規劃中" variant="caution" />，這些頁面描述的就是它。它完全沒有量測過，也沒有程式碼；沒有這個徽章的一切，描述的都是今天的程式碼。
 
@@ -32,7 +32,6 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 | 一個回合的結束狀態 | 兩個搜尋：`SlPlanner.SearchTurn`、`PimcBrain.SearchWorld` | 一個 `TurnEnds`（[§3.1](#sec-3.1)） |
 | SL 的搜尋 | 貪婪下潛，接著是束；簡易束、失敗計畫、重新規劃 | 迭代加寬，配一個戰鬥預算（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)） |
 | NoSL 的搜尋 | PIMC，預算是 K 和每個世界的節點數 | 同樣的 PIMC 跑在 `TurnEnds` 上（[NoSL PIMC：預算 §8](/zh-tw/arch/pimc/budget/#sec-8)） |
-| 選牌提示 | 固定規則 `p0` | 搜尋分支（[提示、招式與 worker §4](/zh-tw/arch/combat-brain/shared/#sec-4)） |
 
 </Aside>
 
@@ -41,7 +40,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 戰鬥大腦回答兩類問題：
 
 1. **玩家的回合**。下一個動作是什麼：從手牌打出一張牌（需要目標時指定目標）、使用藥水，或結束回合。合法動作來自遊戲，由 Harness 列出（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)）。
-2. **出牌過程中的選牌提示**。有些牌打出時會提一個問題：棄哪張牌、消耗哪張、把哪張放到抽牌堆頂、從三張生成的牌裡拿哪張。目前這些都交給一條固定規則 `p0`，在真實戰鬥裡和每個模擬戰鬥裡都是（[提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。
+2. **出牌過程中的選牌提示**。有些牌打出時會提一個問題：棄哪張牌、消耗哪張、把哪張放到抽牌堆頂、從三張生成的牌裡拿哪張。一個動作的第一個提示的各個答案是搜尋的分支，選中的答案隨著動作一起送出（[提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。
 
 只有一個合法動作的決策不經搜尋就回答。其他每個決策都回傳三樣東西：第一動作、它之後的計畫剩餘部分，以及搜尋看過的每個第一動作和它的估值（*候選*，決策日誌會保存它們，Mod 會顯示它們，[Harness：決策日誌 §5](/zh-tw/arch/harness/decision-log/#sec-5)）；SL 規劃器的候選還說明每一個的最佳路線怎麼結束：獲勝機率和剩下的生命值（[葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。計畫很重要：SL 規劃器的計畫是戰鬥剩下的全部，只要遊戲顯示的正是計畫預期的，戰鬥就照著它打，不再搜尋；PIMC 的計畫是本回合剩下的部分，只有在它重複一個循環、而且每個世界對它都一致時，才不經搜尋地打出（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)）。
 
@@ -74,20 +73,20 @@ $n = 5$ 時是 326 對 32，$n = 8$ 時是 109,601 對 256。在殺戮尖塔裡�
 | 今天的搜尋 | 每個世界搜到本回合結束，再按第一動作取平均（[NoSL PIMC：搜尋](/zh-tw/arch/pimc/search/)） | 跨戰鬥各回合的束，每個回合完整搜尋（[SL 規劃器：束搜尋](/zh-tw/arch/sl-planner/beam/)） |
 | 規劃中的搜尋 <Badge text="規劃中" variant="caution" /> | 同樣的搜尋，跑在 `TurnEnds` 上（[NoSL PIMC：搜尋 §7](/zh-tw/arch/pimc/search/#sec-7)） | 寬度逐漸增加的多輪，每輪都打到戰鬥結束（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)） |
 | 多久搜尋一次 | 每個動作 | 每場戰鬥一次，除非計畫會輸（[SL 規劃器：束搜尋 §6](/zh-tw/arch/sl-planner/beam/#sec-6)） |
-| 置換的鍵 | 觀測和這個世界取樣出的隱藏狀態 | 觀測和完整的隱藏狀態 |
+| 置換的鍵 | 觀測、以多重集表示的牌堆（[提示、招式與 worker §5](/zh-tw/arch/combat-brain/shared/#sec-5)），和這個世界取樣出的隱藏狀態 | 觀測、以多重集表示的牌堆，和完整的隱藏狀態 |
 | 葉節點 | 下一回合的開始 | 大多是戰鬥結束 |
 
 為什麼不讓兩者用同一個演算法？在測試集上，跑在 SL 唯一精確世界上的 PIMC 和 NoSL 下的 PIMC 打得幾乎一模一樣：120 場戰鬥裡有 112 場結果相同，其餘 8 場相差不超過 5 點生命值（[NoSL PIMC：預算 §6](/zh-tw/arch/pimc/budget/#sec-6)）。它的搜尋在回合結束處停下，而一個回合之內揭示的東西很少，所以真實的世界能告訴它的，八個取樣世界幾乎都已經告訴它了。只有看得到回合之後的搜尋，知道未來才有用，而這正是規劃器做的事：同樣這 120 場戰鬥，它多贏 9 場（[SL 規劃器：預算 §5](/zh-tw/arch/sl-planner/budget/#sec-5)）。所以 PIMC 只在 NoSL 下打。
 
 ### 3.1 TurnEnds <Badge text="規劃中" variant="caution" />
 
-`TurnEnds` 從一個狀態列舉一個回合可能結束的各個狀態：深度優先，每一步都可以選擇結束回合，按觀測和隱藏狀態合併狀態。兩個規劃中的演算法都呼叫它，一次在一個世界裡。它是搜尋的一個步驟，不是網路的輸入；網路一次讀一個狀態。
+`TurnEnds` 從一個狀態列舉一個回合可能結束的各個狀態：深度優先，每一步都可以選擇結束回合，按觀測、以多重集表示的牌堆和隱藏狀態合併狀態。兩個規劃中的演算法都呼叫它，一次在一個世界裡。它是搜尋的一個步驟，不是網路的輸入；網路一次讀一個狀態。
 
 今天有兩個搜尋在做這件事，而且它們不一樣。`SlPlanner` 的回合搜尋在各個第一動作之間分享一個回合的節點，沒花完的份額往後傳，並回傳各個不同的結束狀態（[SL 規劃器：回合搜尋](/zh-tw/arch/sl-planner/turn-search/)）。`PimcBrain` 的世界搜尋給每個第一動作相等的份額，在它們之間保留一份估值的備忘錄，並回傳每個第一動作之後的最好路線（[NoSL PIMC：搜尋 §1](/zh-tw/arch/pimc/search/#sec-1)）。合併它們會改變 PIMC 分配節點的方式，所以合併後的搜尋必須通過 NoSL 門檻。
 
 ### 3.2 葉節點
 
-葉節點把一個狀態變成一個數字：網路對戰鬥怎樣結束的分布，乘以每種結局的價格（[葉節點 §3–§5](/zh-tw/arch/combat-brain/leaf/#sec-3)）。
+葉節點把一個狀態變成一個數字：網路對戰鬥怎樣結束的分布，每種結局按它會留下的那一局由 V 定價（[葉節點 §2–§5](/zh-tw/arch/combat-brain/leaf/#sec-2)）。
 
 ```mermaid
 flowchart TB
@@ -97,12 +96,12 @@ flowchart TB
     N --> A["在同一批世界上<br/>取平均"]
   end
   subgraph SL["SL = 剪枝 + 網路"]
-    C["節點複本：<br/>1 個精確世界"] --> S["逐輪：按上界丟掉，<br/>按葉節點取前「寬度」個"]
+    C["節點複本：<br/>1 個精確世界"] --> S["逐輪：按葉節點<br/>取前「寬度」個"]
     S --> F["照路線打"]
   end
   N -.-> T["TurnEnds：<br/>一個回合的結束狀態"]
   S -.-> T
-  T --> L["葉節點：<br/>結局 × 價格"]
+  T --> L["葉節點：<br/>結局由 V 定價"]
 ```
 
 這張圖是規劃中的形狀；今天的程式碼在搜尋的方框上有所不同，如上表所說。
@@ -126,24 +125,25 @@ public sealed class PimcBrain(ICombatLeaf leaf)
 
 public sealed class SlPlanner(ICombatLeaf leaf)
 {
-    // SL: plan the rest of the combat in the one exact world.
-    public SlPlan Plan(CombatObservation observation, ICombatWorld world, Budget budget,
-                       IReadOnlyList<EnemyTurns>? history = null);
+    // SL: plan the rest of the combat in the one exact world, from its state.
+    public SlPlan Plan(ICombatWorld world, Budget budget, IReadOnlyList<EnemyTurns>? history = null);
 }
 
 public interface ICombatLeaf
 {
-    // A search leaf: the state after the turn ends, or after the combat does.
-    double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
+    // A search leaf: the state after the turn ends, or after the combat does, with the run around it as it stands.
+    double Value(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history);
     // The value with the chance to win the combat and the HP held at a win, from one evaluation.
-    LeafOutcome Outcome(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
+    LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history);
 }
 
 public sealed record CombatDecisionResult(
-    CombatAction First,                  // one of legal
+    CombatAction First,                  // one of legal, carrying its prompt's answer if search chose one
     IReadOnlyList<CombatAction> Plan,    // the rest of the plan after First
     IReadOnlyList<Candidate> Candidates, // every first action scored, the pick first
-    IReadOnlyList<ulong>? PlanHashes);   // the observation each step of Plan expects, when it can be followed
+    IReadOnlyList<ulong>? PlanHashes,    // the observation each step of Plan expects, when it can be followed
+    bool Replanned = false,              // a step of the plan did not hold, and this search replaced it
+    bool Repeats = false);               // the line repeats a cycle
 ```
 
 - `PimcBrain` 在 NoSL 下搜尋，`SlPlanner` 在 SL 下搜尋；冠軍的 `--policy` 指定其中一個（`pimc` 或 `plan`），各自拒絕另一個環境的對局（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）。在對局裡，它們透過 `PooledPimc` 和 `PooledPlanner` 在 worker 行程池裡搜尋：這兩者把同樣的搜尋送到 worker 行程，再按固定順序合併回覆，所以答案和單一行程給出的相同（[提示、招式與 worker §3](/zh-tw/arch/combat-brain/shared/#sec-3)）。
@@ -161,28 +161,28 @@ public sealed record CombatDecisionResult(
 3. **NoSL 反事實**（規劃中）：公開記錄相同、隱藏狀態不同時，在固定的大腦種子下必須給出相同的選擇。
 4. **SL 封存**：越過節點出口的任何一步都會拋出例外。已成立（`selftest`）：節點複本載入到它的視野邊界後，拒絕再走一步；SL 世界在它那場戰鬥結束後拒絕任何動作。
 5. **可重現**：固定預算下，同一個種子跑兩次給出相同的走法和結果；放到 worker 池裡的搜尋給出的和單一行程相同（`selftest --workers N`）。
-6. **SL 計畫一致性**：在節點複本上做的計畫，在對局裡一步一步打出，每個觀測都如計畫預期，戰鬥結束時的生命值和藥水正是計畫的估值所說的。已成立（`selftest`）；在對局裡，對不上的一步算作一次重新規劃。
+6. **SL 計畫一致性**：在節點複本上做的計畫，在對局裡一步一步打出，每個觀測都如計畫預期，戰鬥結束時的生命值、最大生命值和藥水正是計畫在複本上留下的，而計畫的價值就是它那場戰鬥留下的那一局的 V。已成立（`selftest`）；在對局裡，對不上的一步算作一次重新規劃。
 7. **不需要遊戲的規劃器**（`Sts2Ai.Tests`）：在一個很小的精確戰鬥上，完整搜尋找到的最好路線和窮舉所有路線找到的相同，路線重播後得到它聲稱的估值，沒有證明的失敗計畫在第一個回合後停下，已證明的失敗重播到結束。
 
 ## 6. 驗證的順序 <Badge text="規劃中" variant="caution" />
 
 這個設計按順序過門檻，讓每個門檻都能說明它那一步值多少：
 
-1. **提示**當作搜尋分支（[提示、招式與 worker §4](/zh-tw/arch/combat-brain/shared/#sec-4)），**接著是加寬**（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)），**再接著是預算**（[SL 規劃器：預算 §7](/zh-tw/arch/sl-planner/budget/#sec-7)）。
+1. **加寬**（[SL 規劃器：束搜尋 §7](/zh-tw/arch/sl-planner/beam/#sec-7)），**接著是預算**（[SL 規劃器：預算 §7](/zh-tw/arch/sl-planner/budget/#sec-7)）。
 
-NoSL 有兩個自己的條件：合併 `TurnEnds` 需要一次 NoSL 門檻，提示分支需要先測出策略融合（[NoSL PIMC：搜尋 §7](/zh-tw/arch/pimc/search/#sec-7)）。
+NoSL 有一個自己的條件：合併 `TurnEnds` 需要一次 NoSL 門檻（[NoSL PIMC：搜尋 §7](/zh-tw/arch/pimc/search/#sec-7)）。
 
 ## 7. 三個章節
 
 | 章 | 節 | 解釋什麼 | 圖 |
 |---|---|---|---|
-| 戰鬥大腦 | [葉節點](/zh-tw/arch/combat-brain/leaf/) | 搜尋在哪裡停下、那個狀態值多少：網路的兩個輸出、價格、上界、這個估值看不到什麼 | 網路在真實狀態上的輸出 |
+| 戰鬥大腦 | [葉節點](/zh-tw/arch/combat-brain/leaf/) | 搜尋在哪裡停下、那個狀態值多少：網路的兩個輸出、每種結局由 V 定價、這個估值看不到什麼 | 網路在真實狀態上的輸出 |
 | | [戰鬥網路](/zh-tw/arch/combat-brain/network/) | 網路從輸入到輸出：每個張量、每個編碼器、主幹、兩個輸出頭和遮罩、大小 | 網路的圖 |
 | | [一個狀態走過網路](/zh-tw/arch/combat-brain/walkthrough/) | 用手跟著一個真實的回合開始走過每一層，直到估值和標籤 | – |
-| | [提示、招式與 worker](/zh-tw/arch/combat-brain/shared/) | `p0` 和當作分支的提示、敵人出招記錄、worker 行程池 | – |
+| | [提示、招式與 worker](/zh-tw/arch/combat-brain/shared/) | 選牌提示當作搜尋的分支、敵人出招記錄、worker 行程池 | – |
 | [SL 規劃器](/zh-tw/arch/sl-planner/) | 概覽 | 節點複本、為什麼最好的路線是對的、規劃一次並照著打、規劃中的形狀 | 一場真實的頭目戰，在它的第一個決策處規劃 |
 | | [回合搜尋](/zh-tw/arch/sl-planner/turn-search/) | 完整搜尋一個回合、置換、分享節點、`TurnEnds` | 一個回合的搜尋樹 |
-| | [束搜尋](/zh-tw/arch/sl-planner/beam/) | 跨回合的束、上界、下潛、簡易束、已證明的和失敗的計畫；規劃中的迭代加寬 | 束，一個回合接一個回合；加寬，一輪接一輪 |
+| | [束搜尋](/zh-tw/arch/sl-planner/beam/) | 跨回合的束、為什麼不按估值剪掉任何東西、下潛、簡易束、已證明的和失敗的計畫；規劃中的迭代加寬 | 束，一個回合接一個回合；加寬，一輪接一輪 |
 | | [預算](/zh-tw/arch/sl-planner/budget/) | 力度等級、低預算、時間花在哪裡、結果、弱點；規劃中的戰鬥預算 | – |
 | [NoSL PIMC](/zh-tw/arch/pimc/) | 概覽 | 隱藏了什麼、取樣世界、它們有多忠實、公平規則、規劃中的形狀 | 取樣出的抽牌順序 |
 | | [搜尋](/zh-tw/arch/pimc/search/) | 一個世界裡的搜尋、取平均、雜訊和公共亂數、策略融合；跑在 `TurnEnds` 上的同樣搜尋 | 一個真實決策在 8 個世界裡 |

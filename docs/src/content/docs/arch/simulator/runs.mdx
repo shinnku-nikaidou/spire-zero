@@ -118,14 +118,14 @@ flowchart TD
 
 **战斗决策和宏观决策**带着它们的合法动作，以及按需构建的观测（`CombatDecision`、`MacroDecision`）：不看观测的策略就永远不用为它付出代价。回答必须合法，否则这一局抛异常。
 
-**选牌提示**经过 `PolicySelector`，也就是一局进行时游戏的选牌器（`Simulation/PolicySelector.cs:21-80`）：
+**选牌提示**经过 `PolicySelector`，也就是一局进行时游戏的选牌器（`Simulation/PolicySelector.cs:20-76`）：
 
 - 它按规范顺序给出选项（`CardChoices.Canonical`），所以无论游戏列表是什么顺序，同样的牌都构成同样的提示；这个顺序里打平的，由一条以提示编号为种子的随机数流决定，它不知道任何隐藏的东西，重播时也相同；
 - 它把回答记为游戏自己列表里的下标，这正是重播时交回的形式；
-- 卡牌奖励和卡包是一局层面的决策，由驱动程序的处理器回答；没有这些处理器，卡牌奖励会被跳过，卡包会拿第一个；
+- 卡牌奖励和卡包是一局层面的决策，由驱动程序的处理器回答；单独的一场战斗没有这些处理器，在那里问到卡牌奖励或卡包会抛出异常；
 - 每进入一个节点，提示都从 0 重新编号，与节点的克隆给自己的提示编号一致（[世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)）。
 
-在 `run` 里，三个接口都是同一个对象，即 Harness 的 `Dispatcher`，它把每个决策交给负责回答它的大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）：战斗交给战斗大脑，战斗中的选牌提示交给 `p0`，其余一切（包括战斗外的选牌提示）交给宏观大脑（[宏观大脑](/arch/macro-brain/)）。
+在 `run` 里，三个接口都是同一个对象，即 Harness 的 `Dispatcher`，它把每个决策交给负责回答它的大脑（[Harness：路由、预算与种子 §1](/arch/harness/routing/#sec-1)）：战斗交给战斗大脑，战斗中的选牌提示交给 `first`（`FirstPicks`），除非战斗大脑的动作自带回答，其余一切（包括战斗外的选牌提示）交给宏观大脑（[宏观大脑](/arch/macro-brain/)）。
 
 **结局**。一局以 `won`（在胜利房间里结束）、`lost`（在其他任何地方结束）、`truncated`（过了 `--max-decisions` 仍在进行，默认 20,000）或 `failed`（抛了异常）结束。获胜对局的记录里生命值是 0：一到胜利房间，游戏就会杀死玩家。示例对局的记录是：获胜，第 2 幕（从 0 数起），第 48 层，生命值 0/66。
 
@@ -191,7 +191,7 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 
 `run` 通常把大脑放在自己的进程里：Harness 和冠军的各个大脑都是那里的对象，它们的搜索交给它启动的工作进程池（[工作进程池](/arch/simulator/pool/)）。用 `run --brain SOCKET` 时，大脑则是另一个进程，在一个 Unix 套接字上监听，也就是 Mod 在游戏里与之通信的那个（[Mod：主循环 §8](/arch/mod/loop/#sec-8)）。这时模拟器完全像游戏那样作为对局的主机：每局发送 `hello`，带上它的环境和由种子哈希得到的对局 id，每个决策都连同它的观测和合法动作一起发出，然后打出大脑推荐的动作（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。NoSL 下对局 id 隐藏了种子；SL 下种子确实会到达大脑，就在节点检查点的存档里，而这是 SL 可以知道的。
 
-打什么由大脑决定，所以 `run --brain` 拒绝所有冠军选项，包括 `--log`（`Commands/RunCommand.cs:63-64`）；又因为冠军文件的选项会像给出的选项一样并入，所以指明了任何冠军选项的 `--champion FILE` 也会被拒绝（`Commands/Args.cs:176-192`） <Badge text="推断" variant="caution" />。SL 下主机还发送节点消息：新节点开始时发送检查点，然后是还没发送的决策，每个都在下一个决策之前发出（`Brains/RunBrains.cs:53-99`）。
+打什么由大脑决定，所以 `run --brain` 拒绝所有冠军选项，包括 `--log`（`Commands/RunCommand.cs:63-64`）；又因为冠军文件的选项会像给出的选项一样并入，所以指明了任何冠军选项的 `--champion FILE` 也会被拒绝（`Commands/Args.cs:178-194`） <Badge text="推断" variant="caution" />。SL 下主机还发送节点消息：新节点开始时发送检查点，然后是还没发送的决策，每个都在下一个决策之前发出（`Brains/RunBrains.cs:53-99`）。
 
 `brain` 就是那个进程（`Commands/BrainCommand.cs`）：单独运行的 Harness，一次服务一个连上来的主机。它自己不需要游戏；搜索用的工作进程各自启动自己的游戏。
 
