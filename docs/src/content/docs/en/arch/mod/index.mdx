@@ -37,7 +37,7 @@ What it does not do:
 
 ## 2. One decision, from the screen to the panel
 
-Take a decision of the book's example run as the game would show it: the map on floor 43 (act 3, the player at 24 of 66 HP), with two points to go to.
+Take a decision of the book's example run as the game would show it: the map on floor 19 (act 2, the player at 70 of 70 HP), with two points to go to.
 
 
 ```mermaid
@@ -49,9 +49,9 @@ flowchart LR
   A -->|"Describe"| P["panel, map ring<br/>and route"]
 ```
 
-1. Each frame, `Screens.Read` asks the game which screen is on top (`ActiveScreenContext.GetCurrentScreen()`). The map screen with travel enabled is the `map` surface, and once the action queue is empty its observation and legal actions are read with GameBridge's `MapActions`, as the simulator reads them: here `map:4,10` and `map:6,10`, plus the potion belt's actions if there are potions.
+1. Each frame, `Screens.Read` asks the game which screen is on top (`ActiveScreenContext.GetCurrentScreen()`). The map screen with travel enabled is the `map` surface, and once the action queue is empty its observation and legal actions are read with GameBridge's `MapActions`, as the simulator reads them: here `map:3,2` and `map:5,2`, plus the potion belt's actions if there are potions.
 2. `Assist.Tick` hashes the observation. When the observation and its legal actions have held for 3 frames, and no other decision is open, it sends `decision` with the hash, the surface, the observation and the legal actions.
-3. The brain's Harness routes the decision to the macro brain, which values each option's afterstate with V and answers `map:4,10`, with the rest of the act's route as its plan ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)).
+3. The brain's Harness routes the decision to the macro brain, which values each option's afterstate with V and answers `map:5,2`, with the rest of the act's route as its plan ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)).
 4. The answer is for that hash and those legal actions only. While they still hold, the panel names the room ("go to" and the map legend's name for it) and the rooms of the route to the boss, and the map gets a pulsing ring on the point and a line along the route ([Output §3](/en/arch/output/#sec-3)).
 5. The player clicks a point, or presses F10 and the AI travels there as the click would ([Auto-play and safety §1](/en/arch/mod/auto/#sec-1)). The mod reads the travel where the game queues it and records it in the SL record ([The SL record §3](/en/arch/mod/sl-record/#sec-3)); the screen changes, and the next decision starts over.
 

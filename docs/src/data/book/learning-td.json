@@ -1,1 +1,1577 @@
-{"source": {"files": ["docs/src/data/macro-examples.json (series, source)"], "rev": "0e224cf", "run": "ce13ba5116b7f48a", "seed": "0SSL7NS01MU6", "job": "data/silent/sl/eval/2026-10-30-eval-v6-3-2-clone", "values": "sim afterstates --macro l0 --value weights/silent/v6-3-2.json: each option valued on its afterstate as predicted from the screen", "note": "v is V v6-3-2's value (expected progress) of each macro decision's chosen option; outcome is the run's progress: won on its last floor, 48, so 48 + 1 (learn/v/data.py progress)"}, "outcome": 49, "floor": 48, "series": [{"d": 0, "s": "event", "floor": 1, "hp": 70, "max_hp": 70, "v": 33.2675}, {"d": 2, "s": "event", "floor": 1, "hp": 70, "max_hp": 70, "v": 33.9338}, {"d": 3, "s": "map", "floor": 1, "hp": 70, "max_hp": 70, "v": 34.1657}, {"d": 23, "s": "rewards", "floor": 2, "hp": 70, "max_hp": 70, "v": 34.318}, {"d": 24, "s": "rewards", "floor": 2, "hp": 70, "max_hp": 70, "v": 35.4663}, {"d": 25, "s": "card_reward", "floor": 2, "hp": 70, "max_hp": 70, "v": 35.4663}, {"d": 26, "s": "rewards", "floor": 2, "hp": 70, "max_hp": 70, "v": 35.4663}, {"d": 27, "s": "map", "floor": 2, "hp": 70, "max_hp": 70, "v": 34.8123}, {"d": 28, "s": "event", "floor": 3, "hp": 70, "max_hp": 70, "v": 34.8242}, {"d": 30, "s": "event", "floor": 3, "hp": 70, "max_hp": 70, "v": 35.5748}, {"d": 31, "s": "map", "floor": 3, "hp": 70, "max_hp": 70, "v": 34.7266}, {"d": 55, "s": "rewards", "floor": 4, "hp": 70, "max_hp": 70, "v": 34.8209}, {"d": 56, "s": "rewards", "floor": 4, "hp": 70, "max_hp": 70, "v": 35.2506}, {"d": 57, "s": "card_reward", "floor": 4, "hp": 70, "max_hp": 70, "v": 35.2506}, {"d": 58, "s": "rewards", "floor": 4, "hp": 70, "max_hp": 70, "v": 35.2506}, {"d": 59, "s": "map", "floor": 4, "hp": 70, "max_hp": 70, "v": 34.9567}, {"d": 76, "s": "rewards", "floor": 5, "hp": 70, "max_hp": 70, "v": 34.9949}, {"d": 77, "s": "rewards", "floor": 5, "hp": 70, "max_hp": 70, "v": 37.0307}, {"d": 78, "s": "card_reward", "floor": 5, "hp": 70, "max_hp": 70, "v": 37.0307}, {"d": 79, "s": "rewards", "floor": 5, "hp": 70, "max_hp": 70, "v": 37.0307}, {"d": 80, "s": "map", "floor": 5, "hp": 70, "max_hp": 70, "v": 36.9145}, {"d": 110, "s": "rewards", "floor": 6, "hp": 65, "max_hp": 70, "v": 36.6617}, {"d": 111, "s": "rewards", "floor": 6, "hp": 65, "max_hp": 70, "v": 36.8847}, {"d": 112, "s": "rewards", "floor": 6, "hp": 65, "max_hp": 70, "v": 37.3543}, {"d": 113, "s": "card_reward", "floor": 6, "hp": 65, "max_hp": 70, "v": 37.3543}, {"d": 114, "s": "rewards", "floor": 6, "hp": 65, "max_hp": 70, "v": 37.3543}, {"d": 115, "s": "map", "floor": 6, "hp": 65, "max_hp": 70, "v": 37.1464}, {"d": 116, "s": "map", "floor": 6, "hp": 65, "max_hp": 70, "v": 36.6932}, {"d": 117, "s": "event", "floor": 7, "hp": 65, "max_hp": 70, "v": 36.6964}, {"d": 119, "s": "event", "floor": 7, "hp": 65, "max_hp": 70, "v": 37.0014}, {"d": 120, "s": "map", "floor": 7, "hp": 65, "max_hp": 70, "v": 36.2789}, {"d": 121, "s": "rest", "floor": 8, "hp": 65, "max_hp": 70, "v": 37.6331}, {"d": 123, "s": "rest", "floor": 8, "hp": 65, "max_hp": 70, "v": 37.6331}, {"d": 124, "s": "map", "floor": 8, "hp": 65, "max_hp": 70, "v": 37.2937}, {"d": 125, "s": "event", "floor": 9, "hp": 65, "max_hp": 70, "v": 37.2479}, {"d": 126, "s": "event", "floor": 9, "hp": 65, "max_hp": 70, "v": 37.4125}, {"d": 127, "s": "map", "floor": 9, "hp": 65, "max_hp": 70, "v": 37.4983}, {"d": 128, "s": "treasure", "floor": 10, "hp": 65, "max_hp": 70, "v": 37.9696}, {"d": 129, "s": "map", "floor": 10, "hp": 65, "max_hp": 70, "v": 37.3394}, {"d": 130, "s": "rest", "floor": 11, "hp": 65, "max_hp": 70, "v": 38.5113}, {"d": 132, "s": "rest", "floor": 11, "hp": 65, "max_hp": 70, "v": 38.5113}, {"d": 133, "s": "map", "floor": 11, "hp": 65, "max_hp": 70, "v": 38.4072}, {"d": 160, "s": "rewards", "floor": 12, "hp": 59, "max_hp": 70, "v": 38.0453}, {"d": 161, "s": "rewards", "floor": 12, "hp": 59, "max_hp": 70, "v": 38.2715}, {"d": 162, "s": "rewards", "floor": 12, "hp": 59, "max_hp": 70, "v": 38.2715}, {"d": 163, "s": "map", "floor": 12, "hp": 59, "max_hp": 70, "v": 38.0453}, {"d": 164, "s": "map", "floor": 12, "hp": 59, "max_hp": 70, "v": 37.0478}, {"d": 165, "s": "shop", "floor": 13, "hp": 59, "max_hp": 70, "v": 37.5884}, {"d": 166, "s": "shop", "floor": 13, "hp": 59, "max_hp": 70, "v": 38.1951}, {"d": 168, "s": "shop", "floor": 13, "hp": 59, "max_hp": 70, "v": 38.1951}, {"d": 169, "s": "map", "floor": 13, "hp": 59, "max_hp": 70, "v": 37.939}, {"d": 190, "s": "rewards", "floor": 14, "hp": 59, "max_hp": 70, "v": 38.1364}, {"d": 191, "s": "rewards", "floor": 14, "hp": 59, "max_hp": 70, "v": 39.1542}, {"d": 192, "s": "card_reward", "floor": 14, "hp": 59, "max_hp": 70, "v": 39.1542}, {"d": 193, "s": "rewards", "floor": 14, "hp": 59, "max_hp": 70, "v": 39.1542}, {"d": 194, "s": "map", "floor": 14, "hp": 59, "max_hp": 70, "v": 38.7243}, {"d": 210, "s": "rewards", "floor": 15, "hp": 59, "max_hp": 70, "v": 38.797}, {"d": 211, "s": "rewards", "floor": 15, "hp": 59, "max_hp": 70, "v": 38.797}, {"d": 212, "s": "map", "floor": 15, "hp": 59, "max_hp": 70, "v": 37.6656}, {"d": 213, "s": "rest", "floor": 16, "hp": 59, "max_hp": 70, "v": 39.2545}, {"d": 215, "s": "rest", "floor": 16, "hp": 59, "max_hp": 70, "v": 39.2546}, {"d": 216, "s": "map", "floor": 16, "hp": 59, "max_hp": 70, "v": 42.068}, {"d": 247, "s": "rewards", "floor": 17, "hp": 58, "max_hp": 70, "v": 42.3142}, {"d": 248, "s": "rewards", "floor": 17, "hp": 58, "max_hp": 70, "v": 43.7989}, {"d": 249, "s": "card_reward", "floor": 17, "hp": 58, "max_hp": 70, "v": 43.7989}, {"d": 250, "s": "rewards", "floor": 17, "hp": 58, "max_hp": 70, "v": 43.7989}, {"d": 251, "s": "map", "floor": 17, "hp": 58, "max_hp": 70, "v": 42.2616}, {"d": 252, "s": "event", "floor": 18, "hp": 70, "max_hp": 70, "v": 42.7775}, {"d": 253, "s": "event", "floor": 18, "hp": 70, "max_hp": 70, "v": 42.7775}, {"d": 254, "s": "map", "floor": 18, "hp": 70, "max_hp": 70, "v": 42.6662}, {"d": 263, "s": "rewards", "floor": 19, "hp": 70, "max_hp": 70, "v": 42.6764}, {"d": 264, "s": "rewards", "floor": 19, "hp": 70, "max_hp": 70, "v": 42.6764}, {"d": 265, "s": "map", "floor": 19, "hp": 70, "max_hp": 70, "v": 42.3833}, {"d": 275, "s": "rewards", "floor": 20, "hp": 70, "max_hp": 70, "v": 42.4153}, {"d": 276, "s": "rewards", "floor": 20, "hp": 70, "max_hp": 70, "v": 42.5614}, {"d": 277, "s": "card_reward", "floor": 20, "hp": 70, "max_hp": 70, "v": 42.5614}, {"d": 278, "s": "rewards", "floor": 20, "hp": 70, "max_hp": 70, "v": 42.5614}, {"d": 279, "s": "map", "floor": 20, "hp": 70, "max_hp": 70, "v": 42.9317}, {"d": 308, "s": "rewards", "floor": 21, "hp": 70, "max_hp": 70, "v": 42.9084}, {"d": 309, "s": "rewards", "floor": 21, "hp": 70, "max_hp": 70, "v": 42.9084}, {"d": 310, "s": "map", "floor": 21, "hp": 70, "max_hp": 70, "v": 42.4965}, {"d": 330, "s": "rewards", "floor": 22, "hp": 53, "max_hp": 70, "v": 41.8847}, {"d": 331, "s": "rewards", "floor": 22, "hp": 53, "max_hp": 70, "v": 42.0335}, {"d": 332, "s": "card_reward", "floor": 22, "hp": 53, "max_hp": 70, "v": 42.0335}, {"d": 333, "s": "rewards", "floor": 22, "hp": 53, "max_hp": 70, "v": 42.0335}, {"d": 334, "s": "map", "floor": 22, "hp": 53, "max_hp": 70, "v": 41.3854}, {"d": 335, "s": "shop", "floor": 23, "hp": 53, "max_hp": 70, "v": 42.6356}, {"d": 336, "s": "shop", "floor": 23, "hp": 53, "max_hp": 70, "v": 42.6356}, {"d": 337, "s": "map", "floor": 23, "hp": 53, "max_hp": 70, "v": 41.7222}, {"d": 373, "s": "rewards", "floor": 24, "hp": 38, "max_hp": 70, "v": 40.4333}, {"d": 374, "s": "rewards", "floor": 24, "hp": 38, "max_hp": 70, "v": 41.3365}, {"d": 375, "s": "card_reward", "floor": 24, "hp": 38, "max_hp": 70, "v": 41.3365}, {"d": 376, "s": "rewards", "floor": 24, "hp": 38, "max_hp": 70, "v": 41.3365}, {"d": 377, "s": "map", "floor": 24, "hp": 38, "max_hp": 70, "v": 40.753}, {"d": 378, "s": "rest", "floor": 25, "hp": 38, "max_hp": 70, "v": 42.6171}, {"d": 379, "s": "rest", "floor": 25, "hp": 59, "max_hp": 70, "v": 42.6171}, {"d": 380, "s": "map", "floor": 25, "hp": 59, "max_hp": 70, "v": 41.958}, {"d": 381, "s": "treasure", "floor": 26, "hp": 59, "max_hp": 70, "v": 42.1642}, {"d": 382, "s": "map", "floor": 26, "hp": 59, "max_hp": 70, "v": 41.6182}, {"d": 405, "s": "rewards", "floor": 27, "hp": 59, "max_hp": 70, "v": 41.6736}, {"d": 406, "s": "rewards", "floor": 27, "hp": 59, "max_hp": 70, "v": 41.7958}, {"d": 407, "s": "rewards", "floor": 27, "hp": 59, "max_hp": 70, "v": 41.7958}, {"d": 408, "s": "map", "floor": 27, "hp": 59, "max_hp": 70, "v": 41.6736}, {"d": 409, "s": "map", "floor": 27, "hp": 59, "max_hp": 70, "v": 40.9866}, {"d": 410, "s": "event", "floor": 28, "hp": 59, "max_hp": 70, "v": 41.196}, {"d": 411, "s": "event", "floor": 28, "hp": 59, "max_hp": 70, "v": 41.6988}, {"d": 412, "s": "map", "floor": 28, "hp": 59, "max_hp": 70, "v": 43.8461}, {"d": 413, "s": "rest", "floor": 29, "hp": 59, "max_hp": 70, "v": 44.9474}, {"d": 415, "s": "rest", "floor": 29, "hp": 59, "max_hp": 70, "v": 44.9474}, {"d": 416, "s": "map", "floor": 29, "hp": 59, "max_hp": 70, "v": 44.7553}, {"d": 442, "s": "rewards", "floor": 30, "hp": 46, "max_hp": 70, "v": 44.1139}, {"d": 443, "s": "map", "floor": 30, "hp": 46, "max_hp": 70, "v": 43.5159}, {"d": 458, "s": "rewards", "floor": 31, "hp": 41, "max_hp": 70, "v": 44.5972}, {"d": 459, "s": "card_reward", "floor": 31, "hp": 41, "max_hp": 70, "v": 44.5972}, {"d": 460, "s": "rewards", "floor": 31, "hp": 41, "max_hp": 70, "v": 44.5972}, {"d": 461, "s": "map", "floor": 31, "hp": 41, "max_hp": 70, "v": 43.0506}, {"d": 462, "s": "rest", "floor": 32, "hp": 41, "max_hp": 70, "v": 45.1912}, {"d": 463, "s": "rest", "floor": 32, "hp": 62, "max_hp": 70, "v": 45.1912}, {"d": 464, "s": "map", "floor": 32, "hp": 62, "max_hp": 70, "v": 47.2613}, {"d": 494, "s": "rewards", "floor": 33, "hp": 51, "max_hp": 70, "v": 47.3124}, {"d": 495, "s": "rewards", "floor": 33, "hp": 51, "max_hp": 70, "v": 47.4588}, {"d": 496, "s": "rewards", "floor": 33, "hp": 51, "max_hp": 70, "v": 47.4588}, {"d": 497, "s": "map", "floor": 33, "hp": 51, "max_hp": 70, "v": 47.8628}, {"d": 498, "s": "event", "floor": 34, "hp": 70, "max_hp": 70, "v": 48.3103}, {"d": 499, "s": "event", "floor": 34, "hp": 70, "max_hp": 70, "v": 48.3103}, {"d": 500, "s": "map", "floor": 34, "hp": 70, "max_hp": 70, "v": 48.2645}, {"d": 501, "s": "map", "floor": 34, "hp": 70, "max_hp": 70, "v": 48.1538}, {"d": 524, "s": "rewards", "floor": 35, "hp": 68, "max_hp": 70, "v": 48.1438}, {"d": 525, "s": "rewards", "floor": 35, "hp": 68, "max_hp": 70, "v": 48.1438}, {"d": 526, "s": "map", "floor": 35, "hp": 68, "max_hp": 70, "v": 48.1655}, {"d": 544, "s": "rewards", "floor": 36, "hp": 63, "max_hp": 66, "v": 48.0827}, {"d": 545, "s": "rewards", "floor": 36, "hp": 63, "max_hp": 66, "v": 48.0827}, {"d": 546, "s": "map", "floor": 36, "hp": 63, "max_hp": 66, "v": 47.8058}, {"d": 566, "s": "rewards", "floor": 37, "hp": 52, "max_hp": 66, "v": 47.6961}, {"d": 567, "s": "rewards", "floor": 37, "hp": 52, "max_hp": 66, "v": 47.6981}, {"d": 568, "s": "card_reward", "floor": 37, "hp": 52, "max_hp": 66, "v": 47.6981}, {"d": 569, "s": "rewards", "floor": 37, "hp": 52, "max_hp": 66, "v": 47.6981}, {"d": 570, "s": "map", "floor": 37, "hp": 52, "max_hp": 66, "v": 47.5436}, {"d": 600, "s": "rewards", "floor": 38, "hp": 37, "max_hp": 66, "v": 47.3576}, {"d": 601, "s": "rewards", "floor": 38, "hp": 37, "max_hp": 66, "v": 47.3576}, {"d": 602, "s": "map", "floor": 38, "hp": 37, "max_hp": 66, "v": 47.2617}, {"d": 631, "s": "rewards", "floor": 39, "hp": 37, "max_hp": 66, "v": 47.2827}, {"d": 632, "s": "rewards", "floor": 39, "hp": 37, "max_hp": 66, "v": 47.2827}, {"d": 633, "s": "map", "floor": 39, "hp": 37, "max_hp": 66, "v": 47.0705}, {"d": 634, "s": "shop", "floor": 40, "hp": 37, "max_hp": 66, "v": 47.1812}, {"d": 635, "s": "shop", "floor": 40, "hp": 37, "max_hp": 66, "v": 47.299}, {"d": 637, "s": "shop", "floor": 40, "hp": 37, "max_hp": 66, "v": 47.299}, {"d": 638, "s": "map", "floor": 40, "hp": 37, "max_hp": 66, "v": 46.9585}, {"d": 639, "s": "treasure", "floor": 41, "hp": 37, "max_hp": 66, "v": 47.4364}, {"d": 640, "s": "map", "floor": 41, "hp": 37, "max_hp": 66, "v": 47.8829}, {"d": 667, "s": "rewards", "floor": 42, "hp": 26, "max_hp": 66, "v": 47.7675}, {"d": 668, "s": "rewards", "floor": 42, "hp": 26, "max_hp": 66, "v": 47.9324}, {"d": 669, "s": "rewards", "floor": 42, "hp": 26, "max_hp": 66, "v": 47.971}, {"d": 670, "s": "card_reward", "floor": 42, "hp": 26, "max_hp": 66, "v": 47.971}, {"d": 671, "s": "rewards", "floor": 42, "hp": 26, "max_hp": 66, "v": 47.971}, {"d": 672, "s": "map", "floor": 42, "hp": 26, "max_hp": 66, "v": 47.8941}, {"d": 694, "s": "rewards", "floor": 43, "hp": 24, "max_hp": 66, "v": 48.0427}, {"d": 695, "s": "rewards", "floor": 43, "hp": 24, "max_hp": 66, "v": 48.0427}, {"d": 696, "s": "map", "floor": 43, "hp": 24, "max_hp": 66, "v": 48.0505}, {"d": 753, "s": "rewards", "floor": 44, "hp": 24, "max_hp": 66, "v": 48.1672}, {"d": 754, "s": "rewards", "floor": 44, "hp": 24, "max_hp": 66, "v": 48.1742}, {"d": 755, "s": "card_reward", "floor": 44, "hp": 24, "max_hp": 66, "v": 48.1742}, {"d": 756, "s": "rewards", "floor": 44, "hp": 24, "max_hp": 66, "v": 48.1742}, {"d": 757, "s": "map", "floor": 44, "hp": 24, "max_hp": 66, "v": 48.0797}, {"d": 767, "s": "rewards", "floor": 45, "hp": 24, "max_hp": 66, "v": 48.2076}, {"d": 768, "s": "rewards", "floor": 45, "hp": 24, "max_hp": 66, "v": 48.2255}, {"d": 769, "s": "rewards", "floor": 45, "hp": 24, "max_hp": 66, "v": 48.2522}, {"d": 770, "s": "card_reward", "floor": 45, "hp": 24, "max_hp": 66, "v": 48.2522}, {"d": 771, "s": "rewards", "floor": 45, "hp": 24, "max_hp": 66, "v": 48.2522}, {"d": 772, "s": "map", "floor": 45, "hp": 24, "max_hp": 66, "v": 48.4085}, {"d": 792, "s": "rewards", "floor": 46, "hp": 11, "max_hp": 66, "v": 48.4057}, {"d": 793, "s": "rewards", "floor": 46, "hp": 11, "max_hp": 66, "v": 48.4119}, {"d": 794, "s": "rewards", "floor": 46, "hp": 11, "max_hp": 66, "v": 48.4144}, {"d": 795, "s": "rewards", "floor": 46, "hp": 11, "max_hp": 66, "v": 48.4144}, {"d": 796, "s": "map", "floor": 46, "hp": 11, "max_hp": 66, "v": 48.4084}, {"d": 797, "s": "map", "floor": 46, "hp": 11, "max_hp": 66, "v": 48.3401}, {"d": 798, "s": "rest", "floor": 47, "hp": 11, "max_hp": 66, "v": 48.4814}, {"d": 799, "s": "rest", "floor": 47, "hp": 30, "max_hp": 66, "v": 48.4814}, {"d": 800, "s": "map", "floor": 47, "hp": 30, "max_hp": 66, "v": 48.6282}, {"d": 846, "s": "rewards", "floor": 48, "hp": 26, "max_hp": 66, "v": 48.6269}, {"d": 847, "s": "event", "floor": 48, "hp": 26, "max_hp": 66, "v": 48.6269}]}
+{
+ "source": {
+  "command": "run --champion eval/champions/sl.json --env SL --character SILENT --seeds eval/seeds/promotion-1-100.txt --start 12 --n 1 --records FILE --log FILE",
+  "seed": "0SSL7NS01MU6",
+  "values": "v: the champion's V (eval/champions/sl.json's value) of the run view at each decision that has one; outcome: the run's, 1 for a win"
+ },
+ "outcome": 1,
+ "floor": 48,
+ "series": [
+  {
+   "d": 0,
+   "s": "event",
+   "floor": 1,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.2724
+  },
+  {
+   "d": 2,
+   "s": "event",
+   "floor": 1,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.3799
+  },
+  {
+   "d": 3,
+   "s": "map",
+   "floor": 1,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.3799
+  },
+  {
+   "d": 25,
+   "s": "rewards",
+   "floor": 2,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.4066
+  },
+  {
+   "d": 26,
+   "s": "rewards",
+   "floor": 2,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.4192
+  },
+  {
+   "d": 27,
+   "s": "card_reward",
+   "floor": 2,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.4192
+  },
+  {
+   "d": 28,
+   "s": "rewards",
+   "floor": 2,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.5604
+  },
+  {
+   "d": 29,
+   "s": "map",
+   "floor": 2,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.5604
+  },
+  {
+   "d": 30,
+   "s": "event",
+   "floor": 3,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.4631
+  },
+  {
+   "d": 32,
+   "s": "event",
+   "floor": 3,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.5224
+  },
+  {
+   "d": 33,
+   "s": "map",
+   "floor": 3,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.5224
+  },
+  {
+   "d": 73,
+   "s": "rewards",
+   "floor": 4,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.487
+  },
+  {
+   "d": 74,
+   "s": "rewards",
+   "floor": 4,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.498
+  },
+  {
+   "d": 75,
+   "s": "card_reward",
+   "floor": 4,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.498
+  },
+  {
+   "d": 76,
+   "s": "rewards",
+   "floor": 4,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.5239
+  },
+  {
+   "d": 77,
+   "s": "map",
+   "floor": 4,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.5239
+  },
+  {
+   "d": 93,
+   "s": "rewards",
+   "floor": 5,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.4587
+  },
+  {
+   "d": 94,
+   "s": "rewards",
+   "floor": 5,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.468
+  },
+  {
+   "d": 95,
+   "s": "card_reward",
+   "floor": 5,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.468
+  },
+  {
+   "d": 96,
+   "s": "rewards",
+   "floor": 5,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.5652
+  },
+  {
+   "d": 97,
+   "s": "map",
+   "floor": 5,
+   "act": 0,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.5652
+  },
+  {
+   "d": 124,
+   "s": "rewards",
+   "floor": 6,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.4771
+  },
+  {
+   "d": 125,
+   "s": "rewards",
+   "floor": 6,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.4876
+  },
+  {
+   "d": 126,
+   "s": "card_reward",
+   "floor": 6,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.4876
+  },
+  {
+   "d": 127,
+   "s": "rewards",
+   "floor": 6,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.5813
+  },
+  {
+   "d": 128,
+   "s": "map",
+   "floor": 6,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.5813
+  },
+  {
+   "d": 129,
+   "s": "event",
+   "floor": 7,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.5693
+  },
+  {
+   "d": 131,
+   "s": "event",
+   "floor": 7,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6197
+  },
+  {
+   "d": 132,
+   "s": "map",
+   "floor": 7,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6197
+  },
+  {
+   "d": 133,
+   "s": "rest",
+   "floor": 8,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.5365
+  },
+  {
+   "d": 135,
+   "s": "rest",
+   "floor": 8,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6756
+  },
+  {
+   "d": 136,
+   "s": "map",
+   "floor": 8,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6756
+  },
+  {
+   "d": 137,
+   "s": "event",
+   "floor": 9,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6545
+  },
+  {
+   "d": 138,
+   "s": "event",
+   "floor": 9,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6831
+  },
+  {
+   "d": 139,
+   "s": "map",
+   "floor": 9,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6831
+  },
+  {
+   "d": 140,
+   "s": "treasure",
+   "floor": 10,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6605
+  },
+  {
+   "d": 141,
+   "s": "map",
+   "floor": 10,
+   "act": 0,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.6605
+  },
+  {
+   "d": 176,
+   "s": "rewards",
+   "floor": 11,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.648
+  },
+  {
+   "d": 177,
+   "s": "rewards",
+   "floor": 11,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.6556
+  },
+  {
+   "d": 178,
+   "s": "map",
+   "floor": 11,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.6556
+  },
+  {
+   "d": 179,
+   "s": "shop",
+   "floor": 12,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.6089
+  },
+  {
+   "d": 180,
+   "s": "shop",
+   "floor": 12,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.7739
+  },
+  {
+   "d": 182,
+   "s": "shop",
+   "floor": 12,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.8271
+  },
+  {
+   "d": 183,
+   "s": "map",
+   "floor": 12,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.8271
+  },
+  {
+   "d": 184,
+   "s": "rest",
+   "floor": 13,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.7816
+  },
+  {
+   "d": 186,
+   "s": "rest",
+   "floor": 13,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.8487
+  },
+  {
+   "d": 187,
+   "s": "map",
+   "floor": 13,
+   "act": 0,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.8487
+  },
+  {
+   "d": 234,
+   "s": "rewards",
+   "floor": 14,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.829
+  },
+  {
+   "d": 235,
+   "s": "rewards",
+   "floor": 14,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8393
+  },
+  {
+   "d": 236,
+   "s": "rewards",
+   "floor": 14,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8619
+  },
+  {
+   "d": 237,
+   "s": "card_reward",
+   "floor": 14,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8619
+  },
+  {
+   "d": 238,
+   "s": "rewards",
+   "floor": 14,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8888
+  },
+  {
+   "d": 239,
+   "s": "map",
+   "floor": 14,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8888
+  },
+  {
+   "d": 264,
+   "s": "rewards",
+   "floor": 15,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8781
+  },
+  {
+   "d": 265,
+   "s": "rewards",
+   "floor": 15,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8815
+  },
+  {
+   "d": 266,
+   "s": "map",
+   "floor": 15,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8815
+  },
+  {
+   "d": 267,
+   "s": "rest",
+   "floor": 16,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8602
+  },
+  {
+   "d": 269,
+   "s": "rest",
+   "floor": 16,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8991
+  },
+  {
+   "d": 270,
+   "s": "map",
+   "floor": 16,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8991
+  },
+  {
+   "d": 306,
+   "s": "rewards",
+   "floor": 17,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8892
+  },
+  {
+   "d": 307,
+   "s": "rewards",
+   "floor": 17,
+   "act": 0,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.9049
+  },
+  {
+   "d": 308,
+   "s": "map",
+   "floor": 17,
+   "act": 1,
+   "hp": 39,
+   "max_hp": 70,
+   "v": 0.8183
+  },
+  {
+   "d": 309,
+   "s": "event",
+   "floor": 18,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.8362
+  },
+  {
+   "d": 310,
+   "s": "event",
+   "floor": 18,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.873
+  },
+  {
+   "d": 311,
+   "s": "map",
+   "floor": 18,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.873
+  },
+  {
+   "d": 339,
+   "s": "rewards",
+   "floor": 19,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.8665
+  },
+  {
+   "d": 340,
+   "s": "rewards",
+   "floor": 19,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.8695
+  },
+  {
+   "d": 341,
+   "s": "map",
+   "floor": 19,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.8695
+  },
+  {
+   "d": 365,
+   "s": "rewards",
+   "floor": 20,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.8803
+  },
+  {
+   "d": 366,
+   "s": "rewards",
+   "floor": 20,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.8829
+  },
+  {
+   "d": 367,
+   "s": "card_reward",
+   "floor": 20,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.8829
+  },
+  {
+   "d": 368,
+   "s": "rewards",
+   "floor": 20,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9031
+  },
+  {
+   "d": 369,
+   "s": "map",
+   "floor": 20,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9031
+  },
+  {
+   "d": 394,
+   "s": "rewards",
+   "floor": 21,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9037
+  },
+  {
+   "d": 395,
+   "s": "rewards",
+   "floor": 21,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9051
+  },
+  {
+   "d": 396,
+   "s": "card_reward",
+   "floor": 21,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9051
+  },
+  {
+   "d": 397,
+   "s": "rewards",
+   "floor": 21,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9288
+  },
+  {
+   "d": 398,
+   "s": "map",
+   "floor": 21,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9288
+  },
+  {
+   "d": 423,
+   "s": "rewards",
+   "floor": 22,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9177
+  },
+  {
+   "d": 424,
+   "s": "rewards",
+   "floor": 22,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9193
+  },
+  {
+   "d": 425,
+   "s": "card_reward",
+   "floor": 22,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9193
+  },
+  {
+   "d": 426,
+   "s": "rewards",
+   "floor": 22,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9193
+  },
+  {
+   "d": 427,
+   "s": "map",
+   "floor": 22,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9193
+  },
+  {
+   "d": 428,
+   "s": "shop",
+   "floor": 23,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.8951
+  },
+  {
+   "d": 430,
+   "s": "shop",
+   "floor": 23,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.922
+  },
+  {
+   "d": 431,
+   "s": "map",
+   "floor": 23,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.922
+  },
+  {
+   "d": 432,
+   "s": "rest",
+   "floor": 24,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.918
+  },
+  {
+   "d": 434,
+   "s": "rest",
+   "floor": 24,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.944
+  },
+  {
+   "d": 435,
+   "s": "map",
+   "floor": 24,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.944
+  },
+  {
+   "d": 469,
+   "s": "rewards",
+   "floor": 25,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9243
+  },
+  {
+   "d": 470,
+   "s": "rewards",
+   "floor": 25,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9279
+  },
+  {
+   "d": 471,
+   "s": "rewards",
+   "floor": 25,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.931
+  },
+  {
+   "d": 472,
+   "s": "rewards",
+   "floor": 25,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9419
+  },
+  {
+   "d": 473,
+   "s": "card_reward",
+   "floor": 25,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9419
+  },
+  {
+   "d": 474,
+   "s": "rewards",
+   "floor": 25,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9539
+  },
+  {
+   "d": 475,
+   "s": "map",
+   "floor": 25,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9539
+  },
+  {
+   "d": 476,
+   "s": "treasure",
+   "floor": 26,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9566
+  },
+  {
+   "d": 477,
+   "s": "map",
+   "floor": 26,
+   "act": 1,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9566
+  },
+  {
+   "d": 519,
+   "s": "rewards",
+   "floor": 27,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9565
+  },
+  {
+   "d": 520,
+   "s": "rewards",
+   "floor": 27,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9572
+  },
+  {
+   "d": 521,
+   "s": "map",
+   "floor": 27,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9572
+  },
+  {
+   "d": 522,
+   "s": "rest",
+   "floor": 28,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9492
+  },
+  {
+   "d": 524,
+   "s": "rest",
+   "floor": 28,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9602
+  },
+  {
+   "d": 525,
+   "s": "map",
+   "floor": 28,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9602
+  },
+  {
+   "d": 526,
+   "s": "event",
+   "floor": 29,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9546
+  },
+  {
+   "d": 527,
+   "s": "event",
+   "floor": 29,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9602
+  },
+  {
+   "d": 528,
+   "s": "map",
+   "floor": 29,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9602
+  },
+  {
+   "d": 556,
+   "s": "rewards",
+   "floor": 30,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9616
+  },
+  {
+   "d": 557,
+   "s": "rewards",
+   "floor": 30,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9622
+  },
+  {
+   "d": 558,
+   "s": "rewards",
+   "floor": 30,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9655
+  },
+  {
+   "d": 559,
+   "s": "map",
+   "floor": 30,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9655
+  },
+  {
+   "d": 560,
+   "s": "shop",
+   "floor": 31,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9581
+  },
+  {
+   "d": 562,
+   "s": "shop",
+   "floor": 31,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9698
+  },
+  {
+   "d": 563,
+   "s": "map",
+   "floor": 31,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9698
+  },
+  {
+   "d": 564,
+   "s": "rest",
+   "floor": 32,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.955
+  },
+  {
+   "d": 566,
+   "s": "rest",
+   "floor": 32,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9596
+  },
+  {
+   "d": 567,
+   "s": "map",
+   "floor": 32,
+   "act": 1,
+   "hp": 68,
+   "max_hp": 70,
+   "v": 0.9596
+  },
+  {
+   "d": 611,
+   "s": "rewards",
+   "floor": 33,
+   "act": 1,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.965
+  },
+  {
+   "d": 612,
+   "s": "rewards",
+   "floor": 33,
+   "act": 1,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.9691
+  },
+  {
+   "d": 613,
+   "s": "card_reward",
+   "floor": 33,
+   "act": 1,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.9691
+  },
+  {
+   "d": 614,
+   "s": "rewards",
+   "floor": 33,
+   "act": 1,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.9701
+  },
+  {
+   "d": 615,
+   "s": "map",
+   "floor": 33,
+   "act": 2,
+   "hp": 52,
+   "max_hp": 70,
+   "v": 0.9698
+  },
+  {
+   "d": 616,
+   "s": "event",
+   "floor": 34,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9741
+  },
+  {
+   "d": 617,
+   "s": "event",
+   "floor": 34,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9653
+  },
+  {
+   "d": 618,
+   "s": "map",
+   "floor": 34,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9653
+  },
+  {
+   "d": 642,
+   "s": "rewards",
+   "floor": 35,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9612
+  },
+  {
+   "d": 643,
+   "s": "rewards",
+   "floor": 35,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.962
+  },
+  {
+   "d": 644,
+   "s": "map",
+   "floor": 35,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.962
+  },
+  {
+   "d": 645,
+   "s": "shop",
+   "floor": 36,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.954
+  },
+  {
+   "d": 646,
+   "s": "shop",
+   "floor": 36,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.966
+  },
+  {
+   "d": 648,
+   "s": "shop",
+   "floor": 36,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9728
+  },
+  {
+   "d": 649,
+   "s": "map",
+   "floor": 36,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9728
+  },
+  {
+   "d": 650,
+   "s": "event",
+   "floor": 37,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9661
+  },
+  {
+   "d": 651,
+   "s": "event",
+   "floor": 37,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.9622
+  },
+  {
+   "d": 652,
+   "s": "map",
+   "floor": 37,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.9622
+  },
+  {
+   "d": 720,
+   "s": "rewards",
+   "floor": 38,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.9622
+  },
+  {
+   "d": 721,
+   "s": "rewards",
+   "floor": 38,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.9626
+  },
+  {
+   "d": 722,
+   "s": "map",
+   "floor": 38,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.9626
+  },
+  {
+   "d": 755,
+   "s": "rewards",
+   "floor": 39,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.9643
+  },
+  {
+   "d": 756,
+   "s": "rewards",
+   "floor": 39,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.9647
+  },
+  {
+   "d": 757,
+   "s": "card_reward",
+   "floor": 39,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.9647
+  },
+  {
+   "d": 758,
+   "s": "rewards",
+   "floor": 39,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.98
+  },
+  {
+   "d": 759,
+   "s": "map",
+   "floor": 39,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.98
+  },
+  {
+   "d": 760,
+   "s": "shop",
+   "floor": 40,
+   "act": 2,
+   "hp": 64,
+   "max_hp": 70,
+   "v": 0.975
+  },
+  {
+   "d": 761,
+   "s": "shop",
+   "floor": 40,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9824
+  },
+  {
+   "d": 762,
+   "s": "map",
+   "floor": 40,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9824
+  },
+  {
+   "d": 763,
+   "s": "treasure",
+   "floor": 41,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9744
+  },
+  {
+   "d": 764,
+   "s": "map",
+   "floor": 41,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9744
+  },
+  {
+   "d": 799,
+   "s": "rewards",
+   "floor": 42,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.986
+  },
+  {
+   "d": 800,
+   "s": "rewards",
+   "floor": 42,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9862
+  },
+  {
+   "d": 801,
+   "s": "card_reward",
+   "floor": 42,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9862
+  },
+  {
+   "d": 802,
+   "s": "rewards",
+   "floor": 42,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9862
+  },
+  {
+   "d": 803,
+   "s": "map",
+   "floor": 42,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9862
+  },
+  {
+   "d": 840,
+   "s": "rewards",
+   "floor": 43,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9896
+  },
+  {
+   "d": 841,
+   "s": "rewards",
+   "floor": 43,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9897
+  },
+  {
+   "d": 842,
+   "s": "card_reward",
+   "floor": 43,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9897
+  },
+  {
+   "d": 843,
+   "s": "rewards",
+   "floor": 43,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9935
+  },
+  {
+   "d": 844,
+   "s": "map",
+   "floor": 43,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9935
+  },
+  {
+   "d": 845,
+   "s": "rest",
+   "floor": 44,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9922
+  },
+  {
+   "d": 847,
+   "s": "rest",
+   "floor": 44,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9944
+  },
+  {
+   "d": 848,
+   "s": "map",
+   "floor": 44,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9944
+  },
+  {
+   "d": 885,
+   "s": "rewards",
+   "floor": 45,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9946
+  },
+  {
+   "d": 886,
+   "s": "rewards",
+   "floor": 45,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9947
+  },
+  {
+   "d": 887,
+   "s": "card_reward",
+   "floor": 45,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9947
+  },
+  {
+   "d": 888,
+   "s": "rewards",
+   "floor": 45,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9957
+  },
+  {
+   "d": 889,
+   "s": "map",
+   "floor": 45,
+   "act": 2,
+   "hp": 70,
+   "max_hp": 70,
+   "v": 0.9957
+  },
+  {
+   "d": 936,
+   "s": "rewards",
+   "floor": 46,
+   "act": 2,
+   "hp": 67,
+   "max_hp": 70,
+   "v": 0.9962
+  },
+  {
+   "d": 937,
+   "s": "rewards",
+   "floor": 46,
+   "act": 2,
+   "hp": 67,
+   "max_hp": 70,
+   "v": 0.9963
+  },
+  {
+   "d": 938,
+   "s": "map",
+   "floor": 46,
+   "act": 2,
+   "hp": 67,
+   "max_hp": 70,
+   "v": 0.9963
+  },
+  {
+   "d": 939,
+   "s": "rest",
+   "floor": 47,
+   "act": 2,
+   "hp": 67,
+   "max_hp": 70,
+   "v": 0.9951
+  },
+  {
+   "d": 941,
+   "s": "rest",
+   "floor": 47,
+   "act": 2,
+   "hp": 67,
+   "max_hp": 70,
+   "v": 0.9965
+  },
+  {
+   "d": 942,
+   "s": "map",
+   "floor": 47,
+   "act": 2,
+   "hp": 67,
+   "max_hp": 70,
+   "v": 0.9965
+  },
+  {
+   "d": 995,
+   "s": "rewards",
+   "floor": 48,
+   "act": 2,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.999
+  },
+  {
+   "d": 996,
+   "s": "event",
+   "floor": 48,
+   "act": 2,
+   "hp": 53,
+   "max_hp": 70,
+   "v": 0.999
+  }
+ ]
+}

@@ -103,7 +103,7 @@ A net file is JSON: the graph as base64 ONNX, plus what C# needs to feed it, and
 | `onnx` | inputs as `learn/combat/encode.py`'s `INPUTS` name them; `extra` of 4 numbers; outputs `outcome` (batch × 51, softmax, the closed buckets 0) and `potion_used` (batch × 5 groups × potion ids, sigmoid) | yes |
 | `tests` | up to 16 held-out round starts, among them a multi-hit attack, a held potion and low HP: `obs`, `history`, `outcome`, `potion_used` (5 × 66 numbers, group by group) | yes |
 
-The figure opens two net files, a V's and a combat net's, field by field: sizes, the graph's inputs and outputs with their shapes, its initializers (the weight tensors, by shape only) and operators, and the training report.
+The figure opens the champion's two net files, V's and the combat net's, field by field: sizes, the graph's inputs and outputs with their shapes, its initializers (the weight tensors, by shape only) and operators, and the training report.
 
 <NetFileAnatomy client:visible lang="en" />
 

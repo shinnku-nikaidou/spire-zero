@@ -1,11 +1,8 @@
 {
  "source": {
-  "run": "ce13ba5116b7f48a",
+  "command": "run --champion eval/champions/sl.json --env SL --character SILENT --seeds eval/seeds/promotion-1-100.txt --start 12 --n 1 --records FILE --log FILE",
   "seed": "0SSL7NS01MU6",
-  "job": "data/silent/sl/eval/2026-10-30-eval-v6-3-2-clone",
-  "rev": "b013f95",
-  "champion": "combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone",
-  "how": "the macro decisions of floors 1-3 from src/data/macro-examples.json's series (the run's decision log), the floor-2 combat from the run's record in eval/silent/reports/2026-10-30-sl-r1-promotion-1-300-plan-c2-l0-v6-3-2-clone-p0.json; the game's save points from the game's code (docs: environments/information §4); the decisions missing from the series between two macro decisions are card prompts outside combat (between event steps) or the combat's decisions"
+  "how": "the decisions of floors 1-3 from the run's decision log, the floor-2 combat from its record; the game's save points from the game's code (docs: environments/information §4)"
  },
  "nodes": [
   {
@@ -63,7 +60,7 @@
      "end_hp": 70,
      "decisions": [
       4,
-      22
+      24
      ]
     },
     {
@@ -74,31 +71,31 @@
      "kind": "decision",
      "surface": "rewards",
      "action": "reward:0",
-     "decision": 23
-    },
-    {
-     "kind": "decision",
-     "surface": "rewards",
-     "action": "reward:1",
-     "decision": 24
-    },
-    {
-     "kind": "decision",
-     "surface": "card_reward",
-     "action": "card:1",
      "decision": 25
     },
     {
      "kind": "decision",
      "surface": "rewards",
-     "action": "rewards_done",
+     "action": "reward:1",
      "decision": 26
+    },
+    {
+     "kind": "decision",
+     "surface": "card_reward",
+     "action": "card:0",
+     "decision": 27
+    },
+    {
+     "kind": "decision",
+     "surface": "rewards",
+     "action": "rewards_done",
+     "decision": 28
     },
     {
      "kind": "decision",
      "surface": "map",
      "action": "map:0,2",
-     "decision": 27
+     "decision": 29
     }
    ]
   },
@@ -118,26 +115,26 @@
      "kind": "decision",
      "surface": "event",
      "action": "event:1",
-     "decision": 28
+     "decision": 30
     },
     {
      "kind": "prompt",
      "decisions": [
-      29,
-      29
+      31,
+      31
      ]
     },
     {
      "kind": "decision",
      "surface": "event",
      "action": "proceed",
-     "decision": 30
+     "decision": 32
     },
     {
      "kind": "decision",
      "surface": "map",
      "action": "map:0,3",
-     "decision": 31
+     "decision": 33
     }
    ]
   }

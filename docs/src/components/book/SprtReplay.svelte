@@ -1,7 +1,8 @@
 <script lang="ts">
   // The whole-run gate's SPRT on wins, pair by pair (docs: evaluation/gates §3), with Gate.Sprt's rule (evalStats.ts,
   // src/Sts2Ai.Harness/Gate.cs:51-82): only the pairs where exactly one side won move it. The real tabs replay two pairs of
-  // committed SL reports (src/data/book/eval-pairs.json), the later net as the challenger; "Simulate" draws made-up pairs.
+  // committed SL reports (src/data/book/eval-pairs.json), each pair's second net as the challenger; "Simulate" draws
+  // made-up pairs.
   import { scaleLinear } from 'd3';
   import type { Lang } from '../v/names.ts';
   import { fmt } from '../v/i18n.ts';
@@ -193,9 +194,9 @@
       ))}
     {:else}
       {say(lang, w(
-        'Two committed SL reports on the same 300 seeds, the later net as the challenger, replayed with the gate’s rule; no such gate was run. Grey bars are pairs after the verdict, which the gate never looks at.',
-        '同一组 300 个种子上的两份已提交的 SL 报告，较新的网络当挑战者，按 gate 的规则重放；并没有真的跑过这样的 gate。灰色的柱是判定之后的配对，gate 不会看。',
-        '同一組 300 個種子上的兩份已提交的 SL 報告，較新的網路當挑戰者，按 gate 的規則重放；並沒有真的跑過這樣的 gate。灰色的柱是判定之後的配對，gate 不會看。',
+        'Two committed SL reports on the same 300 seeds, the second net as the challenger, replayed with the gate’s rule; no such gate was run. Grey bars are pairs after the verdict, which the gate never looks at.',
+        '同一组 300 个种子上的两份已提交的 SL 报告，第二个网络当挑战者，按 gate 的规则重放；并没有真的跑过这样的 gate。灰色的柱是判定之后的配对，gate 不会看。',
+        '同一組 300 個種子上的兩份已提交的 SL 報告，第二個網路當挑戰者，按 gate 的規則重放；並沒有真的跑過這樣的 gate。灰色的柱是判定之後的配對，gate 不會看。',
       ))}
     {/if}
   </p>

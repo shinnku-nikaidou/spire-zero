@@ -69,7 +69,7 @@ $$
 y_k = G .
 $$
 
-Its expectation, over the luck of the rest of the run, is exactly the value of decision $k$'s state under the policy that played, so the target is *unbiased*. But it is *noisy*: the luck of one run, every draw and every fight after decision $k$, lands on all of its decisions alike, and a run's macro decisions (181 in the book's example run; [Macro brain §1](/en/arch/macro-brain/#sec-1)) all share its one outcome.
+Its expectation, over the luck of the rest of the run, is exactly the value of decision $k$'s state under the policy that played, so the target is *unbiased*. But it is *noisy*: the luck of one run, every draw and every fight after decision $k$, lands on all of its decisions alike, and a run's macro decisions (174 in the book's example run; [Macro brain §1](/en/arch/macro-brain/#sec-1)) all share its one outcome.
 
 **As built, both trainers use MC targets only.** V's are the masked hazard labels of the floor each run ended on ([Macro brain: from hazards to value §3](/en/arch/macro-brain/value/#sec-3)); the combat net's are how each fight really ended ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)). Nothing in `learn/` bootstraps on a value. Two measures keep MC's noise in check:
 
@@ -92,13 +92,13 @@ $$
 
 $\lambda$, between 0 and 1, sets the mix. $\lambda = 1$ gives $G^\lambda_k = G$, pure MC; $\lambda = 0$ gives TD(0). In between, the label looks about $1/(1-\lambda)$ decisions ahead: at $\lambda = 0.9$, about ten. The point is variance: the further ahead a label looks, the more luck it carries, and a decision's label should mostly reflect what happened soon after it. TD also gives a learning signal at every transition, which helps credit assignment ([§10](#sec-10)).
 
-The figure computes these targets on the book's example run, the whole SL run on seed `0SSL7NS01MU6`, won on floor 48 ([Macro brain §1](/en/arch/macro-brain/#sec-1)). The figure's V values a run in expected progress, roughly the floor it would reach, so a won run's outcome is 48 + 1 = 49. Each dot is the λ-return of one of its 181 macro decisions, against V's own values.
+The figure computes these targets on the book's example run, the whole SL run on seed `0SSL7NS01MU6`, won on floor 48 ([Macro brain §1](/en/arch/macro-brain/#sec-1)). The figure's V is the champion's, and its value is the chance to win, so a won run's outcome is 1. Each dot is the λ-return of one of its 174 macro decisions, against V's own values.
 
 <TdTargets client:visible lang="en" />
 
-The run was won, so its MC target, 49, is far above V's early values: V started at 33, and the MC label credits every early decision with the luck of the whole run (over the first 60 decisions, 12.1 above V's own values on average). At $\lambda = 0.9$ those labels lie 1.2 above V on average: most of the credit goes to the decisions just before V's value rose, around the bosses of acts 1 and 2 (floors 16–17 and 32–33). At $\lambda = 0$ each label is simply V's next value.
+The run was won, so its MC target, 1, is far above V's early values: V started at 0.27, and the MC label credits every early decision with the luck of the whole run (over the first 60 decisions, 0.36 above V's own values on average). At $\lambda = 0.9$ those labels lie 0.07 above V on average: most of the credit goes to the decisions just before V's value rose, in act 1 (the card rewards of floors 2 to 6, the rest site of floor 8, the shop of floor 12); from act 2 on, V is near 1 and the labels with it. At $\lambda = 0$ each label is simply V's next value.
 
-**What is planned.** The design trains V on a mix of MC and TD(λ) targets, and the combat net on TD(λ ≈ 0.95) inside a fight. Nothing in `learn/` computes a λ-return now; the figure's targets are computed in the page (`components/book/td.ts`), checked against the explicit sum above on the same 181 values.
+**What is planned.** The design trains V on a mix of MC and TD(λ) targets, and the combat net on TD(λ ≈ 0.95) inside a fight. Nothing in `learn/` computes a λ-return now; the figure's targets are computed in the page (`components/book/td.ts`), checked against the explicit sum above on the same 174 values.
 
 ## 5. Expert iteration <Badge text="planned" variant="caution" />
 

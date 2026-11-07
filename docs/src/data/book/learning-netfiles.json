@@ -1,1 +1,4063 @@
-{"source": {"files": ["weights/all/v9-1.json", "weights/all/c9-1.json"], "rev": "d454723", "script": "extracted from the net files", "note": "structure and shapes only, no weights"}, "c9-1": {"file": "weights/all/c9-1.json", "bytes": 9578295, "fields": [{"key": "name", "type": "str", "value": "c9-1"}, {"key": "env", "type": "str", "value": "SL"}, {"key": "buckets", "type": "int", "value": 50}, {"key": "loss_min", "type": "float", "value": -0.25}, {"key": "potion_groups", "type": "int", "value": 5}, {"key": "lags", "type": "int", "value": 3}, {"key": "vocab", "type": "object", "tables": {"cards": {"size": 597, "first": ["ABRASIVE", "ABUNDANCE", "ACCELERANT"]}, "modifiers": {"size": 57, "first": ["affliction:BOUND", "affliction:ENTANGLED", "affliction:GALVANIZED"]}, "powers": {"size": 266, "first": ["ACCELERANT_POWER", "ACCURACY_POWER", "ADAPTABLE_POWER"]}, "enemies": {"size": 121, "first": ["AEONGLASS", "ARCHITECT", "ASSASSIN_RUBY_RAIDER"]}, "intents": {"size": 16, "first": ["Attack", "Buff", "CardDebuff"]}, "relics": {"size": 310, "first": ["AKABEKO", "ALCHEMICAL_COFFER", "AMETHYST_AUBERGINE"]}, "potions": {"size": 66, "first": ["AMBERGRIS", "ASHWATER", "ATTACK_POTION"]}, "context": {"size": 96, "first": ["character:DEFECT", "character:IRONCLAD", "character:NECROBINDER"]}, "orbs": {"size": 6, "first": ["DARK_ORB", "FROST_ORB", "GLASS_ORB"]}, "allies": {"size": 121, "first": ["AEONGLASS", "ARCHITECT", "ASSASSIN_RUBY_RAIDER"]}, "relic_status": {"size": 5, "first": ["Active", "Disabled", "Normal"]}}}, {"key": "fit", "type": "object", "values": {"env": "SL", "runs": 29987, "held_out_runs": 6004, "samples": 2005554, "held_out_samples": 407042, "vocab": {"cards": 597, "modifiers": 57, "powers": 266, "enemies": 121, "intents": 16, "relics": 310, "potions": 66, "context": 96, "orbs": 6, "allies": 121, "relic_status": 5}, "held_out": {"samples": 407042, "ce": 1.24922640625967, "ce_prior": 2.351599009272233, "death": 0.09270787781113497, "predicted_death": 0.10027819953387368, "rank_within": 0.9292911042702577, "rank_within_share": 0.7784922824574751, "rank_lost": 0.7267325188637304, "rank_lost_share": 0.1211853329214417, "auc_death": 0.9570104214403339, "auc_death_share": 0.6788054673751523, "potions": {"rows": 25225, "used": 0.31242814667988106, "predicted": 0.321042380474392, "log_loss": 0.3399575927236641, "log_loss_id": 0.5951122254938304, "log_loss_id_room": 0.5635529894536615}}, "by_act": {"0": {"samples": 258856, "ce": 1.1644742334251048, "ce_prior": 2.347110411765955, "death": 0.09532326853540192, "predicted_death": 0.10247825618464113, "rank_within": 0.9370215457467518, "rank_within_share": 0.7699994450407253, "rank_lost": 0.75013855353608, "rank_lost_share": 0.18010468136203653, "auc_death": 0.9646440785624859, "auc_death_share": 0.6606536570160902, "potions": {"rows": 12164, "used": 0.35769483722459716, "predicted": 0.3610780031070902, "log_loss": 0.36134973853755015, "log_loss_id": 0.6451336056743193, "log_loss_id_room": 0.569105487122508}}, "1": {"samples": 106458, "ce": 1.3689272557437193, "ce_prior": 2.376677167516531, "death": 0.08505701779105375, "predicted_death": 0.09151507839586673, "rank_within": 0.9231854397655078, "rank_within_share": 0.8004955543010958, "rank_lost": 0.7106951125417961, "rank_lost_share": 0.02830697016518402, "auc_death": 0.9401547571607899, "auc_death_share": 0.7079305268306073, "potions": {"rows": 7495, "used": 0.30873915943962643, "predicted": 0.30529602829984437, "log_loss": 0.30949179357399437, "log_loss_id": 0.5854396178037673, "log_loss_id_room": 0.5656466893529308}}, "2": {"samples": 41728, "ce": 1.469593915291767, "ce_prior": 2.3154633168286347, "death": 0.09600268404907976, "predicted_death": 0.1089871356371829, "rank_within": 0.8966686681033048, "rank_within_share": 0.775077844543414, "rank_lost": 0.6219768615429049, "rank_lost_share": -0.005983137106670027, "auc_death": 0.9479605030684408, "auc_death_share": 0.7251082244332, "potions": {"rows": 5566, "used": 0.2184692777578153, "predicted": 0.2547516143666112, "log_loss": 0.33423123680319405, "log_loss_id": 0.49881975803453366, "log_loss_id_room": 0.5485991873715789}}}, "by_room": {"Boss": {"samples": 75902, "ce": 1.6835447329973938, "ce_prior": 3.190507919829715, "death": 0.3821901926167953, "predicted_death": 0.4141761450080151, "rank_within": 0.8741224514962075, "rank_within_share": 0.47374465931595844, "rank_lost": 0.7923188393385988, "rank_lost_share": 0.2300572033509725, "auc_death": 0.9533970621215457, "auc_death_share": 0.6553571113450811, "potions": {"rows": 4401, "used": 0.5669166098613951, "predicted": 0.597449524570536, "log_loss": 0.37826502676188084, "log_loss_id": 0.860932867160614, "log_loss_id_room": 0.738387667647691}}, "Elite": {"samples": 66949, "ce": 1.7858032545917444, "ce_prior": 2.9553876894928095, "death": 0.0955503442919237, "predicted_death": 0.1012067518588195, "rank_within": 0.9383823418207172, "rank_within_share": 0.7563350333885618, "rank_lost": 0.7844882150775849, "rank_lost_share": 0.09891928382589477, "auc_death": 0.9681869577847635, "auc_death_share": 0.7282513057528268, "potions": {"rows": 3315, "used": 0.4322775263951735, "predicted": 0.4403647222396826, "log_loss": 0.406308007247783, "log_loss_id": 0.6633419509664641, "log_loss_id_room": 0.6817857257979612}}, "Monster": {"samples": 264191, "ce": 0.988472205491927, "ce_prior": 1.9575738059866503, "death": 0.008819376890204435, "predicted_death": 0.009860102373179039, "rank_within": 0.9428405964801138, "rank_within_share": 0.8716487310328792, "rank_lost": 0.7016668578212907, "rank_lost_share": 0.10684622131275509, "auc_death": 0.9725763864758566, "auc_death_share": 0.8478966615568144, "potions": {"rows": 17509, "used": 0.22576960420355247, "predicted": 0.22897422100674286, "log_loss": 0.3177665686018041, "log_loss_id": 0.5153784780543823, "log_loss_id_room": 0.49722202025420537}}}, "by_encounter": {"AEONGLASS_BOSS": {"samples": 2530, "ce": 1.7612360460589773, "ce_prior": 3.2119881474191154, "death": 0.45217391304347826, "predicted_death": 0.49205825138427134, "rank_within": 0.8641148986470588, "rank_within_share": 0.44383947920383865, "rank_lost": 0.6928926488333558, "rank_lost_share": 0.08478932670553486, "auc_death": 0.9595634034521425, "auc_death_share": 0.6580876934018629, "potions": {"rows": 254, "used": 0.5708661417322834, "predicted": 0.5861011715197944, "log_loss": 0.6016772085209254, "log_loss_id": 0.8943748031780889, "log_loss_id_room": 0.6486983874314145}}, "AXEBOTS_NORMAL": {"samples": 3011, "ce": 1.143262402685864, "ce_prior": 1.8061403348401301, "death": 0.008635004981733644, "predicted_death": 0.011332899561374175, "rank_within": 0.9420181822878955, "rank_within_share": 0.9349049946334387, "rank_lost": 0.5583795615604452, "rank_lost_share": -0.14085602138380457, "auc_death": 0.9726609933796488, "auc_death_share": 0.9557109710107176, "potions": {"rows": 486, "used": 0.21810699588477367, "predicted": 0.22816646228933, "log_loss": 0.47067692281104734, "log_loss_id": 0.49256734056939316, "log_loss_id_room": 0.4572566512162396}}, "BATTLEWORN_DUMMY_EVENT_V1_ENCOUNTER": {"samples": 523, "ce": 0.15509918481004123, "ce_prior": 1.1100594991543336, "death": 0.0, "predicted_death": 5.6275915847628705e-05, "rank_within": 0.9847086236052335, "rank_within_share": 0.9617858964856358, "rank_lost": 0.5267621199532034, "rank_lost_share": 0.26258188129540627, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 152, "used": 0.02631578947368421, "predicted": 0.013659667393598494, "log_loss": 0.07483190854258899, "log_loss_id": 0.39097065734393094, "log_loss_id_room": 0.2845552376401014}}, "BATTLEWORN_DUMMY_EVENT_V2_ENCOUNTER": {"samples": 21, "ce": 0.22201023246694182, "ce_prior": 1.1279650081117698, "death": 0.0, "predicted_death": 9.818850199851796e-09, "rank_within": 0.0, "rank_within_share": 0.0, "rank_lost": 0.0, "rank_lost_share": 0.0, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 0, "used": 0.0, "predicted": 0.0, "log_loss": 0.0, "log_loss_id": 0.0, "log_loss_id_room": 0.0}}, "BATTLEWORN_DUMMY_EVENT_V3_ENCOUNTER": {"samples": 33, "ce": 0.31397867668390245, "ce_prior": 1.0094523648266862, "death": 0.0, "predicted_death": 3.0327208380480144e-05, "rank_within": 0.9534625892455922, "rank_within_share": 0.9900000000000001, "rank_lost": 0.43333333333333346, "rank_lost_share": 0.10488088481701514, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 6, "used": 0.0, "predicted": 0.0018385719983295228, "log_loss": 0.0018414412563703313, "log_loss_id": 0.2754622253967954, "log_loss_id_room": 0.16866688347528838}}, "BOWLBUGS_NORMAL": {"samples": 4133, "ce": 1.108857019045193, "ce_prior": 2.1152322727577424, "death": 0.014759254778611178, "predicted_death": 0.012956682992661311, "rank_within": 0.9693360858740037, "rank_within_share": 0.9345982218581229, "rank_lost": 0.735593724554593, "rank_lost_share": 0.007777402457719582, "auc_death": 0.9832617111413131, "auc_death_share": 0.8857389350655605, "potions": {"rows": 316, "used": 0.24367088607594936, "predicted": 0.27253944479359, "log_loss": 0.2554744890327836, "log_loss_id": 0.5465705155265165, "log_loss_id_room": 0.5343506972796013}}, "BOWLBUGS_WEAK": {"samples": 5372, "ce": 0.7936711169085626, "ce_prior": 1.7073324440661828, "death": 0.0, "predicted_death": 3.710037510130721e-05, "rank_within": 0.9170036560769913, "rank_within_share": 0.792941496224408, "rank_lost": 0.6741252388295976, "rank_lost_share": 0.08796901178086296, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 309, "used": 0.1650485436893204, "predicted": 0.16095967569757746, "log_loss": 0.2773922693611434, "log_loss_id": 0.4826998147670125, "log_loss_id_room": 0.41951338533540405}}, "BYGONE_EFFIGY_ELITE": {"samples": 7646, "ce": 2.056427667375334, "ce_prior": 3.625893086465752, "death": 0.14281977504577556, "predicted_death": 0.1525681844560316, "rank_within": 0.9241715269366263, "rank_within_share": 0.6271399973813758, "rank_lost": 0.8364011948558714, "rank_lost_share": 0.25863488939555707, "auc_death": 0.9766436620291815, "auc_death_share": 0.7628256698182383, "potions": {"rows": 257, "used": 0.6381322957198443, "predicted": 0.6502702858515105, "log_loss": 0.3099585239842708, "log_loss_id": 0.758437603626128, "log_loss_id_room": 0.6303939353722993}}, "BYRDONIS_ELITE": {"samples": 6137, "ce": 1.8001984434524987, "ce_prior": 3.0904159683803516, "death": 0.0549128238553039, "predicted_death": 0.05697317417578598, "rank_within": 0.9554449704604329, "rank_within_share": 0.8027179821404697, "rank_lost": 0.8261939951872244, "rank_lost_share": 0.17494301150627722, "auc_death": 0.9765033208326067, "auc_death_share": 0.8318151136092425, "potions": {"rows": 219, "used": 0.4292237442922374, "predicted": 0.4697087978993747, "log_loss": 0.31589147141656315, "log_loss_id": 0.5938979800601834, "log_loss_id_room": 0.5413112084018832}}, "CEREMONIAL_BEAST_BOSS": {"samples": 7245, "ce": 1.8773440174702078, "ce_prior": 3.3363225398885397, "death": 0.23768115942028986, "predicted_death": 0.2545899028775448, "rank_within": 0.9042313256853021, "rank_within_share": 0.5200177939532568, "rank_lost": 0.8343712933568107, "rank_lost_share": 0.30902186705589174, "auc_death": 0.9607901275815031, "auc_death_share": 0.6375841759012899, "potions": {"rows": 447, "used": 0.6331096196868009, "predicted": 0.669230040391698, "log_loss": 0.475402727697516, "log_loss_id": 0.9270214238999253, "log_loss_id_room": 0.8581201551114225}}, "CHOMPERS_NORMAL": {"samples": 5768, "ce": 1.35135577537305, "ce_prior": 2.263399612858976, "death": 0.009361997226074895, "predicted_death": 0.012467003511818044, "rank_within": 0.9680330478687897, "rank_within_share": 0.9337491506733478, "rank_lost": 0.6980946746291595, "rank_lost_share": -0.03127378629088085, "auc_death": 0.9820542263395129, "auc_death_share": 0.9768543686512263, "potions": {"rows": 524, "used": 0.25, "predicted": 0.2626202023083966, "log_loss": 0.3906625293681064, "log_loss_id": 0.4967189912992764, "log_loss_id_room": 0.5174523655465164}}, "CONSTRUCT_MENAGERIE_NORMAL": {"samples": 1963, "ce": 1.8283068760945171, "ce_prior": 2.6919540741112544, "death": 0.030565461029037188, "predicted_death": 0.04529734258977364, "rank_within": 0.9168106226299124, "rank_within_share": 0.8417292780553222, "rank_lost": 0.6793506827984347, "rank_lost_share": -0.10209615110735405, "auc_death": 0.9765096350299173, "auc_death_share": 0.9093666112328794, "potions": {"rows": 198, "used": 0.3434343434343434, "predicted": 0.38252039836131924, "log_loss": 0.30353203138520946, "log_loss_id": 0.6045339520303, "log_loss_id_room": 0.7027090369975683}}, "CORPSE_SLUGS_NORMAL": {"samples": 4255, "ce": 0.9808915994996186, "ce_prior": 2.0727919660817427, "death": 0.001410105757931845, "predicted_death": 0.003303455674144214, "rank_within": 0.9802885462118897, "rank_within_share": 0.9396360564258386, "rank_lost": 0.7480246581610541, "rank_lost_share": 0.05458943044309374, "auc_death": 0.997155858930603, "auc_death_share": 0.9935532802427001, "potions": {"rows": 205, "used": 0.1951219512195122, "predicted": 0.23583998931940603, "log_loss": 0.33419192536096165, "log_loss_id": 0.508157257195379, "log_loss_id_room": 0.45580648127131873}}, "CORPSE_SLUGS_WEAK": {"samples": 9117, "ce": 0.6730061832874077, "ce_prior": 1.7110217716631564, "death": 0.0, "predicted_death": 1.7205492046947568e-05, "rank_within": 0.9248673070472851, "rank_within_share": 0.7948415643390295, "rank_lost": 0.6975868766348302, "rank_lost_share": 0.2790488299887353, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 333, "used": 0.13513513513513514, "predicted": 0.15807417702553864, "log_loss": 0.3129925951612604, "log_loss_id": 0.4827248940832593, "log_loss_id_room": 0.40131516556216557}}, "CUBEX_CONSTRUCT_NORMAL": {"samples": 3419, "ce": 1.0622314077475465, "ce_prior": 2.0231871087338127, "death": 0.0020473822755191578, "predicted_death": 0.0012678924171959597, "rank_within": 0.9763260067018508, "rank_within_share": 0.9337383916925789, "rank_lost": 0.7393194698653591, "rank_lost_share": 0.1243697922212889, "auc_death": 0.9979846835953244, "auc_death_share": 0.998186215235792, "potions": {"rows": 189, "used": 0.21164021164021163, "predicted": 0.1786155782703432, "log_loss": 0.4836517360417454, "log_loss_id": 0.5292539472030505, "log_loss_id_room": 0.49449642944768263}}, "CULTISTS_NORMAL": {"samples": 4841, "ce": 1.453885350710666, "ce_prior": 2.371556654794019, "death": 0.029539351373683125, "predicted_death": 0.0411155731959368, "rank_within": 0.958523791669855, "rank_within_share": 0.8328838859245545, "rank_lost": 0.7994148609821146, "rank_lost_share": 0.04120222668930664, "auc_death": 0.9754184078408016, "auc_death_share": 0.7332216803241648, "potions": {"rows": 245, "used": 0.2938775510204082, "predicted": 0.3617083385985823, "log_loss": 0.39428315427792177, "log_loss_id": 0.5624255554258778, "log_loss_id_room": 0.5424762621402426}}, "DECIMILLIPEDE_ELITE": {"samples": 3521, "ce": 1.759972655996854, "ce_prior": 2.7429823692123545, "death": 0.07895484237432547, "predicted_death": 0.10236483540425584, "rank_within": 0.9282914441688614, "rank_within_share": 0.8120341478516893, "rank_lost": 0.7292777160301379, "rank_lost_share": 0.0503945980191317, "auc_death": 0.9523061483039269, "auc_death_share": 0.7659023033339379, "potions": {"rows": 145, "used": 0.6206896551724138, "predicted": 0.6446744952692323, "log_loss": 0.4038684798157314, "log_loss_id": 0.8504489568728079, "log_loss_id_room": 1.2403288738360398}}, "DENSE_VEGETATION_EVENT_ENCOUNTER": {"samples": 917, "ce": 1.6406956707171647, "ce_prior": 2.7049173799007384, "death": 0.009814612868047983, "predicted_death": 0.00907609593963461, "rank_within": 0.929275417793382, "rank_within_share": 0.7081105898412317, "rank_lost": 0.8308171349436625, "rank_lost_share": 0.0008477853623257285, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 60, "used": 0.43333333333333335, "predicted": 0.4919736149809978, "log_loss": 0.4818673330878435, "log_loss_id": 0.6428592566580797, "log_loss_id_room": 0.739592410812853}}, "DEVOTED_SCULPTOR_WEAK": {"samples": 3658, "ce": 1.5565436573987845, "ce_prior": 2.0968640461268193, "death": 0.0062875888463641335, "predicted_death": 0.011798107402452355, "rank_within": 0.7727738279885101, "rank_within_share": 0.5859883322222654, "rank_lost": 0.605565576531641, "rank_lost_share": -0.020490835569444654, "auc_death": 0.9764735439424445, "auc_death_share": 0.47278541592261164, "potions": {"rows": 465, "used": 0.2623655913978495, "predicted": 0.27763472219837015, "log_loss": 0.35174787974454097, "log_loss_id": 0.49435167240418043, "log_loss_id_room": 0.47340925962088554}}, "ENTOMANCER_ELITE": {"samples": 4387, "ce": 1.7594889290417743, "ce_prior": 2.673934773010454, "death": 0.10895828584454069, "predicted_death": 0.13272717709813842, "rank_within": 0.9074086893953162, "rank_within_share": 0.7421327225837029, "rank_lost": 0.7020659534213134, "rank_lost_share": -0.030995851242142564, "auc_death": 0.9508806421605057, "auc_death_share": 0.6726848585439709, "potions": {"rows": 287, "used": 0.29965156794425085, "predicted": 0.2884379743115825, "log_loss": 0.35056301905480364, "log_loss_id": 0.5196341271117539, "log_loss_id_room": 0.48084202446311286}}, "EXOSKELETONS_NORMAL": {"samples": 3968, "ce": 1.068284599844846, "ce_prior": 2.0307284989034486, "death": 0.01310483870967742, "predicted_death": 0.010851700042995571, "rank_within": 0.9766906977898155, "rank_within_share": 0.9551014504831344, "rank_lost": 0.7060648510497238, "rank_lost_share": 0.018893546081002497, "auc_death": 0.9756869101350001, "auc_death_share": 0.9417230809901304, "potions": {"rows": 363, "used": 0.14600550964187328, "predicted": 0.17058497210504736, "log_loss": 0.2100015418399543, "log_loss_id": 0.43209634126062396, "log_loss_id_room": 0.36248838627514146}}, "EXOSKELETONS_WEAK": {"samples": 6036, "ce": 0.5554123815068795, "ce_prior": 1.4813031266506334, "death": 0.0004970178926441351, "predicted_death": 4.187030687990785e-05, "rank_within": 0.903326915016546, "rank_within_share": 0.8165297415783592, "rank_lost": 0.6587086191963434, "rank_lost_share": 0.19958463573282695, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 406, "used": 0.1206896551724138, "predicted": 0.1281744606657547, "log_loss": 0.22997631319106782, "log_loss_id": 0.44660020308650744, "log_loss_id_room": 0.36627050797760746}}, "FABRICATOR_NORMAL": {"samples": 2121, "ce": 1.6838003693896337, "ce_prior": 2.354185018326863, "death": 0.031588873173031586, "predicted_death": 0.037111683334341804, "rank_within": 0.9134365037086631, "rank_within_share": 0.824091646454681, "rank_lost": 0.6157254493687153, "rank_lost_share": -0.049273432070950654, "auc_death": 0.9058948421817308, "auc_death_share": 0.6574207144861555, "potions": {"rows": 333, "used": 0.1981981981981982, "predicted": 0.29193419348893324, "log_loss": 0.41894610745391986, "log_loss_id": 0.4708336967379665, "log_loss_id_room": 0.5582116689949027}}, "FLYCONID_NORMAL": {"samples": 3021, "ce": 1.1803548696382742, "ce_prior": 2.2381192694120804, "death": 0.004634227077126779, "predicted_death": 0.005537064323110451, "rank_within": 0.9764716493864483, "rank_within_share": 0.9398145927376592, "rank_lost": 0.7635960811307011, "rank_lost_share": 0.08351347988409064, "auc_death": 0.9937879989426381, "auc_death_share": 0.9871794871794872, "potions": {"rows": 167, "used": 0.32934131736526945, "predicted": 0.33569897309133895, "log_loss": 0.46844981426329596, "log_loss_id": 0.5505373958980677, "log_loss_id_room": 0.557975599844027}}, "FOGMOG_NORMAL": {"samples": 4113, "ce": 1.2015690004721993, "ce_prior": 2.147317561643252, "death": 0.0087527352297593, "predicted_death": 0.00651742685956142, "rank_within": 0.9752145344373567, "rank_within_share": 0.9263019833974452, "rank_lost": 0.7652368055980556, "rank_lost_share": 0.1416820212723309, "auc_death": 0.9897273466123407, "auc_death_share": 0.9030242470570484, "potions": {"rows": 289, "used": 0.2629757785467128, "predicted": 0.31009782075881076, "log_loss": 0.36668798293129135, "log_loss_id": 0.5185231692186982, "log_loss_id_room": 0.500234011378259}}, "FOSSIL_STALKER_NORMAL": {"samples": 3318, "ce": 0.83365983104075, "ce_prior": 1.874465635512596, "death": 0.007534659433393611, "predicted_death": 0.004654404418795821, "rank_within": 0.9849997036573653, "rank_within_share": 0.9577093606083175, "rank_lost": 0.746968057173239, "rank_lost_share": 0.08515017154298661, "auc_death": 0.9918986697906965, "auc_death_share": 0.9768920819678919, "potions": {"rows": 158, "used": 0.25316455696202533, "predicted": 0.18938203954876934, "log_loss": 0.2537337743817314, "log_loss_id": 0.5581766903435316, "log_loss_id_room": 0.515279289160145}}, "FROG_KNIGHT_NORMAL": {"samples": 2208, "ce": 1.2062491903102022, "ce_prior": 1.8491509798760306, "death": 0.016757246376811596, "predicted_death": 0.01533632656689696, "rank_within": 0.9532351759751272, "rank_within_share": 0.9067133168581806, "rank_lost": 0.6129350648981178, "rank_lost_share": -0.059452454802194944, "auc_death": 0.9925340856277337, "auc_death_share": 0.947881106632775, "potions": {"rows": 273, "used": 0.21611721611721613, "predicted": 0.19252318399939572, "log_loss": 0.3040993323876865, "log_loss_id": 0.5324333799974197, "log_loss_id_room": 0.5417145865075826}}, "FUZZY_WURM_CRAWLER_WEAK": {"samples": 8934, "ce": 0.3074700448192357, "ce_prior": 1.2666182699243542, "death": 0.0, "predicted_death": 9.015270827705562e-06, "rank_within": 0.8776203086648037, "rank_within_share": 0.7966240901853509, "rank_lost": 0.6089231704517302, "rank_lost_share": 0.2870136985443811, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 380, "used": 0.05263157894736842, "predicted": 0.0955012501807916, "log_loss": 0.19767541390657978, "log_loss_id": 0.45377948856631733, "log_loss_id_room": 0.3397461709110108}}, "GLOBE_HEAD_NORMAL": {"samples": 1829, "ce": 1.0471125767773832, "ce_prior": 1.8947775039248158, "death": 0.0032804811372334607, "predicted_death": 0.003045211117724979, "rank_within": 0.965575572232045, "rank_within_share": 0.9235992151735385, "rank_lost": 0.6340820441075656, "rank_lost_share": -0.06450442597247232, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 351, "used": 0.1282051282051282, "predicted": 0.13284210162847265, "log_loss": 0.18037300587098354, "log_loss_id": 0.4080016498951961, "log_loss_id_room": 0.3734286541864858}}, "GREMLIN_MERC_NORMAL": {"samples": 4579, "ce": 0.7082650572863592, "ce_prior": 1.8833308961376156, "death": 0.0008735531775496833, "predicted_death": 0.0015390057396209255, "rank_within": 0.9899603741437886, "rank_within_share": 0.9665955275912692, "rank_lost": 0.7626594006480711, "rank_lost_share": 0.092540803659969, "auc_death": 0.9983314794215795, "auc_death_share": 0.9938820912124583, "potions": {"rows": 272, "used": 0.14705882352941177, "predicted": 0.164749306212357, "log_loss": 0.2858904733499923, "log_loss_id": 0.5149203570730065, "log_loss_id_room": 0.43424641148239707}}, "HAUNTED_SHIP_NORMAL": {"samples": 4657, "ce": 1.2893366165726254, "ce_prior": 2.296571095984819, "death": 0.00751556796220743, "predicted_death": 0.005092249129375401, "rank_within": 0.9737637868316381, "rank_within_share": 0.9321228324569256, "rank_lost": 0.75652428527937, "rank_lost_share": 0.08869074103257003, "auc_death": 0.9870062615505296, "auc_death_share": 0.9759159672932166, "potions": {"rows": 239, "used": 0.35564853556485354, "predicted": 0.276250682266276, "log_loss": 0.5390855321588167, "log_loss_id": 0.6602786597003524, "log_loss_id_room": 0.6846624242858265}}, "HUNTER_KILLER_NORMAL": {"samples": 4762, "ce": 1.4223617153816885, "ce_prior": 2.3747512683633145, "death": 0.01490970180596388, "predicted_death": 0.021214629755837638, "rank_within": 0.9652652240436538, "rank_within_share": 0.9178653106400059, "rank_lost": 0.7681016027078102, "rank_lost_share": -0.06013717632611981, "auc_death": 0.9867866357774567, "auc_death_share": 0.9527034103857489, "potions": {"rows": 483, "used": 0.2546583850931677, "predicted": 0.26663458641679083, "log_loss": 0.2821028296706695, "log_loss_id": 0.49757593739546824, "log_loss_id_room": 0.4923776546861578}}, "INFESTED_PRISMS_ELITE": {"samples": 4278, "ce": 1.789235628432316, "ce_prior": 2.8533063714222315, "death": 0.06732117812061711, "predicted_death": 0.06944057420194434, "rank_within": 0.946125335921205, "rank_within_share": 0.8437589265037188, "rank_lost": 0.7507079474135068, "rank_lost_share": -0.013590656598763351, "auc_death": 0.9796429079858854, "auc_death_share": 0.8035329853733046, "potions": {"rows": 260, "used": 0.3730769230769231, "predicted": 0.3999841556776282, "log_loss": 0.3021868676872601, "log_loss_id": 0.6672268353137644, "log_loss_id_room": 0.7173310734490951}}, "INKLETS_NORMAL": {"samples": 3244, "ce": 0.7338868322925582, "ce_prior": 1.8696655202561179, "death": 0.0006165228113440197, "predicted_death": 0.00159405281361945, "rank_within": 0.9879655571406786, "rank_within_share": 0.9653610731465674, "rank_lost": 0.7503157226137719, "rank_lost_share": 0.15761362344877972, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 174, "used": 0.1724137931034483, "predicted": 0.1452345088692763, "log_loss": 0.2864006108764606, "log_loss_id": 0.4902065232002951, "log_loss_id_room": 0.4323820359922096}}, "KAISER_CRAB_BOSS": {"samples": 6600, "ce": 1.8217757291474024, "ce_prior": 3.152291348308125, "death": 0.2509090909090909, "predicted_death": 0.2738249109998431, "rank_within": 0.9060061145231569, "rank_within_share": 0.6221005665387028, "rank_lost": 0.8006228463464181, "rank_lost_share": 0.047502680112562964, "auc_death": 0.9344524987336306, "auc_death_share": 0.6911385265500328, "potions": {"rows": 343, "used": 0.577259475218659, "predicted": 0.6036336151128442, "log_loss": 0.2951504910608109, "log_loss_id": 0.950085232040828, "log_loss_id_room": 0.63691703392352}}, "KNIGHTS_ELITE": {"samples": 1499, "ce": 1.9676833445848347, "ce_prior": 2.941031467051389, "death": 0.0980653769179453, "predicted_death": 0.11722710008338168, "rank_within": 0.8780188276126648, "rank_within_share": 0.7634235584134066, "rank_lost": 0.6538768808105908, "rank_lost_share": 0.048123870985360945, "auc_death": 0.9051850279408673, "auc_death_share": 0.7611983624493209, "potions": {"rows": 101, "used": 0.31683168316831684, "predicted": 0.3521552865933471, "log_loss": 0.3347097956137789, "log_loss_id": 0.5187285501037798, "log_loss_id_room": 0.4370477159000495}}, "KNOWLEDGE_DEMON_BOSS": {"samples": 5467, "ce": 1.38020672638974, "ce_prior": 3.0732664511766896, "death": 0.5321017011157856, "predicted_death": 0.5534585589119472, "rank_within": 0.8648206353145143, "rank_within_share": 0.42564068006284533, "rank_lost": 0.7994691659840228, "rank_lost_share": 0.1164869516281057, "auc_death": 0.9699557165904948, "auc_death_share": 0.6751855112057831, "potions": {"rows": 309, "used": 0.6666666666666666, "predicted": 0.6082387666811125, "log_loss": 0.29480736038486977, "log_loss_id": 0.9901671589542796, "log_loss_id_room": 0.6193724149614873}}, "LAGAVULIN_MATRIARCH_BOSS": {"samples": 9129, "ce": 1.3347574233447363, "ce_prior": 3.0140456880148614, "death": 0.5161573009091905, "predicted_death": 0.5594051830246534, "rank_within": 0.8577942002376233, "rank_within_share": 0.21554214365334504, "rank_lost": 0.8427178851188039, "rank_lost_share": 0.32372003754018946, "auc_death": 0.9717670461018468, "auc_death_share": 0.543600448895136, "potions": {"rows": 416, "used": 0.7091346153846154, "predicted": 0.67736183378822, "log_loss": 0.5812566922911022, "log_loss_id": 1.0305539481149892, "log_loss_id_room": 0.7171294752925466}}, "LIVING_FOG_NORMAL": {"samples": 5450, "ce": 1.1903110282222409, "ce_prior": 2.1340212496653024, "death": 0.0027522935779816515, "predicted_death": 0.0025176934203778767, "rank_within": 0.9765792218244331, "rank_within_share": 0.9489427761293409, "rank_lost": 0.7397842139209593, "rank_lost_share": 0.09397492062717959, "auc_death": 0.9930434782608696, "auc_death_share": 0.9902898550724637, "potions": {"rows": 301, "used": 0.23588039867109634, "predicted": 0.230569218314219, "log_loss": 0.3370317101762486, "log_loss_id": 0.5210114484013404, "log_loss_id_room": 0.49371895644846514}}, "LOUSE_PROGENITOR_NORMAL": {"samples": 5344, "ce": 1.3869692057948764, "ce_prior": 2.3006271113787355, "death": 0.0093562874251497, "predicted_death": 0.01098687219308381, "rank_within": 0.9618467078978797, "rank_within_share": 0.9319368931830542, "rank_lost": 0.706914415693705, "rank_lost_share": -0.012442398727759655, "auc_death": 0.9943271346237749, "auc_death_share": 0.9512693431960333, "potions": {"rows": 424, "used": 0.2830188679245283, "predicted": 0.2571468050717789, "log_loss": 0.2996915518597523, "log_loss_id": 0.524257666329158, "log_loss_id_room": 0.5373472101869966}}, "MAWLER_NORMAL": {"samples": 3869, "ce": 1.0950656958443472, "ce_prior": 2.0803098861394482, "death": 0.002843111915223572, "predicted_death": 0.002655450297457667, "rank_within": 0.9741506930041615, "rank_within_share": 0.9383041655493767, "rank_lost": 0.7152893805227458, "rank_lost_share": 0.12950165535523941, "auc_death": 0.9903264812575575, "auc_death_share": 0.9912765589911902, "potions": {"rows": 216, "used": 0.2037037037037037, "predicted": 0.2518008177999591, "log_loss": 0.3965239581945679, "log_loss_id": 0.5499256346843163, "log_loss_id_room": 0.4994412995562118}}, "MECHA_KNIGHT_ELITE": {"samples": 1843, "ce": 2.2789130528840222, "ce_prior": 3.2154753137823002, "death": 0.12099837221920781, "predicted_death": 0.15956770542256246, "rank_within": 0.867444957222605, "rank_within_share": 0.7260621073211876, "rank_lost": 0.7146543187948394, "rank_lost_share": 0.012992604164566409, "auc_death": 0.9226003345286746, "auc_death_share": 0.7976451166544991, "potions": {"rows": 246, "used": 0.35365853658536583, "predicted": 0.3920941428349448, "log_loss": 0.29529002243969354, "log_loss_id": 0.6874925744391355, "log_loss_id_room": 0.663351582669041}}, "MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER": {"samples": 75, "ce": 2.050312955984835, "ce_prior": 3.090132526806125, "death": 0.04, "predicted_death": 0.045278547050378204, "rank_within": 0.9161989795918366, "rank_within_share": 0.8990631473062222, "rank_lost": 0.49864008705129437, "rank_lost_share": -0.05939474878250646, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 4, "used": 1.0, "predicted": 0.7494068443775177, "log_loss": 0.30822381430113477, "log_loss_id": 1.143265819595144, "log_loss_id_room": 1.3806065077217364}}, "MYTES_NORMAL": {"samples": 5490, "ce": 1.3191642679188724, "ce_prior": 2.2597399979329786, "death": 0.00947176684881603, "predicted_death": 0.011615360822220493, "rank_within": 0.9707461144726998, "rank_within_share": 0.9317570537745453, "rank_lost": 0.7333029944993016, "rank_lost_share": -0.026700779120913336, "auc_death": 0.9754338938218037, "auc_death_share": 0.9429305477194361, "potions": {"rows": 518, "used": 0.30115830115830117, "predicted": 0.28016651726477465, "log_loss": 0.33614944176703365, "log_loss_id": 0.5566854587681799, "log_loss_id_room": 0.6142412172276243}}, "NIBBITS_NORMAL": {"samples": 4799, "ce": 1.197159485904538, "ce_prior": 2.2471183444529808, "death": 0.007709939570743905, "predicted_death": 0.0073938727213176065, "rank_within": 0.9740396603699213, "rank_within_share": 0.9263130385681909, "rank_lost": 0.7697673781817387, "rank_lost_share": 0.1269797709190308, "auc_death": 0.9907852005596774, "auc_death_share": 0.9661891036728399, "potions": {"rows": 265, "used": 0.28679245283018867, "predicted": 0.27924050441136505, "log_loss": 0.337922467668486, "log_loss_id": 0.5257186424650998, "log_loss_id_room": 0.51762795277785}}, "NIBBITS_WEAK": {"samples": 8772, "ce": 0.354420479456728, "ce_prior": 1.5556916170792077, "death": 0.0031919744642042863, "predicted_death": 0.0029071373460059103, "rank_within": 0.931867495061205, "rank_within_share": 0.7770451580013605, "rank_lost": 0.7236627164578515, "rank_lost_share": 0.2773519372222732, "auc_death": 0.9995573262505534, "auc_death_share": 0.78190939943928, "potions": {"rows": 244, "used": 0.14344262295081966, "predicted": 0.1285980812709161, "log_loss": 0.2648961776750042, "log_loss_id": 0.5002556932370127, "log_loss_id_room": 0.4136559034275407}}, "OVERGROWTH_CRAWLERS": {"samples": 4392, "ce": 1.3847257581433825, "ce_prior": 2.4364085031613407, "death": 0.022768670309653915, "predicted_death": 0.02250504588903725, "rank_within": 0.9675106862399576, "rank_within_share": 0.8967113960581949, "rank_lost": 0.7862567471613745, "rank_lost_share": 0.1355326433012105, "auc_death": 0.9862145334178605, "auc_death_share": 0.9207896872426388, "potions": {"rows": 289, "used": 0.4186851211072664, "predicted": 0.37449550230848777, "log_loss": 0.40364002032434876, "log_loss_id": 0.7046674821567501, "log_loss_id_room": 0.806470016311623}}, "OVICOPTER_NORMAL": {"samples": 6485, "ce": 1.8826471658203427, "ce_prior": 2.793843823447838, "death": 0.0607555898226677, "predicted_death": 0.06960079528923231, "rank_within": 0.9214456125801835, "rank_within_share": 0.7892083595229532, "rank_lost": 0.7355200690557006, "rank_lost_share": -0.013761396702858657, "auc_death": 0.95681684175539, "auc_death_share": 0.7438572088342801, "potions": {"rows": 356, "used": 0.4410112359550562, "predicted": 0.37287755629668123, "log_loss": 0.3173603654835653, "log_loss_id": 0.6754214249924074, "log_loss_id_room": 0.8317928778872472}}, "OWL_MAGISTRATE_NORMAL": {"samples": 1979, "ce": 1.405054369455447, "ce_prior": 2.0989718478878543, "death": 0.023749368367862556, "predicted_death": 0.02046170951011841, "rank_within": 0.9478399568894464, "rank_within_share": 0.8993250003815709, "rank_lost": 0.6677273677921729, "rank_lost_share": -0.09655162835591952, "auc_death": 0.9648100764383338, "auc_death_share": 0.9000265034114618, "potions": {"rows": 225, "used": 0.17777777777777778, "predicted": 0.2308129804944041, "log_loss": 0.26232956314249206, "log_loss_id": 0.41527360754222437, "log_loss_id_room": 0.36675342922006343}}, "PHANTASMAL_GARDENERS_ELITE": {"samples": 9150, "ce": 1.5641348423311816, "ce_prior": 2.8125354869699657, "death": 0.05081967213114754, "predicted_death": 0.06411179951906647, "rank_within": 0.9608160119753136, "rank_within_share": 0.8137085287288846, "rank_lost": 0.8404845989286146, "rank_lost_share": 0.09939491664586109, "auc_death": 0.9795301498936788, "auc_death_share": 0.7902126976905229, "potions": {"rows": 453, "used": 0.3730684326710817, "predicted": 0.41435086181575936, "log_loss": 0.46933717038775674, "log_loss_id": 0.6314505147176098, "log_loss_id_room": 0.6988226159764703}}, "PHROG_PARASITE_ELITE": {"samples": 10406, "ce": 1.8397770421508937, "ce_prior": 3.055038567761026, "death": 0.23198154910628482, "predicted_death": 0.22244781691298357, "rank_within": 0.9303800848335622, "rank_within_share": 0.5792981480290598, "rank_lost": 0.7971043353998178, "rank_lost_share": 0.1479363759919329, "auc_death": 0.9743392956051864, "auc_death_share": 0.6502915802750582, "potions": {"rows": 400, "used": 0.58, "predicted": 0.5406923133719357, "log_loss": 0.4569639622514864, "log_loss_id": 0.7776357510874865, "log_loss_id_room": 0.825167461047572}}, "PUNCH_CONSTRUCT_NORMAL": {"samples": 4000, "ce": 0.9283851478424279, "ce_prior": 1.977539020585298, "death": 0.0005, "predicted_death": 0.0025356461715110973, "rank_within": 0.9851943479487784, "rank_within_share": 0.9639996962021162, "rank_lost": 0.7168270597079397, "rank_lost_share": 0.14185136203259757, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 232, "used": 0.22413793103448276, "predicted": 0.22280006271056682, "log_loss": 0.30916291907674026, "log_loss_id": 0.5151880002669766, "log_loss_id_room": 0.4836244655679516}}, "PUNCH_OFF_EVENT_ENCOUNTER": {"samples": 757, "ce": 1.5942703496714083, "ce_prior": 2.916980300331487, "death": 0.06869220607661823, "predicted_death": 0.07736349971292736, "rank_within": 0.9542541836159935, "rank_within_share": 0.8995557991734628, "rank_lost": 0.7857649394051712, "rank_lost_share": 0.05886045795821728, "auc_death": 0.9785583788816548, "auc_death_share": 0.9464856413940466, "potions": {"rows": 33, "used": 0.48484848484848486, "predicted": 0.508133154886502, "log_loss": 0.2904042089546123, "log_loss_id": 0.7682597443103739, "log_loss_id_room": 0.9715925150668975}}, "QUEEN_BOSS": {"samples": 2323, "ce": 1.7489365083077555, "ce_prior": 2.8710485758849162, "death": 0.32371932845458457, "predicted_death": 0.3801425068390397, "rank_within": 0.8969480792028386, "rank_within_share": 0.6749080948146559, "rank_lost": 0.6202359266067614, "rank_lost_share": -0.03068797895171649, "auc_death": 0.967716823989468, "auc_death_share": 0.7624127232385285, "potions": {"rows": 262, "used": 0.25572519083969464, "predicted": 0.37940258715188346, "log_loss": 0.5012667091807438, "log_loss_id": 0.5944882281913763, "log_loss_id_room": 0.720656573305727}}, "RUBY_RAIDERS_NORMAL": {"samples": 3523, "ce": 1.2064391707129116, "ce_prior": 2.3206209609503783, "death": 0.005393130854385467, "predicted_death": 0.008237465865537268, "rank_within": 0.975262224318731, "rank_within_share": 0.923850259827307, "rank_lost": 0.7724240099204911, "rank_lost_share": 0.04070853123539523, "auc_death": 0.994898537879807, "auc_death_share": 0.9700239388473845, "potions": {"rows": 168, "used": 0.3869047619047619, "predicted": 0.41084958686317946, "log_loss": 0.33602147335247057, "log_loss_id": 0.5797173440168447, "log_loss_id_room": 0.6296835885539098}}, "SCROLLS_OF_BITING_NORMAL": {"samples": 1234, "ce": 1.7057809985435217, "ce_prior": 2.524418307057439, "death": 0.01539708265802269, "predicted_death": 0.021176790348820203, "rank_within": 0.9366532945540432, "rank_within_share": 0.8928584103199276, "rank_lost": 0.5860787492203567, "rank_lost_share": -0.09715685508267904, "auc_death": 0.9753402647124607, "auc_death_share": 0.9031261100951229, "potions": {"rows": 205, "used": 0.24878048780487805, "predicted": 0.31332038855632155, "log_loss": 0.3780683897013091, "log_loss_id": 0.5018073804709406, "log_loss_id_room": 0.501278215622582}}, "SCROLLS_OF_BITING_WEAK": {"samples": 3140, "ce": 1.0228811945669243, "ce_prior": 1.840259015037346, "death": 0.0, "predicted_death": 0.0005959963760030885, "rank_within": 0.8767419309821904, "rank_within_share": 0.79575805075837, "rank_lost": 0.5566983077086534, "rank_lost_share": 0.28097071672012786, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 360, "used": 0.11666666666666667, "predicted": 0.13937417324719012, "log_loss": 0.27041666008675613, "log_loss_id": 0.4234056900267976, "log_loss_id_room": 0.3481404710676301}}, "SEAPUNK_NORMAL": {"samples": 4789, "ce": 1.098477645186673, "ce_prior": 2.1724856372760675, "death": 0.006055543954896638, "predicted_death": 0.006544622865557707, "rank_within": 0.9804888101603729, "rank_within_share": 0.9467588791451106, "rank_lost": 0.7486867777501736, "rank_lost_share": 0.08772291491832972, "auc_death": 0.985540104796453, "auc_death_share": 0.9676289802498991, "potions": {"rows": 265, "used": 0.2641509433962264, "predicted": 0.2611811037443837, "log_loss": 0.3702639678663589, "log_loss_id": 0.5756614250954837, "log_loss_id_room": 0.5642484759115756}}, "SEAPUNK_WEAK": {"samples": 8177, "ce": 0.4658520948354067, "ce_prior": 1.5982927601099013, "death": 0.0, "predicted_death": 2.633075747224242e-05, "rank_within": 0.9465210348921214, "rank_within_share": 0.8324462506203784, "rank_lost": 0.7216705496410201, "rank_lost_share": 0.2383057270308343, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 287, "used": 0.21602787456445993, "predicted": 0.14330172343152506, "log_loss": 0.3654180425240962, "log_loss_id": 0.5377735627905793, "log_loss_id_room": 0.4838411797805832}}, "SEWER_CLAM_NORMAL": {"samples": 4869, "ce": 1.0158160233753226, "ce_prior": 1.9627427710627232, "death": 0.004107619634421853, "predicted_death": 0.002611193534452688, "rank_within": 0.9780145796156411, "rank_within_share": 0.9506035377598397, "rank_lost": 0.7014556175066909, "rank_lost_share": 0.07742314809845302, "auc_death": 0.9872778197843632, "auc_death_share": 0.9815815722724497, "potions": {"rows": 248, "used": 0.2056451612903226, "predicted": 0.21865056246312825, "log_loss": 0.35911732955388614, "log_loss_id": 0.5039972128832171, "log_loss_id_room": 0.4495081530951756}}, "SHRINKER_BEETLE_WEAK": {"samples": 7357, "ce": 0.3794237205650359, "ce_prior": 1.3130711504086072, "death": 0.0, "predicted_death": 4.4428518373734144e-05, "rank_within": 0.8705010730679802, "rank_within_share": 0.8171604671696812, "rank_lost": 0.5916281116517212, "rank_lost_share": 0.2531994321647416, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 221, "used": 0.058823529411764705, "predicted": 0.08321403910758374, "log_loss": 0.15895284668368023, "log_loss_id": 0.4391626821277932, "log_loss_id_room": 0.32384761118923155}}, "SKULKING_COLONY_ELITE": {"samples": 6873, "ce": 1.4193045943134006, "ce_prior": 2.4664177630998334, "death": 0.01324021533537029, "predicted_death": 0.015963773249345708, "rank_within": 0.9774056853774515, "rank_within_share": 0.9269486460836999, "rank_lost": 0.768107802986097, "rank_lost_share": 0.00167057379591905, "auc_death": 0.9916365138958695, "auc_death_share": 0.9228833744530657, "potions": {"rows": 412, "used": 0.3567961165048544, "predicted": 0.36360778061303256, "log_loss": 0.5448443253585294, "log_loss_id": 0.6028156722730099, "log_loss_id_room": 0.6266309400512048}}, "SLIMED_BERSERKER_NORMAL": {"samples": 2430, "ce": 1.5793176074077049, "ce_prior": 2.257936343452022, "death": 0.056790123456790124, "predicted_death": 0.05611932040970902, "rank_within": 0.9365595414045476, "rank_within_share": 0.8582373177052183, "rank_lost": 0.6162872234047592, "rank_lost_share": -0.08576124279517575, "auc_death": 0.960879946566794, "auc_death_share": 0.7806017971919564, "potions": {"rows": 457, "used": 0.18818380743982493, "predicted": 0.22294016151722026, "log_loss": 0.27956613778321177, "log_loss_id": 0.4234613416045651, "log_loss_id_room": 0.38552954990559524}}, "SLIMES_NORMAL": {"samples": 3687, "ce": 0.8232110305520897, "ce_prior": 1.9693708091953828, "death": 0.0024410089503661514, "predicted_death": 0.001758009158252694, "rank_within": 0.9873184874422095, "rank_within_share": 0.957656468987164, "rank_lost": 0.7736603014659259, "rank_lost_share": -0.009332468430139356, "auc_death": 0.9933880721873771, "auc_death_share": 0.9934651556661834, "potions": {"rows": 177, "used": 0.2824858757062147, "predicted": 0.2591307325968018, "log_loss": 0.3867177514607604, "log_loss_id": 0.5472102538758, "log_loss_id_room": 0.5358272238708724}}, "SLIMES_WEAK": {"samples": 9593, "ce": 0.39755185484703565, "ce_prior": 1.4217146060113774, "death": 0.0, "predicted_death": 4.5529136601640663e-07, "rank_within": 0.909518594212724, "rank_within_share": 0.7956790648796433, "rank_lost": 0.6855275186711374, "rank_lost_share": 0.26561623742852014, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 377, "used": 0.15119363395225463, "predicted": 0.09938580797237702, "log_loss": 0.2608370307491458, "log_loss_id": 0.5128884242135845, "log_loss_id_room": 0.4274053197563288}}, "SLITHERING_STRANGLER_NORMAL": {"samples": 3025, "ce": 1.3262557154459067, "ce_prior": 2.281707837059211, "death": 0.002644628099173554, "predicted_death": 0.005791054832109465, "rank_within": 0.9690311941985852, "rank_within_share": 0.9230233348710375, "rank_lost": 0.7700719260934903, "rank_lost_share": 0.1547870667118391, "auc_death": 0.9950884870943011, "auc_death_share": 0.9951972990672118, "potions": {"rows": 170, "used": 0.37058823529411766, "predicted": 0.3364696329740403, "log_loss": 0.38548401352813666, "log_loss_id": 0.5709841113644663, "log_loss_id_room": 0.6113554836780627}}, "SLUDGE_SPINNER_WEAK": {"samples": 7528, "ce": 0.4698106603839808, "ce_prior": 1.5646989849317061, "death": 0.0, "predicted_death": 3.491465269458309e-06, "rank_within": 0.9385888681297475, "rank_within_share": 0.8489089325731227, "rank_lost": 0.6966210798627414, "rank_lost_share": 0.242720123174397, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 256, "used": 0.09375, "predicted": 0.08347907500402196, "log_loss": 0.2735671514572798, "log_loss_id": 0.5106957966808884, "log_loss_id_room": 0.3979841970106216}}, "SLUMBERING_BEETLE_NORMAL": {"samples": 5102, "ce": 1.6371636735667643, "ce_prior": 2.5297807625194224, "death": 0.04135633085064681, "predicted_death": 0.04946931727699176, "rank_within": 0.9568594284624377, "rank_within_share": 0.8852942031174902, "rank_lost": 0.7157634636014161, "rank_lost_share": -0.059959526419296194, "auc_death": 0.9862544309668415, "auc_death_share": 0.8717100459807394, "potions": {"rows": 442, "used": 0.36199095022624433, "predicted": 0.4155671414817102, "log_loss": 0.42901313945325475, "log_loss_id": 0.6009415705836466, "log_loss_id_room": 0.6532787981457475}}, "SNAPPING_JAXFRUIT_NORMAL": {"samples": 3750, "ce": 1.2657118580758036, "ce_prior": 2.3832452202566676, "death": 0.004266666666666667, "predicted_death": 0.005137400100207007, "rank_within": 0.9740652145361374, "rank_within_share": 0.9306547595698091, "rank_lost": 0.7682258661211426, "rank_lost_share": 0.19377920368108864, "auc_death": 0.9892298313350943, "auc_death_share": 0.9887726071936598, "potions": {"rows": 168, "used": 0.5, "predicted": 0.42327989335564037, "log_loss": 0.42633405814508435, "log_loss_id": 0.6898797520967508, "log_loss_id_room": 0.8092953151836888}}, "SOUL_FYSH_BOSS": {"samples": 8628, "ce": 1.6107921514601053, "ce_prior": 3.1799442109481455, "death": 0.42489568845618914, "predicted_death": 0.4537000099809198, "rank_within": 0.8767466944934246, "rank_within_share": 0.2978582922936645, "rank_lost": 0.808970993795466, "rank_lost_share": 0.3415596689711945, "auc_death": 0.9559760724219527, "auc_death_share": 0.5707963136185829, "potions": {"rows": 451, "used": 0.5365853658536586, "predicted": 0.639125156694437, "log_loss": 0.3533851724422497, "log_loss_id": 0.7731812908264786, "log_loss_id_room": 0.638915854561329}}, "SOUL_NEXUS_ELITE": {"samples": 1611, "ce": 1.8846036195219786, "ce_prior": 2.628421935215569, "death": 0.0446927374301676, "predicted_death": 0.0505191592817214, "rank_within": 0.9249001260404617, "rank_within_share": 0.841141455288227, "rank_lost": 0.6638634512570022, "rank_lost_share": -0.08904361593408408, "auc_death": 0.9220923304636911, "auc_death_share": 0.8003424650099247, "potions": {"rows": 142, "used": 0.2323943661971831, "predicted": 0.29288550886754455, "log_loss": 0.3730661491058364, "log_loss_id": 0.5830801110142128, "log_loss_id_room": 0.8877849488980419}}, "SPINY_TOAD_NORMAL": {"samples": 4970, "ce": 1.222014286360838, "ce_prior": 2.172607041106071, "death": 0.008450704225352112, "predicted_death": 0.009760776231497643, "rank_within": 0.9726575872265827, "rank_within_share": 0.9402045876311543, "rank_lost": 0.6946780451060859, "rank_lost_share": -0.0404563762053972, "auc_death": 0.9910484590749198, "auc_death_share": 0.9796293379534834, "potions": {"rows": 444, "used": 0.19144144144144143, "predicted": 0.1994652253074474, "log_loss": 0.2847672136397822, "log_loss_id": 0.4973135865715426, "log_loss_id_room": 0.4820724836384506}}, "TERROR_EEL_ELITE": {"samples": 9598, "ce": 1.856559900168987, "ce_prior": 2.972443886322591, "death": 0.053344446759741614, "predicted_death": 0.04765738721028457, "rank_within": 0.9370887846001051, "rank_within_share": 0.7827680252218854, "rank_lost": 0.7885090367742728, "rank_lost_share": 0.14067108719864152, "auc_death": 0.9622905002138271, "auc_death_share": 0.8076541903863037, "potions": {"rows": 393, "used": 0.5139949109414759, "predicted": 0.46353976182366835, "log_loss": 0.46065332391188507, "log_loss_id": 0.7081267228102918, "log_loss_id_room": 0.603075089114928}}, "TEST_SUBJECT_BOSS": {"samples": 2819, "ce": 1.7436016734888873, "ce_prior": 2.993376529909262, "death": 0.42497339482085844, "predicted_death": 0.4694544213758349, "rank_within": 0.8131184268818208, "rank_within_share": 0.5576903081362262, "rank_lost": 0.6427445271514602, "rank_lost_share": 0.03388854157606336, "auc_death": 0.9307720088448298, "auc_death_share": 0.7097376269795753, "potions": {"rows": 234, "used": 0.16666666666666666, "predicted": 0.30022847373066225, "log_loss": 0.35293783386549105, "log_loss_id": 0.3516529702540895, "log_loss_id_room": 1.9022049174646323}}, "THE_INSATIABLE_BOSS": {"samples": 6219, "ce": 1.9519819691313423, "ce_prior": 3.2496808581431798, "death": 0.35938253738543174, "predicted_death": 0.37381469995041433, "rank_within": 0.7944382368349019, "rank_within_share": 0.5234910523329456, "rank_lost": 0.7684725935367063, "rank_lost_share": 0.10377269165717559, "auc_death": 0.8813644494709936, "auc_death_share": 0.6879832389388614, "potions": {"rows": 306, "used": 0.4542483660130719, "predicted": 0.47517495138962706, "log_loss": 0.3173236383874605, "log_loss_id": 0.7250078073835875, "log_loss_id_room": 0.6522869387430615}}, "THE_KIN_BOSS": {"samples": 7270, "ce": 1.665569881924542, "ce_prior": 2.919288909712098, "death": 0.21939477303988997, "predicted_death": 0.25524905811618126, "rank_within": 0.9207737384703883, "rank_within_share": 0.7084983153962104, "rank_lost": 0.8005816372325861, "rank_lost_share": 0.2086040474774188, "auc_death": 0.9598254175888602, "auc_death_share": 0.7165178125556068, "potions": {"rows": 380, "used": 0.5973684210526315, "predicted": 0.5973011332278592, "log_loss": 0.24667184420560914, "log_loss_id": 0.9370279725777876, "log_loss_id_room": 0.6463969626154376}}, "THE_LOST_AND_FORGOTTEN_NORMAL": {"samples": 1818, "ce": 1.4255219017990644, "ce_prior": 2.167492390661272, "death": 0.02585258525852585, "predicted_death": 0.030666944446651877, "rank_within": 0.9325077316653424, "rank_within_share": 0.8998343522491674, "rank_lost": 0.6203312763888865, "rank_lost_share": -0.09493733573987392, "auc_death": 0.9758846349357703, "auc_death_share": 0.8889137692029482, "potions": {"rows": 316, "used": 0.22784810126582278, "predicted": 0.2691082801984021, "log_loss": 0.2819878504339247, "log_loss_id": 0.4975541581470749, "log_loss_id_room": 0.5364398444454728}}, "THE_OBSCURA_NORMAL": {"samples": 5418, "ce": 1.6187371086601352, "ce_prior": 2.416318269268587, "death": 0.03580657069029162, "predicted_death": 0.03285782721848127, "rank_within": 0.94439877170774, "rank_within_share": 0.8592387267006287, "rank_lost": 0.7125496897958519, "rank_lost_share": -0.06595830973173222, "auc_death": 0.9572934870793489, "auc_death_share": 0.7607289600276663, "potions": {"rows": 436, "used": 0.4701834862385321, "predicted": 0.3739006512081081, "log_loss": 0.3963609241187388, "log_loss_id": 0.7223794303560763, "log_loss_id_room": 0.8472730336093676}}, "THIEVING_HOPPER_WEAK": {"samples": 5747, "ce": 0.8007525518236365, "ce_prior": 1.7083561828356912, "death": 0.0, "predicted_death": 0.0001229500982588466, "rank_within": 0.8989619656192616, "rank_within_share": 0.7949591038545594, "rank_lost": 0.633899025132301, "rank_lost_share": 0.11364362377548723, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 419, "used": 0.10023866348448687, "predicted": 0.12930020221747593, "log_loss": 0.2094855025681069, "log_loss_id": 0.41607388708270115, "log_loss_id_room": 0.331335051207088}}, "TOADPOLES_WEAK": {"samples": 8568, "ce": 0.5182656148577798, "ce_prior": 1.5057744099319295, "death": 0.0, "predicted_death": 3.4247772895117298e-06, "rank_within": 0.9312298985141482, "rank_within_share": 0.842248131353263, "rank_lost": 0.6828460544454287, "rank_lost_share": 0.21155120706814065, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 338, "used": 0.13609467455621302, "predicted": 0.11928479153534284, "log_loss": 0.30394375592232264, "log_loss_id": 0.5215227620184789, "log_loss_id_room": 0.4385434278513704}}, "TUNNELER_WEAK": {"samples": 7316, "ce": 0.9066792914560906, "ce_prior": 1.7308849199717045, "death": 0.0032804811372334607, "predicted_death": 0.002476820894691713, "rank_within": 0.872666895254288, "rank_within_share": 0.7546376436397594, "rank_lost": 0.627119675787194, "rank_lost_share": 0.13460468677606952, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 401, "used": 0.2119700748129676, "predicted": 0.17951569011878296, "log_loss": 0.30773762380890946, "log_loss_id": 0.4892999360624192, "log_loss_id_room": 0.4471281179780842}}, "TURRET_OPERATOR_WEAK": {"samples": 3135, "ce": 0.7035618421331697, "ce_prior": 1.521388703767407, "death": 0.0, "predicted_death": 8.159280775868135e-05, "rank_within": 0.9118042781653258, "rank_within_share": 0.8119092787399608, "rank_lost": 0.6218947222708506, "rank_lost_share": 0.12333627271538523, "auc_death": 0.0, "auc_death_share": 0.0, "potions": {"rows": 500, "used": 0.104, "predicted": 0.11666441879489496, "log_loss": 0.2675591061174322, "log_loss_id": 0.4240657114766471, "log_loss_id_room": 0.3489819424737551}}, "TWO_TAILED_RATS_NORMAL": {"samples": 3966, "ce": 0.9051346232074309, "ce_prior": 1.9603069027200626, "death": 0.002773575390821987, "predicted_death": 0.0024093149134407285, "rank_within": 0.9837648353702856, "rank_within_share": 0.9610958469405062, "rank_lost": 0.7513911751591682, "rank_lost_share": 0.03610376470019878, "auc_death": 0.9978699551569508, "auc_death_share": 0.9888452914798206, "potions": {"rows": 162, "used": 0.1111111111111111, "predicted": 0.1691902607203915, "log_loss": 0.21409795788061783, "log_loss_id": 0.41872941658773055, "log_loss_id_room": 0.31579915701321104}}, "VANTOM_BOSS": {"samples": 7235, "ce": 1.6621111659823076, "ce_prior": 3.246295477820832, "death": 0.37194194885970977, "predicted_death": 0.4104013974987663, "rank_within": 0.893886439809106, "rank_within_share": 0.4502646980462167, "rank_lost": 0.8330979933395581, "rank_lost_share": 0.41103661776325157, "auc_death": 0.9599420391115416, "auc_death_share": 0.6696854624996388, "potions": {"rows": 537, "used": 0.5865921787709497, "predicted": 0.6198289554751509, "log_loss": 0.30978176592509205, "log_loss_id": 0.8965869519663086, "log_loss_id_room": 0.6919525372471788}}, "VINE_SHAMBLER_NORMAL": {"samples": 3816, "ce": 1.059223828180131, "ce_prior": 2.084249810449944, "death": 0.002882599580712788, "predicted_death": 0.003873223404961253, "rank_within": 0.9800810852657925, "rank_within_share": 0.9490354285952131, "rank_lost": 0.7282189452098883, "rank_lost_share": 0.14359951530398118, "auc_death": 0.9975031210986267, "auc_death_share": 0.994728811208212, "potions": {"rows": 209, "used": 0.2631578947368421, "predicted": 0.26938650318941115, "log_loss": 0.27450339999501444, "log_loss_id": 0.5351314766306846, "log_loss_id_room": 0.5233095187646425}}, "WATERFALL_GIANT_BOSS": {"samples": 10437, "ce": 1.8035323095664026, "ce_prior": 3.572077732974931, "death": 0.45309954967902655, "predicted_death": 0.49218349528455696, "rank_within": 0.8651517725390905, "rank_within_share": 0.5075119376048598, "rank_lost": 0.7768513408076284, "rank_lost_share": 0.3197222228335337, "auc_death": 0.9571181771059396, "auc_death_share": 0.7380945342141274, "potions": {"rows": 462, "used": 0.7337662337662337, "predicted": 0.7390837642247086, "log_loss": 0.29176036710010417, "log_loss_id": 0.9539540214880201, "log_loss_id_room": 0.5502864938172618}}}, "by_hp": {"below 30 %": {"samples": 31597, "ce": 0.9599411559290457, "ce_prior": 2.2719479736510935, "death": 0.2733170870652277, "predicted_death": 0.28605055769712967, "rank_within": 0.8222220790338535, "rank_within_share": 0.431261959395244, "rank_lost": 0.7446455448723729, "rank_lost_share": 0.2264055241686503, "auc_death": 0.9448728620727056, "auc_death_share": 0.5193111620392846, "potions": {"rows": 1213, "used": 0.605111294311624, "predicted": 0.6124227288131873, "log_loss": 0.35276850371918567, "log_loss_id": 1.0935400118673013, "log_loss_id_room": 1.053024565895082}}, "the rest": {"samples": 375445, "ce": 1.2735723052720336, "ce_prior": 2.3583023447075724, "death": 0.0775080238117434, "predicted_death": 0.0846438211272245, "rank_within": 0.9247222668569808, "rank_within_share": 0.7629356014590264, "rank_lost": 0.7230380282672849, "rank_lost_share": 0.09519370725592205, "auc_death": 0.9520890730982597, "auc_death_share": 0.6472679404551125, "potions": {"rows": 24012, "used": 0.29764284524404466, "predicted": 0.30632289177978267, "log_loss": 0.33931043151103835, "log_loss_id": 0.5699334438483605, "log_loss_id_room": 0.5388266433673945}}}, "by_potion": {"AMBERGRIS": {"rows": 39, "used": 0.3333333333333333, "predicted": 0.4533828259445727, "log_loss": 0.8908353743411984, "log_loss_id": 0.637318956891531, "log_loss_id_room": 0.637318956891531}, "ASHWATER": {"rows": 74, "used": 0.4189189189189189, "predicted": 0.4418888762152779, "log_loss": 0.3812016052876066, "log_loss_id": 0.6833272397499239, "log_loss_id_room": 0.6959083471333141}, "ATTACK_POTION": {"rows": 1954, "used": 0.38075742067553736, "predicted": 0.3649171535479727, "log_loss": 0.41663252774722886, "log_loss_id": 0.6652286581336652, "log_loss_id_room": 0.6096649342159495}, "BEETLE_JUICE": {"rows": 8, "used": 0.25, "predicted": 0.34570426118580144, "log_loss": 0.1870672781756124, "log_loss_id": 0.5745691314663187, "log_loss_id_room": 0.5745691314663187}, "BLESSING_OF_THE_FORGE": {"rows": 37, "used": 0.2702702702702703, "predicted": 0.0821961670354342, "log_loss": 0.5457160829762836, "log_loss_id": 0.7822516092208052, "log_loss_id_room": 1.4060578753557234}, "BLOCK_POTION": {"rows": 48, "used": 0.3333333333333333, "predicted": 0.40522507844267014, "log_loss": 0.4734079079774603, "log_loss_id": 0.6931471805599453, "log_loss_id_room": 0.6591356209971971}, "BLOOD_POTION": {"rows": 44, "used": 0.7954545454545454, "predicted": 0.583693096191961, "log_loss": 0.4433305439174548, "log_loss_id": 0.8066448707722881, "log_loss_id_room": 0.7321061095874621}, "BONE_BREW": {"rows": 31, "used": 0.2903225806451613, "predicted": 0.3042896966029319, "log_loss": 0.32747862436926845, "log_loss_id": 0.6364575369243937, "log_loss_id_room": 1.8802960215797373}, "BOTTLED_POTENTIAL": {"rows": 1, "used": 1.0, "predicted": 0.9999758005142212, "log_loss": 2.419977859108852e-05, "log_loss_id": 1.0296194171811581, "log_loss_id_room": 1.208410871049796}, "CLARITY": {"rows": 503, "used": 0.3121272365805169, "predicted": 0.3397372497130026, "log_loss": 0.4767570814630576, "log_loss_id": 0.6222959059543887, "log_loss_id_room": 0.5854711551398564}, "COLORLESS_POTION": {"rows": 71, "used": 0.30985915492957744, "predicted": 0.4438404294059352, "log_loss": 0.5070537595289674, "log_loss_id": 0.619393457103301, "log_loss_id_room": 0.7230355571023935}, "COSMIC_CONCOCTION": {"rows": 12, "used": 0.25, "predicted": 0.3197010423755273, "log_loss": 0.44276183329308316, "log_loss_id": 0.590946229449388, "log_loss_id_room": 0.5632002122580987}, "CUNNING_POTION": {"rows": 21, "used": 0.3333333333333333, "predicted": 0.3700292616437353, "log_loss": 0.14417379303814837, "log_loss_id": 0.651295858574238, "log_loss_id_room": 0.357865781945177}, "CURE_ALL": {"rows": 1892, "used": 0.45454545454545453, "predicted": 0.5232931688481639, "log_loss": 0.4686838558105892, "log_loss_id": 0.6904142680221274, "log_loss_id_room": 0.6105729500928158}, "DEXTERITY_POTION": {"rows": 54, "used": 0.3333333333333333, "predicted": 0.36015889012917296, "log_loss": 0.35452662820927977, "log_loss_id": 0.6380870336932402, "log_loss_id_room": 0.6168904968813341}, "DROPLET_OF_PRECOGNITION": {"rows": 14, "used": 0.21428571428571427, "predicted": 0.04341852574680162, "log_loss": 1.041157932693329, "log_loss_id": 0.727131370403849, "log_loss_id_room": 0.621575995970758}, "DUPLICATOR": {"rows": 33, "used": 0.15151515151515152, "predicted": 0.2226412292002351, "log_loss": 0.5889980836899192, "log_loss_id": 0.4800904184489996, "log_loss_id_room": 2.857702989770501}, "ENERGY_POTION": {"rows": 25, "used": 0.36, "predicted": 0.3382438426440845, "log_loss": 0.3071766116176436, "log_loss_id": 0.6721288046058719, "log_loss_id_room": 0.6227469503661596}, "ENTROPIC_BREW": {"rows": 2, "used": 1.0, "predicted": 0.9912530183792114, "log_loss": 0.008824245989357668, "log_loss_id": 1.000000500029089e-06, "log_loss_id_room": 1.000000500029089e-06}, "ESSENCE_OF_DARKNESS": {"rows": 18, "used": 0.5, "predicted": 0.4167179065407254, "log_loss": 0.3345533973322226, "log_loss_id": 0.7435022912338413, "log_loss_id_room": 3.527024395299021}, "EXPLOSIVE_AMPOULE": {"rows": 70, "used": 0.2, "predicted": 0.1492762581692304, "log_loss": 0.23694309892702448, "log_loss_id": 0.5288995933681827, "log_loss_id_room": 0.5319535978709151}, "FAIRY_IN_A_BOTTLE": {"rows": 7664, "used": 0.1771920668058455, "predicted": 0.18859555254909677, "log_loss": 0.15535651255931948, "log_loss_id": 0.4691210282119922, "log_loss_id_room": 0.38058799149609696}, "FIRE_POTION": {"rows": 35, "used": 0.6571428571428571, "predicted": 0.3305746416648357, "log_loss": 1.2098269369365195, "log_loss_id": 0.9671661254357009, "log_loss_id_room": 0.9276171860193136}, "FLEX_POTION": {"rows": 287, "used": 0.30313588850174217, "predicted": 0.32366485446557625, "log_loss": 0.36098726097536404, "log_loss_id": 0.6188474422117193, "log_loss_id_room": 0.546229616477872}, "FOCUS_POTION": {"rows": 289, "used": 0.2768166089965398, "predicted": 0.22814894179669268, "log_loss": 0.3338205979101678, "log_loss_id": 0.5906835804689096, "log_loss_id_room": 0.49688760467948223}, "FORTIFIER": {"rows": 24, "used": 0.375, "predicted": 0.48873718517537174, "log_loss": 0.5642322716938378, "log_loss_id": 0.662406829215566, "log_loss_id_room": 0.6193957861585715}, "FRUIT_JUICE": {"rows": 63, "used": 0.047619047619047616, "predicted": 0.09866022025230214, "log_loss": 0.10553867176364334, "log_loss_id": 0.3338576610348884, "log_loss_id_room": 0.28343507069892343}, "FYSH_OIL": {"rows": 88, "used": 0.2159090909090909, "predicted": 0.20973761789085685, "log_loss": 0.23972640693289832, "log_loss_id": 0.5263848173568081, "log_loss_id_room": 1.5894656827288254}, "GAMBLERS_BREW": {"rows": 32, "used": 0.15625, "predicted": 0.11169464783790468, "log_loss": 0.9980037395698604, "log_loss_id": 0.4576133423533251, "log_loss_id_room": 5.742993884190524}, "GHOST_IN_A_JAR": {"rows": 112, "used": 0.25892857142857145, "predicted": 0.47209657334455757, "log_loss": 0.7026937393634892, "log_loss_id": 0.6675825260951304, "log_loss_id_room": 0.6047765206991832}, "GIGANTIFICATION_POTION": {"rows": 13, "used": 0.3076923076923077, "predicted": 0.32514963391514845, "log_loss": 0.17140301205027714, "log_loss_id": 0.6257166228111993, "log_loss_id_room": 0.6257166228111993}, "HEART_OF_IRON": {"rows": 281, "used": 0.4483985765124555, "predicted": 0.49181327997402563, "log_loss": 0.5350012786487339, "log_loss_id": 0.6931555456114102, "log_loss_id_room": 0.7095516733887907}, "KINGS_COURAGE": {"rows": 46, "used": 0.2391304347826087, "predicted": 0.2536204438999804, "log_loss": 0.2930986704966784, "log_loss_id": 0.5677577563507007, "log_loss_id_room": 0.5083140465821147}, "LIQUID_BRONZE": {"rows": 11, "used": 0.45454545454545453, "predicted": 0.2192850186574188, "log_loss": 0.5669633448996857, "log_loss_id": 0.9573331119540931, "log_loss_id_room": 6.279778071802215}, "LIQUID_MEMORIES": {"rows": 520, "used": 0.4807692307692308, "predicted": 0.42094035702958654, "log_loss": 0.4403662815098783, "log_loss_id": 0.7012191123888386, "log_loss_id_room": 0.6691633377384253}, "LUCKY_TONIC": {"rows": 81, "used": 0.41975308641975306, "predicted": 0.4311253598576053, "log_loss": 0.5842642065304634, "log_loss_id": 0.6867349587950536, "log_loss_id_room": 0.7569919026084198}, "MAZALETHS_GIFT": {"rows": 3, "used": 0.0, "predicted": 2.931257358795852e-05, "log_loss": 2.9647061420662358e-05, "log_loss_id": 0.023530497410194157, "log_loss_id_room": 1.000000500029089e-06}, "OROBIC_ACID": {"rows": 167, "used": 0.5329341317365269, "predicted": 0.5194506661820167, "log_loss": 0.35265831919843443, "log_loss_id": 0.705183705734966, "log_loss_id_room": 0.48924386044582185}, "POISON_POTION": {"rows": 8, "used": 0.25, "predicted": 0.1479364824914633, "log_loss": 0.7878534732586833, "log_loss_id": 0.5629959602822835, "log_loss_id_room": 0.5738076031500267}, "POTION_OF_BINDING": {"rows": 27, "used": 0.2222222222222222, "predicted": 0.27372866604133883, "log_loss": 0.4085851578313533, "log_loss_id": 0.5314527841995351, "log_loss_id_room": 0.49606976779248224}, "POTION_OF_CAPACITY": {"rows": 54, "used": 0.2222222222222222, "predicted": 0.16789408484460308, "log_loss": 0.3149499693126622, "log_loss_id": 0.5300991811208375, "log_loss_id_room": 0.49851894028643823}, "POTION_OF_DOOM": {"rows": 115, "used": 0.3739130434782609, "predicted": 0.2832448889917429, "log_loss": 0.3049464175170595, "log_loss_id": 0.7460207154301662, "log_loss_id_room": 0.6348811982803828}, "POTION_SHAPED_ROCK": {"rows": 2996, "used": 0.31108144192256343, "predicted": 0.3316483311689977, "log_loss": 0.4027619715886891, "log_loss_id": 0.6201001382841616, "log_loss_id_room": 0.6037040303056728}, "POT_OF_GHOULS": {"rows": 9, "used": 0.2222222222222222, "predicted": 0.21630914821596686, "log_loss": 0.2851758704139336, "log_loss_id": 0.582438976611775, "log_loss_id_room": 0.5461042617451315}, "POWDERED_DEMISE": {"rows": 9, "used": 0.0, "predicted": 0.002042040415451369, "log_loss": 0.0020560007032020527, "log_loss_id": 0.16579225484274407, "log_loss_id_room": 0.09381875521765486}, "POWER_POTION": {"rows": 25, "used": 0.24, "predicted": 0.22580552697024914, "log_loss": 0.129572888749431, "log_loss_id": 0.553525325253482, "log_loss_id_room": 0.5453968011239027}, "RADIANT_TINCTURE": {"rows": 24, "used": 0.375, "predicted": 0.2592154648247013, "log_loss": 0.3643249395194324, "log_loss_id": 0.6646974962808389, "log_loss_id_room": 0.6203634341454437}, "REGEN_POTION": {"rows": 51, "used": 0.6274509803921569, "predicted": 0.5853197338771733, "log_loss": 0.5384943273213559, "log_loss_id": 0.7152778464964494, "log_loss_id_room": 0.7027595228874446}, "SHACKLING_POTION": {"rows": 405, "used": 0.4049382716049383, "predicted": 0.42295746400333845, "log_loss": 0.5950140531225324, "log_loss_id": 0.6792695444161759, "log_loss_id_room": 0.7281570900450666}, "SHIP_IN_A_BOTTLE": {"rows": 1253, "used": 0.5059856344772546, "predicted": 0.49766713992617256, "log_loss": 0.4220999152357154, "log_loss_id": 0.6982652655920782, "log_loss_id_room": 0.6364160924090986}, "SKILL_POTION": {"rows": 115, "used": 0.30434782608695654, "predicted": 0.5672145573536168, "log_loss": 0.6714220691783915, "log_loss_id": 0.6531004305121214, "log_loss_id_room": 0.672364797903219}, "SNECKO_OIL": {"rows": 478, "used": 0.497907949790795, "predicted": 0.46088681325159897, "log_loss": 0.4826412084011456, "log_loss_id": 0.6934234407464478, "log_loss_id_room": 0.6019295928765983}, "SOLDIERS_STEW": {"rows": 10, "used": 0.5, "predicted": 0.7426405787467957, "log_loss": 0.8891456668686553, "log_loss_id": 0.7159775641069323, "log_loss_id_room": 0.7010213590440149}, "SPEED_POTION": {"rows": 40, "used": 0.575, "predicted": 0.4290166469553406, "log_loss": 0.32442703097113956, "log_loss_id": 0.8345129622877476, "log_loss_id_room": 0.8789889445106217}, "STABLE_SERUM": {"rows": 17, "used": 0.058823529411764705, "predicted": 0.2748080228399142, "log_loss": 0.39064970293055123, "log_loss_id": 0.4139790420884186, "log_loss_id_room": 0.2948926815467662}, "STAR_POTION": {"rows": 122, "used": 0.22950819672131148, "predicted": 0.3238459291999427, "log_loss": 0.3186979123221843, "log_loss_id": 0.5551383106512249, "log_loss_id_room": 0.529069048557171}, "STRENGTH_POTION": {"rows": 61, "used": 0.08196721311475409, "predicted": 0.17889096618737493, "log_loss": 0.21614868314145114, "log_loss_id": 0.29908495463088547, "log_loss_id_room": 0.2928638868390566}, "SWIFT_POTION": {"rows": 1813, "used": 0.314396028681743, "predicted": 0.27187974560191164, "log_loss": 0.4383871816952251, "log_loss_id": 0.623001517898669, "log_loss_id_room": 0.5620826769262633}, "TOUCH_OF_INSANITY": {"rows": 30, "used": 0.5, "predicted": 0.4767993759014644, "log_loss": 0.3002802772568731, "log_loss_id": 0.7150890746577205, "log_loss_id_room": 0.6935318048541069}, "VULNERABLE_POTION": {"rows": 80, "used": 0.0125, "predicted": 0.08391161589647336, "log_loss": 0.08622855002676019, "log_loss_id": 0.15523819049788307, "log_loss_id_room": 2.166729373163947}, "WEAK_POTION": {"rows": 2816, "used": 0.36079545454545453, "predicted": 0.37158165086898126, "log_loss": 0.35165903507666507, "log_loss_id": 0.6591652811637467, "log_loss_id_room": 0.6173518508638491}}}}, {"key": "onnx", "type": "string", "size": 9323144, "onnx": {"opset": 20, "producer": "pytorch 2.11.0", "inputs": [{"name": "cards", "dtype": "int64", "shape": ["batch", "cards"]}, {"name": "ups", "dtype": "float", "shape": ["batch", "cards"]}, {"name": "piles", "dtype": "float", "shape": ["batch", "cards", 4]}, {"name": "mods", "dtype": "int64", "shape": ["batch", "cards", "card_mods"]}, {"name": "mod_mask", "dtype": "float", "shape": ["batch", "cards", "card_mods"]}, {"name": "powers", "dtype": "int64", "shape": ["batch", "powers"]}, {"name": "power_amounts", "dtype": "float", "shape": ["batch", "powers"]}, {"name": "power_mask", "dtype": "float", "shape": ["batch", "powers"]}, {"name": "player", "dtype": "float", "shape": ["batch", 8]}, {"name": "enemies", "dtype": "int64", "shape": ["batch", "enemies"]}, {"name": "enemy_scalars", "dtype": "float", "shape": ["batch", "enemies", 5]}, {"name": "enemy_mask", "dtype": "float", "shape": ["batch", "enemies"]}, {"name": "enemy_powers", "dtype": "int64", "shape": ["batch", "enemies", "enemy_powers"]}, {"name": "enemy_power_amounts", "dtype": "float", "shape": ["batch", "enemies", "enemy_powers"]}, {"name": "enemy_power_mask", "dtype": "float", "shape": ["batch", "enemies", "enemy_powers"]}, {"name": "intents", "dtype": "int64", "shape": ["batch", "enemies", 4, "intents"]}, {"name": "intent_values", "dtype": "float", "shape": ["batch", "enemies", 4, "intents", 2]}, {"name": "intent_mask", "dtype": "float", "shape": ["batch", "enemies", 4, "intents"]}, {"name": "relics", "dtype": "int64", "shape": ["batch", "relics"]}, {"name": "relic_mask", "dtype": "float", "shape": ["batch", "relics"]}, {"name": "potions", "dtype": "int64", "shape": ["batch", "potions"]}, {"name": "potion_mask", "dtype": "float", "shape": ["batch", "potions"]}, {"name": "context", "dtype": "int64", "shape": ["batch", "context"]}, {"name": "context_mask", "dtype": "float", "shape": ["batch", "context"]}, {"name": "power_stacks", "dtype": "float", "shape": ["batch", "powers"]}, {"name": "power_cards", "dtype": "int64", "shape": ["batch", "powers"]}, {"name": "power_card_mask", "dtype": "float", "shape": ["batch", "powers"]}, {"name": "enemy_power_stacks", "dtype": "float", "shape": ["batch", "enemies", "enemy_powers"]}, {"name": "enemy_power_cards", "dtype": "int64", "shape": ["batch", "enemies", "enemy_powers"]}, {"name": "enemy_power_card_mask", "dtype": "float", "shape": ["batch", "enemies", "enemy_powers"]}, {"name": "orbs", "dtype": "int64", "shape": ["batch", "orbs"]}, {"name": "orb_mask", "dtype": "float", "shape": ["batch", "orbs"]}, {"name": "allies", "dtype": "int64", "shape": ["batch", "allies"]}, {"name": "ally_scalars", "dtype": "float", "shape": ["batch", "allies", 4]}, {"name": "ally_mask", "dtype": "float", "shape": ["batch", "allies"]}, {"name": "ally_powers", "dtype": "int64", "shape": ["batch", "allies", "ally_powers"]}, {"name": "ally_power_amounts", "dtype": "float", "shape": ["batch", "allies", "ally_powers"]}, {"name": "ally_power_mask", "dtype": "float", "shape": ["batch", "allies", "ally_powers"]}, {"name": "extra", "dtype": "float", "shape": ["batch", 4]}, {"name": "costs", "dtype": "float", "shape": ["batch", "cards"]}, {"name": "mod_amounts", "dtype": "float", "shape": ["batch", "cards", "card_mods"]}, {"name": "relic_values", "dtype": "float", "shape": ["batch", "relics", 3]}, {"name": "relic_status", "dtype": "int64", "shape": ["batch", "relics"]}, {"name": "damages", "dtype": "float", "shape": ["batch", "cards"]}, {"name": "orb_values", "dtype": "float", "shape": ["batch", "orbs", 2]}, {"name": "numbers", "dtype": "float", "shape": ["batch", "cards", 5]}, {"name": "power_details", "dtype": "float", "shape": ["batch", "powers"]}, {"name": "enemy_power_details", "dtype": "float", "shape": ["batch", "enemies", "enemy_powers"]}], "outputs": [{"name": "outcome", "dtype": "float", "shape": ["batch", 51]}, {"name": "potion_used", "dtype": "float", "shape": ["batch", 5, 66]}], "initializers": [{"name": "net.pile", "shape": [4, 64]}, {"name": "net.slot", "shape": [4, 64]}, {"name": "net.cost", "shape": [64]}, {"name": "net.damage", "shape": [64]}, {"name": "net.stars", "shape": [64]}, {"name": "net.gathered", "shape": [64]}, {"name": "net.melted", "shape": [64]}, {"name": "net.bottoms", "shape": [50]}, {"name": "net.cards.weight", "shape": [597, 64]}, {"name": "net.modifiers.weight", "shape": [57, 64]}, {"name": "net.enemies.weight", "shape": [121, 64]}, {"name": "net.intents.weight", "shape": [16, 64]}, {"name": "net.relics.weight", "shape": [310, 64]}, {"name": "net.potions.weight", "shape": [66, 64]}, {"name": "net.context.weight", "shape": [96, 64]}, {"name": "net.orbs.weight", "shape": [6, 64]}, {"name": "net.allies.weight", "shape": [121, 64]}, {"name": "net.relic_status.weight", "shape": [5, 64]}, {"name": "net.card_up.weight", "shape": [597, 64]}, {"name": "net.card_damage.weight", "shape": [597, 64]}, {"name": "net.card_block.weight", "shape": [597, 64]}, {"name": "net.card_calc.weight", "shape": [597, 64]}, {"name": "net.card_replay.weight", "shape": [597, 64]}, {"name": "net.mod_amount.weight", "shape": [57, 64]}, {"name": "net.relic_counter.weight", "shape": [310, 64]}, {"name": "net.powers.weight", "shape": [266, 64]}, {"name": "net.power_amount.weight", "shape": [266, 64]}, {"name": "net.power_stacks.weight", "shape": [266, 64]}, {"name": "net.power_detail.weight", "shape": [266, 64]}, {"name": "net.intent_damage.weight", "shape": [16, 64]}, {"name": "net.intent_total.weight", "shape": [16, 64]}, {"name": "net.orb_passive.weight", "shape": [6, 64]}, {"name": "net.orb_evoke.weight", "shape": [6, 64]}, {"name": "net.orb_at.weight", "shape": [60, 64]}, {"name": "net.card_phi.0.bias", "shape": [128]}, {"name": "net.card_phi.2.bias", "shape": [128]}, {"name": "net.power_phi.0.bias", "shape": [128]}, {"name": "net.enemy_scalars.bias", "shape": [64]}, {"name": "net.enemy_phi.0.bias", "shape": [256]}, {"name": "net.enemy_phi.2.bias", "shape": [256]}, {"name": "net.ally_scalars.bias", "shape": [64]}, {"name": "net.ally_phi.0.bias", "shape": [128]}, {"name": "net.body.0.weight", "shape": [512, 1292]}, {"name": "net.body.0.bias", "shape": [512]}, {"name": "net.body.2.weight", "shape": [512, 512]}, {"name": "net.body.2.bias", "shape": [512]}, {"name": "net.head.weight", "shape": [51, 512]}, {"name": "net.head.bias", "shape": [51]}, {"name": "net.potion_head.weight", "shape": [330, 512]}, {"name": "net.potion_head.bias", "shape": [330]}, {"name": "onnx::MatMul_527", "shape": [64, 128]}, {"name": "onnx::MatMul_528", "shape": [128, 128]}, {"name": "onnx::MatMul_537", "shape": [5, 64]}, {"name": "onnx::MatMul_538", "shape": [64, 128]}, {"name": "onnx::MatMul_539", "shape": [448, 256]}, {"name": "onnx::MatMul_540", "shape": [256, 256]}, {"name": "onnx::MatMul_559", "shape": [4, 64]}, {"name": "onnx::MatMul_561", "shape": [192, 128]}, {"name": "onnx::Greater_568", "shape": [50]}], "params": 1738813, "ops": {"Constant": 101, "Add": 43, "Mul": 37, "Gather": 36, "Unsqueeze": 26, "Slice": 15, "MatMul": 12, "ReduceSum": 11, "Relu": 10, "Concat": 6, "Shape": 4, "Gemm": 4, "Identity": 2, "Reshape": 2, "Sub": 2, "Transpose": 1, "Flatten": 1, "Cast": 1, "Range": 1, "Clip": 1, "Less": 1, "Greater": 1, "And": 1, "ConstantOfShape": 1, "Where": 1, "Softmax": 1, "Sigmoid": 1}}}, {"key": "tests", "type": "array", "size": 16, "entry": {"obs": ["act", "allies", "ascension", "discard", "draw", "encounter", "enemies", "exhaust", "hand", "player", "potions", "relics", "room", "round"], "history": "array", "outcome": "array of 51", "potion_used": "array of 330"}, "values": null}]}, "v9-1": {"file": "weights/all/v9-1.json", "bytes": 6157608, "fields": [{"key": "name", "type": "str", "value": "v9-1"}, {"key": "floors", "type": "int", "value": 64}, {"key": "vocab", "type": "object", "tables": {"cards": {"size": 597, "first": ["ABRASIVE", "ABUNDANCE", "ACCELERANT"]}, "modifiers": {"size": 57, "first": ["affliction:BOUND", "affliction:ENTANGLED", "affliction:GALVANIZED"]}, "relics": {"size": 310, "first": ["AKABEKO", "ALCHEMICAL_COFFER", "AMETHYST_AUBERGINE"]}, "potions": {"size": 66, "first": ["AMBERGRIS", "ASHWATER", "ATTACK_POTION"]}, "context": {"size": 32, "first": ["act:DEPRECATED_ACT", "act:GLORY", "act:HIVE"]}, "map": {"size": 379, "first": ["Ancient+0", "Ancient+0:quest", "Ancient+1"]}, "relic_status": {"size": 5, "first": ["Active", "Disabled", "Normal"]}}}, {"key": "state", "type": "object", "names": ["floor", "hp", "max_hp", "gold", "ascension", "potion_slots"], "mean": [13.537819308553816, 62.07155188621081, 70.85278969853977, 170.71569044469288, 0.0, 3.1138143730084016], "std": [9.4379439465561, 16.352826001183672, 5.168426939680327, 133.030107619585, 1.0, 0.49638904503674197]}, {"key": "fit", "type": "object", "values": {"runs": 29987, "held_out_runs": 6004, "samples": 3483920, "won": 2057, "vocab": {"cards": 597, "modifiers": 57, "relics": 310, "potions": 66, "context": 32, "map": 379}, "held_out_loss": 1.7008571277163442, "held_out_loss_floor_only": 2.1323440828454308, "held_out_next_combats": 0.1780367595870572, "won_held_out_runs": 401, "brier_held_out": 0.03389697398608646, "brier_held_out_floor_only": 0.05520358051535049, "init_held_out_loss": 2.0901350560874183, "init_brier_held_out": 0.04624580544828771}}, {"key": "onnx", "type": "string", "size": 6077740, "onnx": {"opset": 20, "producer": "pytorch 2.11.0", "inputs": [{"name": "cards", "dtype": "int64", "shape": ["batch", "cards"]}, {"name": "ups", "dtype": "float", "shape": ["batch", "cards"]}, {"name": "card_mask", "dtype": "float", "shape": ["batch", "cards"]}, {"name": "mods", "dtype": "int64", "shape": ["batch", "cards", "card_mods"]}, {"name": "mod_mask", "dtype": "float", "shape": ["batch", "cards", "card_mods"]}, {"name": "mod_amounts", "dtype": "float", "shape": ["batch", "cards", "card_mods"]}, {"name": "numbers", "dtype": "float", "shape": ["batch", "cards", 2]}, {"name": "relics", "dtype": "int64", "shape": ["batch", "relics"]}, {"name": "relic_mask", "dtype": "float", "shape": ["batch", "relics"]}, {"name": "potions", "dtype": "int64", "shape": ["batch", "potions"]}, {"name": "potion_mask", "dtype": "float", "shape": ["batch", "potions"]}, {"name": "context", "dtype": "int64", "shape": ["batch", "context"]}, {"name": "context_mask", "dtype": "float", "shape": ["batch", "context"]}, {"name": "map", "dtype": "int64", "shape": ["batch", "map"]}, {"name": "map_mask", "dtype": "float", "shape": ["batch", "map"]}, {"name": "state", "dtype": "float", "shape": ["batch", 6]}, {"name": "relic_values", "dtype": "float", "shape": ["batch", "relics", 3]}, {"name": "relic_status", "dtype": "int64", "shape": ["batch", "relics"]}, {"name": "held", "dtype": "int64", "shape": ["batch", "held"]}, {"name": "held_mask", "dtype": "float", "shape": ["batch", "held"]}], "outputs": [{"name": "hazards", "dtype": "float", "shape": ["batch", 64]}], "initializers": [{"name": "net.melted", "shape": [64]}, {"name": "net.cards.weight", "shape": [597, 64]}, {"name": "net.card_up.weight", "shape": [597, 64]}, {"name": "net.card_damage.weight", "shape": [597, 64]}, {"name": "net.card_block.weight", "shape": [597, 64]}, {"name": "net.modifiers.weight", "shape": [57, 64]}, {"name": "net.mod_amount.weight", "shape": [57, 64]}, {"name": "net.bags.relics.weight", "shape": [310, 64]}, {"name": "net.bags.potions.weight", "shape": [66, 64]}, {"name": "net.bags.context.weight", "shape": [32, 64]}, {"name": "net.bags.map.weight", "shape": [379, 64]}, {"name": "net.relic_counter.weight", "shape": [310, 64]}, {"name": "net.relic_status.weight", "shape": [5, 64]}, {"name": "net.phi.0.bias", "shape": [256]}, {"name": "net.phi.2.bias", "shape": [256]}, {"name": "net.body.0.weight", "shape": [512, 1030]}, {"name": "net.body.0.bias", "shape": [512]}, {"name": "net.body.2.weight", "shape": [512, 512]}, {"name": "net.body.2.bias", "shape": [512]}, {"name": "net.head.weight", "shape": [64, 512]}, {"name": "net.head.bias", "shape": [64]}, {"name": "onnx::MatMul_184", "shape": [64, 256]}, {"name": "onnx::MatMul_185", "shape": [256, 256]}], "params": 1136512, "ops": {"Constant": 29, "Mul": 14, "Gather": 13, "Add": 12, "Unsqueeze": 9, "ReduceSum": 8, "Relu": 6, "Slice": 4, "MatMul": 4, "Gemm": 3, "Identity": 2, "Clip": 1, "Div": 1, "Concat": 1, "Sigmoid": 1}}}, {"key": "tests", "type": "array", "size": 8, "entry": {"run": "dict", "value": "float"}, "values": [0.0023474377335880783, 0.006734220880200005, 0.21333516405256944, 8.37962567425147e-05, 1.6971565520271563e-05, 0.010012606915205743, 0.005790685562422508, 0.0014406779920856949]}]}}
+{
+ "source": {
+  "files": "the champion's two net files: eval/champions/sl.json's value (v) and combat-net (c)",
+  "note": "structure and shapes only, no weights"
+ },
+ "v": {
+  "file": "weights/all/v9-2.json",
+  "bytes": 6159771,
+  "fields": [
+   {
+    "key": "name",
+    "type": "str",
+    "value": "v9-2"
+   },
+   {
+    "key": "floors",
+    "type": "int",
+    "value": 64
+   },
+   {
+    "key": "vocab",
+    "type": "object",
+    "tables": {
+     "cards": {
+      "size": 597,
+      "first": [
+       "ABRASIVE",
+       "ABUNDANCE",
+       "ACCELERANT"
+      ]
+     },
+     "modifiers": {
+      "size": 57,
+      "first": [
+       "affliction:BOUND",
+       "affliction:ENTANGLED",
+       "affliction:GALVANIZED"
+      ]
+     },
+     "relics": {
+      "size": 310,
+      "first": [
+       "AKABEKO",
+       "ALCHEMICAL_COFFER",
+       "AMETHYST_AUBERGINE"
+      ]
+     },
+     "potions": {
+      "size": 66,
+      "first": [
+       "AMBERGRIS",
+       "ASHWATER",
+       "ATTACK_POTION"
+      ]
+     },
+     "context": {
+      "size": 32,
+      "first": [
+       "act:DEPRECATED_ACT",
+       "act:GLORY",
+       "act:HIVE"
+      ]
+     },
+     "map": {
+      "size": 379,
+      "first": [
+       "Ancient+0",
+       "Ancient+0:quest",
+       "Ancient+1"
+      ]
+     },
+     "relic_status": {
+      "size": 5,
+      "first": [
+       "Active",
+       "Disabled",
+       "Normal"
+      ]
+     }
+    }
+   },
+   {
+    "key": "state",
+    "type": "object",
+    "names": [
+     "floor",
+     "hp",
+     "max_hp",
+     "gold",
+     "ascension",
+     "potion_slots"
+    ],
+    "mean": [
+     13.537819308553816,
+     62.07155188621081,
+     70.85278969853977,
+     170.71569044469288,
+     0.0,
+     3.1138143730084016
+    ],
+    "std": [
+     9.4379439465561,
+     16.352826001183672,
+     5.168426939680327,
+     133.030107619585,
+     1.0,
+     0.49638904503674197
+    ]
+   },
+   {
+    "key": "fit",
+    "type": "object",
+    "values": {
+     "runs": 21272,
+     "held_out_runs": 4310,
+     "samples": 3845738,
+     "won": 5608,
+     "vocab": {
+      "cards": 597,
+      "modifiers": 57,
+      "relics": 310,
+      "potions": 66,
+      "context": 32,
+      "map": 379
+     },
+     "held_out_loss": 1.5244959603173964,
+     "held_out_loss_floor_only": 1.8247639658003008,
+     "held_out_next_combats": 0.15601277197181765,
+     "won_held_out_runs": 1150,
+     "brier_held_out": 0.12783659930966076,
+     "brier_held_out_floor_only": 0.18300813256446813,
+     "init_held_out_loss": 2.0253768769293816,
+     "init_brier_held_out": 0.1569641280821918
+    }
+   },
+   {
+    "key": "onnx",
+    "type": "str",
+    "size": 6077740,
+    "onnx": {
+     "opset": 20,
+     "producer": "pytorch 2.11.0",
+     "inputs": [
+      {
+       "name": "cards",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "cards"
+       ]
+      },
+      {
+       "name": "ups",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards"
+       ]
+      },
+      {
+       "name": "card_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards"
+       ]
+      },
+      {
+       "name": "mods",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "cards",
+        "card_mods"
+       ]
+      },
+      {
+       "name": "mod_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards",
+        "card_mods"
+       ]
+      },
+      {
+       "name": "mod_amounts",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards",
+        "card_mods"
+       ]
+      },
+      {
+       "name": "numbers",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards",
+        2
+       ]
+      },
+      {
+       "name": "relics",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "relics"
+       ]
+      },
+      {
+       "name": "relic_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "relics"
+       ]
+      },
+      {
+       "name": "potions",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "potions"
+       ]
+      },
+      {
+       "name": "potion_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "potions"
+       ]
+      },
+      {
+       "name": "context",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "context"
+       ]
+      },
+      {
+       "name": "context_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "context"
+       ]
+      },
+      {
+       "name": "map",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "map"
+       ]
+      },
+      {
+       "name": "map_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "map"
+       ]
+      },
+      {
+       "name": "state",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        6
+       ]
+      },
+      {
+       "name": "relic_values",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "relics",
+        3
+       ]
+      },
+      {
+       "name": "relic_status",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "relics"
+       ]
+      },
+      {
+       "name": "held",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "held"
+       ]
+      },
+      {
+       "name": "held_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "held"
+       ]
+      }
+     ],
+     "outputs": [
+      {
+       "name": "hazards",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        64
+       ]
+      }
+     ],
+     "initializers": [
+      {
+       "name": "net.melted",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "net.cards.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.card_up.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.card_damage.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.card_block.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.modifiers.weight",
+       "shape": [
+        57,
+        64
+       ]
+      },
+      {
+       "name": "net.mod_amount.weight",
+       "shape": [
+        57,
+        64
+       ]
+      },
+      {
+       "name": "net.bags.relics.weight",
+       "shape": [
+        310,
+        64
+       ]
+      },
+      {
+       "name": "net.bags.potions.weight",
+       "shape": [
+        66,
+        64
+       ]
+      },
+      {
+       "name": "net.bags.context.weight",
+       "shape": [
+        32,
+        64
+       ]
+      },
+      {
+       "name": "net.bags.map.weight",
+       "shape": [
+        379,
+        64
+       ]
+      },
+      {
+       "name": "net.relic_counter.weight",
+       "shape": [
+        310,
+        64
+       ]
+      },
+      {
+       "name": "net.relic_status.weight",
+       "shape": [
+        5,
+        64
+       ]
+      },
+      {
+       "name": "net.phi.0.bias",
+       "shape": [
+        256
+       ]
+      },
+      {
+       "name": "net.phi.2.bias",
+       "shape": [
+        256
+       ]
+      },
+      {
+       "name": "net.body.0.weight",
+       "shape": [
+        512,
+        1030
+       ]
+      },
+      {
+       "name": "net.body.0.bias",
+       "shape": [
+        512
+       ]
+      },
+      {
+       "name": "net.body.2.weight",
+       "shape": [
+        512,
+        512
+       ]
+      },
+      {
+       "name": "net.body.2.bias",
+       "shape": [
+        512
+       ]
+      },
+      {
+       "name": "net.head.weight",
+       "shape": [
+        64,
+        512
+       ]
+      },
+      {
+       "name": "net.head.bias",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "onnx::MatMul_184",
+       "shape": [
+        64,
+        256
+       ]
+      },
+      {
+       "name": "onnx::MatMul_185",
+       "shape": [
+        256,
+        256
+       ]
+      }
+     ],
+     "params": 1136512,
+     "ops": {
+      "Constant": 29,
+      "Mul": 14,
+      "Gather": 13,
+      "Add": 12,
+      "Unsqueeze": 9,
+      "ReduceSum": 8,
+      "Relu": 6,
+      "Slice": 4,
+      "MatMul": 4,
+      "Gemm": 3,
+      "Identity": 2,
+      "Clip": 1,
+      "Div": 1,
+      "Concat": 1,
+      "Sigmoid": 1
+     }
+    }
+   },
+   {
+    "key": "tests",
+    "type": "array",
+    "size": 8,
+    "entry": {
+     "run": [
+      "act",
+      "act_id",
+      "ascension",
+      "character",
+      "deck",
+      "floor",
+      "gold",
+      "hp",
+      "map",
+      "max_hp",
+      "potions",
+      "relics"
+     ],
+     "value": "float"
+    },
+    "values": [
+     0.17157747353618838,
+     0.40366118034504844,
+     0.7924890580259553,
+     0.4478693874365022,
+     0.19173932142286004,
+     0.23390276982878405,
+     0.12214002846946392,
+     0.04060765791613846
+    ]
+   }
+  ]
+ },
+ "c": {
+  "file": "weights/all/c9-2.json",
+  "bytes": 9587216,
+  "fields": [
+   {
+    "key": "name",
+    "type": "str",
+    "value": "c9-2"
+   },
+   {
+    "key": "env",
+    "type": "str",
+    "value": "SL"
+   },
+   {
+    "key": "buckets",
+    "type": "int",
+    "value": 50
+   },
+   {
+    "key": "loss_min",
+    "type": "float",
+    "value": -0.25
+   },
+   {
+    "key": "potion_groups",
+    "type": "int",
+    "value": 5
+   },
+   {
+    "key": "lags",
+    "type": "int",
+    "value": 3
+   },
+   {
+    "key": "vocab",
+    "type": "object",
+    "tables": {
+     "cards": {
+      "size": 597,
+      "first": [
+       "ABRASIVE",
+       "ABUNDANCE",
+       "ACCELERANT"
+      ]
+     },
+     "modifiers": {
+      "size": 57,
+      "first": [
+       "affliction:BOUND",
+       "affliction:ENTANGLED",
+       "affliction:GALVANIZED"
+      ]
+     },
+     "powers": {
+      "size": 266,
+      "first": [
+       "ACCELERANT_POWER",
+       "ACCURACY_POWER",
+       "ADAPTABLE_POWER"
+      ]
+     },
+     "enemies": {
+      "size": 121,
+      "first": [
+       "AEONGLASS",
+       "ARCHITECT",
+       "ASSASSIN_RUBY_RAIDER"
+      ]
+     },
+     "intents": {
+      "size": 16,
+      "first": [
+       "Attack",
+       "Buff",
+       "CardDebuff"
+      ]
+     },
+     "relics": {
+      "size": 310,
+      "first": [
+       "AKABEKO",
+       "ALCHEMICAL_COFFER",
+       "AMETHYST_AUBERGINE"
+      ]
+     },
+     "potions": {
+      "size": 66,
+      "first": [
+       "AMBERGRIS",
+       "ASHWATER",
+       "ATTACK_POTION"
+      ]
+     },
+     "context": {
+      "size": 96,
+      "first": [
+       "character:DEFECT",
+       "character:IRONCLAD",
+       "character:NECROBINDER"
+      ]
+     },
+     "orbs": {
+      "size": 6,
+      "first": [
+       "DARK_ORB",
+       "FROST_ORB",
+       "GLASS_ORB"
+      ]
+     },
+     "allies": {
+      "size": 121,
+      "first": [
+       "AEONGLASS",
+       "ARCHITECT",
+       "ASSASSIN_RUBY_RAIDER"
+      ]
+     },
+     "relic_status": {
+      "size": 5,
+      "first": [
+       "Active",
+       "Disabled",
+       "Normal"
+      ]
+     }
+    }
+   },
+   {
+    "key": "fit",
+    "type": "object",
+    "values": {
+     "env": "SL",
+     "runs": 21272,
+     "held_out_runs": 4310,
+     "samples": 2118826,
+     "held_out_samples": 430142,
+     "vocab": {
+      "cards": 597,
+      "modifiers": 57,
+      "powers": 266,
+      "enemies": 121,
+      "intents": 16,
+      "relics": 310,
+      "potions": 66,
+      "context": 96,
+      "orbs": 6,
+      "allies": 121,
+      "relic_status": 5
+     },
+     "held_out": {
+      "samples": 430142,
+      "ce": 1.3200408033491506,
+      "ce_prior": 2.3736642821522067,
+      "death": 0.04501304220466729,
+      "predicted_death": 0.04652750021241472,
+      "rank_within": 0.9165607439506428,
+      "rank_within_share": 0.7951986453116767,
+      "rank_lost": 0.7247756448578405,
+      "rank_lost_share": 0.13255083652625857,
+      "auc_death": 0.9314979144825425,
+      "auc_death_share": 0.6907267403697208,
+      "potions": {
+       "rows": 34431,
+       "used": 0.27274839534140743,
+       "predicted": 0.27411689128826017,
+       "log_loss": 0.29158021086520164,
+       "log_loss_id": 0.5472295688064733,
+       "log_loss_id_room": 0.4645798370201779
+      }
+     },
+     "by_act": {
+      "0": {
+       "samples": 195358,
+       "ce": 1.1939030194963338,
+       "ce_prior": 2.2611935672729717,
+       "death": 0.025988185792237842,
+       "predicted_death": 0.025594611170209013,
+       "rank_within": 0.9265866548670911,
+       "rank_within_share": 0.8184349681782109,
+       "rank_lost": 0.7411160297083035,
+       "rank_lost_share": 0.19235710863040914,
+       "auc_death": 0.9496215048826807,
+       "auc_death_share": 0.7138019664340068,
+       "potions": {
+        "rows": 10324,
+        "used": 0.307051530414568,
+        "predicted": 0.3064072508742342,
+        "log_loss": 0.3124190569675115,
+        "log_loss_id": 0.5863162760205229,
+        "log_loss_id_room": 0.4823144351384035
+       }
+      },
+      "1": {
+       "samples": 146128,
+       "ce": 1.3563113082676659,
+       "ce_prior": 2.4090411051905547,
+       "death": 0.046507171794591046,
+       "predicted_death": 0.04947717253601622,
+       "rank_within": 0.9204533753280636,
+       "rank_within_share": 0.8024450066447563,
+       "rank_lost": 0.7262810126998972,
+       "rank_lost_share": 0.08268672463364801,
+       "auc_death": 0.9269069055728688,
+       "auc_death_share": 0.6806676859759084,
+       "potions": {
+        "rows": 10180,
+        "used": 0.24528487229862475,
+        "predicted": 0.2514272021340188,
+        "log_loss": 0.2600542249617645,
+        "log_loss_id": 0.5116820160347973,
+        "log_loss_id_room": 0.42829605526590986
+       }
+      },
+      "2": {
+       "samples": 88656,
+       "ce": 1.5382086525097909,
+       "ce_prior": 2.563189069199106,
+       "death": 0.08447256812849666,
+       "predicted_death": 0.08779236237858487,
+       "rank_within": 0.888041051456818,
+       "rank_within_share": 0.7320286882227929,
+       "rank_lost": 0.6838623366539304,
+       "rank_lost_share": 0.07793749365528502,
+       "auc_death": 0.9234734772631703,
+       "auc_death_share": 0.6843357162878478,
+       "potions": {
+        "rows": 13927,
+        "used": 0.2673942701227831,
+        "predicted": 0.2667653700148044,
+        "log_loss": 0.29917655532824056,
+        "log_loss_id": 0.5442384667699839,
+        "log_loss_id_room": 0.4779550726980618
+       }
+      }
+     },
+     "by_room": {
+      "Boss": {
+       "samples": 92931,
+       "ce": 2.106188274936724,
+       "ce_prior": 3.4727814609929974,
+       "death": 0.1881826301234249,
+       "predicted_death": 0.19414819061733696,
+       "rank_within": 0.8773445537853968,
+       "rank_within_share": 0.6194545045185126,
+       "rank_lost": 0.7513662682275958,
+       "rank_lost_share": 0.12481493577555763,
+       "auc_death": 0.9284501900757522,
+       "auc_death_share": 0.673524830544407,
+       "potions": {
+        "rows": 6086,
+        "used": 0.6076240552086757,
+        "predicted": 0.603338622624941,
+        "log_loss": 0.37026031087444217,
+        "log_loss_id": 0.8879046313548739,
+        "log_loss_id_room": 0.6322436038864504
+       }
+      },
+      "Elite": {
+       "samples": 68862,
+       "ce": 1.7803484893256971,
+       "ce_prior": 2.7983418194946283,
+       "death": 0.016990502744619673,
+       "predicted_death": 0.019115559343744558,
+       "rank_within": 0.9224282112969088,
+       "rank_within_share": 0.8159211151111461,
+       "rank_lost": 0.7525378050429192,
+       "rank_lost_share": 0.07594297115730063,
+       "auc_death": 0.9535818374698188,
+       "auc_death_share": 0.8353020883154837,
+       "potions": {
+        "rows": 3935,
+        "used": 0.3423125794155019,
+        "predicted": 0.3407507041354353,
+        "log_loss": 0.28046401459362064,
+        "log_loss_id": 0.580624804558454,
+        "log_loss_id_room": 0.5544444801622477
+       }
+      },
+      "Monster": {
+       "samples": 268349,
+       "ce": 0.9296716253241841,
+       "ce_prior": 1.8840548439827807,
+       "death": 0.0026234493141394227,
+       "predicted_death": 0.0024397737520162562,
+       "rank_within": 0.9286423459408902,
+       "rank_within_share": 0.8507712771832372,
+       "rank_lost": 0.7102581598551766,
+       "rank_lost_share": 0.1490485578485576,
+       "auc_death": 0.977581733662507,
+       "auc_death_share": 0.9130810899987049,
+       "potions": {
+        "rows": 24410,
+        "used": 0.1780417861532159,
+        "predicted": 0.1812923312526734,
+        "log_loss": 0.2737553498931588,
+        "log_loss_id": 0.45690762356462117,
+        "log_loss_id_room": 0.4082906499692898
+       }
+      }
+     },
+     "by_encounter": {
+      "AEONGLASS_BOSS": {
+       "samples": 5872,
+       "ce": 1.931848364235202,
+       "ce_prior": 3.675319869276106,
+       "death": 0.42728201634877383,
+       "predicted_death": 0.45451347594183433,
+       "rank_within": 0.8373202995788356,
+       "rank_within_share": 0.3661890011360677,
+       "rank_lost": 0.7179594713932096,
+       "rank_lost_share": 0.21090596860674124,
+       "auc_death": 0.9326598424922397,
+       "auc_death_share": 0.625939106360909,
+       "potions": {
+        "rows": 581,
+        "used": 0.5972461273666093,
+        "predicted": 0.6041581189102021,
+        "log_loss": 0.4039794472412814,
+        "log_loss_id": 0.8544948330984304,
+        "log_loss_id_room": 0.633879042122837
+       }
+      },
+      "AXEBOTS_NORMAL": {
+       "samples": 6092,
+       "ce": 1.1715188547733317,
+       "ce_prior": 2.0354118841455007,
+       "death": 0.006730137885751806,
+       "predicted_death": 0.004662807205724065,
+       "rank_within": 0.9505602805096869,
+       "rank_within_share": 0.9054856188581246,
+       "rank_lost": 0.6755424529073549,
+       "rank_lost_share": -0.023780993750893917,
+       "auc_death": 0.9740733894075239,
+       "auc_death_share": 0.9493021536186339,
+       "potions": {
+        "rows": 1187,
+        "used": 0.18534119629317608,
+        "predicted": 0.15923365126647962,
+        "log_loss": 0.4141248146609428,
+        "log_loss_id": 0.4671553198693991,
+        "log_loss_id_room": 0.428147251146796
+       }
+      },
+      "BATTLEWORN_DUMMY_EVENT_V1_ENCOUNTER": {
+       "samples": 968,
+       "ce": 0.3109240629454506,
+       "ce_prior": 1.4214782371097958,
+       "death": 0.0,
+       "predicted_death": 1.1638049071556891e-05,
+       "rank_within": 0.9626337183864092,
+       "rank_within_share": 0.9231005312787562,
+       "rank_lost": 0.758788336496287,
+       "rank_lost_share": 0.40881904949420844,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 225,
+        "used": 0.0044444444444444444,
+        "predicted": 0.01103649592048876,
+        "log_loss": 0.01347313240433728,
+        "log_loss_id": 0.3831030427497656,
+        "log_loss_id_room": 0.26431407937780277
+       }
+      },
+      "BATTLEWORN_DUMMY_EVENT_V2_ENCOUNTER": {
+       "samples": 56,
+       "ce": 0.410306493184254,
+       "ce_prior": 1.4743335176691335,
+       "death": 0.0,
+       "predicted_death": 9.102885138415302e-07,
+       "rank_within": 0.9816074444191807,
+       "rank_within_share": 0.8235686128642966,
+       "rank_lost": 0.7612124236657694,
+       "rank_lost_share": 0.4811371066510957,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 27,
+        "used": 0.0,
+        "predicted": 0.002470344089167082,
+        "log_loss": 0.0024945284248267478,
+        "log_loss_id": 0.33856363879377765,
+        "log_loss_id_room": 0.23632972494459847
+       }
+      },
+      "BATTLEWORN_DUMMY_EVENT_V3_ENCOUNTER": {
+       "samples": 48,
+       "ce": 0.6009417372113732,
+       "ce_prior": 1.8063344234682546,
+       "death": 0.0,
+       "predicted_death": 7.679410908845656e-06,
+       "rank_within": 0.9836905300060225,
+       "rank_within_share": 0.9256024766953875,
+       "rank_lost": 0.8189023281307136,
+       "rank_lost_share": 0.7637206921281927,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 9,
+        "used": 0.0,
+        "predicted": 5.5585714647879906e-05,
+        "log_loss": 5.5922235949104063e-05,
+        "log_loss_id": 0.3484455442877354,
+        "log_loss_id_room": 0.18861341104764348
+       }
+      },
+      "BOWLBUGS_NORMAL": {
+       "samples": 5222,
+       "ce": 0.8825302767417551,
+       "ce_prior": 1.9333342829541922,
+       "death": 0.0036384527001148987,
+       "predicted_death": 0.002737272021040923,
+       "rank_within": 0.9768618023503526,
+       "rank_within_share": 0.9492082935820659,
+       "rank_lost": 0.7455397939913448,
+       "rank_lost_share": 0.020146048352563208,
+       "auc_death": 0.9886094729423983,
+       "auc_death_share": 0.9852372817381098,
+       "potions": {
+        "rows": 489,
+        "used": 0.15950920245398773,
+        "predicted": 0.18241881531042703,
+        "log_loss": 0.21655271340994067,
+        "log_loss_id": 0.4277582036425585,
+        "log_loss_id_room": 0.3868079036610435
+       }
+      },
+      "BOWLBUGS_WEAK": {
+       "samples": 6675,
+       "ce": 0.6626440874470315,
+       "ce_prior": 1.6417547791779628,
+       "death": 0.0,
+       "predicted_death": 1.2785327322051905e-05,
+       "rank_within": 0.9050495203906335,
+       "rank_within_share": 0.7780211279577159,
+       "rank_lost": 0.7251736999709208,
+       "rank_lost_share": 0.19856218331895825,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 361,
+        "used": 0.14681440443213298,
+        "predicted": 0.19748078332856858,
+        "log_loss": 0.299461830412029,
+        "log_loss_id": 0.4871875310649845,
+        "log_loss_id_room": 0.406509709050647
+       }
+      },
+      "BYGONE_EFFIGY_ELITE": {
+       "samples": 5701,
+       "ce": 2.1059172428100865,
+       "ce_prior": 3.2904327607200092,
+       "death": 0.00789335204350114,
+       "predicted_death": 0.013981619716526426,
+       "rank_within": 0.9022974634283262,
+       "rank_within_share": 0.7237345879586686,
+       "rank_lost": 0.7664497860716081,
+       "rank_lost_share": 0.1396610999141176,
+       "auc_death": 0.9850678077035016,
+       "auc_death_share": 0.8626353398928964,
+       "potions": {
+        "rows": 250,
+        "used": 0.512,
+        "predicted": 0.48189417306367477,
+        "log_loss": 0.34028326733326103,
+        "log_loss_id": 0.7509176401110328,
+        "log_loss_id_room": 0.6455650507535989
+       }
+      },
+      "BYRDONIS_ELITE": {
+       "samples": 4719,
+       "ce": 1.7721862002920221,
+       "ce_prior": 2.839140559179273,
+       "death": 0.004873913964823055,
+       "predicted_death": 0.006009041676087674,
+       "rank_within": 0.930095784406901,
+       "rank_within_share": 0.8403066687890564,
+       "rank_lost": 0.7467900183730051,
+       "rank_lost_share": 0.1694118973892424,
+       "auc_death": 0.9988712890703344,
+       "auc_death_share": 0.8550026518578604,
+       "potions": {
+        "rows": 217,
+        "used": 0.35023041474654376,
+        "predicted": 0.41116565482269607,
+        "log_loss": 0.2247139331556592,
+        "log_loss_id": 0.5586155040583596,
+        "log_loss_id_room": 0.4966466025205298
+       }
+      },
+      "CEREMONIAL_BEAST_BOSS": {
+       "samples": 6460,
+       "ce": 2.073442764605927,
+       "ce_prior": 3.2251605660112377,
+       "death": 0.0739938080495356,
+       "predicted_death": 0.07825369506024056,
+       "rank_within": 0.9262225991942828,
+       "rank_within_share": 0.7964650533732295,
+       "rank_lost": 0.7654719037591834,
+       "rank_lost_share": 0.10186960237487556,
+       "auc_death": 0.9459804120609211,
+       "auc_death_share": 0.7446457054509451,
+       "potions": {
+        "rows": 345,
+        "used": 0.48405797101449277,
+        "predicted": 0.5262112503166081,
+        "log_loss": 0.47544826924181455,
+        "log_loss_id": 0.7285271558511165,
+        "log_loss_id_room": 0.6619840445034548
+       }
+      },
+      "CHOMPERS_NORMAL": {
+       "samples": 7354,
+       "ce": 1.2703195341255258,
+       "ce_prior": 2.212122251915037,
+       "death": 0.0010878433505575197,
+       "predicted_death": 0.0015090346750726937,
+       "rank_within": 0.9586933824761513,
+       "rank_within_share": 0.9212360862755192,
+       "rank_lost": 0.710759764987876,
+       "rank_lost_share": 0.03648207754422523,
+       "auc_death": 0.9943910256410257,
+       "auc_death_share": 0.9954594017094017,
+       "potions": {
+        "rows": 580,
+        "used": 0.12241379310344827,
+        "predicted": 0.15444142725193055,
+        "log_loss": 0.2025216679192901,
+        "log_loss_id": 0.3703178389672982,
+        "log_loss_id_room": 0.2872774524483264
+       }
+      },
+      "CONSTRUCT_MENAGERIE_NORMAL": {
+       "samples": 3511,
+       "ce": 1.6449201538271807,
+       "ce_prior": 2.6075410077834698,
+       "death": 0.015665052691540872,
+       "predicted_death": 0.010300367093066061,
+       "rank_within": 0.9103902689233272,
+       "rank_within_share": 0.8006621275401336,
+       "rank_lost": 0.749630931072329,
+       "rank_lost_share": 0.010462881463778127,
+       "auc_death": 0.9428808216804184,
+       "auc_death_share": 0.8619238630465572,
+       "potions": {
+        "rows": 580,
+        "used": 0.3448275862068966,
+        "predicted": 0.3098397306648602,
+        "log_loss": 0.25890150000045875,
+        "log_loss_id": 0.5482947040825964,
+        "log_loss_id_room": 0.5603375977454192
+       }
+      },
+      "CORPSE_SLUGS_NORMAL": {
+       "samples": 2898,
+       "ce": 0.7983986356287374,
+       "ce_prior": 1.8381965014496695,
+       "death": 0.0003450655624568668,
+       "predicted_death": 0.00029922305805280653,
+       "rank_within": 0.9779250963132381,
+       "rank_within_share": 0.950267645925158,
+       "rank_lost": 0.7471077026074154,
+       "rank_lost_share": 0.1509015187726706,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 156,
+        "used": 0.19230769230769232,
+        "predicted": 0.14950102966346146,
+        "log_loss": 0.28849605974540954,
+        "log_loss_id": 0.45794696475783436,
+        "log_loss_id_room": 0.42807402451348264
+       }
+      },
+      "CORPSE_SLUGS_WEAK": {
+       "samples": 6437,
+       "ce": 0.40545191596820207,
+       "ce_prior": 1.47117099892664,
+       "death": 0.0,
+       "predicted_death": 8.526691269327925e-07,
+       "rank_within": 0.9084433634077173,
+       "rank_within_share": 0.7590168251707748,
+       "rank_lost": 0.7135786169255001,
+       "rank_lost_share": 0.3536534184208252,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 229,
+        "used": 0.048034934497816595,
+        "predicted": 0.07542389527682158,
+        "log_loss": 0.11728055743308384,
+        "log_loss_id": 0.4315208457311622,
+        "log_loss_id_room": 0.3034422065942788
+       }
+      },
+      "CUBEX_CONSTRUCT_NORMAL": {
+       "samples": 2280,
+       "ce": 0.83711006530105,
+       "ce_prior": 1.764224441453158,
+       "death": 0.0,
+       "predicted_death": 0.000322618976367008,
+       "rank_within": 0.9739317874376786,
+       "rank_within_share": 0.9420521754835403,
+       "rank_lost": 0.7178290905505299,
+       "rank_lost_share": 0.1807635490307535,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 175,
+        "used": 0.26857142857142857,
+        "predicted": 0.17407630380706174,
+        "log_loss": 0.47625564387088776,
+        "log_loss_id": 0.5288320615392849,
+        "log_loss_id_room": 0.540685593526027
+       }
+      },
+      "CULTISTS_NORMAL": {
+       "samples": 3255,
+       "ce": 0.9035310170921094,
+       "ce_prior": 1.8222829670514502,
+       "death": 0.0,
+       "predicted_death": 0.001242391540832675,
+       "rank_within": 0.9743852700462595,
+       "rank_within_share": 0.9216062078240481,
+       "rank_lost": 0.7654988054917943,
+       "rank_lost_share": 0.10002867107475416,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 178,
+        "used": 0.14606741573033707,
+        "predicted": 0.13133174749886592,
+        "log_loss": 0.3284854529120232,
+        "log_loss_id": 0.4798975411861422,
+        "log_loss_id_room": 0.4341286522084271
+       }
+      },
+      "DECIMILLIPEDE_ELITE": {
+       "samples": 6142,
+       "ce": 1.786208828109256,
+       "ce_prior": 2.8683946487758143,
+       "death": 0.03516769781830023,
+       "predicted_death": 0.03671644190965047,
+       "rank_within": 0.9254083291460105,
+       "rank_within_share": 0.8150266667327467,
+       "rank_lost": 0.7671929821888317,
+       "rank_lost_share": 0.0076277596456956285,
+       "auc_death": 0.9706806847371701,
+       "auc_death_share": 0.8613032511628959,
+       "potions": {
+        "rows": 243,
+        "used": 0.27983539094650206,
+        "predicted": 0.27572956151248923,
+        "log_loss": 0.15248109442082033,
+        "log_loss_id": 0.4763144251972517,
+        "log_loss_id_room": 0.4284622235840621
+       }
+      },
+      "DENSE_VEGETATION_EVENT_ENCOUNTER": {
+       "samples": 511,
+       "ce": 1.5358315987694189,
+       "ce_prior": 2.4793766371284987,
+       "death": 0.0,
+       "predicted_death": 0.0002934616462805222,
+       "rank_within": 0.9071698061604321,
+       "rank_within_share": 0.718676339267199,
+       "rank_lost": 0.8295009590211799,
+       "rank_lost_share": 0.23455763020917683,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 16,
+        "used": 0.5,
+        "predicted": 0.4051989310605085,
+        "log_loss": 0.2594574572425615,
+        "log_loss_id": 0.6144583155261625,
+        "log_loss_id_room": 0.73975335499058
+       }
+      },
+      "DEVOTED_SCULPTOR_WEAK": {
+       "samples": 7091,
+       "ce": 1.3354454769577493,
+       "ce_prior": 2.0023370490840606,
+       "death": 0.0008461429981666902,
+       "predicted_death": 0.0011462936980444441,
+       "rank_within": 0.80062525270411,
+       "rank_within_share": 0.5641372323362415,
+       "rank_lost": 0.6334707471766992,
+       "rank_lost_share": 0.09492482565084914,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 1279,
+        "used": 0.20641125879593433,
+        "predicted": 0.238072271657622,
+        "log_loss": 0.3675256336624469,
+        "log_loss_id": 0.4948324361360812,
+        "log_loss_id_room": 0.45542337938037764
+       }
+      },
+      "ENTOMANCER_ELITE": {
+       "samples": 5929,
+       "ce": 1.8399803296263142,
+       "ce_prior": 2.8155533043551944,
+       "death": 0.019227525721032215,
+       "predicted_death": 0.02154235829987804,
+       "rank_within": 0.9148999659909232,
+       "rank_within_share": 0.8309137627975234,
+       "rank_lost": 0.7052782262568178,
+       "rank_lost_share": 0.001864339456989252,
+       "auc_death": 0.9597491208641139,
+       "auc_death_share": 0.8695585027087815,
+       "potions": {
+        "rows": 354,
+        "used": 0.307909604519774,
+        "predicted": 0.2853020975213002,
+        "log_loss": 0.24379878816047063,
+        "log_loss_id": 0.5213824275444524,
+        "log_loss_id_room": 0.5035088661958691
+       }
+      },
+      "EXOSKELETONS_NORMAL": {
+       "samples": 5582,
+       "ce": 0.99918169348925,
+       "ce_prior": 2.0221716109425194,
+       "death": 0.002866356144750985,
+       "predicted_death": 0.0012301859708580857,
+       "rank_within": 0.9684778183941267,
+       "rank_within_share": 0.9346428232768041,
+       "rank_lost": 0.7398835045711042,
+       "rank_lost_share": 0.07942701715624197,
+       "auc_death": 0.9787276171736968,
+       "auc_death_share": 0.8510655338332288,
+       "potions": {
+        "rows": 402,
+        "used": 0.18159203980099503,
+        "predicted": 0.18268084722837452,
+        "log_loss": 0.2156851187756227,
+        "log_loss_id": 0.42947824947244795,
+        "log_loss_id_room": 0.3748182447851555
+       }
+      },
+      "EXOSKELETONS_WEAK": {
+       "samples": 7705,
+       "ce": 0.5376541113465741,
+       "ce_prior": 1.5084463350638198,
+       "death": 0.0,
+       "predicted_death": 1.4149594843022915e-05,
+       "rank_within": 0.8600885583908292,
+       "rank_within_share": 0.7492256742583591,
+       "rank_lost": 0.7033987282458587,
+       "rank_lost_share": 0.31791635987768546,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 445,
+        "used": 0.15730337078651685,
+        "predicted": 0.13576424876558665,
+        "log_loss": 0.27800136102005496,
+        "log_loss_id": 0.45371699626323325,
+        "log_loss_id_room": 0.3841146576246769
+       }
+      },
+      "FABRICATOR_NORMAL": {
+       "samples": 4625,
+       "ce": 1.5168995789822826,
+       "ce_prior": 2.2796872044197745,
+       "death": 0.014054054054054054,
+       "predicted_death": 0.009126444177606625,
+       "rank_within": 0.9198489423499749,
+       "rank_within_share": 0.8661343768774078,
+       "rank_lost": 0.6436916188745958,
+       "rank_lost_share": -0.017495923514451794,
+       "auc_death": 0.9655242777273244,
+       "auc_death_share": 0.9000277860381185,
+       "potions": {
+        "rows": 762,
+        "used": 0.21391076115485563,
+        "predicted": 0.24692779012122673,
+        "log_loss": 0.2812268329314825,
+        "log_loss_id": 0.47581596478713856,
+        "log_loss_id_room": 0.44283927892577635
+       }
+      },
+      "FLYCONID_NORMAL": {
+       "samples": 2390,
+       "ce": 1.073756530448874,
+       "ce_prior": 2.0862878002681273,
+       "death": 0.0012552301255230125,
+       "predicted_death": 0.00036617031528583533,
+       "rank_within": 0.9714914566897359,
+       "rank_within_share": 0.9236520681105984,
+       "rank_lost": 0.7482745284079342,
+       "rank_lost_share": 0.1900321211816068,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 161,
+        "used": 0.2360248447204969,
+        "predicted": 0.2801432863643114,
+        "log_loss": 0.3966967836503127,
+        "log_loss_id": 0.5081670819289703,
+        "log_loss_id_room": 0.48785130963610424
+       }
+      },
+      "FOGMOG_NORMAL": {
+       "samples": 2910,
+       "ce": 0.8984862154810971,
+       "ce_prior": 1.7677723107240209,
+       "death": 0.004123711340206186,
+       "predicted_death": 0.00043578386389669807,
+       "rank_within": 0.9701806790129845,
+       "rank_within_share": 0.942018942065113,
+       "rank_lost": 0.718772181079061,
+       "rank_lost_share": 0.16217094389432252,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 212,
+        "used": 0.18867924528301888,
+        "predicted": 0.19276814112763174,
+        "log_loss": 0.3323798842484712,
+        "log_loss_id": 0.5003886654731213,
+        "log_loss_id_room": 0.4682909654898049
+       }
+      },
+      "FOSSIL_STALKER_NORMAL": {
+       "samples": 2457,
+       "ce": 0.7282070670672582,
+       "ce_prior": 1.7386124782199022,
+       "death": 0.000814000814000814,
+       "predicted_death": 0.000626398413664582,
+       "rank_within": 0.9834065707532779,
+       "rank_within_share": 0.9558411872908132,
+       "rank_lost": 0.7338715331796128,
+       "rank_lost_share": 0.09064435917696402,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 185,
+        "used": 0.14054054054054055,
+        "predicted": 0.16149370333037633,
+        "log_loss": 0.2165429110315553,
+        "log_loss_id": 0.45205459559561756,
+        "log_loss_id_room": 0.38822444326161
+       }
+      },
+      "FROG_KNIGHT_NORMAL": {
+       "samples": 4641,
+       "ce": 1.413464567098254,
+       "ce_prior": 2.2873759927794697,
+       "death": 0.00689506571859513,
+       "predicted_death": 0.006497428312174574,
+       "rank_within": 0.9395213467060617,
+       "rank_within_share": 0.8812830880040669,
+       "rank_lost": 0.7045547819796205,
+       "rank_lost_share": -0.009837007273098618,
+       "auc_death": 0.9834328942010582,
+       "auc_death_share": 0.9764199156699362,
+       "potions": {
+        "rows": 867,
+        "used": 0.2179930795847751,
+        "predicted": 0.18351255076388417,
+        "log_loss": 0.3049575100814976,
+        "log_loss_id": 0.45598140781142,
+        "log_loss_id_room": 0.42571212714723633
+       }
+      },
+      "FUZZY_WURM_CRAWLER_WEAK": {
+       "samples": 5846,
+       "ce": 0.2006151419662958,
+       "ce_prior": 1.261790303374012,
+       "death": 0.0,
+       "predicted_death": 3.257585723524019e-07,
+       "rank_within": 0.8547722330920616,
+       "rank_within_share": 0.7237325258326123,
+       "rank_lost": 0.6882646725135292,
+       "rank_lost_share": 0.4431483479614551,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 278,
+        "used": 0.04316546762589928,
+        "predicted": 0.05179126632337326,
+        "log_loss": 0.1867049311322773,
+        "log_loss_id": 0.44151728486303693,
+        "log_loss_id_room": 0.31627070637212007
+       }
+      },
+      "GLOBE_HEAD_NORMAL": {
+       "samples": 3381,
+       "ce": 1.1003913885347674,
+       "ce_prior": 2.028488184861779,
+       "death": 0.001774622892635315,
+       "predicted_death": 0.0010046111607275444,
+       "rank_within": 0.9552702499495702,
+       "rank_within_share": 0.9017956645911444,
+       "rank_lost": 0.6894158266621763,
+       "rank_lost_share": 0.04848640916049349,
+       "auc_death": 0.9976558837318331,
+       "auc_death_share": 0.9854664791373652,
+       "potions": {
+        "rows": 686,
+        "used": 0.17055393586005832,
+        "predicted": 0.1951820629995429,
+        "log_loss": 0.2846755074361814,
+        "log_loss_id": 0.4499124079142592,
+        "log_loss_id_room": 0.393066324333704
+       }
+      },
+      "GREMLIN_MERC_NORMAL": {
+       "samples": 3489,
+       "ce": 0.6411266144634112,
+       "ce_prior": 1.7218351397650626,
+       "death": 0.0,
+       "predicted_death": 0.000114557821051675,
+       "rank_within": 0.9811664485092685,
+       "rank_within_share": 0.952102790045516,
+       "rank_lost": 0.7563215438350317,
+       "rank_lost_share": 0.22556248496990103,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 229,
+        "used": 0.2052401746724891,
+        "predicted": 0.2014041420322703,
+        "log_loss": 0.3547068890806906,
+        "log_loss_id": 0.49944767475432156,
+        "log_loss_id_room": 0.45552550705372497
+       }
+      },
+      "HAUNTED_SHIP_NORMAL": {
+       "samples": 3215,
+       "ce": 1.097082971316072,
+       "ce_prior": 2.049323722419764,
+       "death": 0.0,
+       "predicted_death": 0.0005345495146567754,
+       "rank_within": 0.9735518503413034,
+       "rank_within_share": 0.9312640820276554,
+       "rank_lost": 0.7445039780179011,
+       "rank_lost_share": 0.18348983224332988,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 210,
+        "used": 0.2,
+        "predicted": 0.24437759470020246,
+        "log_loss": 0.27300802054103723,
+        "log_loss_id": 0.46413341143263037,
+        "log_loss_id_room": 0.43655621969888714
+       }
+      },
+      "HUNTER_KILLER_NORMAL": {
+       "samples": 6329,
+       "ce": 1.3085538129504155,
+       "ce_prior": 2.2332926496758527,
+       "death": 0.004424079633433402,
+       "predicted_death": 0.005950925163455066,
+       "rank_within": 0.9617238250365577,
+       "rank_within_share": 0.910327751347058,
+       "rank_lost": 0.7071990231285367,
+       "rank_lost_share": -0.0036740830112998992,
+       "auc_death": 0.9937716607494902,
+       "auc_death_share": 0.9286243234544206,
+       "potions": {
+        "rows": 643,
+        "used": 0.2286158631415241,
+        "predicted": 0.24434869327510866,
+        "log_loss": 0.2606566326559691,
+        "log_loss_id": 0.4828435169914217,
+        "log_loss_id_room": 0.46391864422390006
+       }
+      },
+      "INFESTED_PRISMS_ELITE": {
+       "samples": 6691,
+       "ce": 1.8078561600055418,
+       "ce_prior": 2.791086271887815,
+       "death": 0.015094903601853235,
+       "predicted_death": 0.019038978692562752,
+       "rank_within": 0.9473282251638948,
+       "rank_within_share": 0.8791461805203098,
+       "rank_lost": 0.7535292266322805,
+       "rank_lost_share": -0.035987494754224574,
+       "auc_death": 0.9910997466695113,
+       "auc_death_share": 0.9653740874416046,
+       "potions": {
+        "rows": 356,
+        "used": 0.2247191011235955,
+        "predicted": 0.24712150769267782,
+        "log_loss": 0.2187777329342669,
+        "log_loss_id": 0.48357559495500824,
+        "log_loss_id_room": 0.505327988612473
+       }
+      },
+      "INKLETS_NORMAL": {
+       "samples": 2243,
+       "ce": 0.6665297841974693,
+       "ce_prior": 1.8245156319913083,
+       "death": 0.00044583147570218456,
+       "predicted_death": 0.00029115967287720045,
+       "rank_within": 0.9912572908034717,
+       "rank_within_share": 0.9657093341087991,
+       "rank_lost": 0.7882793750961585,
+       "rank_lost_share": 0.12391303227679773,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 171,
+        "used": 0.14619883040935672,
+        "predicted": 0.13638705597797,
+        "log_loss": 0.21935881390239362,
+        "log_loss_id": 0.4005541596922541,
+        "log_loss_id_room": 0.3350825344234352
+       }
+      },
+      "KAISER_CRAB_BOSS": {
+       "samples": 11114,
+       "ce": 2.0204611819712475,
+       "ce_prior": 3.3705534186490596,
+       "death": 0.1075220442684902,
+       "predicted_death": 0.121137443289541,
+       "rank_within": 0.9048925348184708,
+       "rank_within_share": 0.7059995200041638,
+       "rank_lost": 0.7883034271486761,
+       "rank_lost_share": 0.08538689024901312,
+       "auc_death": 0.9338865691729672,
+       "auc_death_share": 0.7271813199553,
+       "potions": {
+        "rows": 531,
+        "used": 0.4387947269303202,
+        "predicted": 0.4302524946580669,
+        "log_loss": 0.2990409174952696,
+        "log_loss_id": 0.7393551927263745,
+        "log_loss_id_room": 0.5908857686001471
+       }
+      },
+      "KNIGHTS_ELITE": {
+       "samples": 3037,
+       "ce": 2.007394262837806,
+       "ce_prior": 3.0258863241445257,
+       "death": 0.040171221600263415,
+       "predicted_death": 0.03984105497382371,
+       "rank_within": 0.9021906706602819,
+       "rank_within_share": 0.78405405220229,
+       "rank_lost": 0.7417468720617076,
+       "rank_lost_share": 0.025847398379278862,
+       "auc_death": 0.937086797142833,
+       "auc_death_share": 0.8546981313830186,
+       "potions": {
+        "rows": 338,
+        "used": 0.4437869822485207,
+        "predicted": 0.419106488819496,
+        "log_loss": 0.2883038858923952,
+        "log_loss_id": 0.6665099868371646,
+        "log_loss_id_room": 0.5873771224272967
+       }
+      },
+      "KNOWLEDGE_DEMON_BOSS": {
+       "samples": 9412,
+       "ce": 1.9895457007900457,
+       "ce_prior": 3.7202085219828516,
+       "death": 0.3339354016149596,
+       "predicted_death": 0.35846803847719433,
+       "rank_within": 0.8685577819824777,
+       "rank_within_share": 0.4382093468179362,
+       "rank_lost": 0.7597622265400016,
+       "rank_lost_share": 0.1727139925015418,
+       "auc_death": 0.9421940845668112,
+       "auc_death_share": 0.6285548328314864,
+       "potions": {
+        "rows": 444,
+        "used": 0.6711711711711712,
+        "predicted": 0.6306405610475311,
+        "log_loss": 0.31850327111315696,
+        "log_loss_id": 0.999335381611677,
+        "log_loss_id_room": 0.5519265416522433
+       }
+      },
+      "LAGAVULIN_MATRIARCH_BOSS": {
+       "samples": 6953,
+       "ce": 2.0535987767875006,
+       "ce_prior": 3.318347835784634,
+       "death": 0.14540486121098806,
+       "predicted_death": 0.13240635231751097,
+       "rank_within": 0.8996612323440002,
+       "rank_within_share": 0.5833377218502828,
+       "rank_lost": 0.7767733988410992,
+       "rank_lost_share": 0.16517830789676802,
+       "auc_death": 0.9516304613556656,
+       "auc_death_share": 0.5861048137403237,
+       "potions": {
+        "rows": 458,
+        "used": 0.6593886462882096,
+        "predicted": 0.6230541887099391,
+        "log_loss": 0.33241905777103775,
+        "log_loss_id": 0.891235306141083,
+        "log_loss_id_room": 0.5827764463724706
+       }
+      },
+      "LIVING_FOG_NORMAL": {
+       "samples": 3923,
+       "ce": 1.0302121029233677,
+       "ce_prior": 1.9249847247536487,
+       "death": 0.0007647208768799389,
+       "predicted_death": 0.00019218133941092453,
+       "rank_within": 0.9737252354715056,
+       "rank_within_share": 0.9395083916181313,
+       "rank_lost": 0.7143183449985236,
+       "rank_lost_share": 0.10913126999027242,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 314,
+        "used": 0.17834394904458598,
+        "predicted": 0.12811404308807944,
+        "log_loss": 0.3241678727760855,
+        "log_loss_id": 0.45112927755578663,
+        "log_loss_id_room": 0.4049151232726972
+       }
+      },
+      "LOUSE_PROGENITOR_NORMAL": {
+       "samples": 7084,
+       "ce": 1.1297072272004878,
+       "ce_prior": 2.044858540991861,
+       "death": 0.0009881422924901185,
+       "predicted_death": 0.0024677821229869496,
+       "rank_within": 0.9632642669589807,
+       "rank_within_share": 0.9311083933596378,
+       "rank_lost": 0.7178376728770388,
+       "rank_lost_share": 0.05094064609228709,
+       "auc_death": 0.9984202211690363,
+       "auc_death_share": 0.9968404423380727,
+       "potions": {
+        "rows": 676,
+        "used": 0.1908284023668639,
+        "predicted": 0.20192361296354008,
+        "log_loss": 0.24448595109061397,
+        "log_loss_id": 0.463129061314736,
+        "log_loss_id_room": 0.4095235391898543
+       }
+      },
+      "MAWLER_NORMAL": {
+       "samples": 2526,
+       "ce": 0.8852539995515608,
+       "ce_prior": 1.851822306000988,
+       "death": 0.0011876484560570072,
+       "predicted_death": 0.0008127158097416691,
+       "rank_within": 0.9763978006974687,
+       "rank_within_share": 0.9504777355318912,
+       "rank_lost": 0.697049661289238,
+       "rank_lost_share": 0.16553495627174755,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 213,
+        "used": 0.19718309859154928,
+        "predicted": 0.17242971508416507,
+        "log_loss": 0.3024071813094899,
+        "log_loss_id": 0.4660151885233964,
+        "log_loss_id_room": 0.43269314590690966
+       }
+      },
+      "MECHA_KNIGHT_ELITE": {
+       "samples": 4117,
+       "ce": 2.3827107244652637,
+       "ce_prior": 3.3710767026903783,
+       "death": 0.05732329366043235,
+       "predicted_death": 0.05817565892349333,
+       "rank_within": 0.83374687732001,
+       "rank_within_share": 0.6963287320355498,
+       "rank_lost": 0.6967469108856903,
+       "rank_lost_share": 0.10415777233090663,
+       "auc_death": 0.9110240630097952,
+       "auc_death_share": 0.8314063118476512,
+       "potions": {
+        "rows": 373,
+        "used": 0.4745308310991957,
+        "predicted": 0.47856087129034597,
+        "log_loss": 0.32961216536084126,
+        "log_loss_id": 0.6873273128323244,
+        "log_loss_id_room": 0.5675212103463847
+       }
+      },
+      "MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER": {
+       "samples": 173,
+       "ce": 1.8111399228443301,
+       "ce_prior": 2.6699504851016695,
+       "death": 0.023121387283236993,
+       "predicted_death": 0.015745287106428935,
+       "rank_within": 0.9013752389692418,
+       "rank_within_share": 0.7759177814252995,
+       "rank_lost": 0.7108692396964849,
+       "rank_lost_share": 0.08671269277919195,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 13,
+        "used": 0.07692307692307693,
+        "predicted": 0.14680185681513608,
+        "log_loss": 0.08297889094172921,
+        "log_loss_id": 0.30210089348082136,
+        "log_loss_id_room": 0.20014938635122728
+       }
+      },
+      "MYTES_NORMAL": {
+       "samples": 6829,
+       "ce": 1.1449359581410194,
+       "ce_prior": 2.1100714370642777,
+       "death": 0.0024893835114950945,
+       "predicted_death": 0.002990678319825978,
+       "rank_within": 0.9664701006297212,
+       "rank_within_share": 0.9203983867053128,
+       "rank_lost": 0.7395483547723141,
+       "rank_lost_share": 0.009941968463086237,
+       "auc_death": 0.989335520918786,
+       "auc_death_share": 0.979964662081151,
+       "potions": {
+        "rows": 510,
+        "used": 0.1803921568627451,
+        "predicted": 0.19699538143258163,
+        "log_loss": 0.19519222937825126,
+        "log_loss_id": 0.40663811059419935,
+        "log_loss_id_room": 0.3569344175053479
+       }
+      },
+      "NIBBITS_NORMAL": {
+       "samples": 3347,
+       "ce": 1.0229116238871003,
+       "ce_prior": 2.0137916704811683,
+       "death": 0.0005975500448162533,
+       "predicted_death": 0.0012675793250479415,
+       "rank_within": 0.9796170404737207,
+       "rank_within_share": 0.941512180607908,
+       "rank_lost": 0.7677851672986599,
+       "rank_lost_share": 0.13742313954168137,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 182,
+        "used": 0.25824175824175827,
+        "predicted": 0.2378525313325368,
+        "log_loss": 0.24346870713174362,
+        "log_loss_id": 0.469423595130715,
+        "log_loss_id_room": 0.464600540549519
+       }
+      },
+      "NIBBITS_WEAK": {
+       "samples": 6115,
+       "ce": 0.29534800000218386,
+       "ce_prior": 1.454754904131265,
+       "death": 0.0,
+       "predicted_death": 2.326839338265846e-05,
+       "rank_within": 0.883102483148928,
+       "rank_within_share": 0.7403463109762645,
+       "rank_lost": 0.7494432151961792,
+       "rank_lost_share": 0.33308432034705726,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 214,
+        "used": 0.04205607476635514,
+        "predicted": 0.09161236292130542,
+        "log_loss": 0.1267336064508738,
+        "log_loss_id": 0.41505396358652485,
+        "log_loss_id_room": 0.2749715914804673
+       }
+      },
+      "OVERGROWTH_CRAWLERS": {
+       "samples": 2809,
+       "ce": 1.1339960239272906,
+       "ce_prior": 2.1035479915154855,
+       "death": 0.0,
+       "predicted_death": 0.001124336298001656,
+       "rank_within": 0.9658428883588571,
+       "rank_within_share": 0.9210272886198269,
+       "rank_lost": 0.7720129025154698,
+       "rank_lost_share": 0.1389566050348183,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 177,
+        "used": 0.24293785310734464,
+        "predicted": 0.2662940137721337,
+        "log_loss": 0.3480118111578961,
+        "log_loss_id": 0.5242486420661145,
+        "log_loss_id_room": 0.5244992319261775
+       }
+      },
+      "OVICOPTER_NORMAL": {
+       "samples": 7263,
+       "ce": 1.466893819408415,
+       "ce_prior": 2.3651853359828574,
+       "death": 0.011014732204323282,
+       "predicted_death": 0.0080746806056242,
+       "rank_within": 0.9413282465036902,
+       "rank_within_share": 0.8745490737749346,
+       "rank_lost": 0.7076768782318842,
+       "rank_lost_share": 0.01155594574656069,
+       "auc_death": 0.988282867525517,
+       "auc_death_share": 0.8889424220910005,
+       "potions": {
+        "rows": 454,
+        "used": 0.2488986784140969,
+        "predicted": 0.24863927769970526,
+        "log_loss": 0.2955554278302693,
+        "log_loss_id": 0.45716675828978864,
+        "log_loss_id_room": 0.47144347025980704
+       }
+      },
+      "OWL_MAGISTRATE_NORMAL": {
+       "samples": 4494,
+       "ce": 1.5287639081786504,
+       "ce_prior": 2.3151231959839524,
+       "death": 0.008678237650200267,
+       "predicted_death": 0.009332266077275126,
+       "rank_within": 0.9331509504162737,
+       "rank_within_share": 0.8723554362624893,
+       "rank_lost": 0.67009812637031,
+       "rank_lost_share": -0.09276669650505598,
+       "auc_death": 0.9633764123254417,
+       "auc_death_share": 0.9644800359413289,
+       "potions": {
+        "rows": 805,
+        "used": 0.20124223602484473,
+        "predicted": 0.2028695332655532,
+        "log_loss": 0.2418687571144903,
+        "log_loss_id": 0.4319212324957761,
+        "log_loss_id_room": 0.3996895134116282
+       }
+      },
+      "PHANTASMAL_GARDENERS_ELITE": {
+       "samples": 7116,
+       "ce": 1.418764760542912,
+       "ce_prior": 2.532175033812063,
+       "death": 0.0037942664418212477,
+       "predicted_death": 0.0035819173349480597,
+       "rank_within": 0.9532866215863537,
+       "rank_within_share": 0.8595148296289311,
+       "rank_lost": 0.8054763194036377,
+       "rank_lost_share": 0.10173269568392028,
+       "auc_death": 0.9958775477544116,
+       "auc_death_share": 0.7071277277743716,
+       "potions": {
+        "rows": 259,
+        "used": 0.3474903474903475,
+        "predicted": 0.3674725782048159,
+        "log_loss": 0.2620705109408104,
+        "log_loss_id": 0.5800525691904241,
+        "log_loss_id_room": 0.5502971927777842
+       }
+      },
+      "PHROG_PARASITE_ELITE": {
+       "samples": 8046,
+       "ce": 2.08944631097522,
+       "ce_prior": 2.9740947764580823,
+       "death": 0.019885657469550087,
+       "predicted_death": 0.026805638823933,
+       "rank_within": 0.8908922701041377,
+       "rank_within_share": 0.7305775481011543,
+       "rank_lost": 0.7534572119562669,
+       "rank_lost_share": 0.14030491931410485,
+       "auc_death": 0.9610291110048602,
+       "auc_death_share": 0.6691340999279255,
+       "potions": {
+        "rows": 304,
+        "used": 0.3848684210526316,
+        "predicted": 0.3802235008307977,
+        "log_loss": 0.32449763014100624,
+        "log_loss_id": 0.6297096135105714,
+        "log_loss_id_room": 0.6022645378315715
+       }
+      },
+      "PUNCH_CONSTRUCT_NORMAL": {
+       "samples": 2774,
+       "ce": 0.7620511389808968,
+       "ce_prior": 1.7071840557755613,
+       "death": 0.0,
+       "predicted_death": 0.0004097176752869844,
+       "rank_within": 0.9864223009411662,
+       "rank_within_share": 0.9622325430292474,
+       "rank_lost": 0.7062468816111461,
+       "rank_lost_share": 0.139333874608592,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 188,
+        "used": 0.16489361702127658,
+        "predicted": 0.15231154808500227,
+        "log_loss": 0.2923880522278653,
+        "log_loss_id": 0.4694344916442455,
+        "log_loss_id_room": 0.38443312295869375
+       }
+      },
+      "PUNCH_OFF_EVENT_ENCOUNTER": {
+       "samples": 456,
+       "ce": 1.5273958580535265,
+       "ce_prior": 2.717315547412037,
+       "death": 0.0043859649122807015,
+       "predicted_death": 0.0065271136488318695,
+       "rank_within": 0.9606239224687784,
+       "rank_within_share": 0.9067588412449943,
+       "rank_lost": 0.7433961610651637,
+       "rank_lost_share": 0.18700214586651495,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 30,
+        "used": 0.6333333333333333,
+        "predicted": 0.5485385027288506,
+        "log_loss": 0.6429785496188226,
+        "log_loss_id": 1.0640668731800502,
+        "log_loss_id_room": 1.5013923853573004
+       }
+      },
+      "QUEEN_BOSS": {
+       "samples": 6218,
+       "ce": 1.9948394855182694,
+       "ce_prior": 3.588120484155397,
+       "death": 0.31312319073657124,
+       "predicted_death": 0.35803425460459615,
+       "rank_within": 0.8524883979158437,
+       "rank_within_share": 0.5365723947778315,
+       "rank_lost": 0.7655358592064365,
+       "rank_lost_share": 0.13759010564303303,
+       "auc_death": 0.9230092210248577,
+       "auc_death_share": 0.6827575899359194,
+       "potions": {
+        "rows": 540,
+        "used": 0.6537037037037037,
+        "predicted": 0.6750010830526872,
+        "log_loss": 0.32638569075157703,
+        "log_loss_id": 1.0106699205466199,
+        "log_loss_id_room": 1.1329211060473177
+       }
+      },
+      "RUBY_RAIDERS_NORMAL": {
+       "samples": 2656,
+       "ce": 1.0624373002159149,
+       "ce_prior": 2.142257570854853,
+       "death": 0.0011295180722891566,
+       "predicted_death": 0.001684433437527469,
+       "rank_within": 0.9749878413527311,
+       "rank_within_share": 0.9210824503888184,
+       "rank_lost": 0.7948159295076334,
+       "rank_lost_share": 0.17699673233968313,
+       "auc_death": 1.0,
+       "auc_death_share": 0.9988662131519274,
+       "potions": {
+        "rows": 130,
+        "used": 0.2076923076923077,
+        "predicted": 0.24020736526684333,
+        "log_loss": 0.20872297294544187,
+        "log_loss_id": 0.4734038719547507,
+        "log_loss_id_room": 0.4460264322013868
+       }
+      },
+      "SCROLLS_OF_BITING_NORMAL": {
+       "samples": 2628,
+       "ce": 1.5134696522389042,
+       "ce_prior": 2.453519135788705,
+       "death": 0.00684931506849315,
+       "predicted_death": 0.008365442359323889,
+       "rank_within": 0.9537056894647612,
+       "rank_within_share": 0.892983209419881,
+       "rank_lost": 0.676315647062372,
+       "rank_lost_share": -0.08289501073754495,
+       "auc_death": 0.9808648329026324,
+       "auc_death_share": 0.9100391645861621,
+       "potions": {
+        "rows": 460,
+        "used": 0.24565217391304348,
+        "predicted": 0.2063570592535435,
+        "log_loss": 0.29651925924711886,
+        "log_loss_id": 0.5151312601584336,
+        "log_loss_id_room": 0.5114543619083228
+       }
+      },
+      "SCROLLS_OF_BITING_WEAK": {
+       "samples": 5959,
+       "ce": 0.9074522928953074,
+       "ce_prior": 1.8149749551991494,
+       "death": 0.0,
+       "predicted_death": 0.0002475613304586786,
+       "rank_within": 0.8732233160921594,
+       "rank_within_share": 0.7309119253814955,
+       "rank_lost": 0.6364134906012061,
+       "rank_lost_share": 0.36654426282309616,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 1168,
+        "used": 0.08476027397260275,
+        "predicted": 0.09423388535679446,
+        "log_loss": 0.19634401164175122,
+        "log_loss_id": 0.4145236401347596,
+        "log_loss_id_room": 0.32757061070474097
+       }
+      },
+      "SEAPUNK_NORMAL": {
+       "samples": 3456,
+       "ce": 0.9199636884732214,
+       "ce_prior": 1.9801703418073968,
+       "death": 0.0011574074074074073,
+       "predicted_death": 0.0012185410766985302,
+       "rank_within": 0.9805119592194571,
+       "rank_within_share": 0.9496270319196416,
+       "rank_lost": 0.758094434475755,
+       "rank_lost_share": 0.13874800724800823,
+       "auc_death": 1.0,
+       "auc_death_share": 1.0,
+       "potions": {
+        "rows": 188,
+        "used": 0.1276595744680851,
+        "predicted": 0.1981000916180484,
+        "log_loss": 0.19206087321262139,
+        "log_loss_id": 0.3873331491417874,
+        "log_loss_id_room": 0.3070928631374691
+       }
+      },
+      "SEAPUNK_WEAK": {
+       "samples": 6055,
+       "ce": 0.3056980808686111,
+       "ce_prior": 1.4261903602906356,
+       "death": 0.0,
+       "predicted_death": 3.124225980152819e-05,
+       "rank_within": 0.9059359654640895,
+       "rank_within_share": 0.7595664245680949,
+       "rank_lost": 0.732777365651596,
+       "rank_lost_share": 0.32375653720240344,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 219,
+        "used": 0.1552511415525114,
+        "predicted": 0.13528173990069262,
+        "log_loss": 0.24779812561099326,
+        "log_loss_id": 0.5103145451904655,
+        "log_loss_id_room": 0.4467941772073497
+       }
+      },
+      "SEWER_CLAM_NORMAL": {
+       "samples": 3311,
+       "ce": 0.722289618717889,
+       "ce_prior": 1.7154212918786602,
+       "death": 0.0,
+       "predicted_death": 0.00018514851727504167,
+       "rank_within": 0.9786709319118758,
+       "rank_within_share": 0.9502278596808484,
+       "rank_lost": 0.7081764601142166,
+       "rank_lost_share": 0.08152107333426649,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 264,
+        "used": 0.17803030303030304,
+        "predicted": 0.17636204149529586,
+        "log_loss": 0.3017375803789587,
+        "log_loss_id": 0.4745450209853269,
+        "log_loss_id_room": 0.42021612415891146
+       }
+      },
+      "SHRINKER_BEETLE_WEAK": {
+       "samples": 4948,
+       "ce": 0.28400131605254425,
+       "ce_prior": 1.2372424780968823,
+       "death": 0.0,
+       "predicted_death": 1.6708095459029444e-05,
+       "rank_within": 0.8518575706814171,
+       "rank_within_share": 0.809808532058197,
+       "rank_lost": 0.626302658520088,
+       "rank_lost_share": 0.3643307456282073,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 194,
+        "used": 0.07731958762886598,
+        "predicted": 0.06959717298586135,
+        "log_loss": 0.20049886457577526,
+        "log_loss_id": 0.40856320673792956,
+        "log_loss_id_room": 0.2950311263710236
+       }
+      },
+      "SKULKING_COLONY_ELITE": {
+       "samples": 6475,
+       "ce": 1.2832866410276476,
+       "ce_prior": 2.262426825227003,
+       "death": 0.0012355212355212356,
+       "predicted_death": 0.0029005814585246125,
+       "rank_within": 0.973049448497217,
+       "rank_within_share": 0.9248954795132502,
+       "rank_lost": 0.7727508823735401,
+       "rank_lost_share": 0.05225791916304341,
+       "auc_death": 0.9134471398622342,
+       "auc_death_share": 0.9162923030847558,
+       "potions": {
+        "rows": 413,
+        "used": 0.1937046004842615,
+        "predicted": 0.2559747638507195,
+        "log_loss": 0.3034163007713367,
+        "log_loss_id": 0.48902574348521394,
+        "log_loss_id_room": 0.5863541731324703
+       }
+      },
+      "SLIMED_BERSERKER_NORMAL": {
+       "samples": 5023,
+       "ce": 1.7445499777687306,
+       "ce_prior": 2.4994170460931553,
+       "death": 0.015528568584511248,
+       "predicted_death": 0.017618294869565645,
+       "rank_within": 0.8961321391676851,
+       "rank_within_share": 0.8206931502372022,
+       "rank_lost": 0.6333283687507854,
+       "rank_lost_share": -0.002503031618188581,
+       "auc_death": 0.9600591191891406,
+       "auc_death_share": 0.8408298863863862,
+       "potions": {
+        "rows": 908,
+        "used": 0.21475770925110133,
+        "predicted": 0.24157530668429264,
+        "log_loss": 0.27683160724076444,
+        "log_loss_id": 0.48881836132184675,
+        "log_loss_id_room": 0.4668858331909438
+       }
+      },
+      "SLIMES_NORMAL": {
+       "samples": 2424,
+       "ce": 0.7892939290226554,
+       "ce_prior": 1.8305570787416263,
+       "death": 0.0,
+       "predicted_death": 0.0003055516049373519,
+       "rank_within": 0.9871594756412619,
+       "rank_within_share": 0.9606115180081161,
+       "rank_lost": 0.7766011786053598,
+       "rank_lost_share": 0.11366442049069683,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 167,
+        "used": 0.18562874251497005,
+        "predicted": 0.17483325835844188,
+        "log_loss": 0.26447259264946094,
+        "log_loss_id": 0.425323220506054,
+        "log_loss_id_room": 0.372447328886614
+       }
+      },
+      "SLIMES_WEAK": {
+       "samples": 6743,
+       "ce": 0.2836001430156556,
+       "ce_prior": 1.3493929390071913,
+       "death": 0.0,
+       "predicted_death": 1.1607185107498916e-06,
+       "rank_within": 0.8623248443254418,
+       "rank_within_share": 0.7273301956260451,
+       "rank_lost": 0.7185386598734486,
+       "rank_lost_share": 0.38099462616973734,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 244,
+        "used": 0.09016393442622951,
+        "predicted": 0.10133063869679755,
+        "log_loss": 0.2661636662903873,
+        "log_loss_id": 0.461722697388973,
+        "log_loss_id_room": 0.35039758049479736
+       }
+      },
+      "SLITHERING_STRANGLER_NORMAL": {
+       "samples": 2261,
+       "ce": 1.0361583457180925,
+       "ce_prior": 1.9997102223207766,
+       "death": 0.0,
+       "predicted_death": 0.0004897571384283058,
+       "rank_within": 0.9729617713820733,
+       "rank_within_share": 0.9220980080419557,
+       "rank_lost": 0.7886690092760024,
+       "rank_lost_share": 0.16020052279258673,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 222,
+        "used": 0.21171171171171171,
+        "predicted": 0.21901990755609685,
+        "log_loss": 0.19443920010364693,
+        "log_loss_id": 0.4482805584928603,
+        "log_loss_id_room": 0.42325273702715943
+       }
+      },
+      "SLUDGE_SPINNER_WEAK": {
+       "samples": 5572,
+       "ce": 0.3194132939992636,
+       "ce_prior": 1.3426534962836438,
+       "death": 0.0,
+       "predicted_death": 3.4498291256216956e-06,
+       "rank_within": 0.8913062642876428,
+       "rank_within_share": 0.7812439787108949,
+       "rank_lost": 0.6884296618429435,
+       "rank_lost_share": 0.32759544256429257,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 193,
+        "used": 0.06217616580310881,
+        "predicted": 0.10189660908138078,
+        "log_loss": 0.18419037524774384,
+        "log_loss_id": 0.4272667322504535,
+        "log_loss_id_room": 0.31133370466939103
+       }
+      },
+      "SLUMBERING_BEETLE_NORMAL": {
+       "samples": 7068,
+       "ce": 1.3446758534844552,
+       "ce_prior": 2.22120035484124,
+       "death": 0.006508205998868138,
+       "predicted_death": 0.005856564369159853,
+       "rank_within": 0.9545429982931503,
+       "rank_within_share": 0.9014372395171268,
+       "rank_lost": 0.7211643465270512,
+       "rank_lost_share": -0.05637529183450971,
+       "auc_death": 0.9938925011707682,
+       "auc_death_share": 0.9207614646777171,
+       "potions": {
+        "rows": 632,
+        "used": 0.1962025316455696,
+        "predicted": 0.17679616509728605,
+        "log_loss": 0.3093102600545572,
+        "log_loss_id": 0.4352935679857347,
+        "log_loss_id_room": 0.41540007271571383
+       }
+      },
+      "SNAPPING_JAXFRUIT_NORMAL": {
+       "samples": 2514,
+       "ce": 1.1768038755079333,
+       "ce_prior": 2.2013389349240358,
+       "death": 0.0015910898965791568,
+       "predicted_death": 0.0018713588124230902,
+       "rank_within": 0.9689119646556797,
+       "rank_within_share": 0.9227467612358847,
+       "rank_lost": 0.7548554787114126,
+       "rank_lost_share": 0.1877672724141812,
+       "auc_death": 1.0,
+       "auc_death_share": 1.0,
+       "potions": {
+        "rows": 109,
+        "used": 0.3211009174311927,
+        "predicted": 0.2842223762245873,
+        "log_loss": 0.3882677386161257,
+        "log_loss_id": 0.5431713205276892,
+        "log_loss_id_room": 0.5958395793565472
+       }
+      },
+      "SOUL_FYSH_BOSS": {
+       "samples": 7214,
+       "ce": 2.2204877567916976,
+       "ce_prior": 3.4160402945182624,
+       "death": 0.11006376490158026,
+       "predicted_death": 0.10004287741634349,
+       "rank_within": 0.8807036053303681,
+       "rank_within_share": 0.6329199242755147,
+       "rank_lost": 0.719011689558808,
+       "rank_lost_share": 0.196043287982277,
+       "auc_death": 0.948339998925982,
+       "auc_death_share": 0.6300093773185012,
+       "potions": {
+        "rows": 480,
+        "used": 0.7395833333333334,
+        "predicted": 0.7434991248510328,
+        "log_loss": 0.466458065679274,
+        "log_loss_id": 0.990532417597075,
+        "log_loss_id_room": 0.576866745640951
+       }
+      },
+      "SOUL_NEXUS_ELITE": {
+       "samples": 3054,
+       "ce": 1.900077372232503,
+       "ce_prior": 2.8260077331063735,
+       "death": 0.026522593320235755,
+       "predicted_death": 0.024094452678120385,
+       "rank_within": 0.9170538681786083,
+       "rank_within_share": 0.8087200088936716,
+       "rank_lost": 0.7054710401952108,
+       "rank_lost_share": 0.010978402642701082,
+       "auc_death": 0.9431952076615164,
+       "auc_death_share": 0.8656822394214245,
+       "potions": {
+        "rows": 439,
+        "used": 0.2984054669703872,
+        "predicted": 0.27109179075669226,
+        "log_loss": 0.1900263675801725,
+        "log_loss_id": 0.5633482757061098,
+        "log_loss_id_room": 0.581136992111292
+       }
+      },
+      "SPINY_TOAD_NORMAL": {
+       "samples": 6639,
+       "ce": 1.1429952923209956,
+       "ce_prior": 2.1152447243279715,
+       "death": 0.0018075011296882061,
+       "predicted_death": 0.0027716679318317574,
+       "rank_within": 0.9670006715422922,
+       "rank_within_share": 0.9283612289460114,
+       "rank_lost": 0.7213817969610815,
+       "rank_lost_share": 0.003131065559303875,
+       "auc_death": 0.9984894681934474,
+       "auc_death_share": 0.9969135783303112,
+       "potions": {
+        "rows": 623,
+        "used": 0.18619582664526485,
+        "predicted": 0.1698782623140785,
+        "log_loss": 0.2535268804716109,
+        "log_loss_id": 0.4391383250351047,
+        "log_loss_id_room": 0.38868623801196794
+       }
+      },
+      "TERROR_EEL_ELITE": {
+       "samples": 7835,
+       "ce": 1.4457261582470031,
+       "ce_prior": 2.458174117837867,
+       "death": 0.004722399489470326,
+       "predicted_death": 0.004288914097673097,
+       "rank_within": 0.9334539052381275,
+       "rank_within_share": 0.8393721525526396,
+       "rank_lost": 0.7530008469384769,
+       "rank_lost_share": 0.13544633685935878,
+       "auc_death": 0.9667336504616231,
+       "auc_death_share": 0.8769972242020456,
+       "potions": {
+        "rows": 389,
+        "used": 0.36246786632390743,
+        "predicted": 0.30727926444573805,
+        "log_loss": 0.4444768807869458,
+        "log_loss_id": 0.5931789429103221,
+        "log_loss_id_room": 0.5583613027823796
+       }
+      },
+      "TEST_SUBJECT_BOSS": {
+       "samples": 7503,
+       "ce": 2.131167374726239,
+       "ce_prior": 3.5281927152381116,
+       "death": 0.29441556710649075,
+       "predicted_death": 0.28086498245346103,
+       "rank_within": 0.8195925860389511,
+       "rank_within_share": 0.5590741454538513,
+       "rank_lost": 0.6589319619705089,
+       "rank_lost_share": 0.055420475088785774,
+       "auc_death": 0.9064689462142451,
+       "auc_death_share": 0.6858347166368801,
+       "potions": {
+        "rows": 794,
+        "used": 0.6498740554156172,
+        "predicted": 0.6188391163813155,
+        "log_loss": 0.33854520702285973,
+        "log_loss_id": 0.9688035879265247,
+        "log_loss_id_room": 0.5354513603294027
+       }
+      },
+      "THE_INSATIABLE_BOSS": {
+       "samples": 9305,
+       "ce": 2.3012168753688003,
+       "ce_prior": 3.5826144420949744,
+       "death": 0.1879634605051048,
+       "predicted_death": 0.18970681171795928,
+       "rank_within": 0.8327640486338381,
+       "rank_within_share": 0.5741919022333615,
+       "rank_lost": 0.7428412495242371,
+       "rank_lost_share": 0.08499056971344099,
+       "auc_death": 0.8744975611746374,
+       "auc_death_share": 0.658317537536782,
+       "potions": {
+        "rows": 684,
+        "used": 0.5570175438596491,
+        "predicted": 0.5942173001109382,
+        "log_loss": 0.34875461416174436,
+        "log_loss_id": 0.830539030177782,
+        "log_loss_id_room": 0.5837931636837188
+       }
+      },
+      "THE_KIN_BOSS": {
+       "samples": 7644,
+       "ce": 1.7893595018235884,
+       "ce_prior": 2.893636722686953,
+       "death": 0.06711145996860282,
+       "predicted_death": 0.06548164748060854,
+       "rank_within": 0.9360955641297607,
+       "rank_within_share": 0.8167433008324181,
+       "rank_lost": 0.7900768266525655,
+       "rank_lost_share": 0.06435473318751728,
+       "auc_death": 0.9508901542392404,
+       "auc_death_share": 0.7802502829404118,
+       "potions": {
+        "rows": 287,
+        "used": 0.6829268292682927,
+        "predicted": 0.5760165381049178,
+        "log_loss": 0.3577599110289655,
+        "log_loss_id": 0.9654301637845042,
+        "log_loss_id_room": 0.5145851306899544
+       }
+      },
+      "THE_LOST_AND_FORGOTTEN_NORMAL": {
+       "samples": 3962,
+       "ce": 1.4036802194320657,
+       "ce_prior": 2.274307367206013,
+       "death": 0.01110550227158001,
+       "predicted_death": 0.010649609318393798,
+       "rank_within": 0.9468531547966287,
+       "rank_within_share": 0.8974616573811462,
+       "rank_lost": 0.6751134350908167,
+       "rank_lost_share": -0.027291993616835278,
+       "auc_death": 0.9914361345271449,
+       "auc_death_share": 0.9417362024109627,
+       "potions": {
+        "rows": 711,
+        "used": 0.2742616033755274,
+        "predicted": 0.2491576901644462,
+        "log_loss": 0.31243082674162126,
+        "log_loss_id": 0.4893172895638663,
+        "log_loss_id_room": 0.4772900019833604
+       }
+      },
+      "THE_OBSCURA_NORMAL": {
+       "samples": 7285,
+       "ce": 1.3172606215347884,
+       "ce_prior": 2.1779113390324927,
+       "death": 0.0056280027453671925,
+       "predicted_death": 0.004427512292837604,
+       "rank_within": 0.956031957788104,
+       "rank_within_share": 0.8977123362080901,
+       "rank_lost": 0.7253940309957917,
+       "rank_lost_share": -0.013202302999869445,
+       "auc_death": 0.9904484744367483,
+       "auc_death_share": 0.8999961633003579,
+       "potions": {
+        "rows": 601,
+        "used": 0.19966722129783693,
+        "predicted": 0.220165235360831,
+        "log_loss": 0.27525110299610056,
+        "log_loss_id": 0.46873749126761066,
+        "log_loss_id_room": 0.4083454254602379
+       }
+      },
+      "THIEVING_HOPPER_WEAK": {
+       "samples": 7422,
+       "ce": 0.7456017462242681,
+       "ce_prior": 1.6946754110492308,
+       "death": 0.0,
+       "predicted_death": 9.890587315342873e-05,
+       "rank_within": 0.88894527897515,
+       "rank_within_share": 0.747221575012536,
+       "rank_lost": 0.6947804816959915,
+       "rank_lost_share": 0.2312881258682394,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 533,
+        "used": 0.14071294559099437,
+        "predicted": 0.157915405553014,
+        "log_loss": 0.23076947125591726,
+        "log_loss_id": 0.42117096395132186,
+        "log_loss_id_room": 0.3447999791963938
+       }
+      },
+      "TOADPOLES_WEAK": {
+       "samples": 6499,
+       "ce": 0.3421694454342238,
+       "ce_prior": 1.3130712519736056,
+       "death": 0.0,
+       "predicted_death": 4.3391047274044626e-07,
+       "rank_within": 0.8823534429089049,
+       "rank_within_share": 0.7986049762906291,
+       "rank_lost": 0.6672439080419282,
+       "rank_lost_share": 0.3507469787282242,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 221,
+        "used": 0.07239819004524888,
+        "predicted": 0.09154518894904339,
+        "log_loss": 0.2041558075042099,
+        "log_loss_id": 0.4531279432654497,
+        "log_loss_id_room": 0.33821441439304667
+       }
+      },
+      "TUNNELER_WEAK": {
+       "samples": 8905,
+       "ce": 0.7004571531336925,
+       "ce_prior": 1.588023038252114,
+       "death": 0.0,
+       "predicted_death": 0.00019690356988413178,
+       "rank_within": 0.8557055610812391,
+       "rank_within_share": 0.7271017745724211,
+       "rank_lost": 0.6595894755491172,
+       "rank_lost_share": 0.3135291384064727,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 606,
+        "used": 0.10891089108910891,
+        "predicted": 0.10195826922656857,
+        "log_loss": 0.25731933935252216,
+        "log_loss_id": 0.42967613228066337,
+        "log_loss_id_room": 0.34298783129524757
+       }
+      },
+      "TURRET_OPERATOR_WEAK": {
+       "samples": 6376,
+       "ce": 0.6766924499168521,
+       "ce_prior": 1.667132536682899,
+       "death": 0.00015683814303638644,
+       "predicted_death": 0.00034159103955294873,
+       "rank_within": 0.8930297496987053,
+       "rank_within_share": 0.7450150196836587,
+       "rank_lost": 0.7154803809917356,
+       "rank_lost_share": 0.2699001395969281,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 1188,
+        "used": 0.1111111111111111,
+        "predicted": 0.12413612832991494,
+        "log_loss": 0.30323617422615784,
+        "log_loss_id": 0.42776285254165425,
+        "log_loss_id_room": 0.35656909241501283
+       }
+      },
+      "TWO_TAILED_RATS_NORMAL": {
+       "samples": 2925,
+       "ce": 0.7145813350109375,
+       "ce_prior": 1.7611015170381255,
+       "death": 0.0,
+       "predicted_death": 8.457920026052145e-05,
+       "rank_within": 0.985959789674434,
+       "rank_within_share": 0.9601813319358844,
+       "rank_lost": 0.7568960598390311,
+       "rank_lost_share": 0.0932475581980712,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 173,
+        "used": 0.19653179190751446,
+        "predicted": 0.15722120064018766,
+        "log_loss": 0.31434372658085846,
+        "log_loss_id": 0.4872726830790048,
+        "log_loss_id_room": 0.4596519430681516
+       }
+      },
+      "VANTOM_BOSS": {
+       "samples": 6576,
+       "ce": 2.092003155313423,
+       "ce_prior": 3.4448918934662953,
+       "death": 0.13610097323600973,
+       "predicted_death": 0.1313139250760403,
+       "rank_within": 0.8952785789089484,
+       "rank_within_share": 0.6880315941287173,
+       "rank_lost": 0.7858149579749788,
+       "rank_lost_share": 0.28847513824609305,
+       "auc_death": 0.9440563482375945,
+       "auc_death_share": 0.7457838358957648,
+       "potions": {
+        "rows": 417,
+        "used": 0.513189448441247,
+        "predicted": 0.5639479409152516,
+        "log_loss": 0.28586068168137746,
+        "log_loss_id": 0.7663511875130912,
+        "log_loss_id_room": 0.6425571808034974
+       }
+      },
+      "VINE_SHAMBLER_NORMAL": {
+       "samples": 2714,
+       "ce": 0.9559420718787708,
+       "ce_prior": 1.920441619590479,
+       "death": 0.00036845983787767134,
+       "predicted_death": 0.00034003703648590925,
+       "rank_within": 0.9817367462406484,
+       "rank_within_share": 0.958206564040987,
+       "rank_lost": 0.7248297968811612,
+       "rank_lost_share": 0.12071027733957658,
+       "auc_death": 0.0,
+       "auc_death_share": 0.0,
+       "potions": {
+        "rows": 138,
+        "used": 0.18115942028985507,
+        "predicted": 0.17920149242496738,
+        "log_loss": 0.2359618990501108,
+        "log_loss_id": 0.4426004693674979,
+        "log_loss_id_room": 0.39393110119926966
+       }
+      },
+      "WATERFALL_GIANT_BOSS": {
+       "samples": 8660,
+       "ce": 2.5718114895066195,
+       "ce_prior": 3.8372470249223816,
+       "death": 0.12066974595842957,
+       "predicted_death": 0.1203855851120726,
+       "rank_within": 0.8718798626862138,
+       "rank_within_share": 0.6975828618652049,
+       "rank_lost": 0.7101591467016326,
+       "rank_lost_share": 0.04047698704168531,
+       "auc_death": 0.9482486349069471,
+       "auc_death_share": 0.8155634074977041,
+       "potions": {
+        "rows": 525,
+        "used": 0.64,
+        "predicted": 0.6206984997986283,
+        "log_loss": 0.5196690257176094,
+        "log_loss_id": 0.8691675570378806,
+        "log_loss_id_room": 0.5650864728181315
+       }
+      }
+     },
+     "by_hp": {
+      "below 30 %": {
+       "samples": 20723,
+       "ce": 1.1558592948717,
+       "ce_prior": 2.5046500318428175,
+       "death": 0.16078753076292043,
+       "predicted_death": 0.16171762792662137,
+       "rank_within": 0.8340146044177034,
+       "rank_within_share": 0.4929516225873825,
+       "rank_lost": 0.7670802094445293,
+       "rank_lost_share": 0.20168080924997947,
+       "auc_death": 0.9247759957464653,
+       "auc_death_share": 0.5465856974906371,
+       "potions": {
+        "rows": 856,
+        "used": 0.6915887850467289,
+        "predicted": 0.697801078221719,
+        "log_loss": 0.2867782513330043,
+        "log_loss_id": 1.30749430053706,
+        "log_loss_id_room": 1.0215404052790291
+       }
+      },
+      "the rest": {
+       "samples": 409419,
+       "ce": 1.3283509535868732,
+       "ce_prior": 2.367034356108622,
+       "death": 0.03915304370339432,
+       "predicted_death": 0.04069707950252704,
+       "rank_within": 0.9115925034925672,
+       "rank_within_share": 0.7833911511498627,
+       "rank_lost": 0.7205557112561513,
+       "rank_lost_share": 0.11433348655509609,
+       "auc_death": 0.9250333454906395,
+       "auc_death_share": 0.668695014112465,
+       "potions": {
+        "rows": 33575,
+        "used": 0.2620699925539836,
+        "predicted": 0.2633149951150646,
+        "log_loss": 0.2917026375922176,
+        "log_loss_id": 0.5278464977607136,
+        "log_loss_id_room": 0.450380038168962
+       }
+      }
+     },
+     "by_potion": {
+      "ASHWATER": {
+       "rows": 35,
+       "used": 0.17142857142857143,
+       "predicted": 0.19380372012009112,
+       "log_loss": 0.22914426058478687,
+       "log_loss_id": 0.46185519793526475,
+       "log_loss_id_room": 0.29158987950450266
+      },
+      "ATTACK_POTION": {
+       "rows": 3126,
+       "used": 0.3246960972488804,
+       "predicted": 0.3122869309970398,
+       "log_loss": 0.38979433725317675,
+       "log_loss_id": 0.6308172222567746,
+       "log_loss_id_room": 0.5399062865353346
+      },
+      "BEETLE_JUICE": {
+       "rows": 31,
+       "used": 0.3870967741935484,
+       "predicted": 0.33017020285895216,
+       "log_loss": 0.2659408182578128,
+       "log_loss_id": 0.69733933150698,
+       "log_loss_id_room": 0.5854287648896779
+      },
+      "BLESSING_OF_THE_FORGE": {
+       "rows": 74,
+       "used": 0.33783783783783783,
+       "predicted": 0.1512257597206159,
+       "log_loss": 0.4398242542471891,
+       "log_loss_id": 0.6488440618244194,
+       "log_loss_id_room": 0.6061282089631707
+      },
+      "BLOCK_POTION": {
+       "rows": 152,
+       "used": 0.631578947368421,
+       "predicted": 0.5380446482174472,
+       "log_loss": 0.46059792965314506,
+       "log_loss_id": 0.7162398293313688,
+       "log_loss_id_room": 0.6429706808316783
+      },
+      "BLOOD_POTION": {
+       "rows": 255,
+       "used": 0.592156862745098,
+       "predicted": 0.45392218850046284,
+       "log_loss": 0.6107164940600011,
+       "log_loss_id": 0.6890462421140118,
+       "log_loss_id_room": 0.5892776617857733
+      },
+      "BONE_BREW": {
+       "rows": 46,
+       "used": 0.30434782608695654,
+       "predicted": 0.12288549662882303,
+       "log_loss": 0.3603943058006039,
+       "log_loss_id": 0.6457469123786443,
+       "log_loss_id_room": 0.6173468441277479
+      },
+      "BOTTLED_POTENTIAL": {
+       "rows": 12,
+       "used": 0.5,
+       "predicted": 0.3819709651361336,
+       "log_loss": 0.520823906217408,
+       "log_loss_id": 0.8436321899233289,
+       "log_loss_id_room": 0.7852336399326995
+      },
+      "CLARITY": {
+       "rows": 829,
+       "used": 0.31845597104945716,
+       "predicted": 0.2763388537446538,
+       "log_loss": 0.30177323014554414,
+       "log_loss_id": 0.6282991520376278,
+       "log_loss_id_room": 0.49380314435253636
+      },
+      "COLORLESS_POTION": {
+       "rows": 220,
+       "used": 0.2636363636363636,
+       "predicted": 0.2828052007408834,
+       "log_loss": 0.35534583189749636,
+       "log_loss_id": 0.6127791266888334,
+       "log_loss_id_room": 0.5763682857360736
+      },
+      "CUNNING_POTION": {
+       "rows": 31,
+       "used": 0.06451612903225806,
+       "predicted": 0.30192819305519575,
+       "log_loss": 0.5320533824107861,
+       "log_loss_id": 0.3649568314330065,
+       "log_loss_id_room": 0.37603697129914265
+      },
+      "CURE_ALL": {
+       "rows": 2195,
+       "used": 0.43735763097949887,
+       "predicted": 0.4335077158902991,
+       "log_loss": 0.37984703630912814,
+       "log_loss_id": 0.6853131966541629,
+       "log_loss_id_room": 0.5895296077261666
+      },
+      "DEXTERITY_POTION": {
+       "rows": 148,
+       "used": 0.25,
+       "predicted": 0.24761098612517785,
+       "log_loss": 0.2498605947039813,
+       "log_loss_id": 0.5809125941653147,
+       "log_loss_id_room": 0.5514889499527891
+      },
+      "DISTILLED_CHAOS": {
+       "rows": 22,
+       "used": 0.5454545454545454,
+       "predicted": 0.7217892385405403,
+       "log_loss": 1.0448468482674202,
+       "log_loss_id": 0.7090085090527297,
+       "log_loss_id_room": 0.6031619566212846
+      },
+      "DROPLET_OF_PRECOGNITION": {
+       "rows": 22,
+       "used": 0.5,
+       "predicted": 0.44320944018810143,
+       "log_loss": 0.2948679613241614,
+       "log_loss_id": 0.6932655377625336,
+       "log_loss_id_room": 0.6664525520416053
+      },
+      "DUPLICATOR": {
+       "rows": 119,
+       "used": 0.4117647058823529,
+       "predicted": 0.2878564075246159,
+       "log_loss": 0.35855164666496686,
+       "log_loss_id": 0.7052465270614158,
+       "log_loss_id_room": 0.6070117215727105
+      },
+      "ENERGY_POTION": {
+       "rows": 207,
+       "used": 0.3961352657004831,
+       "predicted": 0.41706478444177664,
+       "log_loss": 0.43596364981504326,
+       "log_loss_id": 0.6720493025228945,
+       "log_loss_id_room": 0.6489248516256424
+      },
+      "ENTROPIC_BREW": {
+       "rows": 14,
+       "used": 1.0,
+       "predicted": 0.9999535594667707,
+       "log_loss": 4.675840866184668e-05,
+       "log_loss_id": 1.000000500029089e-06,
+       "log_loss_id_room": 1.000000500029089e-06
+      },
+      "ESSENCE_OF_DARKNESS": {
+       "rows": 25,
+       "used": 0.28,
+       "predicted": 0.38668187081071664,
+       "log_loss": 0.5629392234935229,
+       "log_loss_id": 0.5952935132788516,
+       "log_loss_id_room": 0.6247903223540634
+      },
+      "EXPLOSIVE_AMPOULE": {
+       "rows": 169,
+       "used": 0.11242603550295859,
+       "predicted": 0.22005429092666115,
+       "log_loss": 0.3158635179738071,
+       "log_loss_id": 0.4219289927588626,
+       "log_loss_id_room": 0.37660547786071347
+      },
+      "FAIRY_IN_A_BOTTLE": {
+       "rows": 11703,
+       "used": 0.1375715628471332,
+       "predicted": 0.13334552167517277,
+       "log_loss": 0.13557137920886428,
+       "log_loss_id": 0.4009192148065733,
+       "log_loss_id_room": 0.28220253197949713
+      },
+      "FIRE_POTION": {
+       "rows": 231,
+       "used": 0.27705627705627706,
+       "predicted": 0.2662473764556705,
+       "log_loss": 0.4908104063108099,
+       "log_loss_id": 0.6132229837960246,
+       "log_loss_id_room": 0.6125815213364317
+      },
+      "FLEX_POTION": {
+       "rows": 602,
+       "used": 0.26744186046511625,
+       "predicted": 0.26212068761485036,
+       "log_loss": 0.35948395246117104,
+       "log_loss_id": 0.5848551326256043,
+       "log_loss_id_room": 0.5706513247233554
+      },
+      "FOCUS_POTION": {
+       "rows": 174,
+       "used": 0.16091954022988506,
+       "predicted": 0.2586822248936176,
+       "log_loss": 0.2673679447247854,
+       "log_loss_id": 0.45118875943694897,
+       "log_loss_id_room": 0.38790218185742015
+      },
+      "FORTIFIER": {
+       "rows": 152,
+       "used": 0.40789473684210525,
+       "predicted": 0.4336966228483117,
+       "log_loss": 0.42965876884102056,
+       "log_loss_id": 0.6760983447450549,
+       "log_loss_id_room": 0.5253317569250326
+      },
+      "FRUIT_JUICE": {
+       "rows": 479,
+       "used": 0.16701461377870563,
+       "predicted": 0.17961988423929307,
+       "log_loss": 0.2634909546263335,
+       "log_loss_id": 0.4525499759058829,
+       "log_loss_id_room": 0.4159839268459602
+      },
+      "FYSH_OIL": {
+       "rows": 112,
+       "used": 0.22321428571428573,
+       "predicted": 0.19260692843722346,
+       "log_loss": 0.18630704810588988,
+       "log_loss_id": 0.532711205759105,
+       "log_loss_id_room": 0.49644363114662865
+      },
+      "GAMBLERS_BREW": {
+       "rows": 73,
+       "used": 0.0684931506849315,
+       "predicted": 0.03889277955185576,
+       "log_loss": 0.0627322973977635,
+       "log_loss_id": 0.27894608085691824,
+       "log_loss_id_room": 0.20228208719188565
+      },
+      "GHOST_IN_A_JAR": {
+       "rows": 32,
+       "used": 0.3125,
+       "predicted": 0.23936959391261903,
+       "log_loss": 0.1677765486853706,
+       "log_loss_id": 0.6581809929175586,
+       "log_loss_id_room": 0.6662013590193324
+      },
+      "GIGANTIFICATION_POTION": {
+       "rows": 22,
+       "used": 0.4090909090909091,
+       "predicted": 0.4659800083662214,
+       "log_loss": 0.4045188215010759,
+       "log_loss_id": 0.7047218922140153,
+       "log_loss_id_room": 0.6754309336190574
+      },
+      "HEART_OF_IRON": {
+       "rows": 68,
+       "used": 0.4117647058823529,
+       "predicted": 0.30853415250949223,
+       "log_loss": 0.5436910876461359,
+       "log_loss_id": 0.7221919577588584,
+       "log_loss_id_room": 0.7391254052660446
+      },
+      "KINGS_COURAGE": {
+       "rows": 8,
+       "used": 0.125,
+       "predicted": 0.06453194530161,
+       "log_loss": 0.24390417186060284,
+       "log_loss_id": 0.44396347298822536,
+       "log_loss_id_room": 0.41654923632119356
+      },
+      "LIQUID_BRONZE": {
+       "rows": 32,
+       "used": 0.28125,
+       "predicted": 0.3016612726626993,
+       "log_loss": 0.18407503552151275,
+       "log_loss_id": 0.6490571738305676,
+       "log_loss_id_room": 0.5188815263624285
+      },
+      "LIQUID_MEMORIES": {
+       "rows": 1178,
+       "used": 0.39728353140916806,
+       "predicted": 0.4408652553611532,
+       "log_loss": 0.3776309195979706,
+       "log_loss_id": 0.6718974509606632,
+       "log_loss_id_room": 0.5691620225817363
+      },
+      "LUCKY_TONIC": {
+       "rows": 409,
+       "used": 0.35207823960880197,
+       "predicted": 0.36527836091026356,
+       "log_loss": 0.3570572088973553,
+       "log_loss_id": 0.6490485314229778,
+       "log_loss_id_room": 0.5312834516362968
+      },
+      "MAZALETHS_GIFT": {
+       "rows": 28,
+       "used": 0.21428571428571427,
+       "predicted": 0.09558255614282021,
+       "log_loss": 0.35409279920975884,
+       "log_loss_id": 0.5244212625440816,
+       "log_loss_id_room": 0.5667485109934346
+      },
+      "OROBIC_ACID": {
+       "rows": 234,
+       "used": 0.4829059829059829,
+       "predicted": 0.47640829504439314,
+       "log_loss": 0.46216311971034413,
+       "log_loss_id": 0.6949603643324034,
+       "log_loss_id_room": 1.1239537101328094
+      },
+      "POISON_POTION": {
+       "rows": 85,
+       "used": 0.16470588235294117,
+       "predicted": 0.1626715215326127,
+       "log_loss": 0.12702926635319636,
+       "log_loss_id": 0.456169682201041,
+       "log_loss_id_room": 0.3108436352562609
+      },
+      "POTION_OF_BINDING": {
+       "rows": 299,
+       "used": 0.2809364548494983,
+       "predicted": 0.2331803042698731,
+       "log_loss": 0.43618914225550814,
+       "log_loss_id": 0.5993305188320398,
+       "log_loss_id_room": 0.6166433354932968
+      },
+      "POTION_OF_CAPACITY": {
+       "rows": 12,
+       "used": 0.16666666666666666,
+       "predicted": 0.036053512410151346,
+       "log_loss": 0.4928447717357558,
+       "log_loss_id": 0.45444249302214196,
+       "log_loss_id_room": 0.48059067805919437
+      },
+      "POTION_OF_DOOM": {
+       "rows": 43,
+       "used": 0.023255813953488372,
+       "predicted": 0.16321021408673075,
+       "log_loss": 0.19784186471477966,
+       "log_loss_id": 0.4159324880603438,
+       "log_loss_id_room": 0.415238363218292
+      },
+      "POTION_SHAPED_ROCK": {
+       "rows": 1139,
+       "used": 0.26163301141352063,
+       "predicted": 0.27988231407741293,
+       "log_loss": 0.35986147607379865,
+       "log_loss_id": 0.5780423148595082,
+       "log_loss_id_room": 0.5655676759402554
+      },
+      "POT_OF_GHOULS": {
+       "rows": 1,
+       "used": 1.0,
+       "predicted": 0.7699729204177856,
+       "log_loss": 0.26139993304141634,
+       "log_loss_id": 1.000000500029089e-06,
+       "log_loss_id_room": 1.000000500029089e-06
+      },
+      "POWDERED_DEMISE": {
+       "rows": 65,
+       "used": 0.4461538461538462,
+       "predicted": 0.26133553124601705,
+       "log_loss": 1.3165534979993783,
+       "log_loss_id": 0.7557048755317325,
+       "log_loss_id_room": 1.038680542725242
+      },
+      "POWER_POTION": {
+       "rows": 152,
+       "used": 0.40131578947368424,
+       "predicted": 0.290969509848851,
+       "log_loss": 0.731471390128479,
+       "log_loss_id": 0.7334971649132985,
+       "log_loss_id_room": 0.5855443333875762
+      },
+      "RADIANT_TINCTURE": {
+       "rows": 72,
+       "used": 0.2638888888888889,
+       "predicted": 0.3989533956313075,
+       "log_loss": 0.5577771773132945,
+       "log_loss_id": 0.5950638543064399,
+       "log_loss_id_room": 0.5461288232864715
+      },
+      "REGEN_POTION": {
+       "rows": 894,
+       "used": 0.5838926174496645,
+       "predicted": 0.6842992696077169,
+       "log_loss": 0.33478768468335174,
+       "log_loss_id": 0.6804618624000578,
+       "log_loss_id_room": 0.5425012595102153
+      },
+      "SHACKLING_POTION": {
+       "rows": 310,
+       "used": 0.4096774193548387,
+       "predicted": 0.41492021243715993,
+       "log_loss": 0.3547354459659349,
+       "log_loss_id": 0.6811423244187272,
+       "log_loss_id_room": 0.6347168173541177
+      },
+      "SHIP_IN_A_BOTTLE": {
+       "rows": 735,
+       "used": 0.41768707482993195,
+       "predicted": 0.4214617562071337,
+       "log_loss": 0.35701434304776963,
+       "log_loss_id": 0.6815186213911407,
+       "log_loss_id_room": 0.5557825902031039
+      },
+      "SKILL_POTION": {
+       "rows": 164,
+       "used": 0.35365853658536583,
+       "predicted": 0.3935673099994777,
+       "log_loss": 0.3592887387971227,
+       "log_loss_id": 0.6529998543626985,
+       "log_loss_id_room": 0.555560432033587
+      },
+      "SNECKO_OIL": {
+       "rows": 856,
+       "used": 0.4369158878504673,
+       "predicted": 0.494606622377204,
+       "log_loss": 0.4589601247420116,
+       "log_loss_id": 0.6862371418317618,
+       "log_loss_id_room": 0.5984471682031796
+      },
+      "SOLDIERS_STEW": {
+       "rows": 81,
+       "used": 0.37037037037037035,
+       "predicted": 0.27774527476723937,
+       "log_loss": 0.6819683702692485,
+       "log_loss_id": 0.6634519325470993,
+       "log_loss_id_room": 0.8285836294961788
+      },
+      "SPEED_POTION": {
+       "rows": 232,
+       "used": 0.25862068965517243,
+       "predicted": 0.23798554563396487,
+       "log_loss": 0.4460633959018347,
+       "log_loss_id": 0.5776304357054953,
+       "log_loss_id_room": 0.5850325168105068
+      },
+      "STABLE_SERUM": {
+       "rows": 107,
+       "used": 0.1588785046728972,
+       "predicted": 0.23796742088147835,
+       "log_loss": 0.239702806646052,
+       "log_loss_id": 0.4890717242048705,
+       "log_loss_id_room": 0.3601189427374119
+      },
+      "STAR_POTION": {
+       "rows": 525,
+       "used": 0.12,
+       "predicted": 0.12656106222910865,
+       "log_loss": 0.2219919628600628,
+       "log_loss_id": 0.3728857483138784,
+       "log_loss_id_room": 0.3246119364509039
+      },
+      "STRENGTH_POTION": {
+       "rows": 238,
+       "used": 0.11764705882352941,
+       "predicted": 0.10942295850408638,
+       "log_loss": 0.27794196044439695,
+       "log_loss_id": 0.364577401140081,
+       "log_loss_id_room": 0.5161581734306375
+      },
+      "SWIFT_POTION": {
+       "rows": 889,
+       "used": 0.2823397075365579,
+       "predicted": 0.2901545580055329,
+       "log_loss": 0.44022188888210895,
+       "log_loss_id": 0.5953922663908445,
+       "log_loss_id_room": 0.7732320235223248
+      },
+      "TOUCH_OF_INSANITY": {
+       "rows": 216,
+       "used": 0.3148148148148148,
+       "predicted": 0.2629738910895177,
+       "log_loss": 0.3986678565769584,
+       "log_loss_id": 0.624721217784506,
+       "log_loss_id_room": 0.5496817568544166
+      },
+      "VULNERABLE_POTION": {
+       "rows": 251,
+       "used": 0.24302788844621515,
+       "predicted": 0.1571238347123739,
+       "log_loss": 0.4070567271956553,
+       "log_loss_id": 0.5587370338663243,
+       "log_loss_id_room": 0.5220326300745266
+      },
+      "WEAK_POTION": {
+       "rows": 3796,
+       "used": 0.3300842992623815,
+       "predicted": 0.3446757139242831,
+       "log_loss": 0.33122223432324116,
+       "log_loss_id": 0.6346227268126946,
+       "log_loss_id_room": 0.5254023276479921
+      }
+     }
+    }
+   },
+   {
+    "key": "onnx",
+    "type": "str",
+    "size": 9323144,
+    "onnx": {
+     "opset": 20,
+     "producer": "pytorch 2.11.0",
+     "inputs": [
+      {
+       "name": "cards",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "cards"
+       ]
+      },
+      {
+       "name": "ups",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards"
+       ]
+      },
+      {
+       "name": "piles",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards",
+        4
+       ]
+      },
+      {
+       "name": "mods",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "cards",
+        "card_mods"
+       ]
+      },
+      {
+       "name": "mod_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards",
+        "card_mods"
+       ]
+      },
+      {
+       "name": "powers",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "powers"
+       ]
+      },
+      {
+       "name": "power_amounts",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "powers"
+       ]
+      },
+      {
+       "name": "power_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "powers"
+       ]
+      },
+      {
+       "name": "player",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        8
+       ]
+      },
+      {
+       "name": "enemies",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "enemies"
+       ]
+      },
+      {
+       "name": "enemy_scalars",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies",
+        5
+       ]
+      },
+      {
+       "name": "enemy_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies"
+       ]
+      },
+      {
+       "name": "enemy_powers",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "enemies",
+        "enemy_powers"
+       ]
+      },
+      {
+       "name": "enemy_power_amounts",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies",
+        "enemy_powers"
+       ]
+      },
+      {
+       "name": "enemy_power_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies",
+        "enemy_powers"
+       ]
+      },
+      {
+       "name": "intents",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "enemies",
+        4,
+        "intents"
+       ]
+      },
+      {
+       "name": "intent_values",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies",
+        4,
+        "intents",
+        2
+       ]
+      },
+      {
+       "name": "intent_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies",
+        4,
+        "intents"
+       ]
+      },
+      {
+       "name": "relics",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "relics"
+       ]
+      },
+      {
+       "name": "relic_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "relics"
+       ]
+      },
+      {
+       "name": "potions",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "potions"
+       ]
+      },
+      {
+       "name": "potion_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "potions"
+       ]
+      },
+      {
+       "name": "context",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "context"
+       ]
+      },
+      {
+       "name": "context_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "context"
+       ]
+      },
+      {
+       "name": "power_stacks",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "powers"
+       ]
+      },
+      {
+       "name": "power_cards",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "powers"
+       ]
+      },
+      {
+       "name": "power_card_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "powers"
+       ]
+      },
+      {
+       "name": "enemy_power_stacks",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies",
+        "enemy_powers"
+       ]
+      },
+      {
+       "name": "enemy_power_cards",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "enemies",
+        "enemy_powers"
+       ]
+      },
+      {
+       "name": "enemy_power_card_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies",
+        "enemy_powers"
+       ]
+      },
+      {
+       "name": "orbs",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "orbs"
+       ]
+      },
+      {
+       "name": "orb_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "orbs"
+       ]
+      },
+      {
+       "name": "allies",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "allies"
+       ]
+      },
+      {
+       "name": "ally_scalars",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "allies",
+        4
+       ]
+      },
+      {
+       "name": "ally_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "allies"
+       ]
+      },
+      {
+       "name": "ally_powers",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "allies",
+        "ally_powers"
+       ]
+      },
+      {
+       "name": "ally_power_amounts",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "allies",
+        "ally_powers"
+       ]
+      },
+      {
+       "name": "ally_power_mask",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "allies",
+        "ally_powers"
+       ]
+      },
+      {
+       "name": "extra",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        4
+       ]
+      },
+      {
+       "name": "costs",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards"
+       ]
+      },
+      {
+       "name": "mod_amounts",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards",
+        "card_mods"
+       ]
+      },
+      {
+       "name": "relic_values",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "relics",
+        3
+       ]
+      },
+      {
+       "name": "relic_status",
+       "dtype": "int64",
+       "shape": [
+        "batch",
+        "relics"
+       ]
+      },
+      {
+       "name": "damages",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards"
+       ]
+      },
+      {
+       "name": "orb_values",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "orbs",
+        2
+       ]
+      },
+      {
+       "name": "numbers",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "cards",
+        5
+       ]
+      },
+      {
+       "name": "power_details",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "powers"
+       ]
+      },
+      {
+       "name": "enemy_power_details",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        "enemies",
+        "enemy_powers"
+       ]
+      }
+     ],
+     "outputs": [
+      {
+       "name": "outcome",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        51
+       ]
+      },
+      {
+       "name": "potion_used",
+       "dtype": "float",
+       "shape": [
+        "batch",
+        5,
+        66
+       ]
+      }
+     ],
+     "initializers": [
+      {
+       "name": "net.pile",
+       "shape": [
+        4,
+        64
+       ]
+      },
+      {
+       "name": "net.slot",
+       "shape": [
+        4,
+        64
+       ]
+      },
+      {
+       "name": "net.cost",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "net.damage",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "net.stars",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "net.gathered",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "net.melted",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "net.bottoms",
+       "shape": [
+        50
+       ]
+      },
+      {
+       "name": "net.cards.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.modifiers.weight",
+       "shape": [
+        57,
+        64
+       ]
+      },
+      {
+       "name": "net.enemies.weight",
+       "shape": [
+        121,
+        64
+       ]
+      },
+      {
+       "name": "net.intents.weight",
+       "shape": [
+        16,
+        64
+       ]
+      },
+      {
+       "name": "net.relics.weight",
+       "shape": [
+        310,
+        64
+       ]
+      },
+      {
+       "name": "net.potions.weight",
+       "shape": [
+        66,
+        64
+       ]
+      },
+      {
+       "name": "net.context.weight",
+       "shape": [
+        96,
+        64
+       ]
+      },
+      {
+       "name": "net.orbs.weight",
+       "shape": [
+        6,
+        64
+       ]
+      },
+      {
+       "name": "net.allies.weight",
+       "shape": [
+        121,
+        64
+       ]
+      },
+      {
+       "name": "net.relic_status.weight",
+       "shape": [
+        5,
+        64
+       ]
+      },
+      {
+       "name": "net.card_up.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.card_damage.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.card_block.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.card_calc.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.card_replay.weight",
+       "shape": [
+        597,
+        64
+       ]
+      },
+      {
+       "name": "net.mod_amount.weight",
+       "shape": [
+        57,
+        64
+       ]
+      },
+      {
+       "name": "net.relic_counter.weight",
+       "shape": [
+        310,
+        64
+       ]
+      },
+      {
+       "name": "net.powers.weight",
+       "shape": [
+        266,
+        64
+       ]
+      },
+      {
+       "name": "net.power_amount.weight",
+       "shape": [
+        266,
+        64
+       ]
+      },
+      {
+       "name": "net.power_stacks.weight",
+       "shape": [
+        266,
+        64
+       ]
+      },
+      {
+       "name": "net.power_detail.weight",
+       "shape": [
+        266,
+        64
+       ]
+      },
+      {
+       "name": "net.intent_damage.weight",
+       "shape": [
+        16,
+        64
+       ]
+      },
+      {
+       "name": "net.intent_total.weight",
+       "shape": [
+        16,
+        64
+       ]
+      },
+      {
+       "name": "net.orb_passive.weight",
+       "shape": [
+        6,
+        64
+       ]
+      },
+      {
+       "name": "net.orb_evoke.weight",
+       "shape": [
+        6,
+        64
+       ]
+      },
+      {
+       "name": "net.orb_at.weight",
+       "shape": [
+        60,
+        64
+       ]
+      },
+      {
+       "name": "net.card_phi.0.bias",
+       "shape": [
+        128
+       ]
+      },
+      {
+       "name": "net.card_phi.2.bias",
+       "shape": [
+        128
+       ]
+      },
+      {
+       "name": "net.power_phi.0.bias",
+       "shape": [
+        128
+       ]
+      },
+      {
+       "name": "net.enemy_scalars.bias",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "net.enemy_phi.0.bias",
+       "shape": [
+        256
+       ]
+      },
+      {
+       "name": "net.enemy_phi.2.bias",
+       "shape": [
+        256
+       ]
+      },
+      {
+       "name": "net.ally_scalars.bias",
+       "shape": [
+        64
+       ]
+      },
+      {
+       "name": "net.ally_phi.0.bias",
+       "shape": [
+        128
+       ]
+      },
+      {
+       "name": "net.body.0.weight",
+       "shape": [
+        512,
+        1292
+       ]
+      },
+      {
+       "name": "net.body.0.bias",
+       "shape": [
+        512
+       ]
+      },
+      {
+       "name": "net.body.2.weight",
+       "shape": [
+        512,
+        512
+       ]
+      },
+      {
+       "name": "net.body.2.bias",
+       "shape": [
+        512
+       ]
+      },
+      {
+       "name": "net.head.weight",
+       "shape": [
+        51,
+        512
+       ]
+      },
+      {
+       "name": "net.head.bias",
+       "shape": [
+        51
+       ]
+      },
+      {
+       "name": "net.potion_head.weight",
+       "shape": [
+        330,
+        512
+       ]
+      },
+      {
+       "name": "net.potion_head.bias",
+       "shape": [
+        330
+       ]
+      },
+      {
+       "name": "onnx::MatMul_527",
+       "shape": [
+        64,
+        128
+       ]
+      },
+      {
+       "name": "onnx::MatMul_528",
+       "shape": [
+        128,
+        128
+       ]
+      },
+      {
+       "name": "onnx::MatMul_537",
+       "shape": [
+        5,
+        64
+       ]
+      },
+      {
+       "name": "onnx::MatMul_538",
+       "shape": [
+        64,
+        128
+       ]
+      },
+      {
+       "name": "onnx::MatMul_539",
+       "shape": [
+        448,
+        256
+       ]
+      },
+      {
+       "name": "onnx::MatMul_540",
+       "shape": [
+        256,
+        256
+       ]
+      },
+      {
+       "name": "onnx::MatMul_559",
+       "shape": [
+        4,
+        64
+       ]
+      },
+      {
+       "name": "onnx::MatMul_561",
+       "shape": [
+        192,
+        128
+       ]
+      },
+      {
+       "name": "onnx::Greater_568",
+       "shape": [
+        50
+       ]
+      }
+     ],
+     "params": 1738913,
+     "ops": {
+      "Constant": 101,
+      "Add": 43,
+      "Mul": 37,
+      "Gather": 36,
+      "Unsqueeze": 26,
+      "Slice": 15,
+      "MatMul": 12,
+      "ReduceSum": 11,
+      "Relu": 10,
+      "Concat": 6,
+      "Shape": 4,
+      "Gemm": 4,
+      "Identity": 2,
+      "Reshape": 2,
+      "Sub": 2,
+      "Transpose": 1,
+      "Flatten": 1,
+      "Cast": 1,
+      "Range": 1,
+      "Clip": 1,
+      "Less": 1,
+      "Greater": 1,
+      "And": 1,
+      "ConstantOfShape": 1,
+      "Where": 1,
+      "Softmax": 1,
+      "Sigmoid": 1
+     }
+    }
+   },
+   {
+    "key": "tests",
+    "type": "array",
+    "size": 16,
+    "entry": {
+     "obs": [
+      "act",
+      "allies",
+      "ascension",
+      "discard",
+      "draw",
+      "encounter",
+      "enemies",
+      "exhaust",
+      "hand",
+      "player",
+      "potions",
+      "relics",
+      "room",
+      "round"
+     ],
+     "history": "array",
+     "outcome": "array of 51",
+     "potion_used": "array of 330"
+    },
+    "values": null
+   }
+  ]
+ }
+}

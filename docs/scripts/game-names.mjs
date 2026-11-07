@@ -1,5 +1,6 @@
 // Writes the game's own names of the ids the figures show (cards, relics, potions, enchantments, afflictions, acts,
-// encounters, ancients, characters, map point types, monsters, powers), in each of the site's languages, from the game's .pck:
+// encounters, ancients, characters, map point types, monsters, powers, rest site options), in each of the site's
+// languages, from the game's .pck:
 //   node scripts/game-names.mjs "PATH/Slay the Spire 2/SlayTheSpire2.pck"
 // into src/data/names/{en,zh-CN,zh-TW}.json. Run it again when the game's version changes.
 import { openSync, readSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -61,6 +62,8 @@ for (const [site, game] of Object.entries(langs)) {
     monster: titles(json(game, 'monsters'), 'name'),
     power: titles(json(game, 'powers')),
     map: Object.fromEntries(Object.entries(legend).map(([type, key]) => [type, map[`LEGEND_${key}.title`]])),
+    // A rest site's options, by the id of their action (rest:SMITH).
+    rest: Object.fromEntries(Object.entries(titles(json(game, 'rest_site_ui'), 'name')).filter(([k]) => k.startsWith('OPTION_')).map(([k, v]) => [k.slice('OPTION_'.length), v])),
   };
   writeFileSync(`${out}${site}.json`, JSON.stringify(names) + '\n');
   console.log(`${site}: ${Object.entries(names).map(([k, v]) => `${Object.keys(v).length} ${k}`).join(', ')}`);

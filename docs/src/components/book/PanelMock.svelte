@@ -1,9 +1,9 @@
 <script lang="ts">
   // The mod's panel as Panel.cs lays it out (docs: output §2): the head, the toolbar with the effort row (and, while
   // auto-play runs, its speed and stops), the strip with V's chance to win, then an answer or a message, and the AI's
-  // recent actions. The three answers are real decisions of the book's example seed, played by the champions at ca1fad5
-  // through the brain command (src/data/book/panel-examples.json, whose texts were made as Describe and L10n make them).
-  // The mod's own words below are L10n.cs's, in the page's language.
+  // recent actions. The three answers are real decisions of the book's example seed, from one play of each champion file
+  // (src/data/book/panel-examples.json, whose texts were made as Describe and L10n make them). The mod's own words below
+  // are L10n.cs's, in the page's language.
   import data from '../../data/book/panel-examples.json';
   import type { Lang } from '../v/names.ts';
   import { w, say } from './words.ts';
@@ -81,6 +81,7 @@
   type Answer = {
     source: { champion: string; decision: number; env: string };
     status: Text;
+    floor: number;
     surface: 'combat' | 'map' | 'other';
     next: Text;
     route: boolean;
@@ -98,8 +99,8 @@
   const ANSWERS = { sl_combat: data.sl_combat, nosl_combat: data.nosl_combat, map: data.map_options } as unknown as Record<Exclude<Mode, 'message'>, Answer>;
 
   const MESSAGES: { status: string; text: string; sub?: [string, string]; tone?: 'warn' | 'error'; env?: boolean; drive?: boolean; champion?: boolean }[] = [
-    { status: 'starting', text: 'Connecting to the brain', sub: ['', '~/.local/state/sts2ai/brain.sock'], env: true },
-    { status: 'offline', text: 'No brain running', sub: ['{0} · trying again every 2 s', 'Connection refused'], tone: 'warn', env: true },
+    { status: 'starting', text: 'Connecting to the brain', sub: ['', '…/mods/Sts2Ai/brain/linux-x64/Sts2Ai.SimWorker'], env: true },
+    { status: 'offline', text: 'No brain running', sub: ['{0} · trying again every 2 s', 'the brain ended (exit code 134): … (log: ~/.local/state/sts2ai/brain.log)'], tone: 'warn', env: true },
     { status: 'run sent', text: 'Waiting for the brain', sub: ['it loads the champion for this run', ''], env: true },
     { status: 'line', text: 'Waiting for a decision', sub: ['open the chest', ''], env: true, drive: true, champion: true },
     { status: 'line', text: 'No SL clone of this room', sub: ['{0} · the next room has one', 'a potion thrown away in combat'], tone: 'warn', env: true, drive: true, champion: true },
@@ -123,6 +124,7 @@
   const finishLabel = $derived(surface === 'combat' ? T('Finish turn') : surface === 'map' ? T('Next room') : T('Finish room'));
 
   const pct = (p: number, whole = false) => (p * 100).toFixed(whole ? 0 : 1) + '%';
+  const moreHp = (base.options[0].hp ?? 0) - (base.options[1].hp ?? 0);
 
   // Panel.Options: the shown value, and one scale for the rows' bars.
   const BAR = 56;
@@ -338,21 +340,21 @@
   <p class="v-caption">
     {#if mode === 'sl_combat'}
       {say(lang, w(
-        `The book’s example seed played in SL by the SL champion (the SL planner with c9-2, L0 with v9-2) at ca1fad5, decision ${base.source.decision}: the first decision of a fight on floor 45, which the planner plans to its end in ${base.seconds} s. Its kept lines began with two first actions; both win, one with an HP more. The strip holds V’s chance from the map decision before the fight, and the line under the action is the planner’s.`,
-        `贯穿全书那个种子，在 SL 里由 SL 冠军（SL 规划器配 c9-2，L0 配 v9-2）在 ca1fad5 上打的第 ${base.source.decision} 个决策：第 45 层一场战斗的第一个决策，规划器花 ${base.seconds} 秒把整场规划到底。它留下的路线以两个第一步开头；两个都赢，一个多剩 1 HP。横条里是战斗前那个地图决策的 V 胜率，动作下面那一行是规划器的。`,
-        `貫穿全書那個種子，在 SL 裡由 SL 冠軍（SL 規劃器配 c9-2，L0 配 v9-2）在 ca1fad5 上打的第 ${base.source.decision} 個決策：第 45 層一場戰鬥的第一個決策，規劃器花 ${base.seconds} 秒把整場規劃到底。它留下的路線以兩個第一步開頭；兩個都贏，一個多剩 1 HP。橫條裡是戰鬥前那個地圖決策的 V 勝率，動作下面那一行是規劃器的。`,
+        `The book’s example seed played in SL by the SL champion, decision ${base.source.decision}: the first decision of the act 3 boss fight on floor ${base.floor}, which the planner plans to its end in ${base.seconds} s. Its kept lines began with two first actions; both win, the first with ${moreHp} HP more. The strip holds V’s chance from the map decision before the fight, and the line under the action is the planner’s. A card the plan draws this turn has no name yet: the panel shows its number.`,
+        `贯穿全书那个种子，在 SL 里由 SL 冠军打的第 ${base.source.decision} 个决策：第 ${base.floor} 层第三幕 Boss 战的第一个决策，规划器花 ${base.seconds} 秒把整场规划到底。它留下的路线以两个第一步开头；两个都赢，第一个多剩 ${moreHp} HP。横条里是战斗前那个地图决策的 V 胜率，动作下面那一行是规划器的。计划在这一回合才抽到的牌还没有名字：面板显示它的编号。`,
+        `貫穿全書那個種子，在 SL 裡由 SL 冠軍打的第 ${base.source.decision} 個決策：第 ${base.floor} 層第三幕頭目戰的第一個決策，規劃器花 ${base.seconds} 秒把整場規劃到底。它留下的路線以兩個第一步開頭；兩個都贏，第一個多剩 ${moreHp} HP。橫條裡是戰鬥前那個地圖決策的 V 勝率，動作下面那一行是規劃器的。計畫在這一回合才抽到的牌還沒有名字：面板顯示它的編號。`,
       ))}
     {:else if mode === 'nosl_combat'}
       {say(lang, w(
-        `The same seed played in NoSL by the NoSL champion (PIMC with c9-2 over 8 worlds of 300 nodes, L0 with v9-2), decision ${ANSWERS.nosl_combat.source.decision}: the act 3 boss fight on floor 48. PIMC’s five best first actions, with their mean scores over the worlds and 95% intervals; PIMC gives no chance to win, so no line sits under the action. This run was won too.`,
-        `同一个种子在 NoSL 里由 NoSL 冠军（PIMC 配 c9-2，8 个世界、每个 300 节点；L0 配 v9-2）打的第 ${ANSWERS.nosl_combat.source.decision} 个决策：第 48 层第三幕的 Boss 战。PIMC 最好的五个第一步，附各世界的平均分和 95% 区间；PIMC 不给胜率，所以动作下面没有那一行。这一局也赢了。`,
-        `同一個種子在 NoSL 裡由 NoSL 冠軍（PIMC 配 c9-2，8 個世界、每個 300 節點；L0 配 v9-2）打的第 ${ANSWERS.nosl_combat.source.decision} 個決策：第 48 層第三幕的頭目戰。PIMC 最好的五個第一步，附各世界的平均分和 95% 區間；PIMC 不給勝率，所以動作下面沒有那一行。這一局也贏了。`,
+        `The same seed played in NoSL by the NoSL champion (PIMC with the same combat net over 8 worlds of 300 nodes, L0 with the same V), decision ${ANSWERS.nosl_combat.source.decision}: a turn’s first decision in the act 3 boss fight on floor ${ANSWERS.nosl_combat.floor}. PIMC’s five best first actions, with their mean scores over the worlds and 95% intervals; PIMC gives no chance to win, so no line sits under the action.`,
+        `同一个种子在 NoSL 里由 NoSL 冠军（PIMC 配同一个战斗网络，8 个世界、每个 300 节点；L0 配同一个 V）打的第 ${ANSWERS.nosl_combat.source.decision} 个决策：第 ${ANSWERS.nosl_combat.floor} 层第三幕 Boss 战里一个回合的第一个决策。PIMC 最好的五个第一步，附各世界的平均分和 95% 区间；PIMC 不给胜率，所以动作下面没有那一行。`,
+        `同一個種子在 NoSL 裡由 NoSL 冠軍（PIMC 配同一個戰鬥網路，8 個世界、每個 300 節點；L0 配同一個 V）打的第 ${ANSWERS.nosl_combat.source.decision} 個決策：第 ${ANSWERS.nosl_combat.floor} 層第三幕頭目戰裡一個回合的第一個決策。PIMC 最好的五個第一步，附各世界的平均分和 95% 區間；PIMC 不給勝率，所以動作下面沒有那一行。`,
       ))}
     {:else if mode === 'map'}
       {say(lang, w(
-        `Decision ${ANSWERS.map.source.decision} of the SL run, on floor 9: both next points are treasures, so the routes after them tell the options apart, and V gives the first 65.7%, the second 63.9%. The strip’s fall is from the event just before. Outside combat the brain answers in a few milliseconds, which the panel prints as 0.0 s.`,
-        `SL 那一局第 9 层的第 ${ANSWERS.map.source.decision} 个决策：下一步的两个点都是宝箱，所以靠之后的路线区分，V 给第一个 65.7%、第二个 63.9%。横条里的下降是相对前一个事件。战斗外大脑几毫秒就回答，面板印成 0.0 s。`,
-        `SL 那一局第 9 層的第 ${ANSWERS.map.source.decision} 個決策：下一步的兩個點都是財寶，所以靠之後的路線區分，V 給第一個 65.7%、第二個 63.9%。橫條裡的下降是相對前一個事件。戰鬥外大腦幾毫秒就回答，面板印成 0.0 s。`,
+        `Decision ${ANSWERS.map.source.decision} of the SL run, on floor ${ANSWERS.map.floor}: V gives the enemy ${pct(ANSWERS.map.options[0].value)} and the ? room ${pct(ANSWERS.map.options[1].value)}, each with the route the brain would take after it, room by room, to the boss. The strip’s rise is from the rewards just before. Outside combat the brain answers in a few milliseconds, which the panel prints as 0.0 s.`,
+        `SL 那一局第 ${ANSWERS.map.floor} 层的第 ${ANSWERS.map.source.decision} 个决策：V 给敌人 ${pct(ANSWERS.map.options[0].value)}、给 ? 房间 ${pct(ANSWERS.map.options[1].value)}，各附上大脑之后会走的路线，一个个房间直到 Boss。横条里的上升是相对前面的奖励。战斗外大脑几毫秒就回答，面板印成 0.0 s。`,
+        `SL 那一局第 ${ANSWERS.map.floor} 層的第 ${ANSWERS.map.source.decision} 個決策：V 給敵人 ${pct(ANSWERS.map.options[0].value)}、給 ? 房間 ${pct(ANSWERS.map.options[1].value)}，各附上大腦之後會走的路線，一個個房間直到頭目。橫條裡的上升是相對前面的獎勵。戰鬥外大腦幾毫秒就回答，面板印成 0.0 s。`,
       ))}
     {:else}
       {say(lang, w(

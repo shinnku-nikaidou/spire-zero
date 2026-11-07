@@ -8,7 +8,7 @@ sidebar:
 import { Badge } from '@astrojs/starlight/components';
 import SurfaceCounts from '../../../../../components/book/SurfaceCounts.svelte';
 
-殺戮尖塔 2 的一局是三幕的地圖點，加上幾百到大約一千個決策：本書貫穿始終的範例對局是一場勝局，用了 848 個決策，其中四分之三在戰鬥裡。`RunSession`（`Simulation/RunSession.cs`）在真實引擎裡打這樣一局，每個決策都經過 GameBridge，也就是 Mod 在遊戲裡呼叫的同一批函式（[GameBridge](/zh-tw/arch/gamebridge/)）。本頁從開始到結束跟著一局走一遍。
+殺戮尖塔 2 的一局是三幕的地圖點，加上幾百到大約一千個決策：本書貫穿始終的範例對局是一場勝局，用了 997 個決策，其中四分之三在戰鬥裡。`RunSession`（`Simulation/RunSession.cs`）在真實引擎裡打這樣一局，每個決策都經過 GameBridge，也就是 Mod 在遊戲裡呼叫的同一批函式（[GameBridge](/zh-tw/arch/gamebridge/)）。本頁從開始到結束跟著一局走一遍。
 
 ## 1. 一局是一個迴圈
 
@@ -127,12 +127,12 @@ flowchart TD
 
 在 `run` 裡，三個介面是同一個物件：Harness 的 `Dispatcher`，它把每個決策交給回答它的大腦（[Harness：路由、預算與種子 §1](/zh-tw/arch/harness/routing/#sec-1)）：戰鬥交給戰鬥大腦，戰鬥中的選牌提示交給 `first`（`FirstPicks`），除非戰鬥大腦的動作帶著它自己的回答，其他一切（包括戰鬥外的選牌提示）交給宏觀大腦（[宏觀大腦](/zh-tw/arch/macro-brain/)）。
 
-**結果**。一局結束時是 `won`（結束於勝利房間）、`lost`（結束於其他任何地方）、`truncated`（超過 `--max-decisions` 仍未結束，預設 20,000）或 `failed`（拋出了例外）。勝局的記錄寫著生命值 0：一到勝利房間，遊戲就殺死玩家。範例對局的記錄是：won、第 2 幕（從 0 算起）、第 48 層、生命值 0/66。
+**結果**。一局結束時是 `won`（結束於勝利房間）、`lost`（結束於其他任何地方）、`truncated`（超過 `--max-decisions` 仍未結束，預設 20,000）或 `failed`（拋出了例外）。勝局的記錄寫著生命值 0：一到勝利房間，遊戲就殺死玩家。範例對局的記錄是：won、第 2 幕（從 0 算起）、第 48 層、生命值 0/70。
 
 **`run` 印出什麼**。第一行說明這批對局、環境、冠軍和遊戲版本。然後每局一行，形式如下（範例對局，省略了牌組、遺物和藥水）：
 
 ```text
-#15 0SSL7NS01MU6 won act 2 floor 48 room … hp 0/66 gold 195 deck [...] relics [...] potions [...] decisions 848 331715 ms maps <3 hashes>
+#12 0SSL7NS01MU6 won act 2 floor 48 room THE_ARCHITECT hp 0/70 gold 160 deck [...] relics [...] potions [...] decisions 997 403012 ms maps <3 hashes>
 ```
 
 SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時，它之後有 `obs <digest>`（[§6](#sec-6)）。失敗的一局會多一行 `failure:`，之後最多三行 `game error:` 列出遊戲錯誤。最後是總計：

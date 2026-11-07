@@ -28,7 +28,7 @@ The book follows one run throughout: an SL run of the Silent on seed `0SSL7NS01M
 
 <RunTimeline client:visible lang="en" />
 
-It fought 28 combats (23 monsters, 2 elites, 3 bosses), rested 7 times (4 upgrades, 3 heals), entered 5 `?` points (4 events, 1 shop), 2 more shops and 3 treasure rooms, and took 848 decisions, 631 of them in combat.
+It fought 24 combats (18 monsters, 3 elites, 3 bosses), stopped at 8 rest sites and upgraded a card at each, entered 6 `?` points (5 events, 1 monster), 5 shops and 3 treasure rooms, and took 997 decisions, 772 of them in combat.
 
 ## 2. The map
 
@@ -40,7 +40,7 @@ Each act's map is built when the act starts, and the player sees all of it at on
 - **The other points** are dealt from a bag: 5 elites, 3 shops, 10 to 14 unknowns (`?`, one fewer in acts 2 and 3) and 5 to 7 rest sites, the rest becoming monsters (`Map/MapPointTypeCounts.cs:14-32`; `Models.Acts/Overgrowth.cs:136`, `Hive.cs:119-120`, `Glory.cs:108-109`). The rules: no elite or rest site on rows 1–5; no rest site in the last three room rows except the fixed row; an elite, rest site, treasure or shop never directly after or before the same type; two points with the same parent never share a type among rest site, monster, unknown, elite and shop (`Map/StandardActMap.cs:405-485`). Duplicate path segments are then pruned (`Map/MapPathPruning.cs:11-43`).
 - **Its randomness** is a stream of its own per act, `act_N_map` (`Map/StandardActMap.cs:113`).
 
-The example run's maps had 62, 60 and 58 points; in Glory 23 monsters, 12 unknowns, 8 rest sites, 5 elites, 5 treasures and 3 shops, besides its Ancient and boss. [Output §3](/en/arch/output/#sec-3) draws that map with the route the brain chose on floor 43.
+The example run's maps had 62, 60 and 58 points; in Hive 26 monsters, 10 unknowns, 9 rest sites, 5 elites, 5 treasures and 3 shops, besides its Ancient and boss. [Output §3](/en/arch/output/#sec-3) draws that map with the route the brain planned on floor 19.
 
 ## 3. Rooms
 
@@ -178,13 +178,13 @@ Besides these, each player has streams for rewards, shops and transformations (`
 
 ## 8. Why it is hard for an AI
 
-- **A long horizon.** A run takes about 555 decisions on average (166,527 decisions in 300 SL runs of the Silent), the example run 848. A card taken on floor 2 still matters on floor 48, and a fight's HP loss carries to every later fight.
+- **A long horizon.** A run takes about 830 decisions on average (83,026 decisions in the champion's 100 SL runs of the Silent), the example run 997. A card taken on floor 2 still matters on floor 48, and a fight's HP loss carries to every later fight.
 - **Hidden information and chance**: the draw order, what a `?` holds, what comes next, the enemies' later moves ([§7](#sec-7)).
 - **Large, changing action sets**: a turn can play the cards in hand (up to 10) and potions in any order, each on any of its targets; a shop offers about 13 items and a removal; card prompts arrive in the middle of a card's play.
-- **One death ends the run.** HP is a resource spent across 28 or so fights, and every rest site trades healing against an upgrade.
+- **One death ends the run.** HP is a resource spent across 22 or so fights, and every rest site trades healing against an upgrade.
 
-Where the decisions are, in those 300 SL runs:
+Where the decisions are, in those 100 SL runs:
 
 <SurfaceCounts client:visible lang="en" />
 
-Combat is 71% of all decisions; every other screen is a decision of the [macro brain](/en/arch/macro-brain/). How the AI splits them, and why it plays a real copy of the game rather than a model of it, is in [the introduction](/en/) and [Simulator](/en/arch/simulator/).
+Combat is 73% of all decisions; every other screen is a decision of the [macro brain](/en/arch/macro-brain/). How the AI splits them, and why it plays a real copy of the game rather than a model of it, is in [the introduction](/en/) and [Simulator](/en/arch/simulator/).

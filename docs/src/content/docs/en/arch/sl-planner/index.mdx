@@ -18,11 +18,11 @@ In SL the combat brain gets one exact copy of the fight: the clone of the curren
 
 </Aside>
 
-Here is what that looks like in a real run. On floor 17 of a run (seed `E91KLB4BRWB4`), the act 1 boss is Vantom: 173 HP and 8 stacks of Slippery, so each hit deals 1 damage and takes a stack off. At the fight's first decision, with 65 of 70 HP, the planner searched for 5.2 seconds and returned a line of 22 actions over 6 rounds. The fight followed it without another search.
+Here is what that looks like in a real run, the book's example run ([The game §1](/en/arch/game/#sec-1)). On floor 17 the act 1 boss is Vantom: 173 HP and 8 stacks of Slippery, so each hit deals 1 damage and takes a stack off. At the fight's first decision, with 39 of 70 HP, the planner searched for 7.0 seconds and returned a line of 34 actions over 9 rounds. The fight followed it without another search.
 
 <PlanTimeline client:visible lang="en" />
 
-The line is a poison plan. Neutralize and Strike spend two stacks of Slippery for 1 damage each. Calculated Gamble discards the hand and draws as many cards, and the planner already knows they will be Adrenaline, Noxious Fumes, Dash and Bouncing Flask: SL may see the draw order, and the planner tried the Gamble on the clone. Noxious Fumes and Snakebite start the poison in round 1. Round 3 takes Vantom's 26-damage hit (60 → 34 HP) to play Dagger Spray, a second Gamble and another Snakebite rather than block. In round 6 the plan ends the turn without playing a card: Vantom has 35 HP and 42 poison, and dies at the start of its own turn. The plan's value, 0.4914, is the leaf's value of a win at 34 of 70 HP, and the fight ended with 34 HP.
+The line is a poison plan that loses no HP. Footwork+ in round 1 raises Dexterity from 2 to 5, so each later Defend blocks 10. Strike and Neutralize spend the stacks of Slippery for 1 damage each, while Deadly Poison+ twice and Bubble Bubble three times build the poison. In round 7, against an attack of 21, the plan plays three Defends and nothing else. In round 9 it ends the turn without playing a card: Vantom has 22 HP and 34 poison, and dies at the start of its own turn. The plan's value, 0.8892, is the leaf's value of a win at 39 of 70 HP, and the fight ended with 39 HP.
 
 ## 1. What SL may see
 

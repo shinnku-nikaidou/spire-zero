@@ -1,7 +1,7 @@
 <script lang="ts">
   // The Wilson 95% interval of a win rate (docs: evaluation/metrics §4), as Rate.Wilson computes it
-  // (src/Sts2Ai.Harness/Reports.cs:10-17), against the normal (Wald) interval; presets are committed reports'
-  // win counts (eval/silent/reports/) and FableBot's published result.
+  // (src/Sts2Ai.Harness/Reports.cs:10-17), against the normal (Wald) interval; presets are example counts, small and
+  // none, and FableBot's published result.
   import { scaleLinear } from 'd3';
   import type { Lang } from '../v/names.ts';
   import { fmt } from '../v/i18n.ts';
@@ -73,9 +73,9 @@
   </svg>
   <p class="v-caption">
     {say(lang, w(
-      'The Wilson interval is the one every report and the leaderboard print (z = 1.96). The normal interval p̂ ± 1.96·√(p̂(1−p̂)/n) is shown only to compare: with few wins it reaches below 0, and with none it has no width at all. Presets: three earlier nets’ whole-run reports on promotion-1-300, one on promotion-1 with no win, and FableBot’s 71 of 343 Ironclad runs.',
-      '每份报告和排行榜印的都是 Wilson 区间（z = 1.96）。正态区间 p̂ ± 1.96·√(p̂(1−p̂)/n) 只是拿来比较：赢得少时它会跌到 0 以下，一局都没赢时宽度是 0。预设：三个较早的网络在 promotion-1-300 上的整局报告，一份 promotion-1 上 0 胜的报告，以及 FableBot 的 343 局 Ironclad 赢 71 局。',
-      '每份報告和排行榜印的都是 Wilson 區間（z = 1.96）。常態區間 p̂ ± 1.96·√(p̂(1−p̂)/n) 只是拿來比較：贏得少時它會跌到 0 以下，一局都沒贏時寬度是 0。預設：三個較早的網路在 promotion-1-300 上的整局報告，一份 promotion-1 上 0 勝的報告，以及 FableBot 的 343 局 Ironclad 贏 71 局。',
+      'The Wilson interval is the one every report and the leaderboard print (z = 1.96). The normal interval p̂ ± 1.96·√(p̂(1−p̂)/n) is shown only to compare: with few wins it reaches below 0, and with none it has no width at all. Presets: example counts of few wins and of none, and FableBot’s 71 of 343 Ironclad runs.',
+      '每份报告和排行榜印的都是 Wilson 区间（z = 1.96）。正态区间 p̂ ± 1.96·√(p̂(1−p̂)/n) 只是拿来比较：赢得少时它会跌到 0 以下，一局都没赢时宽度是 0。预设：几个赢得很少和一局没赢的示例计数，以及 FableBot 的 343 局 Ironclad 赢 71 局。',
+      '每份報告和排行榜印的都是 Wilson 區間（z = 1.96）。常態區間 p̂ ± 1.96·√(p̂(1−p̂)/n) 只是拿來比較：贏得少時它會跌到 0 以下，一局都沒贏時寬度是 0。預設：幾個贏得很少和一局沒贏的示例計數，以及 FableBot 的 343 局 Ironclad 贏 71 局。',
     ))}
   </p>
 </div>

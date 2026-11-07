@@ -8,7 +8,7 @@ sidebar:
 import { Badge } from '@astrojs/starlight/components';
 import SurfaceCounts from '../../../../../components/book/SurfaceCounts.svelte';
 
-A run of Slay the Spire 2 is three acts of map points, and a few hundred to about a thousand decisions: the book's example run, a win, took 848, three quarters of them in combat. `RunSession` (`Simulation/RunSession.cs`) plays such a run in the real engine, with every decision going through GameBridge, the same calls the mod makes in the game ([GameBridge](/en/arch/gamebridge/)). This page follows a run from its start to its end.
+A run of Slay the Spire 2 is three acts of map points, and a few hundred to about a thousand decisions: the book's example run, a win, took 997, three quarters of them in combat. `RunSession` (`Simulation/RunSession.cs`) plays such a run in the real engine, with every decision going through GameBridge, the same calls the mod makes in the game ([GameBridge](/en/arch/gamebridge/)). This page follows a run from its start to its end.
 
 ## 1. A run as a loop
 
@@ -127,12 +127,12 @@ How often a run meets each screen, over the 100 SL runs of the champion's Silent
 
 In `run` all three interfaces are one object, Harness's `Dispatcher`, which routes each decision to the brain that answers it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)): combat to the combat brain, card prompts in combat to `first` (`FirstPicks`) unless the combat brain's action carries its own answer, everything else, card prompts outside combat included, to the macro brain ([Macro brain](/en/arch/macro-brain/)).
 
-**Outcomes.** A run ends `won` (over, in the victory room), `lost` (over anywhere else), `truncated` (still going after `--max-decisions`, 20,000 by default) or `failed` (it threw). A won run's record says HP 0: once the victory room is reached, the game kills the players. The example run's record reads won, act 2 (counted from 0), floor 48, HP 0 of 66.
+**Outcomes.** A run ends `won` (over, in the victory room), `lost` (over anywhere else), `truncated` (still going after `--max-decisions`, 20,000 by default) or `failed` (it threw). A won run's record says HP 0: once the victory room is reached, the game kills the players. The example run's record reads won, act 2 (counted from 0), floor 48, HP 0 of 70.
 
 **What `run` prints.** A first line names the runs, the environment, the champion and the game version. Then one line per run, of this form (the example run, with its deck, relics and potions left out):
 
 ```text
-#15 0SSL7NS01MU6 won act 2 floor 48 room … hp 0/66 gold 195 deck [...] relics [...] potions [...] decisions 848 331715 ms maps <3 hashes>
+#12 0SSL7NS01MU6 won act 2 floor 48 room THE_ARCHITECT hp 0/70 gold 160 deck [...] relics [...] potions [...] decisions 997 403012 ms maps <3 hashes>
 ```
 
 with `replans N` before `maps` when the SL planner planned again, and `obs <digest>` after it when observations were taken ([§6](#sec-6)). A failure adds a `failure:` line, and up to three game errors follow as `game error:` lines. At the end come the totals:

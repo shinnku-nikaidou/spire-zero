@@ -1,8 +1,8 @@
 <script lang="ts">
-  // The two champions' net files field by field (docs: learning/reference §7): weights/all/v9-1.json (V) and
-  // c9-1.json (the combat net), as src/data/book/learning-netfiles.json extracted them: each field's type and size, the
-  // token tables, the state scaling, the training report, the ONNX graph's inputs, outputs, initializer shapes and
-  // operators, and the test inputs. No weights.
+  // The champion's two net files field by field (docs: learning/reference §7): V's and the combat net's, as
+  // src/data/book/learning-netfiles.json extracted them (keyed v and c): each field's type and size, the token tables,
+  // the state scaling, the training report, the ONNX graph's inputs, outputs, initializer shapes and operators, and the
+  // test inputs. No weights.
   import type { Lang } from '../v/names.ts';
   import { fmt } from '../v/i18n.ts';
   import { w, say, type Words } from './words.ts';
@@ -20,8 +20,10 @@
     entry?: Record<string, unknown>;
   }
   interface NetDoc { file: string; bytes: number; fields: Field[] }
-  const FILES: Record<string, NetDoc> = { "v9-1": data["v9-1"] as unknown as NetDoc, "c9-1": data["c9-1"] as unknown as NetDoc };
-  let which = $state('v9-1');
+  const FILES: Record<string, NetDoc> = { v: data.v as unknown as NetDoc, c: data.c as unknown as NetDoc };
+  const base = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+  const named = (doc: NetDoc) => String(doc.fields.find((f) => f.key === 'name')!.value);
+  let which = $state('v');
   const entries = (v: unknown) => Object.entries((v ?? {}) as Record<string, unknown>);
   const list = (v: unknown) => (Array.isArray(v) ? '[' + v.join(', ') + ']' : String(v));
   const numbers = (v: unknown) => ((v ?? []) as number[]).map((x) => fmt(lang, x, 2)).join(', ');
@@ -29,7 +31,7 @@
   const file = $derived(FILES[which]);
 
   const NOTE: Record<string, Words> = {
-    name: w('The net’s name, as the champion shows it (l0 v9-1, plan c9-1).', '网络的名字，冠军名称里就这样显示（l0 v9-1、plan c9-1）。', '網路的名字，冠軍名稱裡就這樣顯示（l0 v9-1、plan c9-1）。'),
+    name: w(`The net’s name, as the champion shows it (l0 ${named(FILES.v)}, plan ${named(FILES.c)}).`, `网络的名字，冠军名称里就这样显示（l0 ${named(FILES.v)}、plan ${named(FILES.c)}）。`, `網路的名字，冠軍名稱裡就這樣顯示（l0 ${named(FILES.v)}、plan ${named(FILES.c)}）。`),
     floors: w('The hazard head’s floors, from floor 0.', '风险值输出头覆盖的楼层数，从第 0 层起。', '風險值輸出頭涵蓋的樓層數，從第 0 層起。'),
     vocab: w('Each token table’s ids, every id of the game build; entry 0 is <unk>, which reads any other id.', '每张 token 表的 id，即游戏这个版本的全部 id；第 0 项是 <unk>，读其他任何 id。', '每張 token 表的 id，即遊戲這個版本的全部 id；第 0 項是 <unk>，讀其他任何 id。'),
     state: w('The six raw numbers V reads, with the training data’s mean and standard deviation that standardize them.', 'V 读的六个原始数字，以及用来标准化它们的训练数据均值和标准差。', 'V 讀的六個原始數字，以及用來標準化它們的訓練資料平均值和標準差。'),
@@ -59,7 +61,7 @@
 <div class="vfig">
   <div class="v-tabs" role="group">
     {#each Object.keys(FILES) as k (k)}
-      <button aria-pressed={which === k} onclick={() => (which = k)}>{k}.json</button>
+      <button aria-pressed={which === k} onclick={() => (which = k)}>{base(FILES[k].file)}</button>
     {/each}
   </div>
   <p class="v-muted" style="margin: 0 0 0.5rem;">{file.file} · {kb(file.bytes)}</p>
@@ -88,7 +90,9 @@
               {/each}
             </tbody>
           </table>
-          <p class="v-muted" style="margin: 0.25rem 0 0;">{say(lang, w('No run is at an ascension above 0 in the data, so its standard deviation reads as 1.', '数据里没有进阶高于 0 的局，所以它的标准差读作 1。', '資料裡沒有晉階高於 0 的局，所以它的標準差讀作 1。'))}</p>
+          {#if f.std && f.mean && f.std[f.names.indexOf('ascension')] === 1 && f.mean[f.names.indexOf('ascension')] === 0}
+            <p class="v-muted" style="margin: 0.25rem 0 0;">{say(lang, w('No run is at an ascension above 0 in the data, so its standard deviation reads as 1.', '数据里没有进阶高于 0 的局，所以它的标准差读作 1。', '資料裡沒有晉階高於 0 的局，所以它的標準差讀作 1。'))}</p>
+          {/if}
         {:else if f.key === 'fit'}
           <table>
             <tbody>
@@ -136,9 +140,9 @@
   {/each}
   <p class="v-caption">
     {say(lang, w(
-      'Extracted from weights/all/v9-1.json and c9-1.json at the page’s commit: field names, types, sizes and shapes, and the small fields’ values; the weights themselves are left out.',
-      '从页面所在提交的 weights/all/v9-1.json 和 c9-1.json 提取：字段名、类型、大小和形状，以及小字段的值；权重本身没有列出。',
-      '從頁面所在提交的 weights/all/v9-1.json 和 c9-1.json 擷取：欄位名、型別、大小和形狀，以及小欄位的值；權重本身沒有列出。',
+      `Extracted from the champion’s two net files, ${FILES.v.file} and ${FILES.c.file}: field names, types, sizes and shapes, and the small fields’ values; the weights themselves are left out.`,
+      `从冠军的两个网络文件 ${FILES.v.file} 和 ${FILES.c.file} 提取：字段名、类型、大小和形状，以及小字段的值；权重本身没有列出。`,
+      `從冠軍的兩個網路檔案 ${FILES.v.file} 和 ${FILES.c.file} 擷取：欄位名、型別、大小和形狀，以及小欄位的值；權重本身沒有列出。`,
     ))}
   </p>
 </div>

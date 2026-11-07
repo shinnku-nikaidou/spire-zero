@@ -1,7 +1,6 @@
 {
  "source": {
-  "file": "weights/silent/c2.json",
-  "what": "tests[0].obs: one of the held-out round starts the combat net c2's file carries, a real start of a round from NoSL self-play, as the trainer read it",
+  "what": "tests[0].obs of a combat net file: a held-out start of a round from NoSL self-play, as the trainer read it",
   "fields": "the observation as Protocol serializes it; the draw pile is sorted by card key, as every observation sends it"
  },
  "obs": {

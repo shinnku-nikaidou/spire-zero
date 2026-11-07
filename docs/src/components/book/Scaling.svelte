@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Combats per second against worker processes (docs: simulator/combat §7): `bench`, 3,000 combats per process,
-  // 2026-10-26, on a machine with 8 physical cores.
+  // Combats per second against worker processes (docs: simulator/combat §7): `bench`, 3,000 combats per process, on a
+  // machine with 8 physical cores.
   import { scaleLinear } from 'd3';
   import type { Lang } from '../v/names.ts';
   import { w, say } from './words.ts';
@@ -50,9 +50,9 @@
   {/if}
   <p class="v-caption">
     {say(lang, w(
-      'bench, 3,000 combats per process, act 1 weak and regular encounters, the play policy, 2026-10-26. Throughput grows almost linearly up to the 8 physical cores; hyperthreading adds about 8% beyond.',
-      'bench，每个进程 3,000 场战斗，第 1 幕弱怪与普通遭遇，play 策略，2026-10-26。吞吐量到 8 个物理核心为止几乎线性增长；超线程之后只多约 8%。',
-      'bench，每個行程 3,000 場戰鬥，第 1 幕弱怪與普通遭遇，play 策略，2026-10-26。吞吐量到 8 個實體核心為止幾乎線性成長；超執行緒之後只多約 8%。',
+      'bench, 3,000 combats per process, act 1 weak and regular encounters, the play policy, on a machine with 8 physical cores. Throughput grows almost linearly up to the 8 physical cores; hyperthreading adds about 8% beyond.',
+      'bench，每个进程 3,000 场战斗，第 1 幕弱怪与普通遭遇，play 策略，在一台有 8 个物理核心的机器上。吞吐量到 8 个物理核心为止几乎线性增长；超线程之后只多约 8%。',
+      'bench，每個行程 3,000 場戰鬥，第 1 幕弱怪與普通遭遇，play 策略，在一台有 8 個實體核心的機器上。吞吐量到 8 個實體核心為止幾乎線性成長；超執行緒之後只多約 8%。',
     ))}
   </p>
 </div>

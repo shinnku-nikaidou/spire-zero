@@ -19,9 +19,11 @@ chapter of several pages lives in a folder (`arch/macro-brain/`, its first page 
 names none).
 
 **Figures.** The interactive figures are Svelte islands in `src/components/` (`book/`, `combat/`, `v/`), drawn with
-D3. The data they show is in `src/data/`: the book's example run, evaluation reports and net files, made by scripts
-such as `scripts/combat-walk.py` (`uv run --project learn python docs/scripts/combat-walk.py` from the
-repository's root). Cards, relics and potions show the game's own names (`src/data/names/`, written by
+D3. The data they show is in `src/data/`: the book's example run, evaluation reports and net files, all from the
+current champion. `scripts/book-data.py` makes it from one play of the example seed in each environment, the
+champion's reports and its two net files (its docstring has the commands), and `scripts/combat-walk.py` makes the
+combat net's walkthrough; both run from the repository's root with `uv run --project learn python docs/scripts/...`.
+After a promotion, run them again. Cards, relics and potions show the game's own names (`src/data/names/`, written by
 `node scripts/game-names.mjs PATH/SlayTheSpire2.pck`), followed by the id in brackets.
 
 **`pnpm check`** builds the site, then `scripts/check.mjs` checks:

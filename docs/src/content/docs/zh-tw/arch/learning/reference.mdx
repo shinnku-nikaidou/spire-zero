@@ -103,7 +103,7 @@ flowchart LR
 | `onnx` | 輸入按 `learn/combat/encode.py` 的 `INPUTS` 命名；`extra` 有 4 個數；輸出 `outcome`（batch × 51，softmax，關閉的桶為 0）和 `potion_used`（batch × 5 組 × 藥水 id，sigmoid） | 是 |
 | `tests` | 最多 16 個留出的回合開始局面，其中有多段攻擊、持有藥水和低生命值的狀態：`obs`、`history`、`outcome`、`potion_used`（5 × 66 個數，一組接一組） | 是 |
 
-下圖逐欄打開兩個網路檔案，一個 V 的和一個戰鬥網路的：大小、計算圖的輸入和輸出及其形狀、它的初始化器（權重張量，只列形狀）和運算子，以及訓練報告。
+下圖逐欄打開冠軍的兩個網路檔案，V 的和戰鬥網路的：大小、計算圖的輸入和輸出及其形狀、它的初始化器（權重張量，只列形狀）和運算子，以及訓練報告。
 
 <NetFileAnatomy client:visible lang="zh-TW" />
 

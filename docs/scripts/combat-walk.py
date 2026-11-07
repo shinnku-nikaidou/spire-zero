@@ -1,6 +1,6 @@
-"""The numbers of the combat net's walkthrough (docs: combat-brain/walkthrough): one round start of the net file's tests,
-followed through every layer of learn/combat/net.py with the file's own weights, into src/data/combat-walk.json. Stops
-if its layers do not end in the outputs the file's tests hold.
+"""The numbers of the combat net's walkthrough (docs: combat-brain/walkthrough): one round start of the champion's combat
+net file's tests (eval/champions/sl.json's combat-net), followed through every layer of learn/combat/net.py with the
+file's own weights, into src/data/combat-walk.json. Stops if its layers do not end in the outputs the file's tests hold.
 
     uv run --project learn python docs/scripts/combat-walk.py
 """
@@ -18,13 +18,15 @@ sys.path.insert(0, str(ROOT / "learn"))
 from combat import data, encode, export  # noqa: E402
 from combat.net import Batch, Net  # noqa: E402
 
-FILE = ROOT / "weights/all/c9-1.json"
+CHAMPION = json.loads((ROOT / "eval/champions/sl.json").read_text())
+FILE = ROOT / CHAMPION["options"]["combat-net"]
 OUT = ROOT / "docs/src/data/combat-walk.json"
-MAIN = 9  # the only test state holding a potion (the Ironclad against three Exoskeletons): every step has something to show
-# The boss fight with the largest chance of a death (the Defect against The Kin at full HP; no test state is more likely
-# lost than won), and the lowest HP of the 16 (the Defect at 10 of 77 HP against a Phrog Parasite)
-OTHERS = {"danger": 8, "mask": 4}
+MAIN = 11  # the only test state holding a potion (the Regent against a Slimed Berserker): every step has something to show
+# The fight with the largest chance of a death (the Silent against the Knowledge Demon, a boss), and the lowest HP of the
+# 16 (the Ironclad at 14 of 86 HP against the Decimillipede, an elite)
+OTHERS = {"danger": 3, "mask": 2}
 LOST_HP = 10  # the sibling state of the search step
+END_HP = 30  # the label's ending: a win at this HP, which the state's file does not hold
 
 
 def load(file: dict) -> tuple[Net, dict]:
@@ -144,7 +146,10 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     )
     card_phi = net.card_phi(card_x)
     per_pile = torch.bmm(x["piles"].transpose(1, 2), card_phi).flatten(1) * net.SUM_SCALE
-    example = next(k for k, c in enumerate(tok["cards"]) if c[0].startswith("STRIKE_") and not c[1] and not c[3])  # a plain Strike, so the cost and damage vectors show
+    # A plain attack (no upgrade, no modifier, a cost and damage, so the cost and damage vectors show), the first with a
+    # copy in another pile.
+    plain = [k for k, c in enumerate(tok["cards"]) if not c[1] and not c[3] and c[4] > 0 and c[6] > 0]
+    example = next(k for k in plain if any(tok["cards"][j][0] == tok["cards"][k][0] and tok["cards"][j][2] != tok["cards"][k][2] for j in plain))
     c_id, c_up, c_pile, c_mods, c_cost, _, c_damage, c_numbers = tok["cards"][example]
     t = x["cards"][0, example]
     card = {
@@ -282,7 +287,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         }
 
     # A label, for an ending this state's file does not hold.
-    end_hp = 70
+    end_hp = END_HP
     lost = share - end_hp / obs["player"]["max_hp"]
     label = data.ending(obs, {"died": False, "hp": end_hp, "max_hp": obs["player"]["max_hp"]})
     logits = net.reachable(raw, x["player"])
@@ -291,7 +296,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
 
     pl = obs["player"]
     return {
-        "source": f"{FILE.name}, tests[{MAIN}]",
+        "source": f"the champion's combat net, {FILE.relative_to(ROOT)}, tests[{MAIN}]",
         "state": {
             "encounter": obs["encounter"],
             "room": obs["room"],

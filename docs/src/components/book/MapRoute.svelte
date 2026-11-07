@@ -1,7 +1,8 @@
 <script lang="ts">
-  // A map answer's marks (docs: output §3): the act-3 map of the example run's floor 43, the path so far, a pulsing ring on
-  // the point the brain picked, and a line along each path of the route after it, as MapMark draws them; the map
-  // route setting picks how much shows.
+  // A map answer's marks (docs: output §3): the map of the example run at the panel's map decision
+  // (src/data/book/panel-examples.json, map), the path so far, a pulsing ring on the point the brain picked, and a line
+  // along the route the brain plans after it, as MapMark draws them; the map route setting picks how much shows. The
+  // setting's names are the mod's (L10n.cs).
   import data from '../../data/book/panel-examples.json';
   import { COLOUR, GLYPH } from '../v/map.ts';
   import { loadNames, type Lang, type Names } from '../v/names.ts';
@@ -31,6 +32,12 @@
   const at = M.visited[M.visited.length - 1];
   const stops = [[at.col, at.row], ...[M.chosen, ...M.route].map(coord)];
   const next = coord(M.chosen);
+  const typeAt = (a: string) => {
+    const [c, r] = coord(a);
+    return M.points.find((p) => p.col === c && p.row === r)!.type;
+  };
+  const room = (a: string) => (names ? names.name('map', typeAt(a)) : typeAt(a));
+  const others = M.options.map((o) => o.action).filter((a) => a !== M.chosen);
 
   let t = $state(0);
   $effect(() => {
@@ -45,14 +52,14 @@
 
 <div class="vfig">
   <div class="v-row" style="margin-bottom: 0.6rem;">
-    <span class="v-muted">Map route</span>
+    <span class="v-muted">{say(lang, w('Map route', '地图路线', '地圖路線'))}</span>
     <div class="v-tabs" style="margin: 0;">
-      <button aria-pressed={route === 'off'} onclick={() => (route = 'off')}>Off</button>
-      <button aria-pressed={route === 'next'} onclick={() => (route = 'next')}>Next point</button>
-      <button aria-pressed={route === 'whole'} onclick={() => (route = 'whole')}>Whole route</button>
+      <button aria-pressed={route === 'off'} onclick={() => (route = 'off')}>{say(lang, w('Off', '关', '關'))}</button>
+      <button aria-pressed={route === 'next'} onclick={() => (route = 'next')}>{say(lang, w('Next point', '下一个点', '下一個點'))}</button>
+      <button aria-pressed={route === 'whole'} onclick={() => (route = 'whole')}>{say(lang, w('Whole route', '整条路线', '整條路線'))}</button>
     </div>
   </div>
-  <svg viewBox="0 0 {W} {H}" role="img" aria-label={say(lang, w('The route on the act 3 map', '第三幕地图上的路线', '第三幕地圖上的路線'))}>
+  <svg viewBox="0 0 {W} {H}" role="img" aria-label={say(lang, w('The planned route on the map', '地图上规划的路线', '地圖上規劃的路線'))}>
     {#each M.points as p (key(p.col, p.row))}
       {#each p.next as n (key(n.col, n.row))}
         <line x1={px(p.col)} y1={py(p.row)} x2={px(n.col)} y2={py(n.row)} stroke="var(--v-grid)" stroke-width="1.5" />
@@ -85,9 +92,9 @@
   </div>
   <p class="v-caption">
     {say(lang, w(
-      `The example run (seed ${M.source.seed}) on floor ${M.source.floor}, act 3 (${M.source.hp} of ${M.source.max_hp} HP), at the map’s row 9. Grey: the path so far. The brain picks the monster at row 10 over the rest site beside it; the purple line is the route the run then took, through an elite and a rest site to the boss.`,
-      `贯穿全书那一局（种子 ${M.source.seed}）在第 ${M.source.floor} 层，第三幕（HP ${M.source.hp}/${M.source.max_hp}），位于地图第 9 行。灰线：走过的路。大脑在第 10 行选了普通战斗，而不是旁边的休息处；紫线是这一局后来实际走的路线，经过一场精英战和一个休息处到 Boss。`,
-      `貫穿全書那一局（種子 ${M.source.seed}）在第 ${M.source.floor} 層，第三幕（HP ${M.source.hp}/${M.source.max_hp}），位於地圖第 9 行。灰線：走過的路。大腦在第 10 行選了普通戰鬥，而不是旁邊的休息處；紫線是這一局後來實際走的路線，經過一場菁英戰和一個休息處到頭目。`,
+      `The example run (seed ${M.source.seed}) on floor ${M.source.floor}, act ${M.source.act + 1} (${M.source.hp} of ${M.source.max_hp} HP), at the map’s row ${at.row}, the decision the panel’s map answer shows. Grey: the path so far. The brain picks the ${room(M.chosen)} at row ${next[1]} over the ${others.map(room).join(', ')} beside it; the purple line is the route it plans after that pick, to the boss.`,
+      `贯穿全书那一局（种子 ${M.source.seed}）在第 ${M.source.floor} 层，第 ${M.source.act + 1} 幕（HP ${M.source.hp}/${M.source.max_hp}），位于地图第 ${at.row} 行，也就是面板里地图回答的那个决策。灰线：走过的路。大脑在第 ${next[1]} 行选了${room(M.chosen)}，而不是旁边的${others.map(room).join('、')}；紫线是它在这一步之后规划的路线，一直到 Boss。`,
+      `貫穿全書那一局（種子 ${M.source.seed}）在第 ${M.source.floor} 層，第 ${M.source.act + 1} 幕（HP ${M.source.hp}/${M.source.max_hp}），位於地圖第 ${at.row} 行，也就是面板裡地圖回答的那個決策。灰線：走過的路。大腦在第 ${next[1]} 行選了${room(M.chosen)}，而不是旁邊的${others.map(room).join('、')}；紫線是它在這一步之後規劃的路線，一直到頭目。`,
     ))}
   </p>
 </div>

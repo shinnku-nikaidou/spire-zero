@@ -22,6 +22,8 @@
     encounter?: string;
   }
   const FLOORS = data.floors as Floor[];
+  // The floors where an act starts, less a half: the dashed lines between the acts.
+  const ACT_STARTS = FLOORS.filter((f, i) => i > 0 && f.act !== FLOORS[i - 1].act).map((f) => f.floor - 0.5);
 
   let names = $state<Names | null>(null);
   $effect(() => {
@@ -78,7 +80,7 @@
     {/each}
     <text x={M.l + 4} y={M.t + 12} class="tick">HP</text>
     <path d={hpLine} fill="none" stroke="var(--v-neg)" stroke-width="2" />
-    {#each [17.5, 33.5] as b (b)}
+    {#each ACT_STARTS as b (b)}
       <line x1={x(Math.ceil(b))! - 2} x2={x(Math.ceil(b))! - 2} y1={M.t} y2={top3 + H_DEC} stroke="var(--v-axis)" stroke-dasharray="3 3" />
     {/each}
     {#each FLOORS as f, i (f.floor)}
