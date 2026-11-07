@@ -263,24 +263,25 @@ internal static partial class SelfTest
     /// <summary>
     /// On the real game, with --combat-net's leaf and the champion's nodes, against 535 HP: Monologue and two Flash of Steel,
     /// which draw each other. A plain search does not get past the first chain, in either world. Then with a prompt in front
-    /// of the cycle: Particle Wall costs stars this character has none of until Touch of Insanity makes it free, and the
-    /// prompt policy would give that to Haze.
+    /// of the cycle, in SL: Particle Wall costs stars this character has none of until Touch of Insanity makes it free,
+    /// which the prompt's first answer does not, so the planner must find the answer that does among the potion's others
+    /// and win with it (on the potion's share of the turn's nodes, split over its answers, it does so a turn later).
     /// </summary>
     private static void CyclesKillInOneTurn(Pump pump, List<EncounterModel> pool, int act, ICombatLeaf leaf, Action<string, bool, string> check)
     {
-        void Case(string name, string[] deck, string[] potions)
+        void Case(string name, string[] deck, string[] potions, bool prompt = false)
         {
             var loadout = new Loadout(Deck: [.. deck.Select(id => new CardSpec(id))], Relics: [], Potions: potions, Hp: 70, MaxHp: 70);
             var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
             CombatObservation obs;
-            using (var session = CombatSession.Start(pump, setup, PromptBrain.Instance))
+            using (var session = CombatSession.Start(pump, setup, FirstPicks.Instance))
             {
                 var seen = session.Observation();
                 obs = seen with { Enemies = [seen.Enemies[0] with { Hp = 535, MaxHp = 535 }] };
             }
             CombatSnapshot root;
             IReadOnlyList<CombatAction> legal;
-            using (var session = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), PromptBrain.Instance))
+            using (var session = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), FirstPicks.Instance))
             {
                 root = session.Snapshot();
                 legal = session.LegalActions();
@@ -289,11 +290,16 @@ internal static partial class SelfTest
             {
                 var world = worlds.Worlds(1, 0)[0];
                 var plan = new SlPlanner(leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 8));
-                check($"SL planner repeats a cycle to lethal ({name})", plan.End == CombatStatus.Won && plan.Result.First != CombatAction.EndTurn && plan.Result.Plan.Count(a => a == CombatAction.EndTurn) <= 1, $"{plan.End}: {plan.Result.Plan.Count + 1} actions");
+                var line = plan.Result.Plan.Prepend(plan.Result.First).ToList();
+                int ends = line.Count(a => a.Kind == CombatActionKind.EndTurn);
+                bool cycled = prompt ? line.Any(a => a.Kind == CombatActionKind.UsePotion && a.Pick != null) : line[0].Kind != CombatActionKind.EndTurn && ends <= 1;
+                check($"SL planner repeats a cycle to lethal ({name})", plan.End == CombatStatus.Won && cycled,
+                    $"{plan.End}: {line.Count} actions, {ends} turn ends, from {string.Join(" ", line.Take(6))}");
                 world.Restore(new([]));
-                foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
+                foreach (var step in line) world.Execute(step);
                 check($"SL world ends a cycle as planned ({name})", world.Status == plan.End, $"{world.Status}, planned {plan.End}");
             }
+            if (prompt) return;
             using (var worlds = SimWorlds.NoSL(pump, obs, setup.Seed, Alone(obs)))
             {
                 var pimc = new PimcBrain(leaf).Decide(obs, legal, worlds, new Budget(Worlds: 2, NodesPerWorld: 300), 1);
@@ -301,6 +307,6 @@ internal static partial class SelfTest
             }
         }
         Case("draws", ["MONOLOGUE", "FLASH_OF_STEEL", "FLASH_OF_STEEL"], []);
-        Case("prompt", ["MONOLOGUE", "PARTICLE_WALL", "NEUTRALIZE", "HAZE", "HAZE"], ["TOUCH_OF_INSANITY"]);
+        Case("prompt", ["MONOLOGUE", "PARTICLE_WALL", "NEUTRALIZE", "HAZE", "HAZE"], ["TOUCH_OF_INSANITY"], prompt: true);
     }
 }

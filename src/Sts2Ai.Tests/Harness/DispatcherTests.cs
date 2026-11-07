@@ -94,7 +94,7 @@ public class DispatcherTests
     [Fact]
     public void AnswersThePromptOfTheActionWithTheBrainsPickAndHidesItFromTheHost()
     {
-        var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = 2 }, [], [])));
+        var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = "2" }, [], [])));
 
         Assert.Equal(CombatAction.Play(0, 1), dispatcher.Choose(Decision(Fixtures.Slugs())));
         Assert.Equal([2], dispatcher.Choose(Prompt()));
@@ -107,7 +107,7 @@ public class DispatcherTests
     [Fact]
     public void APickThePromptDoesNotAcceptGoesToThePolicy()
     {
-        var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = 7 }, [], [])));
+        var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = "7" }, [], [])));
 
         dispatcher.Choose(Decision(Fixtures.Slugs()));
         Assert.Empty(dispatcher.Choose(Prompt()));

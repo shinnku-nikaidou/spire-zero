@@ -25,7 +25,8 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     private bool Searches => Policy is "pimc" or "plan";
 
     /// <summary>
-    /// One Harness per run. Combat prompts go to p0 (<see cref="PromptBrain"/>), which search worlds ask too.
+    /// One Harness per run. Combat prompts go to "first" (<see cref="FirstPicks"/>), which search worlds ask too, unless the
+    /// combat brain's action carries its own answer to its first prompt.
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
     /// this process or over the wire; so does the exploring l0, from its own. pimc plays in NoSL; in SL, plan plans the
     /// whole combat on the node's clone (docs: sl-planner §3), and with --afterstates clone l0 plays each option on it
@@ -45,7 +46,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
             : Policy == "plan" ? new PooledPlanner(pool).Route(Budget, Combat)
             : new PooledPimc(pool).Route(Budget, Combat);
-        var prompts = new Route<IChoicePolicy>("p0", PromptBrain.Instance);
+        var prompts = new Route<IChoicePolicy>("first", FirstPicks.Instance);
         Dispatcher dispatcher;
         if (Macro == "l0")
         {
@@ -70,7 +71,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         get
         {
             string macro = Macro == "l0" ? L0 : "random";
-            return $"combat {Combat}{(Searches ? $" {Budget}" : "")}, combat prompts p0, macro {macro}, macro prompts {macro}";
+            return $"combat {Combat}{(Searches ? $" {Budget}" : "")}, combat prompts first, macro {macro}, macro prompts {macro}";
         }
     }
 

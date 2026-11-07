@@ -12,9 +12,9 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// NoSL worlds start from a combat built to show the observation (<see cref="CombatBuilder"/>), never from the real
 /// combat, and each is determinized with its own seed. The SL world is the real combat itself, replayed exactly, and
 /// tells states apart by the full hidden state (<see cref="HiddenState.Full"/>).
-/// Card prompts inside a world are answered by <see cref="PromptBrain"/>, the run's own prompt brain, so search
-/// expects the picks the run will make, unless an action carries its own answer; an SL world may be given the prompt
-/// policy of its real combat instead.
+/// Card prompts inside a world are answered by <see cref="FirstPicks"/>, as the run answers them, so search expects the
+/// picks the run will make, unless an action carries its own answer; an SL world may be given the prompt policy of its
+/// real combat instead.
 /// </summary>
 internal sealed class SimWorlds : IWorldSource, IDisposable
 {
@@ -28,7 +28,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
     private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, RunView run, IChoicePolicy? prompts = null)
     {
         _pump = pump;
-        _prompts = new(prompts ?? PromptBrain.Instance);
+        _prompts = new(prompts ?? FirstPicks.Instance);
         Environment = environment;
         _root = root;
         _run = run;
@@ -41,14 +41,14 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
     public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed, RunView run, IReadOnlyList<EnemyTurns>? history = null)
     {
         var root = new CombatSnapshot(CombatBuilder.Setup(observation, buildSeed, history), []);
-        using (var built = CombatSession.Start(pump, root.Setup, PromptBrain.Instance))
+        using (var built = CombatSession.Start(pump, root.Setup, FirstPicks.Instance))
             if (built.BuildDifferences.Count > 0)
                 throw new InvalidOperationException($"not built as observed: {string.Join("; ", built.BuildDifferences.Take(4))}");
         return new(pump, PlayEnvironment.NoSL, root, run);
     }
 
     /// <param name="run">The run around the combat, for the leaves (<see cref="World.Run"/>).</param>
-    /// <param name="prompts">Answers the card prompts, as in the real combat; null: <see cref="PromptBrain"/>.</param>
+    /// <param name="prompts">Answers the card prompts, as in the real combat; null: <see cref="FirstPicks"/>.</param>
     public static SimWorlds SL(Pump pump, CombatSnapshot real, RunView run, IChoicePolicy? prompts = null) => new(pump, PlayEnvironment.SL, real, run, prompts);
 
     public PlayEnvironment Environment { get; }
@@ -134,7 +134,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
         public void Execute(CombatAction action)
         {
             var live = Live;
-            source._prompts.Arm(action.Pick);
+            source._prompts.Arm(action);
             live.Execute(action.Plain);
             Sync();
         }

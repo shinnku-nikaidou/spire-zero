@@ -105,7 +105,7 @@ public sealed class Dispatcher(
     private const int ShownPlan = 256;
 
     /// <summary>What the combat brain answered for the first prompt of the action it just chose (<see cref="CombatAction.Pick"/>).</summary>
-    private int? _pick;
+    private IReadOnlyList<int>? _pick;
 
     public CombatAction Choose(CombatDecision decision)
     {
@@ -123,7 +123,7 @@ public sealed class Dispatcher(
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: history,
                 Replanned: Mark(result.Replanned)));
-        _pick = result.First.Pick;
+        _pick = result.First.Picks;
         return result.First.Plain;
     }
 
@@ -134,7 +134,7 @@ public sealed class Dispatcher(
         var (id, seed, clock) = Begin(route.Brain);
         if (!choice.Context.InCombat && MacroClone() is { } node) decision = decision.With(node);
         // The answer search played its line with, for the action just chosen; the host never sees it.
-        var picks = choice.Context.InCombat && _pick is int pick && choice.Accepts([pick]) ? [pick] : route.Policy.Choose(decision);
+        var picks = choice.Context.InCombat && _pick is { } pick && choice.Accepts(pick) ? pick : route.Policy.Choose(decision);
         _pick = null;
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!choice.Accepts(picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", picks)}], which the prompt does not accept");

@@ -76,7 +76,7 @@ internal static class NodeProbe
             }
             var obs = decision.Observation ?? throw new InvalidOperationException("a card prompt outside the run");
             Next ??= new(obs.Run, Surfaces.CardChoice, obs.Screen, []);
-            return PromptBrain.Instance.Choose(decision);
+            return FirstPicks.Instance.Choose(decision);
         }
 
         public string Choose(MacroDecision decision)

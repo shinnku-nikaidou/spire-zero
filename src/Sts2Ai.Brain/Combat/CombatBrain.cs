@@ -161,11 +161,14 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         private readonly List<CombatAction> _actions = [];
         private readonly List<ulong> _hashes = [];
         private readonly LoopSearch _loops = new(world, round, (status, obs, actions, hashes) =>
-            new([.. actions], [.. hashes], status, leaf.Value(status, obs, world.Run(), history), 0, history));
+        {
+            var outcome = leaf.Outcome(status, obs, world.Run(), history);
+            return new TurnEnd([.. actions], [.. hashes], status, outcome.Value, 0, history, outcome.Win, outcome.Hp);
+        });
         private WorldSnapshot _root = new([]);
         private ulong _rootHash;
-        private PromptSeen? _firstPrompt;
-        private int _nodes;
+        /// <summary>The nodes spent on the first action so far, and where the line being searched must stop.</summary>
+        private int _nodes, _limit;
         /// <summary>States cut short by the budget so far: a state whose subtree has none is searched in full.</summary>
         private int _cuts;
 
@@ -178,31 +181,26 @@ public sealed class PimcBrain(ICombatLeaf leaf)
             var lines = new PlannedLine[first.Count];
             for (int a = 0; a < first.Count; a++)
             {
-                if (a > 0) world.Restore(_root);
-                lines[a] = First(first[a]);
-                // Another answer to the first action's prompt gets a line of its own only if it opens a cycle (docs: pimc/search §6).
-                if (first[a].Kind == CombatActionKind.EndTurn || _firstPrompt is not { Options: > 1 } prompt) continue;
-                for (int pick = 0; pick < prompt.Options; pick++)
+                // The other answers to the action's first prompt are lines of the action too: its nodes go to them evenly.
+                (_nodes, _limit) = (0, nodesPerFirst);
+                var todo = new List<CombatAction> { first[a] };
+                for (int i = 0; i < todo.Count; i++)
                 {
-                    if (pick == prompt.Answer) continue;
-                    var picked = first[a] with { Pick = pick };
-                    world.Restore(_root);
-                    world.Execute(picked);
-                    var after = world.Observe();
-                    if (world.Status != CombatStatus.InProgress || after.Round != round || !_loops.OpensCycle(after)) continue;
-                    world.Restore(_root);
-                    var line = First(picked);
-                    if (line.Value > lines[a].Value) lines[a] = line;
+                    if (a > 0 || i > 0) world.Restore(_root);
+                    if (i > 0) _limit = Math.Max(_nodes + 1, (int)((long)nodesPerFirst * (i + 1) / todo.Count));
+                    var line = First(todo[i], out var answers);
+                    todo.AddRange(answers);
+                    if (i == 0 || line.Value > lines[a].Value) lines[a] = line;
                 }
             }
             return lines;
         }
 
         /// <summary>The best line that starts with <paramref name="action"/>: the search's, then the cycles it found.</summary>
-        private PlannedLine First(CombatAction action)
+        /// <param name="answers">The other answers to the first prompt the action met.</param>
+        private PlannedLine First(CombatAction action, out List<CombatAction> answers)
         {
-            _nodes = 0;
-            var after = After(action, _rootHash);
+            var after = After(action, _rootHash, out answers);
             var line = new PlannedLine(after.Value, [action, .. after.Actions], _nodes, [_rootHash, .. after.Hashes!]);
             foreach (var end in _loops.RunFound())
                 if (end.Value > line.Value) line = new(end.Value, end.Actions, _nodes, end.Hashes, Repeats: true);
@@ -220,11 +218,15 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         }
 
         /// <summary>Plays <paramref name="action"/> and returns the best line from there.</summary>
-        private PlannedLine After(CombatAction action, ulong hash)
+        /// <param name="answers">The other answers to the first prompt the action met, as many as the nodes left allow.</param>
+        private PlannedLine After(CombatAction action, ulong hash, out List<CombatAction> answers)
         {
             _nodes++;
             world.Execute(action);
-            if (_actions.Count == 0) _firstPrompt = world.LastPrompt;
+            answers = PromptAnswers.Others(world, action, _limit - _nodes, out bool cut);
+            if (cut) _cuts++;
+            // The decision's action takes its answer's even share.
+            if (_actions.Count == 0 && answers.Count > 0) _limit = Math.Max(_nodes, nodesPerFirst / (answers.Count + 1));
             _actions.Add(action);
             _hashes.Add(hash);
             var line = Reached(action);
@@ -253,16 +255,19 @@ public sealed class PimcBrain(ICombatLeaf leaf)
             var best = new PlannedLine(double.NegativeInfinity, [], 0, []);
             bool moved = false;
             int cuts = _cuts;
-            foreach (var action in Ordered(world.Legal()))
+            var todo = Ordered(world.Legal());
+            for (int i = 0; i < todo.Count; i++)
             {
-                if (moved && _nodes >= nodesPerFirst)
+                var action = todo[i];
+                if (moved && _nodes >= _limit)
                 {
                     _cuts++;
                     break;
                 }
                 if (moved) world.Restore(here);
                 moved = true;
-                var after = After(action, hash);
+                var after = After(action, hash, out var answers);
+                todo.InsertRange(i + 1, answers);
                 if (after.Value > best.Value) best = new(after.Value, [action, .. after.Actions], 0, [hash, .. after.Hashes!]);
             }
             _path.RemoveAt(_path.Count - 1);

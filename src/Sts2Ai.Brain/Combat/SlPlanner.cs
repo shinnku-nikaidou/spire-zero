@@ -65,9 +65,11 @@ public sealed class SlRoute(Budget budget)
 /// <see cref="Budget.Replan"/> turns only, then planned again, from where a beam reaches deeper (or to its end, at 0).
 ///
 /// Only one turn's transpositions are merged, so each state kept is the end of a concrete line of actions, and the
-/// plan replays exactly in the world it was searched in. Card prompts are answered by <see cref="PromptBrain"/>, as in
-/// the run, unless another answer opens a cycle; a cycle goes to <see cref="LoopSearch"/>. The turns' searches are independent, so a turn is one <see cref="TurnSearcher"/> call that can run them
-/// apart: <see cref="Plan"/> runs them here, Harness's pooled planner in workers.
+/// plan replays exactly in the world it was searched in. An action's first card prompt is a branch: each of its other
+/// answers is tried right after it, on the action's share of nodes (<see cref="PromptAnswers"/>); a later prompt is
+/// answered by <see cref="FirstPicks"/>, as in the run. A cycle goes to <see cref="LoopSearch"/>. The turns' searches are
+/// independent, so a turn is one <see cref="TurnSearcher"/> call that can run them apart: <see cref="Plan"/> runs them
+/// here, Harness's pooled planner in workers.
 /// </summary>
 public sealed class SlPlanner(ICombatLeaf leaf)
 {
@@ -243,22 +245,15 @@ public sealed class SlPlanner(ICombatLeaf leaf)
 
     private sealed class TurnDfs(ICombatWorld world, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodes)
     {
-        /// <summary>The nodes a prompt's other answer gets, when it opens a cycle (docs: sl-planner/turn-search §5).</summary>
-        private const int ForkNodes = 40;
-
         private readonly HashSet<(ulong Obs, ulong Hidden)> _seen = [];
         private readonly HashSet<ulong> _keys = [];
         private readonly List<TurnEnd> _ends = [];
-        private List<CombatAction> _actions = [];
-        private List<ulong> _hashes = [];
-        private List<LoopPoint> _path = [];
-        private readonly Queue<Fork> _forks = new();
+        private readonly List<CombatAction> _actions = [];
+        private readonly List<ulong> _hashes = [];
+        private readonly List<LoopPoint> _path = [];
         private int _nodes, _round, _limit;
         private bool _cut;
         private LoopSearch _loops = null!;
-
-        /// <summary>A move that met a prompt, from a state the search left: the other answers are looked at after the search.</summary>
-        private sealed record Fork(WorldSnapshot Snapshot, CombatAction Action, PromptSeen Prompt, ulong Hash, List<LoopPoint> Path, List<CombatAction> Actions, List<ulong> Hashes);
 
         public TurnSearch Run(int keep)
         {
@@ -266,7 +261,6 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             _round = obs.Round;
             _loops = new(world, _round, End);
             Visit(obs, root: true);
-            Forks();
             foreach (var end in _loops.RunFound()) Add(end);
             _cut |= _loops.Found;
             var over = _ends.Where(e => e.Status != CombatStatus.InProgress).MaxBy(e => e.Value);
@@ -276,11 +270,12 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         }
 
         /// <summary>
-        /// Tries every action from the current state, where the player is still on this turn, once per state. At the
-        /// turn's start the nodes are shared over the first actions, each with an even share plus what the ones before it
-        /// left, so every first action is looked at however many states the turn has; below, a subtree spends its share
-        /// depth first. A move back to a state on the path with something gained is a cycle, which would spend every node
-        /// on its own repeats: it goes to <see cref="LoopSearch"/> instead of down.
+        /// Tries every action from the current state, where the player is still on this turn, once per state, each
+        /// followed by the other answers of the first card prompt it met. At the turn's start the nodes are shared over
+        /// the legal actions, each with an even share plus what the ones before it left, so every first action is looked
+        /// at however many states the turn has, and an action's share goes evenly to its prompt's answers; below, a
+        /// subtree spends its share depth first. A move back to a state on the path with something gained is a cycle,
+        /// which would spend every node on its own repeats: it goes to <see cref="LoopSearch"/> instead of down.
         /// </summary>
         private void Visit(CombatObservation obs, bool root = false)
         {
@@ -289,11 +284,14 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             var here = world.Snapshot();
             _path.Add(new(obs, _actions.Count, here));
             bool moved = false;
-            var legal = PimcBrain.Ordered(world.Legal());
-            for (int i = 0; i < legal.Count; i++)
+            var todo = PimcBrain.Ordered(world.Legal());
+            // At the turn's start: the first action's nodes, from and to, and which of its answers is played, of how many.
+            int legal = todo.Count, first = 0, from = 0, to = 0, answer = 0, answers = 0;
+            for (int i = 0; i < todo.Count; i++)
             {
-                var action = legal[i];
-                if (root) _limit = Math.Max(_nodes + 1, (int)((long)nodes * (i + 1) / legal.Count));
+                var action = todo[i];
+                if (root && action.Pick == null) (from, to, answer, answers) = (_nodes, Math.Max(_nodes + 1, (int)((long)nodes * ++first / legal)), 0, 0);
+                else if (root) answer++;
                 else if (moved && _nodes >= _limit)
                 {
                     _cut = true;
@@ -303,8 +301,11 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 moved = true;
                 _nodes++;
                 world.Execute(action);
-                if (world.LastPrompt is { Options: > 1 } prompt && action.Pick == null && action.Kind != CombatActionKind.EndTurn)
-                    _forks.Enqueue(new(here, action, prompt, hash, [.. _path], [.. _actions], [.. _hashes]));
+                var others = PromptAnswers.Others(world, action, (root ? to : _limit) - _nodes, out bool cut);
+                todo.InsertRange(i + 1, others);
+                _cut |= cut;
+                if (root && action.Pick == null) answers = others.Count;
+                if (root) _limit = Math.Max(_nodes, from + (int)((long)(to - from) * (answer + 1) / (answers + 1)));
                 _actions.Add(action);
                 _hashes.Add(hash);
                 var status = world.Status;
@@ -315,32 +316,6 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 _hashes.RemoveAt(_hashes.Count - 1);
             }
             _path.RemoveAt(_path.Count - 1);
-        }
-
-        /// <summary>
-        /// The other answers of the prompts the search met. Only an answer that opens a cycle gets a line, on the
-        /// nodes it adds: the moves the search made are not touched, and neither are the states it keeps unless a cycle
-        /// is there. More lines through the prompts are not better by themselves, since each is one more chance for the
-        /// leaf's mistakes to win.
-        /// </summary>
-        private void Forks()
-        {
-            while (_forks.TryDequeue(out var fork))
-                for (int pick = 0; pick < fork.Prompt.Options && !_loops.Spent; pick++)
-                {
-                    if (pick == fork.Prompt.Answer) continue;
-                    var picked = fork.Action with { Pick = pick };
-                    world.Restore(fork.Snapshot);
-                    _loops.Charge();
-                    world.Execute(picked);
-                    (_path, _actions, _hashes) = ([.. fork.Path], [.. fork.Actions, picked], [.. fork.Hashes, fork.Hash]);
-                    var status = world.Status;
-                    var after = world.Observe();
-                    if (status == CombatStatus.Won) Add(End(status, after, _actions, _hashes));
-                    if (status != CombatStatus.InProgress || after.Round != _round || !_loops.OpensCycle(after)) continue;
-                    _limit = _nodes + ForkNodes;
-                    Visit(after);
-                }
         }
 
         /// <summary>The turn ended here, or the combat did.</summary>

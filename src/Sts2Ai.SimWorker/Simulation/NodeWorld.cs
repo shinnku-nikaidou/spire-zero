@@ -10,14 +10,14 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// The SL world of a combat decision in a run (docs: simulator/worlds §7): the node's clone, loaded and replayed, is the real
 /// combat at the decision. Each action is one more step of the clone; a restore loads the clone again with the steps
 /// it keeps, since the game allows one live run per process. Card prompts inside the world are answered by
-/// <see cref="PromptBrain"/>, as in the run, unless the action carries its own answer, and recorded among the steps. States are told apart by the full hidden
+/// <see cref="FirstPicks"/>, as in the run, unless the action carries its own answer, and recorded among the steps. States are told apart by the full hidden
 /// state (<see cref="HiddenState.Full"/>).
 /// </summary>
 internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisposable
 {
     private readonly List<string> _steps = [];
     private readonly NextAction _next = new();
-    private readonly SearchPrompts _prompts = new(PromptBrain.Instance);
+    private readonly SearchPrompts _prompts = new(FirstPicks.Instance);
     private readonly Checkpoint.Opened _checkpoint = Checkpoint.Open(root.Save);
     private RunSession? _live;
 
@@ -62,7 +62,7 @@ internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisp
     {
         var live = Live;
         _next.Action = action.Plain;
-        _prompts.Arm(action.Pick);
+        _prompts.Arm(action);
         live.Step();
         if (_next.Action != null) throw new InvalidOperationException($"no combat decision to play {action} at: {Live.Describe()}");
         Live.Settle();

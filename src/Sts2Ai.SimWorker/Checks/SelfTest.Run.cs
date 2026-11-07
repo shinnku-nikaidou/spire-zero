@@ -32,7 +32,7 @@ internal static partial class SelfTest
             return action;
         });
         string label = $"run {GameSeeds.MakeSeed(seed, 0)}";
-        using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed, 0)), PromptBrain.Instance, capture, new RandomMacro(rng)))
+        using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed, 0)), FirstPicks.Instance, capture, new RandomMacro(rng)))
             while (!session.IsOver && steps.Count < 8 && (clone == null || session.NodeStart == node)) session.Step();
         if (clone == null || steps.Count < 2)
         {
@@ -63,7 +63,7 @@ internal static partial class SelfTest
         var rng = new Random(seed + 1);
         var nodes = new List<(string Save, int Start)>();
         List<string> trace;
-        using (var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 1, 0)), PromptBrain.Instance, new PlayPolicy(rng), new RandomMacro(rng)))
+        using (var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 1, 0)), FirstPicks.Instance, new PlayPolicy(rng), new RandomMacro(rng)))
         {
             while (!session.IsOver && nodes.Count < 3)
             {
@@ -100,7 +100,7 @@ internal static partial class SelfTest
             var rng = new Random(seed + 7);
             var policy = new EndsTurns();
             var setup = new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 7, 0), Loadout: Loadout.Parse(deck, relics, null, null, null));
-            using var session = RunSession.Start(pump, setup, PromptBrain.Instance, policy, new RandomMacro(rng));
+            using var session = RunSession.Start(pump, setup, FirstPicks.Instance, policy, new RandomMacro(rng));
             var creature = session.Player.Creature;
             for (int i = 0; i < 5000 && !session.IsOver; i++)
             {
@@ -137,7 +137,7 @@ internal static partial class SelfTest
         var nodes = new List<(string Save, int Start)>();
         var seen = new List<string>();
         List<string> trace;
-        using (var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 3, 0)), PromptBrain.Instance, new PlayPolicy(rng), new RandomMacro(rng),
+        using (var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 3, 0)), FirstPicks.Instance, new PlayPolicy(rng), new RandomMacro(rng),
                    obs => seen.Add(ProtocolJson.Serialize(obs))))
         {
             session.Player.Relics[0].Status = RelicStatus.Disabled;
@@ -251,7 +251,7 @@ internal static partial class SelfTest
             {
                 if (following && !done) done = follow(null!, false) == null;
             });
-            using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 2, 0)), PromptBrain.Instance, policy, macro))
+            using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 2, 0)), FirstPicks.Instance, policy, macro))
             {
                 while (!session.IsOver && !done) session.Step();
                 return session.Combats.ElementAtOrDefault(1)?.End;

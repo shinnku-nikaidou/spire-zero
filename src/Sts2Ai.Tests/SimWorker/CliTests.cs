@@ -121,7 +121,7 @@ public sealed class CliTests : IDisposable
         var file = ChampionFile(played.Options(PlayEnvironment.NoSL));
         var again = champion.Read(Parse(["test", "--champion", file]));
 
-        Assert.Equal("combat pimc combat-tiny 4x100, combat prompts p0, macro l0 pure-v-tiny-win eps 0.1, macro prompts l0 pure-v-tiny-win eps 0.1", played.Name);
+        Assert.Equal("combat pimc combat-tiny 4x100, combat prompts first, macro l0 pure-v-tiny-win eps 0.1, macro prompts l0 pure-v-tiny-win eps 0.1", played.Name);
         Assert.Equal(played.Name, again.Name);
         Assert.Equal(played.Options(PlayEnvironment.NoSL), again.Options(PlayEnvironment.NoSL));
         Assert.Equal(4, again.Workers);

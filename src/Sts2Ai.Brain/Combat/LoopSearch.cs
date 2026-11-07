@@ -24,8 +24,8 @@ public sealed record LoopPoint(CombatObservation Obs, int Depth, WorldSnapshot S
 /// After the search (<see cref="RunFound"/>), on a budget of its own, each cycle is repeated 1, 2, 4... times, and each
 /// count is cashed out: a small search with the cycle's moves left out, to the leaf at the next turn's start, which is
 /// the state the combat net knows. Numbers in the middle of a turn mean nothing to it. It stops when neither the value nor
-/// the damage done still grows, when a move is no longer there (a full hand sends a returning card to the discard pile),
-/// or at a win, which is then cut down to the fewest repeats. The count just before a repeat changed the piles is tried
+/// the chance to win the leaf gives still grows, when a move is no longer there (a full hand sends a returning card to the
+/// discard pile), or at a win, which is then cut down to the fewest repeats. The count just before a repeat changed the piles is tried
 /// too, since a boss's next curse may cost more than one more repeat gives.
 ///
 /// The cards are all it knows of a cycle. Every repeat is played in the world, so what the game does to it is the game's.
@@ -53,10 +53,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
     /// <summary>Out of moves, or a cycle already wins: nothing more is looked for.</summary>
     public bool Spent => _used >= Moves || _won;
 
-    /// <summary>Counts a move a caller played on the cycles' budget.</summary>
-    public void Charge() => _used++;
-
-    private sealed record Cycle(WorldSnapshot Start, List<CombatAction> Prefix, List<ulong> PrefixHashes, List<CombatAction> Moves, List<string?> Ids, int Potential);
+    private sealed record Cycle(WorldSnapshot Start, List<CombatAction> Prefix, List<ulong> PrefixHashes, List<CombatAction> Moves, List<string?> Ids);
 
     /// <summary>
     /// Whether the search should not go down from <paramref name="now"/>, the state the path's last action reached: it
@@ -83,44 +80,17 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         return false;
     }
 
-    /// <summary>Repeats and cashes out the cycles found since the last call, the ones with the most left to spend first.</summary>
+    /// <summary>Repeats and cashes out the cycles found since the last call, in the order found.</summary>
     public List<TurnEnd> RunFound()
     {
         var ends = new List<TurnEnd>();
-        foreach (var cycle in _found.OrderByDescending(c => c.Potential).ThenBy(c => c.Prefix.Count))
+        foreach (var cycle in _found)
         {
             if (Spent) break;
             ends.AddRange(Run(cycle, 0));
         }
         _found.Clear();
         return ends;
-    }
-
-    /// <summary>
-    /// Whether one play of a free card from <paramref name="now"/>, the world's state, is a cycle. The world stays where it
-    /// is. Each try costs a restore, on every other answer of every prompt the search meets, and a card that costs
-    /// something can be a cycle only by giving it back, so the free ones are all that is tried.
-    /// </summary>
-    public bool OpensCycle(CombatObservation now)
-    {
-        var free = now.Hand.Where(c => c.Cost == 0 && (c.Stars ?? 0) == 0).Select(c => c.Uid).ToHashSet();
-        var here = world.Snapshot();
-        bool moved = false, opens = false;
-        foreach (var action in world.Legal().Where(a => a.Kind == CombatActionKind.PlayCard && free.Contains(a.Card)))
-        {
-            if (moved) world.Restore(here);
-            moved = true;
-            _used++;
-            world.Execute(action);
-            var after = world.Observe();
-            if (world.Status == CombatStatus.InProgress && Recurs(now, after) && Shape(now) != Shape(after))
-            {
-                opens = true;
-                break;
-            }
-        }
-        if (moved) world.Restore(here);
-        return opens;
     }
 
     /// <summary>The latest state on the path that <paramref name="now"/> brings back, if any.</summary>
@@ -153,10 +123,6 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         return from.Hand.Select(c => c.Id).Distinct().All(id => Left(now, id) >= Left(from, id));
     }
 
-    /// <summary>How much is left to spend the repeats on: what can still be played from the cycle's start, then the energy.</summary>
-    private static int Potential(CombatObservation obs) =>
-        10 * obs.Hand.Count(c => c.Keywords?.Contains("Unplayable") != true) + obs.Player.Energy;
-
     private static Cycle Cycled(IReadOnlyList<LoopPoint> path, LoopPoint back, IReadOnlyList<CombatAction> actions, IReadOnlyList<ulong> hashes)
     {
         var moves = actions.Skip(back.Depth).ToList();
@@ -165,7 +131,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
             var before = path.FirstOrDefault(p => p.Depth == back.Depth + i);
             return before?.Obs.Hand.FirstOrDefault(c => c.Uid == move.Card)?.Id;
         }).ToList();
-        return new(back.Snapshot, [.. actions.Take(back.Depth)], [.. hashes.Take(back.Depth)], moves, ids, Potential(back.Obs));
+        return new(back.Snapshot, [.. actions.Take(back.Depth)], [.. hashes.Take(back.Depth)], moves, ids);
     }
 
     /// <summary>The piles and what is fixed about the enemies, then every number: whether two states differ at all.</summary>
@@ -257,32 +223,30 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
 
     /// <summary>
     /// The best the state can do with what the repeats built: a small search to the end of the turn, without the cycle's
-    /// moves. The damage is the enemies' HP and block it leaves at best: on a fight the leaf calls hopeless the value sits at
-    /// 0 until the repeats reach lethal, and the damage shows they are getting there.
+    /// moves.
     /// </summary>
-    private (TurnEnd? End, int Enemies) Cash(Line line, HashSet<CombatAction> banned, int depth)
+    private TurnEnd? Cash(Line line, HashSet<CombatAction> banned, int depth)
     {
         var ends = new List<TurnEnd>();
-        int nodes = 0, enemies = int.MaxValue;
+        int nodes = 0;
         var seen = new HashSet<(ulong, ulong)>();
-        void Note(CombatStatus status, CombatObservation obs)
-        {
-            ends.Add(end(status, obs, line.Actions, line.Hashes));
-            enemies = Math.Min(enemies, obs.Enemies.Sum(e => Math.Max(0, e.Hp) + e.Block));
-        }
+        void Note(CombatStatus status, CombatObservation obs) => ends.Add(end(status, obs, line.Actions, line.Hashes));
         void Go(CombatObservation obs, List<LoopPoint> stack)
         {
             if (!seen.Add((ProtocolJson.Hash(obs), world.HiddenKey()))) return;
             var here = world.Snapshot();
             List<LoopPoint> path = [.. stack, new(obs, line.Actions.Count, here)];
             bool moved = false;
-            foreach (var action in PimcBrain.Ordered(world.Legal()).Where(a => !banned.Contains(a)))
+            var todo = PimcBrain.Ordered(world.Legal()).Where(a => !banned.Contains(a)).ToList();
+            for (int i = 0; i < todo.Count; i++)
             {
+                var action = todo[i];
                 if (moved && (nodes >= CashNodes || _used >= (_cutting ? 2 * Moves : Moves))) break;
                 if (moved) world.Restore(here);
                 moved = true;
                 nodes++;
                 Play(action, line);
+                todo.InsertRange(i + 1, PromptAnswers.Others(world, action, CashNodes - nodes, out _));
                 var status = world.Status;
                 var after = world.Observe();
                 if (status != CombatStatus.InProgress || action.Kind == CombatActionKind.EndTurn || after.Round != round) Note(status, after);
@@ -296,7 +260,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         var obs = world.Observe();
         if (start != CombatStatus.InProgress) Note(start, obs);
         else Go(obs, []);
-        return (ends.OrderByDescending(e => e.Value).ThenBy(e => e.Actions.Count).FirstOrDefault(), enemies);
+        return ends.OrderByDescending(e => e.Value).ThenBy(e => e.Actions.Count).FirstOrDefault();
     }
 
     /// <summary>
@@ -308,8 +272,8 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         var banned = new HashSet<CombatAction>(cycle.Moves.Where(m => m.Kind != CombatActionKind.EndTurn).Select(m => m.Plain));
         var kept = new List<TurnEnd>();
         var breaks = new List<int>();
-        double best = double.NegativeInfinity;
-        int least = int.MaxValue, flat = 0, lose = 0, win = -1, done = 0;
+        double best = double.NegativeInfinity, likeliest = double.NegativeInfinity;
+        int flat = 0, lose = 0, win = -1, done = 0;
         world.Restore(cycle.Start);
         var line = new Line([.. cycle.Prefix], [.. cycle.PrefixHashes]);
         for (int count = 1; count <= MaxRepeats && !Spent; count *= 2)
@@ -323,17 +287,19 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
             }
             if (status == CombatStatus.Lost) break;
             var here = world.Snapshot();
-            var (cashed, enemies) = Cash(line.Copy(), banned, depth);
+            var cashed = Cash(line.Copy(), banned, depth);
             if (cashed != null) kept.Add(cashed);
             if (cashed?.Status == CombatStatus.Won)
             {
                 win = done;
                 break;
             }
-            double value = cashed?.Value ?? double.NegativeInfinity;
-            if (value > best + 1e-4 || enemies < least)
+            // On a fight the leaf calls nearly hopeless the value barely moves until the repeats near lethal; the chance
+            // to win shows they are getting there.
+            double value = cashed?.Value ?? double.NegativeInfinity, chance = cashed?.Win ?? double.NegativeInfinity;
+            if (value > best || chance > likeliest)
             {
-                (best, least, flat) = (Math.Max(best, value), Math.Min(least, enemies), 0);
+                (best, likeliest, flat) = (Math.Max(best, value), Math.Max(likeliest, chance), 0);
             }
             else if (++flat >= FlatRounds) break;
             lose = done;
@@ -346,7 +312,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
             {
                 if (_used >= 2 * Moves) break;
                 var at = Replayed(cycle, count, out var status);
-                if (status == CombatStatus.InProgress && Cash(at, banned, depth).End is { } cashed) kept.Add(cashed);
+                if (status == CombatStatus.InProgress && Cash(at, banned, depth) is { } cashed) kept.Add(cashed);
             }
         }
         // Won lines are worth the same at any count that wins with the same HP, and a shorter one is less to play and to log.
@@ -363,7 +329,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
                 continue;
             }
             if (status == CombatStatus.Lost) break;
-            var (cashed, _) = Cash(at, banned, depth);
+            var cashed = Cash(at, banned, depth);
             if (cashed != null) kept.Add(cashed);
             if (cashed?.Status == CombatStatus.Won) win = count;
             else lose = count;

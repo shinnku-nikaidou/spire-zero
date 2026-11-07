@@ -18,6 +18,11 @@ public sealed record CardChoice
     /// <summary>Whether <paramref name="picks"/> is a valid answer.</summary>
     public bool Accepts(IReadOnlyList<int> picks) =>
         picks.Count >= Min && picks.Count <= Max && picks.All(i => i >= 0 && i < Options.Count) && picks.Distinct().Count() == picks.Count;
+
+    /// <summary>The options grouped by what the player can tell apart (<see cref="ProtocolJson.CardKey"/>), each group's
+    /// indexes in order: picking k of a group picks its first k.</summary>
+    public IReadOnlyList<IReadOnlyList<int>> Groups() =>
+        [.. Enumerable.Range(0, Options.Count).GroupBy(i => ProtocolJson.CardKey(Options[i])).Select(g => (IReadOnlyList<int>)[.. g])];
 }
 
 /// <summary>Why the game asks: the same options mean different things for an upgrade, a removal or a discard.</summary>

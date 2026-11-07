@@ -15,7 +15,7 @@ public class LoopSearchTests
     /// </summary>
     private sealed class Loop(int enemyHp, int junkEvery = 0, int handCap = 0, int runsOut = int.MaxValue, Loop.Prompted prompted = Loop.Prompted.No, int souls = 0, int copies = 1) : ICombatWorld
     {
-        /// <summary>A potion that offers three cards, with answer 0 the policy's; the last gives R, or a strong one-off card.</summary>
+        /// <summary>A potion that offers three cards, one to take, with answer 0 the policy's; the last gives R, or a strong one-off card.</summary>
         public enum Prompted { No, GivesR, GivesStrike }
 
         private static readonly CombatObservation Start = Fixtures.Slugs();
@@ -77,8 +77,8 @@ public class LoopSearchTests
             if (action.Kind == CombatActionKind.UsePotion)
             {
                 _potion = false;
-                LastPrompt = new(3, 0);
-                if (action.Pick == 2) _hand.Add(prompted == Prompted.GivesR ? (1u, "R") : (3u, "S"));
+                LastPrompt = new([[0], [1], [2]], 1, 1, action.Pick ?? "0");
+                if (action.Pick == "2") _hand.Add(prompted == Prompted.GivesR ? (1u, "R") : (3u, "S"));
                 return;
             }
             var card = _hand.First(c => c.Uid == action.Card);
@@ -246,7 +246,7 @@ public class LoopSearchTests
     }
 
     [Fact]
-    public void AnotherAnswerToAPromptIsTakenIfItOpensACycle()
+    public void AnotherAnswerToAPromptThatOpensACycleIsTaken()
     {
         static Loop make() => new(50, prompted: Loop.Prompted.GivesR);
         var plan = Plan(make());
@@ -254,17 +254,22 @@ public class LoopSearchTests
         // Plan.Turns counts the turns the beam looks at past the win too.
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
-        Assert.Equal(CombatAction.Potion(0) with { Pick = 2 }, plan.Result.First);
+        Assert.Equal(CombatAction.Potion(0) with { Pick = "2" }, plan.Result.First);
         Assert.Equal(CombatStatus.Won, Replayed(plan.Result, make).Status);
     }
 
     [Fact]
-    public void AnotherAnswerToAPromptIsLeftIfItOpensNoCycle()
+    public void EveryAnswerToAPromptIsSearched()
     {
-        // The third answer wins at once, but search does not look for better answers in general: the prompt policy gives them.
-        var line = Line(Plan(new Loop(50, prompted: Loop.Prompted.GivesStrike)));
+        // The third answer wins at once; the policy's first answer loses the fight.
+        static Loop make() => new(50, prompted: Loop.Prompted.GivesStrike);
+        var plan = Plan(make());
 
-        Assert.All(line, a => Assert.Null(a.Pick));
+        Assert.Equal(CombatStatus.Won, plan.End);
+        Assert.Contains(CombatAction.Potion(0) with { Pick = "2" }, Line(plan));
+        Assert.Equal(CombatStatus.Won, Replayed(plan.Result, make).Status);
+        var pimc = Pimc(2, make);
+        Assert.Contains(CombatAction.Potion(0) with { Pick = "2" }, pimc.Plan.Prepend(pimc.First));
     }
 
     [Fact]
@@ -286,7 +291,7 @@ public class LoopSearchTests
         var result = Pimc(2, make);
 
         Assert.True(result.Repeats);
-        Assert.Equal(CombatAction.Potion(0) with { Pick = 2 }, result.First);
+        Assert.Equal(CombatAction.Potion(0) with { Pick = "2" }, result.First);
         Assert.Equal(CombatStatus.Won, Replayed(result, make).Status);
     }
 
@@ -324,12 +329,12 @@ public class LoopSearchTests
         public IReadOnlyList<int> Choose(ChoiceDecision decision) => answer;
     }
 
-    private static ChoiceDecision Prompt(string? source = null, string purpose = "hand", int max = 1) => new(new CardChoice
+    private static ChoiceDecision Prompt(int min = 0, int max = 1, params string[] ids) => new(new CardChoice
     {
-        Options = [new CardView { Id = "A" }, new CardView { Id = "B" }, new CardView { Id = "C" }],
-        Min = 0,
+        Options = [.. (ids.Length > 0 ? ids : ["A", "B", "C"]).Select(id => new CardView { Id = id })],
+        Min = min,
         Max = max,
-        Context = new() { Purpose = purpose, Source = source, Cancelable = false, InCombat = true },
+        Context = new() { Purpose = "hand", Cancelable = false, InCombat = true },
     });
 
     [Fact]
@@ -337,44 +342,56 @@ public class LoopSearchTests
     {
         var prompts = new SearchPrompts(new Answers(1));
 
-        prompts.Arm(null);
-        Assert.Equal([1], prompts.Choose(Prompt("TOUCH_OF_INSANITY")));
-        Assert.Equal(new PromptSeen(3, 1), prompts.Seen);
+        prompts.Arm(R);
+        Assert.Equal([1], prompts.Choose(Prompt()));
+        Assert.Equal("1", prompts.Seen!.Answer);
+        Assert.Equal(["", "0", "2"], prompts.Seen.Others());
 
-        prompts.Arm(2);
-        Assert.Equal([2], prompts.Choose(Prompt("TOUCH_OF_INSANITY")));
-        // Its first prompt only, and what the first offered is what stays noted.
-        Assert.Equal([1], prompts.Choose(Prompt("OTHER", max: 2)));
-        Assert.Equal(new PromptSeen(3, 1), prompts.Seen);
+        prompts.Arm(R with { Pick = "2" });
+        Assert.Equal([2], prompts.Choose(Prompt()));
+        // Its first prompt only, and the first is what stays noted.
+        Assert.Equal([1], prompts.Choose(Prompt(max: 2)));
+        Assert.Equal("2", prompts.Seen!.Answer);
 
-        prompts.Arm(9);
-        Assert.Equal([1], prompts.Choose(Prompt("TOUCH_OF_INSANITY")));
+        prompts.Arm(R with { Pick = "9" });
+        Assert.Equal([1], prompts.Choose(Prompt()));
+        Assert.Equal("1", prompts.Seen!.Answer);
     }
 
     [Fact]
-    public void APromptThatTakesAwayOrAsksForMoreIsNotAChoiceForCycles()
+    public void APromptNoSearchWeighsTakesTheFirstOptionsItNeeds()
     {
-        var prompts = new SearchPrompts(new Answers(1));
+        Assert.Empty(FirstPicks.Instance.Choose(Prompt()));
+        Assert.Equal([0, 1], FirstPicks.Instance.Choose(Prompt(min: 2, max: 3)));
+        Assert.Equal([0], FirstPicks.Instance.Choose(Prompt(min: 2, max: 2, "A")));
+    }
 
-        foreach (var prompt in new[] { Prompt(purpose: "hand_for_discard"), Prompt("THINKING_AHEAD"), Prompt(max: 2) })
-        {
-            prompts.Arm(null);
-            prompts.Choose(prompt);
-            Assert.Null(prompts.Seen);
-        }
+    [Fact]
+    public void TheOtherAnswersPickCardsThePlayerCanTellApart()
+    {
+        var prompts = new SearchPrompts(FirstPicks.Instance);
+        prompts.Arm(R);
+        prompts.Choose(Prompt(1, 2, "A", "A", "B"));
+
+        // Two copies of A are one card twice: picking one is picking the first, the fewest picks first.
+        Assert.Equal(["2", "0,1", "0,2"], prompts.Seen!.Others());
     }
 
     [Fact]
     public void APickIsPartOfAnActionsText()
     {
-        foreach (var action in new[] { CombatAction.Play(5, 1) with { Pick = 2 }, CombatAction.Play(5) with { Pick = 0 }, CombatAction.Potion(1) with { Pick = 3 } })
+        foreach (var action in new[] { CombatAction.Play(5, 1) with { Pick = "2" }, CombatAction.Play(5) with { Pick = "0,3" }, CombatAction.Potion(1) with { Pick = "" },
+                     CombatAction.EndTurn with { Pick = "1" } })
         {
             Assert.Equal(action, CombatAction.Parse(action.ToString()));
             Assert.Equal(action, ProtocolJson.Deserialize<CombatAction>(ProtocolJson.Serialize(action)));
             Assert.Null(action.Plain.Pick);
         }
-        Assert.Equal("potion:0:1@2", (CombatAction.Potion(0, 1) with { Pick = 2 }).ToString());
-        Assert.False(CombatAction.TryParse("end_turn@1", out _));
+        Assert.Equal("potion:0:1@2", (CombatAction.Potion(0, 1) with { Pick = "2" }).ToString());
+        Assert.Equal([0, 3], CombatAction.Parse("play:5@0,3").Picks);
+        Assert.Empty(CombatAction.Parse("end_turn@").Picks!);
+        Assert.Null(CombatAction.Parse("end_turn").Picks);
         Assert.False(CombatAction.TryParse("play:1@x", out _));
+        Assert.False(CombatAction.TryParse("play:1@1,", out _));
     }
 }

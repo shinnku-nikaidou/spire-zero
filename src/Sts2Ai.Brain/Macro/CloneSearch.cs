@@ -107,18 +107,13 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
         if (choice.Min > 1) yield break;
         if (choice.Min == 0) yield return Pick([]);
         if (choice.Max < 1) yield break;
-        foreach (var group in Groups(choice)) yield return Pick([group[0]]);
+        foreach (var group in choice.Groups()) yield return Pick([group[0]]);
     }
 
     public static bool IsPotion(string action) => action.StartsWith("potion:", StringComparison.Ordinal) || action.StartsWith("discard_potion:", StringComparison.Ordinal);
 
     /// <summary>A card prompt's answer in a path.</summary>
     public static string Pick(IEnumerable<int> picks) => "pick:" + string.Join(",", picks.Order());
-
-    /// <summary>The prompt's options grouped by what the player can tell apart (<see cref="ProtocolJson.CardKey"/>), each
-    /// group's indexes in order: picking k of a group picks its first k.</summary>
-    public static IReadOnlyList<IReadOnlyList<int>> Groups(CardChoice choice) =>
-        [.. Enumerable.Range(0, choice.Options.Count).GroupBy(i => ProtocolJson.CardKey(choice.Options[i])).Select(g => (IReadOnlyList<int>)[.. g])];
 
     public static ulong Key(Afterstate after) => ProtocolJson.Hash(after);
 

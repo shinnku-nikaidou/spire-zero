@@ -115,7 +115,7 @@ internal static partial class SelfTest
             var slots = Slots(combat.Observation().Potions);
             check("loadout gets its relics' potion slots", slots == want + ",-", $"combat: slots {slots}");
         }
-        using var run = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(0, 0), Ascension: 4, Loadout: loadout), PromptBrain.Instance,
+        using var run = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(0, 0), Ascension: 4, Loadout: loadout), FirstPicks.Instance,
             RunCommand.Unasked.Instance, new RandomMacro(new Random(0)));
         var runSlots = Slots(run.Player.PotionSlots.Select(p => p?.Id.Entry));
         check("loadout gets its relics' potion slots", runSlots == want, $"run at ascension 4: slots {runSlots}");

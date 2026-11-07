@@ -9,14 +9,26 @@ public enum CombatActionKind { PlayCard, UsePotion, EndTurn }
 /// <summary>
 /// One player action in a combat. It names what it acts on by uid (see <see cref="CombatObservation"/>), not by
 /// position, so it stays valid while the hand changes and means the same thing in the sim and in the real game.
-/// Text form, also used in JSON: "play:CARD[:TARGET][@PICK]", "potion:SLOT[:TARGET][@PICK]", "end_turn".
-/// <see cref="Pick"/> answers the first card prompt a card or potion raises, by the option's place in the prompt; without it
-/// <see cref="ICombatWorld"/> and the run ask their prompt policy. Only search sets it, and a host never sees it: the game
-/// is told <see cref="Plain"/>, and Harness answers the prompt when it comes (docs: combat-brain/shared §1).
+/// Text form, also used in JSON: "play:CARD[:TARGET][@PICK]", "potion:SLOT[:TARGET][@PICK]", "end_turn[@PICK]".
+/// <see cref="Pick"/> answers the first card prompt the action raises (a card's, a potion's, or one the turn's end or the
+/// next turn's start brings), as <see cref="Answer"/> writes it; without it <see cref="ICombatWorld"/> and the run ask
+/// their prompt policy. Only search sets it, and a host never sees it: the game is told <see cref="Plain"/>, and Harness
+/// answers the prompt when it comes (docs: combat-brain/shared §1).
 /// </summary>
 [JsonConverter(typeof(CombatActionJsonConverter))]
-public readonly record struct CombatAction(CombatActionKind Kind, uint? Card = null, int? PotionSlot = null, uint? Target = null, int? Pick = null)
+public readonly record struct CombatAction(CombatActionKind Kind, uint? Card = null, int? PotionSlot = null, uint? Target = null, string? Pick = null)
 {
+    /// <summary>A prompt's answer as <see cref="Pick"/> holds it: the picked options' places, in order, comma-separated; empty for none.</summary>
+    public static string Answer(IEnumerable<int> picks) => string.Join(",", picks.Order());
+
+    /// <summary>The options <see cref="Pick"/> picks, if it is set.</summary>
+    public IReadOnlyList<int>? Picks => Pick switch
+    {
+        null => null,
+        "" => [],
+        var pick => [.. pick.Split(',').Select(p => int.Parse(p, NumberStyles.None, CultureInfo.InvariantCulture))],
+    };
+
     public static CombatAction Play(uint card, uint? target = null) => new(CombatActionKind.PlayCard, Card: card, Target: target);
     public static CombatAction Potion(int slot, uint? target = null) => new(CombatActionKind.UsePotion, PotionSlot: slot, Target: target);
     public static CombatAction EndTurn => new(CombatActionKind.EndTurn);
@@ -28,12 +40,12 @@ public readonly record struct CombatAction(CombatActionKind Kind, uint? Card = n
     {
         CombatActionKind.PlayCard => $"play:{Card}{TargetSuffix}{PickSuffix}",
         CombatActionKind.UsePotion => $"potion:{PotionSlot}{TargetSuffix}{PickSuffix}",
-        _ => "end_turn",
+        _ => $"end_turn{PickSuffix}",
     };
 
     private string TargetSuffix => Target is uint t ? $":{t}" : "";
 
-    private string PickSuffix => Pick is int p ? $"@{p}" : "";
+    private string PickSuffix => Pick is { } p ? $"@{p}" : "";
 
     public static CombatAction Parse(string text) =>
         TryParse(text, out var action) ? action : throw new FormatException($"not a combat action: {text}");
@@ -41,19 +53,19 @@ public readonly record struct CombatAction(CombatActionKind Kind, uint? Card = n
     public static bool TryParse(string text, out CombatAction action)
     {
         action = default;
-        int? pick = null;
+        string? pick = null;
         int at = text.IndexOf('@');
         if (at >= 0)
         {
-            if (!int.TryParse(text.AsSpan(at + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var p)) return false;
-            pick = p;
+            pick = text[(at + 1)..];
+            if (pick != "" && !pick.Split(',').All(p => int.TryParse(p, NumberStyles.None, CultureInfo.InvariantCulture, out _))) return false;
             text = text[..at];
         }
         var parts = text.Split(':');
         if (parts is ["end_turn"])
         {
-            action = EndTurn;
-            return pick == null;
+            action = EndTurn with { Pick = pick };
+            return true;
         }
         if (parts.Length is < 2 or > 3) return false;
         uint? target = null;

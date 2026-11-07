@@ -298,7 +298,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             Explored = true;
             return even;
         }
-        var groups = CloneSearch.Groups(choice);
+        var groups = choice.Groups();
         // An answer is how many of each group it picks.
         var counts = new int[groups.Count];
         for (int left = Math.Min(min, choice.Options.Count), g = 0; left > 0; g++)
