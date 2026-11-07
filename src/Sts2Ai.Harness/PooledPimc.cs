@@ -14,12 +14,13 @@ public sealed class PooledPimc(WorkerPool pool)
     /// <param name="buildSeed">Seeds the combat built from the observation (docs: simulator/combat §5).</param>
     /// <param name="seed">Draws the worlds.</param>
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
+    /// <param name="run">The run around the combat, for the leaves.</param>
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, string buildSeed, Budget budget, ulong seed,
-        IReadOnlyList<EnemyTurns> history)
+        IReadOnlyList<EnemyTurns> history, RunView run)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
         return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) => pool.Map(Enumerable.Range(0, budget.Worlds)
-                .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes, history)).ToList())
+                .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes, history, run)).ToList())
             .Select(r => r.Lines!).ToList());
     }
 
@@ -30,6 +31,7 @@ public sealed class PooledPimc(WorkerPool pool)
     {
         var plan = new TurnPlan(all: false);
         return new(name, (decision, seed, _, history) => plan.Decide(decision.Observation, decision.Legal,
-            () => Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed, history)), budget);
+            () => Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed, history,
+                decision.RunObservation?.Run ?? throw new InvalidOperationException("pimc searches a combat in a run: its leaves need the run"))), budget);
     }
 }

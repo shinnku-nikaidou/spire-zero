@@ -20,6 +20,12 @@ internal static class Fixtures
     public static RunView Floor1() =>
         ProtocolJson.Deserialize<RunView>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "run-floor1.json")));
 
+    private static readonly RunView Floor1Run = Floor1();
+
+    /// <summary>A run around a combat for the search tests' worlds: <see cref="Floor1"/> with the combat's HP, max HP, gold and potions.</summary>
+    public static RunView Around(CombatObservation obs) =>
+        Floor1Run with { Hp = obs.Player.Hp, MaxHp = obs.Player.MaxHp, Gold = obs.Player.Gold, Potions = obs.Potions };
+
     public static CombatObservation WithEnemyHp(this CombatObservation obs, uint uid, int hp) =>
         obs with { Enemies = obs.Enemies.Select(e => e.Uid == uid ? e with { Hp = hp } : e).ToList() };
 
@@ -32,16 +38,17 @@ internal static class Fixtures
 }
 
 /// <summary>
-/// A leaf for the search tests, which have no combat net: a finished combat as <see cref="LeafValue"/> scores it, and a
-/// combat still going below any win, higher for more HP kept and more of the enemies' HP taken.
+/// A leaf for the search tests, which have no combat net or V: a loss nothing, a win 0.2 and more for the HP share the run
+/// keeps, and a combat still going below any win, higher for more HP kept and more of the enemies' HP taken.
 /// </summary>
 internal sealed class ToyLeaf : ICombatLeaf
 {
-    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
+    public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history)
     {
-        if (status != CombatStatus.InProgress) return LeafValue.Of(status, obs);
-        double kept = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
+        double kept = run.Hp / (double)Math.Max(1, run.MaxHp);
+        if (status == CombatStatus.Lost) return new(0, 0, 0);
+        if (status == CombatStatus.Won) return new(0.2 + 0.8 * kept, 1, run.Hp);
         double taken = 1 - obs.Enemies.Sum(e => Math.Max(0, e.Hp)) / (double)Math.Max(1, obs.Enemies.Sum(e => e.MaxHp));
-        return LeafValue.WinBase * (kept + taken) / 2;
+        return new(0.2 * (kept + taken) / 2, 0, 0);
     }
 }

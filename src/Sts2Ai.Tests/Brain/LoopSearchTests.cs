@@ -31,6 +31,8 @@ public class LoopSearchTests
 
         public PromptSeen? LastPrompt { get; private set; }
 
+        public RunView Run() => Fixtures.Around(Observe());
+
         public CombatObservation Observe() => Start with
         {
             Round = _round,
@@ -123,7 +125,7 @@ public class LoopSearchTests
         }
     }
 
-    private static readonly ToyLeaf Leaf = new();
+    private static readonly ICombatLeaf Leaf = new ToyLeaf();
     private static readonly CombatAction R = CombatAction.Play(1), H = CombatAction.Play(2, 1);
 
     private static SlPlan Plan(Loop world) => new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 8));

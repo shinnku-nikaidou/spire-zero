@@ -22,12 +22,26 @@ public class CombatNetTests
     /// </summary>
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
 
+    /// <summary>A V for the tests, linear in what a combat's ending changes: half the HP share, and 0.1 for each potion held.</summary>
+    private sealed class Linear : IRunValue
+    {
+        public string Name => "test";
+        public double Value(RunView run) => 0.5 * run.Hp / run.MaxHp + 0.1 * run.Potions.Count(p => p != null);
+    }
+
+    /// <summary>A V for the tests that is 1 only while every potion of <paramref name="held"/> is still held.</summary>
+    private sealed class AllKept(int held) : IRunValue
+    {
+        public string Name => "test";
+        public double Value(RunView run) => run.Potions.Count(p => p != null) == held ? 1 : 0;
+    }
+
     /// <summary>The champion's own file: loading checks CombatNet gives its test states the trainer's endings.</summary>
     [Fact]
     public void ReadsC9_0sTestStatesAsItsTrainerDid()
     {
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Repo("weights", "all", "c9-0.json")));
-        using var net = CombatNet.Load(file);
+        using var net = CombatNet.Load(file, new Linear());
         Assert.Equal(16, file.Tests.Count);
     }
 
@@ -35,7 +49,7 @@ public class CombatNetTests
     public void ReadsItsStatesAsItsTrainerDid()
     {
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
-        using var net = CombatNet.Load(file);
+        using var net = CombatNet.Load(file, new Linear());
         Assert.Equal(file.Vocab["potions"].Count, file.Tests[0].PotionUsed.Count);
         Assert.True(file.Tests[0].PotionUsed.Distinct().Count() > 1);
         Assert.Contains(file.Tests, t => t.Obs.Potions.Count(p => p == "FIRE_POTION") == 2);
@@ -51,18 +65,36 @@ public class CombatNetTests
     }
 
     [Fact]
-    public void AStateInProgressIsItsEndingsAndThePotionsKept()
+    public void AStateInProgressIsVOfTheRunsItsEndingsLeave()
     {
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
-        using var net = CombatNet.Load(file);
+        using var net = CombatNet.Load(file, new Linear());
         double width = (1 - file.LossMin) / file.Buckets;
+        var potions = file.Vocab["potions"].ToList();
         foreach (var test in file.Tests)
         {
-            double share = test.Obs.Player.Hp / (double)test.Obs.Player.MaxHp, value = 0;
-            for (int k = 1; k <= file.Buckets; k++) value += test.Outcome[k] * (0.2 + 0.6 * (share - (file.LossMin + (k - 0.5) * width)));
-            double kept = test.Obs.Potions.OfType<string>().Sum(p => 1 - test.PotionUsed[Math.Max(0, file.Vocab["potions"].ToList().IndexOf(p))]);
-            Assert.InRange(net.Value(CombatStatus.InProgress, test.Obs, test.History) - (value + (1 - test.Outcome[0]) * 0.02 * kept), -1e-3, 1e-3);
+            int maxHp = test.Obs.Player.MaxHp;
+            double share = test.Obs.Player.Hp / (double)maxHp, value = 0;
+            for (int k = 1; k <= file.Buckets; k++)
+                value += test.Outcome[k] * 0.5 * Math.Clamp((int)Math.Round((share - (file.LossMin + (k - 0.5) * width)) * maxHp), 1, maxHp) / maxHp;
+            double kept = test.Obs.Potions.OfType<string>().Sum(p => 1 - test.PotionUsed[Math.Max(0, potions.IndexOf(p))]);
+            double expected = value + (1 - test.Outcome[0]) * 0.1 * kept;
+            Assert.InRange(((ICombatLeaf)net).Value(CombatStatus.InProgress, test.Obs, Fixtures.Around(test.Obs), test.History) - expected, -1e-3, 1e-3);
         }
+    }
+
+    [Fact]
+    public void EachPotionIsKeptByItsOwnChance()
+    {
+        // Two Fire Potions: V is 1 only if both are kept, a chance of the first's times the second's.
+        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
+        var test = file.Tests.First(t => t.Obs.Potions.Count(p => p == "FIRE_POTION") == 2);
+        int held = test.Obs.Potions.Count(p => p != null);
+        using var net = CombatNet.Load(file, new AllKept(held));
+        var potions = file.Vocab["potions"].ToList();
+        double expected = 1 - test.Outcome[0];
+        foreach (var p in test.Obs.Potions.OfType<string>()) expected *= 1 - test.PotionUsed[Math.Max(0, potions.IndexOf(p))];
+        Assert.InRange(((ICombatLeaf)net).Value(CombatStatus.InProgress, test.Obs, Fixtures.Around(test.Obs), test.History) - expected, -1e-3, 1e-3);
     }
 
     [Fact]
@@ -78,12 +110,14 @@ public class CombatNetTests
     }
 
     [Fact]
-    public void AFinishedStateAndTheBoundAreLeafValues()
+    public void AWonCombatIsVOfItsRunAndALostOneNothing()
     {
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
-        using var net = CombatNet.Load(file);
+        var v = new Linear();
+        using var net = CombatNet.Load(file, v);
         var (obs, history) = (file.Tests[0].Obs, file.Tests[0].History);
-        Assert.Equal(LeafValue.Of(CombatStatus.Won, obs), net.Value(CombatStatus.Won, obs, history));
-        Assert.Equal(0, net.Value(CombatStatus.Lost, obs, history));
+        var run = Fixtures.Around(obs) with { MaxHp = obs.Player.MaxHp + 10 };
+        Assert.Equal(v.Value(run), ((ICombatLeaf)net).Value(CombatStatus.Won, obs, run, history), 9);
+        Assert.Equal(0, ((ICombatLeaf)net).Value(CombatStatus.Lost, obs, run, history));
     }
 }

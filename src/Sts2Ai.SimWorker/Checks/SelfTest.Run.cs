@@ -196,12 +196,16 @@ internal static partial class SelfTest
         }
 
         SlPlan plan;
+        RunView planned;
         using (var world = new NodeWorld(pump, clone))
         {
             plan = new SlPlanner(net.Leaf).Plan(at, world, budget, history);
             world.Restore(new([]));
             foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
             check("SL world ends its combat as planned", plan.End == CombatStatus.Won && world.Status == plan.End, $"{label}: {world.Status}, planned {plan.End}");
+            planned = world.Run();
+            double worth = net.Leaf.Value(world.Status, world.Observe(), planned, history);
+            check("SL plan is worth V of the run its combat leaves", Math.Abs(worth - plan.Value) < 1e-9, $"{label}: {worth:F6}, planned {plan.Value:F6}");
             check("SL world refuses to step past its combat", world.Legal().Count == 0 && Throws(() => world.Execute(CombatAction.EndTurn)), label);
         }
         if (workers > 0)
@@ -225,8 +229,8 @@ internal static partial class SelfTest
         check("SL plan holds in the run", broke == null && steps.Count == 0 && plan.Result.Plan.Count >= 2,
             $"{label}: {broke ?? $"{steps.Count} steps left of {plan.Result.Plan.Count + 1}"}");
         check("SL plan ends the run's combat as planned",
-            end is { Died: false } e && Math.Abs(LeafValue.WinBase + LeafValue.PerHp * e.Hp / e.MaxHp + LeafValue.PerPotion * e.Potions - plan.Value) < 1e-9,
-            $"{label}: {end}, planned {plan.End} at {plan.Value:F4}");
+            end is { Died: false } e && e.Hp == planned.Hp && e.MaxHp == planned.MaxHp && e.Potions == planned.Potions.Count(p => p != null),
+            $"{label}: {end}, planned {plan.End} at {planned.Hp}/{planned.MaxHp} HP");
 
         // Plays the run to the first decision of its second combat, then asks follow at each combat decision of that
         // combat (true) and the next decision after it (false), which plays the rest of it, until follow gives null.

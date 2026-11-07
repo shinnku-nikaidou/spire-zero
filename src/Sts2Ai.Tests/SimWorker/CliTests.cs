@@ -83,7 +83,7 @@ public class CliTests : IDisposable
     [Theory]
     [InlineData("--macro", "l0")]
     [InlineData("--explore", "0.1", "--macro", "random")]
-    [InlineData("--value", "v.json", "--macro", "random")]
+    [InlineData("--value", "Fixtures/pure-v-tiny-win.json", "--macro", "random")]
     [InlineData("--policy", "pimc")]
     public void RefusesChampionsThatDoNotHangTogether(params string[] args)
     {
@@ -97,10 +97,13 @@ public class CliTests : IDisposable
     public void ACombatNetGoesWithASearchAndNamesIt()
     {
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         var champion = new ChampionArgs(file: false);
         var command = Opt.Command("test", "", champion.Options);
-        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--combat-net", net, "--policy", "play"])));
-        Assert.StartsWith("combat pimc combat-tiny 8x300,", champion.Read(command.Parse(["--combat-net", net, "--policy", "pimc"])).Name);
+        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--combat-net", net, "--value", value, "--policy", "play"])));
+        // V prices the combat's endings, so the net needs it.
+        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--combat-net", net, "--policy", "pimc"])));
+        Assert.StartsWith("combat pimc combat-tiny 8x300,", champion.Read(command.Parse(["--combat-net", net, "--value", value, "--policy", "pimc"])).Name);
     }
 
     [Fact]

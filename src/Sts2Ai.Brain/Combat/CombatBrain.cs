@@ -161,7 +161,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         private readonly List<CombatAction> _actions = [];
         private readonly List<ulong> _hashes = [];
         private readonly LoopSearch _loops = new(world, round, (status, obs, actions, hashes) =>
-            new([.. actions], [.. hashes], status, leaf.Value(status, obs, history), 0, 0, history));
+            new([.. actions], [.. hashes], status, leaf.Value(status, obs, world.Run(), history), 0, 0, history));
         private WorldSnapshot _root = new([]);
         private ulong _rootHash;
         private PromptSeen? _firstPrompt;
@@ -214,9 +214,9 @@ public sealed class PimcBrain(ICombatLeaf leaf)
             if (world.Status == CombatStatus.InProgress && obs.Round == round)
             {
                 world.Execute(CombatAction.EndTurn);
-                return new(leaf.Value(world.Status, world.Observe(), history), [action, CombatAction.EndTurn], _nodes, [_rootHash, ProtocolJson.Hash(obs)]);
+                return new(leaf.Value(world.Status, world.Observe(), world.Run(), history), [action, CombatAction.EndTurn], _nodes, [_rootHash, ProtocolJson.Hash(obs)]);
             }
-            return new(leaf.Value(world.Status, obs, history), [action], _nodes, [_rootHash]);
+            return new(leaf.Value(world.Status, obs, world.Run(), history), [action], _nodes, [_rootHash]);
         }
 
         /// <summary>Plays <paramref name="action"/> and returns the best line from there.</summary>
@@ -238,7 +238,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
             var status = world.Status;
             var obs = world.Observe();
             if (status != CombatStatus.InProgress || action.Kind == CombatActionKind.EndTurn || obs.Round != round)
-                return new(leaf.Value(status, obs, history), [], 0, []);
+                return new(leaf.Value(status, obs, world.Run(), history), [], 0, []);
             return _loops.Intercept(_path, obs, _actions, _hashes) ? new(double.NegativeInfinity, [], 0, []) : Best(obs);
         }
 

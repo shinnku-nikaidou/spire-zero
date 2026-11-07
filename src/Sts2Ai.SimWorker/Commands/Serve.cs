@@ -77,7 +77,7 @@ internal static class Serve
 
     private static IReadOnlyList<PlannedLine> Search(Pump pump, PimcBrain brain, PimcWorldRequest r)
     {
-        using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, r.History);
+        using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, r.Run, r.History);
         return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst, r.History);
     }
 

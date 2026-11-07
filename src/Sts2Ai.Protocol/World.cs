@@ -13,6 +13,11 @@ public enum CombatStatus { InProgress, Won, Lost }
 public interface ICombatWorld
 {
     CombatObservation Observe();
+    /// <summary>
+    /// The run around the combat as it stands in this world, as V reads it (docs: combat-brain/leaf §2): the deck with what
+    /// the combat has changed for good (a card grown, one stolen), the relics, the potions, HP, max HP and gold.
+    /// </summary>
+    RunView Run();
     /// <summary>Empty once the combat is over.</summary>
     IReadOnlyList<CombatAction> Legal();
     CombatStatus Status { get; }

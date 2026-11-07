@@ -1,6 +1,6 @@
 """What a trained combat net's report says (docs: learning/combat-net §4), held-out or on the gate's seeds: the error against
 the training's prior and the rank within each fight, on the whole and by act, room, encounter, HP and potion. Beside a
-net's ranks stand those of the HP share held now: the end's price follows it.
+net's ranks stand those of the HP share held now.
 """
 
 import math
@@ -75,8 +75,8 @@ def log_loss(chance: float, used: int) -> float:
 
 
 def predict(model, part, part_batches):
-    """Each sample's prediction: the leaf's value, the cross-entropy, the chance of death, the HP share expected lost after
-    a win, and its held potions' chances of being gone."""
+    """Each sample's prediction: the cross-entropy, the chance of death, the HP share expected lost after a win, and its
+    held potions' chances of being gone."""
     rows = []
     with torch.no_grad():
         for b in part_batches:
@@ -88,12 +88,9 @@ def predict(model, part, part_batches):
     target = torch.tensor([s["class"] for s in part])
     probs = torch.softmax(logits, 1)
     mids = data.LOSS_MIN + (torch.arange(1, data.BUCKETS + 1).double() - 0.5) * data.WIDTH
-    hp = torch.tensor([s["share"] for s in part]).double()[:, None]
-    kept = torch.tensor([sum(1 - x for x in c) for c in chances]).double()
-    value = (probs[:, 1:] * (0.2 + 0.6 * (hp - mids))).sum(1) + (1 - probs[:, 0]) * 0.02 * kept
     expected = (probs[:, 1:] * mids).sum(1) / (1 - probs[:, 0]).clamp_min(1e-9)
     ces = torch.nn.functional.cross_entropy(logits, target, reduction="none")
-    return value, ces, probs[:, 0], expected, chances
+    return ces, probs[:, 0], expected, chances
 
 
 def summary(model, part, part_batches, train) -> dict:
@@ -113,7 +110,7 @@ def summary(model, part, part_batches, train) -> dict:
             "log_loss_id_room": sum(log_loss(rate((r[0], r[1])), r[3]) for r in rows) / n,
         }
 
-    valued, ces, deaths, expected, chances = predict(model, part, part_batches)
+    ces, deaths, expected, chances = predict(model, part, part_batches)
     prior = -torch.log(counts / counts.sum())[torch.tensor([s["class"] for s in part])]
     died = torch.tensor([s["class"] == 0 for s in part], dtype=torch.float64)
     shares = torch.tensor([s["share"] for s in part]).double()
@@ -133,8 +130,6 @@ def summary(model, part, part_batches, train) -> dict:
             "ce_prior": float(prior[ix].mean()),
             "death": float(died[ix].mean()),
             "predicted_death": float(deaths[ix].mean()),
-            "rank_within": rank_within(some, valued[ix], "price"),
-            "rank_within_share": rank_within(some, shares[ix], "price"),
             "rank_lost": rank_within(won, expected[wins], "lost"),
             "rank_lost_share": rank_within(won, shares[wins], "lost"),
             "auc_death": auc_within(some, deaths[ix]),

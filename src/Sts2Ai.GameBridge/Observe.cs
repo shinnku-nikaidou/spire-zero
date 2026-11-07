@@ -29,7 +29,9 @@ public static class Observe
 {
     public static Observation Of(RunState run, Player player, ScreenView screen) => new() { Run = Run(run, player), Screen = screen };
 
-    public static RunView Run(RunState run, Player player) => new()
+    /// <param name="previews">Whether each card carries its upgrade preview (<see cref="CardView.Upgraded"/>), which
+    /// costs a copy of the card: what a decision shows, not what V reads (a combat leaf's run).</param>
+    public static RunView Run(RunState run, Player player, bool previews = true) => new()
     {
         Character = player.Character.Id.Entry,
         Ascension = run.AscensionLevel,
@@ -39,7 +41,7 @@ public static class Observe
         Hp = player.Creature.CurrentHp,
         MaxHp = player.Creature.MaxHp,
         Gold = player.Gold,
-        Deck = player.Deck.Cards.Select(DeckCard).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
+        Deck = player.Deck.Cards.Select(c => previews ? DeckCard(c) : Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
         Relics = player.Relics.Select(Relic).ToList(),
         Potions = player.PotionSlots.Select(p => p?.Id.Entry).ToList(),
         Map = Map(run),

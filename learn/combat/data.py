@@ -102,11 +102,6 @@ def ending(obs: dict, end: dict) -> int:
     return 1 + max(0, min(BUCKETS - 1, int((lost - LOSS_MIN) / (1 - LOSS_MIN) * BUCKETS)))
 
 
-def price(end: dict) -> float:
-    """A combat's end at LeafValue.Of's prices, which the net's endings are valued at."""
-    return 0.0 if end["died"] else 0.2 + 0.6 * share(end["hp"], end["max_hp"]) + 0.02 * end["potions"]
-
-
 def sample(run: str, obs: dict, history: list, end: dict, after: dict | None) -> dict:
     """A round's start; only a few held-out ones keep the observation and the history they were made from."""
     now = share(obs["player"]["hp"], obs["player"]["max_hp"])
@@ -116,7 +111,6 @@ def sample(run: str, obs: dict, history: list, end: dict, after: dict | None) ->
         "class": ending(obs, end),
         "potion_used": [0 for p in obs["potions"] if p is not None] if end["died"] else potions_used(obs, after),
         "lost": None if end["died"] else now - share(end["hp"], end["max_hp"]),
-        "price": price(end),
         "share": now,
         "room": obs.get("room") or "<none>",
         "act": obs["act"],

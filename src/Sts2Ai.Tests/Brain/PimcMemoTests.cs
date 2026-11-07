@@ -23,6 +23,8 @@ public class PimcMemoTests
         private int Count => _steps.IndexOf("A") switch { 0 => 1, 1 => 3, _ => 0 };
         private bool Ended => _steps.Contains("end");
 
+        public RunView Run() => Fixtures.Around(Observe());
+
         public CombatObservation Observe() => Start with
         {
             Round = Ended ? 2 : 1,
@@ -51,7 +53,8 @@ public class PimcMemoTests
     /// <summary>The HP after the enemies' turn, and 50 for each card played.</summary>
     private sealed class Leaf : ICombatLeaf
     {
-        public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history) => obs.Player.Hp + 50 * (2 - obs.Hand.Count);
+        public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history) =>
+            new(obs.Player.Hp + 50 * (2 - obs.Hand.Count), 0, 0);
     }
 
     private static readonly CombatAction A = CombatAction.Play(1), B = CombatAction.Play(2);

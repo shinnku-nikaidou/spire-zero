@@ -21,7 +21,7 @@ public abstract record WorkerRequest(long Id);
 /// <see cref="Observation"/> with <see cref="BuildSeed"/>, then determinized as world <see cref="World"/> of
 /// <see cref="Worlds"/> drawn from <see cref="SearchSeed"/>; the reply holds the best line after each of
 /// <see cref="First"/>, in that order, each searched with <see cref="NodesPerFirst"/> nodes. <see cref="History"/> is the
-/// combat's record of enemy moves so far, for the leaves.
+/// combat's record of enemy moves so far, and <see cref="Run"/> the run around it, for the leaves.
 /// </summary>
 public sealed record PimcWorldRequest(
     long Id,
@@ -32,7 +32,8 @@ public sealed record PimcWorldRequest(
     int World,
     int Worlds,
     int NodesPerFirst,
-    IReadOnlyList<EnemyTurns> History) : WorkerRequest(Id);
+    IReadOnlyList<EnemyTurns> History,
+    RunView Run) : WorkerRequest(Id);
 
 /// <summary>
 /// The SL planner's search of one turn from one state of a combat decision in a run (docs: sl-planner/budget §4):

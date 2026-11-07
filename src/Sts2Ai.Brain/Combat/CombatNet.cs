@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Sts2Ai.Protocol;
@@ -24,9 +25,11 @@ public sealed record CombatNetFile(
 /// played the training games. The net, run by ONNX Runtime, reads the cards in each pile, the player, each enemy with
 /// its intents now and in its last rounds, the powers, relics, potions, orbs and allies, the encounter and the character. It predicts
 /// what is still to come: the HP share lost from here and which potions go, so the HP and potions held now count in full.
-/// A state in progress is worth the endings it predicts, priced as <see cref="LeafValue"/> prices a win (the HP share now
-/// less each bucket's middle, and each potion held by its chance to be kept); a state whose combat is over is
-/// <see cref="LeafValue"/>'s. This class only turns a state into the graph's inputs and those prices.
+/// Every ending is priced by V (<see cref="IRunValue"/>) on the run it leaves: a death ends the run, a win is worth V of
+/// the run then. That run is the one the leaf state stands in (<see cref="ICombatWorld.Run"/>: the deck, relics, max HP
+/// and gold as the combat has left them so far) with the HP the bucket leaves and the potions kept, each subset of those
+/// held by the chance the net gives it (each potion's taken apart from the others'). A finished combat is V of its run.
+/// This class only turns a state into the graph's inputs, and its endings into runs for V.
 /// </summary>
 public sealed class CombatNet : ICombatLeaf, IDisposable
 {
@@ -36,13 +39,21 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     private static readonly string[] Piles = ["hand", "draw", "discard", "exhaust"];
 
+    /// <summary>How many of V's values the leaf keeps; past it they are dropped and valued again as needed.</summary>
+    private const int Kept = 200_000;
+
     private readonly CombatNetFile _file;
+    private readonly IRunValue _value;
     private readonly Dictionary<string, Dictionary<string, int>> _index;
     private readonly InferenceSession _session;
 
-    private CombatNet(CombatNetFile file)
+    /// <summary>V's values of the runs the leaf priced, by the run without its HP and potions (<see cref="Key"/>), the HP and the potions.</summary>
+    private readonly ConcurrentDictionary<(ulong Run, int Hp, string Potions), double> _prices = new();
+
+    private CombatNet(CombatNetFile file, IRunValue value)
     {
         _file = file;
+        _value = value;
         _index = file.Vocab.ToDictionary(t => t.Key, t => t.Value.Select((id, i) => (id, i)).ToDictionary(p => p.id, p => p.i));
         // One thread per call: search workers run side by side, and a leaf is one small input.
         using var options = new SessionOptions { IntraOpNumThreads = 1, InterOpNumThreads = 1 };
@@ -51,10 +62,10 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     public string Name => _file.Name;
 
-    /// <summary>The net of a file, once it gives every test state the trainer's outcome.</summary>
-    public static CombatNet Load(CombatNetFile file)
+    /// <summary>The net of a file, its endings priced by <paramref name="value"/>, once it gives every test state the trainer's outcome.</summary>
+    public static CombatNet Load(CombatNetFile file, IRunValue value)
     {
-        var net = new CombatNet(file);
+        var net = new CombatNet(file, value);
         foreach (var test in file.Tests)
         {
             var outputs = net.Graph(test.Obs, test.History);
@@ -71,28 +82,53 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return net;
     }
 
-    public double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history) => Outcome(status, obs, history).Value;
-
     /// <summary>The value, the chance not to die (1 less the death class), and the HP held at a win: the HP share now
     /// less each win bucket's middle, weighted by the buckets.</summary>
-    public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history)
+    public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history)
     {
-        if (status != CombatStatus.InProgress)
-            return new(LeafValue.Of(status, obs), status == CombatStatus.Won ? 1 : 0, status == CombatStatus.Won ? obs.Player.Hp : 0);
+        if (status == CombatStatus.Lost) return new(0, 0, 0);
+        ulong key = Key(run);
+        if (status == CombatStatus.Won) return new(Price(run, key, run.Hp, run.Potions), 1, run.Hp);
         var outputs = Graph(obs, history);
         var (outcome, potionUsed) = (outputs[0], outputs[1]);
-        double share = obs.Player.Hp / (double)Math.Max(1, obs.Player.MaxHp);
+        var held = Enumerable.Range(0, run.Potions.Count).Where(s => run.Potions[s] != null).ToList();
+        var kept = held.Select(s => 1.0 - potionUsed[Index("potions", run.Potions[s]!)]).ToList();
+        int maxHp = Math.Max(1, run.MaxHp);
+        double share = run.Hp / (double)maxHp;
         double width = (1 - _file.LossMin) / _file.Buckets, value = 0, left = 0;
         for (int k = 1; k < outcome.Length; k++)
         {
+            if (outcome[k] == 0) continue;
             double after = share - (_file.LossMin + (k - 0.5) * width);
-            value += outcome[k] * (LeafValue.WinBase + LeafValue.PerHp * after);
+            int hp = Math.Clamp((int)Math.Round(after * maxHp), 1, maxHp);
+            for (int mask = 0; mask < 1 << held.Count; mask++)
+            {
+                double chance = outcome[k];
+                var potions = run.Potions.ToArray();
+                for (int i = 0; i < held.Count; i++)
+                {
+                    bool keeps = (mask >> i & 1) == 1;
+                    chance *= keeps ? kept[i] : 1 - kept[i];
+                    if (!keeps) potions[held[i]] = null;
+                }
+                if (chance > 0) value += chance * Price(run, key, hp, potions);
+            }
             left += outcome[k] * after;
         }
-        double kept = obs.Potions.OfType<string>().Sum(p => 1.0 - potionUsed[Index("potions", p)]);
         double win = 1 - outcome[0];
-        double hp = win > 0 ? Math.Clamp(left / win, 0, 1) * obs.Player.MaxHp : 0;
-        return new(value + win * LeafValue.PerPotion * kept, win, hp);
+        return new(value, win, win > 0 ? Math.Clamp(left / win, 0, 1) * maxHp : 0);
+    }
+
+    /// <summary>The run without its HP and potions, hashed: what the leaf's prices of one state share.</summary>
+    private static ulong Key(RunView run) => ProtocolJson.Hash(run with { Hp = 0, Potions = [] });
+
+    /// <summary>V of <paramref name="run"/> (whose <see cref="Key"/> is <paramref name="key"/>) at <paramref name="hp"/> with <paramref name="potions"/>.</summary>
+    private double Price(RunView run, ulong key, int hp, IReadOnlyList<string?> potions)
+    {
+        var at = (key, hp, string.Join(",", potions));
+        if (_prices.TryGetValue(at, out double known)) return known;
+        if (_prices.Count >= Kept) _prices.Clear();
+        return _prices[at] = _value.Value(run with { Hp = hp, Potions = potions });
     }
 
     public void Dispose() => _session.Dispose();

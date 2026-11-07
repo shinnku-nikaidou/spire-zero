@@ -12,6 +12,27 @@ namespace Sts2Ai.SimWorker;
 
 internal static partial class SelfTest
 {
+    /// <summary>
+    /// A run for a combat started on its own, which has none, for the leaves to price its endings with: the combat's
+    /// character, act, HP, gold, relics and potions, its piles as the deck, and a map of one point.
+    /// </summary>
+    private static RunView Alone(CombatObservation obs) => new()
+    {
+        Character = obs.Player.Character,
+        Ascension = obs.Ascension,
+        Act = obs.Act,
+        ActId = "<none>",
+        Floor = 1,
+        Hp = obs.Player.Hp,
+        MaxHp = obs.Player.MaxHp,
+        Gold = obs.Player.Gold,
+        Deck = obs.Hand.Concat(obs.Draw).Concat(obs.Discard).Concat(obs.Exhaust).Select(c => c with { Uid = null })
+            .OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
+        Relics = obs.Relics,
+        Potions = obs.Potions,
+        Map = new MapView { Points = [new MapPointView { Col = 0, Row = 0, Type = "Monster", Next = [] }], Visited = [], Boss = "<none>" },
+    };
+
     private sealed record Recording(List<CombatSnapshot> Snapshots, List<string> Observations, List<string> Hidden, string Trace, List<string> ProtocolErrors);
 
     /// <summary>
@@ -40,9 +61,9 @@ internal static partial class SelfTest
             string buildSeed = GameSeeds.MakeSeed((int)decisionSeed, 0);
             var budget = new Budget(4, 120);
             CombatDecisionResult here;
-            using (var worlds = SimWorlds.NoSL(pump, obs, buildSeed))
+            using (var worlds = SimWorlds.NoSL(pump, obs, buildSeed, Alone(obs)))
                 here = brain.Decide(obs, legal, worlds, budget, decisionSeed, []);
-            var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed, []);
+            var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed, [], Alone(obs));
             check("pooled search matches in-process search",
                 Show(here) == Show(there), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; pooled {Show(there)}");
             var errors = workerPool.TakeGameErrors();
@@ -224,7 +245,7 @@ internal static partial class SelfTest
         CombatObservation obs;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
             obs = session.Observation();
-        using var worlds = SimWorlds.NoSL(pump, obs, setup.Seed);
+        using var worlds = SimWorlds.NoSL(pump, obs, setup.Seed, Alone(obs));
         foreach (var world in worlds.Worlds(6, 1))
         {
             var root = world.Snapshot();
@@ -264,7 +285,7 @@ internal static partial class SelfTest
                 root = session.Snapshot();
                 legal = session.LegalActions();
             }
-            using (var worlds = SimWorlds.SL(pump, root))
+            using (var worlds = SimWorlds.SL(pump, root, Alone(obs)))
             {
                 var world = worlds.Worlds(1, 0)[0];
                 var plan = new SlPlanner(leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 8));
@@ -273,7 +294,7 @@ internal static partial class SelfTest
                 foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
                 check($"SL world ends a cycle as planned ({name})", world.Status == plan.End, $"{world.Status}, planned {plan.End}");
             }
-            using (var worlds = SimWorlds.NoSL(pump, obs, setup.Seed))
+            using (var worlds = SimWorlds.NoSL(pump, obs, setup.Seed, Alone(obs)))
             {
                 var pimc = new PimcBrain(leaf).Decide(obs, legal, worlds, new Budget(Worlds: 2, NodesPerWorld: 300), 1);
                 check($"PIMC finds a cycle ({name})", pimc.Repeats, $"{pimc.First} [{string.Join(" ", pimc.Plan.Take(8))}...]");

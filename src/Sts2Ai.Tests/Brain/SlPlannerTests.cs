@@ -42,6 +42,8 @@ public class SlPlannerTests
 
         private int Attack => Attacks[(_round - 1) % Attacks.Length];
 
+        public RunView Run() => Fixtures.Around(Observe());
+
         public CombatObservation Observe() => Start with
         {
             Round = _round,
@@ -90,12 +92,12 @@ public class SlPlannerTests
         }
     }
 
-    private static readonly ToyLeaf Leaf = new();
+    private static readonly ICombatLeaf Leaf = new ToyLeaf();
 
     /// <summary>The best end of the combat by trying every line; each state once, as the toy shows all of it but the draw.</summary>
     private static double BruteForce(Toy world, Dictionary<(ulong, ulong), double> known)
     {
-        if (world.Status != CombatStatus.InProgress) return Leaf.Value(world.Status, world.Observe(), []);
+        if (world.Status != CombatStatus.InProgress) return Leaf.Value(world.Status, world.Observe(), world.Run(), []);
         var key = (ProtocolJson.Hash(world.Observe()), world.HiddenKey());
         if (known.TryGetValue(key, out var value)) return value;
         var here = world.Snapshot();
@@ -125,7 +127,7 @@ public class SlPlannerTests
         // A losing plan is played for its first turn only, unless proved; InProgress checks the steps alone.
         if (plan.End != CombatStatus.Won && !(plan.End == CombatStatus.Lost && plan.Proved)) return;
         Assert.Equal(plan.End, world.Status);
-        Assert.Equal(plan.Value, Leaf.Value(world.Status, world.Observe(), []), 9);
+        Assert.Equal(plan.Value, Leaf.Value(world.Status, world.Observe(), world.Run(), []), 9);
     }
 
     [Fact]

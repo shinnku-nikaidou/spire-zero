@@ -270,6 +270,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         public TurnSearch Run(int keep)
         {
             var obs = world.Observe();
+            var run = world.Run();
             _round = obs.Round;
             _loops = new(world, _round, End);
             Visit(obs, root: true);
@@ -279,7 +280,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             var over = _ends.Where(e => e.Status != CombatStatus.InProgress).MaxBy(e => e.Value);
             var going = _ends.Where(e => e.Status == CombatStatus.InProgress).OrderByDescending(e => e.Value).ToList();
             if (going.Count > keep) _cut = true;
-            return new([.. over == null ? [] : new[] { over }, .. going.Take(keep)], _nodes, _cut, leaf.Value(CombatStatus.Won, obs, history));
+            return new([.. over == null ? [] : new[] { over }, .. going.Take(keep)], _nodes, _cut, leaf.Value(CombatStatus.Won, obs, run, history));
         }
 
         /// <summary>
@@ -357,8 +358,9 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             var record = new MoveRecord(history);
             if (going) record.Witness(obs);
             var turns = record.History;
-            var outcome = leaf.Outcome(status, obs, turns);
-            double bound = going ? leaf.Value(CombatStatus.Won, obs, turns) : outcome.Value;
+            var run = world.Run();
+            var outcome = leaf.Outcome(status, obs, run, turns);
+            double bound = going ? leaf.Value(CombatStatus.Won, obs, run, turns) : outcome.Value;
             ulong key = going ? Mix(ProtocolJson.Hash(obs), world.HiddenKey()) : 0;
             return new([.. actions], [.. hashes], status, outcome.Value, bound, key, turns, outcome.Win, outcome.Hp);
         }

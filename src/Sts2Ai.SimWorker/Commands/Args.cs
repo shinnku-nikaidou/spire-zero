@@ -155,10 +155,12 @@ internal sealed class LeafArgs
 {
     private readonly Option<string?> _net = Opt.Maybe<string?>("--combat-net",
         "the combat net file, which values the search's leaves; pimc and plan need it (docs: learning/combat-net §1)");
+    private readonly Option<string?> _value = Opt.Maybe<string?>("--value",
+        "V, a net file: l0 values its options by it, and it prices the combat net's endings; --macro l0 and --combat-net need it");
 
-    public IEnumerable<Option> Options => [_net];
+    public IEnumerable<Option> Options => [_net, _value];
 
-    public LeafChoice Read(ParseResult r) => LeafChoice.Read(r.GetValue(_net));
+    public LeafChoice Read(ParseResult r) => LeafChoice.Read(r.GetValue(_net), r.GetValue(_value));
 }
 
 /// <summary>--champion FILE for the commands that play a champion: the champion file's options, under the ones given.</summary>
@@ -203,7 +205,6 @@ internal sealed class ChampionArgs(bool file)
         .AcceptOnlyFromAmong("random", "l0");
     private readonly BudgetArgs _budget = new();
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's and plan's search worker processes (default: one per world, --worlds)");
-    private readonly Option<string?> _value = Opt.Maybe<string?>("--value", "l0's V, a net file; --macro l0 needs it");
     private readonly LeafArgs _leaf = new();
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
@@ -213,7 +214,7 @@ internal sealed class ChampionArgs(bool file)
         "a card prompt's picks, every other screen's options but the potion belt's");
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _value, _afterstates, .. _leaf.Options, _explore];
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -224,9 +225,6 @@ internal sealed class ChampionArgs(bool file)
         policy ??= r.GetValue(_policy)!;
         var macro = r.GetValue(_macro)!;
         var budget = _budget.Read(r, policy, planElsewhere);
-        var valueFile = r.GetValue(_value);
-        if ((valueFile != null) != (macro == "l0")) throw new CliException("--value and --macro l0 go together");
-        IRunValue? value = valueFile == null ? null : RunNet.Read(valueFile);
         bool clone = r.GetValue(_afterstates) == "clone";
         if (clone && macro != "l0") throw new CliException("--afterstates is l0's; it needs --macro l0");
         double explore = r.GetValue(_explore);
@@ -234,6 +232,7 @@ internal sealed class ChampionArgs(bool file)
         if (explore > 0 && macro != "l0") throw new CliException("--explore is l0's; it needs --macro l0");
         var leaf = _leaf.Read(r);
         if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
-        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, value, valueFile, leaf, clone, explore);
+        if ((leaf.Value != null) != (macro == "l0" || leaf.Net != null)) throw new CliException("--value goes with --macro l0 or --combat-net, which need it");
+        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore);
     }
 }

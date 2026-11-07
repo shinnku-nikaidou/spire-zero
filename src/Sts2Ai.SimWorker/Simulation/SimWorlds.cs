@@ -21,31 +21,35 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
     private readonly Pump _pump;
     private readonly CombatSnapshot _root;
     private readonly SearchPrompts _prompts;
+    private readonly RunView _run;
     private CombatSession? _live;
     private World? _owner;
 
-    private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, IChoicePolicy? prompts = null)
+    private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, RunView run, IChoicePolicy? prompts = null)
     {
         _pump = pump;
         _prompts = new(prompts ?? PromptBrain.Instance);
         Environment = environment;
         _root = root;
+        _run = run;
     }
 
     /// <exception cref="InvalidOperationException">The combat built from the observation does not show it exactly: search
     /// would explore some other combat (docs: harness/routing §6).</exception>
     /// <param name="history">The enemies' intents in the rounds so far, for the monsters' move logs.</param>
-    public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed, IReadOnlyList<EnemyTurns>? history = null)
+    /// <param name="run">The run around the combat, for the leaves (<see cref="World.Run"/>).</param>
+    public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed, RunView run, IReadOnlyList<EnemyTurns>? history = null)
     {
         var root = new CombatSnapshot(CombatBuilder.Setup(observation, buildSeed, history), []);
         using (var built = CombatSession.Start(pump, root.Setup, PromptBrain.Instance))
             if (built.BuildDifferences.Count > 0)
                 throw new InvalidOperationException($"not built as observed: {string.Join("; ", built.BuildDifferences.Take(4))}");
-        return new(pump, PlayEnvironment.NoSL, root);
+        return new(pump, PlayEnvironment.NoSL, root, run);
     }
 
+    /// <param name="run">The run around the combat, for the leaves (<see cref="World.Run"/>).</param>
     /// <param name="prompts">Answers the card prompts, as in the real combat; null: <see cref="PromptBrain"/>.</param>
-    public static SimWorlds SL(Pump pump, CombatSnapshot real, IChoicePolicy? prompts = null) => new(pump, PlayEnvironment.SL, real, prompts);
+    public static SimWorlds SL(Pump pump, CombatSnapshot real, RunView run, IChoicePolicy? prompts = null) => new(pump, PlayEnvironment.SL, real, run, prompts);
 
     public PlayEnvironment Environment { get; }
 
@@ -98,6 +102,23 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
         }
 
         public CombatObservation Observe() => Live.Observation();
+
+        /// <summary>
+        /// The run around the combat with the combat's relics, potions, HP, max HP and gold as they stand: a combat built
+        /// here has a run of its own with neither the real deck (it holds the combat's piles) nor the real map.
+        /// </summary>
+        public RunView Run()
+        {
+            var player = Live.Player;
+            return source._run with
+            {
+                Relics = player.Relics.Select(GameBridge.Observe.Relic).ToList(),
+                Potions = player.PotionSlots.Select(p => p?.Id.Entry).ToList(),
+                Hp = player.Creature.CurrentHp,
+                MaxHp = player.Creature.MaxHp,
+                Gold = player.Gold,
+            };
+        }
 
         public ulong HiddenKey() => source.Environment == PlayEnvironment.SL ? HiddenState.Full(Live.State, Live.Player) : HiddenState.Key(Live.State, Live.Player);
 
