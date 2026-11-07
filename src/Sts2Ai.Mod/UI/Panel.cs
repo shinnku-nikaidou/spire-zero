@@ -57,7 +57,7 @@ internal sealed class Panel
     private static readonly Color Warn = Color.FromHtml("#f5b544");
     private static readonly Color Error = Color.FromHtml("#ff8a70");
 
-    private const float BarWidth = 72;
+    private const float BarWidth = 56;
 
     private readonly PanelContainer _card;
     private readonly StyleBoxFlat _cardStyle;
@@ -90,22 +90,22 @@ internal sealed class Panel
         _pressed = pressed;
         var layer = new CanvasLayer { Layer = 100 };
         _cardStyle = Box(Colors.Black, 14, Rule);
-        _cardStyle.SetContentMarginAll(16);
-        _cardStyle.ContentMarginLeft = _cardStyle.ContentMarginRight = 18;
+        _cardStyle.SetContentMarginAll(12);
+        _cardStyle.ContentMarginLeft = _cardStyle.ContentMarginRight = 14;
         _cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
         _cardStyle.ShadowSize = 12;
-        _card = Quiet(new PanelContainer { Position = new Vector2(24, 132), CustomMinimumSize = new Vector2(440, 0) });
+        _card = Quiet(new PanelContainer { Position = new Vector2(24, 132), CustomMinimumSize = new Vector2(340, 0) });
         _card.AddThemeStyleboxOverride("panel", _cardStyle);
-        var column = Column(14);
+        var column = Column(10);
         _card.AddChild(column);
 
-        var head = Row(10);
-        head.AddChild(Badge("AI", 28, 8, Accent, null, 12));
+        var head = Row(8);
+        head.AddChild(Badge("AI", 22, 6, Accent, null, 11));
         // A champion's name can be a whole line of options: it takes the head's free width and is cut there.
         var names = Column(0);
         names.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        names.AddChild(_champion = Clipped(Text("", 16, Fg)));
-        names.AddChild(_status = Clipped(Text("", 13, Muted)));
+        names.AddChild(_champion = Clipped(Text("", 13, Fg)));
+        names.AddChild(_status = Clipped(Text("", 11, Muted)));
         head.AddChild(names);
         if (switched != null)
         {
@@ -121,11 +121,11 @@ internal sealed class Panel
             head.AddChild(frame);
         }
         else _switch = [];
-        head.AddChild(Text("F8", 12, Muted));
+        head.AddChild(Text("F8", 11, Muted));
         column.AddChild(head);
 
         // The toolbar, in the style of a debugger's: continue / pause, step, step out.
-        var bar = Frame(Color.FromHtml("#0b0812"), Rule, 4);
+        var bar = Frame(Color.FromHtml("#0b0812"), Rule, 3);
         var buttons = Row(2);
         bar.AddChild(buttons);
         _auto = Tool(Command.Auto);
@@ -140,7 +140,7 @@ internal sealed class Panel
 
         // How hard the SL planner searches: the brain's own effort or a preset, switched in the run.
         var effort = Row(8);
-        effort.AddChild(_effortLabel = Text("", 12, Muted));
+        effort.AddChild(_effortLabel = Text("", 11, Muted));
         var efforts = Frame(Colors.Transparent, Color.FromHtml("#3a3050"), 3);
         var five = Row(2);
         efforts.AddChild(five);
@@ -157,9 +157,9 @@ internal sealed class Panel
         column.AddChild(_effortRow);
 
         // While auto-play runs: its speed and where it stops.
-        var options = Column(6);
+        var options = Column(5);
         var speed = Row(8);
-        speed.AddChild(_speedLabel = Text("", 12, Muted));
+        speed.AddChild(_speedLabel = Text("", 11, Muted));
         var speeds = Frame(Colors.Transparent, Color.FromHtml("#3a3050"), 3);
         var three = Row(2);
         speeds.AddChild(three);
@@ -173,7 +173,7 @@ internal sealed class Panel
         speed.AddChild(speeds);
         options.AddChild(speed);
         var stops = Row(8);
-        stops.AddChild(_stopLabel = Text("", 12, Muted));
+        stops.AddChild(_stopLabel = Text("", 11, Muted));
         _stopElites = Toggle("");
         _stopElites.Pressed += () => Settings.Set(Settings.Current with { StopAtElites = !Settings.Current.StopAtElites });
         _stopDrop = Toggle("");
@@ -185,7 +185,7 @@ internal sealed class Panel
         _options.Visible = false;
         column.AddChild(_options);
 
-        _body = Column(10);
+        _body = Column(8);
         column.AddChild(_body);
         layer.AddChild(_card);
         _map = new MapMark(layer);
@@ -255,6 +255,7 @@ internal sealed class Panel
     {
         var settings = Settings.Current;
         _card.Visible = !_hidden && settings.Panel;
+        if (_card.Theme != Fonts.Theme) _card.Theme = Fonts.Theme;
         var fill = Color.FromHtml("#100c18") with { A = settings.Opacity };
         if (_cardStyle.BgColor != fill) _cardStyle.BgColor = fill;
         _champion.Text = champion;
@@ -274,7 +275,7 @@ internal sealed class Panel
         Label(_stopLabel, L10n.T("Stop at"));
         foreach (var (button, speed) in _speeds) Label(button, L10n.T(speed.ToString()));
         Label(_stopElites, L10n.T("elites, bosses"));
-        Label(_stopDrop, L10n.T("win chance −3"));
+        Label(_stopDrop, L10n.T("win chance -3"));
         Label(_effortLabel, L10n.T("Effort"));
         foreach (var (button, effort) in _efforts) Label(button, L10n.T(effort.ToString()));
         Set(_step, drive.Step ?? L10n.T("Step"), Icons.Step, !drive.Auto && drive.Step != null);
@@ -336,32 +337,32 @@ internal sealed class Panel
     private void StatusStrip(Drive? drive)
     {
         if (drive == null) return;
-        var strip = Frame(StripFill, null, 10);
-        var row = Row(12);
+        var strip = Frame(StripFill, null, 8);
+        var row = Row(10);
         strip.AddChild(row);
         var left = Column(2);
         left.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         if (drive.Win is { } win)
         {
-            left.AddChild(Text(L10n.T("Win chance").ToUpperInvariant(), 12, Muted));
-            var line = Row(8);
-            line.AddChild(Text(Percent(win), 26, Fg));
+            left.AddChild(Text(L10n.T("Win chance").ToUpperInvariant(), 11, Muted));
+            var line = Row(6);
+            line.AddChild(Text(Percent(win), 20, Fg));
             if (drive.Delta is { } delta && Math.Abs(delta) >= 0.0005)
             {
-                var change = Text($"{(delta > 0 ? "▲" : "▼")} {Math.Abs(delta) * 100:0.0}", 13, delta > 0 ? Icons.Green : Error);
+                var change = Text($"{(delta > 0 ? "+" : "-")}{Math.Abs(delta) * 100:0.0}", 12, delta > 0 ? Icons.Green : Error);
                 change.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
                 line.AddChild(change);
             }
             left.AddChild(line);
         }
         row.AddChild(left);
-        var pill = Frame(Track, null, 15);
-        var inside = Row(7);
+        var pill = Frame(Track, null, 6);
+        var inside = Row(6);
         pill.AddChild(inside);
         var dot = Quiet(new PanelContainer { CustomMinimumSize = new Vector2(8, 8), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
         dot.AddThemeStyleboxOverride("panel", Box(drive.PillTone switch { Tone.Warn => Warn, Tone.Error => Error, _ => drive.Auto ? Icons.Green : Warn }, 4));
         inside.AddChild(dot);
-        inside.AddChild(Text(drive.Pill, 13, Fg));
+        inside.AddChild(Text(drive.Pill, 12, Fg));
         pill.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         row.AddChild(pill);
         _body.AddChild(strip);
@@ -370,8 +371,8 @@ internal sealed class Panel
     private void Recent(Drive? drive)
     {
         if (drive == null || drive.Recent.Count == 0) return;
-        _body.AddChild(Text(L10n.T("Recent").ToUpperInvariant(), 12, Muted));
-        foreach (var line in drive.Recent) _body.AddChild(Clipped(Text(line, 14, Fg)));
+        _body.AddChild(Text(L10n.T("Recent").ToUpperInvariant(), 11, Muted));
+        foreach (var line in drive.Recent) _body.AddChild(Clipped(Text(line, 12, Fg)));
     }
 
     private void Message(string message, string? sub, Tone tone)
@@ -381,63 +382,70 @@ internal sealed class Panel
         var dot = Quiet(new PanelContainer { CustomMinimumSize = new Vector2(10, 10), SizeFlagsVertical = Control.SizeFlags.ShrinkBegin });
         dot.AddThemeStyleboxOverride("panel", Box(tone == Tone.Plain ? Accent : color, 5));
         var margin = Quiet(new MarginContainer());
-        margin.AddThemeConstantOverride("margin_top", 8);
+        margin.AddThemeConstantOverride("margin_top", 6);
         margin.AddChild(dot);
         row.AddChild(margin);
         var lines = Column(4);
-        lines.AddChild(Wrapped(Text(message, 19, color)));
-        if (sub != null) lines.AddChild(Wrapped(Text(sub, 14, Muted)));
+        lines.AddChild(Wrapped(Text(message, 15, color)));
+        if (sub != null) lines.AddChild(Wrapped(Text(sub, 12, Muted)));
         row.AddChild(lines);
         _body.AddChild(row);
     }
 
     private void Answer(Shown answer, string? sub, string foot)
     {
-        _body.AddChild(Text(L10n.T("Next").ToUpperInvariant(), 12, Muted));
-        var next = Row(12);
-        next.AddChild(answer.Route ? Ring(30) : Badge("1", 32, 16, Accent, null, 16));
+        _body.AddChild(Text(L10n.T("Next").ToUpperInvariant(), 11, Muted));
+        var next = Row(10);
+        next.AddChild(answer.Route ? Ring(22) : Badge("1", 24, 12, Accent, null, 13));
         var lines = Column(2);
         lines.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        lines.AddChild(Wrapped(Text(answer.Next, 22, Fg)));
-        if (sub != null) lines.AddChild(Wrapped(Text(sub, 13, Muted)));
+        lines.AddChild(Wrapped(Text(answer.Next, 17, Fg)));
+        if (sub != null) lines.AddChild(Wrapped(Text(sub, 12, Muted)));
         next.AddChild(lines);
         _body.AddChild(next);
-        if (answer.Route && answer.Then.Count > 0)
+        var mode = Settings.Current.Considered;
+        bool considered = mode != ConsideredMode.Off && answer.Options.Count > 0;
+        // On the map the options show their routes as rooms; the chosen one's is then not written out again.
+        if (answer.Route)
         {
-            _body.AddChild(Text(L10n.T("Route to the boss").ToUpperInvariant(), 12, Muted));
-            _body.AddChild(Wrapped(Text(string.Join("  ·  ", answer.Then), 15, Fg)));
+            if (answer.Then.Count > 0 && !(considered && answer.Options.Any(o => o.Rooms != null)))
+            {
+                _body.AddChild(Text(L10n.T("Route to the boss").ToUpperInvariant(), 11, Muted));
+                _body.AddChild(Wrapped(Text(string.Join(" · ", answer.Then), 13, Fg)));
+            }
         }
         else
         {
             for (int i = 0; i < answer.Then.Count; i++)
             {
-                var step = Row(12);
-                step.AddChild(Indent(4));
-                step.AddChild(Badge($"{i + 2}", 24, 12, null, Accent, 12));
-                step.AddChild(Wrapped(Text(answer.Then[i], 16, Fg)));
+                var step = Row(10);
+                step.AddChild(Indent(2));
+                step.AddChild(Badge($"{i + 2}", 20, 10, null, Accent, 11));
+                step.AddChild(Wrapped(Text(answer.Then[i], 14, Fg)));
                 _body.AddChild(step);
             }
         }
         if (answer.Later != null)
         {
             var later = Row(0);
-            later.AddChild(Indent(44));
-            later.AddChild(Text(answer.Later, 13, Muted));
+            later.AddChild(Indent(32));
+            later.AddChild(Text(answer.Later, 12, Muted));
             _body.AddChild(later);
         }
-        var mode = Settings.Current.Considered;
-        if (mode != ConsideredMode.Off && answer.Options.Count > 0) Options(answer, mode == ConsideredMode.Bars);
-        _body.AddChild(Text(foot, 12, Muted));
+        if (considered) Options(answer, mode == ConsideredMode.Bars);
+        _body.AddChild(Text(foot, 11, Muted));
     }
 
     /// <summary>
     /// The options the brain scored, the chosen first: with their chance to win the fight and the HP left (the SL
-    /// planner), their chance to win the run and its gap to the best (V; on the map with each option's route), or a
-    /// search's score with its confidence interval (PIMC). The bars share one scale.
+    /// planner), their chance to win the run and its gap to the best (V), or a search's score with its confidence
+    /// interval (PIMC). The bars share one scale. On the map each option is its route, drawn as its rooms, with a legend.
     /// </summary>
     private void Options(Shown answer, bool bars)
     {
         var options = answer.Options;
+        bool routes = options.All(o => o.Rooms is { Count: > 0 });
+        bars &= !routes;
         _body.AddChild(Quiet(new ColorRect { Color = Rule, CustomMinimumSize = new Vector2(0, 1) }));
         var (third, fourth) = answer.Kind switch
         {
@@ -446,12 +454,12 @@ internal sealed class Panel
             _ => (L10n.T("value ±CI"), ""),
         };
         var grid = Quiet(new GridContainer { Columns = bars ? 4 : 3 });
-        grid.AddThemeConstantOverride("h_separation", 10);
-        grid.AddThemeConstantOverride("v_separation", 7);
-        Cell(grid, L10n.T("Considered").ToUpperInvariant(), 12, Muted, expand: true);
+        grid.AddThemeConstantOverride("h_separation", 8);
+        grid.AddThemeConstantOverride("v_separation", 5);
+        Cell(grid, L10n.T(routes ? "Route to the boss" : "Considered").ToUpperInvariant(), 11, Muted, expand: true);
         if (bars) grid.AddChild(Quiet(new Control()));
-        Cell(grid, third, 12, Muted, right: true);
-        Cell(grid, fourth, 12, Muted, right: true);
+        Cell(grid, third, 11, Muted, right: true);
+        Cell(grid, fourth, 11, Muted, right: true);
         double Shown(Shown.Option o) => answer.Kind == ShownKind.Fight ? o.Win ?? 0 : o.Value;
         double best = options.Max(Shown);
         double lo = options.Min(o => Shown(o) - o.Ci), hi = options.Max(o => Shown(o) + o.Ci);
@@ -462,61 +470,57 @@ internal sealed class Panel
         {
             var o = options[i];
             var color = i == 0 ? Lead : Fg;
-            Cell(grid, o.Name, 15, color, expand: true);
+            if (routes)
+            {
+                var rooms = Row(2);
+                rooms.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+                foreach (var room in o.Rooms!) rooms.AddChild(Chip(room, first: i == 0));
+                grid.AddChild(rooms);
+            }
+            else Cell(grid, o.Name, 13, color, expand: true);
             if (bars)
             {
-                var bar = Quiet(new Control { CustomMinimumSize = new Vector2(BarWidth, 16) });
-                bar.AddChild(Strip(0, BarWidth, 3, 10, Track));
+                var bar = Quiet(new Control { CustomMinimumSize = new Vector2(BarWidth, 12), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
+                bar.AddChild(Strip(0, BarWidth, 2, 8, Track));
                 double v = Shown(o);
-                bar.AddChild(Strip(At(v - o.Ci), Math.Max(At(v + o.Ci) - At(v - o.Ci), 4), 3, 10, i == 0 ? Accent : Dim));
+                bar.AddChild(Strip(At(v - o.Ci), Math.Max(At(v + o.Ci) - At(v - o.Ci), 3), 2, 8, i == 0 ? Accent : Dim));
                 if (answer.Kind == ShownKind.Score)
-                    bar.AddChild(Quiet(new ColorRect { Color = Fg, Position = new Vector2(At(v) - 1, 0), Size = new Vector2(2, 16) }));
+                    bar.AddChild(Quiet(new ColorRect { Color = Fg, Position = new Vector2(At(v) - 1, 0), Size = new Vector2(2, 12) }));
                 grid.AddChild(bar);
             }
             switch (answer.Kind)
             {
                 case ShownKind.Fight:
-                    Cell(grid, Percent(o.Win ?? 0, whole: true), 15, color, right: true);
-                    Cell(grid, o.Win > 0 && o.Hp is { } hp ? $"{hp:0}" : "—", 15, color, right: true);
+                    Cell(grid, Percent(o.Win ?? 0, whole: true), 13, color, right: true);
+                    Cell(grid, o.Win > 0 && o.Hp is { } hp ? $"{hp:0}" : "—", 13, color, right: true);
                     break;
                 case ShownKind.Run:
-                    Cell(grid, Percent(o.Value), 15, color, right: true);
-                    Cell(grid, i == 0 || o.Value >= best ? "—" : (o.Value - best >= 0 ? "+" : "−") + $"{Math.Abs(o.Value - best) * 100:0.0}", 15, Muted, right: true);
+                    Cell(grid, Percent(o.Value), 13, color, right: true);
+                    Cell(grid, i == 0 || o.Value >= best ? "—" : "-" + $"{(best - o.Value) * 100:0.0}", 13, Muted, right: true);
                     break;
                 default:
-                    Cell(grid, $"{o.Value:0.000} ±{o.Ci:0.000}", 15, color, right: true);
-                    Cell(grid, "", 15, color, right: true);
+                    Cell(grid, $"{o.Value:0.000} ±{o.Ci:0.000}", 13, color, right: true);
+                    Cell(grid, "", 13, color, right: true);
                     break;
             }
         }
         _body.AddChild(grid);
-        // On the map: each option's route, as chips of its rooms.
-        var routes = options.Where(o => o.Rooms is { Count: > 0 }).ToList();
-        if (routes.Count == 0) return;
-        foreach (var o in routes)
-        {
-            var line = Row(4);
-            var name = Clipped(Text(o.Name, 12, Muted));
-            name.CustomMinimumSize = new Vector2(96, 0);
-            line.AddChild(name);
-            foreach (var room in o.Rooms!) line.AddChild(Chip(room));
-            _body.AddChild(line);
-        }
+        if (!routes) return;
         var legend = Quiet(new HFlowContainer());
-        legend.AddThemeConstantOverride("h_separation", 12);
-        legend.AddThemeConstantOverride("v_separation", 4);
-        foreach (var type in routes.SelectMany(o => o.Rooms!).Distinct())
+        legend.AddThemeConstantOverride("h_separation", 10);
+        legend.AddThemeConstantOverride("v_separation", 3);
+        foreach (var type in options.SelectMany(o => o.Rooms!).Distinct())
         {
-            var item = Row(4);
-            item.AddChild(Chip(type));
-            item.AddChild(Text(Describe.Legend(type), 12, Muted));
+            var item = Row(3);
+            item.AddChild(Chip(type, first: false));
+            item.AddChild(Text(Describe.Legend(type), 11, Muted));
             legend.AddChild(item);
         }
         _body.AddChild(legend);
     }
 
-    /// <summary>A room of a route: a small square in its type's color, with its legend's first letter.</summary>
-    private static Control Chip(string? type)
+    /// <summary>A room of a route: a small square in its type's color, with its legend's first letter; the chosen route's are brighter.</summary>
+    private static Control Chip(string? type, bool first)
     {
         var color = type switch
         {
@@ -526,13 +530,13 @@ internal sealed class Panel
             "Treasure" => Color.FromHtml("#e8c56a"),
             "Boss" => Error,
             "Unknown" => Muted,
-            _ => Dim,
+            _ => first ? Muted : Dim,
         };
         string legend = Describe.Legend(type);
         string letter = type == "Unknown" ? "?" : StringInfo.GetNextTextElement(legend);
-        var chip = Quiet(new PanelContainer { CustomMinimumSize = new Vector2(22, 22), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
-        chip.AddThemeStyleboxOverride("panel", Box(type == "Boss" ? Error : Colors.Transparent, 5, color, 2));
-        var label = Text(letter.ToUpperInvariant(), 11, type == "Boss" ? Ink : type == "Monster" ? Fg : color);
+        var chip = Quiet(new PanelContainer { CustomMinimumSize = new Vector2(16, 16), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
+        chip.AddThemeStyleboxOverride("panel", Box(type == "Boss" ? Error : Colors.Transparent, 3, color, 1));
+        var label = Text(letter.ToUpperInvariant(), 9, type == "Boss" ? Ink : type == "Monster" ? Fg : color);
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.VerticalAlignment = VerticalAlignment.Center;
         chip.AddChild(label);
@@ -549,7 +553,7 @@ internal sealed class Panel
         if (right)
         {
             label.HorizontalAlignment = HorizontalAlignment.Right;
-            label.CustomMinimumSize = new Vector2(56, 0);
+            label.CustomMinimumSize = new Vector2(42, 0);
         }
         grid.AddChild(label);
     }
@@ -575,9 +579,10 @@ internal sealed class Panel
     /// <summary>A toolbar button: an icon and a word, filling its share of the bar.</summary>
     private Button Tool(Command command)
     {
-        var button = new Button { FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 44), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        button.AddThemeFontSizeOverride("font_size", 14);
-        button.AddThemeConstantOverride("h_separation", 7);
+        var button = new Button { FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 32), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        button.AddThemeFontSizeOverride("font_size", 13);
+        button.AddThemeConstantOverride("h_separation", 5);
+        button.AddThemeConstantOverride("icon_max_width", Icons.Shown);
         button.Pressed += () => _pressed?.Invoke(command);
         RestyleTool(button, false);
         return button;
@@ -598,18 +603,18 @@ internal sealed class Panel
 
     private static Button Toggle(string text)
     {
-        var button = new Button { Text = text, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 32) };
-        button.AddThemeFontSizeOverride("font_size", 13);
+        var button = new Button { Text = text, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 24) };
+        button.AddThemeFontSizeOverride("font_size", 12);
         Restyle(button, false);
         return button;
     }
 
     private static void Restyle(Button button, bool on)
     {
-        var fill = Box(on ? Accent : Colors.Transparent, 7);
-        fill.ContentMarginLeft = fill.ContentMarginRight = 12;
-        var hover = Box(on ? Accent : Color.FromHtml("#2a2238"), 7);
-        hover.ContentMarginLeft = hover.ContentMarginRight = 12;
+        var fill = Box(on ? Accent : Colors.Transparent, 6);
+        fill.ContentMarginLeft = fill.ContentMarginRight = 8;
+        var hover = Box(on ? Accent : Color.FromHtml("#2a2238"), 6);
+        hover.ContentMarginLeft = hover.ContentMarginRight = 8;
         foreach (var state in new[] { "normal", "pressed", "focus" }) button.AddThemeStyleboxOverride(state, fill);
         button.AddThemeStyleboxOverride("hover", hover);
         foreach (var state in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color" })

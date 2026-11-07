@@ -3,12 +3,17 @@ using Godot;
 namespace Sts2Ai.Mod;
 
 /// <summary>
-/// The toolbar's icons (docs: output §2), drawn here into small textures so they need no file and no font: play, pause,
-/// step (an arrow over a dot) and finish (an arrow into a bar). Each pixel is the share of 4×4 samples inside the shape.
+/// The toolbar's icons (docs: output §2), drawn here into textures so they need no file and no font: play, pause, step
+/// (an arrow over a dot) and finish (an arrow into a bar). The shapes are laid out on an 18-unit square and drawn at
+/// three times that, then shown at <see cref="Shown"/>: the game scales its 1080p canvas up to the window, and a small
+/// texture would blur. Each pixel is the share of 4×4 samples inside the shape.
 /// </summary>
 internal static class Icons
 {
-    private const int Size = 18;
+    private const int Units = 18, Scale = 3, Size = Units * Scale;
+
+    /// <summary>How wide a toolbar button draws its icon, in the canvas's pixels.</summary>
+    public const int Shown = 15;
 
     public static readonly Color Green = Color.FromHtml("#5fd18a");
     public static readonly Color Amber = Color.FromHtml("#f5b544");
@@ -39,7 +44,7 @@ internal static class Icons
                 int hits = 0;
                 for (int sy = 0; sy < 4; sy++)
                     for (int sx = 0; sx < 4; sx++)
-                        if (inside(px + (sx + 0.5) / 4, py + (sy + 0.5) / 4)) hits++;
+                        if (inside((px + (sx + 0.5) / 4) / Scale, (py + (sy + 0.5) / 4) / Scale)) hits++;
                 int at = (py * Size + px) * 4;
                 data[at] = (byte)color.R8;
                 data[at + 1] = (byte)color.G8;

@@ -76,7 +76,7 @@ internal static class L10n
         ["Max"] = ["Max", "Máx", "最高", "最高", "最大"],
         ["Stop at"] = ["Arrêt", "Parar", "停在", "停在", "停止"],
         ["elites, bosses"] = ["élites, boss", "élites, jefes", "精英、Boss 前", "菁英、頭目前", "エリート・ボス前"],
-        ["win chance −3"] = ["victoire −3", "victoria −3", "胜率掉 3 点", "勝率掉 3 點", "勝率−3"],
+        ["win chance -3"] = ["victoire -3", "victoria -3", "胜率掉 3 点", "勝率掉 3 點", "勝率-3"],
 
         // The answer.
         ["Win chance"] = ["Chance de victoire", "Prob. de ganar", "本局胜率", "本局勝率", "勝率"],

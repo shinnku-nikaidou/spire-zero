@@ -128,6 +128,7 @@ internal sealed class CombatMark(CanvasLayer layer)
             _badges.Add((frame, caption));
         }
         var (box, label) = _badges[_badge++];
+        if (box.Theme != Fonts.Theme) box.Theme = Fonts.Theme;
         label.Text = text;
         box.CustomMinimumSize = new Vector2(height, height);
         box.Size = box.GetCombinedMinimumSize();
