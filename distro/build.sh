@@ -43,6 +43,8 @@ ssh "$STS2_MAC" 'f=$(mktemp) && cat > "$f" && codesign -s - -f "$f" && codesign 
 mv "$launcher.signed" "$launcher"
 chmod +x "$launcher"
 
+# NoSL is not trained for now: it plays with SL's nets, the V and the combat net nosl.json names as sl.json does (PIMC
+# with them for NoSL hosts, the SL planner for SL hosts).
 champion=$B/src/eval/champions/nosl.json
 mkdir -p "$B/brain/nets"
 for net in $(grep -o 'weights/all/[^"]*\.json' "$champion" | sort -u); do
