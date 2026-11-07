@@ -67,9 +67,9 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 它們按估值排序，最好的排在最前。PIMC 的 `plan` 是第一個世界裡 `chosen` 之後本回合剩下的部分。
 
-**SL 規劃器的候選**是它保留的各條路線開頭的每個第一個動作，估值取這些路線中最好的那條，`ci` 為 0，`samples` 為 1，`values` 是那唯一的估值：選中的排第一，其餘按估值排序。它的 `plan` 是它那條路線上這場戰鬥剩下的部分。如果選中的是沒有證明的失敗路線，計畫停在 `replan` 規定重新規劃之前要打的那些回合之後；一條路線最多 40 個回合（[SL 規劃器：束搜尋 §6](/zh-tw/arch/sl-planner/beam/#sec-6)）。
+**SL 規劃器的候選**是它保留的各條路線開頭的每個第一個動作，估值取這些路線中最好的那條，`ci` 為 0，`samples` 為 1，`values` 是那唯一的估值，還有那條路線怎麼結束：`win`，贏下這場戰鬥的機率（路線打到結束處時為 1 或 0，否則是戰鬥網路給的），以及 `hp`，勝利時保有的生命值（[SL 規劃器：回合搜尋 §4](/zh-tw/arch/sl-planner/turn-search/#sec-4)）。選中的排第一，其餘按估值排序。它的 `plan` 是它那條路線上這場戰鬥剩下的部分。如果選中的是沒有證明的失敗路線，計畫停在 `replan` 規定重新規劃之前要打的那些回合之後；一條路線最多 40 個回合（[SL 規劃器：束搜尋 §6](/zh-tw/arch/sl-planner/beam/#sec-6)）。
 
-**沒有候選的行**。只有一個合法動作的決策既沒有計畫也沒有候選。照計畫打出的一步（[NoSL PIMC：搜尋 §6](/zh-tw/arch/pimc/search/#sec-6)、[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）以計畫剩下的部分作為它的 `plan`（計畫的最後一步沒有），沒有 `candidates`。佔位策略兩者都不記。在地圖上，L0 會記下它的 `plan`：`chosen` 之後本幕剩下的路線（[宏觀大腦：搜尋 §1](/zh-tw/arch/macro-brain/search/#sec-1)）。
+**沒有候選的行**。只有一個合法動作的決策既沒有計畫也沒有候選。照計畫打出的一步（[NoSL PIMC：搜尋 §6](/zh-tw/arch/pimc/search/#sec-6)、[SL 規劃器 §4](/zh-tw/arch/sl-planner/#sec-4)）以計畫剩下的部分作為它的 `plan`（計畫的最後一步沒有），沒有 `candidates`。佔位策略兩者都不記。在地圖上，L0 會記下它的 `plan`：`chosen` 之後本幕剩下的路線（[宏觀大腦：搜尋 §1](/zh-tw/arch/macro-brain/search/#sec-1)）。宏觀的行和選牌提示不記 `candidates`：L0 打過分的選項只送給宿主（[路由、預算與種子 §3](/zh-tw/arch/harness/routing/#sec-3)）。
 
 ## 6. 經探索與重新規劃的步驟
 

@@ -199,8 +199,9 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy plan|play] [--log FILE] [--wire FILE]
 ```
 
-- `--socket`：默认是 `$XDG_STATE_HOME/sts2ai/brain.sock`，这个变量没设时是 `~/.local/state/sts2ai/brain.sock`（`Sts2Ai.Protocol/Wire.cs:98-102`）：Steam 在一个容器里运行游戏，这个容器共享主目录，但不共享 `$XDG_RUNTIME_DIR`。
-- 主机在 `hello` 里写明它的环境：NoSL 主机得到 `--policy` 的战斗大脑，SL 主机得到 `--sl-policy` 的（默认是 SL 规划器），宏观大脑相同。
+- `--socket`：默认是 `$XDG_STATE_HOME/sts2ai/brain.sock`，这个变量没设时是 `~/.local/state/sts2ai/brain.sock`（`Sts2Ai.Protocol/Wire.cs:100-104`）：Steam 在一个容器里运行游戏，这个容器共享主目录，但不共享 `$XDG_RUNTIME_DIR`。
+- 主机在 `hello` 里写明它的环境：NoSL 主机得到 `--policy` 的战斗大脑，SL 主机得到 `--sl-policy` 的（默认是 SL 规划器），宏观大脑相同。主机还可以写明一个力度（`low`、`medium`、`high`、`max`），这一局的 SL 规划器就用它来打（[Harness §5](/arch/harness/#sec-5)）。
+- 它的回答带着大脑打过分的选项，在地图上还带每个选项的路线，供 Mod 显示（[输出 §2](/arch/output/#sec-2)）。
 - `--log` 写出决策日志；`--wire` 写出主机发来的每条消息，`clones` 重播这些消息，在各自的克隆上检查主机的 SL 决策（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
 - 它每局打印一行：对局 id、结局、层数、决策数、重新规划次数，以及它的工作进程的游戏错误，主机的对局记录不计入这些错误。
 

@@ -67,9 +67,9 @@ import DecisionLog from '../../../../components/book/DecisionLog.svelte';
 
 它们按值排序，最好的在前。PIMC 的 `plan` 是 `chosen` 之后本回合剩下的部分，取第一个世界里的。
 
-**SL 规划器的候选**是它保留的路线开头的每个首个动作，估值取这些路线中最好的那条，`ci` 为 0，`samples` 为 1，`values` 是那一个值：选中的在前，然后按值排序。它的 `plan` 是它那条路线上战斗剩下的部分。对一个未证明的失败选择，计划在 `replan` 规定的、重新规划之前要打的那些回合之后停止，一条路线最多 40 个回合（[SL 规划器：束搜索 §6](/arch/sl-planner/beam/#sec-6)）。
+**SL 规划器的候选**是它保留的路线开头的每个首个动作，估值取这些路线中最好的那条，`ci` 为 0，`samples` 为 1，`values` 是那一个值，并附上那条路线如何结束：`win`，赢下这场战斗的概率（路线打到结束处时为 1 或 0，否则取战斗网络的），以及 `hp`，赢下时持有的生命值（[SL 规划器：回合搜索 §4](/arch/sl-planner/turn-search/#sec-4)）。选中的在前，其余按值排序。它的 `plan` 是它那条路线上战斗剩下的部分。对一个未证明的失败选择，计划在 `replan` 规定的、重新规划之前要打的那些回合之后停止，一条路线最多 40 个回合（[SL 规划器：束搜索 §6](/arch/sl-planner/beam/#sec-6)）。
 
-**没有候选的行**。只有一个合法动作的决策两者都没有。按沿用的计划打出的一步（[NoSL PIMC：搜索 §6](/arch/pimc/search/#sec-6)、[SL 规划器 §4](/arch/sl-planner/#sec-4)）以计划的剩余部分作为它的 `plan`（计划的最后一步没有），没有 `candidates`。占位策略两者都不记。在地图上，L0 记下它的 `plan`，即 `chosen` 之后本幕剩下的路线（[宏观大脑：搜索 §1](/arch/macro-brain/search/#sec-1)）。
+**没有候选的行**。只有一个合法动作的决策两者都没有。按沿用的计划打出的一步（[NoSL PIMC：搜索 §6](/arch/pimc/search/#sec-6)、[SL 规划器 §4](/arch/sl-planner/#sec-4)）以计划的剩余部分作为它的 `plan`（计划的最后一步没有），没有 `candidates`。占位策略两者都不记。在地图上，L0 记下它的 `plan`，即 `chosen` 之后本幕剩下的路线（[宏观大脑：搜索 §1](/arch/macro-brain/search/#sec-1)）。宏观行和选牌提示不记 `candidates`：L0 打过分的选项只发给宿主（[路由、预算与种子 §3](/arch/harness/routing/#sec-3)）。
 
 ## 6. 探索的步骤与重新规划的步骤
 

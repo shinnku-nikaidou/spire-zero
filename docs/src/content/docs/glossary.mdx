@@ -37,8 +37,9 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 大脑服务器（brain server）、`brain` | Harness 在线路上的那一端，也是为 Mod 和 `run --brain` 单独运行它的 SimWorker 命令（[Harness §5](/arch/harness/#sec-5)）。 |
 | SimWorker | 以无头方式运行真实游戏 DLL 的程序：战斗、整局、大脑、worker、评估（[模拟器](/arch/simulator/)）。 |
 | 工作进程（worker）、工作进程池（worker pool）、`serve` | 一个通过 JSON 行回答搜索请求的 SimWorker 进程；工作进程池负责启动和重启它们（[模拟器：工作进程池](/arch/simulator/pool/)）。 |
-| Mod | 真实游戏里的宿主：读取屏幕上的决策，询问大脑，显示答案（[Mod](/arch/mod/)）。 |
-| 辅助模式（assist mode）、面板（panel）、标记（marks） | Mod 目前的模式：玩家自己打，面板显示答案，标记在地图上画出路线、在战斗中画出计划的序号（[输出](/arch/output/)）。 |
+| Mod | 真实游戏里的宿主：读取屏幕上的决策，询问大脑，显示答案，并在玩家要求时打出它（[Mod](/arch/mod/)）。 |
+| 辅助模式（assist mode）、面板（panel）、标记（marks） | Mod 的模式：面板显示答案和它的各个选项的胜率，标记在地图上画出路线、在战斗中画出计划的序号（[输出](/arch/output/)）。玩家自己打，或者让 AI 来打。 |
+| 自动游玩（auto-play）、执行器（executor） | 玩家要求时，AI 在真实游戏里打出大脑的答案：一步，打到本回合或这个房间结束，或者自己一直打直到被暂停；执行器按玩家点击的方式执行每个动作（[Mod：自动游玩与安全](/arch/mod/auto/)）。 |
 | RunSession | SimWorker 里的类，以无头方式经过每个决策画面打完整局（[模拟器：整局 §1](/arch/simulator/runs/#sec-1)）。 |
 | CombatBuilder | 根据一个观测构建模拟器里的战斗（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)）。 |
 | Pump | 单线程调度器，在一个线程上、按同一种顺序运行游戏的所有异步代码，从而让结果确定（[模拟器：无头宿主 §7](/arch/simulator/headless/#sec-7)）。 |
@@ -69,8 +70,8 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | 观测（observation） | 玩家在决策点能看到的东西，用协议类型表示（[协议：观测与动作](/arch/protocol/observation/)）。 |
 | 合法动作（legal actions） | 玩家此刻能做的每一个动作，写成文本，例如 `play:C:T` 或 `map:col,row`。 |
 | uid | 战斗中一张牌或一个生物的稳定编号，动作用它来指明对象。 |
-| 推荐（recommendation） | 大脑的回答：动作、它之后的计划，以及对一场战斗而言它打过分的候选（[输出 §1](/arch/output/#sec-1)）。 |
-| 候选（candidate） | 搜索打过分的一个第一步动作，带着它的价值、置信区间和样本数（[协议：世界与工作进程消息 §3](/arch/protocol/worlds/#sec-3)）。 |
+| 推荐（recommendation） | 大脑的回答：动作、它之后的计划，以及它打过分的候选（[输出 §1](/arch/output/#sec-1)）。 |
+| 候选（candidate） | 大脑打过分的一个选项，带着它的价值、置信区间和样本数：搜索的一个第一步动作，带着 SL 规划器给出的这场战斗的胜率和剩下的生命值；或者战斗外的一个选项，带着 V 给出的这一局的胜率（[协议：线路 §7](/arch/protocol/wire/#sec-7)）。 |
 | 兜底（fallback） | 没有大脑负责一个决策时，（比如随机地）选一个。这是禁止的：这一局改为报错停止。 |
 | 占位策略（placeholder） | 不搜索的策略（`play`、`random`），用于测试和基线；由 `random` 做出的决策会让一次评估作废。 |
 | PIMC | 完美信息蒙特卡洛（Perfect Information Monte Carlo）：抽样若干确定化的世界，在每个世界里当作一切已知去搜索，再按第一步动作取平均（[NoSL PIMC](/arch/pimc/)）。 |

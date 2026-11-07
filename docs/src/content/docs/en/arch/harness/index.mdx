@@ -61,9 +61,9 @@ sequenceDiagram
 ```
 
 1. **The host asks.** Over the wire, the host sends a `decision` message: the observation, its hash and the legal actions ([Protocol: the wire §3](/en/arch/protocol/wire/#sec-3)). `BrainServer` checks that it belongs to a run, that its id is above the last one, and that the hash is the observation's, then hands it to the run's `Dispatcher` as a combat, card-prompt or macro decision ([§5](#sec-5)). In process, the simulator asks the `Dispatcher` directly.
-2. **Harness notes it.** A combat decision's observation joins the record of enemy moves (`MoveRecord.Witness`); a macro decision ends the combat's record ([§4](#sec-4)). The decision gets its number in the run, its brain's count goes up, and its seed is drawn (`Dispatcher.cs:189-194`).
+2. **Harness notes it.** A combat decision's observation joins the record of enemy moves (`MoveRecord.Witness`); a macro decision ends the combat's record ([§4](#sec-4)). The decision gets its number in the run, its brain's count goes up, and its seed is drawn (`Dispatcher.cs:197-202`).
 3. **One brain decides.** The route for the surface gets the decision, the seed, in SL the node's clone, and the combat's moves so far. A searching brain splits its search into worker requests and merges the replies, which come back in request order ([Routing, budgets and seeds §2](/en/arch/harness/routing/#sec-2)).
-4. **Harness checks and logs.** An answer that is not legal throws. The brain's name, plan and candidates become the decision's note (`Dispatcher.Last`), and, when logging, one line of the decision log.
+4. **Harness checks and logs.** An answer that is not legal throws. The brain's name, plan and candidates become the decision's note (`Dispatcher.Last`), and, when logging, one line of the decision log. Outside combat the candidates are the options the macro or prompt policy scored (`Scored`), which only the note keeps.
 5. **The host gets a recommendation**: the action, the brain, its plan and candidates, with the request's id and hash echoed ([Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)).
 
 **In process and over the wire.** `run` without `--brain` gives each run a `Dispatcher` in its own process. `run --brain SOCKET` and the mod send every decision to the `brain` command over a Unix socket instead, where `BrainServer` gives the run a `Dispatcher` just the same. The answers are the same: `run --check` plays each seed a second time over the wire and compares ([The decision log §8](/en/arch/harness/decision-log/#sec-8)). The host says whether it is the mod or a simulated run (`hello.role`), but the champion is made without reading it: the brain cannot tell the real game from the simulator. This is the project's rule "swap the world, not the brain" ([Introduction §3](/en/#sec-3)).
@@ -75,7 +75,7 @@ sequenceDiagram
 | the decision counter | each decision's number in the log and its seed; combat decisions, card prompts and macro decisions share it, from 0 | never in a run |
 | decisions per brain (`Brains`) | the run record's `brains` | never in a run |
 | `Replans` | combat steps searched again because the plan did not hold | never in a run |
-| `Last` | the latest decision's brain, plan and candidates: what the recommendation carries | each decision |
+| `Last` | the latest decision's brain, plan and candidates (outside combat, the options the policy scored): what the recommendation carries | each decision |
 | the record of enemy moves (`History`) | the combat brain's leaves, and the worlds' monster move logs ([§4](#sec-4)) | at a macro decision, or when the round goes back |
 | the SL node: checkpoint and trace | the node's clone, handed to the combat brain and, with `--afterstates clone`, to the macro side | at each node checkpoint |
 | the decision log | the run's lines, in memory until the run ends | never in a run |
@@ -137,9 +137,11 @@ public sealed class PublicRecord
 | `executed`, `cancel` | ignored: each decision is answered before the next message is read, so there is no search to drop |
 | anything else | `error` |
 
-**Answering** (`BrainServer.cs:138-154`). A combat decision's legal actions are parsed into combat actions and its screen's combat observation is what the brain sees; a card prompt's answer is written `pick:i,j`; every other surface is a macro decision. The recommendation echoes the request's id and hash and carries the decision's note: its brain, plan and candidates (a card prompt's carries the brain only).
+**Answering** (`BrainServer.cs:138-154`). A combat decision's legal actions are parsed into combat actions and its screen's combat observation is what the brain sees; a card prompt's answer is written `pick:i,j`; every other surface is a macro decision. The recommendation echoes the request's id and hash and carries the decision's note: its brain, plan and candidates. A card prompt's carries no plan, and in combat no candidates either; outside combat, its candidates are the answers L0 weighed.
 
-**The `brain` command** wraps it ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). It makes two champions, one per environment, from its options: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s, the SL planner by default ([Environments §5](/en/arch/environments/#sec-5)). Both share one worker pool. `--log FILE` writes each run's decision log at its `run_end`, so a host that drops without one leaves no lines; `--wire FILE` records every message a host sends, from which `clones` checks the mod's SL records ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)).
+**Explained answers.** The `brain` command makes its `Dispatcher`s with `explain`, for hosts that show answers: at a map decision each option the macro brain scored then also carries the route to the boss it would take after that option, `IMacroPolicy.Plan` asked once per option (`Candidate.plan`, [Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)). `run` in process makes them without it.
+
+**The `brain` command** wraps it ([Simulator: reference §4](/en/arch/simulator/reference/#sec-4)). It makes two champions, one per environment, from its options: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s, the SL planner by default ([Environments §5](/en/arch/environments/#sec-5)). Both share one worker pool. A host may ask in `hello` for one of the SL planner's efforts (`low`, `medium`, `high`, `max`, [The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)): that run's SL planner then plays with the preset's budget, and the champion's name in `ready` says so; another combat brain plays as it is, and an effort it does not know is refused with an `error`. The `Dispatcher` maker for each environment and effort is made at the first run that asks for it. `--log FILE` writes each run's decision log at its `run_end`, so a host that drops without one leaves no lines; `--wire FILE` records every message a host sends, from which `clones` checks the mod's SL records ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)).
 
 ## 6. The code
 
@@ -157,7 +159,7 @@ public sealed class PublicRecord
 | `Reports.cs` | `Rate`, `BossEntry`, `Metrics`, `EvalReport`, `Leaderboard` | reports and the leaderboard ([Evaluation: metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7)) |
 | `Gate.cs` | `Gate`, `ChampionFile` | the paired gate and champion files ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)) |
 
-**`Dispatcher`** (`Dispatcher.cs:55-209`), made with the run id, the environment, the four routes, whether to log, and, for `--afterstates clone`, how to open the node's clone for the macro side:
+**`Dispatcher`** (`Dispatcher.cs:58-217`), made with the run id, the environment, the four routes, whether to log, for `--afterstates clone` how to open the node's clone for the macro side, and whether to explain map options ([§5](#sec-5)):
 
 | member | what |
 |---|---|
@@ -174,7 +176,7 @@ public sealed class PublicRecord
 
 | type | what |
 |---|---|
-| `ICombatPolicy`, `IChoicePolicy`, `IMacroPolicy` | a policy for each kind of decision; `IChoicePolicy` and `IMacroPolicy` also say whether their last answer was explored, and `IMacroPolicy` what it plans after its answer |
+| `ICombatPolicy`, `IChoicePolicy`, `IMacroPolicy` | a policy for each kind of decision; `IChoicePolicy` and `IMacroPolicy` also say whether their last answer was explored and which options it was chosen among, with their values (`Scored`, none by default), and `IMacroPolicy` what it plans after an answer (`Plan`) |
 | `CombatDecision`, `ChoiceDecision`, `MacroDecision` | a decision: its legal actions (or its prompt), its observation made on demand, and for the macro side the node's clone if one is open (`IMacroClone`) |
 | `CombatDecisionResult` | a combat brain's answer: the first action, the plan after it, the candidates, the plan's observation hashes, replanned, and whether its line repeats a cycle |
 | `Budget`, `TurnPlan`, `SlRoute`, `MoveRecord` | the search budget, following a plan, the planner's route, the record of enemy moves |

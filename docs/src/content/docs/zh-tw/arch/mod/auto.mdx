@@ -1,55 +1,80 @@
 ---
 title: 自動遊玩與安全
-description: 'Mod 要自己遊玩還缺什麼，以及什麼讓它保持公平：規劃中的執行器和自動跑局驅動程式、它寫的日誌、R3 = R4、操作與安全規則、它的 Harmony 補丁和 JIT、它借鑑的已有工作、它的測試和未決問題。'
+description: '玩家要求時 AI 如何在真實遊戲裡打，以及什麼讓它保持公平：執行器、按目標來打以及它的等待和停止條件、規劃中的自動跑局驅動程式、日誌、R3 = R4、操作與安全規則、它的 Harmony 補丁和 JIT、它借鑑的已有工作、它的測試和未決問題。'
 sidebar:
   label: 自動遊玩與安全
   badge:
-    text: 大多規劃中
-    variant: caution
+    text: 部分實作
+    variant: tip
 ---
 
 import { Badge } from '@astrojs/starlight/components';
 
-輔助模式顯示大腦的答案，把每一次點選都留給玩家。另外還規劃了兩種模式：**自動遊玩**，由 Mod 自己打出答案；以及**半自動**，玩家按一個鍵時，它打出下一步。真實遊戲要靠自動遊玩來評估：模擬到實機階梯的最後一級 R4，就是在真實遊戲裡用和模擬器相同的種子跑完整局（[評估 §2](/zh-tw/arch/evaluation/#sec-2)）。本頁先描述規劃中的部分，再說明目前已經實作、而且成立的東西：日誌、安全規則、補丁和測試。
+輔助模式顯示大腦的答案。玩家自己打出它，或者請 AI 來打：透過面板的工具列或它的按鍵，AI 打出下一個動作、回合或房間的剩餘部分，或者自己一直打下去，直到被暫停（[§2](#sec-2)）。每個動作都像玩家的點選那樣執行（[§1](#sec-1)）。在沒有人坐在鍵盤前的情況下打完整局，是模擬到實機階梯的最後一級 R4：它在真實遊戲裡打按種子開局的對局，拿來和模擬器的對局比較（[評估 §2](/zh-tw/arch/evaluation/#sec-2)）；它的驅動程式還在規劃中（[§2](#sec-2)）。本頁先描述執行器和各個目標，再說明日誌、操作與安全規則、補丁和測試。
 
-§1–§2 都還沒有實作：沒有執行器、沒有轉接器、沒有自動跑局驅動程式，除了 F8 也沒有別的按鍵。
+## 1. 執行器
 
-## 1. 執行轉接器 <Badge text="規劃中" variant="caution" />
+`Executor.Run`（`Executor.cs`）執行一個動作：大腦對畫面上那個決策的答案，所以一定是那個決策的合法動作之一。GameBridge 從不碰 Godot 節點（[GameBridge §2](/zh-tw/arch/gamebridge/#sec-2)），所以這部分節點端的工作放在 Mod 裡。執行器打出每個動作的方式和玩家的點選相同，好讓遊戲的畫面像點選之後那樣接著走。它走三條路徑之一：
 
-轉接器把一個決策介面的動作連到畫面上的 Godot 節點。GameBridge 從不碰 Godot 節點（[GameBridge §2](/zh-tw/arch/gamebridge/#sec-2)），所以這部分節點端的工作放在 Mod 裡。一個介面就能同時服務規劃中的標示和自動遊玩：標示問一個動作在畫面上的哪裡，自動遊玩則請轉接器去執行它。
+- **GameBridge 的 start**，在點選做的就是這個呼叫的地方：戰鬥、地圖、購買、寶箱的遺物、水晶球和藥水欄。
+- **按鈕自己的處理函式**，在點選做的不只是開始動作的地方：獎勵畫面、休息處和事件房間會更新它們自己的按鈕，而每一條離開房間的路都會打開地圖。只有在按鈕已啟用而且在畫面上時（`IsEnabled && IsVisibleInTree()`）才按下它（`ForceClick`），`ForceClick` 自己不檢查這些 <Badge text="已核實" variant="success" />。
+- **畫面等待的任務**，用於選牌提示、卡牌獎勵和卡包。這些畫面把它們的答案交給一個遊戲在 await 的任務（一個 `TaskCompletionSource`）；執行器用大腦的選擇完成那個任務，就像畫面自己的確認那樣。
 
-```csharp
-// One adapter per surface; highlight and auto-play share the action → node mapping.
-interface ISurfaceAdapter
-{
-    string Surface { get; }
-    bool Matches();                       // current screen/room is this surface
-    Control? AnchorFor(string action);    // node to highlight; null = panel only
-    bool Execute(string action);          // same entry point a human click reaches
-}
-```
-
-`Execute` 在各類決策介面上會呼叫什麼：
-
-| 決策介面 | `Execute` |
+| 決策介面 | 執行器呼叫什麼 |
 |---|---|
-| 戰鬥 | `CombatActions.Start`（GameBridge）；只在 `CanTurnBeEnded` 時結束回合 |
-| 按鈕 | 按鈕的處理函式，但要先檢查 `IsEnabled && IsVisibleInTree()`。`ForceClick` 兩者都不檢查 <Badge text="已核實" variant="success" /> |
-| 商店 | `entry.OnTryPurchaseWrapper(inv)`。對商人節點呼叫 `ForceClick` 沒有任何效果 |
-| 地圖 | `NMapScreen.OnMapPointSelectedLocally(point)` |
-| 選牌提示 | 點選卡牌槽，再按確認。走這條 UI 路徑，`PlayerChoice` 會留在重播記錄裡（[GameBridge：各決策介面的動作 §7](/zh-tw/arch/gamebridge/actions/#sec-7)） |
+| 戰鬥 | `CombatActions.Start`：出牌走 `TryManualPlay`，它會檢查目標選擇；藥水連同它的目標走 `EnqueueManualUse`；回合結束則是佇列的 `EndPlayerTurnAction` |
+| 藥水欄，戰鬥外 | `PotionActions.Start`：喝下或丟棄 |
+| 地圖 | `NMapScreen.OnMapPointSelectedLocally(point)`，在那個點的節點啟用之後 |
+| 商店 | 購買：`ShopActions.Start`，也就是商品自己的 `OnTryPurchaseWrapper`，先對照合法清單檢查（start 是一個任務，所以錯誤不會傳到執行器）；商人的庫存會先打開，讓玩家看到這次購買。`leave`：庫存開著時先按它的返回按鈕，然後按房間的繼續按鈕 |
+| 財寶 | 遺物：`TreasureActions.Start`；`skip`：繼續按鈕 |
+| 水晶球 | `CrystalSphereActions.Start` |
+| 獎勵 | 獎勵自己的按鈕（`NRewardButton`）；`rewards_done`：繼續按鈕 |
+| 休息處 | 選項的按鈕（`NRestSiteRoom.GetButtonForOption`）；`leave`：繼續按鈕 |
+| 事件 | 房間的處理函式 `NEventRoom.OptionButtonClicked(option, index)`，它也會清掉舊的按鈕；`proceed`：事件顯示了自己的繼續選項時用它，否則用 `NEventRoom.Proceed()`，它會打開地圖。遠古之民的對話會先一行一行點完 |
+| 選牌提示 | 把選中的牌交給手牌選擇、網格畫面（之後它會離開覆蓋層）或選一張牌畫面的任務。答案選的是規範索引；`Asking.GameIndex` 把每個索引對回遊戲自己的清單（[主迴圈 §5](/zh-tw/arch/mod/loop/#sec-5)） |
+| 卡牌獎勵 | 把牌的索引交給畫面的任務，或者是替代選項（略過、重骰）的索引，排在牌之後計數 |
+| 卡包 | 把卡包交給畫面的任務 |
 
-要打的一步是推薦的 `action`；它的 `plan` 是之後的部分（[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。`Execute` 之後，Mod 會期待觀測的鍵在超時之內改變（遊戲速度為 Fast 時 10 秒，Instant 時 3 秒）；如果沒有改變，就重新觀測，連續失敗 3 次就暫停並記入日誌。如果沒有轉接器匹配，或者畫面空閒卻沒有合法動作，自動遊玩會暫停，面板會顯示「manual needed」（需要手動操作），Mod 會把它作為覆蓋率 bug 記入日誌：絕不執行隨機動作。
+**完成，或再試**。每次呼叫傳回 `Done`，表示遊戲正在執行它；或者 `Again`：在動作被執行之前的一個步驟（遠古之民的一行對話、商店的庫存關著），或者動作的按鈕或節點還沒準備好，或者最上層的畫面不是這個決策介面預期的那個。傳回 `Again` 的動作會在等待之後再試一次（[§2](#sec-2)）。執行器讀不懂的答案會拋出例外（「cannot carry out ACTION on SURFACE」），AI 隨之停下。
 
-目前標記是自己找到它們的節點（`CombatMark`、`MapMark`），不經過轉接器（[輸出 §3](/zh-tw/arch/output/#sec-3)）。每個決策介面上 Mod 的路徑和模擬器的路徑，在 [GameBridge：各決策介面的動作](/zh-tw/arch/gamebridge/actions/)裡並排列出。
+**像玩家的一樣記錄**。執行器走的是 SL 紀錄所監看的那些遊戲入口，所以 AI 的動作進入節點的紀錄時，和玩家的動作完全一樣（[SL 紀錄 §3](/zh-tw/arch/mod/sl-record/#sec-3)）。對它打出的每個動作，Mod 都送出 `executed`（[協定：線路 §5](/zh-tw/arch/protocol/wire/#sec-5)）。
 
-## 2. 自動跑局驅動程式 <Badge text="規劃中" variant="caution" />
+**輕推**。有些畫面在等玩家，卻沒有什麼要決定：關著的寶箱；寶箱的遺物之後、一場不給獎勵的戰鬥之後和水晶球最後一次占卜之後的繼續按鈕；以及遠古之民的對話。這些不會問大腦。AI 自己打或打到一個房間結束時（[§2](#sec-2)），遊戲在沒有決策的情況下等了 1.2 秒之後，`Executor.Nudge` 就按下它們，並記下按了什麼。
 
-驅動程式會在真實遊戲裡自己跑完整局，用於 R4。
+執行器沒有自己的動作，也沒有退路。它沒有路徑的決策介面，或它讀不了的畫面，都會傳回 `Again`，AI 在 10 秒後停下（[§2](#sec-2)）。標記是自己找到它們的節點（`CombatMark`、`MapMark`），不經過執行器（[輸出 §3](/zh-tw/arch/output/#sec-3)）。每個決策介面上 Mod 的路徑和模擬器的路徑，在 [GameBridge：各決策介面的動作](/zh-tw/arch/gamebridge/actions/)裡並排列出。
+
+## 2. 按目標來打
+
+玩家發問，AI 來打（`Assist.cs`）。它打到多遠，就是**目標**：
+
+| 目標 | 怎麼要求 | AI 打什麼 | 直到 |
+|---|---|---|---|
+| Off | | 什麼都不打：面板只顯示答案 | |
+| One | F10，單步按鈕 | 下一個動作 | 它被打出 |
+| Turn | 戰鬥中的 F11 | 這個回合的動作，包括戰鬥中的選牌提示 | 它打出 `end_turn`，或者決策不再是戰鬥的 |
+| Room | 其他地方的 F11 | 直到下一個地圖決策為止的所有東西；從地圖出發時，先走地圖上的這一步 | 在一個不在地圖上的動作之後出現地圖決策 |
+| Auto | F5，自動按鈕 | 所有東西 | 玩家暫停它（再按一次 F5），或者遇到停止條件 |
+
+自動遊玩進行時，單步按鈕和完成按鈕沒有作用；其他時候，每個按鈕都以它的目標取代之前的那一個。它們的標籤跟著畫面走：戰鬥中是「打一張」和「打完回合」，地圖上是「走一步」和「打完下一房」，其他地方是「幫我選」和「走完房間」。
+
+**每個狀態一次**。AI 只在它回答的那個決策還在畫面上時打出答案，也就是觀測雜湊和合法動作組成的同一個鍵（[主迴圈 §3](/zh-tw/arch/mod/loop/#sec-3)），而且每個鍵只打一次。動作之後 10 秒鍵仍然不變，就表示這個動作沒有作用，AI 停下。新的目標讓這一切重新開始：之前打過卻沒有作用的狀態，可以再打一次。
+
+**等待**。每個動作之前，以及每次再試之前，AI 從答案顯示的那一刻起等一段時間，讓玩家跟得上：慢速 1.5 秒，中速（預設）0.8 秒，快速 0.2 秒。單一步（目標 One）立刻打出。遊戲自己的速度設定保持原樣。
+
+**停止條件**。如果玩家保留以下設定（兩者預設都開著），自動遊玩會在一個答案之前停下：
+
+- **下一個是菁英或頭目**：地圖的答案要移動到菁英或頭目的點；
+- **獲勝機率下降了**：V 對贏下這一局的機率，取自最近一個戰鬥外的答案（[輸出 §2](/zh-tw/arch/output/#sec-2)），比自動遊玩開始以來的最好值低超過 3 個百分點。之後最好值就設為下降後的值，所以下一次停下需要一次新的下降。
+
+在玩家開始自動遊玩的那個決策處，兩者都不會讓它停下：在它停下的地方再按一次自動，它就會繼續打。每個目標也會在以下情況結束：一局結束時；一個動作讓狀態保持原樣 10 秒時；動作的按鈕 10 秒都沒準備好時（「AI 按不了」）；執行器拋出例外時；以及與大腦的連線中斷時，這會連工具列一起帶走：之後 AI 只在玩家要求時才重新開始。面板的橫條用琥珀色說明 AI 為什麼停下（[輸出 §2](/zh-tw/arch/output/#sec-2)）。
+
+**AI 做了什麼**。每打出一個動作，Mod 就送出帶有決策 id 的 `executed`，面板則列出 AI 最近的四個動作，連同層數和答案的值。
+
+**規劃中：自動跑局驅動程式** <Badge text="規劃中" variant="caution" />。驅動程式會在真實遊戲裡自己跑完整局，用於 R4。
 
 - **按種子開局**：`NGame.StartNewSingleplayerRun(character, shouldSave: false, acts, modifiers, seed, GameMode.Standard, ascensionLevel)`（`Nodes/NGame.cs:1137`），幕的選擇與大廳會做的相同（[模擬器：整局 §2](/zh-tw/arch/simulator/runs/#sec-2)）。另一種做法是在按下確認（Confirm）按鈕之前設定 `NGame.DebugSeedOverride`，就像遊戲自己的 AutoSlayer 那樣（`AutoSlay/AutoSlayer.cs:501`）。用 `shouldSave: false` 時，`current_run.save` 不會被動到，參數的說明文件就是這麼寫的（`NGame.cs:1130`） <Badge text="已核實" variant="success" />。對局歷史和進度大概仍會寫入 <Badge text="推斷" variant="caution" />，所以自動跑局只會使用帶 Mod 的玩家檔案。
 - **一局結束**：偵測到死亡（所有玩家都死了）或勝利；傳送 `run_end`；回到主選單；從預先登記的清單裡取下一個種子。
-- **速度**：只在自動跑局進行期間把 `PrefsSave.FastMode` 設為 Instant（`Saves/PrefsSave.cs:21`）。有兩個遊戲行為要注意：編輯器以外的建置會在啟動時把 Instant 降為 Fast，而偏好設定會在結束遊戲時儲存。所以在自動跑局停止時和遊戲結束時，都要把玩家自己的設定值恢復回去。
+- **速度**：只在自動跑局進行期間把 `PrefsSave.FastMode` 設為 Instant（`Saves/PrefsSave.cs:21`），並把自動遊玩的等待設為無。有兩個遊戲行為要注意：編輯器以外的建置會在啟動時把 Instant 降為 Fast，而偏好設定會在結束遊戲時儲存。所以在自動跑局停止時和遊戲結束時，都要把玩家自己的設定值恢復回去。
 - **放棄或崩潰**：這個種子記為 `aborted`，並附上原因。絕不為了挑更好的結果而重跑一個種子。
 
 ## 3. 日誌，以及 R3 = R4
@@ -58,34 +83,39 @@ interface ISurfaceAdapter
 
 | 等級 | 內容 |
 |---|---|
-| info | 「assist mode, ENV, brain at PATH」；「environment ENV」；「connected to the brain」；「no brain: REASON」（每種不同的原因一次） |
-| warning | 「off: game V, the mod is for v0.111.0」；「brain: MESSAGE」（一個 `error`）；「unexpected TYPE from the brain」；「a card prompt (TYPE) without its context, left to the player」；「SL record of node N broken after K steps: REASON」；設定檔的兩條警告 |
+| info | 「assist mode, ENV, brain at PATH」；「environment ENV」；「effort EFFORT」；「connected to the brain」；「no brain: REASON」（每種不同的原因一次）；「AI stopped: REASON」；「auto-play pressed the chest」、「… the proceed」、「… the dialogue」 |
+| warning | 「off: game V, the mod is for v0.111.0」；「brain: MESSAGE」（一個 `error`）；「unexpected TYPE from the brain」；「a card prompt (TYPE) without its context, left to the player」；「SL record of node N broken after K steps: REASON」；「could not play ACTION: EXCEPTION」；設定檔的兩條警告 |
 | error | 一個影格的例外，每種不同的文字一次；「SL record: EXCEPTION」；「no AI settings tab: EXCEPTION」 |
 
-它唯一寫的檔案是自己的設定檔（[概覽 §5](/zh-tw/arch/mod/#sec-5)）。它沒有自己的決策日誌。真實遊戲裡的一個工作階段改由大腦那一側記錄：`brain --log FILE` 寫出 Harness 的決策日誌（每個決策的觀測、合法動作、選擇、計畫、候選、環境和時間，[Harness：決策日誌](/zh-tw/arch/harness/decision-log/)），`brain --wire FILE` 則寫出宿主傳來的每則訊息，包括帶有遊戲版本的 `hello`。2026-10-28 的擷取就是這樣的一對，保存在本機的 `tmp/assist/` 裡（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
+它唯一寫的檔案是自己的設定檔（[概覽 §5](/zh-tw/arch/mod/#sec-5)）。它沒有自己的決策日誌。真實遊戲裡的一個工作階段改由大腦那一側記錄：`brain --log FILE` 寫出 Harness 的決策日誌（每個決策的觀測、合法動作、選擇、計畫、候選、環境和時間，[Harness：決策日誌](/zh-tw/arch/harness/decision-log/)），`brain --wire FILE` 則寫出宿主傳來的每則訊息，包括帶有遊戲版本的 `hello`，以及 AI 打出的每個動作的 `executed`。2026-10-28 的擷取就是這樣的一對，保存在本機的 `tmp/assist/` 裡（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 
-**規劃中：Mod 的決策日誌**。每個決策記下：觀測、合法動作、推薦、實際打出的動作、延遲、環境、遊戲和 Mod 的版本，以及必須為 0 的 `NumReloads`（[環境：資訊與節點 §8](/zh-tw/arch/environments/information/#sec-8)）。目前沒有東西讀 `NumReloads`。
+**規劃中：Mod 的決策日誌**。每個決策記下：觀測、合法動作、推薦、實際打出的動作和由誰打出、延遲、環境、遊戲和 Mod 的版本，以及必須為 0 的 `NumReloads`（[環境：資訊與節點 §8](/zh-tw/arch/environments/information/#sec-8)）。目前沒有東西讀 `NumReloads`。
 
 **規劃中：R3 = R4**。同一個種子、同一串決策，在模擬器（R3）和遊戲（R4）裡打出來，必須得到相同的觀測；出現差異就是 GameBridge 或模擬器的 bug，測試會報告第一個差異。目前有的東西範圍較窄：`clones` 為 SL 紀錄逐個決策檢查，節點的複本問的是不是遊戲問過的那個決策（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 
 ## 4. 操作與安全
 
-| 操作 | 狀態 | 作用 |
+| 操作 | 位置 | 作用 |
 |---|---|---|
-| F8 | 已實作 | 隱藏或顯示面板和所有標記；Mod 關閉時也有效 |
-| SL / NoSL 開關 | 已實作 | 在面板的標頭和 AI 分頁裡（[概覽 §5](/zh-tw/arch/mod/#sec-5)） |
-| AI 分頁 | 已實作 | Mod 的設定 |
-| F9 | 規劃中 | 暫停或繼續自動遊玩 |
-| 單步模式 | 規劃中 | 每按一次鍵執行一個動作 |
-| 空白鍵（半自動） | 規劃中 | 標記顯示計畫；按空白鍵打出下一步 |
+| F5 | 工具列的第一個按鈕，「自動」/「暫停」 | 開啟自動遊玩；再按一次，暫停 |
+| F10 | 單步按鈕 | 一個動作（[§2](#sec-2)） |
+| F11 | 完成按鈕 | 戰鬥中是回合剩下的部分，其他地方是房間，從地圖出發是下一個房間 |
+| 速度 | 慢、中、快：自動遊玩進行時在工具列下方，以及在 AI 分頁裡 | 每個動作之前的等待 |
+| 停止條件 | 「菁英、頭目前」和「勝率掉 3 點」：自動遊玩進行時在工具列下方，以及在 AI 分頁裡 | 自動遊玩在哪裡停下 |
+| 力度 | 工具列下方的一列切換鈕，以及在 AI 分頁裡 | 大腦打這一局時用的 SL 規劃器力度（[概覽 §5](/zh-tw/arch/mod/#sec-5)） |
+| F8 | 任何地方 | 隱藏或顯示面板和所有標記；Mod 關閉時也有效 |
+| SL / NoSL | 面板的標頭，以及 AI 分頁 | 環境（[概覽 §5](/zh-tw/arch/mod/#sec-5)） |
+| AI 分頁 | 遊戲的設定畫面 | Mod 的設定 |
 
-**規則**，目前都成立，規劃中的模式也必須遵守：
+工具列和它的按鍵只出現在大腦已經接下（`ready`）的單人對局裡；沒有對局、沒有大腦或大腦出錯時，這些按鍵沒有作用。
 
-- **Mod 不對任何東西採取行動**。輔助模式下，它從不啟動任何遊戲動作。規劃中的自動遊玩只會打出決策合法清單裡的動作。大腦的答案由 Harness 對照這份清單檢查，遇到不合法的就拋出例外（[Harness：路由、預算與種子 §6](/zh-tw/arch/harness/routing/#sec-6)）。
+**規則**：
+
+- **AI 只在玩家要求時行動**，而且只打大腦對畫面上那個決策的答案，每個狀態一次。那個答案是決策的合法動作之一：Harness 對照那份清單檢查它，遇到不合法的就拋出例外（[Harness：路由、預算與種子 §6](/zh-tw/arch/harness/routing/#sec-6)）。除了答案之外，自動遊玩只按不是決策的畫面：寶箱、繼續按鈕、遠古之民的對話（[§1](#sec-1)）。沒有目標時，Mod 不啟動任何遊戲動作。
 - **不修改狀態、不用主控台、不讀檔、不寫存檔**。Mod 沒有做這些事的任何介面。
-- **只限單人**。輔助在多人對局裡會自行關閉，規劃中的自動遊玩則會拒絕任何多人大廳。
+- **只限單人**。輔助和它的工具列在多人對局裡會自行關閉，規劃中的驅動程式則會拒絕任何多人大廳。
 - **什麼會離開遊戲**。socket 只傳輸協定訊息。對局 id 是種子的雜湊，觀測裡也不含種子（`RunView` 沒有種子），所以在 NoSL 下，種子從不離開宿主。SL 下則會：節點的檢查點是遊戲的完整存檔，帶有種子和每條亂數流的狀態，這是 SL 可以知道的（[SL 紀錄 §2](/zh-tw/arch/mod/sl-record/#sec-2)）。NoSL 從不傳送檢查點。
-- **遊戲的設定畫面**是 Mod 唯一會改動遊戲節點的地方：它加上自己的分頁和面板，並把分頁列移動半格，讓它保持置中（[輸出 §2](/zh-tw/arch/output/#sec-2)）。它畫的其他所有東西都在自己的圖層裡。
+- **遊戲的設定畫面**是 Mod 唯一會為了繪製而改動遊戲節點的地方：它加上自己的分頁和面板，並把分頁列移動半格，讓它保持置中（[輸出 §2](/zh-tw/arch/output/#sec-2)）。它畫的其他所有東西都在自己的圖層裡。
 
 ## 5. 補丁與 JIT
 
@@ -116,8 +146,8 @@ STS2MCP（MIT 授權）是一個現成的 Mod，讓外部程式透過 HTTP 操�
 
 **避開**：
 
-- 直接 `new PlayCardAction`：它會跳過 `CanPlayTargeting` 和出牌效果；
-- 直接結束回合；
+- 直接 `new PlayCardAction`：它會跳過 `CanPlayTargeting` 和出牌效果。執行器像手牌那樣，透過 `TryManualPlay` 打出一張牌；
+- 直接結束回合：執行器像結束回合按鈕那樣，透過遊戲的動作佇列排入回合結束；
 - 暴露種子或地圖的路徑；
 - 帶 CORS `*` 的 HTTP：任何網頁都能操控遊戲。Mod 只用 Unix socket。
 
@@ -129,7 +159,8 @@ Mod 沒有單元測試。它和模擬器共用的部分在模擬器那邊測試�
 |---|---|
 | **SL 往返**：`brain --wire` 和 `clones` | 已實作並執行過（[SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
 | **載入**：Mod 能初始化、版本守衛有效、面板會顯示 | 手動 |
-| **真實遊戲裡的決策介面覆蓋**：腳本化的 R4 對局走遍每種決策介面，沒有任何決策因為缺少讀取器而留給玩家 | 規劃中 |
+| **執行器和各個目標**：AI 打每種決策介面、每種停止條件 | 手動；反射用到的名稱和型別、選牌提示的索引對應表，以及 Godot 呼叫，都已經對照反編譯的遊戲審查過 |
+| **真實遊戲裡的決策介面覆蓋**：腳本化的 R4 對局走遍每種決策介面，沒有任何決策因為缺少讀取器而留給玩家 | 規劃中，與驅動程式一起 |
 | **空閒**：動畫進行中從不送出決策；記錄決策時帶上影格編號，並檢查沒有一個與排隊中的動作重疊 | 規劃中 |
 | **速度恢復**：停止時和結束遊戲時都把 Instant 或 Fast 恢復回去 | 規劃中，與驅動程式一起 |
 

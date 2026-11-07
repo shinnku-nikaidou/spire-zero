@@ -14,23 +14,24 @@ Everything else in this book runs headless: the simulator plays the game's own `
 
 <Aside title="Status">
 
-Built: assist mode on every surface, in both environments. `src/Sts2Ai.Mod` loads in the real game (v0.111.0), connects to the brain, asks about each decision once the screen on top has been idle for 3 frames (combat, card prompts, map, rewards, card reward, bundle, event, shop, rest site, treasure, crystal sphere), and shows the answer in a panel with the game's names, with marks on the map and on the cards and targets in combat ([Output](/en/arch/output/)). A switch on the panel picks SL or NoSL. In SL the mod sends the node's checkpoint and every step taken in the node, so the brain plans each combat on the node's clone ([The SL record](/en/arch/mod/sl-record/)); in the real game, 89 of 90 SL decisions replayed on their clones asked the same decision, and the other one's cause is fixed ([The SL record §8](/en/arch/mod/sl-record/#sec-8)). The mod has not been watched through a whole real run yet. Planned: playing by itself (the executor adapters and the auto-run driver) and a decision log of its own ([Auto-play and safety](/en/arch/mod/auto/)).
+Built: assist mode on every surface, in both environments. `src/Sts2Ai.Mod` loads in the real game (v0.111.0), connects to the brain, asks about each decision once the screen on top has been idle for 3 frames (combat, card prompts, map, rewards, card reward, bundle, event, shop, rest site, treasure, crystal sphere), and shows the answer in a panel with the game's names and each option's chance to win, with marks on the map and on the cards and targets in combat ([Output](/en/arch/output/)). From the panel's toolbar the AI also plays the answers itself, when the player asks: one action, the rest of the turn or the room, or on its own until paused ([Auto-play and safety](/en/arch/mod/auto/)). A switch on the panel picks SL or NoSL. In SL the mod sends the node's checkpoint and every step taken in the node, so the brain plans each combat on the node's clone ([The SL record](/en/arch/mod/sl-record/)); in the real game, 89 of 90 SL decisions replayed on their clones asked the same decision, and the other one's cause is fixed ([The SL record §8](/en/arch/mod/sl-record/#sec-8)). The mod has not been watched through a whole real run yet. Planned: playing whole runs with no one at the keyboard (the auto-run driver) and a decision log of its own ([Auto-play and safety §2](/en/arch/mod/auto/#sec-2), [§3](/en/arch/mod/auto/#sec-3)).
 
 </Aside>
 
 ## 1. What the mod does, and what it does not
 
-The mod does four things, all on the game's main thread:
+The mod does five things, all on the game's main thread:
 
 1. **Reads the decision on screen**: which screen is on top, whether it is idle, and the observation and legal actions it offers, asked with the same GameBridge calls the simulator uses ([The main loop §4](/en/arch/mod/loop/#sec-4)).
 2. **Asks the brain**: one `decision` message at a time over a Unix socket, with `cancel` when the screen moves on first ([The main loop §3](/en/arch/mod/loop/#sec-3), [§8](/en/arch/mod/loop/#sec-8)).
 3. **Shows the answer**: the panel, the route on the map and the plan's marks in combat ([Output](/en/arch/output/)).
-4. **Keeps the SL record**: the node's checkpoint and every decision the player takes in it, read where the game commits it, which SL sends before each decision ([The SL record](/en/arch/mod/sl-record/)).
+4. **Plays the answer, when the player asks**: the toolbar's goals, from one action to auto-play, each action carried out as the player's click would be ([Auto-play and safety](/en/arch/mod/auto/)).
+5. **Keeps the SL record**: the node's checkpoint and every decision taken in it, the player's or the AI's, read where the game commits it, which SL sends before each decision ([The SL record](/en/arch/mod/sl-record/)).
 
 What it does not do:
 
 - **think**: no search, no learning, no strategy runs in the game process. The brain is a separate process, `brain`, which the player starts ([§4](#sec-4));
-- **act**: in assist mode the player plays every step. The manifest says so: "Assist only: it never acts on the game". Playing by itself is planned ([Auto-play and safety §1](/en/arch/mod/auto/#sec-1));
+- **act unasked**: the AI plays only when the player asks, from the toolbar or its keys, and only the brain's answer to the decision on screen ([Auto-play and safety §4](/en/arch/mod/auto/#sec-4)). Nothing starts a run by itself: the auto-run driver is planned ([Auto-play and safety §2](/en/arch/mod/auto/#sec-2));
 - **multiplayer**: the game still loads the mod in a multiplayer lobby, as a mod that does not affect gameplay, but a run with more than one player gets no help: the panel says "Off in multiplayer", and the SL record ignores its nodes;
 - **write the game's files**: nothing under the game's profile, no save, no console command, no reload. It writes only its settings file, beside the brain's socket ([§5](#sec-5)), and its lines in the game's log ([Auto-play and safety §3](/en/arch/mod/auto/#sec-3)).
 
@@ -52,7 +53,7 @@ flowchart LR
 2. `Assist.Tick` hashes the observation. When the observation and its legal actions have held for 3 frames, and no other decision is open, it sends `decision` with the hash, the surface, the observation and the legal actions.
 3. The brain's Harness routes the decision to the macro brain, which values each option's afterstate with V and answers `map:4,10`, with the rest of the act's route as its plan ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)).
 4. The answer is for that hash and those legal actions only. While they still hold, the panel names the room ("go to" and the map legend's name for it) and the rooms of the route to the boss, and the map gets a pulsing ring on the point and a line along the route ([Output §3](/en/arch/output/#sec-3)).
-5. The player clicks a point. The mod reads the travel where the game queues it and records it in the SL record ([The SL record §3](/en/arch/mod/sl-record/#sec-3)); the screen changes, and the next decision starts over.
+5. The player clicks a point, or presses F10 and the AI travels there as the click would ([Auto-play and safety §1](/en/arch/mod/auto/#sec-1)). The mod reads the travel where the game queues it and records it in the SL record ([The SL record §3](/en/arch/mod/sl-record/#sec-3)); the screen changes, and the next decision starts over.
 
 ## 3. Installing and loading
 
@@ -107,6 +108,7 @@ dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/ch
 
 - `--champion` names the champion it plays: NoSL hosts get the file's combat brain (PIMC with the combat net) and macro brain (L0 with V); SL hosts get `--sl-policy`'s combat brain, the SL planner by default, with the same macro brain ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)). So one brain serves both environments, and the panel's switch needs no restart.
 - That holds for the NoSL champion's file, whose macro brain values each option on the afterstate predicted from the screen. The SL champion's file (`sl.json`) has L0 play its options on the node's clone (`afterstates: clone`), which SL alone allows: a `brain` started with it refuses NoSL hosts with an `error` ("l0 plays on the node's clone in SL only", `Brains/ChampionOptions.cs:39`), and in SL it needs the node's clone for the decisions outside combat too ([The SL record §6](/en/arch/mod/sl-record/#sec-6)).
+- The mod's effort setting ([§5](#sec-5)) asks the brain, in `hello`, for one of the SL planner's presets for the run: `low`, `medium`, `high` or `max` ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)). The brain then plays that run's SL planner with the preset's budget, and names it in the champion it sends back; with none asked, it plays its own. Another combat brain (PIMC) plays as it is ([Harness §5](/en/arch/harness/#sec-5)).
 - `--log FILE` writes Harness's decision log; `--wire FILE` writes every message the hosts send, which `clones` replays ([The SL record §8](/en/arch/mod/sl-record/#sec-8)).
 - A brain started through the launcher of a fixed build (`tmp/builds/REV/sim.sh`) has `HOME` pointed at `tmp/home`, so it needs `--socket ~/.local/state/sts2ai/brain.sock` to listen where the game looks ([Simulator: reference §1](/en/arch/simulator/reference/#sec-1)).
 - The brain prints a line per run: the run id, the host's role (`mod`), how the run ended, its floor, its decisions, and any replans and game errors in its workers.
@@ -118,7 +120,10 @@ Then start the game from Steam, agree to mods once, and start or continue a sing
 | control | where | effect |
 |---|---|---|
 | F8 | anywhere | hides or shows the panel and every mark |
+| F5, F10, F11 | the toolbar under the panel's head | the AI plays: on its own until paused, one action, or to the end of the turn or the room ([Auto-play and safety §2](/en/arch/mod/auto/#sec-2)) |
 | SL / NoSL | the panel's head | the environment ([Environments](/en/arch/environments/)); switching ends the run as the brain sees it, and the next decision starts a new one from there |
+| effort | a row of toggles under the toolbar | the SL planner's effort; a change ends the run as the brain sees it, as the switch does, and the next decision starts a new one with that effort (in SL, with the node's checkpoint sent again); the champion's name in the head shows the budget |
+| speed, stops | under the toolbar while auto-play runs | auto-play's wait and where it stops |
 | AI tab | the game's settings screen, after General, Graphics, Sound and Input | the mod's settings |
 
 The settings (`Settings.cs`, the AI tab's rows in `SettingsTab.cs`) are kept in `~/.local/state/sts2ai/settings.json`, beside the brain's socket and outside the game's profile. They are read once at start and written at every change; a file that cannot be read gives the defaults.
@@ -128,17 +133,21 @@ The settings (`Settings.cs`, the AI tab's rows in `SettingsTab.cs`) are kept in 
 | AI assist | off, on | on | off: the mod asks nothing and draws nothing, and the run ends as the brain sees it |
 | Environment | SL, NoSL | SL | the same choice as the panel's switch |
 | Panel | off, on | on | the panel card; the marks keep their own rows |
-| Considered options | off, values, values + bars | values + bars | the actions the brain scored, in the panel |
+| Considered options | off, values, values + bars | values + bars | the options the brain scored, with their chances to win, in the panel |
 | Order numbers on cards | off, on | on | the plan's step numbers on the cards it plays this turn |
 | Target and end-turn marks | off, on | on | rings on the plan's targets and on the end turn button |
 | Map route | off, next point, whole route | whole route | the ring on the next point, and the line along the route |
 | Panel opacity | 60% to 100%, by 2% | 92% | the card's background |
+| Search effort | the brain's, low, medium, high, max | the brain's | the SL planner's effort the mod asks the brain for; the same choice as the toolbar's row |
+| Speed of auto-play | slow, medium, fast | medium | the wait before each of the AI's actions: 1.5 s, 0.8 s, 0.2 s |
+| Stop before elites and bosses | off, on | on | auto-play stops before it travels to an elite or the boss |
+| Stop when the win chance falls 3 points | off, on | on | auto-play stops when V's chance to win falls more than 3 points below its best since auto-play started |
 
-A last button, "Reset AI settings", puts the defaults back. The keys planned for playing by itself (pause, step, semi-auto) are in [Auto-play and safety §4](/en/arch/mod/auto/#sec-4).
+The last three rows sit under their own header, "Auto-play". A last button, "Reset AI settings", puts the defaults back. Every label is in the game's language ([Output §2](/en/arch/output/#sec-2)). The keys and how far each one plays are in [Auto-play and safety §4](/en/arch/mod/auto/#sec-4).
 
 ## 6. What the panel says
 
-The panel's head shows the brain's champion (once the brain has named it), a status word and the switch. Its body shows the answer, or a message saying why there is none, with a quieter second line (`Assist.cs:61-162`, `Host.cs:44-63`):
+The panel's head shows the brain's champion (once the brain has named it, with its budget), a status line and the switch. Once the brain has taken the run, the status line is the run's own: the character, the ascension, the floor and the HP, as at the latest decision ("The Silent · A0 · floor 9 · HP 53/70"); before that it is a word. Its body shows the answer, or a message saying why there is none, with a quieter second line (`Assist.cs:162-278`, `Host.cs:44-65`):
 
 | status | message | second line | when |
 |---|---|---|---|
@@ -148,33 +157,37 @@ The panel's head shows the brain's champion (once the brain has named it), a sta
 | `off` | Off in multiplayer | | a run with more than one player; the switch shows neither environment |
 | `run sent` | Waiting for the brain | it loads the champion for this run | `hello` sent, `ready` not back yet |
 | `off for this run` | Brain error | the brain's message · back on at the next run | the brain answered `error`, until the next `hello` ([The main loop §8](/en/arch/mod/loop/#sec-8)) |
-| `ready` | Waiting for a decision | what to do first, such as "open the chest" | nothing on screen to decide, or something still moves |
-| `ready` | No SL clone of this room | why · the next room has one | SL, a combat, and the node's record is missing or broken ([The SL record §6](/en/arch/mod/sl-record/#sec-6)) |
-| `ready` | Thinking… | the seconds so far, while the decision on screen is the one asked | the decision is asked and not answered yet, or an older one is cancelled and its answer not back ([The main loop §3](/en/arch/mod/loop/#sec-3)) |
-| `ready` | the answer | the brain and its time | ([Output §2](/en/arch/output/#sec-2)) |
+| the run's line | Waiting for a decision | what to do first, such as "open the chest" | nothing on screen to decide, or something still moves |
+| the run's line | No SL clone of this room | why · the next room has one | SL, a combat, and the node's record is missing or broken ([The SL record §6](/en/arch/mod/sl-record/#sec-6)) |
+| the run's line | Thinking… | the seconds so far, while the decision on screen is the one asked | the decision is asked and not answered yet, or an older one is cancelled and its answer not back ([The main loop §3](/en/arch/mod/loop/#sec-3)) |
+| the run's line | the answer | how the fight or the run is expected to go after it; the foot names the brain and its time | ([Output §2](/en/arch/output/#sec-2)) |
 | `off` | off: game V, the mod is for v0.111.0 | | the version guard ([§3](#sec-3)); no switch, and no AI tab |
 | `error` | Mod error | the exception's message | the frame threw; logged once per distinct error |
 
-With assist off, the panel and the marks are hidden.
+From the brain's `ready` on, the toolbar, the effort row and the strip with the chance to win and the AI's state show above the message or the answer ([Output §2](/en/arch/output/#sec-2)). With assist off, the panel and the marks are hidden. Every word in the table is shown in the game's language; the reasons in the second lines (a socket error, the brain's message, an exception) come as they are, in English.
 
 ## 7. The code
 
-`src/Sts2Ai.Mod`, 12 source files. It builds against the game's DLLs and GodotSharp, the C# API of the Godot engine, from the same snapshot as the simulator (`src/GameReferences.props`), and compiles in GameBridge and Protocol ([§3](#sec-3)). It does not reference Brain or Harness.
+`src/Sts2Ai.Mod`, 16 source files. It builds against the game's DLLs and GodotSharp, the C# API of the Godot engine, from the same snapshot as the simulator (`src/GameReferences.props`), and compiles in GameBridge and Protocol ([§3](#sec-3)). It does not reference Brain or Harness.
 
 | file | lines | what |
 |---|---|---|
 | `ModEntry.cs` | 13 | the entry point the loader calls |
-| `Host.cs` | 64 | the version guard, the patches, the frame callback, and errors |
+| `Host.cs` | 66 | the version guard, the patches, the frame callback, and errors |
 | `BrainLink.cs` | 101 | the socket: connect, reconnect, a reader and a writer thread, the inbox ([The main loop §8](/en/arch/mod/loop/#sec-8)) |
-| `Assist.cs` | 226 | assist mode, once per frame: the run as the brain sees it, idle, one decision in flight, what the panel shows ([The main loop](/en/arch/mod/loop/)) |
-| `Screens.cs` | 168 | the decision the screen on top asks for ([The main loop §4](/en/arch/mod/loop/#sec-4)) |
+| `Assist.cs` | 486 | assist mode and the AI's play, once per frame: the run as the brain sees it, idle, one decision in flight, the goals with their waits and stops, what the panel shows ([The main loop](/en/arch/mod/loop/), [Auto-play and safety §2](/en/arch/mod/auto/#sec-2)) |
+| `Executor.cs` | 221 | an answer carried out as the player's click would be, and the nudges ([Auto-play and safety §1](/en/arch/mod/auto/#sec-1)) |
+| `Screens.cs` | 170 | the decision the screen on top asks for ([The main loop §4](/en/arch/mod/loop/#sec-4)) |
 | `NodeRecord.cs` | 299 | the SL record and its hooks ([The SL record](/en/arch/mod/sl-record/)) |
-| `UI/Panel.cs` | 356 | the panel card, and the marks it owns ([Output §2](/en/arch/output/#sec-2)) |
-| `UI/Describe.cs` | 189 | an answer in the game's names ([The main loop §6](/en/arch/mod/loop/#sec-6)) |
+| `UI/Panel.cs` | 702 | the panel card with its toolbar and its keys, and the marks it owns ([Output §2](/en/arch/output/#sec-2)) |
+| `UI/Icons.cs` | 64 | the toolbar's icons, drawn in code ([Output §2](/en/arch/output/#sec-2)) |
+| `UI/Fonts.cs` | 33 | the game's own font for the mod's text, by the game's language ([Output §2](/en/arch/output/#sec-2)) |
+| `UI/L10n.cs` | 175 | the mod's own words in the game's language ([Output §2](/en/arch/output/#sec-2)) |
+| `UI/Describe.cs` | 226 | an answer in the game's names, and what its options' values are ([The main loop §6](/en/arch/mod/loop/#sec-6)) |
 | `UI/MapMark.cs` | 93 | the ring and the route on the map ([Output §3](/en/arch/output/#sec-3)) |
-| `UI/CombatMark.cs` | 137 | the plan's marks in combat ([Output §3](/en/arch/output/#sec-3)) |
-| `UI/Settings.cs` | 66 | the settings and their file ([§5](#sec-5)) |
-| `UI/SettingsTab.cs` | 217 | the AI tab in the game's settings screen ([Output §2](/en/arch/output/#sec-2)) |
+| `UI/CombatMark.cs` | 138 | the plan's marks in combat ([Output §3](/en/arch/output/#sec-3)) |
+| `UI/Settings.cs` | 85 | the settings and their file ([§5](#sec-5)) |
+| `UI/SettingsTab.cs` | 224 | the AI tab in the game's settings screen ([Output §2](/en/arch/output/#sec-2)) |
 
 The project file is `Sts2Ai.Mod.csproj` (27 lines) and the manifest `Sts2Ai.json` (12). The mod has no unit tests of its own: what it shares with the simulator, GameBridge and Protocol, is tested there, and the rest is checked in the game ([Auto-play and safety §7](/en/arch/mod/auto/#sec-7)).
 
@@ -182,4 +195,4 @@ The project file is `Sts2Ai.Mod.csproj` (27 lines) and the manifest `Sts2Ai.json
 
 - [The main loop](/en/arch/mod/loop/): one thread for the game, each frame step by step, one decision in flight, idle per screen, card prompts, answers, and the brain link.
 - [The SL record](/en/arch/mod/sl-record/): the node's checkpoint, every step read where the game commits it, a broken record, what is sent, and how it was checked in the game.
-- [Auto-play and safety](/en/arch/mod/auto/): the planned executor and auto-run driver, logs, controls and safety, patches and the JIT, prior art, tests and open questions.
+- [Auto-play and safety](/en/arch/mod/auto/): the executor, playing by goal, the planned auto-run driver, logs, controls and safety, patches and the JIT, prior art, tests and open questions.

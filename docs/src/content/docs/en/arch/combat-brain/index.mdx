@@ -43,7 +43,7 @@ The combat brain answers two kinds of question:
 1. **The player's turn.** Which action next: play a card from the hand (on a target, if it needs one), use a potion, or end the turn. The legal actions come from the game, as Harness lists them ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)).
 2. **Card prompts during play.** Some cards ask a question when played: which card to discard, to exhaust, to put on top of the draw pile, which of three generated cards to take. Today these go to a fixed rule, `p0`, in the real fight and inside every simulated one ([Prompts, moves and workers §1](/en/arch/combat-brain/shared/#sec-1)).
 
-A decision with one legal action is answered without a search. Every other one returns three things: the first action, the rest of the plan after it, and every first action the search looked at with its value (the *candidates*, which the decision log keeps, [Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)). The plan matters: the SL planner's plan is the rest of the fight, and the fight plays it without searching again while the game shows what the plan expected; PIMC's plan is the rest of the turn, played without a search only when it repeats a cycle and every world agrees on it ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2)).
+A decision with one legal action is answered without a search. Every other one returns three things: the first action, the rest of the plan after it, and every first action the search looked at with its value (the *candidates*, which the decision log keeps and the mod shows, [Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)); the SL planner's also say how each one's best line ends, the chance to win and the HP left ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)). The plan matters: the SL planner's plan is the rest of the fight, and the fight plays it without searching again while the game shows what the plan expected; PIMC's plan is the rest of the turn, played without a search only when it repeats a cycle and every world agrees on it ([NoSL PIMC: budget §2](/en/arch/pimc/budget/#sec-2)).
 
 ## 2. A fight as a search problem
 
@@ -135,12 +135,14 @@ public interface ICombatLeaf
 {
     // A search leaf: the state after the turn ends, or after the combat does.
     double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
+    // The value with the chance to win the combat and the HP held at a win, from one evaluation.
+    LeafOutcome Outcome(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
 }
 
 public sealed record CombatDecisionResult(
     CombatAction First,                  // one of legal
     IReadOnlyList<CombatAction> Plan,    // the rest of the plan after First
-    IReadOnlyList<Candidate> Candidates, // every first action, best first
+    IReadOnlyList<Candidate> Candidates, // every first action scored, the pick first
     IReadOnlyList<ulong>? PlanHashes);   // the observation each step of Plan expects, when it can be followed
 ```
 

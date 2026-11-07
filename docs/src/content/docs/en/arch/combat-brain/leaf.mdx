@@ -1,6 +1,6 @@
 ---
 title: 'The leaf: what a state is worth'
-description: "Where a combat search stops and how the state there becomes one number: the combat net's two outputs, the prices that turn them into a value, the bound the planner relies on, and what this value cannot see."
+description: "Where a combat search stops and how the state there becomes one number: the combat net's two outputs, the prices that turn them into a value, the bound the planner relies on, the chance to win and HP the same call gives, and what this value cannot see."
 sidebar:
   label: The leaf
 ---
@@ -10,14 +10,14 @@ Every search stops somewhere. PIMC stops at the end of the turn; the SL planner 
 
 ## 1. What a leaf is
 
-A leaf is either a state at the start of a turn, after the enemies' turn has been played for real, or the end of the fight, won or lost. Both are valued by the same function, `ICombatLeaf.Value(status, observation, history)`: a lost fight is worth nothing, a won one by what it leaves, and a fight in progress by what it is expected to leave.
+A leaf is either a state at the start of a turn, after the enemies' turn has been played for real, or the end of the fight, won or lost. Both are valued by the same function, `ICombatLeaf.Value(status, observation, history)`: a lost fight is worth nothing, a won one by what it leaves, and a fight in progress by what it is expected to leave. `ICombatLeaf.Outcome` gives, from the same evaluation, the value with how the fight is expected to end: the chance to win it and the HP held at a win ([§5](#sec-5)).
 
 - **Observation only.** The leaf reads what the player sees, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)). It never reads the draw order or a random stream, so it cannot leak hidden state, in either environment.
 - **Ordering, more than level.** A search uses the leaf to compare lines: what matters is that a better state gets a higher value. A leaf that rates every state 0.1 too high plays the same as one that does not.
 
 ## 2. The prices of an ending
 
-Prices are numbers set by hand in `LeafValue` (`LeafValue.Of`, `src/Sts2Ai.Brain/Combat/LeafValue.cs:20-31`):
+Prices are numbers set by hand in `LeafValue` (`LeafValue.Of`, `src/Sts2Ai.Brain/Combat/LeafValue.cs:30-41`):
 
 - A lost fight is 0.
 - A won fight with HP share $s$ left (HP over max HP) and $q$ potions held is worth
@@ -28,7 +28,7 @@ $$
 
 They are the leaf's only hand-set numbers. A fight that is already over is valued by them directly, with no net: the end of every finished line, and so every plan's final score, is this formula on the state the line ends in.
 
-`LeafValue.Of` values a finished fight only, and refuses one still going (`src/Sts2Ai.Brain/Combat/LeafValue.cs:30`): a fight in progress is the combat net's ([§3](#sec-3)). So every search's leaf is a net, and `pimc` and `plan` need `--combat-net` (`src/Sts2Ai.SimWorker/Brains/LeafChoice.cs:18`).
+`LeafValue.Of` values a finished fight only, and refuses one still going (`src/Sts2Ai.Brain/Combat/LeafValue.cs:40`): a fight in progress is the combat net's ([§3](#sec-3)). So every search's leaf is a net, and `pimc` and `plan` need `--combat-net` (`src/Sts2Ai.SimWorker/Brains/LeafChoice.cs:18`).
 
 ## 3. The combat net
 
@@ -54,11 +54,19 @@ $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})
 $$
 
-A death adds nothing, since it is worth 0 (`CombatNet.Value`, `src/Sts2Ai.Brain/Combat/CombatNet.cs:74-85`). Term by term, on a real state, in [One state through the net §13](/en/arch/combat-brain/walkthrough/#sec-13).
+A death adds nothing, since it is worth 0 (`CombatNet.Outcome`, `src/Sts2Ai.Brain/Combat/CombatNet.cs:78-96`). Term by term, on a real state, in [One state through the net §13](/en/arch/combat-brain/walkthrough/#sec-13).
 
 The form is **what the state holds, exactly, plus what the net says is still to come**. $s$ enters exactly, so states of one beam differ by their true HP before the net says anything. A potion drunk leaves the sum exactly.
 
 **The bound.** The planner prunes by the value of a win at the state's HP and potions, which is $\text{Win}(s, q)$ of [§2](#sec-2) and no net ([The SL planner: beam §2](/en/arch/sl-planner/beam/#sec-2)). A bucket's middle may pass the HP held by half a width, and a net can predict healing, so a state in progress can rise above its bound by a small amount: 1.84 % of the won round starts in the training data healed at all, and at full HP the mask forbids it.
+
+**How the fight ends.** The same call gives two numbers a player reads (`LeafOutcome`). The chance to win is $1 - p_0$. The HP held at a win is the HP share left after each win bucket, averaged over the win buckets and kept between 0 and 1, times max HP:
+
+$$
+\text{hp} = \operatorname{clamp}\!\left(\frac{\sum_{k=1}^{50} p_k\,(s - m_k)}{1 - p_0},\ 0,\ 1\right) \times \text{max HP}.
+$$
+
+A fight that is over has its own: a win 1 and the HP held, a loss 0 and 0. The SL planner keeps both for each line, and the mod shows them for its options ([The SL planner: beam §5](/en/arch/sl-planner/beam/#sec-5)). A leaf that predicts no ending gives a fight still going no chance to win. Neither number changes a search: the value alone ranks states.
 
 **Where the net acts.** Pruning and the choice among finished lines read the prices alone. The net decides the beam's order, what the beam keeps, the tie among losing lines, and a line stopped at the turn cap. In PIMC, it values every leaf at the end of the turn.
 

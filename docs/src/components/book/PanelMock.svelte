@@ -1,177 +1,371 @@
 <script lang="ts">
-  // The mod's panel as Panel.cs lays it out (docs: output §2): the head, then an answer or a message. The combat
-  // answer is a real PIMC decision from a NoSL run's decision log, the map answer the example run's floor 43
-  // (src/data/book/panel-examples.json). Names come from the game's tables; values print as the panel prints them.
+  // The mod's panel as Panel.cs lays it out (docs: output §2): the head, the toolbar with the effort row (and, while
+  // auto-play runs, its speed and stops), the strip with V's chance to win, then an answer or a message, and the AI's
+  // recent actions. The three answers are real decisions of the book's example seed, played by the champions at ca1fad5
+  // through the brain command (src/data/book/panel-examples.json, whose texts were made as Describe and L10n make them).
+  // The mod's own words below are L10n.cs's, in the page's language.
   import data from '../../data/book/panel-examples.json';
-  import { loadNames, type Lang, type Names } from '../v/names.ts';
+  import type { Lang } from '../v/names.ts';
   import { w, say } from './words.ts';
 
   let { lang = 'en' }: { lang?: Lang } = $props();
 
-  let names = $state<Names | null>(null);
-  $effect(() => {
-    loadNames(lang).then((n) => (names = n));
-  });
-
-  type Mode = 'combat' | 'map' | 'message';
-  let mode = $state<Mode>('combat');
+  type Mode = 'sl_combat' | 'nosl_combat' | 'map' | 'message';
+  let mode = $state<Mode>('sl_combat');
   let considered = $state<'off' | 'values' | 'bars'>('bars');
+  let auto = $state(false);
   let message = $state(0);
 
-  const C = data.combat;
-  const M = data.map;
-  const card = (uid: number) => C.hand.find((h) => h.uid === uid)?.id ?? '?';
-
-  // Describe.Combat: the card's name and its target; one living enemy needs no number.
-  function combat(text: string): string {
-    if (!names) return text;
-    if (text === 'end_turn') return say(lang, w('end turn', 'end turn', 'end turn'));
-    const [, c, t] = text.split(':');
-    const target = t !== undefined ? ' → ' + names.name('monster', C.enemies.find((e) => e.uid === +t)!.id) : '';
-    return names.name('card', card(+c)) + target;
-  }
-  const room = (a: string) => {
-    const [col, row] = a.slice(4).split(',').map(Number);
-    const type = M.points.find((p) => p.col === col && p.row === row)?.type ?? '?';
-    // Describe.Room: the map legend's name; a type the legend has no entry for (the boss) is shown lower-cased.
-    const legend = ['Monster', 'Elite', 'Unknown', 'RestSite', 'Shop', 'Treasure'].includes(type);
-    return legend && names ? names.name('map', type) : type.toLowerCase();
+  // L10n.cs: the mod's own words, English → Simplified, Traditional Chinese.
+  const L: Record<string, [string, string]> = {
+    Auto: ['自动', '自動'],
+    Pause: ['暂停', '暫停'],
+    'Play one': ['打一张', '打一張'],
+    Step: ['走一步', '走一步'],
+    'Pick for me': ['帮我选', '幫我選'],
+    'Finish turn': ['打完回合', '打完回合'],
+    'Next room': ['打完下一房', '打完下一房'],
+    'Finish room': ['走完房间', '走完房間'],
+    'Your move': ['等你操作', '等你操作'],
+    'Auto on': ['自动中', '自動中'],
+    Effort: ['思考深度', '思考深度'],
+    Brain: ['大脑默认', '大腦預設'],
+    Low: ['低', '低'],
+    Medium: ['中', '中'],
+    High: ['高', '高'],
+    Max: ['最高', '最高'],
+    Speed: ['速度', '速度'],
+    Slow: ['慢', '慢'],
+    Fast: ['快', '快'],
+    'Stop at': ['停在', '停在'],
+    'elites, bosses': ['精英、Boss 前', '菁英、頭目前'],
+    'win chance -3': ['胜率掉 3 点', '勝率掉 3 點'],
+    'Win chance': ['本局胜率', '本局勝率'],
+    Next: ['下一步', '下一步'],
+    'Route to the boss': ['到 Boss 的路线', '到頭目的路線'],
+    Considered: ['候选', '候選'],
+    win: ['胜率', '勝率'],
+    'HP left': ['剩 HP', '剩 HP'],
+    diff: ['差', '差'],
+    'value ±CI': ['分数 ±CI', '分數 ±CI'],
+    Recent: ['刚才做了', '剛才做了'],
+    starting: ['启动中', '啟動中'],
+    offline: ['离线', '離線'],
+    ready: ['就绪', '就緒'],
+    off: ['关闭', '關閉'],
+    'off for this run': ['本局关闭', '本局關閉'],
+    'run sent': ['已发送本局', '已送出本局'],
+    'Connecting to the brain': ['正在连接大脑', '正在連接大腦'],
+    'No brain running': ['大脑没有在运行', '大腦沒有在執行'],
+    '{0} · trying again every 2 s': ['{0} · 每 2 秒重试', '{0} · 每 2 秒重試'],
+    'Waiting for the brain': ['等待大脑', '等待大腦'],
+    'it loads the champion for this run': ['正在为本局载入冠军', '正在為本局載入冠軍'],
+    'Waiting for a decision': ['等待下一个决定', '等待下一個決定'],
+    'open the chest': ['打开宝箱', '打開寶箱'],
+    'No SL clone of this room': ['这个房间没有 SL 副本', '這個房間沒有 SL 複本'],
+    '{0} · the next room has one': ['{0} · 下个房间会有', '{0} · 下個房間會有'],
+    'Thinking…': ['思考中…', '思考中…'],
+    'Brain error': ['大脑出错', '大腦出錯'],
+    '{0} · back on at the next run': ['{0} · 下一局恢复', '{0} · 下一局恢復'],
+    'Off in multiplayer': ['多人模式下关闭', '多人模式下關閉'],
   };
+  const T = (en: string, ...args: (string | number)[]) => {
+    let line = lang === 'en' ? en : L[en][lang === 'zh-CN' ? 0 : 1];
+    args.forEach((a, i) => (line = line.replace(`{${i}}`, String(a))));
+    return line;
+  };
+  const up = (s: string) => s.toUpperCase();
 
-  // Describe.Turn: the plan up to and including the turn's end.
-  const turn = $derived.by(() => {
-    const all = [C.chosen, ...C.plan];
-    const end = all.indexOf('end_turn');
-    return end < 0 ? all : all.slice(0, end + 1);
-  });
-  const top = C.candidates.slice(0, 3);
-  const lo0 = Math.min(...top.map((o) => o.value - o.ci));
-  const hi0 = Math.max(...top.map((o) => o.value + o.ci));
-  const pad = Math.max((hi0 - lo0) * 0.1, 1e-6);
-  const [lo, hi] = [lo0 - pad, hi0 + pad];
-  const at = (v: number) => ((v - lo) / (hi - lo)) * 96;
+  type Text = Record<Lang, string>;
+  type Option = { name: Text; value: number; ci: number; win: number | null; hp: number | null; rooms: (string | null)[] | null };
+  type Answer = {
+    source: { champion: string; decision: number; env: string };
+    status: Text;
+    surface: 'combat' | 'map' | 'other';
+    next: Text;
+    route: boolean;
+    sub: Text | null;
+    then: Text[];
+    later: Text | null;
+    kind: 'fight' | 'run' | 'score';
+    options: Option[];
+    brain: string;
+    seconds: number;
+    win: number | null;
+    delta: number | null;
+    recent: Text[];
+  };
+  const ANSWERS = { sl_combat: data.sl_combat, nosl_combat: data.nosl_combat, map: data.map_options } as unknown as Record<Exclude<Mode, 'message'>, Answer>;
 
-  const MESSAGES: { status: string; text: string; sub?: string; tone?: 'warn' | 'error'; env?: boolean }[] = [
-    { status: 'starting', text: 'Connecting to the brain', sub: '~/.local/state/sts2ai/brain.sock', env: true },
-    { status: 'offline', text: 'No brain running', sub: 'Connection refused · trying again every 2 s', tone: 'warn', env: true },
-    { status: 'run sent', text: 'Waiting for the brain', sub: 'it loads the champion for this run', env: true },
-    { status: 'ready', text: 'Waiting for a decision', sub: 'open the chest', env: true },
-    { status: 'ready', text: 'No SL clone of this room', sub: 'a potion thrown away in combat · the next room has one', tone: 'warn', env: true },
-    { status: 'ready', text: 'Thinking…', sub: '3.4 s', env: true },
-    { status: 'off for this run', text: 'Brain error', sub: 'an SL decision before any node checkpoint · back on at the next run', tone: 'error', env: true },
+  const MESSAGES: { status: string; text: string; sub?: [string, string]; tone?: 'warn' | 'error'; env?: boolean; drive?: boolean; champion?: boolean }[] = [
+    { status: 'starting', text: 'Connecting to the brain', sub: ['', '~/.local/state/sts2ai/brain.sock'], env: true },
+    { status: 'offline', text: 'No brain running', sub: ['{0} · trying again every 2 s', 'Connection refused'], tone: 'warn', env: true },
+    { status: 'run sent', text: 'Waiting for the brain', sub: ['it loads the champion for this run', ''], env: true },
+    { status: 'line', text: 'Waiting for a decision', sub: ['open the chest', ''], env: true, drive: true, champion: true },
+    { status: 'line', text: 'No SL clone of this room', sub: ['{0} · the next room has one', 'a potion thrown away in combat'], tone: 'warn', env: true, drive: true, champion: true },
+    { status: 'line', text: 'Thinking…', sub: ['', '3.4 s'], env: true, drive: true, champion: true },
+    { status: 'off for this run', text: 'Brain error', sub: ['{0} · back on at the next run', 'an SL decision before any node checkpoint'], tone: 'error', env: true, champion: true },
     { status: 'off', text: 'Off in multiplayer', env: false },
   ];
   const msg = $derived(MESSAGES[message]);
-  const champion = $derived(mode === 'combat' ? C.source.champion : M.source.champion);
-  const env = $derived(mode === 'combat' ? 'NoSL' : mode === 'map' ? 'SL' : msg.env ? 'SL' : null);
+  const msgSub = (m: (typeof MESSAGES)[number]) => (!m.sub ? null : m.sub[0] === '' ? m.sub[1] : m.sub[1] === '' ? T(m.sub[0]) : T(m.sub[0], m.sub[1]));
+
+  // A message borrows the SL combat's run for its champion, status line and strip.
+  const a = $derived(mode === 'message' ? null : ANSWERS[mode]);
+  const base = ANSWERS.sl_combat;
+  const champion = $derived(a ? a.source.champion : msg.champion ? base.source.champion : '—');
+  const status = $derived(a ? a.status[lang] : msg.status === 'line' ? base.status[lang] : T(msg.status));
+  const env = $derived(a ? a.source.env : msg.env ? 'SL' : null);
+  const drive = $derived(a !== null || !!msg.drive);
+  const run = $derived(a ?? base);
+  const surface = $derived(a ? a.surface : 'combat');
+  const stepLabel = $derived(surface === 'combat' ? T('Play one') : surface === 'map' ? T('Step') : T('Pick for me'));
+  const finishLabel = $derived(surface === 'combat' ? T('Finish turn') : surface === 'map' ? T('Next room') : T('Finish room'));
+
+  const pct = (p: number, whole = false) => (p * 100).toFixed(whole ? 0 : 1) + '%';
+
+  // Panel.Options: the shown value, and one scale for the rows' bars.
+  const BAR = 56;
+  const shownOf = (o: Option) => (a?.kind === 'fight' ? o.win ?? 0 : o.value);
+  const scale = $derived.by(() => {
+    if (!a || a.options.length === 0) return { lo: 0, hi: 1, best: 0 };
+    const vals = a.options.map(shownOf);
+    let lo = Math.min(...a.options.map((o) => shownOf(o) - o.ci));
+    let hi = Math.max(...a.options.map((o) => shownOf(o) + o.ci));
+    const pad = Math.max((hi - lo) * 0.15, a.kind === 'score' ? 1e-6 : 0.005);
+    lo -= pad;
+    hi = a.kind === 'fight' ? Math.max(hi, 1) : hi + pad;
+    return { lo, hi, best: Math.max(...vals) };
+  });
+  const at = (v: number) => Math.min(Math.max(((v - scale.lo) / (scale.hi - scale.lo)) * BAR, 0), BAR);
+  const heads = $derived(a?.kind === 'fight' ? [T('win'), T('HP left')] : a?.kind === 'run' ? [T('win'), T('diff')] : [T('value ±CI'), '']);
+  function cells(o: Option, i: number): [string, string] {
+    if (a?.kind === 'fight') return [pct(o.win ?? 0, true), (o.win ?? 0) > 0 && o.hp !== null ? o.hp.toFixed(0) : '—'];
+    if (a?.kind === 'run') return [pct(o.value), i === 0 || o.value >= scale.best ? '—' : '-' + ((scale.best - o.value) * 100).toFixed(1)];
+    return [`${o.value.toFixed(3)} ±${o.ci.toFixed(3)}`, ''];
+  }
+
+  // Panel.Chip: a room of a route, in its type's color, with its legend name's first letter.
+  const LEGEND: Record<Lang, Record<string, string>> = {
+    en: { Boss: 'Boss', Elite: 'Elite', Monster: 'Enemy', RestSite: 'Rest', Shop: 'Merchant', Treasure: 'Treasure', Unknown: 'Unknown', Ancient: 'Ancient' },
+    'zh-CN': { Boss: 'Boss', Elite: '精英', Monster: '敌人', RestSite: '休息', Shop: '商人', Treasure: '宝箱', Unknown: '未知', Ancient: '先古之民' },
+    'zh-TW': { Boss: '頭目', Elite: '菁英', Monster: '敵人', RestSite: '休息', Shop: '商人', Treasure: '財寶', Unknown: '未知', Ancient: '遠古之民' },
+  };
+  const legend = (t: string | null) => (t ? LEGEND[lang][t] ?? t.toLowerCase() : '?');
+  const CHIP: Record<string, string> = { Elite: '#f5b544', RestSite: '#5fd18a', Shop: '#8ab4ff', Treasure: '#e8c56a', Boss: '#ff8a70', Unknown: '#b5abc8' };
+  const chipColor = (t: string | null, first = false) => CHIP[t ?? ''] ?? (first ? '#b5abc8' : '#5a4d72');
+  const chipLetter = (t: string | null) => (t === 'Unknown' ? '?' : [...legend(t)][0].toUpperCase());
+  // On the map, when every option is a point with its route, each option is one row of rooms (Panel.Options).
+  const routes = $derived(!!a && a.options.length > 0 && a.options.every((o) => o.rooms && o.rooms.length > 0));
+  const bars = $derived(considered === 'bars' && !routes);
+  const types = $derived(routes && a ? [...new Set(a.options.flatMap((o) => o.rooms ?? []))] : []);
+
+  const EFFORTS = ['Brain', 'Low', 'Medium', 'High', 'Max'];
 </script>
 
 <div class="vfig">
   <div class="v-row" style="margin-bottom: 0.75rem;">
     <div class="v-tabs" style="margin: 0;">
-      <button aria-pressed={mode === 'combat'} onclick={() => (mode = 'combat')}>{say(lang, w('Combat answer', '战斗的回答', '戰鬥的回答'))}</button>
-      <button aria-pressed={mode === 'map'} onclick={() => (mode = 'map')}>{say(lang, w('Map answer', '地图的回答', '地圖的回答'))}</button>
+      <button aria-pressed={mode === 'sl_combat'} onclick={() => (mode = 'sl_combat')}>{say(lang, w('SL combat', 'SL 战斗', 'SL 戰鬥'))}</button>
+      <button aria-pressed={mode === 'nosl_combat'} onclick={() => (mode = 'nosl_combat')}>{say(lang, w('NoSL combat', 'NoSL 战斗', 'NoSL 戰鬥'))}</button>
+      <button aria-pressed={mode === 'map'} onclick={() => (mode = 'map')}>{say(lang, w('Map', '地图', '地圖'))}</button>
       <button aria-pressed={mode === 'message'} onclick={() => (mode = 'message')}>{say(lang, w('A message', '一条消息', '一則訊息'))}</button>
     </div>
-    {#if mode === 'combat'}
-      <label class="v-muted">{say(lang, w('Considered options', 'Considered options', 'Considered options'))}
+    {#if mode === 'message'}
+      <select bind:value={message} aria-label={say(lang, w('Message', '消息', '訊息'))}>
+        {#each MESSAGES as m, i (i)}<option value={i}>{T(m.text)}</option>{/each}
+      </select>
+    {:else}
+      <label class="v-muted">{say(lang, w('Considered options', '候选项', '候選項'))}
         <select bind:value={considered}>
-          <option value="off">Off</option>
-          <option value="values">Values</option>
-          <option value="bars">Values + bars</option>
+          <option value="off">{say(lang, w('Off', '关', '關'))}</option>
+          <option value="values">{say(lang, w('Values', '数值', '數值'))}</option>
+          <option value="bars">{say(lang, w('Values + bars', '数值 + 条', '數值 + 長條'))}</option>
         </select>
       </label>
-    {:else if mode === 'message'}
-      <select bind:value={message} aria-label={say(lang, w('Message', '消息', '訊息'))}>
-        {#each MESSAGES as m, i (i)}<option value={i}>{m.text}</option>{/each}
-      </select>
+    {/if}
+    {#if drive}
+      <label class="v-muted"><input type="checkbox" bind:checked={auto} /> {say(lang, w('Auto-play on', '自动打开着', '自動打開著'))}</label>
     {/if}
   </div>
 
   <div class="game">
     <div class="card">
       <div class="head">
-        <span class="badge fill" style="width: 28px; height: 28px; border-radius: 8px; font-size: 12px;">AI</span>
+        <span class="badge fill" style="width: 22px; height: 22px; border-radius: 6px; font-size: 11px;">AI</span>
         <div class="names">
-          <div class="clip" style="font-size: 17px;">{mode === 'message' && message < 3 ? '—' : champion}</div>
-          <div class="clip muted" style="font-size: 13px;">{mode === 'message' ? msg.status : 'ready'}</div>
+          <div class="clip" style="font-size: 13px;">{champion}</div>
+          <div class="clip muted" style="font-size: 11px;">{status}</div>
         </div>
         <div class="switch">
           <span class:on={env === 'SL'}>SL</span><span class:on={env === 'NoSL'}>NoSL</span>
         </div>
-        <span class="muted" style="font-size: 12px;">F8</span>
+        <span class="muted" style="font-size: 11px;">F8</span>
       </div>
 
-      {#if mode === 'message'}
+      {#if drive}
+        <div class="toolbar">
+          <span class="tool" class:on={auto}>
+            {#if auto}
+              <svg width="15" height="15" viewBox="0 0 18 18" aria-hidden="true"><rect x="4" y="3" width="3.5" height="12" fill="#f5b544" /><rect x="10.5" y="3" width="3.5" height="12" fill="#f5b544" /></svg>
+            {:else}
+              <svg width="15" height="15" viewBox="0 0 18 18" aria-hidden="true"><path d="M5 3 L5 15 L15 9 Z" fill="#5fd18a" /></svg>
+            {/if}
+            {auto ? T('Pause') : T('Auto')}
+          </span>
+          <span class="tool" class:off={auto}>
+            <svg width="15" height="15" viewBox="0 0 18 18" aria-hidden="true"><path d="M3.4 10 A5.6 5.6 0 0 1 14.6 10" fill="none" stroke="#8ab4ff" stroke-width="2" /><path d="M11.5 8 L17 8 L14.25 12 Z" fill="#8ab4ff" /><circle cx="9" cy="14.5" r="1.8" fill="#8ab4ff" /></svg>
+            {stepLabel}
+          </span>
+          <span class="tool" class:off={auto}>
+            <svg width="15" height="15" viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="8" width="8" height="2" fill="#8ab4ff" /><path d="M9 4.5 L9 13.5 L13 9 Z" fill="#8ab4ff" /><rect x="14" y="3" width="2" height="12" fill="#8ab4ff" /></svg>
+            {finishLabel}
+          </span>
+        </div>
+        <div class="row" style="gap: 8px;">
+          <span class="muted" style="font-size: 11px;">{T('Effort')}</span>
+          <span class="toggles">{#each EFFORTS as e (e)}<span class:on={e === 'Brain'}>{T(e)}</span>{/each}</span>
+        </div>
+        {#if auto}
+          <div class="row" style="gap: 8px;">
+            <span class="muted" style="font-size: 11px;">{T('Speed')}</span>
+            <span class="toggles">{#each ['Slow', 'Medium', 'Fast'] as s (s)}<span class:on={s === 'Medium'}>{T(s)}</span>{/each}</span>
+          </div>
+          <div class="row" style="gap: 8px; flex-wrap: wrap;">
+            <span class="muted" style="font-size: 11px;">{T('Stop at')}</span>
+            <span class="toggles bare"><span class="on">{T('elites, bosses')}</span><span class="on">{T('win chance -3')}</span></span>
+          </div>
+        {/if}
+
+        <div class="strip">
+          <div style="flex: 1;">
+            {#if run.win !== null}
+              <div class="muted" style="font-size: 11px;">{up(T('Win chance'))}</div>
+              <div class="row" style="gap: 6px; align-items: baseline;">
+                <span style="font-size: 20px;">{pct(run.win)}</span>
+                {#if run.delta !== null && Math.abs(run.delta) >= 0.0005}
+                  <span style="font-size: 12px; color: {run.delta > 0 ? '#5fd18a' : '#ff8a70'};">{run.delta > 0 ? '+' : '-'}{(Math.abs(run.delta) * 100).toFixed(1)}</span>
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <span class="pill"><span class="pilldot" style="background: {auto ? '#5fd18a' : '#f5b544'};"></span>{auto ? T('Auto on') : T('Your move')}</span>
+        </div>
+      {/if}
+
+      {#if !a}
         <div class="row" style="gap: 10px;">
           <span class="dot" class:warn={msg.tone === 'warn'} class:error={msg.tone === 'error'}></span>
           <div>
-            <div style="font-size: 19px;" class:warn-t={msg.tone === 'warn'} class:error-t={msg.tone === 'error'}>{msg.text}</div>
-            {#if msg.sub}<div class="muted" style="font-size: 14px; margin-top: 4px;">{msg.sub}</div>{/if}
+            <div style="font-size: 15px;" class:warn-t={msg.tone === 'warn'} class:error-t={msg.tone === 'error'}>{T(msg.text)}</div>
+            {#if msgSub(msg)}<div class="muted" style="font-size: 12px; margin-top: 4px;">{msgSub(msg)}</div>{/if}
           </div>
         </div>
-      {:else if mode === 'combat'}
-        <div class="row" style="gap: 12px;">
-          <span class="badge fill" style="width: 32px; height: 32px; border-radius: 16px; font-size: 16px;">1</span>
-          <span style="font-size: 24px;">{combat(turn[0])}</span>
-        </div>
-        {#each turn.slice(1) as step, i (i)}
-          <div class="row" style="gap: 12px; padding-left: 4px;">
-            <span class="badge ring" style="width: 24px; height: 24px; border-radius: 12px; font-size: 12px;">{i + 2}</span>
-            <span style="font-size: 17px;">{combat(step)}</span>
+      {:else}
+        <div class="muted" style="font-size: 11px;">{up(T('Next'))}</div>
+        <div class="row" style="gap: 10px;">
+          {#if a.route}
+            <span class="badge" style="width: 22px; height: 22px; border-radius: 11px; border: 3px solid #bf59ff; box-sizing: border-box;"></span>
+          {:else}
+            <span class="badge fill" style="width: 24px; height: 24px; border-radius: 12px; font-size: 13px;">1</span>
+          {/if}
+          <div>
+            <div style="font-size: 17px;">{a.next[lang]}</div>
+            {#if a.sub}<div class="muted" style="font-size: 12px; margin-top: 2px;">{a.sub[lang]}</div>{/if}
           </div>
-        {/each}
-        {#if considered !== 'off'}
+        </div>
+        {#if a.route}
+          {#if a.then.length > 0 && !(considered !== 'off' && routes)}
+            <div class="muted" style="font-size: 11px;">{up(T('Route to the boss'))}</div>
+            <div style="font-size: 13px;">{a.then.map((t) => t[lang]).join(' · ')}</div>
+          {/if}
+        {:else}
+          {#each a.then as step, i (i)}
+            <div class="row" style="gap: 10px; padding-left: 2px;">
+              <span class="badge ring" style="width: 20px; height: 20px; border-radius: 10px; font-size: 11px;">{i + 2}</span>
+              <span style="font-size: 14px;">{step[lang]}</span>
+            </div>
+          {/each}
+        {/if}
+        {#if a.later}<div class="muted" style="font-size: 12px; padding-left: 32px;">{a.later[lang]}</div>{/if}
+
+        {#if considered !== 'off' && a.options.length > 0}
           <div class="rule"></div>
-          <div class="row muted" style="font-size: 12px; justify-content: space-between;"><span>CONSIDERED</span><span>value ±CI</span></div>
-          <div class="grid" class:bars={considered === 'bars'}>
-            {#each top as o, i (o.action)}
-              <span class="clip" class:accent={i === 0} style="font-size: 15px;">{combat(o.action)}</span>
-              <span class="value" class:accent={i === 0}>{o.value.toFixed(1)} ±{o.ci.toFixed(1)}</span>
-              {#if considered === 'bars'}
-                <svg width="96" height="16" aria-hidden="true">
-                  <rect x="0" y="3" width="96" height="10" rx="5" fill="#221b30" />
-                  <rect x={at(o.value - o.ci)} y="3" width={Math.max(at(o.value + o.ci) - at(o.value - o.ci), 3)} height="10" rx="5" fill={i === 0 ? '#bf59ff' : '#5a4d72'} />
-                  <rect x={at(o.value) - 1} y="0" width="2" height="16" fill="#f3effa" />
+          <div class="grid" class:bars>
+            <span class="muted clip" style="font-size: 11px;">{up(T(routes ? 'Route to the boss' : 'Considered'))}</span>
+            {#if bars}<span></span>{/if}
+            <span class="muted num" style="font-size: 11px;">{heads[0]}</span>
+            <span class="muted num" style="font-size: 11px;">{heads[1]}</span>
+            {#each a.options as o, i (i)}
+              {#if routes}
+                <span class="rooms">
+                  {#each o.rooms ?? [] as t, j (j)}
+                    <span class="chip" style="border-color: {chipColor(t, i === 0)}; background: {t === 'Boss' ? '#ff8a70' : 'transparent'}; color: {t === 'Boss' ? '#14081f' : t === 'Monster' ? '#f3effa' : chipColor(t, i === 0)};">{chipLetter(t)}</span>
+                  {/each}
+                </span>
+              {:else}
+                <span class="clip" class:lead={i === 0} style="font-size: 13px;">{o.name[lang]}</span>
+              {/if}
+              {#if bars}
+                <svg width={BAR} height="12" aria-hidden="true" style="overflow: visible;">
+                  <rect x="0" y="2" width={BAR} height="8" rx="4" fill="#221b30" />
+                  <rect x={at(shownOf(o) - o.ci)} y="2" width={Math.max(at(shownOf(o) + o.ci) - at(shownOf(o) - o.ci), 3)} height="8" rx="4" fill={i === 0 ? '#bf59ff' : '#5a4d72'} />
+                  {#if a.kind === 'score'}<rect x={at(shownOf(o)) - 1} y="0" width="2" height="12" fill="#f3effa" />{/if}
                 </svg>
               {/if}
+              <span class="num" class:lead={i === 0}>{cells(o, i)[0]}</span>
+              <span class="num" class:lead={i === 0 && a.kind !== 'run'} class:muted={a.kind === 'run'}>{cells(o, i)[1]}</span>
             {/each}
           </div>
+          {#if routes}
+            <div class="legend">
+              {#each types as t (t)}
+                <span class="row" style="gap: 3px;"><span class="chip" style="border-color: {chipColor(t)}; background: {t === 'Boss' ? '#ff8a70' : 'transparent'}; color: {t === 'Boss' ? '#14081f' : t === 'Monster' ? '#f3effa' : chipColor(t)};">{chipLetter(t)}</span><span class="muted" style="font-size: 11px;">{legend(t)}</span></span>
+              {/each}
+            </div>
+          {/if}
         {/if}
-        <div class="muted" style="font-size: 13px;">{C.brain} · {(C.elapsed_ms / 1000).toFixed(1)} s</div>
-      {:else}
-        <div class="row" style="gap: 12px;">
-          <span class="badge" style="width: 32px; height: 32px; border-radius: 16px; border: 4px solid #bf59ff; box-sizing: border-box;"></span>
-          <span style="font-size: 24px;">go to {room(M.chosen)}</span>
-        </div>
-        <div class="muted" style="font-size: 12px;">ROUTE TO THE BOSS</div>
-        <div style="font-size: 15px;">{M.route.map(room).join('  ·  ')}</div>
-        <div class="muted" style="font-size: 13px;">{M.brain} · 0.0 s</div>
+        <div class="muted" style="font-size: 11px;">{a.brain} · {a.seconds.toFixed(1)} s</div>
+      {/if}
+
+      {#if drive && auto}
+        <div class="muted" style="font-size: 11px;">{up(T('Recent'))}</div>
+        {#each run.recent as line, i (i)}<div class="clip" style="font-size: 12px;">{line[lang]}</div>{/each}
       {/if}
     </div>
   </div>
 
   <p class="v-caption">
-    {#if mode === 'combat'}
+    {#if mode === 'sl_combat'}
       {say(lang, w(
-        `A NoSL elite fight against the Terror Eel, decision ${'112'} of a NoSL champion's run (seed ${C.source.seed}, floor ${C.source.floor}): PIMC's pick, the rest of its turn in the first world, and its three best candidates. The panel prints values to one decimal, so these three read the same; the bars show them apart. The foot's time is the decision's search time; the mod times the whole round trip.`,
-        `NoSL 冠军一局里对恐怖鳗的精英战（种子 ${C.source.seed}，第 ${C.source.floor} 层）的第 112 个决策：PIMC 的选择、它在第一个世界里这回合剩下的步骤，以及最好的三个候选。面板只印到小数点后一位，所以这三个读起来一样；条形图才分得出来。底行的时间是这个决策的搜索时间；Mod 实际计的是整趟往返。`,
-        `NoSL 冠軍一局裡對恐怖鰻的菁英戰（種子 ${C.source.seed}，第 ${C.source.floor} 層）的第 112 個決策：PIMC 的選擇、它在第一個世界裡這回合剩下的步驟，以及最好的三個候選。面板只印到小數點後一位，所以這三個讀起來一樣；長條圖才分得出來。底行的時間是這個決策的搜尋時間；Mod 實際計的是整趟往返。`,
+        `The book’s example seed played in SL by the SL champion (the SL planner with c9-2, L0 with v9-2) at ca1fad5, decision ${base.source.decision}: the first decision of a fight on floor 45, which the planner plans to its end in ${base.seconds} s. Its kept lines began with two first actions; both win, one with an HP more. The strip holds V’s chance from the map decision before the fight, and the line under the action is the planner’s.`,
+        `贯穿全书那个种子，在 SL 里由 SL 冠军（SL 规划器配 c9-2，L0 配 v9-2）在 ca1fad5 上打的第 ${base.source.decision} 个决策：第 45 层一场战斗的第一个决策，规划器花 ${base.seconds} 秒把整场规划到底。它留下的路线以两个第一步开头；两个都赢，一个多剩 1 HP。横条里是战斗前那个地图决策的 V 胜率，动作下面那一行是规划器的。`,
+        `貫穿全書那個種子，在 SL 裡由 SL 冠軍（SL 規劃器配 c9-2，L0 配 v9-2）在 ca1fad5 上打的第 ${base.source.decision} 個決策：第 45 層一場戰鬥的第一個決策，規劃器花 ${base.seconds} 秒把整場規劃到底。它留下的路線以兩個第一步開頭；兩個都贏，一個多剩 1 HP。橫條裡是戰鬥前那個地圖決策的 V 勝率，動作下面那一行是規劃器的。`,
+      ))}
+    {:else if mode === 'nosl_combat'}
+      {say(lang, w(
+        `The same seed played in NoSL by the NoSL champion (PIMC with c9-2 over 8 worlds of 300 nodes, L0 with v9-2), decision ${ANSWERS.nosl_combat.source.decision}: the act 3 boss fight on floor 48. PIMC’s five best first actions, with their mean scores over the worlds and 95% intervals; PIMC gives no chance to win, so no line sits under the action. This run was won too.`,
+        `同一个种子在 NoSL 里由 NoSL 冠军（PIMC 配 c9-2，8 个世界、每个 300 节点；L0 配 v9-2）打的第 ${ANSWERS.nosl_combat.source.decision} 个决策：第 48 层第三幕的 Boss 战。PIMC 最好的五个第一步，附各世界的平均分和 95% 区间；PIMC 不给胜率，所以动作下面没有那一行。这一局也赢了。`,
+        `同一個種子在 NoSL 裡由 NoSL 冠軍（PIMC 配 c9-2，8 個世界、每個 300 節點；L0 配 v9-2）打的第 ${ANSWERS.nosl_combat.source.decision} 個決策：第 48 層第三幕的頭目戰。PIMC 最好的五個第一步，附各世界的平均分和 95% 區間；PIMC 不給勝率，所以動作下面沒有那一行。這一局也贏了。`,
       ))}
     {:else if mode === 'map'}
       {say(lang, w(
-        `The book’s example run on floor ${M.source.floor} (act 3, ${M.source.hp} of ${M.source.max_hp} HP): L0 goes to the monster rather than the rest site. The route is the one the run then took; L0 plans it again at each point. The macro brain gives no candidates, so the panel shows none. Outside combat the brain answers in under 20 ms, which the panel prints as 0.0 s.`,
-        `贯穿全书那一局的第 ${M.source.floor} 层（第三幕，HP ${M.source.hp}/${M.source.max_hp}）：L0 选了普通战斗而不是休息处。路线是这一局后来实际走的；L0 在每个点都会重新规划。宏观大脑不给候选，所以面板不显示。战斗外大脑 20 ms 内就回答，面板印成 0.0 s。`,
-        `貫穿全書那一局的第 ${M.source.floor} 層（第三幕，HP ${M.source.hp}/${M.source.max_hp}）：L0 選了普通戰鬥而不是休息處。路線是這一局後來實際走的；L0 在每個點都會重新規劃。宏觀大腦不給候選，所以面板不顯示。戰鬥外大腦 20 ms 內就回答，面板印成 0.0 s。`,
+        `Decision ${ANSWERS.map.source.decision} of the SL run, on floor 9: both next points are treasures, so the routes after them tell the options apart, and V gives the first 65.7%, the second 63.9%. The strip’s fall is from the event just before. Outside combat the brain answers in a few milliseconds, which the panel prints as 0.0 s.`,
+        `SL 那一局第 9 层的第 ${ANSWERS.map.source.decision} 个决策：下一步的两个点都是宝箱，所以靠之后的路线区分，V 给第一个 65.7%、第二个 63.9%。横条里的下降是相对前一个事件。战斗外大脑几毫秒就回答，面板印成 0.0 s。`,
+        `SL 那一局第 9 層的第 ${ANSWERS.map.source.decision} 個決策：下一步的兩個點都是財寶，所以靠之後的路線區分，V 給第一個 65.7%、第二個 63.9%。橫條裡的下降是相對前一個事件。戰鬥外大腦幾毫秒就回答，面板印成 0.0 s。`,
       ))}
     {:else}
       {say(lang, w(
-        'The messages the panel shows instead of an answer, with their status and quieter line, as Assist.cs writes them; the reasons in the second lines are examples. A warning is amber, an error red.',
-        '面板在没有回答时显示的消息，连同状态字和较淡的第二行，照 Assist.cs 的写法；第二行里的原因是举例。警告是琥珀色，错误是红色。',
-        '面板在沒有回答時顯示的訊息，連同狀態字和較淡的第二行，照 Assist.cs 的寫法；第二行裡的原因是舉例。警告是琥珀色，錯誤是紅色。',
+        'The messages the panel shows instead of an answer, with their status and quieter line, as Assist.cs writes them; the reasons in the second lines are examples, and come in English. A warning is amber, an error red. Once the brain has taken the run, the toolbar and the strip show above them.',
+        '面板在没有回答时显示的消息，连同状态和较淡的第二行，照 Assist.cs 的写法；第二行里的原因是举例，原样是英文。警告是琥珀色，错误是红色。大脑接下这一局之后，工具列和横条会显示在上面。',
+        '面板在沒有回答時顯示的訊息，連同狀態和較淡的第二行，照 Assist.cs 的寫法；第二行裡的原因是舉例，原樣是英文。警告是琥珀色，錯誤是紅色。大腦接下這一局之後，工具列和橫條會顯示在上面。',
       ))}
     {/if}
-    {say(lang, w(' The texts are the mod’s own, in English, with the game’s names in this page’s language.', '文字是 Mod 自己的英文，游戏名称用本页的语言。', '文字是 Mod 自己的英文，遊戲名稱用本頁的語言。'))}
+    {say(lang, w(
+      ' With auto-play on, the recent actions are the four decisions before, as if the AI had played them. The words are the mod’s own as it shows them with the game in this page’s language, and the names the game’s.',
+      '打开自动打时，“刚才做了”是之前的四个决策，当作是 AI 打的。文字是游戏设成本页语言时 Mod 自己显示的样子，名称是游戏的。',
+      '打開自動打時，「剛才做了」是之前的四個決策，當作是 AI 打的。文字是遊戲設成本頁語言時 Mod 自己顯示的樣子，名稱是遊戲的。',
+    ))}
   </p>
 </div>
 
@@ -183,26 +377,26 @@
     overflow-x: auto;
   }
   .card {
-    width: 420px;
+    width: 340px;
     max-width: 100%;
     box-sizing: border-box;
     background: rgba(16, 12, 24, 0.92);
     border: 1px solid #2e2540;
     border-radius: 14px;
     box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
-    padding: 16px 18px;
+    padding: 12px 14px;
     color: #f3effa;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     font-family: system-ui, sans-serif;
     line-height: 1.25;
   }
   .head {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 4px;
+    gap: 8px;
+    margin-bottom: 2px;
   }
   .names {
     flex: 1;
@@ -212,12 +406,13 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
   }
   .muted {
     color: #b5abc8;
   }
-  .accent {
-    color: #bf59ff;
+  .lead {
+    color: #d9a6ff;
   }
   .badge {
     display: inline-flex;
@@ -233,22 +428,85 @@
     border: 2px solid #bf59ff;
     box-sizing: border-box;
   }
-  .switch {
-    display: flex;
+  .switch,
+  .toggles {
+    display: inline-flex;
     gap: 2px;
     border: 1px solid #3a3050;
     border-radius: 10px;
     padding: 3px;
-    font-size: 14px;
+    font-size: 12px;
   }
-  .switch span {
-    padding: 6px 14px;
-    border-radius: 7px;
+  .switch span,
+  .toggles span {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 6px;
     color: #b5abc8;
+    white-space: nowrap;
   }
-  .switch span.on {
+  .toggles.bare {
+    border-color: transparent;
+    gap: 8px;
+    padding: 0;
+  }
+  .switch span.on,
+  .toggles span.on {
     background: #bf59ff;
     color: #14081f;
+  }
+  .toolbar {
+    display: flex;
+    gap: 2px;
+    background: #0b0812;
+    border: 1px solid #2e2540;
+    border-radius: 10px;
+    padding: 3px;
+  }
+  .tool {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 32px;
+    border-radius: 7px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .tool.on {
+    background: #2a2238;
+  }
+  .tool.off {
+    color: #5a4d72;
+  }
+  .tool.off svg {
+    opacity: 0.35;
+  }
+  .strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #17111f;
+    border-radius: 10px;
+    padding: 8px;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #221b30;
+    border-radius: 10px;
+    padding: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .pilldot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
   }
   .row {
     display: flex;
@@ -261,7 +519,7 @@
     background: #bf59ff;
     flex: none;
     align-self: flex-start;
-    margin-top: 8px;
+    margin-top: 6px;
   }
   .dot.warn {
     background: #f5b544;
@@ -281,15 +539,39 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: 1fr 92px;
-    gap: 6px 10px;
+    grid-template-columns: minmax(0, 1fr) minmax(42px, auto) minmax(42px, auto);
+    gap: 5px 8px;
     align-items: center;
   }
   .grid.bars {
-    grid-template-columns: 1fr 92px 96px;
+    grid-template-columns: minmax(0, 1fr) 56px minmax(42px, auto) minmax(42px, auto);
   }
-  .value {
-    font-size: 15px;
+  .num {
+    font-size: 13px;
     text-align: right;
+    white-space: nowrap;
+  }
+  .rooms {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    border: 1px solid;
+    border-radius: 3px;
+    font-size: 9px;
+    line-height: 1;
+    flex: none;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 10px;
   }
 </style>

@@ -199,8 +199,9 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy plan|play] [--log FILE] [--wire FILE]
 ```
 
-- `--socket`：預設是 `$XDG_STATE_HOME/sts2ai/brain.sock`，這個變數未設定時是 `~/.local/state/sts2ai/brain.sock`（`Sts2Ai.Protocol/Wire.cs:98-102`）：Steam 在一個容器裡執行遊戲，這個容器共用家目錄，但不共用 `$XDG_RUNTIME_DIR`。
-- 宿主在 `hello` 裡說明它的環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（預設是 SL 規劃器），宏觀大腦則相同。
+- `--socket`：預設是 `$XDG_STATE_HOME/sts2ai/brain.sock`，這個變數未設定時是 `~/.local/state/sts2ai/brain.sock`（`Sts2Ai.Protocol/Wire.cs:100-104`）：Steam 在一個容器裡執行遊戲，這個容器共用家目錄，但不共用 `$XDG_RUNTIME_DIR`。
+- 宿主在 `hello` 裡說明它的環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的（預設是 SL 規劃器），宏觀大腦則相同。宿主也可以指定一個力度（`low`、`medium`、`high`、`max`），這一局的 SL 規劃器就用它來打（[Harness §5](/zh-tw/arch/harness/#sec-5)）。
+- 它的回答帶著大腦打過分的選項，在地圖上還有每個選項的路線，供 Mod 顯示（[輸出 §2](/zh-tw/arch/output/#sec-2)）。
 - `--log` 寫出決策日誌；`--wire` 寫出宿主傳來的每條訊息，`clones` 會重播這些訊息，在複本上檢查宿主的 SL 決策（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 - 它每局印出一行：對局 id、結局、層數、決策數、重新規劃次數，以及它的工作行程的遊戲錯誤，宿主的對局記錄不計入這些錯誤。
 

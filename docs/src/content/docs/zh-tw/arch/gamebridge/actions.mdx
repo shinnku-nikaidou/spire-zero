@@ -102,7 +102,7 @@ import { Badge } from '@astrojs/starlight/components';
 
 戰鬥以外的文字動作由 `ActionText`（`Actions/ActionText.cs`，internal 類別）解析：一個動詞和它的參數，索引只接受純數字。
 
-**SL 記錄**。Mod 不執行動作，但在 SL 下，它必須照模擬器的命名方式記錄玩家的動作，讓大腦能為這個節點做出複本（[Mod：SL 紀錄 §3](/zh-tw/arch/mod/sl-record/#sec-3)）。它給模擬器的 start 所呼叫的那些遊戲入口打補丁，並用 GameBridge 自己的輔助函式為每一步命名，所以記錄下來的一步，就是模擬器本來會打出的動作（`Sts2Ai.Mod/NodeRecord.cs`）：
+**SL 記錄**。Mod 只在玩家要 AI 來打時才執行動作，而且走的也是這些入口（[Mod：自動遊玩與安全 §1](/zh-tw/arch/mod/auto/#sec-1)）；在 SL 下，它必須照模擬器的命名方式記錄每一步，不論是玩家的還是 AI 的，讓大腦能為這個節點做出複本（[Mod：SL 紀錄 §3](/zh-tw/arch/mod/sl-record/#sec-3)）。它給模擬器的 start 所呼叫的那些遊戲入口打補丁，並用 GameBridge 自己的輔助函式為每一步命名，所以記錄下來的一步，就是模擬器本來會打出的動作（`Sts2Ai.Mod/NodeRecord.cs`）：
 
 | 入口 | 記錄什麼 |
 |---|---|

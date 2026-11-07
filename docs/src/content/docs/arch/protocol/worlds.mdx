@@ -67,10 +67,11 @@ public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 
 ```csharp
 public sealed record Candidate(string Action, double Value, double Ci, int Samples,
-    IReadOnlyList<double>? Values = null);
+    IReadOnlyList<double>? Values = null, double? Win = null, double? Hp = null,
+    IReadOnlyList<string>? Plan = null);
 ```
 
-一次搜索打过分的一个动作：它在各个世界上的平均值、95% 置信区间的半宽、世界的个数，以及在保留时，它在每个世界里的值（保留 4 位小数，按世界的顺序）。推荐把它们按从好到差列出（[线路 §7](/arch/protocol/wire/#sec-7)）；战斗网络的 ExIt 目标就是由各个世界的值做成的（[学习：循环 §5](/arch/learning/loop/#sec-5)）。
+一次搜索打过分的一个动作：它在各个世界上的平均值、95% 置信区间的半宽、世界的个数，以及在保留时，它在每个世界里的值（保留 4 位小数，按世界的顺序）。SL 规划器还加上它为这个动作找到的最佳路线如何结束：赢下这场战斗的概率和赢下时持有的生命值；在战斗外，值是 V 给出的这一局的胜率，在地图上 `plan` 带着这个选项的路线。推荐把它们列出时选中的在前（[线路 §7](/arch/protocol/wire/#sec-7)）；战斗网络的 ExIt 目标就是由各个世界的值做成的（[学习：循环 §5](/arch/learning/loop/#sec-5)）。
 
 ## 4. 工作进程消息
 
@@ -95,7 +96,7 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
     IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
 public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
-    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
+    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);
 public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
 ```
 
@@ -103,7 +104,7 @@ public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen
 |---|---|---|
 | `PlannedLine` | `lines` | 搜索找到的一条打法，从它的首个动作开始：它的值、它的动作、首个动作之后模拟的节点数（包括首个动作本身），以及每个动作被打出时所在的战斗观测的哈希，被跟随的计划在每一步之前核对它；以及它是否重复搜索找到的一个循环。`lines[i]` 是 `first[i]` 之后最好的打法 |
 | `TurnSearch` | `turn` | 一个回合的搜索得到的各个结束状态：`ends`，如果这个回合能到达战斗结束，先是最好的战斗结束状态，然后是下一回合开始时的各个状态，最好的在前；`nodes`，模拟的动作数；`cut`，是否有东西被略去（节点用完了，或者找到的状态比保留的多）；`bound`，被搜索的那个状态的上界 |
-| `TurnEnd` | `turn.ends` | 规划器的打法里一个回合结束处的状态：从决策处到达它的动作（最后一个结束回合）以及每个动作之前的观测哈希；它的战斗状态；叶子的值；它的上界，即它还能达到的最好结果（以它现有的生命值和药水取胜；战斗结束后就是它的值）；它的键，即它的观测和完整隐藏状态的哈希，相等的状态按它合并（战斗结束后为 0）；它的敌人出招记录 |
+| `TurnEnd` | `turn.ends` | 规划器的打法里一个回合结束处的状态：从决策处到达它的动作（最后一个结束回合）以及每个动作之前的观测哈希；它的战斗状态；叶子的值；它的上界，即它还能达到的最好结果（以它现有的生命值和药水取胜；战斗结束后就是它的值）；它的键，即它的观测和完整隐藏状态的哈希，相等的状态按它合并（战斗结束后为 0）；它的敌人出招记录；以及与值来自同一次叶子调用的、从它出发赢下这场战斗的概率和赢下时持有的生命值（战斗结束后为 1 或 0 和持有的生命值） |
 | `Afterstate` | `afters` | 一条路径通向什么：那时的这一局；游戏接下来问的决策界面，一局结束后为 null；它的画面；它的合法动作。选牌提示的选项在它的画面里，所以它的合法动作列表为空；战斗的画面被略去，因为战斗会结束一次试探 |
 
 `status` 写成数字（0 进行中，1 赢，2 输），哈希和键写成 JSON 数字（[协议 §4](/arch/protocol/#sec-4)）。

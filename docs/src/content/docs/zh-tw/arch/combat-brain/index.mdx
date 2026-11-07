@@ -43,7 +43,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 1. **玩家的回合**。下一個動作是什麼：從手牌打出一張牌（需要目標時指定目標）、使用藥水，或結束回合。合法動作來自遊戲，由 Harness 列出（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)）。
 2. **出牌過程中的選牌提示**。有些牌打出時會提一個問題：棄哪張牌、消耗哪張、把哪張放到抽牌堆頂、從三張生成的牌裡拿哪張。目前這些都交給一條固定規則 `p0`，在真實戰鬥裡和每個模擬戰鬥裡都是（[提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。
 
-只有一個合法動作的決策不經搜尋就回答。其他每個決策都回傳三樣東西：第一動作、它之後的計畫剩餘部分，以及搜尋看過的每個第一動作和它的估值（*候選*，決策日誌會保存它們，[Harness：決策日誌 §5](/zh-tw/arch/harness/decision-log/#sec-5)）。計畫很重要：SL 規劃器的計畫是戰鬥剩下的全部，只要遊戲顯示的正是計畫預期的，戰鬥就照著它打，不再搜尋；PIMC 的計畫是本回合剩下的部分，只有在它重複一個循環、而且每個世界對它都一致時，才不經搜尋地打出（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)）。
+只有一個合法動作的決策不經搜尋就回答。其他每個決策都回傳三樣東西：第一動作、它之後的計畫剩餘部分，以及搜尋看過的每個第一動作和它的估值（*候選*，決策日誌會保存它們，Mod 會顯示它們，[Harness：決策日誌 §5](/zh-tw/arch/harness/decision-log/#sec-5)）；SL 規劃器的候選還說明每一個的最佳路線怎麼結束：獲勝機率和剩下的生命值（[葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）。計畫很重要：SL 規劃器的計畫是戰鬥剩下的全部，只要遊戲顯示的正是計畫預期的，戰鬥就照著它打，不再搜尋；PIMC 的計畫是本回合剩下的部分，只有在它重複一個循環、而且每個世界對它都一致時，才不經搜尋地打出（[NoSL PIMC：預算 §2](/zh-tw/arch/pimc/budget/#sec-2)）。
 
 ## 2. 把一場戰鬥看成搜尋問題
 
@@ -135,12 +135,14 @@ public interface ICombatLeaf
 {
     // A search leaf: the state after the turn ends, or after the combat does.
     double Value(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
+    // The value with the chance to win the combat and the HP held at a win, from one evaluation.
+    LeafOutcome Outcome(CombatStatus status, CombatObservation obs, IReadOnlyList<EnemyTurns> history);
 }
 
 public sealed record CombatDecisionResult(
     CombatAction First,                  // one of legal
     IReadOnlyList<CombatAction> Plan,    // the rest of the plan after First
-    IReadOnlyList<Candidate> Candidates, // every first action, best first
+    IReadOnlyList<Candidate> Candidates, // every first action scored, the pick first
     IReadOnlyList<ulong>? PlanHashes);   // the observation each step of Plan expects, when it can be followed
 ```
 

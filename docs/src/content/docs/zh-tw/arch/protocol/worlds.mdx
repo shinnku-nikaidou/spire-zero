@@ -67,10 +67,11 @@ public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 
 ```csharp
 public sealed record Candidate(string Action, double Value, double Ci, int Samples,
-    IReadOnlyList<double>? Values = null);
+    IReadOnlyList<double>? Values = null, double? Win = null, double? Hp = null,
+    IReadOnlyList<string>? Plan = null);
 ```
 
-一次搜尋評過分的一個動作：它在各個世界上的平均值、95% 信賴區間的半寬、世界的個數，以及在保留時，它在每個世界裡的值（四位小數，按世界順序）。推薦把它們按好壞排列，最好的在前（[線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）；各世界的值正是戰鬥網路的 ExIt 目標的材料（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。
+一次搜尋評過分的一個動作：它在各個世界上的平均值、95% 信賴區間的半寬、世界的個數，以及在保留時，它在每個世界裡的值（四位小數，按世界順序）。SL 規劃器還加上它對這個動作的最佳路線怎麼結束：贏下這場戰鬥的機率，以及勝利時保有的生命值；在戰鬥外，值是 V 對贏下這一局的機率，在地圖上 `plan` 帶著這個選項的路線。推薦列出它們時，選中的排第一（[線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）；各世界的值正是戰鬥網路的 ExIt 目標的材料（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。
 
 ## 4. 工作行程訊息
 
@@ -95,7 +96,7 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
     IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
 public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status,
-    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History);
+    double Value, double Bound, ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);
 public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
 ```
 
@@ -103,7 +104,7 @@ public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen
 |---|---|---|
 | `PlannedLine` | `lines` | 搜尋找到的一條打法路線，從它的第一個動作起：它的值、它的動作、第一個動作之後模擬的節點數（包括第一個動作本身），以及每個動作被打出時的戰鬥觀測雜湊，被遵循的計畫在每一步之前都會核對它；以及它是否重複搜尋找到的一個循環。`lines[i]` 是 `first[i]` 之後的最佳路線 |
 | `TurnSearch` | `turn` | 一個回合搜尋的各個結尾：`ends`，如果這個回合能到達戰鬥的結局，先是最佳結局，然後是下一回合開始處的狀態，最好的在前；`nodes`，模擬的動作數；`cut`，是否有東西被略掉（節點用完了，或找到的狀態比保留的多）；`bound`，被搜尋的那個狀態的上界 |
-| `TurnEnd` | `turn.ends` | 規劃器路線上一個回合結束的狀態：從決策到達它的動作（最後一個結束回合）和每個動作之前的觀測雜湊；它的勝負狀態；葉節點的值；它的上界，即它還能達到的最好結果（以它現有的生命值和藥水獲勝；戰鬥結束後就是它的值）；它的鍵，即它的觀測和完整隱藏狀態的雜湊，相等的狀態按它合併（戰鬥結束後為 0）；它的敵人出招記錄 |
+| `TurnEnd` | `turn.ends` | 規劃器路線上一個回合結束的狀態：從決策到達它的動作（最後一個結束回合）和每個動作之前的觀測雜湊；它的勝負狀態；葉節點的值；它的上界，即它還能達到的最好結果（以它現有的生命值和藥水獲勝；戰鬥結束後就是它的值）；它的鍵，即它的觀測和完整隱藏狀態的雜湊，相等的狀態按它合併（戰鬥結束後為 0）；它的敵人出招記錄；以及和值出自同一次葉節點呼叫的、從它出發贏下這場戰鬥的機率和勝利時保有的生命值（戰鬥結束後是 1 或 0，以及保有的生命值） |
 | `Afterstate` | `afters` | 一條路徑通往的地方：那時的一局；遊戲接著詢問的決策介面，一局結束時為 null；它的畫面；它的合法動作。選牌提示的選項在它的畫面裡，所以它的合法清單為空；戰鬥的畫面被省略，因為一場戰鬥會結束一次試探 |
 
 `status` 寫成數字（0 進行中、1 贏、2 輸），雜湊和鍵寫成 JSON 數字（[概覽 §4](/zh-tw/arch/protocol/#sec-4)）。

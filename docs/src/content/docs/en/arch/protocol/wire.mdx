@@ -30,11 +30,11 @@ The version is bumped on any breaking change. A reader refuses a message whose `
 
 | type | direction | fields | meaning |
 |---|---|---|---|
-| `hello` | host → brain | `game_version`, `env` (`"NoSL"` or `"SL"`), `role` (`"mod"` or `"worker"`), `run`: `{run_id, character, ascension}` | a run starts; the environment is fixed for the run |
+| `hello` | host → brain | `game_version`, `env` (`"NoSL"` or `"SL"`), `role` (`"mod"` or `"worker"`), `run`: `{run_id, character, ascension}`, `effort`? (`"low"`, `"medium"`, `"high"` or `"max"`) | a run starts; the environment is fixed for the run, and so is the SL planner's effort the host asks for, if any ([Harness §5](/en/arch/harness/#sec-5)) |
 | `ready` | brain → host | `champion` | the brain takes the run, and names the champion that plays it |
 | `decision` | host → brain | `decision_id`, `obs_hash`, `surface`, `obs`, `legal` | a decision point: the kind of screen, the observation ([Observations and actions](/en/arch/protocol/observation/)), the legal actions; `legal` is empty for a card prompt, whose answer is `pick:i,j,…` |
 | `recommendation` | brain → host | `decision_id`, `obs_hash`, `action`, `brain`, `plan`?, `candidates`? | the answer ([§7](#sec-7)) |
-| `executed` | host → brain | `decision_id`, `action`, `ok`, `error`? | the action of a decision has run |
+| `executed` | host → brain | `decision_id`, `action`, `ok`, `error`? | the host played the answer to a decision |
 | `cancel` | host → brain | `decision_id` | the game moved on before the answer came |
 | `run_end` | host → brain | `won`, `floor`, `reason` | the run is over; `reason` is `won`, `lost`, `truncated` (the decision cap), `failed` or `aborted` |
 | `error` | brain → host | `message` | instead of `ready` or a `recommendation`: the brain cannot take the run or answer the decision; the host ends the run |
@@ -74,11 +74,11 @@ The opening of the book's example run, as the simulator hosting it in SL would s
 - The recommendation repeats the decision's id and hash. The simulator's host fails the run if either differs; the mod keeps answers by decision id and shows one only while the game still shows the same observation and legal list ([§8](#sec-8)).
 - The action must be one of the decision's legal actions (for a card prompt, picks the prompt accepts); Harness refuses anything else, so an illegal answer reaches the host as an `error`.
 
-**What `error` means.** The brain sends `error` instead of `ready` when it refuses the run (an environment its champion cannot play, such as the SL planner in a NoSL run), and instead of a recommendation when it cannot answer: a decision outside a run, an uncovered surface, an illegal pick, a hash that does not match, a decision after a refused node message. The host then ends the run: the simulator's run fails; the mod sends `run_end` with `failed` and turns the assistant off for that run.
+**What `error` means.** The brain sends `error` instead of `ready` when it refuses the run (an environment its champion cannot play, such as the SL planner in a NoSL run, or an effort it does not know), and instead of a recommendation when it cannot answer: a decision outside a run, an uncovered surface, an illegal pick, a hash that does not match, a decision after a refused node message. The host then ends the run: the simulator's run fails; the mod sends `run_end` with `failed` and turns the assistant off for that run.
 
-**`executed` and `cancel`.** The simulator's host sends `executed` for a decision once the game has reached the next decision or the end of the run; `ok` is false only when the run failed. The brain reads both messages and ignores them: it answers each decision before reading on, so there is never a search to drop. The mod advises and never acts, so it sends no `executed`; it sends `cancel` when the game moves on before the answer arrives, and waits for that answer before asking again.
+**`executed` and `cancel`.** The simulator's host sends `executed` for a decision once the game has reached the next decision or the end of the run; `ok` is false only when the run failed. The brain reads both messages and ignores them: it answers each decision before reading on, so there is never a search to drop. The mod sends `executed`, with `ok` true, for each answer the AI played at the player's request ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)), and none for the player's own actions; it sends `cancel` when the game moves on before the answer arrives, and waits for that answer before asking again.
 
-**Runs.** A `hello` in the middle of a run starts a new one: the brain drops the old run's Harness. At `run_end` the `brain` command writes the run's decision log and prints a line for it. The reasons by host: the simulator ends a run `won`, `lost`, `truncated` or `failed`; the mod `won`, `lost`, `failed`, or `aborted` when the player switches the environment or turns the assistant off mid-run.
+**Runs.** A `hello` in the middle of a run starts a new one: the brain drops the old run's Harness. At `run_end` the `brain` command writes the run's decision log and prints a line for it. The reasons by host: the simulator ends a run `won`, `lost`, `truncated` or `failed`; the mod `won`, `lost`, `failed`, or `aborted` when the player switches the environment or the effort, or turns the assistant off, mid-run.
 
 ## 6. SL: the node messages
 
@@ -89,7 +89,7 @@ In SL the brain may know the current node exactly, a node being a map point from
 
 **Timing.** Both are sent lazily, just before the next decision: the checkpoint if a new node has started since, then each decision of the node not yet sent (`Brains/RunBrains.cs:88-99`). A node's travel, its last decision, is therefore never sent: the next decision is in the next node, which starts with its own checkpoint.
 
-**Rules** (`Sts2Ai.Harness/Dispatcher.cs:162-177`): node messages in a NoSL run are refused; node indexes must increase; `seq` must equal the number of actions the node has so far; an SL combat decision before any checkpoint is an error. The brain does not answer node messages: one it refuses fails the run's next decision with the reason.
+**Rules** (`Sts2Ai.Harness/Dispatcher.cs:170-186`): node messages in a NoSL run are refused; node indexes must increase; `seq` must equal the number of actions the node has so far; an SL combat decision before any checkpoint is an error. The brain does not answer node messages: one it refuses fails the run's next decision with the reason.
 
 **What SL lets through.** The checkpoint carries the game's save, which holds the run's seed and random streams, so in SL the seed reaches the brain after all. SL may know it: the node's outcomes are the game's own ([Environments: information §2](/en/arch/environments/information/#sec-2)). The brain reads the checkpoint only by loading it in a worker, as a clone sealed at the node's exit.
 
@@ -100,17 +100,28 @@ public sealed record Recommendation(long DecisionId, string ObsHash, string Acti
     IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null) : WireMessage;
 
 public sealed record Candidate(string Action, double Value, double Ci, int Samples,
-    IReadOnlyList<double>? Values = null);
+    IReadOnlyList<double>? Values = null, double? Win = null, double? Hp = null,
+    IReadOnlyList<string>? Plan = null);
 ```
 
 | field | meaning |
 |---|---|
 | `action` | one of the decision's legal actions; for a card prompt, `pick:i,j,…` |
 | `brain` | the brain that chose it, as the champion's routing table names it ([Harness: routing, budgets and seeds §1](/en/arch/harness/routing/#sec-1)); the host counts decisions per brain for the run record, where placeholder decisions must be none ([Evaluation: metrics, seeds and reports §2](/en/arch/evaluation/metrics/#sec-2)) |
-| `plan` | what the brain planned after this action: the rest of the turn from a searching combat brain, the rest of the act's route from the macro brain on the map |
-| `candidates` | from a searching brain only: the first actions it scored, best first |
+| `plan` | what the brain planned after this action: the rest of the turn from PIMC, the rest of the combat from the SL planner, the rest of the act's route from the macro brain on the map |
+| `candidates` | the options the brain scored, the chosen first, then best first: a searching combat brain's first actions; L0's options at a decision or card prompt outside combat, valued by V (none when its answer was drawn by exploration). A card prompt's options are answers (`pick:i,j`); a card prompt in combat has none |
 
-A `Candidate` (`World.cs:65`) is one scored action: `value`, its mean over the worlds; `ci`, the half-width of its 95% confidence interval; `samples`, the worlds; and, when the search kept them, `values`, its value in each world. The plan and the candidates are what the decision log keeps too ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)), and what the output shows the player ([Output §2](/en/arch/output/#sec-2)).
+A `Candidate` (`World.cs:70`) is one scored option:
+
+| field | meaning |
+|---|---|
+| `value` | a search's mean over its worlds; outside combat, V's chance to win the run after the option |
+| `ci`, `samples` | the half-width of the 95% confidence interval and the worlds; 0 and 1 for the SL planner and for V |
+| `values`? | when the search kept them, the value in each world, to 4 decimals |
+| `win`?, `hp`? | the SL planner's: the chance to win the combat on the action's best line, 1 or 0 where the line reaches the combat's end, else the combat net's 1 − P(death); and the HP held at the end of a win on that line, exact at the end, else expected from the net's buckets ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)) |
+| `plan`? | on the map, the route to the boss the macro brain would take after the option; only for the hosts that show answers ([Harness §5](/en/arch/harness/#sec-5)) |
+
+The plan and a combat's candidates are what the decision log keeps too ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)); the options outside combat go to the host only. All of them are what the output shows the player ([Output §2](/en/arch/output/#sec-2)).
 
 **Planned:**
 
@@ -123,11 +134,12 @@ A `Candidate` (`World.cs:65`) is one scored action: `value`, its mean over the w
 |---|---|---|
 | `role` | `worker` | `mod` |
 | when it asks | at each decision the run reaches | once the screen has been still for 3 frames (the same observation hash and legal list), one decision at a time |
-| acts on the answer | plays it | shows it; the player acts |
-| `executed` | after each action | never |
+| acts on the answer | plays it | shows it; the AI plays it when the player asks ([Mod: auto-play and safety §2](/en/arch/mod/auto/#sec-2)) |
+| `executed` | after each action | after each action the AI played |
 | `cancel` | never | when the screen changes first |
 | node messages | in SL, before each decision | in SL, before each decision |
 | `error` from the brain | the run fails | `run_end` `failed`; the assistant is off for the rest of the run |
 | `run_end` reasons | `won`, `lost`, `truncated`, `failed` | `won`, `lost`, `failed`, `aborted` |
+| `effort` in `hello` | never | the player's choice, if any |
 
 The mod's side is described in [Mod: the main loop §8](/en/arch/mod/loop/#sec-8) and [Mod: the SL record §7](/en/arch/mod/sl-record/#sec-7): it runs in single-player runs only, on the game version it was built for.

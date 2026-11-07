@@ -57,7 +57,7 @@ At each turn end the leaf values the state, and computes a **bound**: the value 
 - none whose bound cannot beat the floor it was given (the best whole line so far);
 - the nodes it used, and whether it was cut (out of nodes, or more ends found than kept).
 
-Each end carries its line (actions, and the observation hashes the plan will follow), its status, value, bound and key, and the record of enemy moves up to it, which the next turn's search and its leaves go on from ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)).
+Each end carries its line (actions, and the observation hashes the plan will follow), its status, value, bound and key, and the record of enemy moves up to it, which the next turn's search and its leaves go on from ([Combat brain: prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)). It also carries how the leaf expects the fight to end from it, from the same net call as the value (`ICombatLeaf.Outcome`): the chance to win and the HP held at a win, exact once the fight is over ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)). The planner keeps them for the host to show ([Beam §5](/en/arch/sl-planner/beam/#sec-5)).
 
 The greedy dive asks each of its turns for every end, with no floor ([Beam §3](/en/arch/sl-planner/beam/#sec-3)). When the full beam later comes to the same state, it does not search that turn again: it takes the dive's ends and keeps those its own width and floor allow (`Narrow`). A floor only drops ends, and the kept ends are the best, in the same order, so the result is the one a fresh search would give.
 

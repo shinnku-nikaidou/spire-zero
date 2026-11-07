@@ -199,8 +199,9 @@ The brain decides what plays, so `run --brain` refuses every champion option, `-
 brain [--socket PATH] [--champion FILE] [champion options] [--sl-policy plan|play] [--log FILE] [--wire FILE]
 ```
 
-- `--socket`: by default `$XDG_STATE_HOME/sts2ai/brain.sock`, or `~/.local/state/sts2ai/brain.sock` when that variable is unset (`Sts2Ai.Protocol/Wire.cs:98-102`): Steam runs the game in a container that shares the home directory but not `$XDG_RUNTIME_DIR`.
-- A host names its environment in `hello`: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s (the SL planner by default), with the same macro brain.
+- `--socket`: by default `$XDG_STATE_HOME/sts2ai/brain.sock`, or `~/.local/state/sts2ai/brain.sock` when that variable is unset (`Sts2Ai.Protocol/Wire.cs:100-104`): Steam runs the game in a container that shares the home directory but not `$XDG_RUNTIME_DIR`.
+- A host names its environment in `hello`: NoSL hosts get `--policy`'s combat brain, SL hosts `--sl-policy`'s (the SL planner by default), with the same macro brain. A host may also name an effort (`low`, `medium`, `high`, `max`), with which the run's SL planner then plays ([Harness §5](/en/arch/harness/#sec-5)).
+- Its answers carry the options the brain scored, and on the map each option's route, for the mod to show ([Output §2](/en/arch/output/#sec-2)).
 - `--log` writes the decision log; `--wire` writes every message the hosts send, which `clones` replays to check a host's SL decisions on their clones ([Mod: the SL record §8](/en/arch/mod/sl-record/#sec-8)).
 - It prints a line per run: the run id, the end, the floor, the decisions, the replans, and its workers' game errors, which the host's run records do not count.
 

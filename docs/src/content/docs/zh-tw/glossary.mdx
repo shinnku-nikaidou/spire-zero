@@ -37,8 +37,9 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | 大腦伺服器（brain server）、`brain` | Harness 在線路上的那一端，以及單獨執行它、供 Mod 和 `run --brain` 使用的 SimWorker 指令（[Harness §5](/zh-tw/arch/harness/#sec-5)）。 |
 | SimWorker | 以無頭方式執行真實遊戲 DLL 的程式：戰鬥、整局、大腦、worker、評估（[模擬器](/zh-tw/arch/simulator/)）。 |
 | worker、工作行程池（worker pool）、`serve` | 一個透過 JSON 行回答搜尋請求的 SimWorker 行程；行程池負責啟動和重啟它們（[模擬器：工作行程池](/zh-tw/arch/simulator/pool/)）。 |
-| Mod | 真實遊戲裡的宿主：讀取畫面上的決策，詢問大腦，顯示答案（[Mod](/zh-tw/arch/mod/)）。 |
-| 輔助模式（assist mode）、面板（panel）、標示（marks） | Mod 目前的模式：玩家自己打，面板顯示答案，標示在地圖上畫出路線、在戰鬥中畫出計畫的數字（[輸出](/zh-tw/arch/output/)）。 |
+| Mod | 真實遊戲裡的宿主：讀取畫面上的決策，詢問大腦，顯示答案，並在玩家要求時打出它（[Mod](/zh-tw/arch/mod/)）。 |
+| 輔助模式（assist mode）、面板（panel）、標示（marks） | Mod 的模式：面板顯示答案和各選項的獲勝機率，標示在地圖上畫出路線、在戰鬥中畫出計畫的數字（[輸出](/zh-tw/arch/output/)）。玩家自己打，或者請 AI 來打。 |
+| 自動遊玩（auto-play）、執行器（executor） | 玩家要求時，AI 在真實遊戲裡打出大腦的回答：一步、打到回合或房間結束，或者自己一直打到被暫停為止；執行器像玩家的點選那樣執行每一個（[Mod：自動遊玩與安全](/zh-tw/arch/mod/auto/)）。 |
 | RunSession | SimWorker 中以無頭方式經過每個決策畫面打完整局的類別（[模擬器：整局 §1](/zh-tw/arch/simulator/runs/#sec-1)）。 |
 | CombatBuilder | 從一個觀測建構模擬器裡的戰鬥（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)）。 |
 | Pump | 單執行緒的排程器，把遊戲所有的非同步程式碼放在同一個執行緒上、按同一個順序執行，所以結果是確定的（[模擬器：無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)）。 |
@@ -69,8 +70,8 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | 觀測（observation） | 玩家在決策點能看到的東西，以協定型別表示（[協定：觀測與動作](/zh-tw/arch/protocol/observation/)）。 |
 | 合法動作（legal actions） | 玩家現在能採取的每個動作，寫成文字，如 `play:C:T` 或 `map:col,row`。 |
 | uid | 戰鬥中一張卡牌或一個生物的穩定 id，讓動作可以指名它們。 |
-| 推薦（recommendation） | 大腦的回答：動作、它之後的計畫，在戰鬥中還有它評分過的候選（[輸出 §1](/zh-tw/arch/output/#sec-1)）。 |
-| 候選（candidate） | 搜尋評分過的一個第一步動作，帶有它的價值、信賴區間和樣本數（[協定：世界與工作行程訊息 §3](/zh-tw/arch/protocol/worlds/#sec-3)）。 |
+| 推薦（recommendation） | 大腦的回答：動作、它之後的計畫，以及它評分過的候選（[輸出 §1](/zh-tw/arch/output/#sec-1)）。 |
+| 候選（candidate） | 大腦評分過的一個選項，帶有它的價值、信賴區間和樣本數：搜尋的一個第一步動作，帶著 SL 規劃器的這場戰鬥的獲勝機率和剩下的生命值；或者在戰鬥外，一個帶著 V 對這一局獲勝機率的選項（[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。 |
 | 後備（fallback） | 沒有大腦負責某個決策時選一個（例如隨機選）。這是禁止的：這一局改為帶著錯誤停下。 |
 | 佔位策略（placeholder） | 不搜尋的策略（`play`、`random`），用於測試和基線；由 `random` 做的決策會讓一次評估作廢。 |
 | PIMC | 完美資訊蒙地卡羅（Perfect Information Monte Carlo）：取樣幾個確定化世界，在每個世界裡當作一切已知去搜尋，再按第一步動作取平均（[NoSL PIMC](/zh-tw/arch/pimc/)）。 |

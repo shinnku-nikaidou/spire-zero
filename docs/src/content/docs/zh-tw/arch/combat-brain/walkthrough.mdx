@@ -203,7 +203,7 @@ $\varphi$ 接著把 $x$ 映射到 128 個數，<code>{v(walk.card.phi.first)}</c
 
 ## 13. 搜尋讀到的數字
 
-`CombatNet.Value`（`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-85`）給 51 個機率定價（[葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）：
+`CombatNet.Outcome`（`src/Sts2Ai.Brain/Combat/CombatNet.cs:78-96`）給 51 個機率定價（[葉節點 §5](/zh-tw/arch/combat-brain/leaf/#sec-5)）：
 
 $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})

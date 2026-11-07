@@ -1,112 +1,377 @@
 {
- "combat": {
+ "source": "sl_combat, nosl_combat, map_options: three decisions of the book's example seed (0SSL7NS01MU6, promotion-1-100 #12, Silent A0), each run played locally on 2026-11-07 by `run --brain` against `brain --champion eval/champions/sl.json` or `nosl.json` at ca1fad5 through a logging proxy; both runs were won on floor 48. Texts made as Describe and L10n make them.",
+ "sl_combat": {
   "source": {
-   "run": "034f8a6ab80c494f",
-   "seed": "3TZ33JATH5R5",
-   "floor": 15,
-   "outcome": "lost",
-   "rev": "b013f95",
-   "champion": "combat pimc c2 8x300, combat prompts p0, macro l0 v6-3-2, macro prompts l0 v6-3-2",
-   "job": "a NoSL run of the NoSL champion (pimc c2 8x300, L0 v6-3-2) on promotion-1-300 #0",
-   "how": "one combat decision of that run, as its decision log holds it",
-   "from": "src/data/combat-examples.json nosl"
+   "title": "SL combat",
+   "how": "the first decision of a fight on floor 45: the SL planner plans the fight",
+   "decision": 869,
+   "seed": "0SSL7NS01MU6",
+   "run": "ce13ba5116b7f48a",
+   "champion": "combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-2 clone, macro prompts l0 v9-2 clone",
+   "rev": "ca1fad5",
+   "env": "SL"
   },
-  "brain": "pimc c2",
-  "hand": [
+  "status": {
+   "en": "The Silent · A0 · floor 45 · HP 64/64",
+   "zh-CN": "静默猎手 · A0 · 第 45 层 · HP 64/64",
+   "zh-TW": "寂靜獵手 · A0 · 第 45 層 · HP 64/64"
+  },
+  "floor": 45,
+  "hp": 64,
+  "max_hp": 64,
+  "surface": "combat",
+  "next": {
+   "en": "Footwork+",
+   "zh-CN": "灵动步法+",
+   "zh-TW": "步法+"
+  },
+  "route": false,
+  "sub": {
+   "en": "this fight 100% · 64 HP left",
+   "zh-CN": "这场胜率 100% · 剩 64 HP",
+   "zh-TW": "這場勝率 100% · 剩 64 HP"
+  },
+  "then": [
    {
-    "id": "DEFEND_SILENT",
-    "cost": 1,
-    "uid": 0
+    "en": "Survivor+",
+    "zh-CN": "生存者+",
+    "zh-TW": "生存者+"
    },
    {
-    "id": "LEG_SWEEP",
-    "cost": 2,
-    "uid": 1
+    "en": "Deadly Poison+ → Owl Magistrate",
+    "zh-CN": "致命毒药+ → 猫头鹰法官",
+    "zh-TW": "致命毒藥+ → 貓頭鷹判官"
    },
    {
-    "id": "SLICE",
-    "cost": 0,
-    "uid": 2
-   },
-   {
-    "id": "CALCULATED_GAMBLE",
-    "cost": 0,
-    "uid": 3
-   },
-   {
-    "id": "NEOWS_FURY",
-    "cost": 1,
-    "uid": 4
-   },
-   {
-    "id": "STRIKE_SILENT",
-    "cost": 1,
-    "uid": 5
-   },
-   {
-    "id": "POISONED_STAB",
-    "cost": 1,
-    "uid": 6
+    "en": "end turn",
+    "zh-CN": "结束回合",
+    "zh-TW": "結束回合"
    }
   ],
-  "enemies": [
+  "later": {
+   "en": "6 more turns planned",
+   "zh-CN": "之后还规划 6 回合",
+   "zh-TW": "之後還規劃 6 回合"
+  },
+  "kind": "fight",
+  "options": [
    {
-    "uid": 1,
-    "id": "TERROR_EEL",
-    "hp": 140
+    "name": {
+     "en": "Footwork+",
+     "zh-CN": "灵动步法+",
+     "zh-TW": "步法+"
+    },
+    "value": 0.8,
+    "ci": 0,
+    "win": 1,
+    "hp": 64,
+    "rooms": null
+   },
+   {
+    "name": {
+     "en": "Assassinate → Owl Magistrate",
+     "zh-CN": "刺杀 → 猫头鹰法官",
+     "zh-TW": "刺殺 → 貓頭鷹判官"
+    },
+    "value": 0.7906,
+    "ci": 0,
+    "win": 1,
+    "hp": 63,
+    "rooms": null
    }
   ],
-  "chosen": "play:1:1",
-  "plan": [
-   "play:2:1",
-   "play:4:1",
-   "play:2:1",
-   "play:3",
-   "end_turn"
-  ],
-  "candidates": [
+  "brain": "plan c9-2",
+  "seconds": 13.5,
+  "win": 0.9850054512163373,
+  "delta": -0.0056,
+  "recent": [
    {
-    "action": "play:1:1",
-    "value": 0.1708,
-    "ci": 0.0113
+    "en": "floor 44 · go to Enemy · 98.5%",
+    "zh-CN": "第 44 层 · 去 敌人 · 98.5%",
+    "zh-TW": "第 44 層 · 去 敵人 · 98.5%"
    },
    {
-    "action": "play:0",
-    "value": 0.1512,
-    "ci": 0.0018
+    "en": "floor 44 · leave · 99.1%",
+    "zh-CN": "第 44 层 · 离开 · 99.1%",
+    "zh-TW": "第 44 層 · 離開 · 99.1%"
    },
    {
-    "action": "play:2:1",
-    "value": 0.1512,
-    "ci": 0.0018
+    "en": "floor 44 · pick Noxious Fumes · 99.1%",
+    "zh-CN": "第 44 层 · 选 毒雾 · 99.1%",
+    "zh-TW": "第 44 層 · 選 毒霧 · 99.1%"
    },
    {
-    "action": "play:6:1",
-    "value": 0.1492,
-    "ci": 0.0067
-   },
+    "en": "floor 44 · Smith · 99.1%",
+    "zh-CN": "第 44 层 · 锻造 · 99.1%",
+    "zh-TW": "第 44 層 · 鍛造 · 99.1%"
+   }
+  ]
+ },
+ "nosl_combat": {
+  "source": {
+   "title": "NoSL combat",
+   "how": "a decision of the act 3 boss fight on floor 48: PIMC over 8 worlds",
+   "decision": 835,
+   "seed": "0SSL7NS01MU6",
+   "run": "ce13ba5116b7f48a",
+   "champion": "combat pimc c9-2 8x300, combat prompts p0, macro l0 v9-2, macro prompts l0 v9-2",
+   "rev": "ca1fad5",
+   "env": "NoSL"
+  },
+  "status": {
+   "en": "The Silent · A0 · floor 48 · HP 44/66",
+   "zh-CN": "静默猎手 · A0 · 第 48 层 · HP 44/66",
+   "zh-TW": "寂靜獵手 · A0 · 第 48 層 · HP 44/66"
+  },
+  "floor": 48,
+  "hp": 44,
+  "max_hp": 66,
+  "surface": "combat",
+  "next": {
+   "en": "Eternal Armor",
+   "zh-CN": "永恒铠甲",
+   "zh-TW": "永恆護甲"
+  },
+  "route": false,
+  "sub": null,
+  "then": [
    {
-    "action": "play:4:1",
-    "value": 0.135,
-    "ci": 0.0064
-   },
-   {
-    "action": "play:3",
-    "value": 0.1282,
-    "ci": 0.0076
-   },
-   {
-    "action": "play:5:1",
-    "value": 0.1273,
-    "ci": 0.0069
-   },
-   {
-    "action": "end_turn",
-    "value": 0.0604,
-    "ci": 0.0012
+    "en": "end turn",
+    "zh-CN": "结束回合",
+    "zh-TW": "結束回合"
    }
   ],
-  "elapsed_ms": 494.2
+  "later": null,
+  "kind": "score",
+  "options": [
+   {
+    "name": {
+     "en": "Eternal Armor",
+     "zh-CN": "永恒铠甲",
+     "zh-TW": "永恆護甲"
+    },
+    "value": 0.4084,
+    "ci": 0.0176,
+    "win": null,
+    "hp": null,
+    "rooms": null
+   },
+   {
+    "name": {
+     "en": "Defend",
+     "zh-CN": "防御",
+     "zh-TW": "防禦"
+    },
+    "value": 0.3193,
+    "ci": 0.0242,
+    "win": null,
+    "hp": null,
+    "rooms": null
+   },
+   {
+    "name": {
+     "en": "Snakebite+ → Torch Head Amalgam #1",
+     "zh-CN": "蛇咬+ → 火炬头聚合体 #1",
+     "zh-TW": "蛇咬+ → 火炬頭融合體 #1"
+    },
+    "value": 0.3169,
+    "ci": 0.0275,
+    "win": null,
+    "hp": null,
+    "rooms": null
+   },
+   {
+    "name": {
+     "en": "Poisoned Stab → Torch Head Amalgam #1",
+     "zh-CN": "带毒刺击 → 火炬头聚合体 #1",
+     "zh-TW": "帶毒刺擊 → 火炬頭融合體 #1"
+    },
+    "value": 0.3157,
+    "ci": 0.0264,
+    "win": null,
+    "hp": null,
+    "rooms": null
+   },
+   {
+    "name": {
+     "en": "Snakebite+ → Queen #2",
+     "zh-CN": "蛇咬+ → 女王 #2",
+     "zh-TW": "蛇咬+ → 女王 #2"
+    },
+    "value": 0.3154,
+    "ci": 0.0289,
+    "win": null,
+    "hp": null,
+    "rooms": null
+   }
+  ],
+  "brain": "pimc c9-2",
+  "seconds": 0.6,
+  "win": 0.9715217848655089,
+  "delta": -0.0054,
+  "recent": [
+   {
+    "en": "floor 48 · end turn",
+    "zh-CN": "第 48 层 · 结束回合",
+    "zh-TW": "第 48 層 · 結束回合"
+   },
+   {
+    "en": "floor 48 · Snakebite+ → Torch Head Amalgam #1",
+    "zh-CN": "第 48 层 · 蛇咬+ → 火炬头聚合体 #1",
+    "zh-TW": "第 48 層 · 蛇咬+ → 火炬頭融合體 #1"
+   },
+   {
+    "en": "floor 48 · Neutralize+ → Torch Head Amalgam #1",
+    "zh-CN": "第 48 层 · 中和+ → 火炬头聚合体 #1",
+    "zh-TW": "第 48 層 · 中和+ → 火炬頭融合體 #1"
+   },
+   {
+    "en": "floor 48 · Defend",
+    "zh-CN": "第 48 层 · 防御",
+    "zh-TW": "第 48 層 · 防禦"
+   }
+  ]
+ },
+ "map_options": {
+  "source": {
+   "title": "map",
+   "how": "the map on floor 9: L0 values each next point with V",
+   "decision": 138,
+   "seed": "0SSL7NS01MU6",
+   "run": "ce13ba5116b7f48a",
+   "champion": "combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-2 clone, macro prompts l0 v9-2 clone",
+   "rev": "ca1fad5",
+   "env": "SL"
+  },
+  "status": {
+   "en": "The Silent · A0 · floor 9 · HP 53/70",
+   "zh-CN": "静默猎手 · A0 · 第 9 层 · HP 53/70",
+   "zh-TW": "寂靜獵手 · A0 · 第 9 層 · HP 53/70"
+  },
+  "floor": 9,
+  "hp": 53,
+  "max_hp": 70,
+  "surface": "map",
+  "next": {
+   "en": "go to Treasure",
+   "zh-CN": "去 宝箱",
+   "zh-TW": "去 財寶"
+  },
+  "route": true,
+  "sub": {
+   "en": "win chance 65.7%",
+   "zh-CN": "整局胜率 65.7%",
+   "zh-TW": "整局勝率 65.7%"
+  },
+  "then": [
+   {
+    "en": "Unknown",
+    "zh-CN": "未知",
+    "zh-TW": "未知"
+   },
+   {
+    "en": "Merchant",
+    "zh-CN": "商人",
+    "zh-TW": "商人"
+   },
+   {
+    "en": "Rest",
+    "zh-CN": "休息",
+    "zh-TW": "休息"
+   },
+   {
+    "en": "Elite",
+    "zh-CN": "精英",
+    "zh-TW": "菁英"
+   },
+   {
+    "en": "Enemy",
+    "zh-CN": "敌人",
+    "zh-TW": "敵人"
+   },
+   {
+    "en": "Rest",
+    "zh-CN": "休息",
+    "zh-TW": "休息"
+   },
+   {
+    "en": "Boss",
+    "zh-CN": "Boss",
+    "zh-TW": "頭目"
+   }
+  ],
+  "later": null,
+  "kind": "run",
+  "options": [
+   {
+    "name": {
+     "en": "go to Treasure",
+     "zh-CN": "去 宝箱",
+     "zh-TW": "去 財寶"
+    },
+    "value": 0.6572,
+    "ci": 0,
+    "win": null,
+    "hp": null,
+    "rooms": [
+     "Treasure",
+     "Unknown",
+     "Shop",
+     "RestSite",
+     "Elite",
+     "Monster",
+     "RestSite",
+     "Boss"
+    ]
+   },
+   {
+    "name": {
+     "en": "go to Treasure",
+     "zh-CN": "去 宝箱",
+     "zh-TW": "去 財寶"
+    },
+    "value": 0.6388,
+    "ci": 0,
+    "win": null,
+    "hp": null,
+    "rooms": [
+     "Treasure",
+     "RestSite",
+     "Monster",
+     "Shop",
+     "Monster",
+     "Monster",
+     "RestSite",
+     "Boss"
+    ]
+   }
+  ],
+  "brain": "l0 v9-2 clone",
+  "seconds": 0.0,
+  "win": 0.6571816093518703,
+  "delta": -0.026,
+  "recent": [
+   {
+    "en": "floor 9 · proceed · 68.3%",
+    "zh-CN": "第 9 层 · 继续 · 68.3%",
+    "zh-TW": "第 9 層 · 繼續 · 68.3%"
+   },
+   {
+    "en": "floor 9 · Join Forces · 68.3%",
+    "zh-CN": "第 9 层 · 结伴同行 · 68.3%",
+    "zh-TW": "第 9 層 · 聯手 · 68.3%"
+   },
+   {
+    "en": "floor 8 · go to Unknown · 68.4%",
+    "zh-CN": "第 8 层 · 去 未知 · 68.4%",
+    "zh-TW": "第 8 層 · 去 未知 · 68.4%"
+   },
+   {
+    "en": "floor 8 · leave · 67.6%",
+    "zh-CN": "第 8 层 · 离开 · 67.6%",
+    "zh-TW": "第 8 層 · 離開 · 67.6%"
+   }
+  ]
  },
  "map": {
   "source": {

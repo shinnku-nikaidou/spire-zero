@@ -203,7 +203,7 @@ The other {walk.potion.outputs - 1} outputs are computed and not read. The large
 
 ## 13. The number the search reads
 
-`CombatNet.Value` (`src/Sts2Ai.Brain/Combat/CombatNet.cs:74-85`) prices the 51 chances ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)):
+`CombatNet.Outcome` (`src/Sts2Ai.Brain/Combat/CombatNet.cs:78-96`) prices the 51 chances ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)):
 
 $$
 \text{value} = \sum_{k=1}^{50} p_k \big(0.2 + 0.6\,(s - m_k)\big) + (1 - p_0)\times 0.02 \sum_{\text{held}} (1 - u_{\text{id}})

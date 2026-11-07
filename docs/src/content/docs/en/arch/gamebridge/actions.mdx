@@ -102,7 +102,7 @@ Which screens get the belt is the host's choice: the simulator and the mod add i
 
 Text actions other than combat's are parsed by `ActionText` (`Actions/ActionText.cs`, internal): a verb and its argument, indexes as plain digits only.
 
-**The SL record.** The mod does not start actions, but in SL it must record the player's as the simulator names them, so the brain can clone the node ([Mod: the SL record §3](/en/arch/mod/sl-record/#sec-3)). It patches the game entry points that the simulator's starts call, and names each step with GameBridge's own helpers, so a recorded step is the action the simulator would have played (`Sts2Ai.Mod/NodeRecord.cs`):
+**The SL record.** The mod starts actions only when the player asks the AI to play, and then through these same entry points ([Mod: auto-play and safety §1](/en/arch/mod/auto/#sec-1)); in SL it must record every step, the player's or the AI's, as the simulator names them, so the brain can clone the node ([Mod: the SL record §3](/en/arch/mod/sl-record/#sec-3)). It patches the game entry points that the simulator's starts call, and names each step with GameBridge's own helpers, so a recorded step is the action the simulator would have played (`Sts2Ai.Mod/NodeRecord.cs`):
 
 | entry point | records |
 |---|---|

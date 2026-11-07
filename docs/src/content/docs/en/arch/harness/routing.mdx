@@ -59,6 +59,8 @@ A macro or prompt route is a `Route<T>(Brain, Policy)`. Today:
 
 **The plan.** After the macro answer is checked, the `Dispatcher` asks the policy what it plans after it (`IMacroPolicy.Plan`): L0's is the rest of the act's route on the map, empty elsewhere. Its time is not in the decision's `elapsed_ms`.
 
+**Scored options.** Then it takes the options the policy chose among, with their values (`Scored`): L0's are every legal option with V's chance to win the run after it, the chosen first and then best first, and none when its answer was drawn by exploration ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)). A card prompt outside combat gives the answers L0 weighed. They become the recommendation's candidates, and for a host that shows answers each map option gets its route too ([Overview §5](/en/arch/harness/#sec-5)); the decision log does not keep them.
+
 **Explored.** A prompt or macro answer is marked explored when the policy says its last answer was drawn: for L0, by its even draws ([The decision log §6](/en/arch/harness/decision-log/#sec-6)).
 
 ## 4. The budget

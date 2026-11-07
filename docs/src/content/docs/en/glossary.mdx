@@ -37,8 +37,9 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | brain server, `brain` | Harness's end of the wire, and the SimWorker command that runs it alone for the mod and for `run --brain` ([Harness §5](/en/arch/harness/#sec-5)). |
 | SimWorker | The program that runs the real game DLL headless: combats, whole runs, the brain, the workers, evaluation ([Simulator](/en/arch/simulator/)). |
 | worker, worker pool, `serve` | A SimWorker process that answers search requests over JSON lines; the pool starts and restarts them ([Simulator: the worker pool](/en/arch/simulator/pool/)). |
-| Mod | The host inside the real game: reads the decision on screen, asks the brain, shows the answer ([Mod](/en/arch/mod/)). |
-| assist mode, panel, marks | The mod's mode today: the player plays, the panel shows the answer, and marks draw the route on the map and the plan's numbers in combat ([Output](/en/arch/output/)). |
+| Mod | The host inside the real game: reads the decision on screen, asks the brain, shows the answer, and plays it when the player asks ([Mod](/en/arch/mod/)). |
+| assist mode, panel, marks | The mod's mode: the panel shows the answer and its options' chances to win, and marks draw the route on the map and the plan's numbers in combat ([Output](/en/arch/output/)). The player plays, or asks the AI to. |
+| auto-play, executor | The AI playing the brain's answers in the real game when the player asks: one step, to the end of the turn or the room, or on its own until paused; the executor carries each one out as the player's click would ([Mod: auto-play and safety](/en/arch/mod/auto/)). |
 | RunSession | The SimWorker class that plays a whole run headless through every decision screen ([Simulator: whole runs §1](/en/arch/simulator/runs/#sec-1)). |
 | CombatBuilder | Builds a simulator combat from an observation ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5)). |
 | Pump | The single-threaded scheduler that runs all of the game's async code on one thread, in one order, so results are deterministic ([Simulator: headless host §7](/en/arch/simulator/headless/#sec-7)). |
@@ -69,8 +70,8 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | observation | What a player can see at a decision point, as protocol types ([Protocol: observations and actions](/en/arch/protocol/observation/)). |
 | legal actions | Every action the player could take now, as text such as `play:C:T` or `map:col,row`. |
 | uid | A stable id for a card or a creature in a combat, so actions can name them. |
-| recommendation | The brain's answer: the action, the plan after it, and for a combat the candidates it scored ([Output §1](/en/arch/output/#sec-1)). |
-| candidate | A first action a search scored, with its value, confidence interval and samples ([Protocol: worlds and worker messages §3](/en/arch/protocol/worlds/#sec-3)). |
+| recommendation | The brain's answer: the action, the plan after it, and the candidates it scored ([Output §1](/en/arch/output/#sec-1)). |
+| candidate | An option a brain scored, with its value, confidence interval and samples: a search's first action, with the SL planner's chance to win the fight and HP left, or outside combat an option with V's chance to win the run ([Protocol: the wire §7](/en/arch/protocol/wire/#sec-7)). |
 | fallback | Choosing something (at random, say) when no brain covers a decision. Forbidden: the run stops with an error instead. |
 | placeholder | A policy that does not search (`play`, `random`), for tests and baselines; a decision by `random` voids an evaluation. |
 | PIMC | Perfect Information Monte Carlo: sample several determinized worlds, search each as if everything were known, and average by first action ([NoSL PIMC](/en/arch/pimc/)). |

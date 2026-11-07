@@ -19,6 +19,8 @@ Until run worlds exist ([Simulator: worlds and the SL clone §8](/en/arch/simula
 
 What the screen does not show, this prediction cannot see. An event option's costs and gains are not on the screen as data, so a costly option ties with leaving and wins when listed first: Tablet of Truth takes max HP for every decipher, down to 1. Nor does it see what a relic does beyond being one more relic, or what a transform gives. Playing the options removes all three.
 
+**The options it shows.** Each answer keeps the options it was chosen among, with their values, the chosen first and then best first (`Scored`); Harness sends them to the host as the answer's candidates ([Harness: routing, budgets and seeds §3](/en/arch/harness/routing/#sec-3)). At a decision they are every legal option, each with V's chance to win the run after it: on the clone, its worth $W$ ([§3](#sec-3)). At a card prompt they are the answers L0 weighed: from the screen, no pick and each single pick, with the answer it reached; on the clone, every answer its local search valued ([§4](#sec-4)). An option worth $-\infty$ ([§5](#sec-5)) is left out, and an answer drawn by exploration shows none. The mod prints them beside the answer, with each map option's route ([Output §2](/en/arch/output/#sec-2)).
+
 ## 2. L0 on the clone
 
 In SL, with `--afterstates clone` (and `--macro l0`), Harness hands L0 the node's clone at each macro decision and at each card prompt outside combat ([Harness: routing, budgets and seeds §3](/en/arch/harness/routing/#sec-3)), and L0 plays the options in the real game instead of predicting them (`CloneSearch`).

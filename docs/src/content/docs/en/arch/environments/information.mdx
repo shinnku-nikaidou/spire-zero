@@ -58,7 +58,7 @@ The boundary, exactly:
 
 - **Entry:** arrival at a map point. The game saves the run there, before it rolls what a `?` becomes and before it builds the room, so the entry state is a complete save (`SerializableRun`). In the simulator the game's `SaveRun` is patched never to write; the save made on arrival, the one with no finished room, starts a node (`Runtime/Patches/Persistence.cs:13-22`), while the saves after a combat win and an Ancient carry a room and never do.
 - **Exit:** the map-travel action (`VoteForMapCoordAction`). The travel itself belongs to the current node; everything after it belongs to the next one.
-- **Special cases:** the run's first point, where the Ancient Neow waits, is the first node; the code numbers nodes from 0, so it is node 0 (`Protocol/Wire.cs:79-81`). After a boss, the first point of the next act is a new node. The end of the run is an exit too.
+- **Special cases:** the run's first point, where the Ancient Neow waits, is the first node; the code numbers nodes from 0, so it is node 0 (`Protocol/Wire.cs:81-83`). After a boss, the first point of the next act is a new node. The end of the run is an exit too.
 
 The figure walks through the first three nodes of one real run, the won SL run that the [macro brain chapter](/en/arch/macro-brain/) follows (seed `0SSL7NS01MU6`). Pick a node and a step, then switch between NoSL and SL to see what each may know at that moment, and where the game itself would have saved.
 

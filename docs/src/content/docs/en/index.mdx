@@ -6,8 +6,8 @@ import { Badge, LinkCard } from '@astrojs/starlight/components';
 
 This project builds an AI that plays **Slay the Spire 2** (STS2), a single-player deck-building roguelike, and runs as a mod inside the game. One brain serves two modes:
 
-- **Assist**: the mod shows the player what the AI would do, its plan for the turn and the options it weighed. This is built ([Mod](/en/arch/mod/), [Output](/en/arch/output/)).
-- **Auto-play**: the AI plays whole runs by itself in the real game. This is planned.
+- **Assist**: the mod shows the player what the AI would do, its plan for the turn and the options it weighed, with each one's chance to win. This is built ([Mod](/en/arch/mod/), [Output](/en/arch/output/)).
+- **Auto-play**: the AI plays the answers itself in the real game. When the player asks, it plays a step, the rest of a turn or a room, or goes on until paused; this is built. Playing whole runs with no one at the keyboard is planned ([Mod: auto-play and safety](/en/arch/mod/auto/)).
 
 The strategy is learned from zero by self-play; it is not built from anyone's recorded games, and it is not written by hand. The first target is the Silent, single-player only: Ascension 0, then Ascension 10. The game version is pinned at **v0.111.0**; the game runs on Godot 4.5.1 and .NET 9.0.7, and mods change its code at runtime with Harmony patches.
 

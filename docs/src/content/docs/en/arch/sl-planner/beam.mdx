@@ -58,6 +58,8 @@ A plan is **proved** when nothing better can exist, as far as the bound holds:
 - its line reaches the decision's bound; or
 - the full beam left nothing out: no turn's search was cut (out of nodes, or more ends than it kept), no state was dropped from the beam, and every line ended the fight or was pruned.
 
+**What the host is shown.** Besides the pick, the planner keeps, for each first action its kept lines began with, the best of those lines. Those are its candidates, the pick first: each with the line's value, its chance to win the fight and the HP held at a win, where the line ends the fight 1 or 0 and the exact HP, elsewhere the leaf's expectation ([Turn search §4](/en/arch/sl-planner/turn-search/#sec-4)). The mod shows them as the fight's chance to win and HP left ([Output §2](/en/arch/output/#sec-2)). Often there is one: in the book's example seed played by the SL champion at ca1fad5, 23 of the 24 fights' plans had a single candidate, every line the planner kept beginning with its pick.
+
 Proofs are rare. On the fights of [Budget §5](/en/arch/sl-planner/budget/#sec-5) (2026-10-28), 18% of the searches were proved on act 1 hallway fights, 3% on elites and 1% on act 2's fights: a turn yields many more states than the beam keeps. In the fights below, none of 21 plans was proved.
 
 ## 6. Losing plans

@@ -61,9 +61,9 @@ sequenceDiagram
 ```
 
 1. **宿主發問**。走線路時，宿主送出一條 `decision` 訊息：觀測、它的雜湊和合法動作（[協定：線路 §3](/zh-tw/arch/protocol/wire/#sec-3)）。`BrainServer` 檢查它屬於一局、它的 id 大於上一個，並且雜湊確實是這個觀測的，然後把它作為戰鬥決策、選牌提示或宏觀決策交給這一局的 `Dispatcher`（[§5](#sec-5)）。在行程內時，模擬器直接詢問 `Dispatcher`。
-2. **Harness 記下它**。戰鬥決策的觀測加入敵人出招紀錄（`MoveRecord.Witness`）；宏觀決策結束這場戰鬥的紀錄（[§4](#sec-4)）。決策得到它在這一局裡的編號，它的大腦的計數加一，並抽取它的種子（`Dispatcher.cs:189-194`）。
+2. **Harness 記下它**。戰鬥決策的觀測加入敵人出招紀錄（`MoveRecord.Witness`）；宏觀決策結束這場戰鬥的紀錄（[§4](#sec-4)）。決策得到它在這一局裡的編號，它的大腦的計數加一，並抽取它的種子（`Dispatcher.cs:197-202`）。
 3. **一個大腦做決定**。這個決策介面的路由拿到決策、種子、SL 下節點的複本，以及這場戰鬥至今的出招。會搜尋的大腦把搜尋拆成工作行程請求，再合併回覆，回覆按請求順序回來（[路由、預算與種子 §2](/zh-tw/arch/harness/routing/#sec-2)）。
-4. **Harness 檢查並記錄**。不合法的回答會拋出例外。大腦的名字、計畫和候選成為這個決策的註記（`Dispatcher.Last`），記錄日誌時也成為決策日誌的一行。
+4. **Harness 檢查並記錄**。不合法的回答會拋出例外。大腦的名字、計畫和候選成為這個決策的註記（`Dispatcher.Last`），記錄日誌時也成為決策日誌的一行。在戰鬥以外，候選是宏觀策略或提示策略打過分的選項（`Scored`），只有註記保存它們。
 5. **宿主拿到推薦**：動作、大腦、它的計畫和候選，並回送請求的 id 和雜湊（[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。
 
 **行程內與走線路**。不帶 `--brain` 的 `run` 在它自己的行程裡給每一局一個 `Dispatcher`。`run --brain SOCKET` 和 Mod 則透過 Unix socket 把每個決策送給 `brain` 指令，在那裡 `BrainServer` 同樣給這一局一個 `Dispatcher`。回答是一樣的：`run --check` 把每個種子走線路再打一遍並加以比較（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。宿主會說明自己是 Mod 還是模擬的一局（`hello.role`），但建立冠軍時不讀它：大腦分辨不出真實遊戲和模擬器。這就是專案的規則「換世界，不換大腦」（[前言 §3](/zh-tw/#sec-3)）。
@@ -75,7 +75,7 @@ sequenceDiagram
 | 決策計數器 | 每個決策在日誌裡的編號和它的種子；戰鬥決策、選牌提示和宏觀決策共用它，從 0 開始 | 一局內從不 |
 | 每個大腦的決策數（`Brains`） | 對局記錄的 `brains` | 一局內從不 |
 | `Replans` | 因為計畫不成立而重新搜尋的戰鬥步驟 | 一局內從不 |
-| `Last` | 最近一個決策的大腦、計畫和候選：推薦帶的內容 | 每個決策 |
+| `Last` | 最近一個決策的大腦、計畫和候選（在戰鬥以外，是策略打過分的選項）：推薦帶的內容 | 每個決策 |
 | 敵人出招紀錄（`History`） | 戰鬥大腦的葉節點，以及世界裡怪物的出招日誌（[§4](#sec-4)） | 宏觀決策時，或回合數倒退時 |
 | SL 節點：檢查點和軌跡 | 節點的複本，交給戰鬥大腦，加上 `--afterstates clone` 時也交給宏觀一側 | 每個節點檢查點 |
 | 決策日誌 | 這一局的各行，在記憶體裡保存到這一局結束 | 一局內從不 |
@@ -137,9 +137,11 @@ public sealed class PublicRecord
 | `executed`、`cancel` | 忽略：每個決策都在讀下一條訊息之前回答，所以沒有可以丟棄的搜尋 |
 | 其他任何訊息 | `error` |
 
-**回答**（`BrainServer.cs:138-154`）。戰鬥決策的合法動作被解析成戰鬥動作，大腦看到的是它畫面上的戰鬥觀測；選牌提示的回答寫成 `pick:i,j`；其他每種決策介面都是宏觀決策。推薦回送請求的 id 和雜湊，並帶著這個決策的註記：它的大腦、計畫和候選（選牌提示的推薦只帶大腦）。
+**回答**（`BrainServer.cs:138-154`）。戰鬥決策的合法動作被解析成戰鬥動作，大腦看到的是它畫面上的戰鬥觀測；選牌提示的回答寫成 `pick:i,j`；其他每種決策介面都是宏觀決策。推薦回送請求的 id 和雜湊，並帶著這個決策的註記：它的大腦、計畫和候選。選牌提示的推薦不帶計畫，在戰鬥中也不帶候選；在戰鬥以外，它的候選是 L0 權衡過的回答。
 
-**`brain` 指令**包裝它（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。它用自己的選項做出兩個冠軍，每種環境一個：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的，預設是 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。兩者共用一個工作行程池。`--log FILE` 在每一局的 `run_end` 時寫出它的決策日誌，所以沒送出這條訊息就斷線的宿主不會留下任何一行；`--wire FILE` 記錄宿主送來的每條訊息，`clones` 據此檢查 Mod 的 SL 記錄（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
+**附帶說明的回答**。`brain` 指令建立它的 `Dispatcher` 時帶上 `explain`，給會顯示回答的宿主用：在地圖決策時，宏觀大腦打過分的每個選項，還會帶上選了它之後要走的、通往頭目的路線，每個選項問一次 `IMacroPolicy.Plan`（`Candidate.plan`，[協定：線路 §7](/zh-tw/arch/protocol/wire/#sec-7)）。行程內的 `run` 建立它們時不帶這個。
+
+**`brain` 指令**包裝它（[模擬器：參考 §4](/zh-tw/arch/simulator/reference/#sec-4)）。它用自己的選項做出兩個冠軍，每種環境一個：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的，預設是 SL 規劃器（[環境 §5](/zh-tw/arch/environments/#sec-5)）。兩者共用一個工作行程池。宿主可以在 `hello` 裡要求 SL 規劃器的某個力度（`low`、`medium`、`high`、`max`，[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）：那一局的 SL 規劃器就用該等級的預算來打，`ready` 裡的冠軍名稱也會寫出這一點；其他戰鬥大腦照原樣打，不認得的力度則以一個 `error` 拒絕。每種環境和力度的 `Dispatcher` 工廠，在第一個要求它的一局時才建立。`--log FILE` 在每一局的 `run_end` 時寫出它的決策日誌，所以沒送出這條訊息就斷線的宿主不會留下任何一行；`--wire FILE` 記錄宿主送來的每條訊息，`clones` 據此檢查 Mod 的 SL 記錄（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)）。
 
 ## 6. 程式碼
 
@@ -157,7 +159,7 @@ public sealed class PublicRecord
 | `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 報告和排行榜（[評估：指標、種子與報告 §7](/zh-tw/arch/evaluation/metrics/#sec-7)） |
 | `Gate.cs` | `Gate`、`ChampionFile` | 配對的晉級門檻和冠軍檔案（[評估：晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)） |
 
-**`Dispatcher`**（`Dispatcher.cs:55-209`）建立時需要 run id、環境、四條路由、是否記錄日誌，以及在 `--afterstates clone` 下如何為宏觀一側開啟節點的複本：
+**`Dispatcher`**（`Dispatcher.cs:58-217`）建立時需要 run id、環境、四條路由、是否記錄日誌、在 `--afterstates clone` 下如何為宏觀一側開啟節點的複本，以及是否為地圖選項附上說明（[§5](#sec-5)）：
 
 | 成員 | 內容 |
 |---|---|
@@ -174,7 +176,7 @@ public sealed class PublicRecord
 
 | 型別 | 內容 |
 |---|---|
-| `ICombatPolicy`、`IChoicePolicy`、`IMacroPolicy` | 每種決策一種策略；`IChoicePolicy` 和 `IMacroPolicy` 還會說明它們上一個回答是否經過探索，`IMacroPolicy` 還會說明它在回答之後的計畫 |
+| `ICombatPolicy`、`IChoicePolicy`、`IMacroPolicy` | 每種決策一種策略；`IChoicePolicy` 和 `IMacroPolicy` 還會說明它們上一個回答是否經過探索，以及它是從哪些選項中選出的，連同它們的估值（`Scored`，預設沒有），`IMacroPolicy` 還會說明它在一個回答之後的計畫（`Plan`） |
 | `CombatDecision`、`ChoiceDecision`、`MacroDecision` | 一個決策：它的合法動作（或它的提示）、按需建構的觀測，以及宏觀一側在有開啟的複本時的節點複本（`IMacroClone`） |
 | `CombatDecisionResult` | 戰鬥大腦的回答：第一個動作、它之後的計畫、候選、計畫的觀測雜湊、是否重新規劃、它的路線是否重複一個循環 |
 | `Budget`、`TurnPlan`、`SlRoute`、`MoveRecord` | 搜尋預算、照計畫打、規劃器的路由、敵人出招紀錄 |

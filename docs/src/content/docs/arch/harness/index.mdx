@@ -61,9 +61,9 @@ sequenceDiagram
 ```
 
 1. **宿主提问**。通过线路时，宿主发来一条 `decision` 消息：观测、它的哈希和合法动作（[协议：线路 §3](/arch/protocol/wire/#sec-3)）。`BrainServer` 检查它属于一局、它的 id 大于上一个、哈希确实是这个观测的，然后把它作为战斗、选牌提示或宏观决策交给这一局的 `Dispatcher`（[§5](#sec-5)）。在进程内时，模拟器直接询问 `Dispatcher`。
-2. **Harness 记下它**。战斗决策的观测加入敌人出招记录（`MoveRecord.Witness`）；宏观决策结束这场战斗的记录（[§4](#sec-4)）。这个决策得到它在这一局里的序号，它的大脑的计数加一，并抽取它的种子（`Dispatcher.cs:189-194`）。
+2. **Harness 记下它**。战斗决策的观测加入敌人出招记录（`MoveRecord.Witness`）；宏观决策结束这场战斗的记录（[§4](#sec-4)）。这个决策得到它在这一局里的序号，它的大脑的计数加一，并抽取它的种子（`Dispatcher.cs:197-202`）。
 3. **一个大脑做决定**。这个决策界面的路由拿到决策、种子、SL 下节点的克隆，以及这场战斗至今的出招。会搜索的大脑把搜索拆成工作进程请求，再合并回复，回复按请求的顺序返回（[路由、预算与种子 §2](/arch/harness/routing/#sec-2)）。
-4. **Harness 检查并记日志**。不合法的回答会抛异常。大脑的名字、计划和候选成为这个决策的注记（`Dispatcher.Last`），开着日志时，还成为决策日志里的一行。
+4. **Harness 检查并记日志**。不合法的回答会抛异常。大脑的名字、计划和候选成为这个决策的注记（`Dispatcher.Last`），开着日志时，还成为决策日志里的一行。在战斗外，候选是宏观策略或提示策略打过分的选项（`Scored`），只有注记保存它们。
 5. **宿主得到一条推荐**：动作、大脑、它的计划和候选，并重复请求的 id 和哈希（[协议：线路 §7](/arch/protocol/wire/#sec-7)）。
 
 **进程内与通过线路**。不带 `--brain` 的 `run` 在自己的进程里给每一局一个 `Dispatcher`。`run --brain SOCKET` 和 Mod 则通过 Unix 套接字把每个决策发给 `brain` 命令，`BrainServer` 在那里同样给这一局一个 `Dispatcher`。两者的回答相同：`run --check` 把每个种子通过线路再打一遍并加以比较（[决策日志 §8](/arch/harness/decision-log/#sec-8)）。宿主会说明自己是 Mod 还是模拟的一局（`hello.role`），但做出冠军时不读它：大脑分不出真实游戏和模拟器。这就是项目的原则「换世界，不换大脑」（[前言 §3](/#sec-3)）。
@@ -75,7 +75,7 @@ sequenceDiagram
 | 决策计数器 | 日志里每个决策的序号和它的种子；战斗决策、选牌提示和宏观决策共用它，从 0 开始 | 一局之内从不 |
 | 每个大脑的决策数（`Brains`） | 对局记录的 `brains` | 一局之内从不 |
 | `Replans` | 因为计划对不上而重新搜索的战斗步骤 | 一局之内从不 |
-| `Last` | 最近一个决策的大脑、计划和候选：推荐带的内容 | 每个决策 |
+| `Last` | 最近一个决策的大脑、计划和候选（在战斗外，是策略打过分的选项）：推荐带的内容 | 每个决策 |
 | 敌人出招记录（`History`） | 战斗大脑的叶子，以及各世界里怪物的出招日志（[§4](#sec-4)） | 宏观决策时，或回合数倒退时 |
 | SL 节点：检查点和轨迹 | 节点的克隆，交给战斗大脑，用 `--afterstates clone` 时也交给宏观一侧 | 每个节点检查点 |
 | 决策日志 | 这一局的各行，一局结束前都留在内存里 | 一局之内从不 |
@@ -137,9 +137,11 @@ public sealed class PublicRecord
 | `executed`、`cancel` | 忽略：每个决策都在读下一条消息之前答完，所以没有需要丢弃的搜索 |
 | 其他任何消息 | `error` |
 
-**回答**（`BrainServer.cs:138-154`）。战斗决策的合法动作被解析成战斗动作，大脑看到的是它画面上的战斗观测；选牌提示的回答写成 `pick:i,j`；其他每个决策界面都是宏观决策。推荐重复请求的 id 和哈希，并带上这个决策的注记：它的大脑、计划和候选（选牌提示的推荐只带大脑）。
+**回答**（`BrainServer.cs:138-154`）。战斗决策的合法动作被解析成战斗动作，大脑看到的是它画面上的战斗观测；选牌提示的回答写成 `pick:i,j`；其他每个决策界面都是宏观决策。推荐重复请求的 id 和哈希，并带上这个决策的注记：它的大脑、计划和候选。选牌提示的推荐不带计划，在战斗中也不带候选；在战斗外，它的候选是 L0 权衡过的那些回答。
 
-**`brain` 命令**包装了它（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。它根据自己的选项做出两个冠军，每种环境一个：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。两者共用一个工作进程池。`--log FILE` 在每一局的 `run_end` 时写出它的决策日志，所以没发这条消息就断开的宿主不留下任何行；`--wire FILE` 记录宿主发来的每条消息，`clones` 据此检查 Mod 的 SL 记录（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
+**带解释的回答**。`brain` 命令用 `explain` 创建它的 `Dispatcher`，供显示答案的宿主使用：在地图决策处，宏观大脑打过分的每个选项还会带上它在这个选项之后会走的、通往 Boss 的路线，每个选项问一次 `IMacroPolicy.Plan`（`Candidate.plan`，[协议：线路 §7](/arch/protocol/wire/#sec-7)）。进程内的 `run` 创建它们时不带它。
+
+**`brain` 命令**包装了它（[模拟器：参考 §4](/arch/simulator/reference/#sec-4)）。它根据自己的选项做出两个冠军，每种环境一个：NoSL 宿主得到 `--policy` 的战斗大脑，SL 宿主得到 `--sl-policy` 的，默认是 SL 规划器（[环境 §5](/arch/environments/#sec-5)）。两者共用一个工作进程池。宿主可以在 `hello` 里要求 SL 规划器的某一档力度（`low`、`medium`、`high`、`max`，[SL 规划器：预算、开销与结果 §1](/arch/sl-planner/budget/#sec-1)）：这一局的 SL 规划器就用这个预设的预算来打，`ready` 里冠军的名字也会写明；别的战斗大脑照原样打，不认识的力度会以 `error` 拒绝。每种环境和力度的 `Dispatcher` 创建器，在第一个要求它的对局到来时才创建。`--log FILE` 在每一局的 `run_end` 时写出它的决策日志，所以没发这条消息就断开的宿主不留下任何行；`--wire FILE` 记录宿主发来的每条消息，`clones` 据此检查 Mod 的 SL 记录（[Mod：SL 记录 §8](/arch/mod/sl-record/#sec-8)）。
 
 ## 6. 代码
 
@@ -157,7 +159,7 @@ public sealed class PublicRecord
 | `Reports.cs` | `Rate`、`BossEntry`、`Metrics`、`EvalReport`、`Leaderboard` | 报告和排行榜（[评估：指标、种子与报告 §7](/arch/evaluation/metrics/#sec-7)） |
 | `Gate.cs` | `Gate`、`ChampionFile` | 配对的晋级门槛和冠军文件（[评估：晋级门槛 §6](/arch/evaluation/gates/#sec-6)） |
 
-**`Dispatcher`**（`Dispatcher.cs:55-209`），创建时给定 run id、环境、四个路由、是否记日志，以及在 `--afterstates clone` 下如何为宏观一侧打开节点的克隆：
+**`Dispatcher`**（`Dispatcher.cs:58-217`），创建时给定 run id、环境、四个路由、是否记日志、在 `--afterstates clone` 下如何为宏观一侧打开节点的克隆，以及是否解释地图选项（[§5](#sec-5)）：
 
 | 成员 | 内容 |
 |---|---|
@@ -174,7 +176,7 @@ public sealed class PublicRecord
 
 | 类型 | 内容 |
 |---|---|
-| `ICombatPolicy`、`IChoicePolicy`、`IMacroPolicy` | 每种决策一个策略；`IChoicePolicy` 和 `IMacroPolicy` 还会说出它们上一个回答是否是探索出来的，`IMacroPolicy` 还会说出它在回答之后的计划 |
+| `ICombatPolicy`、`IChoicePolicy`、`IMacroPolicy` | 每种决策一个策略；`IChoicePolicy` 和 `IMacroPolicy` 还会说出它们上一个回答是否是探索出来的，以及它是从哪些选项中选出来的、各带估值（`Scored`，默认没有），`IMacroPolicy` 还会说出它在一个回答之后的计划（`Plan`） |
 | `CombatDecision`、`ChoiceDecision`、`MacroDecision` | 一个决策：它的合法动作（或它的提示）、按需生成的观测，以及对宏观一侧来说，若有打开的节点克隆，就带上这个克隆（`IMacroClone`） |
 | `CombatDecisionResult` | 战斗大脑的回答：首个动作、它之后的计划、候选、计划的观测哈希、是否重新规划、它的路线是否重复一个循环 |
 | `Budget`、`TurnPlan`、`SlRoute`、`MoveRecord` | 搜索预算、沿用计划、规划器的路由、敌人出招记录 |
