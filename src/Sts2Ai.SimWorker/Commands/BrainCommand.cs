@@ -8,7 +8,8 @@ namespace Sts2Ai.SimWorker.Commands;
 /// <summary>
 /// brain: the brain alone (docs: harness §5), which serves the host that started it, the mod, on its stdin and stdout,
 /// with the champion its options name, and ends when stdin closes. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
-/// --sl-policy's (the SL planner by default), with the same macro brain (docs: harness/routing §1). A host may ask for
+/// --sl-policy's (the SL planner by default), with the same macro brain (docs: harness/routing §1), whose afterstates
+/// the environment sets (<see cref="Champions"/>), so one champion file serves both. A host may ask for
 /// another effort of the SL planner for its run (<see cref="Hello.Effort"/>), which then plays with that preset's
 /// budget. Prints a line per run on stderr, with the game errors of its search workers.
 /// </summary>
@@ -33,9 +34,7 @@ internal static class BrainCommand
         // The wire owns stdout: every other line goes to stderr, from the first.
         var wireOut = Console.OpenStandardOutput();
         Console.SetOut(Console.Error);
-        var slPolicy = r.GetValue(SlPolicy)!;
-        var champion = Champion.Read(r, planElsewhere: slPolicy == "plan");
-        var sl = Champion.Read(r, slPolicy);
+        var (champion, sl) = Champions(r);
 
         using var workerPool = champion.Pool() ?? sl.Pool();
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;
@@ -64,5 +63,18 @@ internal static class BrainCommand
         Console.WriteLine($"brain: NoSL {champion}; SL {sl}; serving stdin and stdout");
         server.Serve(new WireStream(Console.OpenStandardInput(), wireOut));
         return 0;
+    }
+
+    /// <summary>
+    /// The champion of NoSL hosts and of SL hosts. L0 values its options on the afterstates the screen predicts in NoSL and
+    /// on the node's clone in SL, the only pairing Harness takes (docs: macro-brain/search §2), whatever --afterstates says.
+    /// </summary>
+    internal static (ChampionOptions NoSL, ChampionOptions SL) Champions(ParseResult r)
+    {
+        var slPolicy = r.GetValue(SlPolicy)!;
+        var noSl = Champion.Read(r, planElsewhere: slPolicy == "plan") with { OnClone = false };
+        var sl = Champion.Read(r, slPolicy);
+        // The clone values a fight an option starts with the combat net; without one, Harness refuses SL hosts.
+        return (noSl, sl.Macro == "l0" && sl.Leaf.Net != null ? sl with { OnClone = true } : sl);
     }
 }

@@ -38,8 +38,9 @@ internal enum Goal
 /// The environment and the SL planner's effort are the player's choice (<see cref="Settings"/>), kept across games.
 /// Switching either, or turning assist off, ends the run as the brain sees it; the next decision starts a new one from
 /// that point. In SL the brain plans
-/// combats on a clone of the node, so before each decision the mod sends the node's checkpoint and the steps taken in
-/// it (<see cref="NodeRecord"/>); NoSL sends neither.
+/// combats and values every other option on a clone of the node, so before each decision the mod sends the node's
+/// checkpoint and the steps taken in it (<see cref="NodeRecord"/>), and asks nothing in a node it cannot clone; NoSL
+/// sends neither.
 /// </summary>
 internal sealed class Assist(BrainLink link, string gameVersion)
 {
@@ -234,8 +235,9 @@ internal sealed class Assist(BrainLink link, string gameVersion)
             return;
         }
         _idle = Environment.TickCount64;
-        // SL plans a combat on the node's clone; without one there is nothing to plan on (prompts go to p0, which needs none).
-        if (_env == PlayEnvironment.SL && asking.Surface == Surfaces.Combat && (NodeRecord.Checkpoint == null || NodeRecord.Broken != null))
+        // SL plans a combat and values every option outside it on the node's clone; without one there is nothing to play
+        // on: the brain would refuse the run, or value the options on the record's last state, not the screen's.
+        if (_env == PlayEnvironment.SL && (NodeRecord.Checkpoint == null || NodeRecord.Broken != null))
         {
             (_key, _stable) = (null, 0);
             panel.Show(champion, status, _env, L10n.T("No SL clone of this room"),

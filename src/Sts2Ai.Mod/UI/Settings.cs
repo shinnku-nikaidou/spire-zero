@@ -28,6 +28,9 @@ internal enum SearchEffort { Brain, Low, Medium, High, Max }
 /// <param name="StopAtElites">Auto-play stops before it travels to an elite or a boss.</param>
 /// <param name="StopOnDrop">Auto-play stops when V's chance to win falls 3 points below the best it showed since auto-play started.</param>
 /// <param name="Effort">The SL planner's effort the mod asks the brain for; a change starts the run anew for the brain.</param>
+/// <param name="Record">Not on the settings screen, set in the file by hand: each brain the mod starts writes the messages
+/// it gets and its decision log (brain --wire, --log) under <see cref="Dir"/>/captures/, a pair of files per brain,
+/// for <c>clones</c> to check the SL records against (docs: mod/sl-record §8).</param>
 internal sealed record Settings(
     bool Assist = true,
     PlayEnvironment Env = PlayEnvironment.SL,
@@ -40,7 +43,8 @@ internal sealed record Settings(
     AutoSpeed Speed = AutoSpeed.Medium,
     bool StopAtElites = true,
     bool StopOnDrop = true,
-    SearchEffort Effort = SearchEffort.Brain)
+    SearchEffort Effort = SearchEffort.Brain,
+    bool Record = false)
 {
     /// <summary>The effort as hello names it; null for the brain's own.</summary>
     public string? EffortName => Effort == SearchEffort.Brain ? null : Effort.ToString().ToLowerInvariant();

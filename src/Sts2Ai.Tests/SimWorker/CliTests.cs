@@ -81,6 +81,26 @@ public sealed class CliTests : IDisposable
     }
 
     [Theory]
+    [InlineData("screen")]
+    [InlineData("clone")]
+    public void BrainsL0PlaysOnTheScreenInNoSLAndOnTheCloneInSL(string afterstates)
+    {
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
+        var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var file = ChampionFile(new()
+        {
+            ["env"] = "NoSL", ["policy"] = "pimc", ["macro"] = "l0", ["value"] = value, ["combat-net"] = net, ["afterstates"] = afterstates,
+        });
+        var (noSl, sl) = BrainCommand.Champions(Cli.Parse(["brain", "--champion", file]));
+
+        Assert.False(noSl.OnClone);
+        Assert.True(sl.OnClone);
+        Assert.Equal("combat pimc combat-tiny 8x300, combat prompts first, macro l0 pure-v-tiny-win, macro prompts l0 pure-v-tiny-win", noSl.Name);
+        Assert.EndsWith(", combat prompts first, macro l0 pure-v-tiny-win clone, macro prompts l0 pure-v-tiny-win clone", sl.Name);
+        Assert.StartsWith("combat plan combat-tiny ", sl.Name);
+    }
+
+    [Theory]
     [InlineData("--macro", "l0")]
     [InlineData("--explore", "0.1", "--macro", "random")]
     [InlineData("--value", "Fixtures/pure-v-tiny-win.json", "--macro", "random")]

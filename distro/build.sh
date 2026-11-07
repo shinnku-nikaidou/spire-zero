@@ -4,7 +4,8 @@
 #
 #   out/Sts2Ai/Sts2Ai.json, Sts2Ai.dll    the mod (one build, for every platform: it runs on the game's own .NET)
 #   out/Sts2Ai/brain/RID/                 the brain for each platform, self-contained (BundledBrain starts it)
-#   out/Sts2Ai/brain/champion.json        the SL champion's file, its nets under brain/nets/
+#   out/Sts2Ai/brain/champion.json        the NoSL champion's file, its nets under brain/nets/: the brain plays it for
+#                                         NoSL and, with the SL planner and L0 on the node's clone, for SL
 #
 # The brain is a dotnet publish -r RID each with the profile Properties/PublishProfiles/brain.pubxml; the game's
 # assemblies are only compiled against, and the brain loads the player's own at run time (STS2_BIN_DIR).
@@ -42,7 +43,7 @@ ssh "$STS2_MAC" 'f=$(mktemp) && cat > "$f" && codesign -s - -f "$f" && codesign 
 mv "$launcher.signed" "$launcher"
 chmod +x "$launcher"
 
-champion=$B/src/eval/champions/sl.json
+champion=$B/src/eval/champions/nosl.json
 mkdir -p "$B/brain/nets"
 for net in $(grep -o 'weights/all/[^"]*\.json' "$champion" | sort -u); do
   cp "$B/src/$net" "$B/brain/nets/$(basename "$net" .json).net"
