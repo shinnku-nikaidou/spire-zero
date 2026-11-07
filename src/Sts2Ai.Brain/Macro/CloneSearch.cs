@@ -5,8 +5,8 @@ namespace Sts2Ai.Brain.Macro;
 /// <summary>
 /// L0's search of a decision on the node's clone in SL (docs: macro-brain/search §3). Each option is played in the real game,
 /// and what the game asks next is its afterstate. While that is still a screen of the node (not the map, not a combat,
-/// not the run's end), the search goes on: a beam over the screen's own actions (a potion's, which every screen
-/// offers, are left out), level by level, keeping the <see cref="Beam"/> states V values best, up to
+/// not the run's end), the search goes on: a beam over the screen's actions, the belt's as the decision itself offers
+/// them (<see cref="MacroBrain.Offered"/>), level by level, keeping the <see cref="Beam"/> states V values best, up to
 /// <see cref="MaxProbes"/> probes in all. A state reached twice is searched once. A state is worth the best state after
 /// it, or its own value where the search stops (<see cref="Value"/>); an option, its afterstate.
 /// A card prompt that needs two picks or more is not searched into: its own decision searches it.
@@ -95,13 +95,12 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
     /// <summary>Whether the search goes on from <paramref name="after"/>: a screen of the node.</summary>
     private static bool Inside(Afterstate after) => after.Surface is not (null or Surfaces.Map or Surfaces.Combat);
 
-    /// <summary>The answers searched at a screen of the node: its own actions, or a card prompt's single picks.</summary>
+    /// <summary>The answers searched at a screen of the node: its actions as a decision there offers them, or a card prompt's single picks.</summary>
     private static IEnumerable<string> Answers(Afterstate after)
     {
         if (after.Screen is not CardChoiceScreen { Choice: var choice })
         {
-            foreach (var action in after.Legal)
-                if (!IsPotion(action)) yield return action;
+            foreach (var action in MacroBrain.Offered(after.Run, after.Screen, after.Legal)) yield return action;
             yield break;
         }
         if (choice.Min > 1) yield break;
@@ -109,8 +108,6 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
         if (choice.Max < 1) yield break;
         foreach (var group in choice.Groups()) yield return Pick([group[0]]);
     }
-
-    public static bool IsPotion(string action) => action.StartsWith("potion:", StringComparison.Ordinal) || action.StartsWith("discard_potion:", StringComparison.Ordinal);
 
     /// <summary>A card prompt's answer in a path.</summary>
     public static string Pick(IEnumerable<int> picks) => "pick:" + string.Join(",", picks.Order());

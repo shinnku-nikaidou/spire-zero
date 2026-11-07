@@ -1,4 +1,9 @@
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Encounters;
+using MegaCrit.Sts2.Core.Models.Events;
+using MegaCrit.Sts2.Core.Rooms;
+using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
@@ -119,5 +124,58 @@ internal static partial class SelfTest
             RunCommand.Unasked.Instance, new RandomMacro(new Random(0)));
         var runSlots = Slots(run.Player.PotionSlots.Select(p => p?.Id.Entry));
         check("loadout gets its relics' potion slots", runSlots == want, $"run at ascension 4: slots {runSlots}");
+    }
+
+    /// <summary>
+    /// A Foul Potion is thrown out of combat as the shipped game allows (headless patch FoulPotionAtMerchants): at a
+    /// shop's merchant for 100 gold, and at the Fake Merchant, whose fight it starts and which is played to its end.
+    /// Each room is entered from a run's first decision; the macro policy throws the potion where it is offered.
+    /// </summary>
+    private static void FoulPotionAtMerchants(Pump pump, Action<string, bool, string> check)
+    {
+        foreach (bool fake in new[] { false, true })
+        {
+            var macro = new Thrower();
+            using var run = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(0, 0), Loadout: new Loadout(Potions: ["FOUL_POTION"])),
+                FirstPicks.Instance, new PlayPolicy(new Random(0)), macro);
+            var enter = fake ? RunManager.Instance.EnterRoomDebug(RoomType.Event, model: ModelDb.Event<FakeMerchant>(), showTransition: false)
+                : RunManager.Instance.EnterRoomDebug(RoomType.Shop, showTransition: false);
+            pump.RunUntil(() => enter.IsCompleted, run.Describe);
+            if (enter.IsFaulted) throw enter.Exception!.GetBaseException();
+            int gold = run.Player.Gold;
+            run.Step();
+            run.Settle();
+            bool thrown = macro.Offered && run.Player.PotionSlots.All(p => p == null);
+            string seen = $"offered {macro.Offered}, belt {string.Join(",", run.Player.PotionSlots.Select(p => p?.Id.Entry ?? "-"))}";
+            if (!fake)
+            {
+                var errors = HeadlessGame.TakeErrors();
+                check("Foul Potion thrown at a shop's merchant", thrown && run.Player.Gold == gold + 100 && errors.Count == 0,
+                    $"{seen}, gold {gold} -> {run.Player.Gold}, errors {errors.FirstOrDefault()}");
+            }
+            else
+            {
+                // The fight is played to its end, so that the event's combat is checked whole.
+                bool fight = run.Run.CurrentRoom is CombatRoom { Encounter: FakeMerchantEventEncounter };
+                for (int steps = 0; fight && CombatManager.Instance.IsInProgress && !run.IsOver && steps < 2000; steps++) run.Step();
+                var errors = HeadlessGame.TakeErrors();
+                check("Foul Potion thrown at the Fake Merchant", thrown && fight && !CombatManager.Instance.IsInProgress && errors.Count == 0,
+                    $"{seen}, fight {fight}, errors {errors.FirstOrDefault()}");
+            }
+        }
+    }
+
+    /// <summary>Throws the potion in slot 0 where it is offered, and otherwise takes the first legal action.</summary>
+    private sealed class Thrower : IMacroPolicy
+    {
+        public bool Offered { get; private set; }
+
+        public string Choose(MacroDecision decision)
+        {
+            if (!decision.Legal.Contains("potion:0")) return decision.Legal[0];
+            if (Offered) throw new InvalidOperationException("the potion offered again after it was thrown");
+            Offered = true;
+            return "potion:0";
+        }
     }
 }

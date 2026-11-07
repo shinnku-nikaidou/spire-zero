@@ -13,8 +13,8 @@ namespace Sts2Ai.Brain.Macro;
 /// It also answers the card prompts outside combat (upgrade, remove, transform, choose a card).
 ///
 /// With <paramref name="uniform"/>, for self-play (docs: learning/loop §9), some answers are drawn evenly whatever V says (<see cref="Uniform"/>): a card reward's outcome among
-/// its cards and skipping it, a card prompt's picks, and on every other screen its options but a potion's (the belt,
-/// which every screen offers) and those that would come back to a state already decided.
+/// its cards and skipping it, a card prompt's picks, and on every other screen its options, a potion's among them (what
+/// <see cref="Offered"/> leaves of the belt), but those that would come back to a state already decided.
 ///
 /// An option that ends the run is worth what the run's end is: 0 for one the screen says kills (an event's), and on the
 /// clone 1 or 0 as the game ends it. On the clone, an option that starts a combat (an event's fight) is valued by
@@ -113,15 +113,13 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
 
     /// <summary>
     /// With <c>uniform</c>, an option drawn evenly, or null to leave it to V: on every screen but the card reward's (its
-    /// outcome is drawn as a whole, <see cref="Drawn"/>), among the options that are not a potion's and not worth −∞
-    /// (they would come back to a state already decided), when there are two or more.
+    /// outcome is drawn as a whole, <see cref="Drawn"/>), among the options not worth −∞ (they would come back to a state
+    /// already decided), when there are two or more.
     /// </summary>
     private int? Even(Observation obs, List<Option> options)
     {
         if (uniform == null || obs.Screen is CardRewardScreen) return null;
-        var open = Enumerable.Range(0, options.Count)
-            .Where(k => !double.IsNegativeInfinity(options[k].Value) && Split(options[k].Action).Verb is not ("potion" or "discard_potion"))
-            .ToList();
+        var open = Enumerable.Range(0, options.Count).Where(k => !double.IsNegativeInfinity(options[k].Value)).ToList();
         return open.Count >= 2 && uniform.Draw(open.Count) is { } drawn ? open[drawn] : null;
     }
 
@@ -142,7 +140,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     private List<Option> Weigh(MacroDecision decision)
     {
         var obs = decision.Observation;
-        var legal = Offered(obs, decision.Legal);
+        var legal = Offered(obs.Run, obs.Screen, decision.Legal);
         if (decision.Clone is not { } clone)
             return AfterMoves(obs, [.. legal.Select(a => { var after = After(obs, a); return new Option(a, after, Kills(obs, a) ? 0 : value.Value(after), OpensPrompt(obs, a)); })]);
         var played = legal.Where(a => !Travels(obs, a)).ToList();
@@ -167,14 +165,15 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// The options weighed: the legal actions but a potion's discard, unless the belt is full and the screen offers a
     /// potion (a reward, the shop's) for the discard to make room for. Otherwise a discard can only lose the potion; weighed
     /// by V all the same, it was taken wherever V rated a potion below an empty slot, and the data, holding few potions
-    /// kept, could not show V otherwise (self-play threw away 69-79 % of its potions in v9g0 and v9g1).
+    /// kept, could not show V otherwise (self-play threw away 69-79 % of its potions in v9g0 and v9g1). The same at every
+    /// state the clone's search reaches (<see cref="CloneSearch"/>).
     /// </summary>
-    private static List<string> Offered(Observation obs, IReadOnlyList<string> legal)
+    public static List<string> Offered(RunView run, ScreenView? screen, IReadOnlyList<string> legal)
     {
-        bool room = obs.Run.Potions.All(p => p != null) && obs.Screen switch
+        bool room = run.Potions.All(p => p != null) && screen switch
         {
-            RewardsScreen screen => screen.Rewards.Any(r => r.Kind == "potion"),
-            ShopScreen screen => screen.Entries.Any(e => e.Kind == "potion"),
+            RewardsScreen rewards => rewards.Rewards.Any(r => r.Kind == "potion"),
+            ShopScreen shop => shop.Entries.Any(e => e.Kind == "potion"),
             _ => false,
         };
         var offered = legal.Where(a => room || Split(a).Verb != "discard_potion").ToList();

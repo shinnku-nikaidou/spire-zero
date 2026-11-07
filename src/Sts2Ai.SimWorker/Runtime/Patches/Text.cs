@@ -1,6 +1,7 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Models.Monsters;
 
 namespace Sts2Ai.SimWorker.Runtime.Patches;
 
@@ -24,6 +25,17 @@ internal static partial class HeadlessPatches
     private static class LocExists
     {
         private static bool Prefix(ref bool __result) { __result = true; return false; }
+    }
+
+    /// <summary>
+    /// The Fake Merchant says a line before each move, drawn from the monsters' loc table, which is not loaded headless
+    /// (the lookup throws, and the fight's turn loop dies with it). The line is only shown, and drawn with the cosmetic
+    /// RNG, so it is left out.
+    /// </summary>
+    [HarmonyPatch(typeof(FakeMerchantMonster), "ShowDialogueForMove")]
+    private static class FakeMerchantSaysNothing
+    {
+        private static bool Prefix(ref Task __result) { __result = Task.CompletedTask; return false; }
     }
 
     // ---- logging ----

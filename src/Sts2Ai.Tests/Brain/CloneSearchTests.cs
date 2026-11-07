@@ -207,4 +207,50 @@ public class CloneSearchTests
         search.Search(toy.After([[]])[0], [["event:0"], ["event:1"]]);
         Assert.Equal(3, search.Probes);
     }
+
+    /// <summary>A V that is the sum of what each potion held is worth.</summary>
+    private sealed class Belt(Dictionary<string, double> worth) : IRunValue
+    {
+        public string Name => "test";
+        public double Value(RunView run) => run.Potions.Sum(p => p == null ? 0 : worth.GetValueOrDefault(p));
+    }
+
+    /// <summary>
+    /// An event with a belt full of Q: its first option gives potion P on a rewards screen, which takes it only into a free
+    /// slot, and a potion can be discarded there to make one; its second leaves.
+    /// </summary>
+    private static Afterstate Courier(IReadOnlyList<string> path)
+    {
+        var belt = new string?[] { "Q", "Q", "Q" };
+        RunView Run() => Start with { Potions = [.. belt] };
+        if (path.Count == 0) return new(Run(), Surfaces.Event, new EventScreen { Id = "TOY", Options = [], Finished = false }, ["event:0", "event:1"]);
+        if (path[0] == "event:1") return Exit(Run());
+        foreach (var action in path.Skip(1))
+        {
+            if (action == "rewards_done") return Exit(Run());
+            if (action == "reward:0")
+            {
+                belt[Array.IndexOf(belt, null)] = "P";
+                return Exit(Run());
+            }
+            belt[int.Parse(action["discard_potion:".Length..])] = null;
+        }
+        var legal = new List<string>();
+        if (belt.Contains(null)) legal.Add("reward:0");
+        legal.Add("rewards_done");
+        legal.AddRange(Enumerable.Range(0, belt.Length).Where(i => belt[i] != null).Select(i => $"discard_potion:{i}"));
+        return new(Run(), Surfaces.Rewards, new RewardsScreen { Rewards = [new RewardView { Index = 0, Kind = "potion", Id = "P" }] }, legal);
+    }
+
+    [Fact]
+    public void AnEventsPotionIsWorthTheRoomMadeForItWhenTheBeltIsFull()
+    {
+        // The rewards screen can take P only after a discard: below the root the search makes the room, as the decision
+        // there would, so the option is worth Q + Q + P, not the belt it started with.
+        var toy = new Toy(Courier);
+        var l0 = new MacroBrain(new Belt(new() { ["Q"] = 1, ["P"] = 2 }));
+        var options = l0.Options(Root(toy));
+        Assert.Equal(4, options.Single(o => o.Action == "event:0").Value);
+        Assert.Equal(3, options.Single(o => o.Action == "event:1").Value);
+    }
 }

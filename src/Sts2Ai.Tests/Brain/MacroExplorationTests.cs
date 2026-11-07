@@ -81,26 +81,27 @@ public class MacroExplorationTests
         Assert.DoesNotContain(picks, p => p.Pick == "card_alt:Skip");
     }
 
-    /// <summary>One decision of each kind outside card rewards, each offering the potion belt too; V's first is option 0 or 1.</summary>
+    /// <summary>One decision of each kind outside card rewards, each offering the potion belt too (a potion to drink, and its discard, which
+    /// <see cref="MacroBrain.Offered"/> leaves out); V's first is option 0 or 1.</summary>
     private static IEnumerable<MacroDecision> EveryKind()
     {
-        static Observation On(ScreenView screen) => new() { Run = Fixtures.Floor1(), Screen = screen };
-        const string belt = "discard_potion:0";
-        yield return new(Surfaces.Treasure, ["relic:0", "relic:1", "relic:2", belt], () => On(new TreasureScreen { Relics = ["A", "B", "C"] }));
-        yield return new(Surfaces.Shop, ["buy:0", "buy:1", "leave", belt], () => On(new ShopScreen
+        static Observation On(ScreenView screen) => new() { Run = Fixtures.Floor1() with { Potions = ["FRUIT_JUICE", null, null] }, Screen = screen };
+        const string drink = "potion:0", belt = "discard_potion:0";
+        yield return new(Surfaces.Treasure, ["relic:0", "relic:1", "relic:2", drink, belt], () => On(new TreasureScreen { Relics = ["A", "B", "C"] }));
+        yield return new(Surfaces.Shop, ["buy:0", "buy:1", "leave", drink, belt], () => On(new ShopScreen
         {
             Entries = [new() { Slot = 0, Kind = "card", Card = new() { Id = "A" }, Cost = 1 }, new() { Slot = 1, Kind = "card", Card = new() { Id = "B" }, Cost = 1 }],
         }));
-        yield return new(Surfaces.Rest, ["rest:HEAL", "rest:SMITH", belt], () => On(new RestScreen { Options = [new("HEAL", true, 10), new("SMITH", true)] }));
-        yield return new(Surfaces.Event, ["event:0", "event:1", "event:2", belt], () => On(new EventScreen
+        yield return new(Surfaces.Rest, ["rest:HEAL", "rest:SMITH", drink, belt], () => On(new RestScreen { Options = [new("HEAL", true, 10), new("SMITH", true)] }));
+        yield return new(Surfaces.Event, ["event:0", "event:1", "event:2", drink, belt], () => On(new EventScreen
         {
             Id = "E", Finished = false, Options = [new() { Index = 0, Key = "a" }, new() { Index = 1, Key = "b" }, new() { Index = 2, Key = "c" }],
         }));
-        yield return new(Surfaces.Map, ["map:0,1", "map:1,1", belt], () => On(new MapScreen { Travelable = [new(0, 1), new(1, 1)] }));
+        yield return new(Surfaces.Map, ["map:0,1", "map:1,1", drink, belt], () => On(new MapScreen { Travelable = [new(0, 1), new(1, 1)] }));
     }
 
     [Fact]
-    public void AtEpsilonOneEveryKindOfDecisionIsDrawnEvenlyAmongItsOptionsButThePotionBelt()
+    public void AtEpsilonOneEveryKindOfDecisionIsDrawnEvenlyAmongItsOptionsAPotionToDrinkAmongThem()
     {
         foreach (var decision in EveryKind())
         {

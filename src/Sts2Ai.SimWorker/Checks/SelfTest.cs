@@ -135,6 +135,7 @@ internal static partial class SelfTest
         FightCapLoses(pump, pool, act, Check);
         GatheredCardState(pump, pool, act, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
+        FoulPotionAtMerchants(pump, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         CyclesKillInOneTurn(pump, pool, act, net.Leaf, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
