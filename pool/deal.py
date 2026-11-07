@@ -51,8 +51,6 @@ SHARD = re.compile(r"([A-Za-z0-9._]+)-([0-9]+)")
 SILENCE = float(os.environ.get("DEAL_SILENCE", 900))  # a test sets it shorter
 SWEEP = min(60.0, SILENCE / 5)
 STORE = "."
-queues = {}  # JOB: the lines of queue.txt, which never change
-specs = {}  # JOB: job.json
 last_sweep = 0.0
 
 
@@ -116,22 +114,16 @@ def is_open(step, now):
     return not step.get("stopped") and (step.get("deadline_epoch") is None or now < step["deadline_epoch"])
 
 
+# queue.txt and job.json are read on every use, never kept: a job deleted and launched again under the same name has
+# new ones, with another rev, inputs and options.
 def queue(job):
-    if job not in queues:
-        text = read(deal_dir(job, "queue.txt"))
-        if text is None:
-            return []
-        queues[job] = [line.strip() for line in text.split("\n") if line.strip()]
-    return queues[job]
+    text = read(deal_dir(job, "queue.txt"))
+    return [line.strip() for line in (text or "").split("\n") if line.strip()]
 
 
 def spec(job):
-    if job not in specs:
-        text = read(deal_dir(job, "job.json"))
-        if text is None:
-            return None
-        specs[job] = json.loads(text)
-    return specs[job]
+    text = read(deal_dir(job, "job.json"))
+    return None if text is None else json.loads(text)
 
 
 def front(job):
