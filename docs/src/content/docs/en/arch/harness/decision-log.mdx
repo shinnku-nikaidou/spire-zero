@@ -75,7 +75,7 @@ They are sorted by value, best first. PIMC's `plan` is the rest of the turn afte
 
 **`explored: true`** marks an answer that self-play's exploration drew (`--explore ε`, [Learning: the loop §9](/en/arch/learning/loop/#sec-9)), which L0 draws with chance ε whatever V says:
 
-- an option of a screen, drawn evenly among those that are not a potion's: always, also when the draw happens to be V's own pick;
+- an option of a screen, drawn evenly among its options, a potion's among them: always, also when the draw happens to be V's own pick;
 - a card reward's outcome, one of its cards or skipping it, drawn once per card reward: when the drawn outcome is the answer, or the answer is valued below V's best;
 - the picks of a card prompt outside combat, drawn evenly: always.
 

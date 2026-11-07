@@ -136,7 +136,7 @@ In `--help` order (`Commands/Cli.cs:31-36`).
 
 ## 5. `selftest`
 
-`selftest` plays `--n` combats of the pool (20 by default) and runs these checks, by the names it reports (`Checks/SelfTest*.cs`; the order is `Checks/SelfTest.cs:73-146`). Its searches value their leaves with the net `--combat-net` names, which it requires. Exit 1 if any check fails.
+`selftest` plays `--n` combats of the pool (20 by default) and runs these checks, by the names it reports (`Checks/SelfTest*.cs`; the order is `Checks/SelfTest.cs:73-147`). Its searches value their leaves with the net `--combat-net` names, which it requires. Exit 1 if any check fails.
 
 The boundary, that Brain, Protocol and Harness reach no game assembly, is checked without the game by the unit test `BoundaryTests` ([§7](#sec-7)).
 
@@ -146,7 +146,7 @@ The boundary, that Brain, Protocol and Harness reach no game assembly, is checke
 
 **Builds of numbers only a model holds** (Defect): a worn Glass orb (3 of 6), a used-up Silver Crucible, Pael's Tooth keeping 2 cards, Sloth with 1 of 3, Nightmare, a Hardened Shell at 14 of 20; the build keeps a power's stacks (Sloth still lets a card be played) and a power's card (Nightmare's copies next turn). Then: a player built at 3 HP with Royal Poison survives the start; the Waterfall Giant's eruption past 100 (`DeathBlow` 150) is found.
 
-**Rules**: Rolling Boulder hits one enemy after another (Ironclad with 10 Rolling Boulders against the pool's first multi-enemy encounter; the check fails if the pool has none); Thorns kill during a Sly play with no game error; a loadout's relics give their potion slots, in a combat and in a run at ascension 4; a death inside the player's own action, or as the first turn starts, still ends its combat in the record; a fight past the round cap is lost (built at round 80 at 999 HP, it is still on there and lost once that turn ends); the observation shows what a card gathers in a combat: Murder's number, a Spiral's replay, a Glam spent once its card is played.
+**Rules**: Rolling Boulder hits one enemy after another (Ironclad with 10 Rolling Boulders against the pool's first multi-enemy encounter; the check fails if the pool has none); Thorns kill during a Sly play with no game error; a loadout's relics give their potion slots, in a combat and in a run at ascension 4; a death inside the player's own action, or as the first turn starts, still ends its combat in the record; a fight past the round cap is lost (built at round 80 at 999 HP, it is still on there and lost once that turn ends); the observation shows what a card gathers in a combat: Murder's number, a Spiral's replay, a Glam spent once its card is played; a Foul Potion thrown at a shop's merchant gives 100 gold, and thrown at the Fake Merchant it starts the fight, which is played to its end with no game error ([Headless host §4](/en/arch/simulator/headless/#sec-4)).
 
 **Worlds and clones**: a world restores after card prompts (Toasty Mittens and Survivor, 6 worlds); the SL world shows the run's combat, plays as the run does, and restores; the SL clone stops at its node's exit and refuses to step past it; the SL clone keeps relic state the save drops (the first relic set to disabled by hand).
 
@@ -173,16 +173,16 @@ The run line then ends with `obs <digest>`, one hash of the run's observation ha
 
 ## 7. The xUnit tests
 
-`src/Sts2Ai.Tests` holds what runs without the game, 21 classes and 104 test methods: `dotnet test src/Sts2Ai.Tests`. One folder per project tested (`Brain/`, `Harness/`, `SimWorker/`), `BoundaryTests.cs` at the root, and the shared JSON fixtures in `Fixtures.cs` and `Fixtures/`.
+`src/Sts2Ai.Tests` holds what runs without the game, 21 classes and 105 test methods: `dotnet test src/Sts2Ai.Tests`. One folder per project tested (`Brain/`, `Harness/`, `SimWorker/`), `BoundaryTests.cs` at the root, and the shared JSON fixtures in `Fixtures.cs` and `Fixtures/`.
 
 | class | what it checks |
 |---|---|
 | `BoundaryTests` | Brain, Protocol and Harness reach no game assembly, and the check does see GameBridge's `sts2` |
 | `Brain/BudgetTests` | names show only what is not the default |
-| `Brain/CloneSearchTests` | L0 on a toy clone: a shop is worth its best basket; an event option is worth what its next page gives; a fight is worth what the combat leaf says, a death 0 and a won run 1, not V of the run at HP 0, and a fight with no leaf throws; a map move is not played; a two-pick prompt finds the best pair; a skipped card reward is not opened again; a state reached twice is searched once |
+| `Brain/CloneSearchTests` | L0 on a toy clone: a shop is worth its best basket; an event option is worth what its next page gives; a fight is worth what the combat leaf says, a death 0 and a won run 1, not V of the run at HP 0, and a fight with no leaf throws; a map move is not played; a two-pick prompt finds the best pair; a skipped card reward is not opened again; a state reached twice is searched once; with a full belt, an event's potion is worth the room a discard makes for it on the rewards screen |
 | `Brain/CombatNetTests` | reads c9-0's test states and a tiny net's (`combat-tiny.json`) as their trainers did; a state in progress is V of the runs its endings leave; each potion is kept by its own chance in the bucket's group; a bucket the HP held rules out has no weight; a won combat is V of its run, a lost one 0 |
 | `Brain/LoopSearchTests` | 16 tests: a card that comes back is played again until it kills in one turn, whatever it does to the piles, and the cycle ends where the game ends it; a card that runs out, or cards that use themselves up, are an ordinary line; copies in the hand make no cycle; a cycle with no lethal stays on its budget; an answer to a prompt that opens a cycle is found and taken, by the planner and by PIMC; every answer to a prompt is searched; PIMC repeats a cycle too, and its turn plan keeps only a plan that repeats; a prompt is answered by the policy unless the action carries an answer; a prompt no search weighs takes the first options it needs; the other answers pick cards the player can tell apart; a pick is part of an action's text |
-| `Brain/MacroExplorationTests` | a removal is worth only what can be removed; without exploration l0 takes the best; drawn evenly, a card reward's outcome is drawn among its cards and skipping, and the card screen keeps the draw; at ε=1 every kind of decision is drawn evenly among its options but the potion belt; a prompt's picks are drawn evenly at ε=1, and at ε=0.1 most answers are V's |
+| `Brain/MacroExplorationTests` | a removal is worth only what can be removed; without exploration l0 takes the best; drawn evenly, a card reward's outcome is drawn among its cards and skipping, and the card screen keeps the draw; at ε=1 every kind of decision is drawn evenly among its options, a potion to drink among them, and a discard that makes room for nothing is not one; a prompt's picks are drawn evenly at ε=1, and at ε=0.1 most answers are V's |
 | `Brain/MacroPotionTests` | a potion discard is offered only to make room for a potion on the screen; on the map, a potion's option is worth the best move after it, not the state it stays in |
 | `Brain/MacroUpgradeTests` | smithing is worth its best upgrade; the smith prompt takes the valued upgrade; the upgrade prompt takes the best preview |
 | `Brain/MoveRecordTests` | each living enemy is recorded once per round; the dead are skipped; it starts over when the round goes back; `Clear` |

@@ -50,21 +50,23 @@ import PumpDemo from '../../../../../components/book/PumpDemo.svelte';
 
 **Harmony 補丁**在執行時改寫一個遊戲方法。Harmony 是一個 .NET 函式庫：*前綴*（prefix）在原方法之前執行，並且可以跳過原方法；*後綴*（postfix）在原方法之後執行；*轉譯器*（transpiler）則直接改寫方法的 IL（編譯後的指令），而不是包在它外面。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安裝 GameBridge 的 `ChoiceContexts`，再安裝這個組件裡的每個補丁類別。順序很重要：打補丁時會編譯每個被替換的方法，而在選牌提示補丁之前就編譯好的方法，可能把某個小小的 `CardSelectCmd` 入口內嵌進去，從而繞過它的補丁；藍寶石種子（SapphireSeed）的「種下」（由事件轉譯器改寫）就曾經這樣（[GameBridge：讀取遊戲 §6](/zh-tw/arch/gamebridge/observe/#sec-6)）。
 
-除了規則保真組，沒有任何補丁改變遊戲規則；而規則保真組做的，是在 TestMode 改動過的地方放回正式版的規則。各組補丁，按 `Runtime/Patches/` 裡的檔案：
+除了規則保真組，沒有任何補丁改變遊戲規則；而規則保真組做的，是放回正式版的規則：在 TestMode 改動過的地方，以及遊戲透過畫面檢查、而無頭時畫面並不存在的地方。各組補丁，按 `Runtime/Patches/` 裡的檔案：
 
 | 組 | 檔案 | 作用 |
 |---|---|---|
 | 引擎外殼 | `Engine.cs` | 用受控的替身代替引擎的作業系統、時間、單例、資源和玩家名稱 |
 | 資源預載 | `Engine.cs` | 關閉：不從遊戲的資源包載入任何東西 |
 | 表現層 | `Engine.cs` | 沒有 TestMode 守衛就進入表現層的模型程式碼：帝皇蟹的雙臂（火箭和碾碎者的 `BeforeDeath`）、靈魂樞紐（SoulNexus，`AfterDeath`），以及 `EventPresentation` 轉譯器（見下文） |
-| 文字 | `Text.cs` | 在地化回傳鍵名，而不載入文字表；遊戲自己的日誌寫進模擬器的日誌（[§8](#sec-8)） |
+| 文字 | `Text.cs` | 在地化回傳鍵名，而不載入文字表；假商人每個招式之前的那句台詞略過不說，因為無頭時查它會拋出例外（見下文）；遊戲自己的日誌寫進模擬器的日誌（[§8](#sec-8)） |
 | 持久化 | `Persistence.cs` | 從不儲存任何東西：跳過 `SaveRun`、進度更新、進度檔案和重播檔；到達地圖點時做的那次存檔還會為 SL 複本開啟一個節點（[世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）；遊戲真正的檔案層和它的存檔遷移器若被呼叫就拋出例外，只有三個無害的查詢例外，它們回答「沒有這個檔案」 |
-| 規則保真 | `RuleFidelity.cs` | 放回被 TestMode 改掉的正式版規則：滾動巨石逐一命中敵人；`ShippedBranch` 轉譯器在 `MerchantPotionEntry`、大鍋（Cauldron）和召喚鈴鐺（CallingBell）裡把 TestMode 分支換成正式版的分支，若找不到還能替換的 TestMode 檢查就拋出例外 |
+| 規則保真 | `RuleFidelity.cs` | 放回被 TestMode 改掉的正式版規則：滾動巨石逐一命中敵人；`ShippedBranch` 轉譯器在 `MerchantPotionEntry`、大鍋（Cauldron）和召喚鈴鐺（CallingBell）裡把 TestMode 分支換成正式版的分支，若找不到還能替換的 TestMode 檢查就拋出例外；還有向商人扔惡臭藥水，這條規則遊戲是透過畫面檢查的（見下文） |
 | 速度 | `Speed.cs`、`../FastHookListeners.cs` | `FastCreatures`、`FastPlayerCreatures`、`FastPlayers`：戰鬥的生物清單和玩家清單，遊戲每個動作都要透過三個 LINQ 查詢重建它們很多次，這裡改用普通迴圈，以相同的順序建進同一個清單；`FastHookListeners`：鉤子分派佔了模擬器大部分的時間（每個動作約 75 次分派），它不再每次都新建一個監聽器清單和迭代器，而是把同樣的物件按同樣的順序填進一個池化的清單，並像遊戲那樣在每個物件即將使用前重新檢查它。`selftest` 在每個切點把它和遊戲自己的迭代器比較，遊戲的迭代器透過反向補丁保持可呼叫 |
 | 選擇 | `Choices.cs` | `ChooseABundle`、`CrystalSphereScreen` 和 `CardRemovalUsed`：驅動程式必須回答其選擇的畫面（[整局 §4](/zh-tw/arch/simulator/runs/#sec-4)） |
 | 遊戲怪癖 | `GameQuirks.cs` | 正式版遊戲同樣會記下的錯誤，修掉它們，好讓每個遊戲錯誤都是真正的錯誤（[§8](#sec-8)） |
 
 **事件轉譯器**。事件是遊戲裡表現層色彩最重的程式碼：它們的方法會開啟對話框、播放音效、等待動畫。`EventPresentation` 轉譯器（`Runtime/Patches/Engine.cs:129-174`）改寫每個 `EventModel` 子類別的每個方法，包括其中的 lambda 和非同步狀態機：對 Godot 物件的呼叫，或回傳 Godot 物件的呼叫，會被丟掉並給出預設結果，`Task.Delay` 則變成一個已完成的任務。它涉及約 17 個事件類別。其中六個沒有它就會失敗，因為它們透過 null 實例呼叫節點，或等待一段真實時間的延遲：融合者（Amalgamator）、茂密植被（DenseVegetation）、玩偶房（DollRoom）、叢林迷宮冒險（JungleMazeAdventure）、拳擊對決（PunchOff）和審判（Trial）。
+
+**透過畫面檢查的規則**。在戰鬥之外，惡臭藥水可以扔向商人：扔向商店的商人，得到 100 金幣；扔向假商人（Fake Merchant，遊戲裡叫「商人？？？」），就開始一場爭奪它的地毯和貨架上遺物的戰鬥。遊戲只在那個商人的畫面節點存在、而且商品欄沒有打開時才允許這樣做（`FoulPotion.GetFoulPotionMerchantTarget`），所以無頭時它從來扔不出去。`FoulPotionAtMerchants` 允許在商店裡、以及在假商人事件的戰鬥開始之前扔它，這些畫面上玩家總是能扔；扔向假商人時，`FoulPotionThrownAtTheFakeMerchant` 像遊戲那樣從每個玩家的事件開始那場戰鬥，而不需要事件的畫面節點：遊戲的程式碼先要這個節點，沒有就直接返回（`Runtime/Patches/RuleFidelity.cs:89-126`）。在那場戰鬥裡，假商人每個招式之前會說一句台詞，從怪物的在地化表裡抽出來，而無頭時這張表沒有載入：查找會拋出例外，戰鬥的回合迴圈也隨之終止。這句台詞只用於顯示，又是用只影響外觀的亂數抽的，所以 `FakeMerchantSaysNothing` 略過它（`Runtime/Patches/Text.cs:30-39`）。
 
 ## 5. TestMode
 
@@ -109,4 +111,4 @@ import PumpDemo from '../../../../../components/book/PumpDemo.svelte';
 
 有些錯誤是正式版遊戲本身就有的，遊戲怪癖組修掉這些錯誤，好讓每個遊戲錯誤都是真正的錯誤。目前修掉的只有一個：玩家在其中死亡的一次出牌（打出一張 Sly 牌時，敵人的荊棘殺死了玩家）會提前返回，並把這張牌留在它的選擇上下文（`PlayerChoiceContext`）上；接著，發起這次出牌的鉤子就會記下一條錯誤。`PopCardAfterEarlyReturn` 會把這張牌彈出，牌已離開戰鬥時也一樣（`Runtime/Patches/GameQuirks.cs:18-42`）。這是專案對待遊戲 bug 的規則：沒有檢查碼，也沒有後備，但破壞我們正確性的怪癖，在它進入我們程式碼的地方修正（[前言 §2](/zh-tw/#sec-2)）。
 
-遊戲的日誌行寫進模擬器的日誌（`Runtime/Patches/Text.cs:31-46`）：遊戲的錯誤和警告分別記為 Error 和 Warning，其他行記為 Debug，只有 `--verbose` 才會顯示。命令列如何記錄日誌，見[參考 §2](/zh-tw/arch/simulator/reference/#sec-2)。
+遊戲的日誌行寫進模擬器的日誌（`Runtime/Patches/Text.cs:43-58`）：遊戲的錯誤和警告分別記為 Error 和 Warning，其他行記為 Debug，只有 `--verbose` 才會顯示。命令列如何記錄日誌，見[參考 §2](/zh-tw/arch/simulator/reference/#sec-2)。

@@ -50,21 +50,23 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 **Harmony 补丁**在运行时改写游戏的方法。Harmony 是一个 .NET 库：*前缀*（prefix）在原方法之前运行，可以跳过原方法；*后缀*（postfix）在原方法之后运行；*转译器*（transpiler）则不包裹方法，而是直接改写方法的 IL（编译后的指令）。`HeadlessPatches.Apply`（`Runtime/Patches/HeadlessPatches.cs:26-33`）先安装 GameBridge 的 `ChoiceContexts`，再安装程序集里的每个补丁类。顺序很重要：打补丁会编译每个被替换的方法，而在选牌提示补丁之前编译的方法，可能把某个很小的 `CardSelectCmd` 入口内联进去，从而绕过它的补丁；SapphireSeed 的种植（被事件转译器改写过）就曾这样（[GameBridge：读取游戏 §6](/arch/gamebridge/observe/#sec-6)）。
 
-除了规则保真这一组，没有任何补丁改变游戏规则；规则保真组把被 TestMode 改掉的正式版规则放回去。各组补丁，按 `Runtime/Patches/` 里的文件：
+除了规则保真这一组，没有任何补丁改变游戏规则；规则保真组把正式版规则放回去：被 TestMode 改掉的，以及游戏通过画面检查、而无头时画面并不存在的。各组补丁，按 `Runtime/Patches/` 里的文件：
 
 | 分组 | 文件 | 作用 |
 |---|---|---|
 | 引擎外壳 | `Engine.cs` | 引擎的操作系统、时间、单例、资源和玩家名的托管替身 |
 | 资源预加载 | `Engine.cs` | 关闭：不从游戏的资源包加载任何东西 |
 | 表现层 | `Engine.cs` | 没有 TestMode 守卫就进入表现层的模型代码：帝皇蟹的钳臂（火箭和碾碎爪的 `BeforeDeath`）、灵魂枢纽（`AfterDeath`），以及 `EventPresentation` 转译器（见下文） |
-| 文本 | `Text.cs` | 本地化返回键，而不加载文本表；游戏自己的日志转到模拟器的日志（[§8](#sec-8)） |
+| 文本 | `Text.cs` | 本地化返回键，而不加载文本表；假商人每个招式之前的那句台词跳过不说，因为无头时查它会抛异常（见下文）；游戏自己的日志转到模拟器的日志（[§8](#sec-8)） |
 | 持久化 | `Persistence.cs` | 从不保存任何东西：跳过 `SaveRun`、进度更新、进度文件和回放；到达地图点时做的那次存档，同时为 SL 克隆开始一个节点（[世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)）；游戏真实的文件层及其存档迁移器一旦被调用就抛异常，只有三个无害的查询例外，它们回答“没有这个文件” |
-| 规则保真 | `RuleFidelity.cs` | 放回被 TestMode 改掉的正式版规则：滚石逐个命中敌人；`ShippedBranch` 转译器在 `MerchantPotionEntry`、大锅和召唤铃铛里把 TestMode 分支换成正式版的分支，找不到剩下可换的 TestMode 检查时就抛异常 |
+| 规则保真 | `RuleFidelity.cs` | 放回被 TestMode 改掉的正式版规则：滚石逐个命中敌人；`ShippedBranch` 转译器在 `MerchantPotionEntry`、大锅和召唤铃铛里把 TestMode 分支换成正式版的分支，找不到剩下可换的 TestMode 检查时就抛异常；还有向商人扔恶臭药水，这条规则游戏是通过画面检查的（见下文） |
 | 速度 | `Speed.cs`、`../FastHookListeners.cs` | `FastCreatures`、`FastPlayerCreatures`、`FastPlayers`：战斗的生物列表和玩家列表，游戏每个动作都要通过三个 LINQ 查询把它们重建很多次，这里改用普通循环，按相同的顺序建到同一个列表里；`FastHookListeners`：钩子分发占了模拟器的大部分时间（每个动作约 75 次分发），它不再为每次分发新建监听器列表和迭代器，而是把同样的对象按同样的顺序填进一个池化的列表，并像游戏那样在每个对象使用前再检查一次。`selftest` 在每个切点都把它和游戏自己的迭代器比较，后者通过反向补丁保持可调用 |
 | 选择 | `Choices.cs` | `ChooseABundle`、`CrystalSphereScreen` 和 `CardRemovalUsed`：需要驱动程序回答其选择的画面（[整局 §4](/arch/simulator/runs/#sec-4)） |
 | 游戏怪癖 | `GameQuirks.cs` | 正式版游戏同样会记下的错误，修掉它们，好让每个游戏错误都仍是真问题（[§8](#sec-8)） |
 
 **事件转译器**。事件是游戏里表现层最重的代码：它们的方法会打开对话框、播放声音、等待动画。`EventPresentation` 转译器（`Runtime/Patches/Engine.cs:129-174`）改写每个 `EventModel` 子类的每个方法，包括其中的 lambda 和 async 状态机：对 Godot 对象的调用，或返回 Godot 对象的调用，都会被去掉并给出默认结果，`Task.Delay` 则变成一个已完成的任务。它涉及约 17 个事件类。其中六个没有它就会失败，因为它们通过空实例调用节点，或者等待一个实时的延迟：Amalgamator、DenseVegetation、DollRoom、JungleMazeAdventure、PunchOff 和 Trial。
+
+**通过画面检查的规则**。在战斗之外，恶臭药水可以扔向商人：扔向商店的商人，得到 100 金币；扔向假商人（Fake Merchant，游戏里叫「商人？？？」），就开始一场争夺它的地毯和货架上遗物的战斗。游戏只在那个商人的画面节点存在、而且商品栏没有打开时才允许这样做（`FoulPotion.GetFoulPotionMerchantTarget`），所以无头时它从来扔不出去。`FoulPotionAtMerchants` 允许在商店里、以及在假商人事件的战斗开始之前扔它，这些画面上玩家总能扔它；扔向假商人时，`FoulPotionThrownAtTheFakeMerchant` 像游戏那样从每个玩家的事件开始那场战斗，而不需要事件的画面节点：游戏的代码先要这个节点，没有就直接返回（`Runtime/Patches/RuleFidelity.cs:89-126`）。在那场战斗里，假商人每个招式之前会说一句台词，从怪物的本地化表里抽出来，而无头时这张表没有加载：查找会抛异常，战斗的回合循环也随之终止。这句台词只用于显示，又是用只关乎外观的随机数抽的，所以 `FakeMerchantSaysNothing` 跳过它（`Runtime/Patches/Text.cs:30-39`）。
 
 ## 5. TestMode
 
@@ -109,4 +111,4 @@ import PumpDemo from '../../../../components/book/PumpDemo.svelte';
 
 有些错误是正式版游戏自己的，游戏怪癖组把它们修掉，好让每个游戏错误都仍是真问题。目前修掉的只有一个：玩家在其中死亡的出牌（打出一张 Sly 牌时，敌人的荆棘杀死了玩家）会提前返回，把这张牌留在它的选择上下文（`PlayerChoiceContext`）上；随后，发起这次出牌的钩子就记下一条错误。`PopCardAfterEarlyReturn` 把这张牌弹出，即使这张牌已经离开战斗也是如此（`Runtime/Patches/GameQuirks.cs:18-42`）。这是项目对待游戏 bug 的规则：不做校验和，也不做兜底，但破坏我们正确性的怪癖，在它进入我们代码的地方修掉（[前言 §2](/#sec-2)）。
 
-游戏的日志行转到模拟器的日志里（`Runtime/Patches/Text.cs:31-46`）：游戏的错误和警告分别记为 Error 和 Warning，其他行记为 Debug，只有 `--verbose` 才显示。命令行怎样记日志见[参考 §2](/arch/simulator/reference/#sec-2)。
+游戏的日志行转到模拟器的日志里（`Runtime/Patches/Text.cs:43-58`）：游戏的错误和警告分别记为 Error 和 Warning，其他行记为 Debug，只有 `--verbose` 才显示。命令行怎样记日志见[参考 §2](/arch/simulator/reference/#sec-2)。
