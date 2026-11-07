@@ -1,0 +1,806 @@
+#!/usr/bin/env python3
+"""box.py: jobs on the hub's work pool (pool/README.md). Every host runs one worker (worker.py) with a number
+of threads, its only knob; the hub (deal.py) deals the chunks of every open job to whichever thread is free.
+
+  box.py up HOST THREADS...   ships worker.py and its config to HOST and starts it at nice 19, with THREADS: a number, or
+    windows 'HH:MM-HH:MM N' in UTC+8 then a number for the rest of the day (one argument a line). A worker running there
+    is cut first (box.py down), so its chunks in play go back to the hub.
+  box.py threads HOST THREADS...   rewrites HOST's threads; the worker reads it within 10 s. Fewer threads than in play:
+    the extra ones are cut at once, their chunks go back to the hub.
+  box.py down HOST   ends HOST's worker now: runs in play killed and their chunks given back, the outbox sent, exit.
+  box.py run JOB REV UNTIL PURPOSE RANGE -- RUN-OPTION...
+    Opens data/JOB on the pool: RANGE is START:N, run indices into --seeds' file (or `all` of it) or train-seed indices
+    without --seeds (a ledger block: BLOCK:100000), cut into chunks of CHUNK runs (default 1), the job's queue on the
+    hub. The sim at REV (pushed; built here if needed) and the inputs (git at REV, or INPUTS=DIR) go to the hub's dist/
+    once, and every worker takes them on first need. A job belongs to a step, DEADLINE=NAME (default: the job with / as
+    -), which has one deadline and one priority. UNTIL: a self-play or forks job's deadline (+90m, +2h, @EPOCH, or
+    anything date -d reads); `none` for an eval job, which ends when its queue is used up and every chunk is back.
+    Runs in play at the deadline are killed and kept out. PRIORITY=N (default: selfplay 0, eval and forks 1): the hub
+    deals the open steps by priority, higher first, then by launch; inside a step, to the job with the lowest share of
+    its queue dealt. Environment also: OWNER (default main), AFTER=JOB[,JOB...] leaves out the indices those jobs
+    finished (their done-*.txt here).
+  box.py deadline NAME UNTIL   moves step NAME's deadline, also after it passed while its jobs are not fetched.
+  box.py priority NAME N       changes step NAME's priority.
+  box.py stop JOB|NAME REASON  stops a job, or every job of a step: runs in play killed within a minute, finished runs kept.
+  box.py status [JOB...|NAME...]   from the hub: runs, wins, floors, chunks dealt and held, hosts; default: every step.
+  box.py fetch JOB|NAME   waits until the job (or every job of the step) is over and every chunk dealt is back on the
+    hub, copies the small files here (done-, tally-, deal/), closes each manifest with the box's numbers, and once the
+    whole step is fetched takes it off the hub. May be run again.
+  box.py until UNTIL   prints the deadline as epoch seconds.
+"""
+
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+POOL = Path(__file__).resolve().parent
+ROOT = POOL.parent
+HUB = POOL / "hub.sh"
+ON = POOL / "on.sh"
+DIST_ADMIN = POOL / "dist-admin.py"
+STEPS = ROOT / "data" / "pool" / "steps"
+CONFIG = Path.home() / ".config" / "sts2"
+UTC8 = timezone(timedelta(hours=8))
+HUB_LOW_G = 10
+
+
+class Refused(Exception):
+    """A request that makes no sense or cannot go on; its message is all the caller needs."""
+
+
+def say(text: str) -> None:
+    print(f"box: {text}", file=sys.stderr)
+
+
+def output(*cmd, **kw) -> str:
+    return subprocess.run([str(c) for c in cmd], check=True, stdout=subprocess.PIPE, text=True, **kw).stdout.strip()
+
+
+# --- time
+
+def until_epoch(until: str) -> int:
+    m = re.fullmatch(r"\+(\d+(?:\.\d+)?)([smh])", until)
+    if m:
+        return int(time.time() + float(m[1]) * {"s": 1, "m": 60, "h": 3600}[m[2]])
+    try:
+        return int(output("date", "-d", until, "+%s"))
+    except subprocess.CalledProcessError:
+        raise Refused(f"the deadline {until} is not a time") from None
+
+
+def iso_now() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def iso_utc(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, timezone.utc).isoformat(timespec="seconds")
+
+
+def when(epoch: float | None) -> str:
+    if epoch is None:
+        return "no deadline"
+    utc, utc8 = datetime.fromtimestamp(epoch, timezone.utc), datetime.fromtimestamp(epoch, UTC8)
+    return f"{utc:%Y-%m-%d %H:%M:%S} UTC ({utc8:%m-%d %H:%M} UTC+8)"
+
+
+# --- the hub
+
+def hub_ssh() -> str:
+    # one connection for the many rsyncs of a launch loop
+    control = f"-o ControlMaster=auto -o ControlPath={Path.home()}/.ssh/cm-sts2-hub-%C -o ControlPersist=120"
+    return output(HUB, "ssh", "local") + " " + control
+
+
+def hub_addr() -> str:
+    return output(HUB, "addr", "local")
+
+
+def rsync(*args, **kw) -> subprocess.CompletedProcess:
+    return subprocess.run(["rsync", "-e", hub_ssh(), *map(str, args)], check=True, **kw)
+
+
+def to_hub(source: Path, dest: str) -> None:
+    rsync("-a", "--mkpath", source, f"{hub_addr()}:{dest}")
+
+
+def hub_files(folder: str) -> set[str]:
+    listing = rsync("--list-only", f"{hub_addr()}:{folder}/", stdout=subprocess.PIPE, text=True).stdout
+    return {line.split()[-1] for line in listing.splitlines() if line.strip()}
+
+
+def on_hub(script: str, *args) -> dict:
+    """A python script run on the hub (as root, in /root/sts2-store), whose last line of output is JSON."""
+    wrapped = "cd /root/sts2-store && python3 - \"$@\" <<'__py__'\n" + script + "\n__py__\n"
+    done = subprocess.run([str(ON), "hub", *map(str, args)], input=wrapped, text=True, stdout=subprocess.PIPE)
+    if done.returncode:
+        raise Refused(f"the hub's script failed (exit {done.returncode})")
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def hub_disk() -> str:
+    """The hub's free space; the user enlarges its disk on request, so it says when to ask."""
+    look = "df -BG --output=avail,size /root/sts2-store | tail -1\n"
+    words = subprocess.run([str(ON), "hub"], input=look, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.split()
+    if len(words) != 2:
+        return "hub: free space unknown"
+    free, size = (int(word.rstrip("G")) for word in words)
+    return f"hub: {free} G free of {size} G" + (f"; under {HUB_LOW_G} G, TELL THE USER: they enlarge the disk" if free < HUB_LOW_G else "")
+
+
+# --- jobs and steps
+
+def job_dir(job: str) -> Path:
+    return ROOT / "data" / job
+
+
+def load(job: str) -> dict:
+    path = job_dir(job) / "manifest.json"
+    if not path.exists():
+        raise Refused(f"data/{job} has no manifest")
+    return json.loads(path.read_text())
+
+
+def save_json(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new = path.with_name(path.name + ".new")
+    new.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+    os.replace(new, path)
+
+
+def save(job: str, manifest: dict) -> None:
+    save_json(job_dir(job) / "manifest.json", manifest)
+
+
+def step_path(name: str) -> Path:
+    return STEPS / f"{name}.json"
+
+
+def load_step(name: str) -> dict:
+    path = step_path(name)
+    if not path.exists():
+        raise Refused(f"no step {name} here (data/pool/steps/)")
+    return json.loads(path.read_text())
+
+
+def push_step(name: str, step: dict) -> None:
+    """The step here, then on the hub: the dealer reads it from there."""
+    save_json(step_path(name), step)
+    to_hub(step_path(name), f"pool/steps/{name}.json")
+
+
+def jobs_of(names: list[str]) -> list[str]:
+    """Each NAME a step's jobs, or a job."""
+    jobs = []
+    for name in names:
+        jobs += load_step(name)["jobs"] if step_path(name).exists() else [name]
+    return jobs
+
+
+def open_steps() -> list[str]:
+    return sorted(p.stem for p in STEPS.glob("*.json") if not json.loads(p.read_text()).get("fetched"))
+
+
+# --- workers
+
+def worker_config() -> str:
+    cert = CONFIG / "dist-cert.pem"
+    if not cert.exists():
+        text = subprocess.run([str(ON), "hub"], input="cat /root/sts2-dist/cert.pem\n", text=True, check=True, stdout=subprocess.PIPE).stdout
+        cert.write_text(text[text.index("-----BEGIN"):])
+    return json.dumps({"dist": output(HUB, "dist"), "key": (CONFIG / "dist-key").read_text().strip(), "cert": cert.read_text()})
+
+
+WORKER_ALIVE = r"""
+d=$HOME/sts2/pool
+alive() { [ -f "$d/worker.pid" ] && grep -qa worker.py "/proc/$(cat "$d/worker.pid")/cmdline" 2> /dev/null; }
+# the running worker cut: its runs killed, their chunks given back, its outbox sent (5 min at most)
+down() {
+  alive || return 0
+  kill -TERM "$(cat "$d/worker.pid")"
+  for _ in $(seq 420); do alive || return 0; sleep 1; done
+  echo "the worker did not end in 7 min" >&2; return 1
+}
+"""
+
+
+def up(argv: list[str]) -> None:
+    if len(argv) < 2:
+        raise SystemExit(__doc__)
+    host, threads = argv[0], argv[1:]
+    if not re.fullmatch(r"[A-Za-z0-9._]+", host):
+        raise Refused(f"{host}: a host's name is letters, digits, . and _")
+    worker = (POOL / "worker.py").read_text()
+    script = "set -eu\n" + WORKER_ALIVE + f"""
+command -v python3 > /dev/null && command -v zstd > /dev/null && command -v tar > /dev/null || {{ echo "{host}: needs python3, zstd, tar" >&2; exit 1; }}
+mkdir -p "$HOME/sts2" "$d"; chmod 700 "$HOME/sts2" "$d"
+cat > "$d/worker.py.new" <<'__worker__'
+{worker}__worker__
+(umask 077; cat > "$d/config.json" <<'__config__'
+{worker_config()}
+__config__
+)
+cat > "$d/threads" <<'__threads__'
+# threads: a number, or HH:MM-HH:MM N windows in UTC+8 and a last line with a number (box.py threads)
+{chr(10).join(threads)}
+__threads__
+down
+mv "$d/worker.py.new" "$d/worker.py"
+cd "$d"
+setsid nohup nice -n 19 python3 worker.py --name {host} >> worker.log 2>&1 < /dev/null &
+sleep 5
+alive && echo "{host}: worker $(cat worker.pid) running" || {{ echo "{host}: the worker did not start" >&2; tail -5 worker.log >&2; exit 1; }}
+tail -2 worker.log
+"""
+    subprocess.run([str(ON), host], input=script, text=True, check=True, env=os.environ | {"TIMEOUT": "600"})
+
+
+def set_threads(argv: list[str]) -> None:
+    if len(argv) < 2:
+        raise SystemExit(__doc__)
+    host, threads = argv[0], argv[1:]
+    script = f"""set -eu
+cat > "$HOME/sts2/pool/threads" <<'__threads__'
+# threads: a number, or HH:MM-HH:MM N windows in UTC+8 and a last line with a number (box.py threads)
+{chr(10).join(threads)}
+__threads__
+echo "{host}: $(grep -v '^#' "$HOME/sts2/pool/threads" | tr '\\n' ';')"
+"""
+    subprocess.run([str(ON), host], input=script, text=True, check=True)
+
+
+def down(argv: list[str]) -> None:
+    if len(argv) != 1:
+        raise SystemExit(__doc__)
+    script = "set -eu\n" + WORKER_ALIVE + f"down\necho '{argv[0]}: no worker running'\ntail -2 \"$d/worker.log\" 2> /dev/null || true\n"
+    subprocess.run([str(ON), argv[0]], input=script, text=True, check=True, env=os.environ | {"TIMEOUT": "600"})
+
+
+# --- launching
+
+def queue(start: int, n: int, chunk: int, skip: set[int]) -> list[str]:
+    """The chunks in order: runs of up to CHUNK consecutive indices of the range, skip left out, as "INDEX COUNT"."""
+    lines, first, count = [], 0, 0
+    for i in range(start, start + n):
+        if i in skip:
+            if count:
+                lines.append(f"{first} {count}")
+            count = 0
+            continue
+        if not count:
+            first = i
+        count += 1
+        if count == chunk:
+            lines.append(f"{first} {count}")
+            count = 0
+    if count:
+        lines.append(f"{first} {count}")
+    return lines
+
+
+def seeds_in(text: str) -> int:
+    return sum(1 for line in text.splitlines() if line.split("#", 1)[0].strip())
+
+
+def finished_by(jobs: str) -> set[int]:
+    """The indices the AFTER jobs finished."""
+    skip = set()
+    for job in filter(None, jobs.split(",")):
+        files = list(job_dir(job).glob("done-*.txt"))
+        if not files:
+            raise Refused(f"{job} has no done-*.txt here")
+        for path in files:
+            skip.update(int(x) for x in path.read_text().split())
+    return skip
+
+
+def check_seeds(kind: str, options: list[str]) -> None:
+    """Train seeds and test seeds never meet: an eval job plays a seed file of eval/seeds/, every other job the base 1."""
+    seeds = options[options.index("--seeds") + 1] if "--seeds" in options else None
+    base = options[options.index("--seed") + 1] if "--seed" in options else None
+    if kind == "eval":
+        if not seeds or not re.fullmatch(r"eval/seeds/[^/]+\.txt", seeds):
+            raise Refused("an eval job plays a test seed file, --seeds eval/seeds/NAME.txt")
+        if base:
+            raise Refused("an eval job takes no --seed: its seeds are the file's")
+    else:
+        if seeds:
+            raise Refused(f"a {kind} job may be trained on, so it plays train seeds, not --seeds {seeds}")
+        if base not in (None, "1"):
+            raise Refused(f"a {kind} job plays train seeds, base 1, not --seed {base}")
+
+
+def put_inputs(full: str, inputs: str | None, have: set[str]) -> str:
+    """The inputs on the hub's dist/ as inputs-KEY.tar.zst, unless there already; KEY: the short REV for git at REV, else
+    the first 12 hex of the tar's SHA-256."""
+    if inputs is None:
+        key = output("git", "-C", ROOT, "rev-parse", "--short", full)
+        if f"inputs-{key}.tar.zst" in have:
+            return key
+        # the seeds, and the nets and champions all characters share, those REV has
+        wanted = ["eval/seeds", "eval/champions", "weights/all"]
+        there = [p for p in wanted if not subprocess.run(["git", "-C", ROOT, "cat-file", "-e", f"{full}:{p}"], stderr=subprocess.DEVNULL).returncode]
+        tar = subprocess.run(["git", "-C", ROOT, "archive", full, *there], check=True, stdout=subprocess.PIPE).stdout
+    else:
+        tar = subprocess.run(["tar", "-C", ROOT / inputs, "--sort=name", "--mtime=@0", "--owner=0", "--group=0", "-cf", "-", "eval", "weights"],
+                             check=True, stdout=subprocess.PIPE).stdout
+        key = hashlib.sha256(tar).hexdigest()[:12]
+        if f"inputs-{key}.tar.zst" in have:
+            return key
+    with tempfile.TemporaryDirectory(dir=ROOT / "tmp") as t:
+        packed = Path(t) / f"inputs-{key}.tar.zst"
+        with packed.open("wb") as f:
+            subprocess.run(["zstd", "-q", "-12"], input=tar, stdout=f, check=True)
+        to_hub(packed, "dist/")
+    say(f"inputs {key} on the hub")
+    return key
+
+
+def run(argv: list[str]) -> None:
+    if "--" not in argv or argv.index("--") != 5:
+        raise SystemExit(__doc__)
+    cut = argv.index("--")
+    job, rev, until, purpose, spread = argv[:5]
+    options = argv[cut + 1 :]
+    chunk = int(os.environ.get("CHUNK", 1))
+    inputs = os.environ.get("INPUTS")
+
+    full = output("git", "-C", ROOT, "rev-parse", "--verify", f"{rev}^{{commit}}")
+    rev = output("git", "-C", ROOT, "rev-parse", "--short", full)
+    if subprocess.run(["git", "-C", ROOT, "merge-base", "--is-ancestor", full, "origin/main"]).returncode:
+        subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin"], check=True)
+        if subprocess.run(["git", "-C", ROOT, "merge-base", "--is-ancestor", full, "origin/main"]).returncode:
+            raise Refused(f"{rev} is not on origin/main; push it first")
+    parts = job.split("/")
+    if len(parts) < 4 or parts[1] not in ("sl", "nosl"):
+        raise Refused("JOB is CHAR/ENV/KIND/NAME..., ENV sl or nosl")
+    kind = parts[2]
+    if kind not in ("selfplay", "eval", "forks"):
+        raise Refused("KIND is selfplay, eval or forks")
+    check_seeds(kind, options)
+    here = job_dir(job)
+    if (here / "manifest.json").exists():
+        raise Refused(f"data/{job} has a manifest already; a job is launched once")
+    if kind == "eval":
+        if until != "none":
+            raise Refused("an eval job has no deadline (UNTIL none): it ends when its queue is used up")
+        deadline = None
+    else:
+        if until == "none":
+            raise Refused(f"a {kind} job has a deadline")
+        deadline = until_epoch(until)
+        if deadline <= time.time() + 60:
+            raise Refused(f"the deadline {until} is not a minute away")
+    name = os.environ.get("DEADLINE") or job.replace("/", "-")
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        raise Refused("DEADLINE is a name: letters, digits, . _ -")
+    priority = int(os.environ.get("PRIORITY", 0 if kind == "selfplay" else 1))
+    step = None
+    if step_path(name).exists():
+        step = load_step(name)
+        if step.get("fetched"):
+            raise Refused(f"step {name} is fetched already")
+        if step["deadline_epoch"] != deadline:
+            raise Refused(f"step {name} has the deadline {when(step['deadline_epoch'])}: give it (box.py deadline moves it)")
+        if "PRIORITY" in os.environ and priority != step["priority"]:
+            raise Refused(f"step {name} has priority {step['priority']} (box.py priority changes it)")
+        priority = step["priority"]
+
+    seeds = options[options.index("--seeds") + 1] if "--seeds" in options else None
+    if spread == "all":
+        if not seeds:
+            raise Refused("RANGE all needs --seeds")
+        text = (ROOT / inputs / seeds).read_text() if inputs else output("git", "-C", ROOT, "show", f"{full}:{seeds}")
+        start, n = 0, seeds_in(text)
+    else:
+        start, n = (int(x) for x in spread.split(":"))
+    after = os.environ.get("AFTER")
+    lines = queue(start, n, chunk, finished_by(after or ""))
+
+    # the sim and the inputs on the hub's dist/, once
+    have = hub_files("dist")
+    key = put_inputs(full, inputs, have)
+    if f"sts2-{rev}.tar.zst" not in have:
+        subprocess.run([sys.executable, str(DIST_ADMIN), "bundle", rev], check=True)
+
+    deal = here / "deal"
+    deal.mkdir(parents=True)
+    (deal / "queue.txt").write_text("".join(line + "\n" for line in lines))
+    spec = {"job": job, "kind": kind, "rev": rev, "options": options, "chunk": chunk, "inputs": key}
+    (deal / "job.json").write_text(json.dumps(spec, indent=1) + "\n")
+    to_hub(deal / "queue.txt", f"{job}/deal/queue.txt")
+    to_hub(deal / "job.json", f"{job}/deal/job.json")
+    save(job, {
+        "job": job, "kind": kind, "character": parts[0].upper(), "env": parts[1],
+        "owner": os.environ.get("OWNER", "main"), "purpose": purpose, "rev": full,
+        "game": os.environ.get("GAME", "v0.111.0"), "options": options, "inputs": inputs or "git at rev",
+        "box": {
+            "step": name, "priority": priority,
+            "deadline": iso_utc(deadline) if deadline else None, "deadline_epoch": deadline,
+            "seeds": seeds, "range": {"start": start, "n": n}, "chunk": chunk, "inputs_key": key,
+            "after": after.split(",") if after else None,
+        },
+        "launched": iso_now(), "status": "running",
+    })
+    # the job last into its step: the dealer never sees a job without its queue
+    step = step or {"priority": priority, "deadline_epoch": deadline, "launched": time.time(), "stopped": None, "jobs": []}
+    step["jobs"].append(job)
+    push_step(name, step)
+    say(f"data/{job}: {len(lines)} chunks, step {name} (priority {priority}, {when(deadline)}), {len(step['jobs'])} jobs in it")
+
+
+# --- changing a step or job
+
+def move_deadline(argv: list[str]) -> None:
+    if len(argv) != 2:
+        raise SystemExit(__doc__)
+    name, to = argv[0], until_epoch(argv[1])
+    step = load_step(name)
+    if step.get("fetched"):
+        raise Refused(f"step {name} is fetched")
+    if step["deadline_epoch"] is None:
+        raise Refused(f"step {name} has no deadline (eval); box.py stop ends it")
+    if to <= time.time():
+        raise Refused(f"{argv[1]} has passed; box.py stop {name} ends the step now")
+    at, before = iso_now(), step["deadline_epoch"]
+    step["deadline_epoch"] = to
+    push_step(name, step)
+    for job in step["jobs"]:
+        m = load(job)
+        box = m["box"]
+        box.setdefault("deadline_changes", []).append({"at": at, "from": iso_utc(before), "to": iso_utc(to)})
+        box["deadline"], box["deadline_epoch"] = iso_utc(to), to
+        save(job, m)
+    say(f"step {name} ({len(step['jobs'])} jobs) now until {when(to)}")
+
+
+def set_priority(argv: list[str]) -> None:
+    if len(argv) != 2 or not re.fullmatch(r"-?\d+", argv[1]):
+        raise SystemExit(__doc__)
+    step = load_step(argv[0])
+    step["priority"] = int(argv[1])
+    push_step(argv[0], step)
+    for job in step["jobs"]:
+        m = load(job)
+        m["box"]["priority"] = int(argv[1])
+        save(job, m)
+    say(f"step {argv[0]}: priority {argv[1]}")
+
+
+def stop(argv: list[str]) -> None:
+    if len(argv) != 2:
+        raise SystemExit(__doc__)
+    name, reason = argv
+    at = iso_now()
+    if step_path(name).exists():
+        step = load_step(name)
+        step["stopped"] = f"{at} {reason}"
+        push_step(name, step)
+        jobs = step["jobs"]
+    else:
+        load(name)
+        path = job_dir(name) / "deal" / "stopped"
+        path.write_text(f"{at} {reason}\n")
+        to_hub(path, f"{name}/deal/stopped")
+        jobs = [name]
+    for job in jobs:
+        m = load(job)
+        m["stop_reason"] = reason
+        save(job, m)
+    say(f"stopped {name} ({len(jobs)} jobs): runs in play end within about a minute")
+
+
+# --- looking at the pool
+
+STATUS = r"""
+import glob, json, os, sys, time
+from collections import Counter
+now = time.time()
+def read(p):
+    try:
+        return open(p).read().strip()
+    except OSError:
+        return None
+jobs = [j for j in sys.argv[1:] if j]  # on.sh passes '' when given no argument
+steps = {}
+for path in glob.glob("pool/steps/*.json"):
+    step = json.load(open(path))
+    steps[os.path.basename(path)[:-5]] = step
+if not jobs:
+    jobs = [j for s in steps.values() for j in s["jobs"]]
+held = Counter()
+for path in glob.glob("pool/held/*"):
+    words = (read(path) or "").split()
+    if words:
+        held[(words[0], os.path.basename(path).rsplit("-", 1)[0])] += 1
+out = {"now": now, "steps": steps, "jobs": {}, "hosts": {}}
+for job in jobs:
+    d = job + "/deal"
+    queue = [l for l in (read(d + "/queue.txt") or "").split("\n") if l.strip()]
+    front = [l for l in (read(d + "/front.txt") or "").split("\n") if l.strip()]
+    j = {"queue": len(queue), "pos": int(read(d + "/pos") or 0), "front": len(front), "stopped": read(d + "/stopped"),
+         "refused": {os.path.basename(p): read(p) for p in glob.glob(d + "/refused/*")},
+         "held": {h: n for (jj, h), n in held.items() if jj == job},
+         "runs": 0, "won": 0, "floors": 0, "died": Counter(), "sums": Counter(), "chunks": 0, "empty": 0,
+         "ends": Counter(), "hour": 0, "back": 0}
+    for line in (read(d + "/claims.log") or "").split("\n"):
+        if " back " in line:
+            j["back"] += 1
+    for path in glob.glob(job + "/tally-*.txt"):
+        j["chunks"] += 1
+        runs = 0
+        for line in open(path):
+            w = line.split()
+            if w[0] == "run":
+                runs += 1
+                if w[2] == "won":
+                    j["won"] += 1
+                else:
+                    j["died"][w[3]] += 1
+                j["floors"] += int(w[4]) if w[4].isdigit() else 0
+            elif w[0] == "sum":
+                for part in line[4:].strip().split("; "):
+                    k, _, v = part.partition(": ")
+                    if v.strip().lstrip("-").isdigit():
+                        j["sums"][k] += int(v)
+            elif w[0] == "end":
+                j["ends"][w[2].rstrip(":")] += 1
+        j["runs"] += runs
+        j["empty"] += runs == 0
+        if now - os.path.getmtime(path) < 3600:
+            j["hour"] += runs
+    out["jobs"][job] = j
+for path in glob.glob("pool/seen-*"):
+    out["hosts"][os.path.basename(path)[5:]] = read(path)
+st = os.statvfs(".")
+out["free_g"] = st.f_bavail * st.f_frsize / 2**30
+out["size_g"] = st.f_blocks * st.f_frsize / 2**30
+print(json.dumps(out))
+"""
+
+
+def group_key(job: str) -> tuple[str, str]:
+    """A step's rows when it has many jobs: by character and ascension (an aNN part of the name, as v9g2's), else the
+    name's first part."""
+    parts = job.split("/")
+    words = parts[-1].split("-")
+    return parts[0].upper(), next((w for w in words if re.fullmatch(r"a\d\d", w)), words[0])
+
+
+def status(argv: list[str]) -> None:
+    jobs = jobs_of(argv) if argv else []
+    look = on_hub(STATUS, *jobs)
+    now = look["now"]
+    shown = jobs or list(look["jobs"])
+    for name, step in sorted(look["steps"].items(), key=lambda s: (-s[1]["priority"], s[1]["launched"])):
+        mine = [j for j in step["jobs"] if j in shown]
+        if not mine:
+            continue
+        open_ = not step.get("stopped") and (step["deadline_epoch"] is None or now < step["deadline_epoch"])
+        left = f", {(step['deadline_epoch'] - now) / 3600:.1f} h left" if step["deadline_epoch"] and open_ else ""
+        print(f"step {name}: priority {step['priority']}, {when(step['deadline_epoch'])}{left}, "
+              f"{'open' if open_ else 'stopped: ' + step['stopped'] if step.get('stopped') else 'closed'}, {len(step['jobs'])} jobs")
+        rows = {}
+        for job in mine:
+            key = group_key(job) if len(mine) > 20 else (job,)
+            rows.setdefault(key, []).append(look["jobs"][job])
+        total = Counter()
+        for key, js in rows.items():
+            runs, won, floors = sum(j["runs"] for j in js), sum(j["won"] for j in js), sum(j["floors"] for j in js)
+            dealt, queue = sum(j["pos"] - j["front"] for j in js), sum(j["queue"] for j in js)
+            held = sum(sum(j["held"].values()) for j in js)
+            hour = sum(j["hour"] for j in js)
+            sums = sum((Counter(j["sums"]) for j in js), Counter())
+            bad = "; ".join(f"{k}: {v}" for k, v in sums.items() if v)
+            total.update({"runs": runs, "won": won, "floors": floors, "dealt": dealt, "queue": queue, "held": held, "hour": hour})
+            extra = []
+            for j in js:
+                if j["stopped"]:
+                    extra.append(f"stopped {j['stopped']}")
+                for h, why in j["refused"].items():
+                    extra.append(f"refused {h}: {why}")
+            print(f"  {' '.join(key):<44} {runs:>6} runs {won:>5} won ({100 * won / max(runs, 1):5.1f} %) floor {floors / max(runs, 1):4.1f}"
+                  f"  dealt {dealt}/{queue}, {held} in play, {hour} in the last hour" + (f"  {bad}" if bad else "") + "".join(f"\n    {e}" for e in extra))
+        if len(rows) > 1:
+            print(f"  {'all':<44} {total['runs']:>6} runs {total['won']:>5} won ({100 * total['won'] / max(total['runs'], 1):5.1f} %) "
+                  f"floor {total['floors'] / max(total['runs'], 1):4.1f}  dealt {total['dealt']}/{total['queue']}, {total['held']} in play, {total['hour']} in the last hour")
+    print("hosts (threads, playing, busy CPUs of all users / CPUs, last look):")
+    for host, seen in sorted(look["hosts"].items()):
+        t, threads, playing, busy, ncpu = (seen.split() + ["-"] * 5)[:5]
+        age = now - float(t)
+        if (age > 86400 and threads in ("0", "-")) or (host.startswith("nb") and age > 3600):
+            continue  # a host long idle, a notebook long gone
+        print(f"  {host:<12} {threads:>3} threads, {playing:>3} playing, {busy:>5} / {ncpu:<3} busy, {age:5.0f} s ago" + ("  SILENT" if age > 900 else ""))
+    print(f"hub: {look['free_g']:.0f} G free of {look['size_g']:.0f} G" + (f"; under {HUB_LOW_G} G, TELL THE USER: they enlarge the disk" if look["free_g"] < HUB_LOW_G else ""))
+
+
+# --- collecting
+
+OVER = r"""
+import glob, json, os, sys, time
+now = time.time()
+def read(p):
+    try:
+        return open(p).read().strip()
+    except OSError:
+        return None
+steps = {os.path.basename(p)[:-5]: json.load(open(p)) for p in glob.glob("pool/steps/*.json")}
+out = {"now": now, "jobs": {}, "seen": {os.path.basename(p)[5:]: read(p) for p in glob.glob("pool/seen-*")}}
+for job in [j for j in sys.argv[1:] if j]:
+    d = job + "/deal"
+    step = next((s for s in steps.values() if job in s["jobs"]), None)
+    queue = len([l for l in (read(d + "/queue.txt") or "").split("\n") if l.strip()])
+    front = len([l for l in (read(d + "/front.txt") or "").split("\n") if l.strip()])
+    pos = int(read(d + "/pos") or 0)
+    ended = None
+    if read(d + "/stopped") or (step and step.get("stopped")):
+        ended = "stopped"
+    elif step and step["deadline_epoch"] is not None and now >= step["deadline_epoch"]:
+        ended = "deadline"
+    elif not front and pos >= queue:
+        ended = "used up"
+    state = {}
+    for line in (read(d + "/claims.log") or "").split("\n"):
+        w = line.split()
+        if len(w) >= 4:
+            state[(w[1], w[2])] = len(w) > 4 and w[4] == "back"
+    missing = [f"{s} {i}" for (s, i), back in state.items() if not back and not os.path.exists(f"{job}/done-{s}-{i}.txt")]
+    out["jobs"][job] = {"ended": ended, "missing": missing}
+print(json.dumps(out))
+"""
+
+
+def copy_small_files(jobs: list[str]) -> None:
+    """The small files of the jobs on the hub, here: done-, tally-, deal/; one rsync for them all."""
+    rules = []
+    for job in jobs:
+        parts = job.split("/")
+        rules += [f"+ /{'/'.join(parts[:k])}/" for k in range(1, len(parts) + 1)]
+        rules += [f"+ /{job}/done-*", f"+ /{job}/tally-*", f"+ /{job}/deal/***"]
+    with tempfile.NamedTemporaryFile("w", dir=ROOT / "tmp", suffix=".rules") as f:
+        f.write("\n".join(dict.fromkeys(rules)) + "\n- *\n")
+        f.flush()
+        rsync("-a", f"--filter=merge {f.name}", f"{hub_addr()}:", f"{ROOT / 'data'}/")
+
+
+def box_numbers(job: str, manifest: dict) -> dict:
+    """The box's numbers from the small files here."""
+    here, box = job_dir(job), manifest["box"]
+    done, hosts, ends, sums, deadline_ends = set(), {}, Counter(), Counter(), []
+    won = floors = runs = 0
+    for path in here.glob("done-*.txt"):
+        shard, index = path.stem[5:].rsplit("-", 1)
+        host = shard.rsplit("-", 1)[0]
+        indices = [int(x) for x in path.read_text().split()]
+        done.update(indices)
+        h = hosts.setdefault(host, {"chunks": 0, "runs": 0})
+        h["chunks"] += 1
+        h["runs"] += len(indices)
+    for path in here.glob("tally-*.txt"):
+        for line in path.read_text().splitlines():
+            w = line.split()
+            if w[0] == "run":
+                runs += 1
+                won += w[2] == "won"
+                floors += int(w[4]) if w[4].isdigit() else 0
+            elif w[0] == "end":
+                why = w[2].rstrip(":")
+                ends[why] += 1
+                if why == "deadline":
+                    deadline_ends.append(float(w[1]))
+            elif w[0] == "sum":
+                for part in line[4:].split("; "):
+                    k, _, v = part.partition(": ")
+                    if v.strip().lstrip("-").isdigit():
+                        sums[k.strip()] += int(v)
+    prefix = 0
+    for index in sorted(done):
+        if index != box["range"]["start"] + prefix:
+            break
+        prefix += 1
+    claims = (here / "deal" / "claims.log").read_text().splitlines() if (here / "deal" / "claims.log").exists() else []
+    return {
+        "done": len(done), "prefix": prefix, "won": won, "floor": round(floors / max(runs, 1), 2),
+        "hosts": dict(sorted(hosts.items())), "ends": dict(ends), "counts": dict(sums),
+        "taken_back": sum(1 for line in claims if " back " in line),
+        "stop_spread_s": round(max(deadline_ends) - min(deadline_ends), 2) if len(deadline_ends) > 1 else None,
+    }
+
+
+def fetch(argv: list[str]) -> None:
+    if len(argv) != 1:
+        raise SystemExit(__doc__)
+    name = argv[0]
+    jobs = jobs_of([name])
+    for job in jobs:
+        load(job)
+    named, ended_at = 0.0, {}
+    while True:
+        over = on_hub(OVER, *jobs)
+        waiting = {j: v for j, v in over["jobs"].items() if not v["ended"] or v["missing"]}
+        if not waiting:
+            break
+        for job, v in over["jobs"].items():
+            if v["ended"]:
+                ended_at.setdefault(job, time.time())
+        # a job over for 15 min whose chunks are not all back: name them, once an hour
+        missing = [(j, m) for j, v in waiting.items() if time.time() >= ended_at.get(j, time.time()) + 900 for m in v["missing"]]
+        if missing and time.time() >= named + 3600:
+            named = time.time()
+            for job, chunk in missing[:30]:
+                host = chunk.split()[0].rsplit("-", 1)[0]
+                seen = over["seen"].get(host)
+                age = f"{over['now'] - float(seen.split()[0]):.0f} s ago" if seen else "never"
+                say(f"not on the hub yet: {job} chunk {chunk} (its host looked {age})")
+        time.sleep(120)
+    copy_small_files(jobs)
+    totals = Counter()
+    for job in jobs:
+        manifest = load(job)
+        manifest["box"].update(box_numbers(job, manifest))
+        manifest["box"]["ended"] = over["jobs"][job]["ended"]
+        if manifest["status"] == "running":
+            manifest["fetched"], manifest["status"] = iso_now(), "closed"
+        manifest["box"]["stored"] = f"{job}/"
+        save(job, manifest)
+        box = manifest["box"]
+        counted = "; ".join(f"{k}: {v}" for k, v in box["counts"].items())
+        print(f"{job}: {box['done']} runs of {box['range']['n']}, head {box['prefix']}, {box['won']} won, floor {box['floor']}; "
+              f"ended {box['ended']}; chunk ends {box['ends']}; {box['taken_back']} taken back; {counted}")
+        totals.update({"done": box["done"], "won": box["won"]})
+    with tempfile.NamedTemporaryFile("w", dir=ROOT / "tmp", suffix=".list") as f:
+        f.write("".join(f"{job}/manifest.json\n" for job in jobs))
+        f.flush()
+        rsync("-a", f"--files-from={f.name}", f"{ROOT / 'data'}/", f"{hub_addr()}:")
+    say(f"{len(jobs)} jobs closed: {totals['done']} runs, {totals['won']} won; on the hub in each JOB/; pull.sh HOST JOB... unpacks them there")
+    if step_path(name).exists():
+        close_step(name)
+    say(hub_disk())
+
+
+def close_step(name: str) -> None:
+    """A fetched step: its cpu lines of the span here, its file off the hub."""
+    step = load_step(name)
+    if step.get("fetched"):
+        return
+    with tempfile.TemporaryDirectory(dir=ROOT / "tmp") as t:
+        rsync("-a", "--include=cpu-*.txt", "--exclude=*", f"{hub_addr()}:pool/", f"{t}/")
+        lines = []
+        for path in sorted(Path(t).glob("cpu-*.txt")):
+            host = path.stem[4:]
+            lines += [f"{host} {line}" for line in path.read_text().splitlines() if step["launched"] <= float(line.split()[0]) <= time.time()]
+    (STEPS / f"{name}-cpu.txt").write_text("".join(line + "\n" for line in lines))
+    subprocess.run([str(HUB), "rm", f"pool/steps/{name}.json"], check=True, stdout=subprocess.DEVNULL)
+    step["fetched"] = iso_now()
+    save_json(step_path(name), step)
+    say(f"step {name} fetched and off the hub; its hosts' CPU lines in data/pool/steps/{name}-cpu.txt")
+
+
+def main(argv: list[str]) -> None:
+    if not argv:
+        raise SystemExit(__doc__)
+    command, rest = argv[0], argv[1:]
+    if command == "until":
+        print(until_epoch(rest[0]))
+    elif command in (commands := {
+        "up": up, "threads": set_threads, "down": down, "run": run, "deadline": move_deadline, "priority": set_priority,
+        "stop": stop, "status": status, "fetch": fetch,
+    }):
+        commands[command](rest)
+    else:
+        raise SystemExit(__doc__)
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv[1:])
+    except Refused as refused:
+        say(str(refused))
+        sys.exit(1)

@@ -11,10 +11,11 @@
 # The nets lose their .json: the game reads every .json under a mod's folder as a possible manifest, and a net's
 # "name" field makes it log an error.
 # Apple silicon runs only signed code, and the launcher made here is unsigned (macOS kills it, exit 137), so it is signed
-# ad-hoc on a Mac with Xcode's codesign: MAC=user@host, reached by ssh.
+# ad-hoc on a Mac with Xcode's codesign: STS2_MAC=user@host in the repository's .env, reached by ssh.
 set -e
-: "${MAC:?set MAC=user@host, a Mac to sign the osx-arm64 launcher on}"
 R=$(cd "$(dirname "$0")/.." && pwd)
+. "$R/.env"
+: "${STS2_MAC:?set STS2_MAC=user@host in .env, a Mac to sign the osx-arm64 launcher on}"
 rev=$(git -C "$R" rev-parse --short "${1:-HEAD}")
 B=$R/tmp/item/$rev
 I=$R/out/Sts2Ai
@@ -36,7 +37,7 @@ for rid in $rids; do
 done
 
 launcher=$B/brain/osx-arm64/Sts2Ai.SimWorker
-ssh "$MAC" 'f=$(mktemp) && cat > "$f" && codesign -s - -f "$f" && codesign -v "$f" && cat "$f" && rm -f "$f"' \
+ssh "$STS2_MAC" 'f=$(mktemp) && cat > "$f" && codesign -s - -f "$f" && codesign -v "$f" && cat "$f" && rm -f "$f"' \
   < "$launcher" > "$launcher.signed"
 mv "$launcher.signed" "$launcher"
 chmod +x "$launcher"

@@ -13,3 +13,7 @@ data/
 
 # Python bytecode
 __pycache__/
+
+# Private, kept on this machine only: the skills (hosts, accounts, operations) and the Colab notebook (the hub's key)
+.claude/skills/
+distro/sts2_worker.ipynb
