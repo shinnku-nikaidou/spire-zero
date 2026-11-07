@@ -11,6 +11,9 @@ internal enum ConsideredMode { Off, Values, Bars }
 /// <summary>How much of a map answer's route the map shows.</summary>
 internal enum RouteMode { Off, Next, Whole }
 
+/// <summary>How long auto-play waits before each of the AI's actions, so the player can follow it.</summary>
+internal enum AutoSpeed { Slow, Medium, Fast }
+
 /// <summary>
 /// The player's choices for the mod (docs: output §2), set in the game's settings screen (<see cref="SettingsTab"/>) and
 /// the panel's SL/NoSL switch. They are kept in one file beside the brain's socket, outside the game's profile, and
@@ -19,6 +22,8 @@ internal enum RouteMode { Off, Next, Whole }
 /// <param name="Assist">Off: the mod asks the brain nothing and draws nothing.</param>
 /// <param name="Numbers">Order numbers on the cards the plan plays this turn.</param>
 /// <param name="Marks">The plan's target and end-turn marks.</param>
+/// <param name="StopAtElites">Auto-play stops before it travels to an elite or a boss.</param>
+/// <param name="StopOnDrop">Auto-play stops when V's chance to win falls 3 points below the best it showed since auto-play started.</param>
 internal sealed record Settings(
     bool Assist = true,
     PlayEnvironment Env = PlayEnvironment.SL,
@@ -27,8 +32,14 @@ internal sealed record Settings(
     bool Numbers = true,
     bool Marks = true,
     RouteMode Route = RouteMode.Whole,
-    float Opacity = 0.92f)
+    float Opacity = 0.92f,
+    AutoSpeed Speed = AutoSpeed.Medium,
+    bool StopAtElites = true,
+    bool StopOnDrop = true)
 {
+    /// <summary>The wait before each auto-play action at <see cref="Speed"/>, in milliseconds.</summary>
+    public int Delay => Speed switch { AutoSpeed.Slow => 1500, AutoSpeed.Medium => 800, _ => 200 };
+
     private static readonly string Kept = Path.Combine(Path.GetDirectoryName(BrainSocket.DefaultPath)!, "settings.json");
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };

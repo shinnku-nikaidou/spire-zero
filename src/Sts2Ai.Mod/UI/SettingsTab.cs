@@ -87,21 +87,26 @@ internal static class SettingsTab
 
     private static void Fill(VBoxContainer content, Label? font, List<Action> refresh)
     {
-        string[] onOff = ["Off", "On"];
+        string[] onOff = [L10n.T("Off"), L10n.T("On")];
         bool[] bools = [false, true];
-        content.AddChild(Header("Assist", font));
-        content.AddChild(Choice("AI assist", "off: the mod asks nothing and draws nothing", font, onOff, bools, s => s.Assist, (s, v) => s with { Assist = v }, refresh));
-        content.AddChild(Choice("Environment", "SL sees the true outcome of the room you are in; NoSL never peeks", font,
+        content.AddChild(Header(L10n.T("Assist"), font));
+        content.AddChild(Choice(L10n.T("AI assist"), L10n.T("off: the mod asks nothing and draws nothing"), font, onOff, bools, s => s.Assist, (s, v) => s with { Assist = v }, refresh));
+        content.AddChild(Choice(L10n.T("Environment"), L10n.T("SL sees the true outcome of the room you are in; NoSL never peeks"), font,
             ["SL", "NoSL"], [PlayEnvironment.SL, PlayEnvironment.NoSL], s => s.Env, (s, v) => s with { Env = v }, refresh));
-        content.AddChild(Choice("Panel", "F8 hides everything at once", font, onOff, bools, s => s.Panel, (s, v) => s with { Panel = v }, refresh));
-        content.AddChild(Choice("Considered options", "in the panel", font, ["Off", "Values", "Values + bars"],
+        content.AddChild(Choice(L10n.T("Panel"), L10n.T("F8 hides everything at once"), font, onOff, bools, s => s.Panel, (s, v) => s with { Panel = v }, refresh));
+        content.AddChild(Choice(L10n.T("Considered options"), L10n.T("in the panel"), font, [L10n.T("Off"), L10n.T("Values"), L10n.T("Values + bars")],
             [ConsideredMode.Off, ConsideredMode.Values, ConsideredMode.Bars], s => s.Considered, (s, v) => s with { Considered = v }, refresh));
-        content.AddChild(Choice("Order numbers on cards", "the cards this turn's plan plays", font, onOff, bools, s => s.Numbers, (s, v) => s with { Numbers = v }, refresh));
-        content.AddChild(Choice("Target and end-turn marks", "", font, onOff, bools, s => s.Marks, (s, v) => s with { Marks = v }, refresh));
-        content.AddChild(Choice("Map route", "", font, ["Off", "Next point", "Whole route"],
+        content.AddChild(Choice(L10n.T("Order numbers on cards"), L10n.T("the cards this turn's plan plays"), font, onOff, bools, s => s.Numbers, (s, v) => s with { Numbers = v }, refresh));
+        content.AddChild(Choice(L10n.T("Target and end-turn marks"), "", font, onOff, bools, s => s.Marks, (s, v) => s with { Marks = v }, refresh));
+        content.AddChild(Choice(L10n.T("Map route"), "", font, [L10n.T("Off"), L10n.T("Next point"), L10n.T("Whole route")],
             [RouteMode.Off, RouteMode.Next, RouteMode.Whole], s => s.Route, (s, v) => s with { Route = v }, refresh));
         content.AddChild(Opacity(font, refresh));
-        var reset = new Button { Text = "Reset AI settings", FocusMode = Control.FocusModeEnum.None, SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd };
+        content.AddChild(Header(L10n.T("Auto-play"), font));
+        content.AddChild(Choice(L10n.T("Speed of auto-play"), L10n.T("the pause before each of the AI's actions"), font,
+            [L10n.T("Slow"), L10n.T("Medium"), L10n.T("Fast")], [AutoSpeed.Slow, AutoSpeed.Medium, AutoSpeed.Fast], s => s.Speed, (s, v) => s with { Speed = v }, refresh));
+        content.AddChild(Choice(L10n.T("Stop before elites and bosses"), "", font, onOff, bools, s => s.StopAtElites, (s, v) => s with { StopAtElites = v }, refresh));
+        content.AddChild(Choice(L10n.T("Stop when the win chance falls 3 points"), "", font, onOff, bools, s => s.StopOnDrop, (s, v) => s with { StopOnDrop = v }, refresh));
+        var reset = new Button { Text = L10n.T("Reset AI settings"), FocusMode = Control.FocusModeEnum.None, SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd };
         Style(reset, font, 1);
         reset.Pressed += () =>
         {
@@ -151,7 +156,7 @@ internal static class SettingsTab
         };
         refresh.Add(Show);
         Show();
-        return Row("Panel opacity", "", font, slider, value);
+        return Row(L10n.T("Panel opacity"), "", font, slider, value);
     }
 
     private static Control Row(string label, string sub, Label? font, params Control[] controls)

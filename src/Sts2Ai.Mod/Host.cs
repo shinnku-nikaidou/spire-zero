@@ -45,10 +45,12 @@ internal static class Host
     {
         try
         {
-            _panel ??= new Panel((SceneTree)Engine.GetMainLoop(), _assist == null ? null : env => Settings.Set(Settings.Current with { Env = env }));
+            var assist = _assist;
+            _panel ??= new Panel((SceneTree)Engine.GetMainLoop(), assist == null ? null : env => Settings.Set(Settings.Current with { Env = env }),
+                assist == null ? null : assist.Press);
             _panel.Poll();
-            if (_assist == null) _panel.Show("—", "off", null, _off!);
-            else _assist.Tick(_panel);
+            if (assist == null) _panel.Show("—", L10n.T("off"), null, _off!);
+            else assist.Tick(_panel);
             _lastError = null;
         }
         catch (Exception e)
@@ -58,7 +60,7 @@ internal static class Host
             if (error == _lastError) return;
             _lastError = error;
             Log.Error($"{Tag} {error}");
-            _panel?.Show("—", "error", null, "Mod error", e.Message, Tone.Error);
+            _panel?.Show("—", L10n.T("error"), null, L10n.T("Mod error"), e.Message, Tone.Error);
         }
     }
 }

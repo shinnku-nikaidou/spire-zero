@@ -28,7 +28,9 @@ namespace Sts2Ai.Mod;
 /// <summary>A decision to ask the brain about: the request's surface, observation and legal actions.</summary>
 /// <param name="Source">What the player's answer is read against (<see cref="NodeRecord"/>): a card prompt's options in
 /// the game's own order, a rewards screen's set.</param>
-internal sealed record Asking(string Surface, Observation Obs, IReadOnlyList<string> Legal, object? Source = null);
+/// <param name="GameIndex">A card prompt's: for each canonical index, the option's index in <paramref name="Source"/>,
+/// which is what the AI's answer picks (<see cref="Executor"/>).</param>
+internal sealed record Asking(string Surface, Observation Obs, IReadOnlyList<string> Legal, object? Source = null, int[]? GameIndex = null);
 
 /// <summary>
 /// The decision the screen on top asks for (docs: mod/loop §4), asked as the simulator asks it (RunSession): the same
@@ -135,10 +137,10 @@ internal sealed class Screens
     {
         if (ContextOf(prompt) is not { } context || cards.Count == 0) return null;
         var (min, max) = ChoiceContexts.Bounds(context, minSelect, maxSelect, cards.Count);
-        var (choice, _) = CardChoices.Canonical(cards, min, max, context, new Random(0));
+        var (choice, index) = CardChoices.Canonical(cards, min, max, context, new Random(0));
         var st = CombatManager.Instance.IsInProgress ? CombatManager.Instance.DebugOnlyGetState() : null;
         var screen = new CardChoiceScreen { Choice = choice, Combat = st != null ? Observe.Combat(st, me) : null };
-        return new Asking(Surfaces.CardChoice, Observe.Of(run, me, screen), [], cards);
+        return new Asking(Surfaces.CardChoice, Observe.Of(run, me, screen), [], cards, index);
     }
 
     /// <summary>
