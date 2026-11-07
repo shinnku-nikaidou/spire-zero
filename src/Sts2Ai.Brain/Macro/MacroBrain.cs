@@ -138,13 +138,14 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
     private List<Option> Weigh(MacroDecision decision)
     {
         var obs = decision.Observation;
+        var legal = Offered(obs, decision.Legal);
         if (decision.Clone is not { } clone)
-            return decision.Legal.Select(a => { var after = After(obs, a); return new Option(a, after, value.Value(after), OpensPrompt(obs, a)); }).ToList();
-        var played = decision.Legal.Where(a => !Travels(obs, a)).ToList();
+            return AfterMoves(obs, legal.Select(a => { var after = After(obs, a); return new Option(a, after, value.Value(after), OpensPrompt(obs, a)); }).ToList());
+        var played = legal.Where(a => !Travels(obs, a)).ToList();
         var found = new CloneSearch(value, clone, _decided).Search(Root(decision), played.Select(a => (IReadOnlyList<string>)[a]).ToList());
         var options = new List<Option>();
         int k = 0;
-        foreach (var a in decision.Legal)
+        foreach (var a in legal)
         {
             if (Travels(obs, a))
             {
@@ -155,7 +156,39 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
             var (state, worth) = found[k++];
             options.Add(new(a, state.Run, worth, state.Surface == Surfaces.CardChoice));
         }
-        return options;
+        return AfterMoves(obs, options);
+    }
+
+    /// <summary>
+    /// The options weighed: the legal actions but a potion's discard, unless the belt is full and the screen offers a
+    /// potion (a reward, the shop's) for the discard to make room for. Otherwise a discard can only lose the potion; weighed
+    /// by V all the same, it was taken wherever V rated a potion below an empty slot, and the data, holding few potions
+    /// kept, could not show V otherwise (self-play threw away 69-79 % of its potions in v9g0 and v9g1).
+    /// </summary>
+    private static List<string> Offered(Observation obs, IReadOnlyList<string> legal)
+    {
+        bool room = obs.Run.Potions.All(p => p != null) && obs.Screen switch
+        {
+            RewardsScreen screen => screen.Rewards.Any(r => r.Kind == "potion"),
+            ShopScreen screen => screen.Entries.Any(e => e.Kind == "potion"),
+            _ => false,
+        };
+        var offered = legal.Where(a => room || Split(a).Verb != "discard_potion").ToList();
+        return offered.Count > 0 ? offered : legal.ToList();
+    }
+
+    /// <summary>
+    /// On the map, an option that is not a move (a potion's) stays on the map, while each move's afterstate enters the
+    /// next point. V does not value the two kinds of state on one scale (v9-2: staying beat the best move in 19 of 26 map
+    /// decisions, by 1 point at the median), so valued as the state it leaves, such an option won for nothing. It is
+    /// worth the best move after it.
+    /// </summary>
+    private List<Option> AfterMoves(Observation obs, List<Option> options)
+    {
+        var moves = options.Where(o => Travels(obs, o.Action)).Select(o => o.Action).ToList();
+        if (moves.Count == 0) return options;
+        return options.Select(o => Travels(obs, o.Action) || double.IsNegativeInfinity(o.Value) ? o
+            : o with { Value = moves.Max(m => value.Value(After(obs with { Run = o.After }, m))) }).ToList();
     }
 
     /// <summary>The decision as a probe of no answers shows it.</summary>
