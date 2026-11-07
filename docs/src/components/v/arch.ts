@@ -266,24 +266,56 @@ export function valueNet(lang: Lang): Diagram {
           },
         ],
       },
-      bag(w('Relics', '遗物', '遺物'), w('each relic', '每件遗物', '每件遺物'), w('R[r]: one vector per relic id; “:used” is an id of its own.', 'R[r]：每个遗物 id 一个向量；“:used” 是单独的 id。', 'R[r]：每個遺物 id 一個向量；「:used」是單獨的 id。')),
+      bag(
+        w('Relics', '遗物', '遺物'),
+        w('id · counter ·\nmelted · status', 'id · 计数 ·\n熔化 · 状态', 'id · 計數 ·\n熔化 · 狀態'),
+        w(
+          'R[r] + q·R_q[r] + μ·W + R_s[s]: one vector per relic id, its counter q (/ 10) along a direction of its id’s own, a vector if melted and its status’s vector, as the combat net reads a relic; “:used” is an id of its own.',
+          'R[r] + q·R_q[r] + μ·W + R_s[s]：每个遗物 id 一个向量，计数 q（/ 10）沿它 id 自己的方向，熔化时加一个向量，再加它状态的向量，和战斗网络读遗物的方式一样；“:used” 是单独的 id。',
+          'R[r] + q·R_q[r] + μ·W + R_s[s]：每個遺物 id 一個向量，計數 q（/ 10）沿它 id 自己的方向，熔化時加一個向量，再加它狀態的向量，和戰鬥網路讀遺物的方式一樣；「:used」是單獨的 id。',
+        ),
+      ),
       bag(w('Potions', '药水', '藥水'), w('each potion', '每瓶药水', '每瓶藥水'), w('P[p]: one vector per potion id; an empty slot is no token.', 'P[p]：每个药水 id 一个向量；空栏不是词元。', 'P[p]：每個藥水 id 一個向量；空欄不是詞元。')),
       bag(w('Context', '上下文', '上下文'), w('character · act ·\nbosses · ancient', '角色 · 幕 ·\nBoss · 先古之民', '角色 · 幕 ·\n頭目 · 遠古之民'), w('C[t]: one vector per token.', 'C[t]：每个词元一个向量。', 'C[t]：每個詞元一個向量。')),
       bag(w('Map', '地图', '地圖'), w('type + floors ahead\nof each point', '每个点的\n类型 + 前方层数', '每個點的\n類型 + 前方層數'), w('G[t]: one vector per token such as Elite+3; on a map move, the point entered as Elite+0.', 'G[t]：每个词元一个向量，如 Elite+3；选路时，正要进入的点是 Elite+0。', 'G[t]：每個詞元一個向量，如 Elite+3；選路時，正要進入的點是 Elite+0。')),
       numbers(lang),
+      {
+        title: L(w('Kept cards', '遗物保留的牌', '遺物保留的牌')),
+        input: L(w('cards a relic keeps\n(Pael’s Tooth’s)', '遗物保留的牌\n（佩尔之牙的）', '遺物保留的牌\n（佩爾之牙的）')),
+        items: [
+          {
+            kind: 'block',
+            label: L(w('Card vector\nE[c]: 64', '牌向量\nE[c]：64', '牌向量\nE[c]：64')),
+            tone: 'embed',
+            info: L(w('E[c], from the deck’s card table: the id alone, 64 numbers per card.', 'E[c]，来自牌组的牌表：只有 id，每张牌 64 个数。', 'E[c]，來自牌組的牌表：只有 id，每張牌 64 個數。')),
+          },
+          {
+            kind: 'block',
+            label: L(w('The deck’s φ\n64 → 256 → 256', '牌组的 φ\n64 → 256 → 256', '牌組的 φ\n64 → 256 → 256')),
+            tone: 'ff',
+            info: L(w('The same two layers as the deck’s cards, with the same weights, each card on its own.', '和牌组的牌同样的两层、同样的权重，每张牌各自独立。', '和牌組的牌同樣的兩層、同樣的權重，每張牌各自獨立。')),
+          },
+          {
+            kind: 'block',
+            label: L(w('Sum', '求和', '加總')),
+            tone: 'pool',
+            info: L(w('The kept cards added up, padding left out: 256 numbers, apart from the deck’s; zero when no relic keeps a card.', '保留的牌相加（不含补齐位置）：256 个数，和牌组的分开；没有遗物保留牌时为零。', '保留的牌相加（不含補齊位置）：256 個數，和牌組的分開；沒有遺物保留牌時為零。')),
+          },
+        ],
+      },
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 512 + 64 + 64 + 64 + 64 + 6 = 774', '拼接：512 + 64 + 64 + 64 + 64 + 6 = 774', '串接：512 + 64 + 64 + 64 + 64 + 6 = 774')),
+      label: L(w('Concatenate: 512 + 64 + 64 + 64 + 64 + 6 + 256 = 1,030', '拼接：512 + 64 + 64 + 64 + 64 + 6 + 256 = 1,030', '串接：512 + 64 + 64 + 64 + 64 + 6 + 256 = 1,030')),
       tone: 'norm',
-      info: L(w('One vector of 774 numbers. The parts meet only from here on.', '一个 774 个数的向量。各部分从这里才开始相遇。', '一個 774 個數的向量。各部分從這裡才開始相遇。')),
+      info: L(w('One vector of 1,030 numbers. The parts meet only from here on.', '一个 1,030 个数的向量。各部分从这里才开始相遇。', '一個 1,030 個數的向量。各部分從這裡才開始相遇。')),
     },
     top: [
       {
         kind: 'repeat',
         times: 'MLP',
         info: L(w('The body: every relation between the parts is worked out here. A second head, used only in training, reads its output too: Linear 512 → 6, not in the net file.', '主干：各部分之间的关系都在这里算出来。训练时另有第二个输出头也读它的输出：线性层 512 → 6，不进网络文件。', '主幹：各部分之間的關係都在這裡算出來。訓練時另有第二個輸出頭也讀它的輸出：線性層 512 → 6，不進網路檔案。')),
-        items: body(lang, 774),
+        items: body(lang, 1030),
       },
       { kind: 'block', label: L(w('Hazard head\nLinear 512 → 64', '风险值输出头\n线性层 512 → 64', '風險值輸出頭\n線性層 512 → 64')), tone: 'head', info: L(w('One logit per floor, 0 to 63.', '每层一个 logit，0 到 63。', '每層一個 logit，0 到 63。')) },
       {
@@ -394,18 +426,18 @@ export function combatNet(lang: Lang): Diagram {
       },
       {
         title: L(w('The rest', '其余', '其餘')),
-        input: L(w('relics · potions · encounter ·\norbs · allies · 3 numbers', '遗物 · 药水 · 遭遇 ·\n充能球 · 盟友 · 3 个数', '遺物 · 藥水 · 遭遇 ·\n充能球 · 盟友 · 3 個數')),
+        input: L(w('relics · potions · encounter ·\norbs · allies · 4 numbers', '遗物 · 药水 · 遭遇 ·\n充能球 · 盟友 · 4 个数', '遺物 · 藥水 · 遭遇 ·\n充能球 · 盟友 · 4 個數')),
         narrow: true,
         items: [
           {
             kind: 'block',
-            label: L(w('4 × 64 + 128 + 3', '4 × 64 + 128 + 3', '4 × 64 + 128 + 3')),
+            label: L(w('4 × 64 + 128 + 4', '4 × 64 + 128 + 4', '4 × 64 + 128 + 4')),
             tone: 'embed',
             info: L(
               w(
-                'Relics (id, counter, melted and status), potions, the context (the encounter and the character; act and room read as unknown) and orbs (id, passive, evoke and place in the queue), 64 each; allies through their own φ, 128; the ascension, orb slots and gold, 3.',
-                '遗物（id、计数、熔化和状态）、药水、上下文（遭遇和角色；幕和房间读作未知）和充能球（id、被动值、激发值和队列中的位置），各 64；盟友经自己的 φ，128；进阶、充能球栏位和金币，3。',
-                '遺物（id、計數、熔化和狀態）、藥水、上下文（遭遇和角色；幕和房間讀作未知）和充能球（id、被動值、激發值和佇列中的位置），各 64；盟友經自己的 φ，128；晉階、充能球欄位和金幣，3。',
+                'Relics (id, counter, melted and status), potions, the context (the encounter and the character; act and room read as unknown) and orbs (id, passive, evoke and place in the queue), 64 each; allies through their own φ, 128; the ascension, orb slots, gold and potion slots, 4.',
+                '遗物（id、计数、熔化和状态）、药水、上下文（遭遇和角色；幕和房间读作未知）和充能球（id、被动值、激发值和队列中的位置），各 64；盟友经自己的 φ，128；进阶、充能球栏位、金币和药水栏位，4。',
+                '遺物（id、計數、熔化和狀態）、藥水、上下文（遭遇和角色；幕和房間讀作未知）和充能球（id、被動值、激發值和佇列中的位置），各 64；盟友經自己的 φ，128；晉階、充能球欄位、金幣和藥水欄位，4。',
               ),
             ),
           },
@@ -414,12 +446,12 @@ export function combatNet(lang: Lang): Diagram {
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 512 + 256 + 128 + 8 + 387 = 1,291', '拼接：512 + 256 + 128 + 8 + 387 = 1,291', '串接：512 + 256 + 128 + 8 + 387 = 1,291')),
+      label: L(w('Concatenate: 512 + 256 + 128 + 8 + 388 = 1,292', '拼接：512 + 256 + 128 + 8 + 388 = 1,292', '串接：512 + 256 + 128 + 8 + 388 = 1,292')),
       tone: 'norm',
-      info: L(w('One vector of 1,291 numbers.', '一个 1,291 个数的向量。', '一個 1,291 個數的向量。')),
+      info: L(w('One vector of 1,292 numbers.', '一个 1,292 个数的向量。', '一個 1,292 個數的向量。')),
     },
     top: [
-      ...body(lang, 1291),
+      ...body(lang, 1292),
       {
         kind: 'block',
         label: L(w('Endings head\n512 → 51', '结局输出头\n512 → 51', '結局輸出頭\n512 → 51')),
@@ -446,18 +478,18 @@ export function combatNet(lang: Lang): Diagram {
       },
       {
         kind: 'block',
-        label: L(w('Potion head\n512 → 66, sigmoid', '药水输出头\n512 → 66，sigmoid', '藥水輸出頭\n512 → 66，sigmoid')),
+        label: L(w('Potion head\n512 → 5 × 66, sigmoid', '药水输出头\n512 → 5 × 66，sigmoid', '藥水輸出頭\n512 → 5 × 66，sigmoid')),
         tone: 'head',
         info: L(
           w(
-            'Beside the endings, from the same 512 numbers: one chance per potion id of being gone after a win. Only the potions held are read.',
-            '和结局并列，读同样的 512 个数：每个药水 id 一个机率，表示获胜后它已不在。只读现在持有的药水。',
-            '和結局並列，讀同樣的 512 個數：每個藥水 id 一個機率，表示獲勝後它已不在。只讀現在持有的藥水。',
+            'Beside the endings, from the same 512 numbers: for each of 5 groups of 10 buckets in a row, one chance per potion id of being gone after a win that ends in the group. Only the potions held are read.',
+            '和结局并列，读同样的 512 个数：50 个桶每 10 个一组，共 5 组，每组每个药水 id 一个机率，表示在这一组结束的胜利之后它已不在。只读现在持有的药水。',
+            '和結局並列，讀同樣的 512 個數：50 個桶每 10 個一組，共 5 組，每組每個藥水 id 一個機率，表示在這一組結束的勝利之後它已不在。只讀現在持有的藥水。',
           ),
         ),
       },
     ],
-    output: L(w('outcome: 51 chances · potion_used: 66 chances\n→ priced into the leaf’s value', 'outcome：51 个机率 · potion_used：66 个机率\n→ 定价成叶子估值', 'outcome：51 個機率 · potion_used：66 個機率\n→ 定價成葉節點估值')),
+    output: L(w('outcome: 51 chances · potion_used: 5 × 66 chances\n→ priced into the leaf’s value', 'outcome：51 个机率 · potion_used：5 × 66 个机率\n→ 定价成叶子估值', 'outcome：51 個機率 · potion_used：5 × 66 個機率\n→ 定價成葉節點估值')),
     links: [],
   };
 }

@@ -94,30 +94,31 @@ flowchart LR
 
 网络文件是 JSON：base64 编码的 ONNX 计算图，加上 C# 喂给它所需的东西，以及加载时要核对的测试输入和训练器的输出。网络只在 Python 里定义一次；C# 只负责把一局或一个回合开始局面变成计算图的输入（[§8](#sec-8)）。
 
-**V 的文件**（`learn/v/export.py:41-61`）：
+**V 的文件**（`learn/v/export.py:44-64`）：
 
 | 字段 | 内容 | C# 是否读取 |
 |---|---|---|
 | `name` | 网络的名字，和冠军显示的一样（`l0 NAME`） | 是 |
 | `floors` | 64 | 是 |
-| `vocab` | 每张表，这个游戏版本的每个 id（`learn/game_ids.py`），第 0 项是 `<unk>`：`cards`、`modifiers`、`relics`、`potions`、`context`、`map` | 是 |
+| `vocab` | 每张表，这个游戏版本的每个 id（`learn/game_ids.py`），第 0 项是 `<unk>`：`cards`、`modifiers`、`relics`、`potions`、`context`、`map`、`relic_status` | 是 |
 | `state` | `names`（floor、hp、max_hp、gold、ascension、potion_slots）、`mean`、`std` | 是 |
 | `fit` | 训练报告（[§9](#sec-9)） | 否 |
-| `onnx` | 计算图：输入名照 `learn/v/encode.py` 的 `INPUTS`，批大小和长度维度不固定；输出 `hazards`（batch × 64）；opset 20 | 是 |
+| `onnx` | 计算图：输入名照 `learn/v/encode.py` 的 `INPUTS`，在 `state` 之后是遗物的 `relic_values` 和 `relic_status`，以及保留的牌的 `held` 和 `held_mask`，批大小和长度维度不固定；输出 `hazards`（batch × 64）；opset 20 | 是 |
 | `tests` | 按训练种子抽出的最多 8 个留出样本：`run`（整局观测）和 `value`（训练器在 CPU 上给的值） | 是 |
 
-**战斗网络的文件**（`learn/combat/export.py:72-105`）：
+**战斗网络的文件**（`learn/combat/export.py:72-106`）：
 
 | 字段 | 内容 | C# 是否读取 |
 |---|---|---|
 | `name` | 和冠军显示的一样（`pimc NAME`、`plan NAME`） | 是 |
 | `env` | 它学自哪个环境的对局，作为记录写入 | 否 |
 | `buckets`、`loss_min` | 从 −0.25 起的 50 个分桶：网络预测什么 | 是 |
+| `potion_groups` | 5：分桶每相邻 10 个为一组，药水的概率按组给出 | 是 |
 | `lags` | 之前 3 个回合的意图 | 是 |
 | `vocab` | 每张表，这个游戏版本的每个 id：`cards`、`modifiers`、`powers`、`enemies`、`intents`、`relics`、`potions`、`context`、`orbs`、`allies`、`relic_status`；`context` 只含遭遇 | 是 |
 | `fit` | 训练报告 | 否 |
-| `onnx` | 输入名照 `learn/combat/encode.py` 的 `INPUTS`；输出 `outcome`（batch × 51，softmax，关闭的分桶为 0）和 `potion_used`（batch × 药水 id，sigmoid） | 是 |
-| `tests` | 最多 16 个留出的回合开始局面，其中有多段攻击、持有药水和低生命的状态：`obs`、`history`、`outcome`、`potion_used` | 是 |
+| `onnx` | 输入名照 `learn/combat/encode.py` 的 `INPUTS`；`extra` 有 4 个数；输出 `outcome`（batch × 51，softmax，关闭的分桶为 0）和 `potion_used`（batch × 5 组 × 药水 id，sigmoid） | 是 |
+| `tests` | 最多 16 个留出的回合开始局面，其中有多段攻击、持有药水和低生命的状态：`obs`、`history`、`outcome`、`potion_used`（5 × 66 个数，一组接一组） | 是 |
 
 图中逐个字段打开两个网络文件 v9-1.json 和 c9-1.json：大小、计算图的输入和输出及其形状、它的初始化器（权重张量，只列形状）和算子，以及训练报告。
 
@@ -127,9 +128,9 @@ flowchart LR
 
 - **用哪些网络**。`run --value FILE` 读 V 的网络文件（`RunNet.Read`）；`--value` 和 `--macro l0` 或 `--combat-net` 一起用，两者都需要它（`SimWorker/Commands/Args.cs:234`）。`run --combat-net FILE` 加载战斗网络（`CombatNet.Load`），即每个战斗搜索的叶子，它的结局由那个 V 定价：`--combat-net` 和 `--policy pimc` 或 `plan` 必须一起用（`:233`）。
 - **`IRunValue`**（`Brain/Macro/RunValue.cs`）是宏观大脑眼中的 V：一个名字，以及对整局观测的估值。`RunNet` 实现了它。
-- **`RunNet`**（`Brain/Macro/RunNet.cs`）用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）运行计算图，intra-op 和 inter-op 各一个线程（`:49`），因为模拟器跑很多进程，而一个宏观决策只给少数几个小输入估值。它像 `learn/v/encode.py` 那样从整局观测构建输入。未知的 id 读作第 0 项。`Value` 是从这一局当前的层起每一层都活下来的机会（`:75-82`）。
-- **`CombatNet`**（`Brain/Combat/CombatNet.cs`）对状态做同样的事，也是一个线程。`Graph` 从 `Cards`、`Player`、`Enemies`、`PowerNumbers`、`RelicNumbers`、`Allies`、`Bag` 和 `Powers` 构建输入，与 `learn/combat/encode.py` 读状态的方式相同，并返回两个输出；`Outcome` 按每个结局会留下的那局游戏用 V 给它定价，死亡为 0（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
-- **加载检查**。`RunNet.Load` 给每个测试对局估值，任何一个值的偏差超过 10⁻³ × |value| 和 10⁻⁶ 中较大的那个，就拒绝这个文件（`:59-73`）；`CombatNet.Load` 预测每个测试状态，任何一个类别或药水概率的偏差超过 10⁻³，或某个输出的长度不同，就拒绝它。这保证训练和对局时的编码与前向计算一致。
+- **`RunNet`**（`Brain/Macro/RunNet.cs`）用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）运行计算图，intra-op 和 inter-op 各一个线程（`:53-54`），因为模拟器跑很多进程，而一个宏观决策只给少数几个小输入估值。它像 `learn/v/encode.py` 那样从整局观测构建输入，遗物的数值和状态由两个网络共用的 `CombatNet.RelicInputs` 构建。未知的 id 读作第 0 项。`Value` 是从这一局当前的层起每一层都活下来的机会（`:80-87`）。
+- **`CombatNet`**（`Brain/Combat/CombatNet.cs`）对状态做同样的事，也是一个线程。`Graph` 从 `Cards`、`Player`、`Enemies`、`PowerNumbers`、`RelicNumbers`、`Allies`、`Bag` 和 `Powers` 构建输入，与 `learn/combat/encode.py` 读状态的方式相同，并返回两个输出；`Outcome` 按每个结局会留下的那局游戏用 V 给它定价，死亡为 0，每瓶持有的药水按它在结局分桶所在那一组的概率保留（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
+- **加载检查**。`RunNet.Load` 给每个测试对局估值，任何一个值的偏差超过 10⁻³ × |value| 和 10⁻⁶ 中较大的那个，就拒绝这个文件（`:64-78`）；`CombatNet.Load` 预测每个测试状态，任何一个类别或药水概率的偏差超过 10⁻³，或某个输出的长度不同，就拒绝它。这保证训练和对局时的编码与前向计算一致。
 - **开销**。一个结构相同的较早的 V 每次调用 0.093 ms，而一个用克隆的宏观决策要 70–90 ms（提交 `b0ec4b7`）。
 
 ## 9. 脚本
@@ -156,9 +157,9 @@ flowchart LR
 | `--init` | – | 接着训练的网络文件：沿用它的状态缩放和权重，第二个输出头重新开始 |
 | `--seed` | 0 | torch 和 Python 的种子；也决定那 8 个测试对局 |
 
-**拒绝的情况**（`:69-70`、`:80-81`）：训练或留出样本太少；`--init` 的表与游戏的不同，或缺少网络的某个权重、形状不对（`export.weights`，`learn/v/export.py:91-92`）。
+**拒绝的情况**（`:69-70`、`:80-81`）：训练或留出样本太少；`--init` 的表与游戏的不同，或缺少网络的某个权重、形状不对（`export.weights`，`learn/v/export.py:97-98`）。
 
-**常量**（`:39-43`）：64 层；最多 40 轮，连续 5 轮留出损失没有降低 10⁻⁴ 以上就停；每批 256 个决策；AdamW，学习率 3 × 10⁻⁵，权重衰减 10⁻⁴；第二个输出头权重 3。网络的大小是 `Net` 的：嵌入 64，单牌网络 256，主干 512（`learn/v/net.py:74-91`）。
+**常量**（`:39-43`）：64 层；最多 40 轮，连续 5 轮留出损失没有降低 10⁻⁴ 以上就停；每批 256 个决策；AdamW，学习率 3 × 10⁻⁵，权重衰减 10⁻⁴；第二个输出头权重 3。网络的大小是 `Net` 的：嵌入 64，单牌网络 256，主干 512（`learn/v/net.py:86-111`）。
 
 **流程**。读取样本；按对局 id 划分；取游戏的表（`learn/game_ids.py`），并算出状态的加权均值和标准差（或取 `--init` 的）；基线风险值，即每一层的 $(\text{deaths} + 0.5)/(\text{alive} + 1)$，限制在 $[10^{-4}, 1 - 10^{-4}]$ 内，作为输出头的偏置；训练；保留留出风险值损失最好的那一轮。第二个输出头的接下来战斗项每轮都记日志，但不加进去（`:145-148`）。模块的 docstring 说提前停止对各项的加权「与损失相同」；代码并没有加这一项。然后是报告和文件。
 
@@ -197,22 +198,22 @@ flowchart LR
 
 ## 11. 测试
 
-**Python**（在 `learn/` 里 `uv run pytest`，7 个文件共 55 个测试；`uv run ruff check`）：
+**Python**（在 `learn/` 里 `uv run pytest`，7 个文件共 59 个测试；`uv run ruff check`）：
 
 | 文件 | 测试数 | 内容 |
 |---|---|---|
 | `test_common.py` | 11 | `train_lists` 拒绝任一环境中评估作业的对局，接受自我对弈和分叉；`read_lines` 跳过空行和不完整的行、读每个文件、找到 needle、缺文件时报错；清单对按同样的顺序给出日志和记录；`runs_by_log` 把每份日志和它自己的记录对上、每份日志一份记录文件、拒绝出现两次的对局 id，并读每个角色的对局 |
 | `test_weights.py` | 3 | 默认路径在 `weights/all/` 里；那里的文件从不替换；别处的显式路径可以替换 |
-| `test_v_encode.py` | 7 | 带前方层数的可达地图，选路时要进入的点（只在那时读入），在任何访问之前和在 Boss 处；只有 id；牌的关键词和 Tinker Time 把它做成了什么；状态的顺序 |
-| `test_v_train.py` | 10 | 样本和每局权重；输掉的对局里没有结束记录的最后一场战斗，代价是当时剩下的生命值；风险值标签和删失；获胜机会；ONNX 与 torch 对比；读回网络文件的权重，第二个输出头重新开始；`--init` 沿用表和状态缩放，并拒绝其他的表；网络文件及其报告；选路的样本 |
+| `test_v_encode.py` | 9 | 带前方层数的可达地图，选路时要进入的点（只在那时读入），在任何访问之前和在 Boss 处；只有 id；遗物连同它的计数、状态和保留的牌，读法和战斗网络一样；牌的关键词和 Tinker Time 把它做成了什么；一局在牌上增长的数；状态的顺序 |
+| `test_v_train.py` | 11 | 样本和每局权重；输掉的对局里没有结束记录的最后一场战斗，代价是当时剩下的生命值；风险值标签和删失；获胜机会；ONNX 与 torch 对比；读回网络文件的权重，第二个输出头重新开始，导出时被合并成相同的权重也分开读回；`--init` 沿用表和状态缩放，并拒绝其他的表；网络文件及其报告；选路的样本 |
 | `test_game_ids.py` | 3 | 每张表以 `<unk>` 开头，每个 id 只出现一次，且按顺序；每个角色和网络读的东西都在；没有游戏的测试模型 |
-| `test_combat.py` | 17 | 卡牌词元：id、升级、牌堆、修饰词元、费用和数值；牌的关键词、Tinker、用掉的附魔和汇总的数值；能力被挪动的数值和偷走的牌、遗物的效果已用掉；玩家和每个敌人缩放后的原始状态；意图从最近的开始；结局的桶；战斗后从观测中消失的药水；生命值排除掉的分桶；牌的数值和修饰词元以及充能球的数值与顺序会改变输出；胜利后在持有药水上的药水损失；带历史的回合开始样本；拒绝另一个环境；ONNX 与 torch 对比；训练写出它所在环境的网络文件；读回 `c9-0.json` 的权重能给出它的测试状态；从网络文件接着训练并保留它（除非某一轮胜过它）；对局在第一个决策之前就死在其中的战斗 |
+| `test_combat.py` | 18 | 卡牌词元：id、升级、牌堆、修饰词元、费用和数值；牌的关键词、Tinker、用掉的附魔和汇总的数值；能力被挪动的数值和偷走的牌、遗物的效果已用掉；玩家和每个敌人缩放后的原始状态；意图从最近的开始；结局的桶；战斗后从观测中消失的药水；生命值排除掉的分桶；牌的数值和修饰词元以及充能球的数值与顺序会改变输出；胜利后在持有药水上的药水损失；一场胜利的药水概率取它那一组分桶的；带历史的回合开始样本；拒绝另一个环境；ONNX 与 torch 对比；训练写出它所在环境的网络文件；读回 `c9-0.json` 的权重能给出它的测试状态；从网络文件接着训练并保留它（除非某一轮胜过它）；对局在第一个决策之前就死在其中的战斗 |
 | `test_gate.py` | 4 | Boss、精英和死亡；按生命分的休息选择和商店购买；按生命分的怪物或休息；整局按胜局和层数配对、按胜局晋级 |
 
 **C#**（[模拟器：参考 §7](/arch/simulator/reference/#sec-7)），网络在训练和部署之间的一致性，用 `Sts2Ai.Tests/Fixtures/` 里的测试数据和这两个网络文件本身：
 
-- `RunNetTests`（4）：一个极小、未训练的网络（`pure-v-tiny-win.json`，风险值输出头的偏置降低 6），给三个真实的整局观测按训练器的获胜机会估值；`v9-0.json` 能加载，它的测试对局得到训练器给的估值；共用的测试地图上的地图词元；要进入的点只在选路时才读入。
-- `CombatNetTests`（6）：`c9-0.json` 能加载，它的 16 个测试状态读出来和训练器一样；一个极小、未训练的网络（`combat-tiny.json`），它的测试状态是真实的 SL 回合开始，带一个敌人四个回合的历史、一个盟友、同一 id 的两瓶药水、表外的一瓶药水、一个 5% 生命的状态、一次多段攻击、带伤害的牌，以及表内和表外、超过网络能分辨的位置的充能球，读出来和训练器一样；进行中的状态值它的结局所留下的那些局的 V；每瓶药水按它自己的概率保留；持有的生命值排除掉的分桶没有权重；赢下的战斗值它那局游戏的 V，输掉的为 0。
+- `RunNetTests`（4）：一个极小、未训练的网络（`pure-v-tiny-win.json`，风险值输出头的偏置降低 6），给三个真实的整局观测按训练器的获胜机会估值，其中一个带遗物的计数、一个状态、一件熔化的遗物和保留着牌的佩尔之牙；`v9-0.json` 能加载，它的测试对局得到训练器给的估值；共用的测试地图上的地图词元；要进入的点只在选路时才读入。
+- `CombatNetTests`（6）：`c9-0.json` 能加载，它的 16 个测试状态读出来和训练器一样；一个极小、未训练的网络（`combat-tiny.json`），它的测试状态是真实的 SL 回合开始，带一个敌人四个回合的历史、一个盟友、同一 id 的两瓶药水、表外的一瓶药水、一个 5% 生命的状态、一次多段攻击、带伤害的牌，以及表内和表外、超过网络能分辨的位置的充能球，读出来和训练器一样，每组分桶各有自己的药水概率；进行中的状态值它的结局所留下的那些局的 V；每瓶药水按它自己在分桶那一组的概率保留；持有的生命值排除掉的分桶没有权重；赢下的战斗值它那局游戏的 V，输掉的为 0。
 - 改动一个输入时，只要输出的变化小于容差，检查就会通过，所以每个新输入都在一个让每个输入都起作用的网络上再检查了一次（[战斗网络 §9](/arch/combat-brain/network/#sec-9)）。
 
 **规划** <Badge text="规划中" variant="caution" />：

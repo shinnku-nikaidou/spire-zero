@@ -10,7 +10,7 @@ The combat net reads the state of a fight at the start of a round and predicts h
 
 ## 1. The whole net
 
-Set encoders read the cards, the powers, the enemies and the allies; plain sums of learned vectors read the relics, the potions, the context and the orbs. Their outputs are joined into one vector of 1,291 numbers. A body of two layers turns it into 512 numbers, and two heads read those: the **endings** and the **potions**.
+Set encoders read the cards, the powers, the enemies and the allies; plain sums of learned vectors read the relics, the potions, the context and the orbs. Their outputs are joined into one vector of 1,292 numbers. A body of two layers turns it into 512 numbers, and two heads read those: the **endings** and the **potions**.
 
 One net plays every fight: all five characters, every ascension, both environments, with one set of weights (`weights/all/`). The character is one of the context tokens and the ascension one of the numbers, so the net can tell them apart where their fights differ. No input, head or layer exists for one character alone: what one character needs, such as the orbs or the stars, is part of the shared net and reads as empty for the others. SL and NoSL differ only in the search that calls the net, the SL planner or PIMC ([Environments](/en/arch/environments/)).
 
@@ -35,19 +35,19 @@ The shapes along the way, for one state in a batch of $B$, with $n$ cards, $q$ p
 | | summed | $B \times 256$ |
 | relics, potions, context, orbs | each a sum of vectors | $B \times 64$ each |
 | allies | through $\varphi$, summed | $B \times 128$ |
-| 3 numbers | the ascension, orb slots, gold | $B \times 3$ |
-| join | all of them | $B \times 1291$ |
+| 4 numbers | the ascension, orb slots, gold, potion slots | $B \times 4$ |
+| join | all of them | $B \times 1292$ |
 | body | two layers | $B \times 512$ |
 | endings head | a death and 50 buckets | $B \times 51$ |
-| potion head | one chance per potion id | $B \times 66$ |
+| potion head | one chance per potion id in each of 5 groups of buckets | $B \times 5 \times 66$ |
 
-The width of the last dimension of the potion head is the size of the potion table, 66.
+The potion head's last dimension is the size of the potion table, 66, and the one before it the 5 groups of buckets its chances are given for ([§7](#sec-7)).
 
 ## 2. What it reads
 
 **The rule: the state of the fight is in the input; what follows from an id is the net's to learn.** A card's printed numbers follow from its id and upgrade, so they are not read. What a fight gathers on a card is read, since no id says it: its current energy and star costs; its damage and block, which grow as a Claw's damage does with each Claw played; the number it calculates from the fight, such as Murder's; its replays; the damage its enchantment gathered, Momentum's; whether its enchantment's once-a-combat effect is spent; its keywords, also those an effect gave it for this turn only; and what Tinker Time made of a Mad Science. So are an orb's numbers, which change as the fight goes on, and its place in the queue. Nothing about how to play is written in: no card is called good, and no monster's move order is listed.
 
-Everything comes from the observation, what a player sees or remembers, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)), by `encode.tokens` (`learn/combat/encode.py:145-186`):
+Everything comes from the observation, what a player sees or remembers, plus the public record of the enemies' moves so far ([Prompts, moves and workers §2](/en/arch/combat-brain/shared/#sec-2)), by `encode.tokens` (`learn/combat/encode.py:150-191`):
 
 | input | what is read |
 |---|---|
@@ -60,9 +60,9 @@ Everything comes from the observation, what a player sees or remembers, plus the
 | orbs | id, passive, evoke, place in the queue |
 | allies | id, HP share, HP, max HP, block, powers |
 | context | the encounter, the character |
-| 3 numbers | the ascension, orb slots, gold |
+| 4 numbers | the ascension, orb slots, gold, potion slots |
 
-**Not read:** the numbers printed on cards and relics, the draw order, the cost a card goes back to once a temporary change ends, and what an enemy keeps to itself, its counters and the state of its moves. A card's damage and block are its own numbers, `vars.Damage` and `vars.Block`, before Strength and Dexterity; a number it calculates from the fight is `calc` ([Protocol: observation §7](/en/arch/protocol/observation/#sec-7)). The pile is read as a set, as a player sees it, even in SL.
+**Not read:** the numbers printed on cards and relics, the draw order, the cost a card goes back to once a temporary change ends, what an enemy keeps to itself (its counters and the state of its moves), and the cards a relic keeps out of the fight (Pael's Tooth's), which V reads when it prices the fight's endings ([The leaf §2](/en/arch/combat-brain/leaf/#sec-2)). A card's damage and block are its own numbers, `vars.Damage` and `vars.Block`, before Strength and Dexterity; a number it calculates from the fight is `calc` ([Protocol: observation §7](/en/arch/protocol/observation/#sec-7)). The pile is read as a set, as a player sees it, even in SL.
 
 **The context.** The tokens fed are `character:ID`, `encounter:ID`, `room:ID` and `act:N`. The table lists the characters and the encounters; the room and the act read as the unknown entry, since the encounter implies them.
 
@@ -88,7 +88,7 @@ Everything comes from the observation, what a player sees or remembers, plus the
 | an intent's damage per hit | / 10 |
 | an intent's total damage (damage × hits) | / 20 |
 | gold | / 100 |
-| the ascension, orb slots | / 10, not capped |
+| the ascension, orb slots, potion slots | / 10, not capped |
 
 A dead ally is left out: it comes back, if at all, with its HP made anew. Only an enemy that lies dead until it revives stays in the fight's list (the game removes the others at once), and it is read with its intents, since its revival is a move. An enemy without an id reads `<none>`, an ally without one, the player's, `<player>`.
 
@@ -117,11 +117,11 @@ A dead ally is left out: it comes back, if at all, with its HP made anew. Only a
 | `allies`, `ally_mask` | $B \times a$ | each ally's entry and mask |
 | `ally_scalars` | $B \times a \times 4$ | its numbers |
 | `ally_powers`, `ally_power_amounts`, `ally_power_mask` | $B \times a \times q$ | its powers |
-| `extra` | $B \times 3$ | the ascension, orb slots, gold |
+| `extra` | $B \times 4$ | the ascension, orb slots, gold, potion slots |
 
 ## 3. The cards
 
-A pile is a multiset: the order of its cards means nothing, and its size varies. So each card goes through the same small network on its own, and the results are added up, a Deep Set (Zaheer et al., 2017). A sum reads any number of cards in any order. All the encoders below are `Net.encode` (`learn/combat/net.py:229-308`).
+A pile is a multiset: the order of its cards means nothing, and its size varies. So each card goes through the same small network on its own, and the results are added up, a Deep Set (Zaheer et al., 2017). A sum reads any number of cards in any order. All the encoders below are `Net.encode` (`learn/combat/net.py:231-310`).
 
 **The card's vector.** A card with id $c$, upgrade level $u$, energy cost $k$, star cost $k^\star$, damage $v$, block $b$, calculated number $z$, replays $r$, gathered damage $j$, pile $l$ and modifier tokens $m$ with amounts $a_m$ becomes 64 numbers:
 
@@ -192,7 +192,7 @@ $O_g$ and $O_h$ hold a direction per orb id. $O_j$ holds a vector per place and 
 **The join.** All parts are concatenated:
 
 $$
-\underbrace{512}_{\text{cards}} + \underbrace{8}_{\text{player}} + \underbrace{128}_{\text{powers}} + \underbrace{256}_{\text{enemies}} + \underbrace{4 \times 64}_{\text{bags}} + \underbrace{128}_{\text{allies}} + \underbrace{3}_{\text{numbers}} = 1291.
+\underbrace{512}_{\text{cards}} + \underbrace{8}_{\text{player}} + \underbrace{128}_{\text{powers}} + \underbrace{256}_{\text{enemies}} + \underbrace{4 \times 64}_{\text{bags}} + \underbrace{128}_{\text{allies}} + \underbrace{4}_{\text{numbers}} = 1292.
 $$
 
 ## 7. The body and the two heads
@@ -207,13 +207,13 @@ $$
 l < s \quad\text{and}\quad l + 0.025 > s - 1.
 $$
 
-Every other bucket has its logit set to $-10^4$, which leaves it exactly 0 after the softmax (`Net.reachable`, `learn/combat/net.py:221-227`). The rule is inside the graph, so C# holds none of it. A softmax over the open classes then gives the 51 chances, the graph's output `outcome`.
+Every other bucket has its logit set to $-10^4$, which leaves it exactly 0 after the softmax (`Net.reachable`, `learn/combat/net.py:223-229`). The rule is inside the graph, so C# holds none of it. A softmax over the open classes then gives the 51 chances, the graph's output `outcome`.
 
 **Why "still to be lost" and not "left at the end".** The value is formed as *what the state holds, exactly, plus what the net says is still to come* ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)). So the HP held now counts in full, and two states of a beam differ by their true HP before the net says anything. Every head follows this rule: it predicts a change from the state, and what the state holds counts in full.
 
-**The potion head** is one linear layer of 512 → 66 with a sigmoid, the graph's output `potion_used`: one chance per entry of the potion table of being gone by the end of a won fight. Training and the value read only the held potions, by their table entries. Two copies of an id read the same chance; their labels (one gone, one left) train it toward 0.5, whose sum is right.
+**The potion head** is one linear layer of 512 → 5 × 66 = 330 with a sigmoid, the graph's output `potion_used`, of shape $B \times 5 \times 66$. Its 5 **groups** are the buckets taken 10 in a row: buckets 1 to 10, 11 to 20, and so on to 41 to 50 (`POTION_GROUPS`, `potion_group`, `learn/combat/data.py:25-30`). For each group it gives one chance per entry of the potion table of being gone by the end of a won fight that ends in one of the group's buckets. A win that costs little HP and one that costs much can so drink different potions, and the leaf weighs the HP lost and the potions drunk together ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)). Training reads the group the win really ended in, the leaf each bucket's own group; both read only the held potions, by their table entries. Two copies of an id read the same chance; their labels (one gone, one left) train it toward 0.5, whose sum is right.
 
-The potion head has a fixed width and no new dynamic axis, and it shares only the body with the endings. It is a small part of the loss ([Training the combat net §4](/en/arch/learning/combat-net/#sec-4)).
+The potion head has a fixed shape and no new dynamic axis, and it shares only the body with the endings. It is a small part of the loss ([Training the combat net §4](/en/arch/learning/combat-net/#sec-4)).
 
 ## 8. Sizes
 
@@ -234,22 +234,22 @@ The file is `weights/all/c9-1.json`.
 | power $\varphi$ | 64 → 128 | 8,320 |
 | enemy numbers, enemy $\varphi$ | 5 → 64; 448 → 256 → 256 | 181,120 |
 | ally numbers, ally $\varphi$ | 4 → 64; 192 → 128 | 25,024 |
-| body | 1291 → 512 → 512 | 924,160 |
+| body | 1292 → 512 → 512 | 924,672 |
 | endings head | 512 → 51 | 26,163 |
-| potion head | 512 → 66 | 33,858 |
-| **total** | | **1,602,869** |
+| potion head | 512 → 5 × 66 | 169,290 |
+| **total** | | **1,738,813** |
 
 The token tables are fixed, so these sizes depend only on the game build.
 
-**What this file holds.** Its weights have learned from the fights of all five characters at ascension 0, going on from weights that had learned from the Silent's fights at ascension 10 in the first half of every width. The second half has learned with the rest and is read, but for a few units of the allies: 22 of the ally layer's 192 inputs and 4 of the allies' 128 numbers at the body are still read by zeros, all in their second halves. The parts the Silent's fights never fed start at zero in their first half, and have moved off it where the five characters' fights hold them: $D_c$ for 180 of its 597 rows, $R$ for 155, $B$ for 69 and $Z$ for 38; $X$ for 8 of its 266 rows; $K^\star$ and $J$; and the keyword, Tinker and `spent` tokens, all but `keyword:None` and the Tinker tokens None, Curse, Quest and Status. Each character's context row is its own, so the net tells the five characters apart, and the status `Spent` reads apart from `Normal`. $O_g$ and $O_h$ have moved off zero for all five orb ids, and $O_j$ for 35 of its 60 rows, every orb in the queue's first five places and some in the sixth to ninth; its other rows are still zero in their first half. An id that no training held, such as `BEACON_OF_HOPE`, has the first half of `<unk>`'s row, and small random numbers of its own in the second.
+**What this file holds.** Its weights have learned from the fights of all five characters at ascension 0, going on from weights that had learned from the Silent's fights at ascension 10 in the first half of every width. The second half has learned with the rest and is read, but for a few units of the allies: 22 of the ally layer's 192 inputs and 4 of the allies' 128 numbers at the body are still read by zeros, all in their second halves. The parts the Silent's fights never fed start at zero in their first half, and have moved off it where the five characters' fights hold them: $D_c$ for 180 of its 597 rows, $R$ for 155, $B$ for 69 and $Z$ for 38; $X$ for 8 of its 266 rows; $K^\star$ and $J$; and the keyword, Tinker and `spent` tokens, all but `keyword:None` and the Tinker tokens None, Curse, Quest and Status. Each character's context row is its own, so the net tells the five characters apart, and the status `Spent` reads apart from `Normal`. $O_g$ and $O_h$ have moved off zero for all five orb ids, and $O_j$ for 35 of its 60 rows, every orb in the queue's first five places and some in the sixth to ninth; its other rows are still zero in their first half. An id that no training held, such as `BEACON_OF_HOPE`, has the first half of `<unk>`'s row, and small random numbers of its own in the second. The body reads the potion slots through a column of zeros, and the potion head's five groups hold the same weights, so the potion slots move nothing and every group gives a potion the same chance.
 
 ## 9. One forward pass, two implementations
 
 The trainer computes the net in PyTorch; the brain runs it in C#. They must agree, and they do so through the net file ([Learning: reference §7](/en/arch/learning/reference/#sec-7)):
 
-- **Export.** `learn/combat/export.py` (`net_file`, `:72-105`) writes the net as an ONNX graph inside the file, with the mask, the softmax and the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, the buckets, the training report and 16 held-out round starts with the outputs the trainer gave them, among them an attack of several hits, a held potion and low HP.
-- **Inference.** `CombatNet` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) follows `encode.py`: `Graph` (`:90-120`) builds the same tensors, and ONNX Runtime runs the graph.
-- **The check.** `CombatNet.Load` (`:55-72`) refuses the file unless it gives the 16 states the trainer's outputs to within $10^{-3}$. A difference in how either side reads a state stops the file from loading.
+- **Export.** `learn/combat/export.py` (`net_file`, `:72-106`) writes the net as an ONNX graph inside the file, with the mask, the softmax and the sigmoid included, the inputs named as in [§2](#sec-2) and every length left free. Next to it are the token tables, the buckets and their groups, the training report and 16 held-out round starts with the outputs the trainer gave them, among them an attack of several hits, a held potion and low HP.
+- **Inference.** `CombatNet` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) follows `encode.py`: `Graph` (`:144-175`) builds the same tensors, and ONNX Runtime runs the graph.
+- **The check.** `CombatNet.Load` (`:69-86`) refuses the file unless it gives the 16 states the trainer's outputs to within $10^{-3}$. A difference in how either side reads a state stops the file from loading.
 
 ## 10. What the structure cannot express
 

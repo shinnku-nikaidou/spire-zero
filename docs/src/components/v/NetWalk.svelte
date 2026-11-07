@@ -19,15 +19,17 @@
     {
       title: w('Tokens', '词元', '詞元'),
       text: w(
-        'Ids, and three numbers a card can grow, its enchantment’s and affliction’s amounts, damage and block, each read through rows of its own; a card’s cost is gone. No card here has an enchantment or affliction. The map is 10 tokens; repeats stay.',
-        'id，加上牌会成长的三个数字：附魔和诅咒的数值、伤害和格挡，各由自己的那一行读取；牌的费用不读。这里没有牌带附魔或诅咒。地图有 10 个词元，重复的也保留。',
-        'id，加上牌會成長的三個數字：附魔和詛咒的數值、傷害和格擋，各由自己的那一列讀取；牌的費用不讀。這裡沒有牌帶附魔或詛咒。地圖有 10 個詞元，重複的也保留。',
+        'Ids, and three numbers a card can grow, its enchantment’s and affliction’s amounts, damage and block, each read through rows of its own; each relic’s counter, melted flag and status; a card’s cost is gone. No card here has an enchantment or affliction. The map is 10 tokens; repeats stay.',
+        'id，加上牌会成长的三个数字：附魔和诅咒的数值、伤害和格挡，各由自己的那一行读取；每件遗物的计数、熔化标记和状态；牌的费用不读。这里没有牌带附魔或诅咒。地图有 10 个词元，重复的也保留。',
+        'id，加上牌會成長的三個數字：附魔和詛咒的數值、傷害和格擋，各由自己的那一列讀取；每件遺物的計數、熔化標記和狀態；牌的費用不讀。這裡沒有牌帶附魔或詛咒。地圖有 10 個詞元，重複的也保留。',
       ),
       rows: [
         ['cards', 'DEFEND_DEFECT+ ×2, NULL+ ×2, UPROAR ×2, BEAM_CELL+, BULK_UP, CHARGE_BATTERY, CHILL+, CLAW, CLUMSY (Ethereal, Unplayable), DARKNESS+, DEFEND_DEFECT, DUALCAST, FINESSE+, FOLLY (Eternal, Ethereal, Innate, Unplayable), MOMENTUM_STRIKE, MOMENTUM_STRIKE+, NULL, STRIKE_DEFECT, SUPERCRITICAL (Exhaust)'],
         ['damage ÷ 20', 'BEAM_CELL+ 0.20, CLAW 0.15, MOMENTUM_STRIKE 0.55, MOMENTUM_STRIKE+ 0.75, NULL 0.50, NULL+ 0.65 ×2, STRIKE_DEFECT 0.30, UPROAR 0.30 ×2'],
         ['block ÷ 20', 'CHARGE_BATTERY 0.35, DEFEND_DEFECT 0.25, DEFEND_DEFECT+ 0.40 ×2, FINESSE+ 0.35'],
         ['relics', 'CRACKED_CORE, FISHING_ROD, RED_MASK, MINIATURE_CANNON, VERY_HOT_COCOA, GORGET, PRESERVED_FOG'],
+        ['relic counter ÷ 10', 'FISHING_ROD 0.20; every status Normal, none melted'],
+        ['kept cards', '–'],
         ['potions', '–'],
         ['context', 'character:DEFECT, act:GLORY, boss:AEONGLASS_BOSS, ancient:VAKUU'],
         ['map', 'Unknown+0, Elite+1, Monster+2, Monster+2, Elite+3, Unknown+3, Monster+3, RestSite+4, RestSite+4, Boss+5'],
@@ -69,7 +71,7 @@
     },
     {
       title: w('The bags', '四个袋', '四個袋'),
-      text: w('Each bag’s embeddings added up, 64 numbers each, with no layer in between. No potion: the zero vector.', '每个袋的嵌入直接相加，各 64 个数，中间没有任何一层。没有药水，就是零向量。', '每個袋的嵌入直接相加，各 64 個數，中間沒有任何一層。沒有藥水，就是零向量。'),
+      text: w('Each bag’s embeddings added up, 64 numbers each, with no layer in between; a relic’s with its counter’s, melted and status rows. No potion: the zero vector.', '每个袋的嵌入直接相加，各 64 个数，中间没有任何一层；遗物的还加上它的计数、熔化和状态那几行。没有药水，就是零向量。', '每個袋的嵌入直接相加，各 64 個數，中間沒有任何一層；遺物的還加上它的計數、熔化和狀態那幾列。沒有藥水，就是零向量。'),
       rows: [['relics', '[−0.261, 0.347, 0.341, 0.303, …] |2.30|'], ['potions', '[0, 0, 0, 0, …] |0|'], ['context', '[0.172, 0.260, −1.734, 0.047, …] |4.42|'], ['map', '[1.431, −0.289, −0.830, −1.145, …] |4.65|']],
     },
     {
@@ -79,8 +81,8 @@
     },
     {
       title: w('Join and body', '拼接与主干', '串接與主幹'),
-      text: w('512 + 4 × 64 + 6 = 774 numbers, then two ReLU layers. Here 356 of the first layer’s 512 numbers and 274 of the second’s are above 0.', '512 + 4 × 64 + 6 = 774 个数，再经过两层 ReLU。这里第一层 512 个数有 356 个大于 0，第二层有 274 个。', '512 + 4 × 64 + 6 = 774 個數，再經過兩層 ReLU。這裡第一層 512 個數有 356 個大於 0，第二層有 274 個。'),
-      rows: [['z', '774'], ['b₁', '512 (356 > 0)'], ['b₂', '512 (274 > 0)']],
+      text: w('512 + 4 × 64 + 6 + 256 = 1,030 numbers, the last 256 the cards the relics keep, none here: zeros. Then two ReLU layers. Here 356 of the first layer’s 512 numbers and 274 of the second’s are above 0.', '512 + 4 × 64 + 6 + 256 = 1,030 个数，最后 256 个是遗物保留的牌，这里没有，全是零。再经过两层 ReLU。这里第一层 512 个数有 356 个大于 0，第二层有 274 个。', '512 + 4 × 64 + 6 + 256 = 1,030 個數，最後 256 個是遺物保留的牌，這裡沒有，全是零。再經過兩層 ReLU。這裡第一層 512 個數有 356 個大於 0，第二層有 274 個。'),
+      rows: [['z', '1,030'], ['b₁', '512 (356 > 0)'], ['b₂', '512 (274 > 0)']],
     },
     {
       title: w('Hazards and the value', '风险值与价值', '風險值與價值'),

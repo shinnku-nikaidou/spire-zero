@@ -41,7 +41,7 @@ The question the search asks: if it stops here, what is this state worth?
 
 ## 2. Tokens
 
-`encode.tokens` (`learn/combat/encode.py:145-186`) throws away the screen and keeps ids and scaled numbers.
+`encode.tokens` (`learn/combat/encode.py:150-191`) throws away the screen and keeps ids and scaled numbers.
 
 **The player** is 8 numbers: <code>{v(walk.tokens.player.slice(0, 4))}</code> and so on. In full:
 
@@ -49,7 +49,7 @@ The question the search asks: if it stops here, what is this state worth?
 |---|---|---|---|---|---|---|---|
 | {walk.tokens.player[0]} | {walk.tokens.player[1]} | {walk.tokens.player[2]} | {walk.tokens.player[3]} | {walk.tokens.player[4]} | {walk.tokens.player[5]} | {walk.tokens.player[6]} | {walk.tokens.player[7]} |
 
-**The 3 numbers**: ascension / 10, orb slots / 10 and gold / 100 are {walk.tokens.extra.join(', ')}.
+**The 4 numbers**: ascension / 10, orb slots / 10, gold / 100 and potion slots / 10 are {walk.tokens.extra.join(', ')}.
 
 **The enemies** have 5 numbers each: HP share, HP / 100, max HP / 100, block / 20, and rounds shown / 10, here 1 round. Their four intent slots come from the screen and from the record of their earlier moves. In round 2 each enemy has shown one round, so only slots 0 and 1 hold an intent, one each; slots 2 and 3 are empty. An intent reads as its type, its damage per hit / 10 and its total damage / 20:
 
@@ -86,7 +86,7 @@ The tensors have these shapes for this state, with a batch of 1:
 
 ## 4. One card, then the piles
 
-The card's vector is the first lines of `Net.encode` (`learn/combat/net.py:229-308`). Take **{walk.card.id}** in the hand. Its entry in the card table is {walk.card.entry}, its upgrade level {walk.card.up}; it costs 1, which reads as {walk.card.cost}, and its damage of 6 reads as {walk.card.damage}. Its other numbers (block, calculated number, replays, star cost, gathered damage) are 0, and it has no modifiers, so only these parts are left:
+The card's vector is the first lines of `Net.encode` (`learn/combat/net.py:231-310`). Take **{walk.card.id}** in the hand. Its entry in the card table is {walk.card.entry}, its upgrade level {walk.card.up}; it costs 1, which reads as {walk.card.cost}, and its damage of 6 reads as {walk.card.damage}. Its other numbers (block, calculated number, replays, star cost, gathered damage) are 0, and it has no modifiers, so only these parts are left:
 
 | part | vector |
 |---|---|
@@ -156,7 +156,7 @@ A bag has no layer, so its numbers can be below 0. With one potion, the potions'
 | context | {walk.join[6].size} | <code>{v(walk.join[6].first)}</code> |
 | orbs | {walk.join[7].size} | <code>{v(walk.join[7].first)}</code> |
 | allies | {walk.join[8].size} | <code>{v(walk.join[8].first)}</code> |
-| 3 numbers | {walk.join[9].size} | <code>{v(walk.join[9].first)}</code> |
+| 4 numbers | {walk.join[9].size} | <code>{v(walk.join[9].first)}</code> |
 
 One vector of {walk.z.size} numbers, {walk.z.zeros} of them 0. Up to here no part has seen another: the cards know nothing of the enemies, and the enemies nothing of the HP.
 
@@ -166,7 +166,7 @@ Two layers, and everything meets for the first time:
 
 | layer | first numbers | length | numbers at 0 |
 |---|---|---|---|
-| 1291 → 512 | <code>{v(walk.body[0].first)}</code> | {walk.body[0].norm} | {walk.body[0].zeros} |
+| 1292 → 512 | <code>{v(walk.body[0].first)}</code> | {walk.body[0].norm} | {walk.body[0].zeros} |
 | 512 → 512 | <code>{v(walk.body[1].first)}</code> | {walk.body[1].norm} | {walk.body[1].zeros} |
 
 Most of the 512 numbers are 0 for this state; the {512 - walk.body[1].zeros} that are not carry everything the heads will read.
@@ -182,7 +182,7 @@ The HP share is {walk.ended.share}. A bucket $[l, l + 0.025)$ stays open if $l <
 - The bottom: a fight cannot heal more than the HP missing. {walk.state.max_hp - walk.state.hp} of {walk.state.max_hp} HP is a share of 0.161, so the 3 buckets below {walk.head.open_from} are closed.
 - The top: a win cannot lose all the HP held, so the buckets from {walk.head.open_to} up are closed.
 
-That leaves **{walk.head.open} of the 50 buckets open**. The others get a logit of $-10^4$ (`Net.reachable`, `learn/combat/net.py:221-227`), and the softmax gives them exactly 0.
+That leaves **{walk.head.open} of the 50 buckets open**. The others get a logit of $-10^4$ (`Net.reachable`, `learn/combat/net.py:223-229`), and the softmax gives them exactly 0.
 
 The softmax over the rest gives the chances. A death has {walk.head.death}. The most likely buckets, where a share below 0 is HP gained:
 
@@ -197,27 +197,29 @@ The net expects this fight to be won and to end with more HP than now: almost tw
 
 ## 12. The potion head
 
-The same 512 numbers go through a second linear layer, of 512 → {walk.potion.outputs}, one output per entry of the potion table. Fairy in a Bottle is entry {walk.potion.entry}. Its logit is {walk.potion.logit}, and the sigmoid makes that **{walk.potion.chance}** to four places, about 2.5 in a million: the net expects the potion to be still held after a win. The player never drinks this potion; the game uses it on its own when the player would die, and brings the player back with 30 % of max HP.
+The same 512 numbers go through a second linear layer, of 512 → {walk.potion.groups} × {walk.potion.outputs}: for each of {walk.potion.groups} groups of {walk.potion.per_group} buckets in a row, one output per entry of the potion table ([The combat net §7](/en/arch/combat-brain/network/#sec-7)). The likeliest win, a share of {walk.head.tops[0].low} to {walk.head.tops[0].high} still to be lost, is bucket {walk.head.tops[0].bucket}, in group {walk.potion.group + 1}, buckets {walk.potion.group * walk.potion.per_group + 1} to {(walk.potion.group + 1) * walk.potion.per_group}; the chances here are that group's. Fairy in a Bottle is entry {walk.potion.entry}. Its logit is {walk.potion.logit}, and the sigmoid makes that **{walk.potion.chance}** to four places, about 2.5 in a million: the net expects the potion to be still held after a win. In this file the five groups hold the same weights ([The combat net §8](/en/arch/combat-brain/network/#sec-8)), so every group gives it the same chance. The player never drinks this potion; the game uses it on its own when the player would die, and brings the player back with 30 % of max HP.
 
-The other {walk.potion.outputs - 1} outputs are computed and not read. The largest here are {walk.potion.most_likely[0].id} and {walk.potion.most_likely[1].id}, at {walk.potion.most_likely[0].chance} and {walk.potion.most_likely[1].chance}: this state holds neither, so they mean nothing and train nothing. A potion that no training held, such as {walk.potion.unheld}, has `<unk>`'s row and shows its chance, {walk.potion.unk}.
+Of each group's {walk.potion.outputs} outputs only the held potion's is read; the other {walk.potion.outputs - 1} are computed and not read. The largest of them here are {walk.potion.most_likely[0].id} and {walk.potion.most_likely[1].id}, at {walk.potion.most_likely[0].chance} and {walk.potion.most_likely[1].chance}: this state holds neither, so they mean nothing and train nothing. A potion that no training held, such as {walk.potion.unheld}, has `<unk>`'s row and shows its chance, {walk.potion.unk}.
 
 ## 13. The number the search reads
 
 The search does not read the 51 chances or the potion's: it reads one number, the leaf value ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)). `CombatNet.Outcome` (`src/Sts2Ai.Brain/Combat/CombatNet.cs`) makes it by pricing every ending the net still allows with V, the macro brain's chance to win the run, on the run that ending would leave:
 
 $$
-\text{value} = \sum_{k=1}^{50} p_k \sum_{S \subseteq H} \Big(\prod_{i \in S} (1 - u_i) \prod_{i \in H \setminus S} u_i\Big)\, V\big(\text{the run at } h_k \text{ HP, holding } S\big)
+\text{value} = \sum_{k=1}^{50} p_k \sum_{S \subseteq H} \Big(\prod_{i \in S} (1 - u_{i,g(k)}) \prod_{i \in H \setminus S} u_{i,g(k)}\Big)\, V\big(\text{the run at } h_k \text{ HP, holding } S\big)
 $$
 
-Here $H$ is the potions held, $u_i$ the potion head's chance that potion $i$ is gone after a win, and $h_k$ the HP the player holds after bucket $k$: the HP share now less the bucket's middle, times max HP, kept between 1 and max HP.
+Here $H$ is the potions held, $u_{i,g}$ the potion head's chance that potion $i$ is gone after a win ending in group $g$, $g(k) = \lceil k/10 \rceil$ the group of bucket $k$, and $h_k$ the HP the player holds after bucket $k$: the HP share now less the bucket's middle, times max HP, kept between 1 and max HP.
 
-For this state, $H$ is Fairy in a Bottle alone, so each open bucket gives two runs: with the potion, at a chance of $1 - u$, all but about 2.5 in a million ([§12](#sec-12)), and without it. The {walk.head.open} open buckets make {2 * walk.head.open} runs for V, and a closed bucket, whose chance is exactly 0, makes none. The rest of each run is the run around the fight as it stands: the deck, the relics, max HP, gold, the map ahead. The file's test states hold a round start and no run, so this page cannot give V's numbers or the value; what the same call returns beside the value does not need them ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)):
+For this state, $H$ is Fairy in a Bottle alone, so each open bucket gives two runs: with the potion, at a chance of $1 - u_{i,g(k)}$, all but about 2.5 in a million in every group ([§12](#sec-12)), and without it. The {walk.head.open} open buckets make {2 * walk.head.open} runs for V, and a closed bucket, whose chance is exactly 0, makes none. The rest of each run is the run around the fight as it stands: the deck, the relics, max HP, gold, the map ahead. The file's test states hold a round start and no run, so this page cannot give V's numbers or the value; what the same call returns beside the value does not need them ([The leaf §5](/en/arch/combat-brain/leaf/#sec-5)):
 
 | | number |
 |---|---|
 | chance to win, $1 - p_0$ | {walk.ended.win} |
 | HP held at a win, averaged over the win buckets | {walk.ended.hp_at_win} of {walk.state.max_hp} |
-| potions expected to be kept, $\sum (1 - u)$ | {walk.ended.kept} |
+| potions expected to be kept at a win, $\sum_{i \in H} (1 - \bar u_i)$ | {walk.ended.kept} |
+
+Here $\bar u_i = \sum_{k=1}^{50} p_k\, u_{i,g(k)} / (1 - p_0)$, potion $i$'s chance of being gone at a win, each bucket's group's chance weighted by the bucket's.
 
 So V is asked about runs that leave this fight at around 83 HP of 93, still holding the potion, and the value is close to V of that run. Whether that is worth more than another state's ending is V's to say, from everything it reads of the run.
 
@@ -257,7 +259,7 @@ In the boss fight against The Kin the net expects a win to cost 0.55 of max HP, 
 So far the net has predicted. In training this state also has an answer, from how its fight really ended. The file does not keep that ending, so take one for illustration: **suppose the fight is won at {walk.label.end_hp} of 93 HP, with the potion still held**.
 
 - **The ending's class.** The share lost from this state is 78/93 − {walk.label.end_hp}/93 = {walk.label.lost}, in the bucket from {walk.label.low} to {walk.label.high}: class {walk.label.class}. Every round start of that fight would get its own class, from its own HP.
-- **The potion's label.** It is still in the first run view after the fight, so its label is 0.
-- **The loss.** The chance of class {walk.label.class} was {walk.label.chance}, so the endings' cross-entropy is {walk.label.ending_loss}. The potion's is {walk.label.potion_loss}. The sample's loss is their sum, and a gradient step would push that bucket's chance up.
+- **The potion's label.** It is still in the first run view after the fight, so its label is 0. Class {walk.label.class} is in group {Math.floor((walk.label.class - 1) / walk.potion.per_group) + 1}, so the label trains that group's chance alone.
+- **The loss.** The chance of class {walk.label.class} was {walk.label.chance}, so the endings' cross-entropy is {walk.label.ending_loss}. The potion's, by that group's chance, is {walk.label.potion_loss}. The sample's loss is their sum, and a gradient step would push that bucket's chance up.
 
 A large loss like the ending's is what a surprise looks like: under this supposed ending, the net was badly wrong about the HP, and not about the potion. How labels are made across a whole list of runs is in [Training the combat net §3](/en/arch/learning/combat-net/#sec-3).

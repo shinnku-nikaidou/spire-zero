@@ -167,7 +167,7 @@ It covers every decision outside combat: a card reward's outcome among its cards
 
 The only reward is the run's outcome. The hard part is not a missing signal but *credit assignment* (which of a run's many decisions caused the win or the loss) and *variance* (the luck that hides the effect of any one decision). The design attacks both:
 
-1. **The hierarchy shortens the chain.** Combat is solved by search, and the combat net learns how fights end, so run-level credit only spans the macro decisions plus the combat results. Combat and macro keep their own units: the leaf prices HP and potions by hand-set numbers ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)), and V learns what they mean for the run.
+1. **The hierarchy shortens the chain.** Combat is solved by search, and the combat net learns how fights end, so run-level credit only spans the macro decisions plus the combat results. Combat and macro share one unit: the leaf prices each ending of a fight, its HP and the potions it keeps, by V on the run it leaves ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)), so what a fight costs is what V learned it means for the run.
 2. **TD(λ)** <Badge text="planned" variant="caution" /> gives a learning signal at every transition ([§4](#sec-4)).
 3. **Auxiliary reward terms must be potential-based** <Badge text="planned" variant="caution" /> ([§11](#sec-11)).
 4. **Auxiliary heads** give dense supervision, for the representation only: built, the second head ([Macro brain: from hazards to value §4](/en/arch/macro-brain/value/#sec-4)).

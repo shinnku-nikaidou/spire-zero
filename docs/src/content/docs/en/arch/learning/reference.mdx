@@ -94,30 +94,31 @@ The combat net and V are each one net for every character, every ascension and b
 
 A net file is JSON: the graph as base64 ONNX, plus what C# needs to feed it, and test inputs with the trainer's outputs that loading checks. A net is defined once, in Python; C# only turns a run or a round start into the graph's inputs ([§8](#sec-8)).
 
-**V's file** (`learn/v/export.py:41-61`):
+**V's file** (`learn/v/export.py:44-64`):
 
 | field | content | read by C# |
 |---|---|---|
 | `name` | the net's name, as the champion shows it (`l0 NAME`) | yes |
 | `floors` | 64 | yes |
-| `vocab` | per table, every id of the game build (`learn/game_ids.py`), entry 0 `<unk>`: `cards`, `modifiers`, `relics`, `potions`, `context`, `map` | yes |
+| `vocab` | per table, every id of the game build (`learn/game_ids.py`), entry 0 `<unk>`: `cards`, `modifiers`, `relics`, `potions`, `context`, `map`, `relic_status` | yes |
 | `state` | `names` (floor, hp, max_hp, gold, ascension, potion_slots), `mean`, `std` | yes |
 | `fit` | the training report ([§9](#sec-9)) | no |
-| `onnx` | the graph: inputs as `learn/v/encode.py`'s `INPUTS` name them, with free batch and length dimensions; output `hazards` (batch × 64); opset 20 | yes |
+| `onnx` | the graph: inputs as `learn/v/encode.py`'s `INPUTS` name them, the relics' `relic_values` and `relic_status` and the kept cards' `held` and `held_mask` after `state`, with free batch and length dimensions; output `hazards` (batch × 64); opset 20 | yes |
 | `tests` | up to 8 held-out samples drawn by the training seed: `run` (the run view) and `value` (the trainer's value on the CPU) | yes |
 
-**The combat net's file** (`learn/combat/export.py:72-105`):
+**The combat net's file** (`learn/combat/export.py:72-106`):
 
 | field | content | read by C# |
 |---|---|---|
 | `name` | as the champion shows it (`pimc NAME`, `plan NAME`) | yes |
 | `env` | the environment whose games it learned from, written as a record | no |
 | `buckets`, `loss_min` | 50 buckets from −0.25: what the net predicts | yes |
+| `potion_groups` | 5: the groups of buckets, 10 in a row, the potion chances are given for | yes |
 | `lags` | 3 earlier rounds of intents | yes |
 | `vocab` | per table, every id of the game build: `cards`, `modifiers`, `powers`, `enemies`, `intents`, `relics`, `potions`, `context`, `orbs`, `allies`, `relic_status`; `context` holds encounters only | yes |
 | `fit` | the training report | no |
-| `onnx` | inputs as `learn/combat/encode.py`'s `INPUTS` name them; outputs `outcome` (batch × 51, softmax, the closed buckets 0) and `potion_used` (batch × potion ids, sigmoid) | yes |
-| `tests` | up to 16 held-out round starts, among them a multi-hit attack, a held potion and low HP: `obs`, `history`, `outcome`, `potion_used` | yes |
+| `onnx` | inputs as `learn/combat/encode.py`'s `INPUTS` name them; `extra` of 4 numbers; outputs `outcome` (batch × 51, softmax, the closed buckets 0) and `potion_used` (batch × 5 groups × potion ids, sigmoid) | yes |
+| `tests` | up to 16 held-out round starts, among them a multi-hit attack, a held potion and low HP: `obs`, `history`, `outcome`, `potion_used` (5 × 66 numbers, group by group) | yes |
 
 The figure opens the two net files, v9-1.json and c9-1.json, field by field: sizes, the graph's inputs and outputs with their shapes, its initializers (the weight tensors, by shape only) and operators, and the training report.
 
@@ -127,9 +128,9 @@ The figure opens the two net files, v9-1.json and c9-1.json, field by field: siz
 
 - **Which nets.** `run --value FILE` reads V's net file (`RunNet.Read`); `--value` goes with `--macro l0` or `--combat-net`, which both need it (`SimWorker/Commands/Args.cs:234`). `run --combat-net FILE` loads the combat net (`CombatNet.Load`), the leaf of every combat search, its endings priced by that V: `--combat-net` and `--policy pimc` or `plan` go together (`:233`).
 - **`IRunValue`** (`Brain/Macro/RunValue.cs`) is the macro brain's view of V: a name and a value of a run view. `RunNet` implements it.
-- **`RunNet`** (`Brain/Macro/RunNet.cs`) runs the graph with ONNX Runtime (`Microsoft.ML.OnnxRuntime`), one thread intra- and inter-op (`:49`), since the simulator runs many processes and a macro decision values a handful of small inputs. It builds the inputs from the run view as `learn/v/encode.py` does. Unknown ids read as entry 0. `Value` is the chance to survive every floor from the run's current floor on (`:75-82`).
-- **`CombatNet`** (`Brain/Combat/CombatNet.cs`) does the same for a state, with one thread as well. `Graph` builds the inputs from `Cards`, `Player`, `Enemies`, `PowerNumbers`, `RelicNumbers`, `Allies`, `Bag` and `Powers`, as `learn/combat/encode.py` reads a state, and returns the two outputs; `Outcome` prices each ending with V on the run it would leave, a death at 0 ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
-- **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than the larger of 10⁻³ × |value| and 10⁻⁶ (`:59-73`); `CombatNet.Load` predicts every test state and refuses it if any class or potion chance is off by more than 10⁻³, or an output's length differs. This keeps the encoding and the forward pass the same in training and in play.
+- **`RunNet`** (`Brain/Macro/RunNet.cs`) runs the graph with ONNX Runtime (`Microsoft.ML.OnnxRuntime`), one thread intra- and inter-op (`:53-54`), since the simulator runs many processes and a macro decision values a handful of small inputs. It builds the inputs from the run view as `learn/v/encode.py` does, the relics' numbers and statuses by `CombatNet.RelicInputs`, which both nets share. Unknown ids read as entry 0. `Value` is the chance to survive every floor from the run's current floor on (`:80-87`).
+- **`CombatNet`** (`Brain/Combat/CombatNet.cs`) does the same for a state, with one thread as well. `Graph` builds the inputs from `Cards`, `Player`, `Enemies`, `PowerNumbers`, `RelicNumbers`, `Allies`, `Bag` and `Powers`, as `learn/combat/encode.py` reads a state, and returns the two outputs; `Outcome` prices each ending with V on the run it would leave, a death at 0, each held potion kept by its chance in the ending bucket's group ([Combat brain: the leaf §5](/en/arch/combat-brain/leaf/#sec-5)).
+- **The load check.** `RunNet.Load` values every test run and refuses the file if any value is off by more than the larger of 10⁻³ × |value| and 10⁻⁶ (`:64-78`); `CombatNet.Load` predicts every test state and refuses it if any class or potion chance is off by more than 10⁻³, or an output's length differs. This keeps the encoding and the forward pass the same in training and in play.
 - **Cost.** An earlier V of the same structure takes 0.093 ms a call, against 70–90 ms a macro decision with the clone (commit `b0ec4b7`).
 
 ## 9. Scripts
@@ -156,9 +157,9 @@ The figure opens the two net files, v9-1.json and c9-1.json, field by field: siz
 | `--init` | – | a net file to go on from: its state scaling and weights, the second head anew |
 | `--seed` | 0 | torch's and Python's seeds; also picks the 8 test runs |
 
-**Refusals** (`:69-70`, `:80-81`): too few train or held-out samples; `--init` with other tables than the game's, or without one of the net's weights at its shape (`export.weights`, `learn/v/export.py:91-92`).
+**Refusals** (`:69-70`, `:80-81`): too few train or held-out samples; `--init` with other tables than the game's, or without one of the net's weights at its shape (`export.weights`, `learn/v/export.py:97-98`).
 
-**Constants** (`:39-43`): 64 floors; at most 40 epochs, stopping after 5 without a held-out loss lower by 10⁻⁴; batches of 256 decisions; AdamW, learning rate 3 × 10⁻⁵, weight decay 10⁻⁴; the second head at weight 3. The net's sizes are `Net`'s: embeddings 64, card net 256, body 512 (`learn/v/net.py:74-91`).
+**Constants** (`:39-43`): 64 floors; at most 40 epochs, stopping after 5 without a held-out loss lower by 10⁻⁴; batches of 256 decisions; AdamW, learning rate 3 × 10⁻⁵, weight decay 10⁻⁴; the second head at weight 3. The net's sizes are `Net`'s: embeddings 64, card net 256, body 512 (`learn/v/net.py:86-111`).
 
 **The flow.** Read the samples; split by run id; take the game's tables (`learn/game_ids.py`), and the state's weighted mean and standard deviation (or `--init`'s); the baseline hazards, each floor's $(\text{deaths} + 0.5)/(\text{alive} + 1)$ clamped to $[10^{-4}, 1 - 10^{-4}]$, as the head's biases; train; keep the epoch with the best held-out hazard loss. The second head's next-combats term is logged each epoch but not added to it (`:145-148`). The module docstring says early stopping weighs the terms the same way as the loss; the code does not add that term. Then the report and the file.
 
@@ -197,22 +198,22 @@ Every command with every option is in [Simulator: reference §4](/en/arch/simula
 
 ## 11. Tests
 
-**Python** (`uv run pytest` in `learn/`, 55 tests in 7 files; `uv run ruff check`):
+**Python** (`uv run pytest` in `learn/`, 59 tests in 7 files; `uv run ruff check`):
 
 | file | tests | what |
 |---|---|---|
 | `test_common.py` | 11 | `train_lists` refuses an eval job's runs in either environment and takes self-play and forks; `read_lines` skips blank and partial lines, reads every file, finds the needle, fails on a missing file; a list pair gives the logs and records in the same order; `runs_by_log` joins each log with its own records, wants one record file per log, refuses a run id twice and reads every character's runs |
 | `test_weights.py` | 3 | the default path in `weights/all/`; a file there never replaced; an explicit path elsewhere may be |
-| `test_v_encode.py` | 7 | the reachable map with floors ahead, the point entered on a map move and only then, before any visit and at the boss; ids only; a card's keywords and what Tinker Time made of it; the state's order |
-| `test_v_train.py` | 10 | samples and per-run weights; a lost run's last fight with no end costs what was left; hazard labels and censoring; the chance to win; ONNX against torch; a net file's weights read back, the second head anew; `--init` keeps the tables and the state scaling, and refuses other tables; the net file and its report; a map move's sample |
+| `test_v_encode.py` | 9 | the reachable map with floors ahead, the point entered on a map move and only then, before any visit and at the boss; ids only; relics with their counters, statuses and the cards they keep, as the combat net reads them; a card's keywords and what Tinker Time made of it; the numbers a run grows on a card; the state's order |
+| `test_v_train.py` | 11 | samples and per-run weights; a lost run's last fight with no end costs what was left; hazard labels and censoring; the chance to win; ONNX against torch; a net file's weights read back, the second head anew, and weights the export merged as equal read back apart; `--init` keeps the tables and the state scaling, and refuses other tables; the net file and its report; a map move's sample |
 | `test_game_ids.py` | 3 | each table starts with `<unk>` and holds each id once, in order; every character and what the nets read are there; none of the game's test models |
-| `test_combat.py` | 17 | card tokens: ids, upgrades, piles, modifiers, costs and numbers; a card's keywords, Tinker, spent enchantment and gathered numbers; a power's moved number and stolen card, a relic's effect spent; the player's and each enemy's raw state, scaled; intents most recent first; the ending's buckets; potions gone from the view after the fight; buckets the HP rules out; a card's numbers and modifiers and the orbs' numbers and order moving the output; the potion loss on held potions after wins; round-start samples with history; another environment refused; ONNX against torch; training writes a net file of its environment; `c9-0.json`'s weights read back giving its test states; training going on from a net file and keeping it unless an epoch beats it; a combat the run died in before its first decision |
+| `test_combat.py` | 18 | card tokens: ids, upgrades, piles, modifiers, costs and numbers; a card's keywords, Tinker, spent enchantment and gathered numbers; a power's moved number and stolen card, a relic's effect spent; the player's and each enemy's raw state, scaled; intents most recent first; the ending's buckets; potions gone from the view after the fight; buckets the HP rules out; a card's numbers and modifiers and the orbs' numbers and order moving the output; the potion loss on held potions after wins; a win's potion chances those of its group of buckets; round-start samples with history; another environment refused; ONNX against torch; training writes a net file of its environment; `c9-0.json`'s weights read back giving its test states; training going on from a net file and keeping it unless an epoch beats it; a combat the run died in before its first decision |
 | `test_gate.py` | 4 | bosses, elites and deaths; rest choices by HP and shop purchases; monster or rest by HP; whole runs pair on wins and floors and promote on wins |
 
 **C#** ([Simulator: reference §7](/en/arch/simulator/reference/#sec-7)), the train/deploy parity of the nets, on fixtures in `Sts2Ai.Tests/Fixtures/` and the two net files themselves:
 
-- `RunNetTests` (4): a tiny untrained net (`pure-v-tiny-win.json`, its hazard head's bias lowered by 6) values three real run views at the trainer's chance to win; `v9-0.json` loads, its test runs at its trainer's values; the map tokens on a shared test map; the point entered reads on a map move and only then.
-- `CombatNetTests` (6): `c9-0.json` loads, its 16 test states as its trainer read them; a tiny untrained net (`combat-tiny.json`) whose test states, real SL round starts with four rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5% HP, a multi-hit attack, cards with damage and orbs on and off the table past the places the net tells apart, read as its trainer did; a state in progress is V of the runs its endings leave; each potion is kept by its own chance; a bucket the HP held rules out has no weight; a won combat is V of its run, a lost one 0.
+- `RunNetTests` (4): a tiny untrained net (`pure-v-tiny-win.json`, its hazard head's bias lowered by 6) values three real run views at the trainer's chance to win, one of them with a relic's counter, a status, a melted relic and Pael's Tooth keeping cards; `v9-0.json` loads, its test runs at its trainer's values; the map tokens on a shared test map; the point entered reads on a map move and only then.
+- `CombatNetTests` (6): `c9-0.json` loads, its 16 test states as its trainer read them; a tiny untrained net (`combat-tiny.json`) whose test states, real SL round starts with four rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5% HP, a multi-hit attack, cards with damage and orbs on and off the table past the places the net tells apart, read as its trainer did, with potion chances of their own in each group of buckets; a state in progress is V of the runs its endings leave; each potion is kept by its own chance in the bucket's group; a bucket the HP held rules out has no weight; a won combat is V of its run, a lost one 0.
 - A check passes when a changed input moves the output by less than its tolerance, so each new input was checked once more on a net whose weights make every input count ([The combat net §9](/en/arch/combat-brain/network/#sec-9)).
 
 **Planned** <Badge text="planned" variant="caution" />:

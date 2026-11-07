@@ -39,6 +39,7 @@
     buckets: w('Buckets of the HP share still to be lost after a win.', '获胜后还会损失的 HP 比例分成几个桶。', '獲勝後還會損失的 HP 比例分成幾個桶。'),
     loss_min: w('The lowest bucket’s bottom: −0.25, a fight that heals.', '最低一个桶的下限：−0.25，即会回血的战斗。', '最低一個桶的下限：−0.25，即會回血的戰鬥。'),
     lags: w('How many earlier rounds of each enemy’s intents it reads.', '读每个敌人之前几个回合的意图。', '讀每個敵人之前幾個回合的意圖。'),
+    potion_groups: w('Groups of 10 buckets in a row; the potion head gives each its own chances.', '每 10 个相邻的桶一组，共几组；药水输出头为每组各给一套机率。', '每 10 個相鄰的桶一組，共幾組；藥水輸出頭為每組各給一套機率。'),
   };
   // The JSON types, as the extraction's Python names them.
   const TYPE: Record<string, string> = { str: 'string', int: 'number', float: 'number', bool: 'boolean' };

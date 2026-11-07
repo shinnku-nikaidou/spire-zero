@@ -55,8 +55,16 @@ def vec(x: torch.Tensor) -> dict:
 
 
 def outputs(net: Net, b: Batch) -> tuple[torch.Tensor, torch.Tensor]:
+    """The chance of each ending, and each potion id's of being gone after a win in each group of buckets (group, potion)."""
     logits, potions = net(*b.inputs())
     return torch.softmax(logits, 1)[0], torch.sigmoid(potions)[0]
+
+
+def after_win(outcome: torch.Tensor, gone: torch.Tensor) -> torch.Tensor:
+    """Each potion id's chance of being gone after a win, each group's chances weighted by its win buckets'."""
+    win = 1 - float(outcome[0])
+    total = sum(float(outcome[k]) * gone[data.potion_group(k)] for k in range(1, len(outcome)))
+    return total / win if win > 0 else gone[0]
 
 
 def ended(outcome: torch.Tensor, gone: torch.Tensor, obs: dict, index: dict, width: float) -> dict:
@@ -69,7 +77,8 @@ def ended(outcome: torch.Tensor, gone: torch.Tensor, obs: dict, index: dict, wid
     win = 1 - float(outcome[0])
     left = sum(float(outcome[k]) * (share - (data.LOSS_MIN + (k - 0.5) * width)) for k in range(1, len(outcome)))
     held = [p for p in obs["potions"] if p is not None]
-    kept = sum(1 - float(gone[index["potions"].get(p, 0)]) for p in held)
+    used = after_win(outcome, gone)
+    kept = sum(1 - float(used[index["potions"].get(p, 0)]) for p in held)
     return {
         "share": round(share, 4),
         "death": round(float(outcome[0]), 4),
@@ -106,7 +115,7 @@ def shown(test: dict, net: Net, index: dict, width: float) -> dict:
             {"id": e["id"], "hp": e["hp"], "max_hp": e["max_hp"], "intents": e.get("intents") or [], "powers": [{"id": p["id"], "amount": p["amount"]} for p in e["powers"]]}
             for e in obs["enemies"]
         ],
-        "potions": [{"id": p, "gone": round(float(gone[index["potions"].get(p, 0)]), 4)} for p in obs["potions"] if p is not None],
+        "potions": [{"id": p, "gone": round(float(after_win(outcome, gone)[index["potions"].get(p, 0)]), 4)} for p in obs["potions"] if p is not None],
         "outcome": [round(float(v), 5) for v in outcome],
     }
 
@@ -226,10 +235,10 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     if not torch.equal(second, net.encode(*b.inputs())):
         raise SystemExit("the walk's layers are not Net.encode's")
     raw = net.head(second)
-    gone_logits = net.potion_head(second)
+    gone_logits = net.potion_head(second).view(1, data.POTION_GROUPS, -1)
     outcome, gone = outputs(net, b)
     expected = torch.tensor(test["outcome"])
-    if float((outcome - expected).abs().max()) > 1e-3 or float((gone - torch.tensor(test["potion_used"])).abs().max()) > 1e-3:
+    if float((outcome - expected).abs().max()) > 1e-3 or float((gone.flatten() - torch.tensor(test["potion_used"])).abs().max()) > 1e-3:
         raise SystemExit("the walk does not end in the file's test state")
 
     share = float(x["player"][0, 0])
@@ -239,7 +248,10 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     potion = next(p for p in obs["potions"] if p is not None)
     entry = index["potions"][potion]
     table = file["vocab"]["potions"]
-    ranked = sorted(range(len(table)), key=lambda k: -float(gone[k]))
+    # The potion head's group of the likeliest win: its chances are the ones the page reads.
+    group = data.potion_group(max(range(1, data.BUCKETS + 1), key=lambda k: float(outcome[k])))
+    ranked = sorted(range(len(table)), key=lambda k: -float(gone[group, k]))
+    rows = net.potion_head.weight.view(data.POTION_GROUPS, len(table), -1)[group]
 
     # The search's step: the same state with less HP, then without the potion.
     less = json.loads(json.dumps(test))
@@ -275,7 +287,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     label = data.ending(obs, {"died": False, "hp": end_hp, "max_hp": obs["player"]["max_hp"]})
     logits = net.reachable(raw, x["player"])
     ending_loss = float(torch.nn.functional.cross_entropy(logits, torch.tensor([label])))
-    potion_loss = float(torch.nn.functional.binary_cross_entropy_with_logits(gone_logits[0, entry], torch.tensor(0.0)))
+    potion_loss = float(torch.nn.functional.binary_cross_entropy_with_logits(gone_logits[0, data.potion_group(label), entry], torch.tensor(0.0)))
 
     pl = obs["player"]
     return {
@@ -340,12 +352,15 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         "potion": {
             "id": potion,
             "entry": entry,
-            "logit": round(float(gone_logits[0, entry]), 3),
-            "chance": round(float(gone[entry]), 4),
+            "group": group,
+            "groups": data.POTION_GROUPS,
+            "per_group": data.BUCKETS // data.POTION_GROUPS,
+            "logit": round(float(gone_logits[0, group, entry]), 3),
+            "chance": round(float(gone[group, entry]), 4),
             "outputs": len(table),
-            "most_likely": [{"id": table[k], "chance": round(float(gone[k]), 3)} for k in ranked[:3]],
-            "unk": round(float(gone[0]), 3),
-            "unheld": next(table[k] for k in range(1, len(table)) if torch.equal(net.potion_head.weight[k], net.potion_head.weight[0])),
+            "most_likely": [{"id": table[k], "chance": round(float(gone[group, k]), 3)} for k in ranked[:3]],
+            "unk": round(float(gone[group, 0]), 3),
+            "unheld": next(table[k] for k in range(1, len(table)) if torch.equal(rows[k], rows[0])),
         },
         "ended": ended(outcome, gone, obs, index, width),
         "siblings": siblings,
