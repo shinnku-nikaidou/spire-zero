@@ -15,8 +15,12 @@ namespace Sts2Ai.Brain.Macro;
 /// With <paramref name="uniform"/>, for self-play (docs: learning/loop §9), some answers are drawn evenly whatever V says (<see cref="Uniform"/>): a card reward's outcome among
 /// its cards and skipping it, a card prompt's picks, and on every other screen its options but a potion's (the belt,
 /// which every screen offers) and those that would come back to a state already decided.
+///
+/// An option that ends the run is worth what the run's end is: 0 for one the screen says kills (an event's), and on the
+/// clone 1 or 0 as the game ends it. On the clone, an option that starts a combat (an event's fight) is valued by
+/// <paramref name="fights"/>, the combat leaf (<see cref="CloneSearch"/>).
 /// </summary>
-public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacroPolicy, IChoicePolicy
+public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null) : IMacroPolicy, IChoicePolicy
 {
     /// <summary>Each card reward's draw by <c>uniform</c> (null: none), by its floor and cards, made when it is first seen.</summary>
     private readonly Dictionary<string, int?> _draws = [];
@@ -140,9 +144,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
         var obs = decision.Observation;
         var legal = Offered(obs, decision.Legal);
         if (decision.Clone is not { } clone)
-            return AfterMoves(obs, [.. legal.Select(a => { var after = After(obs, a); return new Option(a, after, value.Value(after), OpensPrompt(obs, a)); })]);
+            return AfterMoves(obs, [.. legal.Select(a => { var after = After(obs, a); return new Option(a, after, Kills(obs, a) ? 0 : value.Value(after), OpensPrompt(obs, a)); })]);
         var played = legal.Where(a => !Travels(obs, a)).ToList();
-        var found = new CloneSearch(value, clone, _decided).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<string>)[a])]);
+        var found = new CloneSearch(value, clone, _decided, fights).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<string>)[a])]);
         var options = new List<Option>();
         int k = 0;
         foreach (var a in legal)
@@ -194,6 +198,10 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
     /// <summary>The decision as a probe of no answers shows it.</summary>
     private static Afterstate Root(MacroDecision decision) =>
         new(decision.Observation.Run, decision.Surface, decision.Observation.Screen, decision.Legal);
+
+    /// <summary>An event option the screen says kills: the run ends there, lost.</summary>
+    private static bool Kills(Observation obs, string action) =>
+        obs.Screen is EventScreen screen && Split(action) is ("event", var arg) && screen.Options.First(o => o.Index == int.Parse(arg)).Kills == true;
 
     /// <summary>A map move: the node's exit, which its clone cannot play past.</summary>
     private static bool Travels(Observation obs, string action) => obs.Screen is MapScreen && Split(action).Verb == "map";
@@ -308,7 +316,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
             var fresh = near.Select(Answer).Where(a => !worth.ContainsKey(a)).Distinct().ToList();
             if (fresh.Count > 0)
             {
-                var found = new CloneSearch(value, clone, _decided).Search(root, [.. fresh.Select(a => (IReadOnlyList<string>)[a])]);
+                var found = new CloneSearch(value, clone, _decided, fights).Search(root, [.. fresh.Select(a => (IReadOnlyList<string>)[a])]);
                 for (int i = 0; i < fresh.Count; i++) worth[fresh[i]] = found[i].Value;
             }
             var taken = near[Best(near.Select(c => worth[Answer(c)]).ToList())];

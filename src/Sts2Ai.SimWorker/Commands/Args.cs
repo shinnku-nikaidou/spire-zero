@@ -233,6 +233,7 @@ internal sealed class ChampionArgs(bool file)
         var leaf = _leaf.Read(r);
         if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
         if ((leaf.Value != null) != (macro == "l0" || leaf.Net != null)) throw new CliException("--value goes with --macro l0 or --combat-net, which need it");
+        if (clone && leaf.Net == null) throw new CliException("--afterstates clone needs --combat-net: a fight an option starts is valued by the combat net");
         return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore);
     }
 }

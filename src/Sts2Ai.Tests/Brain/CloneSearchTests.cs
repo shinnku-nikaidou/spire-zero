@@ -85,6 +85,30 @@ public class CloneSearchTests
         Assert.Equal("event:1", new MacroBrain(V).Choose(Root(new Toy(Event))));
     }
 
+    /// <summary>A combat leaf that values every combat at the same <paramref name="worth"/>.</summary>
+    private sealed class FlatLeaf(double worth) : ICombatLeaf
+    {
+        public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history) => new(worth, 0, 0);
+    }
+
+    [Fact]
+    public void AFightAndTheRunsEndAreNotValuedByV()
+    {
+        // A fight with relic B in hand (V alone would count it as won and B kept), a death and a won run, both at HP 0 as
+        // the game leaves a run it ends: the fight is worth what the combat leaf says, the death 0, the win 1.
+        var toy = new Toy(path => path switch
+        {
+            [] => new(Start, Surfaces.Event, new EventScreen { Id = "TOY", Options = [], Finished = false }, ["event:0", "event:1", "event:2"]),
+            ["event:0"] => new(Start with { Relics = [new RelicView { Id = "B" }] }, Surfaces.Combat, new CombatScreen { Combat = Fixtures.Slugs() }, []),
+            ["event:1"] => new(Start with { Hp = 0 }, null, null, [], Won: false),
+            ["event:2"] => new(Start with { Hp = 0 }, null, null, [], Won: true),
+            _ => throw new InvalidOperationException(string.Join(" ", path)),
+        });
+        var found = new CloneSearch(V, toy, fights: new FlatLeaf(0.25)).Search(toy.After([[]])[0], [["event:0"], ["event:1"], ["event:2"]]);
+        Assert.Equal([0.25, 0, 1], found.Select(f => f.Value));
+        Assert.Throws<InvalidOperationException>(() => new CloneSearch(V, toy).Search(toy.After([[]])[0], [["event:0"]]));
+    }
+
     [Fact]
     public void AMoveOnTheMapIsNotPlayed()
     {

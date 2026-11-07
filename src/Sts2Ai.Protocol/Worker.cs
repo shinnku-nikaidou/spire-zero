@@ -39,11 +39,10 @@ public sealed record PimcWorldRequest(
 /// The SL planner's search of one turn from one state of a combat decision in a run (docs: sl-planner/budget §4):
 /// <see cref="Node"/> loaded and replayed is the real combat at the decision, and <see cref="Path"/> played from there
 /// reaches the state. The reply's <see cref="WorkerReply.Turn"/> holds the best ends of that turn: up to
-/// <see cref="Keep"/> states at the next turn's start, and the best end of the combat, each above <see cref="Floor"/>
-/// at best (the best whole line the planner holds), searched with <see cref="Nodes"/> nodes. <see cref="History"/> is
-/// the record of enemy moves up to the state, for the leaves.
+/// <see cref="Keep"/> states at the next turn's start, and the best end of the combat, searched with <see cref="Nodes"/>
+/// nodes. <see cref="History"/> is the record of enemy moves up to the state, for the leaves.
 /// </summary>
-public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep, double? Floor,
+public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep,
     IReadOnlyList<EnemyTurns> History) : WorkerRequest(Id);
 
 /// <summary>
@@ -62,11 +61,12 @@ public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, str
 
 /// <summary>
 /// What a path of answers from a decision in a node's clone leads to (<see cref="SlMacroRequest"/>): the run then, and
-/// the next decision the game asks. <see cref="Surface"/> is null once the run is over. A card prompt's options are in
-/// its screen (<see cref="CardChoiceScreen"/>), so its <see cref="Legal"/> is empty; a combat's screen is left out, as
-/// a combat ends a probe.
+/// the next decision the game asks. <see cref="Surface"/> is null once the run is over, and <see cref="Won"/> then says how
+/// it ended: the game kills the players when it records a win too, so the run's HP cannot tell. A card prompt's options
+/// are in its screen (<see cref="CardChoiceScreen"/>), so its <see cref="Legal"/> is empty; a combat's screen
+/// (<see cref="CombatScreen"/>) holds its first observation, and its actions are left out, as a combat ends a probe.
 /// </summary>
-public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal);
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal, bool? Won = null);
 
 /// <summary>A line of play that search found, from its first action, and its value.</summary>
 /// <param name="Nodes">The actions the search simulated after the line's first action, itself included.</param>
@@ -79,8 +79,7 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
 /// <param name="Ends">The best end of the combat, if the turn can reach one, then the states at the next turn's start, best first.</param>
 /// <param name="Nodes">The actions the search simulated.</param>
 /// <param name="Cut">Whether anything was left out: the nodes ran out, or more states were found than kept.</param>
-/// <param name="Bound">The bound of the state the search started from (<see cref="TurnEnd.Bound"/>).</param>
-public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, double Bound);
+public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut);
 
 /// <summary>
 /// A state where a turn of the SL planner's line ends: at the next turn's first decision, after the enemies' turn, or
@@ -89,12 +88,10 @@ public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut
 /// <param name="Actions">The actions that reach it, the last one ending the turn.</param>
 /// <param name="Hashes">For each of <paramref name="Actions"/>, the hash of the observation it is played at.</param>
 /// <param name="Value">The leaf's value of the state.</param>
-/// <param name="Bound">The best the state can still reach: a win with the HP and the potions it has; once the combat is
-/// over, its value.</param>
 /// <param name="Key">The state's observation and its full hidden state, hashed: states with the same key are the same
 /// state. 0 once the combat is over.</param>
 /// <param name="History">The record of enemy moves up to the state.</param>
 /// <param name="Win">The chance to win the combat from the state, as the leaf predicts it: 1 or 0 once the combat is over.</param>
 /// <param name="Hp">The HP held at the end of a win from the state, as the leaf expects it: the HP held once the combat is won.</param>
-public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, double Value, double Bound,
+public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, double Value,
     ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0);

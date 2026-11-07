@@ -38,6 +38,8 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         if (Policy == "plan" && env != PlayEnvironment.SL) throw new NotSupportedException($"plan plays in SL only, not in {env}");
         if (Policy == "pimc" && env != PlayEnvironment.NoSL) throw new NotSupportedException($"pimc plays in NoSL only, not in {env}");
         if (OnClone && env != PlayEnvironment.SL) throw new NotSupportedException($"l0 plays on the node's clone in SL only, not in {env}");
+        if (Macro == "l0" && env == PlayEnvironment.SL && !OnClone)
+            throw new NotSupportedException("l0 plays on the node's clone in SL (--afterstates clone): the screen's predicted afterstates are NoSL's");
         Random Rng(string stream) => new(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + stream)));
         var rng = Rng("");
         var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
@@ -47,7 +49,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         Dispatcher dispatcher;
         if (Macro == "l0")
         {
-            var l0 = new MacroBrain(Value!, Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null);
+            var l0 = new MacroBrain(Value!, Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null, OnClone ? Leaf.Leaf : null);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log,
                 OnClone ? node => new PooledClone(pool!, node) : null, explain);
         }

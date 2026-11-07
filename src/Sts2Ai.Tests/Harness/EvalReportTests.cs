@@ -48,9 +48,10 @@ public class EvalReportTests
     }
 
     [Fact]
-    public void ARandomDecisionOrAFailureVoidsIt()
+    public void APlaceholdersDecisionOrAFailureVoidsIt()
     {
         Assert.True(EvalReport.Of([Fixtures.Run("A", 5, randomDecisions: 1)], "set", Seeds, "d").Metrics.Void);
+        Assert.True(EvalReport.Of([Fixtures.Run("A", 5) with { Brains = new Dictionary<string, int> { ["play"] = 3 } }], "set", Seeds, "d").Metrics.Void);
         Assert.True(EvalReport.Of([Fixtures.Run("A", 5, outcome: "failed")], "set", Seeds, "d").Metrics.Void);
     }
 }

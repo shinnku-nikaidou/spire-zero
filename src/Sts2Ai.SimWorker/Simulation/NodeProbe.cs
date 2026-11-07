@@ -30,7 +30,7 @@ internal static class NodeProbe
                 session.Step();
             }
             if (answers.Pending > 0) throw new InvalidOperationException($"a probe stopped with {answers.Pending} answers left: {string.Join(" ", path)}");
-            return answers.Next ?? new Afterstate(Observe.Run(session.Run, session.Player), null, null, []);
+            return answers.Next ?? new Afterstate(Observe.Run(session.Run, session.Player), null, null, [], session.Won);
         }
         catch (Asked) when (answers.Next != null)
         {
@@ -62,7 +62,7 @@ internal static class NodeProbe
         {
             if (_left.Count > 0) throw new InvalidOperationException($"a probe met a combat with {_left.Count} answers left");
             var obs = decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside the run");
-            Next ??= new(obs.Run, Surfaces.Combat, null, []);
+            Next ??= new(obs.Run, Surfaces.Combat, obs.Screen, []);
             throw new Asked();
         }
 

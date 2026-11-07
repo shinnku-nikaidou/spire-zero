@@ -32,8 +32,11 @@ public sealed record Metrics(
     IReadOnlyDictionary<string, int> Surfaces, double ElitesPerRun, Rate CardRewardSkips, double GoldMean,
     double MsPerDecision, double SecondsPerRun)
 {
-    /// <summary>The brain name every placeholder goes by (docs: harness/routing §1: a random decision voids the evaluation).</summary>
+    /// <summary>The brain name the macro placeholders go by (docs: harness/routing §1: a placeholder's decision voids the evaluation).</summary>
     public const string RandomBrain = "random";
+
+    /// <summary>Every placeholder's brain name: the macro side's and the combat placeholders' (<see cref="Policies.CombatNames"/>).</summary>
+    public static readonly IReadOnlySet<string> Placeholders = new HashSet<string>([RandomBrain, .. Sts2Ai.Brain.Policies.CombatNames]);
 
     public bool Void => RandomDecisions + Failed + Truncated + GameErrors > 0;
 
@@ -52,7 +55,7 @@ public sealed record Metrics(
             floors.Count == 0 ? 0 : floors.Average(),
             floors.Count == 0 ? 0 : (floors[(floors.Count - 1) / 2] + floors[floors.Count / 2]) / 2,
             bosses,
-            runs.Sum(r => r.Brains.GetValueOrDefault(RandomBrain)),
+            runs.Sum(r => r.Brains.Where(b => Placeholders.Contains(b.Key)).Sum(b => b.Value)),
             runs.Count(r => r.Outcome == "failed"),
             runs.Count(r => r.Outcome == "truncated"),
             runs.Sum(r => r.GameErrors),

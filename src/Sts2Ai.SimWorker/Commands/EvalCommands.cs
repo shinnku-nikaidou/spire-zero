@@ -63,8 +63,7 @@ internal static class GateCommand
 {
     private static readonly Option<string> ChampionPath = Opt.Required<string>("--champion", "the champion file to beat, such as eval/champions/nosl.json");
     private static readonly Option<string> Records = Opt.Required<string>("--records", "the challenger's run record files, comma-separated");
-    private static readonly Option<string> Metric = Opt.Of("--metric", "floor", "what the SPRT compares").AcceptOnlyFromAmong("floor", "win");
-    private static readonly Option<double?> Delta = Opt.Maybe<double?>("--delta", "the difference the SPRT tells from none (default: 1.5 floors, or 0.1 wins)");
+    private static readonly Option<double> Delta = Opt.Of("--delta", 0.1, "the challenger's share of the wins only one side has, above an even one, that the SPRT tells from none");
     private static readonly Option<double> Alpha = Opt.Of("--alpha", 0.05, "the SPRT's chance to pass a challenger no better (with --not-worse: worse by --delta)");
     private static readonly Option<double> Beta = Opt.Of("--beta", 0.05, "the SPRT's chance to fail a challenger better by --delta (with --not-worse: no worse)");
     private static readonly Option<bool> NotWorse = Opt.Of("--not-worse", false,
@@ -76,7 +75,7 @@ internal static class GateCommand
     public static Command Command()
     {
         var command = Opt.Command("gate", "the challenger's records against the champion's report, paired by seed, with an SPRT",
-            [ChampionPath, Records, Metric, Delta, Alpha, Beta, NotWorse, Promote, Env], Challenger.Options);
+            [ChampionPath, Records, Delta, Alpha, Beta, NotWorse, Promote, Env], Challenger.Options);
         command.SetAction(Run);
         return command;
     }
@@ -96,8 +95,6 @@ internal static class GateCommand
         if (challenger.Explores) throw new CliException("--explore is for self-play; a challenger plays its best");
         if (runs.FirstOrDefault(run => run.Config.Champion != challenger.Name) is { } other)
             throw new CliException($"run {other.Seed} was played by {other.Config.Champion}, not by the options given ({challenger.Name})");
-        var metric = r.GetValue(Metric)!;
-        double delta = r.GetValue(Delta) ?? (metric == "floor" ? 1.5 : 0.1);
         IReadOnlyList<(RunRecord, RunRecord)> pairs;
         try
         {
@@ -107,7 +104,7 @@ internal static class GateCommand
         {
             throw new CliException(e.Message);
         }
-        var result = Gate.Sprt(pairs, metric, delta, r.GetValue(Alpha), r.GetValue(Beta), r.GetValue(NotWorse));
+        var result = Gate.Sprt(pairs, r.GetValue(Delta), r.GetValue(Alpha), r.GetValue(Beta), r.GetValue(NotWorse));
         Console.WriteLine($"champion: {file.Champion} ({reportPath})");
         Console.WriteLine($"challenger: {challenger.Name}, {runs.Count} runs");
         Console.WriteLine(result.Summary());

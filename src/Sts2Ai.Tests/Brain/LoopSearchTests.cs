@@ -160,7 +160,7 @@ public class LoopSearchTests
         var plan = Plan(new Loop(50));
 
         Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.Equal(1, plan.Turns);
+        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
         Assert.Equal([.. Enumerable.Repeat(R, 44), H], Line(plan));
         Assert.Equal(CombatStatus.Won, Replayed(plan.Result, () => new Loop(50)).Status);
     }
@@ -171,7 +171,7 @@ public class LoopSearchTests
         var plan = Plan(new Loop(50, junkEvery: 6));
 
         Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.Equal(1, plan.Turns);
+        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
         Assert.Equal(44, Line(plan).Count(a => a == R));
     }
 
@@ -181,7 +181,7 @@ public class LoopSearchTests
         // A full hand sends R to the discard pile: 4 junk in a hand of 6 is 12 plays. Lethal before that, and not after it.
         var plan = Plan(new Loop(15, junkEvery: 3, handCap: 6));
         Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.Equal(1, plan.Turns);
+        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
 
         var far = new Loop(10_000, junkEvery: 3, handCap: 6);
         var line = Line(Plan(far));
@@ -197,7 +197,7 @@ public class LoopSearchTests
         var plan = Plan(new Loop(9, runsOut: 3));
 
         Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.Equal(1, plan.Turns);
+        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
         Assert.Equal([R, R, R, H], Line(plan));
     }
 
@@ -216,7 +216,7 @@ public class LoopSearchTests
         // The search plays the nine R and H out on its nodes.
         var plan = Plan(new Loop(15, souls: 8));
         Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.Equal(1, plan.Turns);
+        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public class LoopSearchTests
         static Loop make() => new(50, prompted: Loop.Prompted.GivesR);
         var plan = Plan(make());
 
-        // Plan.Turns would count the next turn it looked at too, for a win that keeps the potion.
+        // Plan.Turns counts the turns the beam looks at past the win too.
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
         Assert.Equal(CombatAction.Potion(0) with { Pick = 2 }, plan.Result.First);

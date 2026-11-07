@@ -14,9 +14,8 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// the prompt's context (<see cref="ChoiceContexts"/>). Each answer is recorded as indexes into the game's own list,
 /// so a combat can be replayed exactly; when replaying, the recorded answers are given back in order before the live
 /// policy is asked again.
-/// Card rewards and bundles are run-level decisions, answered by the handlers if given: without them a card reward is
-/// skipped and a bundle is left to TestMode (the first one). <paramref name="observe"/>, if given, makes a prompt's
-/// observation for the policy.
+/// Card rewards and bundles are run-level decisions, answered by the handlers: a combat on its own has none, and one
+/// asked there throws. <paramref name="observe"/>, if given, makes a prompt's observation for the policy.
 /// </summary>
 internal sealed class PolicySelector(
     IChoicePolicy policy,
@@ -65,16 +64,13 @@ internal sealed class PolicySelector(
     public CardRewardSelection GetSelectedCardReward(IReadOnlyList<CardCreationResult> options, IReadOnlyList<CardRewardAlternative> alternatives)
     {
         Prompts++;
-        return cardReward?.Invoke(options, alternatives) ?? new CardRewardSelection();
+        return (cardReward ?? throw new InvalidOperationException("a card reward where nothing answers one: a combat on its own"))(options, alternatives);
     }
 
-    /// <summary>Whether <see cref="ChooseBundle"/> asks a handler (see HeadlessPatches).</summary>
-    public bool ChoosesBundles => bundle != null;
-
-    /// <summary>The index of the bundle to take.</summary>
+    /// <summary>The index of the bundle to take (see HeadlessPatches).</summary>
     public int ChooseBundle(IReadOnlyList<IReadOnlyList<CardModel>> bundles)
     {
         Prompts++;
-        return bundle!(bundles);
+        return (bundle ?? throw new InvalidOperationException("a bundle where nothing answers one: a combat on its own"))(bundles);
     }
 }

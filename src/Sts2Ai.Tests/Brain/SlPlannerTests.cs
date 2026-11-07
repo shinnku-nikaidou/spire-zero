@@ -239,25 +239,24 @@ public class SlPlannerTests
     }
 
     [Theory]
-    [InlineData(1, null)]
-    [InlineData(2, null)]
-    [InlineData(1, 0.5)]
-    [InlineData(3, 0.7)]
-    [InlineData(1000, 0.75)]
-    public void ATurnSearchedInFullNarrowsToTheSearchWithAKeepAndAFloor(int keep, double? floor)
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(1000)]
+    public void ATurnSearchedInFullNarrowsToTheSearchWithAKeep(int keep)
     {
         var planner = new SlPlanner(Leaf);
         foreach (var path in new[] { Array.Empty<CombatAction>(), [CombatAction.EndTurn] })
         {
-            TurnSearch Searched(int k, double? f)
+            TurnSearch Searched(int k)
             {
                 var world = new Toy();
                 foreach (var a in path) world.Execute(a);
-                return planner.SearchTurn(world, [], 200, k, f);
+                return planner.SearchTurn(world, [], 200, k);
             }
-            var direct = Searched(keep, floor);
-            var narrowed = SlPlanner.Narrow(Searched(int.MaxValue, null), keep, floor);
-            Assert.Equal((direct.Nodes, direct.Cut, direct.Bound), (narrowed.Nodes, narrowed.Cut, narrowed.Bound));
+            var direct = Searched(keep);
+            var narrowed = SlPlanner.Narrow(Searched(int.MaxValue), keep);
+            Assert.Equal((direct.Nodes, direct.Cut), (narrowed.Nodes, narrowed.Cut));
             Assert.Equal(direct.Ends.Select(e => (string.Join(" ", e.Actions), e.Status, e.Value, e.Key)),
                 narrowed.Ends.Select(e => (string.Join(" ", e.Actions), e.Status, e.Value, e.Key)));
         }
@@ -268,12 +267,12 @@ public class SlPlannerTests
     {
         var planner = new SlPlanner(Leaf);
         var searched = new List<string>();
-        var plan = SlPlanner.Search(new Budget(NodesPerWorld: 100_000, Beam: 4), [], (jobs, nodes, keep, floor) => [.. jobs.Select(job =>
+        var plan = SlPlanner.Search(new Budget(NodesPerWorld: 100_000, Beam: 4), [], (jobs, nodes, keep) => [.. jobs.Select(job =>
         {
             searched.Add(string.Join(" ", job.Path));
             var world = new Toy();
             foreach (var a in job.Path) world.Execute(a);
-            return planner.SearchTurn(world, job.History, nodes, keep, floor);
+            return planner.SearchTurn(world, job.History, nodes, keep);
         })]);
 
         Assert.Single(searched, "");

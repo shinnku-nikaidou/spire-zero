@@ -161,7 +161,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         private readonly List<CombatAction> _actions = [];
         private readonly List<ulong> _hashes = [];
         private readonly LoopSearch _loops = new(world, round, (status, obs, actions, hashes) =>
-            new([.. actions], [.. hashes], status, leaf.Value(status, obs, world.Run(), history), 0, 0, history));
+            new([.. actions], [.. hashes], status, leaf.Value(status, obs, world.Run(), history), 0, history));
         private WorldSnapshot _root = new([]);
         private ulong _rootHash;
         private PromptSeen? _firstPrompt;

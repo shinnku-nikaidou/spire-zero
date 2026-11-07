@@ -45,7 +45,7 @@ internal static partial class HeadlessPatches
     }
 
     /// <summary>
-    /// TestMode always takes the first bundle. With a bundle handler, this runs the screen's own path instead: reserve
+    /// TestMode always takes the first bundle. With the policy's selector, this runs the screen's own path instead: reserve
     /// the choice, ask, sync the answer (<c>CardSelectCmd.FromChooseABundleScreen</c>).
     /// </summary>
     [HarmonyPatch(typeof(CardSelectCmd), nameof(CardSelectCmd.FromChooseABundleScreen))]
@@ -53,7 +53,7 @@ internal static partial class HeadlessPatches
     {
         private static bool Prefix(Player player, IReadOnlyList<IReadOnlyList<CardModel>> bundles, ref Task<IEnumerable<CardModel>> __result)
         {
-            if (CardSelectCmd.Selector is not PolicySelector { ChoosesBundles: true } selector || CombatManager.Instance.IsEnding || bundles.Count == 0)
+            if (CardSelectCmd.Selector is not PolicySelector selector || CombatManager.Instance.IsEnding || bundles.Count == 0)
                 return true;
             var choices = RunManager.Instance.PlayerChoiceSynchronizer;
             uint choiceId = choices.ReserveChoiceId(player);
