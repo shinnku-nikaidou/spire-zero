@@ -8,45 +8,34 @@ namespace Sts2Ai.SimWorker.Runtime;
 /// With no engine, we fill every slot with one tiny function that returns a pointer to zeroed scratch memory.
 /// Managed code that touches Godot (strings, nodes, singletons) then runs through without side effects.
 /// Game rules must never depend on these results; if one does, it shows up as a sim-vs-real mismatch.
+/// The function is <see cref="Zeroed"/>, compiled as any C# method: the same on every platform, no code written at run time.
 /// </summary>
-internal static unsafe partial class GodotNativeStub
+internal static unsafe class GodotNativeStub
 {
-    private const int PageSize = 4096;
-    private const int ProtReadWriteExec = 7;
-    private const int MapPrivateAnonymous = 0x22;
-
-    [LibraryImport("libc", SetLastError = true)]
-    private static partial IntPtr mmap(IntPtr addr, nuint length, int prot, int flags, int fd, nint offset);
+    private const int ScratchSize = 2048;
 
     private static bool _installed;
+    private static IntPtr _scratch;
 
     public static void Install()
     {
         if (_installed) return;
-        if (!OperatingSystem.IsLinux() || RuntimeInformation.ProcessArchitecture != Architecture.X64)
-            throw new PlatformNotSupportedException("the native stub is written for linux-x64");
-
-        IntPtr page = mmap(IntPtr.Zero, PageSize, ProtReadWriteExec, MapPrivateAnonymous, -1, 0);
-        if (page == IntPtr.Zero || page == new IntPtr(-1))
-            throw new InvalidOperationException("mmap failed, errno " + Marshal.GetLastPInvokeError());
-
-        // mov rax, imm64; ret. The returned pointer is the upper half of the page, so a caller that writes
-        // through it cannot overwrite the code in the lower half.
-        byte* code = (byte*)page;
-        code[0] = 0x48;
-        code[1] = 0xB8;
-        *(long*)(code + 2) = (long)(code + PageSize / 2);
-        code[10] = 0xC3;
+        _scratch = (IntPtr)NativeMemory.AllocZeroed(ScratchSize);
+        var stub = (IntPtr)(delegate* unmanaged<IntPtr>)&Zeroed;
 
         var nativeFuncs = typeof(Godot.GD).Assembly.GetType("Godot.NativeInterop.NativeFuncs", throwOnError: true)!;
         var table = nativeFuncs.GetNestedType("UnmanagedCallbacks", BindingFlags.Public | BindingFlags.NonPublic)!;
         int slots = table.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Length;
         int size = slots * IntPtr.Size;
         IntPtr buffer = Marshal.AllocHGlobal(size);
-        for (int i = 0; i < slots; i++) ((IntPtr*)buffer)[i] = page;
+        for (int i = 0; i < slots; i++) ((IntPtr*)buffer)[i] = stub;
 
         nativeFuncs.GetMethod("Initialize", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!
             .Invoke(null, [buffer, size]);
         _installed = true;
     }
+
+    /// <summary>Every engine call's answer: the arguments, whatever they are, stay unread.</summary>
+    [UnmanagedCallersOnly]
+    private static IntPtr Zeroed() => _scratch;
 }
