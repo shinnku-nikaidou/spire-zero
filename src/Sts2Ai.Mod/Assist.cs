@@ -35,8 +35,9 @@ internal enum Goal
 /// falls, if the player set those, and at the run's end.
 /// One decision is in flight at a time: when the state moves on first, the mod cancels it and waits for its answer
 /// before asking about the new state, so a slow brain never falls behind.
-/// The environment is the player's choice (<see cref="Settings"/>), kept across games. Switching it, or turning assist
-/// off, ends the run as the brain sees it; the next decision starts a new one from that point. In SL the brain plans
+/// The environment and the SL planner's effort are the player's choice (<see cref="Settings"/>), kept across games.
+/// Switching either, or turning assist off, ends the run as the brain sees it; the next decision starts a new one from
+/// that point. In SL the brain plans
 /// combats on a clone of the node, so before each decision the mod sends the node's checkpoint and the steps taken in
 /// it (<see cref="NodeRecord"/>); NoSL sends neither.
 /// </summary>
@@ -106,12 +107,21 @@ internal sealed class Assist(BrainLink link, string gameVersion)
     private (double Win, double Hp)? _fight;
 
     private PlayEnvironment _env = Settings.Current.Env;
+    private SearchEffort _effort = Settings.Current.Effort;
 
     /// <summary>The player switched the environment: the brain gets a new run from here.</summary>
     private void Switch(PlayEnvironment env)
     {
         _env = env;
         Log.Info($"{Host.Tag} environment {env}");
+        if (_run != null) End("aborted");
+    }
+
+    /// <summary>The player changed the search effort: the brain gets a new run from here, with that effort.</summary>
+    private void Switch(SearchEffort effort)
+    {
+        _effort = effort;
+        Log.Info($"{Host.Tag} effort {effort}");
         if (_run != null) End("aborted");
     }
 
@@ -154,6 +164,7 @@ internal sealed class Assist(BrainLink link, string gameVersion)
         while (link.Inbox.TryDequeue(out var e)) Handle(e);
         var settings = Settings.Current;
         if (settings.Env != _env) Switch(settings.Env);
+        if (settings.Effort != _effort) Switch(settings.Effort);
 
         var run = RunManager.Instance.DebugOnlyGetState();
         var me = run != null ? LocalContext.GetMe(run) : null;
@@ -193,7 +204,7 @@ internal sealed class Assist(BrainLink link, string gameVersion)
         if (_run == null)
         {
             (_run, _champion, _failure, _next, _sentNode, _sentSteps) = (id, null, null, 0, -1, 0);
-            link.Send(new Hello(gameVersion, _env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel)));
+            link.Send(new Hello(gameVersion, _env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel), settings.EffortName));
         }
         _last = (run.IsGameOver, run.IsGameOver && run.CurrentRoom?.IsVictoryRoom == true, run.TotalFloor);
         if (run.IsGameOver && _goal != Goal.Off) Stop(L10n.T("the run is over"));

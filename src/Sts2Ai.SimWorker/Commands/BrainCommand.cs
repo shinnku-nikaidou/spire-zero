@@ -8,8 +8,9 @@ namespace Sts2Ai.SimWorker;
 /// <summary>
 /// brain: the brain alone (docs: harness §5), which serves the hosts that connect to the socket, one at a time, with the
 /// champion its options name. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
-/// --sl-policy's (the SL planner by default), with the same macro brain (docs: harness/routing §1). Prints a line per run, with
-/// the game errors of its search workers.
+/// --sl-policy's (the SL planner by default), with the same macro brain (docs: harness/routing §1). A host may ask for
+/// another effort of the SL planner for its run (<see cref="Hello.Effort"/>), which then plays with that preset's
+/// budget. Prints a line per run, with the game errors of its search workers.
 /// </summary>
 internal static class BrainCommand
 {
@@ -38,8 +39,17 @@ internal static class BrainCommand
         using var workerPool = champion.Pool() ?? sl.Pool();
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;
         using var wireFile = r.GetValue(Wire) is { } wirePath ? new StreamWriter(wirePath) { AutoFlush = true } : null;
-        var (noSlHarness, slHarness) = (champion.Harness(workerPool, logFile != null, explain: true), sl.Harness(workerPool, logFile != null, explain: true));
-        var server = new BrainServer(hello => (hello.Env == nameof(PlayEnvironment.SL) ? slHarness : noSlHarness)(hello),
+        // One Harness maker per environment and effort asked for, made at the first run that asks.
+        var harnesses = new Dictionary<(string Env, string? Effort), Func<Hello, Dispatcher>>();
+        Func<Hello, Dispatcher> HarnessFor(Hello hello)
+        {
+            if (harnesses.TryGetValue((hello.Env, hello.Effort), out var made)) return made;
+            var options = hello.Env == nameof(PlayEnvironment.SL) ? sl : champion;
+            // An effort is the SL planner's budget; another combat brain plays as it is.
+            if (hello.Effort is { } effort && options.Policy == "plan") options = options with { Budget = Budget.Effort(effort) };
+            return harnesses[(hello.Env, hello.Effort)] = options.Harness(workerPool, logFile != null, explain: true);
+        }
+        var server = new BrainServer(hello => HarnessFor(hello)(hello),
             log: Logs.Factory.CreateLogger("brain"), received: wireFile == null ? null : message => wireFile.WriteLine(ProtocolJson.Serialize(message)),
             ended: (hello, harness, end) =>
         {

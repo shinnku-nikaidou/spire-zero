@@ -36,7 +36,8 @@ internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pil
 
 /// <summary>
 /// The mod's panel over the game (docs: output §2): a card with the champion, the mod's status and an SL/NoSL switch,
-/// the toolbar that lets the AI play (auto, one step, to the end of the turn or the room), then either the brain's
+/// the toolbar that lets the AI play (auto, one step, to the end of the turn or the room) and the SL planner's effort,
+/// then either the brain's
 /// answer (the next action, the plan after it, the options it scored with their chances to win) or a message saying
 /// why there is none. It also owns the marks the answer draws on the game's own nodes (<see cref="MapMark"/>,
 /// <see cref="CombatMark"/>). F8 hides and shows all of it; the settings (<see cref="Settings"/>) pick which parts show.
@@ -68,7 +69,9 @@ internal sealed class Panel
     private readonly Control _options;
     private readonly List<(Button Button, AutoSpeed Speed)> _speeds = [];
     private readonly Button _stopElites, _stopDrop;
-    private readonly Label _speedLabel, _stopLabel;
+    private readonly Label _speedLabel, _stopLabel, _effortLabel;
+    private readonly Control _effortRow;
+    private readonly List<(Button Button, SearchEffort Effort)> _efforts = [];
     private readonly VBoxContainer _body;
     private readonly MapMark _map;
     private readonly CombatMark _combat;
@@ -78,7 +81,7 @@ internal sealed class Panel
     private object? _built;
     private PlayEnvironment? _styled;
     private Drive? _drive;
-    private (bool, AutoSpeed, bool, bool)? _toolStyled;
+    private (bool, AutoSpeed, bool, bool, SearchEffort)? _toolStyled;
 
     /// <param name="switched">What the SL/NoSL switch does; null leaves it out (the mod is off).</param>
     /// <param name="pressed">What the toolbar and its keys do; null leaves the toolbar out (the mod is off).</param>
@@ -134,6 +137,24 @@ internal sealed class Panel
         _toolbar = bar;
         _toolbar.Visible = false;
         column.AddChild(_toolbar);
+
+        // How hard the SL planner searches: the brain's own effort or a preset, switched in the run.
+        var effort = Row(8);
+        effort.AddChild(_effortLabel = Text("", 12, Muted));
+        var efforts = Frame(Colors.Transparent, Color.FromHtml("#3a3050"), 3);
+        var five = Row(2);
+        efforts.AddChild(five);
+        foreach (var value in Enum.GetValues<SearchEffort>())
+        {
+            var button = Toggle("");
+            button.Pressed += () => Settings.Set(Settings.Current with { Effort = value });
+            five.AddChild(button);
+            _efforts.Add((button, value));
+        }
+        effort.AddChild(efforts);
+        _effortRow = effort;
+        _effortRow.Visible = false;
+        column.AddChild(_effortRow);
 
         // While auto-play runs: its speed and where it stops.
         var options = Column(6);
@@ -244,7 +265,7 @@ internal sealed class Panel
             foreach (var (button, which) in _switch) Restyle(button, which == env);
         }
         _drive = drive;
-        _toolbar.Visible = drive != null && _pressed != null;
+        _toolbar.Visible = _effortRow.Visible = drive != null && _pressed != null;
         _options.Visible = drive is { Auto: true };
         if (drive == null) return;
         Set(_auto, drive.Auto ? L10n.T("Pause") : L10n.T("Auto"), drive.Auto ? Icons.Pause : Icons.Play, true);
@@ -254,16 +275,19 @@ internal sealed class Panel
         foreach (var (button, speed) in _speeds) Label(button, L10n.T(speed.ToString()));
         Label(_stopElites, L10n.T("elites, bosses"));
         Label(_stopDrop, L10n.T("win chance −3"));
+        Label(_effortLabel, L10n.T("Effort"));
+        foreach (var (button, effort) in _efforts) Label(button, L10n.T(effort.ToString()));
         Set(_step, drive.Step ?? L10n.T("Step"), Icons.Step, !drive.Auto && drive.Step != null);
         Set(_finish, drive.Finish ?? L10n.T("Finish room"), Icons.Finish, !drive.Auto && drive.Finish != null);
         // New style boxes only when what they show changed, not every frame.
-        var styled = (drive.Auto, settings.Speed, settings.StopAtElites, settings.StopOnDrop);
+        var styled = (drive.Auto, settings.Speed, settings.StopAtElites, settings.StopOnDrop, settings.Effort);
         if (styled == _toolStyled) return;
         _toolStyled = styled;
         RestyleTool(_auto, drive.Auto);
         foreach (var (button, speed) in _speeds) Restyle(button, settings.Speed == speed);
         Restyle(_stopElites, settings.StopAtElites);
         Restyle(_stopDrop, settings.StopOnDrop);
+        foreach (var (button, effort) in _efforts) Restyle(button, settings.Effort == effort);
     }
 
     private static void Label(Label label, string text)
@@ -293,7 +317,7 @@ internal sealed class Panel
     /// <summary>Builds the body again when what it shows, or the settings it is drawn with, changed.</summary>
     private void Build(object what, Action build)
     {
-        var key = (what, Settings.Current with { Env = default, Assist = default, Speed = default, StopAtElites = default, StopOnDrop = default },
+        var key = (what, Settings.Current with { Env = default, Assist = default, Speed = default, StopAtElites = default, StopOnDrop = default, Effort = default },
             L10n.T("Next"));
         if (Equals(key, _built)) return;
         _built = key;

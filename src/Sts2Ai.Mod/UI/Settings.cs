@@ -14,6 +14,9 @@ internal enum RouteMode { Off, Next, Whole }
 /// <summary>How long auto-play waits before each of the AI's actions, so the player can follow it.</summary>
 internal enum AutoSpeed { Slow, Medium, Fast }
 
+/// <summary>How hard the SL planner searches each fight: the brain's own effort, or one of its presets.</summary>
+internal enum SearchEffort { Brain, Low, Medium, High, Max }
+
 /// <summary>
 /// The player's choices for the mod (docs: output §2), set in the game's settings screen (<see cref="SettingsTab"/>) and
 /// the panel's SL/NoSL switch. They are kept in one file beside the brain's socket, outside the game's profile, and
@@ -24,6 +27,7 @@ internal enum AutoSpeed { Slow, Medium, Fast }
 /// <param name="Marks">The plan's target and end-turn marks.</param>
 /// <param name="StopAtElites">Auto-play stops before it travels to an elite or a boss.</param>
 /// <param name="StopOnDrop">Auto-play stops when V's chance to win falls 3 points below the best it showed since auto-play started.</param>
+/// <param name="Effort">The SL planner's effort the mod asks the brain for; a change starts the run anew for the brain.</param>
 internal sealed record Settings(
     bool Assist = true,
     PlayEnvironment Env = PlayEnvironment.SL,
@@ -35,8 +39,12 @@ internal sealed record Settings(
     float Opacity = 0.92f,
     AutoSpeed Speed = AutoSpeed.Medium,
     bool StopAtElites = true,
-    bool StopOnDrop = true)
+    bool StopOnDrop = true,
+    SearchEffort Effort = SearchEffort.Brain)
 {
+    /// <summary>The effort as hello names it; null for the brain's own.</summary>
+    public string? EffortName => Effort == SearchEffort.Brain ? null : Effort.ToString().ToLowerInvariant();
+
     /// <summary>The wait before each auto-play action at <see cref="Speed"/>, in milliseconds.</summary>
     public int Delay => Speed switch { AutoSpeed.Slow => 1500, AutoSpeed.Medium => 800, _ => 200 };
 

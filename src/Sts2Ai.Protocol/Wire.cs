@@ -31,7 +31,9 @@ public abstract record WireMessage
 /// <summary>Host → brain, at the start of a run.</summary>
 /// <param name="Env">"NoSL" or "SL", fixed for the run.</param>
 /// <param name="Role">"mod" or "worker".</param>
-public sealed record Hello(string GameVersion, string Env, string Role, RunHeader Run) : WireMessage;
+/// <param name="Effort">The SL planner's effort the host asks for, fixed for the run: "low", "medium", "high" or
+/// "max" (docs: sl-planner/budget §1); null for the brain's own.</param>
+public sealed record Hello(string GameVersion, string Env, string Role, RunHeader Run, string? Effort = null) : WireMessage;
 
 /// <param name="RunId">The run's id (<see cref="IdOf"/>).</param>
 public sealed record RunHeader(string RunId, string Character, int Ascension)

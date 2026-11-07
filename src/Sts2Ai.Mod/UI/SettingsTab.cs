@@ -101,6 +101,8 @@ internal static class SettingsTab
         content.AddChild(Choice(L10n.T("Map route"), "", font, [L10n.T("Off"), L10n.T("Next point"), L10n.T("Whole route")],
             [RouteMode.Off, RouteMode.Next, RouteMode.Whole], s => s.Route, (s, v) => s with { Route = v }, refresh));
         content.AddChild(Opacity(font, refresh));
+        content.AddChild(Choice(L10n.T("Search effort"), L10n.T("how hard the SL planner searches each fight; a change starts the run anew for the brain"), font,
+            Enum.GetValues<SearchEffort>().Select(e => L10n.T(e.ToString())).ToArray(), Enum.GetValues<SearchEffort>(), s => s.Effort, (s, v) => s with { Effort = v }, refresh));
         content.AddChild(Header(L10n.T("Auto-play"), font));
         content.AddChild(Choice(L10n.T("Speed of auto-play"), L10n.T("the pause before each of the AI's actions"), font,
             [L10n.T("Slow"), L10n.T("Medium"), L10n.T("Fast")], [AutoSpeed.Slow, AutoSpeed.Medium, AutoSpeed.Fast], s => s.Speed, (s, v) => s with { Speed = v }, refresh));
