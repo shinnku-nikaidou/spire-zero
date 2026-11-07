@@ -9,4 +9,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.0" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Namespaces follow folders; these are in scope in every file. -->
+    <Using Include="Sts2Ai.Brain.Combat" />
+    <Using Include="Sts2Ai.Brain.Macro" />
+  </ItemGroup>
 </Project>

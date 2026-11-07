@@ -1,7 +1,7 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class CombatNetTests
 {

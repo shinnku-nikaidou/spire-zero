@@ -16,7 +16,7 @@ public sealed class PooledClone(WorkerPool pool, NodeClone node) : IMacroClone
         if (paths.Count == 0) return [];
         int parts = Math.Min(paths.Count, pool.Count);
         var requests = Enumerable.Range(0, parts)
-            .Select(i => (WorkerRequest)new SlMacroRequest(i, node, paths.Skip(i * paths.Count / parts).Take((i + 1) * paths.Count / parts - i * paths.Count / parts).ToList()))
+            .Select(i => (WorkerRequest)new SlMacroRequest(i, node, [.. paths.Skip(i * paths.Count / parts).Take((i + 1) * paths.Count / parts - i * paths.Count / parts)]))
             .ToList();
         var afters = pool.Map(requests).SelectMany(r => r.Afters ?? throw new InvalidDataException($"request {r.Id}: no afterstates in the reply")).ToList();
         if (afters.Count != paths.Count) throw new InvalidDataException($"{afters.Count} afterstates for {paths.Count} paths");

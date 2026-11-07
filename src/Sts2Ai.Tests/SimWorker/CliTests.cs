@@ -4,9 +4,9 @@ using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 using Sts2Ai.SimWorker;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.SimWorker;
 
-public class CliTests : IDisposable
+public sealed class CliTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("sts2ai-tests-").FullName;
 

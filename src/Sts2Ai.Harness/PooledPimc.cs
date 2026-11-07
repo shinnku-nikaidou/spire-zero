@@ -19,9 +19,9 @@ public sealed class PooledPimc(WorkerPool pool)
         IReadOnlyList<EnemyTurns> history, RunView run)
     {
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
-        return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) => pool.Map(Enumerable.Range(0, budget.Worlds)
-                .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes, history, run)).ToList())
-            .Select(r => r.Lines!).ToList());
+        return PimcBrain.Root(PimcBrain.Ordered(legal), budget, (first, nodes) => [.. pool.Map([.. Enumerable.Range(0, budget.Worlds)
+                .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes, history, run))])
+            .Select(r => r.Lines!)]);
     }
 
     /// <summary>As Harness's combat route, one per run: the build seed drawn from the decision's seed. The route keeps the

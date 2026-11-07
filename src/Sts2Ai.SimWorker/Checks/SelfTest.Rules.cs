@@ -2,7 +2,7 @@ using MegaCrit.Sts2.Core.Models;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Checks;
 
 internal static partial class SelfTest
 {
@@ -12,16 +12,16 @@ internal static partial class SelfTest
     /// </summary>
     private static void RollingBoulder(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
     {
-        var loadout = new Loadout(Deck: Enumerable.Repeat(new CardSpec("ROLLING_BOULDER"), 10).ToList(), Hp: 999, MaxHp: 999);
+        var loadout = new Loadout(Deck: [.. Enumerable.Repeat(new CardSpec("ROLLING_BOULDER"), 10)], Hp: 999, MaxHp: 999);
         foreach (var encounter in pool)
         {
             var setup = new CombatSetup("IRONCLAD", encounter, act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
             using var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0)));
-            if (session.State.HittableEnemies.Count < 2) continue;
+            if (CombatSession.State.HittableEnemies.Count < 2) continue;
 
             int before = HeadlessPatches.RollingBoulderSplits;
             var policy = new PlayPolicy(new Random(0));
-            while (!session.IsOver && session.State.RoundNumber <= 3)
+            while (!CombatSession.IsOver && CombatSession.State.RoundNumber <= 3)
                 session.Execute(policy.Choose(session.Decision()));
             var errors = HeadlessGame.TakeErrors();
             check("rolling boulder hits one by one", HeadlessPatches.RollingBoulderSplits > before && errors.Count == 0,
@@ -70,11 +70,11 @@ internal static partial class SelfTest
             obs = session.Observation();
         obs = obs with { Round = FightCap.MaxRounds };
         using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
-        bool onAtCap = !built.IsOver && built.State.RoundNumber == FightCap.MaxRounds;
+        bool onAtCap = !CombatSession.IsOver && CombatSession.State.RoundNumber == FightCap.MaxRounds;
         built.Execute(built.LegalActions().First(a => a.Kind == CombatActionKind.EndTurn));
         var errors = HeadlessGame.TakeErrors();
         check("a fight past the round cap is lost", onAtCap && built.Outcome == CombatOutcome.Loss && errors.Count == 0,
-            $"{pool[0].Id.Entry}: on at round {FightCap.MaxRounds} {onAtCap}, then {built.Outcome} at round {built.State.RoundNumber}, " +
+            $"{pool[0].Id.Entry}: on at round {FightCap.MaxRounds} {onAtCap}, then {built.Outcome} at round {CombatSession.State.RoundNumber}, " +
             $"hp {built.Player.Creature.CurrentHp}, errors {errors.FirstOrDefault()}");
     }
 
@@ -107,7 +107,7 @@ internal static partial class SelfTest
         string[] potions = ["FIRE_POTION", "BLOCK_POTION", "SWIFT_POTION", "FYSH_OIL", "COLORLESS_POTION", "CLARITY", "TOUCH_OF_INSANITY",
             "FIRE_POTION", "BLOCK_POTION"];
         var loadout = new Loadout(Relics: ["RING_OF_THE_SNAKE", "POTION_BELT", "ALCHEMICAL_COFFER", "PHIAL_HOLSTER"], Potions: potions);
-        string Slots(IEnumerable<string?> slots) => string.Join(",", slots.Select(p => p ?? "-"));
+        static string Slots(IEnumerable<string?> slots) => string.Join(",", slots.Select(p => p ?? "-"));
         string want = Slots(potions);
         using (var combat = CombatSession.Start(pump, new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout),
                    new RandomChoices(new Random(0))))

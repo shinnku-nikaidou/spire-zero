@@ -21,7 +21,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 internal enum CombatOutcome { InProgress, Win, Loss, Truncated }
 
@@ -49,7 +49,7 @@ internal readonly record struct TraceEvent(TraceKind Kind, CombatAction Action =
     public static TraceEvent Parse(string text)
     {
         if (text.StartsWith("choose:", StringComparison.Ordinal))
-            return new(TraceKind.Choice, Picks: text.Length == 7 ? [] : text[7..].Split(',').Select(int.Parse).ToArray());
+            return new(TraceKind.Choice, Picks: text.Length == 7 ? [] : [.. text[7..].Split(',').Select(int.Parse)]);
         if (text.StartsWith("determinize:", StringComparison.Ordinal)) return new(TraceKind.Determinize, Seed: ulong.Parse(text[12..]));
         return new(TraceKind.Action, CombatAction.Parse(text));
     }
@@ -123,7 +123,7 @@ internal sealed class CombatSession : IDisposable
         }
     }
 
-    public CombatSnapshot Snapshot() => new(Setup, _trace.ToArray());
+    public CombatSnapshot Snapshot() => new(Setup, [.. _trace]);
 
     private static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy policy, IEnumerable<int[]> replayPicks, bool check)
     {
@@ -161,7 +161,7 @@ internal sealed class CombatSession : IDisposable
             }
             if (setup.From is { } obs)
             {
-                CombatBuilder.Apply(session.State, player, obs, pump, setup.History);
+                CombatBuilder.Apply(State, player, obs, pump, setup.History);
                 session.Resample(new Rng(StableHash(setup.Seed)));
                 if (check) session.BuildDifferences = CombatBuilder.Differences(obs, session.Observation());
             }
@@ -174,13 +174,13 @@ internal sealed class CombatSession : IDisposable
         }
     }
 
-    public CombatState State => CombatManager.Instance.DebugOnlyGetState()
+    public static CombatState State => CombatManager.Instance.DebugOnlyGetState()
         ?? throw new InvalidOperationException("no combat state");
 
     private PlayerCombatState Pcs => Player.PlayerCombatState
         ?? throw new InvalidOperationException("player has no combat state");
 
-    public bool IsOver => !CombatManager.Instance.IsInProgress;
+    public static bool IsOver => !CombatManager.Instance.IsInProgress;
 
     public CombatOutcome Outcome
     {
@@ -258,7 +258,7 @@ internal sealed class CombatSession : IDisposable
         }
         foreach (var card in cards) draw.MoveToBottomInternal(card);
         var db = NetCombatCardDb.Instance;
-        CombatBuilder.NumberCards(Pcs, Pcs.Hand.Cards.Select(db.GetCardId).ToList());
+        CombatBuilder.NumberCards(Pcs, [.. Pcs.Hand.Cards.Select(db.GetCardId)]);
 
         Creature[] targets = [Player.Creature];
         foreach (var enemy in State.Enemies)

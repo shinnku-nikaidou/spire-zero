@@ -25,7 +25,7 @@ public sealed class RandomChoices(Random rng) : IChoicePolicy
     {
         var choice = decision.Choice;
         int count = choice.Min == choice.Max ? choice.Min : rng.Next(choice.Min, choice.Max + 1);
-        return Enumerable.Range(0, choice.Options.Count).OrderBy(_ => rng.Next()).Take(count).ToList();
+        return [.. Enumerable.Range(0, choice.Options.Count).OrderBy(_ => rng.Next()).Take(count)];
     }
 }
 

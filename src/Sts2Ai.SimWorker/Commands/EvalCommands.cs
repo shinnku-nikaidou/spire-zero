@@ -4,7 +4,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>report: the evaluation report over run records (docs: evaluation/metrics §7), PATH.json and PATH.md.</summary>
 internal static class ReportCommand
@@ -154,7 +154,7 @@ internal static class LeaderboardCommand
                 .Where(byCharacter => byCharacter.ContainsKey(character)).Select(byCharacter => Path.GetFullPath(byCharacter[character]))
                 .Where(reports.ContainsKey).Select(path => reports[path]).ToList()
             : [];
-        var markdown = Leaderboard.Markdown(reports.Values.ToList(), champions);
+        var markdown = Leaderboard.Markdown([.. reports.Values], champions);
         File.WriteAllText(Path.Combine(folder, "leaderboard.md"), markdown);
         Console.Write(markdown);
         return 0;

@@ -1,6 +1,6 @@
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Macro;
 
 /// <summary>
 /// L0's search of a decision on the node's clone in SL (docs: macro-brain/search §3). Each option is played in the real game,
@@ -54,9 +54,9 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
             if (jobs.Count > MaxProbes - Probes)
             {
                 foreach (var job in jobs.Skip(MaxProbes - Probes)) job.Parent.Cut = true;
-                jobs = jobs.Take(MaxProbes - Probes).ToList();
+                jobs = [.. jobs.Take(MaxProbes - Probes)];
             }
-            var next = clone.After(jobs.Select(j => j.Path).ToList());
+            var next = clone.After([.. jobs.Select(j => j.Path)]);
             Probes += jobs.Count;
             frontier = [];
             for (int i = 0; i < jobs.Count; i++)
@@ -103,7 +103,7 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
     /// <summary>The prompt's options grouped by what the player can tell apart (<see cref="ProtocolJson.CardKey"/>), each
     /// group's indexes in order: picking k of a group picks its first k.</summary>
     public static IReadOnlyList<IReadOnlyList<int>> Groups(CardChoice choice) =>
-        Enumerable.Range(0, choice.Options.Count).GroupBy(i => ProtocolJson.CardKey(choice.Options[i])).Select(g => (IReadOnlyList<int>)g.ToList()).ToList();
+        [.. Enumerable.Range(0, choice.Options.Count).GroupBy(i => ProtocolJson.CardKey(choice.Options[i])).Select(g => (IReadOnlyList<int>)[.. g])];
 
     public static ulong Key(Afterstate after) => ProtocolJson.Hash(after);
 

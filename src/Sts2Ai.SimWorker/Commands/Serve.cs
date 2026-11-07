@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
 /// The worker side of the pool (docs: simulator/pool §4): after the hello, one request per stdin line and one reply per
@@ -35,7 +35,7 @@ internal static class Serve
     {
         var pimc = leaf == null ? null : new PimcBrain(leaf);
         var planner = leaf == null ? null : new SlPlanner(leaf);
-        Exception NoLeaf() => new InvalidOperationException("a search request to a worker with no --combat-net");
+        static Exception NoLeaf() => new InvalidOperationException("a search request to a worker with no --combat-net");
         HeadlessGame.TakeErrors();
         wire.WriteLine(ProtocolJson.Serialize(new WorkerHello(HeadlessGame.GameVersion)));
         while (Console.In.ReadLine() is { } line)

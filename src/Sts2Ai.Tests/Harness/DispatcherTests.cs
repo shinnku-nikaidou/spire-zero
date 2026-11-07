@@ -2,7 +2,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Harness;
 
 public class DispatcherTests
 {

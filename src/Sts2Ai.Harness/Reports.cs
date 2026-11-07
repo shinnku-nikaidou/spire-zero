@@ -162,7 +162,7 @@ public sealed record EvalReport(RunConfig Config, string SeedSet, int SetSize, s
 
     /// <summary>The seeds in a seed file: one per line; blank lines and lines from '#' on are skipped.</summary>
     public static List<string> ReadSeeds(string path) =>
-        File.ReadAllLines(path).Select(l => l.Split('#')[0].Trim()).Where(l => l.Length > 0).ToList();
+        [.. File.ReadAllLines(path).Select(l => l.Split('#')[0].Trim()).Where(l => l.Length > 0)];
 
     public string Json() => ProtocolJson.Serialize(this);
 }
@@ -214,10 +214,10 @@ public static class Leaderboard
                 var (sl, nosl) = (latest[(champion, "SL")], latest[(champion, "NoSL")]);
                 var noslRuns = nosl.Runs.ToDictionary(r => r.Seed);
                 var pairs = sl.Runs.Where(r => noslRuns.ContainsKey(r.Seed)).Select(r => (Sl: r, NoSl: noslRuns[r.Seed])).ToList();
-                var wins = Paired(pairs.Select(p => (p.Sl.Outcome == "won" ? 1.0 : 0) - (p.NoSl.Outcome == "won" ? 1 : 0)).ToList());
-                var floors = Paired(pairs.Select(p => (double)p.Sl.Floor - p.NoSl.Floor).ToList());
+                var (Mean, Low, High) = Paired([.. pairs.Select(p => (p.Sl.Outcome == "won" ? 1.0 : 0) - (p.NoSl.Outcome == "won" ? 1 : 0))]);
+                var floors = Paired([.. pairs.Select(p => (double)p.Sl.Floor - p.NoSl.Floor)]);
                 Line($"- {champion} (SL `{Short(sl.Config.Commit)}`, NoSL `{Short(nosl.Config.Commit)}`):");
-                Line($"  - win rate: {wins.Mean * 100:+0.0;-0.0;0.0} pp (95% {wins.Low * 100:+0.0;-0.0;0.0} to {wins.High * 100:+0.0;-0.0;0.0}), {pairs.Count(p => p.Sl.Outcome == "won")} against {pairs.Count(p => p.NoSl.Outcome == "won")} of {pairs.Count}");
+                Line($"  - win rate: {Mean * 100:+0.0;-0.0;0.0} pp (95% {Low * 100:+0.0;-0.0;0.0} to {High * 100:+0.0;-0.0;0.0}), {pairs.Count(p => p.Sl.Outcome == "won")} against {pairs.Count(p => p.NoSl.Outcome == "won")} of {pairs.Count}");
                 Line($"  - floor reached: {floors.Mean:+0.00;-0.00;0.00} (95% {floors.Low:+0.00;-0.00;0.00} to {floors.High:+0.00;-0.00;0.00}); SL went further on {pairs.Count(p => p.Sl.Floor > p.NoSl.Floor)} seeds, as far on {pairs.Count(p => p.Sl.Floor == p.NoSl.Floor)}, less far on {pairs.Count(p => p.Sl.Floor < p.NoSl.Floor)}");
             }
         }
@@ -225,9 +225,9 @@ public static class Leaderboard
     }
 
     /// <summary>The mean of paired differences, with a normal 95% interval.</summary>
-    private static (double Mean, double Low, double High) Paired(IReadOnlyList<double> diffs)
+    private static (double Mean, double Low, double High) Paired(List<double> diffs)
     {
-        if (diffs.Count < 2) return (diffs.FirstOrDefault(), double.NegativeInfinity, double.PositiveInfinity);
+        if (diffs.Count < 2) return (diffs.Count == 0 ? 0 : diffs[0], double.NegativeInfinity, double.PositiveInfinity);
         double mean = diffs.Average(), sd = Math.Sqrt(diffs.Sum(d => (d - mean) * (d - mean)) / (diffs.Count - 1));
         double half = 1.96 * sd / Math.Sqrt(diffs.Count);
         return (mean, mean - half, mean + half);

@@ -1,6 +1,6 @@
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Combat;
 
 /// <summary>
 /// The card prompts asked during a combat, version 0 (docs: combat brain §2, rule 7): a fixed rule per kind of prompt, from
@@ -32,11 +32,11 @@ public sealed class PromptBrain : IChoicePolicy
             var order = options.OrderByDescending(i => discard && Has(choice.Options[i], "Sly"))
                 .ThenBy(i => Worth(choice.Options[i])).ToList();
             var gladly = order.Where(i => Has(choice.Options[i], "Unplayable") || discard && Has(choice.Options[i], "Sly")).ToList();
-            return order.Take(Math.Clamp(gladly.Count, choice.Min, choice.Max)).ToList();
+            return [.. order.Take(Math.Clamp(gladly.Count, choice.Min, choice.Max))];
         }
         if (MakeFree.Contains(context.Source ?? ""))
-            return options.OrderByDescending(i => choice.Options[i].Cost ?? 0).ThenByDescending(i => Worth(choice.Options[i])).Take(choice.Max).ToList();
-        return options.OrderByDescending(i => Worth(choice.Options[i])).Take(choice.Max).ToList();
+            return [.. options.OrderByDescending(i => choice.Options[i].Cost ?? 0).ThenByDescending(i => Worth(choice.Options[i])).Take(choice.Max)];
+        return [.. options.OrderByDescending(i => Worth(choice.Options[i])).Take(choice.Max)];
     }
 
     /// <summary>Whether the picked cards leave the hand this turn.</summary>

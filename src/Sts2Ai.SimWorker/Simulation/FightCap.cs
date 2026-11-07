@@ -2,7 +2,7 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Players;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
 /// The fight round cap (docs: simulator/runs §3): a fight still going when round <see cref="MaxRounds"/> + 1 starts is

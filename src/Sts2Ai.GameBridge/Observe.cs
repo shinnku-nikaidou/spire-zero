@@ -41,9 +41,9 @@ public static class Observe
         Hp = player.Creature.CurrentHp,
         MaxHp = player.Creature.MaxHp,
         Gold = player.Gold,
-        Deck = player.Deck.Cards.Select(c => previews ? DeckCard(c) : Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
-        Relics = player.Relics.Select(Relic).ToList(),
-        Potions = player.PotionSlots.Select(p => p?.Id.Entry).ToList(),
+        Deck = [.. player.Deck.Cards.Select(c => previews ? DeckCard(c) : Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)],
+        Relics = [.. player.Relics.Select(Relic)],
+        Potions = [.. player.PotionSlots.Select(p => p?.Id.Entry)],
         Map = Map(run),
     };
 
@@ -58,15 +58,15 @@ public static class Observe
         if (map.SecondBossMapPoint is { } second) points = points.Append(second);
         return new MapView
         {
-            Points = points.Distinct().OrderBy(p => p.coord.row).ThenBy(p => p.coord.col).Select(p => new MapPointView
+            Points = [.. points.Distinct().OrderBy(p => p.coord.row).ThenBy(p => p.coord.col).Select(p => new MapPointView
             {
                 Col = p.coord.col,
                 Row = p.coord.row,
                 Type = p.PointType.ToString(),
-                Next = p.Children.Select(c => c.coord).OrderBy(c => c.row).ThenBy(c => c.col).Select(Coord).ToList(),
+                Next = [.. p.Children.Select(c => c.coord).OrderBy(c => c.row).ThenBy(c => c.col).Select(Coord)],
                 Quest = p.Quests.Count > 0 ? true : null,
-            }).ToList(),
-            Visited = run.VisitedMapCoords.Select(Coord).ToList(),
+            })],
+            Visited = [.. run.VisitedMapCoords.Select(Coord)],
             Boss = run.Act.BossEncounter.Id.Entry,
             SecondBoss = map.SecondBossMapPoint != null ? run.Act.SecondBossEncounter?.Id.Entry : null,
             Ancient = run.Act.Ancient?.Id.Entry,
@@ -100,16 +100,16 @@ public static class Observe
                 Gold = player.Gold,
                 Powers = Powers(me),
                 OrbSlots = pcs.OrbQueue.Capacity,
-                Orbs = pcs.OrbQueue.Orbs.Select(o => new OrbView(o.Id.Entry, o.PassiveVal, o.EvokeVal)).ToList(),
+                Orbs = [.. pcs.OrbQueue.Orbs.Select(o => new OrbView(o.Id.Entry, o.PassiveVal, o.EvokeVal))],
             },
-            Hand = pcs.Hand.Cards.Select(c => Card(c, withUid: true)).ToList(),
-            Draw = pcs.DrawPile.Cards.Select(c => Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
-            Discard = pcs.DiscardPile.Cards.Select(c => Card(c)).ToList(),
-            Exhaust = pcs.ExhaustPile.Cards.Select(c => Card(c)).ToList(),
-            Potions = player.PotionSlots.Select(p => p?.Id.Entry).ToList(),
-            Relics = player.Relics.Select(Relic).ToList(),
-            Allies = st.Allies.Where(c => c != me).Select(c => Creature(c, targets)).ToList(),
-            Enemies = st.Enemies.Select(c => Creature(c, targets)).ToList(),
+            Hand = [.. pcs.Hand.Cards.Select(c => Card(c, withUid: true))],
+            Draw = [.. pcs.DrawPile.Cards.Select(c => Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)],
+            Discard = [.. pcs.DiscardPile.Cards.Select(c => Card(c))],
+            Exhaust = [.. pcs.ExhaustPile.Cards.Select(c => Card(c))],
+            Potions = [.. player.PotionSlots.Select(p => p?.Id.Entry)],
+            Relics = [.. player.Relics.Select(Relic)],
+            Allies = [.. st.Allies.Where(c => c != me).Select(c => Creature(c, targets))],
+            Enemies = [.. st.Enemies.Select(c => Creature(c, targets))],
         };
     }
 
@@ -184,9 +184,9 @@ public static class Observe
         lock (OnceFlags)
         {
             if (!OnceFlags.TryGetValue(relic.GetType(), out var flags))
-                OnceFlags[relic.GetType()] = flags = relic.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+                OnceFlags[relic.GetType()] = flags = [.. relic.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
                     .Where(f => f.FieldType == typeof(bool) && (f.Name.EndsWith("ThisCombat", StringComparison.Ordinal) || f.Name.EndsWith("ThisTurn", StringComparison.Ordinal)))
-                    .ToArray();
+                ];
             return flags.Any(f => (bool)f.GetValue(relic)!) ? true : null;
         }
     }
@@ -252,15 +252,15 @@ public static class Observe
 
     /// <summary>The intents <paramref name="move"/> would show above <paramref name="owner"/>, aimed at <paramref name="targets"/>.</summary>
     public static List<IntentView> Intents(MoveState move, Creature owner, Creature[] targets) =>
-        move.Intents.Select(i => Intent(i, owner, targets)).ToList();
+        [.. move.Intents.Select(i => Intent(i, owner, targets))];
 
     private static IntentView Intent(AbstractIntent intent, Creature owner, Creature[] targets) => intent is AttackIntent attack
         ? new IntentView { Type = intent.IntentType.ToString(), Damage = attack.GetSingleDamage(targets, owner), Hits = Math.Max(1, attack.Repeats) }
         : new IntentView { Type = intent.IntentType.ToString() };
 
     private static List<PowerView> Powers(Creature c) =>
-        c.Powers.Where(p => p.IsVisible).Select(p => new PowerView(p.Id.Entry, p.DisplayAmount, p.DisplayAmount != p.Amount ? p.Amount : null,
-            HeldCards.Get(p) is { } card ? Card(card) : null, Detail(p), p is SwipePower { StolenCard: { } stolen } ? Card(stolen) : null)).ToList();
+        [.. c.Powers.Where(p => p.IsVisible).Select(p => new PowerView(p.Id.Entry, p.DisplayAmount, p.DisplayAmount != p.Amount ? p.Amount : null,
+            HeldCards.Get(p) is { } card ? Card(card) : null, Detail(p), p is SwipePower { StolenCard: { } stolen } ? Card(stolen) : null))];
 
     public static RelicView Relic(RelicModel r) => new()
     {

@@ -1,7 +1,7 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class PimcMemoTests
 {
@@ -29,7 +29,7 @@ public class PimcMemoTests
         {
             Round = Ended ? 2 : 1,
             Player = Start.Player with { Hp = Ended ? 100 - 10 * Count : 100, MaxHp = 100 },
-            Hand = Start.Hand.Where(c => !_steps.Contains(c.Id)).ToList(),
+            Hand = [.. Start.Hand.Where(c => !_steps.Contains(c.Id))],
         };
 
         public IReadOnlyList<CombatAction> Legal() => Ended ? [] :
@@ -41,7 +41,7 @@ public class PimcMemoTests
         public void Execute(CombatAction action) =>
             _steps.Add(action.Kind == CombatActionKind.EndTurn ? "end" : Start.Hand.First(c => c.Uid == action.Card).Id);
 
-        public WorldSnapshot Snapshot() => new(_steps.ToList());
+        public WorldSnapshot Snapshot() => new([.. _steps]);
 
         public void Restore(WorldSnapshot snapshot)
         {

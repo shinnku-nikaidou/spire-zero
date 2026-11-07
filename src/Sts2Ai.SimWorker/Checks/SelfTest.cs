@@ -5,7 +5,7 @@ using Sts2Ai.GameBridge;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Checks;
 
 /// <summary>
 /// Checks the properties that search and training rely on, over an encounter pool:

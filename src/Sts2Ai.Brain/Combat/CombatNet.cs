@@ -3,7 +3,7 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Combat;
 
 /// <summary>A round's start and what the trainer's net made of it, which loading checks (docs: learning/reference §7, input parity).</summary>
 public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, IReadOnlyList<double> PotionUsed);
@@ -143,12 +143,12 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         inputs.AddRange(PowerNumbers(pl.Powers));
         inputs.Add(Player(obs));
         inputs.AddRange(Enemies(obs, history));
-        inputs.AddRange(Bag("relics", "relic_mask", obs.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id).ToList()));
+        inputs.AddRange(Bag("relics", "relic_mask", [.. obs.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id)]));
         inputs.AddRange(RelicNumbers(obs.Relics));
-        inputs.AddRange(Bag("potions", "potion_mask", obs.Potions.OfType<string>().ToList()));
+        inputs.AddRange(Bag("potions", "potion_mask", [.. obs.Potions.OfType<string>()]));
         inputs.AddRange(Bag("context", "context_mask",
             ["character:" + pl.Character, "encounter:" + (obs.Encounter ?? "<none>"), "room:" + (obs.Room ?? "<none>"), $"act:{obs.Act}"]));
-        inputs.AddRange(Bag("orbs", "orb_mask", pl.Orbs.Select(o => o.Id).ToList()));
+        inputs.AddRange(Bag("orbs", "orb_mask", [.. pl.Orbs.Select(o => o.Id)]));
         var orbValues = new DenseTensor<float>([1, Math.Max(1, pl.Orbs.Count), 2]);
         for (int k = 0; k < pl.Orbs.Count; k++)
         {
@@ -156,14 +156,14 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
             orbValues[0, k, 1] = Capped((double)pl.Orbs[k].Evoke / 10.0);
         }
         inputs.Add(NamedOnnxValue.CreateFromTensor("orb_values", orbValues));
-        inputs.AddRange(Allies(obs.Allies.Where(a => a.Hp > 0).ToList()));
+        inputs.AddRange(Allies([.. obs.Allies.Where(a => a.Hp > 0)]));
         var extra = new DenseTensor<float>([1, 3]);
         extra[0, 0] = (float)(obs.Ascension / 10.0);
         extra[0, 1] = (float)(pl.OrbSlots / 10.0);
         extra[0, 2] = Capped(pl.Gold / 100.0);
         inputs.Add(NamedOnnxValue.CreateFromTensor("extra", extra));
         using var results = _session.Run(inputs);
-        return results.Select(r => r.AsEnumerable<float>().ToArray()).ToArray();
+        return [.. results.Select(r => r.AsEnumerable<float>().ToArray())];
     }
 
     /// <summary>The cards of every pile: id, upgrade level, pile, cost / 3 (0 for X or none), the modifiers' tokens

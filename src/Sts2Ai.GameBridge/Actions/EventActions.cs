@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>
 /// An event: "event:i" picks option i of the current page (locked options are shown but not legal); "proceed" leaves
@@ -33,9 +33,9 @@ public static class EventActions
     };
 
     /// <summary>The models the option's hover tips show (keyword and text tips are left out).</summary>
-    private static List<string> Tips(EventOption option) => option.HoverTips
+    private static List<string> Tips(EventOption option) => [.. option.HoverTips
         .Select(t => t is CardHoverTip { Card: var card } ? card.Id.Entry + (card.IsUpgraded ? "+" : "") : t.CanonicalModel?.Id.Entry)
-        .OfType<string>().ToList();
+        .OfType<string>()];
 
     /// <summary>
     /// Options flagged <see cref="EventOption.IsProceed"/> are UI buttons, never run headless: an ancient's "PROCEED"

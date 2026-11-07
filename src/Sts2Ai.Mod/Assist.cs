@@ -369,7 +369,7 @@ internal sealed class Assist(BrainLink link, string gameVersion)
             : _goal == Goal.Auto ? (L10n.T("Auto on"), Tone.Plain)
             : _goal != Goal.Off ? (L10n.T("Acting"), Tone.Plain)
             : (L10n.T("Your move"), Tone.Plain);
-        return new Drive(_goal == Goal.Auto, step, finish, pill, tone, _win, _win - _before, _recent.ToList());
+        return new Drive(_goal == Goal.Auto, step, finish, pill, tone, _win, _win - _before, [.. _recent]);
     }
 
     /// <summary>The line under the next action: V's chance to win after it, or how the fight is expected to end.</summary>

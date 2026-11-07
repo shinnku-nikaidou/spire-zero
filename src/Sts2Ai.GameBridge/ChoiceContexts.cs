@@ -55,17 +55,15 @@ public static class ChoiceContexts
 
         var prefs = Arg(p => p.ParameterType == typeof(CardSelectorPrefs)) as CardSelectorPrefs?;
         var source = Arg(p => p.Name == "source") as AbstractModel ?? (Arg(p => p.ParameterType == typeof(PlayerChoiceContext)) as PlayerChoiceContext)?.LastInvolvedModel;
-        var pile = Arg(p => p.ParameterType == typeof(CardPile)) as CardPile;
-        var enchantment = Arg(p => p.ParameterType == typeof(EnchantmentModel)) as EnchantmentModel;
         var prompt = prefs?.Prompt;
         return new ChoiceContext
         {
-            Purpose = pile != null ? $"{JsonNamingPolicy.SnakeCaseLower.ConvertName(pile.Type.ToString())}_pile" : JsonNamingPolicy.SnakeCaseLower.ConvertName(entry.Name["From".Length..]),
+            Purpose = Arg(p => p.ParameterType == typeof(CardPile)) is CardPile pile ? $"{JsonNamingPolicy.SnakeCaseLower.ConvertName(pile.Type.ToString())}_pile" : JsonNamingPolicy.SnakeCaseLower.ConvertName(entry.Name["From".Length..]),
             Source = source?.Id.Entry,
             Cancelable = prefs?.Cancelable ?? Arg(p => p.Name == "canSkip") is true,
             InCombat = CombatManager.Instance.IsInProgress,
             PromptKey = prompt != null ? $"{prompt.LocTable}.{prompt.LocEntryKey}" : null,
-            Enchantment = enchantment != null ? new ModifierView(enchantment.Id.Entry, (int)Arg(p => p.Name == "amount")!) : null,
+            Enchantment = Arg(p => p.ParameterType == typeof(EnchantmentModel)) is EnchantmentModel enchantment ? new ModifierView(enchantment.Id.Entry, (int)Arg(p => p.Name == "amount")!) : null,
         };
     }
 

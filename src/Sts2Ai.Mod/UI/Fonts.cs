@@ -2,7 +2,7 @@ using Godot;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Localization.Fonts;
 
-namespace Sts2Ai.Mod;
+namespace Sts2Ai.Mod.UI;
 
 /// <summary>
 /// The game's own font for the mod's text (docs: output §2). The game draws at 1080p and scales the canvas to the window,

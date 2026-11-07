@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>Parses the "verb:argument" text form of out-of-combat actions.</summary>
 internal static class ActionText

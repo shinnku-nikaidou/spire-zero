@@ -53,10 +53,10 @@ internal static partial class Describe
             : [];
         string next = Action(answer.Action, obs);
         // On the map, the route's rings and lines are drawn on the map itself (MapMark); the panel names its rooms.
-        if (ActionText.Is(answer.Action, "map", out _)) return new(next, plan.Select(a => Room(a, obs.Run.Map)).ToList(), true, null, kind, options);
-        if (obs.Screen is not CombatScreen) return new(next, plan.Select(a => Action(a, obs)).ToList(), false, null, kind, options);
+        if (ActionText.Is(answer.Action, "map", out _)) return new(next, [.. plan.Select(a => Room(a, obs.Run.Map))], true, null, kind, options);
+        if (obs.Screen is not CombatScreen) return new(next, [.. plan.Select(a => Action(a, obs))], false, null, kind, options);
         var (turn, later) = Turn(answer.Action, plan);
-        return new(next, turn.Skip(1).Select(a => Action(a, obs)).ToList(), false,
+        return new(next, [.. turn.Skip(1).Select(a => Action(a, obs))], false,
             later == 0 ? null : L10n.T("{0} more turns planned", later), kind, options);
     }
 
@@ -99,7 +99,7 @@ internal static partial class Describe
         var all = plan.Prepend(first).ToList();
         int end = all.FindIndex(Ends);
         int later = end < 0 ? 0 : all.Skip(end + 1).Count(Ends) + (all.Count > end + 1 && !Ends(all[^1]) ? 1 : 0);
-        return (end < 0 ? all : all.Take(end + 1).ToList(), later);
+        return (end < 0 ? all : [.. all.Take(end + 1)], later);
     }
 
     private static string Action(string action, Observation obs)

@@ -1,7 +1,7 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class RunNetTests
 {
@@ -38,7 +38,7 @@ public class RunNetTests
     }
 
     private static MapPointView Point(int col, int row, string type, bool? quest = null, params (int Col, int Row)[] next) =>
-        new() { Col = col, Row = row, Type = type, Quest = quest, Next = next.Select(n => new Coord(n.Col, n.Row)).ToList() };
+        new() { Col = col, Row = row, Type = type, Quest = quest, Next = [.. next.Select(n => new Coord(n.Col, n.Row))] };
 
     // As learn/tests' MAP: start (0,0) -> (0,1) Monster or (1,1) Elite; both -> (0,2) RestSite -> (0,3) Boss; (2,1)
     // leads nowhere from here.
@@ -50,7 +50,7 @@ public class RunNetTests
             Point(1, 1, "Elite", true, (0, 2)), Point(2, 1, "Shop", null, (0, 2)), Point(0, 2, "RestSite", null, (0, 3)),
             Point(0, 3, "Boss"),
         ],
-        Visited = visited.Select(v => new Coord(v.Col, v.Row)).ToList(),
+        Visited = [.. visited.Select(v => new Coord(v.Col, v.Row))],
         Boss = "B",
     };
 

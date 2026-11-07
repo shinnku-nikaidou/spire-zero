@@ -2,7 +2,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Harness;
 
 /// <summary>The options a macro answer carries to a host that shows them (docs: harness §5): V's value of each, and on the map each one's route.</summary>
 public class ExplainTests

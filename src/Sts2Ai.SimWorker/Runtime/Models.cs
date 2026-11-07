@@ -1,11 +1,11 @@
 using MegaCrit.Sts2.Core.Models;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime;
 
 /// <summary>Canonical game models by id entry, the form observations and the command line use ("STRIKE_SILENT").</summary>
 internal static class Models
 {
-    private static readonly Dictionary<(Type, string), AbstractModel> Cache = new();
+    private static readonly Dictionary<(Type, string), AbstractModel> Cache = [];
 
     public static T Find<T>(string id) where T : AbstractModel
     {

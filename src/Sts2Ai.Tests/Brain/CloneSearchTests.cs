@@ -1,7 +1,7 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class CloneSearchTests
 {
@@ -22,7 +22,7 @@ public class CloneSearchTests
         public IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<string>> paths)
         {
             Probes += paths.Count;
-            return paths.Select(play).ToList();
+            return [.. paths.Select(play)];
         }
     }
 
@@ -67,7 +67,7 @@ public class CloneSearchTests
     /// <summary>An event whose first page shows nothing: entering leads to a page that gives relic B; leaving ends it.</summary>
     private static Afterstate Event(IReadOnlyList<string> path)
     {
-        EventScreen Page(string page) => new() { Id = "TOY", Page = page, Options = [], Finished = false };
+        static EventScreen Page(string page) => new() { Id = "TOY", Page = page, Options = [], Finished = false };
         return path switch
         {
             [] => new(Start, Surfaces.Event, Page("first"), ["event:0", "event:1"]),
@@ -101,14 +101,14 @@ public class CloneSearchTests
     {
         var choice = new CardChoice
         {
-            Options = new[] { "A", "B", "BAD", "C" }.Select(id => new CardView { Id = id }).ToList(),
+            Options = [.. CardIds.Select(id => new CardView { Id = id })],
             Min = 2,
             Max = 2,
             Context = new ChoiceContext { Purpose = "choose_a_card_screen", Cancelable = false, InCombat = false },
         };
         var toy = new Toy(path => path switch
         {
-            [var pick] => Exit(Start with { Deck = pick["pick:".Length..].Split(',').Select(i => choice.Options[int.Parse(i)]).ToList() }),
+            [var pick] => Exit(Start with { Deck = [.. pick["pick:".Length..].Split(',').Select(i => choice.Options[int.Parse(i)])] }),
             _ => throw new InvalidOperationException(string.Join(" ", path)),
         });
         var prompt = new ChoiceDecision(choice, () => new Observation { Run = Start, Screen = new CardChoiceScreen { Choice = choice } }, toy);
@@ -116,12 +116,13 @@ public class CloneSearchTests
     }
 
     private static readonly CardView[] Offered = [new() { Id = "A" }, new() { Id = "BAD" }];
+    private static readonly string[] CardIds = ["A", "B", "BAD", "C"];
 
     /// <summary>
     /// A rewards screen: a card reward (reward:0, A or BAD) and relic Y (reward:1). Skipping the card reward returns to
     /// the screen with the card reward still on it, as in the game. Leaving goes on to a state V likes less (relic BAD).
     /// </summary>
-    private static Afterstate Rewards(IReadOnlyList<string> path)
+    private static Afterstate Rewards(List<string> path)
     {
         var run = Start;
         bool card = true, relic = true;

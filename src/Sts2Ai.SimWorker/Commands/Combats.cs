@@ -12,11 +12,12 @@ using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>list: what this game build knows.</summary>
 internal static class TablesCommand
 {
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
     private static readonly Option<string> Out = Opt.Of("--out", "learn/game_ids.json", "where the file goes");
 
     public static Command Command()
@@ -55,7 +56,7 @@ internal static class TablesCommand
             ["points"] = Enum.GetNames<MapPointType>(),
         };
         var sorted = ids.ToDictionary(kv => kv.Key, kv => kv.Value.Distinct().Order(StringComparer.Ordinal).ToList());
-        File.WriteAllText(path, JsonSerializer.Serialize(sorted, new JsonSerializerOptions { WriteIndented = true }) + "\n");
+        File.WriteAllText(path, JsonSerializer.Serialize(sorted, Indented) + "\n");
         Console.WriteLine($"wrote {path}: game {HeadlessGame.GameVersion}, {sorted["cards"].Count} cards");
         return 0;
 
@@ -141,7 +142,7 @@ internal static class CombatCommand
             Console.WriteLine($"    -> {action}");
             session.Execute(action);
         }
-        Console.WriteLine($"result {session.Outcome} after {session.ActionsExecuted} actions, round {session.State.RoundNumber}, hp {session.Player.Creature.CurrentHp}");
+        Console.WriteLine($"result {session.Outcome} after {session.ActionsExecuted} actions, round {CombatSession.State.RoundNumber}, hp {session.Player.Creature.CurrentHp}");
         Console.WriteLine("trace: " + string.Join(" ", session.Trace));
         foreach (var e in HeadlessGame.TakeErrors()) Console.WriteLine("  game error: " + e);
         return 0;
@@ -198,9 +199,9 @@ internal static class BenchCommand
                 using var session = CombatSession.Start(pump, setup, new RandomChoices(rng));
                 startMs = (clock.Elapsed - started).TotalMilliseconds;
                 session.PlayOut(Policies.Combat(policy, rng));
-                outcome = session.IsOver ? session.Outcome.ToString() : CombatOutcome.Truncated.ToString();
+                outcome = CombatSession.IsOver ? session.Outcome.ToString() : CombatOutcome.Truncated.ToString();
                 steps = session.ActionsExecuted;
-                rounds = session.State.RoundNumber;
+                rounds = CombatSession.State.RoundNumber;
                 hp = session.Player.Creature.CurrentHp;
             }
             catch (Exception e)

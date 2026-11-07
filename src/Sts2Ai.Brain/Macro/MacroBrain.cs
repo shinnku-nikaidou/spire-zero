@@ -1,6 +1,6 @@
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Macro;
 
 /// <summary>
 /// The macro brain's L0 (docs: macro-brain/search): it values each option's afterstate with V and takes the best, the first
@@ -130,7 +130,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
 
     /// <summary>Each legal action, in order, with its afterstate and its value: what <see cref="Choose(MacroDecision)"/> picks by.</summary>
     public IReadOnlyList<(string Action, RunView After, double Value)> Options(MacroDecision decision) =>
-        Weigh(decision).Select(o => (o.Action, o.After, o.Value)).ToList();
+        [.. Weigh(decision).Select(o => (o.Action, o.After, o.Value))];
 
     /// <param name="Opens">Whether the option opens a card prompt it was valued by.</param>
     private sealed record Option(string Action, RunView After, double Value, bool Opens);
@@ -140,9 +140,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
         var obs = decision.Observation;
         var legal = Offered(obs, decision.Legal);
         if (decision.Clone is not { } clone)
-            return AfterMoves(obs, legal.Select(a => { var after = After(obs, a); return new Option(a, after, value.Value(after), OpensPrompt(obs, a)); }).ToList());
+            return AfterMoves(obs, [.. legal.Select(a => { var after = After(obs, a); return new Option(a, after, value.Value(after), OpensPrompt(obs, a)); })]);
         var played = legal.Where(a => !Travels(obs, a)).ToList();
-        var found = new CloneSearch(value, clone, _decided).Search(Root(decision), played.Select(a => (IReadOnlyList<string>)[a]).ToList());
+        var found = new CloneSearch(value, clone, _decided).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<string>)[a])]);
         var options = new List<Option>();
         int k = 0;
         foreach (var a in legal)
@@ -174,7 +174,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
             _ => false,
         };
         var offered = legal.Where(a => room || Split(a).Verb != "discard_potion").ToList();
-        return offered.Count > 0 ? offered : legal.ToList();
+        return offered.Count > 0 ? offered : [.. legal];
     }
 
     /// <summary>
@@ -187,8 +187,8 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
     {
         var moves = options.Where(o => Travels(obs, o.Action)).Select(o => o.Action).ToList();
         if (moves.Count == 0) return options;
-        return options.Select(o => Travels(obs, o.Action) || double.IsNegativeInfinity(o.Value) ? o
-            : o with { Value = moves.Max(m => value.Value(After(obs with { Run = o.After }, m))) }).ToList();
+        return [.. options.Select(o => Travels(obs, o.Action) || double.IsNegativeInfinity(o.Value) ? o
+            : o with { Value = moves.Max(m => value.Value(After(obs with { Run = o.After }, m))) })];
     }
 
     /// <summary>The decision as a probe of no answers shows it.</summary>
@@ -266,8 +266,8 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
 
     /// <summary>Options to show: the chosen first, then best first; a value that is not finite (a state already decided) left out.</summary>
     private static List<Candidate> Rank(IEnumerable<(string Action, double Value)> options, string chosen) =>
-        options.Where(o => double.IsFinite(o.Value)).OrderByDescending(o => o.Action == chosen).ThenByDescending(o => o.Value)
-            .Select(o => new Candidate(o.Action, o.Value, 0, 1)).ToList();
+        [.. options.Where(o => double.IsFinite(o.Value)).OrderByDescending(o => o.Action == chosen).ThenByDescending(o => o.Value)
+            .Select(o => new Candidate(o.Action, o.Value, 0, 1))];
 
     /// <summary>
     /// SL: a card prompt answered on the node's clone. A local search over the answers the prompt accepts, from no pick
@@ -308,7 +308,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
             var fresh = near.Select(Answer).Where(a => !worth.ContainsKey(a)).Distinct().ToList();
             if (fresh.Count > 0)
             {
-                var found = new CloneSearch(value, clone, _decided).Search(root, fresh.Select(a => (IReadOnlyList<string>)[a]).ToList());
+                var found = new CloneSearch(value, clone, _decided).Search(root, [.. fresh.Select(a => (IReadOnlyList<string>)[a])]);
                 for (int i = 0; i < fresh.Count; i++) worth[fresh[i]] = found[i].Value;
             }
             var taken = near[Best(near.Select(c => worth[Answer(c)]).ToList())];
@@ -317,7 +317,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
         }
         _decided.Add(CloneSearch.Key(root));
         Scored = Rank(worth.Select(kv => (kv.Key, kv.Value)), Answer(counts));
-        return counts.SelectMany((n, g) => groups[g].Take(n)).Order().ToList();
+        return [.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()];
     }
 
     /// <summary>The answers one pick away from <paramref name="counts"/> that the prompt accepts.</summary>
@@ -344,7 +344,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
     }
 
     /// <summary>The first best of <paramref name="values"/>.</summary>
-    private static int Best(IReadOnlyList<double> values)
+    private static int Best(List<double> values)
     {
         int best = 0;
         for (int i = 1; i < values.Count; i++)
@@ -362,7 +362,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
         if (verb is "potion" or "discard_potion")
         {
             int slot = int.Parse(arg);
-            return run with { Potions = run.Potions.Select((p, i) => i == slot ? null : p).ToList() };
+            return run with { Potions = [.. run.Potions.Select((p, i) => i == slot ? null : p)] };
         }
         switch (obs.Screen)
         {
@@ -456,7 +456,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null) : IMacr
     private static RunView WithPotion(RunView run, string id)
     {
         int slot = run.Potions.ToList().IndexOf(null);
-        return slot < 0 ? run : run with { Potions = run.Potions.Select((p, i) => i == slot ? id : p).ToList() };
+        return slot < 0 ? run : run with { Potions = [.. run.Potions.Select((p, i) => i == slot ? id : p)] };
     }
 
     private static List<CardView> Without(IReadOnlyList<CardView> deck, CardView card) => Minus(deck, [card]);

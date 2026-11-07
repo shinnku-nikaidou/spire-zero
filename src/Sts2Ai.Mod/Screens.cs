@@ -59,12 +59,12 @@ internal sealed class Screens
         {
             case NCombatRoom when NPlayerHand.Instance is { IsInCardSelection: true } hand:
                 return Prompt(run, me, Field<object>(hand, "_selectionCompletionSource"), Field<CardSelectorPrefs>(hand, "_prefs"),
-                    PileType.Hand.GetPile(me).Cards.Where(Field<Func<CardModel, bool>?>(hand, "_currentSelectionFilter") ?? (_ => true)).ToList());
+                    [.. PileType.Hand.GetPile(me).Cards.Where(Field<Func<CardModel, bool>?>(hand, "_currentSelectionFilter") ?? (_ => true))]);
             case NCombatRoom:
                 return Combat(run, me);
             case NCombatPileCardSelectScreen pile:
                 return Prompt(run, me, pile, Field<CardSelectorPrefs>(pile, "_prefs"),
-                    Field<CardPile>(pile, "_pile").Cards.Where(Field<Func<CardModel, bool>?>(pile, "_filter") ?? (_ => true)).ToList());
+                    [.. Field<CardPile>(pile, "_pile").Cards.Where(Field<Func<CardModel, bool>?>(pile, "_filter") ?? (_ => true))]);
             case NCardGridSelectionScreen grid:
                 return Prompt(run, me, grid, Field<CardSelectorPrefs>(grid, "_prefs"), Field<IReadOnlyList<CardModel>>(grid, "_cards"));
             case NChooseACardSelectionScreen choose:

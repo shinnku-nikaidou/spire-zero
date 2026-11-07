@@ -22,7 +22,7 @@ public sealed class WorkerPool : IDisposable
 
     private readonly ProcessStartInfo _start;
     private readonly TimeSpan _timeout;
-    private readonly BlockingCollection<Worker> _free = new();
+    private readonly BlockingCollection<Worker> _free = [];
     private int _restarts;
     private readonly List<string> _gameErrors = [];
 

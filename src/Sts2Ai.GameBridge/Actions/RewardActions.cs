@@ -8,7 +8,7 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.TestSupport;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>
 /// The rewards screen: "reward:i" takes reward i (index into the set, which is the screen's order), "rewards_done"
@@ -24,7 +24,7 @@ public static class RewardActions
     /// <summary>The buttons of the rewards not taken yet: what each shows, and the cards a card reward would show if opened.</summary>
     public static RewardsScreen Screen(RewardsSet set) => new()
     {
-        Rewards = set.Rewards.Select((reward, i) => (reward, i)).Where(r => !r.reward.SuccessfullySelected).Select(r => View(r.reward, r.i)).ToList(),
+        Rewards = [.. set.Rewards.Select((reward, i) => (reward, i)).Where(r => !r.reward.SuccessfullySelected).Select(r => View(r.reward, r.i))],
     };
 
     private static RewardView View(Reward reward, int index) => reward switch
@@ -32,7 +32,7 @@ public static class RewardActions
         GoldReward gold => new() { Index = index, Kind = "gold", Amount = gold.Amount },
         PotionReward potion => new() { Index = index, Kind = "potion", Id = potion.Potion?.Id.Entry },
         RelicReward relic => new() { Index = index, Kind = "relic", Id = relic.Relic?.Id.Entry },
-        CardReward card => new() { Index = index, Kind = "card", Cards = card.Cards.Select(c => Observe.Card(c)).ToList() },
+        CardReward card => new() { Index = index, Kind = "card", Cards = [.. card.Cards.Select(c => Observe.Card(c))] },
         // The card is private; the button's hover tip shows it.
         SpecialCardReward special => new() { Index = index, Kind = "special_card", Card = special.HoverTips.OfType<CardHoverTip>().Select(t => Observe.Card(t.Card)).FirstOrDefault() },
         CardRemovalReward => new() { Index = index, Kind = "remove_card" },
@@ -88,8 +88,8 @@ public static class RewardActions
 
     public static CardRewardScreen CardRewardScreen(IReadOnlyList<CardCreationResult> cards, IReadOnlyList<CardRewardAlternative> alternatives) => new()
     {
-        Cards = cards.Select(c => Observe.Card(c.Card)).ToList(),
-        Alternatives = alternatives.Select(a => a.OptionId).ToList(),
+        Cards = [.. cards.Select(c => Observe.Card(c.Card))],
+        Alternatives = [.. alternatives.Select(a => a.OptionId)],
     };
 
     /// <summary>

@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
 /// The sim's command line (System.CommandLine): `--help` lists the commands, `COMMAND --help` a command's options. Each

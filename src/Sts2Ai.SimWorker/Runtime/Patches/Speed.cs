@@ -3,7 +3,7 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime.Patches;
 
 internal static partial class HeadlessPatches
 {

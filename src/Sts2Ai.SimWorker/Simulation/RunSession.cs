@@ -22,7 +22,7 @@ using Sts2Ai.GameBridge;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>How a run starts: a new singleplayer run of <see cref="Character"/>; a loadout replaces the starting one.</summary>
 internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null);
@@ -220,7 +220,7 @@ internal sealed class RunSession : IDisposable
     }
 
     /// <summary>The current node's SL clone: its checkpoint and the decisions since.</summary>
-    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), _trace.Skip(NodeStart).ToList());
+    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), [.. _trace.Skip(NodeStart)]);
 
     /// <summary>Makes one decision, after anything the game or the driver does on its own. Does nothing once the run is over.</summary>
     public void Step()

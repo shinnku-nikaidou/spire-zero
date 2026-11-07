@@ -2,7 +2,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using Sts2Ai.GameBridge;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime.Patches;
 
 /// <summary>
 /// Harmony patches that let the game's model layer run without the engine. Each patch replaces a call that

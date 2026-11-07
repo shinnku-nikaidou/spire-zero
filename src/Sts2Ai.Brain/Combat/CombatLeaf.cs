@@ -1,6 +1,6 @@
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Combat;
 
 /// <summary>
 /// What a search leaf is worth (docs: combat-brain/leaf §1): a state after the turn ends, or after the combat does, with

@@ -1,7 +1,7 @@
 using System.Text;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Combat;
 
 /// <summary>A state on the search's current path, for <see cref="LoopSearch"/> to compare a later state with.</summary>
 /// <param name="Obs">The state's observation.</param>
@@ -165,7 +165,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
             var before = path.FirstOrDefault(p => p.Depth == back.Depth + i);
             return before?.Obs.Hand.FirstOrDefault(c => c.Uid == move.Card)?.Id;
         }).ToList();
-        return new(back.Snapshot, actions.Take(back.Depth).ToList(), hashes.Take(back.Depth).ToList(), moves, ids, Potential(back.Obs));
+        return new(back.Snapshot, [.. actions.Take(back.Depth)], [.. hashes.Take(back.Depth)], moves, ids, Potential(back.Obs));
     }
 
     /// <summary>The piles and what is fixed about the enemies, then every number: whether two states differ at all.</summary>
@@ -370,7 +370,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         }
         _cutting = outer;
         if (kept.Any(e => e.Status == CombatStatus.Won)) _won = true;
-        return kept.OrderByDescending(e => e.Value).ThenBy(e => e.Actions.Count).ToList();
+        return [.. kept.OrderByDescending(e => e.Value).ThenBy(e => e.Actions.Count)];
     }
 
     private Line Replayed(Cycle cycle, int count, out CombatStatus status)

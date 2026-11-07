@@ -2,7 +2,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
 /// L0's probes in SL (docs: macro-brain/search §6): a node's clone at a decision outside combat, loaded once per path, plays
@@ -14,7 +14,7 @@ internal static class NodeProbe
     public static IReadOnlyList<Afterstate> After(Pump pump, NodeClone node, IReadOnlyList<IReadOnlyList<string>> paths)
     {
         var opened = Checkpoint.Open(node.Save);
-        return paths.Select(path => After(pump, node, opened, path)).ToList();
+        return [.. paths.Select(path => After(pump, node, opened, path))];
     }
 
     private static Afterstate After(Pump pump, NodeClone node, Checkpoint.Opened opened, IReadOnlyList<string> path)
@@ -72,7 +72,7 @@ internal static class NodeProbe
             {
                 var step = _left.Dequeue();
                 if (!step.StartsWith("pick:", StringComparison.Ordinal)) throw new InvalidOperationException($"a probe's {step} met a card prompt");
-                return step["pick:".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+                return [.. step["pick:".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)];
             }
             var obs = decision.Observation ?? throw new InvalidOperationException("a card prompt outside the run");
             Next ??= new(obs.Run, Surfaces.CardChoice, obs.Screen, []);

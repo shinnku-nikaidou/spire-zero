@@ -63,7 +63,7 @@ flowchart LR
 
 ## 4. 代码
 
-`src/Sts2Ai.SimWorker` 引用游戏、GameBridge、Protocol、Brain 和 Harness。它的代码按职责分文件夹；命名空间一律是 `Sts2Ai.SimWorker`。
+`src/Sts2Ai.SimWorker` 引用游戏、GameBridge、Protocol、Brain 和 Harness。它的代码按职责分文件夹，命名空间跟着文件夹走（`Simulation/` 就是 `Sts2Ai.SimWorker.Simulation`），项目文件把这些命名空间导入每个文件。
 
 | 文件夹 | 内容 |
 |---|---|

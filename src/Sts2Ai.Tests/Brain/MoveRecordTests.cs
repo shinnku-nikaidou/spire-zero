@@ -1,6 +1,6 @@
 using Sts2Ai.Brain;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class MoveRecordTests
 {

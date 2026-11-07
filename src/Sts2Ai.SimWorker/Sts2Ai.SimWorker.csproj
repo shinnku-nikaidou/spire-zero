@@ -46,4 +46,17 @@
       <SourceRevisionId>$(SourceRevisionId)-dirty</SourceRevisionId>
     </PropertyGroup>
   </Target>
+
+  <ItemGroup>
+    <!-- Namespaces follow folders; these are in scope in every file. -->
+    <Using Include="Sts2Ai.Brain.Combat" />
+    <Using Include="Sts2Ai.Brain.Macro" />
+    <Using Include="Sts2Ai.GameBridge.Actions" />
+    <Using Include="Sts2Ai.SimWorker.Brains" />
+    <Using Include="Sts2Ai.SimWorker.Checks" />
+    <Using Include="Sts2Ai.SimWorker.Commands" />
+    <Using Include="Sts2Ai.SimWorker.Runtime" />
+    <Using Include="Sts2Ai.SimWorker.Runtime.Patches" />
+    <Using Include="Sts2Ai.SimWorker.Simulation" />
+  </ItemGroup>
 </Project>

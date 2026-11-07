@@ -1,6 +1,6 @@
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Combat;
 
 /// <summary>A beam state as a turn's search needs it: the actions from the decision to it, and the record of enemy
 /// moves up to it, for the leaves.</summary>
@@ -75,15 +75,15 @@ public sealed class SlPlanner(ICombatLeaf leaf)
     public const int MaxTurns = 40;
 
     /// <summary>Plans the rest of the combat in <paramref name="world"/>, the SL world at the decision, searching here.</summary>
-    public SlPlan Plan(CombatObservation observation, ICombatWorld world, Budget budget, IReadOnlyList<EnemyTurns>? history = null)
+    public SlPlan Plan(ICombatWorld world, Budget budget, IReadOnlyList<EnemyTurns>? history = null)
     {
         var root = world.Snapshot();
-        return Search(budget, history ?? [], (jobs, nodes, keep, floor) => jobs.Select(job =>
+        return Search(budget, history ?? [], (jobs, nodes, keep, floor) => [.. jobs.Select(job =>
         {
             world.Restore(root);
             foreach (var action in job.Path) world.Execute(action);
             return SearchTurn(world, job.History, nodes, keep, floor);
-        }).ToList());
+        })]);
     }
 
     /// <summary>
@@ -182,7 +182,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 if (_searched.TryGetValue(PathKey(states[i].Actions), out var full)) found[i] = Narrow(full, width, floor) with { Nodes = 0 };
                 else asked.Add(i);
             if (asked.Count == 0) return [.. found];
-            var replies = search(asked.Select(i => new PlanJob(states[i].Actions, states[i].History)).ToList(), nodesPerState,
+            var replies = search([.. asked.Select(i => new PlanJob(states[i].Actions, states[i].History))], nodesPerState,
                 dive ? int.MaxValue : width, dive ? null : floor);
             for (int k = 0; k < asked.Count; k++)
             {
@@ -214,8 +214,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                         played = i + 1;
                         break;
                     }
-            var result = new CombatDecisionResult(pick.Actions[0], pick.Actions.Take(played).Skip(1).ToList(), candidates,
-                pick.Hashes.Take(played).Skip(1).ToList());
+            var result = new CombatDecisionResult(pick.Actions[0], [.. pick.Actions.Take(played).Skip(1)], candidates,
+                [.. pick.Hashes.Take(played).Skip(1)]);
             return new(result, pick.Value, pick.Status, _nodes, _turns, Proved);
         }
     }

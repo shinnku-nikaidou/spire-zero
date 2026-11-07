@@ -1,7 +1,7 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Brains;
 
 /// <summary>
 /// V (--value FILE), which l0 values its options by and which prices the combat net's endings, and what the search values

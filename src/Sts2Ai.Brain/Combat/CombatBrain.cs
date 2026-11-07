@@ -1,6 +1,6 @@
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Combat;
 
 /// <summary>How much search one decision may use (docs: harness/routing §4): worlds, and actions simulated per world.</summary>
 /// <param name="NodesPerWorld">PIMC: the actions simulated in each world's search of the turn. The SL planner: in each
@@ -70,7 +70,7 @@ public sealed class TurnPlan(bool all = true)
     {
         bool pending = _steps.TryDequeue(out var step);
         if (pending && step.Hash == ProtocolJson.Hash(observation) && legal.Contains(step.Action.Plain))
-            return new(step.Action, _steps.Select(s => s.Action).ToList(), [], _steps.Select(s => s.Hash).ToList());
+            return new(step.Action, [.. _steps.Select(s => s.Action)], [], [.. _steps.Select(s => s.Hash)]);
         _steps.Clear();
         var result = search();
         if (pending) result = result with { Replanned = true };
@@ -107,11 +107,11 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         if (legal.Count == 1) return Only(legal[0]);
         var live = worlds.Worlds(budget.Worlds, seed);
         var roots = live.Select(w => w.Snapshot()).ToList();
-        return Root(Ordered(legal), budget, (first, nodes) => live.Select((w, k) =>
+        return Root(Ordered(legal), budget, (first, nodes) => [.. live.Select((w, k) =>
         {
             w.Restore(roots[k]);
             return SearchWorld(w, observation.Round, first, nodes, history);
-        }).ToList());
+        })]);
     }
 
     /// <summary>The answer when there is nothing to choose: no search, so no candidates.</summary>
@@ -131,19 +131,19 @@ public sealed class PimcBrain(ICombatLeaf leaf)
     /// world. The candidates are listed best first.</summary>
     private static CombatDecisionResult Merge(IReadOnlyList<CombatAction> first, IReadOnlyList<IReadOnlyList<PlannedLine>> worlds)
     {
-        var candidates = first.Select((action, a) => Summarize(action.ToString(), worlds.Select(lines => lines[a]).ToList())).ToList();
+        var candidates = first.Select((action, a) => Summarize(action.ToString(), [.. worlds.Select(lines => lines[a])])).ToList();
         var order = Enumerable.Range(0, first.Count).OrderByDescending(a => candidates[a].Value).ToList();
         var line = worlds[0][order[0]];
         bool agreed = line.Hashes != null && worlds.All(lines =>
             lines[order[0]].Actions.SequenceEqual(line.Actions) && lines[order[0]].Hashes!.SequenceEqual(line.Hashes));
         // A line may start with the first action and an answer to its prompt, which the first world's line gives.
         var pick = line.Actions.Count > 0 ? line.Actions[0] : first[order[0]];
-        return new(pick, line.Actions.Skip(1).ToList(), order.Select(a => candidates[a]).ToList(), agreed ? line.Hashes!.Skip(1).ToList() : null, Repeats: line.Repeats);
+        return new(pick, [.. line.Actions.Skip(1)], [.. order.Select(a => candidates[a])], agreed ? line.Hashes!.Skip(1).ToList() : null, Repeats: line.Repeats);
     }
 
     /// <summary>Search order: ending the turn first (the fallback a spent budget leaves), then cards in hand order, then potions.</summary>
     public static List<CombatAction> Ordered(IReadOnlyList<CombatAction> legal) =>
-        legal.OrderBy(a => a.Kind switch { CombatActionKind.EndTurn => 0, CombatActionKind.PlayCard => 1, _ => 2 }).ToList();
+        [.. legal.OrderBy(a => a.Kind switch { CombatActionKind.EndTurn => 0, CombatActionKind.PlayCard => 1, _ => 2 })];
 
     /// <param name="lines">The action's best line in each world.</param>
     private static Candidate Summarize(string action, IReadOnlyList<PlannedLine> lines)
@@ -151,7 +151,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         var values = lines.Select(l => l.Value).ToArray();
         double mean = values.Average();
         double ci = values.Length < 2 ? 0 : 1.96 * Math.Sqrt(values.Sum(v => (v - mean) * (v - mean)) / (values.Length - 1) / values.Length);
-        return new(action, mean, ci, values.Length, values.Select(v => Math.Round(v, 4)).ToList());
+        return new(action, mean, ci, values.Length, [.. values.Select(v => Math.Round(v, 4))]);
     }
 
     private sealed class WorldSearch(ICombatWorld world, int round, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodesPerFirst)

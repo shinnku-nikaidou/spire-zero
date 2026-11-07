@@ -3,7 +3,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Brains;
 
 /// <summary>The champion that --policy and --macro name (docs: harness/routing §1), pimc's budget, and l0's V (--value).</summary>
 /// <param name="Value">l0's V; null with no l0.</param>

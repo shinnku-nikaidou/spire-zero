@@ -17,7 +17,7 @@ using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
 /// Builds a sim combat that shows exactly a given observation, such as one the mod sends from the real game, so a
@@ -59,7 +59,7 @@ internal static class CombatBuilder
         var encounter = Models.Find<EncounterModel>(obs.Encounter ?? throw new ArgumentException("the observation names no encounter"));
         var deck = obs.Hand.Concat(obs.Draw).Concat(obs.Discard).Concat(obs.Exhaust)
             .Select(c => new CardSpec(c.Id, c.Up ?? 0, c.Enchant?.Id, c.Enchant?.Amount ?? 0)).ToList();
-        var loadout = new Loadout(deck, obs.Relics.Select(r => r.Id).ToList(), Potions: [], obs.Player.Hp, obs.Player.MaxHp);
+        var loadout = new Loadout(deck, [.. obs.Relics.Select(r => r.Id)], Potions: [], obs.Player.Hp, obs.Player.MaxHp);
         return new CombatSetup(obs.Player.Character, encounter, obs.Act, seed, obs.Ascension, loadout, From: obs, History: history);
     }
 
@@ -94,7 +94,7 @@ internal static class CombatBuilder
 
         // After powers and relics, whose global modifiers show in card costs and keywords.
         Cards(st, player, obs);
-        NumberCards(pcs, obs.Hand.Select(c => c.Uid ?? throw new ArgumentException($"card {c.Id} in hand has no uid")).ToList());
+        NumberCards(pcs, [.. obs.Hand.Select(c => c.Uid ?? throw new ArgumentException($"card {c.Id} in hand has no uid"))]);
 
         // After the powers, which change the damage an intent shows.
         foreach (var machine in st.Enemies.Select(e => e.Monster?.MoveStateMachine))
@@ -214,9 +214,9 @@ internal static class CombatBuilder
 
     /// <summary>The monster's moves that would show the same intents as <paramref name="intents"/>, by id.</summary>
     public static List<MoveState> MovesShowing(Creature monster, Creature[] targets, string intents) =>
-        monster.Monster!.MoveStateMachine!.States.Values.OfType<MoveState>()
+        [.. monster.Monster!.MoveStateMachine!.States.Values.OfType<MoveState>()
             .Where(m => Shows(m, monster, targets) == intents)
-            .OrderBy(m => m.Id, StringComparer.Ordinal).ToList();
+            .OrderBy(m => m.Id, StringComparer.Ordinal)];
 
     public static string Shows(MoveState move, Creature monster, Creature[] targets) => Key(Observe.Intents(move, monster, targets));
 

@@ -1,7 +1,7 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class SlPlannerTests
 {
@@ -48,7 +48,7 @@ public class SlPlannerTests
         {
             Round = _round,
             Player = Start.Player with { Hp = Math.Max(0, _hp), MaxHp = 20, Block = _block, Energy = _energy },
-            Hand = _hand.Select(c => new CardView { Id = c.Id, Uid = c.Uid }).ToList(),
+            Hand = [.. _hand.Select(c => new CardView { Id = c.Id, Uid = c.Uid })],
             Draw = [],
             Discard = [],
             Potions = [null, null, null],
@@ -82,7 +82,7 @@ public class SlPlannerTests
             else _block += 5;
         }
 
-        public WorldSnapshot Snapshot() => new(_steps.ToList());
+        public WorldSnapshot Snapshot() => new([.. _steps]);
 
         public void Restore(WorldSnapshot snapshot)
         {
@@ -92,12 +92,12 @@ public class SlPlannerTests
         }
     }
 
-    private static readonly ICombatLeaf Leaf = new ToyLeaf();
+    private static readonly ToyLeaf Leaf = new();
 
     /// <summary>The best end of the combat by trying every line; each state once, as the toy shows all of it but the draw.</summary>
     private static double BruteForce(Toy world, Dictionary<(ulong, ulong), double> known)
     {
-        if (world.Status != CombatStatus.InProgress) return Leaf.Value(world.Status, world.Observe(), world.Run(), []);
+        if (world.Status != CombatStatus.InProgress) return Leaf.Outcome(world.Status, world.Observe(), world.Run(), []).Value;
         var key = (ProtocolJson.Hash(world.Observe()), world.HiddenKey());
         if (known.TryGetValue(key, out var value)) return value;
         var here = world.Snapshot();
@@ -127,7 +127,7 @@ public class SlPlannerTests
         // A losing plan is played for its first turn only, unless proved; InProgress checks the steps alone.
         if (plan.End != CombatStatus.Won && !(plan.End == CombatStatus.Lost && plan.Proved)) return;
         Assert.Equal(plan.End, world.Status);
-        Assert.Equal(plan.Value, Leaf.Value(world.Status, world.Observe(), world.Run(), []), 9);
+        Assert.Equal(plan.Value, Leaf.Outcome(world.Status, world.Observe(), world.Run(), []).Value, 9);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class SlPlannerTests
     {
         var world = new Toy();
         double best = BruteForce(world, []);
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
 
         Assert.True(plan.Proved);
         Assert.Equal(CombatStatus.Won, plan.End);
@@ -147,7 +147,7 @@ public class SlPlannerTests
     public void EachCandidateShowsHowItsBestLineEnds()
     {
         var world = new Toy();
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
 
         var chosen = plan.Result.Candidates[0];
         Assert.Equal(plan.Result.First.ToString(), chosen.Action);
@@ -163,7 +163,7 @@ public class SlPlannerTests
     public void ANarrowBeamProvesNothingAndStillPlaysItsLine()
     {
         var world = new Toy();
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 4, Beam: 1));
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 4, Beam: 1));
 
         Assert.False(plan.Proved);
         AssertReplays(plan);
@@ -173,7 +173,7 @@ public class SlPlannerTests
     public void ALosingPlanIsPlayedForOneTurn()
     {
         var world = new Toy(enemyHp: 500);
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 2));
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 2));
 
         Assert.Equal(CombatStatus.Lost, plan.End);
         Assert.False(plan.Proved);
@@ -189,7 +189,7 @@ public class SlPlannerTests
     public void ALosingPlanIsPlayedForItsReplanTurns(int replan)
     {
         var world = new Toy(enemyHp: 500);
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 2, Replan: replan));
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 2, Replan: replan));
 
         Assert.Equal(CombatStatus.Lost, plan.End);
         Assert.False(plan.Proved);
@@ -219,7 +219,7 @@ public class SlPlannerTests
                 plans++;
                 var world = new Toy(enemyHp);
                 world.Restore(real.Snapshot());
-                return new SlPlanner(Leaf).Plan(real.Observe(), world, b);
+                return new SlPlanner(Leaf).Plan(world, b);
             });
             Assert.False(result.Replanned);
             real.Execute(result.First);
@@ -230,11 +230,11 @@ public class SlPlannerTests
     [Fact]
     public void AfterItsLossPlansALosingCombatIsPlayedToItsEnd()
     {
-        var unlimited = PlayRoute(new Budget(NodesPerWorld: 100_000, Beam: 2), enemyHp: 500);
+        var (Plans, End) = PlayRoute(new Budget(NodesPerWorld: 100_000, Beam: 2), enemyHp: 500);
         var limited = PlayRoute(new Budget(NodesPerWorld: 100_000, Beam: 2, LossPlans: 2), enemyHp: 500);
 
-        Assert.Equal(CombatStatus.Lost, unlimited.End);
-        Assert.True(unlimited.Plans > 2);
+        Assert.Equal(CombatStatus.Lost, End);
+        Assert.True(Plans > 2);
         Assert.Equal((2, CombatStatus.Lost), limited);
     }
 
@@ -268,17 +268,17 @@ public class SlPlannerTests
     {
         var planner = new SlPlanner(Leaf);
         var searched = new List<string>();
-        var plan = SlPlanner.Search(new Budget(NodesPerWorld: 100_000, Beam: 4), [], (jobs, nodes, keep, floor) => jobs.Select(job =>
+        var plan = SlPlanner.Search(new Budget(NodesPerWorld: 100_000, Beam: 4), [], (jobs, nodes, keep, floor) => [.. jobs.Select(job =>
         {
             searched.Add(string.Join(" ", job.Path));
             var world = new Toy();
             foreach (var a in job.Path) world.Execute(a);
             return planner.SearchTurn(world, job.History, nodes, keep, floor);
-        }).ToList());
+        })]);
 
         Assert.Single(searched, "");
         Assert.Equal(searched.Count, searched.Distinct().Count());
-        Assert.Equal(new SlPlanner(Leaf).Plan(new Toy().Observe(), new Toy(), new Budget(NodesPerWorld: 100_000, Beam: 4)).Value, plan.Value, 9);
+        Assert.Equal(new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 100_000, Beam: 4)).Value, plan.Value, 9);
         AssertReplays(plan);
     }
 
@@ -286,8 +286,8 @@ public class SlPlannerTests
     public void WhenTheDiveWinsTheFullBeamKeepsTheEasyBeam()
     {
         var world = new Toy();
-        var easy = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000, EasyBeam: 2));
-        var narrow = new SlPlanner(Leaf).Plan(world.Observe(), new Toy(), new Budget(NodesPerWorld: 100_000, Beam: 2));
+        var easy = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 1000, EasyBeam: 2));
+        var narrow = new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 100_000, Beam: 2));
 
         Assert.Equal(CombatStatus.Won, easy.End);
         Assert.Equal((narrow.Value, narrow.Nodes, narrow.Turns), (easy.Value, easy.Nodes, easy.Turns));
@@ -297,8 +297,8 @@ public class SlPlannerTests
     [Fact]
     public void WhenTheDiveLosesTheFullBeamKeepsTheBeam()
     {
-        var losing = new SlPlanner(Leaf).Plan(new Toy(enemyHp: 500).Observe(), new Toy(enemyHp: 500), new Budget(NodesPerWorld: 100_000, Beam: 1000, EasyBeam: 2));
-        var full = new SlPlanner(Leaf).Plan(new Toy(enemyHp: 500).Observe(), new Toy(enemyHp: 500), new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        var losing = new SlPlanner(Leaf).Plan(new Toy(enemyHp: 500), new Budget(NodesPerWorld: 100_000, Beam: 1000, EasyBeam: 2));
+        var full = new SlPlanner(Leaf).Plan(new Toy(enemyHp: 500), new Budget(NodesPerWorld: 100_000, Beam: 1000));
 
         Assert.Equal((full.Value, full.Nodes, full.Turns, full.Proved), (losing.Value, losing.Nodes, losing.Turns, losing.Proved));
     }
@@ -320,11 +320,11 @@ public class SlPlannerTests
     public void AProvedLossIsPlayedToTheEnd()
     {
         var world = new Toy(enemyHp: 500);
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
 
         Assert.True(plan.Proved);
         Assert.Equal(CombatStatus.Lost, plan.End);
-        Assert.True(plan.Result.Plan.Count(a => a.Kind == CombatActionKind.EndTurn) >= 1);
+        Assert.Contains(plan.Result.Plan, a => a.Kind == CombatActionKind.EndTurn);
         AssertReplays(plan, enemyHp: 500);
     }
 
@@ -332,7 +332,7 @@ public class SlPlannerTests
     public void ItsCandidatesStartWithItsPick()
     {
         var world = new Toy();
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
         Assert.Equal(plan.Result.First.ToString(), plan.Result.Candidates[0].Action);
         Assert.Equal(plan.Value, plan.Result.Candidates[0].Value, 9);
     }

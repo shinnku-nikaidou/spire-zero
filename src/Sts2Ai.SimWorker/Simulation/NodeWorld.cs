@@ -4,7 +4,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
 /// The SL world of a combat decision in a run (docs: simulator/worlds §7): the node's clone, loaded and replayed, is the real
@@ -72,7 +72,7 @@ internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisp
 
     public PromptSeen? LastPrompt => _prompts.Seen;
 
-    public WorldSnapshot Snapshot() => new(_steps.ToList());
+    public WorldSnapshot Snapshot() => new([.. _steps]);
 
     public void Restore(WorldSnapshot snapshot)
     {

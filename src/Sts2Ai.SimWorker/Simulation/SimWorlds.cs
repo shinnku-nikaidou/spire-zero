@@ -2,7 +2,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
 /// The worlds for one decision, inside this process (docs: protocol/worlds §1). The game allows one live combat per
@@ -112,17 +112,17 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
             var player = Live.Player;
             return source._run with
             {
-                Relics = player.Relics.Select(GameBridge.Observe.Relic).ToList(),
-                Potions = player.PotionSlots.Select(p => p?.Id.Entry).ToList(),
+                Relics = [.. player.Relics.Select(GameBridge.Observe.Relic)],
+                Potions = [.. player.PotionSlots.Select(p => p?.Id.Entry)],
                 Hp = player.Creature.CurrentHp,
                 MaxHp = player.Creature.MaxHp,
                 Gold = player.Gold,
             };
         }
 
-        public ulong HiddenKey() => source.Environment == PlayEnvironment.SL ? HiddenState.Full(Live.State, Live.Player) : HiddenState.Key(Live.State, Live.Player);
+        public ulong HiddenKey() => source.Environment == PlayEnvironment.SL ? HiddenState.Full(CombatSession.State, Live.Player) : HiddenState.Key(CombatSession.State, Live.Player);
 
-        public IReadOnlyList<CombatAction> Legal() => Live.IsOver ? [] : Live.LegalActions();
+        public IReadOnlyList<CombatAction> Legal() => CombatSession.IsOver ? [] : Live.LegalActions();
 
         public CombatStatus Status => Live.Outcome switch
         {
@@ -141,7 +141,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
 
         public PromptSeen? LastPrompt => source._prompts.Seen;
 
-        public WorldSnapshot Snapshot() => new(trace.Select(e => e.ToString()).ToList());
+        public WorldSnapshot Snapshot() => new([.. trace.Select(e => e.ToString())]);
 
         public void Restore(WorldSnapshot snapshot)
         {

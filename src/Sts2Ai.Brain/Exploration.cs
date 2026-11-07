@@ -21,6 +21,6 @@ public sealed class Uniform(double share, Random rng)
     {
         if (rng.NextDouble() >= Share) return null;
         int n = min + rng.Next(max - min + 1);
-        return Enumerable.Range(0, options).OrderBy(_ => rng.Next()).Take(n).Order().ToList();
+        return [.. Enumerable.Range(0, options).OrderBy(_ => rng.Next()).Take(n).Order()];
     }
 }

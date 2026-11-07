@@ -27,13 +27,13 @@ internal static class Fixtures
         Floor1Run with { Hp = obs.Player.Hp, MaxHp = obs.Player.MaxHp, Gold = obs.Player.Gold, Potions = obs.Potions };
 
     public static CombatObservation WithEnemyHp(this CombatObservation obs, uint uid, int hp) =>
-        obs with { Enemies = obs.Enemies.Select(e => e.Uid == uid ? e with { Hp = hp } : e).ToList() };
+        obs with { Enemies = [.. obs.Enemies.Select(e => e.Uid == uid ? e with { Hp = hp } : e)] };
 
     public static readonly RunConfig Config = new("v0.111.0", "abc1234", "combat pimc 8x300, combat prompts p0, macro l0, macro prompts l0", "NoSL");
 
     public static RunRecord Run(string seed, int floor, string outcome = "lost", RunConfig? config = null, int randomDecisions = 0) =>
         new(config ?? Config, seed, "SILENT", 0, outcome, floor / 17, floor, 0, 70, 99, [], new Dictionary<string, int> { ["map"] = 10 },
-            randomDecisions > 0 ? new Dictionary<string, int> { [Metrics.RandomBrain] = randomDecisions } : new Dictionary<string, int>(),
+            randomDecisions > 0 ? new Dictionary<string, int> { [Metrics.RandomBrain] = randomDecisions } : [],
             0, 0, 0, outcome == "failed" ? "boom" : null, 1000, $"run-{seed}");
 }
 

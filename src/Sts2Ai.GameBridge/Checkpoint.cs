@@ -24,7 +24,7 @@ public static class Checkpoint
 
     /// <summary>The checkpoint of the run as it is now.</summary>
     public static string Take(Player player) => JsonSerializer.Serialize(new Opened(SaveManager.ToJson(RunManager.Instance.ToSave(null)),
-        player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!)))).ToList()));
+        [.. player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!))))]));
 
     /// <summary>Reads <paramref name="checkpoint"/>, once for every load of it.</summary>
     public static Opened Open(string checkpoint) =>

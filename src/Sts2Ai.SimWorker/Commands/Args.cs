@@ -4,7 +4,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>A mistake in what the command line asks for: the sim reports it in one line and exits with code 2.</summary>
 internal sealed class CliException(string message) : Exception(message);
@@ -54,7 +54,7 @@ internal sealed class LoadoutArgs
     public string Character(ParseResult r) => r.GetValue(_character)!;
 
     public Loadout Loadout(ParseResult r) =>
-        SimWorker.Loadout.Parse(r.GetValue(_deck), r.GetValue(_relics), r.GetValue(_potions), r.GetValue(_hp), r.GetValue(_maxHp));
+        Simulation.Loadout.Parse(r.GetValue(_deck), r.GetValue(_relics), r.GetValue(_potions), r.GetValue(_hp), r.GetValue(_maxHp));
 }
 
 /// <summary>The combats a command plays: one act's room kinds, or one encounter, with the player's loadout.</summary>

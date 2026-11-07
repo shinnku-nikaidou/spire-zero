@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime;
 
 /// <summary>
 /// GodotSharp reaches the engine through a table of native function pointers that the engine fills at startup.
@@ -9,14 +9,14 @@ namespace Sts2Ai.SimWorker;
 /// Managed code that touches Godot (strings, nodes, singletons) then runs through without side effects.
 /// Game rules must never depend on these results; if one does, it shows up as a sim-vs-real mismatch.
 /// </summary>
-internal static unsafe class GodotNativeStub
+internal static unsafe partial class GodotNativeStub
 {
     private const int PageSize = 4096;
     private const int ProtReadWriteExec = 7;
     private const int MapPrivateAnonymous = 0x22;
 
-    [DllImport("libc", SetLastError = true)]
-    private static extern IntPtr mmap(IntPtr addr, nuint length, int prot, int flags, int fd, nint offset);
+    [LibraryImport("libc", SetLastError = true)]
+    private static partial IntPtr mmap(IntPtr addr, nuint length, int prot, int flags, int fd, nint offset);
 
     private static bool _installed;
 
@@ -46,7 +46,7 @@ internal static unsafe class GodotNativeStub
         for (int i = 0; i < slots; i++) ((IntPtr*)buffer)[i] = page;
 
         nativeFuncs.GetMethod("Initialize", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!
-            .Invoke(null, new object[] { buffer, size });
+            .Invoke(null, [buffer, size]);
         _installed = true;
     }
 }

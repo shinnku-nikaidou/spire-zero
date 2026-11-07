@@ -3,7 +3,7 @@ using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>
 /// A rest site: "rest:ID" picks an enabled option (HEAL, SMITH, ...); "leave" once proceeding is allowed, i.e. after
@@ -15,8 +15,8 @@ public static class RestActions
 
     public static RestScreen Screen(IReadOnlyList<RestSiteOption> options, Player player) => new()
     {
-        Options = options.Select(o => new RestOptionView(o.OptionId, o.IsEnabled,
-            o is HealRestSiteOption ? (int)HealRestSiteOption.GetHealAmount(player) : null)).ToList(),
+        Options = [.. options.Select(o => new RestOptionView(o.OptionId, o.IsEnabled,
+            o is HealRestSiteOption ? (int)HealRestSiteOption.GetHealAmount(player) : null))],
     };
 
     public static List<string> Legal(IReadOnlyList<RestSiteOption> options, bool anySucceeded)

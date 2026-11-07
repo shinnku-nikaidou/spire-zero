@@ -2,7 +2,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Logging;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime.Patches;
 
 internal static partial class HeadlessPatches
 {

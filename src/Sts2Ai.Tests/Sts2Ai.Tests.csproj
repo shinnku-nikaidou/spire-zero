@@ -17,6 +17,10 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Sts2Ai.Brain.Combat" />
+    <Using Include="Sts2Ai.Brain.Macro" />
+    <Using Include="Sts2Ai.SimWorker.Commands" />
+    <Using Include="Sts2Ai.SimWorker.Simulation" />
     <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

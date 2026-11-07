@@ -2,10 +2,11 @@ using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Nodes.Combat;
+using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Mod;
+namespace Sts2Ai.Mod.UI;
 
 /// <summary>A combat answer's steps up to this turn's end, in order; null for any other answer.</summary>
 internal sealed record CombatPlan(IReadOnlyList<CombatAction> Steps)
@@ -80,7 +81,7 @@ internal sealed class CombatMark(CanvasLayer layer)
     }
 
     /// <summary>The card's hitbox in hand: it turns and moves with the card, as the card's own node may not.</summary>
-    private static Control? Card(uint uid)
+    private static NClickableControl? Card(uint uid)
     {
         if (!NetCombatCardDb.Instance.TryGetCard(uid, out var card) || card == null) return null;
         var hitbox = NPlayerHand.Instance?.GetCardHolder(card)?.Hitbox;

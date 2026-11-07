@@ -1,7 +1,7 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class LoopSearchTests
 {
@@ -23,6 +23,7 @@ public class LoopSearchTests
         private readonly List<string> _steps = [];
         private List<(uint Uid, string Id)> _hand = Hand(prompted, copies);
         private List<string> _discard = [];
+        private readonly int _maxHp = enemyHp;
         private int _enemy = enemyHp, _hp = 30, _energy = 1, _strength, _round = 1, _plays, _drawn;
         private bool _potion = prompted != Prompted.No;
 
@@ -37,11 +38,11 @@ public class LoopSearchTests
         {
             Round = _round,
             Player = Start.Player with { Hp = Math.Max(0, _hp), MaxHp = 30, Block = 0, Energy = _energy, Powers = _strength > 0 ? [new PowerView("STRENGTH_POWER", _strength)] : [] },
-            Hand = _hand.Select(c => new CardView { Id = c.Id, Uid = c.Uid, Cost = c.Id == "H" ? 1 : 0 }).ToList(),
-            Draw = Enumerable.Repeat(new CardView { Id = "R" }, souls - _drawn).ToList(),
-            Discard = _discard.Select(id => new CardView { Id = id }).ToList(),
+            Hand = [.. _hand.Select(c => new CardView { Id = c.Id, Uid = c.Uid, Cost = c.Id == "H" ? 1 : 0 })],
+            Draw = [.. Enumerable.Repeat(new CardView { Id = "R" }, souls - _drawn)],
+            Discard = [.. _discard.Select(id => new CardView { Id = id })],
             Potions = [_potion ? "P" : null, null, null],
-            Enemies = [Start.Enemies[0] with { Uid = 1, Hp = Math.Max(0, _enemy), MaxHp = enemyHp, Block = 0, Powers = [],
+            Enemies = [Start.Enemies[0] with { Uid = 1, Hp = Math.Max(0, _enemy), MaxHp = _maxHp, Block = 0, Powers = [],
                 Intents = [new IntentView { Type = "Attack", Damage = 10, Hits = 1 }] }],
         };
 
@@ -113,14 +114,14 @@ public class LoopSearchTests
         private static List<(uint Uid, string Id)> Hand(Prompted prompted, int copies) =>
             prompted == Prompted.No ? [(1, "R"), .. Enumerable.Range(1, copies - 1).Select(i => (10u + (uint)i, "R")), (2, "H")] : [(2, "H")];
 
-        public WorldSnapshot Snapshot() => new(_steps.ToList());
+        public WorldSnapshot Snapshot() => new([.. _steps]);
 
         public void Restore(WorldSnapshot snapshot)
         {
             _steps.Clear();
             _hand = Hand(prompted, copies);
             _discard = [];
-            (_enemy, _hp, _energy, _strength, _round, _plays, _drawn, _potion) = (enemyHp, 30, 1, 0, 1, 0, 0, prompted != Prompted.No);
+            (_enemy, _hp, _energy, _strength, _round, _plays, _drawn, _potion) = (_maxHp, 30, 1, 0, 1, 0, 0, prompted != Prompted.No);
             foreach (var step in snapshot.Steps) Apply(CombatAction.Parse(step));
         }
     }
@@ -128,7 +129,7 @@ public class LoopSearchTests
     private static readonly ICombatLeaf Leaf = new ToyLeaf();
     private static readonly CombatAction R = CombatAction.Play(1), H = CombatAction.Play(2, 1);
 
-    private static SlPlan Plan(Loop world) => new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 8));
+    private static SlPlan Plan(Loop world) => new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 8));
 
     private static List<CombatAction> Line(SlPlan plan) => [plan.Result.First, .. plan.Result.Plan];
 
@@ -149,7 +150,7 @@ public class LoopSearchTests
     {
         var first = PimcBrain.Ordered(make().Legal());
         var budget = new Budget(Worlds: worlds, NodesPerWorld: 100);
-        return PimcBrain.Root(first, budget, (f, nodes) => Enumerable.Range(0, worlds).Select(_ => new PimcBrain(Leaf).SearchWorld(make(), 1, f, nodes)).ToList());
+        return PimcBrain.Root(first, budget, (f, nodes) => [.. Enumerable.Range(0, worlds).Select(_ => new PimcBrain(Leaf).SearchWorld(make(), 1, f, nodes))]);
     }
 
     [Fact]
@@ -238,7 +239,7 @@ public class LoopSearchTests
     public void ACycleWithNoLethalStaysOnItsBudget()
     {
         var world = new Loop(1_000_000);
-        var plan = new SlPlanner(Leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 1));
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 1));
 
         Assert.NotEqual(CombatStatus.Won, plan.End);
         Assert.InRange(world.Played, 1, plan.Turns * (2 * LoopSearch.Moves + 400));
@@ -247,7 +248,7 @@ public class LoopSearchTests
     [Fact]
     public void AnotherAnswerToAPromptIsTakenIfItOpensACycle()
     {
-        Func<Loop> make = () => new Loop(50, prompted: Loop.Prompted.GivesR);
+        static Loop make() => new(50, prompted: Loop.Prompted.GivesR);
         var plan = Plan(make());
 
         // Plan.Turns would count the next turn it looked at too, for a win that keeps the potion.
@@ -269,7 +270,7 @@ public class LoopSearchTests
     [Fact]
     public void PimcRepeatsTheCycleAsWell()
     {
-        Func<Loop> make = () => new Loop(50);
+        static Loop make() => new(50);
         var result = Pimc(2, make);
 
         Assert.True(result.Repeats);
@@ -281,7 +282,7 @@ public class LoopSearchTests
     [Fact]
     public void PimcTakesAnotherAnswerThatOpensACycle()
     {
-        Func<Loop> make = () => new Loop(50, prompted: Loop.Prompted.GivesR);
+        static Loop make() => new(50, prompted: Loop.Prompted.GivesR);
         var result = Pimc(2, make);
 
         Assert.True(result.Repeats);

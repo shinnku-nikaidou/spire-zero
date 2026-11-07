@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using MegaCrit.Sts2.Core.Logging;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Mod;
+namespace Sts2Ai.Mod.UI;
 
 /// <summary>How much of the brain's scoring the panel shows.</summary>
 internal enum ConsideredMode { Off, Values, Bars }

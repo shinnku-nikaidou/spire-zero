@@ -158,7 +158,7 @@ public sealed class Dispatcher(
         if (!decision.Legal.Contains(action)) throw new InvalidOperationException($"{macro.Brain} chose {action} on {decision.Surface}, which is not legal");
         var plan = macro.Policy.Plan(decision, action);
         var scored = macro.Policy.Scored;
-        if (explain && decision.Surface == Surfaces.Map) scored = scored.Select(c => c with { Plan = macro.Policy.Plan(decision, c.Action) }).ToList();
+        if (explain && decision.Surface == Surfaces.Map) scored = [.. scored.Select(c => c with { Plan = macro.Policy.Plan(decision, c.Action) })];
         Last = new(macro.Brain, plan.Count > 0 ? plan : null, scored.Count > 0 ? scored : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
@@ -191,7 +191,7 @@ public sealed class Dispatcher(
     private NodeClone Clone()
     {
         var node = _node ?? throw new InvalidOperationException("an SL decision before any node checkpoint");
-        return new(node.Checkpoint, _nodeTrace.ToList());
+        return new(node.Checkpoint, [.. _nodeTrace]);
     }
 
     private (int Id, ulong Seed, Stopwatch Clock) Begin(string brain)

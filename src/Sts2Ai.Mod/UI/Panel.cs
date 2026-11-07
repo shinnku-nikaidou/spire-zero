@@ -2,7 +2,7 @@ using System.Globalization;
 using Godot;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Mod;
+namespace Sts2Ai.Mod.UI;
 
 /// <summary>How a panel message reads: plain, something the player can fix or wait out, or an error.</summary>
 internal enum Tone { Plain, Warn, Error }
@@ -520,7 +520,7 @@ internal sealed class Panel
     }
 
     /// <summary>A room of a route: a small square in its type's color, with its legend's first letter; the chosen route's are brighter.</summary>
-    private static Control Chip(string? type, bool first)
+    private static PanelContainer Chip(string? type, bool first)
     {
         var color = type switch
         {
@@ -558,7 +558,7 @@ internal sealed class Panel
         grid.AddChild(label);
     }
 
-    private static Control Strip(float x, float width, float y, float height, Color color)
+    private static Godot.Panel Strip(float x, float width, float y, float height, Color color)
     {
         var strip = Quiet(new Godot.Panel { Position = new Vector2(x, y), Size = new Vector2(width, height) });
         strip.AddThemeStyleboxOverride("panel", Box(color, (int)(height / 2)));
@@ -622,7 +622,7 @@ internal sealed class Panel
     }
 
     /// <summary>A round badge with a number or a word: filled with <paramref name="fill"/>, or drawn as a ring of <paramref name="ring"/>.</summary>
-    private static Control Badge(string text, int size, int radius, Color? fill, Color? ring, int fontSize)
+    private static PanelContainer Badge(string text, int size, int radius, Color? fill, Color? ring, int fontSize)
     {
         var badge = Quiet(new PanelContainer { CustomMinimumSize = new Vector2(size, size), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
         badge.AddThemeStyleboxOverride("panel", Box(fill ?? Colors.Transparent, radius, ring, 2));
@@ -634,7 +634,7 @@ internal sealed class Panel
     }
 
     /// <summary>A small copy of the map's ring, for a map answer.</summary>
-    private static Control Ring(int size)
+    private static PanelContainer Ring(int size)
     {
         var ring = Quiet(new PanelContainer { CustomMinimumSize = new Vector2(size, size), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
         ring.AddThemeStyleboxOverride("panel", Box(Colors.Transparent, size / 2, Accent, 4));

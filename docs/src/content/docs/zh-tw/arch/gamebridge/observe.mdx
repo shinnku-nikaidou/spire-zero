@@ -109,7 +109,7 @@ import { Badge } from '@astrojs/starlight/components';
 每個選牌提示都經過遊戲的某一個 `CardSelectCmd.From*` 入口，而只有這些入口的參數說明了遊戲為什麼要問。`ChoiceContexts`（`ChoiceContexts.cs`）用 Harmony 捕捉它們。Harmony 是在執行時給遊戲方法打補丁的函式庫：**前綴**（prefix）在方法之前執行，**終結器**（finalizer）在方法之後執行，即使方法拋出例外也一樣。
 
 - **目標**：每個公開靜態的 `CardSelectCmd.From*` 方法，包括每個多載，但 `FromChooseABundleScreen` 除外，它有自己的決策介面。這份清單是用反射找出的，所以遊戲更新新增的入口不需改動就會被打上補丁。
-- **前綴**把入口的參數讀進一個 `ChoiceContext`（`ChoiceContexts.cs:47-70`）：`CardSelectorPrefs`（是否可取消、提示的文字）、`source` 參數，沒有時則是 `PlayerChoiceContext` 最後涉及的模型、一個 `CardPile`（有它時用途為 `<pile>_pile`）、一個 `EnchantmentModel` 及其 `amount`、`canSkip`。用途是入口名稱去掉 `From`，寫成 snake_case。`in_combat` 表示是否有戰鬥正在進行。
+- **前綴**把入口的參數讀進一個 `ChoiceContext`（`ChoiceContexts.cs:47-68`）：`CardSelectorPrefs`（是否可取消、提示的文字）、`source` 參數，沒有時則是 `PlayerChoiceContext` 最後涉及的模型、一個 `CardPile`（有它時用途為 `<pile>_pile`）、一個 `EnchantmentModel` 及其 `amount`、`canSkip`。用途是入口名稱去掉 `From`，寫成 snake_case。`in_combat` 表示是否有戰鬥正在進行。
 - **最外層的入口勝出**。一個入口可以呼叫另一個入口（刪牌會經過通用的牌組提示）：一個深度計數器保留第一個上下文，直到最外層的入口返回。
 - **`Current` 與 `Last`**。入口執行期間，`Current` 按執行緒保存上下文；模擬器的選牌器在入口內部執行，就在那裡讀取它。在真實遊戲裡，提示的畫面在入口第一次 await 之後才開啟，那時 `Current` 已經不在了，所以前綴還把上下文存進 `Last`，一直保留到下一個入口，Mod 就從那裡讀取螢幕上的提示（[Mod：主迴圈 §5](/zh-tw/arch/mod/loop/#sec-5)）。新的上下文物件代表新的提示。
 - **最先打這個補丁**。每個宿主在任何其他補丁之前呼叫一次 `ChoiceContexts.Patch`（模擬器裡在 `HeadlessPatches.Apply`，Mod 裡在 `Host`）。入口那個很小的 async 存根，可能被內嵌進一個更早編譯的呼叫方，例如在另一個補丁編譯它的替換方法時，而內嵌的那份副本會繞過前綴。無頭執行時 SapphireSeed 就發生過這種情況。

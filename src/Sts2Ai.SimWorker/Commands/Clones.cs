@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
 /// clones: the SL export round trip (docs: mod/sl-record §8). Reads what a host sent the brain (brain --wire), and for each
@@ -50,7 +50,7 @@ internal static class ClonesCommand
                         break;
                     }
                     decisions++;
-                    var (asked, failure) = NextDecision(pump, new NodeClone(node.Checkpoint, steps.ToList()));
+                    var (asked, failure) = NextDecision(pump, new NodeClone(node.Checkpoint, [.. steps]));
                     string where = $"node {node.NodeIndex} step {steps.Count}, decision {request.DecisionId} ({request.Surface})";
                     if (asked == null) Console.WriteLine($"{where}: the clone fails: {failure}");
                     else if (DecisionRequest.HashOf(asked) != request.ObsHash)
@@ -98,7 +98,7 @@ internal static class ClonesCommand
         IReadOnlyList<int> IChoicePolicy.Choose(ChoiceDecision decision)
         {
             Asked ??= decision.Observation;
-            return Enumerable.Range(0, decision.Choice.Min).ToList();
+            return [.. Enumerable.Range(0, decision.Choice.Min)];
         }
 
         public string Choose(MacroDecision decision)

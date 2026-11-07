@@ -4,7 +4,7 @@ using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>
 /// The potion belt outside combat, available on every out-of-combat surface: "potion:S" drinks an any-time potion,

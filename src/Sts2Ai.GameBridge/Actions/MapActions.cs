@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>Map travel: "map:COL,ROW".</summary>
 public static class MapActions
@@ -23,12 +23,12 @@ public static class MapActions
         if (map.SecondBossMapPoint != null && last == map.BossMapPoint.coord) return [map.SecondBossMapPoint.coord];
         if (last.row == map.GetRowCount() - 1) return [map.BossMapPoint.coord];
         var point = map.GetPoint(last) ?? throw new InvalidOperationException($"last visited coord {last} is not on the map");
-        return MapTravel.GetTravelablePointsFrom(run, point).Select(p => p.coord).OrderBy(c => c.row).ThenBy(c => c.col).ToList();
+        return [.. MapTravel.GetTravelablePointsFrom(run, point).Select(p => p.coord).OrderBy(c => c.row).ThenBy(c => c.col)];
     }
 
-    public static MapScreen Screen(RunState run) => new() { Travelable = Travelable(run).Select(Observe.Coord).ToList() };
+    public static MapScreen Screen(RunState run) => new() { Travelable = [.. Travelable(run).Select(Observe.Coord)] };
 
-    public static List<string> Legal(RunState run) => Travelable(run).Select(Text).ToList();
+    public static List<string> Legal(RunState run) => [.. Travelable(run).Select(Text)];
 
     public static string Text(MapCoord c) => $"map:{c.col},{c.row}";
 

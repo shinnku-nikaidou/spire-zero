@@ -9,7 +9,7 @@ using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Platform;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime.Patches;
 
 internal static partial class HeadlessPatches
 {
@@ -61,7 +61,7 @@ internal static partial class HeadlessPatches
     [HarmonyPatch]
     private static class EngineSingletons
     {
-        private static MethodBase TargetMethod() =>
+        private static MethodInfo TargetMethod() =>
             typeof(Godot.GodotObject).Assembly.GetType("Godot.NativeInterop.InteropUtils", throwOnError: true)!
                 .GetMethod("EngineGetSingleton", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!;
 
@@ -82,7 +82,7 @@ internal static partial class HeadlessPatches
     [HarmonyPatch]
     private static class NoResourceLoads
     {
-        private static MethodBase TargetMethod() =>
+        private static MethodInfo TargetMethod() =>
             typeof(Godot.ResourceLoader).GetMethods()
                 .First(m => m.Name == nameof(Godot.ResourceLoader.Load) && !m.IsGenericMethod && m.GetParameters().Length == 3);
 

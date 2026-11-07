@@ -2,7 +2,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class MacroExplorationTests
 {
@@ -20,7 +20,7 @@ public class MacroExplorationTests
 
     private static ChoiceDecision Prompt(int min, params string[] cards) => new(new CardChoice
     {
-        Options = cards.Select(id => new CardView { Id = id }).ToList(),
+        Options = [.. cards.Select(id => new CardView { Id = id })],
         Min = min,
         Max = 1,
         Context = new ChoiceContext { Purpose = "choose_a_card_screen", Cancelable = min == 0, InCombat = false },
@@ -50,7 +50,7 @@ public class MacroExplorationTests
         Assert.False(l0.Explored);
     }
 
-    private static List<CardView> Cards(string[] ids) => ids.Select(id => new CardView { Id = id }).ToList();
+    private static List<CardView> Cards(string[] ids) => [.. ids.Select(id => new CardView { Id = id })];
 
     private static MacroDecision Rewards(params string[] cards) => new(Surfaces.Rewards, ["reward:0", "rewards_done"], () => new Observation
     {

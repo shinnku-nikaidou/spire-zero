@@ -8,7 +8,7 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.TestSupport;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime.Patches;
 
 internal static partial class HeadlessPatches
 {

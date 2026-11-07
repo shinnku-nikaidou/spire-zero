@@ -2,7 +2,7 @@ using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using Sts2Ai.Protocol;
 using Tool = MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent.CrystalSphereMinigame.CrystalSphereToolType;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>
 /// The crystal sphere minigame (CRYSTAL_SPHERE event): "big:X,Y" divines the 3x3 block around cell X,Y, "small:X,Y"
@@ -16,7 +16,7 @@ public static class CrystalSphereActions
         var size = game.GridSize;
         return new CrystalSphereScreen
         {
-            Rows = Enumerable.Range(0, size.Y).Select(y => new string(Enumerable.Range(0, size.X).Select(x => Cell(game.cells[x, y])).ToArray())).ToList(),
+            Rows = [.. Enumerable.Range(0, size.Y).Select(y => new string([.. Enumerable.Range(0, size.X).Select(x => Cell(game.cells[x, y]))]))],
             DivinationsLeft = game.DivinationCount,
         };
     }

@@ -1,7 +1,7 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 /// <summary>The potion belt at the macro brain's decisions: what a discard is offered for, and what a potion's option on the map is worth.</summary>
 public class MacroPotionTests
@@ -48,12 +48,12 @@ public class MacroPotionTests
     /// <summary>The map's clone: drinking the potion leaves the run on the map without it.</summary>
     private sealed class Drink : IMacroClone
     {
-        public IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<string>> paths) => paths.Select(path =>
+        public IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<string>> paths) => [.. paths.Select(path =>
         {
             var run = Holding("A", null, null);
             if (path is ["potion:0"]) run = run with { Potions = [null, null, null] };
             return new Afterstate(run, Surfaces.Map, new MapScreen { Travelable = [new(3, 1), new(4, 1)] }, path.Count == 0 ? MapLegal : ["map:3,1", "map:4,1"]);
-        }).ToList();
+        })];
     }
 
     [Fact]

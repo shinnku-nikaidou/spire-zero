@@ -1,6 +1,6 @@
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Macro;
 
 /// <summary>V (docs: macro-brain/value §1): what a run is worth, on one scale for every option of every surface.</summary>
 public interface IRunValue

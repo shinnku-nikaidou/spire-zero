@@ -9,7 +9,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>The legal actions of a combat in protocol terms, and starting one in the game.</summary>
 public static class CombatActions

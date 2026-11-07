@@ -2,7 +2,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Saves.Runs;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
 /// A card in a loadout: its model id and upgrade count, written "BASH", "BASH+" or "BASH+2", and its enchantment

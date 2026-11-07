@@ -1,7 +1,7 @@
 using System.Globalization;
 using MegaCrit.Sts2.Core.Localization;
 
-namespace Sts2Ai.Mod;
+namespace Sts2Ai.Mod.UI;
 
 /// <summary>
 /// The mod's own words in the game's language (docs: output §2): English, French, Spanish (both of the game's), Simplified

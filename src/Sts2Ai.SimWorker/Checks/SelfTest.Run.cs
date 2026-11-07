@@ -3,7 +3,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Checks;
 
 internal static partial class SelfTest
 {
@@ -39,7 +39,7 @@ internal static partial class SelfTest
             check("SL world shows the run's combat", false, $"{label}: no combat with 3 decisions");
             return;
         }
-        string Json(CombatObservation obs) => ProtocolJson.Serialize(obs);
+        static string Json(CombatObservation obs) => ProtocolJson.Serialize(obs);
         using var world = new NodeWorld(pump, clone);
         var root = world.Snapshot();
         check("SL world shows the run's combat", Json(world.Observe()) == Json(steps[0].Obs), label);
@@ -70,14 +70,14 @@ internal static partial class SelfTest
                 if (nodes.Count == 0 || nodes[^1].Start != session.NodeStart) nodes.Add((session.Clone().Save, session.NodeStart));
                 session.Step();
             }
-            trace = session.Trace.ToList();
+            trace = [.. session.Trace];
         }
         if (nodes.Count < 3)
         {
             check("SL clone stops at its node's exit", false, "the run ended before its third node");
             return;
         }
-        var clone = new NodeClone(nodes[1].Save, trace.Skip(nodes[1].Start).Take(nodes[2].Start - nodes[1].Start).ToList());
+        var clone = new NodeClone(nodes[1].Save, [.. trace.Skip(nodes[1].Start).Take(nodes[2].Start - nodes[1].Start)]);
         using var loaded = RunSession.Load(pump, clone, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance);
         check("SL clone stops at its node's exit", loaded.AtHorizon && clone.Trace[^1].StartsWith(Surfaces.Map + " ", StringComparison.Ordinal),
             $"{clone.Trace.Count} decisions, the last {clone.Trace[^1]}, at horizon {loaded.AtHorizon}");
@@ -146,7 +146,7 @@ internal static partial class SelfTest
                 if (nodes.Count == 0 || nodes[^1].Start != session.NodeStart) nodes.Add((session.Clone().Save, session.NodeStart));
                 session.Step();
             }
-            trace = session.Trace.ToList();
+            trace = [.. session.Trace];
         }
         if (nodes.Count < 3)
         {
@@ -155,7 +155,7 @@ internal static partial class SelfTest
         }
         var (start, end) = (nodes[1].Start, nodes[2].Start);
         var cloned = new List<string>();
-        using (RunSession.Load(pump, new NodeClone(nodes[1].Save, trace.Skip(start).Take(end - start).ToList()),
+        using (RunSession.Load(pump, new NodeClone(nodes[1].Save, [.. trace.Skip(start).Take(end - start)]),
                    RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, obs => cloned.Add(ProtocolJson.Serialize(obs))))
         {
         }
@@ -199,7 +199,7 @@ internal static partial class SelfTest
         RunView planned;
         using (var world = new NodeWorld(pump, clone))
         {
-            plan = new SlPlanner(net.Leaf).Plan(at, world, budget, history);
+            plan = new SlPlanner(net.Leaf).Plan(world, budget, history);
             world.Restore(new([]));
             foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
             check("SL world ends its combat as planned", plan.End == CombatStatus.Won && world.Status == plan.End, $"{label}: {world.Status}, planned {plan.End}");

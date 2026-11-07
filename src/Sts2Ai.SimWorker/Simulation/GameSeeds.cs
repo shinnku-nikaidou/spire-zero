@@ -1,4 +1,4 @@
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>The seeds the sim's combats and runs are played from: the game's own kind, made from a base and an index.</summary>
 internal static class GameSeeds

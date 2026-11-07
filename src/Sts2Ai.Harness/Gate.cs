@@ -62,7 +62,7 @@ public static class Gate
     {
         if (metric is not ("floor" or "win")) throw new ArgumentException($"unknown gate metric {metric} (floor, win)");
         double upper = Math.Log((1 - beta) / alpha), lower = Math.Log(beta / (1 - alpha));
-        var challenger = Metrics.Of(pairs.Select(p => p.Challenger).ToList());
+        var challenger = Metrics.Of([.. pairs.Select(p => p.Challenger)]);
         string? voidReason = challenger.Void
             ? $"random decisions {challenger.RandomDecisions}, failed {challenger.Failed}, truncated {challenger.Truncated}, game errors {challenger.GameErrors}"
             : null;

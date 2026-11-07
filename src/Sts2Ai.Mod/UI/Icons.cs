@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Sts2Ai.Mod;
+namespace Sts2Ai.Mod.UI;
 
 /// <summary>
 /// The toolbar's icons (docs: output §2), drawn here into textures so they need no file and no font: play, pause, step
@@ -35,7 +35,7 @@ internal static class Icons
     public static Texture2D Finish { get; } = Draw(Blue, (x, y) =>
         (y is >= 8 and <= 10 && x is >= 2 and <= 10) || Inside(x, y, (9, 4.5), (9, 13.5), (13, 9)) || (x is >= 14 and <= 16 && y is >= 3 and <= 15));
 
-    private static Texture2D Draw(Color color, Func<double, double, bool> inside)
+    private static ImageTexture Draw(Color color, Func<double, double, bool> inside)
     {
         var data = new byte[Size * Size * 4];
         for (int py = 0; py < Size; py++)

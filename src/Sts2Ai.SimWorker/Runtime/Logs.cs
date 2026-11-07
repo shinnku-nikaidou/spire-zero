@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime;
 
 /// <summary>
 /// The sim's logs (Microsoft.Extensions.Logging), one line each on stderr, so that stdout carries only results, and for

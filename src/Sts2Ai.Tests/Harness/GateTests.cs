@@ -1,6 +1,6 @@
 using Sts2Ai.Harness;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Harness;
 
 public class GateTests
 {
@@ -8,9 +8,9 @@ public class GateTests
 
     /// <summary>Floors that differ by <paramref name="gain"/> on average, by gain ± 2 in turn so the variance is not 0.</summary>
     private static List<(RunRecord, RunRecord)> Pairs(int n, double gain, string? challengerOutcome = null) =>
-        Enumerable.Range(0, n).Select(i => (
+        [.. Enumerable.Range(0, n).Select(i => (
             Fixtures.Run($"S{i}", 20),
-            Fixtures.Run($"S{i}", 20 + (int)gain + (i % 2 == 0 ? 2 : -2), challengerOutcome ?? "lost", Challenger))).ToList();
+            Fixtures.Run($"S{i}", 20 + (int)gain + (i % 2 == 0 ? 2 : -2), challengerOutcome ?? "lost", Challenger)))];
 
     [Fact]
     public void AClearGainPasses()

@@ -1,6 +1,6 @@
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Combat;
 
 /// <summary>
 /// A combat's public record of enemy moves (docs: harness §4): what each living enemy showed at the first decision of
@@ -26,7 +26,7 @@ public sealed class MoveRecord
     }
 
     /// <summary>Each enemy's rounds so far, in the order the enemies first showed up.</summary>
-    public IReadOnlyList<EnemyTurns> History => _turns.Select(e => new EnemyTurns(e.Key, e.Value.Id, e.Value.Turns.ToList())).ToList();
+    public IReadOnlyList<EnemyTurns> History => [.. _turns.Select(e => new EnemyTurns(e.Key, e.Value.Id, [.. e.Value.Turns]))];
 
     /// <summary>A decision's observation: on the round's first, each living enemy's intents join the record.</summary>
     public void Witness(CombatObservation obs)

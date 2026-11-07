@@ -6,7 +6,7 @@ using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens.Settings;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Mod;
+namespace Sts2Ai.Mod.UI;
 
 /// <summary>
 /// The mod's "AI" tab in the game's settings screen (docs: output §2), after General, Graphics, Sound and Input. The
@@ -102,7 +102,7 @@ internal static class SettingsTab
             [RouteMode.Off, RouteMode.Next, RouteMode.Whole], s => s.Route, (s, v) => s with { Route = v }, refresh));
         content.AddChild(Opacity(font, refresh));
         content.AddChild(Choice(L10n.T("Search effort"), L10n.T("how hard the SL planner searches each fight; a change starts the run anew for the brain"), font,
-            Enum.GetValues<SearchEffort>().Select(e => L10n.T(e.ToString())).ToArray(), Enum.GetValues<SearchEffort>(), s => s.Effort, (s, v) => s with { Effort = v }, refresh));
+            [.. Enum.GetValues<SearchEffort>().Select(e => L10n.T(e.ToString()))], Enum.GetValues<SearchEffort>(), s => s.Effort, (s, v) => s with { Effort = v }, refresh));
         content.AddChild(Header(L10n.T("Auto-play"), font));
         content.AddChild(Choice(L10n.T("Speed of auto-play"), L10n.T("the pause before each of the AI's actions"), font,
             [L10n.T("Slow"), L10n.T("Medium"), L10n.T("Fast")], [AutoSpeed.Slow, AutoSpeed.Medium, AutoSpeed.Fast], s => s.Speed, (s, v) => s with { Speed = v }, refresh));
@@ -119,7 +119,7 @@ internal static class SettingsTab
     }
 
     /// <summary>A row that steps through <paramref name="values"/> with the two arrows, as the game's own paginators do.</summary>
-    private static Control Choice<T>(string label, string sub, Label? font, string[] names, T[] values, Func<Settings, T> get,
+    private static HBoxContainer Choice<T>(string label, string sub, Label? font, string[] names, T[] values, Func<Settings, T> get,
         Func<Settings, T, Settings> set, List<Action> refresh)
     {
         var value = Text("", font, 1);
@@ -139,7 +139,7 @@ internal static class SettingsTab
         return Row(label, sub, font, prev, value, next);
     }
 
-    private static Control Opacity(Label? font, List<Action> refresh)
+    private static HBoxContainer Opacity(Label? font, List<Action> refresh)
     {
         var slider = new HSlider { MinValue = 0.6, MaxValue = 1, Step = 0.02, CustomMinimumSize = new Vector2(220, 28), FocusMode = Control.FocusModeEnum.None,
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
@@ -161,7 +161,7 @@ internal static class SettingsTab
         return Row(L10n.T("Panel opacity"), "", font, slider, value);
     }
 
-    private static Control Row(string label, string sub, Label? font, params Control[] controls)
+    private static HBoxContainer Row(string label, string sub, Label? font, params Control[] controls)
     {
         var row = new HBoxContainer { CustomMinimumSize = new Vector2(0, 64) };
         row.AddThemeConstantOverride("separation", 16);
@@ -186,7 +186,7 @@ internal static class SettingsTab
         return row;
     }
 
-    private static Control Header(string text, Label? font)
+    private static Label Header(string text, Label? font)
     {
         var header = Text(text.ToUpperInvariant(), font, 0.75f, Muted);
         header.CustomMinimumSize = new Vector2(0, 48);

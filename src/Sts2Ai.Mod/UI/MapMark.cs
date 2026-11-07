@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Mod;
+namespace Sts2Ai.Mod.UI;
 
 /// <summary>A route on the map: where the player is (null before the act's first point), then the points to go to.</summary>
 internal sealed record MapRoute(MapCoord? At, IReadOnlyList<MapCoord> Points)
@@ -16,7 +16,7 @@ internal sealed record MapRoute(MapCoord? At, IReadOnlyList<MapCoord> Points)
         if (!ActionText.Is(answer.Action, "map", out _)) return null;
         var visited = obs.Run.Map.Visited;
         var at = visited.Count > 0 ? new MapCoord(visited[^1].Col, visited[^1].Row) : (MapCoord?)null;
-        return new(at, (answer.Plan ?? []).Prepend(answer.Action).Select(Coord).ToList());
+        return new(at, [.. (answer.Plan ?? []).Prepend(answer.Action).Select(Coord)]);
     }
 
     private static MapCoord Coord(string action)
@@ -67,7 +67,7 @@ internal sealed class MapMark
         float pulse = 1 + 0.1f * Mathf.Sin(Time.GetTicksMsec() / 1000f * Mathf.Tau);
         float radius = (Math.Max(_point.Size.X, _point.Size.Y) / 2 + 14) * xf.Scale.X * pulse;
         _ring.Position = xf * (_point.Size / 2);
-        _ring.Points = Enumerable.Range(0, Segments).Select(i => Vector2.FromAngle(i * Mathf.Tau / Segments) * radius).ToArray();
+        _ring.Points = [.. Enumerable.Range(0, Segments).Select(i => Vector2.FromAngle(i * Mathf.Tau / Segments) * radius)];
     }
 
     private void Find(MapRoute? route)
@@ -79,7 +79,7 @@ internal sealed class MapMark
         var points = (Dictionary<MapCoord, NMapPoint>)AccessTools.Field(typeof(NMapScreen), "_mapPointDictionary").GetValue(screen)!;
         var paths = (Dictionary<(MapCoord, MapCoord), IReadOnlyList<TextureRect>>)AccessTools.Field(typeof(NMapScreen), "_paths").GetValue(screen)!;
         _point = points.GetValueOrDefault(route.Points[0]);
-        var stops = route.At is { } at ? route.Points.Prepend(at).ToList() : route.Points;
+        var stops = route.At is { } at ? [.. route.Points.Prepend(at)] : route.Points;
         foreach (var (from, to) in stops.Zip(stops.Skip(1)))
         {
             if (!paths.TryGetValue((from, to), out var dots) || dots.Count == 0) continue;

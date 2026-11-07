@@ -2,7 +2,7 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Brain;
+namespace Sts2Ai.Brain.Macro;
 
 /// <summary>A run and the value the trainer computed for it, which loading checks (docs: learning/reference §7, input parity).</summary>
 public sealed record NetTest(RunView Run, double Value);
@@ -99,9 +99,9 @@ public sealed class RunNet : IRunValue, IDisposable
         if (run.Map.SecondBoss != null) context.Add("boss:" + run.Map.SecondBoss);
         if (run.Map.Ancient != null) context.Add("ancient:" + run.Map.Ancient);
         return new(
-            run.Deck.Select(Card).ToList(),
-            run.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id).ToList(),
-            run.Potions.OfType<string>().ToList(),
+            [.. run.Deck.Select(Card)],
+            [.. run.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id)],
+            [.. run.Potions.OfType<string>()],
             context,
             MapTokens(run.Map));
 
@@ -134,9 +134,9 @@ public sealed class RunNet : IRunValue, IDisposable
     {
         var points = map.Points.ToDictionary(p => (p.Col, p.Row));
         var here = Here(map, points);
-        return (map.Entering == true ? Reachable(points, here).Prepend(here) : Reachable(points, here))
+        return [.. (map.Entering == true ? Reachable(points, here).Prepend(here) : Reachable(points, here))
             .Select(k => $"{points[k].Type}+{k.Row - here.Row}" + (points[k].Quest == true ? ":quest" : ""))
-            .ToList();
+        ];
     }
 
     /// <summary>Where the player is: the last visited point, or the start (the first by row, col) before any.</summary>
@@ -152,7 +152,7 @@ public sealed class RunNet : IRunValue, IDisposable
             foreach (var next in points[todo.Pop()].Next)
                 if (points.ContainsKey((next.Col, next.Row)) && seen.Add((next.Col, next.Row)))
                     todo.Push((next.Col, next.Row));
-        return seen.OrderBy(k => k.Row).ThenBy(k => k.Col).ToList();
+        return [.. seen.OrderBy(k => k.Row).ThenBy(k => k.Col)];
     }
 
     /// <summary>The run's number the net reads by this name (<c>learn/v/encode.py</c>'s state).</summary>
@@ -212,7 +212,7 @@ public sealed class RunNet : IRunValue, IDisposable
             values[0, i] = (float)((StateValue(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);
         inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
         using var results = _session.Run(inputs);
-        return results[0].AsEnumerable<float>().ToArray();
+        return [.. results[0].AsEnumerable<float>()];
     }
 
     /// <summary>A token table's ids as the graph takes them: padded to at least 1, with their mask.</summary>

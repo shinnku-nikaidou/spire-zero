@@ -9,4 +9,8 @@
   <ItemGroup>
     <ProjectReference Include="../Sts2Ai.Protocol/Sts2Ai.Protocol.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Namespaces follow folders; these are in scope in every file. -->
+    <Using Include="Sts2Ai.GameBridge.Actions" />
+  </ItemGroup>
 </Project>

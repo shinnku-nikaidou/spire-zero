@@ -1,4 +1,4 @@
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
 /// Where the files go, from the repository root (docs: learning/reference §6, evaluation/champions §5): each character is

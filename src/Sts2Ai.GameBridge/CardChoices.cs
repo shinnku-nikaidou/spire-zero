@@ -20,7 +20,7 @@ public static class CardChoices
             .Select((card, index) => (View: deck ? Observe.DeckCard(card) : Observe.Card(card), Index: index, Tie: tieBreak.Next()))
             .OrderBy(o => ProtocolJson.CardKey(o.View), StringComparer.Ordinal).ThenBy(o => o.Tie)
             .ToList();
-        var choice = new CardChoice { Options = sorted.Select(o => o.View).ToList(), Min = min, Max = max, Context = context };
+        var choice = new CardChoice { Options = [.. sorted.Select(o => o.View)], Min = min, Max = max, Context = context };
         return (choice, sorted.Select(o => o.Index).ToArray());
     }
 }

@@ -189,7 +189,7 @@ dotnet run -c Release --project src/Sts2Ai.SimWorker -- brain --champion eval/ch
 | `UI/Settings.cs` | 85 | 设置及其文件（[§5](#sec-5)） |
 | `UI/SettingsTab.cs` | 224 | 游戏设置画面里的 AI 标签页（[输出 §2](/arch/output/#sec-2)） |
 
-项目文件是 `Sts2Ai.Mod.csproj`（27 行），清单是 `Sts2Ai.json`（12 行）。Mod 没有自己的单元测试：它与模拟器共用的部分，即 GameBridge 和 Protocol，在模拟器那边测试，其余部分在游戏里检查（[自动游玩与安全 §7](/arch/mod/auto/#sec-7)）。
+项目文件是 `Sts2Ai.Mod.csproj`（33 行），清单是 `Sts2Ai.json`（12 行）。Mod 没有自己的单元测试：它与模拟器共用的部分，即 GameBridge 和 Protocol，在模拟器那边测试，其余部分在游戏里检查（[自动游玩与安全 §7](/arch/mod/auto/#sec-7)）。
 
 ## 8. 本章
 

@@ -4,7 +4,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Brains;
 
 /// <summary>A run's brain as its host sees it: the three policies, and what the run's record names.</summary>
 internal interface IRunBrain : ICombatPolicy, IChoicePolicy, IMacroPolicy
@@ -129,13 +129,13 @@ internal sealed class WireBrain : IRunBrain
     public int Replans => 0;
 
     public CombatAction Choose(CombatDecision decision) => CombatAction.Parse(Ask(Surfaces.Combat,
-        decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run"), decision.Legal.Select(a => a.ToString()).ToList()));
+        decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run"), [.. decision.Legal.Select(a => a.ToString())]));
 
     public IReadOnlyList<int> Choose(ChoiceDecision decision)
     {
         var action = Ask(Surfaces.CardChoice, decision.Observation ?? throw new InvalidOperationException("a card prompt outside a run"), []);
         if (!action.StartsWith("pick:")) throw new InvalidDataException($"{action} does not answer a card prompt");
-        return action["pick:".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        return [.. action["pick:".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)];
     }
 
     public string Choose(MacroDecision decision) => Ask(decision.Surface, decision.Observation, decision.Legal);

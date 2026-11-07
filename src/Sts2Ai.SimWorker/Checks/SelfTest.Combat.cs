@@ -8,7 +8,7 @@ using Sts2Ai.GameBridge;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Checks;
 
 internal static partial class SelfTest
 {
@@ -26,8 +26,8 @@ internal static partial class SelfTest
         Hp = obs.Player.Hp,
         MaxHp = obs.Player.MaxHp,
         Gold = obs.Player.Gold,
-        Deck = obs.Hand.Concat(obs.Draw).Concat(obs.Discard).Concat(obs.Exhaust).Select(c => c with { Uid = null })
-            .OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal).ToList(),
+        Deck = [.. obs.Hand.Concat(obs.Draw).Concat(obs.Discard).Concat(obs.Exhaust).Select(c => c with { Uid = null })
+            .OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)],
         Relics = obs.Relics,
         Potions = obs.Potions,
         Map = new MapView { Points = [new MapPointView { Col = 0, Row = 0, Type = "Monster", Next = [] }], Visited = [], Boss = "<none>" },
@@ -54,7 +54,7 @@ internal static partial class SelfTest
             using (var session = CombatSession.Start(pump, setup, new RandomChoices(rng)))
             {
                 var policy = new PlayPolicy(rng);
-                for (int a = 0; a < i && !session.IsOver; a++) session.Execute(policy.Choose(session.Decision()));
+                for (int a = 0; a < i && !CombatSession.IsOver; a++) session.Execute(policy.Choose(session.Decision()));
                 (obs, legal) = (session.Observation(), session.LegalActions());
             }
             ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{i}");
@@ -88,14 +88,14 @@ internal static partial class SelfTest
         {
             check("build shows the observation", built.BuildDifferences.Count == 0, $"{at}: {string.Join("; ", built.BuildDifferences.Take(4))}");
             var policy = new PlayPolicy(new Random(k));
-            for (int a = 0; a < 3 && !built.IsOver; a++) built.Execute(policy.Choose(built.Decision()));
+            for (int a = 0; a < 3 && !CombatSession.IsOver; a++) built.Execute(policy.Choose(built.Decision()));
             snapshot = built.Snapshot();
             (json, hidden) = (Json(built), Hidden(built));
         }
         using var restored = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0)));
         check("built combat restores", Json(restored) == json && Hidden(restored) == hidden, at);
         restored.PlayOut(new PlayPolicy(new Random(k)));
-        check("plays on after build", restored.IsOver || restored.State.RoundNumber > obs.Round, at);
+        check("plays on after build", CombatSession.IsOver || CombatSession.State.RoundNumber > obs.Round, at);
     }
 
     private static Recording Record(Pump pump, CombatSetup setup, int rngSeed)
@@ -139,7 +139,7 @@ internal static partial class SelfTest
         var lines = new List<string> { DrawOrder(session) };
         lines.AddRange(Enum.GetValues<RunRngType>().Select(t => $"{t} {Show(session.Run.Rng.GetRng(t))}"));
         lines.AddRange(Enum.GetValues<PlayerRngType>().Select(t => $"{t} {Show(session.Player.PlayerRng.GetRng(t))}"));
-        lines.AddRange(session.State.Enemies.Select(e => $"{e.Monster?.Id.Entry} {e.Monster?.NextMove.Id} {(e.Monster == null ? "" : Show(e.Monster.Rng))}"));
+        lines.AddRange(CombatSession.State.Enemies.Select(e => $"{e.Monster?.Id.Entry} {e.Monster?.NextMove.Id} {(e.Monster == null ? "" : Show(e.Monster.Rng))}"));
         return string.Join("\n", lines);
 
         static string Show(Rng rng)
@@ -152,7 +152,7 @@ internal static partial class SelfTest
     /// <summary>FastHookListeners yields the same models, in the same order, as the game's own iterators.</summary>
     private static bool SameListeners(CombatSession session)
     {
-        var (combat, run) = (session.State, session.Run);
+        var (combat, run) = (CombatSession.State, session.Run);
         // The reverse patches must reach the game's compiler-generated iterators, or this compares ours with ours.
         if (FastHookListeners.Original.Combat(combat).GetType().DeclaringType != typeof(CombatState)) return false;
         if (FastHookListeners.Original.Run(run, null).GetType().DeclaringType != typeof(RunState)) return false;
@@ -240,7 +240,7 @@ internal static partial class SelfTest
     private static void WorldRestoresAfterPrompts(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
     {
         var deck = new[] { "SURVIVOR", "SURVIVOR", "SURVIVOR", "SURVIVOR", "SURVIVOR", "STRIKE_SILENT", "DEFEND_SILENT", "NEUTRALIZE" };
-        var loadout = new Loadout(Deck: deck.Select(id => new CardSpec(id)).ToList(), Relics: ["TOASTY_MITTENS"], Hp: 999, MaxHp: 999);
+        var loadout = new Loadout(Deck: [.. deck.Select(id => new CardSpec(id))], Relics: ["TOASTY_MITTENS"], Hp: 999, MaxHp: 999);
         var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
         CombatObservation obs;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
@@ -270,7 +270,7 @@ internal static partial class SelfTest
     {
         void Case(string name, string[] deck, string[] potions)
         {
-            var loadout = new Loadout(Deck: deck.Select(id => new CardSpec(id)).ToList(), Relics: [], Potions: potions, Hp: 70, MaxHp: 70);
+            var loadout = new Loadout(Deck: [.. deck.Select(id => new CardSpec(id))], Relics: [], Potions: potions, Hp: 70, MaxHp: 70);
             var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
             CombatObservation obs;
             using (var session = CombatSession.Start(pump, setup, PromptBrain.Instance))
@@ -288,7 +288,7 @@ internal static partial class SelfTest
             using (var worlds = SimWorlds.SL(pump, root, Alone(obs)))
             {
                 var world = worlds.Worlds(1, 0)[0];
-                var plan = new SlPlanner(leaf).Plan(world.Observe(), world, new Budget(NodesPerWorld: 300, Beam: 8));
+                var plan = new SlPlanner(leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 8));
                 check($"SL planner repeats a cycle to lethal ({name})", plan.End == CombatStatus.Won && plan.Result.First != CombatAction.EndTurn && plan.Result.Plan.Count(a => a == CombatAction.EndTurn) <= 1, $"{plan.End}: {plan.Result.Plan.Count + 1} actions");
                 world.Restore(new([]));
                 foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);

@@ -9,7 +9,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime.Patches;
 
 internal static partial class HeadlessPatches
 {

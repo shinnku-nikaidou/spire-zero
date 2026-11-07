@@ -214,7 +214,7 @@ internal static class NodeRecord
                 // The game's own indexes into the prompt's options; a skipped single pick is -1.
                 var picks = result.ChoiceType == PlayerChoiceType.Index
                     ? result.AsIndexes().Where(i => i >= 0).ToList()
-                    : result.AsCards(result.ChoiceType).Select(c => options.ToList().IndexOf(c)).ToList();
+                    : [.. result.AsCards(result.ChoiceType).Select(c => options.ToList().IndexOf(c))];
                 if (picks.Any(i => i < 0 || i >= options.Count)) Break("a card picked outside the prompt's options");
                 else Add(Surfaces.CardChoice, string.Join(",", picks));
                 break;

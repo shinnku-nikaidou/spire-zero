@@ -29,13 +29,13 @@ public sealed record RunRecord(
 {
     /// <summary>The run records in these files (comma-separated), one per line. A failed run is as if never set: reports and
     /// gates see only the others (a host's memory fails runs at random: fleet references/maintenance.md).</summary>
-    public static List<RunRecord> Read(string files) => Records(files).Where(r => r.Outcome != "failed").ToList();
+    public static List<RunRecord> Read(string files) => [.. Records(files).Where(r => r.Outcome != "failed")];
 
     /// <summary>The seeds of a set less those these files' runs failed on: 2 failed of 500 is a set of 498.</summary>
     public static List<string> SeedsLeft(string files, IEnumerable<string> seeds)
     {
         var failed = Records(files).Where(r => r.Outcome == "failed").Select(r => r.Seed).ToHashSet();
-        return seeds.Where(s => !failed.Contains(s)).ToList();
+        return [.. seeds.Where(s => !failed.Contains(s))];
     }
 
     private static IEnumerable<RunRecord> Records(string files) =>

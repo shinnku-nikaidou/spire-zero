@@ -5,7 +5,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
 /// run: whole runs through Harness. Combat prompts go to p0; --macro picks the brain of every decision outside combat.
@@ -72,7 +72,7 @@ internal static class RunCommand
         Dispatcher? served = null;
         using var checkWire = check && remote == null ? BrainConnection.InProcess(new BrainServer(hello => served = harness!(hello))) : null;
         Func<Hello, IRunBrain> firstBrain = remote != null ? hello => WireBrain.Start(remote.Wire, hello) : hello => new LocalBrain(harness!(hello));
-        Func<Hello, IRunBrain> secondBrain = hello => WireBrain.Start((remote ?? checkWire)!.Wire, hello);
+        IRunBrain secondBrain(Hello hello) => WireBrain.Start((remote ?? checkWire)!.Wire, hello);
         string character = Loadout.Character(r);
         var loadout = Loadout.Loadout(r);
 
@@ -165,7 +165,7 @@ internal static class RunCommand
             var clock = Stopwatch.StartNew();
             try
             {
-                var clone = new NodeClone(save, run.Trace.Skip(start).Take(end - start).ToList());
+                var clone = new NodeClone(save, [.. run.Trace.Skip(start).Take(end - start)]);
                 using var session = RunSession.Load(pump, clone, Unasked.Instance, Unasked.Instance, Unasked.Instance,
                     obs => seen.Add(ProtocolJson.Hash(obs)));
                 int differs = Enumerable.Range(0, end - start).FirstOrDefault(i => seen.ElementAtOrDefault(i) != run.Observations[start + i], -1);

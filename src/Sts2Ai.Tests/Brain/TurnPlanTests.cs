@@ -1,12 +1,12 @@
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.Brain;
 
 public class TurnPlanTests
 {
     private static CombatDecisionResult Planned(params (CombatAction Action, ulong Hash)[] steps) =>
-        new(CombatAction.EndTurn, steps.Select(s => s.Action).ToList(), [], steps.Select(s => s.Hash).ToList());
+        new(CombatAction.EndTurn, [.. steps.Select(s => s.Action)], [], [.. steps.Select(s => s.Hash)]);
 
     [Fact]
     public void AStepThatDoesNotHoldIsReplannedAndMarked()

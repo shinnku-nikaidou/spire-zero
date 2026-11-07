@@ -6,7 +6,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
 /// Answers the game's card-choice prompts (discard X, exhaust X, choose 1 of 3, ...) by asking an
@@ -54,12 +54,12 @@ internal sealed class PolicySelector(
             var answer = policy.Choose(new ChoiceDecision(choice, observe == null ? null : () => observe(choice)));
             if (!choice.Accepts(answer))
                 throw new InvalidOperationException($"bad card choice [{string.Join(",", answer)}] for {cards.Count} options, select {min}..{max}");
-            picks = answer.Select(i => gameIndex[i]).ToArray();
+            picks = [.. answer.Select(i => gameIndex[i])];
         }
         if (picks.Length < min || picks.Length > max || picks.Distinct().Count() != picks.Length || picks.Any(i => i < 0 || i >= cards.Count))
             throw new InvalidOperationException($"replayed card choice [{string.Join(",", picks)}] does not fit {cards.Count} options, select {min}..{max}");
         record(choice, picks);
-        return Task.FromResult<IEnumerable<CardModel>>(picks.Select(i => cards[i]).ToList());
+        return Task.FromResult<IEnumerable<CardModel>>([.. picks.Select(i => cards[i])]);
     }
 
     public CardRewardSelection GetSelectedCardReward(IReadOnlyList<CardCreationResult> options, IReadOnlyList<CardRewardAlternative> alternatives)

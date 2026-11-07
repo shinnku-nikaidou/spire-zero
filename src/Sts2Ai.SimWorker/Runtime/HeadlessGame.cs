@@ -9,7 +9,7 @@ using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Settings;
 using MegaCrit.Sts2.Core.TestSupport;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Runtime;
 
 /// <summary>Process-wide boot of the game's model layer, and the error channel the game reports into.</summary>
 internal static class HeadlessGame

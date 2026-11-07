@@ -2,7 +2,7 @@ using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Hooks;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.GameBridge;
+namespace Sts2Ai.GameBridge.Actions;
 
 /// <summary>
 /// The merchant: "buy:SLOT" (index into <see cref="MerchantInventory.AllEntries"/> without the removal service:
@@ -16,7 +16,7 @@ public static class ShopActions
     /// <summary>The goods still for sale, by slot, and the removal service's price unless used.</summary>
     public static ShopScreen Screen(MerchantInventory inventory) => new()
     {
-        Entries = Goods(inventory).Select((entry, slot) => (entry, slot)).Where(e => e.entry.IsStocked).Select(e => View(e.entry, e.slot)).ToList(),
+        Entries = [.. Goods(inventory).Select((entry, slot) => (entry, slot)).Where(e => e.entry.IsStocked).Select(e => View(e.entry, e.slot))],
         RemovalCost = inventory.CardRemovalEntry is { IsStocked: true } removal ? removal.Cost : null,
     };
 
@@ -69,5 +69,5 @@ public static class ShopActions
         entry is MerchantCardRemovalEntry ? Remove : $"buy:{Goods(inventory).IndexOf(entry)}";
 
     private static List<MerchantEntry> Goods(MerchantInventory inventory) =>
-        inventory.AllEntries.Where(e => e is not MerchantCardRemovalEntry).ToList();
+        [.. inventory.AllEntries.Where(e => e is not MerchantCardRemovalEntry)];
 }

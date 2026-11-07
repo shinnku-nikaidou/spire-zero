@@ -24,4 +24,10 @@
     <Copy SourceFiles="$(OutDir)Sts2Ai.dll;$(OutDir)Sts2Ai.json" DestinationFolder="$(Sts2GameDir)/mods/Sts2Ai" />
     <Message Importance="high" Text="installed into $(Sts2GameDir)/mods/Sts2Ai" />
   </Target>
+
+  <ItemGroup>
+    <!-- Namespaces follow folders; these are in scope in every file. -->
+    <Using Include="Sts2Ai.GameBridge.Actions" />
+    <Using Include="Sts2Ai.Mod.UI" />
+  </ItemGroup>
 </Project>

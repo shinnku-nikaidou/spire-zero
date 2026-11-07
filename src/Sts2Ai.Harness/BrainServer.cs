@@ -144,7 +144,7 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
         string action = (request.Surface, obs.Screen) switch
         {
             (Surfaces.Combat, CombatScreen screen) =>
-                harness.Choose(new CombatDecision(request.Legal.Select(CombatAction.Parse).ToList(), () => screen.Combat, _ => obs)).ToString(),
+                harness.Choose(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs)).ToString(),
             (Surfaces.CardChoice, CardChoiceScreen screen) => "pick:" + string.Join(",", harness.Choose(new ChoiceDecision(screen.Choice, () => obs))),
             (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
             _ => harness.Choose(new MacroDecision(request.Surface, request.Legal, () => obs)),

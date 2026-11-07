@@ -15,9 +15,9 @@ public sealed class PooledPlanner(WorkerPool pool)
     /// <summary>Plans the rest of the combat at the decision that <paramref name="node"/> stands at.</summary>
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
     public SlPlan Plan(NodeClone node, Budget budget, IReadOnlyList<EnemyTurns> history) =>
-        SlPlanner.Search(budget, history, (jobs, nodes, keep, floor) => pool.Map(jobs
-                .Select((job, i) => (WorkerRequest)new SlTurnRequest(i, node, job.Path, nodes, keep, floor, job.History)).ToList())
-            .Select(r => r.Turn ?? throw new InvalidDataException($"request {r.Id}: no turn in the reply")).ToList());
+        SlPlanner.Search(budget, history, (jobs, nodes, keep, floor) => [.. pool.Map([.. jobs
+                .Select((job, i) => (WorkerRequest)new SlTurnRequest(i, node, job.Path, nodes, keep, floor, job.History))])
+            .Select(r => r.Turn ?? throw new InvalidDataException($"request {r.Id}: no turn in the reply"))]);
 
     /// <summary>As Harness's combat route in SL, one per run (<see cref="SlRoute"/>): plans once, then follows the plan,
     /// planning again only where it does not hold or has run out.</summary>

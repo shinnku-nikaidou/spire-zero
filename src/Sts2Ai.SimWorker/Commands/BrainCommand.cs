@@ -3,7 +3,7 @@ using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
-namespace Sts2Ai.SimWorker;
+namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
 /// brain: the brain alone (docs: harness §5), which serves the hosts that connect to the socket, one at a time, with the

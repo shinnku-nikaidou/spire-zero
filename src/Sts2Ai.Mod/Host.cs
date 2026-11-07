@@ -16,7 +16,7 @@ internal static class Host
     public const string Tag = "[Sts2Ai]";
 
     private static Assist? _assist;
-    private static Panel? _panel;
+    private static UI.Panel? _panel;
     private static string? _off;
     private static string? _lastError;
 
@@ -46,7 +46,7 @@ internal static class Host
         try
         {
             var assist = _assist;
-            _panel ??= new Panel((SceneTree)Engine.GetMainLoop(), assist == null ? null : env => Settings.Set(Settings.Current with { Env = env }),
+            _panel ??= new UI.Panel((SceneTree)Engine.GetMainLoop(), assist == null ? null : env => Settings.Set(Settings.Current with { Env = env }),
                 assist == null ? null : assist.Press);
             _panel.Poll();
             if (assist == null) _panel.Show("—", L10n.T("off"), null, _off!);

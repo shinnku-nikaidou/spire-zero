@@ -1,6 +1,6 @@
 using Sts2Ai.SimWorker;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.Tests.SimWorker;
 
 public class LoadoutTests
 {
