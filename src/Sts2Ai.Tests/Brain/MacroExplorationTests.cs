@@ -134,4 +134,24 @@ public class MacroExplorationTests
         Assert.InRange(treasure.Count(p => p.Item1 == "relic:1"), 900, 960);
         Assert.InRange(treasure.Count(p => p.Explored), 70, 130);
     }
+
+    [Fact]
+    public void TheSoftmaxDrawsByTheRatiosOfVsValuesAndMarksWhatItTookBelowTheBest()
+    {
+        var picks = Enumerable.Range(0, 1000).Select(seed =>
+        {
+            var l0 = new MacroBrain(V, softmax: new Softmax(0.05, new Random(seed)));
+            return (Pick: l0.Choose(Treasure()), l0.Explored);
+        }).ToList();
+        // log 3 - log 2.9 = 0.034: C is drawn e^(-0.034 / 0.05) = 0.51 times as often as B; A, a third of B, never.
+        Assert.InRange(picks.Count(p => p.Pick == "relic:1"), 610, 715);
+        Assert.InRange(picks.Count(p => p.Pick == "relic:2"), 285, 390);
+        Assert.DoesNotContain(picks, p => p.Pick == "relic:0");
+        Assert.All(picks, p => Assert.Equal(p.Pick != "relic:1", p.Explored));
+        // A prompt's step is drawn the same way: B or C, never A.
+        var prompt = Enumerable.Range(0, 300).Select(seed => new MacroBrain(V, softmax: new Softmax(0.05, new Random(seed))).Choose(Prompt(1, "A", "B", "C"))).ToList();
+        Assert.Contains(prompt, p => p.SequenceEqual([1]));
+        Assert.Contains(prompt, p => p.SequenceEqual([2]));
+        Assert.DoesNotContain(prompt, p => p.SequenceEqual([0]));
+    }
 }

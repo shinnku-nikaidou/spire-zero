@@ -15,7 +15,9 @@ public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions);
 
 /// <summary>What played a run, the same for every run of one evaluation (docs: evaluation/metrics §8).</summary>
 /// <param name="Champion">The brain on each side of the routing table, with its budget.</param>
-public sealed record RunConfig(string Game, string Commit, string Champion, string Env);
+/// <param name="AutoWin">The run's rule (<see cref="RunView.AutoWin"/>): the acts, indexes from 0, whose plain monster fights
+/// were won at their start; null in the normal game. Such a run is self-play data, never in a report or a gate.</param>
+public sealed record RunConfig(string Game, string Commit, string Champion, string Env, IReadOnlyList<int>? AutoWin = null);
 
 /// <summary>One run of an evaluation, as the report needs it (docs: evaluation/metrics §8).</summary>
 /// <param name="RunId">The run id the brain knew the run by, as in the decision log (docs: harness/decision-log).</param>

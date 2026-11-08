@@ -31,7 +31,7 @@ public sealed class PooledPimc(WorkerPool pool)
     {
         var plan = new TurnPlan(all: false);
         return new(name, (decision, seed, _, history) => plan.Decide(decision.Observation, decision.Legal,
-            () => Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget, seed, history,
+            () => Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget.For(decision.Observation.Room), seed, history,
                 decision.RunObservation?.Run ?? throw new InvalidOperationException("pimc searches a combat in a run: its leaves need the run"))), budget);
     }
 }

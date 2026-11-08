@@ -42,6 +42,15 @@ public class GateTests
     }
 
     [Fact]
+    public void NoReportOrGateTakesARunPlayedByTheAutoWinRule()
+    {
+        var ruled = Fixtures.Run("A", 12, config: Challenger with { AutoWin = [0, 1] });
+        var champion = EvalReport.Of([Fixtures.Run("A", 10)], "set", ["A"], "d");
+        Assert.Contains("acts 1,2", Assert.Throws<ArgumentException>(() => Gate.Pairs(champion, [ruled])).Message);
+        Assert.Throws<ArgumentException>(() => EvalReport.Of([ruled], "set", ["A"], "d"));
+    }
+
+    [Fact]
     public void NoGainFails() => Assert.Equal("fail", Gate.Sprt(Even(400), 0.1).Verdict);
 
     [Fact]

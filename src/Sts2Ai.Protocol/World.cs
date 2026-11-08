@@ -91,9 +91,10 @@ public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 /// An SL clone of the current node (docs: environments/information §7): the node's checkpoint at its entry (the game's save and the
 /// relic fields it drops), and every decision since, as "surface action" (picks of a card prompt as the game's own
 /// indexes). Opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back
-/// and replays the decisions.
+/// and replays the decisions. <see cref="AutoWin"/> is the run's rule (<see cref="RunView.AutoWin"/>), which the clone
+/// keeps: null in the normal game.
 /// </summary>
-public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, IReadOnlyList<int>? AutoWin = null);
 
 /// <summary>An action that search scored: its mean value over the worlds, the 95% confidence half-width, and how many worlds.
 /// On a macro decision or a card prompt outside combat the value is V's, the chance to win the run.</summary>

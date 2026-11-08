@@ -28,7 +28,7 @@ public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatSta
 /// <see cref="TurnPlan"/>, and planned again only where it does not hold or has run out. An unproved losing plan runs out
 /// after its <see cref="Budget.Replan"/> turns; after <see cref="Budget.LossPlans"/> of them in a row, the last is played
 /// to its end. A combat ends with its first plan that is not an unproved loss, or with the run, so the plans in a row are
-/// the combat's.
+/// the combat's. Each plan has the budget of the combat's room (<see cref="Budget.For"/>).
 /// </summary>
 public sealed class SlRoute(Budget budget)
 {
@@ -40,7 +40,8 @@ public sealed class SlRoute(Budget budget)
         _plan.Decide(observation, legal, () =>
         {
             if (legal.Count == 1) return PimcBrain.Only(legal[0]);
-            var made = plan(budget.LossPlans > 0 && _losses + 1 >= budget.LossPlans ? budget with { Replan = 0 } : budget);
+            var fight = budget.For(observation.Room);
+            var made = plan(fight.LossPlans > 0 && _losses + 1 >= fight.LossPlans ? fight with { Replan = 0 } : fight);
             _losses = made.End == CombatStatus.Lost && !made.Proved ? _losses + 1 : 0;
             return made.Result;
         });

@@ -40,7 +40,7 @@ internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisp
         return GameBridge.Observe.Combat(state, player);
     }
 
-    public RunView Run() => GameBridge.Observe.Run(Live.Run, Live.Player, previews: false);
+    public RunView Run() => Live.View(previews: false);
 
     public ulong HiddenKey()
     {

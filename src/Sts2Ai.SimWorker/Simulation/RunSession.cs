@@ -25,7 +25,10 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>How a run starts: a new singleplayer run of <see cref="Character"/>; a loadout replaces the starting one.</summary>
-internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null);
+/// <param name="AutoWin">The run's rule (<see cref="RunView.AutoWin"/>): the acts, indexes from 0, whose plain monster
+/// fights, an event's included, are won at their start as the game's <c>win</c> console command wins them, their rewards
+/// following as after any win; elites and bosses are fought. Null in the normal game.</param>
+internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null, IReadOnlyList<int>? AutoWin = null);
 
 /// <summary>
 /// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator/runs §2).
@@ -125,7 +128,7 @@ internal sealed class RunSession : IDisposable
             Combat = CombatManager.Instance.IsInProgress ? Observe.Combat(CombatManager.Instance.DebugOnlyGetState()!, Player) : null,
         };
         _selector = new PolicySelector(choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => Prompt(choice)),
-            choice => Observe.Of(Run, Player, Prompt(choice)), CardReward, Bundle);
+            choice => Of(Prompt(choice)), CardReward, Bundle);
         _selectorScope = CardSelectCmd.PushSelector(_selector);
         RewardsSet.testSelector = set =>
         {
@@ -192,7 +195,7 @@ internal sealed class RunSession : IDisposable
         var run = RunState.FromSerializable(save);
         var player = run.Players[0];
         var replay = new Replay(clone.Trace, combat, macro);
-        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel);
+        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel, AutoWin: clone.AutoWin);
         var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = true, _checkpoint = clone.Save };
         session._selector.QueueReplay(clone.Trace.Where(s => s.StartsWith(Surfaces.CardChoice + " ", StringComparison.Ordinal))
             .Select(s => s[(Surfaces.CardChoice.Length + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray()));
@@ -219,8 +222,18 @@ internal sealed class RunSession : IDisposable
         }
     }
 
-    /// <summary>The current node's SL clone: its checkpoint and the decisions since.</summary>
-    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), [.. _trace.Skip(NodeStart)]);
+    /// <summary>The current node's SL clone: its checkpoint and the decisions since, with the run's rule.</summary>
+    public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), [.. _trace.Skip(NodeStart)], Setup.AutoWin);
+
+    /// <summary>The run as a decision shows it, with the run's rule (<see cref="RunView.AutoWin"/>).</summary>
+    /// <param name="previews">As <see cref="Observe.Run"/>'s.</param>
+    public RunView View(bool previews = true)
+    {
+        var view = Observe.Run(Run, Player, previews);
+        return Setup.AutoWin == null ? view : view with { AutoWin = Setup.AutoWin };
+    }
+
+    private Observation Of(ScreenView screen) => new() { Run = View(), Screen = screen };
 
     /// <summary>Makes one decision, after anything the game or the driver does on its own. Does nothing once the run is over.</summary>
     public void Step()
@@ -356,7 +369,8 @@ internal sealed class RunSession : IDisposable
         return true;
     }
 
-    /// <summary>A won combat shows its rewards (<c>NCombatUi.OnCombatWon</c>), or proceeds if the encounter gives none.</summary>
+    /// <summary>A won combat shows its rewards (<c>NCombatUi.OnCombatWon</c>), or proceeds if the encounter gives none. A
+    /// plain monster fight in an act of the run's rule (<see cref="RunSetup.AutoWin"/>) is won at its start.</summary>
     private bool CombatStep(CombatRoom room)
     {
         if (CombatManager.Instance.IsInProgress)
@@ -366,7 +380,11 @@ internal sealed class RunSession : IDisposable
                 _progress.CombatEntered = true;
                 EnterCombat(room);
             }
-            return CombatDecision();
+            if (Setup.AutoWin?.Contains(Run.CurrentActIndex) != true || room.Encounter.RoomType != RoomType.Monster) return CombatDecision();
+            // An enemy that comes back or calls others when killed keeps the combat going: kill again, a few times.
+            if (++_progress.AutoWins > 5) throw new InvalidOperationException($"auto-win: the combat goes on after 5 wins: {Describe()}");
+            Await(Win());
+            return false;
         }
         if (_progress.RewardsOffered) throw new InvalidOperationException($"combat over and no screen: {Describe()}");
         _progress.RewardsOffered = true;
@@ -379,11 +397,22 @@ internal sealed class RunSession : IDisposable
         return false;
     }
 
+    /// <summary>The game's <c>WinConsoleCmd</c>: each enemy loses its powers and is killed, then the game checks for the win.</summary>
+    private static async Task Win()
+    {
+        foreach (var enemy in CombatManager.Instance.DebugOnlyGetState()!.Enemies.ToList())
+        {
+            enemy.RemoveAllPowersInternalExcept();
+            await CreatureCmd.Kill(enemy);
+        }
+        await CombatManager.Instance.CheckWinCondition();
+    }
+
     private bool CombatDecision()
     {
         var state = CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
         var legal = CombatActions.Legal(state, Player);
-        var decision = new CombatDecision(legal, () => Observe.Combat(state, Player), combat => Observe.Of(Run, Player, new CombatScreen { Combat = combat }));
+        var decision = new CombatDecision(legal, () => Observe.Combat(state, Player), combat => Of(new CombatScreen { Combat = combat }));
         var action = _combat.Choose(decision);
         if (!legal.Contains(action)) throw new InvalidOperationException($"combat policy chose {action}, which is not legal");
         Record(Surfaces.Combat, action.ToString(), () => new CombatScreen { Combat = decision.Observation });
@@ -479,7 +508,7 @@ internal sealed class RunSession : IDisposable
 
     private string Choose(string surface, List<string> legal, Func<ScreenView> screen)
     {
-        var decision = new MacroDecision(surface, legal, () => Observe.Of(Run, Player, screen()));
+        var decision = new MacroDecision(surface, legal, () => Of(screen()));
         var action = _macro.Choose(decision);
         if (!legal.Contains(action)) throw new InvalidOperationException($"macro policy chose {action}, not legal on {surface}: {string.Join(" ", legal)}");
         _trace.Add($"{surface} {action}");
@@ -491,7 +520,7 @@ internal sealed class RunSession : IDisposable
     private void Record(string surface, string action, Func<ScreenView> screen)
     {
         _trace.Add($"{surface} {action}");
-        _observed?.Invoke(Observe.Of(Run, Player, screen()));
+        _observed?.Invoke(Of(screen()));
     }
 
     /// <summary>
@@ -601,6 +630,7 @@ internal sealed class RunSession : IDisposable
         /// <summary>Proceeded: the map is open.</summary>
         public bool Left;
         public bool CombatEntered;
+        public int AutoWins;
         public bool RewardsOffered;
         public bool RestSucceeded;
         public bool ChestOpened;

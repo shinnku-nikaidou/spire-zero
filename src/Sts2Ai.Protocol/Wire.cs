@@ -80,9 +80,10 @@ public sealed record WireError(string Message) : WireMessage;
 /// <summary>
 /// Host → brain, SL only (docs: mod/sl-record §7): the node's checkpoint on arrival, before the node's first decision: the game's
 /// save and the relic fields it drops (docs: simulator/worlds §6), opaque outside the simulator. Nodes are numbered from 0 in
-/// the run.
+/// the run. <see cref="AutoWin"/> is the run's rule, which the node's clones keep (<see cref="NodeClone.AutoWin"/>); null
+/// in the normal game, and always from the real game.
 /// </summary>
-public sealed record NodeCheckpoint(int NodeIndex, string Checkpoint) : WireMessage;
+public sealed record NodeCheckpoint(int NodeIndex, string Checkpoint, IReadOnlyList<int>? AutoWin = null) : WireMessage;
 
 /// <summary>
 /// Host → brain, SL only: a decision taken in the node, numbered by <see cref="Seq"/> from 0, as "surface action" (a

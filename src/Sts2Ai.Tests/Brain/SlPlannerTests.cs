@@ -228,6 +228,26 @@ public class SlPlannerTests
     }
 
     [Fact]
+    public void TheRoutePlansEachFightWithTheBudgetOfItsRoom()
+    {
+        var budget = new Budget(NodesPerWorld: 100_000, Beam: 2) with { Boss = new Budget(NodesPerWorld: 100_000, Beam: 3) };
+        foreach (var (room, beam) in new[] { ("Monster", 2), ("Elite", 2), ("Boss", 3) })
+        {
+            var real = new Toy(enemyHp: 30);
+            var used = new List<Budget>();
+            new SlRoute(budget).Decide(real.Observe() with { Room = room }, real.Legal(), b =>
+            {
+                used.Add(b);
+                var world = new Toy(30);
+                world.Restore(real.Snapshot());
+                return new SlPlanner(Leaf).Plan(world, b);
+            });
+            Assert.Equal(beam, Assert.Single(used).Beam);
+            Assert.Null(used[0].Boss);
+        }
+    }
+
+    [Fact]
     public void AfterItsLossPlansALosingCombatIsPlayedToItsEnd()
     {
         var (Plans, End) = PlayRoute(new Budget(NodesPerWorld: 100_000, Beam: 2), enemyHp: 500);

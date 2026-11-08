@@ -121,7 +121,7 @@ public sealed class Dispatcher(
         Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget, seed, ms, Obs: decision.Observation, History: history,
+                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget?.For(decision.Observation.Room), seed, ms, Obs: decision.Observation, History: history,
                 Replanned: Mark(result.Replanned)));
         _pick = result.First.Picks;
         return result.First.Plain;
@@ -191,7 +191,7 @@ public sealed class Dispatcher(
     private NodeClone Clone()
     {
         var node = _node ?? throw new InvalidOperationException("an SL decision before any node checkpoint");
-        return new(node.Checkpoint, [.. _nodeTrace]);
+        return new(node.Checkpoint, [.. _nodeTrace], node.AutoWin);
     }
 
     private (int Id, ulong Seed, Stopwatch Clock) Begin(string brain)

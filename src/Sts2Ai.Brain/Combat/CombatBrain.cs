@@ -12,8 +12,19 @@ namespace Sts2Ai.Brain.Combat;
 /// (<see cref="SlRoute"/>); the last is played to its end. 0: no limit.</param>
 /// <param name="EasyBeam">The SL planner's states kept when its greedy dive already wins the combat; 0:
 /// <paramref name="Beam"/>.</param>
-public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0)
+/// <param name="Elite">An elite fight's budget, where it differs (<see cref="For"/>); null: this one.</param>
+/// <param name="Boss">A boss fight's budget, where it differs; null: this one.</param>
+public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0,
+    Budget? Elite = null, Budget? Boss = null)
 {
+    /// <summary>The budget of a fight in a room of this type (<see cref="CombatObservation.Room"/>: Monster, Elite or Boss).</summary>
+    public Budget For(string? room) => room switch
+    {
+        "Elite" when Elite != null => Elite,
+        "Boss" when Boss != null => Boss,
+        _ => Elite == null && Boss == null ? this : this with { Elite = null, Boss = null },
+    };
+
     /// <summary>The planner's budget at an effort level (docs: sl-planner/budget §1): beam, nodes per state and turn, the
     /// easy beam, the turns of an unproved losing plan played before planning again (0: to its end), and the losing
     /// plans in a row before the last is played to its end.</summary>
@@ -30,9 +41,10 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
     public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "max"];
 
     /// <summary>As the champion's name shows it: 8x300 (beam 16x300 for the planner), then the planner's easy beam,
-    /// replan when not 1 and loss plans when limited.</summary>
+    /// replan when not 1 and loss plans when limited; then an elite's and a boss's budget where they differ.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}");
+        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}") +
+        (Elite != null ? $" elite ({Elite})" : "") + (Boss != null ? $" boss ({Boss})" : "");
 }
 
 /// <summary>Searches every world from the decision's state: the best line after each of <paramref name="first"/>, in

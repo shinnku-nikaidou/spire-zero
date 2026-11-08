@@ -14,21 +14,25 @@ namespace Sts2Ai.Brain.Macro;
 ///
 /// With <paramref name="uniform"/>, for self-play (docs: learning/loop §9), some answers are drawn evenly whatever V says (<see cref="Uniform"/>): a card reward's outcome among
 /// its cards and skipping it, a card prompt's picks, and on every other screen its options, a potion's among them (what
-/// <see cref="Offered"/> leaves of the belt), but those that would come back to a state already decided.
+/// <see cref="Offered"/> leaves of the belt), but those that would come back to a state already decided. With
+/// <paramref name="softmax"/>, for self-play too, every other answer is drawn by V instead of taken as the best: a softmax
+/// over the log of the options' values (<see cref="Pick"/>), at a macro decision, at each step of a card prompt's answer.
 ///
 /// An option that ends the run is worth what the run's end is: 0 for one the screen says kills (an event's), and on the
 /// clone 1 or 0 as the game ends it. On the clone, an option that starts a combat (an event's fight) is valued by
 /// <paramref name="fights"/>, the combat leaf (<see cref="CloneSearch"/>).
 /// </summary>
-public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null) : IMacroPolicy, IChoicePolicy
+public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null)
+    : IMacroPolicy, IChoicePolicy
 {
     /// <summary>Each card reward's draw by <c>uniform</c> (null: none), by its floor and cards, made when it is first seen.</summary>
     private readonly Dictionary<string, int?> _draws = [];
 
-    /// <summary>Whether the last answer was drawn by <c>uniform</c>.</summary>
+    /// <summary>Whether the last answer was drawn: by <c>uniform</c>, or by <c>softmax</c> and valued below the best
+    /// (<see cref="Softmax.Explored"/>; at a card prompt, any of its steps).</summary>
     public bool Explored { get; private set; }
 
-    /// <summary>The options of the last answer, valued by V, to show; none when it was drawn by <c>uniform</c>.</summary>
+    /// <summary>The options of the last answer, valued by V, to show; none when it was drawn.</summary>
     public IReadOnlyList<Candidate> Scored { get; private set; } = [];
 
     /// <summary>
@@ -63,7 +67,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             pick = even;
             Explored = true;
         }
-        else pick = Best(values);
+        else pick = Pick(values);
         var option = options[pick];
         Scored = Explored ? [] : Rank(options.Select(o => (o.Action, o.Value)), option.Action);
         _opened = option.Opens;
@@ -261,13 +265,13 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
             if (picks.Count >= min) options.Insert(0, (-1, current, state));
             if (picks.Count == 0) first.AddRange(options.Select(o => (CloneSearch.Pick(o.Index < 0 ? [] : [o.Index]), o.Value)));
-            var taken = options[Best(options.Select(o => o.Value).ToList())];
+            var taken = options[Pick([.. options.Select(o => o.Value)])];
             if (taken.Index < 0) break;
             picks.Add(taken.Index);
             (current, state) = (taken.Value, taken.State);
         }
         string answer = CloneSearch.Pick(picks);
-        Scored = Rank(first.Where(o => o.Action != answer).Append((answer, current)), answer);
+        Scored = Explored ? [] : Rank(first.Where(o => o.Action != answer).Append((answer, current)), answer);
         return picks;
     }
 
@@ -318,12 +322,12 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
                 var found = new CloneSearch(value, clone, _decided, fights).Search(root, [.. fresh.Select(a => (IReadOnlyList<string>)[a])]);
                 for (int i = 0; i < fresh.Count; i++) worth[fresh[i]] = found[i].Value;
             }
-            var taken = near[Best(near.Select(c => worth[Answer(c)]).ToList())];
+            var taken = near[Pick([.. near.Select(c => worth[Answer(c)])])];
             if (taken == current) break;
             counts = taken;
         }
         _decided.Add(CloneSearch.Key(root));
-        Scored = Rank(worth.Select(kv => (kv.Key, kv.Value)), Answer(counts));
+        Scored = Explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value)), Answer(counts));
         return [.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()];
     }
 
@@ -348,6 +352,21 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         if (add >= 0) moved[add]++;
         if (drop >= 0) moved[drop]--;
         return moved;
+    }
+
+    /// <summary>
+    /// The first best of <paramref name="values"/>, or with <c>softmax</c> a draw by their logs: V is a chance that spans
+    /// orders of magnitude within a run (at A10 from 1e-3 down to 1e-7), so the temperature is in its ratios, the same at
+    /// any V. An option worth nothing (or −∞, a state already decided) is never drawn, unless all are.
+    /// </summary>
+    private int Pick(List<double> values)
+    {
+        int best = Best(values);
+        if (softmax == null || values[best] <= 0) return best;
+        var logs = values.Select(v => v > 0 ? Math.Log(v) : double.NegativeInfinity).ToList();
+        int drawn = softmax.Draw(logs);
+        Explored |= softmax.Explored(logs[drawn], logs[best]);
+        return drawn;
     }
 
     /// <summary>The first best of <paramref name="values"/>.</summary>

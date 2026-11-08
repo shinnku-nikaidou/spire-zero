@@ -24,3 +24,33 @@ public sealed class Uniform(double share, Random rng)
         return [.. Enumerable.Range(0, options).OrderBy(_ => rng.Next()).Take(n).Order()];
     }
 }
+
+/// <summary>
+/// Self-play exploration by values (docs: learning/loop §9): draws one of a brain's options by the values the brain gave
+/// them, each with chance ∝ exp((v − best) / τ). Options near the best are tried often and poor ones seldom; equal ones
+/// equally often. <paramref name="temperature"/> τ is in the values' units, above 0. Never in evaluation.
+/// </summary>
+public sealed class Softmax(double temperature, Random rng)
+{
+    public double Temperature { get; } =
+        temperature > 0 ? temperature : throw new ArgumentOutOfRangeException(nameof(temperature), "a softmax's temperature is above 0");
+
+    /// <summary>An index into <paramref name="values"/>; one worth −∞ is drawn only if all are.</summary>
+    public int Draw(IReadOnlyList<double> values)
+    {
+        double best = values.Max();
+        if (double.IsNegativeInfinity(best)) return rng.Next(values.Count);
+        var weights = values.Select(v => Math.Exp((v - best) / Temperature)).ToList();
+        double r = rng.NextDouble() * weights.Sum();
+        for (int i = 0; i < weights.Count - 1; i++)
+            if ((r -= weights[i]) < 0) return i;
+        return weights.Count - 1;
+    }
+
+    /// <summary>
+    /// Whether a draw valued <paramref name="value"/> explored, against the brain's pick valued <paramref name="pick"/>:
+    /// below it by more than τ / 100. Closer than that, the two are as good as tied (float noise in a net), and the draw
+    /// is as good as the pick.
+    /// </summary>
+    public bool Explored(double value, double pick) => pick - value > Temperature / 100;
+}

@@ -167,6 +167,9 @@ public sealed class RunNet : IRunValue, IDisposable
         "gold" => run.Gold,
         "ascension" => run.Ascension,
         "potion_slots" => run.Potions.Count,
+        // The game's rule, per act from 0: whether its plain monster fights are won at their start.
+        _ when name.StartsWith("auto_win_", StringComparison.Ordinal) && int.TryParse(name["auto_win_".Length..], out int act) =>
+            run.AutoWin?.Contains(act) == true ? 1 : 0,
         _ => throw new InvalidDataException($"a net reads the run's {name}, which RunNet does not know"),
     };
 

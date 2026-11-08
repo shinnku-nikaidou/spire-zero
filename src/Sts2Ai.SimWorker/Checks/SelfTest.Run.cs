@@ -166,6 +166,75 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// The auto-win rule in the first act (<c>run --auto-win 1</c>): a run with random policies, into the second act or to
+    /// its end. In the first act the combat brain is asked in elite and boss fights only, in each of them entered, and
+    /// every plain monster fight ends won at no HP lost; in the second act a monster fight is asked as in the normal game;
+    /// every observation's run carries the rule. Each node of the first act, loaded from its clone, which keeps the rule,
+    /// shows the node's observations as the run did.
+    /// </summary>
+    private static void AutoWinFightsElitesAndBosses(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed + 6);
+        var play = new PlayPolicy(rng);
+        var asked = new List<CombatObservation>();
+        var combat = new CapturePolicy(decision =>
+        {
+            asked.Add(decision.Observation);
+            return play.Choose(decision);
+        });
+        var seen = new List<string>();
+        var nodes = new List<(string Save, int Start, int Act)>();
+        List<string> trace;
+        List<CombatEntry> combats;
+        using (var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 6, 0), AutoWin: [0]), FirstPicks.Instance, combat,
+                   new RandomMacro(rng), obs => seen.Add(ProtocolJson.Serialize(obs))))
+        {
+            for (int i = 0; i < 5000 && !session.IsOver && !asked.Any(o => o.Act == 1); i++)
+            {
+                if (nodes.Count == 0 || nodes[^1].Start != session.NodeStart) nodes.Add((session.Clone().Save, session.NodeStart, session.Run.CurrentActIndex));
+                session.Step();
+            }
+            (trace, combats) = ([.. session.Trace], [.. session.Combats]);
+        }
+        var monsters = combats.Where(c => c.Act == 0 && c.Room == "Monster").ToList();
+        var hurt = monsters.FirstOrDefault(c => c.End is not { Died: false } end || end.Hp < c.Hp);
+        var fought = combats.Where(c => c.Room != "Monster").ToList();
+        var unasked = fought.FirstOrDefault(c => !asked.Any(o => o.Encounter == c.Encounter));
+        var wrong = asked.FirstOrDefault(o => o.Act == 0 && o.Room == "Monster");
+        bool second = combats.Any(c => c.Act == 1), secondAsked = asked.Any(o => o.Act == 1 && o.Room == "Monster");
+        int unruled = seen.Count(s => !s.Contains("\"auto_win\":[0]", StringComparison.Ordinal));
+        check("auto-win in act 1 asks the combat brain in its elites and bosses only, wins its monster fights at no HP lost, asks act 2's",
+            monsters.Count > 0 && fought.Count > 0 && hurt == null && unasked == null && wrong == null && second == secondAsked && unruled == 0,
+            $"{combats.Count} combats ({monsters.Count} act 1 monsters, {fought.Count} elites and bosses), act 2 reached {second}, asked {secondAsked}; " +
+            $"first hurt {hurt}, first unasked {unasked}, first monster asked {wrong?.Encounter}, observations without the rule {unruled}");
+
+        int replayed = 0;
+        string? mismatch = null;
+        for (int k = 0; k + 1 < nodes.Count && nodes[k + 1].Act == 0; k++)
+        {
+            var (save, start, _) = nodes[k];
+            int end = nodes[k + 1].Start;
+            var cloned = new List<string>();
+            try
+            {
+                using (RunSession.Load(pump, new NodeClone(save, [.. trace.Skip(start).Take(end - start)], [0]),
+                           RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, obs => cloned.Add(ProtocolJson.Serialize(obs))))
+                {
+                }
+            }
+            catch (InvalidOperationException e)
+            {
+                mismatch ??= $"node {k}: {Logs.FirstLine(e.Message)}";
+                continue;
+            }
+            if (cloned.SequenceEqual(seen.Skip(start).Take(end - start))) replayed++;
+            else mismatch ??= $"node {k}: {cloned.Count} of {end - start} observations";
+        }
+        check("auto-win: each node of act 1 replays from its clone, which keeps the rule", replayed > 0 && mismatch == null,
+            $"{replayed} nodes replayed; {mismatch}");
+    }
+
+    /// <summary>
     /// A run with random policies, stopped at the first decision of its second combat. The SL planner plans the rest of
     /// that combat on the node's clone (here, and with <paramref name="workers"/> in a pool too, which must plan the
     /// same). A hallway fight at full HP: the plan must win it. The clone, played to the plan's end, must end the combat as

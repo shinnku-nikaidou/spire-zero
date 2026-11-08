@@ -112,7 +112,7 @@ internal sealed class BudgetArgs
 
     /// <summary>The budget options' names in a champion file: they belong to the file's combat brain.</summary>
     public static readonly IReadOnlySet<string> Keys = new HashSet<string>
-        { "worlds", "nodes", "effort", "beam", "easy-beam", "replan", "loss-plans" };
+        { "worlds", "nodes", "effort", "beam", "easy-beam", "replan", "loss-plans", "elite-effort", "boss-effort" };
 
     private readonly Option<int> _worlds = Opt.Of("--worlds", 8, "pimc's determinized worlds per decision");
     private readonly Option<int?> _nodes = Opt.Maybe<int?>("--nodes", "search nodes per world (default 300; plan: per state and turn, default by --effort)");
@@ -123,8 +123,12 @@ internal sealed class BudgetArgs
     private readonly Option<int?> _replan = Opt.Maybe<int?>("--replan", "plan's turns of an unproved losing plan played before planning again, 0: to its end (default by --effort)");
     private readonly Option<int?> _lossPlans = Opt.Maybe<int?>("--loss-plans",
         "plan's unproved losing plans in a row in one combat, the last played to its end; 0: no limit (default by --effort)");
+    private readonly Option<string?> _eliteEffort = Opt.Maybe<string?>("--elite-effort",
+        $"plan's budget preset in an elite fight: {string.Join(", ", Budget.Efforts)} (default: the other options' budget)").AcceptOnlyFromAmong([.. Budget.Efforts]);
+    private readonly Option<string?> _bossEffort = Opt.Maybe<string?>("--boss-effort",
+        $"plan's budget preset in a boss fight: {string.Join(", ", Budget.Efforts)} (default: the other options' budget)").AcceptOnlyFromAmong([.. Budget.Efforts]);
 
-    public IEnumerable<Option> Options => [_worlds, _nodes, _effort, _beam, _easyBeam, _replan, _lossPlans];
+    public IEnumerable<Option> Options => [_worlds, _nodes, _effort, _beam, _easyBeam, _replan, _lossPlans, _eliteEffort, _bossEffort];
 
     /// <summary>The budget of the combat brain <paramref name="brain"/> (pimc, plan, or a placeholder).</summary>
     /// <param name="planElsewhere">Whether plan's options belong to another brain of the command (brain's SL hosts).</param>
@@ -132,10 +136,10 @@ internal sealed class BudgetArgs
     {
         var budget = new Budget(r.GetValue(_worlds), r.GetValue(_nodes) ?? 300);
         bool planOptions = r.GetValue(_effort) != null || r.GetValue(_beam) != null || r.GetValue(_easyBeam) != null || r.GetValue(_replan) != null
-            || r.GetValue(_lossPlans) != null;
+            || r.GetValue(_lossPlans) != null || r.GetValue(_eliteEffort) != null || r.GetValue(_bossEffort) != null;
         if (brain != "plan")
             return planElsewhere || !planOptions ? budget
-                : throw new CliException("--effort, --beam, --easy-beam, --replan and --loss-plans are plan's; they need --policy plan");
+                : throw new CliException("--effort, --beam, --easy-beam, --replan, --loss-plans, --elite-effort and --boss-effort are plan's; they need --policy plan");
         var effort = Budget.Effort(r.GetValue(_effort) ?? DefaultEffort);
         budget = budget with
         {
@@ -146,7 +150,11 @@ internal sealed class BudgetArgs
             LossPlans = r.GetValue(_lossPlans) ?? effort.LossPlans,
         };
         if (budget.Beam < 1 || budget.EasyBeam < 0) throw new CliException("--beam is at least 1, --easy-beam at least 0");
-        return budget.Replan >= 0 && budget.LossPlans >= 0 ? budget : throw new CliException("--replan and --loss-plans are at least 0");
+        if (budget.Replan < 0 || budget.LossPlans < 0) throw new CliException("--replan and --loss-plans are at least 0");
+        // A room's preset is kept only where it differs from the budget of every other fight.
+        Budget? Room(Option<string?> option) =>
+            r.GetValue(option) is { } level && Budget.Effort(level) with { Worlds = budget.Worlds } is var room && room != budget ? room : null;
+        return budget with { Elite = Room(_eliteEffort), Boss = Room(_bossEffort) };
     }
 }
 
@@ -212,9 +220,11 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<double> _explore = Opt.Of("--explore", 0.0,
         "self-play only: the chance ε that l0 draws a decision's answer evenly, whatever V says: a card reward's outcome among its cards and skipping, " +
         "a card prompt's picks, every other screen's options but the potion belt's");
+    private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
+        "self-play only: the softmax temperature τ over the log of V's values by which l0 draws every answer --explore leaves to V (0: V's best)");
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore];
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore, _macroExplore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -230,10 +240,13 @@ internal sealed class ChampionArgs(bool file)
         double explore = r.GetValue(_explore);
         if (explore is not (>= 0 and <= 1)) throw new CliException("--explore is a share of decisions, from 0 to 1");
         if (explore > 0 && macro != "l0") throw new CliException("--explore is l0's; it needs --macro l0");
+        double macroExplore = r.GetValue(_macroExplore);
+        if (macroExplore is not >= 0) throw new CliException("--macro-explore is a temperature, from 0");
+        if (macroExplore > 0 && macro != "l0") throw new CliException("--macro-explore is l0's; it needs --macro l0");
         var leaf = _leaf.Read(r);
         if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
         if ((leaf.Value != null) != (macro == "l0" || leaf.Net != null)) throw new CliException("--value goes with --macro l0 or --combat-net, which need it");
         if (clone && leaf.Net == null) throw new CliException("--afterstates clone needs --combat-net: a fight an option starts is valued by the combat net");
-        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore);
+        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore);
     }
 }

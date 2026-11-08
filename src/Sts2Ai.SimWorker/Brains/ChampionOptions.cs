@@ -12,11 +12,13 @@ namespace Sts2Ai.SimWorker.Brains;
 /// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
 /// <param name="Explore">For self-play only (docs: learning/loop §9): the share ε of macro decisions whose answer l0 draws
 /// evenly, whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
+/// <param name="MacroExplore">For self-play only: l0's softmax temperature τ over the log of V's values for the decisions
+/// not drawn evenly (--macro-explore, <see cref="Softmax"/>); 0 for none, V's best.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue? Value, string? ValueFile,
-    LeafChoice Leaf, bool OnClone = false, double Explore = 0)
+    LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0)
 {
     /// <summary>Whether it explores, which only self-play does.</summary>
-    public bool Explores => Explore > 0;
+    public bool Explores => Explore > 0 || MacroExplore > 0;
 
     /// <summary>The search's workers (pimc's, plan's, l0's on the clone). A run holds its process's one live game, so search runs in other processes.</summary>
     public WorkerPool? Pool() => Searches || OnClone ? new WorkerPool(Program.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
@@ -50,7 +52,8 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         Dispatcher dispatcher;
         if (Macro == "l0")
         {
-            var l0 = new MacroBrain(Value!, Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null, OnClone ? Leaf.Leaf : null);
+            var l0 = new MacroBrain(Value!, Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null, OnClone ? Leaf.Leaf : null,
+                MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log,
                 OnClone ? node => new PooledClone(pool!, node) : null, explain);
         }
@@ -62,8 +65,9 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// <summary>The combat brain, pimc or plan by its combat net's name.</summary>
     private string Combat => Policy + Leaf.Suffix;
 
-    /// <summary>l0 by its V's name, then "clone" if it plays on the node's clone, then "eps ε" if it explores.</summary>
-    private string L0 => $"l0 {Value?.Name}" + (OnClone ? " clone" : "") + (Explore > 0 ? FormattableString.Invariant($" eps {Explore}") : "");
+    /// <summary>l0 by its V's name, then "clone" if it plays on the node's clone, then "explore τ" and "eps ε" if it explores.</summary>
+    private string L0 => $"l0 {Value?.Name}" + (OnClone ? " clone" : "") + (MacroExplore > 0 ? FormattableString.Invariant($" explore {MacroExplore}") : "")
+        + (Explore > 0 ? FormattableString.Invariant($" eps {Explore}") : "");
 
     /// <summary>The champion as Harness names it (<see cref="Dispatcher.Champion"/>), which runs check.</summary>
     public string Name
@@ -85,15 +89,21 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
             if (Budget.EasyBeam > 0) options["easy-beam"] = $"{Budget.EasyBeam}";
             options["replan"] = $"{Budget.Replan}";
             options["loss-plans"] = $"{Budget.LossPlans}";
+            if (Budget.Elite != null) options["elite-effort"] = Effort(Budget.Elite);
+            if (Budget.Boss != null) options["boss-effort"] = Effort(Budget.Boss);
         }
         if (Policy == "pimc") options["worlds"] = $"{Budget.Worlds}";
         if (Searches) options["nodes"] = $"{Budget.NodesPerWorld}";
         if (ValueFile != null) options["value"] = ValueFile;
         if (OnClone) options["afterstates"] = "clone";
         if (Explore > 0) options["explore"] = Explore.ToString(CultureInfo.InvariantCulture);
+        if (MacroExplore > 0) options["macro-explore"] = MacroExplore.ToString(CultureInfo.InvariantCulture);
         if (Leaf.NetPath != null) options["combat-net"] = Leaf.NetPath;
         return options;
     }
+
+    /// <summary>The preset a room's budget was made from (<see cref="BudgetArgs"/> keeps only presets there).</summary>
+    private static string Effort(Budget room) => Budget.Efforts.First(e => Budget.Effort(e) with { Worlds = room.Worlds } == room);
 
     /// <summary>
     /// The options of this challenger as the champion, every character's: no character or ascension, which each job

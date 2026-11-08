@@ -103,6 +103,8 @@ public sealed class CliTests : IDisposable
     [Theory]
     [InlineData("--macro", "l0")]
     [InlineData("--explore", "0.1", "--macro", "random")]
+    [InlineData("--macro-explore", "0.05", "--macro", "random")]
+    [InlineData("--boss-effort", "high", "--policy", "play")]
     [InlineData("--value", "Fixtures/pure-v-tiny-win.json", "--macro", "random")]
     [InlineData("--policy", "pimc")]
     public void RefusesChampionsThatDoNotHangTogether(params string[] args)
@@ -145,5 +147,32 @@ public sealed class CliTests : IDisposable
         Assert.Equal(played.Name, again.Name);
         Assert.Equal(played.Options(PlayEnvironment.NoSL), again.Options(PlayEnvironment.NoSL));
         Assert.Equal(4, again.Workers);
+    }
+
+    [Fact]
+    public void PlansEliteAndBossFightsAtTheirOwnEffortAndDrawsBySoftmaxAndAChampionFileKeepsBoth()
+    {
+        var champion = new ChampionArgs(file: true);
+        var root = new RootCommand { Opt.Command("test", "", champion.Options) };
+        var config = new ParserConfiguration();
+        ParseResult Parse(string[] args) => ChampionFileOption.Merge(root, args, root.Parse(args, config), config);
+
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
+        var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var played = champion.Read(Parse(["test", "--policy", "plan", "--combat-net", net, "--macro", "l0", "--value", value,
+            "--elite-effort", "medium", "--boss-effort", "high", "--explore", "0.1", "--macro-explore", "0.05"]));
+        // An elite at medium is every other fight's budget, so only the boss's shows.
+        Assert.Null(played.Budget.Elite);
+        Assert.Equal(Budget.Effort("high"), played.Budget.Boss);
+        Assert.Equal("combat plan combat-tiny beam 8x300 easy 4 loss plans 3 boss (beam 8x300), combat prompts first, " +
+            "macro l0 pure-v-tiny-win explore 0.05 eps 0.1, macro prompts l0 pure-v-tiny-win explore 0.05 eps 0.1", played.Name);
+        Assert.True(played.Explores);
+
+        var options = played.Options(PlayEnvironment.SL);
+        Assert.Equal("high", options["boss-effort"]);
+        Assert.False(options.ContainsKey("elite-effort"));
+        var again = champion.Read(Parse(["test", "--champion", ChampionFile(options)]));
+        Assert.Equal(played.Name, again.Name);
+        Assert.Equal(played.Budget, again.Budget);
     }
 }

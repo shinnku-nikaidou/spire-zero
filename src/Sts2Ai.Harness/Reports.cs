@@ -75,15 +75,21 @@ public sealed record Metrics(
 /// <param name="SeedSet">The seed file's name; <paramref name="SetSize"/> seeds are in it, and every one must be run.</param>
 public sealed record EvalReport(RunConfig Config, string SeedSet, int SetSize, string Date, Metrics Metrics, IReadOnlyList<RunRecord> Runs)
 {
+    /// <summary>Why a run played by the auto-win rule (<see cref="RunConfig.AutoWin"/>) is in no report or gate.</summary>
+    public static string RuleRefused(RunRecord run) =>
+        $"run {run.Seed} won the plain monster fights of acts {string.Join(",", run.Config.AutoWin!.Select(a => a + 1))} at their start (--auto-win): " +
+        "it is self-play data, in no report or gate";
+
     /// <summary>
     /// The report over <paramref name="runs"/>, which may come from several processes. They must share one config,
-    /// one character and one ascension, and each run a different seed of the set.
+    /// one character and one ascension, and each run a different seed of the set, in the normal game.
     /// </summary>
     /// <exception cref="ArgumentException">The runs disagree on the config, the character or the ascension, repeat a
-    /// seed, or play one not in the set.</exception>
+    /// seed, play one not in the set, or were played by the auto-win rule.</exception>
     public static EvalReport Of(IReadOnlyList<RunRecord> runs, string seedSet, IReadOnlyList<string> seeds, string date)
     {
         if (runs.Count == 0) throw new ArgumentException("no runs");
+        if (runs.FirstOrDefault(r => r.Config.AutoWin != null) is { } ruled) throw new ArgumentException(RuleRefused(ruled));
         var config = runs[0].Config;
         if (runs.FirstOrDefault(r => r.Config != config) is { } other) throw new ArgumentException($"run {other.Seed} was played by {other.Config}, not {config}");
         if (runs.FirstOrDefault(r => (r.Character, r.Ascension) != (runs[0].Character, runs[0].Ascension)) is { } stranger)

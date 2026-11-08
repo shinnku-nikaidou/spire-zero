@@ -77,10 +77,12 @@ public class DispatcherTests
             seen = clone;
             return new(CombatAction.EndTurn, [], []);
         }), new("p0", macro), new("l0", macro), new("l0", macro));
-        dispatcher.Checkpoint(new(0, "{}"));
+        dispatcher.Checkpoint(new(0, "{}", [0, 1]));
         dispatcher.Act(new(0, 0, "event event:1"));
         dispatcher.Choose(Decision(Fixtures.Slugs()));
         Assert.True(seen is { Save: "{}" } && seen.Trace.SequenceEqual(["event event:1"]));
+        // The run's rule goes with the clone, so that its fights and probes play by it.
+        Assert.Equal([0, 1], seen.AutoWin);
     }
 
     private static ChoiceDecision Prompt(bool inCombat = true) => new(new CardChoice

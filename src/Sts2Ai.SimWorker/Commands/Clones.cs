@@ -50,7 +50,7 @@ internal static class ClonesCommand
                         break;
                     }
                     decisions++;
-                    var (asked, failure) = NextDecision(pump, new NodeClone(node.Checkpoint, [.. steps]));
+                    var (asked, failure) = NextDecision(pump, new NodeClone(node.Checkpoint, [.. steps], node.AutoWin));
                     string where = $"node {node.NodeIndex} step {steps.Count}, decision {request.DecisionId} ({request.Surface})";
                     if (asked == null) Console.WriteLine($"{where}: the clone fails: {failure}");
                     else if (DecisionRequest.HashOf(asked) != request.ObsHash)

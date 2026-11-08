@@ -30,7 +30,7 @@ internal static class NodeProbe
                 session.Step();
             }
             if (answers.Pending > 0) throw new InvalidOperationException($"a probe stopped with {answers.Pending} answers left: {string.Join(" ", path)}");
-            return answers.Next ?? new Afterstate(Observe.Run(session.Run, session.Player), null, null, [], session.Won);
+            return answers.Next ?? new Afterstate(session.View(), null, null, [], session.Won);
         }
         catch (Asked) when (answers.Next != null)
         {

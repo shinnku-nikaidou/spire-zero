@@ -141,6 +141,7 @@ internal static partial class SelfTest
         NodeWorldPlaysAsTheRun(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);
         CloneKeepsRelicState(pump, seed, Check);
+        AutoWinFightsElitesAndBosses(pump, seed, Check);
         DeathsOutsideTheEnemysTurnEndTheirCombat(pump, seed, Check);
         int workers = r.GetValue(Workers);
         PlanHoldsInTheRun(pump, seed, workers, net, Check);
