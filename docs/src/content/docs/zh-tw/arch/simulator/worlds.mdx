@@ -54,20 +54,20 @@ NoSL 世界把觸及工作階段動作上限（1,000 個動作，[戰鬥 §1](/z
 
 **節點**是一個地圖點，從到達開始，直到移動到下一個點為止（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。SL 可以知道當前節點的一切，所以 SL 需要它的一個精確副本，可以一打再打。這個副本從一份存檔開始。
 
-到達一個地圖點時，遊戲會儲存這一局。無頭時什麼都不寫：`SaveRun` 補丁跳過它；而一份沒有已完成房間的存檔就是到達時的存檔，所以這個補丁也發出一個節點已開始的訊號（`Runtime/Patches/Persistence.cs:13-23`）。接著 `RunSession` 取得這個節點的**檢查點**（`Sts2Ai.GameBridge/Checkpoint.cs`），記下節點的決策在它的軌跡裡從哪裡開始，並把選牌提示重新從 0 編號（`Simulation/RunSession.cs:137-142`）。檢查點是一個 JSON 物件，分兩部分：
+到達一個地圖點時，遊戲會儲存這一局。無頭時什麼都不寫：`SaveRun` 補丁跳過它；而一份沒有已完成房間的存檔就是到達時的存檔，所以這個補丁也發出一個節點已開始的訊號（`Runtime/Patches/Persistence.cs:13-23`）。接著 `RunSession` 取得這個節點的**檢查點**（`Sts2Ai.GameBridge/Checkpoint.cs`），記下節點的決策在它的軌跡裡從哪裡開始，並把選牌提示重新從 0 編號（`Simulation/RunSession.cs:140-145`）。檢查點是一個 JSON 物件，分兩部分：
 
 - `Save`：遊戲自己的一局存檔，即由 `SaveManager.ToJson` 序列化的 `RunManager.ToSave(null)`，以字串形式巢狀放入；
 - `Relics`：每個遺物的簡單欄位：從遺物自己的類別一直到 `RelicModel`（其中包括它的狀態），每個數字、旗標、列舉或 decimal 型別的可寫欄位，按類別和欄位名存放。存檔會丟掉其中大部分（[§6](#sec-6)）。
 
 兩種宿主都會取檢查點，模擬器和遊戲裡的 Mod 都是，NoSL 的對局也一樣；只有 SL 的對局會把它們傳給大腦（[環境：資訊與節點 §7](/zh-tw/arch/environments/information/#sec-7)）。
 
-**複本**是檢查點，加上此後節點的每個決策，作為軌跡行（`surface action`；選牌提示的選擇用遊戲自己的索引）。它的協定型別是 `NodeClone(Save, Trace)`（`Sts2Ai.Protocol/World.cs:96`），除了模擬器，對其他一切都是不透明的。`RunSession.Clone()` 在節點的任何時刻都能做出一個複本（`Simulation/RunSession.cs:223`）。
+**複本**是檢查點，加上此後節點的每個決策，作為軌跡行（`surface action`；選牌提示的選擇用遊戲自己的索引）。它的協定型別是 `NodeClone(Save, Trace, AutoWin?)`（`Sts2Ai.Protocol/World.cs:97`），除了模擬器，對其他一切都是不透明的。`RunSession.Clone()` 在節點的任何時刻都能做出一個複本（`Simulation/RunSession.cs:226`）。`AutoWin` 是這一局按自動勝利規則打時的規則（[整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）：存檔不保存它，所以由複本帶著，而帶著它載入的複本會像這一局一樣，在普通怪物戰開打時就贏下它們，這是它的重播所需要的。
 
-**在一局裡**，SL 宿主把複本一塊一塊地傳給大腦：新節點開始時傳 `node_checkpoint`，然後節點的每個決策以 `node_action` 傳送，兩者都在下一個決策被提問之前傳送（`Brains/RunBrains.cs:88-99`；[協定：線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。Harness 保留最新的檢查點和此後的決策，在每個決策時，這就是複本（[Harness §4](/zh-tw/arch/harness/#sec-4)）。Mod 從遊戲裡傳送同樣的訊息（[Mod：SL 紀錄 §7](/zh-tw/arch/mod/sl-record/#sec-7)）。
+**在一局裡**，SL 宿主把複本一塊一塊地傳給大腦：新節點開始時傳 `node_checkpoint`（如果這一局有規則，就帶著它），然後節點的每個決策以 `node_action` 傳送，兩者都在下一個決策被提問之前傳送（`Brains/RunBrains.cs:88-99`；[協定：線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。Harness 保留最新的檢查點和此後的決策，在每個決策時，這就是複本（[Harness §4](/zh-tw/arch/harness/#sec-4)）。Mod 從遊戲裡傳送同樣的訊息（[Mod：SL 紀錄 §7](/zh-tw/arch/mod/sl-record/#sec-7)）。
 
 ## 4. 載入複本
 
-`RunSession.Load(clone)`（`Simulation/RunSession.cs:186-220`）走遊戲「繼續」的路徑：`NMainMenu` 的 Continue 和 `NGame.LoadRun`，不含其中的 Godot 節點（`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`）<Badge text="已核實" variant="success" />。
+`RunSession.Load(clone)`（`Simulation/RunSession.cs:189-223`）走遊戲「繼續」的路徑：`NMainMenu` 的 Continue 和 `NGame.LoadRun`，不含其中的 Godot 節點（`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`）<Badge text="已核實" variant="success" />。
 
 <Steps>
 
@@ -86,7 +86,7 @@ NoSL 世界把觸及工作階段動作上限（1,000 個動作，[戰鬥 §1](/z
 
 ## 5. 封存
 
-移動到下一個地圖點是一個節點的最後一個決策。複本會記錄它，但不移動：它停在那裡並設定 `AtHorizon`，之後任何 `Step` 都會拋出例外（「sealed: the clone has left its node」，`Simulation/RunSession.cs:226-228, 350-356`）。如果一局在節點內結束（死亡或勝利），複本也隨之結束。所以在複本上的搜尋可以看到它所在節點的每個結果，卻看不到下一個節點的任何東西，這就是 SL 的邊界（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。
+移動到下一個地圖點是一個節點的最後一個決策。複本會記錄它，但不移動：它停在那裡並設定 `AtHorizon`，之後任何 `Step` 都會拋出例外（「sealed: the clone has left its node」，`Simulation/RunSession.cs:239-241, 350-356`）。如果一局在節點內結束（死亡或勝利），複本也隨之結束。所以在複本上的搜尋可以看到它所在節點的每個結果，卻看不到下一個節點的任何東西，這就是 SL 的邊界（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。
 
 `selftest` 從兩方面檢查封存：一個節點的複本，記下了它的移動，載入後停在視野邊界，並拒絕再走一步（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）；`run --check` 在它重播的每個節點上都檢查這一點（[整局 §6](/zh-tw/arch/simulator/runs/#sec-6)）。
 

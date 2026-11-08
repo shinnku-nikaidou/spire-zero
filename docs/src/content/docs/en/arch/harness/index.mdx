@@ -97,7 +97,7 @@ sequenceDiagram
 
 - `Checkpoint` refuses a checkpoint in NoSL, and one whose node index does not rise; it starts the node's trace over.
 - `Act` refuses an action in NoSL, and one that is not for the current node or whose sequence number is not the trace's length; it adds the action to the trace.
-- At a decision that needs it, the node's clone is the checkpoint's save and a copy of the trace (`NodeClone`). An SL decision that needs a clone before any checkpoint throws. That is every SL combat decision, and with `--afterstates clone` every macro decision and every card prompt outside combat ([Routing, budgets and seeds §3](/en/arch/harness/routing/#sec-3)).
+- At a decision that needs it, the node's clone is the checkpoint's save and a copy of the trace, with the run's auto-win rule if the checkpoint carries one (`NodeClone`). An SL decision that needs a clone before any checkpoint throws. That is every SL combat decision, and with `--afterstates clone` every macro decision and every card prompt outside combat ([Routing, budgets and seeds §3](/en/arch/harness/routing/#sec-3)).
 
 **Planned: the rest of the record** <Badge text="planned" variant="caution" />. A NoSL belief about more than the monsters' moves needs more of what was public:
 

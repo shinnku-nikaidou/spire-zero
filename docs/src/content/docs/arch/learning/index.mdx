@@ -15,13 +15,13 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside title="状态">
 
-已实现：V 的训练器 `learn/v/`（`v.train`）和战斗网络的训练器 `learn/combat/`（`combat.train`），两者都用蒙特卡洛目标（每个决策的标签是它所在对局真实的结局）；自我对弈的均匀抽取探索（`run --explore ε`）；`learn/gate.py`，一个 V 的对局的报告和配对门槛。规划中、尚未实现：TD(λ) 目标、专家迭代、LLM 补丁提案、奖励塑形、特权训练，以及均匀抽取之外对抗局部最优的机制（[循环](/arch/learning/loop/)）。
+已实现：V 的训练器 `learn/v/`（`v.train`）和战斗网络的训练器 `learn/combat/`（`combat.train`），两者都用蒙特卡洛目标（每个决策的标签是它所在对局真实的结局）；自我对弈的探索，均匀抽取和在 V 的估值上做的 softmax（`run --explore ε --macro-explore τ`）；只在选定的幕里打精英和 Boss 的对局所用的自动胜利规则（`run --auto-win`）；写成一个数据集文件的一代（`eval/datasets/`）；`learn/gate.py`，一个 V 的对局的报告和配对门槛。规划中、尚未实现：TD(λ) 目标、专家迭代、LLM 补丁提案、奖励塑形、特权训练，以及均匀抽取之外对抗局部最优的机制（[循环](/arch/learning/loop/)）。
 
 </Aside>
 
 ## 1. 学什么
 
-**宏观大脑的 V**。在战斗外，宏观大脑把一个决策的每个选项都打一遍，看紧接着它的局面（*后状态*），然后选 V 给后状态估值最高的那个选项（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。V 是一个神经网络，读入这一局是什么（它的卡牌、遗物、药水、幕和 Boss 的 id，以及前方的地图）、牌上增长的数、遗物的计数和状态、遗物保留的牌和六个原始数字，返回一个数，即从这里赢下这一局的概率（[宏观大脑：从风险值到价值 §1](/arch/macro-brain/value/#sec-1)）。一个 V 给每个决策界面（surface）打分，所以一张牌、一件遗物、一次回血和地图上的一条路线在同一个尺度上比较，不需要手写的兑换比率。
+**宏观大脑的 V**。在战斗外，宏观大脑把一个决策的每个选项都打一遍，看紧接着它的局面（*后状态*），然后选 V 给后状态估值最高的那个选项（[宏观大脑 §2](/arch/macro-brain/#sec-2)）。V 是一个神经网络，读入这一局是什么（它的卡牌、遗物、药水、幕和 Boss 的 id，以及前方的地图）、牌上增长的数、遗物的计数和状态、遗物保留的牌和九个原始数字（其中包括游戏的规则），返回一个数，即从这里赢下这一局的概率（[宏观大脑：从风险值到价值 §1](/arch/macro-brain/value/#sec-1)）。一个 V 给每个决策界面（surface）打分，所以一张牌、一件遗物、一次回血和地图上的一条路线在同一个尺度上比较，不需要手写的兑换比率。
 
 **战斗网络**。战斗搜索向前看一个回合或一整场战斗，然后必须说出它到达的状态值多少：它的*叶节点价值*。战斗网络读入一个回合的开始，预测这场战斗会怎样结束：死亡，或者还要再损失多少最大生命值（分成 50 个桶），以及赢下之后每瓶持有的药水没有了的概率（[战斗网络](/arch/combat-brain/network/)、[战斗大脑：叶子 §4](/arch/combat-brain/leaf/#sec-4)）。它的训练见[训练战斗网络](/arch/learning/combat-net/)。
 
@@ -37,7 +37,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 ```mermaid
 flowchart LR
-  C["冠军<br/>V + 战斗网络"] --> SP["自我对弈<br/>训练种子，<br/>以 ε 均匀抽取"]
+  C["冠军<br/>V + 战斗网络"] --> SP["自我对弈<br/>训练种子，<br/>ε 和 τ"]
   SP --> D["决策日志<br/>+ 对局记录"]
   D --> F["拟合挑战者<br/>MC 标签"]
   F --> G{"门槛<br/>配对种子"}
@@ -48,7 +48,7 @@ flowchart LR
   P["SPSA、LLM 补丁<br/>（未使用 / 规划中）"] -.-> G
 ```
 
-1. **自我对弈**。冠军在训练种子上打对局，其中比例为 ε 的宏观决策随机抽取，让数据显示其他选项会通向哪里（[循环 §2](/arch/learning/loop/#sec-2)、[§9](/arch/learning/loop/#sec-9)）。
+1. **自我对弈**。冠军在训练种子上打对局，其中比例为 ε 的宏观决策随机抽取，其余的用 softmax 抽取，让数据显示其他选项会通向哪里（[循环 §2](/arch/learning/loop/#sec-2)、[§9](/arch/learning/loop/#sec-9)）。
 2. **拟合**。在这些对局上训练一个新的 V（或战斗网络）。每个决策的标签是它所在对局实际的结局，即*蒙特卡洛*目标（[循环 §3](/arch/learning/loop/#sec-3)）。TD(λ) 和专家迭代还会从搜索算出的价值中学习，它们在规划中（[§4](/arch/learning/loop/#sec-4)、[§5](/arch/learning/loop/#sec-5)）。
 3. **门槛**。挑战者打固定的评估种子，逐个种子与冠军的对局配对，只有差值明显大于零时才通过（[循环 §8](/arch/learning/loop/#sec-8)）。
 
@@ -58,7 +58,7 @@ flowchart LR
 
 | 部分 | 状态 | 位置 |
 |---|---|---|
-| 自我对弈：整局，以 ε 均匀抽取 | 已实现 | `run --explore`，[循环 §2](/arch/learning/loop/#sec-2) |
+| 自我对弈：整局和按自动胜利规则打的对局，以 ε 均匀抽取、以 τ 做 softmax，每代一个数据集文件 | 已实现 | `run --explore --macro-explore --auto-win`，[循环 §2](/arch/learning/loop/#sec-2)、[宏观大脑：自我对弈](/arch/macro-brain/selfplay/) |
 | V 的训练，蒙特卡洛标签 | 已实现 | `learn/v/`，[宏观大脑：从风险值到价值 §5](/arch/macro-brain/value/#sec-5) |
 | 战斗网络的训练，蒙特卡洛标签 | 已实现 | `learn/combat/`，[训练战斗网络](/arch/learning/combat-net/) |
 | 反事实分叉 | <Badge text="规划中" variant="caution" /> | [循环 §10](/arch/learning/loop/#sec-10) |

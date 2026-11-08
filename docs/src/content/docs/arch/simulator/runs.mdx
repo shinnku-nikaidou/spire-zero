@@ -1,6 +1,6 @@
 ---
 title: 整局
-description: 'RunSession 在真实引擎里打完整的一局：它如何开局，代替游戏画面的「步进、稳定、决策」循环，每一种决策画面，一局报告什么，确定性，以及连到大脑上打的对局。'
+description: 'RunSession 在真实引擎里打完整的一局：它如何开局，代替游戏画面的「步进、稳定、决策」循环，每一种决策画面，一局报告什么，确定性，连到大脑上打的对局，以及在选定的幕里只留下精英和 Boss 要打的自动胜利规则。'
 sidebar:
   label: 整局
 ---
@@ -28,7 +28,7 @@ import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
 
 ## 2. 开局
 
-一局的开始方式，与游戏开始一局新的单人游戏相同。游戏里做这件事的代码是 `NGame.StartRun`，它在一个 Godot 节点里 <Badge text="已核实" variant="success" />，所以 `RunSession.Start` 照抄了它（`Simulation/RunSession.cs:149-178`）。它的输入是 `RunSetup(Character, Seed, Ascension, Loadout?)`。
+一局的开始方式，与游戏开始一局新的单人游戏相同。游戏里做这件事的代码是 `NGame.StartRun`，它在一个 Godot 节点里 <Badge text="已核实" variant="success" />，所以 `RunSession.Start` 照抄了它（`Simulation/RunSession.cs:152-181`）。它的输入是 `RunSetup(Character, Seed, Ascension, Loadout?, AutoWin?)`，最后一项是自动胜利规则的幕，如果这一局按它来打的话（[§8](#sec-8)）。
 
 1. `Player.CreateForNewRun(character, UnlockState.all, netId)`，然后套用配置（如果给了的话，[参考 §3](/arch/simulator/reference/#sec-3)）。
 2. 用种子掷出各幕：`ActModel.GetRandomList(new Rng(hash(seed), "act_selection"), UnlockState.all, isMultiplayer: false)`，与 `StartRunLobby.BeginRunLocally` 的做法相同（`Multiplayer.Game.Lobby/StartRunLobby.cs:469-472`）。
@@ -49,7 +49,7 @@ import SurfaceCounts from '../../../../components/book/SurfaceCounts.svelte';
 
 ## 3. 步进、稳定、决策
 
-`Step()` 做一个决策（`Simulation/RunSession.cs:226-241`）。它先稳定下来；如果一局还没结束，就调用 `Decide()`：要么问一个问题并开始执行回答，要么做一个画面不问任何问题就会做的自动步骤。自动步骤之后再稳定一次。连续超过 20 个自动步骤而没有决策，是驱动程序的 bug，会抛异常。
+`Step()` 做一个决策（`Simulation/RunSession.cs:239-254`）。它先稳定下来；如果一局还没结束，就调用 `Decide()`：要么问一个问题并开始执行回答，要么做一个画面不问任何问题就会做的自动步骤。自动步骤之后再稳定一次。连续超过 20 个自动步骤而没有决策，是驱动程序的 bug，会抛异常。
 
 ```mermaid
 flowchart TD
@@ -63,7 +63,7 @@ flowchart TD
   D -->|"自动步骤"| T
 ```
 
-**稳定下来**（`Simulation/RunSession.cs:245-263`）就是不断 pump 游戏，直到玩家可以行动（[无头宿主 §7](/arch/simulator/headless/#sec-7)）：
+**稳定下来**（`Simulation/RunSession.cs:258-276`）就是不断 pump 游戏，直到玩家可以行动（[无头宿主 §7](/arch/simulator/headless/#sec-7)）：
 
 - 战斗中，直到 `CombatActions.WaitingForInput` 成立（玩家的回合、处于出牌阶段、动作执行器空闲）；玩家结束回合之后，要等到后面的回合，所以敌人的回合先打完；
 - 其他时候，直到 pump 的队列为空且动作执行器空闲。
@@ -72,17 +72,18 @@ flowchart TD
 
 然后它记下对局记录需要的东西：刚结束的战斗记下它的结局（生命值、最大生命值、药水），死在玩家自己的动作里的也算，新一幕的地图记下它的哈希。对局在第一个决策之前就死在其中的战斗，记一条 0 生命值的条目。最后，它收走驱动程序发起、已经完成的游戏任务（一次购买、一个休息选项、一个奖励、一次占卜）；出错的任务会抛异常。
 
-**Decide**（`Simulation/RunSession.cs:298-325`）按这个顺序查看：
+**Decide**（`Simulation/RunSession.cs:311-338`）按这个顺序查看：
 
 1. 打开着的奖励画面：一组不是房间最后一组、且东西都已领完的奖励自己关闭；否则最新打开的那组就是这次决策。
 2. 驱动程序的任务还在运行，却没有可以回答的东西，这是 bug，会抛异常：奖励是已发起的任务唯一可能在等的画面。
 3. 地图：在 `MapRoom` 里，或者已经离开当前房间时。
 4. 房间：战斗、事件（水晶球小游戏打开着时先处理它）、商店、休息处、宝箱。其他种类的房间都会抛异常。
 
-**画面本该记住的东西**按房间存放在 `RoomProgress` 里（`Simulation/RunSession.cs:599-608`）：是否已离开房间、是否已进入战斗、发放了哪些奖励、是否有休息选项成功、宝箱是否已打开、遗物是否已选。当前房间改变时它重新开始；事件里的战斗结束、事件继续时，也会这样。
+**画面本该记住的东西**按房间存放在 `RoomProgress` 里（`Simulation/RunSession.cs:628-638`）：是否已离开房间、是否已进入战斗、发放了哪些奖励、是否有休息选项成功、宝箱是否已打开、遗物是否已选。当前房间改变时它重新开始；事件里的战斗结束、事件继续时，也会这样。
 
 **自动步骤**，即画面不需要决策就会做的事：
 
+- 在自动胜利规则的幕里，普通怪物战一开始就赢下（[§8](#sec-8)）；
 - 打赢的战斗发放奖励（`OfferRoomEndRewards`），如果它的遭遇不给奖励就继续前进（`ProceedFromTerminalRewardsScreen`），与 `NCombatUi.OnCombatWon` 的做法相同（`Nodes.Combat/NCombatUi.cs:363-373`）；
 - 宝箱房的宝箱打开（先 `DoNormalRewards`，再 `DoExtraRewardsIfNeeded`），遗物选了或跳过之后离开房间。
 
@@ -104,7 +105,7 @@ flowchart TD
 | `rest` | 可用的选项，按 id（`rest:HEAL`）；某个选项成功之后，或者没有可用选项时，提供 `leave` | `RestSiteSynchronizer.ChooseLocalOption` | |
 | `treasure` | `relic:i`、`relic_skip` | `PickRelicLocally`、`SkipRelicLocally` | 宝箱自己打开；单人模式下跳过之后遗物仍列在那里，所以需要 `RoomProgress.RelicPicked` |
 
-**药水栏**。随时可用的药水（`potion:S`；恶臭药水只在商人面前，[无头宿主 §4](/arch/simulator/headless/#sec-4)）和丢弃药水（`discard_potion:S`）出现在地图、奖励、事件、商店、休息处、宝箱和水晶球画面上，排在画面自己的动作之后（`Simulation/RunSession.cs:471-478`）。卡牌奖励、卡包和选牌提示没有。药水栏动作立即执行，然后再问一次这个画面。药水栏满时，药水奖励和购买药水都不合法，直到空出一个槽。战斗中药水属于战斗动作；战斗里没有丢弃。
+**药水栏**。随时可用的药水（`potion:S`；恶臭药水只在商人面前，[无头宿主 §4](/arch/simulator/headless/#sec-4)）和丢弃药水（`discard_potion:S`）出现在地图、奖励、事件、商店、休息处、宝箱和水晶球画面上，排在画面自己的动作之后（`Simulation/RunSession.cs:500-507`）。卡牌奖励、卡包和选牌提示没有。药水栏动作立即执行，然后再问一次这个画面。药水栏满时，药水奖励和购买药水都不合法，直到空出一个槽。战斗中药水属于战斗动作；战斗里没有丢弃。
 
 **没有兜底**。驱动程序不认识的画面会抛异常，这一局就失败：未知的房间，未知类型的奖励、商店条目或水晶球物品，链接的奖励组，没有画面却还在等待的任务。不在合法清单里的回答也一样。失败从不被一个默认选择掩盖，所以打完的一局，每个决策都是经由它的策略回答的。
 
@@ -148,13 +149,13 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 | `determinism:` | 用 `--check` 时：走传输协议重播后完全相同的局数，以及从检查点精确重播的节点数，附每个节点的用时 |
 | `game Log.Error lines:` | 游戏错误；用了工作进程池时其后是 `worker restarts`，用 SL 规划器时是 `replans` |
 
-**退出码**：有一局失败、重播结果不同、有节点没有精确重播，或者记下了游戏错误时为 1；否则为 0。从未到达的决策界面和空闲等待只打印出来（`Commands/RunCommand.cs:140`）。
+**退出码**：有一局失败、重播结果不同、有节点没有精确重播，或者记下了游戏错误时为 1；否则为 0。从未到达的决策界面和空闲等待只打印出来（`Commands/RunCommand.cs:144`）。
 
 **记录与日志**。`--records FILE` 每行写一条对局记录，作为 `report` 和 `gate` 的输入（[评估：指标、种子与报告 §8](/arch/evaluation/metrics/#sec-8)）：
 
 | 字段 | 内容 |
 |---|---|
-| `config` | `game`（版本）、`commit`（模拟器的提交，`src/` 有改动时带 `-dirty`）、`champion`（冠军的名字）、`env` |
+| `config` | `game`（版本）、`commit`（模拟器的提交，`src/` 有改动时带 `-dirty`）、`champion`（冠军的名字）、`env`，以及 `auto_win`，自动胜利规则的幕，以从 0 开始的索引表示，只出现在按它打的对局里（[§8](#sec-8)） |
 | `seed`、`character`、`ascension`、`run_id` | 这一局；`run_id` 是大脑用来识别它的哈希（[§7](#sec-7)） |
 | `outcome`、`act`、`floor`、`hp`、`max_hp`、`gold` | 在哪里结束 |
 | `combats` | 每场战斗：幕、层、遭遇、房间种类，第一个决策时的生命值、最大生命值和药水，以及它的 `end`：是否死亡，以及剩下的生命值、最大生命值和药水 |
@@ -168,7 +169,7 @@ SL 规划器重新规划过时，`maps` 之前还有 `replans N`；取过观测�
 
 下游的一切都要求一局是它的设置和回答的函数。SL 克隆从检查点重播一个节点的决策，必须到达同一个状态（[世界与 SL 克隆](/arch/simulator/worlds/)）；晋级门槛在相同的种子上把挑战者和冠军配对（[评估：晋级门槛 §2](/arch/evaluation/gates/#sec-2)）；`--check` 把一局和它自己的重播相比较。给定种子，游戏是确定的，但前提是没有别的东西渗进来：没有时钟，没有线程时序，没有无序集合。pump 在一个线程上按投递顺序运行每个后续回调（[无头宿主 §7](/arch/simulator/headless/#sec-7)），用时钟做种子的随机数流从不被规则用到（[战斗 §2](/arch/simulator/combat/#sec-2)），GameBridge 还会给游戏无序存放的东西排序，例如一个地图点的子节点。
 
-**`run --check`** 在它打的每一局上检查这一点（`Commands/RunCommand.cs:94-130`）：
+**`run --check`** 在它打的每一局上检查这一点（`Commands/RunCommand.cs:98-134`）：
 
 - 它观测每个决策：每个观测都必须完全不变地经过 JSON 往返，并保留它的哈希；
 - 它把每个种子再打一遍，这一遍走传输协议（[协议：线路 §1](/arch/protocol/wire/#sec-1)），连到同一进程里一个线程上的大脑，冠军相同，然后比较两遍：轨迹、观测哈希、概况、地图哈希、对局记录和决策日志，耗时除外；SL 下第二遍还带着节点消息；
@@ -196,3 +197,14 @@ brain [--champion FILE] [champion options] [--sl-policy plan|pimc|play] [--log F
 - 它每局在 stderr 上打印一行：对局 id、结局、层数、决策数、重新规划次数，以及它的工作进程的游戏错误，主机的对局记录不计入这些错误。
 
 `run --check` 的第二遍在进程内使用同一个服务端，用一个以进程命名的抽象 Unix 套接字（`\0sts2ai-brain-PID`，`Brains/RunBrains.cs:200-220`），所以 `--check` 打的每一局都会检查线路这条路径。
+
+## 8. 自动胜利规则
+
+`run --auto-win ACTS` 按模拟器自己的一条规则打一局：在它指定的幕里（按游戏显示的那样从 1 开始编号，`--auto-win 1,2`），普通怪物战一开始就赢下，所以那里只打精英和 Boss；其他幕照常打（`Commands/RunCommand.cs:30-32`、`:286-294`）。这样的一局把战斗都花在决定大多数对局的那些战斗上，打起来也比整局便宜得多。自我对弈用它（[宏观大脑：自我对弈 §2](/arch/macro-brain/selfplay/#sec-2)）。
+
+- **哪些战斗**。在规则的幕里，遭遇的房间类型为 `Monster` 的战斗：普通怪物房间的战斗，或事件里这种类型的战斗。精英或 Boss 的遭遇，包括事件里的，和任何一局一样由战斗大脑去打。
+- **怎样赢下**。战斗开始之后，`CombatStep` 做游戏的 `win` 控制台命令所做的事：每个敌人失去它的能力并被杀死（`CreatureCmd.Kill`），然后游戏检查是否获胜（`Win`，`Simulation/RunSession.cs:374-411`）。被杀死时会复活或召唤别的敌人的敌人会让战斗继续，所以要再做一遍，最多五遍；第六遍会抛异常。不问任何战斗决策，生命值不变，奖励和任何胜利之后一样：同样的奖励画面、卡牌、金币和药水。对局记录列出这场战斗，它的结束时的生命值就是开始时的生命值。
+- **在哪里看得到这条规则**。它属于这一局：`RunSetup.AutoWin` 存着它的幕，以从 0 开始的索引表示（`:31`）。每个观测的 run 都以 `auto_win` 带着它（`RunSession.View`，`:230-236`；[协议：观测与动作 §2](/arch/protocol/observation/#sec-2)），所以 V 知道它在估值的是哪种游戏（[宏观大脑：价值网络 §2](/arch/macro-brain/network/#sec-2)）；对局记录的 `config` 写明它（[§5](#sec-5)）；节点的克隆保留它，所以宏观大脑的试探和 SL 规划器的工作进程也按它来打（[世界与 SL 克隆 §3](/arch/simulator/worlds/#sec-3)）。
+- **它不是什么**。真实游戏没有这样的规则，Mod 也从不设定它。按它打的一局是训练用的数据，从不是实力的证据：任何报告和门槛都不收它（[评估：晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。
+
+`selftest` 检查它（[参考 §5](/arch/simulator/reference/#sec-5)）：规则用在第 1 幕的一局，只在这一幕的精英和 Boss 里问战斗大脑，赢下它的怪物战而不掉生命值，在第 2 幕的怪物战里问战斗大脑，第 1 幕的每个节点都能从它的克隆精确重播。

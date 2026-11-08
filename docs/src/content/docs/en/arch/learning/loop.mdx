@@ -53,13 +53,13 @@ The loop runs offline, in processes separate from any decision; an LLM never tak
 
 In self-play the champion plays runs by itself on *train seeds*, seeds kept apart from the evaluation seeds the gates use ([Reference §5](/en/arch/learning/reference/#sec-5)). Each run is the real game running headless in the simulator: the host process plays the run's one live game, and the worker pool runs the searches ([Simulator: whole runs](/en/arch/simulator/runs/), [Simulator: the worker pool](/en/arch/simulator/pool/)). Every decision goes into the decision log, the observation and options with the brain's values ([Harness: the decision log](/en/arch/harness/decision-log/)), and every run's outcome into its run record, with how each combat ended ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). Joined by run id, the two are the training data.
 
-**What it plays.** Whole SL runs: the SL planner, with the combat net in its leaves, fights every combat, and L0 on the node's clone makes every macro decision ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)). The champion plays, so a generation's data is played by the V and the combat net it follows, with all five characters at ascensions 0 to 10 ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
+**What it plays.** SL runs: the SL planner, with the combat net in its leaves, fights every combat, and L0 on the node's clone makes every macro decision ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)). A run is a whole run, or one of the auto-win rule, which wins the plain monster fights of chosen acts at their start and fights only their elites and bosses ([Simulator: whole runs §8](/en/arch/simulator/runs/#sec-8)); V reads which. The champion plays, so a generation's data is played by the V and the combat net it follows, with the characters, ascensions, games and tiers its dataset file sets ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
 
 **Exploration.** Self-play draws some decisions on purpose instead of taking V's best, so that the data shows what the other options lead to ([§9](#sec-9)).
 
 **The newest generation.** A net trains on the newest generation's runs alone, going on from the champion's file (`--init`): runs played by a weaker V label states lower than the champion would now play them ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)).
 
-**Budget.** Self-play plays the champion's own medium budget, as the gates do ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)).
+**Budget.** Self-play plays the champion's own medium budget, as the gates do, except where its dataset gives elite or boss fights a level of their own ([The SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)).
 
 ## 3. Fit: Monte Carlo targets
 
@@ -74,7 +74,7 @@ Its expectation, over the luck of the rest of the run, is exactly the value of d
 **As built, both trainers use MC targets only.** V's are the masked hazard labels of the floor each run ended on ([Macro brain: from hazards to value §3](/en/arch/macro-brain/value/#sec-3)); the combat net's are how each fight really ended ([Training the combat net §3](/en/arch/learning/combat-net/#sec-3)). Nothing in `learn/` bootstraps on a value. Two measures keep MC's noise in check:
 
 - **every run weighs the same** however many decisions it has (each sample weighs one over its run's decisions), and the held-out runs are split by run, not by decision;
-- **a second head** with denser targets, the next six combats' HP costs, shapes the body ([Macro brain: from hazards to value §4](/en/arch/macro-brain/value/#sec-4)). r33hab, a prior-art STS2 project, never mixes HP targets and win targets in one backward pass. V's training does mix them, the second head's squared errors added to the hazards' loss at weight 3 (`learn/v/train.py:44`, `:144`), since that lowers the held-out loss.
+- **a second head** with denser targets, the next six combats' HP costs, shapes the body ([Macro brain: from hazards to value §4](/en/arch/macro-brain/value/#sec-4)). r33hab, a prior-art STS2 project, never mixes HP targets and win targets in one backward pass. V's training does mix them, the second head's squared errors added to the hazards' loss at weight 3 (`learn/v/train.py:44`, `:146`), since that lowers the held-out loss.
 
 ## 4. TD(λ) targets <Badge text="planned" variant="caution" />
 
@@ -106,7 +106,7 @@ The run was won, so its MC target, 1, is far above V's early values: V started a
 
 - **A fair teacher.** The teacher is a search in the same environment, one that obeys that environment's information rules. No behaviour cloning (training a model to copy a teacher's moves) of an omniscient teacher, which failed in several projects.
 - **The combat policy target** is $\mathrm{softmax}(\text{prior logits} + c \cdot \mathrm{minmax}(Q))$, not the search's visit counts. $Q$ is each first action's mean value over the worlds, which PIMC already computes; minmax rescales one decision's $Q$ to $[0, 1]$; the prior logits are 0 while the prior is uniform; $c$ is tuned by how well the target predicts the choice of a search with a much larger budget (log-likelihood). Visit counts would be a poor target: common random numbers at the root flatten them (r33hab), and with mctx's transform (a Gumbel MuZero library), at our 300 nodes per world, the target is almost one-hot.
-- **What the logs hold for it now.** PIMC's candidates in the decision log carry every first action's value in every world and the nodes spent on it ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)), and each combat's end is in the run record. The SL planner, which plays the SL champion's fights, logs one value per candidate and no nodes (`Brain/Combat/SlPlanner.cs:204-206`), so SL's data has no per-world Q.
+- **What the logs hold for it now.** PIMC's candidates in the decision log carry every first action's value in every world and the nodes spent on it ([Harness: the decision log §5](/en/arch/harness/decision-log/#sec-5)), and each combat's end is in the run record. The SL planner, which plays the SL champion's fights, logs one value per candidate and no nodes (`Brain/Combat/SlPlanner.cs:205-207`), so SL's data has no per-world Q.
 - **Two preconditions.** A learned prior steers the search only after it beats the uniform prior in the gate. A learned leaf should beat a rollout to the end of the fight: in r33hab, at 15 simulations, the value head lost 10.6 HP more than rollouts. No rollout leaf is built.
 - **PCR** (playout cap randomization, from KataGo): 25% of the decisions get the full budget and give policy targets; the other 75% get a quarter of it and give value targets only.
 - **Reanalyse** (from MuZero): after each new net, a share of old positions is replayed from seed and trace and searched again with it, which refreshes their policy targets and bootstrapped value targets.
@@ -137,7 +137,7 @@ $$
 \bar d = \frac1n \sum_i d_i, \qquad \mathrm{SE} = \frac{\mathrm{sd}(d)}{\sqrt n}, \qquad \text{promote if } \bar d - 1.645\, \mathrm{SE} > 0,
 $$
 
-the 95% one-sided lower bound above 0 (`learn/gate.py:130-151`; [Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)). The report also pairs the floors.
+the 95% one-sided lower bound above 0 (`learn/gate.py:134-155`; [Evaluation: gates §10](/en/arch/evaluation/gates/#sec-10)). The report also pairs the floors.
 
 **The simulator's SPRT** (`gate`, `Harness/Gate.cs`). A sequential test of the challenger's run records against the champion's report, paired by seed, that stops at the first clear verdict: on wins, δ = 0.1 and α = β = 0.05, or for non-inferiority with `--not-worse` ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)). The challenger first plays the champion's seed set with `run`; the gate reads only the records.
 
@@ -155,9 +155,11 @@ $$
 
 It covers every decision outside combat: a card reward's outcome among its cards and skipping (a skip drawn is never opened, a card drawn is opened and taken); a card prompt's picks (how many, evenly, then which); every other screen's options, a potion's among them, but those that would come back to a state already decided. A potion's options are those L0 weighs: a potion usable out of combat, such as Fruit Juice or the Foul Potion at a merchant, and a discard only where it makes room for a potion the screen offers ([Macro brain: search §1](/en/arch/macro-brain/search/#sec-1)). ε is fixed per run. What is drawn depends neither on V nor on how strong the run is, so its outcomes are causal evidence about the options, and every kind of decision is drawn as often. Every drawn answer is marked `explored` in the log ([Harness: the decision log §6](/en/arch/harness/decision-log/#sec-6)), and the champion's name ends in `eps ε`.
 
-- **The tiers.** A generation's runs are split into three tiers of ε, a third of the runs each: 0.3, 0.1 and 0.02 ([Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3)).
-- **A label carries the later draws.** A decision's label is how its run ended, the draws made after it included, and V is not told the run's ε; the same state is labelled lower in a run that explores more. A *cut point* per run would remove this (draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained on one position per game); it is not done ([Macro brain: weaknesses and next steps §3](/en/arch/macro-brain/next/#sec-3)).
-- **Check.** The share of `explored` decisions among those with two or more options should be about ε.
+**The softmax** (`run --macro-explore τ`, built; `Softmax`, `Brain/Exploration.cs:33-56`) draws every answer the even draws leave to V, by V: option $a$ with chance $V(a)^{1/\tau} / \sum_b V(b)^{1/\tau}$, a softmax over the log of the values, whose temperature τ acts on V's ratios, the same whether V is $10^{-1}$ or $10^{-6}$. It tries the options V rates near its best, where a wrong order costs most, and almost never the far ones, which the even draws cover. A draw more than τ / 100 below the best, in log, is marked `explored`; the champion's name shows `explore τ` before `eps ε`.
+
+- **The tiers.** A generation's runs are split into tiers of exploration, each a pair of ε and τ with the same share of the runs, as its dataset file sets them ([Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3)).
+- **A label carries the later draws.** A decision's label is how its run ended, the draws made after it included, and V is not told the run's ε or τ; the same state is labelled lower in a run that explores more. A *cut point* per run would remove this (draws before it, V's best after it, training only on the decisions after it, as AlphaGo's value network was trained on one position per game); it is not done ([Macro brain: weaknesses and next steps §3](/en/arch/macro-brain/next/#sec-3)).
+- **Check.** With no softmax, the share of `explored` decisions among those with two or more options should be about ε.
 
 **Thompson sampling** <Badge text="planned" variant="caution" /> would draw a plausible value for each option from V's uncertainty and pick the best draw, so that an option is tried about as often as it might really be the best. V has no uncertainty estimate to draw from yet.
 

@@ -54,20 +54,20 @@ A NoSL world reports a combat that hit the session's action cap (1,000 actions, 
 
 A **node** is a map point, from the arrival until the travel to the next ([Environments: information §3](/en/arch/environments/information/#sec-3)). SL may know everything about the current node, so SL needs an exact copy of it that can be played and played again. The copy starts from a save.
 
-On arrival at a map point the game saves the run. Headless nothing is written: the `SaveRun` patch skips it, and a save with no finished room is the arrival's, so the patch also signals that a node has started (`Runtime/Patches/Persistence.cs:13-23`). `RunSession` then takes the node's **checkpoint** (`Sts2Ai.GameBridge/Checkpoint.cs`), notes where the node's decisions begin in its trace, and numbers card prompts from 0 again (`Simulation/RunSession.cs:137-142`). The checkpoint is a JSON object with two parts:
+On arrival at a map point the game saves the run. Headless nothing is written: the `SaveRun` patch skips it, and a save with no finished room is the arrival's, so the patch also signals that a node has started (`Runtime/Patches/Persistence.cs:13-23`). `RunSession` then takes the node's **checkpoint** (`Sts2Ai.GameBridge/Checkpoint.cs`), notes where the node's decisions begin in its trace, and numbers card prompts from 0 again (`Simulation/RunSession.cs:140-145`). The checkpoint is a JSON object with two parts:
 
 - `Save`: the game's own save of the run, `RunManager.ToSave(null)` serialized by `SaveManager.ToJson`, nested as a string;
 - `Relics`: for each relic, its plain fields: every writable field of a number, flag, enum or decimal type, from the relic's own class up to `RelicModel` (its status among them), by class and field name. The save drops most of them ([§6](#sec-6)).
 
 Both hosts take checkpoints, the simulator and the mod in the game, NoSL runs included; only an SL run sends them to the brain ([Environments: information §7](/en/arch/environments/information/#sec-7)).
 
-**The clone** is the checkpoint plus every decision of the node since, as trace lines (`surface action`; a card prompt's picks as the game's own indexes). Its protocol type is `NodeClone(Save, Trace)` (`Sts2Ai.Protocol/World.cs:96`), opaque to everything but the simulator. `RunSession.Clone()` makes one at any point of the node (`Simulation/RunSession.cs:223`).
+**The clone** is the checkpoint plus every decision of the node since, as trace lines (`surface action`; a card prompt's picks as the game's own indexes). Its protocol type is `NodeClone(Save, Trace, AutoWin?)` (`Sts2Ai.Protocol/World.cs:97`), opaque to everything but the simulator. `RunSession.Clone()` makes one at any point of the node (`Simulation/RunSession.cs:226`). `AutoWin` is the run's rule when it plays by the auto-win rule ([Whole runs §8](/en/arch/simulator/runs/#sec-8)): the save does not hold it, so the clone carries it, and a clone loaded with it wins its plain monster fights at their start as the run did, which its replay needs.
 
-**In a run**, the SL host sends the clone to the brain piece by piece: `node_checkpoint` when a new node starts, then each of the node's decisions as `node_action`, both just before the next decision is asked (`Brains/RunBrains.cs:88-99`; [Protocol: the wire §6](/en/arch/protocol/wire/#sec-6)). Harness keeps the latest checkpoint and the decisions since, which is the clone at every decision ([Harness §4](/en/arch/harness/#sec-4)). The mod sends the same messages from the game ([Mod: the SL record §7](/en/arch/mod/sl-record/#sec-7)).
+**In a run**, the SL host sends the clone to the brain piece by piece: `node_checkpoint` (with the run's rule, if any) when a new node starts, then each of the node's decisions as `node_action`, both just before the next decision is asked (`Brains/RunBrains.cs:88-99`; [Protocol: the wire §6](/en/arch/protocol/wire/#sec-6)). Harness keeps the latest checkpoint and the decisions since, which is the clone at every decision ([Harness §4](/en/arch/harness/#sec-4)). The mod sends the same messages from the game ([Mod: the SL record §7](/en/arch/mod/sl-record/#sec-7)).
 
 ## 4. Loading the clone
 
-`RunSession.Load(clone)` (`Simulation/RunSession.cs:186-220`) follows the game's Continue path: `NMainMenu`'s Continue and `NGame.LoadRun`, without the nodes (`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`) <Badge text="verified" variant="success" />.
+`RunSession.Load(clone)` (`Simulation/RunSession.cs:189-223`) follows the game's Continue path: `NMainMenu`'s Continue and `NGame.LoadRun`, without the nodes (`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`) <Badge text="verified" variant="success" />.
 
 <Steps>
 
@@ -86,7 +86,7 @@ After the replay the clone stands at the same decision as the run, with the same
 
 ## 5. The seal
 
-The travel to the next map point is a node's last decision. A clone records it but does not travel: it stops there and sets `AtHorizon`, and any later `Step` throws ("sealed: the clone has left its node", `Simulation/RunSession.cs:226-228, 350-356`). A run that ends inside the node, by a death or the victory, ends the clone with it. So a search on the clone can see every outcome of the node it is in and nothing of the next, which is the SL boundary ([Environments: information §3](/en/arch/environments/information/#sec-3)).
+The travel to the next map point is a node's last decision. A clone records it but does not travel: it stops there and sets `AtHorizon`, and any later `Step` throws ("sealed: the clone has left its node", `Simulation/RunSession.cs:239-241, 350-356`). A run that ends inside the node, by a death or the victory, ends the clone with it. So a search on the clone can see every outcome of the node it is in and nothing of the next, which is the SL boundary ([Environments: information §3](/en/arch/environments/information/#sec-3)).
 
 `selftest` checks the seal both ways: a node's clone, its travel recorded, loads at its horizon and refuses another step ([Reference §5](/en/arch/simulator/reference/#sec-5)); `run --check` checks it on every node it replays ([Whole runs §6](/en/arch/simulator/runs/#sec-6)).
 

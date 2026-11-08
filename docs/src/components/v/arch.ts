@@ -191,13 +191,13 @@ type W = Record<Lang, string>;
 const w = (en: string, cn: string, tw: string): W => ({ en, 'zh-CN': cn, 'zh-TW': tw });
 
 const T = {
-  numbersTitle: w('Six numbers', '六个数字', '六個數字'),
-  numbersInput: w('floor · HP · max HP ·\ngold · ascension ·\npotion slots', '楼层 · 生命 · 最大生命 ·\n金币 · 进阶 ·\n药水栏', '樓層 · 生命 · 最大生命 ·\n金幣 · 晉階 ·\n藥水欄'),
+  numbersTitle: w('Nine numbers', '九个数字', '九個數字'),
+  numbersInput: w('floor · HP · max HP ·\ngold · ascension ·\npotion slots ·\nauto-win acts 1–3', '楼层 · 生命 · 最大生命 ·\n金币 · 进阶 ·\n药水栏 ·\n第 1–3 幕自动胜利', '樓層 · 生命 · 最大生命 ·\n金幣 · 晉階 ·\n藥水欄 ·\n第 1–3 幕自動勝利'),
   standardize: w('Standardize', '标准化', '標準化'),
   standardizeInfo: w(
-    '(x − μ)/σ, with the mean and standard deviation of the training data that the net file keeps: 6 numbers.',
-    '(x − μ)/σ，用网络文件里存的训练数据均值和标准差：6 个数。',
-    '(x − μ)/σ，用網路檔案裡存的訓練資料平均和標準差：6 個數。',
+    '(x − μ)/σ, with the mean and standard deviation of the training data that the net file keeps: 9 numbers.',
+    '(x − μ)/σ，用网络文件里存的训练数据均值和标准差：9 个数。',
+    '(x − μ)/σ，用網路檔案裡存的訓練資料平均和標準差：9 個數。',
   ),
   body1: (n: number) => w(`Linear + ReLU\n${n.toLocaleString('en-US')} → 512`, `线性层 + ReLU\n${n.toLocaleString('en-US')} → 512`, `線性層 + ReLU\n${n.toLocaleString('en-US')} → 512`),
   body1Info: w('The body’s first layer: 512 numbers.', '主干第一层：512 个数。', '主幹第一層：512 個數。'),
@@ -306,16 +306,16 @@ export function valueNet(lang: Lang): Diagram {
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 512 + 64 + 64 + 64 + 64 + 6 + 256 = 1,030', '拼接：512 + 64 + 64 + 64 + 64 + 6 + 256 = 1,030', '串接：512 + 64 + 64 + 64 + 64 + 6 + 256 = 1,030')),
+      label: L(w('Concatenate: 512 + 64 + 64 + 64 + 64 + 9 + 256 = 1,033', '拼接：512 + 64 + 64 + 64 + 64 + 9 + 256 = 1,033', '串接：512 + 64 + 64 + 64 + 64 + 9 + 256 = 1,033')),
       tone: 'norm',
-      info: L(w('One vector of 1,030 numbers. The parts meet only from here on.', '一个 1,030 个数的向量。各部分从这里才开始相遇。', '一個 1,030 個數的向量。各部分從這裡才開始相遇。')),
+      info: L(w('One vector of 1,033 numbers. The parts meet only from here on.', '一个 1,033 个数的向量。各部分从这里才开始相遇。', '一個 1,033 個數的向量。各部分從這裡才開始相遇。')),
     },
     top: [
       {
         kind: 'repeat',
         times: 'MLP',
         info: L(w('The body: every relation between the parts is worked out here. A second head, used only in training, reads its output too: Linear 512 → 6, not in the net file.', '主干：各部分之间的关系都在这里算出来。训练时另有第二个输出头也读它的输出：线性层 512 → 6，不进网络文件。', '主幹：各部分之間的關係都在這裡算出來。訓練時另有第二個輸出頭也讀它的輸出：線性層 512 → 6，不進網路檔案。')),
-        items: body(lang, 1030),
+        items: body(lang, 1033),
       },
       { kind: 'block', label: L(w('Hazard head\nLinear 512 → 64', '风险值输出头\n线性层 512 → 64', '風險值輸出頭\n線性層 512 → 64')), tone: 'head', info: L(w('One logit per floor, 0 to 63.', '每层一个 logit，0 到 63。', '每層一個 logit，0 到 63。')) },
       {

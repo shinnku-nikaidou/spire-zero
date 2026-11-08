@@ -1,6 +1,6 @@
 ---
 title: 'Self-play: runs, generations and the gate'
-description: 'How V learns from runs the champion plays by itself: whole SL runs, even draws for exploration, how a generation is played and trained, and the gate on paired wins that decides whether a new V replaces the champion.'
+description: 'How V learns from runs the champion plays by itself: SL runs of two games, even draws and a softmax for exploration, a generation written as one dataset file, how it is played and trained, and the gate on paired wins that decides whether a new V replaces the champion.'
 sidebar:
   label: Self-play
 ---
@@ -12,7 +12,7 @@ V learns from runs the champion plays by itself. This section is that procedure,
 
 ```mermaid
 flowchart LR
-  C["champion<br/>V + combat net"] --> P["self-play<br/>whole SL runs,<br/>even draws at ε"]
+  C["champion<br/>V + combat net"] --> P["self-play<br/>a dataset file's<br/>SL runs, ε and τ"]
   P --> D["decision logs<br/>+ run records"]
   D --> T["train a new pair<br/>v.train, combat.train"]
   T --> G{"gate<br/>100 paired seeds<br/>per character, wins"}
@@ -22,43 +22,58 @@ flowchart LR
 
 ## 2. The runs
 
-Self-play plays the whole game, SL: every macro decision is made by L0 on the node's clone ([Search §2](/en/arch/macro-brain/search/#sec-2)), and every combat, plain monster fights included, is fought by the SL combat planner with its combat net. It plays the champion as it is, with one option added, `--explore`:
+Self-play plays SL: every macro decision is made by L0 on the node's clone ([Search §2](/en/arch/macro-brain/search/#sec-2)), and every combat it fights is fought by the SL combat planner with its combat net. It plays the champion as it is, with options that only self-play takes:
 
 ```text
 run --champion eval/champions/sl.json --character CHARACTER --asc N --workers 4 \
-    --explore ε --seed 1 --start K --n RUNS --log DIR/log.jsonl --records DIR/rec.jsonl
+    --effort medium --elite-effort medium --boss-effort high [--auto-win 1,2] \
+    --explore ε [--macro-explore τ] --seed 1 --start K --n RUNS --log DIR/log.jsonl --records DIR/rec.jsonl
 ```
 
 - `--champion` takes the champion file's options: SL, the planner at the medium budget, L0 on the clone, the champion's V and combat net ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). An option given on the command line wins over the file's.
-- `--character` and `--asc` are the job's: every character, at every ascension from 0 to 10 ([§4](#sec-4)).
-- `--explore ε` is the share of macro decisions drawn evenly ([§3](#sec-3)).
+- `--character` and `--asc` are the job's: any character, at any ascension from 0 to 10 ([§4](#sec-4)).
+- `--effort`, `--elite-effort` and `--boss-effort` are the planner's level in the other fights, in elite fights and in boss fights ([SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)).
+- `--auto-win ACTS` makes the run one of the auto-win rule: in those acts, numbered from 1, plain monster fights are won at their start, so only elites and bosses are fought there ([Simulator: whole runs §8](/en/arch/simulator/runs/#sec-8)). Without it the run is the whole game.
+- `--explore ε` and `--macro-explore τ` are its exploration: the share of macro decisions drawn evenly, and the softmax's temperature for the rest ([§3](#sec-3)).
 - `--seed 1 --start K --n RUNS` plays the train seeds with indices K to K + RUNS − 1 ([§4](#sec-4)).
 - `--log` and `--records` write the decision log and the run records, one JSON line per decision and one per run ([Harness: the decision log](/en/arch/harness/decision-log/), [Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)). `DIR` is the job's folder under `data/CHARACTER/sl/` ([Learning: reference §3](/en/arch/learning/reference/#sec-3)).
 - `--workers` is how many search processes a run uses (by default 8).
 
-How to build and start the simulator is in [Simulator: reference §1](/en/arch/simulator/reference/#sec-1).
+Every one of these is set per job by the dataset's file ([§4](#sec-4)). How to build and start the simulator is in [Simulator: reference §1](/en/arch/simulator/reference/#sec-1).
 
-**Budget.** Self-play plays at the champion's own budget, medium, the one it is judged at. V is the chance to win under the champion's play ([From hazards to value §1](/en/arch/macro-brain/value/#sec-1)), so its labels come from runs played as the champion plays them.
+**Two games.** A whole run and a run of the auto-win rule are different games. In the second, a hallway fight of acts 1 and 2 costs nothing and still gives its rewards, so a state there has another chance to win than the same state in a whole run. V reads which game a state belongs to, as three of its nine numbers ([The network §2](/en/arch/macro-brain/network/#sec-2)), so one V learns from both and values each state in its own game; the gate and the real game are whole runs, which read the rule as 0, 0, 0. The combat net needs no such input: its target is the fight's own end, the same in either game ([Learning: the combat net §3](/en/arch/learning/combat-net/#sec-3)). The fights a run of the rule plays are the elites and the bosses, which decide most runs, so it gives the combat net more of them for the same play time.
 
-## 3. Exploration: even draws
+**Budget.** Self-play plays at the champion's own budget, medium, the one it is judged at, except where the dataset gives a room its own level, such as high in boss fights. V is the chance to win under the play that made its labels ([From hazards to value §1](/en/arch/macro-brain/value/#sec-1)), so its labels come from runs played as the champion plays them, with that room played harder.
 
-V learns only from what the runs did. If self-play always took V's best option, the data would never show what the other options lead to, and V could never find out it was wrong about them. Self-play therefore sometimes plays another option on purpose.
+## 3. Exploration: even draws and the softmax
 
-**Even draws** (`run --explore ε`). With chance ε, a macro decision's answer is drawn uniformly among its options, whatever V says; otherwise L0 takes V's best. With $n$ options and V's best $a^\ast$:
+V learns only from what the runs did. If self-play always took V's best option, the data would never show what the other options lead to, and V could never find out it was wrong about them. Self-play therefore sometimes plays another option on purpose, in two ways.
+
+**Even draws** (`run --explore ε`). With chance ε, a macro decision's answer is drawn uniformly among its options, whatever V says; otherwise L0 answers by V. With $n$ options and V's best $a^\ast$, and no softmax:
 
 $$
 P(a) = (1 - \varepsilon)\,[a = a^\ast] + \frac{\varepsilon}{n} .
 $$
 
-This covers every decision outside combat: a card reward's outcome among its cards and skipping (a skip drawn is never opened, a card drawn is opened and taken); a card prompt's picks (how many, evenly, then which); and every other screen's options, a potion's among them, but those that would come back to a state already decided ([Search §5](/en/arch/macro-brain/search/#sec-5)). A potion's options are those L0 weighs: a potion usable out of combat (Fruit Juice, Blood Potion, Entropic Brew, Ambergris, the Foul Potion at a merchant), and a discard only where it makes room for a potion the screen offers ([Search §1](/en/arch/macro-brain/search/#sec-1)). ε is fixed per run. Every drawn answer is marked `explored` in the decision log, the champion's name ends in `eps ε`, and the gate refuses an exploring challenger.
+This covers every decision outside combat: a card reward's outcome among its cards and skipping (a skip drawn is never opened, a card drawn is opened and taken); a card prompt's picks (how many, evenly, then which); and every other screen's options, a potion's among them, but those that would come back to a state already decided ([Search §5](/en/arch/macro-brain/search/#sec-5)). A potion's options are those L0 weighs: a potion usable out of combat (Fruit Juice, Blood Potion, Entropic Brew, Ambergris, the Foul Potion at a merchant), and a discard only where it makes room for a potion the screen offers ([Search §1](/en/arch/macro-brain/search/#sec-1)).
 
-**Why even.** What is drawn depends neither on V nor on how well the run is going, so the drawn decisions' outcomes are causal evidence about the options, including the ones V thinks poor, and every kind of decision is drawn as often. A draw weighted by V's own values would try options V already likes, and seldom the counterexamples that would correct it.
+**The softmax** (`run --macro-explore τ`). Every answer the even draws leave to V is drawn by V instead of taken as the best: option $a$ with a chance that grows with the log of its value, at temperature τ,
 
-**The tiers.** A generation's runs are split into three tiers of ε, a third of the runs each: 0.3, 0.1 and 0.02. A higher ε covers more options per run; a lower one reaches the late floors, where the decisions that win a run are.
+$$
+P(a \mid \text{left to V}) = \frac{\exp(\log V(a) / \tau)}{\sum_b \exp(\log V(b) / \tau)} = \frac{V(a)^{1/\tau}}{\sum_b V(b)^{1/\tau}} .
+$$
+
+V is a chance that spans orders of magnitude within a run (at A10 from $10^{-3}$ down to $10^{-7}$), so the temperature acts on its ratios, the same at any V: at τ = 0.05 an option worth 0.97 of the best is drawn $0.97^{20} \approx 0.54$ times as often as the best, and one worth half of it about once in a million. It applies at a macro decision and at each step of a card prompt's answer (`MacroBrain.Pick`, `Brain/Macro/MacroBrain.cs:362-371`; `Softmax`, `Brain/Exploration.cs:33-56`). An option worth nothing, or one that would come back to a state already decided, is never drawn unless all are. With both, $P(a) = \varepsilon / n + (1 - \varepsilon)\,P(a \mid \text{left to V})$; at τ = 0 the second term is V's best alone, the formula above.
+
+ε and τ are fixed per run. Every answer drawn evenly is marked `explored` in the decision log, and so is one the softmax drew more than τ / 100 below the best in log (closer, it is as good as a tie). The champion's name ends in `explore τ eps ε`, and the gate refuses an exploring challenger.
+
+**Why even, and why a softmax too.** What an even draw takes depends neither on V nor on how well the run is going, so the drawn decisions' outcomes are causal evidence about the options, including the ones V thinks poor, and every kind of decision is drawn as often. A draw weighted by V's own values tries options V already likes, and seldom the counterexamples that would correct it. That is the softmax's use: it tries the options V rates near its best, where a wrong order costs the most and V's values are closest, and leaves the far ones to the even draws.
+
+**The tiers.** A dataset's runs are split into tiers of exploration, each a pair of ε and τ, the same number of runs each, as its file sets them ([§4](#sec-4)), such as ε 0.3, 0.1 and 0.02. A higher ε covers more options per run; a lower one reaches the late floors, where the decisions that win a run are.
 
 <Aside>
 
-**A label carries the later draws.** A decision's label is how its run ended, and that includes the draws made after it. V is not told the run's ε, so the same state is labelled lower in a run that explores more ([Weaknesses and next steps §1](/en/arch/macro-brain/next/#sec-1)).
+**A label carries the later draws.** A decision's label is how its run ended, and that includes the draws made after it. V is not told the run's ε or τ, so the same state is labelled lower in a run that explores more ([Weaknesses and next steps §1](/en/arch/macro-brain/next/#sec-1)).
 
 </Aside>
 
@@ -66,10 +81,42 @@ This covers every decision outside combat: a card reward's outcome among its car
 
 A *generation* is one turn of the loop: one dataset, played by one champion.
 
-1. **Play.** The champion plays one job per character, tier and ascension (5 × 3 × 11 jobs), side by side, each with the command of [§2](#sec-2). The number of runs is not fixed: a job may be given more seeds than it plays, and the generation is the runs its jobs finished.
-2. **Seeds.** Train seeds are `run --seed 1 --start K`, the seed of index K. Each generation takes a block of 100,000 indices of its own, and each job plays its own range in it, so no two runs of a generation share a seed. The evaluation's seed files are made from other bases, and the trainers refuse a list that holds an evaluation job's runs (`common.train_lists`), so a train seed never meets a test seed ([Learning: reference §5](/en/arch/learning/reference/#sec-5)).
-3. **List.** The jobs' decision logs and run records go into a list pair, `PREFIX-logs.txt` and `PREFIX-recs.txt`, one file per line, line i of one the log of the records on line i of the other ([Learning: reference §4](/en/arch/learning/reference/#sec-4)).
-4. **Train.** A new V and a new combat net are trained on this generation's runs alone, each going on from the champion's file (`--init`), run from `learn/`:
+1. **The dataset file.** A generation is written as one file, `eval/datasets/NAME.toml`, and `eval/datasets/example.toml` shows every key of it. The file names the block of seeds, the characters, the champion file and its search workers, the exploration tiers, the games, and rows of runs:
+
+   ```toml
+   explore = [{ epsilon = 0.3 }, { epsilon = 0.1, tau = 0.05 }, { epsilon = 0.02, tau = 0.05 }]
+
+   [games.gauntlet]                  # acts 1 and 2: elites and bosses only
+   auto_win = [1, 2]
+   effort = { monster = "medium", elite = "medium", boss = "high" }
+
+   [games.full]                      # the whole game
+   auto_win = []
+   effort = { monster = "medium", elite = "medium", boss = "high" }
+
+   [[runs]]                          # for every character of the file
+   game = "gauntlet"
+   asc = 10
+   n = 4000
+
+   [[runs]]
+   game = "full"
+   asc = [0, 5, 10]
+   n = [100, 300, 1000]
+
+   [[runs]]                          # one character only, with its own tier
+   characters = ["NECROBINDER"]
+   game = "gauntlet"
+   asc = 5
+   n = 300
+   explore = [{ epsilon = 0.1, tau = 0.1 }]
+   ```
+
+   A game is the acts whose plain monster fights are won at their start (none for the whole game) and a fight's level by its room. A row is a game, its ascensions and its runs at each, for every character of the file or for those it names, over the file's tiers or its own. Each row's runs at an ascension are split evenly over its tiers, and each part is one job of [§2](#sec-2)'s command, `aNN-GAME-eEEE` (with `-tTTT` when τ is above 0; ε and τ in hundredths), so `a10-gauntlet-e010-t005` is ascension 10, the auto-win game, ε 0.1 and τ 0.05. The counts are what is played, so the file says every proportion of the generation: characters, ascensions, games and tiers. The file is also the generation's record: it lies beside the data as `dataset.toml` in each character's folder, its first line the commit the generation was played at.
+2. **Play.** The champion plays the file's jobs side by side, each with its own options. The number of runs is not fixed: a job may be given more seeds than it plays, and the generation is the runs its jobs finished.
+3. **Seeds.** Train seeds are `run --seed 1 --start K`, the seed of index K. Each generation takes a block of 100,000 indices of its own, the file's `seeds`: character k of SILENT, IRONCLAD, DEFECT, REGENT and NECROBINDER plays from the block's start plus 20,000 k (k from 0), its rows back to back in the file's order, so no two runs of a generation share a seed. The last 1,000 of a character's 20,000 are kept for trial runs, one per character, row and ascension, played before the generation. The evaluation's seed files are made from other bases, and the trainers refuse a list that holds an evaluation job's runs (`common.train_lists`), so a train seed never meets a test seed ([Learning: reference §5](/en/arch/learning/reference/#sec-5)).
+4. **List.** The jobs' decision logs and run records go into a list pair, `PREFIX-logs.txt` and `PREFIX-recs.txt`, one file per line, line i of one the log of the records on line i of the other ([Learning: reference §4](/en/arch/learning/reference/#sec-4)).
+5. **Train.** A new V and a new combat net are trained on this generation's runs alone, the runs of both games, each going on from the champion's file (`--init`), run from `learn/`:
 
    ```text
    uv run python -m v.train --list PREFIX --name NAME --init ../VALUE
@@ -77,8 +124,8 @@ A *generation* is one turn of the loop: one dataset, played by one champion.
    ```
 
    `VALUE` and `COMBAT_NET` are the champion file's `value` and `combat-net`, paths from the repository's root; `NAME` is a new name, never one already used ([Learning: reference §6](/en/arch/learning/reference/#sec-6)). Each writes `weights/all/NAME.json` ([From hazards to value §5](/en/arch/macro-brain/value/#sec-5), [Learning: the combat net §4](/en/arch/learning/combat-net/#sec-4)). Runs played by a weaker champion label states lower than the champion would now play them, so older generations are not mixed in.
-5. **Gate.** The new pair faces the champion's ([§5](#sec-5)).
-6. **Promote.** A pair that passes replaces the V and the combat net of both champion files ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)), and the next generation plays with it.
+6. **Gate.** The new pair faces the champion's ([§5](#sec-5)).
+7. **Promote.** A pair that passes replaces the V and the combat net of both champion files ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)), and the next generation plays with it.
 
 Failed runs are dropped when the samples are read ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
 

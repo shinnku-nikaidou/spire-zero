@@ -76,26 +76,27 @@ Sts2Ai.SimWorker COMMAND [options]
 | `--rooms` | `weak,regular` | 房間種類，取自 `weak`、`regular`、`elite`、`boss` |
 | `--encounter` | 無 | 改為單一遭遇；它也會設定幕 |
 
-**預算**（budget，`Args.cs:108-151`）：戰鬥大腦的預算。plan 的選項需要 `--policy plan`。
+**預算**（budget，`Args.cs:108-159`）：戰鬥大腦的預算。plan 的選項需要 `--policy plan`。
 
 | 選項 | 預設 | 意義 |
 |---|---|---|
 | `--worlds` | 8 | PIMC 每個決策的世界數 |
 | `--nodes` | 300 | 每個世界的節點數；對 plan 是每個狀態每回合的節點數 |
-| `--effort` | `medium` | plan 的力度檔位：`low` 束寬 8、簡易束 2、失敗計畫 3；`medium` 束寬 8、簡易束 4、失敗計畫 3；`high` 束寬 8；`max` 束寬 16；全都是 300 個節點、重新規劃 1（`src/Sts2Ai.Brain/Combat/CombatBrain.cs:20-27`） |
+| `--effort` | `medium` | plan 的力度檔位：`low` 束寬 8、簡易束 2、失敗計畫 3；`medium` 束寬 8、簡易束 4、失敗計畫 3；`high` 束寬 8；`max` 束寬 16；全都是 300 個節點、重新規劃 1（`src/Sts2Ai.Brain/Combat/CombatBrain.cs:31-38`） |
 | `--beam` | 力度檔位的值 | plan 每回合保留的狀態數（至少 1） |
 | `--easy-beam` | 力度檔位的值 | 貪婪下潛獲勝時保留的狀態數（0：`--beam`） |
 | `--replan` | 力度檔位的值 | 未證明的失敗計畫被沿用幾個回合後再重新規劃（0：沿用到底） |
 | `--loss-plans` | 力度檔位的值 | 每場戰鬥連續幾個未證明的失敗計畫（0：不限） |
+| `--elite-effort`、`--boss-effort` | 無 | plan 在菁英戰、頭目戰裡的力度檔位；其他戰鬥保留上面的預算，等於它的等級不算改變（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)） |
 
-**葉節點**（leaf，`Args.cs:153-164`）：用什麼評估搜尋的路線和 l0 的選項。
+**葉節點**（leaf，`Args.cs:161-172`）：用什麼評估搜尋的路線和 l0 的選項。
 
 | 選項 | 意義 |
 |---|---|
 | `--combat-net FILE` | 戰鬥網路檔案，評估搜尋的葉節點（[戰鬥大腦：葉節點](/zh-tw/arch/combat-brain/leaf/)）。`pimc` 和 `plan` 需要它，`selftest` 和 `--afterstates clone` 也需要 |
 | `--value FILE` | V，一個網路檔案：l0 用它為選項估值，它也為戰鬥網路的結局定價，勝利按勝利留下的那一局的 V，死亡為 0。`--macro l0` 和 `--combat-net` 需要它（`LeafChoice.cs:16`） |
 
-**冠軍**（champion，`Args.cs:196-238`）：構成一個冠軍的選項，用於 `run`、`brain` 和 `gate`。
+**冠軍**（champion，`Args.cs:204-251`）：構成一個冠軍的選項，用於 `run`、`brain` 和 `gate`。
 
 | 選項 | 預設 | 意義 |
 |---|---|---|
@@ -106,8 +107,9 @@ Sts2Ai.SimWorker COMMAND [options]
 | `--afterstates` | `screen` | `clone` 在節點的複本上把每個選項打一遍（SL，`l0`，而且需要 `--combat-net`：選項開啟的戰鬥由戰鬥網路估值）；在 SL 下，`l0` 只在複本上打 |
 | 葉節點選項 | | 見上：`--combat-net` 配 `pimc` 或 `plan`，也只配它們；`--value` 配 `l0` 或 `--combat-net` |
 | `--explore ε` | 0 | l0 把比例 ε 的決策在它們的選項之間均勻抽取，用於自我對弈；需要 `l0`，`gate` 拒絕它 |
+| `--macro-explore τ` | 0 | `--explore` 留給 V 的每個答案，l0 以 V 的估值的對數上、溫度為 τ 的 softmax 抽出（0：V 的最佳），用於自我對弈；需要 `l0`，`gate` 拒絕它（[宏觀大腦：自我對弈 §3](/zh-tw/arch/macro-brain/selfplay/#sec-3)） |
 
-**冠軍檔案**，`--champion FILE`（`Args.cs:166-194`），用於 `run` 和 `brain`：打冠軍檔案指明的冠軍（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。檔案的選項排在給出的選項之後，所以給出的選項優先；其中包括它的 `character` 和 `asc`。沒有 `--env` 的指令（`brain`）會略過檔案的 `env`；給出的 `--policy` 如果和檔案的不同，就保留它自己的預算。`gate` 的 `--champion` 是另一個選項：要擊敗的冠軍。
+**冠軍檔案**，`--champion FILE`（`Args.cs:174-202`），用於 `run` 和 `brain`：打冠軍檔案指明的冠軍（[評估：冠軍與基線 §1](/zh-tw/arch/evaluation/champions/#sec-1)）。檔案的選項排在給出的選項之後，所以給出的選項優先；其中包括它的 `character` 和 `asc`。沒有 `--env` 的指令（`brain`）會略過檔案的 `env`；給出的 `--policy` 如果和檔案的不同，就保留它自己的預算。`gate` 的 `--champion` 是另一個選項：要擊敗的冠軍。
 
 ## 4. 指令
 
@@ -127,7 +129,7 @@ Sts2Ai.SimWorker COMMAND [options]
 
 | 指令 | 選項 | 作用 |
 |---|---|---|
-| `run` | `--seeds FILE`、`--n`、`--start`、`--seed`（1）、`--asc`（0）、`--env`（NoSL）、`--max-decisions`（20000）、`--check`、`--trace`、`--obs`、`--log FILE`、`--records FILE`；冠軍選項、冠軍檔案、配置 | 打整局（[整局](/zh-tw/arch/simulator/runs/)）。會被拒絕的：SL 之外的 `plan`。`pimc` 只在 NoSL 下打：在 SL 下它的對局一開始就失敗 |
+| `run` | `--seeds FILE`、`--n`、`--start`、`--seed`（1）、`--asc`（0）、`--env`（NoSL）、`--max-decisions`（20000）、`--check`、`--trace`、`--obs`、`--log FILE`、`--records FILE`、`--auto-win ACTS`；冠軍選項、冠軍檔案、配置 | 打整局（[整局](/zh-tw/arch/simulator/runs/)）；帶 `--auto-win 1,2` 時，打的對局在這些幕裡的普通怪物戰開打時就贏下（[整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。會被拒絕的：SL 之外的 `plan`。`pimc` 只在 NoSL 下打：在 SL 下它的對局一開始就失敗 |
 | `brain` | `--log FILE`、`--wire FILE`、`--sl-policy`（`plan`）；冠軍選項、冠軍檔案 | 單獨的大腦，在 stdin 和 stdout 上服務啟動它的那個宿主，直到 stdin 關閉；不管 `--afterstates` 怎麼寫，L0 對 NoSL 宿主用畫面預測的後續狀態，對 SL 宿主（有戰鬥網路時）在節點的複本上打（[整局 §7](/zh-tw/arch/simulator/runs/#sec-7)） |
 | `serve` | 葉節點 | 行程池的一個工作行程（[工作行程池 §4](/zh-tw/arch/simulator/pool/#sec-4)） |
 | `clones` | `--wire`（必填） | 把宿主的 SL 決策（由 `brain --wire` 記錄）放到它們的複本上重播並比較觀測；有任何不同時以 1 結束（[Mod：SL 紀錄 §8](/zh-tw/arch/mod/sl-record/#sec-8)） |
@@ -143,7 +145,7 @@ Sts2Ai.SimWorker COMMAND [options]
 
 ## 5. `selftest`
 
-`selftest` 打戰鬥池裡的 `--n` 場戰鬥（預設 20 場），並執行下列檢查，按它報告時使用的名稱列出（`Checks/SelfTest*.cs`；順序見 `Checks/SelfTest.cs:73-147`）。其中的搜尋用 `--combat-net` 指定的網路評估葉節點，由 `--value` 的 V 定價；兩者都必須給出。任何一項失敗就以 1 結束。
+`selftest` 打戰鬥池裡的 `--n` 場戰鬥（預設 20 場），並執行下列檢查，按它報告時使用的名稱列出（`Checks/SelfTest*.cs`；順序見 `Checks/SelfTest.cs:73-148`）。其中的搜尋用 `--combat-net` 指定的網路評估葉節點，由 `--value` 的 V 定價；兩者都必須給出。任何一項失敗就以 1 結束。
 
 邊界，即 Brain、Protocol 和 Harness 不觸及任何遊戲組件，由單元測試 `BoundaryTests` 在不啟動遊戲的情況下檢查（[§7](#sec-7)）。
 
@@ -160,6 +162,8 @@ Sts2Ai.SimWorker COMMAND [options]
 **循環**（寂靜獵手對 535 點生命值，300 個節點）：Monologue 和兩張 Flash of Steel 互相抽到；SL 規劃器（束寬 8）把這個循環重複到獲勝，SL 世界照計畫結束這場戰鬥，PIMC 在 2 個世界上發現它的路線在重複。然後在 SL 下，在循環前面加一個提示：粒子牆要花這個角色沒有的星，直到瘋狂之觸讓它免費，而藥水的第一個回答並不這樣做；規劃器用讓粒子牆免費的那個回答喝下藥水而獲勝，比沒有提示時晚一個回合，用的是藥水的節點中分給那個回答的那一部分。
 
 **SL 計畫成立**（一局的第二場戰鬥，150 個節點，束寬 4）：SL 世界照計畫結束它的戰鬥（一場勝利），並拒絕越過結束再走一步；這一局重新打到那個決策，一步一步地照著計畫打，結束這場戰鬥時的生命值、最大生命值和藥水正是計畫在複本上留下的；計畫的估值是它的戰鬥留下的那一局的 V，誤差在 1e-9 以內。
+
+**自動勝利規則**（規則用在第 1 幕，隨機策略，打到第 2 幕或打到這一局結束）：戰鬥大腦在第 1 幕只在菁英戰和頭目戰裡被詢問，進入的每一場都會，在第 2 幕的怪物戰裡也會；第 1 幕的每場怪物戰都以勝利結束，不損失生命值；每個觀測都帶著這條規則；第 1 幕的每個節點都能從它的複本精確重播，複本保留這條規則（[整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。
 
 **使用 `--workers N` 時**：池化的 PIMC 在 4 個決策上與行程內的 PIMC 相符，每個決策用 4 個世界 × 120 個節點的預算；池化的規劃器做出的計畫和規劃器在單一行程裡做出的一樣；工作行程裡沒有遊戲錯誤；沒有工作行程重啟。
 
@@ -180,30 +184,30 @@ Sts2Ai.SimWorker COMMAND [options]
 
 ## 7. xUnit 測試
 
-`src/Sts2Ai.Tests` 收納不需要遊戲就能執行的部分，共 21 個類別、106 個測試方法：`dotnet test src/Sts2Ai.Tests`。每個受測專案一個資料夾（`Brain/`、`Harness/`、`SimWorker/`），根目錄有 `BoundaryTests.cs`，共用的 JSON 測試資料在 `Fixtures.cs` 和 `Fixtures/` 裡。
+`src/Sts2Ai.Tests` 收納不需要遊戲就能執行的部分，共 21 個類別、111 個測試方法：`dotnet test src/Sts2Ai.Tests`。每個受測專案一個資料夾（`Brain/`、`Harness/`、`SimWorker/`），根目錄有 `BoundaryTests.cs`，共用的 JSON 測試資料在 `Fixtures.cs` 和 `Fixtures/` 裡。
 
 | 類別 | 檢查什麼 |
 |---|---|
 | `BoundaryTests` | Brain、Protocol 和 Harness 不觸及任何遊戲組件，而這項檢查確實看得到 GameBridge 的 `sts2` |
-| `Brain/BudgetTests` | 名稱只顯示不是預設值的部分 |
+| `Brain/BudgetTests` | 名稱只顯示不是預設值的部分；菁英和頭目可以有自己的預算，`For` 把它給它們房間裡的戰鬥，名稱在其餘部分之後顯示它 |
 | `Brain/CloneSearchTests` | L0 在一個玩具複本上：商店值它最好的一籃購買；事件選項值它下一頁給的東西；戰鬥值戰鬥葉節點所說的，死亡值 0，贏下的一局值 1，而不是生命值為 0 那一局的 V，沒有葉節點的戰鬥會拋出例外；地圖上的移動不會真的打出；要選兩張牌的提示找到最好的一對；跳過的卡牌獎勵不會再被打開；到達兩次的狀態只搜尋一次；藥水欄滿時，事件給的藥水值獎勵畫面上丟棄一瓶為它騰出位置之後的狀態 |
 | `Brain/CombatNetTests` | 像它們的訓練器那樣讀取 `weights/all/c9-0.json` 的測試狀態和一個極小網路（`combat-tiny.json`）的狀態；進行中的狀態是它的各個結局留下的那些局的 V；每瓶藥水按它自己在分桶那一組的機率保留；持有的生命值排除掉的分桶沒有權重；贏下的戰鬥是它那一局的 V，輸掉的是 0 |
 | `Brain/LoopSearchTests` | 16 個測試：會回到手裡的牌被反覆打出，直到一回合內斬殺，不管它對牌堆做了什麼，循環在遊戲結束它的地方結束；會用完的牌，或會把自己耗盡的牌，只是一條普通路線；手牌裡的複製品不構成循環；沒有斬殺的循環不超出它的預算；能打開循環的提示回答會被找到並採用，規劃器和 PIMC 都是；提示的每個回答都會被搜尋；PIMC 也重複循環，它的回合計畫只保留會重複的計畫；提示由策略回答，除非動作自帶回答；沒有搜尋權衡的提示取它需要的最前面的選項；其他回答選的是玩家分辨得出的牌；選擇是動作文字的一部分 |
-| `Brain/MacroExplorationTests` | 刪牌只值能刪掉的東西；不探索時 l0 取最好的；均勻抽取時，卡牌獎勵的結果在它的牌和跳過之間抽取，卡牌介面保留這次抽取；ε=1 時每種決策都在它的選項之間均勻抽取，要喝的藥水也在其中，而不為任何藥水騰位置的丟棄不在其中；ε=1 時提示的選擇均勻抽取，ε=0.1 時大多數回答是 V 的 |
+| `Brain/MacroExplorationTests` | 刪牌只值能刪掉的東西；不探索時 l0 取最好的；均勻抽取時，卡牌獎勵的結果在它的牌和跳過之間抽取，卡牌介面保留這次抽取；ε=1 時每種決策都在它的選項之間均勻抽取，要喝的藥水也在其中，而不為任何藥水騰位置的丟棄不在其中；ε=1 時提示的選擇均勻抽取，ε=0.1 時大多數回答是 V 的；softmax 按 V 的估值的比值抽取，從不抽到遠低於最佳的選項，並標出它取到的低於最佳的選項 |
 | `Brain/MacroPotionTests` | 只有為了給畫面上的藥水騰出位置，才會提供丟棄藥水；在地圖上，藥水選項值它之後最好的移動，而不是它停留的那個狀態 |
 | `Brain/MacroUpgradeTests` | 鍛造值它最好的升級；鍛造提示選取估值時的那個升級；升級提示取最好的預覽 |
 | `Brain/MoveRecordTests` | 每個活著的敵人每輪記錄一次；跳過死掉的；輪次倒回時重新開始；`Clear` |
 | `Brain/PimcMemoTests` | 看起來相同、但擲出的結果不同的路線不會被合併 |
 | `Brain/RunNetTests` | 一個極小網路的對局，估值與訓練器算出的獲勝機率相同；像訓練器那樣讀取 `weights/all/v9-0.json` 的測試對局；地圖是路徑仍能通往的每個點，附上它前方的層數；選路讀入要進入的點，也只有選路才讀入 |
 | `Brain/SameCardsTests` | 一張牌的幾張複製品在每個目標上是同一個動作，升級過的複製品是另一個；同樣的牌換個順序、換一張複製品，或藥水放在不同的槽位，都是同一個狀態，雖然它們的觀測不同 |
-| `Brain/SlPlannerTests` | 15 個測試：完整搜尋、每個候選的結局、窄束、失敗計畫和重新規劃的回合數、失敗計畫數、完整搜尋過的一個回合用 keep 縮窄後和帶 keep 的搜尋相同、下潛的回合、簡易束和束、一場會贏的戰鬥只規劃一次、每個力度一個預算、已證明的失敗、候選的順序、記錄的歷史 |
+| `Brain/SlPlannerTests` | 16 個測試：路由用每場戰鬥所在房間的預算規劃它；完整搜尋、每個候選的結局、窄束、失敗計畫和重新規劃的回合數、失敗計畫數、完整搜尋過的一個回合用 keep 縮窄後和帶 keep 的搜尋相同、下潛的回合、簡易束和束、一場會贏的戰鬥只規劃一次、每個力度一個預算、已證明的失敗、候選的順序、記錄的歷史 |
 | `Brain/TurnPlanTests` | 不成立的步驟會重新規劃並被標記 |
-| `Harness/DispatcherTests` | 戰鬥大腦拿到目前為止的招式；宏觀決策結束這份記錄；不合法的選擇被拒絕；沒有覆蓋的決策介面沒有後備；NoSL 下拒收節點檢查點；SL 節點的複本就是它的檢查點加上此後的決策；動作的提示用大腦的選擇回答，宿主看不到；提示不接受的選擇交給策略 |
+| `Harness/DispatcherTests` | 戰鬥大腦拿到目前為止的招式；宏觀決策結束這份記錄；不合法的選擇被拒絕；沒有覆蓋的決策介面沒有後備；NoSL 下拒收節點檢查點；SL 節點的複本就是它的檢查點加上此後的決策，帶著這一局的自動勝利規則；動作的提示用大腦的選擇回答，宿主看不到；提示不接受的選擇交給策略 |
 | `Harness/EvalReportTests` | 按種子集的順序排序；破壞種子集的對局被拒收；一個佔位策略的決策（`random` 或 `play`）或一次失敗會讓報告作廢；`RunRecord.Read` 去掉失敗的對局 |
 | `Harness/ExplainTests` | 宏觀回答帶著每個選項的估值，選中的在前；對顯示這些回答的宿主，每個地圖選項帶著它通往頭目的路線 |
-| `Harness/GateTests` | 8 個測試，以勝場計：通過、失敗和不劣於；雙方都贏或都輸的配對不決定任何事；失敗的一局讓挑戰者作廢；配對；拒絕 |
+| `Harness/GateTests` | 9 個測試，以勝場計：通過、失敗和不劣於；雙方都贏或都輸的配對不決定任何事；失敗的一局讓挑戰者作廢；配對；拒絕；沒有任何報告或門檻接受自動勝利規則的一局 |
 | `Harness/WorkerPoolTests` | 卡住兩次的工作行程讓呼叫失敗；卡住一次的會被重啟並回答 |
-| `SimWorker/CliTests` | 預設值；不分大小寫的環境名稱；錯誤輸入；任何位置的 `--verbose`，以及沒有回應檔案；冠軍檔案的選項墊在給出的選項之下；冠軍檔案的 character 和 asc；`brain` 接受冠軍檔案但不用它的 env；不管檔案裡的後續狀態怎麼寫，`brain` 的 L0 對 NoSL 宿主在畫面上打，對 SL 宿主在複本上打；拒絕不一致的冠軍；戰鬥網路與搜尋一起用，並出現在名稱裡；冠軍的選項能重新打出它 |
+| `SimWorker/CliTests` | 預設值；不分大小寫的環境名稱；錯誤輸入；任何位置的 `--verbose`，以及沒有回應檔案；冠軍檔案的選項墊在給出的選項之下；冠軍檔案的 character 和 asc；`brain` 接受冠軍檔案但不用它的 env；不管檔案裡的後續狀態怎麼寫，`brain` 的 L0 對 NoSL 宿主在畫面上打，對 SL 宿主在複本上打；拒絕不一致的冠軍；戰鬥網路與搜尋一起用，並出現在名稱裡；冠軍的選項能重新打出它；菁英和頭目的等級以及 softmax 出現在名稱裡，冠軍檔案保留它們 |
 | `SimWorker/LoadoutTests` | 帶升級和附魔的牌組語法；附魔需要它的數量 |
 
 ## 8. 未決問題

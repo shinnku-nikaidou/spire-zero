@@ -39,6 +39,7 @@ Observation{run: RunView, screen: ScreenView}
 | `relics` | `RelicView[]` | 遗物，按玩家持有它们的顺序 |
 | `potions` | `(string\|null)[]` | 每个药水槽位一项：药水的 id，空槽位为 null |
 | `map` | `MapView` | 当前这一幕的地图 |
+| `auto_win`? | int[] | 不是画面的内容，而是游戏的规则：普通怪物战在开始时就赢下、因而只打精英和 Boss 的那些幕，以从 0 开始的索引表示，和 `act` 一样；只由模拟器为按自动胜利规则打的一局设定（[模拟器：整局 §8](/arch/simulator/runs/#sec-8)），真实游戏里从不出现 |
 
 `MapView` 就是地图画面画出来的那张地图：
 

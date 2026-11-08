@@ -18,7 +18,7 @@ Three reasons, in order of weight:
 - **Parallelism.** The worlds of a decision are independent, so K worlds on K workers take about the time of one. The game's model layer is not thread-safe and the pump is single-threaded ([Headless host §7](/en/arch/simulator/headless/#sec-7)), so processes, not threads, are the unit.
 - **A boundary for what may be known.** In NoSL a worker gets the observation, never the true state, and builds its worlds from it ([§5](#sec-5)). What crosses to a worker is a protocol message, so it can be read and checked.
 
-`WorkerPool` lives in `Sts2Ai.Harness` (`Sts2Ai.Harness/WorkerPool.cs`), which sees the game only through protocol types; the worker side is the `serve` command of the simulator (`Commands/Serve.cs`). A champion whose combat brain searches (`pimc`, or `plan` in SL) or whose macro brain plays on the clone (`--afterstates clone`) gets a pool, of `--workers` processes, by default one per world (`--worlds`, 8) (`Brains/ChampionOptions.cs:22`).
+`WorkerPool` lives in `Sts2Ai.Harness` (`Sts2Ai.Harness/WorkerPool.cs`), which sees the game only through protocol types; the worker side is the `serve` command of the simulator (`Commands/Serve.cs`). A champion whose combat brain searches (`pimc`, or `plan` in SL) or whose macro brain plays on the clone (`--afterstates clone`) gets a pool, of `--workers` processes, by default one per world (`--worlds`, 8) (`Brains/ChampionOptions.cs:24`).
 
 ## 2. The pool
 

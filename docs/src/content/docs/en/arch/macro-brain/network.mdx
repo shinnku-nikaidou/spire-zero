@@ -12,11 +12,11 @@ V is a neural network that reads a run and predicts how it will end. This sectio
 
 ## 1. The whole net
 
-Seven parts read seven kinds of input, each on its own: the **deck**, the **relics**, the **potions**, the **context**, the **map**, **six numbers** and the **cards the relics keep**. Their outputs are joined into one vector of 1,030 numbers, and an MLP (a *multi-layer perceptron*: linear layers with a non-linearity between them) turns it into one hazard per floor. Those hazards give the value, P(win).
+Seven parts read seven kinds of input, each on its own: the **deck**, the **relics**, the **potions**, the **context**, the **map**, **nine numbers** and the **cards the relics keep**. Their outputs are joined into one vector of 1,033 numbers, and an MLP (a *multi-layer perceptron*: linear layers with a non-linearity between them) turns it into one hazard per floor. Those hazards give the value, P(win).
 
 Only the deck has layers of its own, and the cards the relics keep go through the same ones. The bags are plain sums of learned vectors, and everything that relates one part to another is worked out after the join.
 
-One V values every run: all five characters, every ascension, both environments, with one set of weights (`weights/all/`). The character is one of the context tokens and the ascension one of the six numbers.
+One V values every run: all five characters, every ascension, both environments, with one set of weights (`weights/all/`). The character is one of the context tokens and the ascension one of the nine numbers, as is the game's rule: whether a run wins each act's plain monster fights at their start ([Simulator: whole runs §8](/en/arch/simulator/runs/#sec-8)).
 
 The diagram reads from the bottom up: inputs at the bottom, the value at the top. A frame marks a group of layers. Point at a block for what it computes.
 
@@ -33,10 +33,10 @@ The shapes along the way, with $B$ runs in a batch, $n$ cards, $r$ relics, $p$ p
 | potions | the potions' vectors, summed | $B \times 64$ |
 | context | the tokens' vectors, summed | $B \times 64$ |
 | map | the tokens' vectors, summed | $B \times 64$ |
-| numbers | standardized | $B \times 6$ |
+| numbers | standardized | $B \times 9$ |
 | kept cards | each card's vector through $\varphi$ | $B \times l \times 256$ |
 | | summed | $B \times 256$ |
-| join | all seven | $B \times 1030$ |
+| join | all seven | $B \times 1033$ |
 | body | two layers | $B \times 512$ |
 | head | one hazard per floor | $B \times 64$ |
 
@@ -48,10 +48,10 @@ Everything comes from the run view that Harness logs at every decision ([Harness
 
 - **Each card of the deck:** its id, its upgrade level (higher levels read as 3) and its modifier tokens: its enchantment and affliction, if any, as `enchant:ID` and `affliction:ID`, its keywords as `keyword:K`, and what Tinker Time made of a Mad Science, as `tinker:TYPE` and `rider:RIDER`. And three numbers, which a run can grow on a card: its enchantment's and affliction's amounts (Goopy's grows with each play), its damage (The Scythe's) and its block (Genetic Algorithm's), Osty's damage for an Osty attack.
 - **Each relic:** its id, with `:used` added once it is used up, and what the combat net reads of it ([The combat net §2](/en/arch/combat-brain/network/#sec-2)): its counter / 10 (0 when none shows, capped at ±10), whether a counter shows, whether it is melted, and its status, the game's when it is not the normal one, else `Spent` when its once-a-combat or once-a-turn effect is used, else `Normal`. And the cards it keeps, by id: Pael's Tooth's.
-- **Each potion held:** its id. Empty slots are not tokens; the number of slots is one of the six numbers.
+- **Each potion held:** its id. Empty slots are not tokens; the number of slots is one of the nine numbers.
 - **The context:** `character:ID`, `act:ID`, `boss:ID`, a second `boss:ID` when the act has two, and `ancient:ID` when it has an ancient.
 - **The map:** every point a path still leads to, as its type and floors ahead ([§4](#sec-4)).
-- **Six numbers:** the floor, HP, max HP, gold, the ascension and the potion slots.
+- **Nine numbers:** the floor, HP, max HP, gold, the ascension, the potion slots, and the game's rule: for each of the three acts, 1 if its plain monster fights are won at their start, else 0 (the run view's `auto_win`). A run of that rule is another game, with another chance to win than a whole run's, so V is told which one it values. A whole run, and every run in the real game, reads 0, 0, 0.
 
 **What it does not read.** A card's cost and its other numbers, the numbers printed on a relic, and anything of a kept card but its id. Two runs that differ only there are one input.
 
@@ -74,7 +74,7 @@ Everything comes from the run view that Harness logs at every decision ([Harness
 | `potions`, `potion_mask` | $B \times p$ | int, float | each potion's entry, and its mask |
 | `context`, `context_mask` | $B \times c$ | int, float | each context token's entry, and its mask |
 | `map`, `map_mask` | $B \times m$ | int, float | each map token's entry, and its mask |
-| `state` | $B \times 6$ | float | the six numbers, standardized |
+| `state` | $B \times 9$ | float | the nine numbers, standardized |
 | `relic_values` | $B \times r \times 3$ | float | each relic's counter / 10, whether one shows (unused by the graph), whether it is melted |
 | `relic_status` | $B \times r$ | int | each relic's status's table entry |
 | `held`, `held_mask` | $B \times l$ | int, float | each card the relics keep, its entry in the `cards` table, and its mask |
@@ -149,7 +149,7 @@ So each map move also gives a training sample of its own, the chosen point's aft
 
 **The numbers** are read as they are, standardized ([§2](#sec-2)).
 
-**The join.** The seven outputs are concatenated into one vector $z$ of $512 + 64 + 64 + 64 + 64 + 6 + 256 = 1030$ numbers: the deck, the four bags, the numbers and the cards the relics keep.
+**The join.** The seven outputs are concatenated into one vector $z$ of $512 + 64 + 64 + 64 + 64 + 9 + 256 = 1033$ numbers: the deck, the four bags, the numbers and the cards the relics keep.
 
 **The body** is an MLP of two layers, 512 numbers each:
 
@@ -183,13 +183,13 @@ The hazards of floors before $f$ are computed and not used ([From hazards to val
 | relic, potion, context, map embeddings | 310, 66, 32, 379 × 64 | 50,368 |
 | relic counter, status, melted | 310 × 64; 5 × 64; 64 | 20,224 |
 | $\varphi$ | 64 → 256 → 256 | 82,432 |
-| body | 1030 → 512 → 512 | 790,528 |
+| body | 1033 → 512 → 512 | 791,552 |
 | hazard head | 512 → 64 | 32,832 |
-| **total** | | **1,136,512** |
+| **total** | | **1,138,048** |
 
 The token tables are fixed, so these sizes depend only on the game build. The training-only head adds 3,078.
 
-**What the file holds.** The champion's file is `weights/all/v9-2.json`. It learned from SL self-play of all five characters at ascension 0, at the medium budget: 21,272 runs, 5,608 of them won, 4,310 of them held out (its `fit`, [From hazards to value §6](/en/arch/macro-brain/value/#sec-6)). The damage, block and amount rows ($D$, $K$, $A$) have learned wherever a training run gave a card such a number: 170 cards' damage rows, 68 cards' block rows and 20 enchantments' amount rows. The other rows of the three are zero, so V gives those numbers no weight. So are the relics' counter, status and melted vectors, and the body's 256 columns that read the cards the relics keep: V gives these inputs no weight either. Its $\mu$ and $\sigma$ come from runs at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. An id that no training run held, such as `SHIV`, the afflictions or the `FAKE_` relics, has learned nothing: its row is still the one it started with.
+**What the file holds.** The champion's file is `weights/all/v9-2.json`. It learned from SL self-play of all five characters at ascension 0, at the medium budget: 21,272 runs, 5,608 of them won, 4,310 of them held out (its `fit`, [From hazards to value §6](/en/arch/macro-brain/value/#sec-6)). The damage, block and amount rows ($D$, $K$, $A$) have learned wherever a training run gave a card such a number: 170 cards' damage rows, 68 cards' block rows and 20 enchantments' amount rows. The other rows of the three are zero, so V gives those numbers no weight. So are the relics' counter, status and melted vectors, and the body's 256 columns that read the cards the relics keep: V gives these inputs no weight either. Its $\mu$ and $\sigma$ come from runs at ascension 0: the ascension's $\mu$ is 0 and its $\sigma$ reads as 1, so A10 reads as 10. The rule's three numbers have $\mu$ 0 and $\sigma$ 1, and the body's three columns that read them are zero: no run it learned from played by the auto-win rule, so it values a run of that rule as if it were a whole one. An id that no training run held, such as `SHIV`, the afflictions or the `FAKE_` relics, has learned nothing: its row is still the one it started with.
 
 A call takes about 0.08 ms in C# on one thread, batch of one. A macro decision on the clone takes 70–90 ms, most of it in the game ([Search §6](/en/arch/macro-brain/search/#sec-6)), so V's own cost does not matter.
 

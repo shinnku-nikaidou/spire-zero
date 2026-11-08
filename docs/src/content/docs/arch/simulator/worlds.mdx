@@ -54,20 +54,20 @@ NoSL 世界把碰到会话动作上限（1,000 个动作，[战斗 §1](/arch/si
 
 **节点**是一个地图点，从到达开始，到移动去下一个点为止（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。SL 可以知道当前节点的一切，所以 SL 需要它的一个精确副本，可以打了再打。这个副本从一份存档开始。
 
-到达一个地图点时，游戏会给这一局存档。无头时什么都不写盘：`SaveRun` 补丁跳过写入；而没有已完成房间的存档就是到达时的那次存档，所以这个补丁同时发出信号：一个节点开始了（`Runtime/Patches/Persistence.cs:13-23`）。`RunSession` 随即取这个节点的**检查点**（`Sts2Ai.GameBridge/Checkpoint.cs`），记下节点的决策在轨迹里从哪里开始，并把选牌提示重新从 0 编号（`Simulation/RunSession.cs:137-142`）。检查点是一个 JSON 对象，分两部分：
+到达一个地图点时，游戏会给这一局存档。无头时什么都不写盘：`SaveRun` 补丁跳过写入；而没有已完成房间的存档就是到达时的那次存档，所以这个补丁同时发出信号：一个节点开始了（`Runtime/Patches/Persistence.cs:13-23`）。`RunSession` 随即取这个节点的**检查点**（`Sts2Ai.GameBridge/Checkpoint.cs`），记下节点的决策在轨迹里从哪里开始，并把选牌提示重新从 0 编号（`Simulation/RunSession.cs:140-145`）。检查点是一个 JSON 对象，分两部分：
 
 - `Save`：游戏自己对这一局的存档，即由 `SaveManager.ToJson` 序列化的 `RunManager.ToSave(null)`，作为字符串嵌在里面；
 - `Relics`：每个遗物的简单字段：从遗物自己的类一直到 `RelicModel`，每个数字、标志、枚举或十进制小数类型的可写字段（其中包括它的状态），按类名和字段名记录。存档会丢掉其中的大部分（[§6](#sec-6)）。
 
 两种主机都会取检查点，即模拟器和游戏里的 Mod，NoSL 对局也不例外；只有 SL 对局会把它们发给大脑（[环境：信息与节点 §7](/arch/environments/information/#sec-7)）。
 
-**克隆**是检查点，加上此后这个节点的每个决策，以轨迹行的形式（`surface action`；选牌提示的选择用游戏自己的下标）。它的协议类型是 `NodeClone(Save, Trace)`（`Sts2Ai.Protocol/World.cs:96`），除了模拟器，谁都不解读它的内容。`RunSession.Clone()` 可以在节点的任何时刻生成一个克隆（`Simulation/RunSession.cs:223`）。
+**克隆**是检查点，加上此后这个节点的每个决策，以轨迹行的形式（`surface action`；选牌提示的选择用游戏自己的下标）。它的协议类型是 `NodeClone(Save, Trace, AutoWin?)`（`Sts2Ai.Protocol/World.cs:97`），除了模拟器，谁都不解读它的内容。`RunSession.Clone()` 可以在节点的任何时刻生成一个克隆（`Simulation/RunSession.cs:226`）。一局按自动胜利规则来打时，`AutoWin` 就是这一局的规则（[整局 §8](/arch/simulator/runs/#sec-8)）：存档不保存它，所以由克隆带着；带着它加载的克隆，会像这一局那样在开始时就赢下普通怪物战，它的重播需要这一点。
 
-**在一局里**，SL 主机把克隆一块一块地发给大脑：新节点开始时发 `node_checkpoint`，然后把节点的每个决策作为 `node_action` 发送，两者都在问下一个决策之前发出（`Brains/RunBrains.cs:88-99`；[协议：线路 §6](/arch/protocol/wire/#sec-6)）。Harness 保留最新的检查点和此后的决策，在每个决策处这就是克隆（[Harness §4](/arch/harness/#sec-4)）。Mod 从游戏里发送同样的消息（[Mod：SL 记录 §7](/arch/mod/sl-record/#sec-7)）。
+**在一局里**，SL 主机把克隆一块一块地发给大脑：新节点开始时发 `node_checkpoint`（如果这一局有规则，就带上它），然后把节点的每个决策作为 `node_action` 发送，两者都在问下一个决策之前发出（`Brains/RunBrains.cs:88-99`；[协议：线路 §6](/arch/protocol/wire/#sec-6)）。Harness 保留最新的检查点和此后的决策，在每个决策处这就是克隆（[Harness §4](/arch/harness/#sec-4)）。Mod 从游戏里发送同样的消息（[Mod：SL 记录 §7](/arch/mod/sl-record/#sec-7)）。
 
 ## 4. 加载克隆
 
-`RunSession.Load(clone)`（`Simulation/RunSession.cs:186-220`）走游戏「继续游戏」（Continue）的路径：`NMainMenu` 的 Continue 和 `NGame.LoadRun`，去掉节点部分（`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`） <Badge text="已核实" variant="success" />。
+`RunSession.Load(clone)`（`Simulation/RunSession.cs:189-223`）走游戏「继续游戏」（Continue）的路径：`NMainMenu` 的 Continue 和 `NGame.LoadRun`，去掉节点部分（`Nodes.Screens.MainMenu/NMainMenu.cs:706-712`） <Badge text="已核实" variant="success" />。
 
 <Steps>
 
@@ -86,7 +86,7 @@ NoSL 世界把碰到会话动作上限（1,000 个动作，[战斗 §1](/arch/si
 
 ## 5. 封存
 
-移动到下一个地图点是节点的最后一个决策。克隆记录它，但不移动：停在那里并设置 `AtHorizon`，之后任何 `Step` 都会抛异常（「sealed: the clone has left its node」，`Simulation/RunSession.cs:226-228, 350-356`）。在节点里结束的一局（死亡或胜利），克隆也随之结束。所以在克隆上的搜索能看到它所在节点的每一种结果，而看不到下一个节点的任何东西，这就是 SL 的边界（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。
+移动到下一个地图点是节点的最后一个决策。克隆记录它，但不移动：停在那里并设置 `AtHorizon`，之后任何 `Step` 都会抛异常（「sealed: the clone has left its node」，`Simulation/RunSession.cs:239-241, 350-356`）。在节点里结束的一局（死亡或胜利），克隆也随之结束。所以在克隆上的搜索能看到它所在节点的每一种结果，而看不到下一个节点的任何东西，这就是 SL 的边界（[环境：信息与节点 §3](/arch/environments/information/#sec-3)）。
 
 `selftest` 从两方面检查封存：记下了移动的节点克隆，加载后停在视野边界，并拒绝再走一步（[参考 §5](/arch/simulator/reference/#sec-5)）；`run --check` 则在它重播的每个节点上检查（[整局 §6](/arch/simulator/runs/#sec-6)）。
 

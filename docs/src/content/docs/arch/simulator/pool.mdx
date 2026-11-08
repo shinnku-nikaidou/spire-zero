@@ -18,7 +18,7 @@ import PoolTimeline from '../../../../components/book/PoolTimeline.svelte';
 - **并行**。一个决策的各个世界彼此独立，所以 K 个世界放在 K 个工作进程上，用时和一个世界差不多。游戏的模型层不是线程安全的，pump 也是单线程的（[无头宿主 §7](/arch/simulator/headless/#sec-7)），所以并行的单位是进程，而不是线程。
 - **可知内容的边界**。NoSL 下工作进程拿到的是观测，从来不是真实状态，并由观测构建它的世界（[§5](#sec-5)）。传给工作进程的是协议消息，所以可以读出来检查。
 
-`WorkerPool` 在 `Sts2Ai.Harness` 里（`Sts2Ai.Harness/WorkerPool.cs`），Harness 只通过协议类型看到游戏；工作进程一侧是模拟器的 `serve` 命令（`Commands/Serve.cs`）。战斗大脑要搜索（`pimc`，或 SL 下的 `plan`）或宏观大脑要在克隆上打（`--afterstates clone`）的冠军会得到一个工作进程池，有 `--workers` 个进程，默认每个世界一个（`--worlds`，8）（`Brains/ChampionOptions.cs:22`）。
+`WorkerPool` 在 `Sts2Ai.Harness` 里（`Sts2Ai.Harness/WorkerPool.cs`），Harness 只通过协议类型看到游戏；工作进程一侧是模拟器的 `serve` 命令（`Commands/Serve.cs`）。战斗大脑要搜索（`pimc`，或 SL 下的 `plan`）或宏观大脑要在克隆上打（`--afterstates clone`）的冠军会得到一个工作进程池，有 `--workers` 个进程，默认每个世界一个（`--worlds`，8）（`Brains/ChampionOptions.cs:24`）。
 
 ## 2. 工作进程池
 

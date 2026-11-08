@@ -42,7 +42,7 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 | `chosen` | string | 戰鬥動作的文字：`play:C[:T]`、`potion:S[:T]`、`end_turn`，搜尋選了它的第一個選牌提示的回答時，回答寫在 `@` 之後（[協定：觀測與動作 §3](/zh-tw/arch/protocol/observation/#sec-3)） | 選中的選項索引，用逗號連接，不帶 `pick:` | 動作 |
 | `plan` | string[]? | 大腦在 `chosen` 之後的計畫，如果有（[§5](#sec-5)） | 從不 | 策略在 `chosen` 之後的計畫，如果有：L0 在地圖上的路線 |
 | `candidates` | Candidate[]? | 搜尋的候選，如果有（[§5](#sec-5)） | 從不 | 從不 |
-| `budget` | Budget? | 路由設定的預算，出現在有預算的路由的每一行上，包括只有一個合法動作的步驟和照計畫打出的步驟（[路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)） | 從不 | 從不 |
+| `budget` | Budget? | 這場戰鬥所在房間的預算，出現在有預算的路由的每一行上，包括只有一個合法動作的步驟和照計畫打出的步驟：路由給了菁英或頭目自己的預算時就是它，否則是路由的預算（[路由、預算與種子 §4](/zh-tw/arch/harness/routing/#sec-4)） | 從不 | 從不 |
 | `seed` | integer | 決策的種子（[路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)） | 同上，雖然策略不讀它 | 同上，雖然策略不讀它 |
 | `elapsed_ms` | number | 路由的用時 | 策略的用時 | 策略的用時；它的計畫是之後才問的，不計時 |
 | `obs` | CombatObservation? | 總是有 | – | – |
@@ -73,11 +73,13 @@ import DecisionLog from '../../../../../components/book/DecisionLog.svelte';
 
 ## 6. 經探索與重新規劃的步驟
 
-**`explored: true`** 標出自我對弈的探索抽出的回答（`--explore ε`，[學習：循環 §9](/zh-tw/arch/learning/loop/#sec-9)），L0 以 ε 的機率抽取，不管 V 怎麼說：
+**`explored: true`** 標出自我對弈的探索抽出的回答（[學習：循環 §9](/zh-tw/arch/learning/loop/#sec-9)）。均勻抽取（`--explore ε`）由 L0 以 ε 的機率做出，不管 V 怎麼說，它標出：
 
 - 畫面上的一個選項，從它的選項裡均勻抽出，藥水的選項也在其中：總是標，即使抽中的碰巧就是 V 自己的選擇；
 - 卡牌獎勵的結果，它的某張牌或略過，每個卡牌獎勵抽一次：抽出的結果就是回答，或回答的估值低於 V 的最佳時才標；
 - 戰鬥外選牌提示的選取，均勻抽出：總是標。
+
+softmax（`--macro-explore τ`）標出它抽出的、在 V 的對數上比 V 的最佳低超過 τ / 100 的回答；在選牌提示處，是它的任何一步這樣抽出的回答。
 
 戰鬥步驟沒有 `explored`，沒有經過抽取的回答也沒有。
 

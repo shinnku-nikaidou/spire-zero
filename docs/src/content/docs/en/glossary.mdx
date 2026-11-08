@@ -98,7 +98,10 @@ Terms are grouped by area; each entry links to the page that covers it in depth.
 | ExIt | Expert iteration: train the learned parts to imitate what the search chose ([Learning: the loop §5](/en/arch/learning/loop/#sec-5)). |
 | SPSA | Simultaneous perturbation stochastic approximation: tunes many parameters at once by perturbing them together; the project does not use it ([Learning: the loop §6](/en/arch/learning/loop/#sec-6)). |
 | privileged information | Hidden state used only in training to reduce noise; never an input of the deployed policy. |
-| exploration, even draws, ε | Self-play's exploration (`run --explore ε`): with chance ε a macro decision is drawn evenly among its options, whatever V says. |
+| exploration, even draws, ε | Self-play's exploration (`run --explore ε`): with chance ε a macro decision is drawn evenly among its options, whatever V says ([Macro brain: self-play §3](/en/arch/macro-brain/selfplay/#sec-3)). |
+| softmax, τ | Self-play's other exploration (`run --macro-explore τ`): each answer the even draws leave to V is drawn with a chance proportional to $V^{1/\tau}$, so options near V's best are tried often and far ones almost never. |
+| auto-win rule | A rule of the simulator's own (`run --auto-win 1,2`): in the acts it names, plain monster fights are won at their start, so only elites and bosses are fought there; for self-play only, never in a report or a gate ([Simulator: whole runs §8](/en/arch/simulator/runs/#sec-8)). |
+| dataset file | `eval/datasets/NAME.toml`: one generation of self-play as one file, its seeds, games, tiers of exploration and runs per character and ascension; it lies beside the data as `dataset.toml` ([Macro brain: self-play §4](/en/arch/macro-brain/selfplay/#sec-4)). |
 
 ## 6. Evaluation
 

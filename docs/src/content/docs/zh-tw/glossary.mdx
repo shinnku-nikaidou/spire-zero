@@ -98,7 +98,10 @@ description: '本書用到的每個術語，按領域分組，各有簡短解釋
 | ExIt | 專家迭代（expert iteration）：訓練學出來的部分去模仿搜尋選擇的東西（[學習：循環 §5](/zh-tw/arch/learning/loop/#sec-5)）。 |
 | SPSA | 同時擾動隨機逼近（simultaneous perturbation stochastic approximation）：把許多參數一起擾動，同時調整它們；本專案不使用它（[學習：循環 §6](/zh-tw/arch/learning/loop/#sec-6)）。 |
 | 特權資訊（privileged information） | 只在訓練時用來降低雜訊的隱藏狀態；從不是部署後策略的輸入。 |
-| 探索（exploration）、均勻抽取（even draws）、ε | 自我對弈的探索（`run --explore ε`）：一個宏觀決策以機率 ε 在它的選項中均勻抽取，不管 V 怎麼說。 |
+| 探索（exploration）、均勻抽取（even draws）、ε | 自我對弈的探索（`run --explore ε`）：一個宏觀決策以機率 ε 在它的選項中均勻抽取，不管 V 怎麼說（[宏觀大腦：自我對弈 §3](/zh-tw/arch/macro-brain/selfplay/#sec-3)）。 |
+| softmax、τ | 自我對弈的另一種探索（`run --macro-explore τ`）：均勻抽取留給 V 的每個答案，以正比於 $V^{1/\tau}$ 的機率抽出，所以接近 V 的最佳的選項常被嘗試，遠的選項幾乎從不。 |
+| 自動勝利規則（auto-win rule） | 模擬器自己的一條規則（`run --auto-win 1,2`）：在它指明的幕裡，普通怪物戰在開打時就贏下，所以那裡只打菁英和頭目；只用於自我對弈，從不用於報告或門檻（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。 |
+| 資料集檔案（dataset file） | `eval/datasets/NAME.toml`：自我對弈的一代寫成一個檔案，包括它的種子、遊戲、探索檔位，以及每個角色和晉階的對局數；它以 `dataset.toml` 放在資料旁邊（[宏觀大腦：自我對弈 §4](/zh-tw/arch/macro-brain/selfplay/#sec-4)）。 |
 
 ## 6. 評估
 

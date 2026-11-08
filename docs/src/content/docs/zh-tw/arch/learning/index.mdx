@@ -15,13 +15,13 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside title="狀態">
 
-已實作：V 的訓練器 `learn/v/`（`v.train`）和戰鬥網路的訓練器 `learn/combat/`（`combat.train`），兩者都用蒙地卡羅目標（每個決策都以它那一局實際的結局作標籤）；自我對弈的均勻抽取探索（`run --explore ε`）；`learn/gate.py`，一個 V 的對局的報告和配對門檻。規劃中、尚未實作：TD(λ) 目標、專家迭代、LLM 補丁提案、獎勵塑形、特權訓練，以及均勻抽取之外對抗局部最佳解的機制（[循環](/zh-tw/arch/learning/loop/)）。
+已實作：V 的訓練器 `learn/v/`（`v.train`）和戰鬥網路的訓練器 `learn/combat/`（`combat.train`），兩者都用蒙地卡羅目標（每個決策都以它那一局實際的結局作標籤）；自我對弈的探索，均勻抽取和在 V 的估值上做的 softmax（`run --explore ε --macro-explore τ`）；讓對局在選定的幕裡只打菁英和頭目的自動勝利規則（`run --auto-win`）；寫成一個資料集檔案的一代（`eval/datasets/`）；`learn/gate.py`，一個 V 的對局的報告和配對門檻。規劃中、尚未實作：TD(λ) 目標、專家迭代、LLM 補丁提案、獎勵塑形、特權訓練，以及均勻抽取之外對抗局部最佳解的機制（[循環](/zh-tw/arch/learning/loop/)）。
 
 </Aside>
 
 ## 1. 學到什麼
 
-**宏觀大腦的 V**。在戰鬥外，宏觀大腦把一個決策的每個選項都打一遍，看緊接在它之後的局面（*後狀態*），選後狀態被 V 估得最高的那個選項（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。V 是一個神經網路，讀這一局是什麼（它的卡牌、遺物、藥水、幕和頭目的 id，以及前方的地圖）、牌上長大的數字、遺物的計數和狀態、遺物保留的牌和六個原始數字，傳回一個數字，即從這裡贏下這一局的機率（[宏觀大腦：從風險值到價值 §1](/zh-tw/arch/macro-brain/value/#sec-1)）。同一個 V 給每種決策介面（surface）評分，所以一張牌、一件遺物、一次回血和地圖上的一條路線都在同一個尺度上比較，不需要手寫的換算比例。
+**宏觀大腦的 V**。在戰鬥外，宏觀大腦把一個決策的每個選項都打一遍，看緊接在它之後的局面（*後狀態*），選後狀態被 V 估得最高的那個選項（[宏觀大腦 §2](/zh-tw/arch/macro-brain/#sec-2)）。V 是一個神經網路，讀這一局是什麼（它的卡牌、遺物、藥水、幕和頭目的 id，以及前方的地圖）、牌上長大的數字、遺物的計數和狀態、遺物保留的牌和九個原始數字（遊戲的規則也在其中），傳回一個數字，即從這裡贏下這一局的機率（[宏觀大腦：從風險值到價值 §1](/zh-tw/arch/macro-brain/value/#sec-1)）。同一個 V 給每種決策介面（surface）評分，所以一張牌、一件遺物、一次回血和地圖上的一條路線都在同一個尺度上比較，不需要手寫的換算比例。
 
 **戰鬥網路**。戰鬥搜尋往前看一個回合或一整場戰鬥，然後必須說出它走到的狀態值多少：這就是它的*葉節點價值*。戰鬥網路讀一個回合的開始，預測戰鬥會怎樣結束：死亡，或者還要失去多少比例的最大生命值（分成 50 個桶），以及每瓶持有的藥水在勝利後已經不在的機率（[戰鬥網路](/zh-tw/arch/combat-brain/network/)、[戰鬥大腦：葉節點 §4](/zh-tw/arch/combat-brain/leaf/#sec-4)）。它的訓練見[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/)。
 
@@ -37,7 +37,7 @@ import { Aside, Badge } from '@astrojs/starlight/components';
 
 ```mermaid
 flowchart LR
-  C["冠軍<br/>V + 戰鬥網路"] --> SP["自我對弈<br/>訓練種子，<br/>以 ε 均勻抽取"]
+  C["冠軍<br/>V + 戰鬥網路"] --> SP["自我對弈<br/>訓練種子，<br/>ε 和 τ"]
   SP --> D["決策日誌<br/>+ 對局記錄"]
   D --> F["擬合挑戰者<br/>MC 標籤"]
   F --> G{"晉級門檻<br/>配對種子"}
@@ -48,7 +48,7 @@ flowchart LR
   P["SPSA、LLM 補丁<br/>（未使用 / 規劃中）"] -.-> G
 ```
 
-1. **自我對弈**。冠軍在訓練種子上打對局，其中 ε 比例的宏觀決策隨機抽取，讓資料呈現其他選項會導向什麼（[循環 §2](/zh-tw/arch/learning/loop/#sec-2)、[§9](/zh-tw/arch/learning/loop/#sec-9)）。
+1. **自我對弈**。冠軍在訓練種子上打對局，其中 ε 比例的宏觀決策隨機抽取，其餘用 softmax 抽取，讓資料呈現其他選項會導向什麼（[循環 §2](/zh-tw/arch/learning/loop/#sec-2)、[§9](/zh-tw/arch/learning/loop/#sec-9)）。
 2. **擬合**。在這些對局上訓練一個新的 V（或戰鬥網路）。每個決策的標籤是它那一局實際的結局，即*蒙地卡羅*目標（[循環 §3](/zh-tw/arch/learning/loop/#sec-3)）。TD(λ) 和專家迭代還會從搜尋算出的價值中學習，它們在規劃中（[§4](/zh-tw/arch/learning/loop/#sec-4)、[§5](/zh-tw/arch/learning/loop/#sec-5)）。
 3. **門檻**。挑戰者在固定的評估種子上打，逐個種子和冠軍的對局配對，只有差值明顯大於零才通過（[循環 §8](/zh-tw/arch/learning/loop/#sec-8)）。
 
@@ -58,7 +58,7 @@ flowchart LR
 
 | 部分 | 狀態 | 位置 |
 |---|---|---|
-| 自我對弈：整局，以 ε 均勻抽取 | 已實作 | `run --explore`，[循環 §2](/zh-tw/arch/learning/loop/#sec-2) |
+| 自我對弈：整局和自動勝利規則的對局，以 ε 均勻抽取、以 τ 做 softmax，每代一個資料集檔案 | 已實作 | `run --explore --macro-explore --auto-win`，[循環 §2](/zh-tw/arch/learning/loop/#sec-2)、[宏觀大腦：自我對弈](/zh-tw/arch/macro-brain/selfplay/) |
 | V 的訓練，蒙地卡羅標籤 | 已實作 | `learn/v/`，[宏觀大腦：從風險值到價值 §5](/zh-tw/arch/macro-brain/value/#sec-5) |
 | 戰鬥網路的訓練，蒙地卡羅標籤 | 已實作 | `learn/combat/`，[訓練戰鬥網路](/zh-tw/arch/learning/combat-net/) |
 | 反事實分叉 | <Badge text="規劃中" variant="caution" /> | [循環 §10](/zh-tw/arch/learning/loop/#sec-10) |

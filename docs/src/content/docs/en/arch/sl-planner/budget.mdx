@@ -1,6 +1,6 @@
 ---
 title: 'Budget, cost and results'
-description: The SL planner's effort levels and the low budget, where its time goes, how it runs in workers, the champion's budget and speed, its weaknesses and open questions, and the planned single budget per fight.
+description: The SL planner's effort levels, an elite's and a boss's own level, the low budget, where its time goes, how it runs in workers, the champion's budget and speed, its weaknesses and open questions, and the planned single budget per fight.
 sidebar:
   label: Budget
 ---
@@ -21,6 +21,8 @@ The planner's budget is a few numbers: the beam $B$, the easy beam $E$, the node
 | max | 16 | 16 | no limit |
 
 Medium differs from high in two places: the easy beam, which narrows only fights the dive already wins ([Beam §4](/en/arch/sl-planner/beam/#sec-4)), and the limit on losing plans, which keeps a lost fight from being planned again at every turn ([Beam §6](/en/arch/sl-planner/beam/#sec-6)). Low narrows the easy beam further. Every level gives every room the same beam and nodes.
+
+**A room's own level.** `--elite-effort LEVEL` and `--boss-effort LEVEL` give elite fights and boss fights a level of their own, by the table above; every other fight keeps the budget the other options make (`src/Sts2Ai.SimWorker/Commands/Args.cs:126-129`, `:155-157`). A room's level that equals that budget changes nothing and is not kept. The budget holds them as `Budget.Elite` and `Budget.Boss`, and `Budget.For` gives a fight the budget of its room, which the fight's observation names: `Monster`, `Elite` or `Boss`, an event's fight by its encounter (`src/Sts2Ai.Brain/Combat/CombatBrain.cs:17-27`). The route plans every fight with its room's budget, its loss plans counted by that budget too (`SlRoute`, `src/Sts2Ai.Brain/Combat/SlPlanner.cs:43`), and the decision log records the budget the fight had ([Harness: the decision log §3](/en/arch/harness/decision-log/#sec-3)). The champion's name shows a room's budget after the others', as in `beam 8x300 easy 4 loss plans 3 boss (beam 8x300)`, and a champion file keeps the levels as `elite-effort` and `boss-effort` ([Evaluation: champions and baselines §1](/en/arch/evaluation/champions/#sec-1)). The champion plays medium in every room; a dataset may play its boss fights at high ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)).
 
 ## 2. The low budget
 

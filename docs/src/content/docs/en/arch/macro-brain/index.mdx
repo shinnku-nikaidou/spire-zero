@@ -57,7 +57,7 @@ flowchart LR
 3. **One value.** V reads an afterstate and returns one number. The same V scores every option of every surface, so a card, a relic, an upgrade, a heal and a path on the map are compared on one scale, without exchange rates written by hand ([Afterstates §2](/en/arch/macro-brain/afterstates/#sec-2)).
 4. **Best.** L0 takes the option with the highest value, the first legal one on a tie. Self-play sometimes draws another on purpose, to learn what it would have led to ([Self-play §3](/en/arch/macro-brain/selfplay/#sec-3)).
 
-V itself is a neural network that reads only what the run is (the ids of its cards, relics, potions, act and bosses, and the points of the map ahead), a card's grown numbers, a relic's counter and status, the cards a relic keeps, and six raw numbers, and predicts, for every floor, the chance that the run ends there; together those give the chance to win ([The value network](/en/arch/macro-brain/network/), [From hazards to value §2](/en/arch/macro-brain/value/#sec-2)). It learns from self-play: each decision's label is how its run really ended ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
+V itself is a neural network that reads only what the run is (the ids of its cards, relics, potions, act and bosses, and the points of the map ahead), a card's grown numbers, a relic's counter and status, the cards a relic keeps, and nine raw numbers (the game's rule among them), and predicts, for every floor, the chance that the run ends there; together those give the chance to win ([The value network](/en/arch/macro-brain/network/), [From hazards to value §2](/en/arch/macro-brain/value/#sec-2)). It learns from self-play: each decision's label is how its run really ended ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
 
 ## 3. This chapter
 
@@ -67,5 +67,5 @@ V itself is a neural network that reads only what the run is (the ids of its car
 | [Search](/en/arch/macro-brain/search/) | predicting afterstates from the screen; L0 on the SL clone: beam, probes, card prompts, no way back | – |
 | [The value network](/en/arch/macro-brain/network/) | the net from input to output: every input tensor, the deck's set network, the bags of relics, potions, context and map, the cards the relics keep, the MLP body, the hazard head, its sizes and limits | the architecture; a fork on the map; one real run through every layer |
 | [From hazards to value](/en/arch/macro-brain/value/) | what V means, the hazards and P(win); a logged decision as a sample, its labels and the loss; training and the report | – |
-| [Self-play](/en/arch/macro-brain/selfplay/) | whole runs, even draws, generations, the gate on paired wins | – |
+| [Self-play](/en/arch/macro-brain/selfplay/) | whole runs and runs of the auto-win rule, even draws and a softmax, the dataset file, generations, the gate on paired wins | – |
 | [Weaknesses and next steps](/en/arch/macro-brain/next/) | what is known to be weak, what is planned but not built, open questions | – |

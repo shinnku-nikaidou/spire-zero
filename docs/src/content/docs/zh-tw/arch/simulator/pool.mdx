@@ -18,7 +18,7 @@ import PoolTimeline from '../../../../../components/book/PoolTimeline.svelte';
 - **平行**。一個決策的各個世界彼此獨立，所以 K 個世界放在 K 個工作行程上，大約只花一個世界的時間。遊戲的模型層不是執行緒安全的，pump 也是單執行緒的（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)），所以單位是行程，不是執行緒。
 - **可知範圍的邊界**。NoSL 下工作行程拿到的是觀測，從不是真實狀態，它從觀測建構自己的世界（[§5](#sec-5)）。傳給工作行程的是一條協定訊息，所以可以讀取和檢查。
 
-`WorkerPool` 在 `Sts2Ai.Harness` 裡（`Sts2Ai.Harness/WorkerPool.cs`），這個專案只透過協定型別看到遊戲；工作行程那一端是模擬器的 `serve` 指令（`Commands/Serve.cs`）。戰鬥大腦會搜尋（`pimc`，或 SL 下的 `plan`）或宏觀大腦會在複本上打（`--afterstates clone`）的冠軍會得到一個行程池，有 `--workers` 個行程，預設每個世界一個（`--worlds`，8）（`Brains/ChampionOptions.cs:22`）。
+`WorkerPool` 在 `Sts2Ai.Harness` 裡（`Sts2Ai.Harness/WorkerPool.cs`），這個專案只透過協定型別看到遊戲；工作行程那一端是模擬器的 `serve` 指令（`Commands/Serve.cs`）。戰鬥大腦會搜尋（`pimc`，或 SL 下的 `plan`）或宏觀大腦會在複本上打（`--afterstates clone`）的冠軍會得到一個行程池，有 `--workers` 個行程，預設每個世界一個（`--worlds`，8）（`Brains/ChampionOptions.cs:24`）。
 
 ## 2. 行程池
 

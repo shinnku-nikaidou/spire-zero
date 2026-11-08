@@ -15,13 +15,13 @@ Read first: [Macro brain](/en/arch/macro-brain/) for what V is used for, and [Co
 
 <Aside title="Status">
 
-Built: V's trainer `learn/v/` (`v.train`) and the combat net's trainer `learn/combat/` (`combat.train`), both Monte Carlo (each decision labelled by how its run really ended); the even-draw exploration of self-play (`run --explore ε`); `learn/gate.py`, the report and paired gate of a V's runs. Planned, not built: TD(λ) targets, expert iteration, LLM patch proposals, reward shaping, privileged training, and the mechanisms against local optima beyond even draws ([The loop](/en/arch/learning/loop/)).
+Built: V's trainer `learn/v/` (`v.train`) and the combat net's trainer `learn/combat/` (`combat.train`), both Monte Carlo (each decision labelled by how its run really ended); self-play's exploration, even draws and a softmax over V's values (`run --explore ε --macro-explore τ`); the auto-win rule for runs that fight only elites and bosses in chosen acts (`run --auto-win`); a generation written as one dataset file (`eval/datasets/`); `learn/gate.py`, the report and paired gate of a V's runs. Planned, not built: TD(λ) targets, expert iteration, LLM patch proposals, reward shaping, privileged training, and the mechanisms against local optima beyond even draws ([The loop](/en/arch/learning/loop/)).
 
 </Aside>
 
 ## 1. What is learned
 
-**The macro brain's V.** Outside combat the macro brain plays each option of a decision, looks at the situation right after it (the *afterstate*), and takes the option whose afterstate V values highest ([Macro brain §2](/en/arch/macro-brain/#sec-2)). V is a neural network that reads what the run is (the ids of its cards, relics, potions, act and bosses, the map ahead), a card's grown numbers, a relic's counter and status, the cards a relic keeps, and six raw numbers, and returns one number, the chance to win the run from here ([Macro brain: from hazards to value §1](/en/arch/macro-brain/value/#sec-1)). One V scores every surface, so a card, a relic, an HP heal and a path on the map are compared on one scale without exchange rates written by hand.
+**The macro brain's V.** Outside combat the macro brain plays each option of a decision, looks at the situation right after it (the *afterstate*), and takes the option whose afterstate V values highest ([Macro brain §2](/en/arch/macro-brain/#sec-2)). V is a neural network that reads what the run is (the ids of its cards, relics, potions, act and bosses, the map ahead), a card's grown numbers, a relic's counter and status, the cards a relic keeps, and nine raw numbers (the game's rule among them), and returns one number, the chance to win the run from here ([Macro brain: from hazards to value §1](/en/arch/macro-brain/value/#sec-1)). One V scores every surface, so a card, a relic, an HP heal and a path on the map are compared on one scale without exchange rates written by hand.
 
 **The combat net.** A combat search looks a turn or a fight ahead and must then say what the state it reached is worth: its *leaf value*. The combat net reads a round's start and predicts how the fight will end: a death, or how much of max HP is still to be lost, in 50 buckets, and each held potion's chance of being gone after a win ([The combat net](/en/arch/combat-brain/network/), [Combat brain: the leaf §4](/en/arch/combat-brain/leaf/#sec-4)). Its training is in [Training the combat net](/en/arch/learning/combat-net/).
 
@@ -37,7 +37,7 @@ The loop is modelled on how the open-source chess engine Stockfish is developed.
 
 ```mermaid
 flowchart LR
-  C["champion<br/>V + combat net"] --> SP["self-play<br/>train seeds,<br/>even draws at ε"]
+  C["champion<br/>V + combat net"] --> SP["self-play<br/>train seeds,<br/>ε and τ"]
   SP --> D["decision logs<br/>+ run records"]
   D --> F["fit a challenger<br/>MC labels"]
   F --> G{"gate<br/>paired seeds"}
@@ -48,7 +48,7 @@ flowchart LR
   P["SPSA, LLM patches<br/>(not used / planned)"] -.-> G
 ```
 
-1. **Self-play.** The champion plays runs on train seeds, drawing a share ε of its macro decisions at random so that the data shows what other options lead to ([The loop §2](/en/arch/learning/loop/#sec-2), [§9](/en/arch/learning/loop/#sec-9)).
+1. **Self-play.** The champion plays runs on train seeds, drawing a share ε of its macro decisions at random, and with a softmax the rest, so that the data shows what other options lead to ([The loop §2](/en/arch/learning/loop/#sec-2), [§9](/en/arch/learning/loop/#sec-9)).
 2. **Fit.** A new V (or combat net) is trained on those runs. Each decision's label is how its run actually ended, a *Monte Carlo* target ([The loop §3](/en/arch/learning/loop/#sec-3)). TD(λ) and expert iteration, which would also learn from the values the search computes, are planned ([§4](/en/arch/learning/loop/#sec-4), [§5](/en/arch/learning/loop/#sec-5)).
 3. **Gate.** The challenger plays fixed evaluation seeds, paired seed by seed with the champion's runs, and passes only if the difference is clearly above zero ([The loop §8](/en/arch/learning/loop/#sec-8)).
 
@@ -58,7 +58,7 @@ A *generation* is one turn of this loop ([Macro brain: self-play §4](/en/arch/m
 
 | part | status | where |
 |---|---|---|
-| self-play: whole runs, even draws at ε | built | `run --explore`, [The loop §2](/en/arch/learning/loop/#sec-2) |
+| self-play: whole runs and runs of the auto-win rule, even draws at ε and a softmax at τ, one dataset file per generation | built | `run --explore --macro-explore --auto-win`, [The loop §2](/en/arch/learning/loop/#sec-2), [Macro brain: self-play](/en/arch/macro-brain/selfplay/) |
 | V's training, Monte Carlo labels | built | `learn/v/`, [Macro brain: from hazards to value §5](/en/arch/macro-brain/value/#sec-5) |
 | the combat net's training, Monte Carlo labels | built | `learn/combat/`, [Training the combat net](/en/arch/learning/combat-net/) |
 | counterfactual forks | <Badge text="planned" variant="caution" /> | [The loop §10](/en/arch/learning/loop/#sec-10) |

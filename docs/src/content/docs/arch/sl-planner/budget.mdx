@@ -1,6 +1,6 @@
 ---
 title: '预算、开销与结果'
-description: SL 规划器的力度级别和 low 预算，它的时间花在哪里，它怎样在 worker 里运行，冠军的预算和速度，它的弱点和未决问题，以及规划中的每场战斗一个预算。
+description: SL 规划器的力度级别，精英战和 Boss 战自己的力度级别，low 预算，它的时间花在哪里，它怎样在 worker 里运行，冠军的预算和速度，它的弱点和未决问题，以及规划中的每场战斗一个预算。
 sidebar:
   label: 预算
 ---
@@ -21,6 +21,8 @@ import { Badge } from '@astrojs/starlight/components';
 | max | 16 | 16 | 不限 |
 
 medium 和 high 有两处不同：简易束，它只收窄下潜已经赢下的战斗（[束搜索 §4](/arch/sl-planner/beam/#sec-4)）；以及失败计划的上限，它让一场输掉的战斗不会每个回合都重新规划（[束搜索 §6](/arch/sl-planner/beam/#sec-6)）。low 把简易束收得更窄。每一级都给每个房间同样的束宽和节点数。
+
+**房间自己的力度级别**。`--elite-effort LEVEL` 和 `--boss-effort LEVEL` 按上表给精英战和 Boss 战各自一个力度级别；其他每场战斗保持其他选项所设定的预算（`src/Sts2Ai.SimWorker/Commands/Args.cs:126-129`、`:155-157`）。与那个预算相同的房间力度级别不改变任何东西，也不保留。预算把它们存为 `Budget.Elite` 和 `Budget.Boss`，`Budget.For` 给一场战斗它所在房间的预算，房间由战斗的观测给出：`Monster`、`Elite` 或 `Boss`，事件里的战斗按它的遭遇（`src/Sts2Ai.Brain/Combat/CombatBrain.cs:17-27`）。路线用每场战斗所在房间的预算来规划它，失败计划也按那个预算计数（`SlRoute`，`src/Sts2Ai.Brain/Combat/SlPlanner.cs:43`），决策日志记录这场战斗用的预算（[Harness：决策日志 §3](/arch/harness/decision-log/#sec-3)）。冠军的名字把房间的预算写在其余部分之后，如 `beam 8x300 easy 4 loss plans 3 boss (beam 8x300)`，冠军文件把这些力度级别存为 `elite-effort` 和 `boss-effort`（[评估：冠军与基线 §1](/arch/evaluation/champions/#sec-1)）。冠军在每个房间都用 medium；数据集可以用 high 打它的 Boss 战（[宏观大脑：自我对弈 §2](/arch/macro-brain/selfplay/#sec-2)）。
 
 ## 2. low 预算
 

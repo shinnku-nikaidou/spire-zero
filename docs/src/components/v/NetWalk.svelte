@@ -75,14 +75,14 @@
       rows: [['relics', '[−0.158, −0.269, −0.288, −0.009, …] |2.25|'], ['potions', '[0, 0, 0, 0, …] |0|'], ['context', '[−0.108, −0.689, −0.022, −0.309, …] |2.70|'], ['map', '[1.066, 0.065, −1.150, −1.403, …] |4.62|']],
     },
     {
-      title: w('Six numbers', '六个数字', '六個數字'),
-      text: w('(x − μ)/σ, by the net file’s μ and σ. Every training run was at A0, so ascension has μ 0 and σ read as 1: this A0 run reads 0, and A10 would read 10.', '(x − μ)/σ，用网络文件里的 μ 和 σ。训练局全是 A0，所以进阶的 μ 是 0、σ 读作 1：这一局是 A0，读作 0，A10 则会读作 10。', '(x − μ)/σ，用網路檔案裡的 μ 和 σ。訓練局全是 A0，所以晉階的 μ 是 0、σ 讀作 1：這一局是 A0，讀作 0，A10 則會讀作 10。'),
-      rows: [['floor', '24 → 1.109'], ['HP', '50 → −0.738'], ['max HP', '75 → 0.802'], ['gold', '532 → 2.716'], ['ascension', '0 → 0'], ['potion slots', '3 → −0.229']],
+      title: w('Nine numbers', '九个数字', '九個數字'),
+      text: w('(x − μ)/σ, by the net file’s μ and σ. Every training run was at A0, so ascension has μ 0 and σ read as 1: this A0 run reads 0, and A10 would read 10. The last three are the game’s rule, 0 in a whole run: whether each act wins its plain monster fights at their start.', '(x − μ)/σ，用网络文件里的 μ 和 σ。训练局全是 A0，所以进阶的 μ 是 0、σ 读作 1：这一局是 A0，读作 0，A10 则会读作 10。最后三个是游戏规则，完整的一局都是 0：每一幕的普通怪物战是否在开打时就算赢。', '(x − μ)/σ，用網路檔案裡的 μ 和 σ。訓練局全是 A0，所以晉階的 μ 是 0、σ 讀作 1：這一局是 A0，讀作 0，A10 則會讀作 10。最後三個是遊戲規則，完整的一局都是 0：每一幕的普通怪物戰是否在開打時就算贏。'),
+      rows: [['floor', '24 → 1.109'], ['HP', '50 → −0.738'], ['max HP', '75 → 0.802'], ['gold', '532 → 2.716'], ['ascension', '0 → 0'], ['potion slots', '3 → −0.229'], ['auto-win, acts 1–3', '0 · 0 · 0 → 0 · 0 · 0']],
     },
     {
       title: w('Join and body', '拼接与主干', '串接與主幹'),
-      text: w('512 + 4 × 64 + 6 + 256 = 1,030 numbers, the last 256 the cards the relics keep, none here: zeros. Then two ReLU layers. Here 372 of the first layer’s 512 numbers and 292 of the second’s are above 0.', '512 + 4 × 64 + 6 + 256 = 1,030 个数，最后 256 个是遗物保留的牌，这里没有，全是零。再经过两层 ReLU。这里第一层 512 个数有 372 个大于 0，第二层有 292 个。', '512 + 4 × 64 + 6 + 256 = 1,030 個數，最後 256 個是遺物保留的牌，這裡沒有，全是零。再經過兩層 ReLU。這裡第一層 512 個數有 372 個大於 0，第二層有 292 個。'),
-      rows: [['z', '1,030'], ['b₁', '512 (372 > 0)'], ['b₂', '512 (292 > 0)']],
+      text: w('512 + 4 × 64 + 9 + 256 = 1,033 numbers, the last 256 the cards the relics keep, none here: zeros. Then two ReLU layers. Here 372 of the first layer’s 512 numbers and 292 of the second’s are above 0.', '512 + 4 × 64 + 9 + 256 = 1,033 个数，最后 256 个是遗物保留的牌，这里没有，全是零。再经过两层 ReLU。这里第一层 512 个数有 372 个大于 0，第二层有 292 个。', '512 + 4 × 64 + 9 + 256 = 1,033 個數，最後 256 個是遺物保留的牌，這裡沒有，全是零。再經過兩層 ReLU。這裡第一層 512 個數有 372 個大於 0，第二層有 292 個。'),
+      rows: [['z', '1,033'], ['b₁', '512 (372 > 0)'], ['b₂', '512 (292 > 0)']],
     },
     {
       title: w('Hazards and the value', '风险值与价值', '風險值與價值'),

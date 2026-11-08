@@ -1,6 +1,6 @@
 ---
 title: Whole runs
-description: 'RunSession plays a whole run in the real engine: how it starts, the step-settle-decide loop that stands in for the game''s screens, every decision screen, what a run reports, determinism and runs hosted against a brain.'
+description: 'RunSession plays a whole run in the real engine: how it starts, the step-settle-decide loop that stands in for the game''s screens, every decision screen, what a run reports, determinism, runs hosted against a brain, and the auto-win rule that leaves only elites and bosses to fight in chosen acts.'
 sidebar:
   label: Whole runs
 ---
@@ -28,7 +28,7 @@ Like a combat session, only one run is live in a process at a time: the game's m
 
 ## 2. Starting a run
 
-A run starts the way the game starts a new single-player run. The game's own code for that is `NGame.StartRun`, which lives in a Godot node <Badge text="verified" variant="success" />, so `RunSession.Start` copies it (`Simulation/RunSession.cs:149-178`). Its input is a `RunSetup(Character, Seed, Ascension, Loadout?)`.
+A run starts the way the game starts a new single-player run. The game's own code for that is `NGame.StartRun`, which lives in a Godot node <Badge text="verified" variant="success" />, so `RunSession.Start` copies it (`Simulation/RunSession.cs:152-181`). Its input is a `RunSetup(Character, Seed, Ascension, Loadout?, AutoWin?)`, the last the acts of the auto-win rule, if the run plays by it ([§8](#sec-8)).
 
 1. `Player.CreateForNewRun(character, UnlockState.all, netId)`, then the loadout, if one is given ([Reference §3](/en/arch/simulator/reference/#sec-3)).
 2. Roll the acts from the seed: `ActModel.GetRandomList(new Rng(hash(seed), "act_selection"), UnlockState.all, isMultiplayer: false)`, as `StartRunLobby.BeginRunLocally` does (`Multiplayer.Game.Lobby/StartRunLobby.cs:469-472`).
@@ -49,7 +49,7 @@ Three things are deliberately not done the way a test setup would do them:
 
 ## 3. Step, settle, decide
 
-`Step()` makes one decision (`Simulation/RunSession.cs:226-241`). It settles, and if the run is not over, calls `Decide()`, which either asks a question and starts its answer, or does one automatic step a screen would do without asking anything. After an automatic step it settles again. More than 20 automatic steps in a row with no decision is a driver bug, and throws.
+`Step()` makes one decision (`Simulation/RunSession.cs:239-254`). It settles, and if the run is not over, calls `Decide()`, which either asks a question and starts its answer, or does one automatic step a screen would do without asking anything. After an automatic step it settles again. More than 20 automatic steps in a row with no decision is a driver bug, and throws.
 
 ```mermaid
 flowchart TD
@@ -63,7 +63,7 @@ flowchart TD
   D -->|"automatic step"| T
 ```
 
-**Settle** (`Simulation/RunSession.cs:245-263`) pumps the game until the player can act ([Headless host §7](/en/arch/simulator/headless/#sec-7)):
+**Settle** (`Simulation/RunSession.cs:258-276`) pumps the game until the player can act ([Headless host §7](/en/arch/simulator/headless/#sec-7)):
 
 - in combat, until `CombatActions.WaitingForInput` holds (the player's turn, in the play phase, the action executor idle); after the player ended a turn, on a later turn, so the enemies' turn plays out first;
 - elsewhere, until the pump's queue is empty and the action executor is idle.
@@ -72,17 +72,18 @@ flowchart TD
 
 Then it notes what the run record needs: a combat that just ended gets its end (HP, max HP, potions), a death inside the player's own action included, and a new act's map gets its hash. A combat the run died in before its first decision gets an entry at 0 HP. Last, it collects the game tasks the driver started (a purchase, a rest option, a reward, a divination) that are done; a task that faulted throws.
 
-**Decide** (`Simulation/RunSession.cs:298-325`) looks in this order:
+**Decide** (`Simulation/RunSession.cs:311-338`) looks in this order:
 
 1. The open rewards screens: a set that is not the room's last and has everything taken closes by itself; otherwise the newest open set is the decision.
 2. A driver task still running with nothing to answer is a bug, and throws: rewards are the only screen a started task can wait on.
 3. The map, in a `MapRoom` or once the current room is left.
 4. The room: combat, event (the crystal sphere minigame first, when one is open), shop, rest site, treasure. Any other kind of room throws.
 
-**What a screen would remember** is kept per room in `RoomProgress` (`Simulation/RunSession.cs:599-608`): whether the room was left, the combat entered, the rewards offered, a rest option succeeded, the chest opened, the relic picked. It starts over when the current room changes, which also happens when an event's combat ends and the event resumes.
+**What a screen would remember** is kept per room in `RoomProgress` (`Simulation/RunSession.cs:628-638`): whether the room was left, the combat entered, the rewards offered, a rest option succeeded, the chest opened, the relic picked. It starts over when the current room changes, which also happens when an event's combat ends and the event resumes.
 
 **Automatic steps**, the things a screen does without a decision:
 
+- a plain monster fight in an act of the auto-win rule is won as it starts ([§8](#sec-8));
 - a won combat offers its rewards (`OfferRoomEndRewards`), or proceeds if its encounter gives none (`ProceedFromTerminalRewardsScreen`), as `NCombatUi.OnCombatWon` does (`Nodes.Combat/NCombatUi.cs:363-373`);
 - a treasure room's chest opens (`DoNormalRewards`, then `DoExtraRewardsIfNeeded`), and after the relic is picked or skipped, the room is left.
 
@@ -104,7 +105,7 @@ A **surface** is the kind of decision screen; the protocol names eleven (`Sts2Ai
 | `rest` | the enabled options, by id (`rest:HEAL`); `leave` after an option succeeded, or when none is enabled | `RestSiteSynchronizer.ChooseLocalOption` | |
 | `treasure` | `relic:i`, `relic_skip` | `PickRelicLocally`, `SkipRelicLocally` | the chest opens by itself; in single player, skipping leaves the relics listed, hence `RoomProgress.RelicPicked` |
 
-**The potion belt.** A potion that can be used at any time (`potion:S`; the Foul Potion only at a merchant, [Headless host §4](/en/arch/simulator/headless/#sec-4)) and a discard (`discard_potion:S`) are offered on map, rewards, event, shop, rest, treasure and crystal sphere screens, after the screen's own actions (`Simulation/RunSession.cs:471-478`). Card rewards, bundles and card prompts get none. A belt action is applied at once and the screen is asked again. With a full belt, potion rewards and potion purchases are not legal until a slot frees. In combat potions are combat actions; combat has no discard.
+**The potion belt.** A potion that can be used at any time (`potion:S`; the Foul Potion only at a merchant, [Headless host §4](/en/arch/simulator/headless/#sec-4)) and a discard (`discard_potion:S`) are offered on map, rewards, event, shop, rest, treasure and crystal sphere screens, after the screen's own actions (`Simulation/RunSession.cs:500-507`). Card rewards, bundles and card prompts get none. A belt action is applied at once and the screen is asked again. With a full belt, potion rewards and potion purchases are not legal until a slot frees. In combat potions are combat actions; combat has no discard.
 
 **No fallback.** A screen the driver does not know throws, and the run fails: an unknown room, a reward or shop entry or crystal sphere item of an unknown type, a linked reward set, a task left waiting with no screen. So does an answer that is not in the legal list. A failure is never covered over by a default choice, so a run that finishes has answered every decision through its policies.
 
@@ -148,13 +149,13 @@ with `replans N` before `maps` when the SL planner planned again, and `obs <dige
 | `determinism:` | with `--check`: runs identical on replay over the wire, and nodes that replay exactly from their checkpoints, with the time per node |
 | `game Log.Error lines:` | game errors, then `worker restarts` when a pool was used and `replans` with the SL planner |
 
-**Exit code** 1 when a run failed, a replay differed, a node did not replay exactly, or a game error was logged; 0 otherwise. Surfaces never reached and idle waits are printed only (`Commands/RunCommand.cs:140`).
+**Exit code** 1 when a run failed, a replay differed, a node did not replay exactly, or a game error was logged; 0 otherwise. Surfaces never reached and idle waits are printed only (`Commands/RunCommand.cs:144`).
 
 **Records and logs.** `--records FILE` writes one run record per line, the input of `report` and `gate` ([Evaluation: metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)):
 
 | field | what it holds |
 |---|---|
-| `config` | `game` (version), `commit` (the simulator's, `-dirty` if `src/` had changes), `champion` (its name), `env` |
+| `config` | `game` (version), `commit` (the simulator's, `-dirty` if `src/` had changes), `champion` (its name), `env`, and `auto_win`, the acts of the auto-win rule as indexes from 0, only in a run played by it ([§8](#sec-8)) |
 | `seed`, `character`, `ascension`, `run_id` | the run; `run_id` is the hash the brain knows it by ([§7](#sec-7)) |
 | `outcome`, `act`, `floor`, `hp`, `max_hp`, `gold` | where it ended |
 | `combats` | each combat: act, floor, encounter, room kind, HP, max HP and potions at its first decision, and its `end`: died, and the HP, max HP and potions left |
@@ -168,7 +169,7 @@ with `replans N` before `maps` when the SL planner planned again, and `obs <dige
 
 Everything downstream needs a run to be a function of its setup and its answers. The SL clone replays a node's decisions from its checkpoint and must reach the same state ([Worlds and the SL clone](/en/arch/simulator/worlds/)); a gate pairs a challenger and a champion on the same seeds ([Evaluation: gates §2](/en/arch/evaluation/gates/#sec-2)); `--check` compares a run with its own replay. The game is deterministic given its seed, but only if nothing else leaks in: no clock, no thread timing, no unordered collection. The pump runs every continuation on one thread in posting order ([Headless host §7](/en/arch/simulator/headless/#sec-7)), the clock-seeded random stream is never reached by the rules ([Combats §2](/en/arch/simulator/combat/#sec-2)), and GameBridge sorts what the game keeps unordered, such as a map point's children.
 
-**`run --check`** checks it on every run it plays (`Commands/RunCommand.cs:94-130`):
+**`run --check`** checks it on every run it plays (`Commands/RunCommand.cs:98-134`):
 
 - it observes every decision: each observation must survive a JSON round trip exactly, and its hash is kept;
 - it plays each seed a second time over the wire ([Protocol: the wire §1](/en/arch/protocol/wire/#sec-1)), to a brain in a thread of the same process with the same champion, and compares the two plays: the trace, the observation hashes, the summary, the map hashes, the run record and the decision log, timings aside; in SL the second play also carries the node messages;
@@ -196,3 +197,14 @@ brain [--champion FILE] [champion options] [--sl-policy plan|pimc|play] [--log F
 - It prints a line per run on stderr: the run id, the end, the floor, the decisions, the replans, and its workers' game errors, which the host's run records do not count.
 
 `run --check` uses the same server in-process for its second play, on an abstract Unix socket named after the process (`\0sts2ai-brain-PID`, `Brains/RunBrains.cs:200-220`), so the wire path is checked on every run that `--check` plays.
+
+## 8. The auto-win rule
+
+`run --auto-win ACTS` plays a run by a rule of the simulator's own: in the acts it names, numbered from 1 as the game shows them (`--auto-win 1,2`), a plain monster fight is won the moment it starts, so only elites and bosses are fought there; the other acts are played as usual (`Commands/RunCommand.cs:30-32`, `:286-294`). Such a run spends its combat on the fights that decide most runs, and costs much less to play than a whole one. Self-play uses it ([Macro brain: self-play §2](/en/arch/macro-brain/selfplay/#sec-2)).
+
+- **Which fights.** A combat whose encounter's room type is `Monster`, in an act of the rule: a hallway fight, or an event's fight of that type. An elite's or a boss's encounter, an event's included, is fought by the combat brain as in any run.
+- **How it is won.** Once the fight has started, `CombatStep` does what the game's `win` console command does: each enemy loses its powers and is killed (`CreatureCmd.Kill`), then the game checks for the win (`Win`, `Simulation/RunSession.cs:374-411`). An enemy that comes back or calls others when killed keeps the combat going, so it is done again, up to five times; a sixth throws. No combat decision is asked, the HP is untouched, and the rewards follow as after any win: the same rewards screen, cards, gold and potions. The run record lists the combat, with its end at the HP it began with.
+- **Where the rule is seen.** It belongs to the run: `RunSetup.AutoWin` holds its acts as indexes from 0 (`:31`). Every observation's run carries it as `auto_win` (`RunSession.View`, `:230-236`; [Protocol: observations and actions §2](/en/arch/protocol/observation/#sec-2)), so V knows which game it values ([Macro brain: the network §2](/en/arch/macro-brain/network/#sec-2)); the run record's `config` states it ([§5](#sec-5)); and a node's clone keeps it, so the macro brain's probes and the SL planner's workers play by it too ([Worlds and the SL clone §3](/en/arch/simulator/worlds/#sec-3)).
+- **What it is not.** The real game has no such rule, and the mod never sets it. A run played by it is data for training, never evidence of strength: no report and no gate takes it ([Evaluation: gates §6](/en/arch/evaluation/gates/#sec-6)).
+
+`selftest` checks it ([Reference §5](/en/arch/simulator/reference/#sec-5)): a run with the rule in act 1 asks the combat brain in that act's elites and bosses only, wins its monster fights at no HP lost, asks act 2's monster fights, and every node of act 1 replays exactly from its clone.

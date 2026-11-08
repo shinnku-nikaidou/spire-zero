@@ -42,7 +42,7 @@ Who reads the log:
 | `chosen` | string | the combat action's text: `play:C[:T]`, `potion:S[:T]`, `end_turn`, with the answer to its first card prompt after `@` when the search chose one ([Protocol: observations and actions §3](/en/arch/protocol/observation/#sec-3)) | the picked option indexes joined by commas, without `pick:` | the action |
 | `plan` | string[]? | the brain's plan after `chosen`, if any ([§5](#sec-5)) | never | what the policy plans after `chosen`, if any: L0's route on the map |
 | `candidates` | Candidate[]? | the search's candidates, if any ([§5](#sec-5)) | never | never |
-| `budget` | Budget? | the route's budget, on every line of a route that has one, including steps with one legal action and followed steps ([Routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)) | never | never |
+| `budget` | Budget? | the budget of the fight's room, on every line of a route that has one, including steps with one legal action and followed steps: an elite's or a boss's own budget where the route gives it one, else the route's ([Routing, budgets and seeds §4](/en/arch/harness/routing/#sec-4)) | never | never |
 | `seed` | integer | the decision's seed ([Routing, budgets and seeds §5](/en/arch/harness/routing/#sec-5)) | the same, though the policy does not read it | the same, though the policy does not read it |
 | `elapsed_ms` | number | the route's time | the policy's time | the policy's time; its plan is asked afterwards, and not timed |
 | `obs` | CombatObservation? | always | – | – |
@@ -73,11 +73,13 @@ They are sorted by value, best first. PIMC's `plan` is the rest of the turn afte
 
 ## 6. Explored and replanned steps
 
-**`explored: true`** marks an answer that self-play's exploration drew (`--explore ε`, [Learning: the loop §9](/en/arch/learning/loop/#sec-9)), which L0 draws with chance ε whatever V says:
+**`explored: true`** marks an answer that self-play's exploration drew ([Learning: the loop §9](/en/arch/learning/loop/#sec-9)). The even draws (`--explore ε`), which L0 makes with chance ε whatever V says, mark:
 
 - an option of a screen, drawn evenly among its options, a potion's among them: always, also when the draw happens to be V's own pick;
 - a card reward's outcome, one of its cards or skipping it, drawn once per card reward: when the drawn outcome is the answer, or the answer is valued below V's best;
 - the picks of a card prompt outside combat, drawn evenly: always.
+
+The softmax (`--macro-explore τ`) marks an answer it drew more than τ / 100 below V's best, in the log of V; at a card prompt, an answer any of whose steps it drew so.
 
 Combat steps have no `explored`, nor does an answer that was not drawn.
 

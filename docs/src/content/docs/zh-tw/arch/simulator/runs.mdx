@@ -1,6 +1,6 @@
 ---
 title: 整局
-description: 'RunSession 在真實引擎裡打完整的一局：它怎麼開始、代替遊戲各個畫面的「走一步、穩定、決定」迴圈、每一種決策畫面、一局報告什麼、確定性，以及連到大腦來打的對局。'
+description: 'RunSession 在真實引擎裡打完整的一局：它怎麼開始、代替遊戲各個畫面的「走一步、穩定、決定」迴圈、每一種決策畫面、一局報告什麼、確定性、連到大腦來打的對局，以及讓選定的幕只剩菁英和頭目要打的自動勝利規則。'
 sidebar:
   label: 整局
 ---
@@ -28,7 +28,7 @@ import SurfaceCounts from '../../../../../components/book/SurfaceCounts.svelte';
 
 ## 2. 開始一局
 
-一局的開始方式，和遊戲開始一局新的單人遊戲相同。遊戲裡負責這件事的程式碼是 `NGame.StartRun`，它在一個 Godot 節點裡 <Badge text="已核實" variant="success" />，所以 `RunSession.Start` 照抄了它（`Simulation/RunSession.cs:149-178`）。它的輸入是 `RunSetup(Character, Seed, Ascension, Loadout?)`。
+一局的開始方式，和遊戲開始一局新的單人遊戲相同。遊戲裡負責這件事的程式碼是 `NGame.StartRun`，它在一個 Godot 節點裡 <Badge text="已核實" variant="success" />，所以 `RunSession.Start` 照抄了它（`Simulation/RunSession.cs:152-181`）。它的輸入是 `RunSetup(Character, Seed, Ascension, Loadout?, AutoWin?)`，最後一項是自動勝利規則的幕，如果這一局按它來打（[§8](#sec-8)）。
 
 1. `Player.CreateForNewRun(character, UnlockState.all, netId)`，然後是配置，如果有給的話（[參考 §3](/zh-tw/arch/simulator/reference/#sec-3)）。
 2. 用種子擲出各幕：`ActModel.GetRandomList(new Rng(hash(seed), "act_selection"), UnlockState.all, isMultiplayer: false)`，和 `StartRunLobby.BeginRunLocally` 的做法相同（`Multiplayer.Game.Lobby/StartRunLobby.cs:469-472`）。
@@ -49,7 +49,7 @@ import SurfaceCounts from '../../../../../components/book/SurfaceCounts.svelte';
 
 ## 3. 走一步、穩定、決定
 
-`Step()` 做一個決策（`Simulation/RunSession.cs:226-241`）。它先穩定下來，如果這一局還沒結束，就呼叫 `Decide()`；它要麼提出一個問題並開始執行它的答案，要麼做一個畫面不必詢問就會做的自動步驟。自動步驟之後，它再穩定一次。連續超過 20 個自動步驟而沒有任何決策，是驅動程式的 bug，會拋出例外。
+`Step()` 做一個決策（`Simulation/RunSession.cs:239-254`）。它先穩定下來，如果這一局還沒結束，就呼叫 `Decide()`；它要麼提出一個問題並開始執行它的答案，要麼做一個畫面不必詢問就會做的自動步驟。自動步驟之後，它再穩定一次。連續超過 20 個自動步驟而沒有任何決策，是驅動程式的 bug，會拋出例外。
 
 ```mermaid
 flowchart TD
@@ -63,7 +63,7 @@ flowchart TD
   D -->|"自動步驟"| T
 ```
 
-**穩定**（settle，`Simulation/RunSession.cs:245-263`）用 pump 推進遊戲，直到玩家可以行動（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)）：
+**穩定**（settle，`Simulation/RunSession.cs:258-276`）用 pump 推進遊戲，直到玩家可以行動（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)）：
 
 - 戰鬥中，直到 `CombatActions.WaitingForInput` 成立（玩家的回合、出牌階段、動作執行器空閒）；玩家結束回合之後，要到後面的回合才算，所以敵人的回合會先打完；
 - 其他地方，直到 pump 的佇列為空且動作執行器空閒。
@@ -72,17 +72,18 @@ flowchart TD
 
 接著它記下對局記錄需要的東西：剛結束的戰鬥記下它的結局（生命值、最大生命值、藥水），包括死在玩家自己的動作之中的情形，新一幕的地圖記下它的雜湊。對局在第一個決策之前就死去的戰鬥，會得到一筆生命值為 0 的記錄。最後，它收集驅動程式發起且已完成的遊戲任務（一次購買、一個休息選項、一份獎勵、一次占卜）；出錯的任務會拋出例外。
 
-**決定**（`Simulation/RunSession.cs:298-325`）依這個順序查看：
+**決定**（`Simulation/RunSession.cs:311-338`）依這個順序查看：
 
 1. 開著的獎勵畫面：一組獎勵如果不是這個房間的最後一組，而且全部領完了，就自己關閉；否則最新開啟的那一組就是決策。
 2. 驅動程式的任務還在執行，卻沒有可回答的東西，這是 bug，會拋出例外：已開始的任務唯一能等待的畫面就是獎勵。
 3. 地圖，在 `MapRoom` 裡，或者一旦離開了當前房間。
 4. 房間：戰鬥、事件（有水晶球小遊戲開著時先處理它）、商店、休息處、財寶。其他種類的房間會拋出例外。
 
-**畫面會記住的東西**按房間存放在 `RoomProgress` 裡（`Simulation/RunSession.cs:599-608`）：是否已離開房間、是否已進入戰鬥、已提供的獎勵、某個休息選項是否成功、寶箱是否已開、遺物是否已選。當前房間改變時它會重新開始；事件裡的戰鬥結束、事件繼續時，也算改變。
+**畫面會記住的東西**按房間存放在 `RoomProgress` 裡（`Simulation/RunSession.cs:628-638`）：是否已離開房間、是否已進入戰鬥、已提供的獎勵、某個休息選項是否成功、寶箱是否已開、遺物是否已選。當前房間改變時它會重新開始；事件裡的戰鬥結束、事件繼續時，也算改變。
 
 **自動步驟**，即畫面不需決策就會做的事：
 
+- 自動勝利規則的幕裡的普通怪物戰，在開始時就贏下（[§8](#sec-8)）；
 - 贏下的戰鬥發放它的獎勵（`OfferRoomEndRewards`），如果它的遭遇不給獎勵就直接繼續（`ProceedFromTerminalRewardsScreen`），和 `NCombatUi.OnCombatWon` 的做法一樣（`Nodes.Combat/NCombatUi.cs:363-373`）；
 - 財寶房的寶箱打開（`DoNormalRewards`，然後 `DoExtraRewardsIfNeeded`），遺物被選走或跳過之後，離開房間。
 
@@ -104,7 +105,7 @@ flowchart TD
 | `rest` | 可用的選項，按 id（`rest:HEAL`）；某個選項成功之後，或沒有任何可用選項時，提供 `leave` | `RestSiteSynchronizer.ChooseLocalOption` | |
 | `treasure` | `relic:i`、`relic_skip` | `PickRelicLocally`、`SkipRelicLocally` | 寶箱自己打開；單人模式下跳過之後遺物仍列著，所以要有 `RoomProgress.RelicPicked` |
 
-**藥水欄**。隨時可用的藥水（`potion:S`；惡臭藥水只在商人面前，[無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)）和丟棄藥水（`discard_potion:S`）在地圖、獎勵、事件、商店、休息處、財寶和水晶球畫面上提供，排在畫面自己的動作之後（`Simulation/RunSession.cs:471-478`）。卡牌獎勵、卡包和選牌提示都沒有。藥水欄的動作立即執行，然後再問一次這個畫面。藥水欄滿時，藥水獎勵和購買藥水都不合法，直到空出一個槽。戰鬥中，藥水是戰鬥動作；戰鬥裡沒有丟棄。
+**藥水欄**。隨時可用的藥水（`potion:S`；惡臭藥水只在商人面前，[無頭宿主 §4](/zh-tw/arch/simulator/headless/#sec-4)）和丟棄藥水（`discard_potion:S`）在地圖、獎勵、事件、商店、休息處、財寶和水晶球畫面上提供，排在畫面自己的動作之後（`Simulation/RunSession.cs:500-507`）。卡牌獎勵、卡包和選牌提示都沒有。藥水欄的動作立即執行，然後再問一次這個畫面。藥水欄滿時，藥水獎勵和購買藥水都不合法，直到空出一個槽。戰鬥中，藥水是戰鬥動作；戰鬥裡沒有丟棄。
 
 **沒有後備**。驅動程式不認得的畫面會拋出例外，這一局就失敗：未知的房間、未知類型的獎勵、商店條目或水晶球物品、連結的獎勵組、沒有畫面卻還在等待的任務。不在合法清單裡的答案也一樣。失敗從不被一個預設選擇蓋過去，所以打完的一局，每個決策都是由它的策略回答的。
 
@@ -148,13 +149,13 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 | `determinism:` | 用 `--check` 時：透過線路重播後完全相同的局數，以及能從檢查點精確重播的節點數，附上每個節點的時間 |
 | `game Log.Error lines:` | 遊戲錯誤，接著用了行程池時是 `worker restarts`，用 SL 規劃器時是 `replans` |
 
-**結束代碼**：有一局失敗、有一次重播不同、有一個節點沒有精確重播，或記錄到遊戲錯誤時為 1；否則為 0。從未到達的決策介面和空閒等待只會印出來（`Commands/RunCommand.cs:140`）。
+**結束代碼**：有一局失敗、有一次重播不同、有一個節點沒有精確重播，或記錄到遊戲錯誤時為 1；否則為 0。從未到達的決策介面和空閒等待只會印出來（`Commands/RunCommand.cs:144`）。
 
 **記錄與日誌**。`--records FILE` 每行寫一條對局記錄，是 `report` 和 `gate` 的輸入（[評估：指標、種子與報告 §8](/zh-tw/arch/evaluation/metrics/#sec-8)）：
 
 | 欄位 | 內容 |
 |---|---|
-| `config` | `game`（版本）、`commit`（模擬器的提交，`src/` 有改動時帶 `-dirty`）、`champion`（它的名字）、`env` |
+| `config` | `game`（版本）、`commit`（模擬器的提交，`src/` 有改動時帶 `-dirty`）、`champion`（它的名字）、`env`，以及 `auto_win`，自動勝利規則的幕，以從 0 起算的索引表示，只出現在按這條規則打的對局裡（[§8](#sec-8)） |
 | `seed`、`character`、`ascension`、`run_id` | 這一局；`run_id` 是大腦用來識別它的雜湊（[§7](#sec-7)） |
 | `outcome`、`act`、`floor`、`hp`、`max_hp`、`gold` | 它在哪裡結束 |
 | `combats` | 每場戰鬥：幕、層、遭遇、房間種類，第一個決策時的生命值、最大生命值和藥水，以及它的 `end`：是否死亡，以及剩下的生命值、最大生命值和藥水 |
@@ -168,7 +169,7 @@ SL 規劃器重新規劃過時，`maps` 之前有 `replans N`；取了觀測時�
 
 下游的一切都需要一局是它的設定和答案的函數。SL 複本從檢查點重播一個節點的決策，必須到達相同的狀態（[世界與 SL 複本](/zh-tw/arch/simulator/worlds/)）；晉級門檻在相同的種子上把挑戰者和冠軍配對（[評估：晉級門檻 §2](/zh-tw/arch/evaluation/gates/#sec-2)）；`--check` 把一局和它自己的重播比較。給定種子，遊戲是確定性的，但前提是沒有別的東西滲進來：沒有時鐘、沒有執行緒時序、沒有無序的集合。pump 在一個執行緒上按投遞順序執行每個後續（continuation）（[無頭宿主 §7](/zh-tw/arch/simulator/headless/#sec-7)），規則永遠碰不到以時鐘為種子的亂數流（[戰鬥 §2](/zh-tw/arch/simulator/combat/#sec-2)），GameBridge 則把遊戲不按順序保存的東西排好序，例如一個地圖點的子節點。
 
-**`run --check`** 在它打的每一局上檢查這一點（`Commands/RunCommand.cs:94-130`）：
+**`run --check`** 在它打的每一局上檢查這一點（`Commands/RunCommand.cs:98-134`）：
 
 - 它觀測每個決策：每個觀測都必須能完全不變地經過 JSON 往返，並保留它的雜湊；
 - 它把每個種子透過線路再打一遍（[協定：線路 §1](/zh-tw/arch/protocol/wire/#sec-1)），連到同一行程中一個執行緒裡、冠軍相同的大腦，然後比較兩遍：軌跡、觀測雜湊、摘要、地圖雜湊、對局記錄和決策日誌，耗時除外；SL 下第二遍還帶著節點訊息；
@@ -196,3 +197,14 @@ brain [--champion FILE] [champion options] [--sl-policy plan|pimc|play] [--log F
 - 它每局在 stderr 上印出一行：對局 id、結局、層數、決策數、重新規劃次數，以及它的工作行程的遊戲錯誤，宿主的對局記錄不計入這些錯誤。
 
 `run --check` 在第二遍時在行程內使用同一個伺服器，用一個以行程命名的抽象 Unix socket（`\0sts2ai-brain-PID`，`Brains/RunBrains.cs:200-220`），所以 `--check` 打的每一局都會檢查線路這條路徑。
+
+## 8. 自動勝利規則
+
+`run --auto-win ACTS` 按模擬器自己的一條規則打一局：在它指明的幕裡（和遊戲顯示的一樣從 1 起編號，`--auto-win 1,2`），普通怪物戰一開打就贏下，所以那裡只打菁英和頭目；其他幕照常打（`Commands/RunCommand.cs:30-32`、`:286-294`）。這樣的一局把戰鬥花在決定大多數對局的那些戰鬥上，打起來比整局便宜得多。自我對弈使用它（[宏觀大腦：自我對弈 §2](/zh-tw/arch/macro-brain/selfplay/#sec-2)）。
+
+- **哪些戰鬥**。在規則的幕裡、遭遇的房間類型是 `Monster` 的戰鬥：地圖上怪物房的戰鬥，或事件裡這種類型的戰鬥。菁英或頭目的遭遇，包括事件裡的，都和任何一局一樣由戰鬥大腦來打。
+- **怎麼贏下**。戰鬥開始之後，`CombatStep` 做遊戲的 `win` 主控台指令所做的事：每個敵人失去它的能力並被殺死（`CreatureCmd.Kill`），然後遊戲檢查是否獲勝（`Win`，`Simulation/RunSession.cs:374-411`）。被殺死時復活或召來其他敵人的敵人會讓戰鬥繼續，所以這會再做一次，最多五次；第六次會拋出例外。不詢問任何戰鬥決策，生命值不變，獎勵和任何勝利之後一樣：同樣的獎勵畫面、卡牌、金幣和藥水。對局記錄會列出這場戰鬥，它的 end 停在開始時的生命值。
+- **規則在哪裡看得到**。它屬於這一局：`RunSetup.AutoWin` 以從 0 起算的索引保存它的幕（`:31`）。每個觀測的 run 都以 `auto_win` 帶著它（`RunSession.View`，`:230-236`；[協定：觀測與動作 §2](/zh-tw/arch/protocol/observation/#sec-2)），所以 V 知道自己在給哪一種遊戲估值（[宏觀大腦：價值網路 §2](/zh-tw/arch/macro-brain/network/#sec-2)）；對局記錄的 `config` 寫明它（[§5](#sec-5)）；節點的複本保留它，所以宏觀大腦的試探和 SL 規劃器的工作行程也按它來打（[世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）。
+- **它不是什麼**。真實遊戲沒有這樣的規則，Mod 也從不設定它。按它打的一局是訓練用的資料，從不是實力的證據：沒有任何報告或門檻接受它（[評估：晉級門檻 §6](/zh-tw/arch/evaluation/gates/#sec-6)）。
+
+`selftest` 檢查它（[參考 §5](/zh-tw/arch/simulator/reference/#sec-5)）：規則用在第 1 幕的一局，只在那一幕的菁英戰和頭目戰裡詢問戰鬥大腦，它的怪物戰都贏下且不損失生命值，第 2 幕的怪物戰會詢問戰鬥大腦，第 1 幕的每個節點都能從它的複本精確重播。

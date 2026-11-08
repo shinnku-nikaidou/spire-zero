@@ -39,6 +39,7 @@ Observations are built lazily. Inside the brain a decision carries a function th
 | `relics` | `RelicView[]` | the relics, in the order the player holds them |
 | `potions` | `(string\|null)[]` | one entry per potion slot: the potion's id, or null for an empty slot |
 | `map` | `MapView` | the current act's map |
+| `auto_win`? | int[] | not the screen's but the game's rule: the acts, indexes from 0 as `act`, whose plain monster fights are won at their start, so that only elites and bosses are fought there; set only by the simulator for a run of the auto-win rule ([Simulator: whole runs §8](/en/arch/simulator/runs/#sec-8)), never in the real game |
 
 `MapView` is the map as the map screen draws it:
 

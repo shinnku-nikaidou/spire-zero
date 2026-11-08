@@ -27,13 +27,13 @@ An even split gives a hopeless first action as many nodes as the best one. Spend
 
 ## 4. The same budget in every room
 
-Elite and boss fights decide runs, so they could get more search. The evidence elsewhere is strong: in spire-mentor, raising the boss budget from 1,000 to 4,000 lifted the act 1 clear rate from 21.5% to over 65%. Here every room gets the same 8 × 300; whether more nodes in boss fights pay is open ([§7](#sec-7)).
+Elite and boss fights decide runs, so they could get more search. The evidence elsewhere is strong: in spire-mentor, raising the boss budget from 1,000 to 4,000 lifted the act 1 clear rate from 21.5% to over 65%. Here every room gets the same 8 × 300; whether more nodes in boss fights pay is open ([§7](#sec-7)). The room levels of the SL planner, `--elite-effort` and `--boss-effort`, are effort presets, which are the planner's alone ([SL planner: budget §1](/en/arch/sl-planner/budget/#sec-1)).
 
 ## 5. Workers
 
 Each world of a decision is one request to the worker pool (`PimcWorldRequest`, [Combat brain: prompts, moves and workers §3](/en/arch/combat-brain/shared/#sec-3)): the worker builds the fight from the observation with the build seed, takes world $k$ of the worlds drawn from the search seed, searches this turn and returns the best line after each first action. `PooledPimc` sends one request per world and merges the replies in world order, so the moves are the same as in one process ([§1](#sec-1)).
 
-PIMC plays in NoSL only: SL's one exact world is the planner's ([The SL planner](/en/arch/sl-planner/)), and a champion that plays `pimc` refuses an SL run (`src/Sts2Ai.SimWorker/Brains/ChampionOptions.cs:40`).
+PIMC plays in NoSL only: SL's one exact world is the planner's ([The SL planner](/en/arch/sl-planner/)), and a champion that plays `pimc` refuses an SL run (`src/Sts2Ai.SimWorker/Brains/ChampionOptions.cs:42`).
 
 ## 6. The champion
 

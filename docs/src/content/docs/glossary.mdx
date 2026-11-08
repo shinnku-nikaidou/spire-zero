@@ -98,7 +98,10 @@ description: '本书用到的每个术语，按领域分组，每个都附有简
 | ExIt | 专家迭代（expert iteration）：训练学到的部分去模仿搜索选出的东西（[学习：循环 §5](/arch/learning/loop/#sec-5)）。 |
 | SPSA | 同时扰动随机逼近（simultaneous perturbation stochastic approximation）：把许多参数一起扰动，一次调好它们；本项目不使用它（[学习：循环 §6](/arch/learning/loop/#sec-6)）。 |
 | 特权信息（privileged information） | 只在训练中用来降低噪声的隐藏状态；永远不是部署后策略的输入。 |
-| 探索（exploration）、均匀抽取（even draws）、ε | 自我对弈的探索（`run --explore ε`）：一个宏观决策以概率 ε 在它的选项中均匀抽取，不管 V 怎么说。 |
+| 探索（exploration）、均匀抽取（even draws）、ε | 自我对弈的探索（`run --explore ε`）：一个宏观决策以概率 ε 在它的选项中均匀抽取，不管 V 怎么说（[宏观大脑：自我对弈 §3](/arch/macro-brain/selfplay/#sec-3)）。 |
+| softmax、τ | 自我对弈的另一种探索（`run --macro-explore τ`）：均匀抽取留给 V 的每个答案，以正比于 $V^{1/\tau}$ 的概率抽取，所以接近 V 的最佳的选项常被尝试，远的几乎从不。 |
+| 自动胜利规则（auto-win rule） | 模拟器自己的一条规则（`run --auto-win 1,2`）：在它指定的幕里，普通怪物战一开始就赢下，所以那里只打精英和 Boss；只用于自我对弈，从不进入报告或门槛（[模拟器：整局 §8](/arch/simulator/runs/#sec-8)）。 |
+| 数据集文件（dataset file） | `eval/datasets/NAME.toml`：把一代自我对弈写成一个文件，包括它的种子、游戏、探索档位，以及每个角色、每个进阶的对局数；它作为 `dataset.toml` 放在数据旁边（[宏观大脑：自我对弈 §4](/arch/macro-brain/selfplay/#sec-4)）。 |
 
 ## 6. 评估
 

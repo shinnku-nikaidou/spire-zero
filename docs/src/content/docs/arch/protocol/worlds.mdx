@@ -59,12 +59,12 @@ public sealed record PromptSeen(IReadOnlyList<IReadOnlyList<int>> Groups, int Mi
 ## 2. 节点克隆与敌人出招记录
 
 ```csharp
-public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, IReadOnlyList<int>? AutoWin = null);
 public sealed record EnemyTurns(uint Uid, string? Id, IReadOnlyList<EnemyTurn> Turns);
 public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 ```
 
-**`NodeClone`** 是当前节点的 SL 克隆：节点的检查点（`Save`，到达时游戏的存档，加上存档丢掉的遗物字段），以及此后节点的每个决策，以轨迹行的形式（`surface action`，选牌提示的选择用游戏自己的下标）。在模拟器之外它是不透明的；模拟器像游戏的「继续游戏」（Continue）那样加载存档，把遗物字段放回去，再重播这些决策（[模拟器：世界与 SL 克隆 §4](/arch/simulator/worlds/#sec-4)）。Harness 根据线路上的节点消息做出克隆（[线路 §6](/arch/protocol/wire/#sec-6)）。
+**`NodeClone`** 是当前节点的 SL 克隆：节点的检查点（`Save`，到达时游戏的存档，加上存档丢掉的遗物字段），以及此后节点的每个决策，以轨迹行的形式（`surface action`，选牌提示的选择用游戏自己的下标）。在模拟器之外它是不透明的；模拟器像游戏的「继续游戏」（Continue）那样加载存档，把遗物字段放回去，再重播这些决策（[模拟器：世界与 SL 克隆 §4](/arch/simulator/worlds/#sec-4)）。`AutoWin` 是这一局的自动胜利规则，即普通怪物战在开始时就赢下的那些幕，从 0 开始，克隆保留它；在正常游戏里为 null（[模拟器：整局 §8](/arch/simulator/runs/#sec-8)）。Harness 根据线路上的节点消息做出克隆（[线路 §6](/arch/protocol/wire/#sec-6)）。
 
 **`EnemyTurns`** 是当前战斗里一个敌人招式的公开记录：到目前为止的每个回合，从最早的开始，它的图标在该回合第一个决策处显示的意图。看着这场战斗的玩家全都看到过。Harness 按每场战斗从观测中保存它（`MoveRecord`），并在每个决策时把它交给战斗大脑；搜索根据它建立怪物的出招日志（[模拟器：战斗 §5](/arch/simulator/combat/#sec-5)），学出来的叶子也读取它（[战斗大脑：叶子 §3](/arch/combat-brain/leaf/#sec-3)）。
 

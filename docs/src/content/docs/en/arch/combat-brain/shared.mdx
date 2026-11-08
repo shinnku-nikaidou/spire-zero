@@ -70,7 +70,7 @@ sequenceDiagram
 
 ## 5. What search counts as the same
 
-A hand often holds copies: two Strikes, three Defends. To the player they are one card twice; to the game each copy has its own id (`uid`), so two lines that play different copies, or the same cards in another order, reach observations that differ only in those ids or in the order of a pile. Search counts such actions and such states as one (`src/Sts2Ai.Brain/Combat/CombatBrain.cs:145-181`).
+A hand often holds copies: two Strikes, three Defends. To the player they are one card twice; to the game each copy has its own id (`uid`), so two lines that play different copies, or the same cards in another order, reach observations that differ only in those ids or in the order of a pile. Search counts such actions and such states as one (`src/Sts2Ai.Brain/Combat/CombatBrain.cs:157-193`).
 
 **The same action.** At every state, search tries one action of each that are the same (`PimcBrain.Ordered`): the same card, by everything the observation shows of it but its id (`ProtocolJson.CardKey`), or the same potion, at the same target, with the same answer to its prompt. The first in search order is kept: ending the turn, then the cards in hand order, then potions. An upgraded Strike is another card than a plain one; a second plain Strike is the first one again. So the root's shares of the nodes go to the distinct actions only ([The SL planner: turn search §3](/en/arch/sl-planner/turn-search/#sec-3), [NoSL PIMC: search §1](/en/arch/pimc/search/#sec-1)). A prompt's answers are listed the same way, once per choice of cards the player can tell apart ([§1](#sec-1)).
 

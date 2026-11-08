@@ -7,7 +7,7 @@ sidebar:
 
 ## 1. Known weaknesses
 
-- **Labels carry the later draws.** A state's label in a run that explores more is lower, and V is not told the run's ε ([Self-play §3](/en/arch/macro-brain/selfplay/#sec-3)). A cut point per run would remove this ([§3](#sec-3)).
+- **Labels carry the later draws.** A state's label in a run that explores more is lower, and V is not told the run's ε or τ ([Self-play §3](/en/arch/macro-brain/selfplay/#sec-3)). A cut point per run would remove this ([§3](#sec-3)).
 - **What the net cannot express.** The map bag holds no links, and the map ends with the act ([The value network §8](/en/arch/macro-brain/network/#sec-8)).
 - **One outcome per run.** A run's decisions share one label, so telling which decision made the difference takes many runs ([From hazards to value §3](/en/arch/macro-brain/value/#sec-3)).
 

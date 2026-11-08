@@ -70,7 +70,7 @@ $$
 
 pass at the first $\Lambda_n \ge A$, fail at the first $\Lambda_n \le B$. At $\alpha = \beta = 0.05$, $A = \ln 19 = 2.944$ and $B = -2.944$: a pass needs $k - 1.224\,m \ge 16.15$, 17 pairs won by the challenger alone with none against, and a fail $m - 0.817\,k \ge 13.2$. If the pairs run out first, the verdict is open. The bounds are Wald's approximations; the real error rates have not been measured ([§4](#sec-4)).
 
-**As built** (`Gate.Sprt`, `Harness/Gate.cs:51-82`): it stops at the first pair past a bound, and the result keeps that pair (`decided`), the LLR there, $k$ and $m$, and the mean floor difference over the pairs up to it (`floor_diff_mean`). The floors are listed beside the verdict, not tested. There is no minimum number of pairs.
+**As built** (`Gate.Sprt`, `Harness/Gate.cs:52-83`): it stops at the first pair past a bound, and the result keeps that pair (`decided`), the LLR there, $k$ and $m$, and the mean floor difference over the pairs up to it (`floor_diff_mean`). The floors are listed beside the verdict, not tested. There is no minimum number of pairs.
 
 **Two pairs of reports, replayed.** The figure replays the gate's rule on two pairs of committed SL reports on the same 300 seeds, net C or net B as the challenger; no such gate was run. Net C against net A, 23 runs won against 1, passes after 234 pairs, with 18 won by C alone and 1 by A alone; net B against net A, 13 against 1, stays open. The last tab draws made-up pairs with a share you choose and runs the same gate on them, once or a thousand times.
 
@@ -123,21 +123,22 @@ gate --champion eval/champions/ENV.json --records A[,B…] [the challenger's run
 | `--not-worse` | off | the non-inferiority test ([§7](#sec-7)) |
 | `--promote PATH` | none | on a pass, writes the challenger's report and makes it the champion ([§8](#sec-8)) |
 | `--env ENV` | none | the challenger's environment, refused if it is not the file's |
-| the challenger's run options | | `--policy`, `--macro`, the budget, `--workers`, `--value`, `--afterstates`, `--combat-net`, `--explore` ([Simulator: reference §3](/en/arch/simulator/reference/#sec-3)); there is no `--champion FILE` for the challenger, which is named in full by its options |
+| the challenger's run options | | `--policy`, `--macro`, the budget (an elite's and a boss's own level among it), `--workers`, `--value`, `--afterstates`, `--combat-net`, `--explore`, `--macro-explore` ([Simulator: reference §3](/en/arch/simulator/reference/#sec-3)); there is no `--champion FILE` for the challenger, which is named in full by its options |
 
-**The two sides.** The champion's side is its report's runs. The challenger's side is its records, and every record must have been played by the options given: the name the options make must be each record's `config.champion` (`:96-97`). The pairs are the champion report's runs whose seed the challenger played, in the champion report's order, which is the seed set's (`Gate.Pairs`, `Harness/Gate.cs:37-49`). A challenger that played only the head of the set is gated on the pairs it has.
+**The two sides.** The champion's side is its report's runs. The challenger's side is its records, and every record must have been played by the options given: the name the options make must be each record's `config.champion` (`:96-97`). The pairs are the champion report's runs whose seed the challenger played, in the champion report's order, which is the seed set's (`Gate.Pairs`, `Harness/Gate.cs:37-50`). A challenger that played only the head of the set is gated on the pairs it has.
 
 **Refused**, as a command-line mistake (exit 2):
 
-- `--explore` above 0 (`:95`): exploration is for self-play ([Learning: the loop §9](/en/arch/learning/loop/#sec-9));
+- `--explore` or `--macro-explore` above 0 (`:95`): exploration is for self-play ([Learning: the loop §9](/en/arch/learning/loop/#sec-9));
+- a record played by the auto-win rule (`Harness/Gate.cs:40`): such a run fights only elites and bosses in some acts and is data for training, not a run of the game ([Simulator: whole runs §8](/en/arch/simulator/runs/#sec-8)); a report refuses it too ([Metrics, seeds and reports §7](/en/arch/evaluation/metrics/#sec-7));
 - a record played by another champion name than the options', or records of more than one;
-- a record played in another game version or environment than the champion's report, or as another character or at another ascension (`Harness/Gate.cs:40-45`);
-- a character the champion file names no report of (`:91-92`), which is every character in the NoSL file;
+- a record played in another game version or environment than the champion's report, or as another character or at another ascension (`Harness/Gate.cs:41-46`);
+- a character the champion file names no report of (`:92-93`), which is every character in the NoSL file;
 - a seed run twice; `--env` that is not the file's.
 
 **Not checked:** the commit. A challenger built at another commit pairs with the champion's report all the same, which is why the champion is re-baselined when the code changes how it plays ([§9](#sec-9)). Nor is the champion report's own void checked, and challenger runs whose seed is not in the champion's report are silently left out.
 
-**Verdicts.** `pass`, `fail`, `open` (the pairs ran out first), or `void`: the paired challenger runs break a must-be-zero rule, whatever the SPRT said (`Harness/Gate.cs:56-58, 81`).
+**Verdicts.** `pass`, `fail`, `open` (the pairs ran out first), or `void`: the paired challenger runs break a must-be-zero rule, whatever the SPRT said (`Harness/Gate.cs:57-59, 81`).
 
 **Output and exit code.** Three lines, then a fourth on promotion:
 
@@ -152,7 +153,7 @@ promoted: eval/champions/sl.json now names NAME
 
 ## 7. Not worse
 
-A change meant to be cheaper rather than stronger (searching less, the same play otherwise) is promoted when it is **not worse**. `--not-worse` shifts both hypotheses down by δ: H0, the challenger is worse, a share of 0.5 − δ of the pairs one side won alone; H1, it is not worse, an even share (`Harness/Gate.cs:61`). The gate's line and its stored result say which test it was (`not worse` in the line, `not_worse` in the champion file).
+A change meant to be cheaper rather than stronger (searching less, the same play otherwise) is promoted when it is **not worse**. `--not-worse` shifts both hypotheses down by δ: H0, the challenger is worse, a share of 0.5 − δ of the pairs one side won alone; H1, it is not worse, an even share (`Harness/Gate.cs:62`). The gate's line and its stored result say which test it was (`not worse` in the line, `not_worse` in the champion file).
 
 The project uses it for one more case: a challenger that only removes a hand-written part passes on a tie, since the simpler brain is preferred when it is not worse.
 
@@ -161,7 +162,7 @@ The project uses it for one more case: a challenger that only removes a hand-wri
 On a pass, `--promote PATH` (`SimWorker/Commands/EvalCommands.cs:113-125`):
 
 1. makes the challenger's report from its records on the champion's seed set (`eval/seeds/SET.txt`), dated today; refuses a partial one, since the new report faces the next challengers and must cover the whole set;
-2. makes the champion file's options: the challenger's options for the file's environment, with no character or ascension, which each job gives. Each weights file (`value`, `combat-net`) must be in the shared weights folder, `weights/all/`, where a name always means the same file; a promotion with a file elsewhere is refused before anything is written (`SimWorker/Brains/ChampionOptions.cs:97-111`, [Learning: reference §6](/en/arch/learning/reference/#sec-6));
+2. makes the champion file's options: the challenger's options for the file's environment, with no character or ascension, which each job gives. Each weights file (`value`, `combat-net`) must be in the shared weights folder, `weights/all/`, where a name always means the same file; a promotion with a file elsewhere is refused before anything is written (`SimWorker/Brains/ChampionOptions.cs:107-121`, [Learning: reference §6](/en/arch/learning/reference/#sec-6));
 3. writes `PATH.json` and `PATH.md`, the Markdown with an "Against" section on the champion's report;
 4. rewrites the champion file: the environment, the challenger's name and options, the new report as its only one, under its character (the old champion's other reports were played by other nets), `since` the report's date, and `gate` the result ([Champions and baselines §1](/en/arch/evaluation/champions/#sec-1)).
 
@@ -178,7 +179,7 @@ The wins gate judges a new pair of nets on whole SL runs by wins, with `learn/ga
 uv run python gate.py --records R1,R2 [--logs L1,L2] [--against C1,C2]
 ```
 
-(`learn/gate.py:154-170`, run from `learn/`.) It prints one JSON object. Its report:
+(`learn/gate.py:158-174`, run from `learn/`.) It prints one JSON object. Its report:
 
 | field | what |
 |---|---|
@@ -186,7 +187,7 @@ uv run python gate.py --records R1,R2 [--logs L1,L2] [--against C1,C2]
 | `boss` | per act `"0"`, `"1"`, `"2"`: `{reached, beaten, rate}`, counting every boss combat of the act and those that did not end in a death |
 | `elites_per_run`, `elite_deaths` | elite combats per run, and the elite combats that ended in a death |
 | `died_in` | per act, the lost runs by where they died: the room of the last combat if it ended in a death on the run's floor, else `outside combat` (a combat with no end counts as outside, [Metrics, seeds and reports §8](/en/arch/evaluation/metrics/#sec-8)) |
-| `rest`, `monster_or_rest`, `shop` | with `--logs`: the rest sites' choices by the HP share they were made at (0–40%, 40–70%, 70–90%, 90–100%), the map's choices between a monster and a rest site by the same bands, and what the shops sold (relic, card, potion or other, told by what the next decision's run gained after a `buy:`; `remove`, `leave`); only logged runs that have a record (`:101-127`) |
+| `rest`, `monster_or_rest`, `shop` | with `--logs`: the rest sites' choices by the HP share they were made at (0–40%, 40–70%, 70–90%, 90–100%), the map's choices between a monster and a rest site by the same bands, and what the shops sold (relic, card, potion or other, told by what the next decision's run gained after a `buy:`; `remove`, `leave`); only logged runs that have a record (`:105-131`) |
 | `against` | with `--against`, the pairing below |
 
 **The rule.** `--against` names the champion's records. The pairs are the seeds both sides finished. For each, $d_i$ is the challenger's outcome less the champion's: 1 or 0 per run for wins, the floor for floors. With $n$ pairs, $\bar d$ their mean and $\mathrm{SE} = \mathrm{sd}(d)/\sqrt n$ (the sample SD, $n-1$),
@@ -195,7 +196,7 @@ $$
 \text{lower} = \bar d - 1.645\,\mathrm{SE}, \qquad \text{promote if lower} > 0,
 $$
 
-the 95% one-sided lower bound of the mean difference (1.645 is the normal distribution's 95% quantile). `against` holds `pairs`, `won`, `champion_won`, `wins_diff`, `wins_diff_se`, `wins_lower_95`, `floor_diff`, `floor_diff_se` and `promote`, decided on the wins (`learn/gate.py:130-151`). With one pair the SE is undefined and nothing is promoted; with every pair tied the bound is 0 and nothing is promoted.
+the 95% one-sided lower bound of the mean difference (1.645 is the normal distribution's 95% quantile). `against` holds `pairs`, `won`, `champion_won`, `wins_diff`, `wins_diff_se`, `wins_lower_95`, `floor_diff`, `floor_diff_se` and `promote`, decided on the wins (`learn/gate.py:134-155`). With one pair the SE is undefined and nothing is promoted; with every pair tied the bound is 0 and nothing is promoted.
 
 **What it takes to pass.** In terms of the discordant seeds ([§4](#sec-4)), $\bar d = (k - m)/n$, and the bound is above 0 roughly when $k - m > 1.645\sqrt{k + m}$. Computed exactly with the rule, at 300 pairs:
 
@@ -206,7 +207,7 @@ the 95% one-sided lower bound of the mean difference (1.645 is the normal distri
 
 The margin needed grows with the champion's own wins. With few discordant seeds the normal bound is lenient: 3 seeds won by the challenger alone and none by the champion pass, where an exact McNemar (sign) test gives a one-sided p of 1/8.
 
-**What it does not check.** `gate.py` drops every record with a `failure` before anything (`:42`), so it has no void rule; it has no minimum of pairs, and does not compare the two sides' configs, champions, environments, commits or exploration. It pairs records by seed alone, so it reads one character at a time. The procedure below keeps the rest.
+**What it does not check.** `gate.py` drops every record with a `failure` before anything (`:43`), so it has no void rule, and refuses a record played by the auto-win rule (`:44-45`); it has no minimum of pairs, and does not compare the two sides' configs, champions, environments, commits or exploration. It pairs records by seed alone, so it reads one character at a time. The procedure below keeps the rest.
 
 **The procedure.** The nets are shared, so a new pair of them, a V and a combat net, is gated as a pair on all five characters. Both pairs play, the champion's and the challenger's, every seed of `eval/seeds/promotion-1-100.txt` with each character at ascension 0, the ascension of the champion's reports, and at the same commit, so neither side reuses runs that older code played. Each side plays the SL champion file's options with only `--value` and `--combat-net` changed: the champion's medium budget, `--afterstates clone`, and no `--explore`. One job per character and side, then `gate.py` per character, from `learn/`:
 

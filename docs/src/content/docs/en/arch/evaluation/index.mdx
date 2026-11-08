@@ -60,7 +60,7 @@ If R1 jumped straight to the real game, a lower win rate could have any of these
 
 - R4 runs in real time, so it is for confirmation, not for tuning.
 - In NoSL, R1 decisions already go through the Build path, which builds worlds from observations ([Simulator: worlds and the SL clone §2](/en/arch/simulator/worlds/#sec-2)), so for decisions NoSL's R1 is about R2. In SL it is not: the combat planner and `--afterstates clone` search the node's clone, the game's save and the decisions since, not worlds built from an observation ([Harness: routing, budgets and seeds §2](/en/arch/harness/routing/#sec-2)).
-- No run record names a rung: its `config` holds the game, the commit, the champion and the environment (`Harness/RunRecords.cs:18`), and every run the simulator plays is R1.
+- No run record names a rung: its `config` holds the game, the commit, the champion and the environment, and the auto-win rule's acts in a run of that rule (`Harness/RunRecords.cs:20`), and every run the simulator plays is R1.
 
 ## 3. Two leaderboards
 
@@ -80,7 +80,7 @@ Never put both environments in one table or in one promotion decision. The gate 
 </Aside>
 
 - **Now.** The two champions share the macro brain, one V and one combat net, the nets of every character; their combat search differs ([Environments: worlds §5](/en/arch/environments/worlds/#sec-5)). NoSL plays V with screen afterstates, since the clone is SL's. Both nets learned from SL's games only: NoSL is not trained for now. No NoSL report of that champion exists, so the NoSL file names none: a NoSL gate refuses every character, and the NoSL leaderboard marks no champion.
-- **SL − NoSL.** The difference between a champion's results in the two environments, on the same seeds, is the value of in-node information. For reference, spire-mentor, a prior-art project, lost 22.8–25.5 percentage points (pp) of win rate without its cheat, which covered the whole run, by its own published results; ours is node-level only, so a smaller difference is expected. `leaderboard` computes it for each champion name that has a report in both environments (`Harness/Reports.cs:208-225`), and no board has shown it: SL champions are named `combat plan …`, NoSL ones `combat pimc …`, so no name has both, and a pair of them would measure the planner together with the information, since the combat brains differ.
+- **SL − NoSL.** The difference between a champion's results in the two environments, on the same seeds, is the value of in-node information. For reference, spire-mentor, a prior-art project, lost 22.8–25.5 percentage points (pp) of win rate without its cheat, which covered the whole run, by its own published results; ours is node-level only, so a smaller difference is expected. `leaderboard` computes it for each champion name that has a report in both environments (`Harness/Reports.cs:214-231`), and no board has shown it: SL champions are named `combat plan …`, NoSL ones `combat pimc …`, so no name has both, and a pair of them would measure the planner together with the information, since the combat brains differ.
 - How a board is built, field by field: [Metrics, seeds and reports §9](/en/arch/evaluation/metrics/#sec-9).
 
 ## 4. Where it stands

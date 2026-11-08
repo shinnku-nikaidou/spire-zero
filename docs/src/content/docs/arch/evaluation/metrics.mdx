@@ -31,14 +31,14 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 作废的报告留在排行榜上，带标记，排在最后；不管挑战者的对局打到哪里，门槛都给作废的挑战者判定作废（[晋级门槛 §6](/arch/evaluation/gates/#sec-6)）。
 
-**失败的对局就当从没设定过**。`report` 和 `gate` 通过 `RunRecord.Read` 读记录，它会去掉每条结局为 `failed` 的记录，`RunRecord.SeedsLeft` 再把它的种子从种子集里去掉，所以 500 局有 2 局失败，得到的是 498 局中的 498 局，既不作废，也不算不完整（`Harness/RunRecords.cs:32-39`）。对局失败的原因在大脑之外，比如进程崩溃或机器故障，它说明不了大脑的好坏。`learn/gate.py` 和 `v.train` 同样丢掉它们（`learn/gate.py:42`、`learn/v/data.py:64`），配对也要两边都打完（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
+**失败的对局就当从没设定过**。`report` 和 `gate` 通过 `RunRecord.Read` 读记录，它会去掉每条结局为 `failed` 的记录，`RunRecord.SeedsLeft` 再把它的种子从种子集里去掉，所以 500 局有 2 局失败，得到的是 498 局中的 498 局，既不作废，也不算不完整（`Harness/RunRecords.cs:34-41`）。对局失败的原因在大脑之外，比如进程崩溃或机器故障，它说明不了大脑的好坏。`learn/gate.py` 和 `v.train` 同样丢掉它们（`learn/gate.py:43`、`learn/v/data.py:64`），配对也要两边都打完（[晋级门槛 §10](/arch/evaluation/gates/#sec-10)）。
 
 **被截断的对局在胜率里算作输局**，并且从不重打：种子决定了这一局，重打只会重复它，而丢掉它就等于挑种子（`Harness/Reports.cs:54`）。
 
 还有两个计数应当放在这里，但并不存在：
 
 - **`NumReloads`**，游戏对真实读档次数的计数，在真实游戏里必须为 0 <Badge text="规划中" variant="caution" />。它计划作为 Mod 决策日志的一个字段；目前没有任何东西读取它（[环境：信息与节点 §8](/arch/environments/information/#sec-8)）。
-- **NoSL 对局里的存档导出**没有计数器。模拟的 NoSL 对局从不导出节点检查点（`SimWorker/Commands/RunCommand.cs:233`），NoSL 的 `Dispatcher` 也会拒绝导出（`Harness/Dispatcher.cs:173`），所以一次导出会以错误结束这一局，而不是变成一个计数。
+- **NoSL 对局里的存档导出**没有计数器。模拟的 NoSL 对局从不导出节点检查点（`SimWorker/Commands/RunCommand.cs:237`），NoSL 的 `Dispatcher` 也会拒绝导出（`Harness/Dispatcher.cs:173`），所以一次导出会以错误结束这一局，而不是变成一个计数。
 
 ## 3. 辅助指标
 
@@ -57,7 +57,7 @@ import DeathsByFloor from '../../../../components/book/DeathsByFloor.svelte';
 
 **规划中** <Badge text="规划中" variant="caution" />，还不在任何报告里：
 
-- **校准**：V 预测的获胜机会与实际结局有多接近。Brier 分数（预测机会与这一局的 1 或 0 之间的均方差）只出现在 `v.train` 对整局的留出报告里，即 `brier_held_out` 对比 `brier_held_out_floor_only`，后者是一个只知道层数的模型（`learn/v/train.py:167-182`）；没有哪次评估计算它，也没有任何东西拿它和常数预测比较。
+- **校准**：V 预测的获胜机会与实际结局有多接近。Brier 分数（预测机会与这一局的 1 或 0 之间的均方差）只出现在 `v.train` 对整局的留出报告里，即 `brier_held_out` 对比 `brier_held_out_floor_only`，后者是一个只知道层数的模型（`learn/v/train.py:169-184`）；没有哪次评估计算它，也没有任何东西拿它和常数预测比较。
 - **搜索计算量**：每个决策搜索的分支数和克隆查询次数。报告里只有墙钟时间。
 - **囤积药水**：持有而未用的药水。
 
@@ -87,7 +87,7 @@ $$
 - **晋级**种子，用于门槛和排行榜；
 - **最终**种子，在用它们打任何一局之前就生成并登记在仓库里，要全部打完、全部报告，这样谁也没法挑那些碰巧好看的种子。正式结论至少需要 300 局。
 
-种子集是 `eval/seeds/` 里的一个文本文件，每行一个种子；`#` 开始一条注释，空行被跳过（`EvalReport.ReadSeeds`，`Harness/Reports.cs:166-168`）。每个文件的开头写明它是怎么生成的。这些种子集：
+种子集是 `eval/seeds/` 里的一个文本文件，每行一个种子；`#` 开始一条注释，空行被跳过（`EvalReport.ReadSeeds`，`Harness/Reports.cs:172-174`）。每个文件的开头写明它是怎么生成的。这些种子集：
 
 | 文件 | 种子 | 生成方式 | 用于 |
 |---|---|---|---|
@@ -132,8 +132,8 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 
 这条命令写出 `PATH.json` 和 `PATH.md`，并打印 Markdown（`SimWorker/Commands/EvalCommands.cs:10-51`）。种子集的名字是种子文件去掉扩展名后的文件名。记录可以来自多个进程。`report` 会把以下情况当作命令行错误拒绝（退出码 2）：
 
-- 没有对局，或对局来自两种配置（`config` 在游戏、提交、冠军或环境上不同）；
-- 两个角色或两个进阶等级；一个种子打了两次；一个不在种子集里的种子（`EvalReport.Of`，`Harness/Reports.cs:84-97`）。
+- 没有对局，或对局来自两种配置（`config` 在游戏、提交、冠军或环境上不同），或某一局是按自动胜利规则打的，它是训练用的数据，不是一局游戏（[模拟器：整局 §8](/arch/simulator/runs/#sec-8)）；
+- 两个角色或两个进阶等级；一个种子打了两次；一个不在种子集里的种子（`EvalReport.Of`，`Harness/Reports.cs:89-103`）。
 
 它把各局按种子集的顺序排好，并以生成当天的日期标注报告，格式为 `yyyy-MM-dd`，按机器的本地时间。局数少于种子集的报告是**不完整的**：它的 Markdown 会写明这一点，排行榜不收它，`gate --promote` 也拒绝它。
 
@@ -153,7 +153,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 
 由于报告内嵌了每一条对局记录，连同其中的战斗，每次整局评估的逐局数据都在 git 里，同样种子上的任意两份报告事后都能配对；本章的每张图都是这样做的。不进 git 的是决策日志，以及没有带来晋级的门槛的记录，它们放在 `data/CHARACTER/ENV/` 下（[学习：参考 §3](/arch/learning/reference/#sec-3)）。
 
-**Markdown**（`EvalReport.Markdown`，`Harness/Reports.cs:99-150`）是一页：
+**Markdown**（`EvalReport.Markdown`，`Harness/Reports.cs:105-156`）是一页：
 
 - `# Evaluation DATE: ENV, SET`，然后在适用时，有一行写明原因的 **Void**（作废）和一行 **Partial**（不完整）；
 - 一张表：游戏、提交、冠军和环境，以及写成 `SET: N of M runs, CHARACTER AN` 的种子集；
@@ -166,11 +166,11 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 
 ## 8. 对局记录
 
-`run --records FILE` 每行写一条对局记录，每局结束时立即刷新写入；中途停下的一局什么也不写（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）。记录（`RunRecord`，`Harness/RunRecords.cs:25-28`；在 `SimWorker/Commands/RunCommand.cs:270-275` 构建）：
+`run --records FILE` 每行写一条对局记录，每局结束时立即刷新写入；中途停下的一局什么也不写（[模拟器：整局 §5](/arch/simulator/runs/#sec-5)）。记录（`RunRecord`，`Harness/RunRecords.cs:27-30`；在 `SimWorker/Commands/RunCommand.cs:274-279` 构建）：
 
 | 字段 | 内容 |
 |---|---|
-| `config` | `RunConfig`（`Harness/RunRecords.cs:18`）：`game`、`commit`、`champion`（大脑给自己起的名字，通过线路连接时也是如此）和 `env` |
+| `config` | `RunConfig`（`Harness/RunRecords.cs:20`）：`game`、`commit`、`champion`（大脑给自己起的名字，通过线路连接时也是如此）和 `env`；还有 `auto_win`，自动胜利规则的幕，以从 0 开始的索引表示，只出现在按它打的对局里，任何报告或门槛都不收这样的对局 |
 | `seed`、`character`、`ascension` | 这一局 |
 | `run_id` | 大脑用来识别这一局的种子哈希，即决策日志里的 `run`（[Harness：决策日志 §3](/arch/harness/decision-log/#sec-3)）；学习时靠它把两者连起来 |
 | `outcome` | `won`、`lost`、`truncated`（触及决策上限）或 `failed`（抛出异常） |
@@ -183,9 +183,9 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 
 `end` 是战斗网络结局输出头的目标（[学习：训练战斗网络 §1](/arch/learning/combat-net/#sec-1)）。
 
-**缺失的 end**。按记录类型的说法，只有当一局因为死亡以外的原因（失败、截断）停在战斗中时，`end` 才会缺失。`RunSession` 在会话稳定下来时写 `end`，在某个决策自己的动作结束了这一局之后（比如回合结束时手里的牌，或一次扣生命值的出牌）也立即写；一局在第一个决策之前就死在其中的战斗，这时以 0 生命值得到它的条目（`SimWorker/Simulation/RunSession.cs:234-238, 260, 265-272`）。示例报告里没有哪局输局的最后一场战斗缺少 `end`。
+**缺失的 end**。按记录类型的说法，只有当一局因为死亡以外的原因（失败、截断）停在战斗中时，`end` 才会缺失。`RunSession` 在会话稳定下来时写 `end`，在某个决策自己的动作结束了这一局之后（比如回合结束时手里的牌，或一次扣生命值的出牌）也立即写；一局在第一个决策之前就死在其中的战斗，这时以 0 生命值得到它的条目（`SimWorker/Simulation/RunSession.cs:247-251, 260, 265-272`）。示例报告里没有哪局输局的最后一场战斗缺少 `end`。
 
-**对局死在哪里**。记录给出了报告没有打印的东西。如果一局输局的最后一场战斗在它结束的那一层上，并且那场战斗以死亡结束或没有 end，它就是死在战斗里；否则就是死在战斗之外（例如事件里）。示例报告的 53 局输局：43 局死在 Boss 战，8 局死在精英战，2 局死在普通怪物战，没有一局死在战斗之外。`learn/gate.py` 用同样的规则，但把缺失的 end 当作「战斗之外」（`learn/gate.py:55-62`）；没有缺失的 end 时，它给出同样的计数。从 end 数出的打赢的 Boss：三幕分别是 95 场中的 87 场、83 场中的 75 场和 74 场中的 47 场。
+**对局死在哪里**。记录给出了报告没有打印的东西。如果一局输局的最后一场战斗在它结束的那一层上，并且那场战斗以死亡结束或没有 end，它就是死在战斗里；否则就是死在战斗之外（例如事件里）。示例报告的 53 局输局：43 局死在 Boss 战，8 局死在精英战，2 局死在普通怪物战，没有一局死在战斗之外。`learn/gate.py` 用同样的规则，但把缺失的 end 当作「战斗之外」（`learn/gate.py:59-66`）；没有缺失的 end 时，它给出同样的计数。从 end 数出的打赢的 Boss：三幕分别是 95 场中的 87 场、83 场中的 75 场和 74 场中的 47 场。
 
 <DeathsByFloor client:visible lang="zh-CN" />
 
@@ -195,7 +195,7 @@ report --seeds FILE --records A[,B…] --out PATH [--previous OLD.json]
 leaderboard [--character SILENT]
 ```
 
-这条命令读取 `eval/CHARACTER/reports/` 里的每份报告和 `eval/champions/` 里的每个冠军文件，写出 `eval/CHARACTER/leaderboard.md` 并打印它（`SimWorker/Commands/EvalCommands.cs:130-159`，`Leaderboard.Markdown`，`Harness/Reports.cs:177-237`）。它由手工运行，排行榜和报告一起提交。
+这条命令读取 `eval/CHARACTER/reports/` 里的每份报告和 `eval/champions/` 里的每个冠军文件，写出 `eval/CHARACTER/leaderboard.md` 并打印它（`SimWorker/Commands/EvalCommands.cs:130-159`，`Leaderboard.Markdown`，`Harness/Reports.cs:183-243`）。它由手工运行，排行榜和报告一起提交。
 
 - **分榜**。不完整的报告不列入。其余的依次按角色、进阶等级和种子集分组，每组一个 `##` 小节；小节里每个环境一张 `###` 表，NoSL 在前。两个角色、两个进阶等级或两种环境从不放在一起排名。
 - **列**：冠军、日期、提交（7 个字符，保留 `-dirty`）、胜率（比率加区间）、平均层数、打到第 1 幕 Boss 的局数、每局秒数。

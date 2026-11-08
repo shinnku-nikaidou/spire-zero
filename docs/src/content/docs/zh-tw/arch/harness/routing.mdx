@@ -28,7 +28,7 @@ import { Badge } from '@astrojs/starlight/components';
 combat plan COMBAT beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 VALUE clone, macro prompts l0 VALUE clone
 ```
 
-這是這份程式碼所命名的 SL 冠軍，其中 `COMBAT` 和 `VALUE` 代表冠軍的戰鬥網路和 V 的名字（[評估：冠軍與基線](/zh-tw/arch/evaluation/champions/)）：葉節點用這個戰鬥網路（它的結局由 V 定價）、用 medium 預算的 SL 規劃器，戰鬥中沒有搜尋回答的提示用 `first`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：會搜尋的戰鬥大腦指名它的戰鬥網路；L0 指名它的 V、`clone`，以及它的探索（均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:36-60`）。
+這是這份程式碼所命名的 SL 冠軍，其中 `COMBAT` 和 `VALUE` 代表冠軍的戰鬥網路和 V 的名字（[評估：冠軍與基線](/zh-tw/arch/evaluation/champions/)）：葉節點用這個戰鬥網路（它的結局由 V 定價）、用 medium 預算的 SL 規劃器，戰鬥中沒有搜尋回答的提示用 `first`，宏觀決策和戰鬥外的選牌提示用 L0，它帶著 V，在節點的複本上把每個選項打一遍。每個大腦都會指名自己的組成部分：會搜尋的戰鬥大腦指名它的戰鬥網路；L0 指名它的 V、`clone`，以及它的探索（均勻抽取是 `eps ε`）；預算按 [§4](#sec-4) 的寫法。SimWorker 的 `ChampionOptions` 由指令的選項做出各條路由，如果它做出的名字不是冠軍檔案用的那個，就拒絕執行（`Brains/ChampionOptions.cs:38-63`）。
 
 **環境決定戰鬥大腦**。宏觀大腦在兩種環境裡是同一個；戰鬥大腦不是（[環境：世界 §5](/zh-tw/arch/environments/worlds/#sec-5)）。冠軍工廠在 SL 之外拒絕 `plan` 和 `--afterstates clone`，在 NoSL 之外拒絕 `pimc`，在 SL 下還拒絕不在節點的複本上打的 L0，因為它從畫面預測的後狀態是 NoSL 的。`run` 照給定的選項打，所以帶 L0 的 SL 對局要用 `--afterstates clone`。`brain` 指令同時服務兩種環境：NoSL 宿主得到 `--policy` 的戰鬥大腦，SL 宿主得到 `--sl-policy` 的，而且它按宿主的環境設定 L0 的後狀態，NoSL 宿主從畫面預測，SL 宿主在節點的複本上打，所以一個冠軍檔案就能服務兩者（[概覽 §5](/zh-tw/arch/harness/#sec-5)）。
 
@@ -51,7 +51,7 @@ combat plan COMBAT beam 8x300 easy 4 loss plans 3, combat prompts first, macro l
 
 宏觀路由或提示路由是一個 `Route<T>(Brain, Policy)`。目前：
 
-- **L0**（`MacroBrain`，`--macro l0`）同時回答宏觀決策和戰鬥外的選牌提示，是同一個物件、同一個 V（[宏觀大腦：搜尋](/zh-tw/arch/macro-brain/search/)）。它的探索（`--explore ε`，均勻抽取，僅自我對弈）從它自己的產生器裡抽（[§5](#sec-5)）。
+- **L0**（`MacroBrain`，`--macro l0`）同時回答宏觀決策和戰鬥外的選牌提示，是同一個物件、同一個 V（[宏觀大腦：搜尋](/zh-tw/arch/macro-brain/search/)）。它的探索（`--explore ε`，均勻抽取，以及 `--macro-explore τ`，在 V 的估值的對數上做 softmax；僅自我對弈）從它自己的各個產生器裡抽（[§5](#sec-5)）。
 - **`first`**（`FirstPicks`）回答戰鬥大腦的動作沒有回答的戰鬥中選牌提示：按規範順序取最前面的選項，取提示允許的最少數量，和搜尋世界裡的做法一樣。動作帶著的回答會交給它之後的第一個戰鬥中提示（`Dispatcher`），不接受這個回答的提示也交給 `first`（[戰鬥大腦：提示、招式與 worker §1](/zh-tw/arch/combat-brain/shared/#sec-1)）。
 - **`random`** 佔位策略在 `--macro random` 時回答宏觀的兩側。
 
@@ -61,11 +61,11 @@ combat plan COMBAT beam 8x300 easy 4 loss plans 3, combat prompts first, macro l
 
 **打過分的選項**。接著它取出策略從中選擇的那些選項，連同它們的估值（`Scored`）：L0 的是每個合法選項，帶著 V 對選了它之後贏下這一局的機率，選中的排第一，其餘最好的在前；回答是由探索抽出的時候則沒有（[宏觀大腦：搜尋 §1](/zh-tw/arch/macro-brain/search/#sec-1)）。戰鬥外的選牌提示給出 L0 權衡過的回答。它們成為推薦的候選，對會顯示回答的宿主，每個地圖選項還會帶上它的路線（[概覽 §5](/zh-tw/arch/harness/#sec-5)）；決策日誌不保存它們。
 
-**經探索的回答**。當策略說它上一個回答是抽出來的，提示或宏觀回答就標為探索：對 L0 而言，是它的均勻抽取（[決策日誌 §6](/zh-tw/arch/harness/decision-log/#sec-6)）。
+**經探索的回答**。當策略說它上一個回答是抽出來的，提示或宏觀回答就標為探索：對 L0 而言，是它的均勻抽取，或它的 softmax 抽到低於最佳的選項（[決策日誌 §6](/zh-tw/arch/harness/decision-log/#sec-6)）。
 
 ## 4. 預算
 
-一次戰鬥搜尋能花多少，由一個 `Budget` 決定（`Brain/Combat/CombatBrain.cs:15-36`）。它的單位是**節點**：在一個世界裡模擬的一個動作。沒有掛鐘時間預算，也沒有其他單位。
+一次戰鬥搜尋能花多少，由一個 `Budget` 決定（`Brain/Combat/CombatBrain.cs:17-48`）。它的單位是**節點**：在一個世界裡模擬的一個動作。沒有掛鐘時間預算，也沒有其他單位。
 
 | 欄位（JSON） | 預設值 | 含義 |
 |---|---|---|
@@ -75,6 +75,7 @@ combat plan COMBAT beam 8x300 easy 4 loss plans 3, combat prompts first, macro l
 | `replan` | 1 | 規劃器在重新規劃之前，打一個沒有證明的失敗計畫的回合數；0 表示打到結束 |
 | `loss_plans` | 0 | 在同一場戰鬥裡，規劃器最多連續做出幾個沒有證明的失敗計畫，之後最後一個打到結束；0 表示沒有上限 |
 | `easy_beam` | 0 | 規劃器的貪婪下潛已經能贏時用的束；0 表示等於 `beam` |
+| `elite`、`boss` | null | 菁英戰和頭目戰自己的預算，與這個預算不同時才有（`--elite-effort`、`--boss-effort`）；`Budget.For(room)` 給一場戰鬥它所在房間的預算 |
 
 **力度等級**（`--effort`、`Budget.Effort`，[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）：
 
@@ -85,7 +86,7 @@ combat plan COMBAT beam 8x300 easy 4 loss plans 3, combat prompts first, macro l
 | `high` | 8 | 300 | – | – |
 | `max` | 16 | 300 | – | – |
 
-**作為名字**（`Budget.ToString`）：PIMC 是 `8x300`（規劃器是 `beam 16x300`），接著是規劃器的 `easy N`、不等於 1 時的 `replan N`，和有上限時的 `loss plans N`。
+**作為名字**（`Budget.ToString`）：PIMC 是 `8x300`（規劃器是 `beam 16x300`），接著是規劃器的 `easy N`、不等於 1 時的 `replan N`，和有上限時的 `loss plans N`；然後是 `elite (…)` 和 `boss (…)`，按同樣的規則寫出各自房間的預算，只在它有自己的預算時才有。
 
 **規劃中：按模式的預算** <Badge text="規劃中" variant="caution" />。目前每種模式都用固定的節點預算。設計給每種模式各自的單位：
 
@@ -122,7 +123,7 @@ seed(i)  = z xor (z >> 31)
 
 SL 規劃器搜尋唯一的那個確切世界，忽略它；宏觀策略和提示策略從不收到它。
 
-**佔位策略和探索**從每局各自設定種子的 .NET 產生器裡抽，每條流一個：`Random(FNV(run_id + stream))`，佔位策略的流是 `""`，L0 的均勻抽取是 `:explore uniform`（`Brains/ChampionOptions.cs:44-53`）。所以一局不管在哪個行程裡、走不走線路、記不記日誌，都打得一樣。
+**佔位策略和探索**從每局各自設定種子的 .NET 產生器裡抽，每條流一個：`Random(FNV(run_id + stream))`，佔位策略的流是 `""`，L0 的均勻抽取是 `:explore uniform`，它的 softmax 是 `:explore`（`Brains/ChampionOptions.cs:46-56`）。所以一局不管在哪個行程裡、走不走線路、記不記日誌，都打得一樣。
 
 **看順序，不看時序**。一次搜尋的請求平行執行，但行程池按請求順序回傳回覆（[模擬器：工作行程池 §2](/zh-tw/arch/simulator/pool/#sec-2)），候選按估值排序，平手時保持合法動作的順序（先結束回合，再是牌，再是藥水）。哪個工作行程先完成，永遠不會改變答案。`run --check` 讓整局都受這一點檢驗（[決策日誌 §8](/zh-tw/arch/harness/decision-log/#sec-8)）。
 

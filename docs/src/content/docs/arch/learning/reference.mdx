@@ -40,7 +40,7 @@ flowchart LR
 
 | 文件夹 | 内容 | 例子 |
 |---|---|---|
-| `selfplay/vNgM/aAA-eXXX/` | 一代的作业，每个进阶和 ε 一个文件夹（`a00-e030` 即进阶 0、ε = 0.3）；`vNgM` 指数据，从不指网络 | `sl/selfplay/vNgM/a00-e030` |
+| `selfplay/vNgM/aAA-GAME-eXXX[-tYYY]/` | 一代的作业，按它的数据集文件的每个进阶、游戏和档位一个文件夹（`a10-gauntlet-e010-t005` 即进阶 10、文件中的游戏 `gauntlet`、ε = 0.1、τ = 0.05），旁边是 `dataset.toml`，即这一代据以打出的文件，第一行是它的提交（[宏观大脑：自我对弈 §4](/arch/macro-brain/selfplay/#sec-4)）；`vNgM` 指数据，从不指网络 | `sl/selfplay/vNgM/a10-full-e030` |
 | `eval/DATE-SUBJECT/` | 评估和晋级门槛，每个角色每一方一个文件夹；SUBJECT 写出打的是什么，即进阶和两个网络 | `sl/eval/DATE-a0-V-C` |
 | `forks/DATE-SUBJECT/` | 试打的对局，例如对一个构建或一组选项的冒烟测试 | – |
 | `data/CHARACTER/void/` | 不能用的数据（选项用错、停得太早），保持原来的路径，附一个 `VOID.txt` 写明原因 | `void/sl/selfplay/vNgM/a00-e030` |
@@ -84,7 +84,7 @@ flowchart LR
 | `name` | 网络的名字，和冠军显示的一样（`l0 NAME`） | 是 |
 | `floors` | 64 | 是 |
 | `vocab` | 每张表，这个游戏版本的每个 id（`learn/game_ids.py`），第 0 项是 `<unk>`：`cards`、`modifiers`、`relics`、`potions`、`context`、`map`、`relic_status` | 是 |
-| `state` | `names`（floor、hp、max_hp、gold、ascension、potion_slots）、`mean`、`std` | 是 |
+| `state` | `names`（floor、hp、max_hp、gold、ascension、potion_slots、auto_win_0、auto_win_1、auto_win_2）、`mean`、`std` | 是 |
 | `fit` | 训练报告（[§9](#sec-9)） | 否 |
 | `onnx` | 计算图：输入名照 `learn/v/encode.py` 的 `INPUTS`，在 `state` 之后是遗物的 `relic_values` 和 `relic_status`，以及保留的牌的 `held` 和 `held_mask`，批大小和长度维度不固定；输出 `hazards`（batch × 64）；opset 20 | 是 |
 | `tests` | 按训练种子抽出的最多 8 个留出样本：`run`（整局观测）和 `value`（训练器在 CPU 上给的值） | 是 |
@@ -109,7 +109,7 @@ flowchart LR
 
 ## 8. C# 里的推理
 
-- **用哪些网络**。`run --value FILE` 读 V 的网络文件（`RunNet.Read`）；`--value` 和 `--macro l0` 或 `--combat-net` 一起用，两者都需要它（`SimWorker/Commands/Args.cs:235`）。`run --combat-net FILE` 加载战斗网络（`CombatNet.Load`），即每个战斗搜索的叶子，它的结局由那个 V 定价：`--combat-net` 和 `--policy pimc` 或 `plan` 必须一起用（`:234`）。
+- **用哪些网络**。`run --value FILE` 读 V 的网络文件（`RunNet.Read`）；`--value` 和 `--macro l0` 或 `--combat-net` 一起用，两者都需要它（`SimWorker/Commands/Args.cs:248`）。`run --combat-net FILE` 加载战斗网络（`CombatNet.Load`），即每个战斗搜索的叶子，它的结局由那个 V 定价：`--combat-net` 和 `--policy pimc` 或 `plan` 必须一起用（`:247`）。
 - **`IRunValue`**（`Brain/Macro/RunValue.cs`）是宏观大脑眼中的 V：一个名字，以及对整局观测的估值。`RunNet` 实现了它。
 - **`RunNet`**（`Brain/Macro/RunNet.cs`）用 ONNX Runtime（`Microsoft.ML.OnnxRuntime`）运行计算图，intra-op 和 inter-op 各一个线程（`:53-54`），因为模拟器跑很多进程，而一个宏观决策只给少数几个小输入估值。它像 `learn/v/encode.py` 那样从整局观测构建输入，遗物的数值和状态由两个网络共用的 `CombatNet.RelicInputs` 构建。未知的 id 读作第 0 项。`Value` 是从这一局当前的层起每一层都活下来的机会（`:80-87`）。
 - **`CombatNet`**（`Brain/Combat/CombatNet.cs`）对状态做同样的事，也是一个线程。`Graph` 从 `Cards`、`Player`、`Enemies`、`PowerNumbers`、`RelicNumbers`、`Allies`、`Bag` 和 `Powers` 构建输入，与 `learn/combat/encode.py` 读状态的方式相同，并返回两个输出；`Outcome` 按每个结局会留下的那局游戏用 V 给它定价，死亡为 0，每瓶持有的药水按它在结局分桶所在那一组的概率保留（[战斗大脑：叶子 §5](/arch/combat-brain/leaf/#sec-5)）。
@@ -143,9 +143,9 @@ flowchart LR
 
 **常量**（`:40-44`）：64 层；最多 40 轮，连续 5 轮留出损失没有降低 10⁻⁴ 以上就停；每批 256 个决策；AdamW，学习率 3 × 10⁻⁵，权重衰减 10⁻⁴；第二个输出头权重 3。网络的大小是 `Net` 的：嵌入 64，单牌网络 256，主干 512（`learn/v/net.py:86-111`）。
 
-**流程**。读取样本；按对局 id 划分；取游戏的表（`learn/game_ids.py`），并算出状态的加权均值和标准差（或取 `--init` 的）；基线风险值，即每一层的 $(\text{deaths} + 0.5)/(\text{alive} + 1)$，限制在 $[10^{-4}, 1 - 10^{-4}]$ 内，作为输出头的偏置；训练；保留留出风险值损失最好的那一轮。第二个输出头的接下来战斗项每轮都记日志，但不加进去（`:145-148`）。模块的 docstring 说提前停止对各项的加权「与损失相同」；代码并没有加这一项。然后是报告和文件。
+**流程**。读取样本；按对局 id 划分；取游戏的表（`learn/game_ids.py`），并算出状态的加权均值和标准差（或取 `--init` 的）；基线风险值，即每一层的 $(\text{deaths} + 0.5)/(\text{alive} + 1)$，限制在 $[10^{-4}, 1 - 10^{-4}]$ 内，作为输出头的偏置；训练；保留留出风险值损失最好的那一轮。第二个输出头的接下来战斗项每轮都记日志，但不加进去（`:150-153`）。模块的 docstring 说提前停止对各项的加权「与损失相同」；代码并没有加这一项。然后是报告和文件。
 
-**报告**（一行 JSON，`:165-177`）：
+**报告**（一行 JSON，`:170-185`）：
 
 | 字段 | 何时有 | 内容 |
 |---|---|---|
@@ -162,11 +162,11 @@ flowchart LR
 
 ### `learn/gate.py`：一个 V 的报告和门槛
 
-`uv run python gate.py --records R1,R2 [--logs L1,L2] [--against C1,C2]`（`learn/gate.py:154-170`）。它读打完的对局，失败的排除，被截断的保留（`:40-42`）。输出一行 JSON：
+`uv run python gate.py --records R1,R2 [--logs L1,L2] [--against C1,C2]`（`learn/gate.py:158-174`）。它读打完的对局，失败的排除，被截断的保留（`:40-46`）。输出一行 JSON：
 
-- **来自记录**（`runs_report`，`:45-72`）：`runs`、`floor` 和 `floor_se`；`won`；每幕的 `boss`（打到、打赢、比率）；`elites_per_run`、`elite_deaths`；`died_in`，按幕列出每局失败的对局死在哪种房间的战斗里，或 `outside combat`；
-- **来自日志**（`logs_report`，`:101-127`），只算有记录的对局：`rest`，休息处的选择，按生命比例分（0–40%、40–70%、70–90%、90–100%）；`monster_or_rest`，地图上同时提供怪物和休息处时的选择，按同样的比例分；`shop`，商店卖出了什么（遗物、卡牌、药水，以下一个决策的整局观测为准），以及删牌和离开；
-- **用 `--against` 时**（`paired`，`:130-151`），放在 `against` 下，在双方都打完的种子上按种子配对：`pairs`、`won`、`champion_won`、`wins_diff`、`wins_diff_se`、`wins_lower_95`（均值 − 1.645 SE）、`floor_diff`、`floor_diff_se` 和 `promote`，按胜局判定。
+- **来自记录**（`runs_report`，`:49-76`）：`runs`、`floor` 和 `floor_se`；`won`；每幕的 `boss`（打到、打赢、比率）；`elites_per_run`、`elite_deaths`；`died_in`，按幕列出每局失败的对局死在哪种房间的战斗里，或 `outside combat`；
+- **来自日志**（`logs_report`，`:105-131`），只算有记录的对局：`rest`，休息处的选择，按生命比例分（0–40%、40–70%、70–90%、90–100%）；`monster_or_rest`，地图上同时提供怪物和休息处时的选择，按同样的比例分；`shop`，商店卖出了什么（遗物、卡牌、药水，以下一个决策的整局观测为准），以及删牌和离开；
+- **用 `--against` 时**（`paired`，`:134-155`），放在 `against` 下，在双方都打完的种子上按种子配对：`pairs`、`won`、`champion_won`、`wins_diff`、`wins_diff_se`、`wins_lower_95`（均值 − 1.645 SE）、`floor_diff`、`floor_diff_se` 和 `promote`，按胜局判定。
 
 ## 10. 循环用到的模拟器命令
 

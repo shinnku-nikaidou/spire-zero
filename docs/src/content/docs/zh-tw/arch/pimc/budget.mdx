@@ -27,13 +27,13 @@ PIMC 在每個動作之前都重新搜尋，只有一個例外。當最好的路
 
 ## 4. 每個房間同樣的預算
 
-菁英戰和頭目戰決定對局的成敗，所以可以給它們更多搜尋。其他地方的證據很強：spire-mentor 把頭目預算從 1,000 提到 4,000，第 1 幕通過率從 21.5% 升到 65% 以上。這裡每個房間都是同樣的 8 × 300；頭目戰多給節點是否划算，仍未決（[§7](#sec-7)）。
+菁英戰和頭目戰決定對局的成敗，所以可以給它們更多搜尋。其他地方的證據很強：spire-mentor 把頭目預算從 1,000 提到 4,000，第 1 幕通過率從 21.5% 升到 65% 以上。這裡每個房間都是同樣的 8 × 300；頭目戰多給節點是否划算，仍未決（[§7](#sec-7)）。SL 規劃器的房間等級 `--elite-effort` 和 `--boss-effort` 是力度預設，而力度預設只屬於規劃器（[SL 規劃器：預算 §1](/zh-tw/arch/sl-planner/budget/#sec-1)）。
 
 ## 5. worker
 
 一個決策的每個世界都是發給 worker 行程池的一個請求（`PimcWorldRequest`，[戰鬥大腦：提示、招式與 worker §3](/zh-tw/arch/combat-brain/shared/#sec-3)）：worker 用建構種子從觀測建構戰鬥，取由搜尋種子抽出的世界中的第 $k$ 個，搜尋本回合，回傳每個第一動作之後最好的路線。`PooledPimc` 每個世界送出一個請求，按世界順序合併回覆，所以走法和單一行程時相同（[§1](#sec-1)）。
 
-PIMC 只在 NoSL 下打：SL 唯一的精確世界屬於規劃器（[SL 規劃器](/zh-tw/arch/sl-planner/)），打 `pimc` 的冠軍會拒絕 SL 對局（`src/Sts2Ai.SimWorker/Brains/ChampionOptions.cs:40`）。
+PIMC 只在 NoSL 下打：SL 唯一的精確世界屬於規劃器（[SL 規劃器](/zh-tw/arch/sl-planner/)），打 `pimc` 的冠軍會拒絕 SL 對局（`src/Sts2Ai.SimWorker/Brains/ChampionOptions.cs:42`）。
 
 ## 6. 冠軍
 

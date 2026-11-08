@@ -59,12 +59,12 @@ public sealed record PromptSeen(IReadOnlyList<IReadOnlyList<int>> Groups, int Mi
 ## 2. 節點複本與敵人出招記錄
 
 ```csharp
-public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, IReadOnlyList<int>? AutoWin = null);
 public sealed record EnemyTurns(uint Uid, string? Id, IReadOnlyList<EnemyTurn> Turns);
 public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 ```
 
-**`NodeClone`** 是當前節點的一個 SL 複本：節點的檢查點（`Save`，抵達時遊戲的存檔，加上存檔丟掉的遺物欄位），以及此後節點裡的每個決策，以軌跡行表示（`surface action`，選牌提示的選擇用遊戲自己的索引）。它在模擬器之外是不透明的；模擬器像遊戲的「繼續」那樣載入存檔，把遺物欄位放回去，然後重播這些決策（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。Harness 從線路的節點訊息做出一個複本（[線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。
+**`NodeClone`** 是當前節點的一個 SL 複本：節點的檢查點（`Save`，抵達時遊戲的存檔，加上存檔丟掉的遺物欄位），以及此後節點裡的每個決策，以軌跡行表示（`surface action`，選牌提示的選擇用遊戲自己的索引）。它在模擬器之外是不透明的；模擬器像遊戲的「繼續」那樣載入存檔，把遺物欄位放回去，然後重播這些決策（[模擬器：世界與 SL 複本 §4](/zh-tw/arch/simulator/worlds/#sec-4)）。`AutoWin` 是這一局的自動勝利規則，即普通怪物戰在開打時就贏下的那些幕（從 0 起算），複本會保留它；在一般的遊戲裡為 null（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)）。Harness 從線路的節點訊息做出一個複本（[線路 §6](/zh-tw/arch/protocol/wire/#sec-6)）。
 
 **`EnemyTurns`** 是一個敵人在當前戰鬥裡招式的公開紀錄：到目前為止的每個回合，最舊的在前，它的圖示在該回合第一個決策時顯示的意圖。看著這場戰鬥的玩家全都看到了。Harness 從觀測按戰鬥保存它（`MoveRecord`），並隨每個決策交給戰鬥大腦；搜尋從它建構怪物的招式日誌（[模擬器：戰鬥 §5](/zh-tw/arch/simulator/combat/#sec-5)），學習得到的葉節點也會讀它（[戰鬥大腦：葉節點 §3](/zh-tw/arch/combat-brain/leaf/#sec-3)）。
 

@@ -39,7 +39,7 @@ import WireExchange from '../../../../../components/book/WireExchange.svelte';
 | `cancel` | 宿主 → 大腦 | `decision_id` | 回答到來之前，遊戲已經往前走了 |
 | `run_end` | 宿主 → 大腦 | `won`、`floor`、`reason` | 一局結束；`reason` 是 `won`、`lost`、`truncated`（決策上限）、`failed` 或 `aborted` |
 | `error` | 大腦 → 宿主 | `message` | 代替 `ready` 或 `recommendation`：大腦接不了這一局，或答不了這個決策；宿主結束這一局 |
-| `node_checkpoint` | 宿主 → 大腦 | `node_index`、`checkpoint` | 僅 SL：一個節點開始（[§6](#sec-6)） |
+| `node_checkpoint` | 宿主 → 大腦 | `node_index`、`checkpoint`、`auto_win`? | 僅 SL：一個節點開始（[§6](#sec-6)） |
 | `node_action` | 宿主 → 大腦 | `node_index`、`seq`、`action` | 僅 SL：在節點內做出的一個決策（[§6](#sec-6)） |
 
 `run_id` 是種子 JSON 字串的 `ProtocolJson.Hash`，寫成 16 位十六進位數字（`RunHeader.IdOf`）：大腦可以用這個 id 區分各局、為自己的亂數流設定種子，卻無法從中得知種子（[Harness：路由、預算與種子 §5](/zh-tw/arch/harness/routing/#sec-5)）。`decision_id` 在每局裡從 0 開始計數。`obs_hash` 是觀測的雜湊，寫成 16 位十六進位數字。
@@ -85,7 +85,7 @@ sequenceDiagram
 
 SL 下大腦可以確切知道當前節點；一個節點是一個地圖點，從抵達開始，到離開它的那次移動為止（[環境：資訊與節點 §3](/zh-tw/arch/environments/information/#sec-3)）。宿主用兩種訊息送出大腦重建它所需要的東西，也就是節點的複本（[模擬器：世界與 SL 複本 §3](/zh-tw/arch/simulator/worlds/#sec-3)）：
 
-- **`node_checkpoint`**，在節點開始時送出：`node_index`（從 0 起算，從宿主看到的第一個節點算起；Mod 可能中途才加入一局）；以及 `checkpoint`，一個本身就是一份 JSON 的字串，包含抵達時遊戲的存檔和每個遺物的簡單欄位。
+- **`node_checkpoint`**，在節點開始時送出：`node_index`（從 0 起算，從宿主看到的第一個節點算起；Mod 可能中途才加入一局）；以及 `checkpoint`，一個本身就是一份 JSON 的字串，包含抵達時遊戲的存檔和每個遺物的簡單欄位；帶著 `auto_win` 時，是這一局的自動勝利規則的幕，節點的複本會保留它。只有模擬器設定它（[模擬器：整局 §8](/zh-tw/arch/simulator/runs/#sec-8)），Mod 從不設定。
 - **`node_action`**，節點內做出的每個決策一條：`seq`，在節點內從 0 起算；以及決策的軌跡形式：決策介面、一個空格，然後是動作（`map 0,1`、`combat play:7:1`）。選牌提示的一步是 `card_choice`，選擇用遊戲自己的索引表示，而不是 `pick:` 的規範索引（[觀測與動作 §4](/zh-tw/arch/protocol/observation/#sec-4)），因為複本透過遊戲的選牌器重播它。
 
 **時機**。兩者都是延後送出的，就在下一個決策之前：如果此後開始了新節點，先送檢查點，再送節點裡每個還沒送出的決策（`Brains/RunBrains.cs:88-99`）。因此一個節點的移動，也就是它的最後一個決策，永遠不會被送出：下一個決策在下一個節點裡，而那個節點以它自己的檢查點開始。
@@ -112,7 +112,7 @@ public sealed record Candidate(string Action, double Value, double Ci, int Sampl
 | `plan` | 大腦在這個動作之後的計畫：PIMC 給出本回合剩下的部分，SL 規劃器給出這場戰鬥剩下的部分，地圖上的宏觀大腦給出本幕剩下的路線 |
 | `candidates` | 大腦評過分的選項，選中的排第一，其餘最好的在前：會搜尋的戰鬥大腦的第一個動作；L0 在戰鬥外的決策或選牌提示處的選項，由 V 估值（回答由探索抽出時沒有）。選牌提示的選項是回答（`pick:i,j`）；戰鬥中的選牌提示沒有候選 |
 
-一個 `Candidate`（`World.cs:106`）是一個評過分的選項：
+一個 `Candidate`（`World.cs:107`）是一個評過分的選項：
 
 | 欄位 | 含義 |
 |---|---|

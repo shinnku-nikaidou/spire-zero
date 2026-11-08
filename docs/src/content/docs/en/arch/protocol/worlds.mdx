@@ -59,12 +59,12 @@ The world API covers combats only: the combat brain is its only user. The macro 
 ## 2. The node clone and the record of enemy moves
 
 ```csharp
-public sealed record NodeClone(string Save, IReadOnlyList<string> Trace);
+public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, IReadOnlyList<int>? AutoWin = null);
 public sealed record EnemyTurns(uint Uid, string? Id, IReadOnlyList<EnemyTurn> Turns);
 public sealed record EnemyTurn(int Round, IReadOnlyList<IntentView> Intents);
 ```
 
-**`NodeClone`** is an SL clone of the current node: the node's checkpoint (`Save`, the game's save on arrival with the relic fields it drops) and every decision of the node since as trace lines (`surface action`, a card prompt's picks as the game's own indexes). It is opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back, and replays the decisions ([Simulator: worlds and the SL clone §4](/en/arch/simulator/worlds/#sec-4)). Harness makes one from the wire's node messages ([The wire §6](/en/arch/protocol/wire/#sec-6)).
+**`NodeClone`** is an SL clone of the current node: the node's checkpoint (`Save`, the game's save on arrival with the relic fields it drops) and every decision of the node since as trace lines (`surface action`, a card prompt's picks as the game's own indexes). It is opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back, and replays the decisions ([Simulator: worlds and the SL clone §4](/en/arch/simulator/worlds/#sec-4)). `AutoWin` is the run's auto-win rule, the acts from 0 whose plain monster fights are won at their start, which the clone keeps; null in the normal game ([Simulator: whole runs §8](/en/arch/simulator/runs/#sec-8)). Harness makes one from the wire's node messages ([The wire §6](/en/arch/protocol/wire/#sec-6)).
 
 **`EnemyTurns`** is the public record of one enemy's moves in the current combat: for each round so far, oldest first, the intents its icons showed at the round's first decision. A player who watched the fight saw all of it. Harness keeps it per combat from the observations (`MoveRecord`), and gives it to the combat brain with each decision; search builds the monsters' move logs from it ([Simulator: combats §5](/en/arch/simulator/combat/#sec-5)), and the learned leaves read it ([Combat brain: the leaf §3](/en/arch/combat-brain/leaf/#sec-3)).
 

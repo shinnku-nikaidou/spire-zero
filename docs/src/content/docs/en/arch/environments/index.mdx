@@ -85,11 +85,11 @@ Where the environment is set, as the code has it:
 
 What refuses the wrong environment:
 
-- `--policy plan` (the SL planner) and `--afterstates clone` (L0 playing options on the clone) play in SL only, `--policy pimc` in NoSL only: a `hello` from the other environment is refused (`Brains/ChampionOptions.cs:39-41`), and `run` refuses the planner outside SL before it starts (`Commands/RunCommand.cs:61`).
+- `--policy plan` (the SL planner) and `--afterstates clone` (L0 playing options on the clone) play in SL only, `--policy pimc` in NoSL only: a `hello` from the other environment is refused (`Brains/ChampionOptions.cs:41-43`), and `run` refuses the planner outside SL before it starts (`Commands/RunCommand.cs:65`).
 - SL and NoSL play the same combat net file, which learned from SL's games ([Combat brain: the leaf §6](/en/arch/combat-brain/leaf/#sec-6)).
-- Harness refuses the SL messages `node_checkpoint` and `node_action` in a NoSL run (`Harness/Dispatcher.cs:173`, `:182`); the brain server keeps the refusal and answers the run's next decision with an error, the host ends the run as failed and `run` exits 1, and a failed run is left out of its report (`Harness/BrainServer.cs:61`, `:71-81`, `Harness/RunRecords.cs:32`).
+- Harness refuses the SL messages `node_checkpoint` and `node_action` in a NoSL run (`Harness/Dispatcher.cs:173`, `:182`); the brain server keeps the refusal and answers the run's next decision with an error, the host ends the run as failed and `run` exits 1, and a failed run is left out of its report (`Harness/BrainServer.cs:61`, `:71-81`, `Harness/RunRecords.cs:34`).
 - The combat net trainer reads only the logs of the environment it is given, and fails on the other's (`learn/combat/data.py`).
-- The gate refuses to pair runs played in different environments or games (`Harness/Gate.cs:40-41`).
+- The gate refuses to pair runs played in different environments or games (`Harness/Gate.cs:41-42`).
 
 ## 6. This chapter
 
