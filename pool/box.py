@@ -19,6 +19,14 @@ of threads, its only knob; the hub (deal.py) deals the chunks of every open job 
     deals the open steps by priority, higher first, then by launch; inside a step, to the job with the lowest share of
     its queue dealt. Environment also: OWNER (default main), AFTER=JOB[,JOB...] leaves out the indices those jobs
     finished (their done-*.txt here).
+  box.py plan FILE [REV]   a dataset file (eval/datasets/NAME.toml, as it is here or at REV): prints the jobs it opens, with
+    their options and seeds, and its runs by character, ascension, game and tier; refuses a file that does not hang
+    together. Nothing goes to the hub.
+  box.py launch FILE REV [--smoke]   opens the dataset file at REV as one self-play step NAME, every job as box.py run
+    would, with the champion file's options at REV under the file's own; then puts the file, its first line rev = REV,
+    in each character's data/CHAR/sl/selfplay/NAME/dataset.toml, here and on the hub. --smoke instead plays one run per
+    character, row and ascension (the first tier's) from +19,000 of each character's seeds, as forks jobs of step
+    NAME-smoke with a 1-hour deadline.
   box.py deadline NAME UNTIL   moves step NAME's deadline, also after it passed while its jobs are not fetched.
   box.py priority NAME N       changes step NAME's priority.
   box.py stop JOB|NAME REASON  stops a job, or every job of a step: runs in play killed within a minute, finished runs kept.
@@ -37,6 +45,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -348,16 +357,27 @@ def run(argv: list[str]) -> None:
         raise SystemExit(__doc__)
     cut = argv.index("--")
     job, rev, until, purpose, spread = argv[:5]
-    options = argv[cut + 1 :]
-    chunk = int(os.environ.get("CHUNK", 1))
-    inputs = os.environ.get("INPUTS")
+    priority = int(os.environ["PRIORITY"]) if "PRIORITY" in os.environ else None
+    open_job(job, rev, until, purpose, spread, argv[cut + 1 :], os.environ.get("DEADLINE"), priority,
+             int(os.environ.get("CHUNK", 1)), os.environ.get("INPUTS"), os.environ.get("AFTER"))
 
+
+def pushed(rev: str) -> str:
+    """REV's full hash, once it is on origin/main."""
     full = output("git", "-C", ROOT, "rev-parse", "--verify", f"{rev}^{{commit}}")
-    rev = output("git", "-C", ROOT, "rev-parse", "--short", full)
     if subprocess.run(["git", "-C", ROOT, "merge-base", "--is-ancestor", full, "origin/main"]).returncode:
         subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin"], check=True)
         if subprocess.run(["git", "-C", ROOT, "merge-base", "--is-ancestor", full, "origin/main"]).returncode:
             raise Refused(f"{rev} is not on origin/main; push it first")
+    return full
+
+
+def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options: list[str], step_name: str | None,
+             priority: int | None, chunk: int = 1, inputs: str | None = None, after: str | None = None) -> None:
+    """box.py run: data/JOB on the pool, its queue on the hub, the job last into its step (step_name, default the job
+    with / as -), at priority (default by kind) unless the step has its own."""
+    full = pushed(rev)
+    rev = output("git", "-C", ROOT, "rev-parse", "--short", full)
     parts = job.split("/")
     if len(parts) < 4 or parts[1] not in ("sl", "nosl"):
         raise Refused("JOB is CHAR/ENV/KIND/NAME..., ENV sl or nosl")
@@ -378,10 +398,11 @@ def run(argv: list[str]) -> None:
         deadline = until_epoch(until)
         if deadline <= time.time() + 60:
             raise Refused(f"the deadline {until} is not a minute away")
-    name = os.environ.get("DEADLINE") or job.replace("/", "-")
+    name = step_name or job.replace("/", "-")
     if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
         raise Refused("DEADLINE is a name: letters, digits, . _ -")
-    priority = int(os.environ.get("PRIORITY", 0 if kind == "selfplay" else 1))
+    asked = priority is not None
+    priority = priority if asked else 0 if kind == "selfplay" else 1
     step = None
     if step_path(name).exists():
         step = load_step(name)
@@ -389,7 +410,7 @@ def run(argv: list[str]) -> None:
             raise Refused(f"step {name} is fetched already")
         if step["deadline_epoch"] != deadline:
             raise Refused(f"step {name} has the deadline {when(step['deadline_epoch'])}: give it (box.py deadline moves it)")
-        if "PRIORITY" in os.environ and priority != step["priority"]:
+        if asked and priority != step["priority"]:
             raise Refused(f"step {name} has priority {step['priority']} (box.py priority changes it)")
         priority = step["priority"]
 
@@ -401,7 +422,6 @@ def run(argv: list[str]) -> None:
         start, n = 0, seeds_in(text)
     else:
         start, n = (int(x) for x in spread.split(":"))
-    after = os.environ.get("AFTER")
     lines = queue(start, n, chunk, finished_by(after or ""))
 
     # the sim and the inputs on the hub's dist/, once
@@ -435,6 +455,185 @@ def run(argv: list[str]) -> None:
     push_step(name, step)
     say(f"data/{job}: {len(lines)} chunks, step {name} (priority {priority}, {when(deadline)}), {len(step['jobs'])} jobs in it")
 
+
+# --- datasets: a self-play step written as one TOML file (eval/datasets/NAME.toml)
+
+CHARACTERS = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER"]  # the ledger's order: character k from seeds + 20000 k
+PER_CHARACTER, SMOKE_AT = 20000, 19000  # a character's seeds in a block; the last 1,000 are the smoke's
+EFFORTS = ("low", "medium", "high", "max")
+ROOMS = {"monster": "effort", "elite": "elite-effort", "boss": "boss-effort"}  # a game's effort by room, as run's options
+DATASET_KEYS = {"rev", "name", "deadline", "priority", "seeds", "characters", "champion", "workers", "explore", "games", "runs"}
+
+
+def git_text(rev: str | None, path: str) -> str:
+    """A file of this checkout as it is, or as it is at REV."""
+    if rev is None:
+        return (ROOT / path).read_text()
+    try:
+        return output("git", "-C", ROOT, "show", f"{rev}:{path}", stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        raise Refused(f"{path} is not in git at {rev}") from None
+
+
+def tier(t: dict, where: str) -> tuple[float, float]:
+    """An exploration tier, (epsilon, tau), each a whole number of hundredths, as job names show them."""
+    if not isinstance(t, dict) or set(t) - {"epsilon", "tau"} or "epsilon" not in t:
+        raise Refused(f"{where}: a tier is {{ epsilon = E }} or {{ epsilon = E, tau = T }}")
+    eps, tau = float(t["epsilon"]), float(t.get("tau", 0))
+    if not 0 <= eps <= 1 or tau < 0:
+        raise Refused(f"{where}: epsilon is from 0 to 1, tau from 0")
+    if any(abs(x * 100 - round(x * 100)) > 1e-9 for x in (eps, tau)):
+        raise Refused(f"{where}: epsilon and tau are whole hundredths (job names show them as eEEE and tTTT)")
+    return eps, tau
+
+
+def dataset_jobs(spec: dict, path: str, champion: dict) -> list[dict]:
+    """The file's jobs, each {job, character, asc, game, eps, tau, start, n, options}, in the file's order per character.
+    Refuses what the file cannot mean."""
+    if unknown := set(spec) - DATASET_KEYS:
+        raise Refused(f"{path}: no key {', '.join(sorted(unknown))} (keys: {', '.join(sorted(DATASET_KEYS))})")
+    for key in ("name", "deadline", "seeds", "characters", "champion", "games", "runs"):
+        if key not in spec:
+            raise Refused(f"{path}: {key} is missing")
+    name = spec["name"]
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*", name):
+        raise Refused(f"{path}: name {name} is lower-case letters, digits, . and -")
+    if not isinstance(spec["seeds"], int) or spec["seeds"] < 0 or spec["seeds"] % 100000:
+        raise Refused(f"{path}: seeds is a ledger block's start, a multiple of 100,000")
+    characters = spec["characters"]
+    if not characters or set(characters) - set(CHARACTERS) or len(set(characters)) != len(characters):
+        raise Refused(f"{path}: characters are some of {', '.join(CHARACTERS)}, each once")
+    games = {}
+    for game, g in spec["games"].items():
+        if not re.fullmatch(r"[a-z0-9]+", game):
+            raise Refused(f"{path}: game {game}'s name is lower-case letters and digits")
+        if set(g) != {"auto_win", "effort"} or set(g["effort"]) != set(ROOMS):
+            raise Refused(f"{path}: game {game} has auto_win = [acts] and effort = {{ monster, elite, boss }}")
+        if any(a not in (1, 2, 3) for a in g["auto_win"]) or any(e not in EFFORTS for e in g["effort"].values()):
+            raise Refused(f"{path}: game {game}: auto_win's acts are 1 to 3, an effort one of {', '.join(EFFORTS)}")
+        games[game] = g
+    tiers = [tier(t, f"{path}: explore") for t in spec.get("explore", [])]
+    workers = spec.get("workers")
+    base = dict(champion["options"])
+    if base.get("env") != "SL" or base.get("policy") != "plan" or base.get("macro") != "l0":
+        raise Refused(f"{spec['champion']} is not an SL champion of plan and l0")
+    jobs, used = [], Counter()
+    for k, row in enumerate(spec["runs"]):
+        where = f"{path}: runs[{k}]"
+        if set(row) - {"game", "asc", "n", "characters", "explore"} or not {"game", "asc", "n"} <= set(row):
+            raise Refused(f"{where} has game, asc and n, and may have characters and explore")
+        if row["game"] not in games:
+            raise Refused(f"{where}: no game {row['game']} in [games]")
+        ascs, ns = ([row["asc"]], [row["n"]]) if isinstance(row["asc"], int) else (row["asc"], row["n"])
+        if not isinstance(ns, list) or len(ascs) != len(ns) or any(not isinstance(a, int) or not 0 <= a <= 10 for a in ascs) \
+                or any(not isinstance(x, int) or x < 1 for x in ns):
+            raise Refused(f"{where}: asc and n are one number each, or two lists of the same length; ascensions 0 to 10, n at least 1")
+        mine = row.get("characters", characters)
+        if set(mine) - set(characters):
+            raise Refused(f"{where}: characters {', '.join(sorted(set(mine) - set(characters)))} are not the file's")
+        row_tiers = [tier(t, f"{where}: explore") for t in row["explore"]] if "explore" in row else tiers
+        if not row_tiers:
+            raise Refused(f"{where}: no exploration tier, in the row or the file")
+        g = games[row["game"]]
+        for character in mine:
+            for asc, n in zip(ascs, ns):
+                for j, (eps, tau) in enumerate(row_tiers):
+                    count = n // len(row_tiers) + (j < n % len(row_tiers))
+                    if count == 0:
+                        continue
+                    job = f"{character.lower()}/sl/selfplay/{name}/a{asc:02d}-{row['game']}-e{round(eps * 100):03d}" + (f"-t{round(tau * 100):03d}" if tau else "")
+                    options = base | {ROOMS[room]: effort for room, effort in g["effort"].items()} | {"character": character, "asc": str(asc)}
+                    options |= {"workers": str(workers)} if workers else {}
+                    options |= {"explore": f"{eps:g}"} if eps else {}
+                    options |= {"macro-explore": f"{tau:g}"} if tau else {}
+                    options |= {"auto-win": ",".join(map(str, sorted(g["auto_win"])))} if g["auto_win"] else {}
+                    start = spec["seeds"] + PER_CHARACTER * CHARACTERS.index(character) + used[character]
+                    used[character] += count
+                    jobs.append({"job": job, "character": character, "asc": asc, "game": row["game"], "eps": eps, "tau": tau,
+                                 "start": start, "n": count, "options": [x for kv in options.items() for x in ("--" + kv[0], kv[1])] + ["--seed", "1"]})
+    if over := [c for c, n in used.items() if n > SMOKE_AT]:
+        raise Refused(f"{path}: {', '.join(over)} need more than {SMOKE_AT:,} seeds ({', '.join(f'{used[c]:,}' for c in over)})")
+    if twice := [j for j, n in Counter(j["job"] for j in jobs).items() if n > 1]:
+        raise Refused(f"{path}: rows repeat the job {twice[0]} (the same character, ascension, game and tier): make them one row")
+    return jobs
+
+
+def read_dataset(path: str, rev: str | None) -> tuple[dict, str, list[dict]]:
+    """The file (here, or at REV), its text, and its jobs with the champion file's options at the same place."""
+    text = git_text(rev, path)
+    try:
+        spec = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise Refused(f"{path}: {e}") from None
+    champion = json.loads(git_text(rev, spec.get("champion", "eval/champions/sl.json")))
+    return spec, text, dataset_jobs(spec, path, champion)
+
+
+def show_dataset(spec: dict, jobs: list[dict]) -> None:
+    for j in jobs:
+        print(f"{j['job']}  {j['start']}:{j['n']}  {' '.join(j['options'])}")
+    total = sum(j["n"] for j in jobs)
+    print(f"\n{spec['name']}: {len(jobs)} jobs, {total:,} runs; step {spec['name']}, deadline {spec['deadline']}, priority {spec.get('priority', 0)}")
+    for title, key in (("character", lambda j: j["character"]), ("ascension", lambda j: f"A{j['asc']}"), ("game", lambda j: j["game"]),
+                       ("tier", lambda j: f"eps {j['eps']:g}" + (f" tau {j['tau']:g}" if j["tau"] else ""))):
+        counts = Counter()
+        for j in jobs:
+            counts[key(j)] += j["n"]
+        items = sorted(counts.items(), key=lambda kv: int(kv[0][1:])) if title == "ascension" else counts.items()
+        print(f"  by {title}: " + ", ".join(f"{k} {n:,} ({100 * n / total:.1f} %)" for k, n in items))
+    for character in CHARACTERS:
+        mine = [j for j in jobs if j["character"] == character]
+        if mine:
+            first, last = mine[0]["start"], mine[-1]["start"] + mine[-1]["n"] - 1
+            print(f"  {character}: seeds {first}-{last} ({last - first + 1:,} of {SMOKE_AT:,}), smoke from {spec['seeds'] + PER_CHARACTER * CHARACTERS.index(character) + SMOKE_AT}")
+
+
+def plan_dataset(argv: list[str]) -> None:
+    if len(argv) not in (1, 2):
+        raise SystemExit(__doc__)
+    spec, _, jobs = read_dataset(argv[0], argv[1] if len(argv) == 2 else None)
+    show_dataset(spec, jobs)
+
+
+def launch_dataset(argv: list[str]) -> None:
+    smoke = "--smoke" in argv
+    argv = [a for a in argv if a != "--smoke"]
+    if len(argv) != 2:
+        raise SystemExit(__doc__)
+    path, rev = argv
+    full = pushed(rev)
+    spec, text, jobs = read_dataset(path, full)
+    name = spec["name"]
+    if smoke:
+        # one run per character, row and ascension, the first tier's, from the smoke's seeds
+        firsts, at = {}, Counter()
+        for j in jobs:
+            firsts.setdefault((j["character"], j["asc"], j["game"]), j)
+        jobs = []
+        for (character, asc, game), j in firsts.items():
+            start = spec["seeds"] + PER_CHARACTER * CHARACTERS.index(character) + SMOKE_AT + at[character]
+            at[character] += 1
+            jobs.append(j | {"job": f"{character.lower()}/sl/forks/{name}-smoke/a{asc:02d}-{game}", "start": start, "n": 1})
+        step, until, priority = f"{name}-smoke", until_epoch("+1h"), None
+    else:
+        step, until, priority = name, until_epoch(spec["deadline"]), spec.get("priority", 0)
+    if there := [j["job"] for j in jobs if (job_dir(j["job"]) / "manifest.json").exists()]:
+        raise Refused(f"data/{there[0]} has a manifest already ({len(there)} jobs of the file do)")
+    show_dataset(spec, jobs)
+    for j in jobs:
+        purpose = (f"{name}{' smoke' if smoke else ''}: SL self-play, {j['character']} A{j['asc']}, game {j['game']}, "
+                   f"explore eps {j['eps']:g} tau {j['tau']:g}, from {path}")
+        open_job(j["job"], full, f"@{until}", purpose, f"{j['start']}:{j['n']}", j["options"], step, priority)
+    if smoke:
+        return
+    # the file beside the data, with the commit it was launched at
+    stamped = f'rev = "{full}"\n' + text
+    for character in sorted({j["character"] for j in jobs}):
+        folder = f"{character.lower()}/sl/selfplay/{name}"
+        (ROOT / "data" / folder).mkdir(parents=True, exist_ok=True)
+        (ROOT / "data" / folder / "dataset.toml").write_text(stamped)
+        to_hub(ROOT / "data" / folder / "dataset.toml", f"{folder}/dataset.toml")
+    say(f"dataset {name}: {len(jobs)} jobs in step {step}; its file in each character's data/CHAR/sl/selfplay/{name}/dataset.toml, here and on the hub")
 
 # --- changing a step or job
 
@@ -567,11 +766,15 @@ print(json.dumps(out))
 
 
 def group_key(job: str) -> tuple[str, str]:
-    """A step's rows when it has many jobs: by character and ascension (an aNN part of the name, as v9g2's), else the
-    name's first part."""
+    """A step's rows when it has many jobs: by character and ascension (an aNN part of the name, as v9g2's), with a
+    dataset's game after it (aNN-GAME-eEEE), else the name's first part."""
     parts = job.split("/")
     words = parts[-1].split("-")
-    return parts[0].upper(), next((w for w in words if re.fullmatch(r"a\d\d", w)), words[0])
+    at = next((i for i, w in enumerate(words) if re.fullmatch(r"a\d\d", w)), None)
+    if at is None:
+        return parts[0].upper(), words[0]
+    game = words[at + 1] if at + 1 < len(words) and not re.fullmatch(r"e\d{3}", words[at + 1]) else None
+    return parts[0].upper(), words[at] + (f"-{game}" if game else "")
 
 
 def status(argv: list[str]) -> None:
@@ -790,8 +993,8 @@ def main(argv: list[str]) -> None:
     if command == "until":
         print(until_epoch(rest[0]))
     elif command in (commands := {
-        "up": up, "threads": set_threads, "down": down, "run": run, "deadline": move_deadline, "priority": set_priority,
-        "stop": stop, "status": status, "fetch": fetch,
+        "up": up, "threads": set_threads, "down": down, "run": run, "plan": plan_dataset, "launch": launch_dataset,
+        "deadline": move_deadline, "priority": set_priority, "stop": stop, "status": status, "fetch": fetch,
     }):
         commands[command](rest)
     else:

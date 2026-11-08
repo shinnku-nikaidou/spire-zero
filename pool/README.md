@@ -16,8 +16,8 @@ only knob.
 | `hub.sh` | this checkout | the data channel to the hub (rsync over ssh) and the hub's upkeep |
 | `on.sh` | this checkout | runs a script on a machine of the pool, as our user there |
 
-Each script's usage is at its top. Standard library Python 3.10+ and bash; the machines also need `zstd`, `tar` and
-`rsync`.
+Each script's usage is at its top. Standard library Python 3.10+ (3.11+ for `box.py`, which reads TOML) and bash; the
+machines also need `zstd`, `tar` and `rsync`.
 
 ## Settings
 
@@ -50,6 +50,27 @@ pool/box.py fetch gen1                                  # returns once every chu
 
 REV must be a commit on `origin/main`: the job's build is made from it, and its inputs (`eval/seeds`,
 `eval/champions`, `weights/all`) come from git at REV, so every machine plays the same thing.
+
+## A dataset
+
+A self-play dataset is one file, `eval/datasets/NAME.toml` (`eval/datasets/example.toml` shows every key): the block of
+seeds, the characters, the champion file it plays, the exploration tiers (each a uniform draw's chance ε and a softmax
+temperature τ on log V), the games (which acts win their plain monster fights at their start, and a fight's effort by
+its room: monster, elite, boss), and rows of runs, each a game, ascensions and counts, for every character or for the
+ones it names.
+
+```bash
+pool/box.py plan eval/datasets/NAME.toml                # the jobs, their options and seeds, the shares; nothing sent
+pool/box.py launch eval/datasets/NAME.toml REV --smoke  # one run per character, row and ascension, 1 hour
+pool/box.py launch eval/datasets/NAME.toml REV          # the step NAME
+```
+
+`launch` reads the file at REV and turns each of its jobs into what `box.py run` opens, so the hub deals exactly what
+the file says. Character k of SILENT, IRONCLAD, DEFECT, REGENT, NECROBINDER plays seeds from `seeds + 20000 k`, its rows
+back to back in the file's order, each row's ascensions in order, each ascension's runs split evenly over the tiers; the
+last 1,000 of a character's 20,000 are the smoke's. A job is `CHAR/sl/selfplay/NAME/aNN-GAME-eEEE[-tTTT]` (ε and τ in
+hundredths). The file then lies beside the data, its first line `rev = "REV"`, as `CHAR/sl/selfplay/NAME/dataset.toml`
+in each character's folder, here and on the hub.
 
 ## Words
 

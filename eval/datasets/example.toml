@@ -1,0 +1,47 @@
+# An example of a dataset file, eval/datasets/NAME.toml: an SL self-play step on the hub's work pool, every amount
+# made up. box.py plan FILE [REV] shows what it deals; box.py launch FILE REV [--smoke] opens it (pool/README.md).
+name = "example"                    # the step, and the jobs' folder CHAR/sl/selfplay/NAME/...
+deadline = "+72h"                   # box.py deadline NAME UNTIL moves it later
+priority = 0
+seeds = 1000000                     # the ledger's block: SILENT from +0, IRONCLAD +20,000, DEFECT +40,000, REGENT +60,000,
+                                    # NECROBINDER +80,000; each character's last 1,000 are the smoke's
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER"]   # a row's characters unless it names its own
+champion = "eval/champions/sl.json" # nets, policy and budget; a game sets its rule and efforts on top
+workers = 4                         # search workers per run
+
+# A row's tiers unless it names its own; its runs split evenly over them. epsilon: the chance a macro decision is
+# drawn evenly; tau: the softmax temperature on log V by which the others are drawn (0 or left out: V's best).
+explore = [{ epsilon = 0.3 }, { epsilon = 0.1, tau = 0.05 }, { epsilon = 0.02, tau = 0.05 }]
+
+# A game: the acts (1 to 3) whose plain monster fights, an event's included, are won at their start with their rewards,
+# and a fight's effort by its room (low, medium, high, max).
+[games.gauntlet]
+auto_win = [1, 2]
+effort = { monster = "medium", elite = "medium", boss = "high" }
+
+[games.full]
+auto_win = []
+effort = { monster = "medium", elite = "medium", boss = "high" }
+
+# Rows of runs, each for every character of the row. asc and n: one number each, or two lists of the same length.
+[[runs]]
+game = "gauntlet"
+asc = 10
+n = 4000
+
+[[runs]]
+game = "full"
+asc = 10
+n = 1000
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [18, 36, 55, 73, 91, 109, 127, 145, 164, 182]
+
+[[runs]]                            # one character only, with its own tier
+characters = ["NECROBINDER"]
+game = "gauntlet"
+asc = [5, 9]
+n = [300, 600]
+explore = [{ epsilon = 0.1, tau = 0.1 }]
