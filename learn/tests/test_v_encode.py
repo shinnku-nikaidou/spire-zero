@@ -80,4 +80,9 @@ def test_the_state_is_the_raw_numbers_in_their_order():
         "gold": 99,
         "ascension": 3,
         "potion_slots": 3,
+        "auto_win_0": 0,
+        "auto_win_1": 0,
+        "auto_win_2": 0,
     }
+    # The game's rule: the acts whose plain monster fights are won at their start.
+    assert encode.state(view() | {"auto_win": [0, 1]})[-3:] == [1.0, 1.0, 0.0]

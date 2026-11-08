@@ -38,8 +38,12 @@ def mean_se(xs: list[float]) -> tuple[float, float]:
 
 
 def read_records(paths: str) -> list[dict]:
-    """The finished runs."""
-    return [r for r in read_lines(paths) if not r.get("failure")]
+    """The finished runs, all of the normal game: one that won plain monster fights at their start (run --auto-win) is
+    self-play data, never judged."""
+    runs = [r for r in read_lines(paths) if not r.get("failure")]
+    if ruled := next((r for r in runs if r["config"].get("auto_win")), None):
+        raise LearnError(f"run {ruled['seed']} in {paths} won plain monster fights at their start (--auto-win): no gate takes it")
+    return runs
 
 
 def runs_report(runs: list[dict]) -> dict:

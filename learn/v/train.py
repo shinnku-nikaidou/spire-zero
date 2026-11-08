@@ -31,7 +31,7 @@ import torch  # noqa: E402
 import common  # noqa: E402
 import game_ids  # noqa: E402
 from common import LearnError  # noqa: E402
-from v import data, export  # noqa: E402
+from v import data, encode, export  # noqa: E402
 from v.net import Batch, Net, aux_loss, hazard_loss, win_chance  # noqa: E402
 from weights import out_path  # noqa: E402
 
@@ -80,6 +80,8 @@ def main(
     tables = game_ids.macro_tables()
     if start and start["vocab"] != tables:
         raise LearnError(f"{init} holds other tables than learn/game_ids.json's")
+    if start and start["state"]["names"] != encode.STATE:
+        raise LearnError(f"{init} reads the state {start['state']['names']}, not v/encode.py's {encode.STATE}")
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     if start:
         mean = torch.tensor(start["state"]["mean"], dtype=torch.float64)

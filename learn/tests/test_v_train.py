@@ -72,7 +72,7 @@ def test_the_hazards_are_labelled_up_to_the_floor_a_run_died_on_and_not_past_a_c
     died = data.sample("a", make_view(floor=2), 8, 5, "died")
     censored = data.sample("b", make_view(floor=2), 8, 5)
     unlabelled = data.sample("c", make_view(floor=2), 8)
-    b = Batch([died, censored, unlabelled], {t: {} for t in encode.TABLES}, torch.zeros(6), torch.ones(6), 8, "cpu")
+    b = Batch([died, censored, unlabelled], {t: {} for t in encode.TABLES}, torch.zeros(len(encode.STATE)), torch.ones(len(encode.STATE)), 8, "cpu")
     assert b.label_mask.tolist() == [[0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 0, 0, 0], [0] * 8]
     assert b.target[0].tolist() == [0, 0, 0, 0, 0, 1, 0, 0] and b.target[1].sum() == 0
 
@@ -87,13 +87,13 @@ def test_the_onnx_graph_gives_the_test_runs_their_chance_to_win_as_torch_gave_it
     tables = game_ids.macro_tables()
     torch.manual_seed(0)
     model = Net({t: len(ids) for t, ids in tables.items()}, 16)
-    net = export.net_file("t", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
+    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0)
     assert net["state"]["names"] == encode.STATE and len(net["tests"]) == 3
     graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
     assert [i.name for i in graph.graph.input] == encode.INPUTS
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     for test in net["tests"]:
-        b = Batch([data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu")
+        b = Batch([data.sample("a", test["run"], 16)], index, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), 16, "cpu")
         feed = {name: x.numpy() for name, x in zip(encode.INPUTS, b.inputs(), strict=True)}
         [hazards] = ReferenceEvaluator(graph).run(None, feed)
         assert math.isclose(float(win_chance(torch.tensor(hazards), b.start)[0]), test["value"], rel_tol=1e-5)
@@ -105,7 +105,7 @@ def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_
     sizes = {t: len(ids) for t, ids in tables.items()}
     torch.manual_seed(0)
     model = Net(sizes, 16)
-    net = export.net_file("t", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
+    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0)
     torch.manual_seed(1)
     fresh = Net(sizes, 16)
     weights = export.weights(net, fresh)
@@ -113,7 +113,7 @@ def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_
     fresh.load_state_dict(weights)
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     for test in net["tests"]:
-        b = Batch([data.sample("a", test["run"], 16)], index, torch.zeros(6), torch.full((6,), 10.0), 16, "cpu")
+        b = Batch([data.sample("a", test["run"], 16)], index, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), 16, "cpu")
         with torch.no_grad():
             assert math.isclose(float(values(fresh.eval(), b)[0]), test["value"], rel_tol=1e-5)
 
@@ -126,7 +126,7 @@ def test_weights_the_export_merged_as_equal_read_back_apart():
     with torch.no_grad():  # as v9-0's: the damage and block rows all zero, so the ONNX keeps one of them
         model.card_damage.weight.zero_()
         model.card_block.weight.zero_()
-    net = export.net_file("t", 16, tables, torch.zeros(6), torch.full((6,), 10.0), model, samples, {}, 0)
+    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0)
     weights = export.weights(net, Net(sizes, 16))
     assert torch.equal(weights["card_block.weight"], torch.zeros(sizes["cards"], Net.DIM))
     assert torch.equal(weights["cards.weight"], model.cards.weight)

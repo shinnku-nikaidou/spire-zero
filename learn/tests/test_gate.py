@@ -86,3 +86,10 @@ def test_whole_runs_pair_on_wins_and_floors_and_promote_on_the_wins(tmp_path):
     assert pairs["wins_diff"] == 0.75 and pairs["floor_diff"] == pytest.approx((28 * 3 + 10) / 4)
     assert pairs["wins_lower_95"] == pytest.approx(0.75 - 1.645 * 0.25) and pairs["promote"]
 
+
+
+def test_a_run_that_won_plain_monster_fights_at_their_start_is_never_judged(tmp_path):
+    recs = tmp_path / "r.jsonl"
+    recs.write_text(json.dumps(run("a", "S1", 30, "lost", []) | {"config": {"auto_win": [0, 1]}}) + "\n")
+    result = CliRunner().invoke(gate.script, ["--records", str(recs)])
+    assert isinstance(result.exception, gate.LearnError) and "--auto-win" in str(result.exception)

@@ -4,7 +4,8 @@ Only what the run is and its raw state: each card's id, upgrade level and modifi
 what Tinker Time made of it); the relics, each with its counter, whether it is melted and its status, as the combat net
 reads them (combat/encode.py), and the cards a relic keeps (Pael's Tooth's, by id); the potions; the character, act,
 boss(es) and ancient; the map points the player can still reach, each as its type and how many floors ahead it is; and
-six numbers (floor, HP, max HP, gold, ascension, potion slots). A card's numbers come in only through its own id's row:
+nine numbers (floor, HP, max HP, gold, ascension, potion slots, and the game's rule: whether each act's plain monster
+fights are won at their start, 0 or 1, from the view's `auto_win`). A card's numbers come in only through its own id's row:
 its enchantment's and affliction's amounts / 10 (each modifier's), its damage / 20 (Osty's for an Osty attack) and
 block / 20 (each card's), scaled as the combat net scales them, for what a run grows on a card and its id cannot say
 (Goopy's amount, The Scythe's damage, Genetic Algorithm's block); nothing computed from the deck: what matters in it is
@@ -22,7 +23,8 @@ MAX_UP = 3  # RunNet.MaxUp: upgrade levels above this read as this one
 CAP = 10.0  # RunNet.Cap: a card's numbers, scaled, are capped at ±CAP
 TABLES = ["cards", "modifiers", "relics", "potions", "context", "map", "relic_status"]
 BAGS = {"relics": "relic_mask", "potions": "potion_mask", "context": "context_mask", "map": "map_mask"}  # and masks
-STATE = ["floor", "hp", "max_hp", "gold", "ascension", "potion_slots"]
+ACTS = 3  # the run's acts, indexes 0 to 2
+STATE = ["floor", "hp", "max_hp", "gold", "ascension", "potion_slots", *(f"auto_win_{a}" for a in range(ACTS))]
 # The ONNX graph's inputs, in order (RunNet feeds them by these names).
 INPUTS = [
     "cards", "ups", "card_mask", "mods", "mod_mask", "mod_amounts", "numbers",
@@ -122,4 +124,5 @@ def state(view: dict) -> list[float]:
         float(view["gold"]),
         float(view["ascension"]),
         float(len(view["potions"])),
+        *(float(a in (view.get("auto_win") or [])) for a in range(ACTS)),
     ]
