@@ -380,9 +380,13 @@ mobile-starlight-toc {
   padding-bottom: 0.3em;
 }
 
-/* Key terms stand out as the game's keywords do. */
-.sl-markdown-content strong:not(:where(.not-content *)) {
+/* Key terms stand out as the game's keywords do. A bold run-in at the head of a list item is a label, not a
+   keyword: it keeps the text's own colour. Figures (.vfig) keep their own colours throughout. */
+.sl-markdown-content strong:not(:where(.not-content *, .vfig *)) {
   color: var(--spire-strong);
+}
+.sl-markdown-content li strong:not(:where(.not-content *, .vfig *)) {
+  color: var(--sl-color-white);
 }
 
 .sl-markdown-content a:not(:where(.not-content *)),
@@ -394,7 +398,7 @@ mobile-starlight-toc {
   color: var(--spire-link-hover);
 }
 
-.sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *, .vfig *)) {
   border: 1px solid var(--spire-panel-border);
   border-radius: 4px;
 }
@@ -411,7 +415,7 @@ mobile-starlight-toc {
 
 /* ---------- Tables ---------- */
 
-.sl-markdown-content table:not(:where(.not-content *)) {
+.sl-markdown-content table:not(:where(.not-content *, .vfig *)) {
   width: fit-content;
   max-width: 100%;
   border: 1px solid var(--spire-panel-border);
@@ -420,23 +424,23 @@ mobile-starlight-toc {
   font-size: 0.94em;
   line-height: 1.6;
 }
-.sl-markdown-content :is(th, td):not(:where(.not-content *)),
-.sl-markdown-content :is(th:first-child, td:first-child):not(:where(.not-content *)),
-.sl-markdown-content :is(th:last-child, td:last-child):not(:where(.not-content *)) {
+.sl-markdown-content :is(th, td):not(:where(.not-content *, .vfig *)),
+.sl-markdown-content :is(th:first-child, td:first-child):not(:where(.not-content *, .vfig *)),
+.sl-markdown-content :is(th:last-child, td:last-child):not(:where(.not-content *, .vfig *)) {
   border-bottom: 1px dotted var(--spire-row-rule);
   padding: 0.55rem 0.9rem;
   vertical-align: top;
 }
-.sl-markdown-content th:not(:where(.not-content *)) {
+.sl-markdown-content th:not(:where(.not-content *, .vfig *)) {
   border-bottom: 2px solid var(--spire-rule);
   font-weight: 700;
   color: var(--spire-heading);
   background-color: var(--spire-table-head);
 }
-.sl-markdown-content tbody tr:last-child td:not(:where(.not-content *)) {
+.sl-markdown-content tbody tr:last-child td:not(:where(.not-content *, .vfig *)) {
   border-bottom: 0;
 }
-.sl-markdown-content :is(th, td):first-child:not(:where(.not-content *)) {
+.sl-markdown-content :is(th, td):first-child:not(:where(.not-content *, .vfig *)) {
   min-width: 6.5em;
 }
 

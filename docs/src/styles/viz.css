@@ -23,12 +23,12 @@
   color-scheme: light;
 }
 :root[data-theme='dark'] .vfig {
-  --v-surface: #1a1a19;
+  --v-surface: #121b21;
   --v-ink: #f0efec;
   --v-ink-2: #c3c2b7;
   --v-muted: #898781;
-  --v-grid: #2c2c2a;
-  --v-axis: #383835;
+  --v-grid: #24323b;
+  --v-axis: #2e3d47;
   --v-ring: rgba(255, 255, 255, 0.1);
   --v-s1: #3987e5;
   --v-s2: #d95926;
