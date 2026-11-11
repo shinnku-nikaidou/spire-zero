@@ -35,7 +35,7 @@ const WORDS = {
   potions: w('Potions held', '持有药水', '持有藥水'),
   hits: w('hits', '次', '次'),
   turns: w('turns', '回合', '回合'),
-  nodes: w('nodes', '节点', '節點'),
+  nodes: w('nodes', '节点', '步'),
   death: w('death', '死亡', '死亡'),
 } as const;
 
