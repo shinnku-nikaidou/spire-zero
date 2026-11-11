@@ -4,7 +4,7 @@ using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 using Sts2Ai.SimWorker;
 
-namespace Sts2Ai.Tests;
+namespace Sts2Ai.SimWorker.Tests;
 
 /// <summary>
 /// The decision side's boundary, as selftest checks it but without booting the game: the brain, the protocol and Harness

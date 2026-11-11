@@ -4,7 +4,7 @@ using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 using Sts2Ai.SimWorker;
 
-namespace Sts2Ai.Tests.SimWorker;
+namespace Sts2Ai.SimWorker.Tests;
 
 public sealed class CliTests : IDisposable
 {

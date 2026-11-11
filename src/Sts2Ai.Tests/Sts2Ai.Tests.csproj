@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Unit tests of the parts that run without the game: the brain's own logic, Harness's routing and evaluation, and
-    the sim's command line. Whatever needs a booted game is checked by the sim itself (selftest, run -check).
+    Unit tests of the decision side: the brain's own logic and Harness's routing and evaluation. They reference no game
+    assembly, so they build and run on a machine without the game. The sim's own unit tests are in
+    Sts2Ai.SimWorker.Tests; whatever needs a booted game is checked by the sim itself (selftest, run -check).
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -9,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Sts2Ai.SimWorker/Sts2Ai.SimWorker.csproj" />
+    <ProjectReference Include="../Sts2Ai.Harness/Sts2Ai.Harness.csproj" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
@@ -19,8 +20,6 @@
     <Using Include="Xunit" />
     <Using Include="Sts2Ai.Brain.Combat" />
     <Using Include="Sts2Ai.Brain.Macro" />
-    <Using Include="Sts2Ai.SimWorker.Commands" />
-    <Using Include="Sts2Ai.SimWorker.Simulation" />
     <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

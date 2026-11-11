@@ -18,7 +18,7 @@ and running it needs your own copy of the game, pinned at **v0.111.0**.
 
 | path | what |
 | --- | --- |
-| `src/` | the .NET solution (`Sts2Ai.sln`): `Protocol` (the messages), `GameBridge` (reads and drives the game), `Brain` (the combat and macro brains), `Harness` (dispatch, records, reports, gates), `SimWorker` (the headless simulator and its command line), `Mod` (the in-game mod), `Tests` |
+| `src/` | the .NET solution (`Sts2Ai.sln`): `Protocol` (the messages), `GameBridge` (reads and drives the game), `Brain` (the combat and macro brains), `Harness` (dispatch, records, reports, gates), `SimWorker` (the headless simulator and its command line), `Mod` (the in-game mod), `Tests` (the decision side's, which need no game files) and `SimWorker.Tests` |
 | `learn/` | offline training in Python (PyTorch): the run value V and the combat net, from self-play logs; the gate |
 | `weights/` | the current nets, shared by all five characters |
 | `eval/` | test seed files, champion files, reports and the ledger of nets and seed blocks |
@@ -34,7 +34,8 @@ The game's assemblies are referenced, not shipped: copy `sts2.dll`, `GodotSharp.
 
 ```bash
 dotnet build Sts2Ai.sln -c Release
-dotnet test src/Sts2Ai.Tests
+dotnet test src/Sts2Ai.Tests             # the brain and Harness: builds and runs without the game's assemblies
+dotnet test src/Sts2Ai.SimWorker.Tests   # the simulator's command line and loadouts
 cd learn && uv sync && uv run pytest     # the training code
 pnpm --dir docs install && pnpm --dir docs dev   # the manual at http://localhost:4321
 ```

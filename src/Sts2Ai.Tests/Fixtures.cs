@@ -1,17 +1,11 @@
-using System.Runtime.CompilerServices;
 using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
-using Sts2Ai.SimWorker;
 
 namespace Sts2Ai.Tests;
 
 internal static class Fixtures
 {
-    /// <summary>As the sim's Main: the game's assemblies resolve from the snapshot, should a test reach a game type.</summary>
-    [ModuleInitializer]
-    internal static void ResolveGameAssemblies() => GameAssemblies.InstallResolver();
-
     /// <summary>A real decision from self-play: round 1 of CORPSE_SLUGS_WEAK, two slugs (uids 1 and 2), SILENT at 70/70.</summary>
     public static CombatObservation Slugs() =>
         ProtocolJson.Deserialize<CombatObservation>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "corpse-slugs-round1.json")));

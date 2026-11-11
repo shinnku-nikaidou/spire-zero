@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Unit tests of the sim's own parts that need no booted game: its command line, loadouts, and the boundary check
+    over the compiled references. They load the sim's assembly, so building them needs the game's assemblies; the
+    decision side's tests, which need none, are in Sts2Ai.Tests. Whatever needs a booted game is checked by the sim
+    itself (selftest, run -check).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Sts2Ai.SimWorker/Sts2Ai.SimWorker.csproj" />
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="Sts2Ai.Brain.Combat" />
+    <Using Include="Sts2Ai.Brain.Macro" />
+    <Using Include="Sts2Ai.SimWorker.Commands" />
+    <Using Include="Sts2Ai.SimWorker.Simulation" />
+    <!-- The test nets are the decision side's fixtures. -->
+    <None Include="../Sts2Ai.Tests/Fixtures/**" Link="Fixtures/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
