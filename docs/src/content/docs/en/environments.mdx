@@ -1,0 +1,58 @@
+---
+title: Two environments
+description: 'How much the AI may know: NoSL uses only what the player can see, and SL also knows the true result of any line in the current room.'
+draft: true
+---
+import NodeTimeline from '../../../components/book/NodeTimeline.svelte';
+
+The AI runs the game's own program. If it wanted to peek, it could see the draw order, the seed and the next room. So how much it may know has to be settled by rules first. This project sets two sets of rules, and a run uses one set from start to finish. **NoSL** uses only what the player can see. **SL** also knows the true result of any line in the current room, as if the player had saved on entering the room and could load and retry again and again. Neither knows what the later rooms hold.
+
+## Why two
+
+The game itself lets a player quit in the middle of a run and continue later, and a patient player can use this to retry. So there is no single line for what is fair, and this project draws two.
+
+- **NoSL is the goal.** It is what a player who keeps to the rules knows.
+- **SL is the training ground.** Inside a room nothing is left to luck, so with the same amount of computing the combat play is much stronger. Only then do runs reach the later acts and give the networks late positions to learn from.
+
+## The room: SL's boundary
+
+SL's boundary is the current **room**: it starts on arriving at a point on the map and ends when the next point is chosen. Every screen at that point is inside it: a combat that breaks out in an event, the rewards after a combat, every purchase in a shop, the choice at a rest site, a treasure chest, every page of an event.
+
+Inside the room, SL knows the draw order, the enemies' later moves, the true results of event options and which cards the reward will offer. Outside the room it knows nothing: what the next "?" room is, who the next combat is against, what the later shops sell.
+
+The figure below shows the first three rooms of the example run. Switch between NoSL and SL to see which environment knows each thing.
+
+<NodeTimeline client:visible lang="en" />
+
+The boundary is drawn at the room and not at the whole run. If the whole run could be retried, a run would become a puzzle with one fixed answer, and what the AI learned would not carry over to play that keeps to the rules.
+
+The boundary does not follow the game's own save points either. The game saves by itself at three moments: on arriving at a point, on winning a combat and when an Ancient's event ends. A boundary drawn along those would be patchy. With the room as the boundary, everything at one point is covered, and there is only one exit to guard: the move to the next point.
+
+## How the copy is made and how it is sealed
+
+On arriving at a point, the game saves anyway. The AI's side keeps this save in memory, adds a few relic numbers that the save leaves out, and records every decision made after it. Loading the save and replaying the recorded decisions gives the copy.
+
+The real game never loads a save, and nothing touches the player's save file. Every retry happens on the copy.
+
+The copy is sealed at the exit. It records the move to the next point but does not make it, and any move beyond that is an error. So search can see every result in this room and nothing of the next room.
+
+## How NoSL keeps to the rules
+
+- **Only what is visible is sent.** The program that decides receives an observation, and every field in it is something on the screen. The draw pile is sorted before it is sent, so only its contents remain and not its order. Enemies come with their intents and not with their queued moves. The seed is never sent.
+- **The separation holds at compile time.** The part of the program that decides does not know the game's code. If anyone writes something there that reads the game's internals, it does not compile. So checking fairness means checking that one list of fields, not reading all the code.
+- **The combat that search uses is rebuilt.** It is built again from the observation, and the hidden parts are guessed.
+
+Working things out from what is visible is allowed. For example, each reward card that is not rare raises the chance that the next one is rare by 1 percentage point. That is a rule of the game, and a player who keeps to the rules can work it out too.
+
+## What the two share
+
+The two use the same V and the same combat net, and the same method outside combat. They differ in only two places: how combat is searched, and how the result of each option outside combat is obtained.
+
+| | NoSL | SL |
+|---|---|---|
+| Combat | Guess 8 worlds and average | One exact copy, plan the whole combat |
+| Outside combat | Work out each option's result from the screen | Play each option on the copy |
+
+Both networks learn only from SL runs. What V learns is how things end for a player who plays every later room better, so in NoSL it leans optimistic.
+
+The SL champion played 100 runs with each character at Ascension 0. It won 92 with the Silent, 82 with the Ironclad, 71 with the Regent, 68 with the Defect and 47 with the Necrobinder. NoSL has not been measured yet.

@@ -87,13 +87,13 @@
   });
 
   const L = {
-    budget: w('nodes for the turn', '这回合的节点数', '這回合最多試幾步'),
-    keep: w('states kept', '保留的状态', '留下幾個局面'),
-    merged: w('seen before: merged', '已见过：合并', '見過的局面：不再算'),
+    budget: w('moves to try this turn, at most', '这回合最多试几步', '這回合最多試幾步'),
+    keep: w('positions kept', '留下几个局面', '留下幾個局面'),
+    merged: w('position seen before: not searched again', '见过的局面：不再算', '見過的局面：不再算'),
     dup: w('same end as before', '和之前的结局相同', '和之前的結局相同'),
     kept: w('kept for the next turn', '留到下一回合', '留到下一回合'),
-    shares: w('Where each first action must stop (k/m of the nodes)', '每个第一动作的节点上限（节点数的 k/m）', '每個開頭動作最多用到第幾步'),
-    used: w('nodes used', '用掉的节点', '試了幾步'),
+    shares: w('The move number each opening action may run up to', '每个开头动作最多用到第几步', '每個開頭動作最多用到第幾步'),
+    used: w('moves tried', '试了几步', '試了幾步'),
     ends: w('distinct turn ends', '不同的回合结局', '不同的回合結局'),
     start: w('Start: 2 energy, 50 HP, one enemy with 30 HP attacking for 12.', '开始：2 点能量、50 HP，一个敌人 30 HP，意图攻击 12。', '開始：2 點能量、50 HP，一個敵人 30 HP，意圖攻擊 12。'),
   };

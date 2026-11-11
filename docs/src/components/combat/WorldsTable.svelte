@@ -47,16 +47,16 @@
   const color = (k: number) => `var(--v-s${k + 1})`;
 
   const L = {
-    setting: w('Round 1 of an elite fight; 8 worlds × 300 nodes', '一场精英战的第 1 回合；8 个世界 × 300 个节点', '一場菁英戰的第 1 回合；8 個世界，各試 300 步'),
-    compare: w('Compare two first actions world by world', '逐个世界比较两个第一动作', '逐個世界比較兩個第一步'),
+    setting: w('Round 1 of an elite fight; 8 worlds, 300 moves tried in each', '一场精英战的第 1 回合；8 个世界，各试 300 步', '一場菁英戰的第 1 回合；8 個世界，各試 300 步'),
+    compare: w('Compare two first moves world by world', '逐个世界比较两个第一步', '逐個世界比較兩個第一步'),
     diff: w('difference in each world', '每个世界里的差', '每個世界裡的差'),
     paired: w('paired 95% interval of the difference', '差的成对 95% 区间', '差的成對 95% 區間'),
     unpaired: w('if the worlds were not shared', '如果两边不共用世界', '如果兩邊不共用世界'),
-    know: w('Show each world’s best first action', '标出每个世界里最好的第一动作', '標出每個世界裡最好的第一步'),
+    know: w('Show each world’s best first move', '标出每个世界里最好的第一步', '標出每個世界裡最好的第一步'),
     knowing: w('mean over the worlds of each world’s best', '每个世界各取最好，再平均', '每個世界各取最好，再平均'),
-    pimc: w('PIMC’s pick: the best mean', 'PIMC 的选择：平均最高者', '選中的：平均最高的那一步'),
+    pimc: w('the pick: the move with the best mean', '选中的：平均最高的那一步', '選中的：平均最高的那一步'),
     gap: w('what knowing the world would add', '知道是哪个世界能多得的值', '知道是哪個世界能多得的值'),
-    nodes: w('nodes below it in each world', '每个世界在它底下用的节点', '每個世界在它底下試了幾步'),
+    nodes: w('moves tried below it in each world', '每个世界在它底下试了几步', '每個世界在它底下試了幾步'),
   };
 </script>
 

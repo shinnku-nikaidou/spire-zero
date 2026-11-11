@@ -22,9 +22,9 @@
   const total = $derived(data.surfaces.reduce((a, s) => a + value(s), 0));
   const who = (s: string): Words =>
     s === 'combat'
-      ? w('combat brain: its search', '战斗大脑：它的搜索', '戰鬥大腦')
+      ? w('combat brain', '战斗大脑', '戰鬥大腦')
       : s === 'card_choice'
-        ? w('in combat first or the search’s line, outside the macro brain', '战斗中 first 或搜索的那条打法，战斗外宏观大脑', '戰鬥中由戰鬥大腦，戰鬥外由宏觀大腦')
+        ? w('in combat the combat brain, outside it the macro brain', '战斗中由战斗大脑，战斗外由宏观大脑', '戰鬥中由戰鬥大腦，戰鬥外由宏觀大腦')
         : w('macro brain', '宏观大脑', '宏觀大腦');
 </script>
 
@@ -32,7 +32,7 @@
   <div class="v-row" style="margin-bottom: 0.75rem;">
     <div class="v-tabs" style="margin: 0;">
       <button aria-pressed={view === 'mean'} onclick={() => (view = 'mean')}>{say(lang, w(`Mean of ${N} runs`, `${N} 局的平均`, `${N} 局的平均`))}</button>
-      <button aria-pressed={view === 'example'} onclick={() => (view = 'example')}>{say(lang, w('The example run', '贯穿全书的那一局', '貫穿全書的那一局'))}</button>
+      <button aria-pressed={view === 'example'} onclick={() => (view = 'example')}>{say(lang, w('The example run', '示例对局', '範例對局'))}</button>
     </div>
     <span class="v-muted v-num">
       {say(lang, w('decisions per run:', '每局决策数：', '每局決策數：'))} {fmt(lang, total, view === 'mean' ? 1 : 0)}
@@ -42,7 +42,7 @@
     <table>
       <thead>
         <tr>
-          <th>{say(lang, w('surface', '决策界面', '畫面'))}</th>
+          <th>{say(lang, w('screen', '画面', '畫面'))}</th>
           <th style="width: 45%;">{view === 'mean' ? say(lang, w('decisions per run', '每局决策数', '每局決策數')) : say(lang, w('decisions', '决策数', '決策數'))}</th>
           {#if view === 'mean'}<th>{say(lang, w('runs that met it', '遇到它的局数', '遇到它的局數'))}</th>{/if}
           <th>{say(lang, w('answered by', '由谁回答', '由誰回答'))}</th>
@@ -65,8 +65,8 @@
   </div>
   <p class="v-caption">
     {say(lang, w(
-      `The surfaces counts of the run records in the champion’s Silent report on promotion-1-100 (${N} runs, ${data.won} won). A card prompt is counted with the screen kind card_choice wherever it is asked: of ${prompts.decisions} in all, ${data.card_choice_macro.all} came outside combat. The example run (seed ${data.example.seed}, won at floor ${data.example.floor}) had ${data.card_choice_macro.example} of its ${prompts.example} outside combat.`,
-      `冠军的静默猎手报告（promotion-1-100）里，各对局记录的决策界面计数（${N} 局，赢 ${data.won} 局）。卡牌提示不管在哪里出现，都算作 card_choice：总共 ${prompts.decisions} 次，其中 ${data.card_choice_macro.all} 次在战斗之外。贯穿全书的那一局（种子 ${data.example.seed}，在第 ${data.example.floor} 层获胜）的 ${prompts.example} 次里有 ${data.card_choice_macro.example} 次在战斗之外。`,
+      `How often each screen came up in the champion’s ${N} Silent runs (${data.won} won). A card choice is counted together wherever it comes up: ${prompts.decisions} in all, ${data.card_choice_macro.all} of them outside combat.`,
+      `冠军打静默猎手的 ${N} 局（赢 ${data.won} 局）里，每种画面出现几次。选牌不管在哪里出现都算在一起：总共 ${prompts.decisions} 次，其中 ${data.card_choice_macro.all} 次在战斗之外。`,
       `冠軍打寂靜獵手的 ${N} 局（贏 ${data.won} 局）裡，每種畫面出現幾次。選牌不論在哪裡出現都算在一起：總共 ${prompts.decisions} 次，其中 ${data.card_choice_macro.all} 次在戰鬥之外。`,
     ))}
   </p>

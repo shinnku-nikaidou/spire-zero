@@ -68,23 +68,23 @@
   const path = (pts: Node[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.turn).toFixed(1)},${y(p.value).toFixed(1)}`).join('');
 
   const L = {
-    beam: w('beam B', '束宽 B', '每回合留幾個'),
-    easy: w('easy beam E', '简易束 E', '已經能贏時留幾個'),
-    dive: w('greedy dive first', '先做贪心下潜', '先打一條到底'),
+    beam: w('kept per turn', '每回合留几个', '每回合留幾個'),
+    easy: w('kept per turn once a win is found', '已经能赢时留几个', '已經能贏時留幾個'),
+    dive: w('one line played to the end first', '先打一条到底', '先打一條到底'),
     shown: w('turns shown', '显示到第几回合', '顯示到第幾回合'),
     kept: w('kept', '保留', '保留'),
-    dropped: w('beyond the width', '超出宽度', '沒留下'),
+    dropped: w('not kept', '没留下', '沒留下'),
     end: w('fight over', '战斗结束', '戰鬥結束'),
-    diveLine: w('the dive’s line', '下潜的路线', '先打到底的那一條'),
-    bestLine: w('the pick', '选中的线', '計畫'),
-    yAxis: w('leaf value', '叶子估值', '估值'),
+    diveLine: w('the line played to the end first', '先打到底的那一条', '先打到底的那一條'),
+    bestLine: w('the plan', '计划', '計畫'),
+    yAxis: w('value', '估值', '估值'),
     xAxis: w('turn', '回合', '回合'),
     result: w('Pick', '结果', '結果'),
     wins: w('wins with', '获胜，剩', '獲勝，剩'),
     loses: w('loses', '输', '輸'),
-    proved: w('proved', '已证明', '保證最好'),
-    notProved: w('not proved', '未证明', '不保證最好'),
-    width: w('the full beam’s width', '完整束的宽度', '正式搜尋每回合留幾個'),
+    proved: w('proved best', '保证最好', '保證最好'),
+    notProved: w('not proved best', '不保证最好', '不保證最好'),
+    width: w('kept per turn in the full search', '正式搜索每回合留几个', '正式搜尋每回合留幾個'),
   };
   const COLORS = { kept: 'var(--v-s1)', dropped: 'var(--v-muted)', end: 'var(--v-s3)' } as const;
 </script>

@@ -11,7 +11,7 @@ export const SURFACES: Record<string, Words> = {
   shop: w('shop', '商店', '商店'),
   rewards: w('rewards', '奖励界面', '獎勵畫面'),
   event: w('event', '事件', '事件'),
-  card_choice: w('card prompt', '卡牌提示', '選牌'),
+  card_choice: w('card choice', '选牌', '選牌'),
   treasure: w('treasure', '宝箱', '財寶房'),
   bundle: w('bundle', '卡包', '卡包'),
 };

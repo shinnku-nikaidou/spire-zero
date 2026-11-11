@@ -77,8 +77,8 @@
   {/if}
   <p class="v-caption">
     {say(lang, w(
-      `${lost} lost runs of ${r.runs}, ${r.won} won (the champion’s Necrobinder report, ${r.env}, ${r.seedSet}). Bosses reached ${r.bossesReached.join(' / ')}, beaten ${r.bossesBeaten.join(' / ')} (acts 1 / 2 / 3). A lost run died in a combat when its last combat is on the floor it ended on and that combat ended in a death; learn/gate.py counts any other loss as outside combat${r.deaths.noEnd ? `, ${r.deaths.noEnd} of them deaths whose combat has no end in the record` : ''}.`,
-      `${r.runs} 局里输了 ${lost} 局，通关 ${r.won} 局（冠军的亡灵契约师报告，${r.env}，${r.seedSet}）。Boss 到达 ${r.bossesReached.join(' / ')}，击败 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。输掉的一局若最后一场战斗就在它结束的楼层，且那场战斗以死亡结束，就算死在那场战斗里；其余的输局 learn/gate.py 都算成战斗之外${r.deaths.noEnd ? `，其中 ${r.deaths.noEnd} 场死亡的战斗在记录里没有 end` : ''}。`,
+      `${lost} lost runs of ${r.runs}, ${r.won} won (the champion’s Necrobinder, SL, ascension 0). The three acts’ bosses, in order, were reached in ${r.bossesReached.join(' / ')} runs and beaten in ${r.bossesBeaten.join(' / ')}.`,
+      `${r.runs} 局里输了 ${lost} 局，赢 ${r.won} 局（冠军的亡灵契约师，SL，进阶 0）。三幕的 Boss 依次有 ${r.bossesReached.join(' / ')} 局打到，${r.bossesBeaten.join(' / ')} 局打赢。`,
       `${r.runs} 局裡輸了 ${lost} 局，贏 ${r.won} 局（冠軍的縛亡者，SL，晉階 0）。三幕的頭目依序有 ${r.bossesReached.join(' / ')} 局打到，${r.bossesBeaten.join(' / ')} 局打贏。`,
     ))}
   </p>

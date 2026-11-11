@@ -82,19 +82,19 @@
   <p class="v-ink2" style="margin-top: 0.5rem;">
     {#if best(pimc) !== best(truth)}
       {say(lang, w(
-        `PIMC picks Gamble at ${f(pimc.gamble)}, but a player who must keep a card before the draw gets only ${f(truth.gamble)}: each world’s search kept the right card because it already knew the top card. That is strategy fusion below the root.`,
-        `PIMC 以 ${f(pimc.gamble)} 选了赌一把，但必须在抽牌前留牌的玩家只拿得到 ${f(truth.gamble)}：每个世界的搜索都留对了牌，因为它早就知道最上面是什么。这就是根节点之下的策略融合。`,
+        `The average over worlds gives Gamble ${f(pimc.gamble)} and picks it, but a player who must keep a card before the draw gets only ${f(truth.gamble)}: each world’s search kept the right card because it already knew the top card. That is strategy fusion after the first move.`,
+        `取平均给赌一把 ${f(pimc.gamble)}，选了它，但必须在抽牌前留牌的玩家只拿得到 ${f(truth.gamble)}：每个世界的搜索都留对了牌，因为它早就知道最上面是什么。这就是第一步之后的策略融合。`,
         `取平均給賭一把 ${f(pimc.gamble)}，選了它，但必須在抽牌前留牌的玩家只拿得到 ${f(truth.gamble)}：每個世界的搜尋都留對了牌，因為它早就知道最上面是什麼。這就是第一步之後的策略融合。`,
       ))}
     {:else}
       {say(lang, w(
-        `Here both pick ${best(truth) === 'gamble' ? 'Gamble' : 'Safe'}: one world is likely enough that keeping its card is worth the risk. PIMC still overvalues Gamble (${f(pimc.gamble)} against ${f(truth.gamble)}).`,
-        `这里两者都选${best(truth) === 'gamble' ? '赌一把' : '稳妥'}：其中一个世界够可能，留下它的牌值得冒险。PIMC 仍然高估了赌一把（${f(pimc.gamble)} 对 ${f(truth.gamble)}）。`,
+        `Here both pick ${best(truth) === 'gamble' ? 'Gamble' : 'Safe'}: one world is likely enough that keeping its card is worth the risk. The average still overvalues Gamble (${f(pimc.gamble)} against ${f(truth.gamble)}).`,
+        `这里两者都选${best(truth) === 'gamble' ? '赌一把' : '稳妥'}：其中一个世界够可能，留下它的牌值得冒险。取平均仍然高估了赌一把（${f(pimc.gamble)} 对 ${f(truth.gamble)}）。`,
         `這裡兩者都選${best(truth) === 'gamble' ? '賭一把' : '穩妥'}：其中一個世界夠可能，留下它的牌值得冒險。取平均仍然高估了賭一把（${f(pimc.gamble)} 對 ${f(truth.gamble)}）。`,
       ))}
     {/if}
   </p>
-  <p class="v-caption">{t('illustrative')} {say(lang, w('Values are on a made-up scale, as a search leaf’s are: higher is better.', '数值是虚构的尺度，像搜索叶节点的值一样：越高越好。', '數值是虛構的，越高越好。'))}</p>
+  <p class="v-caption">{t('illustrative')} {say(lang, w('Values are made up: higher is better.', '数值是虚构的，越高越好。', '數值是虛構的，越高越好。'))}</p>
 </div>
 
 <style>

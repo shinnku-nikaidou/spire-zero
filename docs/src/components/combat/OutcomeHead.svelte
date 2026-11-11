@@ -57,7 +57,7 @@
     endHp: w('expected HP at the end, if won', '若获胜，预期结束时的 HP', '若獲勝，預期結束時的 HP'),
     heals: w('heals', '回血', '回血'),
     held: w('HP held now', '现在的 HP', '現在的 HP'),
-    open: w('buckets open, of 50', '开着的桶（共 50 个）', '可能的收場（共 50 種）'),
+    open: w('possible endings, of 50', '可能的收场（共 50 种）', '可能的收場（共 50 種）'),
     closed: w('closed', '关闭', '關閉'),
     gone: w('chance of being gone, if won', '获胜后已不在的机率', '獲勝後已不在的機率'),
   };

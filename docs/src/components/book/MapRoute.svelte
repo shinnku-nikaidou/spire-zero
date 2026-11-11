@@ -92,9 +92,9 @@
   </div>
   <p class="v-caption">
     {say(lang, w(
-      `The example run (seed ${M.source.seed}) on floor ${M.source.floor}, act ${M.source.act + 1} (${M.source.hp} of ${M.source.max_hp} HP), at the map’s row ${at.row}, the decision the panel’s map answer shows. Grey: the path so far. The brain picks the ${room(M.chosen)} at row ${next[1]} over the ${others.map(room).join(', ')} beside it; the purple line is the route it plans after that pick, to the boss.`,
-      `贯穿全书那一局（种子 ${M.source.seed}）在第 ${M.source.floor} 层，第 ${M.source.act + 1} 幕（HP ${M.source.hp}/${M.source.max_hp}），位于地图第 ${at.row} 行，也就是面板里地图回答的那个决策。灰线：走过的路。大脑在第 ${next[1]} 行选了${room(M.chosen)}，而不是旁边的${others.map(room).join('、')}；紫线是它在这一步之后规划的路线，一直到 Boss。`,
-      `貫穿全書那一局（種子 ${M.source.seed}）在第 ${M.source.floor} 層，第 ${M.source.act + 1} 幕（HP ${M.source.hp}/${M.source.max_hp}），位於地圖第 ${at.row} 行，也就是面板裡地圖回答的那個決策。灰線：走過的路。大腦在第 ${next[1]} 行選了${room(M.chosen)}，而不是旁邊的${others.map(room).join('、')}；紫線是它在這一步之後規劃的路線，一直到頭目。`,
+      `The example run (seed ${M.source.seed}) on floor ${M.source.floor}, act ${M.source.act + 1} (${M.source.hp} of ${M.source.max_hp} HP), at the map’s row ${at.row}. Grey: the path so far. The AI picks the ${room(M.chosen)} at row ${next[1]} over the ${others.map(room).join(', ')} beside it; the purple line is the route it intends to follow after that pick, to the boss.`,
+      `示例对局（种子 ${M.source.seed}）在第 ${M.source.floor} 层，第 ${M.source.act + 1} 幕（HP ${M.source.hp}/${M.source.max_hp}），位于地图第 ${at.row} 行。灰线：走过的路。AI 在第 ${next[1]} 行选了${room(M.chosen)}，而不是旁边的${others.map(room).join('、')}；紫线是它在这一步之后打算走的路线，一直到 Boss。`,
+      `範例對局（種子 ${M.source.seed}）在第 ${M.source.floor} 層，第 ${M.source.act + 1} 幕（HP ${M.source.hp}/${M.source.max_hp}），位於地圖第 ${at.row} 列。灰線：走過的路。AI 在第 ${next[1]} 列選了${room(M.chosen)}，而不是旁邊的${others.map(room).join('、')}；紫線是它在這一步之後打算走的路線，一直到頭目。`,
     ))}
   </p>
 </div>

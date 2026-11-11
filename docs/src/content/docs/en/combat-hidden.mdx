@@ -1,0 +1,68 @@
+---
+title: Combat with hidden draws
+description: 'In NoSL the AI sees only what the player sees: it guesses eight possible combats, searches this turn in each, and averages over each first move.'
+draft: true
+---
+import WorldSampler from '../../../components/combat/WorldSampler.svelte';
+import WorldsTable from '../../../components/combat/WorldsTable.svelte';
+import StrategyFusion from '../../../components/book/StrategyFusion.svelte';
+
+In NoSL the AI sees only what the player sees and has no copy to use. It does not know the order of the draw pile, so it guesses. From the screen it builds 8 combats, each with its own guess at the draw order, searches this turn in each of them, and then sees which first move is best on average over the 8. It plays only that one move. Then it looks at the screen again and starts over.
+
+## What it sees and what it does not
+
+It sees everything on the screen: the hand, which cards are in each pile, the enemies' HP and intents. It also has the intents the enemies showed on each turn of this combat so far.
+
+Three things are hidden: the order of the draw pile, how each coming random result will fall, and what the enemies will do after their next move.
+
+## Guessing a world
+
+A **world** is a complete combat that can be played on. Its screen is identical to the real one, and its hidden parts are guessed. Building a world takes three steps:
+
+1. **Rebuild from the screen.** Start the same combat with the deck, relics and HP that are visible, then write every number on the screen over it. Once built, the world is compared with the screen, and a single difference is an error. A different combat is never passed off as this one.
+2. **Restore the moves the enemies have made.** When a monster picks its next move, it looks at what it did before, for example never the same move three times in a row. So the recorded intents have to be put back.
+3. **Roll the hidden parts again.** The draw pile is sorted and then shuffled, every random number source gets a new seed, and each enemy's queued next move is picked at random among the moves with the same intent.
+
+The side that builds worlds only ever receives the screen and the record of the enemies' moves. The true draw order is never passed to it, so even if it wanted to peek, there is nothing to peek at.
+
+The figure below is a real decision on turn 1 of an elite combat: 7 cards in hand and 11 in the draw pile. Each row is one world, that is, one ordering of those 11 cards.
+
+<WorldSampler client:visible lang="en" />
+
+## Searching this turn in each world
+
+The search inside each world works the same way as the search of one turn when everything is known: the turn can end at any move, a position seen before is not worked out again, and the game really plays out the enemies' turn. Search tries at most 300 moves in each world, split evenly among the first moves.
+
+Search stops at the start of the next turn, and the combat net values the position there. It goes no further for two reasons. Beyond that point, every draw and every roll is a branch with an unknown result, and turn multiplied by turn, there are soon too many to try. And only the first move is played anyway, after which the AI searches again.
+
+## Averaging over each first move
+
+After the search, each first move has one score in each of the 8 worlds. The AI averages them and plays the move with the highest average.
+
+It does not let each world pick its own best action. That would amount to pretending to know which world is the real one.
+
+All first moves are compared on the same set of worlds. That way, the good or bad luck two actions meet in the same world cancels when one is subtracted from the other, and what remains is the difference between the actions themselves.
+
+The figure below shows the same decision. Each row is one first move, and the 8 dots are its scores in the 8 worlds.
+
+<WorldsTable client:visible lang="en" />
+
+## A flaw not yet solved
+
+Inside a world, search knows that world's draw order. So a line of the kind "play this card first, then decide by what is drawn" happens to get it right in every world, and its score looks higher than anyone could reach in real play. This flaw is called strategy fusion.
+
+Averaging over the first move corrects only the first move. Searching again after each move limits the effect to one turn. The rest of the turn still has the flaw, and its size has not been measured yet.
+
+The figure below is a made-up example. The safe option is worth 0.70. The gamble is worth 1.00 when it guesses right and 0.20 when it guesses wrong. When the two draw orders are equally likely, the average says the gamble is worth 1.00, but it is really worth only 0.60, less than the safe option.
+
+<StrategyFusion client:visible lang="en" />
+
+## Why not the same method as SL
+
+SL's method does not carry over. The best line in a world is right only if that world is the real combat, and none of the 8 worlds here is sure to be real.
+
+Moving this method to SL brings no benefit either. It looks at one turn only, and little is revealed within one turn, so knowing the truth hardly helps. For knowledge of the future to be useful, the search has to look past this turn, and that is exactly SL's method.
+
+## How well it plays
+
+This has not been measured yet. Both networks learned from SL runs, and NoSL has neither training nor results of its own. The combat net learned how combats end for SL's stronger player, so here its values lean optimistic.

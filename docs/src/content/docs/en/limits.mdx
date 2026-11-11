@@ -1,0 +1,31 @@
+---
+title: Weaknesses and what is not built
+description: Where this AI is weak today, and the parts of the design that are not built yet.
+draft: true
+---
+
+The earlier chapters describe only what runs today. This chapter lists where the AI is weak and which parts are not built yet.
+
+## Weaknesses
+
+- **NoSL has not been trained.** The two networks learn only from SL runs. NoSL has no training of its own, no gate and no results, and the networks' values lean optimistic there.
+- **No results at high Ascension.** All the champion's results are at Ascension 0.
+- **Almost every lost run dies to a boss.** That is 120 of the 140 lost runs, more than half of them at the act 3 boss.
+- **A run has only one outcome.** Hundreds of decisions share it, and seeing which decision made the difference takes many runs.
+- **Exploration is mixed into the labels.** The same position gets a lower label in runs that explore more, and V does not know how much a run explored.
+- **Combat search is narrow.** SL keeps only 8 positions per turn, so a better line may be pushed out, and most plans are not guaranteed to be the best.
+- **Inside each world, NoSL's search knows the future.** The flaw is corrected only for the first move, and the size of the rest has not been measured.
+- **The combat net predicts only HP and potions.** Other things that change in a combat are not in the price until they happen.
+- **The map V reads has no links**, and it ends with this act.
+- **One hand-written rule remains.** The AI considers discarding a potion only when the potion slots are full and a new potion is there to take. Without this rule, V would throw potions away for nothing. Once V learns by itself not to, the rule will be removed.
+- **The gate is on the loose side.** A new pair passes if it wins as few as 3 seeds that the old pair lost, while the old pair wins none that the new pair lost. How often the gate lets a pair through by mistake has not been measured.
+- **Whether the simulator and the real game agree everywhere** has no full set of tests yet.
+
+## Not built yet
+
+- **Training, a gate and results for NoSL.**
+- **Search that looks past the current room.** Today search stops at the room's exit in both environments.
+- **A cheaper combat search.** Start by keeping 1 position per turn and widen round by round, so that easy combats stop early and hard ones get more.
+- **Search results as labels.** Today the only labels are the real outcomes of runs.
+- **Playing a whole run alone with nobody present.** Today the player has to be present to start the AI playing for them.
+- **Explanations.** Telling the player why a move was chosen.

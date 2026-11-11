@@ -1,0 +1,63 @@
+---
+title: Evaluation
+description: 'How to tell that new networks are stronger than the old ones: the new pair and the old pair play the same test seeds and are compared seed by seed. Also how strong the champion is now and where it loses.'
+draft: true
+---
+import WilsonInterval from '../../../components/book/WilsonInterval.svelte';
+import DeathsByFloor from '../../../components/book/DeathsByFloor.svelte';
+
+The new pair of networks and the champion's pair each play the same fixed set of test seeds with all five characters. The two runs on the same seed form a pair, and the question is who won. If the new pair wins more than the old one, and by more than luck could explain, it replaces the champion. How strong the champion is can be read from its win rate on these seeds.
+
+## How strong the champion is now
+
+SL environment, Ascension 0, 100 test seeds per character:
+
+| Character | Wins | 95% interval of the win rate |
+|---|---|---|
+| The Silent | 92 | 85.0–95.9% |
+| The Ironclad | 82 | 73.3–88.3% |
+| The Regent | 71 | 61.5–79.0% |
+| The Defect | 68 | 58.3–76.3% |
+| The Necrobinder | 47 | 37.5–56.7% |
+
+Together that is 360 wins in 500 runs, 72%. Neither NoSL nor Ascension 10 has results yet.
+
+The interval means this: with 92 wins in 100 runs, the true win rate may lie anywhere between 85% and 96%. That is all 100 runs can say. In the figure below you can enter your own number of runs. When wins are very few, the textbook formula gives a win rate below 0, so this book uses another formula that never leaves the range.
+
+<WilsonInterval client:visible lang="en" />
+
+## Where it loses
+
+The five characters lost 140 runs in all. Of these, 120 died to a boss, 72 of them to the act 3 boss. Only 6 died to ordinary monsters, and not one run was lost outside combat. The figure below shows the Necrobinder's 100 runs.
+
+<DeathsByFloor client:visible lang="en" />
+
+## Why the same seeds
+
+The seed decides the map, the enemies met and the rewards received. When both sides play the same seed, they meet the same luck, and only their play differs. The good and bad luck the two sides share cancels out in the seed-by-seed comparison.
+
+Without this pairing, the comparison would rest on two independent batches of runs. At a win rate around 30%, telling apart a gap of 5 percentage points would take about 1,300 runs on each side.
+
+## The gate
+
+1. **Both sides play again, on the same version of the code.** The champion's earlier results are not used for the comparison. An older version of the code played those, and comparing against them would credit the new networks with improvements in the code.
+2. **100 seeds for each of the five characters, with no exploration.** The two sides play 1,000 runs in total.
+3. **Each pair is scored.** New wins and old loses scores +1, old wins and new loses scores −1, and anything else scores 0.
+4. **The lower bound is computed.** Take the mean of the 500 pairs and subtract 1.645 times the standard error. If the result is above 0, the new pair takes over.
+
+The five characters are judged together. One pair of networks has to play every character, and a pair that is much stronger overall should not be blocked because one character slips back a little.
+
+## Which results do not count
+
+In a set of results, the four numbers below must all be 0, or the whole set is void:
+
+- decisions answered by a random placeholder player
+- runs that failed before they finished
+- runs cut off because they were still not over after twenty thousand decisions
+- errors reported by the game
+
+Each of these means that the run was not the claimed AI playing the real game.
+
+## Test seeds
+
+Test seeds are generated in advance and registered, and nobody looks at results before they are used. Nobody can pick a set of seeds that look easy, and the networks have had no chance to learn on them.

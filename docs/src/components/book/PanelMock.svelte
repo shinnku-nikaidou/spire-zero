@@ -47,7 +47,7 @@
     win: ['胜率', '勝率'],
     'HP left': ['剩 HP', '剩 HP'],
     diff: ['差', '差'],
-    'value ±CI': ['分数 ±CI', '分數 ± 區間'],
+    'value ±CI': ['分数 ±CI', '分數 ±CI'],
     Recent: ['刚才做了', '剛才做了'],
     starting: ['启动中', '啟動中'],
     offline: ['离线', '離線'],
@@ -340,14 +340,14 @@
   <p class="v-caption">
     {#if mode === 'sl_combat'}
       {say(lang, w(
-        `The book’s example seed played in SL by the SL champion, decision ${base.source.decision}: the first decision of the act 3 boss fight on floor ${base.floor}, which the planner plans to its end in ${base.seconds} s. Its kept lines began with two first actions; both win, the first with ${moreHp} HP more. The strip holds V’s chance from the map decision before the fight, and the line under the action is the planner’s. A card the plan draws this turn has no name yet: the panel shows its number.`,
-        `贯穿全书那个种子，在 SL 里由 SL 冠军打的第 ${base.source.decision} 个决策：第 ${base.floor} 层第三幕 Boss 战的第一个决策，规划器花 ${base.seconds} 秒把整场规划到底。它留下的路线以两个第一步开头；两个都赢，第一个多剩 ${moreHp} HP。横条里是战斗前那个地图决策的 V 胜率，动作下面那一行是规划器的。计划在这一回合才抽到的牌还没有名字：面板显示它的编号。`,
-        `貫穿全書那個種子，在 SL 裡由 SL 冠軍打的第 ${base.source.decision} 個決策：第 ${base.floor} 層第三幕頭目戰的第一個決策，搜尋花 ${base.seconds} 秒把整場規劃到底。它留下的路線以兩個第一步開頭；兩個都贏，第一個多剩 ${moreHp} HP。橫條裡是戰鬥前那個地圖決策的 V 勝率，動作下面那一行說的是這場戰鬥。計畫在這一回合才抽到的牌還沒有名字：面板顯示它的編號。`,
+        `The example run’s seed played in SL by the SL champion, decision ${base.source.decision}: the first decision of the act 3 boss fight on floor ${base.floor}, which the search plans to its end in ${base.seconds} s. Its kept lines began with two first moves; both win, the first with ${moreHp} HP more. The strip holds V’s chance from the map decision before the fight, and the line under the action is about this fight. A card the plan draws this turn has no name yet: the panel shows its number.`,
+        `示例对局的种子，在 SL 里由 SL 冠军打的第 ${base.source.decision} 个决策：第 ${base.floor} 层第三幕 Boss 战的第一个决策，搜索花 ${base.seconds} 秒把整场规划到底。它留下的打法以两个第一步开头；两个都赢，第一个多剩 ${moreHp} HP。横条里是战斗前那个地图决策的 V 胜率，动作下面那一行说的是这场战斗。计划在这一回合才抽到的牌还没有名字：面板显示它的编号。`,
+        `範例對局的種子，在 SL 裡由 SL 冠軍打的第 ${base.source.decision} 個決策：第 ${base.floor} 層第三幕頭目戰的第一個決策，搜尋花 ${base.seconds} 秒把整場規劃到底。它留下的打法以兩個第一步開頭；兩個都贏，第一個多剩 ${moreHp} HP。橫條裡是戰鬥前那個地圖決策的 V 勝率，動作下面那一行說的是這場戰鬥。計畫在這一回合才抽到的牌還沒有名字：面板顯示它的編號。`,
       ))}
     {:else if mode === 'nosl_combat'}
       {say(lang, w(
-        `The same seed played in NoSL by the NoSL champion (PIMC with the same combat net over 8 worlds of 300 nodes, L0 with the same V), decision ${ANSWERS.nosl_combat.source.decision}: a turn’s first decision in the act 3 boss fight on floor ${ANSWERS.nosl_combat.floor}. PIMC’s five best first actions, with their mean scores over the worlds and 95% intervals; PIMC gives no chance to win, so no line sits under the action.`,
-        `同一个种子在 NoSL 里由 NoSL 冠军（PIMC 配同一个战斗网络，8 个世界、每个 300 节点；L0 配同一个 V）打的第 ${ANSWERS.nosl_combat.source.decision} 个决策：第 ${ANSWERS.nosl_combat.floor} 层第三幕 Boss 战里一个回合的第一个决策。PIMC 最好的五个第一步，附各世界的平均分和 95% 区间；PIMC 不给胜率，所以动作下面没有那一行。`,
+        `The same seed played in NoSL, decision ${ANSWERS.nosl_combat.source.decision}: a turn’s first decision in the act 3 boss fight on floor ${ANSWERS.nosl_combat.floor}. The five best first moves, with their mean scores over the worlds and 95% intervals; NoSL’s search gives no chance to win, so no line sits under the action.`,
+        `同一个种子在 NoSL 里打的第 ${ANSWERS.nosl_combat.source.decision} 个决策：第 ${ANSWERS.nosl_combat.floor} 层第三幕 Boss 战里一个回合的第一个决策。最好的五个第一步，附各世界的平均分和 95% 区间；NoSL 的搜索不给胜率，所以动作下面没有那一行。`,
         `同一個種子在 NoSL 裡打的第 ${ANSWERS.nosl_combat.source.decision} 個決策：第 ${ANSWERS.nosl_combat.floor} 層第三幕頭目戰裡一個回合的第一個決策。最好的五個第一步，附各世界的平均分和 95% 區間；NoSL 的搜尋不給勝率，所以動作下面沒有那一行。`,
       ))}
     {:else if mode === 'map'}
@@ -358,9 +358,9 @@
       ))}
     {:else}
       {say(lang, w(
-        'The messages the panel shows instead of an answer, with their status and quieter line, as Assist.cs writes them; the reasons in the second lines are examples, and come in English. A warning is amber, an error red. Once the brain has taken the run, the toolbar and the strip show above them.',
-        '面板在没有回答时显示的消息，连同状态和较淡的第二行，照 Assist.cs 的写法；第二行里的原因是举例，原样是英文。警告是琥珀色，错误是红色。大脑接下这一局之后，工具列和横条会显示在上面。',
-        '面板在沒有回答時顯示的訊息，連同狀態和較淡的第二行，照 Assist.cs 的寫法；第二行裡的原因是舉例，原樣是英文。警告是琥珀色，錯誤是紅色。大腦接下這一局之後，工具列和橫條會顯示在上面。',
+        'The messages the panel shows instead of an answer, with their status and quieter line, as the mod writes them; the reasons in the second lines are examples, and come in English. A warning is amber, an error red. Once the brain has taken the run, the toolbar and the strip show above them.',
+        '面板在没有回答时显示的消息，连同状态和较淡的第二行，照 Mod 的写法；第二行里的原因是举例，原样是英文。警告是琥珀色，错误是红色。大脑接下这一局之后，工具列和横条会显示在上面。',
+        '面板在沒有回答時顯示的訊息，連同狀態和較淡的第二行，照 Mod 的寫法；第二行裡的原因是舉例，原樣是英文。警告是琥珀色，錯誤是紅色。大腦接下這一局之後，工具列和橫條會顯示在上面。',
       ))}
     {/if}
     {say(lang, w(

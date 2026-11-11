@@ -1,0 +1,79 @@
+---
+title: The value net
+description: 'What V reads and what it computes: it reads the deck, relics, potions and map ahead of a run, outputs for each floor the risk of dying there, and multiplies through to get the chance of winning the whole run.'
+draft: true
+---
+import ArchDiagram from '../../../components/v/ArchDiagram.svelte';
+import EnteringFork from '../../../components/v/EnteringFork.svelte';
+import NetWalk from '../../../components/v/NetWalk.svelte';
+
+V reads the current state of a run and answers with the chance of winning the whole run. It reads only what each thing is, plus raw numbers: every card in the deck, the relics, the potions, the map points that can still be reached, and nine numbers. It does not output the chance of winning directly. For each floor it outputs a risk: the chance of dying on that floor if the run reaches it. Multiplying together the chances of surviving every floor from here on gives the chance of winning.
+
+<ArchDiagram client:visible lang="en" net="value" />
+
+## It reads only raw things
+
+V's input holds no score that a person worked out. A price list such as "a potion is worth 8 HP" is hand-written strategy: the network would copy it, and the runs could not correct it.
+
+It reads these:
+
+- **The deck**: for each card, which card it is, whether it is upgraded, which enchantment it carries, and the numbers that have grown on it during this run.
+- **Relics and potions**: which one each is. A relic also comes with its counter.
+- **Context**: which character, which act, which boss.
+- **The map**: every point in this act that can still be reached.
+- **Nine numbers**: the floor, HP, max HP, gold, the Ascension level, the number of potion slots and so on.
+
+It does not read the cost or the numbers printed on a card, the rooms already played, or the maps of the later acts.
+
+## The deck is a pile, not a sequence
+
+Each card first becomes 64 numbers and passes by itself through the same small two-layer network. The whole deck is then summarised as two things: the average, and the sum divided by 16.
+
+The deck is not treated as a sequence because a deck has no order, and the network would waste effort learning that order does not matter. It is not a long table of how many of each card there are, because most of the hundreds of cells would be empty and the cards would share nothing with each other. Both the average and the sum are needed because, by the average alone, a deck cannot be told from the same deck with every card doubled.
+
+Relics, potions, context and the map are simpler: each item is looked up in a table to get 64 numbers, and items of the same kind are simply added.
+
+## The map: what still lies ahead
+
+Each point on the map that can still be reached becomes a tag that states its type and distance, for example "elite, 3 steps ahead". The map V reads is this: how many rooms of each type there are at each distance. The links between points are not in it.
+
+Two options on the map often lead on to the same points. So the point that is chosen and about to be entered is recorded as "0 steps ahead", which is what tells the two options apart.
+
+<EnteringFork client:visible lang="en" />
+
+The room the run is in now is not counted. Positions recorded in a room all come from after the room was played, and the runs that died inside it left no record at all. If V were fed "the player is in an elite room", it would learn "the elite is already beaten". So each choice of path is made into a training sample of its own, labelled with the run's real outcome, including runs that died in that room.
+
+## Joining it up
+
+All of the above is joined into 1,033 numbers, which pass through a network of two layers with 512 units each. Before this point the deck has not seen the relics and the map has not seen the HP. They meet only here.
+
+The whole network has about 1.14 million weights. The five characters and every Ascension level share one set of weights: the character is a tag and the Ascension level is a number.
+
+## Why it outputs a risk for each floor
+
+The output is 64 risks. The chance of winning is the product, from the current floor on, of 1 minus the risk of each floor.
+
+This is easier to learn than outputting the chance of winning directly. Every floor survived is a label, whereas most runs are lost, and learning win or loss directly would teach little but "lost".
+
+It also works better than predicting which floor the run will reach. With the floor as the target, V would favour play that reaches the late floors safely and yet never wins.
+
+The figure below takes one real position through the whole network: the Defect on floor 24 with 50/75 HP. V gives it a 97% chance of reaching the act 2 boss and a 51% chance of beating it, and the chance of winning the whole run in the end is 17%.
+
+<NetWalk client:visible lang="en" />
+
+## How it learns
+
+Each recorded decision is one sample, and its label is where the run really ended: floors survived are labelled 0, the floor of death is labelled 1, and in a won run every floor is 0. The labels use only real outcomes, never the network's own estimates.
+
+The decisions of one run share one outcome, so each sample is weighted by 1 divided by the number of samples in its run, and each run counts as one vote.
+
+During training the network predicts one more thing: how much HP each of the next six combats will cost. This only gives the network more places in a run where it can check its answers. It is not written into the network file and takes no part in decisions.
+
+The champion's V learned from more than twenty thousand runs and about 3.85 million samples. On the runs held back for checking, the error of its predicted chance of winning is 0.128, against 0.183 for a baseline that knows only the floor. Smaller is better. But this score shows only that V can tell good runs from bad ones. It does not guarantee that V ranks the options of one decision correctly. So in the end, whether a V is good is judged by the results it plays.
+
+## What it cannot express
+
+- **Cards cannot see each other.** Each card is computed by itself before the summary, so how particular cards work together has to be learned inside the few numbers of the summary.
+- **The map has no links.** One room on each of two paths reads the same as two rooms on one path.
+- **The map ends with this act.**
+- **What it has not seen, it does not know.** V knows nothing about a card or relic that never appeared in the training runs.

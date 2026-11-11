@@ -9,8 +9,8 @@
       options: ['Choose the elite', 'Choose the monster', 'After the elite is won'],
       notes: [
         'V values this option before the fight. Its samples are real map moves, labelled with how those runs ended, deaths in that elite included.',
-        'The points after it are the same, so without its own token this option would read exactly like the elite.',
-        'A run view logged in the room comes after its combat, and a run that died there logs none. So a room already played is no token: what it gave is in the deck, relics, HP and gold.',
+        'The points after it are the same, so without its own tag this option would read exactly like the elite.',
+        'A run view logged in the room comes after its combat, and a run that died there logs none. So a room already played is not made a tag: what it gave is in the deck, relics, HP and gold.',
       ],
       you: 'you',
       points: { Elite: 'elite', Monster: 'monster', RestSite: 'rest', Boss: 'boss' },
@@ -19,8 +19,8 @@
       options: ['选精英', '选普通怪', '打赢精英之后'],
       notes: [
         'V 在开打之前为这个选项打分。它的样本是真实的选路，标签是那些局最后的结局，死在这场精英战的也算在内。',
-        '后面的点相同，所以没有自己的词元时，这个选项读起来和精英完全一样。',
-        '房间里记录的局面都在战斗之后，死在里面的局留不下记录。所以打过的房间不是词元：它带来的东西都在牌组、遗物、HP 和金币里。',
+        '后面的点相同，所以没有自己的标记时，这个选项读起来和精英完全一样。',
+        '房间里记录的局面都在战斗之后，死在里面的局留不下记录。所以打过的房间不做成标记：它带来的东西都在牌组、遗物、HP 和金币里。',
       ],
       you: '你',
       points: { Elite: '精英', Monster: '怪物', RestSite: '休息', Boss: 'Boss' },
