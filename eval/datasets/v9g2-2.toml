@@ -1,0 +1,36 @@
+# The SL self-play dataset v9g2-2 (the user, 2026-11-11): the whole game at A10, mainly Defect, with little
+# randomness, played by the champion's pair at the launch's commit (V v9-2, combat net c9-2) after v9-3 was given up.
+name = "v9g2-2"
+deadline = "+96h"                   # box.py deadline v9g2-2 UNTIL moves it; the user stops the step when the data is enough
+priority = 0
+seeds = 1100000                     # the ledger's block 1100000-1199999, 20,000 a character
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER"]
+champion = "eval/champions/sl.json"
+workers = 4
+
+# A third of each character's runs a tier: a decision drawn evenly with chance epsilon, the others by a softmax over
+# log V at temperature tau (the user, 2026-11-11: softmax on). v9g2's uniform 0.3 / 0.1 / 0.02 at A10 left two
+# thirds of its runs lost to the random draws whatever the states were (0.9 % and 5.6 % won); the softmax draws the
+# options V holds close to its best, where v9-2's own choices left no other answer. tau 0.01 is the A10 dataset
+# v8g2's 0.03 carried to v9-2: a run of v9-2 spans about 2.1 of log V from its first fight to a win (the gate's A10
+# logs), v8-2's about 7, so the same gap between two options is about a third as wide here.
+explore = [{ epsilon = 0.06, tau = 0.01 }, { epsilon = 0.03, tau = 0.01 }, { epsilon = 0.01, tau = 0.01 }]
+
+# The whole game, every fight at the gate's effort.
+[games.full]
+auto_win = []
+effort = { monster = "medium", elite = "medium", boss = "medium" }
+
+# DEFECT 4 to 1 for each other character. The amounts are upper bounds: the dealer keeps every job at the same share
+# of its queue, so the step holds 4 : 1 : 1 : 1 : 1 whenever it stops.
+[[runs]]
+characters = ["DEFECT"]
+game = "full"
+asc = 10
+n = 16000
+
+[[runs]]
+characters = ["SILENT", "IRONCLAD", "REGENT", "NECROBINDER"]
+game = "full"
+asc = 10
+n = 4000
