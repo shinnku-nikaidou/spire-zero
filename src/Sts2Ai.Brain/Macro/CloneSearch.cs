@@ -8,15 +8,15 @@ namespace Sts2Ai.Brain.Macro;
 /// not the run's end), the search goes on: a beam over the screen's actions, the belt's as the decision itself offers
 /// them (<see cref="MacroBrain.Offered"/>), level by level, keeping the <see cref="Beam"/> states V values best, up to
 /// <see cref="MaxProbes"/> probes in all. A state reached twice is searched once. A state is worth the best state after
-/// it, or its own value where the search stops (<see cref="Value"/>); an option, its afterstate.
+/// it, or its own value where the search stops (<paramref name="leaf"/>); an option, its afterstate.
 /// A card prompt that needs two picks or more is not searched into: its own decision searches it.
 /// The decision itself and the states <paramref name="decided"/> before it are never searched: an answer that comes back
 /// to one goes round in a cycle (a card reward skipped returns to the rewards screen that opened it, where the same
 /// answer comes again). Such an option is worth −∞, so it is never taken; deeper, such an answer adds nothing.
 /// </summary>
+/// <param name="leaf">What a state is worth where the search stops.</param>
 /// <param name="decided">The keys (<see cref="Key"/>) of the states decided before this decision.</param>
-/// <param name="fights">Values a combat an answer starts (an event's fight); a search that meets one without it throws.</param>
-public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet<ulong>? decided = null, ICombatLeaf? fights = null)
+public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<ulong>? decided = null)
 {
     public const int Beam = 16;
     public const int MaxProbes = 1024;
@@ -43,7 +43,7 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
                 firsts.Add(same ?? new Node(options[i], afters[i], double.NegativeInfinity, 1));
                 continue;
             }
-            var node = new Node(options[i], afters[i], Value(afters[i]), 1);
+            var node = new Node(options[i], afters[i], leaf.Value(afters[i]), 1);
             firsts.Add(node);
             seen[key] = node;
             frontier.Add(node);
@@ -69,7 +69,7 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
                     if (same?.Level == level) jobs[i].Parent.Children.Add(same);
                     continue;
                 }
-                var node = new Node(jobs[i].Path, next[i], Value(next[i]), level);
+                var node = new Node(jobs[i].Path, next[i], leaf.Value(next[i]), level);
                 seen[key] = node;
                 jobs[i].Parent.Children.Add(node);
                 frontier.Add(node);
@@ -77,20 +77,6 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
         }
         return firsts.Select(n => (n.After, n.Worth())).ToList();
     }
-
-    /// <summary>
-    /// What a state is worth where the search stops: a run that is over, 1 if won and 0 if lost; a combat about to start,
-    /// the combat leaf at its first round's start, the HP it will cost and its end priced by V (V reads a run in a room
-    /// as the state after that room, so V alone would take the fight as won at no cost); any other, V.
-    /// </summary>
-    private double Value(Afterstate after) => after switch
-    {
-        { Surface: null } => (after.Won ?? throw new InvalidDataException("a run over with no outcome")) ? 1 : 0,
-        { Screen: CombatScreen { Combat: var combat } } =>
-            (fights ?? throw new InvalidOperationException("an answer starts a combat, and the search has no combat leaf to value it"))
-            .Value(CombatStatus.InProgress, combat, after.Run, []),
-        _ => value.Value(after.Run),
-    };
 
     /// <summary>Whether the search goes on from <paramref name="after"/>: a screen of the node.</summary>
     private static bool Inside(Afterstate after) => after.Surface is not (null or Surfaces.Map or Surfaces.Combat);

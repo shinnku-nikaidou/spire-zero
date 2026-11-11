@@ -13,14 +13,16 @@ namespace Sts2Ai.Brain.Macro;
 /// How an answer is taken from the valued options is <see cref="MacroDraws"/>'s: the best in play; in self-play, with
 /// <paramref name="uniform"/> or <paramref name="softmax"/>, some are drawn.
 ///
-/// An option that ends the run is worth what the run's end is: 0 for one the screen says kills (an event's), and on the
-/// clone 1 or 0 as the game ends it. On the clone, an option that starts a combat (an event's fight) is valued by
-/// <paramref name="fights"/>, the combat leaf (<see cref="CloneSearch"/>).
+/// What an option's afterstate is worth, and at which kind of state the options of one decision are compared, is
+/// <see cref="MacroLeaf"/>'s: V, but for a run that is over (0 for an event option the screen says kills, and on the
+/// clone 1 or 0 as the game ends it) and a combat an option starts (an event's fight), valued by
+/// <paramref name="fights"/>, the combat leaf.
 /// </summary>
 public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null)
     : IMacroPolicy, IChoicePolicy
 {
     private readonly ScreenAfterstates _screen = new(value);
+    private readonly MacroLeaf _leaf = new(value, fights);
     private readonly MacroDraws _draws = new(uniform, softmax);
 
     /// <summary>
@@ -74,28 +76,39 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     {
         var obs = decision.Observation;
         var legal = Offered(obs.Run, obs.Screen, decision.Legal);
+        var moves = legal.Where(a => ScreenAfterstates.Travels(obs, a)).ToList();
+        List<Option> options;
         if (decision.Clone is not { } clone)
-            return AfterMoves(obs, [.. legal.Select(a =>
-            {
-                var after = _screen.After(obs, a);
-                return new Option(a, after, ScreenAfterstates.Kills(obs, a) ? 0 : value.Value(after), ScreenAfterstates.OpensPrompt(obs, a));
-            })]);
-        var played = legal.Where(a => !ScreenAfterstates.Travels(obs, a)).ToList();
-        var found = new CloneSearch(value, clone, _decided, fights).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<MacroAction>)[a])]);
-        var options = new List<Option>();
-        int k = 0;
-        foreach (var a in legal)
         {
-            if (ScreenAfterstates.Travels(obs, a))
+            options = [.. legal.Select(a =>
             {
                 var after = _screen.After(obs, a);
-                options.Add(new(a, after, value.Value(after), false));
-                continue;
-            }
-            var (state, worth) = found[k++];
-            options.Add(new(a, state.Run, worth, state.Surface == Surfaces.CardChoice));
+                return new Option(a, after, ScreenAfterstates.Kills(obs, a) ? MacroLeaf.Lost : _leaf.Value(after), ScreenAfterstates.OpensPrompt(obs, a));
+            })];
         }
-        return AfterMoves(obs, options);
+        else
+        {
+            // A move leaves the node, which the clone cannot play past: its afterstate is predicted, the point entered.
+            var played = legal.Where(a => !moves.Contains(a)).ToList();
+            var found = new CloneSearch(_leaf, clone, _decided).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<MacroAction>)[a])]);
+            options = [];
+            int k = 0;
+            foreach (var a in legal)
+            {
+                if (moves.Contains(a))
+                {
+                    var after = _screen.After(obs, a);
+                    options.Add(new(a, after, _leaf.Value(after), false));
+                    continue;
+                }
+                var (state, worth) = found[k++];
+                options.Add(new(a, state.Run, worth, state.Surface == Surfaces.CardChoice));
+            }
+        }
+        // On the map every option is valued entering a point (MacroLeaf): one that stays on the map, as its best move.
+        // One worth −∞ (it would come back to a state already decided) stays so.
+        if (moves.Count == 0) return options;
+        return [.. options.Select(o => moves.Contains(o.Action) || double.IsNegativeInfinity(o.Value) ? o : o with { Value = _leaf.BestMove(o.After, moves) })];
     }
 
     /// <summary>
@@ -104,6 +117,11 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// by V all the same, it was taken wherever V rated a potion below an empty slot, and the data, holding few potions
     /// kept, could not show V otherwise (self-play threw away 69-79 % of its potions in v9g0 and v9g1). The same at every
     /// state the clone's search reaches (<see cref="CloneSearch"/>).
+    ///
+    /// This is a rule about play, which is otherwise the nets' to learn, so it has a way out. Each new V's report says how
+    /// often it would still throw a potion away (<c>potion_below_empty</c>, <c>learn/v/potions.py</c>: of the held-out
+    /// decisions that hold a potion, the share V values higher with one of them gone). Under that file's limit this
+    /// rule changes next to nothing, and it is deleted.
     /// </summary>
     public static List<MacroAction> Offered(RunView run, ScreenView? screen, IReadOnlyList<MacroAction> legal)
     {
@@ -115,20 +133,6 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         };
         var offered = legal.Where(a => room || a.Verb != MacroAction.DiscardPotion).ToList();
         return offered.Count > 0 ? offered : [.. legal];
-    }
-
-    /// <summary>
-    /// On the map, an option that is not a move (a potion's) stays on the map, while each move's afterstate enters the
-    /// next point. V does not value the two kinds of state on one scale (v9-2: staying beat the best move in 19 of 26 map
-    /// decisions, by 1 point at the median), so valued as the state it leaves, such an option won for nothing. It is
-    /// worth the best move after it.
-    /// </summary>
-    private List<Option> AfterMoves(Observation obs, List<Option> options)
-    {
-        var moves = options.Where(o => ScreenAfterstates.Travels(obs, o.Action)).Select(o => o.Action).ToList();
-        if (moves.Count == 0) return options;
-        return [.. options.Select(o => ScreenAfterstates.Travels(obs, o.Action) || double.IsNegativeInfinity(o.Value) ? o
-            : o with { Value = moves.Max(m => value.Value(_screen.After(obs with { Run = o.After }, m))) })];
     }
 
     /// <summary>The decision as a probe of no answers shows it.</summary>
@@ -150,7 +154,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             obs = obs with { Run = _screen.After(obs, action) };
             var next = points[obs.Run.Map.Visited[^1]].Next;
             if (next.Count == 0) return route;
-            action = next.Select(c => MacroAction.Of(MacroAction.Map, c.Col, c.Row)).MaxBy(a => value.Value(_screen.After(obs, a)));
+            action = next.Select(c => MacroAction.Of(MacroAction.Map, c.Col, c.Row)).MaxBy(a => _leaf.Value(_screen.After(obs, a)));
             route.Add(action);
         }
     }
@@ -167,13 +171,13 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         bool explored = false;
         var picks = new List<int>();
         var state = run;
-        double current = value.Value(state);
+        double current = _leaf.Value(state);
         // The first step's answers, one pick or none, to show beside the answer.
         var first = new List<(MacroAction Action, double Value)>();
         while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
             var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
-                .Select(i => { var next = ScreenAfterstates.Picked(state, choice.Options[i], choice.Context.Purpose); return (Index: i, Value: value.Value(next), State: next); })
+                .Select(i => { var next = ScreenAfterstates.Picked(state, choice.Options[i], choice.Context.Purpose); return (Index: i, Value: _leaf.Value(next), State: next); })
                 .ToList();
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
             if (picks.Count >= min) options.Insert(0, (-1, current, state));
@@ -230,7 +234,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             var fresh = near.Select(Answer).Where(a => !worth.ContainsKey(a)).Distinct().ToList();
             if (fresh.Count > 0)
             {
-                var found = new CloneSearch(value, clone, _decided, fights).Search(root, [.. fresh.Select(a => (IReadOnlyList<MacroAction>)[a])]);
+                var found = new CloneSearch(_leaf, clone, _decided).Search(root, [.. fresh.Select(a => (IReadOnlyList<MacroAction>)[a])]);
                 for (int i = 0; i < fresh.Count; i++) worth[fresh[i]] = found[i].Value;
             }
             var taken = near[_draws.Pick([.. near.Select(c => worth[Answer(c)])], ref explored)];

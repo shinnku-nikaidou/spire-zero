@@ -26,7 +26,7 @@ public sealed class ScreenAfterstates(IRunValue value)
         switch (obs.Screen)
         {
             case MapScreen when action.Verb == MacroAction.Map:
-                return run with { Map = run.Map with { Visited = [.. run.Map.Visited, action.Coord], Entering = true } };
+                return Entered(run, action.Coord);
             case RewardsScreen screen when action.Verb == MacroAction.Reward:
                 var reward = screen.Rewards.First(r => r.Index == action.Index);
                 return reward.Kind switch
@@ -73,6 +73,11 @@ public sealed class ScreenAfterstates(IRunValue value)
                 return run;
         }
     }
+
+    /// <summary>The run after a map move to <paramref name="point"/>: the point added to the path and marked as being
+    /// entered, not yet played (<see cref="MapView.Entering"/>). V and its training read a move's afterstate so.</summary>
+    public static RunView Entered(RunView run, Coord point) =>
+        run with { Map = run.Map with { Visited = [.. run.Map.Visited, point], Entering = true } };
 
     /// <summary>An event option the screen says kills: the run ends there, lost.</summary>
     public static bool Kills(Observation obs, MacroAction action) =>

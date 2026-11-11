@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 import common
 import game_ids
-from v import data, export, spec, train
+from v import data, export, potions, spec, train
 from v.net import Batch, Net, values, win_chance
 
 
@@ -79,6 +79,19 @@ def test_the_hazards_are_labelled_up_to_the_floor_a_run_died_on_and_not_past_a_c
 def test_the_chance_to_win_is_the_chance_to_survive_every_floor_from_the_start():
     h = torch.tensor([[0.9, 0.5, 0.2, 0.0]])
     assert win_chance(h, torch.tensor([1])).tolist() == [pytest.approx(0.5 * 0.8)]
+
+
+def test_the_share_of_decisions_where_v_rates_a_potion_below_the_empty_slot():
+    held = [data.sample("a", read_run(make_view(potions=p)), 8) for p in (["FIRE", None, None], ["FIRE", "FIRE", "SWIFT"], [None] * 3)]
+
+    def dislikes(potion):
+        return lambda part: [-float(s["tokens"]["potions"].count(potion)) for s in part]
+
+    # only the decisions that hold a potion are asked; one potion valued below the empty slot is enough
+    assert potions.below_empty(dislikes("FIRE"), held) == {"decisions": 2, "share": 1.0}
+    assert potions.below_empty(dislikes("SWIFT"), held) == {"decisions": 2, "share": 0.5}
+    assert potions.below_empty(lambda part: [float(len(s["tokens"]["potions"])) for s in part], held)["share"] == 0
+    assert potions.below_empty(dislikes("FIRE"), held[2:]) == {"decisions": 0, "share": None}
 
 
 def held_out_sample(view):

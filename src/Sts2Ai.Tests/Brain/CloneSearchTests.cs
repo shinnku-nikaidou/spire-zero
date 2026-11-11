@@ -111,9 +111,9 @@ public class CloneSearchTests
             ["event:2"] => new(Start with { Hp = 0 }, null, null, [], Won: true),
             _ => throw new InvalidOperationException(string.Join(" ", path)),
         });
-        var found = new CloneSearch(V, toy, fights: new FlatLeaf(0.25)).Search(toy.After([[]])[0], Paths("event:0", "event:1", "event:2"));
+        var found = new CloneSearch(new MacroLeaf(V, new FlatLeaf(0.25)), toy).Search(toy.After([[]])[0], Paths("event:0", "event:1", "event:2"));
         Assert.Equal([0.25, 0, 1], found.Select(f => f.Value));
-        Assert.Throws<InvalidOperationException>(() => new CloneSearch(V, toy).Search(toy.After([[]])[0], Paths("event:0")));
+        Assert.Throws<InvalidOperationException>(() => new CloneSearch(new MacroLeaf(V), toy).Search(toy.After([[]])[0], Paths("event:0")));
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public class CloneSearchTests
             [_, "proceed"] => Exit(Start),
             _ => throw new InvalidOperationException(string.Join(" ", path)),
         });
-        var search = new CloneSearch(V, toy);
+        var search = new CloneSearch(new MacroLeaf(V), toy);
         search.Search(toy.After([[]])[0], Paths("event:0", "event:1"));
         Assert.Equal(3, search.Probes);
     }

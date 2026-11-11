@@ -4,7 +4,9 @@ The samples are v/data.py's: the logged macro decisions of every character with 
 combats' HP costs. The loss is the hazards' cross-entropy plus the second head's squared errors; early stopping on the
 held-out runs weighs them the same way. A run is valued by its chance to win, the chance to survive every floor; the
 report gives the Brier score of that chance on the held-out decisions against whether their runs were won
-(`brier_held_out`, and `brier_held_out_floor_only` for the training runs' hazards whatever the state).
+(`brier_held_out`, and `brier_held_out_floor_only` for the training runs' hazards whatever the state), and of the
+held-out decisions that hold a potion, the share V values higher with one potion gone (`potion_below_empty`,
+v/potions.py).
 
 --init goes on from a net file instead of from scratch: its state scaling and weights, read back from its ONNX (the
 second head, not in the file, starts anew). The report then also gives the file's own held-out loss and Brier score
@@ -34,7 +36,7 @@ import torch  # noqa: E402
 import common  # noqa: E402
 import game_ids  # noqa: E402
 from common import LearnError  # noqa: E402
-from v import data, export, spec  # noqa: E402
+from v import data, export, potions, spec  # noqa: E402
 from v.net import Batch, Net, aux_loss, hazard_loss, win_chance  # noqa: E402
 from weights import out_path  # noqa: E402
 
@@ -190,6 +192,8 @@ def main(
         "won_held_out_runs": len({s["key"] for s in test if s["kind"] == "won"}),
         "brier_held_out": brier(won_chance),
         "brier_held_out_floor_only": brier(base_won_chance),
+        # how often V would still throw a potion away: under potions.LIMIT, MacroBrain.Offered goes
+        "potion_below_empty": potions.below_empty(potions.by(model, make), test)["share"],
     }
     if start:
         report |= {"init_held_out_loss": init_loss, "init_brier_held_out": brier(init_won_chance)}
