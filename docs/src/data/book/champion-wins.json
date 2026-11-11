@@ -1,0 +1,39 @@
+{
+ "source": {
+  "what": "per character: the runs of the champion's report and how many it won",
+  "report": "the champion's reports (eval/champions/sl.json's reports)"
+ },
+ "env": "SL",
+ "characters": [
+  {
+   "character": "SILENT",
+   "ascension": 0,
+   "runs": 100,
+   "won": 92
+  },
+  {
+   "character": "IRONCLAD",
+   "ascension": 0,
+   "runs": 100,
+   "won": 82
+  },
+  {
+   "character": "REGENT",
+   "ascension": 0,
+   "runs": 100,
+   "won": 71
+  },
+  {
+   "character": "DEFECT",
+   "ascension": 0,
+   "runs": 100,
+   "won": 68
+  },
+  {
+   "character": "NECROBINDER",
+   "ascension": 0,
+   "runs": 100,
+   "won": 47
+  }
+ ]
+}

@@ -726,6 +726,24 @@ def surface_counts(play: Play) -> dict:
     }
 
 
+def champion_wins() -> dict:
+    """Per character, the runs of the champion's report and how many it won, best first (the first page's cards)."""
+    rows = []
+    for character in SL_CHAMPION["reports"]:
+        _, r = report(character)
+        (ascension,) = {x["ascension"] for x in r["runs"]}
+        won = sum(x["outcome"] == "won" for x in r["runs"])
+        rows.append({"character": character, "ascension": ascension, "runs": len(r["runs"]), "won": won})
+    return {
+        "source": {
+            "what": "per character: the runs of the champion's report and how many it won",
+            "report": "the champion's reports (eval/champions/sl.json's reports)",
+        },
+        "env": SL_CHAMPION["env"],
+        "characters": sorted(rows, key=lambda row: -row["won"] / row["runs"]),
+    }
+
+
 def eval_reports() -> dict:
     """Where the champion's Necrobinder runs that were lost ended (learn/gate.py's rule)."""
     _, r = report("NECROBINDER")
@@ -874,6 +892,7 @@ def main() -> None:
     write(DATA / "combat-examples.json", combat_examples(sl))
     write(DATA / "book/surface-counts.json", surface_counts(sl))
     write(DATA / "book/eval-reports.json", eval_reports())
+    write(DATA / "book/champion-wins.json", champion_wins())
     write(DATA / "book/learning-netfiles.json", learning_netfiles())
     keep_sources()
 

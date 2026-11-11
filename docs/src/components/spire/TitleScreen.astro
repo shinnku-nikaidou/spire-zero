@@ -1,0 +1,223 @@
+---
+// The book's first page opens as a title screen: the book's name, the champion's win rate with each character as a
+// hand of cards (src/data/book/champion-wins.json, made by scripts/book-data.py) and the way on to the next page.
+import wins from '../../data/book/champion-wins.json';
+import en from '../../data/names/en.json';
+import zhCN from '../../data/names/zh-CN.json';
+import zhTW from '../../data/names/zh-TW.json';
+
+const { lang, siteTitle, entry, pagination } = Astro.locals.starlightRoute;
+
+const characters: Record<string, Record<string, string>> = {
+  en: en.character,
+  'zh-CN': zhCN.character,
+  'zh-TW': zhTW.character,
+};
+const names = characters[lang] ?? characters.en;
+
+// A card's frame is its character's own colour.
+const frames: Record<string, string> = {
+  SILENT: '#3f7d3c',
+  IRONCLAD: '#a8392f',
+  REGENT: '#b9782a',
+  DEFECT: '#2f6fa3',
+  NECROBINDER: '#7b4fa0',
+};
+
+const words: Record<string, { hand: (env: string) => string; start: (page: string) => string }> = {
+  'zh-CN': { hand: (env) => `${env}：冠军用每个角色的胜率`, start: (page) => `从这里开始：${page}` },
+  'zh-TW': { hand: (env) => `${env}：冠軍用每個角色的勝率`, start: (page) => `從這裡開始：${page}` },
+  en: { hand: (env) => `${env}: the champion's win rate with each character`, start: (page) => `Start here: ${page}` },
+};
+const say = words[lang] ?? words.en;
+
+// The hand fans out from its middle card: each card tilts and drops by how far it is from the middle.
+const middle = (wins.characters.length - 1) / 2;
+const cards = wins.characters.map((c, i) => ({
+  ...c,
+  name: names[c.character] ?? c.character,
+  percent: Math.round((100 * c.won) / c.runs),
+  style: `--frame: ${frames[c.character]}; --tilt: ${(i - middle) * 5}deg; --drop: ${(i - middle) ** 2 * 0.35}rem`,
+}));
+const next = pagination.next;
+---
+
+<div class="title-screen">
+  <p class="eyebrow">{entry.data.title}</p>
+  <h1 id="_top">{siteTitle}</h1>
+  <figure class="strength">
+    <ul class="hand">
+      {
+        cards.map((card) => (
+          <li class="card" style={card.style}>
+            <span class="name">{card.name}</span>
+            <span class="rate">
+              <span class="percent">{card.percent}%</span>
+              <span class="count">
+                {card.won} / {card.runs}
+              </span>
+            </span>
+            <span class="bar" aria-hidden="true">
+              <span style={`width: ${card.percent}%`} />
+            </span>
+            <span class="orb">A{card.ascension}</span>
+          </li>
+        ))
+      }
+    </ul>
+    <figcaption>{say.hand(wins.env)}</figcaption>
+  </figure>
+  {
+    next && (
+      <a class="proceed" href={next.href}>
+        {say.start(next.label)}
+      </a>
+    )
+  }
+</div>
+
+<style>
+  .title-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding-block: 1rem 0.5rem;
+    text-align: center;
+  }
+  .eyebrow {
+    font-size: var(--sl-text-sm);
+    letter-spacing: 0.3em;
+    color: var(--sl-color-gray-3);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(2rem, 6vw, 3.4rem);
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+  }
+
+  .strength {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.25rem 0 0;
+  }
+  .hand {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1.25rem 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    box-sizing: border-box;
+    width: 8.5rem;
+    height: 12.25rem;
+    border-radius: 0.625rem;
+    padding: 0.375rem;
+    background-color: var(--frame);
+    box-shadow:
+      0 0 0 2px #0a0f13,
+      0 0.75rem 1.5rem rgba(0, 0, 0, 0.45);
+  }
+  .name {
+    overflow: hidden;
+    border: 1px solid #33241a;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.75rem;
+    white-space: nowrap;
+    color: #33241a;
+    background-color: #e9dcbd;
+  }
+  .rate {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border: 1px solid #0a0f13;
+    border-radius: 0.375rem;
+    background-color: #10181e;
+  }
+  .percent {
+    font-size: 2.6rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #f0c75e;
+  }
+  .count {
+    font-size: 0.8rem;
+    line-height: 1.3;
+    color: #c9cfce;
+  }
+  .bar {
+    display: flex;
+    overflow: hidden;
+    height: 0.7rem;
+    border: 1px solid #0a0f13;
+    border-radius: 0.35rem;
+    background-color: #10181e;
+  }
+  .bar span {
+    background-color: #f0c75e;
+  }
+  .orb {
+    position: absolute;
+    top: -0.7rem;
+    inset-inline-start: -0.7rem;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 2.2rem;
+    height: 2.2rem;
+    border: 2px solid #f0c75e;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f4ecd8;
+    background-color: #1e2c36;
+  }
+  figcaption {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+
+  /* The fan needs the whole hand on one row: only where the text column is at its full width. */
+  @media (min-width: 72rem) {
+    .hand {
+      flex-wrap: nowrap;
+      padding-bottom: 1.4rem;
+    }
+    .card {
+      transform: rotate(var(--tilt)) translateY(var(--drop));
+    }
+  }
+
+  .proceed {
+    display: inline-flex;
+    align-items: center;
+    min-height: 3.25rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 3rem 0.5rem 1.5rem;
+    font-size: var(--sl-text-lg);
+    font-weight: 700;
+    text-decoration: none;
+    color: #f4ecd8;
+    background-color: var(--spire-next);
+    clip-path: polygon(0 0, calc(100% - 1.6rem) 0, 100% 50%, calc(100% - 1.6rem) 100%, 0 100%);
+  }
+  .proceed:hover {
+    filter: brightness(1.12);
+  }
+</style>

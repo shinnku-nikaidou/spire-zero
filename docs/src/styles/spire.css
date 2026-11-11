@@ -206,9 +206,12 @@ mobile-starlight-toc {
   --sl-color-hairline-light: #2a3a45;
   --sl-color-hairline: #2a3a45;
 }
+.page > .header,
+mobile-starlight-toc {
+  color: var(--sl-color-text);
+}
 .page > .header {
   border-bottom: 2px solid var(--sl-color-hairline-shade);
-  color: var(--sl-color-text);
 }
 
 .site-title {
@@ -559,6 +562,9 @@ pre.mermaid svg :is(.marker, marker path) {
 }
 .spire-floor span + span {
   color: var(--sl-color-gray-3);
+}
+.spire-first {
+  text-align: center;
 }
 
 /* ---------- Previous and next: back and proceed ---------- */
