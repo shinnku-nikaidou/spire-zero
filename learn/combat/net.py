@@ -7,7 +7,7 @@ the potions drunk together.
 import torch
 from torch import nn
 
-from combat import encode
+from combat import spec
 from combat.data import BUCKETS, LOSS_MIN, POTION_GROUPS, WIDTH, potion_group
 
 
@@ -21,7 +21,7 @@ def padded(rows, device):
 
 
 def power_tensors(rows, index):
-    """Powers (encode.powers) as ids, amounts, stacks, kept cards and their masks, and moved numbers, padded to the most
+    """Powers (a state's `powers`) as ids, amounts, stacks, kept cards and their masks, and moved numbers, padded to the most
     any row has."""
     n, width = len(rows), max(1, max(len(r) for r in rows))
     ids, amounts, mask = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width), torch.zeros(n, width)
@@ -37,17 +37,17 @@ def power_tensors(rows, index):
 
 
 class Batch:
-    """Samples as tensors, in the order of encode.INPUTS, and their targets."""
+    """Samples as tensors, in the order of spec.INPUTS, and their targets."""
 
     def __init__(self, samples, index, device):
         n, toks = len(samples), [s["tokens"] for s in samples]
         width = max(1, max(len(t["cards"]) for t in toks))
         cards, ups = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width)
-        piles = torch.zeros(n, width, len(encode.PILES))
+        piles = torch.zeros(n, width, len(spec.PILES))
         m_n = max(1, max((len(c[3]) for t in toks for c in t["cards"]), default=0))
         mods, mod_mask = torch.zeros(n, width, m_n, dtype=torch.long), torch.zeros(n, width, m_n)
         costs, mod_amounts, damages = torch.zeros(n, width), torch.zeros(n, width, m_n), torch.zeros(n, width)
-        numbers = torch.zeros(n, width, encode.NUMBERS)
+        numbers = torch.zeros(n, width, spec.NUMBERS)
         for b, t in enumerate(toks):
             for k, (card_id, up, pile, ms, cost, amounts, damage, nums) in enumerate(t["cards"]):
                 cards[b, k], ups[b, k], piles[b, k, pile], costs[b, k] = index["cards"].get(card_id, 0), up, 1, cost
@@ -70,8 +70,8 @@ class Batch:
         e_powers = [torch.zeros(n, e_n, q_n, dtype=torch.long), torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n)]
         e_numbers = [torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n, dtype=torch.long), torch.zeros(n, e_n, q_n)]
         e_details = torch.zeros(n, e_n, q_n)
-        intents = torch.zeros(n, e_n, encode.SLOTS, i_n, dtype=torch.long)
-        intent_values, intent_mask = torch.zeros(n, e_n, encode.SLOTS, i_n, 2), torch.zeros(n, e_n, encode.SLOTS, i_n)
+        intents = torch.zeros(n, e_n, spec.SLOTS, i_n, dtype=torch.long)
+        intent_values, intent_mask = torch.zeros(n, e_n, spec.SLOTS, i_n, 2), torch.zeros(n, e_n, spec.SLOTS, i_n)
         for b, t in enumerate(toks):
             for k, e in enumerate(t["enemies"]):
                 enemies[b, k], enemy_mask[b, k] = index["enemies"].get(e["id"], 0), 1
@@ -85,14 +85,14 @@ class Batch:
                     e_numbers[0][b, k, j], e_details[b, k, j] = st, detail
                     if card:
                         e_numbers[1][b, k, j], e_numbers[2][b, k, j] = index["cards"].get(card, 0), 1
-                for s, slot in enumerate(e["slots"][: encode.SLOTS]):
+                for s, slot in enumerate(e["slots"][: spec.SLOTS]):
                     for j, (kind, damage, total) in enumerate(slot):
                         intents[b, k, s, j], intent_mask[b, k, s, j] = index["intents"].get(kind, 0), 1
                         intent_values[b, k, s, j] = torch.tensor([damage, total])
 
         bags = [
             x
-            for table in encode.BAGS
+            for table in spec.BAGS
             for x in padded([[index[table].get(i, 0) for i in t[table]] for t in toks], "cpu")
         ]
         orbs, orb_mask = padded([[index["orbs"].get(o, 0) for o in t["orbs"]] for t in toks], "cpu")
@@ -137,14 +137,14 @@ class Batch:
         ]  # fmt: skip
         self.tensors = [x.to(device) for x in tensors]
         self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
-        self.potions = self.tensors[encode.INPUTS.index("potions")]
-        self.potion_mask = self.tensors[encode.INPUTS.index("potion_mask")]
+        self.potions = self.tensors[spec.INPUTS.index("potions")]
+        self.potion_mask = self.tensors[spec.INPUTS.index("potion_mask")]
         self.potion_used = torch.zeros_like(self.potion_mask)
         for b, s in enumerate(samples):
             self.potion_used[b, : len(s["potion_used"])] = torch.tensor(s["potion_used"], dtype=torch.float, device=device)
 
     def inputs(self):
-        """The net's inputs, in the order of encode.INPUTS."""
+        """The net's inputs, in the order of spec.INPUTS."""
         return tuple(self.tensors)
 
 
@@ -164,7 +164,7 @@ class Net(nn.Module):
     def __init__(self, sizes: dict[str, int]):
         super().__init__()
         d, h = self.DIM, self.HIDDEN
-        for table in encode.TABLES:
+        for table in spec.TABLES:
             if table != "powers":
                 setattr(self, table, nn.Embedding(sizes[table], d))
         self.card_up = nn.Embedding(sizes["cards"], d)
@@ -182,12 +182,12 @@ class Net(nn.Module):
         self.intent_total = nn.Embedding(sizes["intents"], d)
         self.orb_passive = nn.Embedding(sizes["orbs"], d)
         self.orb_evoke = nn.Embedding(sizes["orbs"], d)
-        self.orb_at = nn.Embedding(encode.MAX_ORBS * sizes["orbs"], d)  # an orb's kind at its place in the queue
+        self.orb_at = nn.Embedding(spec.MAX_ORBS * sizes["orbs"], d)  # an orb's kind at its place in the queue
         for m in self.modules():
             if isinstance(m, nn.Embedding):
                 nn.init.normal_(m.weight, std=0.1)
-        self.pile = nn.Parameter(torch.randn(len(encode.PILES), d) * 0.1)
-        self.slot = nn.Parameter(torch.randn(encode.SLOTS, d) * 0.1)
+        self.pile = nn.Parameter(torch.randn(len(spec.PILES), d) * 0.1)
+        self.slot = nn.Parameter(torch.randn(spec.SLOTS, d) * 0.1)
         self.cost = nn.Parameter(torch.randn(d) * 0.1)
         self.damage = nn.Parameter(torch.randn(d) * 0.1)
         self.stars = nn.Parameter(torch.randn(d) * 0.1)
@@ -196,10 +196,10 @@ class Net(nn.Module):
         self.card_phi = mlp(d, h, h)
         self.power_phi = mlp(d, h)
         self.enemy_scalars = nn.Linear(5, d)
-        self.enemy_phi = mlp(d + h + encode.SLOTS * d, 2 * h, 2 * h)
+        self.enemy_phi = mlp(d + h + spec.SLOTS * d, 2 * h, 2 * h)
         self.ally_scalars = nn.Linear(4, d)
         self.ally_phi = mlp(d + h, h)
-        width = len(encode.PILES) * h + self.N_PLAYER + h + 2 * h + 4 * d + h + self.N_EXTRA
+        width = len(spec.PILES) * h + self.N_PLAYER + h + 2 * h + 4 * d + h + self.N_EXTRA
         self.body = mlp(width, self.BODY, self.BODY)
         self.head = nn.Linear(self.BODY, 1 + BUCKETS)
         self.potion_head = nn.Linear(self.BODY, POTION_GROUPS * sizes["potions"])
@@ -215,10 +215,10 @@ class Net(nn.Module):
 
     def forward(self, *inputs):
         """Per sample, the logits of the ending classes and, after a win in each group of buckets, of each potion id
-        being gone, as (sample, group, potion) (inputs as encode.INPUTS)."""
+        being gone, as (sample, group, potion) (inputs as spec.INPUTS)."""
         z = self.encode(*inputs)
         potions = self.potion_head(z).view(z.shape[0], POTION_GROUPS, -1)
-        return self.reachable(self.head(z), inputs[encode.INPUTS.index("player")]), potions
+        return self.reachable(self.head(z), inputs[spec.INPUTS.index("player")]), potions
 
     def reachable(self, logits, player):
         """The ending classes with the buckets the HP held rules out closed: a win ends with an HP share in (0, 1], so
@@ -289,7 +289,7 @@ class Net(nn.Module):
             (self.context, context, context_mask),
         ):
             parts.append((table(ids) * mask[..., None]).sum(1))
-        places = torch.arange(orbs.shape[1], device=orbs.device).clamp_max(encode.MAX_ORBS - 1)[None, :]
+        places = torch.arange(orbs.shape[1], device=orbs.device).clamp_max(spec.MAX_ORBS - 1)[None, :]
         orb = (
             self.orbs(orbs)
             + orb_values[..., 0:1] * self.orb_passive(orbs)

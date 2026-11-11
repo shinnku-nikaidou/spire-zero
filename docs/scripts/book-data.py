@@ -9,8 +9,8 @@ The plays, with the champion files (the Silent, seed 0SSL7NS01MU6, the 13th seed
         --start 12 --n 1 --records DIR/nosl-records.jsonl --log DIR/nosl-log.jsonl
     uv run --project learn python docs/scripts/book-data.py DIR
 
-V's values are the champion's V on the logged run views (learn/v), as the brain computes them: a map move's option is
-its afterstate (v.encode.entered); any other option of the SL macro brain is played on the node's clone, and what the
+V's values are the champion's V on the logged run views (learn/v, read by the encoder: learn/common.py's Encoder,
+src/Sts2Ai.Encode built here), as the brain computes them: a map move's option is its afterstate (`entered`); any other option of the SL macro brain is played on the node's clone, and what the
 chosen one is worth is the run where the node's search ends, at its next map decision. The panel's texts are made as
 the mod's Describe and L10n make them (src/Sts2Ai.Mod/UI/), with the game's names of src/data/names/.
 """
@@ -26,7 +26,8 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "learn"))
 
-from v import encode, export  # noqa: E402
+import common  # noqa: E402
+from v import export  # noqa: E402
 from v.data import sample  # noqa: E402
 from v.net import Batch, Net, values  # noqa: E402
 
@@ -74,11 +75,23 @@ _mean = torch.tensor(V_FILE["state"]["mean"], dtype=torch.float64)
 _std = torch.tensor(V_FILE["state"]["std"], dtype=torch.float64)
 
 
+_encoder = common.Encoder(common.checkout_encoder())
+
+
 def V(views: list[dict]) -> list[float]:
     """The champion's V of each run view: the chance to win, as RunNet.Value gives it."""
+    read = _encoder.runs([json.dumps({"run_view": v}) for v in views])
     with torch.no_grad():
-        b = Batch([sample("", v, V_FILE["floors"]) for v in views], _index, _mean, _std, V_FILE["floors"], "cpu")
+        b = Batch([sample("", r["run"], V_FILE["floors"]) for r in read], _index, _mean, _std, V_FILE["floors"], "cpu")
         return [float(x) for x in values(_net, b)]
+
+
+def entered(view: dict, action: str) -> dict:
+    """The run view after the map move `map:COL,ROW`: the point added to the path and marked as being entered, as the
+    brain's afterstate of a move is (ScreenAfterstates.Entered); the encoder reads the mark."""
+    col, row = (int(x) for x in action.removeprefix("map:").split(","))
+    m = view["map"] | {"visited": [*view["map"]["visited"], {"col": col, "row": row}], "entering": True}
+    return view | {"map": m}
 
 
 def check_v() -> None:
@@ -98,9 +111,10 @@ def point_type(view: dict, action: str) -> str:
 
 
 def moves(view: dict) -> list[str]:
-    """The map moves from where the player is (encode.here)."""
+    """The map moves from where the player is: the last visited point, or the start (the first by row, col) before any."""
     p = points(view)
-    at = encode.here(view["map"], p)
+    visited = view["map"]["visited"]
+    at = (visited[-1]["col"], visited[-1]["row"]) if visited else min(p, key=lambda k: (k[1], k[0]))
     return [f"map:{n['col']},{n['row']}" for n in p[at]["next"]]
 
 
@@ -113,17 +127,17 @@ def route(view: dict, action: str) -> list[str]:
     """MacroBrain.Plan: the route after a map move, each next point the best by V of its afterstate, up to the boss."""
     out = []
     while True:
-        view = encode.entered(view, action)
+        view = entered(view, action)
         options = moves(view)
         if not options:
             return out
-        action = options[best(options, V([encode.entered(view, a) for a in options]))]
+        action = options[best(options, V([entered(view, a) for a in options]))]
         out.append(action)
 
 
 def map_options(view: dict) -> list[tuple[str, float]]:
     options = moves(view)
-    return list(zip(options, V([encode.entered(view, a) for a in options]), strict=True))
+    return list(zip(options, V([entered(view, a) for a in options]), strict=True))
 
 
 # --- the plays -------------------------------------------------------------------------------------------------------
@@ -162,7 +176,7 @@ class Play:
         """What the macro brain valued the chosen option of log entry k at (the panel's chance to win after it)."""
         e = self.log[k]
         if e["surface"] == "map" and e["chosen"].startswith("map:"):
-            return V([encode.entered(e["run_view"], e["chosen"])])[0]
+            return V([entered(e["run_view"], e["chosen"])])[0]
         if self.env == "NoSL":
             # L0 on the screen: these actions leave the run as it is (MacroBrain.After).
             if e["chosen"] not in ("leave", "proceed", "rewards_done"):

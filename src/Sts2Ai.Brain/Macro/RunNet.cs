@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Sts2Ai.Protocol;
@@ -16,23 +17,72 @@ public sealed record NetFile(
     string Name, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
     IReadOnlyList<NetTest> Tests, NetState State);
 
-/// <summary>The run's numbers the net reads (<c>learn/v/encode.py</c>'s STATE), and how they are standardized.</summary>
+/// <summary>The run's numbers the net reads (of <see cref="RunNet.StateNames"/>), and how they are standardized.</summary>
 public sealed record NetState(IReadOnlyList<string> Names, IReadOnlyList<double> Mean, IReadOnlyList<double> Std);
 
-/// <summary>A card as the net reads it: its id, upgrade level, modifiers (its enchantment and affliction first, as
-/// <paramref name="Amounts"/>), its enchantment's and affliction's amounts / 10, and its damage / 20 and block / 20.</summary>
+/// <summary>A card as the net reads it: its id, upgrade level (capped at <see cref="RunNet.MaxUp"/>), modifiers (its
+/// enchantment and affliction first, as <paramref name="Amounts"/>), its enchantment's and affliction's amounts / 10, and
+/// its damage / 20 and block / 20.</summary>
 public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers, IReadOnlyList<double> Amounts, double Damage, double Block);
 
-/// <summary>A run's ids as the net reads them; <paramref name="Held"/>, the cards its relics keep, by id.</summary>
-public sealed record RunTokens(IReadOnlyList<CardToken> Cards, IReadOnlyList<string> Relics, IReadOnlyList<string> Potions,
-    IReadOnlyList<string> Context, IReadOnlyList<string> Map, IReadOnlyList<string> Held);
+/// <summary>
+/// A run as V reads it (docs: macro-brain/network §2), but for its numbers (<see cref="RunNet.State"/>): ids, and numbers
+/// scaled and capped. <see cref="RunNet.Tokens"/> is the one place a run is turned into them; <see cref="RunNet"/> looks
+/// the ids up in its net file's tables and feeds the graph, and the trainer reads the same tokens as JSON
+/// (<see cref="Write"/>) and does the same.
+/// </summary>
+/// <param name="Relics">Each relic's id, with ":used" once used up.</param>
+/// <param name="RelicValues">Each relic's numbers, as the combat net reads them (<see cref="CombatTokens.RelicValuesOf"/>).</param>
+/// <param name="RelicStatus">Each relic's status (<see cref="CombatTokens.RelicStatusOf"/>).</param>
+/// <param name="Held">The cards the relics keep (Pael's Tooth's), by id.</param>
+/// <param name="Context">The character, the act, the boss(es) and the act's ancient.</param>
+/// <param name="Map">The map points still reachable (<see cref="RunNet.MapTokens"/>).</param>
+public sealed record RunTokens(
+    IReadOnlyList<CardToken> Cards, IReadOnlyList<string> Relics, IReadOnlyList<IReadOnlyList<double>> RelicValues, IReadOnlyList<string> RelicStatus,
+    IReadOnlyList<string> Held, IReadOnlyList<string> Potions, IReadOnlyList<string> Context, IReadOnlyList<string> Map)
+{
+    /// <summary>The tokens as the trainer reads them (<c>learn/v/net.py</c>'s Batch): an object by the names above in snake
+    /// case; a card an array of its id, upgrade level, modifiers, amounts, and its damage and block as one array.</summary>
+    public void Write(Utf8JsonWriter json)
+    {
+        json.WriteStartObject();
+        json.WriteStartArray("cards");
+        foreach (var c in Cards)
+        {
+            json.WriteStartArray();
+            json.WriteStringValue(c.Id);
+            json.WriteNumberValue(c.Up);
+            TokenJson.Strings(json, c.Modifiers);
+            TokenJson.Numbers(json, c.Amounts);
+            TokenJson.Numbers(json, [c.Damage, c.Block]);
+            json.WriteEndArray();
+        }
+        json.WriteEndArray();
+        json.WritePropertyName("relics");
+        TokenJson.Strings(json, Relics);
+        json.WritePropertyName("relic_values");
+        TokenJson.Rows(json, RelicValues);
+        json.WritePropertyName("relic_status");
+        TokenJson.Strings(json, RelicStatus);
+        json.WritePropertyName("held");
+        TokenJson.Strings(json, Held);
+        json.WritePropertyName("potions");
+        TokenJson.Strings(json, Potions);
+        json.WritePropertyName("context");
+        TokenJson.Strings(json, Context);
+        json.WritePropertyName("map");
+        TokenJson.Strings(json, Map);
+        json.WriteEndObject();
+    }
+}
 
 /// <summary>
 /// V (docs: macro-brain/network), run by ONNX Runtime: a net over the run's cards, relics (with their numbers and
 /// statuses, as the combat net reads them, and the cards they keep), potions and context, the map points still reachable
-/// and the run's numbers (<see cref="NetFile.State"/>), read as <c>learn/v/encode.py</c> reads them.
+/// and the run's numbers (<see cref="NetFile.State"/>).
 /// The graph gives one hazard per floor: the chance to die on that floor if still alive there. The value is the chance to
-/// survive every floor from the current one on, the chance to win. This class only turns a run into the graph's inputs.
+/// survive every floor from the current one on, the chance to win. This class turns a run into its tokens and numbers
+/// (<see cref="Tokens"/>, <see cref="State"/>: the one reading of a run, the trainer's too) and feeds them to the graph.
 /// </summary>
 public sealed class RunNet : IRunValue, IDisposable
 {
@@ -89,11 +139,11 @@ public sealed class RunNet : IRunValue, IDisposable
     public void Dispose() => _session.Dispose();
 
     /// <summary>
-    /// The net's tokens of a run, which <c>learn/v/encode.py</c> reads the same way: each card with its modifiers
-    /// (enchantment, affliction, keywords, what Tinker Time made of it), its modifiers' amounts, its damage (Osty's for an
-    /// Osty attack) and block, which only its own id's row reads; each relic, with ":used"
-    /// once used up; each potion; the context: character, act, boss(es) and the act's ancient; the map (<see cref="MapTokens"/>);
-    /// and the cards the relics keep (Pael's Tooth's). The relics' numbers and statuses are fed apart (<see cref="CombatNet.RelicInputs"/>).
+    /// The net's tokens of a run: each card with its modifiers (enchantment, affliction, keywords, what Tinker Time made
+    /// of it), its modifiers' amounts, its damage (Osty's for an Osty attack) and block, which only its own id's row
+    /// reads; each relic, with ":used" once used up, its numbers and its status; each potion; the context: character,
+    /// act, boss(es) and the act's ancient; the map (<see cref="MapTokens"/>); and the cards the relics keep (Pael's
+    /// Tooth's). Nothing is computed from the deck: what matters in it is the net's to learn.
     /// </summary>
     public static RunTokens Tokens(RunView run)
     {
@@ -102,17 +152,19 @@ public sealed class RunNet : IRunValue, IDisposable
         if (run.Map.Ancient != null) context.Add("ancient:" + run.Map.Ancient);
         return new(
             [.. run.Deck.Select(Card)],
-            [.. run.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id)],
+            [.. run.Relics.Select(CombatTokens.RelicId)],
+            [.. run.Relics.Select(CombatTokens.RelicValuesOf)],
+            [.. run.Relics.Select(CombatTokens.RelicStatusOf)],
+            [.. run.Relics.SelectMany(r => r.Cards ?? [])],
             [.. run.Potions.OfType<string>()],
             context,
-            MapTokens(run.Map),
-            [.. run.Relics.SelectMany(r => r.Cards ?? [])]);
+            MapTokens(run.Map));
 
         static CardToken Card(CardView card)
         {
             var vars = card.Vars ?? new Dictionary<string, decimal>();
             decimal damage = vars.TryGetValue("Damage", out var d) ? d : vars.GetValueOrDefault("OstyDamage");
-            return new(card.Id, card.Up ?? 0, Modifiers(card),
+            return new(card.Id, Math.Min(card.Up ?? 0, MaxUp), Modifiers(card),
                 [.. new[] { card.Enchant, card.Affliction }.OfType<ModifierView>().Select(m => Capped(m.Amount / 10.0))],
                 Capped((double)damage / 20.0), Capped((double)vars.GetValueOrDefault("Block") / 20.0));
         }
@@ -131,7 +183,10 @@ public sealed class RunNet : IRunValue, IDisposable
     /// <summary>
     /// Each map point a path leads to from where the player is (the last visited point, or the start before any), the
     /// player's own left out, sorted by (row, col): its type and how many floors ahead it is ("Elite+3"), ":quest" if a
-    /// quest marks it.
+    /// quest marks it. In a map move's afterstate (<see cref="MapView.Entering"/>) the point being entered comes first
+    /// ("Elite+0"), so that options with the same points after them differ. The mark never stands for a room already
+    /// played: a run logged in a room comes after its combat, and a run that died there logs none, so a net that read the
+    /// type of the room it is in would take entering an elite for having beaten it.
     /// </summary>
     public static IReadOnlyList<string> MapTokens(MapView map)
     {
@@ -158,8 +213,13 @@ public sealed class RunNet : IRunValue, IDisposable
         return [.. seen.OrderBy(k => k.Row).ThenBy(k => k.Col)];
     }
 
-    /// <summary>The run's number the net reads by this name (<c>learn/v/encode.py</c>'s state).</summary>
-    private static double StateValue(RunView run, string name) => name switch
+    /// <summary>The run's numbers a net may read, by name: floor, HP, max HP, gold, ascension, potion slots, and the
+    /// game's rule, per act from 0, whether its plain monster fights are won at their start. Raw: a net file standardizes them.</summary>
+    public static readonly IReadOnlyList<string> StateNames =
+        ["floor", "hp", "max_hp", "gold", "ascension", "potion_slots", "auto_win_0", "auto_win_1", "auto_win_2"];
+
+    /// <summary>The run's number of this name (<see cref="StateNames"/>).</summary>
+    public static double State(RunView run, string name) => name switch
     {
         "floor" => run.Floor,
         "hp" => run.Hp,
@@ -172,6 +232,20 @@ public sealed class RunNet : IRunValue, IDisposable
             run.AutoWin?.Contains(act) == true ? 1 : 0,
         _ => throw new InvalidDataException($"a net reads the run's {name}, which RunNet does not know"),
     };
+
+    /// <summary>
+    /// A run as the trainer reads it: its tokens and its numbers by name, <c>{"tokens": ..., "state": {NAME: number}}</c>.
+    /// </summary>
+    public static void Write(Utf8JsonWriter json, RunView run)
+    {
+        json.WriteStartObject();
+        json.WritePropertyName("tokens");
+        Tokens(run).Write(json);
+        json.WriteStartObject("state");
+        foreach (string name in StateNames) json.WriteNumber(name, State(run, name));
+        json.WriteEndObject();
+        json.WriteEndObject();
+    }
 
     /// <summary>Per floor, the chance to die there if still alive there: the graph on a batch of one run.</summary>
     private float[] Hazards(RunView run)
@@ -191,7 +265,7 @@ public sealed class RunNet : IRunValue, IDisposable
         {
             var card = tokens.Cards[k];
             cards[0, k] = Index("cards", card.Id);
-            ups[0, k] = Math.Min(card.Up, MaxUp);
+            ups[0, k] = card.Up;
             cardMask[0, k] = 1;
             for (int j = 0; j < card.Modifiers.Count; j++)
             {
@@ -215,9 +289,9 @@ public sealed class RunNet : IRunValue, IDisposable
         inputs.AddRange(Bag("map", "map_mask", tokens.Map));
         var values = new DenseTensor<float>([1, _file.State.Names.Count]);
         for (int i = 0; i < _file.State.Names.Count; i++)
-            values[0, i] = (float)((StateValue(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);
+            values[0, i] = (float)((State(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);
         inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
-        inputs.AddRange(CombatNet.RelicInputs(run.Relics, status => Index("relic_status", status)));
+        inputs.AddRange(CombatNet.RelicInputs(tokens.RelicValues, tokens.RelicStatus, status => Index("relic_status", status)));
         inputs.AddRange(Bag("cards", "held", "held_mask", tokens.Held));
         using var results = _session.Run(inputs);
         return [.. results[0].AsEnumerable<float>()];

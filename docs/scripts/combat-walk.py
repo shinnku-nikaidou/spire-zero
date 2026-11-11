@@ -2,6 +2,8 @@
 net file's tests (eval/champions/sl.json's combat-net), followed through every layer of learn/combat/net.py with the
 file's own weights, into src/data/combat-walk.json. Stops if its layers do not end in the outputs the file's tests hold.
 
+A state is read by the encoder (learn/common.py's Encoder: src/Sts2Ai.Encode, built here), as the net's trainer had it.
+
     uv run --project learn python docs/scripts/combat-walk.py
 """
 
@@ -15,8 +17,17 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "learn"))
 
-from combat import data, encode, export  # noqa: E402
+import common  # noqa: E402
+from combat import data, export, spec  # noqa: E402
 from combat.net import Batch, Net  # noqa: E402
+
+ENCODER = common.Encoder(common.checkout_encoder())
+
+
+def tokens_of(obs: dict, history: list) -> dict:
+    """A round's start as the combat net reads it."""
+    return ENCODER.combats([json.dumps({"obs": obs, "history": history})])[0]["tokens"]
+
 
 CHAMPION = json.loads((ROOT / "eval/champions/sl.json").read_text())
 FILE = ROOT / CHAMPION["options"]["combat-net"]
@@ -38,13 +49,13 @@ def load(file: dict) -> tuple[Net, dict]:
 
 
 def batch_of(test: dict, index: dict) -> Batch:
-    tokens = encode.tokens(test["obs"], test["history"])
+    tokens = tokens_of(test["obs"], test["history"])
     held = sum(p is not None for p in test["obs"]["potions"])
     return Batch([{"tokens": tokens, "class": 0, "potion_used": [0] * held, "worth": None}], index, "cpu")
 
 
 def inputs_of(b: Batch) -> dict[str, torch.Tensor]:
-    return dict(zip(encode.INPUTS, b.inputs(), strict=True))
+    return dict(zip(spec.INPUTS, b.inputs(), strict=True))
 
 
 def four(x: torch.Tensor) -> list[float]:
@@ -125,7 +136,7 @@ def shown(test: dict, net: Net, index: dict, width: float) -> dict:
 def walk(file: dict, net: Net, index: dict) -> dict:
     test = file["tests"][MAIN]
     obs, history = test["obs"], test["history"]
-    tok = encode.tokens(obs, history)
+    tok = tokens_of(obs, history)
     b = batch_of(test, index)
     x = inputs_of(b)
     width = data.WIDTH
@@ -154,7 +165,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     t = x["cards"][0, example]
     card = {
         "id": c_id,
-        "pile": encode.PILES[c_pile],
+        "pile": spec.PILES[c_pile],
         "up": c_up,
         "cost": round(c_cost, 3),
         "damage": round(c_damage, 3),
@@ -170,10 +181,10 @@ def walk(file: dict, net: Net, index: dict) -> dict:
         "x": four(card_x[0, example]),
         "phi": vec(card_phi[0, example]),
     }
-    twin = next((k for k, c in enumerate(tok["cards"]) if k != example and c[:2] == (c_id, c_up) and c[2] != c_pile), None)
+    twin = next((k for k, c in enumerate(tok["cards"]) if k != example and c[:2] == [c_id, c_up] and c[2] != c_pile), None)
     piles = [
         {"pile": name, "cards": sum(1 for c in tok["cards"] if c[2] == p), "vector": vec(per_pile[0, p * net.HIDDEN : (p + 1) * net.HIDDEN])}
-        for p, name in enumerate(encode.PILES)
+        for p, name in enumerate(spec.PILES)
     ]
 
     # Powers: the player's.
@@ -218,7 +229,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
     relics = (held * x["relic_mask"][..., None]).sum(1)
     potions = (net.potions(x["potions"]) * x["potion_mask"][..., None]).sum(1)
     context = (net.context(x["context"]) * x["context_mask"][..., None]).sum(1)
-    places = torch.arange(x["orbs"].shape[1]).clamp_max(encode.MAX_ORBS - 1)[None, :]
+    places = torch.arange(x["orbs"].shape[1]).clamp_max(spec.MAX_ORBS - 1)[None, :]
     orb = (
         net.orbs(x["orbs"])
         + x["orb_values"][..., 0:1] * net.orb_passive(x["orbs"])
@@ -312,7 +323,7 @@ def walk(file: dict, net: Net, index: dict) -> dict:
             "ascension": obs.get("ascension", 0),
             "orb_slots": pl.get("orb_slots", 0),
             "powers": [{"id": p["id"], "amount": p["amount"]} for p in pl["powers"]],
-            "piles": {p: [c["id"] + ("+" * (c.get("up") or 0)) for c in obs[p]] for p in encode.PILES},
+            "piles": {p: [c["id"] + ("+" * (c.get("up") or 0)) for c in obs[p]] for p in spec.PILES},
             "enemies": [
                 {"id": e["id"], "hp": e["hp"], "max_hp": e["max_hp"], "block": e["block"], "powers": [{"id": p["id"], "amount": p["amount"]} for p in e["powers"]], "intents": e.get("intents") or []}
                 for e in obs["enemies"]

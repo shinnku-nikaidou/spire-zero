@@ -13,7 +13,10 @@ second head, not in the file, starts anew). The report then also gives the file'
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
 
-    uv run python -m v.train --list PREFIX --name NAME [--init ../weights/all/CHAMPION.json]
+A run is read by the simulator's code (common.Encoder): --encoder is how to start it, the simulator's `encode` at
+the commit that will play the net (`"~/sts2/sim-REV.sh encode"`), or the program src/Sts2Ai.Encode.
+
+    uv run python -m v.train --list PREFIX --name NAME --encoder "SIM encode" [--init ../weights/all/CHAMPION.json]
 """
 
 import json
@@ -31,7 +34,7 @@ import torch  # noqa: E402
 import common  # noqa: E402
 import game_ids  # noqa: E402
 from common import LearnError  # noqa: E402
-from v import data, encode, export  # noqa: E402
+from v import data, export, spec  # noqa: E402
 from v.net import Batch, Net, aux_loss, hazard_loss, win_chance  # noqa: E402
 from weights import out_path  # noqa: E402
 
@@ -48,6 +51,7 @@ AUX_WEIGHT = 3.0  # the second head's squared errors, per decision
 def main(
     list_: Annotated[str, typer.Option("--list", help="the list pair PREFIX-logs.txt and PREFIX-recs.txt")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
+    encoder: Annotated[str, typer.Option(help="how to start the encoder that reads the runs: \"SIM encode\"")],
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
     init: Annotated[
         str | None,
@@ -64,7 +68,11 @@ def main(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     logs, records = common.train_lists(list_)
-    samples, runs = data.read_runs(logs, records, FLOORS)
+    reader = common.Encoder(encoder)
+    if missing := [name for name in spec.STATE if name not in reader.hello["state"]]:
+        raise LearnError(f"the encoder knows no {', '.join(missing)} of a run: is it this code's commit?")
+    samples, runs = data.read_runs(logs, records, FLOORS, reader)
+    reader.close()
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -80,8 +88,8 @@ def main(
     tables = game_ids.macro_tables()
     if start and start["vocab"] != tables:
         raise LearnError(f"{init} holds other tables than learn/game_ids.json's")
-    if start and start["state"]["names"] != encode.STATE:
-        raise LearnError(f"{init} reads the state {start['state']['names']}, not v/encode.py's {encode.STATE}")
+    if start and start["state"]["names"] != spec.STATE:
+        raise LearnError(f"{init} reads the state {start['state']['names']}, not v/spec.py's {spec.STATE}")
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     if start:
         mean = torch.tensor(start["state"]["mean"], dtype=torch.float64)
@@ -191,7 +199,7 @@ def main(
         "floors": FLOORS, "epochs": EPOCHS, "patience": PATIENCE, "batch": BATCH, "lr": LR, "weight_decay": WEIGHT_DECAY,
         "aux_weight": AUX_WEIGHT, "dim": Net.DIM, "hidden": Net.HIDDEN, "body": Net.BODY,
     }  # fmt: skip
-    trained = common.trained(list_, start, seed, epochs, settings)
+    trained = common.trained(list_, start, seed, epochs, settings, reader)
     net = export.net_file(name, FLOORS, tables, mean, std, model, test, report, seed, trained)
     export.write(net, out_file)
     logger.info("wrote {}", out_file)

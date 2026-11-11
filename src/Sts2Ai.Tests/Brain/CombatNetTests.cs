@@ -11,7 +11,7 @@ public class CombatNetTests
     /// attack, orbs on and off the table past the places the net tells apart, and every card, power, relic and enemy state
     /// the observation gathers (keywords, Tinker, an enchantment spent, Momentum, calculated numbers, replays, star costs,
     /// a moved number, Swipe's card, a relic spent, an enemy lying dead, another character), every weight nonzero: a
-    /// change to <c>learn/combat/encode.py</c> or to CombatNet that reads a state otherwise fails on loading.
+    /// change to how CombatNet feeds a state's tokens to the graph fails on loading.
     /// </summary>
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
 

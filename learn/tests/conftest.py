@@ -1,6 +1,37 @@
-"""Builders of the small observations the tests need, shaped as the decision logs hold them."""
+"""Builders of the small observations the tests need, shaped as the decision logs hold them, and the encoder that
+reads them for the nets: the real one (src/Sts2Ai.Encode, which needs .NET and not the game), since what a state is read
+as is the simulator's code and nothing here."""
+
+import functools
+import json
 
 import pytest
+
+import common
+
+
+@functools.cache
+def encoder_command() -> str:
+    """How to start the encoder: this checkout's, built once for all the tests."""
+    return common.checkout_encoder()
+
+
+@functools.cache
+def encoder() -> common.Encoder:
+    """One encoder for all the tests."""
+    return common.Encoder(encoder_command())
+
+
+def read_run(view: dict) -> dict:
+    """A run view as V reads it: its tokens and its numbers by name."""
+    return encoder().runs([json.dumps({"run_view": view})])[0]["run"]
+
+
+def round_start(obs: dict, history=()) -> dict:
+    """A round's start as combat/data.py holds it: the observation, the history logged with it and its tokens."""
+    history = list(history)
+    tokens = encoder().combats([json.dumps({"obs": obs, "history": history})])[0]["tokens"]
+    return {"obs": obs, "history": history, "tokens": tokens}
 
 
 def make_enemy(uid, hp=10, intents=({"type": "Attack", "damage": 6, "hits": 1},), monster="M"):

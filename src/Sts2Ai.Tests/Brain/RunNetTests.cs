@@ -10,7 +10,7 @@ public class RunNetTests
     /// a card's damage, block and modifiers' amounts random, its test runs real views (Fixtures' floor 1 and two of g3, one
     /// with a Mad Science of Tinker Time and cards with keywords; the first's first card given a Goopy of amount 4)
     /// valued by the trainer at their chance to win (<c>learn/v/net.py</c>'s win_chance): loading checks RunNet gives each
-    /// the trainer's value, so a change to <c>learn/v/encode.py</c> or to RunNet that reads a run otherwise fails here.
+    /// the trainer's value, so a change to how RunNet feeds a run's tokens to the graph fails here.
     /// </summary>
     [Fact]
     public void ValuesATinyNetsRunsAtTheTrainersChanceToWin()
@@ -56,7 +56,6 @@ public class RunNetTests
         Assert.Empty(RunNet.MapTokens(Map((0, 0), (0, 1), (0, 2), (0, 3))));
     }
 
-    // As learn/tests/test_v_encode.py's test of the point entered.
     [Fact]
     public void AMapMoveReadsThePointEnteredAndOnlyThen()
     {

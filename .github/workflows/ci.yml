@@ -35,6 +35,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # the trainers' tests read their states with the encoder, src/Sts2Ai.Encode, which they build
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
       - uses: astral-sh/setup-uv@v6
       - run: weights/fetch.sh
       # The lock file pins the CUDA build of torch, which training hosts use; the tests need only the CPU one.

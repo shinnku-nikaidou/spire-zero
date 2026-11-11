@@ -7,8 +7,11 @@ exit code 1; anything else is a bug and ends it with a traceback.
 import json
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -16,6 +19,8 @@ import typer
 from loguru import logger
 
 ROOT = Path(__file__).resolve().parent.parent  # the repo
+# How a decision log's line starts: its run, its environment and its surface, read without parsing the line.
+HEAD = re.compile(r'\{"run":"(\w+)","decision_id":\d+,"env":"(\w+)","surface":"(\w+)"')
 
 
 class LearnError(Exception):
@@ -95,11 +100,98 @@ def revision() -> str:
     return git("rev-parse", "HEAD") + ("-dirty" if git("status", "--porcelain", "--", "learn") else "")
 
 
-def trained(list_: str, init: dict | None, seed: int, epochs: int, settings: dict) -> dict:
-    """What made a net, for its file (docs: learning/reference §7): the code's commit, the list pair it trained on, the
-    net it went on from (its name) or none, the seed, the epochs it ran, and the trainer's settings as they were."""
+class Encoder:
+    """The nets' inputs of decisions (docs: learning/reference §2), made by the code that feeds the nets in play, so
+    that a state is read one way only: the simulator's `encode`, or the program src/Sts2Ai.Encode, which is the same
+    without the game. `command` starts it; one process serves a whole training.
+
+    A decision is a line of JSON as the decision log holds it: a log's line as it is, or any JSON with the fields the
+    answer needs (`run_view`, and `surface` and `chosen` for a map move's afterstate; `obs` and `history`)."""
+
+    def __init__(self, command: str):
+        try:
+            self.process = subprocess.Popen(
+                shlex.split(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8"
+            )
+        except OSError as e:
+            raise LearnError(f"cannot start the encoder `{command}`: {e.strerror}") from e
+        hello = self.process.stdout.readline()
+        if not hello:
+            raise LearnError(f"the encoder `{command}` ended without a word")
+        self.hello = json.loads(hello)  # its build's commit, the names of a run's numbers, the combat net's lags
+
+    def runs(self, decisions: list[str], source: str = "") -> list[dict | None]:
+        """Each macro decision's run as V reads it, `{"run": {"tokens", "state"}}`, and for a map move also `"entered"`,
+        its afterstate."""
+        return self._ask("R", decisions, source)
+
+    def combats(self, decisions: list[str], source: str = "") -> list[dict | None]:
+        """Each combat decision's state as the combat net reads it, `{"tokens": ...}`."""
+        return self._ask("C", decisions, source)
+
+    def _ask(self, kind: str, decisions: list[str], source: str) -> list[dict | None]:
+        """The answers, in order; None for a decision that is no JSON, a line cut short. One the encoder cannot read
+        though it is JSON fails."""
+
+        def feed():
+            pipe = self.process.stdin
+            try:
+                for d in decisions:
+                    pipe.write(kind)
+                    pipe.write(d if d.endswith("\n") else d + "\n")
+                pipe.write("\n")  # an empty line: send the answers so far
+                pipe.flush()
+            except OSError:
+                pass  # the encoder ended: the reader below says so
+
+        feeder = threading.Thread(target=feed)
+        feeder.start()
+        answers = []
+        for d in decisions:
+            line = self.process.stdout.readline()
+            if not line:
+                raise LearnError(f"the encoder ended while reading {source or 'a decision'}")
+            answer = json.loads(line)
+            if "error" in answer:
+                try:
+                    json.loads(d)
+                except json.JSONDecodeError:
+                    answer = None
+                else:
+                    raise LearnError(f"the encoder cannot read a decision of {source or 'the trainer'}: {answer['error']}")
+            answers.append(answer)
+        feeder.join()
+        return answers
+
+    def close(self) -> None:
+        self.process.stdin.close()
+        self.process.wait()
+
+
+def checkout_encoder() -> str:
+    """How to start this checkout's encoder, for what runs here (the tests, the book's scripts): STS2_ENCODER, or
+    src/Sts2Ai.Encode, built first, which needs .NET and not the game. A training names its own (--encoder): the
+    simulator's build that will play the net."""
+    if os.environ.get("STS2_ENCODER"):
+        return os.environ["STS2_ENCODER"]
+    dotnet = shutil.which("dotnet")
+    if dotnet is None:
+        raise LearnError("the encoder needs .NET to build here; or set STS2_ENCODER to how to start one")
+    project = ROOT / "src" / "Sts2Ai.Encode"
+    build = [dotnet, "build", str(project), "-c", "Release", "-nologo", "-v", "q"]
+    built = subprocess.run(build, capture_output=True, text=True)
+    if built.returncode != 0:
+        raise LearnError(f"src/Sts2Ai.Encode does not build:\n{built.stdout}{built.stderr}")
+    return shlex.join([dotnet, str(project / "bin" / "Release" / "net9.0" / "Sts2Ai.Encode.dll")])
+
+
+def trained(list_: str, init: dict | None, seed: int, epochs: int, settings: dict, encoder: Encoder) -> dict:
+    """What made a net, for its file (docs: learning/reference §7): the code's commit, the commit of the encoder that
+    read the states, the list pair it trained on, the net it went on from (its name) or none, the seed, the epochs it
+    ran, and the trainer's settings as they were."""
     return {
         "rev": revision(),
+        "encoder": encoder.hello["commit"],
         "list": list_,
         "init": init["name"] if init else None,
         "seed": seed,

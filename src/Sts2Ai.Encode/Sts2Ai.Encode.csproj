@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The nets' inputs for a trainer (docs: learning/reference §2): Sts2Ai.Brain's TokenServer as a program of its own. It
+    needs nothing of the game, so it builds wherever .NET does: the trainers' tests run it. The simulator's `encode`
+    is the same code, for a host that has a simulator build.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Sts2Ai.Brain/Sts2Ai.Brain.csproj" />
+  </ItemGroup>
+  <Import Project="../SourceRevision.targets" />
+</Project>

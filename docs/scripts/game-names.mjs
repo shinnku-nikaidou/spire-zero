@@ -42,7 +42,7 @@ const json = (lang, name) => {
 const titles = (table, key = 'title') =>
   Object.fromEntries(Object.entries(table).filter(([k]) => new RegExp(`^[A-Z0-9_]+\\.${key}$`).test(k)).map(([k, v]) => [k.slice(0, -key.length - 1), v]));
 
-// The map's point types as encode.py's map tokens name them, and the legend entry the game names each by.
+// The map's point types as V's map tokens name them (RunNet.MapTokens), and the legend entry the game names each by.
 const legend = { Boss: 'BOSS', Elite: 'ELITE', Monster: 'ENEMY', RestSite: 'REST', Shop: 'MERCHANT', Treasure: 'TREASURE', Unknown: 'UNKNOWN', Ancient: 'ANCIENT' };
 const langs = { en: 'eng', 'zh-CN': 'zhs', 'zh-TW': 'zht' };
 const out = fileURLToPath(new URL('../src/data/names/', import.meta.url));

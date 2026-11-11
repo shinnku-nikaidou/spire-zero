@@ -7,7 +7,7 @@ file.
 import torch
 from torch import nn
 
-from v import encode
+from v import spec
 from v.data import AUX
 
 
@@ -21,7 +21,7 @@ def padded(rows, device):
 
 
 class Batch:
-    """Samples as tensors: the net's inputs (names: encode.INPUTS), the hazards' targets and the second head's, and the
+    """Samples as tensors: the net's inputs (names: spec.INPUTS), the hazards' targets and the second head's, and the
     weights."""
 
     def __init__(self, samples, index, mean, std, floors, device):
@@ -42,7 +42,7 @@ class Batch:
             name: torch.tensor(r, dtype=torch.long if name in ("cards", "mods") else torch.float32).to(device)
             for name, r in rows.items()
         }
-        for t, bag_mask in encode.BAGS.items():
+        for t, bag_mask in spec.BAGS.items():
             feed[t], feed[bag_mask] = padded(
                 [[index[t].get(i, 0) for i in s["tokens"][t]] for s in samples],
                 device,
@@ -76,11 +76,11 @@ class Batch:
         self.aux, self.aux_mask = aux.to(device), aux_mask.to(device)
 
     def inputs(self):
-        """The net's inputs, in the order of encode.INPUTS."""
-        return tuple(self.feed[name] for name in encode.INPUTS)
+        """The net's inputs, in the order of spec.INPUTS."""
+        return tuple(self.feed[name] for name in spec.INPUTS)
 
 
-N_NUMBERS = 2  # a card's damage and block (encode.card)
+N_NUMBERS = 2  # a card's damage and block (a card's token)
 
 
 class Net(nn.Module):
@@ -96,7 +96,7 @@ class Net(nn.Module):
         self.card_block = nn.Embedding(sizes["cards"], d)
         self.modifiers = nn.Embedding(sizes["modifiers"], d)
         self.mod_amount = nn.Embedding(sizes["modifiers"], d)
-        self.bags = nn.ModuleDict({t: nn.Embedding(sizes[t], d) for t in encode.BAGS})
+        self.bags = nn.ModuleDict({t: nn.Embedding(sizes[t], d) for t in spec.BAGS})
         self.relic_counter = nn.Embedding(sizes["relics"], d)
         self.relic_status = nn.Embedding(sizes["relic_status"], d)
         for e in (self.cards, self.card_up, self.card_damage, self.card_block, self.modifiers, self.mod_amount,
@@ -105,13 +105,13 @@ class Net(nn.Module):
         self.melted = nn.Parameter(torch.randn(d) * 0.1)
         self.phi = nn.Sequential(nn.Linear(d, h), nn.ReLU(), nn.Linear(h, h), nn.ReLU())
         # the deck's mean and scaled sum, the bags, the state, then the kept cards' sum
-        width = 2 * h + len(encode.BAGS) * d + len(encode.STATE) + h
+        width = 2 * h + len(spec.BAGS) * d + len(spec.STATE) + h
         self.body = nn.Sequential(nn.Linear(width, self.BODY), nn.ReLU(), nn.Linear(self.BODY, self.BODY), nn.ReLU())
         self.head = nn.Linear(self.BODY, floors)
         self.aux_head = nn.Linear(self.BODY, AUX)
 
     def forward(self, *inputs):
-        """Per sample and floor, the logit of dying on that floor if alive there (inputs as encode.INPUTS)."""
+        """Per sample and floor, the logit of dying on that floor if alive there (inputs as spec.INPUTS)."""
         return self.head(self.encoded(*inputs))
 
     def both(self, *inputs):
@@ -133,7 +133,7 @@ class Net(nn.Module):
         h = self.phi(x) * card_mask[..., None]
         total = h.sum(1)
         parts = [total / card_mask.sum(1, keepdim=True).clamp_min(1), total * self.SUM_SCALE]
-        for t, (ids, mask) in zip(encode.BAGS, zip(bags[::2], bags[1::2], strict=True), strict=True):
+        for t, (ids, mask) in zip(spec.BAGS, zip(bags[::2], bags[1::2], strict=True), strict=True):
             rows = self.bags[t](ids)
             if t == "relics":
                 rows = (

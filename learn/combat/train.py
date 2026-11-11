@@ -7,7 +7,11 @@ sizes and the training's settings are fixed below: an experiment changes them he
 --list refuses test runs (eval jobs); --test-list's games are only reported, as `medium`. --init goes on from a net file instead of from scratch, at the lower
 LR_INIT, and keeps the file's weights unless a later epoch beats them on the held-out loss.
 
-    uv run python -m combat.train --list PREFIX --env SL --name NAME [--test-list PREFIX] [--init ../weights/all/CHAMPION.json]
+A state is read by the simulator's code (common.Encoder): --encoder is how to start it, the simulator's `encode` at
+the commit that will play the net (`"~/sts2/sim-REV.sh encode"`), or the program src/Sts2Ai.Encode.
+
+    uv run python -m combat.train --list PREFIX --env SL --name NAME --encoder "SIM encode" [--test-list PREFIX]
+        [--init ../weights/all/CHAMPION.json]
 """
 
 import json
@@ -24,7 +28,7 @@ import torch  # noqa: E402
 
 import common  # noqa: E402
 import game_ids  # noqa: E402
-from combat import data, export, report  # noqa: E402
+from combat import data, export, report, spec  # noqa: E402
 from combat.net import POTION_WEIGHT, Batch, Net, loss  # noqa: E402
 from common import LearnError  # noqa: E402
 from weights import out_path  # noqa: E402
@@ -41,6 +45,7 @@ def main(
     list_: Annotated[str, typer.Option("--list", help="the list pair PREFIX-logs.txt and PREFIX-recs.txt")],
     env: Annotated[str, typer.Option(help="the environment whose games these are, SL or NoSL")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
+    encoder: Annotated[str, typer.Option(help="how to start the encoder that reads the states: \"SIM encode\"")],
     test_list: Annotated[str | None, typer.Option(help="a list pair whose games are only reported, as `medium`")] = None,
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
     init: Annotated[str | None, typer.Option(help="a net file to go on from: its weights, read back from its ONNX")] = None,
@@ -53,7 +58,10 @@ def main(
     random.seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    samples, skipped = data.read(*common.train_lists(list_), env)
+    reader = common.Encoder(encoder)
+    if reader.hello["lags"] != spec.LAGS:
+        raise LearnError(f"the encoder reads {reader.hello['lags']} earlier rounds of intents, the net {spec.LAGS}")
+    samples, skipped = data.read(*common.train_lists(list_), env, reader)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -118,8 +126,9 @@ def main(
         **report.summary(model, test, test_batches, train),
     }
     if test_list:
-        medium, _ = data.read(*common.lists(test_list), env)
+        medium, _ = data.read(*common.lists(test_list), env, reader)
         fit["medium"] = report.summary(model, medium, list(batches(medium, False)), train)
+    reader.close()
     print(json.dumps(fit))
 
     kept = [s for s in test if "obs" in s]
@@ -127,7 +136,7 @@ def main(
         "epochs": EPOCHS, "patience": PATIENCE, "batch": BATCH, "lr": LR_INIT if start else LR, "weight_decay": WEIGHT_DECAY,
         "potion_weight": POTION_WEIGHT, "dim": Net.DIM, "hidden": Net.HIDDEN, "body": Net.BODY, "test_list": test_list,
     }  # fmt: skip
-    trained = common.trained(list_, start, seed, epochs, settings)
+    trained = common.trained(list_, start, seed, epochs, settings, reader)
     export.write(export.net_file(name, env, tables, model, kept, fit, seed, trained), out_file)
     logger.info("wrote {}", out_file)
 

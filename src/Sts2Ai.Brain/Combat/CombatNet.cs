@@ -25,23 +25,18 @@ public sealed record CombatNetFile(
 /// <summary>
 /// The learned combat leaf (docs: combat-brain/leaf §3): from a round's start, how the combat ends under the policy that
 /// played the training games. The net, run by ONNX Runtime, reads the cards in each pile, the player, each enemy with
-/// its intents now and in its last rounds, the powers, relics, potions and potion slots, orbs and allies, the encounter and the character. It predicts
+/// its intents now and in its last rounds, the powers, relics, potions and potion slots, orbs and allies, the encounter and the character
+/// (<see cref="CombatTokens"/>). It predicts
 /// what is still to come: the HP share lost from here and which potions go, so the HP and potions held now count in full.
 /// Every ending is priced by V (<see cref="IRunValue"/>) on the run it leaves: a death ends the run, a win is worth V of
 /// the run then. That run is the one the leaf state stands in (<see cref="ICombatWorld.Run"/>: the deck, relics, max HP
 /// and gold as the combat has left them so far) with the HP the bucket leaves and the potions kept, each subset of those
 /// held by the chance the net gives it after a win in the bucket's group (each potion's taken apart from the others'). A
 /// finished combat is V of its run.
-/// This class only turns a state into the graph's inputs, and its endings into runs for V.
+/// This class only feeds a state's tokens to the graph, and turns its endings into runs for V.
 /// </summary>
 public sealed class CombatNet : ICombatLeaf, IDisposable
 {
-    /// <summary>Every scaled number the net reads is capped at ±this: a few states show huge ones (an erupting
-    /// WATERFALL_GIANT's HP).</summary>
-    private const double Cap = 10;
-
-    private static readonly string[] Piles = ["hand", "draw", "discard", "exhaust"];
-
     /// <summary>How many of V's values the leaf keeps; past it they are dropped and valued again as needed.</summary>
     private const int Kept = 200_000;
 
@@ -140,77 +135,67 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     public void Dispose() => _session.Dispose();
 
-    /// <summary>The graph's outputs on a batch of one state, read as <c>learn/combat/encode.py</c> reads it.</summary>
+    /// <summary>The graph's outputs on a batch of one state.</summary>
     private float[][] Graph(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
     {
-        var pl = obs.Player;
-        var inputs = new List<NamedOnnxValue>();
-        inputs.AddRange(Cards(obs));
-        inputs.AddRange(Powers("powers", "power_amounts", "power_mask", pl.Powers));
-        inputs.AddRange(PowerNumbers(pl.Powers));
-        inputs.Add(Player(obs));
-        inputs.AddRange(Enemies(obs, history));
-        inputs.AddRange(Bag("relics", "relic_mask", [.. obs.Relics.Select(r => r.UsedUp == true ? r.Id + ":used" : r.Id)]));
-        inputs.AddRange(RelicNumbers(obs.Relics));
-        inputs.AddRange(Bag("potions", "potion_mask", [.. obs.Potions.OfType<string>()]));
-        inputs.AddRange(Bag("context", "context_mask",
-            ["character:" + pl.Character, "encounter:" + (obs.Encounter ?? "<none>"), "room:" + (obs.Room ?? "<none>"), $"act:{obs.Act}"]));
-        inputs.AddRange(Bag("orbs", "orb_mask", [.. pl.Orbs.Select(o => o.Id)]));
-        var orbValues = new DenseTensor<float>([1, Math.Max(1, pl.Orbs.Count), 2]);
-        for (int k = 0; k < pl.Orbs.Count; k++)
-        {
-            orbValues[0, k, 0] = Capped((double)pl.Orbs[k].Passive / 10.0);
-            orbValues[0, k, 1] = Capped((double)pl.Orbs[k].Evoke / 10.0);
-        }
-        inputs.Add(NamedOnnxValue.CreateFromTensor("orb_values", orbValues));
-        inputs.AddRange(Allies([.. obs.Allies.Where(a => a.Hp > 0)]));
-        var extra = new DenseTensor<float>([1, 4]);
-        extra[0, 0] = (float)(obs.Ascension / 10.0);
-        extra[0, 1] = (float)(pl.OrbSlots / 10.0);
-        extra[0, 2] = Capped(pl.Gold / 100.0);
-        extra[0, 3] = (float)(obs.Potions.Count / 10.0);
-        inputs.Add(NamedOnnxValue.CreateFromTensor("extra", extra));
-        using var results = _session.Run(inputs);
+        using var results = _session.Run(Feed(CombatTokens.Of(obs, history, _file.Lags)));
         return [.. results.Select(r => r.AsEnumerable<float>().ToArray())];
     }
 
-    /// <summary>The cards of every pile: id, upgrade level, pile, cost / 3 (0 for X or none), the modifiers' tokens
-    /// (<see cref="Modifiers"/>) and the enchantment's and affliction's amounts / 10, damage / 20 (Osty's for an Osty
-    /// attack, 0 for none), and the numbers: block / 20, the calculated number / 20, replays / 2, star cost / 5 and the
-    /// damage its enchantment gathered / 20 (Momentum's).</summary>
-    private NamedOnnxValue[] Cards(CombatObservation obs)
+    /// <summary>
+    /// The graph's inputs of one state's tokens: each id as its entry in its table, each number as it is, every set padded
+    /// to at least 1 with its mask. The trainer builds the same from the same tokens (<c>learn/combat/net.py</c>'s Batch).
+    /// </summary>
+    private List<NamedOnnxValue> Feed(CombatTokens t)
     {
-        var cards = Piles.SelectMany((pile, p) => Pile(obs, pile).Select(c => (Card: c, Pile: p, Mods: Modifiers(c)))).ToList();
+        var inputs = new List<NamedOnnxValue>();
+        inputs.AddRange(Cards(t.Cards));
+        inputs.AddRange(Powers("powers", "power_amounts", "power_mask", t.Powers));
+        inputs.AddRange(PowerNumbers(t.Powers));
+        inputs.Add(Row("player", t.Player));
+        inputs.AddRange(Enemies(t.Enemies));
+        inputs.AddRange(Bag("relics", "relic_mask", t.Relics));
+        inputs.AddRange(RelicInputs(t.RelicValues, t.RelicStatus, status => Index("relic_status", status)));
+        inputs.AddRange(Bag("potions", "potion_mask", t.Potions));
+        inputs.AddRange(Bag("context", "context_mask", t.Context));
+        inputs.AddRange(Bag("orbs", "orb_mask", t.Orbs));
+        var orbValues = new DenseTensor<float>([1, Math.Max(1, t.Orbs.Count), 2]);
+        for (int k = 0; k < t.OrbValues.Count; k++)
+            for (int j = 0; j < 2; j++) orbValues[0, k, j] = (float)t.OrbValues[k][j];
+        inputs.Add(NamedOnnxValue.CreateFromTensor("orb_values", orbValues));
+        inputs.AddRange(Allies(t.Allies));
+        inputs.Add(Row("extra", t.Extra));
+        return inputs;
+    }
+
+    private NamedOnnxValue[] Cards(IReadOnlyList<CombatCardToken> cards)
+    {
         int n = Math.Max(1, cards.Count);
-        int m = Math.Max(1, cards.Select(c => c.Mods.Count).DefaultIfEmpty(0).Max());
+        int m = Math.Max(1, cards.Select(c => c.Modifiers.Count).DefaultIfEmpty(0).Max());
         var ids = new DenseTensor<long>([1, n]);
         var ups = new DenseTensor<float>([1, n]);
         var costs = new DenseTensor<float>([1, n]);
         var damages = new DenseTensor<float>([1, n]);
-        var piles = new DenseTensor<float>([1, n, Piles.Length]);
+        var piles = new DenseTensor<float>([1, n, CombatTokens.Piles.Count]);
         var mods = new DenseTensor<long>([1, n, m]);
         var modMask = new DenseTensor<float>([1, n, m]);
         var modAmounts = new DenseTensor<float>([1, n, m]);
-        var numbers = new DenseTensor<float>([1, n, 5]);
+        var numbers = new DenseTensor<float>([1, n, CombatTokens.CardNumbers]);
         for (int k = 0; k < cards.Count; k++)
         {
-            var (card, pile, modifiers) = cards[k];
+            var card = cards[k];
             ids[0, k] = Index("cards", card.Id);
-            ups[0, k] = Math.Min(card.Up ?? 0, RunNet.MaxUp);
-            costs[0, k] = card.Cost is { } cost && cost > 0 ? (float)(cost / 3.0) : 0;
-            piles[0, k, pile] = 1;
-            var vars = card.Vars ?? new Dictionary<string, decimal>();
-            damages[0, k] = Capped((double)(vars.TryGetValue("Damage", out var damage) ? damage : vars.GetValueOrDefault("OstyDamage")) / 20.0);
-            for (int j = 0; j < modifiers.Count; j++)
+            ups[0, k] = card.Up;
+            costs[0, k] = (float)card.Cost;
+            piles[0, k, card.Pile] = 1;
+            damages[0, k] = (float)card.Damage;
+            for (int j = 0; j < card.Modifiers.Count; j++)
             {
-                mods[0, k, j] = Index("modifiers", modifiers[j]);
+                mods[0, k, j] = Index("modifiers", card.Modifiers[j]);
                 modMask[0, k, j] = 1;
             }
-            int[] amounts = [.. new[] { card.Enchant, card.Affliction }.OfType<ModifierView>().Select(x => x.Amount)];
-            for (int j = 0; j < amounts.Length; j++) modAmounts[0, k, j] = Capped(amounts[j] / 10.0);
-            double[] x = [(double)vars.GetValueOrDefault("Block") / 20.0, (double)(card.Calc ?? 0) / 20.0, (card.Replay ?? 0) / 2.0,
-                (card.Stars ?? 0) / 5.0, (card.Enchant?.Extra ?? 0) / 20.0];
-            for (int i = 0; i < x.Length; i++) numbers[0, k, i] = Capped(x[i]);
+            for (int j = 0; j < card.Amounts.Count; j++) modAmounts[0, k, j] = (float)card.Amounts[j];
+            for (int i = 0; i < card.Numbers.Count; i++) numbers[0, k, i] = (float)card.Numbers[i];
         }
         return
         [
@@ -222,49 +207,12 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         ];
     }
 
-    /// <summary>A card's modifier tokens: its enchantment and affliction first (in this order, as their amounts), then
-    /// its keywords, its own and those it has for this turn only, the card type and rider Tinker Time made of it, and
-    /// "spent" for its enchantment's effect used.</summary>
-    private static List<string> Modifiers(CardView card)
+    private NamedOnnxValue[] Enemies(IReadOnlyList<EnemyTokens> enemies)
     {
-        var tokens = new List<string>();
-        if (card.Enchant != null) tokens.Add("enchant:" + card.Enchant.Id);
-        if (card.Affliction != null) tokens.Add("affliction:" + card.Affliction.Id);
-        tokens.AddRange((card.Keywords ?? []).Concat(card.ThisTurn ?? []).Select(k => "keyword:" + k));
-        if (card.Tinker != null) tokens.AddRange(["tinker:" + card.Tinker.Type, "rider:" + card.Tinker.Rider]);
-        if (card.Spent == true) tokens.Add("spent");
-        return tokens;
-    }
-
-    /// <summary>The player's HP share, HP, max HP, block, energy, max energy and stars, and the round.</summary>
-    private static NamedOnnxValue Player(CombatObservation obs)
-    {
-        var pl = obs.Player;
-        double maxHp = Math.Max(1, pl.MaxHp);
-        double[] player = [pl.Hp / maxHp, pl.Hp / 100.0, pl.MaxHp / 100.0, pl.Block / 20.0, pl.Energy / 3.0, pl.MaxEnergy / 3.0, pl.Stars / 5.0, obs.Round / 10.0];
-        var tensor = new DenseTensor<float>([1, player.Length]);
-        for (int i = 0; i < player.Length; i++) tensor[0, i] = Capped(player[i]);
-        return NamedOnnxValue.CreateFromTensor("player", tensor);
-    }
-
-    /// <summary>The enemies, one lying dead until it revives included: id, HP share, HP, max HP, block and how many rounds
-    /// each has shown, its powers, and its slots of intents: those now, then those of its last rounds before this one,
-    /// most recent first.</summary>
-    private NamedOnnxValue[] Enemies(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
-    {
-        var past = history.ToDictionary(h => h.Uid, h => h.Turns.Where(t => t.Round < obs.Round).ToList());
-        var enemies = obs.Enemies;
         int slots = 1 + _file.Lags;
         int e_n = Math.Max(1, enemies.Count);
         int q_n = Math.Max(1, enemies.Select(e => e.Powers.Count).DefaultIfEmpty(0).Max());
-        var enemySlots = enemies.Select(e =>
-        {
-            var turns = e.Uid is { } uid && past.TryGetValue(uid, out var t) ? t : [];
-            var list = new List<IReadOnlyList<IntentView>> { e.Intents ?? [] };
-            for (int lag = 1; lag <= _file.Lags && lag <= turns.Count; lag++) list.Add(turns[^lag].Intents);
-            return (Turns: turns.Count, Slots: list);
-        }).ToList();
-        int i_n = Math.Max(1, enemySlots.SelectMany(s => s.Slots).Select(s => s.Count).DefaultIfEmpty(0).Max());
+        int i_n = Math.Max(1, enemies.SelectMany(e => e.Slots).Select(s => s.Count).DefaultIfEmpty(0).Max());
         var ids = new DenseTensor<long>([1, e_n]);
         var scalars = new DenseTensor<float>([1, e_n, 5]);
         var mask = new DenseTensor<float>([1, e_n]);
@@ -281,33 +229,29 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         for (int k = 0; k < enemies.Count; k++)
         {
             var e = enemies[k];
-            ids[0, k] = Index("enemies", e.Id ?? "<none>");
+            ids[0, k] = Index("enemies", e.Id);
             mask[0, k] = 1;
-            double enemyMax = Math.Max(1, e.MaxHp);
-            double[] numbers = [e.Hp / enemyMax, e.Hp / 100.0, e.MaxHp / 100.0, e.Block / 20.0, enemySlots[k].Turns / 10.0];
-            for (int i = 0; i < numbers.Length; i++) scalars[0, k, i] = Capped(numbers[i]);
+            for (int i = 0; i < e.Scalars.Count; i++) scalars[0, k, i] = (float)e.Scalars[i];
             for (int j = 0; j < e.Powers.Count; j++)
             {
                 var power = e.Powers[j];
                 powers[0, k, j] = Index("powers", power.Id);
-                powerAmounts[0, k, j] = Capped(power.Amount / 10.0);
+                powerAmounts[0, k, j] = (float)power.Amount;
                 powerMask[0, k, j] = 1;
-                powerStacks[0, k, j] = power.Stacks is { } stacks ? Capped(stacks / 10.0) : 0;
-                powerDetails[0, k, j] = Capped((double)(power.Detail ?? 0) / 20.0);
-                if ((power.Card ?? power.Stolen) is not { } card) continue;
-                powerCards[0, k, j] = Index("cards", card.Id);
+                powerStacks[0, k, j] = (float)power.Stacks;
+                powerDetails[0, k, j] = (float)power.Detail;
+                if (power.Card == null) continue;
+                powerCards[0, k, j] = Index("cards", power.Card);
                 powerCardMask[0, k, j] = 1;
             }
-            var slotList = enemySlots[k].Slots;
-            for (int s = 0; s < slotList.Count; s++)
-                for (int j = 0; j < slotList[s].Count; j++)
+            for (int s = 0; s < e.Slots.Count; s++)
+                for (int j = 0; j < e.Slots[s].Count; j++)
                 {
-                    var intent = slotList[s][j];
-                    int damage = intent.Damage ?? 0;
+                    var intent = e.Slots[s][j];
                     intents[0, k, s, j] = Index("intents", intent.Type);
                     intentMask[0, k, s, j] = 1;
-                    intentValues[0, k, s, j, 0] = Capped(damage / 10.0);
-                    intentValues[0, k, s, j, 1] = Capped(damage * (intent.Hits ?? 1) / 20.0);
+                    intentValues[0, k, s, j, 0] = (float)intent.Damage;
+                    intentValues[0, k, s, j, 1] = (float)intent.Total;
                 }
         }
         return
@@ -323,9 +267,8 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         ];
     }
 
-    /// <summary>The player's powers' stacks / 10 (0 where the tooltip states none apart), kept or stolen cards, and
-    /// numbers moved from their own / 20 (else 0).</summary>
-    private NamedOnnxValue[] PowerNumbers(IReadOnlyList<PowerView> powers)
+    /// <summary>The player's powers' stacks, kept or stolen cards, and numbers moved from their own.</summary>
+    private NamedOnnxValue[] PowerNumbers(IReadOnlyList<PowerToken> powers)
     {
         int n = Math.Max(1, powers.Count);
         var stacks = new DenseTensor<float>([1, n]);
@@ -334,10 +277,10 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         var details = new DenseTensor<float>([1, n]);
         for (int k = 0; k < powers.Count; k++)
         {
-            stacks[0, k] = powers[k].Stacks is { } s ? Capped(s / 10.0) : 0;
-            details[0, k] = Capped((double)(powers[k].Detail ?? 0) / 20.0);
-            if ((powers[k].Card ?? powers[k].Stolen) is not { } card) continue;
-            cards[0, k] = Index("cards", card.Id);
+            stacks[0, k] = (float)powers[k].Stacks;
+            details[0, k] = (float)powers[k].Detail;
+            if (powers[k].Card is not { } card) continue;
+            cards[0, k] = Index("cards", card);
             mask[0, k] = 1;
         }
         return
@@ -347,34 +290,22 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         ];
     }
 
-    /// <summary>The relics' numbers and statuses (<see cref="RelicValues"/>, <see cref="RelicStatus"/>), in the relics' order.</summary>
-    private NamedOnnxValue[] RelicNumbers(IReadOnlyList<RelicView> relics) => RelicInputs(relics, status => Index("relic_status", status));
-
-    /// <summary>A relic's numbers as both nets read them: counter / 10 (0 when none shows), whether one shows, whether it is melted.</summary>
-    public static float[] RelicValues(RelicView relic) =>
-        [relic.Counter is { } counter ? Capped(counter / 10.0) : 0, relic.Counter != null ? 1 : 0, relic.Melted == true ? 1 : 0];
-
-    /// <summary>A relic's status as both nets read it: the game's when not the normal one, else Spent for a once-a-combat
-    /// effect used, else Normal.</summary>
-    public static string RelicStatus(RelicView relic) => relic.Status ?? (relic.Spent == true ? "Spent" : "Normal");
-
-    /// <summary>The graph inputs relic_values and relic_status of <paramref name="relics"/>, a status's row by <paramref name="index"/>.</summary>
-    public static NamedOnnxValue[] RelicInputs(IReadOnlyList<RelicView> relics, Func<string, long> index)
+    /// <summary>The graph inputs relic_values and relic_status of a run's relics (<see cref="CombatTokens.RelicValuesOf"/>,
+    /// <see cref="CombatTokens.RelicStatusOf"/>), as both nets take them; a status's row by <paramref name="index"/>.</summary>
+    public static NamedOnnxValue[] RelicInputs(IReadOnlyList<IReadOnlyList<double>> values, IReadOnlyList<string> status, Func<string, long> index)
     {
-        int n = Math.Max(1, relics.Count);
-        var values = new DenseTensor<float>([1, n, 3]);
-        var status = new DenseTensor<long>([1, n]);
-        for (int k = 0; k < relics.Count; k++)
+        int n = Math.Max(1, values.Count);
+        var numbers = new DenseTensor<float>([1, n, 3]);
+        var rows = new DenseTensor<long>([1, n]);
+        for (int k = 0; k < values.Count; k++)
         {
-            var numbers = RelicValues(relics[k]);
-            for (int j = 0; j < numbers.Length; j++) values[0, k, j] = numbers[j];
-            status[0, k] = index(RelicStatus(relics[k]));
+            for (int j = 0; j < values[k].Count; j++) numbers[0, k, j] = (float)values[k][j];
+            rows[0, k] = index(status[k]);
         }
-        return [NamedOnnxValue.CreateFromTensor("relic_values", values), NamedOnnxValue.CreateFromTensor("relic_status", status)];
+        return [NamedOnnxValue.CreateFromTensor("relic_values", numbers), NamedOnnxValue.CreateFromTensor("relic_status", rows)];
     }
 
-    /// <summary>The living allies: ids (a player as "&lt;player&gt;"), HP share, HP, max HP and block, and their powers.</summary>
-    private NamedOnnxValue[] Allies(IReadOnlyList<CreatureView> allies)
+    private NamedOnnxValue[] Allies(IReadOnlyList<AllyTokens> allies)
     {
         int n = Math.Max(1, allies.Count);
         int q = Math.Max(1, allies.Select(a => a.Powers.Count).DefaultIfEmpty(0).Max());
@@ -387,14 +318,13 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         for (int k = 0; k < allies.Count; k++)
         {
             var a = allies[k];
-            ids[0, k] = Index("allies", a.Id ?? "<player>");
-            double[] x = [a.Hp / (double)Math.Max(1, a.MaxHp), a.Hp / 100.0, a.MaxHp / 100.0, a.Block / 20.0];
-            for (int i = 0; i < x.Length; i++) scalars[0, k, i] = Capped(x[i]);
+            ids[0, k] = Index("allies", a.Id);
+            for (int i = 0; i < a.Scalars.Count; i++) scalars[0, k, i] = (float)a.Scalars[i];
             mask[0, k] = 1;
             for (int j = 0; j < a.Powers.Count; j++)
             {
                 powers[0, k, j] = Index("powers", a.Powers[j].Id);
-                amounts[0, k, j] = Capped(a.Powers[j].Amount / 10.0);
+                amounts[0, k, j] = (float)a.Powers[j].Amount;
                 powerMask[0, k, j] = 1;
             }
         }
@@ -406,18 +336,16 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         ];
     }
 
-    private static IReadOnlyList<CardView> Pile(CombatObservation obs, string pile) => pile switch
+    /// <summary>Numbers as one row of the graph's input <paramref name="name"/>.</summary>
+    private static NamedOnnxValue Row(string name, IReadOnlyList<double> numbers)
     {
-        "hand" => obs.Hand,
-        "draw" => obs.Draw,
-        "discard" => obs.Discard,
-        _ => obs.Exhaust,
-    };
+        var tensor = new DenseTensor<float>([1, numbers.Count]);
+        for (int i = 0; i < numbers.Count; i++) tensor[0, i] = (float)numbers[i];
+        return NamedOnnxValue.CreateFromTensor(name, tensor);
+    }
 
-    private static float Capped(double x) => (float)Math.Clamp(x, -Cap, Cap);
-
-    /// <summary>Powers as the graph takes them: ids, amounts over 10 and their mask, padded to at least 1.</summary>
-    private NamedOnnxValue[] Powers(string ids, string amounts, string mask, IReadOnlyList<PowerView> powers)
+    /// <summary>Powers as the graph takes them: ids, amounts and their mask, padded to at least 1.</summary>
+    private NamedOnnxValue[] Powers(string ids, string amounts, string mask, IReadOnlyList<PowerToken> powers)
     {
         int n = Math.Max(1, powers.Count);
         var index = new DenseTensor<long>([1, n]);
@@ -426,7 +354,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         for (int k = 0; k < powers.Count; k++)
         {
             index[0, k] = Index("powers", powers[k].Id);
-            amount[0, k] = Capped(powers[k].Amount / 10.0);
+            amount[0, k] = (float)powers[k].Amount;
             present[0, k] = 1;
         }
         return [NamedOnnxValue.CreateFromTensor(ids, index), NamedOnnxValue.CreateFromTensor(amounts, amount), NamedOnnxValue.CreateFromTensor(mask, present)];
