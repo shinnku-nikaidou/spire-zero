@@ -1,0 +1,591 @@
+/* The book's look: a dark stone wall (the default) and parchment (light), with the sidebar as a map scroll in both.
+   Starlight's own styles sit in cascade layers, so these unlayered rules win without !important. */
+
+/* ---------- Tokens ---------- */
+
+:root {
+  /* Stone wall (dark). */
+  --sl-color-white: #f4ecd8;
+  --sl-color-gray-1: #e9e2d0;
+  --sl-color-gray-2: #c9cfce;
+  --sl-color-gray-3: #98a4a8;
+  --sl-color-gray-4: #5d7687;
+  --sl-color-gray-5: #34485a;
+  --sl-color-gray-6: #1e2c36;
+  --sl-color-black: #162129;
+
+  --sl-color-accent-low: #2a2413;
+  --sl-color-accent: #c9a23f;
+  --sl-color-accent-high: #f0c75e;
+
+  --sl-color-text: #ece5d3;
+  --sl-color-text-accent: #f0c75e;
+  --sl-color-text-invert: #162129;
+  --sl-color-bg: #162129;
+  --sl-color-bg-nav: #0c1318;
+  --sl-color-bg-sidebar: #dccaa2;
+  --sl-color-bg-inline-code: #0f171d;
+  --sl-color-bg-accent: #f0c75e;
+  --sl-color-hairline-light: #2a3a45;
+  --sl-color-hairline: #2a3a45;
+  --sl-color-hairline-shade: #6b5527;
+
+  --sl-badge-default-border: #8a6f2e;
+  --sl-badge-default-bg: #241f12;
+  --sl-badge-default-text: #f0c75e;
+  --sl-badge-note-border: #3a6f96;
+  --sl-badge-note-bg: #14222e;
+  --sl-badge-note-text: #a8d6f0;
+  --sl-badge-success-border: #4f7a4a;
+  --sl-badge-success-bg: #16241a;
+  --sl-badge-success-text: #a9dc98;
+  --sl-badge-tip-border: #8a6f2e;
+  --sl-badge-tip-bg: #241f12;
+  --sl-badge-tip-text: #f0c75e;
+  --sl-badge-caution-border: #b9782a;
+  --sl-badge-caution-bg: #2a1f10;
+  --sl-badge-caution-text: #f2c58c;
+  --sl-badge-danger-border: #b0443a;
+  --sl-badge-danger-bg: #2a1412;
+  --sl-badge-danger-text: #f4aaa2;
+
+  --sl-font: 'Kreon';
+  --sl-text-body: 1.0625rem;
+  --sl-line-height: 1.8;
+  --sl-line-height-headings: 1.3;
+  --sl-text-h1: 2rem;
+  --sl-text-h2: 1.5rem;
+  --sl-text-h3: 1.25rem;
+  --sl-text-h4: 1.125rem;
+
+  --spire-font-display: 'Kreon', 'Noto Serif CJK SC', 'Source Han Serif SC', 'Songti SC', var(--sl-font-system);
+  --spire-heading: #f0c75e;
+  --spire-heading-shadow: 0 2px 0 #5b3d12, 0 6px 18px rgba(0, 0, 0, 0.55);
+  --spire-strong: #f0c75e;
+  --spire-link: #8fd3ea;
+  --spire-link-hover: #c9eef9;
+  --spire-panel: #1e2c36;
+  --spire-panel-border: #3a4d5a;
+  --spire-panel-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  --spire-rule: #6b5527;
+  --spire-table-bg: #1a2731;
+  --spire-table-head: #121b21;
+  --spire-row-rule: #44596a;
+  --spire-glow: #24363f;
+  --spire-figure: #121b21;
+  --spire-node-border: #8a6f2e;
+  --spire-cluster: #18242c;
+  --spire-edge: #f0c75e;
+  --spire-prev: #25353f;
+  --spire-prev-ink: #f4ecd8;
+  --spire-prev-label: #c9cfce;
+  --spire-next: #1f6f6b;
+
+  /* The map scroll and the top bar keep these in both themes. */
+  --spire-parchment: #dccaa2;
+  --spire-ink: #33241a;
+  --spire-ink-2: #5a4532;
+  --spire-ink-red: #8a2a1a;
+  --spire-dot: #7a6244;
+  --spire-wood: #5a3f25;
+  --spire-gold: #f0c75e;
+}
+
+:root:lang(zh-TW) {
+  --spire-font-display: 'Kreon', 'Noto Serif CJK TC', 'Source Han Serif TC', 'Songti TC', var(--sl-font-system);
+}
+:root:lang(en) {
+  --spire-font-display: 'Kreon', Georgia, serif;
+}
+
+:root[data-theme='light'] {
+  /* Parchment (light). */
+  --sl-color-white: #33241a;
+  --sl-color-gray-1: #33241a;
+  --sl-color-gray-2: #3f2f22;
+  --sl-color-gray-3: #5a4532;
+  --sl-color-gray-4: #7a6244;
+  --sl-color-gray-5: #b99c68;
+  --sl-color-gray-6: #dccaa2;
+  --sl-color-gray-7: #f3ead2;
+  --sl-color-black: #e9dcbd;
+
+  --sl-color-accent-low: #ecdcae;
+  --sl-color-accent: #8a6f2e;
+  --sl-color-accent-high: #5b3d12;
+
+  --sl-color-text: #33241a;
+  --sl-color-text-accent: #8a2a1a;
+  --sl-color-text-invert: #f3ead2;
+  --sl-color-bg: #e9dcbd;
+  --sl-color-bg-nav: #0c1318;
+  --sl-color-bg-sidebar: #dccaa2;
+  --sl-color-bg-inline-code: #f3ead2;
+  --sl-color-bg-accent: #8a2a1a;
+  --sl-color-hairline-light: #c9b488;
+  --sl-color-hairline: #c9b488;
+  --sl-color-hairline-shade: #6b5527;
+
+  --sl-badge-default-border: #5a4532;
+  --sl-badge-default-bg: #f3ead2;
+  --sl-badge-default-text: #33241a;
+  --sl-badge-note-border: #2c5f8a;
+  --sl-badge-note-bg: #f3ead2;
+  --sl-badge-note-text: #1d4263;
+  --sl-badge-success-border: #2f6b3a;
+  --sl-badge-success-bg: #f3ead2;
+  --sl-badge-success-text: #1f4a27;
+  --sl-badge-tip-border: #8a6f2e;
+  --sl-badge-tip-bg: #f3ead2;
+  --sl-badge-tip-text: #5b3d12;
+  --sl-badge-caution-border: #a0621c;
+  --sl-badge-caution-bg: #f3ead2;
+  --sl-badge-caution-text: #6e4210;
+  --sl-badge-danger-border: #9c2f27;
+  --sl-badge-danger-bg: #f3ead2;
+  --sl-badge-danger-text: #7a211b;
+
+  --spire-heading: #33241a;
+  --spire-heading-shadow: none;
+  --spire-strong: #8a2a1a;
+  --spire-link: #1f5a6b;
+  --spire-link-hover: #0f3a47;
+  --spire-panel: #f3ead2;
+  --spire-panel-border: #b99c68;
+  --spire-panel-shadow: 0 4px 10px rgba(90, 63, 37, 0.25);
+  --spire-rule: #7a6244;
+  --spire-table-bg: #f3ead2;
+  --spire-table-head: #dccaa2;
+  --spire-row-rule: #9c8255;
+  --spire-glow: #f6eed6;
+  --spire-figure: #efe4c8;
+  --spire-node-border: #33241a;
+  --spire-cluster: #e2d2ab;
+  --spire-edge: #5a4532;
+  --spire-prev: #d2bf96;
+  --spire-prev-ink: #33241a;
+  --spire-prev-label: #4a3828;
+}
+
+@media (min-width: 50em) {
+  :root {
+    --sl-text-h1: 2.5rem;
+    --sl-text-h2: 1.75rem;
+    --sl-text-h3: 1.375rem;
+    --sl-text-h4: 1.1875rem;
+  }
+}
+
+/* ---------- Page ---------- */
+
+body {
+  background-image: radial-gradient(ellipse 70% 32rem at 50% 4rem, var(--spire-glow) 0%, transparent 100%);
+  background-repeat: no-repeat;
+}
+
+/* ---------- Top bar: dark in both themes ---------- */
+
+.page > .header,
+starlight-menu-button,
+mobile-starlight-toc {
+  --sl-color-white: #f4ecd8;
+  --sl-color-gray-1: #e9e2d0;
+  --sl-color-gray-2: #c9cfce;
+  --sl-color-gray-3: #98a4a8;
+  --sl-color-gray-4: #5d7687;
+  --sl-color-gray-5: #34485a;
+  --sl-color-gray-6: #1e2c36;
+  --sl-color-black: #162129;
+  --sl-color-text: #ece5d3;
+  --sl-color-text-accent: #f0c75e;
+  --sl-color-text-invert: #162129;
+  --sl-color-bg: #162129;
+  --sl-color-accent-low: #2a2413;
+  --sl-color-accent: #c9a23f;
+  --sl-color-accent-high: #f0c75e;
+  --sl-color-hairline-light: #2a3a45;
+  --sl-color-hairline: #2a3a45;
+}
+.page > .header {
+  border-bottom: 2px solid var(--sl-color-hairline-shade);
+  color: var(--sl-color-text);
+}
+
+.site-title {
+  gap: 0.6rem;
+  font-family: var(--spire-font-display);
+  font-weight: 700;
+  color: var(--spire-gold);
+}
+.site-title::before {
+  content: '';
+  flex: none;
+  width: 1.35rem;
+  height: 1.35rem;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l3 7h-1l2 6h-1.5L17 22H7l2.5-7H8l2-6H9z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l3 7h-1l2 6h-1.5L17 22H7l2.5-7H8l2-6H9z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* ---------- Sidebar: the map scroll ---------- */
+
+.sidebar-pane {
+  --sl-color-white: var(--spire-ink);
+  --sl-color-gray-1: var(--spire-ink);
+  --sl-color-gray-2: var(--spire-ink);
+  --sl-color-gray-3: var(--spire-ink-2);
+  --sl-color-gray-4: var(--spire-ink-2);
+  --sl-color-gray-5: #b99c68;
+  --sl-color-gray-6: #d2bf96;
+  --sl-color-black: var(--spire-parchment);
+  --sl-color-text: var(--spire-ink);
+  --sl-color-text-accent: var(--spire-ink-red);
+  --sl-color-text-invert: var(--spire-parchment);
+  --sl-color-bg: var(--spire-parchment);
+  --sl-color-hairline-light: transparent;
+  color: var(--spire-ink);
+  background-color: var(--spire-parchment);
+  background-image:
+    radial-gradient(ellipse at 20% 4%, rgba(240, 228, 196, 0.9) 0%, rgba(220, 202, 162, 0) 40%),
+    radial-gradient(ellipse at 80% 92%, rgba(196, 170, 120, 0.55) 0%, rgba(220, 202, 162, 0) 45%);
+  box-shadow: inset 0 0 40px rgba(120, 84, 40, 0.4);
+}
+@media (min-width: 50rem) {
+  .sidebar-pane {
+    border-inline-end: 4px solid var(--spire-wood);
+  }
+}
+
+/* One path for every level: no indent, each row draws its own stretch of the dotted spine. */
+.sidebar-content ul ul li {
+  margin-inline-start: 0;
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+.sidebar-content li + li,
+.sidebar-content .top-level > li + li {
+  margin-top: 0;
+}
+.sidebar-content .top-level > li:has(> details) + li,
+.sidebar-content .top-level > li + li:has(> details) {
+  margin-top: 0.6rem;
+}
+
+.sidebar-content a,
+.sidebar-content ul ul summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  border-radius: 0;
+  padding-block: 0.3rem;
+  padding-inline: 2.1rem 0.5rem;
+  color: var(--spire-ink);
+  background-color: transparent;
+  background-image: radial-gradient(circle, var(--spire-dot) 1.2px, rgba(220, 202, 162, 0) 1.7px);
+  background-size: 1.9rem 0.5rem;
+  background-repeat: repeat-y;
+}
+.sidebar-content a:hover,
+.sidebar-content a:focus {
+  color: var(--spire-ink-red);
+}
+
+/* A page is a small node on the path, a chapter a larger one. */
+.sidebar-content a::before,
+.sidebar-content ul ul summary::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0.55rem;
+  top: 50%;
+  box-sizing: border-box;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: -0.4rem;
+  border: 2px solid var(--spire-ink);
+  border-radius: 50%;
+  background-color: var(--spire-parchment);
+}
+.sidebar-content ul ul summary::before,
+.sidebar-content .top-level > li > a::before {
+  inset-inline-start: 0.35rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-top: -0.6rem;
+}
+/* A chapter whose first page carries the "implemented" badge gets a filled node. */
+.sidebar-content ul ul details:has(> ul > li:first-child .sl-badge.success) > summary::before {
+  background-color: var(--spire-ink);
+}
+
+/* The page being read: circled in red ink. */
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  font-weight: 700;
+  color: var(--spire-ink-red);
+  background-color: transparent;
+}
+.sidebar-content a[aria-current='page']::before {
+  border-color: var(--spire-ink-red);
+  background-color: var(--spire-ink-red);
+  box-shadow:
+    0 0 0 3px var(--spire-parchment),
+    0 0 0 5px var(--spire-ink-red);
+}
+
+/* A part of the book: a heading with a rule under it. */
+.sidebar-content .top-level > li > details > summary {
+  margin-bottom: 0.15rem;
+  border-bottom: 2px solid var(--spire-ink);
+  padding: 0.3rem 0.25rem;
+}
+.sidebar-content .top-level > li > details > summary .large {
+  font-family: var(--spire-font-display);
+  font-weight: 700;
+}
+.sidebar-content .large {
+  font-weight: 700;
+  color: var(--spire-ink);
+}
+.sidebar-content ul ul summary .group-label {
+  flex: 1;
+}
+
+.sidebar-content .sl-badge {
+  border-color: var(--spire-ink-2);
+  font-family: var(--__sl-font);
+  color: var(--spire-ink-2);
+  background-color: transparent;
+}
+.sidebar-content .sl-badge::before {
+  content: none;
+}
+
+/* ---------- Text ---------- */
+
+.content-panel h1,
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6):not(:where(.not-content *)) {
+  font-family: var(--spire-font-display);
+  font-weight: 700;
+  color: var(--spire-heading);
+}
+.content-panel h1 {
+  letter-spacing: 0.01em;
+  text-shadow: var(--spire-heading-shadow);
+}
+.sl-markdown-content .sl-heading-wrapper.level-h2 {
+  border-bottom: 2px dotted var(--spire-rule);
+  padding-bottom: 0.3em;
+}
+
+/* Key terms stand out as the game's keywords do. */
+.sl-markdown-content strong:not(:where(.not-content *)) {
+  color: var(--spire-strong);
+}
+
+.sl-markdown-content a:not(:where(.not-content *)),
+.sl-markdown-content .starlight-aside__content a {
+  color: var(--spire-link);
+}
+.sl-markdown-content a:hover:not(:where(.not-content *)),
+.sl-markdown-content .starlight-aside__content a:hover {
+  color: var(--spire-link-hover);
+}
+
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+  border: 1px solid var(--spire-panel-border);
+  border-radius: 4px;
+}
+.sl-markdown-content .starlight-aside :not(pre) > code:not(:where(.not-content *)) {
+  background-color: var(--sl-color-bg-inline-code);
+}
+
+.sl-markdown-content hr:not(:where(.not-content *)) {
+  border-bottom: 2px dotted var(--spire-rule);
+}
+.sl-markdown-content blockquote:not(:where(.not-content *)) {
+  border-inline-start: 2px dotted var(--spire-rule);
+}
+
+/* ---------- Tables ---------- */
+
+.sl-markdown-content table:not(:where(.not-content *)) {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--spire-panel-border);
+  border-radius: 6px;
+  background-color: var(--spire-table-bg);
+  font-size: 0.94em;
+  line-height: 1.6;
+}
+.sl-markdown-content :is(th, td):not(:where(.not-content *)),
+.sl-markdown-content :is(th:first-child, td:first-child):not(:where(.not-content *)),
+.sl-markdown-content :is(th:last-child, td:last-child):not(:where(.not-content *)) {
+  border-bottom: 1px dotted var(--spire-row-rule);
+  padding: 0.55rem 0.9rem;
+  vertical-align: top;
+}
+.sl-markdown-content th:not(:where(.not-content *)) {
+  border-bottom: 2px solid var(--spire-rule);
+  font-weight: 700;
+  color: var(--spire-heading);
+  background-color: var(--spire-table-head);
+}
+.sl-markdown-content tbody tr:last-child td:not(:where(.not-content *)) {
+  border-bottom: 0;
+}
+.sl-markdown-content :is(th, td):first-child:not(:where(.not-content *)) {
+  min-width: 6.5em;
+}
+
+/* ---------- Mermaid diagrams ---------- */
+
+/* Mermaid writes its theme into each drawing under the drawing's own id, so these need !important. */
+.sl-markdown-content pre.mermaid {
+  border-color: var(--spire-panel-border);
+  border-radius: 6px;
+  background-color: var(--spire-figure);
+  text-align: center;
+}
+pre.mermaid svg .node :is(rect, polygon, circle, ellipse, path) {
+  fill: var(--spire-panel) !important;
+  stroke: var(--spire-node-border) !important;
+  stroke-width: 1.5px !important;
+}
+pre.mermaid svg .cluster rect {
+  fill: var(--spire-cluster) !important;
+  stroke: var(--spire-panel-border) !important;
+}
+pre.mermaid svg :is(.nodeLabel, .edgeLabel, .cluster-label, .label) {
+  color: var(--sl-color-white) !important;
+  fill: var(--sl-color-white) !important;
+}
+pre.mermaid svg :is(.edgeLabel, .edgeLabel p, .labelBkg) {
+  background-color: var(--spire-figure) !important;
+}
+pre.mermaid svg :is(.flowchart-link, .edgePath .path) {
+  stroke: var(--spire-edge) !important;
+}
+pre.mermaid svg :is(.marker, marker path) {
+  fill: var(--spire-edge) !important;
+  stroke: var(--spire-edge) !important;
+}
+
+/* ---------- Asides: a panel with a ribbon for its title ---------- */
+
+.starlight-aside {
+  --spire-ribbon: #2c5f8a;
+  --spire-ribbon-ink: #f4ecd8;
+  position: relative;
+  margin-top: 2rem;
+  border: 1px solid var(--spire-panel-border);
+  border-radius: 6px;
+  padding: 1.75rem 1.25rem 1rem;
+  color: var(--sl-color-text);
+  background-color: var(--spire-panel);
+  box-shadow: var(--spire-panel-shadow);
+}
+.starlight-aside--tip {
+  --spire-ribbon: #2f6b3a;
+}
+.starlight-aside--caution {
+  --spire-ribbon: #e2a13a;
+  --spire-ribbon-ink: #33241a;
+}
+.starlight-aside--danger {
+  --spire-ribbon: #9c2f27;
+}
+.starlight-aside__title {
+  position: absolute;
+  top: -0.95rem;
+  inset-inline-start: 0.75rem;
+  height: 1.9rem;
+  padding: 0 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--spire-ribbon-ink);
+  background-color: var(--spire-ribbon);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.55rem) 50%, 100% 100%, 0 100%, 0.55rem 50%);
+}
+.starlight-aside__icon {
+  display: none;
+}
+.starlight-aside__title + .starlight-aside__content {
+  margin-top: 0;
+}
+
+/* ---------- Badges ---------- */
+
+.sl-badge {
+  border-radius: 4px;
+  font-family: var(--__sl-font);
+  white-space: nowrap;
+}
+.sl-markdown-content .sl-badge::before {
+  content: '';
+  display: inline-block;
+  width: 0.45em;
+  height: 0.45em;
+  margin-inline-end: 0.5em;
+  vertical-align: 0.12em;
+  background-color: currentColor;
+  transform: rotate(45deg);
+}
+
+/* ---------- The page's floor, above its title ---------- */
+
+.spire-floor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--spire-panel-border);
+  border-radius: 1rem;
+  padding: 0.1rem 0.85rem;
+  font-size: var(--sl-text-sm);
+  line-height: 1.6;
+  color: var(--sl-color-text);
+}
+.spire-floor svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--sl-color-text-accent);
+}
+.spire-floor span + span {
+  color: var(--sl-color-gray-3);
+}
+
+/* ---------- Previous and next: back and proceed ---------- */
+
+.pagination-links a {
+  min-height: 4.5rem;
+  border: 0;
+  border-radius: 0;
+  padding: 0.8rem 1.4rem 0.8rem 2.75rem;
+  color: var(--spire-prev-label);
+  background-color: var(--spire-prev);
+  box-shadow: none;
+  clip-path: polygon(1.6rem 0, 100% 0, 100% 100%, 1.6rem 100%, 0 50%);
+}
+.pagination-links a[rel='next'] {
+  padding: 0.8rem 2.75rem 0.8rem 1.4rem;
+  color: #d5ece8;
+  background-color: var(--spire-next);
+  clip-path: polygon(0 0, calc(100% - 1.6rem) 0, 100% 50%, calc(100% - 1.6rem) 100%, 0 100%);
+}
+.pagination-links a:hover {
+  filter: brightness(1.12);
+}
+.pagination-links a svg {
+  display: none;
+}
+.pagination-links .link-title {
+  font-size: var(--sl-text-xl);
+  font-weight: 700;
+  color: var(--spire-prev-ink);
+}
+.pagination-links a[rel='next'] .link-title {
+  color: #f4ecd8;
+}

@@ -1,0 +1,35 @@
+---
+// The page title, with the page's floor above it: its place in the book's reading order, which is the sidebar's.
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+import type { StarlightRouteData } from '@astrojs/starlight/route-data';
+
+type Entry = StarlightRouteData['sidebar'][number];
+type Link = Extract<Entry, { type: 'link' }>;
+
+const pages = (entries: Entry[]): Link[] =>
+  entries.flatMap((entry) => (entry.type === 'link' ? [entry] : pages(entry.entries)));
+
+const { sidebar, lang } = Astro.locals.starlightRoute;
+const all = pages(sidebar);
+const floor = all.findIndex((page) => page.isCurrent) + 1;
+
+const words: Record<string, (n: number, total: number) => [string, string]> = {
+  'zh-CN': (n, total) => [`第 ${n} 层`, `共 ${total} 层`],
+  'zh-TW': (n, total) => [`第 ${n} 層`, `共 ${total} 層`],
+  en: (n, total) => [`Floor ${n}`, `of ${total}`],
+};
+const [here, outOf] = (words[lang] ?? words.en)(floor, all.length);
+---
+
+{
+  floor > 0 && (
+    <p class="spire-floor">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 20h4v-4h4v-4h4V8h4" />
+      </svg>
+      <span>{here}</span>
+      <span>{outOf}</span>
+    </p>
+  )
+}
+<Default />

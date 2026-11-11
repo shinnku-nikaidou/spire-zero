@@ -125,7 +125,22 @@ export default defineConfig({
     svelte(),
     starlight({
       title: { 'zh-CN': '杀戮尖塔 2 AI 架构手册', 'zh-TW': '殺戮尖塔 2 AI 架構手冊', en: 'STS2 AI Architecture' },
-      customCss: ['katex/dist/katex.min.css', './src/styles/viz.css'],
+      // The book's look (src/styles/spire.css): a stone wall and parchment, the sidebar as a map scroll.
+      customCss: ['katex/dist/katex.min.css', './src/styles/viz.css', './src/styles/spire.css'],
+      components: { PageTitle: './src/components/spire/PageTitle.astro' },
+      // Latin text and numbers are set in Kreon; the stylesheet loads without holding up the first paint.
+      head: [
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: true } },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'stylesheet',
+            href: 'https://fonts.googleapis.com/css2?family=Kreon:wght@400;500;700&display=swap',
+            media: 'print',
+            onload: "this.media='all'",
+          },
+        },
+      ],
       defaultLocale: 'root',
       locales: {
         root: { label: '简体中文', lang: 'zh-CN' },
