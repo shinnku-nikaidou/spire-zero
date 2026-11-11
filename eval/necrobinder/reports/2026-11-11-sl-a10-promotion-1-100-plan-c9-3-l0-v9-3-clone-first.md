@@ -1,6 +1,6 @@
-# Evaluation 2026-11-10: SL, promotion-1-100
+# Evaluation 2026-11-11: SL, promotion-1-100
 
-**Partial:** 25 of the set's 100 seeds were run.
+**Partial:** 40 of the set's 100 seeds were run.
 
 | | |
 |---|---|
@@ -8,15 +8,15 @@
 | commit | `fd09a37e2016eb06bc17a573408d2e1102877985` |
 | champion | combat plan c9-3 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-3 clone, macro prompts l0 v9-3 clone |
 | environment | SL |
-| seed set | promotion-1-100: 25 of 100 runs, NECROBINDER A10 |
+| seed set | promotion-1-100: 40 of 100 runs, NECROBINDER A10 |
 
 ## Main
 
-- win rate: 4.0 % (1/25, 0.7 %–19.5 %)
-- floor reached: mean 20.76, median 17.0
-- act 1 boss: reached in 16 of 25 runs, entering with 31.9 HP (44 % of max) on average
-- act 2 boss: reached in 6 of 25 runs, entering with 48.3 HP (59 % of max) on average
-- act 3 boss: reached in 3 of 25 runs, entering with 91.7 HP (95 % of max) on average
+- win rate: 2.5 % (1/40, 0.4 %–12.9 %)
+- floor reached: mean 22.75, median 17.0
+- act 1 boss: reached in 27 of 40 runs, entering with 34.5 HP (49 % of max) on average
+- act 2 boss: reached in 12 of 40 runs, entering with 48.1 HP (65 % of max) on average
+- act 3 boss: reached in 5 of 40 runs, entering with 79.6 HP (97 % of max) on average
 
 ## Must be zero
 
@@ -26,18 +26,18 @@
 
 ## Auxiliary
 
-- elites fought per run: 2.08; card rewards skipped: 22.4 % (51/228, 17.4 %–28.2 %); gold at the end: 103 on average
-- compute: 1052.6 s per run, 3017.0 ms per decision
-- surfaces: combat 6639, rewards 699, map 494, event 241, rest 178, card_reward 177, card_choice 133, shop 120, treasure 32, crystal_sphere 6, bundle 3
+- elites fought per run: 2.17; card rewards skipped: 23.1 % (96/415, 19.3 %–27.4 %); gold at the end: 107 on average
+- compute: 1348.1 s per run, 3458.6 ms per decision
+- surfaces: combat 11891, rewards 1261, map 870, event 410, card_reward 319, rest 306, card_choice 251, shop 208, treasure 57, crystal_sphere 15, bundle 3
 
-## Against 2026-11-10 (combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone, commit `fd09a37e2016eb06bc17a573408d2e1102877985`)
+## Against 2026-11-11 (combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone, commit `fd09a37e2016eb06bc17a573408d2e1102877985`)
 
 | | then | now |
 |---|---|---|
-| win rate | 4.0 % (1/25, 0.7 %–19.5 %) | 4.0 % (1/25, 0.7 %–19.5 %) |
-| floor mean | 27.44 | 20.76 |
-| act 1 boss reached | 22 | 16 |
-| act 2 boss reached | 9 | 6 |
-| act 3 boss reached | 6 | 3 |
+| win rate | 2.3 % (1/43, 0.4 %–12.1 %) | 2.5 % (1/40, 0.4 %–12.9 %) |
+| floor mean | 27.33 | 22.75 |
+| act 1 boss reached | 39 | 27 |
+| act 2 boss reached | 18 | 12 |
+| act 3 boss reached | 9 | 5 |
 | random decisions | 0 | 0 |
 | failed | 0 | 0 |
