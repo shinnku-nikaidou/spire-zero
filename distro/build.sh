@@ -47,8 +47,10 @@ chmod +x "$launcher"
 # with them for NoSL hosts, the SL planner for SL hosts).
 champion=$B/src/eval/champions/nosl.json
 mkdir -p "$B/brain/nets"
+# Net files are not in git, so the commit's export holds none: they come from this checkout's weights/all, which
+# weights/fetch.sh fills with the champions' nets.
 for net in $(grep -o 'weights/all/[^"]*\.json' "$champion" | sort -u); do
-  cp "$B/src/$net" "$B/brain/nets/$(basename "$net" .json).net"
+  cp "$R/$net" "$B/brain/nets/$(basename "$net" .json).net"
 done
 sed 's#weights/all/\([^"]*\)\.json#nets/\1.net#g' "$champion" > "$B/brain/champion.json"
 
