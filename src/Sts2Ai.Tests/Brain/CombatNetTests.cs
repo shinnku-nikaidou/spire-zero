@@ -5,13 +5,6 @@ namespace Sts2Ai.Tests.Brain;
 
 public class CombatNetTests
 {
-    private static string Repo(params string[] path)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (!File.Exists(Path.Combine(dir.FullName, "Sts2Ai.sln"))) dir = dir.Parent!;
-        return Path.Combine([dir.FullName, .. path]);
-    }
-
     /// <summary>
     /// An untrained net with small widths, made by <c>learn/combat/export.py</c>'s net_file: real SL round starts, with four
     /// rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5 % HP and a multi-hit
@@ -38,9 +31,9 @@ public class CombatNetTests
 
     /// <summary>The champion's own file: loading checks CombatNet gives its test states the trainer's endings.</summary>
     [Fact]
-    public void ReadsC9_0sTestStatesAsItsTrainerDid()
+    public void ReadsTheChampionsTestStatesAsItsTrainerDid()
     {
-        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Repo("weights", "all", "c9-0.json")));
+        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixtures.ChampionNet("combat-net")));
         using var net = CombatNet.Load(file, new Linear());
         Assert.Equal(16, file.Tests.Count);
     }

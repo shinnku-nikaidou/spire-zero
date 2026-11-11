@@ -20,6 +20,19 @@ internal static class Fixtures
     public static RunView Around(CombatObservation obs) =>
         Floor1Run with { Hp = obs.Player.Hp, MaxHp = obs.Player.MaxHp, Gold = obs.Player.Gold, Potions = obs.Potions };
 
+    /// <summary>A path in the repository, from the tests' output folder up.</summary>
+    public static string Repo(params string[] path)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (!File.Exists(Path.Combine(dir.FullName, "Sts2Ai.sln"))) dir = dir.Parent!;
+        return Path.Combine([dir.FullName, .. path]);
+    }
+
+    /// <summary>The SL champion's net file of <paramref name="option"/> ("value" or "combat-net"), which weights/fetch.sh
+    /// brings into a checkout.</summary>
+    public static string ChampionNet(string option) =>
+        Repo(ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(Repo("eval", "champions", "sl.json"))).Options[option]);
+
     public static CombatObservation WithEnemyHp(this CombatObservation obs, uint uid, int hp) =>
         obs with { Enemies = [.. obs.Enemies.Select(e => e.Uid == uid ? e with { Hp = hp } : e)] };
 

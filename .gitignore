@@ -11,6 +11,9 @@ obj/
 data/
 
 
+# The net files: kept in the repository's release "weights", fetched by weights/fetch.sh (learn/weights.py)
+weights/all/
+
 # Python bytecode
 __pycache__/
 

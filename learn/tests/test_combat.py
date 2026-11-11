@@ -233,8 +233,11 @@ def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
     assert net["fit"]["medium"]["held_out"]["samples"] == 42  # the 14 runs' three rounds
 
 
-def test_c9_0s_weights_read_back_give_its_test_states_their_endings():
-    net = export.read(str(Path(__file__).parents[2] / "weights" / "all" / "c9-0.json"))
+def test_the_champions_weights_read_back_give_its_test_states_their_endings():
+    """The SL champion's combat net, which weights/fetch.sh brings into a checkout."""
+    repo = Path(__file__).parents[2]
+    champion = json.loads((repo / "eval" / "champions" / "sl.json").read_text())
+    net = export.read(str(repo / champion["options"]["combat-net"]))
     tables = net["vocab"]
     model = Net({t: len(i) for t, i in tables.items()}).eval()
     model.load_state_dict(export.weights(net, model))

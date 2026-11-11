@@ -11,8 +11,8 @@ of threads, its only knob; the hub (deal.py) deals the chunks of every open job 
   box.py run JOB REV UNTIL PURPOSE RANGE -- RUN-OPTION...
     Opens data/JOB on the pool: RANGE is START:N, run indices into --seeds' file (or `all` of it) or train-seed indices
     without --seeds (a ledger block: BLOCK:100000), cut into chunks of CHUNK runs (default 1), the job's queue on the
-    hub. The sim at REV (pushed; built here if needed) and the inputs (git at REV, or INPUTS=DIR) go to the hub's dist/
-    once, and every worker takes them on first need. A job belongs to a step, DEADLINE=NAME (default: the job with / as
+    hub. The sim at REV (pushed; built here if needed) and the inputs (the seeds and champion files of git at REV with
+    the net files the job reads from weights/all here, or INPUTS=DIR) go to the hub's dist/ once, and every worker takes them on first need. A job belongs to a step, DEADLINE=NAME (default: the job with / as
     -), which has one deadline and one priority. UNTIL: a self-play or forks job's deadline (+90m, +2h, @EPOCH, or
     anything date -d reads); `none` for an eval job, which ends when its queue is used up and every chunk is back.
     Runs in play at the deadline are killed and kept out. PRIORITY=N (default: selfplay 0, eval and forks 1): the hub
@@ -41,6 +41,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -328,17 +329,43 @@ def check_seeds(kind: str, options: list[str]) -> None:
             raise Refused(f"a {kind} job plays train seeds, base 1, not --seed {base}")
 
 
-def put_inputs(full: str, inputs: str | None, have: set[str]) -> str:
-    """The inputs on the hub's dist/ as inputs-KEY.tar.zst, unless there already; KEY: the short REV for git at REV, else
-    the first 12 hex of the tar's SHA-256."""
+def weights_of(full: str, inputs: str | None, options: list[str]) -> list[str]:
+    """The net files a job's run reads, as weights/all/NAME.json: those its options name (--value, --combat-net) and
+    those of the champion file it names (--champion, read at REV or in INPUTS)."""
+    named = {}
+    if "--champion" in options:
+        path = options[options.index("--champion") + 1]
+        text = (ROOT / inputs / path).read_text() if inputs else output("git", "-C", ROOT, "show", f"{full}:{path}")
+        named |= json.loads(text)["options"]
+    named |= {key: options[options.index(f"--{key}") + 1] for key in ("value", "combat-net") if f"--{key}" in options}
+    return sorted({named[key] for key in ("value", "combat-net") if key in named})
+
+
+def put_inputs(full: str, inputs: str | None, have: set[str], options: list[str]) -> str:
+    """The inputs on the hub's dist/ as inputs-KEY.tar.zst, unless there already. Without INPUTS: the seeds and champion
+    files of git at REV with the net files the job reads from weights/all here (weights/fetch.sh brings them from the
+    release), KEY the short REV and those nets' names: a net's name is used once, so it says which weights. With INPUTS:
+    that folder's eval/ and weights/, KEY the first 12 hex of the tar's SHA-256."""
     if inputs is None:
-        key = output("git", "-C", ROOT, "rev-parse", "--short", full)
+        nets = weights_of(full, None, options)
+        for net in nets:
+            if not re.fullmatch(r"weights/all/[A-Za-z0-9._-]+\.json", net):
+                raise Refused(f"{net}: a job's net files are in weights/all, where a name is used once")
+            if not (ROOT / net).exists():
+                raise Refused(f"no {net} here: weights/fetch.sh {Path(net).stem} brings it from the release")
+        key = "-".join([output("git", "-C", ROOT, "rev-parse", "--short", full), *(Path(net).stem for net in nets)])
         if f"inputs-{key}.tar.zst" in have:
             return key
-        # the seeds, and the nets and champions all characters share, those REV has
-        wanted = ["eval/seeds", "eval/champions", "weights/all"]
+        wanted = ["eval/seeds", "eval/champions"]
         there = [p for p in wanted if not subprocess.run(["git", "-C", ROOT, "cat-file", "-e", f"{full}:{p}"], stderr=subprocess.DEVNULL).returncode]
-        tar = subprocess.run(["git", "-C", ROOT, "archive", full, *there], check=True, stdout=subprocess.PIPE).stdout
+        with tempfile.TemporaryDirectory(dir=ROOT / "tmp") as t:
+            archive = subprocess.run(["git", "-C", ROOT, "archive", full, *there], check=True, stdout=subprocess.PIPE).stdout
+            subprocess.run(["tar", "-C", t, "-xf", "-"], input=archive, check=True)
+            for net in nets:
+                (Path(t) / net).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / net, Path(t) / net)
+            tar = subprocess.run(["tar", "-C", t, "--sort=name", "--mtime=@0", "--owner=0", "--group=0", "-cf", "-", *sorted(os.listdir(t))],
+                                 check=True, stdout=subprocess.PIPE).stdout
     else:
         tar = subprocess.run(["tar", "-C", ROOT / inputs, "--sort=name", "--mtime=@0", "--owner=0", "--group=0", "-cf", "-", "eval", "weights"],
                              check=True, stdout=subprocess.PIPE).stdout
@@ -428,7 +455,7 @@ def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options:
 
     # the sim and the inputs on the hub's dist/, once
     have = hub_files("dist")
-    key = put_inputs(full, inputs, have)
+    key = put_inputs(full, inputs, have, options)
     if f"sts2-{rev}.tar.zst" not in have:
         subprocess.run([sys.executable, str(DIST_ADMIN), "bundle", rev], check=True)
 
@@ -442,7 +469,7 @@ def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options:
     save(job, {
         "job": job, "kind": kind, "character": parts[0].upper(), "env": parts[1],
         "owner": os.environ.get("OWNER", "main"), "purpose": purpose, "rev": full,
-        "game": os.environ.get("GAME", "v0.111.0"), "options": options, "inputs": inputs or "git at rev",
+        "game": os.environ.get("GAME", "v0.111.0"), "options": options, "inputs": inputs or "git at rev, nets from weights/all",
         "box": {
             "step": name, "priority": priority,
             "deadline": iso_utc(deadline) if deadline else None, "deadline_epoch": deadline,

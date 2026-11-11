@@ -5,13 +5,6 @@ namespace Sts2Ai.Tests.Brain;
 
 public class RunNetTests
 {
-    private static string Repo(params string[] path)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (!File.Exists(Path.Combine(dir.FullName, "Sts2Ai.sln"))) dir = dir.Parent!;
-        return Path.Combine([dir.FullName, .. path]);
-    }
-
     /// <summary>
     /// An untrained V net with small widths, its hazard head's bias lowered by 6 so a run survives most floors, its rows for
     /// a card's damage, block and modifiers' amounts random, its test runs real views (Fixtures' floor 1 and two of g3, one
@@ -30,9 +23,9 @@ public class RunNetTests
 
     /// <summary>The champion's own file: loading checks RunNet gives its test runs the trainer's values.</summary>
     [Fact]
-    public void ReadsV9_0sTestRunsAsItsTrainerDid()
+    public void ReadsTheChampionsTestRunsAsItsTrainerDid()
     {
-        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Repo("weights", "all", "v9-0.json")));
+        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Fixtures.ChampionNet("value")));
         using var net = RunNet.Load(file);
         Assert.Equal(8, file.Tests.Count);
     }

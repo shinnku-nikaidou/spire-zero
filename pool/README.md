@@ -48,8 +48,10 @@ pool/box.py status                                      # from the hub: runs, wi
 pool/box.py fetch gen1                                  # returns once every chunk is on the hub
 ```
 
-REV must be a commit on `origin/main`: the job's build is made from it, and its inputs (`eval/seeds`,
-`eval/champions`, `weights/all`) come from git at REV, so every machine plays the same thing.
+REV must be a commit on `origin/main`: the job's build is made from it, and its seeds and champion files (`eval/seeds`,
+`eval/champions`) come from git at REV. The net files it reads (its `--value` and `--combat-net`, or its champion
+file's) come from `weights/all` in this checkout, where `weights/fetch.sh` brings them from the repository's release;
+a net's name is used once, so every machine plays the same thing.
 
 ## A dataset
 

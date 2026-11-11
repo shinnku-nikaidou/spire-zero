@@ -20,7 +20,7 @@ and running it needs your own copy of the game, pinned at **v0.111.0**.
 | --- | --- |
 | `src/` | the .NET solution (`Sts2Ai.sln`): `Protocol` (the messages), `GameBridge` (reads and drives the game), `Brain` (the combat and macro brains), `Harness` (dispatch, records, reports, gates), `SimWorker` (the headless simulator and its command line), `Mod` (the in-game mod), `Tests` (the decision side's, which need no game files) and `SimWorker.Tests` |
 | `learn/` | offline training in Python (PyTorch): the run value V and the combat net, from self-play logs; the gate |
-| `weights/` | the current nets, shared by all five characters |
+| `weights/` | the nets, shared by all five characters: `weights/all/NAME.json`, kept in the repository's release `weights` and not in git (`weights/fetch.sh` downloads the champions' nets, `weights/put.sh NAME` adds one) |
 | `eval/` | test seed files, champion files, reports and the ledger of nets and seed blocks |
 | `pool/` | the work pool that spreads self-play and evaluation over many machines ([pool/README.md](pool/README.md)) |
 | `distro/` | the script that builds the mod with its brain for every platform |
@@ -33,6 +33,7 @@ The game's assemblies are referenced, not shipped: copy `sts2.dll`, `GodotSharp.
 `-p:Sts2BinDir=PATH` (see `src/GameReferences.props`).
 
 ```bash
+weights/fetch.sh                         # the champions' nets, which runs, some tests and the manual's check read
 dotnet build Sts2Ai.sln -c Release
 dotnet test src/Sts2Ai.Tests             # the brain and Harness: builds and runs without the game's assemblies
 dotnet test src/Sts2Ai.SimWorker.Tests   # the simulator's command line and loadouts

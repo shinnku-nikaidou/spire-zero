@@ -1,0 +1,56 @@
+# What can be checked without the game's assemblies: the decision side's tests (the brain, the protocol, Harness), the
+# training code's tests, and the manual's build and check. The simulator's own tests and its selftest need the game.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GH_TOKEN: ${{ github.token }}   # weights/fetch.sh downloads the champions' nets from the release
+
+jobs:
+  decision-side:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - run: weights/fetch.sh
+      - run: dotnet test src/Sts2Ai.Tests -c Release
+
+  learn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: weights/fetch.sh
+      # The lock file pins the CUDA build of torch, which training hosts use; the tests need only the CPU one.
+      - working-directory: learn
+        run: |
+          uv venv --python 3.12
+          uv pip install --index-url https://download.pytorch.org/whl/cpu torch
+          uv pip install loguru onnx typer pytest ruff
+          .venv/bin/ruff check .
+          .venv/bin/python -m pytest -q
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+      - run: weights/fetch.sh
+      - run: pnpm --dir docs install --frozen-lockfile
+      - run: pnpm --dir docs check
