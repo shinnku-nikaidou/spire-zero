@@ -1,0 +1,33 @@
+# The SL self-play dataset v9g3 (the user, 2026-11-11): the elite gauntlet at A10, mainly Defect, with little
+# randomness. Played by the champion's pair at the launch's commit (V v9-3, combat net c9-3).
+name = "v9g3"
+deadline = "+96h"                   # box.py deadline v9g3 UNTIL moves it; the user stops the step when the data is enough
+priority = 0
+seeds = 1000000                     # the ledger's block 1000000-1099999, 20,000 a character
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER"]
+champion = "eval/champions/sl.json"
+workers = 4
+
+# Uniform draws only, no softmax: a third of each character's runs a tier. Smaller than v9g2's 0.3 / 0.1 / 0.02, so
+# most of a run's decisions are V's best and its outcome is close to the careful policy's.
+explore = [{ epsilon = 0.06 }, { epsilon = 0.03 }, { epsilon = 0.01 }]
+
+# The elite gauntlet: in acts 1 and 2 a plain monster fight, an event's included, is won at its start with its rewards,
+# elites and bosses are fought; act 3 is the whole game. Every fight at the gate's effort.
+[games.gauntlet]
+auto_win = [1, 2]
+effort = { monster = "medium", elite = "medium", boss = "medium" }
+
+# DEFECT 4 to 1 for each other character. The amounts are upper bounds: the dealer keeps every job at the same share
+# of its queue, so the step holds 4 : 1 : 1 : 1 : 1 whenever it stops.
+[[runs]]
+characters = ["DEFECT"]
+game = "gauntlet"
+asc = 10
+n = 16000
+
+[[runs]]
+characters = ["SILENT", "IRONCLAD", "REGENT", "NECROBINDER"]
+game = "gauntlet"
+asc = 10
+n = 4000
