@@ -149,3 +149,16 @@ A machine's layout:
 - `box.py fetch NAME|JOB` waits until each job is over and every chunk dealt has its `done-` on the hub, copies `done-`,
   `tally-` and `deal/` here, closes each manifest with the pool's numbers (runs, wins, floor, chunks per host, ends),
   and once the whole step is fetched takes it off the hub.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s pool/tests -v
+```
+
+`pool/tests/test_pool.py` plays the pool end to end on one machine: the real `deal.py`, `dist.py` (over TLS, with a
+certificate made for the test) and `worker.py` processes on a throwaway store, with `fakesim.py` for the simulator.
+It needs `python3`, `openssl`, `zstd` and `tar`, no game and no other machine, and takes about 20 s. It covers the
+order chunks are dealt in, chunks going back (fewer threads, a worker ended, killed or silent), stops and deadlines, a
+job launched again under its name, and a host whose chunks fail. `WORKER_PACE` (below 1) shortens a worker's waits
+and `DEAL_SILENCE` the dealer's patience: the tests set both, nothing else does.

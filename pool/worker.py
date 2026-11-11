@@ -43,6 +43,7 @@ from pathlib import Path
 UTC8 = timezone(timedelta(hours=8))
 SUMMARY = "game Log.Error lines"  # how a run's last line of counts starts in its output
 FIELDS = re.compile(r'"(outcome)":"([a-z]+)"|"(act)":([0-9]+)|"(floor)":([0-9]+)')
+PACE = float(os.environ.get("WORKER_PACE", 1))  # a test sets it below 1: the waits between checks are that much shorter
 
 args = None
 DIR = S = Path()
@@ -67,7 +68,7 @@ def true_now():
 
 def pause(seconds):
     """Waits, or less when the worker stops; True when it stops."""
-    return stop.wait(seconds)
+    return stop.wait(seconds * PACE)
 
 
 # --- the hub
@@ -247,7 +248,7 @@ def play(i, shard, job, index, n, spec):
                     run.wait()
                 break
             try:
-                run.wait(10)
+                run.wait(10 * PACE)
             except subprocess.TimeoutExpired:
                 pass
     count = min(len(rec.read_text().splitlines()), n) if rec.exists() else 0
@@ -327,8 +328,8 @@ def thread(i):
         index, n, last, failed = int(index), int(n), "", 0
         state["last_work"] = time.time()
         try:
-            if job not in state["look"]["jobs"]:
-                look()
+            # the job as the hub has it now: launched again under its name since the last look, it has another build
+            look()
             spec = state["look"]["jobs"][job]
             state["playing"][shard] = f"{job} {index}"
             count, why, work = play(i, shard, job, index, n, spec)
@@ -366,7 +367,7 @@ def sender():
     while True:
         files = sorted(p for p in box.glob("*.tar"))
         if not files:
-            time.sleep(5)
+            time.sleep(5 * PACE)
             continue
         path = files[0]
         _, *job, shard, index = path.stem.split("+")

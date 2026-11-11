@@ -25,7 +25,7 @@ with the lowest share of its queue dealt (ties: the step's order), skipping a st
       LAST is the chunk the thread finished (empty at first), FAILED whether it ended with fewer runs than dealt by itself
       (not cut, not past the deadline). Answers "JOB INDEX N", or 204 when nothing can be dealt now. When the hub holds
       another chunk for SHARD than LAST, the answer was lost: the same chunk again. MORE=0: the thread ends; nothing is
-      dealt. ONLY: deal only jobs of that kind (selfplay, eval, forks).
+      dealt, and a chunk whose answer was lost goes back. ONLY: deal only jobs of that kind (selfplay, eval, forks).
   GET /back?token&shard&job&index&why   the thread was cut (box.py down, fewer threads): its chunk goes back to the front
   GET /pool?token&host&threads&playing&busy&ncpu&start=0|1
       each worker once a minute: JSON with the hub's clock and every step and job not yet fetched. START=1: the worker has
@@ -249,9 +249,9 @@ def next_chunk(shard, last, failed, more, only):
         job, index, n = held.split()[:3]
         if f"{job}/{index}" != last:
             step = next((s for s in steps() if job in s.get("jobs", [])), None)
-            if step and is_open(step, now) and not os.path.exists(deal_dir(job, "stopped")):
+            if more and step and is_open(step, now) and not os.path.exists(deal_dir(job, "stopped")):
                 return f"{job} {index} {n}"  # its answer was lost
-            take_back_held(shard, "its step closed before it was played")
+            take_back_held(shard, "its step closed before it was played" if more else "its thread ended before it was played")
         else:
             remove(pool("held", shard))
             finish(shard, job, index, failed)

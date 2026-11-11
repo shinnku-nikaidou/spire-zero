@@ -1,5 +1,6 @@
 # What can be checked without the game's assemblies: the decision side's tests (the brain, the protocol, Harness), the
-# training code's tests, and the manual's build and check. The simulator's own tests and its selftest need the game.
+# training code's tests, the work pool's (its real dealer, store and worker with a stand-in simulator), and the
+# manual's build and check. The simulator's own tests and its selftest need the game.
 name: ci
 
 on:
@@ -23,6 +24,12 @@ jobs:
           dotnet-version: 9.0.x
       - run: weights/fetch.sh
       - run: dotnet test src/Sts2Ai.Tests -c Release
+
+  pool:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s pool/tests -v
 
   learn:
     runs-on: ubuntu-latest
