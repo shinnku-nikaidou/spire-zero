@@ -88,6 +88,40 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// Stampede plays an attack of the hand as the turn ends, and a Headbutt played there asks for a card of the discard
+    /// pile: the combat's turns wait on that prompt too, though the game asks it as the end-turn action finishes, with
+    /// the action executor still on that action. A session dropped there must end them as at an enemy's prompt
+    /// (<see cref="PromptSelector.Drop"/>): the next combat must start, and play on.
+    /// </summary>
+    private static void DropsAtATurnEndsPrompt(Pump pump, Action<string, bool, string> check)
+    {
+        var (encounter, act) = Opt.Encounter("KAISER_CRAB_BOSS");
+        var loadout = new Loadout(Deck: [.. Enumerable.Repeat(new CardSpec("HEADBUTT"), 10)]);
+        var setup = new CombatSetup("IRONCLAD", encounter, act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, FirstPicks.Instance))
+            obs = session.Observation();
+        obs = obs with
+        {
+            Player = obs.Player with { Powers = [.. obs.Player.Powers, new PowerView("STAMPEDE_POWER", 1)] },
+            Draw = [.. obs.Draw.Skip(3)],
+            Discard = [.. obs.Draw.Take(3)],
+        };
+        bool asked;
+        using (var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), FirstPicks.Instance))
+        {
+            built.Execute(CombatAction.EndTurn);
+            asked = built.Prompt != null && built.LegalActions().Count == 0;
+        }
+        using var next = CombatSession.Start(pump, setup, FirstPicks.Instance);
+        bool started = next.WaitingForInput && next.LegalActions().Count > 0;
+        if (started) next.EndTurn();
+        var errors = HeadlessGame.TakeErrors();
+        check("a combat dropped at a turn end's prompt lets the next one play", asked && started && CombatSession.State.RoundNumber == 2 && errors.Count == 0,
+            $"asked {asked}, the next started {started}, round {CombatSession.State.RoundNumber}, errors {errors.FirstOrDefault()}");
+    }
+
+    /// <summary>
     /// The fight round cap (<see cref="FightCap"/>): a combat built at the cap's last round, at 999 HP that no enemy turn
     /// takes, is still on there; ending that turn starts round <see cref="FightCap.MaxRounds"/> + 1, and the fight is lost.
     /// </summary>

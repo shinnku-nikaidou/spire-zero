@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Actions;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models;
@@ -50,8 +51,12 @@ internal sealed class PromptSelector(
         var (min, max) = ChoiceContexts.Bounds(context, minSelect, maxSelect, cards.Count);
         // The tie-break only has to be unrelated to the hidden state, and the same on replay.
         var (choice, gameIndex) = CardChoices.Canonical(cards, min, max, context, new Random(prompt));
-        // The player's cards and potions ask from inside their action, which the executor is running then.
-        bool byTurns = CombatManager.Instance.DebugOnlyGetState() != null && !RunManager.Instance.ActionExecutor.IsRunning;
+        // The player's cards and potions ask from inside their action, which the executor is executing then. What a
+        // turn's end brings (a card a power plays there) asks as the end-turn action finishes, the executor still on
+        // it: that action has finished, and the turns wait for the answer.
+        var executor = RunManager.Instance.ActionExecutor;
+        bool byAction = executor.IsRunning && executor.CurrentlyRunningAction is { State: not GameActionState.Finished };
+        bool byTurns = CombatManager.Instance.DebugOnlyGetState() != null && !byAction;
         _waiting = new(choice, gameIndex, cards, new(), byTurns);
         pump.Held = true;
         return _waiting.Answer.Task;

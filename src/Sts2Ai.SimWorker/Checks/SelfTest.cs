@@ -139,6 +139,7 @@ internal static partial class SelfTest
         ThornsKillDuringSlyPlay(pump, pool, act, Check);
         FightCapLoses(pump, pool, act, Check);
         DropsAtAnEnemysPrompt(pump, Check);
+        DropsAtATurnEndsPrompt(pump, Check);
         GatheredCardState(pump, pool, act, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         FoulPotionAtMerchants(pump, Check);
