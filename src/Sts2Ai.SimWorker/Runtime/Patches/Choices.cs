@@ -53,7 +53,7 @@ internal static partial class HeadlessPatches
     {
         private static bool Prefix(Player player, IReadOnlyList<IReadOnlyList<CardModel>> bundles, ref Task<IEnumerable<CardModel>> __result)
         {
-            if (CardSelectCmd.Selector is not PolicySelector selector || CombatManager.Instance.IsEnding || bundles.Count == 0)
+            if (CardSelectCmd.Selector is not PromptSelector selector || CombatManager.Instance.IsEnding || bundles.Count == 0)
                 return true;
             var choices = RunManager.Instance.PlayerChoiceSynchronizer;
             uint choiceId = choices.ReserveChoiceId(player);

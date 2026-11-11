@@ -18,6 +18,7 @@ public sealed class PooledPimc(WorkerPool pool)
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, string buildSeed, Budget budget, ulong seed,
         IReadOnlyList<EnemyTurns> history, RunView run)
     {
+        if (PimcBrain.Unplanned(observation) is { } unplanned) return unplanned;
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
         return PimcBrain.Root(PimcBrain.Ordered(legal, observation), budget, (first, nodes) => [.. pool.Map([.. Enumerable.Range(0, budget.Worlds)
                 .Select(k => (WorkerRequest)new PimcWorldRequest(k, observation, first, buildSeed, seed, k, budget.Worlds, nodes, history, run))])

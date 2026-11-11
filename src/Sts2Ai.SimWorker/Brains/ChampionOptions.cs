@@ -27,8 +27,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     private bool Searches => Policy is "pimc" or "plan";
 
     /// <summary>
-    /// One Harness per run. Combat prompts go to "first" (<see cref="FirstPicks"/>), which search worlds ask too, unless the
-    /// combat brain's action carries its own answer to its first prompt.
+    /// One Harness per run. A card prompt during a combat is the combat brain's, a decision like its others.
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
     /// this process or over the wire; so does the exploring l0, from its own. pimc plays in NoSL; in SL, plan plans the
     /// whole combat on the node's clone (docs: sl-planner §3), and with --afterstates clone l0 plays each option on it
@@ -48,16 +47,15 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
             : Policy == "plan" ? new PooledPlanner(pool).Route(Budget, Combat)
             : new PooledPimc(pool).Route(Budget, Combat);
-        var prompts = new Route<IChoicePolicy>("first", FirstPicks.Instance);
         Dispatcher dispatcher;
         if (Macro == "l0")
         {
             var l0 = new MacroBrain(Value!, Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null, OnClone ? Leaf.Leaf : null,
                 MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null);
-            dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new(L0, l0), new(L0, l0), log,
+            dispatcher = new Dispatcher(hello.Run.RunId, env, combat, new(L0, l0), new(L0, l0), log,
                 OnClone ? node => new PooledClone(pool!, node) : null, explain);
         }
-        else dispatcher = new Dispatcher(hello.Run.RunId, env, combat, prompts, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
+        else dispatcher = new Dispatcher(hello.Run.RunId, env, combat, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
         if (dispatcher.Champion != Name) throw new InvalidOperationException($"champion {dispatcher.Champion} goes by {Name} in champion files");
         return dispatcher;
     };

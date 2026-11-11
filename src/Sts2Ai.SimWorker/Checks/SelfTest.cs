@@ -87,12 +87,17 @@ internal static partial class SelfTest
                 {
                     var snapshot = first.Snapshots[k];
                     string at = $"{label} at step {k}";
+                    bool prompted;
                     using (var restored = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0))))
                     {
                         Check("restore", Json(restored) == first.Observations[k], at);
                         Check("restore hidden state", Hidden(restored) == first.Hidden[k], at);
                         Check("fast hook listeners match the game's", SameListeners(restored), at);
+                        prompted = restored.Prompt != null;
                     }
+                    // A card prompt stands in the middle of an action: there the hidden state is not sampled again, and
+                    // no combat is built to show it (docs: simulator/combat §5).
+                    if (prompted) continue;
 
                     string trueOrder;
                     using (var restored = CombatSession.Restore(pump, snapshot, new RandomChoices(new Random(0))))
@@ -133,12 +138,14 @@ internal static partial class SelfTest
         RollingBoulder(pump, pool, act, Check);
         ThornsKillDuringSlyPlay(pump, pool, act, Check);
         FightCapLoses(pump, pool, act, Check);
+        DropsAtAnEnemysPrompt(pump, Check);
         GatheredCardState(pump, pool, act, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         FoulPotionAtMerchants(pump, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         CyclesKillInOneTurn(pump, pool, act, net.Leaf, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
+        NodeWorldStandsAtTheEntrysPrompt(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);
         CloneKeepsRelicState(pump, seed, Check);
         AutoWinFightsElitesAndBosses(pump, seed, Check);

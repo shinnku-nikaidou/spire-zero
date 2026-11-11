@@ -15,7 +15,7 @@ public class DispatcherTests
     private static Dispatcher Make(CombatRoute combat, string macroPick = "map:0,1")
     {
         var macro = new Fixed(macroPick);
-        return new Dispatcher("run-1", PlayEnvironment.NoSL, combat, new("p0", macro), new("l0", macro), new("l0", macro));
+        return new Dispatcher("run-1", PlayEnvironment.NoSL, combat, new("l0", macro), new("l0", macro));
     }
 
     private static CombatDecision Decision(CombatObservation obs) => new([CombatAction.Play(0, 1), CombatAction.EndTurn], () => obs);
@@ -76,7 +76,7 @@ public class DispatcherTests
         {
             seen = clone;
             return new(CombatAction.EndTurn, [], []);
-        }), new("p0", macro), new("l0", macro), new("l0", macro));
+        }), new("l0", macro), new("l0", macro));
         dispatcher.Checkpoint(new(0, "{}", [0, 1]));
         dispatcher.Act(new(0, 0, "event event:1"));
         dispatcher.Choose(Decision(Fixtures.Slugs()));
@@ -85,33 +85,61 @@ public class DispatcherTests
         Assert.Equal([0, 1], seen.AutoWin);
     }
 
-    private static ChoiceDecision Prompt(bool inCombat = true) => new(new CardChoice
+    private static readonly CardChoice Asked = new()
     {
         Options = [new CardView { Id = "A" }, new CardView { Id = "B" }, new CardView { Id = "C" }],
         Min = 0,
         Max = 1,
-        Context = new() { Purpose = "hand", Cancelable = false, InCombat = inCombat },
-    });
+        Context = new() { Purpose = "hand", Cancelable = false, InCombat = true },
+    };
 
-    [Fact]
-    public void AnswersThePromptOfTheActionWithTheBrainsPickAndHidesItFromTheHost()
+    /// <summary>A card prompt as a host shows it: over the combat when one is going on.</summary>
+    private static ChoiceDecision Prompt(bool inCombat = true)
     {
-        var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = "2" }, [], [])));
-
-        Assert.Equal(CombatAction.Play(0, 1), dispatcher.Choose(Decision(Fixtures.Slugs())));
-        Assert.Equal([2], dispatcher.Choose(Prompt()).Picks);
-        // Only the action's first prompt: the next goes to the prompt policy, as does one out of combat, or one after another action.
-        Assert.Empty(dispatcher.Choose(Prompt()).Picks);
-        dispatcher.Choose(Decision(Fixtures.Slugs()));
-        Assert.Empty(dispatcher.Choose(Prompt(inCombat: false)).Picks);
+        var choice = Asked with { Context = Asked.Context with { InCombat = inCombat } };
+        return new(choice, () => new Observation { Run = Fixtures.Around(Fixtures.Slugs()), Screen = new CardChoiceScreen { Choice = choice, Combat = inCombat ? Fixtures.Slugs() : null } });
     }
 
     [Fact]
-    public void APickThePromptDoesNotAcceptGoesToThePolicy()
+    public void ACardPromptDuringACombatIsTheCombatBrainsDecision()
     {
-        var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = "7" }, [], [])));
+        var seen = new List<(CardChoice? Prompt, int Legal, int Rounds)>();
+        var dispatcher = Make(new("test", (decision, _, _, history) =>
+        {
+            seen.Add((decision.Observation.Prompt, decision.Legal.Count, history[0].Turns.Count));
+            return new(decision.Observation.Prompt != null ? CombatAction.Pick([2]) : CombatAction.Play(0, 1), [CombatAction.EndTurn], []);
+        }));
 
-        dispatcher.Choose(Decision(Fixtures.Slugs()));
+        Assert.Equal(CombatAction.Play(0, 1), dispatcher.Choose(Decision(Fixtures.Slugs())));
+        var (answer, note) = dispatcher.Decide(Prompt());
+        Assert.Equal([2], answer.Picks);
+        // The brain saw the combat with the prompt on it and no play to make, and the combat's record of moves.
+        Assert.Equal([(null, 2, 1), (Asked, 0, 1)], seen);
+        Assert.Equal(2, dispatcher.Brains["test"]);
+        // The host shows the prompt's screen: the plays the plan goes on with are not for it.
+        Assert.Null(note.Plan);
+        // A prompt outside combat is the macro side's.
+        Assert.Empty(dispatcher.Choose(Prompt(inCombat: false)).Picks);
+        Assert.Equal(1, dispatcher.Brains["l0"]);
+    }
+
+    [Fact]
+    public void AnAnswerThePromptDoesNotAcceptIsRefused()
+    {
+        var plays = Make(new("test", (_, _, _, _) => new(CombatAction.EndTurn, [], [])));
+        Assert.Throws<InvalidOperationException>(() => plays.Choose(Prompt()));
+        var wrong = Make(new("test", (_, _, _, _) => new(CombatAction.Pick([7]), [], [])));
+        Assert.Throws<InvalidOperationException>(() => wrong.Choose(Prompt()));
+        // And an answer where a play was asked for.
+        Assert.Throws<InvalidOperationException>(() => wrong.Choose(Decision(Fixtures.Slugs())));
+    }
+
+    [Fact]
+    public void APlaceholderPolicyAnswersACombatsPromptsWithTheFirstOptions()
+    {
+        var dispatcher = Make(CombatRoute.Of("ends", new EndTurns()));
+
+        Assert.Equal(CombatAction.EndTurn, dispatcher.Choose(Decision(Fixtures.Slugs())));
         Assert.Empty(dispatcher.Choose(Prompt()).Picks);
     }
 

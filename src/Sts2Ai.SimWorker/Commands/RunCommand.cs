@@ -8,7 +8,8 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
-/// run: whole runs through Harness. Combat prompts go to p0; --macro picks the brain of every decision outside combat.
+/// run: whole runs through Harness. --policy picks the brain of every decision of a combat, its card prompts among
+/// them; --macro picks the brain of every decision outside combat.
 /// --check plays each seed again over the wire, to a brain in this process, and compares: observations, records and
 /// decision logs included (each observation must survive a JSON round trip); and replays each node from its
 /// checkpoint (the SL clone, docs: simulator/worlds). Reports results, hashes and surface coverage.

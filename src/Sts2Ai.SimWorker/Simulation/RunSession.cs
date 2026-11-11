@@ -33,8 +33,9 @@ internal sealed record RunSetup(string Character, string Seed, int Ascension = 0
 /// <summary>
 /// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator/runs §2).
 /// <see cref="Step"/> pumps the game until it waits for the player, then makes one decision: combat through the
-/// combat policy, card prompts through the card selector, every other screen through the macro policy. Each decision
-/// can be observed (<see cref="Observation"/>): policies build it on request, and <c>observed</c> sees all of them.
+/// combat policy, a card prompt the game waits on (<see cref="Prompt"/>) through the choice policy, every other screen
+/// through the macro policy. Each decision can be observed (<see cref="Observation"/>): policies build it on request,
+/// and <c>observed</c> sees all of them.
 ///
 /// The game runs each room by itself; this class plays the part of the UI: which screen is showing and what its
 /// buttons do. What a screen would remember (a rewards screen still open, the player having left the room) is kept
@@ -49,10 +50,11 @@ internal sealed class RunSession : IDisposable
     private const int MaxAutoSteps = 20;
 
     private readonly Pump _pump;
+    private readonly IChoicePolicy _choices;
     private readonly ICombatPolicy _combat;
     private readonly IMacroPolicy _macro;
     private readonly Action<Observation>? _observed;
-    private readonly PolicySelector _selector;
+    private readonly PromptSelector _selector;
     private readonly IDisposable _selectorScope;
     private readonly List<string> _trace = [];
     private readonly List<ulong> _mapHashes = [];
@@ -82,11 +84,14 @@ internal sealed class RunSession : IDisposable
     /// <summary>A loaded clone stops at its node's exit.</summary>
     private bool _sealed;
 
+    /// <summary>A loaded clone's recorded decisions, which come before the policies' own.</summary>
+    private Replay? _replay;
+
     public RunSetup Setup { get; }
     public Player Player { get; }
     public RunState Run { get; }
 
-    /// <summary>Every decision so far, as "surface action", including card prompts answered inside another action.</summary>
+    /// <summary>Every decision so far, as "surface action", card prompts among them.</summary>
     public IReadOnlyList<string> Trace => _trace;
 
     /// <summary>A hash of each act's map, taken when the act is entered; the same in every process if generation is.</summary>
@@ -119,16 +124,12 @@ internal sealed class RunSession : IDisposable
         Setup = setup;
         Player = player;
         Run = run;
+        _choices = choices;
         _combat = combat;
         _macro = macro;
         _observed = observed;
-        ScreenView Prompt(CardChoice choice) => new CardChoiceScreen
-        {
-            Choice = choice,
-            Combat = CombatManager.Instance.IsInProgress ? Observe.Combat(CombatManager.Instance.DebugOnlyGetState()!, Player) : null,
-        };
-        _selector = new PolicySelector(pump, choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => Prompt(choice)),
-            choice => Of(Prompt(choice)), CardReward, Bundle);
+        _selector = new PromptSelector(pump, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => PromptScreen(choice)),
+            CardReward, Bundle);
         _selectorScope = CardSelectCmd.PushSelector(_selector);
         RewardsSet.testSelector = set =>
         {
@@ -183,7 +184,8 @@ internal sealed class RunSession : IDisposable
     /// <summary>
     /// Loads <paramref name="clone"/> (docs: simulator/worlds §4): its save as the game's Continue loads one, with the relic fields
     /// the save drops put back (<see cref="Checkpoint"/>), then its decisions replayed, before the policies answer. The
-    /// clone is sealed: once it travels it is at its horizon, and stepping further throws.
+    /// clone is sealed: once it travels it is at its horizon, and stepping further throws. A clone whose last decision
+    /// raised a card prompt stands at that prompt, and so does one whose room asks one as it is entered.
     /// </summary>
     /// <param name="opened">The clone's checkpoint already read (<see cref="Checkpoint.Open"/>), for a node loaded many times.</param>
     public static RunSession Load(Pump pump, NodeClone clone, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro,
@@ -196,9 +198,7 @@ internal sealed class RunSession : IDisposable
         var player = run.Players[0];
         var replay = new Replay(clone.Trace, combat, macro);
         var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel, AutoWin: clone.AutoWin);
-        var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = true, _checkpoint = clone.Save };
-        session._selector.QueueReplay(clone.Trace.Where(s => s.StartsWith(Surfaces.CardChoice + " ", StringComparison.Ordinal))
-            .Select(s => s[(Surfaces.CardChoice.Length + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray()));
+        var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = true, _checkpoint = clone.Save, _replay = replay };
         try
         {
             // NMainMenu's Continue and NGame.LoadRun without the nodes.
@@ -208,11 +208,10 @@ internal sealed class RunSession : IDisposable
             AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
             RunManager.Instance.Launch();
             session.Await(RunManager.Instance.GenerateMap());
-            session.Await(RunManager.Instance.LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, run)));
+            session.Enter(RunManager.Instance.LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, run)));
             while (replay.Pending > 0 && !session.IsOver) session.Step();
             if (!session.AtHorizon) session.Settle();
-            if (replay.Pending > 0 || session._selector.PendingReplay > 0)
-                throw new InvalidOperationException($"replay diverged: {replay.Pending} decisions and {session._selector.PendingReplay} card picks never asked for");
+            if (replay.Pending > 0) throw new InvalidOperationException($"replay diverged: {replay.Pending} decisions never asked for");
             return session;
         }
         catch
@@ -235,6 +234,30 @@ internal sealed class RunSession : IDisposable
 
     private Observation Of(ScreenView screen) => new() { Run = View(), Screen = screen };
 
+    /// <summary>The card prompt the game waits on, if any: the next decision, the choice policy's.</summary>
+    public CardChoice? Prompt => _selector.Waiting;
+
+    /// <summary>The combat as a decision shows it, with the prompt it waits on.</summary>
+    public CombatObservation Combat()
+    {
+        var obs = Observe.Combat(CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state"), Player);
+        return Prompt is { } prompt ? obs with { Prompt = prompt } : obs;
+    }
+
+    private CardChoiceScreen PromptScreen(CardChoice choice) => new()
+    {
+        Choice = choice,
+        Combat = CombatManager.Instance.IsInProgress ? Observe.Combat(CombatManager.Instance.DebugOnlyGetState()!, Player) : null,
+    };
+
+    /// <summary>Answers the waiting prompt: a loaded clone's recorded answer first, then the choice policy's.</summary>
+    private void AnswerPrompt()
+    {
+        var prompt = Prompt ?? throw new InvalidOperationException("no card prompt waits for an answer");
+        if (_replay?.Picks() is { } picks) _selector.Replay(picks);
+        else _selector.Answer(_choices.Choose(new ChoiceDecision(prompt, () => Of(PromptScreen(prompt)))).Picks);
+    }
+
     /// <summary>Makes one decision, after anything the game or the driver does on its own. Does nothing once the run is over.</summary>
     public void Step()
     {
@@ -244,7 +267,9 @@ internal sealed class RunSession : IDisposable
             Settle();
             if (IsOver) return;
             if (auto > MaxAutoSteps) throw new InvalidOperationException($"no decision after {MaxAutoSteps} automatic steps: {Describe()}");
-            if (Decide())
+            bool prompted = Prompt != null;
+            if (prompted) AnswerPrompt();
+            if (prompted || Decide())
             {
                 // A death inside the action itself (a card in hand at the turn's end, a play) ends the run before any next Settle.
                 if (IsOver) NoteCombatEnd();
@@ -253,23 +278,26 @@ internal sealed class RunSession : IDisposable
         }
     }
 
-    /// <summary>Pumps until the player can act: in combat, their turn (a later one after ending a turn); elsewhere, the game
-    /// idle. The card prompts on the way are answered. A fight past the round cap is lost there (<see cref="FightCap"/>).</summary>
+    /// <summary>Pumps until the player can act: a card prompt waits (<see cref="Prompt"/>); or in combat, their turn (a
+    /// later one after ending a turn); or elsewhere, the game is idle. A fight past the round cap is lost there
+    /// (<see cref="FightCap"/>).</summary>
     public void Settle()
     {
         void Pump()
         {
-            _selector.Run(() =>
+            _pump.RunUntil(() =>
             {
+                if (Prompt != null) return true;
                 if (CombatManager.Instance.IsInProgress)
                     return CombatActions.WaitingForInput(Player) && (_endedTurn == null || Player.PlayerCombatState!.TurnNumber > _endedTurn);
                 return _pump.Pending == 0 && !RunManager.Instance.ActionExecutor.IsRunning;
             }, Describe);
-            _selector.Flush();
+            _pump.Drain();
         }
         Pump();
-        if (FightCap.Enforce(_pump, Player, Describe)) Pump();
-        _endedTurn = null;
+        if (Prompt == null && FightCap.Enforce(_pump, Player, Describe)) Pump();
+        // A prompt on the way to the next turn does not end the wait for it.
+        if (Prompt == null) _endedTurn = null;
         NoteCombatEnd();
         if (_mapHashes.Count == Run.CurrentActIndex && Run.Map is not NullActMap) _mapHashes.Add(MapHash(Run.Map));
         Collect();
@@ -546,10 +574,33 @@ internal sealed class RunSession : IDisposable
 
     private void Track(Task task, string what, Action? done = null) => _running.Add((task, done, what));
 
-    /// <summary>Pumps a task the driver must finish before going on (run setup).</summary>
+    /// <summary>
+    /// Pumps a loaded clone's entry into its node's room to its end, or to a card prompt its trace has no answer for: a
+    /// combat's first turn starts inside the entry and may ask one (a relic's, at the start of each combat). The clone
+    /// then stands at that prompt, as the run did, and the entry goes on once it is answered.
+    /// </summary>
+    private void Enter(Task entry)
+    {
+        while (true)
+        {
+            _pump.RunUntil(() => Prompt != null || entry.IsCompleted, Describe);
+            if (Prompt == null || _replay!.Pending == 0) break;
+            AnswerPrompt();
+        }
+        Track(entry, "enter the node's room");
+        Collect();
+    }
+
+    /// <summary>Pumps a task the driver must finish before going on (run setup, the auto-win), with the card prompts it
+    /// raises answered as the run's decisions.</summary>
     private void Await(Task task)
     {
-        _selector.Run(() => task.IsCompleted, Describe);
+        while (true)
+        {
+            _pump.RunUntil(() => Prompt != null || task.IsCompleted, Describe);
+            if (Prompt == null) break;
+            AnswerPrompt();
+        }
         if (!task.IsCompletedSuccessfully) throw task.Exception?.GetBaseException() ?? new OperationCanceledException();
     }
 
@@ -594,27 +645,32 @@ internal sealed class RunSession : IDisposable
         RewardsSet.testSelector = null;
         HeadlessPatches.CrystalSphereShown = null;
         HeadlessPatches.NodeEntered = null;
-        _selector.Drop();
         _selectorScope.Dispose();
+        // Nothing runs while a prompt waits: the game stands where it asked until its run is cleaned up.
         _pump.Drain();
         RunManager.Instance.CleanUp(graceful: true);
+        _selector.Drop();
         _pump.Drain();
         LocalContext.NetId = 1UL;
     }
 
     /// <summary>
-    /// Answers combat and macro decisions from a recorded trace, in order, then passes them on to the policies. Card
-    /// prompts are replayed by the card selector, which keeps the game's own indexes.
+    /// Answers decisions from a recorded trace, in order, then passes combat and macro decisions on to the policies. A
+    /// card prompt's recorded answer is the game's own indexes (<see cref="Picks"/>).
     /// </summary>
     private sealed class Replay(IEnumerable<string> trace, ICombatPolicy combat, IMacroPolicy macro) : ICombatPolicy, IMacroPolicy
     {
-        private readonly Queue<string> _steps = new(trace.Where(s => !s.StartsWith(Surfaces.CardChoice + " ", StringComparison.Ordinal)));
+        private readonly Queue<string> _steps = new(trace);
 
         public int Pending => _steps.Count;
 
         public CombatAction Choose(CombatDecision decision) => _steps.Count > 0 ? CombatAction.Parse(Next(Surfaces.Combat)) : combat.Choose(decision);
 
         public MacroAnswer Choose(MacroDecision decision) => _steps.Count > 0 ? new(MacroAction.Parse(Next(decision.Surface))) : macro.Choose(decision);
+
+        /// <summary>The recorded answer to the card prompt that waits; null once the trace is played.</summary>
+        public int[]? Picks() => _steps.Count == 0 ? null
+            : [.. Next(Surfaces.CardChoice).Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)];
 
         private string Next(string surface)
         {

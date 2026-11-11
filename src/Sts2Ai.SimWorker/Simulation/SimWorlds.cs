@@ -12,23 +12,20 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// NoSL worlds start from a combat built to show the observation (<see cref="CombatBuilder"/>), never from the real
 /// combat, and each is determinized with its own seed. The SL world is the real combat itself, replayed exactly, and
 /// tells states apart by the full hidden state (<see cref="HiddenState.Full"/>).
-/// Card prompts inside a world are answered by <see cref="FirstPicks"/>, as the run answers them, so search expects the
-/// picks the run will make, unless an action carries its own answer; an SL world may be given the prompt policy of its
-/// real combat instead.
+/// A card prompt an action raises is a state of a world: its answer is the next action. Only the prompts asked while a
+/// world's combat starts get <see cref="FirstPicks"/>: they come before the state the world begins at.
 /// </summary>
 internal sealed class SimWorlds : IWorldSource, IDisposable
 {
     private readonly Pump _pump;
     private readonly CombatSnapshot _root;
-    private readonly SearchPrompts _prompts;
     private readonly RunView _run;
     private CombatSession? _live;
     private World? _owner;
 
-    private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, RunView run, IChoicePolicy? prompts = null)
+    private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, RunView run)
     {
         _pump = pump;
-        _prompts = new(prompts ?? FirstPicks.Instance);
         Environment = environment;
         _root = root;
         _run = run;
@@ -48,8 +45,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
     }
 
     /// <param name="run">The run around the combat, for the leaves (<see cref="World.Run"/>).</param>
-    /// <param name="prompts">Answers the card prompts, as in the real combat; null: <see cref="FirstPicks"/>.</param>
-    public static SimWorlds SL(Pump pump, CombatSnapshot real, RunView run, IChoicePolicy? prompts = null) => new(pump, PlayEnvironment.SL, real, run, prompts);
+    public static SimWorlds SL(Pump pump, CombatSnapshot real, RunView run) => new(pump, PlayEnvironment.SL, real, run);
 
     public PlayEnvironment Environment { get; }
 
@@ -82,7 +78,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
                 if (source._owner == this && _current) return source._live!;
                 source._live?.Dispose();
                 source._live = null;
-                source._live = CombatSession.Restore(source._pump, source._root with { Trace = [.. source._root.Trace, .. trace] }, source._prompts);
+                source._live = CombatSession.Restore(source._pump, source._root with { Trace = [.. source._root.Trace, .. trace] }, FirstPicks.Instance);
                 source._owner = this;
                 _current = true;
                 Sync();
@@ -91,9 +87,8 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
         }
 
         /// <summary>
-        /// Takes the trace from the live combat, which also records the prompts asked while it starts (a relic that
-        /// asks at the start of each turn). Replay answers prompts from the recorded picks in order, so a trace
-        /// without those would hand a later prompt's pick to them.
+        /// Takes the trace from the live combat, which also records the answers given while it starts (a relic that
+        /// asks at the start of each turn): a restore gives the start those again.
         /// </summary>
         private void Sync()
         {
@@ -133,13 +128,9 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
 
         public void Execute(CombatAction action)
         {
-            var live = Live;
-            source._prompts.Arm(action);
-            live.Execute(action.Plain);
+            Live.Execute(action);
             Sync();
         }
-
-        public PromptSeen? LastPrompt => source._prompts.Seen;
 
         public WorldSnapshot Snapshot() => new([.. trace.Select(e => e.ToString())]);
 

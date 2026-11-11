@@ -63,6 +63,11 @@ internal sealed record CombatSnapshot(CombatSetup Setup, IReadOnlyList<TraceEven
 /// and relics), placed directly in the encounter's room. The driver lists legal actions, executes one, and pumps
 /// the game until it is waiting for player input again (or the combat is over).
 ///
+/// A card prompt an action raises is a state of the combat (docs: simulator/combat §1): the game waits on it
+/// (<see cref="Prompt"/>), no play is legal, and the next action is its answer (<see cref="CombatAction.Pick"/>). Only
+/// the prompts of the combat's start are answered here, by the policy the session is given: a combat built from an
+/// observation starts before the state it is built to show, and those are no decisions of that state's.
+///
 /// The game keeps the run and combat in process-wide singletons, so only one session can be live at a time.
 /// Branching is done by replay: <see cref="Snapshot"/> records the setup and every action and choice so far,
 /// and <see cref="Restore"/> rebuilds that exact state. Same setup and trace, same state: the game draws all its
@@ -74,8 +79,11 @@ internal sealed class CombatSession : IDisposable
 
     private readonly Pump _pump;
     private readonly List<TraceEvent> _trace;
-    private readonly PolicySelector _selector;
+    private readonly PromptSelector _selector;
     private readonly IDisposable _selectorScope;
+    private readonly IChoicePolicy _prompts;
+    /// <summary>The turn the player ended, until the next one starts: a prompt on the way does not end the wait.</summary>
+    private int? _endedTurn;
 
     public CombatSetup Setup { get; }
     public Player Player { get; }
@@ -86,7 +94,7 @@ internal sealed class CombatSession : IDisposable
     /// restored combat is not checked again, and shows none.</summary>
     public IReadOnlyList<string> BuildDifferences { get; private set; } = [];
 
-    private CombatSession(Pump pump, CombatSetup setup, Player player, RunState run, List<TraceEvent> trace, PolicySelector selector)
+    private CombatSession(Pump pump, CombatSetup setup, Player player, RunState run, List<TraceEvent> trace, PromptSelector selector, IChoicePolicy prompts)
     {
         _pump = pump;
         Setup = setup;
@@ -94,26 +102,28 @@ internal sealed class CombatSession : IDisposable
         Run = run;
         _trace = trace;
         _selector = selector;
+        _prompts = prompts;
         _selectorScope = CardSelectCmd.PushSelector(selector);
     }
 
-    public static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy policy) => Start(pump, setup, policy, [], check: true);
+    /// <param name="prompts">Answers the card prompts of the combat's start, and those of a combat played by <see cref="Step"/>.</param>
+    public static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy prompts) => Start(pump, setup, prompts, [], check: true);
 
-    /// <summary>Rebuilds the combat at <paramref name="snapshot"/>; afterwards, choices come from <paramref name="policy"/>.</summary>
-    public static CombatSession Restore(Pump pump, CombatSnapshot snapshot, IChoicePolicy policy)
+    /// <summary>Rebuilds the combat at <paramref name="snapshot"/>: its start, then its actions and answers in order.</summary>
+    public static CombatSession Restore(Pump pump, CombatSnapshot snapshot, IChoicePolicy prompts)
     {
-        var picks = snapshot.Trace.Where(e => e.Kind == TraceKind.Choice).Select(e => e.Picks!);
+        // The answers given while the combat started come first in the trace; the start asks for them again.
+        int started = snapshot.Trace.TakeWhile(e => e.Kind == TraceKind.Choice).Count();
         // The build was checked when the setup was first started (SimWorlds.NoSL); a restore does not check it again.
-        var session = Start(pump, snapshot.Setup, policy, picks, check: false);
+        var session = Start(pump, snapshot.Setup, prompts, [.. snapshot.Trace.Take(started).Select(e => e.Picks!)], check: false);
         try
         {
-            foreach (var e in snapshot.Trace)
+            foreach (var e in snapshot.Trace.Skip(started))
             {
                 if (e.Kind == TraceKind.Action) session.Execute(e.Action);
-                else if (e.Kind == TraceKind.Determinize) session.Determinize(e.Seed);
+                else if (e.Kind == TraceKind.Choice) session.Replay(e.Picks!);
+                else session.Determinize(e.Seed);
             }
-            if (session._selector.PendingReplay > 0)
-                throw new InvalidOperationException($"replay diverged: {session._selector.PendingReplay} recorded choices were never asked for");
             return session;
         }
         catch
@@ -125,7 +135,7 @@ internal sealed class CombatSession : IDisposable
 
     public CombatSnapshot Snapshot() => new(Setup, [.. _trace]);
 
-    private static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy policy, IEnumerable<int[]> replayPicks, bool check)
+    private static CombatSession Start(Pump pump, CombatSetup setup, IChoicePolicy prompts, IReadOnlyList<int[]> replayPicks, bool check)
     {
         var character = ModelDb.AllCharacters.First(c => c.Id.Entry.Equals(setup.Character, StringComparison.OrdinalIgnoreCase));
         var player = Player.CreateForNewRun(character, UnlockState.all, LocalContext.NetId!.Value);
@@ -141,15 +151,26 @@ internal sealed class CombatSession : IDisposable
         RunManager.Instance.SetUpTest(run, new NetSingleplayerGameService(), disableCombatStateSync: true, shouldSave: false);
 
         var trace = new List<TraceEvent>();
-        var selector = new PolicySelector(pump, policy, (_, picks) => trace.Add(new(TraceKind.Choice, Picks: picks)));
-        selector.QueueReplay(replayPicks);
-        var session = new CombatSession(pump, setup, player, run, trace, selector);
+        var selector = new PromptSelector(pump, (_, picks) => trace.Add(new(TraceKind.Choice, Picks: picks)));
+        var session = new CombatSession(pump, setup, player, run, trace, selector, prompts);
         try
         {
+            // The start's prompts get the recorded answers first, then the policy's.
+            var replay = new Queue<int[]>(replayPicks);
+            bool Answered()
+            {
+                if (selector.Waiting is not { } prompt) return false;
+                if (replay.TryDequeue(out var picks)) selector.Replay(picks);
+                else selector.Answer(prompts.Choose(new ChoiceDecision(prompt)).Picks);
+                return true;
+            }
             var enter = RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: setup.Encounter.ToMutable(), showTransition: false);
-            selector.Run(() => enter.IsCompleted, session.Describe);
+            do pump.RunUntil(() => selector.Waiting != null || enter.IsCompleted, session.Describe);
+            while (Answered());
             if (enter.IsFaulted) throw enter.Exception!.GetBaseException();
-            session.Settle();
+            do session.Settle();
+            while (Answered());
+            if (replay.Count > 0) throw new InvalidOperationException($"replay diverged: {replay.Count} answers recorded at the combat's start were never asked for");
             // A start-of-combat effect can kill a player built at low HP (Royal Poison's 4 damage at 3 HP), and a dead
             // player's relics, powers and cards no longer act. Such a combat starts again at full HP; the build then
             // sets the observed HP as always. A relic that keeps a flag by the HP at the start (Red Skull) can then
@@ -157,7 +178,7 @@ internal sealed class CombatSession : IDisposable
             if (setup.From != null && player.Creature.IsDead && setup.Loadout is { Hp: { } hp, MaxHp: { } maxHp } && hp < maxHp)
             {
                 session.Dispose();
-                return Start(pump, setup with { Loadout = setup.Loadout with { Hp = maxHp } }, policy, replayPicks, check);
+                return Start(pump, setup with { Loadout = setup.Loadout with { Hp = maxHp } }, prompts, replayPicks, check);
             }
             if (setup.From is { } obs)
             {
@@ -194,9 +215,17 @@ internal sealed class CombatSession : IDisposable
 
     public bool WaitingForInput => CombatActions.WaitingForInput(Player);
 
-    public List<CombatAction> LegalActions() => CombatActions.Legal(State, Player);
+    /// <summary>The card prompt the combat waits on, if any: its answer is the next action.</summary>
+    public CardChoice? Prompt => _selector.Waiting;
 
-    public CombatObservation Observation() => Observe.Combat(State, Player);
+    /// <summary>The plays the game allows: none while a prompt waits.</summary>
+    public List<CombatAction> LegalActions() => Prompt != null ? [] : CombatActions.Legal(State, Player);
+
+    public CombatObservation Observation()
+    {
+        var obs = Observe.Combat(State, Player);
+        return Prompt is { } prompt ? obs with { Prompt = prompt } : obs;
+    }
 
     /// <summary>Whether the combat is over or at the action cap.</summary>
     public bool IsCapped => IsOver || ActionsExecuted >= MaxActions;
@@ -209,16 +238,49 @@ internal sealed class CombatSession : IDisposable
         while (!IsCapped)
         {
             beforeAction?.Invoke(this);
-            Execute(policy.Choose(Decision()));
+            Step(policy);
         }
     }
 
+    /// <summary>The next action of a combat that policies play: <paramref name="policy"/>'s, or at a card prompt the
+    /// answer of the session's prompt policy.</summary>
+    public CombatAction Next(ICombatPolicy policy) => Prompt is { } prompt ? Answer(prompt) : policy.Choose(Decision());
+
+    /// <summary>The session's prompt policy's answer to a prompt, as an action.</summary>
+    private CombatAction Answer(CardChoice prompt) => CombatAction.Pick(_prompts.Choose(new ChoiceDecision(prompt)).Picks);
+
+    /// <summary>Ends the player's turn and goes on to their next one: a card prompt on the way (an enemy's move can ask
+    /// one) gets the session's prompt policy's answer.</summary>
+    public void EndTurn()
+    {
+        Execute(CombatAction.EndTurn);
+        while (Prompt is { } prompt) Execute(Answer(prompt));
+    }
+
+    /// <summary>Takes the next action of a combat that policies play (<see cref="Next"/>).</summary>
+    public void Step(ICombatPolicy policy) => Execute(Next(policy));
+
+    /// <summary>Takes the action and pumps to where the player can act again: their turn, or a card prompt.</summary>
     public void Execute(CombatAction action)
     {
-        _trace.Add(new(TraceKind.Action, action));
-        int turn = Pcs.TurnNumber;
-        CombatActions.Start(State, Player, action);
-        Settle(afterTurn: action.Kind == CombatActionKind.EndTurn ? turn : null);
+        if ((action.Kind == CombatActionKind.Pick) != (Prompt != null))
+            throw new InvalidOperationException(Prompt != null ? $"{action} while a card prompt waits for its answer" : $"{action} with no card prompt to answer");
+        if (action.Kind == CombatActionKind.Pick) _selector.Answer(action.Picks);
+        else
+        {
+            _trace.Add(new(TraceKind.Action, action));
+            if (action.Kind == CombatActionKind.EndTurn) _endedTurn = Pcs.TurnNumber;
+            CombatActions.Start(State, Player, action);
+        }
+        Settle();
+        ActionsExecuted++;
+    }
+
+    /// <summary>Answers the waiting prompt with a recorded answer, the game's own indexes, and pumps on.</summary>
+    private void Replay(int[] picks)
+    {
+        _selector.Replay(picks);
+        Settle();
         ActionsExecuted++;
     }
 
@@ -229,6 +291,7 @@ internal sealed class CombatSession : IDisposable
     /// </summary>
     public void Determinize(ulong seed)
     {
+        if (Prompt != null) throw new InvalidOperationException("determinize while a card prompt waits: the middle of an action cannot be sampled");
         _trace.Add(new(TraceKind.Determinize, Seed: seed));
         // Seeded only by the caller, never by the run, so nothing about the real seed leaks into the sample.
         Resample(new Rng(seed));
@@ -284,21 +347,24 @@ internal sealed class CombatSession : IDisposable
         return hash;
     }
 
-    /// <summary>Pumps until the player can act again (on a later turn, if given) or the combat has ended, with the card
-    /// prompts on the way answered. A fight past the round cap is lost there (<see cref="FightCap"/>).</summary>
-    private void Settle(int? afterTurn = null)
+    /// <summary>Pumps until the player can act again (on a later turn, after ending one), a card prompt waits, or the
+    /// combat has ended. A fight past the round cap is lost there (<see cref="FightCap"/>).</summary>
+    private void Settle()
     {
         void Pump()
         {
-            _selector.Run(() =>
+            _pump.RunUntil(() =>
             {
+                if (Prompt != null) return true;
                 if (IsOver) return _pump.Pending == 0 && !RunManager.Instance.ActionExecutor.IsRunning;
-                return WaitingForInput && (afterTurn == null || Pcs.TurnNumber > afterTurn);
+                return WaitingForInput && (_endedTurn == null || Pcs.TurnNumber > _endedTurn);
             }, Describe);
-            _selector.Flush();
+            _pump.Drain();
         }
         Pump();
+        if (Prompt != null) return;
         if (FightCap.Enforce(_pump, Player, Describe)) Pump();
+        _endedTurn = null;
     }
 
     public string Describe()
@@ -325,10 +391,11 @@ internal sealed class CombatSession : IDisposable
 
     public void Dispose()
     {
-        _selector.Drop();
         _selectorScope.Dispose();
+        // Nothing runs while a prompt waits: the game stands where it asked until its run is cleaned up.
         _pump.Drain();
         RunManager.Instance.CleanUp(graceful: true);
+        _selector.Drop();
         _pump.Drain();
         LocalContext.NetId = 1UL;
     }

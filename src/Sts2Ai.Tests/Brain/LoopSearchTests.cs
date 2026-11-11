@@ -15,8 +15,17 @@ public class LoopSearchTests
     /// </summary>
     private sealed class Loop(int enemyHp, int junkEvery = 0, int handCap = 0, int runsOut = int.MaxValue, Loop.Prompted prompted = Loop.Prompted.No, int souls = 0, int copies = 1) : ICombatWorld
     {
-        /// <summary>A potion that offers three cards, one to take, with answer 0 the policy's; the last gives R, or a strong one-off card.</summary>
-        public enum Prompted { No, GivesR, GivesStrike }
+        /// <summary>A potion that offers three cards, one to take: the last gives R, or a strong one-off card; or it asks
+        /// twice, and only the last card of the second prompt gives the strong card.</summary>
+        public enum Prompted { No, GivesR, GivesStrike, AsksTwice }
+
+        private static readonly CardChoice Ask = new()
+        {
+            Options = [new CardView { Id = "A" }, new CardView { Id = "B" }, new CardView { Id = "C" }],
+            Min = 1,
+            Max = 1,
+            Context = new() { Purpose = "choose_a_card_screen", Cancelable = false, InCombat = true },
+        };
 
         private static readonly CombatObservation Start = Fixtures.Slugs();
 
@@ -26,11 +35,11 @@ public class LoopSearchTests
         private readonly int _maxHp = enemyHp;
         private int _enemy = enemyHp, _hp = 30, _energy = 1, _strength, _round = 1, _plays, _drawn;
         private bool _potion = prompted != Prompted.No;
+        /// <summary>The prompts the potion still asks: the world waits on the first of them.</summary>
+        private int _asking;
 
         /// <summary>The actions played, not counting the ones a restore plays again.</summary>
         public int Played { get; private set; }
-
-        public PromptSeen? LastPrompt { get; private set; }
 
         public RunView Run() => Fixtures.Around(Observe());
 
@@ -44,9 +53,11 @@ public class LoopSearchTests
             Potions = [_potion ? "P" : null, null, null],
             Enemies = [Start.Enemies[0] with { Uid = 1, Hp = Math.Max(0, _enemy), MaxHp = _maxHp, Block = 0, Powers = [],
                 Intents = [new IntentView { Type = "Attack", Damage = 10, Hits = 1 }] }],
+            // The second prompt of two is another prompt: its source tells them apart.
+            Prompt = _asking > 0 ? Ask with { Context = Ask.Context with { Source = $"P{_asking}" } } : null,
         };
 
-        public IReadOnlyList<CombatAction> Legal() => Status != CombatStatus.InProgress ? [] :
+        public IReadOnlyList<CombatAction> Legal() => Status != CombatStatus.InProgress || _asking > 0 ? [] :
         [
             CombatAction.EndTurn,
             .. _hand.Where(c => c.Id is "R" or "S" || c.Id == "H" && _energy > 0).Select(c => CombatAction.Play(c.Uid, c.Id == "R" ? null : 1u)),
@@ -65,9 +76,14 @@ public class LoopSearchTests
 
         private void Apply(CombatAction action)
         {
-            if (!Legal().Contains(action.Plain)) throw new InvalidOperationException($"{action} is not legal");
+            if (!Observe().Takes(action, Legal())) throw new InvalidOperationException($"{action} is not legal");
             _steps.Add(action.ToString());
-            LastPrompt = null;
+            if (action.Kind == CombatActionKind.Pick)
+            {
+                // Only the last prompt's last card gives anything.
+                if (--_asking == 0 && action.Picks is [2]) _hand.Add(prompted == Prompted.GivesR ? (1u, "R") : (3u, "S"));
+                return;
+            }
             if (action.Kind == CombatActionKind.EndTurn)
             {
                 _hp -= 10;
@@ -77,8 +93,7 @@ public class LoopSearchTests
             if (action.Kind == CombatActionKind.UsePotion)
             {
                 _potion = false;
-                LastPrompt = new([[0], [1], [2]], 1, 1, action.Pick ?? "0");
-                if (action.Pick == "2") _hand.Add(prompted == Prompted.GivesR ? (1u, "R") : (3u, "S"));
+                _asking = prompted == Prompted.AsksTwice ? 2 : 1;
                 return;
             }
             var card = _hand.First(c => c.Uid == action.Card);
@@ -121,7 +136,7 @@ public class LoopSearchTests
             _steps.Clear();
             _hand = Hand(prompted, copies);
             _discard = [];
-            (_enemy, _hp, _energy, _strength, _round, _plays, _drawn, _potion) = (_maxHp, 30, 1, 0, 1, 0, 0, prompted != Prompted.No);
+            (_enemy, _hp, _energy, _strength, _round, _plays, _drawn, _potion, _asking) = (_maxHp, 30, 1, 0, 1, 0, 0, prompted != Prompted.No, 0);
             foreach (var step in snapshot.Steps) Apply(CombatAction.Parse(step));
         }
     }
@@ -255,22 +270,60 @@ public class LoopSearchTests
         // Plan.Turns counts the turns the beam looks at past the win too.
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
-        Assert.Equal(CombatAction.Potion(0) with { Pick = "2" }, plan.Result.First);
+        Assert.Equal([CombatAction.Potion(0), CombatAction.Pick([2])], Line(plan).Take(2));
         Assert.Equal(CombatStatus.Won, Replayed(plan.Result, make).Status);
     }
 
     [Fact]
     public void EveryAnswerToAPromptIsSearched()
     {
-        // The third answer wins at once; the policy's first answer loses the fight.
+        // The third answer wins at once; the first loses the fight.
         static Loop make() => new(50, prompted: Loop.Prompted.GivesStrike);
         var plan = Plan(make());
 
         Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.Contains(CombatAction.Potion(0) with { Pick = "2" }, Line(plan));
+        Assert.Contains(CombatAction.Pick([2]), Line(plan));
         Assert.Equal(CombatStatus.Won, Replayed(plan.Result, make).Status);
         var pimc = Pimc(2, make);
-        Assert.Contains(CombatAction.Potion(0) with { Pick = "2" }, pimc.Plan.Prepend(pimc.First));
+        Assert.Contains(CombatAction.Pick([2]), pimc.Plan.Prepend(pimc.First));
+    }
+
+    [Fact]
+    public void EveryPromptOfAnActionIsSearched()
+    {
+        // The potion asks twice, and only the third answer to its second prompt wins.
+        static Loop make() => new(50, prompted: Loop.Prompted.AsksTwice);
+        var plan = Plan(make());
+
+        Assert.Equal(CombatStatus.Won, plan.End);
+        var line = Line(plan);
+        int potion = line.IndexOf(CombatAction.Potion(0));
+        Assert.Equal(CombatActionKind.Pick, line[potion + 1].Kind);
+        Assert.Equal(CombatAction.Pick([2]), line[potion + 2]);
+        Assert.Equal(CombatStatus.Won, Replayed(plan.Result, make).Status);
+        var pimc = Pimc(2, make);
+        Assert.Equal(CombatStatus.Won, Replayed(pimc, make).Status);
+    }
+
+    [Fact]
+    public void AStateAtAPromptHasNoPlaysAndTakesOnlyItsAnswers()
+    {
+        var world = new Loop(50, prompted: Loop.Prompted.GivesR);
+        world.Execute(CombatAction.Potion(0));
+        var obs = world.Observe();
+
+        Assert.NotNull(obs.Prompt);
+        Assert.Empty(world.Legal());
+        Assert.True(obs.Takes(CombatAction.Pick([1]), world.Legal()));
+        Assert.False(obs.Takes(CombatAction.Pick([0, 1]), world.Legal()));
+        Assert.False(obs.Takes(CombatAction.EndTurn, [CombatAction.EndTurn]));
+        // And where no prompt waits, no answer is taken.
+        Assert.False(Fixtures.Slugs().Takes(CombatAction.Pick([]), [CombatAction.EndTurn]));
+        Assert.Equal([CombatAction.Pick([0]), CombatAction.Pick([1]), CombatAction.Pick([2])], PimcBrain.Actions(world, obs, 10, out bool cut));
+        Assert.False(cut);
+        // A prompt has to be answered: with no node left, its first answer is still tried.
+        Assert.Equal([CombatAction.Pick([0])], PimcBrain.Actions(world, obs, 0, out cut));
+        Assert.True(cut);
     }
 
     [Fact]
@@ -292,7 +345,7 @@ public class LoopSearchTests
         var result = Pimc(2, make);
 
         Assert.True(result.Repeats);
-        Assert.Equal(CombatAction.Potion(0) with { Pick = "2" }, result.First);
+        Assert.Equal([CombatAction.Potion(0), CombatAction.Pick([2])], result.Plan.Prepend(result.First).Take(2));
         Assert.Equal(CombatStatus.Won, Replayed(result, make).Status);
     }
 
@@ -325,11 +378,6 @@ public class LoopSearchTests
         Assert.Equal(3, searches);
     }
 
-    private sealed class Answers(params int[] answer) : IChoicePolicy
-    {
-        public ChoiceAnswer Choose(ChoiceDecision decision) => new(answer);
-    }
-
     private static ChoiceDecision Prompt(int min = 0, int max = 1, params string[] ids) => new(new CardChoice
     {
         Options = [.. (ids.Length > 0 ? ids : ["A", "B", "C"]).Select(id => new CardView { Id = id })],
@@ -339,24 +387,31 @@ public class LoopSearchTests
     });
 
     [Fact]
-    public void APromptIsAnsweredByThePolicyUnlessTheActionCarriesAnAnswer()
+    public void TheAnswersAPlanStartsWithAreGivenWhenTheirPromptsComeEvenIfThePlanIsNotKept()
     {
-        var prompts = new SearchPrompts(new Answers(1));
+        var obs = Fixtures.Slugs();
+        var asked = obs with { Prompt = Prompt().Choice };
+        int searches = 0;
+        CombatDecisionResult Search()
+        {
+            searches++;
+            // PIMC's worlds did not agree: no hashes, so the plan is not kept.
+            return new(R, [CombatAction.Pick([2]), H, CombatAction.EndTurn], []);
+        }
+        var plan = new TurnPlan(all: false);
 
-        prompts.Arm(R);
-        Assert.Equal([1], prompts.Choose(Prompt()).Picks);
-        Assert.Equal("1", prompts.Seen!.Answer);
-        Assert.Equal(["", "0", "2"], prompts.Seen.Others());
+        Assert.Equal(R, plan.Decide(obs, [R, H], Search).First);
+        Assert.Equal(CombatAction.Pick([2]), plan.Decide(asked, [], Search).First);
+        Assert.Equal(1, searches);
+        // The plays after the answer were not kept.
+        Assert.Equal(R, plan.Decide(obs, [R, H], Search).First);
+        Assert.Equal(2, searches);
 
-        prompts.Arm(R with { Pick = "2" });
-        Assert.Equal([2], prompts.Choose(Prompt()).Picks);
-        // Its first prompt only, and the first is what stays noted.
-        Assert.Equal([1], prompts.Choose(Prompt(max: 2)).Picks);
-        Assert.Equal("2", prompts.Seen!.Answer);
-
-        prompts.Arm(R with { Pick = "9" });
-        Assert.Equal([1], prompts.Choose(Prompt()).Picks);
-        Assert.Equal("1", prompts.Seen!.Answer);
+        // An answer the prompt does not take is not given, and that is no plan gone wrong.
+        var narrow = obs with { Prompt = Prompt(1, 1, "A", "B").Choice };
+        var searched = plan.Decide(narrow, [], () => new(CombatAction.Pick([0]), [], []));
+        Assert.Equal(CombatAction.Pick([0]), searched.First);
+        Assert.False(searched.Replanned);
     }
 
     [Fact]
@@ -365,34 +420,40 @@ public class LoopSearchTests
         Assert.Empty(FirstPicks.Instance.Choose(Prompt()).Picks);
         Assert.Equal([0, 1], FirstPicks.Instance.Choose(Prompt(min: 2, max: 3)).Picks);
         Assert.Equal([0], FirstPicks.Instance.Choose(Prompt(min: 2, max: 2, "A")).Picks);
+        // PIMC has no world at a prompt: one its plan did not answer gets the first options.
+        Assert.Equal(CombatAction.Pick([0, 1]), PimcBrain.Unplanned(Fixtures.Slugs() with { Prompt = Prompt(min: 2, max: 3).Choice })!.First);
+        Assert.Null(PimcBrain.Unplanned(Fixtures.Slugs()));
     }
 
     [Fact]
-    public void TheOtherAnswersPickCardsThePlayerCanTellApart()
+    public void APromptsAnswersPickCardsThePlayerCanTellApart()
     {
-        var prompts = new SearchPrompts(FirstPicks.Instance);
-        prompts.Arm(R);
-        prompts.Choose(Prompt(1, 2, "A", "A", "B"));
+        static List<string> Answers(ChoiceDecision prompt) => [.. prompt.Choice.Answers().Select(a => string.Join(",", a))];
 
+        Assert.Equal(["", "0", "1", "2"], Answers(Prompt()));
         // Two copies of A are one card twice: picking one is picking the first, the fewest picks first.
-        Assert.Equal(["2", "0,1", "0,2"], prompts.Seen!.Others());
+        Assert.Equal(["0", "2", "0,1", "0,2"], Answers(Prompt(1, 2, "A", "A", "B")));
+        // The first answer is the one nothing has to weigh, and a prompt with one answer has nothing to decide.
+        Assert.Equal(FirstPicks.Of(Prompt(1, 2, "A", "A", "B").Choice), CombatAction.Pick(Prompt(1, 2, "A", "A", "B").Choice.Answers().First()));
+        Assert.Equal(CombatAction.Pick([0, 1]), PimcBrain.Forced(Fixtures.Slugs() with { Prompt = Prompt(2, 2, "A", "A").Choice }, []));
+        Assert.Null(PimcBrain.Forced(Fixtures.Slugs() with { Prompt = Prompt().Choice }, []));
     }
 
     [Fact]
-    public void APickIsPartOfAnActionsText()
+    public void AnAnswerToAPromptIsACombatAction()
     {
-        foreach (var action in new[] { CombatAction.Play(5, 1) with { Pick = "2" }, CombatAction.Play(5) with { Pick = "0,3" }, CombatAction.Potion(1) with { Pick = "" },
-                     CombatAction.EndTurn with { Pick = "1" } })
+        foreach (var action in new[] { CombatAction.Pick([2]), CombatAction.Pick([3, 0]), CombatAction.Pick([]), CombatAction.Play(5, 1), CombatAction.Potion(1), CombatAction.EndTurn })
         {
             Assert.Equal(action, CombatAction.Parse(action.ToString()));
             Assert.Equal(action, ProtocolJson.Deserialize<CombatAction>(ProtocolJson.Serialize(action)));
-            Assert.Null(action.Plain.Pick);
         }
-        Assert.Equal("potion:0:1@2", (CombatAction.Potion(0, 1) with { Pick = "2" }).ToString());
-        Assert.Equal([0, 3], CombatAction.Parse("play:5@0,3").Picks);
-        Assert.Empty(CombatAction.Parse("end_turn@").Picks!);
-        Assert.Null(CombatAction.Parse("end_turn").Picks);
-        Assert.False(CombatAction.TryParse("play:1@x", out _));
-        Assert.False(CombatAction.TryParse("play:1@1,", out _));
+        // One answer has one form: its picks in order.
+        Assert.Equal("pick:0,3", CombatAction.Pick([3, 0]).ToString());
+        Assert.Equal("pick:", CombatAction.Pick([]).ToString());
+        Assert.Equal([0, 3], CombatAction.Parse("pick:0,3").Picks);
+        Assert.Empty(CombatAction.Parse("pick:").Picks);
+        Assert.False(CombatAction.TryParse("pick:x", out _));
+        Assert.False(CombatAction.TryParse("pick:1,", out _));
+        Assert.False(CombatAction.TryParse("play:1@2", out _));
     }
 }

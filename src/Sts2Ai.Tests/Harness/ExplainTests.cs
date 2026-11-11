@@ -24,7 +24,7 @@ public class ExplainTests
     private static Dispatcher Make(bool explain)
     {
         var l0 = new MacroBrain(V);
-        return new Dispatcher("run-1", PlayEnvironment.NoSL, CombatRoute.Of("test", new EndTurns()), new("p0", l0), new("l0", l0), new("l0", l0),
+        return new Dispatcher("run-1", PlayEnvironment.NoSL, CombatRoute.Of("test", new EndTurns()), new("l0", l0), new("l0", l0),
             explain: explain);
     }
 

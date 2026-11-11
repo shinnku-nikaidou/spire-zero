@@ -54,7 +54,7 @@ internal static partial class SelfTest
             using (var session = CombatSession.Start(pump, setup, new RandomChoices(rng)))
             {
                 var policy = new PlayPolicy(rng);
-                for (int a = 0; a < i && !CombatSession.IsOver; a++) session.Execute(policy.Choose(session.Decision()));
+                for (int a = 0; a < i && !CombatSession.IsOver; a++) session.Step(policy);
                 (obs, legal) = (session.Observation(), session.LegalActions());
             }
             ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{i}");
@@ -88,7 +88,7 @@ internal static partial class SelfTest
         {
             check("build shows the observation", built.BuildDifferences.Count == 0, $"{at}: {string.Join("; ", built.BuildDifferences.Take(4))}");
             var policy = new PlayPolicy(new Random(k));
-            for (int a = 0; a < 3 && !CombatSession.IsOver; a++) built.Execute(policy.Choose(built.Decision()));
+            for (int a = 0; a < 3 && !CombatSession.IsOver; a++) built.Step(policy);
             snapshot = built.Snapshot();
             (json, hidden) = (Json(built), Hidden(built));
         }
@@ -227,15 +227,16 @@ internal static partial class SelfTest
         using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
         check("build solves internal numbers", built.BuildDifferences.Count == 0, $"{pool[0].Id.Entry}: {string.Join("; ", built.BuildDifferences.Take(4))}");
         check("build keeps a power's stacks", built.LegalActions().Any(a => a.Kind == CombatActionKind.PlayCard), "Sloth after 1 card of 3 allows no card");
-        built.Execute(built.LegalActions().First(a => a.Kind == CombatActionKind.EndTurn));
+        built.EndTurn();
         var hand = built.Observation().Hand;
         check("build keeps a power's card", hand.Count(c => c.Id == held.Id) >= 3, $"Nightmare of {held.Id} left a hand of {string.Join(",", hand.Select(c => c.Id))}");
     }
 
     /// <summary>
     /// With Toasty Mittens, which asks for a card to exhaust at the start of each turn, a world plays Survivor (which
-    /// asks for a card to discard), then is rebuilt from its snapshot: the start's own prompt must not take Survivor's
-    /// recorded pick. Over several search seeds, since a wrong pick can match by chance.
+    /// asks for a card to discard) and stands at its prompt, then answers it with the last option; rebuilt from its
+    /// snapshots, it must stand at the prompt again, and after the answer: the start's own prompt must not take
+    /// Survivor's recorded pick. Over several search seeds, since a wrong pick can match by chance.
     /// </summary>
     private static void WorldRestoresAfterPrompts(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
     {
@@ -251,10 +252,18 @@ internal static partial class SelfTest
             var root = world.Snapshot();
             uint survivor = world.Observe().Hand.First(c => c.Id == "SURVIVOR").Uid!.Value;
             world.Execute(world.Legal().First(a => a.Card == survivor));
+            var asked = world.Snapshot();
+            var prompt = world.Observe().Prompt;
+            string waiting = ProtocolJson.Serialize(world.Observe());
+            check("world stops at a card prompt", prompt is { Options.Count: > 1 } && world.Legal().Count == 0, $"{pool[0].Id.Entry}: {string.Join(" ", asked.Steps)}");
+            if (prompt == null) continue;
+            world.Execute(CombatAction.Pick([prompt.Options.Count - 1]));
             string after = ProtocolJson.Serialize(world.Observe());
             var played = world.Snapshot();
             world.Restore(root);
             world.Observe();
+            world.Restore(asked);
+            check("world restores at a prompt", ProtocolJson.Serialize(world.Observe()) == waiting, $"{pool[0].Id.Entry}: {string.Join(" ", asked.Steps)}");
             world.Restore(played);
             check("world restores after prompts", ProtocolJson.Serialize(world.Observe()) == after, $"{pool[0].Id.Entry}: {string.Join(" ", played.Steps)}");
         }
@@ -264,7 +273,7 @@ internal static partial class SelfTest
     /// On the real game, with --combat-net's leaf and the champion's nodes, against 535 HP: Monologue and two Flash of Steel,
     /// which draw each other. A plain search does not get past the first chain, in either world. Then with a prompt in front
     /// of the cycle, in SL: Particle Wall costs stars this character has none of until Touch of Insanity makes it free,
-    /// which the prompt's first answer does not, so the planner must find the answer that does among the potion's others
+    /// which the prompt's first answer does not, so the planner must find the answer that does among the prompt's others
     /// and win with it (on the potion's share of the turn's nodes, split over its answers, it does so a turn later).
     /// </summary>
     private static void CyclesKillInOneTurn(Pump pump, List<EncounterModel> pool, int act, ICombatLeaf leaf, Action<string, bool, string> check)
@@ -292,7 +301,8 @@ internal static partial class SelfTest
                 var plan = new SlPlanner(leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 8));
                 var line = plan.Result.Plan.Prepend(plan.Result.First).ToList();
                 int ends = line.Count(a => a.Kind == CombatActionKind.EndTurn);
-                bool cycled = prompt ? line.Any(a => a.Kind == CombatActionKind.UsePotion && a.Pick != null) : line[0].Kind != CombatActionKind.EndTurn && ends <= 1;
+                bool cycled = prompt ? line.Zip(line.Skip(1)).Any(p => p.First.Kind == CombatActionKind.UsePotion && p.Second.Kind == CombatActionKind.Pick)
+                    : line[0].Kind != CombatActionKind.EndTurn && ends <= 1;
                 check($"SL planner repeats a cycle to lethal ({name})", plan.End == CombatStatus.Won && cycled,
                     $"{plan.End}: {line.Count} actions, {ends} turn ends, from {string.Join(" ", line.Take(6))}");
                 world.Restore(new([]));

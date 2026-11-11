@@ -85,7 +85,8 @@ public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut
 /// A state where a turn of the SL planner's line ends: at the next turn's first decision, after the enemies' turn, or
 /// where the combat ended. As a whole line, the same from the planner's decision.
 /// </summary>
-/// <param name="Actions">The actions that reach it, the last one ending the turn.</param>
+/// <param name="Actions">The actions that reach it. Where the turn ended, its end is among them, followed by the answers
+/// to any card prompt that the end or the next turn's start raised.</param>
 /// <param name="Hashes">For each of <paramref name="Actions"/>, the hash of the observation it is played at.</param>
 /// <param name="Value">The leaf's value of the state.</param>
 /// <param name="Key">The state's observation and its full hidden state, hashed: states with the same key are the same

@@ -138,6 +138,8 @@ internal static partial class Describe
         {
             CombatActionKind.PlayCard => (combat.Hand.FirstOrDefault(c => c.Uid == action.Card) is { } card ? Card(card) : $"card {action.Card}") + target,
             CombatActionKind.UsePotion => L10n.T("drink {0}", combat.Potions.ElementAtOrDefault(action.PotionSlot!.Value) is { } p ? Potion(p) : "?") + target,
+            // A planned answer to a prompt that is not on screen yet: its cards are named when the prompt is.
+            CombatActionKind.Pick => L10n.T(action.Picks.Count == 0 ? "pick none" : "pick cards"),
             _ => L10n.T("end turn"),
         };
     }

@@ -6,14 +6,18 @@ namespace Sts2Ai.Harness;
 
 /// <summary>
 /// A combat brain as Harness calls it: the decision, the seed Harness drew for it, in SL the current node's clone
-/// (null in NoSL), and the combat's record of enemy moves so far (<see cref="Dispatcher.History"/>).
+/// (null in NoSL), and the combat's record of enemy moves so far (<see cref="Dispatcher.History"/>). A card prompt
+/// during a combat is one of its decisions: the observation shows the prompt (<see cref="CombatObservation.Prompt"/>),
+/// no play is legal, and the answer is a <see cref="CombatAction.Pick"/>.
 /// </summary>
 /// <param name="Budget">What the brain may spend, for the log; null for a policy that does not search.</param>
 public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, NodeClone?, IReadOnlyList<EnemyTurns>, CombatDecisionResult> Decide,
     Budget? Budget = null)
 {
-    /// <summary>A placeholder policy: it gives its pick and no candidates.</summary>
-    public static CombatRoute Of(string brain, ICombatPolicy policy) => new(brain, (decision, _, _, _) => new(policy.Choose(decision), [], []));
+    /// <summary>A placeholder policy: it gives its pick and no candidates, and at a card prompt the first options
+    /// (<see cref="FirstPicks"/>).</summary>
+    public static CombatRoute Of(string brain, ICombatPolicy policy) => new(brain, (decision, _, _, _) =>
+        new(decision.Observation.Prompt is { } prompt ? FirstPicks.Of(prompt) : policy.Choose(decision), [], []));
 }
 
 /// <summary>A brain for one side of the routing table, with its name for the log.</summary>
@@ -46,7 +50,8 @@ public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = nu
 /// Harness for one run (docs: harness/routing). The host asks it as its combat, card-prompt and macro policy; it routes
 /// each decision to exactly one brain, draws the brains' seeds from the run id and the decision's number (never from the
 /// game), and logs every decision when asked to. A surface with no route throws: there is no fallback.
-/// Card prompts go to the combat side when asked during a combat, to the macro side otherwise.
+/// A card prompt asked during a combat is the combat brain's, as a decision of the combat (<see cref="CombatRoute"/>);
+/// any other goes to the macro side.
 ///
 /// In SL the host also sends the current node's checkpoint and each decision taken in it (docs: protocol/wire §6), which
 /// make the node's clone for the combat brain and, with <paramref name="clones"/>, for the macro side, which gets it
@@ -56,8 +61,7 @@ public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = nu
 /// carries the route it would take after it.
 /// </summary>
 public sealed class Dispatcher(
-    string runId, PlayEnvironment env, CombatRoute combat, Route<IChoicePolicy> combatChoices, Route<IMacroPolicy> macro,
-    Route<IChoicePolicy> macroChoices, bool log = false, Func<NodeClone, IMacroClone>? clones = null, bool explain = false)
+    string runId, PlayEnvironment env, CombatRoute combat, Route<IMacroPolicy> macro, Route<IChoicePolicy> macroChoices, bool log = false, Func<NodeClone, IMacroClone>? clones = null, bool explain = false)
     : ICombatPolicy, IChoicePolicy, IMacroPolicy
 {
     /// <summary>Every surface outside combat that has a route (docs: harness/routing §3).</summary>
@@ -89,8 +93,7 @@ public sealed class Dispatcher(
 
     /// <summary>The brain on each side of the routing table, for reports.</summary>
     public string Champion =>
-        $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b}" : "")}, combat prompts {combatChoices.Brain}, " +
-        $"macro {macro.Brain}, macro prompts {macroChoices.Brain}";
+        $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b}" : "")}, combat prompts first, macro {macro.Brain}, macro prompts {macroChoices.Brain}";
 
     /// <summary>
     /// The current combat's public record of enemy moves (docs: harness §4): each enemy's intents at the first decision
@@ -100,9 +103,6 @@ public sealed class Dispatcher(
 
     /// <summary>The steps of a plan that are logged and shown.</summary>
     private const int ShownPlan = 256;
-
-    /// <summary>What the combat brain answered for the first prompt of the action it just chose (<see cref="CombatAction.Pick"/>).</summary>
-    private IReadOnlyList<int>? _pick;
 
     public CombatAction Choose(CombatDecision decision) => Decide(decision).Action;
 
@@ -115,43 +115,58 @@ public sealed class Dispatcher(
     /// <summary>A combat decision, with who made it and what it planned and scored.</summary>
     public (CombatAction Action, DecisionNote Note) Decide(CombatDecision decision)
     {
-        _pick = null;
+        var (result, note, id, seed, ms, history) = Fight(decision);
+        if (decision.Observation.Prompt != null || !decision.Legal.Contains(result.First))
+            throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
+        if (log)
+            _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
+                result.First.ToString(), note.Plan, note.Candidates, combat.Budget?.For(decision.Observation.Room), seed, ms, Obs: decision.Observation, History: history,
+                Replanned: Mark(result.Replanned)));
+        return (result.First, note);
+    }
+
+    /// <summary>The combat brain at a decision of a combat, a card prompt's included: its answer, its note, and what the log needs.</summary>
+    private (CombatDecisionResult Result, DecisionNote Note, int Id, ulong Seed, double Ms, IReadOnlyList<EnemyTurns> History) Fight(CombatDecision decision)
+    {
         _moves.Witness(decision.Observation);
         var history = History;
         var (id, seed, clock) = Begin(combat.Brain);
         var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null, history);
         double ms = clock.Elapsed.TotalMilliseconds;
-        if (!decision.Legal.Contains(result.First.Plain)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
         if (result.Replanned) Replans++;
         // A plan that repeats a cycle may have thousands of steps left, at each of them.
         var note = new DecisionNote(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null,
             result.Candidates.Count > 0 ? result.Candidates : null);
-        if (log)
-            _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                result.First.ToString(), note.Plan, note.Candidates, combat.Budget?.For(decision.Observation.Room), seed, ms, Obs: decision.Observation, History: history,
-                Replanned: Mark(result.Replanned)));
-        _pick = result.First.Picks;
-        return (result.First.Plain, note);
+        return (result, note, id, seed, ms, history);
     }
 
-    /// <summary>A card prompt's answer, with who gave it and what it scored.</summary>
+    /// <summary>A card prompt's answer, with who gave it and what it scored. During a combat the prompt is a decision of
+    /// the combat, the combat brain's (<see cref="CombatRoute"/>); the host needs the combat it is asked in for that.</summary>
     public (ChoiceAnswer Answer, DecisionNote Note) Decide(ChoiceDecision decision)
     {
         var choice = decision.Choice;
-        var route = choice.Context.InCombat ? combatChoices : macroChoices;
-        var (id, seed, clock) = Begin(route.Brain);
-        if (!choice.Context.InCombat && MacroClone() is { } node) decision = decision.With(node);
-        // The answer search played its line with, for the action just chosen; the host never sees it, and it was not
-        // chosen by the prompt's policy, so it shows no options.
-        var answer = choice.Context.InCombat && _pick is { } pick && choice.Accepts(pick) ? new ChoiceAnswer(pick) : route.Policy.Choose(decision);
-        _pick = null;
+        if (choice.Context.InCombat)
+        {
+            if (decision.Observation is not { Screen: CardChoiceScreen { Combat: { } around } } shown)
+                throw new InvalidOperationException("a card prompt during a combat, and the host does not show the combat");
+            var (result, note, at, drawn, took, _) = Fight(new CombatDecision([], () => around with { Prompt = choice }, _ => shown));
+            if (result.First.Kind != CombatActionKind.Pick || !choice.Accepts(result.First.Picks))
+                throw new InvalidOperationException($"{combat.Brain} gave {result.First}, which the prompt does not accept");
+            if (log)
+                _log.Add(new(runId, at, env.ToString(), Surfaces.CardChoice, combat.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
+                    result.First.Answer!, note.Plan, note.Candidates, combat.Budget?.For(around.Room), drawn, took, Replanned: Mark(result.Replanned)));
+            // The plan goes on with plays of the combat, which a host showing the prompt's screen has no cards to name.
+            return (new([.. result.First.Picks]), note with { Plan = null });
+        }
+        var (id, seed, clock) = Begin(macroChoices.Brain);
+        if (MacroClone() is { } node) decision = decision.With(node);
+        var answer = macroChoices.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
-        if (!choice.Accepts(answer.Picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", answer.Picks)}], which the prompt does not accept");
-        if (choice.Context.InCombat) answer = answer with { Scored = [] };
+        if (!choice.Accepts(answer.Picks)) throw new InvalidOperationException($"{macroChoices.Brain} gave [{string.Join(",", answer.Picks)}], which the prompt does not accept");
         if (log)
-            _log.Add(new(runId, id, env.ToString(), Surfaces.CardChoice, route.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
+            _log.Add(new(runId, id, env.ToString(), Surfaces.CardChoice, macroChoices.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
                 string.Join(",", answer.Picks), null, null, null, seed, ms, Explored: Mark(answer.Explored)));
-        return (answer, new(route.Brain, null, answer.Scored.Count > 0 ? answer.Scored : null));
+        return (answer, new(macroChoices.Brain, null, answer.Scored.Count > 0 ? answer.Scored : null));
     }
 
     /// <summary>A decision outside combat, with who made it and what it planned and scored.</summary>

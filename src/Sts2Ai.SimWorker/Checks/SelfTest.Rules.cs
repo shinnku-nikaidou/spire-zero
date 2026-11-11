@@ -27,7 +27,7 @@ internal static partial class SelfTest
             int before = HeadlessPatches.RollingBoulderSplits;
             var policy = new PlayPolicy(new Random(0));
             while (!CombatSession.IsOver && CombatSession.State.RoundNumber <= 3)
-                session.Execute(policy.Choose(session.Decision()));
+                session.Step(policy);
             var errors = HeadlessGame.TakeErrors();
             check("rolling boulder hits one by one", HeadlessPatches.RollingBoulderSplits > before && errors.Count == 0,
                 $"{encounter.Id.Entry}: splits {HeadlessPatches.RollingBoulderSplits - before}, errors {errors.FirstOrDefault()}");
@@ -56,11 +56,35 @@ internal static partial class SelfTest
         };
         int before = HeadlessPatches.PopCardAfterEarlyReturn.Pops;
         using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
-        built.Execute(built.LegalActions().First(a => a.Kind == CombatActionKind.EndTurn));
+        built.EndTurn();
         var errors = HeadlessGame.TakeErrors();
         check("thorns kill during a sly play", built.Player.Creature.IsDead && HeadlessPatches.PopCardAfterEarlyReturn.Pops > before && errors.Count == 0,
             $"{pool[0].Id.Entry}: dead {built.Player.Creature.IsDead}, pops {HeadlessPatches.PopCardAfterEarlyReturn.Pops - before}, " +
             $"build {string.Join("; ", built.BuildDifferences.Take(2))}, errors {errors.FirstOrDefault()}");
+    }
+
+    /// <summary>
+    /// The Knowledge Demon's first move asks the player for a card, in the enemies' turn: the combat's turns wait on the
+    /// prompt. A session dropped there must end them, since the game starts a combat's turns only when the turns of the
+    /// combat before it have ended (<see cref="PromptSelector.Drop"/>): the next combat must start, and play on through
+    /// the same prompt.
+    /// </summary>
+    private static void DropsAtAnEnemysPrompt(Pump pump, Action<string, bool, string> check)
+    {
+        var (encounter, act) = Opt.Encounter("KNOWLEDGE_DEMON_BOSS");
+        var setup = new CombatSetup("SILENT", encounter, act, GameSeeds.MakeSeed(0, 0));
+        bool asked;
+        using (var session = CombatSession.Start(pump, setup, FirstPicks.Instance))
+        {
+            session.Execute(CombatAction.EndTurn);
+            asked = session.Prompt != null && session.LegalActions().Count == 0;
+        }
+        using var next = CombatSession.Start(pump, setup, FirstPicks.Instance);
+        bool started = next.WaitingForInput && next.LegalActions().Count > 0;
+        if (started) next.EndTurn();
+        var errors = HeadlessGame.TakeErrors();
+        check("a combat dropped at an enemy's prompt lets the next one play", asked && started && CombatSession.State.RoundNumber == 2 && errors.Count == 0,
+            $"asked {asked}, the next started {started}, round {CombatSession.State.RoundNumber}, errors {errors.FirstOrDefault()}");
     }
 
     /// <summary>
@@ -76,7 +100,7 @@ internal static partial class SelfTest
         obs = obs with { Round = FightCap.MaxRounds };
         using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), new RandomChoices(new Random(0)));
         bool onAtCap = !CombatSession.IsOver && CombatSession.State.RoundNumber == FightCap.MaxRounds;
-        built.Execute(built.LegalActions().First(a => a.Kind == CombatActionKind.EndTurn));
+        built.EndTurn();
         var errors = HeadlessGame.TakeErrors();
         check("a fight past the round cap is lost", onAtCap && built.Outcome == CombatOutcome.Loss && errors.Count == 0,
             $"{pool[0].Id.Entry}: on at round {FightCap.MaxRounds} {onAtCap}, then {built.Outcome} at round {CombatSession.State.RoundNumber}, " +

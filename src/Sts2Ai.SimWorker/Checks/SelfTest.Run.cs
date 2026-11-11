@@ -10,7 +10,8 @@ internal static partial class SelfTest
     /// <summary>
     /// A run with random policies, stopped at its third combat decision: the SL world loaded from the node's clone must
     /// show that decision's observation, give the run's next observations for the run's actions (up to a card prompt,
-    /// which the world answers its own way), and show the first observation again after a restore.
+    /// which the run's choice policy answers and the world stands at), and show the first observation again after a
+    /// restore.
     /// </summary>
     private static void NodeWorldPlaysAsTheRun(Pump pump, int seed, Action<string, bool, string> check)
     {
@@ -54,9 +55,48 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// A run with Gambling Chip, which asks for cards to discard as each combat starts: the first decision of a combat's
+    /// node is that prompt, asked while the room is entered. The SL world loaded from the node's clone must stand at the
+    /// prompt as the run did, with no play to make, go on to the first turn and play there when it is answered, and
+    /// stand at the prompt again after a restore.
+    /// </summary>
+    private static void NodeWorldStandsAtTheEntrysPrompt(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed);
+        RunSession? session = null;
+        NodeClone? clone = null;
+        CardChoice? asked = null;
+        var prompts = new CaptureChoices(decision =>
+        {
+            if (clone == null && decision.Choice.Context.InCombat && session!.Trace.Count == session.NodeStart)
+                (clone, asked) = (session.Clone(), decision.Choice);
+            return FirstPicks.Instance.Choose(decision);
+        });
+        string label = $"run {GameSeeds.MakeSeed(seed, 0)}";
+        using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed, 0), Loadout: new Loadout(Relics: ["RING_OF_THE_SNAKE", "GAMBLING_CHIP"])),
+                   prompts, new PlayPolicy(rng), new RandomMacro(rng)))
+            for (int steps = 0; !session.IsOver && clone == null && steps < 200; steps++) session.Step();
+        if (clone == null || asked == null)
+        {
+            check("SL world stands at a prompt its room asks on entry", false, $"{label}: no combat started with a prompt");
+            return;
+        }
+        static string Json(CardChoice? choice) => choice == null ? "" : ProtocolJson.Serialize(choice);
+        using var world = new NodeWorld(pump, clone);
+        var root = world.Snapshot();
+        check("SL world stands at a prompt its room asks on entry", Json(world.Observe().Prompt) == Json(asked) && world.Legal().Count == 0, label);
+        world.Execute(FirstPicks.Of(asked));
+        bool turn = world.Observe().Prompt == null && world.Legal().Count > 0;
+        if (turn) world.Execute(world.Legal()[0]);
+        check("SL world plays on from the entry's prompt", turn && world.Status == CombatStatus.InProgress, label);
+        world.Restore(root);
+        check("SL world restores at the entry's prompt", Json(world.Observe().Prompt) == Json(asked), label);
+    }
+
+    /// <summary>
     /// A run with random policies, to its third node: its first node's clone (the save on arrival and every decision of
-    /// the node, the travel last) must load at its horizon, without travelling, and refuse another step (docs:
-    /// environments §7, guard 8).
+    /// the node, the travel last) must load at its horizon, without travelling, and refuse another step
+    /// (docs: environments/information §8, guard 8).
     /// </summary>
     private static void CloneStopsAtTheExit(Pump pump, int seed, Action<string, bool, string> check)
     {
@@ -358,5 +398,10 @@ internal static partial class SelfTest
     private sealed class CapturePolicy(Func<CombatDecision, CombatAction> choose) : ICombatPolicy
     {
         public CombatAction Choose(CombatDecision decision) => choose(decision);
+    }
+
+    private sealed class CaptureChoices(Func<ChoiceDecision, ChoiceAnswer> choose) : IChoicePolicy
+    {
+        public ChoiceAnswer Choose(ChoiceDecision decision) => choose(decision);
     }
 }

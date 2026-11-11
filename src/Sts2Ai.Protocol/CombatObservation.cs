@@ -33,6 +33,19 @@ public sealed record CombatObservation
     /// <summary>Allies other than the player (other players, summons).</summary>
     public required IReadOnlyList<CreatureView> Allies { get; init; }
     public required IReadOnlyList<CreatureView> Enemies { get; init; }
+    /// <summary>
+    /// The card prompt the combat waits on, if any (a card's, a potion's, or one a turn's end or start brings). Nothing
+    /// else can be done until it is answered: the actions are then its answers (<see cref="CombatAction.Pick"/>).
+    /// </summary>
+    public CardChoice? Prompt { get; init; }
+
+    /// <summary>
+    /// Whether <paramref name="action"/> can be taken here, given the plays the game lists as <paramref name="legal"/>:
+    /// at a prompt, an answer the prompt accepts; else one of the plays.
+    /// </summary>
+    public bool Takes(CombatAction action, IReadOnlyList<CombatAction> legal) => action.Kind == CombatActionKind.Pick
+        ? Prompt?.Accepts(action.Picks) == true
+        : Prompt == null && legal.Contains(action);
 }
 
 public sealed record PlayerView

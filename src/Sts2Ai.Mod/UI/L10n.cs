@@ -98,6 +98,7 @@ internal static class L10n
         ["discard {0}"] = ["jeter {0}", "tirar {0}", "丢掉 {0}", "丟掉 {0}", "{0}を捨てる"],
         ["pick none"] = ["ne rien choisir", "no elegir nada", "都不选", "都不選", "何も選ばない"],
         ["pick {0}"] = ["choisir {0}", "elegir {0}", "选 {0}", "選 {0}", "{0}を選ぶ"],
+        ["pick cards"] = ["choisir des cartes", "elegir cartas", "选牌", "選牌", "カードを選ぶ"],
         ["go to {0}"] = ["aller à : {0}", "ir a: {0}", "去 {0}", "去 {0}", "{0}へ進む"],
         ["skip the rest, proceed"] = ["passer le reste, continuer", "omitir el resto y continuar", "跳过其余，继续", "略過其餘，繼續", "残りをスキップして進む"],
         ["proceed"] = ["continuer", "continuar", "继续", "繼續", "進む"],

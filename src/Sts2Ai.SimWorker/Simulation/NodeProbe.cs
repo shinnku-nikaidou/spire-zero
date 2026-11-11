@@ -46,9 +46,9 @@ internal static class NodeProbe
     private sealed class Asked : Exception;
 
     /// <summary>
-    /// Answers from the path, then keeps the first decision past it. The driver asks combat and most macro decisions with
-    /// the game idle, so there the probe stops by throwing <see cref="Asked"/>; a card prompt, a card reward and a bundle
-    /// are asked from inside a game task, so they get an answer that is never played on (p0's, or the first action).
+    /// Answers from the path, then keeps the first decision past it. The driver asks combat decisions, card prompts and
+    /// most macro decisions with the game waiting, so there the probe stops by throwing <see cref="Asked"/>; a card reward
+    /// and a bundle are asked from inside a game task, so they get an answer that is never played on (the first action).
     /// </summary>
     private sealed class Answers(IReadOnlyList<MacroAction> path) : ICombatPolicy, IChoicePolicy, IMacroPolicy
     {
@@ -76,7 +76,7 @@ internal static class NodeProbe
             }
             var obs = decision.Observation ?? throw new InvalidOperationException("a card prompt outside the run");
             Next ??= new(obs.Run, Surfaces.CardChoice, obs.Screen, []);
-            return FirstPicks.Instance.Choose(decision);
+            throw new Asked();
         }
 
         public MacroAnswer Choose(MacroDecision decision)

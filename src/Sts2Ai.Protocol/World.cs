@@ -18,7 +18,8 @@ public interface ICombatWorld
     /// the combat has changed for good (a card grown, one stolen), the relics, the potions, HP, max HP and gold.
     /// </summary>
     RunView Run();
-    /// <summary>Empty once the combat is over.</summary>
+    /// <summary>The plays the game allows. Empty once the combat is over, and at a card prompt, whose answers are the
+    /// actions then (<see cref="CombatObservation.Prompt"/>, <see cref="CardChoice.Answers"/>).</summary>
     IReadOnlyList<CombatAction> Legal();
     CombatStatus Status { get; }
     /// <summary>
@@ -27,50 +28,14 @@ public interface ICombatWorld
     /// states apart for search, within this world.
     /// </summary>
     ulong HiddenKey();
-    /// <summary>Card prompts raised by the action are answered inside the world (docs: combat-brain/shared §1), the first
-    /// by <see cref="CombatAction.Pick"/> if it has one.</summary>
+    /// <summary>
+    /// Takes the action and goes on to where the player can act again: their turn, or a card prompt the action raised
+    /// (docs: combat-brain/shared §1), which is a state like any other, answered by the next action.
+    /// </summary>
     void Execute(CombatAction action);
-    /// <summary>The first card prompt the last <see cref="Execute"/> raised, if any: search tries its other answers.</summary>
-    PromptSeen? LastPrompt => null;
     WorldSnapshot Snapshot();
     /// <summary>Goes back to a snapshot taken from this same world.</summary>
     void Restore(WorldSnapshot snapshot);
-}
-
-/// <summary>A card prompt as a world met it: the first one an action raised.</summary>
-/// <param name="Groups">Its options grouped by what the player can tell apart (<see cref="CardChoice.Groups"/>).</param>
-/// <param name="Min">The fewest options it takes.</param>
-/// <param name="Max">The most options it takes.</param>
-/// <param name="Answer">The answer it was given (<see cref="CombatAction.Answer"/>).</param>
-public sealed record PromptSeen(IReadOnlyList<IReadOnlyList<int>> Groups, int Min, int Max, string Answer)
-{
-    public PromptSeen(CardChoice choice, IReadOnlyList<int> answer) : this(choice.Groups(), choice.Min, choice.Max, CombatAction.Answer(answer)) { }
-
-    /// <summary>
-    /// Every other answer the prompt takes, once per choice of cards the player can tell apart (k cards of a group are its
-    /// first k), the fewest picks first, then in the options' order (the cards of a group are next to each other).
-    /// </summary>
-    public IEnumerable<string> Others()
-    {
-        int options = Groups.Sum(g => g.Count);
-        for (int size = Min; size <= Math.Min(Max, options); size++)
-            foreach (var picks in Choose(Groups, 0, size))
-                if (CombatAction.Answer(picks) is var answer && answer != Answer) yield return answer;
-    }
-
-    /// <summary>Every choice of <paramref name="size"/> cards from the groups at <paramref name="from"/> and after.</summary>
-    private static IEnumerable<List<int>> Choose(IReadOnlyList<IReadOnlyList<int>> groups, int from, int size)
-    {
-        if (size == 0)
-        {
-            yield return [];
-            yield break;
-        }
-        for (int g = from; g < groups.Count; g++)
-            for (int k = Math.Min(size, groups[g].Count); k >= 1; k--)
-                foreach (var rest in Choose(groups, g + 1, size - k))
-                    yield return [.. groups[g].Take(k), .. rest];
-    }
 }
 
 /// <summary>Hands out the worlds for one decision.</summary>

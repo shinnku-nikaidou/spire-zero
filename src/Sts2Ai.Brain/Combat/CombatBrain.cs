@@ -51,7 +51,7 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
 /// that order, per world in world order, each first action with <paramref name="nodesPerFirst"/> nodes.</summary>
 public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyList<CombatAction> first, int nodesPerFirst);
 
-/// <param name="First">One of the legal actions, with <see cref="CombatAction.Pick"/> if search chose its prompt's answer.</param>
+/// <param name="First">One of the legal actions; at a card prompt, one of its answers.</param>
 /// <param name="Plan">The rest of the turn after <paramref name="First"/>, in the first world (for narration and highlight).</param>
 /// <param name="Candidates">Every first action, best first.</param>
 /// <param name="PlanHashes">When every world planned the same <paramref name="Plan"/> and expected the same observation
@@ -69,25 +69,32 @@ public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<Comb
 /// that every world planned the same: anything that comes to light (a draw, a random result) ends it, and the decision
 /// is searched. The SL planner's plan is the rest of the combat in its one exact world, so it ends only with the
 /// combat; a step that does not hold there means the world differs from the real combat. One per combat route.
+///
+/// A plan that is not kept still leaves the answers it starts with: the prompts that the action just chosen raises are
+/// part of choosing it. PIMC's worlds are samples, so such an answer is given wherever the prompt takes it, without the
+/// state it expected.
 /// </summary>
 /// <param name="all">Whether to keep every plan a search makes (the SL planner), or only one that repeats a cycle
 /// (<see cref="CombatDecisionResult.Repeats"/>; PIMC).</param>
 public sealed class TurnPlan(bool all = true)
 {
-    private readonly Queue<(CombatAction Action, ulong Hash)> _steps = new();
+    /// <summary>The steps left, each with the hash of the observation it expects; null: wherever it can be taken.</summary>
+    private readonly Queue<(CombatAction Action, ulong? Hash)> _steps = new();
 
     /// <summary>The plan's next step if it still holds here, else <paramref name="search"/>, whose plan is kept; marked
     /// replanned if a step was left that did not hold.</summary>
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<CombatDecisionResult> search)
     {
         bool pending = _steps.TryDequeue(out var step);
-        if (pending && step.Hash == ProtocolJson.Hash(observation) && legal.Contains(step.Action.Plain))
-            return new(step.Action, [.. _steps.Select(s => s.Action)], [], [.. _steps.Select(s => s.Hash)]);
+        if (pending && (step.Hash == null || step.Hash == ProtocolJson.Hash(observation)) && observation.Takes(step.Action, legal))
+            return new(step.Action, [.. _steps.Select(s => s.Action)], [], _steps.All(s => s.Hash != null) ? [.. _steps.Select(s => s.Hash!.Value)] : null);
         _steps.Clear();
         var result = search();
-        if (pending) result = result with { Replanned = true };
+        if (pending && step.Hash != null) result = result with { Replanned = true };
         if ((all || result.Repeats) && result.PlanHashes is { } hashes)
-            foreach (var s in result.Plan.Zip(hashes)) _steps.Enqueue(s);
+            foreach (var (action, hash) in result.Plan.Zip(hashes)) _steps.Enqueue((action, hash));
+        else
+            foreach (var answer in result.Plan.TakeWhile(a => a.Kind == CombatActionKind.Pick)) _steps.Enqueue((answer, null));
         return result;
     }
 }
@@ -101,6 +108,11 @@ public sealed class TurnPlan(bool all = true)
 /// turn) or the combat does, and is scored by the leaf (<see cref="ICombatLeaf"/>, the combat net). Each first action is scored
 /// by its best line in each world, then averaged over the worlds; never the max across worlds, which is strategy fusion. Only the first action is played: the
 /// caller asks again after it. In SL there is one exact world, so this is plain planning.
+///
+/// A card prompt inside a world is a state, and its answers are its actions (<see cref="PromptAnswers"/>); the answers a
+/// line gives right after the first action go with it (<see cref="TurnPlan"/>). A prompt the combat shows that no plan
+/// answered gets <see cref="FirstPicks"/>: a world is built from an observation, and none can be built in the middle of
+/// an action.
 ///
 /// Each world's nodes go to the first actions evenly, so each gets a fair look (<see cref="Root"/>); inside a subtree
 /// the search stops expanding when its share is spent, and what is left is scored
@@ -117,6 +129,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IWorldSource worlds, Budget budget, ulong seed,
         IReadOnlyList<EnemyTurns>? history = null)
     {
+        if (Unplanned(observation) is { } unplanned) return unplanned;
         if (legal.Count == 1) return Only(legal[0]);
         var live = worlds.Worlds(budget.Worlds, seed);
         var roots = live.Select(w => w.Snapshot()).ToList();
@@ -129,6 +142,16 @@ public sealed class PimcBrain(ICombatLeaf leaf)
 
     /// <summary>The answer when there is nothing to choose: no search, so no candidates.</summary>
     public static CombatDecisionResult Only(CombatAction action) => new(action, [], []);
+
+    /// <summary>The one thing there is to do at a decision, if it is so: the only legal play, or a prompt's only answer.</summary>
+    public static CombatAction? Forced(CombatObservation obs, IReadOnlyList<CombatAction> legal)
+    {
+        if (obs.Prompt is not { } prompt) return legal.Count == 1 ? legal[0] : null;
+        return prompt.Answers().Take(2).ToList() is [var only] ? CombatAction.Pick(only) : null;
+    }
+
+    /// <summary>PIMC's answer at a card prompt: none of its worlds stands there (<see cref="FirstPicks"/>).</summary>
+    public static CombatDecisionResult? Unplanned(CombatObservation obs) => obs.Prompt is { } prompt ? Only(FirstPicks.Of(prompt)) : null;
 
     /// <summary>One world's part of a decision: the best line after each of <paramref name="first"/>, in that order.</summary>
     /// <param name="history">The combat's record of enemy moves up to the decision, which every leaf of this turn follows.</param>
@@ -149,9 +172,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         var line = worlds[0][order[0]];
         bool agreed = line.Hashes != null && worlds.All(lines =>
             lines[order[0]].Actions.SequenceEqual(line.Actions) && lines[order[0]].Hashes!.SequenceEqual(line.Hashes));
-        // A line may start with the first action and an answer to its prompt, which the first world's line gives.
-        var pick = line.Actions.Count > 0 ? line.Actions[0] : first[order[0]];
-        return new(pick, [.. line.Actions.Skip(1)], [.. order.Select(a => candidates[a])], agreed ? line.Hashes!.Skip(1).ToList() : null, Repeats: line.Repeats);
+        return new(first[order[0]], [.. line.Actions.Skip(1)], [.. order.Select(a => candidates[a])], agreed ? line.Hashes!.Skip(1).ToList() : null, Repeats: line.Repeats);
     }
 
     /// <summary>
@@ -166,20 +187,33 @@ public sealed class PimcBrain(ICombatLeaf leaf)
             .Where(a => seen.Add(Same(a, obs)))];
     }
 
-    /// <summary>What makes an action the one it is to search: its card's key or its potion's id, its target, its answer.</summary>
+    /// <summary>What makes an action the one it is to search: its card's key or its potion's id, and its target.</summary>
     private static string Same(CombatAction action, CombatObservation obs) => action.Kind switch
     {
         CombatActionKind.PlayCard => "play " + ProtocolJson.CardKey(obs.Hand.FirstOrDefault(c => c.Uid == action.Card)
-            ?? throw new InvalidOperationException($"{action} plays a card not in the hand")) + $" {action.Target}@{action.Pick}",
-        CombatActionKind.UsePotion => $"potion {obs.Potions[action.PotionSlot!.Value]} {action.Target}@{action.Pick}",
+            ?? throw new InvalidOperationException($"{action} plays a card not in the hand")) + $" {action.Target}",
+        CombatActionKind.UsePotion => $"potion {obs.Potions[action.PotionSlot!.Value]} {action.Target}",
         _ => action.ToString(),
     };
+
+    /// <summary>
+    /// The actions search tries at a state of <paramref name="world"/>: where the player can play, the plays
+    /// (<see cref="Ordered"/>); where a card prompt waits, its answers, as many as <paramref name="most"/> nodes can try
+    /// (<see cref="PromptAnswers"/>).
+    /// </summary>
+    /// <param name="cut">Whether answers were left out.</param>
+    public static List<CombatAction> Actions(ICombatWorld world, CombatObservation obs, int most, out bool cut)
+    {
+        cut = false;
+        return obs.Prompt is { } prompt ? PromptAnswers.Of(prompt, most, out cut) : Ordered(world.Legal(), obs);
+    }
 
     /// <summary>
     /// A state as search tells states apart (docs: combat-brain/shared §5), with the world's hidden key beside it: the
     /// observation with the hand, the discard and the exhaust pile each as a multiset of cards, with no uids, and the
     /// potions as a multiset, so the same cards played in another order, or another copy of one, meet as one state. The
-    /// draw pile is one already; its order is in the hidden key.
+    /// draw pile is one already; its order is in the hidden key. A prompt it waits on is part of it, its options with no
+    /// uids either.
     /// </summary>
     public static ulong StateKey(CombatObservation obs) => ProtocolJson.Hash(obs with
     {
@@ -187,6 +221,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         Discard = Cards(obs.Discard),
         Exhaust = Cards(obs.Exhaust),
         Potions = [.. obs.Potions.OrderBy(p => p == null).ThenBy(p => p, StringComparer.Ordinal)],
+        Prompt = obs.Prompt is { } prompt ? prompt with { Options = [.. prompt.Options.Select(c => c.Uid == null ? c : c with { Uid = null })] } : null,
     });
 
     private static List<CardView> Cards(IReadOnlyList<CardView> cards) =>
@@ -228,96 +263,100 @@ public sealed class PimcBrain(ICombatLeaf leaf)
             var lines = new PlannedLine[first.Count];
             for (int a = 0; a < first.Count; a++)
             {
-                // The other answers to the action's first prompt are lines of the action too: its nodes go to them evenly.
+                if (a > 0) world.Restore(_root);
                 (_nodes, _limit) = (0, nodesPerFirst);
-                var todo = new List<CombatAction> { first[a] };
-                for (int i = 0; i < todo.Count; i++)
-                {
-                    if (a > 0 || i > 0) world.Restore(_root);
-                    if (i > 0) _limit = Math.Max(_nodes + 1, (int)((long)nodesPerFirst * (i + 1) / todo.Count));
-                    var line = First(todo[i], out var answers);
-                    todo.AddRange(answers);
-                    if (i == 0 || line.Value > lines[a].Value) lines[a] = line;
-                }
+                lines[a] = First(first[a]);
             }
             return lines;
         }
 
-        /// <summary>The best line that starts with <paramref name="action"/>: the search's, then the cycles it found.</summary>
-        /// <param name="answers">The other answers to the first prompt the action met.</param>
-        private PlannedLine First(CombatAction action, out List<CombatAction> answers)
+        /// <summary>The best line that starts with <paramref name="action"/>: the search's, then the cycles it found. A
+        /// prompt the action raises shares the action's nodes evenly over its answers.</summary>
+        private PlannedLine First(CombatAction action)
         {
-            var after = After(action, _rootHash, out answers);
+            var after = After(action, _rootHash, nodesPerFirst);
             var line = new PlannedLine(after.Value, [action, .. after.Actions], _nodes, [_rootHash, .. after.Hashes!]);
             foreach (var end in _loops.RunFound())
                 if (end.Value > line.Value) line = new(end.Value, end.Actions, _nodes, end.Hashes, Repeats: true);
             if (!double.IsNegativeInfinity(line.Value)) return line;
-            // The move was a cycle at once and no budget was left for it: what is left is ending the turn.
+            // The move was a cycle at once and no budget was left for it: what is left is ending the turn, with the first
+            // answer to any prompt on the way.
             world.Restore(_root);
-            world.Execute(action);
-            var obs = world.Observe();
-            if (world.Status == CombatStatus.InProgress && obs.Round == round)
+            var actions = new List<CombatAction>();
+            var hashes = new List<ulong>();
+            void Play(CombatAction next)
             {
-                world.Execute(CombatAction.EndTurn);
-                return new(leaf.Value(world.Status, world.Observe(), world.Run(), history), [action, CombatAction.EndTurn], _nodes, [_rootHash, ProtocolJson.Hash(obs)]);
+                for (CombatAction? step = next; step is { } taken; step = world.Status == CombatStatus.InProgress && world.Observe().Prompt is { } prompt ? FirstPicks.Of(prompt) : null)
+                {
+                    hashes.Add(ProtocolJson.Hash(world.Observe()));
+                    world.Execute(taken);
+                    actions.Add(taken);
+                }
             }
-            return new(leaf.Value(world.Status, obs, world.Run(), history), [action], _nodes, [_rootHash]);
+            Play(action);
+            if (world.Status == CombatStatus.InProgress && world.Observe().Round == round) Play(CombatAction.EndTurn);
+            return new(leaf.Value(world.Status, world.Observe(), world.Run(), history), actions, _nodes, hashes);
         }
 
         /// <summary>Plays <paramref name="action"/> and returns the best line from there.</summary>
-        /// <param name="answers">The other answers to the first prompt the action met, as many as the nodes left allow.</param>
-        private PlannedLine After(CombatAction action, ulong hash, out List<CombatAction> answers)
+        /// <param name="shareTo">Where the action's share of the nodes ends, if a prompt it raises is to share it.</param>
+        private PlannedLine After(CombatAction action, ulong hash, int? shareTo = null)
         {
             _nodes++;
             world.Execute(action);
-            answers = PromptAnswers.Others(world, action, _limit - _nodes, out bool cut);
-            if (cut) _cuts++;
-            // The decision's action takes its answer's even share.
-            if (_actions.Count == 0 && answers.Count > 0) _limit = Math.Max(_nodes, nodesPerFirst / (answers.Count + 1));
             _actions.Add(action);
             _hashes.Add(hash);
-            var line = Reached(action);
+            var line = Reached(action, shareTo);
             _actions.RemoveAt(_actions.Count - 1);
             _hashes.RemoveAt(_hashes.Count - 1);
             return line;
         }
 
-        private PlannedLine Reached(CombatAction action)
+        /// <summary>A line ends with the combat, or where the player can play again after the turn's end; a prompt on the
+        /// way is answered first.</summary>
+        private PlannedLine Reached(CombatAction action, int? shareTo)
         {
             var status = world.Status;
             var obs = world.Observe();
+            if (status == CombatStatus.InProgress && obs.Prompt != null) return Best(obs, shareTo);
             if (status != CombatStatus.InProgress || action.Kind == CombatActionKind.EndTurn || obs.Round != round)
                 return new(leaf.Value(status, obs, world.Run(), history), [], 0, []);
             return _loops.Intercept(_path, obs, _actions, _hashes) ? new(double.NegativeInfinity, [], 0, []) : Best(obs);
         }
 
-        /// <summary>The best line from the current state, where the player is still on this turn.</summary>
-        private PlannedLine Best(CombatObservation obs)
+        /// <summary>The best line from the current state: where the player is still on this turn, or at a card prompt.</summary>
+        /// <param name="shareTo">Where the state's share of the nodes ends, when its actions share it evenly; null where
+        /// they are tried depth first.</param>
+        private PlannedLine Best(CombatObservation obs, int? shareTo = null)
         {
             ulong hash = ProtocolJson.Hash(obs);
             var key = (StateKey(obs), world.HiddenKey());
             if (_memo.TryGetValue(key, out var known)) return known;
             var here = world.Snapshot();
-            _path.Add(new(obs, _actions.Count, here));
+            // A prompt stands in the middle of an action: a cycle is a move between states where the player can play.
+            bool plays = obs.Prompt == null;
+            if (plays) _path.Add(new(obs, _actions.Count, here));
             var best = new PlannedLine(double.NegativeInfinity, [], 0, []);
             bool moved = false;
-            int cuts = _cuts;
-            var todo = Ordered(world.Legal(), obs);
+            int cuts = _cuts, from = _nodes;
+            var todo = Actions(world, obs, (shareTo ?? _limit) - _nodes, out bool left);
+            if (left) _cuts++;
             for (int i = 0; i < todo.Count; i++)
             {
                 var action = todo[i];
-                if (moved && _nodes >= _limit)
+                int? to = null;
+                if (shareTo is { } end) _limit = (to = Math.Max(_nodes + 1, from + (int)((long)(end - from) * (i + 1) / todo.Count))).Value;
+                else if (moved && _nodes >= _limit)
                 {
                     _cuts++;
                     break;
                 }
                 if (moved) world.Restore(here);
                 moved = true;
-                var after = After(action, hash, out var answers);
-                todo.InsertRange(i + 1, answers);
+                var after = After(action, hash, to);
                 if (after.Value > best.Value) best = new(after.Value, [action, .. after.Actions], 0, [hash, .. after.Hashes!]);
             }
-            _path.RemoveAt(_path.Count - 1);
+            if (plays) _path.RemoveAt(_path.Count - 1);
             if (_cuts == cuts) _memo[key] = best;
             return best;
         }

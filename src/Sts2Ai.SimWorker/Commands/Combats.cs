@@ -14,7 +14,7 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker.Commands;
 
-/// <summary>list: what this game build knows.</summary>
+/// <summary>tables: every id of this game build that the nets' tables hold.</summary>
 internal static class TablesCommand
 {
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
@@ -138,7 +138,7 @@ internal static class CombatCommand
         {
             Console.WriteLine("  " + session.Summary());
             if (r.GetValue(Obs)) Console.WriteLine("  " + ProtocolJson.Serialize(session.Observation()));
-            var action = policy.Choose(session.Decision());
+            var action = session.Next(policy);
             Console.WriteLine($"    -> {action}");
             session.Execute(action);
         }

@@ -39,7 +39,7 @@ public sealed class SlRoute(Budget budget)
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<Budget, SlPlan> plan) =>
         _plan.Decide(observation, legal, () =>
         {
-            if (legal.Count == 1) return PimcBrain.Only(legal[0]);
+            if (PimcBrain.Forced(observation, legal) is { } forced) return PimcBrain.Only(forced);
             var fight = budget.For(observation.Room);
             var made = plan(fight.LossPlans > 0 && _losses + 1 >= fight.LossPlans ? fight with { Replan = 0 } : fight);
             _losses = made.End == CombatStatus.Lost && !made.Proved ? _losses + 1 : 0;
@@ -67,9 +67,9 @@ public sealed class SlRoute(Budget budget)
 /// <see cref="Budget.Replan"/> turns only, then planned again, from where a beam reaches deeper (or to its end, at 0).
 ///
 /// Only one turn's transpositions are merged, so each state kept is the end of a concrete line of actions, and the
-/// plan replays exactly in the world it was searched in. An action's first card prompt is a branch: each of its other
-/// answers is tried right after it, on the action's share of nodes (<see cref="PromptAnswers"/>); a later prompt is
-/// answered by <see cref="FirstPicks"/>, as in the run. A cycle goes to <see cref="LoopSearch"/>. The turns' searches are
+/// plan replays exactly in the world it was searched in. A card prompt is a state like any other, and its answers are
+/// its actions (<see cref="PromptAnswers"/>): every prompt of a line is a branch, and a line ends only where the player
+/// can play again. A cycle goes to <see cref="LoopSearch"/>. The turns' searches are
 /// independent, so a turn is one <see cref="TurnSearcher"/> call that can run them apart: <see cref="Plan"/> runs them
 /// here, Harness's pooled planner in workers.
 /// </summary>
@@ -262,7 +262,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             var obs = world.Observe();
             _round = obs.Round;
             _loops = new(world, _round, End);
-            Visit(obs, root: true);
+            Visit(obs, nodes);
             foreach (var end in _loops.RunFound()) Add(end);
             _cut |= _loops.Found;
             var over = _ends.Where(e => e.Status != CombatStatus.InProgress).MaxBy(e => e.Value);
@@ -272,28 +272,35 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         }
 
         /// <summary>
-        /// Tries every action from the current state, where the player is still on this turn, once per state, each
-        /// followed by the other answers of the first card prompt it met. At the turn's start the nodes are shared over
-        /// the actions (<see cref="PimcBrain.Ordered"/>), each with an even share plus what the ones before it left, so every first action is looked
-        /// at however many states the turn has, and an action's share goes evenly to its prompt's answers; below, a
-        /// subtree spends its share depth first. A move back to a state on the path with something gained is a cycle,
-        /// which would spend every node on its own repeats: it goes to <see cref="LoopSearch"/> instead of down.
+        /// Tries every action from the current state, once per state: the plays where the player is on this turn
+        /// (<see cref="PimcBrain.Ordered"/>), the answers where a card prompt waits. At the turn's start the nodes are
+        /// shared over the actions, each with an even share plus what the ones before it left, so every first action is
+        /// looked at however many states the turn has; a prompt that one of them raises shares that action's nodes over
+        /// its answers the same way. Below, a subtree spends its share depth first. A line ends with the combat, or where
+        /// the player can play again after the turn's end: a prompt the end of the turn or the next turn's start raises
+        /// is answered first, so the leaf reads a state the combat net knows. A move back to a state on the path with
+        /// something gained is a cycle, which would spend every node on its own repeats: it goes to
+        /// <see cref="LoopSearch"/> instead of down.
         /// </summary>
-        private void Visit(CombatObservation obs, bool root = false)
+        /// <param name="shareTo">Where the state's share of the nodes ends, when its actions share it evenly; null where
+        /// they are tried depth first, up to the limit of the share they are in.</param>
+        private void Visit(CombatObservation obs, int? shareTo = null)
         {
             ulong hash = ProtocolJson.Hash(obs);
             if (!_seen.Add((PimcBrain.StateKey(obs), world.HiddenKey()))) return;
             var here = world.Snapshot();
-            _path.Add(new(obs, _actions.Count, here));
+            // A prompt stands in the middle of an action: a cycle is a move between states where the player can play.
+            bool plays = obs.Prompt == null;
+            if (plays) _path.Add(new(obs, _actions.Count, here));
             bool moved = false;
-            var todo = PimcBrain.Ordered(world.Legal(), obs);
-            // At the turn's start: the first action's nodes, from and to, and which of its answers is played, of how many.
-            int legal = todo.Count, first = 0, from = 0, to = 0, answer = 0, answers = 0;
+            var todo = PimcBrain.Actions(world, obs, (shareTo ?? _limit) - _nodes, out bool left);
+            _cut |= left;
+            int from = _nodes;
             for (int i = 0; i < todo.Count; i++)
             {
                 var action = todo[i];
-                if (root && action.Pick == null) (from, to, answer, answers) = (_nodes, Math.Max(_nodes + 1, (int)((long)nodes * ++first / legal)), 0, 0);
-                else if (root) answer++;
+                int? to = null;
+                if (shareTo is { } end) _limit = (to = Math.Max(_nodes + 1, from + (int)((long)(end - from) * (i + 1) / todo.Count))).Value;
                 else if (moved && _nodes >= _limit)
                 {
                     _cut = true;
@@ -303,21 +310,18 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 moved = true;
                 _nodes++;
                 world.Execute(action);
-                var others = PromptAnswers.Others(world, action, (root ? to : _limit) - _nodes, out bool cut);
-                todo.InsertRange(i + 1, others);
-                _cut |= cut;
-                if (root && action.Pick == null) answers = others.Count;
-                if (root) _limit = Math.Max(_nodes, from + (int)((long)(to - from) * (answer + 1) / (answers + 1)));
                 _actions.Add(action);
                 _hashes.Add(hash);
                 var status = world.Status;
                 var after = world.Observe();
-                if (status != CombatStatus.InProgress || action.Kind == CombatActionKind.EndTurn || after.Round != _round) Add(End(status, after, _actions, _hashes));
+                if (status != CombatStatus.InProgress) Add(End(status, after, _actions, _hashes));
+                else if (after.Prompt != null) Visit(after, to);
+                else if (action.Kind == CombatActionKind.EndTurn || after.Round != _round) Add(End(status, after, _actions, _hashes));
                 else if (!_loops.Intercept(_path, after, _actions, _hashes)) Visit(after);
                 _actions.RemoveAt(_actions.Count - 1);
                 _hashes.RemoveAt(_hashes.Count - 1);
             }
-            _path.RemoveAt(_path.Count - 1);
+            if (plays) _path.RemoveAt(_path.Count - 1);
         }
 
         /// <summary>The turn ended here, or the combat did.</summary>

@@ -70,7 +70,7 @@ internal static class ClonesCommand
         var next = new Next();
         try
         {
-            // A card prompt can be asked while the last step plays out, inside the load.
+            // A card reward or a bundle can be asked while the last step plays out, inside the load.
             using var session = RunSession.Load(pump, clone, next, next, next);
             if (next.Asked == null) session.Step();
         }
@@ -83,7 +83,7 @@ internal static class ClonesCommand
 
     /// <summary>
     /// Keeps the observation of the first decision it is asked. It answers every decision with its first option rather
-    /// than stopping the clone: card prompts, card rewards and bundles are asked inside the game's own tasks.
+    /// than stopping the clone: card rewards and bundles are asked inside the game's own tasks.
     /// </summary>
     private sealed class Next : ICombatPolicy, IChoicePolicy, IMacroPolicy
     {

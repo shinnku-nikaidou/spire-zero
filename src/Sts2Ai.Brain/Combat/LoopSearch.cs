@@ -186,13 +186,13 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
     /// <summary>The move, or the same card under a new uid: a copy the game made is the same step of the cycle.</summary>
     private CombatAction? Find(CombatAction move, string? id)
     {
+        var obs = world.Observe();
         var legal = world.Legal();
-        if (legal.Contains(move.Plain)) return move;
+        if (obs.Takes(move, legal)) return move;
         if (id == null) return null;
-        var hand = world.Observe().Hand;
         foreach (var action in legal)
-            if (action.Kind == CombatActionKind.PlayCard && action.Target == move.Target && hand.FirstOrDefault(c => c.Uid == action.Card)?.Id == id)
-                return action with { Pick = move.Pick };
+            if (action.Kind == CombatActionKind.PlayCard && action.Target == move.Target && obs.Hand.FirstOrDefault(c => c.Uid == action.Card)?.Id == id)
+                return action;
         return null;
     }
 
@@ -235,9 +235,10 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         {
             if (!seen.Add((PimcBrain.StateKey(obs), world.HiddenKey()))) return;
             var here = world.Snapshot();
-            List<LoopPoint> path = [.. stack, new(obs, line.Actions.Count, here)];
+            // A prompt stands in the middle of an action: it is no point a cycle comes back to.
+            List<LoopPoint> path = obs.Prompt == null ? [.. stack, new(obs, line.Actions.Count, here)] : stack;
             bool moved = false;
-            var todo = PimcBrain.Ordered(world.Legal(), obs).Where(a => !banned.Contains(a)).ToList();
+            var todo = PimcBrain.Actions(world, obs, CashNodes - nodes, out _).Where(a => !banned.Contains(a)).ToList();
             for (int i = 0; i < todo.Count; i++)
             {
                 var action = todo[i];
@@ -246,10 +247,11 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
                 moved = true;
                 nodes++;
                 Play(action, line);
-                todo.InsertRange(i + 1, PromptAnswers.Others(world, action, CashNodes - nodes, out _));
                 var status = world.Status;
                 var after = world.Observe();
-                if (status != CombatStatus.InProgress || action.Kind == CombatActionKind.EndTurn || after.Round != round) Note(status, after);
+                if (status != CombatStatus.InProgress) Note(status, after);
+                else if (after.Prompt != null) Go(after, path);
+                else if (action.Kind == CombatActionKind.EndTurn || after.Round != round) Note(status, after);
                 else if (Back(path, after) is not { } back) Go(after, path);
                 else if (Shape(back.Obs) != Shape(after) && depth < 2) ends.AddRange(Run(Cycled(path, back, line.Actions, line.Hashes), depth + 1));
                 line.Actions.RemoveAt(line.Actions.Count - 1);
@@ -269,7 +271,8 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
     /// </summary>
     private List<TurnEnd> Run(Cycle cycle, int depth)
     {
-        var banned = new HashSet<CombatAction>(cycle.Moves.Where(m => m.Kind != CombatActionKind.EndTurn).Select(m => m.Plain));
+        // The cycle's plays are left out of the cash-out; its answers are answers to whatever prompt waits, and stay.
+        var banned = new HashSet<CombatAction>(cycle.Moves.Where(m => m.Kind is CombatActionKind.PlayCard or CombatActionKind.UsePotion));
         var kept = new List<TurnEnd>();
         var breaks = new List<int>();
         double best = double.NegativeInfinity, likeliest = double.NegativeInfinity;
