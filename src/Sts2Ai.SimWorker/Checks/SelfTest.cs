@@ -149,6 +149,7 @@ internal static partial class SelfTest
         CloneStopsAtTheExit(pump, seed, Check);
         CloneKeepsRelicState(pump, seed, Check);
         AutoWinFightsElitesAndBosses(pump, seed, Check);
+        ProbeAnswersTheRuledFightsPrompt(pump, seed, Check);
         DeathsOutsideTheEnemysTurnEndTheirCombat(pump, seed, Check);
         int workers = r.GetValue(Workers);
         PlanHoldsInTheRun(pump, seed, workers, net, Check);

@@ -141,14 +141,14 @@ public sealed class Dispatcher(
     }
 
     /// <summary>A card prompt's answer, with who gave it and what it scored. During a combat the prompt is a decision of
-    /// the combat, the combat brain's (<see cref="CombatRoute"/>); the host needs the combat it is asked in for that.</summary>
+    /// the combat, the combat brain's (<see cref="CombatRoute"/>); the host needs the combat it is asked in for that. A
+    /// fight the run's rule wins at its start (<see cref="RunView.AutoWin"/>) is no combat to decide: a prompt asked in
+    /// it, before the win, is the macro side's, as one outside combat.</summary>
     public (ChoiceAnswer Answer, DecisionNote Note) Decide(ChoiceDecision decision)
     {
         var choice = decision.Choice;
-        if (choice.Context.InCombat)
+        if (choice.Context.InCombat && Fought(decision) is var (around, shown))
         {
-            if (decision.Observation is not { Screen: CardChoiceScreen { Combat: { } around } } shown)
-                throw new InvalidOperationException("a card prompt during a combat, and the host does not show the combat");
             var (result, note, at, drawn, took, _) = Fight(new CombatDecision([], () => around with { Prompt = choice }, _ => shown));
             if (result.First.Kind != CombatActionKind.Pick || !choice.Accepts(result.First.Picks))
                 throw new InvalidOperationException($"{combat.Brain} gave {result.First}, which the prompt does not accept");
@@ -167,6 +167,14 @@ public sealed class Dispatcher(
             _log.Add(new(runId, id, env.ToString(), Surfaces.CardChoice, macroChoices.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
                 string.Join(",", answer.Picks), null, null, null, seed, ms, Explored: Mark(answer.Explored)));
         return (answer, new(macroChoices.Brain, null, answer.Scored.Count > 0 ? answer.Scored : null));
+    }
+
+    /// <summary>The combat a card prompt is asked in and the observation that shows it, if the run fights that combat.</summary>
+    private static (CombatObservation Around, Observation Shown)? Fought(ChoiceDecision decision)
+    {
+        if (decision.Observation is not { Screen: CardChoiceScreen { Combat: { } around } } shown)
+            throw new InvalidOperationException("a card prompt during a combat, and the host does not show the combat");
+        return shown.Run.WinsAtStart(around.Room) ? null : (around, shown);
     }
 
     /// <summary>A decision outside combat, with who made it and what it planned and scored.</summary>

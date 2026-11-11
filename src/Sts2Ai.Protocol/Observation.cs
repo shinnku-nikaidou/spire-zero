@@ -37,6 +37,12 @@ public sealed record RunView
     /// Null in the normal game: always in the real game, set only by the simulator.
     /// </summary>
     public IReadOnlyList<int>? AutoWin { get; init; }
+
+    /// <summary>Whether the rule wins a fight in a room of type <paramref name="room"/> at its start, in the act the run is in.</summary>
+    public bool WinsAtStart(string? room) => WinsAtStart(AutoWin, Act, room);
+
+    /// <summary>The rule itself, for the simulator, which applies it: <paramref name="acts"/> are <see cref="AutoWin"/>'s.</summary>
+    public static bool WinsAtStart(IReadOnlyList<int>? acts, int act, string? room) => acts?.Contains(act) == true && room == "Monster";
 }
 
 /// <summary>The current act's map.</summary>

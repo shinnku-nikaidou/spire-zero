@@ -93,11 +93,13 @@ public class DispatcherTests
         Context = new() { Purpose = "hand", Cancelable = false, InCombat = true },
     };
 
-    /// <summary>A card prompt as a host shows it: over the combat when one is going on.</summary>
-    private static ChoiceDecision Prompt(bool inCombat = true)
+    /// <summary>A card prompt as a host shows it: over the combat when one is going on. <paramref name="autoWin"/> is the
+    /// run's rule.</summary>
+    private static ChoiceDecision Prompt(bool inCombat = true, IReadOnlyList<int>? autoWin = null, string room = "Monster")
     {
         var choice = Asked with { Context = Asked.Context with { InCombat = inCombat } };
-        return new(choice, () => new Observation { Run = Fixtures.Around(Fixtures.Slugs()), Screen = new CardChoiceScreen { Choice = choice, Combat = inCombat ? Fixtures.Slugs() : null } });
+        var run = Fixtures.Around(Fixtures.Slugs()) with { AutoWin = autoWin };
+        return new(choice, () => new Observation { Run = run, Screen = new CardChoiceScreen { Choice = choice, Combat = inCombat ? Fixtures.Slugs() with { Room = room } : null } });
     }
 
     [Fact]
@@ -121,6 +123,26 @@ public class DispatcherTests
         // A prompt outside combat is the macro side's.
         Assert.Empty(dispatcher.Choose(Prompt(inCombat: false)).Picks);
         Assert.Equal(1, dispatcher.Brains["l0"]);
+    }
+
+    [Fact]
+    public void ACardPromptInAFightTheRunsRuleWinsIsTheMacroSides()
+    {
+        int fights = 0;
+        var dispatcher = Make(new("test", (_, _, _, _) =>
+        {
+            fights++;
+            return new(CombatAction.Pick([2]), [], []);
+        }));
+        int act = Fixtures.Floor1().Act;
+
+        // The fight is won at its start, before any play: there is no combat to search, and the combat brain is not asked.
+        Assert.Empty(dispatcher.Choose(Prompt(autoWin: [act])).Picks);
+        Assert.Equal((0, 1), (fights, dispatcher.Brains["l0"]));
+        // The rule leaves elites and bosses to be fought, and so does an act it does not name.
+        Assert.Equal([2], dispatcher.Choose(Prompt(autoWin: [act], room: "Elite")).Picks);
+        Assert.Equal([2], dispatcher.Choose(Prompt(autoWin: [act + 1])).Picks);
+        Assert.Equal((2, 1), (fights, dispatcher.Brains["l0"]));
     }
 
     [Fact]

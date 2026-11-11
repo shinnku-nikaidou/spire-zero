@@ -172,12 +172,14 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         var picks = new List<int>();
         var state = run;
         double current = _leaf.Value(state);
+        // A prompt asked in a fight the run's rule wins picks among the fight's cards: nothing of the run changes by it.
+        RunView Picked(RunView from, int i) => choice.Context.InCombat ? from : ScreenAfterstates.Picked(from, choice.Options[i], choice.Context.Purpose);
         // The first step's answers, one pick or none, to show beside the answer.
         var first = new List<(MacroAction Action, double Value)>();
         while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
             var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
-                .Select(i => { var next = ScreenAfterstates.Picked(state, choice.Options[i], choice.Context.Purpose); return (Index: i, Value: _leaf.Value(next), State: next); })
+                .Select(i => { var next = Picked(state, i); return (Index: i, Value: _leaf.Value(next), State: next); })
                 .ToList();
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
             if (picks.Count >= min) options.Insert(0, (-1, current, state));

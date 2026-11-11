@@ -408,7 +408,7 @@ internal sealed class RunSession : IDisposable
                 _progress.CombatEntered = true;
                 EnterCombat(room);
             }
-            if (Setup.AutoWin?.Contains(Run.CurrentActIndex) != true || room.Encounter.RoomType != RoomType.Monster) return CombatDecision();
+            if (!RunView.WinsAtStart(Setup.AutoWin, Run.CurrentActIndex, room.Encounter.RoomType.ToString())) return CombatDecision();
             // An enemy that comes back or calls others when killed keeps the combat going: kill again, a few times.
             if (++_progress.AutoWins > 5) throw new InvalidOperationException($"auto-win: the combat goes on after 5 wins: {Describe()}");
             Await(Win());

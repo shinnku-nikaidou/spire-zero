@@ -274,6 +274,38 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// The auto-win rule with Gambling Chip, which asks for cards to discard as each combat starts: in a fight the rule
+    /// wins, the prompt is asked before the win, shown over a combat that is never fought, so the macro side answers it
+    /// on the node's clone. A probe that answers it there must stop at the won fight's rewards.
+    /// </summary>
+    private static void ProbeAnswersTheRuledFightsPrompt(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed);
+        RunSession? session = null;
+        NodeClone? clone = null;
+        Observation? shown = null;
+        var prompts = new CaptureChoices(decision =>
+        {
+            if (clone == null && decision.Choice.Context.InCombat && session!.Trace.Count == session.NodeStart)
+                (clone, shown) = (session.Clone(), decision.Observation);
+            return FirstPicks.Instance.Choose(decision);
+        });
+        const string name = "auto-win: a probe answers the prompt of a fight the rule wins, and stops at its rewards";
+        string label = $"run {GameSeeds.MakeSeed(seed, 0)}";
+        var setup = new RunSetup("SILENT", GameSeeds.MakeSeed(seed, 0), AutoWin: [0], Loadout: new Loadout(Relics: ["RING_OF_THE_SNAKE", "GAMBLING_CHIP"]));
+        using (session = RunSession.Start(pump, setup, prompts, new PlayPolicy(rng), new RandomMacro(rng)))
+            for (int steps = 0; !session.IsOver && clone == null && steps < 200; steps++) session.Step();
+        if (clone == null || shown is not { Screen: CardChoiceScreen { Combat: { } around, Choice: var asked } })
+        {
+            check(name, false, $"{label}: no combat started with a prompt");
+            return;
+        }
+        var after = NodeProbe.After(pump, clone, [[MacroAction.Pick(FirstPicks.Of(asked).Picks)]])[0];
+        check(name, shown.Run.WinsAtStart(around.Room) && after.Surface == Surfaces.Rewards && after.Run.Hp == shown.Run.Hp,
+            $"{label}: a {around.Room} fight, the rule wins it {shown.Run.WinsAtStart(around.Room)}; the probe stops at {after.Surface ?? "the run's end"} with {after.Run.Hp} HP of {shown.Run.Hp}");
+    }
+
+    /// <summary>
     /// A run with random policies, stopped at the first decision of its second combat. The SL planner plans the rest of
     /// that combat on the node's clone (here, and with <paramref name="workers"/> in a pool too, which must plan the
     /// same). A hallway fight at full HP: the plan must win it. The clone, played to the plan's end, must end the combat as
