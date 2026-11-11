@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Where one report's lost runs ended, floor by floor, and in what room (docs: evaluation/metrics §8), from the run
+  // Where one report's lost runs ended, floor by floor, and in what room, from the run
   // records the report embeds (src/data/book/eval-reports.json, from the champion's Necrobinder report).
   import { scaleBand, scaleLinear } from 'd3';
   import type { Lang } from '../v/names.ts';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // How often a run meets each decision screen (docs: simulator/runs §4): the surfaces counts of the champion's Silent
+  // How often a run meets each decision screen: the surfaces counts of the champion's Silent
   // report, summed over its runs (src/data/book/surface-counts.json), against the book's example run.
   import type { Lang } from '../v/names.ts';
   import { surface, fmt } from '../v/i18n.ts';

@@ -1,4 +1,4 @@
-"""The numbers of the combat net's walkthrough (docs: combat-brain/walkthrough): one round start of the champion's combat
+"""The numbers of the combat net's walkthrough: one round start of the champion's combat
 net file's tests (eval/champions/sl.json's combat-net), followed through every layer of learn/combat/net.py with the
 file's own weights, into src/data/combat-walk.json. Stops if its layers do not end in the outputs the file's tests hold.
 
@@ -116,7 +116,7 @@ def tops(outcome: torch.Tensor, n: int, width: float) -> list[dict]:
 
 
 def shown(test: dict, net: Net, index: dict, width: float) -> dict:
-    """A test state as the figure of the two outputs shows it (docs: combat-brain/leaf §4)."""
+    """A test state as the figure of the two outputs shows it."""
     obs = test["obs"]
     outcome, gone = outputs(net, batch_of(test, index))
     return {

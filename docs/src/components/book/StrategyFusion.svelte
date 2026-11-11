@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Strategy fusion below the root, on a made-up decision with two worlds (docs: environments/worlds §3). Safe is worth
+  // Strategy fusion below the root, on a made-up decision with two worlds. Safe is worth
   // the same in both; Gamble asks the player to keep one of two cards before the hidden top card is drawn.
   import type { Lang } from '../v/names.ts';
   import { w, say, words } from './words.ts';

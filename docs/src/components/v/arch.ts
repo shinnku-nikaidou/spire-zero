@@ -1,8 +1,7 @@
 // A network drawn as stacked blocks, in the manner of the Transformer paper's figure 1 (Vaswani et al., 2017):
 // columns of blocks from the inputs up, frames for repeated blocks, ⊕ for residual sums and side links for skip
 // connections; the columns join in one block, then one trunk goes up to the output. `layout` places it all;
-// ArchDiagram.svelte draws it. The net of the macro brain chapter (docs: macro-brain/network) and the combat net
-// (docs: combat-brain/network) are at the end.
+// ArchDiagram.svelte draws it. The value net and the combat net are at the end.
 import type { Lang } from './names.ts';
 
 export type Tone = 'embed' | 'attn' | 'ff' | 'norm' | 'linear' | 'pool' | 'head' | 'msg';
@@ -330,7 +329,7 @@ export function valueNet(lang: Lang): Diagram {
   };
 }
 
-/** The combat net as its net file's graph has it (docs: combat-brain/network §1). */
+/** The combat net as its net file's graph has it. */
 export function combatNet(lang: Lang): Diagram {
   const L = (x: W) => x[lang];
   const sum = (info: W): Block => ({ kind: 'block', label: L(w('Sum', '求和', '加總')), tone: 'pool', info: L(info) });

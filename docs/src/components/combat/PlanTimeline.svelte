@@ -1,6 +1,6 @@
 <script lang="ts">
-  // One real SL fight, round by round: the planner's plan from its first decision, and the fight following it
-  // (docs: sl-planner). Data: src/data/combat-examples.json, sl.fight.
+  // One real SL fight, round by round: the planner's plan from its first decision, and the fight following it.
+  // Data: src/data/combat-examples.json, sl.fight.
   import { onMount } from 'svelte';
   import examples from '../../data/combat-examples.json';
   import { loadNames, type Lang, type Names } from '../v/names.ts';

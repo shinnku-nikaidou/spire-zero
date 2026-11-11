@@ -2,7 +2,7 @@
  "source": {
   "command": "run --champion eval/champions/sl.json --env SL --character SILENT --seeds eval/seeds/promotion-1-100.txt --start 12 --n 1 --records FILE --log FILE",
   "seed": "0SSL7NS01MU6",
-  "how": "the decisions of floors 1-3 from the run's decision log, the floor-2 combat from its record; the game's save points from the game's code (docs: environments/information §4)"
+  "how": "the decisions of floors 1-3 from the run's decision log, the floor-2 combat from its record; the game's save points from the game's code"
  },
  "nodes": [
   {

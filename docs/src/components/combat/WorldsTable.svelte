@@ -1,7 +1,7 @@
 <script lang="ts">
   // One real NoSL decision: each first action's best line in each of the 8 worlds, their mean and 95% interval as
   // PimcBrain.Summarize makes them, two actions compared world by world (common random numbers), and what a player
-  // who knew the world would get (docs: pimc/search §2–§4). Data: src/data/combat-examples.json, nosl.
+  // who knew the world would get. Data: src/data/combat-examples.json, nosl.
   import { onMount } from 'svelte';
   import { scaleLinear } from 'd3';
   import examples from '../../data/combat-examples.json';

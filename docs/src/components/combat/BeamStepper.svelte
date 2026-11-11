@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The SL planner's beam over turns (docs: sl-planner/beam) on a made-up fight: a greedy dive first, then a beam of
+  // The SL planner's beam over turns on a made-up fight: a greedy dive first, then a beam of
   // B states a turn (E when the dive won), the best by the leaf. The same seeded fight for every setting, so the settings
   // can be compared.
   import { scaleLinear } from 'd3';

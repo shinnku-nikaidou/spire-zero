@@ -1,6 +1,6 @@
 <script lang="ts">
   // The first three nodes of the book's example run (src/data/book/example-nodes.json): each node's steps, where the game
-  // itself saves, and what NoSL and SL may know at each step (docs: environments/information §3).
+  // itself saves, and what NoSL and SL may know at each step.
   import data from '../../data/book/example-nodes.json';
   import { loadNames, type Lang, type Names } from '../v/names.ts';
   import { surface } from '../v/i18n.ts';
@@ -101,7 +101,7 @@
     why: string;
   }
 
-  // What each environment may know at the step, by the rules of docs: environments/information §2 and §5.
+  // What each environment may know at the step.
   const rows = $derived.by((): Row[] => {
     const i = Math.min(s, node.steps.length - 1);
     const at = (k: Step['kind']) => node.steps.findIndex((x) => x.kind === k);

@@ -1,6 +1,6 @@
 <script lang="ts">
   // A fork on the map and the map bag of each option: the point entered reads as "+0" (encode.map_tokens), and a room
-  // already played does not (docs: macro-brain/network §4). An illustrative map, no weights.
+  // already played does not. An illustrative map, no weights.
   import type { Lang } from './names.ts';
 
   let { lang = 'en' }: { lang?: Lang } = $props();

@@ -1,4 +1,4 @@
-// The made-up fight the SL planner's figures search (docs: sl-planner/beam): every turn's ends are drawn from a seed of
+// The made-up fight the SL planner's figures search: every turn's ends are drawn from a seed of
 // the path to them, so every setting of a figure sees the same fight.
 export const MAX_HP = 70;
 const START = { h: 60, f: 140 };

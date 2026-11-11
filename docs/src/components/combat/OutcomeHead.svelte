@@ -1,7 +1,7 @@
 <script lang="ts">
   // The champion's combat net's outputs on the test states its file carries (src/data/combat-walk.json, tests): the
   // chance of a death and of each bucket of the HP share still to be lost, each held potion's chance of being gone, and
-  // the HP expected at a win, as CombatNet.Outcome computes it (docs: combat-brain/leaf §4–§5).
+  // the HP expected at a win, as CombatNet.Outcome computes it.
   import { onMount } from 'svelte';
   import { scaleLinear } from 'd3';
   import walk from '../../data/combat-walk.json';

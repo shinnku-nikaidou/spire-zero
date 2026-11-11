@@ -7,7 +7,10 @@
 //   write `**入口**：到达`),
 // - the book describes the system as it is now: no commit hash, date, generation name, `.claude/` or `tmp/` path in
 //   what a reader sees or in the site's sources and data (README: "What the book may not say"),
-// - every `docs: PAGE §N` that the repository's code cites reaches an existing page and section.
+// - the book is written for a reader who wants to understand the design (README: "How the book is written"): a
+//   chapter's own text holds no section sign, source file name, command-line option or `Type.Member`, few code spans
+//   and links, short paragraphs, no status badge; a chapter and the whole book stay short,
+// - no code cites the book: the code is its own documentation.
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -28,17 +31,24 @@ function* pageFiles(dir) {
 const decode = (s) => decodeURIComponent(s.replaceAll('&amp;', '&'));
 const localeOf = (route) => prefixes.find((p) => route.startsWith(p + '/'));
 const stripLocale = (route) => route.slice(localeOf(route).length);
+const textOf = (html) => html.replace(/<\/(?:p|li|h\d|div|td|th|tr|ul|ol|table|blockquote|section)>|<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '').replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&quot;', '"').replaceAll('&#39;', "'").replace(/\s+/g, ' ').trim();
 
 const pages = new Map();
 for (const file of pageFiles(dist)) {
   const route = '/' + relative(dist, file).replace(/index\.html$/, '');
   const html = readFileSync(file, 'utf8');
   const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
+  // A chapter's own text: the page without its figures (their labels are the figures'), diagrams, code blocks and
+  // the footer under it (the links to the chapters before and after).
+  const body = main.includes('sl-markdown-content') ? main.slice(main.indexOf('sl-markdown-content')) : main;
+  const content = body.includes('<footer') ? body.slice(0, body.indexOf('<footer')) : body;
+  const prose = content.replace(/<astro-island[\s\S]*?<\/astro-island>|<pre[\s\S]*?<\/pre>|<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '');
   pages.set(route, {
     ids: new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => decode(m[1]))),
     links: [...main.matchAll(/\shref="([/#][^"]*)"/g)].map((m) => m[1]),
     text: main.replace(/<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>/g, ''),
     shown: main.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' '),
+    prose,
   });
 }
 
@@ -57,6 +67,18 @@ const lint = (where, text) => {
     for (const m of text.matchAll(pattern)) errors.push(`${where}: ${what} "${m[0]}"`);
 };
 
+// How the book is written: what a chapter's own text may not hold, and how long it may be. Lengths are counted in
+// characters on the Chinese pages and in words on the English ones.
+const unwritten = [
+  ['a section sign', /§/g],
+  ['a source file name', /(?<![\w/.-])[\w./-]+\.(?:cs|py|mjs|ts|toml|json|sh)(?![\w-])/g],
+  ['a command-line option', /(?<![\w-])--[a-z][a-z-]+/g],
+  ['a Type.Member name', /(?<![\w.])[A-Z][a-z]+[A-Za-z0-9]*\.[A-Z][A-Za-z0-9]+/g],
+  ['a status word', /規劃中|规划中|已實作|已实现|已核實|已核实/g],
+];
+const limits = { codeSpans: 5, links: 8, paragraph: { zh: 200, en: 120 }, page: 6000, book: 55000 };
+const sizeOf = (route, text) => (localeOf(route) === '/en' ? text.split(' ').filter(Boolean).length : text.replace(/\s/g, '').length);
+
 // The site's own sources and data: page sources, figures and the data they read.
 function* sourceFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -68,6 +90,7 @@ function* sourceFiles(dir) {
 
 const errors = [];
 let checked = 0;
+let book = 0;
 for (const [route, page] of pages) {
   for (const prefix of prefixes) {
     const twin = prefix + stripLocale(route);
@@ -78,6 +101,26 @@ for (const [route, page] of pages) {
     errors.push(`${route}: unrendered bold near "${m[0]}"`);
   lint(route, page.shown);
 
+  const prose = textOf(page.prose);
+  for (const [what, pattern] of unwritten) {
+    if (what === 'a status word' && stripLocale(route) === '/limits/') continue;
+    for (const m of prose.matchAll(pattern)) errors.push(`${route}: ${what} "${m[0]}"`);
+  }
+  if (/class="[^"]*sl-badge/.test(page.prose)) errors.push(`${route}: a status badge`);
+  const spans = [...page.prose.matchAll(/<code[\s>]/g)].length;
+  if (spans > limits.codeSpans) errors.push(`${route}: ${spans} code spans (at most ${limits.codeSpans})`);
+  const cap = limits.paragraph[localeOf(route) === '/en' ? 'en' : 'zh'];
+  for (const m of page.prose.matchAll(/<(p|li)[\s>][\s\S]*?<\/\1>/g)) {
+    const text = textOf(m[0].replace(/<(ul|ol)[\s>][\s\S]*<\/\1>/g, ''));
+    if (sizeOf(route, text) > cap) errors.push(`${route}: a paragraph of ${sizeOf(route, text)} (at most ${cap}): "${text.slice(0, 30)}…"`);
+  }
+  if (localeOf(route) === '/zh-tw') {
+    const size = sizeOf(route, prose);
+    book += size;
+    if (size > limits.page) errors.push(`${route}: ${size} characters (at most ${limits.page})`);
+  }
+
+  let others = 0;
   for (const href of page.links) {
     if (href.startsWith('/_astro/') || href.startsWith('/pagefind/')) continue;
     checked++;
@@ -88,18 +131,20 @@ for (const [route, page] of pages) {
       errors.push(`${route}: link to missing page ${href}`);
       continue;
     }
+    if (target !== route && page.prose.includes(`href="${href}"`)) others++;
     if (anchor && anchor !== '_top' && !targetPage.ids.has(decode(anchor)))
       errors.push(`${route}: link to missing anchor ${href}`);
     if (localeOf(route) !== localeOf(target))
       errors.push(`${route}: link leaves the page's locale ${href}`);
   }
+  if (others > limits.links) errors.push(`${route}: ${others} links to other chapters (at most ${limits.links})`);
 }
+if (book > limits.book) errors.push(`the book: ${book} characters in Traditional Chinese (at most ${limits.book})`);
 
 for (const file of sourceFiles(fileURLToPath(new URL('../src/', import.meta.url))))
   lint(relative(root, file), readFileSync(file, 'utf8'));
 
-// Code comments cite the book as `docs: PAGE §N` (`docs: simulator/combat §5`, `docs: mod`): each must reach a page
-// and, with §N, its numbered section, so a section is never renumbered or removed while the code cites it.
+// No code cites the book (`docs: PAGE §N`): the book holds the design, the code documents itself.
 const tracked = execFileSync('git', ['ls-files', '-z', '--', '.', ':!docs'], { cwd: root, encoding: 'utf8' }).split('\0');
 for (const file of tracked.filter(Boolean)) {
   let text;
@@ -109,16 +154,10 @@ for (const file of tracked.filter(Boolean)) {
     continue;
   }
   if (text.includes('\0')) continue;
-  for (const m of text.matchAll(/docs: ([a-z][a-z0-9-]*(?:\/[a-z0-9-]+)*)(?: §(\d+(?:\.\d+)*))?/g)) {
-    checked++;
-    const page = pages.get(`/en/arch/${m[1]}/`) ?? pages.get(`/en/${m[1]}/`);
-    if (!page) errors.push(`${file}: cites a missing page "${m[0]}"`);
-    else if (m[2] && !page.ids.has(`sec-${m[2]}`)) errors.push(`${file}: cites a missing section "${m[0]}"`);
-  }
+  for (const m of text.matchAll(/docs: [a-z][a-z0-9-]*(?:\/[a-z0-9-]+)*(?: §\d+(?:\.\d+)*)?/g)) errors.push(`${file}: cites the book "${m[0]}"`);
 }
 
-// The combat net's walkthrough must hold what the champion's combat net file's test states hold
-// (docs: combat-brain/walkthrough).
+// The combat net's figure must hold what the champion's combat net file's test states hold.
 const champion = JSON.parse(readFileSync(new URL('../../eval/champions/sl.json', import.meta.url), 'utf8'));
 const combat = JSON.parse(readFileSync(join(root, champion.options['combat-net']), 'utf8'));
 const walk = JSON.parse(readFileSync(new URL('../src/data/combat-walk.json', import.meta.url), 'utf8'));
@@ -128,5 +167,5 @@ combat.tests.forEach((t, i) => {
 });
 
 for (const error of errors) console.error(error);
-console.log(`${pages.size} pages, ${checked} internal links, ${errors.length} problems`);
+console.log(`${pages.size} pages, ${checked} internal links, ${book} characters in Traditional Chinese, ${errors.length} problems`);
 process.exit(errors.length ? 1 : 0);

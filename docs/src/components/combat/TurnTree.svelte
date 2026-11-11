@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The SL planner's search of one turn (docs: sl-planner/turn-search), on a made-up turn small enough to show whole:
+  // The SL planner's search of one turn, on a made-up turn small enough to show whole:
   // depth first, ending the turn first at every step, states merged by key, the nodes shared over the first actions
   // as SlPlanner's TurnDfs shares them, and the best ends kept for the beam.
   import type { Lang } from '../v/names.ts';

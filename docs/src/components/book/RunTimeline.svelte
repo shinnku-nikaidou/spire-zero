@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The book's example run floor by floor (src/data/book/example-run.json, docs: game §1): each floor's room, the HP
+  // The book's example run floor by floor (src/data/book/example-run.json): each floor's room, the HP
   // the player came in with (a fight's start, else at the floor's first decision outside combat), and how many
   // decisions the floor took, outside combat and in it (with card prompts). Hovering a floor names it.
   import { scaleBand, scaleLinear } from 'd3';

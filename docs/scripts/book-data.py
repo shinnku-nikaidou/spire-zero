@@ -474,7 +474,7 @@ def example_run(play: Play) -> dict:
 
 
 def example_nodes(play: Play) -> dict:
-    """The first three nodes: each node's steps and where the game saves (docs: environments/information §4)."""
+    """The first three nodes: each node's steps and where the game saves."""
     rec = play.record
     fights = {c["floor"]: c for c in rec["combats"]}
     floors = per_floor(play)
@@ -510,81 +510,13 @@ def example_nodes(play: Play) -> dict:
             "command": PLAY["SL"],
             "seed": SEED,
             "how": "the decisions of floors 1-3 from the run's decision log, the floor-2 combat from its record; the game's "
-            "save points from the game's code (docs: environments/information §4)",
+            "save points from the game's code",
         },
         "nodes": nodes,
     }
 
 
 # --- V along the run -------------------------------------------------------------------------------------------------
-
-
-def series(play: Play) -> list[dict]:
-    """Every decision with a run view, and V's value of it: the chance to win as V reads the state there."""
-    ks = [k for k, e in enumerate(play.log) if "run_view" in e]
-    vals = V([play.log[k]["run_view"] for k in ks])
-    out = []
-    for k, v in zip(ks, vals, strict=True):
-        e, view = play.log[k], play.log[k]["run_view"]
-        out.append({"d": k, "s": e["surface"], "floor": view["floor"], "act": view["act"], "hp": view["hp"], "max_hp": view["max_hp"], "chosen": e["chosen"], "n": e["legal"], "v": round(v, 4)})
-    return out
-
-
-def rest_options(play: Play, decision: int) -> list[dict]:
-    """A rest site's two options as L0 on the clone values them: resting heals 30 % of max HP (HealRestSiteOption), and
-    smithing is worth the best upgrade, which the run then has at its next map decision."""
-    k = play.by_id[decision]
-    e, view = play.log[k], play.log[k]["run_view"]
-    if e["chosen"] != "rest:SMITH" or e["legal"] != 2:
-        raise SystemExit(f"decision {decision} is not a rest site that smithed with two options")
-    healed = min(view["max_hp"], view["hp"] + view["max_hp"] * 3 // 10)
-    upgraded = gained(view["deck"], play.view(k + 1)["deck"])
-    return [
-        {"action": "rest:SMITH", "value": round(play.worth(k), 4), "after": {"deck": upgraded}},
-        {"action": "rest:HEAL", "value": round(V([view | {"hp": healed}])[0], 4), "after": {"hp": healed}},
-    ]
-
-
-def log_line(play: Play, decision: int) -> dict:
-    """A decision log line as the figure abbreviates it: without its observation, history and run view."""
-    return {k: v for k, v in play.at(decision).items() if k not in ("obs", "history", "run_view")}
-
-
-def macro_examples(play: Play) -> dict:
-    k = play.by_id[PANEL_MAP]
-    view = play.log[k]["run_view"]
-    rest = LOG_LINES["rest"]
-    return {
-        "source": {
-            "command": PLAY["SL"],
-            "seed": SEED,
-            "outcome": play.record["outcome"],
-            "floor": play.record["floor"],
-            "values": "the champion's V (eval/champions/sl.json's value): series.v of each run view; a map move's option "
-            "of its afterstate; the chosen option of any other decision of the run where its node's search ends, the "
-            "next map decision's view; a rest site's other option of its afterstate",
-        },
-        "decisions": {
-            "rest": {"decision_id": rest, "surface": "rest", "chosen": play.at(rest)["chosen"], "run_view": play.at(rest)["run_view"], "options": rest_options(play, rest)},
-            "map": {"decision_id": PANEL_MAP, "surface": "map", "chosen": play.log[k]["chosen"], "run_view": view, "options": [{"action": a, "value": round(v, 4), "route": route(view, a)} for a, v in map_options(view)]},
-        },
-        "log_lines": {name: log_line(play, d) for name, d in LOG_LINES.items()},
-        "series": series(play),
-    }
-
-
-def learning_td(play: Play) -> dict:
-    return {
-        "source": {
-            "command": PLAY["SL"],
-            "seed": SEED,
-            "values": "v: the champion's V (eval/champions/sl.json's value) of the run view at each decision that has one; "
-            "outcome: the run's, 1 for a win",
-        },
-        "outcome": 1 if play.record["outcome"] == "won" else 0,
-        "floor": play.record["floor"],
-        "series": [{x: s[x] for x in ("d", "s", "floor", "act", "hp", "max_hp", "v")} for s in series(play)],
-    }
 
 
 # --- the panel -------------------------------------------------------------------------------------------------------
@@ -782,99 +714,7 @@ def eval_reports() -> dict:
 DTYPES = {1: "float", 7: "int64", 11: "double", 9: "bool"}
 
 
-def tensor(t) -> dict:
-    dims = [d.dim_param or d.dim_value for d in t.type.tensor_type.shape.dim]
-    return {"name": t.name, "dtype": DTYPES[t.type.tensor_type.elem_type], "shape": dims}
-
-
-def graph(b64: str) -> dict:
-    import base64
-    from collections import Counter
-
-    model = onnx.load_from_string(base64.b64decode(b64))
-    g = model.graph
-    shapes = [{"name": i.name, "shape": list(i.dims)} for i in g.initializer]
-    count = 0
-    for i in g.initializer:
-        n = 1
-        for d in i.dims:
-            n *= d
-        count += n
-    return {
-        "opset": model.opset_import[0].version,
-        "producer": f"{model.producer_name} {model.producer_version}",
-        "inputs": [tensor(t) for t in g.input],
-        "outputs": [tensor(t) for t in g.output],
-        "initializers": shapes,
-        "params": count,
-        "ops": dict(Counter(n.op_type for n in g.node).most_common()),
-    }
-
-
-def shape_of(v) -> object:
-    """A test entry's field as the figure names it."""
-    if isinstance(v, dict):
-        return sorted(v)
-    if isinstance(v, list):
-        return f"array of {len(v)}" if v and all(isinstance(x, int | float) for x in v) else "array"
-    return type(v).__name__
-
-
-def anatomy(path: str) -> dict:
-    """A net file's fields: names, types, sizes and shapes, and the small fields' values; no weights."""
-    f = json.loads((ROOT / path).read_text())
-    fields = []
-    for key, v in f.items():
-        field = {"key": key, "type": {dict: "object", list: "array"}.get(type(v), type(v).__name__)}
-        if key == "vocab":
-            field["tables"] = {t: {"size": len(ids), "first": ids[1:4]} for t, ids in v.items()}
-        elif key == "state":
-            field |= {"names": v["names"], "mean": v["mean"], "std": v["std"]}
-        elif key == "fit":
-            field["values"] = v
-        elif key == "onnx":
-            field |= {"size": len(v), "onnx": graph(v)}
-        elif key == "tests":
-            field |= {"size": len(v), "entry": {k: shape_of(x) for k, x in v[0].items()}, "values": [t["value"] for t in v] if "value" in v[0] else None}
-        else:
-            field["value"] = v
-        fields.append(field)
-    return {"file": path, "bytes": (ROOT / path).stat().st_size, "fields": fields}
-
-
-def learning_netfiles() -> dict:
-    o = SL_CHAMPION["options"]
-    return {
-        "source": {
-            "files": "the champion's two net files: eval/champions/sl.json's value (v) and combat-net (c)",
-            "note": "structure and shapes only, no weights",
-        },
-        "v": anatomy(o["value"]),
-        "c": anatomy(o["combat-net"]),
-    }
-
-
 # --- the kept files' sources -----------------------------------------------------------------------------------------
-
-
-def keep_sources() -> None:
-    """Two data files that do not come from the champion: only their sources are rewritten."""
-    path = DATA / "book/round-start.json"
-    data = json.loads(path.read_text())
-    data["source"] = {
-        "what": "tests[0].obs of a combat net file: a held-out start of a round from NoSL self-play, as the trainer read it",
-        "fields": "the observation as Protocol serializes it; the draw pile is sorted by card key, as every observation sends it",
-    }
-    write(path, data)
-    path = DATA / "book/eval-pairs.json"
-    data = json.loads(path.read_text())
-    data["source"] = {
-        "what": "per seed, in the seed set order: [floor of a, floor of b]; aWon and bWon are the indices of the seeds each "
-        "side won",
-        "reports": "pairs of committed reports on the same seeds: SL whole runs on promotion-1-300, NoSL whole runs on "
-        "promotion-1; the nets are named A to E",
-    }
-    write(path, data, compact=True)
 
 
 def main() -> None:
@@ -886,15 +726,11 @@ def main() -> None:
     nosl = Play("NoSL", lines(folder / "nosl-log.jsonl"), lines(folder / "nosl-records.jsonl")[0], NOSL_CHAMPION)
     write(DATA / "book/example-run.json", example_run(sl))
     write(DATA / "book/example-nodes.json", example_nodes(sl))
-    write(DATA / "macro-examples.json", macro_examples(sl))
-    write(DATA / "book/learning-td.json", learning_td(sl))
     write(DATA / "book/panel-examples.json", panel_examples(sl, nosl))
     write(DATA / "combat-examples.json", combat_examples(sl))
     write(DATA / "book/surface-counts.json", surface_counts(sl))
     write(DATA / "book/eval-reports.json", eval_reports())
     write(DATA / "book/champion-wins.json", champion_wins())
-    write(DATA / "book/learning-netfiles.json", learning_netfiles())
-    keep_sources()
 
 
 if __name__ == "__main__":

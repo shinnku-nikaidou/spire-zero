@@ -1,6 +1,6 @@
 <script lang="ts">
   // One real run through net.Net, step by step: the champion's V file's tests[0], a Defect run at A0 at a map move
-  // (floor 24), values as the trainer gave them. Vectors show their first four numbers (docs: macro-brain/network §9).
+  // (floor 24), values as the trainer gave them. Vectors show their first four numbers.
   import type { Lang } from './names.ts';
 
   let { lang = 'en' }: { lang?: Lang } = $props();

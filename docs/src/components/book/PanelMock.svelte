@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The mod's panel as Panel.cs lays it out (docs: output §2): the head, the toolbar with the effort row (and, while
+  // The mod's panel as Panel.cs lays it out: the head, the toolbar with the effort row (and, while
   // auto-play runs, its speed and stops), the strip with V's chance to win, then an answer or a message, and the AI's
   // recent actions. The three answers are real decisions of the book's example seed, from one play of each champion file
   // (src/data/book/panel-examples.json, whose texts were made as Describe and L10n make them). The mod's own words below

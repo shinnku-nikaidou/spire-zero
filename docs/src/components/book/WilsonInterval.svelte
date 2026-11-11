@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The Wilson 95% interval of a win rate (docs: evaluation/metrics §4), as Rate.Wilson computes it
+  // The Wilson 95% interval of a win rate, as Rate.Wilson computes it
   // (src/Sts2Ai.Harness/Reports.cs:10-17), against the normal (Wald) interval; presets are example counts, small and
   // none, and FableBot's published result.
   import { scaleLinear } from 'd3';

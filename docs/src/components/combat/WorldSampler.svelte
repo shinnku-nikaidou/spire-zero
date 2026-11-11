@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Determinized worlds of one real NoSL decision (docs: pimc §2): the draw pile the player sees as a set, put in an
+  // Determinized worlds of one real NoSL decision: the draw pile the player sees as a set, put in an
   // order that depends only on what is seen, then shuffled with each world's seed. Drawn here in the page with its own
   // generator, not the game's; the run's own 8 worlds are those of the next section's table.
   import { onMount } from 'svelte';

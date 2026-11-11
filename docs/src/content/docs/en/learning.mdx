@@ -1,7 +1,6 @@
 ---
 title: Learning
 description: 'How the two networks learn from zero: the champion plays whole runs by itself, explores on purpose and labels every position with the real outcome, and new networks take over only after passing the gate.'
-draft: true
 ---
 
 Both networks learn by self-play. The champion plays whole runs in the simulator with the current networks, deliberately replaces some of its decisions with random draws, and records every decision and the outcome of every combat. Each recorded position is labelled with what really happened afterwards. A new pair of networks learns from the newest batch of runs only and replaces the champion only after passing the gate. The whole process uses no human runs, no hand-written strategy and no language model.

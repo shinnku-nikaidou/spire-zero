@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A map answer's marks (docs: output §3): the map of the example run at the panel's map decision
+  // A map answer's marks: the map of the example run at the panel's map decision
   // (src/data/book/panel-examples.json, map), the path so far, a pulsing ring on the point the brain picked, and a line
   // along the route the brain plans after it, as MapMark draws them; the map route setting picks how much shows. The
   // setting's names are the mod's (L10n.cs).
