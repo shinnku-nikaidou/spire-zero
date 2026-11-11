@@ -219,7 +219,7 @@ internal sealed class ChampionArgs(bool file)
         .AcceptOnlyFromAmong("screen", "clone");
     private readonly Option<double> _explore = Opt.Of("--explore", 0.0,
         "self-play only: the chance ε that l0 draws a decision's answer evenly, whatever V says: a card reward's outcome among its cards and skipping, " +
-        "a card prompt's picks, every other screen's options but the potion belt's");
+        "a card prompt's picks outside combat, every other screen's options but a potion's discard where it only loses the potion");
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
         "self-play only: the softmax temperature τ over the log of V's values by which l0 draws every answer --explore leaves to V (0: V's best)");
 

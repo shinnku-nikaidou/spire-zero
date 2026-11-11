@@ -30,7 +30,7 @@ public sealed record RunRecord(
     int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string RunId)
 {
     /// <summary>The run records in these files (comma-separated), one per line. A failed run is as if never set: reports and
-    /// gates see only the others (a host's memory fails runs at random: fleet references/maintenance.md).</summary>
+    /// gates see only the others (a machine with bad memory fails runs at random).</summary>
     public static List<RunRecord> Read(string files) => [.. Records(files).Where(r => r.Outcome != "failed")];
 
     /// <summary>The seeds of a set less those these files' runs failed on: 2 failed of 500 is a set of 498.</summary>
