@@ -96,7 +96,7 @@ internal static partial class SelfTest
                         prompted = restored.Prompt != null;
                     }
                     // A card prompt stands in the middle of an action: there the hidden state is not sampled again, and
-                    // no combat is built to show it (docs: simulator/combat §5).
+                    // no combat is built to show it.
                     if (prompted) continue;
 
                     string trueOrder;

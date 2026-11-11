@@ -7,7 +7,7 @@ namespace Sts2Ai.Mod.UI;
 /// <summary>How a panel message reads: plain, something the player can fix or wait out, or an error.</summary>
 internal enum Tone { Plain, Warn, Error }
 
-/// <summary>What the player asks the AI to do, from the toolbar or its keys (docs: mod/auto §4).</summary>
+/// <summary>What the player asks the AI to do, from the toolbar or its keys.</summary>
 internal enum Command
 {
     /// <summary>F5: play by itself until paused; or pause.</summary>
@@ -35,7 +35,7 @@ internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pil
 }
 
 /// <summary>
-/// The mod's panel over the game (docs: output §2): a card with the champion, the mod's status and an SL/NoSL switch,
+/// The mod's panel over the game: a card with the champion, the mod's status and an SL/NoSL switch,
 /// the toolbar that lets the AI play (auto, one step, to the end of the turn or the room) and the SL planner's effort,
 /// then either the brain's
 /// answer (the next action, the plan after it, the options it scored with their chances to win) or a message saying

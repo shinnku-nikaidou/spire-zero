@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain.Macro;
 
 /// <summary>
-/// What a run is worth where the macro brain stops looking ahead (docs: macro-brain/search §2): the one place its
+/// What a run is worth where the macro brain stops looking ahead: the one place its
 /// options get their values, by one rule.
 ///
 /// The game's rules come first. A run that is over is worth 1 if won and 0 if lost: the game kills the players when it

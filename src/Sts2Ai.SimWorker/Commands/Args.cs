@@ -104,7 +104,7 @@ internal sealed record CombatPool(int Act, string Rooms, List<EncounterModel> En
     public CombatSetup Setup(EncounterModel encounter, string seed) => new(Character, encounter, Act, seed, Loadout: Loadout);
 }
 
-/// <summary>pimc's and plan's budget (docs: pimc/budget §1, sl-planner/budget §1).</summary>
+/// <summary>pimc's and plan's budget.</summary>
 internal sealed class BudgetArgs
 {
     /// <summary>The planner's effort when --effort is not given.</summary>
@@ -158,11 +158,11 @@ internal sealed class BudgetArgs
     }
 }
 
-/// <summary>What the search values its leaves with (docs: combat-brain/leaf §2, §3).</summary>
+/// <summary>What the search values its leaves with.</summary>
 internal sealed class LeafArgs
 {
     private readonly Option<string?> _net = Opt.Maybe<string?>("--combat-net",
-        "the combat net file, which values the search's leaves; pimc and plan need it (docs: learning/combat-net §1)");
+        "the combat net file, which values the search's leaves; pimc and plan need it");
     private readonly Option<string?> _value = Opt.Maybe<string?>("--value",
         "V, a net file: l0 values its options by it, and it prices the combat net's endings; --macro l0 and --combat-net need it");
 
@@ -175,7 +175,7 @@ internal sealed class LeafArgs
 internal sealed class ChampionFileOption : Option<string?>
 {
     public ChampionFileOption() : base("--champion") =>
-        Description = "plays the champion this champion file names (docs: evaluation/champions §1); options given override the file's";
+        Description = "plays the champion this champion file names; options given override the file's";
 
     /// <summary>
     /// The parse again with the file's options after the ones given: each that the command has and was not given (brain
@@ -202,7 +202,7 @@ internal sealed class ChampionFileOption : Option<string?>
     }
 }
 
-/// <summary>The options that name a champion (docs: harness/routing §1): its brains, the search's budget and workers, and weights files.</summary>
+/// <summary>The options that name a champion: its brains, the search's budget and workers, and weights files.</summary>
 /// <param name="file">Whether the command also takes --champion FILE to play (run, brain; gate's --champion is the one to beat).</param>
 internal sealed class ChampionArgs(bool file)
 {
@@ -215,7 +215,7 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's and plan's search worker processes (default: one per world, --worlds)");
     private readonly LeafArgs _leaf = new();
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
-            "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone (docs: macro-brain/search §2)")
+            "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone")
         .AcceptOnlyFromAmong("screen", "clone");
     private readonly Option<double> _explore = Opt.Of("--explore", 0.0,
         "self-play only: the chance ε that l0 draws a decision's answer evenly, whatever V says: a card reward's outcome among its cards and skipping, " +

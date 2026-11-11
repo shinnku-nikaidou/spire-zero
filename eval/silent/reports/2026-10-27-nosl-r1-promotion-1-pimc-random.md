@@ -1,6 +1,6 @@
 # Evaluation 2026-10-27: NoSL R1, promotion-1
 
-**Void** (docs: evaluation/metrics §2): 11723 random decisions, 3 failed runs.
+**Void**: 11723 random decisions, 3 failed runs.
 
 | | |
 |---|---|

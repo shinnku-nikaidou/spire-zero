@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Sts2Ai.Protocol;
 
 /// <summary>
-/// The messages between the decision side and a simulator worker (docs: simulator/pool §3), one JSON line each: the worker
+/// The messages between the decision side and a simulator worker, one JSON line each: the worker
 /// says hello once it has booted, then answers each request in order. A request carries everything the worker needs,
 /// so any worker can serve it and a crashed worker's request can be sent again.
 /// </summary>
@@ -17,7 +17,7 @@ public sealed record WorkerHello(string Game);
 public abstract record WorkerRequest(long Id);
 
 /// <summary>
-/// PIMC's search of one NoSL world of a combat decision (docs: pimc/budget §5): the world is built from
+/// PIMC's search of one NoSL world of a combat decision: the world is built from
 /// <see cref="Observation"/> with <see cref="BuildSeed"/>, then determinized as world <see cref="World"/> of
 /// <see cref="Worlds"/> drawn from <see cref="SearchSeed"/>; the reply holds the best line after each of
 /// <see cref="First"/>, in that order, each searched with <see cref="NodesPerFirst"/> nodes. <see cref="History"/> is the
@@ -36,7 +36,7 @@ public sealed record PimcWorldRequest(
     RunView Run) : WorkerRequest(Id);
 
 /// <summary>
-/// The SL planner's search of one turn from one state of a combat decision in a run (docs: sl-planner/budget §4):
+/// The SL planner's search of one turn from one state of a combat decision in a run:
 /// <see cref="Node"/> loaded and replayed is the real combat at the decision, and <see cref="Path"/> played from there
 /// reaches the state. The reply's <see cref="WorkerReply.Turn"/> holds the best ends of that turn: up to
 /// <see cref="Keep"/> states at the next turn's start, and the best end of the combat, searched with <see cref="Nodes"/>
@@ -46,7 +46,7 @@ public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<Combat
     IReadOnlyList<EnemyTurns> History) : WorkerRequest(Id);
 
 /// <summary>
-/// L0's probes of a decision outside combat in a run (docs: macro-brain/search §6): <see cref="Node"/> loaded and replayed
+/// L0's probes of a decision outside combat in a run: <see cref="Node"/> loaded and replayed
 /// stands at the decision; each of <see cref="Paths"/> is played from there, in its own load of the clone, and the
 /// reply's <see cref="WorkerReply.Afters"/> holds what the game asks next after each, in order. A path's answers are
 /// macro actions and, for a card prompt, its picks in the prompt's canonical order (<see cref="MacroAction.Pick"/>).
@@ -72,10 +72,10 @@ public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen
 /// <param name="Nodes">The actions the search simulated after the line's first action, itself included.</param>
 /// <param name="Hashes">For each of <paramref name="Actions"/>, the hash of the observation it is played at
 /// (<see cref="ProtocolJson.Hash"/>): what the line expects to see before each step.</param>
-/// <param name="Repeats">Whether the line repeats a cycle the search found (docs: pimc/search §6).</param>
+/// <param name="Repeats">Whether the line repeats a cycle the search found.</param>
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0, IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
 
-/// <summary>What the SL planner's search of one turn found (docs: sl-planner/turn-search §4).</summary>
+/// <summary>What the SL planner's search of one turn found.</summary>
 /// <param name="Ends">The best end of the combat, if the turn can reach one, then the states at the next turn's start, best first.</param>
 /// <param name="Nodes">The actions the search simulated.</param>
 /// <param name="Cut">Whether anything was left out: the nodes ran out, or more states were found than kept.</param>

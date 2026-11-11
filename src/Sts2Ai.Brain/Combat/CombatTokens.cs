@@ -27,7 +27,7 @@ public sealed record EnemyTokens(string Id, IReadOnlyList<double> Scalars, IRead
 public sealed record AllyTokens(string Id, IReadOnlyList<double> Scalars, IReadOnlyList<PowerToken> Powers);
 
 /// <summary>
-/// A combat state as the combat net reads it (docs: combat-brain/network §2): ids, and numbers scaled and capped. This is
+/// A combat state as the combat net reads it: ids, and numbers scaled and capped. This is
 /// the one place a state is turned into the net's reading. <see cref="CombatNet"/> looks the ids up in its net file's
 /// tables and feeds the graph; the trainer reads the same tokens as JSON (<see cref="Write"/>) and does the same.
 /// </summary>

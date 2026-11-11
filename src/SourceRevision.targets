@@ -1,6 +1,6 @@
 <Project>
   <!--
-    A program says which commit it was built from (reports and net files name it, docs: evaluation/metrics §7). A build
+    A program says which commit it was built from (reports and net files name it). A build
     with uncommitted changes under src/ is not that commit, so its revision gets a "-dirty" suffix.
   -->
   <Target Name="MarkUncommittedSource" AfterTargets="InitializeSourceControlInformation" Condition="'$(SourceRevisionId)' != ''">

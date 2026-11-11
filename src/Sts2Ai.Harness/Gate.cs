@@ -3,7 +3,7 @@ using System.Globalization;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// The full-run gate (docs: evaluation/gates §6): a challenger against the champion on the same seeds (CRN), pair by pair in
+/// The full-run gate: a challenger against the champion on the same seeds (CRN), pair by pair in
 /// the seed set's order, with an SPRT that stops at the first pair where the evidence is clear. The champion's side is
 /// its report: runs are deterministic, so the same seed played again gives the same run.
 ///
@@ -17,7 +17,7 @@ public static class Gate
 {
     /// <param name="Verdict">pass (H1: the challenger is better by delta, or not worse in a not-worse gate), fail (H0: it is
     /// not better, or worse by delta), open (the pairs ran out first), or void (the challenger's runs break a must-be-zero
-    /// rule, docs: evaluation/metrics §2).</param>
+    /// rule).</param>
     /// <param name="Decided">The pair at which the SPRT stopped, or every pair when it did not.</param>
     /// <param name="Llr">The log-likelihood ratio at <paramref name="Decided"/>; it passes at <paramref name="Upper"/> and
     /// fails at <paramref name="Lower"/>.</param>
@@ -84,7 +84,7 @@ public static class Gate
 }
 
 /// <summary>
-/// The gate of a pair of nets (docs: evaluation/gates §6): the champion's nets and the new ones both play the same seed
+/// The gate of a pair of nets: the champion's nets and the new ones both play the same seed
 /// set as each character, at the same commit, and the runs are paired by seed. The nets are every character's, so the
 /// verdict is over all the characters' pairs together: promote when the 95 % one-sided lower bound of the paired
 /// difference in wins (1 or 0, the challenger less the champion) is above 0. Each character's own difference, and the
@@ -159,7 +159,7 @@ public static class NetGate
 }
 
 /// <summary>
-/// The champion of one environment, every character's, as <c>eval/champions/ENV.json</c> holds it (docs: evaluation §5):
+/// The champion of one environment, every character's, as <c>eval/champions/ENV.json</c> holds it:
 /// the run options that play it (<c>run --champion FILE</c>; a job gives its own character and ascension), its name as
 /// the reports show it, by character its report (a report is one character at one ascension), and the gate its nets
 /// passed (<c>promote</c>; none for a champion that took its nets from another environment's promotion).

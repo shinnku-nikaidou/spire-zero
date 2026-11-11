@@ -6,7 +6,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Mod;
 
 /// <summary>
-/// The brain that ships in the mod's folder (docs: mod §4), so a player needs nothing else: brain/RID/ holds a
+/// The brain that ships in the mod's folder, so a player needs nothing else: brain/RID/ holds a
 /// self-contained brain for each platform, brain/ its champion file and nets. It runs as a child process of the game,
 /// talking on its stdin and stdout, with the running game's own assemblies (STS2_BIN_DIR, the folder the game loaded
 /// sts2.dll from) and its working directory brain/; its stderr goes to <see cref="LogPath"/>. With
@@ -54,7 +54,7 @@ internal sealed class BundledBrain
             UseShellExecute = false,
         };
         start.Environment["STS2_BIN_DIR"] = _gameBin;
-        // As every launcher of the simulator sets it (docs: simulator/reference §1).
+        // As every launcher of the simulator sets it.
         start.Environment["DOTNET_ReadyToRun"] = "0";
         // The game's Sentry extension sets this in the game's process. Inherited, it makes sts2.dll's module
         // initializer in each search worker load that extension outside Godot and call into it: SIGSEGV at boot.

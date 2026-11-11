@@ -7,7 +7,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Tests.Brain;
 
 /// <summary>
-/// What the nets read of a state (docs: macro-brain/network §2, combat-brain/network §2), as the JSON the trainers get:
+/// What the nets read of a state, as the JSON the trainers get:
 /// the one reading there is, so these are its tests.
 /// </summary>
 public class TokensTests

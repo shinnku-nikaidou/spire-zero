@@ -5,7 +5,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
-/// L0's probes in SL (docs: macro-brain/search §6): a node's clone at a decision outside combat, loaded once per path, plays
+/// L0's probes in SL: a node's clone at a decision outside combat, loaded once per path, plays
 /// the path's answers from the decision and stops at the next decision the game asks, which it reports
 /// (<see cref="Afterstate"/>). Nothing else is played: a combat, the map or the run's end stops a probe like any decision.
 /// </summary>

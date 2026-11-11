@@ -7,7 +7,7 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Mod;
 
-/// <summary>What the player asked the AI to play (docs: mod/auto §2).</summary>
+/// <summary>What the player asked the AI to play.</summary>
 internal enum Goal
 {
     /// <summary>Nothing: the AI only shows its answer.</summary>
@@ -27,7 +27,7 @@ internal enum Goal
 }
 
 /// <summary>
-/// Assist mode and the AI's play (docs: mod/loop, mod/auto, mod/sl-record §7): once the game has been idle on a decision
+/// Assist mode and the AI's play: once the game has been idle on a decision
 /// for a few frames, asks the brain about that state, and shows the answer while the state lasts. The player acts, or
 /// asks the AI to (<see cref="Press"/>): one action, to the end of the turn or the room, or on its own until paused.
 /// The AI plays only the brain's answer to the decision on screen, through <see cref="Executor"/>, once per state, and

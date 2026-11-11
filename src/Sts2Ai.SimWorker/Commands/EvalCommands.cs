@@ -6,7 +6,7 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker.Commands;
 
-/// <summary>report: the evaluation report over run records (docs: evaluation/metrics §7), PATH.json and PATH.md.</summary>
+/// <summary>report: the evaluation report over run records, PATH.json and PATH.md.</summary>
 internal static class ReportCommand
 {
     private static readonly Option<string> Seeds = Opt.Required<string>("--seeds", "the seed file the records were played on");
@@ -52,7 +52,7 @@ internal static class ReportCommand
 }
 
 /// <summary>
-/// gate: the gate of a change to the code (docs: evaluation/gates §6), the challenger's records against the champion's
+/// gate: the gate of a change to the code, the challenger's records against the champion's
 /// report of their character, paired by seed, with an SPRT. The challenger is named by its run options, which must be
 /// the ones its records were played with, and its runs must be of that report's ascension. It judges and writes
 /// nothing: new nets are judged and promoted by <c>promote</c>.
@@ -110,7 +110,7 @@ internal static class GateCommand
 }
 
 /// <summary>
-/// promote: the gate of a pair of nets and their promotion (docs: evaluation/gates §6). The nets are every character's,
+/// promote: the gate of a pair of nets and their promotion. The nets are every character's,
 /// so each character has two reports of one gate, the champion's nets and the new ones on the same seed set at the same
 /// commit; the reports are paired by seed and judged together (<see cref="NetGate"/>). The challenger is the champion
 /// file's champion with the nets given (--value, --combat-net), and must be what played its reports. On a pass the
@@ -149,7 +149,7 @@ internal static class PromoteCommand
         {
             if (given == null) continue;
             if (Path.GetDirectoryName(Path.GetFullPath(given)) != Path.GetFullPath(Layout.Weights))
-                throw new CliException($"{given} is not in {Layout.Weights}, where a champion's weights files are (docs: learning/reference §6)");
+                throw new CliException($"{given} is not in {Layout.Weights}, where a champion's weights files are");
             nets[key] = $"{Layout.Weights.Replace(Path.DirectorySeparatorChar, '/')}/{Path.GetFileName(given)}";
         }
         var (challenger, options) = With(championPath, file, nets);
@@ -240,14 +240,14 @@ internal static class PromoteCommand
     }
 }
 
-/// <summary>leaderboard: a character's leaderboards over every report in its folder (docs: evaluation/metrics §9).</summary>
+/// <summary>leaderboard: a character's leaderboards over every report in its folder.</summary>
 internal static class LeaderboardCommand
 {
     private static readonly Option<string> Character = Opt.Of("--character", "SILENT", "the character, whose eval folder holds its reports");
 
     public static Command Command()
     {
-        var command = Opt.Command("leaderboard", "a character's leaderboards over every report in eval/CHARACTER/reports (docs: evaluation/metrics §9)", [Character]);
+        var command = Opt.Command("leaderboard", "a character's leaderboards over every report in eval/CHARACTER/reports", [Character]);
         command.SetAction(Run);
         return command;
     }
@@ -279,7 +279,7 @@ internal static class LeaderboardCommand
 /// <summary>seeds: a seed file's seeds, MakeSeed(base, 0..n-1), one per line.</summary>
 internal static class SeedsCommand
 {
-    private static readonly Option<int> Base = Opt.Required<int>("--base", "the seed base (docs: evaluation/metrics §6)");
+    private static readonly Option<int> Base = Opt.Required<int>("--base", "the seed base");
     private static readonly Option<int> N = Opt.Of("--n", 300, "seeds");
 
     public static Command Command()

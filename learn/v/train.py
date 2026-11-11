@@ -1,4 +1,4 @@
-"""Train V (docs: macro-brain/value §5) from self-play, and write its net file for `run --value`.
+"""Train V from self-play, and write its net file for `run --value`.
 
 The samples are v/data.py's: the logged macro decisions of every character with where their runs ended and the next
 combats' HP costs. The loss is the hazards' cross-entropy plus the second head's squared errors; early stopping on the

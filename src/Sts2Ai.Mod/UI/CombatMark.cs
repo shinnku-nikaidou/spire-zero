@@ -22,7 +22,7 @@ internal sealed record CombatPlan(IReadOnlyList<CombatAction> Steps)
 }
 
 /// <summary>
-/// A combat plan's marks (docs: output §3): each card the plan plays this turn is outlined in purple with its step's
+/// A combat plan's marks: each card the plan plays this turn is outlined in purple with its step's
 /// number, each target is ringed with the numbers of the steps aimed at it, and the end turn button is ringed with its
 /// step's number. The marks live in the mod's layer and follow the game's nodes on screen every frame, since cards
 /// move, fan out and are pooled; a card or creature that is gone has no mark. The settings pick which marks show.

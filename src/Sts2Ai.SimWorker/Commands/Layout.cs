@@ -1,7 +1,7 @@
 namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
-/// Where the files go, from the repository root (docs: learning/reference §6, evaluation/champions §5): each character is
+/// Where the files go, from the repository root: each character is
 /// judged on its own, so its reports have a folder of its own; the combat net and V are each one net for every
 /// character and ascension, so their weights share one folder, and so do the champion files. The seed sets are shared.
 /// </summary>

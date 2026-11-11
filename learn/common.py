@@ -101,7 +101,7 @@ def revision() -> str:
 
 
 class Encoder:
-    """The nets' inputs of decisions (docs: learning/reference §2), made by the code that feeds the nets in play, so
+    """The nets' inputs of decisions, made by the code that feeds the nets in play, so
     that a state is read one way only: the simulator's `encode`, or the program src/Sts2Ai.Encode, which is the same
     without the game. `command` starts it; one process serves a whole training.
 
@@ -186,7 +186,7 @@ def checkout_encoder() -> str:
 
 
 def trained(list_: str, init: dict | None, seed: int, epochs: int, settings: dict, encoder: Encoder) -> dict:
-    """What made a net, for its file (docs: learning/reference §7): the code's commit, the commit of the encoder that
+    """What made a net, for its file: the code's commit, the commit of the encoder that
     read the states, the list pair it trained on, the net it went on from (its name) or none, the seed, the epochs it
     ran, and the trainer's settings as they were."""
     return {

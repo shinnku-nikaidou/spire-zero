@@ -1,4 +1,4 @@
-# Promotion set 1 extended to 300 seeds (docs: evaluation/metrics §5). Generated 2026-10-30 by: Sts2Ai.SimWorker seeds --base 2
+# Promotion set 1 extended to 300 seeds. Generated 2026-10-30 by: Sts2Ai.SimWorker seeds --base 2
 # --n 300 (MakeSeed(2, i)). The first 200 are promotion-1's, in its order; the last 100 are new. First played by v6-2's
 # full-game SL report (2026-10-30), paired with earlier promotion-1 reports on the first 200 only.
 3TZ33JATH5R5

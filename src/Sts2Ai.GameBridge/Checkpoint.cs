@@ -9,7 +9,7 @@ using MegaCrit.Sts2.Core.Saves;
 namespace Sts2Ai.GameBridge;
 
 /// <summary>
-/// A node's SL checkpoint (docs: simulator/worlds §3): the game's save on arrival at the map point, and each relic's plain
+/// A node's SL checkpoint: the game's save on arrival at the map point, and each relic's plain
 /// fields (numbers, flags and enums, its status among them). The save keeps only the fields a relic marks as saved, so
 /// without them a relic that changes its state between combats (Lava Rock disables itself) loads differently from the
 /// run it came from. <see cref="RestoreRelics"/> puts them back once the save is loaded.

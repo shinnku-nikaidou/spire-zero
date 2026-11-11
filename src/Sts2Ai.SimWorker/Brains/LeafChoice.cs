@@ -5,7 +5,7 @@ namespace Sts2Ai.SimWorker.Brains;
 
 /// <summary>
 /// V (--value FILE), which l0 values its options by and which prices the combat net's endings, and what the search values
-/// its leaves with (docs: combat-brain/leaf §1): --combat-net FILE's net, priced by V; none for a placeholder policy,
+/// its leaves with: --combat-net FILE's net, priced by V; none for a placeholder policy,
 /// which does not search.
 /// </summary>
 internal sealed record LeafChoice(CombatNet? Net, string? NetPath, IRunValue? Value, string? ValuePath)

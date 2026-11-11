@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
-/// The fight round cap (docs: simulator/runs §3): a fight still going when round <see cref="MaxRounds"/> + 1 starts is
+/// The fight round cap: a fight still going when round <see cref="MaxRounds"/> + 1 starts is
 /// lost. The game has no round limit, and a player who can no longer hurt the enemies, behind a block they cannot get
 /// through, would play the fight forever. At the player's turn past the cap the driver kills the player the way the
 /// game's own kill command does, forced so that nothing revives them, and then checks the win condition. The run, its

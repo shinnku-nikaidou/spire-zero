@@ -18,7 +18,7 @@ internal enum AutoSpeed { Slow, Medium, Fast }
 internal enum SearchEffort { Brain, Low, Medium, High, Max }
 
 /// <summary>
-/// The player's choices for the mod (docs: output §2), set in the game's settings screen (<see cref="SettingsTab"/>) and
+/// The player's choices for the mod, set in the game's settings screen (<see cref="SettingsTab"/>) and
 /// the panel's SL/NoSL switch. They are kept in one file in the mod's own folder (<see cref="Dir"/>), outside the game's
 /// profile, and read once at start; every change is written back at once.
 /// </summary>
@@ -30,7 +30,7 @@ internal enum SearchEffort { Brain, Low, Medium, High, Max }
 /// <param name="Effort">The SL planner's effort the mod asks the brain for; a change starts the run anew for the brain.</param>
 /// <param name="Record">Not on the settings screen, set in the file by hand: each brain the mod starts writes the messages
 /// it gets and its decision log (brain --wire, --log) under <see cref="Dir"/>/captures/, a pair of files per brain,
-/// for <c>clones</c> to check the SL records against (docs: mod/sl-record §8).</param>
+/// for <c>clones</c> to check the SL records against.</param>
 internal sealed record Settings(
     bool Assist = true,
     PlayEnvironment Env = PlayEnvironment.SL,

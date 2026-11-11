@@ -20,7 +20,7 @@ internal static partial class HeadlessPatches
     /// <summary>Plays a crystal sphere minigame the game would put on screen. Without it, the screen's code runs (and fails).</summary>
     public static Action<CrystalSphereMinigame>? CrystalSphereShown;
 
-    /// <summary>The game saving on arrival at a map point (docs: environments/information §3): its state is a node checkpoint.</summary>
+    /// <summary>The game saving on arrival at a map point: its state is a node checkpoint.</summary>
     public static Action? NodeEntered;
 
     public static void Apply()

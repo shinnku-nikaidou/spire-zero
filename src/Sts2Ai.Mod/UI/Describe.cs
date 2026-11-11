@@ -18,7 +18,7 @@ internal enum ShownKind
     Run,
 }
 
-/// <summary>A brain's answer as the panel shows it (docs: output §2).</summary>
+/// <summary>A brain's answer as the panel shows it.</summary>
 /// <param name="Next">The action to take.</param>
 /// <param name="Then">The plan after it: the rest of the turn in combat, the rooms the route goes through on the map.</param>
 /// <param name="Route">Whether <paramref name="Then"/> is a map route, shown as rooms rather than numbered steps.</param>

@@ -33,7 +33,7 @@
     </AssemblyAttribute>
   </ItemGroup>
 
-  <!-- Reports name the commit the build came from (docs: evaluation/metrics §7): "-dirty" with uncommitted source. -->
+  <!-- Reports name the commit the build came from: "-dirty" with uncommitted source. -->
   <Import Project="../SourceRevision.targets" />
 
   <ItemGroup>

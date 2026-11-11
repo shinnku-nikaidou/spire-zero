@@ -4,7 +4,7 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Tests.Harness;
 
-/// <summary>The options a macro answer carries to a host that shows them (docs: harness §5): V's value of each, and on the map each one's route.</summary>
+/// <summary>The options a macro answer carries to a host that shows them: V's value of each, and on the map each one's route.</summary>
 public class ExplainTests
 {
     /// <summary>A V that is the sum of what each relic is worth, less a little per map point visited, so routes differ.</summary>

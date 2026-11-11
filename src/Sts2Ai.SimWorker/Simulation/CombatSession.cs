@@ -63,7 +63,7 @@ internal sealed record CombatSnapshot(CombatSetup Setup, IReadOnlyList<TraceEven
 /// and relics), placed directly in the encounter's room. The driver lists legal actions, executes one, and pumps
 /// the game until it is waiting for player input again (or the combat is over).
 ///
-/// A card prompt an action raises is a state of the combat (docs: simulator/combat §1): the game waits on it
+/// A card prompt an action raises is a state of the combat: the game waits on it
 /// (<see cref="Prompt"/>), no play is legal, and the next action is its answer (<see cref="CombatAction.Pick"/>). Only
 /// the prompts of the combat's start are answered here, by the policy the session is given: a combat built from an
 /// observation starts before the state it is built to show, and those are no decisions of that state's.

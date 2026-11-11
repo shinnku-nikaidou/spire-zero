@@ -9,7 +9,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Mod.UI;
 
 /// <summary>
-/// The mod's "AI" tab in the game's settings screen (docs: output §2), after General, Graphics, Sound and Input. The
+/// The mod's "AI" tab in the game's settings screen, after General, Graphics, Sound and Input. The
 /// game builds its four tabs in <see cref="NSettingsTabManager"/>'s _Ready from nodes in its scene; a postfix there
 /// copies the Input tab for the tab's button, and the Sound panel, emptied, for the tab's panel, so both look and switch
 /// like the game's own. The rows are the mod's own controls in the game's font, each writing <see cref="Settings"/> at

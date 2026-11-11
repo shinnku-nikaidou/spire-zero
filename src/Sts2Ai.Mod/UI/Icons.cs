@@ -3,7 +3,7 @@ using Godot;
 namespace Sts2Ai.Mod.UI;
 
 /// <summary>
-/// The toolbar's icons (docs: output §2), drawn here into textures so they need no file and no font: play, pause, step
+/// The toolbar's icons, drawn here into textures so they need no file and no font: play, pause, step
 /// (an arrow over a dot) and finish (an arrow into a bar). The shapes are laid out on an 18-unit square and drawn at
 /// three times that, then shown at <see cref="Shown"/>: the game scales its 1080p canvas up to the window, and a small
 /// texture would blur. Each pixel is the share of 4×4 samples inside the shape.

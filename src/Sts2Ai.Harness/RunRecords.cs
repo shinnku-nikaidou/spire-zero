@@ -9,18 +9,18 @@ namespace Sts2Ai.Harness;
 /// (failed or truncated).</param>
 public sealed record CombatEntry(int Act, int Floor, string Encounter, string Room, int Hp, int MaxHp, int Potions = 0, CombatEnd? End = null);
 
-/// <summary>How a combat ended, the target of the combat outcome head (docs: learning/combat-net §3): a death, or the HP, max HP and
+/// <summary>How a combat ended, the target of the combat outcome head: a death, or the HP, max HP and
 /// potions left after it.</summary>
 public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions);
 
-/// <summary>What played a run, the same for every run of one evaluation (docs: evaluation/metrics §8).</summary>
+/// <summary>What played a run, the same for every run of one evaluation.</summary>
 /// <param name="Champion">The brain on each side of the routing table, with its budget.</param>
 /// <param name="AutoWin">The run's rule (<see cref="RunView.AutoWin"/>): the acts, indexes from 0, whose plain monster fights
 /// were won at their start; null in the normal game. Such a run is self-play data, never in a report or a gate.</param>
 public sealed record RunConfig(string Game, string Commit, string Champion, string Env, IReadOnlyList<int>? AutoWin = null);
 
-/// <summary>One run of an evaluation, as the report needs it (docs: evaluation/metrics §8).</summary>
-/// <param name="RunId">The run id the brain knew the run by, as in the decision log (docs: harness/decision-log).</param>
+/// <summary>One run of an evaluation, as the report needs it.</summary>
+/// <param name="RunId">The run id the brain knew the run by, as in the decision log.</param>
 /// <param name="Outcome">won, lost, truncated (the decision cap), or failed (an error in the driver or a brain; never re-run).</param>
 /// <param name="Brains">Decisions per brain name, from Harness's log.</param>
 /// <param name="CardRewards">Card rewards offered, and how many of them were left untaken (skipped, or never opened).</param>

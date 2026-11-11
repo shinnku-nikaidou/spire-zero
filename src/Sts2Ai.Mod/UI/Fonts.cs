@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Localization.Fonts;
 namespace Sts2Ai.Mod.UI;
 
 /// <summary>
-/// The game's own font for the mod's text (docs: output §2). The game draws at 1080p and scales the canvas to the window,
+/// The game's own font for the mod's text. The game draws at 1080p and scales the canvas to the window,
 /// with font oversampling off: its fonts are MSDF and stay sharp at any scale, while the engine's default font would be
 /// drawn at 1080p and stretched, blurred. So the mod takes the font the game uses for its language: the game's
 /// substitute where it has one (Chinese, Japanese, Korean, Russian, Thai), else Kreon.

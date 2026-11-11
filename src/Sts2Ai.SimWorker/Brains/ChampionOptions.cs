@@ -5,12 +5,12 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker.Brains;
 
-/// <summary>The champion that --policy and --macro name (docs: harness/routing §1), pimc's budget, and l0's V (--value).</summary>
+/// <summary>The champion that --policy and --macro name, pimc's budget, and l0's V (--value).</summary>
 /// <param name="Value">l0's V; null with no l0.</param>
 /// <param name="ValueFile">Where <paramref name="Value"/> came from.</param>
 /// <param name="Leaf">pimc's and plan's combat net (--combat-net).</param>
 /// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
-/// <param name="Explore">For self-play only (docs: learning/loop §9): the share ε of macro decisions whose answer l0 draws
+/// <param name="Explore">For self-play only: the share ε of macro decisions whose answer l0 draws
 /// evenly, whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
 /// <param name="MacroExplore">For self-play only: l0's softmax temperature τ over the log of V's values for the decisions
 /// not drawn evenly (--macro-explore, <see cref="Softmax"/>); 0 for none, V's best.</param>
@@ -30,8 +30,8 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// One Harness per run. A card prompt during a combat is the combat brain's, a decision like its others.
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
     /// this process or over the wire; so does the exploring l0, from its own. pimc plays in NoSL; in SL, plan plans the
-    /// whole combat on the node's clone (docs: sl-planner §3), and with --afterstates clone l0 plays each option on it
-    /// (docs: macro-brain/search §2). The search runs in <paramref name="pool"/> (<see cref="Pool"/>). With
+    /// whole combat on the node's clone, and with --afterstates clone l0 plays each option on it.
+    /// The search runs in <paramref name="pool"/> (<see cref="Pool"/>). With
     /// <paramref name="explain"/>, for a host that shows the answers, map options carry their routes (<see cref="Dispatcher"/>).
     /// </summary>
     public Func<Hello, Dispatcher> Harness(WorkerPool? pool, bool log, bool explain = false) => hello =>

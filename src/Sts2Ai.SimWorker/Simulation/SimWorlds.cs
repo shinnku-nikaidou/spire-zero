@@ -5,7 +5,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
-/// The worlds for one decision, inside this process (docs: protocol/worlds §1). The game allows one live combat per
+/// The worlds for one decision, inside this process. The game allows one live combat per
 /// process, so the worlds take turns: each keeps its own trace and, when it is used while something else is live,
 /// rebuilds itself by replay.
 ///
@@ -32,7 +32,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
     }
 
     /// <exception cref="InvalidOperationException">The combat built from the observation does not show it exactly: search
-    /// would explore some other combat (docs: harness/routing §6).</exception>
+    /// would explore some other combat.</exception>
     /// <param name="history">The enemies' intents in the rounds so far, for the monsters' move logs.</param>
     /// <param name="run">The run around the combat, for the leaves (<see cref="World.Run"/>).</param>
     public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed, RunView run, IReadOnlyList<EnemyTurns>? history = null)

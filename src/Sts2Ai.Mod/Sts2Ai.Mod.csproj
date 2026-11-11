@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    The in-game host (docs: mod). The game's mod loader loads Sts2Ai.dll from <game>/mods/Sts2Ai/, next to its manifest;
+    The in-game host. The game's mod loader loads Sts2Ai.dll from <game>/mods/Sts2Ai/, next to its manifest;
     the game's own assemblies come from the game at run time.
     GameBridge and Protocol are compiled into Sts2Ai.dll: the loader lists the mod's types before the mod can run any
     code, and its load context does not look in the mod's folder for other DLLs.

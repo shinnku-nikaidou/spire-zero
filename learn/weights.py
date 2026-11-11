@@ -1,7 +1,7 @@
-"""Where weights files go (docs: learning/reference §6). The combat net and V are each one net for every character and
+"""Where weights files go. The combat net and V are each one net for every character and
 ascension, so a trainer writes its file to weights/all/NAME.json unless --out says otherwise. A file in weights/all is
 never replaced, so each name is used once and always means the same weights; the champion files name them where they
-are (docs: evaluation/champions §1).
+are.
 
 weights/all is not in git: the files live in the repository's release "weights". weights/put.sh NAME adds a new net
 there once it is to be kept (a challenger going to a gate, a champion), and weights/fetch.sh brings the nets the

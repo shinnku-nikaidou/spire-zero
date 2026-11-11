@@ -1,12 +1,12 @@
 namespace Sts2Ai.Protocol;
 
-/// <summary>What the AI may know of outcomes the game has not shown yet (docs: environments §2).</summary>
+/// <summary>What the AI may know of outcomes the game has not shown yet.</summary>
 public enum PlayEnvironment { NoSL, SL }
 
 public enum CombatStatus { InProgress, Won, Lost }
 
 /// <summary>
-/// A simulated combat that search can act in (docs: protocol/worlds §1). Search never touches a game directly: it gets
+/// A simulated combat that search can act in. Search never touches a game directly: it gets
 /// worlds from an <see cref="IWorldSource"/>. A NoSL world is one sample of the hidden state that agrees with the
 /// observation; an SL world is an exact copy of the real combat.
 /// </summary>
@@ -14,7 +14,7 @@ public interface ICombatWorld
 {
     CombatObservation Observe();
     /// <summary>
-    /// The run around the combat as it stands in this world, as V reads it (docs: combat-brain/leaf §2): the deck with what
+    /// The run around the combat as it stands in this world, as V reads it: the deck with what
     /// the combat has changed for good (a card grown, one stolen), the relics, the potions, HP, max HP and gold.
     /// </summary>
     RunView Run();
@@ -29,8 +29,8 @@ public interface ICombatWorld
     /// </summary>
     ulong HiddenKey();
     /// <summary>
-    /// Takes the action and goes on to where the player can act again: their turn, or a card prompt the action raised
-    /// (docs: combat-brain/shared §1), which is a state like any other, answered by the next action.
+    /// Takes the action and goes on to where the player can act again: their turn, or a card prompt the action raised,
+    /// which is a state like any other, answered by the next action.
     /// </summary>
     void Execute(CombatAction action);
     WorldSnapshot Snapshot();
@@ -53,7 +53,7 @@ public interface IWorldSource
 public sealed record WorldSnapshot(IReadOnlyList<string> Steps);
 
 /// <summary>
-/// An SL clone of the current node (docs: environments/information §7): the node's checkpoint at its entry (the game's save and the
+/// An SL clone of the current node: the node's checkpoint at its entry (the game's save and the
 /// relic fields it drops), and every decision since, as "surface action" (picks of a card prompt as the game's own
 /// indexes). Opaque outside the simulator, which loads the save as the game's Continue does, puts the relic fields back
 /// and replays the decisions. <see cref="AutoWin"/> is the run's rule (<see cref="RunView.AutoWin"/>), which the clone
@@ -63,8 +63,7 @@ public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, IReadOn
 
 /// <summary>An action that search scored: its mean value over the worlds, the 95% confidence half-width, and how many worlds.
 /// On a macro decision or a card prompt outside combat the value is V's, the chance to win the run.</summary>
-/// <param name="Values">Its value in each world, in world order, to 4 decimals: the Q that ExIt's targets are made of
-/// (docs: learning/loop §5).</param>
+/// <param name="Values">Its value in each world, in world order, to 4 decimals: the Q that ExIt's targets are made of.</param>
 /// <param name="Win">The SL planner's: the chance to win the combat on the action's best line, 1 or 0 where the line
 /// reaches the combat's end, else the combat net's.</param>
 /// <param name="Hp">With <paramref name="Win"/>: the HP held at the end of a win on that line, expected where it is the net's.</param>

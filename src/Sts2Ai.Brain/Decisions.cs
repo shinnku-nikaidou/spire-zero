@@ -23,7 +23,7 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
 
 /// <summary>
 /// What a macro policy gets at each out-of-combat decision: the surface, its legal actions ("map:3,5", "reward:0",
-/// "leave", ...; grammar in docs: protocol/observation §5), and the observation on request. In SL, Harness may add the
+/// "leave", ...), and the observation on request. In SL, Harness may add the
 /// node's clone at the decision (<paramref name="clone"/>).
 /// </summary>
 public sealed class MacroDecision(string surface, IReadOnlyList<MacroAction> legal, Func<Observation> observe, IMacroClone? clone = null)
@@ -44,7 +44,7 @@ public sealed class MacroDecision(string surface, IReadOnlyList<MacroAction> leg
 }
 
 /// <summary>
-/// A card prompt for a choice policy, and the observation it is asked in (docs: protocol/observation §6, surface card_choice) on
+/// A card prompt for a choice policy, and the observation it is asked in on
 /// request. The observation is null where there is no run around the prompt (a combat started on its own). Outside
 /// combat in SL, Harness may add the node's clone at the prompt (<paramref name="clone"/>).
 /// </summary>
@@ -65,7 +65,7 @@ public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe
 }
 
 /// <summary>
-/// SL (docs: macro-brain/search §2): the current node's clone at a decision outside combat. It plays paths of answers from the
+/// SL: the current node's clone at a decision outside combat. It plays paths of answers from the
 /// decision in the real game and shows what the game asks after each: the true afterstates, random outcomes included.
 /// </summary>
 public interface IMacroClone

@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain.Macro;
 
 /// <summary>
-/// Afterstates predicted from what a screen shows (docs: macro-brain/search): the run after an option, not applied in a
+/// Afterstates predicted from what a screen shows: the run after an option, not applied in a
 /// world. The card a reward adds, the relic, the gold a purchase costs, the HP a rest heals, a card's upgrade preview,
 /// the point a map move enters. An option whose result the screen does not show (most event options, a reroll, a
 /// transform) leaves the run as it is. One that opens a choice (a card reward, a removal, smithing) is the best pick in

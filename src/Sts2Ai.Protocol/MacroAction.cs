@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace Sts2Ai.Protocol;
 
 /// <summary>
-/// An action outside combat (docs: protocol/observation §5): a verb and, for most, an argument. Its text form, "verb" or
+/// An action outside combat: a verb and, for most, an argument. Its text form, "verb" or
 /// "verb:argument" ("map:3,5", "reward:0", "leave"), is what the wire, the node's trace and the decision log hold; in
 /// code it is this type, read once by <see cref="Parse"/>. A card prompt's answer is one too, "pick:i,j"
 /// (<see cref="Pick"/>).

@@ -6,7 +6,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// The nets' inputs for a trainer (docs: learning/reference §2), made by the code that feeds the nets in play
+/// The nets' inputs for a trainer, made by the code that feeds the nets in play
 /// (<see cref="RunNet.Tokens"/>, <see cref="CombatTokens.Of"/>), so that a state is read one way only. A trainer starts
 /// it and asks line by line; each request is a letter and a decision as the decision log holds it (a log's line as it is,
 /// or any JSON with the fields named), and gets one line of JSON back:

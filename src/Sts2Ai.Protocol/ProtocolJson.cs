@@ -17,7 +17,7 @@ public static class ProtocolJson
     public static T Deserialize<T>(string json) =>
         JsonSerializer.Deserialize<T>(json, Options) ?? throw new JsonException($"null {typeof(T).Name}");
 
-    /// <summary>The obs_hash of docs: protocol §4: FNV-1a 64 over the UTF-8 of the observation's JSON.</summary>
+    /// <summary>The obs_hash: FNV-1a 64 over the UTF-8 of the observation's JSON.</summary>
     public static ulong Hash<T>(T observation)
     {
         ulong hash = 14695981039346656037;

@@ -1,4 +1,4 @@
-"""V's net (docs: macro-brain/network §1): a set encoder over the deck, bags of ids for the rest (each relic with its
+"""V's net: a set encoder over the deck, bags of ids for the rest (each relic with its
 numbers and status), the cards the relics keep through the deck's card encoder, the raw state, then a body and two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the chance to
 survive every floor. The second head learns the next combats' HP costs, which shapes the body only: it is not in the net
 file.

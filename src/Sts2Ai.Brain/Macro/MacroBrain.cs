@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain.Macro;
 
 /// <summary>
-/// The macro brain's L0 (docs: macro-brain/search): it values each option's afterstate with V and takes the best, the first
+/// The macro brain's L0: it values each option's afterstate with V and takes the best, the first
 /// legal one on a tie. In SL, with the node's clone (<see cref="MacroDecision.Clone"/>), each option is played in the
 /// real game and searched on through the node's screens (<see cref="CloneSearch"/>); only the map's moves, which leave
 /// the node, are predicted, as the point added to the path. Without it, version 0: every afterstate is predicted from

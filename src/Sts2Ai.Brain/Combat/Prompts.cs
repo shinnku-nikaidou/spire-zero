@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain.Combat;
 
 /// <summary>
-/// The answer to a card prompt where nothing weighs the answers (docs: combat-brain/shared §1): the first options in the
+/// The answer to a card prompt where nothing weighs the answers: the first options in the
 /// prompt's canonical order, as few as it takes. It holds no view of what a card is worth. Search does not use it: there
 /// a prompt is a state, and its answers are branches (<see cref="PromptAnswers"/>). It answers for a placeholder policy,
 /// for a combat being built from an observation, and for PIMC at a prompt its plan did not reach, since no world can be
@@ -20,7 +20,7 @@ public sealed class FirstPicks : IChoicePolicy
 }
 
 /// <summary>
-/// A card prompt's answers as the actions of the state that waits on it (docs: combat-brain/shared §1): search tries them
+/// A card prompt's answers as the actions of the state that waits on it: search tries them
 /// as it tries the plays of any other state, and the leaf values where they lead.
 /// </summary>
 public static class PromptAnswers

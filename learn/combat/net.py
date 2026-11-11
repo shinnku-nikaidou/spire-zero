@@ -1,4 +1,4 @@
-"""The combat net (docs: combat-brain/network): set encoders over the cards (per pile), the powers, the enemies (each with its
+"""The combat net: set encoders over the cards (per pile), the powers, the enemies (each with its
 intent slots) and the allies, bags of ids for the rest, then a body and two heads (combat/data.py): the chance of each ending and,
 after a win in each group of buckets (data.POTION_GROUPS), each potion's of being gone, so the leaf weighs the HP lost and
 the potions drunk together.

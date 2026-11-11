@@ -1,4 +1,4 @@
-"""V's inputs (docs: macro-brain/network §2): the token tables, the run's numbers and the ONNX graph's inputs by name.
+"""V's inputs: the token tables, the run's numbers and the ONNX graph's inputs by name.
 
 What a run is read as is not here: the simulator's code turns a run into its tokens and numbers (RunNet.Tokens,
 RunNet.State), in play and for the trainer alike (common.Encoder), so that a run is read one way only. v/net.py's Batch

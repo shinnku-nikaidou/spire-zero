@@ -2,7 +2,7 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Combat;
 
-/// <summary>How much search one decision may use (docs: harness/routing §4): worlds, and actions simulated per world.</summary>
+/// <summary>How much search one decision may use: worlds, and actions simulated per world.</summary>
 /// <param name="NodesPerWorld">PIMC: the actions simulated in each world's search of the turn. The SL planner: in each
 /// search of one turn from one state.</param>
 /// <param name="Beam">The SL planner's states kept from one turn to the next (<see cref="SlPlanner"/>); 0 for PIMC,
@@ -25,7 +25,7 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
         _ => Elite == null && Boss == null ? this : this with { Elite = null, Boss = null },
     };
 
-    /// <summary>The planner's budget at an effort level (docs: sl-planner/budget §1): beam, nodes per state and turn, the
+    /// <summary>The planner's budget at an effort level: beam, nodes per state and turn, the
     /// easy beam, the turns of an unproved losing plan played before planning again (0: to its end), and the losing
     /// plans in a row before the last is played to its end.</summary>
     public static Budget Effort(string level) => level switch
@@ -64,7 +64,7 @@ public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<Comb
     IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false);
 
 /// <summary>
-/// The rest of the plan that a search made, played without searching again (docs: pimc/budget §2, sl-planner §4). A step is
+/// The rest of the plan that a search made, played without searching again. A step is
 /// played only while the combat shows the observation the plan expected before it. PIMC's plan is the rest of a turn
 /// that every world planned the same: anything that comes to light (a draw, a random result) ends it, and the decision
 /// is searched. The SL planner's plan is the rest of the combat in its one exact world, so it ends only with the
@@ -100,7 +100,7 @@ public sealed class TurnPlan(bool all = true)
 }
 
 /// <summary>
-/// Combat brain v0 (docs: pimc/search §1): PIMC over K worlds. In each world, a depth-first search over this turn's
+/// Combat brain v0: PIMC over K worlds. In each world, a depth-first search over this turn's
 /// action sequences, with ending the turn an option at every step, one action of each that are the same
 /// (<see cref="Ordered"/>); states are merged by <see cref="StateKey"/> and the world's hidden state
 /// (<see cref="ICombatWorld.HiddenKey"/>), so each transposition is expanded once, and two lines that look the same but
@@ -177,7 +177,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
 
     /// <summary>
     /// The actions search tries at <paramref name="obs"/>, in its order: ending the turn first (the fallback a spent budget
-    /// leaves), then cards in hand order, then potions. Of the actions that are the same (docs: combat-brain/shared §5),
+    /// leaves), then cards in hand order, then potions. Of the actions that are the same,
     /// only the first: the same card, by <see cref="ProtocolJson.CardKey"/>, or the same potion, at the same target.
     /// </summary>
     public static List<CombatAction> Ordered(IReadOnlyList<CombatAction> legal, CombatObservation obs)
@@ -209,7 +209,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
     }
 
     /// <summary>
-    /// A state as search tells states apart (docs: combat-brain/shared §5), with the world's hidden key beside it: the
+    /// A state as search tells states apart, with the world's hidden key beside it: the
     /// observation with the hand, the discard and the exhaust pile each as a multiset of cards, with no uids, and the
     /// potions as a multiset, so the same cards played in another order, or another copy of one, meet as one state. The
     /// draw pile is one already; its order is in the hidden key. A prompt it waits on is part of it, its options with no

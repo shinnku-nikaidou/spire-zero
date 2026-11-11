@@ -31,7 +31,7 @@ namespace Sts2Ai.SimWorker.Simulation;
 internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null, IReadOnlyList<int>? AutoWin = null);
 
 /// <summary>
-/// One whole run in the real engine, started the way the game starts a new singleplayer run (docs: simulator/runs §2).
+/// One whole run in the real engine, started the way the game starts a new singleplayer run.
 /// <see cref="Step"/> pumps the game until it waits for the player, then makes one decision: combat through the
 /// combat policy, a card prompt the game waits on (<see cref="Prompt"/>) through the choice policy, every other screen
 /// through the macro policy. Each decision can be observed (<see cref="Observation"/>): policies build it on request,
@@ -42,7 +42,7 @@ internal sealed record RunSetup(string Character, string Seed, int Ascension = 0
 /// per room. Same setup and same policy answers, same run. Like <see cref="CombatSession"/>, one live at a time.
 ///
 /// On arrival at each map point the game saves; that save is the node's checkpoint, and with the decisions since it
-/// makes the node's SL clone (<see cref="Clone"/>, <see cref="Load"/>; docs: simulator/worlds §3).
+/// makes the node's SL clone (<see cref="Clone"/>, <see cref="Load"/>).
 /// </summary>
 internal sealed class RunSession : IDisposable
 {
@@ -182,7 +182,7 @@ internal sealed class RunSession : IDisposable
     }
 
     /// <summary>
-    /// Loads <paramref name="clone"/> (docs: simulator/worlds §4): its save as the game's Continue loads one, with the relic fields
+    /// Loads <paramref name="clone"/>: its save as the game's Continue loads one, with the relic fields
     /// the save drops put back (<see cref="Checkpoint"/>), then its decisions replayed, before the policies answer. The
     /// clone is sealed: once it travels it is at its horizon, and stepping further throws. A clone whose last decision
     /// raised a card prompt stands at that prompt, and so does one whose room asks one as it is entered.

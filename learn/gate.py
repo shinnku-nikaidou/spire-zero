@@ -1,4 +1,4 @@
-"""A V's SL report: what the runs reached and how they chose (docs: evaluation/gates §6).
+"""A V's SL report: what the runs reached and how they chose.
 
 From the run records: the runs, the runs won, their mean floor, each act's boss reached and beaten, the elite fights
 per run and the deaths in them, and per act where the lost runs died (the room of the combat, or outside combat). From

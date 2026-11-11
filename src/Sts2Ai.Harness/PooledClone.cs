@@ -4,8 +4,8 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// The node's clone at a decision outside combat (<see cref="IMacroClone"/>), its paths played in a <see cref="WorkerPool"/>
-/// (docs: macro-brain/search §6): the paths are split into one request per worker, in order, each loading the clone once per
+/// The node's clone at a decision outside combat (<see cref="IMacroClone"/>), its paths played in a <see cref="WorkerPool"/>:
+/// the paths are split into one request per worker, in order, each loading the clone once per
 /// path (<see cref="SlMacroRequest"/>). A path's afterstate depends on the clone and the path only, so the split cannot
 /// change a result.
 /// </summary>

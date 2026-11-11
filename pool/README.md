@@ -1,6 +1,6 @@
 # The work pool
 
-Self-play, reports, gates and other batch jobs of the simulator (`run`, see the docs: learning, evaluation) can run on
+Self-play, reports, gates and other batch jobs of the simulator (`run`) can run on
 one work pool spread over many machines. One server, **the hub**, holds every open job's queue of chunks and deals the
 next chunk to whichever worker thread anywhere is free; each machine runs one worker, and its number of threads is its
 only knob.

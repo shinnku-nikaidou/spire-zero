@@ -4,7 +4,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// <see cref="SlPlanner"/> with its turns searched in a <see cref="WorkerPool"/> (docs: sl-planner/budget §4): each turn of the
+/// <see cref="SlPlanner"/> with its turns searched in a <see cref="WorkerPool"/>: each turn of the
 /// beam is one request per state kept, which loads the node's clone, plays the state's path and searches its turn, so
 /// the workers split the beam by action prefix. With the same budget it plans what <see cref="SlPlanner.Plan"/> plans on the node's world in one process.
 /// The workers search with the leaf they were started with (<c>serve --combat-net</c>).

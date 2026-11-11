@@ -1,4 +1,4 @@
-# Promotion set 1 (docs: evaluation/metrics §5). Generated 2026-10-27 by: Sts2Ai.SimWorker seeds --base 2 --n 200
+# Promotion set 1. Generated 2026-10-27 by: Sts2Ai.SimWorker seeds --base 2 --n 200
 # (MakeSeed(2, i)). Train seeds are MakeSeed(1, i), the run default; bases that differ by less than 7919 never
 # share a generator seed, so the sets are disjoint. Rotate to promotion-2 (base 4) when this one is used up.
 3TZ33JATH5R5

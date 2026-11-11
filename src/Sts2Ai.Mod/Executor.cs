@@ -38,7 +38,7 @@ internal enum Acted
 }
 
 /// <summary>
-/// Carries out the brain's answer in the real game (docs: mod/auto §1), the way the player's click does, so the game's
+/// Carries out the brain's answer in the real game, the way the player's click does, so the game's
 /// screens follow: where GameBridge's start is the call the click makes (combat, the map, purchases, a chest's relic,
 /// the crystal sphere, the belt), that; where the click does more (rewards, rest options, events, every way out of a
 /// room), the button's own handler, pressed only when it is enabled and on screen; and a card prompt or a card reward

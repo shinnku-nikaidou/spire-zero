@@ -1,4 +1,4 @@
-"""The combat net's inputs (docs: combat-brain/network §2): the token tables, the sizes the net is built with and the
+"""The combat net's inputs: the token tables, the sizes the net is built with and the
 ONNX graph's inputs by name.
 
 What a state is read as is not here: the simulator's code turns a round's start into its tokens (CombatTokens.Of), in

@@ -1,4 +1,4 @@
-# Promotion set 1 extended to 500 seeds (docs: evaluation/metrics §5; plan v7 §4). Generated 2026-10-31 by: Sts2Ai.SimWorker seeds
+# Promotion set 1 extended to 500 seeds. Generated 2026-10-31 by: Sts2Ai.SimWorker seeds
 # --base 2 --n 500 (MakeSeed(2, i)). The first 300 are promotion-1-300's, in its order (the first 200 promotion-1's); the
 # last 200 are new. Plan v7's gate set: whole SL runs at the champion's planner (plan c2 medium), --afterstates clone,
 # paired on wins; v6-3-2's runs on the first 300 are its promotion-1-300 report's.

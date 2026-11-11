@@ -5,10 +5,10 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Combat;
 
-/// <summary>A round's start and what the trainer's net made of it, which loading checks (docs: learning/reference §7, input parity).</summary>
+/// <summary>A round's start and what the trainer's net made of it, which loading checks.</summary>
 public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, IReadOnlyList<double> PotionUsed);
 
-/// <summary>The combat net as <c>learn/combat/export.py</c> writes it (docs: combat-brain/network).</summary>
+/// <summary>The combat net as <c>learn/combat/export.py</c> writes it.</summary>
 /// <param name="Buckets">How many buckets of the share of max HP lost from the state to a win the head has, after its
 /// first class, a death.</param>
 /// <param name="LossMin">The lowest bucket's bottom (below 0: a combat that healed); the buckets span it to 1 evenly.</param>
@@ -23,7 +23,7 @@ public sealed record CombatNetFile(
     IReadOnlyList<CombatNetTest> Tests, int PotionGroups);
 
 /// <summary>
-/// The learned combat leaf (docs: combat-brain/leaf §3): from a round's start, how the combat ends under the policy that
+/// The learned combat leaf: from a round's start, how the combat ends under the policy that
 /// played the training games. The net, run by ONNX Runtime, reads the cards in each pile, the player, each enemy with
 /// its intents now and in its last rounds, the powers, relics, potions and potion slots, orbs and allies, the encounter and the character
 /// (<see cref="CombatTokens"/>). It predicts

@@ -5,7 +5,7 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Macro;
 
-/// <summary>A run and the value the trainer computed for it, which loading checks (docs: learning/reference §7, input parity).</summary>
+/// <summary>A run and the value the trainer computed for it, which loading checks.</summary>
 public sealed record NetTest(RunView Run, double Value);
 
 /// <summary>V as <c>learn/v/export.py</c> writes it.</summary>
@@ -26,7 +26,7 @@ public sealed record NetState(IReadOnlyList<string> Names, IReadOnlyList<double>
 public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers, IReadOnlyList<double> Amounts, double Damage, double Block);
 
 /// <summary>
-/// A run as V reads it (docs: macro-brain/network §2), but for its numbers (<see cref="RunNet.State"/>): ids, and numbers
+/// A run as V reads it, but for its numbers (<see cref="RunNet.State"/>): ids, and numbers
 /// scaled and capped. <see cref="RunNet.Tokens"/> is the one place a run is turned into them; <see cref="RunNet"/> looks
 /// the ids up in its net file's tables and feeds the graph, and the trainer reads the same tokens as JSON
 /// (<see cref="Write"/>) and does the same.
@@ -77,7 +77,7 @@ public sealed record RunTokens(
 }
 
 /// <summary>
-/// V (docs: macro-brain/network), run by ONNX Runtime: a net over the run's cards, relics (with their numbers and
+/// V, run by ONNX Runtime: a net over the run's cards, relics (with their numbers and
 /// statuses, as the combat net reads them, and the cards they keep), potions and context, the map points still reachable
 /// and the run's numbers (<see cref="NetFile.State"/>).
 /// The graph gives one hazard per floor: the chance to die on that floor if still alive there. The value is the chance to

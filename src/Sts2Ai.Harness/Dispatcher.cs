@@ -30,11 +30,11 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Plan">What the brain planned after <paramref name="Chosen"/>: the rest of the turn in combat, the rest of
 /// the act's route on the map.</param>
 /// <param name="Obs">On a combat decision, the observation the brain was shown: the combat net's input.</param>
-/// <param name="RunView">On a macro decision, the run the brain was shown: what V is trained on (docs: macro-brain/value §3).</param>
+/// <param name="RunView">On a macro decision, the run the brain was shown: what V is trained on.</param>
 /// <param name="History">On a combat decision, what each enemy of the combat showed at the start of each round so far,
 /// this one's included (<see cref="Dispatcher.History"/>).</param>
-/// <param name="Explored">True when <paramref name="Chosen"/> was drawn by self-play exploration (docs: learning/loop §9;
-/// <see cref="Uniform"/>); absent otherwise.</param>
+/// <param name="Explored">True when <paramref name="Chosen"/> was drawn by self-play exploration
+/// (<see cref="Uniform"/>); absent otherwise.</param>
 /// <param name="Replanned">True when the combat brain searched again because a step of its plan did not hold
 /// (<see cref="CombatDecisionResult.Replanned"/>); absent otherwise.</param>
 public sealed record DecisionEntry(
@@ -47,13 +47,13 @@ public sealed record DecisionEntry(
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
 
 /// <summary>
-/// Harness for one run (docs: harness/routing). The host asks it as its combat, card-prompt and macro policy; it routes
+/// Harness for one run. The host asks it as its combat, card-prompt and macro policy; it routes
 /// each decision to exactly one brain, draws the brains' seeds from the run id and the decision's number (never from the
 /// game), and logs every decision when asked to. A surface with no route throws: there is no fallback.
 /// A card prompt asked during a combat is the combat brain's, as a decision of the combat (<see cref="CombatRoute"/>);
 /// any other goes to the macro side.
 ///
-/// In SL the host also sends the current node's checkpoint and each decision taken in it (docs: protocol/wire §6), which
+/// In SL the host also sends the current node's checkpoint and each decision taken in it, which
 /// make the node's clone for the combat brain and, with <paramref name="clones"/>, for the macro side, which gets it
 /// opened at each of its decisions (<see cref="MacroDecision.Clone"/>). In NoSL they are refused.
 ///
@@ -64,7 +64,7 @@ public sealed class Dispatcher(
     string runId, PlayEnvironment env, CombatRoute combat, Route<IMacroPolicy> macro, Route<IChoicePolicy> macroChoices, bool log = false, Func<NodeClone, IMacroClone>? clones = null, bool explain = false)
     : ICombatPolicy, IChoicePolicy, IMacroPolicy
 {
-    /// <summary>Every surface outside combat that has a route (docs: harness/routing §3).</summary>
+    /// <summary>Every surface outside combat that has a route.</summary>
     public static readonly IReadOnlySet<string> MacroSurfaces = new HashSet<string>
     {
         Surfaces.Map, Surfaces.Rewards, Surfaces.CardReward, Surfaces.Bundle, Surfaces.Event, Surfaces.Shop, Surfaces.Rest,
@@ -96,7 +96,7 @@ public sealed class Dispatcher(
         $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b}" : "")}, combat prompts first, macro {macro.Brain}, macro prompts {macroChoices.Brain}";
 
     /// <summary>
-    /// The current combat's public record of enemy moves (docs: harness §4): each enemy's intents at the first decision
+    /// The current combat's public record of enemy moves: each enemy's intents at the first decision
     /// of each round. A combat starts over after any macro decision, or when the round goes back.
     /// </summary>
     public IReadOnlyList<EnemyTurns> History => _moves.History;

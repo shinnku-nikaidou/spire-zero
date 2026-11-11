@@ -6,9 +6,9 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
-/// brain: the brain alone (docs: harness §5), which serves the host that started it, the mod, on its stdin and stdout,
+/// brain: the brain alone, which serves the host that started it, the mod, on its stdin and stdout,
 /// with the champion its options name, and ends when stdin closes. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
-/// --sl-policy's (the SL planner by default), with the same macro brain (docs: harness/routing §1), whose afterstates
+/// --sl-policy's (the SL planner by default), with the same macro brain, whose afterstates
 /// the environment sets (<see cref="Champions"/>), so one champion file serves both. A host may ask for
 /// another effort of the SL planner for its run (<see cref="Hello.Effort"/>), which then plays with that preset's
 /// budget. Prints a line per run on stderr, with the game errors of its search workers.
@@ -23,7 +23,7 @@ internal static class BrainCommand
 
     public static Command Command()
     {
-        var command = Opt.Command("brain", "the brain alone: serves the host that starts it on stdin and stdout, until stdin closes (docs: harness §5)", [Log, Wire, SlPolicy],
+        var command = Opt.Command("brain", "the brain alone: serves the host that starts it on stdin and stdout, until stdin closes", [Log, Wire, SlPolicy],
             Champion.Options);
         command.SetAction(Run);
         return command;
@@ -67,7 +67,7 @@ internal static class BrainCommand
 
     /// <summary>
     /// The champion of NoSL hosts and of SL hosts. L0 values its options on the afterstates the screen predicts in NoSL and
-    /// on the node's clone in SL, the only pairing Harness takes (docs: macro-brain/search §2), whatever --afterstates says.
+    /// on the node's clone in SL, the only pairing Harness takes, whatever --afterstates says.
     /// </summary>
     internal static (ChampionOptions NoSL, ChampionOptions SL) Champions(ParseResult r)
     {

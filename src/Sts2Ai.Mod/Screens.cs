@@ -33,7 +33,7 @@ namespace Sts2Ai.Mod;
 internal sealed record Asking(string Surface, Observation Obs, IReadOnlyList<string> Legal, object? Source = null, int[]? GameIndex = null);
 
 /// <summary>
-/// The decision the screen on top asks for (docs: mod/loop §4), asked as the simulator asks it (RunSession): the same
+/// The decision the screen on top asks for, asked as the simulator asks it (RunSession): the same
 /// surfaces, observations and legal actions, with the potion belt offered on the same screens. The game's UI keeps
 /// what each screen offers in private fields, read here as the screen holds them.
 /// </summary>

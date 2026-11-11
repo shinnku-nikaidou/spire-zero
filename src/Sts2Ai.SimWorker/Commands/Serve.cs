@@ -7,7 +7,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
-/// The worker side of the pool (docs: simulator/pool §4): after the hello, one request per stdin line and one reply per
+/// The worker side of the pool: after the hello, one request per stdin line and one reply per
 /// stdout line, until stdin closes. Each request names its world in full, so nothing carries over between requests.
 /// Everything else the process prints goes to stderr (moved there before the game boots), so the game's own output
 /// cannot get into the stream. After a request that threw, the game's state is unknown (a
@@ -19,7 +19,7 @@ internal static class Serve
 
     public static Command Command()
     {
-        var command = Opt.Command("serve", "a worker: JSON lines on stdin and stdout (docs: simulator/pool §4)", Leaf.Options);
+        var command = Opt.Command("serve", "a worker: JSON lines on stdin and stdout", Leaf.Options);
         command.SetAction(r =>
         {
             // stdout is the wire: keep it, and send everything else that is printed to stderr from the start.

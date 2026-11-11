@@ -7,7 +7,7 @@ out/
 bin/
 obj/
 
-# Raw run records and decision logs, one folder per job (docs: learning/reference §3)
+# Raw run records and decision logs, one folder per job
 data/
 
 

@@ -3,7 +3,7 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain.Macro;
 
 /// <summary>
-/// How the macro brain takes one of the options it has valued (docs: learning/loop §9). In play, the best, the first on a
+/// How the macro brain takes one of the options it has valued. In play, the best, the first on a
 /// tie. In self-play some answers are drawn instead: with <paramref name="uniform"/>, evenly whatever V says, a card
 /// reward's outcome among its cards and skipping it, a card prompt's picks, and on every other screen its options but
 /// those that would come back to a state already decided; with <paramref name="softmax"/>, every other answer by V, a

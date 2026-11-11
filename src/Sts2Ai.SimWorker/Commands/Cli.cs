@@ -27,7 +27,7 @@ internal static class Cli
 
     private static RootCommand Build()
     {
-        var root = new RootCommand("The real sts2.dll headless: combats, runs, the brain and evaluation (docs: simulator)") { Verbose };
+        var root = new RootCommand("The real sts2.dll headless: combats, runs, the brain and evaluation") { Verbose };
         Command[] commands =
         [
             ListCommand.Command(), TablesCommand.Command(), CombatCommand.Command(), BenchCommand.Command(), SelfTest.Command(),

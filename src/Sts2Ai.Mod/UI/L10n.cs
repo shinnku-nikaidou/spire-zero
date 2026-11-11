@@ -4,7 +4,7 @@ using MegaCrit.Sts2.Core.Localization;
 namespace Sts2Ai.Mod.UI;
 
 /// <summary>
-/// The mod's own words in the game's language (docs: output §2): English, French, Spanish (both of the game's), Simplified
+/// The mod's own words in the game's language: English, French, Spanish (both of the game's), Simplified
 /// and Traditional Chinese, and Japanese; every other language reads English. A line is looked up by its English text,
 /// which is also what a line missing from the table shows. Names (cards, relics, rooms, monsters) come from the game's
 /// own tables instead (<see cref="Describe"/>).

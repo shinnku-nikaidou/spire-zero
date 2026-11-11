@@ -1,4 +1,4 @@
-"""How often V would still throw a potion away: the measure `MacroBrain.Offered` waits on (docs: macro-brain/search §1).
+"""How often V would still throw a potion away: the measure `MacroBrain.Offered` waits on.
 
 `Offered` keeps a potion's discard out of the options unless it makes room for a potion on the screen: V rated a held
 potion below the empty slot, and took the discard wherever it was offered. This asks a V the same question on decisions

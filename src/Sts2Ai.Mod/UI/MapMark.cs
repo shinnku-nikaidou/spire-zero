@@ -27,7 +27,7 @@ internal sealed record MapRoute(MapCoord? At, IReadOnlyList<MapCoord> Points)
 }
 
 /// <summary>
-/// A route on the map (docs: output §3): a pulsing purple ring on its next point, and a purple line along each path
+/// A route on the map: a pulsing purple ring on its next point, and a purple line along each path
 /// from where the player is to its end. It lives in the mod's layer and follows the game's nodes on screen every frame,
 /// since the map scrolls. The map screen keeps its point nodes and each path's dots in private dictionaries; a new act
 /// replaces them.

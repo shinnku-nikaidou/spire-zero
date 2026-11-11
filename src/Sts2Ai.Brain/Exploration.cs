@@ -1,7 +1,7 @@
 namespace Sts2Ai.Brain;
 
 /// <summary>
-/// Self-play exploration by even draws (docs: learning/loop §9): with chance <paramref name="share"/> ε, a macro decision's answer is
+/// Self-play exploration by even draws: with chance <paramref name="share"/> ε, a macro decision's answer is
 /// drawn evenly among its options, whatever V says; otherwise the brain answers. What is drawn does not depend on V or on
 /// how strong the run is. Never in evaluation.
 /// </summary>
@@ -26,7 +26,7 @@ public sealed class Uniform(double share, Random rng)
 }
 
 /// <summary>
-/// Self-play exploration by values (docs: learning/loop §9): draws one of a brain's options by the values the brain gave
+/// Self-play exploration by values: draws one of a brain's options by the values the brain gave
 /// them, each with chance ∝ exp((v − best) / τ). Options near the best are tried often and poor ones seldom; equal ones
 /// equally often. <paramref name="temperature"/> τ is in the values' units, above 0. Never in evaluation.
 /// </summary>

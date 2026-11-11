@@ -10,7 +10,7 @@ namespace Sts2Ai.Brain.Combat;
 public sealed record LoopPoint(CombatObservation Obs, int Depth, WorldSnapshot Snapshot);
 
 /// <summary>
-/// Cycles inside a turn (docs: sl-planner/turn-search §5), for both combat brains. A depth-first search has no end to a
+/// Cycles inside a turn, for both combat brains. A depth-first search has no end to a
 /// move that can be played again and again: the first such chain spends the turn's nodes, the budget cuts every move
 /// left at every state above it, and the attack that should come after the repeats is never tried.
 ///

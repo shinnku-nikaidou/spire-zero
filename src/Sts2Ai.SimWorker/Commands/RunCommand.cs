@@ -12,7 +12,7 @@ namespace Sts2Ai.SimWorker.Commands;
 /// them; --macro picks the brain of every decision outside combat.
 /// --check plays each seed again over the wire, to a brain in this process, and compares: observations, records and
 /// decision logs included (each observation must survive a JSON round trip); and replays each node from its
-/// checkpoint (the SL clone, docs: simulator/worlds). Reports results, hashes and surface coverage.
+/// checkpoint (the SL clone). Reports results, hashes and surface coverage.
 /// </summary>
 internal static class RunCommand
 {
@@ -21,13 +21,13 @@ internal static class RunCommand
     private static readonly Option<int> Start = Opt.Of("--start", 0, "the first run's index");
     private static readonly Option<int> Seed = Opt.Of("--seed", 1, "the seed base, without --seeds");
     private static readonly Option<int> Asc = Opt.Of("--asc", 0, "the ascension");
-    private static readonly Option<PlayEnvironment> Env = Opt.Of("--env", PlayEnvironment.NoSL, "the environment (docs: environments)");
+    private static readonly Option<PlayEnvironment> Env = Opt.Of("--env", PlayEnvironment.NoSL, "the environment");
     private static readonly Option<int> MaxDecisions = Opt.Of("--max-decisions", 20_000, "a run stops here, truncated");
     private static readonly Option<bool> Check = Opt.Of("--check", false, "plays each seed again over the wire and compares, and replays each node from its checkpoint");
     private static readonly Option<bool> Trace = Opt.Of("--trace", false, "prints every decision");
     private static readonly Option<bool> Obs = Opt.Of("--obs", false, "prints every observation");
     private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
-    private static readonly Option<string?> Records = Opt.Maybe<string?>("--records", "writes one run record per line (docs: evaluation/metrics §8)");
+    private static readonly Option<string?> Records = Opt.Maybe<string?>("--records", "writes one run record per line");
     private static readonly Option<string?> AutoWin = Opt.Maybe<string?>("--auto-win",
         "acts, numbered from 1 as the game shows them, such as 1,2: their plain monster fights, an event's included, are won at their start " +
         "(the game's win command) with their rewards, so only elites and bosses are fought there; for self-play, as no report or gate takes such a run");
@@ -146,7 +146,7 @@ internal static class RunCommand
     }
 
     /// <summary>
-    /// Loads each node of a played run from its checkpoint and replays the node's decisions (docs: simulator/worlds §6): the
+    /// Loads each node of a played run from its checkpoint and replays the node's decisions: the
     /// clone must show the run's observations one for one, and be at its horizon once it has travelled. Returns how
     /// many nodes did, and what went wrong in the first that did not; each node's load and replay time goes to
     /// <paramref name="ms"/>. The clones keep the run's rule, <paramref name="autoWin"/>.

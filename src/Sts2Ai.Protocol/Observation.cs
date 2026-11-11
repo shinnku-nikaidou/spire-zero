@@ -33,8 +33,8 @@ public sealed record RunView
     public required MapView Map { get; init; }
     /// <summary>
     /// The game's rule, not the screen's: the acts (indexes from 0, as <see cref="Act"/>) whose plain monster fights, an
-    /// event's included, are won at their start with their rewards, so that only elites and bosses are fought there
-    /// (docs: simulator/runs). Null in the normal game: always in the real game, set only by the simulator.
+    /// event's included, are won at their start with their rewards, so that only elites and bosses are fought there.
+    /// Null in the normal game: always in the real game, set only by the simulator.
     /// </summary>
     public IReadOnlyList<int>? AutoWin { get; init; }
 }

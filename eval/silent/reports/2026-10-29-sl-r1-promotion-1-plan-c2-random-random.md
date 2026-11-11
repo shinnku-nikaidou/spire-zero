@@ -1,6 +1,6 @@
 # Evaluation 2026-10-29: SL R1, promotion-1
 
-**Void** (docs: evaluation/metrics §2): 11006 random decisions.
+**Void**: 11006 random decisions.
 
 | | |
 |---|---|

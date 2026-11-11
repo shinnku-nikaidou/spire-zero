@@ -95,8 +95,7 @@ internal static partial class SelfTest
 
     /// <summary>
     /// A run with random policies, to its third node: its first node's clone (the save on arrival and every decision of
-    /// the node, the travel last) must load at its horizon, without travelling, and refuse another step
-    /// (docs: environments/information §8, guard 8).
+    /// the node, the travel last) must load at its horizon, without travelling, and refuse another step.
     /// </summary>
     private static void CloneStopsAtTheExit(Pump pump, int seed, Action<string, bool, string> check)
     {
@@ -169,7 +168,7 @@ internal static partial class SelfTest
     /// <summary>
     /// A run with random policies, to its third node, whose first relic is disabled at the start, a status that the save
     /// drops, as Lava Rock's own. The second node's clone must show every observation of the node as the run did, the
-    /// disabled relic among them (docs: simulator/worlds §6).
+    /// disabled relic among them.
     /// </summary>
     private static void CloneKeepsRelicState(Pump pump, int seed, Action<string, bool, string> check)
     {

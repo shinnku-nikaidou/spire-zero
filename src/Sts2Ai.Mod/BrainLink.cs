@@ -16,7 +16,7 @@ internal sealed record LinkDown(string Reason) : LinkEvent;
 internal sealed record Received(WireMessage Message) : LinkEvent;
 
 /// <summary>
-/// The mod's end of the wire (docs: mod/loop §1, §8). All IO runs on background threads, which never touch the game:
+/// The mod's end of the wire. All IO runs on background threads, which never touch the game:
 /// they send what the main thread queues and queue what arrives, and <see cref="Inbox"/> is drained once per frame.
 /// The brain is the one shipped beside the mod (<see cref="BundledBrain"/>), a child process of the game; the link starts
 /// it again whenever it ends or the connection drops.
