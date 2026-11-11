@@ -116,8 +116,10 @@ def rsync(*args, **kw) -> subprocess.CompletedProcess:
     return subprocess.run(["rsync", "-e", hub_ssh(), *map(str, args)], check=True, **kw)
 
 
-def to_hub(source: Path, dest: str) -> None:
-    rsync("-a", "--mkpath", source, f"{hub_addr()}:{dest}")
+def to_hub(source: Path, folder: str) -> None:
+    """source into the hub's folder, under its own name. Always a folder as the destination: the hub's rrsync (3.5.0)
+    hands rsync an existing file as /proc/self/fd/N, which it cannot replace."""
+    rsync("-a", "--mkpath", source, f"{hub_addr()}:{folder}/")
 
 
 def hub_files(folder: str) -> set[str]:
@@ -182,7 +184,7 @@ def load_step(name: str) -> dict:
 def push_step(name: str, step: dict) -> None:
     """The step here, then on the hub: the dealer reads it from there."""
     save_json(step_path(name), step)
-    to_hub(step_path(name), f"pool/steps/{name}.json")
+    to_hub(step_path(name), "pool/steps")
 
 
 def jobs_of(names: list[str]) -> list[str]:
@@ -347,7 +349,7 @@ def put_inputs(full: str, inputs: str | None, have: set[str]) -> str:
         packed = Path(t) / f"inputs-{key}.tar.zst"
         with packed.open("wb") as f:
             subprocess.run(["zstd", "-q", "-12"], input=tar, stdout=f, check=True)
-        to_hub(packed, "dist/")
+        to_hub(packed, "dist")
     say(f"inputs {key} on the hub")
     return key
 
@@ -435,8 +437,8 @@ def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options:
     (deal / "queue.txt").write_text("".join(line + "\n" for line in lines))
     spec = {"job": job, "kind": kind, "rev": rev, "options": options, "chunk": chunk, "inputs": key}
     (deal / "job.json").write_text(json.dumps(spec, indent=1) + "\n")
-    to_hub(deal / "queue.txt", f"{job}/deal/queue.txt")
-    to_hub(deal / "job.json", f"{job}/deal/job.json")
+    to_hub(deal / "queue.txt", f"{job}/deal")
+    to_hub(deal / "job.json", f"{job}/deal")
     save(job, {
         "job": job, "kind": kind, "character": parts[0].upper(), "env": parts[1],
         "owner": os.environ.get("OWNER", "main"), "purpose": purpose, "rev": full,
@@ -632,7 +634,7 @@ def launch_dataset(argv: list[str]) -> None:
         folder = f"{character.lower()}/sl/selfplay/{name}"
         (ROOT / "data" / folder).mkdir(parents=True, exist_ok=True)
         (ROOT / "data" / folder / "dataset.toml").write_text(stamped)
-        to_hub(ROOT / "data" / folder / "dataset.toml", f"{folder}/dataset.toml")
+        to_hub(ROOT / "data" / folder / "dataset.toml", folder)
     say(f"dataset {name}: {len(jobs)} jobs in step {step}; its file in each character's data/CHAR/sl/selfplay/{name}/dataset.toml, here and on the hub")
 
 # --- changing a step or job
@@ -687,7 +689,7 @@ def stop(argv: list[str]) -> None:
         load(name)
         path = job_dir(name) / "deal" / "stopped"
         path.write_text(f"{at} {reason}\n")
-        to_hub(path, f"{name}/deal/stopped")
+        to_hub(path, f"{name}/deal")
         jobs = [name]
     for job in jobs:
         m = load(job)
