@@ -1,4 +1,5 @@
 using Sts2Ai.Harness;
+using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Tests.Harness;
 
@@ -87,5 +88,73 @@ public class GateTests
         Assert.Throws<ArgumentException>(() => Gate.Pairs(champion, [Fixtures.Run("A", 1, config: Challenger with { Env = "SL" })]));
         Assert.Throws<ArgumentException>(() => Gate.Pairs(champion, [Fixtures.Run("A", 1, config: Challenger), Fixtures.Run("A", 2, config: Challenger)]));
         Assert.Throws<ArgumentException>(() => Gate.Pairs(champion, [Fixtures.Run("A", 1, config: Challenger), Fixtures.Run("B", 2)]));
+    }
+
+    /// <summary>A character's two reports of one gate on <paramref name="n"/> seeds: the champion wins the first
+    /// <paramref name="championWins"/>, the challenger <paramref name="challengerWins"/> from seed <paramref name="from"/> on.</summary>
+    private static (EvalReport Champion, EvalReport Challenger) Sides(string character, int n, int championWins, int challengerWins, int gain = 0, int from = 0)
+    {
+        var seeds = Enumerable.Range(0, n).Select(i => $"S{i}").ToList();
+        EvalReport Report(int first, int wins, int floor, RunConfig config) => EvalReport.Of(
+            [.. seeds.Select((s, i) => Fixtures.Run(s, floor, i >= first && i < first + wins ? "won" : "lost", config) with { Character = character })], "set", seeds, "d");
+        return (Report(0, championWins, 20, Fixtures.Config), Report(from, challengerWins, 20 + gain, Challenger));
+    }
+
+    [Fact]
+    public void NewNetsAreJudgedByEveryCharactersPairsTogether()
+    {
+        // SILENT a little worse, IRONCLAD much better: together the nets pass.
+        var result = NetGate.Judge([Sides("SILENT", 100, 60, 57), Sides("IRONCLAD", 100, 30, 70, gain: 4)]);
+        Assert.True(result.Promote);
+        Assert.Equal(Fixtures.Config.Champion, result.Against);
+        Assert.Equal(["SILENT", "IRONCLAD"], result.Characters.Select(c => c.Character));
+        Assert.Equal(-0.03, result.Characters[0].WinsDiff, 9);
+        Assert.True(result.Characters[0].WinsLower95 < 0);
+        Assert.Equal((200, 127, 90), (result.All.Pairs, result.All.Won, result.All.ChampionWon));
+        Assert.Equal(0.185, result.All.WinsDiff, 9);
+        // The standard error of 200 paired differences, 3 of them -1 and 40 of them +1.
+        double se = Math.Sqrt((3 * Math.Pow(-1 - 0.185, 2) + 40 * Math.Pow(1 - 0.185, 2) + 157 * 0.185 * 0.185) / 199 / 200);
+        Assert.Equal(se, result.All.WinsDiffSe, 9);
+        Assert.Equal(0.185 - 1.645 * se, result.All.WinsLower95, 9);
+        Assert.Equal(2, result.All.FloorDiff, 9);
+        Assert.Contains("net gate pass", result.Summary());
+    }
+
+    [Fact]
+    public void NetsNoBetterAreNotPromoted()
+    {
+        Assert.False(NetGate.Judge([Sides("SILENT", 100, 50, 50)]).Promote);
+        // Three more wins, 8 seeds won only by the challenger and 5 only by the champion: within the noise.
+        Assert.False(NetGate.Judge([Sides("SILENT", 100, 50, 53, from: 5), Sides("DEFECT", 100, 50, 50)]).Promote);
+        Assert.False(NetGate.Judge([Sides("SILENT", 1, 0, 1)]).Promote);
+    }
+
+    [Fact]
+    public void ANetGateRefusesReportsThatDoNotPair()
+    {
+        var silent = Sides("SILENT", 10, 5, 6);
+        Assert.Throws<ArgumentException>(() => NetGate.Judge([]));
+        Assert.Throws<ArgumentException>(() => NetGate.Judge([silent, silent]));
+        var other = Sides("DEFECT", 10, 5, 6);
+        Assert.Throws<ArgumentException>(() => NetGate.Judge([silent, (other.Champion with { SeedSet = "other" }, other.Challenger)]));
+        Assert.Throws<ArgumentException>(() => NetGate.Judge([silent, (other.Champion, other.Challenger with { Config = Fixtures.Config })]));
+        Assert.Throws<ArgumentException>(() => NetGate.Judge([(silent.Champion, other.Challenger)]));
+    }
+
+    [Fact]
+    public void APromotedChampionFileNamesTheChallengerAndItsGate()
+    {
+        var gate = NetGate.Judge([Sides("SILENT", 100, 30, 70)]);
+        var file = new ChampionFile("SL", "old", new Dictionary<string, string> { ["effort"] = "medium", ["value"] = "weights/all/v1.json" },
+            new Dictionary<string, string> { ["SILENT"] = "old.json" }, "2026-01-01");
+        var options = new Dictionary<string, string> { ["effort"] = "medium", ["value"] = "weights/all/v2.json" };
+        var promoted = file.Promoted("new", options, "2026-02-02", new Dictionary<string, string> { ["SILENT"] = "new.json" }, gate);
+        Assert.Equal(("SL", "new", "2026-02-02", "new.json"), (promoted.Env, promoted.Champion, promoted.Since, promoted.Reports["SILENT"]));
+        Assert.Equal(options, promoted.Options);
+        Assert.Equal(gate, ProtocolJson.Deserialize<ChampionFile>(ProtocolJson.Serialize(promoted)).Gate! with { Characters = gate.Characters });
+        // Another environment's file that takes the nets has no report of its own yet, and no gate.
+        var sibling = file.Promoted("new", options, "2026-02-02");
+        Assert.Empty(sibling.Reports);
+        Assert.Null(sibling.Gate);
     }
 }

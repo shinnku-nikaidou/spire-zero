@@ -69,25 +69,6 @@ def test_the_map_counts_a_choice_between_a_monster_and_a_rest_site_by_hp(tmp_pat
     assert r["monster_or_rest"] == {"40%-70%": {"RestSite": 1}, "90%-100%": {"Monster": 1}}
 
 
-def test_whole_runs_pair_on_wins_and_floors_and_promote_on_the_wins(tmp_path):
-    # The challenger wins three of four seeds the champion lost; the champion never finished S5.
-    mine = [run(f"r{i}", f"S{i}", 48, "won", []) for i in range(3)]
-    mine += [run("r3", "S3", 30, "lost", []), run("r5", "S5", 48, "won", [])]
-    theirs = [run(f"c{i}", f"S{i}", 20, "lost", []) for i in range(4)]
-    recs, champ = tmp_path / "r.jsonl", tmp_path / "c.jsonl"
-    recs.write_text("".join(json.dumps(r) + "\n" for r in mine))
-    champ.write_text("".join(json.dumps(r) + "\n" for r in theirs))
-    result = CliRunner().invoke(gate.script, ["--records", str(recs), "--against", str(champ)])
-    assert result.exit_code == 0, result.output
-    report = json.loads(result.output)
-    assert report["won"] == 4
-    pairs = report["against"]
-    assert (pairs["pairs"], pairs["won"], pairs["champion_won"]) == (4, 3, 0)
-    assert pairs["wins_diff"] == 0.75 and pairs["floor_diff"] == pytest.approx((28 * 3 + 10) / 4)
-    assert pairs["wins_lower_95"] == pytest.approx(0.75 - 1.645 * 0.25) and pairs["promote"]
-
-
-
 def test_a_run_that_won_plain_monster_fights_at_their_start_is_never_judged(tmp_path):
     recs = tmp_path / "r.jsonl"
     recs.write_text(json.dumps(run("a", "S1", 30, "lost", []) | {"config": {"auto_win": [0, 1]}}) + "\n")

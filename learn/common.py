@@ -7,6 +7,7 @@ exit code 1; anything else is a bug and ends it with a traceback.
 import json
 import os
 import re
+import subprocess
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -79,6 +80,32 @@ def runs_by_log(logs: str, records: str) -> list[tuple[str, dict[str, dict]]]:
             runs[run_id] = r
         pairs.append((log, runs))
     return pairs
+
+
+def revision() -> str:
+    """The commit this code is. learn/REV holds it in a `git archive` (export-subst, learn/.gitattributes), which is how
+    learn/ reaches a training host; a checkout asks git, and says "-dirty" when learn/ has uncommitted changes."""
+    text = (Path(__file__).parent / "REV").read_text().strip()
+    if not text.startswith("$Format"):
+        return text
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+    return git("rev-parse", "HEAD") + ("-dirty" if git("status", "--porcelain", "--", "learn") else "")
+
+
+def trained(list_: str, init: dict | None, seed: int, epochs: int, settings: dict) -> dict:
+    """What made a net, for its file (docs: learning/reference §7): the code's commit, the list pair it trained on, the
+    net it went on from (its name) or none, the seed, the epochs it ran, and the trainer's settings as they were."""
+    return {
+        "rev": revision(),
+        "list": list_,
+        "init": init["name"] if init else None,
+        "seed": seed,
+        "epochs": epochs,
+        "settings": settings,
+    }
 
 
 def lists(prefix: str) -> tuple[str, str]:

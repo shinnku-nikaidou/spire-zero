@@ -84,10 +84,95 @@ public static class Gate
 }
 
 /// <summary>
+/// The gate of a pair of nets (docs: evaluation/gates §6): the champion's nets and the new ones both play the same seed
+/// set as each character, at the same commit, and the runs are paired by seed. The nets are every character's, so the
+/// verdict is over all the characters' pairs together: promote when the 95 % one-sided lower bound of the paired
+/// difference in wins (1 or 0, the challenger less the champion) is above 0. Each character's own difference, and the
+/// floors', are listed beside it, not tested.
+/// </summary>
+public static class NetGate
+{
+    /// <summary>Paired differences, the challenger less the champion: their mean, its standard error, and for the wins the
+    /// 95 % one-sided lower bound (the mean less 1.645 standard errors).</summary>
+    /// <param name="Character">The character, or "all" for every character's pairs together.</param>
+    public sealed record Paired(string Character, int Pairs, int Won, int ChampionWon, double WinsDiff, double WinsDiffSe, double WinsLower95,
+        double FloorDiff, double FloorDiffSe);
+
+    /// <param name="Against">The champion the challenger was paired with, as its runs name it.</param>
+    /// <param name="All">Every character's pairs together, which decide.</param>
+    public sealed record Result(string Against, string SeedSet, IReadOnlyList<Paired> Characters, Paired All, bool Promote)
+    {
+        /// <summary>A line per character, then all of them together and the verdict.</summary>
+        public string Summary()
+        {
+            static string Line(Paired p) => string.Create(CultureInfo.InvariantCulture,
+                $"{p.Character,-12} {p.Pairs,5} pairs, won {p.Won,4} against {p.ChampionWon,4}: {p.WinsDiff * 100:+0.0;-0.0;0.0} ± {p.WinsDiffSe * 100:0.0} points, " +
+                $"lower bound {p.WinsLower95 * 100:+0.0;-0.0;0.0}; floors {p.FloorDiff:+0.00;-0.00;0.00} ± {p.FloorDiffSe:0.00}");
+            return string.Join("\n", [.. Characters.Select(Line), Line(All),
+                $"net gate {(Promote ? "pass" : "fail")}: the lower bound of the wins over all pairs is {(Promote ? "above" : "not above")} 0"]);
+        }
+    }
+
+    /// <summary>
+    /// Pairs each character's two reports (<see cref="Gate.Pairs"/>, on the seeds both sides finished) and judges them
+    /// together.
+    /// </summary>
+    /// <exception cref="ArgumentException">A pair of reports that does not match (another environment, game, character,
+    /// ascension or seed set), a character twice, sides played by more than one champion each, or no pair at all.</exception>
+    public static Result Judge(IReadOnlyList<(EvalReport Champion, EvalReport Challenger)> sides)
+    {
+        if (sides.Count == 0) throw new ArgumentException("no reports to pair");
+        if (sides.Select(s => s.Champion.Config.Champion).Distinct().Count() > 1) throw new ArgumentException("the champion's reports come from more than one champion");
+        if (sides.Select(s => s.Challenger.Config.Champion).Distinct().Count() > 1) throw new ArgumentException("the challenger's reports come from more than one champion");
+        if (sides.Select(s => s.Champion.SeedSet).Concat(sides.Select(s => s.Challenger.SeedSet)).Distinct().Count() > 1)
+            throw new ArgumentException("the reports are of more than one seed set");
+        var all = new List<(RunRecord Champion, RunRecord Challenger)>();
+        var characters = new List<Paired>();
+        foreach (var (champion, challenger) in sides)
+        {
+            string character = champion.Runs[0].Character;
+            if (characters.Any(c => c.Character == character)) throw new ArgumentException($"{character} has two pairs of reports");
+            var pairs = Gate.Pairs(champion, challenger.Runs);
+            if (pairs.Count == 0) throw new ArgumentException($"{character}'s reports share no seed");
+            characters.Add(Of(character, pairs));
+            all.AddRange(pairs);
+        }
+        var together = Of("all", all);
+        return new(sides[0].Champion.Config.Champion, sides[0].Champion.SeedSet, characters, together, together.WinsLower95 > 0);
+    }
+
+    private static Paired Of(string character, IReadOnlyList<(RunRecord Champion, RunRecord Challenger)> pairs)
+    {
+        static double Won(RunRecord r) => r.Outcome == "won" ? 1 : 0;
+        var (wins, winsSe) = MeanSe([.. pairs.Select(p => Won(p.Challenger) - Won(p.Champion))]);
+        var (floors, floorsSe) = MeanSe([.. pairs.Select(p => (double)(p.Challenger.Floor - p.Champion.Floor))]);
+        return new(character, pairs.Count, pairs.Count(p => p.Challenger.Outcome == "won"), pairs.Count(p => p.Champion.Outcome == "won"),
+            wins, winsSe, wins - 1.645 * winsSe, floors, floorsSe);
+    }
+
+    /// <summary>The mean and its standard error; one value has no standard error, and so never passes.</summary>
+    private static (double Mean, double Se) MeanSe(IReadOnlyList<double> xs)
+    {
+        double mean = xs.Average();
+        return (mean, xs.Count > 1 ? Math.Sqrt(xs.Sum(x => (x - mean) * (x - mean)) / (xs.Count - 1) / xs.Count) : double.PositiveInfinity);
+    }
+}
+
+/// <summary>
 /// The champion of one environment, every character's, as <c>eval/champions/ENV.json</c> holds it (docs: evaluation §5):
 /// the run options that play it (<c>run --champion FILE</c>; a job gives its own character and ascension), its name as
-/// the reports show it, by character the report that challengers of that character are paired against (a report is one
-/// character at one ascension), and the gate it passed (none for the first champion).
+/// the reports show it, by character its report (a report is one character at one ascension), and the gate its nets
+/// passed (<c>promote</c>; none for a champion that took its nets from another environment's promotion).
 /// </summary>
 public sealed record ChampionFile(string Env, string Champion, IReadOnlyDictionary<string, string> Options,
-    IReadOnlyDictionary<string, string> Reports, string Since, Gate.Result? Gate = null);
+    IReadOnlyDictionary<string, string> Reports, string Since, NetGate.Result? Gate = null)
+{
+    /// <summary>
+    /// The file after a promotion: the challenger's name, options and reports, and the gate it passed. For another
+    /// environment's file that shares the nets, <paramref name="reports"/> and <paramref name="gate"/> are left out: its
+    /// old reports were played by other nets, and it has none of its own yet.
+    /// </summary>
+    public ChampionFile Promoted(string champion, IReadOnlyDictionary<string, string> options, string since,
+        IReadOnlyDictionary<string, string>? reports = null, NetGate.Result? gate = null) =>
+        new(Env, champion, options, reports ?? new Dictionary<string, string>(), since, gate);
+}

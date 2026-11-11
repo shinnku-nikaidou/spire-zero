@@ -41,8 +41,9 @@ def onnx_bytes(model, example: Batch) -> bytes:
     return out.getvalue()
 
 
-def net_file(name, floors, tables, mean, std, model, held, report, seed) -> dict:
-    """The file's content; its test runs are a few held-out decisions, valued on the CPU as RunNet values them."""
+def net_file(name, floors, tables, mean, std, model, held, report, seed, trained) -> dict:
+    """The file's content; its test runs are a few held-out decisions, valued on the CPU as RunNet values them. `trained`
+    says what made the net (common.trained)."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     picks = random.Random(seed).sample(held, min(8, len(held)))
@@ -54,6 +55,7 @@ def net_file(name, floors, tables, mean, std, model, held, report, seed) -> dict
         "floors": floors,
         "vocab": tables,
         "state": {"names": encode.STATE, "mean": [float(v) for v in mean], "std": [float(v) for v in std]},
+        "trained": trained,
         "fit": report,
         "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
         # a run's sample keeps its view as JSON (data.read_runs)

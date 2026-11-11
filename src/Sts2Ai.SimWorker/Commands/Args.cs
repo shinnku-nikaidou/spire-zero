@@ -223,6 +223,20 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
         "self-play only: the softmax temperature τ over the log of V's values by which l0 draws every answer --explore leaves to V (0: V's best)");
 
+    /// <summary>The champion a champion file names, with <paramref name="given"/> options over the file's (as <c>run
+    /// --champion FILE OPTION...</c> would play it).</summary>
+    public static ChampionOptions Of(string championFile, IReadOnlyList<string> given)
+    {
+        var args = new ChampionArgs(file: true);
+        var command = Opt.Command("champion", "a champion file's champion", args.Options);
+        var root = new RootCommand { command };
+        var config = new ParserConfiguration { ResponseFileTokenReplacer = null };
+        string[] line = ["champion", "--champion", championFile, .. given];
+        var parsed = ChampionFileOption.Merge(root, line, root.Parse(line, config), config);
+        if (parsed.Errors.Count > 0) throw new CliException($"{championFile}: {parsed.Errors[0].Message}");
+        return args.Read(parsed);
+    }
+
     /// <summary>The options that make the champion, without --champion FILE.</summary>
     public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore, _macroExplore];
 

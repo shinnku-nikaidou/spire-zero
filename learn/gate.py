@@ -1,5 +1,4 @@
-"""A V's SL report and gate: what the runs reached, and, against the champion's runs on the same seeds, the paired
-difference and the verdict.
+"""A V's SL report: what the runs reached and how they chose (docs: evaluation/gates §6).
 
 From the run records: the runs, the runs won, their mean floor, each act's boss reached and beaten, the elite fights
 per run and the deaths in them, and per act where the lost runs died (the room of the combat, or outside combat). From
@@ -8,11 +7,10 @@ monster and a rest site by the same shares, and what the shops sold (a purchase 
 gained: a relic, a card, a potion). A time-boxed job finished only some runs; a log's runs without a record are left
 out.
 
---against pairs the runs with the champion's by seed, on the seeds both finished: the challenger less the champion,
-the mean, its standard error and the 95 % one-sided lower bound, of the wins (1 or 0) and the floors; promote when the
-bound of the wins is above 0.
+It gives no verdict: new nets are judged against the champion's, every character's pairs together, by the sim's
+`promote` (`--look` to judge and write nothing).
 
-    uv run python gate.py --records R1,R2 --logs L1,L2 [--against C1,C2]
+    uv run python gate.py --records R1,R2 --logs L1,L2
 """
 
 import json
@@ -131,37 +129,10 @@ def logs_report(paths: str, runs: set[str]) -> dict:
     return {"rest": dict(sorted(rest.items())), "monster_or_rest": dict(sorted(monster_or_rest.items())), "shop": shop}
 
 
-def paired(runs: list[dict], champion: list[dict]) -> dict:
-    """The challenger less the champion on the seeds both finished: the wins and the floors; the verdict on the wins."""
-    theirs = {r["seed"]: r for r in champion}
-    both = [(r, theirs[r["seed"]]) for r in runs if r["seed"] in theirs]
-
-    def diff(value) -> tuple[float, float, float]:
-        m, se = mean_se([value(a) - value(b) for a, b in both])
-        return m, se, m - 1.645 * se
-
-    m, se, lower = diff(lambda r: float(r["outcome"] == "won"))
-    floor, floor_se, _ = diff(lambda r: float(r["floor"]))
-    return {
-        "pairs": len(both),
-        "won": sum(1 for a, _ in both if a["outcome"] == "won"),
-        "champion_won": sum(1 for _, b in both if b["outcome"] == "won"),
-        "wins_diff": m,
-        "wins_diff_se": se,
-        "wins_lower_95": lower,
-        "floor_diff": floor,
-        "floor_diff_se": floor_se,
-        "promote": bool(lower > 0),
-    }
-
-
 @script.command(help=__doc__)
 def main(
     records: Annotated[str, typer.Option(help="the V's run records, comma-separated")],
     logs: Annotated[str | None, typer.Option(help="their decision logs, for the rest sites, map and shops")] = None,
-    against: Annotated[
-        str | None, typer.Option(help="the champion's run records, to pair with")
-    ] = None,
 ) -> None:
     runs = read_records(records)
     if not runs:
@@ -169,8 +140,6 @@ def main(
     report = runs_report(runs)
     if logs:
         report |= logs_report(logs, {r["run_id"] for r in runs})
-    if against:
-        report["against"] = paired(runs, read_records(against))
     print(json.dumps(report))
 
 

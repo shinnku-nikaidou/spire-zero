@@ -79,47 +79,6 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         }
     }
 
-    /// <summary>The options that play this champion, for a champion file.</summary>
-    public Dictionary<string, string> Options(PlayEnvironment env)
-    {
-        var options = new Dictionary<string, string> { ["env"] = env.ToString(), ["policy"] = Policy, ["macro"] = Macro };
-        if (Policy == "plan")
-        {
-            options["beam"] = $"{Budget.Beam}";
-            if (Budget.EasyBeam > 0) options["easy-beam"] = $"{Budget.EasyBeam}";
-            options["replan"] = $"{Budget.Replan}";
-            options["loss-plans"] = $"{Budget.LossPlans}";
-            if (Budget.Elite != null) options["elite-effort"] = Effort(Budget.Elite);
-            if (Budget.Boss != null) options["boss-effort"] = Effort(Budget.Boss);
-        }
-        if (Policy == "pimc") options["worlds"] = $"{Budget.Worlds}";
-        if (Searches) options["nodes"] = $"{Budget.NodesPerWorld}";
-        if (ValueFile != null) options["value"] = ValueFile;
-        if (OnClone) options["afterstates"] = "clone";
-        if (Explore > 0) options["explore"] = Explore.ToString(CultureInfo.InvariantCulture);
-        if (MacroExplore > 0) options["macro-explore"] = MacroExplore.ToString(CultureInfo.InvariantCulture);
-        if (Leaf.NetPath != null) options["combat-net"] = Leaf.NetPath;
-        return options;
-    }
-
-    /// <summary>The preset a room's budget was made from (<see cref="BudgetArgs"/> keeps only presets there).</summary>
-    private static string Effort(Budget room) => Budget.Efforts.First(e => Budget.Effort(e) with { Worlds = room.Worlds } == room);
-
-    /// <summary>
-    /// The options of this challenger as the champion, every character's: no character or ascension, which each job
-    /// gives. Each weights file it plays with (V, the combat net) must be in the shared weights folder, weights/all, where
-    /// a name is used once, so the champion file names it where it is (docs: learning/reference §6).
-    /// </summary>
-    public Dictionary<string, string> Promoted(PlayEnvironment env)
-    {
-        var options = Options(env);
-        var folder = Layout.Weights;
-        foreach (var key in new[] { "value", "combat-net" })
-            if (options.TryGetValue(key, out var path) && Path.GetDirectoryName(Path.GetFullPath(path)) != Path.GetFullPath(folder))
-                throw new CliException($"not promoted: {path} is not in {folder}, where a champion's weights files are (docs: learning/reference §6)");
-        return options;
-    }
-
     public override string ToString() =>
         $"policy {Combat}{(Searches ? $" budget {Budget} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
 }

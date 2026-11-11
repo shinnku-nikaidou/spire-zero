@@ -87,7 +87,7 @@ def test_the_onnx_graph_gives_the_test_runs_their_chance_to_win_as_torch_gave_it
     tables = game_ids.macro_tables()
     torch.manual_seed(0)
     model = Net({t: len(ids) for t, ids in tables.items()}, 16)
-    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0)
+    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0, {})
     assert net["state"]["names"] == encode.STATE and len(net["tests"]) == 3
     graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
     assert [i.name for i in graph.graph.input] == encode.INPUTS
@@ -105,7 +105,7 @@ def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_
     sizes = {t: len(ids) for t, ids in tables.items()}
     torch.manual_seed(0)
     model = Net(sizes, 16)
-    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0)
+    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0, {})
     torch.manual_seed(1)
     fresh = Net(sizes, 16)
     weights = export.weights(net, fresh)
@@ -126,7 +126,7 @@ def test_weights_the_export_merged_as_equal_read_back_apart():
     with torch.no_grad():  # as v9-0's: the damage and block rows all zero, so the ONNX keeps one of them
         model.card_damage.weight.zero_()
         model.card_block.weight.zero_()
-    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0)
+    net = export.net_file("t", 16, tables, torch.zeros(len(encode.STATE)), torch.full((len(encode.STATE),), 10.0), model, samples, {}, 0, {})
     weights = export.weights(net, Net(sizes, 16))
     assert torch.equal(weights["card_block.weight"], torch.zeros(sizes["cards"], Net.DIM))
     assert torch.equal(weights["cards.weight"], model.cards.weight)
@@ -141,6 +141,11 @@ def test_training_goes_on_from_a_net_file_with_its_tables_and_state_scaling(tmp_
         assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())
     assert b["vocab"] == a["vocab"] and b["state"] == a["state"]
+    # each file says what made it: the commit, the list, the net it went on from, the seed, the epochs and the settings
+    assert (a["trained"]["list"], a["trained"]["init"], a["trained"]["seed"]) == (lists, None, 0)
+    assert b["trained"]["init"] == "first" and a["trained"]["rev"] == common.revision()
+    assert 1 <= a["trained"]["epochs"] <= a["trained"]["settings"]["epochs"] == train.EPOCHS
+    assert a["trained"]["settings"]["lr"] == train.LR and a["trained"]["settings"]["body"] == Net.BODY
     # the report gives the file's own held-out numbers, on the same held-out decisions
     assert "init_held_out_loss" not in a["fit"]
     assert math.isclose(b["fit"]["init_held_out_loss"], a["fit"]["held_out_loss"], rel_tol=1e-4)

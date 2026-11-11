@@ -205,7 +205,7 @@ def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
                | {"obs": obs(round=r, hp=40 + r), "history": history} for r in (2, 3)]  # fmt: skip
     tables = game_ids.combat_tables()
     torch.manual_seed(0)
-    net = export.net_file("t", "SL", tables, Net({t: len(i) for t, i in tables.items()}), samples, {}, 0)
+    net = export.net_file("t", "SL", tables, Net({t: len(i) for t, i in tables.items()}), samples, {}, 0, {})
     assert net["env"] == "SL" and net["lags"] == encode.LAGS and len(net["tests"]) == 2
     graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
     assert [i.name for i in graph.graph.input] == encode.INPUTS
@@ -228,6 +228,10 @@ def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     net = json.loads(out.read_text())
     assert net["env"] == "SL" and net["fit"]["runs"] == 14 and net["fit"]["held_out_runs"] == 3 and net["tests"]
+    made = net["trained"]
+    assert (made["list"], made["init"], made["seed"]) == (runs, None, 0) and made["rev"] == common.revision()
+    assert 1 <= made["epochs"] <= made["settings"]["epochs"] and made["settings"]["lr"] == train.LR
+    assert made["settings"]["test_list"] == runs and made["settings"]["dim"] == Net.DIM
     assert set(net["fit"]["held_out"]) >= {"rank_lost", "rank_lost_share", "auc_death", "auc_death_share", "potions"}
     assert net["fit"]["by_hp"] and net["fit"]["by_potion"]
     assert net["fit"]["medium"]["held_out"]["samples"] == 42  # the 14 runs' three rounds

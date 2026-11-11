@@ -138,8 +138,9 @@ def main(
         init_loss, _, init_won_chance = evaluate(model)
         logger.info("the file's held-out loss {:.4f}", init_loss)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
-    best, best_state, stale = math.inf, None, 0
+    best, best_state, stale, epochs = math.inf, None, 0, 0
     for epoch in range(EPOCHS):
+        epochs = epoch + 1
         model.train()
         for b in batches(train, True):
             logits, aux = model.both(*b.inputs())
@@ -186,7 +187,12 @@ def main(
         report |= {"init_held_out_loss": init_loss, "init_brier_held_out": brier(init_won_chance)}
     print(json.dumps(report))
 
-    net = export.net_file(name, FLOORS, tables, mean, std, model, test, report, seed)
+    settings = {
+        "floors": FLOORS, "epochs": EPOCHS, "patience": PATIENCE, "batch": BATCH, "lr": LR, "weight_decay": WEIGHT_DECAY,
+        "aux_weight": AUX_WEIGHT, "dim": Net.DIM, "hidden": Net.HIDDEN, "body": Net.BODY,
+    }  # fmt: skip
+    trained = common.trained(list_, start, seed, epochs, settings)
+    net = export.net_file(name, FLOORS, tables, mean, std, model, test, report, seed, trained)
     export.write(net, out_file)
     logger.info("wrote {}", out_file)
 

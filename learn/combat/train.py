@@ -25,7 +25,7 @@ import torch  # noqa: E402
 import common  # noqa: E402
 import game_ids  # noqa: E402
 from combat import data, export, report  # noqa: E402
-from combat.net import Batch, Net, loss  # noqa: E402
+from combat.net import POTION_WEIGHT, Batch, Net, loss  # noqa: E402
 from common import LearnError  # noqa: E402
 from weights import out_path  # noqa: E402
 
@@ -81,7 +81,7 @@ def main(
             return sum(float(loss(model(*b.inputs()), b).sum()) for b in test_batches) / len(test)
 
     model = Net({t: len(ids) for t, ids in tables.items()}).to(device)
-    best, best_state, stale = math.inf, None, 0
+    best, best_state, stale, epochs = math.inf, None, 0, 0
     if start:
         model.load_state_dict(export.weights(start, model))
         model.eval()
@@ -89,6 +89,7 @@ def main(
         logger.info("the file's held-out loss {:.4f}", best)
     opt = torch.optim.AdamW(model.parameters(), lr=LR_INIT if start else LR, weight_decay=WEIGHT_DECAY)
     for epoch in range(EPOCHS):
+        epochs = epoch + 1
         model.train()
         for b in batches(train, True):
             step = loss(model(*b.inputs()), b).mean()
@@ -122,7 +123,12 @@ def main(
     print(json.dumps(fit))
 
     kept = [s for s in test if "obs" in s]
-    export.write(export.net_file(name, env, tables, model, kept, fit, seed), out_file)
+    settings = {
+        "epochs": EPOCHS, "patience": PATIENCE, "batch": BATCH, "lr": LR_INIT if start else LR, "weight_decay": WEIGHT_DECAY,
+        "potion_weight": POTION_WEIGHT, "dim": Net.DIM, "hidden": Net.HIDDEN, "body": Net.BODY, "test_list": test_list,
+    }  # fmt: skip
+    trained = common.trained(list_, start, seed, epochs, settings)
+    export.write(export.net_file(name, env, tables, model, kept, fit, seed, trained), out_file)
     logger.info("wrote {}", out_file)
 
 

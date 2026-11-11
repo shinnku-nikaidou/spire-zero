@@ -129,7 +129,7 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
-    public void AChampionsOptionsPlayItAgain()
+    public void AChampionFilesOptionsPlayItsChampion()
     {
         var champion = new ChampionArgs(file: true);
         var root = new RootCommand { Opt.Command("test", "", champion.Options) };
@@ -140,13 +140,19 @@ public sealed class CliTests : IDisposable
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
         var played = champion.Read(Parse(["test", "--policy", "pimc", "--combat-net", net, "--macro", "l0", "--value", value, "--worlds", "4", "--nodes", "100",
             "--explore", "0.1"]));
-        var file = ChampionFile(played.Options(PlayEnvironment.NoSL));
+        var file = ChampionFile(new()
+        {
+            ["env"] = "NoSL", ["policy"] = "pimc", ["combat-net"] = net, ["macro"] = "l0", ["value"] = value, ["worlds"] = "4", ["nodes"] = "100",
+            ["explore"] = "0.1",
+        });
         var again = champion.Read(Parse(["test", "--champion", file]));
 
         Assert.Equal("combat pimc combat-tiny 4x100, combat prompts first, macro l0 pure-v-tiny-win eps 0.1, macro prompts l0 pure-v-tiny-win eps 0.1", played.Name);
         Assert.Equal(played.Name, again.Name);
-        Assert.Equal(played.Options(PlayEnvironment.NoSL), again.Options(PlayEnvironment.NoSL));
         Assert.Equal(4, again.Workers);
+        // As promote reads a champion file with new nets: the file's champion, the options given over its own.
+        Assert.Equal(played.Name, ChampionArgs.Of(file, []).Name);
+        Assert.Equal(played.Name.Replace("4x100", "4x50"), ChampionArgs.Of(file, ["--nodes", "50"]).Name);
     }
 
     [Fact]
@@ -168,10 +174,12 @@ public sealed class CliTests : IDisposable
             "macro l0 pure-v-tiny-win explore 0.05 eps 0.1, macro prompts l0 pure-v-tiny-win explore 0.05 eps 0.1", played.Name);
         Assert.True(played.Explores);
 
-        var options = played.Options(PlayEnvironment.SL);
-        Assert.Equal("high", options["boss-effort"]);
-        Assert.False(options.ContainsKey("elite-effort"));
-        var again = champion.Read(Parse(["test", "--champion", ChampionFile(options)]));
+        var file = ChampionFile(new()
+        {
+            ["env"] = "SL", ["policy"] = "plan", ["combat-net"] = net, ["macro"] = "l0", ["value"] = value, ["effort"] = "medium",
+            ["boss-effort"] = "high", ["explore"] = "0.1", ["macro-explore"] = "0.05",
+        });
+        var again = champion.Read(Parse(["test", "--champion", file]));
         Assert.Equal(played.Name, again.Name);
         Assert.Equal(played.Budget, again.Budget);
     }
