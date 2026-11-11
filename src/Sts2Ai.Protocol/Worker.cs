@@ -49,9 +49,9 @@ public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<Combat
 /// L0's probes of a decision outside combat in a run (docs: macro-brain/search §6): <see cref="Node"/> loaded and replayed
 /// stands at the decision; each of <see cref="Paths"/> is played from there, in its own load of the clone, and the
 /// reply's <see cref="WorkerReply.Afters"/> holds what the game asks next after each, in order. A path's answers are
-/// macro actions in text form and, for a card prompt, "pick:" and its picks in the prompt's canonical order.
+/// macro actions and, for a card prompt, its picks in the prompt's canonical order (<see cref="MacroAction.Pick"/>).
 /// </summary>
-public sealed record SlMacroRequest(long Id, NodeClone Node, IReadOnlyList<IReadOnlyList<string>> Paths) : WorkerRequest(Id);
+public sealed record SlMacroRequest(long Id, NodeClone Node, IReadOnlyList<IReadOnlyList<MacroAction>> Paths) : WorkerRequest(Id);
 
 /// <param name="GameErrors">The game's Log.Error lines while serving the request.</param>
 /// <param name="Turn">The answer to an <see cref="SlTurnRequest"/>.</param>
@@ -66,7 +66,7 @@ public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, str
 /// are in its screen (<see cref="CardChoiceScreen"/>), so its <see cref="Legal"/> is empty; a combat's screen
 /// (<see cref="CombatScreen"/>) holds its first observation, and its actions are left out, as a combat ends a probe.
 /// </summary>
-public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<string> Legal, bool? Won = null);
+public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen, IReadOnlyList<MacroAction> Legal, bool? Won = null);
 
 /// <summary>A line of play that search found, from its first action, and its value.</summary>
 /// <param name="Nodes">The actions the search simulated after the line's first action, itself included.</param>

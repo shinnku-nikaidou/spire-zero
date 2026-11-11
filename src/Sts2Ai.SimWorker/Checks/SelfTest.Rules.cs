@@ -170,12 +170,13 @@ internal static partial class SelfTest
     {
         public bool Offered { get; private set; }
 
-        public string Choose(MacroDecision decision)
+        public MacroAnswer Choose(MacroDecision decision)
         {
-            if (!decision.Legal.Contains("potion:0")) return decision.Legal[0];
+            var potion = MacroAction.Of(MacroAction.Potion, 0);
+            if (!decision.Legal.Contains(potion)) return new(decision.Legal[0]);
             if (Offered) throw new InvalidOperationException("the potion offered again after it was thrown");
             Offered = true;
-            return "potion:0";
+            return new(potion);
         }
     }
 }

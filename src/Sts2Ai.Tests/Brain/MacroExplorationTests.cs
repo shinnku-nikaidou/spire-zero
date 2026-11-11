@@ -15,7 +15,7 @@ public class MacroExplorationTests
 
     private static readonly Worth V = new(new() { ["A"] = 1, ["B"] = 3, ["C"] = 2.9, ["BAD"] = -2, ["WORSE"] = -3 });
 
-    private static MacroDecision Treasure() => new(Surfaces.Treasure, ["relic:0", "relic:1", "relic:2"],
+    private static MacroDecision Treasure() => new(Surfaces.Treasure, Fixtures.Acts("relic:0", "relic:1", "relic:2"),
         () => new Observation { Run = Fixtures.Floor1(), Screen = new TreasureScreen { Relics = ["A", "B", "C"] } });
 
     private static ChoiceDecision Prompt(int min, params string[] cards) => new(new CardChoice
@@ -31,35 +31,37 @@ public class MacroExplorationTests
     {
         // Removing the Eternal BAD would be worth the most, but the game offers only A; without A the deck is worse.
         var deck = new List<CardView> { new() { Id = "A" }, new() { Id = "BAD", Keywords = ["Eternal", "Unplayable"] } };
-        var shop = new MacroDecision(Surfaces.Shop, ["remove", "leave"], () => new Observation
+        var shop = new MacroDecision(Surfaces.Shop, Fixtures.Acts("remove", "leave"), () => new Observation
         {
             Run = Fixtures.Floor1() with { Deck = deck },
             Screen = new ShopScreen { Entries = [], RemovalCost = 75 },
         });
-        Assert.Equal("leave", new MacroBrain(V).Choose(shop));
+        Assert.Equal(MacroAction.Leave, new MacroBrain(V).Choose(shop).Action);
     }
 
     [Fact]
     public void WithoutExplorationItTakesTheBest()
     {
         var l0 = new MacroBrain(V);
-        Assert.Equal("relic:1", l0.Choose(Treasure()));
-        Assert.Equal([1], l0.Choose(Prompt(0, "A", "B")));
-        Assert.Empty(l0.Choose(Prompt(0, "BAD", "WORSE")));
-        Assert.Equal([0], l0.Choose(Prompt(1, "BAD", "WORSE")));
-        Assert.False(l0.Explored);
+        Assert.Equal(new MacroAnswer(MacroAction.Of(MacroAction.Relic, 1)).Action, l0.Choose(Treasure()).Action);
+        Assert.False(l0.Choose(Treasure()).Explored);
+        Assert.Equal([1], l0.Choose(Prompt(0, "A", "B")).Picks);
+        Assert.Empty(l0.Choose(Prompt(0, "BAD", "WORSE")).Picks);
+        var forced = l0.Choose(Prompt(1, "BAD", "WORSE"));
+        Assert.Equal([0], forced.Picks);
+        Assert.False(forced.Explored);
     }
 
     private static List<CardView> Cards(string[] ids) => [.. ids.Select(id => new CardView { Id = id })];
 
-    private static MacroDecision Rewards(params string[] cards) => new(Surfaces.Rewards, ["reward:0", "rewards_done"], () => new Observation
+    private static MacroDecision Rewards(params string[] cards) => new(Surfaces.Rewards, Fixtures.Acts("reward:0", "rewards_done"), () => new Observation
     {
         Run = Fixtures.Floor1(),
         Screen = new RewardsScreen { Rewards = [new RewardView { Index = 0, Kind = "card", Cards = Cards(cards) }] },
     });
 
     private static MacroDecision CardReward(params string[] cards) => new(Surfaces.CardReward,
-        [.. cards.Select((_, i) => $"card:{i}"), "card_alt:Skip"],
+        [.. cards.Select((_, i) => MacroAction.Of(MacroAction.Card, i)), new MacroAction(MacroAction.CardAlt, "Skip")],
         () => new Observation { Run = Fixtures.Floor1(), Screen = new CardRewardScreen { Cards = Cards(cards), Alternatives = ["Skip"] } });
 
     [Fact]
@@ -69,10 +71,14 @@ public class MacroExplorationTests
         for (int seed = 0; seed < 4000; seed++)
         {
             var l0 = new MacroBrain(V, uniform: new Uniform(1, new Random(seed)));
-            if (l0.Choose(Rewards("WORSE", "BAD", "A")) == "rewards_done")
-                picks.Add(("skip", l0.Explored));
-            else
-                picks.Add((l0.Choose(CardReward("WORSE", "BAD", "A")), l0.Explored));
+            var rewards = l0.Choose(Rewards("WORSE", "BAD", "A"));
+            if (rewards.Action == MacroAction.RewardsDone)
+            {
+                picks.Add(("skip", rewards.Explored));
+                continue;
+            }
+            var card = l0.Choose(CardReward("WORSE", "BAD", "A"));
+            picks.Add((card.Action.ToString(), card.Explored));
         }
         // Every outcome has 1/4 whatever V says (it would open the reward and take A); skipping is never opening it.
         foreach (var outcome in new[] { "card:0", "card:1", "card:2", "skip" })
@@ -87,17 +93,17 @@ public class MacroExplorationTests
     {
         static Observation On(ScreenView screen) => new() { Run = Fixtures.Floor1() with { Potions = ["FRUIT_JUICE", null, null] }, Screen = screen };
         const string drink = "potion:0", belt = "discard_potion:0";
-        yield return new(Surfaces.Treasure, ["relic:0", "relic:1", "relic:2", drink, belt], () => On(new TreasureScreen { Relics = ["A", "B", "C"] }));
-        yield return new(Surfaces.Shop, ["buy:0", "buy:1", "leave", drink, belt], () => On(new ShopScreen
+        yield return new(Surfaces.Treasure, Fixtures.Acts("relic:0", "relic:1", "relic:2", drink, belt), () => On(new TreasureScreen { Relics = ["A", "B", "C"] }));
+        yield return new(Surfaces.Shop, Fixtures.Acts("buy:0", "buy:1", "leave", drink, belt), () => On(new ShopScreen
         {
             Entries = [new() { Slot = 0, Kind = "card", Card = new() { Id = "A" }, Cost = 1 }, new() { Slot = 1, Kind = "card", Card = new() { Id = "B" }, Cost = 1 }],
         }));
-        yield return new(Surfaces.Rest, ["rest:HEAL", "rest:SMITH", drink, belt], () => On(new RestScreen { Options = [new("HEAL", true, 10), new("SMITH", true)] }));
-        yield return new(Surfaces.Event, ["event:0", "event:1", "event:2", drink, belt], () => On(new EventScreen
+        yield return new(Surfaces.Rest, Fixtures.Acts("rest:HEAL", "rest:SMITH", drink, belt), () => On(new RestScreen { Options = [new("HEAL", true, 10), new("SMITH", true)] }));
+        yield return new(Surfaces.Event, Fixtures.Acts("event:0", "event:1", "event:2", drink, belt), () => On(new EventScreen
         {
             Id = "E", Finished = false, Options = [new() { Index = 0, Key = "a" }, new() { Index = 1, Key = "b" }, new() { Index = 2, Key = "c" }],
         }));
-        yield return new(Surfaces.Map, ["map:0,1", "map:1,1", drink, belt], () => On(new MapScreen { Travelable = [new(0, 1), new(1, 1)] }));
+        yield return new(Surfaces.Map, Fixtures.Acts("map:0,1", "map:1,1", drink, belt), () => On(new MapScreen { Travelable = [new(0, 1), new(1, 1)] }));
     }
 
     [Fact]
@@ -105,13 +111,13 @@ public class MacroExplorationTests
     {
         foreach (var decision in EveryKind())
         {
-            var options = decision.Legal.Where(a => !a.StartsWith("discard_potion")).ToList();
+            var options = decision.Legal.Where(a => a.Verb != MacroAction.DiscardPotion).ToList();
             var picks = Enumerable.Range(0, 600).Select(seed =>
             {
                 var l0 = new MacroBrain(V, uniform: new Uniform(1, new Random(seed)));
-                var pick = l0.Choose(decision);
-                Assert.True(l0.Explored);
-                return pick;
+                var answer = l0.Choose(decision);
+                Assert.True(answer.Explored);
+                return answer.Action;
             }).ToList();
             foreach (var option in options)
                 Assert.InRange(picks.Count(p => p == option), 600 / options.Count - 70, 600 / options.Count + 70);
@@ -122,16 +128,16 @@ public class MacroExplorationTests
     [Fact]
     public void AtEpsilonOneAPromptsPicksAreDrawnEvenlyAndAtEpsilonZeroPointOneMostAnswersAreVs()
     {
-        var picks = Enumerable.Range(0, 900).Select(seed => new MacroBrain(V, uniform: new Uniform(1, new Random(seed))).Choose(Prompt(0, "BAD", "WORSE", "A"))).ToList();
+        var picks = Enumerable.Range(0, 900).Select(seed => new MacroBrain(V, uniform: new Uniform(1, new Random(seed))).Choose(Prompt(0, "BAD", "WORSE", "A")).Picks).ToList();
         // No pick or one: half each; one: each card a third of that.
         Assert.InRange(picks.Count(p => p.Count == 0), 380, 520);
         foreach (int card in new[] { 0, 1, 2 }) Assert.InRange(picks.Count(p => p.SequenceEqual([card])), 110, 190);
-        Assert.All(Enumerable.Range(0, 100), seed => Assert.Single(new MacroBrain(V, uniform: new Uniform(1, new Random(seed))).Choose(Prompt(1, "BAD", "WORSE"))));
+        Assert.All(Enumerable.Range(0, 100), seed => Assert.Single(new MacroBrain(V, uniform: new Uniform(1, new Random(seed))).Choose(Prompt(1, "BAD", "WORSE")).Picks));
 
         var l0 = new MacroBrain(V, uniform: new Uniform(0.1, new Random(1)));
-        var treasure = Enumerable.Range(0, 1000).Select(_ => (l0.Choose(Treasure()), l0.Explored)).ToList();
+        var treasure = Enumerable.Range(0, 1000).Select(_ => l0.Choose(Treasure())).ToList();
         // V's best 90 % plus a third of the draws.
-        Assert.InRange(treasure.Count(p => p.Item1 == "relic:1"), 900, 960);
+        Assert.InRange(treasure.Count(p => p.Action == MacroAction.Of(MacroAction.Relic, 1)), 900, 960);
         Assert.InRange(treasure.Count(p => p.Explored), 70, 130);
     }
 
@@ -141,7 +147,8 @@ public class MacroExplorationTests
         var picks = Enumerable.Range(0, 1000).Select(seed =>
         {
             var l0 = new MacroBrain(V, softmax: new Softmax(0.05, new Random(seed)));
-            return (Pick: l0.Choose(Treasure()), l0.Explored);
+            var answer = l0.Choose(Treasure());
+            return (Pick: answer.Action.ToString(), answer.Explored);
         }).ToList();
         // log 3 - log 2.9 = 0.034: C is drawn e^(-0.034 / 0.05) = 0.51 times as often as B; A, a third of B, never.
         Assert.InRange(picks.Count(p => p.Pick == "relic:1"), 610, 715);
@@ -149,7 +156,7 @@ public class MacroExplorationTests
         Assert.DoesNotContain(picks, p => p.Pick == "relic:0");
         Assert.All(picks, p => Assert.Equal(p.Pick != "relic:1", p.Explored));
         // A prompt's step is drawn the same way: B or C, never A.
-        var prompt = Enumerable.Range(0, 300).Select(seed => new MacroBrain(V, softmax: new Softmax(0.05, new Random(seed))).Choose(Prompt(1, "A", "B", "C"))).ToList();
+        var prompt = Enumerable.Range(0, 300).Select(seed => new MacroBrain(V, softmax: new Softmax(0.05, new Random(seed))).Choose(Prompt(1, "A", "B", "C")).Picks).ToList();
         Assert.Contains(prompt, p => p.SequenceEqual([1]));
         Assert.Contains(prompt, p => p.SequenceEqual([2]));
         Assert.DoesNotContain(prompt, p => p.SequenceEqual([0]));

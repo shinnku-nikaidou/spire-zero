@@ -28,16 +28,16 @@ public static class MapActions
 
     public static MapScreen Screen(RunState run) => new() { Travelable = [.. Travelable(run).Select(Observe.Coord)] };
 
-    public static List<string> Legal(RunState run) => [.. Travelable(run).Select(Text)];
+    public static List<MacroAction> Legal(RunState run) => [.. Travelable(run).Select(Of)];
 
-    public static string Text(MapCoord c) => $"map:{c.col},{c.row}";
+    public static MacroAction Of(MapCoord c) => MacroAction.Of(MacroAction.Map, c.col, c.row);
 
     /// <summary>Votes for the point, as clicking it on the map screen does; the move runs on the action queue.</summary>
-    public static void Start(RunState run, Player player, string action)
+    public static void Start(RunState run, Player player, MacroAction action)
     {
         var travelable = Travelable(run);
-        int i = travelable.FindIndex(c => Text(c) == action);
-        if (i < 0) throw ActionText.Illegal(action, Surfaces.Map);
+        int i = travelable.FindIndex(c => Of(c) == action);
+        if (i < 0) throw Illegal.Action(action, Surfaces.Map);
         var vote = new MapVote { coord = travelable[i], mapGenerationCount = RunManager.Instance.MapSelectionSynchronizer.MapGenerationCount };
         var source = new MapLocation(run.CurrentMapCoord, run.CurrentActIndex);
         RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(new VoteForMapCoordAction(player, source, vote));

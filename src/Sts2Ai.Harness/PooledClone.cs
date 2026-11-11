@@ -11,7 +11,7 @@ namespace Sts2Ai.Harness;
 /// </summary>
 public sealed class PooledClone(WorkerPool pool, NodeClone node) : IMacroClone
 {
-    public IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<string>> paths)
+    public IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<MacroAction>> paths)
     {
         if (paths.Count == 0) return [];
         int parts = Math.Min(paths.Count, pool.Count);

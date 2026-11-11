@@ -19,16 +19,23 @@ public class CloneSearchTests
     {
         public int Probes { get; private set; }
 
-        public IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<string>> paths)
+        public IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<MacroAction>> paths)
         {
             Probes += paths.Count;
-            return [.. paths.Select(play)];
+            return [.. paths.Select(p => play([.. p.Select(a => a.ToString())]))];
         }
     }
 
     private static readonly RunView Start = Fixtures.Floor1() with { Gold = 10, Deck = [], Relics = [] };
 
     private static Afterstate Exit(RunView run) => new(run, Surfaces.Map, null, []);
+
+    private static IReadOnlyList<MacroAction> Acts(params string[] actions) => Fixtures.Acts(actions);
+
+    /// <summary>Root options, each a path of one action.</summary>
+    private static IReadOnlyList<IReadOnlyList<MacroAction>> Paths(params string[] actions) => [.. actions.Select(a => Acts(a))];
+
+    private static string Chosen(MacroDecision decision) => new MacroBrain(V).Choose(decision).Action.ToString();
 
     private static MacroDecision Root(Toy toy) => Root(toy, toy.After([[]])[0]);
 
@@ -47,7 +54,7 @@ public class CloneSearchTests
             run = run with { Gold = run.Gold - cost, Relics = [.. run.Relics, new RelicView { Id = id }] };
         }
         var legal = Enumerable.Range(0, stock.Length).Where(i => stock[i].Cost <= run.Gold && run.Relics.All(r => r.Id != stock[i].Id))
-            .Select(i => $"buy:{i}").Append("leave").ToList();
+            .Select(i => MacroAction.Of(MacroAction.Buy, i)).Append(MacroAction.Leave).ToList();
         return new(run, Surfaces.Shop, new ShopScreen { Entries = [] }, legal);
     }
 
@@ -58,10 +65,10 @@ public class CloneSearchTests
         var toy = new Toy(Shop);
         var l0 = new MacroBrain(V);
         var options = l0.Options(Root(toy));
-        Assert.Equal("buy:0", l0.Choose(Root(toy)));
-        Assert.Equal(2, options.Single(o => o.Action == "buy:0").Value);
-        Assert.Equal(1.5, options.Single(o => o.Action == "buy:2").Value);
-        Assert.Equal(0, options.Single(o => o.Action == "leave").Value);
+        Assert.Equal("buy:0", Chosen(Root(toy)));
+        Assert.Equal(2, options.Single(o => o.Action.ToString() == "buy:0").Value);
+        Assert.Equal(1.5, options.Single(o => o.Action.ToString() == "buy:2").Value);
+        Assert.Equal(0, options.Single(o => o.Action.ToString() == "leave").Value);
     }
 
     /// <summary>An event whose first page shows nothing: entering leads to a page that gives relic B; leaving ends it.</summary>
@@ -70,9 +77,9 @@ public class CloneSearchTests
         static EventScreen Page(string page) => new() { Id = "TOY", Page = page, Options = [], Finished = false };
         return path switch
         {
-            [] => new(Start, Surfaces.Event, Page("first"), ["event:0", "event:1"]),
+            [] => new(Start, Surfaces.Event, Page("first"), Acts("event:0", "event:1")),
             ["event:0", ..] => Exit(Start),
-            ["event:1"] => new(Start, Surfaces.Event, Page("second"), ["event:0"]),
+            ["event:1"] => new(Start, Surfaces.Event, Page("second"), Acts("event:0")),
             ["event:1", "event:0", ..] => Exit(Start with { Relics = [new RelicView { Id = "B" }] }),
             _ => throw new InvalidOperationException(string.Join(" ", path)),
         };
@@ -82,7 +89,7 @@ public class CloneSearchTests
     public void AnEventOptionIsWorthWhatItsNextPageGives()
     {
         // Leaving is listed first: from the first page alone the two would tie and leaving would win.
-        Assert.Equal("event:1", new MacroBrain(V).Choose(Root(new Toy(Event))));
+        Assert.Equal("event:1", Chosen(Root(new Toy(Event))));
     }
 
     /// <summary>A combat leaf that values every combat at the same <paramref name="worth"/>.</summary>
@@ -98,15 +105,15 @@ public class CloneSearchTests
         // the game leaves a run it ends: the fight is worth what the combat leaf says, the death 0, the win 1.
         var toy = new Toy(path => path switch
         {
-            [] => new(Start, Surfaces.Event, new EventScreen { Id = "TOY", Options = [], Finished = false }, ["event:0", "event:1", "event:2"]),
+            [] => new(Start, Surfaces.Event, new EventScreen { Id = "TOY", Options = [], Finished = false }, Acts("event:0", "event:1", "event:2")),
             ["event:0"] => new(Start with { Relics = [new RelicView { Id = "B" }] }, Surfaces.Combat, new CombatScreen { Combat = Fixtures.Slugs() }, []),
             ["event:1"] => new(Start with { Hp = 0 }, null, null, [], Won: false),
             ["event:2"] => new(Start with { Hp = 0 }, null, null, [], Won: true),
             _ => throw new InvalidOperationException(string.Join(" ", path)),
         });
-        var found = new CloneSearch(V, toy, fights: new FlatLeaf(0.25)).Search(toy.After([[]])[0], [["event:0"], ["event:1"], ["event:2"]]);
+        var found = new CloneSearch(V, toy, fights: new FlatLeaf(0.25)).Search(toy.After([[]])[0], Paths("event:0", "event:1", "event:2"));
         Assert.Equal([0.25, 0, 1], found.Select(f => f.Value));
-        Assert.Throws<InvalidOperationException>(() => new CloneSearch(V, toy).Search(toy.After([[]])[0], [["event:0"]]));
+        Assert.Throws<InvalidOperationException>(() => new CloneSearch(V, toy).Search(toy.After([[]])[0], Paths("event:0")));
     }
 
     [Fact]
@@ -114,9 +121,9 @@ public class CloneSearchTests
     {
         var run = Fixtures.Floor1();
         var next = run.Map.Points.First(p => p.Row == 1);
-        var map = new Afterstate(run, Surfaces.Map, new MapScreen { Travelable = [new(next.Col, next.Row)] }, [$"map:{next.Col},{next.Row}"]);
+        var map = new Afterstate(run, Surfaces.Map, new MapScreen { Travelable = [new(next.Col, next.Row)] }, [MacroAction.Of(MacroAction.Map, next.Col, next.Row)]);
         var toy = new Toy(path => throw new InvalidOperationException($"played {string.Join(" ", path)}"));
-        Assert.Equal($"map:{next.Col},{next.Row}", new MacroBrain(V).Choose(Root(toy, map)));
+        Assert.Equal($"map:{next.Col},{next.Row}", Chosen(Root(toy, map)));
         Assert.Equal(0, toy.Probes);
     }
 
@@ -136,7 +143,7 @@ public class CloneSearchTests
             _ => throw new InvalidOperationException(string.Join(" ", path)),
         });
         var prompt = new ChoiceDecision(choice, () => new Observation { Run = Start, Screen = new CardChoiceScreen { Choice = choice } }, toy);
-        Assert.Equal([1, 3], new MacroBrain(V).Choose(prompt));
+        Assert.Equal([1, 3], new MacroBrain(V).Choose(prompt).Picks);
     }
 
     private static readonly CardView[] Offered = [new() { Id = "A" }, new() { Id = "BAD" }];
@@ -161,7 +168,7 @@ public class CloneSearchTests
                     run = run with { Relics = [.. run.Relics, new RelicView { Id = "Y" }] };
                     break;
                 case "reward:0" when ++i == path.Count:
-                    return new(run, Surfaces.CardReward, new CardRewardScreen { Cards = Offered, Alternatives = ["Skip"] }, ["card:0", "card:1", "card_alt:Skip"]);
+                    return new(run, Surfaces.CardReward, new CardRewardScreen { Cards = Offered, Alternatives = ["Skip"] }, Acts("card:0", "card:1", "card_alt:Skip"));
                 case "reward:0" when path[i] != "card_alt:Skip":
                     card = false;
                     run = run with { Deck = [.. run.Deck, Offered[int.Parse(path[i]["card:".Length..])]] };
@@ -171,7 +178,7 @@ public class CloneSearchTests
         var rewards = new List<RewardView>();
         if (card) rewards.Add(new() { Index = 0, Kind = "card", Cards = Offered });
         if (relic) rewards.Add(new() { Index = 1, Kind = "relic", Id = "Y" });
-        return new(run, Surfaces.Rewards, new RewardsScreen { Rewards = rewards }, [.. rewards.Select(r => $"reward:{r.Index}"), "rewards_done"]);
+        return new(run, Surfaces.Rewards, new RewardsScreen { Rewards = rewards }, [.. rewards.Select(r => MacroAction.Of(MacroAction.Reward, r.Index)), MacroAction.RewardsDone]);
     }
 
     [Fact]
@@ -187,7 +194,7 @@ public class CloneSearchTests
         {
             Assert.True(path.Count < 8, $"no way out: {string.Join(" ", path)}");
             var at = path.ToList();
-            path.Add(l0.Choose(Root(new Toy(p => Rewards([.. at, .. p])))));
+            path.Add(l0.Choose(Root(new Toy(p => Rewards([.. at, .. p])))).Action.ToString());
         }
         Assert.Equal(["reward:0", "card:0", "reward:1", "rewards_done"], path);
     }
@@ -198,13 +205,13 @@ public class CloneSearchTests
         // Two ways to the same page: its one answer is probed once.
         var toy = new Toy(path => path switch
         {
-            [] => new(Start, Surfaces.Event, new EventScreen { Id = "TOY", Options = [], Finished = false }, ["event:0", "event:1"]),
-            [_] => new(Start, Surfaces.Event, new EventScreen { Id = "TOY", Page = "same", Options = [], Finished = false }, ["proceed"]),
+            [] => new(Start, Surfaces.Event, new EventScreen { Id = "TOY", Options = [], Finished = false }, Acts("event:0", "event:1")),
+            [_] => new(Start, Surfaces.Event, new EventScreen { Id = "TOY", Page = "same", Options = [], Finished = false }, Acts("proceed")),
             [_, "proceed"] => Exit(Start),
             _ => throw new InvalidOperationException(string.Join(" ", path)),
         });
         var search = new CloneSearch(V, toy);
-        search.Search(toy.After([[]])[0], [["event:0"], ["event:1"]]);
+        search.Search(toy.After([[]])[0], Paths("event:0", "event:1"));
         Assert.Equal(3, search.Probes);
     }
 
@@ -223,7 +230,7 @@ public class CloneSearchTests
     {
         var belt = new string?[] { "Q", "Q", "Q" };
         RunView Run() => Start with { Potions = [.. belt] };
-        if (path.Count == 0) return new(Run(), Surfaces.Event, new EventScreen { Id = "TOY", Options = [], Finished = false }, ["event:0", "event:1"]);
+        if (path.Count == 0) return new(Run(), Surfaces.Event, new EventScreen { Id = "TOY", Options = [], Finished = false }, Acts("event:0", "event:1"));
         if (path[0] == "event:1") return Exit(Run());
         foreach (var action in path.Skip(1))
         {
@@ -239,7 +246,7 @@ public class CloneSearchTests
         if (belt.Contains(null)) legal.Add("reward:0");
         legal.Add("rewards_done");
         legal.AddRange(Enumerable.Range(0, belt.Length).Where(i => belt[i] != null).Select(i => $"discard_potion:{i}"));
-        return new(Run(), Surfaces.Rewards, new RewardsScreen { Rewards = [new RewardView { Index = 0, Kind = "potion", Id = "P" }] }, legal);
+        return new(Run(), Surfaces.Rewards, new RewardsScreen { Rewards = [new RewardView { Index = 0, Kind = "potion", Id = "P" }] }, Acts([.. legal]));
     }
 
     [Fact]
@@ -250,7 +257,7 @@ public class CloneSearchTests
         var toy = new Toy(Courier);
         var l0 = new MacroBrain(new Belt(new() { ["Q"] = 1, ["P"] = 2 }));
         var options = l0.Options(Root(toy));
-        Assert.Equal(4, options.Single(o => o.Action == "event:0").Value);
-        Assert.Equal(3, options.Single(o => o.Action == "event:1").Value);
+        Assert.Equal(4, options.Single(o => o.Action.ToString() == "event:0").Value);
+        Assert.Equal(3, options.Single(o => o.Action.ToString() == "event:1").Value);
     }
 }

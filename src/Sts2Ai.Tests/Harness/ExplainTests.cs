@@ -31,12 +31,12 @@ public class ExplainTests
     [Fact]
     public void AMacroAnswerCarriesEachOptionsValueTheChosenFirst()
     {
-        var treasure = new MacroDecision(Surfaces.Treasure, ["relic:0", "relic:1", "relic:2"],
+        var treasure = new MacroDecision(Surfaces.Treasure, Fixtures.Acts("relic:0", "relic:1", "relic:2"),
             () => new Observation { Run = Fixtures.Floor1(), Screen = new TreasureScreen { Relics = ["A", "B", "C"] } });
-        var dispatcher = Make(explain: false);
+        var (answer, note) = Make(explain: false).Decide(treasure);
 
-        Assert.Equal("relic:1", dispatcher.Choose(treasure));
-        var candidates = dispatcher.Last!.Candidates!;
+        Assert.Equal("relic:1", answer.Action.ToString());
+        var candidates = note.Candidates!;
         Assert.Equal(["relic:1", "relic:2", "relic:0"], candidates.Select(c => c.Action));
         double start = V.Value(Fixtures.Floor1());
         Assert.Equal([start + 0.3, start + 0.2, start + 0.1], candidates.Select(c => c.Value), new Close());
@@ -48,20 +48,17 @@ public class ExplainTests
     {
         var run = Fixtures.Floor1();
         var at = run.Map.Points.First(p => p.Col == run.Map.Visited[^1].Col && p.Row == run.Map.Visited[^1].Row);
-        var legal = at.Next.Select(c => $"map:{c.Col},{c.Row}").ToList();
+        var legal = at.Next.Select(c => MacroAction.Of(MacroAction.Map, c.Col, c.Row)).ToList();
         var map = new MacroDecision(Surfaces.Map, legal, () => new Observation { Run = run, Screen = new MapScreen { Travelable = at.Next } });
 
-        var plain = Make(explain: false);
-        plain.Choose(map);
-        Assert.All(plain.Last!.Candidates!, c => Assert.Null(c.Plan));
+        Assert.All(Make(explain: false).Decide(map).Note.Candidates!, c => Assert.Null(c.Plan));
 
-        var dispatcher = Make(explain: true);
-        string chosen = dispatcher.Choose(map);
-        var candidates = dispatcher.Last!.Candidates!;
-        Assert.Equal(legal.Order(), candidates.Select(c => c.Action).Order());
-        Assert.Equal(chosen, candidates[0].Action);
+        var (chosen, note) = Make(explain: true).Decide(map);
+        var candidates = note.Candidates!;
+        Assert.Equal(legal.Select(a => a.ToString()).Order(), candidates.Select(c => c.Action).Order());
+        Assert.Equal(chosen.Action.ToString(), candidates[0].Action);
         // The chosen option's route is the answer's plan; every route goes one row at a time from its option to the last row.
-        Assert.Equal(dispatcher.Last.Plan, candidates[0].Plan);
+        Assert.Equal(note.Plan, candidates[0].Plan);
         int last = run.Map.Points.Where(p => p.Next.Count > 0).Max(p => p.Row);
         foreach (var c in candidates)
         {

@@ -21,7 +21,7 @@ public class MacroUpgradeTests
 
     private static readonly CardView Small = Card("AAA", 6, 7), Big = Card("ZZZ", 6, 12);
 
-    private static MacroDecision Rest(int heal, params CardView[] deck) => new(Surfaces.Rest, ["rest:HEAL", "rest:SMITH"],
+    private static MacroDecision Rest(int heal, params CardView[] deck) => new(Surfaces.Rest, Fixtures.Acts("rest:HEAL", "rest:SMITH"),
         () => new Observation
         {
             Run = Fixtures.Floor1() with { Hp = 40, Deck = deck },
@@ -34,9 +34,9 @@ public class MacroUpgradeTests
         var l0 = new MacroBrain(new Damage());
         // The best upgrade adds 6 damage: smithing beats a heal of 5, whichever card comes first; the other upgrade
         // adds only 1, and alone it loses to the heal.
-        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Small, Big)));
-        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Big, Small)));
-        Assert.Equal("rest:HEAL", l0.Choose(Rest(5, Small, Small)));
+        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Small, Big)).Action.ToString());
+        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Big, Small)).Action.ToString());
+        Assert.Equal("rest:HEAL", l0.Choose(Rest(5, Small, Small)).Action.ToString());
     }
 
     /// <summary>A V that likes the run as it is best: each HP and each upgraded card costs.</summary>
@@ -60,10 +60,10 @@ public class MacroUpgradeTests
         // An upgrade beats the heal, and keeping the run as it is beats both; but the rest site must be used, and
         // stopping the prompt would only go back to it.
         var l0 = new MacroBrain(new Unchanged());
-        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Small, Big)));
-        Assert.Single(l0.Choose(UpgradePrompt()));
+        Assert.Equal("rest:SMITH", l0.Choose(Rest(5, Small, Big)).Action.ToString());
+        Assert.Single(l0.Choose(UpgradePrompt()).Picks);
         // A prompt that no answer of L0's opened may still be stopped.
-        Assert.Empty(l0.Choose(UpgradePrompt()));
+        Assert.Empty(l0.Choose(UpgradePrompt()).Picks);
     }
 
     [Fact]
@@ -77,6 +77,6 @@ public class MacroUpgradeTests
             Max = 1,
             Context = new ChoiceContext { Purpose = "deck_for_upgrade", Cancelable = false, InCombat = false },
         }, () => new Observation { Run = Fixtures.Floor1() with { Deck = [Small, Big] }, Screen = new TreasureScreen { Relics = [] } });
-        Assert.Equal([1], l0.Choose(prompt));
+        Assert.Equal([1], l0.Choose(prompt).Picks);
     }
 }

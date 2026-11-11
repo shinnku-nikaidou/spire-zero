@@ -16,8 +16,6 @@ namespace Sts2Ai.GameBridge.Actions;
 /// </summary>
 public static class RewardActions
 {
-    public const string Done = "rewards_done";
-
     /// <summary>A combat room's rewards screen ends the room: proceeding opens the map (<c>NRewardsScreen</c>).</summary>
     public static bool IsTerminal(RewardsSet set) => set.Room is CombatRoom;
 
@@ -43,26 +41,26 @@ public static class RewardActions
     /// Rewards not taken yet, then proceed unless the set forbids skipping. A potion reward with a full belt stays on
     /// the screen but cannot be taken until a slot is free, so it is left out until then.
     /// </summary>
-    public static List<string> Legal(RewardsSet set)
+    public static List<MacroAction> Legal(RewardsSet set)
     {
-        var actions = new List<string>();
+        var actions = new List<MacroAction>();
         for (int i = 0; i < set.Rewards.Count; i++)
         {
             var reward = set.Rewards[i];
             if (reward is LinkedRewardSet) throw new NotSupportedException("linked rewards are not handled (unused in this game version)");
             if (reward.SuccessfullySelected) continue;
             if (reward is PotionReward && !set.Player.HasOpenPotionSlots) continue;
-            actions.Add($"reward:{i}");
+            actions.Add(MacroAction.Of(MacroAction.Reward, i));
         }
-        if (!set.DisallowSkipping || set.AllRewardsSuccessfullySelected) actions.Add(Done);
+        if (!set.DisallowSkipping || set.AllRewardsSuccessfullySelected) actions.Add(MacroAction.RewardsDone);
         return actions;
     }
 
     /// <summary>Takes a reward, as its button does. The task ends when the reward is resolved (true if taken).</summary>
-    public static Task<bool> Start(RewardsSet set, string action)
+    public static Task<bool> Start(RewardsSet set, MacroAction action)
     {
-        if (!ActionText.Is(action, "reward", out var arg) || !Legal(set).Contains(action)) throw ActionText.Illegal(action, Surfaces.Rewards);
-        return RunManager.Instance.RewardsSetSynchronizer.SelectLocalReward(set.Rewards[ActionText.Index(arg)]);
+        if (action.Verb != MacroAction.Reward || !Legal(set).Contains(action)) throw Illegal.Action(action, Surfaces.Rewards);
+        return RunManager.Instance.RewardsSetSynchronizer.SelectLocalReward(set.Rewards[action.Index]);
     }
 
     /// <summary>
@@ -71,7 +69,7 @@ public static class RewardActions
     /// </summary>
     public static Task Proceed(RunState run, RewardsSet set)
     {
-        if (set.DisallowSkipping && !set.AllRewardsSuccessfullySelected) throw ActionText.Illegal(Done, Surfaces.Rewards);
+        if (set.DisallowSkipping && !set.AllRewardsSuccessfullySelected) throw Illegal.Action(MacroAction.RewardsDone, Surfaces.Rewards);
         if (!IsTerminal(set))
         {
             RunManager.Instance.RewardsSetSynchronizer.SkipLocalRewardsSet();
@@ -96,21 +94,21 @@ public static class RewardActions
     /// The card reward screen: each offered card, then each alternative (skip, reroll, ones added by relics) by id.
     /// <paramref name="spent"/> holds alternatives that stay listed but no longer do anything (a used reroll).
     /// </summary>
-    public static List<string> CardRewardLegal(IReadOnlyList<CardCreationResult> cards, IReadOnlyList<CardRewardAlternative> alternatives,
+    public static List<MacroAction> CardRewardLegal(IReadOnlyList<CardCreationResult> cards, IReadOnlyList<CardRewardAlternative> alternatives,
         IReadOnlySet<CardRewardAlternative> spent)
     {
-        var actions = Enumerable.Range(0, cards.Count).Select(i => $"card:{i}").ToList();
-        actions.AddRange(alternatives.Where(a => !spent.Contains(a)).Select(a => $"card_alt:{a.OptionId}"));
+        var actions = Enumerable.Range(0, cards.Count).Select(i => MacroAction.Of(MacroAction.Card, i)).ToList();
+        actions.AddRange(alternatives.Where(a => !spent.Contains(a)).Select(a => new MacroAction(MacroAction.CardAlt, a.OptionId)));
         return actions;
     }
 
     /// <summary>The selector's answer for <paramref name="action"/>.</summary>
-    public static CardRewardSelection CardRewardAnswer(IReadOnlyList<CardCreationResult> cards, IReadOnlyList<CardRewardAlternative> alternatives, string action)
+    public static CardRewardSelection CardRewardAnswer(IReadOnlyList<CardCreationResult> cards, IReadOnlyList<CardRewardAlternative> alternatives, MacroAction action) => action.Verb switch
     {
-        if (ActionText.Is(action, "card", out var arg)) return new CardRewardSelection { card = cards[ActionText.Index(arg)].Card };
-        if (ActionText.Is(action, "card_alt", out arg)) return new CardRewardSelection { alternative = alternatives.First(a => a.OptionId == arg) };
-        throw ActionText.Illegal(action, Surfaces.CardReward);
-    }
+        MacroAction.Card => new CardRewardSelection { card = cards[action.Index].Card },
+        MacroAction.CardAlt => new CardRewardSelection { alternative = alternatives.First(a => a.OptionId == action.Arg) },
+        _ => throw Illegal.Action(action, Surfaces.CardReward),
+    };
 
     /// <summary>An alternative that leaves the screen open (reroll): picking it again would be a no-op.</summary>
     public static bool KeepsScreenOpen(CardRewardAlternative alternative) => alternative.AfterSelected == PostAlternateCardRewardAction.DoNothing;

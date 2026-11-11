@@ -327,7 +327,7 @@ public class LoopSearchTests
 
     private sealed class Answers(params int[] answer) : IChoicePolicy
     {
-        public IReadOnlyList<int> Choose(ChoiceDecision decision) => answer;
+        public ChoiceAnswer Choose(ChoiceDecision decision) => new(answer);
     }
 
     private static ChoiceDecision Prompt(int min = 0, int max = 1, params string[] ids) => new(new CardChoice
@@ -344,27 +344,27 @@ public class LoopSearchTests
         var prompts = new SearchPrompts(new Answers(1));
 
         prompts.Arm(R);
-        Assert.Equal([1], prompts.Choose(Prompt()));
+        Assert.Equal([1], prompts.Choose(Prompt()).Picks);
         Assert.Equal("1", prompts.Seen!.Answer);
         Assert.Equal(["", "0", "2"], prompts.Seen.Others());
 
         prompts.Arm(R with { Pick = "2" });
-        Assert.Equal([2], prompts.Choose(Prompt()));
+        Assert.Equal([2], prompts.Choose(Prompt()).Picks);
         // Its first prompt only, and the first is what stays noted.
-        Assert.Equal([1], prompts.Choose(Prompt(max: 2)));
+        Assert.Equal([1], prompts.Choose(Prompt(max: 2)).Picks);
         Assert.Equal("2", prompts.Seen!.Answer);
 
         prompts.Arm(R with { Pick = "9" });
-        Assert.Equal([1], prompts.Choose(Prompt()));
+        Assert.Equal([1], prompts.Choose(Prompt()).Picks);
         Assert.Equal("1", prompts.Seen!.Answer);
     }
 
     [Fact]
     public void APromptNoSearchWeighsTakesTheFirstOptionsItNeeds()
     {
-        Assert.Empty(FirstPicks.Instance.Choose(Prompt()));
-        Assert.Equal([0, 1], FirstPicks.Instance.Choose(Prompt(min: 2, max: 3)));
-        Assert.Equal([0], FirstPicks.Instance.Choose(Prompt(min: 2, max: 2, "A")));
+        Assert.Empty(FirstPicks.Instance.Choose(Prompt()).Picks);
+        Assert.Equal([0, 1], FirstPicks.Instance.Choose(Prompt(min: 2, max: 3)).Picks);
+        Assert.Equal([0], FirstPicks.Instance.Choose(Prompt(min: 2, max: 2, "A")).Picks);
     }
 
     [Fact]

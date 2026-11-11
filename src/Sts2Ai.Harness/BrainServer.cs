@@ -100,17 +100,22 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
         // A field this build does not know is dropped on reading, so a mod built from newer wire types fails here.
         if (DecisionRequest.HashOf(obs) != request.ObsHash)
             throw new InvalidDataException($"obs_hash {request.ObsHash} is not the observation's: are the mod and the brain built from the same commit?");
-        string action = (request.Surface, obs.Screen) switch
+        var (action, note) = (request.Surface, obs.Screen) switch
         {
-            (Surfaces.Combat, CombatScreen screen) =>
-                harness.Choose(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs)).ToString(),
-            (Surfaces.CardChoice, CardChoiceScreen screen) => "pick:" + string.Join(",", harness.Choose(new ChoiceDecision(screen.Choice, () => obs))),
+            (Surfaces.Combat, CombatScreen screen) => Text(harness.Decide(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs))),
+            (Surfaces.CardChoice, CardChoiceScreen screen) => Text(harness.Decide(new ChoiceDecision(screen.Choice, () => obs))),
             (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
-            _ => harness.Choose(new MacroDecision(request.Surface, request.Legal, () => obs)),
+            _ => Text(harness.Decide(new MacroDecision(request.Surface, [.. request.Legal.Select(MacroAction.Parse)], () => obs))),
         };
-        var note = harness.Last!;
         return new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, note.Plan, note.Candidates);
     }
+
+    private static (string Action, DecisionNote Note) Text((CombatAction Action, DecisionNote Note) decided) => (decided.Action.ToString(), decided.Note);
+
+    private static (string Action, DecisionNote Note) Text((ChoiceAnswer Answer, DecisionNote Note) decided) =>
+        (MacroAction.Pick(decided.Answer.Picks).ToString(), decided.Note);
+
+    private static (string Action, DecisionNote Note) Text((MacroAnswer Answer, DecisionNote Note) decided) => (decided.Answer.Action.ToString(), decided.Note);
 
     private static string Describe(Exception e) => $"{e.GetType().Name}: {e.Message}";
 }

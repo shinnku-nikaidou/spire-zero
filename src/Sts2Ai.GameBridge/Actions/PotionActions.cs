@@ -1,3 +1,4 @@
+using Sts2Ai.Protocol;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
@@ -12,31 +13,31 @@ namespace Sts2Ai.GameBridge.Actions;
 /// </summary>
 public static class PotionActions
 {
-    public static List<string> Legal(Player player)
+    public static List<MacroAction> Legal(Player player)
     {
-        var actions = new List<string>();
+        var actions = new List<MacroAction>();
         if (!player.CanUseOrRemovePotions || player.Creature.IsDead) return actions;
         for (int s = 0; s < player.PotionSlots.Count; s++)
         {
             var potion = player.PotionSlots[s];
             if (potion == null || potion.IsQueued) continue;
-            if (potion.Usage == PotionUsage.AnyTime && potion.PassesCustomUsabilityCheck) actions.Add($"potion:{s}");
-            actions.Add($"discard_potion:{s}");
+            if (potion.Usage == PotionUsage.AnyTime && potion.PassesCustomUsabilityCheck) actions.Add(MacroAction.Of(MacroAction.Potion, s));
+            actions.Add(MacroAction.Of(MacroAction.DiscardPotion, s));
         }
         return actions;
     }
 
     /// <summary>Whether <paramref name="action"/> is a belt action (legal or not) rather than one of the surface's own.</summary>
-    public static bool Handles(string action) => ActionText.Is(action, "potion", out _) || ActionText.Is(action, "discard_potion", out _);
+    public static bool Handles(MacroAction action) => action.Verb is MacroAction.Potion or MacroAction.DiscardPotion;
 
     /// <summary>Uses or discards the potion through the action queue, as the popup's buttons do.</summary>
-    public static void Start(Player player, string action)
+    public static void Start(Player player, MacroAction action)
     {
-        if (!Legal(player).Contains(action)) throw ActionText.Illegal(action, "potion");
-        if (ActionText.Is(action, "potion", out var slot))
-            player.PotionSlots[ActionText.Index(slot)]!.EnqueueManualUse(null);
-        else if (ActionText.Is(action, "discard_potion", out slot))
+        if (!Legal(player).Contains(action)) throw Illegal.Action(action, "potion");
+        if (action.Verb == MacroAction.Potion)
+            player.PotionSlots[action.Index]!.EnqueueManualUse(null);
+        else
             RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
-                new DiscardPotionGameAction(player, (uint)ActionText.Index(slot), CombatManager.Instance.IsInProgress));
+                new DiscardPotionGameAction(player, (uint)action.Index, CombatManager.Instance.IsInProgress));
     }
 }

@@ -13,7 +13,7 @@ internal sealed record MapRoute(MapCoord? At, IReadOnlyList<MapCoord> Points)
     /// <summary>A map answer's route: its point, then the points the brain planned after it; null for any other answer.</summary>
     public static MapRoute? Of(Recommendation answer, Observation obs)
     {
-        if (!ActionText.Is(answer.Action, "map", out _)) return null;
+        if (MacroAction.Parse(answer.Action).Verb != MacroAction.Map) return null;
         var visited = obs.Run.Map.Visited;
         var at = visited.Count > 0 ? new MapCoord(visited[^1].Col, visited[^1].Row) : (MapCoord?)null;
         return new(at, [.. (answer.Plan ?? []).Prepend(answer.Action).Select(Coord)]);
@@ -21,9 +21,8 @@ internal sealed record MapRoute(MapCoord? At, IReadOnlyList<MapCoord> Points)
 
     private static MapCoord Coord(string action)
     {
-        ActionText.Is(action, "map", out var arg);
-        var at = arg.Split(',').Select(int.Parse).ToArray();
-        return new(at[0], at[1]);
+        var at = MacroAction.Parse(action).Coord;
+        return new(at.Col, at.Row);
     }
 }
 

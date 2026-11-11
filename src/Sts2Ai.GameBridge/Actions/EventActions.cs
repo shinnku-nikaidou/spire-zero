@@ -13,8 +13,6 @@ namespace Sts2Ai.GameBridge.Actions;
 /// </summary>
 public static class EventActions
 {
-    public const string Proceed = "proceed";
-
     /// <summary>The page and its buttons; a finished event shows only the proceed button.</summary>
     public static EventScreen Screen(EventModel ev, Player player) => new()
     {
@@ -42,17 +40,17 @@ public static class EventActions
     /// only opens the map (it is "proceed"), Trial's "DOUBLE_DOWN" opens the abandon-run popup (abandoning is never an
     /// action).
     /// </summary>
-    public static List<string> Legal(EventModel ev)
+    public static List<MacroAction> Legal(EventModel ev)
     {
-        if (ev.IsFinished) return [Proceed];
-        var actions = new List<string>();
+        if (ev.IsFinished) return [MacroAction.Proceed];
+        var actions = new List<MacroAction>();
         var options = ev.CurrentOptions;
         for (int i = 0; i < options.Count; i++)
         {
             var option = options[i];
             if (option.IsLocked) continue;
-            if (!option.IsProceed) actions.Add($"event:{i}");
-            else if (option.TextKey == "PROCEED" && !actions.Contains(Proceed)) actions.Add(Proceed);
+            if (!option.IsProceed) actions.Add(MacroAction.Of(MacroAction.Event, i));
+            else if (option.TextKey == "PROCEED" && !actions.Contains(MacroAction.Proceed)) actions.Add(MacroAction.Proceed);
         }
         return actions;
     }
@@ -61,10 +59,10 @@ public static class EventActions
     /// Picks an option as its button does: through the event synchronizer, which runs it in the background (the
     /// caller pumps until the game settles). "proceed" changes nothing in the game: the caller opens the map.
     /// </summary>
-    public static void Start(EventModel ev, string action)
+    public static void Start(EventModel ev, MacroAction action)
     {
-        if (!Legal(ev).Contains(action)) throw ActionText.Illegal(action, Surfaces.Event);
-        if (action == Proceed) return;
-        RunManager.Instance.EventSynchronizer.ChooseLocalOption(ActionText.Index(action["event:".Length..]));
+        if (!Legal(ev).Contains(action)) throw Illegal.Action(action, Surfaces.Event);
+        if (action == MacroAction.Proceed) return;
+        RunManager.Instance.EventSynchronizer.ChooseLocalOption(action.Index);
     }
 }

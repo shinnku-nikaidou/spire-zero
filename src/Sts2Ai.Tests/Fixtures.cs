@@ -20,6 +20,9 @@ internal static class Fixtures
     public static RunView Around(CombatObservation obs) =>
         Floor1Run with { Hp = obs.Player.Hp, MaxHp = obs.Player.MaxHp, Gold = obs.Player.Gold, Potions = obs.Potions };
 
+    /// <summary>Macro actions from their text forms.</summary>
+    public static IReadOnlyList<MacroAction> Acts(params string[] actions) => [.. actions.Select(MacroAction.Parse)];
+
     /// <summary>A path in the repository, from the tests' output folder up.</summary>
     public static string Repo(params string[] path)
     {

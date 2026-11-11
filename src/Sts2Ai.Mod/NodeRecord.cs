@@ -122,14 +122,13 @@ internal static class NodeRecord
     private static void Leave()
     {
         if (_screen is not { } room) return;
-        string? leave = room.Surface switch
+        MacroAction? leave = room.Surface switch
         {
-            Surfaces.Event => EventActions.Proceed,
-            Surfaces.Shop => ShopActions.Leave,
-            Surfaces.Rest => RestActions.Leave,
+            Surfaces.Event => MacroAction.Proceed,
+            Surfaces.Shop or Surfaces.Rest => MacroAction.Leave,
             _ => null,
         };
-        if (leave != null && room.Legal.Contains(leave)) Add(room.Surface, leave);
+        if (leave is { } action && room.Legal.Contains(action.ToString())) Add(room.Surface, action);
     }
 
     // ---- node entry ----
@@ -173,13 +172,13 @@ internal static class NodeRecord
                 Add(Surfaces.Combat, CombatActions.PotionOf(me, (int)use.PotionIndex, use.TargetId).ToString());
                 break;
             case UsePotionAction use:
-                Belt($"potion:{use.PotionIndex}");
+                Belt(MacroAction.Of(MacroAction.Potion, (int)use.PotionIndex));
                 break;
             case DiscardPotionGameAction discard when discard.WasEnqueuedInCombat:
                 Break("a potion thrown away in combat");
                 break;
             case DiscardPotionGameAction discard:
-                Belt($"discard_potion:{DiscardedSlot(discard)}");
+                Belt(MacroAction.Of(MacroAction.DiscardPotion, (int)DiscardedSlot(discard)));
                 break;
             case EndPlayerTurnAction:
                 Add(Surfaces.Combat, CombatAction.EndTurn.ToString());
@@ -189,7 +188,7 @@ internal static class NodeRecord
                 break;
             case VoteForMapCoordAction vote when Destination(vote) is { } to:
                 if (_screen?.Surface != Surfaces.Map) Leave();
-                string travel = MapActions.Text(to.coord);
+                var travel = MapActions.Of(to.coord);
                 if (MapActions.Legal(run).Contains(travel)) Add(Surfaces.Map, travel);
                 else Break($"a travel to {travel}, which the map does not offer");
                 break;
@@ -197,9 +196,9 @@ internal static class NodeRecord
     });
 
     /// <summary>The potion belt outside combat, offered on the screen it is used on.</summary>
-    private static void Belt(string action)
+    private static void Belt(MacroAction action)
     {
-        if (_screen is { } screen && screen.Surface != Surfaces.Combat && screen.Legal.Contains(action)) Add(screen.Surface, action);
+        if (_screen is { } screen && screen.Surface != Surfaces.Combat && screen.Legal.Contains(action.ToString())) Add(screen.Surface, action);
         else Break($"{action} on a screen that does not offer it");
     }
 
@@ -225,7 +224,7 @@ internal static class NodeRecord
                 else Break("a card reward closed unanswered");
                 break;
             case { Surface: Surfaces.Bundle }:
-                Add(Surfaces.Bundle, $"bundle:{result.AsIndex()}");
+                Add(Surfaces.Bundle, MacroAction.Of(MacroAction.Bundle, result.AsIndex()));
                 break;
             default:
                 Break($"a {result.ChoiceType} choice on {_screen?.Surface ?? "no screen"}");
@@ -233,14 +232,14 @@ internal static class NodeRecord
         }
     });
 
-    private static void EventOption(int index) => Add(Surfaces.Event, $"event:{index}");
+    private static void EventOption(int index) => Add(Surfaces.Event, MacroAction.Of(MacroAction.Event, index));
 
     private static void RestOption(RestSiteSynchronizer __instance, int index) =>
-        Guard(() => Add(Surfaces.Rest, $"rest:{__instance.GetLocalOptions()[index].OptionId}"));
+        Guard(() => Add(Surfaces.Rest, RestActions.Of(__instance.GetLocalOptions()[index])));
 
     private static void RewardTaken(Reward reward)
     {
-        if (_screen is { Surface: Surfaces.Rewards, Source: RewardsSet set } && set.Rewards.IndexOf(reward) is var i and >= 0) Add(Surfaces.Rewards, $"reward:{i}");
+        if (_screen is { Surface: Surfaces.Rewards, Source: RewardsSet set } && set.Rewards.IndexOf(reward) is var i and >= 0) Add(Surfaces.Rewards, MacroAction.Of(MacroAction.Reward, i));
         else Break("a reward taken from no rewards screen");
     }
 
@@ -248,27 +247,29 @@ internal static class NodeRecord
     private static void RewardsDone()
     {
         if (_screen?.Surface != Surfaces.Rewards) return;
-        Add(Surfaces.Rewards, RewardActions.Done);
+        Add(Surfaces.Rewards, MacroAction.RewardsDone);
         // Some screens call two of these.
         _screen = null;
     }
 
-    private static void RelicPicked(int? index) => Add(Surfaces.Treasure, index is int i ? $"relic:{i}" : TreasureActions.Skip);
+    private static void RelicPicked(int? index) => Add(Surfaces.Treasure, index is int i ? MacroAction.Of(MacroAction.Relic, i) : MacroAction.RelicSkip);
 
     /// <summary>A purchase the shop cannot make (too little gold, sold out) changes nothing; a relic buying for free is no decision.</summary>
     private static void Bought(MerchantEntry __instance, MerchantInventory? inventory, bool ignoreCost) => Guard(() =>
     {
         if (ignoreCost || inventory == null || _run?.CurrentRoom is not MerchantRoom) return;
-        string action = ShopActions.Of(inventory, __instance);
+        var action = ShopActions.Of(inventory, __instance);
         if (ShopActions.Legal(inventory).Contains(action)) Add(Surfaces.Shop, action);
     });
 
     /// <summary>A click that uncovers nothing changes nothing.</summary>
     private static void Divined(CrystalSphereMinigame __instance, CrystalSphereCell clickedCell) => Guard(() =>
     {
-        string action = CrystalSphereActions.Of(__instance, clickedCell);
+        var action = CrystalSphereActions.Of(__instance, clickedCell);
         if (CrystalSphereActions.Legal(__instance).Contains(action)) Add(Surfaces.CrystalSphere, action);
     });
+
+    private static void Add(string surface, MacroAction action) => Add(surface, action.ToString());
 
     private static void Add(string surface, string action)
     {

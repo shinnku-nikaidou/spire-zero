@@ -10,9 +10,6 @@ namespace Sts2Ai.GameBridge.Actions;
 /// </summary>
 public static class ShopActions
 {
-    public const string Remove = "remove";
-    public const string Leave = "leave";
-
     /// <summary>The goods still for sale, by slot, and the removal service's price unless used.</summary>
     public static ShopScreen Screen(MerchantInventory inventory) => new()
     {
@@ -32,9 +29,9 @@ public static class ShopActions
     /// Stocked entries the player can afford. Potions need a free belt slot and the game's leave to take one (Sozu
     /// forbids it): without either the purchase fails and nothing changes.
     /// </summary>
-    public static List<string> Legal(MerchantInventory inventory)
+    public static List<MacroAction> Legal(MerchantInventory inventory)
     {
-        var actions = new List<string>();
+        var actions = new List<MacroAction>();
         var entries = Goods(inventory);
         var player = inventory.Player;
         for (int i = 0; i < entries.Count; i++)
@@ -44,10 +41,10 @@ public static class ShopActions
             if (entry is MerchantPotionEntry potion
                 && (!player.HasOpenPotionSlots || !Hook.ShouldProcurePotion(player.RunState, player.Creature.CombatState, potion.Model!, player)))
                 continue;
-            actions.Add($"buy:{i}");
+            actions.Add(MacroAction.Of(MacroAction.Buy, i));
         }
-        if (inventory.CardRemovalEntry is { IsStocked: true, EnoughGold: true }) actions.Add(Remove);
-        actions.Add(Leave);
+        if (inventory.CardRemovalEntry is { IsStocked: true, EnoughGold: true }) actions.Add(MacroAction.Remove);
+        actions.Add(MacroAction.Leave);
         return actions;
     }
 
@@ -56,17 +53,17 @@ public static class ShopActions
     /// for the card through the card selector; the shop's removal button then marks it used.
     /// "leave" changes nothing in the game: the caller opens the map.
     /// </summary>
-    public static async Task<bool> Start(MerchantInventory inventory, string action)
+    public static async Task<bool> Start(MerchantInventory inventory, MacroAction action)
     {
-        if (!Legal(inventory).Contains(action)) throw ActionText.Illegal(action, Surfaces.Shop);
-        if (action == Leave) return true;
-        if (action == Remove) return await inventory.CardRemovalEntry!.OnTryPurchaseWrapper(inventory);
-        return await Goods(inventory)[ActionText.Index(action["buy:".Length..])].OnTryPurchaseWrapper(inventory);
+        if (!Legal(inventory).Contains(action)) throw Illegal.Action(action, Surfaces.Shop);
+        if (action == MacroAction.Leave) return true;
+        if (action == MacroAction.Remove) return await inventory.CardRemovalEntry!.OnTryPurchaseWrapper(inventory);
+        return await Goods(inventory)[action.Index].OnTryPurchaseWrapper(inventory);
     }
 
     /// <summary>Buying <paramref name="entry"/>, or the removal service, as the action names it.</summary>
-    public static string Of(MerchantInventory inventory, MerchantEntry entry) =>
-        entry is MerchantCardRemovalEntry ? Remove : $"buy:{Goods(inventory).IndexOf(entry)}";
+    public static MacroAction Of(MerchantInventory inventory, MerchantEntry entry) =>
+        entry is MerchantCardRemovalEntry ? MacroAction.Remove : MacroAction.Of(MacroAction.Buy, Goods(inventory).IndexOf(entry));
 
     private static List<MerchantEntry> Goods(MerchantInventory inventory) =>
         [.. inventory.AllEntries.Where(e => e is not MerchantCardRemovalEntry)];

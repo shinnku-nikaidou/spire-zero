@@ -38,8 +38,8 @@ internal sealed class LocalBrain(Dispatcher harness) : IRunBrain
     public IReadOnlyList<DecisionEntry> Log => harness.Log;
     public int Replans => harness.Replans;
     public CombatAction Choose(CombatDecision decision) => harness.Choose(decision);
-    public IReadOnlyList<int> Choose(ChoiceDecision decision) => harness.Choose(decision);
-    public string Choose(MacroDecision decision) => harness.Choose(decision);
+    public ChoiceAnswer Choose(ChoiceDecision decision) => harness.Choose(decision);
+    public MacroAnswer Choose(MacroDecision decision) => harness.Choose(decision);
     public void Checkpoint(NodeCheckpoint checkpoint) => harness.Checkpoint(checkpoint);
     public void Act(NodeAction action) => harness.Act(action);
     public void End(RunEnd end, string? failure) { }
@@ -69,13 +69,13 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
         return brain.Choose(decision);
     }
 
-    public IReadOnlyList<int> Choose(ChoiceDecision decision)
+    public ChoiceAnswer Choose(ChoiceDecision decision)
     {
         Flush();
         return brain.Choose(decision);
     }
 
-    public string Choose(MacroDecision decision)
+    public MacroAnswer Choose(MacroDecision decision)
     {
         Flush();
         return brain.Choose(decision);
@@ -131,14 +131,15 @@ internal sealed class WireBrain : IRunBrain
     public CombatAction Choose(CombatDecision decision) => CombatAction.Parse(Ask(Surfaces.Combat,
         decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run"), [.. decision.Legal.Select(a => a.ToString())]));
 
-    public IReadOnlyList<int> Choose(ChoiceDecision decision)
+    public ChoiceAnswer Choose(ChoiceDecision decision)
     {
-        var action = Ask(Surfaces.CardChoice, decision.Observation ?? throw new InvalidOperationException("a card prompt outside a run"), []);
-        if (!action.StartsWith("pick:")) throw new InvalidDataException($"{action} does not answer a card prompt");
-        return [.. action["pick:".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)];
+        var action = MacroAction.Parse(Ask(Surfaces.CardChoice, decision.Observation ?? throw new InvalidOperationException("a card prompt outside a run"), []));
+        if (action.Verb != MacroAction.PickVerb) throw new InvalidDataException($"{action} does not answer a card prompt");
+        return new(action.Picks);
     }
 
-    public string Choose(MacroDecision decision) => Ask(decision.Surface, decision.Observation, decision.Legal);
+    public MacroAnswer Choose(MacroDecision decision) =>
+        new(MacroAction.Parse(Ask(decision.Surface, decision.Observation, [.. decision.Legal.Select(a => a.ToString())])));
 
     public void Checkpoint(NodeCheckpoint checkpoint)
     {

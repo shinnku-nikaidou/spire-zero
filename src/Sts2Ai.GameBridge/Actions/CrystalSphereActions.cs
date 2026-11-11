@@ -33,31 +33,30 @@ public static class CrystalSphereActions
         var type => throw new NotSupportedException($"crystal sphere item {type} has no view"),
     };
 
-    public static List<string> Legal(CrystalSphereMinigame game)
+    public static List<MacroAction> Legal(CrystalSphereMinigame game)
     {
-        var actions = new List<string>();
+        var actions = new List<MacroAction>();
         var size = game.GridSize;
         for (int x = 0; x < size.X; x++)
             for (int y = 0; y < size.Y; y++)
-                if (AnyHidden(game, x - 1, x + 1, y - 1, y + 1)) actions.Add($"big:{x},{y}");
+                if (AnyHidden(game, x - 1, x + 1, y - 1, y + 1)) actions.Add(MacroAction.Of(MacroAction.Big, x, y));
         for (int x = 0; x < size.X; x++)
             for (int y = 0; y < size.Y; y++)
-                if (game.cells[x, y].IsHidden) actions.Add($"small:{x},{y}");
+                if (game.cells[x, y].IsHidden) actions.Add(MacroAction.Of(MacroAction.Small, x, y));
         return actions;
     }
 
     /// <summary>A click on <paramref name="cell"/> with the tool the minigame holds, as the action names it.</summary>
-    public static string Of(CrystalSphereMinigame game, CrystalSphereCell cell) =>
-        $"{(game.CrystalSphereTool == Tool.Big ? "big" : "small")}:{cell.X},{cell.Y}";
+    public static MacroAction Of(CrystalSphereMinigame game, CrystalSphereCell cell) =>
+        MacroAction.Of(game.CrystalSphereTool == Tool.Big ? MacroAction.Big : MacroAction.Small, cell.X, cell.Y);
 
     /// <summary>Picks the tool and clicks the cell, as the screen does. The minigame ends with the last divination.</summary>
-    public static Task Start(CrystalSphereMinigame game, string action)
+    public static Task Start(CrystalSphereMinigame game, MacroAction action)
     {
-        if (game.IsFinished || !Legal(game).Contains(action)) throw ActionText.Illegal(action, Surfaces.CrystalSphere);
-        var tool = action.StartsWith("big:", StringComparison.Ordinal) ? Tool.Big : Tool.Small;
-        var cell = action[(action.IndexOf(':') + 1)..].Split(',');
-        game.SetTool(tool);
-        return game.CellClicked(game.cells[ActionText.Index(cell[0]), ActionText.Index(cell[1])]);
+        if (game.IsFinished || !Legal(game).Contains(action)) throw Illegal.Action(action, Surfaces.CrystalSphere);
+        var cell = action.Coord;
+        game.SetTool(action.Verb == MacroAction.Big ? Tool.Big : Tool.Small);
+        return game.CellClicked(game.cells[cell.Col, cell.Row]);
     }
 
     private static bool AnyHidden(CrystalSphereMinigame game, int x0, int x1, int y0, int y1)

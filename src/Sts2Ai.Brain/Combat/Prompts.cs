@@ -11,7 +11,7 @@ public sealed class FirstPicks : IChoicePolicy
 {
     public static FirstPicks Instance { get; } = new();
 
-    public IReadOnlyList<int> Choose(ChoiceDecision decision) => [.. Enumerable.Range(0, Math.Min(decision.Choice.Min, decision.Choice.Options.Count))];
+    public ChoiceAnswer Choose(ChoiceDecision decision) => new([.. Enumerable.Range(0, Math.Min(decision.Choice.Min, decision.Choice.Options.Count))]);
 }
 
 /// <summary>
@@ -53,12 +53,12 @@ public sealed class SearchPrompts(IChoicePolicy policy) : IChoicePolicy
     /// <summary>A new action is about to be played, with its answer to its first prompt, if it carries one.</summary>
     public void Arm(CombatAction action) => (_pick, _asked, Seen) = (action.Picks, false, null);
 
-    public IReadOnlyList<int> Choose(ChoiceDecision decision)
+    public ChoiceAnswer Choose(ChoiceDecision decision)
     {
         if (_asked) return policy.Choose(decision);
         _asked = true;
-        var answer = _pick is { } pick && decision.Choice.Accepts(pick) ? pick : policy.Choose(decision);
-        Seen = new(decision.Choice, answer);
+        var answer = _pick is { } pick && decision.Choice.Accepts(pick) ? new(pick) : policy.Choose(decision);
+        Seen = new(decision.Choice, answer.Picks);
         return answer;
     }
 }

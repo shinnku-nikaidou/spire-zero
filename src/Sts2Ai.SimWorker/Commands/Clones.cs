@@ -95,16 +95,16 @@ internal static class ClonesCommand
             return decision.Legal[0];
         }
 
-        IReadOnlyList<int> IChoicePolicy.Choose(ChoiceDecision decision)
+        ChoiceAnswer IChoicePolicy.Choose(ChoiceDecision decision)
         {
             Asked ??= decision.Observation;
-            return [.. Enumerable.Range(0, decision.Choice.Min)];
+            return new([.. Enumerable.Range(0, decision.Choice.Min)]);
         }
 
-        public string Choose(MacroDecision decision)
+        public MacroAnswer Choose(MacroDecision decision)
         {
             Asked ??= decision.Observation;
-            return decision.Legal[0];
+            return new(decision.Legal[0]);
         }
     }
 

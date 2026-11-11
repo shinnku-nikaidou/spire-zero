@@ -21,18 +21,18 @@ public sealed class PlayPolicy(Random rng) : ICombatPolicy
 /// <summary>Uniformly random legal selection.</summary>
 public sealed class RandomChoices(Random rng) : IChoicePolicy
 {
-    public IReadOnlyList<int> Choose(ChoiceDecision decision)
+    public ChoiceAnswer Choose(ChoiceDecision decision)
     {
         var choice = decision.Choice;
         int count = choice.Min == choice.Max ? choice.Min : rng.Next(choice.Min, choice.Max + 1);
-        return [.. Enumerable.Range(0, choice.Options.Count).OrderBy(_ => rng.Next()).Take(count)];
+        return new([.. Enumerable.Range(0, choice.Options.Count).OrderBy(_ => rng.Next()).Take(count)]);
     }
 }
 
 /// <summary>Uniform over the legal actions: a placeholder that reaches every surface, not a strategy.</summary>
 public sealed class RandomMacro(Random rng) : IMacroPolicy
 {
-    public string Choose(MacroDecision decision) => decision.Legal[rng.Next(decision.Legal.Count)];
+    public MacroAnswer Choose(MacroDecision decision) => new(decision.Legal[rng.Next(decision.Legal.Count)]);
 }
 
 public static class Policies

@@ -11,12 +11,12 @@ public static class BundleActions
         Bundles = [.. bundles.Select(b => (IReadOnlyList<CardView>)[.. b.Select(c => Observe.Card(c))])],
     };
 
-    public static List<string> Legal(int bundles) => [.. Enumerable.Range(0, bundles).Select(i => $"bundle:{i}")];
+    public static List<MacroAction> Legal(int bundles) => [.. Enumerable.Range(0, bundles).Select(i => MacroAction.Of(MacroAction.Bundle, i))];
 
     /// <summary>The bundle <paramref name="action"/> takes.</summary>
-    public static int Index(int bundles, string action)
+    public static int Index(int bundles, MacroAction action)
     {
-        if (!Legal(bundles).Contains(action)) throw ActionText.Illegal(action, Surfaces.Bundle);
-        return ActionText.Index(action["bundle:".Length..]);
+        if (!Legal(bundles).Contains(action)) throw Illegal.Action(action, Surfaces.Bundle);
+        return action.Index;
     }
 }

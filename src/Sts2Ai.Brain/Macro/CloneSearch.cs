@@ -27,7 +27,7 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
     /// <param name="root">The decision itself, as a probe of no answers would show it.</param>
     /// <param name="options">Each option, as the answers it plays from the decision.</param>
     /// <returns>Each option's afterstate and worth, in order.</returns>
-    public IReadOnlyList<(Afterstate After, double Value)> Search(Afterstate root, IReadOnlyList<IReadOnlyList<string>> options)
+    public IReadOnlyList<(Afterstate After, double Value)> Search(Afterstate root, IReadOnlyList<IReadOnlyList<MacroAction>> options)
     {
         var seen = new Dictionary<ulong, Node?> { [Key(root)] = null };
         foreach (var key in decided ?? new HashSet<ulong>()) seen.TryAdd(key, null);
@@ -51,7 +51,7 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
         for (int level = 2; frontier.Count > 0 && Probes < MaxProbes; level++)
         {
             var parents = frontier.Where(n => Inside(n.After)).OrderByDescending(n => n.Value).Take(Beam).ToList();
-            var jobs = parents.SelectMany(p => Answers(p.After).Select(a => (Parent: p, Path: (IReadOnlyList<string>)[.. p.Path, a]))).ToList();
+            var jobs = parents.SelectMany(p => Answers(p.After).Select(a => (Parent: p, Path: (IReadOnlyList<MacroAction>)[.. p.Path, a]))).ToList();
             if (jobs.Count > MaxProbes - Probes)
             {
                 foreach (var job in jobs.Skip(MaxProbes - Probes)) job.Parent.Cut = true;
@@ -96,7 +96,7 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
     private static bool Inside(Afterstate after) => after.Surface is not (null or Surfaces.Map or Surfaces.Combat);
 
     /// <summary>The answers searched at a screen of the node: its actions as a decision there offers them, or a card prompt's single picks.</summary>
-    private static IEnumerable<string> Answers(Afterstate after)
+    private static IEnumerable<MacroAction> Answers(Afterstate after)
     {
         if (after.Screen is not CardChoiceScreen { Choice: var choice })
         {
@@ -104,21 +104,18 @@ public sealed class CloneSearch(IRunValue value, IMacroClone clone, IReadOnlySet
             yield break;
         }
         if (choice.Min > 1) yield break;
-        if (choice.Min == 0) yield return Pick([]);
+        if (choice.Min == 0) yield return MacroAction.Pick([]);
         if (choice.Max < 1) yield break;
-        foreach (var group in choice.Groups()) yield return Pick([group[0]]);
+        foreach (var group in choice.Groups()) yield return MacroAction.Pick([group[0]]);
     }
-
-    /// <summary>A card prompt's answer in a path.</summary>
-    public static string Pick(IEnumerable<int> picks) => "pick:" + string.Join(",", picks.Order());
 
     public static ulong Key(Afterstate after) => ProtocolJson.Hash(after);
 
-    private sealed class Node(IReadOnlyList<string> path, Afterstate after, double value, int level)
+    private sealed class Node(IReadOnlyList<MacroAction> path, Afterstate after, double value, int level)
     {
         private double? _worth;
 
-        public IReadOnlyList<string> Path { get; } = path;
+        public IReadOnlyList<MacroAction> Path { get; } = path;
         public Afterstate After { get; } = after;
         public double Value { get; } = value;
         public int Level { get; } = level;

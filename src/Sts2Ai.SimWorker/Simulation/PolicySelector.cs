@@ -50,7 +50,7 @@ internal sealed class PolicySelector(
         if (_replay.Count > 0) picks = _replay.Dequeue();
         else
         {
-            var answer = policy.Choose(new ChoiceDecision(choice, observe == null ? null : () => observe(choice)));
+            var answer = policy.Choose(new ChoiceDecision(choice, observe == null ? null : () => observe(choice))).Picks;
             if (!choice.Accepts(answer))
                 throw new InvalidOperationException($"bad card choice [{string.Join(",", answer)}] for {cards.Count} options, select {min}..{max}");
             picks = [.. answer.Select(i => gameIndex[i])];

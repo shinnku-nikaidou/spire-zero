@@ -53,7 +53,7 @@ internal static partial class Describe
             : [];
         string next = Action(answer.Action, obs);
         // On the map, the route's rings and lines are drawn on the map itself (MapMark); the panel names its rooms.
-        if (ActionText.Is(answer.Action, "map", out _)) return new(next, [.. plan.Select(a => Room(a, obs.Run.Map))], true, null, kind, options);
+        if (MacroAction.Parse(answer.Action).Verb == MacroAction.Map) return new(next, [.. plan.Select(a => Room(a, obs.Run.Map))], true, null, kind, options);
         if (obs.Screen is not CombatScreen) return new(next, [.. plan.Select(a => Action(a, obs))], false, null, kind, options);
         var (turn, later) = Turn(answer.Action, plan);
         return new(next, [.. turn.Skip(1).Select(a => Action(a, obs))], false,
@@ -63,9 +63,10 @@ internal static partial class Describe
     /// <summary>The map point type a map action goes to ("Elite", "RestSite", ...), or null.</summary>
     public static string? Point(string action, MapView map)
     {
-        if (!ActionText.Is(action, "map", out var arg)) return null;
-        var at = arg.Split(',').Select(int.Parse).ToArray();
-        return map.Points.FirstOrDefault(p => p.Col == at[0] && p.Row == at[1])?.Type;
+        var move = MacroAction.Parse(action);
+        if (move.Verb != MacroAction.Map) return null;
+        var at = move.Coord;
+        return map.Points.FirstOrDefault(p => p.Col == at.Col && p.Row == at.Row)?.Type;
     }
 
     /// <summary>The map legend's name for a map point type, in the game's language.</summary>
@@ -102,29 +103,30 @@ internal static partial class Describe
         return (end < 0 ? all : [.. all.Take(end + 1)], later);
     }
 
-    private static string Action(string action, Observation obs)
+    private static string Action(string text, Observation obs)
     {
         // A combat potion action carries its target too ("potion:SLOT:TARGET"); the combat names it.
-        if (obs.Screen is CombatScreen { Combat: var combat }) return Combat(action, combat);
-        if (ActionText.Is(action, "potion", out var arg)) return L10n.T("drink {0}", Potion(obs, arg));
-        if (ActionText.Is(action, "discard_potion", out arg)) return L10n.T("discard {0}", Potion(obs, arg));
+        if (obs.Screen is CombatScreen { Combat: var combat }) return Combat(text, combat);
+        var action = MacroAction.Parse(text);
+        if (action.Verb == MacroAction.Potion) return L10n.T("drink {0}", Potion(obs, action.Index));
+        if (action.Verb == MacroAction.DiscardPotion) return L10n.T("discard {0}", Potion(obs, action.Index));
         return obs.Screen switch
         {
-            CardChoiceScreen { Choice: var choice } => Pick(action, choice),
-            MapScreen => Map(action, obs.Run.Map),
+            CardChoiceScreen { Choice: var choice } when action.Verb == MacroAction.PickVerb => Pick(action, choice),
+            MapScreen when action.Verb == MacroAction.Map => L10n.T("go to {0}", Room(text, obs.Run.Map)),
             RewardsScreen rewards => Reward(action, rewards),
             CardRewardScreen reward => CardReward(action, reward),
-            BundleScreen bundles when ActionText.Is(action, "bundle", out arg) =>
-                L10n.T("bundle {0}", ActionText.Index(arg) + 1) + ": " + string.Join(", ", bundles.Bundles[ActionText.Index(arg)].Select(Card)),
+            BundleScreen bundles when action.Verb == MacroAction.Bundle =>
+                L10n.T("bundle {0}", action.Index + 1) + ": " + string.Join(", ", bundles.Bundles[action.Index].Select(Card)),
             EventScreen ev => Event(action, ev),
             ShopScreen shop => Shop(action, shop),
-            RestScreen when ActionText.Is(action, "rest", out arg) => Text("rest_site_ui", $"OPTION_{arg}.name") ?? arg,
-            RestScreen when action == RestActions.Leave => L10n.T("leave"),
-            TreasureScreen treasure when ActionText.Is(action, "relic", out arg) => Relic(treasure.Relics[ActionText.Index(arg)]),
-            TreasureScreen when action == TreasureActions.Skip => L10n.T("skip the relic"),
-            CrystalSphereScreen when ActionText.Is(action, "big", out arg) => L10n.T("big divination at {0}", arg),
-            CrystalSphereScreen when ActionText.Is(action, "small", out arg) => L10n.T("small divination at {0}", arg),
-            _ => action,
+            RestScreen when action.Verb == MacroAction.Rest => Text("rest_site_ui", $"OPTION_{action.Arg}.name") ?? action.Arg,
+            RestScreen when action == MacroAction.Leave => L10n.T("leave"),
+            TreasureScreen treasure when action.Verb == MacroAction.Relic => Relic(treasure.Relics[action.Index]),
+            TreasureScreen when action == MacroAction.RelicSkip => L10n.T("skip the relic"),
+            CrystalSphereScreen when action.Verb == MacroAction.Big => L10n.T("big divination at {0}", action.Arg),
+            CrystalSphereScreen when action.Verb == MacroAction.Small => L10n.T("small divination at {0}", action.Arg),
+            _ => text,
         };
     }
 
@@ -151,22 +153,19 @@ internal static partial class Describe
         return combat.Player.Uid == uid ? L10n.T("self") : combat.Allies.FirstOrDefault(a => a.Uid == uid)?.Id is { } ally ? Monster(ally) : $"creature {uid}";
     }
 
-    private static string Pick(string action, CardChoice choice)
+    private static string Pick(MacroAction action, CardChoice choice)
     {
-        if (!ActionText.Is(action, "pick", out var arg)) return action;
-        var picks = arg.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(ActionText.Index).ToList();
+        var picks = action.Picks;
         return picks.Count == 0 ? L10n.T("pick none") : L10n.T("pick {0}", string.Join(", ", picks.Select(i => Card(choice.Options[i]))));
     }
 
-    private static string Map(string action, MapView map) => ActionText.Is(action, "map", out _) ? L10n.T("go to {0}", Room(action, map)) : action;
-
     /// <summary>The room a map action goes to, by the map legend's name for it.</summary>
-    private static string Room(string action, MapView map) => ActionText.Is(action, "map", out _) ? Legend(Point(action, map)) : action;
+    private static string Room(string action, MapView map) => MacroAction.Parse(action).Verb == MacroAction.Map ? Legend(Point(action, map)) : action;
 
-    private static string Reward(string action, RewardsScreen screen)
+    private static string Reward(MacroAction action, RewardsScreen screen)
     {
-        if (action == RewardActions.Done) return L10n.T(screen.Rewards.Count > 0 ? "skip the rest, proceed" : "proceed");
-        if (!ActionText.Is(action, "reward", out var arg) || screen.Rewards.FirstOrDefault(r => r.Index == ActionText.Index(arg)) is not { } reward) return action;
+        if (action == MacroAction.RewardsDone) return L10n.T(screen.Rewards.Count > 0 ? "skip the rest, proceed" : "proceed");
+        if (action.Verb != MacroAction.Reward || screen.Rewards.FirstOrDefault(r => r.Index == action.Index) is not { } reward) return action.ToString();
         return reward.Kind switch
         {
             "gold" => L10n.T("take {0} gold", reward.Amount ?? 0),
@@ -179,26 +178,26 @@ internal static partial class Describe
         };
     }
 
-    private static string CardReward(string action, CardRewardScreen screen)
+    private static string CardReward(MacroAction action, CardRewardScreen screen) => action.Verb switch
     {
-        if (ActionText.Is(action, "card", out var arg)) return L10n.T("take {0}", Card(screen.Cards[ActionText.Index(arg)]));
-        if (ActionText.Is(action, "card_alt", out arg)) return Text("card_reward_ui", $"OPTION_{arg.ToUpperInvariant()}.name") ?? arg;
-        return action;
-    }
+        MacroAction.Card => L10n.T("take {0}", Card(screen.Cards[action.Index])),
+        MacroAction.CardAlt => Text("card_reward_ui", $"OPTION_{action.Arg.ToUpperInvariant()}.name") ?? action.Arg,
+        _ => action.ToString(),
+    };
 
-    private static string Event(string action, EventScreen ev)
+    private static string Event(MacroAction action, EventScreen ev)
     {
-        if (action == EventActions.Proceed) return L10n.T("proceed");
-        if (!ActionText.Is(action, "event", out var arg) || ev.Options.FirstOrDefault(o => o.Index == ActionText.Index(arg)) is not { } option) return action;
+        if (action == MacroAction.Proceed) return L10n.T("proceed");
+        if (action.Verb != MacroAction.Event || ev.Options.FirstOrDefault(o => o.Index == action.Index) is not { } option) return action.ToString();
         // Ancients keep their texts in their own table.
         return Text("events", option.Key + ".title") ?? Text("ancients", option.Key + ".title") ?? option.Key[(option.Key.LastIndexOf('.') + 1)..];
     }
 
-    private static string Shop(string action, ShopScreen shop)
+    private static string Shop(MacroAction action, ShopScreen shop)
     {
-        if (action == ShopActions.Leave) return L10n.T("leave the shop");
-        if (action == ShopActions.Remove) return L10n.T("remove a card ({0} gold)", shop.RemovalCost ?? 0);
-        if (!ActionText.Is(action, "buy", out var arg) || shop.Entries.FirstOrDefault(e => e.Slot == ActionText.Index(arg)) is not { } entry) return action;
+        if (action == MacroAction.Leave) return L10n.T("leave the shop");
+        if (action == MacroAction.Remove) return L10n.T("remove a card ({0} gold)", shop.RemovalCost ?? 0);
+        if (action.Verb != MacroAction.Buy || shop.Entries.FirstOrDefault(e => e.Slot == action.Index) is not { } entry) return action.ToString();
         string what = entry.Kind switch
         {
             "card" => Card(entry.Card!),
@@ -209,8 +208,7 @@ internal static partial class Describe
         return L10n.T("buy {0} ({1} gold)", what, entry.Cost);
     }
 
-    private static string Potion(Observation obs, string slot) =>
-        obs.Run.Potions.ElementAtOrDefault(ActionText.Index(slot)) is { } id ? Potion(id) : $"potion {slot}";
+    private static string Potion(Observation obs, int slot) => obs.Run.Potions.ElementAtOrDefault(slot) is { } id ? Potion(id) : $"potion {slot}";
 
     private static string Card(CardView card) => (Text("cards", card.Id + ".title") ?? card.Id) + (card.Up is > 0 ? "+" : "");
     private static string Relic(string id) => Text("relics", id + ".title") ?? id;

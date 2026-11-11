@@ -348,7 +348,7 @@ internal static partial class SelfTest
     /// <summary>A macro policy that tells <paramref name="before"/> of each decision it is asked.</summary>
     private sealed class FollowMacro(IMacroPolicy macro, Action before) : IMacroPolicy
     {
-        public string Choose(MacroDecision decision)
+        public MacroAnswer Choose(MacroDecision decision)
         {
             before();
             return macro.Choose(decision);

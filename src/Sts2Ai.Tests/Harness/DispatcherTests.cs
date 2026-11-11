@@ -8,8 +8,8 @@ public class DispatcherTests
 {
     private sealed class Fixed(string pick) : IMacroPolicy, IChoicePolicy
     {
-        public string Choose(MacroDecision decision) => pick;
-        public IReadOnlyList<int> Choose(ChoiceDecision decision) => [];
+        public MacroAnswer Choose(MacroDecision decision) => new(MacroAction.Parse(pick));
+        public ChoiceAnswer Choose(ChoiceDecision decision) => new([]);
     }
 
     private static Dispatcher Make(CombatRoute combat, string macroPick = "map:0,1")
@@ -21,7 +21,7 @@ public class DispatcherTests
     private static CombatDecision Decision(CombatObservation obs) => new([CombatAction.Play(0, 1), CombatAction.EndTurn], () => obs);
 
     private static MacroDecision Map(string surface = Surfaces.Map) =>
-        new(surface, ["map:0,1"], () => throw new InvalidOperationException("the observation is not needed without a log"));
+        new(surface, Fixtures.Acts("map:0,1"), () => throw new InvalidOperationException("the observation is not needed without a log"));
 
     [Fact]
     public void GivesTheCombatBrainTheMovesSoFar()
@@ -47,7 +47,7 @@ public class DispatcherTests
         dispatcher.Choose(Decision(Fixtures.Slugs()));
         Assert.NotEmpty(dispatcher.History);
 
-        Assert.Equal("map:0,1", dispatcher.Choose(Map()));
+        Assert.Equal("map:0,1", dispatcher.Choose(Map()).Action.ToString());
         Assert.Empty(dispatcher.History);
     }
 
@@ -99,11 +99,11 @@ public class DispatcherTests
         var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = "2" }, [], [])));
 
         Assert.Equal(CombatAction.Play(0, 1), dispatcher.Choose(Decision(Fixtures.Slugs())));
-        Assert.Equal([2], dispatcher.Choose(Prompt()));
+        Assert.Equal([2], dispatcher.Choose(Prompt()).Picks);
         // Only the action's first prompt: the next goes to the prompt policy, as does one out of combat, or one after another action.
-        Assert.Empty(dispatcher.Choose(Prompt()));
+        Assert.Empty(dispatcher.Choose(Prompt()).Picks);
         dispatcher.Choose(Decision(Fixtures.Slugs()));
-        Assert.Empty(dispatcher.Choose(Prompt(inCombat: false)));
+        Assert.Empty(dispatcher.Choose(Prompt(inCombat: false)).Picks);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class DispatcherTests
         var dispatcher = Make(new("test", (_, _, _, _) => new(CombatAction.Play(0, 1) with { Pick = "7" }, [], [])));
 
         dispatcher.Choose(Decision(Fixtures.Slugs()));
-        Assert.Empty(dispatcher.Choose(Prompt()));
+        Assert.Empty(dispatcher.Choose(Prompt()).Picks);
     }
 
     private sealed class EndTurns : ICombatPolicy

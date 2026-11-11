@@ -11,13 +11,13 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// </summary>
 internal static class NodeProbe
 {
-    public static IReadOnlyList<Afterstate> After(Pump pump, NodeClone node, IReadOnlyList<IReadOnlyList<string>> paths)
+    public static IReadOnlyList<Afterstate> After(Pump pump, NodeClone node, IReadOnlyList<IReadOnlyList<MacroAction>> paths)
     {
         var opened = Checkpoint.Open(node.Save);
         return [.. paths.Select(path => After(pump, node, opened, path))];
     }
 
-    private static Afterstate After(Pump pump, NodeClone node, Checkpoint.Opened opened, IReadOnlyList<string> path)
+    private static Afterstate After(Pump pump, NodeClone node, Checkpoint.Opened opened, IReadOnlyList<MacroAction> path)
     {
         var answers = new Answers(path);
         RunSession? session = null;
@@ -50,9 +50,9 @@ internal static class NodeProbe
     /// the game idle, so there the probe stops by throwing <see cref="Asked"/>; a card prompt, a card reward and a bundle
     /// are asked from inside a game task, so they get an answer that is never played on (p0's, or the first action).
     /// </summary>
-    private sealed class Answers(IReadOnlyList<string> path) : ICombatPolicy, IChoicePolicy, IMacroPolicy
+    private sealed class Answers(IReadOnlyList<MacroAction> path) : ICombatPolicy, IChoicePolicy, IMacroPolicy
     {
-        private readonly Queue<string> _left = new(path);
+        private readonly Queue<MacroAction> _left = new(path);
 
         public Afterstate? Next { get; private set; }
 
@@ -66,30 +66,30 @@ internal static class NodeProbe
             throw new Asked();
         }
 
-        public IReadOnlyList<int> Choose(ChoiceDecision decision)
+        public ChoiceAnswer Choose(ChoiceDecision decision)
         {
             if (Next == null && _left.Count > 0)
             {
                 var step = _left.Dequeue();
-                if (!step.StartsWith("pick:", StringComparison.Ordinal)) throw new InvalidOperationException($"a probe's {step} met a card prompt");
-                return [.. step["pick:".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)];
+                if (step.Verb != MacroAction.PickVerb) throw new InvalidOperationException($"a probe's {step} met a card prompt");
+                return new(step.Picks);
             }
             var obs = decision.Observation ?? throw new InvalidOperationException("a card prompt outside the run");
             Next ??= new(obs.Run, Surfaces.CardChoice, obs.Screen, []);
             return FirstPicks.Instance.Choose(decision);
         }
 
-        public string Choose(MacroDecision decision)
+        public MacroAnswer Choose(MacroDecision decision)
         {
             if (Next == null && _left.Count > 0)
             {
                 var step = _left.Peek();
-                if (step.StartsWith("pick:", StringComparison.Ordinal)) throw new InvalidOperationException($"a probe's {step} met {decision.Surface}");
-                return _left.Dequeue();
+                if (step.Verb == MacroAction.PickVerb) throw new InvalidOperationException($"a probe's {step} met {decision.Surface}");
+                return new(_left.Dequeue());
             }
             var obs = decision.Observation;
             Next ??= new(obs.Run, decision.Surface, obs.Screen, decision.Legal);
-            if (decision.Surface is Surfaces.CardReward or Surfaces.Bundle) return decision.Legal[0];
+            if (decision.Surface is Surfaces.CardReward or Surfaces.Bundle) return new(decision.Legal[0]);
             throw new Asked();
         }
     }

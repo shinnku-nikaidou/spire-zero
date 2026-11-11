@@ -340,13 +340,13 @@ internal sealed class RunSession : IDisposable
     private bool RewardsDecision(RewardsSet set)
     {
         if (Ask(Surfaces.Rewards, RewardActions.Legal(set), () => RewardActions.Screen(set)) is not { } action) return true;
-        if (action == RewardActions.Done)
+        if (action == MacroAction.RewardsDone)
         {
             Close(set);
             Track(RewardActions.Proceed(Run, set), "rewards proceed");
             if (RewardActions.IsTerminal(set)) _progress.Left = true;
         }
-        else Track(RewardActions.Start(set, action), action);
+        else Track(RewardActions.Start(set, action), action.ToString());
         return true;
     }
 
@@ -428,13 +428,13 @@ internal sealed class RunSession : IDisposable
         var ev = RunManager.Instance.EventSynchronizer.GetLocalEvent();
         if (Ask(Surfaces.Event, EventActions.Legal(ev), () => EventActions.Screen(ev, Player)) is not { } action) return true;
         EventActions.Start(ev, action);
-        if (action == EventActions.Proceed) _progress.Left = true;
+        if (action == MacroAction.Proceed) _progress.Left = true;
         return true;
     }
 
     private bool CrystalSphereDecision(CrystalSphereMinigame minigame)
     {
-        if (Ask(Surfaces.CrystalSphere, CrystalSphereActions.Legal(minigame), () => CrystalSphereActions.Screen(minigame)) is { } action) Track(CrystalSphereActions.Start(minigame, action), action);
+        if (Ask(Surfaces.CrystalSphere, CrystalSphereActions.Legal(minigame), () => CrystalSphereActions.Screen(minigame)) is { } action) Track(CrystalSphereActions.Start(minigame, action), action.ToString());
         return true;
     }
 
@@ -442,8 +442,8 @@ internal sealed class RunSession : IDisposable
     {
         var inventory = room.GetLocalInventory();
         if (Ask(Surfaces.Shop, ShopActions.Legal(inventory), () => ShopActions.Screen(inventory)) is not { } action) return true;
-        Track(ShopActions.Start(inventory, action), action);
-        if (action == ShopActions.Leave) _progress.Left = true;
+        Track(ShopActions.Start(inventory, action), action.ToString());
+        if (action == MacroAction.Leave) _progress.Left = true;
         return true;
     }
 
@@ -452,13 +452,13 @@ internal sealed class RunSession : IDisposable
         var options = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
         var progress = _progress;
         if (Ask(Surfaces.Rest, RestActions.Legal(options, progress.RestSucceeded), () => RestActions.Screen(options, Player)) is not { } action) return true;
-        if (action == RestActions.Leave)
+        if (action == MacroAction.Leave)
         {
             progress.Left = true;
             return true;
         }
         var chosen = RestActions.Start(options, progress.RestSucceeded, action);
-        Track(chosen, action, () => progress.RestSucceeded |= chosen.Result);
+        Track(chosen, action.ToString(), () => progress.RestSucceeded |= chosen.Result);
         return true;
     }
 
@@ -497,7 +497,7 @@ internal sealed class RunSession : IDisposable
     /// Asks the macro policy. The potion belt is usable on every screen, so its actions are offered everywhere and
     /// handled here: then the result is null, and the screen asks again once the potion is done.
     /// </summary>
-    private string? Ask(string surface, List<string> legal, Func<ScreenView> screen)
+    private MacroAction? Ask(string surface, List<MacroAction> legal, Func<ScreenView> screen)
     {
         legal.AddRange(PotionActions.Legal(Player));
         var action = Choose(surface, legal, screen);
@@ -506,10 +506,10 @@ internal sealed class RunSession : IDisposable
         return null;
     }
 
-    private string Choose(string surface, List<string> legal, Func<ScreenView> screen)
+    private MacroAction Choose(string surface, List<MacroAction> legal, Func<ScreenView> screen)
     {
         var decision = new MacroDecision(surface, legal, () => Of(screen()));
-        var action = _macro.Choose(decision);
+        var action = _macro.Choose(decision).Action;
         if (!legal.Contains(action)) throw new InvalidOperationException($"macro policy chose {action}, not legal on {surface}: {string.Join(" ", legal)}");
         _trace.Add($"{surface} {action}");
         _observed?.Invoke(decision.Observation);
@@ -613,7 +613,7 @@ internal sealed class RunSession : IDisposable
 
         public CombatAction Choose(CombatDecision decision) => _steps.Count > 0 ? CombatAction.Parse(Next(Surfaces.Combat)) : combat.Choose(decision);
 
-        public string Choose(MacroDecision decision) => _steps.Count > 0 ? Next(decision.Surface) : macro.Choose(decision);
+        public MacroAnswer Choose(MacroDecision decision) => _steps.Count > 0 ? new(MacroAction.Parse(Next(decision.Surface))) : macro.Choose(decision);
 
         private string Next(string surface)
         {

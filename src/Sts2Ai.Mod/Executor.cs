@@ -48,10 +48,16 @@ internal enum Acted
 /// </summary>
 internal static class Executor
 {
-    public static Acted Run(Asking asking, string action, RunState run, Player me)
+    public static Acted Run(Asking asking, string text, RunState run, Player me)
     {
+        if (asking.Surface == Surfaces.Combat)
+        {
+            CombatActions.Start(CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat"), me, CombatAction.Parse(text));
+            return Acted.Done;
+        }
+        var action = MacroAction.Parse(text);
         // In combat a potion is a combat action, with its target; elsewhere it is the belt's.
-        if (asking.Surface != Surfaces.Combat && PotionActions.Handles(action))
+        if (PotionActions.Handles(action))
         {
             PotionActions.Start(me, action);
             return Acted.Done;
@@ -59,39 +65,39 @@ internal static class Executor
         var top = ActiveScreenContext.Instance.GetCurrentScreen();
         switch (asking.Surface)
         {
-            case Surfaces.Combat:
-                CombatActions.Start(CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat"), me, CombatAction.Parse(action));
-                return Acted.Done;
             case Surfaces.CardChoice:
                 return Pick(top, asking, action);
             case Surfaces.CardReward when top is NCardRewardSelectionScreen screen:
             {
                 var options = Field<IReadOnlyList<CardCreationResult>>(screen, "_options");
                 var alternatives = Field<IReadOnlyList<CardRewardAlternative>>(screen, "_extraOptions");
-                int index = ActionText.Is(action, "card", out var arg) ? ActionText.Index(arg)
-                    : ActionText.Is(action, "card_alt", out arg) ? options.Count + alternatives.ToList().FindIndex(a => a.OptionId == arg)
-                    : throw Unknown(asking, action);
+                int index = action.Verb switch
+                {
+                    MacroAction.Card => action.Index,
+                    MacroAction.CardAlt => options.Count + alternatives.ToList().FindIndex(a => a.OptionId == action.Arg),
+                    _ => throw Unknown(asking, action),
+                };
                 Field<TaskCompletionSource<int?>?>(screen, "_completionSource")?.TrySetResult(index);
                 return Acted.Done;
             }
-            case Surfaces.Bundle when top is NChooseABundleSelectionScreen screen && ActionText.Is(action, "bundle", out var arg):
+            case Surfaces.Bundle when top is NChooseABundleSelectionScreen screen && action.Verb == MacroAction.Bundle:
             {
                 var bundles = Field<IReadOnlyList<IReadOnlyList<CardModel>>>(screen, "_bundles");
-                Field<TaskCompletionSource<IEnumerable<IReadOnlyList<CardModel>>>>(screen, "_completionSource").TrySetResult([bundles[ActionText.Index(arg)]]);
+                Field<TaskCompletionSource<IEnumerable<IReadOnlyList<CardModel>>>>(screen, "_completionSource").TrySetResult([bundles[action.Index]]);
                 return Acted.Done;
             }
             case Surfaces.Rewards when top is NRewardsScreen screen:
             {
-                if (action == RewardActions.Done) return Click(Field<NProceedButton>(screen, "_proceedButton"));
-                if (!ActionText.Is(action, "reward", out var arg) || asking.Source is not RewardsSet set) throw Unknown(asking, action);
-                var reward = set.Rewards[ActionText.Index(arg)];
+                if (action == MacroAction.RewardsDone) return Click(Field<NProceedButton>(screen, "_proceedButton"));
+                if (action.Verb != MacroAction.Reward || asking.Source is not RewardsSet set) throw Unknown(asking, action);
+                var reward = set.Rewards[action.Index];
                 var button = Field<List<Godot.Control>>(screen, "_rewardButtons").OfType<NRewardButton>().FirstOrDefault(b => b.Reward == reward);
                 return button != null ? Click(button) : Acted.Again;
             }
-            case Surfaces.Map when top is NMapScreen screen && ActionText.Is(action, "map", out var arg):
+            case Surfaces.Map when top is NMapScreen screen && action.Verb == MacroAction.Map:
             {
-                var at = arg.Split(',').Select(int.Parse).ToArray();
-                if (!Field<Dictionary<MapCoord, NMapPoint>>(screen, "_mapPointDictionary").TryGetValue(new MapCoord(at[0], at[1]), out var point) || !point.IsEnabled)
+                var at = action.Coord;
+                if (!Field<Dictionary<MapCoord, NMapPoint>>(screen, "_mapPointDictionary").TryGetValue(new MapCoord(at.Col, at.Row), out var point) || !point.IsEnabled)
                     return Acted.Again;
                 screen.OnMapPointSelectedLocally(point);
                 return Acted.Done;
@@ -99,7 +105,7 @@ internal static class Executor
             case Surfaces.Event:
                 return Event(action);
             case Surfaces.Shop when NMerchantRoom.Instance is { } room && run.CurrentRoom is MerchantRoom merchant:
-                if (action == ShopActions.Leave)
+                if (action == MacroAction.Leave)
                     return room.Inventory.IsOpen ? Again(Click(Field<NBackButton>(room.Inventory, "_backButton"))) : Click(room.ProceedButton);
                 // The purchase does not need the shop open; opened, the player sees it. Checked here: the start is a task.
                 var inventory = merchant.GetLocalInventory();
@@ -109,13 +115,13 @@ internal static class Executor
                 return Acted.Done;
             case Surfaces.Rest when NRestSiteRoom.Instance is { } room:
             {
-                if (action == RestActions.Leave) return Click(room.ProceedButton);
-                var option = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions().FirstOrDefault(o => $"rest:{o.OptionId}" == action)
+                if (action == MacroAction.Leave) return Click(room.ProceedButton);
+                var option = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions().FirstOrDefault(o => RestActions.Of(o) == action)
                     ?? throw Unknown(asking, action);
                 return room.GetButtonForOption(option) is { } button ? Click(button) : Acted.Again;
             }
             case Surfaces.Treasure when top is NTreasureRoom room:
-                if (action == TreasureActions.Skip) return Click(room.ProceedButton);
+                if (action == MacroAction.RelicSkip) return Click(room.ProceedButton);
                 TreasureActions.Start(RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics ?? throw Unknown(asking, action), action);
                 return Acted.Done;
             case Surfaces.CrystalSphere when top is NCrystalSphereScreen sphere:
@@ -151,11 +157,11 @@ internal static class Executor
     }
 
     /// <summary>A card prompt's picks, canonical indexes, answered as its screen answers itself: the cards to the task it awaits.</summary>
-    private static Acted Pick(object? top, Asking asking, string action)
+    private static Acted Pick(object? top, Asking asking, MacroAction action)
     {
-        if (!ActionText.Is(action, "pick", out var arg) || asking.Source is not IReadOnlyList<CardModel> options || asking.GameIndex is not { } index)
+        if (action.Verb != MacroAction.PickVerb || asking.Source is not IReadOnlyList<CardModel> options || asking.GameIndex is not { } index)
             throw Unknown(asking, action);
-        var cards = arg.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(i => options[index[ActionText.Index(i)]]).ToList();
+        var cards = action.Picks.Select(i => options[index[i]]).ToList();
         switch (top)
         {
             case NCombatRoom when NPlayerHand.Instance is { IsInCardSelection: true } hand:
@@ -180,21 +186,21 @@ internal static class Executor
     /// option when the event shows one, else as the room's proceed, which opens the map. An ancient's dialogue is
     /// clicked through first.
     /// </summary>
-    private static Acted Event(string action)
+    private static Acted Event(MacroAction action)
     {
         var ev = RunManager.Instance.EventSynchronizer.GetLocalEvent();
         if (NEventRoom.Instance is not { } room) return Acted.Again;
         if (Dialogue() is { } hitbox) return Again(Click(hitbox));
         var options = ev.CurrentOptions;
-        if (action == EventActions.Proceed)
+        if (action == MacroAction.Proceed)
         {
             int at = options.ToList().FindIndex(o => o.IsProceed && o.TextKey == "PROCEED");
             if (at >= 0) room.OptionButtonClicked(options[at], at);
             else _ = NEventRoom.Proceed();
             return Acted.Done;
         }
-        if (!ActionText.Is(action, "event", out var arg)) return Acted.Again;
-        int i = ActionText.Index(arg);
+        if (action.Verb != MacroAction.Event) return Acted.Again;
+        int i = action.Index;
         room.OptionButtonClicked(options[i], i);
         return Acted.Done;
     }
@@ -215,7 +221,7 @@ internal static class Executor
     /// <summary>A step taken before the action: the action itself is still to come.</summary>
     private static Acted Again(Acted _) => Acted.Again;
 
-    private static InvalidOperationException Unknown(Asking asking, string action) => new($"cannot carry out {action} on {asking.Surface}");
+    private static InvalidOperationException Unknown(Asking asking, MacroAction action) => new($"cannot carry out {action} on {asking.Surface}");
 
     private static T Field<T>(object node, string name) => (T)AccessTools.Field(node.GetType(), name).GetValue(node)!;
 }

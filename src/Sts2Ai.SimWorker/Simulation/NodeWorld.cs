@@ -100,6 +100,6 @@ internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisp
             return action;
         }
 
-        public string Choose(MacroDecision decision) => throw new InvalidOperationException($"search left the combat for {decision.Surface}");
+        public MacroAnswer Choose(MacroDecision decision) => throw new InvalidOperationException($"search left the combat for {decision.Surface}");
     }
 }

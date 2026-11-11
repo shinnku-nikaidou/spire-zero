@@ -201,9 +201,9 @@ internal static class RunCommand
 
         public CombatAction Choose(CombatDecision decision) => throw Exhausted();
 
-        IReadOnlyList<int> IChoicePolicy.Choose(ChoiceDecision decision) => throw Exhausted();
+        ChoiceAnswer IChoicePolicy.Choose(ChoiceDecision decision) => throw Exhausted();
 
-        public string Choose(MacroDecision decision) => throw Exhausted();
+        public MacroAnswer Choose(MacroDecision decision) => throw Exhausted();
 
         private static InvalidOperationException Exhausted() => new("asked beyond the recording");
     }

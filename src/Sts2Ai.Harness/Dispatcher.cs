@@ -78,9 +78,6 @@ public sealed class Dispatcher(
     /// <summary>The run's decisions so far, when logging.</summary>
     public IReadOnlyList<DecisionEntry> Log => _log;
 
-    /// <summary>The latest decision's brain, plan and candidates.</summary>
-    public DecisionNote? Last { get; private set; }
-
     /// <summary>How many decisions each brain made so far.</summary>
     public IReadOnlyDictionary<string, int> Brains => _brains;
 
@@ -107,7 +104,16 @@ public sealed class Dispatcher(
     /// <summary>What the combat brain answered for the first prompt of the action it just chose (<see cref="CombatAction.Pick"/>).</summary>
     private IReadOnlyList<int>? _pick;
 
-    public CombatAction Choose(CombatDecision decision)
+    public CombatAction Choose(CombatDecision decision) => Decide(decision).Action;
+
+    public ChoiceAnswer Choose(ChoiceDecision decision) => Decide(decision).Answer;
+
+    public MacroAnswer Choose(MacroDecision decision) => Decide(decision).Answer;
+
+    public IReadOnlyList<MacroAction> Plan(MacroDecision decision, MacroAction action) => macro.Policy.Plan(decision, action);
+
+    /// <summary>A combat decision, with who made it and what it planned and scored.</summary>
+    public (CombatAction Action, DecisionNote Note) Decide(CombatDecision decision)
     {
         _pick = null;
         _moves.Witness(decision.Observation);
@@ -118,53 +124,55 @@ public sealed class Dispatcher(
         if (!decision.Legal.Contains(result.First.Plain)) throw new InvalidOperationException($"{combat.Brain} chose {result.First}, which is not legal");
         if (result.Replanned) Replans++;
         // A plan that repeats a cycle may have thousands of steps left, at each of them.
-        Last = new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null, result.Candidates.Count > 0 ? result.Candidates : null);
+        var note = new DecisionNote(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null,
+            result.Candidates.Count > 0 ? result.Candidates : null);
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                result.First.ToString(), Last.Plan, Last.Candidates, combat.Budget?.For(decision.Observation.Room), seed, ms, Obs: decision.Observation, History: history,
+                result.First.ToString(), note.Plan, note.Candidates, combat.Budget?.For(decision.Observation.Room), seed, ms, Obs: decision.Observation, History: history,
                 Replanned: Mark(result.Replanned)));
         _pick = result.First.Picks;
-        return result.First.Plain;
+        return (result.First.Plain, note);
     }
 
-    public IReadOnlyList<int> Choose(ChoiceDecision decision)
+    /// <summary>A card prompt's answer, with who gave it and what it scored.</summary>
+    public (ChoiceAnswer Answer, DecisionNote Note) Decide(ChoiceDecision decision)
     {
         var choice = decision.Choice;
         var route = choice.Context.InCombat ? combatChoices : macroChoices;
         var (id, seed, clock) = Begin(route.Brain);
         if (!choice.Context.InCombat && MacroClone() is { } node) decision = decision.With(node);
-        // The answer search played its line with, for the action just chosen; the host never sees it.
-        var picks = choice.Context.InCombat && _pick is { } pick && choice.Accepts(pick) ? pick : route.Policy.Choose(decision);
+        // The answer search played its line with, for the action just chosen; the host never sees it, and it was not
+        // chosen by the prompt's policy, so it shows no options.
+        var answer = choice.Context.InCombat && _pick is { } pick && choice.Accepts(pick) ? new ChoiceAnswer(pick) : route.Policy.Choose(decision);
         _pick = null;
         double ms = clock.Elapsed.TotalMilliseconds;
-        if (!choice.Accepts(picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", picks)}], which the prompt does not accept");
-        // The answer search played its line with was not chosen by the prompt's policy, so its options do not show.
-        IReadOnlyList<Candidate> scored = choice.Context.InCombat ? [] : route.Policy.Scored;
-        Last = new(route.Brain, null, scored.Count > 0 ? scored : null);
+        if (!choice.Accepts(answer.Picks)) throw new InvalidOperationException($"{route.Brain} gave [{string.Join(",", answer.Picks)}], which the prompt does not accept");
+        if (choice.Context.InCombat) answer = answer with { Scored = [] };
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.CardChoice, route.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
-                string.Join(",", picks), null, null, null, seed, ms, Explored: Mark(route.Policy.Explored)));
-        return picks;
+                string.Join(",", answer.Picks), null, null, null, seed, ms, Explored: Mark(answer.Explored)));
+        return (answer, new(route.Brain, null, answer.Scored.Count > 0 ? answer.Scored : null));
     }
 
-    public string Choose(MacroDecision decision)
+    /// <summary>A decision outside combat, with who made it and what it planned and scored.</summary>
+    public (MacroAnswer Answer, DecisionNote Note) Decide(MacroDecision decision)
     {
         _moves.Clear();
         var (id, seed, clock) = Begin(macro.Brain);
         if (!MacroSurfaces.Contains(decision.Surface)) throw new InvalidOperationException($"uncovered surface {decision.Surface}");
         if (MacroClone() is { } node) decision = decision.With(node);
-        var action = macro.Policy.Choose(decision);
+        var answer = macro.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
-        if (!decision.Legal.Contains(action)) throw new InvalidOperationException($"{macro.Brain} chose {action} on {decision.Surface}, which is not legal");
-        var plan = macro.Policy.Plan(decision, action);
-        var scored = macro.Policy.Scored;
-        if (explain && decision.Surface == Surfaces.Map) scored = [.. scored.Select(c => c with { Plan = macro.Policy.Plan(decision, c.Action) })];
-        Last = new(macro.Brain, plan.Count > 0 ? plan : null, scored.Count > 0 ? scored : null);
+        if (!decision.Legal.Contains(answer.Action)) throw new InvalidOperationException($"{macro.Brain} chose {answer.Action} on {decision.Surface}, which is not legal");
+        static List<string>? Text(IReadOnlyList<MacroAction> route) => route.Count > 0 ? [.. route.Select(a => a.ToString())] : null;
+        var plan = Text(macro.Policy.Plan(decision, answer.Action));
+        if (explain && decision.Surface == Surfaces.Map)
+            answer = answer with { Scored = [.. answer.Scored.Select(c => c with { Plan = Text(macro.Policy.Plan(decision, MacroAction.Parse(c.Action))) ?? [] })] };
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
-                action, Last.Plan, null, null, seed, ms, RunView: decision.Observation.Run,
-                Explored: Mark(macro.Policy.Explored)));
-        return action;
+                answer.Action.ToString(), plan, null, null, seed, ms, RunView: decision.Observation.Run,
+                Explored: Mark(answer.Explored)));
+        return (answer, new(macro.Brain, plan, answer.Scored.Count > 0 ? answer.Scored : null));
     }
 
     /// <summary>SL: the host arrived at a node; its decisions follow.</summary>

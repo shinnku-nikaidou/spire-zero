@@ -158,12 +158,12 @@ internal sealed class Screens
         return _context;
     }
 
-    private static Asking? Ask(RunState run, Player me, string surface, ScreenView screen, List<string> legal, bool potions = true, object? source = null)
+    private static Asking? Ask(RunState run, Player me, string surface, ScreenView screen, List<MacroAction> legal, bool potions = true, object? source = null)
     {
         // A screen with nothing to pick is waiting on something else (an animation, a proceed button).
         if (legal.Count == 0) return null;
         if (potions) legal.AddRange(PotionActions.Legal(me));
-        return new Asking(surface, Observe.Of(run, me, screen), legal, source);
+        return new Asking(surface, Observe.Of(run, me, screen), [.. legal.Select(a => a.ToString())], source);
     }
 
     private static T Field<T>(object node, string name) => (T)AccessTools.Field(node.GetType(), name).GetValue(node)!;

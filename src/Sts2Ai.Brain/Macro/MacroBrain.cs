@@ -6,17 +6,12 @@ namespace Sts2Ai.Brain.Macro;
 /// The macro brain's L0 (docs: macro-brain/search): it values each option's afterstate with V and takes the best, the first
 /// legal one on a tie. In SL, with the node's clone (<see cref="MacroDecision.Clone"/>), each option is played in the
 /// real game and searched on through the node's screens (<see cref="CloneSearch"/>); only the map's moves, which leave
-/// the node, are predicted, as the point added to the path. Without it, version 0: the afterstate is predicted from what
-/// the screen shows (the card a reward adds, the relic, the gold a purchase costs, the HP a rest heals, a card's upgrade
-/// preview), not applied in a world. An option whose result the screen does not show (most event options, a reroll, a transform) is valued as the state before it. One that opens a
-/// choice (a card reward, a removal, smithing) is valued as the best pick in it, so a choice that would be skipped is not opened.
-/// It also answers the card prompts outside combat (upgrade, remove, transform, choose a card).
+/// the node, are predicted, as the point added to the path. Without it, version 0: every afterstate is predicted from
+/// what the screen shows (<see cref="ScreenAfterstates"/>). It also answers the card prompts outside combat (upgrade,
+/// remove, transform, choose a card).
 ///
-/// With <paramref name="uniform"/>, for self-play (docs: learning/loop §9), some answers are drawn evenly whatever V says (<see cref="Uniform"/>): a card reward's outcome among
-/// its cards and skipping it, a card prompt's picks, and on every other screen its options, a potion's among them (what
-/// <see cref="Offered"/> leaves of the belt), but those that would come back to a state already decided. With
-/// <paramref name="softmax"/>, for self-play too, every other answer is drawn by V instead of taken as the best: a softmax
-/// over the log of the options' values (<see cref="Pick"/>), at a macro decision, at each step of a card prompt's answer.
+/// How an answer is taken from the valued options is <see cref="MacroDraws"/>'s: the best in play; in self-play, with
+/// <paramref name="uniform"/> or <paramref name="softmax"/>, some are drawn.
 ///
 /// An option that ends the run is worth what the run's end is: 0 for one the screen says kills (an event's), and on the
 /// clone 1 or 0 as the game ends it. On the clone, an option that starts a combat (an event's fight) is valued by
@@ -25,15 +20,8 @@ namespace Sts2Ai.Brain.Macro;
 public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null)
     : IMacroPolicy, IChoicePolicy
 {
-    /// <summary>Each card reward's draw by <c>uniform</c> (null: none), by its floor and cards, made when it is first seen.</summary>
-    private readonly Dictionary<string, int?> _draws = [];
-
-    /// <summary>Whether the last answer was drawn: by <c>uniform</c>, or by <c>softmax</c> and valued below the best
-    /// (<see cref="Softmax.Explored"/>; at a card prompt, any of its steps).</summary>
-    public bool Explored { get; private set; }
-
-    /// <summary>The options of the last answer, valued by V, to show; none when it was drawn.</summary>
-    public IReadOnlyList<Candidate> Scored { get; private set; } = [];
+    private readonly ScreenAfterstates _screen = new(value);
+    private readonly MacroDraws _draws = new(uniform, softmax);
 
     /// <summary>
     /// Whether the last macro answer opens a card prompt it was valued by (smithing, a removal). Stopping that prompt
@@ -50,112 +38,57 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// </summary>
     private readonly HashSet<ulong> _decided = [];
 
-    public string Choose(MacroDecision decision)
+    public MacroAnswer Choose(MacroDecision decision)
     {
         if (decision.Legal.Count == 0) throw new InvalidOperationException("no legal action");
-        Explored = false;
+        var obs = decision.Observation;
         var options = Weigh(decision);
         var values = options.Select(o => o.Value).ToList();
+        bool explored = false;
         int pick;
-        if (Drawn(decision.Observation, options) is { } drawn)
+        if (_draws.CardReward(obs, [.. options.Select(o => o.Action)], values) is { } drawn)
         {
-            pick = Best(drawn);
-            Explored = double.IsPositiveInfinity(drawn[pick]) || values[pick] < values[Best(values)];
+            pick = MacroDraws.Best(drawn);
+            explored = double.IsPositiveInfinity(drawn[pick]) || values[pick] < values[MacroDraws.Best(values)];
         }
-        else if (Even(decision.Observation, options) is { } even)
+        else if (_draws.Even(obs, values) is { } even)
         {
             pick = even;
-            Explored = true;
+            explored = true;
         }
-        else pick = Pick(values);
+        else pick = _draws.Pick(values, ref explored);
         var option = options[pick];
-        Scored = Explored ? [] : Rank(options.Select(o => (o.Action, o.Value)), option.Action);
         _opened = option.Opens;
         if (decision.Clone != null) _decided.Add(CloneSearch.Key(Root(decision)));
-        return option.Action;
-    }
-
-    /// <summary>
-    /// With <c>uniform</c>, the options' values with a card reward's drawn outcome first (+∞) and its others last (−∞);
-    /// null where nothing is drawn. On the rewards screen, a card reward drawn to be skipped is never opened and one drawn
-    /// to be taken is opened now; on the card reward screen, the drawn card, or skipping, is taken.
-    /// </summary>
-    private List<double>? Drawn(Observation obs, List<Option> options)
-    {
-        if (uniform == null) return null;
-        var values = options.Select(o => o.Value).ToList();
-        bool any = false;
-        switch (obs.Screen)
-        {
-            case RewardsScreen screen:
-                for (int k = 0; k < options.Count; k++)
-                {
-                    var (verb, arg) = Split(options[k].Action);
-                    if (verb != "reward" || screen.Rewards.FirstOrDefault(r => r.Index == int.Parse(arg)) is not { Kind: "card", Cards: { } offered }) continue;
-                    if (Draw(obs.Run, offered) is not { } drawn) continue;
-                    values[k] = drawn == offered.Count ? double.NegativeInfinity : double.PositiveInfinity;
-                    any = true;
-                }
-                break;
-            case CardRewardScreen screen when Draw(obs.Run, screen.Cards) is { } drawn:
-                string wanted = drawn < screen.Cards.Count ? $"card:{drawn}" : "card_alt:Skip";
-                int at = options.FindIndex(o => o.Action == wanted);
-                if (at < 0) break;
-                for (int k = 0; k < options.Count; k++) values[k] = k == at ? double.PositiveInfinity : double.NegativeInfinity;
-                any = true;
-                break;
-        }
-        return any ? values : null;
-    }
-
-    private int? Draw(RunView run, IReadOnlyList<CardView> offered)
-    {
-        string key = $"{run.Floor}:{string.Join(",", offered.Select(c => $"{c.Id}+{c.Up ?? 0}"))}";
-        if (!_draws.TryGetValue(key, out var drawn)) _draws[key] = drawn = uniform!.Draw(offered.Count + 1);
-        return drawn;
-    }
-
-    /// <summary>
-    /// With <c>uniform</c>, an option drawn evenly, or null to leave it to V: on every screen but the card reward's (its
-    /// outcome is drawn as a whole, <see cref="Drawn"/>), among the options not worth −∞ (they would come back to a state
-    /// already decided), when there are two or more.
-    /// </summary>
-    private int? Even(Observation obs, List<Option> options)
-    {
-        if (uniform == null || obs.Screen is CardRewardScreen) return null;
-        var open = Enumerable.Range(0, options.Count).Where(k => !double.IsNegativeInfinity(options[k].Value)).ToList();
-        return open.Count >= 2 && uniform.Draw(open.Count) is { } drawn ? open[drawn] : null;
-    }
-
-    /// <summary>With <c>uniform</c>, a card prompt's picks drawn evenly (<see cref="Uniform.Picks"/>), at least <paramref name="min"/>; or null.</summary>
-    private IReadOnlyList<int>? Even(CardChoice choice, int min)
-    {
-        int n = choice.Options.Count;
-        return uniform?.Picks(n, Math.Min(min, n), Math.Min(choice.Max, n));
+        return new(option.Action, explored, explored ? [] : Rank(options.Select(o => (o.Action, o.Value)), option.Action));
     }
 
     /// <summary>Each legal action, in order, with its afterstate and its value: what <see cref="Choose(MacroDecision)"/> picks by.</summary>
-    public IReadOnlyList<(string Action, RunView After, double Value)> Options(MacroDecision decision) =>
+    public IReadOnlyList<(MacroAction Action, RunView After, double Value)> Options(MacroDecision decision) =>
         [.. Weigh(decision).Select(o => (o.Action, o.After, o.Value))];
 
     /// <param name="Opens">Whether the option opens a card prompt it was valued by.</param>
-    private sealed record Option(string Action, RunView After, double Value, bool Opens);
+    private sealed record Option(MacroAction Action, RunView After, double Value, bool Opens);
 
     private List<Option> Weigh(MacroDecision decision)
     {
         var obs = decision.Observation;
         var legal = Offered(obs.Run, obs.Screen, decision.Legal);
         if (decision.Clone is not { } clone)
-            return AfterMoves(obs, [.. legal.Select(a => { var after = After(obs, a); return new Option(a, after, Kills(obs, a) ? 0 : value.Value(after), OpensPrompt(obs, a)); })]);
-        var played = legal.Where(a => !Travels(obs, a)).ToList();
-        var found = new CloneSearch(value, clone, _decided, fights).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<string>)[a])]);
+            return AfterMoves(obs, [.. legal.Select(a =>
+            {
+                var after = _screen.After(obs, a);
+                return new Option(a, after, ScreenAfterstates.Kills(obs, a) ? 0 : value.Value(after), ScreenAfterstates.OpensPrompt(obs, a));
+            })]);
+        var played = legal.Where(a => !ScreenAfterstates.Travels(obs, a)).ToList();
+        var found = new CloneSearch(value, clone, _decided, fights).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<MacroAction>)[a])]);
         var options = new List<Option>();
         int k = 0;
         foreach (var a in legal)
         {
-            if (Travels(obs, a))
+            if (ScreenAfterstates.Travels(obs, a))
             {
-                var after = After(obs, a);
+                var after = _screen.After(obs, a);
                 options.Add(new(a, after, value.Value(after), false));
                 continue;
             }
@@ -172,7 +105,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// kept, could not show V otherwise (self-play threw away 69-79 % of its potions in v9g0 and v9g1). The same at every
     /// state the clone's search reaches (<see cref="CloneSearch"/>).
     /// </summary>
-    public static List<string> Offered(RunView run, ScreenView? screen, IReadOnlyList<string> legal)
+    public static List<MacroAction> Offered(RunView run, ScreenView? screen, IReadOnlyList<MacroAction> legal)
     {
         bool room = run.Potions.All(p => p != null) && screen switch
         {
@@ -180,7 +113,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             ShopScreen shop => shop.Entries.Any(e => e.Kind == "potion"),
             _ => false,
         };
-        var offered = legal.Where(a => room || Split(a).Verb != "discard_potion").ToList();
+        var offered = legal.Where(a => room || a.Verb != MacroAction.DiscardPotion).ToList();
         return offered.Count > 0 ? offered : [.. legal];
     }
 
@@ -192,93 +125,72 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// </summary>
     private List<Option> AfterMoves(Observation obs, List<Option> options)
     {
-        var moves = options.Where(o => Travels(obs, o.Action)).Select(o => o.Action).ToList();
+        var moves = options.Where(o => ScreenAfterstates.Travels(obs, o.Action)).Select(o => o.Action).ToList();
         if (moves.Count == 0) return options;
-        return [.. options.Select(o => Travels(obs, o.Action) || double.IsNegativeInfinity(o.Value) ? o
-            : o with { Value = moves.Max(m => value.Value(After(obs with { Run = o.After }, m))) })];
+        return [.. options.Select(o => ScreenAfterstates.Travels(obs, o.Action) || double.IsNegativeInfinity(o.Value) ? o
+            : o with { Value = moves.Max(m => value.Value(_screen.After(obs with { Run = o.After }, m))) })];
     }
 
     /// <summary>The decision as a probe of no answers shows it.</summary>
     private static Afterstate Root(MacroDecision decision) =>
         new(decision.Observation.Run, decision.Surface, decision.Observation.Screen, decision.Legal);
 
-    /// <summary>An event option the screen says kills: the run ends there, lost.</summary>
-    private static bool Kills(Observation obs, string action) =>
-        obs.Screen is EventScreen screen && Split(action) is ("event", var arg) && screen.Options.First(o => o.Index == int.Parse(arg)).Kills == true;
-
-    /// <summary>A map move: the node's exit, which its clone cannot play past.</summary>
-    private static bool Travels(Observation obs, string action) => obs.Screen is MapScreen && Split(action).Verb == "map";
-
     /// <summary>
     /// On the map, the rest of the act's route after <paramref name="action"/>: each next point along the map's paths as
     /// <see cref="Choose(MacroDecision)"/> would take it if nothing else changed, up to the boss.
     /// </summary>
-    public IReadOnlyList<string> Plan(MacroDecision decision, string action)
+    public IReadOnlyList<MacroAction> Plan(MacroDecision decision, MacroAction action)
     {
         var obs = decision.Observation;
-        if (obs.Screen is not MapScreen || Split(action).Verb != "map") return [];
+        if (!ScreenAfterstates.Travels(obs, action)) return [];
         var points = obs.Run.Map.Points.ToDictionary(p => new Coord(p.Col, p.Row));
-        var route = new List<string>();
+        var route = new List<MacroAction>();
         while (true)
         {
-            obs = obs with { Run = After(obs, action) };
+            obs = obs with { Run = _screen.After(obs, action) };
             var next = points[obs.Run.Map.Visited[^1]].Next;
             if (next.Count == 0) return route;
-            action = next.Select(c => $"map:{c.Col},{c.Row}").MaxBy(a => Value(obs, a))!;
+            action = next.Select(c => MacroAction.Of(MacroAction.Map, c.Col, c.Row)).MaxBy(a => value.Value(_screen.After(obs, a)));
             route.Add(action);
         }
     }
 
-    public IReadOnlyList<int> Choose(ChoiceDecision decision)
+    public ChoiceAnswer Choose(ChoiceDecision decision)
     {
         if (decision.Clone is { } clone) return Choose(decision, clone);
         var choice = decision.Choice;
         var run = decision.Observation?.Run ?? throw new InvalidOperationException("a card prompt outside combat without its run");
-        // A transform is valued as the removal it starts with: what the new card will be is not shown.
-        Func<RunView, CardView, RunView> pick = choice.Context.Purpose switch
-        {
-            "deck_for_removal" or "deck_for_transformation" => (s, card) => s with { Deck = Without(s.Deck, card) },
-            "deck_for_upgrade" => Upgrade,
-            "choose_a_card_screen" or "simple_grid_for_rewards" => (s, card) => s with { Deck = [.. s.Deck, card] },
-            _ => (s, _) => s,
-        };
         // Greedy: add the best pick while it helps, or while the prompt wants more.
         int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
         _opened = false;
-        Explored = false;
-        Scored = [];
-        if (Even(choice, min) is { } even)
-        {
-            Explored = true;
-            return even;
-        }
+        if (_draws.Even(choice, min) is { } even) return new(even, Explored: true);
+        bool explored = false;
         var picks = new List<int>();
         var state = run;
         double current = value.Value(state);
         // The first step's answers, one pick or none, to show beside the answer.
-        var first = new List<(string Action, double Value)>();
+        var first = new List<(MacroAction Action, double Value)>();
         while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
             var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
-                .Select(i => { var next = pick(state, choice.Options[i]); return (Index: i, Value: value.Value(next), State: next); })
+                .Select(i => { var next = ScreenAfterstates.Picked(state, choice.Options[i], choice.Context.Purpose); return (Index: i, Value: value.Value(next), State: next); })
                 .ToList();
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
             if (picks.Count >= min) options.Insert(0, (-1, current, state));
-            if (picks.Count == 0) first.AddRange(options.Select(o => (CloneSearch.Pick(o.Index < 0 ? [] : [o.Index]), o.Value)));
-            var taken = options[Pick([.. options.Select(o => o.Value)])];
+            if (picks.Count == 0) first.AddRange(options.Select(o => (MacroAction.Pick(o.Index < 0 ? [] : [o.Index]), o.Value)));
+            var taken = options[_draws.Pick([.. options.Select(o => o.Value)], ref explored)];
             if (taken.Index < 0) break;
             picks.Add(taken.Index);
             (current, state) = (taken.Value, taken.State);
         }
-        string answer = CloneSearch.Pick(picks);
-        Scored = Explored ? [] : Rank(first.Where(o => o.Action != answer).Append((answer, current)), answer);
-        return picks;
+        var answer = MacroAction.Pick(picks.Order());
+        return new(picks, explored, explored ? [] : Rank(first.Where(o => o.Action != answer).Append((answer, current)), answer));
     }
 
     /// <summary>Options to show: the chosen first, then best first; a value that is not finite (a state already decided) left out.</summary>
-    private static List<Candidate> Rank(IEnumerable<(string Action, double Value)> options, string chosen) =>
+    private static List<Candidate> Rank(IEnumerable<(MacroAction Action, double Value)> options, MacroAction chosen) =>
         [.. options.Where(o => double.IsFinite(o.Value)).OrderByDescending(o => o.Action == chosen).ThenByDescending(o => o.Value)
-            .Select(o => new Candidate(o.Action, o.Value, 0, 1))];
+            .Select(o => new Candidate(o.Action.ToString(), o.Value, 0, 1))];
 
     /// <summary>
     /// SL: a card prompt answered on the node's clone. A local search over the answers the prompt accepts, from no pick
@@ -286,21 +198,19 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// same card twice only if the deck has it twice), each searched on (<see cref="CloneSearch"/>), and moves to the best
     /// while it beats the answer it has, which is listed first so that it wins a tie.
     /// </summary>
-    private IReadOnlyList<int> Choose(ChoiceDecision decision, IMacroClone clone)
+    private ChoiceAnswer Choose(ChoiceDecision decision, IMacroClone clone)
     {
         var choice = decision.Choice;
         var obs = decision.Observation ?? throw new InvalidOperationException("a card prompt outside combat without its run");
         int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
         _opened = false;
-        Explored = false;
         var root = new Afterstate(obs.Run, Surfaces.CardChoice, obs.Screen, []);
-        Scored = [];
-        if (Even(choice, min) is { } even)
+        if (_draws.Even(choice, min) is { } even)
         {
             _decided.Add(CloneSearch.Key(root));
-            Explored = true;
-            return even;
+            return new(even, Explored: true);
         }
+        bool explored = false;
         var groups = choice.Groups();
         // An answer is how many of each group it picks.
         var counts = new int[groups.Count];
@@ -309,8 +219,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             counts[g] = Math.Min(left, groups[g].Count);
             left -= counts[g];
         }
-        var worth = new Dictionary<string, double>();
-        string Answer(int[] c) => CloneSearch.Pick(c.SelectMany((n, g) => groups[g].Take(n)));
+        var worth = new Dictionary<MacroAction, double>();
+        // In the prompt's canonical order, so that the same picks are the same answer.
+        MacroAction Answer(int[] c) => MacroAction.Pick(c.SelectMany((n, g) => groups[g].Take(n)).Order());
         // Without exploring, each step is better than the last; exploring could wander, so the steps are capped.
         for (int step = 0; step < 4 * Math.Max(choice.Max, 1); step++)
         {
@@ -319,16 +230,16 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             var fresh = near.Select(Answer).Where(a => !worth.ContainsKey(a)).Distinct().ToList();
             if (fresh.Count > 0)
             {
-                var found = new CloneSearch(value, clone, _decided, fights).Search(root, [.. fresh.Select(a => (IReadOnlyList<string>)[a])]);
+                var found = new CloneSearch(value, clone, _decided, fights).Search(root, [.. fresh.Select(a => (IReadOnlyList<MacroAction>)[a])]);
                 for (int i = 0; i < fresh.Count; i++) worth[fresh[i]] = found[i].Value;
             }
-            var taken = near[Pick([.. near.Select(c => worth[Answer(c)])])];
+            var taken = near[_draws.Pick([.. near.Select(c => worth[Answer(c)])], ref explored)];
             if (taken == current) break;
             counts = taken;
         }
         _decided.Add(CloneSearch.Key(root));
-        Scored = Explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value)), Answer(counts));
-        return [.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()];
+        return new([.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()], explored,
+            explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value)), Answer(counts)));
     }
 
     /// <summary>The answers one pick away from <paramref name="counts"/> that the prompt accepts.</summary>
@@ -352,151 +263,5 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         if (add >= 0) moved[add]++;
         if (drop >= 0) moved[drop]--;
         return moved;
-    }
-
-    /// <summary>
-    /// The first best of <paramref name="values"/>, or with <c>softmax</c> a draw by their logs: V is a chance that spans
-    /// orders of magnitude within a run (at A10 from 1e-3 down to 1e-7), so the temperature is in its ratios, the same at
-    /// any V. An option worth nothing (or −∞, a state already decided) is never drawn, unless all are.
-    /// </summary>
-    private int Pick(List<double> values)
-    {
-        int best = Best(values);
-        if (softmax == null || values[best] <= 0) return best;
-        var logs = values.Select(v => v > 0 ? Math.Log(v) : double.NegativeInfinity).ToList();
-        int drawn = softmax.Draw(logs);
-        Explored |= softmax.Explored(logs[drawn], logs[best]);
-        return drawn;
-    }
-
-    /// <summary>The first best of <paramref name="values"/>.</summary>
-    private static int Best(List<double> values)
-    {
-        int best = 0;
-        for (int i = 1; i < values.Count; i++)
-            if (values[i] > values[best]) best = i;
-        return best;
-    }
-
-    private double Value(Observation obs, string action) => value.Value(After(obs, action));
-
-    /// <summary>The predicted afterstate.</summary>
-    private RunView After(Observation obs, string action)
-    {
-        var run = obs.Run;
-        var (verb, arg) = Split(action);
-        if (verb is "potion" or "discard_potion")
-        {
-            int slot = int.Parse(arg);
-            return run with { Potions = [.. run.Potions.Select((p, i) => i == slot ? null : p)] };
-        }
-        switch (obs.Screen)
-        {
-            case MapScreen when verb == "map":
-                var at = arg.Split(',');
-                return run with { Map = run.Map with { Visited = [.. run.Map.Visited, new Coord(int.Parse(at[0]), int.Parse(at[1]))], Entering = true } };
-            case RewardsScreen screen when verb == "reward":
-                var reward = screen.Rewards.First(r => r.Index == int.Parse(arg));
-                return reward.Kind switch
-                {
-                    "gold" => run with { Gold = run.Gold + (reward.Amount ?? 0) },
-                    "potion" => WithPotion(run, reward.Id!),
-                    "relic" => WithRelic(run, reward.Id!),
-                    "special_card" when reward.Card != null => run with { Deck = [.. run.Deck, reward.Card] },
-                    "card" => Best((reward.Cards ?? []).Select(c => run with { Deck = [.. run.Deck, c] })) ?? run,
-                    "remove_card" => BestRemoval(run) ?? run,
-                    _ => run,
-                };
-            case CardRewardScreen screen when verb == "card":
-                return run with { Deck = [.. run.Deck, screen.Cards[int.Parse(arg)]] };
-            case BundleScreen screen when verb == "bundle":
-                return run with { Deck = [.. run.Deck, .. screen.Bundles[int.Parse(arg)]] };
-            case EventScreen screen when verb == "event":
-                var option = screen.Options.First(o => o.Index == int.Parse(arg));
-                if (option.Kills == true) return run with { Hp = 0 };
-                return option.Relic != null ? WithRelic(run, option.Relic) : run;
-            case ShopScreen screen when verb == "buy":
-                var entry = screen.Entries.First(e => e.Slot == int.Parse(arg));
-                var paid = run with { Gold = run.Gold - entry.Cost };
-                return entry.Kind switch
-                {
-                    "card" => paid with { Deck = [.. run.Deck, entry.Card!] },
-                    "relic" => WithRelic(paid, entry.Id!),
-                    "potion" => WithPotion(paid, entry.Id!),
-                    _ => paid,
-                };
-            case ShopScreen screen when verb == "remove":
-                // The removal prompt follows; the best removal is what this option is worth.
-                var gold = run with { Gold = run.Gold - (screen.RemovalCost ?? 0) };
-                return BestRemoval(gold) ?? gold;
-            case RestScreen screen when verb == "rest":
-                var rest = screen.Options.First(o => o.Id == arg);
-                if (rest.Heal is { } heal) return run with { Hp = Math.Min(run.MaxHp, run.Hp + heal) };
-                // Smithing opens the upgrade prompt; the best upgrade is what this option is worth.
-                if (arg == "SMITH") return BestUpgrade(run) ?? run;
-                return run;
-            case TreasureScreen screen when verb == "relic":
-                return WithRelic(run, screen.Relics[int.Parse(arg)]);
-            default:
-                return run;
-        }
-    }
-
-    private RunView? Best(IEnumerable<RunView> runs) => runs.MaxBy(value.Value);
-
-    /// <summary>Whether <see cref="After"/> values <paramref name="action"/> as the best pick of the card prompt it opens.</summary>
-    private static bool OpensPrompt(Observation obs, string action)
-    {
-        var (verb, arg) = Split(action);
-        return obs.Screen switch
-        {
-            RestScreen when verb == "rest" => arg == "SMITH",
-            ShopScreen when verb == "remove" => true,
-            RewardsScreen screen when verb == "reward" => screen.Rewards.First(r => r.Index == int.Parse(arg)).Kind == "remove_card",
-            _ => false,
-        };
-    }
-
-    /// <summary>The best of the removals the game offers: an Eternal card cannot be removed.</summary>
-    private RunView? BestRemoval(RunView run) =>
-        Best(Distinct(run.Deck).Where(c => c.Keywords?.Contains("Eternal") != true).Select(c => run with { Deck = Without(run.Deck, c) }));
-
-    private RunView? BestUpgrade(RunView run) => Best(Distinct(run.Deck).Where(c => c.Upgraded != null).Select(c => Upgrade(run, c)));
-
-    /// <summary>The run with <paramref name="card"/> upgraded as its upgrade preview shows (<see cref="CardView.Upgraded"/>);
-    /// unchanged for a card that has none, which the game does not let be upgraded.</summary>
-    private static RunView Upgrade(RunView run, CardView card) =>
-        card.Upgraded is { } upgraded ? run with { Deck = [.. Without(run.Deck, card), upgraded] } : run;
-
-    /// <summary>One of each card the player can tell apart (<see cref="ProtocolJson.CardKey"/>).</summary>
-    private static IEnumerable<CardView> Distinct(IReadOnlyList<CardView> deck) => deck.DistinctBy(ProtocolJson.CardKey);
-
-    private static (string Verb, string Arg) Split(string action)
-    {
-        int colon = action.IndexOf(':');
-        return colon < 0 ? (action, "") : (action[..colon], action[(colon + 1)..]);
-    }
-
-    private static RunView WithRelic(RunView run, string id) => run with { Relics = [.. run.Relics, new RelicView { Id = id }] };
-
-    private static RunView WithPotion(RunView run, string id)
-    {
-        int slot = run.Potions.ToList().IndexOf(null);
-        return slot < 0 ? run : run with { Potions = [.. run.Potions.Select((p, i) => i == slot ? id : p)] };
-    }
-
-    private static List<CardView> Without(IReadOnlyList<CardView> deck, CardView card) => Minus(deck, [card]);
-
-    /// <summary>The cards of <paramref name="deck"/> left after taking out each of <paramref name="cards"/> once.</summary>
-    private static List<CardView> Minus(IReadOnlyList<CardView> deck, IReadOnlyList<CardView> cards)
-    {
-        var left = deck.ToList();
-        foreach (var card in cards)
-        {
-            string key = ProtocolJson.CardKey(card);
-            int i = left.FindIndex(c => ProtocolJson.CardKey(c) == key);
-            if (i >= 0) left.RemoveAt(i);
-        }
-        return left;
     }
 }

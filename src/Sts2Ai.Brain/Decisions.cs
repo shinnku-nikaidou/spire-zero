@@ -22,16 +22,16 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
 }
 
 /// <summary>
-/// What a macro policy gets at each out-of-combat decision: the surface, its legal actions in text form ("map:3,5",
-/// "reward:0", "leave", ...; grammar in docs: protocol/observation §5), and the observation on request. In SL, Harness may add the
+/// What a macro policy gets at each out-of-combat decision: the surface, its legal actions ("map:3,5", "reward:0",
+/// "leave", ...; grammar in docs: protocol/observation §5), and the observation on request. In SL, Harness may add the
 /// node's clone at the decision (<paramref name="clone"/>).
 /// </summary>
-public sealed class MacroDecision(string surface, IReadOnlyList<string> legal, Func<Observation> observe, IMacroClone? clone = null)
+public sealed class MacroDecision(string surface, IReadOnlyList<MacroAction> legal, Func<Observation> observe, IMacroClone? clone = null)
 {
     private Observation? _observation;
 
     public string Surface { get; } = surface;
-    public IReadOnlyList<string> Legal { get; } = legal;
+    public IReadOnlyList<MacroAction> Legal { get; } = legal;
 
     /// <summary>SL: the node's clone at this decision; null in NoSL.</summary>
     public IMacroClone? Clone { get; } = clone;
@@ -72,9 +72,29 @@ public interface IMacroClone
 {
     /// <summary>
     /// For each of <paramref name="paths"/>, in order, what the game asks next after its answers from the decision on:
-    /// macro actions in text form, and for a card prompt "pick:" and its picks in the prompt's canonical order.
+    /// macro actions, and for a card prompt its picks (<see cref="MacroAction.Pick"/>, canonical indexes, in order).
     /// </summary>
-    IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<string>> paths);
+    IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<MacroAction>> paths);
+}
+
+/// <summary>A macro policy's answer to a decision.</summary>
+/// <param name="Action">One of <see cref="MacroDecision.Legal"/>.</param>
+/// <param name="Explored">Whether it was drawn by self-play exploration (<see cref="Uniform"/>, <see cref="Softmax"/>).</param>
+/// <param name="Scored">The legal actions it was chosen among, each with its value, the chosen first and then best
+/// first; none from a policy that values nothing, or for an answer that was drawn.</param>
+public sealed record MacroAnswer(MacroAction Action, bool Explored = false, IReadOnlyList<Candidate>? Scored = null)
+{
+    public IReadOnlyList<Candidate> Scored { get; init; } = Scored ?? [];
+}
+
+/// <summary>A choice policy's answer to a card prompt.</summary>
+/// <param name="Picks">Indexes into <see cref="CardChoice.Options"/>; must satisfy <see cref="CardChoice.Accepts"/>.</param>
+/// <param name="Explored">As <see cref="MacroAnswer.Explored"/>.</param>
+/// <param name="Scored">The answers it was chosen among, as "pick:I,J", each with its value, the chosen first and then
+/// best first; none from a policy that values nothing, or for an answer that was drawn.</param>
+public sealed record ChoiceAnswer(IReadOnlyList<int> Picks, bool Explored = false, IReadOnlyList<Candidate>? Scored = null)
+{
+    public IReadOnlyList<Candidate> Scored { get; init; } = Scored ?? [];
 }
 
 /// <summary>Picks the next action of a combat.</summary>
@@ -83,33 +103,17 @@ public interface ICombatPolicy
     CombatAction Choose(CombatDecision decision);
 }
 
-/// <summary>Answers the card-choice prompts that come up while a card or power resolves.</summary>
+/// <summary>Answers the card-choice prompts that come up while a card or power resolves, or outside combat.</summary>
 public interface IChoicePolicy
 {
-    /// <summary>Indexes into <see cref="CardChoice.Options"/>; must satisfy <see cref="CardChoice.Accepts"/>.</summary>
-    IReadOnlyList<int> Choose(ChoiceDecision decision);
-
-    /// <summary>Whether the last answer was drawn by self-play exploration (<see cref="Uniform"/>); never by default.</summary>
-    bool Explored => false;
-
-    /// <summary>The answers the last one was chosen among, as "pick:I,J", each with its value, the chosen first and
-    /// then best first; none by default.</summary>
-    IReadOnlyList<Candidate> Scored => [];
+    ChoiceAnswer Choose(ChoiceDecision decision);
 }
 
 /// <summary>Picks an out-of-combat action (map, rewards, events, shop, rest, treasure, card rewards, bundles).</summary>
 public interface IMacroPolicy
 {
-    /// <summary>One of <see cref="MacroDecision.Legal"/>.</summary>
-    string Choose(MacroDecision decision);
+    MacroAnswer Choose(MacroDecision decision);
 
     /// <summary>The actions the policy plans after <paramref name="action"/>, for the highlight and the log; none by default.</summary>
-    IReadOnlyList<string> Plan(MacroDecision decision, string action) => [];
-
-    /// <summary>As <see cref="IChoicePolicy.Explored"/>.</summary>
-    bool Explored => false;
-
-    /// <summary>The legal actions the last answer was chosen among, each with its value, the chosen first and then
-    /// best first; none by default.</summary>
-    IReadOnlyList<Candidate> Scored => [];
+    IReadOnlyList<MacroAction> Plan(MacroDecision decision, MacroAction action) => [];
 }
