@@ -55,7 +55,7 @@
       case 'roll':
         return say(lang, w('The ? becomes an event', '? 变成事件', '? 變成事件'));
       case 'prompt':
-        return say(lang, w('Card prompt', '卡牌提示', '卡牌提示'));
+        return say(lang, w('Card prompt', '卡牌提示', '選牌'));
       case 'combat':
         return `${say(lang, w('Combat', '战斗', '戰鬥'))}: ${names ? names.full('encounter', st.encounter!) : st.encounter}`;
       default:
@@ -67,8 +67,8 @@
     switch (st.kind) {
       case 'arrive':
         return st.save === 'run_start'
-          ? say(lang, w('The run starts here. Entering the first point saves the run, as every arrival does; there is no separate start save. Node 0 starts here.', '一局从这里开始。进入第一个点时存档，和每次抵达一样；没有另外的开局存档。节点 0 从这里开始。', '一局從這裡開始。進入第一個點時存檔，和每次抵達一樣；沒有另外的開局存檔。節點 0 從這裡開始。'))
-          : say(lang, w('The game saves on arrival, before it rolls a ? and builds the room. The node starts here.', '游戏在抵达时存档，在掷 ? 和建房间之前。节点从这里开始。', '遊戲在抵達時存檔，在擲 ? 和建房間之前。節點從這裡開始。'));
+          ? say(lang, w('The run starts here. Entering the first point saves the run, as every arrival does; there is no separate start save. Node 0 starts here.', '一局从这里开始。进入第一个点时存档，和每次抵达一样；没有另外的开局存档。节点 0 从这里开始。', '一局從這裡開始。進入第一個點時存檔，和每次抵達一樣；沒有另外的開局存檔。第一個房間從這裡開始。'))
+          : say(lang, w('The game saves on arrival, before it rolls a ? and builds the room. The node starts here.', '游戏在抵达时存档，在掷 ? 和建房间之前。节点从这里开始。', '遊戲在抵達時存檔，在擲 ? 和建房間之前。房間從這裡開始。'));
       case 'save':
         return st.save === 'combat_won'
           ? say(lang, w('Winning a combat saves the run with the room marked as finished: a reload comes back after the combat.', '赢下战斗时存档，房间标为已完成：重新载入会回到战斗之后。', '贏下戰鬥時存檔，房間標為已完成：重新載入會回到戰鬥之後。'))
@@ -76,11 +76,11 @@
       case 'combat':
         return `${say(lang, w('Decisions', '决策', '決策'))} ${st.decisions![0]}–${st.decisions![1]}; HP ${st.hp}/${st.max_hp} → ${st.end_hp}/${st.max_hp}.`;
       case 'prompt':
-        return `${say(lang, w('Decision', '决策', '決策'))} ${st.decisions![0]}: ${say(lang, w('a card prompt the option opened.', '这个选项打开的卡牌提示。', '這個選項打開的卡牌提示。'))}`;
+        return `${say(lang, w('Decision', '决策', '決策'))} ${st.decisions![0]}: ${say(lang, w('a card prompt the option opened.', '这个选项打开的卡牌提示。', '這個選項帶出的選牌。'))}`;
       case 'roll':
         return say(lang, w('Entering the point rolls what it becomes; both environments see the result at once.', '进入这个点时掷出它变成什么；两个环境都立刻看到结果。', '進入這個點時擲出它變成什麼；兩個環境都立刻看到結果。'));
       default:
-        return `${say(lang, w('Decision', '决策', '決策'))} ${st.decision}` + (st.surface === 'map' ? ` · ${say(lang, w('the travel: the node’s last step', '移动：节点的最后一步', '移動：節點的最後一步'))}` : '');
+        return `${say(lang, w('Decision', '决策', '決策'))} ${st.decision}` + (st.surface === 'map' ? ` · ${say(lang, w('the travel: the node’s last step', '移动：节点的最后一步', '移動：這個房間的最後一步'))}` : '');
     }
   }
 
@@ -149,7 +149,7 @@
           why: i >= roll
             ? say(lang, w('Rolled on entering, and shown at once.', '进入时掷出，立刻显示。', '進入時擲出，立刻顯示。'))
             : sl
-              ? say(lang, w('The roll happens inside the node, so the clone sees it.', '这次掷骰在节点里，所以克隆看得到。', '這次擲骰在節點裡，所以複本看得到。'))
+              ? say(lang, w('The roll happens inside the node, so the clone sees it.', '这次掷骰在节点里，所以克隆看得到。', '這次擲骰在房間裡，所以複本看得到。'))
               : say(lang, w('Not until the point is entered.', '要进入这个点才知道。', '要進入這個點才知道。')),
         });
       }
@@ -169,7 +169,7 @@
       what:
         i === travel && following?.point === 'Unknown'
           ? say(lang, w('What the next ? (floor 3) becomes', '下一个 ?（第 3 层）会变成什么', '下一個 ?（第 3 層）會變成什麼'))
-          : say(lang, w('Anything in a later node: its encounter, rewards, stock, what a ? becomes', '之后节点里的任何东西：遭遇、奖励、商品、? 会变成什么', '之後節點裡的任何東西：遭遇、獎勵、商品、? 會變成什麼')),
+          : say(lang, w('Anything in a later node: its encounter, rewards, stock, what a ? becomes', '之后节点里的任何东西：遭遇、奖励、商品、? 会变成什么', '之後房間裡的任何東西：遭遇、獎勵、商品、? 會變成什麼')),
       status: 'unknown',
       why: sl
         ? say(lang, w('Not even SL: the clone stops at the travel and refuses another step.', 'SL 也不知道：克隆在移动时停下，拒绝再走一步。', 'SL 也不知道：複本在移動時停下，拒絕再走一步。'))
@@ -179,7 +179,7 @@
       what: say(lang, w('The seed, the RNG state or the save, read directly', '直接读种子、随机数状态或存档', '直接讀種子、亂數狀態或存檔')),
       status: 'never',
       why: sl
-        ? say(lang, w('Only through the sealed clone, in a worker process.', '只能通过封存的克隆，在工作进程里。', '只能透過封存的複本，在工作行程裡。'))
+        ? say(lang, w('Only through the sealed clone, in a worker process.', '只能通过封存的克隆，在工作进程里。', '只能透過封住的複本。'))
         : say(lang, w('Never: the observation has no field for them.', '永远不行：观测里没有这些字段。', '永遠不行：觀測裡沒有這些欄位。')),
     });
     return out;
@@ -232,7 +232,7 @@
     </div>
     <span class="v-muted">
       {say(lang, w('Quit and continue would go back to', '此时退出再继续会回到', '此時退出再繼續會回到'))}: ◆ {say(lang, SAVE[lastSave])}.
-      {#if env === 'SL'}{say(lang, w('SL’s clone can go back to the node’s arrival.', 'SL 的克隆可以回到节点的抵达。', 'SL 的複本可以回到節點的抵達。'))}{/if}
+      {#if env === 'SL'}{say(lang, w('SL’s clone can go back to the node’s arrival.', 'SL 的克隆可以回到节点的抵达。', 'SL 的複本可以回到抵達這個房間的那一刻。'))}{/if}
     </span>
   </div>
 
@@ -253,7 +253,7 @@
       w(
         'The won SL run of seed 0SSL7NS01MU6: its macro decisions from the decision log, its floor-2 combat from the run record. Gaps in the decision numbers are combat decisions and card prompts. The game’s save points are where the game’s code saves.',
         '种子 0SSL7NS01MU6 那一局赢下的 SL 对局：宏观决策取自决策日志，第 2 层的战斗取自对局记录。决策编号的空缺是战斗决策与卡牌提示。游戏存档点是游戏代码存档的地方。',
-        '種子 0SSL7NS01MU6 那一局贏下的 SL 對局：宏觀決策取自決策日誌，第 2 層的戰鬥取自對局記錄。決策編號的空缺是戰鬥決策與卡牌提示。遊戲存檔點是遊戲程式碼存檔的地方。',
+        '本書範例對局（種子 0SSL7NS01MU6）的前三個房間。◆ 是遊戲自己存檔的時刻。',
       ),
     )}
   </p>

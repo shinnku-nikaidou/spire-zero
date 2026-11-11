@@ -21,7 +21,7 @@ const WORDS = {
   worlds: w('worlds', '个世界', '個世界'),
   mean: w('mean', '平均', '平均'),
   ci: w('95% interval', '95% 区间', '95% 區間'),
-  firstAction: w('First action', '第一动作', '第一動作'),
+  firstAction: w('First action', '第一动作', '第一步'),
   played: w('played', '实际打出', '實際打出'),
   reset: w('Reset', '还原', '還原'),
   step: w('Next', '下一步', '下一步'),

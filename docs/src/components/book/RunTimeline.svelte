@@ -39,7 +39,7 @@
     Event: { color: COLOUR.Unknown, label: w('Event', '事件', '事件') },
     RestSite: { color: COLOUR.RestSite, label: w('Rest site', '休息处', '休息處') },
     Shop: { color: COLOUR.Shop, label: w('Shop', '商店', '商店') },
-    Treasure: { color: COLOUR.Treasure, label: w('Treasure', '宝箱', '寶箱') },
+    Treasure: { color: COLOUR.Treasure, label: w('Treasure', '宝箱', '財寶') },
   };
 
   const W = 680;
@@ -66,7 +66,7 @@
     const fight = f.encounter && names ? ` · ${names.full('encounter', f.encounter)}` : '';
     const hp = f.hp === null ? '' : f.end_hp !== undefined ? ` · HP ${f.hp} → ${f.end_hp} / ${f.max_hp}` : ` · HP ${f.hp} / ${f.max_hp}`;
     const dec = say(lang, w(` · ${f.macro} decisions outside combat, ${f.other} in combat or card prompts`,
-      ` · 战斗外 ${f.macro} 个决策，战斗中或选牌提示 ${f.other} 个`, ` · 戰鬥外 ${f.macro} 個決策，戰鬥中或選牌提示 ${f.other} 個`));
+      ` · 战斗外 ${f.macro} 个决策，战斗中或选牌提示 ${f.other} 个`, ` · 戰鬥外 ${f.macro} 個決策，戰鬥裡 ${f.other} 個`));
     return `${say(lang, w('Floor', '第', '第'))} ${f.floor}${say(lang, w('', ' 层', ' 層'))}: ${room}${fight}${hp}${dec}`;
   }
 </script>
@@ -100,14 +100,14 @@
       <span><i style="background: {r.color}"></i>{say(lang, r.label)}</span>
     {/each}
     <span><i style="background: var(--v-ink-2)"></i>{say(lang, w('decisions outside combat', '战斗外的决策', '戰鬥外的決策'))}</span>
-    <span><i style="background: var(--v-axis)"></i>{say(lang, w('combat decisions and card prompts', '战斗决策与选牌提示', '戰鬥決策與選牌提示'))}</span>
+    <span><i style="background: var(--v-axis)"></i>{say(lang, w('combat decisions and card prompts', '战斗决策与选牌提示', '戰鬥裡的決策'))}</span>
   </div>
   <p class="v-ink2 now">{cur ? describe(cur) : say(lang, w('Point at a floor.', '指向某一层看详情。', '指向某一層看詳情。'))}</p>
   <p class="v-caption">
     {say(lang, w(
       `The book’s example run (seed ${data.source.seed}, won on floor ${data.source.floor}): its rooms, the HP it came in with, and the ${data.source.decisions} decisions it took, per floor. Dashed lines: the act changes. From the run’s record and decision log; an event may have been a ? on the map.`,
       `贯穿全书的那一局（种子 ${data.source.seed}，在第 ${data.source.floor} 层通关）：每一层的房间、进入时的 HP，以及这一局全部 ${data.source.decisions} 个决策在各层的分布。虚线：换幕。数据来自这一局的对局记录和决策日志；事件可能原本是地图上的 ?。`,
-      `貫穿全書的那一局（種子 ${data.source.seed}，在第 ${data.source.floor} 層通關）：每一層的房間、進入時的 HP，以及這一局全部 ${data.source.decisions} 個決策在各層的分布。虛線：換幕。資料來自這一局的對局記錄和決策日誌；事件可能原本是地圖上的 ?。`,
+      `本書的範例對局（種子 ${data.source.seed}，在第 ${data.source.floor} 層獲勝）：每一層是什麼房間、進房間時的生命，以及全部 ${data.source.decisions} 個決策落在哪幾層。虛線是換幕。`,
     ))}
   </p>
 </div>

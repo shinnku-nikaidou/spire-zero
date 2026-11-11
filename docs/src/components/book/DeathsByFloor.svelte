@@ -79,7 +79,7 @@
     {say(lang, w(
       `${lost} lost runs of ${r.runs}, ${r.won} won (the champion’s Necrobinder report, ${r.env}, ${r.seedSet}). Bosses reached ${r.bossesReached.join(' / ')}, beaten ${r.bossesBeaten.join(' / ')} (acts 1 / 2 / 3). A lost run died in a combat when its last combat is on the floor it ended on and that combat ended in a death; learn/gate.py counts any other loss as outside combat${r.deaths.noEnd ? `, ${r.deaths.noEnd} of them deaths whose combat has no end in the record` : ''}.`,
       `${r.runs} 局里输了 ${lost} 局，通关 ${r.won} 局（冠军的亡灵契约师报告，${r.env}，${r.seedSet}）。Boss 到达 ${r.bossesReached.join(' / ')}，击败 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。输掉的一局若最后一场战斗就在它结束的楼层，且那场战斗以死亡结束，就算死在那场战斗里；其余的输局 learn/gate.py 都算成战斗之外${r.deaths.noEnd ? `，其中 ${r.deaths.noEnd} 场死亡的战斗在记录里没有 end` : ''}。`,
-      `${r.runs} 局裡輸了 ${lost} 局，通關 ${r.won} 局（冠軍的縛亡者報告，${r.env}，${r.seedSet}）。頭目到達 ${r.bossesReached.join(' / ')}，擊敗 ${r.bossesBeaten.join(' / ')}（第 1 / 2 / 3 幕）。輸掉的一局若最後一場戰鬥就在它結束的樓層，且那場戰鬥以死亡結束，就算死在那場戰鬥裡；其餘的輸局 learn/gate.py 都算成戰鬥之外${r.deaths.noEnd ? `，其中 ${r.deaths.noEnd} 場死亡的戰鬥在紀錄裡沒有 end` : ''}。`,
+      `${r.runs} 局裡輸了 ${lost} 局，贏 ${r.won} 局（冠軍的縛亡者，SL，晉階 0）。三幕的頭目依序有 ${r.bossesReached.join(' / ')} 局打到，${r.bossesBeaten.join(' / ')} 局打贏。`,
     ))}
   </p>
 </div>

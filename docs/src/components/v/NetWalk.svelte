@@ -12,16 +12,16 @@
       text: w(
         'The afterstate of a map move: an unknown room is about to be entered. Nothing else has changed.',
         '一次选路的 afterstate：正要进入一个未知房间，其他都没变。',
-        '一次選路的 afterstate：正要進入一個未知房間，其他都沒變。',
+        '一次選路之後的局面：正要進入一個未知房間，其他都沒變。',
       ),
       rows: [['character', 'DEFECT'], ['floor', '24'], ['HP', '50 / 75'], ['gold', '532'], ['deck', '22'], ['relics', '6'], ['potions', '0 / 3 slots']],
     },
     {
-      title: w('Tokens', '词元', '詞元'),
+      title: w('Tokens', '词元', '標記'),
       text: w(
         'Ids, and three numbers a card can grow, its enchantment’s and affliction’s amounts, damage and block, each read through rows of its own; each relic’s counter, melted flag and status; a card’s cost is gone. No card here has an enchantment or affliction. The map is 12 tokens, one per point; two points of one type at one distance would give the same token twice.',
         'id，加上牌会成长的三个数字：附魔和诅咒的数值、伤害和格挡，各由自己的那一行读取；每件遗物的计数、熔化标记和状态；牌的费用不读。这里没有牌带附魔或诅咒。地图有 12 个词元，每个点一个；同类型、同距离的两个点会给出两个相同的词元。',
-        'id，加上牌會成長的三個數字：附魔和詛咒的數值、傷害和格擋，各由自己的那一列讀取；每件遺物的計數、熔化標記和狀態；牌的費用不讀。這裡沒有牌帶附魔或詛咒。地圖有 12 個詞元，每個點一個；同類型、同距離的兩個點會給出兩個相同的詞元。',
+        'id，加上牌會成長的三個數字：附魔和詛咒的數值、傷害和格擋，各由自己的那一列讀取；每件遺物的計數、熔化標記和狀態；牌的費用不讀。這裡沒有牌帶附魔或詛咒。地圖有 12 個標記，每個點一個；同類型、同距離的兩個點會給出兩個相同的標記。',
       ),
       rows: [
         ['cards', 'DEFEND_DEFECT ×3, STRIKE_DEFECT ×3, BOOT_SEQUENCE (Exhaust, Innate), BULK_UP, CHARGE_BATTERY, COOLHEADED, DARKNESS, DEFEND_DEFECT+, DEFRAGMENT, FIGHT_THROUGH, FLAK_CANNON, LIGHTNING_ROD, NULL, PECK, QUADCAST, SHATTER (Exhaust), UPROAR+, ZAP'],
@@ -36,8 +36,8 @@
       ],
     },
     {
-      title: w('Table entries', '表项', '表項'),
-      text: w('Each token becomes its row in its table.', '每个词元换成它在表里的行号。', '每個詞元換成它在表裡的行號。'),
+      title: w('Table entries', '表项', '查表'),
+      text: w('Each token becomes its row in its table.', '每个词元换成它在表里的行号。', '每個標記換成它在表裡的行號。'),
       rows: [
         ['DEFEND_DEFECT', '146'], ['STRIKE_DEFECT', '514'], ['BOOT_SEQUENCE', '60'], ['keyword:Exhaust', '33'], ['CRACKED_CORE', '53'], ['character:DEFECT', '27'], ['Unknown+0', '337'], ['Treasure+1', '255'],
       ],
@@ -70,8 +70,8 @@
       rows: [['mean', '[0.297, 0.360, 0.430, 0.276, …]'], ['sum ÷ 16', '[0.408, 0.495, 0.591, 0.379, …]']],
     },
     {
-      title: w('The bags', '四个袋', '四個袋'),
-      text: w('Each bag’s embeddings added up, 64 numbers each, with no layer in between; a relic’s with its counter’s, melted and status rows. No potion: the zero vector.', '每个袋的嵌入直接相加，各 64 个数，中间没有任何一层；遗物的还加上它的计数、熔化和状态那几行。没有药水，就是零向量。', '每個袋的嵌入直接相加，各 64 個數，中間沒有任何一層；遺物的還加上它的計數、熔化和狀態那幾列。沒有藥水，就是零向量。'),
+      title: w('The bags', '四个袋', '四類加總'),
+      text: w('Each bag’s embeddings added up, 64 numbers each, with no layer in between; a relic’s with its counter’s, melted and status rows. No potion: the zero vector.', '每个袋的嵌入直接相加，各 64 个数，中间没有任何一层；遗物的还加上它的计数、熔化和状态那几行。没有药水，就是零向量。', '每一類查表得到的向量直接相加，各 64 個數，中間沒有任何一層；遺物的還加上它的計數、熔化和狀態那幾列。沒有藥水，就是零向量。'),
       rows: [['relics', '[−0.158, −0.269, −0.288, −0.009, …] |2.25|'], ['potions', '[0, 0, 0, 0, …] |0|'], ['context', '[−0.108, −0.689, −0.022, −0.309, …] |2.70|'], ['map', '[1.066, 0.065, −1.150, −1.403, …] |4.62|']],
     },
     {

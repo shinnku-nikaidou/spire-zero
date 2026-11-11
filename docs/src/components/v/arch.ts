@@ -233,7 +233,7 @@ export function valueNet(lang: Lang): Diagram {
         kind: 'block',
         label: L(w('Sum', '求和', '加總')),
         tone: 'pool',
-        info: L(w('The bag’s vectors added up, padding left out: 64 numbers.', '袋里的向量相加（不含补齐位置）：64 个数。', '袋裡的向量相加（不含補齊位置）：64 個數。')),
+        info: L(w('The bag’s vectors added up, padding left out: 64 numbers.', '袋里的向量相加（不含补齐位置）：64 个数。', '同一類的向量相加（不含補齊位置）：64 個數。')),
       },
     ],
   });
@@ -275,9 +275,9 @@ export function valueNet(lang: Lang): Diagram {
           'R[r] + q·R_q[r] + μ·W + R_s[s]：每個遺物 id 一個向量，計數 q（/ 10）沿它 id 自己的方向，熔化時加一個向量，再加它狀態的向量，和戰鬥網路讀遺物的方式一樣；「:used」是單獨的 id。',
         ),
       ),
-      bag(w('Potions', '药水', '藥水'), w('each potion', '每瓶药水', '每瓶藥水'), w('P[p]: one vector per potion id; an empty slot is no token.', 'P[p]：每个药水 id 一个向量；空栏不是词元。', 'P[p]：每個藥水 id 一個向量；空欄不是詞元。')),
-      bag(w('Context', '上下文', '上下文'), w('character · act ·\nbosses · ancient', '角色 · 幕 ·\nBoss · 先古之民', '角色 · 幕 ·\n頭目 · 遠古之民'), w('C[t]: one vector per token.', 'C[t]：每个词元一个向量。', 'C[t]：每個詞元一個向量。')),
-      bag(w('Map', '地图', '地圖'), w('type + floors ahead\nof each point', '每个点的\n类型 + 前方层数', '每個點的\n類型 + 前方層數'), w('G[t]: one vector per token such as Elite+3; on a map move, the point entered as Elite+0.', 'G[t]：每个词元一个向量，如 Elite+3；选路时，正要进入的点是 Elite+0。', 'G[t]：每個詞元一個向量，如 Elite+3；選路時，正要進入的點是 Elite+0。')),
+      bag(w('Potions', '药水', '藥水'), w('each potion', '每瓶药水', '每瓶藥水'), w('P[p]: one vector per potion id; an empty slot is no token.', 'P[p]：每个药水 id 一个向量；空栏不是词元。', 'P[p]：每個藥水 id 一個向量；空欄不算。')),
+      bag(w('Context', '上下文', '上下文'), w('character · act ·\nbosses · ancient', '角色 · 幕 ·\nBoss · 先古之民', '角色 · 幕 ·\n頭目 · 遠古之民'), w('C[t]: one vector per token.', 'C[t]：每个词元一个向量。', 'C[t]：每個標記一個向量。')),
+      bag(w('Map', '地图', '地圖'), w('type + floors ahead\nof each point', '每个点的\n类型 + 前方层数', '每個點的\n類型 + 前方層數'), w('G[t]: one vector per token such as Elite+3; on a map move, the point entered as Elite+0.', 'G[t]：每个词元一个向量，如 Elite+3；选路时，正要进入的点是 Elite+0。', 'G[t]：每個標記一個向量，如 Elite+3；選路時，正要進入的點是 Elite+0。')),
       numbers(lang),
       {
         title: L(w('Kept cards', '遗物保留的牌', '遺物保留的牌')),
@@ -348,7 +348,7 @@ export function combatNet(lang: Lang): Diagram {
               w(
                 'Its id, upgrade level, modifier tokens (enchantment, affliction, keywords, Tinker, spent) and amounts, pile, current energy and star costs, damage, block, calculated number, replays and gathered damage; 64 numbers per card.',
                 '它的 id、升级等级、修饰词元（附魔、诅咒、关键词、Tinker、已用）和数值、所在牌堆、当前能量与星辰费用、伤害、格挡、计算出的数字、额外打出次数和附魔累积的伤害；每张牌 64 个数。',
-                '它的 id、升級等級、修飾詞元（附魔、詛咒、關鍵字、Tinker、已用）和數值、所在牌堆、目前能量與星辰費用、傷害、格擋、計算出的數字、額外打出次數和附魔累積的傷害；每張牌 64 個數。',
+                '它的 id、升級等級、修飾標記（附魔、詛咒、關鍵字、Tinker、已用）和數值、所在牌堆、目前能量與星辰費用、傷害、格擋、計算出的數字、額外打出次數和附魔累積的傷害；每張牌 64 個數。',
               ),
             ),
           },
@@ -460,7 +460,7 @@ export function combatNet(lang: Lang): Diagram {
           w(
             'One logit for a death and one for each of 50 buckets of the share of max HP still to be lost if the fight is won, from −0.25 to 1.',
             '死亡一个 logit，若赢下战斗、还会失去的最大 HP 比例的 50 个桶（−0.25 到 1）各一个 logit。',
-            '死亡一個 logit，若贏下戰鬥、還會失去的最大 HP 比例的 50 個桶（−0.25 到 1）各一個 logit。',
+            '死亡一個 logit，若贏下戰鬥、還會失去的最大 HP 比例的 50 個區間（−0.25 到 1）各一個 logit。',
           ),
         ),
       },
@@ -472,7 +472,7 @@ export function combatNet(lang: Lang): Diagram {
           w(
             'The buckets the HP held rules out are closed inside the graph: a win ends with an HP share in (0, 1]. A closed bucket’s chance is exactly 0.',
             '现有 HP 排除的桶在图里就被关掉：获胜时结束的 HP 比例在 (0, 1] 之间。被关掉的桶机率正好是 0。',
-            '現有 HP 排除的桶在圖裡就被關掉：獲勝時結束的 HP 比例在 (0, 1] 之間。被關掉的桶機率正好是 0。',
+            '現有 HP 排除的區間在圖裡就被關掉：獲勝時結束的 HP 比例在 (0, 1] 之間。被關掉的區間機率正好是 0。',
           ),
         ),
       },
@@ -484,12 +484,12 @@ export function combatNet(lang: Lang): Diagram {
           w(
             'Beside the endings, from the same 512 numbers: for each of 5 groups of 10 buckets in a row, one chance per potion id of being gone after a win that ends in the group. Only the potions held are read.',
             '和结局并列，读同样的 512 个数：50 个桶每 10 个一组，共 5 组，每组每个药水 id 一个机率，表示在这一组结束的胜利之后它已不在。只读现在持有的药水。',
-            '和結局並列，讀同樣的 512 個數：50 個桶每 10 個一組，共 5 組，每組每個藥水 id 一個機率，表示在這一組結束的勝利之後它已不在。只讀現在持有的藥水。',
+            '和結局並列，讀同樣的 512 個數：50 個區間每 10 個一組，共 5 組，每組每個藥水 id 一個機率，表示在這一組結束的勝利之後它已不在。只讀現在持有的藥水。',
           ),
         ),
       },
     ],
-    output: L(w('outcome: 51 chances · potion_used: 5 × 66 chances\n→ priced into the leaf’s value', 'outcome：51 个机率 · potion_used：5 × 66 个机率\n→ 定价成叶子估值', 'outcome：51 個機率 · potion_used：5 × 66 個機率\n→ 定價成葉節點估值')),
+    output: L(w('outcome: 51 chances · potion_used: 5 × 66 chances\n→ priced into the leaf’s value', 'outcome：51 个机率 · potion_used：5 × 66 个机率\n→ 定价成叶子估值', '收場：51 個機率 · 藥水：5 × 66 個機率\n→ 交給 V 估價')),
     links: [],
   };
 }

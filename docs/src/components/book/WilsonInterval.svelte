@@ -35,7 +35,7 @@
   const ticks = $derived(x.ticks(6));
   const ROWS = [
     { key: 'wilson', y: 52, colour: 'var(--v-s1)', label: w('Wilson', 'Wilson', 'Wilson') },
-    { key: 'wald', y: 96, colour: 'var(--v-s2)', label: w('normal (Wald)', '正态（Wald）', '常態（Wald）') },
+    { key: 'wald', y: 96, colour: 'var(--v-s2)', label: w('normal (Wald)', '正态（Wald）', '常態近似') },
   ];
 </script>
 
