@@ -22,6 +22,12 @@ internal sealed class Pump : SynchronizationContext
 
     public int Pending => _queue.Count;
 
+    /// <summary>
+    /// Set while the game waits for an answer only the driver can give (a card prompt): nothing queued runs until it is
+    /// cleared, so the game stands exactly where it asked.
+    /// </summary>
+    public bool Held { get; set; }
+
     /// <summary>How often RunUntil had to block waiting for work posted from another thread, and for how long.</summary>
     public long IdleWaits { get; private set; }
     public long IdleWaitTicks { get; private set; }
@@ -53,11 +59,12 @@ internal sealed class Pump : SynchronizationContext
 
     public override SynchronizationContext CreateCopy() => this;
 
-    /// <summary>Runs queued callbacks, including ones queued while draining. Returns how many ran.</summary>
+    /// <summary>Runs queued callbacks, including ones queued while draining, up to one that leaves the pump
+    /// <see cref="Held"/>. Returns how many ran.</summary>
     public int Drain()
     {
         int ran = 0;
-        while (_queue.TryDequeue(out var item))
+        while (!Held && _queue.TryDequeue(out var item))
         {
             _posted.Wait(0);
             item.Callback(item.State);
@@ -68,7 +75,8 @@ internal sealed class Pump : SynchronizationContext
 
     /// <summary>
     /// Pumps until <paramref name="done"/> holds. Throws <see cref="StuckException"/> when nothing has been
-    /// posted for <paramref name="idleTimeoutMs"/> while still not done.
+    /// posted for <paramref name="idleTimeoutMs"/> while still not done, or when the pump is <see cref="Held"/> and
+    /// <paramref name="done"/> does not hold: the caller does not expect what the game waits for.
     /// </summary>
     public void RunUntil(Func<bool> done, Func<string> describe, int idleTimeoutMs = 10_000)
     {
@@ -77,6 +85,7 @@ internal sealed class Pump : SynchronizationContext
         {
             if (Drain() > 0) idleSince = Environment.TickCount64;
             if (done()) return;
+            if (Held) throw new StuckException($"the game waits for an answer nothing here gives: {describe()}");
             long waitStart = Environment.TickCount64;
             IdleWaits++;
             bool posted = _posted.Wait(2);

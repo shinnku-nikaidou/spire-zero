@@ -141,13 +141,13 @@ internal sealed class CombatSession : IDisposable
         RunManager.Instance.SetUpTest(run, new NetSingleplayerGameService(), disableCombatStateSync: true, shouldSave: false);
 
         var trace = new List<TraceEvent>();
-        var selector = new PolicySelector(policy, (_, picks) => trace.Add(new(TraceKind.Choice, Picks: picks)));
+        var selector = new PolicySelector(pump, policy, (_, picks) => trace.Add(new(TraceKind.Choice, Picks: picks)));
         selector.QueueReplay(replayPicks);
         var session = new CombatSession(pump, setup, player, run, trace, selector);
         try
         {
             var enter = RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: setup.Encounter.ToMutable(), showTransition: false);
-            pump.RunUntil(() => enter.IsCompleted, session.Describe);
+            selector.Run(() => enter.IsCompleted, session.Describe);
             if (enter.IsFaulted) throw enter.Exception!.GetBaseException();
             session.Settle();
             // A start-of-combat effect can kill a player built at low HP (Royal Poison's 4 damage at 3 HP), and a dead
@@ -284,18 +284,18 @@ internal sealed class CombatSession : IDisposable
         return hash;
     }
 
-    /// <summary>Pumps until the player can act again (on a later turn, if given) or the combat has ended. A fight past the
-    /// round cap is lost there (<see cref="FightCap"/>).</summary>
+    /// <summary>Pumps until the player can act again (on a later turn, if given) or the combat has ended, with the card
+    /// prompts on the way answered. A fight past the round cap is lost there (<see cref="FightCap"/>).</summary>
     private void Settle(int? afterTurn = null)
     {
         void Pump()
         {
-            _pump.RunUntil(() =>
+            _selector.Run(() =>
             {
                 if (IsOver) return _pump.Pending == 0 && !RunManager.Instance.ActionExecutor.IsRunning;
                 return WaitingForInput && (afterTurn == null || Pcs.TurnNumber > afterTurn);
             }, Describe);
-            _pump.Drain();
+            _selector.Flush();
         }
         Pump();
         if (FightCap.Enforce(_pump, Player, Describe)) Pump();
@@ -325,6 +325,7 @@ internal sealed class CombatSession : IDisposable
 
     public void Dispose()
     {
+        _selector.Drop();
         _selectorScope.Dispose();
         _pump.Drain();
         RunManager.Instance.CleanUp(graceful: true);

@@ -127,7 +127,7 @@ internal sealed class RunSession : IDisposable
             Choice = choice,
             Combat = CombatManager.Instance.IsInProgress ? Observe.Combat(CombatManager.Instance.DebugOnlyGetState()!, Player) : null,
         };
-        _selector = new PolicySelector(choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => Prompt(choice)),
+        _selector = new PolicySelector(pump, choices, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => Prompt(choice)),
             choice => Of(Prompt(choice)), CardReward, Bundle);
         _selectorScope = CardSelectCmd.PushSelector(_selector);
         RewardsSet.testSelector = set =>
@@ -254,18 +254,18 @@ internal sealed class RunSession : IDisposable
     }
 
     /// <summary>Pumps until the player can act: in combat, their turn (a later one after ending a turn); elsewhere, the game
-    /// idle. A fight past the round cap is lost there (<see cref="FightCap"/>).</summary>
+    /// idle. The card prompts on the way are answered. A fight past the round cap is lost there (<see cref="FightCap"/>).</summary>
     public void Settle()
     {
         void Pump()
         {
-            _pump.RunUntil(() =>
+            _selector.Run(() =>
             {
                 if (CombatManager.Instance.IsInProgress)
                     return CombatActions.WaitingForInput(Player) && (_endedTurn == null || Player.PlayerCombatState!.TurnNumber > _endedTurn);
                 return _pump.Pending == 0 && !RunManager.Instance.ActionExecutor.IsRunning;
             }, Describe);
-            _pump.Drain();
+            _selector.Flush();
         }
         Pump();
         if (FightCap.Enforce(_pump, Player, Describe)) Pump();
@@ -549,7 +549,7 @@ internal sealed class RunSession : IDisposable
     /// <summary>Pumps a task the driver must finish before going on (run setup).</summary>
     private void Await(Task task)
     {
-        _pump.RunUntil(() => task.IsCompleted, Describe);
+        _selector.Run(() => task.IsCompleted, Describe);
         if (!task.IsCompletedSuccessfully) throw task.Exception?.GetBaseException() ?? new OperationCanceledException();
     }
 
@@ -594,6 +594,7 @@ internal sealed class RunSession : IDisposable
         RewardsSet.testSelector = null;
         HeadlessPatches.CrystalSphereShown = null;
         HeadlessPatches.NodeEntered = null;
+        _selector.Drop();
         _selectorScope.Dispose();
         _pump.Drain();
         RunManager.Instance.CleanUp(graceful: true);
