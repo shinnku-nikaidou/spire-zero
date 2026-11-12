@@ -1,4 +1,7 @@
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 
@@ -38,6 +41,29 @@ internal static partial class HeadlessPatches
             if (context.LastInvolvedModel != card || !(card.Owner.Creature.IsDead || card.CombatState == null)) return;
             Pops++;
             context.PopModel(card);
+        }
+    }
+
+    /// <summary>
+    /// Transforming a card into a random one takes the first result of the transform, and the transform gives none
+    /// once the combat is ending: the command then throws, out of the hook that asked. From a hook of the turn's
+    /// start that ends the combat's turns, so the won combat never ends. Seen as Entropy 2 with Smokestack against the
+    /// last enemy at 2 HP: the first card transformed was a Dazed, the Burn it became had Smokestack kill the enemy,
+    /// and the second transform threw (checked by selftest). A transform asked in an ending combat does nothing, as
+    /// the game's other commands do there.
+    /// </summary>
+    [HarmonyPatch(typeof(CardCmd), nameof(CardCmd.TransformToRandom))]
+    internal static class NoRandomTransformInAnEndingCombat
+    {
+        /// <summary>How many transforms were left out (checked by selftest).</summary>
+        public static int Skipped;
+
+        private static bool Prefix(ref Task<CardPileAddResult> __result)
+        {
+            if (!CombatManager.Instance.IsEnding) return true;
+            Skipped++;
+            __result = Task.FromResult(default(CardPileAddResult));
+            return false;
         }
     }
 }

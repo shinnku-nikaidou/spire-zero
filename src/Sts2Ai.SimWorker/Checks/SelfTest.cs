@@ -140,6 +140,7 @@ internal static partial class SelfTest
         FightCapLoses(pump, pool, act, Check);
         DropsAtAnEnemysPrompt(pump, Check);
         DropsAtATurnEndsPrompt(pump, Check);
+        TransformKillsBeforeTheNextTransform(pump, Check);
         GatheredCardState(pump, pool, act, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         FoulPotionAtMerchants(pump, Check);

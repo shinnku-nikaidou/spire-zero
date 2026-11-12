@@ -64,6 +64,40 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// Seed 1151522's game error (v9g2-2, DEFECT): Entropy 2 and Smokestack, a hand of Dazed at the turn's start. The
+    /// first Dazed transformed becomes another status card, Smokestack kills every enemy on it, and the second
+    /// transform is asked in an ending combat: the combat must end won with no game error, through
+    /// <see cref="HeadlessPatches.NoRandomTransformInAnEndingCombat"/>.
+    /// </summary>
+    private static void TransformKillsBeforeTheNextTransform(Pump pump, Action<string, bool, string> check)
+    {
+        var (encounter, act) = Opt.Encounter("SOUL_NEXUS_ELITE");
+        var loadout = new Loadout(Deck: [.. Enumerable.Repeat(new CardSpec("DAZED"), 10)]);
+        var setup = new CombatSetup("DEFECT", encounter, act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, FirstPicks.Instance))
+            obs = session.Observation();
+        obs = obs with
+        {
+            Player = obs.Player with
+            {
+                Block = 999,
+                Powers = [.. obs.Player.Powers, new PowerView("ENTROPY_POWER", 2), new PowerView("SMOKESTACK_POWER", 999)],
+            },
+        };
+        int before = HeadlessPatches.NoRandomTransformInAnEndingCombat.Skipped;
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), FirstPicks.Instance);
+        built.Execute(CombatAction.EndTurn);
+        bool asked = built.Prompt != null;
+        if (asked) built.Execute(CombatAction.Pick([0, 1]));
+        int skipped = HeadlessPatches.NoRandomTransformInAnEndingCombat.Skipped - before;
+        var errors = HeadlessGame.TakeErrors();
+        check("a transform that ends the combat leaves the next transform out", asked && built.Outcome == CombatOutcome.Win && skipped == 1 && errors.Count == 0,
+            $"asked {asked}, outcome {built.Outcome}, transforms left out {skipped}, build {string.Join("; ", built.BuildDifferences.Take(2))}, " +
+            $"errors {errors.FirstOrDefault()}");
+    }
+
+    /// <summary>
     /// The Knowledge Demon's first move asks the player for a card, in the enemies' turn: the combat's turns wait on the
     /// prompt. A session dropped there must end them, since the game starts a combat's turns only when the turns of the
     /// combat before it have ended (<see cref="PromptSelector.Drop"/>): the next combat must start, and play on through
