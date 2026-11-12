@@ -18,7 +18,7 @@ of threads, its only knob; the hub (deal.py) deals the chunks of every open job 
     Runs in play at the deadline are killed and kept out. PRIORITY=N (default: selfplay 0, eval and forks 1): the hub
     deals the open steps by priority, higher first, then by launch; inside a step, to the job with the lowest share of
     its queue dealt. Environment also: OWNER (default main), AFTER=JOB[,JOB...] leaves out the indices those jobs
-    finished (their done-*.txt here).
+    finished (their tally-*.txt here); a failed run is not finished, so its index is played again.
   box.py plan FILE [REV]   a dataset file (eval/datasets/NAME.toml, as it is here or at REV): prints the jobs it opens, with
     their options and seeds, and its runs by character, ascension, game and tier; refuses a file that does not hang
     together. Nothing goes to the hub.
@@ -302,14 +302,15 @@ def seeds_in(text: str) -> int:
 
 
 def finished_by(jobs: str) -> set[int]:
-    """The indices the AFTER jobs finished."""
+    """The indices the AFTER jobs finished: the runs with an outcome. A failed run has none to keep, so it is played again."""
     skip = set()
     for job in filter(None, jobs.split(",")):
-        files = list(job_dir(job).glob("done-*.txt"))
+        files = list(job_dir(job).glob("tally-*.txt"))
         if not files:
-            raise Refused(f"{job} has no done-*.txt here")
+            raise Refused(f"{job} has no tally-*.txt here")
         for path in files:
-            skip.update(int(x) for x in path.read_text().split())
+            runs = [line.split() for line in path.read_text().splitlines() if line.startswith("run ")]
+            skip.update(int(w[1]) for w in runs if w[2] != "failed")
     return skip
 
 
