@@ -103,7 +103,10 @@ expression: `TestMode.IsOn`, the empty list of mods).
 - Where game code needs a presentation value otherwise (a test on one guards game code, one is written to state), the
   member is not translated and the report says so. The report also lists every statement left out that held a call
   that is not presentation, for review.
-- Events (`event`, `+=` on one, raising one) are presentation.
+- Events (`event`, `+=` on one, raising one) are presentation. One has a subscriber that is game code and is raised
+  by hand to it (`manual/card_pile.rs`): the combat's card table gives a card its id when it shows up in a pile. The
+  others with game code behind them (a pet's death, a monster's own) wait for events as state: a list of delegates
+  in subscription order, once delegates are values.
 
 **How C# becomes Rust.** The rules are uniform, so that reading the generated function beside the C# method is checking
 it.
@@ -128,6 +131,9 @@ it.
 | an enum | a number with named values (`CardType::Attack`, `struct CardType(pub i32)`), so that casts, flags and arithmetic are C#'s |
 | a struct; a class named in `[values]` (`ModelId`) | a Rust struct held by value and compared by content |
 | `List<T>`, `IEnumerable<T>`, `IReadOnlyList<T>`, arrays | `Vec<T>` by value; LINQ through `rt::linq` (`where_`, `select`, ...), evaluated at once. A local that only reads a list out of a field (`var hand = pile.Cards`) stands for that field, so it sees later changes as the C# reference does. A null collection is an empty one |
+| a collection field the game declares nullable (`HashSet<CardKeyword>? _keywords`, made when first asked for) | the collection and a flag beside it, `_keywords__set`: a collection is a value and has no null of its own. `== null`, `is null`, `??`, `??=` and `?.` on the field read the flag, a write sets it, and the import sets it from the export's `null`. Any other collection that is null is an empty one |
+| a list local taken from another local (`var list2 = results; list2.Add(x)`) | the same list under two names, as in C# |
+| a change of a collection its property makes on demand (`LocalKeywords.Add(k)`) | the getter runs, then the field it returns is changed |
 | `HashSet<T>`, `Dictionary<K,V>`, `Queue<T>`, `Stack<T>` | `rt::Set`, `Dict`, `Queue`, `Stack`: .NET's enumeration order (a freed slot is reused first); `List.Sort` is .NET's introsort |
 | a lambda given to LINQ | a closure `\|x, c\| ..`; anywhere else, and a method group, a stored delegate `Fn1<A, R>` (clonable, can be null) |
 | `out` and `ref` parameters | returned: `fn m(..) -> (T, Out1)` |

@@ -489,7 +489,21 @@ public sealed partial class Body
         if (World.CollOf(local.Type) != World.Coll.None && !reassigned.Contains(local) && FieldPlaceOf(init) is { } place)
         {
             aliases[local] = place;
+            if (Presence(init) is { } there) aliasPresence[local] = there;
             return;
+        }
+        // A list taken from another local is that list: C# holds one reference to it under two names.
+        {
+            var from = init;
+            while (from is IConversionOperation { IsTryCast: false } cv && World.CollOf(cv.Operand.Type) != World.Coll.None) from = cv.Operand;
+            ISymbol? other = from switch { ILocalReferenceOperation l => l.Local, IParameterReferenceOperation p => p.Parameter, _ => null };
+            if (other != null && World.CollOf(local.Type) != World.Coll.None && World.CollOf(from.Type) != World.Coll.None && !reassigned.Contains(local) && !reassigned.Contains(other) && !droppedLocals.Contains(other)
+                && N(local.Type) == N(from.Type))
+            {
+                aliases[local] = aliases.TryGetValue(other, out var known) ? known : NameOf(other);
+                if (aliasPresence.TryGetValue(other, out var there2)) aliasPresence[local] = there2;
+                return;
+            }
         }
         // A span over a list (the compiler's way to fill a new list) is that list.
         if (init is IInvocationOperation { TargetMethod: { Name: "AsSpan", ContainingType.Name: "CollectionsMarshal" } } span)

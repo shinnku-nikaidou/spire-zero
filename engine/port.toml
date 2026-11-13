@@ -220,11 +220,14 @@ members = [
 
 [manual]
 # The one who answers a card prompt (manual/i_card_selector.rs): the game asks whoever is on its selector stack.
-classes = ["ICardSelector"]
+# What mods add (manual/mod_helper.rs): nothing, there are none.
+classes = ["ICardSelector", "ModHelper"]
 # The canonical models are built by manual/canon.rs: what the game's ModelDb does by reflection.
 members = [
     "ModelDb.Get", "ModelDb.GetId", "ModelDb.GetByIdOrNull", "ModelDb.Contains",
     "CardSelectorStack.GetSelector", "CardSelectorStack.PushSelector",
+    # An event with a subscriber that is game code: the combat's card table ids the cards of its piles (manual/card_pile.rs).
+    "CardPile.InvokeContentsChanged",
     # The id of an epoch class, which the game keeps in a table filled by reflection (manual/epoch_model.rs).
     "EpochModel.GetId",
     # The turn loop and the action queue wait on each other in the game; here they run in turn (manual/, world.rs).

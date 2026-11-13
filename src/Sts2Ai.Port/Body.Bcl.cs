@@ -36,6 +36,14 @@ public sealed partial class Body
         string Rd(Func<string, string[], string> build, params int[] idx) => HoistedCodes(idx.Select(V).ToArray(), Ref(inst!), build);
         string Mut(Func<string, string[], string> build, params int[] idx)
         {
+            // A change of a collection that its property makes on demand: the getter runs (and makes it), then the
+            // field it returned is changed.
+            if (inst is IPropertyReferenceOperation { Property: var lazy } lp && Forwarded(lazy.OriginalDefinition) == null && MadeOnDemand(lazy.OriginalDefinition) is { } made
+                && w.StateField(made) is { } madeName && StableReceiver(lp.Instance) && !w.IsValue(made.ContainingType))
+            {
+                string on = lp.Instance == null ? "me" : Expr(lp.Instance);
+                return $"{{ let _ = {Expr(lp)}; {HoistedCodes(idx.Select(V).ToArray(), $"{w.DataName(made.ContainingType)}::of_mut({on}, c).{madeName}", build, always: true)} }}";
+            }
             if (UnstableReceiver(inst!) is not { } recv) return HoistedCodes(idx.Select(V).ToArray(), Place(inst!), build, always: true);
             string r = Tmp("r"), code = Expr(recv);
             pinned[recv] = r;

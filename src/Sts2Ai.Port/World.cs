@@ -593,8 +593,16 @@ public sealed class World
             string name = FieldName(f);
             while (!seen.Add(name)) name += "_";
             yield return (f, name, type, f.Type.TypeKind != TypeKind.Delegate);
+            // A collection the game declares nullable: whether it is there is kept beside it (a collection is a value here).
+            if (IsNullableColl(f)) yield return (f, name + "__set", "bool", false);
         }
     }
+
+    private static bool IsNullableColl(IFieldSymbol f) =>
+        CollOf(f.Type) != Coll.None && ((f.AssociatedSymbol as IPropertySymbol)?.NullableAnnotation ?? f.NullableAnnotation) == NullableAnnotation.Annotated;
+
+    /// <summary>Whether the field is a collection that can be null in the game, kept here with a flag that says it is there.</summary>
+    public bool NullableColl(IFieldSymbol f) => IsNullableColl(f.OriginalDefinition) && StateField(f) != null;
 
     private readonly ConcurrentDictionary<IFieldSymbol, string?> _fieldNames = new(Eq);
 

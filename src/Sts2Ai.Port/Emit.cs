@@ -357,7 +357,7 @@ public sealed class Emitter(World w)
                         string? field = w.StateField(f);
                         if (field == null) continue;
                         string place = isStruct ? $"me.{field}" : $"{w.DataName(t)}::of_mut(me, c).{field}";
-                        try { head.Append($"{{ let __v = {body.Initial(init)}; {place} = __v; }}\n"); }
+                        try { head.Append($"{{ let __v = {body.Initial(init)}; {place} = __v; {(w.NullableColl(f) ? $"{place}__set = true; " : "")}}}\n"); }
                         catch (Dropped) { }
                         catch (Unsupported e)
                         {

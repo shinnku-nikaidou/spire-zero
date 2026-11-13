@@ -22,12 +22,19 @@ public sealed partial class Body
             case ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var chosen } } pick when !droppedLocals.Contains(chosen) && HoldsObjects(chosen.Type) && IsPresentation(pick.Value):
                 w.Rep.Count("a local set from a screen left as a panic");
                 return $"panic!(\"{Where}: {NameOf(chosen)} comes from presentation\")";
-            case ISimpleAssignmentOperation a: return Assign(a.Target, () => Guard(a.Value, "a write of presentation to state"), false);
+            case ISimpleAssignmentOperation a:
+            {
+                string there = PresenceWrite(a.Target, a.Value) is { } set ? $"let __there = {set.Split(" = ")[1]}; " : "";
+                string code = Assign(a.Target, () => Guard(a.Value, "a write of presentation to state"), false);
+                return there.Length == 0 ? code : $"{{ {there}{code}; {PresenceWrite(a.Target, a.Value)!.Split(" = ")[0]} = __there; }}";
+            }
             case ICompoundAssignmentOperation ca: return Compound(ca, false);
             case IIncrementOrDecrementOperation inc: return Increment(inc, false);
             case ICoalesceAssignmentOperation co:
             {
                 string value = Expr(co.Value);
+                if (Presence(co.Target) is { } has)
+                    return $"if !{has} {{ {Assign(co.Target, () => Wrap(value, co.Value.Type, co.Target.Type), false)}; {has.Replace("::of(", "::of_mut(")} = true; }}";
                 return $"if rt::is_null(&{Expr(co.Target)}) {{ {Assign(co.Target, () => Wrap(value, co.Value.Type, co.Target.Type), false)}; }}";
             }
             case IConditionalAccessOperation ca: return ConditionalAccess(ca, true);
@@ -61,6 +68,35 @@ public sealed partial class Body
         try { Expr(op); return false; }
         catch (Dropped) { return true; }
         catch (Unsupported) { return false; }
+    }
+
+    /// <summary>The locals that stand for a nullable collection field, with the flag that says the collection is there.</summary>
+    private readonly Dictionary<ISymbol, string> aliasPresence = new(Eq);
+
+    /// <summary>For an expression that is a collection field the game declares nullable: the flag that says it is
+    /// there. A collection is a value here and has no null of its own.</summary>
+    private string? Presence(IOperation op)
+    {
+        while (op is IConversionOperation { IsTryCast: false } cv && World.CollOf(cv.Operand.Type) != World.Coll.None) op = cv.Operand;
+        if (op is ILocalReferenceOperation l) return aliasPresence.GetValueOrDefault(l.Local);
+        IFieldSymbol? field = op switch
+        {
+            IFieldReferenceOperation { Field.IsStatic: false } f => f.Field.OriginalDefinition,
+            IPropertyReferenceOperation { Property: { IsStatic: false } p } => Forwarded(p.OriginalDefinition),
+            _ => null,
+        };
+        if (field == null || !w.NullableColl(field)) return null;
+        if (op is IFieldReferenceOperation { Instance: { } inst } vf && w.IsValue(vf.Field.ContainingType)) return $"{Ref(inst)}.{w.StateField(field)}__set";
+        return FieldPlaceOf(op) is { } place ? place + "__set" : null;
+    }
+
+    /// <summary>What a write to a nullable collection field does to its flag: `flag = whether the value is there`.</summary>
+    private string? PresenceWrite(IOperation target, IOperation value)
+    {
+        if (Presence(target) is not { } flag) return null;
+        string there = IsNullConst(value) ? "false" : Presence(value) ?? "true";
+        if (there != "true" && there != "false") w.Rep.Count("a nullable collection field set from another");
+        return $"{flag.Replace("::of(", "::of_mut(")} = {there}";
     }
 
     private string Guard(IOperation op, string why)
@@ -126,13 +162,19 @@ public sealed partial class Body
             case IConversionOperation cv: return Conv(cv);
             case IBinaryOperation b: return Binary(b);
             case IUnaryOperation u: return Unary(u);
-            case ISimpleAssignmentOperation a: return Assign(a.Target, () => Guard(a.Value, "a write of presentation to state"), true);
+            case ISimpleAssignmentOperation a:
+            {
+                string code = Assign(a.Target, () => Guard(a.Value, "a write of presentation to state"), true);
+                return PresenceWrite(a.Target, a.Value) is { } set ? $"{{ let __a = {code}; {set}; __a }}" : code;
+            }
             case ICompoundAssignmentOperation ca: return Compound(ca, true);
             case IIncrementOrDecrementOperation inc: return Increment(inc, true);
             case ICoalesceOperation co: return Coalesce(co);
             case ICoalesceAssignmentOperation coa:
             {
                 string value = Expr(coa.Value);
+                if (Presence(coa.Target) is { } has)
+                    return $"{{ if !{has} {{ {Assign(coa.Target, () => Wrap(value, coa.Value.Type, coa.Target.Type), false)}; {has.Replace("::of(", "::of_mut(")} = true; }} {Expr(coa.Target)} }}";
                 return $"{{ if rt::is_null(&{Expr(coa.Target)}) {{ {Assign(coa.Target, () => Wrap(value, coa.Value.Type, coa.Target.Type), false)}; }} {Expr(coa.Target)} }}";
             }
             case IConditionalOperation c:
@@ -145,6 +187,8 @@ public sealed partial class Body
             case IConditionalAccessOperation ca: return ConditionalAccess(ca, false);
             case IConditionalAccessInstanceOperation: return condInstances.Peek();
             case IIsTypeOperation it: return IsType(Expr(it.ValueOperand), it.ValueOperand.Type, it.TypeOperand);
+            case IIsPatternOperation ip when NullPattern(ip.Pattern) is { } nullTest && Presence(ip.Value) is { } there:
+                return nullTest ? $"!{there}" : there;
             case IIsPatternOperation ip:
             {
                 string s = Tmp("s");
@@ -405,6 +449,17 @@ public sealed partial class Body
         }
     }
 
+    /// <summary>The field a property's getter makes when it is not there yet and then returns (`if (_f != null) return
+    /// _f; _f = ..; return _f;`): every return of the getter gives that one field.</summary>
+    private static IFieldSymbol? MadeOnDemand(IPropertySymbol p)
+    {
+        if (p.IsStatic || p.ContainingType.TypeKind != TypeKind.Class || !World.IsSource(p)) return null;
+        if (p.GetMethod?.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not AccessorDeclarationSyntax { Body: { } block }) return null;
+        var names = block.DescendantNodes().OfType<ReturnStatementSyntax>().Select(r => (r.Expression as IdentifierNameSyntax)?.Identifier.Text).Distinct().ToList();
+        if (names.Count != 1 || names[0] == null) return null;
+        return p.ContainingType.GetMembers(names[0]!).OfType<IFieldSymbol>().FirstOrDefault(f => !f.IsStatic);
+    }
+
     private static bool IsBaseAccess(IOperation? instance) => instance?.Syntax is BaseExpressionSyntax;
 
     private static bool VirtualMember(ISymbol m) =>
@@ -431,7 +486,7 @@ public sealed partial class Body
             w.Slots.TryAdd(slot, 0);
             return $"g::dispatch::{w.Module(slot.ContainingType)}::{w.FnName((IMethodSymbol)slot)}";
         }
-        if (m.IsAbstract) throw new Unsupported($"a direct call of the abstract {type.Name}.{m.Name}");
+        if (m.IsAbstract && w.CatOf(type) != Cat.Manual) throw new Unsupported($"a direct call of the abstract {type.Name}.{m.Name}");
         var cat = w.CatOfMember(m);
         if (cat == Cat.Stub) w.StubRefs.TryAdd(m, 0);
         if (cat == Cat.Manual) w.ManualRefs.TryAdd(m, 0);
@@ -848,7 +903,8 @@ public sealed partial class Body
             var other = Unboxed(IsNullConst(b.LeftOperand) ? b.RightOperand : b.LeftOperand);
             if (IsNullConst(other)) return b.OperatorKind == BinaryOperatorKind.Equals ? "true" : "false";
             if (other is IFieldReferenceOperation { Field: var cache } && w.IsCache(cache)) return b.OperatorKind == BinaryOperatorKind.Equals ? "true" : "false";
-            if (World.CollOf(other.Type) != World.Coll.None) w.Rep.Count("null test on a collection (never null here)");
+            if (Presence(other) is { } there) return b.OperatorKind == BinaryOperatorKind.Equals ? $"!{there}" : there;
+            if (World.CollOf(other.Type) != World.Coll.None) w.Rep.Count($"null test on a collection (never null here): {Where}: {other.Syntax.ToString().Split('\n')[0].Trim()} [{other.Kind}]");
             string tested;
             try { tested = Ref(other); }
             catch (Dropped) when (other.Type is { IsReferenceType: true })
@@ -954,6 +1010,7 @@ public sealed partial class Body
         string v = Tmp("v");
         string value = Expr(co.Value);
         string other = Expr(co.WhenNull);
+        if (Presence(co.Value) is { } there) return $"(if {there} {{ {Convert(value, co.Value.Type, co.Type!, null)} }} else {{ {other} }})";
         if (co.Value.Type != null && World.IsNullable(co.Value.Type, out var inner) && N(inner) == N(co.Type))
             return $"(match {value} {{ Some({v}) => {v}, None => {other} }})";
         string converted = Convert(v, co.Value.Type, co.Type!, null);
@@ -968,14 +1025,15 @@ public sealed partial class Body
         condInstances.Push(nullable ? $"{r}.unwrap()" : r);
         try
         {
+            string isNull = Presence(op.Operation) is { } there ? $"!{there}" : $"rt::is_null(&{r})";
             if (statement || op.Type == null || op.Type.SpecialType == SpecialType.System_Void)
             {
                 string body = ExprStmt(op.WhenNotNull);
-                return $"{{ let {r} = {recv}; if !rt::is_null(&{r}) {{ {body}; }} }}";
+                return $"{{ let {r} = {recv}; if !({isNull}) {{ {body}; }} }}";
             }
             string inner = Expr(op.WhenNotNull);
             string wrapped = Wrap(inner, op.WhenNotNull.Type, op.Type);
-            return $"{{ let {r} = {recv}; if rt::is_null(&{r}) {{ {Null(op.Type)} }} else {{ {wrapped} }} }}";
+            return $"{{ let {r} = {recv}; if {isNull} {{ {Null(op.Type)} }} else {{ {wrapped} }} }}";
         }
         finally { condInstances.Pop(); }
     }

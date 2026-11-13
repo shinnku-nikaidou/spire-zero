@@ -570,6 +570,7 @@ public sealed class Output(World w, Emitter em)
                 if (w.Erased(tp)) { lines.Append($"    d.{World.TargField(tp)} = field(m, \"{World.TargField(tp)}\")?;\n"); n++; }
             foreach (var (_, name, _, isState) in w.Fields(t))
                 if (isState) { lines.Append($"    d.{name} = field(m, \"{Json(name)}\")?;\n"); n++; }
+                else if (name.EndsWith("__set")) lines.Append($"    d.{name} = there(m, \"{Json(name[..^5])}\")?;\n");
             sb.Append($"fn {Fill(t)}(d: &mut {w.DataName(t)}, o: &Object) -> Res<()> {{\n    let m = level(o, \"{w.Unique(t)}\", {n})?;\n{lines}    Ok(())\n}}\n\n");
         }
 
@@ -619,6 +620,7 @@ public sealed class Output(World w, Emitter em)
             if (s.TypeKind == TypeKind.Class) sb.Append("        if v.is_null() {\n            return Ok(Self::default());\n        }\n");
             sb.Append($"        let m = object(v)?;\n        members(m, {fields.Count})?;\n        Ok({w.Unique(s)} {{\n");
             foreach (var f in fields) sb.Append($"            {f.Name}: field(m, \"{Json(f.Name)}\")?,\n");
+            foreach (var f in w.Fields(s).Where(f => !f.IsState && f.Name.EndsWith("__set"))) sb.Append($"            {f.Name}: there(m, \"{Json(f.Name[..^5])}\")?,\n");
             sb.Append("            ..Default::default()\n        })\n    }\n}\n\n");
         }
         return sb.ToString();

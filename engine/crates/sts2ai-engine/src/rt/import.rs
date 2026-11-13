@@ -60,6 +60,15 @@ pub fn field<T: Rd>(m: &Object, name: &str) -> Res<T> {
     T::rd(v).map_err(|e| format!("{name}: {e}"))
 }
 
+/// Whether a field holds a value: the flag of a collection that can be null in the game (a collection here has no
+/// null of its own).
+pub fn there(m: &Object, name: &str) -> Res<bool> {
+    Ok(!m
+        .get(name)
+        .ok_or_else(|| format!("no field {name}"))?
+        .is_null())
+}
+
 /// The objects of one arena.
 pub fn arena<T: Stored>(
     into: &mut Arena<T>,
