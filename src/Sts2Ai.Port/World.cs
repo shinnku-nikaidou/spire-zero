@@ -607,7 +607,8 @@ public sealed class World
         return t;
     }
 
-    /// <summary>The instance fields of a class that are state, and those that are kept but not state (delegates).</summary>
+    /// <summary>The instance fields of a class that are state, and those that are kept but not state (a delegate that
+    /// no export carries).</summary>
     public IEnumerable<(IFieldSymbol Field, string Name, string Type, bool IsState)> Fields(INamedTypeSymbol t)
     {
         var seen = new HashSet<string>();
@@ -626,11 +627,15 @@ public sealed class World
             catch (Unsupported e) { Rep.FieldSkipped($"{t.Name}.{f.Name}: {e.Message}"); continue; }
             string name = FieldName(f);
             while (!seen.Add(name)) name += "_";
-            yield return (f, name, type, f.Type.TypeKind != TypeKind.Delegate);
+            yield return (f, name, type, f.Type.TypeKind != TypeKind.Delegate || ExportsDelegate(t, f));
             // A collection the game declares nullable: whether it is there is kept beside it (a collection is a value here).
             if (IsNullableColl(f)) yield return (f, name + "__set", "bool", false);
         }
     }
+
+    /// <summary>Whether a field that holds a delegate is part of an export.</summary>
+    private bool ExportsDelegate(INamedTypeSymbol t, IFieldSymbol f) =>
+        Cfg.DelegatesExported && !Cfg.TransientDelegates.Contains($"{t.Name}.{f.AssociatedSymbol?.Name ?? f.Name}");
 
     private static bool IsNullableColl(IFieldSymbol f) =>
         CollOf(f.Type) != Coll.None && ((f.AssociatedSymbol as IPropertySymbol)?.NullableAnnotation ?? f.NullableAnnotation) == NullableAnnotation.Annotated;
@@ -665,6 +670,15 @@ public sealed class World
     public Lambdas? Lambdas;
 
     public readonly ConcurrentDictionary<string, FnEntry> Fns = new();
+
+    /// <summary>A class the compiler made to hold what a lambda captured (a display class): an object of the game like
+    /// any other, the target of the delegates made of its lambdas. `Name` is its Rust name, `Clr` its CLR full name,
+    /// the fields are the captured variables by the names the compiler gave them (`&lt;&gt;4__this` is `this`),
+    /// `Dropped` those of them that are presentation.</summary>
+    public sealed record ClosureClass(string Name, string Clr, List<ClosureField> Fields, List<string> Dropped);
+    public sealed record ClosureField(string Rust, string Cs, ITypeSymbol Type);
+
+    public readonly ConcurrentDictionary<string, ClosureClass> Closures = new();
 
     /// <summary>A stable short mark of a text, for a name that has to tell two signatures of one method apart.</summary>
     public static string Mark(string text)

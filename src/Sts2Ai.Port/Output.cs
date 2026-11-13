@@ -237,6 +237,11 @@ public sealed class Output(World w, Emitter em)
 
     private string ArenaField(INamedTypeSymbol root) => World.Ident(w.Unique(root));
     private string Tag(INamedTypeSymbol root) => "TAG_" + World.Snake(w.Unique(root)).ToUpperInvariant();
+    private static string ArenaField(World.ClosureClass k) => World.Ident(k.Name);
+    private static string Tag(World.ClosureClass k) => "TAG_" + World.Snake(k.Name).ToUpperInvariant();
+
+    /// <summary>The classes of what lambdas capture, each with an arena of its own after the game's.</summary>
+    private List<World.ClosureClass> Closures() => w.Closures.Values.OrderBy(k => k.Name, StringComparer.Ordinal).ToList();
 
     private bool HasFields(INamedTypeSymbol t) => w.Fields(t).Any() || t.TypeParameters.Any(w.Erased);
 
@@ -253,14 +258,21 @@ public sealed class Output(World w, Emitter em)
     {
         var sb = new StringBuilder("//! The state of a combat: one arena per class, one struct per class with fields.\n" + Emitter.Header.Replace("use crate::r#gen::state::*;\n", ""));
         sb.Append('\n');
+        var closures = Closures();
         for (int i = 0; i < roots.Count; i++) sb.Append($"pub const {Tag(roots[i])}: u16 = {i + 1};\n");
+        for (int i = 0; i < closures.Count; i++) sb.Append($"pub const {Tag(closures[i])}: u16 = {roots.Count + i + 1};\n");
         sb.Append("\n/// Every object of a combat.\n#[derive(Clone, Debug, Default)]\npub struct Arenas {\n");
         foreach (var r in roots) sb.Append($"    pub {ArenaField(r)}: Arena<{w.DataName(r)}>,\n");
+        foreach (var k in closures) sb.Append($"    pub {ArenaField(k)}: Arena<{k.Name}Data>,\n");
         sb.Append("}\n\n");
         sb.Append("impl Arenas {\n    /// While set, what is made is canonical (the building of the canonical models).\n    pub fn set_canon_build(&mut self, on: bool) {\n");
         foreach (var r in roots) sb.Append($"        self.{ArenaField(r)}.canon_build = on;\n");
+        foreach (var k in closures) sb.Append($"        self.{ArenaField(k)}.canon_build = on;\n");
+        sb.Append("    }\n\n    /// Takes over what lambdas captured from a copy of the combat in which delegates were made (manual/delegates.rs).\n    pub fn take_closures(&mut self, from: &Arenas) {\n");
+        foreach (var k in closures) sb.Append($"        self.{ArenaField(k)} = from.{ArenaField(k)}.clone();\n");
         sb.Append("    }\n}\n\n");
-        sb.Append("/// The arena names, by tag: the classes that own an arena.\npub static ARENA_NAMES: &[&str] = &[\"\", " + string.Join(", ", roots.Select(r => $"\"{ArenaField(r)}\"")) + "];\n\n");
+        sb.Append("/// The arena names, by tag: the classes that own an arena.\npub static ARENA_NAMES: &[&str] = &[\"\", " +
+            string.Join(", ", roots.Select(ArenaField).Concat(closures.Select(ArenaField)).Select(a => $"\"{a}\"")) + "];\n\n");
 
         var subs = stateful.Where(t => !w.IsOpen(t) && !Eq.Equals(w.Root(t), t)).ToList();
         var opens = stateful.Where(w.IsOpen).ToList();
@@ -338,6 +350,18 @@ public sealed class Output(World w, Emitter em)
                 foreach (var (variant, path) in paths) sb.Append($"            {ext}::{variant}(d) => {(path.Length == 0 ? "d" : "&mut d" + path)},\n");
                 sb.Append($"            _ => panic!(\"not a {w.Unique(t)}: {{:?}}\", me),\n        }}\n    }}\n}}\n\n");
             }
+        }
+
+        // What a lambda captured: an object of the class the compiler made for it, the target of the lambda's delegate.
+        foreach (var k in closures)
+        {
+            string data = k.Name + "Data", arena = ArenaField(k);
+            sb.Append($"/// {k.Clr}: what the lambdas of one scope captured.\n{derive}pub struct {data} {{\n");
+            foreach (var f in k.Fields) sb.Append($"    pub {f.Rust}: {w.RType(f.Type)},\n");
+            sb.Append("}\n\n");
+            sb.Append($"impl Stored for {data} {{\n    const TAG: u16 = {Tag(k)};\n}}\n\n");
+            sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{ &c.a.{arena}[me] }}\n    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{ &mut c.a.{arena}[me] }}\n");
+            sb.Append($"    pub fn make({string.Concat(k.Fields.Select(f => $"{f.Rust}: {w.RType(f.Type)}, "))}c: &mut Combat) -> Obj {{\n        c.a.{arena}.alloc({data} {{ {string.Join(", ", k.Fields.Select(f => f.Rust))} }})\n    }}\n}}\n\n");
         }
 
         sb.Append("/// The roots (port.toml [roots]): the statics of the game that are state. Part of the combat, as Combat.s.\n" + derive + "pub struct Roots {\n");
@@ -477,6 +501,7 @@ public sealed class Output(World w, Emitter em)
         string meta = World.MetaName(n);
         if (meta == "System.Collections.Generic.KeyValuePair`2") return new JsonObject { ["kind"] = "pair", ["key"] = TypeDesc(n.TypeArguments[0]), ["value"] = TypeDesc(n.TypeArguments[1]) };
         if (meta == "System.Type") return new JsonObject { ["kind"] = "kind" };
+        if (n.TypeKind == TypeKind.Delegate) return new JsonObject { ["kind"] = "delegate" };
         if (n.TypeKind == TypeKind.Enum) return new JsonObject { ["kind"] = "enum", ["name"] = w.Unique(n), ["rust"] = w.RType(n.EnumUnderlyingType) };
         if (w.IsValue(n))
         {
@@ -535,6 +560,21 @@ public sealed class Output(World w, Emitter em)
                 ["dropped"] = DroppedDesc(t),
             });
         }
+        // What a lambda captured is an object of an export when delegates are: the target of the lambda's delegate.
+        var closures = w.Cfg.DelegatesExported ? Closures() : [];
+        foreach (var k in closures)
+            classes.Add(new JsonObject
+            {
+                ["name"] = k.Name,
+                ["cs"] = k.Clr,
+                ["base"] = null,
+                ["arena"] = ArenaField(k),
+                ["open"] = false,
+                ["abstract"] = false,
+                ["type_parameters"] = new JsonArray(),
+                ["fields"] = new JsonArray(k.Fields.Select(f => (JsonNode)new JsonObject { ["name"] = Json(f.Rust), ["cs"] = f.Cs, ["type"] = TypeDesc(f.Type) }).ToArray()),
+                ["dropped"] = new JsonArray(k.Dropped.Select(d => (JsonNode)d).ToArray()),
+            });
         var structs = new JsonArray();
         foreach (var s in w.Structs.Keys.OrderBy(s => w.Unique(s), StringComparer.Ordinal))
         {
@@ -572,7 +612,7 @@ public sealed class Output(World w, Emitter em)
             ["format"] = 1,
             ["game"] = w.Cfg.GameVersion,
             ["roots"] = rootList,
-            ["arenas"] = new JsonArray(roots.Select(r => (JsonNode)ArenaField(r)).ToArray()),
+            ["arenas"] = new JsonArray(roots.Select(ArenaField).Concat(closures.Select(ArenaField)).Select(a => (JsonNode)a).ToArray()),
             ["classes"] = classes,
             ["structs"] = structs,
             ["enums"] = enums,
@@ -651,8 +691,26 @@ public sealed class Output(World w, Emitter em)
             sb.Append("    Ok(d)\n}\n\n");
         }
 
+        var closures = w.Cfg.DelegatesExported ? Closures() : [];
+        foreach (var k in closures)
+        {
+            // An object of an export has its class and, when the class has fields, one member with them.
+            string data = k.Name + "Data";
+            sb.Append($"fn read_{World.Snake(k.Name)}(v: &Value) -> Res<{data}> {{\n    let o = object(v)?;\n    let class: String = field(o, \"class\")?;\n");
+            sb.Append($"    if class != \"{k.Name}\" {{\n        return Err(format!(\"{{class}} is not a {k.Name}\"));\n    }}\n");
+            if (k.Fields.Count == 0) sb.Append($"    members(o, 1)?;\n    Ok({data} {{}})\n}}\n\n");
+            else
+            {
+                sb.Append($"    let m = level(o, \"{k.Name}\", {k.Fields.Count})?;\n    members(o, 2)?;\n    Ok({data} {{\n");
+                foreach (var f in k.Fields) sb.Append($"        {f.Rust}: field(m, \"{Json(f.Rust)}\")?,\n");
+                sb.Append("    })\n}\n\n");
+            }
+        }
+
+        sb.Append($"/// Whether an export carries its delegates (port.toml [delegates]); one that does not gets them made again.\npub const DELEGATES: bool = {(w.Cfg.DelegatesExported ? "true" : "false")};\n\n");
         sb.Append("/// The arenas of an export, by name: an arena's objects in their order.\npub fn read_arenas(m: &Object, a: &mut Arenas) -> Res<()> {\n    for (name, v) in m {\n        match name.as_str() {\n");
         foreach (var r in roots) sb.Append($"            \"{ArenaField(r)}\" => arena(&mut a.{ArenaField(r)}, name, v, read_{World.Snake(w.Unique(r))})?,\n");
+        foreach (var k in closures) sb.Append($"            \"{ArenaField(k)}\" => arena(&mut a.{ArenaField(k)}, name, v, read_{World.Snake(k.Name)})?,\n");
         sb.Append("            _ => return Err(format!(\"no arena {name}\")),\n        }\n    }\n    Ok(())\n}\n\n");
 
         var rootList = StaticRoots();

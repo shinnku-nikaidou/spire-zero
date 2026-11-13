@@ -110,7 +110,7 @@ expression: `TestMode.IsOn`, the empty list of mods).
 - Events (`event`, `+=` on one, raising one) are presentation. One has a subscriber that is game code and is raised
   by hand to it (`manual/card_pile.rs`): the combat's card table gives a card its id when it shows up in a pile. The
   others with game code behind them (a pet's death, a monster's own) wait for events as state: a list of delegates
-  in subscription order, once delegates are values.
+  in subscription order. Delegates are values now (below); the events follow once exports carry them.
 
 **How C# becomes Rust.** The rules are uniform, so that reading the generated function beside the C# method is checking
 it.
@@ -148,19 +148,50 @@ it.
 | a collection's `Contains` handed over as a function (`Where(seen.Contains)`) | a function over the collection as it is then |
 | a change of a collection its property makes on demand (`LocalKeywords.Add(k)`) | the getter runs, then the field it returns is changed |
 | `HashSet<T>`, `Dictionary<K,V>`, `Queue<T>`, `Stack<T>` | `rt::Set`, `Dict`, `Queue`, `Stack`: .NET's enumeration order (a freed slot is reused first); `List.Sort` is .NET's introsort |
-| a lambda given to LINQ | a closure `\|x, c\| ..`; anywhere else, and a method group, a stored delegate `Fn1<A, R>` (clonable, can be null) |
+| a lambda given to LINQ | a closure `\|x, c\| ..` |
+| a lambda anywhere else, a method group | a delegate `Fn1<A, R>`: a function of `gen/fns.rs` and the object it is bound to (Delegates, below) |
 | `out` and `ref` parameters | returned: `fn m(..) -> (T, Out1)` |
 | a collection parameter the callee changes (`state.RegisterStates(States)`) | returned like a `ref` parameter and written back by the caller: a collection is a value here, and C# hands over a reference. Decided per virtual slot or interface member, so every override has one signature |
 | a change through a computed object (`x.GetEntry(id).Cards.Add(card)`) | the object is computed once into a local, before the arguments, as in C# |
 | labels and `goto` (the decompiler's) | the block is cut into parts at its labels; a loop runs the parts in order, or the one a `goto` names; the block's locals are declared before the loop |
 | `try` / `finally` | the block, then the `finally`, then the block's `return` if it had one; a `catch` that does nothing is no handler |
 | `value with { A = x }` | a copy with the fields set |
-| a local function handed over as a delegate | a lambda at that place |
+| a local function handed over as a delegate | a lambda at that place, under the compiler's name of the local function |
 | a record's parameters; a class that keeps its primary constructor | the properties of the same names are set first in the constructor; `port` rewrites `class C(T p)` into fields and a constructor before it compiles the source (the schema names such a field as the compiled game does, `<p>P`) |
 | `(T)obj` for a type parameter that is no game class by its constraints | `rt::unbox::<T>(obj)`: the object itself |
 | `(object)a == b` on a class held by value | the values compared |
 | `throw` | `panic!` (the caller turns a panic into an error) |
 | a `static readonly` field | a function that gives its initial value; a static that is written is hand-written |
+
+**Delegates.** A delegate of the game is a method and the object it is bound to (`Delegate.Method`,
+`Delegate.Target`), and that is what one is here: `Fn0` .. `Fn5` hold the number of a function of `gen/fns.rs` and a
+handle. Two of the same method on the same object are equal, as in C#, and an export can carry one.
+
+- `gen/fns.rs` has one function for every method translated code makes a delegate of, and the table `BY_NAME` of
+  them by the game's own name of the method: `<class>::<method>`, the class by its CLR full name. That name is how
+  an export says what a delegate is.
+- A method group (`ButtMove`, `monster.WakeUpMove`) is the method bound to its object, to nothing when it is static.
+  A virtual one is in the table under every class that has a body for it: reflection names the body the object runs.
+  A member that is presentation as a whole is, handed over, a function that does nothing, under the member's name.
+- A lambda or a local function has no name in the source. The compiler gave it one (`<get_CanonicalVars>b__6_0`,
+  `<Stun>g__Wrapper|0`), and `port` reads it from the game's assembly (`Lambdas.cs`): every place a member makes a
+  delegate is an `ldftn` in its IL, in the order of the code, so the k-th compiler-made method among them is the k-th
+  lambda of the source. (The code of an async member or an iterator is in its state machine's `MoveNext`.) The two
+  lists must agree in length and, place by place, in the number of parameters or the local function's name; a member
+  where they do not keeps its lambdas as code, and the report lists it.
+- What a lambda captures decides what it is bound to, as the compiler decided it. Nothing: the method is on `<>c`,
+  bound to nothing. Only `this`: the method is on the class, bound to the object. Locals: the method is on a class
+  the compiler made for the scope (`<>c__DisplayClass30_0`), whose fields are the captured variables, and it is bound
+  to an object of that class. Such a class is a class of the engine like any other, with an arena of its own
+  (`CreatureCmdClosure30_0`): the place that makes the delegate makes the object with the captured values, and the
+  function takes them from the object it is bound to.
+- Known difference: C# makes one such object for a scope, the scope's lambdas share it, and a lambda sees a later
+  write to a captured variable. Here every delegate gets its own object, with the values the variables have where
+  the delegate is made (a variable not declared yet has its default). `port` refuses a kept lambda that writes a
+  captured variable, and the report lists the ones that read a variable written after they were made. There is one,
+  the card table's subscription: it reads the pile of a value whose other field, the delegate itself, is set after.
+- Not data, just code (`FnN::new`): a lambda in a member with type parameters, one with a `ref` parameter or more than
+  five, one whose class holds another scope's class, and those of a member the two lists above do not agree on.
 
 Canonical models (the game's `ModelDb`: one object per model class) live in arenas built once per process
 (`manual/canon.rs`, from `gen/model_table.rs`: every model class with its id, as the game's `ModelDb` finds them by
@@ -212,7 +243,7 @@ puts a selector of its own on the selector stack.
 `TYPE` is `{"kind": "int" | "float", "rust": "i32"}`, `{"kind": "bool" | "decimal" | "string" | "char" | "kind"}`,
 `{"kind": "enum", "name", "rust"}`, `{"kind": "ref", "class"}`, `{"kind": "struct", "name"}`,
 `{"kind": "nullable" | "list" | "set" | "queue" | "stack", "of": TYPE}`, `{"kind": "dict" | "pair", "key", "value"}`,
-`{"kind": "tuple", "items": [TYPE]}`.
+`{"kind": "tuple", "items": [TYPE]}`, `{"kind": "delegate"}`.
 
 - Every class that is translated or hand-written, and every class above one, has its instance fields listed. A
   class's fields are those of its own entry and of each `base` above it.
@@ -227,6 +258,13 @@ puts a selector of its own on the selector stack.
   translated code reads and writes them there.
 - The Rust structs are generated from the same walk: `Arenas` (one `Arena<TData>` per arena), `TData` per class, `TExt`
   for the fields of the classes below `T`, `Roots`.
+- A field that holds a delegate is a field of the schema, of kind `delegate`, and the classes of what lambdas capture
+  (Delegates, above) are classes of the schema, each with its arena after the game's: `name` as in the engine
+  (`CreatureCmdClosure30_0`), `cs` the compiler's class (`...CreatureCmd+<>c__DisplayClass30_0`), no base, the fields
+  by the compiler's names (`stunMove`; `<>4__this` is `this`), a captured variable that is presentation on `dropped`.
+  Both only with `[delegates] exported` of `port.toml` on. Off, which is the state until the C# side writes
+  delegates, the schema has neither: a field that holds a delegate is on `dropped`. A field named in
+  `[delegates] transient` stays there either way: its delegate is never run after a decision.
 
 ## The export
 
@@ -274,6 +312,7 @@ it (`import.rs`, with the reader `port` generates beside the structs, `gen/impor
 | `tuple`, `pair` | an array of the items; `[key, value]` |
 | `kind` (a `System.Type`) | the schema name of the class, or `null` |
 | `ref` | `null`; `["<arena>", index]`; `["canon", "<Class>"]` for the canonical model of a class, which is not exported as an object; `["outside", "<CLR name>"]`, refused |
+| `delegate` | `null`; `{"method": "<class>::<method>", "target": REF}`: the method's declaring class by its CLR full name and the method's name, both as reflection gives them (`...Monsters.BygoneEffigy::SlashMove`, `...Cards.Unleash+<>c::<get_CanonicalVars>b__6_0`, `...CreatureCmd+<>c__DisplayClass30_0::<Stun>g__Wrapper\|0`); `target` is `null` for a static method and for a lambda on `<>c`, else a reference like any other, to a game object or to an object of what the lambda captured. A delegate made of more than one is an error. The engine refuses a method it has no function for |
 
 An export is taken at a decision of the player with nothing running: the action queues are empty, no prompt is open.
 
@@ -322,11 +361,13 @@ game's objects (`Combat.x`).
   one selector, written by hand (`manual/i_card_selector.rs`): it takes the next answer or stops the step, and gives
   the prompt its number. The stack is not kept as objects.
 
-**Delegates in the state.** A monster's move states and a model's vars hold delegates (which move is next, what a
-calculated var adds). An export has no delegates yet, so the import makes them again: it runs each monster's
-`GenerateMoveStateMachine` and each model's `CanonicalVars` on a scratch copy and copies the delegates over by state
-id and var name (`manual/delegates.rs`). A move a monster made on the spot (a stun) has no place in the machine made
-again: such an export is refused. This goes when delegates are values of the export.
+**Delegates in the state.** A monster's move states and a model's vars hold delegates (what a move does, when a
+branch is taken, what a calculated var adds). With `[delegates] exported` on, an export carries them and import reads
+each as the function of the table under its method's name. Until the C# side writes them it is off, and import makes
+them again: it runs each monster's `GenerateMoveStateMachine` and each model's `CanonicalVars` on a scratch copy and
+copies the delegates over by state id and var name, with the objects of what their lambdas captured
+(`manual/delegates.rs`). A move a monster made on the spot (a stun) has no place in the machine made again: such an
+export is refused. The switch and that file go when every export carries its delegates.
 
 **Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
 other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.

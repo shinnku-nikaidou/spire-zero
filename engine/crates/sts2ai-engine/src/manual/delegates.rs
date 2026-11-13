@@ -2,7 +2,11 @@
 //! is taken, how much an intent shows), and a calculated var of a card holds one. An imported combat has those objects
 //! with their plain fields and no delegate, so each is given its delegate again from where the game makes it: the
 //! monster's own `GenerateMoveStateMachine`, the model's own `CanonicalVars`. The code runs on a copy of the combat
-//! (it may draw from a random stream); only the delegates are taken from it, state by state and var by var, by id.
+//! (it may draw from a random stream); only the delegates are taken from it, state by state and var by var, by id,
+//! and with them the objects of what their lambdas captured (a delegate names one as its target).
+//!
+//! This is for an export that does not carry its delegates (`gen::import::DELEGATES` off) and goes when every export
+//! does.
 
 use crate::r#gen as g;
 use crate::r#gen::kinds::*;
@@ -13,19 +17,21 @@ type Res = Result<(), String>;
 
 /// Gives every object of an imported combat that holds a delegate its delegate.
 pub fn attach(c: &mut Combat) -> Res {
-    monsters(c)?;
-    vars(c)
+    let mut scratch = c.clone();
+    monsters(c, &mut scratch)?;
+    vars(c, &mut scratch)?;
+    c.a.take_closures(&scratch.a);
+    Ok(())
 }
 
-fn monsters(c: &mut Combat) -> Res {
+fn monsters(c: &mut Combat, scratch: &mut Combat) -> Res {
     for i in 0..c.a.monster_model.items.len() {
         let monster = Obj::new(MonsterModelData::TAG, i, false);
         let machine = c.a.monster_model[monster]._move_state_machine;
         if machine.is_null() {
             continue;
         }
-        let mut scratch = c.clone();
-        let fresh = g::dispatch::monster_model::generate_move_state_machine(monster, &mut scratch);
+        let fresh = g::dispatch::monster_model::generate_move_state_machine(monster, scratch);
         let what = format!("{:?} of {:?}", machine, g::kinds::kind_of(monster, c));
         let states: Vec<(Str, Obj)> = c.a.monster_move_state_machine[machine]
             .states
@@ -45,13 +51,13 @@ fn monsters(c: &mut Combat) -> Res {
                     id.as_str()
                 ));
             };
-            if g::kinds::kind_of(made, &scratch) != g::kinds::kind_of(state, c) {
+            if g::kinds::kind_of(made, scratch) != g::kinds::kind_of(state, c) {
                 return Err(format!(
                     "{what}: the state {} is of another class than the one the monster makes",
                     id.as_str()
                 ));
             }
-            state_delegates(state, made, c, &scratch)
+            state_delegates(state, made, c, scratch)
                 .map_err(|e| format!("{what}: the state {}: {e}", id.as_str()))?;
             known.push(state);
         }
@@ -59,14 +65,13 @@ fn monsters(c: &mut Combat) -> Res {
         // other move outside the machine (one made on the spot) has a delegate nobody can make again.
         let next = c.a.monster_model[monster].next_move;
         if !next.is_null() && !known.contains(&next) {
-            let unset =
-                g::monster_moves_monster_move_state_machine::move_state::new__0(&mut scratch);
-            if MoveStateData::of(next, c).state_id != MoveStateData::of(unset, &scratch).state_id {
+            let unset = g::monster_moves_monster_move_state_machine::move_state::new__0(scratch);
+            if MoveStateData::of(next, c).state_id != MoveStateData::of(unset, scratch).state_id {
                 return Err(format!(
                     "{what}: its next move is not a state of its machine"
                 ));
             }
-            state_delegates(next, unset, c, &scratch)
+            state_delegates(next, unset, c, scratch)
                 .map_err(|e| format!("{what}: its next move: {e}"))?;
         }
     }
@@ -146,7 +151,7 @@ fn intent_delegates(intent: Obj, made: Obj, c: &mut Combat, scratch: &Combat) ->
 
 /// The calculated vars: each model's own `CanonicalVars` makes the var with its delegate (a static one: the game
 /// refuses any other), and the var of the same name gets it.
-fn vars(c: &mut Combat) -> Res {
+fn vars(c: &mut Combat, scratch: &mut Combat) -> Res {
     let mut models: Vec<(Obj, DynamicVarSet, fn(Obj, &mut Combat) -> Vec<DynamicVar>)> = Vec::new();
     for i in 0..c.a.card_model.items.len() {
         let o = Obj::new(CardModelData::TAG, i, false);
@@ -203,8 +208,7 @@ fn vars(c: &mut Combat) -> Res {
         if calculated.is_empty() {
             continue;
         }
-        let mut scratch = c.clone();
-        let made = canonical_vars(model, &mut scratch);
+        let made = canonical_vars(model, scratch);
         for (name, var) in calculated {
             let Some(source) = made
                 .iter()
@@ -217,7 +221,7 @@ fn vars(c: &mut Combat) -> Res {
                     name.as_str()
                 ));
             };
-            if !is_subclass(g::kinds::kind_of(source, &scratch), Kind::CalculatedVar) {
+            if !is_subclass(g::kinds::kind_of(source, scratch), Kind::CalculatedVar) {
                 return Err(format!(
                     "{:?}: the var {} is calculated, the one the model makes is not",
                     g::kinds::kind_of(model, c),
@@ -225,7 +229,7 @@ fn vars(c: &mut Combat) -> Res {
                 ));
             }
             CalculatedVarData::of_mut(var, c)._multiplier_calc =
-                CalculatedVarData::of(source, &scratch)
+                CalculatedVarData::of(source, scratch)
                     ._multiplier_calc
                     .clone();
         }

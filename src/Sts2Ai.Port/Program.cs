@@ -54,6 +54,7 @@ for (int pass = 1; pass <= 6; pass++)
     world.ManualRefs.Clear();
     world.Slots.Clear();
     world.Fns.Clear();
+    world.Closures.Clear();
     var bag = new ConcurrentBag<Emitter.ClassResult>();
     Parallel.ForEach(types, t => bag.Add(emitter.Class(t)));
     results = bag.OrderBy(r => World.FullName(r.Type), StringComparer.Ordinal).ToList();

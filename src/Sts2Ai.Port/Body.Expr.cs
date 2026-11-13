@@ -1330,7 +1330,7 @@ public sealed partial class Body
             case IAnonymousFunctionOperation f:
             {
                 var (code, captured) = Lambda(f, true);
-                if (BoundLambda(f, invoke, code, captured) is { } bound) return bound;
+                if (BoundLambda(f, f.Symbol, f.Body, invoke, code) is { } bound) return bound;
                 string clones = string.Concat(captured.Select(x => $"let mut {x} = {x}.clone(); "));
                 return $"{{ {clones}{fn}::new(move {code}) }}";
             }
@@ -1346,6 +1346,7 @@ public sealed partial class Body
                     while (root.Parent != null) root = root.Parent;
                     var local = root.DescendantsAndSelf().OfType<ILocalFunctionOperation>().First(l => Eq.Equals(l.Symbol, mr.Method.OriginalDefinition));
                     var (code, captured) = Lambda(local.Symbol, local.Body ?? throw new Unsupported("a local function without a body"), true);
+                    if (BoundLambda(mr, local.Symbol, local.Body, invoke, code) is { } boundLocal) return boundLocal;
                     string clones = string.Concat(captured.Select(x => $"let mut {x} = {x}.clone(); "));
                     return $"{{ {clones}{fn}::new(move {code}) }}";
                 }
@@ -1354,6 +1355,7 @@ public sealed partial class Body
                     && (invoke.ReturnsVoid || (World.IsTask(invoke.ReturnType, out var given) && given == null)))
                 {
                     LeftOut++;
+                    if (BoundNothing(mr, invoke) is { } nothing) return nothing;
                     var unused = invoke.Parameters.Select((p, i) => $"_a{i}: {T(p.Type)}").Append("_c: &mut Combat");
                     return $"{fn}::new(move |{string.Join(", ", unused)}| -> {(invoke.ReturnsVoid ? "()" : "R<()>")} {{ {(invoke.ReturnsVoid ? "" : "Ok(())")} }})";
                 }
@@ -1406,25 +1408,138 @@ public sealed partial class Body
         }
     }
 
-    /// <summary>A lambda as a delegate that is data, when the compiler's method of it is known and it captures nothing
-    /// but `this`: that method as a function of gen/fns.rs, bound to this object (to nothing when it captures
-    /// nothing). Null otherwise: the delegate is then code made on the spot.</summary>
-    private string? BoundLambda(IAnonymousFunctionOperation f, IMethodSymbol invoke, string code, List<string> captured)
+    /// <summary>A lambda (or a local function handed over) as a delegate that is data, when the compiler's method of it
+    /// is known: that method as a function of gen/fns.rs, bound to what the compiler binds it to. That is nothing when
+    /// it captures nothing, this object when it captures only `this`, and otherwise an object of the class the
+    /// compiler made for what it captures (World.ClosureClass), made here with the captured values. Null where that
+    /// cannot be written: the delegate is then code made on the spot.</summary>
+    private string? BoundLambda(IOperation site, IMethodSymbol sym, IBlockOperation body, IMethodSymbol invoke, string code)
     {
-        if (!compiled.TryGetValue(f, out var made) || made.Holder is not ("c" or "this") || captured.Count > 0) return null;
+        if (!compiled.TryGetValue(site, out var made)) return null;
         if (invoke.Parameters.Length > 5 || invoke.Parameters.Any(p => p.RefKind != RefKind.None)) return null;
         // What the lambda's code may name besides its own parameters: `me` and the combat. Not a type parameter's kind.
         if (cls.TypeParameters.Length > 0 || member is IMethodSymbol { TypeParameters.Length: > 0 }) return null;
-        bool onThis = made.Holder == "this" && !made.IsStatic;
-        if (onThis && (isStructMember || member.IsStatic)) return null;
+        string target, prelude;
+        switch (made.Holder)
+        {
+            case "c":
+                (target, prelude) = ("Obj::NULL", "");
+                break;
+            case "this" when made.IsStatic:
+                (target, prelude) = ("Obj::NULL", "");
+                break;
+            case "this":
+                if (isStructMember || member.IsStatic) return null;
+                (target, prelude) = ("me", "let me = t;\n");
+                break;
+            case "closure":
+                if (ClosureObject(site, made, sym, body) is not { } closure) return null;
+                (target, prelude) = closure;
+                break;
+            default:
+                return null;
+        }
         var types = invoke.Parameters.Select(p => T(p.Type)).ToList();
         string ret = invoke.ReturnsVoid ? "()" : T(invoke.ReturnType);
         string clr = $"{made.Class}::{made.Method}";
         string name = $"lf_{World.Snake(cls.Name)}__{World.Snake(member.Name)}_{World.Mark(clr + "|" + string.Join(",", types) + "->" + ret)}";
         var args = Enumerable.Range(0, types.Count).Select(i => $"a{i}").Append("c");
-        w.Fns.TryAdd(name, new World.FnEntry(name, clr, null, types, ret, $"let me = t;\n({code})({string.Join(", ", args)})"));
-        w.Rep.Count("lambdas that are data (bound to the compiler's name)");
-        return $"g::fns::{name}({(onThis ? "me" : "Obj::NULL")})";
+        w.Fns.TryAdd(name, new World.FnEntry(name, clr, null, types, ret, $"{prelude}({code})({string.Join(", ", args)})"));
+        w.Rep.Count(made.Holder == "closure" ? "lambdas that are data, bound to an object of what they capture" : "lambdas that are data (bound to the compiler's name)");
+        return $"g::fns::{name}({target})";
+    }
+
+    /// <summary>The class the compiler made for what a lambda captures, as a class of the engine: the code that makes
+    /// its object here with the captured values, and the code that takes them out again where the lambda runs. Null
+    /// when a field of it is not a variable of this member (another scope's class held by this one).
+    ///
+    /// C# makes one object for a scope and every lambda of the scope shares it; here each place a delegate is made
+    /// makes its own, with the values the variables have there. A variable of the class that is not declared yet at
+    /// that place has its default, as in C#.</summary>
+    private (string Target, string Prelude)? ClosureObject(IOperation site, Lambdas.Made made, IMethodSymbol sym, IBlockOperation body)
+    {
+        if (!made.Class.StartsWith(World.FullName(cls) + "+", StringComparison.Ordinal)) return null;
+        var inner = new HashSet<ISymbol>(Eq) { sym };
+        foreach (var d in body.Descendants())
+        {
+            if (d is IAnonymousFunctionOperation nested) inner.Add(nested.Symbol);
+            if (d is ILocalFunctionOperation local) inner.Add(local.Symbol);
+        }
+        var used = new HashSet<ISymbol>(Eq);
+        bool usesThis = false;
+        foreach (var d in body.Descendants())
+        {
+            if (d is IInstanceReferenceOperation) usesThis = true;
+            if (d.ConstantValue.HasValue) continue;
+            ISymbol? s = d switch { ILocalReferenceOperation l => l.Local, IParameterReferenceOperation p => p.Parameter, _ => null };
+            if (s != null && !inner.Contains(s.ContainingSymbol)) used.Add(s);
+        }
+        if (usesThis && !made.Fields.Contains("<>4__this")) return null;
+        // Every variable of the member by its name: a field of the class is one of them.
+        var known = new Dictionary<string, List<ISymbol>>();
+        void Know(ISymbol s) { if (!known.TryGetValue(s.Name, out var list)) known[s.Name] = list = []; if (!list.Contains(s, Eq)) list.Add(s); }
+        if (member is IMethodSymbol owner) foreach (var p in owner.Parameters) Know(p);
+        if (member is IPropertySymbol { SetMethod: { } setter }) foreach (var p in setter.Parameters) Know(p);
+        if (memberRoot != null)
+            foreach (var d in memberRoot.DescendantsAndSelf())
+                switch (d)
+                {
+                    case IVariableDeclaratorOperation v: Know(v.Symbol); break;
+                    case ILocalReferenceOperation l: Know(l.Local); break;
+                    case IParameterReferenceOperation p: Know(p.Parameter); break;
+                }
+        var fields = new List<World.ClosureField>();
+        var dropped = new List<string>();
+        var values = new List<string>();
+        var prelude = new StringBuilder();
+        string name = w.Unique(cls) + "Closure" + made.Class[(made.Class.LastIndexOf("DisplayClass", StringComparison.Ordinal) + "DisplayClass".Length)..];
+        foreach (string cs in made.Fields)
+        {
+            if (cs == "<>4__this")
+            {
+                if (isStructMember || member.IsStatic) return null;
+                fields.Add(new World.ClosureField("this", cs, cls));
+                values.Add("me");
+                prelude.Append($"let me = {name}Data::of(t, c).this;\n");
+                continue;
+            }
+            ISymbol? s = used.FirstOrDefault(u => u.Name == cs) ?? (known.TryGetValue(cs, out var same) && same.Count == 1 ? same[0] : null);
+            if (s == null || aliases.ContainsKey(s)) return null;
+            ITypeSymbol type = s is ILocalSymbol ls ? ls.Type : ((IParameterSymbol)s).Type;
+            if (s is IParameterSymbol { RefKind: not RefKind.None }) return null;
+            // A captured variable that is presentation is not held, as everywhere.
+            if (w.IsDropped(type) || droppedLocals.Contains(s) || (s is IParameterSymbol dp && w.IsDropped(dp))) { dropped.Add(cs); continue; }
+            string rust = World.Ident(World.Snake(cs));
+            if (rust == "this") rust += "_";
+            string rtype;
+            try { rtype = T(type); }
+            catch (Exception e) when (e is Dropped or Unsupported) { return null; }
+            fields.Add(new World.ClosureField(rust, cs, type));
+            bool here = used.Contains(s) || names.ContainsKey(s);
+            values.Add(here ? NameOf(s) + CloneOf(type) : "Default::default()");
+            if (used.Contains(s)) prelude.Append($"let mut {NameOf(s)}: {rtype} = {name}Data::of(t, c).{rust}.clone();\n");
+        }
+        // A variable the lambda uses that the class does not hold: the lambda is not the one this class was made for.
+        if (used.Any(u => !made.Fields.Contains(u.Name))) return null;
+        // The known difference: the object holds the values as they are here, and C# would show the lambda a later write.
+        if (memberRoot != null)
+            foreach (var d in memberRoot.Descendants())
+            {
+                IOperation? written = d switch
+                {
+                    ISimpleAssignmentOperation a => a.Target,
+                    ICompoundAssignmentOperation a => a.Target,
+                    IIncrementOrDecrementOperation a => a.Target,
+                    _ => null,
+                };
+                // A write to a part of a value held in the variable is a write to the variable.
+                while (written is IMemberReferenceOperation { Instance: { Type: { } held } inside } && w.IsValue(held)) written = inside;
+                ISymbol? target = written switch { ILocalReferenceOperation l => l.Local, IParameterReferenceOperation p => p.Parameter, _ => null };
+                if (target != null && used.Contains(target) && d.Syntax.Span.End >= site.Syntax.Span.End)
+                    w.Rep.Note("lambdas that read a variable written after they were made (they read the value from before)", $"{Where}: {target.Name}");
+            }
+        w.Closures.TryAdd(made.Class, new World.ClosureClass(name, made.Class, fields, dropped));
+        return ($"{name}Data::make({string.Concat(values.Select(v => v + ", "))}c)", prelude.ToString());
     }
 
     /// <summary>A method group as a delegate that is data: the method as a function of gen/fns.rs, bound to the object
@@ -1450,6 +1565,22 @@ public sealed partial class Body
         string name = $"mg_{stem.Replace("::", "__")}_{World.Mark(string.Join(",", types) + "->" + ret)}";
         var slot = virt && path.StartsWith("g::dispatch::") ? (IMethodSymbol)World.Slot(m.OriginalDefinition) : null;
         w.Fns.TryAdd(name, new World.FnEntry(name, $"{World.FullName(m.ContainingType)}::{m.Name}", slot, types, ret, $"{path}({string.Join(", ", args)})"));
+        return $"g::fns::{name}({(mr.Instance == null ? "Obj::NULL" : Expr(mr.Instance))})";
+    }
+
+    /// <summary>A member that is presentation as a whole, handed over as a function: still the game's method by its
+    /// name, bound to its object, and a function of the table that does nothing.</summary>
+    private string? BoundNothing(IMethodReferenceOperation mr, IMethodSymbol invoke)
+    {
+        var m = mr.Method;
+        if (m.MethodKind != MethodKind.Ordinary || invoke.Parameters.Length > 5 || invoke.Parameters.Any(p => p.RefKind != RefKind.None)) return null;
+        if (m.IsGenericMethod || m.ContainingType.IsGenericType || IsBaseAccess(mr.Instance)) return null;
+        if (mr.Instance != null && (w.IsValue(m.ContainingType) || mr.Instance.Type is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })) return null;
+        var types = invoke.Parameters.Select(p => T(p.Type)).ToList();
+        string ret = invoke.ReturnsVoid ? "()" : T(invoke.ReturnType);
+        string name = $"mg_{World.Snake(w.Unique(m.ContainingType))}__{World.Snake(m.Name)}_nothing_{World.Mark(World.FullName(m.ContainingType) + "|" + string.Join(",", types) + "->" + ret)}";
+        var slot = mr.IsVirtual ? (IMethodSymbol)World.Slot(m.OriginalDefinition) : null;
+        w.Fns.TryAdd(name, new World.FnEntry(name, $"{World.FullName(m.ContainingType)}::{m.Name}", slot, types, ret, invoke.ReturnsVoid ? "()" : "Ok(())"));
         return $"g::fns::{name}({(mr.Instance == null ? "Obj::NULL" : Expr(mr.Instance))})";
     }
 

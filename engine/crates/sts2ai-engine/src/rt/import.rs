@@ -1,7 +1,10 @@
 //! Reading an export of the game's combat (DESIGN.md, "The export"): the pieces the generated reader is made of.
 //! Nothing here forgives: a member that is missing, one too many, a value of another shape, each is an error.
 
-use super::{Arena, Dec, Dict, KeyValuePair, Obj, Queue, Set, Stack, Stored, Str};
+use super::{
+    Arena, Combat, Dec, Dict, Fn0, Fn1, Fn2, Fn3, Fn4, Fn5, KeyValuePair, Obj, Queue, Set, Stack,
+    Stored, Str,
+};
 use crate::r#gen::kinds::Kind;
 use serde_json::{Map, Value};
 
@@ -292,3 +295,75 @@ macro_rules! rd_tuple {
 rd_tuple!(2; A 0, B 1);
 rd_tuple!(3; A 0, B 1, C 2);
 rd_tuple!(4; A 0, B 1, C 2, D 3);
+
+/// A delegate: null, or `{"method": "<class>::<method>", "target": reference or null}`, the method by the game's own
+/// names (the class by its CLR full name, a lambda by the name the compiler gave it). It is the function of port's
+/// table under that name whose type is the field's; a method the engine has no function for is refused.
+macro_rules! rd_delegate {
+    ($name:ident $(, $ty:ident)*) => {
+        impl<$($ty: 'static,)* R: 'static> Rd for $name<$($ty,)* R> {
+            fn rd(v: &Value) -> Res<Self> {
+                if v.is_null() {
+                    return Ok(Self::NULL);
+                }
+                let o = object(v)?;
+                members(o, 2)?;
+                let method: String = field(o, "method")?;
+                let target: Obj = field(o, "target")?;
+                let table = crate::r#gen::fns::BY_NAME;
+                let from = table.partition_point(|x| x.0 < method.as_str());
+                let same = table[from..].iter().take_while(|x| x.0 == method);
+                let mut known = false;
+                for (_, id, f) in same {
+                    known = true;
+                    if let Some(f) = f.downcast_ref::<fn(Obj, $($ty,)* &mut Combat) -> R>() {
+                        return Ok(Self::of(*id, target, *f));
+                    }
+                }
+                Err(if known {
+                    format!("{method} is not a function of this delegate's type")
+                } else {
+                    format!("the engine has no function {method}")
+                })
+            }
+        }
+    };
+}
+rd_delegate!(Fn0);
+rd_delegate!(Fn1, A);
+rd_delegate!(Fn2, A, B);
+rd_delegate!(Fn3, A, B, D);
+rd_delegate!(Fn4, A, B, D, E);
+rd_delegate!(Fn5, A, B, D, E, F);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rt::R;
+    use serde_json::json;
+
+    const UNSET: &str =
+        "MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine.MoveState::UnsetMove";
+
+    #[test]
+    fn a_delegate_is_read_by_the_games_name_of_its_method() {
+        let v = json!({"method": UNSET, "target": null});
+        let f = Fn1::<Vec<Obj>, R<()>>::rd(&v).unwrap();
+        assert_eq!(f.bound().map(|(_, target)| target), Some(Obj::NULL));
+        // The same method read twice is the same delegate, as two delegates of one method are equal in C#.
+        assert!(f == Fn1::<Vec<Obj>, R<()>>::rd(&v).unwrap());
+        assert!(Fn1::<Vec<Obj>, R<()>>::rd(&Value::Null).unwrap().is_null());
+    }
+
+    #[test]
+    fn a_delegate_of_another_type_or_of_no_function_is_refused() {
+        let v = json!({"method": UNSET, "target": null});
+        let e = Fn0::<bool>::rd(&v).unwrap_err();
+        assert!(e.contains("not a function of this delegate's type"), "{e}");
+        let v = json!({"method": "Some.Class::NoSuchMethod", "target": null});
+        let e = Fn0::<bool>::rd(&v).unwrap_err();
+        assert!(e.contains("the engine has no function"), "{e}");
+        let v = json!({"method": UNSET});
+        assert!(Fn1::<Vec<Obj>, R<()>>::rd(&v).is_err());
+    }
+}

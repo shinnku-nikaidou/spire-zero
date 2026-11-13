@@ -77,6 +77,7 @@ public sealed partial class Body
             if (w.IsDropped(p)) droppedLocals.Add(p);
         var f = new Frame { Async = m.IsAsync, ReturnsTask = World.IsTask(m.ReturnType, out _), Ret = m.ReturnsVoid ? null : m.ReturnType };
         if (op != null) f.Iterator = HasYield(op);
+        memberRoot = op;
         if (op != null && w.Lambdas != null) BindLambdas(op, w.Lambdas.Of(m));
         if (f.Iterator && !w.Yields(m)) throw new Unsupported("yield in what is not a sequence of values");
         foreach (var p in m.Parameters)
@@ -457,6 +458,9 @@ public sealed partial class Body
                 return;
         }
     }
+
+    /// <summary>The whole body of the member being translated.</summary>
+    private IOperation? memberRoot;
 
     /// <summary>Whether the member's body is more than one statement.</summary>
     private bool severalStatements;
