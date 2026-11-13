@@ -273,6 +273,11 @@ members = [
     "GameActionPlayerChoiceContext.SignalPlayerChoiceBegun", "GameActionPlayerChoiceContext.SignalPlayerChoiceEnded",
     # waits for a creature another player's game has yet to make
     "CombatState.GetCreatureAsync",
+    # The shipped game damages each enemy as the boulder reaches it, one hit per enemy in list order; test mode deals
+    # one hit to all of them, whose hooks run after every enemy has lost its HP. The simulator the engine is held
+    # against keeps the shipped rule (its RuleFidelity), which is drawn on the screen and not code port can read
+    # (manual/rolling_boulder_power.rs).
+    "RollingBoulderPower.DoDamage",
 ]
 
 [open]

@@ -23,6 +23,7 @@ pub mod i_card_selector;
 pub mod mod_helper;
 pub mod model_db;
 pub mod object;
+pub mod rolling_boulder_power;
 pub mod saved_properties;
 pub mod whispering_earring;
 

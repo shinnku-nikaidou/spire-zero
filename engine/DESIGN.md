@@ -78,6 +78,11 @@ state), `[fields]` (classes of which only the named fields are state: `RunManage
 unset, so the value is computed at each use), `[value]` (members with a fixed value in the headless game, as a Rust
 expression: `TestMode.IsOn`, the empty list of mods).
 
+The game the engine is held against runs with test mode on, and the simulator keeps the shipped game's rule in the
+few places where test mode changes one (its `RuleFidelity`). The engine follows it there: a `[value]` for one member
+where the shipped branch is code (`TestMode.IsOn@Cauldron.GenerateRewards`), and one member written by hand where the
+shipped rule is drawn on the screen (Rolling Boulder damages one enemy after the other, `manual/rolling_boulder_power.rs`).
+
 **What happens to presentation.** The engine is the headless game: there is no node, no sound, no text.
 
 - A statement that only calls presentation is left out. A local of a presentation type, and the statements that use it,
