@@ -444,7 +444,8 @@ internal sealed class RunSession : IDisposable
     {
         var state = CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
         var legal = CombatActions.Legal(state, Player);
-        var decision = new CombatDecision(legal, () => Observe.Combat(state, Player), combat => Of(new CombatScreen { Combat = combat }));
+        var decision = new CombatDecision(legal, () => Observe.Combat(state, Player), combat => Of(new CombatScreen { Combat = combat }),
+            () => LiveCombat.Export(Player, View(previews: false)));
         var action = _combat.Choose(decision);
         if (!legal.Contains(action)) throw new InvalidOperationException($"combat policy chose {action}, which is not legal");
         Record(Surfaces.Combat, action.ToString(), () => new CombatScreen { Combat = decision.Observation });

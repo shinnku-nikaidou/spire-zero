@@ -2,15 +2,23 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain;
 
+/// <summary>The live combat written out for the engine to take in, and the run around it as it stands: what a world
+/// made from it shows as its run (<see cref="ICombatWorld.Run"/>) before the combat changes more of it.</summary>
+/// <param name="Bytes">The combat as the bridge's <c>EngineExport</c> wrote it.</param>
+public sealed record CombatExport(byte[] Bytes, RunView Run);
+
 /// <summary>
 /// What a combat policy gets at each decision: the legal actions, and the observation on request. In a run, the run
 /// observation around the combat too (<paramref name="inRun"/> makes it from the combat's); a combat started on its
-/// own has none.
+/// own has none. A host that holds the live game can write the combat out for the engine (<paramref name="export"/>),
+/// where the game stands between actions: not at a card prompt.
 /// </summary>
-public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe, Func<CombatObservation, Observation>? inRun = null)
+public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe, Func<CombatObservation, Observation>? inRun = null,
+    Func<CombatExport>? export = null)
 {
     private CombatObservation? _observation;
     private Observation? _runObservation;
+    private CombatExport? _export;
 
     public IReadOnlyList<CombatAction> Legal { get; } = legal;
 
@@ -19,6 +27,9 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
 
     /// <summary>Built on first use, like <see cref="Observation"/>.</summary>
     public Observation? RunObservation => _runObservation ??= inRun?.Invoke(Observation);
+
+    /// <summary>The live combat for the engine, written on first use; null where the host has none to give.</summary>
+    public CombatExport? Export => _export ??= export?.Invoke();
 }
 
 /// <summary>
