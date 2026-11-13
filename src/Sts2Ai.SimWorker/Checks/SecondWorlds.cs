@@ -102,7 +102,7 @@ internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds
     {
         if (real.Prompt != null) return null;
         long started = Stopwatch.GetTimestamp();
-        var written = export.Write(real.Player, HeadlessGame.GameVersion);
+        var written = export.Write(HeadlessGame.GameVersion);
         byte[] bytes = written.Bytes;
         Written = (Written.Count + 1, Written.Bytes + bytes.Length, Written.Ms + Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         foreach (var (type, references) in written.Outside) Outside[type] = Outside.GetValueOrDefault(type) + references;

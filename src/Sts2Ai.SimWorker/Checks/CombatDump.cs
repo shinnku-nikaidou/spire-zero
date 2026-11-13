@@ -23,7 +23,7 @@ internal sealed class CombatDump(EngineExport export, string root)
             [.. player.Deck.Cards.Select(c => Observe.Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)],
             [.. player.Relics.Select(Observe.Relic)], [.. player.PotionSlots.Select(p => p?.Id.Entry)]);
         return new(prompt,
-            going && !prompt ? export.Write(player, HeadlessGame.GameVersion).Bytes : null,
+            going && !prompt ? export.Write(HeadlessGame.GameVersion).Bytes : null,
             ProtocolJson.Serialize(run),
             going ? new Keys(HiddenState.Full(CombatSession.State, player), PimcBrain.StateKey(real.Observation()),
                 HiddenState.KeyText(CombatSession.State, player), HiddenState.FullText(CombatSession.State, player)) : null);
