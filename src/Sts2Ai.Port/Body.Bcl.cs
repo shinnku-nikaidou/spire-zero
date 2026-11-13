@@ -323,7 +323,7 @@ public sealed partial class Body
         return op;
     }
 
-    private static int ArityOf(IOperation arg)
+    internal static int ArityOf(IOperation arg)
     {
         var t = arg.Type as INamedTypeSymbol;
         if (t?.DelegateInvokeMethod != null) return t.DelegateInvokeMethod.Parameters.Length;

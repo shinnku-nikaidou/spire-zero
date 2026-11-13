@@ -77,6 +77,8 @@ public sealed partial class Body
             if (w.IsDropped(p)) droppedLocals.Add(p);
         var f = new Frame { Async = m.IsAsync, ReturnsTask = World.IsTask(m.ReturnType, out _), Ret = m.ReturnsVoid ? null : m.ReturnType };
         if (op != null) f.Iterator = HasYield(op);
+        // A member whose body is a LINQ chain C# has not evaluated: its `__each` form walks the chain (ReturnWalk).
+        if (op != null && !f.Iterator && w.Yields(m)) f.Iterator = lazyMember = true;
         memberRoot = op;
         if (op != null && w.Lambdas != null) BindLambdas(op, w.Lambdas.Of(m));
         if (f.Iterator && !w.Yields(m)) throw new Unsupported("yield in what is not a sequence of values");
@@ -462,6 +464,9 @@ public sealed partial class Body
     /// <summary>The whole body of the member being translated.</summary>
     private IOperation? memberRoot;
 
+    /// <summary>Whether the member being translated gives a LINQ chain that C# has not evaluated yet (World.LazyMember).</summary>
+    private bool lazyMember;
+
     /// <summary>Whether the member's body is more than one statement.</summary>
     private bool severalStatements;
 
@@ -498,6 +503,7 @@ public sealed partial class Body
     private string Return(IOperation? value)
     {
         var f = frames.Peek();
+        if (f.Iterator && lazyMember && frames.Count == 1 && value != null) return ReturnWalk(value);
         if (f.Iterator) throw new Unsupported("return in an iterator");
         if (value == null)
         {
@@ -531,9 +537,11 @@ public sealed partial class Body
         // chain's source, and each use runs the chain over it (a loop over it: LazySteps).
         if (init != null && local.Type is INamedTypeSymbol { Name: "IEnumerable" } && IsDeferred(init))
         {
-            if (!reassigned.Contains(local) && !declaredAhead.Contains(local) && LazyChain(init) is { } chain && LazyLocal(local, chain.Source, chain.Steps, whole) is { } held)
+            var chain = LazyChain(init);
+            var root = chain?.Source ?? init;
+            if (!reassigned.Contains(local) && !declaredAhead.Contains(local) && (chain != null || WalkOf(root) is { CallOn: not null }))
             {
-                sb.Append(held);
+                sb.Append(LazyLocal(local, root, chain?.Steps ?? [], whole));
                 Written++;
                 return;
             }
@@ -717,16 +725,21 @@ public sealed partial class Body
         if (fe.LoopControlVariable is IDeclarationExpressionOperation { Expression: ITupleOperation parts }) { ForEachTuple(fe, parts, sb); return; }
         ILocalSymbol? local = fe.LoopControlVariable is IVariableDeclaratorOperation vd ? vd.Symbol : null;
         if (local == null) throw new Unsupported("foreach without a plain loop variable");
-        if (!w.IsDropped(local.Type) && WalkCall(fe.Collection) is { } walk) { ForEachWalk(fe, local, walk, sb); return; }
+        if (!w.IsDropped(local.Type) && WalkCall(fe.Collection) is { } walk)
+        {
+            ForEachWalk(fe, local, new WalkSource(each => Invoke(walk, each), T(World.WalkItem(walk.TargetMethod.ReducedFrom ?? walk.TargetMethod)!), null, null), new LazyCode("", "", LazyFirst, "return Ok(false);", 0), sb);
+            return;
+        }
         string coll;
-        string label = "'l" + tmp++, next = label, item = "", steps = "", flags = "";
-        int nested = 0;
+        string label = "'l" + tmp++;
+        LazyChainOf? lazy;
+        var run = new LazyCode("", "", "", $"continue {label};", 0);
         try
         {
             if (w.IsDropped(local.Type)) throw new Dropped(local.Type.Name);
-            var lazy = Lazy(fe.Collection);
-            coll = lazy?.Source ?? IterSource(fe.Collection);
-            if (lazy != null) (steps, flags, item, next, nested) = LazySteps(lazy.Value.Steps, label);
+            lazy = Lazy(fe.Collection);
+            coll = lazy == null ? IterSource(fe.Collection) : lazy.Code ?? "";
+            if (lazy != null) run = lazy.Walk != null ? LazySteps(lazy.Steps, "return Ok(true);", "return Ok(false);") : LazySteps(lazy.Steps, $"break {label};", $"continue {label};");
             if (lazy is not { Whole: true } && IsDeferred(fe.Collection) && HoldsGameCall(fe.Body)) w.Rep.Deferred(Where, fe);
         }
         catch (Dropped d)
@@ -740,11 +753,12 @@ public sealed partial class Body
             Leave(fe);
             return;
         }
-        loops.Push(($"break {label};", $"continue {next};"));
+        if (lazy?.Walk != null) { ForEachWalk(fe, local, lazy.Walk, run, sb); return; }
+        loops.Push(($"break {label};", run.Next));
         string body = Sub(fe.Body);
         loops.Pop();
-        if (item.Length == 0) sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
-        else sb.Append($"{flags}{label}: for {LazyFirst} in {coll} {{\n{steps}let mut {NameOf(local)}: {T(local.Type)} = {item};\n{body}}}{new string('}', nested)}\n");
+        if (lazy == null) sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
+        else sb.Append($"{run.Before}{label}: for {LazyFirst} in {coll} {{\n{run.Code}let mut {NameOf(local)}: {T(local.Type)} = {run.Item};\n{body}}}{new string('}', run.Nested)}\n");
         Written++;
     }
 
@@ -754,101 +768,115 @@ public sealed partial class Body
 
     /// <summary>Locals that hold a LINQ chain as C# holds it: the Rust local has the chain's source, and these are
     /// the operators a walk runs over it. `Whole`: nothing below the source is left for the walk to evaluate.</summary>
-    private readonly Dictionary<ISymbol, (List<LazyStep> Steps, bool Whole)> lazyLocals = new(Eq);
+    private readonly Dictionary<ISymbol, LazyChainOf> lazyLocals = new(Eq);
 
-    /// <summary>One operator of a LINQ chain that hands its values on one at a time and runs a function for each.</summary>
-    private sealed record LazyStep(string Name, IOperation Function);
+    /// <summary>A sequence of the game that is walked by handing it the code to run for each value (a member written
+    /// with yield, or one that gives a chain): the call of its `__each` form with that code, the type of a value, and,
+    /// for a property of an object, the same call and the call that gives all values, on a given object.</summary>
+    private sealed record WalkSource(Func<string, string> Call, string Item, Func<string, string, string>? CallOn, Func<string, string>? ValueOn);
 
-    /// <summary>The operators of LINQ that hand values on as they are asked for (the others take everything first).</summary>
-    private static readonly HashSet<string> Streaming =
-    [
-        "Where", "Select", "SelectMany", "TakeWhile", "SkipWhile", "Take", "Skip", "Concat", "Append", "Prepend", "Cast", "OfType", "Distinct", "DefaultIfEmpty",
-        "Union", "Except", "Intersect", "Zip", "AsEnumerable",
-    ];
+    /// <summary>What a loop walks, when it runs the walk itself: the source (its code, or the sequence to hand the
+    /// loop's code to), the operators to run for each value, and whether nothing below the source is left that C#
+    /// would evaluate as the walk goes.</summary>
+    private sealed record LazyChainOf(string? Code, WalkSource? Walk, List<Chains.Step> Steps, bool Whole);
 
-    private static bool IsLinq(IMethodSymbol m) => m.ContainingType is { Name: "Enumerable", ContainingNamespace.Name: "Linq" };
+    /// <summary>The operators of a chain as code (LazySteps): the code, what is declared before the walk, the name of
+    /// the value the body gets, the statement that goes on with the next value, how many loops were opened inside.</summary>
+    private sealed record LazyCode(string Code, string Before, string Item, string Next, int Nested);
 
-    private static List<IOperation> Ordered(IInvocationOperation inv) => inv.Arguments.OrderBy(x => x.Parameter!.Ordinal).Select(x => x.Value).ToList();
-
-    /// <summary>Whether C# evaluates the sequence only as it is walked, and runs code of the game while it does: a LINQ
-    /// chain in which an operator that runs a function for each value has only operators above it that hand values
-    /// on one at a time; or a local that holds one.</summary>
+    /// <summary>Whether C# evaluates the sequence only as it is walked, and runs code of the game while it does
+    /// (World.DeferredChain); or a local that holds such a sequence.</summary>
     private bool IsDeferred(IOperation? op)
     {
-        while (op != null)
+        if (op != null && Chains.Bare(op) is ILocalReferenceOperation l) return deferredLocals.Contains(l.Local) || lazyLocals.ContainsKey(l.Local);
+        // A chain over such a local.
+        for (var at = op; at != null;)
         {
-            while (op is IConversionOperation { IsTryCast: false } cv) op = cv.Operand;
-            if (op is ILocalReferenceOperation l) return deferredLocals.Contains(l.Local) || lazyLocals.ContainsKey(l.Local);
-            // A member of the game that gives such a chain.
-            if (op is IPropertyReferenceOperation { Property: var lp } && w.LazyMember(lp)) return true;
-            if (op is IInvocationOperation { TargetMethod: var lm } && World.IsSource(lm.ContainingType) && w.LazyMember(lm)) return true;
-            if (op is not IInvocationOperation inv || !IsLinq(inv.TargetMethod) || !Streaming.Contains(inv.TargetMethod.Name)) return false;
-            var a = Ordered(inv);
-            if (a.Skip(1).Any(x => x.Type?.TypeKind == TypeKind.Delegate)) return true;
-            op = a.Count > 0 ? a[0] : null;
+            at = Chains.Bare(at);
+            if (at is ILocalReferenceOperation under) return deferredLocals.Contains(under.Local) || lazyLocals.ContainsKey(under.Local);
+            if (at is not IInvocationOperation inv || !Chains.IsLinq(inv.TargetMethod) || !Chains.Streaming.Contains(inv.TargetMethod.Name)) break;
+            var a = Chains.Ordered(inv);
+            at = a.Count > 0 ? a[0] : null;
         }
-        return false;
+        return w.DeferredChain(op);
     }
 
-    /// <summary>A LINQ chain split where a walk can take it over: the operators at its end that run one function for
-    /// each value (innermost first), and the sequence they are applied to, which is evaluated where it stands.</summary>
-    private (IOperation Source, List<LazyStep> Steps)? LazyChain(IOperation op)
+    /// <summary>A LINQ chain split where a walk can take it over (Chains.Split); null when no operator at its end is
+    /// one a walk runs.</summary>
+    private (IOperation Source, List<Chains.Step> Steps)? LazyChain(IOperation op)
     {
-        var steps = new List<LazyStep>();
-        while (true)
-        {
-            var bare = op;
-            while (bare is IConversionOperation { IsTryCast: false } cv) bare = cv.Operand;
-            if (bare is not IInvocationOperation inv || !IsLinq(inv.TargetMethod) || inv.TargetMethod.Name is not ("Where" or "Select" or "SelectMany" or "TakeWhile" or "SkipWhile")) break;
-            var a = Ordered(inv);
-            if (a.Count != 2 || ArityOf(a[1]) != 1) break;
-            steps.Add(new LazyStep(inv.TargetMethod.Name, a[1]));
-            op = a[0];
-        }
-        steps.Reverse();
-        return steps.Count == 0 ? null : (op, steps);
+        var (source, steps) = Chains.Split(op, w.IsObj);
+        return steps.Count == 0 ? null : (source, steps);
     }
 
-    /// <summary>What a loop walks, when it is a LINQ chain the loop can run itself: the code of its source and the
-    /// operators to run for each value.</summary>
-    private (string Source, List<LazyStep> Steps, bool Whole)? Lazy(IOperation collection)
+    /// <summary>A read of a sequence of the game that can be walked value by value: a call of a method written with
+    /// yield, or a property that is one or that gives a chain.</summary>
+    private WalkSource? WalkOf(IOperation source)
     {
-        var bare = collection;
-        while (bare is IConversionOperation { IsTryCast: false } cv) bare = cv.Operand;
-        if (bare is ILocalReferenceOperation l && lazyLocals.TryGetValue(l.Local, out var held)) return ($"{NameOf(l.Local)}.clone()", held.Steps, held.Whole);
-        if (LazyChain(collection) is not { } chain) return null;
-        return (Expr(chain.Source), chain.Steps, !IsDeferred(chain.Source));
+        if (WalkCall(source) is { } call) return new WalkSource(each => Invoke(call, each), T(World.WalkItem(call.TargetMethod.ReducedFrom ?? call.TargetMethod)!), null, null);
+        var bare = source;
+        while (bare is IConversionOperation { IsTryCast: false, Conversion: { IsIdentity: true } or { IsReference: true, IsImplicit: true } } cv) bare = cv.Operand;
+        if (bare is not IPropertyReferenceOperation { Arguments.Length: 0 } op) return null;
+        var def = op.Property.OriginalDefinition;
+        var type = def.ContainingType;
+        if (def.GetMethod is not { } getter || World.WalkItem(getter) is not { } item) return null;
+        if (!World.IsSource(type) || World.IsGeneratedList(type) || w.IsValue(type) || w.IsDropped(type) || w.IsDropMember(def) || w.IsDropped(def.Type) || Value(def) != null || w.StaticState(def) != null) return null;
+        bool virt = !def.IsStatic && VirtualMember(def) && !IsBaseAccess(op.Instance);
+        string path = CallPath(getter, virt);
+        if (!(path.StartsWith("g::dispatch::") ? w.IsWalk((IMethodSymbol)World.Slot(getter)) : w.Yields(getter))) return null;
+        if (def.IsStatic)
+        {
+            string kinds = string.Concat(KindArgs(getter).Select(k => k + ", "));
+            return new WalkSource(each => $"{path}__each({kinds}c, {each})", T(item), null, null);
+        }
+        return new WalkSource(each => $"{path}__each({(op.Instance == null ? "me" : Expr(op.Instance))}, c, {each})", T(item),
+            (on, each) => $"{path}__each({on}, c, {each})", on => $"{path}({on}, c)");
+    }
+
+    /// <summary>What a loop walks, when the loop runs the walk itself: a LINQ chain C# evaluates as it is walked, a
+    /// local that holds one, or a sequence of the game. Null for a plain collection.</summary>
+    private LazyChainOf? Lazy(IOperation collection)
+    {
+        if (Chains.Bare(collection) is ILocalReferenceOperation l && lazyLocals.TryGetValue(l.Local, out var held)) return held;
+        var chain = LazyChain(collection);
+        var root = chain?.Source ?? collection;
+        var steps = chain?.Steps ?? [];
+        if (WalkOf(root) is { } walk) return new LazyChainOf(null, walk, steps, true);
+        return steps.Count == 0 ? null : new LazyChainOf(Expr(root), null, steps, !IsDeferred(root));
     }
 
     private const string LazyFirst = "__x0";
 
-    /// <summary>The operators of a chain as the code a loop over the chain's source runs for each value, before its own
-    /// body: C# runs an operator's function for a value when the loop reaches that value, after the loop's body ran
-    /// for the values before it. `Where` goes on to the next value, `Select` makes the value, `SelectMany` is a loop
-    /// inside, `TakeWhile` ends the walk. Gives the code, what is declared before the loop, the name of the value the
-    /// body gets, the loop a `continue` of the body goes on with, and how many loops were opened inside.</summary>
-    private (string Code, string Before, string Item, string Next, int Nested) LazySteps(List<LazyStep> steps, string label)
+    /// <summary>The operators of a chain as the code a walk of the chain's source runs for each value, before the
+    /// loop's own body: C# runs an operator's function for a value when the loop reaches that value, after the loop's
+    /// body ran for the values before it. `Where` goes on to the next value, `Select` makes the value, `SelectMany`
+    /// is a loop inside, `TakeWhile` ends the walk. `end` and `next` are the statements that end the walk and go on
+    /// with the source's next value.</summary>
+    private LazyCode LazySteps(List<Chains.Step> steps, string end, string next)
     {
         var code = new StringBuilder();
         var before = new StringBuilder();
-        string item = LazyFirst, next = label;
+        string item = LazyFirst;
         int nested = 0;
         foreach (var step in steps)
         {
-            string f = $"({Closure(step.Function, 1)})";
+            string f = step.Function == null ? "" : $"({Closure(step.Function, 1)})";
             switch (step.Name)
             {
+                case "OfType":
+                    code.Append($"if !rt::is({item}, {KindExpr(step.Type!)}, c) {{ {next} }}\n");
+                    break;
                 case "Where":
-                    code.Append($"if !{f}({item}.clone(), c) {{ continue {next}; }}\n");
+                    code.Append($"if !{f}({item}.clone(), c) {{ {next} }}\n");
                     break;
                 case "TakeWhile":
-                    code.Append($"if !{f}({item}.clone(), c) {{ break {label}; }}\n");
+                    code.Append($"if !{f}({item}.clone(), c) {{ {end} }}\n");
                     break;
                 case "SkipWhile":
                 {
                     string skipping = Tmp("skipping");
                     before.Append($"let mut {skipping} = true;\n");
-                    code.Append($"if {skipping} && {f}({item}.clone(), c) {{ continue {next}; }}\n{skipping} = false;\n");
+                    code.Append($"if {skipping} && {f}({item}.clone(), c) {{ {next} }}\n{skipping} = false;\n");
                     break;
                 }
                 case "Select":
@@ -860,30 +888,62 @@ public sealed partial class Body
                 }
                 case "SelectMany":
                 {
-                    string inner = Tmp("x");
-                    next = "'l" + tmp++;
-                    code.Append($"{next}: for {inner} in {f}({item}, c) {{\n");
+                    string inner = Tmp("x"), label = "'l" + tmp++;
+                    code.Append($"{label}: for {inner} in {f}({item}, c) {{\n");
+                    next = $"continue {label};";
                     item = inner;
                     nested++;
                     break;
                 }
             }
         }
-        return (code.ToString(), before.ToString(), item, next, nested);
+        return new LazyCode(code.ToString(), before.ToString(), item, next, nested);
     }
 
-    /// <summary>A local that holds a LINQ chain: the Rust local is the chain's source, read here, and every use of the
-    /// local is the chain over it, written here once (an alias, like a list read out of a field). Null when the chain
-    /// cannot be written. C# reads the source's items at each use too; the report lists a local with game code
-    /// between where it is declared and where it is last used, which is where that could show.</summary>
-    private string? LazyLocal(ILocalSymbol local, IOperation source, List<LazyStep> steps, IOperation whole)
+    /// <summary>`return chain;` of a member that gives a chain, in its `__each` form: the chain is walked here, and
+    /// each value is handed to the code that walks the member.</summary>
+    private string ReturnWalk(IOperation value)
     {
-        string name = NameOf(local), chain = $"{name}.clone()";
+        var lazy = Lazy(value) ?? throw new Unsupported("a member that gives a chain returns something else");
+        if (lazy.Walk is { } walk)
+        {
+            var inside = LazySteps(lazy.Steps, "return Ok(true);", "return Ok(false);");
+            string last = inside.Nested == 0 ? $"__k({inside.Item}, c)" : $"if __k({inside.Item}, c)? {{ return Ok(true); }}\n{new string('}', inside.Nested)}\nOk(false)";
+            return $"{inside.Before}return {walk.Call($"&mut |{LazyFirst}: {walk.Item}, c: &mut Combat| -> R<bool> {{\n{inside.Code}{last}\n}}")};";
+        }
+        string label = "'l" + tmp++;
+        var run = LazySteps(lazy.Steps, $"break {label};", $"continue {label};");
+        return $"{run.Before}{label}: for {LazyFirst} in {lazy.Code} {{\n{run.Code}if __k({run.Item}, c)? {{ return Ok(true); }}\n}}{new string('}', run.Nested)}";
+    }
+
+    /// <summary>A local that holds a LINQ chain or a sequence of the game: the Rust local is the chain's source, read
+    /// here (the object, for a sequence that is a property of one), and every use of the local is the chain over it,
+    /// written here once (an alias, like a list read out of a field). C# reads the source's items at each use too;
+    /// the report lists a local with game code between where it is declared and where it is last used, which is
+    /// where that could show.</summary>
+    private string LazyLocal(ILocalSymbol local, IOperation source, List<Chains.Step> steps, IOperation whole)
+    {
+        string name = NameOf(local), code, chain;
+        LazyChainOf held;
+        if (WalkOf(source) is { CallOn: { } callOn, ValueOn: { } valueOn } walk && Chains.Bare(source) is IPropertyReferenceOperation { Instance: var on })
+        {
+            code = on == null ? "me" : Expr(on);
+            chain = valueOn(name);
+            held = new LazyChainOf(null, new WalkSource(each => callOn(name, each), walk.Item, null, null), steps, true);
+        }
+        else
+        {
+            code = Expr(source);
+            chain = $"{name}.clone()";
+            held = new LazyChainOf(chain, null, steps, !IsDeferred(source));
+        }
         foreach (var step in steps)
         {
-            string f = Closure(step.Function, 1);
+            string f = step.Function == null ? "" : Closure(step.Function, 1);
             chain = step.Name switch
             {
+                "OfType" => $"linq::of_type({chain}, {KindExpr(step.Type!)}, c)",
+                "Cast" => chain,
                 "Where" => $"linq::where_({chain}, {f}, c)",
                 "Select" => $"linq::select({chain}, {f}, c)",
                 "SelectMany" => $"linq::select_many({chain}, {f}, c)",
@@ -891,14 +951,13 @@ public sealed partial class Body
                 _ => $"linq::skip_while({chain}, {f}, c)",
             };
         }
-        string code = Expr(source);
         aliases[local] = chain;
-        lazyLocals[local] = (steps, !IsDeferred(source));
+        lazyLocals[local] = held;
         if (whole.Parent is IBlockOperation block)
         {
             var after = block.Operations.SkipWhile(o => o != whole).Skip(1).ToList();
             int last = after.FindLastIndex(o => o.DescendantsAndSelf().OfType<ILocalReferenceOperation>().Any(r => Eq.Equals(r.Local, local)));
-            if (after.Take(Math.Max(last, 0)).Any(HoldsGameCall)) w.Rep.Note("LINQ chains held in a local with game code between where they are declared and where they are last used", $"{Where}: {local.Name}");
+            if (after.Take(Math.Max(last, 0)).Any(HoldsGameCall)) w.Rep.HeldChain(Where, whole);
         }
         return $"let mut {name} = {code};\n";
     }
@@ -906,12 +965,12 @@ public sealed partial class Body
     /// <summary>foreach over a call of a sequence written with yield. In C# the sequence's code and the loop's body
     /// take turns; here the loop's body is handed to the sequence, which runs it for each value as it reaches it. The
     /// body answers whether the walk ends (a break, or a return whose value waits in a variable outside).</summary>
-    private void ForEachWalk(IForEachLoopOperation fe, ILocalSymbol local, IInvocationOperation call, StringBuilder sb)
+    private void ForEachWalk(IForEachLoopOperation fe, ILocalSymbol local, WalkSource walk, LazyCode run, StringBuilder sb)
     {
         var f = frames.Peek();
         var scope = new Scope { Label = Tmp("w"), Frame = frames.Count, Walk = true };
         scopes.Push(scope);
-        loops.Push(("return Ok(true);", "return Ok(false);"));
+        loops.Push(("return Ok(true);", run.Next));
         walks++;
         string body;
         try { body = Sub(fe.Body); }
@@ -922,9 +981,10 @@ public sealed partial class Body
             scopes.Pop();
         }
         string name = NameOf(local);
-        string item = T(World.WalkItem((call.TargetMethod.ReducedFrom ?? call.TargetMethod))!);
-        string each = $"&mut |{name}: {item}, c: &mut Combat| -> R<bool> {{\nlet mut {name}: {T(local.Type)} = {name};\n{body}Ok(false)\n}}";
-        string walked = Invoke(call, each);
+        // The chain's operators run for each value before the body; a loop one of them opened closes after it.
+        string each = $"&mut |{LazyFirst}: {walk.Item}, c: &mut Combat| -> R<bool> {{\n{run.Code}let mut {name}: {T(local.Type)} = {run.Item};\n{body}{new string('}', run.Nested)}\nOk(false)\n}}";
+        string walked = walk.Call(each);
+        sb.Append(run.Before);
         if (scope.Used) sb.Append($"let mut {scope.Label} = None;\n");
         // A stop (a card prompt) inside the body leaves through the sequence; where nothing is awaited there is none.
         sb.Append(f.Async || f.Iterator ? $"{walked}?;\n" : $"rt::walked({walked});\n");

@@ -14,6 +14,7 @@ public sealed class Report
     private readonly ConcurrentBag<string> failed = [];
     private readonly ConcurrentBag<string> fieldsSkipped = [];
     private readonly ConcurrentBag<string> deferred = [];
+    private readonly ConcurrentBag<string> heldChains = [];
 
     public int ClassesTranslated, MembersTranslated, MembersFailed, MembersPresentation, Stubs, ManualRefs, Dispatchers, StatementsLeftOut, Quarantined;
 
@@ -52,9 +53,20 @@ public sealed class Report
         deferred.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}");
     }
 
+    /// <summary>A local that holds a LINQ chain whose source the engine reads where the local is declared, with game
+    /// code between there and the local's last use: C# reads the source's items at each use.</summary>
+    public void HeldChain(string where, IOperation declaration)
+    {
+        var span = declaration.Syntax.GetLocation().GetLineSpan();
+        string first = declaration.Syntax.ToString().Replace("\r", "").Split('\n')[0].Trim();
+        if (first.Length > 180) first = first[..180] + "...";
+        heldChains.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}");
+    }
+
     public void Reset()
     {
         deferred.Clear();
+        heldChains.Clear();
         counts.Clear();
         unsupported.Clear();
         notes.Clear();
@@ -97,6 +109,8 @@ public sealed class Report
         foreach (var s in droppedWithCall.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== loops over a LINQ chain C# evaluates as the loop goes (here: where it is written), with game code inside");
         foreach (var s in deferred.Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== locals that hold a LINQ chain, with game code between where they are declared (where the chain's source is read) and their last use");
+        foreach (var s in heldChains.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== members not translated");
         foreach (var s in failed.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         return sb.ToString();

@@ -706,47 +706,71 @@ public sealed class World
         if (m.MethodKind is not (MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation or MethodKind.PropertyGet) || WalkItem(m) == null) return false;
         if (!IsSource(m.ContainingType) || self.CatOfMember(m) != Cat.Translated || self.IsDropMember(m) || self.IsDropped(m.ReturnType)) return false;
         var syntax = m.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-        return syntax != null && syntax
+        if (syntax == null) return false;
+        // A member whose whole body is a LINQ chain not yet evaluated is a sequence in the same way: C# runs the
+        // chain's functions for a value when the caller asks for it.
+        return self.LazyMember(m.AssociatedSymbol ?? m) || syntax
             .DescendantNodes(n => n is not (Microsoft.CodeAnalysis.CSharp.Syntax.AnonymousFunctionExpressionSyntax or Microsoft.CodeAnalysis.CSharp.Syntax.LocalFunctionStatementSyntax))
             .Any(n => n is Microsoft.CodeAnalysis.CSharp.Syntax.YieldStatementSyntax);
     }, this);
 
     private readonly ConcurrentDictionary<ISymbol, bool> _lazy = new(Eq);
+    private readonly ConcurrentDictionary<ISymbol, bool> _deferred = new(Eq);
 
-    private static readonly HashSet<string> StreamingNames =
-    [
-        "Where", "Select", "SelectMany", "TakeWhile", "SkipWhile", "Take", "Skip", "Concat", "Append", "Prepend", "Cast", "OfType", "Distinct", "DefaultIfEmpty",
-        "Union", "Except", "Intersect", "Zip", "AsEnumerable",
-    ];
-
-    /// <summary>Whether a member gives a LINQ chain C# has not evaluated yet (`IEnumerable&lt;T&gt; Alive => _all.Where(..)`):
-    /// its whole body is one such chain, in which an operator that runs a function has only operators above it that
-    /// hand values on one at a time. Read from the member's syntax.</summary>
-    public bool LazyMember(ISymbol member) => _lazy.GetOrAdd(member.OriginalDefinition, static (sym, self) =>
+    /// <summary>The expression a member's body gives, when the body is nothing else (`IEnumerable&lt;T&gt; Alive => _all.Where(..)`).</summary>
+    private IOperation? Given(ISymbol member)
     {
-        IMethodSymbol? m = sym switch { IPropertySymbol p => p.GetMethod, IMethodSymbol x => x, _ => null };
-        if (m == null || !IsSource(m.ContainingType) || m.ReturnType is not INamedTypeSymbol { Name: "IEnumerable" }) return false;
-        Microsoft.CodeAnalysis.CSharp.Syntax.ExpressionSyntax? value = null;
-        foreach (var reference in (sym is IPropertySymbol ? sym : m).DeclaringSyntaxReferences)
+        IMethodSymbol? m = member switch { IPropertySymbol p => p.GetMethod, IMethodSymbol x => x, _ => null };
+        if (m == null || !IsSource(m.ContainingType) || m.ReturnType is not INamedTypeSymbol { Name: "IEnumerable" }) return null;
+        var syntax = m.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntax == null) return null;
+        var model = Comp.GetSemanticModel(syntax.SyntaxTree);
+        return Chains.Returned(syntax switch
         {
-            var node = reference.GetSyntax();
-            var arrow = node.ChildNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ArrowExpressionClauseSyntax>().FirstOrDefault()
-                ?? node.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.AccessorDeclarationSyntax>().FirstOrDefault(a => a.Keyword.Text == "get")?.ExpressionBody;
-            if (arrow != null) { value = arrow.Expression; break; }
-            var block = node is Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax md ? md.Body
-                : node.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.AccessorDeclarationSyntax>().FirstOrDefault(a => a.Keyword.Text == "get")?.Body;
-            if (block is { Statements: [Microsoft.CodeAnalysis.CSharp.Syntax.ReturnStatementSyntax { Expression: { } returned }] }) { value = returned; break; }
-        }
-        while (value != null)
+            Microsoft.CodeAnalysis.CSharp.Syntax.ArrowExpressionClauseSyntax arrow => model.GetOperation(arrow) ?? model.GetOperation(arrow.Expression),
+            Microsoft.CodeAnalysis.CSharp.Syntax.AccessorDeclarationSyntax { Body: not null } or Microsoft.CodeAnalysis.CSharp.Syntax.AccessorDeclarationSyntax { ExpressionBody: not null } => model.GetOperation(syntax),
+            Microsoft.CodeAnalysis.CSharp.Syntax.BaseMethodDeclarationSyntax { Body: not null } or Microsoft.CodeAnalysis.CSharp.Syntax.BaseMethodDeclarationSyntax { ExpressionBody: not null } => model.GetOperation(syntax),
+            _ => null,
+        });
+    }
+
+    /// <summary>Whether C# evaluates the sequence only as it is walked, and runs code of the game while it does: a
+    /// LINQ chain in which an operator that runs a function for each value has only operators above it that hand
+    /// values on one at a time; or a member of the game that gives one.</summary>
+    public bool DeferredChain(IOperation? op)
+    {
+        while (op != null)
         {
-            while (value is Microsoft.CodeAnalysis.CSharp.Syntax.ParenthesizedExpressionSyntax par) value = par.Expression;
-            if (value is not Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax
-                { Expression: Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax { Name.Identifier.Text: var name, Expression: var inner } } call || !StreamingNames.Contains(name)) return false;
-            if (call.ArgumentList.Arguments.Any(a => a.Expression is Microsoft.CodeAnalysis.CSharp.Syntax.AnonymousFunctionExpressionSyntax or Microsoft.CodeAnalysis.CSharp.Syntax.IdentifierNameSyntax
-                or Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax) && name is "Where" or "Select" or "SelectMany" or "TakeWhile" or "SkipWhile") return true;
-            value = inner;
+            op = Chains.Bare(op);
+            if (op is IPropertyReferenceOperation { Property: var p } && IsSource(p.ContainingType)) return DeferredMember(p);
+            if (op is not IInvocationOperation inv) return false;
+            if (IsSource(inv.TargetMethod.ContainingType)) return DeferredMember(inv.TargetMethod);
+            if (!Chains.IsLinq(inv.TargetMethod) || !Chains.Streaming.Contains(inv.TargetMethod.Name)) return false;
+            var a = Chains.Ordered(inv);
+            if (a.Skip(1).Any(x => x.Type?.TypeKind == TypeKind.Delegate)) return true;
+            op = a.Count > 0 ? a[0] : null;
         }
         return false;
+    }
+
+    /// <summary>Whether a member gives a LINQ chain C# has not evaluated yet.</summary>
+    public bool DeferredMember(ISymbol member) => _deferred.GetOrAdd(member.OriginalDefinition, static (sym, self) => self.DeferredChain(self.Given(sym)), this);
+
+    /// <summary>Whether a member gives a chain that a walk can run whole (Chains.Split): the operators that run a
+    /// function are all at its end, over a sequence that is evaluated at once or is itself walked value by value.
+    /// Such a member is a sequence like one written with yield (Yields).</summary>
+    public bool LazyMember(ISymbol member) => _lazy.GetOrAdd(member.OriginalDefinition, static (sym, self) =>
+    {
+        if (self.Given(sym) is not { } given) return false;
+        var (source, steps) = Chains.Split(given, self.IsObj);
+        if (!steps.Any(s => s.Function != null)) return false;
+        if (!self.DeferredChain(source)) return true;
+        return Chains.Bare(source) switch
+        {
+            IPropertyReferenceOperation { Property.GetMethod: { } getter } => self.Yields(getter),
+            IInvocationOperation { TargetMethod: var called } when IsSource(called.ContainingType) => self.Yields(called),
+            _ => false,
+        };
     }, this);
 
     /// <summary>Whether a virtual call of this slot may run a body written with yield: its dispatcher has the
