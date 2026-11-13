@@ -21,8 +21,10 @@ public sealed class EngineExportTests : IDisposable
     /// <param name="pileField">The CLR name the schema gives the field that holds the cards.</param>
     /// <param name="forgotten">A field of the game the schema says nothing of.</param>
     /// <param name="delegates">Whether the pile's ContentsChanged, a delegate, is state too.</param>
-    private EngineSchema Schema(string pileField = "_cards", string? forgotten = null, bool delegates = false)
+    /// <param name="events">Whether it is state as an event: the list of its subscribers.</param>
+    private EngineSchema Schema(string pileField = "_cards", string? forgotten = null, bool delegates = false, bool events = false)
     {
+        delegates |= events;
         const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
         var dropped = typeof(CardPile).GetFields(Declared).Select(f => f.Name)
             .Where(f => f is not ("_cards" or "<Type>k__BackingField") && f != forgotten && !(delegates && f == "ContentsChanged"));
@@ -34,18 +36,22 @@ public sealed class EngineExportTests : IDisposable
                "fields":[{"name":"_cards","cs":"PILE_FIELD","type":{"kind":"list","of":{"kind":"ref","class":"CardModel"}}},
                          {"name":"type_","cs":"<Type>k__BackingField","type":{"kind":"enum","name":"PileType","rust":"i32"}}DELEGATE],
                "dropped":DROPPED}],
-             "structs":[],"enums":[],"hash":"abc"}
+             "structs":[],"enums":[],"hash":"abc"PRESENTATION}
             """.Replace("PILE_FIELD", pileField).Replace("DROPPED", JsonSerializer.Serialize(dropped))
-            .Replace("DELEGATE", delegates ? """,{"name":"contents_changed","cs":"ContentsChanged","type":{"kind":"delegate"}}""" : ""));
+            .Replace("DELEGATE", !delegates ? "" : events ? """,{"name":"contents_changed","cs":"ContentsChanged","type":{"kind":"list","of":{"kind":"delegate"}}}"""
+                : """,{"name":"contents_changed","cs":"ContentsChanged","type":{"kind":"delegate"}}""")
+            .Replace("PRESENTATION", !events ? "" : ""","presentation":{"namespaces":["MegaCrit.Sts2.Core.Nodes"],"keep":[],"types":["MegaCrit.Sts2.Core.Entities.Cards.CardPil*"]}"""));
         return EngineSchema.Load(path);
     }
 
     private static void Heard() { }
 
     /// <summary>The one object of a pile's arena as the export wrote it: its delegate field.</summary>
-    private string Changed(CardPile pile, params CardPile[] before)
+    private string Changed(CardPile pile, params CardPile[] before) => Changed(Schema(delegates: true), pile, before);
+
+    private static string Changed(EngineSchema schema, CardPile pile, params CardPile[] before)
     {
-        var written = new EngineExport(Schema(delegates: true)).Write([.. before.Append(pile).Select((p, i) => ($"p{i}", (object)p))], "v-test", new(0));
+        var written = new EngineExport(schema).Write([.. before.Append(pile).Select((p, i) => ($"p{i}", (object)p))], "v-test", new(0));
         using var doc = JsonDocument.Parse(written.Bytes);
         return doc.RootElement.GetProperty("arenas").GetProperty("card_pile")[before.Length].GetProperty("CardPile").GetProperty("contents_changed").GetRawText();
     }
@@ -83,6 +89,32 @@ public sealed class EngineExportTests : IDisposable
             Assert.Equal("outside", target[0].GetString());
             Assert.StartsWith("Sts2Ai.SimWorker.Tests.EngineExportTests+<>c__DisplayClass", target[1].GetString());
         }
+    }
+
+    [Fact]
+    public void AnEventIsTheListOfItsSubscribersWithoutPresentations()
+    {
+        // The schema's presentation lists name no type of CardModel's, and every type whose name starts as CardPile's.
+        var schema = Schema(events: true);
+        Assert.False(schema.Presentation(typeof(MegaCrit.Sts2.Core.Models.CardModel)));
+        Assert.True(schema.Presentation(typeof(CardPile)));
+        Assert.True(schema.Presentation(typeof(EngineExportTests)));
+
+        var (hand, draw) = (new CardPile(PileType.Hand), new CardPile(PileType.Draw));
+        Assert.Equal("[]", Changed(schema, hand));
+        // A subscriber outside the game and one of a class the lists name are presentation: neither is written.
+        hand.ContentsChanged += Heard;
+        hand.ContentsChanged += draw.InvokeCardAddFinished;
+        Assert.Equal("[]", Changed(schema, hand, draw));
+
+        // With lists that name nothing of the game's, the game's subscribers are written, in the order they are called.
+        hand.ContentsChanged += draw.InvokeCardRemoveFinished;
+        string path = Path.Combine(_dir, "schema.json");
+        File.WriteAllText(path, File.ReadAllText(path).Replace("MegaCrit.Sts2.Core.Entities.Cards.CardPil*", "MegaCrit.Sts2.Core.Entities.Cards.NoSuch"));
+        Assert.Equal(
+            """[{"method":"MegaCrit.Sts2.Core.Entities.Cards.CardPile::InvokeCardAddFinished","target":["card_pile",0]},"""
+            + """{"method":"MegaCrit.Sts2.Core.Entities.Cards.CardPile::InvokeCardRemoveFinished","target":["card_pile",0]}]""",
+            Changed(EngineSchema.Load(path), hand, draw));
     }
 
     [Fact]

@@ -19,7 +19,7 @@ namespace Sts2Ai.GameBridge;
 /// </summary>
 public sealed class EngineSchema
 {
-    internal enum Kind { Int, Bool, Float, Decimal, String, Char, Enum, Struct, Nullable, Sequence, Set, Dict, Tuple, Pair, Type, Ref, Delegate }
+    internal enum Kind { Int, Bool, Float, Decimal, String, Char, Enum, Struct, Nullable, Sequence, Set, Dict, Tuple, Pair, Type, Ref, Delegate, Event }
 
     /// <summary>How a value is written: its kind and the shapes inside it.</summary>
     /// <param name="Clr">Of a struct: its CLR type.</param>
@@ -54,6 +54,23 @@ public sealed class EngineSchema
 
     internal Class? Of(Type type) => _classes.GetValueOrDefault(type.IsGenericType ? type.GetGenericTypeDefinition() : type);
 
+    /// <summary>The port's lists of what is presentation (the schema's <c>presentation</c>: port.toml's drop lists as
+    /// they are): namespaces, the namespaces below them that are kept, and types, where a "*" at the end takes every
+    /// name that starts so.</summary>
+    private readonly string[] _presentationNamespaces = [], _presentationKept = [], _presentationTypes = [];
+
+    /// <summary>Whether a type is presentation, which the engine has nothing of: no type of the game's assembly, one
+    /// the lists name, one nested in such a type, or one of a namespace the lists name and do not keep.</summary>
+    public bool Presentation(Type type)
+    {
+        if (type.Assembly != typeof(CombatManager).Assembly) return true;
+        if (type.DeclaringType is { } outer) return Presentation(outer);
+        string name = type.FullName ?? type.Name;
+        static bool At(string? space, string root) => space == root || space?.StartsWith(root + ".", StringComparison.Ordinal) == true;
+        return _presentationTypes.Any(t => t.EndsWith('*') ? name.StartsWith(t[..^1], StringComparison.Ordinal) : name == t)
+            || (_presentationNamespaces.Any(n => At(type.Namespace, n)) && !_presentationKept.Any(k => At(type.Namespace, k)));
+    }
+
     /// <summary>The schema name of a class of the game; its CLR name for a class the schema does not hold.</summary>
     internal string NameOf(Type type) => Of(type)?.Name ?? type.FullName ?? type.Name;
 
@@ -71,6 +88,11 @@ public sealed class EngineSchema
         Hash = root.GetProperty("hash").GetString()!;
         Arenas = [.. root.GetProperty("arenas").EnumerateArray().Select(a => a.GetString()!)];
         var arenaIndex = Enumerable.Range(0, Arenas.Count).ToDictionary(i => Arenas[i]);
+        if (root.TryGetProperty("presentation", out var presentation))
+        {
+            string[] Names(string list) => [.. presentation.GetProperty(list).EnumerateArray().Select(n => n.GetString()!)];
+            (_presentationNamespaces, _presentationKept, _presentationTypes) = (Names("namespaces"), Names("keep"), Names("types"));
+        }
         var game = typeof(CombatManager).Assembly;
         var problems = new List<string>();
         const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
@@ -118,6 +140,11 @@ public sealed class EngineSchema
             return null;
         }
 
+        // An event's backing field is one delegate that calls its subscribers in turn: where the schema has it as a
+        // list of delegates, the list is those subscribers.
+        static Shape Held(Shape shape, FieldInfo field) =>
+            shape is { Kind: Kind.Sequence, Of.Kind: Kind.Delegate } && typeof(Delegate).IsAssignableFrom(field.FieldType) ? new(Kind.Event) : shape;
+
         void Fill(Slot[] slots, Type type, JsonElement entry)
         {
             var named = entry.GetProperty("dropped").EnumerateArray().Select(d => d.GetString()!).ToHashSet();
@@ -128,7 +155,7 @@ public sealed class EngineSchema
                 named.Add(cs);
                 var info = type.GetField(cs, Declared);
                 if (info == null) problems.Add($"no field {type.FullName}.{cs}");
-                else slots[i] = new(JsonEncodedText.Encode(field.GetProperty("name").GetString()!), info, ShapeOf(field.GetProperty("type")));
+                else slots[i] = new(JsonEncodedText.Encode(field.GetProperty("name").GetString()!), info, Held(ShapeOf(field.GetProperty("type")), info));
                 i++;
             }
             foreach (var live in type.GetFields(Declared))
@@ -216,7 +243,8 @@ public sealed class EngineSchema
 /// array of [key, value] for a dictionary; an object for a struct; null for an absent value of any of these. A set or
 /// a dictionary that has freed slots (<see cref="HashedLayout"/>) is an object instead: its <c>items</c> as that array,
 /// <c>at</c> with the slot of each, and <c>free</c> with the freed slots in the order adds will take them.
-/// A delegate is null or <c>{"method": "CLR.Class::Method", "target": reference or null}</c>.
+/// A delegate is null or <c>{"method": "CLR.Class::Method", "target": reference or null}</c>; an event that is state is
+/// the list of its subscribers as such delegates, in the order they are called, without those that are presentation.
 /// A reference is null or a pair: ["arena", index] for an object of the export; ["canon", "Class"] for a canonical
 /// model, which the engine has already and which is not written; ["outside", "CLR.Name"] for an object of a class the
 /// schema does not hold, whose state the engine therefore lacks. <c>outside</c> counts those references by class, and
@@ -380,6 +408,16 @@ public sealed class EngineExport(EngineSchema schema)
 
         private void Value(Utf8JsonWriter json, EngineSchema.Shape shape, object? value)
         {
+            if (shape.Kind == EngineSchema.Kind.Event)
+            {
+                // An event nobody subscribed to is null in the game: the list is empty then. A subscriber whose method
+                // is presentation's is not one of the engine's, and is left out.
+                json.WriteStartArray();
+                foreach (var subscriber in ((Delegate?)value)?.GetInvocationList() ?? [])
+                    if (!schema.Presentation(subscriber.Method.DeclaringType ?? typeof(object))) Function(json, subscriber);
+                json.WriteEndArray();
+                return;
+            }
             if (value == null)
             {
                 json.WriteNullValue();
