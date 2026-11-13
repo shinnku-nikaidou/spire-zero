@@ -290,3 +290,19 @@
     470 份有），不在動作佇列也不在歷史裡。Vigor 在攻擊結束後不清這個欄位，之後算加傷時還會讀那個已結束指令的來源牌與
     攻擊者；沒找到會再執行它的地方。路徑已交給 engine-port 判讀。
   - 匯出端的 delegate 等 engine-port 在筆記回答四個問題、schema 有 `delegate` 種類、閉包類別與丟棄名單後再寫。接著做步驟 5 的設計。
+- 04:27 （協調）子代理 engine-state 完成這一輪（讀出狀態：`protocol.rs`、`observe.rs`、`legal.rs`、`keys.rs`、`prompt.rs`、`ffi.rs`、
+  `tests/`，四個 commit；筆記 `tmp/engine/notes/engine-state.md`）。驗收：
+  - **第一個「引擎對真遊戲」的數字**：在補上八個缺的生成成員的 scratch 複本（`tmp/engine-state/snap3`，手寫替身只在 scratch，
+    不進 git）裡，`tmp/engine/fixtures` 的 3,972 份匯出有 3,277 份通過匯入檢查——觀測逐位元組、合法動作、狀態、RunView、
+    狀態鍵、隱藏鍵都與真遊戲相同；其餘 695 份全是匯入被拒或撞到 `todo!`，沒有任何一份是「算出來不一樣」。我重跑過，數字相同。
+    它另報整局與針對性樣本合計 6,613 份通過、同樣 0 個差異（這部分我沒重跑）。
+  - 在現在的生成碼上是 0 份通過：每筆都停在翻譯器還沒翻出的成員（`CombatHistoryEntry.HappenedThisTurn`、
+    `DynamicVarSet.Values`、`PowerModel.GetInternalData<T>`、`FoulPotion.PassesCustomUsabilityCheck`，後面還有五個）或匯入被拒
+    （Bygone Effigy 的狀態機 592 份；當場做的下一招：Corpse Slug、Ceremonial Beast、Thieving Hopper、Eye With Teeth）。
+  - 只寫了、還沒有任何一次執行走到的：選牌提示那條路、`relics[].melted`、Pael's Tooth 的 `relics[].cards`、提示中與戰鬥結束後
+    的合法動作。速度：寫一份觀測 1.6 µs、算狀態鍵 1.7 µs（它量的；C# 現在建一份觀測 254 µs）。
+  - 走步與續打 0 通過：引擎的 `apply` 進得了翻譯出來的規則，停在 engine-port 的 `todo!`（`Creature.LogName`、
+    `EnergySpentEntry.ctor`、`end_turn` 後玩家為 null 等）。
+  - 已轉給 engine-port：上述成員與匯入被拒的清單、commit `world.rs` 並把 `ffi.rs` 的引擎型別換成它、提示要帶的欄位、
+    回合上限（FightCap）。已轉給 engine-bridge：模擬器自己的提示計數要隨匯入進引擎（匯出加第七個頂層成員）、
+    鍵回傳 0 時查錯誤、補「熔掉的遺物」與「Pael's Tooth 帶牌」兩種樣本、一份常停在選牌提示的樣本。
