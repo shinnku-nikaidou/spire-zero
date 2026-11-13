@@ -217,3 +217,26 @@
     戰鬥中加的選牌獎勵），出現在 4 場戰鬥。裁定：戰鬥中會建立的獎勵類別是狀態，進 schema；只有獎勵畫面才跑的部分不在範圍內。
     在那之前這 4 場的匯入照規則被拒。
   - engine-port 的順序：先修讀取器（396 份都要能匯入）→ 這兩項 → 手寫核心。
+- 04:01 （engine-bridge）協調要的量測、槽位配置、名單，都已推上 main：
+  - 量測：全量掃描 51,823 份匯出裡，有已釋放槽位的 HashSet／Dictionary 共 58,916 個，分佈在 49,890 份匯出；絕大多數是
+    「東西都移掉了的空集合」（`CombatManager._card_or_potion_effect_depth` 49,683、各能力的 `amounts_for_played_cards` 等），
+    還有內容的只有 `CardModel._keywords` 427 個。schema 外的參照 17 個，全部經 `CombatRoom._extra_rewards`
+    （GoldReward 14、CardReward 3，4 場戰鬥）；協調裁定獎勵類別進 schema，在那之前這 4 場照規矩拒收。
+  - 匯出（format 1 的補充，協調 03:57 裁定）：`set`／`dict` 沒有已釋放槽位時照舊是陣列；有的話寫成
+    `{"items": [...], "at": [...], "free": [...]}`（`at` 是每個項目的槽位，`free` 是已釋放槽位、下一個會被拿走的在前）。
+    寫出前檢查每個槽位恰好屬於其中一邊，否則失敗；不是 HashSet<T>／Dictionary<K,V> 的 `set`／`dict` 也失敗。
+    全量掃描 0 場失敗：狀態裡沒有別種雜湊集合。每個摘要與每行都帶這兩個計數，dump 的 `combat.json` 逐筆標 `freed`。
+  - `tmp/engine/fixtures` 仍是舊格式（等 engine-port 的讀取器跟上再換）；新格式的同一批在 `tmp/engine/fixtures-next`
+    （2,473 份匯出裡 2,366 份帶物件形式）。
+  - `sim hashed --out tmp/engine/hashed.txt`（新指令，不需要遊戲）：.NET 9.0.22 自己的 HashSet<int> 與
+    Dictionary<int,int> 在 3,000 條帶種子的操作序列（141,720 步）下，每步之後的項目、槽位、已釋放槽位；給引擎的
+    `rt::Set`／`rt::Dict` 直接對 .NET 本身驗。`tmp/engine/check_hashed.py` 用 30 行的模型對過：0 問題
+    （一個容易漏的：`IntersectWith` 空集合等於 `Clear`）。
+  - 涵蓋報告的名單：`GameIds.Unreached` 列出 30 個「單人標準局打不到」的 id 與原因，報告不再把它們算進「沒遇到」，
+    萬一遇到了會指出名單有誤。19 個能力的歸類：只能打在隊友身上的多人專用牌 7 個＋Tank 給隊友的 GUARDED；沒有任何
+    來源的 4 個（GRAVITY、LEADERSHIP、MAGIC_BOMB、NO_ENERGY_GAIN）；只有 Dread 模式的首領領域才有的 6 個
+    （三個 *_DOMINION、EXPLOSIVE、YOU_ARE_MINE、AMNESIA：這一組算不算由協調裁定）；單人打得到、不排除的只有
+    `IMPROVEMENT_POWER`（Mad Science 配 Tinker Time 的 Improvement 附加效果，牌組參數寫不出來，只能靠整局遇到，
+    另外 240 局正在跑）。其餘是測試怪與 `DEPRECATED_*`。
+  - 套上名單後，4 套牌組的單場掃描加 48 個整局：除了 `IMPROVEMENT_POWER` 每個 id 都遇到了（牌 716/716、能力
+    285/286、遺物 316/316、藥水 68/68、怪 113/113、遭遇 89/89），148,621 個決策對 replay 0 分歧。
