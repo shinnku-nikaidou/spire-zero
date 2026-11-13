@@ -232,6 +232,41 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// A combat built in the middle of a Fool's turn goes on as the real one: Lullaby, which gave its block as the third
+    /// melody was played, gives none again, and The Shot states the damage its Florescence gave it.
+    /// </summary>
+    private static void BuildsAFoolsTurn(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        const string name = "build goes on in a Fool's turn";
+        var loadout = new Loadout(Deck: [.. new[] { "LULLABY", "WAH_CHO_KI", "FLORESCENCE", "FOOLISH_SHOT", "DEFEND_FOOL" }.Select(id => new CardSpec(id))], Hp: 999, MaxHp: 999);
+        string seed = GameSeeds.MakeSeed(0, 0);
+        static void Play(CombatSession s, string id)
+        {
+            var hand = s.Observation().Hand;
+            s.Execute(s.LegalActions().First(a => a.Kind == CombatActionKind.PlayCard && hand.Any(c => c.Uid == a.Card && c.Id == id)));
+        }
+        static decimal? Shot(CombatObservation obs) => obs.Hand.FirstOrDefault(c => c.Id == "THE_SHOT")?.Calc;
+        CombatObservation mid, after;
+        using (var session = CombatSession.Start(pump, new CombatSetup("FOOL", pool[0], act, seed, Loadout: loadout), new RandomChoices(new Random(0))))
+        {
+            foreach (string id in new[] { "LULLABY", "WAH_CHO_KI", "FLORESCENCE" }) Play(session, id);
+            mid = session.Observation();
+            Play(session, "DEFEND_FOOL");
+            after = session.Observation();
+        }
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(mid, seed), new RandomChoices(new Random(0)));
+        var differences = built.BuildDifferences;
+        decimal? shot = Shot(built.Observation());
+        Play(built, "DEFEND_FOOL");
+        int block = built.Observation().Player.Block;
+        var errors = HeadlessGame.TakeErrors();
+        check(name, mid.Player.Melodies?.Count == 3 && mid.Player.Block > 0 && Shot(mid) > 0 && differences.Count == 0 && shot == Shot(mid)
+            && block == after.Player.Block && errors.Count == 0,
+            $"{pool[0].Id.Entry}: melodies {string.Join(",", mid.Player.Melodies ?? [])}, block {mid.Player.Block} then {after.Player.Block}, built {block}; " +
+            $"The Shot {Shot(mid)}, built {shot}; {string.Join("; ", differences.Take(4))}, errors {errors.FirstOrDefault()}");
+    }
+
+    /// <summary>
     /// A loadout whose relics give potion slots holds more potions than the base three: the slots are what the game
     /// gives for those relics (3 + Potion Belt's 2 + Alchemical Coffer's 4 + Phial Holster's 1), in a combat and at
     /// the start of a run, where ascension 4 (Tight Belt) takes one away, and the relics' pickups do not run again.

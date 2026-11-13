@@ -143,6 +143,7 @@ internal static partial class SelfTest
         TransformKillsBeforeTheNextTransform(pump, Check);
         GatheredCardState(pump, pool, act, Check);
         FirstArrowComesWithAShootCard(pump, pool, act, Check);
+        BuildsAFoolsTurn(pump, pool, act, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         FoulPotionAtMerchants(pump, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);

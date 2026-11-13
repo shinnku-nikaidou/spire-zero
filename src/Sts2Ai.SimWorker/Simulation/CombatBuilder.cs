@@ -9,6 +9,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Events;
@@ -37,7 +38,8 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// the log of the moves it made (<see cref="MoveLogs"/>), which its choice of the next move can depend on.
 ///
 /// The player's arrows are placed as shown: those held, and those stuck in each enemy (<see cref="Arrows"/>). The melodies
-/// played this turn come back as card plays in the combat's history (<see cref="Melodies"/>).
+/// played this turn come back as card plays in the combat's history (<see cref="Melodies"/>), and with them what they
+/// alone decide (Lullaby's block given this turn).
 ///
 /// Not reproduced, because the observation doesn't show it: the rest of this turn's history (cards played, damage
 /// taken, ...), counters kept inside powers and monsters, how long a card's cost change lasts (a card in hand is taken to be
@@ -49,6 +51,7 @@ internal static class CombatBuilder
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly FieldInfo TurnNumber = typeof(PlayerCombatState).GetField("<TurnNumber>k__BackingField", Private)!;
     private static readonly FieldInfo ArrowList = typeof(PlayerCombatState).GetField("_arrows", Private)!;
+    private static readonly FieldInfo LullabyGiven = typeof(LullabyPower).GetField("_proccdThisTurn", Private)!;
     private static readonly FieldInfo EnemyList = typeof(CombatState).GetField("_enemies", Private)!;
     private static readonly FieldInfo AllyList = typeof(CombatState).GetField("_allies", Private)!;
     private static readonly FieldInfo NextCreatureId = typeof(CombatState).GetField("_nextCreatureId", Private)!;
@@ -439,6 +442,9 @@ internal static class CombatBuilder
             CombatManager.Instance.History.CardPlayStarted(st, play);
             CombatManager.Instance.History.CardPlayFinished(st, play);
         }
+        // Lullaby gives its block once a turn, as the third melody is played: with all three shown it has given it.
+        if (melodies.Count == 3)
+            foreach (var lullaby in player.Creature.GetPowerInstances<LullabyPower>()) LullabyGiven.SetValue(lullaby, true);
     }
 
     private static readonly PropertyInfo ToothCards = typeof(PaelsTooth).GetProperty(nameof(PaelsTooth.SerializableCards))!;
@@ -647,5 +653,9 @@ internal static class CombatBuilder
             if (inHand) card.SetStarCostThisTurn(stars);
             else card.SetStarCostThisCombat(stars);
         }
+        // A number the card states from one it keeps to itself is found from the stated one: The Shot's damage, from the
+        // cards its Florescence exhausted. One stated from the combat's history stays as the built combat gives it.
+        if (view.Calc is decimal calc && card.DynamicVars.Values.OfType<CalculatedVar>().FirstOrDefault() is { } stated)
+            Solve(() => (int)stated.Calculate(null), (int)calc, DecimalKnobs(card, typeof(CardModel)));
     }
 }
