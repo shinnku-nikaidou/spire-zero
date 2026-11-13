@@ -34,7 +34,8 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// this process or over the wire; so does the exploring l0, from its own. pimc plays in NoSL; in SL, plan plans the
     /// whole combat on the node's clone, and with --afterstates clone l0 plays each option on it.
     /// The search runs in <paramref name="pool"/> (<see cref="Pool"/>); with --combat-world engine, plan's runs in the
-    /// engine, in as many threads as the pool has workers, and the pool serves the plans rooted at a card prompt. With
+    /// engine, in as many threads as the pool has workers, and the pool plays the node's clone across a card prompt a
+    /// plan is rooted at. With
     /// <paramref name="explain"/>, for a host that shows the answers, map options carry their routes (<see cref="Dispatcher"/>).
     /// </summary>
     public Func<Hello, Dispatcher> Harness(WorkerPool? pool, bool log, bool explain = false) => hello =>
@@ -48,7 +49,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         Random Rng(string stream) => new(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + stream)));
         var rng = Rng("");
         var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
-            : Policy == "plan" ? Engine ? new EnginePlanner(Leaf.Leaf, Workers, new PooledPlanner(pool)).Route(Budget, Combat) : new PooledPlanner(pool).Route(Budget, Combat)
+            : Policy == "plan" ? Engine ? new EnginePlanner(Leaf.Leaf, Workers).Route(Budget, Combat, pool) : new PooledPlanner(pool).Route(Budget, Combat)
             : new PooledPimc(pool).Route(Budget, Combat);
         Dispatcher dispatcher;
         if (Macro == "l0")

@@ -16,21 +16,15 @@ namespace Sts2Ai.Harness;
 /// <param name="ImportBytes">Their bytes as written out.</param>
 /// <param name="ExportMs">The time writing them out took.</param>
 /// <param name="ImportMs">The time the engine took to take them in.</param>
+/// <param name="Crossings">Engine world: paths of answers played on the node's clone for the plans rooted at a card
+/// prompt, a worker's request each (<see cref="PromptRoot"/>).</param>
 /// <param name="Replans">Plans made because a step of the plan before did not hold (<see cref="Dispatcher.Replans"/>).</param>
 /// <param name="PromptOpens">Plans rooted at a card prompt that opens its combat, before any decision of the player's.</param>
 /// <param name="PromptAfterPlan">Plans rooted at a card prompt where the plan before had run out.</param>
 /// <param name="PromptReplanned">Plans rooted at a card prompt because a step did not hold there.</param>
 public sealed record PlanTally(int Plans = 0, long Nodes = 0, int Turns = 0, double WallMs = 0, double CpuMs = 0,
-    int Imports = 0, long ImportBytes = 0, double ExportMs = 0, double ImportMs = 0,
-    int Replans = 0, int PromptOpens = 0, int PromptAfterPlan = 0, int PromptReplanned = 0)
-{
-    /// <summary>Both parts' costs added up: the plans one planner made and those it handed to another.</summary>
-    public PlanTally Plus(PlanTally other) => this with
-    {
-        Plans = Plans + other.Plans, Nodes = Nodes + other.Nodes, Turns = Turns + other.Turns, WallMs = WallMs + other.WallMs, CpuMs = CpuMs + other.CpuMs,
-        Imports = Imports + other.Imports, ImportBytes = ImportBytes + other.ImportBytes, ExportMs = ExportMs + other.ExportMs, ImportMs = ImportMs + other.ImportMs,
-    };
-}
+    int Imports = 0, long ImportBytes = 0, double ExportMs = 0, double ImportMs = 0, int Crossings = 0,
+    int Replans = 0, int PromptOpens = 0, int PromptAfterPlan = 0, int PromptReplanned = 0);
 
 /// <summary>Counts what one run's plans cost, as its planner makes them.</summary>
 /// <param name="cpu">The processor time the search has taken so far, wherever it runs.</param>
@@ -50,6 +44,9 @@ public sealed class PlanMeter(Func<TimeSpan> cpu)
         };
         return made;
     }
+
+    /// <summary>Counts paths of answers played on the node's clone.</summary>
+    public void Crossed(int paths) => Tally = Tally with { Crossings = Tally.Crossings + paths };
 
     /// <summary>Counts a live combat taken in by the engine.</summary>
     public void Imported(int bytes, double exportMs, double importMs) => Tally = Tally with

@@ -22,9 +22,8 @@ public sealed class EnginePlannerTests(FakeEngine engine)
 
     private static readonly Budget Small = new(NodesPerWorld: 40, Beam: 4);
 
-    /// <summary>The planner with its turns searched in <paramref name="threads"/> threads. No plan here is rooted at a
-    /// card prompt, so it has no planner on the node's clone to hand one to.</summary>
-    private static EnginePlanner Planner(int threads) => new(new ToyLeaf(), threads, null!);
+    /// <summary>The planner with its turns searched in <paramref name="threads"/> threads.</summary>
+    private static EnginePlanner Planner(int threads) => new(new ToyLeaf(), threads);
 
     private static string Text(SlPlan plan) => ProtocolJson.Serialize(plan);
 
@@ -48,7 +47,7 @@ public sealed class EnginePlannerTests(FakeEngine engine)
     [Fact]
     public void AFailureInAThreadIsThePlansFailure()
     {
-        var refused = Assert.Throws<EngineException>(() => Planner(4).Plan(new(Encoding.UTF8.GetBytes("refuse"), Around), Small, []));
+        var refused = Assert.Throws<EngineException>(() => Planner(4).Plan(new CombatExport(Encoding.UTF8.GetBytes("refuse"), Around), Small, []));
         Assert.Contains("takes no combat called refuse", refused.Message);
     }
 
@@ -57,6 +56,74 @@ public sealed class EnginePlannerTests(FakeEngine engine)
     {
         long before = engine.Worlds();
         Planner(4).Plan(Live, Small, []);
+        Assert.Equal(before, engine.Worlds());
+    }
+
+    private static readonly CardChoice Asked = new()
+    {
+        Options = [new CardView { Id = "A" }, new CardView { Id = "B" }],
+        Min = 1,
+        Max = 1,
+        Context = new() { Purpose = "hand", Cancelable = false, InCombat = true },
+    };
+
+    /// <summary>
+    /// A node's clone that stands at a card prompt, as a planner's crossing asks it: the first option leads to the
+    /// stand-in's "LONG" combat; the second raises another prompt, whose two answers lead to "LONG" and to a combat the
+    /// strike wins at once. <paramref name="asked"/> gets every path played.
+    /// </summary>
+    private static PromptRoot.Crossing Clone(List<string> asked) => new(paths => [.. paths.Select(path =>
+    {
+        string text = string.Join(' ', path);
+        lock (asked) asked.Add(text);
+        var prompt = new PromptStep(CombatStatus.InProgress, Fixtures.Slugs() with { Prompt = Asked }, Around, HiddenKey: (ulong)path.Count + 5);
+        PromptStep Combat(string encounter) => new(CombatStatus.InProgress, Fixtures.Slugs(), Around, Export: Convert.ToBase64String(Encoding.UTF8.GetBytes(encounter)));
+        return text switch
+        {
+            "" or "pick:1" => prompt,
+            "pick:0" or "pick:1 pick:0" => Combat("LONG"),
+            "pick:1 pick:1" => Combat("NIBBITS_WEAK"),
+            _ => throw new InvalidOperationException($"the clone was asked for {text}"),
+        };
+    })]);
+
+    [Fact]
+    public void APlanRootedAtACardPromptCrossesItOnTheCloneAndGoesOnInTheEngine()
+    {
+        var asked = new List<string>();
+        using var crossing = Clone(asked);
+        var plan = Planner(4).Plan(crossing, Small, []);
+        // The second option and then the second again reach the combat that is won at once.
+        Assert.Equal((CombatStatus.Won, CombatAction.Pick([1])), (plan.End, plan.Result.First));
+        Assert.Equal([CombatAction.Pick([1]), CombatAction.Play(7)], plan.Result.Plan);
+        // Each path was played on the clone once, however many states and threads came to it.
+        Assert.Equal(["", "pick:0", "pick:1", "pick:1 pick:0", "pick:1 pick:1"], asked.Order(StringComparer.Ordinal));
+        Assert.Equal(5, crossing.Crossed);
+
+        // The same plan as the planner makes alone on one such world, and on one thread.
+        var again = new List<string>();
+        using var second = Clone(again);
+        using var world = new PromptRoot(second);
+        Assert.Equal(Text(new SlPlanner(new ToyLeaf()).Plan(world, Small)), Text(plan));
+        using var third = Clone([]);
+        Assert.Equal(Text(plan), Text(Planner(1).Plan(third, Small, [])));
+    }
+
+    [Fact]
+    public void AnswersCrossedAheadAreNotAskedAgainAndEveryEngineWorldIsFreed()
+    {
+        long before = engine.Worlds();
+        var asked = new List<string>();
+        using (var crossing = Clone(asked))
+        {
+            crossing.Ahead([[], [CombatAction.Pick([0])], [CombatAction.Pick([1])]]);
+            Assert.Equal(3, asked.Count);
+            Planner(4).Plan(crossing, Small, []);
+            Assert.Equal(5, asked.Count);
+            using var world = new PromptRoot(crossing);
+            Assert.Throws<InvalidOperationException>(() => world.Execute(CombatAction.EndTurn));
+            Assert.Throws<InvalidOperationException>(() => world.Execute(CombatAction.Pick([0, 1])));
+        }
         Assert.Equal(before, engine.Worlds());
     }
 }
