@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Reflection;
 using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
@@ -8,12 +10,26 @@ namespace Sts2Ai.SimWorker.Simulation;
 
 /// <summary>
 /// A card in a loadout: its model id and upgrade count, written "BASH", "BASH+" or "BASH+2", and its enchantment
-/// if any, written after "@" with its amount: "BASH@SHARP:2", "BASH+2@SHARP:2".
+/// if any, written after "@" with its amount: "BASH@SHARP:2", "BASH+2@SHARP:2". A card that keeps properties of its
+/// own in a save can be given them in brackets after its id, as NAME=VALUE with ";" between:
+/// "MAD_SCIENCE[TinkerTimeType=Power;TinkerTimeRider=Improvement]".
 /// </summary>
-internal readonly record struct CardSpec(string Id, int Upgrades = 0, string? Enchant = null, int EnchantAmount = 0)
+/// <param name="Props">The card's saved properties, as written between the brackets; null: as the game makes the card.</param>
+internal readonly record struct CardSpec(string Id, int Upgrades = 0, string? Enchant = null, int EnchantAmount = 0, string? Props = null)
 {
+    /// <summary>The card as a deck's text writes it: what <see cref="Parse"/> reads.</summary>
+    public string Text => Id + (Props == null ? "" : $"[{Props}]") + (Upgrades switch { 0 => "", 1 => "+", _ => $"+{Upgrades}" })
+        + (Enchant == null ? "" : $"@{Enchant}:{EnchantAmount}");
+
     public static CardSpec Parse(string text)
     {
+        string? props = null;
+        if (text.IndexOf('[') is >= 0 and var open)
+        {
+            int close = text.IndexOf(']');
+            if (close < open) throw new FormatException($"the properties of {text} are not closed by ]");
+            (props, text) = (text[(open + 1)..close], text[..open] + text[(close + 1)..]);
+        }
         string? enchant = null;
         int amount = 0;
         int at = text.IndexOf('@');
@@ -24,9 +40,9 @@ internal readonly record struct CardSpec(string Id, int Upgrades = 0, string? En
             (enchant, amount, text) = (parts[0], int.Parse(parts[1]), text[..at]);
         }
         int plus = text.IndexOf('+');
-        if (plus < 0) return new(text, 0, enchant, amount);
+        if (plus < 0) return new(text, 0, enchant, amount, props);
         var count = text[(plus + 1)..];
-        return new(text[..plus], count.Length == 0 ? 1 : int.Parse(count), enchant, amount);
+        return new(text[..plus], count.Length == 0 ? 1 : int.Parse(count), enchant, amount, props);
     }
 
     public SerializableCard ToSerializable() => new()
@@ -34,11 +50,28 @@ internal readonly record struct CardSpec(string Id, int Upgrades = 0, string? En
         Id = Models.Find<CardModel>(Id).Id,
         CurrentUpgradeLevel = Upgrades,
         Enchantment = Enchant == null ? null : new SerializableEnchantment { Id = Models.Find<EnchantmentModel>(Enchant).Id, Amount = EnchantAmount },
+        Props = Saved(),
         FloorAddedToDeck = 1,
     };
 
+    /// <summary>The card's saved properties as the game writes them of a card that has them set so.</summary>
+    private SavedProperties? Saved()
+    {
+        if (Props == null) return null;
+        var card = Models.Find<CardModel>(Id).ToMutable();
+        foreach (string pair in Props.Split(';'))
+        {
+            if (pair.Split('=') is not [var name, var value]) throw new FormatException($"the property {pair} of {Id} is not NAME=VALUE");
+            var property = card.GetType().GetProperty(name) is { } found && found.GetCustomAttribute<SavedPropertyAttribute>() != null ? found
+                : throw new ArgumentException($"{Id} keeps no property {name} in a save");
+            property.SetValue(card, property.PropertyType.IsEnum ? Enum.Parse(property.PropertyType, value, ignoreCase: true)
+                : Convert.ChangeType(value, property.PropertyType, CultureInfo.InvariantCulture));
+        }
+        return SavedProperties.From(card);
+    }
+
     public override string ToString() =>
-        Upgrades switch { 0 => Id, 1 => Id + "+", _ => $"{Id}+{Upgrades}" } + (Enchant == null ? "" : $" ({Enchant} {EnchantAmount})");
+        Upgrades switch { 0 => Id, 1 => Id + "+", _ => $"{Id}+{Upgrades}" } + (Props == null ? "" : $" [{Props}]") + (Enchant == null ? "" : $" ({Enchant} {EnchantAmount})");
 }
 
 /// <summary>

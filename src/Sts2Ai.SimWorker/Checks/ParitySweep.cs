@@ -2,7 +2,9 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models.Enchantments;
+using MegaCrit.Sts2.Core.Models.Events;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
@@ -206,7 +208,8 @@ internal static class RandomLoadout
             int upgrades = card.MaxUpgradeLevel > 0 && rng.Next(3) == 0 ? rng.Next(1, Math.Min(card.MaxUpgradeLevel, 3) + 1) : 0;
             var fits = rng.Next(6) == 0 ? enchantments.Where(e => e.CanEnchant(card)).ToList() : [];
             var enchantment = fits.Count > 0 ? fits[rng.Next(fits.Count)] : null;
-            deck.Add(new(card.Id.Entry, upgrades, enchantment?.Id.Entry, enchantment == null ? 0 : enchantment.ShowAmount ? rng.Next(1, 4) : 1));
+            deck.Add(new(card.Id.Entry, upgrades, enchantment?.Id.Entry, enchantment == null ? 0 : enchantment.ShowAmount ? rng.Next(1, 4) : 1,
+                card is MadScience ? Tinkered(rng) : null));
         }
 
         var relicPool = character.RelicPool.AllRelics.Concat(ModelDb.AllRelicPools.Except(ModelDb.CharacterRelicPools).SelectMany(p => p.AllRelics))
@@ -223,9 +226,22 @@ internal static class RandomLoadout
         return new(deck, relics, potions, rng.Next(2) == 0 ? maxHp : rng.Next(maxHp / 4, maxHp + 1), maxHp);
     }
 
-    /// <summary>Whether a deck can hold the card as a loadout makes it. Mad Science is made only by the Tinker Time
-    /// event, with a type and a rider, and the game cannot play one without them.</summary>
-    private static bool InDecks(CardModel card) => GameIds.Real(card) && card is not (MadScience or DeprecatedCard);
+    /// <summary>Whether a deck can hold the card.</summary>
+    private static bool InDecks(CardModel card) => GameIds.Real(card) && card is not DeprecatedCard;
+
+    /// <summary>What the Tinker Time event gives the Mad Science it makes, and the game cannot play one without: one of
+    /// its three types, and one of that type's three riders.</summary>
+    private static string Tinkered(Random rng)
+    {
+        (CardType Type, TinkerTime.RiderEffect[] Riders)[] kinds =
+        [
+            (CardType.Attack, [TinkerTime.RiderEffect.Sapping, TinkerTime.RiderEffect.Violence, TinkerTime.RiderEffect.Choking]),
+            (CardType.Skill, [TinkerTime.RiderEffect.Energized, TinkerTime.RiderEffect.Wisdom, TinkerTime.RiderEffect.Chaos]),
+            (CardType.Power, [TinkerTime.RiderEffect.Expertise, TinkerTime.RiderEffect.Curious, TinkerTime.RiderEffect.Improvement]),
+        ];
+        var (type, riders) = kinds[rng.Next(kinds.Length)];
+        return $"{nameof(MadScience.TinkerTimeType)}={type};{nameof(MadScience.TinkerTimeRider)}={riders[rng.Next(riders.Length)]}";
+    }
 
     /// <summary>Whether the game puts the enchantment on cards of the deck. Inky is put on a card in combat, by Blade of
     /// Ink, and the game cannot play it on a card with no target.</summary>
@@ -234,8 +250,7 @@ internal static class RandomLoadout
     /// <summary>The loadout as the command line takes it (--deck, --relics, --potions, --hp, --max-hp), to play it again.</summary>
     public static string Text(Loadout loadout) => string.Join(" ", new[]
     {
-        loadout.Deck is { } deck ? "--deck " + string.Join(",", deck.Select(c =>
-            c.Id + (c.Upgrades switch { 0 => "", 1 => "+", _ => $"+{c.Upgrades}" }) + (c.Enchant == null ? "" : $"@{c.Enchant}:{c.EnchantAmount}"))) : null,
+        loadout.Deck is { } deck ? "--deck " + string.Join(",", deck.Select(c => c.Text)) : null,
         loadout.Relics is { } relics ? "--relics " + (relics.Count == 0 ? "\"\"" : string.Join(",", relics)) : null,
         loadout.Potions is { } potions ? "--potions " + (potions.Count == 0 ? "\"\"" : string.Join(",", potions)) : null,
         loadout.Hp is { } hp ? $"--hp {hp}" : null,
