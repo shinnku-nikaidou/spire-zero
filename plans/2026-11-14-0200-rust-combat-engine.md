@@ -205,3 +205,6 @@
     `cargo check`，已提醒 engine-port 盡量讓工作樹保持可編譯。
   - HashSet／Dictionary 移除過元素後的列舉順序是 format 1 說不出來的已知缺口：請 engine-bridge 在匯出時數「有空槽的集合」，
     全量為 0 就當不存在，否則 format 1 加上槽位與空閒串列。
+- 03:52 （協調）驗收整局對拍：乾淨的 HEAD 建置跑 `parity --runs 1 --hp 9999 --max-hp 9999 --continue 4`，12 局、227 場戰鬥、
+  9,920 個決策，0 分歧（exit 0），與 engine-bridge 的回報一致。裁定：還沒遇到的 19 個能力逐個查原始碼分兩類，單人打不到的
+  以名單排除並寫理由（測試怪、`DEPRECATED_*` 同），打得到的由掃描補上能逼出它的牌組或遭遇。
