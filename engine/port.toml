@@ -1,0 +1,126 @@
+# What port does with each class of the game. See DESIGN.md, "The translation".
+# Names are the game's own: namespaces and full type names in [scope] and [drop], Class or Class.Member elsewhere.
+
+[scope]
+# Translated: every class of these namespaces (the namespace itself, not the ones below it), and the types named in full.
+translate = [
+    # the content
+    "MegaCrit.Sts2.Core.Models.Cards",
+    "MegaCrit.Sts2.Core.Models.Powers",
+    "MegaCrit.Sts2.Core.Models.Relics",
+    "MegaCrit.Sts2.Core.Models.Monsters",
+    "MegaCrit.Sts2.Core.Models.Potions",
+    "MegaCrit.Sts2.Core.Models.Orbs",
+    "MegaCrit.Sts2.Core.Models.Enchantments",
+    "MegaCrit.Sts2.Core.Models.Afflictions",
+    "MegaCrit.Sts2.Core.Models.Encounters",
+    # the core the content stands on
+    "MegaCrit.Sts2.Core.Models.AbstractModel",
+    "MegaCrit.Sts2.Core.Models.CardModel",
+    "MegaCrit.Sts2.Core.Models.PowerModel",
+    "MegaCrit.Sts2.Core.Models.RelicModel",
+    "MegaCrit.Sts2.Core.Models.MonsterModel",
+    "MegaCrit.Sts2.Core.Models.PotionModel",
+    "MegaCrit.Sts2.Core.Models.OrbModel",
+    "MegaCrit.Sts2.Core.Models.EnchantmentModel",
+    "MegaCrit.Sts2.Core.Models.AfflictionModel",
+    "MegaCrit.Sts2.Core.Models.EncounterModel",
+    "MegaCrit.Sts2.Core.Models.ModelId",
+    "MegaCrit.Sts2.Core.Models.ITemporaryPower",
+    "MegaCrit.Sts2.Core.Commands",
+    "MegaCrit.Sts2.Core.Commands.Builders",
+    "MegaCrit.Sts2.Core.Hooks",
+    "MegaCrit.Sts2.Core.Combat",
+    "MegaCrit.Sts2.Core.Combat.History",
+    "MegaCrit.Sts2.Core.Combat.History.Entries",
+    "MegaCrit.Sts2.Core.Entities.Cards",
+    "MegaCrit.Sts2.Core.Entities.Creatures",
+    "MegaCrit.Sts2.Core.Entities.Players",
+    "MegaCrit.Sts2.Core.Entities.Powers",
+    "MegaCrit.Sts2.Core.Entities.Orbs",
+    "MegaCrit.Sts2.Core.Entities.Potions",
+    "MegaCrit.Sts2.Core.Entities.Relics",
+    "MegaCrit.Sts2.Core.Entities.Intents",
+    "MegaCrit.Sts2.Core.Entities.FoolArrows",
+    "MegaCrit.Sts2.Core.Entities.Enchantments",
+    "MegaCrit.Sts2.Core.Entities.Models",
+    "MegaCrit.Sts2.Core.MonsterMoves",
+    "MegaCrit.Sts2.Core.MonsterMoves.Intents",
+    "MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine",
+    "MegaCrit.Sts2.Core.Localization.DynamicVars",
+    "MegaCrit.Sts2.Core.ValueProps",
+    "MegaCrit.Sts2.Core.Extensions",
+    "MegaCrit.Sts2.Core.Factories",
+    "MegaCrit.Sts2.Core.GameActions",
+    "MegaCrit.Sts2.Core.GameActions.Multiplayer",
+    "MegaCrit.Sts2.Core.CardSelection",
+    "MegaCrit.Sts2.Core.Helpers.AscensionHelper",
+    "MegaCrit.Sts2.Core.Helpers.MathHelper",
+]
+exclude = []
+
+[drop]
+# Presentation: the namespace and everything below it.
+namespaces = [
+    "Godot",
+    "MegaCrit.Sts2.Core.Nodes",
+    "MegaCrit.Sts2.Core.Audio",
+    "MegaCrit.Sts2.Core.HoverTips",
+    "MegaCrit.Sts2.Core.Animation",
+    "MegaCrit.Sts2.Core.Assets",
+    "MegaCrit.Sts2.Core.Bindings",
+    "MegaCrit.Sts2.Core.Localization",
+    "MegaCrit.Sts2.Core.Achievements",
+    "MegaCrit.Sts2.Core.Platform",
+    "MegaCrit.Sts2.Core.Debug",
+    "MegaCrit.Sts2.Core.TestSupport",
+    "MegaCrit.Sts2.Core.Logging",
+    "MegaCrit.Sts2.Core.ControllerInput",
+    "MegaCrit.Sts2.Core.DevConsole",
+    "MegaCrit.Sts2.addons",
+]
+# Kept although a namespace above them is dropped.
+keep = ["MegaCrit.Sts2.Core.Localization.DynamicVars"]
+types = [
+    "MegaCrit.Sts2.Core.Commands.SfxCmd",
+    "MegaCrit.Sts2.Core.Commands.VfxCmd",
+    "MegaCrit.Sts2.Core.Commands.TalkCmd",
+    "MegaCrit.Sts2.Core.Commands.ThinkCmd",
+    # text shown to the player
+    "MegaCrit.Sts2.Core.Localization.DynamicVars.StringVar",
+    # the wire forms of the actions (multiplayer)
+    "MegaCrit.Sts2.Core.GameActions.Net*",
+    "MegaCrit.Sts2.Core.GameActions.INetAction",
+    "System.Text.StringBuilder",
+    "System.Console",
+    "System.Diagnostics.Debug",
+    "System.Diagnostics.Stopwatch",
+    "System.GC",
+    "System.IDisposable",
+]
+members = [
+    "Cmd.Wait",
+    "Cmd.CustomScaledWait",
+    "CreatureCmd.TriggerAnim",
+    "CardCmd.Preview",
+    "CardCmd.PreviewCardPileAdd",
+    # the generator for things that do not matter (screen shake angles): different on every run by design
+    "Rng.Chaotic",
+]
+
+[manual]
+classes = []
+members = []
+
+[open]
+# Base classes that own no arena: their fields are part of every class directly below them.
+classes = ["AbstractModel"]
+
+[values]
+# Classes held by value in Rust (a struct, compared by content): immutable records.
+classes = ["ModelId"]
+
+[value]
+# Members with a fixed value in the engine. The real game the engine is checked against runs headless with TestMode on.
+"TestMode.IsOn" = "true"
+"TestMode.IsOff" = "false"

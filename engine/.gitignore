@@ -1,0 +1,3 @@
+# Built from the user's own copy of the game by gen.sh; never in git.
+/crates/sts2ai-engine/src/gen/
+/target/

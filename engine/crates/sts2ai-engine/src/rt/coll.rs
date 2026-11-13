@@ -1,0 +1,387 @@
+//! .NET's collections, with the order .NET gives them. HashSet and Dictionary enumerate their slots in order; a removed
+//! slot is reused by the next add, most recently freed first. That is reproduced here, because game code walks them.
+
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
+
+/// Anything a foreach can walk, as the list of its items in .NET's order.
+pub trait IntoVec<T> {
+    fn into_vec(self) -> Vec<T>;
+}
+
+impl<T> IntoVec<T> for Vec<T> {
+    fn into_vec(self) -> Vec<T> {
+        self
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct KeyValuePair<K, V> {
+    pub key: K,
+    pub value: V,
+}
+
+/// The slots of a HashSet or Dictionary.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Slots<T> {
+    slots: Vec<Option<T>>,
+    /// Freed slots; the last one is reused first.
+    free: Vec<usize>,
+}
+
+impl<T> Default for Slots<T> {
+    fn default() -> Self {
+        Slots { slots: Vec::new(), free: Vec::new() }
+    }
+}
+
+impl<T> Slots<T> {
+    fn put(&mut self, v: T) {
+        match self.free.pop() {
+            Some(i) => self.slots[i] = Some(v),
+            None => self.slots.push(Some(v)),
+        }
+    }
+    fn release(&mut self, i: usize) -> T {
+        self.free.push(i);
+        self.slots[i].take().unwrap()
+    }
+    fn len(&self) -> usize {
+        self.slots.len() - self.free.len()
+    }
+    fn clear(&mut self) {
+        self.slots.clear();
+        self.free.clear();
+    }
+    fn iter(&self) -> impl Iterator<Item = &T> {
+        self.slots.iter().flatten()
+    }
+}
+
+/// HashSet<T>.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Set<T>(Slots<T>);
+
+impl<T> Default for Set<T> {
+    fn default() -> Self {
+        Set(Slots::default())
+    }
+}
+
+impl<T: PartialEq + Clone> Set<T> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn from_vec(items: Vec<T>) -> Self {
+        let mut s = Self::default();
+        for x in items {
+            s.add(x);
+        }
+        s
+    }
+    fn find(&self, x: &T) -> Option<usize> {
+        self.0.slots.iter().position(|s| s.as_ref() == Some(x))
+    }
+    pub fn add(&mut self, x: T) -> bool {
+        if self.find(&x).is_some() {
+            return false;
+        }
+        self.0.put(x);
+        true
+    }
+    pub fn contains(&self, x: &T) -> bool {
+        self.find(x).is_some()
+    }
+    pub fn remove(&mut self, x: &T) -> bool {
+        match self.find(x) {
+            Some(i) => {
+                self.0.release(i);
+                true
+            }
+            None => false,
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+    pub fn union_with(&mut self, other: Vec<T>) {
+        for x in other {
+            self.add(x);
+        }
+    }
+    pub fn except_with(&mut self, other: Vec<T>) {
+        for x in &other {
+            self.remove(x);
+        }
+    }
+    pub fn intersect_with(&mut self, other: Vec<T>) {
+        for i in 0..self.0.slots.len() {
+            if self.0.slots[i].as_ref().is_some_and(|x| !other.contains(x)) {
+                self.0.release(i);
+            }
+        }
+    }
+    pub fn set_equals(&self, other: &Vec<T>) -> bool {
+        other.iter().all(|x| self.contains(x)) && self.0.iter().all(|x| other.contains(x))
+    }
+    pub fn overlaps(&self, other: &Vec<T>) -> bool {
+        other.iter().any(|x| self.contains(x))
+    }
+}
+
+impl<T: Clone> IntoVec<T> for Set<T> {
+    fn into_vec(self) -> Vec<T> {
+        self.0.slots.into_iter().flatten().collect()
+    }
+}
+
+impl<T: PartialEq> PartialEq for Set<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.slots == other.0.slots
+    }
+}
+
+/// Dictionary<K, V>.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Dict<K, V>(Slots<(K, V)>);
+
+impl<K, V> Default for Dict<K, V> {
+    fn default() -> Self {
+        Dict(Slots::default())
+    }
+}
+
+impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn from_vec(items: Vec<KeyValuePair<K, V>>) -> Self {
+        let mut d = Self::default();
+        for kv in items {
+            d.add(kv.key, kv.value);
+        }
+        d
+    }
+    fn find(&self, k: &K) -> Option<usize> {
+        self.0.slots.iter().position(|s| s.as_ref().is_some_and(|(key, _)| key == k))
+    }
+    /// Add: the key must be new.
+    pub fn add(&mut self, k: K, v: V) {
+        assert!(self.find(&k).is_none(), "an item with the same key has already been added");
+        self.0.put((k, v));
+    }
+    pub fn try_add(&mut self, k: K, v: V) -> bool {
+        if self.find(&k).is_some() {
+            return false;
+        }
+        self.0.put((k, v));
+        true
+    }
+    /// dict[k] = v.
+    pub fn set(&mut self, k: K, v: V) {
+        match self.find(&k) {
+            Some(i) => self.0.slots[i].as_mut().unwrap().1 = v,
+            None => self.0.put((k, v)),
+        }
+    }
+    /// dict[k]: the key must be there.
+    pub fn get(&self, k: &K) -> V {
+        self.try_get(k).expect("the given key was not present in the dictionary")
+    }
+    pub fn try_get(&self, k: &K) -> Option<V> {
+        self.find(k).map(|i| self.0.slots[i].as_ref().unwrap().1.clone())
+    }
+    pub fn contains_key(&self, k: &K) -> bool {
+        self.find(k).is_some()
+    }
+    pub fn remove(&mut self, k: &K) -> bool {
+        self.take(k).is_some()
+    }
+    /// Remove(key, out value).
+    pub fn take(&mut self, k: &K) -> Option<V> {
+        self.find(k).map(|i| self.0.release(i).1)
+    }
+    pub fn keys(&self) -> Vec<K> {
+        self.0.iter().map(|(k, _)| k.clone()).collect()
+    }
+    pub fn values(&self) -> Vec<V> {
+        self.0.iter().map(|(_, v)| v.clone()).collect()
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+}
+
+impl<K: PartialEq + Clone, V: Clone + PartialEq> Dict<K, V> {
+    pub fn contains_value(&self, v: &V) -> bool {
+        self.0.iter().any(|(_, x)| x == v)
+    }
+}
+
+impl<K: Clone, V: Clone> IntoVec<KeyValuePair<K, V>> for Dict<K, V> {
+    fn into_vec(self) -> Vec<KeyValuePair<K, V>> {
+        self.0.slots.into_iter().flatten().map(|(key, value)| KeyValuePair { key, value }).collect()
+    }
+}
+
+impl<K: PartialEq, V: PartialEq> PartialEq for Dict<K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.slots == other.0.slots
+    }
+}
+
+/// Queue<T>.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Queue<T>(VecDeque<T>);
+
+impl<T> Default for Queue<T> {
+    fn default() -> Self {
+        Queue(VecDeque::new())
+    }
+}
+
+impl<T: Clone> Queue<T> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn from_vec(items: Vec<T>) -> Self {
+        Queue(items.into())
+    }
+    pub fn enqueue(&mut self, x: T) {
+        self.0.push_back(x)
+    }
+    pub fn dequeue(&mut self) -> T {
+        self.0.pop_front().expect("queue empty")
+    }
+    pub fn try_dequeue(&mut self) -> Option<T> {
+        self.0.pop_front()
+    }
+    pub fn peek(&self) -> T {
+        self.0.front().expect("queue empty").clone()
+    }
+    pub fn try_peek(&self) -> Option<T> {
+        self.0.front().cloned()
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+}
+
+impl<T: Clone + PartialEq> Queue<T> {
+    pub fn contains(&self, x: &T) -> bool {
+        self.0.contains(x)
+    }
+}
+
+impl<T> IntoVec<T> for Queue<T> {
+    fn into_vec(self) -> Vec<T> {
+        self.0.into()
+    }
+}
+
+/// Stack<T>. A foreach walks it from the top.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Stack<T>(Vec<T>);
+
+impl<T> Default for Stack<T> {
+    fn default() -> Self {
+        Stack(Vec::new())
+    }
+}
+
+impl<T: Clone> Stack<T> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// new Stack<T>(items): pushed in order, so the last item is on top.
+    pub fn from_vec(items: Vec<T>) -> Self {
+        Stack(items)
+    }
+    pub fn push(&mut self, x: T) {
+        self.0.push(x)
+    }
+    pub fn pop(&mut self) -> T {
+        self.0.pop().expect("stack empty")
+    }
+    pub fn try_pop(&mut self) -> Option<T> {
+        self.0.pop()
+    }
+    pub fn peek(&self) -> T {
+        self.0.last().expect("stack empty").clone()
+    }
+    pub fn try_peek(&self) -> Option<T> {
+        self.0.last().cloned()
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+}
+
+impl<T: Clone + PartialEq> Stack<T> {
+    pub fn contains(&self, x: &T) -> bool {
+        self.0.contains(x)
+    }
+}
+
+impl<T> IntoVec<T> for Stack<T> {
+    fn into_vec(mut self) -> Vec<T> {
+        self.0.reverse();
+        self.0
+    }
+}
+
+/// One group of GroupBy.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Group<K, T> {
+    pub key: K,
+    pub items: Vec<T>,
+}
+
+impl<K, T> IntoVec<T> for Group<K, T> {
+    fn into_vec(self) -> Vec<T> {
+        self.items
+    }
+}
+
+/// IOrderedEnumerable<T>: the items in order, and which of them compared equal on every key so far (ThenBy orders only
+/// within those). The sort is stable, as .NET's.
+#[derive(Clone, Debug)]
+pub struct Ordered<T> {
+    pub items: Vec<T>,
+    /// One number per item, never decreasing: items with the same number are tied.
+    pub rank: Vec<u32>,
+}
+
+impl<T> IntoVec<T> for Ordered<T> {
+    fn into_vec(self) -> Vec<T> {
+        self.items
+    }
+}
