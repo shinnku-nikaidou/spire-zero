@@ -1,6 +1,6 @@
 //! A combat of the real game, exported by the C# side, read into the engine (DESIGN.md, "The export").
 
-use crate::r#gen::import::{DELEGATES, GAME, SCHEMA_HASH, read_arenas, read_roots};
+use crate::r#gen::import::{GAME, SCHEMA_HASH, read_arenas, read_roots};
 use crate::rt::Combat;
 use crate::rt::import::{Res, field, members, object};
 use serde_json::Value;
@@ -48,9 +48,5 @@ pub fn import(json: &str) -> Res<Combat> {
     let sim = object(o.get("sim").ok_or("no member sim")?)?;
     members(sim, 1)?;
     c.x.prompts = field(sim, "prompts")?;
-    // An export that does not carry its delegates gets them made again from the game's own code.
-    if !DELEGATES {
-        crate::manual::delegates::attach(&mut c)?;
-    }
     Ok(c)
 }

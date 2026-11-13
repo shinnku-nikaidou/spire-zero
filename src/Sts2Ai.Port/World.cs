@@ -633,9 +633,9 @@ public sealed class World
         }
     }
 
-    /// <summary>Whether a field that holds a delegate is part of an export.</summary>
+    /// <summary>Whether a field that holds a delegate is part of an export: all but those never alive at a decision.</summary>
     private bool ExportsDelegate(INamedTypeSymbol t, IFieldSymbol f) =>
-        Cfg.DelegatesExported && !Cfg.TransientDelegates.Contains($"{t.Name}.{f.AssociatedSymbol?.Name ?? f.Name}");
+        !Cfg.TransientDelegates.Contains($"{t.Name}.{f.AssociatedSymbol?.Name ?? f.Name}");
 
     private static bool IsNullableColl(IFieldSymbol f) =>
         CollOf(f.Type) != Coll.None && ((f.AssociatedSymbol as IPropertySymbol)?.NullableAnnotation ?? f.NullableAnnotation) == NullableAnnotation.Annotated;

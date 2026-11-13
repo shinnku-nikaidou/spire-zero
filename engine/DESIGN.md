@@ -115,7 +115,7 @@ shipped rule is drawn on the screen (Rolling Boulder damages one enemy after the
 - Events (`event`, `+=` on one, raising one) are presentation. One has a subscriber that is game code and is raised
   by hand to it (`manual/card_pile.rs`): the combat's card table gives a card its id when it shows up in a pile. The
   others with game code behind them (a pet's death, a monster's own) wait for events as state: a list of delegates
-  in subscription order. Delegates are values now (below); the events follow once exports carry them. The report
+  in subscription order. Delegates are values and exports carry them (below); the events are the next step. The report
   lists every event of the engine's classes with everyone in the game's source who subscribes to it and what the
   subscriber is (game code, a presentation member, a presentation class, a class outside the translated scope).
 
@@ -256,8 +256,8 @@ puts a selector of its own on the selector stack.
 
 - Every class that is translated or hand-written, and every class above one, has its instance fields listed. A
   class's fields are those of its own entry and of each `base` above it.
-- `dropped` names the instance fields that are left out on purpose: presentation, what cannot be state (a task, a
-  delegate, an event, a lock), and what `port.toml` says is not state (`[drop] fields`, or everything a `[fields]`
+- `dropped` names the instance fields that are left out on purpose: presentation, what cannot be state (a task, an
+  event, a lock), and what `port.toml` says is not state (`[drop] fields`, or everything a `[fields]`
   entry does not name: the run outside the combat, the network). A field of the live game that is in neither list is
   one the decompiled source does not have: the C# side fails on it.
 - One arena per topmost class. A class listed in `[open]` (`AbstractModel`) owns no arena: its fields are part of every
@@ -271,10 +271,8 @@ puts a selector of its own on the selector stack.
   (Delegates, above) are classes of the schema, each with its arena after the game's: `name` as in the engine
   (`CreatureCmdClosure30_0`), `cs` the compiler's class (`...CreatureCmd+<>c__DisplayClass30_0`), no base, the fields
   by the compiler's names (`stunMove`; `<>4__this` is `this`), a captured variable that is presentation on `dropped`.
-  Both only with `[delegates] exported` of `port.toml` on. Off, which is the state until the C# side writes
-  delegates, the schema has neither: a field that holds a delegate is on `dropped`. A field named in
-  `[delegates] transient` stays there either way: its delegate is never run after a decision.
-- With the same switch on, the schema has `"presentation": {"namespaces": [..], "keep": [..], "types": [..]}`:
+  A field named in `[delegates] transient` of `port.toml` is on `dropped`: its delegate is never run after a decision.
+- The schema has `"presentation": {"namespaces": [..], "keep": [..], "types": [..]}`:
   what `port.toml` lists under `[drop]`, as it is there. A type is presentation when its full name is on `types` (a
   `*` at the end takes every name that starts so), or the type it is nested in is, or it is no type of the game's
   assembly, or its namespace is at or below one of `namespaces` and not at or below one of `keep`. The C# side
@@ -378,12 +376,10 @@ game's objects (`Combat.x`).
   the prompt its number. The stack is not kept as objects.
 
 **Delegates in the state.** A monster's move states and a model's vars hold delegates (what a move does, when a
-branch is taken, what a calculated var adds). With `[delegates] exported` on, an export carries them and import reads
-each as the function of the table under its method's name. Until the C# side writes them it is off, and import makes
-them again: it runs each monster's `GenerateMoveStateMachine` and each model's `CanonicalVars` on a scratch copy and
-copies the delegates over by state id and var name, with the objects of what their lambdas captured
-(`manual/delegates.rs`). A move a monster made on the spot (a stun) has no place in the machine made again: such an
-export is refused. The switch and that file go when every export carries its delegates.
+branch is taken, what a calculated var adds). An export carries them, and import reads each as the function of the
+table under its method's name, bound to the object the export names: a game object, or the object of what a lambda
+captured. So a move a monster made on the spot (a stun, with the move to go back to captured) is imported like any
+other.
 
 **Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
 other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.

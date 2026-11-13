@@ -271,8 +271,6 @@ public sealed class Output(World w, Emitter em)
         foreach (var k in closures) sb.Append($"        self.{ArenaField(k)}.canon_build = on;\n");
         sb.Append("    }\n\n    /// Every arena under its name, for measurements.\n    pub fn each(&self, f: &mut dyn FnMut(&'static str, &dyn AnyArena)) {\n");
         foreach (string arena in roots.Select(ArenaField).Concat(closures.Select(ArenaField))) sb.Append($"        f(\"{arena}\", &self.{arena});\n");
-        sb.Append("    }\n\n    /// Takes over what lambdas captured from a copy of the combat in which delegates were made (manual/delegates.rs).\n    pub fn take_closures(&mut self, from: &Arenas) {\n");
-        foreach (var k in closures) sb.Append($"        self.{ArenaField(k)} = from.{ArenaField(k)}.clone();\n");
         sb.Append("    }\n}\n\n");
         sb.Append("/// The arena names, by tag: the classes that own an arena.\npub static ARENA_NAMES: &[&str] = &[\"\", " +
             string.Join(", ", roots.Select(ArenaField).Concat(closures.Select(ArenaField)).Select(a => $"\"{a}\"")) + "];\n\n");
@@ -616,8 +614,8 @@ public sealed class Output(World w, Emitter em)
                 ["dropped"] = DroppedDesc(t),
             });
         }
-        // What a lambda captured is an object of an export when delegates are: the target of the lambda's delegate.
-        var closures = w.Cfg.DelegatesExported ? Closures() : [];
+        // What a lambda captured is an object of an export: the target of the lambda's delegate.
+        var closures = Closures();
         foreach (var k in closures)
             classes.Add(new JsonObject
             {
@@ -676,7 +674,7 @@ public sealed class Output(World w, Emitter em)
             ["structs"] = structs,
             ["enums"] = enums,
         };
-        if (w.Cfg.DelegatesExported) doc["presentation"] = presentation;
+        doc["presentation"] = presentation;
         var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         // The hash is of the schema as written without it; an export carries it, and the engine reads no other.
         hash = System.Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(doc.ToJsonString(options))));
@@ -751,7 +749,7 @@ public sealed class Output(World w, Emitter em)
             sb.Append("    Ok(d)\n}\n\n");
         }
 
-        var closures = w.Cfg.DelegatesExported ? Closures() : [];
+        var closures = Closures();
         foreach (var k in closures)
         {
             // An object of an export has its class and, when the class has fields, one member with them.
@@ -767,7 +765,6 @@ public sealed class Output(World w, Emitter em)
             }
         }
 
-        sb.Append($"/// Whether an export carries its delegates (port.toml [delegates]); one that does not gets them made again.\npub const DELEGATES: bool = {(w.Cfg.DelegatesExported ? "true" : "false")};\n\n");
         sb.Append("/// The arenas of an export, by name: an arena's objects in their order.\npub fn read_arenas(m: &Object, a: &mut Arenas) -> Res<()> {\n    for (name, v) in m {\n        match name.as_str() {\n");
         foreach (var r in roots) sb.Append($"            \"{ArenaField(r)}\" => arena(&mut a.{ArenaField(r)}, name, v, read_{World.Snake(w.Unique(r))})?,\n");
         foreach (var k in closures) sb.Append($"            \"{ArenaField(k)}\" => arena(&mut a.{ArenaField(k)}, name, v, read_{World.Snake(k.Name)})?,\n");

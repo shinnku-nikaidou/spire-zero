@@ -219,11 +219,8 @@ RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "_mapP
 EventRoom = ["_isPreFinished"]
 
 [delegates]
-# A delegate is a value (DESIGN.md, "Delegates"): a function of the engine's table and the object it is bound to.
-# `exported` says whether an export carries them. On, the schema has the fields that hold one (kind `delegate`) and
-# the classes of what lambdas capture, and import reads them. Off, the schema has none of it and import makes the
-# delegates again from the game's own code (manual/delegates.rs): the state until the exporter writes them.
-exported = false
+# A delegate is a value (DESIGN.md, "Delegates"): a function of the engine's table and the object it is bound to. The
+# schema has the fields that hold one (kind `delegate`) and the classes of what lambdas capture; an export carries them.
 # Fields whose delegate is never run after a decision: kept in the engine, not part of an export.
 # AttackCommand: both are read only inside Execute, which has ended before any decision (a power may still hold the
 # finished command, for its plain fields).

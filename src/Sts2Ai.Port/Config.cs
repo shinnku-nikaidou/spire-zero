@@ -53,10 +53,6 @@ public sealed class Config
         return !EnterExcept.Contains(full) && Enter.Any(e => e.EndsWith('*') ? full.StartsWith(e[..^1], StringComparison.Ordinal) : e == full);
     }
 
-    /// <summary>Whether an export carries delegates (DESIGN.md, "Delegates"): the schema then has the fields that hold
-    /// one (kind `delegate`), the events that are state and the classes of what lambdas capture, and import reads them.
-    /// Off, the schema has none of that and import makes the delegates again from the game's code.</summary>
-    public bool DelegatesExported;
     /// <summary>Fields that hold a delegate which is never alive at a decision, as Class.Field: kept, not exported.</summary>
     public HashSet<string> TransientDelegates = [];
 
@@ -94,7 +90,6 @@ public sealed class Config
             foreach (var kv in only) c.OnlyFields[kv.Key] = ((TomlArray)kv.Value).Select(x => (string)x!).ToHashSet();
         if (doc.TryGetValue("game", out var g) && g is TomlTable game && game.TryGetValue("version", out var ver)) c.GameVersion = (string)ver;
         if (doc.TryGetValue("game", out var g2) && g2 is TomlTable game2 && game2.TryGetValue("assembly", out var asm)) c.GameAssembly = (string)asm;
-        if (doc.TryGetValue("delegates", out var dg) && dg is TomlTable delegates && delegates.TryGetValue("exported", out var exported)) c.DelegatesExported = (bool)exported;
         foreach (var s in List(doc, "delegates", "transient")) c.TransientDelegates.Add(s);
         if (c.GameVersion.Length == 0) throw new InvalidDataException($"{path}: no [game] version");
         if (doc.TryGetValue("value", out var v) && v is TomlTable values)

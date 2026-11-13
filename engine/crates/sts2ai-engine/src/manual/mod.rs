@@ -14,7 +14,6 @@ pub mod card_select_cmd;
 pub mod card_selector_stack;
 pub mod combat_manager;
 pub mod combat_state;
-pub mod delegates;
 pub mod epoch_model;
 pub mod game_action;
 pub mod game_action_player_choice_context;
