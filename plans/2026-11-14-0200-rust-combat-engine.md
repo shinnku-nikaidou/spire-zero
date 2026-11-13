@@ -240,3 +240,16 @@
     另外 240 局正在跑）。其餘是測試怪與 `DEPRECATED_*`。
   - 套上名單後，4 套牌組的單場掃描加 48 個整局：除了 `IMPROVEMENT_POWER` 每個 id 都遇到了（牌 716/716、能力
     285/286、遺物 316/316、藥水 68/68、怪 113/113、遭遇 89/89），148,621 個決策對 replay 0 分歧。
+- 04:04 （協調）這一輪的驗收與裁定：
+  - 匯入：engine-port 已修讀取器、收進獎勵類別與集合的空槽（commit 3958b840）。我用工作樹的 crate 匯入剛倒的 1,369 份匯出
+    （`tmp/verify/fx`，含 Gremlin Merc 與 Corpse Slugs）：1,333 份成功，36 份被拒，都是同一個原因
+    （`CorpseSlug` 的下一招不在重建的招式狀態機裡），已回給 engine-port。
+  - 讀出狀態（子代理 engine-state）：`protocol.rs`、`observe.rs`、`legal.rs`、`keys.rs`、`prompt.rs`、`ffi.rs` 與測試已 commit；
+    `protocol`／`reflection`／`abi` 三組測試通過（我重跑過）。走真樣本的 `fixtures` 測試還是 0 通過：每次呼叫都被翻譯器的三個
+    缺口擋住——`ModHelper.IterateAllCombatStateSubscribers`（樁；沒有 mod 訂閱者，定為空）、`CardModel.GetKeywordsWithSources`
+    （`ImmutableHashSet.Empty`）、`MonsterModel.get_Rng`（因一個分支回傳 `Rng.Chaotic` 被整個丟掉；裁定：保留成員，該分支
+    panic）。三項已發給 engine-port。它的筆記（`tmp/engine/notes/engine-state.md`）寫了 `World` 的讀取介面與提示要帶的欄位。
+  - engine-bridge：匯出已照裁定寫集合的槽位（全量 51,823 份 0 失敗）；`sim hashed` 產生真 .NET 集合的操作序列樣本
+    （`tmp/engine/hashed.txt`，141,720 步）；沒遇到的 19 個能力已分類，30 個 id 以名單排除並附理由。裁定：Dread 模式才有的
+    那一組（各 Boss 的 dominion 等）維持排除，理由寫「只在 Dread 模式；模擬器打標準局」。排除後只剩 `IMPROVEMENT_POWER`
+    還沒遇到（要整局才碰得到，正在多跑 240 局）。樣本 `tmp/engine/fixtures` 請它照現在的 schema 重倒成新格式、只留一份。
