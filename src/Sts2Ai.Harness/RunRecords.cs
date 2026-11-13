@@ -24,10 +24,12 @@ public sealed record RunConfig(string Game, string Commit, string Champion, stri
 /// <param name="Outcome">won, lost, truncated (the decision cap), or failed (an error in the driver or a brain; never re-run).</param>
 /// <param name="Brains">Decisions per brain name, from Harness's log.</param>
 /// <param name="CardRewards">Card rewards offered, and how many of them were left untaken (skipped, or never opened).</param>
+/// <param name="Search">What the combat brain's plans cost and where they were rooted, where Harness ran in the run's
+/// own process and the brain keeps count (the SL planner); null otherwise.</param>
 public sealed record RunRecord(
     RunConfig Config, string Seed, string Character, int Ascension, string Outcome, int Act, int Floor, int Hp, int MaxHp, int Gold,
     IReadOnlyList<CombatEntry> Combats, IReadOnlyDictionary<string, int> Surfaces, IReadOnlyDictionary<string, int> Brains,
-    int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string RunId)
+    int CardRewards, int CardRewardsSkipped, int GameErrors, string? Failure, double ElapsedMs, string RunId, PlanTally? Search = null)
 {
     /// <summary>The run records in these files (comma-separated), one per line. A failed run is as if never set: reports and
     /// gates see only the others (a machine with bad memory fails runs at random).</summary>

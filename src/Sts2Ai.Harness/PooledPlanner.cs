@@ -18,14 +18,18 @@ public sealed class PooledPlanner(WorkerPool pool)
                 .Select((job, i) => (WorkerRequest)new SlTurnRequest(i, node, job.Path, nodes, keep, job.History))])
             .Select(r => r.Turn ?? throw new InvalidDataException($"request {r.Id}: no turn in the reply"))]);
 
+    /// <summary>Counts what plans made here cost: the search's processor time is the workers'.</summary>
+    public PlanMeter Meter() => new(pool.CpuTime);
+
     /// <summary>As Harness's combat route in SL, one per run (<see cref="SlRoute"/>): plans once, then follows the plan,
     /// planning again only where it does not hold or has run out.</summary>
     /// <param name="name">The brain's name in reports: plan and its leaf's name.</param>
     public CombatRoute Route(Budget budget, string name)
     {
         var route = new SlRoute(budget);
-        return new(name, (decision, _, node, history) => route.Decide(decision.Observation, decision.Legal, b =>
+        var meter = Meter();
+        return new(name, (decision, _, node, history) => route.Decide(decision.Observation, decision.Legal, b => meter.Count(() =>
             Plan(node ?? throw new InvalidOperationException("the SL planner has no node clone: it plays in SL only"),
-                b, history)), budget);
+                b, history))), budget, () => meter.Tally);
     }
 }

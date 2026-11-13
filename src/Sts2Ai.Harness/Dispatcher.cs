@@ -11,8 +11,9 @@ namespace Sts2Ai.Harness;
 /// no play is legal, and the answer is a <see cref="CombatAction.Pick"/>.
 /// </summary>
 /// <param name="Budget">What the brain may spend, for the log; null for a policy that does not search.</param>
+/// <param name="Costs">What the brain's plans have cost so far in this run; null for one that keeps no count.</param>
 public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, NodeClone?, IReadOnlyList<EnemyTurns>, CombatDecisionResult> Decide,
-    Budget? Budget = null)
+    Budget? Budget = null, Func<PlanTally>? Costs = null)
 {
     /// <summary>A placeholder policy: it gives its pick and no candidates, and at a card prompt the first options
     /// (<see cref="FirstPicks"/>).</summary>
@@ -91,6 +92,17 @@ public sealed class Dispatcher(
     /// </summary>
     public int Replans { get; private set; }
 
+    /// <summary>Combat decisions since the last decision outside combat: 0 before a combat's first.</summary>
+    private int _fought;
+    private int _promptOpens, _promptAfterPlan, _promptReplanned;
+
+    /// <summary>What the combat brain's plans cost in this run so far and where they were rooted; null for a brain
+    /// that keeps no count.</summary>
+    public PlanTally? Search => combat.Costs?.Invoke() is not { } costs ? null : costs with
+    {
+        Replans = Replans, PromptOpens = _promptOpens, PromptAfterPlan = _promptAfterPlan, PromptReplanned = _promptReplanned,
+    };
+
     /// <summary>The brain on each side of the routing table, for reports.</summary>
     public string Champion =>
         $"combat {combat.Brain}{(combat.Budget is { } b ? $" {b}" : "")}, combat prompts first, macro {macro.Brain}, macro prompts {macroChoices.Brain}";
@@ -134,6 +146,10 @@ public sealed class Dispatcher(
         var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null, history);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (result.Replanned) Replans++;
+        // A search leaves candidates, a planned step and a forced answer none: so a plan was made here, at a prompt.
+        if (decision.Observation.Prompt != null && result.Candidates.Count > 0)
+            _ = result.Replanned ? _promptReplanned++ : _fought == 0 ? _promptOpens++ : _promptAfterPlan++;
+        _fought++;
         // A plan that repeats a cycle may have thousands of steps left, at each of them.
         var note = new DecisionNote(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null,
             result.Candidates.Count > 0 ? result.Candidates : null);
@@ -181,6 +197,7 @@ public sealed class Dispatcher(
     public (MacroAnswer Answer, DecisionNote Note) Decide(MacroDecision decision)
     {
         _moves.Clear();
+        _fought = 0;
         var (id, seed, clock) = Begin(macro.Brain);
         if (!MacroSurfaces.Contains(decision.Surface)) throw new InvalidOperationException($"uncovered surface {decision.Surface}");
         if (MacroClone() is { } node) decision = decision.With(node);

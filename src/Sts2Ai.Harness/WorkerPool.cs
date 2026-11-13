@@ -58,6 +58,10 @@ public sealed class WorkerPool : IDisposable
     /// <summary>Workers started again after dying.</summary>
     public int Restarts => _restarts;
 
+    /// <summary>The processor time the workers have taken since they started. Call when no <see cref="Map"/> is
+    /// running: every worker is then free. A worker that died took its time with it.</summary>
+    public TimeSpan CpuTime() => _free.Aggregate(TimeSpan.Zero, (sum, worker) => sum + worker.CpuTime);
+
     /// <summary>The game's Log.Error lines in the workers' replies since the last call.</summary>
     public List<string> TakeGameErrors()
     {
@@ -154,6 +158,15 @@ public sealed class WorkerPool : IDisposable
         }
 
         public string Game { get; }
+
+        public TimeSpan CpuTime
+        {
+            get
+            {
+                _process.Refresh();
+                return _process.TotalProcessorTime;
+            }
+        }
 
         public string Call(string line)
         {
