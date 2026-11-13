@@ -73,9 +73,20 @@ fn every_combat_is_played_through() {
         played += 1;
         let actions = actions(&folder);
         let export = std::fs::read_to_string(folder.join("0.export.json")).unwrap();
+        let text_of = |panic: Box<dyn std::any::Any + Send>| {
+            panic
+                .downcast_ref::<String>()
+                .cloned()
+                .or(panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_default()
+        };
         let result = std::panic::catch_unwind(|| {
-            let mut world = sts2ai_engine::world::Live::import(&export)
-                .map_err(|e| (0, format!("import: {e}")))?;
+            // A panic while the export is read (a member the import runs that is not translated) stops the combat too.
+            let mut world = match std::panic::catch_unwind(|| sts2ai_engine::world::Live::import(&export)) {
+                Ok(Ok(world)) => world,
+                Ok(Err(e)) => return Err((0, format!("import: {e}"))),
+                Err(panic) => return Err((0, format!("import: panic: {}", text_of(panic)))),
+            };
             for (k, action) in actions.iter().enumerate() {
                 let Some(action) = action else { break };
                 let step =
@@ -83,14 +94,7 @@ fn every_combat_is_played_through() {
                 match step {
                     Ok(Ok(())) => {}
                     Ok(Err(e)) => return Err((k, format!("refused: {e}"))),
-                    Err(panic) => {
-                        let text = panic
-                            .downcast_ref::<String>()
-                            .cloned()
-                            .or(panic.downcast_ref::<&str>().map(|s| s.to_string()))
-                            .unwrap_or_default();
-                        return Err((k, format!("panic: {text}")));
-                    }
+                    Err(panic) => return Err((k, format!("panic: {}", text_of(panic)))),
                 }
             }
             Ok::<usize, (usize, String)>(actions.len() - 1)

@@ -69,7 +69,7 @@ public sealed class Emitter(World w)
         foreach (var p in m.Parameters)
         {
             // A parameter of a presentation type is not there in Rust.
-            if (w.IsDropped(p.Type)) continue;
+            if (w.IsDropped(p)) continue;
             string t = w.RType(p.Type);
             if (p.RefKind is RefKind.Out or RefKind.Ref || w.IsChangedParam(p)) rets.Add(t);
             if (p.RefKind == RefKind.Out) continue;

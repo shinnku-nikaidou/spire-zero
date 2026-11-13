@@ -153,6 +153,10 @@ public sealed class World
     }
 
     /// <summary>Where a member's code is: translated, written by hand, or not there yet.</summary>
+    /// <summary>Whether a parameter is not there in Rust: its type is presentation, or port.toml says what it carries is.</summary>
+    public bool IsDropped(IParameterSymbol p) =>
+        IsDropped(p.Type) || (Cfg.DropParams.Count > 0 && p.ContainingSymbol is IMethodSymbol m && Cfg.DropParams.Contains($"{m.ContainingType.Name}.{m.Name}.{p.Name}"));
+
     public Cat CatOfMember(ISymbol m)
     {
         var c = CatOf(m.ContainingType);

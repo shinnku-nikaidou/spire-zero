@@ -74,7 +74,7 @@ public sealed partial class Body
         severalStatements = op is IMethodBodyOperation { BlockBody.Operations.Length: > 1 };
         // A parameter of a presentation type is not there in Rust: what uses it is presentation.
         foreach (var p in m.Parameters)
-            if (w.IsDropped(p.Type)) droppedLocals.Add(p);
+            if (w.IsDropped(p)) droppedLocals.Add(p);
         var f = new Frame { Async = m.IsAsync, ReturnsTask = World.IsTask(m.ReturnType, out _), Ret = m.ReturnsVoid ? null : m.ReturnType };
         if (op != null) f.Iterator = HasYield(op);
         if (f.Iterator && !w.Yields(m)) throw new Unsupported("yield in what is not a sequence of values");
@@ -213,9 +213,22 @@ public sealed partial class Body
     {
         if (op == null) return;
         if (op is IBlockOperation { Operations: var ops } lb && ops.Any(o => o is ILabeledOperation)) Labeled(lb, sb);
-        else if (op is IBlockOperation b) foreach (var s in b.Operations) Stmt(s, sb);
+        else if (op is IBlockOperation b)
+        {
+            foreach (var s in b.Operations)
+            {
+                dead = false;
+                Stmt(s, sb);
+                // What follows a test that is always true and always leaves (`if (TestMode.IsOn) return;`) never runs.
+                if (dead) break;
+            }
+            dead = false;
+        }
         else Stmt(op, sb);
     }
+
+    /// <summary>Set by a statement after which nothing of its block runs.</summary>
+    private bool dead;
 
     /// <summary>Where each label of a block with labels is: the loop of its block, the variable that says which part
     /// runs next, and the number of the part the label starts.</summary>
@@ -268,6 +281,7 @@ public sealed partial class Body
     {
         var sb = new StringBuilder();
         Block(op, sb);
+        dead = false;
         return sb.ToString();
     }
 
@@ -290,7 +304,7 @@ public sealed partial class Body
                     if (w.IsDropped(m.ReturnType) || Value(m) != null) continue;
                     // A call on presentation, or one that only takes presentation and gives nothing back, is presentation.
                     if (inv.Instance != null && (w.IsDropped(inv.Instance.Type) || inv.Instance is IMemberReferenceOperation { Member: var im } && World.IsSource(im.ContainingType) && w.IsDropMember(im))) continue;
-                    if (m.ReturnsVoid && m.Parameters.Length > 0 && m.Parameters.All(p => w.IsDropped(p.Type))) continue;
+                    if ((m.ReturnsVoid || (World.IsTask(m.ReturnType, out var gives) && gives == null)) && m.Parameters.Length > 0 && m.Parameters.All(p => w.IsDropped(p.Type))) continue;
                     if (IsPureName(m.Name) || m.ContainingType.Name is "ModelDb") continue;
                     // A task run on the side is what the task is: its own calls decide.
                     if (m is { Name: "RunSafely", ContainingType.Name: "TaskHelper" }) continue;
@@ -642,6 +656,7 @@ public sealed partial class Body
             if (taken.Length > 0) sb.Append("{\n").Append(taken).Append("}\n");
             // The branch never taken, when it is presentation, is a statement left out: a member with nothing else is presentation.
             else if ((test == "true" ? cond.WhenFalse : cond.WhenTrue) is { } never && !HoldsGameCall(never) && !WritesOuterLocal(never)) LeftOut++;
+            dead = test == "true" && EndsInReturn(cond.WhenTrue);
             return;
         }
         string then = Sub(cond.WhenTrue), other = Sub(cond.WhenFalse);

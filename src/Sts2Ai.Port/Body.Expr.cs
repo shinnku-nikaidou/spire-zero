@@ -458,6 +458,31 @@ public sealed partial class Body
         }
     }
 
+    /// <summary>The field of another object that a property hands out, and the code that gives that object, when its
+    /// getter is nothing but `=> holder.field` (the holder computed from this object).</summary>
+    private (IFieldSymbol Field, IOperation Holder)? Held(IPropertySymbol p)
+    {
+        if (p.IsStatic || !World.IsSource(p) || !(Eq.Equals(p.ContainingType, cls.OriginalDefinition) || InheritsFrom(cls, p.ContainingType))) return null;
+        var syntax = p.GetMethod?.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        ExpressionSyntax? e = syntax switch
+        {
+            ArrowExpressionClauseSyntax a => a.Expression,
+            AccessorDeclarationSyntax { ExpressionBody: { } eb } => eb.Expression,
+            AccessorDeclarationSyntax { Body.Statements: [ReturnStatementSyntax { Expression: { } re }] } => re,
+            _ => null,
+        };
+        if (e is not MemberAccessExpressionSyntax { Expression: not ThisExpressionSyntax and not BaseExpressionSyntax } access) return null;
+        if (w.Comp.GetSemanticModel(access.SyntaxTree).GetOperation(access) is not IFieldReferenceOperation { Field: { IsStatic: false } field, Instance: { } holder }) return null;
+        if (!World.IsSource(field.ContainingType) || w.IsValue(field.ContainingType) || !w.IsStateful(field.ContainingType)) return null;
+        return (field.OriginalDefinition, holder);
+    }
+
+    private static bool InheritsFrom(INamedTypeSymbol t, INamedTypeSymbol of)
+    {
+        for (var b = t.BaseType; b != null; b = b.BaseType) if (Eq.Equals(b.OriginalDefinition, of.OriginalDefinition)) return true;
+        return false;
+    }
+
     /// <summary>The field a property's getter makes when it is not there yet and then returns (`if (_f != null) return
     /// _f; _f = ..; return _f;`): every return of the getter gives that one field.</summary>
     private static IFieldSymbol? MadeOnDemand(IPropertySymbol p)
@@ -631,7 +656,7 @@ public sealed partial class Body
         foreach (var a in ordered)
         {
             var kind = a.Parameter!.RefKind;
-            if (w.IsDropped(a.Parameter.Type))
+            if (w.IsDropped(a.Parameter))
             {
                 if (HoldsGameCall(a.Value)) w.Rep.DroppedWithCall(Where, a.Value);
                 continue;
@@ -652,14 +677,15 @@ public sealed partial class Body
                 try { after.Add($"{Place(a.Value)} = {o};"); }
                 catch (Unsupported) { }
             }
-            string code = Guard(a.Value, $"a call of {type.Name}.{m.Name} with presentation");
+            // A task run on the side is what the task is: one that is presentation makes the whole call presentation.
+            string code = def is { Name: "RunSafely", ContainingType.Name: "TaskHelper" } ? Expr(a.Value) : Guard(a.Value, $"a call of {type.Name}.{m.Name} with presentation");
             if (!inOrder) { string t = Tmp("a"); pre.Add($"let {t} = {code};"); code = t; }
             args.Add(code);
         }
         if (!inOrder)
         {
             // Named arguments: evaluated in the order written.
-            var passed = ordered.Where(x => x.Parameter!.RefKind != RefKind.Out && !w.IsDropped(x.Parameter.Type)).ToList();
+            var passed = ordered.Where(x => x.Parameter!.RefKind != RefKind.Out && !w.IsDropped(x.Parameter)).ToList();
             pre = op.Arguments.Where(passed.Contains).Select(a => pre[passed.IndexOf(a)]).ToList();
         }
         args.Add("c");
@@ -700,7 +726,7 @@ public sealed partial class Body
                 var args = KindArgs(ctor);
                 foreach (var a in op.Arguments.OrderBy(a => a.Parameter!.Ordinal))
                 {
-                    if (w.IsDropped(a.Parameter!.Type)) continue;
+                    if (w.IsDropped(a.Parameter!)) continue;
                     if (a.Parameter!.RefKind != RefKind.None) throw new Unsupported("constructor with ref parameters");
                     args.Add(Guard(a.Value, $"creation of {type.Name} with presentation"));
                 }
@@ -743,6 +769,13 @@ public sealed partial class Body
                 && p.ContainingType.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => Eq.Equals(f.AssociatedSymbol, p.OriginalDefinition)) is { } auto:
                 return $"{Place(pr.Instance!)}.{World.FieldName(auto)}";
             case IPropertyReferenceOperation pr when FieldPlaceOf(pr) is { } fp: return fp.Replace("::of(", "::of_mut(");
+            // A collection its property makes on demand: the getter runs (and makes it), then the field it returned is the place.
+            case IPropertyReferenceOperation { Property: var lazy } lp when Forwarded(lazy.OriginalDefinition) == null && MadeOnDemand(lazy.OriginalDefinition) is { } made
+                && w.StateField(made) is { } madeName && StableReceiver(lp.Instance) && !w.IsValue(made.ContainingType):
+                return $"(*{{ let _ = {Expr(lp)}; &mut {w.DataName(made.ContainingType)}::of_mut({(lp.Instance == null ? "me" : Expr(lp.Instance))}, c).{madeName} }})";
+            // A property of this object that hands out a field of another object (`=> GetInternalData<Data>().list`): that field.
+            case IPropertyReferenceOperation { Instance: null or IInstanceReferenceOperation, Property: var hp } when Held(hp.OriginalDefinition) is { } held && w.StateField(held.Field) is { } heldName:
+                return $"(*{{ let __h = {Expr(held.Holder)}; &mut {w.DataName(held.Field.ContainingType)}::of_mut(__h, c).{heldName} }})";
             case IConversionOperation { IsTryCast: false } cv when N(cv.Type) == N(cv.Operand.Type): return Place(cv.Operand);
             case IConditionalAccessInstanceOperation: return condInstances.Peek();
             case IArrayElementReferenceOperation ae when ae.Indices.Length == 1 && IsSimple(ae.Indices[0]): return $"{Place(ae.ArrayReference)}[({Expr(ae.Indices[0])}) as usize]";
@@ -750,6 +783,11 @@ public sealed partial class Body
                 return $"{Place(ix.Instance!)}[({Expr(ix.Arguments[0].Value)}) as usize]";
             case IPropertyReferenceOperation { Property.IsIndexer: true, Arguments.Length: 1 } dx when World.CollOf(dx.Property.ContainingType) == World.Coll.Dict && IsSimple(dx.Arguments[0].Value):
                 return $"(*{Place(dx.Instance!)}.get_mut(&{Expr(dx.Arguments[0].Value)}))";
+            // A key or an index that is computed: computed first, then the place is taken.
+            case IPropertyReferenceOperation { Property.IsIndexer: true, Arguments.Length: 1 } dk when World.CollOf(dk.Property.ContainingType) == World.Coll.Dict:
+                return $"(*{{ let __k = {Expr(dk.Arguments[0].Value)}; {Place(dk.Instance!)}.get_mut(&__k) }})";
+            case IPropertyReferenceOperation { Property.IsIndexer: true, Arguments.Length: 1 } vk when World.CollOf(vk.Property.ContainingType) == World.Coll.Vec:
+                return $"(*{{ let __i = ({Expr(vk.Arguments[0].Value)}) as usize; &mut {Place(vk.Instance!)}[__i] }})";
             default: throw new Unsupported($"a change in place of {op.Kind} ({op.Syntax.ToString().Split('\n')[0].Trim()})");
         }
     }
@@ -833,6 +871,10 @@ public sealed partial class Body
 
     private string Assign(IOperation target, Func<string> value, bool asValue)
     {
+        // The decompiler writes an object initializer's `{ P = v }` as a statement even where P is init-only, which
+        // the compiler refuses: the property is the one it names.
+        if (target is IInvalidOperation invalid && invalid.ChildOperations.Count == 1 && invalid.ChildOperations.First() is IPropertyReferenceOperation { Property.SetMethod.IsInitOnly: true } initOnly)
+            target = initOnly;
         string Done(string store, string v) => asValue ? $"{{ let __v = {v}; {store.Replace("$v", "__v" + CloneOf(target.Type))}; __v }}" : UsesCombat(store.Replace("$v", "")) && UsesCombat(v) ? $"{{ let __v = {v}; {store.Replace("$v", "__v")}; }}" : store.Replace("$v", v);
         switch (target)
         {
@@ -1305,6 +1347,14 @@ public sealed partial class Body
                     var (code, captured) = Lambda(local.Symbol, local.Body ?? throw new Unsupported("a local function without a body"), true);
                     string clones = string.Concat(captured.Select(x => $"let mut {x} = {x}.clone(); "));
                     return $"{{ {clones}{fn}::new(move {code}) }}";
+                }
+                // A member that is presentation as a whole, handed over as a function, is one that does nothing.
+                if (World.IsSource(mr.Method.ContainingType) && !w.IsDropped(mr.Method.ContainingType) && w.IsDropMember(mr.Method.OriginalDefinition)
+                    && (invoke.ReturnsVoid || (World.IsTask(invoke.ReturnType, out var given) && given == null)))
+                {
+                    LeftOut++;
+                    var unused = invoke.Parameters.Select((p, i) => $"_a{i}: {T(p.Type)}").Append("_c: &mut Combat");
+                    return $"{fn}::new(move |{string.Join(", ", unused)}| -> {(invoke.ReturnsVoid ? "()" : "R<()>")} {{ {(invoke.ReturnsVoid ? "" : "Ok(())")} }})";
                 }
                 var ps = invoke.Parameters.Select((p, i) => $"a{i}: {T(p.Type)}").Append("c: &mut Combat");
                 string call = MethodGroupCall(mr, invoke.Parameters.Length, out string? inst);

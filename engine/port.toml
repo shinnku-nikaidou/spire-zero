@@ -191,6 +191,8 @@ members = [
 keep_members = ["LocString..ctor", "LocString.LocTable", "LocString.LocEntryKey"]
 
 # Instance fields that are not state, as Class.Field (the property's name for the field behind one).
+# Parameters that only carry presentation: the argument is left out with them. (A formatted text for a tooltip.)
+parameters = ["StringVar..ctor.baseValue"]
 fields = [
     # the network
     "ActionQueueSynchronizer._netService",

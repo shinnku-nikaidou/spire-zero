@@ -35,6 +35,8 @@ public sealed class Config
     public HashSet<string> Caches = [];
     /// <summary>Instance fields that are not state, as Class.Field (or Class.Property for the field behind one).</summary>
     public HashSet<string> DropFields = [];
+    /// <summary>Parameters that only carry presentation (`Class.Method.parameter`, a constructor as `Class..ctor.parameter`).</summary>
+    public HashSet<string> DropParams = [];
     /// <summary>Classes of which only the named fields are state (by field or property name); their other fields are not.</summary>
     public Dictionary<string, HashSet<string>> OnlyFields = [];
     /// <summary>Members that tell hand-written code that they run, as Class.Member (a `*` at the end takes every member
@@ -73,6 +75,7 @@ public sealed class Config
         foreach (var s in List(doc, "values", "classes")) c.ValueClasses.Add(s);
         foreach (var s in List(doc, "roots", "members")) c.Statics.Add(s);
         foreach (var s in List(doc, "drop", "fields")) c.DropFields.Add(s);
+        foreach (var s in List(doc, "drop", "parameters")) c.DropParams.Add(s);
         foreach (var s in List(doc, "caches", "members")) c.Caches.Add(s);
         foreach (var s in List(doc, "enter", "members")) c.Enter.Add(s);
         foreach (var s in List(doc, "enter", "except")) c.EnterExcept.Add(s);
