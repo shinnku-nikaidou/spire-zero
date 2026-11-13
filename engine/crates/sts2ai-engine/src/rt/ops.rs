@@ -40,6 +40,12 @@ impl IsNull for Obj {
         self.0 == 0
     }
 }
+/// No exception: the one with no class.
+impl IsNull for Exception {
+    fn is_null(&self) -> bool {
+        self.name.is_empty()
+    }
+}
 impl IsNull for Str {
     fn is_null(&self) -> bool {
         Str::is_null(*self)

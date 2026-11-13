@@ -240,7 +240,7 @@ public sealed class Output(World w, Emitter em)
         sb.Append("impl Arenas {\n    /// While set, what is made is canonical (the building of the canonical models).\n    pub fn set_canon_build(&mut self, on: bool) {\n");
         foreach (var r in roots) sb.Append($"        self.{ArenaField(r)}.canon_build = on;\n");
         sb.Append("    }\n}\n\n");
-        sb.Append("/// The arena names, by tag: the classes that own an arena.\npub static ARENA_NAMES: &[&str] = &[\"\", " + string.Join(", ", roots.Select(r => $"\"{w.Unique(r)}\"")) + "];\n\n");
+        sb.Append("/// The arena names, by tag: the classes that own an arena.\npub static ARENA_NAMES: &[&str] = &[\"\", " + string.Join(", ", roots.Select(r => $"\"{ArenaField(r)}\"")) + "];\n\n");
 
         var subs = stateful.Where(t => !w.IsOpen(t) && !Eq.Equals(w.Root(t), t)).ToList();
         var opens = stateful.Where(w.IsOpen).ToList();
@@ -559,7 +559,9 @@ public sealed class Output(World w, Emitter em)
         sb.Append($"/// The hash of the schema the engine was made with: an export made along another schema is refused.\npub const SCHEMA_HASH: &str = \"{hash}\";\n\n");
 
         string Fill(INamedTypeSymbol t) => "fill_" + World.Snake(w.Unique(t));
-        foreach (var t in stateful.Where(HasFields))
+        // A class has a member of its own in an exported object when it has state: a field of the schema, a type parameter.
+        bool HasLevel(INamedTypeSymbol t) => w.Fields(t).Any(f => f.IsState) || t.TypeParameters.Any(w.Erased);
+        foreach (var t in stateful.Where(HasLevel))
         {
             var lines = new StringBuilder();
             int n = 0;
@@ -579,8 +581,8 @@ public sealed class Output(World w, Emitter em)
             sb.Append($"    if !is_subclass(kind, Kind::{w.Unique(r)}) {{\n        return Err(format!(\"{{kind:?}} is not a {w.Unique(r)}\"));\n    }}\n");
             sb.Append($"    let mut d = {data} {{ kind, {(carriers.Count > 0 ? $"ext: {ext}::of_kind(kind), " : "")}..Default::default() }};\n");
             int levels = 1;
-            foreach (var o in OpenChain(r).Where(HasFields)) { sb.Append($"    {Fill(o)}(&mut d.{World.Ident(w.Unique(o))}, o)?;\n"); levels++; }
-            if (HasFields(r)) { sb.Append($"    {Fill(r)}(&mut d, o)?;\n"); levels++; }
+            foreach (var o in OpenChain(r).Where(HasLevel)) { sb.Append($"    {Fill(o)}(&mut d.{World.Ident(w.Unique(o))}, o)?;\n"); levels++; }
+            if (HasLevel(r)) { sb.Append($"    {Fill(r)}(&mut d, o)?;\n"); levels++; }
             if (carriers.Count == 0) sb.Append($"    members(o, {levels})?;\n");
             else
             {
@@ -591,8 +593,8 @@ public sealed class Output(World w, Emitter em)
                     for (INamedTypeSymbol? x = t; x != null; x = w.BaseClass(x) is { } b ? Carrier(b) : null) chain.Add(x);
                     sb.Append($"            {ext}::{w.Unique(t)}(x) => {{\n");
                     for (int i = 0; i < chain.Count; i++)
-                        sb.Append($"                {Fill(chain[i])}({(i == 0 ? "x" : "&mut x" + string.Concat(Enumerable.Repeat(".base", i)))}, o)?;\n");
-                    sb.Append($"                {chain.Count}\n            }}\n");
+                        if (HasLevel(chain[i])) sb.Append($"                {Fill(chain[i])}({(i == 0 ? "x" : "&mut x" + string.Concat(Enumerable.Repeat(".base", i)))}, o)?;\n");
+                    sb.Append($"                {chain.Count(HasLevel)}\n            }}\n");
                 }
                 sb.Append("        };\n    members(o, levels)?;\n");
             }

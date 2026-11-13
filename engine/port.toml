@@ -130,6 +130,13 @@ types = [
     "System.Diagnostics.Stopwatch",
     "System.GC",
     "System.IDisposable",
+    # waiting: the engine runs straight through
+    "System.Threading.CancellationToken",
+    "System.Threading.CancellationTokenSource",
+    "System.Threading.Lock",
+    "System.Threading.Lock.Scope",
+    "System.Threading.Tasks.TaskCompletionSource",
+    "System.Threading.Tasks.TaskCompletionSource`1",
 ]
 members = [
     "Cmd.Wait",
@@ -191,3 +198,6 @@ classes = ["ModelId"]
 # Members with a fixed value in the engine. The real game the engine is checked against runs headless with TestMode on.
 "TestMode.IsOn" = "true"
 "TestMode.IsOff" = "false"
+# Nothing cancels a combat of the engine.
+"CancellationToken.IsCancellationRequested" = "false"
+"CancellationTokenSource.IsCancellationRequested" = "false"

@@ -1,6 +1,9 @@
 //! The part of the game's core that is written by hand, one module per C# class (engine/port.toml lists them; port
 //! prints the signature each member must have in gen/manual.txt).
 
+// The names are port's: the C# member, with the parameter types where the member is overloaded.
+#![allow(non_snake_case)]
+
 pub mod canon;
 pub mod model_db;
 pub mod object;

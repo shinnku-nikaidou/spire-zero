@@ -91,3 +91,20 @@ pub fn by_id(id: &ModelId, c: &Combat) -> Obj {
     let table = c.x.canon_in_build.as_ref().unwrap_or_else(|| &canon().table);
     table.by_id.get(&(id.category, id.entry)).copied().unwrap_or(Obj::NULL)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every model class of the engine has its canonical model, with the id the game gives the class.
+    #[test]
+    fn every_model_class_is_made() {
+        let c = combat();
+        for kind in MODEL_KINDS {
+            let o = of(kind);
+            assert!(o.is_canon());
+            assert_eq!(g::kinds::kind_of(o, &c), kind);
+            assert_eq!(AbstractModelData::of(o, &c).id, id_of(kind));
+        }
+    }
+}
