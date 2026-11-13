@@ -193,3 +193,15 @@
     LEADERSHIP、MAGIC_BOMB、NO_ENERGY_GAIN、SOULBOUND、YOU_ARE_MINE（各加 `_POWER`）；要逐一查是多人專用、
     另一種模式才有，還是有單人打得到的來源。其餘沒遇到的仍是測試怪與 `DEPRECATED_*`。
   - 回歸：單場掃描 `--n 480` 12,549 個決策 0 分歧；`--world determinized --n 48` 匯入 0、走步 269（與驗收時同數）。
+- 03:51 （協調）驗收 engine-port 的「生成的匯入讀取器」與新 schema（commit b77a130d）：
+  - 乾淨匯出的 HEAD（`tmp/builds/verify-5431cd52`）重跑 `gen.sh --fresh --check` 通過：範圍擴到 2,019 個類別、13,061 個成員
+    （沒翻出 449、樁 556、手寫成員 6、0 個被 rustc 拒收），schema 雜湊與工作樹的相同。
+  - 匯出端吃得下新 schema：我另倒一份小樣本（`tmp/verify/fx`，24 場、396 份匯出），雜湊相符、四個根物件、`outside` 全空。
+    engine-bridge 的大樣本（`tmp/engine/fixtures`，120 場、2,685 筆，檢查腳本 0 個問題）是照舊 schema 倒的，已請它重倒。
+  - **匯入還不通**：396 份匯出全部被拒（`abstract_intent[0]: no member AttackIntent`）。原因在讀取器：沒有欄位的類別
+    （`AttackIntent` 唯一的欄位被列為不收）它也要求匯出裡有那一層；格式規定只寫有欄位或型別參數的層，匯出端是對的。
+    已回給 engine-port，連同重現方法（`tmp/verify/imp`）；要它在 crate 裡留一個測試：樣本的每份匯出都能匯入。
+  - 另外：工作樹的 crate 此刻編不過（生成碼對 `rt::ops::Exception` 用了 `is_null`），會擋住子代理 engine-state 的
+    `cargo check`，已提醒 engine-port 盡量讓工作樹保持可編譯。
+  - HashSet／Dictionary 移除過元素後的列舉順序是 format 1 說不出來的已知缺口：請 engine-bridge 在匯出時數「有空槽的集合」，
+    全量為 0 就當不存在，否則 format 1 加上槽位與空閒串列。
