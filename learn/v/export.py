@@ -75,11 +75,10 @@ def read(path: str) -> dict:
         return json.load(f)
 
 
-def weights(net: dict, model) -> dict[str, torch.Tensor]:
-    """A net file's weights by model's parameter names, from its ONNX: the named initializers, the Linear layers the
-    export turned into MatMul + Add (their weights transposed, named by their Add's bias), and the weights the export
-    found equal to another and keeps as its Identity (v9-0's all-zero damage and block rows). The second head is not in
-    the file and keeps model's own."""
+def stored(net: dict) -> dict[str, torch.Tensor]:
+    """A net file's weights by parameter name, from its ONNX: the named initializers, the Linear layers the export
+    turned into MatMul + Add (their weights transposed, named by their Add's bias), and the weights the export found
+    equal to another and keeps as its Identity (a carried net's all-zero rows)."""
     graph = onnx.load_from_string(base64.b64decode(net["onnx"])).graph
     inits = {i.name: torch.from_numpy(numpy_helper.to_array(i).copy()) for i in graph.initializer}
     found = {k.removeprefix("net."): v for k, v in inits.items() if k.startswith("net.")}
@@ -90,6 +89,13 @@ def weights(net: dict, model) -> dict[str, torch.Tensor]:
             found[bias.removeprefix("net.").removesuffix(".bias") + ".weight"] = inits[n.input[1]].T
         if n.op_type == "Identity" and n.input[0] in inits and n.output[0].startswith("net."):
             found[n.output[0].removeprefix("net.")] = inits[n.input[0]]
+    return found
+
+
+def weights(net: dict, model) -> dict[str, torch.Tensor]:
+    """A net file's weights by model's parameter names (stored). The second head is not in the file and keeps model's
+    own."""
+    found = stored(net)
     own = model.state_dict()
     for k, v in own.items():
         if k.startswith("aux_head."):
