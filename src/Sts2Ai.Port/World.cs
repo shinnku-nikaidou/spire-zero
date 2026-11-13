@@ -655,10 +655,14 @@ public sealed class World
     // ---------------------------------------------------------------- the functions a delegate can be
 
     /// <summary>A function of gen/fns.rs: what a delegate of the game that names a method is bound to. `Name` is its
-    /// Rust name there, `Method` the game's method (its name, as reflection gives it, is how an export says which
-    /// function a delegate is), `Types` and `Ret` the delegate's signature, `Call` the code that runs it with the
-    /// target `t` and the arguments `a0`, `a1`, ..</summary>
-    public sealed record FnEntry(string Name, IMethodSymbol Method, bool Virtual, List<string> Types, string Ret, string Call);
+    /// Rust name there, `Clr` the game's name of the method as reflection gives it (`<class>::<method>`: how an export
+    /// says which function a delegate is), `VirtualSlot` the slot when the call is a virtual one (every body of it
+    /// is then a name of the function), `Types` and `Ret` the delegate's signature, `Call` the code that runs it
+    /// with the target `t` and the arguments `a0`, `a1`, ..</summary>
+    public sealed record FnEntry(string Name, string Clr, IMethodSymbol? VirtualSlot, List<string> Types, string Ret, string Call);
+
+    /// <summary>The compiler's names of the game's lambdas, from its assembly (set at start-up).</summary>
+    public Lambdas? Lambdas;
 
     public readonly ConcurrentDictionary<string, FnEntry> Fns = new();
 

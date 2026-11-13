@@ -697,14 +697,13 @@ public sealed class Output(World w, Emitter em)
             string generic = $"Fn{n}<{string.Join(", ", e.Types.Append(e.Ret))}>";
             string pointer = $"fn(Obj, {string.Concat(e.Types.Select(t => t + ", "))}&mut Combat) -> {e.Ret}";
             string ps = string.Concat(e.Types.Select((t, i) => $"a{i}: {t}, "));
-            string clr = $"{World.FullName(e.Method.ContainingType)}::{e.Method.Name}";
+            string clr = e.Clr;
             sb.Append($"/// C#: {clr}\npub fn {e.Name}(t: Obj) -> {generic} {{\n    Fn{n}::of({id}, t, {e.Name}__f)\n}}\n");
             sb.Append($"fn {e.Name}__f(t: Obj, {ps}c: &mut Combat) -> {e.Ret} {{\n    {e.Call}\n}}\n");
             sb.Append($"static {e.Name.ToUpperInvariant()}: {pointer} = {e.Name}__f;\n\n");
             var names = new SortedSet<string>(StringComparer.Ordinal) { clr };
-            if (e.Virtual)
+            if (e.VirtualSlot is { } slot)
             {
-                var slot = (IMethodSymbol)World.Slot(e.Method);
                 foreach (var k in concrete.Where(k => Derives(k, slot.ContainingType)))
                     if (FindImpl(k, slot) is { IsAbstract: false } impl) names.Add($"{World.FullName(impl.ContainingType)}::{impl.Name}");
             }

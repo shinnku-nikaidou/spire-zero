@@ -36,6 +36,7 @@ var comp = CSharpCompilation.Create("sts2", trees, refs,
 Console.Error.WriteLine($"port: {trees.Count} files, {refs.Count} references ({clock.Elapsed.TotalSeconds:F1} s)");
 
 var world = new World(comp, cfg);
+if (File.Exists(Path.Combine(bin, "sts2.dll"))) world.Lambdas = new Lambdas(Path.Combine(bin, "sts2.dll"));
 var emitter = new Emitter(world);
 if (quarantinePath.Length > 0 && File.Exists(quarantinePath))
     emitter.Quarantine = File.ReadAllLines(quarantinePath).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')).ToHashSet();

@@ -1330,6 +1330,7 @@ public sealed partial class Body
             case IAnonymousFunctionOperation f:
             {
                 var (code, captured) = Lambda(f, true);
+                if (BoundLambda(f, invoke, code, captured) is { } bound) return bound;
                 string clones = string.Concat(captured.Select(x => $"let mut {x} = {x}.clone(); "));
                 return $"{{ {clones}{fn}::new(move {code}) }}";
             }
@@ -1365,6 +1366,67 @@ public sealed partial class Body
         }
     }
 
+    /// <summary>The compiler's method of each place in the member where a delegate is made of a lambda or of a local
+    /// function (Lambdas): filled when the member's translation starts, for the member and the lambdas inside it.</summary>
+    private readonly Dictionary<IOperation, Lambdas.Made> compiled = [];
+
+    /// <summary>Binds the places of `root` where a delegate is made, in the order of the code, to the compiler-made
+    /// methods the same code's IL makes delegates of. They are bound only when both lists agree in length and, place
+    /// by place, in what they are; a member where they do not is noted and its lambdas stay code made on the spot.</summary>
+    private void BindLambdas(IOperation root, List<Lambdas.Made>? made)
+    {
+        var sites = new List<IOperation>();
+        void Walk(IOperation op)
+        {
+            foreach (var child in op.ChildOperations)
+            {
+                if (child is IAnonymousFunctionOperation) { sites.Add(child); continue; }
+                if (child is ILocalFunctionOperation) continue;
+                if (child is IMethodReferenceOperation { Method.MethodKind: MethodKind.LocalFunction }) sites.Add(child);
+                Walk(child);
+            }
+        }
+        Walk(root);
+        if (sites.Count == 0) return;
+        bool Agrees(IOperation site, Lambdas.Made m) => site switch
+        {
+            IAnonymousFunctionOperation f => m.Params < 0 || m.Params == f.Symbol.Parameters.Length,
+            IMethodReferenceOperation r => m.Method.Contains($"g__{r.Method.Name}|"),
+            _ => false,
+        };
+        if (made == null || made.Count != sites.Count || !sites.Zip(made).All(x => Agrees(x.First, x.Second)))
+        {
+            w.Rep.Note("members whose lambdas are not bound to the compiler's names", Where);
+            return;
+        }
+        for (int i = 0; i < sites.Count; i++)
+        {
+            compiled[sites[i]] = made[i];
+            if (sites[i] is IAnonymousFunctionOperation { Body: { } body }) BindLambdas(body, w.Lambdas!.Inside(made[i]));
+        }
+    }
+
+    /// <summary>A lambda as a delegate that is data, when the compiler's method of it is known and it captures nothing
+    /// but `this`: that method as a function of gen/fns.rs, bound to this object (to nothing when it captures
+    /// nothing). Null otherwise: the delegate is then code made on the spot.</summary>
+    private string? BoundLambda(IAnonymousFunctionOperation f, IMethodSymbol invoke, string code, List<string> captured)
+    {
+        if (!compiled.TryGetValue(f, out var made) || made.Holder is not ("c" or "this") || captured.Count > 0) return null;
+        if (invoke.Parameters.Length > 5 || invoke.Parameters.Any(p => p.RefKind != RefKind.None)) return null;
+        // What the lambda's code may name besides its own parameters: `me` and the combat. Not a type parameter's kind.
+        if (cls.TypeParameters.Length > 0 || member is IMethodSymbol { TypeParameters.Length: > 0 }) return null;
+        bool onThis = made.Holder == "this" && !made.IsStatic;
+        if (onThis && (isStructMember || member.IsStatic)) return null;
+        var types = invoke.Parameters.Select(p => T(p.Type)).ToList();
+        string ret = invoke.ReturnsVoid ? "()" : T(invoke.ReturnType);
+        string clr = $"{made.Class}::{made.Method}";
+        string name = $"lf_{World.Snake(cls.Name)}__{World.Snake(member.Name)}_{World.Mark(clr + "|" + string.Join(",", types) + "->" + ret)}";
+        var args = Enumerable.Range(0, types.Count).Select(i => $"a{i}").Append("c");
+        w.Fns.TryAdd(name, new World.FnEntry(name, clr, null, types, ret, $"let me = t;\n({code})({string.Join(", ", args)})"));
+        w.Rep.Count("lambdas that are data (bound to the compiler's name)");
+        return $"g::fns::{name}({(onThis ? "me" : "Obj::NULL")})";
+    }
+
     /// <summary>A method group as a delegate that is data: the method as a function of gen/fns.rs, bound to the object
     /// it is taken from (nothing for a static one). Null where the method cannot be named that way (a generic one, one
     /// of a value): the delegate is then code made on the spot.</summary>
@@ -1386,7 +1448,8 @@ public sealed partial class Body
         string path = CallPath(m, virt);
         string stem = path.StartsWith("g::") ? path[3..] : path.StartsWith("m::") ? "m_" + path[3..] : path;
         string name = $"mg_{stem.Replace("::", "__")}_{World.Mark(string.Join(",", types) + "->" + ret)}";
-        w.Fns.TryAdd(name, new World.FnEntry(name, m.OriginalDefinition, virt && path.StartsWith("g::dispatch::"), types, ret, $"{path}({string.Join(", ", args)})"));
+        var slot = virt && path.StartsWith("g::dispatch::") ? (IMethodSymbol)World.Slot(m.OriginalDefinition) : null;
+        w.Fns.TryAdd(name, new World.FnEntry(name, $"{World.FullName(m.ContainingType)}::{m.Name}", slot, types, ret, $"{path}({string.Join(", ", args)})"));
         return $"g::fns::{name}({(mr.Instance == null ? "Obj::NULL" : Expr(mr.Instance))})";
     }
 
