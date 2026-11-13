@@ -125,3 +125,28 @@
     格式與匯出的 JSON 長相，引擎也還沒有 `import.rs`／`ffi.rs`。格式寫定後由這個工作階段接著做。
   - 要協調決定或知道的事在共享筆記 `engine-bridge.md`：戰敗只比 status；提示中途無法匯入；`sz_world_run` 的格式是
     我假設的；快照靠 GC 釋放；`CombatSession.Start` 在 A10 滿藥水時會讓整個行程之後全失敗（未修，不是我的檔）。
+- 03:10 （engine-port）里程碑一完成：`engine/gen.sh --fresh --check` 從乾淨的樹跑完，`cargo check` 通過（port 5 秒，
+  整個流程 12 秒）。port 的報告：翻譯類別 1,897 個（內容類別全部：牌 717、能力 308+巢狀、遺物 317、怪物 123、藥水 68、
+  遭遇 91、附魔 23、苦難 7、球 5，加核心）；翻出成員 12,071 個、約 22 萬行 Rust；沒翻出的成員 251 個（函式體是 `todo!`，
+  原因在 `gen/report.txt`，大宗是 CombatManager、動作佇列、選牌這些本來就要手寫的）；rustc 拒收 0 個；樁 410 個；
+  分派函式 501 個；整個丟掉的呈現成員 1,210 個、丟掉的敘述 1,974 條，其中含非呈現呼叫要人看的 6 條。手寫成員目前 0
+  （`manual/` 只有骨架）。`rt/` 的 `Dec`（對 .NET 1,437 萬個欄位 0 差異）和亂數流（對 C# 97.7 萬行 0 差異）已就位。
+  設計文件依實作改了幾處（控制代碼含 null、不用 Option；泛型的遊戲類別改傳 `Kind`；成員是模組函式；呈現的規則），
+  見 `engine/DESIGN.md`。下一步：里程碑二（手寫核心 + world/import/observe/ffi，讓一場戰鬥跑到底）。
+- 03:21 （協調）驗收兩份回報，都成立：
+  - 里程碑一：在 HEAD 的乾淨匯出（`tmp/builds/verify-1b47cd3a`）重跑 `engine/gen.sh --fresh --check`，數字與回報相同
+    （1,897 類別、12,071 成員、251 個沒翻出、410 個樁、0 個被 rustc 拒收），`cargo check` 通過，全程 28 秒。
+    翻出的牌對照 C# 讀過，照設計文件的規則。
+  - `sim parity`：同一份乾淨建置，`--n 240` 6,158 個決策 0 分歧（exit 0）；`--world determinized --n 48` 匯入 0、
+    走步 269、續打 322 個分歧（exit 1），工具確實抓得到隱藏狀態的差異。全量那次的輸出檔與回報一致。
+  - 裁定（已發給兩個工作階段）：匯出格式採 engine-bridge 的提案（format 1）；匯入的讀取器由 `port` 生成，不在 Rust
+    執行期解讀 schema；`outside` 必須歸零（Rng、RunRngSet、PlayerRngSet、戰鬥讀到的 RunState／Player 欄位都進
+    schema，否則在 `port.toml` 標為非狀態），非空的匯出一律拒收；schema 另列每個類別刻意不收的欄位、根物件、遊戲版本
+    與自身雜湊；剩下的工作以「由戰鬥入口可達的 `todo!` 與樁」為準（410 個樁多半是戰鬥外的）；內容類別沒翻出的成員
+    一律修翻譯器，不手寫。觀測維持設計文件的做法：`observe.rs` 照 `Observe.cs` 逐項手寫，由對拍逐位元組把關。
+  - 「完整支援」的定義補一句：遊戲自己的測試怪與 `DEPRECATED_*` 沒有任何打法會遇到，以名單排除。
+  - 分工：engine-port 留在關鍵路徑（生成的匯入讀取器 → 手寫核心到一場打到底 → 可達清單 → 翻譯器涵蓋）；
+    engine-bridge 接著做樣本傾印（`sim parity` 逐決策倒出匯出、真觀測、合法動作、兩個鍵、RunView、動作，讓整個對拍
+    也能在 `cargo test` 離線跑）、修 `CombatSession.Start`，之後是整局對拍與步驟 5 的設計；「讀出狀態」這一塊
+    （`observe.rs`、合法動作、隱藏鍵、狀態鍵、RunView、`ffi.rs`、對樣本的 Rust 測試）原本要開第三個工作階段，
+    遠端控制下開不了，改由協調工作階段的子代理 engine-state 做，筆記在 `tmp/engine/notes/engine-state.md`。
