@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace Sts2Ai.Port;
@@ -401,7 +402,8 @@ public sealed class World
                 or "System.Collections.ObjectModel.ReadOnlyCollection`1" or "System.Collections.Immutable.ImmutableArray`1" or "System.Collections.Immutable.ImmutableList`1"
                 or "System.ReadOnlySpan`1" or "System.Span`1" => Coll.Vec,
             "System.Linq.IOrderedEnumerable`1" => Coll.Ordered,
-            "System.Collections.Generic.HashSet`1" or "System.Collections.Generic.ISet`1" or "System.Collections.Generic.IReadOnlySet`1" => Coll.Set,
+            "System.Collections.Generic.HashSet`1" or "System.Collections.Generic.ISet`1" or "System.Collections.Generic.IReadOnlySet`1"
+                or "System.Collections.Immutable.ImmutableHashSet`1" => Coll.Set,
             "System.Collections.Generic.Dictionary`2" or "System.Collections.Generic.IDictionary`2" or "System.Collections.Generic.IReadOnlyDictionary`2" => Coll.Dict,
             "System.Collections.Generic.Queue`1" => Coll.Queue,
             "System.Collections.Generic.Stack`1" => Coll.Stack,
@@ -597,6 +599,102 @@ public sealed class World
                 if (Eq.Equals(x.Field, f)) return x.Name;
             return null;
         }, this);
+    }
+
+    // ---------------------------------------------------------------- collections a callee changes
+
+    private static readonly HashSet<string> Mutators =
+    [
+        "Add", "AddRange", "Insert", "InsertRange", "Remove", "RemoveAt", "RemoveAll", "RemoveRange", "Clear", "Sort", "Reverse",
+        "Enqueue", "Dequeue", "TryDequeue", "Push", "Pop", "TryPop", "TryAdd", "UnionWith", "ExceptWith", "IntersectWith",
+        "SymmetricExceptWith", "AddFirst", "AddLast", "RemoveFirst", "RemoveLast",
+    ];
+
+    private HashSet<(ISymbol Slot, int Ordinal)>? _changed;
+
+    /// <summary>Whether a method changes the collection it is given as this parameter (adds to it, clears it, hands it
+    /// to a method that does). A C# collection is one object for the caller and the callee; here it is a value, so
+    /// such a parameter comes back to the caller with the result, as a ref parameter does. Decided for a virtual
+    /// member as a whole: if one implementation changes it, the parameter comes back from every one.</summary>
+    public bool IsChangedParam(IParameterSymbol p)
+    {
+        if (p.RefKind != RefKind.None || CollOf(p.Type) == Coll.None || p.ContainingSymbol is not IMethodSymbol { MethodKind: MethodKind.Ordinary } m) return false;
+        _changed ??= ChangedParams();
+        var def = m.OriginalDefinition.ReducedFrom?.OriginalDefinition ?? m.OriginalDefinition;
+        return _changed.Contains((SigSlot(def), p.Ordinal));
+    }
+
+    private readonly ConcurrentDictionary<ISymbol, ISymbol> _sigSlots = new(Eq);
+
+    /// <summary>The member that decides a method's signature: its slot, or the interface member the slot implements.</summary>
+    private ISymbol SigSlot(IMethodSymbol m) => _sigSlots.GetOrAdd(m, static (sym, self) =>
+    {
+        var slot = (IMethodSymbol)Slot(sym);
+        var type = ((IMethodSymbol)sym).ContainingType;
+        if (type.TypeKind == TypeKind.Interface) return slot;
+        foreach (var i in type.AllInterfaces)
+        {
+            if (!IsSource(i)) continue;
+            foreach (var im in i.GetMembers(slot.Name).OfType<IMethodSymbol>())
+                if (type.FindImplementationForInterfaceMember(im) is IMethodSymbol impl && Eq.Equals(Slot(impl.OriginalDefinition), slot)) return im.OriginalDefinition;
+        }
+        return slot;
+    }, this);
+
+    private HashSet<(ISymbol, int)> ChangedParams()
+    {
+        static IOperation Bare(IOperation op)
+        {
+            while (op is IConversionOperation { IsTryCast: false } cv) op = cv.Operand;
+            return op;
+        }
+        var set = new HashSet<(ISymbol, int)>();
+        // What each method does with its collection parameters: changes one itself, or passes one on.
+        var passes = new List<(IParameterSymbol From, IParameterSymbol To)>();
+        var lockObj = new object();
+        var methods = AllTypes.Where(t => t.TypeKind is TypeKind.Class or TypeKind.Struct or TypeKind.Interface && CatOf(t) is Cat.Translated or Cat.Manual)
+            .SelectMany(t => t.GetMembers().OfType<IMethodSymbol>())
+            .Where(m => m.MethodKind is MethodKind.Ordinary && m.Parameters.Any(p => p.RefKind == RefKind.None && CollOf(p.Type) != Coll.None)).ToList();
+        Parallel.ForEach(methods, m =>
+        {
+            var syntax = m.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            if (syntax == null) return;
+            var op = Comp.GetSemanticModel(syntax.SyntaxTree).GetOperation(syntax);
+            if (op == null) return;
+            foreach (var o in op.DescendantsAndSelf())
+            {
+                IParameterSymbol? Own(IOperation? x) => x != null && Bare(x) is IParameterReferenceOperation pr && Eq.Equals(pr.Parameter.ContainingSymbol, m)
+                    && pr.Parameter.RefKind == RefKind.None && CollOf(pr.Parameter.Type) != Coll.None ? pr.Parameter : null;
+                switch (o)
+                {
+                    case IInvocationOperation inv when !IsSource(inv.TargetMethod.ContainingType) && Mutators.Contains(inv.TargetMethod.Name) && Own(inv.Instance) is { } changed:
+                        lock (lockObj) set.Add((SigSlot(m.OriginalDefinition), changed.Ordinal));
+                        break;
+                    case IAssignmentOperation { Target: IPropertyReferenceOperation { Property.IsIndexer: true } ix } when Own(ix.Instance) is { } changed:
+                        lock (lockObj) set.Add((SigSlot(m.OriginalDefinition), changed.Ordinal));
+                        break;
+                    case IAssignmentOperation { Target: IArrayElementReferenceOperation ae } when Own(ae.ArrayReference) is { } changed:
+                        lock (lockObj) set.Add((SigSlot(m.OriginalDefinition), changed.Ordinal));
+                        break;
+                    case IArgumentOperation { Parameter: { RefKind: RefKind.None } to } arg when IsSource(to.ContainingType) && CollOf(to.Type) != Coll.None && Own(arg.Value) is { } from:
+                        lock (lockObj) passes.Add((from, to));
+                        break;
+                }
+            }
+        });
+        // Passing a collection on to a method that changes it changes it.
+        for (bool grew = true; grew;)
+        {
+            grew = false;
+            foreach (var (from, to) in passes)
+            {
+                var toMethod = (IMethodSymbol)to.ContainingSymbol;
+                var toDef = toMethod.OriginalDefinition.ReducedFrom?.OriginalDefinition ?? toMethod.OriginalDefinition;
+                if (!set.Contains((SigSlot(toDef), to.OriginalDefinition.Ordinal))) continue;
+                grew |= set.Add((SigSlot(((IMethodSymbol)from.ContainingSymbol).OriginalDefinition), from.Ordinal));
+            }
+        }
+        return set;
     }
 
     /// <summary>Whether a static only remembers the result of a computation (port.toml [caches]): it reads as null and a

@@ -506,6 +506,15 @@ public sealed partial class Body
                 if (a.Value is not IDiscardOperation) after.Add(Assign(a.Value is IDeclarationExpressionOperation de ? de.Expression : a.Value, () => o, false) + ";");
                 if (kind == RefKind.Out) continue;
             }
+            else if (w.IsChangedParam(a.Parameter))
+            {
+                // The callee changes the collection: what it made of it comes back, to where the caller has it. A
+                // collection made for the call alone has nowhere to come back to.
+                string o = Tmp("o");
+                outs.Add(o);
+                try { after.Add($"{Place(a.Value)} = {o};"); }
+                catch (Unsupported) { }
+            }
             string code = Guard(a.Value, $"a call of {type.Name}.{m.Name} with presentation");
             if (!inOrder) { string t = Tmp("a"); pre.Add($"let {t} = {code};"); code = t; }
             args.Add(code);

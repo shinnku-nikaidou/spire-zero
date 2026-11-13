@@ -71,13 +71,14 @@ public sealed partial class Body
     public string Method(IMethodSymbol m, IOperation? op, string prologue = "")
     {
         if (op != null) ScanAssignments(op);
+        severalStatements = op is IMethodBodyOperation { BlockBody.Operations.Length: > 1 };
         // A parameter of a presentation type is not there in Rust: what uses it is presentation.
         foreach (var p in m.Parameters)
             if (w.IsDropped(p.Type)) droppedLocals.Add(p);
         var f = new Frame { Async = m.IsAsync, ReturnsTask = World.IsTask(m.ReturnType, out _), Ret = m.ReturnsVoid ? null : m.ReturnType };
         if (op != null) f.Iterator = HasYield(op);
         foreach (var p in m.Parameters)
-            if (p.RefKind is RefKind.Out or RefKind.Ref && !w.IsDropped(p.Type)) f.Outs.Add(NameOf(p));
+            if ((p.RefKind is RefKind.Out or RefKind.Ref || w.IsChangedParam(p)) && !w.IsDropped(p.Type)) f.Outs.Add(NameOf(p));
         frames.Push(f);
         var sb = new StringBuilder();
         switch (op)
@@ -355,6 +356,9 @@ public sealed partial class Body
         }
     }
 
+    /// <summary>Whether the member's body is more than one statement.</summary>
+    private bool severalStatements;
+
     private string NoDrop(IOperation op, string why)
     {
         try { return Expr(op); }
@@ -367,7 +371,16 @@ public sealed partial class Body
         if (f.Iterator) throw new Unsupported("return in an iterator");
         if (value == null)
             return f.ReturnsTask && f.Async ? "return Ok(());" : f.Outs.Count > 0 ? $"return {OutTuple(f, null)};" : "return;";
-        string v = NoDrop(value, "returns presentation");
+        string v;
+        try { v = Expr(value); }
+        catch (Dropped d)
+        {
+            // A member whose one statement returns presentation is presentation as a whole. One return among several
+            // is a branch nothing in a combat takes (the generator for what does not matter, of a canonical model).
+            if (!severalStatements) throw new Unsupported($"returns presentation ({d.Message})");
+            w.Rep.Count("a return of presentation left as a panic");
+            return $"panic!(\"{Where}: {d.Message.Replace("\"", "'")}: presentation only\");";
+        }
         if (f.ReturnsTask && f.Async) return $"return Ok({v});";
         return f.Outs.Count > 0 ? $"{{ let __r = {v}; return {OutTuple(f, "__r")}; }}" : $"return {v};";
     }

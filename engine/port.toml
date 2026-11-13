@@ -72,6 +72,7 @@ translate = [
     "MegaCrit.Sts2.Core.Runs.RelicGrabBag",
     "MegaCrit.Sts2.Core.Runs.ExtraRunFields",
     "MegaCrit.Sts2.Core.Runs.RunManager",
+    "MegaCrit.Sts2.Core.Entities.Ascension",
     "MegaCrit.Sts2.Core.Unlocks.UnlockState",
     "MegaCrit.Sts2.Core.Context.LocalContext",
     "MegaCrit.Sts2.Core.Rooms.AbstractRoom",
@@ -163,7 +164,7 @@ fields = [
 [fields]
 # Classes of which only the named fields are state. The rest of them is the run outside the combat, the network, the
 # bookkeeping of what the engine writes by hand.
-RunManager = ["State", "ActionQueueSet", "ActionExecutor", "ActionQueueSynchronizer", "PlayerChoiceSynchronizer", "CardSelectorStack"]
+RunManager = ["State", "AscensionManager", "ActionQueueSet", "ActionExecutor", "ActionQueueSynchronizer", "PlayerChoiceSynchronizer", "CardSelectorStack"]
 RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
 
 [caches]
@@ -203,6 +204,8 @@ classes = ["ModelId"]
 "TestMode.IsOn" = "true"
 "TestMode.IsOff" = "false"
 # Nothing cancels a combat of the engine.
+# The game the engine is held against runs with no mod.
+"ModHelper.IterateAllCombatStateSubscribers" = "Vec::<Obj>::new()"
 # A delegate of the engine has no object behind it to ask for (the game asks only to refuse one that has).
 "Delegate.Target" = "Obj::NULL"
 "CancellationToken.IsCancellationRequested" = "false"

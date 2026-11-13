@@ -344,6 +344,7 @@ public sealed partial class Body
         return $"{f.ContainingType.Name}.{f.Name}" switch
         {
             "String.Empty" => "Str::EMPTY",
+            "ImmutableHashSet.Empty" => $"<{T(f.ContainingType)}>::new()",
             "Decimal.Zero" => "Dec::ZERO",
             "Decimal.One" => "Dec::ONE",
             "Decimal.MinusOne" => "Dec::MINUS_ONE",

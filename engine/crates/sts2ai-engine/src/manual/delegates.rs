@@ -39,10 +39,15 @@ fn monsters(c: &mut Combat) -> Res {
             state_delegates(state, made, c, &scratch).map_err(|e| format!("{what}: the state {}: {e}", id.as_str()))?;
             known.push(state);
         }
-        // A move outside the machine (one made on the spot) has a delegate nobody can make again.
+        // The next move of a monster that has not rolled one yet is the move of no machine: `new MoveState()`. Any
+        // other move outside the machine (one made on the spot) has a delegate nobody can make again.
         let next = c.a.monster_model[monster].next_move;
         if !next.is_null() && !known.contains(&next) {
-            return Err(format!("{what}: its next move is not a state of its machine"));
+            let unset = g::monster_moves_monster_move_state_machine::move_state::new__0(&mut scratch);
+            if MoveStateData::of(next, c).state_id != MoveStateData::of(unset, &scratch).state_id {
+                return Err(format!("{what}: its next move is not a state of its machine"));
+            }
+            state_delegates(next, unset, c, &scratch).map_err(|e| format!("{what}: its next move: {e}"))?;
         }
     }
     Ok(())

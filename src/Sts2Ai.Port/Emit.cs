@@ -71,7 +71,7 @@ public sealed class Emitter(World w)
             // A parameter of a presentation type is not there in Rust.
             if (w.IsDropped(p.Type)) continue;
             string t = w.RType(p.Type);
-            if (p.RefKind is RefKind.Out or RefKind.Ref) rets.Add(t);
+            if (p.RefKind is RefKind.Out or RefKind.Ref || w.IsChangedParam(p)) rets.Add(t);
             if (p.RefKind == RefKind.Out) continue;
             ps.Add($"mut {body.ParamName(p)}: {t}");
             args.Add(body.ParamName(p));
@@ -198,7 +198,7 @@ public sealed class Emitter(World w)
                     r.Translated++;
                     r.LeftOut += body.LeftOut;
                     if (body.Written == 0 && body.LeftOut > 0 && m.MethodKind == MethodKind.Ordinary && (m.ReturnsVoid || (World.IsTask(m.ReturnType, out var res) && res == null))
-                        && m.Parameters.All(p => p.RefKind == RefKind.None))
+                        && m.Parameters.All(p => p.RefKind == RefKind.None && !w.IsChangedParam(p)))
                         r.Hollow.Add(m);
                 }
                 catch (Unsupported e) when (e.Message.StartsWith("returns presentation") && op is not Microsoft.CodeAnalysis.Operations.IMethodBodyOperation { BlockBody.Operations.Length: > 1 })

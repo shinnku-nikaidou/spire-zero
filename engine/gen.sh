@@ -23,7 +23,7 @@ mkdir -p "$(dirname "$quarantine")"
 [ "${1:-}" = "--fresh" ] && { rm -f "$quarantine"; shift; }
 touch "$quarantine"
 
-dotnet build "$repo/src/Sts2Ai.Port" -c Release -v q --nologo >/dev/null
+dotnet build "$repo/src/Sts2Ai.Port" -c Release -v q --nologo >"$repo/tmp/engine/port-build.log" 2>&1 || { grep -E "error" "$repo/tmp/engine/port-build.log" | head -20 >&2; echo "gen.sh: port does not build" >&2; exit 1; }
 port() {
     dotnet "$repo/src/Sts2Ai.Port/bin/Release/net9.0/port.dll" --decompiled "$decompiled" --bin "$bin" \
         --config "$here/port.toml" --out "$out" --quarantine "$quarantine"
