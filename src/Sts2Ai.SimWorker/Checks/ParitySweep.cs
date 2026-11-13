@@ -106,7 +106,7 @@ internal sealed class Sweep(IReadOnlyList<CharacterModel> characters, IReadOnlyL
 
     /// <summary>Every encounter of the game, each with its act: the ones the game lists (the acts', then the events' it
     /// names), then the ones it has besides.</summary>
-    public static List<(EncounterModel, int)> AllEncounters() =>
+    public static List<(EncounterModel Encounter, int Act)> AllEncounters() =>
         [.. ModelDb.AllEncounters.Concat(ModelDb.All.OfType<EncounterModel>().OrderBy(e => e.Id.Entry, StringComparer.Ordinal)).Distinct().Where(GameIds.Real)
             .Select(e => (e, Enumerable.Range(0, ModelDb.ActsByIndex.Count).FirstOrDefault(i => ModelDb.ActsByIndex[i].Any(a => a.AllEncounters.Contains(e)))))];
 }

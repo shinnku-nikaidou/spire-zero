@@ -19,7 +19,7 @@ internal static class ParityCommand
         .AcceptOnlyFromAmong("replay", "determinized");
     private static readonly Option<string> Character = Opt.Of("--character", "all", "the characters, such as SILENT,FOOL, or all");
     private static readonly Option<string> Asc = Opt.Of("--asc", "0,10", "the ascension levels");
-    private static readonly Option<string> Encounter = Opt.Of("--encounter", "all", "the encounters, such as A,B (see list), or all: every encounter of the game");
+    private static readonly Option<string> Encounter = Opt.Of("--encounter", "all", "the encounters, such as A,B, or all: every encounter of the game, the ones list shows and the events' besides");
     private static readonly Option<int> Decks = Opt.Of("--decks", 2,
         "loadouts per character, ascension and encounter: the first is the starting one, the others are drawn (deck, upgrades, enchantments, relics, potions, HP)");
     private static readonly Option<string?> Deck = Opt.Maybe<string?>("--deck", "this deck in every combat instead, such as A*5,B+,C+2@SHARP:2 (as combat's)");
@@ -68,7 +68,10 @@ internal static class ParityCommand
             : [.. r.GetValue(Character)!.Split(',').Select(id => ModelDb.AllCharacters.FirstOrDefault(c => c.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase))
                 ?? throw new CliException($"no character {id} (see list)"))];
         var ascensions = r.GetValue(Asc)!.Split(',').Select(a => int.TryParse(a, out int level) ? level : throw new CliException($"--asc {a} is no ascension level")).ToList();
-        var encounters = r.GetValue(Encounter) is "all" ? Sweep.AllEncounters() : [.. r.GetValue(Encounter)!.Split(',').Select(Opt.Encounter)];
+        var encounters = Sweep.AllEncounters();
+        if (r.GetValue(Encounter) is not "all")
+            encounters = [.. r.GetValue(Encounter)!.Split(',').Select(id => encounters.Where(e => e.Encounter.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase))
+                .DefaultIfEmpty().First() is { Encounter: not null } found ? found : throw new CliException($"no encounter {id} (see list)"))];
         var given = Loadout.Parse(r.GetValue(Deck), r.GetValue(Relics), r.GetValue(Potions), r.GetValue(Hp), r.GetValue(MaxHp));
         int decks = r.GetValue(Decks);
         if (decks < 1) throw new CliException("--decks is at least 1");
