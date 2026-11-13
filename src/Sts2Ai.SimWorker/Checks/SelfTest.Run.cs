@@ -1,3 +1,4 @@
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using Sts2Ai.Brain;
 using Sts2Ai.Harness;
@@ -321,11 +322,11 @@ internal static partial class SelfTest
         NodeClone? clone = null;
         CombatObservation? at = null;
         var record = new MoveRecord();
-        Play((decision, _) =>
+        Play((obs, _) =>
         {
             clone ??= session!.Clone();
-            at ??= decision.Observation;
-            record.Witness(decision.Observation);
+            at ??= obs;
+            record.Witness(obs!);
             return null;
         });
         var history = record.History;
@@ -359,11 +360,11 @@ internal static partial class SelfTest
         var steps = new Queue<CombatAction>(plan.Result.Plan.Prepend(plan.Result.First));
         var hashes = new Queue<ulong>(plan.Result.PlanHashes!.Prepend(ProtocolJson.Hash(at)));
         string? broke = null;
-        var end = Play((decision, inCombat) =>
+        var end = Play((obs, inCombat) =>
         {
             if (!inCombat || broke != null) return null;
             if (!steps.TryDequeue(out var step)) broke = "the combat went on past the plan";
-            else if (hashes.Dequeue() != ProtocolJson.Hash(decision.Observation)) broke = $"before {step}, {steps.Count} steps from the end, the observation differs";
+            else if (hashes.Dequeue() != ProtocolJson.Hash(obs)) broke = $"before {step}, {steps.Count} steps from the end, the observation differs";
             return broke == null ? step : null;
         });
         check("SL plan holds in the run", broke == null && steps.Count == 0 && plan.Result.Plan.Count >= 2,
@@ -374,7 +375,9 @@ internal static partial class SelfTest
 
         // Plays the run to the first decision of its second combat, then asks follow at each combat decision of that
         // combat (true) and the next decision after it (false), which plays the rest of it, until follow gives null.
-        CombatEnd? Play(Func<CombatDecision, bool, CombatAction?> follow)
+        // The combat's states as the plan has them: where the player can play, and each card prompt, whose answer is a
+        // step of the plan like any other.
+        CombatEnd? Play(Func<CombatObservation?, bool, CombatAction?> follow)
         {
             var rng = new Random(seed + 2);
             var play = new PlayPolicy(rng);
@@ -383,15 +386,22 @@ internal static partial class SelfTest
             {
                 if (!following && session!.Combats.Count == 2) following = true;
                 if (!following) return play.Choose(decision);
-                var action = follow(decision, true);
+                var action = follow(decision.Observation, true);
                 done |= action == null;
                 return action ?? play.Choose(decision);
             });
+            var prompts = new CaptureChoices(decision =>
+            {
+                if (!following || done || !CombatManager.Instance.IsInProgress) return FirstPicks.Instance.Choose(decision);
+                var action = follow(session!.Combat(), true);
+                done |= action == null;
+                return action is { Kind: CombatActionKind.Pick } pick ? new([.. pick.Picks]) : FirstPicks.Instance.Choose(decision);
+            });
             var macro = new FollowMacro(new RandomMacro(rng), () =>
             {
-                if (following && !done) done = follow(null!, false) == null;
+                if (following && !done) done = follow(null, false) == null;
             });
-            using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 2, 0)), FirstPicks.Instance, policy, macro))
+            using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 2, 0)), prompts, policy, macro))
             {
                 while (!session.IsOver && !done) session.Step();
                 return session.Combats.ElementAtOrDefault(1)?.End;
