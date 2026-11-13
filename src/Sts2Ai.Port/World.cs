@@ -570,6 +570,8 @@ public sealed class World
         {
             if (f.IsStatic || f.IsConst) continue;
             if (f.AssociatedSymbol is IEventSymbol) continue;
+            if (Cfg.DropFields.Contains($"{t.Name}.{f.AssociatedSymbol?.Name ?? f.Name}")) continue;
+            if (Cfg.OnlyFields.TryGetValue(t.Name, out var only) && !only.Contains(f.AssociatedSymbol?.Name ?? f.Name)) continue;
             if (IsDropped(f.Type)) continue;
             // A stored task is a handle on running code, not state.
             if (IsTask(f.Type, out _)) { Rep.FieldSkipped($"{t.Name}.{f.Name}: a task"); continue; }
@@ -595,6 +597,32 @@ public sealed class World
                 if (Eq.Equals(x.Field, f)) return x.Name;
             return null;
         }, this);
+    }
+
+    /// <summary>Whether a static only remembers the result of a computation (port.toml [caches]): it reads as null and a
+    /// write to it does nothing, so the computation runs at each use.</summary>
+    public bool IsCache(ISymbol field) => field.IsStatic && field.ContainingType != null && Cfg.Caches.Contains(field.ContainingType.Name + "." + field.Name);
+
+    /// <summary>The field of Combat.s that holds a static of the game, when port.toml lists it as state; else null.</summary>
+    public string? StaticState(ISymbol fieldOrProperty)
+    {
+        var owner = fieldOrProperty is IFieldSymbol { AssociatedSymbol: { } a } ? a : fieldOrProperty;
+        if (!owner.IsStatic || owner.ContainingType == null || !Cfg.Statics.Contains(owner.ContainingType.Name + "." + owner.Name)) return null;
+        return Snake(Unique(owner.ContainingType)) + "__" + Snake(owner.Name.TrimStart('_'));
+    }
+
+    /// <summary>The statics of the game that are state: the field or property, the name in Combat.s, the type.</summary>
+    public List<(ISymbol Member, string Name, ITypeSymbol Type)> StaticStates()
+    {
+        var list = new List<(ISymbol, string, ITypeSymbol)>();
+        foreach (var t in AllTypes)
+            foreach (var m in t.GetMembers())
+            {
+                if (m is IFieldSymbol { AssociatedSymbol: not null }) continue;
+                ITypeSymbol? type = m switch { IFieldSymbol f => f.Type, IPropertySymbol p => p.Type, _ => null };
+                if (type != null && StaticState(m) is { } name) list.Add((m, name, type));
+            }
+        return list.OrderBy(x => x.Item2, StringComparer.Ordinal).ToList();
     }
 
     private HashSet<string>? _typeNames;

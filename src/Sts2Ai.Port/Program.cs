@@ -18,6 +18,8 @@ string decompiled = Arg("decompiled"), bin = Arg("bin"), configPath = Arg("confi
 string quarantinePath = Arg("quarantine", "");
 var clock = Stopwatch.StartNew();
 var cfg = Config.Load(configPath);
+if (!Path.GetFileName(decompiled.TrimEnd('/')).EndsWith(cfg.GameVersion))
+    throw new ArgumentException($"{configPath} is for the game {cfg.GameVersion}, {decompiled} is another");
 
 // The whole decompiled tree is compiled only to be asked questions (types, symbols, conversions). The game's own
 // assembly is left out of the references: its source is what we read.
@@ -38,7 +40,9 @@ var emitter = new Emitter(world);
 if (quarantinePath.Length > 0 && File.Exists(quarantinePath))
     emitter.Quarantine = File.ReadAllLines(quarantinePath).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')).ToHashSet();
 
-var types = world.AllTypes.Where(t => t.TypeKind is TypeKind.Class or TypeKind.Struct && world.CatOf(t) == Cat.Translated)
+// An interface is a class here when it has code of its own: a static method, a default implementation.
+static bool HasCode(INamedTypeSymbol t) => t.GetMembers().OfType<IMethodSymbol>().Any(m => !m.IsAbstract && m.MethodKind is MethodKind.Ordinary or MethodKind.PropertyGet or MethodKind.PropertySet);
+var types = world.AllTypes.Where(t => (t.TypeKind is TypeKind.Class or TypeKind.Struct || (t.TypeKind == TypeKind.Interface && HasCode(t))) && world.CatOf(t) == Cat.Translated)
     .OrderBy(World.FullName, StringComparer.Ordinal).ToList();
 var eq = SymbolEqualityComparer.Default;
 List<Emitter.ClassResult> results = [];

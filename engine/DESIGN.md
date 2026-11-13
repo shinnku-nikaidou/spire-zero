@@ -127,6 +127,11 @@ written; a handle to one carries a flag, and `ToMutable` copies it into the comb
 
 ```
 { "format": 1,
+  "game": "v0.113.0",                                         // port.toml [game]
+  "roots":   [{ "name": "combat_manager__instance",           // the statics that are state (port.toml [roots])
+                "class": "MegaCrit.Sts2.Core.Combat.CombatManager", "member": "Instance",
+                "cs": "<Instance>k__BackingField",            // the static field, as reflection names it
+                "type": TYPE }],
   "arenas":  ["card_model", "creature", ...],                 // the classes that own an arena, by tag (1-based)
   "classes": [{ "name": "Creature",                           // the Rust name (the C# name, made unique)
                 "cs": "MegaCrit.Sts2.Core.Entities.Creatures.Creature",
@@ -136,28 +141,81 @@ written; a handle to one carries a flag, and `ToMutable` copies it into the comb
                 "type_parameters": ["targ_t"],                // of a generic class: Kind fields
                 "fields": [{ "name": "_block",                // the Rust field
                              "cs": "_block",                  // the C# field, as reflection names it
-                             "type": TYPE }] }],              //   (an auto-property's: "<Block>k__BackingField")
-  "structs": [{ "name", "cs", "fields" }],
-  "enums":   [{ "name", "cs", "rust": "i32", "members": { "Attack": 1, ... } }] }
+                             "type": TYPE }],                 //   (an auto-property's: "<Block>k__BackingField")
+                "dropped": ["CombatBegan", "_turnLoopTask"] }],   // its other instance fields, by C# name
+  "structs": [{ "name", "cs", "fields", "dropped" }],
+  "enums":   [{ "name", "cs", "rust": "i32", "members": { "Attack": 1, ... } }],
+  "hash": "9f2c.." }                                          // SHA-256 of this file as written without this member
 ```
 
 `TYPE` is `{"kind": "int" | "float", "rust": "i32"}`, `{"kind": "bool" | "decimal" | "string" | "char" | "kind"}`,
 `{"kind": "enum", "name", "rust"}`, `{"kind": "ref", "class"}`, `{"kind": "struct", "name"}`,
 `{"kind": "nullable" | "list" | "set" | "queue" | "stack", "of": TYPE}`, `{"kind": "dict" | "pair", "key", "value"}`,
-`{"kind": "tuple", "items": [TYPE]}`. Fields of presentation types, delegates, events and tasks are not state.
+`{"kind": "tuple", "items": [TYPE]}`.
 
-- Every class that is translated or hand-written, and every class above one, has its instance fields listed
-  (auto-property backing fields under the property's name). A class's fields are those of its own entry and of each
-  `base` above it.
+- Every class that is translated or hand-written, and every class above one, has its instance fields listed. A
+  class's fields are those of its own entry and of each `base` above it.
+- `dropped` names the instance fields that are left out on purpose: presentation, what cannot be state (a task, a
+  delegate, an event, a lock), and what `port.toml` says is not state (`[drop] fields`, or everything a `[fields]`
+  entry does not name: the run outside the combat, the network). A field of the live game that is in neither list is
+  one the decompiled source does not have: the C# side fails on it.
 - One arena per topmost class. A class listed in `[open]` (`AbstractModel`) owns no arena: its fields are part of every
   class directly below it.
-- The Rust structs are generated from the same walk, with `serde`: `Arenas` (one `Arena<TData>` per arena), `TData` per
-  class, `TExt` for the fields of the classes below `T`.
-- `EngineExport` (C#) walks the live combat by reflection along the schema: every object once, with its class, its
-  fields by name, and references as (arena, index). A field the schema does not know is an error on the C# side, one
-  the engine does not know is an error on the Rust side.
-- What the game keeps outside the objects (the id counters of `NetCombatCardDb`, the combat history, the action queues'
-  ids) is exported as the classes that hold it, the same way.
+- The roots are the statics of the game that are state (`CombatManager.Instance`, `RunManager.Instance`,
+  `LocalContext.NetId`, counters). In the engine they are fields of `Roots`, part of every combat (`Combat.s`);
+  translated code reads and writes them there.
+- The Rust structs are generated from the same walk: `Arenas` (one `Arena<TData>` per arena), `TData` per class, `TExt`
+  for the fields of the classes below `T`, `Roots`.
+
+## The export
+
+`EngineExport` (C#, `src/Sts2Ai.GameBridge`) writes a live combat by reflection along the schema, and the engine reads
+it (`import.rs`, with the reader `port` generates beside the structs, `gen/import.rs`). Format 1:
+
+```json
+{ "format": 1, "game": "v0.113.0", "schema": "9f2c..",
+  "roots":  { "combat_manager__instance": ["combat_manager", 0], "local_context__net_id": 1 },
+  "arenas": { "creature":   [ { "class": "Creature", "Creature": { "_block": 0, "_current_hp": 70 } } ],
+              "card_model": [ { "class": "Deflect",
+                                "AbstractModel": { "id": { "category": "CARD", "entry": "DEFLECT" }, "is_mutable": true },
+                                "CardModel": { "_owner": ["player", 0], "_canonical_instance": ["canon", "Deflect"] } } ] },
+  "outside": {} }
+```
+
+- **`schema`** is the schema's `hash`. The engine reads no export of another game version or another schema.
+- **`roots`**: one member per root of the schema, by its `name`, holding its value.
+- **`arenas`**: one member per arena that holds an object; its value is the arena's objects, and an object's place in
+  the list is its index.
+- **An object**: `class` is the schema name of its own class. Then one member per class of its chain that has fields
+  in the schema (or type parameters), named by that class's schema name; in it one member per type parameter (the
+  schema name of the type argument) and per field, by the field's `name`. Every field of the schema is written, none
+  besides.
+- **Which objects**: every object reached from the roots through the schema's fields, once, numbered in the order the
+  walk meets it. The same combat gives the same bytes.
+- **`outside`**: the classes outside the schema that a reference pointed to, with how many references. It must be
+  empty: the engine refuses an export that reaches a class it does not hold. A class a combat reaches is either in the
+  schema with its real fields, or the field that reaches it is named not-state in `port.toml`.
+
+| the schema's `kind` | written as |
+| --- | --- |
+| `int`, `enum`, `char` | a number (an enum's underlying value, a char's UTF-16 code unit) |
+| `bool` | `true` / `false` |
+| `float` | a number that reads back to the same bits; a NaN or an infinity is an error |
+| `decimal` | a string, as .NET writes it invariant: `"1.50"` keeps its scale |
+| `string` | a string, or `null` |
+| `struct` | an object: one member per field of the schema's struct, by `name`; `null` for a null class held by value |
+| `nullable` | `null`, or the value |
+| `list`, `set`, `queue`, `stack` | an array in the collection's own enumeration order (a stack from its top); `null` for a null collection, which the engine reads as an empty one |
+| `dict` | an array of `[key, value]` in enumeration order, or `null` |
+| `tuple`, `pair` | an array of the items; `[key, value]` |
+| `kind` (a `System.Type`) | the schema name of the class, or `null` |
+| `ref` | `null`; `["<arena>", index]`; `["canon", "<Class>"]` for the canonical model of a class, which is not exported as an object; `["outside", "<CLR name>"]`, refused |
+
+An export is taken at a decision of the player with nothing running: the action queues are empty, no prompt is open.
+
+One thing format 1 cannot say: a `HashSet` or `Dictionary` from which items were removed keeps freed slots that the next
+added items fill, so its later enumeration order depends on them. The engine reads such a collection as one without
+freed slots.
 
 `Combat` is that state plus the answers to the running action's prompts: plain data, `Clone`, no pointers, no interior
 mutability. Two worlds share nothing but the canonical models, so worlds are searched in threads of one process.
@@ -179,8 +237,9 @@ is ever stored, and translated code stays a straight line with `?`.
 synchronizer) are written by hand: the order in which queued actions, hooks and the two sides' turns run is the
 game's, the waiting for input and for the screen is not there.
 
-**Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is `rt::random`, checked bit
-for bit against the C#. `Rng.Chaotic`, the generator for things that do not matter, is presentation.
+**Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
+other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.
+`Rng.Chaotic`, the generator for things that do not matter, is presentation.
 
 ## Building
 

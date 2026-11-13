@@ -5,6 +5,7 @@ pub mod coll;
 pub mod combat;
 pub mod dec;
 pub mod func;
+pub mod import;
 pub mod linq;
 pub mod list;
 pub mod obj;
@@ -13,7 +14,7 @@ pub mod random;
 pub mod str;
 
 pub use coll::{Dict, Group, IntoVec, KeyValuePair, Ordered, Queue, Set, Stack};
-pub use combat::{Combat, R, Stop, canon};
+pub use combat::{Choices, Combat, Prompt, R, Stop};
 pub use dec::{Dec, MidpointRounding};
 pub use func::{Fn0, Fn1, Fn2, Fn3, Fn4, Fn5};
 pub use obj::{Arena, Obj, Stored};
@@ -52,6 +53,11 @@ macro_rules! cs_enum {
             /// C#'s Enum.HasFlag.
             pub fn has_flag(self, flag: $name) -> bool {
                 self.0 & flag.0 == flag.0
+            }
+        }
+        impl $crate::rt::import::Rd for $name {
+            fn rd(v: &serde_json::Value) -> $crate::rt::import::Res<Self> {
+                Ok($name(<$under as $crate::rt::import::Rd>::rd(v)?))
             }
         }
         impl $crate::rt::ToS for $name {

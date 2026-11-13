@@ -8,5 +8,6 @@
 
 #[path = "gen/mod.rs"]
 pub mod r#gen;
+pub mod import;
 pub mod manual;
 pub mod rt;

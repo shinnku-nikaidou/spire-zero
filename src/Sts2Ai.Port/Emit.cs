@@ -272,6 +272,13 @@ public sealed class Emitter(World w)
         catch (Exception e) when (e is Dropped or Unsupported) { return; }
         string text;
         var body = new Body(w, t, f);
+        if (w.StaticState(f.AssociatedSymbol ?? f) is { } inCombat)
+        {
+            // A static that is state: part of the combat.
+            sb.Append(Fn($"C#: static {t.Name}.{(f.AssociatedSymbol ?? f).Name} (state)", name, new Sig("", [], [], rtype), $"c.s.{inCombat}.clone()\n"));
+            r.Translated++;
+            return;
+        }
         try
         {
             if (w.IsObj(type)) throw new Unsupported("a static object");

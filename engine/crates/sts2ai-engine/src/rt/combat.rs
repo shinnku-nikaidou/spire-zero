@@ -1,8 +1,7 @@
 //! The combat: every object of it, and the answers given to the prompts of the action that is running.
 
 use super::{Obj, Str};
-use crate::r#gen::state::Arenas;
-use std::sync::OnceLock;
+use crate::r#gen::state::{Arenas, Roots};
 
 /// Why an action stopped before its end.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,19 +45,16 @@ impl Choices {
     }
 }
 
-/// A combat: plain data. Cloning it gives an independent combat.
+/// A combat: plain data. Cloning it gives an independent combat. `Combat::default()` has nothing in it, not even the
+/// canonical models; `manual::canon::combat()` is the one to start from.
 #[derive(Clone, Debug, Default)]
 pub struct Combat {
     /// Every object, by class.
     pub a: Arenas,
+    /// The roots: the statics of the game that are state.
+    pub s: Roots,
     pub choices: Choices,
     /// What the hand-written core keeps beside the game's own objects.
     pub x: crate::manual::Extra,
 }
 
-static CANON: OnceLock<Arenas> = OnceLock::new();
-
-/// The canonical models: one object per model class, built once, shared by every combat, never written.
-pub fn canon() -> &'static Arenas {
-    CANON.get_or_init(crate::manual::canon::build)
-}

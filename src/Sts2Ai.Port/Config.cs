@@ -26,6 +26,17 @@ public sealed class Config
     public HashSet<string> Open = [];
     /// <summary>Classes that are values in Rust (a struct, compared by content): immutable records such as ModelId.</summary>
     public HashSet<string> ValueClasses = [];
+    /// <summary>The roots: statics of the game that are state, as Class.Member. They are part of the combat (Combat.s),
+    /// read and written like fields, and where an export starts.</summary>
+    public HashSet<string> Statics = [];
+    /// <summary>Statics that only remember the result of a computation, as Class.Field: never kept, computed at each use.</summary>
+    public HashSet<string> Caches = [];
+    /// <summary>Instance fields that are not state, as Class.Field (or Class.Property for the field behind one).</summary>
+    public HashSet<string> DropFields = [];
+    /// <summary>Classes of which only the named fields are state (by field or property name); their other fields are not.</summary>
+    public Dictionary<string, HashSet<string>> OnlyFields = [];
+    /// <summary>The version of the game the tables are for.</summary>
+    public string GameVersion = "";
     /// <summary>Members replaced by a fixed Rust expression, as Class.Member or Class.Member@Class.Method (inside that method only).</summary>
     public Dictionary<string, string> Values = [];
 
@@ -43,6 +54,13 @@ public sealed class Config
         foreach (var s in List(doc, "manual", "members")) c.ManualMembers.Add(s);
         foreach (var s in List(doc, "open", "classes")) c.Open.Add(s);
         foreach (var s in List(doc, "values", "classes")) c.ValueClasses.Add(s);
+        foreach (var s in List(doc, "roots", "members")) c.Statics.Add(s);
+        foreach (var s in List(doc, "drop", "fields")) c.DropFields.Add(s);
+        foreach (var s in List(doc, "caches", "members")) c.Caches.Add(s);
+        if (doc.TryGetValue("fields", out var fl) && fl is TomlTable only)
+            foreach (var kv in only) c.OnlyFields[kv.Key] = ((TomlArray)kv.Value).Select(x => (string)x!).ToHashSet();
+        if (doc.TryGetValue("game", out var g) && g is TomlTable game && game.TryGetValue("version", out var ver)) c.GameVersion = (string)ver;
+        if (c.GameVersion.Length == 0) throw new InvalidDataException($"{path}: no [game] version");
         if (doc.TryGetValue("value", out var v) && v is TomlTable values)
             foreach (var kv in values) c.Values[kv.Key] = (string)kv.Value;
         return c;

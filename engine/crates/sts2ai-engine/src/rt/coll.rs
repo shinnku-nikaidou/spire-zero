@@ -1,7 +1,6 @@
 //! .NET's collections, with the order .NET gives them. HashSet and Dictionary enumerate their slots in order; a removed
 //! slot is reused by the next add, most recently freed first. That is reproduced here, because game code walks them.
 
-use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 /// Anything a foreach can walk, as the list of its items in .NET's order.
@@ -15,14 +14,14 @@ impl<T> IntoVec<T> for Vec<T> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct KeyValuePair<K, V> {
     pub key: K,
     pub value: V,
 }
 
 /// The slots of a HashSet or Dictionary.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 struct Slots<T> {
     slots: Vec<Option<T>>,
     /// Freed slots; the last one is reused first.
@@ -58,10 +57,16 @@ impl<T> Slots<T> {
     }
 }
 
-/// HashSet<T>.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(transparent)]
+/// HashSet<T>. 
+#[derive(Clone, Debug)]
 pub struct Set<T>(Slots<T>);
+
+impl<T> Set<T> {
+    /// The set that enumerates these items in this order, with no freed slot.
+    pub fn from_items(items: Vec<T>) -> Self {
+        Set(Slots { slots: items.into_iter().map(Some).collect(), free: Vec::new() })
+    }
+}
 
 impl<T> Default for Set<T> {
     fn default() -> Self {
@@ -148,10 +153,16 @@ impl<T: PartialEq> PartialEq for Set<T> {
     }
 }
 
-/// Dictionary<K, V>.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(transparent)]
+/// Dictionary<K, V>. 
+#[derive(Clone, Debug)]
 pub struct Dict<K, V>(Slots<(K, V)>);
+
+impl<K, V> Dict<K, V> {
+    /// The dictionary that enumerates these pairs in this order, with no freed slot.
+    pub fn from_pairs(pairs: Vec<(K, V)>) -> Self {
+        Dict(Slots { slots: pairs.into_iter().map(Some).collect(), free: Vec::new() })
+    }
+}
 
 impl<K, V> Default for Dict<K, V> {
     fn default() -> Self {
@@ -245,13 +256,19 @@ impl<K: PartialEq, V: PartialEq> PartialEq for Dict<K, V> {
 }
 
 /// Queue<T>.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Queue<T>(VecDeque<T>);
 
 impl<T> Default for Queue<T> {
     fn default() -> Self {
         Queue(VecDeque::new())
+    }
+}
+
+impl<T> Queue<T> {
+    /// The queue that gives these items in this order.
+    pub fn from_items(items: Vec<T>) -> Self {
+        Queue(items.into())
     }
 }
 
@@ -301,13 +318,19 @@ impl<T> IntoVec<T> for Queue<T> {
 }
 
 /// Stack<T>. A foreach walks it from the top.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Stack<T>(Vec<T>);
 
 impl<T> Default for Stack<T> {
     fn default() -> Self {
         Stack(Vec::new())
+    }
+}
+
+impl<T> Stack<T> {
+    /// The stack of these items, the last one on top.
+    pub fn from_bottom(items: Vec<T>) -> Self {
+        Stack(items)
     }
 }
 

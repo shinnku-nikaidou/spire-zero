@@ -255,6 +255,8 @@ public sealed partial class Body
         if (f.ContainingType.IsTupleType) return $"{Expr(op.Instance!)}.{TupleIndex(f)}";
         if (w.IsDropped(f.ContainingType) || w.IsDropped(f.Type)) throw new Dropped(f.Name);
         if (!World.IsSource(f.ContainingType)) return BclField(op) ?? throw new Unsupported($"library field {f.ContainingType.Name}.{f.Name}");
+        if (w.StaticState(f) is { } inCombat) return Owned($"c.s.{inCombat}", f.Type);
+        if (w.IsCache(f)) return Null(f.Type);
         if (f.IsStatic)
         {
             // A static that is read only: its initializer is a function of the class's module.
@@ -435,6 +437,7 @@ public sealed partial class Body
         if (type.IsTupleType || !World.IsSource(type) || World.IsGeneratedList(type))
             return BclProp(op) ?? (w.IsDropped(type) ? throw new Dropped($"{type.Name}.{p.Name}") : throw new Unsupported($"library property {type.Name}.{p.Name}"));
         if (w.IsDropped(type) || w.IsDropMember(def) || w.IsDropped(def.Type)) throw new Dropped($"{type.Name}.{p.Name}");
+        if (w.StaticState(def) is { } inCombat) return Owned($"c.s.{inCombat}", def.Type);
         var getter = def.GetMethod ?? throw new Unsupported($"property {p.Name} has no getter");
         if (w.IsValue(type) && !def.IsStatic)
         {
@@ -661,6 +664,8 @@ public sealed partial class Body
             case IDiscardOperation: return Done("let _ = $v", value());
             case IEventReferenceOperation ev: throw new Dropped("event " + ev.Event.Name);
             case IFieldReferenceOperation f:
+                if (w.StaticState(f.Field) is { } sf) return Done($"c.s.{sf} = $v", value());
+                if (w.IsCache(f.Field)) return asValue ? value() : $"{{ let _ = {value()}; }}";
                 if (f.Field.IsStatic) throw new Unsupported($"a write to the static {f.Field.ContainingType.Name}.{f.Field.Name}");
                 if (w.IsDropped(f.Field.Type) || w.IsDropped(f.Field.ContainingType)) throw new Dropped(f.Field.Name);
                 return Done($"{FieldPlace(f, true)} = $v", value());
@@ -685,6 +690,7 @@ public sealed partial class Body
                     }
                     throw new Unsupported($"a write to the library property {type.Name}.{p.Name}");
                 }
+                if (w.StaticState(p) is { } sp) return Done($"c.s.{sp} = $v", value());
                 var auto = type.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(x => Eq.Equals(x.AssociatedSymbol, p));
                 if (w.IsValue(type) && auto != null) return Done($"{Place(pr.Instance!)}.{World.FieldName(auto)} = $v", value());
                 if (p.SetMethod == null)
@@ -747,6 +753,7 @@ public sealed partial class Body
         {
             var other = Unboxed(IsNullConst(b.LeftOperand) ? b.RightOperand : b.LeftOperand);
             if (IsNullConst(other)) return b.OperatorKind == BinaryOperatorKind.Equals ? "true" : "false";
+            if (other is IFieldReferenceOperation { Field: var cache } && w.IsCache(cache)) return b.OperatorKind == BinaryOperatorKind.Equals ? "true" : "false";
             if (World.CollOf(other.Type) != World.Coll.None) w.Rep.Count("null test on a collection (never null here)");
             string tested;
             try { tested = Ref(other); }
@@ -844,6 +851,7 @@ public sealed partial class Body
 
     private string Coalesce(ICoalesceOperation co)
     {
+        if (co.Value is IFieldReferenceOperation { Field: var cache } && w.IsCache(cache)) return Expr(co.WhenNull);
         string v = Tmp("v");
         string value = Expr(co.Value);
         string other = Expr(co.WhenNull);

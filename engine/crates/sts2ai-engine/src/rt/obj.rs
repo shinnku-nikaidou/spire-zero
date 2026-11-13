@@ -1,12 +1,11 @@
 //! Handles and arenas. An object of the game is a slot in the arena of its class; a reference to it is an `Obj`: the
 //! arena's tag and the slot's index. `Obj::NULL` is C#'s null.
 
-use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
+use std::sync::Arc;
 
 /// A reference to an object of the game, or null. Copy, compared by identity, as a C# reference is.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Obj(pub u32);
 
 impl Obj {
@@ -45,32 +44,37 @@ impl std::fmt::Debug for Obj {
 }
 
 /// The data of a class that owns an arena.
-pub trait Stored: Sized + 'static {
+pub trait Stored: Clone + 'static {
     const TAG: u8;
-    /// The arena of the canonical models of this class.
-    fn canon() -> &'static Arena<Self>;
 }
 
-/// The objects of one class (and of the classes below it).
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(transparent)]
+/// The objects of one class (and of the classes below it): those of this combat, and the canonical models of the class
+/// (the game's ModelDb: one per model class). Every combat starts with the same canonical models and shares them; a
+/// combat that writes to one (the game fills a canonical model's caches when they are first read) gets its own copy
+/// of them at that moment.
+#[derive(Clone, Debug)]
 pub struct Arena<T> {
     pub items: Vec<T>,
-    /// Set while the canonical models are being built: allocations are canonical, and canonical handles are local.
-    #[serde(skip)]
+    pub canon: Arc<Vec<T>>,
+    /// Set while the canonical models are being built: what is made then is canonical.
     pub canon_build: bool,
 }
 
 impl<T> Default for Arena<T> {
     fn default() -> Self {
-        Arena { items: Vec::new(), canon_build: false }
+        Arena { items: Vec::new(), canon: Arc::new(Vec::new()), canon_build: false }
     }
 }
 
 impl<T: Stored> Arena<T> {
     pub fn alloc(&mut self, value: T) -> Obj {
+        if self.canon_build {
+            let canon = Arc::make_mut(&mut self.canon);
+            canon.push(value);
+            return Obj::new(T::TAG, canon.len() - 1, true);
+        }
         self.items.push(value);
-        Obj::new(T::TAG, self.items.len() - 1, self.canon_build)
+        Obj::new(T::TAG, self.items.len() - 1, false)
     }
     pub fn len(&self) -> usize {
         self.items.len()
@@ -96,7 +100,7 @@ impl<T: Stored> Index<Obj> for Arena<T> {
         if o.tag() != T::TAG {
             wrong_arena(o, T::TAG);
         }
-        if o.is_canon() && !self.canon_build { &T::canon().items[o.ix()] } else { &self.items[o.ix()] }
+        if o.is_canon() { &self.canon[o.ix()] } else { &self.items[o.ix()] }
     }
 }
 
@@ -106,9 +110,6 @@ impl<T: Stored> IndexMut<Obj> for Arena<T> {
         if o.tag() != T::TAG {
             wrong_arena(o, T::TAG);
         }
-        if o.is_canon() && !self.canon_build {
-            panic!("write to the canonical {:?}", o);
-        }
-        &mut self.items[o.ix()]
+        if o.is_canon() { &mut Arc::make_mut(&mut self.canon)[o.ix()] } else { &mut self.items[o.ix()] }
     }
 }

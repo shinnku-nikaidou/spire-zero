@@ -2,8 +2,12 @@
 //! prints the signature each member must have in gen/manual.txt).
 
 pub mod canon;
+pub mod model_db;
 pub mod object;
 
 /// What the hand-written core keeps beside the game's own objects.
 #[derive(Clone, Debug, Default)]
-pub struct Extra {}
+pub struct Extra {
+    /// The canonical models made so far, while they are being built (manual/canon.rs); None in a combat.
+    pub canon_in_build: Option<canon::Table>,
+}

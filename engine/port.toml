@@ -1,6 +1,10 @@
 # What port does with each class of the game. See DESIGN.md, "The translation".
 # Names are the game's own: namespaces and full type names in [scope] and [drop], Class or Class.Member elsewhere.
 
+[game]
+# The version the tables below are for: gen.sh reads the decompiled source of this version, the schema carries it.
+version = "v0.113.0"
+
 [scope]
 # Translated: every class of these namespaces (the namespace itself, not the ones below it), and the types named in full.
 translate = [
@@ -56,6 +60,37 @@ translate = [
     "MegaCrit.Sts2.Core.CardSelection",
     "MegaCrit.Sts2.Core.Helpers.AscensionHelper",
     "MegaCrit.Sts2.Core.Helpers.MathHelper",
+    # what a combat reads of the run around it
+    "MegaCrit.Sts2.Core.Random",
+    "MegaCrit.Sts2.Core.Odds",
+    "MegaCrit.Sts2.Core.Runs.RunState",
+    "MegaCrit.Sts2.Core.Runs.IRunState",
+    "MegaCrit.Sts2.Core.Runs.NullRunState",
+    "MegaCrit.Sts2.Core.Runs.ICardScope",
+    "MegaCrit.Sts2.Core.Runs.IPlayerCollection",
+    "MegaCrit.Sts2.Core.Runs.RunRngSet",
+    "MegaCrit.Sts2.Core.Runs.RelicGrabBag",
+    "MegaCrit.Sts2.Core.Runs.ExtraRunFields",
+    "MegaCrit.Sts2.Core.Runs.RunManager",
+    "MegaCrit.Sts2.Core.Unlocks.UnlockState",
+    "MegaCrit.Sts2.Core.Context.LocalContext",
+    "MegaCrit.Sts2.Core.Rooms.AbstractRoom",
+    "MegaCrit.Sts2.Core.Rooms.CombatRoom",
+    "MegaCrit.Sts2.Core.Models.ModelDb",
+    "MegaCrit.Sts2.Core.Models.CharacterModel",
+    "MegaCrit.Sts2.Core.Models.Characters",
+    "MegaCrit.Sts2.Core.Models.CardPoolModel",
+    "MegaCrit.Sts2.Core.Models.CardPools",
+    "MegaCrit.Sts2.Core.Models.RelicPoolModel",
+    "MegaCrit.Sts2.Core.Models.RelicPools",
+    "MegaCrit.Sts2.Core.Models.PotionPoolModel",
+    "MegaCrit.Sts2.Core.Models.PotionPools",
+    "MegaCrit.Sts2.Core.Models.RunModel",
+    "MegaCrit.Sts2.Core.Models.MultiplayerScalingModel",
+    "MegaCrit.Sts2.Core.Models.BadgeModel",
+    "MegaCrit.Sts2.Core.Models.Badges",
+    "MegaCrit.Sts2.Core.Models.ModifierModel",
+    "MegaCrit.Sts2.Core.Models.Modifiers",
 ]
 exclude = []
 
@@ -86,8 +121,6 @@ types = [
     "MegaCrit.Sts2.Core.Commands.VfxCmd",
     "MegaCrit.Sts2.Core.Commands.TalkCmd",
     "MegaCrit.Sts2.Core.Commands.ThinkCmd",
-    # text shown to the player
-    "MegaCrit.Sts2.Core.Localization.DynamicVars.StringVar",
     # the wire forms of the actions (multiplayer)
     "MegaCrit.Sts2.Core.GameActions.Net*",
     "MegaCrit.Sts2.Core.GameActions.INetAction",
@@ -108,13 +141,47 @@ members = [
     "Rng.Chaotic",
 ]
 
+# Instance fields that are not state, as Class.Field (the property's name for the field behind one).
+fields = [
+    # the network
+    "ActionQueueSynchronizer._netService",
+    "ActionQueueSynchronizer._messageBuffer",
+    "PlayerChoiceSynchronizer._netService",
+]
+
+[fields]
+# Classes of which only the named fields are state. The rest of them is the run outside the combat, the network, the
+# bookkeeping of what the engine writes by hand.
+RunManager = ["State", "ActionQueueSet", "ActionExecutor", "ActionQueueSynchronizer", "PlayerChoiceSynchronizer", "CardSelectorStack"]
+RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
+
+[caches]
+# Statics that only remember the result of a computation: never kept, computed at each use.
+members = [
+    "ModelDb._allCards", "ModelDb._allCardPools", "ModelDb._allCharacterCardPools", "ModelDb._allSharedEvents",
+    "ModelDb._allEvents", "ModelDb._allEncounters", "ModelDb._eventEncounters", "ModelDb._allPotions",
+    "ModelDb._allPotionPools", "ModelDb._allCharacterPotionPools", "ModelDb._allCharacterRelicPools",
+    "ModelDb._allSharedPotionPools", "ModelDb._allPowers", "ModelDb._allRelics", "ModelDb._acts",
+    "ModelDb._actsByIndex", "ModelDb._badges", "ModelDb._achievements",
+]
+
 [manual]
 classes = []
-members = []
+# The canonical models are built by manual/canon.rs: what the game's ModelDb does by reflection.
+members = ["ModelDb.Get", "ModelDb.GetId", "ModelDb.GetByIdOrNull", "ModelDb.Contains"]
 
 [open]
 # Base classes that own no arena: their fields are part of every class directly below them.
 classes = ["AbstractModel"]
+
+[roots]
+# Statics of the game that are state. In the engine they are part of the combat; an export starts from them.
+members = [
+    "CombatManager.Instance",
+    "RunManager.Instance",
+    "NetCombatCardDb.Instance",
+    "LocalContext.NetId",
+]
 
 [values]
 # Classes held by value in Rust (a struct, compared by content): immutable records.
