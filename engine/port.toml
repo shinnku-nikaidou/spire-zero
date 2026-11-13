@@ -156,6 +156,10 @@ types = [
     # the wire forms of the actions (multiplayer)
     "MegaCrit.Sts2.Core.GameActions.Net*",
     "MegaCrit.Sts2.Core.GameActions.INetAction",
+    # tells the screen that something of the combat changed: it subscribes to every creature, pile and card
+    "MegaCrit.Sts2.Core.Combat.CombatStateTracker",
+    # the rewards the players of one game see of each other; it listens for the combat's end
+    "MegaCrit.Sts2.Core.Multiplayer.Game.RewardSynchronizer",
     "System.Text.StringBuilder",
     "System.Console",
     "System.Diagnostics.Debug",
@@ -192,9 +196,10 @@ members = [
 ]
 keep_members = ["LocString..ctor", "LocString.LocTable", "LocString.LocEntryKey"]
 
-# Instance fields that are not state, as Class.Field (the property's name for the field behind one).
 # Parameters that only carry presentation: the argument is left out with them. (A formatted text for a tooltip.)
 parameters = ["StringVar..ctor.baseValue"]
+# Instance fields that are not state, as Class.Field (the property's name for the field behind one, the event's name
+# for an event that would be state: DESIGN.md, "Events").
 fields = [
     # the network
     "ActionQueueSynchronizer._netService",
@@ -207,6 +212,11 @@ fields = [
     # a card's title, looked up once
     "CardModel._titleLocString",
     "StringVar.StringValue",
+    # Events whose subscribers are the action queue, the executor and the turn loop waiting on each other: the
+    # hand-written core runs them in turn and does itself what these announce ([manual]).
+    "ActionQueueSet.ActionQueueChanged",
+    "GameAction.AfterFinished",
+    "CombatState.CreaturesChanged",
 ]
 
 [fields]
@@ -252,8 +262,6 @@ members = [
     "ModelDb.Get", "ModelDb.GetId", "ModelDb.GetByIdOrNull", "ModelDb.Contains",
     # The stack of who answers a player's card prompts: the engine has one selector, and it is always on top.
     "CardSelectorStack.GetSelector", "CardSelectorStack.PushSelector",
-    # An event with a subscriber that is game code: the combat's card table ids the cards of its piles (manual/card_pile.rs).
-    "CardPile.InvokeContentsChanged",
     # The id of an epoch class, which the game keeps in a table filled by reflection (manual/epoch_model.rs).
     "EpochModel.GetId",
     # The turn loop and the action queue wait on each other in the game; here they run in turn (manual/, world.rs).

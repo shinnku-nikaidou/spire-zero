@@ -47,9 +47,11 @@ var types = world.AllTypes.Where(t => (t.TypeKind is TypeKind.Class or TypeKind.
     .OrderBy(World.FullName, StringComparer.Ordinal).ToList();
 var eq = SymbolEqualityComparer.Default;
 List<Emitter.ClassResult> results = [];
+world.FindSubscriptions();
 for (int pass = 1; pass <= 6; pass++)
 {
     world.Rep.Reset();
+    world.FindStateEvents();
     world.StubRefs.Clear();
     world.ManualRefs.Clear();
     world.Slots.Clear();

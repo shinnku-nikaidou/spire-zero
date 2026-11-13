@@ -15,7 +15,7 @@ public sealed class Dropped(string what) : Exception(what);
 public sealed class Unsupported(string why) : Exception(why);
 
 /// <summary>The game's symbols as the translator sees them: which class is what, the Rust name and type of everything.</summary>
-public sealed class World
+public sealed partial class World
 {
     public readonly CSharpCompilation Comp;
     public readonly Config Cfg;
@@ -609,7 +609,7 @@ public sealed class World
 
     /// <summary>The instance fields of a class that are state, and those that are kept but not state (a delegate that
     /// no export carries).</summary>
-    public IEnumerable<(IFieldSymbol Field, string Name, string Type, bool IsState)> Fields(INamedTypeSymbol t)
+    public IEnumerable<(ISymbol Field, string Name, string Type, bool IsState)> Fields(INamedTypeSymbol t)
     {
         var seen = new HashSet<string>();
         foreach (var f in t.GetMembers().OfType<IFieldSymbol>())
@@ -631,6 +631,15 @@ public sealed class World
             // A collection the game declares nullable: whether it is there is kept beside it (a collection is a value here).
             if (IsNullableColl(f)) yield return (f, name + "__set", "bool", false);
         }
+        // An event that is state is the list of its subscribers, in the order they subscribed (Events.cs). The field
+        // the compiler makes behind the event has the event's name.
+        foreach (var ev in t.GetMembers().OfType<IEventSymbol>())
+        {
+            if (!StateEvents.Contains(ev)) continue;
+            string name = Ident(Snake(ev.Name));
+            while (!seen.Add(name)) name += "_";
+            yield return (ev, name, $"Vec<{RType(ev.Type)}>", true);
+        }
     }
 
     /// <summary>Whether a field that holds a delegate is part of an export: all but those never alive at a decision.</summary>
@@ -643,10 +652,10 @@ public sealed class World
     /// <summary>Whether the field is a collection that can be null in the game, kept here with a flag that says it is there.</summary>
     public bool NullableColl(IFieldSymbol f) => IsNullableColl(f.OriginalDefinition) && StateField(f) != null;
 
-    private readonly ConcurrentDictionary<IFieldSymbol, string?> _fieldNames = new(Eq);
+    private readonly ConcurrentDictionary<ISymbol, string?> _fieldNames = new(Eq);
 
     /// <summary>The Rust name of a state field, or null when the field is not kept.</summary>
-    public string? StateField(IFieldSymbol f)
+    public string? StateField(ISymbol f)
     {
         f = f.OriginalDefinition;
         return _fieldNames.GetOrAdd(f, static (f, self) =>

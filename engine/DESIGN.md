@@ -104,7 +104,9 @@ shipped rule is drawn on the screen (Rolling Boulder damages one enemy after the
   arguments: they are run, the call is not.
 - A loop over presentation, a test or a `switch` on presentation, a lambda: left out when nothing in it is game code
   (no call into the game, no write to state or to a local from outside), and for a `switch`, when nothing after it
-  could be skipped by a way out of it. A lambda like that is an empty function.
+  could be skipped by a way out of it. A lambda like that is an empty function. A test or a loop over game values
+  with nothing left under it is left out too when the test, or what the loop walks, only reads (no call, nothing
+  made or written): `if (newHp < oldHp) { a sound }`.
 - A local that presentation was written to (`delay += Rng.Chaotic.Next..`) is presentation from there on, and so is a
   text that only presentation reads (the words of a log line).
 - A branch that takes game objects from a screen (`result = await hand.SelectCards(..)`), or returns presentation in a
@@ -112,12 +114,7 @@ shipped rule is drawn on the screen (Rolling Boulder damages one enemy after the
 - Where game code needs a presentation value otherwise (a test on one guards game code, one is written to state), the
   member is not translated and the report says so. The report also lists every statement left out that held a call
   that is not presentation, for review.
-- Events (`event`, `+=` on one, raising one) are presentation. One has a subscriber that is game code and is raised
-  by hand to it (`manual/card_pile.rs`): the combat's card table gives a card its id when it shows up in a pile. The
-  others with game code behind them (a pet's death, a monster's own) wait for events as state: a list of delegates
-  in subscription order. Delegates are values and exports carry them (below); the events are the next step. The report
-  lists every event of the engine's classes with everyone in the game's source who subscribes to it and what the
-  subscriber is (game code, a presentation member, a presentation class, a class outside the translated scope).
+- Events (`event`, `+=` on one, raising one) are presentation, all but the few that are state (Events, below).
 
 **How C# becomes Rust.** The rules are uniform, so that reading the generated function beside the C# method is checking
 it.
@@ -159,6 +156,7 @@ it.
 | `HashSet<T>`, `Dictionary<K,V>`, `Queue<T>`, `Stack<T>` | `rt::Set`, `Dict`, `Queue`, `Stack`: .NET's enumeration order (a freed slot is reused first); `List.Sort` is .NET's introsort |
 | a lambda given to LINQ | a closure `\|x, c\| ..` |
 | a lambda anywhere else, a method group | a delegate `Fn1<A, R>`: a function of `gen/fns.rs` and the object it is bound to (Delegates, below) |
+| `x.Died += f`, `x.Died -= f`, `Died?.Invoke(a)` on an event that is state | `push` on the list of subscribers; `rt::unsubscribe`; a call of each subscriber of a copy of the list (Events, below) |
 | `out` and `ref` parameters | returned: `fn m(..) -> (T, Out1)` |
 | a collection parameter the callee changes (`state.RegisterStates(States)`) | returned like a `ref` parameter and written back by the caller: a collection is a value here, and C# hands over a reference. Decided per virtual slot or interface member, so every override has one signature |
 | a change through a computed object (`x.GetEntry(id).Cards.Add(card)`) | the object is computed once into a local, before the arguments, as in C# |
@@ -375,6 +373,25 @@ game's objects (`Combat.x`).
   one selector, written by hand (`manual/i_card_selector.rs`): it takes the next answer or stops the step, and gives
   the prompt its number. The stack is not kept as objects.
 
+**Events.** An event of the game is a list of delegates, called in the order they subscribed. Nearly all are how
+the game tells its screen that something changed. An event is state when a subscriber is game code: a member of an
+engine class that is not presentation as a whole. Then who is subscribed decides what the game does, and the event
+is a field of its class, the list of its subscribers (`Vec<FnN>`, under the event's name): `+=` adds to the end,
+`-=` takes out the last subscriber equal to the handler (the same method on the same object), and raising it
+(`Died?.Invoke(x)`, `Died(x)`) calls the subscribers there are at that moment, in order; with none, the arguments
+are not evaluated. A subscriber that is a presentation member of an engine class is in the list all the same, as a
+function that does nothing, because the game's list has it. Four events are state: a pile's `ContentsChanged` (the
+combat's card table gives a card its id when it shows up in a pile), the combat manager's `CombatEnded` (the card
+table lets go of the piles), a creature's `Died` (a pet leaves its owner's list; two monsters unsubscribe
+themselves), a player's `RelicObtained` (a card reward that is open).
+
+In the schema such an event is a field of type list of `delegate` under the event's own name, and an export has the
+subscribers in order without those whose class is presentation (`presentation` of the schema): the screen's nodes,
+`CombatStateTracker`, `RewardSynchronizer`. The events of the action queue, the executor and the turn loop
+(`ActionQueueSet.ActionQueueChanged`, `GameAction.AfterFinished`, `CombatState.CreaturesChanged`) are on
+`[drop] fields`: the hand-written core does what they announce. The report lists every event of the engine's classes
+that someone subscribes to, with each subscriber and what it is.
+
 **Delegates in the state.** A monster's move states and a model's vars hold delegates (what a move does, when a
 branch is taken, what a calculated var adds). An export carries them, and import reads each as the function of the
 table under its method's name, bound to the object the export names: a game object, or the object of what a lambda
@@ -432,6 +449,16 @@ int32_t  sz_last_error(sz_buf *out);                               // this threa
 A difference is reported with the first JSON path that differs and the ids involved. The engine supports the game
 version when every card, power, relic, potion, monster, encounter, orb, enchantment and affliction id of that version
 has been met in the check with no difference, and whole runs of all six characters at A0 and A10 pass it too.
+
+The crate has the same checks without the game, over a dump of combats the game played (`sim parity --world none
+--dump DIR`: for every decision the export, the observation, the legal actions and the action taken), named by
+`STS2AI_ENGINE_FIXTURES`: `cargo test --release --test fixtures` (`import`, `step`, `continued` as above, through the
+C ABI: a world is held against a record by its observation, its legal actions, its status, what it changed of the
+run and its two keys) and `--test world` (every combat is played through by the world alone, no action refused). A
+dump is of one schema: it is stale when the schema's hash changes. `--test speed -- --ignored --nocapture` measures the
+engine's own operations on the middle decision of the dump's combats (import, clone, apply by kind of action, the
+observation, the keys) and what a copy costs arena by arena. `engine/reach.py` lists the members without code that a
+combat could reach, each with the chain of callers.
 
 ## Credit
 

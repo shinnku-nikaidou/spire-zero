@@ -9,7 +9,6 @@ pub mod action_queue_set;
 pub mod action_queue_synchronizer;
 pub mod branching_player_choice_context;
 pub mod canon;
-pub mod card_pile;
 pub mod card_select_cmd;
 pub mod card_selector_stack;
 pub mod combat_manager;

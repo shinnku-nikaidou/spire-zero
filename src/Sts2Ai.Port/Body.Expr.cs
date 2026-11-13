@@ -150,8 +150,10 @@ public sealed partial class Body
                 return isStructMember ? "me.clone()" : "me";
             case IFieldReferenceOperation f: return FieldGet(f);
             case IPropertyReferenceOperation p: return PropGet(p);
-            case IEventReferenceOperation ev: throw new Dropped("event " + ev.Event.Name);
-            case IEventAssignmentOperation: throw new Dropped("event subscription");
+            case IEventReferenceOperation ev:
+                if (w.StateEvents.Contains(ev.Event.OriginalDefinition)) throw new Unsupported($"the event {ev.Event.Name} read as a value");
+                throw new Dropped("event " + ev.Event.Name);
+            case IEventAssignmentOperation ea: return Subscribe(ea);
             case IInvocationOperation inv: return Invoke(inv);
             case IObjectCreationOperation oc: return New(oc);
             case IWithOperation { Operand.Type: var wt } wo when w.IsValue(wt):
@@ -620,6 +622,7 @@ public sealed partial class Body
         if (m.MethodKind == MethodKind.LocalFunction) throw new Unsupported("local function");
         if (m.MethodKind == MethodKind.DelegateInvoke)
         {
+            if (op.Instance is IEventReferenceOperation raised) return Raise(raised, op);
             var parts = op.Arguments.OrderBy(a => a.Parameter!.Ordinal).Select(a => Expr(a.Value)).Append("c");
             return $"{Expr(op.Instance!)}.call({string.Join(", ", parts)})";
         }
@@ -889,7 +892,9 @@ public sealed partial class Body
                 return Assign(de.Expression, value, asValue);
             case IInstanceReferenceOperation when isStructMember: return Done("me = $v", value());
             case IDiscardOperation: return Done("let _ = $v", value());
-            case IEventReferenceOperation ev: throw new Dropped("event " + ev.Event.Name);
+            case IEventReferenceOperation ev:
+                if (w.StateEvents.Contains(ev.Event.OriginalDefinition)) throw new Unsupported($"a write to the event {ev.Event.Name}");
+                throw new Dropped("event " + ev.Event.Name);
             case IFieldReferenceOperation f:
                 if (w.StaticState(f.Field) is { } sf) return Done($"c.s.{sf} = $v", value());
                 if (w.IsCache(f.Field)) return asValue ? value() : $"{{ let _ = {value()}; }}";
@@ -1097,6 +1102,8 @@ public sealed partial class Body
 
     private string ConditionalAccess(IConditionalAccessOperation op, bool statement)
     {
+        if (op.Operation is IEventReferenceOperation raised && op.WhenNotNull is IInvocationOperation { TargetMethod.MethodKind: MethodKind.DelegateInvoke } call)
+            return Raise(raised, call);
         string r = Tmp("r");
         string recv = Expr(op.Operation);
         bool nullable = op.Operation.Type != null && World.IsNullable(op.Operation.Type, out _);
@@ -1114,6 +1121,45 @@ public sealed partial class Body
             return $"{{ let {r} = {recv}; if {isNull} {{ {Null(op.Type)} }} else {{ {wrapped} }} }}";
         }
         finally { condInstances.Pop(); }
+    }
+
+    // ---------------------------------------------------------------- events (Events.cs)
+
+    /// <summary>The list of an event's subscribers in the object that has the event.</summary>
+    private string Subscribers(IEventReferenceOperation er, string receiver, bool mutable)
+    {
+        var ev = (IEventSymbol)er.Event.OriginalDefinition;
+        string name = w.StateField(ev) ?? throw new Unsupported($"the event {ev.ContainingType.Name}.{ev.Name} is not kept");
+        return $"{w.DataName(ev.ContainingType)}::{(mutable ? "of_mut" : "of")}({receiver}, c).{name}";
+    }
+
+    /// <summary>`x.Changed += f`, `x.Changed -= f` on an event that is state: f joins the end of the list, or the
+    /// last subscriber equal to f (the same method on the same object) leaves it. On any other event the statement
+    /// is presentation.</summary>
+    private string Subscribe(IEventAssignmentOperation ea)
+    {
+        if (ea.EventReference is not IEventReferenceOperation er || !w.StateEvents.Contains(er.Event.OriginalDefinition)) throw new Dropped("event subscription");
+        if (er.Instance == null) throw new Unsupported("a static event");
+        string e = Tmp("e"), h = Tmp("h");
+        string receiver = Expr(er.Instance), handler = Expr(ea.HandlerValue);
+        string list = Subscribers(er, e, true);
+        return $"{{ let {e} = {receiver}; let {h} = {handler}; {(ea.Adds ? $"{list}.push({h})" : $"rt::unsubscribe(&mut {list}, &{h})")}; }}";
+    }
+
+    /// <summary>Raising an event that is state (`Changed?.Invoke(x)`, `Changed(x)`): the subscribers are called in
+    /// the order they subscribed, those there are when it is raised (one that leaves or joins while the others run
+    /// changes nothing of this round, as a C# delegate is a value). With nobody subscribed the arguments are not
+    /// evaluated. On any other event the statement is presentation.</summary>
+    private string Raise(IEventReferenceOperation er, IInvocationOperation call)
+    {
+        if (!w.StateEvents.Contains(er.Event.OriginalDefinition)) throw new Dropped("event " + er.Event.Name);
+        if (er.Instance == null) throw new Unsupported("a static event");
+        if (!call.TargetMethod.ReturnsVoid) throw new Unsupported($"the event {er.Event.Name}, whose subscribers give a value");
+        string s = Tmp("s"), f = Tmp("f");
+        var args = call.Arguments.OrderBy(a => a.Parameter!.Ordinal).Select(a => (Name: Tmp("a"), Code: Expr(a.Value))).ToList();
+        string lets = string.Concat(args.Select(a => $"let {a.Name} = {a.Code}; "));
+        string passed = string.Join(", ", args.Select(a => a.Name + ".clone()").Append("c"));
+        return $"{{ let {s} = {Subscribers(er, Expr(er.Instance), false)}.clone(); if !{s}.is_empty() {{ {lets}for {f} in {s} {{ {f}.call({passed}); }} }} }}";
     }
 
     /// <summary>T as T? when the target is a nullable value.</summary>

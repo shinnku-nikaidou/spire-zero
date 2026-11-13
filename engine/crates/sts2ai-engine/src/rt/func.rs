@@ -97,3 +97,29 @@ delegate!(Fn2, Repr2, a: A, b: B);
 delegate!(Fn3, Repr3, a: A, b: B, d: D);
 delegate!(Fn4, Repr4, a: A, b: B, d: D, e: E);
 delegate!(Fn5, Repr5, a: A, b: B, d: D, e: E, f: F);
+
+/// C#'s `event -= handler`: the last subscriber equal to the handler (the same method on the same object) leaves the
+/// list, if there is one.
+pub fn unsubscribe<F: PartialEq>(subscribers: &mut Vec<F>, handler: &F) {
+    if let Some(at) = subscribers.iter().rposition(|f| f == handler) {
+        subscribers.remove(at);
+    }
+}
+
+#[cfg(test)]
+mod event_tests {
+    use super::*;
+
+    fn one(_target: Obj, _c: &mut Combat) {}
+    fn two(_target: Obj, _c: &mut Combat) {}
+
+    #[test]
+    fn unsubscribing_takes_the_last_equal_subscriber() {
+        let (a, b) = (Fn0::of(1, Obj::NULL, one), Fn0::of(2, Obj::NULL, two));
+        let mut list = vec![a.clone(), b.clone(), a.clone()];
+        unsubscribe(&mut list, &a);
+        assert!(list == vec![a.clone(), b.clone()]);
+        unsubscribe(&mut list, &Fn0::of(3, Obj::NULL, one));
+        assert_eq!(list.len(), 2);
+    }
+}

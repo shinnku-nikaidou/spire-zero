@@ -471,54 +471,26 @@ public sealed class Output(World w, Emitter em)
 
     // ---------------------------------------------------------------- events
 
-    /// <summary>Every event of a class the engine has, with every place in the game's source that subscribes to it
-    /// and what the subscriber is: game code (a member of a translated or hand-written class that is not
-    /// presentation), presentation, or a class outside the translated scope. An event with a subscriber that is game
-    /// code is state: who is subscribed decides what the game does (DESIGN.md, "The translation").</summary>
+    /// <summary>Every event of a class the engine has that someone subscribes to (World.FindSubscriptions), with
+    /// every subscriber and what it is. An event with a subscriber that is game code is state.</summary>
     private List<string> Events()
     {
-        var byEvent = new SortedDictionary<string, List<(bool Game, string Line)>>(StringComparer.Ordinal);
-        foreach (var tree in w.Comp.SyntaxTrees)
-        {
-            var adds = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.AssignmentExpressionSyntax>()
-                .Where(a => a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.AddAssignmentExpression)).ToList();
-            if (adds.Count == 0) continue;
-            var model = w.Comp.GetSemanticModel(tree);
-            foreach (var add in adds)
-            {
-                if (model.GetOperation(add) is not Microsoft.CodeAnalysis.Operations.IEventAssignmentOperation { Adds: true, EventReference: Microsoft.CodeAnalysis.Operations.IEventReferenceOperation { Event: var ev } } subscription) continue;
-                var owner = ev.ContainingType.OriginalDefinition;
-                if (!World.IsSource(owner) || w.CatOf(owner) is not (Cat.Translated or Cat.Manual)) continue;
-                var where = model.GetEnclosingSymbol(add.SpanStart);
-                while (where is IMethodSymbol { MethodKind: MethodKind.AnonymousFunction or MethodKind.LocalFunction }) where = where.ContainingSymbol;
-                var from = where?.ContainingType?.OriginalDefinition;
-                var handler = subscription.HandlerValue;
-                while (handler is Microsoft.CodeAnalysis.Operations.IConversionOperation cv) handler = cv.Operand;
-                if (handler is Microsoft.CodeAnalysis.Operations.IDelegateCreationOperation dc) handler = dc.Target;
-                // What runs: a method by its name, or code written at the place (it is then the subscribing member's).
-                var method = (handler as Microsoft.CodeAnalysis.Operations.IMethodReferenceOperation)?.Method.OriginalDefinition;
-                var runs = method?.ContainingType?.OriginalDefinition ?? from;
-                string what;
-                bool game = false;
-                if (runs == null) what = "unknown";
-                else if (w.IsDroppedNamed(runs)) what = "presentation";
-                else if (w.CatOf(runs) is not (Cat.Translated or Cat.Manual)) what = "outside the translated scope";
-                else if ((method ?? where) is { } member && w.IsDropMember(member)) what = "a presentation member";
-                else { what = "game code"; game = true; }
-                string text = method != null ? $"{method.ContainingType.Name}.{method.Name}" : handler is Microsoft.CodeAnalysis.Operations.IAnonymousFunctionOperation ? "a lambda" : handler.Syntax.ToString();
-                string key = $"{owner.Name}.{ev.Name}";
-                if (!byEvent.TryGetValue(key, out var list)) byEvent[key] = list = [];
-                list.Add((game, $"    {text}, subscribed in {from?.Name}.{where?.Name}: {what}"));
-            }
-        }
+        var byEvent = w.Subscriptions.GroupBy(s => (ISymbol)s.Event, Eq).OrderBy(g => $"{g.Key.ContainingType.Name}.{g.Key.Name}", StringComparer.Ordinal).ToList();
+        string Name(ISymbol ev) => $"{ev.ContainingType.Name}.{ev.Name}";
         var lines = new List<string>();
-        foreach (var (name, subscribers) in byEvent.Where(e => e.Value.Any(x => x.Game)))
+        foreach (var g in byEvent.Where(g => w.StateEvents.Contains(g.Key)))
         {
-            lines.Add($"{name}: state");
-            lines.AddRange(subscribers.Select(x => x.Line).Distinct().Order(StringComparer.Ordinal));
+            lines.Add($"{Name(g.Key)}: state");
+            lines.AddRange(g.Select(s => $"    {s.Text}, subscribed in {s.Where?.ContainingType?.Name}.{s.Where?.Name}: {w.SubscriberKind(s)}").Distinct().Order(StringComparer.Ordinal));
         }
-        var others = byEvent.Where(e => !e.Value.Any(x => x.Game)).Select(e => $"{e.Key} ({e.Value.Count})").ToList();
-        lines.Add($"not state, {others.Count} events (subscriptions): {string.Join(", ", others)}");
+        // An event port.toml drops although game code subscribes: the hand-written core does what it announces.
+        foreach (var g in byEvent.Where(g => !w.StateEvents.Contains(g.Key) && g.Any(s => w.SubscriberKind(s) == "game code")))
+        {
+            lines.Add($"{Name(g.Key)}: not state ({(w.IsDroppedEvent((IEventSymbol)g.Key) ? "port.toml [drop] fields" : "no field behind it, or static")})");
+            lines.AddRange(g.Where(s => w.SubscriberKind(s) == "game code").Select(s => $"    {s.Text}, subscribed in {s.Where?.ContainingType?.Name}.{s.Where?.Name}: game code").Distinct().Order(StringComparer.Ordinal));
+        }
+        var others = byEvent.Where(g => !g.Any(s => w.SubscriberKind(s) == "game code")).Select(g => $"{Name(g.Key)} ({g.Count()})").ToList();
+        lines.Add($"not state, {others.Count} events with no subscriber that is game code (subscriptions): {string.Join(", ", others)}");
         return lines;
     }
 
@@ -574,7 +546,9 @@ public sealed class Output(World w, Emitter em)
         foreach (var (field, name, type, isState) in w.Fields(t))
         {
             if (!isState) continue;
-            arr.Add(new JsonObject { ["name"] = Json(name), ["cs"] = PrimaryConstructors.ClrName(field.ContainingType.Name, field.Name), ["type"] = TypeDesc(field.Type) });
+            // An event that is state is the list of its subscribers: the C# side writes the delegates the event's own holds.
+            var held = field is IFieldSymbol f ? TypeDesc(f.Type) : new JsonObject { ["kind"] = "list", ["of"] = new JsonObject { ["kind"] = "delegate" } };
+            arr.Add(new JsonObject { ["name"] = Json(name), ["cs"] = PrimaryConstructors.ClrName(field.ContainingType.Name, field.Name), ["type"] = held });
         }
         return arr;
     }
@@ -590,7 +564,7 @@ public sealed class Output(World w, Emitter em)
         {
             if (m.IsStatic) continue;
             if (m is IFieldSymbol { IsConst: false } f && !kept.Contains(f.Name)) names.Add(f.Name);
-            if (m is IEventSymbol) names.Add(m.Name);
+            if (m is IEventSymbol && !kept.Contains(m.Name)) names.Add(m.Name);
         }
         return new JsonArray(names.Select(n => (JsonNode)n).ToArray());
     }

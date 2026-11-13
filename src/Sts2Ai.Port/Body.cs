@@ -297,15 +297,22 @@ public sealed partial class Body
     }
 
     /// <summary>Whether a statement that is left out held something that is not presentation: a call into game code, or a write to state.</summary>
-    /// <summary>Whether a call of a delegate is the raising of an event (`Changed?.Invoke(x)`, `Changed(x)`).</summary>
-    private static bool RaisesEvent(IInvocationOperation inv)
+    /// <summary>Whether a call of a delegate is the raising of an event that is presentation (`Changed?.Invoke(x)`,
+    /// `Changed(x)`): one that is not state.</summary>
+    private bool RaisesEvent(IInvocationOperation inv)
     {
-        if (inv.Instance is IEventReferenceOperation) return true;
+        bool Idle(IOperation? raised) => raised is IEventReferenceOperation er && !w.StateEvents.Contains(er.Event.OriginalDefinition);
+        if (inv.Instance is IEventReferenceOperation) return Idle(inv.Instance);
         if (inv.Instance is not IConditionalAccessInstanceOperation) return false;
         for (var p = inv.Parent; p != null; p = p.Parent)
-            if (p is IConditionalAccessOperation ca) return ca.Operation is IEventReferenceOperation;
+            if (p is IConditionalAccessOperation ca) return Idle(ca.Operation);
         return false;
     }
+
+    /// <summary>Whether evaluating an expression does nothing but give its value: no call, nothing made, nothing written.</summary>
+    private static bool OnlyReads(IOperation op) =>
+        !op.DescendantsAndSelf().Any(d => d is IInvocationOperation or IObjectCreationOperation or IAssignmentOperation or IIncrementOrDecrementOperation
+            or IDeclarationExpressionOperation or IAwaitOperation or IEventAssignmentOperation);
 
     private bool HoldsGameCall(IOperation op)
     {
@@ -316,7 +323,7 @@ public sealed partial class Body
                 case IInvocationOperation inv:
                     var m = inv.TargetMethod.ReducedFrom ?? inv.TargetMethod;
                     // A function that was handed over is called: what it does is not known here, so it is game code.
-                    // (An event that is raised is presentation: what listens to it is the screen.)
+                    // (An event that is raised is presentation when what listens to it is the screen: one that is not state.)
                     if (m.MethodKind == MethodKind.DelegateInvoke && inv.Instance is { Type: { } handed } && !w.IsDropped(handed) && !RaisesEvent(inv)
                         && !(inv.Instance is ILocalReferenceOperation { Local: var dl } && droppedLocals.Contains(dl))) return true;
                     if (!World.IsSource(m.ContainingType) || w.IsDropped(m.ContainingType) || w.IsDropMember(m)) continue;
@@ -330,6 +337,8 @@ public sealed partial class Body
                     return true;
                 case IObjectCreationOperation { Type: INamedTypeSymbol t } when World.IsSource(t) && !w.IsDropped(t) && t.TypeKind == TypeKind.Class:
                     if (t.Name.Contains("ChoiceContext") || t.Name.EndsWith("Exception")) continue;
+                    return true;
+                case IEventAssignmentOperation { EventReference: IEventReferenceOperation subscribed } when w.StateEvents.Contains(subscribed.Event.OriginalDefinition):
                     return true;
                 case IAssignmentOperation a when a.Target is IFieldReferenceOperation { Field: var f } && !w.IsDropped(f.Type) && !w.IsDropped(f.ContainingType):
                     return true;
@@ -700,6 +709,8 @@ public sealed partial class Body
             return;
         }
         string then = Sub(cond.WhenTrue), other = Sub(cond.WhenFalse);
+        // Nothing is left under the test and the test only reads: the statement is left out (a member with nothing else is presentation).
+        if (then.Length == 0 && other.Length == 0 && OnlyReads(cond.Condition)) { LeftOut++; return; }
         sb.Append($"if {Unparen(test)} {{\n{then}}}");
         if (other.Length > 0) sb.Append($" else {{\n{other}}}");
         sb.Append('\n');
@@ -757,6 +768,8 @@ public sealed partial class Body
         loops.Push(($"break {label};", run.Next));
         string body = Sub(fe.Body);
         loops.Pop();
+        // Nothing is left in the loop and what it walks is only read: the statement is left out.
+        if (body.Length == 0 && lazy == null && OnlyReads(fe.Collection)) { LeftOut++; return; }
         if (lazy == null) sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
         else sb.Append($"{run.Before}{label}: for {LazyFirst} in {coll} {{\n{run.Code}let mut {NameOf(local)}: {T(local.Type)} = {run.Item};\n{body}}}{new string('}', run.Nested)}\n");
         Written++;
