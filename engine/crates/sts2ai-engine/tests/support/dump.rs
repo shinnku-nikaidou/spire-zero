@@ -127,7 +127,7 @@ impl Tally {
         self.failed.extend(other.failed);
     }
 
-    /// Panics if any record failed, with the first failures and the kinds of difference by how many records have them.
+    /// Panics if any record failed, with the kinds of difference: how many records have each, and the first that has.
     pub fn finish(self, what: &str) {
         let counts = format!(
             "{what}: {} passed, {} failed, {} skipped",
@@ -140,19 +140,17 @@ impl Tally {
             assert!(self.passed > 0, "{what}: the dump has no record to check");
             return;
         }
-        let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
-        for (_, difference) in &self.failed {
-            *kinds.entry(kind_of(difference)).or_default() += 1;
+        // Each kind of difference with how many records have it and the first of them, the most common kind first.
+        let mut kinds: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+        for (index, (_, difference)) in self.failed.iter().enumerate() {
+            kinds.entry(kind_of(difference)).or_insert((0, index)).0 += 1;
         }
-        let mut kinds: Vec<(String, usize)> = kinds.into_iter().collect();
-        kinds.sort_by(|a, b| b.1.cmp(&a.1));
+        let mut kinds: Vec<(usize, usize)> = kinds.into_values().collect();
+        kinds.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
         let mut report = format!("{counts}\n");
-        for (kind, count) in kinds.iter().take(40) {
-            report.push_str(&format!("{count:7}  {kind}\n"));
-        }
-        report.push_str("first failures:\n");
-        for (at, difference) in self.failed.iter().take(10) {
-            report.push_str(&format!("  {at}: {difference}\n"));
+        for (count, first) in kinds.iter().take(40) {
+            let (at, difference) = &self.failed[*first];
+            report.push_str(&format!("{count:7}  {at}: {difference}\n"));
         }
         panic!("{report}");
     }
