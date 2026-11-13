@@ -68,6 +68,11 @@ translate = [
     # what a combat reads of the run around it
     "MegaCrit.Sts2.Core.Random",
     "MegaCrit.Sts2.Core.Odds",
+    # the run's dominion (Dread): a model that takes the combat's hooks
+    "MegaCrit.Sts2.Core.Models.Dread",
+    "MegaCrit.Sts2.Core.Models.Dread.Dominions",
+    # a model by its id, for what holds cards in their saved form
+    "MegaCrit.Sts2.Core.Saves.SaveUtil",
     # who answers a card prompt (written by hand: [manual])
     "MegaCrit.Sts2.Core.TestSupport.ICardSelector",
     # what is unlocked decides which cards a pool can give
@@ -204,7 +209,7 @@ fields = [
 # bookkeeping of what the engine writes by hand.
 LocString = ["locTable", "locEntryKey"]
 RunManager = ["State", "AscensionManager", "ActionQueueSet", "ActionExecutor", "ActionQueueSynchronizer", "PlayerChoiceSynchronizer", "CardSelectorStack"]
-RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "_mapPointHistory", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
+RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "_mapPointHistory", "Dominion", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
 
 [caches]
 # Statics that only remember the result of a computation: never kept, computed at each use.

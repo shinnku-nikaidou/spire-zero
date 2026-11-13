@@ -85,8 +85,12 @@ public sealed partial class Body
             IPropertyReferenceOperation { Property: { IsStatic: false } p } => Forwarded(p.OriginalDefinition),
             _ => null,
         };
+        // A value's own field, or the field behind its property.
+        if (op is IPropertyReferenceOperation { Property: { IsStatic: false } vp } vpr && w.IsValue(vp.ContainingType)
+            && vp.ContainingType.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => Eq.Equals(f.AssociatedSymbol, vp.OriginalDefinition)) is { } auto && w.NullableColl(auto))
+            return $"{(vpr.Instance == null ? "me" : Place(vpr.Instance))}.{w.StateField(auto)}__set";
         if (field == null || !w.NullableColl(field)) return null;
-        if (op is IFieldReferenceOperation { Instance: { } inst } vf && w.IsValue(vf.Field.ContainingType)) return $"{Ref(inst)}.{w.StateField(field)}__set";
+        if (op is IFieldReferenceOperation { Instance: { } inst } vf && w.IsValue(vf.Field.ContainingType)) return $"{Place(inst)}.{w.StateField(field)}__set";
         return FieldPlaceOf(op) is { } place ? place + "__set" : null;
     }
 
@@ -714,6 +718,8 @@ public sealed partial class Body
             case IArrayElementReferenceOperation ae when ae.Indices.Length == 1 && IsSimple(ae.Indices[0]): return $"{Place(ae.ArrayReference)}[({Expr(ae.Indices[0])}) as usize]";
             case IPropertyReferenceOperation { Property.IsIndexer: true, Arguments.Length: 1 } ix when World.CollOf(ix.Property.ContainingType) == World.Coll.Vec && IsSimple(ix.Arguments[0].Value):
                 return $"{Place(ix.Instance!)}[({Expr(ix.Arguments[0].Value)}) as usize]";
+            case IPropertyReferenceOperation { Property.IsIndexer: true, Arguments.Length: 1 } dx when World.CollOf(dx.Property.ContainingType) == World.Coll.Dict && IsSimple(dx.Arguments[0].Value):
+                return $"(*{Place(dx.Instance!)}.get_mut(&{Expr(dx.Arguments[0].Value)}))";
             default: throw new Unsupported($"a change in place of {op.Kind} ({op.Syntax.ToString().Split('\n')[0].Trim()})");
         }
     }

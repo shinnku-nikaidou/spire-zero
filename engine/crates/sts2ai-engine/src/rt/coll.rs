@@ -30,7 +30,10 @@ struct Slots<T> {
 
 impl<T> Default for Slots<T> {
     fn default() -> Self {
-        Slots { slots: Vec::new(), free: Vec::new() }
+        Slots {
+            slots: Vec::new(),
+            free: Vec::new(),
+        }
     }
 }
 
@@ -57,7 +60,7 @@ impl<T> Slots<T> {
     }
 }
 
-/// HashSet<T>. 
+/// HashSet<T>.
 #[derive(Clone, Debug)]
 pub struct Set<T>(Slots<T>);
 
@@ -87,14 +90,20 @@ impl<T> Slots<T> {
             seen[i] = true;
         }
         // The last of `free` here is the one filled first.
-        Ok(Slots { slots, free: free.into_iter().rev().collect() })
+        Ok(Slots {
+            slots,
+            free: free.into_iter().rev().collect(),
+        })
     }
 }
 
 impl<T> Set<T> {
     /// The set that enumerates these items in this order, with no freed slot.
     pub fn from_items(items: Vec<T>) -> Self {
-        Set(Slots { slots: items.into_iter().map(Some).collect(), free: Vec::new() })
+        Set(Slots {
+            slots: items.into_iter().map(Some).collect(),
+            free: Vec::new(),
+        })
     }
     /// The set with these items in these slots and these freed slots (the next one to be filled first).
     pub fn from_layout(items: Vec<T>, at: Vec<usize>, free: Vec<usize>) -> Result<Self, String> {
@@ -187,17 +196,24 @@ impl<T: PartialEq> PartialEq for Set<T> {
     }
 }
 
-/// Dictionary<K, V>. 
+/// Dictionary<K, V>.
 #[derive(Clone, Debug)]
 pub struct Dict<K, V>(Slots<(K, V)>);
 
 impl<K, V> Dict<K, V> {
     /// The dictionary that enumerates these pairs in this order, with no freed slot.
     pub fn from_pairs(pairs: Vec<(K, V)>) -> Self {
-        Dict(Slots { slots: pairs.into_iter().map(Some).collect(), free: Vec::new() })
+        Dict(Slots {
+            slots: pairs.into_iter().map(Some).collect(),
+            free: Vec::new(),
+        })
     }
     /// The dictionary with these pairs in these slots and these freed slots (the next one to be filled first).
-    pub fn from_layout(pairs: Vec<(K, V)>, at: Vec<usize>, free: Vec<usize>) -> Result<Self, String> {
+    pub fn from_layout(
+        pairs: Vec<(K, V)>,
+        at: Vec<usize>,
+        free: Vec<usize>,
+    ) -> Result<Self, String> {
         Ok(Dict(Slots::from_layout(pairs, at, free)?))
     }
 }
@@ -220,11 +236,17 @@ impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
         d
     }
     fn find(&self, k: &K) -> Option<usize> {
-        self.0.slots.iter().position(|s| s.as_ref().is_some_and(|(key, _)| key == k))
+        self.0
+            .slots
+            .iter()
+            .position(|s| s.as_ref().is_some_and(|(key, _)| key == k))
     }
     /// Add: the key must be new.
     pub fn add(&mut self, k: K, v: V) {
-        assert!(self.find(&k).is_none(), "an item with the same key has already been added");
+        assert!(
+            self.find(&k).is_none(),
+            "an item with the same key has already been added"
+        );
         self.0.put((k, v));
     }
     pub fn try_add(&mut self, k: K, v: V) -> bool {
@@ -243,10 +265,22 @@ impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
     }
     /// dict[k]: the key must be there.
     pub fn get(&self, k: &K) -> V {
-        self.try_get(k).expect("the given key was not present in the dictionary")
+        self.try_get(k)
+            .expect("the given key was not present in the dictionary")
+    }
+    /// The value of a key, to change in place (`dict[k].Add(x)`). Panics where C# throws KeyNotFoundException.
+    pub fn get_mut(&mut self, k: &K) -> &mut V {
+        self.0
+            .slots
+            .iter_mut()
+            .flatten()
+            .find(|(key, _)| key == k)
+            .map(|(_, v)| v)
+            .expect("the key is not in the dictionary")
     }
     pub fn try_get(&self, k: &K) -> Option<V> {
-        self.find(k).map(|i| self.0.slots[i].as_ref().unwrap().1.clone())
+        self.find(k)
+            .map(|i| self.0.slots[i].as_ref().unwrap().1.clone())
     }
     pub fn contains_key(&self, k: &K) -> bool {
         self.find(k).is_some()
@@ -283,7 +317,12 @@ impl<K: PartialEq + Clone, V: Clone + PartialEq> Dict<K, V> {
 
 impl<K: Clone, V: Clone> IntoVec<KeyValuePair<K, V>> for Dict<K, V> {
     fn into_vec(self) -> Vec<KeyValuePair<K, V>> {
-        self.0.slots.into_iter().flatten().map(|(key, value)| KeyValuePair { key, value }).collect()
+        self.0
+            .slots
+            .into_iter()
+            .flatten()
+            .map(|(key, value)| KeyValuePair { key, value })
+            .collect()
     }
 }
 
