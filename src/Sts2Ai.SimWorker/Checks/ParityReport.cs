@@ -282,6 +282,9 @@ internal sealed class ParitySummary
                 + (acts ? $"{met.Count(kv => kv.Value[2] > 0),6}{met.Count(kv => kv.Value[3] > 0),10}" : $"{"",6}{"",10}")
                 + $"{universe[kind].Count(id => !met.ContainsKey(id)),11}");
         }
+        var reached = _met.SelectMany(kind => kind.Value.Keys.Where(GameIds.Unreached.ContainsKey).Select(id => $"{kind.Key} {id}")).Order(StringComparer.Ordinal).ToList();
+        output.WriteLine($"  left out by name: {GameIds.Unreached.Count} ids that no standard run of one player meets"
+            + (reached.Count > 0 ? $"; MET all the same, so the list is wrong: {string.Join(", ", reached)}" : ""));
         var worst = _met.SelectMany(kind => kind.Value.Where(kv => kv.Value[1] > 0).Select(kv => (Kind: kind.Key, Id: kv.Key, Counts: kv.Value)))
             .OrderByDescending(x => (double)x.Counts[1] / x.Counts[0]).ThenByDescending(x => x.Counts[1]).ThenBy(x => x.Id, StringComparer.Ordinal).ToList();
         if (worst.Count > 0)

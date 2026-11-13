@@ -27,7 +27,51 @@ internal static class GameIds
         ["afflictions"] = Entries<AfflictionModel>(),
     };
 
-    private static List<string> Entries<T>() where T : AbstractModel => [.. ModelDb.All.OfType<T>().Where(Real).Select(m => m.Id.Entry).Distinct().Order(StringComparer.Ordinal)];
+    private static List<string> Entries<T>() where T : AbstractModel =>
+        [.. ModelDb.All.OfType<T>().Where(Real).Select(m => m.Id.Entry).Distinct().Where(id => !Unreached.ContainsKey(id)).Order(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// The ids that no combat of one player's standard run meets, each with why, read from the game's own code
+    /// (v0.113.0). <see cref="All"/> leaves them out, so that "never met" names only what a sweep should have met; one
+    /// of them that is met after all is reported (<see cref="ParitySummary"/>): the list is then wrong for the game.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> Unreached = new Dictionary<string, string>
+    {
+        // Powers of cards that target an ally: the cards are multiplayer only, and one player has no ally to play them on.
+        ["CONCOCT_POWER"] = "only the card Concoct applies it, to an ally (multiplayer only)",
+        ["COORDINATE_POWER"] = "only the card Coordinate applies it, to an ally (multiplayer only)",
+        ["COVERED_POWER"] = "only the card Intercept applies it, to an ally (multiplayer only)",
+        ["INTERCEPT_POWER"] = "only Covered power applies it, which only the card Intercept gives (multiplayer only)",
+        ["FADE_POWER"] = "only the card Fade applies it, to an ally (multiplayer only)",
+        ["IMITATION_LEARNING_POWER"] = "only the card Imitation Learning applies it, played on an ally (multiplayer only)",
+        ["SOULBOUND_POWER"] = "only the card Soulbound applies it, to an ally (multiplayer only)",
+        ["GUARDED_POWER"] = "only Tank power applies it, to its owner's teammates",
+        // Powers that nothing in the game's code applies.
+        ["GRAVITY_POWER"] = "nothing applies it",
+        ["LEADERSHIP_POWER"] = "nothing applies it",
+        ["MAGIC_BOMB_POWER"] = "nothing applies it",
+        ["NO_ENERGY_GAIN_POWER"] = "nothing applies it",
+        // The Dread game mode's dominions: a standard run has none.
+        ["AEONGLASS_DOMINION_POWER"] = "the Aeonglass's dominion applies it (Dread mode only)",
+        ["INSATIABLE_DOMINION_POWER"] = "the Insatiable's dominion applies it (Dread mode only)",
+        ["LAGAVULIN_MATRIARCH_DOMINION_POWER"] = "the Lagavulin Matriarch's dominion applies it (Dread mode only)",
+        ["EXPLOSIVE_POWER"] = "only the Waterfall Giant's dominion applies it (Dread mode only)",
+        ["YOU_ARE_MINE_POWER"] = "only the Queen's dominion applies it (Dread mode only)",
+        ["AMNESIA_POWER"] = "only choosing the card Amnesia applies it, which only the Knowledge Demon's dominion offers (Dread mode only)",
+        // The game's own test models outside its Mocks namespaces, which no encounter uses, and its placeholders for removed content.
+        ["BIG_DUMMY"] = "a test monster: only mock encounters use it",
+        ["ONE_HP_MONSTER"] = "a test monster: no encounter uses it",
+        ["TEN_HP_MONSTER"] = "a test monster: no encounter uses it",
+        ["SINGLE_ATTACK_MOVE_MONSTER"] = "a test monster: no encounter uses it",
+        ["MULTI_ATTACK_MOVE_MONSTER"] = "a test monster: no encounter uses it",
+        ["THE_ADVERSARY_MK_ONE"] = "no encounter uses it",
+        ["THE_ADVERSARY_MK_TWO"] = "no encounter uses it",
+        ["THE_ADVERSARY_MK_THREE"] = "no encounter uses it",
+        ["DEPRECATED_MONSTER"] = "a placeholder for a monster a save names and the game no longer has",
+        ["DEPRECATED_CARD"] = "a placeholder for a card a save names and the game no longer has",
+        ["DEPRECATED_ENCHANTMENT"] = "a placeholder for an enchantment a save names and the game no longer has",
+        ["DEPRECATED_ENCOUNTER"] = "a placeholder with no monsters: over before a decision",
+    };
 
     /// <summary>Not one of the game's own test models, which sit in namespaces of their own (Models.Cards.Mocks).</summary>
     public static bool Real(AbstractModel model) => model.GetType().Namespace?.Contains(".Mock") != true;
