@@ -104,11 +104,11 @@ internal static class Executor
             }
             case Surfaces.Event:
                 return Event(action);
-            case Surfaces.Shop when NMerchantRoom.Instance is { } room && run.CurrentRoom is MerchantRoom merchant:
+            case Surfaces.Shop when NMerchantRoom.Instance is { } room && run.CurrentRoom is MerchantRoom:
                 if (action == MacroAction.Leave)
                     return room.Inventory.IsOpen ? Again(Click(Field<NBackButton>(room.Inventory, "_backButton"))) : Click(room.ProceedButton);
                 // The purchase does not need the shop open; opened, the player sees it. Checked here: the start is a task.
-                var inventory = merchant.GetLocalInventory();
+                var inventory = RunManager.Instance.MerchantSynchronizer.GetLocalInventory();
                 if (!ShopActions.Legal(inventory).Contains(action)) throw Unknown(asking, action);
                 if (!room.Inventory.IsOpen) room.OpenInventory();
                 _ = ShopActions.Start(inventory, action);

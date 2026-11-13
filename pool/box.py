@@ -470,7 +470,7 @@ def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options:
     save(job, {
         "job": job, "kind": kind, "character": parts[0].upper(), "env": parts[1],
         "owner": os.environ.get("OWNER", "main"), "purpose": purpose, "rev": full,
-        "game": os.environ.get("GAME", "v0.111.0"), "options": options, "inputs": inputs or "git at rev, nets from weights/all",
+        "game": os.environ.get("GAME", "v0.113.0"), "options": options, "inputs": inputs or "git at rev, nets from weights/all",
         "box": {
             "step": name, "priority": priority,
             "deadline": iso_utc(deadline) if deadline else None, "deadline_epoch": deadline,
@@ -488,7 +488,7 @@ def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options:
 
 # --- datasets: a self-play step written as one TOML file (eval/datasets/NAME.toml)
 
-CHARACTERS = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER"]  # the ledger's order: character k from seeds + 20000 k
+CHARACTERS = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]  # the ledger's order: character k from seeds + 20000 k
 PER_CHARACTER, SMOKE_AT = 20000, 19000  # a character's seeds in a block; the last 1,000 are the smoke's
 EFFORTS = ("low", "medium", "high", "max")
 ROOMS = {"monster": "effort", "elite": "elite-effort", "boss": "boss-effort"}  # a game's effort by room, as run's options

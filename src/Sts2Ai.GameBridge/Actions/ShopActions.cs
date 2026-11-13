@@ -1,5 +1,6 @@
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Hooks;
+using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.GameBridge.Actions;
@@ -50,15 +51,14 @@ public static class ShopActions
 
     /// <summary>
     /// Buys, as clicking the item does; the task ends when the purchase is done (true if bought). Card removal asks
-    /// for the card through the card selector; the shop's removal button then marks it used.
-    /// "leave" changes nothing in the game: the caller opens the map.
+    /// for the card through the card selector. "leave" changes nothing in the game: the caller opens the map.
     /// </summary>
     public static async Task<bool> Start(MerchantInventory inventory, MacroAction action)
     {
         if (!Legal(inventory).Contains(action)) throw Illegal.Action(action, Surfaces.Shop);
         if (action == MacroAction.Leave) return true;
-        if (action == MacroAction.Remove) return await inventory.CardRemovalEntry!.OnTryPurchaseWrapper(inventory);
-        return await Goods(inventory)[action.Index].OnTryPurchaseWrapper(inventory);
+        var entry = action == MacroAction.Remove ? inventory.CardRemovalEntry! : Goods(inventory)[action.Index];
+        return await RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
     }
 
     /// <summary>Buying <paramref name="entry"/>, or the removal service, as the action names it.</summary>

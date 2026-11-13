@@ -4,8 +4,9 @@ name = "example"                    # the step, and the jobs' folder CHAR/sl/sel
 deadline = "+72h"                   # box.py deadline NAME UNTIL moves it later
 priority = 0
 seeds = 1000000                     # the ledger's block: SILENT from +0, IRONCLAD +20,000, DEFECT +40,000, REGENT +60,000,
-                                    # NECROBINDER +80,000; each character's last 1,000 are the smoke's
-characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER"]   # a row's characters unless it names its own
+                                    # NECROBINDER +80,000, FOOL +100,000 (the ledger's next block too); each character's
+                                    # last 1,000 are the smoke's
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]   # a row's characters unless it names its own
 champion = "eval/champions/sl.json" # nets, policy and budget; a game sets its rule and efforts on top
 workers = 4                         # search workers per run
 

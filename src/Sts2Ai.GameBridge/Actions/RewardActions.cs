@@ -81,7 +81,7 @@ public static class RewardActions
             RunManager.Instance.ActChangeSynchronizer.SetLocalPlayerReady();
             return Task.CompletedTask;
         }
-        return RunManager.Instance.ProceedFromTerminalRewardsScreen();
+        return RunManager.Instance.ProceedFromTerminalRewardsScreenAsync();
     }
 
     public static CardRewardScreen CardRewardScreen(IReadOnlyList<CardCreationResult> cards, IReadOnlyList<CardRewardAlternative> alternatives) => new()

@@ -11,7 +11,7 @@ namespace Sts2Ai.Mod;
 internal static class Host
 {
     /// <summary>The game version GameBridge is written against; any other turns the mod off.</summary>
-    private const string PinnedVersion = "v0.111.0";
+    private const string PinnedVersion = "v0.113.0";
 
     public const string Tag = "[Sts2Ai]";
 

@@ -55,7 +55,7 @@ internal sealed class RunSession : IDisposable
     private readonly IMacroPolicy _macro;
     private readonly Action<Observation>? _observed;
     private readonly PromptSelector _selector;
-    private readonly IDisposable _selectorScope;
+    private IDisposable? _selectorScope;
     private readonly List<string> _trace = [];
     private readonly List<ulong> _mapHashes = [];
     private readonly List<CombatEntry> _combats = [];
@@ -130,7 +130,6 @@ internal sealed class RunSession : IDisposable
         _observed = observed;
         _selector = new PromptSelector(pump, (choice, picks) => Record(Surfaces.CardChoice, string.Join(",", picks), () => PromptScreen(choice)),
             CardReward, Bundle);
-        _selectorScope = CardSelectCmd.PushSelector(_selector);
         RewardsSet.testSelector = set =>
         {
             set.ThrowInTestIfRewardsNotTaken = false;
@@ -160,12 +159,13 @@ internal sealed class RunSession : IDisposable
         // StartRunLobby.BeginRunLocally: the acts are rolled from the seed.
         var actRng = new Rng(StringHelper.GetDeterministicHashCode(setup.Seed), "act_selection");
         var acts = ActModel.GetRandomList(actRng, UnlockState.all, isMultiplayer: false).Select(a => a.ToMutable()).ToList();
-        var run = RunState.CreateForNewRun([player], acts, [], GameMode.Standard, setup.Ascension, setup.Seed);
+        var run = RunState.CreateForNewRun([player], acts, [], GameMode.Standard, isCustom: false, setup.Ascension, setup.Seed);
         RunManager.Instance.SetUpNewSingleplayer(run, shouldSave: false);
 
         var session = new RunSession(pump, setup, player, run, choices, combat, macro, observed);
         try
         {
+            session.UseSelector();
             // NGame.StartRun without the nodes. A loadout's relics are its final state, pickups done (their potion
             // slots included), so their AfterObtained does not run again.
             if (setup.Loadout?.Relics == null) session.Await(RunManager.Instance.FinalizeStartingRelics());
@@ -203,6 +203,7 @@ internal sealed class RunSession : IDisposable
         {
             // NMainMenu's Continue and NGame.LoadRun without the nodes.
             session.Await(RunManager.Instance.SetUpSavedSingleplayer(run, save));
+            session.UseSelector();
             Checkpoint.RestoreRelics(opened, player);
             // Continue always saves; a clone saves nothing, as a run this simulator starts.
             AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
@@ -220,6 +221,9 @@ internal sealed class RunSession : IDisposable
             throw;
         }
     }
+
+    /// <summary>The run's card prompts go to this session: the game keeps its selectors with the run it has set up.</summary>
+    private void UseSelector() => _selectorScope = RunManager.Instance.CardSelectorStack.PushSelector(Player, _selector);
 
     /// <summary>The current node's SL clone: its checkpoint and the decisions since, with the run's rule.</summary>
     public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), [.. _trace.Skip(NodeStart)], Setup.AutoWin);
@@ -419,7 +423,7 @@ internal sealed class RunSession : IDisposable
         if (room.Encounter.ShouldGiveRewards) Track(room.OfferRoomEndRewards(), "offer combat rewards");
         else
         {
-            Track(RunManager.Instance.ProceedFromTerminalRewardsScreen(), "proceed without rewards");
+            Track(RunManager.Instance.ProceedFromTerminalRewardsScreenAsync(), "proceed without rewards");
             _progress.Left = true;
         }
         return false;
@@ -468,7 +472,7 @@ internal sealed class RunSession : IDisposable
 
     private bool ShopDecision(MerchantRoom room)
     {
-        var inventory = room.GetLocalInventory();
+        var inventory = RunManager.Instance.MerchantSynchronizer.GetLocalInventory();
         if (Ask(Surfaces.Shop, ShopActions.Legal(inventory), () => ShopActions.Screen(inventory)) is not { } action) return true;
         Track(ShopActions.Start(inventory, action), action.ToString());
         if (action == MacroAction.Leave) _progress.Left = true;
@@ -510,7 +514,7 @@ internal sealed class RunSession : IDisposable
             _progress.RelicPicked = true;
             return true;
         }
-        Track(RunManager.Instance.ProceedFromTerminalRewardsScreen(), "leave treasure");
+        Track(RunManager.Instance.ProceedFromTerminalRewardsScreenAsync(), "leave treasure");
         _progress.Left = true;
         return false;
 
@@ -645,7 +649,7 @@ internal sealed class RunSession : IDisposable
         RewardsSet.testSelector = null;
         HeadlessPatches.CrystalSphereShown = null;
         HeadlessPatches.NodeEntered = null;
-        _selectorScope.Dispose();
+        _selectorScope?.Dispose();
         // Nothing runs while a prompt waits: the game stands where it asked until its run is cleaned up.
         _pump.Drain();
         RunManager.Instance.CleanUp(graceful: true);

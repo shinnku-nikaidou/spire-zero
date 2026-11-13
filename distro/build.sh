@@ -28,7 +28,7 @@ git -C "$R" archive "$rev" | tar -x -C "$B/src"
 export DOTNET_ROOT="$HOME/.dotnet" DOTNET_CLI_TELEMETRY_OPTOUT=1
 dotnet="$HOME/.dotnet/dotnet"
 # The archive sits inside this checkout, so left alone the build would stamp the checkout's HEAD, not REV.
-set -- -p:Sts2BinDir="$R/tmp/gamebin/v0.111.0" -p:SourceRevisionId="$(git -C "$R" rev-parse "$rev")" \
+set -- -p:Sts2BinDir="$R/tmp/gamebin/v0.113.0" -p:SourceRevisionId="$(git -C "$R" rev-parse "$rev")" \
   -p:UseArtifactsOutput=true -p:ArtifactsPath="$B/art" -v q -nologo
 
 "$dotnet" build "$B/src/src/Sts2Ai.Mod" -c Release "$@"

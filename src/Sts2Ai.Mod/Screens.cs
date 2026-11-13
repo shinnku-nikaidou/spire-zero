@@ -94,9 +94,9 @@ internal sealed class Screens
                 var ev = RunManager.Instance.EventSynchronizer.GetLocalEvent();
                 return Ask(run, me, Surfaces.Event, EventActions.Screen(ev, me), EventActions.Legal(ev));
             }
-            case NMerchantRoom or NMerchantInventory when settled && run.CurrentRoom is MerchantRoom room:
+            case NMerchantRoom or NMerchantInventory when settled && run.CurrentRoom is MerchantRoom:
             {
-                var inventory = room.GetLocalInventory();
+                var inventory = RunManager.Instance.MerchantSynchronizer.GetLocalInventory();
                 return Ask(run, me, Surfaces.Shop, ShopActions.Screen(inventory), ShopActions.Legal(inventory));
             }
             case NRestSiteRoom rest when settled:

@@ -12,7 +12,7 @@ nets learn it from the AI's own runs. Training runs the game's own `sts2.dll` he
 game's, not a model of them.
 
 This is an unofficial fan project, not affiliated with or endorsed by Mega Crit. It contains no game files: building
-and running it needs your own copy of the game, pinned at **v0.111.0**.
+and running it needs your own copy of the game, pinned at **v0.113.0** (the `public-beta` branch).
 
 ## Layout
 
@@ -20,7 +20,7 @@ and running it needs your own copy of the game, pinned at **v0.111.0**.
 | --- | --- |
 | `src/` | the .NET solution (`Sts2Ai.sln`): `Protocol` (the messages), `GameBridge` (reads and drives the game), `Brain` (the combat and macro brains), `Harness` (dispatch, records, reports, gates), `SimWorker` (the headless simulator and its command line), `Mod` (the in-game mod), `Tests` (the decision side's, which need no game files) and `SimWorker.Tests` |
 | `learn/` | offline training in Python (PyTorch): the run value V and the combat net, from self-play logs; the gate |
-| `weights/` | the nets, shared by all five characters: `weights/all/NAME.json`, kept in the repository's release `weights` and not in git (`weights/fetch.sh` downloads the champions' nets, `weights/put.sh NAME` adds one) |
+| `weights/` | the nets, shared by all six characters: `weights/all/NAME.json`, kept in the repository's release `weights` and not in git (`weights/fetch.sh` downloads the champions' nets, `weights/put.sh NAME` adds one) |
 | `eval/` | test seed files, champion files, reports and the ledger of nets and seed blocks |
 | `pool/` | the work pool that spreads self-play and evaluation over many machines ([pool/README.md](pool/README.md)) |
 | `distro/` | the script that builds the mod with its brain for every platform |
@@ -29,7 +29,7 @@ and running it needs your own copy of the game, pinned at **v0.111.0**.
 ## Building
 
 The game's assemblies are referenced, not shipped: copy `sts2.dll`, `GodotSharp.dll`, `SmartFormat.dll` and
-`0Harmony.dll` (and what they load) from the game's data folder to `tmp/gamebin/v0.111.0/`, or pass
+`0Harmony.dll` (and what they load) from the game's data folder to `tmp/gamebin/v0.113.0/`, or pass
 `-p:Sts2BinDir=PATH` (see `src/GameReferences.props`).
 
 ```bash

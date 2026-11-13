@@ -1,7 +1,6 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
-using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.GameActions;
@@ -28,23 +27,6 @@ internal static partial class HeadlessPatches
     }
 
     /// <summary>
-    /// A card removal is marked used by the shop's removal button (<c>NMerchantCardRemoval.OnCardRemovalUsed</c>), whoever
-    /// bought it: the player or Lord's Parasol. Headless there is no button, so this marks it.
-    /// </summary>
-    [HarmonyPatch(typeof(MerchantCardRemovalEntry), "OnTryPurchase", [typeof(MerchantInventory), typeof(bool), typeof(bool)])]
-    private static class CardRemovalUsed
-    {
-        private static void Postfix(MerchantCardRemovalEntry __instance, ref Task<(bool, int)> __result) => __result = MarkUsed(__instance, __result);
-
-        private static async Task<(bool, int)> MarkUsed(MerchantCardRemovalEntry removal, Task<(bool, int)> purchase)
-        {
-            var result = await purchase;
-            if (result.Item1) removal.SetUsed();
-            return result;
-        }
-    }
-
-    /// <summary>
     /// TestMode always takes the first bundle. With the policy's selector, this runs the screen's own path instead: reserve
     /// the choice, ask, sync the answer (<c>CardSelectCmd.FromChooseABundleScreen</c>).
     /// </summary>
@@ -53,7 +35,7 @@ internal static partial class HeadlessPatches
     {
         private static bool Prefix(Player player, IReadOnlyList<IReadOnlyList<CardModel>> bundles, ref Task<IEnumerable<CardModel>> __result)
         {
-            if (CardSelectCmd.Selector is not PromptSelector selector || CombatManager.Instance.IsEnding || bundles.Count == 0)
+            if (RunManager.Instance.CardSelectorStack.GetSelector(player) is not PromptSelector selector || CombatManager.Instance.IsEnding || bundles.Count == 0)
                 return true;
             var choices = RunManager.Instance.PlayerChoiceSynchronizer;
             uint choiceId = choices.ReserveChoiceId(player);

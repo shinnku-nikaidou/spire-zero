@@ -68,14 +68,12 @@ internal static class NodeRecord
         Prefix(harmony, typeof(RunManager), nameof(RunManager.ProceedFromTerminalRewardsScreen), nameof(RewardsDone));
         Prefix(harmony, typeof(ActChangeSynchronizer), nameof(ActChangeSynchronizer.SetLocalPlayerReady), nameof(RewardsDone));
         Prefix(harmony, typeof(TreasureRoomRelicSynchronizer), nameof(TreasureRoomRelicSynchronizer.PickRelicLocally), nameof(RelicPicked));
-        Prefix(harmony, typeof(MerchantEntry), nameof(MerchantEntry.OnTryPurchaseWrapper), nameof(Bought));
-        Prefix(harmony, typeof(MerchantCardRemovalEntry), nameof(MerchantCardRemovalEntry.OnTryPurchaseWrapper), nameof(Bought));
+        Prefix(harmony, typeof(MerchantSynchronizer), nameof(MerchantSynchronizer.PurchaseLocalEntry), nameof(Bought));
         Prefix(harmony, typeof(CrystalSphereMinigame), nameof(CrystalSphereMinigame.CellClicked), nameof(Divined));
         Postfix(harmony, typeof(EventSynchronizer), nameof(EventSynchronizer.ChooseLocalOption), nameof(EventRunning));
         Postfix(harmony, typeof(RestSiteSynchronizer), nameof(RestSiteSynchronizer.ChooseLocalOption), nameof(RestRunning));
         Postfix(harmony, typeof(RewardsSetSynchronizer), nameof(RewardsSetSynchronizer.SelectLocalReward), nameof(RewardRunning));
-        Postfix(harmony, typeof(MerchantEntry), nameof(MerchantEntry.OnTryPurchaseWrapper), nameof(PurchaseRunning));
-        Postfix(harmony, typeof(MerchantCardRemovalEntry), nameof(MerchantCardRemovalEntry.OnTryPurchaseWrapper), nameof(PurchaseRunning));
+        Postfix(harmony, typeof(MerchantSynchronizer), nameof(MerchantSynchronizer.PurchaseLocalEntry), nameof(PurchaseRunning));
         Postfix(harmony, typeof(CrystalSphereMinigame), nameof(CrystalSphereMinigame.CellClicked), nameof(DivinationRunning));
     }
 
@@ -254,11 +252,13 @@ internal static class NodeRecord
 
     private static void RelicPicked(int? index) => Add(Surfaces.Treasure, index is int i ? MacroAction.Of(MacroAction.Relic, i) : MacroAction.RelicSkip);
 
-    /// <summary>A purchase the shop cannot make (too little gold, sold out) changes nothing; a relic buying for free is no decision.</summary>
-    private static void Bought(MerchantEntry __instance, MerchantInventory? inventory, bool ignoreCost) => Guard(() =>
+    /// <summary>A purchase the shop cannot make (too little gold, sold out) changes nothing. Only the player's own purchase
+    /// comes this way: a relic buying for free goes past it.</summary>
+    private static void Bought(MerchantEntry entry) => Guard(() =>
     {
-        if (ignoreCost || inventory == null || _run?.CurrentRoom is not MerchantRoom) return;
-        var action = ShopActions.Of(inventory, __instance);
+        if (_run?.CurrentRoom is not MerchantRoom) return;
+        var inventory = RunManager.Instance.MerchantSynchronizer.GetLocalInventory();
+        var action = ShopActions.Of(inventory, entry);
         if (ShopActions.Legal(inventory).Contains(action)) Add(Surfaces.Shop, action);
     });
 

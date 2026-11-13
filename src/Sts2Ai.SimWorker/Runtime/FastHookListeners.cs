@@ -193,7 +193,8 @@ internal static class FastHookListeners
         }
         for (int i = 0; i < state.Modifiers.Count; i++) list.Add(state.Modifiers[i]);
         for (int i = 0; i < state.BadgeModels.Count; i++) list.Add(state.BadgeModels[i]);
-        if (state.MultiplayerScalingModel != null) list.Add(state.MultiplayerScalingModel);
+        for (int i = 0; i < state.RunModels.Count; i++) list.Add(state.RunModels[i]);
+        if (state.Dominion != null) list.Add(state.Dominion);
     }
 
     /// <summary>The list RunState.IterateHookListeners builds, in the same order. Combat listeners follow it lazily.</summary>
@@ -223,6 +224,7 @@ internal static class FastHookListeners
         }
         list.AddRange(state.Modifiers);
         list.AddRange(state.BadgeModels);
-        list.Add(state.MultiplayerScalingModel);
+        list.AddRange(state.RunModels);
+        if (state.Dominion != null) list.Add(state.Dominion);
     }
 }

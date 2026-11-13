@@ -1,5 +1,5 @@
 """The nets' token tables, the same for every character: every id of the game build, in learn/game_ids.json (written by the
-sim's `tables` command), so that five brains share one shape. Entry 0 reads any other id, as one newer than the file."""
+sim's `tables` command), so that every character shares one shape. Entry 0 reads any other id, as one newer than the file."""
 
 import json
 from pathlib import Path

@@ -103,7 +103,7 @@ internal sealed class CombatSession : IDisposable
         _trace = trace;
         _selector = selector;
         _prompts = prompts;
-        _selectorScope = CardSelectCmd.PushSelector(selector);
+        _selectorScope = RunManager.Instance.CardSelectorStack.PushSelector(player, selector);
     }
 
     /// <param name="prompts">Answers the card prompts of the combat's start, and those of a combat played by <see cref="Step"/>.</param>
@@ -145,7 +145,7 @@ internal sealed class CombatSession : IDisposable
         var encounterAct = ModelDb.ActsByIndex[setup.ActIndex].FirstOrDefault(a => a.AllEncounters.Contains(setup.Encounter));
         if (encounterAct != null) acts[setup.ActIndex] = encounterAct;
 
-        var run = RunState.CreateForTest([player], acts, null, GameMode.Standard, setup.Ascension, setup.Seed);
+        var run = RunState.CreateForTest([player], acts, null, GameMode.Standard, isCustomGame: false, setup.Ascension, setup.Seed);
         run.CurrentActIndex = setup.ActIndex;
         run.Map = new MockSinglePointActMap();
         RunManager.Instance.SetUpTest(run, new NetSingleplayerGameService(), disableCombatStateSync: true, shouldSave: false);

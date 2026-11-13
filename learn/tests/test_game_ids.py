@@ -9,7 +9,7 @@ def test_each_table_starts_with_unknown_and_holds_each_id_once_in_order():
 
 def test_the_tables_hold_every_character_and_what_the_nets_read():
     combat, macro = game_ids.combat_tables(), game_ids.macro_tables()
-    for character in ("IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT"):
+    for character in ("IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT", "FOOL"):
         assert f"character:{character}" in macro["context"]
         assert f"STRIKE_{character}" in combat["cards"] and f"STRIKE_{character}" in macro["cards"]
     assert {i.split(":")[0] for i in combat["context"][1:]} == {"encounter", "character"}  # it says the room and the act

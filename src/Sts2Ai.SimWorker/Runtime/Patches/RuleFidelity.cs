@@ -52,8 +52,9 @@ internal static partial class HeadlessPatches
 
     /// <summary>
     /// Methods whose TestMode branch skips an RNG draw (or a grab-bag pull) that the shipped game makes, which would
-    /// shift every later draw from that stream. Their shipped branch is plain logic, so it runs as-is with the
-    /// TestMode check replaced by a constant.
+    /// shift every later draw from that stream, or skips putting the run's state back: a shop left without the game's
+    /// leaving it keeps its goods as the run's shop until the next one. Their shipped branch is plain logic, so it runs
+    /// as-is with the TestMode check replaced by a constant.
     /// </summary>
     [HarmonyPatch]
     private static class ShippedBranch
@@ -63,6 +64,7 @@ internal static partial class HeadlessPatches
             AccessTools.Method(typeof(MerchantPotionEntry), nameof(MerchantPotionEntry.CalcCost)),
             AccessTools.Method(typeof(Cauldron), "GenerateRewards"),
             AccessTools.Method(typeof(CallingBell), "GenerateRewards"),
+            AccessTools.Method(typeof(MerchantRoom), nameof(MerchantRoom.Exit)),
         ];
 
         private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
