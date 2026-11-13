@@ -310,6 +310,9 @@ classes = ["ModelId", "LocString"]
 # The simulator the engine is held against keeps the shipped rule where test mode skips a draw (its RuleFidelity).
 "TestMode.IsOn@Cauldron.GenerateRewards" = "false"
 "TestMode.IsOn@CallingBell.GenerateRewards" = "false"
+# Fur Coat asks whether the room the party stands in is one it marked, through the map's point at the current
+# coordinate. The map is not held; the point at a coordinate has that coordinate.
+"MapPoint.coord@FurCoat.AfterCreatureAddedToCombat" = "g::dispatch::i_run_state::current_map_coord(g::entities_players::player::run_state(g::models::relic_model::owner(me, c), c), c).unwrap()"
 # An action of the engine has no task that could have failed: a failure is a panic.
 "GameAction.Exception" = "Exception::default()"
 # One player, no network.
