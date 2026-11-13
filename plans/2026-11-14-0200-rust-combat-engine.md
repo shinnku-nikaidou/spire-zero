@@ -106,3 +106,22 @@
 - 02:19 用戶：所有計畫檔由 `tmp/plans` 搬到 `plans/` 並進 git，檔名都帶到分鐘（四個舊檔補上建立時間），四處機器位址改成名稱；
   之前這一節寫的時間是估的、比時鐘快，已照檔案與 commit 時間改正。用戶另囑：經常 commit + push，全自動，不必問。
   兩個工作階段已收到新路徑的通知（排隊中，未確認已讀；`tmp/plans` 留了指向 `plans/` 的符號連結，舊路徑照樣寫得到）。
+- 03:00 engine-bridge（步驟 2）回報：`sim parity` 與 `src/Sts2Ai.Engine` 已 commit、push（三個 commit）。
+  - `sim parity`：真遊戲用帶種子的隨機策略打完一場並記下每個決策，再拿第二世界逐點對：匯入、走步（帶著走的世界，
+    分歧後在下一個對得上的決策重建）、續打。輸出每場一行 JSON（`--out`）、總結（依第一個不同的 JSON 路徑、依動作作用的
+    牌／藥水分組）、每個 id 的涵蓋表（`--coverage`）。第二世界由 `ISecondWorlds` 工廠給：`--world replay`（現有的 SL
+    重播世界）、`--world determinized`（同一個世界但隱藏狀態重抽，用來反過來測工具）。`--workers N` 分給 N 個行程。
+  - `--world replay` 全量（6 角色 × A0、A10 × 90 個遭遇 × 4 套配置，seed 1，每個決策都續打）：4,320 場、104,528 個決策，
+    匯入 104,528 次、走步 104,528 步、續打 3,528,527 步，**0 分歧、0 場失敗**（12 個行程 21 分鐘）。預設的 2 套配置
+    2,160 場、53,444 個決策同樣 0 分歧（14 個行程 5 分 20 秒）。涵蓋：牌 715/717（671 張被打出過）、能力 283/304、
+    遺物 316/316、藥水 68/68、怪物 113/122、遭遇 89/90、充能球 5/5、附魔 22/23、苦痛 7/7；沒遇到的是遊戲自己的測試怪、
+    DEPRECATED_*、MAD_SCIENCE，與 21 個只在特定招式／牌之後才出現的能力。
+  - 工具自測：`--world determinized` 720 場：匯入 0 分歧（17,706 次），走步 4,388、續打 4,899 個分歧，幾乎都在
+    `end_turn` 之後的 `hand[].id`，正是「匯出漏了隱藏狀態」該有的樣子。比較邏輯另有 18 個單元測試（假世界注入差異）。
+  - `Sts2Ai.Engine`：十二個 C 函式的 P/Invoke、safe handle、`EngineWorld : ICombatWorld`（快照 = 原生世界的複本，跟著
+    快照物件被回收；世界互不共用，可各在一條執行緒）。函式庫路徑只有一處：環境變數 `STS2AI_ENGINE_LIB`，否則程式旁邊
+    的檔。真函式庫還沒有，所以對一個用 rustc 現編的替身函式庫測（8 個測試；`dotnet test src/Sts2Ai.Tests` 因此需要 rustc）。
+  - 沒做：`EngineExport.cs` 與 `--world engine`。`gen/schema.json` 02:59 才出現（format 1），`engine/DESIGN.md` 還沒寫它的
+    格式與匯出的 JSON 長相，引擎也還沒有 `import.rs`／`ffi.rs`。格式寫定後由這個工作階段接著做。
+  - 要協調決定或知道的事在共享筆記 `engine-bridge.md`：戰敗只比 status；提示中途無法匯入；`sz_world_run` 的格式是
+    我假設的；快照靠 GC 釋放；`CombatSession.Start` 在 A10 滿藥水時會讓整個行程之後全失敗（未修，不是我的檔）。
