@@ -268,7 +268,8 @@ public sealed partial class Body
         for (int i = 0; i < parts.Count; i++)
         {
             var body = new StringBuilder();
-            foreach (var s in parts[i]) Stmt(s, body);
+            // (A part goes on after a test that always leaves: a goto may still reach what follows.)
+            foreach (var s in parts[i]) { Stmt(s, body); dead = false; }
             bool leaves = parts[i].LastOrDefault() is IReturnOperation or IThrowOperation or IBranchOperation { BranchKind: BranchKind.GoTo };
             if (!leaves && i == parts.Count - 1) endReached = true;
             sb.Append($"{i} => {{\n{body}{(leaves ? "" : $"{pc} = {i + 1};\n")}}}\n");
