@@ -73,7 +73,7 @@ impl ffi::World for Live {
                 self.combat = before;
                 return Err(e);
             }
-            Ok(()) => pump(&mut c),
+            Ok(()) => pump(&mut c).and_then(|()| cap(&mut c)),
         };
         let stopped = if c.choices.stopped {
             Err(Stop::Choice)
@@ -227,6 +227,31 @@ fn start(action: &str, c: &mut Combat) -> Result<(), String> {
         _ => return Err(format!("{action}: not an action")),
     }
     Ok(())
+}
+
+/// The rounds a fight may last. The game has no limit; the simulator the engine stands in for has this one
+/// (FightCap in the simulator), so that a player who can no longer hurt the enemies does not play forever.
+const MAX_ROUNDS: i32 = 80;
+
+/// The fight round cap: when the player can act again and the fight is past its last round, the player is killed the
+/// way the game's own kill command does, forced so that nothing revives them, and the win condition is checked.
+fn cap(c: &mut Combat) -> R<()> {
+    let manager = c.s.combat_manager__instance;
+    if !g::combat::combat_manager::is_in_progress(manager, c) {
+        return Ok(());
+    }
+    let state = g::combat::combat_manager::debug_only_get_state(manager, c);
+    if is_null(&state) || g::combat::combat_state::round_number(state, c) <= MAX_ROUNDS {
+        return Ok(());
+    }
+    let player = g::combat::combat_state::players(state, c)[0];
+    let creature = g::entities_players::player::creature(player, c);
+    if g::entities_creatures::creature::is_dead(creature, c) {
+        return Ok(());
+    }
+    g::commands::creature_cmd::kill__creature_bool(creature, true, c)?;
+    g::combat::combat_manager::check_win_condition__0(manager, c)?;
+    pump(c)
 }
 
 /// Runs the queued actions and the turn loop in turn until neither can go on.

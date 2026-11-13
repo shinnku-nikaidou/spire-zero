@@ -132,6 +132,9 @@ it.
 | a struct; a class named in `[values]` (`ModelId`) | a Rust struct held by value and compared by content |
 | `List<T>`, `IEnumerable<T>`, `IReadOnlyList<T>`, arrays | `Vec<T>` by value; LINQ through `rt::linq` (`where_`, `select`, ...), evaluated at once. A local that only reads a list out of a field (`var hand = pile.Cards`) stands for that field, so it sees later changes as the C# reference does. A null collection is an empty one |
 | a collection field the game declares nullable (`HashSet<CardKeyword>? _keywords`, made when first asked for) | the collection and a flag beside it, `_keywords__set`: a collection is a value and has no null of its own. `== null`, `is null`, `??`, `??=` and `?.` on the field read the flag, a write sets it, and the import sets it from the export's `null`. Any other collection that is null is an empty one |
+| a property that hands out a collection of another object (`=> GetInternalData<Data>().list`), changed in place | the other object is computed, then its field is changed |
+| what follows a test that is always true and always leaves (`if (TestMode.IsOn) return;`) | not translated: it never runs |
+| a member that is presentation as a whole, handed over as a function | a function that does nothing |
 | a list local taken from another local (`var list2 = results; list2.Add(x)`), or from one of two fields (`var list = side == Player ? _allies : _enemies; list.Add(x)`) | the same list under two names, as in C# |
 | a method written with `yield` (`IterateHookListeners`); `foreach` over a call of one | a second function `m__each(.., c, k)` whose body hands each value to `k` as it reaches it; `foreach` gives its body as `k` (a `break` ends the walk, a `return` keeps its value outside and ends it). In C# the sequence and the loop's body take turns, so what the body changes is seen by the rest of the sequence (a model an earlier listener removed is not called): here too. A virtual slot with one such body has the `__each` dispatcher. Anything else that takes the sequence (`AddRange`, LINQ) takes all of it at once: `m(..)` collects |
 | a LINQ chain that C# evaluates when it is walked (`foreach (var x in list.Where(f))`) | evaluated where it is written: a known difference where the loop's body changes what `f` reads |
@@ -296,6 +299,9 @@ with two waits (`manual/combat_manager.rs`); the game's two signals are fields o
 game's objects (`Combat.x`).
 
 - A task the game starts and does not await (`TaskHelper.RunSafely(..)`) runs where it is started.
+- The fight round cap is the simulator's rule, not the game's, and `world.rs` has it as the simulator does: when the
+  player can act again in round 81, the player is killed by the game's own kill command, forced, and the win
+  condition is checked.
 - A hook that asks the player in the game is left waiting while the turn goes on and finishes later as an action of
   its own. Here its prompt stops the step like any other, and when the step is run again with the answer, the hook's
   rest runs where the hook stands, before what follows it. No combat of the check has shown a difference from this;
