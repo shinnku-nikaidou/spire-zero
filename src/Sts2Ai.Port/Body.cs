@@ -212,8 +212,53 @@ public sealed partial class Body
     private void Block(IOperation? op, StringBuilder sb)
     {
         if (op == null) return;
-        if (op is IBlockOperation b) foreach (var s in b.Operations) Stmt(s, sb);
+        if (op is IBlockOperation { Operations: var ops } lb && ops.Any(o => o is ILabeledOperation)) Labeled(lb, sb);
+        else if (op is IBlockOperation b) foreach (var s in b.Operations) Stmt(s, sb);
         else Stmt(op, sb);
+    }
+
+    /// <summary>Where each label of a block with labels is: the loop of its block, the variable that says which part
+    /// runs next, and the number of the part the label starts.</summary>
+    private readonly Dictionary<ISymbol, (string Loop, string Pc, int Part)> labels = new(Eq);
+
+    /// <summary>The locals of blocks with labels: declared before the block's loop, so every part sees them.</summary>
+    private readonly HashSet<ISymbol> declaredAhead = new(Eq);
+
+    /// <summary>A block with labels (the decompiler's gotos): its statements are cut into parts at the labels, and a
+    /// loop runs the parts, one after the other or the one a goto names.</summary>
+    private void Labeled(IBlockOperation b, StringBuilder sb)
+    {
+        string loop = "'g" + tmp++, pc = Tmp("pc");
+        var parts = new List<List<IOperation>> { new() };
+        foreach (var s in b.Operations)
+        {
+            if (s is ILabeledOperation lab)
+            {
+                parts.Add([]);
+                labels[lab.Label] = (loop, pc, parts.Count - 1);
+                if (lab.Operation != null) parts[^1].Add(lab.Operation);
+            }
+            else parts[^1].Add(s);
+        }
+        foreach (var s in parts.SelectMany(p => p).OfType<IVariableDeclarationGroupOperation>())
+            foreach (var d in s.Declarations.SelectMany(x => x.Declarators))
+            {
+                if (w.IsDropped(d.Symbol.Type)) continue;
+                declaredAhead.Add(d.Symbol);
+                sb.Append($"let mut {NameOf(d.Symbol)}: {T(d.Symbol.Type)} = {(World.IsTask(d.Symbol.Type, out _) ? "Ok(Default::default())" : "Default::default()")};\n");
+            }
+        sb.Append($"let mut {pc}: i32 = 0;\n{loop}: loop {{\nmatch {pc} {{\n");
+        bool endReached = false;
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var body = new StringBuilder();
+            foreach (var s in parts[i]) Stmt(s, body);
+            bool leaves = parts[i].LastOrDefault() is IReturnOperation or IThrowOperation or IBranchOperation { BranchKind: BranchKind.GoTo };
+            if (!leaves && i == parts.Count - 1) endReached = true;
+            sb.Append($"{i} => {{\n{body}{(leaves ? "" : $"{pc} = {i + 1};\n")}}}\n");
+        }
+        sb.Append(endReached ? $"_ => break {loop},\n" : "_ => unreachable!(),\n").Append("}\n}\n");
+        Written++;
     }
 
     private string Sub(IOperation? op)
@@ -244,6 +289,8 @@ public sealed partial class Body
                     if (inv.Instance != null && (w.IsDropped(inv.Instance.Type) || inv.Instance is IMemberReferenceOperation { Member: var im } && World.IsSource(im.ContainingType) && w.IsDropMember(im))) continue;
                     if (m.ReturnsVoid && m.Parameters.Any(p => w.IsDropped(p.Type))) continue;
                     if (IsPureName(m.Name) || m.ContainingType.Name is "ModelDb") continue;
+                    // A task run on the side is what the task is: its own calls decide.
+                    if (m is { Name: "RunSafely", ContainingType.Name: "TaskHelper" }) continue;
                     return true;
                 case IObjectCreationOperation { Type: INamedTypeSymbol t } when World.IsSource(t) && !w.IsDropped(t) && t.TypeKind == TypeKind.Class:
                     if (t.Name.Contains("ChoiceContext") || t.Name.EndsWith("Exception")) continue;
@@ -297,7 +344,15 @@ public sealed partial class Body
                     string code = ExprStmt(es.Operation);
                     if (code.Length > 0) { sb.Append(code).Append(";\n"); Written++; }
                 }
-                catch (Dropped) { if (!Salvage(es.Operation, sb)) Leave(op); }
+                catch (Dropped)
+                {
+                    // A local that presentation was written to is presentation from here on: its value is not kept.
+                    IOperation? target = es.Operation switch { IAssignmentOperation a => a.Target, IIncrementOrDecrementOperation i => i.Target, _ => null };
+                    if (target is ILocalReferenceOperation { Local: var tainted }) droppedLocals.Add(tainted);
+                    // What a statement that is left out declares is not there.
+                    foreach (var declared in es.Operation.DescendantsAndSelf().OfType<ILocalReferenceOperation>().Where(l => l.IsDeclaration)) droppedLocals.Add(declared.Local);
+                    if (!Salvage(es.Operation, sb)) Leave(op);
+                }
                 return;
             case IVariableDeclarationGroupOperation g:
                 foreach (var decl in g.Declarations)
@@ -319,6 +374,13 @@ public sealed partial class Body
                 }
                 Written++;
                 return;
+            case IBranchOperation { BranchKind: BranchKind.GoTo } go:
+            {
+                if (!labels.TryGetValue(go.Target, out var to)) throw new Unsupported("a goto to a label inside another statement");
+                sb.Append($"{to.Pc} = {to.Part};\ncontinue {to.Loop};\n");
+                Written++;
+                return;
+            }
             case IBranchOperation br:
             {
                 if (loops.Count == 0) throw new Unsupported("a break outside a loop");
@@ -342,7 +404,8 @@ public sealed partial class Body
             }
             case IUsingDeclarationOperation ud: Stmt(ud.DeclarationGroup, sb); return;
             case ILockOperation lk: Stmt(lk.Body, sb); return;
-            case ILocalFunctionOperation: throw new Unsupported("local function");
+            // A local function is written where it is used: handed over as a delegate.
+            case ILocalFunctionOperation: return;
             case ILabeledOperation: throw new Unsupported("label");
             default:
                 // An expression in statement position (a constructor initializer arrives this way).
@@ -365,12 +428,25 @@ public sealed partial class Body
         catch (Dropped d) { throw new Unsupported($"{why} ({d.Message})"); }
     }
 
+    /// <summary>The labels of the try blocks with a finally that the code being written is inside of, innermost last.</summary>
+    private readonly Stack<(string Label, int Frame)> tries = new();
+
+    /// <summary>The try block with a finally around the code being written, in the same member or lambda.</summary>
+    private string? TryAround => tries.Count > 0 && tries.Peek().Frame == frames.Count ? tries.Peek().Label : null;
+
+    /// <summary>The statement that leaves with what the member returns: out of the member, or out of the try block
+    /// around it whose finally has to run first.</summary>
+    private string LeaveWith(string value) => TryAround is { } label ? $"break {label} Some({value});" : $"return {value};";
+
     private string Return(IOperation? value)
     {
         var f = frames.Peek();
         if (f.Iterator) throw new Unsupported("return in an iterator");
         if (value == null)
+        {
+            if (TryAround != null) return LeaveWith(f.ReturnsTask && f.Async ? "Ok(())" : f.Outs.Count > 0 ? OutTuple(f, null) : "()");
             return f.ReturnsTask && f.Async ? "return Ok(());" : f.Outs.Count > 0 ? $"return {OutTuple(f, null)};" : "return;";
+        }
         string v;
         try { v = Expr(value); }
         catch (Dropped d)
@@ -381,8 +457,8 @@ public sealed partial class Body
             w.Rep.Count("a return of presentation left as a panic");
             return $"panic!(\"{Where}: {d.Message.Replace("\"", "'")}: presentation only\");";
         }
-        if (f.ReturnsTask && f.Async) return $"return Ok({v});";
-        return f.Outs.Count > 0 ? $"{{ let __r = {v}; return {OutTuple(f, "__r")}; }}" : $"return {v};";
+        if (f.ReturnsTask && f.Async) return LeaveWith($"Ok({v})");
+        return f.Outs.Count > 0 ? $"{{ let __r = {v}; {LeaveWith(OutTuple(f, "__r"))} }}" : LeaveWith(v);
     }
 
     private void Declare(IVariableDeclaratorOperation d, IOperation? init, StringBuilder sb, IOperation whole)
@@ -394,10 +470,19 @@ public sealed partial class Body
             Leave(whole);
             return;
         }
+        // A text only presentation reads (the words of a log line) goes with it.
+        if (local.Type.SpecialType == SpecialType.System_String && OnlyPresentationReads(local, whole))
+        {
+            droppedLocals.Add(local);
+            Leave(whole);
+            return;
+        }
         string type = T(local.Type);
+        // In a block with labels the local is declared before the block's loop.
+        string let = declaredAhead.Contains(local) ? NameOf(local) : $"let mut {NameOf(local)}: {type}";
         if (init == null)
         {
-            sb.Append($"let mut {NameOf(local)}: {type} = Default::default();\n");
+            if (!declaredAhead.Contains(local)) sb.Append($"{let} = Default::default();\n");
             return;
         }
         // A list read out of a field stays that field: C# holds a reference, and sees later changes.
@@ -415,7 +500,7 @@ public sealed partial class Body
         try
         {
             string code = Expr(init);
-            sb.Append($"let mut {NameOf(local)}: {type} = {code};\n");
+            sb.Append($"{let} = {code};\n");
             Written++;
         }
         catch (Dropped)
@@ -425,6 +510,57 @@ public sealed partial class Body
         }
     }
 
+    /// <summary>Whether nothing but presentation follows the statement in its round of the loop around it (or in the
+    /// member, with no loop around it).</summary>
+    private bool NothingAfter(IOperation statement)
+    {
+        for (IOperation at = statement; at.Parent != null; at = at.Parent)
+        {
+            switch (at.Parent)
+            {
+                case IBlockOperation block:
+                    foreach (var later in block.Operations.SkipWhile(o => o != at).Skip(1))
+                        if (HoldsGameCall(later) || WritesOuterLocal(later) || later is IReturnOperation { ReturnedValue: not null }) return false;
+                    break;
+                case IConditionalOperation: break;
+                case ILoopOperation or IAnonymousFunctionOperation or IMethodBodyOperation: return true;
+                default: return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Whether the code writes a local declared outside of it.</summary>
+    private bool WritesOuterLocal(IOperation code)
+    {
+        var own = new HashSet<ISymbol>(code.Descendants().OfType<IVariableDeclaratorOperation>().Select(d => (ISymbol)d.Symbol), Eq);
+        foreach (var d in code.Descendants())
+        {
+            IOperation? target = d switch { IAssignmentOperation a => a.Target, IIncrementOrDecrementOperation i => i.Target, _ => null };
+            if (target is ILocalReferenceOperation l && !own.Contains(l.Local) && !w.IsDropped(l.Local.Type)) return true;
+            if (target is IParameterReferenceOperation) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether every use of the local is inside the arguments of a presentation call.</summary>
+    private bool OnlyPresentationReads(ILocalSymbol local, IOperation declaration)
+    {
+        IOperation root = declaration;
+        while (root.Parent != null) root = root.Parent;
+        foreach (var use in root.Descendants().OfType<ILocalReferenceOperation>().Where(r => Eq.Equals(r.Local, local)))
+        {
+            bool inPresentation = false;
+            for (IOperation? at = use.Parent; at != null && !inPresentation; at = at.Parent)
+            {
+                if (at is IInvocationOperation inv && w.IsDropped((inv.TargetMethod.ReducedFrom ?? inv.TargetMethod).OriginalDefinition.ContainingType)) inPresentation = true;
+                else if (at is IExpressionStatementOperation or IReturnOperation or IVariableDeclaratorOperation or IAnonymousFunctionOperation) break;
+            }
+            if (!inPresentation) return false;
+        }
+        return true;
+    }
+
     private void If(IConditionalOperation cond, StringBuilder sb)
     {
         string test;
@@ -432,6 +568,7 @@ public sealed partial class Body
         catch (Dropped d)
         {
             // A test on presentation: the whole statement goes when nothing in it is left.
+            if (!HoldsGameCall(cond) && !WritesOuterLocal(cond)) { Leave(cond); return; }
             int before = Written;
             string a = Sub(cond.WhenTrue), b = Sub(cond.WhenFalse);
             if (a.Length + b.Length > 0 || Written != before) throw new Unsupported($"a test on presentation guards game code ({d.Message})");
@@ -468,6 +605,7 @@ public sealed partial class Body
     private void ForEach(IForEachLoopOperation fe, StringBuilder sb)
     {
         if (fe.IsAsynchronous) throw new Unsupported("await foreach");
+        if (fe.LoopControlVariable is IDeclarationExpressionOperation { Expression: ITupleOperation parts }) { ForEachTuple(fe, parts, sb); return; }
         ILocalSymbol? local = fe.LoopControlVariable is IVariableDeclaratorOperation vd ? vd.Symbol : null;
         if (local == null) throw new Unsupported("foreach without a plain loop variable");
         string coll;
@@ -479,6 +617,8 @@ public sealed partial class Body
         catch (Dropped d)
         {
             droppedLocals.Add(local);
+            // Nothing in the loop but presentation and the ways out of a round of it.
+            if (!HoldsGameCall(fe.Body) && !WritesOuterLocal(fe.Body)) { Leave(fe); return; }
             int before = Written;
             string inner = Sub(fe.Body);
             if (inner.Length > 0 || Written != before) throw new Unsupported($"a loop over presentation holds game code ({d.Message})");
@@ -490,6 +630,39 @@ public sealed partial class Body
         string body = Sub(fe.Body);
         loops.Pop();
         sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
+        Written++;
+    }
+
+    /// <summary>foreach (var (a, b) in pairs): the items are taken apart in the loop's pattern.</summary>
+    private void ForEachTuple(IForEachLoopOperation fe, ITupleOperation parts, StringBuilder sb)
+    {
+        var binds = new StringBuilder();
+        string Pattern(ITupleOperation t) => "(" + string.Join(", ", t.Elements.Select(e => e switch
+        {
+            ITupleOperation inner => Pattern(inner),
+            IDiscardOperation => "_",
+            ILocalReferenceOperation { Local: var l } when w.IsDropped(l.Type) => Skip(l),
+            ILocalReferenceOperation { Local: var l } => Bind(l),
+            _ => throw new Unsupported("foreach without a plain loop variable"),
+        })) + ")";
+        string Skip(ILocalSymbol l) { droppedLocals.Add(l); return "_"; }
+        string Bind(ILocalSymbol l) { binds.Append($"let mut {NameOf(l)}: {T(l.Type)} = {NameOf(l)};\n"); return NameOf(l); }
+        string pattern = Pattern(parts);
+        // A dictionary's items are pairs.
+        var walked = fe.Collection;
+        while (walked is IConversionOperation { IsTryCast: false } cv) walked = cv.Operand;
+        if (World.CollOf(walked.Type) == World.Coll.Dict && parts.Elements.Length == 2)
+        {
+            string[] halves = pattern[1..^1].Split(", ");
+            if (halves.Length != 2) throw new Unsupported("foreach over a dictionary with a nested pattern");
+            pattern = $"KeyValuePair {{ key: {halves[0]}, value: {halves[1]} }}";
+        }
+        string coll = IterSource(fe.Collection);
+        string label = "'l" + tmp++;
+        loops.Push(($"break {label};", $"continue {label};"));
+        string body = Sub(fe.Body);
+        loops.Pop();
+        sb.Append($"{label}: for {pattern} in {coll} {{\n{binds}{body}}}\n");
         Written++;
     }
 
@@ -511,7 +684,13 @@ public sealed partial class Body
     {
         var head = new StringBuilder();
         foreach (var b in fl.Before) Stmt(b, head);
-        string test = fl.Condition == null ? "true" : NoDrop(fl.Condition, "a loop test on presentation");
+        string test;
+        try { test = fl.Condition == null ? "true" : Expr(fl.Condition); }
+        catch (Dropped d)
+        {
+            if (!HoldsGameCall(fl.Body) && !WritesOuterLocal(fl.Body)) { Leave(fl); return; }
+            throw new Unsupported($"a loop test on presentation ({d.Message})");
+        }
         string label = "'l" + tmp++, inner = "'k" + tmp++;
         loops.Push(($"break {label};", $"break {inner};"));
         string body = Sub(fl.Body);
@@ -558,7 +737,15 @@ public sealed partial class Body
     {
         string subject = Tmp("s");
         string label = "'s" + tmp++;
-        string value = NoDrop(sw.Value, "a switch on presentation");
+        string value;
+        try { value = Expr(sw.Value); }
+        catch (Dropped d)
+        {
+            // A switch on presentation with nothing but presentation in it, and nothing after it that a way out of
+            // it (continue, return) could skip.
+            if (!HoldsGameCall(sw) && !WritesOuterLocal(sw) && NothingAfter(sw)) { Leave(sw); return; }
+            throw new Unsupported($"a switch on presentation ({d.Message})");
+        }
         var arms = new StringBuilder();
         string? fallback = null;
         loops.Push(($"break {label};", loops.Count > 0 ? loops.Peek().Continue : null));
@@ -597,13 +784,34 @@ public sealed partial class Body
     private void Try(ITryOperation tr, StringBuilder sb)
     {
         // The engine has no exceptions to catch: a panic ends the action. A finally block runs after the body.
-        if (tr.Catches.Length > 0 && tr.Catches.Any(c => Sub(c.Handler).Length > 0 && !IsRethrowOnly(c)))
+        if (tr.Catches.Length > 0 && tr.Catches.Any(c => !IsRethrowOnly(c) && HandlerDoesSomething(c)))
             w.Rep.Note("catch block left out", Where);
         bool returnsInside = tr.Body.Descendants().Any(d => d is IReturnOperation && !InsideLambda(d, tr.Body));
         string fin = tr.Finally == null ? "" : Sub(tr.Finally);
-        if (fin.Length > 0 && returnsInside) throw new Unsupported("return inside try with a finally that does something");
+        if (fin.Length > 0 && returnsInside)
+        {
+            // A return inside leaves the body with its value, the finally block runs, then the member returns it.
+            // (A stop for a card prompt leaves at once: the copy it ran on is thrown away.)
+            string label = "'t" + tmp++;
+            tries.Push((label, frames.Count));
+            var inner = new StringBuilder();
+            Block(tr.Body, inner);
+            tries.Pop();
+            sb.Append($"let __left = {label}: {{\n{inner}None\n}};\n{fin}if let Some(__v) = __left {{\n{LeaveWith("__v")}\n}}\n");
+            Written++;
+            return;
+        }
         Block(tr.Body, sb);
         sb.Append(fin);
+    }
+
+    /// <summary>Whether a catch block holds anything but presentation. It is never written: only noted.</summary>
+    private bool HandlerDoesSomething(ICatchClauseOperation c)
+    {
+        int written = Written, leftOut = LeftOut;
+        try { return Sub(c.Handler).Length > 0; }
+        catch (Exception e) when (e is Unsupported or Dropped) { return true; }
+        finally { Written = written; LeftOut = leftOut; }
     }
 
     private static bool IsRethrowOnly(ICatchClauseOperation c) => c.Handler.Operations.All(o => o is IThrowOperation or IExpressionStatementOperation);

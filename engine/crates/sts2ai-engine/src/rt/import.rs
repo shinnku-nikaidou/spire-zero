@@ -14,22 +14,36 @@ pub trait Rd: Sized {
 }
 
 pub fn object(v: &Value) -> Res<&Object> {
-    v.as_object().ok_or_else(|| format!("not an object: {}", brief(v)))
+    v.as_object()
+        .ok_or_else(|| format!("not an object: {}", brief(v)))
 }
 
 pub fn array(v: &Value) -> Res<&Vec<Value>> {
-    v.as_array().ok_or_else(|| format!("not an array: {}", brief(v)))
+    v.as_array()
+        .ok_or_else(|| format!("not an array: {}", brief(v)))
 }
 
 fn brief(v: &Value) -> String {
     let text = v.to_string();
-    if text.len() > 80 { format!("{}..", &text[..text.char_indices().nth(80).map_or(text.len(), |x| x.0)]) } else { text }
+    if text.len() > 80 {
+        format!(
+            "{}..",
+            &text[..text.char_indices().nth(80).map_or(text.len(), |x| x.0)]
+        )
+    } else {
+        text
+    }
 }
 
 /// An object must have exactly this many members.
 pub fn members(o: &Object, count: usize) -> Res<()> {
     if o.len() != count {
-        return Err(format!("{} members where {} are expected: {}", o.len(), count, o.keys().cloned().collect::<Vec<_>>().join(", ")));
+        return Err(format!(
+            "{} members where {} are expected: {}",
+            o.len(),
+            count,
+            o.keys().cloned().collect::<Vec<_>>().join(", ")
+        ));
     }
     Ok(())
 }
@@ -47,9 +61,15 @@ pub fn field<T: Rd>(m: &Object, name: &str) -> Res<T> {
 }
 
 /// The objects of one arena.
-pub fn arena<T: Stored>(into: &mut Arena<T>, name: &str, v: &Value, read: fn(&Value) -> Res<T>) -> Res<()> {
+pub fn arena<T: Stored>(
+    into: &mut Arena<T>,
+    name: &str,
+    v: &Value,
+    read: fn(&Value) -> Res<T>,
+) -> Res<()> {
     for (i, o) in array(v)?.iter().enumerate() {
-        into.items.push(read(o).map_err(|e| format!("{name}[{i}]: {e}"))?);
+        into.items
+            .push(read(o).map_err(|e| format!("{name}[{i}]: {e}"))?);
     }
     Ok(())
 }
@@ -72,13 +92,15 @@ rd_int!(i8, i16, i32, i64, u8, u16, u32, u64);
 
 impl Rd for bool {
     fn rd(v: &Value) -> Res<Self> {
-        v.as_bool().ok_or_else(|| format!("not a bool: {}", brief(v)))
+        v.as_bool()
+            .ok_or_else(|| format!("not a bool: {}", brief(v)))
     }
 }
 
 impl Rd for f64 {
     fn rd(v: &Value) -> Res<Self> {
-        v.as_f64().ok_or_else(|| format!("not a number: {}", brief(v)))
+        v.as_f64()
+            .ok_or_else(|| format!("not a number: {}", brief(v)))
     }
 }
 
@@ -98,7 +120,9 @@ impl Rd for char {
 
 impl Rd for Dec {
     fn rd(v: &Value) -> Res<Self> {
-        let s = v.as_str().ok_or_else(|| format!("a decimal is written as a string: {}", brief(v)))?;
+        let s = v
+            .as_str()
+            .ok_or_else(|| format!("a decimal is written as a string: {}", brief(v)))?;
         Dec::parse(s).ok_or_else(|| format!("not a decimal: {s}"))
     }
 }
@@ -115,7 +139,9 @@ impl Rd for Str {
 
 impl Rd for String {
     fn rd(v: &Value) -> Res<Self> {
-        v.as_str().map(str::to_owned).ok_or_else(|| format!("not a string: {}", brief(v)))
+        v.as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| format!("not a string: {}", brief(v)))
     }
 }
 
@@ -123,7 +149,9 @@ impl Rd for Kind {
     fn rd(v: &Value) -> Res<Self> {
         match v {
             Value::Null => Ok(Kind::None),
-            Value::String(s) => crate::r#gen::kinds::kind_by_name(s).ok_or_else(|| format!("no class {s}")),
+            Value::String(s) => {
+                crate::r#gen::kinds::kind_by_name(s).ok_or_else(|| format!("no class {s}"))
+            }
             _ => Err(format!("not a class name: {}", brief(v))),
         }
     }
@@ -141,11 +169,16 @@ impl Rd for Obj {
         };
         match first {
             "canon" => Ok(crate::manual::canon::of(Kind::rd(&pair[1])?)),
-            "outside" => Err(format!("an object of {}, a class the engine does not hold", pair[1])),
+            "outside" => Err(format!(
+                "an object of {}, a class the engine does not hold",
+                pair[1]
+            )),
             arena => {
-                let tag = crate::r#gen::state::ARENA_NAMES.iter().position(|n| *n == arena && !n.is_empty());
+                let tag = crate::r#gen::state::ARENA_NAMES
+                    .iter()
+                    .position(|n| *n == arena && !n.is_empty());
                 let tag = tag.ok_or_else(|| format!("no arena {arena}"))?;
-                Ok(Obj::new(tag as u8, usize::rd(&pair[1])?, false))
+                Ok(Obj::new(tag as u16, usize::rd(&pair[1])?, false))
             }
         }
     }
@@ -159,7 +192,11 @@ impl Rd for usize {
 
 impl<T: Rd> Rd for Option<T> {
     fn rd(v: &Value) -> Res<Self> {
-        if v.is_null() { Ok(None) } else { Ok(Some(T::rd(v)?)) }
+        if v.is_null() {
+            Ok(None)
+        } else {
+            Ok(Some(T::rd(v)?))
+        }
     }
 }
 
@@ -168,7 +205,11 @@ fn items<T: Rd>(v: &Value) -> Res<Vec<T>> {
     if v.is_null() {
         return Ok(Vec::new());
     }
-    array(v)?.iter().enumerate().map(|(i, x)| T::rd(x).map_err(|e| format!("[{i}]: {e}"))).collect()
+    array(v)?
+        .iter()
+        .enumerate()
+        .map(|(i, x)| T::rd(x).map_err(|e| format!("[{i}]: {e}")))
+        .collect()
 }
 
 impl<T: Rd> Rd for Vec<T> {
@@ -186,7 +227,9 @@ fn layout<T: Rd>(o: &Object) -> Res<(Vec<T>, Vec<usize>, Vec<usize>)> {
 
 impl<T: Rd> Rd for Set<T> {
     fn rd(v: &Value) -> Res<Self> {
-        let Value::Object(o) = v else { return Ok(Set::from_items(items(v)?)) };
+        let Value::Object(o) = v else {
+            return Ok(Set::from_items(items(v)?));
+        };
         let (items, at, free) = layout(o)?;
         Set::from_layout(items, at, free)
     }
@@ -194,7 +237,9 @@ impl<T: Rd> Rd for Set<T> {
 
 impl<K: Rd, V: Rd> Rd for Dict<K, V> {
     fn rd(v: &Value) -> Res<Self> {
-        let Value::Object(o) = v else { return Ok(Dict::from_pairs(items(v)?)) };
+        let Value::Object(o) = v else {
+            return Ok(Dict::from_pairs(items(v)?));
+        };
         let (pairs, at, free) = layout(o)?;
         Dict::from_layout(pairs, at, free)
     }

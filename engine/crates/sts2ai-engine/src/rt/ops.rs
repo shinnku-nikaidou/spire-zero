@@ -8,6 +8,14 @@ use crate::r#gen::kinds::{Kind, is_subclass, kind_of};
 pub trait Val: Clone + PartialEq + Default + 'static {}
 impl<T: Clone + PartialEq + Default + 'static> Val for T {}
 
+/// C#'s cast of an object to a type parameter, `(T)obj`: the object itself where the parameter stands for a class.
+pub fn unbox<T: Clone + 'static>(o: Obj) -> T {
+    (&o as &dyn std::any::Any)
+        .downcast_ref::<T>()
+        .expect("a cast of an object to a type that is no class")
+        .clone()
+}
+
 /// A thrown exception as a value (only its class is kept).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Exception {
@@ -62,6 +70,12 @@ impl IsNull for Kind {
     }
 }
 // A collection is never null here: a null one is an empty one.
+/// A group that LINQ found none of (FirstOrDefault) is the empty one: a group that exists holds something.
+impl<K, T> IsNull for super::coll::Group<K, T> {
+    fn is_null(&self) -> bool {
+        self.items.is_empty()
+    }
+}
 impl<T> IsNull for Vec<T> {
     fn is_null(&self) -> bool {
         false
@@ -117,7 +131,12 @@ pub fn is(o: Obj, kind: Kind, c: &Combat) -> bool {
 /// `(T)x`: null stays null; an object of another class panics, where C# throws InvalidCastException.
 pub fn cast(o: Obj, kind: Kind, c: &Combat) -> Obj {
     if !o.is_null() && !is_subclass(kind_of(o, c), kind) {
-        panic!("InvalidCastException: {:?} ({:?}) is not a {:?}", o, kind_of(o, c), kind);
+        panic!(
+            "InvalidCastException: {:?} ({:?}) is not a {:?}",
+            o,
+            kind_of(o, c),
+            kind
+        );
     }
     o
 }
@@ -149,7 +168,11 @@ impl ToS for bool {
 }
 impl ToS for Str {
     fn to_s(&self, _c: &mut Combat) -> Str {
-        if Str::is_null(*self) { Str::EMPTY } else { *self }
+        if Str::is_null(*self) {
+            Str::EMPTY
+        } else {
+            *self
+        }
     }
 }
 impl ToS for Obj {
@@ -205,7 +228,9 @@ macro_rules! cmp_ord {
         })*
     };
 }
-cmp_ord!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, Dec, bool, char);
+cmp_ord!(
+    i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, Dec, bool, char
+);
 impl Cmp for Str {
     fn cmp_net(&self, other: &Self, _c: &mut Combat) -> i32 {
         self.compare(*other)

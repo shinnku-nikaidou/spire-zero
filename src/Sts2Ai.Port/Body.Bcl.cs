@@ -34,7 +34,14 @@ public sealed partial class Body
         string F(int i, int arity) => Closure(a[i], arity);
         string I() => Expr(inst!);
         string Rd(Func<string, string[], string> build, params int[] idx) => HoistedCodes(idx.Select(V).ToArray(), Ref(inst!), build);
-        string Mut(Func<string, string[], string> build, params int[] idx) => HoistedCodes(idx.Select(V).ToArray(), Place(inst!), build, always: true);
+        string Mut(Func<string, string[], string> build, params int[] idx)
+        {
+            if (UnstableReceiver(inst!) is not { } recv) return HoistedCodes(idx.Select(V).ToArray(), Place(inst!), build, always: true);
+            string r = Tmp("r"), code = Expr(recv);
+            pinned[recv] = r;
+            try { return $"{{ let {r} = {code}; {HoistedCodes(idx.Select(V).ToArray(), Place(inst!), build, always: true)} }}"; }
+            finally { pinned.Remove(recv); }
+        }
         // A change in place that runs a closure: the list is taken out of its field while the closure runs.
         string Taken(Func<string, string> build)
         {
@@ -61,6 +68,7 @@ public sealed partial class Body
             case "Enumerable.SingleOrDefault": return n == 1 ? $"linq::single_or_default({V(0)})" : IsF(1) ? $"linq::single_or_default_by({V(0)}, {F(1, 1)}, c)" : null;
             case "Enumerable.ToList" or "Enumerable.ToArray" or "Enumerable.AsEnumerable" or "Enumerable.Cast": return V(0);
             case "Enumerable.ToHashSet" when n == 1: return $"Set::from_vec({V(0)})";
+            case "Enumerable.ToDictionary" when n == 1: return $"Dict::from_pairs({V(0)})";
             case "Enumerable.ToDictionary" when n == 2: return $"linq::to_dictionary({V(0)}, {F(1, 1)}, |x, _c| x, c)";
             case "Enumerable.ToDictionary" when n == 3 && IsF(2): return $"linq::to_dictionary({V(0)}, {F(1, 1)}, {F(2, 1)}, c)";
             case "Enumerable.Concat": return $"linq::concat({V(0)}, {V(1)})";
@@ -73,6 +81,7 @@ public sealed partial class Body
             case "Enumerable.OrderByDescending" when n == 2: return $"linq::order_by({V(0)}, {F(1, 1)}, true, c)";
             case "Enumerable.ThenBy" when n == 2: return $"linq::then_by({V(0)}, {F(1, 1)}, false, c)";
             case "Enumerable.ThenByDescending" when n == 2: return $"linq::then_by({V(0)}, {F(1, 1)}, true, c)";
+            case "Enumerable.Order" when n == 2 && Unconverted(a[1]) is IPropertyReferenceOperation { Property: { Name: "Ordinal", ContainingType.Name: "StringComparer" } }:
             case "Enumerable.Order" when n == 1: return $"linq::order_by({V(0)}, |x, _c| x, false, c)";
             case "Enumerable.Sum": return n == 1 ? $"linq::sum({V(0)})" : $"linq::sum_by({V(0)}, {F(1, 1)}, c)";
             case "Enumerable.Max": return n == 1 ? $"linq::max({V(0)})" : $"linq::max({LinqSelect(V(0), a[1])})";
@@ -96,6 +105,8 @@ public sealed partial class Body
                 if (!w.IsObj(target)) throw new Unsupported($"OfType<{target.Name}>");
                 return $"linq::of_type({V(0)}, {KindExpr(target)}, c)";
             }
+            case "Enumerable.Zip" when n == 2: return $"linq::zip({V(0)}, {V(1)}, |a, b, _c: &mut Combat| (a, b), c)";
+            case "Interlocked.Increment" when n == 1: { string place = Place(a[0]); return $"{{ {place} += 1; {place} }}"; }
             case "Enumerable.Zip" when n == 3: return $"linq::zip({V(0)}, {V(1)}, {F(2, 2)}, c)";
             case "Enumerable.GroupBy" when n == 2: return $"linq::group_by({V(0)}, {F(1, 1)}, c)";
             case "Enumerable.Append": return $"linq::append({V(0)}, {V(1)})";
@@ -241,6 +252,13 @@ public sealed partial class Body
             case "Math.Max" or "Mathf.Max" or "MathF.Max" or "Decimal.Max" or "Int32.Max": return $"rt::max({V(0)}, {V(1)})";
             case "Math.Min" or "Mathf.Min" or "MathF.Min" or "Decimal.Min" or "Int32.Min": return $"rt::min({V(0)}, {V(1)})";
             case "Math.Abs" or "Mathf.Abs" or "MathF.Abs" or "Decimal.Abs": return $"{V(0)}.abs()";
+            case "KeyValuePair.Deconstruct" when n == 2:
+            {
+                string d = Tmp("d");
+                return $"{{ let {d} = {I()}; {Assign(a[0], () => $"{d}.key", false)}; {Assign(a[1], () => $"{d}.value", false)}; }}";
+            }
+            case "BitOperations.RotateLeft": return $"{V(0)}.rotate_left(({V(1)}) as u32)";
+            case "BitOperations.RotateRight": return $"{V(0)}.rotate_right(({V(1)}) as u32)";
             case "Math.Floor" or "MathF.Floor" or "Mathf.Floor" or "Decimal.Floor": return $"{V(0)}.floor()";
             case "Math.Ceiling" or "MathF.Ceiling" or "Mathf.Ceil" or "Decimal.Ceiling": return $"{V(0)}.{(a[0].Type?.SpecialType == SpecialType.System_Decimal ? "ceiling" : "ceil")}()";
             case "Math.Truncate" or "MathF.Truncate" or "Decimal.Truncate": return $"{V(0)}.{(a[0].Type?.SpecialType == SpecialType.System_Decimal ? "truncate" : "trunc")}()";

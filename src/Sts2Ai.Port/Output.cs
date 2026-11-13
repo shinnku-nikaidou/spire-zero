@@ -123,7 +123,8 @@ public sealed class Output(World w, Emitter em)
                     if (!arms.TryGetValue(path, out var list)) arms[path] = list = [];
                     list.Add("Kind::" + w.Unique(k));
                 }
-                string fallback = slot.IsAbstract || type.TypeKind == TypeKind.Interface
+                // An interface's member with a body of its own is what its classes run when they have none.
+                string fallback = slot.IsAbstract
                     ? $"k => panic!(\"{type.Name}.{slot.Name}: no implementation for {{:?}}\", k)"
                     : $"_ => {PathOf(slot)}";
                 body.Append($"    /// C#: virtual {type.Name}.{(slot.AssociatedSymbol ?? slot).Name}\n");
@@ -233,7 +234,7 @@ public sealed class Output(World w, Emitter em)
     {
         var sb = new StringBuilder("//! The state of a combat: one arena per class, one struct per class with fields.\n" + Emitter.Header.Replace("use crate::r#gen::state::*;\n", ""));
         sb.Append('\n');
-        for (int i = 0; i < roots.Count; i++) sb.Append($"pub const {Tag(roots[i])}: u8 = {i + 1};\n");
+        for (int i = 0; i < roots.Count; i++) sb.Append($"pub const {Tag(roots[i])}: u16 = {i + 1};\n");
         sb.Append("\n/// Every object of a combat.\n#[derive(Clone, Debug, Default)]\npub struct Arenas {\n");
         foreach (var r in roots) sb.Append($"    pub {ArenaField(r)}: Arena<{w.DataName(r)}>,\n");
         sb.Append("}\n\n");
@@ -278,7 +279,7 @@ public sealed class Output(World w, Emitter em)
             sb.Append("    pub kind: Kind,\n").Append(FieldLines(r));
             if (carriers.Count > 0) sb.Append($"    pub ext: {w.Unique(r)}Ext,\n");
             sb.Append("}\n\n");
-            sb.Append($"impl Stored for {data} {{\n    const TAG: u8 = {Tag(r)};\n}}\n\n");
+            sb.Append($"impl Stored for {data} {{\n    const TAG: u16 = {Tag(r)};\n}}\n\n");
             sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{ &c.a.{arena}[me] }}\n    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{ &mut c.a.{arena}[me] }}\n");
             sb.Append($"    pub fn alloc(kind: Kind, c: &mut Combat) -> Obj {{\n        c.a.{arena}.alloc({data} {{ kind, {(carriers.Count > 0 ? $"ext: {w.Unique(r)}Ext::of_kind(kind), " : "")}..Default::default() }})\n    }}\n}}\n\n");
             if (carriers.Count == 0) continue;
@@ -337,7 +338,7 @@ public sealed class Output(World w, Emitter em)
             sb.Append($"/// {World.FullName(s)} (a value)\n#[derive(Clone, {(copy ? "Copy, " : "")}Debug, Default, PartialEq)]\npub struct {w.Unique(s)} {{\n{FieldLines(s)}}}\n\n");
             {
                 // Its text: its own ToString when it has one.
-                var toString = s.GetMembers("ToString").OfType<IMethodSymbol>().FirstOrDefault(m => m.Parameters.Length == 0 && !m.IsImplicitlyDeclared);
+                var toString = s.GetMembers("ToString").OfType<IMethodSymbol>().FirstOrDefault(m => m.Parameters.Length == 0 && !m.IsImplicitlyDeclared && !w.IsDropMember(m));
                 string text = toString != null && w.CatOf(s) == Cat.Translated ? $"{w.Path(s, toString)}::{w.FnName(toString)}(self.clone(), c)" : "Str::from_string(format!(\"{:?}\", self))";
                 sb.Append($"impl ToS for {w.Unique(s)} {{\n    fn to_s(&self, c: &mut Combat) -> Str {{ {text} }}\n}}\n\n");
             }
@@ -345,7 +346,7 @@ public sealed class Output(World w, Emitter em)
             if (s.TypeKind == TypeKind.Class) sb.Append($"impl IsNull for {w.Unique(s)} {{\n    fn is_null(&self) -> bool {{ *self == Self::default() }}\n}}\n\n");
             if (s.AllInterfaces.Any(i => i.Name == "IComparable" && i.TypeArguments.Length == 1 && Eq.Equals(i.TypeArguments[0].OriginalDefinition, s)))
             {
-                var compare = s.GetMembers("CompareTo").OfType<IMethodSymbol>().FirstOrDefault(m => m.Parameters.Length == 1 && Eq.Equals(m.Parameters[0].Type.OriginalDefinition, s));
+                var compare = s.GetMembers("CompareTo").OfType<IMethodSymbol>().FirstOrDefault(m => m.Parameters.Length == 1 && Eq.Equals(m.Parameters[0].Type.OriginalDefinition, s) && !w.IsDropMember(m));
                 if (compare != null && w.CatOf(s) != Cat.Stub)
                     sb.Append($"impl Cmp for {w.Unique(s)} {{\n    fn cmp_net(&self, other: &Self, c: &mut Combat) -> i32 {{ {w.Path(s, compare)}::{w.FnName(compare)}(self.clone(), other.clone(), c) }}\n}}\n\n");
             }
@@ -460,7 +461,7 @@ public sealed class Output(World w, Emitter em)
         foreach (var (field, name, type, isState) in w.Fields(t))
         {
             if (!isState) continue;
-            arr.Add(new JsonObject { ["name"] = Json(name), ["cs"] = field.Name, ["type"] = TypeDesc(field.Type) });
+            arr.Add(new JsonObject { ["name"] = Json(name), ["cs"] = PrimaryConstructors.ClrName(field.ContainingType.Name, field.Name), ["type"] = TypeDesc(field.Type) });
         }
         return arr;
     }

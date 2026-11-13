@@ -1,6 +1,5 @@
 //! The combat: every object of it, and the answers given to the prompts of the action that is running.
 
-use super::{Obj, Str};
 use crate::r#gen::state::{Arenas, Roots};
 
 /// Why an action stopped before its end.
@@ -13,35 +12,23 @@ pub enum Stop {
 /// What a C# Task is here: the value, or the reason the action stopped. `await x` is `x?`.
 pub type R<T> = Result<T, Stop>;
 
-/// A prompt in the middle of an effect, as the player sees it.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Prompt {
-    /// Which command asks ("FromHand", "FromSimpleGrid", ..).
-    pub kind: Str,
-    /// What can be picked, in the order shown.
-    pub options: Vec<Obj>,
-    pub min: i32,
-    pub max: i32,
-}
-
-/// The answers given so far to the prompts of the running action, and the prompt it stopped at.
+/// The answers given to the prompts of the running action: for each prompt it has met, the picked options as
+/// indexes into the list the game offered.
 #[derive(Clone, Debug, Default)]
 pub struct Choices {
-    /// One entry per prompt answered: the indexes picked.
     pub answers: Vec<Vec<i32>>,
+    /// How many of them the action has taken so far.
     pub next: usize,
-    pub pending: Option<Prompt>,
+    /// Set when a task nobody awaits stopped at a prompt, in a member that cannot pass the stop on.
+    pub stopped: bool,
 }
 
 impl Choices {
-    /// The answer to the prompt the action has just reached, or the stop that asks for it.
-    pub fn take(&mut self, prompt: Prompt) -> R<Vec<i32>> {
-        if let Some(answer) = self.answers.get(self.next) {
-            self.next += 1;
-            return Ok(answer.clone());
-        }
-        self.pending = Some(prompt);
-        Err(Stop::Choice)
+    /// The answer to the prompt the action has just reached; None when it has not been given yet.
+    pub fn take(&mut self) -> Option<Vec<i32>> {
+        let answer = self.answers.get(self.next)?.clone();
+        self.next += 1;
+        Some(answer)
     }
 }
 
@@ -57,4 +44,3 @@ pub struct Combat {
     /// What the hand-written core keeps beside the game's own objects.
     pub x: crate::manual::Extra,
 }
-

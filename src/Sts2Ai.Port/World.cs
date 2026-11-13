@@ -92,6 +92,8 @@ public sealed class World
             string full = FullName(t);
             if (self.Cfg.DropTypes.Contains(full) || self.Cfg.DropTypes.Any(d => d.EndsWith('*') && full.StartsWith(d[..^1], StringComparison.Ordinal))) return true;
             if (t.ContainingType != null) return self.IsDroppedNamed(t.ContainingType);
+            // A type the scope names itself is translated, whatever its namespace.
+            if (self.Cfg.Translate.Contains(full)) return false;
             string ns = Namespace(t);
             if (!IsSource(t))
             {
@@ -146,6 +148,7 @@ public sealed class World
         if (m.ContainingType == null) return false;
         var owner = m is IMethodSymbol { AssociatedSymbol: { } a } ? a : m;
         var t = m.ContainingType.OriginalDefinition;
+        if (Cfg.KeepMembers.Contains(t.Name + "." + owner.Name)) return false;
         return Cfg.DropMembers.Contains(t.Name + "." + owner.Name) || Cfg.DropMembers.Contains(t.Name + ".*") || AutoDropped.Contains(m.OriginalDefinition);
     }
 
@@ -388,13 +391,19 @@ public sealed class World
 
     public static bool IsGeneratedList(INamedTypeSymbol n) => n.Name.Contains("z__ReadOnly");
 
+    /// <summary>The keys or the values of a dictionary, as their own type: a list here.</summary>
+    public static bool IsDictPart(INamedTypeSymbol n) => n.Name is "ValueCollection" or "KeyCollection" && n.ContainingType is { } d && MetaName(d) == "System.Collections.Generic.Dictionary`2";
+
+    /// <summary>What a list type holds.</summary>
+    public static ITypeSymbol ItemOf(INamedTypeSymbol n) => IsDictPart(n) ? n.ContainingType.TypeArguments[n.Name == "KeyCollection" ? 0 : 1] : n.TypeArguments[0];
+
     public enum Coll { None, Vec, Set, Dict, Queue, Stack, Ordered }
 
     public static Coll CollOf(ITypeSymbol? t)
     {
         if (t is IArrayTypeSymbol) return Coll.Vec;
         if (t is not INamedTypeSymbol n) return Coll.None;
-        if (IsGeneratedList(n)) return Coll.Vec;
+        if (IsGeneratedList(n) || IsDictPart(n)) return Coll.Vec;
         return MetaName(n) switch
         {
             "System.Collections.Generic.List`1" or "System.Collections.Generic.IList`1" or "System.Collections.Generic.IReadOnlyList`1"
@@ -449,7 +458,7 @@ public sealed class World
         if (IsDroppedNamed(n) || n.TypeArguments.Any(IsDropped)) throw new Dropped(n.Name);
         switch (CollOf(n))
         {
-            case Coll.Vec: return $"Vec<{RType(n.TypeArguments[0], norm)}>";
+            case Coll.Vec: return $"Vec<{RType(ItemOf(n), norm)}>";
             case Coll.Ordered: return $"Ordered<{RType(n.TypeArguments[0], norm)}>";
             case Coll.Set: return $"Set<{RType(n.TypeArguments[0], norm)}>";
             case Coll.Dict: return $"Dict<{RType(n.TypeArguments[0], norm)}, {RType(n.TypeArguments[1], norm)}>";

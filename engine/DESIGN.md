@@ -67,7 +67,16 @@ matter in the classes we translate.
 - *presentation* (dropped): anything declared in the namespaces of `[drop] namespaces` (`Godot`,
   `MegaCrit.Sts2.Core.{Nodes,Audio,HoverTips,Animation,Assets,Bindings,Localization,...}` but not
   `Localization.DynamicVars`), the types of `[drop] types`, the members of `[drop] members` (`Cmd.Wait`,
-  `CreatureCmd.TriggerAnim`, ...), and every library type outside `System`.
+  `CreatureCmd.TriggerAnim`, ...; `Class.*` takes a whole class but its `keep_members`), and every library type
+  outside `System`. A type `[scope] translate` names itself is translated whatever its namespace: `LocString` is kept
+  as the two strings that say where a text is in the tables (a card prompt is named by them), and everything that
+  makes its words is presentation.
+
+What is state is `port.toml`'s too, since the game's objects hold more than a combat: `[roots]` (the statics that are
+state), `[fields]` (classes of which only the named fields are state: `RunManager`, `RunState`), `[drop] fields`
+(fields that are not: the network, who answers prompts), `[caches]` (statics that only remember a computation: read as
+unset, so the value is computed at each use), `[value]` (members with a fixed value in the headless game, as a Rust
+expression: `TestMode.IsOn`, the empty list of mods).
 
 **What happens to presentation.** The engine is the headless game: there is no node, no sound, no text.
 
@@ -84,9 +93,16 @@ matter in the classes we translate.
   fixed value (`[value]` of `port.toml`: `TestMode.IsOn`) folds: only the branch taken is translated.
 - A presentation call whose arguments do game work (`CardCmd.PreviewCardPileAdd(await CardPileCmd.Add(..))`) keeps its
   arguments: they are run, the call is not.
-- Where game code needs a presentation value (a test on one guards game code, one is written to state), the member is
-  not translated and the report says so. The report also lists every statement left out that held a call that is not
-  presentation, for review.
+- A loop over presentation, a test or a `switch` on presentation, a lambda: left out when nothing in it is game code
+  (no call into the game, no write to state or to a local from outside), and for a `switch`, when nothing after it
+  could be skipped by a way out of it. A lambda like that is an empty function.
+- A local that presentation was written to (`delay += Rng.Chaotic.Next..`) is presentation from there on, and so is a
+  text that only presentation reads (the words of a log line).
+- A branch that takes game objects from a screen (`result = await hand.SelectCards(..)`), or returns presentation in a
+  member that does more, is a `panic!` naming the member: the headless game never takes it.
+- Where game code needs a presentation value otherwise (a test on one guards game code, one is written to state), the
+  member is not translated and the report says so. The report also lists every statement left out that held a call
+  that is not presentation, for review.
 - Events (`event`, `+=` on one, raising one) are presentation.
 
 **How C# becomes Rust.** The rules are uniform, so that reading the generated function beside the C# method is checking
@@ -115,11 +131,30 @@ it.
 | `HashSet<T>`, `Dictionary<K,V>`, `Queue<T>`, `Stack<T>` | `rt::Set`, `Dict`, `Queue`, `Stack`: .NET's enumeration order (a freed slot is reused first); `List.Sort` is .NET's introsort |
 | a lambda given to LINQ | a closure `\|x, c\| ..`; anywhere else, and a method group, a stored delegate `Fn1<A, R>` (clonable, can be null) |
 | `out` and `ref` parameters | returned: `fn m(..) -> (T, Out1)` |
+| a collection parameter the callee changes (`state.RegisterStates(States)`) | returned like a `ref` parameter and written back by the caller: a collection is a value here, and C# hands over a reference. Decided per virtual slot or interface member, so every override has one signature |
+| a change through a computed object (`x.GetEntry(id).Cards.Add(card)`) | the object is computed once into a local, before the arguments, as in C# |
+| labels and `goto` (the decompiler's) | the block is cut into parts at its labels; a loop runs the parts in order, or the one a `goto` names; the block's locals are declared before the loop |
+| `try` / `finally` | the block, then the `finally`, then the block's `return` if it had one; a `catch` that does nothing is no handler |
+| `value with { A = x }` | a copy with the fields set |
+| a local function handed over as a delegate | a lambda at that place |
+| a record's parameters; a class that keeps its primary constructor | the properties of the same names are set first in the constructor; `port` rewrites `class C(T p)` into fields and a constructor before it compiles the source (the schema names such a field as the compiled game does, `<p>P`) |
+| `(T)obj` for a type parameter that is no game class by its constraints | `rt::unbox::<T>(obj)`: the object itself |
+| `(object)a == b` on a class held by value | the values compared |
 | `throw` | `panic!` (the caller turns a panic into an error) |
 | a `static readonly` field | a function that gives its initial value; a static that is written is hand-written |
 
-Canonical models (the game's `ModelDb`: one object per model class) live in arenas built once per process and never
-written; a handle to one carries a flag, and `ToMutable` copies it into the combat.
+Canonical models (the game's `ModelDb`: one object per model class) live in arenas built once per process
+(`manual/canon.rs`, from `gen/model_table.rs`: every model class with its id, as the game's `ModelDb` finds them by
+reflection). A handle to one carries a flag, every combat starts with the same ones and shares them, and a combat that
+writes to one (the game fills a canonical model's caches when they are first read) gets its own copy of that arena at
+that moment. `ToMutable` copies a model into the combat.
+
+A handle is 32 bits: 21 of index, 10 of arena tag, the canonical flag.
+
+Two members of the game announce themselves to hand-written code (`[enter]`: `m::class::enter(name, arguments.., c)`
+before the member's body, `leave(c)` after it, on every way out): the `CardSelectCmd.From*` entries, because only the
+outermost entry's arguments say why a prompt asks, and Whispering Earring's turn start, which is the one time the game
+puts a selector of its own on the selector stack.
 
 ## State
 
@@ -173,7 +208,7 @@ written; a handle to one carries a flag, and `ToMutable` copies it into the comb
 it (`import.rs`, with the reader `port` generates beside the structs, `gen/import.rs`). Format 1:
 
 ```json
-{ "format": 1, "game": "v0.113.0", "schema": "9f2c..",
+{ "format": 1, "game": "v0.113.0", "schema": "9f2c..", "sim": { "prompts": 0 },
   "roots":  { "combat_manager__instance": ["combat_manager", 0], "local_context__net_id": 1 },
   "arenas": { "creature":   [ { "class": "Creature", "Creature": { "_block": 0, "_current_hp": 70 } } ],
               "card_model": [ { "class": "Deflect",
@@ -183,6 +218,9 @@ it (`import.rs`, with the reader `port` generates beside the structs, `gen/impor
 ```
 
 - **`schema`** is the schema's `hash`. The engine reads no export of another game version or another schema.
+- **`sim`**: what the program around the game holds that later observations depend on and that is no object of the
+  game: `prompts`, how many card prompts its selector was asked so far. A prompt's number seeds the order of its
+  options that look the same, so the engine counts on from it.
 - **`roots`**: one member per root of the schema, by its `name`, holding its value.
 - **`arenas`**: one member per arena that holds an object; its value is the arena's objects, and an object's place in
   the list is its index.
@@ -236,9 +274,30 @@ the observation shows). The next answer runs the action again from the start wit
 deterministic (the random streams are part of the state), so the run up to the prompt repeats exactly. No continuation
 is ever stored, and translated code stays a straight line with `?`.
 
-**The action queue and the turn loop** (`CombatManager`, `ActionExecutor`, the `GameAction`s, the multiplayer
-synchronizer) are written by hand: the order in which queued actions, hooks and the two sides' turns run is the
-game's, the waiting for input and for the screen is not there.
+**The action queue and the turn loop.** In the game these are tasks that wait on each other: the executor runs
+queued actions, the turn loop waits for "every player is ready to end the turn", runs the turn's end, waits for
+"ready for the enemies' turn", runs the enemies, starts the next turn. Here the members that wait are written by hand
+(`manual/`, listed in `port.toml [manual]`, about twenty; the rest of `CombatManager`, the queues and the actions is
+the game's code) and the two run in turn: `world.rs` starts an action through the entry the game's screen uses
+(`CardModel.TryManualPlay`, `PotionModel.EnqueueManualUse`, `PlayerCmd.EndTurn`), then runs the executor until its
+queues are empty, then one step of the turn loop, and again until neither moves. The turn loop is a state machine
+with two waits (`manual/combat_manager.rs`); the game's two signals are fields of what the engine keeps beside the
+game's objects (`Combat.x`).
+
+- A task the game starts and does not await (`TaskHelper.RunSafely(..)`) runs where it is started.
+- A hook that asks the player in the game is left waiting while the turn goes on and finishes later as an action of
+  its own. Here its prompt stops the step like any other, and when the step is run again with the answer, the hook's
+  rest runs where the hook stands, before what follows it. No combat of the check has shown a difference from this;
+  it is a known place to look when one does.
+- Who answers a card prompt: the game asks the selector on top of the player's stack (`ICardSelector`). The engine has
+  one selector, written by hand (`manual/i_card_selector.rs`): it takes the next answer or stops the step, and gives
+  the prompt its number. The stack is not kept as objects.
+
+**Delegates in the state.** A monster's move states and a model's vars hold delegates (which move is next, what a
+calculated var adds). An export has no delegates yet, so the import makes them again: it runs each monster's
+`GenerateMoveStateMachine` and each model's `CanonicalVars` on a scratch copy and copies the delegates over by state
+id and var name (`manual/delegates.rs`). A move a monster made on the spot (a stun) has no place in the machine made
+again: such an export is refused. This goes when delegates are values of the export.
 
 **Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
 other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.

@@ -33,12 +33,23 @@ fn canon() -> &'static Canon {
 fn build() -> Canon {
     let mut c = Combat::default();
     c.a.set_canon_build(true);
-    c.x.canon_in_build = Some(Table { by_kind: vec![Obj::NULL; ALL_KINDS.len()], by_id: HashMap::new() });
+    c.x.canon_in_build = Some(Table {
+        by_kind: vec![Obj::NULL; ALL_KINDS.len()],
+        by_id: HashMap::new(),
+    });
     for kind in MODEL_KINDS {
         model(kind, &mut c);
     }
     // C#: ModelDb.InitIds.
-    let made: Vec<Obj> = c.x.canon_in_build.as_ref().unwrap().by_kind.iter().copied().filter(|o| !o.is_null()).collect();
+    let made: Vec<Obj> =
+        c.x.canon_in_build
+            .as_ref()
+            .unwrap()
+            .by_kind
+            .iter()
+            .copied()
+            .filter(|o| !o.is_null())
+            .collect();
     for o in made {
         let info = model_info(g::kinds::kind_of(o, &c)).unwrap();
         let d = AbstractModelData::of_mut(o, &mut c);
@@ -58,7 +69,10 @@ pub fn combat() -> Combat {
 /// The id of a model class. C#: ModelDb.GetId(type).
 pub fn id_of(kind: Kind) -> ModelId {
     let info = model_info(kind).unwrap_or_else(|| panic!("{kind:?} is not a model class"));
-    ModelId { category: Str::lit(info.category), entry: Str::lit(info.entry) }
+    ModelId {
+        category: Str::lit(info.category),
+        entry: Str::lit(info.entry),
+    }
 }
 
 /// The canonical model of a class.
@@ -73,7 +87,9 @@ pub fn of(kind: Kind) -> Obj {
 /// The canonical model of a class, for code that runs with a combat: while the canonical models are being built, one
 /// that another needs is made at that moment.
 pub fn model(kind: Kind, c: &mut Combat) -> Obj {
-    let Some(table) = &c.x.canon_in_build else { return of(kind) };
+    let Some(table) = &c.x.canon_in_build else {
+        return of(kind);
+    };
     let known = table.by_kind[kind as usize];
     if !known.is_null() {
         return known;
@@ -88,8 +104,15 @@ pub fn model(kind: Kind, c: &mut Combat) -> Obj {
 
 /// The canonical model with an id, or null.
 pub fn by_id(id: &ModelId, c: &Combat) -> Obj {
-    let table = c.x.canon_in_build.as_ref().unwrap_or_else(|| &canon().table);
-    table.by_id.get(&(id.category, id.entry)).copied().unwrap_or(Obj::NULL)
+    let table =
+        c.x.canon_in_build
+            .as_ref()
+            .unwrap_or_else(|| &canon().table);
+    table
+        .by_id
+        .get(&(id.category, id.entry))
+        .copied()
+        .unwrap_or(Obj::NULL)
 }
 
 #[cfg(test)]

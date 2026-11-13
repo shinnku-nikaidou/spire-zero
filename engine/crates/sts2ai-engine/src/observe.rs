@@ -704,7 +704,7 @@ pub fn relic(relic: RelicModel, c: &mut Combat) -> RelicView {
             if kept.is_empty() {
                 None
             } else {
-                Some(kept.into_iter().map(|x| g::stubs::serializable_card::id(x, c).entry).collect())
+                Some(kept.into_iter().map(|x| g::saves_runs::serializable_card::id(x, c).entry).collect())
             }
         } else {
             None

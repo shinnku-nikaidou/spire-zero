@@ -38,31 +38,8 @@ pub trait World: Clone + Send + Sized + 'static {
     fn asked(&self) -> Option<&Asked>;
 }
 
-/// The combat of an export as it was taken in: a world that shows, and takes no action. It serves until the rules
-/// side has its world (world.rs), which then takes its place as `Engine`.
-#[derive(Clone)]
-pub struct Imported(Combat);
-
-impl World for Imported {
-    fn import(export: &str) -> Result<Self, String> {
-        crate::import::import(export).map(Imported)
-    }
-
-    fn apply(&mut self, _action: &str) -> Result<(), String> {
-        Err("the engine takes no action yet (there is no world.rs)".into())
-    }
-
-    fn combat(&mut self) -> &mut Combat {
-        &mut self.0
-    }
-
-    fn asked(&self) -> Option<&Asked> {
-        None
-    }
-}
-
 /// The world behind the C ABI.
-type Engine = Imported;
+type Engine = crate::world::Live;
 
 /// A world and what was read of it where it stands: the observation, which the state key is the hash of too.
 struct Handle<W: World> {

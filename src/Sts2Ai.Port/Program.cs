@@ -27,7 +27,7 @@ var parse = new CSharpParseOptions(LanguageVersion.Preview);
 var trees = Directory.EnumerateFiles(decompiled, "*.cs", SearchOption.AllDirectories)
     .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/"))
     .Order(StringComparer.Ordinal).AsParallel().AsOrdered()
-    .Select(f => CSharpSyntaxTree.ParseText(File.ReadAllText(f), parse, f)).ToList();
+    .Select(f => CSharpSyntaxTree.ParseText(PrimaryConstructors.Undo(File.ReadAllText(f)), parse, f)).ToList();
 var refs = Directory.EnumerateFiles(bin, "*.dll").Where(f => Path.GetFileName(f) != "sts2.dll")
     .Where(f => { try { System.Reflection.AssemblyName.GetAssemblyName(f); return true; } catch { return false; } })
     .Select(f => (MetadataReference)MetadataReference.CreateFromFile(f)).ToList();

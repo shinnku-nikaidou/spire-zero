@@ -52,18 +52,34 @@ translate = [
     "MegaCrit.Sts2.Core.MonsterMoves.Intents",
     "MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine",
     "MegaCrit.Sts2.Core.Localization.DynamicVars",
+    # a text's place in the tables (its table and its key): what a card prompt is named by
+    "MegaCrit.Sts2.Core.Localization.LocString",
     "MegaCrit.Sts2.Core.ValueProps",
     "MegaCrit.Sts2.Core.Extensions",
     "MegaCrit.Sts2.Core.Factories",
     "MegaCrit.Sts2.Core.GameActions",
     "MegaCrit.Sts2.Core.GameActions.Multiplayer",
+    "MegaCrit.Sts2.Core.Entities.Multiplayer.NetCombatCard",
     "MegaCrit.Sts2.Core.CardSelection",
     "MegaCrit.Sts2.Core.Helpers.AscensionHelper",
     "MegaCrit.Sts2.Core.Helpers.MathHelper",
+    "MegaCrit.Sts2.Core.Helpers.NonInteractiveMode",
+    "MegaCrit.Sts2.Core.Helpers.TaskHelper",
     # what a combat reads of the run around it
     "MegaCrit.Sts2.Core.Random",
     "MegaCrit.Sts2.Core.Odds",
+    # who answers a card prompt (written by hand: [manual])
+    "MegaCrit.Sts2.Core.TestSupport.ICardSelector",
+    # what is unlocked decides which cards a pool can give
+    "MegaCrit.Sts2.Core.Timeline.EpochModel",
+    "MegaCrit.Sts2.Core.Timeline.Epochs",
     "MegaCrit.Sts2.Core.Runs.RunState",
+    "MegaCrit.Sts2.Core.Runs.History",
+    "MegaCrit.Sts2.Core.Runs.PlayerMapPointHistoryEntry",
+    "MegaCrit.Sts2.Core.Map.MapPointType",
+    "MegaCrit.Sts2.Core.Saves.Runs.SerializableCard",
+    "MegaCrit.Sts2.Core.Saves.Runs.SerializableEnchantment",
+    "MegaCrit.Sts2.Core.Saves.Runs.SavedProperties",
     "MegaCrit.Sts2.Core.Runs.IRunState",
     "MegaCrit.Sts2.Core.Runs.NullRunState",
     "MegaCrit.Sts2.Core.Runs.ICardScope",
@@ -117,10 +133,14 @@ namespaces = [
     "MegaCrit.Sts2.Core.ControllerInput",
     "MegaCrit.Sts2.Core.DevConsole",
     "MegaCrit.Sts2.addons",
+    # the run's map: nothing of a combat
+    "MegaCrit.Sts2.Core.Map",
 ]
 # Kept although a namespace above them is dropped.
 keep = ["MegaCrit.Sts2.Core.Localization.DynamicVars"]
 types = [
+    # the save files and the profile's progress: what a combat does to them is outside the combat
+    "MegaCrit.Sts2.Core.Saves.SaveManager",
     "MegaCrit.Sts2.Core.Commands.SfxCmd",
     "MegaCrit.Sts2.Core.Commands.VfxCmd",
     "MegaCrit.Sts2.Core.Commands.TalkCmd",
@@ -150,7 +170,19 @@ members = [
     "CardCmd.PreviewCardPileAdd",
     # the generator for things that do not matter (screen shake angles): different on every run by design
     "Rng.Chaotic",
+    # the checksums players of one game compare, the replay file
+    "RunManager.ChecksumTracker",
+    "RunManager.WriteReplay",
+    # the words a text var puts into a description (a title, a player's name)
+    "StringVar.StringValue",
+    # the run's clock
+    "RunManager.WinTime",
+    "RunManager.RunTime",
+    # a text's words, and what is put into them: only its place in the tables is kept (keep_members)
+    "LocString.*",
+    "DynamicVarSet.AddTo",
 ]
+keep_members = ["LocString..ctor", "LocString.LocTable", "LocString.LocEntryKey"]
 
 # Instance fields that are not state, as Class.Field (the property's name for the field behind one).
 fields = [
@@ -159,13 +191,20 @@ fields = [
     "ActionQueueSynchronizer._messageBuffer",
     "PlayerChoiceSynchronizer._netService",
     "RewardsSet._synchronizer",
+    # who answers a player's card prompts: the simulator's selector there, the engine's own here
+    "CardSelectorStack._localSelector",
+    "CardSelectorStack._selectorStacks",
+    # a card's title, looked up once
+    "CardModel._titleLocString",
+    "StringVar.StringValue",
 ]
 
 [fields]
 # Classes of which only the named fields are state. The rest of them is the run outside the combat, the network, the
 # bookkeeping of what the engine writes by hand.
+LocString = ["locTable", "locEntryKey"]
 RunManager = ["State", "AscensionManager", "ActionQueueSet", "ActionExecutor", "ActionQueueSynchronizer", "PlayerChoiceSynchronizer", "CardSelectorStack"]
-RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
+RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "_mapPointHistory", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
 
 [caches]
 # Statics that only remember the result of a computation: never kept, computed at each use.
@@ -175,12 +214,34 @@ members = [
     "ModelDb._allPotionPools", "ModelDb._allCharacterPotionPools", "ModelDb._allCharacterRelicPools",
     "ModelDb._allSharedPotionPools", "ModelDb._allPowers", "ModelDb._allRelics", "ModelDb._acts",
     "ModelDb._actsByIndex", "ModelDb._badges", "ModelDb._achievements",
+    # flags that an error was reported once
+    "CombatManager._staleTurnEndReported", "CombatManager._turnLoopWaitTimeoutReported",
 ]
 
 [manual]
-classes = []
+# The one who answers a card prompt (manual/i_card_selector.rs): the game asks whoever is on its selector stack.
+classes = ["ICardSelector"]
 # The canonical models are built by manual/canon.rs: what the game's ModelDb does by reflection.
-members = ["ModelDb.Get", "ModelDb.GetId", "ModelDb.GetByIdOrNull", "ModelDb.Contains"]
+members = [
+    "ModelDb.Get", "ModelDb.GetId", "ModelDb.GetByIdOrNull", "ModelDb.Contains",
+    "CardSelectorStack.GetSelector", "CardSelectorStack.PushSelector",
+    # The id of an epoch class, which the game keeps in a table filled by reflection (manual/epoch_model.rs).
+    "EpochModel.GetId",
+    # The turn loop and the action queue wait on each other in the game; here they run in turn (manual/, world.rs).
+    "CombatManager.StartCombatInternal", "CombatManager.SetReadyToEndTurn", "CombatManager.SetReadyToBeginEnemyTurn",
+    "CombatManager.WaitUntilQueueIsEmptyOrWaitingOnNonPlayerDrivenAction", "CombatManager.DoTurnEndCards",
+    "ActionExecutor.ExecuteActions", "ActionExecutor.FinishedExecutingActions", "ActionExecutor.IsRunning",
+    "GameAction.Execute", "GameAction.WaitForActionToResumeExecutingAfterPlayerChoice",
+    "ActionQueueSynchronizer.RequestEnqueue", "ActionQueueSynchronizer.RequestResumeActionAfterPlayerChoice",
+    "ActionQueueSet.BecameEmpty",
+    "BranchingPlayerChoiceContext.AssignTaskAndWaitForPauseOrCompletion",
+    "HookPlayerChoiceContext.AssignTaskAndWaitForPauseOrCompletion",
+    "HookPlayerChoiceContext.WaitForPauseOrCompletionWithoutAssigningTask", "HookPlayerChoiceContext.WaitForCompletion",
+    "HookPlayerChoiceContext.SignalPlayerChoiceBegun", "HookPlayerChoiceContext.SignalPlayerChoiceEnded",
+    "GameActionPlayerChoiceContext.SignalPlayerChoiceBegun", "GameActionPlayerChoiceContext.SignalPlayerChoiceEnded",
+    # waits for a creature another player's game has yet to make
+    "CombatState.GetCreatureAsync",
+]
 
 [open]
 # Base classes that own no arena: their fields are part of every class directly below them.
@@ -193,19 +254,48 @@ members = [
     "RunManager.Instance",
     "NetCombatCardDb.Instance",
     "LocalContext.NetId",
+    "CombatTurnState._sequenceCounter",
 ]
+
+[enter]
+# Members that tell hand-written code that they run: `m::<class>::enter(name, arguments.., c)` before the member's
+# body, `m::<class>::leave(c)` after it.
+# - A card prompt is named by the entry that asks it and by that entry's arguments (manual/card_select_cmd.rs); the
+#   bundle screen is no card prompt.
+# - Whispering Earring plays cards with a selector of the game's own on the stack (manual/whispering_earring.rs).
+members = ["CardSelectCmd.From*", "WhisperingEarring.AfterAutoPrePlayPhaseEnteredLate"]
+except = ["CardSelectCmd.FromChooseABundleScreen"]
+
+[enter.arguments]
+# What `enter` gets of the member's parameters, picked by type or by name; null or None where a member has none.
+CardSelectCmd = ["type:CardPile", "name:source", "type:PlayerChoiceContext", "type:CardSelectorPrefs", "type:EnchantmentModel", "name:amount", "name:canSkip"]
 
 [values]
 # Classes held by value in Rust (a struct, compared by content): immutable records.
-classes = ["ModelId"]
+classes = ["ModelId", "LocString"]
 
 [value]
 # Members with a fixed value in the engine. The real game the engine is checked against runs headless with TestMode on.
 "TestMode.IsOn" = "true"
 "TestMode.IsOff" = "false"
 # Nothing cancels a combat of the engine.
+# The simulator the engine is held against keeps the shipped rule where test mode skips a draw (its RuleFidelity).
+"TestMode.IsOn@Cauldron.GenerateRewards" = "false"
+"TestMode.IsOn@CallingBell.GenerateRewards" = "false"
+# An action of the engine has no task that could have failed: a failure is a panic.
+"GameAction.Exception" = "Exception::default()"
+# One player, no network.
+"RunManager.NetService" = "Obj::NULL"
+"RunManager.IsCleaningUp" = "false"
+"INetGameService.Type" = "NetGameType::Singleplayer"
+"INetGameService.NetId" = "c.s.local_context__net_id.unwrap()"
 # The game the engine is held against runs with no mod.
 "ModHelper.IterateAllCombatStateSubscribers" = "Vec::<Obj>::new()"
+"ModHelper.IterateAllRunStateSubscribers" = "Vec::<Obj>::new()"
+# the speed setting only times waits and animations
+"PrefsSave.FastMode" = "FastModeType::Instant"
+# every text the game asks for is in its tables
+"LocString.Exists" = "true"
 # A delegate of the engine has no object behind it to ask for (the game asks only to refuse one that has).
 "Delegate.Target" = "Obj::NULL"
 "CancellationToken.IsCancellationRequested" = "false"

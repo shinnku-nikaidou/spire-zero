@@ -18,6 +18,10 @@ public sealed partial class Body
     {
         switch (op)
         {
+            // Game objects that come from a screen (the cards picked on it): a branch there is none of headless.
+            case ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var chosen } } pick when !droppedLocals.Contains(chosen) && HoldsObjects(chosen.Type) && IsPresentation(pick.Value):
+                w.Rep.Count("a local set from a screen left as a panic");
+                return $"panic!(\"{Where}: {NameOf(chosen)} comes from presentation\")";
             case ISimpleAssignmentOperation a: return Assign(a.Target, () => Guard(a.Value, "a write of presentation to state"), false);
             case ICompoundAssignmentOperation ca: return Compound(ca, false);
             case IIncrementOrDecrementOperation inc: return Increment(inc, false);
@@ -33,12 +37,30 @@ public sealed partial class Body
                 string code = Expr(inv);
                 if (code.Length == 0) return "";
                 if (inv.Type == null || inv.Type.SpecialType == SpecialType.System_Void) return code;
-                if (World.IsTask(inv.Type, out _)) w.Rep.Note("a task that is not awaited", Where);
+                if (World.IsTask(inv.Type, out _))
+                {
+                    // A task nobody awaits has run by now, or has stopped at a card prompt with no answer yet. A stop
+                    // is the caller's too: it goes up where the member can pass it on, and is noted on the combat
+                    // where it cannot (the world looks there).
+                    w.Rep.Note("a task that is not awaited", Where);
+                    return frames.Peek().ReturnsTask ? $"let _ = {code}?" : $"if {code}.is_err() {{ c.choices.stopped = true; }}";
+                }
                 return $"let _ = {code}";
             }
-            case IDeconstructionAssignmentOperation: throw new Unsupported("deconstruction");
+            case IDeconstructionAssignmentOperation de: return Deconstruct(de);
             default: return $"let _ = {Expr(op)}";
         }
+    }
+
+    /// <summary>Whether the type is a game object or a collection of them.</summary>
+    private bool HoldsObjects(ITypeSymbol t) => w.IsObj(t) || (t is INamedTypeSymbol n && World.CollOf(n) != World.Coll.None && n.TypeArguments.Any(HoldsObjects));
+
+    /// <summary>Whether the expression is presentation as a whole.</summary>
+    private bool IsPresentation(IOperation op)
+    {
+        try { Expr(op); return false; }
+        catch (Dropped) { return true; }
+        catch (Unsupported) { return false; }
     }
 
     private string Guard(IOperation op, string why)
@@ -50,8 +72,21 @@ public sealed partial class Body
     // ---------------------------------------------------------------- expressions
 
     /// <summary>Rust code that gives an owned value of the operation's type.</summary>
+    /// <summary>Receivers already computed into a local: the object a change in place goes through.</summary>
+    private readonly Dictionary<IOperation, string> pinned = new();
+
+    /// <summary>The object a place is a field of, when it is more than a name: it is computed once, before the
+    /// arguments of the change, as in C#.</summary>
+    private IOperation? UnstableReceiver(IOperation place)
+    {
+        while (place is IConversionOperation { IsTryCast: false } cv && World.CollOf(cv.Operand.Type) != World.Coll.None) place = cv.Operand;
+        IOperation? recv = place switch { IFieldReferenceOperation f => f.Instance, IPropertyReferenceOperation pr => pr.Instance, _ => null };
+        return recv != null && recv.Type != null && w.IsObj(recv.Type) && !StableReceiver(recv) ? recv : null;
+    }
+
     private string Expr(IOperation op)
     {
+        if (pinned.TryGetValue(op, out var pin)) return pin;
         if (op.ConstantValue.HasValue && op is not IInterpolatedStringOperation)
         {
             if (op.ConstantValue.Value == null) return Null(op.Type);
@@ -74,6 +109,20 @@ public sealed partial class Body
             case IEventAssignmentOperation: throw new Dropped("event subscription");
             case IInvocationOperation inv: return Invoke(inv);
             case IObjectCreationOperation oc: return New(oc);
+            case IWithOperation { Operand.Type: var wt } wo when w.IsValue(wt):
+            {
+                // A copy of a value with some of its fields set.
+                string o = Tmp("o");
+                implicitReceivers.Push(o);
+                var sb = new StringBuilder($"{{ let mut {o} = {Expr(wo.Operand)}.clone(); ");
+                foreach (var init in wo.Initializer.Initializers)
+                {
+                    try { sb.Append(ExprStmt(init)).Append("; "); }
+                    catch (Dropped) { LeftOut++; }
+                }
+                implicitReceivers.Pop();
+                return sb.Append($"{o} }}").ToString();
+            }
             case IConversionOperation cv: return Conv(cv);
             case IBinaryOperation b: return Binary(b);
             case IUnaryOperation u: return Unary(u);
@@ -317,7 +366,7 @@ public sealed partial class Body
         ILocalReferenceOperation l => !reassigned.Contains(l.Local) && !droppedLocals.Contains(l.Local) && !aliases.ContainsKey(l.Local),
         IParameterReferenceOperation p => !reassigned.Contains(p.Parameter),
         IConditionalAccessInstanceOperation => true,
-        _ => false,
+        _ => pinned.ContainsKey(instance),
     };
 
     private static readonly Dictionary<IPropertySymbol, IFieldSymbol?> forwarded = new(Eq);
@@ -375,7 +424,8 @@ public sealed partial class Body
             if (!w.IsDropped(p.Type)) T(p.Type);
         if (!m.ReturnsVoid) T(m.ReturnType);
         // A virtual member of the library (ToString, Equals) has no dispatcher: the override the compiler found is called.
-        if (virtualCall && VirtualMember(owner) && World.IsSource(World.Slot(m).ContainingType) && !w.IsValue(type))
+        // A class written by hand answers for the classes below it too: no dispatcher goes around it.
+        if (virtualCall && VirtualMember(owner) && World.IsSource(World.Slot(m).ContainingType) && !w.IsValue(type) && w.CatOf(World.Slot(m).ContainingType) != Cat.Manual)
         {
             var slot = World.Slot(m);
             w.Slots.TryAdd(slot, 0);
@@ -485,6 +535,9 @@ public sealed partial class Body
         bool valueCtor = m.MethodKind == MethodKind.Constructor && w.IsValue(type);
         if (m.MethodKind == MethodKind.Constructor && !valueCtor) path = CtorPath(path);
         var args = KindArgs(m);
+        // A call on what port.toml says is presentation (the generator for what does not matter) is presentation.
+        if (op.Instance is IMemberReferenceOperation { Member: var im } && World.IsSource(im.ContainingType) && w.Cfg.DropMembers.Contains($"{im.ContainingType.Name}.{im.Name}"))
+            throw new Dropped($"{im.ContainingType.Name}.{im.Name}");
         if (op.Instance != null && !valueCtor) args.Add(Guard(op.Instance, $"a call of {type.Name}.{m.Name} on presentation"));
         var after = new List<string>();
         var ordered = op.Arguments.OrderBy(a => a.Parameter!.Ordinal).ToList();
@@ -594,6 +647,7 @@ public sealed partial class Body
                 return NameOf(p.Parameter);
             case IInstanceReferenceOperation { ReferenceKind: InstanceReferenceKind.ImplicitReceiver }: return implicitReceivers.Peek();
             case IInstanceReferenceOperation when isStructMember: return "me";
+            case IFieldReferenceOperation { Field.IsStatic: true } sf when w.StaticState(sf.Field) is { } root: return $"c.s.{root}";
             case IFieldReferenceOperation { Field.IsStatic: false } f when !f.Field.ContainingType.IsTupleType: return FieldPlace(f, true);
             case IFieldReferenceOperation { Field.ContainingType.IsTupleType: true } tf: return $"{Place(tf.Instance!)}.{TupleIndex(tf.Field)}";
             case IPropertyReferenceOperation { Property: { IsStatic: false } p } pr when w.IsValue(p.ContainingType)
@@ -653,6 +707,37 @@ public sealed partial class Body
             sb.Append($"let __h{i} = {codes[i]}; ");
         }
         return sb.Append(build(receiver, names)).Append(" }").ToString();
+    }
+
+    /// <summary>var (a, b) = pair; (x, y) = (y, x): the value is taken apart into its targets.</summary>
+    private string Deconstruct(IDeconstructionAssignmentOperation de)
+    {
+        var target = de.Target is IDeclarationExpressionOperation { Expression: var inner } ? inner : de.Target;
+        if (target is not ITupleOperation tuple) throw new Unsupported("deconstruction into something that is no tuple");
+        var value = de.Value;
+        while (value is IConversionOperation { IsTryCast: false, Operand.Type: not null } cv && (cv.Operand.Type.IsTupleType || World.MetaName((INamedTypeSymbol)cv.Operand.Type) == "System.Collections.Generic.KeyValuePair`2")) value = cv.Operand;
+        string d = Tmp("d");
+        var sb = new StringBuilder($"let {d} = {Expr(value)}; ");
+        void Parts(ITupleOperation t, string from, ITypeSymbol? type)
+        {
+            bool pair = type is INamedTypeSymbol n && World.MetaName(n) == "System.Collections.Generic.KeyValuePair`2";
+            if (!pair && type is not { IsTupleType: true }) throw new Unsupported($"deconstruction of {type?.Name}");
+            for (int i = 0; i < t.Elements.Length; i++)
+            {
+                string part = pair ? $"{from}.{(i == 0 ? "key" : "value")}" : $"{from}.{i}";
+                var partType = pair ? ((INamedTypeSymbol)type!).TypeArguments[i] : ((INamedTypeSymbol)type!).TupleElements[i].Type;
+                var e = t.Elements[i] is IDeclarationExpressionOperation { Expression: var x } ? x : t.Elements[i];
+                switch (e)
+                {
+                    case IDiscardOperation: break;
+                    case ITupleOperation nested: Parts(nested, part, partType); break;
+                    case ILocalReferenceOperation { Local: var l } when w.IsDropped(l.Type): droppedLocals.Add(l); break;
+                    default: sb.Append(Assign(e, () => part, false)).Append("; "); break;
+                }
+            }
+        }
+        Parts(tuple, d, value.Type);
+        return $"{{ {sb}}}";
     }
 
     private string Assign(IOperation target, Func<string> value, bool asValue)
@@ -774,6 +859,11 @@ public sealed partial class Body
             }
             return $"{(b.OperatorKind == BinaryOperatorKind.Equals ? "" : "!")}rt::is_null(&{tested})";
         }
+        // `(object)a == b` on a class that is a value here: the same object has the same content, and where the game
+        // goes on to compare the content of two that are not the same object, it finds the same answer.
+        if (b.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals && Unboxed(b.LeftOperand) is var ul && Unboxed(b.RightOperand) is var ur
+            && (ul != b.LeftOperand || ur != b.RightOperand) && w.IsValue(ul.Type) && w.IsValue(ur.Type) && N(ul.Type) == N(ur.Type))
+            return $"({Expr(ul)} {(b.OperatorKind == BinaryOperatorKind.Equals ? "==" : "!=")} {Expr(ur)})";
         if (b.OperatorMethod is { } om && World.IsSource(om.ContainingType) && !(om.IsImplicitlyDeclared && w.IsValue(om.ContainingType)))
         {
             if (w.IsDropped(om.ContainingType)) throw new Dropped(om.ContainingType.Name);
@@ -950,8 +1040,11 @@ public sealed partial class Body
         var cf = World.CollOf(from);
         var ct = World.CollOf(to);
         if (cf != World.Coll.None && ct == World.Coll.Vec) return $"{code}.into_vec()";
+        if (ct == World.Coll.Vec && World.MetaName(from) == "System.Linq.IGrouping`2") return $"{code}.into_vec()";
         if (World.IsTask(from, out var fr) && World.IsTask(to, out var tr) && tr == null) return $"{code}.map(|_| ())";
         if (to.SpecialType == SpecialType.System_Object || (w.IsObj(to) && !w.IsObj(from))) throw new Unsupported($"{from.Name} boxed as {to.Name}");
+        // (T)object, for a type parameter that stands for a class at every call.
+        if (w.IsObj(from) && to is ITypeParameterSymbol) return $"rt::unbox::<{nt}>({code})";
         throw new Unsupported($"conversion {nf} to {nt}");
     }
 
@@ -1013,7 +1106,8 @@ public sealed partial class Body
 
     private void Hoist(ILocalSymbol local)
     {
-        string decl = $"let mut {NameOf(local)}: {T(local.Type)} = Default::default();";
+        // A task that has not been started is one that is done.
+        string decl = $"let mut {NameOf(local)}: {T(local.Type)} = {(World.IsTask(local.Type, out _) ? "Ok(Default::default())" : "Default::default()")};";
         var f = frames.Peek();
         if (!f.Hoisted.Contains(decl)) f.Hoisted.Add(decl);
     }
@@ -1105,7 +1199,16 @@ public sealed partial class Body
             }
             case IMethodReferenceOperation mr:
             {
-                if (mr.Method.MethodKind == MethodKind.LocalFunction) throw new Unsupported("local function");
+                if (mr.Method.MethodKind == MethodKind.LocalFunction)
+                {
+                    // A local function handed over as a delegate is a lambda with a name.
+                    IOperation root = mr;
+                    while (root.Parent != null) root = root.Parent;
+                    var local = root.DescendantsAndSelf().OfType<ILocalFunctionOperation>().First(l => Eq.Equals(l.Symbol, mr.Method.OriginalDefinition));
+                    var (code, captured) = Lambda(local.Symbol, local.Body ?? throw new Unsupported("a local function without a body"), true);
+                    string clones = string.Concat(captured.Select(x => $"let mut {x} = {x}.clone(); "));
+                    return $"{{ {clones}{fn}::new(move {code}) }}";
+                }
                 var ps = invoke.Parameters.Select((p, i) => $"a{i}: {T(p.Type)}").Append("c: &mut Combat");
                 string call = MethodGroupCall(mr, invoke.Parameters.Length, out string? inst);
                 return $"{{ {(inst == null ? "" : $"let __i = {inst}; ")}{fn}::new(move |{string.Join(", ", ps)}| {call}) }}";
@@ -1131,9 +1234,10 @@ public sealed partial class Body
     }
 
     /// <summary>A closure `|a: A, c: &mut Combat| -> R { .. }`, and the outer locals it captures that are not Copy.</summary>
-    private (string Code, List<string> Captured) Lambda(IAnonymousFunctionOperation f, bool stored)
+    private (string Code, List<string> Captured) Lambda(IAnonymousFunctionOperation f, bool stored) => Lambda(f.Symbol, f.Body, stored);
+
+    private (string Code, List<string> Captured) Lambda(IMethodSymbol sym, IBlockOperation fBody, bool stored)
     {
-        var sym = f.Symbol;
         var ps = new List<string>();
         foreach (var p in sym.Parameters)
         {
@@ -1142,12 +1246,18 @@ public sealed partial class Body
             ps.Add($"mut {NameOf(p)}: {T(p.Type)}");
         }
         ps.Add("c: &mut Combat");
+        // A lambda with nothing in it but presentation does nothing here.
+        if ((sym.ReturnsVoid || (World.IsTask(sym.ReturnType, out var gives) && gives == null)) && !HoldsGameCall(fBody) && WritesOnlyItsOwn(sym, fBody))
+        {
+            LeftOut++;
+            return ($"|{string.Join(", ", ps.Select(p => p.StartsWith("mut ") ? "_" + p[4..] : "_" + p))}| -> {(sym.ReturnsVoid ? "()" : T(sym.ReturnType))} {{ {(sym.ReturnsVoid ? "" : "Ok(())")} }}", []);
+        }
         var frame = new Frame { Async = sym.IsAsync, ReturnsTask = World.IsTask(sym.ReturnType, out _), Ret = sym.ReturnsVoid ? null : sym.ReturnType, Lambda = sym };
         frames.Push(frame);
         var savedLoops = loops.ToArray();
         loops.Clear();
         string body;
-        try { body = Sub(f.Body); }
+        try { body = Sub(fBody); }
         finally
         {
             frames.Pop();
@@ -1157,17 +1267,33 @@ public sealed partial class Body
         string ret = sym.ReturnsVoid ? "()" : T(sym.ReturnType);
         var captured = new List<string>();
         var inner = new HashSet<ISymbol>(Eq) { sym };
-        foreach (var d in f.Body.Descendants())
+        foreach (var d in fBody.Descendants())
             if (d is IAnonymousFunctionOperation nested) inner.Add(nested.Symbol);
-        foreach (var d in f.Body.Descendants())
+        foreach (var d in fBody.Descendants())
         {
             ISymbol? s = d switch { ILocalReferenceOperation l => l.Local, IParameterReferenceOperation p => p.Parameter, _ => null };
             if (s == null || inner.Contains(s.ContainingSymbol) || droppedLocals.Contains(s) || aliases.ContainsKey(s)) continue;
             ITypeSymbol type = s is ILocalSymbol ls ? ls.Type : ((IParameterSymbol)s).Type;
-            if (stored && IsWritten(f.Body, s)) throw new Unsupported("a stored lambda writes a captured local");
+            if (stored && IsWritten(fBody, s)) throw new Unsupported("a stored lambda writes a captured local");
             if (!w.IsCopy(type) && !captured.Contains(NameOf(s))) captured.Add(NameOf(s));
         }
         return ($"|{string.Join(", ", ps)}| -> {ret} {{\n{head}{body}{Tail(frame, sym.ReturnsVoid)}}}", captured);
+    }
+
+    /// <summary>Whether every local from outside that the lambda writes is one nothing else reads.</summary>
+    private bool WritesOnlyItsOwn(IMethodSymbol sym, IBlockOperation fBody)
+    {
+        IOperation root = fBody;
+        while (root.Parent != null) root = root.Parent;
+        var inside = new HashSet<IOperation>(fBody.Descendants());
+        foreach (var d in fBody.Descendants())
+        {
+            IOperation? target = d switch { IAssignmentOperation a => a.Target, IIncrementOrDecrementOperation a => a.Target, _ => null };
+            if (target is IParameterReferenceOperation p && !Eq.Equals(p.Parameter.ContainingSymbol, sym)) return false;
+            if (target is not ILocalReferenceOperation l || w.IsDropped(l.Local.Type)) continue;
+            if (root.Descendants().OfType<ILocalReferenceOperation>().Any(r => Eq.Equals(r.Local, l.Local) && !inside.Contains(r))) return false;
+        }
+        return true;
     }
 
     private static bool IsWritten(IOperation body, ISymbol s)

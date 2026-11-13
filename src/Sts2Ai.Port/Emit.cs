@@ -152,7 +152,9 @@ public sealed class Emitter(World w)
 
         void Method(IMethodSymbol m, string? autoField = null)
         {
-            if (w.IsManualMember(m) || w.Cfg.DropMembers.Contains(t.Name + "." + (m.AssociatedSymbol ?? m).Name) || w.Cfg.DropMembers.Contains(t.Name + ".*")) return;
+            if (w.IsManualMember(m)) return;
+            if (!w.Cfg.KeepMembers.Contains(t.Name + "." + (m.AssociatedSymbol ?? m).Name)
+                && (w.Cfg.DropMembers.Contains(t.Name + "." + (m.AssociatedSymbol ?? m).Name) || w.Cfg.DropMembers.Contains(t.Name + ".*"))) return;
             if (PresentationSignature(m)) { r.Presentation++; return; }
             if (m.IsVirtual || m.IsOverride || m.IsAbstract || m.ExplicitInterfaceImplementations.Length > 0 || ImplementsInterface(m)) r.Virtuals.Add(m);
             if (w.AutoDropped.Contains(m)) { r.Presentation++; return; }
@@ -194,7 +196,7 @@ public sealed class Emitter(World w)
                 {
                     if (!hasBody) throw new Unsupported("no body in the decompiled source");
                     if (op == null) throw new Unsupported("code the compiler could not bind");
-                    text = body.Method(m, op);
+                    text = Entered(t, m, body, sig, body.Method(m, op));
                     r.Translated++;
                     r.LeftOut += body.LeftOut;
                     if (body.Written == 0 && body.LeftOut > 0 && m.MethodKind == MethodKind.Ordinary && (m.ReturnsVoid || (World.IsTask(m.ReturnType, out var res) && res == null))
@@ -331,7 +333,7 @@ public sealed class Emitter(World w)
         string text;
         if (Quarantine.Contains($"{module}::{CtorName(name)}") || Quarantine.Contains($"{module}::{name}"))
         {
-            text = $"todo!(\"port: rustc refused the translation of {t.Name}.ctor\")\n";
+            text = $"todo!(\"port: rustc refused the translation of {t.Name}.ctor\");\n";
             r.Quarantined++;
         }
         else
@@ -352,7 +354,7 @@ public sealed class Emitter(World w)
                         if (f.IsStatic || f.IsConst || w.IsDropped(f.Type)) continue;
                         var init = Initializer(f.AssociatedSymbol ?? f);
                         if (init == null) continue;
-                        string? field = isStruct ? World.FieldName(f) : w.StateField(f);
+                        string? field = w.StateField(f);
                         if (field == null) continue;
                         string place = isStruct ? $"me.{field}" : $"{w.DataName(t)}::of_mut(me, c).{field}";
                         try { head.Append($"{{ let __v = {body.Initial(init)}; {place} = __v; }}\n"); }
@@ -363,6 +365,16 @@ public sealed class Emitter(World w)
                             head.Append($"panic!(\"port: initializer of {t.Name}.{f.Name}: {Body.Escape(e.Message)}\");\n");
                         }
                     }
+                    // A record's parameters are its properties of the same names.
+                    if (ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is Microsoft.CodeAnalysis.CSharp.Syntax.TypeDeclarationSyntax { ParameterList: not null })
+                        foreach (var p in ctor.Parameters)
+                        {
+                            var auto = t.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => f.AssociatedSymbol is IPropertySymbol { Name: var n } && n == p.Name);
+                            if (auto == null || w.IsDropped(p.Type)) continue;
+                            string? field = w.StateField(auto);
+                            if (field == null) continue;
+                            head.Append($"{(isStruct ? $"me.{field}" : $"{w.DataName(t)}::of_mut(me, c).{field}")} = {body.ParamName(p)}.clone();\n");
+                        }
                     // A constructor that names no base constructor runs the base's parameterless one.
                     if (!isStruct && op is not IConstructorBodyOperation { Initializer: not null } && w.BaseClass(t) is { } b)
                         head.Append(body.BaseCtor(t, b)).Append('\n');
@@ -387,6 +399,25 @@ public sealed class Emitter(World w)
         if (t.IsAbstract) return;
         string args = string.Join(", ", inner.Args.Append("c"));
         sb.Append(Fn($"C#: new {t.Name}", name, sig, $"let me = {w.DataName(w.Root(t))}::alloc({w.KindOf(t)}, c);\n{CtorName(name)}({args});\nme\n"));
+    }
+
+    /// <summary>The body of a member port.toml lists under [enter]: hand-written code is told before it runs and after.</summary>
+    private string Entered(INamedTypeSymbol t, IMethodSymbol m, Body body, Sig sig, string text)
+    {
+        if (!w.Cfg.Enters(t.Name, m.Name)) return text;
+        var args = new List<string> { $"\"{m.Name}\"" };
+        foreach (string rule in w.Cfg.EnterArguments.GetValueOrDefault(t.Name, []))
+        {
+            IParameterSymbol? Find(IMethodSymbol x) => x.Parameters.FirstOrDefault(p => rule.StartsWith("type:") ? p.Type.Name == rule[5..] : p.Name == rule[5..]);
+            var shape = t.GetMembers().OfType<IMethodSymbol>().Where(x => w.Cfg.Enters(t.Name, x.Name)).Select(Find).FirstOrDefault(p => p != null)
+                ?? throw new InvalidDataException($"[enter] {rule}: no member of {t.Name} has it");
+            bool obj = w.IsObj(shape.Type);
+            var p = Find(m);
+            args.Add(p == null ? (obj ? "Obj::NULL" : "None") : obj ? body.ParamName(p) : $"Some({body.ParamName(p)}.clone())");
+        }
+        args.Add("c");
+        string module = $"m::{World.Snake(w.Unique(t))}";
+        return $"{module}::enter({string.Join(", ", args)});\nlet __r = (move |c: &mut Combat| -> {sig.Ret} {{\n{text}}})(c);\n{module}::leave(c);\n__r\n";
     }
 
     private static IOperation Unwrap(IOperation op) => op is IExpressionStatementOperation es ? es.Operation : op;
