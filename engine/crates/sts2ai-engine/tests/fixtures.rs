@@ -59,7 +59,11 @@ impl World {
         }
     }
 
-    fn text(&self, name: &str, call: unsafe extern "C" fn(u64, *mut ffi::SzBuf) -> i32) -> Result<Vec<u8>, String> {
+    fn text(
+        &self,
+        name: &str,
+        call: unsafe extern "C" fn(u64, *mut ffi::SzBuf) -> i32,
+    ) -> Result<Vec<u8>, String> {
         let mut buf = ffi::SzBuf::EMPTY;
         match unsafe { call(self.0, &mut buf) } {
             0 => Ok(take(buf)),
@@ -100,14 +104,21 @@ fn shows(world: &World, fixture: &Fixture, k: usize) -> Result<(), String> {
     }
     let legal = world.text("sz_world_legal", ffi::sz_world_legal)?;
     if legal != record.legal.as_bytes() {
-        let (expected, actual): (Vec<&str>, String) = (record.legal.lines().collect(), String::from_utf8_lossy(&legal).into_owned());
+        let (expected, actual): (Vec<&str>, String) = (
+            record.legal.lines().collect(),
+            String::from_utf8_lossy(&legal).into_owned(),
+        );
         let actual: Vec<&str> = actual.lines().collect();
         let at = expected
             .iter()
             .zip(&actual)
             .position(|(a, b)| a != b)
             .unwrap_or(expected.len().min(actual.len()));
-        return Err(format!("legal[{at}]: {:?} != {:?}", expected.get(at), actual.get(at)));
+        return Err(format!(
+            "legal[{at}]: {:?} != {:?}",
+            expected.get(at),
+            actual.get(at)
+        ));
     }
     if status != record.status {
         return Err(format!("status: {} != {status}", record.status));
@@ -133,13 +144,22 @@ fn shows(world: &World, fixture: &Fixture, k: usize) -> Result<(), String> {
 /// many records it showed before the first that differs.
 fn follow(mut world: World, fixture: &Fixture, from: usize, tally: &mut Tally, what: &str) {
     for k in from..fixture.records.len() - 1 {
-        let action = fixture.records[k].action.as_deref().expect("only the last record has no action");
-        let step = world.apply(action).and_then(|()| shows(&world, fixture, k + 1));
+        let action = fixture.records[k]
+            .action
+            .as_deref()
+            .expect("only the last record has no action");
+        let step = world
+            .apply(action)
+            .and_then(|()| shows(&world, fixture, k + 1));
         match step {
             Ok(()) => tally.passed += 1,
             Err(difference) => {
                 tally.failed.push((
-                    format!("{} record {} ({what} from {from}, after {action})", fixture.name, k + 1),
+                    format!(
+                        "{} record {} ({what} from {from}, after {action})",
+                        fixture.name,
+                        k + 1
+                    ),
                     difference,
                 ));
                 return;
@@ -159,9 +179,13 @@ fn import() {
                 tally.skipped += 1;
                 continue;
             }
-            match World::import(&fixture.bytes(k, "export.json")).and_then(|world| shows(&world, fixture, k)) {
+            match World::import(&fixture.bytes(k, "export.json"))
+                .and_then(|world| shows(&world, fixture, k))
+            {
                 Ok(()) => tally.passed += 1,
-                Err(difference) => tally.failed.push((format!("{} record {k}", fixture.name), difference)),
+                Err(difference) => tally
+                    .failed
+                    .push((format!("{} record {k}", fixture.name), difference)),
             }
         }
         tally
@@ -170,14 +194,23 @@ fn import() {
 }
 
 /// The step check: the world imported at a combat's first record is carried through the whole combat, card prompts
-/// included, and shows every record after each action.
+/// included, and shows every record after each action. A combat that opens on a card prompt (a relic that asks before
+/// the first hand) has no export there: its world is imported at the first record that has one, and the records
+/// before it are counted as skipped.
 #[test]
 fn step() {
     sweep(|fixture| {
         let mut tally = Tally::default();
-        match World::import(&fixture.bytes(0, "export.json")) {
-            Ok(world) => follow(world, fixture, 0, &mut tally, "carried"),
-            Err(difference) => tally.failed.push((format!("{} record 0", fixture.name), difference)),
+        let Some(first) = (0..fixture.records.len()).find(|&k| fixture.has_export(k)) else {
+            tally.skipped += fixture.records.len();
+            return tally;
+        };
+        tally.skipped += first;
+        match World::import(&fixture.bytes(first, "export.json")) {
+            Ok(world) => follow(world, fixture, first, &mut tally, "carried"),
+            Err(difference) => tally
+                .failed
+                .push((format!("{} record {first}", fixture.name), difference)),
         }
         tally
     })
@@ -191,9 +224,13 @@ fn continued() {
     sweep(|fixture| {
         let mut tally = Tally::default();
         for k in (0..fixture.records.len() - 1).filter(|&k| fixture.has_export(k)) {
-            match World::import(&fixture.bytes(k, "export.json")).and_then(|world| world.try_clone()) {
+            match World::import(&fixture.bytes(k, "export.json"))
+                .and_then(|world| world.try_clone())
+            {
                 Ok(world) => follow(world, fixture, k, &mut tally, "continued"),
-                Err(difference) => tally.failed.push((format!("{} record {k}", fixture.name), difference)),
+                Err(difference) => tally
+                    .failed
+                    .push((format!("{} record {k}", fixture.name), difference)),
             }
         }
         tally
@@ -220,8 +257,16 @@ fn blockers() {
                     errors.extend(world.text("sz_world_legal", ffi::sz_world_legal).err());
                     errors.extend(world.text("sz_world_observe", ffi::sz_world_observe).err());
                     errors.extend(world.text("sz_world_run", ffi::sz_world_run).err());
-                    errors.extend(world.key("sz_world_state_key", ffi::sz_world_state_key).err());
-                    errors.extend(world.key("sz_world_hidden_key", ffi::sz_world_hidden_key).err());
+                    errors.extend(
+                        world
+                            .key("sz_world_state_key", ffi::sz_world_state_key)
+                            .err(),
+                    );
+                    errors.extend(
+                        world
+                            .key("sz_world_hidden_key", ffi::sz_world_hidden_key)
+                            .err(),
+                    );
                 }
             }
             let mut said = said.lock().unwrap();

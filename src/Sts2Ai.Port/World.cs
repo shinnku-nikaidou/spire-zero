@@ -711,6 +711,44 @@ public sealed class World
             .Any(n => n is Microsoft.CodeAnalysis.CSharp.Syntax.YieldStatementSyntax);
     }, this);
 
+    private readonly ConcurrentDictionary<ISymbol, bool> _lazy = new(Eq);
+
+    private static readonly HashSet<string> StreamingNames =
+    [
+        "Where", "Select", "SelectMany", "TakeWhile", "SkipWhile", "Take", "Skip", "Concat", "Append", "Prepend", "Cast", "OfType", "Distinct", "DefaultIfEmpty",
+        "Union", "Except", "Intersect", "Zip", "AsEnumerable",
+    ];
+
+    /// <summary>Whether a member gives a LINQ chain C# has not evaluated yet (`IEnumerable&lt;T&gt; Alive => _all.Where(..)`):
+    /// its whole body is one such chain, in which an operator that runs a function has only operators above it that
+    /// hand values on one at a time. Read from the member's syntax.</summary>
+    public bool LazyMember(ISymbol member) => _lazy.GetOrAdd(member.OriginalDefinition, static (sym, self) =>
+    {
+        IMethodSymbol? m = sym switch { IPropertySymbol p => p.GetMethod, IMethodSymbol x => x, _ => null };
+        if (m == null || !IsSource(m.ContainingType) || m.ReturnType is not INamedTypeSymbol { Name: "IEnumerable" }) return false;
+        Microsoft.CodeAnalysis.CSharp.Syntax.ExpressionSyntax? value = null;
+        foreach (var reference in (sym is IPropertySymbol ? sym : m).DeclaringSyntaxReferences)
+        {
+            var node = reference.GetSyntax();
+            var arrow = node.ChildNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ArrowExpressionClauseSyntax>().FirstOrDefault()
+                ?? node.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.AccessorDeclarationSyntax>().FirstOrDefault(a => a.Keyword.Text == "get")?.ExpressionBody;
+            if (arrow != null) { value = arrow.Expression; break; }
+            var block = node is Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax md ? md.Body
+                : node.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.AccessorDeclarationSyntax>().FirstOrDefault(a => a.Keyword.Text == "get")?.Body;
+            if (block is { Statements: [Microsoft.CodeAnalysis.CSharp.Syntax.ReturnStatementSyntax { Expression: { } returned }] }) { value = returned; break; }
+        }
+        while (value != null)
+        {
+            while (value is Microsoft.CodeAnalysis.CSharp.Syntax.ParenthesizedExpressionSyntax par) value = par.Expression;
+            if (value is not Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax
+                { Expression: Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax { Name.Identifier.Text: var name, Expression: var inner } } call || !StreamingNames.Contains(name)) return false;
+            if (call.ArgumentList.Arguments.Any(a => a.Expression is Microsoft.CodeAnalysis.CSharp.Syntax.AnonymousFunctionExpressionSyntax or Microsoft.CodeAnalysis.CSharp.Syntax.IdentifierNameSyntax
+                or Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax) && name is "Where" or "Select" or "SelectMany" or "TakeWhile" or "SkipWhile") return true;
+            value = inner;
+        }
+        return false;
+    }, this);
+
     /// <summary>Whether a virtual call of this slot may run a body written with yield: its dispatcher has the
     /// `__each` form too.</summary>
     public bool IsWalk(IMethodSymbol slot)

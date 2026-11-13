@@ -53,7 +53,9 @@ fn actions(folder: &std::path::Path) -> Vec<Option<String>> {
 }
 
 /// Every combat of the dump is played through from its first decision with the actions the game was given: no action
-/// is refused and nothing the engine lacks is reached. What stops a combat is counted by its message.
+/// is refused and nothing the engine lacks is reached. What stops a combat is counted by its message. A combat that
+/// opens on a card prompt has no export there (the engine takes no combat in at a prompt): it is played from its
+/// first decision that has one.
 #[test]
 fn every_combat_is_played_through() {
     use std::collections::BTreeMap;
@@ -72,7 +74,12 @@ fn every_combat_is_played_through() {
         }
         played += 1;
         let actions = actions(&folder);
-        let export = std::fs::read_to_string(folder.join("0.export.json")).unwrap();
+        let Some(first) =
+            (0..actions.len()).find(|k| folder.join(format!("{k}.export.json")).exists())
+        else {
+            panic!("{name}: no decision of the combat has an export");
+        };
+        let export = std::fs::read_to_string(folder.join(format!("{first}.export.json"))).unwrap();
         let text_of = |panic: Box<dyn std::any::Any + Send>| {
             panic
                 .downcast_ref::<String>()
@@ -82,12 +89,14 @@ fn every_combat_is_played_through() {
         };
         let result = std::panic::catch_unwind(|| {
             // A panic while the export is read (a member the import runs that is not translated) stops the combat too.
-            let mut world = match std::panic::catch_unwind(|| sts2ai_engine::world::Live::import(&export)) {
+            let mut world = match std::panic::catch_unwind(|| {
+                sts2ai_engine::world::Live::import(&export)
+            }) {
                 Ok(Ok(world)) => world,
-                Ok(Err(e)) => return Err((0, format!("import: {e}"))),
-                Err(panic) => return Err((0, format!("import: panic: {}", text_of(panic)))),
+                Ok(Err(e)) => return Err((first, format!("import: {e}"))),
+                Err(panic) => return Err((first, format!("import: panic: {}", text_of(panic)))),
             };
-            for (k, action) in actions.iter().enumerate() {
+            for (k, action) in actions.iter().enumerate().skip(first) {
                 let Some(action) = action else { break };
                 let step =
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| world.apply(action)));
@@ -97,7 +106,7 @@ fn every_combat_is_played_through() {
                     Err(panic) => return Err((k, format!("panic: {}", text_of(panic)))),
                 }
             }
-            Ok::<usize, (usize, String)>(actions.len() - 1)
+            Ok::<usize, (usize, String)>(actions.len() - 1 - first)
         });
         match result {
             Ok(Ok(n)) => {
@@ -105,7 +114,7 @@ fn every_combat_is_played_through() {
                 steps += n;
             }
             Ok(Err((k, message))) => {
-                steps += k;
+                steps += k - first;
                 let key: String = message.chars().take(200).collect();
                 let entry = stopped
                     .entry(key)
