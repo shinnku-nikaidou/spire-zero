@@ -79,11 +79,13 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
         _ => throw Native.Failed("sz_world_status"),
     };
 
-    public ulong HiddenKey() => Native.sz_world_hidden_key(_world);
+    /// <exception cref="EngineException">The engine could not make the key.</exception>
+    public ulong HiddenKey() => Native.Key(Native.sz_world_hidden_key(_world), "sz_world_hidden_key");
 
     /// <summary>The state as search tells states apart, without building the observation: what
     /// <c>PimcBrain.StateKey</c> is to the real combat's observation.</summary>
-    public ulong StateKey() => Native.sz_world_state_key(_world);
+    /// <exception cref="EngineException">The engine could not make the key.</exception>
+    public ulong StateKey() => Native.Key(Native.sz_world_state_key(_world), "sz_world_state_key");
 
     public void Execute(CombatAction action)
     {

@@ -2,7 +2,9 @@
 //! which build it with rustc alone. Its combat is a list of the actions taken:
 //!  - the import's bytes are the encounter's id, and "refuse" cannot be imported;
 //!  - "play:9" fails (no such card); "play:7" wins, "potion:0" loses; each "end_turn" is a round;
-//!  - each action costs 1 HP of 70, down to 0.
+//!  - each action costs 1 HP of 70, down to 0;
+//!  - a combat called "keyless" has no keys: both are 0, with an error;
+//!  - every call on a world forgets the thread's last error first, as the engine does.
 //! `sz_test_live` counts the worlds not yet freed.
 
 use std::cell::RefCell;
@@ -58,6 +60,20 @@ fn fail(message: &str) {
     ERROR.with(|e| *e.borrow_mut() = message.to_string());
 }
 
+/// A call on a world starts with no error said.
+fn begin() {
+    ERROR.with(|e| e.borrow_mut().clear());
+}
+
+/// A key has no value that says "failed": it is 0 with an error.
+fn key(w: &World, key: u64) -> u64 {
+    if w.encounter == "keyless" {
+        fail("the stand-in has no key for a combat called keyless");
+        return 0;
+    }
+    key
+}
+
 fn make(world: World) -> u64 {
     LIVE.fetch_add(1, Ordering::SeqCst);
     Box::into_raw(Box::new(world)) as u64
@@ -73,6 +89,7 @@ unsafe fn text(bytes: *const u8, len: usize) -> String {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize) -> u64 {
+    begin();
     let encounter = unsafe { text(json, len) };
     if encounter == "refuse" {
         fail("the stand-in takes no combat called refuse");
@@ -83,6 +100,7 @@ pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize) -> u64 {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_clone(id: u64) -> u64 {
+    begin();
     make(unsafe { world(id) }.clone())
 }
 
@@ -94,6 +112,7 @@ pub unsafe extern "C" fn sz_world_free(id: u64) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_apply(id: u64, action: *const u8, len: usize) -> i32 {
+    begin();
     let action = unsafe { text(action, len) };
     if action == "play:9" {
         fail("no card 9 in hand");
@@ -105,17 +124,20 @@ pub unsafe extern "C" fn sz_world_apply(id: u64, action: *const u8, len: usize) 
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_status(id: u64) -> i32 {
+    begin();
     unsafe { world(id) }.status()
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_legal(id: u64, out: *mut Buf) -> i32 {
+    begin();
     let over = unsafe { world(id) }.status() != 0;
     give(if over { String::new() } else { "play:7\npotion:0:2\nend_turn\n".to_string() }, out)
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_observe(id: u64, out: *mut Buf) -> i32 {
+    begin();
     let w = unsafe { world(id) };
     give(
         format!(
@@ -134,6 +156,7 @@ pub unsafe extern "C" fn sz_world_observe(id: u64, out: *mut Buf) -> i32 {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_run(id: u64, out: *mut Buf) -> i32 {
+    begin();
     let w = unsafe { world(id) };
     give(
         format!(
@@ -146,12 +169,16 @@ pub unsafe extern "C" fn sz_world_run(id: u64, out: *mut Buf) -> i32 {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_hidden_key(id: u64) -> u64 {
-    unsafe { world(id) }.steps.len() as u64
+    begin();
+    let w = unsafe { world(id) };
+    key(w, w.steps.len() as u64)
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_state_key(id: u64) -> u64 {
-    unsafe { world(id) }.round() as u64
+    begin();
+    let w = unsafe { world(id) };
+    key(w, w.round() as u64)
 }
 
 #[unsafe(no_mangle)]

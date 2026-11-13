@@ -78,13 +78,21 @@ internal static unsafe partial class Native
         }
     }
 
-    /// <summary>What the engine said of the call that just failed on this thread.</summary>
-    internal static EngineException Failed(string call)
+    /// <summary>What the engine said of the last call on this thread: empty when that call did not fail.</summary>
+    internal static string Said()
     {
         Buf buf;
-        string said = sz_last_error(&buf) == 0 ? Encoding.UTF8.GetString(Take(buf)) : "";
-        return new EngineException(said.Length > 0 ? $"{call}: {said}" : $"{call} failed, and the engine does not say why");
+        return sz_last_error(&buf) == 0 ? Encoding.UTF8.GetString(Take(buf)) : "";
     }
+
+    /// <summary>What the engine said of the call that just failed on this thread.</summary>
+    internal static EngineException Failed(string call) =>
+        new(Said() is { Length: > 0 } said ? $"{call}: {said}" : $"{call} failed, and the engine does not say why");
+
+    /// <summary>A key the engine gave. A key has no value that says "failed": the engine answers 0 then and says why,
+    /// and a key that is 0 comes with nothing said.</summary>
+    internal static ulong Key(ulong key, string call) =>
+        key != 0 || Said() is not { Length: > 0 } said ? key : throw new EngineException($"{call}: {said}");
 }
 
 /// <summary>

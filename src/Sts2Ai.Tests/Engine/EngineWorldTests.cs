@@ -105,6 +105,18 @@ public sealed class EngineWorldTests(FakeEngine engine) : IClassFixture<FakeEngi
     }
 
     [Fact]
+    public void AKeyOfZeroIsAKeyUnlessTheEngineSaysItFailed()
+    {
+        using var world = World();
+        Assert.Throws<EngineException>(() => world.Execute(CombatAction.Play(9)));
+        // No action taken: the key is 0, and the failure before it is not this call's.
+        Assert.Equal(0UL, world.HiddenKey());
+        using var keyless = World("keyless");
+        Assert.Equal("sz_world_hidden_key: the stand-in has no key for a combat called keyless", Assert.Throws<EngineException>(() => keyless.HiddenKey()).Message);
+        Assert.Equal("sz_world_state_key: the stand-in has no key for a combat called keyless", Assert.Throws<EngineException>(() => keyless.StateKey()).Message);
+    }
+
+    [Fact]
     public void ASnapshotBringsItsStateBackAnyNumberOfTimes()
     {
         using var world = World();
