@@ -343,3 +343,23 @@
     stub 377，手寫成員 30，呈現成員 1,323。
   - 接下來（協調排的步驟 b）：delegate 成為值（`Fn0..5` 是函式編號加目標、依 `ldftn` 順序的表、閉包類別、schema 的
     `delegate` 種類），然後事件是 delegate 的清單，`manual/delegates.rs` 與 `card_pile.rs` 隨之拿掉。
+- 06:36 （engine-port）步驟 b 的引擎端：**delegate 是值了**。commit 4ef66743、30c60a3f、8f669c74（都已推送）。
+  - `FnN` 現在是「表裡的第幾個函式＋它綁定的物件」，可比較、可匯出；`gen/fns.rs` 有 516 個函式和一張以遊戲自己的方法名
+    （`<CLR 類別>::<方法>`）排序的表。方法群組直接有名字；lambda 與區域函式在反編譯原始碼裡沒有名字，port 讀 `sts2.dll` 的 IL
+    （成員裡每個 `ldftn` 依程式順序對上原始碼的第幾個 lambda）取得編譯器給的名字。
+  - 捕獲區域變數的 lambda：編譯器替那個範圍做的類別（`<>c__DisplayClassN_M`）成為引擎的類別、各有自己的 arena（25 個，29 個
+    lambda 綁在上面），delegate 的目標就是那個物件。暈眩招的包裝（`CreatureCmd.Stun` 的 `Wrapper`）因此是資料。
+  - schema 的 `delegate` 種類、閉包類別、匯入端的讀取都寫好了，但放在開關後面：`engine/port.toml` 的 `[delegates] exported`，
+    **目前是關**。關的時候 schema 與之前逐位元組相同（f79a712b，現有 dump 都還能用），匯入照舊重做 delegate；開了之後 schema
+    多 18 個 `delegate` 欄位與 25 個閉包類別。要開，只差匯出端寫出 `delegate` 這一種值（engine-bridge 的檔案；要寫什麼在
+    筆記 `delegates.md` 最後一節）。開了、重新 dump 之後，那 332 個被拒的匯入（暈眩招）應該就進得來，`manual/delegates.rs`
+    與開關一起刪掉。
+  - 不靠匯出端能驗的都驗了：engine-bridge 普查（2,160 場戰鬥＋48 局整局）看到的每一個資料欄位裡的方法，表裡都有
+    （427/427、416/416；原本缺一個純呈現的 `Rocket.RechargeMove`，現在是表裡一個什麼都不做的函式）；開關開著引擎能編譯；
+    讀取器有單元測試。開關關著，掃描結果與之前相同：1,068 場全部打完、走步 25,979 筆全同、匯入 24,883 過 / 332 拒、
+    續打 805,249 步全同。
+  - 事件（訂閱者是遊戲邏輯的那 8 個）還沒做：等開關開了之後做成 delegate 的清單，`manual/card_pile.rs` 隨之拿掉。更正先前
+    的說法：`CombatStateTracker`、`CombatReplayWriter`、`RewardSynchronizer` 目前不在 port.toml 的 drop 清單上（只是在翻譯
+    範圍外），到時會放上去，schema 也會帶 drop 清單讓匯出端跳過它們的訂閱。
+  - 新工具 `engine/reach.py`：從手寫程式與產生的表出發，沿著產生的程式碼列出「戰鬥走得到、但還沒有程式碼」的成員。
+    現在是 657 個沒有程式碼的成員裡 34 個走得到（靜態、寧多勿少；多數是地圖動作、戰鬥外取得遺物）。接下來照這張表補翻譯。
