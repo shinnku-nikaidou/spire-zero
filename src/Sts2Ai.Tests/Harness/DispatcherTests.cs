@@ -126,6 +126,34 @@ public class DispatcherTests
     }
 
     [Fact]
+    public void ThePlansRootedAtACardPromptAreCountedByWhyTheyWereMade()
+    {
+        // A route that searches at every prompt (a search leaves candidates) and says what its plans cost.
+        bool replanned = false;
+        var costs = new PlanTally(Plans: 4, Nodes: 1200);
+        var searched = new[] { new Candidate("pick:2", 0.5, 0, 1) };
+        var dispatcher = Make(new("test", (decision, _, _, _) => decision.Observation.Prompt != null
+            ? new(CombatAction.Pick([2]), [], searched, Replanned: replanned)
+            : new(CombatAction.Play(0, 1), [], []), Costs: () => costs));
+
+        // The combat's first decision is a prompt: it opens the combat.
+        dispatcher.Decide(Prompt());
+        // After a play, a prompt the plan had no answer for; then one where a step did not hold.
+        dispatcher.Choose(Decision(Fixtures.Slugs()));
+        dispatcher.Decide(Prompt());
+        replanned = true;
+        dispatcher.Decide(Prompt());
+        // A decision outside combat ends the combat: the next prompt opens another.
+        dispatcher.Choose(Map());
+        replanned = false;
+        dispatcher.Decide(Prompt());
+
+        Assert.Equal(costs with { Replans = 1, PromptOpens = 2, PromptAfterPlan = 1, PromptReplanned = 1 }, dispatcher.Search);
+        // A brain that keeps no count has none.
+        Assert.Null(Make(CombatRoute.Of("test", new EndTurns())).Search);
+    }
+
+    [Fact]
     public void ACardPromptInAFightTheRunsRuleWinsIsTheMacroSides()
     {
         int fights = 0;
