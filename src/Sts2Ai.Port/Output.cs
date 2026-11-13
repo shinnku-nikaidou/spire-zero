@@ -104,7 +104,7 @@ public sealed class Output(World w, Emitter em)
                 if (signed == null) continue;
                 var (name, sig) = signed.Value;
                 string args = string.Join(", ", sig.Args.Append("c"));
-                string fish = sig.Generics.Length == 0 ? "" : "::<" + string.Join(", ", sig.Generics.Trim('<', '>').Split(',').Select(x => x.Split(':')[0].Trim())) + ">";
+                string fish = Emitter.Fish(sig);
                 string none = sig.Ret == "()" ? "()" : sig.Ret == "R<()>" ? "Ok(())" : $"panic!(\"{type.Name}.{slot.Name}: the override is presentation\")";
                 string PathOf(IMethodSymbol impl)
                 {
@@ -114,7 +114,14 @@ public sealed class Output(World w, Emitter em)
                     if (cat == Cat.Manual) w.ManualRefs.TryAdd(impl, 0);
                     return $"{w.Path(impl.ContainingType, impl)}::{w.FnName(impl)}{fish}({args})";
                 }
+                // A slot one of whose bodies is written with yield has the `__each` form too: a body that is not
+                // gives its whole sequence, which is then handed out value by value.
+                bool walk = w.IsWalk(slot);
+                string EachOf(IMethodSymbol impl) => w.Yields(impl)
+                    ? $"{w.Path(impl.ContainingType, impl)}::{w.FnName(impl)}__each{fish}({args}, __k)"
+                    : $"rt::walk({PathOf(impl)}, c, __k)";
                 var arms = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
+                var eachArms = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
                 foreach (var k in below)
                 {
                     var impl = FindImpl(k, slot);
@@ -122,6 +129,10 @@ public sealed class Output(World w, Emitter em)
                     string path = PathOf(impl);
                     if (!arms.TryGetValue(path, out var list)) arms[path] = list = [];
                     list.Add("Kind::" + w.Unique(k));
+                    if (!walk) continue;
+                    string each = EachOf(impl);
+                    if (!eachArms.TryGetValue(each, out var eachList)) eachArms[each] = eachList = [];
+                    eachList.Add("Kind::" + w.Unique(k));
                 }
                 // An interface's member with a body of its own is what its classes run when they have none.
                 string fallback = slot.IsAbstract
@@ -133,6 +144,12 @@ public sealed class Output(World w, Emitter em)
                 foreach (var (path, kinds) in arms) body.Append($"            {string.Join(" | ", kinds)} => {path},\n");
                 body.Append($"            {fallback},\n        }}\n    }}\n\n");
                 count++;
+                if (!walk) continue;
+                string item = w.RType(World.WalkItem(slot)!);
+                body.Append($"    /// C#: virtual {type.Name}.{(slot.AssociatedSymbol ?? slot).Name}, value by value\n");
+                body.Append($"    pub fn {name}__each{sig.Generics}({ps}, __k: &mut dyn FnMut({item}, &mut Combat) -> R<bool>) -> R<bool> {{\n        match g::kinds::kind_of(me, c) {{\n");
+                foreach (var (path, kinds) in eachArms) body.Append($"            {string.Join(" | ", kinds)} => {path},\n");
+                body.Append($"            {(slot.IsAbstract ? fallback : $"_ => {EachOf(slot)}")},\n        }}\n    }}\n\n");
             }
             if (body.Length > 0) sb.Append($"pub mod {w.Module(type)} {{\n    use super::*;\n\n{body}}}\n\n");
         }

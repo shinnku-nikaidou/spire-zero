@@ -127,6 +127,11 @@ public sealed partial class Body
     private string Expr(IOperation op)
     {
         if (pinned.TryGetValue(op, out var pin)) return pin;
+        // An enumerator taken by hand: MoveNext steps the iterator, Current is the item it is at.
+        if (op is IInvocationOperation { TargetMethod.Name: "MoveNext", Instance: ILocalReferenceOperation { Local: var en } } && enumerators.Contains(en))
+            return $"{{ {NameOf(en)}_at = {NameOf(en)}_it.next(); {NameOf(en)}_at.is_some() }}";
+        if (op is IPropertyReferenceOperation { Property.Name: "Current", Instance: ILocalReferenceOperation { Local: var en2 } } && enumerators.Contains(en2))
+            return $"{NameOf(en2)}_at.clone().expect(\"an enumerator before its first item or after its last\")";
         if (op.ConstantValue.HasValue && op is not IInterpolatedStringOperation)
         {
             if (op.ConstantValue.Value == null) return Null(op.Type);
@@ -484,7 +489,7 @@ public sealed partial class Body
         if (!m.ReturnsVoid) T(m.ReturnType);
         // A virtual member of the library (ToString, Equals) has no dispatcher: the override the compiler found is called.
         // A class written by hand answers for the classes below it too: no dispatcher goes around it.
-        if (virtualCall && VirtualMember(owner) && World.IsSource(World.Slot(m).ContainingType) && !w.IsValue(type) && w.CatOf(World.Slot(m).ContainingType) != Cat.Manual)
+        if (virtualCall && Dispatched(m))
         {
             var slot = World.Slot(m);
             w.Slots.TryAdd(slot, 0);
@@ -495,6 +500,25 @@ public sealed partial class Body
         if (cat == Cat.Stub) w.StubRefs.TryAdd(m, 0);
         if (cat == Cat.Manual) w.ManualRefs.TryAdd(m, 0);
         return $"{w.Path(type, m)}::{w.FnName(m)}";
+    }
+
+    /// <summary>Whether a virtual call of the member goes through its slot's dispatcher.</summary>
+    private bool Dispatched(IMethodSymbol m) =>
+        VirtualMember(m.AssociatedSymbol ?? m) && World.IsSource(World.Slot(m).ContainingType) && !w.IsValue(m.ContainingType) && w.CatOf(World.Slot(m).ContainingType) != Cat.Manual;
+
+    /// <summary>The call a foreach walks, when it is a call of a sequence written with yield (or of a slot one of whose
+    /// bodies is): the loop's body then runs inside the call, for each value as the sequence reaches it.</summary>
+    private IInvocationOperation? WalkCall(IOperation collection)
+    {
+        var inner = collection;
+        while (inner is IConversionOperation { IsTryCast: false, Conversion: { IsIdentity: true } or { IsReference: true, IsImplicit: true } } cv) inner = cv.Operand;
+        if (inner is not IInvocationOperation op) return null;
+        var def = (op.TargetMethod.ReducedFrom ?? op.TargetMethod).OriginalDefinition;
+        var type = def.ContainingType;
+        if (!World.IsSource(type) || World.IsGeneratedList(type) || w.IsDropped(type) || w.IsDropMember(def) || Value(def) != null) return null;
+        if (def.MethodKind is not (MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation) || World.WalkItem(def) == null) return null;
+        bool viaSlot = op.IsVirtual && !IsBaseAccess(op.Instance) && Dispatched(def);
+        return (viaSlot ? w.IsWalk((IMethodSymbol)World.Slot(def)) : w.Yields(def)) ? op : null;
     }
 
     private bool InStaticOrCtor => member is IMethodSymbol { IsStatic: true } or IMethodSymbol { MethodKind: MethodKind.Constructor } or IPropertySymbol { IsStatic: true } or IFieldSymbol;
@@ -563,7 +587,8 @@ public sealed partial class Body
         return $"{CallPath(getter, virt)}({string.Join(", ", args)})";
     }
 
-    private string Invoke(IInvocationOperation op)
+    /// <summary>A call. With `walk` (the code that takes each value), the call of a sequence's `__each` form.</summary>
+    private string Invoke(IInvocationOperation op, string? walk = null)
     {
         var m = op.TargetMethod;
         if (Value(m.ReducedFrom ?? m) is { } fixedValue) return fixedValue;
@@ -588,7 +613,7 @@ public sealed partial class Body
             if (op.Instance != null && !m.ReturnsVoid && Eq.Equals(m.ReturnType.OriginalDefinition, type) && !World.IsTask(m.ReturnType, out _)) return Expr(op.Instance);
             throw new Dropped($"{type.Name}.{m.Name}");
         }
-        string path = CallPath(m, op.IsVirtual && !IsBaseAccess(op.Instance)) + Turbofish(m);
+        string path = CallPath(m, op.IsVirtual && !IsBaseAccess(op.Instance)) + (walk == null ? "" : "__each") + Turbofish(m);
         // base(..) or this(..) at the head of a constructor: the other constructor's body, on this object.
         // For a value, the other constructor makes the value.
         bool valueCtor = m.MethodKind == MethodKind.Constructor && w.IsValue(type);
@@ -638,6 +663,11 @@ public sealed partial class Body
             pre = op.Arguments.Where(passed.Contains).Select(a => pre[passed.IndexOf(a)]).ToList();
         }
         args.Add("c");
+        if (walk != null)
+        {
+            if (outs.Count > 0) throw new Unsupported("a sequence that changes what it is given");
+            args.Add(walk);
+        }
         string call = $"{path}({string.Join(", ", args)})";
         if (valueCtor) call = $"me = {call}";
         if (outs.Count == 0) return pre.Count == 0 ? call : $"{{ {string.Join(" ", pre)} {call} }}";
@@ -700,7 +730,7 @@ public sealed partial class Body
         {
             case ILocalReferenceOperation l:
                 if (droppedLocals.Contains(l.Local)) throw new Dropped(l.Local.Name);
-                return aliases.TryGetValue(l.Local, out var a) ? a.Replace("::of(", "::of_mut(") : NameOf(l.Local);
+                return aliases.TryGetValue(l.Local, out var a) ? a.Replace("{ &", "{ &mut ").Replace("::of(", "::of_mut(") : NameOf(l.Local);
             case IParameterReferenceOperation p:
                 if (droppedLocals.Contains(p.Parameter)) throw new Dropped(p.Parameter.Name);
                 return NameOf(p.Parameter);
@@ -1261,6 +1291,9 @@ public sealed partial class Body
                 string clones = string.Concat(captured.Select(x => $"let mut {x} = {x}.clone(); "));
                 return $"{{ {clones}{fn}::new(move {code}) }}";
             }
+            case IMethodReferenceOperation { Method: { Name: "Contains" } cm, Instance: { } list } when !World.IsSource(cm.ContainingType) && invoke.Parameters.Length == 1 && World.CollOf(list.Type) != World.Coll.None:
+                // list.Contains handed over as a function.
+                return $"{{ let __m = {Expr(list)}.into_vec(); {fn}::new(move |a0: {T(invoke.Parameters[0].Type)}, _c: &mut Combat| linq::contains(&__m, &a0)) }}";
             case IMethodReferenceOperation mr:
             {
                 if (mr.Method.MethodKind == MethodKind.LocalFunction)
@@ -1385,6 +1418,8 @@ public sealed partial class Body
         switch (arg)
         {
             case IAnonymousFunctionOperation f: return Lambda(f, false).Code;
+            case IMethodReferenceOperation { Method: { Name: "Contains" } cm, Instance: { } list } when !World.IsSource(cm.ContainingType) && arity == 1 && World.CollOf(list.Type) != World.Coll.None:
+                return $"{{ let __m = {Expr(list)}.into_vec(); move |a0, _c: &mut Combat| linq::contains(&__m, &a0) }}";
             case IMethodReferenceOperation mr:
             {
                 if (mr.Instance != null && mr.Instance is not IInstanceReferenceOperation) throw new Unsupported("method group on a computed receiver");

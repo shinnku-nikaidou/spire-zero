@@ -361,3 +361,22 @@ pub fn when_all(tasks: Vec<R<()>>) -> R<()> {
 pub fn when_all_values<T>(tasks: Vec<R<T>>) -> R<Vec<T>> {
     tasks.into_iter().collect()
 }
+
+/// A whole sequence handed out value by value: `k` takes each and answers whether the walk ends there. Gives back
+/// whether it did. (A sequence written with yield has its own function of this shape: see World.Yields in port.)
+pub fn walk<T>(items: Vec<T>, c: &mut Combat, k: &mut dyn FnMut(T, &mut Combat) -> R<bool>) -> R<bool> {
+    for item in items {
+        if k(item, c)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The end of a walk whose body awaits nothing: no stop can have left it.
+pub fn walked(r: R<bool>) -> bool {
+    match r {
+        Ok(ended) => ended,
+        Err(_) => panic!("a stop left a walk that awaits nothing"),
+    }
+}

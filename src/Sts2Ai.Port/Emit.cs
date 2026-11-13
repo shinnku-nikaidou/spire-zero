@@ -89,6 +89,18 @@ public sealed class Emitter(World w)
         return $"/// {doc}\npub fn {name}{sig.Generics}({ps}){ret} {{\n{body}}}\n\n";
     }
 
+    /// <summary>The `__each` form of a sequence: the function that hands each value to `__k`, which answers whether the
+    /// walk ends there. It gives back whether it did.</summary>
+    public static string FnEach(string doc, string name, Sig sig, string item, string body)
+    {
+        string ps = string.Join(", ", sig.Params.Append("c: &mut Combat").Append($"__k: &mut dyn FnMut({item}, &mut Combat) -> R<bool>"));
+        return $"/// {doc}, value by value\npub fn {name}__each{sig.Generics}({ps}) -> R<bool> {{\n{body}}}\n\n";
+    }
+
+    /// <summary>The type arguments of a call of a function with this signature, written out.</summary>
+    public static string Fish(Sig sig) =>
+        sig.Generics.Length == 0 ? "" : "::<" + string.Join(", ", sig.Generics.Trim('<', '>').Split(',').Select(x => x.Split(':')[0].Trim())) + ">";
+
     /// <summary>The signature of a member for a stub, a dispatcher or the list of hand-written members; null when it cannot be written.</summary>
     public (string Name, Sig Sig)? SignatureOf(IMethodSymbol m, bool ctorBody = false)
     {
@@ -174,7 +186,8 @@ public sealed class Emitter(World w)
                 return;
             }
             string text;
-            if (Quarantine.Contains($"{module}::{name}"))
+            bool yields = w.Yields(m);
+            if (Quarantine.Contains($"{module}::{name}") || (yields && Quarantine.Contains($"{module}::{name}__each")))
             {
                 text = $"todo!(\"port: rustc refused the translation of {t.Name}.{m.Name}\")\n";
                 r.Quarantined++;
@@ -217,6 +230,14 @@ public sealed class Emitter(World w)
                     text = $"todo!(\"port: {t.Name}.{m.Name}: {Body.Escape(e.Message)}\")\n";
                     r.Failed++;
                 }
+            }
+            if (yields)
+            {
+                // A sequence written with yield: the body hands each value to the code that walks it. The form that
+                // gives the whole sequence at once collects them.
+                string item = w.RType(World.WalkItem(m)!);
+                sb.Append(FnEach(doc, name, sig, item, text));
+                text = $"let mut __out: {sig.Ret} = Vec::new();\nrt::walked({name}__each{Fish(sig)}({string.Join(", ", sig.Args.Append("c"))}, &mut |__x, _| {{\n__out.push(__x);\nOk(false)\n}}));\n__out\n";
             }
             sb.Append(Fn(doc, name, sig, text));
         }

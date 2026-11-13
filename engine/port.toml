@@ -82,6 +82,7 @@ translate = [
     "MegaCrit.Sts2.Core.Runs.History",
     "MegaCrit.Sts2.Core.Runs.PlayerMapPointHistoryEntry",
     "MegaCrit.Sts2.Core.Map.MapPointType",
+    "MegaCrit.Sts2.Core.Map.MapCoord",
     "MegaCrit.Sts2.Core.Saves.Runs.SerializableCard",
     "MegaCrit.Sts2.Core.Saves.Runs.SerializableEnchantment",
     "MegaCrit.Sts2.Core.Saves.Runs.SavedProperties",
@@ -209,7 +210,7 @@ fields = [
 # bookkeeping of what the engine writes by hand.
 LocString = ["locTable", "locEntryKey"]
 RunManager = ["State", "AscensionManager", "ActionQueueSet", "ActionExecutor", "ActionQueueSynchronizer", "PlayerChoiceSynchronizer", "CardSelectorStack"]
-RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "_mapPointHistory", "Dominion", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
+RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "_mapPointHistory", "_visitedMapCoords", "Dominion", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
 
 [caches]
 # Statics that only remember the result of a computation: never kept, computed at each use.
@@ -261,6 +262,7 @@ members = [
     "CombatManager.Instance",
     "RunManager.Instance",
     "NetCombatCardDb.Instance",
+    "NullRunState.Instance",
     "LocalContext.NetId",
     "CombatTurnState._sequenceCounter",
 ]

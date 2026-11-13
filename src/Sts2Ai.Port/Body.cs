@@ -77,6 +77,7 @@ public sealed partial class Body
             if (w.IsDropped(p.Type)) droppedLocals.Add(p);
         var f = new Frame { Async = m.IsAsync, ReturnsTask = World.IsTask(m.ReturnType, out _), Ret = m.ReturnsVoid ? null : m.ReturnType };
         if (op != null) f.Iterator = HasYield(op);
+        if (f.Iterator && !w.Yields(m)) throw new Unsupported("yield in what is not a sequence of values");
         foreach (var p in m.Parameters)
             if ((p.RefKind is RefKind.Out or RefKind.Ref || w.IsChangedParam(p)) && !w.IsDropped(p.Type)) f.Outs.Add(NameOf(p));
         frames.Push(f);
@@ -100,7 +101,6 @@ public sealed partial class Body
         var head = new StringBuilder(prologue);
         foreach (var p in m.Parameters)
             if (p.RefKind == RefKind.Out && !w.IsDropped(p.Type)) head.Append($"let mut {NameOf(p)}: {T(p.Type)} = Default::default();\n");
-        if (f.Iterator) head.Append($"let mut __out: {T(m.ReturnType)} = Vec::new();\n");
         foreach (var h in f.Hoisted) head.Append(h).Append('\n');
         return head.ToString() + sb + (EndsInReturn(op) && !f.Iterator ? "" : Tail(f, m.ReturnsVoid));
     }
@@ -160,7 +160,7 @@ public sealed partial class Body
 
     private string Tail(Frame f, bool returnsVoid)
     {
-        if (f.Iterator) return "__out\n";
+        if (f.Iterator) return "Ok(false)\n";
         if (f.ReturnsTask && f.Async && (f.Ret == null || !World.IsTask(f.Ret, out var r) || r == null)) return "Ok(())\n";
         if (returnsVoid || f.Ret == null) return f.Outs.Count == 0 ? "" : OutTuple(f, null) + "\n";
         return $"#[allow(unreachable_code)]\n{{ unreachable!(\"{Where}: no return\") }}\n";
@@ -219,7 +219,10 @@ public sealed partial class Body
 
     /// <summary>Where each label of a block with labels is: the loop of its block, the variable that says which part
     /// runs next, and the number of the part the label starts.</summary>
-    private readonly Dictionary<ISymbol, (string Loop, string Pc, int Part)> labels = new(Eq);
+    private readonly Dictionary<ISymbol, (string Loop, string Pc, int Part, int Walks)> labels = new(Eq);
+
+    /// <summary>How many loops over a sequence the code being written is inside of (each is a closure of its own).</summary>
+    private int walks;
 
     /// <summary>The locals of blocks with labels: declared before the block's loop, so every part sees them.</summary>
     private readonly HashSet<ISymbol> declaredAhead = new(Eq);
@@ -235,7 +238,7 @@ public sealed partial class Body
             if (s is ILabeledOperation lab)
             {
                 parts.Add([]);
-                labels[lab.Label] = (loop, pc, parts.Count - 1);
+                labels[lab.Label] = (loop, pc, parts.Count - 1, walks);
                 if (lab.Operation != null) parts[^1].Add(lab.Operation);
             }
             else parts[^1].Add(s);
@@ -366,9 +369,14 @@ public sealed partial class Body
             case IReturnOperation r:
                 switch (r.Kind)
                 {
-                    case OperationKind.YieldBreak: sb.Append("return __out;\n"); break;
+                    // A sequence hands each value to the code that walks it, which says whether to go on (see World.Yields).
+                    case OperationKind.YieldBreak:
+                        if (!frames.Peek().Iterator) throw new Unsupported("yield in a local function");
+                        sb.Append(LeaveWith("Ok(false)")).Append('\n');
+                        break;
                     case OperationKind.YieldReturn:
-                        sb.Append($"__out.push({NoDrop(r.ReturnedValue!, "yields presentation")});\n");
+                        if (!frames.Peek().Iterator) throw new Unsupported("yield in a local function");
+                        sb.Append($"if __k({NoDrop(r.ReturnedValue!, "yields presentation")}, c)? {{\n{LeaveWith("Ok(true)")}\n}}\n");
                         break;
                     default: sb.Append(Return(r.ReturnedValue)).Append('\n'); break;
                 }
@@ -377,6 +385,7 @@ public sealed partial class Body
             case IBranchOperation { BranchKind: BranchKind.GoTo } go:
             {
                 if (!labels.TryGetValue(go.Target, out var to)) throw new Unsupported("a goto to a label inside another statement");
+                if (to.Walks != walks) throw new Unsupported("a goto out of a loop over a sequence");
                 sb.Append($"{to.Pc} = {to.Part};\ncontinue {to.Loop};\n");
                 Written++;
                 return;
@@ -428,15 +437,29 @@ public sealed partial class Body
         catch (Dropped d) { throw new Unsupported($"{why} ({d.Message})"); }
     }
 
-    /// <summary>The labels of the try blocks with a finally that the code being written is inside of, innermost last.</summary>
-    private readonly Stack<(string Label, int Frame)> tries = new();
+    /// <summary>What a return has to get out of first: a try block with a finally (a labeled block), or the body of a
+    /// loop over a sequence (a closure, which keeps the value in a variable outside it).</summary>
+    private sealed class Scope
+    {
+        public string Label = "";
+        public int Frame;
+        public bool Walk, Used;
+    }
 
-    /// <summary>The try block with a finally around the code being written, in the same member or lambda.</summary>
-    private string? TryAround => tries.Count > 0 && tries.Peek().Frame == frames.Count ? tries.Peek().Label : null;
+    /// <summary>The scopes the code being written is inside of, innermost last.</summary>
+    private readonly Stack<Scope> scopes = new();
 
-    /// <summary>The statement that leaves with what the member returns: out of the member, or out of the try block
-    /// around it whose finally has to run first.</summary>
-    private string LeaveWith(string value) => TryAround is { } label ? $"break {label} Some({value});" : $"return {value};";
+    /// <summary>The scope around the code being written, in the same member or lambda.</summary>
+    private Scope? Around => scopes.Count > 0 && scopes.Peek().Frame == frames.Count ? scopes.Peek() : null;
+
+    /// <summary>The statement that leaves with what the member returns: out of the member, or out of the scope around
+    /// it, after which the value goes on outwards.</summary>
+    private string LeaveWith(string value)
+    {
+        if (Around is not { } scope) return $"return {value};";
+        scope.Used = true;
+        return scope.Walk ? $"{{ {scope.Label} = Some({value}); return Ok(true); }}" : $"break {scope.Label} Some({value});";
+    }
 
     private string Return(IOperation? value)
     {
@@ -444,7 +467,7 @@ public sealed partial class Body
         if (f.Iterator) throw new Unsupported("return in an iterator");
         if (value == null)
         {
-            if (TryAround != null) return LeaveWith(f.ReturnsTask && f.Async ? "Ok(())" : f.Outs.Count > 0 ? OutTuple(f, null) : "()");
+            if (Around != null) return LeaveWith(f.ReturnsTask && f.Async ? "Ok(())" : f.Outs.Count > 0 ? OutTuple(f, null) : "()");
             return f.ReturnsTask && f.Async ? "return Ok(());" : f.Outs.Count > 0 ? $"return {OutTuple(f, null)};" : "return;";
         }
         string v;
@@ -470,6 +493,15 @@ public sealed partial class Body
             Leave(whole);
             return;
         }
+        // An enumerator taken by hand (the compiler's foreach with a way out): the list's iterator, and the item it is at.
+        if (World.MetaName(local.Type) == "System.Collections.Generic.IEnumerator`1" && init is IInvocationOperation { TargetMethod.Name: "GetEnumerator", Instance: { } over } && World.CollOf(over.Type) != World.Coll.None)
+        {
+            string item = T(((INamedTypeSymbol)local.Type).TypeArguments[0]);
+            enumerators.Add(local);
+            sb.Append($"let mut {NameOf(local)}_it = {Expr(over)}.into_vec().into_iter();\nlet mut {NameOf(local)}_at: Option<{item}> = None;\n");
+            Written++;
+            return;
+        }
         // A text only presentation reads (the words of a log line) goes with it.
         if (local.Type.SpecialType == SpecialType.System_String && OnlyPresentationReads(local, whole))
         {
@@ -490,6 +522,17 @@ public sealed partial class Body
         {
             aliases[local] = place;
             if (Presence(init) is { } there) aliasPresence[local] = there;
+            return;
+        }
+        // One of two lists of the state, picked by a test (`side == Player ? _allies : _enemies`): the local is the
+        // one picked, and the test is made once, here.
+        if (World.CollOf(local.Type) != World.Coll.None && !reassigned.Contains(local) && init is IConditionalOperation { WhenFalse: { } otherwise } pick
+            && FieldPlaceOf(pick.WhenTrue) is { } first && FieldPlaceOf(otherwise) is { } second)
+        {
+            string which = Tmp("which");
+            sb.Append($"let {which}: bool = {Expr(pick.Condition)};\n");
+            aliases[local] = $"(*(if {which} {{ &{first} }} else {{ &{second} }}))";
+            Written++;
             return;
         }
         // A list taken from another local is that list: C# holds one reference to it under two names.
@@ -557,6 +600,9 @@ public sealed partial class Body
         return false;
     }
 
+    /// <summary>The locals that are enumerators taken by hand.</summary>
+    private readonly HashSet<ISymbol> enumerators = new(Eq);
+
     /// <summary>Whether every use of the local is inside the arguments of a presentation call.</summary>
     private bool OnlyPresentationReads(ILocalSymbol local, IOperation declaration)
     {
@@ -622,6 +668,7 @@ public sealed partial class Body
         if (fe.LoopControlVariable is IDeclarationExpressionOperation { Expression: ITupleOperation parts }) { ForEachTuple(fe, parts, sb); return; }
         ILocalSymbol? local = fe.LoopControlVariable is IVariableDeclaratorOperation vd ? vd.Symbol : null;
         if (local == null) throw new Unsupported("foreach without a plain loop variable");
+        if (!w.IsDropped(local.Type) && WalkCall(fe.Collection) is { } walk) { ForEachWalk(fe, local, walk, sb); return; }
         string coll;
         try
         {
@@ -644,6 +691,36 @@ public sealed partial class Body
         string body = Sub(fe.Body);
         loops.Pop();
         sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
+        Written++;
+    }
+
+    /// <summary>foreach over a call of a sequence written with yield. In C# the sequence's code and the loop's body
+    /// take turns; here the loop's body is handed to the sequence, which runs it for each value as it reaches it. The
+    /// body answers whether the walk ends (a break, or a return whose value waits in a variable outside).</summary>
+    private void ForEachWalk(IForEachLoopOperation fe, ILocalSymbol local, IInvocationOperation call, StringBuilder sb)
+    {
+        var f = frames.Peek();
+        var scope = new Scope { Label = Tmp("w"), Frame = frames.Count, Walk = true };
+        scopes.Push(scope);
+        loops.Push(("return Ok(true);", "return Ok(false);"));
+        walks++;
+        string body;
+        try { body = Sub(fe.Body); }
+        finally
+        {
+            walks--;
+            loops.Pop();
+            scopes.Pop();
+        }
+        string name = NameOf(local);
+        string item = T(World.WalkItem((call.TargetMethod.ReducedFrom ?? call.TargetMethod))!);
+        string each = $"&mut |{name}: {item}, c: &mut Combat| -> R<bool> {{\nlet mut {name}: {T(local.Type)} = {name};\n{body}Ok(false)\n}}";
+        string walked = Invoke(call, each);
+        if (scope.Used) sb.Append($"let mut {scope.Label} = None;\n");
+        // A stop (a card prompt) inside the body leaves through the sequence; where nothing is awaited there is none.
+        sb.Append(f.Async || f.Iterator ? $"{walked}?;\n" : $"rt::walked({walked});\n");
+        if (scope.Used) sb.Append($"if let Some(__v) = {scope.Label} {{\n{LeaveWith("__v")}\n}}\n");
+        w.Rep.Count("foreach loops run inside the sequence they walk");
         Written++;
     }
 
@@ -807,10 +884,10 @@ public sealed partial class Body
             // A return inside leaves the body with its value, the finally block runs, then the member returns it.
             // (A stop for a card prompt leaves at once: the copy it ran on is thrown away.)
             string label = "'t" + tmp++;
-            tries.Push((label, frames.Count));
+            scopes.Push(new Scope { Label = label, Frame = frames.Count });
             var inner = new StringBuilder();
             Block(tr.Body, inner);
-            tries.Pop();
+            scopes.Pop();
             sb.Append($"let __left = {label}: {{\n{inner}None\n}};\n{fin}if let Some(__v) = __left {{\n{LeaveWith("__v")}\n}}\n");
             Written++;
             return;

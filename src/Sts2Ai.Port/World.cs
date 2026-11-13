@@ -618,6 +618,58 @@ public sealed class World
         }, this);
     }
 
+    // ---------------------------------------------------------------- sequences written with yield
+
+    private readonly ConcurrentDictionary<ISymbol, bool> _yields = new(Eq);
+    private HashSet<ISymbol>? _walks;
+
+    /// <summary>The type of the values of a sequence: T of IEnumerable&lt;T&gt;.</summary>
+    public static ITypeSymbol? WalkItem(IMethodSymbol m) =>
+        m.ReturnType is INamedTypeSymbol { Name: "IEnumerable", TypeArguments.Length: 1 } e ? e.TypeArguments[0] : null;
+
+    /// <summary>Whether a method's own body is written with yield. In C# such a body runs step by step, each step when
+    /// the caller asks for the next value; here it is a function that hands each value to the caller's code as it
+    /// reaches it (`name__each`), so what that code changes is seen by the rest of the body, as in the game.</summary>
+    public bool Yields(IMethodSymbol m0) => _yields.GetOrAdd(m0.OriginalDefinition, static (sym, self) =>
+    {
+        var m = (IMethodSymbol)sym;
+        if (m.MethodKind is not (MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation or MethodKind.PropertyGet) || WalkItem(m) == null) return false;
+        if (!IsSource(m.ContainingType) || self.CatOfMember(m) != Cat.Translated || self.IsDropMember(m) || self.IsDropped(m.ReturnType)) return false;
+        var syntax = m.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        return syntax != null && syntax
+            .DescendantNodes(n => n is not (Microsoft.CodeAnalysis.CSharp.Syntax.AnonymousFunctionExpressionSyntax or Microsoft.CodeAnalysis.CSharp.Syntax.LocalFunctionStatementSyntax))
+            .Any(n => n is Microsoft.CodeAnalysis.CSharp.Syntax.YieldStatementSyntax);
+    }, this);
+
+    /// <summary>Whether a virtual call of this slot may run a body written with yield: its dispatcher has the
+    /// `__each` form too.</summary>
+    public bool IsWalk(IMethodSymbol slot)
+    {
+        _walks ??= Walks();
+        return _walks.Contains(slot.OriginalDefinition);
+    }
+
+    private HashSet<ISymbol> Walks()
+    {
+        var set = new HashSet<ISymbol>(Eq);
+        foreach (var t in AllTypes)
+        {
+            if (t.TypeKind != TypeKind.Class || CatOf(t) != Cat.Translated) continue;
+            foreach (var m in t.GetMembers().OfType<IMethodSymbol>())
+            {
+                if (!Yields(m)) continue;
+                set.Add(Slot(m));
+                foreach (var i in t.AllInterfaces)
+                {
+                    if (!IsSource(i)) continue;
+                    foreach (var im in i.GetMembers().OfType<IMethodSymbol>())
+                        if (Eq.Equals(t.FindImplementationForInterfaceMember(im)?.OriginalDefinition, m)) set.Add(im.OriginalDefinition);
+                }
+            }
+        }
+        return set;
+    }
+
     // ---------------------------------------------------------------- collections a callee changes
 
     private static readonly HashSet<string> Mutators =
