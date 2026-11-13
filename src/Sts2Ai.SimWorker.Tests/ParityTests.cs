@@ -18,7 +18,8 @@ public class ParityTests
 
     /// <summary>A world of the scripted combat, made at a decision. It shows what the game showed, but for what
     /// <paramref name="wrong"/> gives for (the decision it was made at, the decision it stands at).</summary>
-    private sealed class Scripted(int madeAt, Func<int, int, Shown?> wrong, CombatStatus end) : SecondWorld, ICombatWorld
+    /// <param name="run">The run the world gives at the decision it stands at; null: it has none to give.</param>
+    private sealed class Scripted(int madeAt, Func<int, int, Shown?> wrong, CombatStatus end, Func<int, RunView>? run = null) : SecondWorld, ICombatWorld
     {
         private int _taken;
 
@@ -37,7 +38,7 @@ public class ParityTests
         }
 
         public CombatObservation Observe() => throw new NotSupportedException();
-        public RunView Run() => throw new NotSupportedException();
+        public RunView Run() => run?.Invoke(madeAt + _taken) ?? throw new NotSupportedException();
         public ulong HiddenKey() => throw new NotSupportedException();
         public WorldSnapshot Snapshot() => throw new NotSupportedException();
         public void Restore(WorldSnapshot snapshot) => throw new NotSupportedException();
@@ -103,6 +104,24 @@ public class ParityTests
     {
         Assert.Empty(Check((_, at) => at == Decisions ? Real(at, CombatStatus.Lost) with { Observation = "{}" } : null, end: CombatStatus.Lost).Differences);
         Assert.Equal("step@5 round", Found(Check((_, at) => at == Decisions ? Real(at) with { Observation = "{}" } : null))[0]);
+    }
+
+    [Fact]
+    public void TheRunAroundACombatIsComparedWhereThereIsOne()
+    {
+        // The combat of a whole run: each decision takes 1 HP of the run's 50, and the world forgets it from decision 4 on.
+        static RunView Run(int hp) => new()
+        {
+            Character = "SILENT", Ascension = 0, Act = 0, ActId = "ACT", Floor = 3, Hp = hp, MaxHp = 70, Gold = 99, Deck = [], Relics = [], Potions = [null],
+            Map = new MapView { Points = [], Visited = [], Boss = "BOSS" },
+        };
+        var present = GameIds.Kinds.ToDictionary(k => k, _ => new HashSet<string>());
+        var steps = Enumerable.Range(0, Decisions + 1).Select(i => new RealStep(Real(i) with { Run = ProtocolJson.Serialize(Run(50 - i)) }, i,
+            i == Decisions ? null : CombatAction.EndTurn, i == Decisions ? null : "end_turn",
+            i == Decisions ? null : () => new Scripted(i, (_, _) => null, CombatStatus.Won, at => Run(50 - Math.Min(at, 3))), present)).ToList();
+        var result = Lockstep.Compare(steps, continues: 0, seed: 1);
+        Assert.Equal(["step@3 run.hp", "import@4 run.hp", "import@5 run.hp"], Found(result));
+        Assert.Equal(("46", "47"), (result.Differences[0].Real, result.Differences[0].World));
     }
 
     [Fact]
