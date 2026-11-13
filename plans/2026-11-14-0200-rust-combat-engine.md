@@ -171,3 +171,25 @@
     `outside` 全空）。
   - `RunChange`（`sz_world_run` 的六個成員）成為 `Sts2Ai.Engine` 的公開型別；`HiddenState` 另給出雜湊前的文字。
   - 接下來：修 `CombatSession.Start`、整局對拍（先 `--world replay`）、步驟 5 的設計寫進共享筆記再動手。
+- 03:48 （engine-bridge）`CombatSession.Start` 修好，整局對拍（`--world replay`）完成，都已推上 main：
+  - `CombatSession.Start`：`SetUpTest` 失敗時把 run 清掉，同一行程之後的戰鬥照常開打（實測：關掉檢查讓遊戲自己在
+    A10 滿藥水時丟例外，下一場 A0 仍然打完）。藥水裝滿而進階又要收掉一格腰帶時，`Loadout.ApplyTo` 直接報
+    「N potions do not fit the belt: ascension A leaves M slots」（`RunSession` 走同一條檢查）。
+  - `sim parity --runs N`：每個角色 × 進階各打 N 個整局（戰鬥用掃描的隨機玩家，其他畫面均勻亂選），局裡每一場戰鬥照
+    單場的三種比對走，另外多比一項：戰鬥外圍的 run（`ICombatWorld.Run()` 對 `Observe.Run(.., previews: false)`，
+    路徑以 `run.` 開頭）。`--world replay` 在整局裡的第二世界是 `NodeWorld`（節點複本載入後重播，就是現在搜尋用的
+    那個世界），提示中途也造得出來；`--world engine` 把當下的 RunView 交給 `EngineWorld.Import`。`--dump` 一樣可用
+    （資料夾名多一段樓層）。每場戰鬥一行，run 的結局記在它最後一場那行。
+  - 隨機玩家用角色自己的血量幾層就死，所以整局要加 `--hp 9999 --max-hp 9999`。結果（種子 1，
+    `--runs 4 --hp 9999 --max-hp 9999 --continue 4 --workers 12`）：48 局、959 場戰鬥、44,093 個決策，匯入、走步、
+    續打（88,053 步）全部 0 分歧，0 場失敗，12 個行程 113 秒。14 局打通三幕，其餘多半死在首領戰的 80 回合上限
+    （第 17／33／49 層）。
+  - 途中找到並修掉的是工具自己的問題，不是 `NodeWorld` 的：整局的隨機作答把選牌順序打亂，而動作文字
+    （`pick:1,2`）只有排序後的一種寫法，賭徒籌碼、Prepared、Dredge 這類「順序會落到棄牌堆」的提示因此出現分歧
+    （54 個決策）。改成照動作的順序作答後歸零。對引擎的意義：`pick` 一律照選項順序套用。
+  - 涵蓋：單場掃描沒遇到的 34 個 id 裡，整局補到 `MAD_SCIENCE`（也打出去了）、`CURIOUS_POWER`、`NEMESIS_POWER`。
+    仍然沒遇到的 19 個能力：AEONGLASS_DOMINION、AMNESIA、CONCOCT、COORDINATE、COVERED、EXPLOSIVE、FADE、GRAVITY、
+    GUARDED、IMITATION_LEARNING、IMPROVEMENT、INSATIABLE_DOMINION、INTERCEPT、LAGAVULIN_MATRIARCH_DOMINION、
+    LEADERSHIP、MAGIC_BOMB、NO_ENERGY_GAIN、SOULBOUND、YOU_ARE_MINE（各加 `_POWER`）；要逐一查是多人專用、
+    另一種模式才有，還是有單人打得到的來源。其餘沒遇到的仍是測試怪與 `DEPRECATED_*`。
+  - 回歸：單場掃描 `--n 480` 12,549 個決策 0 分歧；`--world determinized --n 48` 匯入 0、走步 269（與驗收時同數）。
