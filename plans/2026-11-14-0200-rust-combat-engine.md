@@ -150,3 +150,24 @@
     也能在 `cargo test` 離線跑）、修 `CombatSession.Start`，之後是整局對拍與步驟 5 的設計；「讀出狀態」這一塊
     （`observe.rs`、合法動作、隱藏鍵、狀態鍵、RunView、`ffi.rs`、對樣本的 Rust 測試）原本要開第三個工作階段，
     遠端控制下開不了，改由協調工作階段的子代理 engine-state 做，筆記在 `tmp/engine/notes/engine-state.md`。
+- 03:32 （engine-bridge）步驟 3 的 C# 這一半與樣本傾印完成，都已推上 main：
+  - `EngineExport.cs`：照 `engine/DESIGN.md`「The export」的 format 1 寫（根物件取自 schema 的 `roots`、帶 schema 的
+    `hash`、`outside` 照數）。載入 schema 時就地核對這份遊戲：類別、欄位、型別參數、靜態根欄位缺一個就拒收；
+    schema 的類別在遊戲裡有、但 `fields` 和 `dropped` 都沒列的實例欄位也拒收。03:28 那份 schema（121 個 arena、
+    1,953 個類別）對 v0.113.0 零問題。每份匯出約 110 KB、1.2 毫秒；同一場戰鬥位元組相同。
+  - `sim parity --world engine`：每個決策匯出、交給 `EngineWorld.Import`。引擎函式庫還沒建出來，所以現在每次匯入都是
+    同一個明確的錯（no engine library at …），真遊戲那一側的走法與 replay 掃描完全相同（匯出不擾動遊戲）。
+  - `sim parity --dump DIR`（新）與 `--world none`（只打真遊戲、不比對）：每場戰鬥一個資料夾，`combat.json` 列出逐決策的
+    回合、狀態、合法動作、隱藏鍵、狀態鍵、所採動作；每個決策另有 `K.export.json`（提示中途與結束時沒有）、
+    `K.observation.json`（ProtocolJson 原位元組）、`K.run.json`（`sz_world_run` 該寫出的位元組）、`K.hidden.txt`
+    （隱藏鍵雜湊前的兩段文字）。版面與雜湊規則寫在傾印根目錄的 `README.md`（由指令自己寫出，永遠與程式一致）。
+  - 預設樣本在 `tmp/engine/fixtures/`，指令：
+    `sim parity --world none --dump tmp/engine/fixtures --encounter NIBBITS_WEAK,CULTISTS_NORMAL,RUBY_RAIDERS_NORMAL,BYGONE_EFFIGY_ELITE,CEREMONIAL_BEAST_BOSS --workers 12`
+    （六個角色 × A0、A10 × 5 個遭遇 × 2 套牌組 = 120 場，2,685 筆記錄、2,473 份匯出、318 MB，12 個行程 5 秒）。
+    全量預設掃描（2,160 場）約 5.2 萬份匯出、約 5.7 GB。
+  - 兩支不靠遊戲也不靠引擎的檢查：`tmp/engine/check_dump.py DIR`（README 的規則：隱藏鍵＝第二段文字的雜湊、狀態鍵＝
+    觀測依搜尋的分法雜湊、觀測能原樣寫回；預設樣本 2,685 筆 0 問題，可當 Rust 那邊雜湊的對照實作）與
+    `tmp/engine/check_export.py SCHEMA EXPORT...`（匯出對 schema：類別、欄位、參照、根、雜湊；855,285 個物件 0 問題，
+    `outside` 全空）。
+  - `RunChange`（`sz_world_run` 的六個成員）成為 `Sts2Ai.Engine` 的公開型別；`HiddenState` 另給出雜湊前的文字。
+  - 接下來：修 `CombatSession.Start`、整局對拍（先 `--world replay`）、步驟 5 的設計寫進共享筆記再動手。
