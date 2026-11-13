@@ -103,14 +103,19 @@ internal sealed class CombatDump(EngineExport export, string root)
         - `hidden_key`, `state_key`: 64-bit numbers, in full. Not there once the combat is over: search asks for
           neither then.
         - `freed`: there where the record's export holds a hash set or a dictionary with freed slots (items were
-          removed from it), counted by the field that holds it (`Class.field`). The export writes such a collection
-          in its order of enumeration and says nothing of the freed slots, which the next items added will take: a
-          world imported there can enumerate it otherwise than the game after an add.
+          removed from it), counted by the field that holds it (`Class.field`, with ` (empty)` for one that holds
+          nothing now). Those are the collections the export writes in the object form below.
 
         ## The files of a record
 
         - `<k>.export.json`: `EngineExport`'s bytes (export format 1: engine/DESIGN.md). There for every record that
-          is in progress and no prompt.
+          is in progress and no prompt. A `set` or a `dict` of the schema is a .NET `HashSet<T>` or `Dictionary<K, V>`,
+          written as an array of its items in its order of enumeration (a dict's as `[key, value]`). One that has
+          freed slots is written as an object instead, `{"items": [...], "at": [...], "free": [...]}`: `items` is
+          that array; `at` the slot of each item (rising); `free` the freed slots in the order adds will take them,
+          the next one first. Every slot below `at`'s length plus `free`'s is in exactly one of the two. .NET
+          enumerates such a collection by slot, and an add takes `free`'s first slot, or the next new slot when
+          none is freed, so the order after later adds follows from this and from nothing else.
         - `<k>.observation.json`: the bytes `sz_world_observe` must write: the observation as `ProtocolJson` writes it
           (snake_case names, a null member left out, members in the order of `CombatObservation`'s declaration).
         - `<k>.run.json`: the bytes `sz_world_run` must write: `{"hp":..,"max_hp":..,"gold":..,"deck":[..],"relics":[..],

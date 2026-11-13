@@ -18,7 +18,7 @@ namespace Sts2Ai.GameBridge;
 /// </summary>
 public sealed class EngineSchema
 {
-    internal enum Kind { Int, Bool, Float, Decimal, String, Char, Enum, Struct, Nullable, Sequence, Dict, Tuple, Pair, Type, Ref }
+    internal enum Kind { Int, Bool, Float, Decimal, String, Char, Enum, Struct, Nullable, Sequence, Set, Dict, Tuple, Pair, Type, Ref }
 
     /// <summary>How a value is written: its kind and the shapes inside it.</summary>
     internal sealed record Shape(Kind Kind, Shape? Of = null, Shape? Key = null, Shape? Value = null, Shape[]? Items = null, Slot[]? Fields = null);
@@ -97,7 +97,8 @@ public sealed class EngineSchema
             "kind" => new(Kind.Type),
             "ref" => new(Kind.Ref),
             "nullable" => new(Kind.Nullable, Of: ShapeOf(t.GetProperty("of"))),
-            "list" or "set" or "queue" or "stack" => new(Kind.Sequence, Of: ShapeOf(t.GetProperty("of"))),
+            "list" or "queue" or "stack" => new(Kind.Sequence, Of: ShapeOf(t.GetProperty("of"))),
+            "set" => new(Kind.Set, Of: ShapeOf(t.GetProperty("of"))),
             "dict" => new(Kind.Dict, Key: ShapeOf(t.GetProperty("key")), Value: ShapeOf(t.GetProperty("value"))),
             "pair" => new(Kind.Pair, Key: ShapeOf(t.GetProperty("key")), Value: ShapeOf(t.GetProperty("value"))),
             "tuple" => new(Kind.Tuple, Items: [.. t.GetProperty("items").EnumerateArray().Select(ShapeOf)]),
@@ -201,7 +202,9 @@ public sealed class EngineSchema
 /// numbered in the order the walk meets them, so the same combat gives the same bytes. Values by the schema's kinds:
 /// a number for an int, an enum (its underlying value) and a char (its code unit); a string for a decimal, as .NET
 /// writes it, which keeps its scale; an array for a list, set, queue or stack in its own order, and for a tuple; an
-/// array of [key, value] for a dictionary; an object for a struct; null for an absent value of any of these.
+/// array of [key, value] for a dictionary; an object for a struct; null for an absent value of any of these. A set or
+/// a dictionary that has freed slots (<see cref="HashedLayout"/>) is an object instead: its <c>items</c> as that array,
+/// <c>at</c> with the slot of each, and <c>free</c> with the freed slots in the order adds will take them.
 /// A reference is null or a pair: ["arena", index] for an object of the export; ["canon", "Class"] for a canonical
 /// model, which the engine has already and which is not written; ["outside", "CLR.Name"] for an object of a class the
 /// schema does not hold, whose state the engine therefore lacks. <c>outside</c> counts those references by class, and
@@ -216,8 +219,7 @@ public sealed class EngineExport(EngineSchema schema)
     /// the field that holds the reference ("CLR.Name from Class.field"; a root by its name).</param>
     /// <param name="Freed">The hash sets and dictionaries written that have freed slots, counted by the field that
     /// holds them ("Class.field", with " (empty)" for one that holds nothing now). Items were removed from such a
-    /// collection, and the next ones added to it take the freed slots, so its later order of enumeration depends on
-    /// what the export does not say: it writes the items in today's order only.</param>
+    /// collection, and the next ones added to it take the freed slots: the export writes it with its slots.</param>
     public sealed record Written(byte[] Bytes, int Objects, IReadOnlyDictionary<string, int> Outside, IReadOnlyDictionary<string, int> Freed);
 
     /// <summary>The live combat: everything reached from the schema's roots as they stand.</summary>
@@ -233,8 +235,6 @@ public sealed class EngineExport(EngineSchema schema)
     {
         private static readonly JsonWriterOptions Plain = new() { SkipValidation = true };
 
-        /// <summary>The runtime's own count of freed slots, by the closed type of a hash set or a dictionary.</summary>
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FieldInfo> FreeCounts = new();
 
         private readonly Dictionary<object, (EngineSchema.Class Class, int Index)> _seen = new(ReferenceEqualityComparer.Instance);
         private readonly Queue<(object Object, EngineSchema.Class Class)> _toWrite = [];
@@ -313,17 +313,36 @@ public sealed class EngineExport(EngineSchema schema)
             json.WriteEndObject();
         }
 
-        /// <summary>Counts a hash set or a dictionary that has freed slots, under the field being written.</summary>
-        private void NoteFreed(object collection)
+        /// <summary>
+        /// A hash set or a dictionary: its items as an array, in its order of enumeration; and once it has freed slots,
+        /// an object of that array, the slot of each item, and the freed slots in the order adds will take them, which
+        /// is counted under the field being written.
+        /// </summary>
+        /// <param name="items">Writes the items, each a value of the array.</param>
+        private void Hashed(Utf8JsonWriter json, object collection, Action items)
         {
-            var type = collection.GetType();
-            if (!type.IsGenericType || !(type.GetGenericTypeDefinition() == typeof(HashSet<>) || type.GetGenericTypeDefinition() == typeof(Dictionary<,>))) return;
-            if (!FreeCounts.TryGetValue(type, out var count))
-                FreeCounts[type] = count = type.GetField("_freeCount", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?? throw new InvalidOperationException($"{type} has no _freeCount: another runtime than the one this was written for");
-            if ((int)count.GetValue(collection)! == 0) return;
-            string field = Field + (((IEnumerable)collection).GetEnumerator().MoveNext() ? "" : " (empty)");
+            if (!HashedLayout.Covers(collection.GetType()))
+                throw new InvalidOperationException($"{Field} holds a {collection.GetType()}: the export knows the slots of HashSet<T> and Dictionary<K, V> only");
+            if (HashedLayout.Of(collection) is not var (at, free))
+            {
+                json.WriteStartArray();
+                items();
+                json.WriteEndArray();
+                return;
+            }
+            string field = Field + (at.Length > 0 ? "" : " (empty)");
             _freed[field] = _freed.GetValueOrDefault(field) + 1;
+            json.WriteStartObject();
+            json.WriteStartArray("items");
+            items();
+            json.WriteEndArray();
+            json.WriteStartArray("at");
+            foreach (int slot in at) json.WriteNumberValue(slot);
+            json.WriteEndArray();
+            json.WriteStartArray("free");
+            foreach (int slot in free) json.WriteNumberValue(slot);
+            json.WriteEndArray();
+            json.WriteEndObject();
         }
 
         /// <summary>The field being written, as a count names it.</summary>
@@ -373,16 +392,21 @@ public sealed class EngineExport(EngineSchema schema)
                     json.WriteEndObject();
                     break;
                 case EngineSchema.Kind.Sequence:
-                    NoteFreed(value);
                     json.WriteStartArray();
                     foreach (var item in (IEnumerable)value) Value(json, shape.Of!, item);
                     json.WriteEndArray();
                     break;
+                case EngineSchema.Kind.Set:
+                    Hashed(json, value, () =>
+                    {
+                        foreach (var item in (IEnumerable)value) Value(json, shape.Of!, item);
+                    });
+                    break;
                 case EngineSchema.Kind.Dict:
-                    NoteFreed(value);
-                    json.WriteStartArray();
-                    foreach (DictionaryEntry entry in (IDictionary)value) Pair(json, shape, entry.Key, entry.Value);
-                    json.WriteEndArray();
+                    Hashed(json, value, () =>
+                    {
+                        foreach (DictionaryEntry entry in (IDictionary)value) Pair(json, shape, entry.Key, entry.Value);
+                    });
                     break;
                 case EngineSchema.Kind.Pair:
                     // A KeyValuePair has no interface that gives its key and value.

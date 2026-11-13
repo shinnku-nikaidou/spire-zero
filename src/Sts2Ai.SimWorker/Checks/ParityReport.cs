@@ -54,8 +54,8 @@ internal sealed record ParityLine
     /// <summary>The references of the combat's exports to objects of classes outside the engine's schema, by the class and
     /// the field that holds the reference.</summary>
     public Dictionary<string, int> Outside { get; init; } = [];
-    /// <summary>The hash sets and dictionaries with freed slots that the exports wrote, by the field that holds them, and
-    /// the exports with at least one (<c>EngineExport.Written.Freed</c>).</summary>
+    /// <summary>The hash sets and dictionaries with freed slots, which the exports wrote with their slots, by the field
+    /// that holds them, and the exports with at least one (<c>EngineExport.Written.Freed</c>).</summary>
     public Dictionary<string, int> Freed { get; init; } = [];
     public int FreedExports { get; init; }
     public double Ms { get; init; }
@@ -244,7 +244,7 @@ internal sealed class ParitySummary
         if (_freed.Count > 0)
         {
             output.WriteLine();
-            output.WriteLine("hash sets and dictionaries written with freed slots, whose later order the exports do not say, by the field that holds them:");
+            output.WriteLine("hash sets and dictionaries that had freed slots, which the exports write with their slots, by the field that holds them:");
             foreach (var (field, count) in _freed.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal)) output.WriteLine($"  {count,9}  {field}");
         }
         if (_outside.Count > 0)
