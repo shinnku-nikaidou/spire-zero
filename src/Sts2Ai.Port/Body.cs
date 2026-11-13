@@ -515,6 +515,7 @@ public sealed partial class Body
     private void Declare(IVariableDeclaratorOperation d, IOperation? init, StringBuilder sb, IOperation whole)
     {
         var local = d.Symbol;
+        if (IsDeferred(init) && local.Type is INamedTypeSymbol { Name: "IEnumerable" }) deferredLocals.Add(local);
         if (w.IsDropped(local.Type))
         {
             droppedLocals.Add(local);

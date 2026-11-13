@@ -293,6 +293,8 @@ classes = ["ModelId", "LocString"]
 # Members with a fixed value in the engine. The real game the engine is checked against runs headless with TestMode on.
 "TestMode.IsOn" = "true"
 "TestMode.IsOff" = "false"
+# The tests' hook that hands out a chosen relic: there is none.
+"TestRngInjector.ConsumeRelicOverride" = "Obj::NULL"
 # Nothing cancels a combat of the engine.
 # The simulator the engine is held against keeps the shipped rule where test mode skips a draw (its RuleFidelity).
 "TestMode.IsOn@Cauldron.GenerateRewards" = "false"
