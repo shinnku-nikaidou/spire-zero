@@ -292,6 +292,16 @@ public sealed partial class Body
     }
 
     /// <summary>Whether a statement that is left out held something that is not presentation: a call into game code, or a write to state.</summary>
+    /// <summary>Whether a call of a delegate is the raising of an event (`Changed?.Invoke(x)`, `Changed(x)`).</summary>
+    private static bool RaisesEvent(IInvocationOperation inv)
+    {
+        if (inv.Instance is IEventReferenceOperation) return true;
+        if (inv.Instance is not IConditionalAccessInstanceOperation) return false;
+        for (var p = inv.Parent; p != null; p = p.Parent)
+            if (p is IConditionalAccessOperation ca) return ca.Operation is IEventReferenceOperation;
+        return false;
+    }
+
     private bool HoldsGameCall(IOperation op)
     {
         foreach (var d in op.DescendantsAndSelf())
@@ -300,6 +310,10 @@ public sealed partial class Body
             {
                 case IInvocationOperation inv:
                     var m = inv.TargetMethod.ReducedFrom ?? inv.TargetMethod;
+                    // A function that was handed over is called: what it does is not known here, so it is game code.
+                    // (An event that is raised is presentation: what listens to it is the screen.)
+                    if (m.MethodKind == MethodKind.DelegateInvoke && inv.Instance is { Type: { } handed } && !w.IsDropped(handed) && !RaisesEvent(inv)
+                        && !(inv.Instance is ILocalReferenceOperation { Local: var dl } && droppedLocals.Contains(dl))) return true;
                     if (!World.IsSource(m.ContainingType) || w.IsDropped(m.ContainingType) || w.IsDropMember(m)) continue;
                     if (w.IsDropped(m.ReturnType) || Value(m) != null) continue;
                     // A call on presentation, or one that only takes presentation and gives nothing back, is presentation.
