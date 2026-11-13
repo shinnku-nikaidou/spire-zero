@@ -490,9 +490,9 @@ public sealed class World
         if (!IsSource(n)) throw new Unsupported($"library type {meta}");
         if (IsValue(n))
         {
-            if (n.TypeArguments.Length > 0) throw new Unsupported($"generic struct {n.Name}");
+            string args = StructArgs(n, norm);
             Structs.TryAdd(n.OriginalDefinition, 0);
-            return Unique(n);
+            return Unique(n) + args;
         }
         switch (n.TypeKind)
         {
@@ -500,14 +500,44 @@ public sealed class World
                 Enums.TryAdd(n.OriginalDefinition, 0);
                 return Unique(n);
             case TypeKind.Struct:
-                if (n.TypeArguments.Length > 0) throw new Unsupported($"generic struct {n.Name}");
+            {
+                string args = StructArgs(n, norm);
                 Structs.TryAdd(n.OriginalDefinition, 0);
-                return Unique(n);
+                return Unique(n) + args;
+            }
             case TypeKind.Class or TypeKind.Interface:
                 KindOf(n);
                 return norm ? "Obj" : Unique(n);
         }
         throw new Unsupported($"type {meta}");
+    }
+
+    /// <summary>The type arguments of a generic struct, as Rust writes them.</summary>
+    private string StructArgs(INamedTypeSymbol n, bool norm)
+    {
+        if (n.TypeArguments.Length == 0) return "";
+        // The compiler's own helpers (an inline array behind a collection expression) are no structs of the game.
+        if (n.Name.StartsWith("_003C") || n.Name.StartsWith('<')) throw new Unsupported($"generic struct {n.Name}");
+        if (n.ContainingType is { TypeArguments.Length: > 0 }) throw new Unsupported($"a struct inside the generic {n.ContainingType.Name}");
+        return "<" + string.Join(", ", n.TypeArguments.Select(a => RType(a, norm))) + ">";
+    }
+
+    /// <summary>The name of a closed generic struct in the schema: the struct's, then its arguments'.</summary>
+    public string UseName(INamedTypeSymbol n) =>
+        Unique(n) + "Of" + string.Concat(n.TypeArguments.Select(a => string.Concat(System.Text.RegularExpressions.Regex.Split(RType(a), "[^A-Za-z0-9]+").Where(x => x.Length > 0).Select(x => char.ToUpperInvariant(x[0]) + x[1..]))));
+
+    /// <summary>The name of a closed generic struct as the game's assembly finds it: its arguments carry their assembly
+    /// (`Outer+S`1[[System.Int32, System.Private.CoreLib]]`), since Assembly.GetType looks for a bare one in the game alone.</summary>
+    public string ClrUseName(INamedTypeSymbol n) => FullName(n.OriginalDefinition) + "[" + string.Join(",", n.TypeArguments.Select(a => "[" + ClrArg(a) + "]")) + "]";
+
+    private string ClrArg(ITypeSymbol t)
+    {
+        string suffix = "";
+        while (t is IArrayTypeSymbol a) { suffix += "[]"; t = a.ElementType; }
+        if (t is not INamedTypeSymbol n || n.TypeArguments.Length > 0) throw new Unsupported($"a generic struct of {t}");
+        if (IsSource(n)) return FullName(n) + suffix + ", " + Cfg.GameAssembly;
+        if (n.SpecialType == SpecialType.None) throw new Unsupported($"a generic struct of {t}");
+        return MetaName(n) + suffix + ", System.Private.CoreLib";
     }
 
     /// <summary>Whether a value of the type is copied by a plain read (no .clone()).</summary>
@@ -533,7 +563,7 @@ public sealed class World
     }
 
     public bool StructIsCopy(INamedTypeSymbol s) =>
-        s.GetMembers().OfType<IFieldSymbol>().Where(f => !f.IsStatic && !f.IsConst).All(f => !IsDropped(f.Type) && IsCopy(f.Type));
+        s.TypeArguments.Length == 0 && s.GetMembers().OfType<IFieldSymbol>().Where(f => !f.IsStatic && !f.IsConst).All(f => !IsDropped(f.Type) && IsCopy(f.Type));
 
     // ---------------------------------------------------------------- class layout
 

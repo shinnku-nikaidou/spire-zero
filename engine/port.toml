@@ -232,6 +232,9 @@ members = [
 classes = ["ICardSelector", "ModHelper"]
 # The canonical models are built by manual/canon.rs: what the game's ModelDb does by reflection.
 members = [
+    # What a model saves, read and written over port's table of its [SavedProperty] properties (manual/saved_properties.rs).
+    "SavedProperties.FromInternal",
+    "SavedProperties.FillInternal",
     "ModelDb.Get", "ModelDb.GetId", "ModelDb.GetByIdOrNull", "ModelDb.Contains",
     "CardSelectorStack.GetSelector", "CardSelectorStack.PushSelector",
     # An event with a subscriber that is game code: the combat's card table ids the cards of its piles (manual/card_pile.rs).

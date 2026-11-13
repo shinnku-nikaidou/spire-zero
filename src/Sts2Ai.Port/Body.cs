@@ -705,6 +705,7 @@ public sealed partial class Body
         {
             if (w.IsDropped(local.Type)) throw new Dropped(local.Type.Name);
             coll = IterSource(fe.Collection);
+            if (IsDeferred(fe.Collection) && HoldsGameCall(fe.Body)) w.Rep.Deferred(Where, fe);
         }
         catch (Dropped d)
         {
@@ -723,6 +724,18 @@ public sealed partial class Body
         loops.Pop();
         sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
         Written++;
+    }
+
+    /// <summary>Locals that hold a LINQ chain not yet evaluated in C# (`IEnumerable<T> xs = list.Where(f);`).</summary>
+    private readonly HashSet<ISymbol> deferredLocals = new(Eq);
+
+    /// <summary>Whether C# evaluates the sequence only as it is walked: a LINQ chain that ends in an operator that hands
+    /// its values on one by one and runs a function for each, or a local that holds one.</summary>
+    private bool IsDeferred(IOperation? op)
+    {
+        while (op is IConversionOperation { IsTryCast: false } cv) op = cv.Operand;
+        if (op is ILocalReferenceOperation l) return deferredLocals.Contains(l.Local);
+        return op is IInvocationOperation { TargetMethod: { ContainingType: { Name: "Enumerable", ContainingNamespace.Name: "Linq" }, Name: "Where" or "Select" or "SelectMany" or "TakeWhile" or "SkipWhile" } };
     }
 
     /// <summary>foreach over a call of a sequence written with yield. In C# the sequence's code and the loop's body

@@ -13,6 +13,7 @@ public sealed class Report
     private readonly ConcurrentBag<string> droppedWithCall = [];
     private readonly ConcurrentBag<string> failed = [];
     private readonly ConcurrentBag<string> fieldsSkipped = [];
+    private readonly ConcurrentBag<string> deferred = [];
 
     public int ClassesTranslated, MembersTranslated, MembersFailed, MembersPresentation, Stubs, ManualRefs, Dispatchers, StatementsLeftOut, Quarantined;
 
@@ -41,8 +42,19 @@ public sealed class Report
         droppedWithCall.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}");
     }
 
+    /// <summary>A foreach over a LINQ chain that C# evaluates as the loop goes and the engine where it is written,
+    /// with game code in the loop: where the two could differ.</summary>
+    public void Deferred(string where, IOperation loop)
+    {
+        var span = loop.Syntax.GetLocation().GetLineSpan();
+        string first = loop.Syntax.ToString().Replace("\r", "").Split('\n')[0].Trim();
+        if (first.Length > 180) first = first[..180] + "...";
+        deferred.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}");
+    }
+
     public void Reset()
     {
+        deferred.Clear();
         counts.Clear();
         unsupported.Clear();
         notes.Clear();
@@ -83,6 +95,8 @@ public sealed class Report
         foreach (var s in fieldsSkipped.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== statements left out as presentation that held a call that is not presentation");
         foreach (var s in droppedWithCall.Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== loops over a LINQ chain C# evaluates as the loop goes (here: where it is written), with game code inside");
+        foreach (var s in deferred.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== members not translated");
         foreach (var s in failed.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         return sb.ToString();

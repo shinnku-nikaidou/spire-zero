@@ -55,6 +55,8 @@ public sealed class Config
 
     /// <summary>The version of the game the tables are for.</summary>
     public string GameVersion = "";
+    /// <summary>The name of the game's assembly, as a type of it is named from outside.</summary>
+    public string GameAssembly = "sts2";
     /// <summary>Members replaced by a fixed Rust expression, as Class.Member or Class.Member@Class.Method (inside that method only).</summary>
     public Dictionary<string, string> Values = [];
 
@@ -84,6 +86,7 @@ public sealed class Config
         if (doc.TryGetValue("fields", out var fl) && fl is TomlTable only)
             foreach (var kv in only) c.OnlyFields[kv.Key] = ((TomlArray)kv.Value).Select(x => (string)x!).ToHashSet();
         if (doc.TryGetValue("game", out var g) && g is TomlTable game && game.TryGetValue("version", out var ver)) c.GameVersion = (string)ver;
+        if (doc.TryGetValue("game", out var g2) && g2 is TomlTable game2 && game2.TryGetValue("assembly", out var asm)) c.GameAssembly = (string)asm;
         if (c.GameVersion.Length == 0) throw new InvalidDataException($"{path}: no [game] version");
         if (doc.TryGetValue("value", out var v) && v is TomlTable values)
             foreach (var kv in values) c.Values[kv.Key] = (string)kv.Value;

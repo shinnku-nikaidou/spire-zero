@@ -85,7 +85,11 @@ expression: `TestMode.IsOn`, the empty list of mods).
 - A presentation call in a chain (`x.WithHitFx(..)`, a `[drop] members` entry that returns its receiver) leaves the
   chain's value as it was.
 - A parameter of a presentation type is not there in Rust: the function has one parameter fewer, a call passes one
-  argument fewer, and what uses the parameter inside is presentation.
+  argument fewer, and what uses the parameter inside is presentation. `[drop] parameters` names a parameter of
+  another type that only carries presentation (the text a `StringVar` shows).
+- What is game code in something left out: a call into the game (not one that gives presentation back, nor one that
+  takes presentation alone and gives nothing or a bare task), a call of a function that was handed over, a write to
+  state. An event that is raised is presentation.
 - A member that returns a presentation type is left out whole. So is a method in which nothing but presentation is
   left, and a member that only hands out presentation (an asset path): `port` finds those by translating, and runs again
   until it finds no more; a call to one is presentation too. A virtual one only when every override is like that.
@@ -127,6 +131,7 @@ it.
 | `x is T`, `(T)x`, `x as T` | `rt::is(x, Kind::T, c)`, `rt::cast(x, Kind::T, c)` (panics on another class), `rt::as_(x, Kind::T, c)` |
 | a virtual member | `gen/dispatch.rs`: `g::dispatch::<class that declares it>::m(me, .., c)`, a `match` on the object's kind to the most derived override; `base.M()` calls the parent's function directly |
 | `new T(a)` | `t::new(a, c)`: a slot with the class's kind, then `t::ctor(me, a, c)` (field initializers, the base constructor, the body) |
+| a generic struct (`SavedProperty<T>`) | a generic Rust struct. In the schema each way the state closes it is a struct of its own (`SavedPropertiesSavedPropertyOfI32`), under the name the game's assembly finds it by: the arguments with their assemblies (`..SavedProperty`1[[System.Int32, System.Private.CoreLib]]`) |
 | `decimal`, `int`, `bool`, `string` | `Dec` (.NET's decimal, bit for bit), `i32`, `bool`, `Str` (`Copy`; text made at run time is interned) |
 | an enum | a number with named values (`CardType::Attack`, `struct CardType(pub i32)`), so that casts, flags and arithmetic are C#'s |
 | a struct; a class named in `[values]` (`ModelId`) | a Rust struct held by value and compared by content |
@@ -162,6 +167,13 @@ Canonical models (the game's `ModelDb`: one object per model class) live in aren
 reflection). A handle to one carries a flag, every combat starts with the same ones and shares them, and a combat that
 writes to one (the game fills a canonical model's caches when they are first read) gets its own copy of that arena at
 that moment. `ToMutable` copies a model into the combat.
+
+The other thing the game finds by reflection is what a model saves: the properties marked `[SavedProperty]`, which
+`SavedProperties` reads when a card or a relic is written out (a card added to the deck when a combat ends goes
+into the run's history this way) and writes when one is made from what was written. `port` writes them as a table
+(`gen/saved.rs`: for each class its properties in the game's order, by the attribute's order and then by name, each
+with the code that reads it and the code that writes it), and the two members that walk the properties are
+hand-written over that table (`manual/saved_properties.rs`).
 
 A handle is 32 bits: 21 of index, 10 of arena tag, the canonical flag.
 
