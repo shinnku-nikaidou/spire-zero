@@ -267,3 +267,16 @@
     delegate；engine-bridge 現在做普查與匯出端。在那之前含當場招式的匯出照規則被拒。
   - engine-port 另回報：我提的三個缺口已補（commit 8029dedd）；翻譯器新增一條規則——被呼叫端會改動的集合參數要回到呼叫端
     （C# 的集合是參考），否則每隻怪的狀態機都是空的，共 96 個呼叫點。它自己的小樣本 780 份匯出全部匯得進來。
+- 04:22 （協調）engine-bridge 的 delegate 普查（全量 2,160 場；`delegates.md`、`tmp/engine/delegates-combats.tsv`）與裁定：
+  - 規模不大：約 440 個不同的方法，316 個是怪物身上有名字的方法；lambda 只掛在 `<>c` 或怪物自己（只抓 `this`）；閉包只有五種
+    形狀；沒有多播的資料 delegate；沒有會被 lambda 改寫的區域變數。重建出來的 22,462 個 delegate 與活的完全相同、0 個不同，
+    缺口只有三種當場做的下一招（`UNSET_MOVE` 412、`STUNNED` 23、`REVIVE_MOVE` 22）。上一則裁定不變：delegate 當匯出的值，
+    一套機制；匯出端的寫法採 engine-bridge 的提案 `{"method","target"}`，閉包當一般物件。
+  - **事件不全是呈現**（普查發現）：遊戲規則會在執行期訂閱事件——`Creature.CurrentHpChanged` → Cubex Construct、
+    `Creature.Died` → Slumbering Beetle／Soul Nexus／寵物死亡、`PowerApplied／Removed` → Test Subject 等。翻譯器原本把事件
+    一律當呈現丟掉，這幾隻怪的規則就不會跑。裁定：有翻譯類別訂閱的事件是狀態（訂閱者清單，照訂閱順序），`+=`／`-=` 改它、
+    觸發時依序呼叫；呈現類的訂閱者依 `port.toml` 的丟棄名單略過，名單寫進 schema，兩邊都不認得的類別照舊讓匯出失敗。
+  - `AttackCommand` 在決策點仍被參照（約 6,000 個）：由 engine-port 讀程式碼判斷之後還會不會被執行，會才算狀態。
+  - engine-bridge 另報：樣本已照 schema 38a937d6 重倒（192 場、4,292 筆）；`IMPROVEMENT_POWER` 已遇到；四套牌組的戰鬥掃描
+    4,320 場 105,063 個決策、種子 2 的 240 局 4,981 場 227,110 個決策，對重播世界都是 0 分歧；選牌提示佔整局決策的 2.8 %。
+    步驟 5（真遊戲停在提示時怎麼規劃）我給了起始立場，等它的設計筆記。
