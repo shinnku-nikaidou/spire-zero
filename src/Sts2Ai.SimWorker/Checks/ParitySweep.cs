@@ -51,13 +51,13 @@ internal static class GameIds
         ["LEADERSHIP_POWER"] = "nothing applies it",
         ["MAGIC_BOMB_POWER"] = "nothing applies it",
         ["NO_ENERGY_GAIN_POWER"] = "nothing applies it",
-        // The Dread game mode's dominions: a standard run has none.
-        ["AEONGLASS_DOMINION_POWER"] = "the Aeonglass's dominion applies it (Dread mode only)",
-        ["INSATIABLE_DOMINION_POWER"] = "the Insatiable's dominion applies it (Dread mode only)",
-        ["LAGAVULIN_MATRIARCH_DOMINION_POWER"] = "the Lagavulin Matriarch's dominion applies it (Dread mode only)",
-        ["EXPLOSIVE_POWER"] = "only the Waterfall Giant's dominion applies it (Dread mode only)",
-        ["YOU_ARE_MINE_POWER"] = "only the Queen's dominion applies it (Dread mode only)",
-        ["AMNESIA_POWER"] = "only choosing the card Amnesia applies it, which only the Knowledge Demon's dominion offers (Dread mode only)",
+        // The bosses' dominions of the Dread game mode.
+        ["AEONGLASS_DOMINION_POWER"] = "Dread mode only; the simulator plays standard runs (the Aeonglass's dominion applies it)",
+        ["INSATIABLE_DOMINION_POWER"] = "Dread mode only; the simulator plays standard runs (the Insatiable's dominion applies it)",
+        ["LAGAVULIN_MATRIARCH_DOMINION_POWER"] = "Dread mode only; the simulator plays standard runs (the Lagavulin Matriarch's dominion applies it)",
+        ["EXPLOSIVE_POWER"] = "Dread mode only; the simulator plays standard runs (only the Waterfall Giant's dominion applies it)",
+        ["YOU_ARE_MINE_POWER"] = "Dread mode only; the simulator plays standard runs (only the Queen's dominion applies it)",
+        ["AMNESIA_POWER"] = "Dread mode only; the simulator plays standard runs (only choosing the card Amnesia applies it, which only the Knowledge Demon's dominion offers)",
         // The game's own test models outside its Mocks namespaces, which no encounter uses, and its placeholders for removed content.
         ["BIG_DUMMY"] = "a test monster: only mock encounters use it",
         ["ONE_HP_MONSTER"] = "a test monster: no encounter uses it",

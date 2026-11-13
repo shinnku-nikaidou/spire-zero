@@ -25,6 +25,10 @@ internal sealed record ParityLine
     /// <summary>How the real combat ended; null when it failed.</summary>
     public string? Outcome { get; init; }
     public int Decisions { get; init; }
+    /// <summary>The decisions that are card prompts, where the engine takes no combat in, and whether the combat's first
+    /// decision is one: a prompt asked before the player has played anything.</summary>
+    public int Prompts { get; init; }
+    public bool OpensWithPrompt { get; init; }
     /// <summary>The checks made: worlds made at a decision, actions a carried world took, actions a continued world took.</summary>
     public int Imports { get; init; }
     public int Steps { get; init; }
@@ -114,6 +118,8 @@ internal sealed record ParityLine
         {
             Outcome = result.Outcome,
             Decisions = result.Steps.Count - 1,
+            Prompts = result.Steps.Count(s => s.Action?.Kind == CombatActionKind.Pick),
+            OpensWithPrompt = result.Steps[0].Action?.Kind == CombatActionKind.Pick,
             Imports = result.Imports,
             Steps = result.StepChecks,
             Continues = result.ContinueChecks,
@@ -167,7 +173,7 @@ internal sealed class ParitySummary
     private int _freedExports;
     private readonly List<string> _runEnds = [];
     private readonly Dictionary<string, Dictionary<string, int[]>> _met = GameIds.Kinds.ToDictionary(k => k, _ => new Dictionary<string, int[]>());
-    private int _combats, _failed, _decisions, _imports, _steps, _continues, _differed, _differedCombats, _exports;
+    private int _combats, _failed, _decisions, _prompts, _opened, _imports, _steps, _continues, _differed, _differedCombats, _exports;
     private readonly int[] _differences = new int[3];
     private double _ms, _exportMs;
     private long _exportBytes;
@@ -197,6 +203,8 @@ internal sealed class ParitySummary
         foreach (var (field, collections) in line.Freed) _freed[field] = _freed.GetValueOrDefault(field) + collections;
         _freedExports += line.FreedExports;
         _decisions += line.Decisions;
+        _prompts += line.Prompts;
+        if (line.OpensWithPrompt) _opened++;
         _imports += line.Imports;
         _steps += line.Steps;
         _continues += line.Continues;
@@ -235,7 +243,7 @@ internal sealed class ParitySummary
         foreach (var (error, count) in _gameErrors.OrderByDescending(kv => kv.Value).Take(5)) output.WriteLine($"  game error x{count}: {(error.Length > 200 ? error[..200] + "..." : error)}");
         if (_runEnds.Count > 0)
             output.WriteLine($"runs       {_runEnds.Count}: {string.Join(", ", _runEnds.GroupBy(e => e).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} x{g.Count()}"))}");
-        output.WriteLine($"decisions  {_decisions}; checks: {_imports} imports, {_steps} steps, {_continues} continued steps");
+        output.WriteLine($"decisions  {_decisions}, {_prompts} of them card prompts, which open {_opened} combats; checks: {_imports} imports, {_steps} steps, {_continues} continued steps");
         if (_exports > 0)
             output.WriteLine($"exports    {_exports}: {_exportBytes / 1024.0 / _exports:F0} KB" + (_exportMs > 0 ? $" and {_exportMs / _exports:F2} ms" : "") + " each; "
                 + $"{_freed.Values.Sum()} hash sets and dictionaries with freed slots, in {_freedExports} exports");
