@@ -34,5 +34,6 @@ pub fn import(json: &str) -> Res<Combat> {
     let mut c = crate::manual::canon::combat();
     read_arenas(object(o.get("arenas").ok_or("no member arenas")?)?, &mut c.a)?;
     c.s = read_roots(object(o.get("roots").ok_or("no member roots")?)?)?;
+    crate::manual::delegates::attach(&mut c)?;
     Ok(c)
 }

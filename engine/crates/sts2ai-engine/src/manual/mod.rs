@@ -5,6 +5,7 @@
 #![allow(non_snake_case)]
 
 pub mod canon;
+pub mod delegates;
 pub mod model_db;
 pub mod object;
 

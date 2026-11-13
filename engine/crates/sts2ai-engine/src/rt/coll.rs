@@ -61,10 +61,44 @@ impl<T> Slots<T> {
 #[derive(Clone, Debug)]
 pub struct Set<T>(Slots<T>);
 
+impl<T> Slots<T> {
+    /// The slots of a collection of the game as it stands: each item with the slot it is in, in enumeration order,
+    /// and the freed slots in the order they will be filled again. Every slot is in exactly one of the two.
+    fn from_layout(items: Vec<T>, at: Vec<usize>, free: Vec<usize>) -> Result<Self, String> {
+        if items.len() != at.len() {
+            return Err(format!("{} items at {} slots", items.len(), at.len()));
+        }
+        let count = items.len() + free.len();
+        let mut slots: Vec<Option<T>> = Vec::new();
+        slots.resize_with(count, || None);
+        let mut last = None;
+        for (item, i) in items.into_iter().zip(at) {
+            if i >= count || last.is_some_and(|l| i <= l) {
+                return Err(format!("an item at slot {i}: slots go up, below {count}"));
+            }
+            last = Some(i);
+            slots[i] = Some(item);
+        }
+        let mut seen = vec![false; count];
+        for &i in &free {
+            if i >= count || slots[i].is_some() || seen[i] {
+                return Err(format!("a freed slot {i} that is not free, or twice"));
+            }
+            seen[i] = true;
+        }
+        // The last of `free` here is the one filled first.
+        Ok(Slots { slots, free: free.into_iter().rev().collect() })
+    }
+}
+
 impl<T> Set<T> {
     /// The set that enumerates these items in this order, with no freed slot.
     pub fn from_items(items: Vec<T>) -> Self {
         Set(Slots { slots: items.into_iter().map(Some).collect(), free: Vec::new() })
+    }
+    /// The set with these items in these slots and these freed slots (the next one to be filled first).
+    pub fn from_layout(items: Vec<T>, at: Vec<usize>, free: Vec<usize>) -> Result<Self, String> {
+        Ok(Set(Slots::from_layout(items, at, free)?))
     }
 }
 
@@ -161,6 +195,10 @@ impl<K, V> Dict<K, V> {
     /// The dictionary that enumerates these pairs in this order, with no freed slot.
     pub fn from_pairs(pairs: Vec<(K, V)>) -> Self {
         Dict(Slots { slots: pairs.into_iter().map(Some).collect(), free: Vec::new() })
+    }
+    /// The dictionary with these pairs in these slots and these freed slots (the next one to be filled first).
+    pub fn from_layout(pairs: Vec<(K, V)>, at: Vec<usize>, free: Vec<usize>) -> Result<Self, String> {
+        Ok(Dict(Slots::from_layout(pairs, at, free)?))
     }
 }
 
@@ -406,5 +444,32 @@ pub struct Ordered<T> {
 impl<T> IntoVec<T> for Ordered<T> {
     fn into_vec(self) -> Vec<T> {
         self.items
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    /// A set read with freed slots fills them first, the next one first, as .NET's does.
+    #[test]
+    fn freed_slots_are_filled_in_their_order() {
+        // {1, 2, 3} after Remove(1) and Remove(2): slot 2 holds 3; the free list is 1, then 0.
+        let mut set = Set::from_layout(vec![3], vec![2], vec![1, 0]).unwrap();
+        set.add(7);
+        set.add(8);
+        set.add(9);
+        assert_eq!(set.into_vec(), vec![8, 7, 3, 9]);
+        let mut dict = Dict::from_layout(Vec::<(i32, i32)>::new(), vec![], vec![1, 0]).unwrap();
+        dict.set(1, 10);
+        dict.set(2, 20);
+        assert_eq!(dict.keys(), vec![2, 1]);
+    }
+
+    #[test]
+    fn a_layout_that_breaks_the_rule_is_refused() {
+        assert!(Set::from_layout(vec![1], vec![0], vec![0]).is_err());
+        assert!(Set::from_layout(vec![1, 2], vec![1, 0], vec![]).is_err());
+        assert!(Set::from_layout(vec![1], vec![2], vec![0]).is_err());
     }
 }

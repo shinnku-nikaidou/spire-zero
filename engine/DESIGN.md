@@ -205,17 +205,20 @@ it (`import.rs`, with the reader `port` generates beside the structs, `gen/impor
 | `string` | a string, or `null` |
 | `struct` | an object: one member per field of the schema's struct, by `name`; `null` for a null class held by value |
 | `nullable` | `null`, or the value |
-| `list`, `set`, `queue`, `stack` | an array in the collection's own enumeration order (a stack from its top); `null` for a null collection, which the engine reads as an empty one |
-| `dict` | an array of `[key, value]` in enumeration order, or `null` |
+| `list`, `queue`, `stack` | an array in the collection's own enumeration order (a stack from its top); `null` for a null collection, which the engine reads as an empty one |
+| `set`, `dict` | an array in enumeration order (a dictionary's items as `[key, value]`), or `null`; with freed slots, the object below |
 | `tuple`, `pair` | an array of the items; `[key, value]` |
 | `kind` (a `System.Type`) | the schema name of the class, or `null` |
 | `ref` | `null`; `["<arena>", index]`; `["canon", "<Class>"]` for the canonical model of a class, which is not exported as an object; `["outside", "<CLR name>"]`, refused |
 
 An export is taken at a decision of the player with nothing running: the action queues are empty, no prompt is open.
 
-One thing format 1 cannot say: a `HashSet` or `Dictionary` from which items were removed keeps freed slots that the next
-added items fill, so its later enumeration order depends on them. The engine reads such a collection as one without
-freed slots.
+A `HashSet` or `Dictionary` from which items were removed keeps freed slots, and the next items added fill them
+before the end: its later enumeration order depends on them (an empty one with two freed slots already reverses its
+next two adds). Such a collection is written as `{"items": [..], "at": [..], "free": [..]}`: the items in enumeration
+order, the slot index of each, and the freed slots in the order they are filled again. Every slot below the count is
+in exactly one of `at` and `free`; the engine builds its `Set` / `Dict` with exactly those slots and refuses anything
+else.
 
 `Combat` is that state plus the answers to the running action's prompts: plain data, `Clone`, no pointers, no interior
 mutability. Two worlds share nothing but the canonical models, so worlds are searched in threads of one process.

@@ -91,6 +91,9 @@ translate = [
     "MegaCrit.Sts2.Core.Models.Badges",
     "MegaCrit.Sts2.Core.Models.ModifierModel",
     "MegaCrit.Sts2.Core.Models.Modifiers",
+    # what a combat hands to the run: the rewards it adds
+    "MegaCrit.Sts2.Core.Rewards",
+    "MegaCrit.Sts2.Core.Runs.CardCreationOptions",
 ]
 exclude = []
 
@@ -154,6 +157,7 @@ fields = [
     "ActionQueueSynchronizer._netService",
     "ActionQueueSynchronizer._messageBuffer",
     "PlayerChoiceSynchronizer._netService",
+    "RewardsSet._synchronizer",
 ]
 
 [fields]
@@ -199,5 +203,7 @@ classes = ["ModelId"]
 "TestMode.IsOn" = "true"
 "TestMode.IsOff" = "false"
 # Nothing cancels a combat of the engine.
+# A delegate of the engine has no object behind it to ask for (the game asks only to refuse one that has).
+"Delegate.Target" = "Obj::NULL"
 "CancellationToken.IsCancellationRequested" = "false"
 "CancellationTokenSource.IsCancellationRequested" = "false"

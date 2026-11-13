@@ -177,15 +177,26 @@ impl<T: Rd> Rd for Vec<T> {
     }
 }
 
+/// A hash set or dictionary with freed slots: `{"items": [..], "at": [..], "free": [..]}`. The items in enumeration
+/// order, the slot of each, and the freed slots, the next one to be filled first.
+fn layout<T: Rd>(o: &Object) -> Res<(Vec<T>, Vec<usize>, Vec<usize>)> {
+    members(o, 3)?;
+    Ok((field(o, "items")?, field(o, "at")?, field(o, "free")?))
+}
+
 impl<T: Rd> Rd for Set<T> {
     fn rd(v: &Value) -> Res<Self> {
-        Ok(Set::from_items(items(v)?))
+        let Value::Object(o) = v else { return Ok(Set::from_items(items(v)?)) };
+        let (items, at, free) = layout(o)?;
+        Set::from_layout(items, at, free)
     }
 }
 
 impl<K: Rd, V: Rd> Rd for Dict<K, V> {
     fn rd(v: &Value) -> Res<Self> {
-        Ok(Dict::from_pairs(items(v)?))
+        let Value::Object(o) = v else { return Ok(Dict::from_pairs(items(v)?)) };
+        let (pairs, at, free) = layout(o)?;
+        Dict::from_layout(pairs, at, free)
     }
 }
 
