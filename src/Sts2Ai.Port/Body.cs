@@ -290,7 +290,7 @@ public sealed partial class Body
                     if (w.IsDropped(m.ReturnType) || Value(m) != null) continue;
                     // A call on presentation, or one that only takes presentation and gives nothing back, is presentation.
                     if (inv.Instance != null && (w.IsDropped(inv.Instance.Type) || inv.Instance is IMemberReferenceOperation { Member: var im } && World.IsSource(im.ContainingType) && w.IsDropMember(im))) continue;
-                    if (m.ReturnsVoid && m.Parameters.Any(p => w.IsDropped(p.Type))) continue;
+                    if (m.ReturnsVoid && m.Parameters.Length > 0 && m.Parameters.All(p => w.IsDropped(p.Type))) continue;
                     if (IsPureName(m.Name) || m.ContainingType.Name is "ModelDb") continue;
                     // A task run on the side is what the task is: its own calls decide.
                     if (m is { Name: "RunSafely", ContainingType.Name: "TaskHelper" }) continue;
@@ -640,6 +640,8 @@ public sealed partial class Body
         {
             string taken = Sub(test == "true" ? cond.WhenTrue : cond.WhenFalse);
             if (taken.Length > 0) sb.Append("{\n").Append(taken).Append("}\n");
+            // The branch never taken, when it is presentation, is a statement left out: a member with nothing else is presentation.
+            else if ((test == "true" ? cond.WhenFalse : cond.WhenTrue) is { } never && !HoldsGameCall(never) && !WritesOuterLocal(never)) LeftOut++;
             return;
         }
         string then = Sub(cond.WhenTrue), other = Sub(cond.WhenFalse);
