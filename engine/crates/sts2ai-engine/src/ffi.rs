@@ -1,0 +1,377 @@
+//! The C ABI of libsts2ai_engine (engine/DESIGN.md, "The C ABI"), as src/Sts2Ai.Engine/Native.cs calls it. A world is
+//! an opaque handle; a call on one world touches no other, so different worlds are used from different threads, and a
+//! world may be freed from another thread than the one that used it. Every function catches panics: a failed call
+//! says so by its result, and `sz_last_error` gives what was wrong, to the thread that made the call.
+//!
+//! What a world shows is read off its combat here (observe.rs, legal.rs, keys.rs, prompt.rs). What a world does
+//! (taking a combat in, taking an action) is the rules side's, behind `World`.
+
+use crate::r#gen as g;
+use crate::r#gen::kinds::*;
+use crate::keys;
+use crate::legal;
+use crate::observe;
+use crate::prompt::{self, Asked};
+use crate::protocol::{self, CombatObservation};
+use crate::rt::{self, Combat};
+use std::cell::{Cell, RefCell};
+use std::panic::{self, AssertUnwindSafe};
+use std::sync::Once;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// A world
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// What the C ABI needs of a world: the rules side. Everything a world shows is read off `combat` and `asked`.
+pub trait World: Clone + Send + Sized + 'static {
+    /// A world standing where a live combat stood, from the bytes `EngineExport` wrote of it.
+    fn import(export: &str) -> Result<Self, String>;
+
+    /// Takes the action ("play:10:1", "potion:0", "end_turn", or "pick:0,2" at a card prompt) and goes on to where the
+    /// player is asked again: their turn, a card prompt, or the combat's end.
+    fn apply(&mut self, action: &str) -> Result<(), String>;
+
+    /// The combat as it stands. At a card prompt, as it stood when the running action stopped there.
+    fn combat(&mut self) -> &mut Combat;
+
+    /// The card prompt the world waits on, if any.
+    fn asked(&self) -> Option<&Asked>;
+}
+
+/// The combat of an export as it was taken in: a world that shows, and takes no action. It serves until the rules
+/// side has its world (world.rs), which then takes its place as `Engine`.
+#[derive(Clone)]
+pub struct Imported(Combat);
+
+impl World for Imported {
+    fn import(export: &str) -> Result<Self, String> {
+        crate::import::import(export).map(Imported)
+    }
+
+    fn apply(&mut self, _action: &str) -> Result<(), String> {
+        Err("the engine takes no action yet (there is no world.rs)".into())
+    }
+
+    fn combat(&mut self) -> &mut Combat {
+        &mut self.0
+    }
+
+    fn asked(&self) -> Option<&Asked> {
+        None
+    }
+}
+
+/// The world behind the C ABI.
+type Engine = Imported;
+
+/// A world and what was read of it where it stands: the observation, which the state key is the hash of too.
+struct Handle<W: World> {
+    world: W,
+    shown: Option<CombatObservation>,
+}
+
+impl<W: World> Handle<W> {
+    fn new(world: W) -> Handle<W> {
+        Handle { world, shown: None }
+    }
+
+    /// C#: RunSession.Combat. The combat as a decision shows it, with the prompt it waits on.
+    fn shown(&mut self) -> &CombatObservation {
+        if self.shown.is_none() {
+            let asked = self.world.asked().cloned();
+            let c = self.world.combat();
+            let (st, player) = live(c);
+            let mut observation = observe::combat(st, player, c);
+            observation.prompt = asked.map(|asked| prompt::canonical(&asked, c).0);
+            self.shown = Some(observation);
+        }
+        self.shown.as_ref().expect("just read")
+    }
+}
+
+/// C#: NodeWorld.Combat. The live combat's state, and the player the world is for: the game's own "me".
+fn live(c: &mut Combat) -> (CombatState, Player) {
+    let manager = g::combat::combat_manager::instance(c);
+    let st = g::combat::combat_manager::debug_only_get_state(manager, c);
+    if rt::is_null(&st) {
+        panic!("no combat state");
+    }
+    let player = g::context::local_context::get_me__i_combat_state(st, c);
+    if rt::is_null(&player) {
+        panic!("the combat has no player with the local net id");
+    }
+    (st, player)
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------------------------------------------------
+
+thread_local! {
+    /// What was wrong with this thread's last failed call; empty after a call that worked.
+    static ERROR: RefCell<String> = const { RefCell::new(String::new()) };
+    /// Whether this thread is inside a call of the C ABI, whose panics are errors of the call.
+    static IN_CALL: Cell<bool> = const { Cell::new(false) };
+    /// Where this thread's last panic inside a call was raised.
+    static PANICKED_AT: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// A panic inside a call is the call's error, with the place it was raised, and is not printed; any other panic goes
+/// to the hook that was there.
+fn hook_panics() {
+    static HOOKED: Once = Once::new();
+    HOOKED.call_once(|| {
+        let before = panic::take_hook();
+        panic::set_hook(Box::new(move |info| {
+            if IN_CALL.with(Cell::get) {
+                let at = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_default();
+                PANICKED_AT.with(|place| *place.borrow_mut() = at);
+            } else {
+                before(info);
+            }
+        }));
+    });
+}
+
+fn fail(message: String) {
+    ERROR.with(|error| *error.borrow_mut() = message);
+}
+
+/// Runs a call of the C ABI: its error, or its panic, becomes this thread's error and `failed`.
+fn call<T>(failed: T, body: impl FnOnce() -> Result<T, String>) -> T {
+    hook_panics();
+    ERROR.with(|error| error.borrow_mut().clear());
+    IN_CALL.with(|inside| inside.set(true));
+    let result = panic::catch_unwind(AssertUnwindSafe(body));
+    IN_CALL.with(|inside| inside.set(false));
+    match result {
+        Ok(Ok(value)) => value,
+        Ok(Err(message)) => {
+            fail(message);
+            failed
+        }
+        Err(payload) => {
+            let message = match payload.downcast::<String>() {
+                Ok(text) => *text,
+                Err(payload) => payload
+                    .downcast::<&'static str>()
+                    .map(|text| text.to_string())
+                    .unwrap_or_else(|_| "a panic with no message".into()),
+            };
+            let at = PANICKED_AT.with(|place| std::mem::take(&mut *place.borrow_mut()));
+            fail(if at.is_empty() { message } else { format!("{message} ({at})") });
+            failed
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Handles and buffers
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// C: `sz_buf`. Bytes the engine allocated, given back with `sz_buf_free`.
+#[repr(C)]
+pub struct SzBuf {
+    pub ptr: *mut u8,
+    pub len: usize,
+}
+
+impl SzBuf {
+    pub const EMPTY: SzBuf = SzBuf {
+        ptr: std::ptr::null_mut(),
+        len: 0,
+    };
+}
+
+fn give(bytes: Vec<u8>, out: *mut SzBuf) {
+    let bytes = bytes.into_boxed_slice();
+    let len = bytes.len();
+    let ptr = Box::into_raw(bytes) as *mut u8;
+    unsafe { *out = SzBuf { ptr, len } };
+}
+
+fn make(world: Engine) -> u64 {
+    Box::into_raw(Box::new(Handle::new(world))) as u64
+}
+
+/// The world of a handle. One world is used by one thread at a time (Native.cs).
+unsafe fn world<'a>(id: u64) -> Result<&'a mut Handle<Engine>, String> {
+    if id == 0 {
+        return Err("no world: the handle is 0".into());
+    }
+    Ok(unsafe { &mut *(id as *mut Handle<Engine>) })
+}
+
+unsafe fn text<'a>(bytes: *const u8, len: usize, what: &str) -> Result<&'a str, String> {
+    if bytes.is_null() {
+        return Err(format!("{what}: a null pointer"));
+    }
+    std::str::from_utf8(unsafe { std::slice::from_raw_parts(bytes, len) }).map_err(|e| format!("{what} is not UTF-8: {e}"))
+}
+
+/// A call that fills a buffer: 0 and the bytes, or 1 and an empty buffer.
+unsafe fn fill(id: u64, out: *mut SzBuf, body: impl FnOnce(&mut Handle<Engine>) -> Vec<u8>) -> i32 {
+    if out.is_null() {
+        return call(1, || Err("no buffer to fill: a null pointer".into()));
+    }
+    unsafe { *out = SzBuf::EMPTY };
+    call(1, || {
+        let bytes = body(unsafe { world(id) }?);
+        give(bytes, out);
+        Ok(0)
+    })
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The functions
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// A world from a live combat as `EngineExport` wrote it; 0 on error.
+///
+/// # Safety
+/// `json` points at `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize) -> u64 {
+    call(0, || Ok(make(Engine::import(unsafe { text(json, len, "the export") }?)?)))
+}
+
+/// An independent world standing where this one stands; 0 on error.
+///
+/// # Safety
+/// `world` is a live handle of this library, used by no other thread during the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_clone(world: u64) -> u64 {
+    call(0, || Ok(make(unsafe { self::world(world) }?.world.clone())))
+}
+
+/// Frees a world. Any thread may free a world no thread is using.
+///
+/// # Safety
+/// `world` is a live handle of this library or 0, and is not used again.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_free(world: u64) {
+    if world != 0 {
+        // A world is plain data: dropping it runs none of the game's code.
+        drop(unsafe { Box::from_raw(world as *mut Handle<Engine>) });
+    }
+}
+
+/// Takes an action, in `CombatAction`'s text form; 0 when it was taken.
+///
+/// # Safety
+/// `world` as for `sz_world_clone`; `action` points at `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_apply(world: u64, action: *const u8, len: usize) -> i32 {
+    call(1, || {
+        let handle = unsafe { self::world(world) }?;
+        let action = unsafe { text(action, len, "the action") }?;
+        handle.shown = None;
+        handle.world.apply(action)?;
+        Ok(0)
+    })
+}
+
+/// 0 in progress, 1 won, 2 lost; -1 on error.
+///
+/// # Safety
+/// `world` as for `sz_world_clone`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_status(world: u64) -> i32 {
+    call(-1, || {
+        let c = unsafe { self::world(world) }?.world.combat();
+        let (_, player) = live(c);
+        Ok(legal::status(player, c) as i32)
+    })
+}
+
+/// The plays the game allows, each on a line, in the game's order; none at a card prompt or once the combat is over.
+///
+/// # Safety
+/// `world` as for `sz_world_clone`; `out` points at an `sz_buf` to fill.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_legal(world: u64, out: *mut SzBuf) -> i32 {
+    unsafe {
+        fill(world, out, |handle| {
+            let at_prompt = handle.world.asked().is_some();
+            let c = handle.world.combat();
+            let (st, player) = live(c);
+            protocol::legal_text(&legal::plays(st, player, at_prompt, c))
+        })
+    }
+}
+
+/// The observation's JSON, byte for byte what `ProtocolJson` writes of the real combat's.
+///
+/// # Safety
+/// As for `sz_world_legal`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_observe(world: u64, out: *mut SzBuf) -> i32 {
+    unsafe {
+        fill(world, out, |handle| {
+            let mut json = Vec::with_capacity(4096);
+            protocol::observation_json(handle.shown(), &mut json);
+            json
+        })
+    }
+}
+
+/// What the combat has changed of the run: `{"hp","max_hp","gold","deck","relics","potions"}` in ProtocolJson's form.
+///
+/// # Safety
+/// As for `sz_world_legal`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_run(world: u64, out: *mut SzBuf) -> i32 {
+    unsafe {
+        fill(world, out, |handle| {
+            let c = handle.world.combat();
+            let (_, player) = live(c);
+            let mut json = Vec::with_capacity(2048);
+            protocol::run_json(&observe::run(player, c), &mut json);
+            json
+        })
+    }
+}
+
+/// `ICombatWorld.HiddenKey` of the SL world (`HiddenState.Full`). 0 with this thread's error set on error.
+///
+/// # Safety
+/// `world` as for `sz_world_clone`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_hidden_key(world: u64) -> u64 {
+    call(0, || {
+        let c = unsafe { self::world(world) }?.world.combat();
+        let (st, player) = live(c);
+        Ok(keys::full(st, player, c))
+    })
+}
+
+/// `PimcBrain.StateKey` of the world's observation. 0 with this thread's error set on error.
+///
+/// # Safety
+/// `world` as for `sz_world_clone`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_state_key(world: u64) -> u64 {
+    call(0, || Ok(protocol::state_key(unsafe { self::world(world) }?.shown())))
+}
+
+/// Gives back a buffer one of the calls above filled.
+///
+/// # Safety
+/// `buf` is a buffer of this library that was not freed before, or an empty one.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_buf_free(buf: SzBuf) {
+    if !buf.ptr.is_null() {
+        drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(buf.ptr, buf.len)) });
+    }
+}
+
+/// This thread's last error: what the last call that failed on this thread said, or nothing after one that worked.
+/// Always 0.
+///
+/// # Safety
+/// `out` points at an `sz_buf` to fill.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_last_error(out: *mut SzBuf) -> i32 {
+    give(ERROR.with(|error| error.borrow().clone()).into_bytes(), out);
+    0
+}

@@ -8,6 +8,12 @@
 
 #[path = "gen/mod.rs"]
 pub mod r#gen;
+pub mod ffi;
 pub mod import;
+pub mod keys;
+pub mod legal;
 pub mod manual;
+pub mod observe;
+pub mod prompt;
+pub mod protocol;
 pub mod rt;
