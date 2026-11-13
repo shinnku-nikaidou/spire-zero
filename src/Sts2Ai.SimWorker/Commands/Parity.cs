@@ -24,6 +24,9 @@ internal static class ParityCommand
     private static readonly Option<string?> Dump = Opt.Maybe<string?>("--dump",
         "a folder that gets every combat as files, for the engine's own tests: at each decision the combat as the engine imports it, what the game shows " +
         "and the action it was given (the folder's README.md has the layout)");
+    private static readonly Option<string?> Delegates = Opt.Maybe<string?>("--delegates",
+        "a file that gets a census of the delegates the combats' state holds (DelegateCensus): one row for each field and method with its count, and, with " +
+        "--world replay, each monster's machine and each card's vars made again by the game and held against the live ones at a combat's last decision");
     private static readonly Option<int?> Runs = Opt.Maybe<int?>("--runs",
         "whole runs in place of the sweep's combats: this many for every character and ascension, played by the same random player, every combat of a run " +
         "checked as a combat of the sweep is, and the run around it compared too. The player dies early at a character's own HP: --hp and --max-hp let it go on");
@@ -54,7 +57,7 @@ internal static class ParityCommand
     };
 
     /// <summary>The options a part of the sweep takes from the whole: all but where the output goes and who shares it.</summary>
-    private static readonly Option[] Shared = [World, Dump, Runs, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
+    private static readonly Option[] Shared = [World, Dump, Delegates, Runs, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
 
     public static Command Command()
     {
@@ -134,11 +137,16 @@ internal static class ParityCommand
             Directory.CreateDirectory(dumped);
             File.WriteAllText(Path.Combine(dumped, "README.md"), CombatDump.Readme(string.Join(' ', Environment.GetCommandLineArgs().SkipWhile(a => a != "parity"))));
         }
+        string? delegates = r.GetValue(Delegates);
+        // A part's census goes beside the whole's, which adds the parts up.
+        string? censusFile = delegates == null ? null : parts == 1 ? delegates : $"{delegates}.{part}";
         if (workers == 1)
         {
             // The engine's schema is read once; each combat has its own maker of engine worlds, which counts what it wrote.
-            var export = world == "engine" || dumped != null ? new EngineExport(EngineSchema.Load(EngineLibrary.SchemaPath)) : null;
+            var schema = world == "engine" || dumped != null || delegates != null ? EngineSchema.Load(EngineLibrary.SchemaPath) : null;
+            var export = schema == null ? null : new EngineExport(schema);
             var dump = dumped == null ? null : new CombatDump(export!, dumped);
+            Census = delegates == null ? null : (new DelegateCensus(schema!), export!);
             if (runs != null)
             {
                 IRunWorlds same = world switch
@@ -184,7 +192,18 @@ internal static class ParityCommand
                 if (worker.Process.ExitCode is not (0 or 1)) throw new InvalidOperationException($"the worker of part {worker.Part} ended with exit code {worker.Process.ExitCode}");
             }
             if (done.Count != indexes.Count) throw new InvalidOperationException($"the workers played {done.Count} of {indexes.Count} {unit}");
+            if (delegates != null)
+            {
+                var whole = new DelegateCensus(EngineSchema.Load(EngineLibrary.SchemaPath));
+                foreach (int k in Enumerable.Range(0, workers))
+                {
+                    whole.Add($"{delegates}.{k}");
+                    File.Delete($"{delegates}.{k}");
+                }
+                whole.Write(delegates);
+            }
         }
+        if (workers == 1) Census?.Census.Write(censusFile!);
         clock.Stop();
         if (toStdout) return summary.Clean ? 0 : 1;
 
@@ -210,8 +229,9 @@ internal static class ParityCommand
         var clock = Stopwatch.StartNew();
         try
         {
-            var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues, dump == null ? null : dump.Keep);
+            var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues, Kept(dump));
             dump?.Write(combat.Info, result);
+            MadeAgain(result.Steps);
             var line = ParityLine.Of(combat.Info, result, clock.Elapsed.TotalMilliseconds, full);
             return worlds is EngineWorlds { Written: var written } engine ? line.With(written.Count, written.Bytes, written.Ms, engine.Tally)
                 : dump != null ? line.With(result.Steps) : line;
@@ -223,6 +243,29 @@ internal static class ParityCommand
         }
     }
 
+    /// <summary>The census of delegates, when one is asked for, with the export whose walk it rides on.</summary>
+    private static (DelegateCensus Census, EngineExport Export)? Census;
+
+    /// <summary>What is kept of each decision: the dump's files, and with a census the delegates of an export's walk.</summary>
+    private static Keep? Kept(CombatDump? dump) => Census is not var (census, export) ? dump == null ? null : dump.Keep : (player, status, prompt, observation) =>
+    {
+        if (status == CombatStatus.InProgress && !prompt) export.Write(HeadlessGame.GameVersion, census);
+        return dump?.Keep(player, status, prompt, observation);
+    };
+
+    /// <summary>With a census: the combat's last decision made again as a second world, which is then the live game, and
+    /// in it the game's own code makes the machines and the vars again (<see cref="DelegateCensus.Compare"/>). The world
+    /// is thrown away after.</summary>
+    private static void MadeAgain(IReadOnlyList<RealStep> steps)
+    {
+        if (Census is not var (census, _) || steps.Count < 2 || steps[^2].Make is not { } make) return;
+        using var world = make();
+        if (world.World is EngineWorld) return;
+        world.World.Observe();
+        var state = MegaCrit.Sts2.Core.Combat.CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
+        census.Compare(state, MegaCrit.Sts2.Core.Context.LocalContext.GetMe(state.RunState) ?? throw new InvalidOperationException("no player"));
+    }
+
     /// <summary>One whole run: a line for each of its combats. The first carries what belongs to the run as a whole
     /// (the time the real run took, the game's errors, what the engine's worlds wrote), the last how the run ended.</summary>
     private static List<ParityLine> PlayRun(Pump pump, SweepRun run, IRunWorlds worlds, CombatDump? dump, int? continues, bool full)
@@ -232,7 +275,7 @@ internal static class ParityCommand
             "run", run.Setup.Loadout is { } loadout ? RandomLoadout.Text(loadout) : null, run.PolicySeed, combat?.Floor);
         try
         {
-            var (combats, end, gameErrors) = RunLockstep.Record(pump, run.Setup, run.PolicySeed, worlds, dump == null ? null : dump.Keep);
+            var (combats, end, gameErrors) = RunLockstep.Record(pump, run.Setup, run.PolicySeed, worlds, Kept(dump));
             if (combats.Count == 0) throw new InvalidOperationException($"the run has no combat: it {end}");
             var lines = new List<ParityLine>();
             foreach (var combat in combats)
@@ -243,6 +286,7 @@ internal static class ParityCommand
                     GameErrors = lines.Count == 0 ? gameErrors : [],
                 };
                 dump?.Write(Info(combat), result);
+                MadeAgain(combat.Steps);
                 lines.Add(ParityLine.Of(Info(combat), result, clock.Elapsed.TotalMilliseconds, full));
                 clock.Restart();
             }

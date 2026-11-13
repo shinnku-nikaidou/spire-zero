@@ -21,17 +21,20 @@ public sealed class EngineSchema
     internal enum Kind { Int, Bool, Float, Decimal, String, Char, Enum, Struct, Nullable, Sequence, Set, Dict, Tuple, Pair, Type, Ref }
 
     /// <summary>How a value is written: its kind and the shapes inside it.</summary>
-    internal sealed record Shape(Kind Kind, Shape? Of = null, Shape? Key = null, Shape? Value = null, Shape[]? Items = null, Slot[]? Fields = null);
+    /// <param name="Clr">Of a struct: its CLR type.</param>
+    internal sealed record Shape(Kind Kind, Shape? Of = null, Shape? Key = null, Shape? Value = null, Shape[]? Items = null, Slot[]? Fields = null, Type? Clr = null);
 
     /// <summary>One field of a class or struct: its name in the engine, and where the game keeps it.</summary>
     internal sealed record Slot(JsonEncodedText Name, FieldInfo Field, Shape Shape);
 
     /// <summary>One class's own part of an object: its fields, and the type arguments the engine keeps as fields.</summary>
-    internal sealed record Level(JsonEncodedText Name, Slot[] Fields, (JsonEncodedText Name, int Argument)[] TypeParameters);
+    /// <param name="Clr">The class, as the game declares it.</param>
+    internal sealed record Level(JsonEncodedText Name, Slot[] Fields, (JsonEncodedText Name, int Argument)[] TypeParameters, Type Clr);
 
     /// <summary>A class with state: the arena its objects live in, and the levels of its chain that hold something,
     /// from the root down.</summary>
-    internal sealed record Class(string Name, int Arena, Level[] Chain);
+    /// <param name="Types">Every class of its chain, from the root down, the ones that hold nothing too.</param>
+    internal sealed record Class(string Name, int Arena, Level[] Chain, (string Name, Type Clr)[] Types);
 
     /// <summary>A static of the game that is state: where the export's walk starts.</summary>
     internal sealed record Root(JsonEncodedText Name, FieldInfo Field, Shape Shape);
@@ -102,7 +105,7 @@ public sealed class EngineSchema
             "dict" => new(Kind.Dict, Key: ShapeOf(t.GetProperty("key")), Value: ShapeOf(t.GetProperty("value"))),
             "pair" => new(Kind.Pair, Key: ShapeOf(t.GetProperty("key")), Value: ShapeOf(t.GetProperty("value"))),
             "tuple" => new(Kind.Tuple, Items: [.. t.GetProperty("items").EnumerateArray().Select(ShapeOf)]),
-            "struct" => structs.TryGetValue(t.GetProperty("name").GetString()!, out var s) ? new(Kind.Struct, Fields: s.Slots)
+            "struct" => structs.TryGetValue(t.GetProperty("name").GetString()!, out var s) ? new(Kind.Struct, Fields: s.Slots, Clr: s.Type)
                 : Problem<Shape>($"no struct {t.GetProperty("name")}") ?? new(Kind.Struct, Fields: []),
             var kind => throw new InvalidDataException($"{path}: unknown kind {kind}"),
         };
@@ -150,7 +153,7 @@ public sealed class EngineSchema
                     if (at < 0) problems.Add($"no type parameter {p} on {type.FullName}");
                     return (JsonEncodedText.Encode(p), at);
                 }).ToArray();
-                level = new(JsonEncodedText.Encode(name), slots, parameters);
+                level = new(JsonEncodedText.Encode(name), slots, parameters, type);
             }
             return levels[name] = level;
         }
@@ -158,11 +161,17 @@ public sealed class EngineSchema
         foreach (var (name, entry) in entries)
         {
             var chain = new List<Level>();
+            var types = new List<(string, Type)>();
             for (string? at = name; at != null; at = entries[at].GetProperty("base").GetString())
-                if (LevelOf(at) is { } level && (level.Fields.Length > 0 || level.TypeParameters.Length > 0)) chain.Add(level);
+            {
+                if (LevelOf(at) is not { } level) continue;
+                types.Add((at, level.Clr));
+                if (level.Fields.Length > 0 || level.TypeParameters.Length > 0) chain.Add(level);
+            }
             chain.Reverse();
+            types.Reverse();
             int arena = entry.GetProperty("arena").GetString() is { } a ? arenaIndex[a] : -1;
-            if (game.GetType(entry.GetProperty("cs").GetString()!) is { } type) _classes[type] = new(name, arena, [.. chain]);
+            if (game.GetType(entry.GetProperty("cs").GetString()!) is { } type) _classes[type] = new(name, arena, [.. chain], [.. types]);
         }
 
         var roots = new List<Root>();
@@ -224,14 +233,20 @@ public sealed class EngineExport(EngineSchema schema)
 
     /// <summary>The live combat: everything reached from the schema's roots as they stand.</summary>
     /// <param name="game">The game's version.</param>
-    public Written Write(string game) => new Walk(schema).Write(schema.Roots.Select(r => (r.Name, r.Shape, r.Field.GetValue(null))), game);
+    /// <param name="census">Counts the delegates in the fields of what the walk visits; null: no census.</param>
+    public Written Write(string game, DelegateCensus? census = null)
+    {
+        var written = new Walk(schema, census).Write(schema.Roots.Select(r => (r.Name, r.Shape, r.Field.GetValue(null))), game);
+        census?.EndExport();
+        return written;
+    }
 
     /// <summary>Everything reached from these objects, each a root under its name.</summary>
     public Written Write(IEnumerable<(string Name, object Root)> roots, string game) =>
-        new Walk(schema).Write(roots.Select(r => (JsonEncodedText.Encode(r.Name), new EngineSchema.Shape(EngineSchema.Kind.Ref), (object?)r.Root)), game);
+        new Walk(schema, null).Write(roots.Select(r => (JsonEncodedText.Encode(r.Name), new EngineSchema.Shape(EngineSchema.Kind.Ref), (object?)r.Root)), game);
 
     /// <summary>One export: the objects met so far, and those still to be written.</summary>
-    private sealed class Walk(EngineSchema schema)
+    private sealed class Walk(EngineSchema schema, DelegateCensus? census)
     {
         private static readonly JsonWriterOptions Plain = new() { SkipValidation = true };
 
@@ -298,6 +313,8 @@ public sealed class EngineExport(EngineSchema schema)
         {
             json.WriteStartObject();
             json.WriteString("class", cls.Name);
+            if (census != null)
+                foreach (var (name, type) in cls.Types) census.Note(name, type, o);
             foreach (var level in cls.Chain)
             {
                 json.WriteStartObject(level.Name);
@@ -383,6 +400,7 @@ public sealed class EngineExport(EngineSchema schema)
                     Value(json, shape.Of!, value);
                     break;
                 case EngineSchema.Kind.Struct:
+                    if (shape.Clr != null) census?.Note(shape.Clr.Name, shape.Clr, value);
                     json.WriteStartObject();
                     foreach (var slot in shape.Fields!)
                     {

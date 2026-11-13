@@ -100,7 +100,7 @@ internal sealed record Kept(bool Prompt, EngineExport.Written? Export, string Ru
 
 /// <summary>What a dump keeps of the live combat where it stands: its player, its status, whether it waits on a card
 /// prompt, and its observation.</summary>
-internal delegate Kept Keep(Player player, CombatStatus status, bool prompt, CombatObservation observation);
+internal delegate Kept? Keep(Player player, CombatStatus status, bool prompt, CombatObservation observation);
 
 /// <summary>A state's keys in search: the world's hidden key (<c>HiddenState.Full</c>) with the two texts it is the hash
 /// of, and the observation's key (<c>PimcBrain.StateKey</c>).</summary>
