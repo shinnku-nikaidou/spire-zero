@@ -15,8 +15,16 @@ pub trait Sink {
 }
 
 impl Sink for Vec<u8> {
+    #[inline]
     fn put(&mut self, bytes: &[u8]) {
-        self.extend_from_slice(bytes);
+        // Most of a JSON text comes in pieces of a few bytes, which a call to copy them costs more than.
+        if bytes.len() <= 16 {
+            for &byte in bytes {
+                self.push(byte);
+            }
+        } else {
+            self.extend_from_slice(bytes);
+        }
     }
 }
 
@@ -36,6 +44,7 @@ impl Default for Fnv {
 }
 
 impl Sink for Fnv {
+    #[inline]
     fn put(&mut self, bytes: &[u8]) {
         let mut hash = self.0;
         for &b in bytes {
@@ -59,9 +68,9 @@ impl<S: Sink> Sink for Escaped<'_, S> {
 // System.Text.Json's forms
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// Whether the default encoder writes the character as it is: printable ASCII but for the ones HTML could misread.
-fn plain(ch: char) -> bool {
-    matches!(ch, ' '..='~') && !matches!(ch, '"' | '&' | '\'' | '+' | '<' | '>' | '\\' | '`')
+/// Whether the default encoder writes the byte as it is: printable ASCII but for the characters HTML could misread.
+const fn plain(byte: u8) -> bool {
+    matches!(byte, b' '..=b'~') && !matches!(byte, b'"' | b'&' | b'\'' | b'+' | b'<' | b'>' | b'\\' | b'`')
 }
 
 /// A string's text as System.Text.Json's default encoder writes it between the quotes: `\b \t \n \f \r \\` short, every
@@ -70,11 +79,10 @@ pub fn escape<S: Sink>(text: &str, out: &mut S) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let bytes = text.as_bytes();
     let mut from = 0;
-    for (at, ch) in text.char_indices() {
-        if plain(ch) {
-            continue;
-        }
+    while let Some(ahead) = bytes[from..].iter().position(|byte| !plain(*byte)) {
+        let at = from + ahead;
         out.put(&bytes[from..at]);
+        let ch = text[at..].chars().next().expect("a character where a byte is");
         from = at + ch.len_utf8();
         match ch {
             '\u{8}' => out.put(b"\\b"),
@@ -125,7 +133,15 @@ pub fn uint<S: Sink>(n: u64, out: &mut S) {
 
 /// A decimal as .NET prints it: every digit of its scale, and a zero with no sign.
 pub fn decimal<S: Sink>(d: Dec, out: &mut S) {
-    out.put(d.to_string().as_bytes());
+    match u64::try_from(d.mantissa()) {
+        Ok(whole) if d.scale() == 0 => {
+            if d.is_negative() && whole != 0 {
+                out.put(b"-");
+            }
+            uint(whole, out);
+        }
+        _ => out.put(d.to_string().as_bytes()),
+    }
 }
 
 pub fn boolean<S: Sink>(b: bool, out: &mut S) {

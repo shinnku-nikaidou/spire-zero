@@ -96,3 +96,52 @@ fn text_hash_is_dotnets() {
         r#""\u0000\b\t\n\u000B\f\r\u001F \u0022\u0026\u0027\u002B\u003C\u003E\\\u0060\u007F\u0080\u4E2D\uD83D\uDE00~""#
     );
 }
+
+/// Not a check: what writing an observation and hashing it to the state key cost, per observation of the dump, once
+/// the observation has been read off the combat.
+///
+///     cargo test --release --test protocol costs -- --ignored --nocapture
+#[test]
+#[ignore = "a measurement, run by hand"]
+fn costs() {
+    let observations = std::sync::Mutex::new(Vec::new());
+    sweep(|fixture| {
+        for k in 0..fixture.records.len() {
+            let bytes = fixture.bytes(k, "observation.json");
+            let tree = json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
+            observations.lock().unwrap().push((views::observation(&tree).unwrap(), bytes.len()));
+        }
+        Tally::default()
+    });
+    let observations = observations.into_inner().unwrap();
+    // Each observation many times in a row, as search asks of the one it stands at.
+    let rounds = 200;
+    let observations = &observations[..observations.len().min(500)];
+    let started = std::time::Instant::now();
+    let mut written = 0;
+    let mut json = Vec::with_capacity(8192);
+    for (observation, _) in observations {
+        for _ in 0..rounds {
+            json.clear();
+            protocol::observation_json(observation, &mut json);
+            written += json.len();
+        }
+    }
+    let write = started.elapsed();
+    let started = std::time::Instant::now();
+    let mut mixed = 0u64;
+    for (observation, _) in observations {
+        for _ in 0..rounds {
+            mixed = mixed.wrapping_add(protocol::state_key(observation));
+        }
+    }
+    let key = started.elapsed();
+    let calls = (rounds * observations.len()) as f64;
+    println!(
+        "{} observations, {:.0} bytes each: writing one {:.2} us, its state key {:.2} us ({mixed:x})",
+        observations.len(),
+        written as f64 / calls,
+        write.as_secs_f64() * 1e6 / calls,
+        key.as_secs_f64() * 1e6 / calls
+    );
+}
