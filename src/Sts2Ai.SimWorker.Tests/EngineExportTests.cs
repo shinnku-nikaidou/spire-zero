@@ -47,7 +47,8 @@ public sealed class EngineExportTests : IDisposable
             """{"format":1,"game":"v-test","schema":"abc","roots":{"Hand":["card_pile",0],"Draw":["card_pile",1],"Again":["card_pile",0],"Text":["outside","System.String"]},"""
             + $"\"arenas\":{{\"card_pile\":[{Pile(PileType.Hand)},{Pile(PileType.Draw)}]}},\"outside\":{{\"System.String\":1}}}}",
             Encoding.UTF8.GetString(written.Bytes));
-        Assert.Equal((2, 1), (written.Objects, written.Outside["System.String"]));
+        Assert.Equal((2, 1), (written.Objects, written.Outside["System.String from Text"]));
+        Assert.Empty(written.Freed);
     }
 
     [Fact]

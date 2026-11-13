@@ -105,6 +105,27 @@ internal sealed class ReplayWorlds(Pump pump, bool determinized = false) : ISeco
     }
 }
 
+/// <summary>What a combat's exports say of themselves, added up (<see cref="EngineExport.Written"/>).</summary>
+internal sealed class ExportTally
+{
+    /// <summary>The references to objects of classes outside the engine's schema, by the class and the field that holds
+    /// the reference: state the engine was not given.</summary>
+    public Dictionary<string, int> Outside { get; } = [];
+
+    /// <summary>The hash sets and dictionaries with freed slots, by the field that holds them.</summary>
+    public Dictionary<string, int> Freed { get; } = [];
+
+    /// <summary>The exports that hold at least one such collection.</summary>
+    public int FreedExports { get; private set; }
+
+    public void Add(EngineExport.Written written)
+    {
+        foreach (var (type, references) in written.Outside) Outside[type] = Outside.GetValueOrDefault(type) + references;
+        foreach (var (field, collections) in written.Freed) Freed[field] = Freed.GetValueOrDefault(field) + collections;
+        if (written.Freed.Count > 0) FreedExports++;
+    }
+}
+
 /// <summary>No second world: the real combats are only played, for what a dump keeps of them (<see cref="CombatDump"/>).</summary>
 internal sealed class NoWorlds : ISecondWorlds, IRunWorlds
 {
@@ -123,9 +144,8 @@ internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds, IRunWor
     /// <summary>The exports written, their bytes in all, and the time they took.</summary>
     public (int Count, long Bytes, double Ms) Written { get; private set; }
 
-    /// <summary>The classes outside the engine's schema that the combat's objects pointed to, with the references to
-    /// each over all the exports: state the engine was not given.</summary>
-    public Dictionary<string, int> Outside { get; } = [];
+    /// <summary>What the exports say of themselves, over all of them.</summary>
+    public ExportTally Tally { get; } = new();
 
     public Func<SecondWorld>? At(CombatSession real) => real.Prompt != null ? null : Make(SecondWorld.Alone(real));
 
@@ -139,7 +159,7 @@ internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds, IRunWor
         var written = export.Write(HeadlessGame.GameVersion);
         byte[] bytes = written.Bytes;
         Written = (Written.Count + 1, Written.Bytes + bytes.Length, Written.Ms + Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-        foreach (var (type, references) in written.Outside) Outside[type] = Outside.GetValueOrDefault(type) + references;
+        Tally.Add(written);
         return () => new Imported(EngineWorld.Import(bytes, run));
     }
 

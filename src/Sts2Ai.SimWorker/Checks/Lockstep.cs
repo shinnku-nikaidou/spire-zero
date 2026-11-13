@@ -92,11 +92,11 @@ internal sealed record RealStep(Shown Shown, int Round, CombatAction? Action, st
 
 /// <summary>What a dump keeps of a decision of the real combat besides what the check compares (<see cref="CombatDump"/>).</summary>
 /// <param name="Prompt">The decision is a card prompt, in the middle of an action.</param>
-/// <param name="Export">The live combat as <c>EngineExport</c> writes it; null where the engine takes none in: at a card
-/// prompt, and once the combat is over.</param>
+/// <param name="Export">The live combat as <see cref="EngineExport"/> writes it; null where the engine takes none in: at a
+/// card prompt, and once the combat is over.</param>
 /// <param name="Run">What the combat has changed of the run (<c>RunChange</c>), as the JSON <c>sz_world_run</c> writes.</param>
 /// <param name="Keys">How search tells the state apart; null once the combat is over, where it does not ask.</param>
-internal sealed record Kept(bool Prompt, byte[]? Export, string Run, Keys? Keys);
+internal sealed record Kept(bool Prompt, EngineExport.Written? Export, string Run, Keys? Keys);
 
 /// <summary>What a dump keeps of the live combat where it stands: its player, its status, whether it waits on a card
 /// prompt, and its observation.</summary>

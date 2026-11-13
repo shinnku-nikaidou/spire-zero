@@ -211,8 +211,14 @@ public sealed class EngineExport(EngineSchema schema)
 {
     private const int Format = 1;
 
-    /// <summary>An export: its bytes, how many objects it holds, and the references it could not follow, by class.</summary>
-    public sealed record Written(byte[] Bytes, int Objects, IReadOnlyDictionary<string, int> Outside);
+    /// <summary>An export: its bytes, how many objects it holds, and the references it could not follow.</summary>
+    /// <param name="Outside">The references to objects of classes the schema does not hold, counted by the class and
+    /// the field that holds the reference ("CLR.Name from Class.field"; a root by its name).</param>
+    /// <param name="Freed">The hash sets and dictionaries written that have freed slots, counted by the field that
+    /// holds them ("Class.field", with " (empty)" for one that holds nothing now). Items were removed from such a
+    /// collection, and the next ones added to it take the freed slots, so its later order of enumeration depends on
+    /// what the export does not say: it writes the items in today's order only.</param>
+    public sealed record Written(byte[] Bytes, int Objects, IReadOnlyDictionary<string, int> Outside, IReadOnlyDictionary<string, int> Freed);
 
     /// <summary>The live combat: everything reached from the schema's roots as they stand.</summary>
     /// <param name="game">The game's version.</param>
@@ -227,10 +233,17 @@ public sealed class EngineExport(EngineSchema schema)
     {
         private static readonly JsonWriterOptions Plain = new() { SkipValidation = true };
 
+        /// <summary>The runtime's own count of freed slots, by the closed type of a hash set or a dictionary.</summary>
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FieldInfo> FreeCounts = new();
+
         private readonly Dictionary<object, (EngineSchema.Class Class, int Index)> _seen = new(ReferenceEqualityComparer.Instance);
         private readonly Queue<(object Object, EngineSchema.Class Class)> _toWrite = [];
         private readonly (ArrayBufferWriter<byte> Bytes, Utf8JsonWriter Json, int Count)?[] _arenas = new (ArrayBufferWriter<byte>, Utf8JsonWriter, int)?[schema.Arenas.Count];
         private readonly SortedDictionary<string, int> _outside = new(StringComparer.Ordinal);
+        private readonly SortedDictionary<string, int> _outsideFrom = new(StringComparer.Ordinal);
+        private readonly SortedDictionary<string, int> _freed = new(StringComparer.Ordinal);
+        /// <summary>The field being written, for <see cref="_freed"/>.</summary>
+        private (string Owner, JsonEncodedText Name) _field;
 
         public Written Write(IEnumerable<(JsonEncodedText Name, EngineSchema.Shape Shape, object? Value)> roots, string game)
         {
@@ -244,6 +257,7 @@ public sealed class EngineExport(EngineSchema schema)
             json.WriteStartObject("roots");
             foreach (var (name, shape, value) in roots)
             {
+                _field = ("", name);
                 json.WritePropertyName(name);
                 Value(json, shape, value);
             }
@@ -268,7 +282,7 @@ public sealed class EngineExport(EngineSchema schema)
             json.WriteEndObject();
             json.WriteEndObject();
             json.Flush();
-            return new(bytes.WrittenSpan.ToArray(), _seen.Count, _outside);
+            return new(bytes.WrittenSpan.ToArray(), _seen.Count, _outsideFrom, _freed);
         }
 
         private (ArrayBufferWriter<byte> Bytes, Utf8JsonWriter Json, int Count) Arena(int index)
@@ -288,20 +302,32 @@ public sealed class EngineExport(EngineSchema schema)
             {
                 json.WriteStartObject(level.Name);
                 foreach (var (name, argument) in level.TypeParameters) json.WriteString(name, schema.NameOf(o.GetType().GetGenericArguments()[argument]));
-                Fields(json, level.Fields, o);
+                foreach (var slot in level.Fields)
+                {
+                    _field = (level.Name.Value, slot.Name);
+                    json.WritePropertyName(slot.Name);
+                    Value(json, slot.Shape, slot.Field.GetValue(o));
+                }
                 json.WriteEndObject();
             }
             json.WriteEndObject();
         }
 
-        private void Fields(Utf8JsonWriter json, EngineSchema.Slot[] slots, object owner)
+        /// <summary>Counts a hash set or a dictionary that has freed slots, under the field being written.</summary>
+        private void NoteFreed(object collection)
         {
-            foreach (var slot in slots)
-            {
-                json.WritePropertyName(slot.Name);
-                Value(json, slot.Shape, slot.Field.GetValue(owner));
-            }
+            var type = collection.GetType();
+            if (!type.IsGenericType || !(type.GetGenericTypeDefinition() == typeof(HashSet<>) || type.GetGenericTypeDefinition() == typeof(Dictionary<,>))) return;
+            if (!FreeCounts.TryGetValue(type, out var count))
+                FreeCounts[type] = count = type.GetField("_freeCount", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?? throw new InvalidOperationException($"{type} has no _freeCount: another runtime than the one this was written for");
+            if ((int)count.GetValue(collection)! == 0) return;
+            string field = Field + (((IEnumerable)collection).GetEnumerator().MoveNext() ? "" : " (empty)");
+            _freed[field] = _freed.GetValueOrDefault(field) + 1;
         }
+
+        /// <summary>The field being written, as a count names it.</summary>
+        private string Field => _field.Owner.Length == 0 ? _field.Name.Value : $"{_field.Owner}.{_field.Name.Value}";
 
         private void Value(Utf8JsonWriter json, EngineSchema.Shape shape, object? value)
         {
@@ -339,15 +365,21 @@ public sealed class EngineExport(EngineSchema schema)
                     break;
                 case EngineSchema.Kind.Struct:
                     json.WriteStartObject();
-                    Fields(json, shape.Fields!, value);
+                    foreach (var slot in shape.Fields!)
+                    {
+                        json.WritePropertyName(slot.Name);
+                        Value(json, slot.Shape, slot.Field.GetValue(value));
+                    }
                     json.WriteEndObject();
                     break;
                 case EngineSchema.Kind.Sequence:
+                    NoteFreed(value);
                     json.WriteStartArray();
                     foreach (var item in (IEnumerable)value) Value(json, shape.Of!, item);
                     json.WriteEndArray();
                     break;
                 case EngineSchema.Kind.Dict:
+                    NoteFreed(value);
                     json.WriteStartArray();
                     foreach (DictionaryEntry entry in (IDictionary)value) Pair(json, shape, entry.Key, entry.Value);
                     json.WriteEndArray();
@@ -386,6 +418,7 @@ public sealed class EngineExport(EngineSchema schema)
             {
                 string name = type.FullName ?? type.Name;
                 _outside[name] = _outside.GetValueOrDefault(name) + 1;
+                _outsideFrom[$"{name} from {Field}"] = _outsideFrom.GetValueOrDefault($"{name} from {Field}") + 1;
                 json.WriteStringValue("outside");
                 json.WriteStringValue(name);
             }

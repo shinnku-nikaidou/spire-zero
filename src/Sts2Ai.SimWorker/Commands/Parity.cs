@@ -213,8 +213,8 @@ internal static class ParityCommand
             var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues, dump == null ? null : dump.Keep);
             dump?.Write(combat.Info, result);
             var line = ParityLine.Of(combat.Info, result, clock.Elapsed.TotalMilliseconds, full);
-            return worlds is not EngineWorlds { Written: var written } engine ? line
-                : line with { Exports = written.Count, ExportBytes = written.Bytes, ExportMs = Math.Round(written.Ms, 1), Outside = engine.Outside };
+            return worlds is EngineWorlds { Written: var written } engine ? line.With(written.Count, written.Bytes, written.Ms, engine.Tally)
+                : dump != null ? line.With(result.Steps) : line;
         }
         catch (Exception e)
         {
@@ -246,8 +246,8 @@ internal static class ParityCommand
                 lines.Add(ParityLine.Of(Info(combat), result, clock.Elapsed.TotalMilliseconds, full));
                 clock.Restart();
             }
-            if (worlds is EngineWorlds { Written: var written } engine)
-                lines[0] = lines[0] with { Exports = written.Count, ExportBytes = written.Bytes, ExportMs = Math.Round(written.Ms, 1), Outside = engine.Outside };
+            if (worlds is EngineWorlds { Written: var written } engine) lines[0] = lines[0].With(written.Count, written.Bytes, written.Ms, engine.Tally);
+            else if (dump != null) lines[0] = lines[0].With(combats.SelectMany(c => c.Steps));
             lines[^1] = lines[^1] with { RunEnd = end };
             return lines;
         }

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker.Checks;
@@ -50,10 +51,32 @@ internal sealed record ParityLine
     public int Exports { get; init; }
     public long ExportBytes { get; init; }
     public double ExportMs { get; init; }
-    /// <summary>With the engine's world: the classes outside its schema that the combat pointed to, with the references
-    /// to each over the combat's exports.</summary>
+    /// <summary>The references of the combat's exports to objects of classes outside the engine's schema, by the class and
+    /// the field that holds the reference.</summary>
     public Dictionary<string, int> Outside { get; init; } = [];
+    /// <summary>The hash sets and dictionaries with freed slots that the exports wrote, by the field that holds them, and
+    /// the exports with at least one (<c>EngineExport.Written.Freed</c>).</summary>
+    public Dictionary<string, int> Freed { get; init; } = [];
+    public int FreedExports { get; init; }
     public double Ms { get; init; }
+
+    /// <summary>The line with what the combat's exports said of themselves.</summary>
+    public ParityLine With(int exports, long bytes, double ms, ExportTally tally) =>
+        this with { Exports = exports, ExportBytes = bytes, ExportMs = Math.Round(ms, 1), Outside = tally.Outside, Freed = tally.Freed, FreedExports = tally.FreedExports };
+
+    /// <summary>The line with what a dump's exports said, of the steps a dump kept.</summary>
+    public ParityLine With(IEnumerable<RealStep> steps)
+    {
+        var tally = new ExportTally();
+        var (exports, bytes) = (0, 0L);
+        foreach (var written in steps.Select(s => s.Kept?.Export).OfType<EngineExport.Written>())
+        {
+            tally.Add(written);
+            exports++;
+            bytes += written.Bytes.Length;
+        }
+        return With(exports, bytes, 0, tally);
+    }
 
     public const int MaxDifferences = 30;
     private const int MaxValue = 160;
@@ -140,6 +163,8 @@ internal sealed class ParitySummary
     private readonly Dictionary<string, int> _subjects = [];
     private readonly Dictionary<string, int> _gameErrors = [];
     private readonly Dictionary<string, int> _outside = [];
+    private readonly Dictionary<string, int> _freed = [];
+    private int _freedExports;
     private readonly List<string> _runEnds = [];
     private readonly Dictionary<string, Dictionary<string, int[]>> _met = GameIds.Kinds.ToDictionary(k => k, _ => new Dictionary<string, int[]>());
     private int _combats, _failed, _decisions, _imports, _steps, _continues, _differed, _differedCombats, _exports;
@@ -169,6 +194,8 @@ internal sealed class ParitySummary
         _exportBytes += line.ExportBytes;
         _exportMs += line.ExportMs;
         foreach (var (type, references) in line.Outside) _outside[type] = _outside.GetValueOrDefault(type) + references;
+        foreach (var (field, collections) in line.Freed) _freed[field] = _freed.GetValueOrDefault(field) + collections;
+        _freedExports += line.FreedExports;
         _decisions += line.Decisions;
         _imports += line.Imports;
         _steps += line.Steps;
@@ -210,13 +237,20 @@ internal sealed class ParitySummary
             output.WriteLine($"runs       {_runEnds.Count}: {string.Join(", ", _runEnds.GroupBy(e => e).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} x{g.Count()}"))}");
         output.WriteLine($"decisions  {_decisions}; checks: {_imports} imports, {_steps} steps, {_continues} continued steps");
         if (_exports > 0)
-            output.WriteLine($"exports    {_exports}: {_exportBytes / 1024.0 / _exports:F0} KB and {_exportMs / _exports:F2} ms each");
+            output.WriteLine($"exports    {_exports}: {_exportBytes / 1024.0 / _exports:F0} KB" + (_exportMs > 0 ? $" and {_exportMs / _exports:F2} ms" : "") + " each; "
+                + $"{_freed.Values.Sum()} hash sets and dictionaries with freed slots, in {_freedExports} exports");
         output.WriteLine($"differed   {_differed} decisions in {_differedCombats} combats; differences: {_differences[0]} import, {_differences[1]} step, {_differences[2]} continue");
 
+        if (_freed.Count > 0)
+        {
+            output.WriteLine();
+            output.WriteLine("hash sets and dictionaries written with freed slots, whose later order the exports do not say, by the field that holds them:");
+            foreach (var (field, count) in _freed.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal)) output.WriteLine($"  {count,9}  {field}");
+        }
         if (_outside.Count > 0)
         {
             output.WriteLine();
-            output.WriteLine("outside the engine's schema: classes the combats' objects pointed to, whose state the exports do not hold (references):");
+            output.WriteLine("outside the engine's schema: references to objects whose state the exports do not hold, by their class and the field that holds the reference:");
             foreach (var (type, references) in _outside.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal))
                 output.WriteLine($"  {references,9}  {type}");
         }

@@ -23,7 +23,7 @@ internal sealed class CombatDump(EngineExport export, string root)
             [.. player.Deck.Cards.Select(c => Observe.Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)],
             [.. player.Relics.Select(Observe.Relic)], [.. player.PotionSlots.Select(p => p?.Id.Entry)]);
         return new(going && prompt,
-            going && !prompt ? export.Write(HeadlessGame.GameVersion).Bytes : null,
+            going && !prompt ? export.Write(HeadlessGame.GameVersion) : null,
             ProtocolJson.Serialize(run),
             going ? new Keys(HiddenState.Full(state, player), PimcBrain.StateKey(observation), HiddenState.KeyText(state, player), HiddenState.FullText(state, player)) : null);
     }
@@ -40,10 +40,11 @@ internal sealed class CombatDump(EngineExport export, string root)
             var kept = step.Kept ?? throw new InvalidOperationException("the combat was played with nothing kept");
             File.WriteAllText(Path.Combine(dir, $"{k}.observation.json"), step.Shown.Observation);
             File.WriteAllText(Path.Combine(dir, $"{k}.run.json"), kept.Run);
-            if (kept.Export != null) File.WriteAllBytes(Path.Combine(dir, $"{k}.export.json"), kept.Export);
+            if (kept.Export != null) File.WriteAllBytes(Path.Combine(dir, $"{k}.export.json"), kept.Export.Bytes);
             if (kept.Keys != null) File.WriteAllText(Path.Combine(dir, $"{k}.hidden.txt"), $"{kept.Keys.HiddenKeyText}\n{kept.Keys.HiddenText}\n");
             decisions.Add(new(step.Round, step.Shown.Status switch { CombatStatus.InProgress => "in_progress", CombatStatus.Won => "won", _ => "lost" },
-                kept.Prompt ? true : null, step.Shown.Legal, kept.Keys?.Hidden, kept.Keys?.State, step.Action?.ToString()));
+                kept.Prompt ? true : null, step.Shown.Legal, kept.Keys?.Hidden, kept.Keys?.State, step.Action?.ToString(),
+                kept.Export is { Freed: { Count: > 0 } freed } ? freed : null));
         }
         File.WriteAllText(Path.Combine(dir, "combat.json"), ProtocolJson.Serialize(new Combat(1, HeadlessGame.GameVersion, combat.Index, combat.Character,
             combat.Ascension, combat.Encounter, combat.Act, combat.Floor, combat.Seed, combat.Deck, combat.Loadout, combat.PolicySeed, result.Outcome, decisions)));
@@ -52,7 +53,8 @@ internal sealed class CombatDump(EngineExport export, string root)
     private sealed record Combat(int Format, string Game, int I, string Character, int Ascension, string Encounter, int Act, int? Floor, string Seed, string Deck,
         string? Loadout, int PolicySeed, string Outcome, IReadOnlyList<Decision> Decisions);
 
-    private sealed record Decision(int Round, string Status, bool? Prompt, IReadOnlyList<string> Legal, ulong? HiddenKey, ulong? StateKey, string? Action);
+    private sealed record Decision(int Round, string Status, bool? Prompt, IReadOnlyList<string> Legal, ulong? HiddenKey, ulong? StateKey, string? Action,
+        IReadOnlyDictionary<string, int>? Freed);
 
     /// <param name="command">The command line that makes the dump.</param>
     public static string Readme(string command) => $$"""
@@ -95,9 +97,15 @@ internal sealed class CombatDump(EngineExport export, string root)
           there, so the record has no export; a world reaches it by the action before, and `action` answers it
           (`pick:...`). The prompt itself is in the observation. `legal` is empty at a prompt.
         - `legal`: the plays in the game's order, as `sz_world_legal` writes them, one a line.
-        - `action`: what the game was given at the record, in the same text (`sz_world_apply`).
+        - `action`: what the game was given at the record, in the same text (`sz_world_apply`). A `pick:` names the
+          prompt's options by their index, in rising order, and the game is given them in that order: an action has
+          one form, and the order matters to the game (the cards a prompt discards land in it).
         - `hidden_key`, `state_key`: 64-bit numbers, in full. Not there once the combat is over: search asks for
           neither then.
+        - `freed`: there where the record's export holds a hash set or a dictionary with freed slots (items were
+          removed from it), counted by the field that holds it (`Class.field`). The export writes such a collection
+          in its order of enumeration and says nothing of the freed slots, which the next items added will take: a
+          world imported there can enumerate it otherwise than the game after an add.
 
         ## The files of a record
 
