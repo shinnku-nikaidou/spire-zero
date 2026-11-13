@@ -17,7 +17,7 @@ pub use coll::{Dict, Group, IntoVec, KeyValuePair, Ordered, Queue, Set, Stack};
 pub use combat::{Choices, Combat, R, Stop};
 pub use dec::{Dec, MidpointRounding};
 pub use func::{Fn0, Fn1, Fn2, Fn3, Fn4, Fn5};
-pub use obj::{Arena, Obj, Stored};
+pub use obj::{AnyArena, Arena, Obj, Stored};
 pub use ops::*;
 pub use str::Str;
 

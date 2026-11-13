@@ -73,6 +73,33 @@ pub struct Arena<T> {
     pub canon_build: bool,
 }
 
+/// An arena seen without its type, for measurements (tests/speed.rs): how much it holds, what a copy of it costs,
+/// what is in it.
+pub trait AnyArena {
+    /// The objects of the combat's own (the canonical ones are shared, not copied).
+    fn len(&self) -> usize;
+    /// The size of one object, without what it points to.
+    fn item_size(&self) -> usize;
+    /// Makes a copy and drops it.
+    fn copy(&self);
+    fn text(&self) -> String;
+}
+
+impl<T: Clone + std::fmt::Debug> AnyArena for Arena<T> {
+    fn len(&self) -> usize {
+        self.items.len()
+    }
+    fn item_size(&self) -> usize {
+        std::mem::size_of::<T>()
+    }
+    fn copy(&self) {
+        std::hint::black_box(self.clone());
+    }
+    fn text(&self) -> String {
+        format!("{:?}", self.items)
+    }
+}
+
 impl<T> Default for Arena<T> {
     fn default() -> Self {
         Arena {

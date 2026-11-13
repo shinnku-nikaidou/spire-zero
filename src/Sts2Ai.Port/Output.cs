@@ -34,6 +34,7 @@ public sealed class Output(World w, Emitter em)
         string state;
         int before;
         do { before = w.Structs.Count + w.Enums.Count + w.Kinds.Count; state = State(); } while (before != w.Structs.Count + w.Enums.Count + w.Kinds.Count);
+        w.Rep.Events = Events();
         Files["state.rs"] = state;
         Files["schema.json"] = Schema(out string hash);
         Files["import.rs"] = Import(hash);
@@ -268,6 +269,8 @@ public sealed class Output(World w, Emitter em)
         sb.Append("impl Arenas {\n    /// While set, what is made is canonical (the building of the canonical models).\n    pub fn set_canon_build(&mut self, on: bool) {\n");
         foreach (var r in roots) sb.Append($"        self.{ArenaField(r)}.canon_build = on;\n");
         foreach (var k in closures) sb.Append($"        self.{ArenaField(k)}.canon_build = on;\n");
+        sb.Append("    }\n\n    /// Every arena under its name, for measurements.\n    pub fn each(&self, f: &mut dyn FnMut(&'static str, &dyn AnyArena)) {\n");
+        foreach (string arena in roots.Select(ArenaField).Concat(closures.Select(ArenaField))) sb.Append($"        f(\"{arena}\", &self.{arena});\n");
         sb.Append("    }\n\n    /// Takes over what lambdas captured from a copy of the combat in which delegates were made (manual/delegates.rs).\n    pub fn take_closures(&mut self, from: &Arenas) {\n");
         foreach (var k in closures) sb.Append($"        self.{ArenaField(k)} = from.{ArenaField(k)}.clone();\n");
         sb.Append("    }\n}\n\n");
@@ -468,6 +471,59 @@ public sealed class Output(World w, Emitter em)
         return sb.ToString();
     }
 
+    // ---------------------------------------------------------------- events
+
+    /// <summary>Every event of a class the engine has, with every place in the game's source that subscribes to it
+    /// and what the subscriber is: game code (a member of a translated or hand-written class that is not
+    /// presentation), presentation, or a class outside the translated scope. An event with a subscriber that is game
+    /// code is state: who is subscribed decides what the game does (DESIGN.md, "The translation").</summary>
+    private List<string> Events()
+    {
+        var byEvent = new SortedDictionary<string, List<(bool Game, string Line)>>(StringComparer.Ordinal);
+        foreach (var tree in w.Comp.SyntaxTrees)
+        {
+            var adds = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.AssignmentExpressionSyntax>()
+                .Where(a => a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.AddAssignmentExpression)).ToList();
+            if (adds.Count == 0) continue;
+            var model = w.Comp.GetSemanticModel(tree);
+            foreach (var add in adds)
+            {
+                if (model.GetOperation(add) is not Microsoft.CodeAnalysis.Operations.IEventAssignmentOperation { Adds: true, EventReference: Microsoft.CodeAnalysis.Operations.IEventReferenceOperation { Event: var ev } } subscription) continue;
+                var owner = ev.ContainingType.OriginalDefinition;
+                if (!World.IsSource(owner) || w.CatOf(owner) is not (Cat.Translated or Cat.Manual)) continue;
+                var where = model.GetEnclosingSymbol(add.SpanStart);
+                while (where is IMethodSymbol { MethodKind: MethodKind.AnonymousFunction or MethodKind.LocalFunction }) where = where.ContainingSymbol;
+                var from = where?.ContainingType?.OriginalDefinition;
+                var handler = subscription.HandlerValue;
+                while (handler is Microsoft.CodeAnalysis.Operations.IConversionOperation cv) handler = cv.Operand;
+                if (handler is Microsoft.CodeAnalysis.Operations.IDelegateCreationOperation dc) handler = dc.Target;
+                // What runs: a method by its name, or code written at the place (it is then the subscribing member's).
+                var method = (handler as Microsoft.CodeAnalysis.Operations.IMethodReferenceOperation)?.Method.OriginalDefinition;
+                var runs = method?.ContainingType?.OriginalDefinition ?? from;
+                string what;
+                bool game = false;
+                if (runs == null) what = "unknown";
+                else if (w.IsDroppedNamed(runs)) what = "presentation";
+                else if (w.CatOf(runs) is not (Cat.Translated or Cat.Manual)) what = "outside the translated scope";
+                else if ((method ?? where) is { } member && w.IsDropMember(member)) what = "a presentation member";
+                else { what = "game code"; game = true; }
+                string text = method != null ? $"{method.ContainingType.Name}.{method.Name}" : handler is Microsoft.CodeAnalysis.Operations.IAnonymousFunctionOperation ? "a lambda" : handler.Syntax.ToString();
+                string key = $"{owner.Name}.{ev.Name}";
+                if (!byEvent.TryGetValue(key, out var list)) byEvent[key] = list = [];
+                list.Add((game, $"    {text}, subscribed in {from?.Name}.{where?.Name}: {what}"));
+            }
+        }
+        var lines = new List<string>();
+        foreach (var (name, subscribers) in byEvent.Where(e => e.Value.Any(x => x.Game)))
+        {
+            lines.Add($"{name}: state");
+            lines.AddRange(subscribers.Select(x => x.Line).Distinct().Order(StringComparer.Ordinal));
+        }
+        var others = byEvent.Where(e => !e.Value.Any(x => x.Game)).Select(e => $"{e.Key} ({e.Value.Count})").ToList();
+        lines.Add($"not state, {others.Count} events (subscriptions): {string.Join(", ", others)}");
+        return lines;
+    }
+
     // ---------------------------------------------------------------- schema
 
     /// <summary>The closed generic structs the schema's types name.</summary>
@@ -607,6 +663,9 @@ public sealed class Output(World w, Emitter em)
             string cs = member is IPropertySymbol sp ? member.ContainingType.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => Eq.Equals(f.AssociatedSymbol, sp))?.Name ?? member.Name : member.Name;
             rootList.Add(new JsonObject { ["name"] = name, ["class"] = World.FullName(member.ContainingType), ["member"] = member.Name, ["cs"] = cs, ["type"] = TypeDesc(type) });
         }
+        // What is presentation, as port.toml lists it: the C# side skips an event's subscriber whose class is.
+        JsonArray Names(IEnumerable<string> names) => new(names.Order(StringComparer.Ordinal).Select(n => (JsonNode)n).ToArray());
+        var presentation = new JsonObject { ["namespaces"] = Names(w.Cfg.DropNamespaces), ["keep"] = Names(w.Cfg.KeepNamespaces), ["types"] = Names(w.Cfg.DropTypes) };
         var doc = new JsonObject
         {
             ["format"] = 1,
@@ -617,6 +676,7 @@ public sealed class Output(World w, Emitter em)
             ["structs"] = structs,
             ["enums"] = enums,
         };
+        if (w.Cfg.DelegatesExported) doc["presentation"] = presentation;
         var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         // The hash is of the schema as written without it; an export carries it, and the engine reads no other.
         hash = System.Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(doc.ToJsonString(options))));

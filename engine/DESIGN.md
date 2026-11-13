@@ -110,7 +110,9 @@ expression: `TestMode.IsOn`, the empty list of mods).
 - Events (`event`, `+=` on one, raising one) are presentation. One has a subscriber that is game code and is raised
   by hand to it (`manual/card_pile.rs`): the combat's card table gives a card its id when it shows up in a pile. The
   others with game code behind them (a pet's death, a monster's own) wait for events as state: a list of delegates
-  in subscription order. Delegates are values now (below); the events follow once exports carry them.
+  in subscription order. Delegates are values now (below); the events follow once exports carry them. The report
+  lists every event of the engine's classes with everyone in the game's source who subscribes to it and what the
+  subscriber is (game code, a presentation member, a presentation class, a class outside the translated scope).
 
 **How C# becomes Rust.** The rules are uniform, so that reading the generated function beside the C# method is checking
 it.
@@ -267,6 +269,11 @@ puts a selector of its own on the selector stack.
   Both only with `[delegates] exported` of `port.toml` on. Off, which is the state until the C# side writes
   delegates, the schema has neither: a field that holds a delegate is on `dropped`. A field named in
   `[delegates] transient` stays there either way: its delegate is never run after a decision.
+- With the same switch on, the schema has `"presentation": {"namespaces": [..], "keep": [..], "types": [..]}`:
+  what `port.toml` lists under `[drop]`, as it is there. A type is presentation when its full name is on `types` (a
+  `*` at the end takes every name that starts so), or the type it is nested in is, or it is no type of the game's
+  assembly, or its namespace is at or below one of `namespaces` and not at or below one of `keep`. The C# side
+  needs it for events: a subscriber whose method's class is presentation is not written.
 
 ## The export
 
@@ -298,7 +305,9 @@ it (`import.rs`, with the reader `port` generates beside the structs, `gen/impor
   walk meets it. The same combat gives the same bytes.
 - **`outside`**: the classes outside the schema that a reference pointed to, with how many references. It must be
   empty: the engine refuses an export that reaches a class it does not hold. A class a combat reaches is either in the
-  schema with its real fields, or the field that reaches it is named not-state in `port.toml`.
+  schema with its real fields, or the field that reaches it is named not-state in `port.toml`. (A combat an event
+  starts has the event's room below its own on the run's stack of rooms: `EventRoom` is in the schema with its one
+  flag, and the event it holds is not a combat's.)
 
 | the schema's `kind` | written as |
 | --- | --- |

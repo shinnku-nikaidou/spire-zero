@@ -99,6 +99,8 @@ translate = [
     "MegaCrit.Sts2.Core.Context.LocalContext",
     "MegaCrit.Sts2.Core.Rooms.AbstractRoom",
     "MegaCrit.Sts2.Core.Rooms.CombatRoom",
+    # the room below the combat's when an event starts the combat
+    "MegaCrit.Sts2.Core.Rooms.EventRoom",
     "MegaCrit.Sts2.Core.Models.ModelDb",
     "MegaCrit.Sts2.Core.Models.CharacterModel",
     "MegaCrit.Sts2.Core.Models.Characters",
@@ -212,7 +214,9 @@ fields = [
 # bookkeeping of what the engine writes by hand.
 LocString = ["locTable", "locEntryKey"]
 RunManager = ["State", "AscensionManager", "ActionQueueSet", "ActionExecutor", "ActionQueueSynchronizer", "PlayerChoiceSynchronizer", "CardSelectorStack"]
-RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "_mapPointHistory", "_visitedMapCoords", "Dominion", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields"]
+RunState = ["_players", "_currentActIndex", "_currentRooms", "_allCards", "_mapPointHistory", "_visitedMapCoords", "Dominion", "GameMode", "AscensionLevel", "Rng", "Odds", "UnlockState", "Modifiers", "BadgeModels", "RunModels", "ExtraFields", "SharedRelicGrabBag"]
+# The room of an event that started the combat: the event itself is not a combat's.
+EventRoom = ["_isPreFinished"]
 
 [delegates]
 # A delegate is a value (DESIGN.md, "Delegates"): a function of the engine's table and the object it is bound to.
@@ -246,7 +250,10 @@ members = [
     # What a model saves, read and written over port's table of its [SavedProperty] properties (manual/saved_properties.rs).
     "SavedProperties.FromInternal",
     "SavedProperties.FillInternal",
+    # A model by its class or id: the game looks in tables it fills by reflection, the engine in the arenas of
+    # canonical models (manual/model_db.rs, manual/canon.rs).
     "ModelDb.Get", "ModelDb.GetId", "ModelDb.GetByIdOrNull", "ModelDb.Contains",
+    # The stack of who answers a player's card prompts: the engine has one selector, and it is always on top.
     "CardSelectorStack.GetSelector", "CardSelectorStack.PushSelector",
     # An event with a subscriber that is game code: the combat's card table ids the cards of its piles (manual/card_pile.rs).
     "CardPile.InvokeContentsChanged",

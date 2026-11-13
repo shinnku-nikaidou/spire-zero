@@ -15,6 +15,8 @@ public sealed class Report
     private readonly ConcurrentBag<string> fieldsSkipped = [];
     private readonly ConcurrentBag<string> deferred = [];
     private readonly ConcurrentBag<string> heldChains = [];
+    /// <summary>The events of the translated classes with who subscribes (Output.Events).</summary>
+    public List<string> Events = [];
 
     public int ClassesTranslated, MembersTranslated, MembersFailed, MembersPresentation, Stubs, ManualRefs, Dispatchers, StatementsLeftOut, Quarantined;
 
@@ -111,6 +113,8 @@ public sealed class Report
         foreach (var s in deferred.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== locals that hold a LINQ chain, with game code between where they are declared (where the chain's source is read) and their last use");
         foreach (var s in heldChains.Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== events of the engine's classes that someone subscribes to (state: a subscriber is game code; then every subscriber, with what it is)");
+        foreach (var s in Events) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== members not translated");
         foreach (var s in failed.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         return sb.ToString();
