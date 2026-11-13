@@ -652,6 +652,24 @@ public sealed class World
         }, this);
     }
 
+    // ---------------------------------------------------------------- the functions a delegate can be
+
+    /// <summary>A function of gen/fns.rs: what a delegate of the game that names a method is bound to. `Name` is its
+    /// Rust name there, `Method` the game's method (its name, as reflection gives it, is how an export says which
+    /// function a delegate is), `Types` and `Ret` the delegate's signature, `Call` the code that runs it with the
+    /// target `t` and the arguments `a0`, `a1`, ..</summary>
+    public sealed record FnEntry(string Name, IMethodSymbol Method, bool Virtual, List<string> Types, string Ret, string Call);
+
+    public readonly ConcurrentDictionary<string, FnEntry> Fns = new();
+
+    /// <summary>A stable short mark of a text, for a name that has to tell two signatures of one method apart.</summary>
+    public static string Mark(string text)
+    {
+        uint h = 2166136261;
+        foreach (char ch in text) { h ^= ch; h *= 16777619; }
+        return h.ToString("x8")[..6];
+    }
+
     // ---------------------------------------------------------------- sequences written with yield
 
     private readonly ConcurrentDictionary<ISymbol, bool> _yields = new(Eq);

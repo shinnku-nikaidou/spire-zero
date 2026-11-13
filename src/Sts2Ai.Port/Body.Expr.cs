@@ -1356,12 +1356,38 @@ public sealed partial class Body
                     var unused = invoke.Parameters.Select((p, i) => $"_a{i}: {T(p.Type)}").Append("_c: &mut Combat");
                     return $"{fn}::new(move |{string.Join(", ", unused)}| -> {(invoke.ReturnsVoid ? "()" : "R<()>")} {{ {(invoke.ReturnsVoid ? "" : "Ok(())")} }})";
                 }
+                if (BoundGroup(mr, invoke) is { } bound) return bound;
                 var ps = invoke.Parameters.Select((p, i) => $"a{i}: {T(p.Type)}").Append("c: &mut Combat");
                 string call = MethodGroupCall(mr, invoke.Parameters.Length, out string? inst);
                 return $"{{ {(inst == null ? "" : $"let __i = {inst}; ")}{fn}::new(move |{string.Join(", ", ps)}| {call}) }}";
             }
             default: return Expr(target);
         }
+    }
+
+    /// <summary>A method group as a delegate that is data: the method as a function of gen/fns.rs, bound to the object
+    /// it is taken from (nothing for a static one). Null where the method cannot be named that way (a generic one, one
+    /// of a value): the delegate is then code made on the spot.</summary>
+    private string? BoundGroup(IMethodReferenceOperation mr, IMethodSymbol invoke)
+    {
+        var m = mr.Method;
+        if (!World.IsSource(m.ContainingType) || m.MethodKind != MethodKind.Ordinary || invoke.Parameters.Length > 5) return null;
+        if (invoke.Parameters.Any(p => p.RefKind != RefKind.None) || m.Parameters.Any(p => p.RefKind != RefKind.None || w.IsDropped(p) || w.IsChangedParam(p))) return null;
+        if (m.Parameters.Length != invoke.Parameters.Length || KindArgs(m).Count > 0 || Turbofish(m).Length > 0) return null;
+        if (mr.Instance != null && (w.IsValue(m.ContainingType) || mr.Instance.Type is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })) return null;
+        bool virt = mr.IsVirtual && !IsBaseAccess(mr.Instance);
+        if (IsBaseAccess(mr.Instance)) return null;
+        var types = invoke.Parameters.Select(p => T(p.Type)).ToList();
+        string ret = invoke.ReturnsVoid ? "()" : T(invoke.ReturnType);
+        var args = new List<string>();
+        if (mr.Instance != null) args.Add("t");
+        for (int i = 0; i < types.Count; i++) args.Add($"a{i}");
+        args.Add("c");
+        string path = CallPath(m, virt);
+        string stem = path.StartsWith("g::") ? path[3..] : path.StartsWith("m::") ? "m_" + path[3..] : path;
+        string name = $"mg_{stem.Replace("::", "__")}_{World.Mark(string.Join(",", types) + "->" + ret)}";
+        w.Fns.TryAdd(name, new World.FnEntry(name, m.OriginalDefinition, virt && path.StartsWith("g::dispatch::"), types, ret, $"{path}({string.Join(", ", args)})"));
+        return $"g::fns::{name}({(mr.Instance == null ? "Obj::NULL" : Expr(mr.Instance))})";
     }
 
     private string MethodGroupCall(IMethodReferenceOperation mr, int arity, out string? instance)
