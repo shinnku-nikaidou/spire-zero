@@ -144,6 +144,8 @@ internal static partial class SelfTest
         GatheredCardState(pump, pool, act, Check);
         FirstArrowComesWithAShootCard(pump, pool, act, Check);
         BuildsAFoolsTurn(pump, pool, act, Check);
+        BuildsARegentsTurn(pump, Check);
+        DrawnMovesGoOn(pump, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         FoulPotionAtMerchants(pump, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);

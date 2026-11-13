@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
@@ -39,12 +40,14 @@ namespace Sts2Ai.SimWorker.Simulation;
 ///
 /// The player's arrows are placed as shown: those held, and those stuck in each enemy (<see cref="Arrows"/>). The melodies
 /// played this turn come back as card plays in the combat's history (<see cref="Melodies"/>), and with them what they
-/// alone decide (Lullaby's block given this turn).
+/// alone decide (Lullaby's block given this turn). So do the plays a power's number counts (<see cref="Plays"/>), and a
+/// counter inside a power is set where the hand's costs show it (<see cref="HandCosts"/>).
 ///
-/// Not reproduced, because the observation doesn't show it: the rest of this turn's history (cards played, damage
-/// taken, ...), counters kept inside powers and monsters, how long a card's cost change lasts (a card in hand is taken to be
-/// cheaper this turn or until played, a card elsewhere for the rest of the combat), and which debuffs on the player
-/// skip their next tick.
+/// Not reproduced, because the observation doesn't show it: the rest of this turn's history (which cards were played,
+/// damage taken, ...), counters kept inside powers and monsters that nothing shown depends on (Void Form's free plays
+/// left while the hand is still free), how long a card's cost change lasts (a card in hand is taken to be cheaper this
+/// turn or until played, a card elsewhere for the rest of the combat), and which debuffs on the player skip their next
+/// tick.
 /// </summary>
 internal static class CombatBuilder
 {
@@ -103,7 +106,9 @@ internal static class CombatBuilder
 
         // After powers, relics and this turn's melodies, whose global modifiers show in card costs and keywords.
         Melodies(st, player, obs.Player.Melodies ?? []);
+        Plays(st, player, obs.Player.Powers);
         Cards(st, player, obs);
+        HandCosts(player, obs.Hand);
         NumberCards(pcs, [.. obs.Hand.Select(c => c.Uid ?? throw new ArgumentException($"card {c.Id} in hand has no uid"))]);
         // After the powers: an arrow stuck in an enemy is kept by the power that shows it. After the cards: a Shoot card
         // that enters a pile brings a first arrow to a character with none of its own.
@@ -155,7 +160,7 @@ internal static class CombatBuilder
     /// <summary>The move that showed <paramref name="intents"/> in an earlier round, or null if none could have.</summary>
     private static MoveState? Made(Creature enemy, MonsterMoveStateMachine machine, Creature[] targets, IReadOnlyList<IntentView> intents)
     {
-        var moves = machine.States.Values.OfType<MoveState>().OrderBy(m => m.Id, StringComparer.Ordinal).ToList();
+        var moves = machine.States.Values.OfType<MoveState>().OrderBy(m => !GoesOn(m)).ThenBy(m => m.Id, StringComparer.Ordinal).ToList();
         foreach (var key in new Func<IReadOnlyList<IntentView>, string>[] { Key, Types, i => string.Join(",", i.Select(x => x.Type)) })
         {
             string want = key(intents);
@@ -225,11 +230,22 @@ internal static class CombatBuilder
         MustPerformOnceBeforeTransitioning = true,
     };
 
-    /// <summary>The monster's moves that would show the same intents as <paramref name="intents"/>, by id.</summary>
-    public static List<MoveState> MovesShowing(Creature monster, Creature[] targets, string intents) =>
-        [.. monster.Monster!.MoveStateMachine!.States.Values.OfType<MoveState>()
+    /// <summary>
+    /// The monster's moves that would show the same intents as <paramref name="intents"/>, by id. Of moves that look the
+    /// same, one the machine cannot go on from is not the one queued while another is there: the Kaiser Crab's rocket
+    /// keeps a second Precise Smash that no move leads to and none follows (game v0.113.0), and the game's turn loop
+    /// dies once a monster has made it.
+    /// </summary>
+    public static List<MoveState> MovesShowing(Creature monster, Creature[] targets, string intents)
+    {
+        var moves = monster.Monster!.MoveStateMachine!.States.Values.OfType<MoveState>()
             .Where(m => Shows(m, monster, targets) == intents)
-            .OrderBy(m => m.Id, StringComparer.Ordinal)];
+            .OrderBy(m => m.Id, StringComparer.Ordinal).ToList();
+        return moves.Any(GoesOn) ? [.. moves.Where(GoesOn)] : moves;
+    }
+
+    /// <summary>Whether the monster's machine has a state to go to after <paramref name="move"/>.</summary>
+    private static bool GoesOn(MoveState move) => move.FollowUpState != null || move.FollowUpStateId != null;
 
     public static string Shows(MoveState move, Creature monster, Creature[] targets) => Key(Observe.Intents(move, monster, targets));
 
@@ -447,6 +463,60 @@ internal static class CombatBuilder
             foreach (var lullaby in player.Creature.GetPowerInstances<LullabyPower>()) LullabyGiven.SetValue(lullaby, true);
     }
 
+    private static readonly FieldInfo HistoryEntries = typeof(CombatHistory).GetField("_entries", Private)!;
+
+    /// <summary>
+    /// The cards played this turn that a power's number counts, which the game reads from the combat's history: Pale Blue
+    /// Dot shows how many more it waits for. Each comes back as the play of a card with no tag (so of no melody), the
+    /// player's and outside every pile, while that brings the powers' numbers closer to those shown; a play that does
+    /// not is taken out of the history again.
+    /// </summary>
+    private static void Plays(CombatState st, Player player, IReadOnlyList<PowerView> views)
+    {
+        var shown = player.Creature.Powers.Where(p => p.IsVisible).Zip(views).Where(p => p.First.Id.Entry == p.Second.Id).ToList();
+        int Off() => shown.Sum(p => Math.Abs(p.First.DisplayAmount - p.Second.Amount));
+        var history = CombatManager.Instance.History;
+        var entries = (System.Collections.IList)HistoryEntries.GetValue(history)!;
+        var model = ModelDb.AllCards.OrderBy(c => c.Id.Entry, StringComparer.Ordinal).First(c => !c.Tags.Any());
+        for (int off = Off(); off > 0; off = Off())
+        {
+            int before = entries.Count;
+            var play = new CardPlay
+            {
+                Card = Create(st, player, new CardSpec(model.Id.Entry)), Player = player, Target = null, ResultPile = PileType.Discard,
+                Resources = default, IsAutoPlay = false, PlayIndex = 0, PlayCount = 1,
+            };
+            history.CardPlayStarted(st, play);
+            history.CardPlayFinished(st, play);
+            if (Off() < off) continue;
+            while (entries.Count > before) entries.RemoveAt(entries.Count - 1);
+            break;
+        }
+        // Pale Blue Dot gives its draw once a turn, as the fifth card is played: one that waits for no more has given it.
+        foreach (var dot in player.Creature.GetPowerInstances<PaleBlueDotPower>().Where(d => d.DisplayAmount == 0))
+            foreach (var given in FlagKnobs(InternalData.GetValue(dot)!, typeof(object))) given.Set(1);
+    }
+
+    /// <summary>
+    /// The hand's costs that no cost of a card's own gives: a counter a power keeps to itself decides them. Void Form
+    /// makes the turn's first plays free and counts them, so after those the hand shows its costs again, which a Void Form
+    /// that has counted nothing still hides. Each such counter of the player's powers is tried until the hand shows its
+    /// costs; one that does not get there is put back.
+    /// </summary>
+    private static void HandCosts(Player player, IReadOnlyList<CardView> views)
+    {
+        var hand = player.PlayerCombatState!.Hand.Cards.Zip(views).ToList();
+        int Off()
+        {
+            foreach (var (card, view) in hand) Costs(card, view, inHand: true);
+            return hand.Count(h => (!h.First.EnergyCost.CostsX && h.Second.Cost is int energy && h.First.EnergyCost.GetWithModifiers(CostModifiers.All) != energy)
+                || (h.Second.Stars is int stars && h.First.GetStarCostWithModifiers() != stars));
+        }
+        if (Off() == 0) return;
+        Solve(Off, 0, player.Creature.Powers.Select(p => InternalData.GetValue(p)).OfType<object>().SelectMany(d => FieldKnobs(d, typeof(object))));
+        Off();
+    }
+
     private static readonly PropertyInfo ToothCards = typeof(PaelsTooth).GetProperty(nameof(PaelsTooth.SerializableCards))!;
 
     private static void Relics(Player player, IReadOnlyList<RelicView> views)
@@ -639,6 +709,16 @@ internal static class CombatBuilder
         foreach (var k in have.Except(want)) card.RemoveKeyword(Enum.Parse<CardKeyword>(k));
         foreach (var k in want.Except(have)) card.AddKeyword(Enum.Parse<CardKeyword>(k));
 
+        Costs(card, view, inHand);
+        // A number the card states from one it keeps to itself is found from the stated one: The Shot's damage, from the
+        // cards its Florescence exhausted. One stated from the combat's history stays as the built combat gives it.
+        if (view.Calc is decimal calc && card.DynamicVars.Values.OfType<CalculatedVar>().FirstOrDefault() is { } stated)
+            Solve(() => (int)stated.Calculate(null), (int)calc, DecimalKnobs(card, typeof(CardModel)));
+    }
+
+    /// <summary>The card's own energy and star cost, set so that with the global modifiers as they stand it shows the view's.</summary>
+    private static void Costs(CardModel card, CardView view, bool inHand)
+    {
         var cost = card.EnergyCost;
         if (!cost.CostsX && view.Cost is int energy && cost.GetWithModifiers(CostModifiers.All) != energy)
         {
@@ -653,9 +733,5 @@ internal static class CombatBuilder
             if (inHand) card.SetStarCostThisTurn(stars);
             else card.SetStarCostThisCombat(stars);
         }
-        // A number the card states from one it keeps to itself is found from the stated one: The Shot's damage, from the
-        // cards its Florescence exhausted. One stated from the combat's history stays as the built combat gives it.
-        if (view.Calc is decimal calc && card.DynamicVars.Values.OfType<CalculatedVar>().FirstOrDefault() is { } stated)
-            Solve(() => (int)stated.Calculate(null), (int)calc, DecimalKnobs(card, typeof(CardModel)));
     }
 }

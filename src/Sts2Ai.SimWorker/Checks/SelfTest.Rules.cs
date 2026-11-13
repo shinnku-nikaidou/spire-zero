@@ -267,6 +267,79 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// A hidden move drawn anew is one the monster's machine goes on from. The Kaiser Crab's rocket keeps a second
+    /// Precise Smash that looks like the first, which no move leads to and none follows (game v0.113.0): a rocket that
+    /// made it ended the game's turn loop, and the combat stood still.
+    /// </summary>
+    private static void DrawnMovesGoOn(Pump pump, Action<string, bool, string> check)
+    {
+        var (encounter, act) = Opt.Encounter("KAISER_CRAB_BOSS");
+        var loadout = new Loadout(Deck: [.. Enumerable.Repeat(new CardSpec("DEFEND_IRONCLAD"), 10)], Hp: 999, MaxHp: 999);
+        int turns = 0;
+        string? failed = null;
+        for (int k = 0; k < 8 && failed == null; k++)
+        {
+            using var session = CombatSession.Start(pump, new CombatSetup("IRONCLAD", encounter, act, GameSeeds.MakeSeed(0, k), Loadout: loadout), FirstPicks.Instance);
+            try
+            {
+                for (int t = 0; t < 6 && !CombatSession.IsOver; t++, turns++)
+                {
+                    session.Determinize((ulong)(k * 6 + t));
+                    session.EndTurn();
+                }
+            }
+            catch (Exception e)
+            {
+                failed = $"combat {k}: {e.GetType().Name}: {Logs.FirstLine(e.Message)}";
+            }
+        }
+        var errors = HeadlessGame.TakeErrors();
+        check("a drawn move goes on", failed == null && errors.Count == 0 && turns == 48,
+            $"KAISER_CRAB_BOSS, {turns} turns of 48: {failed}, errors {(errors.Count > 0 ? Logs.FirstLine(errors[0]) : "")}");
+    }
+
+    /// <summary>
+    /// A combat built in the middle of a Regent's turn goes on as the real one. Pale Blue Dot shows how many more cards
+    /// it waits for this turn, which the game counts in the combat's history; Void Form makes the turn's first two plays
+    /// free and counts them to itself, so the costs the hand shows after them say that it has.
+    /// </summary>
+    private static void BuildsARegentsTurn(Pump pump, Action<string, bool, string> check)
+    {
+        const string name = "build goes on in a Regent's turn";
+        // The second turn's hand must be the deck's four other cards: an enemy that adds none.
+        var (encounter, act) = Opt.Encounter("FUZZY_WURM_CRAWLER_WEAK");
+        var loadout = new Loadout(Deck: [.. new[] { "VOID_FORM", "PALE_BLUE_DOT", "DEFEND_REGENT", "DEFEND_REGENT", "DEFEND_REGENT" }.Select(id => new CardSpec(id))], Hp: 999, MaxHp: 999);
+        string seed = GameSeeds.MakeSeed(0, 0);
+        static void Play(CombatSession s, string id)
+        {
+            var hand = s.Observation().Hand;
+            s.Execute(s.LegalActions().First(a => a.Kind == CombatActionKind.PlayCard && hand.Any(c => c.Uid == a.Card && c.Id == id)));
+        }
+        static string Shows(CombatObservation obs) =>
+            $"energy {obs.Player.Energy}, block {obs.Player.Block}, costs {string.Join(",", obs.Hand.Select(c => c.Cost))}, " +
+            $"dot {obs.Player.Powers.FirstOrDefault(p => p.Id == "PALE_BLUE_DOT_POWER")?.Amount}";
+        CombatObservation mid, after;
+        using (var session = CombatSession.Start(pump, new CombatSetup("REGENT", encounter, act, seed, Loadout: loadout), new RandomChoices(new Random(0))))
+        {
+            // Void Form ends the turn it is played in; the next turn's first two plays are free.
+            Play(session, "VOID_FORM");
+            foreach (string id in new[] { "PALE_BLUE_DOT", "DEFEND_REGENT" }) Play(session, id);
+            mid = session.Observation();
+            Play(session, "DEFEND_REGENT");
+            after = session.Observation();
+        }
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(mid, seed), new RandomChoices(new Random(0)));
+        var differences = built.BuildDifferences;
+        string start = Shows(built.Observation());
+        Play(built, "DEFEND_REGENT");
+        string then = Shows(built.Observation());
+        var errors = HeadlessGame.TakeErrors();
+        check(name, mid.Hand.All(c => c.Cost == 1) && mid.Player.Powers.Any(p => p.Id == "PALE_BLUE_DOT_POWER" && p.Amount == 3)
+            && differences.Count == 0 && start == Shows(mid) && then == Shows(after) && errors.Count == 0,
+            $"real {Shows(mid)} then {Shows(after)}; built {start} then {then}; {string.Join("; ", differences.Take(4))}, errors {errors.FirstOrDefault()}");
+    }
+
+    /// <summary>
     /// A loadout whose relics give potion slots holds more potions than the base three: the slots are what the game
     /// gives for those relics (3 + Potion Belt's 2 + Alchemical Coffer's 4 + Phial Holster's 1), in a combat and at
     /// the start of a run, where ascension 4 (Tight Belt) takes one away, and the relics' pickups do not run again.
