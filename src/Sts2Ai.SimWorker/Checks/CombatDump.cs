@@ -116,6 +116,11 @@ internal sealed class CombatDump(EngineExport export, string root)
           the next one first. Every slot below `at`'s length plus `free`'s is in exactly one of the two. .NET
           enumerates such a collection by slot, and an add takes `free`'s first slot, or the next new slot when
           none is freed, so the order after later adds follows from this and from nothing else.
+          A `delegate` of the schema (there once the schema lists them) is `null` or
+          `{"method": "<CLR class>::<method>", "target": REF-or-null}`: the method by its declaring class's full CLR
+          name and its own name as reflection has them (a lambda's is the compiler's), and what it is bound to:
+          a reference like any other, to a game object or to the object the compiler made for what a lambda
+          captures; `null` for a static method and for a lambda that captures nothing.
           Its member `sim` is what the simulator holds beside the game that later observations depend on:
           `{"prompts": N}`, the card prompts the session's selector had been asked before the record
           (`PromptSelector.Prompts`). The next prompt is number N, and its number seeds the order of its options that

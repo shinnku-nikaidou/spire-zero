@@ -20,21 +20,78 @@ public sealed class EngineExportTests : IDisposable
     /// <summary>A schema of the game's CardPile alone: its cards and its type as state, its other fields dropped.</summary>
     /// <param name="pileField">The CLR name the schema gives the field that holds the cards.</param>
     /// <param name="forgotten">A field of the game the schema says nothing of.</param>
-    private EngineSchema Schema(string pileField = "_cards", string? forgotten = null)
+    /// <param name="delegates">Whether the pile's ContentsChanged, a delegate, is state too.</param>
+    private EngineSchema Schema(string pileField = "_cards", string? forgotten = null, bool delegates = false)
     {
         const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-        var dropped = typeof(CardPile).GetFields(Declared).Select(f => f.Name).Where(f => f is not ("_cards" or "<Type>k__BackingField") && f != forgotten);
+        var dropped = typeof(CardPile).GetFields(Declared).Select(f => f.Name)
+            .Where(f => f is not ("_cards" or "<Type>k__BackingField") && f != forgotten && !(delegates && f == "ContentsChanged"));
         string path = Path.Combine(_dir, "schema.json");
         File.WriteAllText(path, """
             {"format":1,"game":"v-test","roots":[],"arenas":["temporary_card_cost","card_pile"],
              "classes":[
               {"name":"CardPile","cs":"MegaCrit.Sts2.Core.Entities.Cards.CardPile","base":null,"arena":"card_pile","open":false,"abstract":false,"type_parameters":[],
                "fields":[{"name":"_cards","cs":"PILE_FIELD","type":{"kind":"list","of":{"kind":"ref","class":"CardModel"}}},
-                         {"name":"type_","cs":"<Type>k__BackingField","type":{"kind":"enum","name":"PileType","rust":"i32"}}],
+                         {"name":"type_","cs":"<Type>k__BackingField","type":{"kind":"enum","name":"PileType","rust":"i32"}}DELEGATE],
                "dropped":DROPPED}],
              "structs":[],"enums":[],"hash":"abc"}
-            """.Replace("PILE_FIELD", pileField).Replace("DROPPED", JsonSerializer.Serialize(dropped)));
+            """.Replace("PILE_FIELD", pileField).Replace("DROPPED", JsonSerializer.Serialize(dropped))
+            .Replace("DELEGATE", delegates ? """,{"name":"contents_changed","cs":"ContentsChanged","type":{"kind":"delegate"}}""" : ""));
         return EngineSchema.Load(path);
+    }
+
+    private static void Heard() { }
+
+    /// <summary>The one object of a pile's arena as the export wrote it: its delegate field.</summary>
+    private string Changed(CardPile pile, params CardPile[] before)
+    {
+        var written = new EngineExport(Schema(delegates: true)).Write([.. before.Append(pile).Select((p, i) => ($"p{i}", (object)p))], "v-test", new(0));
+        using var doc = JsonDocument.Parse(written.Bytes);
+        return doc.RootElement.GetProperty("arenas").GetProperty("card_pile")[before.Length].GetProperty("CardPile").GetProperty("contents_changed").GetRawText();
+    }
+
+    [Fact]
+    public void ADelegateIsItsMethodAndWhatItIsBoundTo()
+    {
+        var (hand, draw) = (new CardPile(PileType.Hand), new CardPile(PileType.Draw));
+        Assert.Equal("null", Changed(hand));
+
+        // A method of an object of the export: bound to that object, by its place.
+        hand.ContentsChanged += draw.InvokeCardAddFinished;
+        Assert.Equal("""{"method":"MegaCrit.Sts2.Core.Entities.Cards.CardPile::InvokeCardAddFinished","target":["card_pile",0]}""", Changed(hand, draw));
+
+        // A static method and a lambda that captures nothing are bound to nothing.
+        var pile = new CardPile(PileType.Discard);
+        pile.ContentsChanged += Heard;
+        Assert.Equal("{\"method\":\"Sts2Ai.SimWorker.Tests.EngineExportTests::Heard\",\"target\":null}", Changed(pile));
+        pile = new CardPile(PileType.Discard);
+        pile.ContentsChanged += () => { };
+        using (var lambda = JsonDocument.Parse(Changed(pile)))
+        {
+            Assert.StartsWith("Sts2Ai.SimWorker.Tests.EngineExportTests+<>c::<ADelegateIsItsMethodAndWhatItIsBoundTo>b__", lambda.RootElement.GetProperty("method").GetString());
+            Assert.Equal(JsonValueKind.Null, lambda.RootElement.GetProperty("target").ValueKind);
+        }
+
+        // A lambda that captures is bound to the object the compiler made for what it captures: one of the walk, here
+        // of a class the schema does not hold.
+        int heard = 0;
+        pile = new CardPile(PileType.Discard);
+        pile.ContentsChanged += () => heard++;
+        using (var closure = JsonDocument.Parse(Changed(pile)))
+        {
+            var target = closure.RootElement.GetProperty("target");
+            Assert.Equal("outside", target[0].GetString());
+            Assert.StartsWith("Sts2Ai.SimWorker.Tests.EngineExportTests+<>c__DisplayClass", target[1].GetString());
+        }
+    }
+
+    [Fact]
+    public void ADelegateOfTwoMethodsIsRefused()
+    {
+        var pile = new CardPile(PileType.Hand);
+        pile.ContentsChanged += Heard;
+        pile.ContentsChanged += Heard;
+        Assert.Contains("a delegate of 2 methods", Assert.Throws<InvalidOperationException>(() => Changed(pile)).Message);
     }
 
     [Fact]

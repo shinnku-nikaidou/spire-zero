@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -18,7 +19,7 @@ namespace Sts2Ai.GameBridge;
 /// </summary>
 public sealed class EngineSchema
 {
-    internal enum Kind { Int, Bool, Float, Decimal, String, Char, Enum, Struct, Nullable, Sequence, Set, Dict, Tuple, Pair, Type, Ref }
+    internal enum Kind { Int, Bool, Float, Decimal, String, Char, Enum, Struct, Nullable, Sequence, Set, Dict, Tuple, Pair, Type, Ref, Delegate }
 
     /// <summary>How a value is written: its kind and the shapes inside it.</summary>
     /// <param name="Clr">Of a struct: its CLR type.</param>
@@ -99,6 +100,7 @@ public sealed class EngineSchema
             "enum" => new(Kind.Enum),
             "kind" => new(Kind.Type),
             "ref" => new(Kind.Ref),
+            "delegate" => new(Kind.Delegate),
             "nullable" => new(Kind.Nullable, Of: ShapeOf(t.GetProperty("of"))),
             "list" or "queue" or "stack" => new(Kind.Sequence, Of: ShapeOf(t.GetProperty("of"))),
             "set" => new(Kind.Set, Of: ShapeOf(t.GetProperty("of"))),
@@ -214,6 +216,7 @@ public sealed class EngineSchema
 /// array of [key, value] for a dictionary; an object for a struct; null for an absent value of any of these. A set or
 /// a dictionary that has freed slots (<see cref="HashedLayout"/>) is an object instead: its <c>items</c> as that array,
 /// <c>at</c> with the slot of each, and <c>free</c> with the freed slots in the order adds will take them.
+/// A delegate is null or <c>{"method": "CLR.Class::Method", "target": reference or null}</c>.
 /// A reference is null or a pair: ["arena", index] for an object of the export; ["canon", "Class"] for a canonical
 /// model, which the engine has already and which is not written; ["outside", "CLR.Name"] for an object of a class the
 /// schema does not hold, whose state the engine therefore lacks. <c>outside</c> counts those references by class, and
@@ -450,7 +453,37 @@ public sealed class EngineExport(EngineSchema schema)
                 case EngineSchema.Kind.Ref:
                     Reference(json, value);
                     break;
+                case EngineSchema.Kind.Delegate:
+                    Function(json, (Delegate)value);
+                    break;
             }
+        }
+
+        /// <summary>The methods met in delegates so far, each by the name it is written under.</summary>
+        private static readonly ConcurrentDictionary<MethodInfo, JsonEncodedText> Methods = new();
+
+        /// <summary>A delegate: the method it calls, by its class's CLR name and its own name as reflection has them
+        /// (a lambda's is the compiler's), and what it is bound to: a game object or the object the compiler made for
+        /// what a lambda captures, each an object of the walk like any other; nothing for a static method and for a
+        /// lambda that captures nothing.</summary>
+        private void Function(Utf8JsonWriter json, Delegate function)
+        {
+            if (function.GetInvocationList().Length != 1)
+                throw new InvalidOperationException($"{Field} holds a delegate of {function.GetInvocationList().Length} methods: the export writes one");
+            json.WriteStartObject();
+            json.WriteString("method", Methods.GetOrAdd(function.Method, static method =>
+            {
+                var type = method.DeclaringType ?? throw new InvalidOperationException($"the method {method.Name} of a delegate has no class");
+                const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+                if (type.GetMember(method.Name, MemberTypes.Method, all).Length != 1)
+                    throw new InvalidOperationException($"{type.FullName} has more than one method {method.Name}: a delegate's name would need its parameter types");
+                return JsonEncodedText.Encode($"{type.FullName}::{method.Name}");
+            }));
+            json.WritePropertyName("target");
+            // A lambda that captures nothing is a method of the one object of its class's "<>c", which holds nothing.
+            if (function.Target is { } target && target.GetType().Name != "<>c") Reference(json, target);
+            else json.WriteNullValue();
+            json.WriteEndObject();
         }
 
         private void Pair(Utf8JsonWriter json, EngineSchema.Shape shape, object? key, object? value)
