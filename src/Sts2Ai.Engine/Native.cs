@@ -3,17 +3,25 @@ using System.Text;
 
 namespace Sts2Ai.Engine;
 
-/// <summary>Where the engine's library is: the one place that says.</summary>
+/// <summary>Where the engine's files are: the one place that says.</summary>
 public static class EngineLibrary
 {
     /// <summary>The variable that names the library file, for a build that does not sit beside the program (a
     /// developer's <c>engine/target/release</c>).</summary>
     public const string Variable = "STS2AI_ENGINE_LIB";
 
+    /// <summary>The variable that names the schema file, for the same case (a developer's <c>gen/schema.json</c>).</summary>
+    public const string SchemaVariable = "STS2AI_ENGINE_SCHEMA";
+
     /// <summary>The library file: the one <see cref="Variable"/> names, or else the one beside the program, under the
     /// platform's name for it.</summary>
     public static string Path { get; } = Environment.GetEnvironmentVariable(Variable) ?? System.IO.Path.Combine(AppContext.BaseDirectory,
         OperatingSystem.IsWindows() ? "sts2ai_engine.dll" : OperatingSystem.IsMacOS() ? "libsts2ai_engine.dylib" : "libsts2ai_engine.so");
+
+    /// <summary>The schema the library's state was made from, which a live combat is written out along: the file
+    /// <see cref="SchemaVariable"/> names, or else the one beside the program.</summary>
+    public static string SchemaPath { get; } = Environment.GetEnvironmentVariable(SchemaVariable)
+        ?? System.IO.Path.Combine(AppContext.BaseDirectory, "sts2ai_engine.schema.json");
 }
 
 /// <summary>The engine failed: what it said (<c>sz_last_error</c>).</summary>
@@ -31,7 +39,9 @@ internal static unsafe partial class Native
     static Native()
     {
         if (nint.Size != 8) throw new PlatformNotSupportedException("the engine's handles are 64 bits wide");
-        NativeLibrary.SetDllImportResolver(typeof(Native).Assembly, (name, _, _) => name == Library ? NativeLibrary.Load(EngineLibrary.Path) : 0);
+        NativeLibrary.SetDllImportResolver(typeof(Native).Assembly, (name, _, _) => name != Library ? 0
+            : File.Exists(EngineLibrary.Path) ? NativeLibrary.Load(EngineLibrary.Path)
+            : throw new DllNotFoundException($"no engine library at {EngineLibrary.Path} ({EngineLibrary.Variable} names another)"));
     }
 
     /// <summary><c>sz_buf</c>: bytes the engine allocated, to be given back with <see cref="sz_buf_free"/>.</summary>

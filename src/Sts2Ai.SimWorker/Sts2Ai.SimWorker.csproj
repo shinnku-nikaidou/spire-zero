@@ -24,6 +24,7 @@
     <ProjectReference Include="../Sts2Ai.GameBridge/Sts2Ai.GameBridge.csproj" />
     <ProjectReference Include="../Sts2Ai.Brain/Sts2Ai.Brain.csproj" />
     <ProjectReference Include="../Sts2Ai.Harness/Sts2Ai.Harness.csproj" />
+    <ProjectReference Include="../Sts2Ai.Engine/Sts2Ai.Engine.csproj" />
     <PackageReference Include="System.CommandLine" Version="2.0.14" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.22" />
     <InternalsVisibleTo Include="Sts2Ai.SimWorker.Tests" />

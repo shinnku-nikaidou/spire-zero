@@ -5,6 +5,9 @@
     decision side's tests, which need none, are in Sts2Ai.Tests. Whatever needs a booted game is checked by the sim
     itself (selftest, run -check).
   -->
+  <!-- A test may name a game type itself (the export's walk is tested on the game's plain classes). -->
+  <Import Project="../GameReferences.props" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>

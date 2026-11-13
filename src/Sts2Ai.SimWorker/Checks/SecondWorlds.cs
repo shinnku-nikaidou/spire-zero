@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using Sts2Ai.Engine;
+using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker.Checks;
@@ -14,6 +17,23 @@ internal abstract class SecondWorld : IDisposable
     public virtual string Observation() => ProtocolJson.Serialize(World.Observe());
 
     public abstract void Dispose();
+
+    /// <summary>A run for a combat started on its own, which has none: nothing in the check reads it.</summary>
+    public static RunView Alone(CombatSession real) => new()
+    {
+        Character = real.Player.Character.Id.Entry,
+        Ascension = real.Run.AscensionLevel,
+        Act = real.Run.CurrentActIndex,
+        ActId = "<none>",
+        Floor = 1,
+        Hp = real.Player.Creature.CurrentHp,
+        MaxHp = real.Player.Creature.MaxHp,
+        Gold = real.Player.Gold,
+        Deck = [],
+        Relics = [],
+        Potions = [],
+        Map = new MapView { Points = [], Visited = [], Boss = "<none>" },
+    };
 }
 
 /// <summary>Makes the second worlds of the lockstep check: the one place where one kind of world differs from another.</summary>
@@ -46,31 +66,55 @@ internal sealed class ReplayWorlds(Pump pump, bool determinized = false) : ISeco
             if (real.Prompt != null) return null;
             snapshot = snapshot with { Trace = [.. snapshot.Trace, new TraceEvent(TraceKind.Determinize, Seed: (ulong)snapshot.Trace.Count)] };
         }
-        var run = Alone(real);
+        var run = SecondWorld.Alone(real);
         return () => new Replay(SimWorlds.SL(pump, snapshot, run));
     }
-
-    /// <summary>A run for a combat started on its own, which has none: nothing in the check reads it.</summary>
-    private static RunView Alone(CombatSession real) => new()
-    {
-        Character = real.Player.Character.Id.Entry,
-        Ascension = real.Run.AscensionLevel,
-        Act = real.Run.CurrentActIndex,
-        ActId = "<none>",
-        Floor = 1,
-        Hp = real.Player.Creature.CurrentHp,
-        MaxHp = real.Player.Creature.MaxHp,
-        Gold = real.Player.Gold,
-        Deck = [],
-        Relics = [],
-        Potions = [],
-        Map = new MapView { Points = [], Visited = [], Boss = "<none>" },
-    };
 
     private sealed class Replay(SimWorlds source) : SecondWorld
     {
         public override ICombatWorld World { get; } = source.Worlds(1, 0)[0];
 
         public override void Dispose() => source.Dispose();
+    }
+}
+
+/// <summary>
+/// The engine's world (engine/DESIGN.md): at a decision the live combat is written out along the engine's schema
+/// (<see cref="EngineExport"/>), and the world is the engine's import of those bytes. The engine takes a combat in
+/// between actions only, so none is made at a card prompt. One of these serves one combat: it counts what it wrote.
+/// </summary>
+/// <param name="dump">Where each export is also written, as PREFIX-DECISION.json; null: nowhere.</param>
+internal sealed class EngineWorlds(EngineExport export, string? dump) : ISecondWorlds
+{
+    private int _decision = -1;
+
+    /// <summary>The exports written, their bytes in all, and the time they took.</summary>
+    public (int Count, long Bytes, double Ms) Written { get; private set; }
+
+    /// <summary>The classes outside the engine's schema that the combat's objects pointed to, with the references to
+    /// each over all the exports: state the engine was not given.</summary>
+    public Dictionary<string, int> Outside { get; } = [];
+
+    public Func<SecondWorld>? At(CombatSession real)
+    {
+        _decision++;
+        if (real.Prompt != null) return null;
+        long started = Stopwatch.GetTimestamp();
+        var written = export.Write(real.Player, HeadlessGame.GameVersion);
+        byte[] bytes = written.Bytes;
+        Written = (Written.Count + 1, Written.Bytes + bytes.Length, Written.Ms + Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        foreach (var (type, references) in written.Outside) Outside[type] = Outside.GetValueOrDefault(type) + references;
+        if (dump != null) File.WriteAllBytes($"{dump}-{_decision}.json", bytes);
+        var run = SecondWorld.Alone(real);
+        return () => new Imported(EngineWorld.Import(bytes, run));
+    }
+
+    private sealed class Imported(EngineWorld world) : SecondWorld
+    {
+        public override ICombatWorld World => world;
+
+        public override string Observation() => world.ObservationJson();
+
+        public override void Dispose() => world.Dispose();
     }
 }

@@ -1,4 +1,5 @@
 using Sts2Ai.Brain;
+using Sts2Ai.Engine;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
@@ -15,7 +16,7 @@ public class BoundaryTests
     [Fact]
     public void TheBrainProtocolAndHarnessReachNoGameAssembly()
     {
-        foreach (var root in new[] { typeof(ICombatPolicy).Assembly, typeof(CombatObservation).Assembly, typeof(WorkerPool).Assembly })
+        foreach (var root in new[] { typeof(ICombatPolicy).Assembly, typeof(CombatObservation).Assembly, typeof(WorkerPool).Assembly, typeof(EngineWorld).Assembly })
             Assert.Empty(GameAssemblies.ReachedFrom(root));
         Assert.Contains("sts2", GameAssemblies.ReachedFrom(typeof(Observe).Assembly));
     }

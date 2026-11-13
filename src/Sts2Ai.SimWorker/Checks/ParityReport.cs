@@ -42,6 +42,13 @@ internal sealed record ParityLine
     public string? Failure { get; init; }
     /// <summary>The first of the game's own Log.Error lines while the real combat was played.</summary>
     public IReadOnlyList<string> GameErrors { get; init; } = [];
+    /// <summary>With the engine's world: the combats written out for it, their bytes in all, and the time that took.</summary>
+    public int Exports { get; init; }
+    public long ExportBytes { get; init; }
+    public double ExportMs { get; init; }
+    /// <summary>With the engine's world: the classes outside its schema that the combat pointed to, with the references
+    /// to each over the combat's exports.</summary>
+    public Dictionary<string, int> Outside { get; init; } = [];
     public double Ms { get; init; }
 
     public const int MaxDifferences = 30;
@@ -127,10 +134,12 @@ internal sealed class ParitySummary
     private readonly Dictionary<string, (int[] Counts, string Example)> _paths = [];
     private readonly Dictionary<string, int> _subjects = [];
     private readonly Dictionary<string, int> _gameErrors = [];
+    private readonly Dictionary<string, int> _outside = [];
     private readonly Dictionary<string, Dictionary<string, int[]>> _met = GameIds.Kinds.ToDictionary(k => k, _ => new Dictionary<string, int[]>());
-    private int _combats, _failed, _decisions, _imports, _steps, _continues, _differed, _differedCombats;
+    private int _combats, _failed, _decisions, _imports, _steps, _continues, _differed, _differedCombats, _exports;
     private readonly int[] _differences = new int[3];
-    private double _ms;
+    private double _ms, _exportMs;
+    private long _exportBytes;
 
     public int Combats => _combats;
 
@@ -149,6 +158,10 @@ internal sealed class ParitySummary
             return;
         }
         _outcomes[line.Outcome!] = _outcomes.GetValueOrDefault(line.Outcome!) + 1;
+        _exports += line.Exports;
+        _exportBytes += line.ExportBytes;
+        _exportMs += line.ExportMs;
+        foreach (var (type, references) in line.Outside) _outside[type] = _outside.GetValueOrDefault(type) + references;
         _decisions += line.Decisions;
         _imports += line.Imports;
         _steps += line.Steps;
@@ -187,8 +200,17 @@ internal sealed class ParitySummary
         foreach (var (failure, count) in _failures.OrderByDescending(kv => kv.Value).Take(10)) output.WriteLine($"  failed x{count}: {failure}");
         foreach (var (error, count) in _gameErrors.OrderByDescending(kv => kv.Value).Take(5)) output.WriteLine($"  game error x{count}: {(error.Length > 200 ? error[..200] + "..." : error)}");
         output.WriteLine($"decisions  {_decisions}; checks: {_imports} imports, {_steps} steps, {_continues} continued steps");
+        if (_exports > 0)
+            output.WriteLine($"exports    {_exports}: {_exportBytes / 1024.0 / _exports:F0} KB and {_exportMs / _exports:F2} ms each");
         output.WriteLine($"differed   {_differed} decisions in {_differedCombats} combats; differences: {_differences[0]} import, {_differences[1]} step, {_differences[2]} continue");
 
+        if (_outside.Count > 0)
+        {
+            output.WriteLine();
+            output.WriteLine("outside the engine's schema: classes the combats' objects pointed to, whose state the exports do not hold (references):");
+            foreach (var (type, references) in _outside.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal))
+                output.WriteLine($"  {references,9}  {type}");
+        }
         if (_paths.Count > 0)
         {
             output.WriteLine();

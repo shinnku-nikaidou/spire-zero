@@ -2,6 +2,8 @@ using System.CommandLine;
 using System.Diagnostics;
 using MegaCrit.Sts2.Core.Models;
 using Microsoft.Extensions.Logging;
+using Sts2Ai.Engine;
+using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker.Commands;
@@ -15,8 +17,11 @@ namespace Sts2Ai.SimWorker.Commands;
 internal static class ParityCommand
 {
     private static readonly Option<string> World = Opt.Of("--world", "replay",
-        "the second world: replay, the SL world that replays the combat; determinized, the same with its hidden state drawn again, which must differ after actions")
-        .AcceptOnlyFromAmong("replay", "determinized");
+        "the second world: engine, the Rust engine's, made from the combat written out along its schema; replay, the SL world that replays the combat; " +
+        "determinized, the same with its hidden state drawn again, which must differ after actions")
+        .AcceptOnlyFromAmong("engine", "replay", "determinized");
+    private static readonly Option<string?> Exports = Opt.Maybe<string?>("--exports",
+        "with --world engine: a folder that gets every export written, as COMBAT-DECISION.json");
     private static readonly Option<string> Character = Opt.Of("--character", "all", "the characters, such as SILENT,FOOL, or all");
     private static readonly Option<string> Asc = Opt.Of("--asc", "0,10", "the ascension levels");
     private static readonly Option<string> Encounter = Opt.Of("--encounter", "all", "the encounters, such as A,B, or all: every encounter of the game, the ones list shows and the events' besides");
@@ -44,7 +49,7 @@ internal static class ParityCommand
     };
 
     /// <summary>The options a part of the sweep takes from the whole: all but where the output goes and who shares it.</summary>
-    private static readonly Option[] Shared = [World, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
+    private static readonly Option[] Shared = [World, Exports, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
 
     public static Command Command()
     {
@@ -105,10 +110,18 @@ internal static class ParityCommand
             }
         }
 
+        string world = r.GetValue(World)!;
+        string? exports = r.GetValue(Exports);
+        if (exports != null && world != "engine") throw new CliException("--exports is the engine's: it needs --world engine");
         if (workers == 1)
         {
-            ISecondWorlds worlds = new ReplayWorlds(pump, determinized: r.GetValue(World) == "determinized");
-            foreach (int i in indexes) Take(Play(pump, sweep[i], worlds, r.GetValue(Continue), r.GetValue(Full)));
+            // The engine's schema is read once; each combat has its own maker, which counts what it wrote.
+            var export = world == "engine" ? new EngineExport(EngineSchema.Load(EngineLibrary.SchemaPath)) : null;
+            if (exports != null) Directory.CreateDirectory(exports);
+            ISecondWorlds replay = new ReplayWorlds(pump, determinized: world == "determinized");
+            foreach (int i in indexes)
+                Take(Play(pump, sweep[i], export == null ? replay : new EngineWorlds(export, exports == null ? null : Path.Combine(exports, $"{i}")),
+                    r.GetValue(Continue), r.GetValue(Full)));
         }
         else
         {
@@ -142,7 +155,7 @@ internal static class ParityCommand
 
         string continues = r.GetValue(Continue) is { } few ? $"continued from {few} decisions a combat" : "continued from every decision";
         return Finish(r, summary, universe,
-            $"parity: world {r.GetValue(World)}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}, {indexes.Count} of the sweep's {sweep.Count} combats "
+            $"parity: world {world}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}, {indexes.Count} of the sweep's {sweep.Count} combats "
             + $"({characters.Count} characters x {ascensions.Count} ascensions x {encounters.Count} encounters x {decks} loadouts), seed {r.GetValue(Seed)}, "
             + $"{continues}, {clock.Elapsed.TotalSeconds:F0} s with {workers} {(workers == 1 ? "process" : "processes")}");
     }
@@ -161,7 +174,9 @@ internal static class ParityCommand
         try
         {
             var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues);
-            return ParityLine.Of(combat, result, clock.Elapsed.TotalMilliseconds, full);
+            var line = ParityLine.Of(combat, result, clock.Elapsed.TotalMilliseconds, full);
+            return worlds is not EngineWorlds { Written: var written } engine ? line
+                : line with { Exports = written.Count, ExportBytes = written.Bytes, ExportMs = Math.Round(written.Ms, 1), Outside = engine.Outside };
         }
         catch (Exception e)
         {
