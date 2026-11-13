@@ -2,6 +2,7 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Actions;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.TestSupport;
@@ -35,6 +36,12 @@ internal sealed class PromptSelector(
 
     /// <summary>Prompts asked so far; each one's number seeds its tie-break.</summary>
     public int Prompts { get; private set; }
+
+    /// <summary>What an export of the live combat says of the program around the game: the count of the selector that
+    /// answers <paramref name="player"/>'s prompts, a session's, which is on the game's stack while the session lives.</summary>
+    public static EngineExport.Around Around(Player player) =>
+        RunManager.Instance.CardSelectorStack.GetSelector(player) is PromptSelector selector ? new(selector.Prompts)
+            : throw new InvalidOperationException("the player's card selector is not a session's");
 
     /// <summary>The prompt the game waits on, if any.</summary>
     public CardChoice? Waiting => _waiting?.Choice;

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using MegaCrit.Sts2.Core.Entities.Players;
 using Sts2Ai.Engine;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
@@ -147,16 +148,16 @@ internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds, IRunWor
     /// <summary>What the exports say of themselves, over all of them.</summary>
     public ExportTally Tally { get; } = new();
 
-    public Func<SecondWorld>? At(CombatSession real) => real.Prompt != null ? null : Make(SecondWorld.Alone(real));
+    public Func<SecondWorld>? At(CombatSession real) => real.Prompt != null ? null : Make(SecondWorld.Alone(real), real.Player);
 
     /// <summary>In a run the world is given the run as it stands, which its own <see cref="ICombatWorld.Run"/> then
     /// carries the combat's changes over.</summary>
-    public Func<SecondWorld>? At(RunSession real) => real.Prompt != null ? null : Make(real.View(previews: false));
+    public Func<SecondWorld>? At(RunSession real) => real.Prompt != null ? null : Make(real.View(previews: false), real.Player);
 
-    private Func<SecondWorld> Make(RunView run)
+    private Func<SecondWorld> Make(RunView run, Player player)
     {
         long started = Stopwatch.GetTimestamp();
-        var written = export.Write(HeadlessGame.GameVersion);
+        var written = export.Write(HeadlessGame.GameVersion, PromptSelector.Around(player));
         byte[] bytes = written.Bytes;
         Written = (Written.Count + 1, Written.Bytes + bytes.Length, Written.Ms + Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         Tally.Add(written);

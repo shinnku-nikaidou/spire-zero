@@ -35,6 +35,8 @@ internal static class ParityCommand
     private static readonly Option<string> Encounter = Opt.Of("--encounter", "all", "the encounters, such as A,B, or all: every encounter of the game, the ones list shows and the events' besides");
     private static readonly Option<int> Decks = Opt.Of("--decks", 2,
         "loadouts per character, ascension and encounter: the first is the starting one, the others are drawn (deck, upgrades, enchantments, relics, potions, HP)");
+    private static readonly Option<string?> Cards = Opt.Maybe<string?>("--cards",
+        "the only cards a drawn deck holds, such as A,B,C, of those its character can draw (its own pool's and the shared pools'): for decks full of one kind of card");
     private static readonly Option<string?> Deck = Opt.Maybe<string?>("--deck", "this deck in every combat instead, such as A*5,B+,C+2@SHARP:2 (as combat's)");
     private static readonly Option<string?> Relics = Opt.Maybe<string?>("--relics", "these relics in every combat instead");
     private static readonly Option<string?> Potions = Opt.Maybe<string?>("--potions", "these potions in every combat instead");
@@ -57,7 +59,7 @@ internal static class ParityCommand
     };
 
     /// <summary>The options a part of the sweep takes from the whole: all but where the output goes and who shares it.</summary>
-    private static readonly Option[] Shared = [World, Dump, Delegates, Runs, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
+    private static readonly Option[] Shared = [World, Dump, Delegates, Runs, Character, Asc, Encounter, Decks, Cards, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
 
     public static Command Command()
     {
@@ -89,12 +91,15 @@ internal static class ParityCommand
         int decks = r.GetValue(Decks);
         if (decks < 1) throw new CliException("--decks is at least 1");
         var loadout = given == new Loadout() ? null : given;
-        var sweep = new Sweep(characters, ascensions, encounters, decks, r.GetValue(Seed), loadout);
+        var cards = r.GetValue(Cards)?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(id => Models.Find<CardModel>(id).Id.Entry).ToHashSet();
+        if (cards != null && loadout?.Deck != null) throw new CliException("--cards is for drawn decks: not with --deck");
+        var sweep = new Sweep(characters, ascensions, encounters, decks, r.GetValue(Seed), loadout, cards);
         RunSweep? runs = null;
         if (r.GetValue(Runs) is { } each)
         {
             if (each < 1) throw new CliException("--runs is at least 1");
             if (r.GetValue(Encounter) is not "all" || r.GetResult(Decks) is { Implicit: false }) throw new CliException("--runs plays whole runs: not with --encounter or --decks");
+            if (cards != null) throw new CliException("--runs plays whole runs: not with --cards");
             runs = new RunSweep(characters, ascensions, each, r.GetValue(Seed), loadout);
         }
         int count = runs?.Count ?? sweep.Count;
@@ -249,7 +254,7 @@ internal static class ParityCommand
     /// <summary>What is kept of each decision: the dump's files, and with a census the delegates of an export's walk.</summary>
     private static Keep? Kept(CombatDump? dump) => Census is not var (census, export) ? dump == null ? null : dump.Keep : (player, status, prompt, observation) =>
     {
-        if (status == CombatStatus.InProgress && !prompt) export.Write(HeadlessGame.GameVersion, census);
+        if (status == CombatStatus.InProgress && !prompt) export.Write(HeadlessGame.GameVersion, PromptSelector.Around(player), census);
         return dump?.Keep(player, status, prompt, observation);
     };
 

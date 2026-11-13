@@ -21,5 +21,17 @@ public class LoadoutTests
     }
 
     [Fact]
+    public void ACardAndARelicCanBeGivenWhatTheyKeepInASave()
+    {
+        var card = CardSpec.Parse("MAD_SCIENCE[TinkerTimeType=Power;TinkerTimeRider=Improvement]+");
+        Assert.Equal(new CardSpec("MAD_SCIENCE", 1, null, 0, "TinkerTimeType=Power;TinkerTimeRider=Improvement"), card);
+        Assert.Equal("MAD_SCIENCE[TinkerTimeType=Power;TinkerTimeRider=Improvement]+", card.Text);
+        Assert.Equal(new RelicSpec("PAELS_TOOTH", "SerializableCards=BASH|ANGER+"), RelicSpec.Parse("PAELS_TOOTH[SerializableCards=BASH|ANGER+]"));
+        Assert.Equal(new RelicSpec("ANCHOR"), RelicSpec.Parse("ANCHOR"));
+        Assert.Throws<FormatException>(() => RelicSpec.Parse("ANCHOR[IsWax=true"));
+        Assert.Equal(["ANCHOR[IsWax=true;IsMelted=true]", "VAJRA", "VAJRA"], Loadout.Parse(null, "ANCHOR[IsWax=true;IsMelted=true],VAJRA*2", null, null, null).Relics!);
+    }
+
+    [Fact]
     public void AnEnchantmentNeedsItsAmount() => Assert.Throws<FormatException>(() => CardSpec.Parse("BASH@SHARP"));
 }

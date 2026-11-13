@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models.Enchantments;
 using MegaCrit.Sts2.Core.Models.Events;
+using MegaCrit.Sts2.Core.Models.Relics;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
@@ -160,8 +161,9 @@ internal sealed class RunSweep(IReadOnlyList<CharacterModel> characters, IReadOn
 /// <paramref name="given"/>, every loadout is that one. Consecutive combats go through the characters, then the
 /// ascensions, then the encounters, then the loadouts, so a part of the sweep is spread over all of them.
 /// </summary>
+/// <param name="cards">The cards a drawn deck holds, of those its character can draw; null: any of them.</param>
 internal sealed class Sweep(IReadOnlyList<CharacterModel> characters, IReadOnlyList<int> ascensions, IReadOnlyList<(EncounterModel Encounter, int Act)> encounters,
-    int decks, int seed, Loadout? given)
+    int decks, int seed, Loadout? given, IReadOnlySet<string>? cards = null)
 {
     public int Count => characters.Count * ascensions.Count * encounters.Count * decks;
 
@@ -175,7 +177,7 @@ internal sealed class Sweep(IReadOnlyList<CharacterModel> characters, IReadOnlyL
             int deck = i / (characters.Count * ascensions.Count * encounters.Count);
             var (loadout, kind) = given != null ? (given, "given")
                 : deck == 0 ? (null, "starting")
-                : (RandomLoadout.Draw(character, new Random(unchecked(seed * 7_919 + i))), "random");
+                : (RandomLoadout.Draw(character, new Random(unchecked(seed * 7_919 + i)), cards), "random");
             return new(i, new CombatSetup(character.Id.Entry, encounter, act, GameSeeds.MakeSeed(seed, i), ascension, loadout), kind, unchecked(seed * 1_000_003 + i));
         }
     }
@@ -191,14 +193,20 @@ internal sealed class Sweep(IReadOnlyList<CharacterModel> characters, IReadOnlyL
 /// A loadout drawn for a sweep, to meet what a run can bring into a combat: a deck of 10 to 30 cards, four in five from
 /// the character's pool and the rest from the pools every character shares (colorless, curses, statuses, events, quests,
 /// tokens), some upgraded and some enchanted with an enchantment the card takes; the starting relics and up to six more
-/// from the character's and the shared pools; up to three potions; and half the time less than full HP.
+/// from the character's and the shared pools; up to three potions; and half the time less than full HP. Of the relics
+/// added, one in eight is of wax (Toy Box's) and half of those have melted; a Paels Tooth holds one to five cards, and
+/// one loadout in twelve gets one.
 /// </summary>
 internal static class RandomLoadout
 {
-    public static Loadout Draw(CharacterModel character, Random rng)
+    /// <param name="cards">The only cards the deck may hold, by id; null: any the character can draw.</param>
+    public static Loadout Draw(CharacterModel character, Random rng, IReadOnlySet<string>? cards = null)
     {
-        var own = character.CardPool.AllCards.Where(InDecks).ToList();
-        var shared = ModelDb.AllSharedCardPools.SelectMany(p => p.AllCards).Where(InDecks).ToList();
+        bool Asked(CardModel card) => cards == null || cards.Contains(card.Id.Entry);
+        var own = character.CardPool.AllCards.Where(InDecks).Where(Asked).ToList();
+        var shared = ModelDb.AllSharedCardPools.SelectMany(p => p.AllCards).Where(InDecks).Where(Asked).ToList();
+        if (own.Count == 0 || shared.Count == 0)
+            throw new ArgumentException($"none of the cards given is in {(own.Count == 0 ? $"{character.Id.Entry}'s pool" : "the pools every character shares")}");
         var enchantments = ModelDb.DebugEnchantments.Where(OnDeckCards).OrderBy(e => e.Id.Entry, StringComparer.Ordinal).ToList();
         var deck = new List<CardSpec>();
         int size = rng.Next(10, 31);
@@ -223,7 +231,18 @@ internal static class RandomLoadout
         var potions = Enumerable.Range(0, rng.Next(3)).Select(_ => potionPool[rng.Next(potionPool.Count)]).ToList();
 
         int maxHp = character.StartingHp;
-        return new(deck, relics, potions, rng.Next(2) == 0 ? maxHp : rng.Next(maxHp / 4, maxHp + 1), maxHp);
+        int hp = rng.Next(2) == 0 ? maxHp : rng.Next(maxHp / 4, maxHp + 1);
+
+        // What a relic keeps in a save, drawn last: the loadouts above are what they were before relics had any.
+        string tooth = ModelDb.Relic<PaelsTooth>().Id.Entry;
+        if (rng.Next(12) == 0 && !relics.Contains(tooth)) relics.Add(tooth);
+        var held = character.CardPool.AllCards.Where(c => InDecks(c) && c.IsUpgradable).ToList();
+        for (int i = character.StartingRelics.Count; i < relics.Count; i++)
+            if (relics[i] == tooth)
+                relics[i] += $"[{nameof(PaelsTooth.SerializableCards)}={string.Join('|', Enumerable.Range(0, rng.Next(1, 6)).Select(_ => held[rng.Next(held.Count)].Id.Entry))}]";
+            else if (rng.Next(8) == 0)
+                relics[i] += $"[{nameof(RelicModel.IsWax)}=true{(rng.Next(2) == 0 ? $";{nameof(RelicModel.IsMelted)}=true" : "")}]";
+        return new(deck, relics, potions, hp, maxHp);
     }
 
     /// <summary>Whether a deck can hold the card.</summary>

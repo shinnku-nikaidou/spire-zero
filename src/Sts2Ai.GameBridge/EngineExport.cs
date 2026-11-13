@@ -199,7 +199,7 @@ public sealed class EngineSchema
 /// bounds the walk and names every field, so nothing is mapped by hand: what the schema does not list is not written.
 ///
 /// <code>
-/// {"format":1,"game":"v0.113.0","schema":"9f2c..",
+/// {"format":1,"game":"v0.113.0","schema":"9f2c..","sim":{"prompts":0},
 ///  "roots":{"combat_manager__instance":["combat_manager",0],"local_context__net_id":1,...},
 ///  "arenas":{"creature":[{"class":"Creature","Creature":{"_block":0,...}}],
 ///            "card_model":[{"class":"Deflect","AbstractModel":{...},"CardModel":{...}}]},
@@ -217,7 +217,8 @@ public sealed class EngineSchema
 /// A reference is null or a pair: ["arena", index] for an object of the export; ["canon", "Class"] for a canonical
 /// model, which the engine has already and which is not written; ["outside", "CLR.Name"] for an object of a class the
 /// schema does not hold, whose state the engine therefore lacks. <c>outside</c> counts those references by class, and
-/// the engine takes in an export only where it is empty.
+/// the engine takes in an export only where it is empty. <c>sim</c> is what the program around the game holds that the
+/// combat's later observations depend on, which is no state of the game's and so in no arena (<see cref="Around"/>).
 /// </summary>
 public sealed class EngineExport(EngineSchema schema)
 {
@@ -231,19 +232,25 @@ public sealed class EngineExport(EngineSchema schema)
     /// collection, and the next ones added to it take the freed slots: the export writes it with its slots.</param>
     public sealed record Written(byte[] Bytes, int Objects, IReadOnlyDictionary<string, int> Outside, IReadOnlyDictionary<string, int> Freed);
 
+    /// <summary>What the program that runs the game holds beside it, which the combat's later observations depend on:
+    /// the export's <c>sim</c>.</summary>
+    /// <param name="Prompts">The card prompts its selector has been asked so far. The next prompt's number seeds the
+    /// order of that prompt's options that look the same, so a world that goes on from the export counts on from here.</param>
+    public sealed record Around(int Prompts);
+
     /// <summary>The live combat: everything reached from the schema's roots as they stand.</summary>
     /// <param name="game">The game's version.</param>
     /// <param name="census">Counts the delegates in the fields of what the walk visits; null: no census.</param>
-    public Written Write(string game, DelegateCensus? census = null)
+    public Written Write(string game, Around around, DelegateCensus? census = null)
     {
-        var written = new Walk(schema, census).Write(schema.Roots.Select(r => (r.Name, r.Shape, r.Field.GetValue(null))), game);
+        var written = new Walk(schema, census).Write(schema.Roots.Select(r => (r.Name, r.Shape, r.Field.GetValue(null))), game, around);
         census?.EndExport();
         return written;
     }
 
     /// <summary>Everything reached from these objects, each a root under its name.</summary>
-    public Written Write(IEnumerable<(string Name, object Root)> roots, string game) =>
-        new Walk(schema, null).Write(roots.Select(r => (JsonEncodedText.Encode(r.Name), new EngineSchema.Shape(EngineSchema.Kind.Ref), (object?)r.Root)), game);
+    public Written Write(IEnumerable<(string Name, object Root)> roots, string game, Around around) =>
+        new Walk(schema, null).Write(roots.Select(r => (JsonEncodedText.Encode(r.Name), new EngineSchema.Shape(EngineSchema.Kind.Ref), (object?)r.Root)), game, around);
 
     /// <summary>One export: the objects met so far, and those still to be written.</summary>
     private sealed class Walk(EngineSchema schema, DelegateCensus? census)
@@ -260,7 +267,7 @@ public sealed class EngineExport(EngineSchema schema)
         /// <summary>The field being written, for <see cref="_freed"/>.</summary>
         private (string Owner, JsonEncodedText Name) _field;
 
-        public Written Write(IEnumerable<(JsonEncodedText Name, EngineSchema.Shape Shape, object? Value)> roots, string game)
+        public Written Write(IEnumerable<(JsonEncodedText Name, EngineSchema.Shape Shape, object? Value)> roots, string game, Around around)
         {
             var bytes = new ArrayBufferWriter<byte>(1 << 16);
             using var json = new Utf8JsonWriter(bytes, Plain);
@@ -268,6 +275,9 @@ public sealed class EngineExport(EngineSchema schema)
             json.WriteNumber("format", Format);
             json.WriteString("game", game);
             json.WriteString("schema", schema.Hash);
+            json.WriteStartObject("sim");
+            json.WriteNumber("prompts", around.Prompts);
+            json.WriteEndObject();
 
             json.WriteStartObject("roots");
             foreach (var (name, shape, value) in roots)

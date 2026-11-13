@@ -55,23 +55,58 @@ internal readonly record struct CardSpec(string Id, int Upgrades = 0, string? En
     };
 
     /// <summary>The card's saved properties as the game writes them of a card that has them set so.</summary>
-    private SavedProperties? Saved()
-    {
-        if (Props == null) return null;
-        var card = Models.Find<CardModel>(Id).ToMutable();
-        foreach (string pair in Props.Split(';'))
-        {
-            if (pair.Split('=') is not [var name, var value]) throw new FormatException($"the property {pair} of {Id} is not NAME=VALUE");
-            var property = card.GetType().GetProperty(name) is { } found && found.GetCustomAttribute<SavedPropertyAttribute>() != null ? found
-                : throw new ArgumentException($"{Id} keeps no property {name} in a save");
-            property.SetValue(card, property.PropertyType.IsEnum ? Enum.Parse(property.PropertyType, value, ignoreCase: true)
-                : Convert.ChangeType(value, property.PropertyType, CultureInfo.InvariantCulture));
-        }
-        return SavedProperties.From(card);
-    }
+    private SavedProperties? Saved() => Props == null ? null : SavedProps.Of(Models.Find<CardModel>(Id).ToMutable(), Props);
 
     public override string ToString() =>
         Upgrades switch { 0 => Id, 1 => Id + "+", _ => $"{Id}+{Upgrades}" } + (Props == null ? "" : $" [{Props}]") + (Enchant == null ? "" : $" ({Enchant} {EnchantAmount})");
+}
+
+/// <summary>
+/// A relic in a loadout: its model id, and in brackets after it the properties it keeps in a save, as a card's:
+/// "ANCHOR[IsWax=true;IsMelted=true]" is a wax relic that has melted, "PAELS_TOOTH[SerializableCards=BASH|ANGER+]" a
+/// Paels Tooth that holds two cards (a list of cards is written as a deck's cards with "|" between).
+/// </summary>
+/// <param name="Props">The relic's saved properties, as written between the brackets; null: as the game makes the relic.</param>
+internal readonly record struct RelicSpec(string Id, string? Props = null)
+{
+    public static RelicSpec Parse(string text)
+    {
+        int open = text.IndexOf('[');
+        if (open < 0) return new(text);
+        return text.EndsWith(']') ? new(text[..open], text[(open + 1)..^1]) : throw new FormatException($"the properties of {text} are not closed by ]");
+    }
+
+    /// <summary>The relic as the game makes it from a save that holds it so.</summary>
+    public RelicModel ToRelic()
+    {
+        var id = Models.Find<RelicModel>(Id).Id;
+        return RelicModel.FromSerializable(new() { Id = id, Props = Props == null ? null : SavedProps.Of(Models.Find<RelicModel>(Id).ToMutable(), Props) });
+    }
+}
+
+/// <summary>The properties a model keeps in a save, from a loadout's text for them: NAME=VALUE with ";" between.</summary>
+internal static class SavedProps
+{
+    /// <summary>Sets them on <paramref name="model"/>, and gives them as the game writes them of a model that has
+    /// them set so.</summary>
+    public static SavedProperties? Of(AbstractModel model, string props)
+    {
+        foreach (string pair in props.Split(';'))
+        {
+            int equals = pair.IndexOf('=');
+            if (equals < 0) throw new FormatException($"the property {pair} of {model.Id.Entry} is not NAME=VALUE");
+            var (name, value) = (pair[..equals], pair[(equals + 1)..]);
+            var property = model.GetType().GetProperty(name) is { } found && found.GetCustomAttribute<SavedPropertyAttribute>() != null ? found
+                : throw new ArgumentException($"{model.Id.Entry} keeps no property {name} in a save");
+            property.SetValue(model, Value(property.PropertyType, value));
+        }
+        return SavedProperties.From(model);
+    }
+
+    private static object Value(Type type, string text) =>
+        type.IsEnum ? Enum.Parse(type, text, ignoreCase: true)
+        : type == typeof(List<SerializableCard>) ? text.Split('|').Select(card => CardSpec.Parse(card).ToSerializable()).ToList()
+        : Convert.ChangeType(text, type, CultureInfo.InvariantCulture);
 }
 
 /// <summary>
@@ -122,9 +157,9 @@ internal sealed record Loadout(
                 player.RemoveRelicInternal(relic, silent: true);
                 player.SubtractFromMaxPotionCount(PotionSlots(relic));
             }
-            foreach (var id in Relics)
+            foreach (var spec in Relics)
             {
-                var relic = Models.Find<RelicModel>(id).ToMutable();
+                var relic = RelicSpec.Parse(spec).ToRelic();
                 player.AddRelicInternal(relic, silent: true);
                 player.AddToMaxPotionCount(PotionSlots(relic));
             }
