@@ -65,7 +65,7 @@ class Batch:
         enemies, enemy_mask, enemy_scalars = (
             torch.zeros(n, e_n, dtype=torch.long),
             torch.zeros(n, e_n),
-            torch.zeros(n, e_n, 5),
+            torch.zeros(n, e_n, spec.ENEMY_SCALARS),
         )
         e_powers = [torch.zeros(n, e_n, q_n, dtype=torch.long), torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n)]
         e_numbers = [torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n, dtype=torch.long), torch.zeros(n, e_n, q_n)]
@@ -158,7 +158,7 @@ def mlp(*sizes):
 class Net(nn.Module):
     DIM, HIDDEN, BODY = 64, 128, 512
     SUM_SCALE = 1 / 8  # each pile's sum, scaled to about a mean's size
-    N_PLAYER, N_EXTRA = 8, 4
+    N_PLAYER, N_EXTRA = 8, 6
     CLOSED = -1e4  # the logit of an ending the state rules out: no weight in float32's softmax
 
     def __init__(self, sizes: dict[str, int]):
@@ -172,6 +172,7 @@ class Net(nn.Module):
         self.card_block = nn.Embedding(sizes["cards"], d)
         self.card_calc = nn.Embedding(sizes["cards"], d)
         self.card_replay = nn.Embedding(sizes["cards"], d)
+        self.card_grown = nn.Embedding(sizes["cards"], d)
         self.mod_amount = nn.Embedding(sizes["modifiers"], d)
         self.relic_counter = nn.Embedding(sizes["relics"], d)
         self.powers = nn.Embedding(sizes["powers"], d)
@@ -195,7 +196,7 @@ class Net(nn.Module):
         self.melted = nn.Parameter(torch.randn(d) * 0.1)
         self.card_phi = mlp(d, h, h)
         self.power_phi = mlp(d, h)
-        self.enemy_scalars = nn.Linear(5, d)
+        self.enemy_scalars = nn.Linear(spec.ENEMY_SCALARS, d)
         self.enemy_phi = mlp(d + h + spec.SLOTS * d, 2 * h, 2 * h)
         self.ally_scalars = nn.Linear(4, d)
         self.ally_phi = mlp(d + h, h)
@@ -247,6 +248,7 @@ class Net(nn.Module):
             + numbers[..., 2:3] * self.card_replay(cards)
             + numbers[..., 3:4] * self.stars
             + numbers[..., 4:5] * self.gathered
+            + numbers[..., 5:6] * self.card_grown(cards)
             + ((self.modifiers(mods) + mod_amounts[..., None] * self.mod_amount(mods)) * mod_mask[..., None]).sum(2)
             + piles @ self.pile
         )

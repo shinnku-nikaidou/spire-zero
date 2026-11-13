@@ -6,8 +6,8 @@ namespace Sts2Ai.Brain.Combat;
 
 /// <summary>A card of a pile: its id, upgrade level (capped at <see cref="RunNet.MaxUp"/>), pile (<see cref="CombatTokens.Piles"/>),
 /// modifiers, cost / 3 (0 for X or none), its enchantment's and affliction's amounts / 10, its damage / 20 (Osty's for
-/// an Osty attack, 0 for none), and its numbers: block / 20, the calculated number / 20, replays / 2, star cost / 5 and
-/// the damage its enchantment gathered / 20 (Momentum's).</summary>
+/// an Osty attack, 0 for none), and its numbers: block / 20, the calculated number / 20, replays / 2, star cost / 5,
+/// the damage its enchantment gathered / 20 (Momentum's) and how far its other numbers have grown / 10 (Show Off's Aim).</summary>
 public sealed record CombatCardToken(
     string Id, int Up, int Pile, IReadOnlyList<string> Modifiers, double Cost, IReadOnlyList<double> Amounts, double Damage, IReadOnlyList<double> Numbers);
 
@@ -18,9 +18,9 @@ public sealed record PowerToken(string Id, double Amount, double Stacks, string?
 /// <summary>An intent: its type, its damage per hit / 10 and its total damage / 20 (0 for no attack).</summary>
 public sealed record IntentToken(string Type, double Damage, double Total);
 
-/// <summary>An enemy, one lying dead until it revives included: its id, its HP share, HP / 100, max HP / 100, block / 20
-/// and how many rounds it has shown / 10, its powers, and its slots of intents: those now, then those of its last rounds
-/// before this one, most recent first.</summary>
+/// <summary>An enemy, one lying dead until it revives included: its id, its HP share, HP / 100, max HP / 100, block / 20,
+/// how many rounds it has shown / 10 and the player's arrows stuck in it / 3, its powers, and its slots of intents:
+/// those now, then those of its last rounds before this one, most recent first.</summary>
 public sealed record EnemyTokens(string Id, IReadOnlyList<double> Scalars, IReadOnlyList<PowerToken> Powers, IReadOnlyList<IReadOnlyList<IntentToken>> Slots);
 
 /// <summary>A living ally: its id (a player's as "&lt;player&gt;"), its HP share, HP / 100, max HP / 100 and block / 20, and its powers.</summary>
@@ -37,7 +37,8 @@ public sealed record AllyTokens(string Id, IReadOnlyList<double> Scalars, IReadO
 /// <param name="RelicStatus">Each relic's status (<see cref="RelicStatusOf"/>).</param>
 /// <param name="Context">The character, the encounter, the room and the act.</param>
 /// <param name="OrbValues">Each orb's passive / 10 and evoke / 10.</param>
-/// <param name="Extra">The ascension / 10, the orb slots / 10, the gold / 100 and the potion slots / 10.</param>
+/// <param name="Extra">The ascension / 10, the orb slots / 10, the gold / 100, the potion slots / 10, the arrows held / 3
+/// and the arrows shown in all / 3.</param>
 public sealed record CombatTokens(
     IReadOnlyList<CombatCardToken> Cards, IReadOnlyList<PowerToken> Powers, IReadOnlyList<double> Player, IReadOnlyList<EnemyTokens> Enemies,
     IReadOnlyList<string> Relics, IReadOnlyList<IReadOnlyList<double>> RelicValues, IReadOnlyList<string> RelicStatus,
@@ -54,7 +55,10 @@ public sealed record CombatTokens(
     public static readonly IReadOnlyList<string> Piles = ["hand", "draw", "discard", "exhaust"];
 
     /// <summary>How many numbers a card has beyond its cost and damage.</summary>
-    public const int CardNumbers = 5;
+    public const int CardNumbers = 6;
+
+    /// <summary>How many numbers an enemy has.</summary>
+    public const int EnemyScalars = 6;
 
     /// <summary>The tokens of a state.</summary>
     /// <param name="history">The combat's record of enemy moves; the rounds before this one are read.</param>
@@ -68,7 +72,8 @@ public sealed record CombatTokens(
             var turns = e.Uid is { } uid && past.TryGetValue(uid, out var t) ? t : [];
             var slots = new List<IReadOnlyList<IntentToken>> { Intents(e.Intents ?? []) };
             for (int lag = 1; lag <= lags && lag <= turns.Count; lag++) slots.Add(Intents(turns[^lag].Intents));
-            return new EnemyTokens(e.Id ?? "<none>", [.. Creature(e.Hp, e.MaxHp, e.Block), Capped(turns.Count / 10.0)], PowersOf(e.Powers), slots);
+            return new EnemyTokens(e.Id ?? "<none>", [.. Creature(e.Hp, e.MaxHp, e.Block), Capped(turns.Count / 10.0), Capped((e.Arrows ?? 0) / 3.0)],
+                PowersOf(e.Powers), slots);
         }).ToList();
         return new(
             [.. Piles.SelectMany((_, p) => Pile(obs, p).Select(c => Card(c, p)))],
@@ -83,7 +88,8 @@ public sealed record CombatTokens(
             [.. pl.Orbs.Select(o => o.Id)],
             [.. pl.Orbs.Select(o => (IReadOnlyList<double>)[Capped((double)o.Passive / 10.0), Capped((double)o.Evoke / 10.0)])],
             [.. obs.Allies.Where(a => a.Hp > 0).Select(a => new AllyTokens(a.Id ?? "<player>", Creature(a.Hp, a.MaxHp, a.Block), PowersOf(a.Powers)))],
-            [obs.Ascension / 10.0, pl.OrbSlots / 10.0, Capped(pl.Gold / 100.0), obs.Potions.Count / 10.0]);
+            [obs.Ascension / 10.0, pl.OrbSlots / 10.0, Capped(pl.Gold / 100.0), obs.Potions.Count / 10.0,
+                Capped((pl.Arrows ?? 0) / 3.0), Capped((pl.ArrowSlots ?? 0) / 3.0)]);
     }
 
     /// <summary>A relic's id as both nets read it: with ":used" once used up.</summary>
@@ -121,7 +127,7 @@ public sealed record CombatTokens(
             Capped((double)damage / 20.0),
             [
                 Capped((double)vars.GetValueOrDefault("Block") / 20.0), Capped((double)(card.Calc ?? 0) / 20.0), Capped((card.Replay ?? 0) / 2.0),
-                Capped((card.Stars ?? 0) / 5.0), Capped((card.Enchant?.Extra ?? 0) / 20.0),
+                Capped((card.Stars ?? 0) / 5.0), Capped((card.Enchant?.Extra ?? 0) / 20.0), Capped((double)(card.Grown ?? 0) / 10.0),
             ]);
     }
 

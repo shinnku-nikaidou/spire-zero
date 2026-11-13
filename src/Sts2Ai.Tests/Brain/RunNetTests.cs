@@ -8,7 +8,8 @@ public class RunNetTests
     /// <summary>
     /// An untrained V net with small widths, its hazard head's bias lowered by 6 so a run survives most floors, its rows for
     /// a card's damage, block and modifiers' amounts random, its test runs real views (Fixtures' floor 1 and two of g3, one
-    /// with a Mad Science of Tinker Time and cards with keywords; the first's first card given a Goopy of amount 4)
+    /// with a Mad Science of Tinker Time and cards with keywords; the first's first card given a Goopy of amount 4 and a
+    /// growth of 4)
     /// valued by the trainer at their chance to win (<c>learn/v/net.py</c>'s win_chance): loading checks RunNet gives each
     /// the trainer's value, so a change to how RunNet feeds a run's tokens to the graph fails here.
     /// </summary>

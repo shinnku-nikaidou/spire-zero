@@ -214,7 +214,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         int q_n = Math.Max(1, enemies.Select(e => e.Powers.Count).DefaultIfEmpty(0).Max());
         int i_n = Math.Max(1, enemies.SelectMany(e => e.Slots).Select(s => s.Count).DefaultIfEmpty(0).Max());
         var ids = new DenseTensor<long>([1, e_n]);
-        var scalars = new DenseTensor<float>([1, e_n, 5]);
+        var scalars = new DenseTensor<float>([1, e_n, CombatTokens.EnemyScalars]);
         var mask = new DenseTensor<float>([1, e_n]);
         var powers = new DenseTensor<long>([1, e_n, q_n]);
         var powerAmounts = new DenseTensor<float>([1, e_n, q_n]);

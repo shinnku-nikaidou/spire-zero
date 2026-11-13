@@ -10,7 +10,8 @@ public class CombatNetTests
     /// rounds of an enemy's history, an ally, two potions of one id, a potion off the table, a state at 5 % HP and a multi-hit
     /// attack, orbs on and off the table past the places the net tells apart, and every card, power, relic and enemy state
     /// the observation gathers (keywords, Tinker, an enchantment spent, Momentum, calculated numbers, replays, star costs,
-    /// a moved number, Swipe's card, a relic spent, an enemy lying dead, another character), every weight nonzero: a
+    /// a moved number, Swipe's card, a relic spent, an enemy lying dead, another character, arrows held, shown and stuck in
+    /// an enemy, a card that has grown), every weight nonzero: a
     /// change to how CombatNet feeds a state's tokens to the graph fails on loading.
     /// </summary>
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");

@@ -80,7 +80,7 @@ class Batch:
         return tuple(self.feed[name] for name in spec.INPUTS)
 
 
-N_NUMBERS = 2  # a card's damage and block (a card's token)
+N_NUMBERS = 3  # a card's damage, block and growth (a card's token)
 
 
 class Net(nn.Module):
@@ -94,12 +94,13 @@ class Net(nn.Module):
         self.card_up = nn.Embedding(sizes["cards"], d)
         self.card_damage = nn.Embedding(sizes["cards"], d)
         self.card_block = nn.Embedding(sizes["cards"], d)
+        self.card_grown = nn.Embedding(sizes["cards"], d)
         self.modifiers = nn.Embedding(sizes["modifiers"], d)
         self.mod_amount = nn.Embedding(sizes["modifiers"], d)
         self.bags = nn.ModuleDict({t: nn.Embedding(sizes[t], d) for t in spec.BAGS})
         self.relic_counter = nn.Embedding(sizes["relics"], d)
         self.relic_status = nn.Embedding(sizes["relic_status"], d)
-        for e in (self.cards, self.card_up, self.card_damage, self.card_block, self.modifiers, self.mod_amount,
+        for e in (self.cards, self.card_up, self.card_damage, self.card_block, self.card_grown, self.modifiers, self.mod_amount,
                   *self.bags.values(), self.relic_counter, self.relic_status):  # fmt: skip
             nn.init.normal_(e.weight, std=0.1)
         self.melted = nn.Parameter(torch.randn(d) * 0.1)
@@ -128,6 +129,7 @@ class Net(nn.Module):
             + ups[..., None] * self.card_up(cards)
             + numbers[..., 0:1] * self.card_damage(cards)
             + numbers[..., 1:2] * self.card_block(cards)
+            + numbers[..., 2:3] * self.card_grown(cards)
             + ((self.modifiers(mods) + mod_amounts[..., None] * self.mod_amount(mods)) * mod_mask[..., None]).sum(2)
         )
         h = self.phi(x) * card_mask[..., None]

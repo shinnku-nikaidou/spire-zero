@@ -62,6 +62,12 @@ public sealed record PlayerView
     public required IReadOnlyList<PowerView> Powers { get; init; }
     public required int OrbSlots { get; init; }
     public required IReadOnlyList<OrbView> Orbs { get; init; }
+    /// <summary>The arrows held, ready to shoot, of those the icons beside the player show; null for a player with no arrows.</summary>
+    public int? Arrows { get; init; }
+    /// <summary>All the arrows those icons show: the ones held and the ones stuck in enemies. A destroyed arrow is not shown.</summary>
+    public int? ArrowSlots { get; init; }
+    /// <summary>The melodies played this turn, as the symbols beside the player show them: of Wah, Cho and Ki, in this order.</summary>
+    public IReadOnlyList<string>? Melodies { get; init; }
 }
 
 /// <summary>
@@ -105,6 +111,9 @@ public sealed record CardView
     public bool? Spent { get; init; }
     /// <summary>The number its text prints from the state of the combat (no target picked), for a card in combat that has one.</summary>
     public decimal? Calc { get; init; }
+    /// <summary>How far its numbers other than damage and block have moved from those of a fresh copy at its upgrade
+    /// level, when they have: the Aim a Show Off has gained.</summary>
+    public decimal? Grown { get; init; }
 }
 
 /// <summary>What Tinker Time made of a Mad Science: its card type (Attack, Skill, Power) and its rider effect.</summary>
@@ -153,6 +162,8 @@ public sealed record CreatureView
     public required IReadOnlyList<PowerView> Powers { get; init; }
     /// <summary>What the icons above an enemy show, one that lies dead until it revives included: its revival is a move.</summary>
     public IReadOnlyList<IntentView>? Intents { get; init; }
+    /// <summary>The player's arrows stuck in it, when any, as it shows them.</summary>
+    public int? Arrows { get; init; }
 }
 
 /// <summary>An intent icon and its number, as shown above the monster.</summary>

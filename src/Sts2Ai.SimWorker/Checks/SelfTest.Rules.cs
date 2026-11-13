@@ -195,6 +195,43 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// A character with no arrows of its own has none until a Shoot card enters one of its piles in a combat, which
+    /// brings the first: with the card still in the draw pile the observation shows no arrows at all, with the card in
+    /// hand one held, and a combat built from either shows the same.
+    /// </summary>
+    private static void FirstArrowComesWithAShootCard(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        const string name = "a first arrow comes with a Shoot card";
+        var loadout = new Loadout(Deck: [.. Enumerable.Repeat(new CardSpec("DEFEND_IRONCLAD"), 9), new CardSpec("FOOLISH_SHOT")], Hp: 999, MaxHp: 999);
+        static bool Held(CombatObservation obs) => obs.Hand.Any(c => c.Id == "FOOLISH_SHOT");
+        for (int k = 0; k < 32; k++)
+        {
+            string seed = GameSeeds.MakeSeed(0, k);
+            CombatObservation before, after;
+            using (var session = CombatSession.Start(pump, new CombatSetup("IRONCLAD", pool[0], act, seed, Loadout: loadout), new RandomChoices(new Random(0))))
+            {
+                before = session.Observation();
+                if (Held(before)) continue;
+                for (int turns = 0; turns < 4 && !CombatSession.IsOver && !Held(session.Observation()); turns++) session.EndTurn();
+                after = session.Observation();
+            }
+            var differences = new List<string>();
+            foreach (var obs in new[] { before, after })
+            {
+                using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, seed), new RandomChoices(new Random(0)));
+                differences.AddRange(built.BuildDifferences);
+            }
+            var errors = HeadlessGame.TakeErrors();
+            check(name, before.Player is { Arrows: null, ArrowSlots: null } && Held(after) && after.Player is { Arrows: 1, ArrowSlots: 1 }
+                && differences.Count == 0 && errors.Count == 0,
+                $"{pool[0].Id.Entry} {seed}: before {before.Player.Arrows}/{before.Player.ArrowSlots}, in hand {Held(after)} with {after.Player.Arrows}/{after.Player.ArrowSlots}, " +
+                $"built: {string.Join("; ", differences.Take(4))}, errors {errors.FirstOrDefault()}");
+            return;
+        }
+        check(name, false, "no seed of 32 leaves the Shoot card in the draw pile");
+    }
+
+    /// <summary>
     /// A loadout whose relics give potion slots holds more potions than the base three: the slots are what the game
     /// gives for those relics (3 + Potion Belt's 2 + Alchemical Coffer's 4 + Phial Holster's 1), in a combat and at
     /// the start of a run, where ascension 4 (Tight Belt) takes one away, and the relics' pickups do not run again.

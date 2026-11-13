@@ -4,6 +4,7 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.FoolArrows;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.Entities.Relics;
@@ -11,6 +12,7 @@ using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Events;
+using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
@@ -34,8 +36,11 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// With the enemies' intents in the rounds so far (Harness's record of them, which the player saw), each monster gets
 /// the log of the moves it made (<see cref="MoveLogs"/>), which its choice of the next move can depend on.
 ///
-/// Not reproduced, because the observation doesn't show it: this turn's history (cards played, damage taken, ...),
-/// counters kept inside powers and monsters, how long a card's cost change lasts (a card in hand is taken to be
+/// The player's arrows are placed as shown: those held, and those stuck in each enemy (<see cref="Arrows"/>). The melodies
+/// played this turn come back as card plays in the combat's history (<see cref="Melodies"/>).
+///
+/// Not reproduced, because the observation doesn't show it: the rest of this turn's history (cards played, damage
+/// taken, ...), counters kept inside powers and monsters, how long a card's cost change lasts (a card in hand is taken to be
 /// cheaper this turn or until played, a card elsewhere for the rest of the combat), and which debuffs on the player
 /// skip their next tick.
 /// </summary>
@@ -43,6 +48,7 @@ internal static class CombatBuilder
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly FieldInfo TurnNumber = typeof(PlayerCombatState).GetField("<TurnNumber>k__BackingField", Private)!;
+    private static readonly FieldInfo ArrowList = typeof(PlayerCombatState).GetField("_arrows", Private)!;
     private static readonly FieldInfo EnemyList = typeof(CombatState).GetField("_enemies", Private)!;
     private static readonly FieldInfo AllyList = typeof(CombatState).GetField("_allies", Private)!;
     private static readonly FieldInfo NextCreatureId = typeof(CombatState).GetField("_nextCreatureId", Private)!;
@@ -92,9 +98,13 @@ internal static class CombatBuilder
         Potions(player, obs.Potions);
         Orbs(player, obs.Player.OrbSlots, obs.Player.Orbs);
 
-        // After powers and relics, whose global modifiers show in card costs and keywords.
+        // After powers, relics and this turn's melodies, whose global modifiers show in card costs and keywords.
+        Melodies(st, player, obs.Player.Melodies ?? []);
         Cards(st, player, obs);
         NumberCards(pcs, [.. obs.Hand.Select(c => c.Uid ?? throw new ArgumentException($"card {c.Id} in hand has no uid"))]);
+        // After the powers: an arrow stuck in an enemy is kept by the power that shows it. After the cards: a Shoot card
+        // that enters a pile brings a first arrow to a character with none of its own.
+        Arrows(st, player, obs);
 
         // After the powers, which change the damage an intent shows.
         foreach (var machine in st.Enemies.Select(e => e.Monster?.MoveStateMachine))
@@ -364,6 +374,8 @@ internal static class CombatBuilder
                 power = Models.Find<PowerModel>(view.Id).ToMutable();
                 // The game: a power's target "is used on instanced powers that each target a player".
                 if (power.InstanceType != PowerInstanceType.None && c.Side == CombatSide.Enemy) power.Target = c.CombatState!.Players[0].Creature;
+                // One instanced by who applied it shows only to that player: the player applied the ones seen.
+                if (power.InstanceType == PowerInstanceType.InstancedPerApplier) power.Applier = player.Creature;
                 power.ApplyInternal(c, (view.Stacks ?? view.Amount) is var amount and not 0 ? amount : 1, silent: true);
             }
             if (view.Stacks is int stacks) power.SetAmount(stacks, silent: true);
@@ -381,6 +393,52 @@ internal static class CombatBuilder
         var list = (List<PowerModel>)PowerList.GetValue(c)!;
         var places = Enumerable.Range(0, list.Count).Where(i => list[i].IsVisible).ToList();
         foreach (var (i, power) in places.Zip(wanted)) list[i] = power;
+    }
+
+    /// <summary>
+    /// The player's arrows as the observation shows them: as many as shown, of which those held are ready and each
+    /// other is stuck in an enemy, kept by the power that shows it there. An arrow the player has beyond those shown
+    /// is a destroyed one, which nothing shows. A player the observation gives no arrows at all has none, destroyed
+    /// ones included: one who is not the Fool, before the first Shoot card enters a pile.
+    /// </summary>
+    private static void Arrows(CombatState st, Player player, CombatObservation obs)
+    {
+        var pcs = player.PlayerCombatState!;
+        int shown = obs.Player.ArrowSlots ?? 0, held = obs.Player.Arrows ?? 0;
+        if (obs.Player.ArrowSlots is null) ((List<ArrowSlot>)ArrowList.GetValue(pcs)!).Clear();
+        else while (pcs.Arrows.Count < Math.Max(shown, 1)) pcs.GainArrow();
+        var slots = pcs.Arrows;
+        for (int i = 0; i < slots.Count; i++) slots[i].Status = i < held ? ArrowStatus.Retrieved : i < shown ? ArrowStatus.Away : ArrowStatus.Destroyed;
+        int next = held;
+        foreach (var (enemy, view) in st.Enemies.Zip(obs.Enemies))
+        {
+            if (view.Arrows is not > 0) continue;
+            var impaled = enemy.GetPowerInstances<ImpaledPower>().FirstOrDefault(p => p.Applier == player.Creature)
+                ?? throw new ArgumentException($"{view.Arrows} arrows in {view.Id}, which shows no power that keeps them");
+            for (int k = 0; k < view.Arrows; k++)
+                impaled.AddArrow(next < shown ? slots[next++] : throw new ArgumentException("more arrows stuck in enemies than the player shows away"));
+        }
+        if (next != shown) throw new ArgumentException($"{shown - next} arrows away that no enemy shows");
+    }
+
+    /// <summary>
+    /// The melodies played this turn, which the game reads from the combat's history: each comes back as the play of a
+    /// card that makes it and no other, the player's and outside every pile.
+    /// </summary>
+    private static void Melodies(CombatState st, Player player, IReadOnlyList<string> melodies)
+    {
+        foreach (var melody in melodies)
+        {
+            var tag = Enum.Parse<CardTag>(melody);
+            var model = ModelDb.AllCards.OrderBy(c => c.Id.Entry, StringComparer.Ordinal).First(c => c.Tags.SequenceEqual([tag]));
+            var play = new CardPlay
+            {
+                Card = Create(st, player, new CardSpec(model.Id.Entry)), Player = player, Target = null, ResultPile = PileType.Discard,
+                Resources = default, IsAutoPlay = false, PlayIndex = 0, PlayCount = 1,
+            };
+            CombatManager.Instance.History.CardPlayStarted(st, play);
+            CombatManager.Instance.History.CardPlayFinished(st, play);
+        }
     }
 
     private static readonly PropertyInfo ToothCards = typeof(PaelsTooth).GetProperty(nameof(PaelsTooth.SerializableCards))!;

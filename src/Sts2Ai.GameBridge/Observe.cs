@@ -1,8 +1,12 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Combat.History;
+using MegaCrit.Sts2.Core.Combat.History.Entries;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Enchantments;
+using MegaCrit.Sts2.Core.Entities.FoolArrows;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -16,6 +20,7 @@ using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves.Runs;
 using MegaCrit.Sts2.Core.ValueProps;
 using Sts2Ai.Protocol;
 
@@ -80,6 +85,7 @@ public static class Observe
         var pcs = player.PlayerCombatState ?? throw new InvalidOperationException("player has no combat state");
         var me = player.Creature;
         Creature[] targets = [me];
+        var arrows = pcs.Arrows;
         return new CombatObservation
         {
             Encounter = st.Encounter?.Id.Entry,
@@ -101,6 +107,9 @@ public static class Observe
                 Powers = Powers(me),
                 OrbSlots = pcs.OrbQueue.Capacity,
                 Orbs = [.. pcs.OrbQueue.Orbs.Select(o => new OrbView(o.Id.Entry, o.PassiveVal, o.EvokeVal))],
+                Arrows = arrows.Count > 0 ? arrows.Count(a => a.Status == ArrowStatus.Retrieved) : null,
+                ArrowSlots = arrows.Count > 0 ? arrows.Count(a => a.Status != ArrowStatus.Destroyed) : null,
+                Melodies = Melodies(st, player),
             },
             Hand = [.. pcs.Hand.Cards.Select(c => Card(c, withUid: true))],
             Draw = [.. pcs.DrawPile.Cards.Select(c => Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)],
@@ -109,7 +118,7 @@ public static class Observe
             Potions = [.. player.PotionSlots.Select(p => p?.Id.Entry)],
             Relics = [.. player.Relics.Select(Relic)],
             Allies = [.. st.Allies.Where(c => c != me).Select(c => Creature(c, targets))],
-            Enemies = [.. st.Enemies.Select(c => Creature(c, targets))],
+            Enemies = [.. st.Enemies.Select(c => Creature(c, targets) with { Arrows = Stuck(c, me) })],
         };
     }
 
@@ -136,7 +145,50 @@ public static class Observe
             Replay = card.GetEnchantedReplayCount() is > 0 and var replay ? replay : null,
             Spent = card.Enchantment?.Status == EnchantmentStatus.Disabled ? true : null,
             Calc = card.CombatState != null ? card.DynamicVars.Values.OfType<CalculatedVar>().FirstOrDefault()?.Calculate(null) : null,
+            Grown = Grown(card),
         };
+    }
+
+    private static readonly CardTag[] MelodyTags = [CardTag.Wah, CardTag.Cho, CardTag.Ki];
+    private static readonly ConcurrentDictionary<(ModelId Id, int Up), Dictionary<string, decimal>> FreshVars = new();
+
+    /// <summary>The melodies the player's card plays of this turn made, as the game counts them (<c>MelodyCmd.PlayedThisTurn</c>).
+    /// The history is in order, so only this turn's end of it is read.</summary>
+    private static List<string>? Melodies(CombatState st, Player player)
+    {
+        if (CombatManager.Instance.History.Entries is not IReadOnlyList<CombatHistoryEntry> entries) throw new InvalidOperationException("the combat history is no list");
+        int played = 0;
+        for (int i = entries.Count - 1; i >= 0 && entries[i].HappenedThisTurn(st); i--)
+        {
+            if (entries[i] is not CardPlayFinishedEntry play || play.CardPlay.Player != player) continue;
+            for (int t = 0; t < MelodyTags.Length; t++)
+                if (play.CardPlay.Card.Tags.Contains(MelodyTags[t])) played |= 1 << t;
+        }
+        return played == 0 ? null : [.. MelodyTags.Where((_, t) => (played >> t & 1) == 1).Select(t => t.ToString())];
+    }
+
+    /// <summary>How many of the player's arrows are stuck in <paramref name="c"/>.</summary>
+    private static int? Stuck(Creature c, Creature me)
+    {
+        int stuck = 0;
+        foreach (var power in c.Powers)
+            if (power is ImpaledPower impaled && impaled.Applier == me) stuck += impaled.Arrows.Count;
+        return stuck > 0 ? stuck : null;
+    }
+
+    /// <summary>How far the card's numbers other than its damage and block, which are read as they are, have moved from
+    /// those of a fresh copy at its upgrade level. A calculated number is left out as in <see cref="Vars"/>.</summary>
+    private static decimal? Grown(CardModel card)
+    {
+        var fresh = FreshVars.GetOrAdd((card.Id, card.CurrentUpgradeLevel), static key =>
+        {
+            var copy = CardModel.FromSerializable(new SerializableCard { Id = key.Id, CurrentUpgradeLevel = key.Up, FloorAddedToDeck = 1 });
+            return copy.DynamicVars.Where(kv => kv.Value is not CalculatedVar).ToDictionary(kv => kv.Key, kv => kv.Value.BaseValue);
+        });
+        decimal moved = 0;
+        foreach (var (name, v) in card.DynamicVars)
+            if (v is not CalculatedVar && name is not ("Damage" or "OstyDamage" or "Block") && fresh.TryGetValue(name, out decimal was)) moved += v.BaseValue - was;
+        return moved == 0 ? null : moved;
     }
 
     private static readonly FieldInfo LocalModifiers = typeof(CardEnergyCost).GetField("_localModifiers", BindingFlags.Instance | BindingFlags.NonPublic)!;

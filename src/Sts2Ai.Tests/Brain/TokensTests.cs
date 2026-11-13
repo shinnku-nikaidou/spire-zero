@@ -47,7 +47,7 @@ public class TokensTests
     public void ARunsCardsAreIdsAndTheirModifiersAmountsAndItsRelicsPotionsAndContextIdsOnly()
     {
         var t = Tokens(Run());
-        Same("""[["STRIKE",3,["enchant:SHARP"],[0.2],[0,0]],["NEUTRALIZE",0,["affliction:HEX"],[0.1],[0,0]]]""", t["cards"]);
+        Same("""[["STRIKE",3,["enchant:SHARP"],[0.2],[0,0,0]],["NEUTRALIZE",0,["affliction:HEX"],[0.1],[0,0,0]]]""", t["cards"]);
         Same("""["RING","VASE:used"]""", t["relics"]);
         Same("""["FIRE"]""", t["potions"]);
         Same("""["character:SILENT","act:OVERGROWTH","boss:B","ancient:NEOW"]""", t["context"]);
@@ -75,14 +75,16 @@ public class TokensTests
              {"id":"DEFEND_SILENT","enchant":{"id":"GOOPY","amount":5},"keywords":["Exhaust"],"vars":{"Block":5}},
              {"id":"THE_SCYTHE","vars":{"Damage":23,"Increase":5}},
              {"id":"GENETIC_ALGORITHM","up":1,"vars":{"Block":260}},
-             {"id":"FETCH","vars":{"OstyDamage":6}}]
+             {"id":"FETCH","vars":{"OstyDamage":6}},
+             {"id":"SHOW_OFF","vars":{"AimPower":9,"BaseAim":5,"ShowOffPower":2},"grown":4}]
             """));
         Same("""
-            [["MAD_SCIENCE",0,["keyword:Ethereal","tinker:Skill","rider:Wisdom"],[],[0,0]],
-             ["DEFEND_SILENT",0,["enchant:GOOPY","keyword:Exhaust"],[0.5],[0,0.25]],
-             ["THE_SCYTHE",0,[],[],[1.15,0]],
-             ["GENETIC_ALGORITHM",1,[],[],[0,10]],
-             ["FETCH",0,[],[],[0.3,0]]]
+            [["MAD_SCIENCE",0,["keyword:Ethereal","tinker:Skill","rider:Wisdom"],[],[0,0,0]],
+             ["DEFEND_SILENT",0,["enchant:GOOPY","keyword:Exhaust"],[0.5],[0,0.25,0]],
+             ["THE_SCYTHE",0,[],[],[1.15,0,0]],
+             ["GENETIC_ALGORITHM",1,[],[],[0,10,0]],
+             ["FETCH",0,[],[],[0.3,0,0]],
+             ["SHOW_OFF",0,[],[],[0,0,0.4]]]
             """, t["cards"]);
     }
 
@@ -119,8 +121,8 @@ public class TokensTests
     {
         var t = Tokens(Obs());
         Same("""
-            [["STRIKE",3,0,["enchant:SHARP"],0.3333333333333333,[0.2],0.3,[0,0,0,0,0]],
-             ["DEFEND",0,1,[],0.3333333333333333,[],0,[0.25,0,0,0,0]]]
+            [["STRIKE",3,0,["enchant:SHARP"],0.3333333333333333,[0.2],0.3,[0,0,0,0,0,0]],
+             ["DEFEND",0,1,[],0.3333333333333333,[],0,[0.25,0,0,0,0,0]]]
             """, t["cards"]);
         Same("""["RING","VASE:used"]""", t["relics"]);
         Same("""["Normal","Normal"]""", t["relic_status"]);
@@ -136,14 +138,15 @@ public class TokensTests
             [{"id":"MAD_SCIENCE","cost":1,"stars":2,"keywords":["Exhaust","Retain"],"calc":12,"replay":1,
               "tinker":{"type":"Attack","rider":"Violence"},"affliction":{"id":"HEXED","amount":1}},
              {"id":"PUNCH_DAGGER","cost":1,"enchant":{"id":"MOMENTUM","amount":2,"extra":4},"spent":true,"this_turn":["Sly"]},
-             {"id":"BONE_SHARDS","cost":1,"vars":{"OstyDamage":9}}]
+             {"id":"BONE_SHARDS","cost":1,"vars":{"OstyDamage":9},"grown":4}]
             """))["cards"]!;
         Same("""["affliction:HEXED","keyword:Exhaust","keyword:Retain","tinker:Attack","rider:Violence"]""", cards[0]![3]);
         Same("[0.1]", cards[0]![5]);
-        Same("[0,0.6,0.5,0.4,0]", cards[0]![7]);
+        Same("[0,0.6,0.5,0.4,0,0]", cards[0]![7]);
         Same("""["enchant:MOMENTUM","keyword:Sly","spent"]""", cards[1]![3]);
-        Same("[0,0,0,0,0.2]", cards[1]![7]);
+        Same("[0,0,0,0,0.2,0]", cards[1]![7]);
         Assert.Equal(0.45, (double)cards[2]![6]!);
+        Same("[0,0,0,0,0,0.4]", cards[2]![7]);
     }
 
     [Fact]
@@ -165,9 +168,24 @@ public class TokensTests
         // One lying dead is read: it may revive.
         Assert.Equal(2, enemies.Count);
         Assert.Equal("M", (string)enemies[0]!["id"]!);
-        Same("[0.6,0.12,0.2,0,0]", enemies[0]!["scalars"]);
+        Same("[0.6,0.12,0.2,0,0,0]", enemies[0]!["scalars"]);
         Same("""[[["Attack",0.6,0.3]]]""", enemies[0]!["slots"]);
-        Same("[0,0,0.2,0,0]", enemies[1]!["scalars"]);
+        Same("[0,0,0.2,0,0,0]", enemies[1]!["scalars"]);
+        Same("[0,0,0,0.3,0,0]", t["extra"]);
+    }
+
+    [Fact]
+    public void ArrowsAreThoseHeldThoseShownAndThoseStuckInEachEnemy()
+    {
+        var obs = Obs();
+        var t = Tokens(obs with
+        {
+            Player = obs.Player with { Arrows = 1, ArrowSlots = 3 },
+            Enemies = [obs.Enemies[0] with { Arrows = 2 }, .. obs.Enemies.Skip(1)],
+        });
+        Same("[0,0,0,0.3,0.3333333333333333,1]", t["extra"]);
+        Assert.Equal(2 / 3.0, (double)t["enemies"]![0]!["scalars"]![5]!);
+        Assert.Equal(0, (double)t["enemies"]![1]!["scalars"]![5]!);
     }
 
     [Fact]

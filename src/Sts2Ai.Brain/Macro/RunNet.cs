@@ -22,8 +22,8 @@ public sealed record NetState(IReadOnlyList<string> Names, IReadOnlyList<double>
 
 /// <summary>A card as the net reads it: its id, upgrade level (capped at <see cref="RunNet.MaxUp"/>), modifiers (its
 /// enchantment and affliction first, as <paramref name="Amounts"/>), its enchantment's and affliction's amounts / 10, and
-/// its damage / 20 and block / 20.</summary>
-public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers, IReadOnlyList<double> Amounts, double Damage, double Block);
+/// its damage / 20, its block / 20 and how far its other numbers have grown / 10 (Show Off's Aim).</summary>
+public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifiers, IReadOnlyList<double> Amounts, double Damage, double Block, double Grown);
 
 /// <summary>
 /// A run as V reads it, but for its numbers (<see cref="RunNet.State"/>): ids, and numbers
@@ -42,7 +42,7 @@ public sealed record RunTokens(
     IReadOnlyList<string> Held, IReadOnlyList<string> Potions, IReadOnlyList<string> Context, IReadOnlyList<string> Map)
 {
     /// <summary>The tokens as the trainer reads them (<c>learn/v/net.py</c>'s Batch): an object by the names above in snake
-    /// case; a card an array of its id, upgrade level, modifiers, amounts, and its damage and block as one array.</summary>
+    /// case; a card an array of its id, upgrade level, modifiers, amounts, and its damage, block and growth as one array.</summary>
     public void Write(Utf8JsonWriter json)
     {
         json.WriteStartObject();
@@ -54,7 +54,7 @@ public sealed record RunTokens(
             json.WriteNumberValue(c.Up);
             TokenJson.Strings(json, c.Modifiers);
             TokenJson.Numbers(json, c.Amounts);
-            TokenJson.Numbers(json, [c.Damage, c.Block]);
+            TokenJson.Numbers(json, [c.Damage, c.Block, c.Grown]);
             json.WriteEndArray();
         }
         json.WriteEndArray();
@@ -140,7 +140,7 @@ public sealed class RunNet : IRunValue, IDisposable
 
     /// <summary>
     /// The net's tokens of a run: each card with its modifiers (enchantment, affliction, keywords, what Tinker Time made
-    /// of it), its modifiers' amounts, its damage (Osty's for an Osty attack) and block, which only its own id's row
+    /// of it), its modifiers' amounts, its damage (Osty's for an Osty attack), block and growth, which only its own id's row
     /// reads; each relic, with ":used" once used up, its numbers and its status; each potion; the context: character,
     /// act, boss(es) and the act's ancient; the map (<see cref="MapTokens"/>); and the cards the relics keep (Pael's
     /// Tooth's). Nothing is computed from the deck: what matters in it is the net's to learn.
@@ -166,7 +166,7 @@ public sealed class RunNet : IRunValue, IDisposable
             decimal damage = vars.TryGetValue("Damage", out var d) ? d : vars.GetValueOrDefault("OstyDamage");
             return new(card.Id, Math.Min(card.Up ?? 0, MaxUp), Modifiers(card),
                 [.. new[] { card.Enchant, card.Affliction }.OfType<ModifierView>().Select(m => Capped(m.Amount / 10.0))],
-                Capped((double)damage / 20.0), Capped((double)vars.GetValueOrDefault("Block") / 20.0));
+                Capped((double)damage / 20.0), Capped((double)vars.GetValueOrDefault("Block") / 20.0), Capped((double)(card.Grown ?? 0) / 10.0));
         }
 
         static IReadOnlyList<string> Modifiers(CardView card)
@@ -260,7 +260,7 @@ public sealed class RunNet : IRunValue, IDisposable
         var mods = new DenseTensor<long>([1, n, m]);
         var modMask = new DenseTensor<float>([1, n, m]);
         var modAmounts = new DenseTensor<float>([1, n, m]);
-        var numbers = new DenseTensor<float>([1, n, 2]);
+        var numbers = new DenseTensor<float>([1, n, 3]);
         for (int k = 0; k < tokens.Cards.Count; k++)
         {
             var card = tokens.Cards[k];
@@ -275,6 +275,7 @@ public sealed class RunNet : IRunValue, IDisposable
             for (int j = 0; j < card.Amounts.Count; j++) modAmounts[0, k, j] = (float)card.Amounts[j];
             numbers[0, k, 0] = (float)card.Damage;
             numbers[0, k, 1] = (float)card.Block;
+            numbers[0, k, 2] = (float)card.Grown;
         }
         var inputs = new List<NamedOnnxValue>
         {
