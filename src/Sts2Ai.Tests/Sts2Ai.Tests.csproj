@@ -3,6 +3,7 @@
     Unit tests of the decision side: the brain's own logic and Harness's routing and evaluation. They reference no game
     assembly, so they build and run on a machine without the game. The sim's own unit tests are in
     Sts2Ai.SimWorker.Tests; whatever needs a booted game is checked by the sim itself (selftest, run -check).
+    The tests of the engine's C# side run against a stand-in library that they build with rustc, the engine's toolchain.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -11,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Sts2Ai.Harness/Sts2Ai.Harness.csproj" />
+    <ProjectReference Include="../Sts2Ai.Engine/Sts2Ai.Engine.csproj" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />

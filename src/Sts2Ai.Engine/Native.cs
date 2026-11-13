@@ -1,0 +1,106 @@
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace Sts2Ai.Engine;
+
+/// <summary>Where the engine's library is: the one place that says.</summary>
+public static class EngineLibrary
+{
+    /// <summary>The variable that names the library file, for a build that does not sit beside the program (a
+    /// developer's <c>engine/target/release</c>).</summary>
+    public const string Variable = "STS2AI_ENGINE_LIB";
+
+    /// <summary>The library file: the one <see cref="Variable"/> names, or else the one beside the program, under the
+    /// platform's name for it.</summary>
+    public static string Path { get; } = Environment.GetEnvironmentVariable(Variable) ?? System.IO.Path.Combine(AppContext.BaseDirectory,
+        OperatingSystem.IsWindows() ? "sts2ai_engine.dll" : OperatingSystem.IsMacOS() ? "libsts2ai_engine.dylib" : "libsts2ai_engine.so");
+}
+
+/// <summary>The engine failed: what it said (<c>sz_last_error</c>).</summary>
+public sealed class EngineException(string message) : Exception(message);
+
+/// <summary>
+/// The C ABI of <c>libsts2ai_engine</c>, as engine/DESIGN.md gives it. A world is an opaque 64-bit handle, passed here
+/// as a pointer-sized one, which is the same thing on the 64-bit platforms the engine is built for. A call on one world
+/// never touches another, so different worlds may be used from different threads; one world from one thread at a time.
+/// </summary>
+internal static unsafe partial class Native
+{
+    private const string Library = "sts2ai_engine";
+
+    static Native()
+    {
+        if (nint.Size != 8) throw new PlatformNotSupportedException("the engine's handles are 64 bits wide");
+        NativeLibrary.SetDllImportResolver(typeof(Native).Assembly, (name, _, _) => name == Library ? NativeLibrary.Load(EngineLibrary.Path) : 0);
+    }
+
+    /// <summary><c>sz_buf</c>: bytes the engine allocated, to be given back with <see cref="sz_buf_free"/>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Buf
+    {
+        public byte* Ptr;
+        public nuint Len;
+    }
+
+    [LibraryImport(Library)] internal static partial WorldHandle sz_world_import(byte* json, nuint len);
+    [LibraryImport(Library)] internal static partial WorldHandle sz_world_clone(WorldHandle world);
+    [LibraryImport(Library)] internal static partial void sz_world_free(nint world);
+    [LibraryImport(Library)] internal static partial int sz_world_apply(WorldHandle world, byte* action, nuint len);
+    [LibraryImport(Library)] internal static partial int sz_world_status(WorldHandle world);
+    [LibraryImport(Library)] internal static partial int sz_world_legal(WorldHandle world, Buf* result);
+    [LibraryImport(Library)] internal static partial int sz_world_observe(WorldHandle world, Buf* result);
+    [LibraryImport(Library)] internal static partial int sz_world_run(WorldHandle world, Buf* result);
+    [LibraryImport(Library)] internal static partial ulong sz_world_hidden_key(WorldHandle world);
+    [LibraryImport(Library)] internal static partial ulong sz_world_state_key(WorldHandle world);
+    [LibraryImport(Library)] internal static partial void sz_buf_free(Buf buf);
+    [LibraryImport(Library)] internal static partial int sz_last_error(Buf* result);
+
+    /// <summary>The bytes of a buffer the engine filled, which is given back.</summary>
+    internal static byte[] Take(Buf buf)
+    {
+        try
+        {
+            return new ReadOnlySpan<byte>(buf.Ptr, checked((int)buf.Len)).ToArray();
+        }
+        finally
+        {
+            sz_buf_free(buf);
+        }
+    }
+
+    /// <summary>What the engine said of the call that just failed on this thread.</summary>
+    internal static EngineException Failed(string call)
+    {
+        Buf buf;
+        string said = sz_last_error(&buf) == 0 ? Encoding.UTF8.GetString(Take(buf)) : "";
+        return new EngineException(said.Length > 0 ? $"{call}: {said}" : $"{call} failed, and the engine does not say why");
+    }
+}
+
+/// <summary>
+/// A native world, freed when its last user lets go of it or, for one nobody disposed (a snapshot that search dropped),
+/// when the collector finds it. The collector cannot see the native memory behind a handle, so each one tells it how
+/// much that is, about: the size of the export the world came from.
+/// </summary>
+internal sealed class WorldHandle : SafeHandle
+{
+    private long _weight;
+
+    public WorldHandle() : base(0, ownsHandle: true) { }
+
+    public override bool IsInvalid => handle == 0;
+
+    /// <summary>Tells the collector this world holds about <paramref name="bytes"/> of native memory.</summary>
+    public WorldHandle Weighing(long bytes)
+    {
+        if (bytes > 0) GC.AddMemoryPressure(_weight = bytes);
+        return this;
+    }
+
+    protected override bool ReleaseHandle()
+    {
+        Native.sz_world_free(handle);
+        if (_weight > 0) GC.RemoveMemoryPressure(_weight);
+        return true;
+    }
+}

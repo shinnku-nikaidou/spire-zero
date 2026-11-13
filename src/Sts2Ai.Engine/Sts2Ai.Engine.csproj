@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The C# side of the combat engine (engine/DESIGN.md): the C ABI of libsts2ai_engine, and a world of it as search
+    uses one. No game assembly may be reachable from here: the engine takes a combat in as bytes, and the bridge writes
+    them (GameBridge's EngineExport).
+  -->
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Sts2Ai.Protocol/Sts2Ai.Protocol.csproj" />
+  </ItemGroup>
+</Project>
