@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    The decision side around the brains: runs their searches in simulator worker processes. Like Sts2Ai.Brain, it
-    sees the game only through Sts2Ai.Protocol (SimWorker's selftest checks the compiled references); it starts
-    workers by their executable, without referencing them.
+    The decision side around the brains: runs their searches in simulator worker processes, or in the engine
+    (Sts2Ai.Engine, whose native library is loaded when a world is first made: a host that plans on the node's clone
+    needs none). Like Sts2Ai.Brain, it sees the game only through Sts2Ai.Protocol (SimWorker's selftest checks the
+    compiled references); it starts workers by their executable, without referencing them.
   -->
   <ItemGroup>
     <ProjectReference Include="../Sts2Ai.Brain/Sts2Ai.Brain.csproj" />
+    <ProjectReference Include="../Sts2Ai.Engine/Sts2Ai.Engine.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Namespaces follow folders; these are in scope in every file. -->

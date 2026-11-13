@@ -3,6 +3,7 @@
 //!  - the import's bytes are the encounter's id, and "refuse" cannot be imported;
 //!  - "play:9" fails (no such card); "play:7" wins, "potion:0" loses; each "end_turn" is a round;
 //!  - each action costs 1 HP of 70, down to 0;
+//!  - a combat called "LONG" is won by "play:7" from round 3 on only; before, the play is a step like any other;
 //!  - a combat called "keyless" has no keys: both are 0, with an error;
 //!  - every call on a world forgets the thread's last error first, as the engine does.
 //! `sz_test_live` counts the worlds not yet freed.
@@ -27,8 +28,21 @@ impl World {
         1 + self.steps.iter().filter(|s| *s == "end_turn").count()
     }
 
+    /// Whether the combat is won: by "play:7", in "LONG" by one played in round 3 or later.
+    fn won(&self) -> bool {
+        let mut round = 1;
+        for step in &self.steps {
+            if step == "end_turn" {
+                round += 1;
+            } else if step == "play:7" && (self.encounter != "LONG" || round >= 3) {
+                return true;
+            }
+        }
+        false
+    }
+
     fn status(&self) -> i32 {
-        if self.steps.iter().any(|s| s == "play:7") {
+        if self.won() {
             1
         } else if self.steps.iter().any(|s| s == "potion:0") {
             2
@@ -143,8 +157,9 @@ pub unsafe extern "C" fn sz_world_observe(id: u64, out: *mut Buf) -> i32 {
         format!(
             concat!(
                 r#"{{"encounter":"{}","act":0,"ascension":0,"round":{},"player":{{"uid":1,"character":"SILENT","hp":{},"max_hp":70,"#,
-                r#""block":0,"energy":3,"max_energy":3,"stars":0,"gold":99,"powers":[],"orb_slots":0,"orbs":[]}},"hand":[],"draw":[],"#,
-                r#""discard":[],"exhaust":[],"potions":[null],"relics":[],"allies":[],"enemies":[]}}"#
+                r#""block":0,"energy":3,"max_energy":3,"stars":0,"gold":99,"powers":[],"orb_slots":0,"orbs":[]}},"#,
+                r#""hand":[{{"id":"STRIKE_SILENT","uid":7}}],"draw":[],"#,
+                r#""discard":[],"exhaust":[],"potions":["FIRE_POTION"],"relics":[],"allies":[],"enemies":[]}}"#
             ),
             w.encounter,
             w.round(),

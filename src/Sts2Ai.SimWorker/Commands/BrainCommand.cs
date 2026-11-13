@@ -35,6 +35,7 @@ internal static class BrainCommand
         var wireOut = Console.OpenStandardOutput();
         Console.SetOut(Console.Error);
         var (champion, sl) = Champions(r);
+        if (champion.Engine || sl.Engine) throw new CliException("--combat-world engine needs the game in the run's own process: a host over the wire sends no live combat");
 
         using var workerPool = champion.Pool() ?? sl.Pool();
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;

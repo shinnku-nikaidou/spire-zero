@@ -48,7 +48,16 @@ public sealed class FakeEngine : IDisposable
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 }
 
-public sealed class EngineWorldTests(FakeEngine engine) : IClassFixture<FakeEngine>
+/// <summary>The tests that use the stand-in engine: one library for all of them, since a process loads the engine once,
+/// and one test at a time, since some count the library's live worlds.</summary>
+[CollectionDefinition(Name)]
+public sealed class EngineTests : ICollectionFixture<FakeEngine>
+{
+    public const string Name = "engine";
+}
+
+[Collection(EngineTests.Name)]
+public sealed class EngineWorldTests(FakeEngine engine)
 {
     private static readonly RunView Around = new()
     {

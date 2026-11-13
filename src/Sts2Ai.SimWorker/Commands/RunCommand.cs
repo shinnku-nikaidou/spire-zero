@@ -64,6 +64,7 @@ internal static class RunCommand
         bool log = check || logFile != null;
         var champion = Champion.Read(r);
         if (champion.Policy == "plan" && env != PlayEnvironment.SL) throw new CliException("plan plays in SL only (--env SL)");
+        if (champion.Engine && check) throw new CliException("--check plays each seed again over the wire, where no live combat reaches the engine: not with --combat-world engine");
         using var workerPool = champion.Pool();
         var harness = champion.Harness(workerPool, log);
         // --check plays each seed again over the wire, to a brain server in this process with the same champion, whose
@@ -116,7 +117,7 @@ internal static class RunCommand
                 first.Trace[k] != second.Trace[k] || first.Observations.ElementAtOrDefault(k) != second.Observations.ElementAtOrDefault(k), -1);
             bool same = first.Trace.Count == second.Trace.Count && first.Summary == second.Summary &&
                 first.MapHashes.SequenceEqual(second.MapHashes) && first.Observations.SequenceEqual(second.Observations) &&
-                ProtocolJson.Serialize(first.Record) == ProtocolJson.Serialize(second.Record);
+                ProtocolJson.Serialize(first.Record with { Search = null }) == ProtocolJson.Serialize(second.Record);
             static string Timeless(DecisionEntry e) => ProtocolJson.Serialize(e with { ElapsedMs = 0 });
             bool sameLog = first.Log.Select(Timeless).SequenceEqual(secondLog.Select(Timeless));
             if (diverged < 0 && same && sameLog) continue;
@@ -277,7 +278,7 @@ internal static class RunCommand
             var record = new RunRecord(config, setup.Seed, setup.Character, setup.Ascension, outcome,
                 session?.Run.CurrentActIndex ?? 0, session?.Run.TotalFloor ?? 0, player?.Creature.CurrentHp ?? 0, player?.Creature.MaxHp ?? 0,
                 player?.Gold ?? 0, session?.Combats.ToList() ?? [], surfaces, new Dictionary<string, int>(brain?.Brains ?? new Dictionary<string, int>()),
-                session?.CardRewards ?? 0, session?.CardRewardsSkipped ?? 0, 0, failure, 0, hello.Run.RunId);
+                session?.CardRewards ?? 0, session?.CardRewardsSkipped ?? 0, 0, failure, 0, hello.Run.RunId, brain?.Search);
             return new(outcome, session?.Summary() ?? "", steps, session?.MapHashes.ToList() ?? [], observations, brain?.Log.ToList() ?? [], failure,
                 HeadlessGame.TakeErrors(), record, nodes, brain?.Replans ?? 0);
         }

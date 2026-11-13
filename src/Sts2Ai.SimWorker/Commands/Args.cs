@@ -214,6 +214,10 @@ internal sealed class ChampionArgs(bool file)
     private readonly BudgetArgs _budget = new();
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's and plan's search worker processes (default: one per world, --worlds)");
     private readonly LeafArgs _leaf = new();
+    private readonly Option<string> _world = Opt.Of("--combat-world", "replay",
+            "the world plan searches in: replay, the node's clone in the worker processes; engine, the Rust engine in threads of this process, which needs the " +
+            "game in the run's own process (run, not brain). The champion is the same one on both")
+        .AcceptOnlyFromAmong("replay", "engine");
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone")
         .AcceptOnlyFromAmong("screen", "clone");
@@ -238,7 +242,7 @@ internal sealed class ChampionArgs(bool file)
     }
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore, _macroExplore];
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _world, _afterstates, .. _leaf.Options, _explore, _macroExplore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -261,6 +265,8 @@ internal sealed class ChampionArgs(bool file)
         if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
         if ((leaf.Value != null) != (macro == "l0" || leaf.Net != null)) throw new CliException("--value goes with --macro l0 or --combat-net, which need it");
         if (clone && leaf.Net == null) throw new CliException("--afterstates clone needs --combat-net: a fight an option starts is valued by the combat net");
-        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore);
+        bool engine = r.GetValue(_world) == "engine";
+        if (engine && policy != "plan") throw new CliException("--combat-world is plan's; it needs --policy plan");
+        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore, engine);
     }
 }
