@@ -13,6 +13,7 @@ namespace Sts2Ai.SimWorker.Commands;
 /// held against the real game at every decision. One JSON line per combat (--out), and a summary: the differences by
 /// the first path that differs and by what the action acts with, and for every id of the game how often it was met and
 /// how often it differed (--coverage has the whole table). Exit code 0: every combat checked, no difference.
+/// With --runs the combats are those of whole runs (<see cref="RunLockstep"/>), each with the run around it.
 /// </summary>
 internal static class ParityCommand
 {
@@ -23,6 +24,9 @@ internal static class ParityCommand
     private static readonly Option<string?> Dump = Opt.Maybe<string?>("--dump",
         "a folder that gets every combat as files, for the engine's own tests: at each decision the combat as the engine imports it, what the game shows " +
         "and the action it was given (the folder's README.md has the layout)");
+    private static readonly Option<int?> Runs = Opt.Maybe<int?>("--runs",
+        "whole runs in place of the sweep's combats: this many for every character and ascension, played by the same random player, every combat of a run " +
+        "checked as a combat of the sweep is, and the run around it compared too. The player dies early at a character's own HP: --hp and --max-hp let it go on");
     private static readonly Option<string> Character = Opt.Of("--character", "all", "the characters, such as SILENT,FOOL, or all");
     private static readonly Option<string> Asc = Opt.Of("--asc", "0,10", "the ascension levels");
     private static readonly Option<string> Encounter = Opt.Of("--encounter", "all", "the encounters, such as A,B, or all: every encounter of the game, the ones list shows and the events' besides");
@@ -50,7 +54,7 @@ internal static class ParityCommand
     };
 
     /// <summary>The options a part of the sweep takes from the whole: all but where the output goes and who shares it.</summary>
-    private static readonly Option[] Shared = [World, Dump, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
+    private static readonly Option[] Shared = [World, Dump, Runs, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
 
     public static Command Command()
     {
@@ -81,10 +85,20 @@ internal static class ParityCommand
         var given = Loadout.Parse(r.GetValue(Deck), r.GetValue(Relics), r.GetValue(Potions), r.GetValue(Hp), r.GetValue(MaxHp));
         int decks = r.GetValue(Decks);
         if (decks < 1) throw new CliException("--decks is at least 1");
-        var sweep = new Sweep(characters, ascensions, encounters, decks, r.GetValue(Seed), given == new Loadout() ? null : given);
+        var loadout = given == new Loadout() ? null : given;
+        var sweep = new Sweep(characters, ascensions, encounters, decks, r.GetValue(Seed), loadout);
+        RunSweep? runs = null;
+        if (r.GetValue(Runs) is { } each)
+        {
+            if (each < 1) throw new CliException("--runs is at least 1");
+            if (r.GetValue(Encounter) is not "all" || r.GetResult(Decks) is { Implicit: false }) throw new CliException("--runs plays whole runs: not with --encounter or --decks");
+            runs = new RunSweep(characters, ascensions, each, r.GetValue(Seed), loadout);
+        }
+        int count = runs?.Count ?? sweep.Count;
+        string unit = runs == null ? "combats" : "runs";
 
         int start = r.GetValue(Start);
-        int end = Math.Min(sweep.Count, start + (r.GetValue(N) ?? sweep.Count));
+        int end = Math.Min(count, start + (r.GetValue(N) ?? count));
         var (part, parts) = (0, 1);
         if (r.GetValue(Part) is { } text)
             (part, parts) = text.Split('/') is [var k, var n] && int.TryParse(k, out int kk) && int.TryParse(n, out int nn) && kk >= 0 && kk < nn ? (kk, nn)
@@ -99,15 +113,17 @@ internal static class ParityCommand
         var output = toStdout ? Console.Out : file;
         var clock = Stopwatch.StartNew();
         long reported = 0;
+        var done = new HashSet<int>();
         void Take(ParityLine line)
         {
             lock (summary)
             {
                 summary.Add(line);
+                done.Add(line.I);
                 output?.WriteLine(ProtocolJson.Serialize(line));
                 if (toStdout || clock.ElapsedMilliseconds - reported < 30_000) return;
                 reported = clock.ElapsedMilliseconds;
-                Logs.Sim.LogInformation("parity: {Done} of {All} combats, {Seconds:F0} s", summary.Combats, indexes.Count, clock.Elapsed.TotalSeconds);
+                Logs.Sim.LogInformation("parity: {Done} of {All} {Unit}, {Seconds:F0} s", done.Count, indexes.Count, unit, clock.Elapsed.TotalSeconds);
             }
         }
 
@@ -123,9 +139,24 @@ internal static class ParityCommand
             // The engine's schema is read once; each combat has its own maker of engine worlds, which counts what it wrote.
             var export = world == "engine" || dumped != null ? new EngineExport(EngineSchema.Load(EngineLibrary.SchemaPath)) : null;
             var dump = dumped == null ? null : new CombatDump(export!, dumped);
-            ISecondWorlds same = world == "none" ? new NoWorlds() : new ReplayWorlds(pump, determinized: world == "determinized");
-            foreach (int i in indexes)
-                Take(Play(pump, sweep[i], world == "engine" ? new EngineWorlds(export!) : same, dump, r.GetValue(Continue), r.GetValue(Full)));
+            if (runs != null)
+            {
+                IRunWorlds same = world switch
+                {
+                    "none" => new NoWorlds(),
+                    "determinized" => throw new CliException("--world determinized is a world of single combats: not with --runs"),
+                    _ => new NodeWorlds(pump),
+                };
+                foreach (int i in indexes)
+                    foreach (var line in PlayRun(pump, runs[i], world == "engine" ? new EngineWorlds(export!) : same, dump, r.GetValue(Continue), r.GetValue(Full)))
+                        Take(line);
+            }
+            else
+            {
+                ISecondWorlds same = world == "none" ? new NoWorlds() : new ReplayWorlds(pump, determinized: world == "determinized");
+                foreach (int i in indexes)
+                    Take(Play(pump, sweep[i], world == "engine" ? new EngineWorlds(export!) : same, dump, r.GetValue(Continue), r.GetValue(Full)));
+            }
         }
         else
         {
@@ -152,15 +183,17 @@ internal static class ParityCommand
                 worker.Process.WaitForExit();
                 if (worker.Process.ExitCode is not (0 or 1)) throw new InvalidOperationException($"the worker of part {worker.Part} ended with exit code {worker.Process.ExitCode}");
             }
-            if (summary.Combats != indexes.Count) throw new InvalidOperationException($"the workers played {summary.Combats} of {indexes.Count} combats");
+            if (done.Count != indexes.Count) throw new InvalidOperationException($"the workers played {done.Count} of {indexes.Count} {unit}");
         }
         clock.Stop();
         if (toStdout) return summary.Clean ? 0 : 1;
 
         string continues = r.GetValue(Continue) is { } few ? $"continued from {few} decisions a combat" : "continued from every decision";
         return Finish(r, summary, universe,
-            $"parity: world {world}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}, {indexes.Count} of the sweep's {sweep.Count} combats "
-            + $"({characters.Count} characters x {ascensions.Count} ascensions x {encounters.Count} encounters x {decks} loadouts), seed {r.GetValue(Seed)}, "
+            $"parity: world {world}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}, {indexes.Count} of the sweep's {count} {unit} "
+            + (runs == null ? $"({characters.Count} characters x {ascensions.Count} ascensions x {encounters.Count} encounters x {decks} loadouts)"
+                : $"({characters.Count} characters x {ascensions.Count} ascensions x {r.GetValue(Runs)} runs)")
+            + $", seed {r.GetValue(Seed)}, "
             + $"{continues}, {clock.Elapsed.TotalSeconds:F0} s with {workers} {(workers == 1 ? "process" : "processes")}");
     }
 
@@ -178,15 +211,50 @@ internal static class ParityCommand
         try
         {
             var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues, dump == null ? null : dump.Keep);
-            dump?.Write(combat, result);
-            var line = ParityLine.Of(combat, result, clock.Elapsed.TotalMilliseconds, full);
+            dump?.Write(combat.Info, result);
+            var line = ParityLine.Of(combat.Info, result, clock.Elapsed.TotalMilliseconds, full);
             return worlds is not EngineWorlds { Written: var written } engine ? line
                 : line with { Exports = written.Count, ExportBytes = written.Bytes, ExportMs = Math.Round(written.Ms, 1), Outside = engine.Outside };
         }
         catch (Exception e)
         {
             Logs.Sim.LogError(e, "combat #{Index} failed", combat.Index);
-            return ParityLine.Failed(combat, e, clock.Elapsed.TotalMilliseconds);
+            return ParityLine.Failed(combat.Info, e, clock.Elapsed.TotalMilliseconds);
+        }
+    }
+
+    /// <summary>One whole run: a line for each of its combats. The first carries what belongs to the run as a whole
+    /// (the time the real run took, the game's errors, what the engine's worlds wrote), the last how the run ended.</summary>
+    private static List<ParityLine> PlayRun(Pump pump, SweepRun run, IRunWorlds worlds, CombatDump? dump, int? continues, bool full)
+    {
+        var clock = Stopwatch.StartNew();
+        SweptCombat Info(RunCombat? combat) => new(run.Index, run.Setup.Character, run.Setup.Ascension, combat?.Encounter ?? "<run>", combat?.Act ?? 0, run.Setup.Seed,
+            "run", run.Setup.Loadout is { } loadout ? RandomLoadout.Text(loadout) : null, run.PolicySeed, combat?.Floor);
+        try
+        {
+            var (combats, end, gameErrors) = RunLockstep.Record(pump, run.Setup, run.PolicySeed, worlds, dump == null ? null : dump.Keep);
+            if (combats.Count == 0) throw new InvalidOperationException($"the run has no combat: it {end}");
+            var lines = new List<ParityLine>();
+            foreach (var combat in combats)
+            {
+                var result = Lockstep.Compare(combat.Steps, continues, run.PolicySeed) with
+                {
+                    Outcome = combat.End == CombatStatus.Lost ? "Loss" : "Win",
+                    GameErrors = lines.Count == 0 ? gameErrors : [],
+                };
+                dump?.Write(Info(combat), result);
+                lines.Add(ParityLine.Of(Info(combat), result, clock.Elapsed.TotalMilliseconds, full));
+                clock.Restart();
+            }
+            if (worlds is EngineWorlds { Written: var written } engine)
+                lines[0] = lines[0] with { Exports = written.Count, ExportBytes = written.Bytes, ExportMs = Math.Round(written.Ms, 1), Outside = engine.Outside };
+            lines[^1] = lines[^1] with { RunEnd = end };
+            return lines;
+        }
+        catch (Exception e)
+        {
+            Logs.Sim.LogError(e, "run #{Index} failed", run.Index);
+            return [ParityLine.Failed(Info(null), e, clock.Elapsed.TotalMilliseconds)];
         }
     }
 }

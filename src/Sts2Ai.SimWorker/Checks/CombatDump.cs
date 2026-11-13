@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Players;
 using Sts2Ai.Engine;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
@@ -13,27 +14,24 @@ namespace Sts2Ai.SimWorker.Checks;
 /// </summary>
 internal sealed class CombatDump(EngineExport export, string root)
 {
-    /// <summary>What the dump keeps of the live combat where it stands (<see cref="Lockstep.Check"/>'s keep).</summary>
-    public Kept Keep(CombatSession real)
+    /// <summary>What the dump keeps of the live combat where it stands (a <see cref="Checks.Keep"/>).</summary>
+    public Kept Keep(Player player, CombatStatus status, bool prompt, CombatObservation observation)
     {
-        var player = real.Player;
-        bool going = real.Outcome == CombatOutcome.InProgress;
-        bool prompt = going && real.Prompt != null;
+        bool going = status == CombatStatus.InProgress;
+        var state = CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
         var run = new RunChange(player.Creature.CurrentHp, player.Creature.MaxHp, player.Gold,
             [.. player.Deck.Cards.Select(c => Observe.Card(c)).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)],
             [.. player.Relics.Select(Observe.Relic)], [.. player.PotionSlots.Select(p => p?.Id.Entry)]);
-        return new(prompt,
+        return new(going && prompt,
             going && !prompt ? export.Write(HeadlessGame.GameVersion).Bytes : null,
             ProtocolJson.Serialize(run),
-            going ? new Keys(HiddenState.Full(CombatSession.State, player), PimcBrain.StateKey(real.Observation()),
-                HiddenState.KeyText(CombatSession.State, player), HiddenState.FullText(CombatSession.State, player)) : null);
+            going ? new Keys(HiddenState.Full(state, player), PimcBrain.StateKey(observation), HiddenState.KeyText(state, player), HiddenState.FullText(state, player)) : null);
     }
 
     /// <summary>The combat's folder: what was kept at each decision, and combat.json, which lists them.</summary>
-    public void Write(SweepCombat combat, LockstepResult result)
+    public void Write(SweptCombat combat, LockstepResult result)
     {
-        var setup = combat.Setup;
-        string dir = Path.Combine(root, $"{combat.Index:D5}-{setup.Character}-A{setup.Ascension}-{setup.Encounter.Id.Entry}");
+        string dir = Path.Combine(root, $"{combat.Index:D5}-{combat.Character}-A{combat.Ascension}-{(combat.Floor is { } floor ? $"F{floor:D2}-" : "")}{combat.Encounter}");
         Directory.CreateDirectory(dir);
         var decisions = new List<Decision>();
         for (int k = 0; k < result.Steps.Count; k++)
@@ -47,12 +45,11 @@ internal sealed class CombatDump(EngineExport export, string root)
             decisions.Add(new(step.Round, step.Shown.Status switch { CombatStatus.InProgress => "in_progress", CombatStatus.Won => "won", _ => "lost" },
                 kept.Prompt ? true : null, step.Shown.Legal, kept.Keys?.Hidden, kept.Keys?.State, step.Action?.ToString()));
         }
-        File.WriteAllText(Path.Combine(dir, "combat.json"), ProtocolJson.Serialize(new Combat(1, HeadlessGame.GameVersion, combat.Index, setup.Character,
-            setup.Ascension, setup.Encounter.Id.Entry, setup.ActIndex, setup.Seed, combat.Deck,
-            setup.Loadout is { } loadout ? RandomLoadout.Text(loadout) : null, combat.PolicySeed, result.Outcome, decisions)));
+        File.WriteAllText(Path.Combine(dir, "combat.json"), ProtocolJson.Serialize(new Combat(1, HeadlessGame.GameVersion, combat.Index, combat.Character,
+            combat.Ascension, combat.Encounter, combat.Act, combat.Floor, combat.Seed, combat.Deck, combat.Loadout, combat.PolicySeed, result.Outcome, decisions)));
     }
 
-    private sealed record Combat(int Format, string Game, int I, string Character, int Ascension, string Encounter, int Act, string Seed, string Deck,
+    private sealed record Combat(int Format, string Game, int I, string Character, int Ascension, string Encounter, int Act, int? Floor, string Seed, string Deck,
         string? Loadout, int PolicySeed, string Outcome, IReadOnlyList<Decision> Decisions);
 
     private sealed record Decision(int Round, string Status, bool? Prompt, IReadOnlyList<string> Legal, ulong? HiddenKey, ulong? StateKey, string? Action);
@@ -71,6 +68,7 @@ internal sealed class CombatDump(EngineExport export, string root)
 
             README.md
             <index>-<CHARACTER>-A<ascension>-<ENCOUNTER>/     one combat; the index is its place in the sweep
+                                                              (of a whole run: <run's index>-..-A<ascension>-F<floor>-<ENCOUNTER>)
               combat.json                                     what the combat is, and its decisions in order
               <k>.export.json                                 decision k: the live combat, as the engine imports it
               <k>.observation.json                            what the game shows there
@@ -90,7 +88,8 @@ internal sealed class CombatDump(EngineExport export, string root)
                           {"round":1,"status":"in_progress","prompt":true,"legal":[],"hidden_key":1,"state_key":2,"action":"pick:0,2"},
                           {"round":3,"status":"won","legal":[]}]}
 
-        - `deck`: `starting` (the character's own loadout), `random` (drawn: `loadout` says what) or `given`.
+        - `deck`: `starting` (the character's own loadout), `random` (drawn: `loadout` says what) or `given`; `run` for a
+          combat of a whole run (`--runs`), which also has its `floor`, and whose `seed` is the run's.
         - `status`: `in_progress`, `won`, `lost`: `sz_world_status`'s 0, 1, 2.
         - `prompt`: there where the record is a card prompt, in the middle of an action. The engine imports no combat
           there, so the record has no export; a world reaches it by the action before, and `action` answers it
@@ -109,7 +108,8 @@ internal sealed class CombatDump(EngineExport export, string root)
         - `<k>.run.json`: the bytes `sz_world_run` must write: `{"hp":..,"max_hp":..,"gold":..,"deck":[..],"relics":[..],
           "potions":[..]}`. `deck` is the player's deck (not the combat's piles) as cards with no uid and no upgrade
           preview, in the ordinal order of their keys (a card's key is its JSON); `potions` has one entry a slot, null
-          for an empty one. A combat of this sweep stands on its own, so there is no run around it to give.
+          for an empty one. A combat started on its own has no run around it; of a whole run's combat these six are
+          what the combat can change of the run.
         - `<k>.hidden.txt`: two lines. The first is the text `HiddenState.Key` hashes: the draw pile's card keys in
           order, each followed by `|`; then the counter of every run stream and every player stream, each followed by
           `,`; then for each live monster `counter:next move id,`. The second is the text `HiddenState.Full` hashes,

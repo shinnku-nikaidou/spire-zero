@@ -47,6 +47,33 @@ internal interface ISecondWorlds
     Func<SecondWorld>? At(CombatSession real);
 }
 
+/// <summary>Makes the second worlds of the lockstep check over a whole run, as <see cref="ISecondWorlds"/> of a combat.</summary>
+internal interface IRunWorlds
+{
+    /// <summary>As <see cref="ISecondWorlds.At"/>, at a decision of a combat of the real run.</summary>
+    Func<SecondWorld>? At(RunSession real);
+}
+
+/// <summary>
+/// The SL world of a combat decision in a run (<see cref="NodeWorld"/>): the node's clone, loaded and replayed. It is
+/// what search plays on today, and must agree with the run everywhere, at a card prompt too.
+/// </summary>
+internal sealed class NodeWorlds(Pump pump) : IRunWorlds
+{
+    public Func<SecondWorld>? At(RunSession real)
+    {
+        var clone = real.Clone();
+        return () => new Node(new NodeWorld(pump, clone));
+    }
+
+    private sealed class Node(NodeWorld world) : SecondWorld
+    {
+        public override ICombatWorld World => world;
+
+        public override void Dispose() => world.Dispose();
+    }
+}
+
 /// <summary>
 /// The SL world that replays the combat (<see cref="SimWorlds.SL"/>): the simulator's own second world, which must agree
 /// with the game everywhere. The lockstep check is tested against it.
@@ -79,9 +106,11 @@ internal sealed class ReplayWorlds(Pump pump, bool determinized = false) : ISeco
 }
 
 /// <summary>No second world: the real combats are only played, for what a dump keeps of them (<see cref="CombatDump"/>).</summary>
-internal sealed class NoWorlds : ISecondWorlds
+internal sealed class NoWorlds : ISecondWorlds, IRunWorlds
 {
     public Func<SecondWorld>? At(CombatSession real) => null;
+
+    public Func<SecondWorld>? At(RunSession real) => null;
 }
 
 /// <summary>
@@ -89,7 +118,7 @@ internal sealed class NoWorlds : ISecondWorlds
 /// (<see cref="EngineExport"/>), and the world is the engine's import of those bytes. The engine takes a combat in
 /// between actions only, so none is made at a card prompt. One of these serves one combat: it counts what it wrote.
 /// </summary>
-internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds
+internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds, IRunWorlds
 {
     /// <summary>The exports written, their bytes in all, and the time they took.</summary>
     public (int Count, long Bytes, double Ms) Written { get; private set; }
@@ -98,15 +127,19 @@ internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds
     /// each over all the exports: state the engine was not given.</summary>
     public Dictionary<string, int> Outside { get; } = [];
 
-    public Func<SecondWorld>? At(CombatSession real)
+    public Func<SecondWorld>? At(CombatSession real) => real.Prompt != null ? null : Make(SecondWorld.Alone(real));
+
+    /// <summary>In a run the world is given the run as it stands, which its own <see cref="ICombatWorld.Run"/> then
+    /// carries the combat's changes over.</summary>
+    public Func<SecondWorld>? At(RunSession real) => real.Prompt != null ? null : Make(real.View(previews: false));
+
+    private Func<SecondWorld> Make(RunView run)
     {
-        if (real.Prompt != null) return null;
         long started = Stopwatch.GetTimestamp();
         var written = export.Write(HeadlessGame.GameVersion);
         byte[] bytes = written.Bytes;
         Written = (Written.Count + 1, Written.Bytes + bytes.Length, Written.Ms + Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         foreach (var (type, references) in written.Outside) Outside[type] = Outside.GetValueOrDefault(type) + references;
-        var run = SecondWorld.Alone(real);
         return () => new Imported(EngineWorld.Import(bytes, run));
     }
 

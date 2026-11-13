@@ -1,24 +1,23 @@
 using System.Text.Json;
+using MegaCrit.Sts2.Core.Entities.Players;
 using Sts2Ai.Brain;
+using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker.Checks;
 
 /// <summary>
-/// What a combat shows where the player decides, or at its end: the three things the lockstep check compares. The
-/// observation is the JSON the brain would get, byte for byte; the plays are in the game's order.
+/// What a combat shows where the player decides, or at its end: what the lockstep check compares. The observation is
+/// the JSON the brain would get, byte for byte; the plays are in the game's order. A combat of a whole run has the run
+/// around it too, as a combat's leaf reads it (<see cref="ICombatWorld.Run"/>); a combat started on its own has none.
 /// </summary>
-internal sealed record Shown(string Observation, IReadOnlyList<string> Legal, CombatStatus Status)
+internal sealed record Shown(string Observation, IReadOnlyList<string> Legal, CombatStatus Status, string? Run = null)
 {
-    public static Shown Of(CombatSession real) => new(
-        ProtocolJson.Serialize(real.Observation()),
-        CombatSession.IsOver ? [] : [.. real.LegalActions().Select(a => a.ToString())],
-        real.Outcome switch { CombatOutcome.InProgress => CombatStatus.InProgress, CombatOutcome.Loss => CombatStatus.Lost, _ => CombatStatus.Won });
-
     /// <summary>
     /// The first thing <paramref name="world"/> shows otherwise: in its observation (the first JSON path, in the
-    /// document's order), else in its plays ("legal[i]"), else in its status ("status"). A lost combat is compared by
-    /// its status alone: a loss is worth nothing whatever it holds, and nothing reads the rest.
+    /// document's order), else in its plays ("legal[i]"), else in its status ("status"), else in its run ("run." and
+    /// the path). A lost combat is compared by its status alone: a loss is worth nothing whatever it holds, and nothing
+    /// reads the rest.
     /// </summary>
     public (string Path, string? Real, string? World)? FirstDifference(SecondWorld world)
     {
@@ -31,7 +30,9 @@ internal sealed record Shown(string Observation, IReadOnlyList<string> Legal, Co
             var (real, other) = (i < Legal.Count ? Legal[i] : null, i < legal.Count ? legal[i].ToString() : null);
             if (real != other) return ($"legal[{i}]", real, other);
         }
-        return status == Status ? null : ("status", Status.ToString(), status.ToString());
+        if (status != Status) return ("status", Status.ToString(), status.ToString());
+        if (Run != null && JsonDiff.First(Run, ProtocolJson.Serialize(world.World.Run())) is { } run) return ($"run.{run.Path}", run.Real, run.World);
+        return null;
     }
 }
 
@@ -97,6 +98,10 @@ internal sealed record RealStep(Shown Shown, int Round, CombatAction? Action, st
 /// <param name="Keys">How search tells the state apart; null once the combat is over, where it does not ask.</param>
 internal sealed record Kept(bool Prompt, byte[]? Export, string Run, Keys? Keys);
 
+/// <summary>What a dump keeps of the live combat where it stands: its player, its status, whether it waits on a card
+/// prompt, and its observation.</summary>
+internal delegate Kept Keep(Player player, CombatStatus status, bool prompt, CombatObservation observation);
+
 /// <summary>A state's keys in search: the world's hidden key (<c>HiddenState.Full</c>) with the two texts it is the hash
 /// of, and the observation's key (<c>PimcBrain.StateKey</c>).</summary>
 internal sealed record Keys(ulong Hidden, ulong State, string HiddenKeyText, string HiddenText);
@@ -138,9 +143,8 @@ internal static class Lockstep
 {
     /// <param name="seed">Seeds the policy, the answers to card prompts, and which decisions are continued from.</param>
     /// <param name="continues">How many decisions the continue check starts from, drawn evenly; null: every one.</param>
-    /// <param name="keep">Called at every decision of the real combat and at its end, while it is live: what a dump
-    /// keeps of it; null: nothing is dumped.</param>
-    public static LockstepResult Check(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, int? continues, Func<CombatSession, Kept>? keep = null)
+    /// <param name="keep">Called at every decision of the real combat and at its end, while it is live; null: nothing is dumped.</param>
+    public static LockstepResult Check(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, int? continues, Keep? keep = null)
     {
         HeadlessGame.TakeErrors();
         var (steps, outcome) = Record(pump, setup, seed, worlds, keep);
@@ -149,7 +153,7 @@ internal static class Lockstep
     }
 
     /// <summary>Plays the real combat to its end: every decision as the game showed it, with its action.</summary>
-    private static (List<RealStep> Steps, CombatOutcome Outcome) Record(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, Func<CombatSession, Kept>? keep)
+    private static (List<RealStep> Steps, CombatOutcome Outcome) Record(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, Keep? keep)
     {
         var rng = new Random(seed);
         var steps = new List<RealStep>();
@@ -157,10 +161,12 @@ internal static class Lockstep
         var policy = new SweepPolicy(rng);
         while (true)
         {
-            var shown = Shown.Of(real);
+            var observation = real.Observation();
+            var status = real.Outcome switch { CombatOutcome.InProgress => CombatStatus.InProgress, CombatOutcome.Loss => CombatStatus.Lost, _ => CombatStatus.Won };
+            var shown = new Shown(ProtocolJson.Serialize(observation), CombatSession.IsOver ? [] : [.. real.LegalActions().Select(a => a.ToString())], status);
             var present = GameIds.Present(CombatSession.State, real.Player, real.Prompt);
             int round = CombatSession.State.RoundNumber;
-            var kept = keep?.Invoke(real);
+            var kept = keep?.Invoke(real.Player, status, real.Prompt != null, observation);
             if (real.IsCapped)
             {
                 steps.Add(new(shown, round, null, null, null, present, kept));
@@ -168,7 +174,7 @@ internal static class Lockstep
             }
             var make = worlds.At(real);
             var action = real.Next(policy);
-            steps.Add(new(shown, round, action, Subject(real, action), make, present, kept));
+            steps.Add(new(shown, round, action, Subject(real.Player, real.Prompt, action), make, present, kept));
             real.Execute(action);
         }
     }
@@ -300,11 +306,12 @@ internal static class Lockstep
         return [.. all.Take(n)];
     }
 
-    private static string Subject(CombatSession real, CombatAction action) => action.Kind switch
+    /// <summary>What an action acts with (<see cref="RealStep.Subject"/>), in the combat as it stands before it.</summary>
+    public static string Subject(Player player, CardChoice? prompt, CombatAction action) => action.Kind switch
     {
-        CombatActionKind.PlayCard => $"play {CombatActions.HandCard(real.Player.PlayerCombatState!, action.Card!.Value).Id.Entry}",
-        CombatActionKind.UsePotion => $"potion {real.Player.PotionSlots[action.PotionSlot!.Value]!.Id.Entry}",
-        CombatActionKind.Pick => $"pick {real.Prompt!.Context.Source ?? real.Prompt.Context.Purpose}",
+        CombatActionKind.PlayCard => $"play {CombatActions.HandCard(player.PlayerCombatState!, action.Card!.Value).Id.Entry}",
+        CombatActionKind.UsePotion => $"potion {player.PotionSlots[action.PotionSlot!.Value]!.Id.Entry}",
+        CombatActionKind.Pick => $"pick {prompt!.Context.Source ?? prompt.Context.Purpose}",
         _ => "end_turn",
     };
 

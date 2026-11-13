@@ -14,8 +14,10 @@ internal sealed record ParityLine
     public required int Ascension { get; init; }
     public required string Encounter { get; init; }
     public required int Act { get; init; }
+    /// <summary>For a combat of a whole run: its floor. <see cref="I"/> is then the run's index and <see cref="Seed"/> the run's.</summary>
+    public int? Floor { get; init; }
     public required string Seed { get; init; }
-    /// <summary>"starting", "random" or "given".</summary>
+    /// <summary>"starting", "random" or "given"; "run" for a combat of a whole run.</summary>
     public required string Deck { get; init; }
     /// <summary>The loadout as the command line takes it; null: the starting one.</summary>
     public string? Loadout { get; init; }
@@ -40,6 +42,8 @@ internal sealed record ParityLine
     public Dictionary<string, Dictionary<string, int[]>> Met { get; init; } = [];
     /// <summary>What the real game, or the check itself, failed with: no check was made.</summary>
     public string? Failure { get; init; }
+    /// <summary>On the last combat of a whole run: how the run ended, "won" or "died on floor N".</summary>
+    public string? RunEnd { get; init; }
     /// <summary>The first of the game's own Log.Error lines while the real combat was played.</summary>
     public IReadOnlyList<string> GameErrors { get; init; } = [];
     /// <summary>With the engine's world: the combats written out for it, their bytes in all, and the time that took.</summary>
@@ -55,7 +59,7 @@ internal sealed record ParityLine
     private const int MaxValue = 160;
     private static readonly string[] Checks = ["import", "step", "continue"];
 
-    public static ParityLine Of(SweepCombat combat, LockstepResult result, double ms, bool full)
+    public static ParityLine Of(SweptCombat combat, LockstepResult result, double ms, bool full)
     {
         var paths = new Dictionary<string, int[]>();
         var subjects = new Dictionary<string, int>();
@@ -104,19 +108,20 @@ internal sealed record ParityLine
         static string? Short(string? value) => value is { Length: > MaxValue } ? value[..MaxValue] + "..." : value;
     }
 
-    public static ParityLine Failed(SweepCombat combat, Exception e, double ms) =>
+    public static ParityLine Failed(SweptCombat combat, Exception e, double ms) =>
         Start(combat) with { Failure = $"{e.GetType().Name}: {Logs.FirstLine(e.Message)}", Ms = Math.Round(ms, 1) };
 
-    private static ParityLine Start(SweepCombat combat) => new()
+    private static ParityLine Start(SweptCombat combat) => new()
     {
         I = combat.Index,
-        Character = combat.Setup.Character,
-        Ascension = combat.Setup.Ascension,
-        Encounter = combat.Setup.Encounter.Id.Entry,
-        Act = combat.Setup.ActIndex,
-        Seed = combat.Setup.Seed,
+        Character = combat.Character,
+        Ascension = combat.Ascension,
+        Encounter = combat.Encounter,
+        Act = combat.Act,
+        Floor = combat.Floor,
+        Seed = combat.Seed,
         Deck = combat.Deck,
-        Loadout = combat.Setup.Loadout is { } loadout ? RandomLoadout.Text(loadout) : null,
+        Loadout = combat.Loadout,
     };
 
     /// <summary>
@@ -135,6 +140,7 @@ internal sealed class ParitySummary
     private readonly Dictionary<string, int> _subjects = [];
     private readonly Dictionary<string, int> _gameErrors = [];
     private readonly Dictionary<string, int> _outside = [];
+    private readonly List<string> _runEnds = [];
     private readonly Dictionary<string, Dictionary<string, int[]>> _met = GameIds.Kinds.ToDictionary(k => k, _ => new Dictionary<string, int[]>());
     private int _combats, _failed, _decisions, _imports, _steps, _continues, _differed, _differedCombats, _exports;
     private readonly int[] _differences = new int[3];
@@ -158,6 +164,7 @@ internal sealed class ParitySummary
             return;
         }
         _outcomes[line.Outcome!] = _outcomes.GetValueOrDefault(line.Outcome!) + 1;
+        if (line.RunEnd != null) _runEnds.Add(line.RunEnd);
         _exports += line.Exports;
         _exportBytes += line.ExportBytes;
         _exportMs += line.ExportMs;
@@ -199,6 +206,8 @@ internal sealed class ParitySummary
             + (_failed > 0 ? $"; {_failed} FAILED, not checked" : "") + $"  ({_ms / 1000:F0} s of work)");
         foreach (var (failure, count) in _failures.OrderByDescending(kv => kv.Value).Take(10)) output.WriteLine($"  failed x{count}: {failure}");
         foreach (var (error, count) in _gameErrors.OrderByDescending(kv => kv.Value).Take(5)) output.WriteLine($"  game error x{count}: {(error.Length > 200 ? error[..200] + "..." : error)}");
+        if (_runEnds.Count > 0)
+            output.WriteLine($"runs       {_runEnds.Count}: {string.Join(", ", _runEnds.GroupBy(e => e).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} x{g.Count()}"))}");
         output.WriteLine($"decisions  {_decisions}; checks: {_imports} imports, {_steps} steps, {_continues} continued steps");
         if (_exports > 0)
             output.WriteLine($"exports    {_exports}: {_exportBytes / 1024.0 / _exports:F0} KB and {_exportMs / _exports:F2} ms each");

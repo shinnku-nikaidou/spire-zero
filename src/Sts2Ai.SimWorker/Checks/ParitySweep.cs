@@ -76,7 +76,37 @@ internal static class GameIds
 /// <param name="Index">Its place in the sweep, which names it: the same options and index give the same combat.</param>
 /// <param name="Deck">"starting", "random" or "given".</param>
 /// <param name="PolicySeed">Seeds the player (<see cref="Lockstep.Check"/>).</param>
-internal sealed record SweepCombat(int Index, CombatSetup Setup, string Deck, int PolicySeed);
+internal sealed record SweepCombat(int Index, CombatSetup Setup, string Deck, int PolicySeed)
+{
+    public SweptCombat Info => new(Index, Setup.Character, Setup.Ascension, Setup.Encounter.Id.Entry, Setup.ActIndex, Setup.Seed, Deck,
+        Setup.Loadout is { } loadout ? RandomLoadout.Text(loadout) : null, PolicySeed);
+}
+
+/// <summary>What a checked combat is, as its line and its dump say it: a combat of a sweep, or one of a whole run.</summary>
+/// <param name="Index">The combat's place in its sweep; for a run's combat, the run's.</param>
+/// <param name="Seed">The game's seed: the combat's own, or the run's.</param>
+/// <param name="Deck">"starting", "random" or "given"; "run" for a combat of a whole run.</param>
+/// <param name="Loadout">The loadout the combat, or the run, was started with instead of the character's own.</param>
+/// <param name="Floor">For a combat of a whole run: the floor it is on.</param>
+internal sealed record SweptCombat(int Index, string Character, int Ascension, string Encounter, int Act, string Seed, string Deck, string? Loadout, int PolicySeed,
+    int? Floor = null);
+
+/// <summary>One whole run of a sweep of runs.</summary>
+internal sealed record SweepRun(int Index, RunSetup Setup, int PolicySeed);
+
+/// <summary>
+/// The runs of a lockstep sweep over whole runs: <paramref name="runs"/> for every character and ascension given, each
+/// started as the game starts a new run, or with <paramref name="given"/> in place of the character's own loadout.
+/// Consecutive runs go through the characters, then the ascensions.
+/// </summary>
+internal sealed class RunSweep(IReadOnlyList<CharacterModel> characters, IReadOnlyList<int> ascensions, int runs, int seed, Loadout? given)
+{
+    public int Count => characters.Count * ascensions.Count * runs;
+
+    public SweepRun this[int i] => new(i,
+        new RunSetup(characters[i % characters.Count].Id.Entry, GameSeeds.MakeSeed(seed, i), ascensions[i / characters.Count % ascensions.Count], given),
+        unchecked(seed * 1_000_003 + i));
+}
 
 /// <summary>
 /// The combats of a lockstep sweep: every character, ascension and encounter given, each with <paramref name="decks"/>
