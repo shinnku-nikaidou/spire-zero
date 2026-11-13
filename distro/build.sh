@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the Workshop item from one commit ($1, default HEAD) into out/Sts2Ai/, ready to upload (plan
-# tmp/plans/2026-11-07-1333-steam-workshop-release.md); out/commit names the commit. Intermediate files: tmp/item/REV/.
+# plans/2026-11-07-1333-steam-workshop-release.md); out/commit names the commit. Intermediate files: tmp/item/REV/.
 #
 #   out/Sts2Ai/Sts2Ai.json, Sts2Ai.dll    the mod (one build, for every platform: it runs on the game's own .NET)
 #   out/Sts2Ai/brain/RID/                 the brain for each platform, self-contained (BundledBrain starts it)

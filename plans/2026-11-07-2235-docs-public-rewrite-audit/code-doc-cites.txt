@@ -1,0 +1,96 @@
+2	 docs: combat-brain/leaf §1
+2	 docs: combat-brain/leaf §2
+1	 docs: combat-brain/leaf §3
+3	 docs: combat-brain/network
+5	 docs: combat-brain/shared §1
+2	 docs: combat-brain/shared §5
+1	 docs: environments
+1	 docs: environments §2
+1	 docs: environments/information §3
+2	 docs: environments/information §7
+1	 docs: evaluation §5
+3	 docs: evaluation/champions §1
+2	 docs: evaluation/gates §6
+1	 docs: evaluation/metrics
+8	 docs: evaluation/metrics §2
+5	 docs: evaluation/metrics §5
+1	 docs: evaluation/metrics §6
+3	 docs: evaluation/metrics §7
+3	 docs: evaluation/metrics §8
+9	 docs: evaluation/metrics §9
+1	 docs: gamebridge/actions §7
+3	 docs: harness §4
+4	 docs: harness §5
+1	 docs: harness/decision-log
+1	 docs: harness/routing
+4	 docs: harness/routing §1
+1	 docs: harness/routing §3
+1	 docs: harness/routing §4
+1	 docs: harness/routing §6
+1	 docs: learning
+1	 docs: learning §6
+1	 docs: learning/combat-net
+1	 docs: learning/combat-net §1
+2	 docs: learning/combat-net §3
+2	 docs: learning/combat-net §4
+1	 docs: learning/loop §5
+4	 docs: learning/loop §9
+4	 docs: learning/reference §6
+4	 docs: learning/reference §7
+2	 docs: macro-brain/network
+1	 docs: macro-brain/network §1
+1	 docs: macro-brain/network §2
+1	 docs: macro-brain/search
+3	 docs: macro-brain/search §2
+1	 docs: macro-brain/search §3
+3	 docs: macro-brain/search §6
+1	 docs: macro-brain/value §1
+2	 docs: macro-brain/value §3
+1	 docs: macro-brain/value §5
+1	 docs: mod
+2	 docs: mod §3
+1	 docs: mod §4
+1	 docs: mod/auto §1
+1	 docs: mod/auto §2
+2	 docs: mod/auto §4
+1	 docs: mod/auto §5
+1	 docs: mod/loop
+2	 docs: mod/loop §1
+1	 docs: mod/loop §4
+1	 docs: mod/sl-record
+1	 docs: mod/sl-record §7
+1	 docs: mod/sl-record §8
+7	 docs: output §2
+2	 docs: output §3
+1	 docs: pimc/budget §1
+1	 docs: pimc/budget §2
+1	 docs: pimc/budget §5
+1	 docs: pimc/search §1
+1	 docs: pimc/search §6
+1	 docs: protocol §4
+3	 docs: protocol/observation §5
+2	 docs: protocol/observation §6
+2	 docs: protocol/wire
+2	 docs: protocol/wire §6
+1	 docs: protocol/wire §7
+2	 docs: protocol/worlds §1
+1	 docs: simulator
+1	 docs: simulator/combat §5
+1	 docs: simulator/pool §2
+1	 docs: simulator/pool §3
+2	 docs: simulator/pool §4
+1	 docs: simulator/reference §1
+1	 docs: simulator/runs §2
+1	 docs: simulator/runs §3
+1	 docs: simulator/worlds
+3	 docs: simulator/worlds §3
+1	 docs: simulator/worlds §4
+3	 docs: simulator/worlds §6
+1	 docs: simulator/worlds §7
+2	 docs: sl-planner §3
+1	 docs: sl-planner §4
+2	 docs: sl-planner/budget §1
+2	 docs: sl-planner/budget §4
+1	 docs: sl-planner/turn-search §2
+1	 docs: sl-planner/turn-search §4
+1	 docs: sl-planner/turn-search §5
