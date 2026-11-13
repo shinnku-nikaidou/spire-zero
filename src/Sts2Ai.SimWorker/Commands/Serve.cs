@@ -49,6 +49,7 @@ internal static class Serve
                 {
                     SlTurnRequest turn => new WorkerReply(id, null, null, [], SearchTurn(pump, planner ?? throw NoLeaf(), turn)),
                     SlMacroRequest macro => new WorkerReply(id, null, null, [], Afters: NodeProbe.After(pump, macro.Node, macro.Paths)),
+                    SlPromptRequest prompt => new WorkerReply(id, null, null, [], Crossed: Cross(pump, prompt)),
                     PimcWorldRequest world => new WorkerReply(id, Search(pump, pimc ?? throw NoLeaf(), world), null, []),
                     _ => throw new InvalidDataException($"no search for {request.GetType().Name}"),
                 };
@@ -79,6 +80,18 @@ internal static class Serve
     {
         using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, r.Run, r.History);
         return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst, r.History);
+    }
+
+    /// <summary>What stands in the node's clone after a path of answers from the card prompt it waits on; where the
+    /// player can play again, with the combat written out for the engine.</summary>
+    private static PromptStep Cross(Pump pump, SlPromptRequest r)
+    {
+        using var world = new NodeWorld(pump, r.Node);
+        foreach (var answer in r.Path) world.Execute(answer);
+        var (status, shown) = (world.Status, world.Observe());
+        bool going = status == CombatStatus.InProgress;
+        return new(status, shown, world.Run(), going ? world.HiddenKey() : 0,
+            going && shown.Prompt == null ? Convert.ToBase64String(world.Export().Bytes) : null);
     }
 
     /// <summary>The SL planner's turn from a state of the node's clone: the clone at the decision, then the path.</summary>

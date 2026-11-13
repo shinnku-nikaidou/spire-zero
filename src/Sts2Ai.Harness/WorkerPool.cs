@@ -87,7 +87,9 @@ public sealed class WorkerPool : IDisposable
                 _free.Add(worker);
             }
         });
-        foreach (var r in replies) _gameErrors.AddRange(r.GameErrors);
+        // Search threads may each ask at once (a prompt crossed on the node's clone).
+        lock (_gameErrors)
+            foreach (var r in replies) _gameErrors.AddRange(r.GameErrors);
         if (replies.FirstOrDefault(r => r.Error != null) is { } failed) throw new InvalidOperationException($"request {failed.Id}: {failed.Error}");
         return replies;
     }

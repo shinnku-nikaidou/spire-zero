@@ -37,6 +37,9 @@ internal sealed class NodeWorld(Pump pump, NodeClone root) : ICombatWorld, IDisp
 
     public RunView Run() => Live.View(previews: false);
 
+    /// <summary>The combat where it stands, written out for the engine: between actions only, not at a card prompt.</summary>
+    public CombatExport Export() => LiveCombat.Export(Live.Player, Run());
+
     public ulong HiddenKey()
     {
         var (state, player) = Combat;

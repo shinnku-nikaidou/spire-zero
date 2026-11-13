@@ -14,6 +14,7 @@ public sealed record WorkerHello(string Game);
 [JsonDerivedType(typeof(PimcWorldRequest), "pimc_world")]
 [JsonDerivedType(typeof(SlTurnRequest), "sl_turn")]
 [JsonDerivedType(typeof(SlMacroRequest), "sl_macro")]
+[JsonDerivedType(typeof(SlPromptRequest), "sl_prompt")]
 public abstract record WorkerRequest(long Id);
 
 /// <summary>
@@ -53,11 +54,28 @@ public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<Combat
 /// </summary>
 public sealed record SlMacroRequest(long Id, NodeClone Node, IReadOnlyList<IReadOnlyList<MacroAction>> Paths) : WorkerRequest(Id);
 
+/// <summary>
+/// The SL planner's way across a card prompt of a combat in a run, where the engine cannot start: <see cref="Node"/>
+/// loaded and replayed stands at the prompt the real combat waits on, and <see cref="Path"/>, answers to it and to the
+/// prompts they raise, is played from there. The reply's <see cref="WorkerReply.Crossed"/> is what stands there then.
+/// </summary>
+public sealed record SlPromptRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path) : WorkerRequest(Id);
+
+/// <summary>
+/// Where a path of answers from a card prompt leads in a node's clone (<see cref="SlPromptRequest"/>): the combat's
+/// status, what it shows (another prompt, if one waits), and the run around it.
+/// </summary>
+/// <param name="HiddenKey">The world's hidden key there (<see cref="ICombatWorld.HiddenKey"/>), while the combat goes on.</param>
+/// <param name="Export">Where the player can play again (the combat goes on and no prompt waits): the combat written
+/// out for the engine, the bridge's <c>EngineExport</c> bytes in base64. Null otherwise.</param>
+public sealed record PromptStep(CombatStatus Status, CombatObservation Observation, RunView Run, ulong HiddenKey = 0, string? Export = null);
+
 /// <param name="GameErrors">The game's Log.Error lines while serving the request.</param>
 /// <param name="Turn">The answer to an <see cref="SlTurnRequest"/>.</param>
 /// <param name="Afters">The answer to an <see cref="SlMacroRequest"/>.</param>
+/// <param name="Crossed">The answer to an <see cref="SlPromptRequest"/>.</param>
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors, TurnSearch? Turn = null,
-    IReadOnlyList<Afterstate>? Afters = null);
+    IReadOnlyList<Afterstate>? Afters = null, PromptStep? Crossed = null);
 
 /// <summary>
 /// What a path of answers from a decision in a node's clone leads to (<see cref="SlMacroRequest"/>): the run then, and
