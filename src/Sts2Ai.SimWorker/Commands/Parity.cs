@@ -18,10 +18,11 @@ internal static class ParityCommand
 {
     private static readonly Option<string> World = Opt.Of("--world", "replay",
         "the second world: engine, the Rust engine's, made from the combat written out along its schema; replay, the SL world that replays the combat; " +
-        "determinized, the same with its hidden state drawn again, which must differ after actions")
-        .AcceptOnlyFromAmong("engine", "replay", "determinized");
-    private static readonly Option<string?> Exports = Opt.Maybe<string?>("--exports",
-        "with --world engine: a folder that gets every export written, as COMBAT-DECISION.json");
+        "determinized, the same with its hidden state drawn again, which must differ after actions; none: the combats are only played, for --dump")
+        .AcceptOnlyFromAmong("engine", "replay", "determinized", "none");
+    private static readonly Option<string?> Dump = Opt.Maybe<string?>("--dump",
+        "a folder that gets every combat as files, for the engine's own tests: at each decision the combat as the engine imports it, what the game shows " +
+        "and the action it was given (the folder's README.md has the layout)");
     private static readonly Option<string> Character = Opt.Of("--character", "all", "the characters, such as SILENT,FOOL, or all");
     private static readonly Option<string> Asc = Opt.Of("--asc", "0,10", "the ascension levels");
     private static readonly Option<string> Encounter = Opt.Of("--encounter", "all", "the encounters, such as A,B, or all: every encounter of the game, the ones list shows and the events' besides");
@@ -49,7 +50,7 @@ internal static class ParityCommand
     };
 
     /// <summary>The options a part of the sweep takes from the whole: all but where the output goes and who shares it.</summary>
-    private static readonly Option[] Shared = [World, Exports, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
+    private static readonly Option[] Shared = [World, Dump, Character, Asc, Encounter, Decks, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
 
     public static Command Command()
     {
@@ -111,17 +112,20 @@ internal static class ParityCommand
         }
 
         string world = r.GetValue(World)!;
-        string? exports = r.GetValue(Exports);
-        if (exports != null && world != "engine") throw new CliException("--exports is the engine's: it needs --world engine");
+        string? dumped = r.GetValue(Dump);
+        if (dumped != null && parts == 1)
+        {
+            Directory.CreateDirectory(dumped);
+            File.WriteAllText(Path.Combine(dumped, "README.md"), CombatDump.Readme(string.Join(' ', Environment.GetCommandLineArgs().SkipWhile(a => a != "parity"))));
+        }
         if (workers == 1)
         {
-            // The engine's schema is read once; each combat has its own maker, which counts what it wrote.
-            var export = world == "engine" ? new EngineExport(EngineSchema.Load(EngineLibrary.SchemaPath)) : null;
-            if (exports != null) Directory.CreateDirectory(exports);
-            ISecondWorlds replay = new ReplayWorlds(pump, determinized: world == "determinized");
+            // The engine's schema is read once; each combat has its own maker of engine worlds, which counts what it wrote.
+            var export = world == "engine" || dumped != null ? new EngineExport(EngineSchema.Load(EngineLibrary.SchemaPath)) : null;
+            var dump = dumped == null ? null : new CombatDump(export!, dumped);
+            ISecondWorlds same = world == "none" ? new NoWorlds() : new ReplayWorlds(pump, determinized: world == "determinized");
             foreach (int i in indexes)
-                Take(Play(pump, sweep[i], export == null ? replay : new EngineWorlds(export, exports == null ? null : Path.Combine(exports, $"{i}")),
-                    r.GetValue(Continue), r.GetValue(Full)));
+                Take(Play(pump, sweep[i], world == "engine" ? new EngineWorlds(export!) : same, dump, r.GetValue(Continue), r.GetValue(Full)));
         }
         else
         {
@@ -168,12 +172,13 @@ internal static class ParityCommand
         return summary.Clean ? 0 : 1;
     }
 
-    private static ParityLine Play(Pump pump, SweepCombat combat, ISecondWorlds worlds, int? continues, bool full)
+    private static ParityLine Play(Pump pump, SweepCombat combat, ISecondWorlds worlds, CombatDump? dump, int? continues, bool full)
     {
         var clock = Stopwatch.StartNew();
         try
         {
-            var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues);
+            var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues, dump == null ? null : dump.Keep);
+            dump?.Write(combat, result);
             var line = ParityLine.Of(combat, result, clock.Elapsed.TotalMilliseconds, full);
             return worlds is not EngineWorlds { Written: var written } engine ? line
                 : line with { Exports = written.Count, ExportBytes = written.Bytes, ExportMs = Math.Round(written.Ms, 1), Outside = engine.Outside };

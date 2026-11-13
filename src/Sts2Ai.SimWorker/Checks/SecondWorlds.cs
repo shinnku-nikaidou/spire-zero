@@ -78,16 +78,19 @@ internal sealed class ReplayWorlds(Pump pump, bool determinized = false) : ISeco
     }
 }
 
+/// <summary>No second world: the real combats are only played, for what a dump keeps of them (<see cref="CombatDump"/>).</summary>
+internal sealed class NoWorlds : ISecondWorlds
+{
+    public Func<SecondWorld>? At(CombatSession real) => null;
+}
+
 /// <summary>
 /// The engine's world (engine/DESIGN.md): at a decision the live combat is written out along the engine's schema
 /// (<see cref="EngineExport"/>), and the world is the engine's import of those bytes. The engine takes a combat in
 /// between actions only, so none is made at a card prompt. One of these serves one combat: it counts what it wrote.
 /// </summary>
-/// <param name="dump">Where each export is also written, as PREFIX-DECISION.json; null: nowhere.</param>
-internal sealed class EngineWorlds(EngineExport export, string? dump) : ISecondWorlds
+internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds
 {
-    private int _decision = -1;
-
     /// <summary>The exports written, their bytes in all, and the time they took.</summary>
     public (int Count, long Bytes, double Ms) Written { get; private set; }
 
@@ -97,14 +100,12 @@ internal sealed class EngineWorlds(EngineExport export, string? dump) : ISecondW
 
     public Func<SecondWorld>? At(CombatSession real)
     {
-        _decision++;
         if (real.Prompt != null) return null;
         long started = Stopwatch.GetTimestamp();
         var written = export.Write(real.Player, HeadlessGame.GameVersion);
         byte[] bytes = written.Bytes;
         Written = (Written.Count + 1, Written.Bytes + bytes.Length, Written.Ms + Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         foreach (var (type, references) in written.Outside) Outside[type] = Outside.GetValueOrDefault(type) + references;
-        if (dump != null) File.WriteAllBytes($"{dump}-{_decision}.json", bytes);
         var run = SecondWorld.Alone(real);
         return () => new Imported(EngineWorld.Import(bytes, run));
     }

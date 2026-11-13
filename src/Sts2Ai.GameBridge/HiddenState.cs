@@ -12,11 +12,14 @@ namespace Sts2Ai.GameBridge;
 /// What a combat's observation hides that changes how the same plays turn out (<see cref="ICombatWorld.HiddenKey"/>):
 /// the draw pile's order, the position of every random stream, and each monster's queued move. The order of this
 /// turn's plays is left out on purpose, so the same plays in another order still meet as one state in search.
-/// <see cref="Full"/> adds what else the game keeps, for the SL world.
+/// <see cref="Full"/> adds what else the game keeps, for the SL world. Each key is the hash of a text, which another
+/// world that must tell the same states apart (the engine's) can be held against.
 /// </summary>
 public static class HiddenState
 {
-    public static ulong Key(CombatState st, Player player)
+    public static ulong Key(CombatState st, Player player) => ProtocolJson.Hash(KeyText(st, player));
+
+    public static string KeyText(CombatState st, Player player)
     {
         var key = new StringBuilder();
         foreach (var card in player.PlayerCombatState!.DrawPile.Cards) key.Append(Observe.CardKey(card)).Append('|');
@@ -25,7 +28,7 @@ public static class HiddenState
         foreach (var creature in st.Enemies.Concat(st.Allies))
             if (creature.Monster is { IsMutable: true } monster)
                 key.Append(monster.Rng.ToSerializable().counter).Append(':').Append(monster.NextMove?.Id).Append(',');
-        return ProtocolJson.Hash(key.ToString());
+        return key.ToString();
     }
 
     /// <summary>
@@ -33,14 +36,16 @@ public static class HiddenState
     /// besides <see cref="Key"/> it holds each monster's moves so far and what the combat's history holds of this turn.
     /// The turn's entries go in as a multiset, so the same plays in another order still meet.
     /// </summary>
-    public static ulong Full(CombatState st, Player player)
+    public static ulong Full(CombatState st, Player player) => ProtocolJson.Hash(FullText(st, player));
+
+    public static string FullText(CombatState st, Player player)
     {
         var key = new StringBuilder().Append(Key(st, player)).Append('#');
         foreach (var creature in st.Enemies.Concat(st.Allies))
             if (creature.Monster is { IsMutable: true, MoveStateMachine: { } machine })
                 key.AppendJoin(',', machine.StateLog.Select(m => m.Id)).Append('|');
         key.AppendJoin(';', CombatManager.Instance.History.Entries.Where(e => e.HappenedThisTurn(st)).Select(Entry).Order(StringComparer.Ordinal));
-        return ProtocolJson.Hash(key.ToString());
+        return key.ToString();
     }
 
     /// <summary>A history entry as its kind, who acted, and what it acted with. Not the game's own description, which

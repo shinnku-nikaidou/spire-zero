@@ -56,16 +56,12 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
 
     public CombatObservation Observe() => ProtocolJson.Deserialize<CombatObservation>(ObservationJson());
 
-    /// <summary>What a combat can change of the run around it, as <c>sz_world_run</c> writes it: the members of
-    /// <see cref="RunView"/> of these names, in <see cref="ProtocolJson"/>'s form.</summary>
-    private sealed record RunChange(int Hp, int MaxHp, int Gold, IReadOnlyList<CardView> Deck, IReadOnlyList<RelicView> Relics, IReadOnlyList<string?> Potions);
-
+    /// <summary>The run given at the import with what the combat has changed of it since (<see cref="RunChange"/>).</summary>
     public RunView Run()
     {
         Native.Buf buf;
         if (Native.sz_world_run(_world, &buf) != 0) throw Native.Failed("sz_world_run");
-        var now = ProtocolJson.Deserialize<RunChange>(Encoding.UTF8.GetString(Native.Take(buf)));
-        return _run with { Hp = now.Hp, MaxHp = now.MaxHp, Gold = now.Gold, Deck = now.Deck, Relics = now.Relics, Potions = now.Potions };
+        return ProtocolJson.Deserialize<RunChange>(Encoding.UTF8.GetString(Native.Take(buf))).Over(_run);
     }
 
     public IReadOnlyList<CombatAction> Legal()

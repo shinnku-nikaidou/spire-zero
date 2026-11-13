@@ -85,7 +85,21 @@ internal static class JsonDiff
 /// <param name="Subject">What the action acts with: "play CARD", "potion POTION", "pick SOURCE" (the prompt's asker), "end_turn".</param>
 /// <param name="Make">Makes a second world standing at this decision; null where none can be made (<see cref="ISecondWorlds.At"/>).</param>
 /// <param name="Present">The ids in the combat at the decision, by kind (<see cref="GameIds.Present"/>).</param>
-internal sealed record RealStep(Shown Shown, int Round, CombatAction? Action, string? Subject, Func<SecondWorld>? Make, IReadOnlyDictionary<string, HashSet<string>> Present);
+/// <param name="Kept">What a dump keeps of the decision besides; null when nothing is dumped.</param>
+internal sealed record RealStep(Shown Shown, int Round, CombatAction? Action, string? Subject, Func<SecondWorld>? Make, IReadOnlyDictionary<string, HashSet<string>> Present,
+    Kept? Kept = null);
+
+/// <summary>What a dump keeps of a decision of the real combat besides what the check compares (<see cref="CombatDump"/>).</summary>
+/// <param name="Prompt">The decision is a card prompt, in the middle of an action.</param>
+/// <param name="Export">The live combat as <c>EngineExport</c> writes it; null where the engine takes none in: at a card
+/// prompt, and once the combat is over.</param>
+/// <param name="Run">What the combat has changed of the run (<c>RunChange</c>), as the JSON <c>sz_world_run</c> writes.</param>
+/// <param name="Keys">How search tells the state apart; null once the combat is over, where it does not ask.</param>
+internal sealed record Kept(bool Prompt, byte[]? Export, string Run, Keys? Keys);
+
+/// <summary>A state's keys in search: the world's hidden key (<c>HiddenState.Full</c>) with the two texts it is the hash
+/// of, and the observation's key (<c>PimcBrain.StateKey</c>).</summary>
+internal sealed record Keys(ulong Hidden, ulong State, string HiddenKeyText, string HiddenText);
 
 /// <summary>A place where the second world did not show what the real game showed.</summary>
 /// <param name="Check">"import", "step" or "continue".</param>
@@ -124,16 +138,18 @@ internal static class Lockstep
 {
     /// <param name="seed">Seeds the policy, the answers to card prompts, and which decisions are continued from.</param>
     /// <param name="continues">How many decisions the continue check starts from, drawn evenly; null: every one.</param>
-    public static LockstepResult Check(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, int? continues)
+    /// <param name="keep">Called at every decision of the real combat and at its end, while it is live: what a dump
+    /// keeps of it; null: nothing is dumped.</param>
+    public static LockstepResult Check(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, int? continues, Func<CombatSession, Kept>? keep = null)
     {
         HeadlessGame.TakeErrors();
-        var (steps, outcome) = Record(pump, setup, seed, worlds);
+        var (steps, outcome) = Record(pump, setup, seed, worlds, keep);
         var gameErrors = HeadlessGame.TakeErrors();
         return Compare(steps, continues, seed) with { Outcome = outcome.ToString(), GameErrors = gameErrors };
     }
 
     /// <summary>Plays the real combat to its end: every decision as the game showed it, with its action.</summary>
-    private static (List<RealStep> Steps, CombatOutcome Outcome) Record(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds)
+    private static (List<RealStep> Steps, CombatOutcome Outcome) Record(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, Func<CombatSession, Kept>? keep)
     {
         var rng = new Random(seed);
         var steps = new List<RealStep>();
@@ -144,14 +160,15 @@ internal static class Lockstep
             var shown = Shown.Of(real);
             var present = GameIds.Present(CombatSession.State, real.Player, real.Prompt);
             int round = CombatSession.State.RoundNumber;
+            var kept = keep?.Invoke(real);
             if (real.IsCapped)
             {
-                steps.Add(new(shown, round, null, null, null, present));
+                steps.Add(new(shown, round, null, null, null, present, kept));
                 return (steps, real.Outcome);
             }
             var make = worlds.At(real);
             var action = real.Next(policy);
-            steps.Add(new(shown, round, action, Subject(real, action), make, present));
+            steps.Add(new(shown, round, action, Subject(real, action), make, present, kept));
             real.Execute(action);
         }
     }
