@@ -253,3 +253,17 @@
     （`tmp/engine/hashed.txt`，141,720 步）；沒遇到的 19 個能力已分類，30 個 id 以名單排除並附理由。裁定：Dread 模式才有的
     那一組（各 Boss 的 dominion 等）維持排除，理由寫「只在 Dread 模式；模擬器打標準局」。排除後只剩 `IMPROVEMENT_POWER`
     還沒遇到（要整局才碰得到，正在多跑 240 局）。樣本 `tmp/engine/fixtures` 請它照現在的 schema 重倒成新格式、只留一份。
+- 04:09 （協調）狀態裡的 delegate（engine-port 提出，筆記 `delegates.md`）：
+  - 問題：怪物的招式（`MoveState._onPerform`）、狀態機的分支條件、意圖的傷害算式、牌的倍率算式都是 delegate，匯出帶不走。
+    現在的做法是匯入後用遊戲自己的程式碼重建（重跑 `GenerateMoveStateMachine`、`CanonicalVars`，依狀態 id／變數名對回去），
+    但「當場做出來的招式」重建不了：暈眩的怪物下一招是 `new MoveState("STUNNED", stunMove, ..)`（13 個呼叫點各給各的），
+    `IllusionPower` 的復活招同理。所以 Corpse Slugs 從第一次暈眩起的匯出都被拒（剛才那 36 份）。
+  - 裁定：採它的提案——delegate 是匯出裡的值（哪個方法、綁在誰身上），閉包抓住的變數是狀態；不再重建。補三點：
+    (1) 閉包物件（編譯器做的 display class）當一般物件匯出，保有身分，兩個 delegate 共用同一個閉包時不會被拆開；
+    (2) 哪個 lambda 對應 DLL 裡哪個方法，從組件的 IL 順序配對，並逐對檢查簽章與抓住的變數名，對不上就在生成時報錯，不猜；
+    (3) 先由 engine-bridge 對全量掃描與整局做一次普查（狀態裡實際出現哪些 delegate、閉包有哪些欄位、抓住的值會不會變），
+    用來估工作量，之後當作翻譯器那張表的完整性檢查。
+  - 順序：engine-port 先把手寫核心與 `world.rs` 做到戰鬥能從匯入的狀態打下去（里程碑二，用匯得進來的遭遇），再做引擎這邊的
+    delegate；engine-bridge 現在做普查與匯出端。在那之前含當場招式的匯出照規則被拒。
+  - engine-port 另回報：我提的三個缺口已補（commit 8029dedd）；翻譯器新增一條規則——被呼叫端會改動的集合參數要回到呼叫端
+    （C# 的集合是參考），否則每隻怪的狀態機都是空的，共 96 個呼叫點。它自己的小樣本 780 份匯出全部匯得進來。
