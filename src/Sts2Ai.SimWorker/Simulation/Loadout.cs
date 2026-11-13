@@ -1,5 +1,7 @@
+using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves.Runs;
 
 namespace Sts2Ai.SimWorker.Simulation;
@@ -70,7 +72,10 @@ internal sealed record Loadout(
         });
 
     /// <summary>Replaces the player's starting inventory. Must run before the player is added to a run.</summary>
-    public void ApplyTo(Player player)
+    /// <param name="ascension">The run's ascension level: from Tight Belt on, setting up the run takes a slot off the
+    /// belt, which the game cannot do to a full one.</param>
+    /// <exception cref="ArgumentException">The potions do not fit the belt.</exception>
+    public void ApplyTo(Player player, int ascension)
     {
         if (Deck != null)
         {
@@ -97,6 +102,8 @@ internal sealed record Loadout(
             foreach (var id in Potions)
                 if (!player.AddPotionInternal(Models.Find<PotionModel>(id).ToMutable(), silent: true).success)
                     throw new ArgumentException($"no free potion slot for {id}");
+            if (Potions.Count == player.MaxPotionCount && new AscensionManager(GameMode.Standard, ascension).HasLevel(AscensionLevel.TightBelt))
+                throw new ArgumentException($"{Potions.Count} potions do not fit the belt: ascension {ascension} leaves {player.MaxPotionCount - 1} slots");
         }
         if (MaxHp is int max) player.Creature.SetMaxHpInternal(max);
         if (Hp is int hp) player.Creature.SetCurrentHpInternal(Math.Min(hp, player.Creature.MaxHp));

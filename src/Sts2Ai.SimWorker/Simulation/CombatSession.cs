@@ -139,7 +139,7 @@ internal sealed class CombatSession : IDisposable
     {
         var character = ModelDb.AllCharacters.First(c => c.Id.Entry.Equals(setup.Character, StringComparison.OrdinalIgnoreCase));
         var player = Player.CreateForNewRun(character, UnlockState.all, LocalContext.NetId!.Value);
-        setup.Loadout?.ApplyTo(player);
+        setup.Loadout?.ApplyTo(player, setup.Ascension);
 
         var acts = ActModel.GetDefaultList().ToList();
         var encounterAct = ModelDb.ActsByIndex[setup.ActIndex].FirstOrDefault(a => a.AllEncounters.Contains(setup.Encounter));
@@ -148,7 +148,19 @@ internal sealed class CombatSession : IDisposable
         var run = RunState.CreateForTest([player], acts, null, GameMode.Standard, isCustomGame: false, setup.Ascension, setup.Seed);
         run.CurrentActIndex = setup.ActIndex;
         run.Map = new MockSinglePointActMap();
-        RunManager.Instance.SetUpTest(run, new NetSingleplayerGameService(), disableCombatStateSync: true, shouldSave: false);
+        try
+        {
+            RunManager.Instance.SetUpTest(run, new NetSingleplayerGameService(), disableCombatStateSync: true, shouldSave: false);
+        }
+        catch
+        {
+            // The game holds the run from the first line of its setup: one that fails there must not stay, or no
+            // combat of the process starts after it.
+            RunManager.Instance.CleanUp(graceful: true);
+            pump.Drain();
+            LocalContext.NetId = 1UL;
+            throw;
+        }
 
         var trace = new List<TraceEvent>();
         var selector = new PromptSelector(pump, (_, picks) => trace.Add(new(TraceKind.Choice, Picks: picks)));

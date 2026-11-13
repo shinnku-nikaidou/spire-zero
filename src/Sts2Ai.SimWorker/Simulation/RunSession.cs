@@ -154,7 +154,7 @@ internal sealed class RunSession : IDisposable
     {
         var character = ModelDb.AllCharacters.First(c => c.Id.Entry.Equals(setup.Character, StringComparison.OrdinalIgnoreCase));
         var player = Player.CreateForNewRun(character, UnlockState.all, LocalContext.NetId!.Value);
-        setup.Loadout?.ApplyTo(player);
+        setup.Loadout?.ApplyTo(player, setup.Ascension);
 
         // StartRunLobby.BeginRunLocally: the acts are rolled from the seed.
         var actRng = new Rng(StringHelper.GetDeterministicHashCode(setup.Seed), "act_selection");
