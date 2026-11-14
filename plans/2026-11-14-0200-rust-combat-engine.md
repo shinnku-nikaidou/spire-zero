@@ -917,3 +917,22 @@
   其餘都是值（ModelId、MapCoord，逐欄位比，與遊戲的一致）；MapPoint、RestSiteOption 兩處原本就未翻譯。定向 dump：Pael's
   Tooth 握著重複的卡與同卡不同附魔數值，六角色 × 四場 × 三套（72 場，54 勝）；舊引擎在這批 31 個 step、999 個 continued
   失敗，新的全過。四項檢查：all、runs、tooth、c1752 全過（all 1,068 場；runs 959 場）。請協調者重跑 seed 17。
+- 15:03 （engine-bridge）**步驟 7 的準備**（照 14:20 的分工；沒送 pool 工作、沒重新部署 worker、沒動正在跑的 step 用到的東西）。
+  - **建置包帶著引擎**：fleet 的建置是本機的 `tmp/build.sh`（不進 git；`box.py run` 與 `dist-admin.py bundle` 都用它建 REV）。
+    它現在建好模擬器之後，若那個 REV 有 `engine/`，就在同一份原始碼上跑 `engine/gen.sh --check` 與 `cargo build --release`，把
+    函式庫和 schema（改名 `sts2ai_engine.schema.json`）放進模擬器的 release 資料夾——模擬器本來就在程式旁邊找這兩個檔，worker
+    寫跨越的匯出也用同一份 schema——再刪掉約 0.7 G 的建置樹。`dist-admin.py bundle` 原樣把整個 release 資料夾打包，所以 pool 的
+    程式、啟動腳本都沒改。f7ec5be1：整個建置 49 秒，建置包 47.9 MB。**14:22 以前建好的 `tmp/builds/REV` 沒有引擎**，那些 REV 要跑
+    引擎世界得先刪掉重建。本機用這個建置、不設任何引擎變數跑 Fool A10 種子 78：引擎對重播逐筆相同（10 個計畫、17,112 個節點）。
+  - **glibc**（函式庫的符號最高要到 GLIBC_2.34，另外要 `libgcc_s.so.1`；經 `host/on.sh` 唯讀查）：pushqkzh 2.37、pusheen 2.35、
+    ds6754 2.36、cshinnku 2.43、hostc 2.36、ovh 2.43、gcpsg 2.41、ecs1041 2.36，都是 x86-64、都有 `libgcc_s.so.1`，全部載得起來。
+    hk8 和 ecs1030 連不上（hk8：nyctl 找不到這台，ssh 逾時；ecs1030：ssh 逾時），沒查到。Colab 的 Ubuntu 22.04 是 2.35。
+    Mac 要的是 dylib，這個建置包只給 linux-x64。
+  - **gcpsg 上的手動煙霧測試**（不經 pool）：f7ec5be1 的建置包照 `dist-admin.py bundle` 的 `stage_tree` 在本機打包（沒放上 hub），
+    帶到 gcpsg，照 `worker.py` 的 install 步驟解到一個自己的 home 底下（啟動腳本的 `~/sts2` 就是那裡，fleet 的 `~/sts2` 沒碰），
+    inputs 只有冠軍檔與它的兩個網路，從 inputs 資料夾執行。Defect A0 種子 78，重播 3 個 worker 對引擎 3 執行緒：**逐筆相同**，
+    重規劃 0，搜尋統計相同（25 個計畫、104,049 個節點、486 個回合；引擎那局跨越 331 次，所以 worker 也從建置包讀到了 schema），
+    和本機驗收的數字一樣。執行中的行程沒有任何引擎變數，載入的是建置包裡那份函式庫。牆鐘：重播 2,070 秒、引擎 248 秒（gcpsg
+    負載約 50–60／64，只當參考）。做完已刪掉 gcpsg 上解開的建置包、遊戲檔與權重。
+  - 預設仍是 replay。要在 pool 上試引擎世界，只要一個 job 的選項加 `--combat-world engine`、REV 是 14:22 之後才建的；要不要試由協調者
+    問用戶。
