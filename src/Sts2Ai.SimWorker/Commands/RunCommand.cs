@@ -9,7 +9,7 @@ namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
 /// run: whole runs through Harness. --policy picks the brain of every decision of a combat, its card prompts among
-/// them; --macro picks the brain of every decision outside combat.
+/// them; --macro picks the brain of every decision outside combat. plan searches in the engine unless --combat-world replay.
 /// --check plays each seed again over the wire, to a brain in this process, and compares: observations, records and
 /// decision logs included (each observation must survive a JSON round trip); and replays each node from its
 /// checkpoint (the SL clone). Reports results, hashes and surface coverage.
@@ -31,7 +31,7 @@ internal static class RunCommand
     private static readonly Option<string?> AutoWin = Opt.Maybe<string?>("--auto-win",
         "acts, numbered from 1 as the game shows them, such as 1,2: their plain monster fights, an event's included, are won at their start " +
         "(the game's win command) with their rewards, so only elites and bosses are fought there; for self-play, as no report or gate takes such a run");
-    private static readonly ChampionArgs Champion = new(file: true);
+    private static readonly ChampionArgs Champion = new(file: true, world: "engine");
     private static readonly LoadoutArgs Loadout = new();
 
     public static Command Command()
@@ -64,7 +64,7 @@ internal static class RunCommand
         bool log = check || logFile != null;
         var champion = Champion.Read(r);
         if (champion.Policy == "plan" && env != PlayEnvironment.SL) throw new CliException("plan plays in SL only (--env SL)");
-        if (champion.Engine && check) throw new CliException("--check plays each seed again over the wire, where no live combat reaches the engine: not with --combat-world engine");
+        if (champion.Engine && check) throw new CliException("--check plays each seed again over the wire, where no live combat reaches the engine: plan needs --combat-world replay there");
         using var workerPool = champion.Pool();
         var harness = champion.Harness(workerPool, log);
         // --check plays each seed again over the wire, to a brain server in this process with the same champion, whose

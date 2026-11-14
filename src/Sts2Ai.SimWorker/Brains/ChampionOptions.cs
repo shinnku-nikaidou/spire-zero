@@ -14,8 +14,8 @@ namespace Sts2Ai.SimWorker.Brains;
 /// evenly, whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
 /// <param name="MacroExplore">For self-play only: l0's softmax temperature τ over the log of V's values for the decisions
 /// not drawn evenly (--macro-explore, <see cref="Softmax"/>); 0 for none, V's best.</param>
-/// <param name="Engine">Whether plan searches in the engine (--combat-world engine, <see cref="EnginePlanner"/>) rather than
-/// on the node's clone. It is the same champion either way, by the same name.</param>
+/// <param name="Engine">Whether plan searches in the engine (--combat-world engine, run's default, <see cref="EnginePlanner"/>)
+/// rather than on the node's clone (replay, brain's). It is the same champion either way, by the same name.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue? Value, string? ValueFile,
     LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0, bool Engine = false)
 {

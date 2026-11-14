@@ -28,6 +28,28 @@ public sealed class CliTests : IDisposable
         Assert.Equal("play", r.GetValue<string>("--policy"));
         Assert.Equal(8, r.GetValue<int>("--worlds"));
         Assert.Null(r.GetValue<int?>("--n"));
+        // run's plan searches in the engine; brain's hosts send no live combat, so its plan searches on the replayed clone.
+        Assert.Equal("engine", r.GetValue<string>("--combat-world"));
+        Assert.Equal("replay", Cli.Parse(["brain"]).GetValue<string>("--combat-world"));
+    }
+
+    [Fact]
+    public void PlanSearchesInTheCommandsWorldAndOtherBrainsRefuseOnlyTheEngineAskedFor()
+    {
+        var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
+        string[] plan = ["--policy", "plan", "--combat-net", net, "--value", value];
+        var run = new ChampionArgs(file: false, world: "engine");
+        var brain = new ChampionArgs(file: false);
+        var runCommand = Opt.Command("run", "", run.Options);
+        var brainCommand = Opt.Command("brain", "", brain.Options);
+
+        Assert.True(run.Read(runCommand.Parse(plan)).Engine);
+        Assert.False(run.Read(runCommand.Parse([.. plan, "--combat-world", "replay"])).Engine);
+        Assert.False(brain.Read(brainCommand.Parse(plan)).Engine);
+        Assert.True(brain.Read(brainCommand.Parse([.. plan, "--combat-world", "engine"])).Engine);
+        Assert.False(run.Read(runCommand.Parse(["--policy", "play"])).Engine);
+        Assert.Throws<CliException>(() => run.Read(runCommand.Parse(["--policy", "play", "--combat-world", "engine"])));
     }
 
     [Fact]
@@ -95,6 +117,7 @@ public sealed class CliTests : IDisposable
 
         Assert.False(noSl.OnClone);
         Assert.True(sl.OnClone);
+        Assert.False(noSl.Engine || sl.Engine);
         Assert.Equal("combat pimc combat-tiny 8x300, combat prompts first, macro l0 pure-v-tiny-win, macro prompts l0 pure-v-tiny-win", noSl.Name);
         Assert.EndsWith(", combat prompts first, macro l0 pure-v-tiny-win clone, macro prompts l0 pure-v-tiny-win clone", sl.Name);
         Assert.StartsWith("combat plan combat-tiny ", sl.Name);

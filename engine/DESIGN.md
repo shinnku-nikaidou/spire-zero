@@ -28,6 +28,11 @@ Three rules follow from the goal and decide everything below.
 Nothing derived from the game is in git: not the generated Rust, not the schema, not dumped tables. They are built from
 the user's own copy of the game, like `tmp/gamebin`.
 
+`sim run`'s planner searches in the engine (`--combat-world engine`, its default): the run's own process holds the live
+game, so each plan imports the combat there. `--combat-world replay`, the node's clone in the worker processes, stays for
+checks. A host over the wire sends no live combat, so `sim brain` (the mod's brain) plans on the clone, and `run --check`,
+which plays each seed again over the wire, needs `--combat-world replay`.
+
 ## Pieces
 
 | path | what | written by |
