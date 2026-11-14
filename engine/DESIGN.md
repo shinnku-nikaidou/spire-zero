@@ -265,6 +265,10 @@ puts a selector of its own on the selector stack.
   translated code reads and writes them there.
 - The Rust structs are generated from the same walk: `Arenas` (one `Arena<TData>` per arena), `TData` per class, `TExt`
   for the fields of the classes below `T`, `Roots`.
+- A copy of a combat shares its objects with the combat it was copied from: an arena is a list of handles
+  (`Vec<Arc<TData>>`), a copy copies the handles, and an object is copied when one of the two first writes to it.
+  What a combat never writes after it was made (the run's history, the combat's own history entries, most cards)
+  is held once by every world a search makes of it.
 - A field that holds a delegate is a field of the schema, of kind `delegate`, and the classes of what lambdas capture
   (Delegates, above) are classes of the schema, each with its arena after the game's: `name` as in the engine
   (`CreatureCmdClosure30_0`), `cs` the compiler's class (`...CreatureCmd+<>c__DisplayClass30_0`), no base, the fields
@@ -457,8 +461,9 @@ C ABI: a world is held against a record by its observation, its legal actions, i
 run and its two keys) and `--test world` (every combat is played through by the world alone, no action refused). A
 dump is of one schema: it is stale when the schema's hash changes. `--test speed -- --ignored --nocapture` measures the
 engine's own operations on the middle decision of the dump's combats (import, clone, apply by kind of action, the
-observation, the keys) and what a copy costs arena by arena. `engine/reach.py` lists the members without code that a
-combat could reach, each with the chain of callers.
+observation, the keys) and what a copy costs arena by arena; its `spin` does one kind of call again and again for
+`engine/sample.py`, which stops the process with gdb and counts which functions were on the stack. `engine/reach.py`
+lists the members without code that a combat could reach, each with the chain of callers.
 
 ## Credit
 

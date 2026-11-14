@@ -6,6 +6,11 @@
 //! For each sampled state: the import, a copy of the world, an action (a play, the end of the turn), the observation,
 //! the plays, the two keys, all through the C ABI as the C# side calls them; what a copy allocates; and, arena by
 //! arena, what the copy's time and bytes go to and how much of it the rest of the combat never changes.
+//!
+//! `spin` is for a sampling profiler (engine/sample.py): it does one kind of call over the same states again and again,
+//!
+//!     STS2AI_SPEED_SPIN=play|end_turn|observe|hidden_key|legal|clone STS2AI_SPEED_SECONDS=60 \
+//!         cargo test --release --test speed spin -- --ignored --nocapture
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::BTreeMap;
@@ -138,9 +143,8 @@ fn kind_of(action: &str) -> &'static str {
     }
 }
 
-#[test]
-#[ignore = "a measurement, run by hand"]
-fn speed() {
+/// The dump's folder and its combats, every so many of them: about sixty.
+fn sampled() -> (std::path::PathBuf, Vec<std::path::PathBuf>) {
     let root = std::path::PathBuf::from(
         std::env::var_os("STS2AI_ENGINE_FIXTURES").expect("STS2AI_ENGINE_FIXTURES"),
     );
@@ -151,26 +155,111 @@ fn speed() {
         .collect();
     folders.sort();
     let every = (folders.len() / 60).max(1);
+    (root, folders.into_iter().step_by(every).collect())
+}
+
+/// The decision in the middle of a combat, at a place where the engine takes a combat in: its number and its export.
+fn middle(folder: &std::path::Path) -> Option<(usize, Vec<u8>)> {
+    let combat: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(folder.join("combat.json")).unwrap())
+            .unwrap();
+    let decisions = combat["decisions"].as_array().unwrap();
+    let with_export: Vec<usize> = (0..decisions.len() - 1)
+        .filter(|k| {
+            folder.join(format!("{k}.export.json")).exists()
+                && decisions[*k]["prompt"].as_bool() != Some(true)
+        })
+        .collect();
+    let k = *with_export.get(with_export.len() / 2)?;
+    Some((
+        k,
+        std::fs::read(folder.join(format!("{k}.export.json"))).unwrap(),
+    ))
+}
+
+/// One kind of call, over the sampled states, for as long as asked: what a sampling profiler looks at. Every call is
+/// on a fresh copy of its state (a world keeps its observation once made, and an action changes it), so the copy and
+/// its release are in the samples too, under `sz_world_clone` and `sz_world_free`.
+#[test]
+#[ignore = "for a profiler, run by hand"]
+fn spin() {
+    let what = std::env::var("STS2AI_SPEED_SPIN").expect("STS2AI_SPEED_SPIN");
+    let seconds: f64 = std::env::var("STS2AI_SPEED_SECONDS")
+        .map(|s| s.parse().expect("STS2AI_SPEED_SECONDS"))
+        .unwrap_or(60.0);
+    let (_, folders) = sampled();
+    // Each state with the actions of the kind asked for.
+    let mut states: Vec<(World, Vec<String>)> = Vec::new();
+    for folder in &folders {
+        let Some((_, export)) = middle(folder) else {
+            continue;
+        };
+        let Some(world) = World::import(&export) else {
+            continue;
+        };
+        let legal = String::from_utf8(world.text(ffi::sz_world_legal)).unwrap();
+        let actions: Vec<String> = legal
+            .lines()
+            .filter(|l| l.split(':').next() == Some(what.as_str()))
+            .map(str::to_string)
+            .collect();
+        states.push((world, actions));
+    }
+    eprintln!(
+        "spin: {what} over {} states for {seconds} s, process {}",
+        states.len(),
+        std::process::id()
+    );
+    let start = Instant::now();
+    let mut calls = 0u64;
+    while start.elapsed().as_secs_f64() < seconds {
+        for (world, actions) in &states {
+            match what.as_str() {
+                "play" | "end_turn" => {
+                    for action in actions {
+                        let mut copy = world.copy();
+                        assert!(copy.apply(action), "{action}");
+                        calls += 1;
+                    }
+                }
+                "observe" => drop(world.copy().text(ffi::sz_world_observe)),
+                "legal" => drop(world.copy().text(ffi::sz_world_legal)),
+                "hidden_key" => {
+                    unsafe { ffi::sz_world_hidden_key(world.copy().0) };
+                }
+                "clone" => drop(world.copy()),
+                other => panic!(
+                    "STS2AI_SPEED_SPIN={other}: play, end_turn, observe, hidden_key, legal or clone"
+                ),
+            }
+            if actions.is_empty() {
+                calls += 1;
+            }
+        }
+    }
+    let spent = start.elapsed().as_secs_f64();
+    eprintln!(
+        "spin: {calls} calls in {spent:.1} s, {:.1} us a call with its copy",
+        spent * 1e6 / calls as f64
+    );
+}
+
+#[test]
+#[ignore = "a measurement, run by hand"]
+fn speed() {
+    let (root, folders) = sampled();
     let mut series: BTreeMap<&'static str, Series> = BTreeMap::new();
     let mut arenas: BTreeMap<&'static str, (usize, f64, u64, u64, usize)> = BTreeMap::new();
     let (mut states, mut holding, mut steady_bytes, mut all_bytes) = (0usize, 0usize, 0u64, 0u64);
     let mut inline = 0usize;
-    for folder in folders.iter().step_by(every) {
+    for folder in folders.iter() {
+        let Some((k, export)) = middle(folder) else {
+            continue;
+        };
         let combat: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(folder.join("combat.json")).unwrap())
                 .unwrap();
         let decisions = combat["decisions"].as_array().unwrap();
-        // The state in the middle of the combat, at a place where the engine takes a combat in.
-        let with_export: Vec<usize> = (0..decisions.len() - 1)
-            .filter(|k| {
-                folder.join(format!("{k}.export.json")).exists()
-                    && decisions[*k]["prompt"].as_bool() != Some(true)
-            })
-            .collect();
-        let Some(&k) = with_export.get(with_export.len() / 2) else {
-            continue;
-        };
-        let export = std::fs::read(folder.join(format!("{k}.export.json"))).unwrap();
         let Some(world) = World::import(&export) else {
             continue;
         };

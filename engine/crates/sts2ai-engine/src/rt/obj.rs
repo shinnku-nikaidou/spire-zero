@@ -65,12 +65,28 @@ pub trait Stored: Clone + 'static {
 /// (the game's ModelDb: one per model class). Every combat starts with the same canonical models and shares them; a
 /// combat that writes to one (the game fills a canonical model's caches when they are first read) gets its own copy
 /// of them at that moment.
+///
+/// A copy of a combat shares its objects with the combat it was copied from: copying an arena copies the handles, and
+/// an object is copied when one of the two first writes to it. What a combat never writes (the run's history, the
+/// combat's own history entries, most cards) is held once by every copy made of it.
 #[derive(Clone, Debug)]
 pub struct Arena<T> {
-    pub items: Vec<T>,
+    items: Vec<Arc<T>>,
     pub canon: Arc<Vec<T>>,
     /// Set while the canonical models are being built: what is made then is canonical.
     pub canon_build: bool,
+}
+
+/// The object behind a handle for writing: the handle's own, copied first when another copy of the combat holds it too.
+#[inline]
+fn owned<T: Clone>(slot: &mut Arc<T>) -> &mut T {
+    if Arc::strong_count(slot) != 1 {
+        *slot = Arc::new(T::clone(slot));
+    }
+    // SAFETY: the count is 1 and no Weak is ever made of an arena's object, so this handle is the only one; it is
+    // borrowed mutably, so nothing can copy it while the reference lives. A count read as more than 1 after another
+    // thread let go only costs a copy.
+    unsafe { &mut *(Arc::as_ptr(slot) as *mut T) }
 }
 
 /// An arena seen without its type, for measurements (tests/speed.rs): how much it holds, what a copy of it costs,
@@ -83,6 +99,8 @@ pub trait AnyArena {
     /// Makes a copy and drops it.
     fn copy(&self);
     fn text(&self) -> String;
+    /// How many of the objects another copy of the combat holds too.
+    fn shared(&self) -> usize;
 }
 
 impl<T: Clone + std::fmt::Debug> AnyArena for Arena<T> {
@@ -97,6 +115,12 @@ impl<T: Clone + std::fmt::Debug> AnyArena for Arena<T> {
     }
     fn text(&self) -> String {
         format!("{:?}", self.items)
+    }
+    fn shared(&self) -> usize {
+        self.items
+            .iter()
+            .filter(|item| Arc::strong_count(item) != 1)
+            .count()
     }
 }
 
@@ -117,8 +141,12 @@ impl<T: Stored> Arena<T> {
             canon.push(value);
             return Obj::new(T::TAG, canon.len() - 1, true);
         }
-        self.items.push(value);
+        self.items.push(Arc::new(value));
         Obj::new(T::TAG, self.items.len() - 1, false)
+    }
+    /// The combat's own objects, in the order they were made.
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.items.iter().map(|item| &**item)
     }
     pub fn len(&self) -> usize {
         self.items.len()
@@ -168,7 +196,7 @@ impl<T: Stored> IndexMut<Obj> for Arena<T> {
         if o.is_canon() {
             &mut Arc::make_mut(&mut self.canon)[o.ix()]
         } else {
-            &mut self.items[o.ix()]
+            owned(&mut self.items[o.ix()])
         }
     }
 }

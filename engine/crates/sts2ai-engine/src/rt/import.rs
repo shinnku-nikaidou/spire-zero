@@ -80,8 +80,7 @@ pub fn arena<T: Stored>(
     read: fn(&Value) -> Res<T>,
 ) -> Res<()> {
     for (i, o) in array(v)?.iter().enumerate() {
-        into.items
-            .push(read(o).map_err(|e| format!("{name}[{i}]: {e}"))?);
+        into.alloc(read(o).map_err(|e| format!("{name}[{i}]: {e}"))?);
     }
     Ok(())
 }
