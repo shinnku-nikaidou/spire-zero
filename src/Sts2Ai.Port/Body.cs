@@ -109,6 +109,9 @@ public sealed partial class Body
         }
         frames.Pop();
         var head = new StringBuilder(prologue);
+        // A walk takes the kinds its caller's code does something for first thing (rt::wanted), so that no walk
+        // below sees them.
+        if (f.Iterator) head.Append("let __only = c.only.take();\n");
         foreach (var p in m.Parameters)
             if (p.RefKind == RefKind.Out && !w.IsDropped(p.Type)) head.Append($"let mut {NameOf(p)}: {T(p.Type)} = Default::default();\n");
         foreach (var h in f.Hoisted) head.Append(h).Append('\n');
@@ -155,7 +158,10 @@ public sealed partial class Body
         loops.Pop();
         string name = NameOf(item);
         sb.Append($"let __kept = match rt::memo::kept(c, {slot}, {key}) {{\nSome(__kept) => __kept,\nNone => {{\nlet __stamp = rt::memo::writes(c);\n{build}rt::memo::keep(c, {slot}, {key}, __stamp, {NameOf(list)})\n}}\n}};\n");
-        sb.Append($"{label}: for __at in 0..__kept.len() {{\nlet mut {name}: {T(item.Type)} = __kept.item(__at);\nif rt::memo::passes(c, &__kept, __at, |c: &mut Combat| {passes}) {{\n{hand}}}\n}}\n");
+        // An item of a kind the caller's code does nothing for is passed over before its test is asked: the walk
+        // goes through the positions of the kinds it was asked for, found once for the list.
+        sb.Append($"let __picked = rt::memo::picked(&__kept, __only, c);\n");
+        sb.Append($"{label}: for __n in 0..rt::memo::count(&__kept, &__picked) {{\nlet __at = rt::memo::nth(&__picked, __n);\nlet mut {name}: {T(item.Type)} = __kept.item(__at);\nif rt::memo::passes(c, &__kept, __at, |c: &mut Combat| {passes}) {{\n{hand}}}\n}}\n");
         Written++;
         foreach (var o in ops.Skip(at + 1)) Stmt(o, sb);
         w.Rep.Count("kept walks");
@@ -474,7 +480,12 @@ public sealed partial class Body
                         break;
                     case OperationKind.YieldReturn:
                         if (!frames.Peek().Iterator) throw new Unsupported("yield in a local function");
-                        sb.Append($"if __k({NoDrop(r.ReturnedValue!, "yields presentation")}, c)? {{\n{LeaveWith("Ok(true)")}\n}}\n");
+                        string yielded = NoDrop(r.ReturnedValue!, "yields presentation");
+                        // An object is handed on only when the caller's code does something for its kind.
+                        if (r.ReturnedValue!.Type != null && w.IsObj(r.ReturnedValue.Type))
+                            sb.Append($"{{\nlet __y = {yielded};\nif rt::wanted(__only, __y, c) && __k(__y, c)? {{\n{LeaveWith("Ok(true)")}\n}}\n}}\n");
+                        else
+                            sb.Append($"if __k({yielded}, c)? {{\n{LeaveWith("Ok(true)")}\n}}\n");
                         break;
                     default: sb.Append(Return(r.ReturnedValue)).Append('\n'); break;
                 }
@@ -867,7 +878,7 @@ public sealed partial class Body
         if (local == null) throw new Unsupported("foreach without a plain loop variable");
         if (!w.IsDropped(local.Type) && WalkCall(fe.Collection) is { } walk)
         {
-            ForEachWalk(fe, local, new WalkSource(each => Invoke(walk, each), T(World.WalkItem(walk.TargetMethod.ReducedFrom ?? walk.TargetMethod)!), null, null), new LazyCode("", "", LazyFirst, "return Ok(false);", 0), sb);
+            ForEachWalk(fe, local, new WalkSource(each => Invoke(walk, each), T(World.WalkItem(walk.TargetMethod.ReducedFrom ?? walk.TargetMethod)!), null, null), new LazyCode("", "", LazyFirst, "return Ok(false);", 0), sb, OnlyFor(fe, local, walk));
             return;
         }
         string coll;
@@ -965,6 +976,57 @@ public sealed partial class Body
         w.Rep.Count("get-or-insert of a collection in a dictionary, changed after: the local is the dictionary's own value");
         Written++;
         return true;
+    }
+
+    /// <summary>What a loop over a walk hands the walk as the kinds its body does something for (Combat::only),
+    /// set right before the call, whose target takes it first thing: what the walk was handed, when the body only
+    /// hands each value on (`foreach (var x in inner) yield return x;`); or the kinds that override the one virtual
+    /// member the body calls, when that member's own body leaves everything as it is for these arguments
+    /// (`item.TryModifyStarCost(card, cost, out cost)` against `{ modifiedCost = originalCost; return false; }`): for
+    /// any other kind the call does nothing. Null when the walk's call does more than name its arguments.</summary>
+    private string? OnlyFor(IForEachLoopOperation fe, ILocalSymbol local, IInvocationOperation walk)
+    {
+        if (walk.Instance is { } on && !IsSimple(Unwrapped(on)) && Unwrapped(on) is not IInstanceReferenceOperation) return null;
+        if (walk.Arguments.Any(a => !IsSimple(Unwrapped(a.Value)))) return null;
+        var body = fe.Body is IBlockOperation { Operations: [var one] } ? one : fe.Body;
+        if (frames.Peek().Iterator && body is IReturnOperation { Kind: OperationKind.YieldReturn, ReturnedValue: { } y } && Unwrapped(y) is ILocalReferenceOperation { Local: var yl } && Eq.Equals(yl, local))
+            return "__only";
+        if (body is not IExpressionStatementOperation { Operation: IInvocationOperation { Instance: { } inst, TargetMethod: var m } call }
+            || Unwrapped(inst) is not ILocalReferenceOperation { Local: var called } || !Eq.Equals(called, local) || !call.IsVirtual || !Dispatched(m))
+            return null;
+        var slot = (IMethodSymbol)World.Slot(m.OriginalDefinition);
+        if (slot.IsAbstract || w.MemberBody(slot) is not IMethodBodyOperation { BlockBody: { } own }) return null;
+        if (call.Arguments.Any(a => a.Value is not IDeclarationExpressionOperation && !IsSimple(Unwrapped(a.Value)))) return null;
+        // The member's own body: each out parameter set to a parameter, then a constant returned.
+        var copies = new Dictionary<int, int>();
+        var ops = own.Operations;
+        for (int i = 0; i < ops.Length; i++)
+        {
+            if (i == ops.Length - 1 && ops[i] is IReturnOperation { ReturnedValue: { ConstantValue.HasValue: true } or null }) break;
+            if (ops[i] is IExpressionStatementOperation { Operation: ISimpleAssignmentOperation { Target: IParameterReferenceOperation { Parameter: { RefKind: RefKind.Out } to }, Value: var from } }
+                && Unwrapped(from) is IParameterReferenceOperation { Parameter: { RefKind: RefKind.None } p })
+                copies[to.Ordinal] = p.Ordinal;
+            else return null;
+        }
+        // At the call, each out argument is the local handed in for the parameter it is set to.
+        ISymbol? Named(IOperation v) => (v is IDeclarationExpressionOperation de ? de.Expression : Unwrapped(v)) switch
+        {
+            ILocalReferenceOperation l => l.Local,
+            IParameterReferenceOperation pr => pr.Parameter,
+            _ => null,
+        };
+        foreach (var p in slot.Parameters)
+        {
+            if (p.RefKind == RefKind.Ref) return null;
+            if (p.RefKind != RefKind.Out) continue;
+            if (!copies.TryGetValue(p.Ordinal, out int fromOrdinal)) return null;
+            var outArg = call.Arguments.FirstOrDefault(a => a.Parameter?.Ordinal == p.Ordinal);
+            var inArg = call.Arguments.FirstOrDefault(a => a.Parameter?.Ordinal == fromOrdinal);
+            if (outArg == null || inArg == null || Named(outArg.Value) is not { } o || !Eq.Equals(o, Named(inArg.Value))) return null;
+        }
+        w.OnlyFilters.TryAdd(slot, 0);
+        w.Rep.Count("loops over a walk whose body only calls a member that does nothing where it is not overridden: the walk passes over the other kinds");
+        return $"Some(g::dispatch::{w.Module(slot.ContainingType)}::{w.FnName(slot)}__only)";
     }
 
     /// <summary>Whether a loop over a dictionary's pairs changes a pair's value in place, itself or through a local
@@ -1205,7 +1267,7 @@ public sealed partial class Body
     /// <summary>foreach over a call of a sequence written with yield. In C# the sequence's code and the loop's body
     /// take turns; here the loop's body is handed to the sequence, which runs it for each value as it reaches it. The
     /// body answers whether the walk ends (a break, or a return whose value waits in a variable outside).</summary>
-    private void ForEachWalk(IForEachLoopOperation fe, ILocalSymbol local, WalkSource walk, LazyCode run, StringBuilder sb)
+    private void ForEachWalk(IForEachLoopOperation fe, ILocalSymbol local, WalkSource walk, LazyCode run, StringBuilder sb, string? only = null)
     {
         var f = frames.Peek();
         var scope = new Scope { Label = Tmp("w"), Frame = frames.Count, Walk = true };
@@ -1226,6 +1288,7 @@ public sealed partial class Body
         string walked = walk.Call(each);
         sb.Append(run.Before);
         if (scope.Used) sb.Append($"let mut {scope.Label} = None;\n");
+        if (only != null) sb.Append($"c.only = {only};\n");
         // A stop (a card prompt) inside the body leaves through the sequence; where nothing is awaited there is none.
         sb.Append(f.Async || f.Iterator ? $"{walked}?;\n" : $"rt::walked({walked});\n");
         if (scope.Used) sb.Append($"if let Some(__v) = {scope.Label} {{\n{LeaveWith("__v")}\n}}\n");

@@ -120,8 +120,10 @@ public sealed class Output(World w, Emitter em)
                 // A slot one of whose bodies is written with yield has the `__each` form too: a body that is not
                 // gives its whole sequence, which is then handed out value by value.
                 bool walk = w.IsWalk(slot);
+                // The kinds the caller's code does something for go on to a body written with yield; a body that is
+                // not runs without them, as any code would.
                 string EachOf(IMethodSymbol impl) => w.Yields(impl)
-                    ? $"{w.Path(impl.ContainingType, impl)}::{w.FnName(impl)}__each{fish}({args}, __k)"
+                    ? $"{{ c.only = __only; {w.Path(impl.ContainingType, impl)}::{w.FnName(impl)}__each{fish}({args}, __k) }}"
                     : $"rt::walk({PathOf(impl)}, c, __k)";
                 var arms = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
                 var eachArms = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
@@ -147,10 +149,16 @@ public sealed class Output(World w, Emitter em)
                 foreach (var (path, kinds) in arms) body.Append($"            {string.Join(" | ", kinds)} => {path},\n");
                 body.Append($"            {fallback},\n        }}\n    }}\n\n");
                 count++;
+                if (w.OnlyFilters.ContainsKey(slot))
+                {
+                    var overriding = arms.Values.SelectMany(k => k).Order(StringComparer.Ordinal).ToList();
+                    body.Append($"    /// The kinds that override {type.Name}.{slot.Name}: for every other kind it does nothing (Body.OnlyFor).\n");
+                    body.Append($"    pub fn {name}__only(k: Kind) -> bool {{\n        {(overriding.Count == 0 ? "false" : $"matches!(k, {string.Join(" | ", overriding)})")}\n    }}\n\n");
+                }
                 if (!walk) continue;
                 string item = w.RType(World.WalkItem(slot)!);
                 body.Append($"    /// C#: virtual {type.Name}.{(slot.AssociatedSymbol ?? slot).Name}, value by value\n");
-                body.Append($"    pub fn {name}__each{sig.Generics}({ps}, __k: &mut dyn FnMut({item}, &mut Combat) -> R<bool>) -> R<bool> {{\n        match g::kinds::kind_of(me, c) {{\n");
+                body.Append($"    pub fn {name}__each{sig.Generics}({ps}, __k: &mut dyn FnMut({item}, &mut Combat) -> R<bool>) -> R<bool> {{\n        let __only = c.only.take();\n        match g::kinds::kind_of(me, c) {{\n");
                 foreach (var (path, kinds) in eachArms) body.Append($"            {string.Join(" | ", kinds)} => {path},\n");
                 body.Append($"            {(slot.IsAbstract ? fallback : $"_ => {EachOf(slot)}")},\n        }}\n    }}\n\n");
             }

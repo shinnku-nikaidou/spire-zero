@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
@@ -190,6 +191,12 @@ public sealed partial class World
         Rep.MemoMethods = seen.Count;
         return classes;
     }
+
+    /// <summary>The virtual members a loop over a walk calls on each value where the walk may pass over the kinds
+    /// that do not override them (Body.OnlyFor): each gets a test of its kinds beside its dispatcher.</summary>
+    public readonly ConcurrentDictionary<ISymbol, byte> OnlyFilters = new(Eq);
+
+    public IOperation? MemberBody(IMethodSymbol m) => BodyOf(m);
 
     /// <summary>A method's body as one operation, or null when it has none here (abstract, extern, an auto-accessor).</summary>
     private IOperation? BodyOf(IMethodSymbol m)

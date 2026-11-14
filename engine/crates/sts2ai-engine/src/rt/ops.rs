@@ -386,6 +386,16 @@ pub fn walk<T>(items: Vec<T>, c: &mut Combat, k: &mut dyn FnMut(T, &mut Combat) 
     Ok(false)
 }
 
+/// Whether a walk hands a value on to code that does something only for some kinds (`Combat::only`, taken when
+/// the walk began): every other kind is passed over, and null is handed on, as C# would call it and throw.
+#[inline]
+pub fn wanted(only: Option<fn(Kind) -> bool>, o: Obj, c: &Combat) -> bool {
+    match only {
+        None => true,
+        Some(f) => o.is_null() || f(kind_of(o, c)),
+    }
+}
+
 /// The end of a walk whose body awaits nothing: no stop can have left it.
 pub fn walked(r: R<bool>) -> bool {
     match r {
