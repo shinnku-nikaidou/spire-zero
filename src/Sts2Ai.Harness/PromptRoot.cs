@@ -121,9 +121,16 @@ public sealed class PromptRoot(PromptRoot.Crossing crossing) : ICombatWorld, IDi
 
     public void Restore(WorldSnapshot snapshot)
     {
-        if (!_snapshots.TryGetValue(snapshot, out var saved)) throw new InvalidOperationException("the snapshot is not one this world took");
+        if (!_snapshots.TryGetValue(snapshot, out var saved)) throw new InvalidOperationException("the snapshot is not one this world took, or it was forgotten");
         (_path, _place, _world) = (saved.Path, saved.Place, saved.World);
         if (saved.Inner != null) _world!.Restore(saved.Inner);
+    }
+
+    public void Forget(WorldSnapshot snapshot)
+    {
+        if (!_snapshots.TryGetValue(snapshot, out var saved)) throw new InvalidOperationException("the snapshot is not one this world took, or it was forgotten");
+        _snapshots.Remove(snapshot);
+        if (saved.Inner != null) saved.World!.Forget(saved.Inner);
     }
 
     /// <summary>Frees the engine's worlds this one stood in.</summary>

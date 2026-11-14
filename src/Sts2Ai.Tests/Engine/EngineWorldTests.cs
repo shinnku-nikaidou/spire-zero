@@ -160,33 +160,59 @@ public sealed class EngineWorldTests(FakeEngine engine)
     }
 
     [Fact]
+    public void AStateOfTheSearchIsOneNativeWorldFreedWhenTheSearchLeavesIt()
+    {
+        long before = engine.Worlds();
+        using var world = World();
+        var here = world.Snapshot();
+        // The snapshot is the world it was taken at: nothing is copied until an action is taken from there.
+        Assert.Equal(before + 1, engine.Worlds());
+        world.Execute(CombatAction.EndTurn);
+        var below = world.Snapshot();
+        world.Execute(CombatAction.EndTurn);
+        Assert.Equal(before + 3, engine.Worlds());
+
+        // Back at the first state: the last one goes, the one a snapshot holds stays.
+        world.Restore(here);
+        Assert.Equal(before + 2, engine.Worlds());
+        world.Forget(below);
+        Assert.Equal(before + 1, engine.Worlds());
+        Assert.Throws<InvalidOperationException>(() => world.Restore(below));
+
+        // A state forgotten while the world stands there stays the world's own.
+        world.Forget(here);
+        Assert.Equal(before + 1, engine.Worlds());
+        world.Execute(CombatAction.EndTurn);
+        Assert.Equal((before + 1, 2), (engine.Worlds(), world.Observe().Round));
+    }
+
+    [Fact]
     public void EveryNativeWorldIsFreed()
     {
         long before = engine.Worlds();
-        var kept = Play(out var world);
-        // The world, the snapshot still held, and nothing of the snapshots that were dropped.
-        Assert.Equal(before + 2, engine.Worlds());
-        world.Restore(kept);
-        Assert.Equal(before + 2, engine.Worlds());
-        world.Dispose();
-        Assert.Equal(before, engine.Worlds());
-        GC.KeepAlive(kept);
-    }
-
-    /// <summary>Takes snapshots and drops all but one, as search does, in a frame of its own so that none stays on the stack.</summary>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static WorldSnapshot Play(out EngineWorld world)
-    {
-        world = World();
+        var world = World();
         using (var copy = world.Clone()) copy.Execute(CombatAction.EndTurn);
-        WorldSnapshot? kept = null;
         for (int i = 0; i < 50; i++)
         {
             var snapshot = world.Snapshot();
             world.Execute(CombatAction.EndTurn);
-            if (i == 20) kept = snapshot;
-            else if (i % 2 == 0) world.Restore(snapshot);
+            if (i % 2 == 0) world.Restore(snapshot);
         }
-        return kept!;
+        // Snapshots nobody forgot go with the world.
+        Assert.True(engine.Worlds() > before + 1);
+        world.Dispose();
+        Assert.Equal(before, engine.Worlds());
+
+        // A world nobody disposed goes when the collector finds it.
+        Dropped();
+        Assert.Equal(before, engine.Worlds());
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void Dropped()
+    {
+        var world = World();
+        world.Snapshot();
+        world.Execute(CombatAction.EndTurn);
     }
 }

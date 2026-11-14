@@ -129,10 +129,27 @@ public class LoopSearchTests
         private static List<(uint Uid, string Id)> Hand(Prompted prompted, int copies) =>
             prompted == Prompted.No ? [(1, "R"), .. Enumerable.Range(1, copies - 1).Select(i => (10u + (uint)i, "R")), (2, "H")] : [(2, "H")];
 
-        public WorldSnapshot Snapshot() => new([.. _steps]);
+        /// <summary>The snapshots taken here and not yet forgotten, and the forgotten ones, which search may not restore.</summary>
+        private readonly HashSet<WorldSnapshot> _open = new(ReferenceEqualityComparer.Instance), _forgotten = new(ReferenceEqualityComparer.Instance);
+
+        public int Open => _open.Count;
+
+        public WorldSnapshot Snapshot()
+        {
+            var snapshot = new WorldSnapshot([.. _steps]);
+            _open.Add(snapshot);
+            return snapshot;
+        }
+
+        public void Forget(WorldSnapshot snapshot)
+        {
+            if (!_open.Remove(snapshot)) throw new InvalidOperationException("the snapshot was forgotten before, or is not this world's");
+            _forgotten.Add(snapshot);
+        }
 
         public void Restore(WorldSnapshot snapshot)
         {
+            if (_forgotten.Contains(snapshot)) throw new InvalidOperationException("the snapshot was forgotten");
             _steps.Clear();
             _hand = Hand(prompted, copies);
             _discard = [];
@@ -144,7 +161,14 @@ public class LoopSearchTests
     private static readonly ICombatLeaf Leaf = new ToyLeaf();
     private static readonly CombatAction R = CombatAction.Play(1), H = CombatAction.Play(2, 1);
 
-    private static SlPlan Plan(Loop world) => new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 8));
+    private static SlPlan Plan(Loop world)
+    {
+        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 8));
+        // The search lets go of every state it leaves, a cycle's start once the cycle is run; the toy refuses a
+        // snapshot that was forgotten.
+        Assert.Equal(0, world.Open);
+        return plan;
+    }
 
     private static List<CombatAction> Line(SlPlan plan) => [plan.Result.First, .. plan.Result.Plan];
 

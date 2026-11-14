@@ -82,12 +82,14 @@ public sealed class SlPlanner(ICombatLeaf leaf)
     public SlPlan Plan(ICombatWorld world, Budget budget, IReadOnlyList<EnemyTurns>? history = null)
     {
         var root = world.Snapshot();
-        return Search(budget, history ?? [], (jobs, nodes, keep) => [.. jobs.Select(job =>
+        var plan = Search(budget, history ?? [], (jobs, nodes, keep) => [.. jobs.Select(job =>
         {
             world.Restore(root);
             foreach (var action in job.Path) world.Execute(action);
             return SearchTurn(world, job.History, nodes, keep);
         })]);
+        world.Forget(root);
+        return plan;
     }
 
     /// <summary>
@@ -253,6 +255,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private readonly List<CombatAction> _actions = [];
         private readonly List<ulong> _hashes = [];
         private readonly List<LoopPoint> _path = [];
+        /// <summary>Snapshots of states the search has left that a cycle found there starts from: kept until the cycles are run.</summary>
+        private readonly List<WorldSnapshot> _kept = [];
         private int _nodes, _round, _limit;
         private bool _cut;
         private LoopSearch _loops = null!;
@@ -264,6 +268,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             _loops = new(world, _round, End);
             Visit(obs, nodes);
             foreach (var end in _loops.RunFound()) Add(end);
+            foreach (var snapshot in _kept) world.Forget(snapshot);
             _cut |= _loops.Found;
             var over = _ends.Where(e => e.Status != CombatStatus.InProgress).MaxBy(e => e.Value);
             var going = _ends.Where(e => e.Status == CombatStatus.InProgress).OrderByDescending(e => e.Value).ToList();
@@ -322,6 +327,9 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 _hashes.RemoveAt(_hashes.Count - 1);
             }
             if (plays) _path.RemoveAt(_path.Count - 1);
+            // The search is done with this state: the world lets go of it, unless a cycle found below starts here.
+            if (_loops.StartsAt(here)) _kept.Add(here);
+            else world.Forget(here);
         }
 
         /// <summary>The turn ended here, or the combat did.</summary>

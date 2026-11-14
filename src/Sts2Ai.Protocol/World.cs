@@ -36,6 +36,12 @@ public interface ICombatWorld
     WorldSnapshot Snapshot();
     /// <summary>Goes back to a snapshot taken from this same world.</summary>
     void Restore(WorldSnapshot snapshot);
+    /// <summary>
+    /// Told that a snapshot taken from this world will not be restored again, so the world lets go of what it kept
+    /// for it: search says so when it leaves the state. A world whose snapshots hold nothing of its own (the steps
+    /// to replay) has nothing to do.
+    /// </summary>
+    void Forget(WorldSnapshot snapshot) { }
 }
 
 /// <summary>Hands out the worlds for one decision.</summary>

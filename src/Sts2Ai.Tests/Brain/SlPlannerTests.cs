@@ -82,10 +82,27 @@ public class SlPlannerTests
             else _block += 5;
         }
 
-        public WorldSnapshot Snapshot() => new([.. _steps]);
+        /// <summary>The snapshots taken here and not yet forgotten, and the forgotten ones, which search may not restore.</summary>
+        private readonly HashSet<WorldSnapshot> _open = new(ReferenceEqualityComparer.Instance), _forgotten = new(ReferenceEqualityComparer.Instance);
+
+        public int Open => _open.Count;
+
+        public WorldSnapshot Snapshot()
+        {
+            var snapshot = new WorldSnapshot([.. _steps]);
+            _open.Add(snapshot);
+            return snapshot;
+        }
+
+        public void Forget(WorldSnapshot snapshot)
+        {
+            if (!_open.Remove(snapshot)) throw new InvalidOperationException("the snapshot was forgotten before, or is not this world's");
+            _forgotten.Add(snapshot);
+        }
 
         public void Restore(WorldSnapshot snapshot)
         {
+            if (_forgotten.Contains(snapshot)) throw new InvalidOperationException("the snapshot was forgotten");
             _steps.Clear();
             Reset();
             foreach (var step in snapshot.Steps) Execute(CombatAction.Parse(step));
@@ -141,6 +158,16 @@ public class SlPlannerTests
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.Equal(best, plan.Value, 9);
         AssertReplays(plan);
+    }
+
+    [Fact]
+    public void ThePlannerLetsGoOfEveryStateItLeaves()
+    {
+        var world = new Toy();
+        new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        Assert.Equal(0, world.Open);
+        new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 4, Beam: 1));
+        Assert.Equal(0, world.Open);
     }
 
     [Fact]

@@ -96,9 +96,9 @@ internal static unsafe partial class Native
 }
 
 /// <summary>
-/// A native world, freed when its last user lets go of it or, for one nobody disposed (a snapshot that search dropped),
-/// when the collector finds it. The collector cannot see the native memory behind a handle, so each one tells it how
-/// much that is, about: the size of the export the world came from.
+/// A native world, freed when its world lets go of it or, for a world nobody disposed, when the collector finds it.
+/// The collector cannot see the native memory behind a handle, so each one tells it how much that is, about: the
+/// size of the export the world came from.
 /// </summary>
 internal sealed class WorldHandle : SafeHandle
 {

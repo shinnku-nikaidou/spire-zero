@@ -53,6 +53,10 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
     /// <summary>Out of moves, or a cycle already wins: nothing more is looked for.</summary>
     public bool Spent => _used >= Moves || _won;
 
+    /// <summary>Whether a cycle kept for <see cref="RunFound"/> starts at this snapshot of the search's path: the
+    /// search then keeps it until the cycles are run.</summary>
+    public bool StartsAt(WorldSnapshot snapshot) => _found.Any(cycle => ReferenceEquals(cycle.Start, snapshot));
+
     private sealed record Cycle(WorldSnapshot Start, List<CombatAction> Prefix, List<ulong> PrefixHashes, List<CombatAction> Moves, List<string?> Ids);
 
     /// <summary>
@@ -70,14 +74,15 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         var here = world.Snapshot();
         int done = 1;
         var scratch = new Line([], []);
-        if (Repeat(cycle, scratch, ref done, ProbeRepeats, null, out var status, back.Obs) && status == CombatStatus.InProgress)
+        bool holds = Repeat(cycle, scratch, ref done, ProbeRepeats, null, out var status, back.Obs) && status == CombatStatus.InProgress;
+        if (holds)
         {
             _found.Add(cycle);
             Found = true;
-            return true;
         }
-        world.Restore(here);
-        return false;
+        else world.Restore(here);
+        world.Forget(here);
+        return holds;
     }
 
     /// <summary>Repeats and cashes out the cycles found since the last call, in the order found.</summary>
@@ -257,6 +262,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
                 line.Actions.RemoveAt(line.Actions.Count - 1);
                 line.Hashes.RemoveAt(line.Hashes.Count - 1);
             }
+            world.Forget(here);
         }
         var start = world.Status;
         var obs = world.Observe();
@@ -290,24 +296,31 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
             }
             if (status == CombatStatus.Lost) break;
             var here = world.Snapshot();
-            var cashed = Cash(line.Copy(), banned, depth);
-            if (cashed != null) kept.Add(cashed);
-            if (cashed?.Status == CombatStatus.Won)
+            try
             {
-                win = done;
-                break;
+                var cashed = Cash(line.Copy(), banned, depth);
+                if (cashed != null) kept.Add(cashed);
+                if (cashed?.Status == CombatStatus.Won)
+                {
+                    win = done;
+                    break;
+                }
+                // On a fight the leaf calls nearly hopeless the value barely moves until the repeats near lethal; the chance
+                // to win shows they are getting there.
+                double value = cashed?.Value ?? double.NegativeInfinity, chance = cashed?.Win ?? double.NegativeInfinity;
+                if (value > best || chance > likeliest)
+                {
+                    (best, likeliest, flat) = (Math.Max(best, value), Math.Max(likeliest, chance), 0);
+                }
+                else if (++flat >= FlatRounds) break;
+                lose = done;
+                if (!held) break;
+                world.Restore(here);
             }
-            // On a fight the leaf calls nearly hopeless the value barely moves until the repeats near lethal; the chance
-            // to win shows they are getting there.
-            double value = cashed?.Value ?? double.NegativeInfinity, chance = cashed?.Win ?? double.NegativeInfinity;
-            if (value > best || chance > likeliest)
+            finally
             {
-                (best, likeliest, flat) = (Math.Max(best, value), Math.Max(likeliest, chance), 0);
+                world.Forget(here);
             }
-            else if (++flat >= FlatRounds) break;
-            lose = done;
-            if (!held) break;
-            world.Restore(here);
         }
         if (win < 0)
         {
