@@ -9,7 +9,8 @@
 //! and a new object changes none that is there. A copy of the combat has the count and the kept lists it was copied
 //! with, and the count of each only goes up, so a list kept at a count is the list of the one combat that stood there.
 
-use crate::r#gen::state::{MEMO_FILTERS, MEMO_GETTERS, MEMO_WALKS};
+use crate::r#gen::kinds::Kind;
+use crate::r#gen::state::{MEMO_FILTERS, MEMO_GETTERS, MEMO_WALKS, kind_of};
 use crate::rt::{Combat, Obj, Only};
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, OnceLock};
@@ -23,10 +24,17 @@ pub struct Kept {
     /// For each item: 0 not asked yet, 1 does not pass, 2 passes. Shared by the copies of a combat that stand where it
     /// was kept, whose answers are the same.
     answers: Box<[AtomicU8]>,
-    /// For each set of kinds a walk was asked for (`Combat::only`, by its number), the positions of the items of
-    /// those kinds. An object's kind never changes, so these hold as long as the list, and a list built again with
-    /// the same items has them too.
-    picked: Arc<[OnceLock<Box<[u32]>>]>,
+    /// The items' kinds and, for each set of kinds a walk was asked for (`Combat::only`, by its number), the
+    /// positions of the items of those kinds. An object's kind never changes, so these hold as long as the list, and
+    /// a list built again with the same items has them too.
+    picked: Arc<Picked>,
+}
+
+#[derive(Debug)]
+struct Picked {
+    /// Each item's kind, None for null.
+    kinds: OnceLock<Box<[Option<Kind>]>>,
+    by: Box<[OnceLock<Box<[u32]>>]>,
 }
 
 impl Kept {
@@ -76,7 +84,7 @@ pub fn keep(c: &mut Combat, slot: usize, key: [Obj; 2], at: u64, items: Vec<Obj>
     let answers = (0..items.len()).map(|_| AtomicU8::new(0)).collect();
     let picked = match &c.memo.walks[slot] {
         Some(before) if before.items == items => before.picked.clone(),
-        _ => (0..MEMO_FILTERS).map(|_| OnceLock::new()).collect(),
+        _ => Arc::new(Picked { kinds: OnceLock::new(), by: (0..MEMO_FILTERS).map(|_| OnceLock::new()).collect() }),
     };
     let kept = Arc::new(Kept { at, key, items, answers, picked });
     if at == c.a.writes {
@@ -118,11 +126,12 @@ pub fn keep_value(c: &mut Combat, slot: usize, me: Obj, at: u64, value: Obj, len
 #[inline]
 pub fn picked<'k>(kept: &'k Kept, only: Option<&'static Only>, c: &Combat) -> Option<&'k [u32]> {
     let of = only?;
-    Some(kept.picked[of.id].get_or_init(|| {
-        (0..kept.items.len())
-            .filter(|&at| crate::rt::wanted(only, kept.items[at], c))
-            .map(|at| at as u32)
-            .collect()
+    Some(kept.picked.by[of.id].get_or_init(|| {
+        let kinds = kept.picked.kinds.get_or_init(|| {
+            kept.items.iter().map(|&o| if o.is_null() { None } else { Some(kind_of(o, c)) }).collect()
+        });
+        // Null is handed on, as `rt::wanted` does.
+        (0..kinds.len()).filter(|&at| kinds[at].is_none_or(of.test)).map(|at| at as u32).collect()
     }))
 }
 
