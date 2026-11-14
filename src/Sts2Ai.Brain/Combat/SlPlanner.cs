@@ -217,7 +217,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                         break;
                     }
             var result = new CombatDecisionResult(pick.Actions[0], [.. pick.Actions.Take(played).Skip(1)], candidates,
-                [.. pick.Hashes.Take(played).Skip(1)]);
+                [.. pick.Hashes.Take(played).Skip(1)], Nodes: _nodes, Turns: _turns);
             return new(result, pick.Value, pick.Status, _nodes, _turns, Proved);
         }
     }

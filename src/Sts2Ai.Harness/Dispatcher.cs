@@ -38,11 +38,14 @@ public sealed record Route<T>(string Brain, T Policy);
 /// (<see cref="Uniform"/>); absent otherwise.</param>
 /// <param name="Replanned">True when the combat brain searched again because a step of its plan did not hold
 /// (<see cref="CombatDecisionResult.Replanned"/>); absent otherwise.</param>
+/// <param name="Nodes">Where the SL planner planned: the actions its search simulated
+/// (<see cref="CombatDecisionResult.Nodes"/>); absent otherwise.</param>
+/// <param name="Turns">With <paramref name="Nodes"/>: the turns its beams searched.</param>
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
     CombatObservation? Obs = null, RunView? RunView = null,
-    IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null, bool? Replanned = null);
+    IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null, bool? Replanned = null, int? Nodes = null, int? Turns = null);
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
@@ -133,7 +136,7 @@ public sealed class Dispatcher(
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 result.First.ToString(), note.Plan, note.Candidates, combat.Budget?.For(decision.Observation.Room), seed, ms, Obs: decision.Observation, History: history,
-                Replanned: Mark(result.Replanned)));
+                Replanned: Mark(result.Replanned), Nodes: result.Nodes, Turns: result.Turns));
         return (result.First, note);
     }
 
@@ -170,7 +173,8 @@ public sealed class Dispatcher(
                 throw new InvalidOperationException($"{combat.Brain} gave {result.First}, which the prompt does not accept");
             if (log)
                 _log.Add(new(runId, at, env.ToString(), Surfaces.CardChoice, combat.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
-                    result.First.Answer!, note.Plan, note.Candidates, combat.Budget?.For(around.Room), drawn, took, Replanned: Mark(result.Replanned)));
+                    result.First.Answer!, note.Plan, note.Candidates, combat.Budget?.For(around.Room), drawn, took, Replanned: Mark(result.Replanned),
+                    Nodes: result.Nodes, Turns: result.Turns));
             // The plan goes on with plays of the combat, which a host showing the prompt's screen has no cards to name.
             return (new([.. result.First.Picks]), note with { Plan = null });
         }

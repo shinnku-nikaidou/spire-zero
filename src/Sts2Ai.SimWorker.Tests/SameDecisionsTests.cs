@@ -25,4 +25,14 @@ public class SameDecisionsTests
         Assert.StartsWith("record 2 (run run-1 decision 2, combat), candidates:", value);
         Assert.Equal("3 decisions against 2", SameDecisionsCommand.Difference(first, first[..2]));
     }
+
+    [Fact]
+    public void PlansThatChooseAlikeButSearchApartDiffer()
+    {
+        var first = new[] { Entry(0, "play:1", 10) with { Nodes = 120, Turns = 4 } };
+        Assert.StartsWith("record 0 (run run-1 decision 0, combat), nodes: 120 against 126",
+            SameDecisionsCommand.Difference(first, [first[0] with { Nodes = 126 }]));
+        Assert.StartsWith("record 0 (run run-1 decision 0, combat), turns: 4 against 5",
+            SameDecisionsCommand.Difference(first, [first[0] with { Turns = 5 }]));
+    }
 }

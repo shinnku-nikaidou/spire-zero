@@ -158,6 +158,8 @@ public class SlPlannerTests
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.Equal(best, plan.Value, 9);
         AssertReplays(plan);
+        // The result says what its search took, for the log.
+        Assert.Equal((plan.Nodes, plan.Turns), (plan.Result.Nodes!.Value, plan.Result.Turns!.Value));
     }
 
     /// <summary>A leaf that tells how it was asked: one state at a time, or several together.</summary>

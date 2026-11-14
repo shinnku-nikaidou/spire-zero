@@ -60,8 +60,11 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// (<see cref="TurnPlan"/>). In SL that means the clone differs from the real combat.</param>
 /// <param name="Repeats">Whether the line repeats a cycle (<see cref="LoopSearch"/>): PIMC follows such a plan, since
 /// searching again before each of hundreds of repeats would only find it again.</param>
+/// <param name="Nodes">The SL planner's search behind the result: the actions it simulated (<see cref="SlPlan.Nodes"/>).
+/// Two worlds that plan alike search alike, so the log keeps it.</param>
+/// <param name="Turns">With <paramref name="Nodes"/>: the turns its beams searched.</param>
 public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
-    IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false);
+    IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false, int? Nodes = null, int? Turns = null);
 
 /// <summary>
 /// The rest of the plan that a search made, played without searching again. A step is

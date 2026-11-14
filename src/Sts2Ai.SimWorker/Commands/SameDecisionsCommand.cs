@@ -8,9 +8,10 @@ namespace Sts2Ai.SimWorker.Commands;
 /// <summary>
 /// same-decisions: whether decision logs (<c>run --log</c>) are the same record by record, all but the time a decision
 /// took: surface, brain, what it was shown (the observation's hash), how many options, the action, the plan after it,
-/// the candidates with their values, the seed. It is how the planner's two worlds are held against each other: the same
-/// seeds played with <c>--combat-world replay</c> and with <c>engine</c>, and the engine on one thread and on many,
-/// must leave equal logs with no replanned step in any. It needs no game.
+/// the candidates with their values, the seed, and where the SL planner planned, how many actions and turns its search
+/// took (so two worlds that choose alike but search apart are told apart too). It is how the planner's two worlds are
+/// held against each other: the same seeds played with <c>--combat-world replay</c> and with <c>engine</c>, and the
+/// engine on one thread and on many, must leave equal logs with no replanned step in any. It needs no game.
 /// </summary>
 internal static class SameDecisionsCommand
 {
