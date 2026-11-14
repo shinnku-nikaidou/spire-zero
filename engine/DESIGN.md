@@ -270,7 +270,9 @@ puts a selector of its own on the selector stack.
 - The Rust structs are generated from the same walk: `Arenas` (one `Arena<TData>` per arena), `TData` per class, `TExt`
   for the fields of the classes below `T`, `Roots`.
 - A copy of a combat shares its objects with the combat it was copied from: an arena is a list of handles
-  (`Vec<Arc<TData>>`), a copy copies the handles, and an object is copied when one of the two first writes to it.
+  (`Arc<Vec<Arc<TData>>>`, none while it holds nothing), a copy shares the list, the list is copied when one of the two
+  first writes to an object of it or makes one, and an object is copied when one of the two first writes to it: a
+  copy costs one count for each arena that holds something, and an action pays for the arenas it writes to.
   What a combat never writes after it was made (the run's history, the combat's own history entries, most cards)
   is held once by every world a search makes of it. A set or dictionary does the same with its slots: the game hands
   its collections around by reference, the translated code by value, and a value that is only read costs no copy.

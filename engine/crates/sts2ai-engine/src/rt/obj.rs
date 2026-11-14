@@ -66,13 +66,15 @@ pub trait Stored: Clone + 'static {
 /// combat that writes to one (the game fills a canonical model's caches when they are first read) gets its own copy
 /// of them at that moment.
 ///
-/// A copy of a combat shares its objects with the combat it was copied from: copying an arena copies the handles, and
+/// A copy of a combat shares its objects with the combat it was copied from, and the list of their handles too: a copy
+/// of an arena is one handle, the list is copied when one of the two first writes to an object of it or makes one, and
 /// an object is copied when one of the two first writes to it. What a combat never writes (the run's history, the
-/// combat's own history entries, most cards) is held once by every copy made of it.
+/// combat's own history entries, most cards) is held once by every copy made of it. An arena with nothing in it holds
+/// nothing.
 #[derive(Clone, Debug)]
 pub struct Arena<T> {
-    items: Vec<Arc<T>>,
-    pub canon: Arc<Vec<T>>,
+    items: Option<Arc<Vec<Arc<T>>>>,
+    canon: Option<Arc<Vec<T>>>,
     /// Set while the canonical models are being built: what is made then is canonical.
     pub canon_build: bool,
 }
@@ -105,7 +107,7 @@ pub trait AnyArena {
 
 impl<T: Clone + std::fmt::Debug> AnyArena for Arena<T> {
     fn len(&self) -> usize {
-        self.items.len()
+        self.own().len()
     }
     fn item_size(&self) -> usize {
         std::mem::size_of::<T>()
@@ -114,22 +116,33 @@ impl<T: Clone + std::fmt::Debug> AnyArena for Arena<T> {
         std::hint::black_box(self.clone());
     }
     fn text(&self) -> String {
-        format!("{:?}", self.items)
+        format!("{:?}", self.own())
     }
     fn shared(&self) -> usize {
-        self.items
-            .iter()
-            .filter(|item| Arc::strong_count(item) != 1)
-            .count()
+        match &self.items {
+            Some(list) if Arc::strong_count(list) != 1 => list.len(),
+            _ => self.own().iter().filter(|item| Arc::strong_count(item) != 1).count(),
+        }
     }
 }
 
 impl<T> Default for Arena<T> {
     fn default() -> Self {
         Arena {
-            items: Vec::new(),
-            canon: Arc::new(Vec::new()),
+            items: None,
+            canon: None,
             canon_build: false,
+        }
+    }
+}
+
+impl<T> Arena<T> {
+    /// The handles of the combat's own objects.
+    #[inline]
+    fn own(&self) -> &[Arc<T>] {
+        match &self.items {
+            Some(list) => list,
+            None => &[],
         }
     }
 }
@@ -137,22 +150,23 @@ impl<T> Default for Arena<T> {
 impl<T: Stored> Arena<T> {
     pub fn alloc(&mut self, value: T) -> Obj {
         if self.canon_build {
-            let canon = Arc::make_mut(&mut self.canon);
+            let canon = owned(self.canon.get_or_insert_with(Default::default));
             canon.push(value);
             return Obj::new(T::TAG, canon.len() - 1, true);
         }
-        self.items.push(Arc::new(value));
-        Obj::new(T::TAG, self.items.len() - 1, false)
+        let list = owned(self.items.get_or_insert_with(Default::default));
+        list.push(Arc::new(value));
+        Obj::new(T::TAG, list.len() - 1, false)
     }
     /// The combat's own objects, in the order they were made.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.items.iter().map(|item| &**item)
+        self.own().iter().map(|item| &**item)
     }
     pub fn len(&self) -> usize {
-        self.items.len()
+        self.own().len()
     }
     pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
+        self.own().is_empty()
     }
 }
 
@@ -172,6 +186,12 @@ fn wrong_arena(o: Obj, tag: u16) -> ! {
     );
 }
 
+#[cold]
+#[inline(never)]
+fn no_object(o: Obj) -> ! {
+    panic!("{o:?} is not there");
+}
+
 impl<T: Stored> Index<Obj> for Arena<T> {
     type Output = T;
     #[inline]
@@ -179,10 +199,14 @@ impl<T: Stored> Index<Obj> for Arena<T> {
         if o.tag() != T::TAG {
             wrong_arena(o, T::TAG);
         }
-        if o.is_canon() {
-            &self.canon[o.ix()]
+        let found = if o.is_canon() {
+            self.canon.as_ref().and_then(|canon| canon.get(o.ix()))
         } else {
-            &self.items[o.ix()]
+            self.items.as_ref().and_then(|list| list.get(o.ix())).map(|item| &**item)
+        };
+        match found {
+            Some(item) => item,
+            None => no_object(o),
         }
     }
 }
@@ -193,10 +217,14 @@ impl<T: Stored> IndexMut<Obj> for Arena<T> {
         if o.tag() != T::TAG {
             wrong_arena(o, T::TAG);
         }
-        if o.is_canon() {
-            &mut Arc::make_mut(&mut self.canon)[o.ix()]
+        let slot = if o.is_canon() {
+            self.canon.as_mut().map(owned).and_then(|canon| canon.get_mut(o.ix()))
         } else {
-            owned(&mut self.items[o.ix()])
+            self.items.as_mut().map(owned).and_then(|list| list.get_mut(o.ix())).map(owned)
+        };
+        match slot {
+            Some(item) => item,
+            None => no_object(o),
         }
     }
 }
