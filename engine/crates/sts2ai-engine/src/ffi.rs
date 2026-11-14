@@ -27,8 +27,11 @@ pub trait World: Clone + Send + Sized + 'static {
     /// A world standing where a live combat stood, from the bytes `EngineExport` wrote of it.
     fn import(export: &str) -> Result<Self, String>;
 
-    /// Takes the action ("play:10:1", "potion:0", "end_turn", or "pick:0,2" at a card prompt) and goes on to where the
-    /// player is asked again: their turn, a card prompt, or the combat's end.
+    /// The world after the action ("play:10:1", "potion:0", "end_turn", or "pick:0,2" at a card prompt), where the
+    /// player is asked again: their turn, a card prompt, or the combat's end. This world stays where it stands.
+    fn step(&mut self, action: &str) -> Result<Self, String>;
+
+    /// Takes the action: this world becomes the one after it.
     fn apply(&mut self, action: &str) -> Result<(), String>;
 
     /// The combat as it stands. At a card prompt, as it stood when the running action stopped there.
@@ -71,6 +74,53 @@ impl<W: World> Handle<W> {
         }
         self.shown.as_ref().expect("just read")
     }
+}
+
+impl<W: World> Handle<W> {
+    /// What search reads of every state it reaches. Once the combat is over there is nothing to tell apart: the keys
+    /// are 0 and no observation is read.
+    fn node(&mut self) -> SzNode {
+        let prompt = self.world.asked().is_some() as i32;
+        let c = self.world.combat();
+        let (st, player) = live(c);
+        let status = legal::status(player, c) as i32;
+        let round = g::combat::combat_state::round_number(st, c);
+        if status != 0 {
+            return SzNode {
+                status,
+                round,
+                prompt,
+                state_key: 0,
+                hidden_key: 0,
+            };
+        }
+        self.shown();
+        let shown = self.shown.as_ref().expect("just read");
+        let c = self.world.combat();
+        SzNode {
+            status,
+            round,
+            prompt,
+            state_key: protocol::state_key(&shown.observation),
+            hidden_key: keys::full(st, player, &shown.draw, c),
+        }
+    }
+}
+
+/// C: `sz_node`. What `sz_world_step` says of the world it made.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SzNode {
+    /// As `sz_world_status`.
+    pub status: i32,
+    /// The observation's round.
+    pub round: i32,
+    /// 1 where a card prompt waits.
+    pub prompt: i32,
+    /// As `sz_world_state_key`; 0 once the combat is over.
+    pub state_key: u64,
+    /// As `sz_world_hidden_key`; 0 once the combat is over.
+    pub hidden_key: u64,
 }
 
 /// C#: NodeWorld.Combat. The live combat's state, and the player the world is for: the game's own "me".
@@ -252,6 +302,25 @@ pub unsafe extern "C" fn sz_world_apply(world: u64, action: *const u8, len: usiz
         handle.shown = None;
         handle.world.apply(action)?;
         Ok(0)
+    })
+}
+
+/// The world after an action, made from `world`, which stays as it is and is freed on its own; 0 on error. `node` is
+/// filled with what search reads of every state: one copy of the combat a state, where a clone and an apply are two.
+///
+/// # Safety
+/// `world` and `action` as for `sz_world_apply`; `node` points at an `sz_node` to fill.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_step(world: u64, action: *const u8, len: usize, node: *mut SzNode) -> u64 {
+    call(0, || {
+        if node.is_null() {
+            return Err("no node to fill: a null pointer".into());
+        }
+        let handle = unsafe { self::world(world) }?;
+        let action = unsafe { text(action, len, "the action") }?;
+        let mut after = Handle::new(handle.world.step(action)?);
+        unsafe { *node = after.node() };
+        Ok(Box::into_raw(Box::new(after)) as u64)
     })
 }
 

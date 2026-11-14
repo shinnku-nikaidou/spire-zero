@@ -66,7 +66,71 @@ fn a_failed_call_is_an_error() {
     assert_eq!(unsafe { ffi::sz_world_clone(0) }, 0);
     assert_eq!(unsafe { ffi::sz_world_legal(0, std::ptr::null_mut()) }, 1);
     assert!(last_error().contains("null pointer"), "{}", last_error());
+    let mut node = ffi::SzNode::default();
+    assert_eq!(unsafe { ffi::sz_world_step(0, b"end_turn".as_ptr(), 8, &mut node) }, 0);
+    assert!(last_error().contains("handle is 0"), "{}", last_error());
     unsafe { ffi::sz_world_free(0) };
+}
+
+/// The plays a world allows, as text.
+fn legal(world: u64) -> String {
+    let mut buf = SzBuf::EMPTY;
+    assert_eq!(unsafe { ffi::sz_world_legal(world, &mut buf) }, 0, "sz_world_legal: {}", last_error());
+    let text = String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(buf.ptr, buf.len) }).into_owned();
+    unsafe { ffi::sz_buf_free(buf) };
+    text
+}
+
+#[test]
+fn a_refused_step_makes_no_world_and_leaves_the_one_it_was_asked_of() {
+    let world = import(&an_export());
+    let before = legal(world);
+    let mut node = ffi::SzNode::default();
+    let not_an_action = b"play:999999";
+    assert_eq!(unsafe { ffi::sz_world_step(world, not_an_action.as_ptr(), not_an_action.len(), &mut node) }, 0);
+    assert!(!last_error().is_empty(), "a refused step says nothing");
+    assert_eq!(node, ffi::SzNode::default(), "a refused step fills the node");
+    assert_eq!(unsafe { ffi::sz_world_step(world, b"end_turn".as_ptr(), 8, std::ptr::null_mut()) }, 0);
+    assert!(last_error().contains("null pointer"), "{}", last_error());
+    assert_eq!(legal(world), before);
+    unsafe { ffi::sz_world_free(world) };
+}
+
+/// The states a world goes through when the first play it allows is taken again and again, each world made of the
+/// one before by `sz_world_step`: every state's two keys. Frees the world it was given.
+fn line(mut world: u64) -> Vec<(u64, u64)> {
+    let mut keys = Vec::new();
+    for _ in 0..60 {
+        let plays = legal(world);
+        let Some(action) = plays.lines().next() else {
+            break;
+        };
+        let mut node = ffi::SzNode::default();
+        let after = unsafe { ffi::sz_world_step(world, action.as_ptr(), action.len(), &mut node) };
+        assert_ne!(after, 0, "sz_world_step {action}: {}", last_error());
+        keys.push((node.state_key, node.hidden_key));
+        unsafe { ffi::sz_world_free(world) };
+        world = after;
+    }
+    unsafe { ffi::sz_world_free(world) };
+    keys
+}
+
+/// Copies of one world share what they have not written to (rt/obj.rs). Each is played in a thread of its own while
+/// the others are, and all go through the same states as one played alone.
+#[test]
+fn copies_of_one_world_are_played_in_threads_at_once() {
+    let world = import(&an_export());
+    let alone = line(unsafe { ffi::sz_world_clone(world) });
+    assert!(alone.len() > 3, "the line is {} states long", alone.len());
+    for _ in 0..20 {
+        let copies: Vec<u64> = (0..8).map(|_| unsafe { ffi::sz_world_clone(world) }).collect();
+        let threads: Vec<_> = copies.into_iter().map(|copy| std::thread::spawn(move || line(copy))).collect();
+        for thread in threads {
+            assert_eq!(thread.join().unwrap(), alone);
+        }
+    }
+    unsafe { ffi::sz_world_free(world) };
 }
 
 #[test]

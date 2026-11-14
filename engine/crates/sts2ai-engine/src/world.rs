@@ -4,6 +4,10 @@
 //! an `EndPlayerTurnAction`), then the queued actions and the turn loop run in turn until neither can go on: the
 //! player is asked again, or the combat is over.
 //!
+//! An action is taken in a copy of the combat, which makes the world after it: the world before stays as it is, for
+//! search to come back to (`step`), or is let go (`apply`). A copy shares the combat's objects until one of the two
+//! writes to them (rt/obj.rs), so the copy is the price of what the action changes.
+//!
 //! A card prompt in the middle of an action has no answer the first time: the action stops there
 //! (`Err(Stop::Choice)`). The world then keeps the combat as it was before the action, the action and the answers
 //! given so far, and shows the combat as it stood at the prompt. The answer runs the action again from the start
@@ -16,6 +20,7 @@ use crate::r#gen::state::*;
 use crate::manual;
 use crate::prompt::{self, Asked};
 use crate::rt::*;
+use std::sync::Arc;
 
 /// A combat the player acts in.
 #[derive(Clone)]
@@ -28,8 +33,8 @@ pub struct Live {
 
 #[derive(Clone)]
 struct Prompted {
-    /// The combat before the action.
-    before: Combat,
+    /// The combat before the action, which every world along the action's prompts holds.
+    before: Arc<Combat>,
     action: String,
     /// The answers to the action's prompts so far: for each, the picked cards as indexes into the game's list.
     answers: Vec<Vec<i32>>,
@@ -44,23 +49,16 @@ impl ffi::World for Live {
         })
     }
 
-    fn apply(&mut self, action: &str) -> Result<(), String> {
-        let (before, action, answers) = match self.prompted.take() {
-            None => (
-                std::mem::take(&mut self.combat),
-                action.to_string(),
-                Vec::new(),
-            ),
-            Some(mut prompted) => match picks(action, &prompted.asked, &mut self.combat) {
-                Ok(picked) => {
-                    prompted.answers.push(picked);
-                    (prompted.before, prompted.action, prompted.answers)
-                }
-                Err(e) => {
-                    self.prompted = Some(prompted);
-                    return Err(e);
-                }
-            },
+    fn step(&mut self, action: &str) -> Result<Self, String> {
+        // What runs: the action from the combat as it stands, or at a card prompt the prompted action again from
+        // the combat before it, with one more answer.
+        let (before, action, answers) = match &self.prompted {
+            None => (&self.combat, action.to_string(), Vec::new()),
+            Some(prompted) => {
+                let mut answers = prompted.answers.clone();
+                answers.push(picks(action, &prompted.asked, &mut self.combat)?);
+                (&*prompted.before, prompted.action.clone(), answers)
+            }
         };
         let mut c = before.clone();
         c.choices = Choices {
@@ -68,13 +66,8 @@ impl ffi::World for Live {
             next: 0,
             stopped: false,
         };
-        let stopped = match start(&action, &mut c) {
-            Err(e) => {
-                self.combat = before;
-                return Err(e);
-            }
-            Ok(()) => pump(&mut c).and_then(|()| cap(&mut c)),
-        };
+        start(&action, &mut c)?;
+        let stopped = pump(&mut c).and_then(|()| cap(&mut c));
         let stopped = if c.choices.stopped {
             Err(Stop::Choice)
         } else {
@@ -89,22 +82,35 @@ impl ffi::World for Live {
                         c.choices.next
                     );
                 }
-                self.combat = c;
+                Ok(Live {
+                    combat: c,
+                    prompted: None,
+                })
             }
             Err(Stop::Choice) => {
                 let asked =
                     c.x.asked
                         .take()
                         .expect("an action stopped for a choice without saying what it asks");
-                self.combat = c;
-                self.prompted = Some(Box::new(Prompted {
-                    before,
-                    action,
-                    answers,
-                    asked,
-                }));
+                let before = match &self.prompted {
+                    None => Arc::new(self.combat.clone()),
+                    Some(prompted) => prompted.before.clone(),
+                };
+                Ok(Live {
+                    combat: c,
+                    prompted: Some(Box::new(Prompted {
+                        before,
+                        action,
+                        answers,
+                        asked,
+                    })),
+                })
             }
         }
+    }
+
+    fn apply(&mut self, action: &str) -> Result<(), String> {
+        *self = self.step(action)?;
         Ok(())
     }
 

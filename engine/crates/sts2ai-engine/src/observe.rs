@@ -85,7 +85,7 @@ pub fn combat(st: CombatState, player: Player, c: &mut Combat) -> CombatObservat
 /// lists the pile sorted, and the hidden key (keys.rs) tells draw piles apart by their order. The cards are read once
 /// for both.
 pub fn seen(st: CombatState, player: Player, c: &mut Combat) -> (CombatObservation, Vec<Vec<u8>>) {
-    let mut draw_order = Vec::new();
+    let draw_order;
     let pcs = g::entities_players::player::player_combat_state(player, c);
     if rt::is_null(&pcs) {
         panic!("player has no combat state");

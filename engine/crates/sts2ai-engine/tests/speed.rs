@@ -3,9 +3,11 @@
 //!
 //!     STS2AI_ENGINE_FIXTURES=<dump> cargo test --release --test speed -- --ignored --nocapture
 //!
-//! For each sampled state: the import, a copy of the world, an action (a play, the end of the turn), the observation,
-//! the plays, the two keys, all through the C ABI as the C# side calls them; what a copy allocates; and, arena by
-//! arena, what the copy's time and bytes go to and how much of it the rest of the combat never changes.
+//! For each sampled state: the import, a copy of the world, an action (a play, the end of the turn), a search node
+//! (the world after an action with its status and keys, by `sz_world_step` and by a copy and an apply), the
+//! observation and its parts, the plays, the two keys, all through the C ABI as the C# side calls them; what a copy
+//! allocates; and, arena by arena, what the copy's time and bytes go to and how much of it the rest of the combat
+//! never changes.
 //!
 //! `spin` does one kind of call over the same states again and again and samples its own stack meanwhile, a thousand
 //! times a second of its CPU time; engine/sample.py turns the file of stacks into a report by function. Built with
@@ -564,6 +566,42 @@ fn speed() {
             }
         }
 
+        // A search node, two ways: the world after a play with its status and its two keys, and its release. One call
+        // that makes it of the world before, or a copy, the action in it, and the three questions.
+        for action in legal.lines().filter(|l| !l.is_empty()) {
+            let (mut stepped, mut copied) = (f64::MAX, f64::MAX);
+            for _ in 0..3 {
+                let start = Instant::now();
+                let mut node = ffi::SzNode::default();
+                let after = unsafe {
+                    ffi::sz_world_step(world.0, action.as_ptr(), action.len(), &mut node)
+                };
+                if after != 0 {
+                    drop(World(after));
+                    stepped = stepped.min(start.elapsed().as_secs_f64() * 1e6);
+                }
+                let start = Instant::now();
+                let mut copy = world.copy();
+                if copy.apply(action) {
+                    if unsafe { ffi::sz_world_status(copy.0) } == 0 {
+                        unsafe { ffi::sz_world_state_key(copy.0) };
+                        unsafe { ffi::sz_world_hidden_key(copy.0) };
+                    }
+                    drop(copy);
+                    copied = copied.min(start.elapsed().as_secs_f64() * 1e6);
+                }
+            }
+            let (by_step, by_copy) = match action.split(':').next() {
+                Some("end_turn") => ("node, one step: end_turn", "node, copy and apply: end_turn"),
+                Some("potion") => ("node, one step: use a potion", "node, copy and apply: use a potion"),
+                _ => ("node, one step: play a card", "node, copy and apply: play a card"),
+            };
+            if stepped < f64::MAX && copied < f64::MAX {
+                series.entry(by_step).or_default().add(stepped);
+                series.entry(by_copy).or_default().add(copied);
+            }
+        }
+
         // Arena by arena: what a copy of each costs, and whether the rest of the combat changes it.
         let text = String::from_utf8(export).unwrap();
         let mut live = Live::import(&text).unwrap();
@@ -627,6 +665,12 @@ fn speed() {
         ("apply: play a card", "us"),
         ("apply: use a potion", "us"),
         ("apply: end_turn", "us"),
+        ("node, copy and apply: play a card", "us"),
+        ("node, one step: play a card", "us"),
+        ("node, copy and apply: use a potion", "us"),
+        ("node, one step: use a potion", "us"),
+        ("node, copy and apply: end_turn", "us"),
+        ("node, one step: end_turn", "us"),
         ("observe", "us"),
         ("observe: the views", "us"),
         ("observe: of them the cards", "us"),

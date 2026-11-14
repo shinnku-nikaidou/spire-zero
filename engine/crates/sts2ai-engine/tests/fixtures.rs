@@ -4,7 +4,9 @@
 //!
 //!  - `import`: every record with an export is imported, and what the world shows is the record.
 //!  - `step`: a world imported at a combat's first record takes the combat's actions, and shows each next record.
-//!  - `continued`: the same from the world imported at every record, to the combat's end.
+//!    Each action makes the next world from the one before (`sz_world_step`), which still shows its own record.
+//!  - `continued`: the same from the world imported at every record, to the combat's end, each action taken in place
+//!    (`sz_world_apply`).
 
 mod support;
 
@@ -50,6 +52,46 @@ impl World {
             0 => Ok(()),
             _ => Err(format!("error: sz_world_apply: {}", last_error())),
         }
+    }
+
+    /// The world after the action, as `sz_world_step` makes it of this one, held against what it says of itself.
+    fn step(&self, action: &str) -> Result<World, String> {
+        let mut node = ffi::SzNode::default();
+        let after = match unsafe { ffi::sz_world_step(self.0, action.as_ptr(), action.len(), &mut node) } {
+            0 => return Err(format!("error: sz_world_step: {}", last_error())),
+            world => World(world),
+        };
+        let status = after.status()?;
+        let (state_key, hidden_key) = if status == 0 {
+            (
+                after.key("sz_world_state_key", ffi::sz_world_state_key)?,
+                after.key("sz_world_hidden_key", ffi::sz_world_hidden_key)?,
+            )
+        } else {
+            (0, 0)
+        };
+        let (round, prompt) = if status == 2 {
+            // A lost combat's observation is not asked for.
+            (node.round, node.prompt)
+        } else {
+            let observation: serde_json::Value =
+                serde_json::from_slice(&after.text("sz_world_observe", ffi::sz_world_observe)?).map_err(|e| e.to_string())?;
+            (
+                observation["round"].as_i64().unwrap_or(-1) as i32,
+                !observation["prompt"].is_null() as i32,
+            )
+        };
+        let own = ffi::SzNode {
+            status,
+            round,
+            prompt,
+            state_key,
+            hidden_key,
+        };
+        if node != own {
+            return Err(format!("sz_world_step's node: {node:?} != {own:?}"));
+        }
+        Ok(after)
     }
 
     fn status(&self) -> Result<i32, String> {
@@ -140,17 +182,30 @@ fn shows(world: &World, fixture: &Fixture, k: usize) -> Result<(), String> {
     Ok(())
 }
 
+/// How a world takes an action: in place, or by making the next world of it.
+#[derive(Clone, Copy, PartialEq)]
+enum By {
+    Apply,
+    Step,
+}
+
 /// Plays the world from record `from` along the combat's actions, and holds it against each next record. Returns how
-/// many records it showed before the first that differs.
-fn follow(mut world: World, fixture: &Fixture, from: usize, tally: &mut Tally, what: &str) {
+/// many records it showed before the first that differs. By `Step`, the world before an action is held against its
+/// own record once more after the action: it stays as it is.
+fn follow(mut world: World, fixture: &Fixture, from: usize, tally: &mut Tally, what: &str, by: By) {
     for k in from..fixture.records.len() - 1 {
         let action = fixture.records[k]
             .action
             .as_deref()
             .expect("only the last record has no action");
-        let step = world
-            .apply(action)
-            .and_then(|()| shows(&world, fixture, k + 1));
+        let step = match by {
+            By::Apply => world.apply(action),
+            By::Step => world.step(action).and_then(|after| {
+                let before = std::mem::replace(&mut world, after);
+                shows(&before, fixture, k).map_err(|difference| format!("the world before the action, {difference}"))
+            }),
+        }
+        .and_then(|()| shows(&world, fixture, k + 1));
         match step {
             Ok(()) => tally.passed += 1,
             Err(difference) => {
@@ -207,7 +262,7 @@ fn step() {
         };
         tally.skipped += first;
         match World::import(&fixture.bytes(first, "export.json")) {
-            Ok(world) => follow(world, fixture, first, &mut tally, "carried"),
+            Ok(world) => follow(world, fixture, first, &mut tally, "carried", By::Step),
             Err(difference) => tally
                 .failed
                 .push((format!("{} record {first}", fixture.name), difference)),
@@ -227,7 +282,7 @@ fn continued() {
             match World::import(&fixture.bytes(k, "export.json"))
                 .and_then(|world| world.try_clone())
             {
-                Ok(world) => follow(world, fixture, k, &mut tally, "continued"),
+                Ok(world) => follow(world, fixture, k, &mut tally, "continued", By::Apply),
                 Err(difference) => tally
                     .failed
                     .push((format!("{} record {k}", fixture.name), difference)),

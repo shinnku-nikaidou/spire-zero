@@ -2,6 +2,7 @@
 //! slot is reused by the next add, most recently freed first. That is reproduced here, because game code walks them.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 /// Anything a foreach can walk, as the list of its items in .NET's order.
 pub trait IntoVec<T> {
@@ -20,9 +21,14 @@ pub struct KeyValuePair<K, V> {
     pub value: V,
 }
 
-/// The slots of a HashSet or Dictionary.
+/// The slots of a HashSet or Dictionary. A copy shares them with the collection it was copied from, and the one of
+/// the two that is written to first takes slots of its own: the game hands its collections around by reference and
+/// the translated code by value, and most of those values are only read. One with nothing in it holds nothing.
 #[derive(Clone, Debug)]
-struct Slots<T> {
+struct Slots<T>(Option<Arc<Held<T>>>);
+
+#[derive(Clone, Debug)]
+struct Held<T> {
     slots: Vec<Option<T>>,
     /// Freed slots; the last one is reused first.
     free: Vec<usize>,
@@ -30,33 +36,64 @@ struct Slots<T> {
 
 impl<T> Default for Slots<T> {
     fn default() -> Self {
-        Slots {
-            slots: Vec::new(),
-            free: Vec::new(),
-        }
+        Slots(None)
     }
 }
 
 impl<T> Slots<T> {
+    fn of(slots: Vec<Option<T>>, free: Vec<usize>) -> Self {
+        Slots(Some(Arc::new(Held { slots, free })))
+    }
+    /// Every slot in order, the freed ones empty.
+    fn slots(&self) -> &[Option<T>] {
+        match &self.0 {
+            Some(held) => &held.slots,
+            None => &[],
+        }
+    }
+    fn len(&self) -> usize {
+        match &self.0 {
+            Some(held) => held.slots.len() - held.free.len(),
+            None => 0,
+        }
+    }
+    fn clear(&mut self) {
+        self.0 = None;
+    }
+    fn iter(&self) -> impl Iterator<Item = &T> {
+        self.slots().iter().flatten()
+    }
+}
+
+impl<T: Clone> Slots<T> {
+    /// The slots to write to: this collection's own.
+    fn held(&mut self) -> &mut Held<T> {
+        Arc::make_mut(self.0.get_or_insert_with(|| {
+            Arc::new(Held {
+                slots: Vec::new(),
+                free: Vec::new(),
+            })
+        }))
+    }
     fn put(&mut self, v: T) {
-        match self.free.pop() {
-            Some(i) => self.slots[i] = Some(v),
-            None => self.slots.push(Some(v)),
+        let held = self.held();
+        match held.free.pop() {
+            Some(i) => held.slots[i] = Some(v),
+            None => held.slots.push(Some(v)),
         }
     }
     fn release(&mut self, i: usize) -> T {
-        self.free.push(i);
-        self.slots[i].take().unwrap()
+        let held = self.held();
+        held.free.push(i);
+        held.slots[i].take().unwrap()
     }
-    fn len(&self) -> usize {
-        self.slots.len() - self.free.len()
-    }
-    fn clear(&mut self) {
-        self.slots.clear();
-        self.free.clear();
-    }
-    fn iter(&self) -> impl Iterator<Item = &T> {
-        self.slots.iter().flatten()
+    /// What the slots hold, in order.
+    fn into_items(self) -> Vec<T> {
+        match self.0.map(Arc::try_unwrap) {
+            None => Vec::new(),
+            Some(Ok(held)) => held.slots.into_iter().flatten().collect(),
+            Some(Err(shared)) => shared.slots.iter().flatten().cloned().collect(),
+        }
     }
 }
 
@@ -90,20 +127,14 @@ impl<T> Slots<T> {
             seen[i] = true;
         }
         // The last of `free` here is the one filled first.
-        Ok(Slots {
-            slots,
-            free: free.into_iter().rev().collect(),
-        })
+        Ok(Slots::of(slots, free.into_iter().rev().collect()))
     }
 }
 
 impl<T> Set<T> {
     /// The set that enumerates these items in this order, with no freed slot.
     pub fn from_items(items: Vec<T>) -> Self {
-        Set(Slots {
-            slots: items.into_iter().map(Some).collect(),
-            free: Vec::new(),
-        })
+        Set(Slots::of(items.into_iter().map(Some).collect(), Vec::new()))
     }
     /// The set with these items in these slots and these freed slots (the next one to be filled first).
     pub fn from_layout(items: Vec<T>, at: Vec<usize>, free: Vec<usize>) -> Result<Self, String> {
@@ -129,7 +160,7 @@ impl<T: PartialEq + Clone> Set<T> {
         s
     }
     fn find(&self, x: &T) -> Option<usize> {
-        self.0.slots.iter().position(|s| s.as_ref() == Some(x))
+        self.0.slots().iter().position(|s| s.as_ref() == Some(x))
     }
     pub fn add(&mut self, x: T) -> bool {
         if self.find(&x).is_some() {
@@ -170,8 +201,8 @@ impl<T: PartialEq + Clone> Set<T> {
         }
     }
     pub fn intersect_with(&mut self, other: Vec<T>) {
-        for i in 0..self.0.slots.len() {
-            if self.0.slots[i].as_ref().is_some_and(|x| !other.contains(x)) {
+        for i in 0..self.0.slots().len() {
+            if self.0.slots()[i].as_ref().is_some_and(|x| !other.contains(x)) {
                 self.0.release(i);
             }
         }
@@ -186,13 +217,13 @@ impl<T: PartialEq + Clone> Set<T> {
 
 impl<T: Clone> IntoVec<T> for Set<T> {
     fn into_vec(self) -> Vec<T> {
-        self.0.slots.into_iter().flatten().collect()
+        self.0.into_items()
     }
 }
 
 impl<T: PartialEq> PartialEq for Set<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.0.slots == other.0.slots
+        self.0.slots() == other.0.slots()
     }
 }
 
@@ -203,10 +234,7 @@ pub struct Dict<K, V>(Slots<(K, V)>);
 impl<K, V> Dict<K, V> {
     /// The dictionary that enumerates these pairs in this order, with no freed slot.
     pub fn from_pairs(pairs: Vec<(K, V)>) -> Self {
-        Dict(Slots {
-            slots: pairs.into_iter().map(Some).collect(),
-            free: Vec::new(),
-        })
+        Dict(Slots::of(pairs.into_iter().map(Some).collect(), Vec::new()))
     }
     /// The dictionary with these pairs in these slots and these freed slots (the next one to be filled first).
     pub fn from_layout(
@@ -237,7 +265,7 @@ impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
     }
     fn find(&self, k: &K) -> Option<usize> {
         self.0
-            .slots
+            .slots()
             .iter()
             .position(|s| s.as_ref().is_some_and(|(key, _)| key == k))
     }
@@ -259,7 +287,7 @@ impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
     /// dict[k] = v.
     pub fn set(&mut self, k: K, v: V) {
         match self.find(&k) {
-            Some(i) => self.0.slots[i].as_mut().unwrap().1 = v,
+            Some(i) => self.0.held().slots[i].as_mut().unwrap().1 = v,
             None => self.0.put((k, v)),
         }
     }
@@ -271,6 +299,7 @@ impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
     /// The value of a key, to change in place (`dict[k].Add(x)`). Panics where C# throws KeyNotFoundException.
     pub fn get_mut(&mut self, k: &K) -> &mut V {
         self.0
+            .held()
             .slots
             .iter_mut()
             .flatten()
@@ -280,7 +309,7 @@ impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
     }
     pub fn try_get(&self, k: &K) -> Option<V> {
         self.find(k)
-            .map(|i| self.0.slots[i].as_ref().unwrap().1.clone())
+            .map(|i| self.0.slots()[i].as_ref().unwrap().1.clone())
     }
     pub fn contains_key(&self, k: &K) -> bool {
         self.find(k).is_some()
@@ -318,9 +347,8 @@ impl<K: PartialEq + Clone, V: Clone + PartialEq> Dict<K, V> {
 impl<K: Clone, V: Clone> IntoVec<KeyValuePair<K, V>> for Dict<K, V> {
     fn into_vec(self) -> Vec<KeyValuePair<K, V>> {
         self.0
-            .slots
+            .into_items()
             .into_iter()
-            .flatten()
             .map(|(key, value)| KeyValuePair { key, value })
             .collect()
     }
@@ -328,7 +356,7 @@ impl<K: Clone, V: Clone> IntoVec<KeyValuePair<K, V>> for Dict<K, V> {
 
 impl<K: PartialEq, V: PartialEq> PartialEq for Dict<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        self.0.slots == other.0.slots
+        self.0.slots() == other.0.slots()
     }
 }
 

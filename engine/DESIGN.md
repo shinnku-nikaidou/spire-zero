@@ -268,7 +268,8 @@ puts a selector of its own on the selector stack.
 - A copy of a combat shares its objects with the combat it was copied from: an arena is a list of handles
   (`Vec<Arc<TData>>`), a copy copies the handles, and an object is copied when one of the two first writes to it.
   What a combat never writes after it was made (the run's history, the combat's own history entries, most cards)
-  is held once by every world a search makes of it.
+  is held once by every world a search makes of it. A set or dictionary does the same with its slots: the game hands
+  its collections around by reference, the translated code by value, and a value that is only read costs no copy.
 - A field that holds a delegate is a field of the schema, of kind `delegate`, and the classes of what lambdas capture
   (Delegates, above) are classes of the schema, each with its arena after the game's: `name` as in the engine
   (`CreatureCmdClosure30_0`), `cs` the compiler's class (`...CreatureCmd+<>c__DisplayClass30_0`), no base, the fields
@@ -426,6 +427,7 @@ uint64_t sz_world_import(const uint8_t *json, size_t len);        // a live comb
 uint64_t sz_world_clone(uint64_t world);
 void     sz_world_free(uint64_t world);
 int32_t  sz_world_apply(uint64_t world, const uint8_t *action, size_t len);   // "play:10:1", "potion:0", "end_turn", "pick:0,2"; 0 ok
+uint64_t sz_world_step(uint64_t world, const uint8_t *action, size_t len, sz_node *node);   // the world after the action; 0 on error
 int32_t  sz_world_status(uint64_t world);                          // 0 in progress, 1 won, 2 lost
 int32_t  sz_world_legal(uint64_t world, sz_buf *out);              // the plays, one per line, in the game's order; empty at a prompt
 int32_t  sz_world_observe(uint64_t world, sz_buf *out);            // the CombatObservation's JSON, byte for byte ProtocolJson's
@@ -436,7 +438,27 @@ void     sz_buf_free(sz_buf buf);
 int32_t  sz_last_error(sz_buf *out);                               // this thread's last error
 ```
 
-`sz_buf` is `{ uint8_t *ptr; size_t len; }`. Actions are `CombatAction`'s text form. The observation is produced by
+`sz_buf` is `{ uint8_t *ptr; size_t len; }`. Actions are `CombatAction`'s text form.
+
+`sz_world_step` is how search makes a node: the world after the action is made of `world`, which stays as it is (what a
+snapshot is to search) and is freed on its own, in either order. It is one copy of the combat where a clone and an
+apply are two, and `sz_node` says what search reads of every state it reaches, so a state met before costs no further
+call:
+
+```c
+typedef struct {
+    int32_t  status;      // as sz_world_status
+    int32_t  round;       // the observation's round
+    int32_t  prompt;      // 1 where a card prompt waits
+    uint64_t state_key;   // as sz_world_state_key; 0 once the combat is over
+    uint64_t hidden_key;  // as sz_world_hidden_key; 0 once the combat is over
+} sz_node;
+```
+
+`sz_world_apply` is the same step with the world before let go, for a line played without coming back. At a card
+prompt the world keeps the combat as it was before the prompted action, and every world along that action's prompts
+holds the same one.
+ The observation is produced by
 `observe.rs`, which mirrors `src/Sts2Ai.GameBridge/Observe.cs` member by member. A world reads its observation once
 where it stands: the state key is its hash, and the hidden key takes the draw pile's card keys from it (the same
 cards, in the pile's own order) and reads only the random streams, the monsters' moves and the turn's history beside.
