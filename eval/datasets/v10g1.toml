@@ -1,0 +1,48 @@
+# The SL self-play dataset v10g1 (the user, 2026-11-14): the first on game v0.113.0, mainly the Fool, played by the
+# champion's pair v10-1-2 + c10-1-2 with combat search in the Rust engine (run's default world).
+# The Fool: 10,000 at A0 and 10,000 over A1-A10, fewer the higher (weights 10 down to 1).
+# Each other character: 4,000, half at A10 and half over A0-A9, more the nearer A10 (weights 1 up to 10).
+name = "v10g1"
+deadline = "+48h"                   # box.py deadline v10g1 UNTIL moves it; the user stops the step when the data is enough
+priority = 0
+seeds = 1300000                     # the ledger's blocks 1300000-1899999, one a character (the FOOL's 1800000-1899999)
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
+champion = "eval/champions/sl.json"
+workers = 4
+
+# The five characters' tiers, v9g2-2's: a third of each one's runs a tier, a decision drawn evenly with chance
+# epsilon, the others by a softmax over log V at temperature tau.
+explore = [{ epsilon = 0.06, tau = 0.01 }, { epsilon = 0.03, tau = 0.01 }, { epsilon = 0.01, tau = 0.01 }]
+
+# The whole game, every fight at the test's effort.
+[games.full]
+auto_win = []
+effort = { monster = "medium", elite = "medium", boss = "medium" }
+
+# The Fool's tiers are v9g0's, even draws only: every Fool card reads as the unknown id, so V skips its card rewards and
+# only the draws put its cards in a deck; a softmax would follow V's blank values.
+[[runs]]
+characters = ["FOOL"]
+game = "full"
+asc = 0
+n = 10000
+explore = [{ epsilon = 0.3 }, { epsilon = 0.1 }, { epsilon = 0.02 }]
+
+[[runs]]
+characters = ["FOOL"]
+game = "full"
+asc = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+n = [1818, 1636, 1455, 1273, 1091, 909, 727, 545, 364, 182]
+explore = [{ epsilon = 0.3 }, { epsilon = 0.1 }, { epsilon = 0.02 }]
+
+[[runs]]
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER"]
+game = "full"
+asc = 10
+n = 2000
+
+[[runs]]
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER"]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [36, 73, 109, 145, 182, 218, 255, 291, 327, 364]
