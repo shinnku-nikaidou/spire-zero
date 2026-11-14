@@ -1080,3 +1080,6 @@
   1.2–1.7 GB、每局牆鐘約 80 秒（重播 1,069–1,843 秒）。另補了 `box.py` 的 status／fetch 顯示失敗局數（之前失敗局看不出來）。
   剩下的是切換本身（計畫約定由用戶決定）：提案是 `run` 的 `--combat-world` 預設改成 engine，`brain`（經線路的主機）維持 replay，
   `run --check` 需要明寫 replay；做法由 engine-bridge 改、我在 pool 上用一個小步驟驗過再用。
+- 20:42 （協調）**用戶的話**（Remote Control，看完「可以上生產」的報告後）：「切換」。交給 engine-bridge：`run` 的 `--combat-world` 預設改成
+  engine；`brain`（經線路的主機）維持 replay；`run --check` 不給選項時自己走 replay 或明說要給；說明文字、DESIGN.md、釘住預設的測試
+  一起改，同一個 commit 不放別的。之後我在乾淨建置上複驗、在 pool 上用一個小步驟煙霧測試，才給別的工作用。
