@@ -166,6 +166,11 @@ combat.tests.forEach((t, i) => {
   if (off > 1e-3) errors.push(`combat-walk.json: test state ${i} is ${off} off the net file's`);
 });
 
+// V's figure must end in the value the champion's V file holds for its first test run.
+const value = JSON.parse(readFileSync(join(root, champion.options.value), 'utf8'));
+const vWalk = JSON.parse(readFileSync(new URL('../src/data/v-walk.json', import.meta.url), 'utf8'));
+if (Math.abs(vWalk.test_value - value.tests[0].value) > 1e-9) errors.push(`v-walk.json: made from another V than the champion's (scripts/v-walk.py)`);
+
 for (const error of errors) console.error(error);
 console.log(`${pages.size} pages, ${checked} internal links, ${book} characters in Traditional Chinese, ${errors.length} problems`);
 process.exit(errors.length ? 1 : 0);

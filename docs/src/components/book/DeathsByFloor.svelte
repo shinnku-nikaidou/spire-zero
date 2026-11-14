@@ -18,7 +18,10 @@
   const rows = r.deaths.byFloor;
   const totals = Object.fromEntries(KINDS.map((k) => [k.key, rows.reduce((s, f) => s + f[k.key], 0)])) as Record<string, number>;
   const lost = Object.values(totals).reduce((a, b) => a + b, 0);
-  const floors = Array.from({ length: 48 }, (_, i) => i + 1);
+  // At Ascension 10 act 3 ends in two bosses, on floors 48 and 49.
+  const last = Math.max(48, ...rows.map((f) => f.floor));
+  const floors = Array.from({ length: last }, (_, i) => i + 1);
+  const bosses = [17, 33, ...floors.filter((f) => f >= 48)];
 
   const W = 660;
   const H = 240;
@@ -49,13 +52,13 @@
       <line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} stroke="var(--v-grid)" />
       <text x={M.l - 6} y={y(v) + 4} text-anchor="end">{v}</text>
     {/each}
-    {#each [17, 33, 48] as f, i (f)}
+    {#each bosses as f, i (f)}
       <line x1={x(f)! + x.bandwidth() / 2} x2={x(f)! + x.bandwidth() / 2} y1={M.t} y2={H - M.b} stroke="var(--v-axis)" stroke-dasharray="2 3" />
-      <text x={x(f)! + x.bandwidth() / 2} y={M.t + 2} text-anchor="middle">{say(lang, w(`act ${i + 1} boss`, `第 ${i + 1} 幕 Boss`, `第 ${i + 1} 幕頭目`))}</text>
+      {#if i < 3}<text x={x(f)! + x.bandwidth() / 2} y={M.t + 2} text-anchor="middle">{say(lang, w(`act ${i + 1} boss`, `第 ${i + 1} 幕 Boss`, `第 ${i + 1} 幕頭目`))}</text>{/if}
     {/each}
     {#each floors as f (f)}
       <rect x={x(f)} y={M.t} width={x.bandwidth()} height={H - M.b - M.t} fill={hover === f ? 'var(--v-wash)' : 'transparent'} role="presentation" onpointerenter={() => (hover = f)} />
-      {#if f % 4 === 1 || f === 48}<text x={x(f)! + x.bandwidth() / 2} y={H - M.b + 14} text-anchor="middle">{f}</text>{/if}
+      {#if f % 4 === 1 || f === last}<text x={x(f)! + x.bandwidth() / 2} y={H - M.b + 14} text-anchor="middle">{f}</text>{/if}
     {/each}
     {#each rows as row (row.floor)}
       {#each stack(row) as s (s.key)}
@@ -77,9 +80,9 @@
   {/if}
   <p class="v-caption">
     {say(lang, w(
-      `${lost} lost runs of ${r.runs}, ${r.won} won (the champion’s Necrobinder, SL, ascension 0). The three acts’ bosses, in order, were reached in ${r.bossesReached.join(' / ')} runs and beaten in ${r.bossesBeaten.join(' / ')}.`,
-      `${r.runs} 局里输了 ${lost} 局，赢 ${r.won} 局（冠军的亡灵契约师，SL，进阶 0）。三幕的 Boss 依次有 ${r.bossesReached.join(' / ')} 局打到，${r.bossesBeaten.join(' / ')} 局打赢。`,
-      `${r.runs} 局裡輸了 ${lost} 局，贏 ${r.won} 局（冠軍的縛亡者，SL，晉階 0）。三幕的頭目依序有 ${r.bossesReached.join(' / ')} 局打到，${r.bossesBeaten.join(' / ')} 局打贏。`,
+      `${lost} lost runs of ${r.runs}, ${r.won} won (the champion’s Necrobinder, SL, ascension ${r.ascension}). The three acts’ bosses, in order, were reached in ${r.bossesReached.join(' / ')} runs and beaten in ${r.bossesBeaten.join(' / ')}.`,
+      `${r.runs} 局里输了 ${lost} 局，赢 ${r.won} 局（冠军的亡灵契约师，SL，进阶 ${r.ascension}）。三幕的 Boss 依次有 ${r.bossesReached.join(' / ')} 局打到，${r.bossesBeaten.join(' / ')} 局打赢。`,
+      `${r.runs} 局裡輸了 ${lost} 局，贏 ${r.won} 局（冠軍的縛亡者，SL，晉階 ${r.ascension}）。三幕的頭目依序有 ${r.bossesReached.join(' / ')} 局打到，${r.bossesBeaten.join(' / ')} 局打贏。`,
     ))}
   </p>
 </div>

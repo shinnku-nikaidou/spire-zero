@@ -44,9 +44,9 @@ PLAY = {
 # The decisions the figures show, by decision_id in the plays' logs; each is checked where it matters. After a promotion
 # the plays differ: pick them again with the same intent.
 PLAN_FIGHT = 17  # PlanTimeline: the floor of the SL fight, the act 1 boss (one enemy, as the figure's bars expect)
-PANEL_SL = 943  # PanelMock: the first decision of the act 3 boss fight in SL, two first actions kept, both won
-PANEL_NOSL = 863  # PanelMock: a turn's first decision in the NoSL run's act 3 boss fight, after an end turn
-PANEL_MAP = 341  # PanelMock and MapRoute: an SL map decision of two options, an enemy or a ? room
+PANEL_SL = 590  # PanelMock: the first decision of a boss fight in SL (act 2: the act 3 one keeps one first action), two first actions kept, both won
+PANEL_NOSL = 689  # PanelMock: a turn's first decision in the NoSL run's act 3 boss fight, after an end turn
+PANEL_MAP = 546  # PanelMock and MapRoute: an SL map decision of two options, an enemy or a ? room
 LOG_LINES = {"combat": 4, "card prompt": 1, "rest": 133}  # DecisionLog: one line of each kind
 
 
@@ -246,6 +246,9 @@ def combat_action(lang: str, action: str, obs: dict) -> str:
         return (card(lang, held) if held else f"card {uid}") + target
     if verb == "potion":
         return T(lang, "drink {0}", NAMES[lang]["potion"][obs["potions"][int(args[0])]]) + target
+    if verb == "pick":
+        # A planned answer to a prompt that is not on screen yet: its cards are named when the prompt is.
+        return T(lang, "pick cards" if args and args[0] else "pick none")
     raise SystemExit(f"cannot name {action}")
 
 
@@ -531,7 +534,7 @@ def panel_examples(sl: Play, nosl: Play) -> dict:
         "source": f"sl_combat, nosl_combat, map_options: three decisions of the book's example seed ({SEED}, the Silent "
         "at A0), one from each play of eval/champions/sl.json and eval/champions/nosl.json; map: the map of map_options' "
         "decision. Texts made as Describe and L10n make them.",
-        "sl_combat": answer(sl, PANEL_SL, "SL combat", "the first decision of the act 3 boss fight: the SL planner plans the fight"),
+        "sl_combat": answer(sl, PANEL_SL, "SL combat", "the first decision of the act 2 boss fight: the SL planner plans the fight"),
         "nosl_combat": answer(nosl, PANEL_NOSL, "NoSL combat", "a turn's first decision in the act 3 boss fight: PIMC over 8 worlds"),
         "map_options": answer(sl, PANEL_MAP, "map", "a map decision: L0 values each next point with V"),
         "map": {
@@ -691,7 +694,9 @@ def eval_reports() -> dict:
         where = last["room"] if here and last.get("end", {}).get("died") else "outside"
         row = rows.setdefault(x["floor"], {"floor": x["floor"], "Boss": 0, "Elite": 0, "Monster": 0, "outside": 0})
         row[where] += 1
-    bosses = [[c for x in runs for c in x["combats"] if c["act"] == act and c["room"] == "Boss"] for act in range(3)]
+    # Per run and act, its boss fights (two in act 3 at the highest ascension): reached if any, beaten if all were won.
+    bosses = [[b for x in runs if (b := [c for c in x["combats"] if c["act"] == act and c["room"] == "Boss"])] for act in range(3)]
+    (ascension,) = {x["ascension"] for x in runs}
     return {
         "source": {
             "what": "one report: per floor, where its lost runs died",
@@ -699,11 +704,12 @@ def eval_reports() -> dict:
         },
         "report": {
             "env": r["config"]["env"],
+            "ascension": ascension,
             "seedSet": r["seed_set"],
             "runs": len(runs),
             "won": sum(x["outcome"] == "won" for x in runs),
             "bossesReached": [len(b) for b in bosses],
-            "bossesBeaten": [sum(1 for c in b if c.get("end") and not c["end"]["died"]) for b in bosses],
+            "bossesBeaten": [sum(all(c.get("end") and not c["end"]["died"] for c in fights) for fights in b) for b in bosses],
             "deaths": {"byFloor": [rows[f] for f in sorted(rows)], "noEnd": no_end},
         },
     }

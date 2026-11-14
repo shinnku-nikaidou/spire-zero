@@ -3,31 +3,31 @@
  "sl_combat": {
   "source": {
    "title": "SL combat",
-   "how": "the first decision of the act 3 boss fight: the SL planner plans the fight",
-   "decision": 943,
+   "how": "the first decision of the act 2 boss fight: the SL planner plans the fight",
+   "decision": 590,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone",
+   "champion": "combat plan c10-1-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-1-2 clone, macro prompts l0 v10-1-2 clone",
    "env": "SL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 48 · HP 67/70",
-   "zh-CN": "静默猎手 · A0 · 第 48 层 · HP 67/70",
-   "zh-TW": "寂靜獵手 · A0 · 第 48 層 · HP 67/70"
+   "en": "The Silent · A0 · floor 33 · HP 69/70",
+   "zh-CN": "静默猎手 · A0 · 第 33 层 · HP 69/70",
+   "zh-TW": "寂靜獵手 · A0 · 第 33 層 · HP 69/70"
   },
-  "floor": 48,
-  "hp": 67,
+  "floor": 33,
+  "hp": 69,
   "max_hp": 70,
   "surface": "combat",
   "next": {
-   "en": "Assassinate → Queen #2",
-   "zh-CN": "刺杀 → 女王 #2",
-   "zh-TW": "刺殺 → 女王 #2"
+   "en": "Footwork+",
+   "zh-CN": "灵动步法+",
+   "zh-TW": "步法+"
   },
   "route": false,
   "sub": {
-   "en": "this fight 100% · 53 HP left",
-   "zh-CN": "这场胜率 100% · 剩 53 HP",
-   "zh-TW": "這場勝率 100% · 剩 53 HP"
+   "en": "this fight 100% · 69 HP left",
+   "zh-CN": "这场胜率 100% · 剩 69 HP",
+   "zh-TW": "這場勝率 100% · 剩 69 HP"
   },
   "then": [
    {
@@ -36,19 +36,14 @@
     "zh-TW": "防禦"
    },
    {
-    "en": "Calculated Gamble",
-    "zh-CN": "计算下注",
-    "zh-TW": "精算一搏"
+    "en": "Backflip",
+    "zh-CN": "后空翻",
+    "zh-TW": "後空翻"
    },
    {
-    "en": "card 7",
-    "zh-CN": "card 7",
-    "zh-TW": "card 7"
-   },
-   {
-    "en": "card 10",
-    "zh-CN": "card 10",
-    "zh-TW": "card 10"
+    "en": "Deadly Poison+ → Knowledge Demon",
+    "zh-CN": "致命毒药+ → 知识恶魔",
+    "zh-TW": "致命毒藥+ → 知識惡魔"
    },
    {
     "en": "end turn",
@@ -65,53 +60,53 @@
   "options": [
    {
     "name": {
-     "en": "Assassinate → Queen #2",
-     "zh-CN": "刺杀 → 女王 #2",
-     "zh-TW": "刺殺 → 女王 #2"
+     "en": "Footwork+",
+     "zh-CN": "灵动步法+",
+     "zh-TW": "步法+"
     },
-    "value": 0.999,
+    "value": 0.9989,
     "ci": 0,
     "win": 1,
-    "hp": 53,
+    "hp": 69,
     "rooms": null
    },
    {
     "name": {
-     "en": "Noxious Fumes+",
-     "zh-CN": "毒雾+",
-     "zh-TW": "毒霧+"
+     "en": "Strike → Knowledge Demon",
+     "zh-CN": "打击 → 知识恶魔",
+     "zh-TW": "打擊 → 知識惡魔"
     },
-    "value": 0.9987,
+    "value": 0.9989,
     "ci": 0,
     "win": 1,
-    "hp": 39,
+    "hp": 69,
     "rooms": null
    }
   ],
-  "brain": "plan c9-2",
-  "seconds": 21.8,
-  "win": 0.9959230327701608,
-  "delta": -0.0006,
+  "brain": "plan c10-1-2",
+  "seconds": 1.5,
+  "win": 0.9977713596620913,
+  "delta": -0.0,
   "recent": [
    {
-    "en": "floor 47 · go to Boss · 99.6%",
-    "zh-CN": "第 47 层 · 去 Boss · 99.6%",
-    "zh-TW": "第 47 層 · 去 頭目 · 99.6%"
+    "en": "floor 32 · go to Boss · 99.8%",
+    "zh-CN": "第 32 层 · 去 Boss · 99.8%",
+    "zh-TW": "第 32 層 · 去 頭目 · 99.8%"
    },
    {
-    "en": "floor 47 · leave · 99.7%",
-    "zh-CN": "第 47 层 · 离开 · 99.7%",
-    "zh-TW": "第 47 層 · 離開 · 99.7%"
+    "en": "floor 32 · leave · 99.8%",
+    "zh-CN": "第 32 层 · 离开 · 99.8%",
+    "zh-TW": "第 32 層 · 離開 · 99.8%"
    },
    {
-    "en": "floor 47 · pick Noxious Fumes · 99.7%",
-    "zh-CN": "第 47 层 · 选 毒雾 · 99.7%",
-    "zh-TW": "第 47 層 · 選 毒霧 · 99.7%"
+    "en": "floor 32 · pick Footwork · 99.8%",
+    "zh-CN": "第 32 层 · 选 灵动步法 · 99.8%",
+    "zh-TW": "第 32 層 · 選 步法 · 99.8%"
    },
    {
-    "en": "floor 47 · Smith · 99.7%",
-    "zh-CN": "第 47 层 · 锻造 · 99.7%",
-    "zh-TW": "第 47 層 · 鍛造 · 99.7%"
+    "en": "floor 32 · Smith · 99.8%",
+    "zh-CN": "第 32 层 · 锻造 · 99.8%",
+    "zh-TW": "第 32 層 · 鍛造 · 99.8%"
    }
   ]
  },
@@ -119,42 +114,42 @@
   "source": {
    "title": "NoSL combat",
    "how": "a turn's first decision in the act 3 boss fight: PIMC over 8 worlds",
-   "decision": 863,
+   "decision": 689,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat pimc c9-2 8x300, combat prompts first, macro l0 v9-2, macro prompts l0 v9-2",
+   "champion": "combat pimc c10-1-2 8x300, combat prompts first, macro l0 v10-1-2, macro prompts l0 v10-1-2",
    "env": "NoSL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 48 · HP 62/70",
-   "zh-CN": "静默猎手 · A0 · 第 48 层 · HP 62/70",
-   "zh-TW": "寂靜獵手 · A0 · 第 48 層 · HP 62/70"
+   "en": "The Silent · A0 · floor 48 · HP 50/66",
+   "zh-CN": "静默猎手 · A0 · 第 48 层 · HP 50/66",
+   "zh-TW": "寂靜獵手 · A0 · 第 48 層 · HP 50/66"
   },
   "floor": 48,
-  "hp": 62,
-  "max_hp": 70,
+  "hp": 50,
+  "max_hp": 66,
   "surface": "combat",
   "next": {
-   "en": "Bullet Time",
-   "zh-CN": "子弹时间",
-   "zh-TW": "子彈時間"
+   "en": "Footwork+",
+   "zh-CN": "灵动步法+",
+   "zh-TW": "步法+"
   },
   "route": false,
   "sub": null,
   "then": [
    {
-    "en": "Deadly Poison+ → Queen #2",
-    "zh-CN": "致命毒药+ → 女王 #2",
-    "zh-TW": "致命毒藥+ → 女王 #2"
+    "en": "Strike → Test Subject #C{Count}",
+    "zh-CN": "打击 → 实验体 #C{Count}",
+    "zh-TW": "打擊 → 實驗體 #C{Count}"
    },
    {
-    "en": "Footwork+",
-    "zh-CN": "灵动步法+",
-    "zh-TW": "步法+"
+    "en": "Survivor+",
+    "zh-CN": "生存者+",
+    "zh-TW": "生存者+"
    },
    {
-    "en": "Defend+",
-    "zh-CN": "防御+",
-    "zh-TW": "防禦+"
+    "en": "pick cards",
+    "zh-CN": "选牌",
+    "zh-TW": "選牌"
    },
    {
     "en": "end turn",
@@ -167,69 +162,69 @@
   "options": [
    {
     "name": {
-     "en": "Bullet Time",
-     "zh-CN": "子弹时间",
-     "zh-TW": "子彈時間"
-    },
-    "value": 0.9888,
-    "ci": 0.0039,
-    "win": null,
-    "hp": null,
-    "rooms": null
-   },
-   {
-    "name": {
      "en": "Footwork+",
      "zh-CN": "灵动步法+",
      "zh-TW": "步法+"
     },
-    "value": 0.9882,
-    "ci": 0.004,
+    "value": 0.999,
+    "ci": 0.0001,
     "win": null,
     "hp": null,
     "rooms": null
    },
    {
     "name": {
-     "en": "Deadly Poison+ → Queen #2",
-     "zh-CN": "致命毒药+ → 女王 #2",
-     "zh-TW": "致命毒藥+ → 女王 #2"
+     "en": "Strike → Test Subject #C{Count}",
+     "zh-CN": "打击 → 实验体 #C{Count}",
+     "zh-TW": "打擊 → 實驗體 #C{Count}"
     },
-    "value": 0.9881,
-    "ci": 0.004,
+    "value": 0.999,
+    "ci": 0.0001,
     "win": null,
     "hp": null,
     "rooms": null
    },
    {
     "name": {
-     "en": "Deadly Poison+ → Torch Head Amalgam #1",
-     "zh-CN": "致命毒药+ → 火炬头聚合体 #1",
-     "zh-TW": "致命毒藥+ → 火炬頭融合體 #1"
+     "en": "Haze+",
+     "zh-CN": "迷雾+",
+     "zh-TW": "迷霧+"
     },
-    "value": 0.9871,
-    "ci": 0.0041,
+    "value": 0.9989,
+    "ci": 0.0001,
     "win": null,
     "hp": null,
     "rooms": null
    },
    {
     "name": {
-     "en": "Expose+ → Queen #2",
-     "zh-CN": "暴露+ → 女王 #2",
-     "zh-TW": "暴露+ → 女王 #2"
+     "en": "Bubble Bubble → Test Subject #C{Count}",
+     "zh-CN": "咕嘟冒泡 → 实验体 #C{Count}",
+     "zh-TW": "咕嘟冒泡 → 實驗體 #C{Count}"
     },
-    "value": 0.987,
-    "ci": 0.0039,
+    "value": 0.9988,
+    "ci": 0.0002,
+    "win": null,
+    "hp": null,
+    "rooms": null
+   },
+   {
+    "name": {
+     "en": "Survivor+",
+     "zh-CN": "生存者+",
+     "zh-TW": "生存者+"
+    },
+    "value": 0.9986,
+    "ci": 0.0002,
     "win": null,
     "hp": null,
     "rooms": null
    }
   ],
-  "brain": "pimc c9-2",
-  "seconds": 0.6,
-  "win": 0.9906500568175864,
-  "delta": -0.0013,
+  "brain": "pimc c10-1-2",
+  "seconds": 0.4,
+  "win": 0.9980888370674725,
+  "delta": -0.0001,
   "recent": [
    {
     "en": "floor 48 · end turn",
@@ -237,19 +232,19 @@
     "zh-TW": "第 48 層 · 結束回合"
    },
    {
-    "en": "floor 48 · Pinpoint+ → Torch Head Amalgam #1",
-    "zh-CN": "第 48 层 · 精密瞄准+ → 火炬头聚合体 #1",
-    "zh-TW": "第 48 層 · 精密瞄準+ → 火炬頭融合體 #1"
+    "en": "floor 48 · Strike+ → Test Subject #C{Count}",
+    "zh-CN": "第 48 层 · 打击+ → 实验体 #C{Count}",
+    "zh-TW": "第 48 層 · 打擊+ → 實驗體 #C{Count}"
    },
    {
-    "en": "floor 48 · Defend",
-    "zh-CN": "第 48 层 · 防御",
-    "zh-TW": "第 48 層 · 防禦"
+    "en": "floor 48 · drink Weak Potion → Test Subject #C{Count}",
+    "zh-CN": "第 48 层 · 喝 虚弱药水 → 实验体 #C{Count}",
+    "zh-TW": "第 48 層 · 喝 虛弱藥水 → 實驗體 #C{Count}"
    },
    {
-    "en": "floor 48 · Noxious Fumes",
-    "zh-CN": "第 48 层 · 毒雾",
-    "zh-TW": "第 48 層 · 毒霧"
+    "en": "floor 48 · Mad Science+",
+    "zh-CN": "第 48 层 · 疯狂科学+",
+    "zh-TW": "第 48 層 · 瘋狂科學+"
    }
   ]
  },
@@ -257,86 +252,36 @@
   "source": {
    "title": "map",
    "how": "a map decision: L0 values each next point with V",
-   "decision": 341,
+   "decision": 546,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat plan c9-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v9-2 clone, macro prompts l0 v9-2 clone",
+   "champion": "combat plan c10-1-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-1-2 clone, macro prompts l0 v10-1-2 clone",
    "env": "SL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 19 · HP 70/70",
-   "zh-CN": "静默猎手 · A0 · 第 19 层 · HP 70/70",
-   "zh-TW": "寂靜獵手 · A0 · 第 19 層 · HP 70/70"
+   "en": "The Silent · A0 · floor 29 · HP 70/70",
+   "zh-CN": "静默猎手 · A0 · 第 29 层 · HP 70/70",
+   "zh-TW": "寂靜獵手 · A0 · 第 29 層 · HP 70/70"
   },
-  "floor": 19,
+  "floor": 29,
   "hp": 70,
   "max_hp": 70,
   "surface": "map",
   "next": {
-   "en": "go to Enemy",
-   "zh-CN": "去 敌人",
-   "zh-TW": "去 敵人"
+   "en": "go to Unknown",
+   "zh-CN": "去 未知",
+   "zh-TW": "去 未知"
   },
   "route": true,
   "sub": {
-   "en": "win chance 87.7%",
-   "zh-CN": "整局胜率 87.7%",
-   "zh-TW": "整局勝率 87.7%"
+   "en": "win chance 99.5%",
+   "zh-CN": "整局胜率 99.5%",
+   "zh-TW": "整局勝率 99.5%"
   },
   "then": [
-   {
-    "en": "Enemy",
-    "zh-CN": "敌人",
-    "zh-TW": "敵人"
-   },
-   {
-    "en": "Enemy",
-    "zh-CN": "敌人",
-    "zh-TW": "敵人"
-   },
-   {
-    "en": "Merchant",
-    "zh-CN": "商人",
-    "zh-TW": "商人"
-   },
-   {
-    "en": "Rest",
-    "zh-CN": "休息",
-    "zh-TW": "休息"
-   },
    {
     "en": "Elite",
     "zh-CN": "精英",
     "zh-TW": "菁英"
-   },
-   {
-    "en": "Treasure",
-    "zh-CN": "宝箱",
-    "zh-TW": "財寶"
-   },
-   {
-    "en": "Enemy",
-    "zh-CN": "敌人",
-    "zh-TW": "敵人"
-   },
-   {
-    "en": "Rest",
-    "zh-CN": "休息",
-    "zh-TW": "休息"
-   },
-   {
-    "en": "Unknown",
-    "zh-CN": "未知",
-    "zh-TW": "未知"
-   },
-   {
-    "en": "Enemy",
-    "zh-CN": "敌人",
-    "zh-TW": "敵人"
-   },
-   {
-    "en": "Merchant",
-    "zh-CN": "商人",
-    "zh-TW": "商人"
    },
    {
     "en": "Rest",
@@ -354,83 +299,63 @@
   "options": [
    {
     "name": {
-     "en": "go to Enemy",
-     "zh-CN": "去 敌人",
-     "zh-TW": "去 敵人"
+     "en": "go to Unknown",
+     "zh-CN": "去 未知",
+     "zh-TW": "去 未知"
     },
-    "value": 0.8773,
+    "value": 0.9954,
     "ci": 0,
     "win": null,
     "hp": null,
     "rooms": [
-     "Monster",
-     "Monster",
-     "Monster",
-     "Shop",
-     "RestSite",
-     "Elite",
-     "Treasure",
-     "Monster",
-     "RestSite",
      "Unknown",
-     "Monster",
-     "Shop",
+     "Elite",
      "RestSite",
      "Boss"
     ]
    },
    {
     "name": {
-     "en": "go to Unknown",
-     "zh-CN": "去 未知",
-     "zh-TW": "去 未知"
+     "en": "go to Enemy",
+     "zh-CN": "去 敌人",
+     "zh-TW": "去 敵人"
     },
-    "value": 0.8729,
+    "value": 0.9949,
     "ci": 0,
     "win": null,
     "hp": null,
     "rooms": [
-     "Unknown",
      "Monster",
-     "Unknown",
      "Monster",
-     "RestSite",
-     "Elite",
-     "Treasure",
-     "Monster",
-     "RestSite",
-     "Unknown",
-     "Monster",
-     "Shop",
      "RestSite",
      "Boss"
     ]
    }
   ],
-  "brain": "l0 v9-2 clone",
+  "brain": "l0 v10-1-2 clone",
   "seconds": 0.0,
-  "win": 0.8773240790680618,
-  "delta": 0.0078,
+  "win": 0.9953589763404774,
+  "delta": -0.0008,
   "recent": [
    {
-    "en": "floor 19 · skip the rest, proceed · 87.0%",
-    "zh-CN": "第 19 层 · 跳过其余，继续 · 87.0%",
-    "zh-TW": "第 19 層 · 略過其餘，繼續 · 87.0%"
+    "en": "floor 29 · leave · 99.6%",
+    "zh-CN": "第 29 层 · 离开 · 99.6%",
+    "zh-TW": "第 29 層 · 離開 · 99.6%"
    },
    {
-    "en": "floor 19 · take 17 gold · 87.0%",
-    "zh-CN": "第 19 层 · 拿 17 金币 · 87.0%",
-    "zh-TW": "第 19 層 · 拿 17 金幣 · 87.0%"
+    "en": "floor 29 · pick Footwork · 99.6%",
+    "zh-CN": "第 29 层 · 选 灵动步法 · 99.6%",
+    "zh-TW": "第 29 層 · 選 步法 · 99.6%"
    },
    {
-    "en": "floor 19 · Predator → Exoskeleton",
-    "zh-CN": "第 19 层 · 猎杀者 → 外骨骼虫",
-    "zh-TW": "第 19 層 · 獵殺者 → 外骨骼蟲"
+    "en": "floor 29 · Smith · 99.6%",
+    "zh-CN": "第 29 层 · 锻造 · 99.6%",
+    "zh-TW": "第 29 層 · 鍛造 · 99.6%"
    },
    {
-    "en": "floor 19 · Strike → Exoskeleton",
-    "zh-CN": "第 19 层 · 打击 → 外骨骼虫",
-    "zh-TW": "第 19 層 · 打擊 → 外骨骼蟲"
+    "en": "floor 28 · go to Rest · 99.6%",
+    "zh-CN": "第 28 层 · 去 休息 · 99.6%",
+    "zh-TW": "第 28 層 · 去 休息 · 99.6%"
    }
   ]
  },
@@ -438,30 +363,20 @@
   "source": {
    "command": "run --champion eval/champions/sl.json --env SL --character SILENT --seeds eval/seeds/promotion-1-100.txt --start 12 --n 1 --records FILE --log FILE",
    "seed": "0SSL7NS01MU6",
-   "decision": 341,
-   "floor": 19,
+   "decision": 546,
+   "floor": 29,
    "hp": 70,
    "max_hp": 70,
    "act": 1,
    "act_id": "HIVE",
    "route": "the route the brain planned after its pick, as the decision log holds it (MacroBrain.Plan)",
    "travelled": [
-    "map:6,3",
-    "map:6,4",
-    "map:5,5",
-    "map:4,6",
-    "map:3,7",
-    "map:3,8",
-    "map:3,9",
-    "map:3,10",
-    "map:4,11",
-    "map:4,12",
     "map:3,13",
     "map:3,14",
     "map:3,15"
    ]
   },
-  "brain": "l0 v9-2 clone",
+  "brain": "l0 v10-1-2 clone",
   "points": [
    {
     "col": 3,
@@ -469,68 +384,50 @@
     "type": "Ancient",
     "next": [
      {
-      "col": 1,
-      "row": 1
-     },
-     {
-      "col": 4,
+      "col": 5,
       "row": 1
      }
     ]
    },
    {
-    "col": 1,
+    "col": 5,
     "row": 1,
     "type": "Monster",
     "next": [
      {
-      "col": 1,
+      "col": 4,
+      "row": 2
+     },
+     {
+      "col": 6,
       "row": 2
      }
     ]
    },
    {
     "col": 4,
-    "row": 1,
+    "row": 2,
     "type": "Monster",
     "next": [
      {
       "col": 3,
-      "row": 2
+      "row": 3
      },
      {
+      "col": 4,
+      "row": 3
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 2,
+    "type": "Monster",
+    "next": [
+     {
       "col": 5,
-      "row": 2
-     }
-    ]
-   },
-   {
-    "col": 1,
-    "row": 2,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 2,
       "row": 3
-     }
-    ]
-   },
-   {
-    "col": 3,
-    "row": 2,
-    "type": "Unknown",
-    "next": [
-     {
-      "col": 2,
-      "row": 3
-     }
-    ]
-   },
-   {
-    "col": 5,
-    "row": 2,
-    "type": "Monster",
-    "next": [
+     },
      {
       "col": 6,
       "row": 3
@@ -538,16 +435,38 @@
     ]
    },
    {
-    "col": 2,
+    "col": 3,
     "row": 3,
     "type": "Monster",
     "next": [
      {
-      "col": 2,
+      "col": 3,
+      "row": 4
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 3,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 3,
       "row": 4
      },
      {
-      "col": 3,
+      "col": 4,
+      "row": 4
+     }
+    ]
+   },
+   {
+    "col": 5,
+    "row": 3,
+    "type": "Shop",
+    "next": [
+     {
+      "col": 4,
       "row": 4
      }
     ]
@@ -555,7 +474,7 @@
    {
     "col": 6,
     "row": 3,
-    "type": "Monster",
+    "type": "Unknown",
     "next": [
      {
       "col": 6,
@@ -564,27 +483,27 @@
     ]
    },
    {
-    "col": 2,
-    "row": 4,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 2,
-      "row": 5
-     }
-    ]
-   },
-   {
     "col": 3,
     "row": 4,
     "type": "Unknown",
     "next": [
      {
-      "col": 2,
+      "col": 3,
+      "row": 5
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 4,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 3,
       "row": 5
      },
      {
-      "col": 3,
+      "col": 5,
       "row": 5
      }
     ]
@@ -592,7 +511,7 @@
    {
     "col": 6,
     "row": 4,
-    "type": "Monster",
+    "type": "Unknown",
     "next": [
      {
       "col": 5,
@@ -605,25 +524,14 @@
     ]
    },
    {
-    "col": 2,
+    "col": 3,
     "row": 5,
-    "type": "Unknown",
+    "type": "RestSite",
     "next": [
-     {
-      "col": 1,
-      "row": 6
-     },
      {
       "col": 2,
       "row": 6
-     }
-    ]
-   },
-   {
-    "col": 3,
-    "row": 5,
-    "type": "Monster",
-    "next": [
+     },
      {
       "col": 4,
       "row": 6
@@ -633,14 +541,10 @@
    {
     "col": 5,
     "row": 5,
-    "type": "Shop",
+    "type": "Unknown",
     "next": [
      {
       "col": 4,
-      "row": 6
-     },
-     {
-      "col": 5,
       "row": 6
      }
     ]
@@ -657,23 +561,16 @@
     ]
    },
    {
-    "col": 1,
-    "row": 6,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 0,
-      "row": 7
-     }
-    ]
-   },
-   {
     "col": 2,
     "row": 6,
     "type": "Monster",
     "next": [
      {
       "col": 1,
+      "row": 7
+     },
+     {
+      "col": 3,
       "row": 7
      }
     ]
@@ -681,25 +578,14 @@
    {
     "col": 4,
     "row": 6,
-    "type": "RestSite",
+    "type": "Elite",
     "next": [
      {
       "col": 3,
       "row": 7
-     }
-    ]
-   },
-   {
-    "col": 5,
-    "row": 6,
-    "type": "Elite",
-    "next": [
-     {
-      "col": 4,
-      "row": 7
      },
      {
-      "col": 5,
+      "col": 4,
       "row": 7
      }
     ]
@@ -707,390 +593,309 @@
    {
     "col": 6,
     "row": 6,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 6,
-      "row": 7
-     }
-    ]
-   },
-   {
-    "col": 0,
-    "row": 7,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 0,
-      "row": 8
-     }
-    ]
-   },
-   {
-    "col": 1,
-    "row": 7,
-    "type": "RestSite",
-    "next": [
-     {
-      "col": 0,
-      "row": 8
-     }
-    ]
-   },
-   {
-    "col": 3,
-    "row": 7,
-    "type": "Elite",
-    "next": [
-     {
-      "col": 2,
-      "row": 8
-     },
-     {
-      "col": 3,
-      "row": 8
-     }
-    ]
-   },
-   {
-    "col": 4,
-    "row": 7,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 3,
-      "row": 8
-     }
-    ]
-   },
-   {
-    "col": 5,
-    "row": 7,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 5,
-      "row": 8
-     }
-    ]
-   },
-   {
-    "col": 6,
-    "row": 7,
-    "type": "RestSite",
-    "next": [
-     {
-      "col": 6,
-      "row": 8
-     }
-    ]
-   },
-   {
-    "col": 0,
-    "row": 8,
-    "type": "Treasure",
-    "next": [
-     {
-      "col": 0,
-      "row": 9
-     },
-     {
-      "col": 1,
-      "row": 9
-     }
-    ]
-   },
-   {
-    "col": 2,
-    "row": 8,
-    "type": "Treasure",
-    "next": [
-     {
-      "col": 1,
-      "row": 9
-     }
-    ]
-   },
-   {
-    "col": 3,
-    "row": 8,
-    "type": "Treasure",
-    "next": [
-     {
-      "col": 2,
-      "row": 9
-     },
-     {
-      "col": 3,
-      "row": 9
-     }
-    ]
-   },
-   {
-    "col": 5,
-    "row": 8,
-    "type": "Treasure",
-    "next": [
-     {
-      "col": 6,
-      "row": 9
-     }
-    ]
-   },
-   {
-    "col": 6,
-    "row": 8,
-    "type": "Treasure",
-    "next": [
-     {
-      "col": 6,
-      "row": 9
-     }
-    ]
-   },
-   {
-    "col": 0,
-    "row": 9,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 0,
-      "row": 10
-     }
-    ]
-   },
-   {
-    "col": 1,
-    "row": 9,
-    "type": "Unknown",
-    "next": [
-     {
-      "col": 0,
-      "row": 10
-     }
-    ]
-   },
-   {
-    "col": 2,
-    "row": 9,
-    "type": "Unknown",
-    "next": [
-     {
-      "col": 2,
-      "row": 10
-     }
-    ]
-   },
-   {
-    "col": 3,
-    "row": 9,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 3,
-      "row": 10
-     }
-    ]
-   },
-   {
-    "col": 6,
-    "row": 9,
-    "type": "Elite",
-    "next": [
-     {
-      "col": 5,
-      "row": 10
-     },
-     {
-      "col": 6,
-      "row": 10
-     }
-    ]
-   },
-   {
-    "col": 0,
-    "row": 10,
-    "type": "Unknown",
-    "next": [
-     {
-      "col": 0,
-      "row": 11
-     },
-     {
-      "col": 1,
-      "row": 11
-     }
-    ]
-   },
-   {
-    "col": 2,
-    "row": 10,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 2,
-      "row": 11
-     }
-    ]
-   },
-   {
-    "col": 3,
-    "row": 10,
-    "type": "RestSite",
-    "next": [
-     {
-      "col": 4,
-      "row": 11
-     }
-    ]
-   },
-   {
-    "col": 5,
-    "row": 10,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 4,
-      "row": 11
-     }
-    ]
-   },
-   {
-    "col": 6,
-    "row": 10,
-    "type": "RestSite",
-    "next": [
-     {
-      "col": 6,
-      "row": 11
-     }
-    ]
-   },
-   {
-    "col": 0,
-    "row": 11,
-    "type": "Elite",
-    "next": [
-     {
-      "col": 0,
-      "row": 12
-     },
-     {
-      "col": 1,
-      "row": 12
-     }
-    ]
-   },
-   {
-    "col": 1,
-    "row": 11,
-    "type": "RestSite",
-    "next": [
-     {
-      "col": 2,
-      "row": 12
-     }
-    ]
-   },
-   {
-    "col": 2,
-    "row": 11,
-    "type": "Unknown",
-    "next": [
-     {
-      "col": 2,
-      "row": 12
-     }
-    ]
-   },
-   {
-    "col": 4,
-    "row": 11,
-    "type": "Unknown",
-    "next": [
-     {
-      "col": 4,
-      "row": 12
-     }
-    ]
-   },
-   {
-    "col": 6,
-    "row": 11,
-    "type": "Unknown",
-    "next": [
-     {
-      "col": 6,
-      "row": 12
-     }
-    ]
-   },
-   {
-    "col": 0,
-    "row": 12,
-    "type": "Unknown",
-    "next": [
-     {
-      "col": 0,
-      "row": 13
-     }
-    ]
-   },
-   {
-    "col": 1,
-    "row": 12,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 2,
-      "row": 13
-     }
-    ]
-   },
-   {
-    "col": 2,
-    "row": 12,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 2,
-      "row": 13
-     }
-    ]
-   },
-   {
-    "col": 4,
-    "row": 12,
-    "type": "Monster",
-    "next": [
-     {
-      "col": 3,
-      "row": 13
-     },
-     {
-      "col": 4,
-      "row": 13
-     }
-    ]
-   },
-   {
-    "col": 6,
-    "row": 12,
     "type": "Shop",
     "next": [
      {
       "col": 6,
-      "row": 13
+      "row": 7
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 7,
+    "type": "Elite",
+    "next": [
+     {
+      "col": 0,
+      "row": 8
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 7,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 3,
+      "row": 8
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 7,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 4,
+      "row": 8
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 7,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 6,
+      "row": 8
      }
     ]
    },
    {
     "col": 0,
-    "row": 13,
+    "row": 8,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 0,
+      "row": 9
+     },
+     {
+      "col": 1,
+      "row": 9
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 8,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 3,
+      "row": 9
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 8,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 3,
+      "row": 9
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 8,
+    "type": "Treasure",
+    "next": [
+     {
+      "col": 6,
+      "row": 9
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 9,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 1,
+      "row": 10
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 9,
     "type": "Elite",
     "next": [
      {
       "col": 1,
+      "row": 10
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 9,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 3,
+      "row": 10
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 9,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 6,
+      "row": 10
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 10,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 0,
+      "row": 11
+     },
+     {
+      "col": 2,
+      "row": 11
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 10,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 2,
+      "row": 11
+     },
+     {
+      "col": 4,
+      "row": 11
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 10,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 6,
+      "row": 11
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 11,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 0,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 2,
+    "row": 11,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 1,
+      "row": 12
+     },
+     {
+      "col": 3,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 11,
+    "type": "RestSite",
+    "next": [
+     {
+      "col": 3,
+      "row": 12
+     },
+     {
+      "col": 4,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 11,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 6,
+      "row": 12
+     }
+    ]
+   },
+   {
+    "col": 0,
+    "row": 12,
+    "type": "Elite",
+    "next": [
+     {
+      "col": 1,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 12,
+    "type": "Shop",
+    "next": [
+     {
+      "col": 1,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 3,
+    "row": 12,
+    "type": "Unknown",
+    "next": [
+     {
+      "col": 2,
+      "row": 13
+     },
+     {
+      "col": 3,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 4,
+    "row": 12,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 5,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 6,
+    "row": 12,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 6,
+      "row": 13
+     }
+    ]
+   },
+   {
+    "col": 1,
+    "row": 13,
+    "type": "Monster",
+    "next": [
+     {
+      "col": 2,
       "row": 14
      }
     ]
@@ -1101,7 +906,7 @@
     "type": "Monster",
     "next": [
      {
-      "col": 1,
+      "col": 2,
       "row": 14
      }
     ]
@@ -1109,7 +914,7 @@
    {
     "col": 3,
     "row": 13,
-    "type": "Shop",
+    "type": "Elite",
     "next": [
      {
       "col": 3,
@@ -1118,12 +923,12 @@
     ]
    },
    {
-    "col": 4,
+    "col": 5,
     "row": 13,
     "type": "Monster",
     "next": [
      {
-      "col": 5,
+      "col": 6,
       "row": 14
      }
     ]
@@ -1131,16 +936,16 @@
    {
     "col": 6,
     "row": 13,
-    "type": "Monster",
+    "type": "Unknown",
     "next": [
      {
-      "col": 5,
+      "col": 6,
       "row": 14
      }
     ]
    },
    {
-    "col": 1,
+    "col": 2,
     "row": 14,
     "type": "RestSite",
     "next": [
@@ -1162,7 +967,7 @@
     ]
    },
    {
-    "col": 5,
+    "col": 6,
     "row": 14,
     "type": "RestSite",
     "next": [
@@ -1185,34 +990,64 @@
     "row": 0
    },
    {
-    "col": 4,
+    "col": 5,
     "row": 1
-   }
-  ],
-  "boss": "THE_INSATIABLE_BOSS",
-  "ancient": "PAEL",
-  "chosen": "map:5,2",
-  "options": [
-   {
-    "action": "map:3,2",
-    "value": 0.8729
    },
    {
-    "action": "map:5,2",
-    "value": 0.8773
+    "col": 6,
+    "row": 2
+   },
+   {
+    "col": 5,
+    "row": 3
+   },
+   {
+    "col": 4,
+    "row": 4
+   },
+   {
+    "col": 3,
+    "row": 5
+   },
+   {
+    "col": 2,
+    "row": 6
+   },
+   {
+    "col": 3,
+    "row": 7
+   },
+   {
+    "col": 3,
+    "row": 8
+   },
+   {
+    "col": 3,
+    "row": 9
+   },
+   {
+    "col": 3,
+    "row": 10
+   },
+   {
+    "col": 4,
+    "row": 11
+   }
+  ],
+  "boss": "KNOWLEDGE_DEMON_BOSS",
+  "ancient": "DARV",
+  "chosen": "map:3,12",
+  "options": [
+   {
+    "action": "map:3,12",
+    "value": 0.9954
+   },
+   {
+    "action": "map:4,12",
+    "value": 0.9949
    }
   ],
   "route": [
-   "map:6,3",
-   "map:6,4",
-   "map:5,5",
-   "map:4,6",
-   "map:3,7",
-   "map:3,8",
-   "map:3,9",
-   "map:3,10",
-   "map:4,11",
-   "map:4,12",
    "map:3,13",
    "map:3,14",
    "map:3,15"

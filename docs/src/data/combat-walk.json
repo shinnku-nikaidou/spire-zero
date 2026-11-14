@@ -1,250 +1,169 @@
 {
- "source": "the champion's combat net, weights/all/c9-2.json, tests[11]",
+ "source": "the champion's combat net, weights/all/c10-1-2.json, tests[10]",
  "state": {
-  "encounter": "SLIMED_BERSERKER_NORMAL",
-  "room": "Monster",
-  "act": 2,
+  "encounter": "TERROR_EEL_ELITE",
+  "room": "Elite",
+  "act": 0,
   "round": 2,
   "hp": 37,
-  "max_hp": 71,
+  "max_hp": 66,
   "block": 0,
   "energy": 3,
   "max_energy": 3,
-  "stars": 1,
-  "gold": 846,
-  "ascension": 0,
+  "stars": 0,
+  "gold": 27,
+  "ascension": 10,
   "orb_slots": 0,
-  "powers": [
-   {
-    "id": "THORNS_POWER",
-    "amount": 3
-   }
-  ],
+  "powers": [],
   "piles": {
    "hand": [
-    "BIG_BANG",
-    "BULWARK",
-    "SQUASH",
-    "MAUL+",
-    "WROUGHT_IN_WAR+",
-    "COMET+"
+    "HAUNT",
+    "DEFEND_NECROBINDER",
+    "DEFEND_NECROBINDER",
+    "DEFEND_NECROBINDER",
+    "SOW",
+    "STRIKE_NECROBINDER",
+    "STRIKE_NECROBINDER",
+    "DEFY"
    ],
    "draw": [
-    "BOMBARDMENT",
-    "DEFEND_REGENT",
-    "GLITTERSTREAM+",
-    "GLOW+",
-    "KINGLY_PUNCH+",
-    "MAUL",
-    "MAUL",
-    "MAUL+",
-    "REFLECT+",
-    "VENERATE+"
+    "DREDGE",
+    "STRIKE_NECROBINDER",
+    "STRIKE_NECROBINDER",
+    "UNLEASH"
    ],
    "discard": [
-    "FALLING_STAR+",
-    "DEFEND_REGENT",
-    "MAUL+",
-    "MAUL",
-    "GLITTERSTREAM+",
-    "SPECTRUM_SHIFT",
-    "SLIMED",
-    "SLIMED",
-    "SLIMED",
-    "SLIMED",
-    "SLIMED",
-    "SLIMED",
-    "SLIMED",
-    "SLIMED",
-    "SLIMED",
-    "SLIMED"
+    "DEFEND_NECROBINDER",
+    "BODYGUARD",
+    "EQUILIBRIUM"
    ],
-   "exhaust": []
+   "exhaust": [
+    "ASCENDERS_BANE"
+   ]
   },
   "enemies": [
    {
-    "id": "SLIMED_BERSERKER",
-    "hp": 201,
-    "max_hp": 261,
+    "id": "TERROR_EEL",
+    "hp": 150,
+    "max_hp": 150,
     "block": 0,
-    "powers": [],
+    "powers": [
+     {
+      "id": "SHRIEK_POWER",
+      "amount": 75
+     }
+    ],
     "intents": [
      {
       "type": "Attack",
       "damage": 4,
-      "hits": 4
+      "hits": 3
+     },
+     {
+      "type": "Buff"
      }
     ]
    }
   ],
   "relics": [
    {
-    "id": "DIVINE_RIGHT",
+    "id": "BOUND_PHYLACTERY",
     "counter": null,
     "status": null
    },
    {
-    "id": "FISHING_ROD",
-    "counter": 0,
-    "status": null
-   },
-   {
-    "id": "KUSARIGAMA",
-    "counter": 0,
-    "status": null
-   },
-   {
-    "id": "LETTER_OPENER",
-    "counter": 0,
-    "status": null
-   },
-   {
-    "id": "PAELS_BLOOD",
-    "counter": null,
-    "status": null
-   },
-   {
-    "id": "GHOST_SEED",
-    "counter": null,
-    "status": null
-   },
-   {
-    "id": "BRONZE_SCALES",
-    "counter": null,
-    "status": null
-   },
-   {
-    "id": "CLAWS",
+    "id": "BOOMING_CONCH",
     "counter": null,
     "status": null
    }
   ],
   "potions": [
-   "FAIRY_IN_A_BOTTLE",
-   null,
+   "SNECKO_OIL",
    null
   ]
  },
  "tokens": {
   "player": [
-   0.521,
+   0.561,
    0.37,
-   0.71,
-   0.0,
-   1.0,
-   1.0,
-   0.2,
+   0.66,
+   0,
+   1,
+   1,
+   0,
    0.2
   ],
   "extra": [
-   0.0,
-   0.0,
-   8.46,
-   0.3
+   1,
+   0,
+   0.27,
+   0.2,
+   0,
+   0
   ],
   "context": [
-   "character:REGENT",
-   "encounter:SLIMED_BERSERKER_NORMAL",
-   "room:Monster",
-   "act:2"
+   "character:NECROBINDER",
+   "encounter:TERROR_EEL_ELITE",
+   "room:Elite",
+   "act:0"
   ],
   "context_entries": [
    4,
-   70,
+   81,
    0,
    0
   ],
   "relics": [
-   "DIVINE_RIGHT",
-   "FISHING_ROD",
-   "KUSARIGAMA",
-   "LETTER_OPENER",
-   "PAELS_BLOOD",
-   "GHOST_SEED",
-   "BRONZE_SCALES",
-   "CLAWS"
+   "BOUND_PHYLACTERY",
+   "BOOMING_CONCH"
   ],
   "relic_values": [
    [
-    0.0,
-    0.0,
-    0.0
+    0,
+    0,
+    0
    ],
    [
-    0.0,
-    1.0,
-    0.0
-   ],
-   [
-    0.0,
-    1.0,
-    0.0
-   ],
-   [
-    0.0,
-    1.0,
-    0.0
-   ],
-   [
-    0.0,
-    0.0,
-    0.0
-   ],
-   [
-    0.0,
-    0.0,
-    0.0
-   ],
-   [
-    0.0,
-    0.0,
-    0.0
-   ],
-   [
-    0.0,
-    0.0,
-    0.0
+    0,
+    0,
+    0
    ]
   ],
   "relic_status": [
    "Normal",
-   "Normal",
-   "Normal",
-   "Normal",
-   "Normal",
-   "Normal",
-   "Normal",
    "Normal"
   ],
   "potions": [
-   "FAIRY_IN_A_BOTTLE"
+   "SNECKO_OIL"
   ],
   "orbs": [],
-  "allies": []
+  "allies": [
+   "OSTY"
+  ]
  },
  "shapes": {
   "cards": [
    1,
-   32
+   16
   ],
   "ups": [
    1,
-   32
+   16
   ],
   "piles": [
    1,
-   32,
+   16,
    4
   ],
   "mods": [
    1,
-   32,
-   1
+   16,
+   3
   ],
   "mod_mask": [
    1,
-   32,
-   1
+   16,
+   3
   ],
   "powers": [
    1,
@@ -269,7 +188,7 @@
   "enemy_scalars": [
    1,
    1,
-   5
+   6
   ],
   "enemy_mask": [
    1,
@@ -294,28 +213,28 @@
    1,
    1,
    4,
-   1
+   2
   ],
   "intent_values": [
    1,
    1,
    4,
-   1,
+   2,
    2
   ],
   "intent_mask": [
    1,
    1,
    4,
-   1
+   2
   ],
   "relics": [
    1,
-   8
+   2
   ],
   "relic_mask": [
    1,
-   8
+   2
   ],
   "potions": [
    1,
@@ -398,29 +317,29 @@
   ],
   "extra": [
    1,
-   4
+   6
   ],
   "costs": [
    1,
-   32
+   16
   ],
   "mod_amounts": [
    1,
-   32,
-   1
+   16,
+   3
   ],
   "relic_values": [
    1,
-   8,
+   2,
    3
   ],
   "relic_status": [
    1,
-   8
+   2
   ],
   "damages": [
    1,
-   32
+   16
   ],
   "orb_values": [
    1,
@@ -429,8 +348,8 @@
   ],
   "numbers": [
    1,
-   32,
-   5
+   16,
+   6
   ],
   "power_details": [
    1,
@@ -443,61 +362,62 @@
   ]
  },
  "card": {
-  "id": "MAUL",
-  "pile": "draw",
+  "id": "STRIKE_NECROBINDER",
+  "pile": "hand",
   "up": 0,
   "cost": 0.333,
-  "damage": 0.5,
+  "damage": 0.3,
   "numbers": [
-   0.0,
-   0.0,
-   0.0,
-   0.0,
-   0.0
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
   ],
-  "entry": 328,
+  "entry": 600,
   "mods": [],
   "id_vector": [
-   -0.097,
-   0.168,
-   -0.122,
-   0.147
+   0.22,
+   -0.1,
+   0.142,
+   0.113
   ],
   "up_vector": [
-   -0.288,
-   0.337,
-   -0.173,
-   0.078
+   0.012,
+   -0.066,
+   0.12,
+   -0.051
   ],
   "cost_vector": [
-   0.473,
-   -0.32,
-   0.217,
-   0.034
+   0.487,
+   -0.338,
+   0.236,
+   0.019
   ],
   "damage_vector": [
-   -0.098,
-   0.088,
-   -0.111,
-   0.011
+   -0.102,
+   0.095,
+   -0.115,
+   0.014
   ],
   "card_damage_vector": [
-   -0.164,
-   0.113,
-   -0.012,
-   -0.064
+   -0.002,
+   -0.014,
+   -0.077,
+   -0.062
   ],
   "pile_vector": [
-   0.083,
-   0.052,
-   -0.083,
-   -0.021
+   -0.143,
+   0.063,
+   -0.058,
+   -0.072
   ],
   "x": [
-   0.013,
-   0.215,
-   -0.194,
-   0.11
+   0.209,
+   -0.125,
+   0.105,
+   0.033
   ],
   "phi": {
    "size": 128,
@@ -505,62 +425,62 @@
     0.0,
     0.0,
     0.0,
-    0.449
+    0.0
    ],
-   "norm": 3.046,
-   "zeros": 94
+   "norm": 1.858,
+   "zeros": 120
   }
  },
  "twin_in_another_pile": true,
  "piles": [
   {
    "pile": "hand",
-   "cards": 6,
+   "cards": 8,
    "vector": {
     "size": 128,
     "first": [
-     0.147,
      0.0,
-     0.144,
-     0.623
+     0.0,
+     0.393,
+     0.082
     ],
-    "norm": 3.033,
-    "zeros": 49
+    "norm": 2.003,
+    "zeros": 57
    }
   },
   {
    "pile": "draw",
-   "cards": 10,
+   "cards": 4,
    "vector": {
     "size": 128,
     "first": [
-     0.15,
      0.0,
-     0.176,
-     0.319
+     0.0,
+     0.007,
+     0.042
     ],
-    "norm": 3.138,
-    "zeros": 33
+    "norm": 0.7,
+    "zeros": 75
    }
   },
   {
    "pile": "discard",
-   "cards": 16,
+   "cards": 3,
    "vector": {
     "size": 128,
     "first": [
+     0.005,
      0.0,
-     0.0,
-     0.031,
-     0.217
+     0.023,
+     0.0
     ],
-    "norm": 2.107,
-    "zeros": 40
+    "norm": 0.438,
+    "zeros": 92
    }
   },
   {
    "pile": "exhaust",
-   "cards": 0,
+   "cards": 1,
    "vector": {
     "size": 128,
     "first": [
@@ -569,8 +489,8 @@
      0.0,
      0.0
     ],
-    "norm": 0.0,
-    "zeros": 128
+    "norm": 0.143,
+    "zeros": 121
    }
   }
  ],
@@ -579,45 +499,56 @@
   "first": [
    0.0,
    0.0,
-   0.317,
+   0.0,
    0.0
   ],
-  "norm": 0.902,
-  "zeros": 117
+  "norm": 0.0,
+  "zeros": 128
  },
  "enemies": [
   {
-   "id": "SLIMED_BERSERKER",
-   "entry": 85,
+   "id": "TERROR_EEL",
+   "entry": 98,
    "numbers": [
-    0.77,
-    2.01,
-    2.61,
-    0.0,
-    0.1
+    1,
+    1.5,
+    1.5,
+    0,
+    0.1,
+    0
    ],
-   "powers": [],
+   "powers": [
+    {
+     "id": "SHRIEK_POWER",
+     "amount": 7.5
+    }
+   ],
    "slots": [
     [
      {
       "type": "Attack",
       "damage": 0.4,
-      "total": 0.8
+      "total": 0.6
+     },
+     {
+      "type": "Buff",
+      "damage": 0,
+      "total": 0
      }
     ],
     [
      {
-      "type": "StatusCard",
-      "damage": 0.0,
-      "total": 0.0
+      "type": "Attack",
+      "damage": 1.8,
+      "total": 0.9
      }
     ]
    ],
    "numbers_vector": [
-    -0.213,
-    1.532,
-    -0.438,
-    0.218
+    -0.065,
+    0.983,
+    -0.363,
+    -0.244
    ],
    "powers_vector": [
     0.0,
@@ -626,10 +557,10 @@
     0.0
    ],
    "slot_vector": [
-    -0.131,
-    -0.034,
-    -0.048,
-    -0.193
+    -0.246,
+    -0.023,
+    -0.024,
+    0.022
    ],
    "phi": {
     "size": 256,
@@ -639,8 +570,8 @@
      0.0,
      0.0
     ],
-    "norm": 6.327,
-    "zeros": 234
+    "norm": 4.109,
+    "zeros": 231
    }
   }
  ],
@@ -652,41 +583,41 @@
    0.0,
    0.0
   ],
-  "norm": 6.327,
-  "zeros": 234
+  "norm": 4.109,
+  "zeros": 231
  },
  "bags": {
   "relics": {
    "size": 64,
    "first": [
-    0.314,
-    -0.386,
-    0.399,
-    -0.7
+    0.252,
+    0.227,
+    0.015,
+    -0.132
    ],
-   "norm": 3.52,
+   "norm": 1.184,
    "zeros": 0
   },
   "potions": {
    "size": 64,
    "first": [
-    0.218,
-    -0.311,
-    0.107,
-    -0.246
+    0.063,
+    -0.035,
+    0.035,
+    -0.27
    ],
-   "norm": 1.361,
+   "norm": 1.609,
    "zeros": 0
   },
   "context": {
    "size": 64,
    "first": [
-    0.715,
-    0.29,
-    0.178,
-    -0.004
+    0.155,
+    -0.038,
+    -0.112,
+    0.336
    ],
-   "norm": 2.107,
+   "norm": 1.576,
    "zeros": 0
   },
   "orbs": {
@@ -708,8 +639,8 @@
     0.0,
     0.0
    ],
-   "norm": 0.0,
-   "zeros": 128
+   "norm": 1.184,
+   "zeros": 97
   }
  },
  "join": [
@@ -717,19 +648,19 @@
    "part": "cards",
    "size": 512,
    "first": [
-    0.147,
     0.0,
-    0.144,
-    0.623
+    0.0,
+    0.393,
+    0.082
    ]
   },
   {
    "part": "player",
    "size": 8,
    "first": [
-    0.521,
+    0.561,
     0.37,
-    0.71,
+    0.66,
     0.0
    ]
   },
@@ -739,7 +670,7 @@
    "first": [
     0.0,
     0.0,
-    0.317,
+    0.0,
     0.0
    ]
   },
@@ -757,30 +688,30 @@
    "part": "relics",
    "size": 64,
    "first": [
-    0.314,
-    -0.386,
-    0.399,
-    -0.7
+    0.252,
+    0.227,
+    0.015,
+    -0.132
    ]
   },
   {
    "part": "potions",
    "size": 64,
    "first": [
-    0.218,
-    -0.311,
-    0.107,
-    -0.246
+    0.063,
+    -0.035,
+    0.035,
+    -0.27
    ]
   },
   {
    "part": "context",
    "size": 64,
    "first": [
-    0.715,
-    0.29,
-    0.178,
-    -0.004
+    0.155,
+    -0.038,
+    -0.112,
+    0.336
    ]
   },
   {
@@ -805,37 +736,37 @@
   },
   {
    "part": "extra",
-   "size": 4,
+   "size": 6,
    "first": [
+    1.0,
     0.0,
-    0.0,
-    8.46,
-    0.3
+    0.27,
+    0.2
    ]
   }
  ],
  "z": {
-  "size": 1292,
+  "size": 1294,
   "first": [
-   0.147,
    0.0,
-   0.144,
-   0.623
+   0.0,
+   0.393,
+   0.082
   ],
-  "norm": 12.557,
-  "zeros": 796
+  "norm": 5.789,
+  "zeros": 870
  },
  "body": [
   {
    "size": 512,
    "first": [
-    1.036,
-    0.0,
+    1.023,
+    0.757,
     0.0,
     0.0
    ],
-   "norm": 10.104,
-   "zeros": 434
+   "norm": 7.208,
+   "zeros": 411
   },
   {
    "size": 512,
@@ -845,136 +776,136 @@
     0.0,
     0.0
    ],
-   "norm": 4.795,
-   "zeros": 482
+   "norm": 6.138,
+   "zeros": 441
   }
  ],
  "head": {
-  "death_logit": -3.361,
+  "death_logit": -2.393,
   "logits": [
-   -10.185,
-   -9.854,
-   -8.339,
-   -7.483,
-   -6.892,
-   -6.551,
-   -4.888,
-   -4.742,
-   -4.226,
-   -5.198,
-   0.4,
-   0.067,
-   -0.103,
-   0.045,
-   -0.13,
-   0.258,
-   -0.504,
-   -0.504,
-   -0.174,
-   -0.522,
-   -1.053,
-   -1.037,
-   -1.355,
-   -1.548,
-   -1.862,
-   -1.928,
-   -2.326,
-   -2.646,
-   -2.522,
-   -3.139,
-   -3.311,
-   -4.484,
-   -4.68,
-   -4.842,
-   -5.098,
-   -5.467,
-   -5.663,
-   -5.997,
-   -5.998,
-   -7.686,
-   -8.708,
-   -8.495,
-   -9.772,
-   -10.942,
-   -13.608,
-   -13.162,
-   -12.908,
-   -12.308,
-   -15.938,
-   -16.984
+   -14.043,
+   -15.366,
+   -11.929,
+   -11.07,
+   -11.29,
+   -9.499,
+   -7.158,
+   -7.675,
+   -6.699,
+   -7.097,
+   1.055,
+   -0.523,
+   -0.927,
+   -0.488,
+   -0.667,
+   -1.292,
+   -0.876,
+   -1.493,
+   -1.963,
+   -1.458,
+   -1.808,
+   -2.858,
+   -2.228,
+   -2.46,
+   -3.076,
+   -2.259,
+   -2.232,
+   -3.428,
+   -2.668,
+   -3.346,
+   -2.651,
+   -3.176,
+   -4.209,
+   -3.418,
+   -3.37,
+   -4.054,
+   -3.879,
+   -4.397,
+   -4.997,
+   -5.154,
+   -5.378,
+   -6.863,
+   -7.657,
+   -7.316,
+   -9.545,
+   -9.452,
+   -10.153,
+   -13.083,
+   -13.346,
+   -14.717
   ],
-  "open": 31,
+  "open": 33,
   "open_from": -0.25,
-  "open_to": 0.525,
+  "open_to": 0.575,
   "width": 0.025,
-  "death": 0.0031,
+  "death": 0.0125,
   "tops": [
    {
     "bucket": 11,
     "low": 0.0,
     "high": 0.025,
-    "chance": 0.1332
-   },
-   {
-    "bucket": 16,
-    "low": 0.125,
-    "high": 0.15,
-    "chance": 0.1155
-   },
-   {
-    "bucket": 12,
-    "low": 0.025,
-    "high": 0.05,
-    "chance": 0.0954
+    "chance": 0.393
    },
    {
     "bucket": 14,
     "low": 0.075,
     "high": 0.1,
-    "chance": 0.0934
+    "chance": 0.084
    },
    {
-    "bucket": 13,
-    "low": 0.05,
-    "high": 0.075,
-    "chance": 0.0805
+    "bucket": 12,
+    "low": 0.025,
+    "high": 0.05,
+    "chance": 0.0811
+   },
+   {
+    "bucket": 15,
+    "low": 0.1,
+    "high": 0.125,
+    "chance": 0.0702
+   },
+   {
+    "bucket": 17,
+    "low": 0.15,
+    "high": 0.175,
+    "chance": 0.057
    }
   ],
   "chances": [
-   0.0031,
+   0.0125,
+   0.0,
+   0.0,
+   0.0,
    0.0,
    0.0,
    0.0,
    0.0001,
    0.0001,
+   0.0002,
    0.0001,
-   0.0007,
-   0.0008,
-   0.0013,
-   0.0005,
-   0.1332,
-   0.0954,
-   0.0805,
-   0.0934,
-   0.0784,
-   0.1155,
-   0.0539,
-   0.0539,
-   0.075,
-   0.053,
-   0.0311,
-   0.0317,
-   0.023,
-   0.019,
-   0.0139,
-   0.013,
-   0.0087,
+   0.393,
+   0.0811,
+   0.0541,
+   0.084,
+   0.0702,
+   0.0376,
+   0.057,
+   0.0308,
+   0.0192,
+   0.0318,
+   0.0224,
+   0.0079,
+   0.0147,
+   0.0117,
    0.0063,
-   0.0072,
-   0.0039,
-   0.0033,
-   0.0,
-   0.0,
+   0.0143,
+   0.0147,
+   0.0044,
+   0.0095,
+   0.0048,
+   0.0097,
+   0.0057,
+   0.002,
    0.0,
    0.0,
    0.0,
@@ -995,90 +926,90 @@
   ]
  },
  "potion": {
-  "id": "FAIRY_IN_A_BOTTLE",
-  "entry": 24,
+  "id": "SNECKO_OIL",
+  "entry": 59,
   "group": 1,
   "groups": 5,
   "per_group": 10,
-  "logit": -2.289,
-  "chance": 0.092,
-  "outputs": 66,
+  "logit": 1.863,
+  "chance": 0.8657,
+  "outputs": 69,
   "most_likely": [
    {
     "id": "ENTROPIC_BREW",
     "chance": 1.0
    },
    {
-    "id": "REGEN_POTION",
-    "chance": 0.961
+    "id": "DISTILLED_CHAOS",
+    "chance": 0.999
    },
    {
-    "id": "AMBERGRIS",
-    "chance": 0.96
+    "id": "ENERGY_POTION",
+    "chance": 0.999
    }
   ],
-  "unk": 0.501,
-  "unheld": "DEPRECATED_POTION"
+  "unk": 0.495,
+  "unheld": "BOTTLED_SONG"
  },
  "ended": {
-  "share": 0.5211,
-  "death": 0.0031,
-  "win": 0.9969,
-  "hp_at_win": 26.7,
-  "kept": 0.908
+  "share": 0.5606,
+  "death": 0.0125,
+  "win": 0.9875,
+  "hp_at_win": 29.9,
+  "kept": 0.1498
  },
  "siblings": {
   "less_hp": {
-   "share": 0.3803,
-   "death": 0.0085,
-   "win": 0.9915,
-   "hp_at_win": 19.9,
-   "kept": 0.6637,
+   "share": 0.4091,
+   "death": 0.0327,
+   "win": 0.9673,
+   "hp_at_win": 20.3,
+   "kept": 0.1198,
    "tops": [
     {
      "bucket": 11,
      "low": 0.0,
      "high": 0.025,
-     "chance": 0.1578
-    },
-    {
-     "bucket": 16,
-     "low": 0.125,
-     "high": 0.15,
-     "chance": 0.1272
-    },
-    {
-     "bucket": 12,
-     "low": 0.025,
-     "high": 0.05,
-     "chance": 0.1165
-    }
-   ]
-  },
-  "no_potion": {
-   "share": 0.5211,
-   "death": 0.0109,
-   "win": 0.9891,
-   "hp_at_win": 25.1,
-   "kept": 0,
-   "tops": [
-    {
-     "bucket": 11,
-     "low": 0.0,
-     "high": 0.025,
-     "chance": 0.1407
-    },
-    {
-     "bucket": 16,
-     "low": 0.125,
-     "high": 0.15,
-     "chance": 0.0872
+     "chance": 0.3636
     },
     {
      "bucket": 14,
      "low": 0.075,
      "high": 0.1,
-     "chance": 0.0837
+     "chance": 0.0867
+    },
+    {
+     "bucket": 12,
+     "low": 0.025,
+     "high": 0.05,
+     "chance": 0.0842
+    }
+   ]
+  },
+  "no_potion": {
+   "share": 0.5606,
+   "death": 0.0241,
+   "win": 0.9759,
+   "hp_at_win": 22.0,
+   "kept": 0,
+   "tops": [
+    {
+     "bucket": 17,
+     "low": 0.15,
+     "high": 0.175,
+     "chance": 0.091
+    },
+    {
+     "bucket": 20,
+     "low": 0.225,
+     "high": 0.25,
+     "chance": 0.0762
+    },
+    {
+     "bucket": 21,
+     "low": 0.25,
+     "high": 0.275,
+     "chance": 0.0749
     }
    ]
   }
@@ -1086,133 +1017,573 @@
  "lost_hp": 10,
  "others": {
   "danger": {
-   "share": 0.4429,
-   "death": 0.4796,
-   "win": 0.5204,
-   "hp_at_win": 8.5,
-   "kept": 0,
-   "encounter": "KNOWLEDGE_DEMON_BOSS",
-   "room": "Boss",
-   "round": 11,
-   "hp": 31,
-   "max_hp": 70,
-   "enemies": [
-    "KNOWLEDGE_DEMON"
-   ],
-   "open": 28,
-   "open_from": -0.25,
-   "open_to": 0.45,
-   "tops": [
-    {
-     "bucket": 23,
-     "low": 0.3,
-     "high": 0.325,
-     "chance": 0.0726
-    },
-    {
-     "bucket": 24,
-     "low": 0.325,
-     "high": 0.35,
-     "chance": 0.061
-    },
-    {
-     "bucket": 28,
-     "low": 0.425,
-     "high": 0.45,
-     "chance": 0.0556
-    }
-   ]
-  },
-  "mask": {
-   "share": 0.1628,
-   "death": 0.0022,
-   "win": 0.9978,
-   "hp_at_win": 18.9,
+   "share": 0.2879,
+   "death": 0.9311,
+   "win": 0.0689,
+   "hp_at_win": 4.5,
    "kept": 0,
    "encounter": "DECIMILLIPEDE_ELITE",
    "room": "Elite",
-   "round": 3,
-   "hp": 14,
-   "max_hp": 86,
+   "round": 1,
+   "hp": 19,
+   "max_hp": 66,
    "enemies": [
     "DECIMILLIPEDE_SEGMENT_FRONT",
     "DECIMILLIPEDE_SEGMENT_MIDDLE",
     "DECIMILLIPEDE_SEGMENT_BACK"
    ],
-   "open": 17,
+   "open": 22,
    "open_from": -0.25,
-   "open_to": 0.175,
+   "open_to": 0.3,
    "tops": [
     {
-     "bucket": 8,
-     "low": -0.075,
-     "high": -0.05,
-     "chance": 0.3931
+     "bucket": 21,
+     "low": 0.25,
+     "high": 0.275,
+     "chance": 0.0155
     },
     {
-     "bucket": 7,
-     "low": -0.1,
-     "high": -0.075,
-     "chance": 0.3578
+     "bucket": 20,
+     "low": 0.225,
+     "high": 0.25,
+     "chance": 0.0134
     },
     {
-     "bucket": 9,
-     "low": -0.05,
-     "high": -0.025,
-     "chance": 0.1046
+     "bucket": 22,
+     "low": 0.275,
+     "high": 0.3,
+     "chance": 0.0104
+    }
+   ]
+  },
+  "mask": {
+   "share": 0.0349,
+   "death": 0.1636,
+   "win": 0.8364,
+   "hp_at_win": 1.9,
+   "kept": 0,
+   "encounter": "TERROR_EEL_ELITE",
+   "room": "Elite",
+   "round": 7,
+   "hp": 3,
+   "max_hp": 86,
+   "enemies": [
+    "TERROR_EEL"
+   ],
+   "open": 12,
+   "open_from": -0.25,
+   "open_to": 0.05,
+   "tops": [
+    {
+     "bucket": 11,
+     "low": 0.0,
+     "high": 0.025,
+     "chance": 0.8359
+    },
+    {
+     "bucket": 12,
+     "low": 0.025,
+     "high": 0.05,
+     "chance": 0.0005
+    },
+    {
+     "bucket": 10,
+     "low": -0.025,
+     "high": 0.0,
+     "chance": 0.0
     }
    ]
   }
  },
  "label": {
   "end_hp": 30,
-  "lost": 0.0986,
-  "class": 14,
-  "low": 0.075,
-  "high": 0.1,
-  "chance": 0.0934,
-  "ending_loss": 2.371,
-  "potion_loss": 0.0965
+  "lost": 0.1061,
+  "class": 15,
+  "low": 0.1,
+  "high": 0.125,
+  "chance": 0.0702,
+  "ending_loss": 2.656,
+  "potion_loss": 2.0076
  },
  "tests": [
   {
-   "encounter": "TURRET_OPERATOR_WEAK",
-   "round": 4,
+   "encounter": "SLUMBERING_BEETLE_NORMAL",
+   "round": 3,
    "player": {
-    "hp": 69,
-    "max_hp": 75,
-    "energy": 4
+    "hp": 59,
+    "max_hp": 78,
+    "energy": 3
    },
    "hand": [
-    "FLAME_BARRIER",
-    "HAILSTORM",
+    "MOMENTUM_STRIKE",
     "STRIKE_DEFECT",
-    "SHATTER",
-    "ZAP"
+    "CHILL",
+    "DUALCAST",
+    "LIGHTNING_ROD"
    ],
    "enemies": [
     {
-     "id": "LIVING_SHIELD",
-     "hp": 39,
-     "max_hp": 55,
+     "id": "BOWLBUG_ROCK",
+     "hp": 25,
+     "max_hp": 49,
+     "intents": [
+      {
+       "type": "Stun"
+      }
+     ],
+     "powers": [
+      {
+       "id": "IMBALANCED_POWER",
+       "amount": 1
+      }
+     ]
+    },
+    {
+     "id": "BOWLBUG_SILK",
+     "hp": 44,
+     "max_hp": 44,
+     "intents": [
+      {
+       "type": "Debuff"
+      }
+     ],
+     "powers": []
+    },
+    {
+     "id": "SLUMBERING_BEETLE",
+     "hp": 89,
+     "max_hp": 89,
+     "intents": [
+      {
+       "type": "Sleep"
+      }
+     ],
+     "powers": [
+      {
+       "id": "PLATING_POWER",
+       "amount": 17
+      },
+      {
+       "id": "SLUMBER_POWER",
+       "amount": 1
+      }
+     ]
+    }
+   ],
+   "potions": [
+    {
+     "id": "POTION_SHAPED_ROCK",
+     "gone": 0.1462
+    },
+    {
+     "id": "POTION_SHAPED_ROCK",
+     "gone": 0.1462
+    }
+   ],
+   "outcome": [
+    2e-05,
+    0.0,
+    0.0,
+    0.0,
+    1e-05,
+    2e-05,
+    3e-05,
+    0.00023,
+    0.00149,
+    0.01388,
+    0.21067,
+    0.48944,
+    0.08774,
+    0.06909,
+    0.05285,
+    0.03027,
+    0.01809,
+    0.01058,
+    0.00562,
+    0.00431,
+    0.00212,
+    0.00124,
+    0.00096,
+    0.00043,
+    0.00032,
+    0.00021,
+    0.00014,
+    0.0001,
+    3e-05,
+    3e-05,
+    4e-05,
+    2e-05,
+    2e-05,
+    1e-05,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "TEST_SUBJECT_BOSS",
+   "round": 13,
+   "player": {
+    "hp": 6,
+    "max_hp": 82,
+    "energy": 3
+   },
+   "hand": [
+    "NULL",
+    "COOLHEADED",
+    "WOUND",
+    "CHARGE_BATTERY",
+    "LIGHTNING_ROD"
+   ],
+   "enemies": [
+    {
+     "id": "TEST_SUBJECT",
+     "hp": 45,
+     "max_hp": 313,
+     "intents": [
+      {
+       "type": "StatusCard"
+      },
+      {
+       "type": "Buff"
+      }
+     ],
+     "powers": [
+      {
+       "id": "NEMESIS_POWER",
+       "amount": 1
+      },
+      {
+       "id": "STRENGTH_POWER",
+       "amount": 3
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.02159,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.94435,
+    0.01643,
+    0.01763,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "OVICOPTER_NORMAL",
+   "round": 6,
+   "player": {
+    "hp": 63,
+    "max_hp": 75,
+    "energy": 3
+   },
+   "hand": [
+    "CLAW",
+    "DEFEND_DEFECT",
+    "LEAP",
+    "THUNDER",
+    "COLD_SNAP"
+   ],
+   "enemies": [
+    {
+     "id": "TOUGH_EGG",
+     "hp": 14,
+     "max_hp": 20,
      "intents": [
       {
        "type": "Attack",
-       "damage": 6,
+       "damage": 5,
        "hits": 1
       }
      ],
      "powers": [
       {
-       "id": "RAMPART_POWER",
-       "amount": 25
+       "id": "MINION_POWER",
+       "amount": 1
       }
      ]
     },
     {
-     "id": "TURRET_OPERATOR",
-     "hp": 6,
-     "max_hp": 41,
+     "id": "TOUGH_EGG",
+     "hp": 15,
+     "max_hp": 21,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 5,
+       "hits": 1
+      }
+     ],
+     "powers": [
+      {
+       "id": "MINION_POWER",
+       "amount": 1
+      }
+     ]
+    },
+    {
+     "id": "TOUGH_EGG",
+     "hp": 17,
+     "max_hp": 23,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 5,
+       "hits": 1
+      }
+     ],
+     "powers": [
+      {
+       "id": "MINION_POWER",
+       "amount": 1
+      }
+     ]
+    },
+    {
+     "id": "OVICOPTER",
+     "hp": 73,
+     "max_hp": 127,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 8,
+       "hits": 1
+      },
+      {
+       "type": "Debuff"
+      }
+     ],
+     "powers": []
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.90896,
+    0.03412,
+    0.02485,
+    0.01494,
+    0.00749,
+    0.00395,
+    0.00242,
+    0.00082,
+    0.00095,
+    0.00064,
+    0.00032,
+    0.00029,
+    0.00012,
+    6e-05,
+    3e-05,
+    2e-05,
+    1e-05,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "TERROR_EEL_ELITE",
+   "round": 7,
+   "player": {
+    "hp": 3,
+    "max_hp": 86,
+    "energy": 3
+   },
+   "hand": [
+    "DEFEND_REGENT",
+    "GLOW",
+    "DEFEND_REGENT",
+    "STRIKE_REGENT",
+    "VENERATE"
+   ],
+   "enemies": [
+    {
+     "id": "TERROR_EEL",
+     "hp": 22,
+     "max_hp": 150,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 36,
+       "hits": 1
+      }
+     ],
+     "powers": [
+      {
+       "id": "VIGOR_POWER",
+       "amount": 6
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.16363,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1e-05,
+    0.83587,
+    0.0005,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "SPINY_TOAD_NORMAL",
+   "round": 1,
+   "player": {
+    "hp": 56,
+    "max_hp": 70,
+    "energy": 4
+   },
+   "hand": [
+    "DEFEND_SILENT",
+    "REANIMATE",
+    "DODGE_AND_ROLL",
+    "HAZE",
+    "DEFLECT",
+    "ASCENDERS_BANE",
+    "SNAKEBITE",
+    "STRIKE_SILENT"
+   ],
+   "enemies": [
+    {
+     "id": "SPINY_TOAD",
+     "hp": 122,
+     "max_hp": 122,
      "intents": [
       {
        "type": "Buff"
@@ -1234,19 +1605,343 @@
     0.0,
     0.0,
     0.0,
-    0.97255,
-    0.01328,
-    0.0071,
-    0.0038,
-    0.00147,
-    0.0009,
-    0.00045,
+    0.76116,
+    0.08325,
+    0.07631,
+    0.03294,
+    0.0183,
+    0.01464,
+    0.00733,
+    0.00201,
+    0.00179,
+    0.00094,
+    0.00077,
+    0.00024,
     0.00014,
-    0.00016,
     7e-05,
-    3e-05,
     4e-05,
+    3e-05,
+    2e-05,
     1e-05,
+    0.0,
+    0.0,
+    1e-05,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "CORPSE_SLUGS_NORMAL",
+   "round": 4,
+   "player": {
+    "hp": 49,
+    "max_hp": 81,
+    "energy": 3
+   },
+   "hand": [
+    "STRIKE_SILENT",
+    "NEUTRALIZE",
+    "DEFEND_SILENT",
+    "STRIKE_SILENT",
+    "DEFEND_SILENT"
+   ],
+   "enemies": [
+    {
+     "id": "CORPSE_SLUG",
+     "hp": 23,
+     "max_hp": 28,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 9,
+       "hits": 1
+      }
+     ],
+     "powers": [
+      {
+       "id": "RAVENOUS_POWER",
+       "amount": 5
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 4
+      }
+     ]
+    },
+    {
+     "id": "CORPSE_SLUG",
+     "hp": 24,
+     "max_hp": 29,
+     "intents": [
+      {
+       "type": "Debuff"
+      }
+     ],
+     "powers": [
+      {
+       "id": "RAVENOUS_POWER",
+       "amount": 5
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 4
+      }
+     ]
+    },
+    {
+     "id": "CORPSE_SLUG",
+     "hp": 13,
+     "max_hp": 27,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 3,
+       "hits": 2
+      }
+     ],
+     "powers": [
+      {
+       "id": "RAVENOUS_POWER",
+       "amount": 5
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 4
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.97636,
+    0.01061,
+    0.00844,
+    0.00316,
+    0.00111,
+    0.00026,
+    4e-05,
+    2e-05,
+    1e-05,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "SKULKING_COLONY_ELITE",
+   "round": 2,
+   "player": {
+    "hp": 36,
+    "max_hp": 63,
+    "energy": 3
+   },
+   "hand": [
+    "COLD_SNAP",
+    "STRIKE_DEFECT",
+    "CHARGE_BATTERY",
+    "ZAP",
+    "ASCENDERS_BANE"
+   ],
+   "enemies": [
+    {
+     "id": "SKULKING_COLONY",
+     "hp": 64,
+     "max_hp": 80,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 16,
+       "hits": 1
+      }
+     ],
+     "powers": [
+      {
+       "id": "HARDENED_SHELL_POWER",
+       "amount": 20
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.00048,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1e-05,
+    0.01186,
+    0.02003,
+    0.08587,
+    0.18227,
+    0.18974,
+    0.16138,
+    0.10252,
+    0.05276,
+    0.0643,
+    0.03906,
+    0.03428,
+    0.01772,
+    0.01228,
+    0.01015,
+    0.0055,
+    0.00325,
+    0.00233,
+    0.00154,
+    0.00096,
+    0.00071,
+    0.00058,
+    0.00025,
+    0.00017,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "FOSSIL_STALKER_NORMAL",
+   "round": 5,
+   "player": {
+    "hp": 52,
+    "max_hp": 70,
+    "energy": 3
+   },
+   "hand": [
+    "STRIKE_SILENT",
+    "NEUTRALIZE",
+    "SURVIVOR",
+    "DEFEND_SILENT",
+    "STRIKE_SILENT"
+   ],
+   "enemies": [
+    {
+     "id": "FOSSIL_STALKER",
+     "hp": 8,
+     "max_hp": 51,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 9,
+       "hits": 2
+      }
+     ],
+     "powers": [
+      {
+       "id": "SUCK_POWER",
+       "amount": 3
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 7
+      },
+      {
+       "id": "STRENGTH_POWER",
+       "amount": 6
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.99988,
+    9e-05,
+    2e-05,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
     0.0,
     0.0,
     0.0,
@@ -1278,28 +1973,44 @@
   },
   {
    "encounter": "EXOSKELETONS_NORMAL",
-   "round": 6,
+   "round": 3,
    "player": {
-    "hp": 60,
-    "max_hp": 77,
-    "energy": 4
+    "hp": 48,
+    "max_hp": 75,
+    "energy": 3
    },
    "hand": [
-    "ERADICATE",
-    "DEFEND_NECROBINDER",
-    "STRIKE_NECROBINDER",
-    "BODYGUARD",
-    "DEFY"
+    "DEFEND_DEFECT",
+    "ZAP",
+    "DEFEND_DEFECT",
+    "CHARGE_BATTERY",
+    "COOLHEADED"
    ],
    "enemies": [
     {
      "id": "EXOSKELETON",
-     "hp": 28,
-     "max_hp": 28,
+     "hp": 30,
+     "max_hp": 30,
+     "intents": [
+      {
+       "type": "Buff"
+      }
+     ],
+     "powers": [
+      {
+       "id": "HARD_TO_KILL_POWER",
+       "amount": 9
+      }
+     ]
+    },
+    {
+     "id": "EXOSKELETON",
+     "hp": 27,
+     "max_hp": 27,
      "intents": [
       {
        "type": "Attack",
-       "damage": 12,
+       "damage": 11,
        "hits": 1
       }
      ],
@@ -1310,6 +2021,498 @@
       },
       {
        "id": "STRENGTH_POWER",
+       "amount": 2
+      }
+     ]
+    },
+    {
+     "id": "EXOSKELETON",
+     "hp": 28,
+     "max_hp": 28,
+     "intents": [
+      {
+       "type": "Buff"
+      }
+     ],
+     "powers": [
+      {
+       "id": "HARD_TO_KILL_POWER",
+       "amount": 9
+      },
+      {
+       "id": "STRENGTH_POWER",
+       "amount": 2
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.00043,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    2e-05,
+    1e-05,
+    3e-05,
+    1e-05,
+    0.74502,
+    0.07316,
+    0.05715,
+    0.04046,
+    0.02703,
+    0.01631,
+    0.01204,
+    0.00499,
+    0.00602,
+    0.00472,
+    0.00315,
+    0.00236,
+    0.00129,
+    0.00104,
+    0.00095,
+    0.0008,
+    0.00077,
+    0.00043,
+    0.00039,
+    0.00035,
+    0.00037,
+    0.00025,
+    0.00019,
+    8e-05,
+    9e-05,
+    0.00011,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "OVICOPTER_NORMAL",
+   "round": 2,
+   "player": {
+    "hp": 44,
+    "max_hp": 80,
+    "energy": 3
+   },
+   "hand": [
+    "ASCENDERS_BANE",
+    "DEFEND_SILENT",
+    "DEADLY_POISON",
+    "ADRENALINE",
+    "SNAKEBITE",
+    "DEFEND_SILENT",
+    "STRIKE_SILENT"
+   ],
+   "enemies": [
+    {
+     "id": "TOUGH_EGG",
+     "hp": 16,
+     "max_hp": 16,
+     "intents": [
+      {
+       "type": "Summon"
+      }
+     ],
+     "powers": [
+      {
+       "id": "HATCH_POWER",
+       "amount": 1
+      },
+      {
+       "id": "MINION_POWER",
+       "amount": 1
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 2
+      }
+     ]
+    },
+    {
+     "id": "TOUGH_EGG",
+     "hp": 17,
+     "max_hp": 17,
+     "intents": [
+      {
+       "type": "Summon"
+      }
+     ],
+     "powers": [
+      {
+       "id": "HATCH_POWER",
+       "amount": 1
+      },
+      {
+       "id": "MINION_POWER",
+       "amount": 1
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 2
+      }
+     ]
+    },
+    {
+     "id": "TOUGH_EGG",
+     "hp": 19,
+     "max_hp": 19,
+     "intents": [
+      {
+       "type": "Summon"
+      }
+     ],
+     "powers": [
+      {
+       "id": "HATCH_POWER",
+       "amount": 1
+      },
+      {
+       "id": "MINION_POWER",
+       "amount": 1
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 2
+      }
+     ]
+    },
+    {
+     "id": "OVICOPTER",
+     "hp": 115,
+     "max_hp": 130,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 12,
+       "hits": 1
+      }
+     ],
+     "powers": [
+      {
+       "id": "WEAK_POWER",
+       "amount": 2
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 7
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.00025,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.26674,
+    0.14029,
+    0.13094,
+    0.11995,
+    0.09019,
+    0.07868,
+    0.05939,
+    0.02088,
+    0.03389,
+    0.0191,
+    0.01371,
+    0.00853,
+    0.00599,
+    0.00412,
+    0.00291,
+    0.00169,
+    0.00118,
+    0.00051,
+    0.00047,
+    0.00024,
+    0.00023,
+    0.00016,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "TERROR_EEL_ELITE",
+   "round": 2,
+   "player": {
+    "hp": 37,
+    "max_hp": 66,
+    "energy": 3
+   },
+   "hand": [
+    "HAUNT",
+    "DEFEND_NECROBINDER",
+    "DEFEND_NECROBINDER",
+    "DEFEND_NECROBINDER",
+    "SOW",
+    "STRIKE_NECROBINDER",
+    "STRIKE_NECROBINDER",
+    "DEFY"
+   ],
+   "enemies": [
+    {
+     "id": "TERROR_EEL",
+     "hp": 150,
+     "max_hp": 150,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 4,
+       "hits": 3
+      },
+      {
+       "type": "Buff"
+      }
+     ],
+     "powers": [
+      {
+       "id": "SHRIEK_POWER",
+       "amount": 75
+      }
+     ]
+    }
+   ],
+   "potions": [
+    {
+     "id": "SNECKO_OIL",
+     "gone": 0.8502
+    }
+   ],
+   "outcome": [
+    0.0125,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1e-05,
+    0.00011,
+    6e-05,
+    0.00017,
+    0.00011,
+    0.39295,
+    0.08114,
+    0.05414,
+    0.084,
+    0.07021,
+    0.0376,
+    0.05698,
+    0.03075,
+    0.01922,
+    0.03184,
+    0.02245,
+    0.00785,
+    0.01474,
+    0.01169,
+    0.00631,
+    0.0143,
+    0.01468,
+    0.00444,
+    0.0095,
+    0.00482,
+    0.00965,
+    0.00571,
+    0.00203,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "MYTES_NORMAL",
+   "round": 1,
+   "player": {
+    "hp": 64,
+    "max_hp": 75,
+    "energy": 4
+   },
+   "hand": [
+    "FALLING_STAR",
+    "KNOW_THY_PLACE",
+    "DEFEND_REGENT",
+    "DEFEND_REGENT",
+    "DEFEND_REGENT",
+    "SPECTRUM_SHIFT",
+    "CATASTROPHE"
+   ],
+   "enemies": [
+    {
+     "id": "MYTE",
+     "hp": 65,
+     "max_hp": 65,
+     "intents": [
+      {
+       "type": "StatusCard"
+      }
+     ],
+     "powers": []
+    },
+    {
+     "id": "MYTE",
+     "hp": 63,
+     "max_hp": 63,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 4,
+       "hits": 1
+      },
+      {
+       "type": "Buff"
+      }
+     ],
+     "powers": []
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    2e-05,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.27276,
+    0.11784,
+    0.12149,
+    0.11459,
+    0.09188,
+    0.08325,
+    0.06774,
+    0.03003,
+    0.03428,
+    0.02522,
+    0.01316,
+    0.00975,
+    0.00624,
+    0.00394,
+    0.00279,
+    0.00135,
+    0.00123,
+    0.0007,
+    0.00054,
+    0.00049,
+    0.00028,
+    0.00013,
+    0.00011,
+    4e-05,
+    6e-05,
+    3e-05,
+    2e-05,
+    1e-05,
+    1e-05,
+    1e-05,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "THIEVING_HOPPER_WEAK",
+   "round": 5,
+   "player": {
+    "hp": 50,
+    "max_hp": 75,
+    "energy": 3
+   },
+   "hand": [
+    "SNAKEBITE",
+    "DEFEND_SILENT",
+    "POUNCE",
+    "DEFEND_SILENT",
+    "STRIKE_SILENT",
+    "SERPENT_FORM",
+    "DEFEND_SILENT"
+   ],
+   "enemies": [
+    {
+     "id": "THIEVING_HOPPER",
+     "hp": 35,
+     "max_hp": 84,
+     "intents": [
+      {
+       "type": "Escape"
+      }
+     ],
+     "powers": [
+      {
+       "id": "ESCAPE_ARTIST_POWER",
+       "amount": 1
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 10
+      },
+      {
+       "id": "SWIPE_POWER",
+       "amount": 1
+      },
+      {
+       "id": "FLUTTER_POWER",
        "amount": 4
       }
      ]
@@ -1328,11 +2531,201 @@
     0.0,
     0.0,
     0.0,
-    0.9999,
-    7e-05,
-    2e-05,
-    1e-05,
+    1.0,
     0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "SKULKING_COLONY_ELITE",
+   "round": 4,
+   "player": {
+    "hp": 51,
+    "max_hp": 66,
+    "energy": 3
+   },
+   "hand": [
+    "ENFEEBLING_TOUCH",
+    "DEFEND_NECROBINDER",
+    "DEFEND_NECROBINDER",
+    "DEFY",
+    "SOUL"
+   ],
+   "enemies": [
+    {
+     "id": "SKULKING_COLONY",
+     "hp": 48,
+     "max_hp": 75,
+     "intents": [
+      {
+       "type": "Attack",
+       "damage": 9,
+       "hits": 2
+      }
+     ],
+     "powers": [
+      {
+       "id": "HARDENED_SHELL_POWER",
+       "amount": 20
+      },
+      {
+       "id": "DOOM_POWER",
+       "amount": 18
+      },
+      {
+       "id": "STRENGTH_POWER",
+       "amount": 2
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.99315,
+    0.00373,
+    0.00146,
+    0.00089,
+    0.00042,
+    0.0001,
+    0.00013,
+    5e-05,
+    1e-05,
+    2e-05,
+    2e-05,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "encounter": "BOWLBUGS_WEAK",
+   "round": 4,
+   "player": {
+    "hp": 53,
+    "max_hp": 58,
+    "energy": 3
+   },
+   "hand": [
+    "PIERCING_WAIL",
+    "STRIKE_SILENT",
+    "CLOAK_AND_DAGGER",
+    "SHADOWMELD",
+    "MALAISE"
+   ],
+   "enemies": [
+    {
+     "id": "BOWLBUG_ROCK",
+     "hp": 16,
+     "max_hp": 48,
+     "intents": [
+      {
+       "type": "Stun"
+      }
+     ],
+     "powers": [
+      {
+       "id": "IMBALANCED_POWER",
+       "amount": 1
+      },
+      {
+       "id": "POISON_POWER",
+       "amount": 7
+      }
+     ]
+    }
+   ],
+   "potions": [],
+   "outcome": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.99953,
+    0.00025,
+    0.00017,
+    3e-05,
+    1e-05,
     0.0,
     0.0,
     0.0,
@@ -1372,54 +2765,53 @@
   },
   {
    "encounter": "DECIMILLIPEDE_ELITE",
-   "round": 3,
+   "round": 1,
    "player": {
-    "hp": 14,
-    "max_hp": 86,
+    "hp": 19,
+    "max_hp": 66,
     "energy": 3
    },
    "hand": [
-    "STRIKE_IRONCLAD",
-    "FEEL_NO_PAIN",
-    "SHRUG_IT_OFF",
-    "DEFEND_IRONCLAD",
-    "SHRUG_IT_OFF"
+    "JACK_OF_ALL_TRADES",
+    "GRAVE_WARDEN",
+    "SNAP",
+    "POKE",
+    "SPUR",
+    "FLATTEN",
+    "SEANCE",
+    "LETHALITY"
    ],
    "enemies": [
     {
      "id": "DECIMILLIPEDE_SEGMENT_FRONT",
-     "hp": 28,
-     "max_hp": 46,
+     "hp": 42,
+     "max_hp": 42,
      "intents": [
       {
        "type": "Attack",
-       "damage": 7,
-       "hits": 2
+       "damage": 8,
+       "hits": 1
+      },
+      {
+       "type": "Debuff"
       }
      ],
      "powers": [
       {
        "id": "REATTACH_POWER",
        "amount": 25
-      },
-      {
-       "id": "STRENGTH_POWER",
-       "amount": 2
       }
      ]
     },
     {
      "id": "DECIMILLIPEDE_SEGMENT_MIDDLE",
-     "hp": 15,
-     "max_hp": 42,
+     "hp": 40,
+     "max_hp": 40,
      "intents": [
       {
        "type": "Attack",
-       "damage": 6,
-       "hits": 1
-      },
-      {
-       "type": "Buff"
+       "damage": 5,
+       "hits": 2
       }
      ],
      "powers": [
@@ -1431,11 +2823,16 @@
     },
     {
      "id": "DECIMILLIPEDE_SEGMENT_BACK",
-     "hp": 0,
+     "hp": 44,
      "max_hp": 44,
      "intents": [
       {
-       "type": "Heal"
+       "type": "Attack",
+       "damage": 6,
+       "hits": 1
+      },
+      {
+       "type": "Buff"
       }
      ],
      "powers": [
@@ -1448,105 +2845,7 @@
    ],
    "potions": [],
    "outcome": [
-    0.00225,
-    0.0,
-    1e-05,
-    1e-05,
-    1e-05,
-    3e-05,
-    0.00031,
-    0.35777,
-    0.3931,
-    0.1046,
-    0.05784,
-    0.0379,
-    0.02236,
-    0.01428,
-    0.00525,
-    0.00225,
-    0.00147,
-    0.00058,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "KNOWLEDGE_DEMON_BOSS",
-   "round": 11,
-   "player": {
-    "hp": 31,
-    "max_hp": 70,
-    "energy": 3
-   },
-   "hand": [
-    "SNAKEBITE",
-    "PREDATOR",
-    "METAMORPHOSIS",
-    "BACKFLIP",
-    "LEG_SWEEP"
-   ],
-   "enemies": [
-    {
-     "id": "KNOWLEDGE_DEMON",
-     "hp": 191,
-     "max_hp": 379,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 9,
-       "hits": 3
-      }
-     ],
-     "powers": [
-      {
-       "id": "POISON_POWER",
-       "amount": 30
-      },
-      {
-       "id": "WEAK_POWER",
-       "amount": 8
-      },
-      {
-       "id": "STRENGTH_POWER",
-       "amount": 4
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.47955,
+    0.93111,
     0.0,
     0.0,
     0.0,
@@ -1558,1195 +2857,38 @@
     0.0,
     0.0,
     0.00037,
-    0.00046,
-    0.00064,
-    0.00078,
-    0.00183,
-    0.00601,
-    0.0123,
-    0.01195,
-    0.02661,
-    0.03341,
-    0.04711,
-    0.05433,
-    0.07262,
-    0.06102,
-    0.04395,
-    0.04197,
-    0.04949,
-    0.05561,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "HUNTER_KILLER_NORMAL",
-   "round": 1,
-   "player": {
-    "hp": 88,
-    "max_hp": 88,
-    "energy": 3
-   },
-   "hand": [
-    "RESTLESSNESS",
-    "HEADBUTT",
-    "STRIKE_IRONCLAD",
-    "INFERNAL_BLADE",
-    "SHRUG_IT_OFF",
-    "STRIKE_IRONCLAD"
-   ],
-   "enemies": [
-    {
-     "id": "HUNTER_KILLER",
-     "hp": 121,
-     "max_hp": 121,
-     "intents": [
-      {
-       "type": "Debuff"
-      }
-     ],
-     "powers": []
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.15365,
-    0.54646,
-    0.12937,
-    0.07974,
-    0.0384,
-    0.01548,
-    0.01746,
-    0.00731,
-    0.00625,
-    0.00195,
-    0.00169,
-    0.00114,
-    0.00058,
-    0.00028,
-    0.00014,
-    5e-05,
-    2e-05,
-    3e-05,
-    1e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "BOWLBUGS_WEAK",
-   "round": 3,
-   "player": {
-    "hp": 63,
-    "max_hp": 75,
-    "energy": 4
-   },
-   "hand": [
-    "DEFEND_DEFECT",
-    "PROLONG",
-    "DUALCAST",
-    "FTL",
-    "COLD_SNAP"
-   ],
-   "enemies": [
-    {
-     "id": "BOWLBUG_ROCK",
-     "hp": 19,
-     "max_hp": 46,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 15,
-       "hits": 1
-      }
-     ],
-     "powers": [
-      {
-       "id": "IMBALANCED_POWER",
-       "amount": 1
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.9979,
-    0.00114,
-    0.00074,
-    0.00017,
-    4e-05,
-    1e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "WATERFALL_GIANT_BOSS",
-   "round": 8,
-   "player": {
-    "hp": 72,
-    "max_hp": 79,
-    "energy": 3
-   },
-   "hand": [
-    "DEFEND_DEFECT",
-    "DEFEND_DEFECT",
-    "TEMPEST",
-    "DUALCAST",
-    "BUFFER"
-   ],
-   "enemies": [
-    {
-     "id": "WATERFALL_GIANT",
-     "hp": 60,
-     "max_hp": 240,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 10,
-       "hits": 1
-      },
-      {
-       "type": "Buff"
-      }
-     ],
-     "powers": [
-      {
-       "id": "STEAM_ERUPTION_POWER",
-       "amount": 33
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.04825,
-    0.05947,
-    0.09378,
-    0.11837,
-    0.16604,
-    0.14344,
-    0.09281,
-    0.07222,
-    0.07762,
-    0.05134,
-    0.0324,
-    0.01792,
-    0.00842,
-    0.01135,
-    0.0028,
-    0.00174,
-    0.00095,
-    0.00064,
-    0.0002,
-    0.00011,
-    7e-05,
-    2e-05,
-    1e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "FLYCONID_NORMAL",
-   "round": 3,
-   "player": {
-    "hp": 56,
-    "max_hp": 75,
-    "energy": 3
-   },
-   "hand": [
-    "STRIKE_DEFECT",
-    "GUNK_UP",
-    "STRIKE_DEFECT",
-    "SLIMED",
-    "DEFEND_DEFECT"
-   ],
-   "enemies": [
-    {
-     "id": "FLYCONID",
-     "hp": 38,
-     "max_hp": 47,
-     "intents": [
-      {
-       "type": "Debuff"
-      }
-     ],
-     "powers": []
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.95427,
-    0.01794,
-    0.01485,
-    0.00833,
-    0.00264,
-    0.00131,
-    0.00053,
-    8e-05,
-    4e-05,
-    1e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "SLITHERING_STRANGLER_NORMAL",
-   "round": 6,
-   "player": {
-    "hp": 60,
-    "max_hp": 80,
-    "energy": 3
-   },
-   "hand": [
-    "DOMINATE",
-    "SLIMED",
-    "DEFEND_IRONCLAD",
-    "STRIKE_IRONCLAD",
-    "STRIKE_IRONCLAD"
-   ],
-   "enemies": [
-    {
-     "id": "SLITHERING_STRANGLER",
-     "hp": 11,
-     "max_hp": 53,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 12,
-       "hits": 1
-      }
-     ],
-     "powers": []
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.00033,
-    0.47982,
-    0.50156,
-    0.00552,
-    0.00333,
-    0.00328,
-    0.00241,
-    0.00223,
-    0.00102,
-    0.00031,
-    0.00016,
-    3e-05,
-    1e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "LOUSE_PROGENITOR_NORMAL",
-   "round": 3,
-   "player": {
-    "hp": 69,
-    "max_hp": 75,
-    "energy": 3
-   },
-   "hand": [
-    "CHARGE_BATTERY",
-    "BEAM_CELL",
-    "HOLOGRAM",
-    "DUALCAST",
-    "REBOOT",
-    "FINESSE"
-   ],
-   "enemies": [
-    {
-     "id": "LOUSE_PROGENITOR",
-     "hp": 104,
-     "max_hp": 136,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 19,
-       "hits": 1
-      }
-     ],
-     "powers": [
-      {
-       "id": "STRENGTH_POWER",
-       "amount": 5
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    2e-05,
-    3e-05,
-    9e-05,
-    0.50954,
-    0.18377,
-    0.13622,
-    0.07964,
-    0.0404,
-    0.02662,
-    0.01241,
-    0.00525,
-    0.00254,
-    0.00192,
-    0.00083,
-    0.00039,
-    0.00016,
-    0.0001,
-    3e-05,
-    2e-05,
-    1e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "CORPSE_SLUGS_WEAK",
-   "round": 2,
-   "player": {
-    "hp": 69,
-    "max_hp": 80,
-    "energy": 3
-   },
-   "hand": [
-    "STRIKE_IRONCLAD",
-    "STRIKE_IRONCLAD",
-    "STRIKE_IRONCLAD",
-    "BASH",
-    "DEFEND_IRONCLAD"
-   ],
-   "enemies": [
-    {
-     "id": "CORPSE_SLUG",
-     "hp": 25,
-     "max_hp": 25,
-     "intents": [
-      {
-       "type": "Debuff"
-      }
-     ],
-     "powers": [
-      {
-       "id": "RAVENOUS_POWER",
-       "amount": 4
-      },
-      {
-       "id": "STRENGTH_POWER",
-       "amount": 4
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.00011,
-    0.36941,
-    0.62017,
-    0.00825,
-    0.00158,
-    0.00048,
-    1e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "SLIMED_BERSERKER_NORMAL",
-   "round": 2,
-   "player": {
-    "hp": 37,
-    "max_hp": 71,
-    "energy": 3
-   },
-   "hand": [
-    "BIG_BANG",
-    "BULWARK",
-    "SQUASH",
-    "MAUL",
-    "WROUGHT_IN_WAR",
-    "COMET"
-   ],
-   "enemies": [
-    {
-     "id": "SLIMED_BERSERKER",
-     "hp": 201,
-     "max_hp": 261,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 4,
-       "hits": 4
-      }
-     ],
-     "powers": []
-    }
-   ],
-   "potions": [
-    {
-     "id": "FAIRY_IN_A_BOTTLE",
-     "gone": 0.092
-    }
-   ],
-   "outcome": [
-    0.0031,
-    0.0,
-    0.0,
-    2e-05,
-    5e-05,
-    9e-05,
-    0.00013,
-    0.00067,
-    0.00078,
-    0.0013,
-    0.00049,
-    0.13321,
-    0.09542,
-    0.08051,
-    0.09342,
-    0.07836,
-    0.11552,
-    0.05394,
-    0.05393,
-    0.07503,
-    0.05298,
-    0.03113,
-    0.03166,
-    0.02304,
-    0.01899,
-    0.01387,
-    0.01299,
-    0.00872,
-    0.00633,
-    0.00717,
-    0.00387,
-    0.00326,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "CORPSE_SLUGS_WEAK",
-   "round": 1,
-   "player": {
-    "hp": 80,
-    "max_hp": 80,
-    "energy": 3
-   },
-   "hand": [
-    "DEFEND_IRONCLAD",
-    "STRIKE_IRONCLAD",
-    "DEFEND_IRONCLAD",
-    "INJURY",
-    "STRIKE_IRONCLAD"
-   ],
-   "enemies": [
-    {
-     "id": "CORPSE_SLUG",
-     "hp": 27,
-     "max_hp": 27,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 3,
-       "hits": 2
-      }
-     ],
-     "powers": [
-      {
-       "id": "RAVENOUS_POWER",
-       "amount": 4
-      }
-     ]
-    },
-    {
-     "id": "CORPSE_SLUG",
-     "hp": 25,
-     "max_hp": 25,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 8,
-       "hits": 1
-      }
-     ],
-     "powers": [
-      {
-       "id": "RAVENOUS_POWER",
-       "amount": 4
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.03567,
-    0.46297,
-    0.30293,
-    0.14244,
-    0.03616,
-    0.00861,
-    0.00603,
-    0.00192,
-    0.00198,
-    0.00065,
-    0.00042,
-    0.00017,
-    4e-05,
-    2e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "KAISER_CRAB_BOSS",
-   "round": 5,
-   "player": {
-    "hp": 42,
-    "max_hp": 60,
-    "energy": 3
-   },
-   "hand": [
-    "DEFEND_DEFECT",
-    "CHARGE_BATTERY",
-    "MOMENTUM_STRIKE",
-    "DUALCAST",
-    "GLASSWORK"
-   ],
-   "enemies": [
-    {
-     "id": "CRUSHER",
-     "hp": 170,
-     "max_hp": 209,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 21,
-       "hits": 1
-      },
-      {
-       "type": "Defend"
-      }
-     ],
-     "powers": [
-      {
-       "id": "BACK_ATTACK_LEFT_POWER",
-       "amount": 1
-      },
-      {
-       "id": "CRAB_RAGE_POWER",
-       "amount": 1
-      },
-      {
-       "id": "STRENGTH_POWER",
-       "amount": 2
-      }
-     ]
-    },
-    {
-     "id": "ROCKET",
-     "hp": 112,
-     "max_hp": 199,
-     "intents": [
-      {
-       "type": "Sleep"
-      }
-     ],
-     "powers": [
-      {
-       "id": "BACK_ATTACK_RIGHT_POWER",
-       "amount": 1
-      },
-      {
-       "id": "CRAB_RAGE_POWER",
-       "amount": 1
-      },
-      {
-       "id": "STRENGTH_POWER",
-       "amount": 2
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.00148,
-    0.02939,
-    0.01288,
-    0.0219,
-    0.04311,
-    0.08552,
-    0.15924,
-    0.21547,
-    0.13904,
-    0.14721,
-    0.04121,
-    0.04398,
-    0.01179,
-    0.00867,
-    0.00585,
-    0.00422,
-    0.00586,
-    0.00323,
-    0.00167,
-    0.0032,
-    0.0016,
-    0.0033,
-    0.00123,
-    0.00235,
-    0.00173,
-    0.00075,
-    0.00051,
-    0.00073,
-    0.00068,
-    0.0002,
-    0.00048,
-    0.00021,
-    0.0002,
-    0.00042,
-    0.00012,
-    8e-05,
-    0.00021,
-    0.00012,
-    0.00017,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "SPINY_TOAD_NORMAL",
-   "round": 2,
-   "player": {
-    "hp": 57,
-    "max_hp": 70,
-    "energy": 4
-   },
-   "hand": [
-    "FOOTWORK",
-    "CLOAK_AND_DAGGER",
-    "SURVIVOR",
-    "MIRAGE",
-    "BLUR"
-   ],
-   "enemies": [
-    {
-     "id": "SPINY_TOAD",
-     "hp": 103,
-     "max_hp": 119,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 22,
-       "hits": 1
-      }
-     ],
-     "powers": [
-      {
-       "id": "STRENGTH_POWER",
-       "amount": -1
-      },
-      {
-       "id": "THORNS_POWER",
-       "amount": 5
-      },
-      {
-       "id": "POISON_POWER",
-       "amount": 3
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.94019,
-    0.02479,
-    0.01557,
-    0.00968,
-    0.0026,
-    0.00321,
-    0.00166,
-    0.00055,
-    0.00106,
     0.00044,
-    0.00013,
-    9e-05,
-    3e-05,
-    1e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
-   ]
-  },
-  {
-   "encounter": "THE_LOST_AND_FORGOTTEN_NORMAL",
-   "round": 2,
-   "player": {
-    "hp": 73,
-    "max_hp": 76,
-    "energy": 3
-   },
-   "hand": [
-    "STRIKE_IRONCLAD",
-    "INFLAME",
-    "PECK",
-    "CATASTROPHE",
-    "BODY_SLAM",
-    "BLUDGEON"
-   ],
-   "enemies": [
-    {
-     "id": "THE_LOST",
-     "hp": 76,
-     "max_hp": 93,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 6,
-       "hits": 2
-      }
-     ],
-     "powers": [
-      {
-       "id": "POSSESS_STRENGTH_POWER",
-       "amount": 1
-      },
-      {
-       "id": "STRENGTH_POWER",
-       "amount": 2
-      }
-     ]
-    },
-    {
-     "id": "THE_FORGOTTEN",
-     "hp": 106,
-     "max_hp": 106,
-     "intents": [
-      {
-       "type": "Attack",
-       "damage": 15,
-       "hits": 1
-      }
-     ],
-     "powers": [
-      {
-       "id": "POSSESS_SPEED_POWER",
-       "amount": 1
-      },
-      {
-       "id": "DEXTERITY_POWER",
-       "amount": 2
-      }
-     ]
-    }
-   ],
-   "potions": [],
-   "outcome": [
-    0.00017,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.01934,
-    0.018,
-    0.04075,
-    0.11143,
-    0.1237,
-    0.08063,
-    0.06845,
-    0.10071,
-    0.07222,
-    0.09215,
-    0.05758,
-    0.06605,
-    0.03991,
-    0.03345,
-    0.01651,
-    0.01827,
-    0.01025,
-    0.00993,
-    0.00509,
-    0.00506,
-    0.00333,
-    0.00173,
-    0.00129,
-    0.00093,
+    0.00063,
     0.00122,
-    0.00052,
-    0.00037,
-    0.00031,
-    0.00024,
-    0.00018,
-    0.00013,
-    4e-05,
-    4e-05,
-    1e-05,
-    1e-05,
+    0.0021,
+    0.00266,
+    0.00715,
+    0.00755,
+    0.00739,
+    0.01339,
+    0.01555,
+    0.01044,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
     0.0,
     0.0,
     0.0,
@@ -2804,10 +2946,10 @@
   },
   "cards.weight": {
    "shape": [
-    597,
+    718,
     64
    ],
-   "weights": 38208
+   "weights": 45952
   },
   "modifiers.weight": {
    "shape": [
@@ -2818,10 +2960,10 @@
   },
   "enemies.weight": {
    "shape": [
-    121,
+    123,
     64
    ],
-   "weights": 7744
+   "weights": 7872
   },
   "intents.weight": {
    "shape": [
@@ -2832,24 +2974,24 @@
   },
   "relics.weight": {
    "shape": [
-    310,
+    328,
     64
    ],
-   "weights": 19840
+   "weights": 20992
   },
   "potions.weight": {
    "shape": [
-    66,
+    69,
     64
    ],
-   "weights": 4224
+   "weights": 4416
   },
   "context.weight": {
    "shape": [
-    96,
+    97,
     64
    ],
-   "weights": 6144
+   "weights": 6208
   },
   "orbs.weight": {
    "shape": [
@@ -2860,10 +3002,10 @@
   },
   "allies.weight": {
    "shape": [
-    121,
+    123,
     64
    ],
-   "weights": 7744
+   "weights": 7872
   },
   "relic_status.weight": {
    "shape": [
@@ -2874,38 +3016,45 @@
   },
   "card_up.weight": {
    "shape": [
-    597,
+    718,
     64
    ],
-   "weights": 38208
+   "weights": 45952
   },
   "card_damage.weight": {
    "shape": [
-    597,
+    718,
     64
    ],
-   "weights": 38208
+   "weights": 45952
   },
   "card_block.weight": {
    "shape": [
-    597,
+    718,
     64
    ],
-   "weights": 38208
+   "weights": 45952
   },
   "card_calc.weight": {
    "shape": [
-    597,
+    718,
     64
    ],
-   "weights": 38208
+   "weights": 45952
   },
   "card_replay.weight": {
    "shape": [
-    597,
+    718,
     64
    ],
-   "weights": 38208
+   "weights": 45952
+  },
+  "card_grown.weight": {
+   "shape": [
+    718,
+    64
+   ],
+   "weights": 45952
   },
   "mod_amount.weight": {
    "shape": [
@@ -2916,38 +3065,38 @@
   },
   "relic_counter.weight": {
    "shape": [
-    310,
+    328,
     64
    ],
-   "weights": 19840
+   "weights": 20992
   },
   "powers.weight": {
    "shape": [
-    266,
+    305,
     64
    ],
-   "weights": 17024
+   "weights": 19520
   },
   "power_amount.weight": {
    "shape": [
-    266,
+    305,
     64
    ],
-   "weights": 17024
+   "weights": 19520
   },
   "power_stacks.weight": {
    "shape": [
-    266,
+    305,
     64
    ],
-   "weights": 17024
+   "weights": 19520
   },
   "power_detail.weight": {
    "shape": [
-    266,
+    305,
     64
    ],
-   "weights": 17024
+   "weights": 19520
   },
   "intent_damage.weight": {
    "shape": [
@@ -3026,9 +3175,9 @@
   "enemy_scalars.weight": {
    "shape": [
     64,
-    5
+    6
    ],
-   "weights": 320
+   "weights": 384
   },
   "enemy_scalars.bias": {
    "shape": [
@@ -3091,9 +3240,9 @@
   "body.0.weight": {
    "shape": [
     512,
-    1292
+    1294
    ],
-   "weights": 661504
+   "weights": 662528
   },
   "body.0.bias": {
    "shape": [
@@ -3129,36 +3278,36 @@
   },
   "potion_head.weight": {
    "shape": [
-    330,
+    345,
     512
    ],
-   "weights": 168960
+   "weights": 176640
   },
   "potion_head.bias": {
    "shape": [
-    330
+    345
    ],
-   "weights": 330
+   "weights": 345
   }
  },
- "total_weights": 1738813,
+ "total_weights": 1852812,
  "vocab": {
-  "cards": 597,
+  "cards": 718,
   "modifiers": 57,
-  "powers": 266,
-  "enemies": 121,
+  "powers": 305,
+  "enemies": 123,
   "intents": 16,
-  "relics": 310,
-  "potions": 66,
-  "context": 96,
+  "relics": 328,
+  "potions": 69,
+  "context": 97,
   "orbs": 6,
-  "allies": 121,
+  "allies": 123,
   "relic_status": 5
  },
  "fit": {
-  "runs": 21272,
-  "held_out_runs": 4310,
-  "samples": 2118826,
-  "held_out_samples": 430142
+  "runs": 29217,
+  "held_out_runs": 5933,
+  "samples": 2953506,
+  "held_out_samples": 605520
  }
 }

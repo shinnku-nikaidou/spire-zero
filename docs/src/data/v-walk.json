@@ -1,0 +1,446 @@
+{
+ "source": "the champion's V, weights/all/v10-1-2.json, tests[0]; vectors show their first four numbers",
+ "run": {
+  "character": "SILENT",
+  "ascension": 6,
+  "floor": 15,
+  "hp": 25,
+  "max_hp": 70,
+  "gold": 146,
+  "deck": 20,
+  "relics": 4,
+  "potions": 0,
+  "slots": 2,
+  "after": "Monster",
+  "entering": false
+ },
+ "tags": {
+  "cards": [
+   "DEFEND_SILENT ×5",
+   "STRIKE_SILENT ×3",
+   "ACROBATICS+",
+   "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
+   "BACKFLIP",
+   "CALTROPS+",
+   "CLUMSY (Ethereal, Unplayable)",
+   "DASH",
+   "FLECHETTES",
+   "MIRAGE (Exhaust)",
+   "NEUTRALIZE",
+   "NOXIOUS_FUMES",
+   "SERPENT_FORM",
+   "SURVIVOR"
+  ],
+  "damage": [
+   "STRIKE_SILENT 0.30 ×3",
+   "DASH 0.50",
+   "FLECHETTES 0.25",
+   "NEUTRALIZE 0.15"
+  ],
+  "block": [
+   "DEFEND_SILENT 0.25 ×5",
+   "BACKFLIP 0.25",
+   "DASH 0.50",
+   "SURVIVOR 0.40"
+  ],
+  "grown": [],
+  "modified": 3,
+  "relics": [
+   "RING_OF_THE_SNAKE",
+   "NEW_LEAF",
+   "ANCHOR",
+   "BEATING_REMNANT"
+  ],
+  "counters": [],
+  "statuses": {
+   "Normal": 4
+  },
+  "melted": 0,
+  "kept": [],
+  "potions": [],
+  "context": [
+   "character:SILENT",
+   "act:UNDERDOCKS",
+   "boss:LAGAVULIN_MATRIARCH_BOSS",
+   "ancient:NEOW"
+  ],
+  "map": [
+   "RestSite+1",
+   "Boss+2"
+  ]
+ },
+ "lookup": [
+  [
+   "ACROBATICS",
+   5
+  ],
+  [
+   "STRIKE_SILENT",
+   602
+  ],
+  [
+   "keyword:Eternal",
+   31
+  ],
+  [
+   "RING_OF_THE_SNAKE",
+   239
+  ],
+  [
+   "character:SILENT",
+   32
+  ],
+  [
+   "RestSite+1",
+   171
+  ],
+  [
+   "Boss+2",
+   67
+  ]
+ ],
+ "card_vectors": [
+  [
+   "DEFEND_SILENT",
+   "E + 0.25·K",
+   [
+    -0.096,
+    -0.21,
+    0.141,
+    0.144
+   ]
+  ],
+  [
+   "STRIKE_SILENT",
+   "E + 0.30·D",
+   [
+    0.127,
+    0.04,
+    0.017,
+    -0.141
+   ]
+  ],
+  [
+   "ACROBATICS+",
+   "E + U",
+   [
+    0.423,
+    0.198,
+    0.186,
+    0.377
+   ]
+  ],
+  [
+   "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
+   "E + M[keyword:Eternal] + M[keyword:Ethereal] + M[keyword:Unplayable]",
+   [
+    0.05,
+    -0.01,
+    0.233,
+    0.148
+   ]
+  ],
+  [
+   "BACKFLIP",
+   "E + 0.25·K",
+   [
+    -0.216,
+    0.207,
+    -0.226,
+    -0.121
+   ]
+  ]
+ ],
+ "phi": [
+  [
+   "DEFEND_SILENT",
+   [
+    0.259,
+    0.143,
+    0.4,
+    0.156
+   ],
+   3.85
+  ],
+  [
+   "STRIKE_SILENT",
+   [
+    0.193,
+    0.404,
+    0.361,
+    0.221
+   ],
+   3.73
+  ],
+  [
+   "ACROBATICS+",
+   [
+    0.0,
+    0.414,
+    0.098,
+    0.061
+   ],
+   5.75
+  ],
+  [
+   "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
+   [
+    0.344,
+    0.703,
+    0.371,
+    0.304
+   ],
+   7.16
+  ],
+  [
+   "BACKFLIP",
+   [
+    0.421,
+    0.122,
+    0.447,
+    0.363
+   ],
+   4.14
+  ]
+ ],
+ "pool": {
+  "n": 20,
+  "mean": [
+   0.31,
+   0.338,
+   0.414,
+   0.278
+  ],
+  "sum": [
+   0.387,
+   0.423,
+   0.517,
+   0.348
+  ]
+ },
+ "groups": [
+  [
+   "relics",
+   [
+    0.237,
+    -0.216,
+    0.305,
+    0.386
+   ],
+   2.03
+  ],
+  [
+   "potions",
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   0.0
+  ],
+  [
+   "context",
+   [
+    -0.255,
+    0.039,
+    0.174,
+    -0.691
+   ],
+   2.35
+  ],
+  [
+   "map",
+   [
+    -0.486,
+    0.369,
+    -0.083,
+    -0.116
+   ],
+   2.21
+  ]
+ ],
+ "numbers": [
+  [
+   "floor",
+   15.0,
+   0.155
+  ],
+  [
+   "HP",
+   25.0,
+   -2.267
+  ],
+  [
+   "max HP",
+   70.0,
+   -0.165
+  ],
+  [
+   "gold",
+   146.0,
+   -0.186
+  ],
+  [
+   "ascension",
+   6.0,
+   6.0
+  ],
+  [
+   "potion slots",
+   2.0,
+   -2.244
+  ],
+  [
+   "auto-win",
+   [
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0
+   ]
+  ]
+ ],
+ "ascension_scaled": false,
+ "body": {
+  "width": 1033,
+  "parts": [
+   256,
+   256,
+   4,
+   64,
+   9,
+   256
+  ],
+  "kept_zero": true,
+  "b1": [
+   396,
+   512
+  ],
+  "b2": [
+   232,
+   512
+  ]
+ },
+ "hazards": {
+  "start": 15,
+  "floors": 49,
+  "spans": [
+   {
+    "from": 15,
+    "to": 16,
+    "h": [
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "from": 17,
+    "to": 17,
+    "h": [
+     0.085
+    ],
+    "boss": true
+   },
+   {
+    "from": 18,
+    "to": 32,
+    "h": [
+     0.0,
+     0.0,
+     0.0,
+     0.0038,
+     0.0097,
+     0.0217,
+     0.0313,
+     0.0282,
+     0.0,
+     0.0296,
+     0.023,
+     0.0127,
+     0.017,
+     0.0359,
+     0.0
+    ]
+   },
+   {
+    "from": 33,
+    "to": 33,
+    "h": [
+     0.0801
+    ],
+    "boss": true
+   },
+   {
+    "from": 34,
+    "to": 47,
+    "h": [
+     0.0,
+     0.002,
+     0.0014,
+     0.018,
+     0.0141,
+     0.0114,
+     0.0168,
+     0.0002,
+     0.0264,
+     0.0139,
+     0.0332,
+     0.0269,
+     0.031,
+     0.0
+    ]
+   },
+   {
+    "from": 48,
+    "to": 48,
+    "h": [
+     0.2435
+    ],
+    "boss": true
+   },
+   {
+    "from": 49,
+    "to": 63,
+    "h": [
+     0.0002,
+     0.001,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  ],
+  "bosses": [
+   17,
+   33,
+   48
+  ]
+ },
+ "reach": {
+  "17": 1.0,
+  "33": 0.7375,
+  "48": 0.5567
+ },
+ "beat": {
+  "17": 0.915,
+  "33": 0.9199,
+  "48": 0.7565
+ },
+ "value": 0.4206,
+ "test_value": 0.420591315874077
+}

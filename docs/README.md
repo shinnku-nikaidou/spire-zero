@@ -52,10 +52,11 @@ predict) stand in the preface and in the chapters on the two environments, the t
 weaknesses. After a promotion those sentences change together with the figures' data.
 
 **Figures.** The interactive figures are Svelte islands in `src/components/` (`book/`, `combat/`, `v/`), drawn with
-D3. The data they show is in `src/data/`: the book's example run, the champion's reports and its combat net's test
+D3. The data they show is in `src/data/`: the book's example run, the champion's reports and its two nets' test
 states. `scripts/book-data.py` makes it from one play of the example seed in each environment and the champion's
-reports (its docstring has the commands), and `scripts/combat-walk.py` makes the combat net's states; both run from
-the repository's root with `uv run --project learn python docs/scripts/...`. After a promotion, run them again.
+reports (its docstring has the commands), `scripts/combat-walk.py` makes the combat net's states and
+`scripts/v-walk.py` V's walk; all three run from the repository's root with
+`uv run --project learn python docs/scripts/...`. After a promotion, run them again.
 Cards, relics and monsters show the game's own names (`src/data/names/`, written by
 `node scripts/game-names.mjs PATH/SlayTheSpire2.pck`).
 
@@ -75,7 +76,8 @@ It builds the site, then `scripts/check.mjs` checks:
   (`.mdx`, `.md`, `.svelte`, `.ts`, `.json`; not the game's names);
 - no tracked file outside `docs/` cites the book (`docs: PAGE §N`);
 - the combat net's figure data (`src/data/combat-walk.json`) holds what the test states of the champion's combat net
-  file hold (the file `eval/champions/sl.json` names).
+  file hold (the file `eval/champions/sl.json` names), and V's walk (`src/data/v-walk.json`) ends in the value the
+  champion's V file holds for its first test run.
 
 It prints the number of pages, internal links and characters, and every problem; it exits 1 on any problem.
 

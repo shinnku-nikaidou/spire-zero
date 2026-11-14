@@ -7,68 +7,70 @@
   },
   "fight": {
    "floor": 17,
-   "encounter": "VANTOM_BOSS",
+   "encounter": "CEREMONIAL_BEAST_BOSS",
    "start": {
-    "hp": 39,
+    "hp": 58,
     "max_hp": 70
    },
    "end": {
     "died": false,
-    "hp": 39,
+    "hp": 58,
     "max_hp": 70,
     "potions": 0
    },
    "first": {
     "plan": [
-     "play:2",
      "play:6",
      "end_turn",
-     "play:9:1",
-     "play:10:1",
      "play:11",
-     "play:12:1",
-     "end_turn",
-     "play:7",
-     "play:5",
-     "play:12:1",
-     "end_turn",
-     "play:9:1",
      "play:1:1",
-     "play:11",
-     "play:4:1",
-     "end_turn",
+     "play:2",
      "play:10:1",
-     "play:11",
      "end_turn",
-     "play:7",
-     "play:8",
-     "play:4:1",
-     "play:9:1",
+     "play:13:1",
+     "play:14",
+     "pick:0",
+     "play:17:1",
      "end_turn",
-     "play:13",
-     "play:3",
-     "play:8",
+     "play:14",
+     "pick:2",
+     "play:17:1",
+     "play:9",
+     "end_turn",
+     "play:12",
+     "play:2",
+     "play:15",
+     "play:1:1",
+     "end_turn",
+     "play:13:1",
+     "play:5",
      "end_turn",
      "play:0:1",
-     "play:4:1",
+     "play:10:1",
+     "play:18:1",
+     "play:1:1",
      "end_turn",
+     "play:16",
+     "end_turn",
+     "play:8",
+     "play:5",
      "end_turn"
     ],
-    "chosen": "play:1:1",
+    "chosen": "play:5",
     "candidates": [
      {
-      "action": "play:1:1",
-      "value": 0.8892344623433958,
+      "action": "play:5",
+      "value": 0.9895305041673912,
       "ci": 0,
       "samples": 1,
       "values": [
-       0.8892
+       0.9895
       ],
       "win": 1,
-      "hp": 39
+      "hp": 58
      }
     ],
-    "elapsed_ms": 6962.6757,
+    "elapsed_ms": 467.3811,
     "budget": {
      "worlds": 8,
      "nodes_per_world": 300,
@@ -81,2104 +83,23 @@
    },
    "steps": [
     {
-     "chosen": "play:1:1",
-     "searched": true,
-     "elapsed_ms": 6962.7,
-     "obs": {
-      "round": 1,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 2
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 1
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 3
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "FOOTWORK",
-        "cost": 1,
-        "up": 1,
-        "uid": 6
-       }
-      ],
-      "draw": 7,
-      "discard": 0,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 173,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 7,
-          "hits": 1
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 8
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:2",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 1,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 2,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 2
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 3
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "FOOTWORK",
-        "cost": 1,
-        "up": 1,
-        "uid": 6
-       }
-      ],
-      "draw": 7,
-      "discard": 1,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 172,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 7,
-          "hits": 1
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 7
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:6",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 1,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 7,
-       "energy": 1,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 2
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 3
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "FOOTWORK",
-        "cost": 1,
-        "up": 1,
-        "uid": 6
-       }
-      ],
-      "draw": 7,
-      "discard": 2,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 172,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 7,
-          "hits": 1
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 7
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 1,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 7,
-       "energy": 0,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 3
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       }
-      ],
-      "draw": 7,
-      "discard": 2,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 172,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 7,
-          "hits": 1
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 7
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:9:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 2,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       },
-       {
-        "id": "NEUTRALIZE",
-        "cost": 0,
-        "up": 1,
-        "uid": 9
-       },
-       {
-        "id": "DEADLY_POISON",
-        "cost": 1,
-        "up": 1,
-        "uid": 10
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       }
-      ],
-      "draw": 2,
-      "discard": 6,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 172,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 6,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 7
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:10:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 2,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       },
-       {
-        "id": "DEADLY_POISON",
-        "cost": 1,
-        "up": 1,
-        "uid": 10
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       }
-      ],
-      "draw": 2,
-      "discard": 7,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 171,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 4,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 6
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:11",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 2,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 2,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       }
-      ],
-      "draw": 2,
-      "discard": 8,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 171,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 4,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 6
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 7
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:12:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 2,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 12,
-       "energy": 1,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 12
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 13
-       }
-      ],
-      "draw": 0,
-      "discard": 9,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 171,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 4,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 6
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 7
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 2,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 12,
-       "energy": 0,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 13
-       }
-      ],
-      "draw": 0,
-      "discard": 10,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 170,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 4,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 5
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 7
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:7",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 3,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 12
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 13
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 3
-       }
-      ],
-      "draw": 8,
-      "discard": 0,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 169,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 19,
-          "hits": 1
-         },
-         {
-          "type": "StatusCard"
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 4
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 6
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
      "chosen": "play:5",
-     "searched": false,
-     "elapsed_ms": 0.0,
+     "searched": true,
+     "elapsed_ms": 467.4,
      "obs": {
-      "round": 3,
-      "encounter": "VANTOM_BOSS",
+      "round": 1,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
       "room": "Boss",
       "act": 0,
       "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 10,
-       "energy": 2,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 12
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 13
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 3
-       }
-      ],
-      "draw": 8,
-      "discard": 1,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 169,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 19,
-          "hits": 1
-         },
-         {
-          "type": "StatusCard"
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 4
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 6
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:12:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 3,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 23,
-       "energy": 1,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 12
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 13
-       }
-      ],
-      "draw": 8,
-      "discard": 3,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 169,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 19,
-          "hits": 1
-         },
-         {
-          "type": "StatusCard"
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 4
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 6
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 3,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 23,
-       "energy": 0,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 13
-       }
-      ],
-      "draw": 8,
-      "discard": 4,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 168,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 19,
-          "hits": 1
-         },
-         {
-          "type": "StatusCard"
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 3
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 6
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:9:1",
-     "searched": false,
-     "elapsed_ms": 1.0,
-     "obs": {
-      "round": 4,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
+       "hp": 58,
        "max_hp": 70,
        "block": 0,
        "energy": 3,
        "powers": [
         {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "NEUTRALIZE",
-        "cost": 0,
-        "up": 1,
-        "uid": 9
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 1
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       },
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       }
-      ],
-      "draw": 3,
-      "discard": 8,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 167,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Buff"
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 2
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 5
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:1:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 4,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 1
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       },
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       }
-      ],
-      "draw": 3,
-      "discard": 9,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 166,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Buff"
-         }
-        ],
-        "powers": [
-         {
-          "id": "SLIPPERY_POWER",
-          "amount": 1
-         },
-         {
-          "id": "POISON_POWER",
-          "amount": 5
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:11",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 4,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 2,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       },
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       }
-      ],
-      "draw": 3,
-      "discard": 10,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 165,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Buff"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 5
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:4:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 4,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 12,
-       "energy": 1,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       }
-      ],
-      "draw": 1,
-      "discard": 11,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 165,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Buff"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 5
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 4,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 12,
-       "energy": 0,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       }
-      ],
-      "draw": 1,
-      "discard": 12,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 165,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Buff"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 14
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:10:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 5,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEADLY_POISON",
-        "cost": 1,
-        "up": 1,
-        "uid": 10
-       },
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 16
-       },
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 14
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       },
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       }
-      ],
-      "draw": 11,
-      "discard": 0,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 151,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 6,
-          "hits": 1
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 13
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:11",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 5,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 2,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 16
-       },
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 14
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       },
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       }
-      ],
-      "draw": 11,
-      "discard": 1,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 151,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 6,
-          "hits": 1
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 20
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 5,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 12,
-       "energy": 1,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 16
-       },
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 14
-       },
-       {
-        "id": "PREDATOR",
-        "cost": 2,
-        "uid": 0
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 15
-       }
-      ],
-      "draw": 9,
-      "discard": 2,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 151,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 6,
-          "hits": 1
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 20
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:7",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 6,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "NEUTRALIZE",
-        "cost": 0,
-        "up": 1,
-        "uid": 9
-       }
-      ],
-      "draw": 4,
-      "discard": 7,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 131,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 8,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 19
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:8",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 6,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 10,
-       "energy": 2,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "NEUTRALIZE",
-        "cost": 0,
-        "up": 1,
-        "uid": 9
-       }
-      ],
-      "draw": 4,
-      "discard": 8,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 131,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 8,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 19
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:4:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 6,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 20,
-       "energy": 1,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "NEUTRALIZE",
-        "cost": 0,
-        "up": 1,
-        "uid": 9
-       }
-      ],
-      "draw": 4,
-      "discard": 9,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 131,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 8,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 19
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:9:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 6,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 20,
-       "energy": 0,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "NEUTRALIZE",
-        "cost": 0,
-        "up": 1,
-        "uid": 9
-       }
-      ],
-      "draw": 4,
-      "discard": 10,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 131,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 8,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 28
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 6,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 20,
-       "energy": 0,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       }
-      ],
-      "draw": 4,
-      "discard": 11,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 127,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 6,
-          "hits": 2
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 28
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:13",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 7,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
+         "id": "RETAIN_HAND_POWER",
+         "amount": 1
         }
        ]
       },
@@ -2186,612 +107,40 @@
        {
         "id": "STRIKE_SILENT",
         "cost": 1,
-        "uid": 12
+        "up": 1,
+        "uid": 0
        },
        {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 13
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
         "uid": 1
        },
        {
         "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
         "cost": 1,
         "uid": 3
        },
        {
-        "id": "DEFEND_SILENT",
+        "id": "PECK",
         "cost": 1,
-        "uid": 8
-       }
-      ],
-      "draw": 11,
-      "discard": 0,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 99,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 21,
-          "hits": 1
-         },
-         {
-          "type": "StatusCard"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 27
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:3",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 7,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 10,
-       "energy": 2,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 12
+        "uid": 4
        },
        {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 1
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 3
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       }
-      ],
-      "draw": 11,
-      "discard": 1,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 99,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 21,
-          "hits": 1
-         },
-         {
-          "type": "StatusCard"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 27
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:8",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 7,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 20,
-       "energy": 1,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 12
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 1
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
-       }
-      ],
-      "draw": 11,
-      "discard": 2,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 99,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 21,
-          "hits": 1
-         },
-         {
-          "type": "StatusCard"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 27
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 7,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 30,
-       "energy": 0,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 12
-       },
-       {
-        "id": "STRIKE_SILENT",
-        "cost": 1,
-        "uid": 1
-       }
-      ],
-      "draw": 11,
-      "discard": 3,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 99,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Attack",
-          "damage": 21,
-          "hits": 1
-         },
-         {
-          "type": "StatusCard"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 27
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         },
-         {
-          "id": "WEAK_POWER",
-          "amount": 1
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:0:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 8,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "PREDATOR",
+        "id": "HAZE",
         "cost": 2,
-        "uid": 0
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       }
-      ],
-      "draw": 6,
-      "discard": 8,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 72,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Buff"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 26
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "play:4:1",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 8,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 1,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        },
-        {
-         "id": "DRAW_CARDS_NEXT_TURN_POWER",
-         "amount": 2
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       },
-       {
-        "id": "BUBBLE_BUBBLE",
-        "cost": 1,
-        "uid": 4
-       }
-      ],
-      "draw": 6,
-      "discard": 9,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 57,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Buff"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 26
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 8,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 0,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        },
-        {
-         "id": "DRAW_CARDS_NEXT_TURN_POWER",
-         "amount": 2
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 2
-       },
-       {
-        "id": "SURVIVOR",
-        "cost": 1,
-        "uid": 5
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 7
-       }
-      ],
-      "draw": 6,
-      "discard": 10,
-      "exhaust": 0,
-      "potions": [
-       null,
-       null,
-       null
-      ],
-      "enemies": [
-       {
-        "uid": 1,
-        "id": "VANTOM",
-        "hp": 57,
-        "max_hp": 173,
-        "block": 0,
-        "intents": [
-         {
-          "type": "Buff"
-         }
-        ],
-        "powers": [
-         {
-          "id": "POISON_POWER",
-          "amount": 35
-         },
-         {
-          "id": "STRENGTH_POWER",
-          "amount": 2
-         }
-        ]
-       }
-      ]
-     }
-    },
-    {
-     "chosen": "end_turn",
-     "searched": false,
-     "elapsed_ms": 0.0,
-     "obs": {
-      "round": 9,
-      "encounter": "VANTOM_BOSS",
-      "room": "Boss",
-      "act": 0,
-      "player": {
-       "hp": 39,
-       "max_hp": 70,
-       "block": 0,
-       "energy": 3,
-       "powers": [
-        {
-         "id": "DEXTERITY_POWER",
-         "amount": 5
-        }
-       ]
-      },
-      "hand": [
-       {
-        "id": "NEUTRALIZE",
-        "cost": 0,
         "up": 1,
-        "uid": 9
+        "uid": 5
        },
        {
-        "id": "DEADLY_POISON",
+        "id": "FOOTWORK",
         "cost": 1,
-        "up": 1,
-        "uid": 10
-       },
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 15
-       },
-       {
-        "id": "BACKFLIP",
-        "cost": 1,
-        "uid": 11
-       },
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 16
-       },
-       {
-        "id": "WOUND",
-        "cost": -1,
-        "uid": 14
-       },
-       {
-        "id": "DEFEND_SILENT",
-        "cost": 1,
-        "uid": 8
+        "uid": 6
        }
       ],
       "draw": 12,
@@ -2805,9 +154,2569 @@
       "enemies": [
        {
         "uid": 1,
-        "id": "VANTOM",
-        "hp": 22,
-        "max_hp": 173,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 252,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": []
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:6",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 1,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 0,
+       "energy": 1,
+       "powers": [
+        {
+         "id": "RETAIN_HAND_POWER",
+         "amount": 1
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "up": 1,
+        "uid": 0
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "FOOTWORK",
+        "cost": 1,
+        "uid": 6
+       }
+      ],
+      "draw": 12,
+      "discard": 1,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 252,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 6
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 1,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 0,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "RETAIN_HAND_POWER",
+         "amount": 1
+        },
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 2
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "up": 1,
+        "uid": 0
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       }
+      ],
+      "draw": 12,
+      "discard": 1,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 252,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 6
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:11",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 2,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 0,
+       "energy": 3,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 2
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "up": 1,
+        "uid": 0
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       },
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       },
+       {
+        "id": "FOOTWORK",
+        "cost": 1,
+        "uid": 11
+       }
+      ],
+      "draw": 7,
+      "discard": 1,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 246,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 13,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 5
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 1
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:1:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 2,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 0,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "up": 1,
+        "uid": 0
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       },
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       }
+      ],
+      "draw": 7,
+      "discard": 1,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 246,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 13,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 5
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 1
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:2",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 2,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 0,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "up": 1,
+        "uid": 0
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       },
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       }
+      ],
+      "draw": 7,
+      "discard": 2,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 242,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 13,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 5
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 3
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:10:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 2,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 9,
+       "energy": 1,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "up": 1,
+        "uid": 0
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       },
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       }
+      ],
+      "draw": 7,
+      "discard": 3,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 242,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 13,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 5
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 3
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 2,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 22,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "up": 1,
+        "uid": 0
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       }
+      ],
+      "draw": 7,
+      "discard": 4,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 233,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 13,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 5
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 3
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:13:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 3,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 9,
+       "energy": 3,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       },
+       {
+        "id": "BUBBLE_BUBBLE",
+        "cost": 1,
+        "uid": 13
+       },
+       {
+        "id": "SURVIVOR",
+        "cost": 1,
+        "uid": 14
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "BACKFLIP",
+        "cost": 1,
+        "uid": 16
+       },
+       {
+        "id": "DEADLY_POISON",
+        "cost": 1,
+        "uid": 17
+       }
+      ],
+      "draw": 1,
+      "discard": 10,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 228,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 15,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 4
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:14",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 3,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 9,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       },
+       {
+        "id": "SURVIVOR",
+        "cost": 1,
+        "uid": 14
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "BACKFLIP",
+        "cost": 1,
+        "uid": 16
+       },
+       {
+        "id": "DEADLY_POISON",
+        "cost": 1,
+        "uid": 17
+       }
+      ],
+      "draw": 1,
+      "discard": 11,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 228,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 15,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 13
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:17:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 3,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 21,
+       "energy": 1,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "DEADLY_POISON",
+        "cost": 1,
+        "uid": 17
+       }
+      ],
+      "draw": 1,
+      "discard": 13,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 228,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 15,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 13
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 3,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 21,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       }
+      ],
+      "draw": 1,
+      "discard": 14,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 228,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 15,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 18
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:14",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 4,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 6,
+       "energy": 3,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 18
+       },
+       {
+        "id": "SURVIVOR",
+        "cost": 1,
+        "uid": 14
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "DEADLY_POISON",
+        "cost": 1,
+        "uid": 17
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       }
+      ],
+      "draw": 12,
+      "discard": 0,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 210,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 16,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 17
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 1
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 4
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:17:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 4,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 18,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 18
+       },
+       {
+        "id": "DEADLY_POISON",
+        "cost": 1,
+        "uid": 17
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       }
+      ],
+      "draw": 12,
+      "discard": 2,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 210,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 16,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 17
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 1
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 4
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:9",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 4,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 18,
+       "energy": 1,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 18
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       }
+      ],
+      "draw": 12,
+      "discard": 3,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 210,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 16,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 22
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 1
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 4
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 4,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 27,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 18
+       }
+      ],
+      "draw": 12,
+      "discard": 4,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 210,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 16,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 22
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 1
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 4
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:12",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 5,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 10,
+       "energy": 3,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       }
+      ],
+      "draw": 7,
+      "discard": 5,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 188,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 24,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 21
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 6
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:2",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 5,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 19,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       }
+      ],
+      "draw": 7,
+      "discard": 6,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 188,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 24,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 21
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 6
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:15",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 5,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 28,
+       "energy": 1,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       }
+      ],
+      "draw": 7,
+      "discard": 7,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 188,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 24,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 21
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 6
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:1:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 5,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 37,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       }
+      ],
+      "draw": 7,
+      "discard": 8,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 188,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 24,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 21
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 6
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 5,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 37,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       }
+      ],
+      "draw": 7,
+      "discard": 9,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 184,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 18,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 21
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 6
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:13:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 6,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 10,
+       "energy": 3,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       },
+       {
+        "id": "BUBBLE_BUBBLE",
+        "cost": 1,
+        "uid": 13
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "up": 1,
+        "uid": 5
+       },
+       {
+        "id": "BACKFLIP",
+        "cost": 1,
+        "uid": 16
+       }
+      ],
+      "draw": 1,
+      "discard": 10,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 163,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 19,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 20
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 8
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 1
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:5",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 6,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 10,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "up": 1,
+        "uid": 5
+       },
+       {
+        "id": "BACKFLIP",
+        "cost": 1,
+        "uid": 16
+       }
+      ],
+      "draw": 1,
+      "discard": 11,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 163,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 19,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 29
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 8
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 1
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 6,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 10,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "BACKFLIP",
+        "cost": 1,
+        "uid": 16
+       }
+      ],
+      "draw": 1,
+      "discard": 12,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 163,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 19,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 35
+         },
+         {
+          "id": "PLOW_POWER",
+          "amount": 150
+         },
+         {
+          "id": "STRENGTH_POWER",
+          "amount": 8
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 3
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:0:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 7,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 10,
+       "energy": 3,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "up": 1,
+        "uid": 0
+       },
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 18
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       }
+      ],
+      "draw": 12,
+      "discard": 0,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 128,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Debuff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 34
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:10:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 7,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 10,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "FISTICUFFS",
+        "cost": 1,
+        "up": 1,
+        "uid": 10
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 18
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       }
+      ],
+      "draw": 12,
+      "discard": 1,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 119,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Debuff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 34
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:18:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 7,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 23,
+       "energy": 1,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 18
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       }
+      ],
+      "draw": 12,
+      "discard": 2,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 110,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Debuff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 34
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:1:1",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 7,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 23,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       },
+       {
+        "id": "NEUTRALIZE",
+        "cost": 0,
+        "up": 1,
+        "uid": 1
+       }
+      ],
+      "draw": 12,
+      "discard": 3,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 104,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Debuff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 34
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 7,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 23,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 2
+       }
+      ],
+      "draw": 12,
+      "discard": 4,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 100,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Debuff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 34
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 4
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:16",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 8,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 10,
+       "energy": 3,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        },
+        {
+         "id": "RINGING_POWER",
+         "amount": 1
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "DEADLY_POISON",
+        "cost": 1,
+        "uid": 17
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       },
+       {
+        "id": "SURVIVOR",
+        "cost": 1,
+        "uid": 14
+       },
+       {
+        "id": "BACKFLIP",
+        "cost": 1,
+        "uid": 16
+       }
+      ],
+      "draw": 7,
+      "discard": 5,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 66,
+        "max_hp": 252,
         "block": 0,
         "intents": [
          {
@@ -2819,10 +2728,366 @@
         "powers": [
          {
           "id": "POISON_POWER",
-          "amount": 34
+          "amount": 33
          },
          {
-          "id": "STRENGTH_POWER",
+          "id": "WEAK_POWER",
+          "amount": 3
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 8,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 19,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        },
+        {
+         "id": "RINGING_POWER",
+         "amount": 1
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "STRIKE_SILENT",
+        "cost": 1,
+        "uid": 3
+       },
+       {
+        "id": "DEADLY_POISON",
+        "cost": 1,
+        "uid": 17
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       },
+       {
+        "id": "SURVIVOR",
+        "cost": 1,
+        "uid": 14
+       },
+       {
+        "id": "BUBBLE_BUBBLE",
+        "cost": 1,
+        "uid": 13
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "uid": 7
+       }
+      ],
+      "draw": 5,
+      "discard": 6,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 66,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 11,
+          "hits": 1
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 33
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 3
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:8",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 9,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 8,
+       "energy": 3,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 8
+       },
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "up": 1,
+        "uid": 5
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       }
+      ],
+      "draw": 11,
+      "discard": 0,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 33,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 12,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 32
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "play:5",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 9,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 17,
+       "energy": 2,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "HAZE",
+        "cost": 2,
+        "up": 1,
+        "uid": 5
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       }
+      ],
+      "draw": 11,
+      "discard": 1,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 33,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 12,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 32
+         },
+         {
+          "id": "WEAK_POWER",
+          "amount": 2
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "chosen": "end_turn",
+     "searched": false,
+     "elapsed_ms": 0.0,
+     "obs": {
+      "round": 9,
+      "encounter": "CEREMONIAL_BEAST_BOSS",
+      "room": "Boss",
+      "act": 0,
+      "player": {
+       "hp": 58,
+       "max_hp": 70,
+       "block": 17,
+       "energy": 0,
+       "powers": [
+        {
+         "id": "DEXTERITY_POWER",
+         "amount": 4
+        }
+       ]
+      },
+      "hand": [
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 15
+       },
+       {
+        "id": "PECK",
+        "cost": 1,
+        "uid": 4
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 9
+       },
+       {
+        "id": "DEFEND_SILENT",
+        "cost": 1,
+        "uid": 12
+       }
+      ],
+      "draw": 11,
+      "discard": 2,
+      "exhaust": 0,
+      "potions": [
+       null,
+       null,
+       null
+      ],
+      "enemies": [
+       {
+        "uid": 1,
+        "id": "CEREMONIAL_BEAST",
+        "hp": 33,
+        "max_hp": 252,
+        "block": 0,
+        "intents": [
+         {
+          "type": "Attack",
+          "damage": 12,
+          "hits": 1
+         },
+         {
+          "type": "Buff"
+         }
+        ],
+        "powers": [
+         {
+          "id": "POISON_POWER",
+          "amount": 38
+         },
+         {
+          "id": "WEAK_POWER",
           "amount": 4
          }
         ]

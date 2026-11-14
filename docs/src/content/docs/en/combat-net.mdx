@@ -7,7 +7,7 @@ import OutcomeHead from '../../../components/combat/OutcomeHead.svelte';
 
 Search often stops inside a combat that is not over, and it then needs to know what the current position is worth. The **combat net** reads the position and predicts how the combat will end: death, or a win, with how much more HP lost and whether the potions in hand are still there. Each ending corresponds to one concrete run as it stands after the combat. V prices that run, and the prices are weighted by probability. The combat net says only what will happen. What it is worth is always for V to say.
 
-The figure below shows its predictions on 16 real positions. The red bar is the chance of death, the other 50 bars are the endings of a win, and the grey ones cannot happen. For example, on turn 11 against the boss Knowledge Demon, the Silent has 31/70 HP left: the net gives a 48% chance of death and, in case of a win, 8.5 HP left on average.
+The figure below shows its predictions on 16 real positions. The red bar is the chance of death, the other 50 bars are the endings of a win, and the grey ones cannot happen. For example, on turn 1 against the elite The Decimillipede, the Necrobinder has only 19/66 HP left: the net gives a 93% chance of death and, in case of a win, 4.5 HP left on average.
 
 <OutcomeHead client:visible lang="en" />
 
@@ -31,9 +31,9 @@ The number of things in a combat is not fixed: the hand may hold 3 cards or 10. 
 
 1. **Each thing becomes 64 numbers.** A card, a status effect or an enemy is first looked up in a table by what kind it is, then adjusted by its own numbers.
 2. **Things in the same pile are added up.** Each card passes through the same small network by itself, and the results for one pile are then added together. Adding ignores order and works for any number of cards. The net uses a sum and not an average because only a sum tells a full hand from a thin one.
-3. **Joined end to end, then through two layers.** All the sums are joined into 1,292 numbers, which pass through a network of two layers with 512 units each. Only here do the cards, the enemies and the HP meet for the first time.
+3. **Joined end to end, then through two layers.** All the sums are joined into 1,294 numbers, which pass through a network of two layers with 512 units each. Only here do the cards, the enemies and the HP meet for the first time.
 
-The whole network has about 1.74 million weights. The five characters share one network, and the character is only a tag in the input.
+The whole network has about 1.85 million weights. The six characters share one network, and the character is only a tag in the input.
 
 <ArchDiagram client:visible lang="en" net="combat" />
 
@@ -54,9 +54,9 @@ The net does not output a score directly, for three reasons. No number has to be
 
 ## How it learns
 
-A sample is the start of each turn in self-play, and its label is how that combat really ended. The net the champion uses learned from more than twenty thousand runs and about 2.12 million turns. One run in five is held back from learning and used only for checking.
+A sample is the start of each turn in self-play, and its label is how that combat really ended. The net the champion uses learned from nearly thirty thousand runs and about 2.95 million turns. One run in five is held back from learning and used only for checking.
 
-On the runs held back for checking, among positions from the same encounter and the same turn, the net tells death from survival with a score of about 0.93. On this score 1 is perfect, 0.5 is guessing, and looking at HP alone gives 0.69. The death rate it predicts is 4.65%, and the real one is 4.50%.
+On the runs held back for checking, among positions from the same encounter and the same turn, the net tells death from survival with a score of about 0.92. On this score 1 is perfect, 0.5 is guessing, and looking at HP alone gives 0.73. The death rate it predicts is 5.79%, and the real one is 5.47%.
 
 ## What it cannot see
 

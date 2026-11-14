@@ -5,21 +5,29 @@
  },
  "report": {
   "env": "SL",
-  "seedSet": "promotion-1-100",
-  "runs": 100,
-  "won": 47,
+  "ascension": 10,
+  "seedSet": "promotion-1-50",
+  "runs": 35,
+  "won": 0,
   "bossesReached": [
-   95,
-   83,
-   74
+   25,
+   10,
+   3
   ],
   "bossesBeaten": [
-   87,
-   75,
-   47
+   13,
+   5,
+   0
   ],
   "deaths": {
    "byFloor": [
+    {
+     "floor": 7,
+     "Boss": 0,
+     "Elite": 0,
+     "Monster": 1,
+     "outside": 0
+    },
     {
      "floor": 8,
      "Boss": 0,
@@ -42,57 +50,78 @@
      "outside": 0
     },
     {
+     "floor": 13,
+     "Boss": 0,
+     "Elite": 1,
+     "Monster": 1,
+     "outside": 0
+    },
+    {
      "floor": 14,
-     "Boss": 0,
-     "Elite": 2,
-     "Monster": 0,
-     "outside": 0
-    },
-    {
-     "floor": 17,
-     "Boss": 8,
-     "Elite": 0,
-     "Monster": 0,
-     "outside": 0
-    },
-    {
-     "floor": 24,
-     "Boss": 0,
-     "Elite": 2,
-     "Monster": 0,
-     "outside": 0
-    },
-    {
-     "floor": 25,
-     "Boss": 0,
-     "Elite": 0,
-     "Monster": 1,
-     "outside": 0
-    },
-    {
-     "floor": 29,
-     "Boss": 0,
-     "Elite": 0,
-     "Monster": 1,
-     "outside": 0
-    },
-    {
-     "floor": 33,
-     "Boss": 8,
-     "Elite": 0,
-     "Monster": 0,
-     "outside": 0
-    },
-    {
-     "floor": 42,
      "Boss": 0,
      "Elite": 1,
      "Monster": 0,
      "outside": 0
     },
     {
+     "floor": 15,
+     "Boss": 0,
+     "Elite": 3,
+     "Monster": 0,
+     "outside": 0
+    },
+    {
+     "floor": 17,
+     "Boss": 12,
+     "Elite": 0,
+     "Monster": 0,
+     "outside": 0
+    },
+    {
+     "floor": 20,
+     "Boss": 0,
+     "Elite": 0,
+     "Monster": 1,
+     "outside": 0
+    },
+    {
+     "floor": 24,
+     "Boss": 0,
+     "Elite": 0,
+     "Monster": 1,
+     "outside": 0
+    },
+    {
+     "floor": 27,
+     "Boss": 0,
+     "Elite": 1,
+     "Monster": 0,
+     "outside": 0
+    },
+    {
+     "floor": 33,
+     "Boss": 5,
+     "Elite": 0,
+     "Monster": 0,
+     "outside": 0
+    },
+    {
+     "floor": 39,
+     "Boss": 0,
+     "Elite": 0,
+     "Monster": 2,
+     "outside": 0
+    },
+    {
      "floor": 48,
-     "Boss": 27,
+     "Boss": 1,
+     "Elite": 0,
+     "Monster": 0,
+     "outside": 0
+    },
+    {
+     "floor": 49,
+     "Boss": 2,
      "Elite": 0,
      "Monster": 0,
      "outside": 0

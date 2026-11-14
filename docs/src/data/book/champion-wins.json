@@ -6,34 +6,40 @@
  "env": "SL",
  "characters": [
   {
-   "character": "SILENT",
-   "ascension": 0,
-   "runs": 100,
-   "won": 92
-  },
-  {
    "character": "IRONCLAD",
-   "ascension": 0,
-   "runs": 100,
-   "won": 82
+   "ascension": 10,
+   "runs": 36,
+   "won": 13
   },
   {
-   "character": "REGENT",
-   "ascension": 0,
-   "runs": 100,
-   "won": 71
+   "character": "SILENT",
+   "ascension": 10,
+   "runs": 35,
+   "won": 11
   },
   {
    "character": "DEFECT",
-   "ascension": 0,
-   "runs": 100,
-   "won": 68
+   "ascension": 10,
+   "runs": 144,
+   "won": 29
+  },
+  {
+   "character": "REGENT",
+   "ascension": 10,
+   "runs": 37,
+   "won": 6
+  },
+  {
+   "character": "FOOL",
+   "ascension": 10,
+   "runs": 39,
+   "won": 1
   },
   {
    "character": "NECROBINDER",
-   "ascension": 0,
-   "runs": 100,
-   "won": 47
+   "ascension": 10,
+   "runs": 35,
+   "won": 0
   }
  ]
 }

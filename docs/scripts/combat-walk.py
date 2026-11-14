@@ -32,10 +32,10 @@ def tokens_of(obs: dict, history: list) -> dict:
 CHAMPION = json.loads((ROOT / "eval/champions/sl.json").read_text())
 FILE = ROOT / CHAMPION["options"]["combat-net"]
 OUT = ROOT / "docs/src/data/combat-walk.json"
-MAIN = 11  # the only test state holding a potion (the Regent against a Slimed Berserker): every step has something to show
-# The fight with the largest chance of a death (the Silent against the Knowledge Demon, a boss), and the lowest HP of the
-# 16 (the Ironclad at 14 of 86 HP against the Decimillipede, an elite)
-OTHERS = {"danger": 3, "mask": 2}
+MAIN = 10  # a test state holding one potion (the Necrobinder against the Terror Eel, an elite): every step has something to show
+# The fight with the largest chance of a death (the Necrobinder at 19 of 66 HP against the Decimillipede, an elite), and
+# the lowest HP of the 16 (the Regent at 3 of 86 HP against the Terror Eel, an elite)
+OTHERS = {"danger": 15, "mask": 3}
 LOST_HP = 10  # the sibling state of the search step
 END_HP = 30  # the label's ending: a win at this HP, which the state's file does not hold
 
@@ -51,7 +51,7 @@ def load(file: dict) -> tuple[Net, dict]:
 def batch_of(test: dict, index: dict) -> Batch:
     tokens = tokens_of(test["obs"], test["history"])
     held = sum(p is not None for p in test["obs"]["potions"])
-    return Batch([{"tokens": tokens, "class": 0, "potion_used": [0] * held, "worth": None}], index, "cpu")
+    return Batch([{"tokens": common.pack(tokens), "class": 0, "potion_used": [0] * held, "worth": None}], index, "cpu")
 
 
 def inputs_of(b: Batch) -> dict[str, torch.Tensor]:

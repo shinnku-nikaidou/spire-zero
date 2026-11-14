@@ -46,7 +46,7 @@ The room the run is in now is not counted. Positions recorded in a room all come
 
 All of the above is joined into 1,033 numbers, which pass through a network of two layers with 512 units each. Before this point the deck has not seen the relics and the map has not seen the HP. They meet only here.
 
-The whole network has about 1.14 million weights. The five characters and every Ascension level share one set of weights: the character is a tag and the Ascension level is a number.
+The whole network has about 1.22 million weights. The six characters and every Ascension level share one set of weights: the character is a tag and the Ascension level is a number.
 
 ## Why it outputs a risk for each floor
 
@@ -56,7 +56,7 @@ This is easier to learn than outputting the chance of winning directly. Every fl
 
 It also works better than predicting which floor the run will reach. With the floor as the target, V would favour play that reaches the late floors safely and yet never wins.
 
-The figure below takes one real position through the whole network: the Defect on floor 24 with 50/75 HP. V gives it a 97% chance of reaching the act 2 boss and a 51% chance of beating it, and the chance of winning the whole run in the end is 17%.
+The figure below takes one real position through the whole network: the Silent at Ascension 6 on floor 15 with 25/70 HP. V gives it a 92% chance of beating the act 1 boss, a 56% chance of reaching the act 3 boss and a 76% chance of beating it, and the chance of winning the whole run in the end is 42%.
 
 <NetWalk client:visible lang="en" />
 
@@ -68,7 +68,7 @@ The decisions of one run share one outcome, so each sample is weighted by 1 divi
 
 During training the network predicts one more thing: how much HP each of the next six combats will cost. This only gives the network more places in a run where it can check its answers. It is not written into the network file and takes no part in decisions.
 
-The champion's V learned from more than twenty thousand runs and about 3.85 million samples. On the runs held back for checking, the error of its predicted chance of winning is 0.128, against 0.183 for a baseline that knows only the floor. Smaller is better. But this score shows only that V can tell good runs from bad ones. It does not guarantee that V ranks the options of one decision correctly. So in the end, whether a V is good is judged by the results it plays.
+The champion's V learned from nearly thirty thousand runs and about 4.98 million samples. On the runs held back for checking, the error of its predicted chance of winning is 0.091, against 0.149 for a baseline that knows only the floor. Smaller is better. But this score shows only that V can tell good runs from bad ones. It does not guarantee that V ranks the options of one decision correctly. So in the end, whether a V is good is judged by the results it plays.
 
 ## What it cannot express
 
