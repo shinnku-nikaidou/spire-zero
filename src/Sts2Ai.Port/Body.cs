@@ -72,6 +72,7 @@ public sealed partial class Body
     {
         if (op != null) ScanAssignments(op);
         if (op != null) nullLocals = World.NullLocals(op, w);
+        bodyOp = op;
         nullReturn = w.ReturnsNullColl(m);
         severalStatements = op is IMethodBodyOperation { BlockBody.Operations.Length: > 1 };
         // A parameter of a presentation type is not there in Rust: what uses it is presentation.
@@ -670,6 +671,44 @@ public sealed partial class Body
             if (Presence(init) is { } there) aliasPresence[local] = there;
             return;
         }
+        // A pair's value, in a loop over a dictionary by key: the dictionary's own value.
+        if (World.CollOf(local.Type) != World.Coll.None && !reassigned.Contains(local)
+            && Unwrapped(init) is IPropertyReferenceOperation { Property.Name: "Value", Instance: ILocalReferenceOperation { Local: var pl } } && pairs.TryGetValue(pl, out var pv))
+        {
+            aliases[local] = pv.Value;
+            return;
+        }
+        // A copy of a collection of collections (`results.ToList()`) whose items are changed in place, and that is
+        // not changed itself: C# copies the outer collection only, so its items are the source's own, and the local
+        // is the source.
+        if (World.CollOf(local.Type) == World.Coll.Vec && !reassigned.Contains(local) && bodyOp != null && local is ILocalSymbol outer
+            && init is IInvocationOperation { TargetMethod.Name: "ToList" or "ToArray", Arguments.Length: <= 1 } copy
+            && (copy.Instance ?? (copy.Arguments.Length == 1 ? copy.Arguments[0].Value : null)) is { } copied && FieldPlaceOf(copied) is { } source
+            && w.ChangesOf(outer, bodyOp).Count == 0
+            && bodyOp.Descendants().OfType<IForEachLoopOperation>().Any(fe => fe.Collection is var fc && Unwrapped(fc) is ILocalReferenceOperation { Local: var over } && Eq.Equals(over, outer)
+                && fe.LoopControlVariable is IVariableDeclaratorOperation { Symbol: var item } && w.ChangesOf(item, fe.Body).Count > 0))
+        {
+            aliases[local] = source;
+            w.Rep.Count("copies of a collection of collections whose items are changed in place: the source itself");
+            return;
+        }
+        // A list read out of a field of an object that takes code to reach (`GetPile(owner).Cards`,
+        // `GetInternalData<Data>().list`): the object is reached once, here, as C# does, and the local is that field.
+        if (World.CollOf(local.Type) != World.Coll.None && !reassigned.Contains(local) && !declaredAhead.Contains(local) && UnstableReceiver(init) is { } holder)
+        {
+            string h = Tmp("holder");
+            pinned[holder] = h;
+            string? held = FieldPlaceOf(init);
+            pinned.Remove(holder);
+            if (held != null)
+            {
+                sb.Append($"let {h} = {Expr(holder)};\n");
+                aliases[local] = held;
+                Written++;
+                w.Rep.Count("lists read out of a field of an object reached by code: the object reached once, the local that field");
+                return;
+            }
+        }
         // One of two lists of the state, picked by a test (`side == Player ? _allies : _enemies`): the local is the
         // one picked, and the test is made once, here.
         if (World.CollOf(local.Type) != World.Coll.None && !reassigned.Contains(local) && init is IConditionalOperation { WhenFalse: { } otherwise } pick
@@ -699,6 +738,12 @@ public sealed partial class Body
         {
             aliases[local] = Place(span.Arguments[0].Value);
             return;
+        }
+        if (World.CollOf(local.Type) != World.Coll.None && bodyOp != null && local is ILocalSymbol cl)
+        {
+            collSources ??= World.CollectionSources(bodyOp);
+            if (w.HoldsState(init, collSources, new HashSet<ILocalSymbol>(SymbolEqualityComparer.Default)))
+                w.Rep.Alias(Where, init, $"{local.Name}: read as a copy of a collection the state holds; C# would see later changes made to it under another name");
         }
         try
         {
@@ -769,6 +814,7 @@ public sealed partial class Body
 
     private void If(IConditionalOperation cond, StringBuilder sb)
     {
+        if (GetOrInsert(cond, sb)) return;
         string test;
         try { test = Expr(cond.Condition); }
         catch (Dropped d)
@@ -848,6 +894,38 @@ public sealed partial class Body
             return;
         }
         if (lazy?.Walk != null) { ForEachWalk(fe, local, lazy.Walk, run, sb); return; }
+        // The values of a dictionary of collections, or its pairs, where the loop changes a value in place: C# changes
+        // the dictionary's own value, so the loop goes by key and the value is the dictionary's own there.
+        if (lazy == null && Unwrapped(fe.Collection) is var walked && (walked is IPropertyReferenceOperation { Property.Name: "Values", Instance: { } ofValues } ? ofValues : walked) is var dict
+            && World.CollOf(dict.Type) == World.Coll.Dict && ItemsPlace(dict) is { } dictPlace
+            && (walked != dict ? World.CollOf(local.Type) != World.Coll.None && w.ChangesOf(local, fe.Body).Count > 0 : PairValueChanged(local, fe.Body)))
+        {
+            string k = Tmp("k");
+            string value = $"(*{dictPlace}.at(&{k}))";
+            if (walked != dict) aliases[local] = value;
+            else pairs[local] = (k, value);
+            loops.Push(($"break {label};", $"continue {label};"));
+            string byKey = Sub(fe.Body);
+            loops.Pop();
+            sb.Append($"{label}: for {k} in {dictPlace}.keys() {{\n{byKey}}}\n");
+            w.Rep.Count("loops over a dictionary of collections that change a value in place: by key, the value in its place");
+            Written++;
+            return;
+        }
+        // An item of a collection of collections that the loop changes in place: C# changes the collection's own
+        // item, so the loop goes by position and the item is the collection's place there.
+        if (lazy == null && World.CollOf(local.Type) != World.Coll.None && w.ChangesOf(local, fe.Body).Count > 0 && ItemsPlace(fe.Collection) is { } items)
+        {
+            string at = Tmp("at"), n = Tmp("n");
+            aliases[local] = $"{items}[{at}]";
+            loops.Push(($"break {label};", $"continue {label};"));
+            string changing = Sub(fe.Body);
+            loops.Pop();
+            sb.Append($"let {n} = {items}.len();\n{label}: for {at} in 0..{n} {{\n{changing}}}\n");
+            w.Rep.Count("loops over a collection of collections that change an item in place: by position, the item in its place");
+            Written++;
+            return;
+        }
         loops.Push(($"break {label};", run.Next));
         string body = Sub(fe.Body);
         loops.Pop();
@@ -856,6 +934,72 @@ public sealed partial class Body
         if (lazy == null) sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
         else sb.Append($"{run.Before}{label}: for {LazyFirst} in {coll} {{\n{run.Code}let mut {NameOf(local)}: {T(local.Type)} = {run.Item};\n{body}}}{new string('}', run.Nested)}\n");
         Written++;
+    }
+
+    /// <summary>`if (!d.TryGetValue(k, out v)) { v = new T(); d[k] = v; }` with v changed after: C# then has one
+    /// collection under two names, the dictionary's value and v. The new collection is put in when the key is not
+    /// there, and v is the dictionary's own value at the key, the key reached once.</summary>
+    private bool GetOrInsert(IConditionalOperation cond, StringBuilder sb)
+    {
+        if (cond.WhenFalse != null || bodyOp == null) return false;
+        if (Unwrapped(cond.Condition) is not IUnaryOperation { OperatorKind: UnaryOperatorKind.Not, Operand: var asked }
+            || Unwrapped(asked) is not IInvocationOperation { TargetMethod.Name: "TryGetValue", Instance: { } dict, Arguments: [var keyArg, var outArg] }
+            || World.CollOf(dict.Type) != World.Coll.Dict)
+            return false;
+        if ((outArg.Value is IDeclarationExpressionOperation de ? de.Expression : outArg.Value) is not ILocalReferenceOperation { Local: var v } || World.CollOf(v.Type) == World.Coll.None)
+            return false;
+        var stmts = cond.WhenTrue is IBlockOperation b ? b.Operations.ToList() : [cond.WhenTrue];
+        if (stmts is not [IExpressionStatementOperation { Operation: ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var made }, Value: var fresh } },
+                IExpressionStatementOperation { Operation: ISimpleAssignmentOperation { Target: IPropertyReferenceOperation { Property.IsIndexer: true, Instance: { } dict2, Arguments: [var key2] }, Value: var stored } }]
+            || !Eq.Equals(made, v) || Unwrapped(stored) is not ILocalReferenceOperation { Local: var put } || !Eq.Equals(put, v)
+            || dict2.Syntax.ToString() != dict.Syntax.ToString() || key2.Value.Syntax.ToString() != keyArg.Value.Syntax.ToString())
+            return false;
+        collSources ??= World.CollectionSources(bodyOp);
+        if (w.HoldsState(fresh, collSources, new HashSet<ILocalSymbol>(SymbolEqualityComparer.Default)) || w.ChangesOf(v, bodyOp).Count == 0 || ItemsPlace(dict) is not { } d)
+            return false;
+        // v is set nowhere but here.
+        if (bodyOp.Descendants().Count(o => o is ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var t } } && Eq.Equals(t, v)) != 1) return false;
+        string k = Tmp("key");
+        sb.Append($"let {k} = {Expr(keyArg.Value)};\nif !{d}.contains_key(&{k}) {{\n{Mutable(d)}.set({k}.clone(), {Expr(fresh)});\n}}\n");
+        aliases[v] = $"(*{d}.at(&{k}))";
+        w.Rep.Count("get-or-insert of a collection in a dictionary, changed after: the local is the dictionary's own value");
+        Written++;
+        return true;
+    }
+
+    /// <summary>Whether a loop over a dictionary's pairs changes a pair's value in place, itself or through a local
+    /// set to it.</summary>
+    private bool PairValueChanged(ILocalSymbol pair, IOperation body)
+    {
+        bool IsValue(IOperation? o) => o != null && Unwrapped(o) is IPropertyReferenceOperation { Property.Name: "Value", Instance: ILocalReferenceOperation { Local: var p } } && Eq.Equals(p, pair);
+        if (World.CollOf((pair.Type as INamedTypeSymbol)?.TypeArguments.ElementAtOrDefault(1)) == World.Coll.None) return false;
+        foreach (var d in body.DescendantsAndSelf())
+        {
+            if (d is IVariableDeclaratorOperation { Symbol: var l } vd && IsValue(vd.Initializer?.Value ?? (vd.Parent as IVariableDeclarationOperation)?.Initializer?.Value)
+                && !reassigned.Contains(l) && w.ChangesOf(l, body).Count > 0) return true;
+            if (d is IInvocationOperation { Instance: var on } inv && IsValue(on) && World.IsSource(inv.TargetMethod.ContainingType) == false) return true;
+        }
+        return false;
+    }
+
+    private static IOperation Unwrapped(IOperation o)
+    {
+        while (o is IConversionOperation { IsTryCast: false } cv) o = cv.Operand;
+        return o;
+    }
+
+    /// <summary>The place a loop's collection is, to reach its items where they are: a local, a parameter, a
+    /// field; null for a value made for the loop.</summary>
+    private string? ItemsPlace(IOperation coll)
+    {
+        while (coll is IConversionOperation { IsTryCast: false } cv && World.CollOf(cv.Operand.Type) != World.Coll.None) coll = cv.Operand;
+        if (World.CollOf(coll.Type) is not (World.Coll.Vec or World.Coll.Dict)) return null;
+        return coll switch
+        {
+            ILocalReferenceOperation l when !droppedLocals.Contains(l.Local) && !nullLocals.Contains(l.Local) && !lazyLocals.ContainsKey(l.Local) => Ref(coll),
+            IParameterReferenceOperation => Ref(coll),
+            _ => FieldPlaceOf(coll),
+        };
     }
 
     /// <summary>Locals that hold a LINQ chain not yet evaluated in C# (`IEnumerable<T> xs = list.Where(f);`) and are

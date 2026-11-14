@@ -274,6 +274,57 @@ public sealed partial class Body
     /// <summary>The locals of collection type that can be null, as an Option (World.NullLocals), and whether the
     /// member's own result can be (World.ReturnsNullColl).</summary>
     private HashSet<ILocalSymbol> nullLocals = new(Eq);
+
+    /// <summary>The body being written, where each collection local gets its value, the locals already looked at,
+    /// and the target of the assignment being written (a local set, not changed).</summary>
+    private IOperation? bodyOp, assignTarget;
+    private Dictionary<ILocalSymbol, List<IOperation>>? collSources;
+    private readonly HashSet<ISymbol> aliasChecked = new(Eq);
+
+    /// <summary>A collection local changed in place that the rules for a second name (Body.Declare, ForEach,
+    /// GetOrInsert) left a copy: when C# has the same collection under another name there (a collection the state
+    /// holds, or one stored into it), the change would not reach it, and the member is not translated.</summary>
+    private void AliasCheck(ILocalSymbol l, IOperation site)
+    {
+        if (bodyOp == null || World.CollOf(l.Type) == World.Coll.None || aliases.ContainsKey(l) || !aliasChecked.Add(l)) return;
+        collSources ??= World.CollectionSources(bodyOp);
+        string Line(IOperation o) => o.Syntax.ToString().Replace("\r", "").Split('\n')[0].Trim();
+        bool State(IOperation v) => w.HoldsState(v, collSources, new HashSet<ILocalSymbol>(SymbolEqualityComparer.Default));
+        var from = collSources.GetValueOrDefault(l)?.FirstOrDefault(State);
+        // Every change made to a collection of the local's own making (`x = field; if (x == null) { x = new(); x.Add(..); }`).
+        if (from != null && w.ChangesOf(l, bodyOp).All(ch => OnOwn(l, ch, State))) from = null;
+        string? why = from != null ? $"may be a collection the state holds ({Line(from)})"
+            : w.StoredThenChanged(l, bodyOp) is { } st ? $"stored into the state ({Line(st)}), then changed" : null;
+        if (why == null) return;
+        w.Rep.Alias(Where, site, $"{l.Name}: {why}; not translated");
+        throw new Unsupported($"a collection changed in place under a second name ({l.Name}: {why})");
+    }
+
+    /// <summary>Whether the collection a change is made to is one the local was last set to a new collection of its
+    /// own, in a block around the change, with no loop around the change setting it from the state.</summary>
+    private static bool OnOwn(ILocalSymbol l, IOperation change, Func<IOperation, bool> state)
+    {
+        bool Sets(IOperation o, out IOperation? value)
+        {
+            value = o switch
+            {
+                IExpressionStatementOperation { Operation: ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var t }, Value: var v } } when Eq.Equals(t, l) => v,
+                IVariableDeclarationGroupOperation g => g.Declarations.SelectMany(d => d.Declarators).FirstOrDefault(d => Eq.Equals(d.Symbol, l)) is { } vd ? vd.Initializer?.Value ?? (vd.Parent as IVariableDeclarationOperation)?.Initializer?.Value : null,
+                _ => null,
+            };
+            return value != null;
+        }
+        for (IOperation? x = change; x?.Parent != null; x = x.Parent)
+        {
+            if (x.Parent is ILoopOperation loop && loop.DescendantsAndSelf().Any(o => o is ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var t }, Value: var v } && Eq.Equals(t, l) && state(v)))
+                return false;
+            if (x.Parent is not IBlockOperation block) continue;
+            int at = block.Operations.IndexOf(x);
+            for (int i = at - 1; i >= 0; i--)
+                if (Sets(block.Operations[i], out var value)) return !state(value!);
+        }
+        return false;
+    }
     private bool nullReturn;
     /// <summary>Set for the one call whose Option itself is wanted, not the collection in it.</summary>
     private bool takeOption;
@@ -717,8 +768,12 @@ public sealed partial class Body
                 // collection made for the call alone has nowhere to come back to.
                 string o = Tmp("o");
                 outs.Add(o);
+                if (a.Value is ILocalReferenceOperation changed) AliasCheck(changed.Local, a);
+                var was = assignTarget;
+                assignTarget = a.Value;
                 try { after.Add($"{Place(a.Value)} = {o};"); }
                 catch (Unsupported) { }
+                finally { assignTarget = was; }
             }
             // A task run on the side is what the task is: one that is presentation makes the whole call presentation.
             string code = def is { Name: "RunSafely", ContainingType.Name: "TaskHelper" } ? Expr(a.Value) : Guard(a.Value, $"a call of {type.Name}.{m.Name} with presentation");
@@ -829,10 +884,13 @@ public sealed partial class Body
     {
         switch (op)
         {
-            case ILocalReferenceOperation l when nullLocals.Contains(l.Local): return $"(*rt::nn_mut(&mut {NameOf(l.Local)}))";
+            case ILocalReferenceOperation l when nullLocals.Contains(l.Local):
+                if (!ReferenceEquals(op, assignTarget)) AliasCheck(l.Local, op);
+                return $"(*rt::nn_mut(&mut {NameOf(l.Local)}))";
             case ILocalReferenceOperation l:
                 if (droppedLocals.Contains(l.Local)) throw new Dropped(l.Local.Name);
-                return aliases.TryGetValue(l.Local, out var a) ? a.Replace("{ &", "{ &mut ").Replace("::of(", "::of_mut(") : NameOf(l.Local);
+                if (!ReferenceEquals(op, assignTarget)) AliasCheck(l.Local, op);
+                return aliases.TryGetValue(l.Local, out var a) ? Mutable(a) : NameOf(l.Local);
             case IParameterReferenceOperation p:
                 if (droppedLocals.Contains(p.Parameter)) throw new Dropped(p.Parameter.Name);
                 return NameOf(p.Parameter);
@@ -845,6 +903,7 @@ public sealed partial class Body
                 && p.ContainingType.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => Eq.Equals(f.AssociatedSymbol, p.OriginalDefinition)) is { } auto:
                 return $"{Place(pr.Instance!)}.{World.FieldName(auto)}";
             case IPropertyReferenceOperation pr when FieldPlaceOf(pr) is { } fp: return fp.Replace("::of(", "::of_mut(");
+            case IPropertyReferenceOperation { Property.Name: "Value", Instance: ILocalReferenceOperation { Local: var pl } } when pairs.TryGetValue(pl, out var pv): return Mutable(pv.Value);
             // A collection its property makes on demand: the getter runs (and makes it), then the field it returned is the place.
             case IPropertyReferenceOperation { Property: var lazy } lp when Forwarded(lazy.OriginalDefinition) == null && MadeOnDemand(lazy.OriginalDefinition) is { } made
                 && w.StateField(made) is { } madeName && StableReceiver(lp.Instance) && !w.IsValue(made.ContainingType):
@@ -868,6 +927,13 @@ public sealed partial class Body
         }
     }
 
+    /// <summary>A place read where it is, to be changed: the same objects reached for writing.</summary>
+    private static string Mutable(string place) => place.Replace("{ &", "{ &mut ").Replace("::of(", "::of_mut(").Replace(".at(&", ".get_mut(&");
+
+    /// <summary>Pairs of a loop over a dictionary of collections by key (Body.ForEach): the key's local, and the
+    /// value's place in the dictionary.</summary>
+    private readonly Dictionary<ISymbol, (string Key, string Value)> pairs = new(Eq);
+
     /// <summary>A Rust expression to read through without copying: the place itself when there is one.</summary>
     private string Ref(IOperation op)
     {
@@ -880,6 +946,7 @@ public sealed partial class Body
             case IInstanceReferenceOperation when isStructMember: return "me";
             case IFieldReferenceOperation { Field.IsStatic: false } f when !f.Field.ContainingType.IsTupleType && World.IsSource(f.Field.ContainingType) && Value(f.Field) == null: return FieldPlace(f, false);
             case IPropertyReferenceOperation pr when FieldPlaceOf(pr) is { } fp: return fp;
+            case IPropertyReferenceOperation { Property.Name: "Value", Instance: ILocalReferenceOperation { Local: var pl } } when pairs.TryGetValue(pl, out var pv): return pv.Value;
             case IConversionOperation { IsTryCast: false } cv when cv.Operand.Type != null && N(cv.Type) == N(cv.Operand.Type) && !cv.Conversion.IsUserDefined: return Ref(cv.Operand);
             default: return $"({Expr(op)})";
         }
@@ -962,7 +1029,13 @@ public sealed partial class Body
                 return Done($"{NameOf(held)} = $v", $"Some({value()})");
             case ILocalReferenceOperation or IParameterReferenceOperation or IArrayElementReferenceOperation:
             case IFieldReferenceOperation { Field.ContainingType.IsTupleType: true }:
-                return Done($"{Place(target)} = $v", value());
+            {
+                var was = assignTarget;
+                assignTarget = target;
+                string place = Place(target);
+                assignTarget = was;
+                return Done($"{place} = $v", value());
+            }
             case IDeclarationExpressionOperation de:
                 if (de.Expression is ILocalReferenceOperation dl && !w.IsDropped(dl.Local.Type)) Hoist(dl.Local);
                 return Assign(de.Expression, value, asValue);

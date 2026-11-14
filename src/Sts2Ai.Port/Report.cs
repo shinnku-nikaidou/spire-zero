@@ -16,6 +16,7 @@ public sealed class Report
     private readonly ConcurrentBag<string> deferred = [];
     private readonly ConcurrentBag<string> heldChains = [];
     private readonly ConcurrentBag<string> usings = [];
+    private readonly ConcurrentBag<string> aliased = [];
     /// <summary>The events of the translated classes with who subscribes (Output.Events).</summary>
     public List<string> Events = [];
     /// <summary>The classes whose fields the kept walks read, each with the first read found (World.MemoClasses); the
@@ -79,10 +80,20 @@ public sealed class Report
         usings.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}  ->  {what}");
     }
 
+    /// <summary>A collection local changed in place where C# has the same collection under another name.</summary>
+    public void Alias(string where, IOperation op, string what)
+    {
+        var span = op.Syntax.GetLocation().GetLineSpan();
+        string first = op.Syntax.ToString().Replace("\r", "").Split('\n')[0].Trim();
+        if (first.Length > 120) first = first[..120] + "...";
+        aliased.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}  --  {what}");
+    }
+
     public void Reset()
     {
         deferred.Clear();
         usings.Clear();
+        aliased.Clear();
         heldChains.Clear();
         counts.Clear();
         unsupported.Clear();
@@ -134,6 +145,8 @@ public sealed class Report
         foreach (var s in MemoClasses) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== hand-written members the kept walks reach, taken to read what their C# reads");
         foreach (var s in MemoManual) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== collections C# holds under a second name (a collection the state holds, or one stored into it) that are a copy here: read (C# would see later changes made under the other name), or changed in place (not translated)");
+        foreach (var s in aliased.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== events of the engine's classes that someone subscribes to (state: a subscriber is game code; then every subscriber, with what it is)");
         foreach (var s in Events) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== members not translated");

@@ -296,6 +296,17 @@ impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
         self.try_get(k)
             .expect("the given key was not present in the dictionary")
     }
+    /// The value of a key, read where it is (a collection the dictionary holds, under a second name). Panics where C#
+    /// throws KeyNotFoundException.
+    pub fn at(&self, k: &K) -> &V {
+        self.0
+            .slots()
+            .iter()
+            .flatten()
+            .find(|(key, _)| key == k)
+            .map(|(_, v)| v)
+            .expect("the key is not in the dictionary")
+    }
     /// The value of a key, to change in place (`dict[k].Add(x)`). Panics where C# throws KeyNotFoundException.
     pub fn get_mut(&mut self, k: &K) -> &mut V {
         self.0

@@ -353,6 +353,8 @@ public sealed partial class Body
             case "String.this[]": return $"{Expr(inst!)}.char_at({Expr(op.Arguments[0].Value)})";
             case "Nullable.HasValue": return $"{Ref(inst!)}.is_some()";
             case "Nullable.Value": return $"{Expr(inst!)}.unwrap()";
+            case "KeyValuePair.Key" when inst is ILocalReferenceOperation { Local: var pk } && pairs.TryGetValue(pk, out var kp): return $"{kp.Key}.clone()";
+            case "KeyValuePair.Value" when inst is ILocalReferenceOperation { Local: var pv } && pairs.TryGetValue(pv, out var vp): return $"{vp.Value}.clone()";
             case "KeyValuePair.Key": return Owned($"{Ref(inst!)}.key", op.Type);
             case "KeyValuePair.Value": return Owned($"{Ref(inst!)}.value", op.Type);
             case "IGrouping.Key": return Owned($"{Ref(inst!)}.key", op.Type);
