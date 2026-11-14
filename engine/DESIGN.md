@@ -325,9 +325,13 @@ it (`import.rs`, with the reader `port` generates beside the structs, `gen/impor
   besides.
 - **Which objects**: every object reached from the roots through the schema's fields, once, numbered in the order the
   walk meets it. The same combat gives the same bytes.
-- **`outside`**: the classes outside the schema that a reference pointed to, with how many references. It must be
+- **`outside`**: the classes outside the schema that a reference pointed to, by class and the field it came from
+  (`"<CLR name> from <Class>.<field>"`, the innermost field, a struct's own included), with how many references. It must be
   empty: the engine refuses an export that reaches a class it does not hold. A class a combat reaches is either in the
-  schema with its real fields, or the field that reaches it is named not-state in `port.toml`. (A combat an event
+  schema with its real fields, or the field that reaches it is named not-state in `port.toml`. A field whose declared
+  type could hold a value written as a value (`object`, or an interface a string or a value type implements) holds a
+  reference here; port's report lists every such field of the schema with how it is settled: dropped, holding
+  objects of classes only (every write in the game's code gives one, `PowerModel._internalData`), or not settled. (A combat an event
   starts has the event's room below its own on the run's stack of rooms: `EventRoom` is in the schema with its one
   flag, and the event it holds is not a combat's.)
 

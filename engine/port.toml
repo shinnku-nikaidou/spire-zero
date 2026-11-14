@@ -216,6 +216,8 @@ fields = [
     # a card's title, looked up once
     "CardModel._titleLocString",
     "StringVar.StringValue",
+    # a chosen event option in the run's history: its title's words, a LocString's variables copied (presentation)
+    "EventOptionHistoryEntry.Variables",
     # Events whose subscribers are the action queue, the executor and the turn loop waiting on each other: the
     # hand-written core runs them in turn and does itself what these announce ([manual]).
     "ActionQueueSet.ActionQueueChanged",

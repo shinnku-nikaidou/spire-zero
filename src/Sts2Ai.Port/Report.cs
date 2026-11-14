@@ -97,6 +97,9 @@ public sealed class Report
 
     public List<string> EqualityTypes = [];
 
+    /// <summary>The schema's fields that could hold a value written as a value, and how each is settled (World.ValueSlots).</summary>
+    public List<string> ValueSlots = [];
+
     private readonly ConcurrentBag<string> guards = [];
 
     private readonly ConcurrentBag<string> staticReads = [];
@@ -209,6 +212,8 @@ public sealed class Report
         foreach (var s in deferred.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== locals that hold a LINQ chain, with game code between where they are declared (where the chain's source is read) and their last use");
         foreach (var s in heldChains.Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== fields of the schema whose declared type can hold a value an export writes as a value (object, or an interface a string or a value type implements), and how each is settled: dropped, holds objects only (every write gives an object of a class), or not settled (an export that holds a value there is refused)");
+        foreach (var s in ValueSlots) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== the game's types whose equality is their own (an Equals or == of theirs, or a record's), and how each is a value here");
         foreach (var s in EqualityTypes) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== operations of translated code that compare such values by their equality (a collection's Remove, Contains, IndexOf, a set's or dictionary's key, LINQ, object.Equals), and what became of each");

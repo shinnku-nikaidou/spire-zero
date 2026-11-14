@@ -136,6 +136,7 @@ foreach (var (path, text) in output.Files)
         ? $"hand-stated facts      {lines.Count}  (read against this version)"
         : $"hand-stated facts      {lines.Count}  ({same} hold again, {look} for a person to read again: code changed since {cfg.FactsVersion})";
 }
+rep.ValueSlots = world.ValueSlots();
 rep.EqualityTypes = world.EqualityTypes()
     .Select(e => $"{World.FullName(e.Type)} ({(e.Type.IsRecord ? "record " : "")}{e.Type.TypeKind.ToString().ToLowerInvariant()}): {e.How}; here " +
         (world.IsValue(e.Type) ? (world.EqualityLeftOut(e.Type) is [_, ..] left ? $"a value, its fields compared, but its own leaves out {string.Join(", ", left)}: not the same" : "a value, its fields compared, as its own does")
