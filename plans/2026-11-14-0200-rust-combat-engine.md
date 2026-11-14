@@ -1045,3 +1045,21 @@
   每局對 pool 試跑同一種子的重播紀錄（ba80131a）跑 `same-decisions`：**12 局全部逐筆相同**（決策數 717、682、613、829、630 等與重播
   那局一樣），重規劃 0，記憶體峰值 1.2–1.6 GB。接著在 pool 開 `engine-trial-3`：只跑引擎世界、self-play 的選項、六角色 × 兩種遊戲
   × 25 個種子（1200004–1200028）共 300 局，量失敗率。
+- 20:03（engine-bridge）**pool 試跑被拒的匯入：來源、修法、檢查**（協調者交辦：訓練種子索引 1200000，種子 MRW25WTK2AC8，
+  只在引擎世界被拒，「the combat reaches classes the engine does not hold: System.String」）。
+  - **拒收說出來源**（20366fcd）：匯出的 `outside`（引擎只讀它的鍵來拒收）改成以「CLR 名稱 from 類別.欄位」計數，欄位取最內層的
+    （結構體自己的欄位也算），所以規劃器、worker 的跨越、對拍，任何一處被拒都說得出原因；沒有這種參照的匯出位元組不變。舊引擎下
+    那一局現在說「System.String from EventOptionHistoryEntry.variables」。測試一項。
+  - **欄位**：`EventOptionHistoryEntry.Variables`（`Dictionary<string, object>`，經由 `PlayerMapPointHistoryEntry.event_choices`）。
+    選了一個事件選項時，`EventSynchronizer.SaveEventOptionToHistory` 把選項標題（一個 LocString）的變數原樣複製進來，而
+    `LocString.Add(name, string)`、`Add(name, LocString)` 放的是字串。只有結算統計與地圖歷史的懸浮提示讀它，戰鬥從不讀。
+  - **修法**（規則與 `StringVar.StringValue` 相同：本地化文字裡的字詞是呈現）：`[drop] fields` 加上這個欄位，由 engine-port 落地
+    （1eac54cb，schema 3d41153e → 2bebc33c，見 19:36）。
+  - **會抓到它的檢查**：(a) 靜態表：port 的報告列出 schema 裡宣告型別能放「schema 當值寫的東西」的參照位置（`System.Object`，
+    或字串、數值型別會實作的介面），每一項寫明怎麼處理；現在 6 項：`PowerModel._internalData` 只放物件（42 個 `InitInternalData`
+    本體都回傳類別物件），這個欄位、`LocString._variables` 與三個 `_extraHoverTips` 丟掉，沒有未處理的。(b) 這個種子的整局：本機
+    比對（1abe5cd3 加上拒收命名，引擎是與 1eac54cb 同一行 port.toml 的副本，schema 2bebc33c）。引擎世界 12 局全部跑完，每局 12–84 秒，
+    匯入 0 被拒、遊戲 Log.Error 0、重規劃 0；每局對 pool 試跑同一種子的重播紀錄跑 `same-decisions`，**12 局全部逐筆相同**。同一版本
+    重跑的重播 4 局（IRONCLAD A0、SILENT A0／A10、DEFECT A10）對引擎那局也逐筆相同，計畫、節點、回合數兩邊相等（引擎世界
+    SILENT A10、DEFECT A10 各跨越 3 次）。其餘 8 局重播在 20:01 停掉：協調者 20:00 在 5ace9fe9 的乾淨建置上做了同樣的 12 對，
+    再跑只是重複。
