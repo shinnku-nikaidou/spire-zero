@@ -20,8 +20,13 @@ public sealed class PromptRoot(PromptRoot.Crossing crossing) : ICombatWorld, IDi
     /// </summary>
     /// <param name="cross">Plays each path of answers on the node's clone and says what stands there, in the paths'
     /// order; asked from any thread.</param>
-    public sealed class Crossing(Func<IReadOnlyList<IReadOnlyList<CombatAction>>, IReadOnlyList<PromptStep>> cross) : IDisposable
+    public sealed class Crossing(Func<IReadOnlyList<IReadOnlyList<CombatAction>>, IReadOnlyList<PromptStep>> cross)
     {
+        /// <summary>The paths asked of the clone at a time (<see cref="Ahead"/>): enough to keep a pool's workers busy,
+        /// few enough that their replies, hundreds of kilobytes each, do not pile up while a prompt of a thousand
+        /// answers is crossed.</summary>
+        public const int Batch = 32;
+
         private readonly ConcurrentDictionary<string, Lazy<Place>> _places = new();
         private int _crossed;
 
@@ -36,46 +41,37 @@ public sealed class PromptRoot(PromptRoot.Crossing crossing) : ICombatWorld, IDi
             return new Place(cross([path])[0]);
         })).Value;
 
-        /// <summary>Plays these paths at once, so that the clone's workers serve them side by side: the answers a
-        /// search is about to try one after another.</summary>
+        /// <summary>Plays these paths, <see cref="Batch"/> at a time, so that the clone's workers serve them side by
+        /// side: the answers a search is about to try one after another.</summary>
         public void Ahead(IReadOnlyList<IReadOnlyList<CombatAction>> paths)
         {
-            var asked = paths.Where(p => !_places.ContainsKey(Key(p))).ToList();
-            if (asked.Count == 0) return;
-            Interlocked.Add(ref _crossed, asked.Count);
-            var steps = cross(asked);
-            for (int i = 0; i < asked.Count; i++)
+            foreach (var asked in paths.Where(p => !_places.ContainsKey(Key(p))).Chunk(Batch))
             {
-                var place = new Place(steps[i]);
-                _places.TryAdd(Key(asked[i]), new(() => place));
+                Interlocked.Add(ref _crossed, asked.Length);
+                var steps = cross(asked);
+                for (int i = 0; i < asked.Length; i++)
+                {
+                    var place = new Place(steps[i]);
+                    _places.TryAdd(Key(asked[i]), new(() => place));
+                }
             }
-        }
-
-        public void Dispose()
-        {
-            foreach (var place in _places.Values)
-                if (place.IsValueCreated) place.Value.Dispose();
         }
     }
 
     /// <summary>What stands after one path of answers: a prompt or the combat's end as the clone shows it, or the
-    /// combat as the engine took it in.</summary>
-    internal sealed class Place(PromptStep step) : IDisposable
+    /// combat as the worker wrote it out for the engine.</summary>
+    internal sealed class Place(PromptStep step)
     {
-        private EngineWorld? _taken;
+        /// <summary>The combat written out, as bytes: a plan crosses up to a thousand paths, and a world taken in for
+        /// each would hold the engine's memory for the whole plan.</summary>
+        private readonly byte[]? _export = step.Export == null ? null : Convert.FromBase64String(step.Export);
 
-        public PromptStep Step => step;
+        /// <summary>The step as the clone showed it, without the combat written out.</summary>
+        public PromptStep Step { get; } = step with { Export = null };
 
-        /// <summary>A world of the engine's standing here, the caller's own; null where the engine has none (a prompt
-        /// waits, or the combat is over).</summary>
-        public EngineWorld? World()
-        {
-            if (step.Export == null) return null;
-            // One world from one thread at a time: the world taken in is copied under the lock.
-            lock (this) return (_taken ??= EngineWorld.Import(Convert.FromBase64String(step.Export), step.Run)).Clone();
-        }
-
-        public void Dispose() => _taken?.Dispose();
+        /// <summary>A world of the engine's standing here, taken in for the caller, whose own it is; null where the
+        /// engine has none (a prompt waits, or the combat is over).</summary>
+        public EngineWorld? World() => _export == null ? null : EngineWorld.Import(_export, Step.Run);
     }
 
     /// <summary>A point of this world: the answers given, and in the engine's part the engine's own snapshot.</summary>

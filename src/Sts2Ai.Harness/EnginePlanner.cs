@@ -84,7 +84,7 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
             if (decision.Observation.Prompt is { } prompt)
             {
                 var clone = node ?? throw new InvalidOperationException("the SL planner has no node clone: it plays in SL only");
-                using var crossing = new PromptRoot.Crossing(paths =>
+                var crossing = new PromptRoot.Crossing(paths =>
                     [.. pool.Map([.. paths.Select((path, i) => (WorkerRequest)new SlPromptRequest(i, clone, path))])
                         .Select(r => r.Crossed ?? throw new InvalidDataException($"request {r.Id}: no crossing in the reply"))]);
                 var plan = meter.Count(() =>

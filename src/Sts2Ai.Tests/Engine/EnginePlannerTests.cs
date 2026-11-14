@@ -91,7 +91,7 @@ public sealed class EnginePlannerTests(FakeEngine engine)
     public void APlanRootedAtACardPromptCrossesItOnTheCloneAndGoesOnInTheEngine()
     {
         var asked = new List<string>();
-        using var crossing = Clone(asked);
+        var crossing = Clone(asked);
         var plan = Planner(4).Plan(crossing, Small, []);
         // The second option and then the second again reach the combat that is won at once.
         Assert.Equal((CombatStatus.Won, CombatAction.Pick([1])), (plan.End, plan.Result.First));
@@ -102,10 +102,10 @@ public sealed class EnginePlannerTests(FakeEngine engine)
 
         // The same plan as the planner makes alone on one such world, and on one thread.
         var again = new List<string>();
-        using var second = Clone(again);
+        var second = Clone(again);
         using var world = new PromptRoot(second);
         Assert.Equal(Text(new SlPlanner(new ToyLeaf()).Plan(world, Small)), Text(plan));
-        using var third = Clone([]);
+        var third = Clone([]);
         Assert.Equal(Text(plan), Text(Planner(1).Plan(third, Small, [])));
     }
 
@@ -114,16 +114,34 @@ public sealed class EnginePlannerTests(FakeEngine engine)
     {
         long before = engine.Worlds();
         var asked = new List<string>();
-        using (var crossing = Clone(asked))
+        var crossing = Clone(asked);
+        crossing.Ahead([[], [CombatAction.Pick([0])], [CombatAction.Pick([1])]]);
+        Assert.Equal(3, asked.Count);
+        // No world of the engine's is made until a search stands at an answer.
+        Assert.Equal(before, engine.Worlds());
+        Planner(4).Plan(crossing, Small, []);
+        Assert.Equal(5, asked.Count);
+        using (var world = new PromptRoot(crossing))
         {
-            crossing.Ahead([[], [CombatAction.Pick([0])], [CombatAction.Pick([1])]]);
-            Assert.Equal(3, asked.Count);
-            Planner(4).Plan(crossing, Small, []);
-            Assert.Equal(5, asked.Count);
-            using var world = new PromptRoot(crossing);
             Assert.Throws<InvalidOperationException>(() => world.Execute(CombatAction.EndTurn));
             Assert.Throws<InvalidOperationException>(() => world.Execute(CombatAction.Pick([0, 1])));
         }
         Assert.Equal(before, engine.Worlds());
+    }
+
+    [Fact]
+    public void APromptsAnswersAreCrossedAFewAtATime()
+    {
+        var batches = new List<int>();
+        var crossing = new PromptRoot.Crossing(paths =>
+        {
+            batches.Add(paths.Count);
+            return [.. paths.Select(_ => new PromptStep(CombatStatus.Lost, Fixtures.Slugs(), Around))];
+        });
+        var answers = Enumerable.Range(0, 2 * PromptRoot.Crossing.Batch + 5).Select(i => (IReadOnlyList<CombatAction>)[CombatAction.Pick([i])]).ToList();
+        crossing.Ahead(answers);
+        crossing.Ahead(answers);
+        Assert.Equal([PromptRoot.Crossing.Batch, PromptRoot.Crossing.Batch, 5], batches);
+        Assert.Equal(answers.Count, crossing.Crossed);
     }
 }
