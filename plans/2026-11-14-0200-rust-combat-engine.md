@@ -992,3 +992,15 @@
   免死效果的實際觸發（engine-port 的定向樣本在做）；正式版有畫面時才會不同的三處。
 - 16:25 （協調）pool 試跑的步驟 `engine-trial` 在 16:24 開好（24 個工作、48 局、期限 24 小時）。和用戶的 test-v10-1-2-c10-1-2 同優先、
   照先後要等那個測試全部發完（約到凌晨）；用戶說「插到前面」，16:25 改成優先 2，下一個空出來的執行緒就先發試跑。
+- 16:34（engine-port）完整性審查的四項（8996b567）：
+  - `if` 規則：讀表現層、且會 return／continue／break 離開的測試，只有在其後沒有東西會被跳過時才整句留掉，否則成員不翻譯；
+    throw 不算（遊戲因錯誤結束）。報告新增一節列出每一個：4 個 if（輪替 Dread 角色、LoomingFruit.HasCornucopia、
+    PotionModel.OutlinePath 改為未翻譯，都不可達）與 CardCmd.Upgrade 的 switch（回合末的 continue，留掉）。Fur Coat 的
+    戰鬥開始以「標記房間」的值照遊戲翻譯（守衛在）；遺物稀有度的測試覆寫給定為「沒有」。
+  - reach.py 讀得到 rustfmt 折行的 todo!：可達且無程式碼的 28 個逐一確認，沒有一個會在單人標準戰鬥中執行。
+  - 每條 `[drop]` 命名空間與型別：port 列出它從翻譯成員中拿掉了什麼（一句、表現層測試永不走的分支、整個成員），含遊戲碼的
+    先列；每條成為一個手寫事實，依據是那些成員（共 143 條），換版時程式碼變了就 LOOK（拿 v0.111.0 試過）。Map 含遊戲碼的：
+    Dowsing 的任務進度、Planisphere 的回血、Spoils Map、Fur Coat 的標記、Big Game Hunter、地圖生成兩個 hook，都不在戰鬥中。
+  - 防死效果：port 依 `ShouldDie`／`AfterPreventingDeath` 覆寫只找到 Fairy in a Bottle 與 Lizard Tail。定向 dump：HP 3／70、
+    六角色、第一幕兩個 act 的 6 菁英 6 頭目、A0 與 A10，三組（兩瓶 Fairy、Lizard Tail、兩者）各 144 場；從紀錄看 Fairy 在
+    144／144 場觸發（沒有手動喝）、Lizard Tail 在 144／144 場用掉。四項檢查：all、runs、tooth、c1752 與三組全過。
