@@ -13,6 +13,9 @@ public sealed class Output(World w, Emitter em)
     private List<INamedTypeSymbol> stateful = [];
     private List<INamedTypeSymbol> roots = [];
 
+    /// How many tests of kinds the dispatchers have (Body.OnlyFor), each a number of its own.
+    private int filters;
+
     public void Build(List<Emitter.ClassResult> classes)
     {
         var areas = new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
@@ -154,6 +157,7 @@ public sealed class Output(World w, Emitter em)
                     var overriding = arms.Values.SelectMany(k => k).Order(StringComparer.Ordinal).ToList();
                     body.Append($"    /// The kinds that override {type.Name}.{slot.Name}: for every other kind it does nothing (Body.OnlyFor).\n");
                     body.Append($"    pub fn {name}__only(k: Kind) -> bool {{\n        {(overriding.Count == 0 ? "false" : $"matches!(k, {string.Join(" | ", overriding)})")}\n    }}\n\n");
+                    body.Append($"    pub static {name.ToUpperInvariant()}__ONLY: rt::Only = rt::Only {{ id: {filters++}, test: {name}__only }};\n\n");
                 }
                 if (!walk) continue;
                 string item = w.RType(World.WalkItem(slot)!);
@@ -273,7 +277,7 @@ public sealed class Output(World w, Emitter em)
         var closures = Closures();
         for (int i = 0; i < roots.Count; i++) sb.Append($"pub const {Tag(roots[i])}: u16 = {i + 1};\n");
         for (int i = 0; i < closures.Count; i++) sb.Append($"pub const {Tag(closures[i])}: u16 = {roots.Count + i + 1};\n");
-        sb.Append($"\n/// The kept walks and getters of port.toml [memo] (rt/memo.rs).\npub const MEMO_WALKS: usize = {w.Cfg.Memo.Count};\npub const MEMO_GETTERS: usize = {w.Cfg.MemoGetters.Count};\n");
+        sb.Append($"\n/// The kept walks and getters of port.toml [memo] (rt/memo.rs).\npub const MEMO_WALKS: usize = {w.Cfg.Memo.Count};\npub const MEMO_GETTERS: usize = {w.Cfg.MemoGetters.Count};\npub const MEMO_FILTERS: usize = {filters};\n");
         sb.Append("\n/// Every object of a combat.\n#[derive(Clone, Debug, Default)]\npub struct Arenas {\n");
         foreach (var r in roots) sb.Append($"    pub {ArenaField(r)}: Arena<{w.DataName(r)}>,\n");
         foreach (var k in closures) sb.Append($"    pub {ArenaField(k)}: Arena<{k.Name}Data>,\n");

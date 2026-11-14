@@ -170,7 +170,7 @@ public sealed partial class Body
         // An item of a kind the caller's code does nothing for is passed over before its test is asked: the walk
         // goes through the positions of the kinds it was asked for, found once for the list.
         sb.Append($"let __picked = rt::memo::picked(&__kept, __only, c);\n");
-        sb.Append($"{label}: for __n in 0..rt::memo::count(&__kept, &__picked) {{\nlet __at = rt::memo::nth(&__picked, __n);\nlet mut {name}: {T(item.Type)} = __kept.item(__at);\nif rt::memo::passes(c, &__kept, __at, |c: &mut Combat| {passes}) {{\n{hand}}}\n}}\n");
+        sb.Append($"{label}: for __n in 0..rt::memo::count(&__kept, __picked) {{\nlet __at = rt::memo::nth(__picked, __n);\nlet mut {name}: {T(item.Type)} = __kept.item(__at);\nif rt::memo::passes(c, &__kept, __at, |c: &mut Combat| {passes}) {{\n{hand}}}\n}}\n");
         Written++;
         foreach (var o in ops.Skip(at + 1)) Stmt(o, sb);
         w.Rep.Count("kept walks");
@@ -1000,18 +1000,26 @@ public sealed partial class Body
         var body = fe.Body is IBlockOperation { Operations: [var one] } ? one : fe.Body;
         if (frames.Peek().Iterator && body is IReturnOperation { Kind: OperationKind.YieldReturn, ReturnedValue: { } y } && Unwrapped(y) is ILocalReferenceOperation { Local: var yl } && Eq.Equals(yl, local))
             return "__only";
-        if (body is not IExpressionStatementOperation { Operation: IInvocationOperation { Instance: { } inst, TargetMethod: var m } call }
+        // The call alone, or `if (call) ..` where the member's own body says false.
+        var (asked, mustSayFalse) = body switch
+        {
+            IExpressionStatementOperation { Operation: IInvocationOperation alone } => (alone, false),
+            IConditionalOperation { WhenFalse: null, Condition: var cond } when Unwrapped(cond) is IInvocationOperation tested => (tested, true),
+            _ => ((IInvocationOperation?)null, false),
+        };
+        if (asked is not { Instance: { } inst, TargetMethod: var m } call
             || Unwrapped(inst) is not ILocalReferenceOperation { Local: var called } || !Eq.Equals(called, local) || !call.IsVirtual || !Dispatched(m))
             return null;
         var slot = (IMethodSymbol)World.Slot(m.OriginalDefinition);
         if (slot.IsAbstract || w.MemberBody(slot) is not IMethodBodyOperation { BlockBody: { } own }) return null;
         if (call.Arguments.Any(a => a.Value is not IDeclarationExpressionOperation && !IsSimple(Unwrapped(a.Value)))) return null;
-        // The member's own body: each out parameter set to a parameter, then a constant returned.
+        // The member's own body: each out parameter set to a parameter, then a constant returned (false, when the
+        // call is a test).
         var copies = new Dictionary<int, int>();
         var ops = own.Operations;
         for (int i = 0; i < ops.Length; i++)
         {
-            if (i == ops.Length - 1 && ops[i] is IReturnOperation { ReturnedValue: { ConstantValue.HasValue: true } or null }) break;
+            if (i == ops.Length - 1 && ops[i] is IReturnOperation { ReturnedValue: var said } && (said == null ? !mustSayFalse : said.ConstantValue is { HasValue: true, Value: var v } && (!mustSayFalse || v is false))) break;
             if (ops[i] is IExpressionStatementOperation { Operation: ISimpleAssignmentOperation { Target: IParameterReferenceOperation { Parameter: { RefKind: RefKind.Out } to }, Value: var from } }
                 && Unwrapped(from) is IParameterReferenceOperation { Parameter: { RefKind: RefKind.None } p })
                 copies[to.Ordinal] = p.Ordinal;
@@ -1035,7 +1043,7 @@ public sealed partial class Body
         }
         w.OnlyFilters.TryAdd(slot, 0);
         w.Rep.Count("loops over a walk whose body only calls a member that does nothing where it is not overridden: the walk passes over the other kinds");
-        return $"Some(g::dispatch::{w.Module(slot.ContainingType)}::{w.FnName(slot)}__only)";
+        return $"Some(&g::dispatch::{w.Module(slot.ContainingType)}::{w.FnName(slot).ToUpperInvariant()}__ONLY)";
     }
 
     /// <summary>Whether a loop over a dictionary's pairs changes a pair's value in place, itself or through a local

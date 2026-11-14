@@ -430,14 +430,16 @@ its combat asks, is found once for each card at a write count (the classes it re
 the card's index shared like the answers.
 
 **What a hook does nothing for.** Most listeners do not override the member a hook calls, and for them the member's
-own body does nothing. A loop over a walk whose body only calls one virtual member of each value, where that member's
-own body leaves everything as it is for these arguments (it sets each out parameter to the value handed in for it and
-returns a constant: `item.TryModifyStarCost(card, cost, out cost)` against `{ modifiedCost = originalCost; return
-false; }`), sets `Combat::only` to the kinds that override the member right before it calls the walk. Every walk takes
+own body does nothing. A loop over a walk whose body only calls one virtual member of each value, or only tests it
+(`if (item.ShouldStopCombatFromEnding()) ..`), where that member's own body leaves everything as it is for these
+arguments (it sets each out parameter to the value handed in for it and returns a constant, false for a test:
+`item.TryModifyStarCost(card, cost, out cost)` against `{ modifiedCost = originalCost; return false; }`), sets
+`Combat::only` to the kinds that override the member right before it calls the walk. Every walk takes
 it first thing, so no walk below sees it; a walk hands on only values of those kinds (and null, which C# would call and
 throw on), passes it on to a walk it only forwards (`foreach (var x in inner) yield return x;`), and a kept walk goes
-through the positions of those kinds alone, found once for each kept list, before any test is asked. Six hooks: a
-card's energy cost (early and late), star cost and keywords, the shuffle order, the merchant's cards.
+through the positions of those kinds alone, found once for each kept list, before any test is asked. Seventeen
+hooks: among them a card's energy cost (early and late), star cost and keywords, whether the combat may end, whether a
+turn is taken again.
 
 **Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
 other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.

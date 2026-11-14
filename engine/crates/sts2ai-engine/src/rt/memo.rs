@@ -9,11 +9,10 @@
 //! and a new object changes none that is there. A copy of the combat has the count and the kept lists it was copied
 //! with, and the count of each only goes up, so a list kept at a count is the list of the one combat that stood there.
 
-use crate::r#gen::kinds::Kind;
-use crate::r#gen::state::{MEMO_GETTERS, MEMO_WALKS};
-use crate::rt::{Combat, Obj};
+use crate::r#gen::state::{MEMO_FILTERS, MEMO_GETTERS, MEMO_WALKS};
+use crate::rt::{Combat, Obj, Only};
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering::Relaxed};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, OnceLock};
 
 /// A walk's list as it was built at a write count, of the walk's object and argument, with the test's answers.
 #[derive(Debug)]
@@ -24,9 +23,9 @@ pub struct Kept {
     /// For each item: 0 not asked yet, 1 does not pass, 2 passes. Shared by the copies of a combat that stand where it
     /// was kept, whose answers are the same.
     answers: Box<[AtomicU8]>,
-    /// For each set of kinds a walk was asked for (`Combat::only`, by its test's address), the positions of the items
-    /// of those kinds. An object's kind never changes, so these hold as long as the list.
-    picked: Mutex<Vec<(usize, Arc<[u32]>)>>,
+    /// For each set of kinds a walk was asked for (`Combat::only`, by its number), the positions of the items of
+    /// those kinds. An object's kind never changes, so these hold as long as the list.
+    picked: Box<[OnceLock<Box<[u32]>>]>,
 }
 
 impl Kept {
@@ -73,7 +72,8 @@ pub fn kept(c: &Combat, slot: usize, key: [Obj; 2]) -> Option<Arc<Kept>> {
 /// cache of the game's writes).
 pub fn keep(c: &mut Combat, slot: usize, key: [Obj; 2], at: u64, items: Vec<Obj>) -> Arc<Kept> {
     let answers = (0..items.len()).map(|_| AtomicU8::new(0)).collect();
-    let kept = Arc::new(Kept { at, key, items, answers, picked: Mutex::new(Vec::new()) });
+    let picked = (0..MEMO_FILTERS).map(|_| OnceLock::new()).collect();
+    let kept = Arc::new(Kept { at, key, items, answers, picked });
     if at == c.a.writes {
         c.memo.walks[slot] = Some(kept.clone());
     }
@@ -110,31 +110,27 @@ pub fn keep_value(c: &mut Combat, slot: usize, me: Obj, at: u64, value: Obj, len
 
 /// The positions of the items a walk hands on when its caller's code does something only for some kinds
 /// (`rt::wanted`); `None`: every item.
-pub fn picked(kept: &Kept, only: Option<fn(Kind) -> bool>, c: &Combat) -> Option<Arc<[u32]>> {
-    let test = only?;
-    let id = test as usize;
-    let mut known = kept.picked.lock().unwrap();
-    if let Some((_, positions)) = known.iter().find(|(of, _)| *of == id) {
-        return Some(positions.clone());
-    }
-    let positions: Arc<[u32]> = (0..kept.items.len())
-        .filter(|&at| crate::rt::wanted(only, kept.items[at], c))
-        .map(|at| at as u32)
-        .collect();
-    known.push((id, positions.clone()));
-    Some(positions)
+#[inline]
+pub fn picked<'k>(kept: &'k Kept, only: Option<&'static Only>, c: &Combat) -> Option<&'k [u32]> {
+    let of = only?;
+    Some(kept.picked[of.id].get_or_init(|| {
+        (0..kept.items.len())
+            .filter(|&at| crate::rt::wanted(only, kept.items[at], c))
+            .map(|at| at as u32)
+            .collect()
+    }))
 }
 
 /// How many items a walk goes through: every item, or those picked.
 #[inline]
-pub fn count(kept: &Kept, picked: &Option<Arc<[u32]>>) -> usize {
-    picked.as_ref().map_or(kept.items.len(), |p| p.len())
+pub fn count(kept: &Kept, picked: Option<&[u32]>) -> usize {
+    picked.map_or(kept.items.len(), |p| p.len())
 }
 
 /// The position of the `n`th item a walk goes through.
 #[inline]
-pub fn nth(picked: &Option<Arc<[u32]>>, n: usize) -> usize {
-    picked.as_ref().map_or(n, |p| p[n] as usize)
+pub fn nth(picked: Option<&[u32]>, n: usize) -> usize {
+    picked.map_or(n, |p| p[n] as usize)
 }
 
 /// Whether item `at` of the list passes the walk's test: the kept answer while the combat stands where the list was

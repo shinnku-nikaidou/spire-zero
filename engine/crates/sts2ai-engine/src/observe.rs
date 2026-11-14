@@ -19,7 +19,39 @@ use crate::protocol::{
 use crate::rt::{self, Combat, Dec, Obj, Str};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::rc::Rc;
+
+/// A quick hash for the keys of FRESH_VARS, asked for every card of every observation (an id's two words and a
+/// level): the standard one is made to stand up to chosen keys, which these are not.
+#[derive(Default)]
+struct Fx(u64);
+
+impl Hasher for Fx {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = (self.0.rotate_left(5) ^ b as u64).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+        }
+    }
+    fn write_u64(&mut self, i: u64) {
+        self.0 = (self.0.rotate_left(5) ^ i).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+    fn write_usize(&mut self, i: usize) {
+        self.write_u64(i as u64);
+    }
+    fn write_u32(&mut self, i: u32) {
+        self.write_u64(i as u64);
+    }
+    fn write_i32(&mut self, i: i32) {
+        self.write_u64(i as u32 as u64);
+    }
+    fn write_u8(&mut self, i: u8) {
+        self.write_u64(i as u64);
+    }
+}
 
 /// C#: `model.Id.Entry`.
 fn entry(model: AbstractModel, c: &mut Combat) -> Str {
@@ -378,7 +410,7 @@ fn stuck(creature: Creature, me: Creature, c: &mut Combat) -> Option<i32> {
 thread_local! {
     /// C#: Observe.FreshVars. The numbers of a fresh copy of a card at an upgrade level, by the card's id and the
     /// level: what the game's code makes of them, the same in every combat.
-    static FRESH_VARS: RefCell<HashMap<(Str, Str, i32), Rc<Vec<(Str, Dec)>>>> = RefCell::new(HashMap::new());
+    static FRESH_VARS: RefCell<HashMap<(Str, Str, i32), Rc<Vec<(Str, Dec)>>, BuildHasherDefault<Fx>>> = RefCell::new(HashMap::default());
 }
 
 /// C#: the value FreshVars keeps for a key. `CardModel.FromSerializable(new SerializableCard { Id, CurrentUpgradeLevel,

@@ -47,5 +47,5 @@ pub struct Combat {
     pub memo: crate::rt::memo::Memo,
     /// The kinds the code a walk hands its values to does something for, set by that code right before it calls
     /// the walk, and taken by the walk first thing (`rt::wanted`); `None` everywhere else.
-    pub only: Option<fn(crate::r#gen::kinds::Kind) -> bool>,
+    pub only: Option<&'static crate::rt::Only>,
 }

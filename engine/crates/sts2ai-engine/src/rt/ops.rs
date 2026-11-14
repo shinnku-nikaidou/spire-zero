@@ -386,13 +386,21 @@ pub fn walk<T>(items: Vec<T>, c: &mut Combat, k: &mut dyn FnMut(T, &mut Combat) 
     Ok(false)
 }
 
+/// The kinds the code a walk hands its values to does something for (`Combat::only`): a test of a kind, and its
+/// number among the tests port made (gen/state.rs MEMO_FILTERS), under which a kept walk keeps what it picked.
+#[derive(Debug)]
+pub struct Only {
+    pub id: usize,
+    pub test: fn(Kind) -> bool,
+}
+
 /// Whether a walk hands a value on to code that does something only for some kinds (`Combat::only`, taken when
 /// the walk began): every other kind is passed over, and null is handed on, as C# would call it and throw.
 #[inline]
-pub fn wanted(only: Option<fn(Kind) -> bool>, o: Obj, c: &Combat) -> bool {
+pub fn wanted(only: Option<&'static Only>, o: Obj, c: &Combat) -> bool {
     match only {
         None => true,
-        Some(f) => o.is_null() || f(kind_of(o, c)),
+        Some(only) => o.is_null() || (only.test)(kind_of(o, c)),
     }
 }
 
