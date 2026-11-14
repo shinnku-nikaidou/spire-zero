@@ -7,7 +7,6 @@ use crate::r#gen as g;
 use crate::r#gen::enums::*;
 use crate::r#gen::kinds::*;
 use crate::r#gen::state::*;
-use crate::observe;
 use crate::protocol::{self, Escaped, Fnv, Sink};
 use crate::rt::{self, Combat, Str};
 
@@ -46,13 +45,11 @@ fn counter(rng: Rng, c: &mut Combat) -> i32 {
 }
 
 /// The text `HiddenState.Key` hashes: the draw pile's card keys in order, the position of every random stream, and
-/// each monster's queued move.
-pub fn key_text<S: Sink>(st: CombatState, player: Player, c: &mut Combat, out: &mut S) {
-    let pcs = g::entities_players::player::player_combat_state(player, c);
-    let draw = g::entities_players::player_combat_state::draw_pile(pcs, c);
-    for card in g::entities_cards::card_pile::cards(draw, c) {
-        let view = observe::card(card, false, c);
-        out.put(&protocol::card_key(&view));
+/// each monster's queued move. `draw` is those card keys, as the observation of the same state read them
+/// (`observe::seen`).
+pub fn key_text<S: Sink>(st: CombatState, player: Player, draw: &[Vec<u8>], c: &mut Combat, out: &mut S) {
+    for key in draw {
+        out.put(key);
         out.put(b"|");
     }
     let run_state = g::combat::combat_state::run_state(st, c);
@@ -89,14 +86,14 @@ fn put_text<S: Sink>(text: Str, out: &mut S) {
 }
 
 /// C#: HiddenState.Key.
-pub fn key(st: CombatState, player: Player, c: &mut Combat) -> u64 {
-    hash_of_text(|out| key_text(st, player, c, out))
+pub fn key(st: CombatState, player: Player, draw: &[Vec<u8>], c: &mut Combat) -> u64 {
+    hash_of_text(|out| key_text(st, player, draw, c, out))
 }
 
 /// The text `HiddenState.Full` hashes: `Key`, each monster's moves so far, and what the combat's history holds of this
 /// turn, as a multiset.
-pub fn full_text<S: Sink>(st: CombatState, player: Player, c: &mut Combat, out: &mut S) {
-    protocol::uint(key(st, player, c), out);
+pub fn full_text<S: Sink>(st: CombatState, player: Player, draw: &[Vec<u8>], c: &mut Combat, out: &mut S) {
+    protocol::uint(key(st, player, draw, c), out);
     out.put(b"#");
     for monster in monsters(st, c) {
         let machine = g::models::monster_model::move_state_machine(monster, c);
@@ -132,8 +129,8 @@ pub fn full_text<S: Sink>(st: CombatState, player: Player, c: &mut Combat, out: 
 }
 
 /// C#: HiddenState.Full. The SL world's hidden key.
-pub fn full(st: CombatState, player: Player, c: &mut Combat) -> u64 {
-    hash_of_text(|out| full_text(st, player, c, out))
+pub fn full(st: CombatState, player: Player, draw: &[Vec<u8>], c: &mut Combat) -> u64 {
+    hash_of_text(|out| full_text(st, player, draw, c, out))
 }
 
 /// C#: `creature?.CombatId` in an interpolated string: nothing for no creature or no id.

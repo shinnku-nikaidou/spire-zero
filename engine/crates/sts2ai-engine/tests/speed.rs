@@ -7,10 +7,13 @@
 //! the plays, the two keys, all through the C ABI as the C# side calls them; what a copy allocates; and, arena by
 //! arena, what the copy's time and bytes go to and how much of it the rest of the combat never changes.
 //!
-//! `spin` is for a sampling profiler (engine/sample.py): it does one kind of call over the same states again and again,
+//! `spin` does one kind of call over the same states again and again and samples its own stack meanwhile, a thousand
+//! times a second of its CPU time; engine/sample.py turns the file of stacks into a report by function. Built with
+//! line tables, the functions rustc inlined are told apart too:
 //!
-//!     STS2AI_SPEED_SPIN=play|end_turn|observe|hidden_key|legal|clone STS2AI_SPEED_SECONDS=60 \
-//!         cargo test --release --test speed spin -- --ignored --nocapture
+//!     STS2AI_SPEED_SPIN=play|end_turn|observe|node|legal|clone STS2AI_SPEED_SECONDS=20 STS2AI_SPEED_STACKS=<file> \
+//!         CARGO_PROFILE_RELEASE_DEBUG=line-tables-only cargo test --release --test speed spin -- --ignored --nocapture
+//!     engine/sample.py <file>
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::BTreeMap;
@@ -177,9 +180,119 @@ fn middle(folder: &std::path::Path) -> Option<(usize, Vec<u8>)> {
     ))
 }
 
-/// One kind of call, over the sampled states, for as long as asked: what a sampling profiler looks at. Every call is
-/// on a fresh copy of its state (a world keeps its observation once made, and an action changes it), so the copy and
-/// its release are in the samples too, under `sz_world_clone` and `sz_world_free`.
+// ---------------------------------------------------------------------------------------------------------------------
+// Sampling the test's own stack
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// A sampling profiler with nothing but the C library: a timer of the process's CPU time interrupts the working
+/// thread, and the handler notes the return addresses on its stack. The addresses are written as they are, with where
+/// the program was loaded; engine/sample.py names them.
+mod stacks {
+    use std::cell::Cell;
+    use std::ffi::c_void;
+    use std::io::Write;
+    use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering::Relaxed};
+
+    #[repr(C)]
+    struct Timeval {
+        seconds: i64,
+        micros: i64,
+    }
+
+    #[repr(C)]
+    struct Itimerval {
+        interval: Timeval,
+        value: Timeval,
+    }
+
+    unsafe extern "C" {
+        fn backtrace(buffer: *mut *mut c_void, size: i32) -> i32;
+        fn signal(signal: i32, handler: usize) -> usize;
+        fn setitimer(which: i32, new: *const Itimerval, old: *mut Itimerval) -> i32;
+    }
+
+    /// Linux, x86-64 and aarch64 alike.
+    const SIGPROF: i32 = 27;
+    const ITIMER_PROF: i32 = 2;
+    const DEPTH: usize = 128;
+    /// Room for the samples: each is its length and its addresses.
+    const ROOM: usize = 6_000_000;
+
+    static NOTED: AtomicPtr<usize> = AtomicPtr::new(std::ptr::null_mut());
+    static USED: AtomicUsize = AtomicUsize::new(0);
+
+    thread_local! {
+        /// Whether this is the thread whose stacks are wanted: the test harness's own threads only wait.
+        static WANTED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    extern "C" fn tick(_: i32) {
+        if !WANTED.with(Cell::get) {
+            return;
+        }
+        let mut frames = [std::ptr::null_mut::<c_void>(); DEPTH];
+        let n = unsafe { backtrace(frames.as_mut_ptr(), DEPTH as i32) } as usize;
+        let at = USED.fetch_add(n + 1, Relaxed);
+        let noted = NOTED.load(Relaxed);
+        if noted.is_null() || at + n + 1 > ROOM {
+            return;
+        }
+        unsafe {
+            *noted.add(at) = n;
+            for (i, frame) in frames[..n].iter().enumerate() {
+                *noted.add(at + 1 + i) = *frame as usize;
+            }
+        }
+    }
+
+    fn timer(micros: i64) {
+        let every = Itimerval {
+            interval: Timeval { seconds: 0, micros },
+            value: Timeval { seconds: 0, micros },
+        };
+        unsafe { setitimer(ITIMER_PROF, &every, std::ptr::null_mut()) };
+    }
+
+    /// Samples the calling thread from now on, a thousand times a second of the process's CPU time.
+    pub fn start() {
+        // The first call of `backtrace` readies the unwinder, which a signal handler must not be the one to do.
+        let mut frames = [std::ptr::null_mut::<c_void>(); 4];
+        unsafe { backtrace(frames.as_mut_ptr(), 4) };
+        NOTED.store(Box::leak(vec![0usize; ROOM].into_boxed_slice()).as_mut_ptr(), Relaxed);
+        WANTED.with(|wanted| wanted.set(true));
+        unsafe { signal(SIGPROF, tick as extern "C" fn(i32) as usize) };
+        timer(1000);
+    }
+
+    /// Stops sampling and writes the samples: the program's mappings (which file each address is of), then one line of
+    /// addresses a sample, the innermost first.
+    pub fn write(path: &str) {
+        timer(0);
+        WANTED.with(|wanted| wanted.set(false));
+        let used = USED.load(Relaxed).min(ROOM);
+        let noted = unsafe { std::slice::from_raw_parts(NOTED.load(Relaxed), used) };
+        let mut out = std::io::BufWriter::new(std::fs::File::create(path).expect(path));
+        for line in std::fs::read_to_string("/proc/self/maps").unwrap().lines() {
+            if line.split_whitespace().nth(5).is_some_and(|file| file.starts_with('/')) {
+                writeln!(out, "map {line}").unwrap();
+            }
+        }
+        let (mut at, mut samples) = (0, 0);
+        while at < used && at + 1 + noted[at] <= used {
+            let n = noted[at];
+            let line: Vec<String> = noted[at + 1..at + 1 + n].iter().map(|a| format!("{a:x}")).collect();
+            writeln!(out, "{}", line.join(" ")).unwrap();
+            at += n + 1;
+            samples += 1;
+        }
+        eprintln!("spin: {samples} stacks in {path}");
+    }
+}
+
+/// One kind of call, over the sampled states, for as long as asked, sampling its own stack if asked where to write
+/// the stacks. Every call is on a fresh copy of its state (a world keeps its observation once made, and an action
+/// changes it), so the copy and its release are in the samples too, under `sz_world_clone` and `sz_world_free`.
+/// `node` is what search asks of a state it reaches: the observation, the plays and the two keys.
 #[test]
 #[ignore = "for a profiler, run by hand"]
 fn spin() {
@@ -210,6 +323,10 @@ fn spin() {
         states.len(),
         std::process::id()
     );
+    let stacks = std::env::var("STS2AI_SPEED_STACKS").ok();
+    if stacks.is_some() {
+        stacks::start();
+    }
     let start = Instant::now();
     let mut calls = 0u64;
     while start.elapsed().as_secs_f64() < seconds {
@@ -224,12 +341,16 @@ fn spin() {
                 }
                 "observe" => drop(world.copy().text(ffi::sz_world_observe)),
                 "legal" => drop(world.copy().text(ffi::sz_world_legal)),
-                "hidden_key" => {
-                    unsafe { ffi::sz_world_hidden_key(world.copy().0) };
+                "node" => {
+                    let copy = world.copy();
+                    drop(copy.text(ffi::sz_world_observe));
+                    drop(copy.text(ffi::sz_world_legal));
+                    unsafe { ffi::sz_world_state_key(copy.0) };
+                    unsafe { ffi::sz_world_hidden_key(copy.0) };
                 }
                 "clone" => drop(world.copy()),
                 other => panic!(
-                    "STS2AI_SPEED_SPIN={other}: play, end_turn, observe, hidden_key, legal or clone"
+                    "STS2AI_SPEED_SPIN={other}: play, end_turn, observe, node, legal or clone"
                 ),
             }
             if actions.is_empty() {
@@ -238,6 +359,9 @@ fn spin() {
         }
     }
     let spent = start.elapsed().as_secs_f64();
+    if let Some(path) = stacks {
+        stacks::write(&path);
+    }
     eprintln!(
         "spin: {calls} calls in {spent:.1} s, {:.1} us a call with its copy",
         spent * 1e6 / calls as f64
@@ -254,7 +378,7 @@ fn observation_parts(live: &Live, series: &mut BTreeMap<&'static str, Series>) {
         let st = g::combat::combat_manager::debug_only_get_state(manager, c);
         (st, g::context::local_context::get_me__i_combat_state(st, c))
     };
-    let fresh: Vec<Live> = (0..60).map(|_| live.clone()).collect();
+    let fresh: Vec<Live> = (0..200).map(|_| live.clone()).collect();
     let mut next = fresh.into_iter();
     let mut views = None;
     series
@@ -286,6 +410,64 @@ fn observation_parts(live: &Live, series: &mut BTreeMap<&'static str, Series>) {
                 }
             }
         }));
+    // Of a card's view, the game's getters that ask the combat's listeners.
+    type Getter = fn(sts2ai_engine::r#gen::kinds::CardModel, &mut sts2ai_engine::rt::Combat);
+    let getters: [(&'static str, Getter); 5] = [
+        ("observe: the cards' energy cost", |card, c| {
+            let cost = g::models::card_model::energy_cost(card, c);
+            if !g::entities_cards::card_energy_cost::costs_x(cost, c) {
+                std::hint::black_box(g::entities_cards::card_energy_cost::get_with_modifiers(
+                    cost,
+                    sts2ai_engine::r#gen::enums::CostModifiers::All,
+                    c,
+                ));
+            }
+        }),
+        ("observe: the cards' star cost", |card, c| {
+            if g::dispatch::card_model::canonical_star_cost(card, c) >= 0 {
+                std::hint::black_box(g::models::card_model::get_star_cost_with_modifiers(card, c));
+            }
+        }),
+        ("observe: the cards' keywords", |card, c| {
+            std::hint::black_box(g::models::card_model::keywords(card, c));
+        }),
+        ("observe: the cards' replay count", |card, c| {
+            std::hint::black_box(g::models::card_model::get_enchanted_replay_count(card, c));
+        }),
+        ("observe: the cards' calculated number", |card, c| {
+            let vars = g::models::card_model::dynamic_vars(card, c);
+            let values = g::localization_dynamic_vars::dynamic_var_set::values(vars, c);
+            let first = values
+                .into_iter()
+                .find(|v| sts2ai_engine::rt::is(*v, sts2ai_engine::r#gen::kinds::Kind::CalculatedVar, c));
+            if let Some(v) = first {
+                std::hint::black_box(g::localization_dynamic_vars::calculated_var::calculate(
+                    v,
+                    sts2ai_engine::rt::Obj::NULL,
+                    c,
+                ));
+            }
+        }),
+    ];
+    for (name, getter) in getters {
+        series.entry(name).or_default().add(micros(4, || {
+            let mut copy = next.next().unwrap();
+            let c = copy.combat();
+            let (_, player) = who(c);
+            let pcs = g::entities_players::player::player_combat_state(player, c);
+            let piles = [
+                g::entities_players::player_combat_state::hand(pcs, c),
+                g::entities_players::player_combat_state::draw_pile(pcs, c),
+                g::entities_players::player_combat_state::discard_pile(pcs, c),
+                g::entities_players::player_combat_state::exhaust_pile(pcs, c),
+            ];
+            for pile in piles {
+                for card in g::entities_cards::card_pile::cards(pile, c) {
+                    getter(card, c);
+                }
+            }
+        }));
+    }
     let views = views.unwrap();
     series
         .entry("observe: the cards, how many")
@@ -448,6 +630,11 @@ fn speed() {
         ("observe", "us"),
         ("observe: the views", "us"),
         ("observe: of them the cards", "us"),
+        ("observe: the cards' energy cost", "us"),
+        ("observe: the cards' star cost", "us"),
+        ("observe: the cards' keywords", "us"),
+        ("observe: the cards' replay count", "us"),
+        ("observe: the cards' calculated number", "us"),
         ("observe: the cards, how many", ""),
         ("observe: JSON", "us"),
         ("observation", "KB"),

@@ -78,6 +78,14 @@ fn potions(player: Player, c: &mut Combat) -> Vec<Option<Str>> {
 
 /// C#: Observe.Combat.
 pub fn combat(st: CombatState, player: Player, c: &mut Combat) -> CombatObservation {
+    seen(st, player, c).0
+}
+
+/// The observation, and beside it the draw pile's cards as their card keys in the pile's own order: the observation
+/// lists the pile sorted, and the hidden key (keys.rs) tells draw piles apart by their order. The cards are read once
+/// for both.
+pub fn seen(st: CombatState, player: Player, c: &mut Combat) -> (CombatObservation, Vec<Vec<u8>>) {
+    let mut draw_order = Vec::new();
     let pcs = g::entities_players::player::player_combat_state(player, c);
     if rt::is_null(&pcs) {
         panic!("player has no combat state");
@@ -87,7 +95,7 @@ pub fn combat(st: CombatState, player: Player, c: &mut Combat) -> CombatObservat
     let arrows = g::entities_players::player_combat_state::arrows(pcs, c);
     let encounter = g::combat::combat_state::encounter(st, c);
     let run_state = g::combat::combat_state::run_state(st, c);
-    CombatObservation {
+    let observation = CombatObservation {
         encounter: if rt::is_null(&encounter) { None } else { Some(entry(encounter, c)) },
         room: if rt::is_null(&encounter) {
             None
@@ -162,7 +170,7 @@ pub fn combat(st: CombatState, player: Player, c: &mut Combat) -> CombatObservat
                 .into_iter()
                 .map(|x| card(x, false, c))
                 .collect();
-            sort_by_key(&mut cards);
+            draw_order = sort_by_key(&mut cards);
             cards
         },
         discard: {
@@ -199,7 +207,8 @@ pub fn combat(st: CombatState, player: Player, c: &mut Combat) -> CombatObservat
                 .collect()
         },
         prompt: None,
-    }
+    };
+    (observation, draw_order)
 }
 
 /// C#: Observe.Card. A card as the player sees it; with its uid only if asked (cards in hand).

@@ -437,7 +437,9 @@ int32_t  sz_last_error(sz_buf *out);                               // this threa
 ```
 
 `sz_buf` is `{ uint8_t *ptr; size_t len; }`. Actions are `CombatAction`'s text form. The observation is produced by
-`observe.rs`, which mirrors `src/Sts2Ai.GameBridge/Observe.cs` member by member.
+`observe.rs`, which mirrors `src/Sts2Ai.GameBridge/Observe.cs` member by member. A world reads its observation once
+where it stands: the state key is its hash, and the hidden key takes the draw pile's card keys from it (the same
+cards, in the pile's own order) and reads only the random streams, the monsters' moves and the turn's history beside.
 
 ## The lockstep check
 
@@ -461,9 +463,10 @@ C ABI: a world is held against a record by its observation, its legal actions, i
 run and its two keys) and `--test world` (every combat is played through by the world alone, no action refused). A
 dump is of one schema: it is stale when the schema's hash changes. `--test speed -- --ignored --nocapture` measures the
 engine's own operations on the middle decision of the dump's combats (import, clone, apply by kind of action, the
-observation, the keys) and what a copy costs arena by arena; its `spin` does one kind of call again and again for
-`engine/sample.py`, which stops the process with gdb and counts which functions were on the stack. `engine/reach.py`
-lists the members without code that a combat could reach, each with the chain of callers.
+observation and what its parts cost, the keys) and what a copy costs arena by arena; its `spin` does one kind of call
+again and again and samples its own stack a thousand times a second (a timer signal and the C library's `backtrace`,
+no other tool), and `engine/sample.py` names the addresses and counts which functions were on the stack.
+`engine/reach.py` lists the members without code that a combat could reach, each with the chain of callers.
 
 ## Credit
 

@@ -517,11 +517,15 @@ pub fn sorted_keys(cards: &[CardView]) -> Vec<Vec<u8>> {
     keys
 }
 
-/// The cards sorted by card key (see `sorted_keys`), for the piles an observation lists as multisets.
-pub fn sort_by_key(cards: &mut Vec<CardView>) {
-    let mut keyed: Vec<(Vec<u8>, CardView)> = std::mem::take(cards).into_iter().map(|c| (card_key(&c), c)).collect();
-    keyed.sort_by(|a, b| a.0.cmp(&b.0));
-    cards.extend(keyed.into_iter().map(|(_, c)| c));
+/// The cards sorted by card key (see `sorted_keys`), for the piles an observation lists as multisets. Gives the keys
+/// in the order the cards came.
+pub fn sort_by_key(cards: &mut Vec<CardView>) -> Vec<Vec<u8>> {
+    let keys: Vec<Vec<u8>> = cards.iter().map(card_key).collect();
+    let mut order: Vec<usize> = (0..cards.len()).collect();
+    order.sort_by(|a, b| keys[*a].cmp(&keys[*b]));
+    let mut came: Vec<Option<CardView>> = std::mem::take(cards).into_iter().map(Some).collect();
+    cards.extend(order.into_iter().map(|at| came[at].take().expect("an index once")));
+    keys
 }
 
 /// C#: ProtocolJson.Serialize of what `sz_world_run` gives (EngineWorld.RunChange).

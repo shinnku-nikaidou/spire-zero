@@ -41,10 +41,17 @@ pub trait World: Clone + Send + Sized + 'static {
 /// The world behind the C ABI.
 type Engine = crate::world::Live;
 
-/// A world and what was read of it where it stands: the observation, which the state key is the hash of too.
+/// A world and what was read of it where it stands.
 struct Handle<W: World> {
     world: W,
-    shown: Option<CombatObservation>,
+    shown: Option<Shown>,
+}
+
+/// What was read of a world where it stands: the observation, which the state key is the hash of too, and the draw
+/// pile's card keys in the pile's order, which the hidden key is made of.
+struct Shown {
+    observation: CombatObservation,
+    draw: Vec<Vec<u8>>,
 }
 
 impl<W: World> Handle<W> {
@@ -53,14 +60,14 @@ impl<W: World> Handle<W> {
     }
 
     /// C#: RunSession.Combat. The combat as a decision shows it, with the prompt it waits on.
-    fn shown(&mut self) -> &CombatObservation {
+    fn shown(&mut self) -> &Shown {
         if self.shown.is_none() {
             let asked = self.world.asked().cloned();
             let c = self.world.combat();
             let (st, player) = live(c);
-            let mut observation = observe::combat(st, player, c);
+            let (mut observation, draw) = observe::seen(st, player, c);
             observation.prompt = asked.map(|asked| prompt::canonical(&asked, c).0);
-            self.shown = Some(observation);
+            self.shown = Some(Shown { observation, draw });
         }
         self.shown.as_ref().expect("just read")
     }
@@ -286,7 +293,7 @@ pub unsafe extern "C" fn sz_world_observe(world: u64, out: *mut SzBuf) -> i32 {
     unsafe {
         fill(world, out, |handle| {
             let mut json = Vec::with_capacity(4096);
-            protocol::observation_json(handle.shown(), &mut json);
+            protocol::observation_json(&handle.shown().observation, &mut json);
             json
         })
     }
@@ -316,9 +323,12 @@ pub unsafe extern "C" fn sz_world_run(world: u64, out: *mut SzBuf) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_hidden_key(world: u64) -> u64 {
     call(0, || {
-        let c = unsafe { self::world(world) }?.world.combat();
+        let handle = unsafe { self::world(world) }?;
+        handle.shown();
+        let draw = &handle.shown.as_ref().expect("just read").draw;
+        let c = handle.world.combat();
         let (st, player) = live(c);
-        Ok(keys::full(st, player, c))
+        Ok(keys::full(st, player, draw, c))
     })
 }
 
@@ -328,7 +338,7 @@ pub unsafe extern "C" fn sz_world_hidden_key(world: u64) -> u64 {
 /// `world` as for `sz_world_clone`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_state_key(world: u64) -> u64 {
-    call(0, || Ok(protocol::state_key(unsafe { self::world(world) }?.shown())))
+    call(0, || Ok(protocol::state_key(&unsafe { self::world(world) }?.shown().observation)))
 }
 
 /// Gives back a buffer one of the calls above filled.
