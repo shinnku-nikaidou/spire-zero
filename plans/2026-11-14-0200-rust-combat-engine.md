@@ -562,3 +562,16 @@
   - 接下來照剖析的順序：(1) 型別判斷——`is_subclass` 改成兩次比較（已寫成補丁 `tmp/engine/is-subclass.patch`，等 dotnet
     能跑再生成、驗證、量測），再來是 `kind_of` 不經跳表與讀物件；(2) 監聽者走訪裡被整份複製的清單；(3) 隱藏鍵直接由狀態
     雜湊；(4) 複製再降一級（arena 的控制代碼清單也共用，約 2 微秒）。
+- 08:27 （協調）**本機故障**（engine-bridge 08:25 發現，我自己查過屬實）：08:13 起系統的動態載入器
+  `/usr/lib64/ld-linux-x86-64.so.2` 在核心提供的內容裡有兩個位元組是錯的（位移 0x4f52 讀到 03、0x4f5a 讀到 a5，套件裡是
+  83、85；sha256 與套件記錄不符），所有 dotnet 啟動都 SIGSEGV（`dotnet --version` 回 139），python3、rpm 在結束時也會。
+  核心紀錄裡是 ld-linux 位移 4f54 的 segfault，沒有 OOM kill、沒有 machine check。08:13:31–08:22:53 有 1,156 次 gdb
+  當掉（某個 gdb 取樣迴圈，core 檔 4 GB），現在沒有在跑的。Rust 工具鏈與 git 正常。
+  - 之前發生的事：engine-bridge 的一局（方案 B、單執行緒、每場戰鬥都以提示開場）從 07:55 到 08:19 漲到 37 GB，把 46 GB 的
+    記憶體吃滿，壞位元就是那時出現的。是記憶體還是核心的問題不知道。那個 37 GB 是方案 B 的 bug，engine-bridge 在查。
+  - 後果：本機在用戶重開機之前不能跑 port（生成）也不能跑 `sim`。**07:55 之後在本機量到、驗到的數字一律不算已驗證**
+    （包含 08:17 那張節點成本表與 Gambling Chip 的兩局），重開機後各自重量、我再重跑。不繞過載入器。
+  - 重開機前還能做的：只動 Rust 的部分（步驟 6 三件確定的事、計時基準）、讀程式找 37 GB、對齊 `sz_world_step`。
+  - 從現在起的規矩：本機每個工作都加記憶體上限（`systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=0 …`
+    或腳本裡 `ulimit -v`），同時合計約 30 GB 以內；跑飛的工作自己死，不拖垮整台機器。
+  - 我先前建議 engine-port 用 gdb 取樣，這個建議在重開機前撤回。
