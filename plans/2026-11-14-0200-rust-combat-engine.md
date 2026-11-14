@@ -693,3 +693,9 @@
     需要自己的規則和報告清單。
   - 下一步（步驟 6）：結束回合仍是節點裡最貴的（每個 hook 對每個監聽者還要做一次虛擬呼叫：讀物件取類別再跳表）；
     把類別放進控制代碼（kind_of 不讀物件）、arena 的控制代碼清單也在複本間共用。細節在筆記 engine-port.md。
+- 10:40 （協調）gcpsg 照用戶的話（「裝，用 gcpsg」）準備好了：以 shinnku 身分裝了 Rust 1.100.0（rustfmt、clippy）與 .NET SDK 9.0.320，
+  放在 `~/engine`，和 fleet 的 `~/sts2` 分開。gcpsg 沒有 GitHub 的憑證，所以程式碼這樣過去：先 push 到 GitHub，再從這裡
+  push 到 gcpsg 上的裸儲存庫，那邊的工作樹再 pull。三個工作樹（協調、engine-bridge、engine-port 各一）；反編譯的遊戲與遊戲
+  組件另外複製過去（不進 git）。在那邊建置一次約 7 分鐘（在 pool 的 32 條執行緒旁邊、nice 19），引擎世界的小型對拍 72 場
+  0 差異。使用方式寫在 fleet 技能的 `references/remote-checkout.md`（本機、不進 git）。限制：那台的 CPU 正被用戶的測試佔滿，
+  我們三方合計最多 16 個行程、記憶體合計約 120 G；在那邊量的速度不和本機比，每局 CPU 的數列照舊在本機量。
