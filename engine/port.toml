@@ -236,6 +236,13 @@ EventRoom = ["_isPreFinished"]
 # finished command, for its plain fields).
 transient = ["AttackCommand._afterAttackerAnim", "AttackCommand._beforeDamage"]
 
+[memo]
+# Walks that build a list of the combat's objects and then hand on each one that passes a test (DESIGN.md, "Kept
+# walks"): the list, and each test's answer once asked, are kept while nothing in the combat is written, and used by
+# the next walk. What the list and the test read is objects only (no static of [roots]); a write between two items
+# sends the rest of that walk to the test as the game asks it. Every hook walks these, most of them more than once.
+walks = ["CombatState.IterateHookListeners", "RunState.IterateHookListeners"]
+
 [caches]
 # Statics that only remember the result of a computation: never kept, computed at each use.
 members = [

@@ -22,6 +22,8 @@ public sealed partial class Body
             case ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var chosen } } pick when !droppedLocals.Contains(chosen) && HoldsObjects(chosen.Type) && IsPresentation(pick.Value):
                 w.Rep.Count("a local set from a screen left as a panic");
                 return $"panic!(\"{Where}: {NameOf(chosen)} comes from presentation\")";
+            case ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var held } } na when nullLocals.Contains(held):
+                return $"{NameOf(held)} = {MaybeNull(na.Value)}";
             case ISimpleAssignmentOperation a:
             {
                 string there = PresenceWrite(a.Target, a.Value) is { } set ? $"let __there = {set.Split(" = ")[1]}; " : "";
@@ -173,6 +175,8 @@ public sealed partial class Body
             case IConversionOperation cv: return Conv(cv);
             case IBinaryOperation b: return Binary(b);
             case IUnaryOperation u: return Unary(u);
+            case ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var held } } na when nullLocals.Contains(held):
+                throw new Unsupported("a collection that can be null, set inside an expression");
             case ISimpleAssignmentOperation a:
             {
                 string code = Assign(a.Target, () => Guard(a.Value, "a write of presentation to state"), true);
@@ -267,9 +271,42 @@ public sealed partial class Body
 
     private string CloneOf(ITypeSymbol? t) => w.IsCopy(t) ? "" : ".clone()";
 
+    /// <summary>The locals of collection type that can be null, as an Option (World.NullLocals), and whether the
+    /// member's own result can be (World.ReturnsNullColl).</summary>
+    private HashSet<ILocalSymbol> nullLocals = new(Eq);
+    private bool nullReturn;
+    /// <summary>Set for the one call whose Option itself is wanted, not the collection in it.</summary>
+    private bool takeOption;
+
+    /// <summary>A value of collection type as an Option: None for null, the Option of a local or a call that can be
+    /// null, Some of any other.</summary>
+    private string MaybeNull(IOperation op)
+    {
+        var bare = op;
+        while (bare is IConversionOperation { IsTryCast: false } cv) bare = cv.Operand;
+        switch (bare)
+        {
+            case ILiteralOperation { ConstantValue: { HasValue: true, Value: null } }:
+            case IDefaultValueOperation:
+                return "None";
+            case ILocalReferenceOperation l when nullLocals.Contains(l.Local):
+                return $"{NameOf(l.Local)}.clone()";
+            case IInvocationOperation inv when w.ReturnsNullColl(inv.TargetMethod):
+                takeOption = true;
+                try { return Expr(bare); }
+                finally { takeOption = false; }
+            case IConditionalOperation { WhenFalse: { } otherwise } c:
+                return $"if {Expr(c.Condition)} {{ {MaybeNull(c.WhenTrue)} }} else {{ {MaybeNull(otherwise)} }}";
+            default:
+                return $"Some({Expr(op)})";
+        }
+    }
+
     private string Read(ISymbol local, ITypeSymbol? type)
     {
         if (droppedLocals.Contains(local)) throw new Dropped(local.Name);
+        // A collection that can be null, read as one: null is C#'s NullReferenceException.
+        if (local is ILocalSymbol nl && nullLocals.Contains(nl)) return $"rt::nn(&{NameOf(local)})";
         if (aliases.TryGetValue(local, out var place)) return place + ".clone()";
         return NameOf(local) + CloneOf(type);
     }
@@ -617,6 +654,9 @@ public sealed partial class Body
     /// <summary>A call. With `walk` (the code that takes each value), the call of a sequence's `__each` form.</summary>
     private string Invoke(IInvocationOperation op, string? walk = null)
     {
+        // Whether this call's Option is wanted (MaybeNull): for this call alone, not for the calls in its arguments.
+        bool optionWanted = takeOption;
+        takeOption = false;
         var m = op.TargetMethod;
         if (Value(m.ReducedFrom ?? m) is { } fixedValue) return fixedValue;
         if (m.MethodKind == MethodKind.LocalFunction) throw new Unsupported("local function");
@@ -682,6 +722,16 @@ public sealed partial class Body
             }
             // A task run on the side is what the task is: one that is presentation makes the whole call presentation.
             string code = def is { Name: "RunSafely", ContainingType.Name: "TaskHelper" } ? Expr(a.Value) : Guard(a.Value, $"a call of {type.Name}.{m.Name} with presentation");
+            // `ref x`, or a collection the callee changes, of a local the call alone reads: what the callee makes of it
+            // comes back to it right after, so the value is handed over, not copied.
+            if ((kind == RefKind.Ref || w.IsChangedParam(a.Parameter)) && Moved(a, op) is { } moved) code = moved;
+            // A collection that can be null, handed to a parameter: a parameter's collection is never null here, so
+            // null is the empty one.
+            else if (kind == RefKind.None && !w.IsChangedParam(a.Parameter) && World.CollOf(a.Value.Type) != World.Coll.None && World.MayBeNull(a.Value, nullLocals, w))
+            {
+                w.Rep.Count($"a collection that can be null, passed as an argument (null is the empty one): {Where}");
+                code = $"({MaybeNull(a.Value)}).unwrap_or_default()";
+            }
             if (!inOrder) { string t = Tmp("a"); pre.Add($"let {t} = {code};"); code = t; }
             args.Add(code);
         }
@@ -699,6 +749,9 @@ public sealed partial class Body
         }
         string call = $"{path}({string.Join(", ", args)})";
         if (valueCtor) call = $"me = {call}";
+        // A call whose collection can be null (World.ReturnsNullColl) gives an Option; read as the collection, null is
+        // C#'s NullReferenceException.
+        if (w.ReturnsNullColl(m) && !optionWanted) call = $"rt::nn(&{call})";
         if (outs.Count == 0) return pre.Count == 0 ? call : $"{{ {string.Join(" ", pre)} {call} }}";
         bool hasValue = !m.ReturnsVoid;
         var names = new List<string>();
@@ -706,6 +759,25 @@ public sealed partial class Body
         names.AddRange(outs);
         string pattern = names.Count == 1 ? names[0] : "(" + string.Join(", ", names) + ")";
         return $"{{ {string.Join(" ", pre)} let {pattern} = {call}; {string.Join(" ", after)} {(hasValue ? "__r" : "")} }}";
+    }
+
+    /// <summary>A `ref` argument, or one the callee changes, that is a local or parameter of this body (not one that stands for a field), whose
+    /// value is not a copy type and which no other part of the call mentions: the value taken out of the local, which
+    /// the call's result is written back into before anything else can read it.</summary>
+    private string? Moved(IArgumentOperation a, IInvocationOperation call)
+    {
+        ISymbol? s = a.Value switch
+        {
+            ILocalReferenceOperation l => l.Local,
+            IParameterReferenceOperation p => p.Parameter,
+            _ => null,
+        };
+        if (s == null || aliases.ContainsKey(s) || droppedLocals.Contains(s) || w.IsCopy(a.Value.Type)) return null;
+        bool Mentions(IOperation? o) => o != null && o.DescendantsAndSelf().Any(d =>
+            d is ILocalReferenceOperation { Local: var x } && Eq.Equals(x, s) || d is IParameterReferenceOperation { Parameter: var y } && Eq.Equals(y, s));
+        if (Mentions(call.Instance) || call.Arguments.Any(other => other != a && Mentions(other.Value))) return null;
+        w.Rep.Count("ref arguments handed over, not copied");
+        return $"std::mem::take(&mut {NameOf(s)})";
     }
 
     private string New(IObjectCreationOperation op)
@@ -757,6 +829,7 @@ public sealed partial class Body
     {
         switch (op)
         {
+            case ILocalReferenceOperation l when nullLocals.Contains(l.Local): return $"(*rt::nn_mut(&mut {NameOf(l.Local)}))";
             case ILocalReferenceOperation l:
                 if (droppedLocals.Contains(l.Local)) throw new Dropped(l.Local.Name);
                 return aliases.TryGetValue(l.Local, out var a) ? a.Replace("{ &", "{ &mut ").Replace("::of(", "::of_mut(") : NameOf(l.Local);
@@ -800,6 +873,7 @@ public sealed partial class Body
     {
         switch (op)
         {
+            case ILocalReferenceOperation l when nullLocals.Contains(l.Local): return $"(*rt::nn_ref(&{NameOf(l.Local)}))";
             case ILocalReferenceOperation l when !droppedLocals.Contains(l.Local): return aliases.TryGetValue(l.Local, out var a) ? a : NameOf(l.Local);
             case IParameterReferenceOperation p when !droppedLocals.Contains(p.Parameter): return NameOf(p.Parameter);
             case IInstanceReferenceOperation { ReferenceKind: InstanceReferenceKind.ImplicitReceiver }: return implicitReceivers.Peek();
@@ -884,6 +958,8 @@ public sealed partial class Body
             case ILocalReferenceOperation { IsDeclaration: true } decl when !droppedLocals.Contains(decl.Local) && !w.IsDropped(decl.Local.Type):
                 Hoist(decl.Local);
                 return Done($"{NameOf(decl.Local)} = $v", value());
+            case ILocalReferenceOperation { Local: var held } when nullLocals.Contains(held):
+                return Done($"{NameOf(held)} = $v", $"Some({value()})");
             case ILocalReferenceOperation or IParameterReferenceOperation or IArrayElementReferenceOperation:
             case IFieldReferenceOperation { Field.ContainingType.IsTupleType: true }:
                 return Done($"{Place(target)} = $v", value());
@@ -987,6 +1063,11 @@ public sealed partial class Body
             if (IsNullConst(other)) return b.OperatorKind == BinaryOperatorKind.Equals ? "true" : "false";
             if (other is IFieldReferenceOperation { Field: var cache } && w.IsCache(cache)) return b.OperatorKind == BinaryOperatorKind.Equals ? "true" : "false";
             if (Presence(other) is { } there) return b.OperatorKind == BinaryOperatorKind.Equals ? $"!{there}" : there;
+            if (World.CollOf(other.Type) != World.Coll.None && World.MayBeNull(other, nullLocals, w))
+            {
+                w.Rep.Count($"null test on a collection that can be null (an Option): {Where}: {other.Syntax.ToString().Split('\n')[0].Trim()} [{other.Kind}]");
+                return $"({MaybeNull(other)}).{(b.OperatorKind == BinaryOperatorKind.Equals ? "is_none" : "is_some")}()";
+            }
             if (World.CollOf(other.Type) != World.Coll.None) w.Rep.Count($"null test on a collection (never null here): {Where}: {other.Syntax.ToString().Split('\n')[0].Trim()} [{other.Kind}]");
             string tested;
             try { tested = Ref(other); }

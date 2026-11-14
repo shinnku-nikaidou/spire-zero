@@ -56,6 +56,9 @@ public sealed class Config
     /// <summary>Fields that hold a delegate which is never alive at a decision, as Class.Field: kept, not exported.</summary>
     public HashSet<string> TransientDelegates = [];
 
+    /// <summary>Walks whose list is kept while the combat is unchanged, as Class.Method, in the order of their slots.</summary>
+    public List<string> Memo = [];
+
     /// <summary>The version of the game the tables are for.</summary>
     public string GameVersion = "";
     /// <summary>The name of the game's assembly, as a type of it is named from outside.</summary>
@@ -91,6 +94,7 @@ public sealed class Config
         if (doc.TryGetValue("game", out var g) && g is TomlTable game && game.TryGetValue("version", out var ver)) c.GameVersion = (string)ver;
         if (doc.TryGetValue("game", out var g2) && g2 is TomlTable game2 && game2.TryGetValue("assembly", out var asm)) c.GameAssembly = (string)asm;
         foreach (var s in List(doc, "delegates", "transient")) c.TransientDelegates.Add(s);
+        c.Memo.AddRange(List(doc, "memo", "walks"));
         if (c.GameVersion.Length == 0) throw new InvalidDataException($"{path}: no [game] version");
         if (doc.TryGetValue("value", out var v) && v is TomlTable values)
             foreach (var kv in values) c.Values[kv.Key] = (string)kv.Value;

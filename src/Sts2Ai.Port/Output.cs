@@ -265,6 +265,7 @@ public sealed class Output(World w, Emitter em)
         sb.Append("\n/// Every object of a combat.\n#[derive(Clone, Debug, Default)]\npub struct Arenas {\n");
         foreach (var r in roots) sb.Append($"    pub {ArenaField(r)}: Arena<{w.DataName(r)}>,\n");
         foreach (var k in closures) sb.Append($"    pub {ArenaField(k)}: Arena<{k.Name}Data>,\n");
+        sb.Append("    /// How many times an object was written to or made (rt/memo.rs): every write goes through `of_mut` or `alloc`.\n    pub writes: u64,\n");
         sb.Append("}\n\n");
         sb.Append("impl Arenas {\n    /// While set, what is made is canonical (the building of the canonical models).\n    pub fn set_canon_build(&mut self, on: bool) {\n");
         foreach (var r in roots) sb.Append($"        self.{ArenaField(r)}.canon_build = on;\n");
@@ -297,7 +298,7 @@ public sealed class Output(World w, Emitter em)
             sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{\n        match me.tag() {{\n");
             foreach (var r in under) sb.Append($"            {Tag(r)} => &c.a.{ArenaField(r)}[me].{field},\n");
             sb.Append($"            _ => panic!(\"not a {w.Unique(o)}: {{:?}}\", me),\n        }}\n    }}\n");
-            sb.Append($"    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n        match me.tag() {{\n");
+            sb.Append($"    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n        c.a.writes += 1;\n        match me.tag() {{\n");
             foreach (var r in under) sb.Append($"            {Tag(r)} => &mut c.a.{ArenaField(r)}[me].{field},\n");
             sb.Append($"            _ => panic!(\"not a {w.Unique(o)}: {{:?}}\", me),\n        }}\n    }}\n}}\n\n");
         }
@@ -312,8 +313,8 @@ public sealed class Output(World w, Emitter em)
             if (carriers.Count > 0) sb.Append($"    pub ext: {w.Unique(r)}Ext,\n");
             sb.Append("}\n\n");
             sb.Append($"impl Stored for {data} {{\n    const TAG: u16 = {Tag(r)};\n}}\n\n");
-            sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{ &c.a.{arena}[me] }}\n    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{ &mut c.a.{arena}[me] }}\n");
-            sb.Append($"    pub fn alloc(kind: Kind, c: &mut Combat) -> Obj {{\n        c.a.{arena}.alloc({data} {{ kind, {(carriers.Count > 0 ? $"ext: {w.Unique(r)}Ext::of_kind(kind), " : "")}..Default::default() }})\n    }}\n}}\n\n");
+            sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{ &c.a.{arena}[me] }}\n    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n        c.a.writes += 1;\n        &mut c.a.{arena}[me]\n    }}\n");
+            sb.Append($"    pub fn alloc(kind: Kind, c: &mut Combat) -> Obj {{\n        c.a.writes += 1;\n        c.a.{arena}.alloc({data} {{ kind, {(carriers.Count > 0 ? $"ext: {w.Unique(r)}Ext::of_kind(kind), " : "")}..Default::default() }})\n    }}\n}}\n\n");
             if (carriers.Count == 0) continue;
             string ext = w.Unique(r) + "Ext";
             sb.Append($"/// The fields of the classes below {w.Unique(r)}.\n#[derive(Clone, Debug, Default)]\npub enum {ext} {{\n    #[default]\n    None,\n");
@@ -440,7 +441,56 @@ public sealed class Output(World w, Emitter em)
         sb.Append("/// The class of a schema name.\npub fn kind_by_name(name: &str) -> Option<Kind> {\n    static BY_NAME: std::sync::OnceLock<std::collections::HashMap<&'static str, Kind>> = std::sync::OnceLock::new();\n" +
             "    BY_NAME.get_or_init(|| KIND_SCHEMA_NAMES.iter().copied().zip(ALL_KINDS).skip(1).collect()).get(name).copied()\n}\n\n");
         sb.Append("pub fn kind_name(k: Kind) -> Str {\n    Str::lit(KIND_NAMES[k as usize])\n}\n\n");
-        sb.Append("/// Whether a class is, or derives from, or implements another.\npub fn is_subclass(k: Kind, of: Kind) -> bool {\n    k == of || ANCESTORS[k as usize].contains(&of)\n}\n\n");
+        // The classes numbered so that a class and everything below it are one run of numbers (the class first, then
+        // each class directly below it with its own run): `x is T` for a class T is then two comparisons.
+        var below = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(Eq);
+        var tops = new List<INamedTypeSymbol>();
+        foreach (var k in kinds.Where(k => k.TypeKind != TypeKind.Interface))
+        {
+            var above = k.BaseType?.OriginalDefinition;
+            if (above == null || !w.Kinds.ContainsKey(above)) { tops.Add(k); continue; }
+            if (!below.TryGetValue(above, out var under)) below[above] = under = new List<INamedTypeSymbol>();
+            under.Add(k);
+        }
+        var order = new Dictionary<INamedTypeSymbol, (int First, int Last)>(Eq);
+        int next = 0;
+        void Number(INamedTypeSymbol k)
+        {
+            int first = ++next;
+            if (below.TryGetValue(k, out var under))
+                foreach (var b in under) Number(b);
+            order[k] = (first, next);
+        }
+        foreach (var k in tops) Number(k);
+        sb.Append($"/// Each class's number in an order where a class and all below it are one run; 0 for an interface.\nstatic ORDER: [u16; {kinds.Count + 1}] = [0, {string.Join(", ", kinds.Select(k => order.TryGetValue(k, out var o) ? o.First : 0))}];\n\n");
+        sb.Append($"/// The run of a class: its own number and the last one below it; (0, 0) for an interface.\nstatic RUN: [(u16, u16); {kinds.Count + 1}] = [(0, 0), {string.Join(", ", kinds.Select(k => order.TryGetValue(k, out var o) ? $"({o.First}, {o.Last})" : "(0, 0)"))}];\n\n");
+        sb.Append("/// Whether a class is, or derives from, or implements another.\n#[inline]\npub fn is_subclass(k: Kind, of: Kind) -> bool {\n" +
+            "    let (first, last) = RUN[of as usize];\n    if last != 0 {\n        let at = ORDER[k as usize];\n        return first <= at && at <= last;\n    }\n" +
+            "    k == of || ANCESTORS[k as usize].contains(&of)\n}\n\n");
+        // `x is T` by the arena x is in, which the handle says: an arena whose class is a T holds only Ts, an arena no
+        // class of which is a T holds none, and only in an arena with some of each is the object's own class read.
+        int tags = roots.Count + Closures().Count + 1, words = (tags + 63) / 64;
+        string Bits(IEnumerable<int> set)
+        {
+            var w64 = new ulong[words];
+            foreach (int t in set) w64[t / 64] |= 1UL << (t % 64);
+            return "[" + string.Join(", ", w64.Select(x => $"0x{x:x}")) + "]";
+        }
+        var families = roots.Select((r, i) => (Tag: i + 1, Root: r,
+            Classes: kinds.Where(k => k.TypeKind == TypeKind.Class && Eq.Equals(w.Root(k), r)).ToList())).ToList();
+        sb.Append($"/// For each class, the arenas (by tag) that hold only objects of it, and those that hold some.\nstatic IN_ARENAS: [([u64; {words}], [u64; {words}]); {kinds.Count + 1}] = [\n    ({Bits([])}, {Bits([])}),\n");
+        foreach (var k in kinds)
+        {
+            var all = families.Where(f => Derives(f.Root, k)).Select(f => f.Tag).ToList();
+            var some = families.Where(f => !Derives(f.Root, k) && f.Classes.Any(c => Derives(c, k))).Select(f => f.Tag).ToList();
+            sb.Append($"    ({Bits(all)}, {Bits(some)}),\n");
+        }
+        sb.Append("];\n\n");
+        sb.Append("/// C#: `o is T`: whether the object is not null and of the class or below it. The arena tells, but where it holds\n" +
+            "/// objects of both kinds.\n#[inline]\npub fn is_kind(o: Obj, of: Kind, c: &crate::rt::Combat) -> bool {\n" +
+            "    let t = o.tag() as usize;\n    let (all, some) = &IN_ARENAS[of as usize];\n" +
+            "    if (all[t / 64] >> (t % 64)) & 1 == 1 {\n        return true;\n    }\n" +
+            "    (some[t / 64] >> (t % 64)) & 1 == 1 && is_subclass(kind_of(o, c), of)\n}\n\n");
         sb.Append("pub use crate::r#gen::state::kind_of;\n\n");
         foreach (var k in kinds) sb.Append($"pub type {w.Unique(k)} = Obj;\n");
         return sb.ToString();

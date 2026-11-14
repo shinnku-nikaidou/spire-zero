@@ -8,6 +8,7 @@ pub mod func;
 pub mod import;
 pub mod linq;
 pub mod list;
+pub mod memo;
 pub mod obj;
 pub mod ops;
 pub mod random;

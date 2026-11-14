@@ -132,7 +132,8 @@ it.
 | `async Task<T> M()`, `await M()` | `fn m(..) -> R<T>`, `m(..)?` |
 | `M<T>(a)` where `T` is a game class | `m(Kind::T, a, c)`: the type argument is a `Kind` value, first in the list. A generic class keeps its type arguments as `Kind` fields |
 | `M<T>(a)` otherwise | a Rust generic, `T: Val` |
-| `x is T`, `(T)x`, `x as T` | `rt::is(x, Kind::T, c)`, `rt::cast(x, Kind::T, c)` (panics on another class), `rt::as_(x, Kind::T, c)` |
+| `x is T`, `(T)x`, `x as T` | `rt::is(x, Kind::T, c)`, `rt::cast(x, Kind::T, c)` (panics on another class), `rt::as_(x, Kind::T, c)`. The handle names the arena, and for each class `kinds.rs` has the arenas that hold only Ts and those that hold some: only in the second is the object's own class read, and then compared by number (the classes are numbered so that a class and all below it are one run) |
+| `ref x`, or a collection the callee changes, where `x` is a local the call alone reads | the value is handed over (`std::mem::take`) and the call's result written back right after; a member gives its `ref` and `out` parameters away where it returns |
 | a virtual member | `gen/dispatch.rs`: `g::dispatch::<class that declares it>::m(me, .., c)`, a `match` on the object's kind to the most derived override; `base.M()` calls the parent's function directly |
 | `new T(a)` | `t::new(a, c)`: a slot with the class's kind, then `t::ctor(me, a, c)` (field initializers, the base constructor, the body) |
 | a generic struct (`SavedProperty<T>`) | a generic Rust struct. In the schema each way the state closes it is a struct of its own (`SavedPropertiesSavedPropertyOfI32`), under the name the game's assembly finds it by: the arguments with their assemblies (`..SavedProperty`1[[System.Int32, System.Private.CoreLib]]`) |
@@ -140,6 +141,7 @@ it.
 | an enum | a number with named values (`CardType::Attack`, `struct CardType(pub i32)`), so that casts, flags and arithmetic are C#'s |
 | a struct; a class named in `[values]` (`ModelId`) | a Rust struct held by value and compared by content |
 | `List<T>`, `IEnumerable<T>`, `IReadOnlyList<T>`, arrays | `Vec<T>` by value; LINQ through `rt::linq` (`where_`, `select`, ...), evaluated at once. A local that only reads a list out of a field (`var hand = pile.Cards`) stands for that field, so it sees later changes as the C# reference does. A null collection is an empty one |
+| a local of collection type that is ever set to what can be null (`null`, such a local, a call of a method whose result can be null), and the result of a method (not virtual, not async) that can return null | `Option<Vec<T>>`: `== null` is `is_none()`; read as the collection it is `rt::nn(&x)`, which panics where C# throws; handed to a parameter, null is the empty collection, as a parameter's collection is never null here. Every other collection is never null (`== null` is false), and the report lists each null test on a collection with which of the two it is |
 | a collection field the game declares nullable (`HashSet<CardKeyword>? _keywords`, made when first asked for) | the collection and a flag beside it, `_keywords__set`: a collection is a value and has no null of its own. `== null`, `is null`, `??`, `??=` and `?.` on the field read the flag, a write sets it, and the import sets it from the export's `null`. Any other collection that is null is an empty one |
 | a property that hands out a collection of another object (`=> GetInternalData<Data>().list`), changed in place | the other object is computed, then its field is changed |
 | what follows a test that is always true and always leaves (`if (TestMode.IsOn) return;`) | not translated: it never runs |
@@ -162,6 +164,7 @@ it.
 | a change through a computed object (`x.GetEntry(id).Cards.Add(card)`) | the object is computed once into a local, before the arguments, as in C# |
 | labels and `goto` (the decompiler's) | the block is cut into parts at its labels; a loop runs the parts in order, or the one a `goto` names; the block's locals are declared before the loop |
 | `try` / `finally` | the block, then the `finally`, then the block's `return` if it had one; a `catch` that does nothing is no handler |
+| `using (r) { .. }`, `using var r = ..;`, `await using` | at the end of the block (for a declaration: of the rest of its block) the resource's `Dispose` or `DisposeAsync` runs, when it is not null, as a `finally` would, if its class is the game's and that member is game code (an attack's context, whose disposing runs `AfterAttack`); a stop for a card prompt leaves without it, as the game's task waits there. A lock's scope, a timer, a node guard are left out, and so is a resource whose making is kept by hand (the selector stack). The report lists every `using` and what became of each resource |
 | `value with { A = x }` | a copy with the fields set |
 | a local function handed over as a delegate | a lambda at that place, under the compiler's name of the local function |
 | a record's parameters; a class that keeps its primary constructor | the properties of the same names are set first in the constructor; `port` rewrites `class C(T p)` into fields and a constructor before it compiles the source (the schema names such a field as the compiled game does, `<p>P`) |
@@ -402,6 +405,19 @@ branch is taken, what a calculated var adds). An export carries them, and import
 table under its method's name, bound to the object the export names: a game object, or the object of what a lambda
 captured. So a move a monster made on the spot (a stun, with the move to go back to captured) is imported like any
 other.
+
+**Kept walks.** Every hook of the game walks the combat's listeners: `CombatState.IterateHookListeners` (and the
+run's, around it) builds a list of every power, monster, relic, potion, orb, card of every pile with its enchantment
+and affliction, and hands on each that passes `Contains`. A card's view alone walks it five times. The two walks are
+named in `port.toml [memo]`, and for them port writes the list's building apart from the loop (`rt/memo.rs`): a
+combat counts every write to its objects (`Arenas.writes`, raised by every `of_mut` and `alloc` of the generated
+state, which are the only ways an object is written or made), and the list built at a count is kept with the combat,
+with each item's `Contains` answer once it is asked. The next walk at the same count, of the same object and argument,
+takes the list and the answers as they are. When the code an item was handed to writes, the count moves and the rest
+of that walk asks `Contains` as the game does, item by item. A copy of a combat has the count and the lists it was
+copied with, and each one's count only goes up from there, so a list kept at a count is the list of the one combat
+that stood there. The list and the test read objects only, no root; a list built by code that writes (a getter that
+fills a cache) is not kept.
 
 **Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
 other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.

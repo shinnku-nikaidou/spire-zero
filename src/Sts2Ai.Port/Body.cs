@@ -71,6 +71,8 @@ public sealed partial class Body
     public string Method(IMethodSymbol m, IOperation? op, string prologue = "")
     {
         if (op != null) ScanAssignments(op);
+        if (op != null) nullLocals = World.NullLocals(op, w);
+        nullReturn = w.ReturnsNullColl(m);
         severalStatements = op is IMethodBodyOperation { BlockBody.Operations.Length: > 1 };
         // A parameter of a presentation type is not there in Rust: what uses it is presentation.
         foreach (var p in m.Parameters)
@@ -89,6 +91,9 @@ public sealed partial class Body
         switch (op)
         {
             case null: break;
+            case IMethodBodyOperation { BlockBody: { } block } when f.Iterator && w.Cfg.Memo.IndexOf($"{cls.Name}.{m.Name}") is var slot and >= 0:
+                Kept(slot, m, block, sb);
+                break;
             case IMethodBodyOperation mb: Block(mb.BlockBody ?? mb.ExpressionBody, sb); break;
             case IConstructorBodyOperation cb:
                 if (cb.Initializer != null) Stmt(cb.Initializer, sb);
@@ -107,6 +112,52 @@ public sealed partial class Body
             if (p.RefKind == RefKind.Out && !w.IsDropped(p.Type)) head.Append($"let mut {NameOf(p)}: {T(p.Type)} = Default::default();\n");
         foreach (var h in f.Hoisted) head.Append(h).Append('\n');
         return head.ToString() + sb + (EndsInReturn(op) && !f.Iterator ? "" : Tail(f, m.ReturnsVoid));
+    }
+
+    /// <summary>A kept walk (port.toml [memo]): the statements that build a list, then `foreach (var x in list) if (test)
+    /// yield return x;`, then the rest. The list is built only when the combat has been written to since it was last
+    /// built (rt/memo.rs), and each test's answer is kept while nothing is written; the rest is as written.</summary>
+    private void Kept(int slot, IMethodSymbol m, IBlockOperation block, StringBuilder sb)
+    {
+        var ops = block.Operations;
+        static IOperation Bare(IOperation o) => o is IConversionOperation { IsImplicit: true } cv ? Bare(cv.Operand) : o;
+        int at = ops.ToList().FindIndex(o => o is IForEachLoopOperation { Collection: var coll } && Bare(coll) is ILocalReferenceOperation);
+        if (at < 0) throw new Unsupported("a kept walk without a loop over a local list");
+        var fe = (IForEachLoopOperation)ops[at];
+        var list = ((ILocalReferenceOperation)Bare(fe.Collection)).Local;
+        var item = (fe.LoopControlVariable as IVariableDeclaratorOperation)?.Symbol ?? throw new Unsupported("a kept walk's loop has no plain variable");
+        var inner = fe.Body is IBlockOperation { Operations.Length: 1 } one ? one.Operations[0] : fe.Body;
+        if (inner is not IConditionalOperation { WhenFalse: null } test
+            || !(test.WhenTrue is IReturnOperation { Kind: OperationKind.YieldReturn } y0 ? Bare(y0.ReturnedValue!) is ILocalReferenceOperation { Local: var y } && Eq.Equals(y, item)
+                : test.WhenTrue is IBlockOperation { Operations: [IReturnOperation { Kind: OperationKind.YieldReturn } y1] } && Bare(y1.ReturnedValue!) is ILocalReferenceOperation { Local: var z } && Eq.Equals(z, item)))
+            throw new Unsupported("a kept walk's loop is not `if (test) yield return item;`");
+        if (ops.Take(at).Any(o => o.DescendantsAndSelf().OfType<IReturnOperation>().Any(r => !InsideLambda(r, o))))
+            throw new Unsupported("a kept walk's list is built by statements that return or yield");
+        // The key: the object the walk is of and its arguments, all objects.
+        var keys = new List<string> { "me" };
+        foreach (var p in m.Parameters)
+        {
+            if (p.Type is not INamedTypeSymbol pt || !w.Kinds.ContainsKey(pt.OriginalDefinition)) throw new Unsupported($"a kept walk's parameter {p.Name} is not an object");
+            keys.Add(NameOf(p));
+        }
+        if (keys.Count > 2) throw new Unsupported("a kept walk with more than one argument");
+        while (keys.Count < 2) keys.Add("Obj::NULL");
+        string key = $"[{string.Join(", ", keys)}]";
+        var build = new StringBuilder();
+        foreach (var o in ops.Take(at)) Stmt(o, build);
+        int hoisted = frames.Peek().Hoisted.Count;
+        string passes = Expr(test.Condition);
+        if (frames.Peek().Hoisted.Count != hoisted) throw new Unsupported("a kept walk's test needs statements of its own");
+        string label = "'l" + tmp++;
+        loops.Push(($"break {label};", $"continue {label};"));
+        string hand = Sub(test.WhenTrue);
+        loops.Pop();
+        string name = NameOf(item);
+        sb.Append($"let __kept = match rt::memo::kept(c, {slot}, {key}) {{\nSome(__kept) => __kept,\nNone => {{\nlet __stamp = rt::memo::writes(c);\n{build}rt::memo::keep(c, {slot}, {key}, __stamp, {NameOf(list)})\n}}\n}};\n");
+        sb.Append($"{label}: for __at in 0..__kept.len() {{\nlet mut {name}: {T(item.Type)} = __kept.item(__at);\nif rt::memo::passes(c, &__kept, __at, |c: &mut Combat| {passes}) {{\n{hand}}}\n}}\n");
+        Written++;
+        foreach (var o in ops.Skip(at + 1)) Stmt(o, sb);
+        w.Rep.Count("kept walks");
     }
 
     /// <summary>The value of a field initializer or of a static, as one expression.</summary>
@@ -166,15 +217,17 @@ public sealed partial class Body
     {
         if (f.Iterator) return "Ok(false)\n";
         if (f.ReturnsTask && f.Async && (f.Ret == null || !World.IsTask(f.Ret, out var r) || r == null)) return "Ok(())\n";
-        if (returnsVoid || f.Ret == null) return f.Outs.Count == 0 ? "" : OutTuple(f, null) + "\n";
+        if (returnsVoid || f.Ret == null) return f.Outs.Count == 0 ? "" : OutTuple(f, null, true) + "\n";
         return $"#[allow(unreachable_code)]\n{{ unreachable!(\"{Where}: no return\") }}\n";
     }
 
-    private static string OutTuple(Frame f, string? value)
+    /// <summary>What a member with `ref`/`out` parameters gives back: its value and theirs. `leaving`: the member
+    /// returns right here, so the parameters are given away, not copied.</summary>
+    private static string OutTuple(Frame f, string? value, bool leaving = false)
     {
         var parts = new List<string>();
         if (value != null) parts.Add(value);
-        parts.AddRange(f.Outs.Select(o => o + ".clone()"));
+        parts.AddRange(f.Outs.Select(o => leaving ? o : o + ".clone()"));
         return parts.Count == 1 ? parts[0] : "(" + string.Join(", ", parts) + ")";
     }
 
@@ -219,10 +272,12 @@ public sealed partial class Body
         if (op is IBlockOperation { Operations: var ops } lb && ops.Any(o => o is ILabeledOperation)) Labeled(lb, sb);
         else if (op is IBlockOperation b)
         {
-            foreach (var s in b.Operations)
+            for (int i = 0; i < b.Operations.Length; i++)
             {
                 dead = false;
-                Stmt(s, sb);
+                // A using declaration's scope is the rest of its block.
+                if (b.Operations[i] is IUsingDeclarationOperation ud) { UsingDeclaration(ud, b.Operations.Skip(i + 1).ToList(), sb); break; }
+                Stmt(b.Operations[i], sb);
                 // What follows a test that is always true and always leaves (`if (TestMode.IsOn) return;`) never runs.
                 if (dead) break;
             }
@@ -447,13 +502,32 @@ public sealed partial class Body
             case ITryOperation tr: Try(tr, sb); return;
             case IUsingOperation us:
             {
-                // A using block: what it holds is run; disposing is presentation (timers, node guards).
-                if (us.Resources is IVariableDeclarationGroupOperation ug) Stmt(ug, sb);
-                else { try { Expr(us.Resources); } catch (Dropped) { } }
-                Stmt(us.Body, sb);
+                // A using block: what it holds is made, the block runs, and a resource whose disposing is game code is
+                // disposed at its end (Disposals).
+                var held = new List<(string? Code, ITypeSymbol? Type, string Name)>();
+                if (us.Resources is IVariableDeclarationGroupOperation ug)
+                {
+                    Stmt(ug, sb);
+                    held.AddRange(Declared(ug));
+                }
+                // A resource that is not a declared local is made only when its disposing is game code; otherwise it
+                // is presentation (a lock's scope) or what it stands for is kept by hand (the selector stack).
+                else if (us.Resources.Type is INamedTypeSymbol rt && World.IsSource(rt) && DisposeOf(rt, us.IsAsynchronous ? "DisposeAsync" : "Dispose") is { } d && !w.IsDropMember(d))
+                {
+                    string u = Tmp("u");
+                    sb.Append($"let {u} = {Expr(us.Resources)};\n");
+                    held.Add((u, us.Resources.Type, us.Resources.Syntax.ToString()));
+                }
+                else held.Add((null, us.Resources.Type, us.Resources.Syntax.ToString()));
+                string fin = Disposals(held, us.IsAsynchronous, us);
+                Scoped(inner => Block(us.Body, inner), [us.Body], fin, sb);
                 return;
             }
-            case IUsingDeclarationOperation ud: Stmt(ud.DeclarationGroup, sb); return;
+            case IUsingDeclarationOperation ud:
+                // Outside a plain block (Block takes the ones inside one): nothing to dispose at the end of it.
+                Stmt(ud.DeclarationGroup, sb);
+                if (Disposals(Declared(ud.DeclarationGroup), ud.IsAsynchronous, ud).Length > 0) throw new Unsupported("a using declaration that disposes, outside a plain block");
+                return;
             case ILockOperation lk: Stmt(lk.Body, sb); return;
             // A local function is written where it is used: handed over as a delegate.
             case ILocalFunctionOperation: return;
@@ -517,10 +591,10 @@ public sealed partial class Body
         if (value == null)
         {
             if (Around != null) return LeaveWith(f.ReturnsTask && f.Async ? "Ok(())" : f.Outs.Count > 0 ? OutTuple(f, null) : "()");
-            return f.ReturnsTask && f.Async ? "return Ok(());" : f.Outs.Count > 0 ? $"return {OutTuple(f, null)};" : "return;";
+            return f.ReturnsTask && f.Async ? "return Ok(());" : f.Outs.Count > 0 ? $"return {OutTuple(f, null, true)};" : "return;";
         }
         string v;
-        try { v = Expr(value); }
+        try { v = nullReturn && frames.Count == 1 ? MaybeNull(value) : Expr(value); }
         catch (Dropped d)
         {
             // A member whose one statement returns presentation is presentation as a whole. One return among several
@@ -530,12 +604,21 @@ public sealed partial class Body
             return $"panic!(\"{Where}: {d.Message.Replace("\"", "'")}: presentation only\");";
         }
         if (f.ReturnsTask && f.Async) return LeaveWith($"Ok({v})");
-        return f.Outs.Count > 0 ? $"{{ let __r = {v}; {LeaveWith(OutTuple(f, "__r"))} }}" : LeaveWith(v);
+        return f.Outs.Count > 0 ? $"{{ let __r = {v}; {LeaveWith(OutTuple(f, "__r", Around == null))} }}" : LeaveWith(v);
     }
 
     private void Declare(IVariableDeclaratorOperation d, IOperation? init, StringBuilder sb, IOperation whole)
     {
         var local = d.Symbol;
+        // A collection that can be null is an Option (World.NullLocals).
+        if (nullLocals.Contains(local) && !w.IsDropped(local.Type))
+        {
+            string opt = declaredAhead.Contains(local) ? NameOf(local) : $"let mut {NameOf(local)}: Option<{T(local.Type)}>";
+            if (init == null) { if (!declaredAhead.Contains(local)) sb.Append($"{opt} = None;\n"); return; }
+            sb.Append($"{opt} = {MaybeNull(init)};\n");
+            Written++;
+            return;
+        }
         if (w.IsDropped(local.Type))
         {
             droppedLocals.Add(local);
@@ -1152,6 +1235,95 @@ public sealed partial class Body
         if (fallback != null) arms.Append(first ? $"{{\n{fallback}}}" : $" else {{\n{fallback}}}");
         sb.Append($"{label}: {{\nlet {subject} = {value};\n{arms}\n}}\n");
         Written++;
+    }
+
+    /// <summary>`using var x = ..;`: the declaration, then the rest of the block, then the disposing of what it
+    /// declared (Disposals).</summary>
+    private void UsingDeclaration(IUsingDeclarationOperation ud, List<IOperation> rest, StringBuilder sb)
+    {
+        Stmt(ud.DeclarationGroup, sb);
+        string fin = Disposals(Declared(ud.DeclarationGroup), ud.IsAsynchronous, ud);
+        Scoped(inner =>
+        {
+            foreach (var o in rest)
+            {
+                dead = false;
+                Stmt(o, inner);
+                if (dead) break;
+            }
+        }, rest, fin, sb);
+    }
+
+    /// <summary>The locals a using declares, as resources: each with its code (none when it is presentation).</summary>
+    private List<(string? Code, ITypeSymbol? Type, string Name)> Declared(IVariableDeclarationGroupOperation g) =>
+        [.. g.Declarations.SelectMany(d => d.Declarators).Select(d => (droppedLocals.Contains(d.Symbol) || w.IsDropped(d.Symbol.Type) ? null : NameOf(d.Symbol), (ITypeSymbol?)d.Symbol.Type, d.Symbol.Name))];
+
+    /// <summary>The disposing of a using's resources at the end of its scope, the last one first: a resource of a class
+    /// of the game whose Dispose (DisposeAsync, for `await using`) is game code, when it is not null, as C# does. The
+    /// rest (a lock's scope, a timer, a node guard, an animation's track) is left out. Each one is in the report.</summary>
+    private string Disposals(IEnumerable<(string? Code, ITypeSymbol? Type, string Name)> resources, bool isAsync, IOperation where)
+    {
+        var sb = new StringBuilder();
+        foreach (var (code, type, name) in resources.Reverse())
+        {
+            string what;
+            var dispose = type is INamedTypeSymbol t && World.IsSource(t) ? DisposeOf(t, isAsync ? "DisposeAsync" : "Dispose") : null;
+            if (code == null) what = "left out: presentation, or kept by hand";
+            else if (dispose == null) what = $"{type?.Name} has no Dispose of the game's (left out)";
+            else
+            {
+                try
+                {
+                    string call = $"{CallPath(dispose, dispose.IsVirtual || dispose.IsAbstract || dispose.IsOverride)}({code}, c)";
+                    sb.Append($"if !rt::is_null(&{code}) {{\n{call}{(World.IsTask(dispose.ReturnType, out _) ? "?" : "")};\n}}\n");
+                    what = $"{type!.Name}.{dispose.Name} at the end of its scope";
+                }
+                catch (Dropped) { what = $"{type!.Name}.{dispose.Name} is presentation (left out)"; }
+            }
+            w.Rep.Using(Where, where, $"{name}: {what}");
+        }
+        return sb.ToString();
+    }
+
+    private static IMethodSymbol? DisposeOf(INamedTypeSymbol t, string name)
+    {
+        for (INamedTypeSymbol? x = t; x != null; x = x.BaseType)
+            if (x.GetMembers(name).OfType<IMethodSymbol>().FirstOrDefault(m => !m.IsStatic && m.Parameters.Length == 0) is { } m) return m;
+        return null;
+    }
+
+    /// <summary>Code with something to run at its end, as a finally block runs: a return inside leaves the code with
+    /// its value, `fin` runs, then the member returns it. A stop for a card prompt leaves at once, as the game's task
+    /// waits there without disposing; a break or continue out of it is not supported.</summary>
+    private void Scoped(Action<StringBuilder> body, IReadOnlyList<IOperation> ops, string fin, StringBuilder sb)
+    {
+        if (fin.Length == 0) { body(sb); return; }
+        foreach (var o in ops)
+            foreach (var d in o.DescendantsAndSelf())
+            {
+                if (d is IReturnOperation { Kind: OperationKind.YieldReturn or OperationKind.YieldBreak } && !InsideLambda(d, o)) throw new Unsupported("yield inside a using that disposes");
+                if (d is IBranchOperation { BranchKind: BranchKind.Break or BranchKind.Continue } br && !InsideLambda(d, o) && Leaves(br, o)) throw new Unsupported("a break out of a using that disposes");
+            }
+        bool returnsInside = ops.Any(o => o.DescendantsAndSelf().Any(d => d is IReturnOperation { Kind: OperationKind.Return } && !InsideLambda(d, o)));
+        if (!returnsInside) { body(sb); sb.Append(fin); return; }
+        string label = "'t" + tmp++, left = Tmp("left");
+        scopes.Push(new Scope { Label = label, Frame = frames.Count });
+        var inner = new StringBuilder();
+        try { body(inner); }
+        finally { scopes.Pop(); }
+        sb.Append($"let {left} = {label}: {{\n{inner}None\n}};\n{fin}if let Some(__v) = {left} {{\n{LeaveWith("__v")}\n}}\n");
+        Written++;
+    }
+
+    /// <summary>Whether a break or continue goes out of `root`: no loop or switch of its own is around it inside.</summary>
+    private static bool Leaves(IBranchOperation br, IOperation root)
+    {
+        for (var p = br.Parent; p != null; p = p.Parent)
+        {
+            if (p is ILoopOperation or ISwitchOperation) return false;
+            if (p == root) return true;
+        }
+        return true;
     }
 
     private void Try(ITryOperation tr, StringBuilder sb)

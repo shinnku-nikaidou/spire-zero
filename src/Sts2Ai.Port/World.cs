@@ -697,6 +697,85 @@ public sealed partial class World
         return h.ToString("x8")[..6];
     }
 
+    // ---------------------------------------------------------------- collections that can be null
+
+    private readonly ConcurrentDictionary<ISymbol, bool> _nullColl = new(Eq);
+
+    /// <summary>Whether a method gives a collection that can be null: it returns null, or what can be null (a local
+    /// set to null, a call of such a method, a test with null on one side). Such a result is an `Option` here, where
+    /// every other collection is never null (a null one is an empty one). Only for a method that is not virtual and
+    /// not async, whose every caller is known.</summary>
+    public bool ReturnsNullColl(IMethodSymbol m0)
+    {
+        var key = m0.OriginalDefinition;
+        if (_nullColl.TryGetValue(key, out bool known)) return known;
+        // A method that returns its own result, or one that calls back into it: taken as not null for the moment.
+        if (!_nullCollAsked.Value!.Add(key)) return false;
+        try { return _nullColl.GetOrAdd(key, NullCollOf(key)); }
+        finally { _nullCollAsked.Value!.Remove(key); }
+    }
+
+    private readonly ThreadLocal<HashSet<ISymbol>> _nullCollAsked = new(() => new HashSet<ISymbol>(SymbolEqualityComparer.Default));
+
+    private bool NullCollOf(IMethodSymbol m)
+    {
+        var self = this;
+        if (m.MethodKind != MethodKind.Ordinary || m.IsVirtual || m.IsAbstract || m.IsOverride || m.IsAsync || CollOf(m.ReturnType) == Coll.None) return false;
+        if (!IsSource(m.ContainingType) || self.CatOfMember(m) != Cat.Translated || self.IsDropMember(m) || self.Yields(m)) return false;
+        var syntax = m.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntax == null) return false;
+        var body = self.Comp.GetSemanticModel(syntax.SyntaxTree).GetOperation(syntax);
+        if (body == null) return false;
+        var locals = NullLocals(body, self);
+        return body.Descendants().OfType<IReturnOperation>().Any(r => r.Kind == OperationKind.Return && r.ReturnedValue != null
+            && !Within(r, body) && MayBeNull(r.ReturnedValue, locals, self));
+    }
+
+    /// <summary>Whether `op` is inside a lambda or a local function below `root`.</summary>
+    private static bool Within(IOperation op, IOperation root)
+    {
+        for (var p = op.Parent; p != null && p != root; p = p.Parent)
+            if (p is IAnonymousFunctionOperation or ILocalFunctionOperation) return true;
+        return false;
+    }
+
+    /// <summary>Whether an expression of a collection type can be null: null, a local that is ever set to what can be
+    /// null, a call of a method that gives a collection that can be null, a test with such a side.</summary>
+    public static bool MayBeNull(IOperation op, ISet<ILocalSymbol> locals, World w)
+    {
+        while (op is IConversionOperation { IsTryCast: false } cv) op = cv.Operand;
+        return op switch
+        {
+            ILiteralOperation { ConstantValue: { HasValue: true, Value: null } } => true,
+            IDefaultValueOperation => true,
+            ILocalReferenceOperation l => locals.Contains(l.Local),
+            IInvocationOperation inv => w.ReturnsNullColl(inv.TargetMethod),
+            IConditionalOperation { WhenFalse: { } f } c => MayBeNull(c.WhenTrue, locals, w) || MayBeNull(f, locals, w),
+            _ => false,
+        };
+    }
+
+    /// <summary>The locals of collection type in a body that are ever set to what can be null.</summary>
+    public static HashSet<ILocalSymbol> NullLocals(IOperation body, World w)
+    {
+        var found = new HashSet<ILocalSymbol>(SymbolEqualityComparer.Default);
+        var sets = new List<(ILocalSymbol Local, IOperation Value)>();
+        foreach (var d in body.Descendants())
+        {
+            if (d is IVariableDeclaratorOperation { Symbol: var l } vd && CollOf(l.Type) != Coll.None && (vd.Initializer?.Value ?? (vd.Parent as IVariableDeclarationOperation)?.Initializer?.Value) is { } init)
+                sets.Add((l, init));
+            if (d is ISimpleAssignmentOperation { Target: ILocalReferenceOperation { Local: var t } } a && CollOf(t.Type) != Coll.None)
+                sets.Add((t, a.Value));
+        }
+        for (bool more = true; more;)
+        {
+            more = false;
+            foreach (var (l, v) in sets)
+                if (!found.Contains(l) && MayBeNull(v, found, w)) { found.Add(l); more = true; }
+        }
+        return found;
+    }
+
     // ---------------------------------------------------------------- sequences written with yield
 
     private readonly ConcurrentDictionary<ISymbol, bool> _yields = new(Eq);

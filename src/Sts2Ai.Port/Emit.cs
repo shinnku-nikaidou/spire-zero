@@ -64,7 +64,8 @@ public sealed class Emitter(World w)
         if (!m.ReturnsVoid && m.MethodKind != MethodKind.Constructor)
         {
             if (w.IsDropped(m.ReturnType)) throw new Dropped(m.ReturnType.Name);
-            rets.Add(w.RType(m.ReturnType));
+            // A collection that can be null (World.ReturnsNullColl) is an Option.
+            rets.Add(w.ReturnsNullColl(m) ? $"Option<{w.RType(m.ReturnType)}>" : w.RType(m.ReturnType));
         }
         foreach (var p in m.Parameters)
         {

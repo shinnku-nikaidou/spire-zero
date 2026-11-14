@@ -76,6 +76,19 @@ impl<K, T> IsNull for super::coll::Group<K, T> {
         self.items.is_empty()
     }
 }
+/// A collection that can be null (an Option: port's World.ReturnsNullColl and Body's nullable locals), read as the
+/// collection: null is C#'s NullReferenceException.
+pub fn nn<T: Clone>(x: &Option<T>) -> T {
+    x.as_ref().expect("NullReferenceException: a collection that is null").clone()
+}
+/// The same, to read without copying.
+pub fn nn_ref<T>(x: &Option<T>) -> &T {
+    x.as_ref().expect("NullReferenceException: a collection that is null")
+}
+/// The same, to change in place.
+pub fn nn_mut<T>(x: &mut Option<T>) -> &mut T {
+    x.as_mut().expect("NullReferenceException: a collection that is null")
+}
 impl<T> IsNull for Vec<T> {
     fn is_null(&self) -> bool {
         false
@@ -126,7 +139,7 @@ pub fn throw_if(bad: bool, at: &str) {
 
 /// `x is T`.
 pub fn is(o: Obj, kind: Kind, c: &Combat) -> bool {
-    !o.is_null() && is_subclass(kind_of(o, c), kind)
+    crate::r#gen::kinds::is_kind(o, kind, c)
 }
 /// `(T)x`: null stays null; an object of another class panics, where C# throws InvalidCastException.
 pub fn cast(o: Obj, kind: Kind, c: &Combat) -> Obj {

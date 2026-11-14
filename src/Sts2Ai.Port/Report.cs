@@ -15,6 +15,7 @@ public sealed class Report
     private readonly ConcurrentBag<string> fieldsSkipped = [];
     private readonly ConcurrentBag<string> deferred = [];
     private readonly ConcurrentBag<string> heldChains = [];
+    private readonly ConcurrentBag<string> usings = [];
     /// <summary>The events of the translated classes with who subscribes (Output.Events).</summary>
     public List<string> Events = [];
 
@@ -65,9 +66,19 @@ public sealed class Report
         heldChains.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}");
     }
 
+    /// <summary>A using of translated code (a statement or a declaration) and what became of each resource.</summary>
+    public void Using(string where, IOperation op, string what)
+    {
+        var span = op.Syntax.GetLocation().GetLineSpan();
+        string first = op.Syntax.ToString().Replace("\r", "").Split('\n')[0].Trim();
+        if (first.Length > 140) first = first[..140] + "...";
+        usings.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}  ->  {what}");
+    }
+
     public void Reset()
     {
         deferred.Clear();
+        usings.Clear();
         heldChains.Clear();
         counts.Clear();
         unsupported.Clear();
@@ -113,6 +124,8 @@ public sealed class Report
         foreach (var s in deferred.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== locals that hold a LINQ chain, with game code between where they are declared (where the chain's source is read) and their last use");
         foreach (var s in heldChains.Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== usings of translated code, and what became of each resource (disposed at the end of its scope, or left out and why)");
+        foreach (var s in usings.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== events of the engine's classes that someone subscribes to (state: a subscriber is game code; then every subscriber, with what it is)");
         foreach (var s in Events) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== members not translated");

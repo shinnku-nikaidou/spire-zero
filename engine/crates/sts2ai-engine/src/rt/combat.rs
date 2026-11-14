@@ -43,4 +43,6 @@ pub struct Combat {
     pub choices: Choices,
     /// What the hand-written core keeps beside the game's own objects.
     pub x: crate::manual::Extra,
+    /// The walks kept while nothing is written (rt/memo.rs).
+    pub memo: crate::rt::memo::Memo,
 }
