@@ -438,7 +438,12 @@ counted), or only tests it (`if (item.ShouldStopCombatFromEnding()) ..`), where 
 everything as it is for these arguments (it sets each out parameter to the value handed in for it and returns a
 constant, false for a test, or a task that has run to its end: `item.TryModifyStarCost(card, cost, out cost)` against
 `{ modifiedCost = originalCost; return false; }`, `AfterCardChangedPiles` against `{ return Task.CompletedTask; }`),
-sets `Combat::only` to the kinds that override the member right before it calls the walk. Every walk takes it first
+sets `Combat::only` to the kinds that override the member right before it calls the walk. So does a loop that puts
+the call's value in a local and then only does what that value, the constant the member's own body returns, leaves as
+it was: `decimal num2 = item.ModifyDamageAdditive(..); num += num2; if (num2 != 0m) list.Add(item);` against
+`{ return 0m; }` (a decimal plus a zero of no scale, or times a one of no scale, is itself, digits, scale and sign, as
+`rt::dec` and .NET compute it; a test that is false with the constant, `v != k` for k equal to it, `v < y` for the
+largest value). Every walk takes it first
 thing, so no walk below sees it; a walk hands on only values of those kinds (and null, which C# would call and throw
 on), passes it on to a walk it only forwards (`foreach (var x in inner) yield return x;`), and a kept walk goes through
 the positions of those kinds alone, found once for each kept list, before any test is asked.
@@ -451,10 +456,10 @@ popped; a model stack made empty on the way reads as none, here and in the C#). 
 await context.AssignTaskAndWaitForPauseOrCompletion(task); tasks.Add(context.WaitForCompletion());`, the object and the
 task used nowhere else and the list only added to, awaited all at once and cleared: made and asked its own members with
 a task run to its end, it changes nothing outside itself, and nothing keeps it. port checks the shape of each loop; the
-facts are the table's. A hundred and one members of the hooks: among them a card's energy cost (early and late), star
+facts are the table's. A hundred and nine members of the hooks: among them a card's energy cost (early and late), star
 cost and keywords, whether the combat may end, what comes after a card changes piles or is played or drawn, an
-attack, damage given and received, block gained, energy reset, a power's amount changed, and the turn's start and end
-for each side.
+attack, damage given and received, block gained, energy reset, a power's amount changed, the turn's start and end for
+each side, and what modifies damage, block and a power's amount given.
 
 **Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
 other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.

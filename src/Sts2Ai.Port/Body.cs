@@ -1006,6 +1006,18 @@ public sealed partial class Body
         // An object made for the call alone (port.toml [only] scratch): `var context = new K(model, ..); Task task =
         // model.M(context, ..); await context.A(task); tasks.Add(context.B());`.
         IInvocationOperation? forScratch = kept.Count >= 2 ? ScratchCall(kept, local) : null;
+        // The call's value into a local, then statements that the value the member's own body gives leaves as they
+        // were: `decimal num2 = item.ModifyDamageAdditive(..); num += num2; if (num2 != 0m) list.Add(item);` against
+        // `{ return 0m; }`.
+        ILocalSymbol? given = null;
+        List<IOperation> withGiven = [];
+        if (forScratch == null && kept.Count >= 2 && kept[0] is IVariableDeclarationGroupOperation { Declarations: [{ Declarators: [var gd] } gdecl] }
+            && (gd.Initializer?.Value ?? gdecl.Initializer?.Value) is { } gv && Unwrapped(gv) is IInvocationOperation gcall)
+        {
+            given = gd.Symbol;
+            withGiven = kept.Skip(1).ToList();
+            forScratch = gcall;
+        }
         if (forScratch == null && kept.Count != 1) return null;
         var body = forScratch ?? kept[0];
         if (frames.Peek().Iterator && body is IReturnOperation { Kind: OperationKind.YieldReturn, ReturnedValue: { } y } && Unwrapped(y) is ILocalReferenceOperation { Local: var yl } && Eq.Equals(yl, local))
@@ -1034,7 +1046,11 @@ public sealed partial class Body
         for (int i = 0; i < ops.Length; i++)
         {
             if (i == ops.Length - 1 && ops[i] is IReturnOperation { ReturnedValue: var said }
-                && (said == null ? !mustSayFalse : said.ConstantValue is { HasValue: true, Value: var v } ? !mustSayFalse || v is false : !mustSayFalse && Done(Unwrapped(said)))) break;
+                && (said == null ? !mustSayFalse : said.ConstantValue is { HasValue: true, Value: var v } ? !mustSayFalse || v is false : !mustSayFalse && Done(Unwrapped(said))))
+            {
+                if (given != null && (said?.ConstantValue is not { HasValue: true, Value: { } k } || !withGiven.All(st => Idle(st, given, k)))) return null;
+                break;
+            }
             if (ops[i] is IExpressionStatementOperation { Operation: ISimpleAssignmentOperation { Target: IParameterReferenceOperation { Parameter: { RefKind: RefKind.Out } to }, Value: var from } }
                 && Unwrapped(from) is IParameterReferenceOperation { Parameter: { RefKind: RefKind.None } p })
                 copies[to.Ordinal] = p.Ordinal;
@@ -1061,6 +1077,37 @@ public sealed partial class Body
         if (paired) w.Rep.Count("  of them with a pair of port.toml [only] pairs around the call");
         if (forScratch != null) w.Rep.Count("  of them with an object of port.toml [only] scratch made for the call");
         return $"Some(&g::dispatch::{w.Module(slot.ContainingType)}::{w.FnName(slot).ToUpperInvariant()}__ONLY)";
+    }
+
+    /// <summary>Whether a statement changes nothing when the local holds the constant: `x += v` with v a zero of no
+    /// scale, `x *= v` with v a one of no scale (of decimal, the sum and the product are then x, its digits, scale and
+    /// sign; of an integer too), `if (test) ..` whose test is false with v (`v != k` for k equal to v, `v < y` for v the
+    /// largest value), on a local or parameter x and a y that is only read.</summary>
+    private static bool Idle(IOperation st, ILocalSymbol v, object k)
+    {
+        bool IsV(IOperation o) => Named(o) is ILocalSymbol l && Eq.Equals(l, v);
+        static bool Integral(object x) => x is int or long or short or sbyte or uint or ulong or ushort or byte;
+        static bool Plain(decimal d) => (decimal.GetBits(d)[3]) == 0;
+        bool Zero() => k is decimal d ? d == 0m && Plain(d) : Integral(k) && System.Convert.ToDecimal(k) == 0m;
+        bool One() => k is decimal d ? d == 1m && Plain(d) : Integral(k) && System.Convert.ToDecimal(k) == 1m;
+        bool Largest() => k switch { decimal d => d == decimal.MaxValue, int i => i == int.MaxValue, long l => l == long.MaxValue, _ => false };
+        switch (st)
+        {
+            case IExpressionStatementOperation { Operation: ICompoundAssignmentOperation { OperatorKind: var op, Target: var x, Value: var by } }
+                when IsV(by) && Named(x) is ILocalSymbol or IParameterSymbol:
+                return op is BinaryOperatorKind.Add && Zero() || op is BinaryOperatorKind.Multiply && One();
+            case IConditionalOperation { WhenFalse: null, Condition: var cond } when Unwrapped(cond) is IBinaryOperation { OperatorKind: var op, LeftOperand: var a, RightOperand: var b }:
+                if (op is BinaryOperatorKind.NotEquals)
+                {
+                    var other = IsV(a) ? b : IsV(b) ? a : null;
+                    return other?.ConstantValue is { HasValue: true, Value: { } kc } && (k is decimal || Integral(k)) && System.Convert.ToDecimal(k) == System.Convert.ToDecimal(kc);
+                }
+                if (op is BinaryOperatorKind.LessThan && IsV(a) && OnlyReads(b) || op is BinaryOperatorKind.GreaterThan && IsV(b) && OnlyReads(a))
+                    return Largest();
+                return false;
+            default:
+                return false;
+        }
     }
 
     private static ISymbol? Named(IOperation o) => Unwrapped(o) switch
