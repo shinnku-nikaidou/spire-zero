@@ -1004,3 +1004,19 @@
   - 防死效果：port 依 `ShouldDie`／`AfterPreventingDeath` 覆寫只找到 Fairy in a Bottle 與 Lizard Tail。定向 dump：HP 3／70、
     六角色、第一幕兩個 act 的 6 菁英 6 頭目、A0 與 A10，三組（兩瓶 Fairy、Lizard Tail、兩者）各 144 場；從紀錄看 Fairy 在
     144／144 場觸發（沒有手動喝）、Lizard Tail 在 144／144 場用掉。四項檢查：all、runs、tooth、c1752 與三組全過。
+- 17:01（engine-port）語意審查的八項依規則改成 .NET 9 的做法（518cabb7）：
+  - F1：`Sum`／`Average` 依元素型別：float 以 double 累加最後才轉回、int 檢查溢位、int 的平均為 double；單元測試
+    {0.1f, 0.2f, 0.4f} = 0x3f333333（逐項 f32 相加是 0x3f333334）。生成碼裡 8 個 int、3 個 float 的 Sum。
+  - F2：`foreach` 走欄位、屬性、只設一次的區域變數或參數所持有的 List、且迴圈內有呼叫或寫入時，每一步檢查清單是否還如
+    開始時，變了就 panic（同 C# 列舉器丟例外）；162 個迴圈，持有者只取一次（含 Emotion Chip）。
+  - F3：賦值先取持有者與索引（各一次），再取值，再寫；複合賦值與 ++／-- 讀寫同一個持有者（CreatureCmd 的 GetEntry 只呼叫一次）。
+  - F4：靜態初始化式讀到常數以外的東西時，只在 `[statics] fixed` 聲明值永遠一樣時翻譯（25 個：標準模型、文字鍵、路徑），
+    每個是手寫事實；依進階等級的卡牌稀有度不翻譯（只有戰鬥外的卡牌獎勵用到）。
+  - F5：從 HashSet 複製照 ConstructFrom（保留或重排空槽）、複製字典壓實、`IntersectWith` 空集合即 Clear；附單元測試。
+  - F6：依文化或忽略大小寫的字串比較、排序、大小寫轉換不翻譯並列表；`[strings] ordinal` 聲明 ModelId 與種子是 ASCII
+    名字（文化與序數一致）照序數翻譯。ModelDb.AllPotions／AllRelics 的文化排序因此不翻譯（戰鬥不會走到）。
+  - F7：閉包提醒也看包住 lambda 的迴圈裡的寫入。F8：int 的 `Math.Abs` 溢位丟例外、浮點 Max／Min（NaN、±0）、
+    值型別空序列的 MaxBy、`IsNullOrWhiteSpace(null)`、`[Flags]` 列舉文字，都照 .NET；附單元測試。
+  - 過程中第一次四項檢查有 9 場停在 ModelId 建構式（F6 拒絕了它的 EndsWith，而 F4 讓 ModelId.none 走到它）：補了上面的
+    `[strings] ordinal`。reach.py 原本不追同模組內的直接呼叫（每個 new → ctor），已修，可達且無程式碼的成員 34 個，新多的
+    5 個都是遺物取得效果，不在戰鬥中。四項檢查：all、runs、tooth、c1752、三組防死全過。
