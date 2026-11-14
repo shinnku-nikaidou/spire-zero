@@ -42,6 +42,8 @@ public static class Facts
         foreach (var s in c.Caches.Order(StringComparer.Ordinal)) { var (t, f) = Split(s); Add("caches", s, (t, "~" + f)); }
         foreach (var s in c.TransientDelegates.Order(StringComparer.Ordinal)) { var (t, f) = Split(s); Add("delegates", s, (t, "~" + f)); }
         foreach (var s in c.Statics.Order(StringComparer.Ordinal)) Add("roots", s, Split(s));
+        foreach (var s in c.FixedStatics.Order(StringComparer.Ordinal)) Add("statics", s, Split(s));
+        foreach (var s in c.OrdinalStrings.Order(StringComparer.Ordinal)) Add("strings", s, Split(s));
         foreach (var s in c.DropMembers.Order(StringComparer.Ordinal)) Add("drop", s, Split(s));
         foreach (var s in c.KeepMembers.Order(StringComparer.Ordinal)) Add("drop", s, Split(s));
         foreach (var s in c.DropFields.Order(StringComparer.Ordinal)) { var (t, f) = Split(s); Add("drop", s, (t, "~" + f)); }

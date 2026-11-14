@@ -1063,7 +1063,18 @@ public sealed partial class Body
         loops.Pop();
         // Nothing is left in the loop and what it walks is only read: the statement is left out.
         if (body.Length == 0 && lazy == null && OnlyReads(fe.Collection)) { LeftOut++; return; }
-        if (lazy == null) sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
+        if (lazy == null && fe.Body.Descendants().Any(o => o is IInvocationOperation or IAssignmentOperation or IIncrementOrDecrementOperation or IObjectCreationOperation)
+            && ChangeableList(fe.Collection) is var (walkedList, pin, listCode))
+        {
+            // A list the loop's code could change: C#'s enumerator throws at its next step when the list changed,
+            // and so does this (rt::enumerating), at the start of every round but the first and at the end. The
+            // object that holds the list is reached once, as C# reaches the collection once.
+            string seen = Tmp("w"), at = Tmp("at");
+            sb.Append($"{{\n{pin}let {seen} = {listCode};\nlet mut {at} = 0usize;\n{label}: loop {{\nif {at} > 0 {{ rt::enumerating(&{seen}, &{walkedList}); }}\nif {at} == {seen}.len() {{ break {label}; }}\n"
+                + $"let mut {NameOf(local)}: {T(local.Type)} = {seen}[{at}].clone();\n{at} += 1;\n{body}}}\n}}\n");
+            w.Rep.Count("loops over a list their code could change: each step checks it is as it was, as C#'s enumerator does");
+        }
+        else if (lazy == null) sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
         else sb.Append($"{run.Before}{label}: for {LazyFirst} in {coll} {{\n{run.Code}let mut {NameOf(local)}: {T(local.Type)} = {run.Item};\n{body}}}{new string('}', run.Nested)}\n");
         Written++;
     }
@@ -1634,6 +1645,46 @@ public sealed partial class Body
     }
 
     /// <summary>What a foreach walks: a snapshot of the collection, as a Vec.</summary>
+    /// <summary>The place of the list a foreach walks, when C# walks a `List<T>` that code may change meanwhile: a field
+    /// of an object reached the same way every time (or a property that returns one), a local or parameter set once.
+    /// An array has no such check; a list made for the loop (ToList, a getter that copies) no one else holds.</summary>
+    private string? EnumeratedList(IOperation collection)
+    {
+        var inner = collection;
+        while (inner is IConversionOperation { IsTryCast: false } cv && World.CollOf(cv.Operand.Type) != World.Coll.None) inner = cv.Operand;
+        static bool IsList(ITypeSymbol? t) => t is INamedTypeSymbol { OriginalDefinition: var d } && World.FullName(d) == "System.Collections.Generic.List`1";
+        switch (inner)
+        {
+            case IFieldReferenceOperation f when IsList(f.Field.Type):
+                return FieldPlaceOf(inner);
+            case IPropertyReferenceOperation { Property: var p } when Forwarded(p.OriginalDefinition) is { } field && IsList(field.Type):
+                return FieldPlaceOf(inner);
+            case ILocalReferenceOperation l when IsList(l.Local.Type) && !reassigned.Contains(l.Local) && !droppedLocals.Contains(l.Local) && !nullLocals.Contains(l.Local) && !lazyLocals.ContainsKey(l.Local):
+                return Ref(inner);
+            case IParameterReferenceOperation pr when IsList(pr.Parameter.Type) && !reassigned.Contains(pr.Parameter):
+                return Ref(inner);
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>EnumeratedList, with the object that holds the list reached once first where code reaches it
+    /// (`Owner.PlayerCombatState.OrbQueue.Orbs`): the list's place, the statement that reaches the object, and the
+    /// list as the walk takes it.</summary>
+    private (string Place, string Pin, string Code)? ChangeableList(IOperation collection)
+    {
+        if (EnumeratedList(collection) is { } place) return (place, "", IterSource(collection));
+        if (UnstableReceiver(collection) is not { } recv) return null;
+        string r = Tmp("r"), code = Expr(recv);
+        pinned[recv] = r;
+        try
+        {
+            if (EnumeratedList(collection) is not { } pinnedPlace) return null;
+            return (pinnedPlace, $"let {r} = {code};\n", IterSource(collection));
+        }
+        finally { pinned.Remove(recv); }
+    }
+
     private string IterSource(IOperation collection)
     {
         var inner = collection;

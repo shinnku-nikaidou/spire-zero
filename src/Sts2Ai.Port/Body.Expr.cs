@@ -1015,8 +1015,54 @@ public sealed partial class Body
         return $"{{ {sb}}}";
     }
 
+    /// <summary>What a write's target reaches before its value, as C# does it: the object that holds the member
+    /// (where code reaches it, not a local), then an indexer's or an array's index, each reached once and first. Gives
+    /// the statements that reach them, with them pinned for the code that follows; Unpin takes them back.</summary>
+    private (string Pre, List<IOperation> Pins) PinTarget(IOperation target)
+    {
+        var pins = new List<IOperation>();
+        var pre = new StringBuilder();
+        void Pin(IOperation op, string name, bool clone)
+        {
+            pre.Append($"let {name} = {Expr(op)}; ");
+            pinned[op] = clone ? $"{name}.clone()" : name;
+            pins.Add(op);
+        }
+        bool Trivial(IOperation op) => op.ConstantValue.HasValue || pinned.ContainsKey(op) || op is ILocalReferenceOperation { Local: var l } && !reassigned.Contains(l) || op is IParameterReferenceOperation { Parameter: var p } && !reassigned.Contains(p) || op is IInstanceReferenceOperation;
+        IOperation? holder = target switch
+        {
+            IFieldReferenceOperation f => f.Instance,
+            IPropertyReferenceOperation { Property: var prop } pr when World.IsSource(prop.ContainingType) => pr.Instance,
+            // A library indexer (a list's, a dictionary's): the object that holds the collection.
+            IPropertyReferenceOperation pr when pr.Instance != null => UnstableReceiver(pr.Instance),
+            IArrayElementReferenceOperation ae => UnstableReceiver(ae.ArrayReference),
+            _ => null,
+        };
+        if (holder is { Type: { } ht } && w.IsObj(ht) && !Trivial(holder) && !StableReceiver(holder)) Pin(holder, Tmp("r"), false);
+        IEnumerable<IOperation> indices = target switch
+        {
+            IPropertyReferenceOperation pr => pr.Arguments.Select(a => a.Value),
+            IArrayElementReferenceOperation ae => ae.Indices,
+            _ => [],
+        };
+        foreach (var i in indices)
+            if (!Trivial(i)) Pin(i, Tmp("i"), true);
+        return (pre.ToString(), pins);
+    }
+
+    private void Unpin(List<IOperation> pins)
+    {
+        foreach (var p in pins) pinned.Remove(p);
+    }
+
     private string Assign(IOperation target, Func<string> value, bool asValue)
     {
+        // The target's holder and index first, then the value, as C# evaluates them.
+        if (target is IFieldReferenceOperation or IPropertyReferenceOperation or IArrayElementReferenceOperation && PinTarget(target) is { Pins.Count: > 0 } first)
+        {
+            try { return $"{{ {first.Pre}{Assign(target, value, asValue)} }}"; }
+            finally { Unpin(first.Pins); }
+        }
         // The decompiler writes an object initializer's `{ P = v }` as a statement even where P is init-only, which
         // the compiler refuses: the property is the one it names.
         if (target is IInvalidOperation invalid && invalid.ChildOperations.Count == 1 && invalid.ChildOperations.First() is IPropertyReferenceOperation { Property.SetMethod.IsInitOnly: true } initOnly)
@@ -1101,11 +1147,18 @@ public sealed partial class Body
         if (ca.Target is IEventReferenceOperation ev) throw new Dropped("event " + ev.Event.Name);
         if (ca.Target.Type?.TypeKind == TypeKind.Delegate) throw new Unsupported("delegates combined");
         if (ca.OperatorMethod != null && World.IsSource(ca.OperatorMethod.ContainingType)) throw new Unsupported("compound assignment with a game operator");
-        string old = Tmp("old");
-        string value = Expr(ca.Value);
-        string result = BinaryCode(ca.OperatorKind, old, value, ca.Target.Type, ca.Value.Type, ca.Target.Type, ca.IsLifted, ca.Value);
-        string store = Assign(ca.Target, () => result, asValue);
-        return $"{{ let {old} = {Expr(ca.Target)}; {store}{(asValue ? "" : ";")} }}";
+        // The target's holder and index reached once, then the target read, the value, the write (C#'s order).
+        var (pre, pins) = PinTarget(ca.Target);
+        try
+        {
+            string old = Tmp("old");
+            string read = Expr(ca.Target);
+            string value = Expr(ca.Value);
+            string result = BinaryCode(ca.OperatorKind, old, value, ca.Target.Type, ca.Value.Type, ca.Target.Type, ca.IsLifted, ca.Value);
+            string store = Assign(ca.Target, () => result, asValue);
+            return $"{{ {pre}let {old} = {read}; {store}{(asValue ? "" : ";")} }}";
+        }
+        finally { Unpin(pins); }
     }
 
     private string Increment(IIncrementOrDecrementOperation inc, bool asValue)
@@ -1115,9 +1168,16 @@ public sealed partial class Body
         string old = Tmp("old");
         if (World.IsNullable(inc.Target.Type!, out _)) throw new Unsupported("increment of a nullable");
         if (!asValue && inc.Target is ILocalReferenceOperation or IParameterReferenceOperation) return $"{Place(inc.Target)} {op}= {one}";
-        string store = Assign(inc.Target, () => $"({old} {op} {one})", false);
-        if (!asValue) return $"{{ let {old} = {Expr(inc.Target)}; {store}; }}";
-        return inc.IsPostfix ? $"{{ let {old} = {Expr(inc.Target)}; {store}; {old} }}" : $"{{ let {old} = {Expr(inc.Target)}; {store}; ({old} {op} {one}) }}";
+        // The target's holder and index reached once (C#'s order), then read and written.
+        var (pre, pins) = PinTarget(inc.Target);
+        try
+        {
+            string read = Expr(inc.Target);
+            string store = Assign(inc.Target, () => $"({old} {op} {one})", false);
+            if (!asValue) return $"{{ {pre}let {old} = {read}; {store}; }}";
+            return inc.IsPostfix ? $"{{ {pre}let {old} = {read}; {store}; {old} }}" : $"{{ {pre}let {old} = {read}; {store}; ({old} {op} {one}) }}";
+        }
+        finally { Unpin(pins); }
     }
 
     // ---------------------------------------------------------------- operators
@@ -1728,6 +1788,14 @@ public sealed partial class Body
         // A variable the lambda uses that the class does not hold: the lambda is not the one this class was made for.
         if (used.Any(u => !made.Fields.Contains(u.Name))) return null;
         // The known difference: the object holds the values as they are here, and C# would show the lambda a later write.
+        // Later: after it in the code, or anywhere in a loop around it, for a variable declared outside that loop's body
+        // (a round's write runs after the lambda of the round before; a `for`'s step runs after its body).
+        var loopsAround = new List<ILoopOperation>();
+        for (var up = site.Parent; up != null && up is not (IAnonymousFunctionOperation or ILocalFunctionOperation); up = up.Parent)
+            if (up is ILoopOperation loop) loopsAround.Add(loop);
+        bool InLoopAfter(IOperation write, ISymbol variable) => loopsAround.Any(loop =>
+            loop.Syntax.Span.Contains(write.Syntax.Span)
+            && !variable.DeclaringSyntaxReferences.Any(r => r.SyntaxTree == loop.Body.Syntax.SyntaxTree && loop.Body.Syntax.Span.Contains(r.Span)));
         if (memberRoot != null)
             foreach (var d in memberRoot.Descendants())
             {
@@ -1741,7 +1809,7 @@ public sealed partial class Body
                 // A write to a part of a value held in the variable is a write to the variable.
                 while (written is IMemberReferenceOperation { Instance: { Type: { } held } inside } && w.IsValue(held)) written = inside;
                 ISymbol? target = written switch { ILocalReferenceOperation l => l.Local, IParameterReferenceOperation p => p.Parameter, _ => null };
-                if (target != null && used.Contains(target) && d.Syntax.Span.End >= site.Syntax.Span.End)
+                if (target != null && used.Contains(target) && (d.Syntax.Span.End >= site.Syntax.Span.End || InLoopAfter(d, target)))
                     w.Rep.Note("lambdas that read a variable written after they were made (they read the value from before)", $"{Where}: {target.Name}");
             }
         w.Closures.TryAdd(made.Class, new World.ClosureClass(name, made.Class, fields, dropped));

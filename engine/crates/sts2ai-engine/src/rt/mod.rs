@@ -65,7 +65,7 @@ macro_rules! cs_enum {
             fn to_s(&self, _c: &mut $crate::rt::Combat) -> $crate::rt::Str {
                 match self.name() {
                     Some(n) => $crate::rt::Str::lit(n),
-                    None => $crate::rt::Str::from_string(self.0.to_string()),
+                    None => $crate::rt::Str::from_string(self.unnamed_text()),
                 }
             }
         }

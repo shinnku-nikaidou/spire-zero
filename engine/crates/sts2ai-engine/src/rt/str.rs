@@ -38,6 +38,10 @@ impl Str {
     pub fn is_null_or_empty(self) -> bool {
         self.0.is_none_or(|s| s.is_empty())
     }
+    /// string.IsNullOrWhiteSpace: null, empty, or only white space (char.IsWhiteSpace).
+    pub fn is_null_or_white_space(self) -> bool {
+        self.0.is_none_or(|s| s.chars().all(char::is_whitespace))
+    }
     /// string.Concat: null counts as empty.
     pub fn concat(parts: &[Str]) -> Str {
         let mut out = String::new();

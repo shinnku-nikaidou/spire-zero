@@ -31,6 +31,12 @@ public sealed class Config
     /// <summary>The roots: statics of the game that are state, as Class.Member. They are part of the combat (Combat.s),
     /// read and written like fields, and where an export starts.</summary>
     public HashSet<string> Statics = [];
+    /// <summary>Statics whose initializer reads more than constants and gives the same value whenever it is read, as
+    /// Class.Field: translated as a function that makes it again at every read (.NET makes it once a process).</summary>
+    public HashSet<string> FixedStatics = [];
+    /// <summary>Members whose strings compared by the current culture are names of ASCII letters, digits and
+    /// underscores, where culture and ordinal agree, as Class.Member: translated as ordinal.</summary>
+    public HashSet<string> OrdinalStrings = [];
     /// <summary>Statics that only remember the result of a computation, as Class.Field: never kept, computed at each use.</summary>
     public HashSet<string> Caches = [];
     /// <summary>Instance fields that are not state, as Class.Field (or Class.Property for the field behind one).</summary>
@@ -97,6 +103,8 @@ public sealed class Config
         foreach (var s in List(doc, "open", "classes")) c.Open.Add(s);
         foreach (var s in List(doc, "values", "classes")) c.ValueClasses.Add(s);
         foreach (var s in List(doc, "roots", "members")) c.Statics.Add(s);
+        foreach (var s in List(doc, "statics", "fixed")) c.FixedStatics.Add(s);
+        foreach (var s in List(doc, "strings", "ordinal")) c.OrdinalStrings.Add(s);
         foreach (var s in List(doc, "drop", "fields")) c.DropFields.Add(s);
         foreach (var s in List(doc, "drop", "parameters")) c.DropParams.Add(s);
         foreach (var s in List(doc, "caches", "members")) c.Caches.Add(s);

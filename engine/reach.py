@@ -23,6 +23,8 @@ FN = re.compile(r"^(\s*)(?:pub )?fn ([a-z0-9_]+)\s*[<(]")
 MOD = re.compile(r"^(\s*)pub mod ([a-z0-9_]+) \{")
 REF = re.compile(r"\bg::((?:[a-z0-9_]+::)*[a-z0-9_]+)")
 BARE = re.compile(r"\b([a-z0-9_]+__f)\b")
+# A call of a function of the same module, by its name alone (a constructor's `new` calls its `ctor` so).
+LOCAL = re.compile(r"(?<![:\w.])([a-z_][a-z0-9_]*)\s*\(")
 # A body that is only a `todo!`, on one line or as rustfmt wraps a long one.
 TODO = re.compile(r'^\s*todo!\(\s*"([^"]+)"\s*\)\s*$', re.S)
 
@@ -73,7 +75,7 @@ for path in sorted(gen.rglob("*.rs")):
     read(path, [p for p in rel if p != "mod"])
 
 
-def refs(text, own_file):
+def refs(text, module):
     found = set()
     for m in REF.finditer(text):
         parts = m.group(1).split("::")
@@ -82,9 +84,13 @@ def refs(text, own_file):
             if (p := "::".join(parts[:n])) in bodies:
                 found.add(p)
                 break
-    if own_file == "fns":
+    if module == "fns":
         for m in BARE.finditer(text):
             if (p := "fns::" + m.group(1)) in bodies:
+                found.add(p)
+    if module:
+        for m in LOCAL.finditer(text):
+            if (p := module + "::" + m.group(1)) in bodies:
                 found.add(p)
     return found
 
@@ -108,7 +114,7 @@ for p in refs("\n".join(outside), ""):
     reach(p, "a generated table")
 while queue:
     at = queue.popleft()
-    for p in refs(bodies[at], at.split("::")[0]):
+    for p in refs(bodies[at], "::".join(at.split("::")[:-1])):
         reach(p, at)
 
 

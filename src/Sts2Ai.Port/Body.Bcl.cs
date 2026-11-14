@@ -99,6 +99,46 @@ public sealed partial class Body
         }
     }
 
+    /// <summary>How a library call would compare or case strings other than ordinal, as .NET does it (the engine's
+    /// strings compare by their UTF-16 code units, like StringComparison.Ordinal): by a StringComparison or comparer
+    /// it is handed, or by the current culture where it is handed none (string.Compare, CompareTo, StartsWith,
+    /// EndsWith and IndexOf of a string, ToLower, ToUpper, and ordering strings with Comparer.Default). Null when
+    /// ordinal.</summary>
+    private static string? CultureString(IInvocationOperation op, string tk, string name)
+    {
+        foreach (var arg in op.Arguments)
+        {
+            var pt = arg.Parameter?.Type;
+            if (pt == null) continue;
+            if (pt.Name == "StringComparison")
+                return arg.Value.ConstantValue is { HasValue: true, Value: 4 } ? null : $"compared by {arg.Value.Syntax}";
+            if (pt.Name is "CultureInfo" or "IFormatProvider" && tk == "String") return $"cased by {arg.Value.Syntax}";
+            if (pt is INamedTypeSymbol { Name: "IComparer" or "IEqualityComparer" or "StringComparer", TypeArguments: var ta } && (ta.Length == 0 || ta[0].SpecialType == SpecialType.System_String))
+                return Unconverted(arg.Value) is IPropertyReferenceOperation { Property: { Name: "Ordinal", ContainingType.Name: "StringComparer" } } or ILiteralOperation { ConstantValue.Value: null } ? null : $"compared by {arg.Value.Syntax}";
+        }
+        var m = op.TargetMethod.ReducedFrom ?? op.TargetMethod;
+        bool firstIsString = m.Parameters.FirstOrDefault()?.Type.SpecialType == SpecialType.System_String || op.Instance?.Type?.SpecialType == SpecialType.System_String && m.Parameters.FirstOrDefault()?.Type.SpecialType == SpecialType.System_String;
+        switch (tk, name)
+        {
+            case ("String", "Compare" or "CompareTo"):
+            case ("String", "StartsWith" or "EndsWith" or "IndexOf" or "LastIndexOf") when firstIsString:
+                return "compared by the current culture";
+            case ("String", "ToLower" or "ToUpper"):
+                return "cased by the current culture";
+            case ("Enumerable", "OrderBy" or "OrderByDescending" or "ThenBy" or "ThenByDescending" or "Order" or "OrderDescending" or "Min" or "Max" or "MinBy" or "MaxBy"):
+            {
+                // The key: what the selector gives, or the items themselves.
+                var key = op.Arguments.Length > 1 && op.Arguments[1].Value is IDelegateCreationOperation or IAnonymousFunctionOperation || op.Arguments.Length > 1 && op.Arguments[1].Parameter?.Type is INamedTypeSymbol { TypeKind: TypeKind.Delegate }
+                    ? (op.Arguments[1].Parameter!.Type as INamedTypeSymbol)?.TypeArguments.LastOrDefault()
+                    : (m.Parameters.FirstOrDefault()?.Type as INamedTypeSymbol)?.TypeArguments.FirstOrDefault() ?? op.Type;
+                return key?.SpecialType == SpecialType.System_String ? "ordered by the current culture (Comparer<string>.Default)" : null;
+            }
+            case ("Vec", "Sort") when op.Arguments.Length == 0 && (op.Instance?.Type as INamedTypeSymbol)?.TypeArguments.FirstOrDefault()?.SpecialType == SpecialType.System_String:
+                return "ordered by the current culture (Comparer<string>.Default)";
+        }
+        return null;
+    }
+
     private string? BclCall(IInvocationOperation op)
     {
         var m = op.TargetMethod;
@@ -137,6 +177,18 @@ public sealed partial class Body
         bool IsF(int i) => a[i].Type?.TypeKind == TypeKind.Delegate || Unconverted(a[i]) is IAnonymousFunctionOperation or IMethodReferenceOperation or IDelegateCreationOperation;
         string elem = "";
 
+        // A string compared or cased by culture or ignoring case, where the engine's strings are ordinal.
+        if (CultureString(op, tk, def.Name) is { } byCulture)
+        {
+            // Names compared by the current culture compare as ordinal: port.toml [strings] ordinal states which.
+            if (byCulture == "compared by the current culture" && w.Cfg.OrdinalStrings.Contains(Where))
+                w.Rep.Culture(Where, op, $"{byCulture}, of ASCII names ([strings] ordinal): translated as ordinal");
+            else
+            {
+                w.Rep.Culture(Where, op, $"{byCulture}: not translated");
+                throw new Unsupported($"a string {byCulture} ({tk}.{def.Name})");
+            }
+        }
         // A comparison by the values' equality (EqualityComparer<T>.Default, object.Equals) over a type of the game
         // whose equality is its own: a value here is compared by its fields (World.ValueEquality says whether its
         // Equals compares the same), an object by its own Equals where this translates the operation, else not at all.
@@ -181,7 +233,8 @@ public sealed partial class Body
             case "Enumerable.Single": return n == 1 ? $"linq::single({V(0)})" : $"linq::single_by({V(0)}, {F(1, 1)}, c)";
             case "Enumerable.SingleOrDefault": return n == 1 ? $"linq::single_or_default({V(0)})" : IsF(1) ? $"linq::single_or_default_by({V(0)}, {F(1, 1)}, c)" : null;
             case "Enumerable.ToList" or "Enumerable.ToArray" or "Enumerable.AsEnumerable" or "Enumerable.Cast": return V(0);
-            case "Enumerable.ToHashSet" when n == 1: return $"Set::from_vec({V(0)})";
+            // Of a set, .NET's ConstructFrom keeps its slots (rt::Set::copy_of); of anything else, its items in order.
+            case "Enumerable.ToHashSet" when n == 1: return World.CollOf(Unconverted(a[0]).Type) == World.Coll.Set ? $"Set::copy_of(&{Expr(Unconverted(a[0]))})" : $"Set::from_vec({V(0)})";
             case "Enumerable.ToDictionary" when n == 1: return $"Dict::from_pairs({V(0)})";
             case "Enumerable.ToDictionary" when n == 2: return $"linq::to_dictionary({V(0)}, {F(1, 1)}, |x, _c| x, c)";
             case "Enumerable.ToDictionary" when n == 3 && IsF(2): return $"linq::to_dictionary({V(0)}, {F(1, 1)}, {F(2, 1)}, c)";
@@ -197,12 +250,13 @@ public sealed partial class Body
             case "Enumerable.ThenByDescending" when n == 2: return $"linq::then_by({V(0)}, {F(1, 1)}, true, c)";
             case "Enumerable.Order" when n == 2 && Unconverted(a[1]) is IPropertyReferenceOperation { Property: { Name: "Ordinal", ContainingType.Name: "StringComparer" } }:
             case "Enumerable.Order" when n == 1: return $"linq::order_by({V(0)}, |x, _c| x, false, c)";
-            case "Enumerable.Sum": return n == 1 ? $"linq::sum({V(0)})" : $"linq::sum_by({V(0)}, {F(1, 1)}, c)";
+            case "Enumerable.Sum": return $"linq::sum_{NumberKind(m, n)}({(n == 1 ? V(0) : LinqSelect(V(0), a[1]))})";
             case "Enumerable.Max": return n == 1 ? $"linq::max({V(0)})" : $"linq::max({LinqSelect(V(0), a[1])})";
             case "Enumerable.Min": return n == 1 ? $"linq::min({V(0)})" : $"linq::min({LinqSelect(V(0), a[1])})";
-            case "Enumerable.MaxBy" when n == 2: return $"linq::max_by({V(0)}, {F(1, 1)}, c)";
-            case "Enumerable.MinBy" when n == 2: return $"linq::min_by({V(0)}, {F(1, 1)}, c)";
-            case "Enumerable.Average": return n == 1 ? $"linq::average({V(0)})" : $"linq::average({LinqSelect(V(0), a[1])})";
+            // Of no items, a class's or a nullable's is null; of a value .NET throws.
+            case "Enumerable.MaxBy" when n == 2: return $"linq::max_by{(op.Type is { IsReferenceType: true } || World.IsNullable(op.Type!, out _) ? "" : "_value")}({V(0)}, {F(1, 1)}, c)";
+            case "Enumerable.MinBy" when n == 2: return $"linq::min_by{(op.Type is { IsReferenceType: true } || World.IsNullable(op.Type!, out _) ? "" : "_value")}({V(0)}, {F(1, 1)}, c)";
+            case "Enumerable.Average": return $"linq::average_{NumberKind(m, n)}({(n == 1 ? V(0) : LinqSelect(V(0), a[1]))})";
             case "Enumerable.Take" when a[1].Type?.SpecialType == SpecialType.System_Int32: return $"linq::take({V(0)}, {V(1)})";
             case "Enumerable.Skip": return $"linq::skip({V(0)}, {V(1)})";
             case "Enumerable.TakeLast": return $"linq::take_last({V(0)}, {V(1)})";
@@ -293,7 +347,9 @@ public sealed partial class Body
             case "Set.Clear": return $"{Place(inst!)}.clear()";
             case "Set.UnionWith": return Mut((p, x) => $"{p}.union_with({x[0]})", 0);
             case "Set.ExceptWith": return Mut((p, x) => $"{p}.except_with({x[0]})", 0);
-            case "Set.IntersectWith": return Mut((p, x) => $"{p}.intersect_with({x[0]})", 0);
+            // Against an empty collection that has a count, .NET clears the set; against a LINQ sequence it removes
+            // item by item.
+            case "Set.IntersectWith": return Mut((p, x) => $"{p}.intersect_with({x[0]}, {(IsDeferred(a[0]) ? "false" : "true")})", 0);
             case "Set.SetEquals": return Rd((r, x) => $"{r}.set_equals(&{x[0]})", 0);
             case "Set.Overlaps": return Rd((r, x) => $"{r}.overlaps(&{x[0]})", 0);
 
@@ -329,7 +385,7 @@ public sealed partial class Body
             case "String.Replace" when n == 2 && a[0].Type?.SpecialType == SpecialType.System_String: return $"{I()}.replace({V(0)}, {V(1)})";
             case "String.Split" when n == 1 && a[0].Type?.SpecialType == SpecialType.System_Char: return $"{I()}.split({V(0)})";
             case "String.IsNullOrEmpty": return $"{V(0)}.is_null_or_empty()";
-            case "String.IsNullOrWhiteSpace": return $"{V(0)}.trim().is_null_or_empty()";
+            case "String.IsNullOrWhiteSpace": return $"{V(0)}.is_null_or_white_space()";
             case "String.Join" when n == 2 && World.CollOf(a[1].Type) == World.Coll.Vec && N(a[1].Type) == "Vec<Str>" && a[0].Type?.SpecialType == SpecialType.System_String: return $"Str::join({V(0)}, &{V(1)})";
             case "String.Concat" when a.All(x => x.Type?.SpecialType == SpecialType.System_String): return $"Str::concat(&[{string.Join(", ", a.Select(Expr))}])";
             case "String.Compare" or "String.CompareOrdinal" when n >= 2: return $"{V(0)}.compare({V(1)})";
@@ -365,6 +421,8 @@ public sealed partial class Body
             // ---- numbers
             case "Math.Max" or "Mathf.Max" or "MathF.Max" or "Decimal.Max" or "Int32.Max": return $"rt::max({V(0)}, {V(1)})";
             case "Math.Min" or "Mathf.Min" or "MathF.Min" or "Decimal.Min" or "Int32.Min": return $"rt::min({V(0)}, {V(1)})";
+            // Of an int, .NET throws where the value has no positive (int.MinValue).
+            case "Math.Abs" when a[0].Type?.SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64: return $"rt::abs_checked({V(0)})";
             case "Math.Abs" or "Mathf.Abs" or "MathF.Abs" or "Decimal.Abs": return $"{V(0)}.abs()";
             case "KeyValuePair.Deconstruct" when n == 2:
             {
@@ -439,6 +497,26 @@ public sealed partial class Body
     }
 
     /// <summary>Max(selector), Min(selector), Average(selector): the selected values first.</summary>
+    /// <summary>What Sum or Average adds (.NET 9 adds each in its own way, rt/linq.rs): the numbers of the sequence, or
+    /// what the selector gives.</summary>
+    private static string NumberKind(IMethodSymbol m, int n)
+    {
+        // A reduced extension method has no parameter for the sequence it is called on.
+        int at = (n == 1 ? 0 : 1) - (m.Parameters.Length < n ? 1 : 0);
+        var p = at < 0 ? m.ReceiverType as INamedTypeSymbol : m.Parameters[at].Type as INamedTypeSymbol;
+        if (at < 0 && p != null) p = p.AllInterfaces.Prepend(p).FirstOrDefault(i => i.Name == "IEnumerable" && i.TypeArguments.Length == 1) ?? p;
+        var t = n == 1 ? p?.TypeArguments.FirstOrDefault() : p?.TypeArguments.LastOrDefault();
+        return t?.SpecialType switch
+        {
+            SpecialType.System_Int32 => "i32",
+            SpecialType.System_Int64 => "i64",
+            SpecialType.System_Single => "f32",
+            SpecialType.System_Double => "f64",
+            SpecialType.System_Decimal => "dec",
+            _ => throw new Unsupported($"{m.Name} over {t?.ToDisplayString() ?? "?"}"),
+        };
+    }
+
     private string LinqSelect(string source, IOperation selector) => $"linq::select({source}, {Closure(selector, 1)}, c)";
 
     private string? BclProp(IPropertyReferenceOperation op)
@@ -504,9 +582,11 @@ public sealed partial class Body
                 return a.Count == 0 || isInt(0) ? $"Vec::<{targs}>::new()" : a.Count == 1 ? IterSource(a[0]) : null;
             case World.Coll.Dict:
                 if (a.Count == 0 || (a.Count == 1 && isInt(0))) return $"Dict::<{targs}>::new()";
-                return a.Count == 1 && World.CollOf(a[0].Type) == World.Coll.Dict ? Expr(a[0]) : null;
+                // .NET copies a dictionary's live entries in order, no freed slot.
+                return a.Count == 1 && World.CollOf(a[0].Type) == World.Coll.Dict ? $"{Expr(a[0])}.packed()" : null;
             case World.Coll.Set:
                 if (a.Count == 0 || (a.Count == 1 && isInt(0))) return $"Set::<{targs}>::new()";
+                if (a.Count == 1 && World.CollOf(Unconverted(a[0]).Type) == World.Coll.Set) return $"Set::copy_of(&{Expr(Unconverted(a[0]))})";
                 return a.Count == 1 && World.CollOf(Unconverted(a[0]).Type) != World.Coll.None ? $"Set::from_vec({IterSource(a[0])})" : null;
             case World.Coll.Queue:
                 if (a.Count == 0 || isInt(0)) return $"Queue::<{targs}>::new()";

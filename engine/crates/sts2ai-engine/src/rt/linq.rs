@@ -254,50 +254,49 @@ pub fn then_by<T: Clone, K: Cmp>(o: Ordered<T>, mut f: impl FnMut(T, &mut Combat
     Ordered { items, rank }
 }
 
-/// What Sum, Average, Max and Min work on.
-pub trait Number: Copy + PartialOrd {
-    const ZERO: Self;
-    fn add(self, o: Self) -> Self;
-    fn div_count(self, n: usize) -> Self;
+// .NET 9's Enumerable.Sum and Average, each as it adds: int and long checked (an overflow throws), float in double
+// and narrowed once at the end, double in order, decimal as decimal adds. Average of int or long is a double.
+const OVERFLOW: &str = "Arithmetic operation resulted in an overflow.";
+const EMPTY: &str = "Sequence contains no elements";
+pub fn sum_i32(s: Vec<i32>) -> i32 {
+    s.into_iter().fold(0i32, |t, x| t.checked_add(x).expect(OVERFLOW))
 }
-macro_rules! number {
-    ($($ty:ty),*) => {
-        $(impl Number for $ty {
-            const ZERO: Self = 0 as $ty;
-            fn add(self, o: Self) -> Self {
-                self + o
-            }
-            fn div_count(self, n: usize) -> Self {
-                self / n as $ty
-            }
-        })*
-    };
+pub fn sum_i64(s: Vec<i64>) -> i64 {
+    s.into_iter().fold(0i64, |t, x| t.checked_add(x).expect(OVERFLOW))
 }
-number!(i32, i64, u32, u64, f32, f64);
-impl Number for Dec {
-    const ZERO: Self = Dec::ZERO;
-    fn add(self, o: Self) -> Self {
-        self + o
-    }
-    fn div_count(self, n: usize) -> Self {
-        self / Dec::from_u64(n as u64)
-    }
+pub fn sum_f32(s: Vec<f32>) -> f32 {
+    s.into_iter().fold(0f64, |t, x| t + x as f64) as f32
 }
-
-pub fn sum<T: Number>(s: Vec<T>) -> T {
-    s.into_iter().fold(T::ZERO, T::add)
+pub fn sum_f64(s: Vec<f64>) -> f64 {
+    s.into_iter().fold(0f64, |t, x| t + x)
 }
-pub fn sum_by<T, N: Number>(s: Vec<T>, mut f: impl FnMut(T, &mut Combat) -> N, c: &mut Combat) -> N {
-    let mut total = N::ZERO;
-    for x in s {
-        total = total.add(f(x, c));
-    }
-    total
+pub fn sum_dec(s: Vec<Dec>) -> Dec {
+    s.into_iter().fold(Dec::ZERO, |t, x| t + x)
 }
-pub fn average<T: Number>(s: Vec<T>) -> T {
-    assert!(!s.is_empty(), "Sequence contains no elements");
+pub fn average_i32(s: Vec<i32>) -> f64 {
+    assert!(!s.is_empty(), "{EMPTY}");
     let n = s.len();
-    sum(s).div_count(n)
+    s.into_iter().fold(0i64, |t, x| t.checked_add(x as i64).expect(OVERFLOW)) as f64 / n as f64
+}
+pub fn average_i64(s: Vec<i64>) -> f64 {
+    assert!(!s.is_empty(), "{EMPTY}");
+    let n = s.len();
+    sum_i64(s) as f64 / n as f64
+}
+pub fn average_f32(s: Vec<f32>) -> f32 {
+    assert!(!s.is_empty(), "{EMPTY}");
+    let n = s.len();
+    (s.into_iter().fold(0f64, |t, x| t + x as f64) / n as f64) as f32
+}
+pub fn average_f64(s: Vec<f64>) -> f64 {
+    assert!(!s.is_empty(), "{EMPTY}");
+    let n = s.len();
+    sum_f64(s) / n as f64
+}
+pub fn average_dec(s: Vec<Dec>) -> Dec {
+    assert!(!s.is_empty(), "{EMPTY}");
+    let n = s.len();
+    sum_dec(s) / Dec::from_u64(n as u64)
 }
 pub fn max<T: PartialOrd>(s: Vec<T>) -> T {
     let mut it = s.into_iter();
@@ -329,6 +328,15 @@ pub fn max_by<T: Clone + Default, K: PartialOrd>(s: Vec<T>, mut f: impl FnMut(T,
         }
     }
     best.map(|(x, _)| x).unwrap_or_default()
+}
+/// MaxBy and MinBy of a value type: .NET throws on no items.
+pub fn max_by_value<T: Clone + Default, K: PartialOrd>(s: Vec<T>, f: impl FnMut(T, &mut Combat) -> K, c: &mut Combat) -> T {
+    assert!(!s.is_empty(), "{EMPTY}");
+    max_by(s, f, c)
+}
+pub fn min_by_value<T: Clone + Default, K: PartialOrd>(s: Vec<T>, f: impl FnMut(T, &mut Combat) -> K, c: &mut Combat) -> T {
+    assert!(!s.is_empty(), "{EMPTY}");
+    min_by(s, f, c)
 }
 pub fn min_by<T: Clone + Default, K: PartialOrd>(s: Vec<T>, mut f: impl FnMut(T, &mut Combat) -> K, c: &mut Combat) -> T {
     let mut best: Option<(T, K)> = None;
@@ -428,4 +436,31 @@ pub fn repeat<T: Clone>(x: T, n: i32) -> Vec<T> {
 }
 pub fn default_if_empty<T: Default>(s: Vec<T>) -> Vec<T> {
     if s.is_empty() { vec![T::default()] } else { s }
+}
+
+#[cfg(test)]
+mod number_tests {
+    use super::*;
+
+    /// .NET 9 adds floats in double and narrows once: 0.1f + 0.2f + 0.4f is 0x3f333333, where adding in float gives
+    /// 0x3f333334.
+    #[test]
+    fn float_sum_adds_in_double() {
+        assert_eq!(sum_f32(vec![0.1f32, 0.2, 0.4]).to_bits(), 0x3f333333);
+        let in_double = (0.1f32 as f64 + 0.2f32 as f64 + 0.4f32 as f64) / 3.0;
+        assert_eq!(average_f32(vec![0.1f32, 0.2, 0.4]).to_bits(), (in_double as f32).to_bits());
+    }
+
+    /// Average of ints is a double, not an integer division.
+    #[test]
+    fn int_average_is_a_double() {
+        assert_eq!(average_i32(vec![1, 2]), 1.5);
+    }
+
+    /// An int sum that overflows throws, as .NET's checked one does.
+    #[test]
+    #[should_panic(expected = "overflow")]
+    fn int_sum_overflow_throws() {
+        sum_i32(vec![i32::MAX, 1]);
+    }
 }

@@ -328,6 +328,30 @@ members = [
     "CombatTurnState._sequenceCounter",
 ]
 
+[statics]
+# Statics whose initializer reads more than constants (.NET runs it once a process, the engine at every read) and
+# gives the same value whenever it is read: canonical models of the model table, which never change in a process;
+# text keys and paths of presentation. A static that reads a run's or a combat's state (the ascension level, ..) is
+# not translated: its value is the first run's of the process. Port lists every one with what it reads.
+fixed = [
+    # canonical models and their ids
+    "BowlbugsNormal._workerValidCounts", "Cauldron._testPotions", "CultistsNormal._cultists", "Fabricator.aggroSpawns",
+    "Fabricator.defenseSpawns", "FlyconidNormal._mediumSlimes", "KnowledgeDemon._curseOfKnowledgeSets", "OrbModel._validOrbs",
+    "RubyRaidersNormal._raiderValidCounts", "SlimesWeak._mediumSlimes", "SlimesWeak._smallSlimes",
+    "SlitheringStranglerNormal._mediumSlimes", "SlitheringStranglerNormal._smallSlimes",
+    # text keys, scene paths, animation data
+    "CalcifiedCultist._cawCawDialogue", "CardKeywordExtensions._period", "DampCultist._cawCawDialogue",
+    "DecimillipedeSegment.rocksVfxPath", "DevotedSculptor._forbiddenIncantationDialogue", "IntentAnimData._data",
+    "KinPriest._followersDeathLine", "KinPriest._ritualApplyLine", "KnowledgeDemon._curseOfKnowledgeDoneLine",
+    "KnowledgeDemon._curseOfKnowledgeStartLine", "MagiKnight._dampenDialogue", "MonsterModel._fallbackVisualsPath",
+]
+
+[strings]
+# Members whose strings, compared by the current culture (EndsWith, StartsWith of a string), are names of ASCII
+# letters, digits and underscores: there culture and ordinal agree, and the engine compares them ordinal. A model's
+# category is made of its class's name; a seed is upper-case letters and digits.
+ordinal = ["ModelId..ctor", "ModelId.SlugifyCategory", "RunRngSet..ctor"]
+
 [enter]
 # Members that tell hand-written code that they run: `m::<class>::enter(name, arguments.., c)` before the member's
 # body, `m::<class>::leave(c)` after it.

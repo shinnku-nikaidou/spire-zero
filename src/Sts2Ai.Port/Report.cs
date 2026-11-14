@@ -99,6 +99,22 @@ public sealed class Report
 
     private readonly ConcurrentBag<string> guards = [];
 
+    private readonly ConcurrentBag<string> staticReads = [];
+
+    private readonly ConcurrentBag<string> culture = [];
+
+    /// <summary>A string compared, ordered or cased by culture or ignoring case: not translated.</summary>
+    public void Culture(string where, IOperation op, string how)
+    {
+        var span = op.Syntax.GetLocation().GetLineSpan();
+        string first = op.Syntax.ToString().Replace("\r", "").Split('\n')[0].Trim();
+        if (first.Length > 140) first = first[..140] + "...";
+        culture.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}  ->  {how}");
+    }
+
+    /// <summary>A static whose initializer reads more than constants, with what it reads and what became of it.</summary>
+    public void StaticRead(string line) => staticReads.Add(line);
+
     /// <summary>What each [drop] entry takes out of translated members: (entry, member, line, whether it held game code).</summary>
     private readonly ConcurrentBag<(string Entry, string Where, string Line, bool Game, string Used)> removed = [];
 
@@ -142,6 +158,8 @@ public sealed class Report
         aliased.Clear();
         equality.Clear();
         guards.Clear();
+        staticReads.Clear();
+        culture.Clear();
         removed.Clear();
         heldChains.Clear();
         counts.Clear();
@@ -197,6 +215,10 @@ public sealed class Report
         foreach (var s in equality.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== tests on presentation (if, switch) that can leave (return, continue, break), and what became of each: left out where nothing they could skip follows, else not translated");
         foreach (var s in guards.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== strings compared, ordered or cased by culture or ignoring case (.NET's default for string.Compare, CompareTo, StartsWith, EndsWith and IndexOf of a string, ToLower, ToUpper, ordering strings): not translated, the engine's strings being ordinal, but where port.toml [strings] ordinal states the strings are ASCII names");
+        foreach (var s in culture.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== statics whose initializer reads more than constants (.NET runs it once a process, the engine at every read): translated where port.toml [statics] fixed states it gives the same value whenever read");
+        foreach (var s in staticReads.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== what each [drop] namespace and type takes out of translated members: every place that held game code (a call into translated game code, a write to state or to a local from outside), then how many places used only the entry's own code, and which of its members they used (where the entry's own code is game logic, that is what the engine leaves out)");
         foreach (var g in removed.Distinct().GroupBy(r => r.Entry).OrderBy(g => g.Key, StringComparer.Ordinal))
         {

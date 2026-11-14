@@ -200,7 +200,28 @@ impl<T: PartialEq + Clone> Set<T> {
             self.remove(x);
         }
     }
-    pub fn intersect_with(&mut self, other: Vec<T>) {
+    /// C#: `new HashSet<T>(set)` and `set.ToHashSet()` of a set: .NET's ConstructFrom, which takes the slots as they
+    /// are, freed ones too, unless the set is so much larger than what it holds that it is laid out again.
+    pub fn copy_of(source: &Self) -> Self {
+        let count = source.len();
+        if count == 0 {
+            return Self::default();
+        }
+        if expand_prime(count + 1) >= grown_capacity(source.0.slots().len()) {
+            return source.clone();
+        }
+        Set::from_items(source.0.iter().cloned().collect())
+    }
+    /// C#: `IntersectWith(other)`. Against an empty collection (a list, an array, a set: anything with a count) it is
+    /// `Clear`; against a sequence it removes what the other lacks, slot by slot.
+    pub fn intersect_with(&mut self, other: Vec<T>, counted: bool) {
+        if self.is_empty() {
+            return;
+        }
+        if counted && other.is_empty() {
+            self.clear();
+            return;
+        }
         for i in 0..self.0.slots().len() {
             if self.0.slots()[i].as_ref().is_some_and(|x| !other.contains(x)) {
                 self.0.release(i);
@@ -225,6 +246,34 @@ impl<T: PartialEq> PartialEq for Set<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0.slots() == other.0.slots()
     }
+}
+
+/// .NET's HashHelpers.GetPrime, over its table of primes.
+fn get_prime(min: usize) -> usize {
+    const PRIMES: [usize; 72] = [
+        3, 7, 11, 17, 23, 29, 37, 47, 59, 71, 89, 107, 131, 163, 197, 239, 293, 353, 431, 521, 631, 761, 919, 1103, 1327,
+        1597, 1931, 2333, 2801, 3371, 4049, 4861, 5839, 7013, 8419, 10103, 12143, 14591, 17519, 21023, 25229, 30293,
+        36353, 43627, 52361, 62851, 75431, 90523, 108631, 130363, 156437, 187751, 225307, 270371, 324449, 389357,
+        467237, 560689, 672827, 807403, 968897, 1162687, 1395263, 1674319, 2009191, 2411033, 2893249, 3471899, 4166287,
+        4999559, 5999471, 7199369,
+    ];
+    *PRIMES.iter().find(|&&p| p >= min).expect("a hash set larger than .NET's table of primes")
+}
+
+/// .NET's HashHelpers.ExpandPrime: the size a full table grows to.
+fn expand_prime(old: usize) -> usize {
+    get_prime(2 * old)
+}
+
+/// The size of a set's table after it has used this many slots, grown from empty by adds as .NET grows it (3, then
+/// ExpandPrime of the size each time it is full). A set made at a size, or by the game before the export, may have
+/// another; the size only decides whether a copy keeps the freed slots.
+fn grown_capacity(used: usize) -> usize {
+    let mut capacity = 3;
+    while capacity < used {
+        capacity = expand_prime(capacity);
+    }
+    capacity
 }
 
 /// Dictionary<K, V>.
@@ -255,6 +304,10 @@ impl<K, V> Default for Dict<K, V> {
 impl<K: PartialEq + Clone, V: Clone> Dict<K, V> {
     pub fn new() -> Self {
         Self::default()
+    }
+    /// C#: `new Dictionary<K, V>(dictionary)`: .NET copies the live entries in their order, no freed slot.
+    pub fn packed(&self) -> Self {
+        Dict::from_pairs(self.0.iter().cloned().collect())
     }
     pub fn from_vec(items: Vec<KeyValuePair<K, V>>) -> Self {
         let mut d = Self::default();
@@ -542,6 +595,44 @@ mod layout_tests {
         dict.set(1, 10);
         dict.set(2, 20);
         assert_eq!(dict.keys(), vec![2, 1]);
+    }
+
+    /// .NET 9's `new HashSet<T>(set)` keeps the freed slots of a set whose table is not much larger than what it
+    /// holds, and lays out again one that is; `new Dictionary<K, V>(d)` always packs.
+    #[test]
+    fn copies_keep_or_pack_the_freed_slots_as_dotnet() {
+        let mut small = Set::from_vec(vec![1, 2, 3]);
+        small.remove(&2);
+        let mut copy = Set::copy_of(&small);
+        copy.add(9);
+        assert_eq!(copy.into_vec(), vec![1, 9, 3]);
+        // 20 adds grow the table to 37; with 2 left, ExpandPrime(3) = 7 < 37: laid out again.
+        let mut large = Set::from_vec((0..20).collect());
+        for x in 1..19 {
+            large.remove(&x);
+        }
+        let mut copy = Set::copy_of(&large);
+        copy.add(99);
+        assert_eq!(copy.into_vec(), vec![0, 19, 99]);
+        let mut dict = Dict::from_layout(vec![(5, 50)], vec![1], vec![0]).unwrap();
+        dict = dict.packed();
+        dict.set(6, 60);
+        assert_eq!(dict.keys(), vec![5, 6]);
+    }
+
+    /// IntersectWith of an empty collection is Clear: no freed slot is left for the next adds.
+    #[test]
+    fn intersect_with_an_empty_collection_clears() {
+        let mut set = Set::from_vec(vec![1, 2, 3]);
+        set.intersect_with(vec![], true);
+        set.add(4);
+        set.add(5);
+        assert_eq!(set.into_vec(), vec![4, 5]);
+        let mut set = Set::from_vec(vec![1, 2, 3]);
+        set.intersect_with(vec![], false);
+        set.add(4);
+        set.add(5);
+        assert_eq!(set.into_vec(), vec![5, 4]);
     }
 
     #[test]

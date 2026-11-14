@@ -315,6 +315,16 @@ public sealed class Emitter(World w)
         {
             if (w.IsObj(type)) throw new Unsupported("a static object");
             var init = Initializer(f.AssociatedSymbol ?? f) ?? throw new Unsupported("a static without an initializer");
+            // .NET runs a static's initializer once a process; this makes the value again at every read. The same only
+            // when it reads constants alone, or port.toml states that what it reads never changes.
+            string key = $"{t.Name}.{(f.AssociatedSymbol ?? f).Name}";
+            var reads = StaticReads(init);
+            if (reads.Count > 0)
+            {
+                bool stated = w.Cfg.FixedStatics.Contains(key);
+                w.Rep.StaticRead($"{key}: reads {string.Join(", ", reads)}  ->  {(stated ? "the same at every read ([statics] fixed): translated" : "not translated")}");
+                if (!stated) throw new Unsupported($"its initializer reads {string.Join(", ", reads.Take(3))}, which .NET reads once a process");
+            }
             text = body.Initial(init) + "\n";
             r.Translated++;
         }
@@ -325,6 +335,38 @@ public sealed class Emitter(World w)
             r.Failed++;
         }
         sb.Append(Fn($"C#: static {t.Name}.{(f.AssociatedSymbol ?? f).Name}", name, new Sig("", [], [], rtype), text));
+    }
+
+    /// <summary>What a static's initializer reads besides constants: each call, getter, field or object it makes of a
+    /// class of the game, as Class.Member. A collection or array it fills, a value of the library made of constants,
+    /// a lambda (not run there) are constants here.</summary>
+    private List<string> StaticReads(IOperation init, HashSet<IFieldSymbol>? seen = null)
+    {
+        seen ??= new HashSet<IFieldSymbol>(SymbolEqualityComparer.Default);
+        var reads = new SortedSet<string>(StringComparer.Ordinal);
+        static bool Implicit(IOperation? i) => i is IInstanceReferenceOperation { ReferenceKind: InstanceReferenceKind.ImplicitReceiver };
+        void Walk(IOperation o)
+        {
+            switch (o)
+            {
+                case IAnonymousFunctionOperation or IDelegateCreationOperation: return;
+                case IInvocationOperation inv when Implicit(inv.Instance): break;
+                case IInvocationOperation inv: reads.Add($"{inv.TargetMethod.ContainingType.Name}.{inv.TargetMethod.Name}"); break;
+                case IPropertyReferenceOperation pr when !Implicit(pr.Instance): reads.Add($"{pr.Property.ContainingType.Name}.{pr.Property.Name}"); break;
+                case IFieldReferenceOperation fr when !fr.ConstantValue.HasValue && fr.Field.ContainingType.TypeKind != TypeKind.Enum && !Implicit(fr.Instance):
+                    // Another static set once from constants is a constant too.
+                    if (fr.Field is { IsStatic: true, IsReadOnly: true } other && seen.Add(other) && Initializer(other) is { } otherInit && StaticReads(otherInit, seen).Count == 0) break;
+                    reads.Add($"{fr.Field.ContainingType.Name}.{fr.Field.Name}");
+                    break;
+                // The compiler's read-only wrapper of a collection expression, and a value of the game made of constants.
+                case IObjectCreationOperation oc when oc.Type is INamedTypeSymbol ot && World.IsSource(ot) && !ot.Name.StartsWith("_003C_003Ez__") && !ot.Name.StartsWith("<>z__") && !w.IsValue(ot):
+                    reads.Add($"new {ot.Name}");
+                    break;
+            }
+            foreach (var ch in o.ChildOperations) Walk(ch);
+        }
+        Walk(init);
+        return reads.ToList();
     }
 
     private IOperation? Initializer(ISymbol fieldOrProperty)

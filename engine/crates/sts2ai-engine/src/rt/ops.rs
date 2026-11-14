@@ -306,11 +306,99 @@ pub fn compare<T: Cmp>(a: T, b: T, c: &mut Combat) -> i32 {
 
 /// Math.Max: the first argument when the two are equal, and Math.Min the second, as .NET's decimal does (the two can
 /// differ in scale: Math.Min(1.0m, 1.00m) is 1.00).
-pub fn max<T: PartialOrd>(a: T, b: T) -> T {
-    if a >= b { a } else { b }
+/// Math.Max and Math.Min as .NET 9 has them: of equal numbers, Max gives the first and Min the second (a decimal's
+/// scale shows which); of floats, NaN wins and Max(-0, +0) is +0, Min(-0, +0) is -0.
+pub trait MinMax: PartialOrd + Sized {
+    fn net_max(self, o: Self) -> Self {
+        if self < o { o } else { self }
+    }
+    fn net_min(self, o: Self) -> Self {
+        if self < o { self } else { o }
+    }
 }
-pub fn min<T: PartialOrd>(a: T, b: T) -> T {
-    if a < b { a } else { b }
+impl MinMax for i8 {}
+impl MinMax for i16 {}
+impl MinMax for i32 {}
+impl MinMax for i64 {}
+impl MinMax for u8 {}
+impl MinMax for u16 {}
+impl MinMax for u32 {}
+impl MinMax for u64 {}
+impl MinMax for Dec {}
+macro_rules! float_min_max {
+    ($($ty:ty),*) => {
+        $(impl MinMax for $ty {
+            fn net_max(self, o: Self) -> Self {
+                if self != o {
+                    if self.is_nan() || o < self { self } else { o }
+                } else if o.is_sign_negative() { self } else { o }
+            }
+            fn net_min(self, o: Self) -> Self {
+                if self != o {
+                    if self.is_nan() || self < o { self } else { o }
+                } else if self.is_sign_negative() { self } else { o }
+            }
+        })*
+    };
+}
+float_min_max!(f32, f64);
+pub fn max<T: MinMax>(a: T, b: T) -> T {
+    a.net_max(b)
+}
+pub fn min<T: MinMax>(a: T, b: T) -> T {
+    a.net_min(b)
+}
+
+/// Math.Abs of an int: .NET throws for the one value with no positive.
+pub trait AbsChecked: Sized {
+    fn abs_checked(self) -> Self;
+}
+impl AbsChecked for i32 {
+    fn abs_checked(self) -> Self {
+        self.checked_abs().expect("Negating the minimum value of a twos complement number is invalid.")
+    }
+}
+impl AbsChecked for i64 {
+    fn abs_checked(self) -> Self {
+        self.checked_abs().expect("Negating the minimum value of a twos complement number is invalid.")
+    }
+}
+pub fn abs_checked<T: AbsChecked>(x: T) -> T {
+    x.abs_checked()
+}
+
+/// .NET's FormatFlagNames: the names of the flags a value is made of, lowest first, joined by ", "; None when some
+/// bits have no name. `values` are the enum's values as unsigned, each with one name, lowest first.
+pub fn flags_text(value: u64, values: &[(u64, &str)]) -> Option<String> {
+    if value == 0 {
+        return Some("0".to_string());
+    }
+    let mut left = value;
+    let mut found = Vec::new();
+    // From the highest value not above it, down.
+    let mut at = values.iter().rposition(|&(v, _)| v <= value)?;
+    loop {
+        let (v, name) = values[at];
+        if at == 0 && v == 0 {
+            break;
+        }
+        if left & v == v {
+            left &= !v;
+            found.push(name);
+            if left == 0 {
+                break;
+            }
+        }
+        if at == 0 {
+            break;
+        }
+        at -= 1;
+    }
+    if left != 0 {
+        return None;
+    }
+    found.reverse();
+    Some(found.join(", "))
 }
 pub fn clamp<T: PartialOrd>(v: T, lo: T, hi: T) -> T {
     if v < lo {
@@ -442,5 +530,52 @@ pub fn walked(r: R<bool>) -> bool {
     match r {
         Ok(ended) => ended,
         Err(_) => panic!("a stop left a walk that awaits nothing"),
+    }
+}
+
+/// C#: `List<T>.Enumerator.MoveNext`: a list changed while a `foreach` walks it throws at the walk's next step.
+/// `walked` is the list as the walk began, `now` the list in its place.
+#[inline]
+pub fn enumerating<T: PartialEq>(walked: &[T], now: &[T]) {
+    if walked != now {
+        panic!("Collection was modified; enumeration operation may not execute.");
+    }
+}
+
+#[cfg(test)]
+mod net_tests {
+    use super::*;
+
+    /// Math.Max and Math.Min of floats as .NET 9: NaN wins, and of +0 and -0 Max is +0, Min is -0.
+    #[test]
+    fn float_max_and_min() {
+        assert!(max(f32::NAN, 1.0).is_nan() && max(1.0, f32::NAN).is_nan());
+        assert!(min(f32::NAN, 1.0).is_nan() && min(1.0f64, f64::NAN).is_nan());
+        assert!(max(-0.0f32, 0.0).is_sign_positive() && max(0.0f32, -0.0).is_sign_positive());
+        assert!(min(-0.0f32, 0.0).is_sign_negative() && min(0.0f32, -0.0).is_sign_negative());
+        assert_eq!(max(2, 3), 3);
+        assert_eq!(min(2.5f32, -1.0), -1.0);
+    }
+
+    /// A [Flags] value no one name has: its flags' names, lowest first; the number where bits have no name.
+    #[test]
+    fn flags_text_as_dotnet() {
+        let values = [(0, "None"), (1, "A"), (2, "B"), (4, "C"), (6, "BC")];
+        assert_eq!(flags_text(3, &values).as_deref(), Some("A, B"));
+        assert_eq!(flags_text(7, &values).as_deref(), Some("A, BC"));
+        assert_eq!(flags_text(9, &values), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "twos complement")]
+    fn abs_of_the_minimum_int_throws() {
+        abs_checked(i32::MIN);
+    }
+
+    #[test]
+    fn null_is_white_space() {
+        assert!(Str::NULL.is_null_or_white_space());
+        assert!(Str::lit(" \t").is_null_or_white_space());
+        assert!(!Str::lit(" a").is_null_or_white_space());
     }
 }

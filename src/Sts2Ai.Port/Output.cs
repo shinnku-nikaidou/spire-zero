@@ -529,7 +529,20 @@ public sealed class Output(World w, Emitter em)
                 string v = System.Convert.ToString(f.ConstantValue, System.Globalization.CultureInfo.InvariantCulture)!;
                 if (seen.Add(v)) sb.Append($"            {v} => Some(\"{f.Name}\"),\n");
             }
-            sb.Append("            _ => None,\n        }\n    }\n}\n");
+            sb.Append("            _ => None,\n        }\n    }\n");
+            if (e.GetAttributes().Any(a => a.AttributeClass?.Name == "FlagsAttribute"))
+            {
+                // .NET's Enum.ToString of a [Flags] enum (FormatFlagNames): the flags it is made of, lowest first.
+                int bits = e.EnumUnderlyingType!.SpecialType switch { SpecialType.System_Byte or SpecialType.System_SByte => 8, SpecialType.System_Int16 or SpecialType.System_UInt16 => 16, SpecialType.System_Int32 or SpecialType.System_UInt32 => 32, _ => 64 };
+                ulong Unsigned(object v) => unchecked((ulong)System.Convert.ToInt64(v is ulong u ? (long)u : v) & (bits == 64 ? ulong.MaxValue : (1UL << bits) - 1));
+                var values = members.Select(f => (Value: Unsigned(f.ConstantValue!), f.Name)).GroupBy(x => x.Value).Select(g => g.First()).OrderBy(x => x.Value).ToList();
+                string storage = bits == 64 ? "self.0 as u64" : $"(self.0 as u{bits}) as u64";
+                sb.Append("    /// C#: Enum.ToString of this [Flags] enum where no one name has the value: the names of the flags it is made\n    /// of, lowest first, or the number.\n");
+                sb.Append($"    pub fn unnamed_text(self) -> String {{\n        const VALUES: &[(u64, &str)] = &[{string.Join(", ", values.Select(v => $"({v.Value}, \"{v.Name}\")"))}];\n");
+                sb.Append($"        crate::rt::flags_text({storage}, VALUES).unwrap_or_else(|| self.0.to_string())\n    }}\n");
+            }
+            else sb.Append("    pub fn unnamed_text(self) -> String {\n        self.0.to_string()\n    }\n");
+            sb.Append("}\n");
             sb.Append($"cs_enum!({name}, {under});\n\n");
         }
         return sb.ToString();
