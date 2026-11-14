@@ -112,11 +112,14 @@ pub fn full_text<S: Sink>(st: CombatState, player: Player, draw: &[Vec<u8>], c: 
     }
     let manager = g::combat::combat_manager::instance(c);
     let history = g::combat::combat_manager::history(manager, c);
+    // The history only grows at its end, each entry with the round, the side and each player's turn number it was
+    // made in, which only go forward: this turn's entries are its end, read back to the first that is not.
     let mut entries = Vec::new();
-    for e in g::combat_history::combat_history::entries(history, c) {
-        if g::combat_history::combat_history_entry::happened_this_turn(e, st, c) {
-            entries.push(entry(e, c));
+    for e in g::combat_history::combat_history::entries(history, c).into_iter().rev() {
+        if !g::combat_history::combat_history_entry::happened_this_turn(e, st, c) {
+            break;
         }
+        entries.push(entry(e, c));
     }
     // C#: Order(StringComparer.Ordinal), by UTF-16 code unit.
     entries.sort_by(|a, b| a.encode_utf16().cmp(b.encode_utf16()));

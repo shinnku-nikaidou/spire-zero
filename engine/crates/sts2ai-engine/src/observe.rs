@@ -16,7 +16,7 @@ use crate::protocol::{
     CardView, CombatObservation, CreatureView, IntentView, ModifierView, OrbView, PlayerView, PowerView, RelicView, RunChange, TinkerView,
     sort_by_key,
 };
-use crate::rt::{self, Combat, Dec, Obj, Str};
+use crate::rt::{self, Combat, Dec, Obj, Set, Str};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
@@ -247,6 +247,8 @@ pub fn seen(st: CombatState, player: Player, c: &mut Combat) -> (CombatObservati
 pub fn card(card: CardModel, with_uid: bool, c: &mut Combat) -> CardView {
     let cost = g::models::card_model::energy_cost(card, c);
     let x = g::entities_cards::card_energy_cost::costs_x(cost, c);
+    // The card's keywords, which the C# asks for again in each test below: the same set every time it is asked here.
+    let keywords = g::models::card_model::keywords(card, c);
     CardView {
         id: entry(card, c),
         uid: if with_uid {
@@ -310,7 +312,7 @@ pub fn card(card: CardModel, with_uid: bool, c: &mut Combat) -> CardView {
             None
         },
         keywords: {
-            let keywords = rt::IntoVec::into_vec(g::models::card_model::keywords(card, c));
+            let keywords = rt::IntoVec::into_vec(keywords.clone());
             if keywords.is_empty() {
                 None
             } else {
@@ -319,7 +321,7 @@ pub fn card(card: CardModel, with_uid: bool, c: &mut Combat) -> CardView {
                 Some(names)
             }
         },
-        this_turn: this_turn(card, c),
+        this_turn: this_turn(card, &keywords, c),
         vars: {
             let vars = vars(card, c);
             (!vars.is_empty()).then_some(vars)
@@ -580,13 +582,15 @@ fn spent(relic: RelicModel, c: &mut Combat) -> Option<bool> {
     flag.then_some(true)
 }
 
-/// C#: Observe.ThisTurn. The keywords an effect gave the card for this turn only, beside its own.
-fn this_turn(card: CardModel, c: &mut Combat) -> Option<Vec<Str>> {
+/// C#: Observe.ThisTurn. The keywords an effect gave the card for this turn only, beside its own. `ShouldRetainThisTurn`
+/// is Retain among the card's keywords or a retain for this turn alone, and with Retain among them it is not listed:
+/// so it is listed for the turn's own alone; the same for Sly (`IsSlyThisTurn`).
+fn this_turn(card: CardModel, keywords: &Set<CardKeyword>, c: &mut Combat) -> Option<Vec<Str>> {
     let mut kept = Vec::new();
-    if g::models::card_model::should_retain_this_turn(card, c) && !g::models::card_model::keywords(card, c).contains(&CardKeyword::Retain) {
+    if !keywords.contains(&CardKeyword::Retain) && g::models::card_model::has_single_turn_retain(card, c) {
         kept.push(Str::lit("Retain"));
     }
-    if g::models::card_model::is_sly_this_turn(card, c) && !g::models::card_model::keywords(card, c).contains(&CardKeyword::Sly) {
+    if !keywords.contains(&CardKeyword::Sly) && g::models::card_model::has_single_turn_sly(card, c) {
         kept.push(Str::lit("Sly"));
     }
     (!kept.is_empty()).then_some(kept)
