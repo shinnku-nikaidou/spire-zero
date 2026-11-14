@@ -1157,9 +1157,13 @@ public sealed partial class Body
         if (b.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals && Unboxed(b.LeftOperand) is var ul && Unboxed(b.RightOperand) is var ur
             && (ul != b.LeftOperand || ur != b.RightOperand) && w.IsValue(ul.Type) && w.IsValue(ur.Type) && N(ul.Type) == N(ur.Type))
             return $"({Expr(ul)} {(b.OperatorKind == BinaryOperatorKind.Equals ? "==" : "!=")} {Expr(ur)})";
+        // A game's == or != of its own: called (listed with the comparisons by equality); a record's, which C# writes
+        // over its fields: a value here compares them too (not listed), an object's is not translated (CallPath).
         if (b.OperatorMethod is { } om && World.IsSource(om.ContainingType) && !(om.IsImplicitlyDeclared && w.IsValue(om.ContainingType)))
         {
             if (w.IsDropped(om.ContainingType)) throw new Dropped(om.ContainingType.Name);
+            if (om.Name is "op_Equality" or "op_Inequality")
+                w.Rep.Equality(Where, b, om.IsImplicitlyDeclared ? $"{om.ContainingType.Name}: a record's {om.Name}, of an object: not translated" : $"{om.ContainingType.Name}: its own {om.Name}, called");
             return $"{CallPath(om, false)}({Expr(b.LeftOperand)}, {Expr(b.RightOperand)}, c)";
         }
         if (b.OperatorKind is BinaryOperatorKind.ConditionalAnd or BinaryOperatorKind.ConditionalOr)

@@ -124,6 +124,39 @@ pub fn is_null<T: IsNull>(x: &T) -> bool {
     x.is_null()
 }
 
+/// The `Equals` of a class of the game whose equality is its own (port: Body.OwnEquals), as the comparisons below call
+/// it: on the first value, given the second.
+pub type OwnEquals = fn(Obj, Obj, &mut Combat) -> bool;
+
+/// C#: `EqualityComparer<T>.Default.IndexOf` over a list of objects of a class whose equality is its own: the first
+/// item that equals `x`, asked of the item (`items[i].Equals(x)`); for a null `x`, the first null.
+pub fn position_eq(items: &[Obj], x: Obj, eq: OwnEquals, c: &mut Combat) -> Option<usize> {
+    for (at, &item) in items.iter().enumerate() {
+        if x.is_null() {
+            if item.is_null() {
+                return Some(at);
+            }
+        } else if !item.is_null() && eq(item, x, c) {
+            return Some(at);
+        }
+    }
+    None
+}
+
+/// C#: `object.Equals(a, b)`: the same object, or neither null and `a.Equals(b)`.
+pub fn object_equals(a: Obj, b: Obj, eq: OwnEquals, c: &mut Combat) -> bool {
+    a == b || (!a.is_null() && !b.is_null() && eq(a, b, c))
+}
+
+/// C#: `EqualityComparer<T>.Default.Equals(a, b)` for a class: both null, or neither null and `a.Equals(b)`.
+pub fn comparer_equals(a: Obj, b: Obj, eq: OwnEquals, c: &mut Combat) -> bool {
+    if a.is_null() {
+        b.is_null()
+    } else {
+        !b.is_null() && eq(a, b, c)
+    }
+}
+
 pub fn throw_if_null<T: IsNull>(x: &T, at: &str) {
     if x.is_null() {
         panic!("{at}: ArgumentNullException");

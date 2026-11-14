@@ -21,6 +21,84 @@ public sealed partial class Body
         };
     }
 
+    /// <summary>The type of the values a call of the library compares by their equality (EqualityComparer&lt;T&gt;.Default,
+    /// `object.Equals`): a list's Remove, Contains and IndexOf, every operation of a set and of a dictionary (its keys;
+    /// ContainsValue its values), LINQ's Contains, Distinct, the set operations and the ones that group by a key.</summary>
+    private static ITypeSymbol? Compared(IInvocationOperation op, string tk, string name)
+    {
+        var m = op.TargetMethod;
+        var ct = m.ContainingType;
+        ITypeSymbol? Arg(int i) => ct.TypeArguments.Length > i ? ct.TypeArguments[i] : null;
+        ITypeSymbol? Of(int i) => (m.ReducedFrom != null ? m.ReducedFrom.TypeArguments.Length : m.TypeArguments.Length) > i ? (m.TypeArguments.Length > i ? m.TypeArguments[i] : null) : null;
+        static ITypeSymbol? Bare(IOperation? o)
+        {
+            while (o is IConversionOperation cv) o = cv.Operand;
+            return o?.Type;
+        }
+        return (tk, name) switch
+        {
+            ("Vec", "Remove" or "Contains" or "IndexOf" or "LastIndexOf") => Arg(0),
+            ("Set", _) => Arg(0),
+            ("Dict", "ContainsValue") => Arg(1),
+            ("Dict", _) => Arg(0),
+            ("Queue" or "Stack", "Contains") => Arg(0),
+            ("Enumerable", "Contains" or "Distinct" or "Except" or "Intersect" or "Union" or "SequenceEqual" or "ToHashSet") => Of(0),
+            ("Enumerable", "GroupBy" or "ToDictionary" or "DistinctBy" or "ToLookup" or "CountBy" or "ExceptBy" or "IntersectBy" or "UnionBy") => Of(1),
+            ("Object", "Equals") => op.Instance != null ? Bare(op.Instance) : Bare(op.Arguments.FirstOrDefault()?.Value),
+            ("EqualityComparer", "Equals") => Arg(0),
+            _ => null,
+        };
+    }
+
+    /// <summary>The function that answers `x.Equals(y)` for objects of a class of the game whose equality is its own,
+    /// as EqualityComparer&lt;T&gt;.Default asks it: its IEquatable&lt;T&gt;.Equals where it has one, else its
+    /// Equals(object). Null where it has none of its own, no translated one, or a class below it answers otherwise (a
+    /// virtual call this does not dispatch).</summary>
+    private string? OwnEquals(ITypeSymbol t)
+    {
+        if (t is not INamedTypeSymbol n || !World.IsSource(n) || n.TypeKind != TypeKind.Class) return null;
+        IMethodSymbol? eq = null;
+        if (n.AllInterfaces.FirstOrDefault(i => i.Name == "IEquatable" && i.TypeArguments is [var ta] && Eq.Equals(ta.OriginalDefinition, n.OriginalDefinition)) is { } equatable
+            && n.FindImplementationForInterfaceMember(equatable.GetMembers("Equals")[0]) is IMethodSymbol im)
+            eq = im;
+        for (var x = n; x != null && eq == null && World.IsSource(x); x = x.BaseType)
+            eq = x.GetMembers("Equals").OfType<IMethodSymbol>().FirstOrDefault(m => m.IsOverride && m.Parameters is [{ Type.SpecialType: SpecialType.System_Object }]);
+        if (eq == null || eq.IsImplicitlyDeclared || w.CatOf(eq.ContainingType) != Cat.Translated || w.IsDropMember(eq)) return null;
+        var root = n.OriginalDefinition;
+        bool Under(INamedTypeSymbol s) { for (var x = s.BaseType; x != null; x = x.BaseType) if (Eq.Equals(x.OriginalDefinition, root)) return true; return false; }
+        if (w.AllTypes.Any(s => World.IsSource(s) && Under(s) && s.GetMembers("Equals").OfType<IMethodSymbol>().Any(m => m.IsOverride && !m.IsImplicitlyDeclared))) return null;
+        return CallPath(eq, false);
+    }
+
+    /// <summary>A comparison by the values' equality over objects of a class whose equality is its own, with `eq` its
+    /// Equals, as .NET makes it: a list's Remove, Contains and IndexOf and LINQ's Contains ask each item in order
+    /// (`items[i].Equals(x)`, a null `x` finds a null), `object.Equals(a, b)` the same object or `a.Equals(b)`, a
+    /// comparer `a.Equals(b)` with both null equal. Null for every other operation (sets, keys, Distinct ..).</summary>
+    private string? EqualityCall(IInvocationOperation op, string key, string eq, List<IOperation> a, IOperation? inst,
+        Func<Func<string, string[], string>, int[], string> rd, Func<Func<string, string[], string>, int[], string> mut, Func<int, string> v)
+    {
+        int n = a.Count;
+        switch (key)
+        {
+            case "Vec.Remove" when n == 1:
+                return mut((p, x) => $"{{ let __items = {p}.clone(); match rt::position_eq(&__items, {x[0]}, {eq}, c) {{ Some(__at) => {{ {p}.remove(__at); true }} None => false }} }}", [0]);
+            case "Vec.Contains" when n == 1:
+                return rd((r, x) => $"rt::position_eq(&{r}.clone(), {x[0]}, {eq}, c).is_some()", [0]);
+            case "Vec.IndexOf" when n == 1:
+                return rd((r, x) => $"rt::position_eq(&{r}.clone(), {x[0]}, {eq}, c).map_or(-1, |at| at as i32)", [0]);
+            case "Enumerable.Contains" when n == 2 && World.CollOf(a[0].Type) == World.Coll.Vec:
+                return $"{{ let __items = {v(0)}; let __x = {v(1)}; rt::position_eq(&__items, __x, {eq}, c).is_some() }}";
+            case "Object.Equals" when inst == null && n == 2:
+                return $"{{ let __a = {Expr(Unboxed(a[0]))}; let __b = {Expr(Unboxed(a[1]))}; rt::object_equals(__a, __b, {eq}, c) }}";
+            case "Object.Equals" when inst != null && n == 1:
+                return $"{{ let __a = {Expr(Unboxed(inst))}; let __b = {Expr(Unboxed(a[0]))}; {eq}(__a, __b, c) }}";
+            case "EqualityComparer.Equals" when n == 2:
+                return $"{{ let __a = {v(0)}; let __b = {v(1)}; rt::comparer_equals(__a, __b, {eq}, c) }}";
+            default:
+                return null;
+        }
+    }
+
     private string? BclCall(IInvocationOperation op)
     {
         var m = op.TargetMethod;
@@ -58,6 +136,34 @@ public sealed partial class Body
         }
         bool IsF(int i) => a[i].Type?.TypeKind == TypeKind.Delegate || Unconverted(a[i]) is IAnonymousFunctionOperation or IMethodReferenceOperation or IDelegateCreationOperation;
         string elem = "";
+
+        // A comparison by the values' equality (EqualityComparer<T>.Default, object.Equals) over a type of the game
+        // whose equality is its own: a value here is compared by its fields (World.ValueEquality says whether its
+        // Equals compares the same), an object by its own Equals where this translates the operation, else not at all.
+        if (Compared(op, tk, def.Name) is { } compared && w.OwnEquality(compared) is { } own)
+        {
+            if (w.IsValue(compared) || compared.IsValueType)
+            {
+                if (compared is INamedTypeSymbol cn && w.EqualityLeftOut(cn) is [_, ..] left)
+                {
+                    w.Rep.Equality(Where, op, $"{compared.Name}: a value whose own Equals leaves out {string.Join(", ", left)}: not translated");
+                    throw new Unsupported($"compares {compared.Name}, whose Equals leaves out {string.Join(", ", left)} ({tk}.{def.Name})");
+                }
+                w.Rep.Equality(Where, op, $"{compared.Name}: a value, its fields compared");
+            }
+            else
+            {
+                string? eq = OwnEquals(compared);
+                string? code = eq == null ? null : EqualityCall(op, $"{tk}.{def.Name}", eq, a, inst, Rd, Mut, V);
+                if (code == null)
+                {
+                    w.Rep.Equality(Where, op, $"{compared.Name} (own: {own}): not translated");
+                    throw new Unsupported($"compares {compared.Name} by its own equality ({tk}.{def.Name})");
+                }
+                w.Rep.Equality(Where, op, $"{compared.Name}: by its own Equals");
+                return code;
+            }
+        }
 
         switch ($"{tk}.{def.Name}")
         {

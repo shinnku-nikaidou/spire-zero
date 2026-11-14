@@ -125,6 +125,11 @@ foreach (var (path, text) in output.Files)
         ? $"hand-stated facts      {lines.Count}  (read against this version)"
         : $"hand-stated facts      {lines.Count}  ({same} hold again, {look} for a person to read again: code changed since {cfg.FactsVersion})";
 }
+rep.EqualityTypes = world.EqualityTypes()
+    .Select(e => $"{World.FullName(e.Type)} ({(e.Type.IsRecord ? "record " : "")}{e.Type.TypeKind.ToString().ToLowerInvariant()}): {e.How}; here " +
+        (world.IsValue(e.Type) ? (world.EqualityLeftOut(e.Type) is [_, ..] left ? $"a value, its fields compared, but its own leaves out {string.Join(", ", left)}: not the same" : "a value, its fields compared, as its own does")
+            : world.CatOf(e.Type) == Cat.Translated ? "an object" : $"not translated ({world.CatOf(e.Type)})"))
+    .Order(StringComparer.Ordinal).ToList();
 File.WriteAllText(Path.Combine(outDir, "report.txt"), rep.Full());
 Console.Write(rep.Summary());
 Console.Error.WriteLine($"port: {output.Files.Count} files written to {outDir} ({clock.Elapsed.TotalSeconds:F1} s)");

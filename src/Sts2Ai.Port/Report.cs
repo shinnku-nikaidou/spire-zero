@@ -83,6 +83,20 @@ public sealed class Report
         usings.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}  ->  {what}");
     }
 
+    private readonly ConcurrentBag<string> equality = [];
+
+    /// <summary>An operation that compares values of a type whose equality is its own (World.OwnEquality), with what
+    /// became of it.</summary>
+    public void Equality(string where, IOperation op, string what)
+    {
+        var span = op.Syntax.GetLocation().GetLineSpan();
+        string first = op.Syntax.ToString().Replace("\r", "").Split('\n')[0].Trim();
+        if (first.Length > 140) first = first[..140] + "...";
+        equality.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}  ->  {what}");
+    }
+
+    public List<string> EqualityTypes = [];
+
     /// <summary>A collection local changed in place where C# has the same collection under another name.</summary>
     public void Alias(string where, IOperation op, string what)
     {
@@ -97,6 +111,7 @@ public sealed class Report
         deferred.Clear();
         usings.Clear();
         aliased.Clear();
+        equality.Clear();
         heldChains.Clear();
         counts.Clear();
         unsupported.Clear();
@@ -145,6 +160,10 @@ public sealed class Report
         foreach (var s in deferred.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== locals that hold a LINQ chain, with game code between where they are declared (where the chain's source is read) and their last use");
         foreach (var s in heldChains.Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== the game's types whose equality is their own (an Equals or == of theirs, or a record's), and how each is a value here");
+        foreach (var s in EqualityTypes) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== operations of translated code that compare such values by their equality (a collection's Remove, Contains, IndexOf, a set's or dictionary's key, LINQ, object.Equals), and what became of each");
+        foreach (var s in equality.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== usings of translated code, and what became of each resource (disposed at the end of its scope, or left out and why)");
         foreach (var s in usings.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine($"== classes whose fields the kept walks and getters read (port.toml [memo], {MemoMethods} methods reached): only a write to a field of one of these moves the write count");
