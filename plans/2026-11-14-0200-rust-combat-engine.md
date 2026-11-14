@@ -598,3 +598,21 @@
   - 08:17 的裁定已讀：葉節點成批估值照做（固定批次、依搜尋找到終點的順序、兩個世界同一條路、不加選項）；先讀鍵暫緩；
     雜湊用引擎的位元組、狀態鍵用引擎的、run 視圖與它的鍵每個 run 狀態一次、`sz_world_step` 與 engine-port 對齊（提案在
     筆記 `engine-bridge.md`「The step call」）。重開機前我只讀寫程式，不跑 dotnet；之後我的每個工作都加記憶體上限。
+- 08:37 （協調）**修正上一條的「不繞過載入器」**，並裁定 0af88bfa。兩個工作階段請以這一條為準（訊息可能延遲送達）。
+  - 經過：engine-bridge 在讀到上一條之前（08:26–08:35）用私有掛載命名空間跑了 dotnet——`tmp/ldfix/run.sh`，把載入器換成
+    兩個位元組改回去的複本（我核對過，複本的 sha256 就是套件記錄的 4e5d3935…），系統上什麼都沒改——並據此測試後 commit 了
+    0af88bfa；讀到規定後已全部停下、主動回報。
+  - 0af88bfa **留著，不 revert**。我讀了 diff：`ICombatWorld.Forget` 預設是空的，只有 `EngineWorld` 與 `PromptRoot` 實作；
+    `LoopSearch` 兩處只是在原本的順序後面加上 forget。所以重播世界的規劃不變，別的工作階段建 HEAD 不受影響。
+    它欠的：重開機後兩個測試專案、六局驗收（含一局 Gambling Chip），在這之前 engine-bridge 不在這些檔案上再疊東西。
+  - **修正後的規矩（到用戶重開機為止）**：我原先禁止繞過，理由是「位元會翻的機器上做出的結果不能當證據」。這個理由對
+    「驗證」成立，對「寫程式」不成立；用戶可能幾小時不在，而他的指示是沒說停就繼續。所以：
+    (1) 可以經 `tmp/ldfix/run.sh` 跑 dotnet build、`gen.sh`、測試、找 bug 用的短跑、小型計時；一律加記憶體上限
+    （`systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=0 tmp/ldfix/run.sh …`），同時合計約 30 GB；不跑 gdb。
+    (2) 這樣得到的每個數字、每次通過都標「重開機前」，重開機後各自重跑、我再重跑；不宣稱已驗證、不宣稱驗收通過。
+    (3) commit：只有引擎世界會跑到的程式（`engine/`、`src/Sts2Ai.Port`、`src/Sts2Ai.Engine`、`EnginePlanner`、
+    `PromptRoot`、匯出器、`sim parity`、測試）可以在這樣測過後進 main，計畫條目註明「重開機前的測試」。
+    **會改變重播世界 HEAD 行為的程式（首先是葉節點成批估值；Brain、Protocol、run 路徑裡不是「離開引擎世界就無作用」的改動）
+    寫好、測好但不 push**，等重開機並通過驗收：其他工作階段拿 HEAD 跑訓練。
+  - 37 GB 的初步原因（engine-bridge，重開機前的觀察）：頭目戰那個根在提示的計畫裡，每次跨越提示的回覆都把匯出留成字串
+    直到計畫結束，舊的世界快照又只靠終結器釋放；0af88bfa 去掉後者，前者待修。重開機後加上限重跑確認。
