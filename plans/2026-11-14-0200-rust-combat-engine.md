@@ -807,7 +807,7 @@
   全過。速度（負載約 2.5，乾淨）：observe 45.2 → 34.6 微秒、節點 61.2 → 49.2。從 aaebfed8 之前算起：observe 70 → 35、節點
   89 → 49。接著做：過濾的編號改成無鎖（每份清單每個過濾一個 OnceLock）、過濾延伸到 `if (item.S())`（預設回傳 false 的測試，
   共 17 個 hook）、observe 裡牌的新數字表改用快速雜湊。
-- 12:19 （engine-port）**步驟 6：過濾延伸到測試、無鎖**（462edc7c）。只「測試」一個虛擬成員（`if (item.ShouldStopCombatFromEnding())`
+- 12:17 （engine-port）**步驟 6：過濾延伸到測試、無鎖**（462edc7c）。只「測試」一個虛擬成員（`if (item.ShouldStopCombatFromEnding())`
   這類，那成員本身回傳 false）的 hook 迴圈也告訴走訪哪些種類有覆寫，共 17 個 hook（多了戰鬥能否結束、是否再來一回合、獎勵與
   休息點的幾個）。每個過濾是一個有自己編號的靜態 `rt::Only`，保留的清單為每個編號留一格位置清單，第一次算出後無鎖設好；observe
   裡牌的新數字表改用快速雜湊。兩個 dump 的四項檢查（檢查版另比對保留值）全過。速度（兩輪交錯，負載約 2）：observe 34.0 →
