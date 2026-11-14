@@ -244,6 +244,9 @@ public sealed class Output(World w, Emitter em)
     /// <summary>The classes of what lambdas capture, each with an arena of its own after the game's.</summary>
     private List<World.ClosureClass> Closures() => w.Closures.Values.OrderBy(k => k.Name, StringComparer.Ordinal).ToList();
 
+    /// <summary>What the `of_mut` of a class whose fields the kept walks read starts with (World.MemoClasses).</summary>
+    private const string Counted = "        c.a.writes += 1;\n";
+
     private bool HasFields(INamedTypeSymbol t) => w.Fields(t).Any() || t.TypeParameters.Any(w.Erased);
 
     /// <summary>The nearest class at or above t, below its root, that has fields of its own.</summary>
@@ -265,7 +268,7 @@ public sealed class Output(World w, Emitter em)
         sb.Append("\n/// Every object of a combat.\n#[derive(Clone, Debug, Default)]\npub struct Arenas {\n");
         foreach (var r in roots) sb.Append($"    pub {ArenaField(r)}: Arena<{w.DataName(r)}>,\n");
         foreach (var k in closures) sb.Append($"    pub {ArenaField(k)}: Arena<{k.Name}Data>,\n");
-        sb.Append("    /// How many times an object was written to or made (rt/memo.rs): every write goes through `of_mut` or `alloc`.\n    pub writes: u64,\n");
+        sb.Append("    /// How many times a field the kept walks read (port.toml [memo]) may have been written (rt/memo.rs): the\n    /// `of_mut` of each class whose fields they read counts one.\n    pub writes: u64,\n");
         sb.Append("}\n\n");
         sb.Append("impl Arenas {\n    /// While set, what is made is canonical (the building of the canonical models).\n    pub fn set_canon_build(&mut self, on: bool) {\n");
         foreach (var r in roots) sb.Append($"        self.{ArenaField(r)}.canon_build = on;\n");
@@ -298,7 +301,7 @@ public sealed class Output(World w, Emitter em)
             sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{\n        match me.tag() {{\n");
             foreach (var r in under) sb.Append($"            {Tag(r)} => &c.a.{ArenaField(r)}[me].{field},\n");
             sb.Append($"            _ => panic!(\"not a {w.Unique(o)}: {{:?}}\", me),\n        }}\n    }}\n");
-            sb.Append($"    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n        c.a.writes += 1;\n        match me.tag() {{\n");
+            sb.Append($"    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n{(w.CountsWrites(o) ? Counted : "")}        match me.tag() {{\n");
             foreach (var r in under) sb.Append($"            {Tag(r)} => &mut c.a.{ArenaField(r)}[me].{field},\n");
             sb.Append($"            _ => panic!(\"not a {w.Unique(o)}: {{:?}}\", me),\n        }}\n    }}\n}}\n\n");
         }
@@ -313,8 +316,8 @@ public sealed class Output(World w, Emitter em)
             if (carriers.Count > 0) sb.Append($"    pub ext: {w.Unique(r)}Ext,\n");
             sb.Append("}\n\n");
             sb.Append($"impl Stored for {data} {{\n    const TAG: u16 = {Tag(r)};\n}}\n\n");
-            sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{ &c.a.{arena}[me] }}\n    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n        c.a.writes += 1;\n        &mut c.a.{arena}[me]\n    }}\n");
-            sb.Append($"    pub fn alloc(kind: Kind, c: &mut Combat) -> Obj {{\n        c.a.writes += 1;\n        c.a.{arena}.alloc({data} {{ kind, {(carriers.Count > 0 ? $"ext: {w.Unique(r)}Ext::of_kind(kind), " : "")}..Default::default() }})\n    }}\n}}\n\n");
+            sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{ &c.a.{arena}[me] }}\n    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n{(w.CountsWrites(r) ? Counted : "")}        &mut c.a.{arena}[me]\n    }}\n");
+            sb.Append($"    pub fn alloc(kind: Kind, c: &mut Combat) -> Obj {{\n        c.a.{arena}.alloc({data} {{ kind, {(carriers.Count > 0 ? $"ext: {w.Unique(r)}Ext::of_kind(kind), " : "")}..Default::default() }})\n    }}\n}}\n\n");
             if (carriers.Count == 0) continue;
             string ext = w.Unique(r) + "Ext";
             sb.Append($"/// The fields of the classes below {w.Unique(r)}.\n#[derive(Clone, Debug, Default)]\npub enum {ext} {{\n    #[default]\n    None,\n");
@@ -348,7 +351,7 @@ public sealed class Output(World w, Emitter em)
                 sb.Append($"impl {td} {{\n    pub fn of(me: Obj, c: &Combat) -> &{td} {{\n        match &c.a.{arena}[me].ext {{\n");
                 foreach (var (variant, path) in paths) sb.Append($"            {ext}::{variant}(d) => {(path.Length == 0 ? "d" : "&d" + path)},\n");
                 sb.Append($"            _ => panic!(\"not a {w.Unique(t)}: {{:?}}\", me),\n        }}\n    }}\n");
-                sb.Append($"    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {td} {{\n        match &mut c.a.{arena}[me].ext {{\n");
+                sb.Append($"    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {td} {{\n{(w.CountsWrites(t) ? Counted : "")}        match &mut c.a.{arena}[me].ext {{\n");
                 foreach (var (variant, path) in paths) sb.Append($"            {ext}::{variant}(d) => {(path.Length == 0 ? "d" : "&mut d" + path)},\n");
                 sb.Append($"            _ => panic!(\"not a {w.Unique(t)}: {{:?}}\", me),\n        }}\n    }}\n}}\n\n");
             }

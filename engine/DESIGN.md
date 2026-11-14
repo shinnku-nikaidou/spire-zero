@@ -410,14 +410,20 @@ other.
 run's, around it) builds a list of every power, monster, relic, potion, orb, card of every pile with its enchantment
 and affliction, and hands on each that passes `Contains`. A card's view alone walks it five times. The two walks are
 named in `port.toml [memo]`, and for them port writes the list's building apart from the loop (`rt/memo.rs`): a
-combat counts every write to its objects (`Arenas.writes`, raised by every `of_mut` and `alloc` of the generated
-state, which are the only ways an object is written or made), and the list built at a count is kept with the combat,
-with each item's `Contains` answer once it is asked. The next walk at the same count, of the same object and argument,
-takes the list and the answers as they are. When the code an item was handed to writes, the count moves and the rest
-of that walk asks `Contains` as the game does, item by item. A copy of a combat has the count and the lists it was
-copied with, and each one's count only goes up from there, so a list kept at a count is the list of the one combat
-that stood there. The list and the test read objects only, no root; a list built by code that writes (a getter that
-fills a cache) is not kept.
+combat counts the writes that could change what the walks read (`Arenas.writes`), and the list built at a count is
+kept with the combat, with each item's `Contains` answer once it is asked. The next walk at the same count, of the
+same object and argument, takes the list and the answers as they are. When the code an item was handed to writes, the
+count moves and the rest of that walk asks `Contains` as the game does, item by item. Which writes count, port works
+out from the game's code: from the statements that build the list and from the test it follows every call at any
+depth, every implementation of a virtual member and every getter, and gathers the classes whose own fields are read
+(sixteen: the combat, its creatures and players, piles, orb queues, the models' fields the walk looks at, and
+`AbstractModel`'s, which every model's getters check). A field is written only through the `of_mut` of the class that
+declares it, and a new object changes none that is there, so the `of_mut` of these classes count and nothing else
+does: a choice context made for each listener of a hook, or a relic's counter, leaves the lists kept. A walk that
+reads a root, or calls code the walk cannot see into (a delegate it is handed), stops the translation; the report
+lists the classes with the first read found for each. A copy of a combat has the count and the lists it was copied
+with, and each one's count only goes up from there, so a list kept at a count is the list of the one combat that
+stood there. A list built by code that writes what the walks read (a getter that fills a cache) is not kept.
 
 **Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
 other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.

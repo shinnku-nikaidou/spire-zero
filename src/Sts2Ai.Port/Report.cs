@@ -18,6 +18,10 @@ public sealed class Report
     private readonly ConcurrentBag<string> usings = [];
     /// <summary>The events of the translated classes with who subscribes (Output.Events).</summary>
     public List<string> Events = [];
+    /// <summary>The classes whose fields the kept walks read, each with the first read found (World.MemoClasses); the
+    /// hand-written members they reach, read as their C# is; how many methods they reach.</summary>
+    public List<string> MemoClasses = [], MemoManual = [];
+    public int MemoMethods;
 
     public int ClassesTranslated, MembersTranslated, MembersFailed, MembersPresentation, Stubs, ManualRefs, Dispatchers, StatementsLeftOut, Quarantined;
 
@@ -126,6 +130,10 @@ public sealed class Report
         foreach (var s in heldChains.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== usings of translated code, and what became of each resource (disposed at the end of its scope, or left out and why)");
         foreach (var s in usings.Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine($"== classes whose fields the kept walks read (port.toml [memo], {MemoMethods} methods reached): only a write to a field of one of these moves the write count");
+        foreach (var s in MemoClasses) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== hand-written members the kept walks reach, taken to read what their C# reads");
+        foreach (var s in MemoManual) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== events of the engine's classes that someone subscribes to (state: a subscriber is game code; then every subscriber, with what it is)");
         foreach (var s in Events) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== members not translated");

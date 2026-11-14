@@ -1,12 +1,13 @@
 //! Kept walks (port.toml [memo], DESIGN.md "Kept walks"). A walk the game makes at every hook builds a list of the
 //! combat's objects and hands on each one that passes a test. Here the list, and each test's answer once asked, are
-//! kept with the combat's write count: while the count stands nothing in the combat has changed, so the next walk
+//! kept with the combat's write count: while the count stands nothing the walks read has changed, so the next walk
 //! finds the same list and the same answers. A write between two items of a walk (the code an item was handed to
-//! changed the combat) sends the rest of that walk to the test, asked as the game asks it.
+//! changed what they read) sends the rest of that walk to the test, asked as the game asks it.
 //!
-//! A combat's count goes up at every `of_mut` and `alloc` of the generated state, the only ways an object is written
-//! or made; a copy of the combat has the count and the kept lists it was copied with, and the count of each only goes
-//! up, so a list kept at a count is the list of the one combat that stood there.
+//! A combat's count goes up at every `of_mut` of a class whose fields the walks read, at any depth of call (port finds
+//! them, and lists them in gen/report.txt): a field is written only through the `of_mut` of the class that declares it,
+//! and a new object changes none that is there. A copy of the combat has the count and the kept lists it was copied
+//! with, and the count of each only goes up, so a list kept at a count is the list of the one combat that stood there.
 
 use crate::rt::{Combat, Obj};
 use std::sync::Arc;
