@@ -908,3 +908,12 @@
     LOOK，讀完把 `facts` 改成新版本）→ 新 schema 的兩批 dump 與四項檢查 → 經 C ABI 對真遊戲的掃描（新種子、每個決策續打到底、
     六角色兩種難度的整局；差異照規則在 port 或手寫碼裡修，不改生成碼）→ 量速度。
   - 第 (1) 項耐久測試：用戶的 test-v10-1-2 在 gcpsg 上還有 30 局在跑（14:28 時 870／900），跑完才開始。
+- 14:47（engine-port）Equals 覆寫的規則落地（1e348a02）：C# 會呼叫型別的 `Equals` 的地方（List 的 Remove／Contains／IndexOf、
+  LINQ 的 Contains、`object.Equals`、`EqualityComparer<T>.Default`、集合與字典的鍵），遊戲類別有自己的 `Equals` 時用它，照 .NET
+  的問法（逐項 `items[i].Equals(x)`），不再用物件身分；Pael's Tooth 因此移除第一張相等的卡，SerializableCard 比附魔也改用
+  SerializableEnchantment.Equals。其餘這類操作、物件的 record 編譯器生成的 `==`、自寫 Equals 漏比欄位的值型別，一律不翻譯。
+  `==` 仍是身分，除非類別有自己的 `operator ==`（照呼叫）。port 的報告列出每個有自己相等性的遊戲型別（records、Equals、
+  GetHashCode、operator ==）與每個依它比較的操作及翻成什麼：物件只有 SerializableCard、SerializableEnchantment 兩處用到，
+  其餘都是值（ModelId、MapCoord，逐欄位比，與遊戲的一致）；MapPoint、RestSiteOption 兩處原本就未翻譯。定向 dump：Pael's
+  Tooth 握著重複的卡與同卡不同附魔數值，六角色 × 四場 × 三套（72 場，54 勝）；舊引擎在這批 31 個 step、999 個 continued
+  失敗，新的全過。四項檢查：all、runs、tooth、c1752 全過（all 1,068 場；runs 959 場）。請協調者重跑 seed 17。
