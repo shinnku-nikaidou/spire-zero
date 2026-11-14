@@ -16,6 +16,8 @@
 //!     STS2AI_SPEED_SPIN=play|end_turn|observe|node|legal|clone STS2AI_SPEED_SECONDS=20 STS2AI_SPEED_STACKS=<file> \
 //!         CARGO_PROFILE_RELEASE_DEBUG=line-tables-only cargo test --release --test speed spin -- --ignored --nocapture
 //!     engine/sample.py <file>
+//!
+//! `grown` counts, arena by arena, the objects one action of a kind makes (`STS2AI_SPEED_GROWN=play|end_turn`).
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::BTreeMap;
@@ -368,6 +370,52 @@ fn spin() {
         "spin: {calls} calls in {spent:.1} s, {:.1} us a call with its copy",
         spent * 1e6 / calls as f64
     );
+}
+
+/// What one action leaves in the arenas: for each arena, how many objects the actions of the kind asked for add,
+/// summed over the sampled states (`STS2AI_SPEED_GROWN=play|end_turn`).
+#[test]
+#[ignore = "a measurement, run by hand"]
+fn grown() {
+    let what = std::env::var("STS2AI_SPEED_GROWN").expect("STS2AI_SPEED_GROWN");
+    let (_, folders) = sampled();
+    let mut added: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
+    let mut actions_taken = 0usize;
+    for folder in &folders {
+        let Some((_, export)) = middle(folder) else {
+            continue;
+        };
+        let Some(world) = World::import(&export) else {
+            continue;
+        };
+        let legal = String::from_utf8(world.text(ffi::sz_world_legal)).unwrap();
+        let text = String::from_utf8(export).unwrap();
+        let Ok(live) = Live::import(&text) else {
+            continue;
+        };
+        for action in legal.lines().filter(|l| l.split(':').next() == Some(what.as_str())) {
+            let mut before: BTreeMap<&'static str, usize> = BTreeMap::new();
+            let mut copy = live.clone();
+            copy.combat().a.each(&mut |name, arena| {
+                before.insert(name, arena.len());
+            });
+            if copy.apply(action).is_err() {
+                continue;
+            }
+            actions_taken += 1;
+            copy.combat().a.each(&mut |name, arena| {
+                let e = added.entry(name).or_default();
+                e.0 += arena.len().saturating_sub(before[name]);
+                e.1 += arena.len();
+            });
+        }
+    }
+    let mut rows: Vec<_> = added.into_iter().filter(|r| r.1.0 > 0).collect();
+    rows.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    println!("{what}: {actions_taken} actions; objects added an action, and held after it, by arena:");
+    for (name, (n, held)) in rows.iter().take(25) {
+        println!("  {:>9.1} {:>9.1}  {name}", *n as f64 / actions_taken as f64, *held as f64 / actions_taken as f64);
+    }
 }
 
 /// What an observation's time goes to, each part on fresh copies of the combat: the views as a whole (what the player

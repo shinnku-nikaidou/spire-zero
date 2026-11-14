@@ -24,8 +24,9 @@ pub struct Kept {
     /// was kept, whose answers are the same.
     answers: Box<[AtomicU8]>,
     /// For each set of kinds a walk was asked for (`Combat::only`, by its number), the positions of the items of
-    /// those kinds. An object's kind never changes, so these hold as long as the list.
-    picked: Box<[OnceLock<Box<[u32]>>]>,
+    /// those kinds. An object's kind never changes, so these hold as long as the list, and a list built again with
+    /// the same items has them too.
+    picked: Arc<[OnceLock<Box<[u32]>>]>,
 }
 
 impl Kept {
@@ -69,10 +70,14 @@ pub fn kept(c: &Combat, slot: usize, key: [Obj; 2]) -> Option<Arc<Kept>> {
 }
 
 /// The list just built, begun at write count `at`. It is kept if building it wrote nothing (a getter that fills a
-/// cache of the game's writes).
+/// cache of the game's writes). The positions picked for each set of kinds are those of the list it replaces when the
+/// items are the same.
 pub fn keep(c: &mut Combat, slot: usize, key: [Obj; 2], at: u64, items: Vec<Obj>) -> Arc<Kept> {
     let answers = (0..items.len()).map(|_| AtomicU8::new(0)).collect();
-    let picked = (0..MEMO_FILTERS).map(|_| OnceLock::new()).collect();
+    let picked = match &c.memo.walks[slot] {
+        Some(before) if before.items == items => before.picked.clone(),
+        _ => (0..MEMO_FILTERS).map(|_| OnceLock::new()).collect(),
+    };
     let kept = Arc::new(Kept { at, key, items, answers, picked });
     if at == c.a.writes {
         c.memo.walks[slot] = Some(kept.clone());
