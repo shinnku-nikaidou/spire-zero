@@ -424,7 +424,10 @@ does: a choice context made for each listener of a hook, or a relic's counter, l
 reads a root, or calls code the walk cannot see into (a delegate it is handed), stops the translation; the report
 lists the classes with the first read found for each. A copy of a combat has the count and the lists it was copied
 with, and each one's count only goes up from there, so a list kept at a count is the list of the one combat that
-stood there. A list built by code that writes what the walks read (a getter that fills a cache) is not kept.
+stood there. A list built by code that writes what the walks read (a getter that fills a cache) is not kept. The
+getters named there are kept the same way, for each object: a card's pile, which every getter of a card that looks at
+its combat asks, is found once for each card at a write count (the classes it reads are counted too), in an array by
+the card's index shared like the answers.
 
 **What a hook does nothing for.** Most listeners do not override the member a hook calls, and for them the member's
 own body does nothing. A loop over a walk whose body only calls one virtual member of each value, where that member's

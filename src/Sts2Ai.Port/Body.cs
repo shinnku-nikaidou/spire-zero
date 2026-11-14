@@ -115,7 +115,16 @@ public sealed partial class Body
         foreach (var p in m.Parameters)
             if (p.RefKind == RefKind.Out && !w.IsDropped(p.Type)) head.Append($"let mut {NameOf(p)}: {T(p.Type)} = Default::default();\n");
         foreach (var h in f.Hoisted) head.Append(h).Append('\n');
-        return head.ToString() + sb + (EndsInReturn(op) && !f.Iterator ? "" : Tail(f, m.ReturnsVoid));
+        string whole = head.ToString() + sb + (EndsInReturn(op) && !f.Iterator ? "" : Tail(f, m.ReturnsVoid));
+        // A kept getter (port.toml [memo]): its value for this object while nothing it reads is written.
+        if (m.MethodKind == MethodKind.PropertyGet && m.AssociatedSymbol is IPropertySymbol kp && w.Cfg.MemoGetters.IndexOf($"{cls.Name}.{kp.Name}") is var g and >= 0)
+        {
+            string type = T(m.ReturnType), arena = World.Ident(w.Unique(w.Root(cls)));
+            whole = $"if let Some(__v) = rt::memo::value(c, {g}, me) {{\nreturn __v;\n}}\nlet __stamp = rt::memo::writes(c);\n"
+                + $"let __v: {type} = (|c: &mut Combat| -> {type} {{\n{whole}}})(c);\nrt::memo::keep_value(c, {g}, me, __stamp, __v, c.a.{arena}.len());\n__v\n";
+            w.Rep.Count("kept getters");
+        }
+        return whole;
     }
 
     /// <summary>A kept walk (port.toml [memo]): the statements that build a list, then `foreach (var x in list) if (test)

@@ -13,7 +13,8 @@ public sealed partial class World
     private HashSet<INamedTypeSymbol>? _memoClasses;
 
     /// <summary>The classes whose own fields a kept walk of port.toml [memo] may read where it builds its list or asks
-    /// its test: through every call at any depth, every implementation of a virtual member, every getter. A field is
+    /// its test, or a kept getter anywhere in its body: through every call at any depth, every implementation of a
+    /// virtual member, every getter. A field is
     /// written only through the `of_mut` of the class that declares it (gen/state.rs), and a new object changes none
     /// that is there, so a write by any other `of_mut`, and every `alloc`, leaves each kept list and answer as it is:
     /// only these classes' `of_mut` move the write count (rt/memo.rs). A walk that reads a static that is state, or runs
@@ -167,6 +168,17 @@ public sealed partial class World
                 foreach (var o in ops.Take(at)) Visit(o, name);
                 Visit(((IForEachLoopOperation)ops[at]).Collection, name);
                 Visit(test.Condition, name);
+            }
+
+        // The kept getters: all of each.
+        foreach (var t in sourceTypes)
+            foreach (var p in t.GetMembers().OfType<IPropertySymbol>())
+            {
+                string name = $"{t.Name}.{p.Name}";
+                if (!Cfg.MemoGetters.Contains(name)) continue;
+                if (p.IsStatic || p.IsVirtual || p.IsAbstract || p.IsOverride || p.Parameters.Length > 0 || p.GetMethod == null || !IsObj(p.Type) || !IsStateful(t))
+                    problems.Add($"{name} is not a getter of an object, not virtual, that gives an object");
+                else Call(p.GetMethod, false, name);
             }
 
         while (queue.Count > 0)

@@ -10,12 +10,10 @@
 //! with, and the count of each only goes up, so a list kept at a count is the list of the one combat that stood there.
 
 use crate::r#gen::kinds::Kind;
+use crate::r#gen::state::{MEMO_GETTERS, MEMO_WALKS};
 use crate::rt::{Combat, Obj};
-use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
-
-/// One slot a walk of port.toml's [memo], in its order.
-const SLOTS: usize = 2;
 
 /// A walk's list as it was built at a write count, of the walk's object and argument, with the test's answers.
 #[derive(Debug)]
@@ -41,9 +39,20 @@ impl Kept {
     }
 }
 
-/// The kept walks of a combat.
+/// A kept getter's values at a write count, by the index of the object they are of: 0 not asked yet, else the
+/// handle's bits plus one. Shared by the copies of a combat that stand where they were kept, whose values are the same.
+#[derive(Debug)]
+pub struct Values {
+    at: u64,
+    of: Box<[AtomicU64]>,
+}
+
+/// The kept walks and getters of a combat, one slot each in port.toml's order.
 #[derive(Clone, Debug, Default)]
-pub struct Memo([Option<Arc<Kept>>; SLOTS]);
+pub struct Memo {
+    walks: [Option<Arc<Kept>>; MEMO_WALKS],
+    values: [Option<Arc<Values>>; MEMO_GETTERS],
+}
 
 /// The combat's write count.
 #[inline]
@@ -54,7 +63,7 @@ pub fn writes(c: &Combat) -> u64 {
 /// The list of walk `slot` with this key, if it was built where the combat stands.
 #[inline]
 pub fn kept(c: &Combat, slot: usize, key: [Obj; 2]) -> Option<Arc<Kept>> {
-    match &c.memo.0[slot] {
+    match &c.memo.walks[slot] {
         Some(kept) if kept.at == c.a.writes && kept.key == key => Some(kept.clone()),
         _ => None,
     }
@@ -66,9 +75,37 @@ pub fn keep(c: &mut Combat, slot: usize, key: [Obj; 2], at: u64, items: Vec<Obj>
     let answers = (0..items.len()).map(|_| AtomicU8::new(0)).collect();
     let kept = Arc::new(Kept { at, key, items, answers, picked: Mutex::new(Vec::new()) });
     if at == c.a.writes {
-        c.memo.0[slot] = Some(kept.clone());
+        c.memo.walks[slot] = Some(kept.clone());
     }
     kept
+}
+
+/// The value of getter `slot` for this object, if it was asked where the combat stands.
+#[inline]
+pub fn value(c: &Combat, slot: usize, me: Obj) -> Option<Obj> {
+    let values = c.memo.values[slot].as_ref()?;
+    if values.at != c.a.writes || me.is_canon() {
+        return None;
+    }
+    match values.of.get(me.ix())?.load(Relaxed) {
+        0 => None,
+        bits => Some(Obj((bits - 1) as u32)),
+    }
+}
+
+/// The value just found for this object, begun at write count `at` (`len`: how many objects its arena holds). It is
+/// kept if finding it wrote nothing.
+pub fn keep_value(c: &mut Combat, slot: usize, me: Obj, at: u64, value: Obj, len: usize) {
+    if at != c.a.writes || me.is_canon() {
+        return;
+    }
+    if !c.memo.values[slot].as_ref().is_some_and(|v| v.at == at) {
+        let of = (0..len).map(|_| AtomicU64::new(0)).collect();
+        c.memo.values[slot] = Some(Arc::new(Values { at, of }));
+    }
+    if let Some(cell) = c.memo.values[slot].as_ref().and_then(|v| v.of.get(me.ix())) {
+        cell.store(value.0 as u64 + 1, Relaxed);
+    }
 }
 
 /// The positions of the items a walk hands on when its caller's code does something only for some kinds

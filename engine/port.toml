@@ -243,6 +243,9 @@ transient = ["AttackCommand._afterAttackerAnim", "AttackCommand._beforeDamage"]
 # the translation). A write between two items sends the rest of that walk to the test as the game asks it. Every hook
 # walks these, most of them more than once.
 walks = ["CombatState.IterateHookListeners", "RunState.IterateHookListeners"]
+# Getters of an object, kept for each object while nothing they read is written, as the walks: a card's pile is
+# asked several times by every getter of the card that looks at its combat.
+getters = ["CardModel.Pile"]
 
 [caches]
 # Statics that only remember the result of a computation: never kept, computed at each use.

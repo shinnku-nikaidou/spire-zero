@@ -273,6 +273,7 @@ public sealed class Output(World w, Emitter em)
         var closures = Closures();
         for (int i = 0; i < roots.Count; i++) sb.Append($"pub const {Tag(roots[i])}: u16 = {i + 1};\n");
         for (int i = 0; i < closures.Count; i++) sb.Append($"pub const {Tag(closures[i])}: u16 = {roots.Count + i + 1};\n");
+        sb.Append($"\n/// The kept walks and getters of port.toml [memo] (rt/memo.rs).\npub const MEMO_WALKS: usize = {w.Cfg.Memo.Count};\npub const MEMO_GETTERS: usize = {w.Cfg.MemoGetters.Count};\n");
         sb.Append("\n/// Every object of a combat.\n#[derive(Clone, Debug, Default)]\npub struct Arenas {\n");
         foreach (var r in roots) sb.Append($"    pub {ArenaField(r)}: Arena<{w.DataName(r)}>,\n");
         foreach (var k in closures) sb.Append($"    pub {ArenaField(k)}: Arena<{k.Name}Data>,\n");

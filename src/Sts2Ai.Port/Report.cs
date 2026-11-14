@@ -141,7 +141,7 @@ public sealed class Report
         foreach (var s in heldChains.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== usings of translated code, and what became of each resource (disposed at the end of its scope, or left out and why)");
         foreach (var s in usings.Order(StringComparer.Ordinal)) sb.AppendLine(s);
-        sb.AppendLine().AppendLine($"== classes whose fields the kept walks read (port.toml [memo], {MemoMethods} methods reached): only a write to a field of one of these moves the write count");
+        sb.AppendLine().AppendLine($"== classes whose fields the kept walks and getters read (port.toml [memo], {MemoMethods} methods reached): only a write to a field of one of these moves the write count");
         foreach (var s in MemoClasses) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== hand-written members the kept walks reach, taken to read what their C# reads");
         foreach (var s in MemoManual) sb.AppendLine(s);
