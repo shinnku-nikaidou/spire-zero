@@ -752,7 +752,9 @@ public sealed partial class Body
             var kind = a.Parameter!.RefKind;
             if (w.IsDropped(a.Parameter))
             {
-                if (HoldsGameCall(a.Value)) w.Rep.DroppedWithCall(Where, a.Value);
+                bool game = HoldsGameCall(a.Value);
+                if (game) w.Rep.DroppedWithCall(Where, a.Value);
+                Removed(a.Value, a.Value, "an argument of a presentation parameter", game);
                 continue;
             }
             if (kind is RefKind.Out or RefKind.Ref)

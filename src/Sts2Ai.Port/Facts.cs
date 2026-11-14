@@ -10,8 +10,9 @@ namespace Sts2Ai.Port;
 /// <summary>The facts port.toml states by hand about the game's classes (a fixed value, a member written by hand, a
 /// pair that leaves an object as it was, a field that only caches, ...), each with the code it rests on: the members
 /// or classes it names. Compared with the code of the version they were last read against (`[game] facts`): where that
-/// code is the same, the fact holds again; where it changed or is gone, a person reads it again. Whole namespaces
-/// ([scope], [drop] namespaces and types) are not compared; [memo] port checks itself at every run (Reads.cs).</summary>
+/// code is the same, the fact holds again; where it changed or is gone, a person reads it again. A [drop] namespace or
+/// type rests on the members of translated classes it takes code out of (Body.Removed), which the translation finds;
+/// [scope] is not compared; [memo] port checks itself at every run (Reads.cs).</summary>
 public static class Facts
 {
     /// <summary>A fact: its table, its entry as port.toml writes it, and what it rests on, each a class and a member
@@ -122,11 +123,11 @@ public static class Facts
     /// <summary>The report's section: each fact with what became of the code it rests on since the version it was read
     /// against (`stated`: that version's code; null when it is the version translated now).</summary>
     public static (List<string> Lines, int Looked, int Same) Compare(Config c, Dictionary<string, List<BaseTypeDeclarationSyntax>> now,
-        Dictionary<string, List<BaseTypeDeclarationSyntax>>? stated)
+        Dictionary<string, List<BaseTypeDeclarationSyntax>>? stated, IEnumerable<Fact>? more = null)
     {
         var lines = new List<string>();
         int look = 0, same = 0;
-        foreach (var f in Stated(c))
+        foreach (var f in Stated(c).Concat(more ?? []))
         {
             var notes = new List<string>();
             bool library = true, toLook = false;
@@ -145,8 +146,9 @@ public static class Facts
             string status = toLook ? "LOOK" : library ? "library" : stated == null ? "read" : "same";
             if (toLook) look++;
             else if (!library) same++;
-            string on2 = string.Join(", ", f.On.Select(o => Named(o.Class, o.Member)));
-            lines.Add($"{status,-7}  [{f.Table}] {f.Entry}  (on {on2}){(notes.Count > 0 ? "  " + string.Join("; ", notes) : "")}");
+            string on2 = f.On.Count > 6 ? $"{f.On.Count} members, the ones it takes code out of" : string.Join(", ", f.On.Select(o => Named(o.Class, o.Member)));
+            string said = notes.Count > 12 ? string.Join("; ", notes.Take(12)) + $"; and {notes.Count - 12} more" : string.Join("; ", notes);
+            lines.Add($"{status,-7}  [{f.Table}] {f.Entry}  (on {on2}){(notes.Count > 0 ? "  " + said : "")}");
         }
         return (lines, look, same);
     }

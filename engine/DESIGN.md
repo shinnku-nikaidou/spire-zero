@@ -103,8 +103,11 @@ shipped rule is drawn on the screen (Rolling Boulder damages one enemy after the
 - A presentation call whose arguments do game work (`CardCmd.PreviewCardPileAdd(await CardPileCmd.Add(..))`) keeps its
   arguments: they are run, the call is not.
 - A loop over presentation, a test or a `switch` on presentation, a lambda: left out when nothing in it is game code
-  (no call into the game, no write to state or to a local from outside), and for a `switch`, when nothing after it
-  could be skipped by a way out of it. A lambda like that is an empty function. A test or a loop over game values
+  (no call into the game, no write to state or to a local from outside), and, for a test or a `switch` that can
+  leave (a `return`, `continue` or `break`: `if (node.IsVisible) return;`), when it can only return or continue and
+  nothing after it could be skipped; otherwise what follows it is game code that runs only when it does not leave, so
+  the member is not translated. A `throw` does not count: it ends the game with an error. The report lists every test
+  on presentation that can leave, and what became of it. A lambda like that is an empty function. A test or a loop over game values
   with nothing left under it is left out too when the test, or what the loop walks, only reads (no call, nothing
   made or written): `if (newHp < oldHp) { a sound }`.
 - A local that presentation was written to (`delay += Rng.Chaotic.Next..`) is presentation from there on, and so is a
@@ -477,7 +480,10 @@ compiles. The list is for a new game version's surprises; on v0.113.0 it is empt
 
 `port` prints its report and writes it in full to `gen/report.txt`: the hand-stated facts about the game's classes
 with the code each rests on (When the game changes), classes and members translated, members not translated with the
-reason, stubs, hand-written members used, statements left out, and the ones to review.
+reason, stubs, hand-written members used, statements left out, and the ones to review. For each `[drop]` namespace and
+type it lists what that takes out of translated members (a statement, the branch a test on presentation never takes,
+a whole member): every place that held game code, and which of the entry's own members the other places used, for a
+person to judge whether that is presentation.
 
 ## The C ABI
 
@@ -567,9 +573,10 @@ holds. Nothing of the game goes into git on the way.
    held game code, and first **the hand-stated facts**: every entry of port.toml that states something about the
    game's classes (a fixed value, a member written by hand, an `[only]` fact, a cache, a delegate field that is never
    alive at a decision, a root, a presentation member or field, the fields a class keeps, a value class, an open base
-   class), each with the code it rests on (the members it names; for a fact about a class's shape, its fields and
-   properties; for a field, the members of its class that name it), held against that code in the version `facts`
-   names. `same`: the code is the same, the fact holds again. `LOOK`: the code changed, is new or is gone, and a person
+   class, a `[drop]` namespace or type), each with the code it rests on (the members it names; for a fact about a
+   class's shape, its fields and properties; for a field, the members of its class that name it; for a `[drop]`
+   namespace or type, the members of translated classes it takes code out of, as the translation finds them), held
+   against that code in the version `facts` names. `same`: the code is the same, the fact holds again. `LOOK`: the code changed, is new or is gone, and a person
    reads the fact again and mends the table or the hand-written code. `library`: it rests on .NET alone. Once every
    `LOOK` is read, `facts` becomes the new version. Not in the list, because port checks them itself at every run:
    what a kept walk reads ([memo]), the shape of every loop a hook's kinds are told to, the second-name rule.

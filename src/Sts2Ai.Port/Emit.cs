@@ -116,6 +116,14 @@ public sealed class Emitter(World w)
 
     // ---------------------------------------------------------------- one class
 
+    /// <summary>A member of a translated class left out whole: recorded against the [drop] entries it uses.</summary>
+    private void WholeLeftOut(IMethodSymbol m, string what)
+    {
+        var op = BodyOp(m, out _);
+        if (op == null) return;
+        new Body(w, m.ContainingType, m.AssociatedSymbol ?? m).RemovedWhole(op, m, what);
+    }
+
     private IOperation? BodyOp(IMethodSymbol m, out bool hasBody)
     {
         hasBody = false;
@@ -168,16 +176,16 @@ public sealed class Emitter(World w)
             if (w.IsManualMember(m)) return;
             if (!w.Cfg.KeepMembers.Contains(t.Name + "." + (m.AssociatedSymbol ?? m).Name)
                 && (w.Cfg.DropMembers.Contains(t.Name + "." + (m.AssociatedSymbol ?? m).Name) || w.Cfg.DropMembers.Contains(t.Name + ".*"))) return;
-            if (PresentationSignature(m)) { r.Presentation++; return; }
+            if (PresentationSignature(m)) { r.Presentation++; WholeLeftOut(m, "the member, which returns presentation"); return; }
             if (m.IsVirtual || m.IsOverride || m.IsAbstract || m.ExplicitInterfaceImplementations.Length > 0 || ImplementsInterface(m)) r.Virtuals.Add(m);
-            if (w.AutoDropped.Contains(m)) { r.Presentation++; return; }
+            if (w.AutoDropped.Contains(m)) { r.Presentation++; WholeLeftOut(m, "the member, with nothing but presentation left in it"); return; }
             if (m.IsAbstract || m.IsExtern) return;
             string name = w.FnName(m);
             string doc = $"C#: {t.Name}.{(m.AssociatedSymbol ?? m).Name}{(m.MethodKind == MethodKind.PropertySet ? " (set)" : "")}";
             var body = new Body(w, t, m.AssociatedSymbol ?? m);
             Sig sig;
             try { sig = Signature(m, body); }
-            catch (Dropped) { r.Presentation++; return; }
+            catch (Dropped) { r.Presentation++; WholeLeftOut(m, "the member, which takes presentation"); return; }
             catch (Unsupported e)
             {
                 // No signature: the function cannot even be declared. Callers fail on the same type and become todo! themselves.

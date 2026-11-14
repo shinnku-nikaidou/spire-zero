@@ -364,7 +364,68 @@ public sealed partial class Body
     private void Leave(IOperation op)
     {
         LeftOut++;
-        if (HoldsGameCall(op)) w.Rep.DroppedWithCall(Where, op);
+        bool game = HoldsGameCall(op);
+        if (game) w.Rep.DroppedWithCall(Where, op);
+        Removed(op, op, "a statement left out", game);
+    }
+
+    /// <summary>The [drop] entries (World.DropEntry) whose types the code uses, each with the members of those types it
+    /// calls or reads.</summary>
+    private Dictionary<string, SortedSet<string>> DropsIn(IOperation code)
+    {
+        var found = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        SortedSet<string> Of(string e) => found.TryGetValue(e, out var s) ? s : found[e] = new SortedSet<string>(StringComparer.Ordinal);
+        void Type(ITypeSymbol? t, string? member = null)
+        {
+            switch (t)
+            {
+                case INamedTypeSymbol n:
+                    if (w.DropEntry(n) is { } e)
+                    {
+                        var s = Of(e);
+                        if (member != null) s.Add($"{n.Name}.{member}");
+                    }
+                    foreach (var a in n.TypeArguments) Type(a);
+                    break;
+                case IArrayTypeSymbol a: Type(a.ElementType); break;
+            }
+        }
+        foreach (var d in code.DescendantsAndSelf())
+        {
+            Type(d.Type);
+            switch (d)
+            {
+                case IInvocationOperation inv: Type(inv.TargetMethod.ContainingType, (inv.TargetMethod.ReducedFrom ?? inv.TargetMethod).Name); break;
+                case IMemberReferenceOperation mr: Type(mr.Member.ContainingType, mr.Member.Name); break;
+                case IObjectCreationOperation oc: Type(oc.Type, ".ctor"); break;
+            }
+        }
+        return found;
+    }
+
+    /// <summary>Code that a [drop] entry takes out of a translated member (a statement left out, a branch never taken
+    /// under a test on presentation, the whole member), recorded against each entry whose types `cause` uses.</summary>
+    private void Removed(IOperation cause, IOperation code, string what, bool game)
+    {
+        foreach (var (entry, used) in DropsIn(cause))
+            w.Rep.Removed(entry, Where, code, what, game || WritesOuterLocal(code), used);
+    }
+
+    /// <summary>A member left out whole (its signature, or nothing but presentation in it): what the drop entries its
+    /// signature and body use take out with it.</summary>
+    public void RemovedWhole(IOperation? body, IMethodSymbol m, string what)
+    {
+        if (body == null) return;
+        bool game = HoldsGameCall(body);
+        var entries = DropsIn(body);
+        void Sig(ITypeSymbol t)
+        {
+            if (t is INamedTypeSymbol n && w.DropEntry(n) is { } e && !entries.ContainsKey(e)) entries[e] = new SortedSet<string>(StringComparer.Ordinal);
+        }
+        Sig(m.ReturnType);
+        foreach (var p in m.Parameters) Sig(p.Type);
+        foreach (var (entry, used) in entries)
+            w.Rep.Removed(entry, Where, body, what, game, used);
     }
 
     /// <summary>Whether a statement that is left out held something that is not presentation: a call into game code, or a write to state.</summary>
@@ -798,6 +859,42 @@ public sealed partial class Body
         return true;
     }
 
+    /// <summary>How the code can leave the statement it is and go on elsewhere: "return" (also `yield`),
+    /// "continue" (to a loop around it), "break" or "goto"; null when it cannot. Of each, the one that skips most. A
+    /// throw does not count: it ends the game with an error, and the engine holds to games that do not fail. Lambdas
+    /// and local functions inside are code of their own.</summary>
+    private static string? Leaving(IOperation code)
+    {
+        var inner = new HashSet<ILabelSymbol>(SymbolEqualityComparer.Default);
+        var ops = new List<IOperation>();
+        void Walk(IOperation o)
+        {
+            ops.Add(o);
+            foreach (var ch in o.ChildOperations)
+                if (ch is not (IAnonymousFunctionOperation or ILocalFunctionOperation)) Walk(ch);
+        }
+        Walk(code);
+        foreach (var o in ops)
+            switch (o)
+            {
+                case ILoopOperation l: inner.Add(l.ExitLabel); inner.Add(l.ContinueLabel); break;
+                case ISwitchOperation sw: inner.Add(sw.ExitLabel); break;
+                case ILabeledOperation lb: inner.Add(lb.Label); break;
+            }
+        string? how = null;
+        int Rank(string h) => h switch { "continue" => 0, "return" => 1, _ => 2 };
+        void Take(string h) { if (how == null || Rank(h) > Rank(how)) how = h; }
+        foreach (var o in ops)
+            switch (o)
+            {
+                case IReturnOperation: Take("return"); break;
+                case IBranchOperation b when !inner.Contains(b.Target):
+                    Take(b.BranchKind switch { BranchKind.Continue => "continue", BranchKind.Break => "break", _ => "goto" });
+                    break;
+            }
+        return how;
+    }
+
     /// <summary>Whether the code writes a local declared outside of it.</summary>
     private bool WritesOuterLocal(IOperation code)
     {
@@ -839,8 +936,21 @@ public sealed partial class Body
         try { test = Expr(cond.Condition); }
         catch (Dropped d)
         {
-            // A test on presentation: the whole statement goes when nothing in it is left.
-            if (!HoldsGameCall(cond) && !WritesOuterLocal(cond)) { Leave(cond); return; }
+            // A test on presentation: the whole statement goes when nothing in it is left. One that can leave (a
+            // return, continue or break: `if (node.IsVisible) return;`) decides whether what follows runs: it goes
+            // only when it can only return or continue and nothing but presentation follows it.
+            if (!HoldsGameCall(cond) && !WritesOuterLocal(cond))
+            {
+                if (Leaving(cond) is not { } how) { Leave(cond); return; }
+                if (how is "return" or "continue" && NothingAfter(cond))
+                {
+                    w.Rep.Guard(Where, cond, $"leaves by {how}, nothing after it: left out");
+                    Leave(cond);
+                    return;
+                }
+                w.Rep.Guard(Where, cond, $"leaves by {how}, and what follows runs only when it does not: not translated");
+                throw new Unsupported($"a test on presentation that leaves by {how} guards what follows ({d.Message})");
+            }
             int before = Written;
             string a = Sub(cond.WhenTrue), b = Sub(cond.WhenFalse);
             if (a.Length + b.Length > 0 || Written != before) throw new Unsupported($"a test on presentation guards game code ({d.Message})");
@@ -854,6 +964,8 @@ public sealed partial class Body
             if (taken.Length > 0) sb.Append("{\n").Append(taken).Append("}\n");
             // The branch never taken, when it is presentation, is a statement left out: a member with nothing else is presentation.
             else if ((test == "true" ? cond.WhenFalse : cond.WhenTrue) is { } never && !HoldsGameCall(never) && !WritesOuterLocal(never)) LeftOut++;
+            if ((test == "true" ? cond.WhenFalse : cond.WhenTrue) is { } skipped)
+                Removed(cond.Condition, skipped, $"the branch a test on presentation never takes (it is {test} here)", HoldsGameCall(skipped));
             dead = test == "true" && EndsInReturn(cond.WhenTrue);
             return;
         }
@@ -1598,7 +1710,13 @@ public sealed partial class Body
         {
             // A switch on presentation with nothing but presentation in it, and nothing after it that a way out of
             // it (continue, return) could skip.
-            if (!HoldsGameCall(sw) && !WritesOuterLocal(sw) && NothingAfter(sw)) { Leave(sw); return; }
+            if (!HoldsGameCall(sw) && !WritesOuterLocal(sw) && NothingAfter(sw))
+            {
+                if (Leaving(sw) is { } how) w.Rep.Guard(Where, sw, $"a switch that leaves by {how}, nothing after it: left out");
+                Leave(sw);
+                return;
+            }
+            if (Leaving(sw) is { } how2) w.Rep.Guard(Where, sw, $"a switch that leaves by {how2}: not translated");
             throw new Unsupported($"a switch on presentation ({d.Message})");
         }
         var arms = new StringBuilder();

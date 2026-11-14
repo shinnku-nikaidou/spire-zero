@@ -23,7 +23,8 @@ FN = re.compile(r"^(\s*)(?:pub )?fn ([a-z0-9_]+)\s*[<(]")
 MOD = re.compile(r"^(\s*)pub mod ([a-z0-9_]+) \{")
 REF = re.compile(r"\bg::((?:[a-z0-9_]+::)*[a-z0-9_]+)")
 BARE = re.compile(r"\b([a-z0-9_]+__f)\b")
-TODO = re.compile(r'^\s*todo!\("([^"]+)"\)\s*$')
+# A body that is only a `todo!`, on one line or as rustfmt wraps a long one.
+TODO = re.compile(r'^\s*todo!\(\s*"([^"]+)"\s*\)\s*$', re.S)
 
 bodies = {}  # path -> text of the body
 missing = {}  # path -> the member's C# name
@@ -62,7 +63,7 @@ def read(path, prefix):
         full = "::".join(prefix + [x[1] for x in mods] + [name])
         text = "\n".join(lines[j + 1 : k])
         bodies[full] = text
-        if k == j + 2 and (t := TODO.match(lines[j + 1])):
+        if t := TODO.match(text):
             missing[full] = t.group(1)
         i = k + 1
 

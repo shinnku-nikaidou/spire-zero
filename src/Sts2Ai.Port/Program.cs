@@ -116,7 +116,18 @@ foreach (var (path, text) in output.Files)
             .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/")).AsParallel()
             .Select(f => CSharpSyntaxTree.ParseText(PrimaryConstructors.Undo(File.ReadAllText(f)), parse, f)).ToList());
     }
-    var (lines, look, same) = Facts.Compare(cfg, now, before);
+    // Each [drop] namespace and type rests on the members it takes code out of (as this version's translation found them).
+    var drops = rep.RemovedFrom.GroupBy(r => r.Entry).OrderBy(g => g.Key, StringComparer.Ordinal)
+        .Select(g => new Facts.Fact("drop", g.Key, g.Select(r => r.Member).Distinct().Order(StringComparer.Ordinal)
+            .Select(m =>
+            {
+                // Class.Member; an explicit interface member is named in the code by its last part.
+                int dot = m.IndexOf('.');
+                string member = m[(dot + 1)..];
+                if (!member.StartsWith('.') && member.LastIndexOf('.') is var last and > 0) member = member[(last + 1)..];
+                return (m[..dot], (string?)member);
+            }).Distinct().ToList())).ToList();
+    var (lines, look, same) = Facts.Compare(cfg, now, before, drops);
     rep.Facts = lines;
     rep.FactsHead = before == null
         ? $"== hand-stated facts about the game's code (port.toml), read against this version ({cfg.GameVersion}): each with the code it rests on"

@@ -108,6 +108,22 @@ public sealed partial class World
         }, this);
     }
 
+    /// <summary>The [drop] entry of port.toml that makes a type of the game presentation: "namespace N" or "type T";
+    /// null for a type that is not dropped, or a library's (every library type outside System is).</summary>
+    public string? DropEntry(INamedTypeSymbol t0)
+    {
+        var t = t0.OriginalDefinition;
+        if (!IsSource(t) || !IsDroppedNamed(t)) return null;
+        string full = FullName(t);
+        foreach (var d in Cfg.DropTypes)
+            if (full == d || d.EndsWith('*') && full.StartsWith(d[..^1], StringComparison.Ordinal)) return "type " + d;
+        if (t.ContainingType != null) return DropEntry(t.ContainingType);
+        string ns = Namespace(t);
+        foreach (var d in Cfg.DropNamespaces)
+            if (ns == d || ns.StartsWith(d + ".")) return "namespace " + d;
+        return null;
+    }
+
     /// <summary>Whether the type, or a type inside it, is presentation.</summary>
     public bool IsDropped(ITypeSymbol? t) => t switch
     {

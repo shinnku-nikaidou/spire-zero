@@ -97,6 +97,35 @@ public sealed class Report
 
     public List<string> EqualityTypes = [];
 
+    private readonly ConcurrentBag<string> guards = [];
+
+    /// <summary>What each [drop] entry takes out of translated members: (entry, member, line, whether it held game code).</summary>
+    private readonly ConcurrentBag<(string Entry, string Where, string Line, bool Game, string Used)> removed = [];
+
+    /// <summary>The members each [drop] entry takes code out of, as "Class.Member".</summary>
+    public IEnumerable<(string Entry, string Member)> RemovedFrom => removed.Select(r => (r.Entry, r.Where)).Distinct();
+
+    /// <summary>Code a [drop] entry takes out of a translated member, with what of the entry's types it uses.</summary>
+    public void Removed(string entry, string where, IOperation op, string what, bool game, IEnumerable<string> used)
+    {
+        var span = op.Syntax.GetLocation().GetLineSpan();
+        string text = op.Syntax.ToString().Replace("\r", "");
+        string first = string.Join(" ", text.Split('\n').Select(l => l.Trim()).Take(2));
+        if (first.Length > 140) first = first[..140] + "...";
+        var u = used.ToList();
+        removed.Add((entry, where, $"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {what}: {first}{(u.Count > 0 ? "  [uses " + string.Join(", ", u.Take(6)) + (u.Count > 6 ? ", .." : "") + "]" : "")}", game, string.Join("\n", u)));
+    }
+
+    /// <summary>A test on presentation (an `if` or a `switch`) that can leave (return, continue, break), with
+    /// what became of it: left out where nothing it could skip follows, else not translated.</summary>
+    public void Guard(string where, IOperation op, string what)
+    {
+        var span = op.Syntax.GetLocation().GetLineSpan();
+        string first = op.Syntax.ToString().Replace("\r", "").Split('\n')[0].Trim();
+        if (first.Length > 140) first = first[..140] + "...";
+        guards.Add($"{where} ({Path.GetFileName(span.Path)}:{span.StartLinePosition.Line + 1}): {first}  ->  {what}");
+    }
+
     /// <summary>A collection local changed in place where C# has the same collection under another name.</summary>
     public void Alias(string where, IOperation op, string what)
     {
@@ -112,6 +141,8 @@ public sealed class Report
         usings.Clear();
         aliased.Clear();
         equality.Clear();
+        guards.Clear();
+        removed.Clear();
         heldChains.Clear();
         counts.Clear();
         unsupported.Clear();
@@ -164,6 +195,19 @@ public sealed class Report
         foreach (var s in EqualityTypes) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== operations of translated code that compare such values by their equality (a collection's Remove, Contains, IndexOf, a set's or dictionary's key, LINQ, object.Equals), and what became of each");
         foreach (var s in equality.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== tests on presentation (if, switch) that can leave (return, continue, break), and what became of each: left out where nothing they could skip follows, else not translated");
+        foreach (var s in guards.Distinct().Order(StringComparer.Ordinal)) sb.AppendLine(s);
+        sb.AppendLine().AppendLine("== what each [drop] namespace and type takes out of translated members: every place that held game code (a call into translated game code, a write to state or to a local from outside), then how many places used only the entry's own code, and which of its members they used (where the entry's own code is game logic, that is what the engine leaves out)");
+        foreach (var g in removed.Distinct().GroupBy(r => r.Entry).OrderBy(g => g.Key, StringComparer.Ordinal))
+        {
+            var game = g.Where(r => r.Game).Select(r => r.Line).Distinct().Order(StringComparer.Ordinal).ToList();
+            var rest = g.Where(r => !r.Game).ToList();
+            sb.AppendLine($"-- {g.Key}: {g.Select(r => r.Where).Distinct().Count()} members, {game.Count} places with game code, {rest.Select(r => r.Line).Distinct().Count()} with only its own");
+            foreach (var l in game) sb.AppendLine("   " + l);
+            var used = rest.DistinctBy(r => r.Line).SelectMany(r => r.Used.Split('\n', StringSplitOptions.RemoveEmptyEntries)).GroupBy(u => u).OrderByDescending(x => x.Count()).ThenBy(x => x.Key, StringComparer.Ordinal)
+                .Select(x => $"{x.Key} ({x.Count()})").ToList();
+            if (used.Count > 0) sb.AppendLine("   its own code used elsewhere: " + string.Join(", ", used));
+        }
         sb.AppendLine().AppendLine("== usings of translated code, and what became of each resource (disposed at the end of its scope, or left out and why)");
         foreach (var s in usings.Order(StringComparer.Ordinal)) sb.AppendLine(s);
         sb.AppendLine().AppendLine($"== classes whose fields the kept walks and getters read (port.toml [memo], {MemoMethods} methods reached): only a write to a field of one of these moves the write count");
