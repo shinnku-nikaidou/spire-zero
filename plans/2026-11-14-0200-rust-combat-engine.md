@@ -1083,3 +1083,20 @@
 - 20:42 （協調）**用戶的話**（Remote Control，看完「可以上生產」的報告後）：「切換」。交給 engine-bridge：`run` 的 `--combat-world` 預設改成
   engine；`brain`（經線路的主機）維持 replay；`run --check` 不給選項時自己走 replay 或明說要給；說明文字、DESIGN.md、釘住預設的測試
   一起改，同一個 commit 不放別的。之後我在乾淨建置上複驗、在 pool 上用一個小步驟煙霧測試，才給別的工作用。
+- 20:51（engine-bridge）**切換：`run` 的計畫預設在引擎裡搜尋**（5e90a4a4，只有這件事）。
+  - `run` 的 `--combat-world` 預設 engine；`replay`（worker 行程裡節點的複本）留作檢查用。`brain`（經線路的宿主）預設維持 replay，
+    明確要求 engine 時照舊拒絕。plan 以外的戰鬥大腦不管預設照常打，只有明確要求 engine 時才拒絕，所以 NoSL 與 mod 的大腦
+    （nosl.json）行為不變。
+  - `run --check` 不給選項：**拒絕**，訊息說要給 `--combat-world replay`。選這個因為比較簡單（原有的拒絕只改訊息），而且檢查不會在
+    呼叫者沒說的情況下換世界。
+  - 說明文字、`ChampionOptions` 的註解、DESIGN.md 加一段；測試釘住：`run` 預設 engine、`brain` 預設 replay、plan 照指令的世界、
+    其他大腦只拒絕明確要求的 engine、`brain` 的兩個冠軍都不在引擎裡。
+  - 驗證（本機，每項各自 MemoryMax 12G）：兩個測試專案 145／61 全過。5e90a4a4 的乾淨建置（含引擎，schema 2bebc33c）：(1) `run` 不給選項
+    （sl.json，SILENT A0，訓練種子索引 1200000）：開頭寫「in the engine」，紀錄 imports 11（計畫 11）、重規劃 0、Log.Error 0，對重播世界
+    那局 `same-decisions` 410 個決策逐筆相同；(2) `brain --champion eval/champions/nosl.json`：回 ready，第一個決策（事件）回
+    recommendation（l0），run_end 後正常結束；(3) `run --check` 不給選項：exit 2，訊息如上；加 `--combat-world replay` 跑前 40 個決策：
+    經線路重打 1/1 相同、4/4 個節點從檢查點重播一致。
+  - 冒煙途中工作目錄的冠軍檔被另一個 session 改成 c10-1-2／v10-1-2（還沒提交），所以 (1) 打的是 c10-0／v10-0，(2) 與 (3) 的 replay
+    那一局是 c10-1-2／v10-1-2；跟切換本身無關。
+  - 書（docs）裡說 SL 的搜尋靠存檔重播回到先前局面的段落，對 sim 的自我對弈已經不是現況（mod 的大腦仍是）；docs 照規矩要先問用戶
+    由誰改，沒有動。
