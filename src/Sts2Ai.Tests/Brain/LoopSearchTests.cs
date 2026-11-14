@@ -10,10 +10,11 @@ public class LoopSearchTests
     /// deals 6 plus the strength. The enemies' turn hits for 10. Every <paramref name="junkEvery"/> plays a junk card comes,
     /// to the discard pile, or to the hand if <paramref name="handCap"/> is set, and then a full hand sends R to the discard
     /// pile, which ends the cycle. <paramref name="runsOut"/> ends it after that many plays. With <paramref name="souls"/>, R
-    /// is exhausted instead and draws the next of that many R in the draw pile, as a Soul does. The hand starts with
-    /// <paramref name="copies"/> R.
+    /// is exhausted instead and draws the next of that many R in the draw pile, as a Soul does. With
+    /// <paramref name="returns"/>, R comes back only that many times, as Feral returns free attacks, and the player's power
+    /// shows how many are left. The hand starts with <paramref name="copies"/> R.
     /// </summary>
-    private sealed class Loop(int enemyHp, int junkEvery = 0, int handCap = 0, int runsOut = int.MaxValue, Loop.Prompted prompted = Loop.Prompted.No, int souls = 0, int copies = 1) : ICombatWorld
+    private sealed class Loop(int enemyHp, int junkEvery = 0, int handCap = 0, int runsOut = int.MaxValue, Loop.Prompted prompted = Loop.Prompted.No, int souls = 0, int copies = 1, int? returns = null) : ICombatWorld
     {
         /// <summary>A potion that offers three cards, one to take: the last gives R, or a strong one-off card; or it asks
         /// twice, and only the last card of the second prompt gives the strong card.</summary>
@@ -33,7 +34,7 @@ public class LoopSearchTests
         private List<(uint Uid, string Id)> _hand = Hand(prompted, copies);
         private List<string> _discard = [];
         private readonly int _maxHp = enemyHp;
-        private int _enemy = enemyHp, _hp = 30, _energy = 1, _strength, _round = 1, _plays, _drawn;
+        private int _enemy = enemyHp, _hp = 30, _energy = 1, _strength, _round = 1, _plays, _drawn, _returns = returns ?? 0;
         private bool _potion = prompted != Prompted.No;
         /// <summary>The prompts the potion still asks: the world waits on the first of them.</summary>
         private int _asking;
@@ -46,7 +47,8 @@ public class LoopSearchTests
         public CombatObservation Observe() => Start with
         {
             Round = _round,
-            Player = Start.Player with { Hp = Math.Max(0, _hp), MaxHp = 30, Block = 0, Energy = _energy, Powers = _strength > 0 ? [new PowerView("STRENGTH_POWER", _strength)] : [] },
+            Player = Start.Player with { Hp = Math.Max(0, _hp), MaxHp = 30, Block = 0, Energy = _energy, Powers = [.. _strength > 0 ? [new PowerView("STRENGTH_POWER", _strength)] : Array.Empty<PowerView>(),
+                .. returns != null ? [new PowerView("FERAL_POWER", _returns)] : Array.Empty<PowerView>()] },
             Hand = [.. _hand.Select(c => new CardView { Id = c.Id, Uid = c.Uid, Cost = c.Id == "H" ? 1 : 0 })],
             Draw = [.. Enumerable.Repeat(new CardView { Id = "R" }, souls - _drawn)],
             Discard = [.. _discard.Select(id => new CardView { Id = id })],
@@ -112,7 +114,11 @@ public class LoopSearchTests
                     {
                         if (_drawn < souls) _hand.Add((200 + (uint)_drawn++, "R"));
                     }
-                    else if ((handCap == 0 || _hand.Count < handCap) && _plays < runsOut) _hand.Add(card);
+                    else if ((handCap == 0 || _hand.Count < handCap) && _plays < runsOut && (returns == null || _returns > 0))
+                    {
+                        _hand.Add(card);
+                        if (returns != null) _returns--;
+                    }
                     else _discard.Add("R");
                     break;
                 case "H":
@@ -153,7 +159,7 @@ public class LoopSearchTests
             _steps.Clear();
             _hand = Hand(prompted, copies);
             _discard = [];
-            (_enemy, _hp, _energy, _strength, _round, _plays, _drawn, _potion, _asking) = (_maxHp, 30, 1, 0, 1, 0, 0, prompted != Prompted.No, 0);
+            (_enemy, _hp, _energy, _strength, _round, _plays, _drawn, _potion, _asking, _returns) = (_maxHp, 30, 1, 0, 1, 0, 0, prompted != Prompted.No, 0, returns ?? 0);
             foreach (var step in snapshot.Steps) Apply(CombatAction.Parse(step));
         }
     }
@@ -257,6 +263,23 @@ public class LoopSearchTests
         var plan = Plan(new Loop(15, souls: 8));
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
+    }
+
+    [Fact]
+    public void APowerThatCountsDownTheReturnsIsAnOrdinaryLine()
+    {
+        // R comes back eight times, more than the probe repeats, and each return takes one off the count its power shows:
+        // a chain that spends the power, not a cycle.
+        var world = new Loop(15, returns: 8);
+        var before = world.Observe();
+        world.Execute(R);
+        Assert.Contains(world.Observe().Hand, c => c.Id == "R");
+        Assert.False(LoopSearch.Recurs(before, world.Observe()));
+
+        // The search plays the nine R and H out on its nodes: 6 plus 9 strength.
+        var plan = Plan(new Loop(15, returns: 8));
+        Assert.Equal(CombatStatus.Won, plan.End);
+        Assert.Equal([.. Enumerable.Repeat(R, 9), H], Line(plan));
     }
 
     [Fact]

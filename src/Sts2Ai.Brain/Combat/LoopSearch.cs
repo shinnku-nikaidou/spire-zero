@@ -15,11 +15,11 @@ public sealed record LoopPoint(CombatObservation Obs, int Depth, WorldSnapshot S
 /// left at every state above it, and the attack that should come after the repeats is never tried.
 ///
 /// So the search does not go down a cycle. A move that brings back the cards of a state on the path, with no less energy
-/// or stars, no fewer copies of those cards left and something changed, is tried a few more times, each of which must
-/// bring them back too; if it holds, it is set aside (<see cref="Intercept"/>). What the piles do to other cards does not
-/// matter: a curse a boss deals every six cards changes them, and the cycle goes on. A move that runs out by itself, or
-/// uses up its own cards, is an ordinary line, and the search goes on as it always did, so a deck with no cycle is played
-/// move for move as it would be without this class.
+/// or stars, no power of the player's lower, no fewer copies of those cards left and something changed, is tried a few
+/// more times, each of which must bring them back too; if it holds, it is set aside (<see cref="Intercept"/>). What the
+/// piles do to other cards does not matter: a curse a boss deals every six cards changes them, and the cycle goes on. A
+/// move that runs out by itself, uses up its own cards or spends a power's count, is an ordinary line, and the search
+/// goes on as it always did, so a deck with no cycle is played move for move as it would be without this class.
 ///
 /// After the search (<see cref="RunFound"/>), on a budget of its own, each cycle is repeated 1, 2, 4... times, and each
 /// count is cashed out: a small search with the cycle's moves left out, to the leaf at the next turn's start, which is
@@ -108,13 +108,15 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
 
     /// <summary>
     /// Whether the moves from <paramref name="from"/> to <paramref name="now"/> can be played again: the same round, potions
-    /// and living enemies, every card of its hand back (a copy will do) and no dearer, no less energy or stars, and no
-    /// fewer copies of its hand's cards left to draw or play. Moves that use up their own cards run out by themselves:
-    /// a Soul draws the next Soul and is exhausted, so a pile of Souls is a long line, not a cycle.
+    /// and living enemies, every card of its hand back (a copy will do) and no dearer, no less energy or stars, every power
+    /// of the player's still there and no lower, and no fewer copies of its hand's cards left to draw or play. Moves that
+    /// use up what brings them back run out by themselves: a Soul draws the next Soul and is exhausted, so a pile of Souls
+    /// is a long line, not a cycle; and Feral returns only so many free attacks a turn, the count its power shows.
     /// </summary>
     public static bool Recurs(CombatObservation from, CombatObservation now)
     {
         if (from.Round != now.Round || now.Player.Energy < from.Player.Energy || now.Player.Stars < from.Player.Stars) return false;
+        if (!from.Player.Powers.All(p => now.Player.Powers.Any(q => q.Id == p.Id && q.Amount >= p.Amount))) return false;
         if (!from.Potions.SequenceEqual(now.Potions)) return false;
         if (!from.Enemies.Where(e => e.Hp > 0).Select(e => e.Uid).SequenceEqual(now.Enemies.Where(e => e.Hp > 0).Select(e => e.Uid))) return false;
         var hand = now.Hand.ToList();
