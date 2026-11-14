@@ -6,16 +6,19 @@ namespace Sts2Ai.Engine;
 /// <summary>
 /// A combat in the engine, as search uses a world. It is made from a live combat as the bridge wrote it out
 /// (<see cref="Import"/>), or from another world (<see cref="Clone"/>); worlds share nothing, so each may be searched in
-/// a thread of its own. A snapshot is the native world the snapshot was taken at, kept as it stands: an action taken
-/// from there is taken in a copy, so a state of the search is one native world, and it is freed when the snapshot is
-/// forgotten (<see cref="Forget"/>) and the world has moved on, or with the world.
+/// a thread of its own. Each state of a search is one native world that never changes: an action makes the world after
+/// it from the one before (<c>sz_world_step</c>), which a snapshot keeps as it stands, and the step says the state's
+/// status and keys with it. A native world is freed when nothing stands on it any more: the world has moved on and
+/// every snapshot taken there is forgotten (<see cref="Forget"/>), or the world is disposed.
 /// </summary>
 public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
 {
-    /// <summary>A native world and how many stand on it: this world while it is there, and every snapshot taken there.</summary>
-    private sealed class Place(WorldHandle handle)
+    /// <summary>A native world, how many stand on it (this world while it is there, and every snapshot taken there),
+    /// and what the step that made it said of it; none for a world taken in or copied.</summary>
+    private sealed class Place(WorldHandle handle, Native.Node? node = null)
     {
         public readonly WorldHandle Handle = handle;
+        public readonly Native.Node? Node = node;
         public int Held = 1;
     }
 
@@ -104,7 +107,7 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
         return [.. Encoding.UTF8.GetString(Native.Take(buf)).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(CombatAction.Parse)];
     }
 
-    public CombatStatus Status => Native.sz_world_status(_at.Handle) switch
+    public CombatStatus Status => (_at.Node?.Status ?? Native.sz_world_status(_at.Handle)) switch
     {
         0 => CombatStatus.InProgress,
         1 => CombatStatus.Won,
@@ -113,27 +116,28 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     };
 
     /// <exception cref="EngineException">The engine could not make the key.</exception>
-    public ulong HiddenKey() => Native.Key(Native.sz_world_hidden_key(_at.Handle), "sz_world_hidden_key");
+    public ulong HiddenKey() => _at.Node is { Status: 0 } node ? node.HiddenKey
+        : Native.Key(Native.sz_world_hidden_key(_at.Handle), "sz_world_hidden_key");
 
     /// <summary>The state as search tells states apart, without building the observation: what
     /// <c>PimcBrain.StateKey</c> is to the real combat's observation.</summary>
     /// <exception cref="EngineException">The engine could not make the key.</exception>
-    public ulong StateKey() => Native.Key(Native.sz_world_state_key(_at.Handle), "sz_world_state_key");
+    public ulong StateKey() => _at.Node is { Status: 0 } node ? node.StateKey
+        : Native.Key(Native.sz_world_state_key(_at.Handle), "sz_world_state_key");
 
+    /// <summary>The world after the action is made from the one before, which stays for any snapshot taken there and
+    /// is let go if there is none.</summary>
     public void Execute(CombatAction action)
     {
-        _shown = null;
         var text = Encoding.UTF8.GetBytes(action.ToString());
-        if (_at.Held > 1)
-        {
-            // A snapshot stands here and keeps this world: the action is taken in a copy.
-            var child = new Place(Copy(_at.Handle));
-            _at.Held--;
-            _at = child;
-        }
-        int failed;
-        fixed (byte* bytes = text) failed = Native.sz_world_apply(_at.Handle, bytes, (nuint)text.Length);
-        if (failed != 0) throw Native.Failed($"sz_world_apply {action}");
+        Native.Node node;
+        WorldHandle after;
+        fixed (byte* bytes = text) after = Native.sz_world_step(_at.Handle, bytes, (nuint)text.Length, &node);
+        if (after.IsInvalid) throw Native.Failed($"sz_world_step {action}");
+        var before = _at;
+        _at = new(after.Weighing(_weight), node);
+        _shown = null;
+        Leave(before);
     }
 
     public WorldSnapshot Snapshot()

@@ -14,10 +14,10 @@ namespace Sts2Ai.Tests.Engine;
 public sealed class FakeEngine : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("sts2ai-engine-").FullName;
-    private readonly Live _live;
+    private readonly Count _live, _steps, _clones;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate long Live();
+    private delegate long Count();
 
     public FakeEngine()
     {
@@ -31,8 +31,13 @@ public sealed class FakeEngine : IDisposable
         rustc.WaitForExit();
         if (rustc.ExitCode != 0) throw new InvalidOperationException($"rustc could not build the stand-in engine: {errors}");
         Environment.SetEnvironmentVariable(EngineLibrary.Variable, library);
-        _live = Marshal.GetDelegateForFunctionPointer<Live>(NativeLibrary.GetExport(NativeLibrary.Load(library), "sz_test_live"));
+        var loaded = NativeLibrary.Load(library);
+        Count Export(string name) => Marshal.GetDelegateForFunctionPointer<Count>(NativeLibrary.GetExport(loaded, name));
+        (_live, _steps, _clones) = (Export("sz_test_live"), Export("sz_test_steps"), Export("sz_test_clones"));
     }
+
+    /// <summary>The worlds made so far by a step, and by a clone.</summary>
+    public (long Steps, long Clones) Made() => (_steps(), _clones());
 
     /// <summary>The native worlds not yet freed, once the collector has taken what nothing holds.</summary>
     public long Worlds()
@@ -134,7 +139,7 @@ public sealed class EngineWorldTests(FakeEngine engine)
         Assert.Contains("takes no combat called refuse", Assert.Throws<EngineException>(() => World("refuse")).Message);
         using var world = World();
         var failed = Assert.Throws<EngineException>(() => world.Execute(CombatAction.Play(9)));
-        Assert.Equal("sz_world_apply play:9: no card 9 in hand", failed.Message);
+        Assert.Equal("sz_world_step play:9: no card 9 in hand", failed.Message);
         Assert.Equal(0UL, world.HiddenKey());
     }
 
@@ -148,6 +153,8 @@ public sealed class EngineWorldTests(FakeEngine engine)
         using var keyless = World("keyless");
         Assert.Equal("sz_world_hidden_key: the stand-in has no key for a combat called keyless", Assert.Throws<EngineException>(() => keyless.HiddenKey()).Message);
         Assert.Equal("sz_world_state_key: the stand-in has no key for a combat called keyless", Assert.Throws<EngineException>(() => keyless.StateKey()).Message);
+        // A step must say the keys of the world it made: there it fails.
+        Assert.Equal("sz_world_step end_turn: the stand-in has no key for a combat called keyless", Assert.Throws<EngineException>(() => keyless.Execute(CombatAction.EndTurn)).Message);
     }
 
     [Fact]
@@ -202,12 +209,38 @@ public sealed class EngineWorldTests(FakeEngine engine)
     }
 
     [Fact]
+    public void AnActionIsOneStepThatSaysTheStatesKeys()
+    {
+        using var world = World();
+        var here = world.Snapshot();
+        var before = engine.Made();
+        world.Execute(CombatAction.EndTurn);
+        world.Restore(here);
+        world.Execute(CombatAction.Play(7));
+
+        // Two actions, two worlds made by a step each, none copied.
+        var after = engine.Made();
+        Assert.Equal((2L, 0L), (after.Steps - before.Steps, after.Clones - before.Clones));
+        // What the step said is what the engine says when asked.
+        Assert.Equal(CombatStatus.Won, world.Status);
+        world.Restore(here);
+        world.Execute(CombatAction.EndTurn);
+        using var asked = World();
+        asked.Execute(CombatAction.EndTurn);
+        using var copy = asked.Clone();
+        Assert.Equal((copy.HiddenKey(), copy.StateKey()), (world.HiddenKey(), world.StateKey()));
+        Assert.Throws<EngineException>(() => world.Execute(CombatAction.Play(9)));
+        Assert.Equal(2, world.Observe().Round);
+        world.Forget(here);
+    }
+
+    [Fact]
     public void AStateOfTheSearchIsOneNativeWorldFreedWhenTheSearchLeavesIt()
     {
         long before = engine.Worlds();
         using var world = World();
         var here = world.Snapshot();
-        // The snapshot is the world it was taken at: nothing is copied until an action is taken from there.
+        // The snapshot is the world it was taken at: nothing is made until an action is taken from there.
         Assert.Equal(before + 1, engine.Worlds());
         world.Execute(CombatAction.EndTurn);
         var below = world.Snapshot();

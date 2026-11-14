@@ -52,10 +52,22 @@ internal static unsafe partial class Native
         public nuint Len;
     }
 
+    /// <summary><c>sz_node</c>: what <see cref="sz_world_step"/> says of the world it made, which search reads of every
+    /// state. The keys are 0 once the combat is over.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Node
+    {
+        public int Status;
+        public int Round;
+        public int Prompt;
+        public ulong StateKey;
+        public ulong HiddenKey;
+    }
+
     [LibraryImport(Library)] internal static partial WorldHandle sz_world_import(byte* json, nuint len);
     [LibraryImport(Library)] internal static partial WorldHandle sz_world_clone(WorldHandle world);
     [LibraryImport(Library)] internal static partial void sz_world_free(nint world);
-    [LibraryImport(Library)] internal static partial int sz_world_apply(WorldHandle world, byte* action, nuint len);
+    [LibraryImport(Library)] internal static partial WorldHandle sz_world_step(WorldHandle world, byte* action, nuint len, Node* node);
     [LibraryImport(Library)] internal static partial int sz_world_status(WorldHandle world);
     [LibraryImport(Library)] internal static partial int sz_world_legal(WorldHandle world, Buf* result);
     [LibraryImport(Library)] internal static partial int sz_world_observe(WorldHandle world, Buf* result);

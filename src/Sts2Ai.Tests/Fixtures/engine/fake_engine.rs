@@ -4,14 +4,16 @@
 //!  - "play:9" fails (no such card); "play:7" wins, "potion:0" loses; each "end_turn" is a round;
 //!  - each action costs 1 HP of 70, down to 0;
 //!  - a combat called "LONG" is won by "play:7" from round 3 on only; before, the play is a step like any other;
-//!  - a combat called "keyless" has no keys: both are 0, with an error;
+//!  - a combat called "keyless" has no keys: both are 0, with an error, and a step from it fails;
 //!  - every call on a world forgets the thread's last error first, as the engine does.
-//! `sz_test_live` counts the worlds not yet freed.
+//! `sz_test_live` counts the worlds not yet freed, `sz_test_steps` and `sz_test_clones` the steps and clones made.
 
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 static LIVE: AtomicI64 = AtomicI64::new(0);
+static STEPS: AtomicI64 = AtomicI64::new(0);
+static CLONES: AtomicI64 = AtomicI64::new(0);
 
 thread_local! {
     static ERROR: RefCell<String> = const { RefCell::new(String::new()) };
@@ -115,7 +117,13 @@ pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize) -> u64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_clone(id: u64) -> u64 {
     begin();
+    CLONES.fetch_add(1, Ordering::SeqCst);
     make(unsafe { world(id) }.clone())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sz_test_clones() -> i64 {
+    CLONES.load(Ordering::SeqCst)
 }
 
 #[unsafe(no_mangle)]
@@ -182,20 +190,60 @@ pub unsafe extern "C" fn sz_world_run(id: u64, out: *mut Buf) -> i32 {
     )
 }
 
+fn hidden_key(w: &World) -> u64 {
+    key(w, w.steps.len() as u64)
+}
+
+/// What the observation shows: the encounter, the round and the HP.
+fn state_key(w: &World) -> u64 {
+    let name = w.encounter.bytes().fold(0u64, |sum, b| sum.wrapping_mul(31).wrapping_add(b as u64));
+    key(w, name.wrapping_mul(1_000_003) ^ (w.round() * 1000 + w.hp()) as u64)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_hidden_key(id: u64) -> u64 {
     begin();
-    let w = unsafe { world(id) };
-    key(w, w.steps.len() as u64)
+    hidden_key(unsafe { world(id) })
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_state_key(id: u64) -> u64 {
     begin();
-    let w = unsafe { world(id) };
-    // What the observation shows: the encounter, the round and the HP.
-    let name = w.encounter.bytes().fold(0u64, |sum, b| sum.wrapping_mul(31).wrapping_add(b as u64));
-    key(w, name.wrapping_mul(1_000_003) ^ (w.round() * 1000 + w.hp()) as u64)
+    state_key(unsafe { world(id) })
+}
+
+#[repr(C)]
+pub struct Node {
+    status: i32,
+    round: i32,
+    prompt: i32,
+    state_key: u64,
+    hidden_key: u64,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_step(id: u64, action: *const u8, len: usize, node: *mut Node) -> u64 {
+    begin();
+    let action = unsafe { text(action, len) };
+    if action == "play:9" {
+        fail("no card 9 in hand");
+        return 0;
+    }
+    let mut after = unsafe { world(id) }.clone();
+    after.steps.push(action);
+    let status = after.status();
+    let (state, hidden) = if status == 0 { (state_key(&after), hidden_key(&after)) } else { (0, 0) };
+    if after.encounter == "keyless" {
+        return 0;
+    }
+    unsafe { *node = Node { status, round: after.round() as i32, prompt: 0, state_key: state, hidden_key: hidden } };
+    STEPS.fetch_add(1, Ordering::SeqCst);
+    make(after)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sz_test_steps() -> i64 {
+    STEPS.load(Ordering::SeqCst)
 }
 
 #[unsafe(no_mangle)]
