@@ -1041,3 +1041,7 @@
   schema 中每個宣告型別可能裝「值」的欄位與處理方式：PowerModel._internalData 只裝物件（42 個 InitInternalData 本體都回傳類別
   物件），其餘 5 個都已丟掉，沒有未處理的。DESIGN.md 的 `outside` 改為依類別與來源欄位計數。新 schema 下重錄 all、runs、
   tooth、c1752 四組 dump，四項檢查全過（數字與換 schema 前相同）。
+- 20:00 （協調）複驗被拒匯入的修正（5ace9fe9 的乾淨建置，schema 2bebc33c）：訓練種子 1200000，六角色 × A0／A10，引擎世界 12 局，
+  每局對 pool 試跑同一種子的重播紀錄（ba80131a）跑 `same-decisions`：**12 局全部逐筆相同**（決策數 717、682、613、829、630 等與重播
+  那局一樣），重規劃 0，記憶體峰值 1.2–1.6 GB。接著在 pool 開 `engine-trial-3`：只跑引擎世界、self-play 的選項、六角色 × 兩種遊戲
+  × 25 個種子（1200004–1200028）共 300 局，量失敗率。
