@@ -757,7 +757,7 @@ for job in jobs:
     j = {"queue": len(queue), "pos": int(read(d + "/pos") or 0), "front": len(front), "stopped": read(d + "/stopped"),
          "refused": {os.path.basename(p): read(p) for p in glob.glob(d + "/refused/*")},
          "held": {h: n for (jj, h), n in held.items() if jj == job},
-         "runs": 0, "won": 0, "floors": 0, "died": Counter(), "sums": Counter(), "chunks": 0, "empty": 0,
+         "runs": 0, "won": 0, "failed": 0, "floors": 0, "died": Counter(), "sums": Counter(), "chunks": 0, "empty": 0,
          "ends": Counter(), "hour": 0, "back": 0}
     for line in (read(d + "/claims.log") or "").split("\n"):
         if " back " in line:
@@ -769,6 +769,7 @@ for job in jobs:
             w = line.split()
             if w[0] == "run":
                 runs += 1
+                j["failed"] += w[2] == "failed"
                 if w[2] == "won":
                     j["won"] += 1
                 else:
@@ -831,6 +832,8 @@ def status(argv: list[str]) -> None:
             held = sum(sum(j["held"].values()) for j in js)
             hour = sum(j["hour"] for j in js)
             sums = sum((Counter(j["sums"]) for j in js), Counter())
+            # A failed run (an error in the driver or a brain) counts among the runs but is dropped by every reader.
+            sums["failed"] = sum(j.get("failed", 0) for j in js)
             bad = "; ".join(f"{k}: {v}" for k, v in sums.items() if v)
             total.update({"runs": runs, "won": won, "floors": floors, "dealt": dealt, "queue": queue, "held": held, "hour": hour})
             extra = []
@@ -907,7 +910,7 @@ def box_numbers(job: str, manifest: dict) -> dict:
     """The box's numbers from the small files here."""
     here, box = job_dir(job), manifest["box"]
     done, hosts, ends, sums, deadline_ends = set(), {}, Counter(), Counter(), []
-    won = floors = runs = 0
+    won = failed = floors = runs = 0
     for path in here.glob("done-*.txt"):
         shard, index = path.stem[5:].rsplit("-", 1)
         host = shard.rsplit("-", 1)[0]
@@ -922,6 +925,7 @@ def box_numbers(job: str, manifest: dict) -> dict:
             if w[0] == "run":
                 runs += 1
                 won += w[2] == "won"
+                failed += w[2] == "failed"
                 floors += int(w[4]) if w[4].isdigit() else 0
             elif w[0] == "end":
                 why = w[2].rstrip(":")
@@ -940,7 +944,7 @@ def box_numbers(job: str, manifest: dict) -> dict:
         prefix += 1
     claims = (here / "deal" / "claims.log").read_text().splitlines() if (here / "deal" / "claims.log").exists() else []
     return {
-        "done": len(done), "prefix": prefix, "won": won, "floor": round(floors / max(runs, 1), 2),
+        "done": len(done), "prefix": prefix, "won": won, "failed": failed, "floor": round(floors / max(runs, 1), 2),
         "hosts": dict(sorted(hosts.items())), "ends": dict(ends), "counts": dict(sums),
         "taken_back": sum(1 for line in claims if " back " in line),
         "stop_spread_s": round(max(deadline_ends) - min(deadline_ends), 2) if len(deadline_ends) > 1 else None,
@@ -985,14 +989,16 @@ def fetch(argv: list[str]) -> None:
         save(job, manifest)
         box = manifest["box"]
         counted = "; ".join(f"{k}: {v}" for k, v in box["counts"].items())
-        print(f"{job}: {box['done']} runs of {box['range']['n']}, head {box['prefix']}, {box['won']} won, floor {box['floor']}; "
+        failed = f", {box['failed']} FAILED (dropped by every reader)" if box["failed"] else ""
+        print(f"{job}: {box['done']} runs of {box['range']['n']}, head {box['prefix']}, {box['won']} won{failed}, floor {box['floor']}; "
               f"ended {box['ended']}; chunk ends {box['ends']}; {box['taken_back']} taken back; {counted}")
-        totals.update({"done": box["done"], "won": box["won"]})
+        totals.update({"done": box["done"], "won": box["won"], "failed": box["failed"]})
     with tempfile.NamedTemporaryFile("w", dir=ROOT / "tmp", suffix=".list") as f:
         f.write("".join(f"{job}/manifest.json\n" for job in jobs))
         f.flush()
         rsync("-a", f"--files-from={f.name}", f"{ROOT / 'data'}/", f"{hub_addr()}:")
-    say(f"{len(jobs)} jobs closed: {totals['done']} runs, {totals['won']} won; on the hub in each JOB/; pull.sh HOST JOB... unpacks them there")
+    say(f"{len(jobs)} jobs closed: {totals['done']} runs, {totals['won']} won" + (f", {totals['failed']} failed" if totals["failed"] else "") +
+        "; on the hub in each JOB/; pull.sh HOST JOB... unpacks them there")
     if step_path(name).exists():
         close_step(name)
     say(hub_disk())
