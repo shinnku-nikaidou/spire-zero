@@ -16,6 +16,8 @@ Below is floor 17 of the book's example run: Vantom, the act 1 boss, with the pl
 
 The seed decides every random result in the game. Save once on entering the room, replay every action taken since, and the game is back at the present moment, exact down to where its random numbers stand. That is the copy. On the copy, the same actions always give the same results.
 
+In self-play, search uses a copy of this combat taken into the combat engine. The engine is translated statement by statement from the game's own code, so a position can be duplicated directly instead of replayed again and again; it has been compared with the game move by move, with the same results.
+
 The copy goes only as far as leaving this room. What the next room holds, or what the next "?" room turns into, the copy does not show. This boundary is the rule of SL.
 
 So a combat is no longer a gamble but a search for a path: many lines lead from here to the end of the combat, and the task is to find the best one.
@@ -64,6 +66,6 @@ Keeping only 8 is the biggest approximation in this method. A better line may hi
 
 ## Following the plan
 
-A plan is a string of actions, and each action also records the position the AI should see before playing it. In the real combat, as long as the current position matches the one the plan recorded, the AI plays the next move directly and does not search again. The copy and the real combat run the same game program with the same seed, so every move should match. If one does not, the AI plans again from the current position.
+A plan is a string of actions, and each action also records the position the AI should see before playing it. In the real combat, as long as the current position matches the one the plan recorded, the AI plays the next move directly and does not search again. The copy runs the game's own rules with the same seed, so every move should match. If one does not, the AI plans again from the current position.
 
 **A losing plan is handled differently.** When the plan expects to lose and search has not looked at every line, it may simply have missed the line that wins. In that case the AI follows the plan for one turn only and then plans again: the rest of the combat is now shorter, so the same search can see deeper. It does this at most three times in a row in one combat, and it plays the third plan to the end, so that a combat bound to be lost is not thought through again every turn.
