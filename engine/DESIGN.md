@@ -467,13 +467,16 @@ other class. `rt::random` is the same generator written by hand and checked bit 
 
 ## Building
 
-`engine/gen.sh` runs `port` on `tmp/decompiled/sts2-<version>` with `tmp/gamebin/<version>` and formats `src/gen/`.
+`engine/gen.sh` runs `port` on `tmp/decompiled/sts2-<version>` with `tmp/gamebin/<version>` (the version port.toml's
+`[game]` names, and beside it the decompiled source of the one its hand-stated facts were read against, when that is
+another) and formats `src/gen/`.
 `engine/gen.sh --check` then runs `cargo check`; a translated function rustc refuses goes on the quarantine list
 (`tmp/engine/quarantine.txt`), `port` writes its body as a `todo!` and counts it, and the loop repeats until the crate
 compiles. The list is for a new game version's surprises; on v0.113.0 it is empty.
 
-`port` prints its report and writes it in full to `gen/report.txt`: classes and members translated, members not
-translated with the reason, stubs, hand-written members used, statements left out, and the ones to review.
+`port` prints its report and writes it in full to `gen/report.txt`: the hand-stated facts about the game's classes
+with the code each rests on (When the game changes), classes and members translated, members not translated with the
+reason, stubs, hand-written members used, statements left out, and the ones to review.
 
 ## The C ABI
 
@@ -547,6 +550,37 @@ observation and what its parts cost, the keys) and what a copy costs arena by ar
 again and again and samples its own stack a thousand times a second (a timer signal and the C library's `backtrace`,
 no other tool), and `engine/sample.py` names the addresses and counts which functions were on the stack.
 `engine/reach.py` lists the members without code that a combat could reach, each with the chain of callers.
+
+## When the game changes
+
+A new version of the game is a new input: the engine is made again from it, and the same checks decide whether it
+holds. Nothing of the game goes into git on the way.
+
+1. **The game's code.** From the player's own copy, into `tmp/`: the decompiled source as a project,
+   `tmp/decompiled/sts2-<version>` (ILSpy's command line over the game's `sts2.dll`), and the game's assemblies as
+   shipped, `tmp/gamebin/<version>`. The old version's decompiled source stays beside the new one until step 3 is done.
+   The engine names the version in one place, port.toml's `[game] version`; `engine/gen.sh` reads it there.
+2. **Translate.** `version` becomes the new one, `facts` stays the old. `engine/gen.sh --check` runs port and then
+   rustc; a function rustc refuses goes on the quarantine list and becomes a `todo!` the report counts (Building).
+3. **Read the report** (`gen/report.txt`). The members not translated and why, the stubs, the statements left out that
+   held game code, and first **the hand-stated facts**: every entry of port.toml that states something about the
+   game's classes (a fixed value, a member written by hand, an `[only]` fact, a cache, a delegate field that is never
+   alive at a decision, a root, a presentation member or field, the fields a class keeps, a value class, an open base
+   class), each with the code it rests on (the members it names; for a fact about a class's shape, its fields and
+   properties; for a field, the members of its class that name it), held against that code in the version `facts`
+   names. `same`: the code is the same, the fact holds again. `LOOK`: the code changed, is new or is gone, and a person
+   reads the fact again and mends the table or the hand-written code. `library`: it rests on .NET alone. Once every
+   `LOOK` is read, `facts` becomes the new version. Not in the list, because port checks them itself at every run:
+   what a kept walk reads ([memo]), the shape of every loop a hook's kinds are told to, the second-name rule.
+4. **Dumps and the four checks.** A dump is of one schema, and the schema's hash changes with the version: dump every
+   encounter (`sim parity --world none --dump DIR`) and whole runs (`--runs N --world none --dump DIR`), then
+   `--test world` and `--test fixtures` (import, step, continued) on both.
+5. **Against the real game, through the C ABI.** `sim parity --world engine` over the encounter sweep on seeds no one
+   has used, continued from every decision, and whole runs of every character at both ascensions (`--runs`); a
+   difference is fixed by a rule in port, or in the hand-written code where that is what is wrong, never in the
+   generated code, and the sweep runs again. `--coverage` lists every id of the game with how often it was met; the
+   version is supported when each was met with no difference (The lockstep check).
+6. **Speed**, before and after: `tests/speed.rs` on the new dump.
 
 ## Credit
 

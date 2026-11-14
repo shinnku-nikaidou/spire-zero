@@ -16,6 +16,8 @@ string Arg(string name, string? fallback = null)
 
 string decompiled = Arg("decompiled"), bin = Arg("bin"), configPath = Arg("config"), outDir = Arg("out");
 string quarantinePath = Arg("quarantine", "");
+// The decompiled code of the version port.toml's hand-stated facts were read against, when that is another one.
+string statedPath = Arg("stated", "");
 var clock = Stopwatch.StartNew();
 var cfg = Config.Load(configPath);
 if (!Path.GetFileName(decompiled.TrimEnd('/')).EndsWith(cfg.GameVersion))
@@ -101,6 +103,27 @@ foreach (var (path, text) in output.Files)
     string full = Path.Combine(outDir, path);
     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
     File.WriteAllText(full, text);
+}
+// The hand-stated facts: each against the code it rests on, now and in the version it was read against.
+{
+    var now = Facts.Index(trees);
+    Dictionary<string, List<Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax>>? before = null;
+    if (cfg.FactsVersion != cfg.GameVersion)
+    {
+        if (statedPath.Length == 0 || !Path.GetFileName(statedPath.TrimEnd('/')).EndsWith(cfg.FactsVersion) || !Directory.Exists(statedPath))
+            throw new ArgumentException($"{configPath}: the facts were read against {cfg.FactsVersion}: --stated must be its decompiled code");
+        before = Facts.Index(Directory.EnumerateFiles(statedPath, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/")).AsParallel()
+            .Select(f => CSharpSyntaxTree.ParseText(PrimaryConstructors.Undo(File.ReadAllText(f)), parse, f)).ToList());
+    }
+    var (lines, look, same) = Facts.Compare(cfg, now, before);
+    rep.Facts = lines;
+    rep.FactsHead = before == null
+        ? $"== hand-stated facts about the game's code (port.toml), read against this version ({cfg.GameVersion}): each with the code it rests on"
+        : $"== hand-stated facts about the game's code (port.toml), read against {cfg.FactsVersion}, now {cfg.GameVersion}: \"same\" holds again (its code is the same), \"LOOK\" a person reads again (its code changed, is new or is gone), \"library\" rests on .NET only";
+    rep.FactsSummary = before == null
+        ? $"hand-stated facts      {lines.Count}  (read against this version)"
+        : $"hand-stated facts      {lines.Count}  ({same} hold again, {look} for a person to read again: code changed since {cfg.FactsVersion})";
 }
 File.WriteAllText(Path.Combine(outDir, "report.txt"), rep.Full());
 Console.Write(rep.Summary());

@@ -23,6 +23,9 @@ public sealed class Report
     /// hand-written members they reach, read as their C# is; how many methods they reach.</summary>
     public List<string> MemoClasses = [], MemoManual = [];
     public int MemoMethods;
+    /// <summary>The hand-stated facts and what became of the code each rests on (Facts.cs), with the head of the section.</summary>
+    public List<string> Facts = [];
+    public string FactsHead = "", FactsSummary = "";
 
     public int ClassesTranslated, MembersTranslated, MembersFailed, MembersPresentation, Stubs, ManualRefs, Dispatchers, StatementsLeftOut, Quarantined;
 
@@ -117,12 +120,15 @@ public sealed class Report
         sb.AppendLine($"presentation members    {MembersPresentation}  (left out whole)");
         sb.AppendLine($"statements left out     {StatementsLeftOut}  (presentation)");
         sb.AppendLine($"  of them with a call that is not presentation: {droppedWithCall.Count}  (listed in report.txt, for review)");
+        if (FactsSummary.Length > 0) sb.AppendLine(FactsSummary);
         return sb.ToString();
     }
 
     public string Full()
     {
         var sb = new StringBuilder(Summary());
+        sb.AppendLine().AppendLine(FactsHead);
+        foreach (var s in Facts) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== why members were not translated (count, reason, one example)");
         foreach (var kv in unsupported.OrderByDescending(kv => kv.Value.Count).ThenBy(kv => kv.Key, StringComparer.Ordinal))
             sb.AppendLine($"{kv.Value.Count,6}  {kv.Key}    e.g. {kv.Value.Example}");

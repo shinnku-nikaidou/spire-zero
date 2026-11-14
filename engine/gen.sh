@@ -9,8 +9,13 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(dirname "$here")"
-version="${STS2_VERSION:-v0.113.0}"
+# port.toml's [game]: the version translated, and the one its hand-stated facts were read against (DESIGN.md, "When
+# the game changes").
+toml() { sed -n "/^\[game\]/,/^\[/s/^$1 *= *\"\(.*\)\"/\1/p" "$here/port.toml"; }
+version="${STS2_VERSION:-$(toml version)}"
+facts="$(toml facts)"; facts="${facts:-$version}"
 decompiled="${STS2_DECOMPILED:-$repo/tmp/decompiled/sts2-$version}"
+stated="$repo/tmp/decompiled/sts2-$facts"
 bin="${STS2_BIN_DIR:-$repo/tmp/gamebin/$version}"
 out="$here/crates/sts2ai-engine/src/gen"
 quarantine="$repo/tmp/engine/quarantine.txt"
@@ -26,7 +31,7 @@ touch "$quarantine"
 dotnet build "$repo/src/Sts2Ai.Port" -c Release -v q --nologo >"$repo/tmp/engine/port-build.log" 2>&1 || { grep -E "error" "$repo/tmp/engine/port-build.log" | head -20 >&2; echo "gen.sh: port does not build" >&2; exit 1; }
 port() {
     dotnet "$repo/src/Sts2Ai.Port/bin/Release/net9.0/port.dll" --decompiled "$decompiled" --bin "$bin" \
-        --config "$here/port.toml" --out "$out" --quarantine "$quarantine"
+        --config "$here/port.toml" --out "$out" --quarantine "$quarantine" --stated "$stated"
     (cd "$here" && find "$out" -name '*.rs' -print0 | xargs -0 rustfmt --edition 2024 --config max_width=140 2>/dev/null) || true
 }
 port

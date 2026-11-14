@@ -73,6 +73,9 @@ public sealed class Config
 
     /// <summary>The version of the game the tables are for.</summary>
     public string GameVersion = "";
+    /// <summary>The version whose code the hand-stated facts about the game's classes were last read against
+    /// (`[game] facts`; the translated version when not given): port compares the code each rests on (Facts.cs).</summary>
+    public string FactsVersion = "";
     /// <summary>The name of the game's assembly, as a type of it is named from outside.</summary>
     public string GameAssembly = "sts2";
     /// <summary>Members replaced by a fixed Rust expression, as Class.Member or Class.Member@Class.Method (inside that method only).</summary>
@@ -104,6 +107,7 @@ public sealed class Config
         if (doc.TryGetValue("fields", out var fl) && fl is TomlTable only)
             foreach (var kv in only) c.OnlyFields[kv.Key] = ((TomlArray)kv.Value).Select(x => (string)x!).ToHashSet();
         if (doc.TryGetValue("game", out var g) && g is TomlTable game && game.TryGetValue("version", out var ver)) c.GameVersion = (string)ver;
+        c.FactsVersion = doc.TryGetValue("game", out var gf) && gf is TomlTable gameF && gameF.TryGetValue("facts", out var fv) ? (string)fv : c.GameVersion;
         if (doc.TryGetValue("game", out var g2) && g2 is TomlTable game2 && game2.TryGetValue("assembly", out var asm)) c.GameAssembly = (string)asm;
         foreach (var s in List(doc, "delegates", "transient")) c.TransientDelegates.Add(s);
         c.Memo.AddRange(List(doc, "memo", "walks"));
