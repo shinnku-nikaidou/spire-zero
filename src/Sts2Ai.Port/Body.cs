@@ -997,13 +997,17 @@ public sealed partial class Body
     {
         if (walk.Instance is { } on && !IsSimple(Unwrapped(on)) && Unwrapped(on) is not IInstanceReferenceOperation) return null;
         if (walk.Arguments.Any(a => !IsSimple(Unwrapped(a.Value)))) return null;
-        var body = fe.Body is IBlockOperation { Operations: [var one] } ? one : fe.Body;
+        // What is left of the body once the statements left out as presentation are gone.
+        var kept = fe.Body is IBlockOperation block ? block.Operations.Where(s => !LeftOutWhole(s)).ToList() : [fe.Body];
+        if (kept.Count != 1) return null;
+        var body = kept[0];
         if (frames.Peek().Iterator && body is IReturnOperation { Kind: OperationKind.YieldReturn, ReturnedValue: { } y } && Unwrapped(y) is ILocalReferenceOperation { Local: var yl } && Eq.Equals(yl, local))
             return "__only";
-        // The call alone, or `if (call) ..` where the member's own body says false.
+        // The call alone (awaited or not), or `if (call) ..` where the member's own body says false.
         var (asked, mustSayFalse) = body switch
         {
             IExpressionStatementOperation { Operation: IInvocationOperation alone } => (alone, false),
+            IExpressionStatementOperation { Operation: IAwaitOperation { Operation: var awaited } } when Unwrapped(awaited) is IInvocationOperation awaitedCall => (awaitedCall, false),
             IConditionalOperation { WhenFalse: null, Condition: var cond } when Unwrapped(cond) is IInvocationOperation tested => (tested, true),
             _ => ((IInvocationOperation?)null, false),
         };
@@ -1011,15 +1015,18 @@ public sealed partial class Body
             || Unwrapped(inst) is not ILocalReferenceOperation { Local: var called } || !Eq.Equals(called, local) || !call.IsVirtual || !Dispatched(m))
             return null;
         var slot = (IMethodSymbol)World.Slot(m.OriginalDefinition);
-        if (slot.IsAbstract || w.MemberBody(slot) is not IMethodBodyOperation { BlockBody: { } own }) return null;
+        if (slot.IsAbstract || w.MemberBody(slot) is not IMethodBodyOperation { } ownBody || (ownBody.BlockBody ?? ownBody.ExpressionBody) is not { } own) return null;
         if (call.Arguments.Any(a => a.Value is not IDeclarationExpressionOperation && !IsSimple(Unwrapped(a.Value)))) return null;
         // The member's own body: each out parameter set to a parameter, then a constant returned (false, when the
-        // call is a test).
+        // call is a test), or a task that has run to its end (`Task.CompletedTask`: awaited, it goes on at once).
+        static bool Done(IOperation said) => said is IPropertyReferenceOperation { Property: { IsStatic: true, Name: "CompletedTask" } done }
+            && done.ContainingType.ToDisplayString() == "System.Threading.Tasks.Task";
         var copies = new Dictionary<int, int>();
         var ops = own.Operations;
         for (int i = 0; i < ops.Length; i++)
         {
-            if (i == ops.Length - 1 && ops[i] is IReturnOperation { ReturnedValue: var said } && (said == null ? !mustSayFalse : said.ConstantValue is { HasValue: true, Value: var v } && (!mustSayFalse || v is false))) break;
+            if (i == ops.Length - 1 && ops[i] is IReturnOperation { ReturnedValue: var said }
+                && (said == null ? !mustSayFalse : said.ConstantValue is { HasValue: true, Value: var v } ? !mustSayFalse || v is false : !mustSayFalse && Done(Unwrapped(said)))) break;
             if (ops[i] is IExpressionStatementOperation { Operation: ISimpleAssignmentOperation { Target: IParameterReferenceOperation { Parameter: { RefKind: RefKind.Out } to }, Value: var from } }
                 && Unwrapped(from) is IParameterReferenceOperation { Parameter: { RefKind: RefKind.None } p })
                 copies[to.Ordinal] = p.Ordinal;
@@ -1044,6 +1051,18 @@ public sealed partial class Body
         w.OnlyFilters.TryAdd(slot, 0);
         w.Rep.Count("loops over a walk whose body only calls a member that does nothing where it is not overridden: the walk passes over the other kinds");
         return $"Some(&g::dispatch::{w.Module(slot.ContainingType)}::{w.FnName(slot).ToUpperInvariant()}__ONLY)";
+    }
+
+    /// <summary>Whether a statement is left out whole as presentation: a call (awaited or not) of a member that is
+    /// presentation, on a value and with arguments that only read (`model.InvokeExecutionFinished();`).</summary>
+    private bool LeftOutWhole(IOperation stmt)
+    {
+        if (stmt is not IExpressionStatementOperation { Operation: var e }) return false;
+        if (e is IAwaitOperation aw) e = aw.Operation;
+        if (e is not IInvocationOperation inv) return false;
+        var m = (inv.TargetMethod.ReducedFrom ?? inv.TargetMethod).OriginalDefinition;
+        bool presentation = w.IsDropped(m.ContainingType) || World.IsSource(m.ContainingType) && w.IsDropMember(m);
+        return presentation && (inv.Instance == null || OnlyReads(inv.Instance)) && inv.Arguments.All(a => OnlyReads(a.Value));
     }
 
     /// <summary>Whether a loop over a dictionary's pairs changes a pair's value in place, itself or through a local
