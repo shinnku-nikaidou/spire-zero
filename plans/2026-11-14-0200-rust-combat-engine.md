@@ -1100,3 +1100,9 @@
     那一局是 c10-1-2／v10-1-2；跟切換本身無關。
   - 書（docs）裡說 SL 的搜尋靠存檔重播回到先前局面的段落，對 sim 的自我對弈已經不是現況（mod 的大腦仍是）；docs 照規矩要先問用戶
     由誰改，沒有動。
+- 21:00 （協調）**切換的複驗與 pool 煙霧測試**（f8114dbd，切換之後只有紀錄與冠軍檔變了；用戶這時已把 v10-1-2 + c10-1-2 升為冠軍）。乾淨建置上：
+  `run` 不給選項顯示「in the engine」、9 個計畫都匯入、重規劃 0；`run --check` 不給選項時拒絕並說要給 replay；`brain` 用 nosl.json 正常服務。
+  pool 上兩個步驟、都不指定戰鬥世界：`engine-switch-smoke`（六角色各一局 self-play 形狀，A10 v9g2-2 的檔次，訓練種子 1200029）與
+  `engine-switch-smoke-test`（測試形狀：DEFECT A0／A10 × 冠軍的一對與前一對 v10-0 + c10-0，promotion-1-200 的前 2 個種子）。
+  14 局全部「in the engine」、失敗 0、遊戲錯誤 0、重規劃 0、commit 都是 f8114dbd；每局 計畫數 = 匯入 + 根在選牌提示的計畫
+  （後者在 worker 裡穿過提示再匯入）。主機：hostc、cshinnku、ds6754、gcpsg、pushqkzh 都有。**生產與測試從此在引擎上跑。**
