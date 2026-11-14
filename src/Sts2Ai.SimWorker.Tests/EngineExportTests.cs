@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Runs.History;
 using Sts2Ai.GameBridge;
 
 namespace Sts2Ai.SimWorker.Tests;
@@ -134,10 +136,45 @@ public sealed class EngineExportTests : IDisposable
         string Pile(PileType type) => """{"class":"CardPile","CardPile":{"_cards":[],"type_":TYPE}}""".Replace("TYPE", ((int)type).ToString());
         Assert.Equal(
             """{"format":1,"game":"v-test","schema":"abc","sim":{"prompts":3},"roots":{"Hand":["card_pile",0],"Draw":["card_pile",1],"Again":["card_pile",0],"Text":["outside","System.String"]},"""
-            + $"\"arenas\":{{\"card_pile\":[{Pile(PileType.Hand)},{Pile(PileType.Draw)}]}},\"outside\":{{\"System.String\":1}}}}",
+            + $"\"arenas\":{{\"card_pile\":[{Pile(PileType.Hand)},{Pile(PileType.Draw)}]}},\"outside\":{{\"System.String from Text\":1}}}}",
             Encoding.UTF8.GetString(written.Bytes));
         Assert.Equal((2, 1), (written.Objects, written.Outside["System.String from Text"]));
         Assert.Empty(written.Freed);
+    }
+
+    /// <summary>A schema of the game's map point history entry with its event choices alone, each choice a struct of its
+    /// text's variables, whose values are references to any object.</summary>
+    private EngineSchema HistorySchema()
+    {
+        const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        string Others(Type type, string kept) => JsonSerializer.Serialize(type.GetFields(Declared).Select(f => f.Name).Where(f => f != kept));
+        string path = Path.Combine(_dir, "history.json");
+        File.WriteAllText(path, """
+            {"format":1,"game":"v-test","roots":[],"arenas":["player_map_point_history_entry"],
+             "classes":[
+              {"name":"PlayerMapPointHistoryEntry","cs":"MegaCrit.Sts2.Core.Runs.PlayerMapPointHistoryEntry","base":null,"arena":"player_map_point_history_entry","open":false,"abstract":false,"type_parameters":[],
+               "fields":[{"name":"event_choices","cs":"<EventChoices>k__BackingField","type":{"kind":"list","of":{"kind":"struct","name":"EventOptionHistoryEntry"}}}],
+               "dropped":ENTRY}],
+             "structs":[
+              {"name":"EventOptionHistoryEntry","cs":"MegaCrit.Sts2.Core.Runs.History.EventOptionHistoryEntry",
+               "fields":[{"name":"variables","cs":"<Variables>k__BackingField","type":{"kind":"dict","key":{"kind":"string"},"value":{"kind":"ref","class":"Object"}}}],
+               "dropped":CHOICE}],
+             "enums":[],"hash":"abc"}
+            """.Replace("ENTRY", Others(typeof(PlayerMapPointHistoryEntry), "<EventChoices>k__BackingField"))
+            .Replace("CHOICE", Others(typeof(EventOptionHistoryEntry), "<Variables>k__BackingField")));
+        return EngineSchema.Load(path);
+    }
+
+    [Fact]
+    public void AReferenceOutsideTheSchemaIsNamedByTheInnermostFieldThatHoldsIt()
+    {
+        // An event option's text keeps a card's name as a string among its variables, and the history copies them.
+        var entry = new PlayerMapPointHistoryEntry();
+        entry.EventChoices.Add(new EventOptionHistoryEntry { Variables = new() { ["Card"] = "STRIKE" } });
+        var written = new EngineExport(HistorySchema()).Write([("Entry", entry)], "v-test", new(0));
+        using var doc = JsonDocument.Parse(written.Bytes);
+        Assert.Equal("""{"System.String from EventOptionHistoryEntry.variables":1}""", doc.RootElement.GetProperty("outside").GetRawText());
+        Assert.Equal(1, written.Outside["System.String from EventOptionHistoryEntry.variables"]);
     }
 
     [Fact]

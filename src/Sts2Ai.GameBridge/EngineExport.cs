@@ -247,9 +247,11 @@ public sealed class EngineSchema
 /// the list of its subscribers as such delegates, in the order they are called, without those that are presentation.
 /// A reference is null or a pair: ["arena", index] for an object of the export; ["canon", "Class"] for a canonical
 /// model, which the engine has already and which is not written; ["outside", "CLR.Name"] for an object of a class the
-/// schema does not hold, whose state the engine therefore lacks. <c>outside</c> counts those references by class, and
-/// the engine takes in an export only where it is empty. <c>sim</c> is what the program around the game holds that the
-/// combat's later observations depend on, which is no state of the game's and so in no arena (<see cref="Around"/>).
+/// schema does not hold, whose state the engine therefore lacks. <c>outside</c> counts those references by the class
+/// and the field that holds the reference ("CLR.Name from Class.field"), and the engine takes in an export only where
+/// it is empty: a refusal names where each such reference comes from. <c>sim</c> is what the program around the game
+/// holds that the combat's later observations depend on, which is no state of the game's and so in no arena
+/// (<see cref="Around"/>).
 /// </summary>
 public sealed class EngineExport(EngineSchema schema)
 {
@@ -293,9 +295,8 @@ public sealed class EngineExport(EngineSchema schema)
         private readonly Queue<(object Object, EngineSchema.Class Class)> _toWrite = [];
         private readonly (ArrayBufferWriter<byte> Bytes, Utf8JsonWriter Json, int Count)?[] _arenas = new (ArrayBufferWriter<byte>, Utf8JsonWriter, int)?[schema.Arenas.Count];
         private readonly SortedDictionary<string, int> _outside = new(StringComparer.Ordinal);
-        private readonly SortedDictionary<string, int> _outsideFrom = new(StringComparer.Ordinal);
         private readonly SortedDictionary<string, int> _freed = new(StringComparer.Ordinal);
-        /// <summary>The field being written, for <see cref="_freed"/>.</summary>
+        /// <summary>The field being written, for <see cref="_outside"/> and <see cref="_freed"/>.</summary>
         private (string Owner, JsonEncodedText Name) _field;
 
         public Written Write(IEnumerable<(JsonEncodedText Name, EngineSchema.Shape Shape, object? Value)> roots, string game, Around around)
@@ -334,11 +335,11 @@ public sealed class EngineExport(EngineSchema schema)
             json.WriteEndObject();
 
             json.WriteStartObject("outside");
-            foreach (var (type, count) in _outside) json.WriteNumber(type, count);
+            foreach (var (from, count) in _outside) json.WriteNumber(from, count);
             json.WriteEndObject();
             json.WriteEndObject();
             json.Flush();
-            return new(bytes.WrittenSpan.ToArray(), _seen.Count, _outsideFrom, _freed);
+            return new(bytes.WrittenSpan.ToArray(), _seen.Count, _outside, _freed);
         }
 
         private (ArrayBufferWriter<byte> Bytes, Utf8JsonWriter Json, int Count) Arena(int index)
@@ -452,13 +453,17 @@ public sealed class EngineExport(EngineSchema schema)
                     break;
                 case EngineSchema.Kind.Struct:
                     if (shape.Clr != null) census?.Note(shape.Clr.Name, shape.Clr, value);
+                    // A count names the struct's own field, the innermost that holds what it counts.
+                    var holder = _field;
                     json.WriteStartObject();
                     foreach (var slot in shape.Fields!)
                     {
+                        _field = (shape.Clr!.Name, slot.Name);
                         json.WritePropertyName(slot.Name);
                         Value(json, slot.Shape, slot.Field.GetValue(value));
                     }
                     json.WriteEndObject();
+                    _field = holder;
                     break;
                 case EngineSchema.Kind.Sequence:
                     json.WriteStartArray();
@@ -540,8 +545,8 @@ public sealed class EngineExport(EngineSchema schema)
             if (cls == null)
             {
                 string name = type.FullName ?? type.Name;
-                _outside[name] = _outside.GetValueOrDefault(name) + 1;
-                _outsideFrom[$"{name} from {Field}"] = _outsideFrom.GetValueOrDefault($"{name} from {Field}") + 1;
+                string from = $"{name} from {Field}";
+                _outside[from] = _outside.GetValueOrDefault(from) + 1;
                 json.WriteStringValue("outside");
                 json.WriteStringValue(name);
             }
