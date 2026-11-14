@@ -16,9 +16,11 @@ namespace Sts2Ai.Harness;
 /// </summary>
 public sealed class WorkerPool : IDisposable
 {
-    /// <summary>How long a worker may take to boot or to answer one request. A request is one world's search, a few
-    /// seconds at most; this is for a worker that is stuck, not slow.</summary>
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(5);
+    /// <summary>How long a worker may take to boot or to answer one request. A request is one world's search, mostly
+    /// seconds; but deep in a long fight each restore replays the fight from its start, a turn with a cycle restores
+    /// many times over, and a busy host runs several times slower, so one request can take many minutes. This is for a
+    /// worker that is stuck, not slow: a slow run is left to finish.</summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromHours(1);
 
     private readonly ProcessStartInfo _start;
     private readonly TimeSpan _timeout;
