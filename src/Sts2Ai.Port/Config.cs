@@ -63,6 +63,14 @@ public sealed class Config
     /// order of their slots.</summary>
     public List<string> MemoGetters = [];
 
+    /// <summary>port.toml [only] pairs: two members of a class, as (Class, Open, Close), where a call of Close right after
+    /// a call of Open with the same value leaves the object as anything reads it.</summary>
+    public List<(string Class, string Open, string Close)> OnlyPairs = [];
+
+    /// <summary>port.toml [only] scratch: classes an object of which, made in a hook loop for one listener's call,
+    /// changes nothing outside itself by being made or by its own members, as Class.</summary>
+    public HashSet<string> OnlyScratch = [];
+
     /// <summary>The version of the game the tables are for.</summary>
     public string GameVersion = "";
     /// <summary>The name of the game's assembly, as a type of it is named from outside.</summary>
@@ -100,6 +108,14 @@ public sealed class Config
         foreach (var s in List(doc, "delegates", "transient")) c.TransientDelegates.Add(s);
         c.Memo.AddRange(List(doc, "memo", "walks"));
         c.MemoGetters.AddRange(List(doc, "memo", "getters"));
+        foreach (var s in List(doc, "only", "pairs"))
+        {
+            var dot = s.IndexOf('.');
+            var slash = s.IndexOf('/');
+            if (dot < 0 || slash < dot) throw new InvalidDataException($"{path}: [only] pairs: '{s}' is not Class.Open/Close");
+            c.OnlyPairs.Add((s[..dot], s[(dot + 1)..slash], s[(slash + 1)..]));
+        }
+        foreach (var s in List(doc, "only", "scratch")) c.OnlyScratch.Add(s);
         if (c.GameVersion.Length == 0) throw new InvalidDataException($"{path}: no [game] version");
         if (doc.TryGetValue("value", out var v) && v is TomlTable values)
             foreach (var kv in values) c.Values[kv.Key] = (string)kv.Value;

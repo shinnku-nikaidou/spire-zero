@@ -441,9 +441,20 @@ constant, false for a test, or a task that has run to its end: `item.TryModifySt
 sets `Combat::only` to the kinds that override the member right before it calls the walk. Every walk takes it first
 thing, so no walk below sees it; a walk hands on only values of those kinds (and null, which C# would call and throw
 on), passes it on to a walk it only forwards (`foreach (var x in inner) yield return x;`), and a kept walk goes through
-the positions of those kinds alone, found once for each kept list, before any test is asked. Sixty-seven members of
-the hooks: among them a card's energy cost (early and late), star cost and keywords, whether the combat may end, what
-comes after a card changes piles, an attack, block gained, energy reset, a power's amount changed.
+the positions of those kinds alone, found once for each kept list, before any test is asked.
+
+Two facts of the game's own classes, stated in port.toml `[only]`, let a loop's other statements go with the call for
+those kinds. A pair (`PlayerChoiceContext.PushModel/PopModel`) around the call, on an object the loop does not make and
+handed the loop's value: the second right after the first leaves the object as anything reads it (the model pushed is
+popped; a model stack made empty on the way reads as none, here and in the C#). An object made for the call alone
+(`HookPlayerChoiceContext`): `var context = new HookPlayerChoiceContext(item, ..); Task task = item.M(context, ..);
+await context.AssignTaskAndWaitForPauseOrCompletion(task); tasks.Add(context.WaitForCompletion());`, the object and the
+task used nowhere else and the list only added to, awaited all at once and cleared: made and asked its own members with
+a task run to its end, it changes nothing outside itself, and nothing keeps it. port checks the shape of each loop; the
+facts are the table's. A hundred and one members of the hooks: among them a card's energy cost (early and late), star
+cost and keywords, whether the combat may end, what comes after a card changes piles or is played or drawn, an
+attack, damage given and received, block gained, energy reset, a power's amount changed, and the turn's start and end
+for each side.
 
 **Random streams.** The game's `Rng` (a call counter over `MegaRandom`, xoshiro256\*\*) is part of the state like any
 other class. `rt::random` is the same generator written by hand and checked bit for bit against the C#.

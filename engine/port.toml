@@ -247,6 +247,19 @@ walks = ["CombatState.IterateHookListeners", "RunState.IterateHookListeners"]
 # asked several times by every getter of the card that looks at its combat.
 getters = ["CardModel.Pile"]
 
+[only]
+# A hook loop whose call does nothing for the kinds that do not override the member it calls is told the kinds that
+# do (DESIGN.md, "What a hook does nothing for"). Two facts of the game's own classes let the loop's other statements
+# go with the call for those kinds:
+# - pairs (Class.Open/Close): Close right after Open, handed the same value, leaves the object as anything reads it.
+#   PlayerChoiceContext's model stack: the value pushed is popped (a stack made empty on the way is read as none:
+#   only ModelStack tells them apart, and nothing calls it).
+# - scratch (Class): an object made in the loop for one listener's call alone, by being made and by its own members
+#   handed a task run to its end, changes nothing outside itself: HookPlayerChoiceContext's fields, its owner looked
+#   up, its own model stack; its waits (manual/hook_player_choice_context.rs) give back what the task gave.
+pairs = ["PlayerChoiceContext.PushModel/PopModel"]
+scratch = ["HookPlayerChoiceContext"]
+
 [caches]
 # Statics that only remember the result of a computation: never kept, computed at each use.
 members = [

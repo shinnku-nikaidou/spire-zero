@@ -999,13 +999,21 @@ public sealed partial class Body
         if (walk.Arguments.Any(a => !IsSimple(Unwrapped(a.Value)))) return null;
         // What is left of the body once the statements left out as presentation are gone.
         var kept = fe.Body is IBlockOperation block ? block.Operations.Where(s => !LeftOutWhole(s)).ToList() : [fe.Body];
-        if (kept.Count != 1) return null;
-        var body = kept[0];
+        // Around the call, a pair of members of an object the loop does not make, which leaves it as it was
+        // (port.toml [only] pairs): `choiceContext.PushModel(model); await model.M(choiceContext, ..); choiceContext.PopModel(model);`.
+        bool paired = kept.Count == 3 && Paired(kept[0], kept[2], local);
+        if (paired) kept = [kept[1]];
+        // An object made for the call alone (port.toml [only] scratch): `var context = new K(model, ..); Task task =
+        // model.M(context, ..); await context.A(task); tasks.Add(context.B());`.
+        IInvocationOperation? forScratch = kept.Count >= 2 ? ScratchCall(kept, local) : null;
+        if (forScratch == null && kept.Count != 1) return null;
+        var body = forScratch ?? kept[0];
         if (frames.Peek().Iterator && body is IReturnOperation { Kind: OperationKind.YieldReturn, ReturnedValue: { } y } && Unwrapped(y) is ILocalReferenceOperation { Local: var yl } && Eq.Equals(yl, local))
             return "__only";
         // The call alone (awaited or not), or `if (call) ..` where the member's own body says false.
         var (asked, mustSayFalse) = body switch
         {
+            IInvocationOperation made => (made, false),
             IExpressionStatementOperation { Operation: IInvocationOperation alone } => (alone, false),
             IExpressionStatementOperation { Operation: IAwaitOperation { Operation: var awaited } } when Unwrapped(awaited) is IInvocationOperation awaitedCall => (awaitedCall, false),
             IConditionalOperation { WhenFalse: null, Condition: var cond } when Unwrapped(cond) is IInvocationOperation tested => (tested, true),
@@ -1050,7 +1058,108 @@ public sealed partial class Body
         }
         w.OnlyFilters.TryAdd(slot, 0);
         w.Rep.Count("loops over a walk whose body only calls a member that does nothing where it is not overridden: the walk passes over the other kinds");
+        if (paired) w.Rep.Count("  of them with a pair of port.toml [only] pairs around the call");
+        if (forScratch != null) w.Rep.Count("  of them with an object of port.toml [only] scratch made for the call");
         return $"Some(&g::dispatch::{w.Module(slot.ContainingType)}::{w.FnName(slot).ToUpperInvariant()}__ONLY)";
+    }
+
+    private static ISymbol? Named(IOperation o) => Unwrapped(o) switch
+    {
+        ILocalReferenceOperation l => l.Local,
+        IParameterReferenceOperation p => p.Parameter,
+        _ => null,
+    };
+
+    private static string MemberName(IMethodSymbol m) => $"{m.OriginalDefinition.ContainingType.Name}.{m.Name}";
+
+    /// <summary>Whether two statements are calls of a pair of port.toml [only] pairs, the first before the call and the
+    /// second after it, on the same object (a local or parameter the loop does not make, which the call cannot change
+    /// to another), each handed the loop's value alone.</summary>
+    private bool Paired(IOperation first, IOperation last, ILocalSymbol local)
+    {
+        if (first is not IExpressionStatementOperation { Operation: IInvocationOperation { Instance: { } oa } open }
+            || last is not IExpressionStatementOperation { Operation: IInvocationOperation { Instance: { } ob } close }) return false;
+        var (o, c) = (open.TargetMethod.OriginalDefinition, close.TargetMethod.OriginalDefinition);
+        bool Below(INamedTypeSymbol? t, string name) { for (; t != null; t = t.BaseType) if (t.Name == name) return true; return false; }
+        if (!w.Cfg.OnlyPairs.Any(p => p.Open == o.Name && p.Close == c.Name && Below(o.ContainingType, p.Class) && Eq.Equals(o.ContainingType, c.ContainingType))) return false;
+        if (Named(oa) is not { } on || !Eq.Equals(on, Named(ob)) || Eq.Equals(on, local)) return false;
+        bool Item(IInvocationOperation i) => i.Arguments is [var x] && Named(x.Value) is ILocalSymbol l && Eq.Equals(l, local);
+        return Item(open) && Item(close);
+    }
+
+    /// <summary>The call of a loop body that makes an object of a port.toml [only] scratch class for it alone: the
+    /// object made into a local from values that are only read, then the call (its task into a local, or awaited, or
+    /// left), then only members of the object's class called on it (awaited, or what they give added to a list of
+    /// tasks that is only added to, awaited all at once and cleared), handed the task or simple values; the object and
+    /// the task used nowhere else. Null when the body is not that.</summary>
+    private IInvocationOperation? ScratchCall(List<IOperation> stmts, ILocalSymbol local)
+    {
+        static (ILocalSymbol, IOperation)? Declared(IOperation st) =>
+            st is IVariableDeclarationGroupOperation { Declarations: [{ Declarators: [var d] } decl] } && (d.Initializer?.Value ?? decl.Initializer?.Value) is { } v
+                ? (d.Symbol, v) : null;
+        static bool OnlyRead(IOperation op) => OnlyReads(op) && !op.DescendantsAndSelf().Any(d => d is IPropertyReferenceOperation pr && World.IsSource(pr.Property.ContainingType));
+        if (Declared(stmts[0]) is not { } first) return null;
+        var (made, init) = first;
+        if (Unwrapped(init) is not IObjectCreationOperation { Type: INamedTypeSymbol k } creation
+            || !w.Cfg.OnlyScratch.Contains(k.Name) || creation.Initializer != null || creation.Arguments.Any(a => !OnlyRead(a.Value))) return null;
+        IInvocationOperation? call = null;
+        ILocalSymbol? task = null;
+        if (Declared(stmts[1]) is { } second && Unwrapped(second.Item2) is IInvocationOperation ti) (call, task) = (ti, second.Item1);
+        else if (stmts[1] is IExpressionStatementOperation { Operation: var e1 } && Unwrapped(e1 is IAwaitOperation aw1 ? aw1.Operation : e1) is IInvocationOperation te) call = te;
+        if (call == null) return null;
+        var asked = new HashSet<IOperation>();
+        foreach (var st in stmts.Skip(2))
+        {
+            if (st is not IExpressionStatementOperation { Operation: var e }) return null;
+            if (e is IAwaitOperation aw) e = aw.Operation;
+            if (Unwrapped(e) is not IInvocationOperation own) return null;
+            if (own is { TargetMethod.Name: "Add", Instance: { } li, Arguments: [var added] } && !World.IsSource(own.TargetMethod.ContainingType))
+            {
+                if (Named(li) is not ILocalSymbol list || !TasksOnly(list) || Unwrapped(added.Value) is not IInvocationOperation inner) return null;
+                own = inner;
+            }
+            bool OfK(INamedTypeSymbol? c) { for (var x = k; x != null; x = x.BaseType) if (Eq.Equals(x.OriginalDefinition, c?.OriginalDefinition)) return true; return false; }
+            if (own.Instance is not { } oi || Named(oi) is not ILocalSymbol ol || !Eq.Equals(ol, made) || !OfK(own.TargetMethod.ContainingType)) return null;
+            if (own.Arguments.Any(a => !(task != null && Named(a.Value) is ILocalSymbol al && Eq.Equals(al, task)) && !IsSimple(Unwrapped(a.Value)))) return null;
+            asked.Add(own.Instance);
+            foreach (var a in own.Arguments) asked.Add(a.Value);
+        }
+        // The object and the task go nowhere else: the object only into the call and as the receiver above, the task only
+        // to the members above.
+        var into = call.Arguments.Select(a => a.Value).ToHashSet();
+        foreach (var r in stmts.SelectMany(st => st.Descendants()).OfType<ILocalReferenceOperation>())
+        {
+            if (Eq.Equals(r.Local, made) && !r.IsDeclaration && !into.Contains(OuterConversion(r)) && !asked.Contains(OuterConversion(r))) return null;
+            if (task != null && Eq.Equals(r.Local, task) && !r.IsDeclaration && !asked.Contains(OuterConversion(r))) return null;
+        }
+        return call;
+    }
+
+    private static IOperation OuterConversion(IOperation o)
+    {
+        while (o.Parent is IConversionOperation { IsTryCast: false } cv) o = cv;
+        return o;
+    }
+
+    /// <summary>Whether a local list of tasks is only added to, awaited all at once (`Task.WhenAll(list)`) and cleared,
+    /// in the method: a task run to its end, more or fewer, changes nothing then.</summary>
+    private bool TasksOnly(ILocalSymbol list)
+    {
+        if (bodyOp == null || list.Type is not INamedTypeSymbol { TypeArguments: [var item] } || item.ToDisplayString() != "System.Threading.Tasks.Task") return false;
+        foreach (var r in bodyOp.Descendants().OfType<ILocalReferenceOperation>().Where(r => Eq.Equals(r.Local, list)))
+        {
+            if (r.IsDeclaration) continue;
+            var at = OuterConversion(r);
+            bool ok = at.Parent switch
+            {
+                IInvocationOperation { TargetMethod.Name: "Add" or "Clear" } inv when inv.Instance == at && !World.IsSource(inv.TargetMethod.ContainingType) => true,
+                IArgumentOperation { Parent: IInvocationOperation { TargetMethod: { Name: "WhenAll", ContainingType: var tt } } } when tt.ToDisplayString() == "System.Threading.Tasks.Task" => true,
+                ISimpleAssignmentOperation { Target: var tg } when tg == at => false,
+                _ => false,
+            };
+            if (!ok) return false;
+        }
+        return true;
     }
 
     /// <summary>Whether a statement is left out whole as presentation: a call (awaited or not) of a member that is
