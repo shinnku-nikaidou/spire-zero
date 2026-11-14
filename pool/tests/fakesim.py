@@ -9,7 +9,9 @@ line worker.py looks for. A record says which build (REV), tag and inputs played
   --runs K     writes only the chunk's first K runs, then exits 1: a chunk with fewer runs than dealt
 
 The environment, set per worker: FAKESIM_HOLD=FILE, a run there starts only once FILE exists; FAKESIM_FAIL_TAG=T, a
-chunk of a job tagged T there writes no run and exits 1.
+chunk of a job tagged T there writes no run and exits 1; FAKESIM_FLAKY=DIR, the first attempt at each chunk there fails
+(DIR keeps which were tried), as FAKESIM_FLAKY_MODE says: exit (no run, exit 1, the default) or record (its runs written
+with outcome failed, exit 0), as a host whose memory flips bits fails a run that plays on when played again.
 """
 import argparse
 import json
@@ -42,6 +44,15 @@ def main():
             inputs = f.read().strip()
     except OSError:
         inputs = None
+    flaky, spoiled = os.environ.get("FAKESIM_FLAKY"), False
+    if flaky:
+        marker = os.path.join(flaky, str(args.start))
+        spoiled = not os.path.exists(marker)
+        if spoiled:
+            open(marker, "w").close()
+            if os.environ.get("FAKESIM_FLAKY_MODE", "exit") == "exit":
+                print(f"fakesim: flaky, the first attempt at {args.start} fails", flush=True)
+                sys.exit(1)
     hold = os.environ.get("FAKESIM_HOLD")
     with open(args.records, "w") as records, open(args.log, "w") as log:
         for k in range(args.n):
@@ -54,6 +65,8 @@ def main():
             index = args.start + k
             record = {"index": index, "seed": f"SEED{index}", "outcome": "won" if index % 3 == 0 else "lost",
                       "act": 1 + index % 3, "floor": 10 + index % 40, "rev": rev, "tag": args.tag, "inputs": inputs}
+            if spoiled:
+                record |= {"outcome": "failed", "failure": "fakesim: flaky, a spoiled run"}
             records.write(json.dumps(record, separators=(",", ":")) + "\n")
             records.flush()
             log.write(json.dumps({"index": index, "decisions": []}, separators=(",", ":")) + "\n")

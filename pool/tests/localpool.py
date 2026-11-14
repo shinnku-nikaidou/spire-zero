@@ -64,10 +64,12 @@ class Worker:
     waits (WORKER_PACE): at 0.02 it looks at the pool every 1.2 s, checks its threads file and its runs every 0.2 s,
     asks again 1.2 s after an empty answer, and its sender looks at an empty outbox every 0.1 s."""
 
-    def __init__(self, hub, name, threads, pace, env):
+    def __init__(self, hub, name, threads, pace, env, retry=None):
         self.name, self.pace = name, pace
         self.dir = hub.tmp / "hosts" / name / "sts2" / "pool"
         self.dir.mkdir(parents=True)
+        if retry is not None:
+            write_whole(self.dir / "retry", f"{retry}\n")
         config = {"dist": f"https://127.0.0.1:{hub.dist_port}", "key": hub.key, "cert": (hub.tmp / "cert.pem").read_text()}
         (self.dir / "config.json").write_text(json.dumps(config))
         self.log_path = self.dir / "worker.log"
@@ -272,8 +274,8 @@ class Hub:
         for job in jobs:
             shutil.rmtree(self.store / job)
 
-    def worker(self, name, threads, pace=0.02, env=None):
-        worker = Worker(self, name, threads, pace, env)
+    def worker(self, name, threads, pace=0.02, env=None, retry=None):
+        worker = Worker(self, name, threads, pace, env, retry)
         self.workers.append(worker)
         return worker
 

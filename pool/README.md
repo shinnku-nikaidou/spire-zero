@@ -124,6 +124,11 @@ again, or when its host has not been heard from for 15 min. A chunk taken back i
 - A thread asks the dealer (`/next`), plays the chunk with `sim-REV.sh run OPTIONS --start INDEX --n N --log --records`
   in the job's inputs, and leaves it in `~/sts2/pool/outbox/`; one sender thread PUTs the outbox to `dist.py` in order
   and tries again until the hub takes it.
+- **Played again on failure** (`~/sts2/pool/retry`, a number, none by default): for a machine whose memory flips bits.
+  A chunk that fails there (a run exit with fewer runs than dealt, or a record whose outcome is failed) is played
+  again up to that many times before it goes up; the same seed on the same machine gives the run the flip spoiled, and
+  a failure that comes back every time goes up as before. Each attempt played again leaves a line in the chunk's
+  `out-` and a `sum played again: N` line in its `tally-`.
 - **Builds and inputs on first need.** The first thread that needs a job's REV downloads `dist/sts2-REV.tar.zst`
   (`dist-admin.py bundle`: the build, and .NET and the game files a new machine lacks) and `dist/inputs-KEY.tar.zst`;
   the machine's other threads wait. `box.py run` puts both on the hub first.
@@ -140,7 +145,7 @@ A machine's layout:
 ├─ sim-REV.sh                 its launcher
 ├─ home/                      the redirected HOME
 ├─ inputs/KEY/                a job's inputs
-└─ pool/                      worker.py, config.json, threads, worker.pid, worker.log, outbox/, work/SHARD/
+└─ pool/                      worker.py, config.json, threads, retry, worker.pid, worker.log, outbox/, work/SHARD/
 ```
 
 ## Looking and collecting

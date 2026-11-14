@@ -20,6 +20,12 @@ with the runs that finished, maybe none. The hub's clock is the truth: every loo
 the offset with the shortest round trip of the last 10 is used for deadlines and end lines.
 
 --until-empty: ends once no thread got work for 10 min and the outbox is empty. --only KIND: only that kind of job.
+
+The retry file (DIR/retry, a number, default 0; read at each chunk's end) is how many times a failed chunk (a run exit
+with fewer runs than dealt, or a record whose outcome is failed) is played again here before it goes up: for a host
+whose memory flips bits, where the same seed played again gives the run the flip spoiled. A failure that comes back
+every time goes up as before. Each attempt played again leaves a line in the chunk's output and a "sum played again"
+line in its tally.
 """
 
 import argparse
@@ -223,8 +229,44 @@ def why_kill(i, job):
     return None
 
 
+def retries():
+    """How many times a failed chunk is played again here: the retry file's number, 0 without one."""
+    try:
+        return max(0, int((DIR / "retry").read_text().split()[0]))
+    except (OSError, ValueError, IndexError):
+        return 0
+
+
+def failure(count, why, work):
+    """Why a chunk that ran to its end failed, or None."""
+    if why.startswith("failed"):
+        return why
+    if why == "whole":
+        for line in (work / "rec.jsonl").read_text().splitlines()[:count]:
+            if '"outcome":"failed"' in line:
+                try:
+                    said = json.loads(line).get("failure") or ""
+                except ValueError:
+                    said = ""
+                return "a failed run: " + " ".join(said.split())[:200]
+    return None
+
+
 def play(i, shard, job, index, n, spec):
-    """One chunk: (runs finished, why it ended: whole, deadline, stopped, cut, or failed: ...), the work folder."""
+    """One chunk, played again on failure as the retry file says: (runs finished, why it ended: whole, deadline,
+    stopped, cut, or failed: ...), the work folder, why each attempt played again failed."""
+    again = []
+    while True:
+        count, why, work = play_once(i, shard, job, index, n, spec)
+        bad = failure(count, why, work)
+        if bad is None or len(again) >= retries():
+            return count, why, work, again
+        again.append(bad)
+        log(f"{shard}: {job} {index}: {bad}; played again ({len(again)})")
+
+
+def play_once(i, shard, job, index, n, spec):
+    """One attempt at a chunk: (runs finished, why it ended), the work folder."""
     sim, inputs = install(spec)
     work = DIR / "work" / shard
     shutil.rmtree(work, ignore_errors=True)
@@ -259,13 +301,15 @@ def play(i, shard, job, index, n, spec):
     return count, why, work
 
 
-def pack(shard, job, index, count, why, work):
+def pack(shard, job, index, count, why, work, again=()):
     """The chunk into the outbox as one tar, for the sender: its runs, the output with its end line, done- last."""
     stem = f"{shard}-{index}"
     stage = work / "pack"
     stage.mkdir()
     out, ended = work / "out.txt", true_now()
     with out.open("a") as f:
+        for k, bad in enumerate(again, 1):
+            f.write(f"box: {shard} {index} attempt {k} failed, played again: {bad}\n")
         f.write(f"box: {shard} {index} ended {ended:.3f} {why}\n")
     names, counts, tally = [], [], []
     if count:
@@ -281,6 +325,8 @@ def pack(shard, job, index, count, why, work):
     shutil.copy(out, stage / f"out-{stem}.txt")
     text = out.read_text(errors="replace")
     tally += [f"sum {line}" for line in text.splitlines() if line.startswith(SUMMARY)]
+    if again:
+        tally.append(f"sum played again: {len(again)}")
     tally.append(f"end {ended:.3f} {why}")
     for name in sorted(p.name for p in stage.iterdir()):
         lines = (stage / name).read_bytes().count(b"\n")
@@ -332,7 +378,7 @@ def thread(i):
             look()
             spec = state["look"]["jobs"][job]
             state["playing"][shard] = f"{job} {index}"
-            count, why, work = play(i, shard, job, index, n, spec)
+            count, why, work, again = play(i, shard, job, index, n, spec)
         except Exception as e:  # the job cannot be played here: give it back, wait, try again
             log(f"{shard}: {job} {index}: {e!r}")
             state["playing"].pop(shard, None)
@@ -352,7 +398,7 @@ def thread(i):
             log(f"{shard}: cut in {job} {index}, given back")
             shutil.rmtree(work, ignore_errors=True)
             continue
-        pack(shard, job, index, count, why, work)
+        pack(shard, job, index, count, why, work, again)
         with state_lock:
             state["played"] += count
         if why != "whole":

@@ -6,6 +6,7 @@ a throwaway store, with fakesim.py for the simulator (localpool.py sets them up)
 POOL_TEST_KEEP=1 keeps each test's temp folder (the store, the logs, the workers' folders) and prints where it is.
 """
 import shutil
+import subprocess
 import time
 import unittest
 
@@ -355,6 +356,62 @@ class FailingHost(PoolTest):
         self.assertEqual(hub.numbers(bad), {"queue": 6, "pos": 6, "front": 0, "back": 0, "runs": 4, "won": 1,
                                             "ends": {"failed": 2, "whole": 4}, "missing": []})
         self.assert_each_run_once(hub, good, range(6))
+
+
+class PlayedAgain(PoolTest):
+    """A host with a retry file plays a failed chunk again before it goes up (pushqkzh, whose memory flips bits)."""
+
+    def out(self, hub, job, index):
+        files = list((hub.store / job).glob(f"out-*-{index}.txt.zst"))
+        return subprocess.run(["zstd", "-dc", *map(str, files)], check=True, stdout=subprocess.PIPE, text=True).stdout
+
+    def tally(self, hub, job, index):
+        return "".join(p.read_text() for p in (hub.store / job).glob(f"tally-*-{index}.txt"))
+
+    def test_a_spoiled_attempt_is_played_again_and_only_the_good_run_goes_up(self):
+        for mode, why in (("exit", "failed: run exit 1 at index {}"), ("record", "a failed run: fakesim: flaky, a spoiled run")):
+            with self.subTest(mode=mode):
+                hub = self.pool()
+                job = f"silent/sl/selfplay/again/{mode}"
+                hub.launch(job, "again", chunks(0, 4), ["--tag", "again"])
+                flaky = hub.tmp / f"flaky-{mode}"
+                flaky.mkdir()
+                a = hub.worker("hostA", 1, env={"FAKESIM_FLAKY": str(flaky), "FAKESIM_FLAKY_MODE": mode}, retry=1)
+                hub.wait("every chunk on the hub", lambda: len(hub.done(job)) == 4 and not hub.held() and not a.outbox())
+                self.assert_each_run_once(hub, job, range(4))
+                self.assertEqual(hub.numbers(job)["ends"], {"whole": 4})
+                self.assertEqual(sorted(r["outcome"] for r in hub.records(job)), ["lost", "lost", "won", "won"])
+                for index in range(4):
+                    self.assertIn(f"attempt 1 failed, played again: {why.format(index)}", self.out(hub, job, index))
+                    self.assertIn("sum played again: 1\n", self.tally(hub, job, index))
+                    self.assertNotIn("attempt 2", self.out(hub, job, index))
+                self.assertIn(f"{job} 0: {why.format(0)}; played again (1)", a.log())
+                # the dealer heard of no failure
+                self.assertFalse((hub.store / job / "deal" / "refused").exists())
+                self.assertFalse((hub.store / job / "deal" / "fails").exists())
+
+    def test_a_failure_that_comes_back_goes_up_as_before(self):
+        hub = self.pool()
+        bad, good = "silent/sl/selfplay/again2/bad", "silent/sl/selfplay/again2/good"
+        hub.launch(bad, "again2", chunks(0, 6), ["--tag", "bad"])
+        hub.launch(good, "again2", chunks(0, 6), ["--tag", "good"])
+        a = hub.worker("hostA", 1, env={"FAKESIM_FAIL_TAG": "bad"}, retry=2)
+        hub.wait("hostA has played what it gets",
+                 lambda: len(hub.done(good)) == 6 and len(hub.done(bad)) == 2 and not hub.held() and not a.outbox())
+        # each failed chunk was played three times, then went up failed: the host is refused after two, as without retries
+        for index in (0, 1):
+            out = self.out(hub, bad, index)
+            self.assertIn("attempt 1 failed, played again: failed: run exit 1", out)
+            self.assertIn("attempt 2 failed, played again: failed: run exit 1", out)
+            self.assertIn(f"ended", out.splitlines()[-1])
+            self.assertIn("failed: run exit 1", out.splitlines()[-1])
+            self.assertIn("sum played again: 2\n", self.tally(hub, bad, index))
+        self.assertEqual(hub.numbers(bad)["ends"], {"failed": 2})
+        self.assertIn("2 chunks in a row ended with fewer runs than dealt",
+                      (hub.store / bad / "deal" / "refused" / "hostA").read_text())
+        # the good job's chunks were never played again
+        for index in range(6):
+            self.assertNotIn("played again", self.tally(hub, good, index))
 
 
 class DealerAlone(PoolTest):
