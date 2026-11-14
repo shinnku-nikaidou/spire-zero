@@ -1036,3 +1036,8 @@
   種子 1200000 六角色 A0／A10 兩個世界比對；在這之前**不能上生產**。
   - 每局牆鐘（pool，負載下）：重播平均 1,843 秒、引擎 66 秒（約 28 倍）；計畫的處理器時間 3,782 對 75 秒。本機量 12 局生產選項的
     整局（9377e9da、引擎世界）：記憶體峰值 1.2–1.6 GB、CPU 20–113 秒（含 4 個 worker）。
+- 19:36（engine-port）池試跑被拒的匯入（訓練種子 1200000，「System.String」）照 engine-bridge 的找法修了（1eac54cb）：歷史裡
+  事件選項的文字變數 EventOptionHistoryEntry.Variables 列為非狀態（schema 3d41153e → 2bebc33c）。port 的報告新增一節，列出
+  schema 中每個宣告型別可能裝「值」的欄位與處理方式：PowerModel._internalData 只裝物件（42 個 InitInternalData 本體都回傳類別
+  物件），其餘 5 個都已丟掉，沒有未處理的。DESIGN.md 的 `outside` 改為依類別與來源欄位計數。新 schema 下重錄 all、runs、
+  tooth、c1752 四組 dump，四項檢查全過（數字與換 schema 前相同）。
