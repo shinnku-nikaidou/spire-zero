@@ -23,13 +23,18 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     private readonly Dictionary<WorldSnapshot, Place> _snapshots = new(ReferenceEqualityComparer.Instance);
     private readonly RunView _run;
     private readonly long _weight;
+    private readonly RunChanges _changes;
     private Place _at;
+    /// <summary>The observation last made where the world stands now, and its text's hash; none once the world has moved.</summary>
+    private CombatObservation? _shown;
+    private ulong _shownHash;
 
-    private EngineWorld(WorldHandle world, RunView run, long weight)
+    private EngineWorld(WorldHandle world, RunView run, long weight, RunChanges changes)
     {
         _at = new(world);
         _run = run;
         _weight = weight;
+        _changes = changes;
     }
 
     /// <param name="export">The live combat as <c>EngineExport</c> wrote it.</param>
@@ -41,11 +46,11 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
         WorldHandle world;
         fixed (byte* json = export) world = Native.sz_world_import(json, (nuint)export.Length);
         if (world.IsInvalid) throw Native.Failed("sz_world_import");
-        return new(world.Weighing(export.Length), run, export.Length);
+        return new(world.Weighing(export.Length), run, export.Length, new());
     }
 
     /// <summary>An independent world standing where this one stands.</summary>
-    public EngineWorld Clone() => new(Copy(_at.Handle), _run, _weight);
+    public EngineWorld Clone() => new(Copy(_at.Handle), _run, _weight, _changes);
 
     private WorldHandle Copy(WorldHandle world)
     {
@@ -62,14 +67,34 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
         return Encoding.UTF8.GetString(Native.Take(buf));
     }
 
-    public CombatObservation Observe() => ProtocolJson.Deserialize<CombatObservation>(ObservationJson());
+    /// <summary>The observation read from the engine's text, whose hash is kept with it (<see cref="Hash"/>).</summary>
+    public CombatObservation Observe()
+    {
+        Native.Buf buf;
+        if (Native.sz_world_observe(_at.Handle, &buf) != 0) throw Native.Failed("sz_world_observe");
+        var text = Native.Take(buf);
+        _shownHash = ProtocolJson.HashOfJson(text);
+        return _shown = ProtocolJson.Deserialize<CombatObservation>(text);
+    }
 
-    /// <summary>The run given at the import with what the combat has changed of it since (<see cref="RunChange"/>).</summary>
+    /// <summary>The hash of the observation's text as the engine wrote it, which is the text
+    /// <see cref="ProtocolJson"/> writes of the observation: the same number without writing it again.</summary>
+    public ulong Hash(CombatObservation observation) =>
+        ReferenceEquals(observation, _shown) ? _shownHash : ProtocolJson.Hash(observation);
+
+    /// <summary>The engine's own key of the state the observation was made at, while the world still stands there.</summary>
+    public ulong StateKey(CombatObservation observation) =>
+        ReferenceEquals(observation, _shown) ? StateKey() : ProtocolJson.StateKey(observation);
+
+    /// <summary>The run given at the import with what the combat has changed of it since (<see cref="RunChange"/>).
+    /// The deck and the relics are read once for as long as the engine writes them the same, for all the worlds of
+    /// one import: the same lists come back, so a leaf that priced one run knows the next for the same but its HP
+    /// and potions.</summary>
     public RunView Run()
     {
         Native.Buf buf;
         if (Native.sz_world_run(_at.Handle, &buf) != 0) throw Native.Failed("sz_world_run");
-        return ProtocolJson.Deserialize<RunChange>(Encoding.UTF8.GetString(Native.Take(buf))).Over(_run);
+        return _changes.Over(_run, Native.Take(buf));
     }
 
     public IReadOnlyList<CombatAction> Legal()
@@ -97,6 +122,7 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
 
     public void Execute(CombatAction action)
     {
+        _shown = null;
         var text = Encoding.UTF8.GetBytes(action.ToString());
         if (_at.Held > 1)
         {
@@ -121,6 +147,7 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     public void Restore(WorldSnapshot snapshot)
     {
         var kept = Kept(snapshot);
+        _shown = null;
         if (kept == _at) return;
         kept.Held++;
         Leave(_at);

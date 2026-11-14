@@ -193,7 +193,9 @@ pub unsafe extern "C" fn sz_world_hidden_key(id: u64) -> u64 {
 pub unsafe extern "C" fn sz_world_state_key(id: u64) -> u64 {
     begin();
     let w = unsafe { world(id) };
-    key(w, w.round() as u64)
+    // What the observation shows: the encounter, the round and the HP.
+    let name = w.encounter.bytes().fold(0u64, |sum, b| sum.wrapping_mul(31).wrapping_add(b as u64));
+    key(w, name.wrapping_mul(1_000_003) ^ (w.round() * 1000 + w.hp()) as u64)
 }
 
 #[unsafe(no_mangle)]

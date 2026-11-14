@@ -37,6 +37,16 @@ public interface ICombatWorld
     /// <summary>Goes back to a snapshot taken from this same world.</summary>
     void Restore(WorldSnapshot snapshot);
     /// <summary>
+    /// The hash of an observation this world has just made, as a plan keeps it for each step
+    /// (<see cref="ProtocolJson.Hash{T}"/>). A world that wrote the observation as text has it from the text.
+    /// </summary>
+    ulong Hash(CombatObservation observation) => ProtocolJson.Hash(observation);
+    /// <summary>
+    /// The state as search tells states apart (<see cref="ProtocolJson.StateKey"/>) of an observation this world has
+    /// just made. A world that can tell its state apart without the observation's records does.
+    /// </summary>
+    ulong StateKey(CombatObservation observation) => ProtocolJson.StateKey(observation);
+    /// <summary>
     /// Told that a snapshot taken from this world will not be restored again, so the world lets go of what it kept
     /// for it: search says so when it leaves the state. A world whose snapshots hold nothing of its own (the steps
     /// to replay) has nothing to do.

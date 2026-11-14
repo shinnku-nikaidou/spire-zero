@@ -183,7 +183,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
     private void Play(CombatAction action, Line line)
     {
         _used++;
-        line.Hashes.Add(ProtocolJson.Hash(world.Observe()));
+        line.Hashes.Add(world.Hash(world.Observe()));
         world.Execute(action);
         line.Actions.Add(action);
     }
@@ -238,7 +238,7 @@ public sealed class LoopSearch(ICombatWorld world, int round, LoopSearch.EndOf e
         void Note(CombatStatus status, CombatObservation obs) => ends.Add(end(status, obs, line.Actions, line.Hashes));
         void Go(CombatObservation obs, List<LoopPoint> stack)
         {
-            if (!seen.Add((PimcBrain.StateKey(obs), world.HiddenKey()))) return;
+            if (!seen.Add((world.StateKey(obs), world.HiddenKey()))) return;
             var here = world.Snapshot();
             // A prompt stands in the middle of an action: it is no point a cycle comes back to.
             List<LoopPoint> path = obs.Prompt == null ? [.. stack, new(obs, line.Actions.Count, here)] : stack;

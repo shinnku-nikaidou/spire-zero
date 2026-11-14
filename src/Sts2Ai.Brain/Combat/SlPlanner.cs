@@ -54,7 +54,7 @@ public sealed class SlRoute(Budget budget)
 ///
 /// A beam over turns. Each state kept is searched to the end of its turn (<see cref="SearchTurn"/>): a depth-first
 /// search over the turn's actions, ending the turn an option at every step, one action of each that are the same and
-/// transpositions merged by the state as search tells it (<see cref="PimcBrain.StateKey"/>: the same cards in another
+/// transpositions merged by the state as search tells it (<see cref="ICombatWorld.StateKey"/>: the same cards in another
 /// order, or another copy of one, are one state) and the world's full hidden state (<see cref="ICombatWorld.HiddenKey"/>).
 /// Each distinct state where the turn ends, after the enemies' turn, is scored by the leaf (<see cref="ICombatLeaf"/>,
 /// which reads the observation alone); the best <see cref="Budget.Beam"/> of all the states' ends, distinct by key, are the next turn's states. A
@@ -252,6 +252,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private readonly HashSet<(ulong Obs, ulong Hidden)> _seen = [];
         private readonly HashSet<ulong> _keys = [];
         private readonly List<TurnEnd> _ends = [];
+        /// <summary>The lines the search has ended, in the order found, until the leaf is asked about them all.</summary>
+        private readonly List<Ended> _ended = [];
         private readonly List<CombatAction> _actions = [];
         private readonly List<ulong> _hashes = [];
         private readonly List<LoopPoint> _path = [];
@@ -267,6 +269,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             _round = obs.Round;
             _loops = new(world, _round, End);
             Visit(obs, nodes);
+            Value();
             foreach (var end in _loops.RunFound()) Add(end);
             foreach (var snapshot in _kept) world.Forget(snapshot);
             _cut |= _loops.Found;
@@ -291,8 +294,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         /// they are tried depth first, up to the limit of the share they are in.</param>
         private void Visit(CombatObservation obs, int? shareTo = null)
         {
-            ulong hash = ProtocolJson.Hash(obs);
-            if (!_seen.Add((PimcBrain.StateKey(obs), world.HiddenKey()))) return;
+            if (!_seen.Add((world.StateKey(obs), world.HiddenKey()))) return;
+            ulong hash = world.Hash(obs);
             var here = world.Snapshot();
             // A prompt stands in the middle of an action: a cycle is a move between states where the player can play.
             bool plays = obs.Prompt == null;
@@ -319,9 +322,9 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 _hashes.Add(hash);
                 var status = world.Status;
                 var after = world.Observe();
-                if (status != CombatStatus.InProgress) Add(End(status, after, _actions, _hashes));
+                if (status != CombatStatus.InProgress) Ends(status, after);
                 else if (after.Prompt != null) Visit(after, to);
-                else if (action.Kind == CombatActionKind.EndTurn || after.Round != _round) Add(End(status, after, _actions, _hashes));
+                else if (action.Kind == CombatActionKind.EndTurn || after.Round != _round) Ends(status, after);
                 else if (!_loops.Intercept(_path, after, _actions, _hashes)) Visit(after);
                 _actions.RemoveAt(_actions.Count - 1);
                 _hashes.RemoveAt(_hashes.Count - 1);
@@ -332,16 +335,47 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             else world.Forget(here);
         }
 
-        /// <summary>The turn ended here, or the combat did.</summary>
+        /// <summary>A line that ended the turn or the combat, as the world stood there, before the leaf has valued it.</summary>
+        private sealed record Ended(LeafState State, IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key)
+        {
+            public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, State.Status, outcome.Value, Key, State.History, outcome.Win, outcome.Hp);
+        }
+
+        /// <summary>The key of a state at the next turn's start, by which a turn's ends and the beam's states are told
+        /// apart; 0 once the combat is over.</summary>
+        private ulong KeyOf(CombatStatus status, CombatObservation obs) =>
+            status == CombatStatus.InProgress ? Mix(world.StateKey(obs), world.HiddenKey()) : 0;
+
+        /// <summary>The turn ended here, or the combat did: what the leaf is asked about, with the line that led here.</summary>
+        private Ended Reached(CombatStatus status, CombatObservation obs, IReadOnlyList<CombatAction> actions, IReadOnlyList<ulong> hashes, ulong key)
+        {
+            var record = new MoveRecord(history);
+            if (status == CombatStatus.InProgress) record.Witness(obs);
+            return new(new(status, obs, world.Run(), record.History), [.. actions], [.. hashes], key);
+        }
+
+        /// <summary>The search's line ended here. The search needs no end's value to go on, so the leaf is asked about
+        /// all of a turn's ends together (<see cref="Value"/>); a state another line already ended at is not asked about again.</summary>
+        private void Ends(CombatStatus status, CombatObservation obs)
+        {
+            ulong key = KeyOf(status, obs);
+            if (status == CombatStatus.InProgress && !_keys.Add(key)) return;
+            _ended.Add(Reached(status, obs, _actions, _hashes, key));
+        }
+
+        /// <summary>Asks the leaf about the ends the search found, in the order found.</summary>
+        private void Value()
+        {
+            var outcomes = leaf.Outcomes([.. _ended.Select(e => e.State)]);
+            for (int i = 0; i < _ended.Count; i++) _ends.Add(_ended[i].Valued(outcomes[i]));
+            _ended.Clear();
+        }
+
+        /// <summary>A line's end valued at once: the cycles' cash-outs compare the values as they go.</summary>
         private TurnEnd End(CombatStatus status, CombatObservation obs, IReadOnlyList<CombatAction> actions, IReadOnlyList<ulong> hashes)
         {
-            bool going = status == CombatStatus.InProgress;
-            var record = new MoveRecord(history);
-            if (going) record.Witness(obs);
-            var turns = record.History;
-            var outcome = leaf.Outcome(status, obs, world.Run(), turns);
-            ulong key = going ? Mix(PimcBrain.StateKey(obs), world.HiddenKey()) : 0;
-            return new([.. actions], [.. hashes], status, outcome.Value, key, turns, outcome.Win, outcome.Hp);
+            var ended = Reached(status, obs, actions, hashes, KeyOf(status, obs));
+            return ended.Valued(leaf.Outcome(status, obs, ended.State.Run, ended.State.History));
         }
 
         private void Add(TurnEnd end)

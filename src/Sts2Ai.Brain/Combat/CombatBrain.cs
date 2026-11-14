@@ -208,24 +208,8 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         return obs.Prompt is { } prompt ? PromptAnswers.Of(prompt, most, out cut) : Ordered(world.Legal(), obs);
     }
 
-    /// <summary>
-    /// A state as search tells states apart, with the world's hidden key beside it: the
-    /// observation with the hand, the discard and the exhaust pile each as a multiset of cards, with no uids, and the
-    /// potions as a multiset, so the same cards played in another order, or another copy of one, meet as one state. The
-    /// draw pile is one already; its order is in the hidden key. A prompt it waits on is part of it, its options with no
-    /// uids either.
-    /// </summary>
-    public static ulong StateKey(CombatObservation obs) => ProtocolJson.Hash(obs with
-    {
-        Hand = Cards(obs.Hand),
-        Discard = Cards(obs.Discard),
-        Exhaust = Cards(obs.Exhaust),
-        Potions = [.. obs.Potions.OrderBy(p => p == null).ThenBy(p => p, StringComparer.Ordinal)],
-        Prompt = obs.Prompt is { } prompt ? prompt with { Options = [.. prompt.Options.Select(c => c.Uid == null ? c : c with { Uid = null })] } : null,
-    });
-
-    private static List<CardView> Cards(IReadOnlyList<CardView> cards) =>
-        [.. cards.Select(c => c.Uid == null ? c : c with { Uid = null }).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)];
+    /// <summary>A state as search tells states apart (<see cref="ProtocolJson.StateKey"/>).</summary>
+    public static ulong StateKey(CombatObservation obs) => ProtocolJson.StateKey(obs);
 
     /// <param name="lines">The action's best line in each world.</param>
     private static Candidate Summarize(string action, IReadOnlyList<PlannedLine> lines)

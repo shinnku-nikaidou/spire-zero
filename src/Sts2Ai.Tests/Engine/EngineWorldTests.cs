@@ -78,7 +78,15 @@ public sealed class EngineWorldTests(FakeEngine engine)
 
         world.Execute(CombatAction.EndTurn);
         Assert.Equal((2, 69), (world.Observe().Round, world.Observe().Player.Hp));
-        Assert.Equal((1UL, 2UL), (world.HiddenKey(), world.StateKey()));
+        // The stand-in's keys: the steps taken, and what the observation shows (the encounter, the round, the HP).
+        Assert.Equal(1UL, world.HiddenKey());
+        using var same = World();
+        using var other = World("LONG");
+        Assert.NotEqual(world.StateKey(), same.StateKey());
+        same.Execute(CombatAction.EndTurn);
+        other.Execute(CombatAction.EndTurn);
+        Assert.Equal(world.StateKey(), same.StateKey());
+        Assert.NotEqual(world.StateKey(), other.StateKey());
         Assert.StartsWith("""{"encounter":"NIBBITS_WEAK","act":0,"ascension":0,"round":2,""", world.ObservationJson());
     }
 
@@ -90,6 +98,23 @@ public sealed class EngineWorldTests(FakeEngine engine)
         var run = world.Run();
         Assert.Equal((69, "STRIKE_SILENT", "RING_OF_THE_SNAKE"), (run.Hp, run.Deck.Single().Id, run.Relics.Single().Id));
         Assert.Equal(("HIVE", 20, 10, "QUEEN_BOSS"), (run.ActId, run.Floor, run.Ascension, run.Map.Boss));
+    }
+
+    [Fact]
+    public void TheRunsDeckAndRelicsAreTheSameListsWhileTheEngineWritesThemTheSame()
+    {
+        using var world = World();
+        var before = world.Run();
+        world.Execute(CombatAction.EndTurn);
+        var after = world.Run();
+        using var copy = world.Clone();
+
+        Assert.NotEqual(before.Hp, after.Hp);
+        Assert.Same(before.Deck, after.Deck);
+        Assert.Same(before.Relics, after.Relics);
+        Assert.Same(before.Deck, copy.Run().Deck);
+        // So two runs that differ in their HP alone are equal once the HP is set aside, with nothing written out.
+        Assert.Equal(before, after with { Hp = before.Hp, Potions = before.Potions });
     }
 
     [Theory]
@@ -123,6 +148,23 @@ public sealed class EngineWorldTests(FakeEngine engine)
         using var keyless = World("keyless");
         Assert.Equal("sz_world_hidden_key: the stand-in has no key for a combat called keyless", Assert.Throws<EngineException>(() => keyless.HiddenKey()).Message);
         Assert.Equal("sz_world_state_key: the stand-in has no key for a combat called keyless", Assert.Throws<EngineException>(() => keyless.StateKey()).Message);
+    }
+
+    [Fact]
+    public void TheHashAndTheStateKeyOfAnObservationComeFromTheEngineWhileTheWorldStandsThere()
+    {
+        using var world = World();
+        var shown = world.Observe();
+        // The stand-in writes its observation as ProtocolJson would, as the engine does: its text's hash is the observation's.
+        Assert.Equal(world.ObservationJson(), ProtocolJson.Serialize(shown));
+        Assert.Equal(ProtocolJson.Hash(shown), world.Hash(shown));
+        Assert.Equal(world.StateKey(), world.StateKey(shown));
+
+        // Once the world has moved, an older observation is hashed and keyed from its records.
+        world.Execute(CombatAction.EndTurn);
+        Assert.Equal(ProtocolJson.Hash(shown), world.Hash(shown));
+        Assert.Equal(ProtocolJson.StateKey(shown), world.StateKey(shown));
+        Assert.NotEqual(world.StateKey(), world.StateKey(shown));
     }
 
     [Fact]

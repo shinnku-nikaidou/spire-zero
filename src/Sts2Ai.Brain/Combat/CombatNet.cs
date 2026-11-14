@@ -80,14 +80,50 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return net;
     }
 
+    /// <summary>How many states the net is asked about in one evaluation (<see cref="Outcomes"/>).</summary>
+    public const int Batch = 16;
+
+    public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history) =>
+        Ended(status, run) ?? Priced(run, Graphs([CombatTokens.Of(obs, history, _file.Lags)])[0]);
+
+    /// <summary>
+    /// The states' outcomes with the net asked about <see cref="Batch"/> of them at a time, in their order: one
+    /// evaluation of a batch costs a few times one state's. A batch pads every state to its widest, so a state's
+    /// numbers can differ in their last bits from what it gets alone or in other company; the batches follow from
+    /// the states and their order only.
+    /// </summary>
+    public IReadOnlyList<LeafOutcome> Outcomes(IReadOnlyList<LeafState> states)
+    {
+        var outcomes = new LeafOutcome[states.Count];
+        var going = new List<int>();
+        for (int i = 0; i < states.Count; i++)
+        {
+            if (Ended(states[i].Status, states[i].Run) is { } ended) outcomes[i] = ended;
+            else going.Add(i);
+        }
+        for (int from = 0; from < going.Count; from += Batch)
+        {
+            var asked = going.GetRange(from, Math.Min(Batch, going.Count - from));
+            var outputs = Graphs([.. asked.Select(i => CombatTokens.Of(states[i].Obs, states[i].History, _file.Lags))]);
+            for (int k = 0; k < asked.Count; k++) outcomes[asked[k]] = Priced(states[asked[k]].Run, outputs[k]);
+        }
+        return outcomes;
+    }
+
+    /// <summary>A finished combat: nothing for a death, V of its run for a win; null while the combat goes on.</summary>
+    private LeafOutcome? Ended(CombatStatus status, RunView run) => status switch
+    {
+        CombatStatus.Lost => new(0, 0, 0),
+        CombatStatus.Won => new(Price(run, Key(run), run.Hp, run.Potions), 1, run.Hp),
+        _ => null,
+    };
+
     /// <summary>The value, the chance not to die (1 less the death class), and the HP held at a win: the HP share now
     /// less each win bucket's middle, weighted by the buckets.</summary>
-    public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history)
+    /// <param name="outputs">The graph's outputs for the state: the endings' chances, and the potions' chances of being gone.</param>
+    private LeafOutcome Priced(RunView run, float[][] outputs)
     {
-        if (status == CombatStatus.Lost) return new(0, 0, 0);
         ulong key = Key(run);
-        if (status == CombatStatus.Won) return new(Price(run, key, run.Hp, run.Potions), 1, run.Hp);
-        var outputs = Graph(obs, history);
         var (outcome, potionUsed) = (outputs[0], outputs[1]);
         var held = Enumerable.Range(0, run.Potions.Count).Where(s => run.Potions[s] != null).ToList();
         // Each held potion's chance of being kept after a win in each group of buckets.
@@ -121,8 +157,19 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return new(value, win, win > 0 ? Math.Clamp(left / win, 0, 1) * maxHp : 0);
     }
 
-    /// <summary>The run without its HP and potions, hashed: what the leaf's prices of one state share.</summary>
-    private static ulong Key(RunView run) => ProtocolJson.Hash(run with { Hp = 0, Potions = [] });
+    /// <summary>The run without its HP and potions, hashed: what the leaf's prices of one state share. A thread's
+    /// leaves mostly stand in one run that differs in nothing else, and a world that hands out the same deck and
+    /// relics for it lets that be seen without writing the run again.</summary>
+    private ulong Key(RunView run)
+    {
+        if (_keyed.Value is var (last, kept) && run with { Hp = last.Hp, Potions = last.Potions } == last) return kept;
+        ulong key = ProtocolJson.Hash(run with { Hp = 0, Potions = [] });
+        _keyed.Value = (run, key);
+        return key;
+    }
+
+    /// <summary>The run a thread last made a key of, and the key.</summary>
+    private readonly ThreadLocal<(RunView Run, ulong Key)?> _keyed = new();
 
     /// <summary>V of <paramref name="run"/> (whose <see cref="Key"/> is <paramref name="key"/>) at <paramref name="hp"/> with <paramref name="potions"/>.</summary>
     private double Price(RunView run, ulong key, int hp, IReadOnlyList<string?> potions)
@@ -133,13 +180,76 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         return _prices[at] = _value.Value(run with { Hp = hp, Potions = potions });
     }
 
-    public void Dispose() => _session.Dispose();
+    public void Dispose()
+    {
+        _session.Dispose();
+        _keyed.Dispose();
+    }
 
     /// <summary>The graph's outputs on a batch of one state.</summary>
-    private float[][] Graph(CombatObservation obs, IReadOnlyList<EnemyTurns> history)
+    private float[][] Graph(CombatObservation obs, IReadOnlyList<EnemyTurns> history) => Graphs([CombatTokens.Of(obs, history, _file.Lags)])[0];
+
+    /// <summary>The graph's outputs for each of the states, asked as one batch.</summary>
+    private float[][][] Graphs(IReadOnlyList<CombatTokens> states)
     {
-        using var results = _session.Run(Feed(CombatTokens.Of(obs, history, _file.Lags)));
-        return [.. results.Select(r => r.AsEnumerable<float>().ToArray())];
+        using var results = _session.Run(Stack([.. states.Select(Feed)]));
+        var outputs = results.Select(r => r.AsEnumerable<float>().ToArray()).ToList();
+        return [.. Enumerable.Range(0, states.Count).Select(b => outputs.Select(all =>
+        {
+            int width = all.Length / states.Count;
+            return all[(b * width)..((b + 1) * width)];
+        }).ToArray())];
+    }
+
+    /// <summary>
+    /// Several states' inputs as one batch: every input padded with zeros to its widest state in each dimension. Zero
+    /// is what the graph reads as nothing there (a mask of 0, a card in no pile), as in the trainer's batches.
+    /// </summary>
+    private static List<NamedOnnxValue> Stack(IReadOnlyList<List<NamedOnnxValue>> states)
+    {
+        if (states.Count == 1) return states[0];
+        var batch = new List<NamedOnnxValue>(states[0].Count);
+        for (int k = 0; k < states[0].Count; k++)
+        {
+            string name = states[0][k].Name;
+            batch.Add(states[0][k].Value switch
+            {
+                DenseTensor<float> => NamedOnnxValue.CreateFromTensor(name, Stacked<float>(states, k)),
+                DenseTensor<long> => NamedOnnxValue.CreateFromTensor(name, Stacked<long>(states, k)),
+                var other => throw new InvalidOperationException($"input {name} is a {other.GetType().Name}"),
+            });
+        }
+        return batch;
+    }
+
+    /// <summary>Input <paramref name="k"/> of each state, each a batch of one, as one tensor with a row a state.</summary>
+    private static DenseTensor<T> Stacked<T>(IReadOnlyList<List<NamedOnnxValue>> states, int k)
+    {
+        var parts = states.Select(inputs => (DenseTensor<T>)inputs[k].Value).ToList();
+        int rank = parts[0].Rank;
+        var dims = new int[rank];
+        dims[0] = parts.Count;
+        for (int d = 1; d < rank; d++)
+            foreach (var part in parts) dims[d] = Math.Max(dims[d], part.Dimensions[d]);
+        var batch = new DenseTensor<T>(dims);
+        var to = batch.Buffer.Span;
+        for (int b = 0; b < parts.Count; b++)
+        {
+            var from = parts[b].Buffer.Span;
+            for (int i = 0; i < from.Length; i++)
+            {
+                // The element's place in its state, dimension by dimension, is its place in the state's row of the batch.
+                int rest = i, at = b * batch.Strides[0];
+                for (int d = 1; d < rank; d++)
+                {
+                    int index = rest / parts[b].Strides[d];
+                    rest -= index * parts[b].Strides[d];
+                    at += index * batch.Strides[d];
+                }
+                to[at] = from[i];
+            }
+        }
+        return batch;
     }
 
     /// <summary>

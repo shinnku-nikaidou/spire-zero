@@ -14,7 +14,19 @@ public interface ICombatLeaf
 
     /// <summary>The value with how the combat is expected to end, from one evaluation: what the SL planner keeps for each line, to show.</summary>
     LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history);
+
+    /// <summary>
+    /// The outcomes of several states, in their order: the ends of one turn's search, which the SL planner asks about
+    /// together once the turn is searched. A leaf that reads a net evaluates them in batches, which is far cheaper a
+    /// state than one evaluation each; the batches depend on the states and their order alone, so the same search
+    /// gets the same values wherever it runs.
+    /// </summary>
+    IReadOnlyList<LeafOutcome> Outcomes(IReadOnlyList<LeafState> states) =>
+        [.. states.Select(s => Outcome(s.Status, s.Obs, s.Run, s.History))];
 }
+
+/// <summary>A state a leaf is asked about: what <see cref="ICombatLeaf.Outcome"/> takes.</summary>
+public readonly record struct LeafState(CombatStatus Status, CombatObservation Obs, RunView Run, IReadOnlyList<EnemyTurns> History);
 
 /// <summary>A leaf's value of a state, the chance to win the combat from it, and the HP held at the end of a win.</summary>
 public readonly record struct LeafOutcome(double Value, double Win, double Hp);

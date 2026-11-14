@@ -94,6 +94,10 @@ public sealed class PromptRoot(PromptRoot.Crossing crossing) : ICombatWorld, IDi
 
     public ulong HiddenKey() => _world?.HiddenKey() ?? _place.Step.HiddenKey;
 
+    public ulong Hash(CombatObservation observation) => _world?.Hash(observation) ?? ProtocolJson.Hash(observation);
+
+    public ulong StateKey(CombatObservation observation) => _world?.StateKey(observation) ?? ProtocolJson.StateKey(observation);
+
     public void Execute(CombatAction action)
     {
         if (_world != null)

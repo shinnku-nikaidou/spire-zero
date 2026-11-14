@@ -160,6 +160,43 @@ public class SlPlannerTests
         AssertReplays(plan);
     }
 
+    /// <summary>A leaf that tells how it was asked: one state at a time, or several together.</summary>
+    private sealed class Asked : ICombatLeaf
+    {
+        public int Alone { get; private set; }
+        public List<int> Together { get; } = [];
+
+        public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history)
+        {
+            Alone++;
+            return Leaf.Outcome(status, obs, run, history);
+        }
+
+        public IReadOnlyList<LeafOutcome> Outcomes(IReadOnlyList<LeafState> states)
+        {
+            Together.Add(states.Count);
+            return [.. states.Select(s => Leaf.Outcome(s.Status, s.Obs, s.Run, s.History))];
+        }
+    }
+
+    [Fact]
+    public void TheLeafIsAskedAboutATurnsEndsTogether()
+    {
+        var asked = new Asked();
+        var found = new SlPlanner(asked).SearchTurn(new Toy(), [], 100_000, int.MaxValue);
+
+        // One question a turn's search, about every end it found; no end is valued by itself.
+        Assert.Single(asked.Together);
+        Assert.True(asked.Together[0] >= found.Ends.Count);
+        Assert.Equal(0, asked.Alone);
+
+        // The plan is the one a leaf asked one state at a time gives.
+        var plan = new SlPlanner(new Asked()).Plan(new Toy(), new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        var plain = new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        Assert.Equal((plain.Value, plain.End, plain.Nodes, plain.Result.First), (plan.Value, plan.End, plan.Nodes, plan.Result.First));
+        Assert.Equal(plain.Result.Plan, plan.Result.Plan);
+    }
+
     [Fact]
     public void ThePlannerLetsGoOfEveryStateItLeaves()
     {

@@ -1,4 +1,5 @@
 using Sts2Ai.Brain;
+using Sts2Ai.Brain.Combat;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Tests.Brain;
@@ -58,6 +59,37 @@ public class CombatNetTests
         Assert.Contains(file.Tests, t => t.Obs.Player.Powers.Any(p => p.Detail != null) && t.Obs.Relics.Any(r => r.Spent == true));
         Assert.Contains(file.Tests, t => t.Obs.Enemies.Any(e => e.Powers.Any(p => p.Stolen != null)));
         Assert.Contains(file.Tests, t => t.Obs.Enemies.Any(e => e.Hp <= 0 && e.Intents?.Count > 0) && t.Obs.Player.Character == "IRONCLAD");
+    }
+
+    /// <summary>States of every width through several batches, finished combats among them: each is worth what it is
+    /// worth alone, to a float's precision, and the same states in the same order give the same numbers to the last bit.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AStateIsWorthInABatchWhatItIsWorthAlone(bool champion)
+    {
+        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(champion ? Fixtures.ChampionNet("combat-net") : Fixture));
+        using var net = CombatNet.Load(file, new Linear());
+        var states = new List<LeafState>();
+        for (int i = 0; i < 3 * CombatNet.Batch; i++)
+        {
+            var test = file.Tests[(i * 5 + i / 7) % file.Tests.Count];
+            states.Add(new(CombatStatus.InProgress, test.Obs, Fixtures.Around(test.Obs), test.History));
+            if (i % 5 == 0) states.Add(new(CombatStatus.Won, test.Obs, Fixtures.Around(test.Obs), test.History));
+            if (i % 7 == 0) states.Add(new(CombatStatus.Lost, test.Obs, Fixtures.Around(test.Obs), test.History));
+        }
+
+        var together = net.Outcomes(states);
+
+        Assert.Equal(states.Count, together.Count);
+        for (int i = 0; i < states.Count; i++)
+        {
+            var alone = net.Outcome(states[i].Status, states[i].Obs, states[i].Run, states[i].History);
+            Assert.InRange(together[i].Value - alone.Value, -1e-5, 1e-5);
+            Assert.InRange(together[i].Win - alone.Win, -1e-5, 1e-5);
+            Assert.InRange(together[i].Hp - alone.Hp, -1e-3, 1e-3);
+        }
+        Assert.Equal(together, net.Outcomes(states));
     }
 
     [Fact]
