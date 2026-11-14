@@ -10,6 +10,7 @@ import torch
 
 from combat import data
 from combat.net import won_group
+from common import unpack
 
 
 def ranks(x: torch.Tensor) -> torch.Tensor:
@@ -58,7 +59,7 @@ def potion_rates(samples):
     used, held = Counter(), Counter()
     for s in samples:
         if s["class"] > 0:
-            for p, u in zip(s["tokens"]["potions"], s["potion_used"], strict=True):
+            for p, u in zip(unpack(s["tokens"])["potions"], s["potion_used"], strict=True):
                 for key in (None, p, (p, s["room"])):
                     used[key] += u
                     held[key] += 1
@@ -116,7 +117,10 @@ def summary(model, part, part_batches, train) -> dict:
     died = torch.tensor([s["class"] == 0 for s in part], dtype=torch.float64)
     shares = torch.tensor([s["share"] for s in part]).double()
     rows_of = [
-        [(p, s["room"], c, u) for p, c, u in zip(s["tokens"]["potions"], chances[k], s["potion_used"], strict=True)]
+        [
+            (p, s["room"], c, u)
+            for p, c, u in zip(unpack(s["tokens"])["potions"], chances[k], s["potion_used"], strict=True)
+        ]
         if s["class"] > 0
         else []
         for k, s in enumerate(part)

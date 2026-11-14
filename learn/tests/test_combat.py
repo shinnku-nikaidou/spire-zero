@@ -139,7 +139,8 @@ def test_each_round_start_is_a_sample_with_the_history_before_it(tmp_path):
     samples, skipped = data.read(*common.lists(write_runs(tmp_path)), "SL", encoder())
     assert skipped == 0 and len(samples) == 30  # rounds 1, 2 and 3 of each run's combat
     first, third = samples[0], samples[2]
-    assert first["tokens"]["enemies"][0]["scalars"][4] == 0 and third["tokens"]["enemies"][0]["scalars"][4] == 0.2
+    enemy = [common.unpack(s["tokens"])["enemies"][0] for s in (first, third)]
+    assert enemy[0]["scalars"][4] == 0 and enemy[1]["scalars"][4] == 0.2
     assert first["class"] == 0 and samples[3]["class"] > 0 and samples[3]["potion_used"] == [1]
     assert first["potion_used"] == [0] and first["lost"] is None and samples[3]["lost"] == pytest.approx((59 - 40) / 70)
 

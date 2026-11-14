@@ -1,4 +1,4 @@
-"""What the scripts of learn/ share: logging, errors, reading JSON lines and list pairs.
+"""What the scripts of learn/ share: logging, errors, reading JSON lines and list pairs, packing a sample's parts.
 
 Logs go to stderr, so that a script's stdout carries only its result. A LearnError ends a script with its message and
 exit code 1; anything else is a bug and ends it with a traceback.
@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import zlib
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -62,6 +63,18 @@ def read_lines(paths: str, needle: str | None = None) -> Iterator[dict]:
                     yield json.loads(line)
                 except json.JSONDecodeError:
                     pass
+
+
+def pack(x) -> bytes:
+    """A sample's part as the trainers hold it: compressed JSON. As Python objects a combat round start's tokens were
+    17.5 KB and 258 objects, packed 0.8 KB, its whole sample then about 1.5 KB (2026-11-14, 100 runs of v9 g2); the
+    samples of a training stay in memory from the first epoch to the last. What is packed came from JSON (the encoder's
+    answer, a log's line), so unpack gives it back equal to the last bit (-0.0 too), as new objects each time."""
+    return zlib.compress(json.dumps(x, separators=(",", ":")).encode(), 1)
+
+
+def unpack(b: bytes):
+    return json.loads(zlib.decompress(b))
 
 
 def runs_by_log(logs: str, records: str) -> list[tuple[str, dict[str, dict]]]:

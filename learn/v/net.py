@@ -7,6 +7,7 @@ file.
 import torch
 from torch import nn
 
+from common import unpack
 from v import spec
 from v.data import AUX
 
@@ -21,15 +22,16 @@ def padded(rows, device):
 
 
 class Batch:
-    """Samples as tensors: the net's inputs (names: spec.INPUTS), the hazards' targets and the second head's, and the
-    weights."""
+    """Samples (their tokens packed, v/data.py) as tensors: the net's inputs (names: spec.INPUTS), the hazards' targets
+    and the second head's, and the weights."""
 
     def __init__(self, samples, index, mean, std, floors, device):
-        n, width = len(samples), max(1, max(len(s["tokens"]["cards"]) for s in samples))
-        m_n = max(1, max((len(c[2]) for s in samples for c in s["tokens"]["cards"]), default=0))
+        toks = [unpack(s["tokens"]) for s in samples]
+        n, width = len(samples), max(1, max(len(tok["cards"]) for tok in toks))
+        m_n = max(1, max((len(c[2]) for tok in toks for c in tok["cards"]), default=0))
         rows = {name: [] for name in ("cards", "ups", "card_mask", "mods", "mod_mask", "mod_amounts", "numbers")}
-        for s in samples:
-            deck, pad = s["tokens"]["cards"], width - len(s["tokens"]["cards"])
+        for tok in toks:
+            deck, pad = tok["cards"], width - len(tok["cards"])
             rows["cards"].append([index["cards"].get(c[0], 0) for c in deck] + [0] * pad)
             rows["ups"].append([float(c[1]) for c in deck] + [0.0] * pad)
             rows["card_mask"].append([1.0] * len(deck) + [0.0] * pad)
@@ -44,18 +46,18 @@ class Batch:
         }
         for t, bag_mask in spec.BAGS.items():
             feed[t], feed[bag_mask] = padded(
-                [[index[t].get(i, 0) for i in s["tokens"][t]] for s in samples],
+                [[index[t].get(i, 0) for i in tok[t]] for tok in toks],
                 device,
             )
         x = torch.tensor([s["state"] for s in samples], dtype=torch.float64)
         feed["state"] = ((x - mean) / std).float().to(device)
-        r_n = max(1, max(len(s["tokens"]["relics"]) for s in samples))
+        r_n = max(1, max(len(tok["relics"]) for tok in toks))
         relic_values, relic_status = torch.zeros(n, r_n, 3), torch.zeros(n, r_n, dtype=torch.long)
-        for b, s in enumerate(samples):
-            for k, (v, status) in enumerate(zip(s["tokens"]["relic_values"], s["tokens"]["relic_status"], strict=True)):
+        for b, tok in enumerate(toks):
+            for k, (v, status) in enumerate(zip(tok["relic_values"], tok["relic_status"], strict=True)):
                 relic_values[b, k], relic_status[b, k] = torch.tensor(v), index["relic_status"].get(status, 0)
         feed["relic_values"], feed["relic_status"] = relic_values.to(device), relic_status.to(device)
-        feed["held"], feed["held_mask"] = padded([[index["cards"].get(c, 0) for c in s["tokens"]["held"]] for s in samples], device)
+        feed["held"], feed["held_mask"] = padded([[index["cards"].get(c, 0) for c in tok["held"]] for tok in toks], device)
         self.feed = feed
 
         g = torch.arange(floors)

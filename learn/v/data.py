@@ -13,7 +13,7 @@ afterstate, are what RunNet feeds V in play.
 
 import json
 
-from common import HEAD, LearnError, runs_by_log
+from common import HEAD, LearnError, pack, runs_by_log
 from v import spec
 
 AUX = 6  # the next combats whose HP cost the second head learns
@@ -24,14 +24,15 @@ def held_out(run_id: str) -> bool:
 
 
 def sample(run: str, read: dict, floors: int, reached: int | None = None, kind: str = "censored") -> dict:
-    """A run as V reads it (`read`: its tokens and its numbers by name, the encoder's) as a sample: died on floor
-    reached, won, or lived through the floor before reached (censored); with no reach, it has no hazard label."""
+    """A run as V reads it (`read`: its tokens and its numbers by name, the encoder's) as a sample, its tokens packed
+    (common.pack): died on floor reached, won, or lived through the floor before reached (censored); with no reach, it
+    has no hazard label."""
     state = [float(read["state"][name]) for name in spec.STATE]
     start = min(max(int(read["state"]["floor"]), 0), floors - 1)
     end = start if reached is None else max(start, min(reached, floors - 1))
     return {
         "run": run,
-        "tokens": read["tokens"],
+        "tokens": pack(read["tokens"]),
         "state": state,
         "start": start,
         "end": end,
@@ -72,8 +73,9 @@ def read_runs(logs: str, records: str, floors: int, encoder) -> tuple[list[dict]
     """The logged decisions as samples, and the run records.
 
     A sample keeps its tokens and state, not its view: as Python objects a view is ~54 KB, ten times those (2026-10-30:
-    plan v6 generation 3's 2.16M decisions took ~117 GB a training, now 21 GB); a held-out decision keeps its view as
-    JSON, for the net file's test runs."""
+    plan v6 generation 3's 2.16M decisions took ~117 GB a training, now 21 GB); a held-out decision keeps its view,
+    packed, for the net file's test runs. As objects a sample was 14.8 KB, with its tokens packed 3.1 KB, half of that
+    the held-out views' JSON, now packed too (2026-11-14, 100 runs of v9 g2)."""
     samples, runs_seen = [], []
     for i, (log, runs) in enumerate(runs_by_log(logs, records)):
         runs = {k: r for k, r in runs.items() if not r.get("failure")}
@@ -87,7 +89,7 @@ def read_runs(logs: str, records: str, floors: int, encoder) -> tuple[list[dict]
             s = sample(run, read["run"], floors, r["floor"], kind)
             nxt = next_combats(r, int(read["run"]["state"]["floor"]))
             if held_out(run):
-                s["view_json"] = json.dumps(json.loads(line)["run_view"])
+                s["view"] = pack(json.loads(line)["run_view"])
             more = [sample(run, read["entered"], floors, r["floor"], kind)] if "entered" in read else []
             for x in [s, *more]:
                 samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt})

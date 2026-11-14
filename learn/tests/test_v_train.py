@@ -55,10 +55,10 @@ def test_each_decision_is_a_sample_of_where_its_run_ended_and_each_run_weighs_on
     assert first["next"] == [5 / 70, 5 / 70] and samples[2]["next"] == []  # the combats after floors 1 and 3
     assert math.isclose(sum(s["weight"] for s in samples), 10)
     assert {data.held_out(s["run"]) for s in samples} == {True, False}
-    # only the held-out samples keep their view, as JSON
-    assert all(("view_json" in s) == data.held_out(s["run"]) and "view" not in s for s in samples)
+    # only the held-out samples keep their view, packed as their tokens are
+    assert all(("view" in s) == data.held_out(s["run"]) for s in samples)
     held = next(s for s in samples if data.held_out(s["run"]))
-    assert json.loads(held["view_json"])["floor"] == held["state"][0]
+    assert common.unpack(held["view"])["floor"] == held["state"][0]
 
 
 def test_a_lost_runs_last_fight_with_no_end_costs_what_was_left():
@@ -85,18 +85,22 @@ def test_the_share_of_decisions_where_v_rates_a_potion_below_the_empty_slot():
     held = [data.sample("a", read_run(make_view(potions=p)), 8) for p in (["FIRE", None, None], ["FIRE", "FIRE", "SWIFT"], [None] * 3)]
 
     def dislikes(potion):
-        return lambda part: [-float(s["tokens"]["potions"].count(potion)) for s in part]
+        return lambda part: [-float(common.unpack(s["tokens"])["potions"].count(potion)) for s in part]
 
     # only the decisions that hold a potion are asked; one potion valued below the empty slot is enough
     assert potions.below_empty(dislikes("FIRE"), held) == {"decisions": 2, "share": 1.0}
     assert potions.below_empty(dislikes("SWIFT"), held) == {"decisions": 2, "share": 0.5}
-    assert potions.below_empty(lambda part: [float(len(s["tokens"]["potions"])) for s in part], held)["share"] == 0
+
+    def more_is_better(part):
+        return [float(len(common.unpack(s["tokens"])["potions"])) for s in part]
+
+    assert potions.below_empty(more_is_better, held)["share"] == 0
     assert potions.below_empty(dislikes("FIRE"), held[2:]) == {"decisions": 0, "share": None}
 
 
 def held_out_sample(view):
     """A held-out decision that died on floor 9 of 16, with the view the net file keeps for its tests."""
-    return data.sample("a", read_run(view), 16, 9, "died") | {"view_json": json.dumps(view)}
+    return data.sample("a", read_run(view), 16, 9, "died") | {"view": common.pack(view)}
 
 
 def test_the_onnx_graph_gives_the_test_runs_their_chance_to_win_as_torch_gave_it():
@@ -191,7 +195,7 @@ def test_a_map_move_gives_a_sample_entering_the_point(tmp_path):
         with open(log, "w") as f:
             f.writelines(json.dumps(r, separators=(",", ":")) + "\n" for r in rows)
     samples, _ = data.read_runs(*common.lists(lists), 64, encoder())
-    assert len(samples) == 60 and samples[1]["tokens"]["map"][0] == "Elite+0:quest"
+    assert len(samples) == 60 and common.unpack(samples[1]["tokens"])["map"][0] == "Elite+0:quest"
     assert math.isclose(sum(s["weight"] for s in samples), 10)
     assert "Elite+0:quest" in game_ids.macro_tables()["map"]
 

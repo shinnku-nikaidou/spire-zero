@@ -9,6 +9,7 @@ from torch import nn
 
 from combat import spec
 from combat.data import BUCKETS, LOSS_MIN, POTION_GROUPS, WIDTH, potion_group
+from common import unpack
 
 
 def padded(rows, device):
@@ -37,10 +38,10 @@ def power_tensors(rows, index):
 
 
 class Batch:
-    """Samples as tensors, in the order of spec.INPUTS, and their targets."""
+    """Samples (their tokens packed, combat/data.py) as tensors, in the order of spec.INPUTS, and their targets."""
 
     def __init__(self, samples, index, device):
-        n, toks = len(samples), [s["tokens"] for s in samples]
+        n, toks = len(samples), [unpack(s["tokens"]) for s in samples]
         width = max(1, max(len(t["cards"]) for t in toks))
         cards, ups = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width)
         piles = torch.zeros(n, width, len(spec.PILES))

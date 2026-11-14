@@ -13,7 +13,7 @@ import onnx
 import torch
 from onnx import numpy_helper
 
-from common import LearnError
+from common import LearnError, unpack
 from v import spec
 from v.net import Batch, Hazards, values
 
@@ -47,7 +47,7 @@ def net_file(name, floors, tables, mean, std, model, held, report, seed, trained
     value. `trained` says what made the net (common.trained)."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
-    held = [s for s in held if "view_json" in s]
+    held = [s for s in held if "view" in s]
     picks = random.Random(seed).sample(held, min(8, len(held)))
     b = Batch(picks, index, mean, std, floors, "cpu")
     with torch.no_grad():
@@ -60,7 +60,7 @@ def net_file(name, floors, tables, mean, std, model, held, report, seed, trained
         "trained": trained,
         "fit": report,
         "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
-        "tests": [{"run": json.loads(s["view_json"]), "value": float(v)} for s, v in zip(picks, valued, strict=True)],
+        "tests": [{"run": unpack(s["view"]), "value": float(v)} for s, v in zip(picks, valued, strict=True)],
     }
 
 

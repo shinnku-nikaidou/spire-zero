@@ -18,7 +18,7 @@ import torch
 import typer
 
 import common
-from common import HEAD, LearnError
+from common import HEAD, LearnError, pack, unpack
 from v import data, export
 from v.net import Batch, Net, values
 
@@ -33,14 +33,15 @@ def below_empty(valued, samples: list[dict]) -> dict:
     """Of the samples that hold a potion (DECISIONS of them at most), the share V values higher without one of their
     potions; `valued` gives V's value of each sample of a list. A potion is taken out of the tokens, which is all its
     discard changes in what V reads: the belt's size stays."""
-    holding = [s for s in samples if s["tokens"]["potions"]]
+    holding = [s for s in samples if unpack(s["tokens"])["potions"]]
     asked = holding[:: max(1, -(-len(holding) // DECISIONS))]
     without = []
     for i, s in enumerate(asked):
-        for potion in sorted(set(s["tokens"]["potions"])):
-            left = list(s["tokens"]["potions"])
+        tokens = unpack(s["tokens"])
+        for potion in sorted(set(tokens["potions"])):
+            left = list(tokens["potions"])
             left.remove(potion)
-            without.append((i, s | {"tokens": s["tokens"] | {"potions": left}}))
+            without.append((i, s | {"tokens": pack(tokens | {"potions": left})}))
     kept = valued(asked)
     thrown = {i for (i, _), v in zip(without, valued([s for _, s in without]), strict=True) if v > kept[i]}
     return {"decisions": len(asked), "share": len(thrown) / len(asked) if asked else None}

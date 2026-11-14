@@ -16,7 +16,7 @@ import json
 import zlib
 from collections import Counter
 
-from common import HEAD, LearnError, runs_by_log
+from common import HEAD, LearnError, pack, runs_by_log
 
 BUCKETS = 50  # buckets of the HP share lost from the state to a win
 LOSS_MIN = -0.25  # the lowest bucket's bottom: a share healed
@@ -102,13 +102,14 @@ def ending(obs: dict, end: dict) -> int:
 
 
 def sample(run: str, start: dict, end: dict, after: dict | None) -> dict:
-    """A round's start (its observation, history and tokens); only a few held-out ones keep the observation and the
-    history they were made from, which CombatNet reads again when it loads the net file."""
+    """A round's start (its observation, history and tokens, the tokens packed: common.pack); only a few held-out ones
+    keep the observation and the history they were made from, which CombatNet reads again when it loads the net
+    file."""
     obs = start["obs"]
     now = share(obs["player"]["hp"], obs["player"]["max_hp"])
     s = {
         "run": run,
-        "tokens": start["tokens"],
+        "tokens": pack(start["tokens"]),
         "class": ending(obs, end),
         "potion_used": [0 for p in obs["potions"] if p is not None] if end["died"] else potions_used(obs, after),
         "lost": None if end["died"] else now - share(end["hp"], end["max_hp"]),

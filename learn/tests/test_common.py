@@ -1,7 +1,18 @@
+import json
+import math
+
 import pytest
 
 import common
 from common import LearnError, read_lines, runs_by_log, train_lists
+
+
+def test_a_packed_value_unpacks_equal_to_the_last_bit():
+    x = {"cards": [["STRIKE", 1, 0, [], 1.0, [2.5], -0.0, [0.1, 1e-300, 3]]], "big": 2**70, "s": "é\u2603", "none": None}
+    back = common.unpack(common.pack(x))
+    assert back == x and json.dumps(back) == json.dumps(x)  # the types too: 1 and 1.0 and -0.0 kept apart
+    assert math.copysign(1.0, back["cards"][0][6]) == -1.0 and back["cards"][0][7][1] == 1e-300
+    assert back is not x and common.unpack(common.pack(x)) is not back  # new objects each time
 
 
 def test_read_lines_skips_blank_and_partial_lines(tmp_path):

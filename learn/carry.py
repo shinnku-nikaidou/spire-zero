@@ -117,6 +117,7 @@ def combat(
         {
             **t,
             **a,
+            "tokens": common.pack(a["tokens"]),
             "class": 0,
             "potion_used": [],
             "share": t["obs"]["player"]["hp"] / max(1, t["obs"]["player"]["max_hp"]),
@@ -168,9 +169,9 @@ def v(
     # The targets are not read here: a batch is only the tests' inputs.
     samples = [
         {
-            "tokens": a["run"]["tokens"],
+            "tokens": common.pack(a["run"]["tokens"]),
             "state": [float(a["run"]["state"][n]) for n in v_spec.STATE],
-            "view_json": json.dumps(t["run"]),
+            "view": common.pack(t["run"]),
             "start": min(max(int(a["run"]["state"]["floor"]), 0), old["floors"] - 1),
             "end": old["floors"] - 1,
             "kind": "won",
