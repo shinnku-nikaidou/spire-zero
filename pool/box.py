@@ -25,7 +25,7 @@ of threads, its only knob; the hub (deal.py) deals the chunks of every open job 
   box.py launch FILE REV [--smoke]   opens the dataset file at REV as one self-play step NAME, every job as box.py run
     would, with the champion file's options at REV under the file's own; then puts the file, its first line rev = REV,
     in each character's data/CHAR/sl/selfplay/NAME/dataset.toml, here and on the hub. --smoke instead plays one run per
-    character, row and ascension (the first tier's) from +19,000 of each character's seeds, as forks jobs of step
+    character, row and ascension (the first tier's) from +99,000 of each character's seeds, as forks jobs of step
     NAME-smoke with a 1-hour deadline.
   box.py deadline NAME UNTIL   moves step NAME's deadline, also after it passed while its jobs are not fetched.
   box.py priority NAME N       changes step NAME's priority.
@@ -488,8 +488,8 @@ def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options:
 
 # --- datasets: a self-play step written as one TOML file (eval/datasets/NAME.toml)
 
-CHARACTERS = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]  # the ledger's order: character k from seeds + 20000 k
-PER_CHARACTER, SMOKE_AT = 20000, 19000  # a character's seeds in a block; the last 1,000 are the smoke's
+CHARACTERS = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]  # the ledger's order: character k from seeds + 100000 k
+PER_CHARACTER, SMOKE_AT = 100000, 99000  # a character's block of seeds; the last 1,000 are the smoke's
 EFFORTS = ("low", "medium", "high", "max")
 ROOMS = {"monster": "effort", "elite": "elite-effort", "boss": "boss-effort"}  # a game's effort by room, as run's options
 DATASET_KEYS = {"rev", "name", "deadline", "priority", "seeds", "characters", "champion", "workers", "explore", "games", "runs"}

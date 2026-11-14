@@ -68,10 +68,10 @@ pool/box.py launch eval/datasets/NAME.toml REV          # the step NAME
 ```
 
 `launch` reads the file at REV and turns each of its jobs into what `box.py run` opens, so the hub deals exactly what
-the file says. Character k of SILENT, IRONCLAD, DEFECT, REGENT, NECROBINDER, FOOL plays seeds from `seeds + 20000 k` (so a
-file with the FOOL reaches 20,000 seeds into the ledger's next block of 100,000, and takes both), its rows
+the file says. Character k of SILENT, IRONCLAD, DEFECT, REGENT, NECROBINDER, FOOL plays seeds from `seeds + 100000 k`, a
+ledger block of 100,000 each (so a file takes six blocks), its rows
 back to back in the file's order, each row's ascensions in order, each ascension's runs split evenly over the tiers; the
-last 1,000 of a character's 20,000 are the smoke's. A job is `CHAR/sl/selfplay/NAME/aNN-GAME-eEEE[-tTTT]` (ε and τ in
+last 1,000 of a character's block are the smoke's, so a character plays at most 99,000 runs. A job is `CHAR/sl/selfplay/NAME/aNN-GAME-eEEE[-tTTT]` (ε and τ in
 hundredths). The file then lies beside the data, its first line `rev = "REV"`, as `CHAR/sl/selfplay/NAME/dataset.toml`
 in each character's folder, here and on the hub.
 
