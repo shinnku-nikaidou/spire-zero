@@ -244,6 +244,66 @@ fn spin() {
     );
 }
 
+/// What an observation's time goes to, each part on fresh copies of the combat: the views as a whole (what the player
+/// sees, computed from the game's objects), of them the cards of the four piles alone, and writing the views as JSON.
+fn observation_parts(live: &Live, series: &mut BTreeMap<&'static str, Series>) {
+    use sts2ai_engine::r#gen as g;
+    use sts2ai_engine::{observe, protocol};
+    let who = |c: &mut sts2ai_engine::rt::Combat| {
+        let manager = g::combat::combat_manager::instance(c);
+        let st = g::combat::combat_manager::debug_only_get_state(manager, c);
+        (st, g::context::local_context::get_me__i_combat_state(st, c))
+    };
+    let fresh: Vec<Live> = (0..60).map(|_| live.clone()).collect();
+    let mut next = fresh.into_iter();
+    let mut views = None;
+    series
+        .entry("observe: the views")
+        .or_default()
+        .add(micros(4, || {
+            let mut copy = next.next().unwrap();
+            let c = copy.combat();
+            let (st, player) = who(c);
+            views = Some(observe::combat(st, player, c));
+        }));
+    series
+        .entry("observe: of them the cards")
+        .or_default()
+        .add(micros(4, || {
+            let mut copy = next.next().unwrap();
+            let c = copy.combat();
+            let (_, player) = who(c);
+            let pcs = g::entities_players::player::player_combat_state(player, c);
+            let piles = [
+                g::entities_players::player_combat_state::hand(pcs, c),
+                g::entities_players::player_combat_state::draw_pile(pcs, c),
+                g::entities_players::player_combat_state::discard_pile(pcs, c),
+                g::entities_players::player_combat_state::exhaust_pile(pcs, c),
+            ];
+            for (at, pile) in piles.into_iter().enumerate() {
+                for card in g::entities_cards::card_pile::cards(pile, c) {
+                    std::hint::black_box(observe::card(card, at == 0, c));
+                }
+            }
+        }));
+    let views = views.unwrap();
+    series
+        .entry("observe: the cards, how many")
+        .or_default()
+        .add(
+            (views.hand.len() + views.draw.len() + views.discard.len() + views.exhaust.len())
+                as f64,
+        );
+    series
+        .entry("observe: JSON")
+        .or_default()
+        .add(micros(20, || {
+            let mut json = Vec::with_capacity(4096);
+            protocol::observation_json(&views, &mut json);
+            std::hint::black_box(json);
+        }));
+}
+
 #[test]
 #[ignore = "a measurement, run by hand"]
 fn speed() {
@@ -325,6 +385,7 @@ fn speed() {
         // Arena by arena: what a copy of each costs, and whether the rest of the combat changes it.
         let text = String::from_utf8(export).unwrap();
         let mut live = Live::import(&text).unwrap();
+        observation_parts(&live, &mut series);
         let mut before: BTreeMap<&'static str, String> = BTreeMap::new();
         inline = std::mem::size_of_val(live.combat());
         live.combat().a.each(&mut |name, arena| {
@@ -385,6 +446,10 @@ fn speed() {
         ("apply: use a potion", "us"),
         ("apply: end_turn", "us"),
         ("observe", "us"),
+        ("observe: the views", "us"),
+        ("observe: of them the cards", "us"),
+        ("observe: the cards, how many", ""),
+        ("observe: JSON", "us"),
         ("observation", "KB"),
         ("legal", "us"),
         ("state key", "us"),
