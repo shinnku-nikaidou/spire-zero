@@ -130,6 +130,22 @@ public sealed class EnginePlannerTests(FakeEngine engine)
     }
 
     [Fact]
+    public void AnAnswersEngineWorldIsFreedOnceTheSearchHasLeftIt()
+    {
+        long before = engine.Worlds();
+        var many = Asked with { Options = [.. Enumerable.Range(0, 12).Select(i => new CardView { Id = $"C{i}" })] };
+        var crossing = new PromptRoot.Crossing(paths => [.. paths.Select(path => path.Count == 0
+            ? new PromptStep(CombatStatus.InProgress, Fixtures.Slugs() with { Prompt = many }, Around, HiddenKey: 5)
+            : new PromptStep(CombatStatus.InProgress, Fixtures.Slugs(), Around, Export: Convert.ToBase64String(Encoding.UTF8.GetBytes("LONG"))))]);
+        using var world = new PromptRoot(crossing);
+        var found = new SlPlanner(new ToyLeaf()).SearchTurn(world, [], 200, 4);
+        Assert.Equal(13, crossing.Crossed);
+        Assert.NotEmpty(found.Ends);
+        // Every answer was searched, and only the world where the search stopped is left.
+        Assert.Equal(before + 1, engine.Worlds());
+    }
+
+    [Fact]
     public void APromptsAnswersAreCrossedAFewAtATime()
     {
         var batches = new List<int>();

@@ -74,70 +74,100 @@ public sealed class PromptRoot(PromptRoot.Crossing crossing) : ICombatWorld, IDi
         public EngineWorld? World() => _export == null ? null : EngineWorld.Import(_export, Step.Run);
     }
 
+    /// <summary>An engine world this one has stood in, and how many stand on it: this world while it is there, and
+    /// every snapshot taken there that is not forgotten.</summary>
+    private sealed class Held(EngineWorld world)
+    {
+        public readonly EngineWorld World = world;
+        public int Count = 1;
+    }
+
     /// <summary>A point of this world: the answers given, and in the engine's part the engine's own snapshot.</summary>
-    private sealed record Saved(IReadOnlyList<CombatAction> Path, Place Place, EngineWorld? World, WorldSnapshot? Inner);
+    private sealed record Saved(IReadOnlyList<CombatAction> Path, Place Place, Held? At, WorldSnapshot? Inner);
 
     private readonly ConditionalWeakTable<WorldSnapshot, Saved> _snapshots = [];
-    /// <summary>Every engine world this one has stood in: a snapshot may bring any of them back.</summary>
-    private readonly List<EngineWorld> _made = [];
+    /// <summary>The engine worlds something still stands on, freed at the end (a snapshot never forgotten).</summary>
+    private readonly HashSet<Held> _held = [];
     private IReadOnlyList<CombatAction> _path = [];
     private Place _place = crossing.At([]);
-    private EngineWorld? _world;
+    private Held? _at;
 
-    public CombatObservation Observe() => _world?.Observe() ?? _place.Step.Observation;
+    private EngineWorld? World => _at?.World;
 
-    public RunView Run() => _world?.Run() ?? _place.Step.Run;
+    public CombatObservation Observe() => World?.Observe() ?? _place.Step.Observation;
 
-    public IReadOnlyList<CombatAction> Legal() => _world?.Legal() ?? [];
+    public RunView Run() => World?.Run() ?? _place.Step.Run;
 
-    public CombatStatus Status => _world?.Status ?? _place.Step.Status;
+    public IReadOnlyList<CombatAction> Legal() => World?.Legal() ?? [];
 
-    public ulong HiddenKey() => _world?.HiddenKey() ?? _place.Step.HiddenKey;
+    public CombatStatus Status => World?.Status ?? _place.Step.Status;
 
-    public ulong Hash(CombatObservation observation) => _world?.Hash(observation) ?? ProtocolJson.Hash(observation);
+    public ulong HiddenKey() => World?.HiddenKey() ?? _place.Step.HiddenKey;
 
-    public ulong StateKey(CombatObservation observation) => _world?.StateKey(observation) ?? ProtocolJson.StateKey(observation);
+    public ulong Hash(CombatObservation observation) => World?.Hash(observation) ?? ProtocolJson.Hash(observation);
+
+    public ulong StateKey(CombatObservation observation) => World?.StateKey(observation) ?? ProtocolJson.StateKey(observation);
 
     public void Execute(CombatAction action)
     {
-        if (_world != null)
+        if (World is { } world)
         {
-            _world.Execute(action);
+            world.Execute(action);
             return;
         }
         if (_place.Step is not { Status: CombatStatus.InProgress, Observation.Prompt: { } prompt } || action.Kind != CombatActionKind.Pick || !prompt.Accepts(action.Picks))
             throw new InvalidOperationException($"{action} is no answer to the card prompt the combat waits on");
         _path = [.. _path, action];
         _place = crossing.At(_path);
-        if ((_world = _place.World()) != null) _made.Add(_world);
+        if (_place.World() is { } taken) _held.Add(_at = new(taken));
     }
 
     public WorldSnapshot Snapshot()
     {
         var snapshot = new WorldSnapshot([]);
-        _snapshots.Add(snapshot, new(_path, _place, _world, _world?.Snapshot()));
+        if (_at != null) _at.Count++;
+        _snapshots.Add(snapshot, new(_path, _place, _at, World?.Snapshot()));
         return snapshot;
     }
 
     public void Restore(WorldSnapshot snapshot)
     {
-        if (!_snapshots.TryGetValue(snapshot, out var saved)) throw new InvalidOperationException("the snapshot is not one this world took, or it was forgotten");
-        (_path, _place, _world) = (saved.Path, saved.Place, saved.World);
-        if (saved.Inner != null) _world!.Restore(saved.Inner);
+        var saved = Find(snapshot);
+        if (saved.At != _at)
+        {
+            if (saved.At != null) saved.At.Count++;
+            Leave(_at);
+            _at = saved.At;
+        }
+        (_path, _place) = (saved.Path, saved.Place);
+        if (saved.Inner != null) World!.Restore(saved.Inner);
     }
 
     public void Forget(WorldSnapshot snapshot)
     {
-        if (!_snapshots.TryGetValue(snapshot, out var saved)) throw new InvalidOperationException("the snapshot is not one this world took, or it was forgotten");
+        var saved = Find(snapshot);
         _snapshots.Remove(snapshot);
-        if (saved.Inner != null) saved.World!.Forget(saved.Inner);
+        if (saved.Inner != null) saved.At!.World.Forget(saved.Inner);
+        Leave(saved.At);
     }
 
-    /// <summary>Frees the engine's worlds this one stood in.</summary>
+    private Saved Find(WorldSnapshot snapshot) => _snapshots.TryGetValue(snapshot, out var saved) ? saved
+        : throw new InvalidOperationException("the snapshot is not one this world took, or it was forgotten");
+
+    /// <summary>One fewer stands on the engine world: with none left, it is freed, so that a search over a prompt's
+    /// answers holds the worlds of the answers it is in, not of every answer it has tried.</summary>
+    private void Leave(Held? held)
+    {
+        if (held == null || --held.Count > 0) return;
+        held.World.Dispose();
+        _held.Remove(held);
+    }
+
+    /// <summary>Frees the engine's worlds something still stands on.</summary>
     public void Dispose()
     {
-        foreach (var world in _made) world.Dispose();
-        _made.Clear();
-        _world = null;
+        foreach (var held in _held) held.World.Dispose();
+        _held.Clear();
+        _at = null;
     }
 }
