@@ -3,7 +3,7 @@
   "name": "STS2 AI",
   "author": "shinnku",
   "description": "An AI for single-player runs: shows its recommended action with each option's chance to win, and plays it when asked. Starts its own brain, a background program, while the game runs.",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "has_pck": false,
   "has_dll": true,
   "affects_gameplay": false,
