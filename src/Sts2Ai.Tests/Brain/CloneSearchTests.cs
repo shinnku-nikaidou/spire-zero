@@ -200,6 +200,20 @@ public class CloneSearchTests
     }
 
     [Fact]
+    public void EachOptionCarriesTheLineItWasValuedBy()
+    {
+        // Opening a card reward is valued by its best card (A, not BAD) and names it. In the shop, Y after X reaches the
+        // state that X after Y reached first: each option's line is its own answers all the same.
+        var reward = new MacroBrain(V).Choose(Root(new Toy(p => Rewards([.. p])))).Scored;
+        Assert.Equal("card:0", reward.Single(c => c.Action == "reward:0").Plan![0]);
+        var shop = new MacroBrain(V).Choose(Root(new Toy(Shop))).Scored;
+        Assert.Equal(["buy:1", "leave"], shop.Single(c => c.Action == "buy:0").Plan);
+        Assert.Equal(["buy:0", "leave"], shop.Single(c => c.Action == "buy:1").Plan);
+        Assert.Equal(["leave"], shop.Single(c => c.Action == "buy:2").Plan);
+        Assert.Null(shop.Single(c => c.Action == "leave").Plan);
+    }
+
+    [Fact]
     public void AStateReachedTwiceIsSearchedOnce()
     {
         // Two ways to the same page: its one answer is probed once.

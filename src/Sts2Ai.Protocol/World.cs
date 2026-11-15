@@ -83,6 +83,8 @@ public sealed record NodeClone(string Save, IReadOnlyList<string> Trace, IReadOn
 /// <param name="Win">The SL planner's: the chance to win the combat on the action's best line, 1 or 0 where the line
 /// reaches the combat's end, else the combat net's.</param>
 /// <param name="Hp">With <paramref name="Win"/>: the HP held at the end of a win on that line, expected where it is the net's.</param>
-/// <param name="Plan">On the map, the route to the boss after the action, as the macro brain would take it.</param>
+/// <param name="Plan">On the map, the route to the boss after the action, as the macro brain would take it. Elsewhere
+/// outside combat in SL, the answers after it within the node along which its value was found (the node's clone search),
+/// such as the card a card reward's opening was valued by.</param>
 public sealed record Candidate(string Action, double Value, double Ci, int Samples, IReadOnlyList<double>? Values = null,
     double? Win = null, double? Hp = null, IReadOnlyList<string>? Plan = null);

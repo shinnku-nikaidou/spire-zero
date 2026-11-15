@@ -62,7 +62,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         var option = options[pick];
         _opened = option.Opens;
         if (decision.Clone != null) _decided.Add(CloneSearch.Key(Root(decision)));
-        return new(option.Action, explored, explored ? [] : Rank(options.Select(o => (o.Action, o.Value)), option.Action));
+        return new(option.Action, explored, explored ? [] : Rank(options.Select(o => (o.Action, o.Value, o.Line)), option.Action));
     }
 
     /// <summary>Each legal action, in order, with its afterstate and its value: what <see cref="Choose(MacroDecision)"/> picks by.</summary>
@@ -70,7 +70,8 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         [.. Weigh(decision).Select(o => (o.Action, o.After, o.Value))];
 
     /// <param name="Opens">Whether the option opens a card prompt it was valued by.</param>
-    private sealed record Option(MacroAction Action, RunView After, double Value, bool Opens);
+    /// <param name="Line">SL: the answers after it within the node along which it was valued (<see cref="CloneSearch"/>).</param>
+    private sealed record Option(MacroAction Action, RunView After, double Value, bool Opens, IReadOnlyList<MacroAction>? Line = null);
 
     private List<Option> Weigh(MacroDecision decision)
     {
@@ -101,8 +102,8 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
                     options.Add(new(a, after, _leaf.Value(after), false));
                     continue;
                 }
-                var (state, worth) = found[k++];
-                options.Add(new(a, state.Run, worth, state.Surface == Surfaces.CardChoice));
+                var (state, worth, line) = found[k++];
+                options.Add(new(a, state.Run, worth, state.Surface == Surfaces.CardChoice, line));
             }
         }
         // On the map every option is valued entering a point (MacroLeaf): one that stays on the map, as its best move.
@@ -190,13 +191,14 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             (current, state) = (taken.Value, taken.State);
         }
         var answer = MacroAction.Pick(picks.Order());
-        return new(picks, explored, explored ? [] : Rank(first.Where(o => o.Action != answer).Append((answer, current)), answer));
+        return new(picks, explored, explored ? [] : Rank(first.Where(o => o.Action != answer).Append((answer, current)).Select(o => (o.Item1, o.Item2, (IReadOnlyList<MacroAction>?)null)), answer));
     }
 
-    /// <summary>Options to show: the chosen first, then best first; a value that is not finite (a state already decided) left out.</summary>
-    private static List<Candidate> Rank(IEnumerable<(MacroAction Action, double Value)> options, MacroAction chosen) =>
+    /// <summary>Options to show: the chosen first, then best first; a value that is not finite (a state already decided) left
+    /// out. Each carries its line, if it has one, as its plan.</summary>
+    private static List<Candidate> Rank(IEnumerable<(MacroAction Action, double Value, IReadOnlyList<MacroAction>? Line)> options, MacroAction chosen) =>
         [.. options.Where(o => double.IsFinite(o.Value)).OrderByDescending(o => o.Action == chosen).ThenByDescending(o => o.Value)
-            .Select(o => new Candidate(o.Action.ToString(), o.Value, 0, 1))];
+            .Select(o => new Candidate(o.Action.ToString(), o.Value, 0, 1, Plan: o.Line is { Count: > 0 } line ? [.. line.Select(a => a.ToString())] : null))];
 
     /// <summary>
     /// SL: a card prompt answered on the node's clone. A local search over the answers the prompt accepts, from no pick
@@ -245,7 +247,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         }
         _decided.Add(CloneSearch.Key(root));
         return new([.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()], explored,
-            explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value)), Answer(counts)));
+            explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value, (IReadOnlyList<MacroAction>?)null)), Answer(counts)));
     }
 
     /// <summary>The answers one pick away from <paramref name="counts"/> that the prompt accepts.</summary>

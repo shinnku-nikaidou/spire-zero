@@ -8,7 +8,8 @@ namespace Sts2Ai.Brain.Macro;
 /// not the run's end), the search goes on: a beam over the screen's actions, the belt's as the decision itself offers
 /// them (<see cref="MacroBrain.Offered"/>), level by level, keeping the <see cref="Beam"/> states V values best, up to
 /// <see cref="MaxProbes"/> probes in all. A state reached twice is searched once. A state is worth the best state after
-/// it, or its own value where the search stops (<paramref name="leaf"/>); an option, its afterstate.
+/// it, or its own value where the search stops (<paramref name="leaf"/>); an option, its afterstate. An option's line
+/// is the answers after it along which its worth was found, as the decisions there would take them.
 /// A card prompt that needs two picks or more is not searched into: its own decision searches it.
 /// The decision itself and the states <paramref name="decided"/> before it are never searched: an answer that comes back
 /// to one goes round in a cycle (a card reward skipped returns to the rewards screen that opened it, where the same
@@ -26,8 +27,8 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
 
     /// <param name="root">The decision itself, as a probe of no answers would show it.</param>
     /// <param name="options">Each option, as the answers it plays from the decision.</param>
-    /// <returns>Each option's afterstate and worth, in order.</returns>
-    public IReadOnlyList<(Afterstate After, double Value)> Search(Afterstate root, IReadOnlyList<IReadOnlyList<MacroAction>> options)
+    /// <returns>Each option's afterstate, worth and line, in order.</returns>
+    public IReadOnlyList<(Afterstate After, double Value, IReadOnlyList<MacroAction> Line)> Search(Afterstate root, IReadOnlyList<IReadOnlyList<MacroAction>> options)
     {
         var seen = new Dictionary<ulong, Node?> { [Key(root)] = null };
         foreach (var key in decided ?? new HashSet<ulong>()) seen.TryAdd(key, null);
@@ -66,16 +67,16 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
                 if (seen.TryGetValue(key, out var same))
                 {
                     // Linked only within a level, so that the states form no cycle.
-                    if (same?.Level == level) jobs[i].Parent.Children.Add(same);
+                    if (same?.Level == level) jobs[i].Parent.Children.Add((jobs[i].Path[^1], same));
                     continue;
                 }
                 var node = new Node(jobs[i].Path, next[i], leaf.Value(next[i]), level);
                 seen[key] = node;
-                jobs[i].Parent.Children.Add(node);
+                jobs[i].Parent.Children.Add((jobs[i].Path[^1], node));
                 frontier.Add(node);
             }
         }
-        return firsts.Select(n => (n.After, n.Worth())).ToList();
+        return firsts.Select(n => (n.After, n.Worth(), n.Line())).ToList();
     }
 
     /// <summary>Whether the search goes on from <paramref name="after"/>: a screen of the node.</summary>
@@ -105,12 +106,21 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
         public Afterstate After { get; } = after;
         public double Value { get; } = value;
         public int Level { get; } = level;
-        public List<Node> Children { get; } = [];
+        /// <summary>The states after its answers, each with the answer that leads to it.</summary>
+        public List<(MacroAction Answer, Node Node)> Children { get; } = [];
 
         /// <summary>Some of its answers were never probed, the probes having run out.</summary>
         public bool Cut { get; set; }
 
         public double Worth() => _worth ??= Children.Count == 0 ? Value
-            : Math.Max(Children.Max(c => c.Worth()), Cut ? Value : double.NegativeInfinity);
+            : Math.Max(Children.Max(c => c.Node.Worth()), Cut ? Value : double.NegativeInfinity);
+
+        /// <summary>The answers from this state to the one its worth is: none where that is its own value.</summary>
+        public IReadOnlyList<MacroAction> Line()
+        {
+            if (Children.Count == 0) return [];
+            var (answer, best) = Children.MaxBy(c => c.Node.Worth());
+            return Cut && best.Worth() < Value ? [] : [answer, .. best.Line()];
+        }
     }
 }

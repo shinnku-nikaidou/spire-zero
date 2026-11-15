@@ -48,10 +48,10 @@ internal static partial class Describe
             ? candidates.Any(c => c.Win != null) ? ShownKind.Fight : ShownKind.Score
             : ShownKind.Run;
         var options = candidates.Count > 1 || kind != ShownKind.Score
-            ? candidates.Take(Listed).Select(c => new Shown.Option(Action(c.Action, obs), c.Value, c.Ci, c.Win, c.Hp,
-                c.Plan?.Prepend(c.Action).Select(a => Point(a, obs.Run.Map)).ToList())).ToList()
+            ? candidates.Take(Listed).Select(c => new Shown.Option(Action(c.Action, obs, c.Plan), c.Value, c.Ci, c.Win, c.Hp,
+                obs.Screen is MapScreen ? c.Plan?.Prepend(c.Action).Select(a => Point(a, obs.Run.Map)).ToList() : null)).ToList()
             : [];
-        string next = Action(answer.Action, obs);
+        string next = Action(answer.Action, obs, candidates.FirstOrDefault(c => c.Action == answer.Action)?.Plan);
         // On the map, the route's rings and lines are drawn on the map itself (MapMark); the panel names its rooms.
         if (MacroAction.Parse(answer.Action).Verb == MacroAction.Map) return new(next, [.. plan.Select(a => Room(a, obs.Run.Map))], true, null, kind, options);
         if (obs.Screen is not CombatScreen) return new(next, [.. plan.Select(a => Action(a, obs))], false, null, kind, options);
@@ -103,7 +103,8 @@ internal static partial class Describe
         return (end < 0 ? all : [.. all.Take(end + 1)], later);
     }
 
-    private static string Action(string text, Observation obs)
+    /// <param name="line">Outside combat, the answers the brain would give after the action (<see cref="Candidate.Plan"/>).</param>
+    private static string Action(string text, Observation obs, IReadOnlyList<string>? line = null)
     {
         // A combat potion action carries its target too ("potion:SLOT:TARGET"); the combat names it.
         if (obs.Screen is CombatScreen { Combat: var combat }) return Combat(text, combat);
@@ -114,7 +115,7 @@ internal static partial class Describe
         {
             CardChoiceScreen { Choice: var choice } when action.Verb == MacroAction.PickVerb => Pick(action, choice),
             MapScreen when action.Verb == MacroAction.Map => L10n.T("go to {0}", Room(text, obs.Run.Map)),
-            RewardsScreen rewards => Reward(action, rewards),
+            RewardsScreen rewards => Reward(action, rewards, line),
             CardRewardScreen reward => CardReward(action, reward),
             BundleScreen bundles when action.Verb == MacroAction.Bundle =>
                 L10n.T("bundle {0}", action.Index + 1) + ": " + string.Join(", ", bundles.Bundles[action.Index].Select(Card)),
@@ -164,7 +165,9 @@ internal static partial class Describe
     /// <summary>The room a map action goes to, by the map legend's name for it.</summary>
     private static string Room(string action, MapView map) => MacroAction.Parse(action).Verb == MacroAction.Map ? Legend(Point(action, map)) : action;
 
-    private static string Reward(MacroAction action, RewardsScreen screen)
+    /// <summary>A reward as the rewards screen shows it. A card reward is named with the card the brain would take in it,
+    /// the first answer of its <paramref name="line"/>; without one, with the cards it holds.</summary>
+    private static string Reward(MacroAction action, RewardsScreen screen, IReadOnlyList<string>? line)
     {
         if (action == MacroAction.RewardsDone) return L10n.T(screen.Rewards.Count > 0 ? "skip the rest, proceed" : "proceed");
         if (action.Verb != MacroAction.Reward || screen.Rewards.FirstOrDefault(r => r.Index == action.Index) is not { } reward) return action.ToString();
@@ -173,6 +176,7 @@ internal static partial class Describe
             "gold" => L10n.T("take {0} gold", reward.Amount ?? 0),
             "potion" => L10n.T("take {0}", Potion(reward.Id!)),
             "relic" => L10n.T("take {0}", Relic(reward.Id!)),
+            "card" when reward.Cards is { } cards && Taken(line, cards) is { } taken => L10n.T("open the card reward") + " → " + taken,
             "card" => L10n.T("open the card reward") + (reward.Cards is { } cards ? ": " + string.Join(", ", cards.Select(Card)) : ""),
             "special_card" => L10n.T("take {0}", reward.Card is { } card ? Card(card) : L10n.T("the card")),
             "remove_card" => L10n.T("remove a card"),
@@ -180,12 +184,29 @@ internal static partial class Describe
         };
     }
 
+    /// <summary>What a card reward of <paramref name="cards"/> is answered with first along <paramref name="line"/>: a card,
+    /// or one of its alternatives; null for none.</summary>
+    private static string? Taken(IReadOnlyList<string>? line, IReadOnlyList<CardView> cards)
+    {
+        if (line is not [var first, ..]) return null;
+        var action = MacroAction.Parse(first);
+        return action.Verb switch
+        {
+            MacroAction.Card when action.Index < cards.Count => Card(cards[action.Index]),
+            MacroAction.CardAlt => Alternative(action),
+            _ => null,
+        };
+    }
+
     private static string CardReward(MacroAction action, CardRewardScreen screen) => action.Verb switch
     {
         MacroAction.Card => L10n.T("take {0}", Card(screen.Cards[action.Index])),
-        MacroAction.CardAlt => Text("card_reward_ui", $"OPTION_{action.Arg.ToUpperInvariant()}.name") ?? action.Arg,
+        MacroAction.CardAlt => Alternative(action),
         _ => action.ToString(),
     };
+
+    /// <summary>A card reward's alternative to a card (skipping, the Singing Bowl's max HP), as its button names it.</summary>
+    private static string Alternative(MacroAction action) => Text("card_reward_ui", $"OPTION_{action.Arg.ToUpperInvariant()}.name") ?? action.Arg;
 
     private static string Event(MacroAction action, EventScreen ev)
     {
