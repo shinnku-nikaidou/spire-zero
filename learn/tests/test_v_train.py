@@ -1,3 +1,4 @@
+import array
 import base64
 import json
 import math
@@ -11,8 +12,8 @@ from typer.testing import CliRunner
 
 import common
 import game_ids
-from v import data, export, potions, spec, train
-from v.net import Batch, Net, values, win_chance
+from v import bootstrap, data, export, potions, spec, train
+from v.net import Batch, Net, boot_targets, values, win_chance
 
 
 def record(run_id, floor, outcome="lost", combats=()):
@@ -209,3 +210,74 @@ def test_training_refuses_to_go_on_from_a_net_of_other_tables(tmp_path):
     first.write_text(json.dumps(net | {"vocab": net["vocab"] | {"cards": net["vocab"]["cards"][:-1]}}))
     args = ["--list", lists, "--name", "second", "--out", str(tmp_path / "second.json"), "--init", str(first), "--encoder", encoder_command()]
     assert CliRunner().invoke(train.script, args).exit_code != 0
+
+
+def map_moves(lists):
+    """The logs' decisions made map moves, so each gives its afterstate as a second sample."""
+    for log in common.lists(lists)[0].split(","):
+        rows = [json.loads(line) for line in open(log)]
+        with open(log, "w") as f:
+            f.writelines(json.dumps(r | {"surface": "map", "chosen": "map:1,1"}, separators=(",", ":")) + "\n" for r in rows)
+
+
+def test_a_decisions_later_state_is_its_runs_first_own_decision_that_many_floors_on(tmp_path):
+    lists = write_runs(tmp_path)
+    map_moves(lists)
+    samples, _ = data.read_runs(*common.lists(lists), 64, encoder())
+    # each run: floor 1's decision and its afterstate, then floor 2's, then floor 3's
+    run = [k for k, s in enumerate(samples) if s["run"] == f"{0:016x}"]
+    assert [samples[k]["own"] for k in run] == [True, False] * 3
+    assert [samples[k]["decision"] for k in run] == [0, 0, 1, 1, 2, 2]
+    one, two = bootstrap.later(samples, 1), bootstrap.later(samples, 2)
+    assert [one[k] for k in run] == [run[2], run[2], run[4], run[4], None, None]
+    assert [two[k] for k in run] == [run[4], run[4], None, None, None, None]
+
+
+def test_the_folds_cut_the_training_runs_by_id_and_leave_the_held_out_ones_out():
+    assert [bootstrap.fold(f"{i:016x}") for i in range(10)] == [None, "A", "A", "B", "B"] * 2
+
+
+def test_hazards_of_0_and_1_at_the_runs_real_end_give_todays_labels():
+    died = data.sample("a", read_run(make_view(floor=2)), 8, 5, "died")
+    won = data.sample("b", read_run(make_view(floor=2)), 8, 7, "won")
+    args = ({t: {} for t in spec.TABLES}, torch.zeros(len(spec.STATE)), torch.ones(len(spec.STATE)), 8, "cpu")
+    plain = Batch([died, won], *args)
+    dies_on_5, lives = array.array("f", [0, 0, 0, 0, 0, 1, 0, 0]), array.array("f", [0] * 8)
+    booted = Batch([died | {"boot": (4, dies_on_5)}, won | {"boot": (3, lives)}], *args)
+    assert torch.equal(booted.target, plain.target) and torch.equal(booted.label_mask, plain.label_mask)
+
+
+def test_a_bootstrapped_floor_weighs_the_frozen_vs_chance_that_the_run_is_alive_there():
+    target, weight = boot_targets(1, 3, torch.tensor([0.0, 0.0, 0.0, 0.5, 0.2, 0.0]), 6)
+    assert target.tolist() == pytest.approx([0, 0, 0, 0.5, 0.2, 0])
+    assert weight.tolist() == pytest.approx([0, 1, 1, 1, 0.5, 0.4])
+
+
+def test_a_training_on_multi_step_targets_takes_a_v_of_each_fold_and_says_so(tmp_path):
+    lists = write_runs(tmp_path)
+    nets = {}
+    for f in bootstrap.FOLDS:
+        nets[f] = tmp_path / f"f{f}.json"
+        args = ["--list", lists, "--name", f"f{f}", "--out", str(nets[f]), "--encoder", encoder_command(), "--fold", f]
+        result = CliRunner().invoke(train.script, args)
+        assert result.exit_code == 0, result.output
+        assert json.loads(nets[f].read_text())["trained"]["fold"] == f
+
+    def multi_step(frozen):
+        out = tmp_path / "td.json"
+        args = ["--list", lists, "--name", "td", "--out", str(out), "--encoder", encoder_command()]
+        return out, CliRunner().invoke(train.script, [*args, "--bootstrap", frozen, "--horizon", "1"])
+
+    out, result = multi_step(f"{nets['A']},{nets['B']}")
+    assert result.exit_code == 0, result.output
+    td = json.loads(out.read_text())
+    assert td["trained"]["bootstrap"] == {"nets": {"A": "fA", "B": "fB"}, "horizon": 1} and "fold" not in td["trained"]
+    # each training run's decisions are on floors 1-3: the first two have a decision a floor on
+    assert td["fit"]["bootstrapped_share"] == pytest.approx(2 / 3)
+    _, twice = multi_step(f"{nets['A']},{nets['A']}")
+    assert isinstance(twice.exception, common.LearnError) and "both trained on fold A" in str(twice.exception)
+    plain = tmp_path / "plain.json"
+    args = ["--list", lists, "--name", "plain", "--out", str(plain), "--encoder", encoder_command()]
+    assert CliRunner().invoke(train.script, args).exit_code == 0
+    _, unfolded = multi_step(f"{nets['A']},{plain}")
+    assert isinstance(unfolded.exception, common.LearnError) and "not trained on one fold" in str(unfolded.exception)

@@ -12,6 +12,11 @@ v/potions.py).
 second head, not in the file, starts anew). The report then also gives the file's own held-out loss and Brier score
 (`init_held_out_loss`, `init_brier_held_out`), on the same held-out decisions.
 
+--bootstrap FA.json,FB.json --horizon N trains on multi-step targets (v/bootstrap.py): a training decision keeps what
+happened over the next N floors and from there on is labelled with the hazards of a frozen V that never saw its run,
+FA trained on fold A of the training runs alone and FB on fold B (`--fold A`, `--fold B`); the held-out decisions keep
+their real outcomes, so the report and early stopping are on the same labels as without.
+
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
 
@@ -37,7 +42,7 @@ import torch  # noqa: E402
 import common  # noqa: E402
 import game_ids  # noqa: E402
 from common import LearnError  # noqa: E402
-from v import data, export, potions, spec  # noqa: E402
+from v import bootstrap, data, export, potions, spec  # noqa: E402
 from v.net import Batch, Net, aux_loss, hazard_loss, win_chance  # noqa: E402
 from weights import out_path  # noqa: E402
 from workers import built  # noqa: E402
@@ -65,7 +70,17 @@ def main(
     ] = None,
     seed: int = 0,
     workers: Annotated[int, typer.Option(help="processes that read the logs and build the batches (0: this one)")] = 8,
+    fold: Annotated[str | None, typer.Option(help="train on one fold of the training runs alone: A or B")] = None,
+    frozen: Annotated[
+        str | None,
+        typer.Option("--bootstrap", help="the frozen V's of folds A and B, FA.json,FB.json, for multi-step targets"),
+    ] = None,
+    horizon: Annotated[int, typer.Option(help="with --bootstrap: the floors labelled with what happened")] = 0,
 ) -> None:
+    if fold is not None and fold not in bootstrap.FOLDS:
+        raise LearnError(f"--fold is one of {', '.join(bootstrap.FOLDS)}, not {fold}")
+    if (frozen is None) != (horizon == 0) or horizon < 0:
+        raise LearnError("--bootstrap and --horizon (at least 1) go together")
     out_file = out_path(name, out)
     start = export.read(init) if init else None
     torch.manual_seed(seed)
@@ -78,7 +93,7 @@ def main(
         raise LearnError(f"the encoder knows no {', '.join(missing)} of a run: is it this code's commit?")
     samples, runs = data.read_runs(logs, records, FLOORS, reader, workers)
     reader.close()
-    train = [s for s in samples if not data.held_out(s["run"])]
+    train = [s for s in samples if not data.held_out(s["run"]) and fold in (None, bootstrap.fold(s["run"]))]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
         raise LearnError(f"{len(train)} train and {len(test)} held-out samples: too few runs")
@@ -126,6 +141,15 @@ def main(
         alive, deaths = alive + (m * wt).sum(0), deaths + (b.target.double().cpu() * m * wt).sum(0)
     base_hazard = ((deaths + 0.5) / (alive + 1)).clamp(1e-4, 1 - 1e-4)
     base_logits = torch.log(base_hazard / (1 - base_hazard)).float().to(device)
+
+    # Multi-step targets, after the baseline, which stays on what happened.
+    boot = None
+    if frozen:
+        with torch.random.fork_rng(devices=[]):  # the frozen V's leave the training's own draws as they were
+            nets = bootstrap.frozen([export.read(p) for p in frozen.split(",")], tables, FLOORS, device)
+        got = bootstrap.attach(train, horizon, nets, index, FLOORS, BATCH, device, workers)
+        boot = {"nets": {f: nets[f][0]["name"] for f in sorted(nets)}, "horizon": horizon, "share": got / len(train)}
+        logger.info("{} of {} training decisions labelled {} floors on by {}", got, len(train), horizon, boot["nets"])
 
     def evaluate(model):
         total, aux_total, wins = 0.0, 0.0, []
@@ -202,6 +226,8 @@ def main(
     }
     if start:
         report |= {"init_held_out_loss": init_loss, "init_brier_held_out": brier(init_won_chance)}
+    if boot:
+        report["bootstrapped_share"] = boot["share"]  # of the training decisions
     print(json.dumps(report))
 
     settings = {
@@ -209,6 +235,10 @@ def main(
         "aux_weight": AUX_WEIGHT, "dim": Net.DIM, "hidden": Net.HIDDEN, "body": Net.BODY,
     }  # fmt: skip
     trained = common.trained(list_, start, seed, epochs, settings, reader)
+    if fold:
+        trained["fold"] = fold  # a frozen V of v/bootstrap.py: it never saw the other fold's runs
+    if boot:
+        trained["bootstrap"] = {"nets": boot["nets"], "horizon": horizon}
     net = export.net_file(name, FLOORS, tables, mean, std, model, test, report, seed, trained)
     export.write(net, out_file)
     logger.info("wrote {}", out_file)

@@ -65,9 +65,14 @@ class Batch:
         end = torch.tensor([s["end"] for s in samples])[:, None]
         died = torch.tensor([s["kind"] == "died" for s in samples])[:, None]
         won = torch.tensor([s["kind"] == "won" for s in samples])[:, None]
-        self.target = (died & (g == end)).float().to(device)
+        target = (died & (g == end)).float()
         # A censored sample says nothing from the floor it stopped on; one with no reach (end = start) says nothing.
-        self.label_mask = ((g >= start) & (won | (g < end) | (died & (g == end)))).float().to(device)
+        label_mask = ((g >= start) & (won | (g < end) | (died & (g == end)))).float()
+        for b, s in enumerate(samples):
+            if "boot" in s:  # a multi-step target (v/bootstrap.py): s' floor and the frozen V's hazards there
+                later_floor, hazards = s["boot"]
+                target[b], label_mask[b] = boot_targets(s["start"], later_floor, torch.tensor(hazards), floors)
+        self.target, self.label_mask = target.to(device), label_mask.to(device)
         self.weight = torch.tensor([s["weight"] for s in samples]).to(device)
         self.start = start[:, 0].to(device)
 
@@ -80,6 +85,16 @@ class Batch:
     def inputs(self):
         """The net's inputs, in the order of spec.INPUTS."""
         return tuple(self.feed[name] for name in spec.INPUTS)
+
+
+def boot_targets(start: int, later_floor: int, hazards: torch.Tensor, floors: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """A bootstrapped sample's targets and weights per floor (v/bootstrap.py): lived through from its start to s', then
+    from s' on the frozen V's hazards there, each floor weighed by the frozen V's chance that the run is alive on it."""
+    g = torch.arange(floors)
+    target = torch.where(g >= later_floor, hazards, torch.zeros(floors))
+    alive = torch.ones(floors)
+    alive[later_floor + 1 :] = torch.cumprod(1 - hazards[later_floor:-1], 0)
+    return target, torch.where(g >= start, alive, torch.zeros(floors))
 
 
 N_NUMBERS = 3  # a card's damage, block and growth (a card's token)

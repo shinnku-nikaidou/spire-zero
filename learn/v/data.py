@@ -13,12 +13,14 @@ afterstate, are what RunNet feeds V in play.
 
 import functools
 import json
+import re
 
 from common import HEAD, LearnError, pack, runs_by_log
 from v import spec
 from workers import each
 
 AUX = 6  # the next combats whose HP cost the second head learns
+DECISION = re.compile(r'\{"run":"\w+","decision_id":(\d+)')  # a log line's decision number in its run
 
 
 def held_out(run_id: str) -> bool:
@@ -86,8 +88,10 @@ def read_log(i: int, log: str, runs: dict, floors: int, encoder) -> tuple[list[d
         if held_out(run):
             s["view"] = pack(json.loads(line)["run_view"])
         more = [sample(run, read["entered"], floors, r["floor"], kind)] if "entered" in read else []
+        decision = int(DECISION.match(line)[1])
         for x in [s, *more]:
-            samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt})
+            # own: the decision's own view, which a multi-step target may start from (v/bootstrap.py)
+            samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt, "decision": decision, "own": x is s})
     return samples, list(runs.values())
 
 
