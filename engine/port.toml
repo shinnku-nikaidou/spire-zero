@@ -162,6 +162,9 @@ types = [
     "MegaCrit.Sts2.Core.GameActions.INetAction",
     # tells the screen that something of the combat changed: it subscribes to every creature, pile and card
     "MegaCrit.Sts2.Core.Combat.CombatStateTracker",
+    # the combat's background scenes, which the screen picks with its own rng (EncounterModel._backgroundAssets): null
+    # in the simulator, set in the game once the room is drawn
+    "MegaCrit.Sts2.Core.Rooms.BackgroundAssets",
     # the rewards the players of one game see of each other; it listens for the combat's end
     "MegaCrit.Sts2.Core.Multiplayer.Game.RewardSynchronizer",
     "System.Text.StringBuilder",
