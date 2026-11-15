@@ -113,7 +113,7 @@ internal static class NodeRecord
         Prefix(harmony, typeof(RewardsSetSynchronizer), nameof(RewardsSetSynchronizer.SelectLocalReward), nameof(RewardTaken));
         Prefix(harmony, typeof(RewardsSetSynchronizer), nameof(RewardsSetSynchronizer.SkipLocalRewardsSet), nameof(RewardsDone));
         Prefix(harmony, typeof(RunManager), nameof(RunManager.ProceedFromTerminalRewardsScreen), nameof(RewardsDone));
-        Prefix(harmony, typeof(ActChangeSynchronizer), nameof(ActChangeSynchronizer.SetLocalPlayerReady), nameof(RewardsDone));
+        Prefix(harmony, typeof(ActChangeSynchronizer), nameof(ActChangeSynchronizer.SetLocalPlayerReady), nameof(ActDone));
         Prefix(harmony, typeof(TreasureRoomRelicSynchronizer), nameof(TreasureRoomRelicSynchronizer.PickRelicLocally), nameof(RelicPicked));
         Prefix(harmony, typeof(MerchantSynchronizer), nameof(MerchantSynchronizer.PurchaseLocalEntry), nameof(Bought));
         Prefix(harmony, typeof(CrystalSphereMinigame), nameof(CrystalSphereMinigame.CellClicked), nameof(Divined));
@@ -387,6 +387,18 @@ internal static class NodeRecord
         if (screen.Source is RewardsSet set && RewardActions.IsTerminal(set)) Leave();
         else Add(Surfaces.Rewards, MacroAction.RewardsDone.ToString());
     }
+
+    /// <summary>
+    /// The proceed button of an act's last rewards: the game goes on to the next act, or to the Architect after the last
+    /// one, and disables the button for good (<c>NRewardsScreen</c>). No map opens and there is no going back, so the
+    /// step is final at once; the rewards screen stays up until the act changes, and seeing it again takes nothing back.
+    /// </summary>
+    private static void ActDone() => Guard(() =>
+    {
+        if (_screen is not { Surface: Surfaces.Rewards }) return;
+        _screen = null;
+        Add(Surfaces.Rewards, MacroAction.RewardsDone.ToString());
+    });
 
     private static void RelicPicked(int? index) =>
         Add(Surfaces.Treasure, (index is int i ? MacroAction.Of(MacroAction.Relic, i) : MacroAction.RelicSkip).ToString());
