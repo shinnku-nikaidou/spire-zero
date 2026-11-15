@@ -12,7 +12,8 @@ namespace Sts2Ai.SimWorker.Commands;
 /// them; --macro picks the brain of every decision outside combat. plan searches in the engine unless --combat-world replay.
 /// --check plays each seed again over the wire, to a brain in this process, and compares: observations, records and
 /// decision logs included (each observation must survive a JSON round trip); and replays each node from its
-/// checkpoint (the SL clone). Reports results, hashes and surface coverage.
+/// checkpoint (the SL clone), and from each save the game made inside a finished room, which the game's Continue loads.
+/// Reports results, hashes and surface coverage.
 /// </summary>
 internal static class RunCommand
 {
@@ -23,7 +24,7 @@ internal static class RunCommand
     private static readonly Option<int> Asc = Opt.Of("--asc", 0, "the ascension");
     private static readonly Option<PlayEnvironment> Env = Opt.Of("--env", PlayEnvironment.NoSL, "the environment");
     private static readonly Option<int> MaxDecisions = Opt.Of("--max-decisions", 20_000, "a run stops here, truncated");
-    private static readonly Option<bool> Check = Opt.Of("--check", false, "plays each seed again over the wire and compares, and replays each node from its checkpoint");
+    private static readonly Option<bool> Check = Opt.Of("--check", false, "plays each seed again over the wire and compares, and replays each node from its checkpoint and from each save in a finished room");
     private static readonly Option<bool> Trace = Opt.Of("--trace", false, "prints every decision");
     private static readonly Option<bool> Obs = Opt.Of("--obs", false, "prints every observation");
     private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
@@ -80,6 +81,8 @@ internal static class RunCommand
         var surfaces = new Dictionary<string, int>();
         var failures = new Dictionary<string, int>();
         int mismatches = 0, gameErrors = 0, nodes = 0, nodesExact = 0, replans = 0;
+        // Saves inside a finished room, by kind: how many, and how many of their clones replayed exactly.
+        var roomSaves = new SortedDictionary<string, (int All, int Exact)>();
         var cloneMs = new List<double>();
         Console.WriteLine($"run: {n} runs in {env}, {champion}, game {HeadlessGame.GameVersion}{HeadlessGame.JitNote}");
         var clock = Stopwatch.StartNew();
@@ -104,10 +107,12 @@ internal static class RunCommand
             if (first.Failure != null) Console.WriteLine($"  failure: {first.Failure}");
             foreach (var e in first.Errors.Take(3)) Console.WriteLine($"  game error: {Logs.FirstLine(e)}");
             if (!check) continue;
-            var (clonesExact, cloneMismatch) = ClonesReplay(pump, first, autoWin, cloneMs);
-            nodes += first.Nodes.Count;
-            nodesExact += clonesExact;
-            if (cloneMismatch != null) Console.WriteLine($"  CLONE MISMATCH: {cloneMismatch}");
+            foreach (var (kind, wrong) in ClonesReplay(pump, first, autoWin, cloneMs))
+            {
+                if (kind == Arrival) (nodes, nodesExact) = (nodes + 1, nodesExact + (wrong == null ? 1 : 0));
+                else roomSaves[kind] = (roomSaves.GetValueOrDefault(kind).All + 1, roomSaves.GetValueOrDefault(kind).Exact + (wrong == null ? 1 : 0));
+                if (wrong != null) Console.WriteLine($"  CLONE MISMATCH: {wrong}");
+            }
             var second = PlayRun(pump, setup, env, secondBrain, maxDecisions, trace: false, observe, printObservations: false);
             workerPool?.TakeGameErrors();
             var secondLog = served!.Log;
@@ -138,27 +143,35 @@ internal static class RunCommand
         if (missing.Count > 0) Console.WriteLine("surfaces never reached: " + string.Join(" ", missing));
         foreach (var (msg, count) in failures.OrderByDescending(kv => kv.Value)) Console.WriteLine($"  failure x{count}: {msg}");
         if (check) Console.WriteLine($"determinism: {n - mismatches}/{n} runs identical on replay over the wire; " +
-                                     $"{nodesExact}/{nodes} nodes replay exactly from their checkpoint" +
+                                     $"{nodesExact}/{nodes} nodes replay exactly from their checkpoint; saves in a finished room replay exactly: " +
+                                     (roomSaves.Count == 0 ? "none made" : string.Join(", ", roomSaves.Select(kv => $"{kv.Key} {kv.Value.Exact}/{kv.Value.All}"))) +
                                      (cloneMs.Count > 0 ? $" ({cloneMs.Average():F0} ms each, max {cloneMs.Max():F0})" : ""));
         Console.WriteLine($"game Log.Error lines: {gameErrors}" + (workerPool != null ? $"; worker restarts: {workerPool.Restarts}" : "") +
                           (champion.Policy == "plan" ? $"; replans: {replans}" : ""));
-        return failures.Count == 0 && mismatches == 0 && nodesExact == nodes && gameErrors == 0 ? 0 : 1;
+        return failures.Count == 0 && mismatches == 0 && nodesExact == nodes && roomSaves.Values.All(v => v.Exact == v.All) && gameErrors == 0 ? 0 : 1;
     }
 
+    /// <summary>The kind of a node's checkpoint taken on arrival, beside the kinds of saves in a finished room.</summary>
+    private const string Arrival = "arrival";
+
     /// <summary>
-    /// Loads each node of a played run from its checkpoint and replays the node's decisions: the
-    /// clone must show the run's observations one for one, and be at its horizon once it has travelled. Returns how
-    /// many nodes did, and what went wrong in the first that did not; each node's load and replay time goes to
-    /// <paramref name="ms"/>. The clones keep the run's rule, <paramref name="autoWin"/>.
+    /// Loads each checkpoint of a played run and replays the decisions from it to its node's end: each node's, taken on
+    /// arrival, and each save the game made inside a finished room (after a won fight, after an ancient), which loads as
+    /// the game's Continue loads it. The clone must show the run's observations one for one, and be at its horizon once it
+    /// has travelled. Returns each checkpoint's kind and what went wrong with it, or null; each load and replay time goes
+    /// to <paramref name="ms"/>. The clones keep the run's rule, <paramref name="autoWin"/>.
     /// </summary>
-    private static (int Exact, string? Mismatch) ClonesReplay(Pump pump, RunResult run, IReadOnlyList<int>? autoWin, List<double> ms)
+    private static List<(string Kind, string? Wrong)> ClonesReplay(Pump pump, RunResult run, IReadOnlyList<int>? autoWin, List<double> ms)
     {
-        int exact = 0;
-        string? mismatch = null;
-        for (int k = 0; k < run.Nodes.Count; k++)
+        var starts = run.Nodes.Select(n => n.Start).ToList();
+        int EndOf(int at) => starts.FirstOrDefault(s => s > at, run.Trace.Count);
+        var checkpoints = run.Nodes.Select((n, k) => (n.Save, n.Start, Kind: Arrival, Where: $"node {k}"))
+            .Concat(run.RoomSaves.Select(r => (r.Save, r.Start, r.Kind, Where: $"{r.Kind} save in node {starts.Count(s => s <= r.Start) - 1}")));
+        var results = new List<(string Kind, string? Wrong)>();
+        foreach (var (save, start, kind, where) in checkpoints)
         {
-            var (save, start) = run.Nodes[k];
-            int end = k + 1 < run.Nodes.Count ? run.Nodes[k + 1].Start : run.Trace.Count;
+            int end = EndOf(start);
+            bool last = end == run.Trace.Count;
             var seen = new List<ulong>();
             string? wrong;
             var clock = Stopwatch.StartNew();
@@ -168,7 +181,6 @@ internal static class RunCommand
                 using var session = RunSession.Load(pump, clone, Unasked.Instance, Unasked.Instance, Unasked.Instance,
                     obs => seen.Add(ProtocolJson.Hash(obs)));
                 int differs = Enumerable.Range(0, end - start).FirstOrDefault(i => seen.ElementAtOrDefault(i) != run.Observations[start + i], -1);
-                bool last = k + 1 == run.Nodes.Count;
                 wrong = differs >= 0 ? $"observation {start + differs} ({run.Trace[start + differs]}) differs"
                     : seen.Count != end - start ? $"{seen.Count} observations, not {end - start}"
                     : !last && !session.AtHorizon ? "not at its horizon after travelling"
@@ -189,10 +201,9 @@ internal static class RunCommand
             }
             ms.Add(clock.Elapsed.TotalMilliseconds);
             if (HeadlessGame.TakeErrors() is [var error, ..]) wrong ??= $"game error: {Logs.FirstLine(error)}";
-            if (wrong != null) mismatch ??= $"node {k} (decisions {start}..{end - 1}): {wrong}";
-            else exact++;
+            results.Add((kind, wrong == null ? null : $"{where} (decisions {start}..{end - 1}): {wrong}"));
         }
-        return (exact, mismatch);
+        return results;
     }
 
     /// <summary>Policies for a clone that replays everything: asking one means the recording ran out.</summary>
@@ -213,9 +224,11 @@ internal static class RunCommand
     /// <param name="Log">Harness's decision log, when logging in this process.</param>
     /// <param name="Record">The run's record, its game errors and time still to fill in.</param>
     /// <param name="Nodes">Each node's checkpoint and where its decisions begin in the trace (when observing).</param>
+    /// <param name="RoomSaves">Each save inside a finished room as a checkpoint, where the decisions after it begin, and
+    /// the room's kind (when observing).</param>
     private sealed record RunResult(string Outcome, string Summary, IReadOnlyList<string> Trace, IReadOnlyList<ulong> MapHashes,
         IReadOnlyList<ulong> Observations, IReadOnlyList<DecisionEntry> Log, string? Failure, List<string> Errors, RunRecord Record,
-        IReadOnlyList<(string Save, int Start)> Nodes, int Replans);
+        IReadOnlyList<(string Save, int Start)> Nodes, IReadOnlyList<(string Save, int Start, string Kind)> RoomSaves, int Replans);
 
     /// <summary>
     /// One run to the end (or the decision cap), against the brain that <paramref name="brains"/> gives for the run's
@@ -230,6 +243,7 @@ internal static class RunCommand
         IRunBrain? brain = null;
         var observations = new List<ulong>();
         var nodes = new List<(string Save, int Start)>();
+        var roomSaves = new List<(string Save, int Start, string Kind)>();
         RunSession? session = null;
         RunResult result;
         try
@@ -246,6 +260,7 @@ internal static class RunCommand
             IRunBrain player = export ?? brain;
             session = RunSession.Start(pump, setup, player, player, player, observed);
             if (export != null) export.Session = session;
+            if (observe) session.RoomSaved = (save, at, kind) => roomSaves.Add((save, at, kind));
             int printed = 0;
             while (!session.IsOver && session.Trace.Count < maxDecisions)
             {
@@ -279,7 +294,7 @@ internal static class RunCommand
                 player?.Gold ?? 0, session?.Combats.ToList() ?? [], surfaces, new Dictionary<string, int>(brain?.Brains ?? new Dictionary<string, int>()),
                 session?.CardRewards ?? 0, session?.CardRewardsSkipped ?? 0, 0, failure, 0, hello.Run.RunId, brain?.Search);
             return new(outcome, session?.Summary() ?? "", steps, session?.MapHashes.ToList() ?? [], observations, brain?.Log.ToList() ?? [], failure,
-                HeadlessGame.TakeErrors(), record, nodes, brain?.Replans ?? 0);
+                HeadlessGame.TakeErrors(), record, nodes, roomSaves, brain?.Replans ?? 0);
         }
     }
 

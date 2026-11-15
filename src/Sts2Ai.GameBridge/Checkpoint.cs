@@ -3,13 +3,14 @@ using System.Reflection;
 using System.Text.Json;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
 
 namespace Sts2Ai.GameBridge;
 
 /// <summary>
-/// A node's SL checkpoint: the game's save on arrival at the map point, and each relic's plain
+/// An SL checkpoint: one of the game's saves (on arrival at a map point, or after a room's fight or ancient), and each relic's plain
 /// fields (numbers, flags and enums, its status among them). The save keeps only the fields a relic marks as saved, so
 /// without them a relic that changes its state between combats (Lava Rock disables itself) loads differently from the
 /// run it came from. <see cref="RestoreRelics"/> puts them back once the save is loaded.
@@ -22,8 +23,12 @@ public static class Checkpoint
 
     public sealed record RelicFields(string Id, Dictionary<string, string> Fields);
 
-    /// <summary>The checkpoint of the run as it is now.</summary>
-    public static string Take(Player player) => JsonSerializer.Serialize(new Opened(SaveManager.ToJson(RunManager.Instance.ToSave(null)),
+    /// <summary>
+    /// The checkpoint of the run as it is now, saved as the game saves it: on arrival at a map point with no room, after a
+    /// won fight or a finished ancient with that room, which a load then enters as finished (<c>SaveManager.SaveRun</c>).
+    /// </summary>
+    public static string Take(Player player, AbstractRoom? preFinishedRoom = null) => JsonSerializer.Serialize(new Opened(
+        SaveManager.ToJson(RunManager.Instance.ToSave(preFinishedRoom)),
         [.. player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!))))]));
 
     /// <summary>Reads <paramref name="checkpoint"/>, once for every load of it.</summary>

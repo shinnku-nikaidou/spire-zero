@@ -1,5 +1,6 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
+using MegaCrit.Sts2.Core.Rooms;
 using Sts2Ai.GameBridge;
 
 namespace Sts2Ai.SimWorker.Runtime.Patches;
@@ -22,6 +23,10 @@ internal static partial class HeadlessPatches
 
     /// <summary>The game saving on arrival at a map point: its state is a node checkpoint.</summary>
     public static Action? NodeEntered;
+
+    /// <summary>The game saving inside a room it marked finished (after a won fight, after an ancient): a load of that save
+    /// enters the room as finished.</summary>
+    public static Action<AbstractRoom>? RoomSaved;
 
     public static void Apply()
     {

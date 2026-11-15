@@ -153,6 +153,7 @@ internal static partial class SelfTest
         NodeWorldPlaysAsTheRun(pump, seed, Check);
         NodeWorldStandsAtTheEntrysPrompt(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);
+        CloneReplaysADiscardInCombat(pump, seed, Check);
         CloneKeepsRelicState(pump, seed, Check);
         AutoWinFightsElitesAndBosses(pump, seed, Check);
         ProbeAnswersTheRuledFightsPrompt(pump, seed, Check);

@@ -1,6 +1,7 @@
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using Sts2Ai.Brain;
+using Sts2Ai.GameBridge.Actions;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
@@ -122,6 +123,61 @@ internal static partial class SelfTest
         check("SL clone stops at its node's exit", loaded.AtHorizon && clone.Trace[^1].StartsWith(Surfaces.Map + " ", StringComparison.Ordinal),
             $"{clone.Trace.Count} decisions, the last {clone.Trace[^1]}, at horizon {loaded.AtHorizon}");
         check("SL clone refuses to step past its node's exit", Throws(loaded.Step), $"stepped past {clone.Trace[^1]}");
+    }
+
+    /// <summary>
+    /// A potion the player threw away in combat, which the real game's record holds as a step of the combat
+    /// ("combat discard_potion:S") though the simulator never decides one: a clone of the node with that step after the
+    /// combat's first decision point stands at the same decision with the slot empty, and everything else as without it.
+    /// </summary>
+    private static void CloneReplaysADiscardInCombat(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed + 3);
+        RunSession? session = null;
+        NodeClone? clone = null;
+        int slot = -1;
+        var play = new PlayPolicy(rng);
+        var capture = new CapturePolicy(decision =>
+        {
+            if (clone == null && session!.Player.PotionSlots.ToList().FindIndex(p => p != null) is var full and >= 0) (clone, slot) = (session.Clone(), full);
+            return play.Choose(decision);
+        });
+        string label = $"run {GameSeeds.MakeSeed(seed + 3, 0)}";
+        var loadout = new Loadout(Potions: ["FIRE_POTION", "BLOCK_POTION"]);
+        using (session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 3, 0), Loadout: loadout), FirstPicks.Instance, capture,
+                   new KeepsPotions(rng)))
+            for (int steps = 0; !session.IsOver && clone == null && steps < 200; steps++) session.Step();
+        if (clone == null)
+        {
+            check("SL clone replays a potion thrown away in combat", false, $"{label}: no combat decision with a potion");
+            return;
+        }
+        string step = $"{Surfaces.Combat} {MacroAction.Of(MacroAction.DiscardPotion, slot)}";
+        static string Slots(RunSession s) => string.Join(",", s.Player.PotionSlots.Select(p => p?.Id.Entry ?? "-"));
+        static string Hand(RunSession s) => string.Join(",", s.Player.PlayerCombatState!.Hand.Cards.Select(c => c.Id.Entry));
+        string? wrong;
+        try
+        {
+            string slots, hand;
+            int hp;
+            // One session lives at a time.
+            using (var plain = RunSession.Load(pump, clone, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance))
+                (slots, hand, hp) = (Slots(plain), Hand(plain), plain.Player.Creature.CurrentHp);
+            using var discarded = RunSession.Load(pump, new NodeClone(clone.Save, [.. clone.Trace, step], clone.AutoWin),
+                RunCommand.Unasked.Instance, RunCommand.Unasked.Instance, RunCommand.Unasked.Instance);
+            var want = slots.Split(',').Select((p, i) => i == slot ? "-" : p);
+            wrong = Slots(discarded) != string.Join(",", want) ? $"slots {Slots(discarded)}, not {string.Join(",", want)} (before: {slots})"
+                : discarded.Trace[^1] != step ? $"the last step is {discarded.Trace[^1]}"
+                : !CombatActions.WaitingForInput(discarded.Player) ? "not at a decision of the combat"
+                : Hand(discarded) != hand || discarded.Player.Creature.CurrentHp != hp ? $"hand {Hand(discarded)}, HP {discarded.Player.Creature.CurrentHp}; before {hand}, HP {hp}"
+                : null;
+        }
+        catch (Exception e)
+        {
+            wrong = $"{e.GetType().Name}: {Logs.FirstLine(e.Message)}";
+        }
+        if (HeadlessGame.TakeErrors() is [var error, ..]) wrong ??= $"game error: {Logs.FirstLine(error)}";
+        check("SL clone replays a potion thrown away in combat", wrong == null, $"{label}, {step}: {wrong}");
     }
 
     /// <summary>
@@ -433,6 +489,16 @@ internal static partial class SelfTest
         {
             before();
             return macro.Choose(decision);
+        }
+    }
+
+    /// <summary>A random macro policy that never uses or throws away a potion outside combat.</summary>
+    private sealed class KeepsPotions(Random rng) : IMacroPolicy
+    {
+        public MacroAnswer Choose(MacroDecision decision)
+        {
+            var kept = decision.Legal.Where(a => !PotionActions.Handles(a)).ToList();
+            return new(kept[rng.Next(kept.Count)]);
         }
     }
 

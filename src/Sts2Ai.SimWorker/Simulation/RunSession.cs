@@ -113,6 +113,14 @@ internal sealed class RunSession : IDisposable
     /// <summary>A sealed clone has left its node: it travelled. It cannot step any more.</summary>
     public bool AtHorizon { get; private set; }
 
+    /// <summary>
+    /// Gets each save the game makes inside a room it marked finished (after a won fight, after an ancient), as a
+    /// checkpoint (<see cref="Checkpoint.Take"/> with that room), where the decisions after it begin in
+    /// <see cref="Trace"/>, and the room's kind. A load of such a checkpoint enters the room as finished, as the game's
+    /// Continue does. Null: none are taken.
+    /// </summary>
+    public Action<string, int, string>? RoomSaved { get; set; }
+
     public bool IsOver => Run.IsGameOver;
 
     /// <summary>Winning ends in the victory room, where the game kills the players once the run is recorded.</summary>
@@ -144,7 +152,16 @@ internal sealed class RunSession : IDisposable
             (_checkpoint, NodeStart) = (Checkpoint.Take(player), _trace.Count);
             _selector.RestartPrompts();
         };
+        HeadlessPatches.RoomSaved = room => RoomSaved?.Invoke(Checkpoint.Take(player, room), _trace.Count, KindOf(room));
     }
+
+    /// <summary>A finished room's kind as a save names it: a fight by its room type, a fight inside an event, an event.</summary>
+    private static string KindOf(AbstractRoom room) => room switch
+    {
+        CombatRoom { ParentEventId: not null } => "event fight",
+        CombatRoom combat => combat.RoomType.ToString().ToLowerInvariant(),
+        _ => room.GetType().Name,
+    };
 
     /// <summary>
     /// Starts the run and pumps it to the first decision (normally Neow). <paramref name="observed"/>, if given, gets
@@ -444,6 +461,15 @@ internal sealed class RunSession : IDisposable
     private bool CombatDecision()
     {
         var state = CombatManager.Instance.DebugOnlyGetState() ?? throw new InvalidOperationException("no combat state");
+        // A potion the player threw away in combat, from a clone's record: no decision of the simulator's, which never
+        // throws one away there, so it is no legal action. It is started as the potion's popup starts it, and the
+        // combat's decision is asked again.
+        if (_replay?.Discard() is { } discard)
+        {
+            Record(Surfaces.Combat, discard.ToString(), () => new CombatScreen { Combat = Observe.Combat(state, Player) });
+            PotionActions.Start(Player, discard);
+            return true;
+        }
         var legal = CombatActions.Legal(state, Player);
         var decision = new CombatDecision(legal, () => Observe.Combat(state, Player), combat => Of(new CombatScreen { Combat = combat }),
             () => LiveCombat.Export(Player, View(previews: false)));
@@ -659,6 +685,7 @@ internal sealed class RunSession : IDisposable
         RewardsSet.testSelector = null;
         HeadlessPatches.CrystalSphereShown = null;
         HeadlessPatches.NodeEntered = null;
+        HeadlessPatches.RoomSaved = null;
         _selectorScope?.Dispose();
         // Nothing runs while a prompt waits: the game stands where it asked until its run is cleaned up.
         _pump.Drain();
@@ -672,7 +699,8 @@ internal sealed class RunSession : IDisposable
 
     /// <summary>
     /// Answers decisions from a recorded trace, in order, then passes combat and macro decisions on to the policies. A
-    /// card prompt's recorded answer is the game's own indexes (<see cref="Picks"/>).
+    /// card prompt's recorded answer is the game's own indexes (<see cref="Picks"/>). A trace from the real game may also
+    /// hold a step no policy is asked for: a potion thrown away in combat (<see cref="Discard"/>).
     /// </summary>
     private sealed class Replay(IEnumerable<string> trace, ICombatPolicy combat, IMacroPolicy macro) : ICombatPolicy, IMacroPolicy
     {
@@ -683,6 +711,14 @@ internal sealed class RunSession : IDisposable
         public CombatAction Choose(CombatDecision decision) => _steps.Count > 0 ? CombatAction.Parse(Next(Surfaces.Combat)) : combat.Choose(decision);
 
         public MacroAnswer Choose(MacroDecision decision) => _steps.Count > 0 ? new(MacroAction.Parse(Next(decision.Surface))) : macro.Choose(decision);
+
+        /// <summary>The recorded potion thrown away in combat, if that is the next step: taken from the trace.</summary>
+        public MacroAction? Discard()
+        {
+            if (!_steps.TryPeek(out var step) || !step.StartsWith($"{Surfaces.Combat} {MacroAction.DiscardPotion}:", StringComparison.Ordinal)) return null;
+            _steps.Dequeue();
+            return MacroAction.Parse(step[(Surfaces.Combat.Length + 1)..]);
+        }
 
         /// <summary>The recorded answer to the card prompt that waits; null once the trace is played.</summary>
         public int[]? Picks() => _steps.Count == 0 ? null
