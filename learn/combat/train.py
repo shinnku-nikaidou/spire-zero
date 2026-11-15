@@ -29,11 +29,11 @@ import torch  # noqa: E402
 
 import common  # noqa: E402
 import game_ids  # noqa: E402
-from batches import built  # noqa: E402
 from combat import data, export, report, spec  # noqa: E402
 from combat.net import POTION_WEIGHT, Batch, Net, loss  # noqa: E402
 from common import LearnError  # noqa: E402
 from weights import out_path  # noqa: E402
+from workers import built  # noqa: E402
 
 script = common.app()
 
@@ -52,7 +52,7 @@ def main(
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
     init: Annotated[str | None, typer.Option(help="a net file to go on from: its weights, read back from its ONNX")] = None,
     seed: int = 0,
-    workers: Annotated[int, typer.Option(help="processes that build the batches (0: this one)")] = 8,
+    workers: Annotated[int, typer.Option(help="processes that read the logs and build the batches (0: this one)")] = 8,
 ) -> None:
     if env not in ("SL", "NoSL"):
         raise LearnError(f"--env is SL or NoSL, not {env}")
@@ -64,7 +64,7 @@ def main(
     reader = common.Encoder(encoder)
     if reader.hello["lags"] != spec.LAGS:
         raise LearnError(f"the encoder reads {reader.hello['lags']} earlier rounds of intents, the net {spec.LAGS}")
-    samples, skipped = data.read(*common.train_lists(list_), env, reader)
+    samples, skipped = data.read(*common.train_lists(list_), env, reader, workers)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -131,7 +131,7 @@ def main(
         **report.summary(model, test, test_batches, train),
     }
     if test_list:
-        medium, _ = data.read(*common.lists(test_list), env, reader)
+        medium, _ = data.read(*common.lists(test_list), env, reader, workers)
         fit["medium"] = report.summary(model, medium, list(batches(medium, False)), train)
     reader.close()
     print(json.dumps(fit))

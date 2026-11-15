@@ -11,10 +11,12 @@ A run is read by the simulator's code, not here (common.Encoder): its tokens and
 afterstate, are what RunNet feeds V in play.
 """
 
+import functools
 import json
 
 from common import HEAD, LearnError, pack, runs_by_log
 from v import spec
+from workers import each
 
 AUX = 6  # the next combats whose HP cost the second head learns
 
@@ -69,30 +71,38 @@ def macro_lines(log: str, runs: dict) -> list[tuple[str, str]]:
         return [(m[1], line) for m, line in heads if m and m[1] in runs and '"run_view"' in line and line.endswith("\n")]
 
 
-def read_runs(logs: str, records: str, floors: int, encoder) -> tuple[list[dict], list[dict]]:
-    """The logged decisions as samples, and the run records.
+def read_log(i: int, log: str, runs: dict, floors: int, encoder) -> tuple[list[dict], list[dict]]:
+    """The samples of the I-th log of a list, each keyed (i, run), and the runs of its records that did not fail."""
+    runs = {k: r for k, r in runs.items() if not r.get("failure")}
+    samples = []
+    lines = macro_lines(log, runs)
+    for (run, line), read in zip(lines, encoder.runs([line for _, line in lines], log), strict=True):
+        if read is None:
+            continue
+        r = runs[run]
+        kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
+        s = sample(run, read["run"], floors, r["floor"], kind)
+        nxt = next_combats(r, int(read["run"]["state"]["floor"]))
+        if held_out(run):
+            s["view"] = pack(json.loads(line)["run_view"])
+        more = [sample(run, read["entered"], floors, r["floor"], kind)] if "entered" in read else []
+        for x in [s, *more]:
+            samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt})
+    return samples, list(runs.values())
+
+
+def read_runs(logs: str, records: str, floors: int, encoder, workers: int = 0) -> tuple[list[dict], list[dict]]:
+    """The logged decisions as samples, and the run records; WORKERS processes read the logs (workers.each).
 
     A sample keeps its tokens and state, not its view: as Python objects a view is ~54 KB, ten times those (2026-10-30:
     plan v6 generation 3's 2.16M decisions took ~117 GB a training, now 21 GB); a held-out decision keeps its view,
     packed, for the net file's test runs. As objects a sample was 14.8 KB, with its tokens packed 3.1 KB, half of that
     the held-out views' JSON, now packed too (2026-11-14, 100 runs of v9 g2)."""
     samples, runs_seen = [], []
-    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
-        runs = {k: r for k, r in runs.items() if not r.get("failure")}
-        runs_seen += runs.values()
-        lines = macro_lines(log, runs)
-        for (run, line), read in zip(lines, encoder.runs([line for _, line in lines], log), strict=True):
-            if read is None:
-                continue
-            r = runs[run]
-            kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
-            s = sample(run, read["run"], floors, r["floor"], kind)
-            nxt = next_combats(r, int(read["run"]["state"]["floor"]))
-            if held_out(run):
-                s["view"] = pack(json.loads(line)["run_view"])
-            more = [sample(run, read["entered"], floors, r["floor"], kind)] if "entered" in read else []
-            for x in [s, *more]:
-                samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt})
+    pairs = ((i, log, runs) for i, (log, runs) in enumerate(runs_by_log(logs, records)))
+    for got, seen in each(functools.partial(read_log, floors=floors), pairs, encoder, workers):
+        samples += got
+        runs_seen += seen
     per_run = {}
     for s in samples:
         per_run[s["key"]] = per_run.get(s["key"], 0) + 1

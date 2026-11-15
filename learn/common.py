@@ -122,6 +122,7 @@ class Encoder:
     answer needs (`run_view`, and `surface` and `chosen` for a map move's afterstate; `obs` and `history`)."""
 
     def __init__(self, command: str):
+        self.command = command  # how to start another one, as a reader in a worker does (workers.each)
         try:
             self.process = subprocess.Popen(
                 shlex.split(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8"

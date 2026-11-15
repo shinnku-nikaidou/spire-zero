@@ -175,7 +175,9 @@ def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
     monkeypatch.setattr(data, "KEEP", 1)
     out = tmp_path / "net.json"
     runs = write_runs(tmp_path, runs=14)
+    # --workers 0: the patched KEEP holds in this process only, not in a worker's fresh import
     args = ["--list", runs, "--env", "SL", "--name", "t", "--out", str(out), "--test-list", runs, "--encoder", encoder_command()]
+    args += ["--workers", "0"]
     result = CliRunner().invoke(train.script, args)
     assert result.exit_code == 0, result.output
     net = json.loads(out.read_text())
@@ -209,10 +211,10 @@ def test_training_goes_on_from_a_net_file_and_keeps_it_unless_an_epoch_beats_it(
     monkeypatch.setattr(data, "KEEP", 1)
     first, second = tmp_path / "first.json", tmp_path / "second.json"
     runs = write_runs(tmp_path, runs=14)
-    args = ["--list", runs, "--env", "SL", "--name", "first", "--out", str(first), "--encoder", encoder_command()]
+    args = ["--list", runs, "--env", "SL", "--name", "first", "--out", str(first), "--encoder", encoder_command(), "--workers", "0"]
     assert CliRunner().invoke(train.script, args).exit_code == 0
     monkeypatch.setattr(train, "EPOCHS", 0)
-    args = ["--list", runs, "--env", "SL", "--name", "second", "--out", str(second), "--init", str(first), "--encoder", encoder_command()]
+    args = ["--list", runs, "--env", "SL", "--name", "second", "--out", str(second), "--init", str(first), "--encoder", encoder_command(), "--workers", "0"]
     result = CliRunner().invoke(train.script, args)
     assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())

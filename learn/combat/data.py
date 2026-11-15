@@ -12,11 +12,13 @@ Every fifth run (by run id) is held out, for early stopping and the report.
 The endings are those of the policy that played, so only logs of the --env given are read.
 """
 
+import functools
 import json
 import zlib
 from collections import Counter
 
 from common import HEAD, LearnError, pack, runs_by_log
+from workers import each
 
 BUCKETS = 50  # buckets of the HP share lost from the state to a win
 LOSS_MIN = -0.25  # the lowest bucket's bottom: a share healed
@@ -124,27 +126,38 @@ def sample(run: str, start: dict, end: dict, after: dict | None) -> dict:
     return s
 
 
-def read(logs: str, records: str, env: str, encoder) -> tuple[list[dict], int]:
+def read_log(i: int, log: str, runs: dict, env: str, encoder) -> tuple[list[dict], int]:
+    """The round starts of the I-th log of a list as samples, each keyed (i, run), and how many of its runs were
+    skipped (read below)."""
+    samples, skipped = [], 0
+    for run, fights in combats(log, env, encoder).items():
+        r = runs.get(run)
+        if r is None or r.get("failure"):
+            continue
+        # a combat the run died in before its first decision (entered at 0 HP) has no round start in the log
+        ends = [c for c in r["combats"] if c.get("hp") != 0]
+        if len(fights) != len(ends) or any(
+            b["starts"][0]["obs"]["encounter"] != f["encounter"] for b, f in zip(fights, ends, strict=True)
+        ):
+            skipped += 1
+            continue
+        for k, (fight, f) in enumerate(zip(fights, ends, strict=True)):
+            end = f.get("end") or ({"died": True} if k == len(ends) - 1 and r.get("outcome") == "lost" else None)
+            if end is None or (not end["died"] and fight["after"] is None):
+                continue
+            for start in fight["starts"]:
+                samples.append(sample(run, start, end, fight["after"]) | {"key": (i, run)})
+    return samples, skipped
+
+
+def read(logs: str, records: str, env: str, encoder, workers: int = 0) -> tuple[list[dict], int]:
     """The round starts of the logs' combats as samples, and how many runs were skipped: those whose combats do not
     match their record's (a log cut short, a combat logged apart). The run's last combat in a lost run counts as a death
-    even with no `end` in its record; a win with no run view after it is left out."""
+    even with no `end` in its record; a win with no run view after it is left out. WORKERS processes read the logs
+    (workers.each)."""
     samples, skipped = [], 0
-    for i, (log, runs) in enumerate(runs_by_log(logs, records)):
-        for run, fights in combats(log, env, encoder).items():
-            r = runs.get(run)
-            if r is None or r.get("failure"):
-                continue
-            # a combat the run died in before its first decision (entered at 0 HP) has no round start in the log
-            ends = [c for c in r["combats"] if c.get("hp") != 0]
-            if len(fights) != len(ends) or any(
-                b["starts"][0]["obs"]["encounter"] != f["encounter"] for b, f in zip(fights, ends, strict=True)
-            ):
-                skipped += 1
-                continue
-            for k, (fight, f) in enumerate(zip(fights, ends, strict=True)):
-                end = f.get("end") or ({"died": True} if k == len(ends) - 1 and r.get("outcome") == "lost" else None)
-                if end is None or (not end["died"] and fight["after"] is None):
-                    continue
-                for start in fight["starts"]:
-                    samples.append(sample(run, start, end, fight["after"]) | {"key": (i, run)})
+    pairs = ((i, log, runs) for i, (log, runs) in enumerate(runs_by_log(logs, records)))
+    for got, n in each(functools.partial(read_log, env=env), pairs, encoder, workers):
+        samples += got
+        skipped += n
     return samples, skipped

@@ -36,11 +36,11 @@ import torch  # noqa: E402
 
 import common  # noqa: E402
 import game_ids  # noqa: E402
-from batches import built  # noqa: E402
 from common import LearnError  # noqa: E402
 from v import data, export, potions, spec  # noqa: E402
 from v.net import Batch, Net, aux_loss, hazard_loss, win_chance  # noqa: E402
 from weights import out_path  # noqa: E402
+from workers import built  # noqa: E402
 
 script = common.app()
 
@@ -64,7 +64,7 @@ def main(
         ),
     ] = None,
     seed: int = 0,
-    workers: Annotated[int, typer.Option(help="processes that build the batches (0: this one)")] = 8,
+    workers: Annotated[int, typer.Option(help="processes that read the logs and build the batches (0: this one)")] = 8,
 ) -> None:
     out_file = out_path(name, out)
     start = export.read(init) if init else None
@@ -76,7 +76,7 @@ def main(
     reader = common.Encoder(encoder)
     if missing := [name for name in spec.STATE if name not in reader.hello["state"]]:
         raise LearnError(f"the encoder knows no {', '.join(missing)} of a run: is it this code's commit?")
-    samples, runs = data.read_runs(logs, records, FLOORS, reader)
+    samples, runs = data.read_runs(logs, records, FLOORS, reader, workers)
     reader.close()
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
