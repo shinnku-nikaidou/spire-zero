@@ -3,8 +3,8 @@ using Godot;
 namespace Sts2Ai.Mod.UI;
 
 /// <summary>
-/// The toolbar's icons, drawn here into textures so they need no file and no font: play, pause, step
-/// (an arrow over a dot) and finish (an arrow into a bar). The shapes are laid out on an 18-unit square and drawn at
+/// The panel's icons, drawn here into textures so they need no file and no font: the toolbar's play, pause,
+/// step (an arrow over a dot) and finish (an arrow into a bar), and the head's opacity and close. The shapes are laid out on an 18-unit square and drawn at
 /// three times that, then shown at <see cref="Shown"/>: the game scales its 1080p canvas up to the window, and a small
 /// texture would blur. Each pixel is the share of 4×4 samples inside the shape.
 /// </summary>
@@ -34,6 +34,17 @@ internal static class Icons
     /// <summary>An arrow to the right, into a bar.</summary>
     public static Texture2D Finish { get; } = Draw(Blue, (x, y) =>
         (y is >= 8 and <= 10 && x is >= 2 and <= 10) || Inside(x, y, (9, 4.5), (9, 13.5), (13, 9)) || (x is >= 14 and <= 16 && y is >= 3 and <= 15));
+
+    /// <summary>The panel's close button: a cross, in white for the button to tint.</summary>
+    public static Texture2D Close { get; } = Draw(Colors.White, (x, y) =>
+        x is >= 4.5 and <= 13.5 && y is >= 4.5 and <= 13.5 && (Math.Abs(x - y) <= 1.1 || Math.Abs(x + y - 18) <= 1.1));
+
+    /// <summary>The panel's opacity button: a ring with its left half filled, in white for the button to tint.</summary>
+    public static Texture2D Opacity { get; } = Draw(Colors.White, (x, y) =>
+    {
+        double r = Math.Sqrt((x - 9) * (x - 9) + (y - 9) * (y - 9));
+        return r <= 6.6 && (r >= 5.2 || x <= 9);
+    });
 
     private static ImageTexture Draw(Color color, Func<double, double, bool> inside)
     {

@@ -141,7 +141,7 @@ internal static class SettingsTab
 
     private static HBoxContainer Opacity(Label? font, List<Action> refresh)
     {
-        var slider = new HSlider { MinValue = 0.6, MaxValue = 1, Step = 0.02, CustomMinimumSize = new Vector2(220, 28), FocusMode = Control.FocusModeEnum.None,
+        var slider = new HSlider { MinValue = 0.3, MaxValue = 1, Step = 0.05, CustomMinimumSize = new Vector2(220, 28), FocusMode = Control.FocusModeEnum.None,
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
         var value = Text("", font, 1);
         value.CustomMinimumSize = new Vector2(70, 0);

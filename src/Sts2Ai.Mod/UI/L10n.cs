@@ -44,6 +44,7 @@ internal static class L10n
         ["Mod error"] = ["Erreur du mod", "Error del mod", "Mod 出错", "Mod 出錯", "Modのエラー"],
         ["floor {0}"] = ["étage {0}", "piso {0}", "第 {0} 层", "第 {0} 層", "{0}階"],
         ["HP {0}/{1}"] = ["PV {0}/{1}", "PV {0}/{1}", "HP {0}/{1}", "HP {0}/{1}", "HP {0}/{1}"],
+        ["Close · F8 brings it back"] = ["Fermer · F8 le rouvre", "Cerrar · F8 lo vuelve a abrir", "关闭 · 按 F8 再打开", "關閉 · 按 F8 再打開", "閉じる · F8で再表示"],
 
         // The toolbar and the auto-play state.
         ["Auto"] = ["Auto", "Auto", "自动", "自動", "オート"],

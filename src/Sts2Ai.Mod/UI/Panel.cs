@@ -41,6 +41,7 @@ internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pil
 /// answer (the next action, the plan after it, the options it scored with their chances to win) or a message saying
 /// why there is none. It also owns the marks the answer draws on the game's own nodes (<see cref="MapMark"/>,
 /// <see cref="CombatMark"/>). F8 hides and shows all of it; the settings (<see cref="Settings"/>) pick which parts show.
+/// The card's head moves it (dragged, and kept where it was let go), steps its opacity down, and closes it; F8 opens it again.
 /// The card's content is built again only when what it shows changes, not every frame.
 /// </summary>
 internal sealed class Panel
@@ -59,8 +60,10 @@ internal sealed class Panel
 
     private const float BarWidth = 56;
 
+    /// <summary>The opacities the head's button steps down through, then back to the first.</summary>
+    private static readonly float[] Opacities = [1f, 0.75f, 0.5f, 0.3f];
+
     private readonly PanelContainer _card;
-    private readonly StyleBoxFlat _cardStyle;
     private readonly Label _champion;
     private readonly Label _status;
     private readonly (Button Button, PlayEnvironment Env)[] _switch;
@@ -76,8 +79,13 @@ internal sealed class Panel
     private readonly MapMark _map;
     private readonly CombatMark _combat;
     private readonly Action<Command>? _pressed;
+    private readonly Button _opacity, _close;
     private readonly HashSet<Key> _down = [];
     private bool _hidden;
+    /// <summary>The close button hid the card alone; F8 opens it again.</summary>
+    private bool _closed;
+    /// <summary>While the head is dragged: where in the card the mouse took it.</summary>
+    private Vector2? _grab;
     private object? _built;
     private PlayEnvironment? _styled;
     private Drive? _drive;
@@ -89,17 +97,21 @@ internal sealed class Panel
     {
         _pressed = pressed;
         var layer = new CanvasLayer { Layer = 100 };
-        _cardStyle = Box(Colors.Black, 14, Rule);
-        _cardStyle.SetContentMarginAll(12);
-        _cardStyle.ContentMarginLeft = _cardStyle.ContentMarginRight = 14;
-        _cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
-        _cardStyle.ShadowSize = 12;
-        _card = Quiet(new PanelContainer { Position = new Vector2(24, 132), CustomMinimumSize = new Vector2(340, 0) });
-        _card.AddThemeStyleboxOverride("panel", _cardStyle);
+        var cardStyle = Box(Color.FromHtml("#100c18") with { A = 0.92f }, 14, Rule);
+        cardStyle.SetContentMarginAll(12);
+        cardStyle.ContentMarginLeft = cardStyle.ContentMarginRight = 14;
+        cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
+        cardStyle.ShadowSize = 12;
+        _card = Quiet(new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY), CustomMinimumSize = new Vector2(340, 0) });
+        _card.AddThemeStyleboxOverride("panel", cardStyle);
         var column = Column(10);
         _card.AddChild(column);
 
+        // The head is the card's handle: it takes the mouse there, unlike the rest of the card.
         var head = Row(8);
+        head.MouseFilter = Control.MouseFilterEnum.Stop;
+        head.MouseDefaultCursorShape = Control.CursorShape.Move;
+        head.GuiInput += Drag;
         head.AddChild(Badge("AI", 22, 6, Accent, null, 11));
         // A champion's name can be a whole line of options: it takes the head's free width and is cut there.
         var names = Column(0);
@@ -121,7 +133,15 @@ internal sealed class Panel
             head.AddChild(frame);
         }
         else _switch = [];
-        head.AddChild(Text("F8", 11, Muted));
+        var corner = Row(0);
+        corner.AddChild(_opacity = HeadButton(Icons.Opacity, () =>
+        {
+            float now = Settings.Current.Opacity;
+            float next = Opacities.FirstOrDefault(o => o < now - 0.01f, Opacities[0]);
+            Settings.Set(Settings.Current with { Opacity = next });
+        }));
+        corner.AddChild(_close = HeadButton(Icons.Close, () => _closed = true));
+        head.AddChild(corner);
         column.AddChild(head);
 
         // The toolbar, in the style of a debugger's: continue / pause, step, step out.
@@ -193,10 +213,14 @@ internal sealed class Panel
         tree.Root.CallDeferred(Node.MethodName.AddChild, layer);
     }
 
-    /// <summary>Reads the keys: F8 hides and shows, F5, F10 and F11 are the toolbar's; once per frame.</summary>
+    /// <summary>Reads the keys: F8 hides and shows (and opens a closed card), F5, F10 and F11 are the toolbar's; once per frame.</summary>
     public void Poll()
     {
-        if (Pressed(Key.F8)) _hidden = !_hidden;
+        if (Pressed(Key.F8))
+        {
+            if (_closed) _closed = _hidden = false;
+            else _hidden = !_hidden;
+        }
         if (_pressed == null || _drive == null) return;
         if (Pressed(Key.F5)) _pressed(Command.Auto);
         if (Pressed(Key.F10)) _pressed(Command.Step);
@@ -254,10 +278,13 @@ internal sealed class Panel
     private void Head(string champion, string status, PlayEnvironment? env, Drive? drive)
     {
         var settings = Settings.Current;
-        _card.Visible = !_hidden && settings.Panel;
+        _card.Visible = !_hidden && !_closed && settings.Panel;
         if (_card.Theme != Fonts.Theme) _card.Theme = Fonts.Theme;
-        var fill = Color.FromHtml("#100c18") with { A = settings.Opacity };
-        if (_cardStyle.BgColor != fill) _cardStyle.BgColor = fill;
+        if (_card.Modulate.A != settings.Opacity) _card.Modulate = Colors.White with { A = settings.Opacity };
+        // Where it was let go, kept inside the window as the card grows and shrinks.
+        if (_grab == null && _card.IsInsideTree()) _card.Position = Inside(new Vector2(settings.PanelX, settings.PanelY));
+        Tooltip(_opacity, $"{L10n.T("Panel opacity")} {settings.Opacity * 100:0}%");
+        Tooltip(_close, L10n.T("Close · F8 brings it back"));
         _champion.Text = champion;
         _status.Text = status;
         if (env != _styled)
@@ -301,6 +328,33 @@ internal sealed class Panel
         if (button.Text != text) button.Text = text;
     }
 
+    private static void Tooltip(Control control, string text)
+    {
+        if (control.TooltipText != text) control.TooltipText = text;
+    }
+
+    /// <summary>Drags the card by its head; where it is let go is kept in the settings.</summary>
+    private void Drag(InputEvent e)
+    {
+        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left } button)
+        {
+            if (button.Pressed) _grab = _card.GetGlobalMousePosition() - _card.Position;
+            else if (_grab != null)
+            {
+                _grab = null;
+                Settings.Set(Settings.Current with { PanelX = _card.Position.X, PanelY = _card.Position.Y });
+            }
+        }
+        else if (e is InputEventMouseMotion && _grab is { } grab) _card.Position = Inside(_card.GetGlobalMousePosition() - grab);
+    }
+
+    /// <summary><paramref name="at"/> moved as little as it takes for the whole card to be inside the window.</summary>
+    private Vector2 Inside(Vector2 at)
+    {
+        var room = _card.GetViewportRect().Size - _card.Size;
+        return new Vector2(Math.Clamp(at.X, 0, Math.Max(room.X, 0)), Math.Clamp(at.Y, 0, Math.Max(room.Y, 0)));
+    }
+
     private static void Set(Button button, string text, Texture2D icon, bool enabled)
     {
         if (button.Text != text) button.Text = text;
@@ -318,7 +372,11 @@ internal sealed class Panel
     /// <summary>Builds the body again when what it shows, or the settings it is drawn with, changed.</summary>
     private void Build(object what, Action build)
     {
-        var key = (what, Settings.Current with { Env = default, Assist = default, Speed = default, StopAtElites = default, StopOnDrop = default, Effort = default },
+        var key = (what, Settings.Current with
+            {
+                Env = default, Assist = default, Opacity = default, PanelX = default, PanelY = default, Speed = default, StopAtElites = default,
+                StopOnDrop = default, Effort = default,
+            },
             L10n.T("Next"));
         if (Equals(key, _built)) return;
         _built = key;
@@ -599,6 +657,24 @@ internal sealed class Panel
         foreach (var state in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color" }) button.AddThemeColorOverride(state, Fg);
         button.AddThemeColorOverride("font_disabled_color", Dim);
         button.AddThemeColorOverride("icon_disabled_color", new Color(1, 1, 1, 0.35f));
+    }
+
+    /// <summary>A small icon button in the head's corner: grey, white under the mouse.</summary>
+    private static Button HeadButton(Texture2D icon, Action pressed)
+    {
+        var button = new Button { Icon = icon, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(24, 24),
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, IconAlignment = HorizontalAlignment.Center };
+        button.AddThemeConstantOverride("icon_max_width", 12);
+        var fill = Box(Colors.Transparent, 6);
+        fill.SetContentMarginAll(4);
+        var hover = Box(Color.FromHtml("#2a2238"), 6);
+        hover.SetContentMarginAll(4);
+        foreach (var state in new[] { "normal", "pressed", "focus" }) button.AddThemeStyleboxOverride(state, fill);
+        button.AddThemeStyleboxOverride("hover", hover);
+        button.AddThemeColorOverride("icon_normal_color", Muted);
+        foreach (var state in new[] { "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color" }) button.AddThemeColorOverride(state, Fg);
+        button.Pressed += pressed;
+        return button;
     }
 
     private static Button Toggle(string text)
