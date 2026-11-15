@@ -212,3 +212,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   the node's SL record, so the rest of the room is decided without the clone. Reinstalled in `mods/` (17:22). Seen in
   the same run, sent to its own session: potions left on the rewards with free slots, a Duplication potion drunk and
   the turn ended with energy unspent.
+- 2026-11-15 ~17:27, the same game (0.3.2 at fb104fbf still loaded) on to floor 33: after THE_INSATIABLE_BOSS, the
+  rewards' first decision failed on the clone, "combat policy chose potion:0:1, which is not legal". The player had
+  clicked the Weak potion in the enemy's turn; the game puts such a request aside and calls `RequestEnqueue` again at
+  the player's turn, and NodeRecord took both, so the clone drank it and then found slot 0 empty (the save the game
+  keeps from the room's arrival, `current_run.save.backup`, held one Weak potion in slot 0). Fixed in 0.3.3 at bef85f60:
+  a put-aside request is skipped and recorded when it comes again.
