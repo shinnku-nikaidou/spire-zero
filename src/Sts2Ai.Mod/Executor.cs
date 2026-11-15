@@ -142,7 +142,8 @@ internal static class Executor
         switch (ActiveScreenContext.Instance.GetCurrentScreen())
         {
             case NTreasureRoom room:
-                if (!Field<bool>(room, "_hasChestBeenOpened")) return Click(Field<NClickableControl>(room, "_chestButton")) == Acted.Done ? "chest" : null;
+                // The chest's button is disabled once it is clicked (the game has had no _hasChestBeenOpened since v0.113.0).
+                if (Field<NClickableControl>(room, "_chestButton") is { IsEnabled: true } chest) return Click(chest) == Acted.Done ? "chest" : null;
                 return Click(room.ProceedButton) == Acted.Done ? "proceed" : null;
             case NCombatRoom room when !CombatManager.Instance.IsInProgress:
                 return Click(room.ProceedButton) == Acted.Done ? "proceed" : null;
@@ -223,5 +224,8 @@ internal static class Executor
 
     private static InvalidOperationException Unknown(Asking asking, MacroAction action) => new($"cannot carry out {action} on {asking.Surface}");
 
-    private static T Field<T>(object node, string name) => (T)AccessTools.Field(node.GetType(), name).GetValue(node)!;
+    /// <summary>A private field of the game's node, by name. A field the game no longer has is an error that names it:
+    /// as a null dereference it ended the game with SIGSEGV (v0.113.1's treasure room, 2026-11-15).</summary>
+    private static T Field<T>(object node, string name) =>
+        (T)(AccessTools.Field(node.GetType(), name) ?? throw new MissingFieldException(node.GetType().FullName, name)).GetValue(node)!;
 }

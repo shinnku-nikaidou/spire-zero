@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
+using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
@@ -107,7 +108,8 @@ internal sealed class Screens
             case NTreasureRoom treasure when settled:
                 if (Field<bool>(treasure, "_isRelicCollectionOpen") && RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics is { Count: > 0 } relics)
                     return Ask(run, me, Surfaces.Treasure, TreasureActions.Screen(relics), TreasureActions.Legal(relics));
-                if (!Field<bool>(treasure, "_hasChestBeenOpened")) note = "open the chest";
+                // The chest's button is disabled once it is clicked (the game has had no _hasChestBeenOpened since v0.113.0).
+                if (Field<NClickableControl>(treasure, "_chestButton").IsEnabled) note = "open the chest";
                 return null;
             default:
                 return null;
@@ -168,5 +170,8 @@ internal sealed class Screens
         return new Asking(surface, Observe.Of(run, me, screen), [.. legal.Select(a => a.ToString())], source);
     }
 
-    private static T Field<T>(object node, string name) => (T)AccessTools.Field(node.GetType(), name).GetValue(node)!;
+    /// <summary>A private field of the game's node, by name. A field the game no longer has is an error that names it:
+    /// as a null dereference it ended the game with SIGSEGV (v0.113.1's treasure room, 2026-11-15).</summary>
+    private static T Field<T>(object node, string name) =>
+        (T)(AccessTools.Field(node.GetType(), name) ?? throw new MissingFieldException(node.GetType().FullName, name)).GetValue(node)!;
 }
