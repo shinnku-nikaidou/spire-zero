@@ -253,3 +253,11 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
     decisions, the same deck, relics and maps), 26 s on the Mac, 48 s in the VM.
   Left for going public: the real game on Linux (the player-interaction checklist) and on the Mac, both the user's;
   then the tested build uploaded with the new texts and preview, and set public.
+- 2026-11-15 19:31–19:36: the item is **public** (the user: "順便把圖片上傳上去，可以公開了，反正沒人看得到", ahead of the
+  real-game tests on Linux and the Mac). 0.3.7 (48cae06c, the build checked on three platforms) with the 17 new texts
+  and the preview; the page shows them (Chrome, logged out), 394.2 MB. Two things learned:
+  - the uploader runs as the game, and Steam lets one machine of an account play at a time: with the game open on the
+    Mac, Steam logged this machine off ("Logged In Elsewhere") and the upload failed. Close the game everywhere first.
+  - with `--note`, the update's commit timed out three times (k_EResultTimeout, the content and preview already up);
+    without it, the same update went through at once. The 0.3.7 change note is not on the page.
+  Still to do: the real game on Linux (the checklist) and on the Mac through the subscription.
