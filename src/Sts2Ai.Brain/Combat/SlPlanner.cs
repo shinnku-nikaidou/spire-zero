@@ -63,8 +63,9 @@ public sealed class SlRoute(Budget budget)
 /// line can still raise past winning now with what the state holds (max HP or gold gained, a card grown, a potion drunk
 /// that V rates below an empty slot), so no state's value caps its lines'. A greedy dive, a beam of one, goes first.
 /// Every loss is worth the same, so among losing lines the one that died from the turn
-/// start the leaf valued highest is the pick; and a losing plan that is not proved is played for its first
-/// <see cref="Budget.Replan"/> turns only, then planned again, from where a beam reaches deeper (or to its end, at 0).
+/// start the leaf valued highest is the pick. Among wins worth exactly the same, the one with the fewest turns ended
+/// is: a combat no line loses HP in has many, and the dive, which goes first, often finds a slow one. A losing plan
+/// that is not proved is played for its first <see cref="Budget.Replan"/> turns only, then planned again, from where a beam reaches deeper (or to its end, at 0).
 ///
 /// Only one turn's transpositions are merged, so each state kept is the end of a concrete line of actions, and the
 /// plan replays exactly in the world it was searched in. A card prompt is a state like any other, and its answers are
@@ -112,6 +113,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private readonly Dictionary<CombatAction, TurnEnd> _byFirst = [];
         private TurnEnd? _best;
         private double _bestFrom = double.NegativeInfinity;
+        private int _bestEnds;
         private List<TurnEnd> _left = [];
         private int _nodes, _turns;
         private bool _complete;
@@ -145,10 +147,13 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                             continue;
                         }
                         Note(_byFirst, line);
-                        // A loss is 0 however it comes: then the turn start it came from decides.
+                        // A loss is 0 however it comes: then the turn start it came from decides. Wins worth exactly the
+                        // same: the one with fewer turns ended.
                         double from = states[i].Value;
-                        if (_best == null || line.Value > _best.Value || (line.Value == _best.Value && line.Status == CombatStatus.Lost && from > _bestFrom))
-                            (_best, _bestFrom) = (line, from);
+                        int ends = line.Actions.Count(a => a.Kind == CombatActionKind.EndTurn);
+                        if (_best == null || line.Value > _best.Value || (line.Value == _best.Value && (line.Status == CombatStatus.Lost
+                                ? from > _bestFrom : line.Status == CombatStatus.Won && ends < _bestEnds)))
+                            (_best, _bestFrom, _bestEnds) = (line, from, ends);
                     }
                 }
                 var seen = new HashSet<ulong>();

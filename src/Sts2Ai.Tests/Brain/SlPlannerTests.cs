@@ -388,6 +388,33 @@ public class SlPlannerTests
         Assert.Equal((full.Value, full.Nodes, full.Turns, full.Proved), (losing.Value, losing.Nodes, losing.Turns, losing.Proved));
     }
 
+    /// <summary>
+    /// The dive follows play:1, the start the leaf values higher, to a win after two turns; play:2's win comes after one,
+    /// worth <paramref name="below"/> less. Only a win worth exactly the same takes the place of the slower one.
+    /// </summary>
+    [Theory]
+    [InlineData(0.0, "play:2")]
+    [InlineData(1e-12, "play:1")]
+    public void OfWinsWorthExactlyTheSameTheFewestTurnsIsThePick(double below, string pick)
+    {
+        TurnEnd End(CombatStatus status, double value, ulong key, params CombatAction[] actions) =>
+            new([.. actions], [.. actions.Select(_ => key)], status, value, key, []);
+        var turns = new Dictionary<string, TurnSearch>
+        {
+            [""] = new([End(CombatStatus.InProgress, 0.6, 1, CombatAction.Play(1), CombatAction.EndTurn),
+                End(CombatStatus.InProgress, 0.5, 2, CombatAction.Play(2), CombatAction.EndTurn)], 2, false),
+            ["play:1 end_turn"] = new([End(CombatStatus.InProgress, 0.7, 3, CombatAction.EndTurn)], 1, false),
+            ["play:1 end_turn end_turn"] = new([End(CombatStatus.Won, 0.9, 0, CombatAction.Play(1))], 1, false),
+            ["play:2 end_turn"] = new([End(CombatStatus.Won, 0.9 - below, 0, CombatAction.Play(2))], 1, false),
+        };
+        var plan = SlPlanner.Search(new Budget(Beam: 2), [], (jobs, nodes, keep) =>
+            [.. jobs.Select(job => SlPlanner.Narrow(turns[string.Join(" ", job.Path)], keep))]);
+
+        Assert.Equal(CombatStatus.Won, plan.End);
+        Assert.Equal(pick, plan.Result.First.ToString());
+        Assert.Equal(pick == "play:2" ? 0.9 - below : 0.9, plan.Value);
+    }
+
     [Fact]
     public void AWinningCombatIsPlannedOnce() =>
         Assert.Equal((1, CombatStatus.Won), PlayRoute(new Budget(NodesPerWorld: 100_000, Beam: 1000, LossPlans: 1), enemyHp: 24));
