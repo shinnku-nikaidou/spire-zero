@@ -155,6 +155,7 @@ internal static partial class SelfTest
         CloneStopsAtTheExit(pump, seed, Check);
         CloneReplaysADiscardInCombat(pump, seed, Check);
         CloneKeepsRelicState(pump, seed, Check);
+        ChestRelicIsThePlayers(pump, seed, Check);
         AutoWinFightsElitesAndBosses(pump, seed, Check);
         ProbeAnswersTheRuledFightsPrompt(pump, seed, Check);
         DeathsOutsideTheEnemysTurnEndTheirCombat(pump, seed, Check);

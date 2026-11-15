@@ -6,10 +6,12 @@ using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Entities.TreasureRelicPicking;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Rewards;
@@ -66,6 +68,9 @@ internal sealed class RunSession : IDisposable
 
     /// <summary>Game tasks the driver started (a purchase, a rest option, opening a chest), and what to do once each ends.</summary>
     private readonly List<(Task Task, Action? Done, string What)> _running = [];
+
+    /// <summary>The run's chest picking, whose awards this session obtains (<see cref="UseTreasureAwards"/>).</summary>
+    private TreasureRoomRelicSynchronizer? _treasure;
 
     /// <summary>The crystal sphere screen, open over its event until the last divination.</summary>
     private CrystalSphereMinigame? _minigame;
@@ -184,6 +189,7 @@ internal sealed class RunSession : IDisposable
         try
         {
             session.UseSelector();
+            session.UseTreasureAwards();
             // NGame.StartRun without the nodes. A loadout's relics are its final state, pickups done (their potion
             // slots included), so their AfterObtained does not run again.
             if (setup.Loadout?.Relics == null) session.Await(RunManager.Instance.FinalizeStartingRelics());
@@ -222,6 +228,7 @@ internal sealed class RunSession : IDisposable
             // NMainMenu's Continue and NGame.LoadRun without the nodes.
             session.Await(RunManager.Instance.SetUpSavedSingleplayer(run, save));
             session.UseSelector();
+            session.UseTreasureAwards();
             Checkpoint.RestoreRelics(opened, player);
             // Continue always saves; a clone saves nothing, as a run this simulator starts.
             AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
@@ -242,6 +249,29 @@ internal sealed class RunSession : IDisposable
 
     /// <summary>The run's card prompts go to this session: the game keeps its selectors with the run it has set up.</summary>
     private void UseSelector() => _selectorScope = RunManager.Instance.CardSelectorStack.PushSelector(Player, _selector);
+
+    /// <summary>The run's chest picking, which awards its relics to this session (<see cref="Award"/>): the game makes it with the run it sets up.</summary>
+    private void UseTreasureAwards()
+    {
+        _treasure = RunManager.Instance.TreasureRoomRelicSynchronizer;
+        _treasure.RelicsAwarded += Award;
+    }
+
+    /// <summary>
+    /// The relics a chest's picking awards, obtained as the treasure screen obtains them once its animation ends, in
+    /// its order, each also leaving the other players' grab bags (<c>NTreasureRoomRelicCollection</c>). The game leaves
+    /// that to the screen, which never runs headless: without this, a relic picked from a chest was never the player's.
+    /// </summary>
+    private void Award(List<RelicPickingResult> results, bool lastRound)
+    {
+        foreach (var result in results.OrderBy(r => r.type))
+        {
+            if (result.type != RelicPickingResultType.Skipped)
+                Track(RelicCmd.Obtain(result.relic.ToMutable(), result.player!), $"obtain {result.relic.Id.Entry}");
+            foreach (var player in Run.Players)
+                if (player != result.player) player.RelicGrabBag.MoveToFallback(result.relic);
+        }
+    }
 
     /// <summary>The current node's SL clone: its checkpoint and the decisions since, with the run's rule.</summary>
     public NodeClone Clone() => new(_checkpoint ?? throw new InvalidOperationException("no node entered yet"), [.. _trace.Skip(NodeStart)], Setup.AutoWin);
@@ -687,6 +717,7 @@ internal sealed class RunSession : IDisposable
         HeadlessPatches.NodeEntered = null;
         HeadlessPatches.RoomSaved = null;
         _selectorScope?.Dispose();
+        if (_treasure != null) _treasure.RelicsAwarded -= Award;
         // Nothing runs while a prompt waits: the game stands where it asked until its run is cleaned up.
         _pump.Drain();
         // As the combat's end would; nothing where none is going on.

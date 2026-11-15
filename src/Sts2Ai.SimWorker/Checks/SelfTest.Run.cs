@@ -1,5 +1,6 @@
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Relics;
+using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Brain;
 using Sts2Ai.GameBridge.Actions;
 using Sts2Ai.Harness;
@@ -220,6 +221,49 @@ internal static partial class SelfTest
             Asked = true;
             return CombatAction.EndTurn;
         }
+    }
+
+    /// <summary>
+    /// A relic picked from a chest is the player's once the pick is done, as the treasure screen obtains it: the game
+    /// leaves that to the screen. A run with random policies and the first act's auto-win rule, to its first chest.
+    /// </summary>
+    private static void ChestRelicIsThePlayers(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed + 8);
+        string? picked = null;
+        var random = new RandomMacro(rng);
+        var macro = new BeforeMacro(random, decision =>
+        {
+            if (decision.Surface != Surfaces.Treasure || picked != null) return null;
+            picked = RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics![0].Id.Entry;
+            return MacroAction.Of(MacroAction.Relic, 0);
+        });
+        string label = $"run {GameSeeds.MakeSeed(seed + 8, 0)}";
+        string? wrong;
+        try
+        {
+            using var session = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(seed + 8, 0), AutoWin: [0]), FirstPicks.Instance,
+                new PlayPolicy(rng), macro);
+            for (int i = 0; i < 5000 && !session.IsOver && picked == null; i++) session.Step();
+            string relics = string.Join(",", session.Player.Relics.Select(r => r.Id.Entry));
+            wrong = picked == null ? "no chest met"
+                : !session.Player.Relics.Any(r => r.Id.Entry == picked) ? $"{picked} picked, relics {relics}"
+                : null;
+            // The run goes on from the chest: nothing the award started is left waiting.
+            if (wrong == null) session.Step();
+        }
+        catch (Exception e)
+        {
+            wrong = $"{e.GetType().Name}: {Logs.FirstLine(e.Message)}";
+        }
+        if (HeadlessGame.TakeErrors() is [var error, ..]) wrong ??= $"game error: {Logs.FirstLine(error)}";
+        check("a relic picked from a chest is the player's", wrong == null, $"{label}: {wrong}");
+    }
+
+    /// <summary>A macro policy that answers first where its rule does, and leaves the rest to another.</summary>
+    private sealed class BeforeMacro(IMacroPolicy other, Func<MacroDecision, MacroAction?> first) : IMacroPolicy
+    {
+        public MacroAnswer Choose(MacroDecision decision) => first(decision) is { } action ? new(action) : other.Choose(decision);
     }
 
     /// <summary>
