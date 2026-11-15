@@ -2,6 +2,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.Models;
+using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -171,10 +172,15 @@ internal static class NodeRecord
 
     // ---- the player's decisions ----
 
-    /// <summary>Card plays, potions, the turn's end and the map's travel all go through the action queue.</summary>
-    private static void Queued(GameAction action) => Guard(() =>
+    /// <summary>
+    /// Card plays, potions, the turn's end and the map's travel all go through the action queue. A play-phase action
+    /// asked for in the enemy's turn is put aside and asked for again once the player's turn begins (or dropped if the
+    /// combat ends first): it is taken then, once, where it runs.
+    /// </summary>
+    private static void Queued(ActionQueueSynchronizer __instance, GameAction action) => Guard(() =>
     {
         if (_run is not { } run || LocalContext.GetMe(run) is not { } me) return;
+        if (action.ActionType == GameActionType.CombatPlayPhaseOnly && __instance.CombatState == ActionSynchronizerCombatState.NotPlayPhase) return;
         switch (action)
         {
             case PlayCardAction play:
