@@ -21,4 +21,5 @@ The two environments are never ranked together, nor two characters or ascensions
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
-| combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone **(champion)** | 2026-11-14 | `b7e8d79` | 35.5 % (71/200, 29.2 %–42.3 %) | 38.49 | 183 | 102.7 |
+| combat plan c10-2-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2-2 clone, macro prompts l0 v10-2-2 clone **(champion)** | 2026-11-15 | `4e0ec5d` | 41.5 % (83/200, 34.9 %–48.4 %) | 41.71 | 193 | 104.2 |
+| combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone | 2026-11-14 | `b7e8d79` | 35.5 % (71/200, 29.2 %–42.3 %) | 38.49 | 183 | 102.7 |
