@@ -9,10 +9,13 @@ description in each of the game's 17 languages. The game reads a subscribed item
 | `make.py` | writes every `LANGUAGE.bbcode`: the texts and the win numbers are in it, the characters' and Ascension's names are the game's own |
 | `names.mjs` | reads those names from the game's `.pck` into `tmp/workshop/names.json`, which `make.py` reads |
 | `item.txt` | the item's id, written once by `workshop create` |
+| `preview.html`, `preview.png` | the item's preview image, 1024 x 1024 (Steam takes up to 1 MB), and the page it is rendered from in a headless Chrome |
 
 ```bash
 node distro/workshop/names.mjs "PATH/Slay the Spire 2/SlayTheSpire2.pck" ascension main_menu_ui > tmp/workshop/names.json
 python3 -I distro/workshop/make.py
+google-chrome --headless=new --hide-scrollbars --user-data-dir="$PWD/tmp/workshop/chrome" --window-size=1024,1024 \
+  --virtual-time-budget=8000 --screenshot="$PWD/distro/workshop/preview.png" "file://$PWD/distro/workshop/preview.html"
 ```
 
 ## Uploading
@@ -25,7 +28,7 @@ repository's root:
 dotnet build src/Sts2Ai.Workshop -c Release
 src/Sts2Ai.Workshop/bin/Release/net9.0/workshop check
 src/Sts2Ai.Workshop/bin/Release/net9.0/workshop create
-src/Sts2Ai.Workshop/bin/Release/net9.0/workshop upload --content out/Sts2Ai --visibility private --branches public-beta:public-beta --note "what changed"
+src/Sts2Ai.Workshop/bin/Release/net9.0/workshop upload --content out/Sts2Ai --preview distro/workshop/preview.png --visibility private --branches public-beta:public-beta --note "what changed"
 ```
 
 - `check` says what Steam sees: logged on, the game's branch, and the item's title, visibility, size and last update.
