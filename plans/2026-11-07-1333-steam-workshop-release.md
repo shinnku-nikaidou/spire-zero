@@ -233,3 +233,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   `brain/champion.json` names v10-2-2 / c10-2-2 and its nets are byte for byte `weights/all/`'s. Installed in `mods/`
   over 0.3.4 (the game still running 0.3.4's code until restarted). The listing's win table is v10-2 + c10-2's: it
   needs the new pair's numbers before the next upload.
+- 2026-11-15 19:01: 0.3.7 at 48cae06c (0.3.6 with chest relics in the brain's clones: a relic picked from a chest is
+  the player's, as the game's treasure screen obtains it; the user, through the mod session: "修"). Built with
+  distro/build.sh (378 MB, three platforms; the champion v10-2-2 + c10-2-2). The item's Linux brain on `clones` over
+  the user's 0.3.4 game log (18:22–18:45, floors 35–49) against the Steam install's game files: 266/266 SL decisions
+  asked the same (265 before the fix). Installed in `mods/Sts2Ai` by swapping the folder (0.3.6 moved to
+  `tmp/modeng/old-installs/`); the game was running 0.3.6 and loads 0.3.7 once restarted.
