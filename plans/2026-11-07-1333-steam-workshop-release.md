@@ -183,3 +183,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   `distro/workshop/LANGUAGE.bbcode` in the game's 17 languages (the user: the listing in many languages; only what was
   done, "沒做過的事情直接不寫"), with each character's SL wins at A0 and A10 for v10-2 + c10-2.
   Step 14 as the user put it: the Steam website steps are mine in Chrome, the user only accepts the agreement.
+- 2026-11-15 16:24: the item is 3840142917 (`workshop create`; Steam asked for no agreement, the account had accepted
+  it). 0.3.0 built at aefa47a0 (378 MB) and uploaded private with `--branches public-beta:public-beta` in 45 s, the 17
+  languages' texts after it; `workshop check`: private, 394.1 MB. The page renders the lists and the table; no preview
+  image yet. Subscribed with the user's account in Chrome: Steam downloaded it to
+  `steamapps/workshop/content/2868840/3840142917`, the same files as `out/Sts2Ai` (`diff -rq`), the Linux launcher and
+  engine still executable. The `mods_STEAMTEST` copy moved to `tmp/modeng/old-installs/`, so the game loads the
+  Workshop's. Next: C, the real game on each platform through the subscription, then a preview image and public.
