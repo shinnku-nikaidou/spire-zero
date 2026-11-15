@@ -274,3 +274,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   part was put together by the script's own steps in `tmp/player-interaction/item-0.3.9-linux/`, and `out/` still holds
   0.3.8's full item. The item's Linux brain on `clones` (the user's game, decision 779 with the step kept): the same.
   Installed in `mods/Sts2Ai` (0.3.8 moved to `tmp/modeng/old-installs/`). Not uploadable: the full 0.3.9 needs the Mac.
+- 2026-11-15 21:04: version numbers are this session's from now on (the user: "你就負責一直發版本號，我告訴你要上傳workshop再說");
+  uploads wait for the user's word. 0.3.10 at 1b62acaa: 93b43011's shop fix (the AI buys only once the shop has been
+  open half a second; the game died at 20:52 in NMerchantCard.DoRelicFlash) on top of 0.3.9. The Mac still unreachable,
+  so built with the new `LINUX_ONLY=1` of `distro/build.sh` (973790c7: linux-x64 alone into `tmp/item/REV/Sts2Ai`, `out/`
+  untouched; 51 s). Its brain on `run --check` (IRONCLAD A10, low, seed 1138): identical over the wire, 31/31 nodes and
+  18/18 saves in a finished room replay exactly, 0 game errors. Installed in `mods/` over 0.3.9 with the game closed.
+  The game compares manifest versions as numbers (SemanticVersion), so 0.3.10 is above the Workshop's 0.3.7.
