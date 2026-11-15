@@ -470,7 +470,7 @@ def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options:
     save(job, {
         "job": job, "kind": kind, "character": parts[0].upper(), "env": parts[1],
         "owner": os.environ.get("OWNER", "main"), "purpose": purpose, "rev": full,
-        "game": os.environ.get("GAME", "v0.113.0"), "options": options, "inputs": inputs or "git at rev, nets from weights/all",
+        "game": os.environ.get("GAME", "v0.113.1"), "options": options, "inputs": inputs or "git at rev, nets from weights/all",
         "box": {
             "step": name, "priority": priority,
             "deadline": iso_utc(deadline) if deadline else None, "deadline_epoch": deadline,

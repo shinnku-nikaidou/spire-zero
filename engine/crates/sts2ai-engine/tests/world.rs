@@ -74,6 +74,11 @@ fn every_combat_is_played_through() {
         }
         played += 1;
         let actions = actions(&folder);
+        // A combat over at its first record (an encounter with no monster) has nothing to play.
+        if actions.len() == 1 {
+            whole += 1;
+            continue;
+        }
         let Some(first) =
             (0..actions.len()).find(|k| folder.join(format!("{k}.export.json")).exists())
         else {

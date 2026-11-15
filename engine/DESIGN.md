@@ -245,7 +245,7 @@ puts a selector of its own on the selector stack.
 
 ```
 { "format": 1,
-  "game": "v0.113.0",                                         // port.toml [game]
+  "game": "v0.113.1",                                         // port.toml [game]
   "roots":   [{ "name": "combat_manager__instance",           // the statics that are state (port.toml [roots])
                 "class": "MegaCrit.Sts2.Core.Combat.CombatManager", "member": "Instance",
                 "cs": "<Instance>k__BackingField",            // the static field, as reflection names it
@@ -308,7 +308,7 @@ puts a selector of its own on the selector stack.
 it (`import.rs`, with the reader `port` generates beside the structs, `gen/import.rs`). Format 1:
 
 ```json
-{ "format": 1, "game": "v0.113.0", "schema": "9f2c..", "sim": { "prompts": 0 },
+{ "format": 1, "game": "v0.113.1", "schema": "9f2c..", "sim": { "prompts": 0 },
   "roots":  { "combat_manager__instance": ["combat_manager", 0], "local_context__net_id": 1 },
   "arenas": { "creature":   [ { "class": "Creature", "Creature": { "_block": 0, "_current_hp": 70 } } ],
               "card_model": [ { "class": "Deflect",
@@ -491,7 +491,7 @@ other class. `rt::random` is the same generator written by hand and checked bit 
 another) and formats `src/gen/`.
 `engine/gen.sh --check` then runs `cargo check`; a translated function rustc refuses goes on the quarantine list
 (`tmp/engine/quarantine.txt`), `port` writes its body as a `todo!` and counts it, and the loop repeats until the crate
-compiles. The list is for a new game version's surprises; on v0.113.0 it is empty.
+compiles. The list is for a new game version's surprises; on v0.113.1 it is empty.
 
 `port` prints its report and writes it in full to `gen/report.txt`: the hand-stated facts about the game's classes
 with the code each rests on (When the game changes), classes and members translated, members not translated with the

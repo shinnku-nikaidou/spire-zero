@@ -27,7 +27,7 @@ ROOT = POOL.parent
 HUB, ON = POOL / "hub.sh", POOL / "on.sh"
 CONFIG = Path.home() / ".config" / "sts2"
 KEY, PIN, CERT = CONFIG / "dist-key", CONFIG / "dist-pin", CONFIG / "dist-cert.pem"
-GAME = "v0.113.0"
+GAME = "v0.113.1"
 # all the sim loads of the game's folder: the rest of the snapshot is .NET's, which comes from dotnet/, and nothing else is read
 GAME_FILES = [
     "sts2.dll", "GodotSharp.dll", "0Harmony.dll", "Sentry.dll", "Sentry.Godot.dll", "Steamworks.NET.dll",
