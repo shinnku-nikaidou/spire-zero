@@ -65,8 +65,12 @@ internal static class HeadlessGame
         }
     }
 
+    /// <summary>The game's version: the one the program that started this one names (STS2_GAME_VERSION: the mod, from
+    /// the running game, whose install keeps release_info.json beside the folder of its assemblies, not in it), else the
+    /// snapshot's release_info.json.</summary>
     private static string ReadGameVersion()
     {
+        if (Environment.GetEnvironmentVariable("STS2_GAME_VERSION") is { Length: > 0 } named) return named;
         var path = Path.Combine(GameAssemblies.BinDir, "release_info.json");
         if (!File.Exists(path)) return "unknown";
         using var doc = JsonDocument.Parse(File.ReadAllText(path));

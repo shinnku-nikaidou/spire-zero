@@ -9,17 +9,19 @@ namespace Sts2Ai.Mod;
 /// The brain that ships in the mod's folder, so a player needs nothing else: brain/RID/ holds a
 /// self-contained brain for each platform, brain/ its champion file and nets. It runs as a child process of the game,
 /// talking on its stdin and stdout, with the running game's own assemblies (STS2_BIN_DIR, the folder the game loaded
-/// sts2.dll from) and its working directory brain/; its stderr goes to <see cref="LogPath"/>. With
+/// sts2.dll from) and version (STS2_GAME_VERSION, which the live combats it writes out carry for the engine) and its
+/// working directory brain/; its stderr goes to <see cref="LogPath"/>. With
 /// <see cref="Settings.Record"/> it also writes what it gets and decides beside that log (<see cref="Captures"/>).
 /// </summary>
 internal sealed class BundledBrain
 {
     private readonly string _dir;
     private readonly string _gameBin;
+    private readonly string _gameVersion;
     private bool _started;
 
-    private BundledBrain(string dir, string launcher, string gameBin, string logPath) =>
-        (_dir, Launcher, _gameBin, LogPath) = (dir, launcher, gameBin, logPath);
+    private BundledBrain(string dir, string launcher, string gameBin, string gameVersion, string logPath) =>
+        (_dir, Launcher, _gameBin, _gameVersion, LogPath) = (dir, launcher, gameBin, gameVersion, logPath);
 
     public string Launcher { get; }
 
@@ -29,13 +31,13 @@ internal sealed class BundledBrain
     public string LogPath { get; }
 
     /// <summary>The brain beside the mod for this platform, or null when the mod ships none (an install for development).</summary>
-    public static BundledBrain? Find(string modDir, string gameBin, string logPath)
+    public static BundledBrain? Find(string modDir, string gameBin, string gameVersion, string logPath)
     {
         string os = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux";
         string rid = $"{os}-{RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()}";
         var dir = Path.Combine(modDir, "brain");
         var launcher = Path.Combine(dir, rid, OperatingSystem.IsWindows() ? "Sts2Ai.SimWorker.exe" : "Sts2Ai.SimWorker");
-        return File.Exists(launcher) ? new BundledBrain(dir, launcher, gameBin, logPath) : null;
+        return File.Exists(launcher) ? new BundledBrain(dir, launcher, gameBin, gameVersion, logPath) : null;
     }
 
     /// <summary>Starts the brain, runs <paramref name="session"/> on its stdin and stdout, and ends it; why it ended.</summary>
@@ -57,6 +59,7 @@ internal sealed class BundledBrain
             UseShellExecute = false,
         };
         start.Environment["STS2_BIN_DIR"] = _gameBin;
+        start.Environment["STS2_GAME_VERSION"] = _gameVersion;
         // As every launcher of the simulator sets it.
         start.Environment["DOTNET_ReadyToRun"] = "0";
         // The game's Sentry extension sets this in the game's process. Inherited, it makes sts2.dll's module

@@ -3,7 +3,9 @@
 # plans/2026-11-07-1333-steam-workshop-release.md); out/commit names the commit. Intermediate files: tmp/item/REV/.
 #
 #   out/Sts2Ai/Sts2Ai.json, Sts2Ai.dll    the mod (one build, for every platform: it runs on the game's own .NET)
-#   out/Sts2Ai/brain/RID/                 the brain for each platform, self-contained (BundledBrain starts it)
+#   out/Sts2Ai/brain/RID/                 the brain for each platform, self-contained (BundledBrain starts it), and
+#                                         the engine its SL planner searches in: libsts2ai_engine and the schema the
+#                                         mod writes the live combat out along (sts2ai_engine.schema.json)
 #   out/Sts2Ai/brain/champion.json        the NoSL champion's file, its nets under brain/nets/: the brain plays it for
 #                                         NoSL and, with the SL planner and L0 on the node's clone, for SL
 #
@@ -13,6 +15,10 @@
 # "name" field makes it log an error.
 # Apple silicon runs only signed code, and the launcher made here is unsigned (macOS kills it, exit 137), so it is signed
 # ad-hoc on a Mac with Xcode's codesign: STS2_MAC=user@host in the repository's .env, reached by ssh.
+# The engine's code is made here from the decompiled game of the version REV pins (engine/gen.sh; it never goes into
+# git, engine/DESIGN.md), and only the libraries ship: linux-x64's built here, osx-arm64's on the Mac with its Rust,
+# whose linker signs it. Linux and macOS arm64 only for now: Windows comes later, with its engine
+# (plans/2026-11-15-1240-mod-engine.md, D1).
 set -e
 R=$(cd "$(dirname "$0")/.." && pwd)
 . "$R/.env"
@@ -20,15 +26,18 @@ R=$(cd "$(dirname "$0")/.." && pwd)
 rev=$(git -C "$R" rev-parse --short "${1:-HEAD}")
 B=$R/tmp/item/$rev
 I=$R/out/Sts2Ai
-rids="linux-x64 osx-arm64 win-x64"
+rids="linux-x64 osx-arm64"
 
 rm -rf "$B"
 mkdir -p "$B/src"
 git -C "$R" archive "$rev" | tar -x -C "$B/src"
 export DOTNET_ROOT="$HOME/.dotnet" DOTNET_CLI_TELEMETRY_OPTOUT=1
 dotnet="$HOME/.dotnet/dotnet"
+# The game REV is written for: the snapshot its own GameReferences.props names.
+game=$(sed -n 's|.*tmp/gamebin/\(v[0-9.]*\)</Sts2BinDir>.*|\1|p' "$B/src/src/GameReferences.props")
+[ -d "$R/tmp/gamebin/$game" ] && [ -d "$R/tmp/decompiled/sts2-$game" ] || { echo "build.sh: no snapshot or decompile of game $game" >&2; exit 1; }
 # The archive sits inside this checkout, so left alone the build would stamp the checkout's HEAD, not REV.
-set -- -p:Sts2BinDir="$R/tmp/gamebin/v0.113.1" -p:SourceRevisionId="$(git -C "$R" rev-parse "$rev")" \
+set -- -p:Sts2BinDir="$R/tmp/gamebin/$game" -p:SourceRevisionId="$(git -C "$R" rev-parse "$rev")" \
   -p:UseArtifactsOutput=true -p:ArtifactsPath="$B/art" -v q -nologo
 
 "$dotnet" build "$B/src/src/Sts2Ai.Mod" -c Release "$@"
@@ -36,6 +45,15 @@ set -- -p:Sts2BinDir="$R/tmp/gamebin/v0.113.1" -p:SourceRevisionId="$(git -C "$R
 for rid in $rids; do
   "$dotnet" publish "$B/src/src/Sts2Ai.SimWorker" "$@" -p:PublishProfile=brain -r "$rid" -o "$B/brain/$rid"
 done
+
+# The engine beside each brain, where Native looks for it.
+STS2_DECOMPILED="$R/tmp/decompiled/sts2-$game" STS2_BIN_DIR="$R/tmp/gamebin/$game" "$B/src/engine/gen.sh" --check >&2
+(cd "$B/src/engine" && cargo build --release -q)
+cp "$B/src/engine/target/release/libsts2ai_engine.so" "$B/brain/linux-x64/"
+tar -C "$B/src" --exclude=engine/target -cf - engine | ssh "$STS2_MAC" \
+  'set -e; d=$(mktemp -d); trap "rm -rf $d" EXIT; tar -xf - -C "$d"; cd "$d/engine"; PATH="$HOME/.cargo/bin:$PATH" cargo build --release -q >&2
+   codesign -v target/release/libsts2ai_engine.dylib >&2; cat target/release/libsts2ai_engine.dylib' > "$B/brain/osx-arm64/libsts2ai_engine.dylib"
+for rid in $rids; do cp "$B/src/engine/crates/sts2ai-engine/src/gen/schema.json" "$B/brain/$rid/sts2ai_engine.schema.json"; done
 
 launcher=$B/brain/osx-arm64/Sts2Ai.SimWorker
 ssh "$STS2_MAC" 'f=$(mktemp) && cat > "$f" && codesign -s - -f "$f" && codesign -v "$f" && cat "$f" && rm -f "$f"' \
