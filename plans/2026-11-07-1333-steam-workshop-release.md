@@ -268,3 +268,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   56 HP and the Flex Potion kept. Installed in `mods/Sts2Ai` by swapping the folder (0.3.7 moved to
   `tmp/modeng/old-installs/`). The local 0.3.8 is above the Workshop's 0.3.7, so the game loads 0.3.8: a real-game
   test from now on tests 0.3.8, not the uploaded build.
+- 2026-11-15 20:42: 0.3.9 at 84edc72a (an act's last rewards_done is final in the record, so the Architect's room is
+  asked on the right clone; no decision is read while a relic flashes; both from the user's 0.3.8 game). Linux only:
+  the Mac did not answer (no route to host), so `distro/build.sh` stopped before macOS's engine and launcher; the Linux
+  part was put together by the script's own steps in `tmp/player-interaction/item-0.3.9-linux/`, and `out/` still holds
+  0.3.8's full item. The item's Linux brain on `clones` (the user's game, decision 779 with the step kept): the same.
+  Installed in `mods/Sts2Ai` (0.3.8 moved to `tmp/modeng/old-installs/`). Not uploadable: the full 0.3.9 needs the Mac.
