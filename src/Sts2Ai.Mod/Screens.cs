@@ -52,6 +52,10 @@ internal sealed class Screens
     public Asking? Read(RunState run, Player me, out string note)
     {
         note = "";
+        // A relic's flash shows its full count for a second (Iron Club, Pendulum and 19 more read their counter off
+        // _isActivating), and the live combat's export carries it. The simulator's flashes end at once, so it never asks
+        // a decision during one.
+        if (me.Relics.Any(Flashing)) return null;
         var top = ActiveScreenContext.Instance.GetCurrentScreen();
         // Prompts wait inside an action or a reward; every other screen waits with the action queue empty.
         bool settled = RunManager.Instance.ActionQueueSet.IsEmpty;
@@ -167,6 +171,15 @@ internal sealed class Screens
         if (legal.Count == 0) return null;
         if (potions) legal.AddRange(PotionActions.Legal(me));
         return new Asking(surface, Observe.Of(run, me, screen), [.. legal.Select(a => a.ToString())], source);
+    }
+
+    private static readonly Dictionary<Type, System.Reflection.FieldInfo?> FlashFields = [];
+
+    private static bool Flashing(RelicModel relic)
+    {
+        var type = relic.GetType();
+        if (!FlashFields.TryGetValue(type, out var field)) FlashFields[type] = field = AccessTools.Field(type, "_isActivating");
+        return field?.GetValue(relic) is true;
     }
 
     /// <summary>A private field of the game's node, by name. A field the game no longer has is an error that names it:
