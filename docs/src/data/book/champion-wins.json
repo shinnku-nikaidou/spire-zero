@@ -8,38 +8,38 @@
   {
    "character": "IRONCLAD",
    "ascension": 10,
-   "runs": 36,
-   "won": 13
+   "runs": 200,
+   "won": 71
   },
   {
    "character": "SILENT",
    "ascension": 10,
-   "runs": 35,
-   "won": 11
+   "runs": 200,
+   "won": 41
   },
   {
    "character": "DEFECT",
    "ascension": 10,
-   "runs": 144,
-   "won": 29
+   "runs": 200,
+   "won": 33
   },
   {
    "character": "REGENT",
    "ascension": 10,
-   "runs": 37,
-   "won": 6
-  },
-  {
-   "character": "FOOL",
-   "ascension": 10,
-   "runs": 39,
-   "won": 1
+   "runs": 200,
+   "won": 17
   },
   {
    "character": "NECROBINDER",
    "ascension": 10,
-   "runs": 35,
-   "won": 0
+   "runs": 200,
+   "won": 14
+  },
+  {
+   "character": "FOOL",
+   "ascension": 10,
+   "runs": 200,
+   "won": 3
   }
  ]
 }

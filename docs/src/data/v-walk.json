@@ -1,55 +1,40 @@
 {
- "source": "the champion's V, weights/all/v10-1-2.json, tests[0]; vectors show their first four numbers",
+ "source": "the champion's V, weights/all/v10-2.json, tests[0]; vectors show their first four numbers",
  "run": {
-  "character": "SILENT",
-  "ascension": 6,
-  "floor": 15,
-  "hp": 25,
-  "max_hp": 70,
-  "gold": 146,
-  "deck": 20,
+  "character": "NECROBINDER",
+  "ascension": 9,
+  "floor": 1,
+  "hp": 52,
+  "max_hp": 66,
+  "gold": 99,
+  "deck": 13,
   "relics": 4,
   "potions": 0,
   "slots": 2,
-  "after": "Monster",
+  "after": "Ancient",
   "entering": false
  },
  "tags": {
   "cards": [
-   "DEFEND_SILENT ×5",
-   "STRIKE_SILENT ×3",
-   "ACROBATICS+",
+   "DEFEND_NECROBINDER ×5",
+   "STRIKE_NECROBINDER ×5",
    "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
-   "BACKFLIP",
-   "CALTROPS+",
-   "CLUMSY (Ethereal, Unplayable)",
-   "DASH",
-   "FLECHETTES",
-   "MIRAGE (Exhaust)",
-   "NEUTRALIZE",
-   "NOXIOUS_FUMES",
-   "SERPENT_FORM",
-   "SURVIVOR"
+   "BODYGUARD",
+   "UNLEASH"
   ],
   "damage": [
-   "STRIKE_SILENT 0.30 ×3",
-   "DASH 0.50",
-   "FLECHETTES 0.25",
-   "NEUTRALIZE 0.15"
+   "STRIKE_NECROBINDER 0.30 ×5"
   ],
   "block": [
-   "DEFEND_SILENT 0.25 ×5",
-   "BACKFLIP 0.25",
-   "DASH 0.50",
-   "SURVIVOR 0.40"
+   "DEFEND_NECROBINDER 0.25 ×5"
   ],
   "grown": [],
-  "modified": 3,
+  "modified": 1,
   "relics": [
-   "RING_OF_THE_SNAKE",
-   "NEW_LEAF",
-   "ANCHOR",
-   "BEATING_REMNANT"
+   "BOUND_PHYLACTERY",
+   "LARGE_CAPSULE",
+   "KUSARIGAMA",
+   "CHANDELIER"
   ],
   "counters": [],
   "statuses": {
@@ -59,175 +44,232 @@
   "kept": [],
   "potions": [],
   "context": [
-   "character:SILENT",
+   "character:NECROBINDER",
    "act:UNDERDOCKS",
    "boss:LAGAVULIN_MATRIARCH_BOSS",
    "ancient:NEOW"
   ],
   "map": [
-   "RestSite+1",
-   "Boss+2"
+   "Monster+1",
+   "Monster+1",
+   "Monster+1",
+   "Monster+2",
+   "Monster+2",
+   "Unknown+2",
+   "Monster+2",
+   "Shop+3",
+   "Monster+3",
+   "Unknown+3",
+   "Monster+3",
+   "Shop+3",
+   "Monster+4",
+   "Unknown+4",
+   "Monster+4",
+   "Unknown+4",
+   "Unknown+5",
+   "Monster+5",
+   "RestSite+5",
+   "RestSite+5",
+   "Elite+6",
+   "RestSite+6",
+   "Elite+6",
+   "Monster+6",
+   "Elite+6",
+   "RestSite+7",
+   "Unknown+7",
+   "Elite+7",
+   "RestSite+7",
+   "Monster+8",
+   "Unknown+8",
+   "Unknown+8",
+   "Elite+8",
+   "Shop+8",
+   "Treasure+9",
+   "Treasure+9",
+   "Treasure+9",
+   "Treasure+9",
+   "Unknown+10",
+   "Monster+10",
+   "Elite+10",
+   "Unknown+10",
+   "Unknown+11",
+   "RestSite+11",
+   "Monster+11",
+   "RestSite+11",
+   "Unknown+12",
+   "Monster+12",
+   "Monster+12",
+   "Elite+13",
+   "Unknown+13",
+   "Elite+13",
+   "Monster+13",
+   "Monster+14",
+   "Monster+14",
+   "Monster+14",
+   "RestSite+15",
+   "RestSite+15",
+   "Boss+16"
   ]
  },
  "lookup": [
   [
-   "ACROBATICS",
-   5
+   "ASCENDERS_BANE",
+   26
   ],
   [
-   "STRIKE_SILENT",
-   602
+   "STRIKE_NECROBINDER",
+   600
   ],
   [
    "keyword:Eternal",
    31
   ],
   [
-   "RING_OF_THE_SNAKE",
-   239
+   "BOUND_PHYLACTERY",
+   35
   ],
   [
-   "character:SILENT",
-   32
+   "character:NECROBINDER",
+   30
   ],
   [
-   "RestSite+1",
-   171
+   "Monster+1",
+   129
   ],
   [
-   "Boss+2",
-   67
+   "Monster+1",
+   129
   ]
  ],
  "card_vectors": [
   [
-   "DEFEND_SILENT",
+   "DEFEND_NECROBINDER",
    "E + 0.25·K",
    [
-    -0.096,
-    -0.21,
-    0.141,
-    0.144
+    -0.018,
+    -0.001,
+    0.034,
+    0.015
    ]
   ],
   [
-   "STRIKE_SILENT",
+   "STRIKE_NECROBINDER",
    "E + 0.30·D",
    [
-    0.127,
-    0.04,
-    0.017,
-    -0.141
-   ]
-  ],
-  [
-   "ACROBATICS+",
-   "E + U",
-   [
-    0.423,
-    0.198,
-    0.186,
-    0.377
+    -0.007,
+    -0.034,
+    0.021,
+    0.02
    ]
   ],
   [
    "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
    "E + M[keyword:Eternal] + M[keyword:Ethereal] + M[keyword:Unplayable]",
    [
-    0.05,
-    -0.01,
-    0.233,
-    0.148
+    0.043,
+    -0.056,
+    0.228,
+    0.143
    ]
   ],
   [
-   "BACKFLIP",
-   "E + 0.25·K",
+   "BODYGUARD",
+   "E",
    [
-    -0.216,
-    0.207,
-    -0.226,
-    -0.121
+    -0.026,
+    0.006,
+    0.036,
+    0.004
+   ]
+  ],
+  [
+   "UNLEASH",
+   "E",
+   [
+    -0.035,
+    0.008,
+    0.042,
+    -0.008
    ]
   ]
  ],
  "phi": [
   [
-   "DEFEND_SILENT",
+   "DEFEND_NECROBINDER",
    [
-    0.259,
-    0.143,
-    0.4,
-    0.156
+    0.198,
+    0.136,
+    0.233,
+    0.034
    ],
-   3.85
+   3.19
   ],
   [
-   "STRIKE_SILENT",
+   "STRIKE_NECROBINDER",
    [
-    0.193,
-    0.404,
-    0.361,
-    0.221
+    0.127,
+    0.339,
+    0.332,
+    0.123
    ],
-   3.73
-  ],
-  [
-   "ACROBATICS+",
-   [
-    0.0,
-    0.414,
-    0.098,
-    0.061
-   ],
-   5.75
+   3.34
   ],
   [
    "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
    [
-    0.344,
-    0.703,
-    0.371,
-    0.304
+    0.254,
+    0.28,
+    0.205,
+    0.135
    ],
-   7.16
+   4.71
   ],
   [
-   "BACKFLIP",
+   "BODYGUARD",
    [
-    0.421,
-    0.122,
-    0.447,
-    0.363
+    0.35,
+    0.291,
+    0.307,
+    0.194
    ],
-   4.14
+   3.75
+  ],
+  [
+   "UNLEASH",
+   [
+    0.357,
+    0.223,
+    0.305,
+    0.168
+   ],
+   3.57
   ]
  ],
  "pool": {
-  "n": 20,
+  "n": 13,
   "mean": [
-   0.31,
-   0.338,
-   0.414,
-   0.278
+   0.199,
+   0.244,
+   0.28,
+   0.098
   ],
   "sum": [
-   0.387,
-   0.423,
-   0.517,
-   0.348
+   0.162,
+   0.198,
+   0.228,
+   0.08
   ]
  },
  "groups": [
   [
    "relics",
    [
-    0.237,
-    -0.216,
-    0.305,
-    0.386
+    -0.177,
+    -0.147,
+    0.145,
+    0.063
    ],
-   2.03
+   1.79
   ],
   [
    "potions",
@@ -242,49 +284,49 @@
   [
    "context",
    [
-    -0.255,
-    0.039,
-    0.174,
-    -0.691
+    0.029,
+    -0.032,
+    0.081,
+    -1.008
    ],
-   2.35
+   2.49
   ],
   [
    "map",
    [
-    -0.486,
-    0.369,
-    -0.083,
-    -0.116
+    5.535,
+    -0.577,
+    -0.099,
+    -1.42
    ],
-   2.21
+   13.98
   ]
  ],
  "numbers": [
   [
    "floor",
-   15.0,
-   0.155
+   1.0,
+   -1.328
   ],
   [
    "HP",
-   25.0,
-   -2.267
+   52.0,
+   -0.616
   ],
   [
    "max HP",
-   70.0,
-   -0.165
+   66.0,
+   -0.939
   ],
   [
    "gold",
-   146.0,
-   -0.186
+   99.0,
+   -0.539
   ],
   [
    "ascension",
-   6.0,
-   6.0
+   9.0,
+   9.0
   ],
   [
    "potion slots",
@@ -318,23 +360,37 @@
   ],
   "kept_zero": true,
   "b1": [
-   396,
+   351,
    512
   ],
   "b2": [
-   232,
+   196,
    512
   ]
  },
  "hazards": {
-  "start": 15,
-  "floors": 49,
+  "start": 1,
+  "floors": 63,
   "spans": [
    {
-    "from": 15,
+    "from": 1,
     "to": 16,
     "h": [
      0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0019,
+     0.0006,
+     0.0264,
+     0.0314,
+     0.037,
+     0.0,
+     0.0646,
+     0.0347,
+     0.019,
+     0.0274,
+     0.0272,
      0.0
     ]
    },
@@ -342,7 +398,7 @@
     "from": 17,
     "to": 17,
     "h": [
-     0.085
+     0.3133
     ],
     "boss": true
    },
@@ -351,19 +407,19 @@
     "to": 32,
     "h": [
      0.0,
-     0.0,
-     0.0,
+     0.0009,
+     0.0006,
      0.0038,
-     0.0097,
-     0.0217,
-     0.0313,
-     0.0282,
+     0.003,
+     0.003,
+     0.0357,
+     0.0342,
      0.0,
-     0.0296,
-     0.023,
-     0.0127,
-     0.017,
-     0.0359,
+     0.0285,
+     0.0336,
+     0.0217,
+     0.0262,
+     0.0311,
      0.0
     ]
    },
@@ -371,7 +427,7 @@
     "from": 33,
     "to": 33,
     "h": [
-     0.0801
+     0.2629
     ],
     "boss": true
    },
@@ -380,18 +436,18 @@
     "to": 47,
     "h": [
      0.0,
-     0.002,
-     0.0014,
-     0.018,
-     0.0141,
-     0.0114,
-     0.0168,
-     0.0002,
-     0.0264,
-     0.0139,
+     0.0024,
+     0.0038,
+     0.0065,
+     0.0058,
+     0.0046,
+     0.0212,
+     0.0,
      0.0332,
-     0.0269,
-     0.031,
+     0.0299,
+     0.0162,
+     0.0324,
+     0.0399,
      0.0
     ]
    },
@@ -399,7 +455,7 @@
     "from": 48,
     "to": 48,
     "h": [
-     0.2435
+     0.3789
     ],
     "boss": true
    },
@@ -407,9 +463,9 @@
     "from": 49,
     "to": 63,
     "h": [
+     0.0651,
+     0.0015,
      0.0002,
-     0.001,
-     0.0,
      0.0,
      0.0,
      0.0,
@@ -432,15 +488,15 @@
   ]
  },
  "reach": {
-  "17": 1.0,
-  "33": 0.7375,
-  "48": 0.5567
+  "17": 0.7592,
+  "33": 0.4161,
+  "48": 0.2514
  },
  "beat": {
-  "17": 0.915,
-  "33": 0.9199,
-  "48": 0.7565
+  "17": 0.6867,
+  "33": 0.7371,
+  "48": 0.6211
  },
- "value": 0.4206,
- "test_value": 0.420591315874077
+ "value": 0.1457,
+ "test_value": 0.1457302057142305
 }

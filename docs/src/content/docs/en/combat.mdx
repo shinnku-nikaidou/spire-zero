@@ -8,7 +8,7 @@ import BeamStepper from '../../../components/combat/BeamStepper.svelte';
 
 In SL, the environment that allows saving and loading, the AI holds a **copy** of the current room: an identical combat, down to which card is drawn next and what each enemy does next turn. So it does not have to guess. Before the fight starts, it plays the combat through many times on the copy, finds the line with the best outcome, and then follows that line in the real combat.
 
-Below is floor 17 of the book's example run: Ceremonial Beast, the act 1 boss, with the player at 58/70 HP. The AI thought for half a second at the first decision and got a line of 9 turns and 35 actions. It then followed the line all the way and never thought a second time. At the end of the combat, HP was still 58.
+Below is floor 17 of the book's example run: Ceremonial Beast, the act 1 boss, with the player at 53/70 HP. The AI thought for a second at the first decision and got a line of 19 turns and 73 actions. It then followed the line all the way and never thought a second time. At the end of the combat, 30 HP was left.
 
 <PlanTimeline client:visible lang="en" />
 
@@ -26,7 +26,7 @@ So a combat is no longer a gamble but a search for a path: many lines lead from 
 
 When a line has been played out, it leaves a run behind: how much HP remains, whether the potions are still there, whether the deck has changed. **V** says what that run is worth. V is a learned function that reads the current state of a run and estimates the chance of winning the whole run in the end. If the combat is lost, the run is over and worth 0.
 
-So the best line is the one with the highest V once it is played out. It need not lose the least HP or kill the fastest: losing a few more HP to keep a potion is the better line whenever V judges the trade worth it. The plan for the boss fight above is worth 0.99, meaning that after playing it out, V gives the run a 99% chance of winning to the end.
+So the best line is the one with the highest V once it is played out. It need not lose the least HP or kill the fastest: losing a few more HP to keep a potion is the better line whenever V judges the trade worth it. The plan for the boss fight above is worth 0.95, meaning that after playing it out, V gives the run a 95% chance of winning to the end.
 
 Positions in the middle of the search, where the combat is not over, also need a value before they can be compared. That value comes from the combat net: it predicts how the combat will end, and the same V turns that into a chance of winning the whole run.
 

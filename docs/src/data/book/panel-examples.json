@@ -3,47 +3,52 @@
  "sl_combat": {
   "source": {
    "title": "SL combat",
-   "how": "the first decision of the act 2 boss fight: the SL planner plans the fight",
-   "decision": 590,
+   "how": "the first decision of a fight: the SL planner plans the fight",
+   "decision": 652,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat plan c10-1-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-1-2 clone, macro prompts l0 v10-1-2 clone",
+   "champion": "combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone",
    "env": "SL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 33 · HP 69/70",
-   "zh-CN": "静默猎手 · A0 · 第 33 层 · HP 69/70",
-   "zh-TW": "寂靜獵手 · A0 · 第 33 層 · HP 69/70"
+   "en": "The Silent · A0 · floor 31 · HP 55/70",
+   "zh-CN": "静默猎手 · A0 · 第 31 层 · HP 55/70",
+   "zh-TW": "寂靜獵手 · A0 · 第 31 層 · HP 55/70"
   },
-  "floor": 33,
-  "hp": 69,
+  "floor": 31,
+  "hp": 55,
   "max_hp": 70,
   "surface": "combat",
   "next": {
-   "en": "Footwork+",
-   "zh-CN": "灵动步法+",
-   "zh-TW": "步法+"
+   "en": "Accelerant+",
+   "zh-CN": "触媒+",
+   "zh-TW": "催化劑+"
   },
   "route": false,
   "sub": {
-   "en": "this fight 100% · 69 HP left",
-   "zh-CN": "这场胜率 100% · 剩 69 HP",
-   "zh-TW": "這場勝率 100% · 剩 69 HP"
+   "en": "this fight 100% · 44 HP left",
+   "zh-CN": "这场胜率 100% · 剩 44 HP",
+   "zh-TW": "這場勝率 100% · 剩 44 HP"
   },
   "then": [
+   {
+    "en": "Dagger Throw → Chomper #1",
+    "zh-CN": "投掷匕首 → 啃咬机 #1",
+    "zh-TW": "投擲匕首 → 啃咬機 #1"
+   },
+   {
+    "en": "pick cards",
+    "zh-CN": "选牌",
+    "zh-TW": "選牌"
+   },
    {
     "en": "Defend",
     "zh-CN": "防御",
     "zh-TW": "防禦"
    },
    {
-    "en": "Backflip",
-    "zh-CN": "后空翻",
-    "zh-TW": "後空翻"
-   },
-   {
-    "en": "Deadly Poison+ → Knowledge Demon",
-    "zh-CN": "致命毒药+ → 知识恶魔",
-    "zh-TW": "致命毒藥+ → 知識惡魔"
+    "en": "Strike → Chomper #1",
+    "zh-CN": "打击 → 啃咬机 #1",
+    "zh-TW": "打擊 → 啃咬機 #1"
    },
    {
     "en": "end turn",
@@ -52,61 +57,61 @@
    }
   ],
   "later": {
-   "en": "11 more turns planned",
-   "zh-CN": "之后还规划 11 回合",
-   "zh-TW": "之後還規劃 11 回合"
+   "en": "8 more turns planned",
+   "zh-CN": "之后还规划 8 回合",
+   "zh-TW": "之後還規劃 8 回合"
   },
   "kind": "fight",
   "options": [
+   {
+    "name": {
+     "en": "Accelerant+",
+     "zh-CN": "触媒+",
+     "zh-TW": "催化劑+"
+    },
+    "value": 0.9841,
+    "ci": 0,
+    "win": 1,
+    "hp": 44,
+    "rooms": null
+   },
    {
     "name": {
      "en": "Footwork+",
      "zh-CN": "灵动步法+",
      "zh-TW": "步法+"
     },
-    "value": 0.9989,
+    "value": 0.9837,
     "ci": 0,
     "win": 1,
-    "hp": 69,
-    "rooms": null
-   },
-   {
-    "name": {
-     "en": "Strike → Knowledge Demon",
-     "zh-CN": "打击 → 知识恶魔",
-     "zh-TW": "打擊 → 知識惡魔"
-    },
-    "value": 0.9989,
-    "ci": 0,
-    "win": 1,
-    "hp": 69,
+    "hp": 41,
     "rooms": null
    }
   ],
-  "brain": "plan c10-1-2",
-  "seconds": 1.5,
-  "win": 0.9977713596620913,
-  "delta": -0.0,
+  "brain": "plan c10-2",
+  "seconds": 3.9,
+  "win": 0.980815159604775,
+  "delta": -0.0013,
   "recent": [
    {
-    "en": "floor 32 · go to Boss · 99.8%",
-    "zh-CN": "第 32 层 · 去 Boss · 99.8%",
-    "zh-TW": "第 32 層 · 去 頭目 · 99.8%"
+    "en": "floor 30 · go to Enemy · 98.1%",
+    "zh-CN": "第 30 层 · 去 敌人 · 98.1%",
+    "zh-TW": "第 30 層 · 去 敵人 · 98.1%"
    },
    {
-    "en": "floor 32 · leave · 99.8%",
-    "zh-CN": "第 32 层 · 离开 · 99.8%",
-    "zh-TW": "第 32 層 · 離開 · 99.8%"
+    "en": "floor 30 · leave the shop · 98.2%",
+    "zh-CN": "第 30 层 · 离开商店 · 98.2%",
+    "zh-TW": "第 30 層 · 離開商店 · 98.2%"
    },
    {
-    "en": "floor 32 · pick Footwork · 99.8%",
-    "zh-CN": "第 32 层 · 选 灵动步法 · 99.8%",
-    "zh-TW": "第 32 層 · 選 步法 · 99.8%"
+    "en": "floor 30 · pick Strike · 98.2%",
+    "zh-CN": "第 30 层 · 选 打击 · 98.2%",
+    "zh-TW": "第 30 層 · 選 打擊 · 98.2%"
    },
    {
-    "en": "floor 32 · Smith · 99.8%",
-    "zh-CN": "第 32 层 · 锻造 · 99.8%",
-    "zh-TW": "第 32 層 · 鍛造 · 99.8%"
+    "en": "floor 30 · remove a card (100 gold) · 98.2%",
+    "zh-CN": "第 30 层 · 移除一张牌（100 金币） · 98.2%",
+    "zh-TW": "第 30 層 · 移除一張牌（100 金幣） · 98.2%"
    }
   ]
  },
@@ -114,42 +119,47 @@
   "source": {
    "title": "NoSL combat",
    "how": "a turn's first decision in the act 3 boss fight: PIMC over 8 worlds",
-   "decision": 689,
+   "decision": 833,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat pimc c10-1-2 8x300, combat prompts first, macro l0 v10-1-2, macro prompts l0 v10-1-2",
+   "champion": "combat pimc c10-2 8x300, combat prompts first, macro l0 v10-2, macro prompts l0 v10-2",
    "env": "NoSL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 48 · HP 50/66",
-   "zh-CN": "静默猎手 · A0 · 第 48 层 · HP 50/66",
-   "zh-TW": "寂靜獵手 · A0 · 第 48 層 · HP 50/66"
+   "en": "The Silent · A0 · floor 48 · HP 70/70",
+   "zh-CN": "静默猎手 · A0 · 第 48 层 · HP 70/70",
+   "zh-TW": "寂靜獵手 · A0 · 第 48 層 · HP 70/70"
   },
   "floor": 48,
-  "hp": 50,
-  "max_hp": 66,
+  "hp": 70,
+  "max_hp": 70,
   "surface": "combat",
   "next": {
-   "en": "Footwork+",
-   "zh-CN": "灵动步法+",
-   "zh-TW": "步法+"
+   "en": "Backflip",
+   "zh-CN": "后空翻",
+   "zh-TW": "後空翻"
   },
   "route": false,
   "sub": null,
   "then": [
    {
-    "en": "Strike → Test Subject #C{Count}",
-    "zh-CN": "打击 → 实验体 #C{Count}",
-    "zh-TW": "打擊 → 實驗體 #C{Count}"
+    "en": "Defend",
+    "zh-CN": "防御",
+    "zh-TW": "防禦"
    },
    {
-    "en": "Survivor+",
-    "zh-CN": "生存者+",
-    "zh-TW": "生存者+"
+    "en": "Pinpoint+ → Test Subject #C{Count}",
+    "zh-CN": "精密瞄准+ → 实验体 #C{Count}",
+    "zh-TW": "精密瞄準+ → 實驗體 #C{Count}"
    },
    {
-    "en": "pick cards",
-    "zh-CN": "选牌",
-    "zh-TW": "選牌"
+    "en": "Sidestep+",
+    "zh-CN": "侧步+",
+    "zh-TW": "側步+"
+   },
+   {
+    "en": "Pinpoint+ → Test Subject #C{Count}",
+    "zh-CN": "精密瞄准+ → 实验体 #C{Count}",
+    "zh-TW": "精密瞄準+ → 實驗體 #C{Count}"
    },
    {
     "en": "end turn",
@@ -162,12 +172,24 @@
   "options": [
    {
     "name": {
-     "en": "Footwork+",
-     "zh-CN": "灵动步法+",
-     "zh-TW": "步法+"
+     "en": "Backflip",
+     "zh-CN": "后空翻",
+     "zh-TW": "後空翻"
     },
-    "value": 0.999,
-    "ci": 0.0001,
+    "value": 0.9881,
+    "ci": 0.0015,
+    "win": null,
+    "hp": null,
+    "rooms": null
+   },
+   {
+    "name": {
+     "en": "Defend+",
+     "zh-CN": "防御+",
+     "zh-TW": "防禦+"
+    },
+    "value": 0.9876,
+    "ci": 0.0016,
     "win": null,
     "hp": null,
     "rooms": null
@@ -178,53 +200,41 @@
      "zh-CN": "打击 → 实验体 #C{Count}",
      "zh-TW": "打擊 → 實驗體 #C{Count}"
     },
-    "value": 0.999,
-    "ci": 0.0001,
+    "value": 0.9874,
+    "ci": 0.0012,
     "win": null,
     "hp": null,
     "rooms": null
    },
    {
     "name": {
-     "en": "Haze+",
-     "zh-CN": "迷雾+",
-     "zh-TW": "迷霧+"
+     "en": "Sidestep+",
+     "zh-CN": "侧步+",
+     "zh-TW": "側步+"
     },
-    "value": 0.9989,
-    "ci": 0.0001,
+    "value": 0.987,
+    "ci": 0.0012,
     "win": null,
     "hp": null,
     "rooms": null
    },
    {
     "name": {
-     "en": "Bubble Bubble → Test Subject #C{Count}",
-     "zh-CN": "咕嘟冒泡 → 实验体 #C{Count}",
-     "zh-TW": "咕嘟冒泡 → 實驗體 #C{Count}"
+     "en": "Defend",
+     "zh-CN": "防御",
+     "zh-TW": "防禦"
     },
-    "value": 0.9988,
-    "ci": 0.0002,
-    "win": null,
-    "hp": null,
-    "rooms": null
-   },
-   {
-    "name": {
-     "en": "Survivor+",
-     "zh-CN": "生存者+",
-     "zh-TW": "生存者+"
-    },
-    "value": 0.9986,
-    "ci": 0.0002,
+    "value": 0.9869,
+    "ci": 0.0012,
     "win": null,
     "hp": null,
     "rooms": null
    }
   ],
-  "brain": "pimc c10-1-2",
-  "seconds": 0.4,
-  "win": 0.9980888370674725,
-  "delta": -0.0001,
+  "brain": "pimc c10-2",
+  "seconds": 0.8,
+  "win": 0.9994633254976415,
+  "delta": -0.0,
   "recent": [
    {
     "en": "floor 48 · end turn",
@@ -232,9 +242,9 @@
     "zh-TW": "第 48 層 · 結束回合"
    },
    {
-    "en": "floor 48 · Strike+ → Test Subject #C{Count}",
-    "zh-CN": "第 48 层 · 打击+ → 实验体 #C{Count}",
-    "zh-TW": "第 48 層 · 打擊+ → 實驗體 #C{Count}"
+    "en": "floor 48 · drink Weak Potion → Test Subject #C{Count}",
+    "zh-CN": "第 48 层 · 喝 虚弱药水 → 实验体 #C{Count}",
+    "zh-TW": "第 48 層 · 喝 虛弱藥水 → 實驗體 #C{Count}"
    },
    {
     "en": "floor 48 · drink Weak Potion → Test Subject #C{Count}",
@@ -242,9 +252,9 @@
     "zh-TW": "第 48 層 · 喝 虛弱藥水 → 實驗體 #C{Count}"
    },
    {
-    "en": "floor 48 · Mad Science+",
-    "zh-CN": "第 48 层 · 疯狂科学+",
-    "zh-TW": "第 48 層 · 瘋狂科學+"
+    "en": "floor 48 · Piercing Wail",
+    "zh-CN": "第 48 层 · 尖啸",
+    "zh-TW": "第 48 層 · 刺耳尖嚎"
    }
   ]
  },
@@ -252,32 +262,62 @@
   "source": {
    "title": "map",
    "how": "a map decision: L0 values each next point with V",
-   "decision": 546,
+   "decision": 467,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat plan c10-1-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-1-2 clone, macro prompts l0 v10-1-2 clone",
+   "champion": "combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone",
    "env": "SL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 29 · HP 70/70",
-   "zh-CN": "静默猎手 · A0 · 第 29 层 · HP 70/70",
-   "zh-TW": "寂靜獵手 · A0 · 第 29 層 · HP 70/70"
+   "en": "The Silent · A0 · floor 23 · HP 70/70",
+   "zh-CN": "静默猎手 · A0 · 第 23 层 · HP 70/70",
+   "zh-TW": "寂靜獵手 · A0 · 第 23 層 · HP 70/70"
   },
-  "floor": 29,
+  "floor": 23,
   "hp": 70,
   "max_hp": 70,
   "surface": "map",
   "next": {
-   "en": "go to Unknown",
-   "zh-CN": "去 未知",
-   "zh-TW": "去 未知"
+   "en": "go to Enemy",
+   "zh-CN": "去 敌人",
+   "zh-TW": "去 敵人"
   },
   "route": true,
   "sub": {
-   "en": "win chance 99.5%",
-   "zh-CN": "整局胜率 99.5%",
-   "zh-TW": "整局勝率 99.5%"
+   "en": "win chance 97.6%",
+   "zh-CN": "整局胜率 97.6%",
+   "zh-TW": "整局勝率 97.6%"
   },
   "then": [
+   {
+    "en": "Elite",
+    "zh-CN": "精英",
+    "zh-TW": "菁英"
+   },
+   {
+    "en": "Treasure",
+    "zh-CN": "宝箱",
+    "zh-TW": "財寶"
+   },
+   {
+    "en": "Elite",
+    "zh-CN": "精英",
+    "zh-TW": "菁英"
+   },
+   {
+    "en": "Unknown",
+    "zh-CN": "未知",
+    "zh-TW": "未知"
+   },
+   {
+    "en": "Enemy",
+    "zh-CN": "敌人",
+    "zh-TW": "敵人"
+   },
+   {
+    "en": "Unknown",
+    "zh-CN": "未知",
+    "zh-TW": "未知"
+   },
    {
     "en": "Elite",
     "zh-CN": "精英",
@@ -299,15 +339,21 @@
   "options": [
    {
     "name": {
-     "en": "go to Unknown",
-     "zh-CN": "去 未知",
-     "zh-TW": "去 未知"
+     "en": "go to Enemy",
+     "zh-CN": "去 敌人",
+     "zh-TW": "去 敵人"
     },
-    "value": 0.9954,
+    "value": 0.9757,
     "ci": 0,
     "win": null,
     "hp": null,
     "rooms": [
+     "Monster",
+     "Elite",
+     "Treasure",
+     "Elite",
+     "Unknown",
+     "Monster",
      "Unknown",
      "Elite",
      "RestSite",
@@ -316,46 +362,52 @@
    },
    {
     "name": {
-     "en": "go to Enemy",
-     "zh-CN": "去 敌人",
-     "zh-TW": "去 敵人"
+     "en": "go to Elite",
+     "zh-CN": "去 精英",
+     "zh-TW": "去 菁英"
     },
-    "value": 0.9949,
+    "value": 0.9743,
     "ci": 0,
     "win": null,
     "hp": null,
     "rooms": [
+     "Elite",
+     "RestSite",
+     "Treasure",
+     "RestSite",
      "Monster",
-     "Monster",
+     "RestSite",
+     "Unknown",
+     "Elite",
      "RestSite",
      "Boss"
     ]
    }
   ],
-  "brain": "l0 v10-1-2 clone",
+  "brain": "l0 v10-2 clone",
   "seconds": 0.0,
-  "win": 0.9953589763404774,
-  "delta": -0.0008,
+  "win": 0.9756695460603922,
+  "delta": -0.0032,
   "recent": [
    {
-    "en": "floor 29 · leave · 99.6%",
-    "zh-CN": "第 29 层 · 离开 · 99.6%",
-    "zh-TW": "第 29 層 · 離開 · 99.6%"
+    "en": "floor 23 · leave · 97.9%",
+    "zh-CN": "第 23 层 · 离开 · 97.9%",
+    "zh-TW": "第 23 層 · 離開 · 97.9%"
    },
    {
-    "en": "floor 29 · pick Footwork · 99.6%",
-    "zh-CN": "第 29 层 · 选 灵动步法 · 99.6%",
-    "zh-TW": "第 29 層 · 選 步法 · 99.6%"
+    "en": "floor 23 · pick Haze · 97.9%",
+    "zh-CN": "第 23 层 · 选 迷雾 · 97.9%",
+    "zh-TW": "第 23 層 · 選 迷霧 · 97.9%"
    },
    {
-    "en": "floor 29 · Smith · 99.6%",
-    "zh-CN": "第 29 层 · 锻造 · 99.6%",
-    "zh-TW": "第 29 層 · 鍛造 · 99.6%"
+    "en": "floor 23 · Smith · 97.9%",
+    "zh-CN": "第 23 层 · 锻造 · 97.9%",
+    "zh-TW": "第 23 層 · 鍛造 · 97.9%"
    },
    {
-    "en": "floor 28 · go to Rest · 99.6%",
-    "zh-CN": "第 28 层 · 去 休息 · 99.6%",
-    "zh-TW": "第 28 層 · 去 休息 · 99.6%"
+    "en": "floor 22 · go to Rest · 97.2%",
+    "zh-CN": "第 22 层 · 去 休息 · 97.2%",
+    "zh-TW": "第 22 層 · 去 休息 · 97.2%"
    }
   ]
  },
@@ -363,20 +415,26 @@
   "source": {
    "command": "run --champion eval/champions/sl.json --env SL --character SILENT --seeds eval/seeds/promotion-1-100.txt --start 12 --n 1 --records FILE --log FILE",
    "seed": "0SSL7NS01MU6",
-   "decision": 546,
-   "floor": 29,
+   "decision": 467,
+   "floor": 23,
    "hp": 70,
    "max_hp": 70,
    "act": 1,
    "act_id": "HIVE",
    "route": "the route the brain planned after its pick, as the decision log holds it (MacroBrain.Plan)",
    "travelled": [
-    "map:3,13",
-    "map:3,14",
+    "map:1,7",
+    "map:0,8",
+    "map:1,9",
+    "map:1,10",
+    "map:2,11",
+    "map:1,12",
+    "map:1,13",
+    "map:2,14",
     "map:3,15"
    ]
   },
-  "brain": "l0 v10-1-2 clone",
+  "brain": "l0 v10-2 clone",
   "points": [
    {
     "col": 3,
@@ -1008,46 +1066,28 @@
    {
     "col": 3,
     "row": 5
-   },
-   {
-    "col": 2,
-    "row": 6
-   },
-   {
-    "col": 3,
-    "row": 7
-   },
-   {
-    "col": 3,
-    "row": 8
-   },
-   {
-    "col": 3,
-    "row": 9
-   },
-   {
-    "col": 3,
-    "row": 10
-   },
-   {
-    "col": 4,
-    "row": 11
    }
   ],
   "boss": "KNOWLEDGE_DEMON_BOSS",
   "ancient": "DARV",
-  "chosen": "map:3,12",
+  "chosen": "map:2,6",
   "options": [
    {
-    "action": "map:3,12",
-    "value": 0.9954
+    "action": "map:2,6",
+    "value": 0.9757
    },
    {
-    "action": "map:4,12",
-    "value": 0.9949
+    "action": "map:4,6",
+    "value": 0.9743
    }
   ],
   "route": [
+   "map:1,7",
+   "map:0,8",
+   "map:1,9",
+   "map:1,10",
+   "map:2,11",
+   "map:3,12",
    "map:3,13",
    "map:3,14",
    "map:3,15"

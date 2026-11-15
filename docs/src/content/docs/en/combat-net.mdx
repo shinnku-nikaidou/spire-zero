@@ -7,7 +7,7 @@ import OutcomeHead from '../../../components/combat/OutcomeHead.svelte';
 
 Search often stops inside a combat that is not over, and it then needs to know what the current position is worth. The **combat net** reads the position and predicts how the combat will end: death, or a win, with how much more HP lost and whether the potions in hand are still there. Each ending corresponds to one concrete run as it stands after the combat. V prices that run, and the prices are weighted by probability. The combat net says only what will happen. What it is worth is always for V to say.
 
-The figure below shows its predictions on 16 real positions. The red bar is the chance of death, the other 50 bars are the endings of a win, and the grey ones cannot happen. For example, on turn 1 against the elite The Decimillipede, the Necrobinder has only 19/66 HP left: the net gives a 93% chance of death and, in case of a win, 4.5 HP left on average.
+The figure below shows its predictions on 16 real positions. The red bar is the chance of death, the other 50 bars are the endings of a win, and the grey ones cannot happen. For example, on turn 11 against the Waterfall Giant, the act 1 boss, the Fool has only 25/83 HP left: the net gives a 94% chance of death and, in case of a win, 3.5 HP left on average.
 
 <OutcomeHead client:visible lang="en" />
 
@@ -54,9 +54,9 @@ The net does not output a score directly, for three reasons. No number has to be
 
 ## How it learns
 
-A sample is the start of each turn in self-play, and its label is how that combat really ended. The net the champion uses learned from nearly thirty thousand runs and about 2.95 million turns. One run in five is held back from learning and used only for checking.
+A sample is the start of each turn in self-play, and its label is how that combat really ended. The net the champion uses learned from about forty thousand runs and about 3.59 million turns. One run in five is held back from learning and used only for checking.
 
-On the runs held back for checking, among positions from the same encounter and the same turn, the net tells death from survival with a score of about 0.92. On this score 1 is perfect, 0.5 is guessing, and looking at HP alone gives 0.73. The death rate it predicts is 5.79%, and the real one is 5.47%.
+On the runs held back for checking, among positions from the same encounter and the same turn, the net tells death from survival with a score of about 0.94. On this score 1 is perfect, 0.5 is guessing, and looking at HP alone gives 0.70. The death rate it predicts is 5.44%, and the real one is 6.31%.
 
 ## What it cannot see
 

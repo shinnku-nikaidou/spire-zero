@@ -16,8 +16,15 @@
     {
      "kind": "decision",
      "surface": "event",
-     "action": "event:0",
+     "action": "event:1",
      "decision": 0
+    },
+    {
+     "kind": "prompt",
+     "decisions": [
+      1,
+      1
+     ]
     },
     {
      "kind": "save",
@@ -27,13 +34,13 @@
      "kind": "decision",
      "surface": "event",
      "action": "proceed",
-     "decision": 1
+     "decision": 2
     },
     {
      "kind": "decision",
      "surface": "map",
-     "action": "map:0,1",
-     "decision": 2
+     "action": "map:5,1",
+     "decision": 3
     }
    ]
   },
@@ -50,10 +57,10 @@
      "encounter": "SLIMES_WEAK",
      "hp": 70,
      "max_hp": 70,
-     "end_hp": 70,
+     "end_hp": 69,
      "decisions": [
-      3,
-      21
+      4,
+      19
      ]
     },
     {
@@ -63,96 +70,78 @@
     {
      "kind": "prompt",
      "decisions": [
-      6,
-      6
-     ]
-    },
-    {
-     "kind": "prompt",
-     "decisions": [
-      19,
-      19
+      14,
+      14
      ]
     },
     {
      "kind": "decision",
      "surface": "rewards",
      "action": "reward:0",
-     "decision": 22
+     "decision": 20
     },
     {
      "kind": "decision",
      "surface": "rewards",
      "action": "reward:1",
-     "decision": 23
+     "decision": 21
     },
     {
      "kind": "decision",
      "surface": "card_reward",
-     "action": "card:0",
-     "decision": 24
+     "action": "card:2",
+     "decision": 22
     },
     {
      "kind": "decision",
      "surface": "rewards",
      "action": "rewards_done",
-     "decision": 25
+     "decision": 23
     },
     {
      "kind": "decision",
      "surface": "map",
-     "action": "map:0,2",
-     "decision": 26
+     "action": "map:5,2",
+     "decision": 24
     }
    ]
   },
   {
    "floor": 3,
-   "point": "Monster",
+   "point": "Unknown",
    "steps": [
     {
      "kind": "arrive",
      "save": "arrival"
     },
     {
-     "kind": "combat",
-     "encounter": "NIBBITS_WEAK",
-     "hp": 70,
-     "max_hp": 70,
-     "end_hp": 70,
-     "decisions": [
-      27,
-      53
-     ]
+     "kind": "roll",
+     "becomes": "event"
     },
     {
-     "kind": "save",
-     "save": "combat_won"
+     "kind": "decision",
+     "surface": "event",
+     "action": "event:0",
+     "decision": 25
     },
     {
      "kind": "prompt",
      "decisions": [
-      48,
-      48
+      26,
+      26
      ]
     },
     {
      "kind": "decision",
-     "surface": "rewards",
-     "action": "reward:0",
-     "decision": 54
-    },
-    {
-     "kind": "decision",
-     "surface": "rewards",
-     "action": "rewards_done",
-     "decision": 55
+     "surface": "event",
+     "action": "proceed",
+     "decision": 27
     },
     {
      "kind": "decision",
      "surface": "map",
-     "action": "map:0,3",
-     "decision": 56
+     "action": "map:4,3",
+     "decision": 28
     }
    ]
   }

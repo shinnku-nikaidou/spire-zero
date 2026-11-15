@@ -340,9 +340,9 @@
   <p class="v-caption">
     {#if mode === 'sl_combat'}
       {say(lang, w(
-        `The example run’s seed played in SL by the SL champion, decision ${base.source.decision}: the first decision of the act 3 boss fight on floor ${base.floor}, which the search plans to its end in ${base.seconds} s. Its kept lines began with two first moves; both win, the first with ${moreHp} HP more. The strip holds V’s chance from the map decision before the fight, and the line under the action is about this fight. A card the plan draws this turn has no name yet: the panel shows its number.`,
-        `示例对局的种子，在 SL 里由 SL 冠军打的第 ${base.source.decision} 个决策：第 ${base.floor} 层第三幕 Boss 战的第一个决策，搜索花 ${base.seconds} 秒把整场规划到底。它留下的打法以两个第一步开头；两个都赢，第一个多剩 ${moreHp} HP。横条里是战斗前那个地图决策的 V 胜率，动作下面那一行说的是这场战斗。计划在这一回合才抽到的牌还没有名字：面板显示它的编号。`,
-        `範例對局的種子，在 SL 裡由 SL 冠軍打的第 ${base.source.decision} 個決策：第 ${base.floor} 層第三幕頭目戰的第一個決策，搜尋花 ${base.seconds} 秒把整場規劃到底。它留下的打法以兩個第一步開頭；兩個都贏，第一個多剩 ${moreHp} HP。橫條裡是戰鬥前那個地圖決策的 V 勝率，動作下面那一行說的是這場戰鬥。計畫在這一回合才抽到的牌還沒有名字：面板顯示它的編號。`,
+        `The example run’s seed played in SL by the SL champion, decision ${base.source.decision}: the first decision of the fight on floor ${base.floor}, which the search plans to its end in ${base.seconds} s. Its kept lines began with two first moves; both win, the first with ${moreHp} HP more. The strip holds V’s chance from the map decision before the fight, and the line under the action is about this fight.`,
+        `示例对局的种子，在 SL 里由 SL 冠军打的第 ${base.source.decision} 个决策：第 ${base.floor} 层那场战斗的第一个决策，搜索花 ${base.seconds} 秒把整场规划到底。它留下的打法以两个第一步开头；两个都赢，第一个多剩 ${moreHp} HP。横条里是战斗前那个地图决策的 V 胜率，动作下面那一行说的是这场战斗。`,
+        `範例對局的種子，在 SL 裡由 SL 冠軍打的第 ${base.source.decision} 個決策：第 ${base.floor} 層那場戰鬥的第一個決策，搜尋花 ${base.seconds} 秒把整場規劃到底。它留下的打法以兩個第一步開頭；兩個都贏，第一個多剩 ${moreHp} HP。橫條裡是戰鬥前那個地圖決策的 V 勝率，動作下面那一行說的是這場戰鬥。`,
       ))}
     {:else if mode === 'nosl_combat'}
       {say(lang, w(
@@ -352,9 +352,9 @@
       ))}
     {:else if mode === 'map'}
       {say(lang, w(
-        `Decision ${ANSWERS.map.source.decision} of the SL run, on floor ${ANSWERS.map.floor}: V gives the enemy ${pct(ANSWERS.map.options[0].value)} and the ? room ${pct(ANSWERS.map.options[1].value)}, each with the route the brain would take after it, room by room, to the boss. The strip’s rise is from the rewards just before. Outside combat the brain answers in a few milliseconds, which the panel prints as 0.0 s.`,
-        `SL 那一局第 ${ANSWERS.map.floor} 层的第 ${ANSWERS.map.source.decision} 个决策：V 给敌人 ${pct(ANSWERS.map.options[0].value)}、给 ? 房间 ${pct(ANSWERS.map.options[1].value)}，各附上大脑之后会走的路线，一个个房间直到 Boss。横条里的上升是相对前面的奖励。战斗外大脑几毫秒就回答，面板印成 0.0 s。`,
-        `SL 那一局第 ${ANSWERS.map.floor} 層的第 ${ANSWERS.map.source.decision} 個決策：V 給敵人 ${pct(ANSWERS.map.options[0].value)}、給 ? 房間 ${pct(ANSWERS.map.options[1].value)}，各附上大腦之後會走的路線，一個個房間直到頭目。橫條裡的上升是相對前面的獎勵。戰鬥外大腦幾毫秒就回答，面板印成 0.0 s。`,
+        `Decision ${ANSWERS.map.source.decision} of the SL run, on floor ${ANSWERS.map.floor}: V gives “${ANSWERS.map.options[0].name[lang]}” ${pct(ANSWERS.map.options[0].value)} and “${ANSWERS.map.options[1].name[lang]}” ${pct(ANSWERS.map.options[1].value)}, each with the route the brain would take after it, room by room, to the boss. The strip’s change is from the decision just before. Outside combat the brain answers in a few milliseconds, which the panel prints as 0.0 s.`,
+        `SL 那一局第 ${ANSWERS.map.floor} 层的第 ${ANSWERS.map.source.decision} 个决策：V 给“${ANSWERS.map.options[0].name[lang]}” ${pct(ANSWERS.map.options[0].value)}、给“${ANSWERS.map.options[1].name[lang]}” ${pct(ANSWERS.map.options[1].value)}，各附上大脑之后会走的路线，一个个房间直到 Boss。横条里的变化是相对前一个决策。战斗外大脑几毫秒就回答，面板印成 0.0 s。`,
+        `SL 那一局第 ${ANSWERS.map.floor} 層的第 ${ANSWERS.map.source.decision} 個決策：V 給「${ANSWERS.map.options[0].name[lang]}」${pct(ANSWERS.map.options[0].value)}、給「${ANSWERS.map.options[1].name[lang]}」${pct(ANSWERS.map.options[1].value)}，各附上大腦之後會走的路線，一個個房間直到頭目。橫條裡的變化是相對前一個決策。戰鬥外大腦幾毫秒就回答，面板印成 0.0 s。`,
       ))}
     {:else}
       {say(lang, w(

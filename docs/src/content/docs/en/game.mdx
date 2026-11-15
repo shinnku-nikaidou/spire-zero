@@ -5,7 +5,7 @@ description: What a run of Slay the Spire 2 is, what the player decides, what st
 import RunTimeline from '../../../components/book/RunTimeline.svelte';
 import SurfaceCounts from '../../../components/book/SurfaceCounts.svelte';
 
-Slay the Spire 2 is a single-player card game. The player climbs a tower with a deck of cards, fighting, taking new cards and picking up relics along the way, until the last boss is beaten or the player dies on the way up. This chapter covers only what the later chapters need. Every number is read from the game's own code, version v0.113.0.
+Slay the Spire 2 is a single-player card game. The player climbs a tower with a deck of cards, fighting, taking new cards and picking up relics along the way, until the last boss is beaten or the player dies on the way up. This chapter covers only what the later chapters need. Every number is read from the game's own code, version v0.113.1.
 
 ## A run
 
@@ -26,7 +26,7 @@ This book follows one run from start to finish: the Silent, in the SL environmen
 
 <RunTimeline client:visible lang="en" />
 
-This run fought 20 combats, stopped at 11 rest sites and entered 5 shops. It made 866 decisions in all, 639 of them in combat.
+This run fought 22 combats, stopped at 9 rest sites and entered 4 shops. It made 1,011 decisions in all, 717 of them in combat.
 
 ## Combat
 
@@ -57,12 +57,12 @@ Whether the AI may use the hidden column is the subject of the chapter "Two envi
 
 ## Why it is hard
 
-- **The road is long.** The strongest version of the AI so far, which this book calls the champion, makes about 560 decisions in an average run. A card taken on floor 2 is still in the deck on floor 48.
+- **The road is long.** The strongest version of the AI so far, which this book calls the champion, makes about 550 decisions in an average run. A card taken on floor 2 is still in the deck on floor 48.
 - **There is only one result.** Hundreds of decisions share one win or loss, so it is hard to say which decision was right.
 - **Much is hidden.** Every decision is made without knowing the draw order, the "?" rooms or the next combat.
 - **The options are many and keep changing.** In one turn the cards in hand can be played in any order, and each card may also need a target.
 - **One death ends it.** HP is a budget to spread over twenty-odd combats, and every rest site is a choice between healing and an upgrade.
 
-The figure below shows which screens the decisions fell on in the champion's 35 runs with the Silent at Ascension 10. Combat takes 75%.
+The figure below shows which screens the decisions fell on in the champion's 200 runs with the Silent at Ascension 10. Combat takes 74%.
 
 <SurfaceCounts client:visible lang="en" />

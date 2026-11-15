@@ -44,10 +44,10 @@ PLAY = {
 # The decisions the figures show, by decision_id in the plays' logs; each is checked where it matters. After a promotion
 # the plays differ: pick them again with the same intent.
 PLAN_FIGHT = 17  # PlanTimeline: the floor of the SL fight, the act 1 boss (one enemy, as the figure's bars expect)
-PANEL_SL = 590  # PanelMock: the first decision of a boss fight in SL (act 2: the act 3 one keeps one first action), two first actions kept, both won
-PANEL_NOSL = 689  # PanelMock: a turn's first decision in the NoSL run's act 3 boss fight, after an end turn
-PANEL_MAP = 546  # PanelMock and MapRoute: an SL map decision of two options, an enemy or a ? room
-LOG_LINES = {"combat": 4, "card prompt": 1, "rest": 133}  # DecisionLog: one line of each kind
+PANEL_SL = 652  # PanelMock: the first decision of an SL fight with two first actions kept, both won (no boss fight keeps two)
+PANEL_NOSL = 833  # PanelMock: a turn's first decision in the NoSL run's act 3 boss fight, after an end turn
+PANEL_MAP = 467  # PanelMock and MapRoute: an SL map decision of two options, an enemy or an elite
+LOG_LINES = {"combat": 4, "card prompt": 1, "rest": 67}  # DecisionLog: one line of each kind
 
 
 def lines(path: Path) -> list[dict]:
@@ -166,10 +166,14 @@ class Play:
         return re.search(r"combat prompts (\S+?),", champion_name(self.champion)).group(1)
 
     def view(self, k: int) -> dict:
-        """The run view at log entry k: its own, or the next one's (a card prompt outside combat logs none)."""
+        """The run view at log entry k: its own, or the next one's (a card prompt outside combat logs none). In the fight
+        a lost run ends in, none follows: the last one before it, on the record's last floor."""
         for e in self.log[k:]:
             if "run_view" in e:
                 return e["run_view"]
+        if self.record["outcome"] == "lost" and self.log[k]["surface"] == "combat":
+            before = next(e["run_view"] for e in reversed(self.log[:k]) if "run_view" in e)
+            return before | {"floor": self.record["floor"]}
         raise SystemExit(f"no run view after decision {k}")
 
     def worth(self, k: int) -> float:
@@ -290,6 +294,8 @@ def macro_action(lang: str, play: Play, k: int) -> str:
             return T(lang, "proceed" if e["legal"] == 1 else "skip the rest, proceed")
         case ("shop", "leave"):
             return T(lang, "leave the shop")
+        case ("shop", "remove"):
+            return T(lang, "remove a card ({0} gold)", view["gold"] - after["gold"])
         case ("rewards", _) if after["gold"] > view["gold"]:
             return T(lang, "take {0} gold", after["gold"] - view["gold"])
         case ("rewards", _) if added("relics"):
@@ -534,7 +540,7 @@ def panel_examples(sl: Play, nosl: Play) -> dict:
         "source": f"sl_combat, nosl_combat, map_options: three decisions of the book's example seed ({SEED}, the Silent "
         "at A0), one from each play of eval/champions/sl.json and eval/champions/nosl.json; map: the map of map_options' "
         "decision. Texts made as Describe and L10n make them.",
-        "sl_combat": answer(sl, PANEL_SL, "SL combat", "the first decision of the act 2 boss fight: the SL planner plans the fight"),
+        "sl_combat": answer(sl, PANEL_SL, "SL combat", "the first decision of a fight: the SL planner plans the fight"),
         "nosl_combat": answer(nosl, PANEL_NOSL, "NoSL combat", "a turn's first decision in the act 3 boss fight: PIMC over 8 worlds"),
         "map_options": answer(sl, PANEL_MAP, "map", "a map decision: L0 values each next point with V"),
         "map": {
