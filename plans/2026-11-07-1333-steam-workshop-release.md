@@ -239,3 +239,6 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   the user's 0.3.4 game log (18:22–18:45, floors 35–49) against the Steam install's game files: 266/266 SL decisions
   asked the same (265 before the fix). Installed in `mods/Sts2Ai` by swapping the folder (0.3.6 moved to
   `tmp/modeng/old-installs/`); the game was running 0.3.6 and loads 0.3.7 once restarted.
+- 2026-11-15 19:04: the listing's wins are v10-2-2 + c10-2-2's (8f298dc4: the test's SL runs, medium, the old table's
+  seeds; A0 348 of 450, A10 288 of 1,200), and the item has a preview image, `distro/workshop/preview.png` (2649447a;
+  1024 x 1024, 591 KB, no game art), both for the next upload, which waits on the real-game tests.
