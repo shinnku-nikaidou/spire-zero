@@ -17,16 +17,17 @@
 # ad-hoc on a Mac with Xcode's codesign: STS2_MAC=user@host in the repository's .env, reached by ssh.
 # The engine's code is made here from the decompiled game of the version REV pins (engine/gen.sh; it never goes into
 # git, engine/DESIGN.md), and only the libraries ship: linux-x64's built here, osx-arm64's on the Mac with its Rust,
-# whose linker signs it. Linux and macOS arm64 only for now: Windows comes later, with its engine
-# (plans/2026-11-15-1240-mod-engine.md, D1).
+# whose linker signs it, win-x64's on a Windows machine with its Rust and Visual Studio's C++ build tools:
+# STS2_WIN=user@host and STS2_WIN_PORT in .env, reached by ssh, its shell PowerShell.
 set -e
 R=$(cd "$(dirname "$0")/.." && pwd)
 . "$R/.env"
 : "${STS2_MAC:?set STS2_MAC=user@host in .env, a Mac to sign the osx-arm64 launcher on}"
+: "${STS2_WIN:?set STS2_WIN=user@host in .env, a Windows machine to build win-x64's engine on}"
 rev=$(git -C "$R" rev-parse --short "${1:-HEAD}")
 B=$R/tmp/item/$rev
 I=$R/out/Sts2Ai
-rids="linux-x64 osx-arm64"
+rids="linux-x64 osx-arm64 win-x64"
 
 rm -rf "$B"
 mkdir -p "$B/src"
@@ -53,6 +54,16 @@ cp "$B/src/engine/target/release/libsts2ai_engine.so" "$B/brain/linux-x64/"
 tar -C "$B/src" --exclude=engine/target -cf - engine | ssh "$STS2_MAC" \
   'set -e; d=$(mktemp -d); trap "rm -rf $d" EXIT; tar -xf - -C "$d"; cd "$d/engine"; PATH="$HOME/.cargo/bin:$PATH" cargo build --release -q >&2
    codesign -v target/release/libsts2ai_engine.dylib >&2; cat target/release/libsts2ai_engine.dylib' > "$B/brain/osx-arm64/libsts2ai_engine.dylib"
+# Windows: the engine over and its DLL back by scp, the build between in PowerShell, the shell there.
+tar -C "$B/src" --exclude=engine/target -cf "$B/engine.tar" engine
+win_port=${STS2_WIN_PORT:-22}
+scp -q -P "$win_port" "$B/engine.tar" "$STS2_WIN:sts2ai-engine.tar"
+ssh -p "$win_port" "$STS2_WIN" '$d = "$HOME\sts2ai-engine"; if (Test-Path $d) { Remove-Item -Recurse -Force $d };'\
+' New-Item -ItemType Directory $d | Out-Null; tar -xf "$HOME\sts2ai-engine.tar" -C $d; if ($LASTEXITCODE) { exit 1 };'\
+' Set-Location "$d\engine"; & "$HOME\.cargo\bin\cargo.exe" build --release -q; exit $LASTEXITCODE' >&2
+scp -q -P "$win_port" "$STS2_WIN:sts2ai-engine/engine/target/release/sts2ai_engine.dll" "$B/brain/win-x64/"
+chmod 644 "$B/brain/win-x64/sts2ai_engine.dll"
+ssh -p "$win_port" "$STS2_WIN" 'Remove-Item -Recurse -Force "$HOME\sts2ai-engine", "$HOME\sts2ai-engine.tar"'
 for rid in $rids; do cp "$B/src/engine/crates/sts2ai-engine/src/gen/schema.json" "$B/brain/$rid/sts2ai_engine.schema.json"; done
 
 launcher=$B/brain/osx-arm64/Sts2Ai.SimWorker
