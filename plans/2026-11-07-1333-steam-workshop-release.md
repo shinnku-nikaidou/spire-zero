@@ -201,3 +201,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   (its panel work, with the brain from before afa491a2), which wins a tie over `mods_STEAMTEST` (a Steam source to the
   game). The user: a session whose version another took goes one up; old local copies are deleted, the Workshop
   subscription left alone. 0.3.2 at 515a5187 (the panel commits and afa491a2) is now the only local copy, in `mods/`.
+- 2026-11-15 ~17:05, the third try (0.3.2): a combat (NIBBITS_WEAK) with no engine error, then the game died entering a
+  treasure room: SIGSEGV in the mod's `Field<bool>(room, "_hasChestBeenOpened")`, a field v0.113.0 dropped (the core
+  dump's code is a null virtual call then an unbox to bool). Fixed at fb104fbf (the chest's button's IsEnabled; a missing
+  field throws a named exception); every other member the mod reads by name exists in v0.113.1. Reinstalled in `mods/`.
