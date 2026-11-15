@@ -288,3 +288,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   `weights/all/`'s). The brain and engine sources are 0.3.8's (only the mod's dll changed since). The game closed on all
   three machines; the first upload's commit timed out (k_EResultTimeout, without `--note`, the item untouched), the same
   command again went through. Public, 394.2 MB; the page shows the new title. Not uploaded: the preview (unchanged).
+- 2026-11-15 22:08: 0.3.12 at 25689778, febb79d8 (card plays recorded off the game's combat history: in the user's
+  0.3.11 game the Harmony prefix on `CardModel.OnPlayWrapper` went quiet after 60 plays; a failed SL decision on the
+  clone breaks that room's record, not the run's). The Mac back, so the full three-platform item, in `out/` (3:04).
+  Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): identical over the wire, 31/31 nodes and 18/18
+  saves in a finished room replay exactly, 0 game errors. Installed in `mods/` over 0.3.11 with the game closed; it
+  wins over the Workshop's 0.3.11. Not uploaded (the user's word first).
