@@ -190,3 +190,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   `steamapps/workshop/content/2868840/3840142917`, the same files as `out/Sts2Ai` (`diff -rq`), the Linux launcher and
   engine still executable. The `mods_STEAMTEST` copy moved to `tmp/modeng/old-installs/`, so the game loads the
   Workshop's. Next: C, the real game on each platform through the subscription, then a preview image and public.
+- 2026-11-15 ~16:45, the first real-game test (the user, Linux, SL, through the subscription): the mod loaded from the
+  Workshop folder and reached the brain; floor 2's first combat decision failed, the engine refusing the export
+  (`EncounterModel._backgroundAssets`, the background scenes the screen picks, null in the simulator). Fixed in
+  port.toml at afa491a2 (BackgroundAssets is presentation). 0.3.1 built there (with the panel work of 3727b316): the
+  item's Linux brain on `parity --world engine`, the same 720 combats as before, 0 differences. Installed locally in
+  `mods_STEAMTEST` (the user: no upload for each fix): the game keeps the higher version, 0.3.1, over the Workshop's
+  0.3.0. The Workshop gets 0.3.1 after the real game passes.
