@@ -96,6 +96,9 @@ fn owned<T: Clone>(slot: &mut Arc<T>) -> &mut T {
 pub trait AnyArena {
     /// The objects of the combat's own (the canonical ones are shared, not copied).
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     /// The size of one object, without what it points to.
     fn item_size(&self) -> usize;
     /// Makes a copy and drops it.

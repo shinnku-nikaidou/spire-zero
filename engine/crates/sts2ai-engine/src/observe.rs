@@ -409,10 +409,13 @@ fn stuck(creature: Creature, me: Creature, c: &mut Combat) -> Option<i32> {
     (stuck > 0).then_some(stuck)
 }
 
+/// FRESH_VARS's map: a card's id (its two words) and upgrade level to its fresh copy's numbers.
+type FreshVars = HashMap<(Str, Str, i32), Rc<Vec<(Str, Dec)>>, BuildHasherDefault<Fx>>;
+
 thread_local! {
     /// C#: Observe.FreshVars. The numbers of a fresh copy of a card at an upgrade level, by the card's id and the
     /// level: what the game's code makes of them, the same in every combat.
-    static FRESH_VARS: RefCell<HashMap<(Str, Str, i32), Rc<Vec<(Str, Dec)>>, BuildHasherDefault<Fx>>> = RefCell::new(HashMap::default());
+    static FRESH_VARS: RefCell<FreshVars> = RefCell::new(HashMap::default());
 }
 
 /// C#: the value FreshVars keeps for a key. `CardModel.FromSerializable(new SerializableCard { Id, CurrentUpgradeLevel,

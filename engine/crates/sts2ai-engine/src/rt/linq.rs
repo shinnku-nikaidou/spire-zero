@@ -92,12 +92,7 @@ pub fn first_or_default_by<T: Clone + Default>(s: Vec<T>, f: impl FnMut(T, &mut 
     where_first(s, f, c).unwrap_or_default()
 }
 fn where_first<T: Clone>(s: Vec<T>, mut f: impl FnMut(T, &mut Combat) -> bool, c: &mut Combat) -> Option<T> {
-    for x in s {
-        if f(x.clone(), c) {
-            return Some(x);
-        }
-    }
-    None
+    s.into_iter().find(|x| f(x.clone(), c))
 }
 pub fn last<T>(s: Vec<T>) -> T {
     s.into_iter().next_back().expect("Sequence contains no elements")

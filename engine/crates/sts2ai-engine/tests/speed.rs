@@ -411,7 +411,7 @@ fn grown() {
         }
     }
     let mut rows: Vec<_> = added.into_iter().filter(|r| r.1.0 > 0).collect();
-    rows.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    rows.sort_by_key(|r| std::cmp::Reverse(r.1.0));
     println!("{what}: {actions_taken} actions; objects added an action, and held after it, by arena:");
     for (name, (n, held)) in rows.iter().take(25) {
         println!("  {:>9.1} {:>9.1}  {name}", *n as f64 / actions_taken as f64, *held as f64 / actions_taken as f64);
@@ -658,7 +658,7 @@ fn speed() {
         inline = std::mem::size_of_val(live.combat());
         live.combat().a.each(&mut |name, arena| {
             before.insert(name, arena.text());
-            if arena.len() == 0 {
+            if arena.is_empty() {
                 return;
             }
             holding += 1;
@@ -690,9 +690,8 @@ fn speed() {
         });
     }
     // Which share of a copy's bytes is in arenas that the rest of the combat left as they were, in every state.
-    for (_, (_, _, bytes, _, steady)) in &arenas {
+    for (_, _, bytes, _, _) in arenas.values() {
         all_bytes += bytes;
-        let _ = steady;
     }
     println!(
         "{states} states, each the middle decision of a combat of {}",
@@ -743,7 +742,7 @@ fn speed() {
         "a copy, arena by arena (sums over the {states} states; `steady`: in how many of the states the rest of the combat left the arena as it was):"
     );
     let mut rows: Vec<_> = arenas.iter().collect();
-    rows.sort_by(|a, b| b.1.2.cmp(&a.1.2));
+    rows.sort_by_key(|r| std::cmp::Reverse(r.1.2));
     let total_time: f64 = rows.iter().map(|r| r.1.1).sum();
     println!(
         "  {:<44} {:>9} {:>10} {:>7} {:>11} {:>7} {:>8}",

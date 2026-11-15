@@ -42,6 +42,10 @@ impl Kept {
         self.items.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
     pub fn item(&self, at: usize) -> Obj {
         self.items[at]
     }

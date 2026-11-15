@@ -228,10 +228,10 @@ impl<T: PartialEq + Clone> Set<T> {
             }
         }
     }
-    pub fn set_equals(&self, other: &Vec<T>) -> bool {
+    pub fn set_equals(&self, other: &[T]) -> bool {
         other.iter().all(|x| self.contains(x)) && self.0.iter().all(|x| other.contains(x))
     }
-    pub fn overlaps(&self, other: &Vec<T>) -> bool {
+    pub fn overlaps(&self, other: &[T]) -> bool {
         other.iter().any(|x| self.contains(x))
     }
 }
