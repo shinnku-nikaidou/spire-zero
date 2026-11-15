@@ -10,10 +10,11 @@ namespace Sts2Ai.Harness;
 /// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
 /// observation that does not match its hash) gets an error instead, and the host ends the run. SL node messages get
 /// no answer: one that Harness refuses fails the run's next decision. <paramref name="ended"/> gets each run's Harness at
-/// run_end; <paramref name="received"/> every message a host sends.
+/// run_end; <paramref name="received"/> every message a host sends; <paramref name="answered"/> the run's Harness after
+/// each answer is sent, so its decision log can be written as it grows.
 /// </summary>
 public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, Dispatcher, RunEnd>? ended = null,
-    Action<WireMessage>? received = null)
+    Action<WireMessage>? received = null, Action<Dispatcher>? answered = null)
 {
     /// <summary>A Unix socket listening at the abstract name <paramref name="path"/> (a leading NUL: no file), for a host in the same process.</summary>
     public static Socket Bind(string path)
@@ -62,6 +63,7 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
                         if (request.DecisionId <= last) throw new InvalidDataException($"decision {request.DecisionId} after decision {last}");
                         last = request.DecisionId;
                         wire.Send(Answer(run, request));
+                        answered?.Invoke(run);
                     }
                     catch (Exception e)
                     {

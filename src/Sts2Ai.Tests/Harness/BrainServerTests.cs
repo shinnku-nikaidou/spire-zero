@@ -63,4 +63,39 @@ public class BrainServerTests
         Assert.Equal(["A", "B"], seen[0]!.Run.Deck.Select(c => c.Id));
         Assert.Null(seen[1]);
     }
+
+    [Fact]
+    public void EachAnswerHandsOverItsRunsLogAsItGrows()
+    {
+        var combat = new CombatRoute("test", (_, _, _, _) => new(CombatAction.EndTurn, [], []));
+        var macro = new Fixed();
+        var logged = new List<int>();
+        var server = new BrainServer(hello => new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("l0", macro), new("l0", macro), log: true),
+            answered: run => logged.Add(run.Log.Count));
+
+        using var toBrain = new AnonymousPipeServerStream(PipeDirection.Out);
+        using var brainIn = new AnonymousPipeClientStream(PipeDirection.In, toBrain.ClientSafePipeHandle);
+        using var toHost = new AnonymousPipeServerStream(PipeDirection.Out);
+        using var hostIn = new AnonymousPipeClientStream(PipeDirection.In, toHost.ClientSafePipeHandle);
+        var serving = new Thread(() => server.Serve(new WireStream(brainIn, toHost)));
+        serving.Start();
+        var host = new WireStream(hostIn, toBrain);
+
+        var obs = new Observation { Run = Fixtures.Floor1(), Screen = new CombatScreen { Combat = Fixtures.Slugs() } };
+        string hash = DecisionRequest.HashOf(obs);
+        host.Send(new Hello("v-test", "NoSL", "worker", new RunHeader("run-1", "SILENT", 0)));
+        host.Expect<Ready>();
+        for (int id = 0; id < 3; id++)
+        {
+            host.Send(new DecisionRequest(id, hash, Surfaces.Combat, obs, [CombatAction.EndTurn.ToString()]));
+            host.Expect<Recommendation>();
+        }
+        // A decision answered with an error logs nothing and hands nothing over.
+        host.Send(new DecisionRequest(3, "not the hash", Surfaces.Combat, obs, [CombatAction.EndTurn.ToString()]));
+        host.Expect<WireError>();
+        toBrain.Dispose();
+        serving.Join();
+
+        Assert.Equal([1, 2, 3], logged);
+    }
 }

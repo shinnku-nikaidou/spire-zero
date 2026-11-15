@@ -17,7 +17,7 @@ namespace Sts2Ai.SimWorker.Commands;
 /// </summary>
 internal static class BrainCommand
 {
-    private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
+    private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision as it is answered");
     private static readonly Option<string?> Wire = Opt.Maybe<string?>("--wire", "writes every message the hosts send, one JSON line each (what clones replays)");
     private static readonly Option<string> SlPolicy = Opt.Of("--sl-policy", "plan", "the combat brain of SL hosts; --policy is NoSL hosts'")
         .AcceptOnlyFromAmong(["pimc", "plan", .. Policies.CombatNames]);
@@ -51,11 +51,21 @@ internal static class BrainCommand
             if (hello.Effort is { } effort && options.Policy == "plan") options = options with { Budget = Budget.Effort(effort) };
             return harnesses[(hello.Env, hello.Effort)] = options.Harness(workerPool, logFile != null, explain: true);
         }
+        // Each decision is written as it is answered, so a game that crashes or is closed mid-run keeps every decision
+        // made so far. A connection serves its runs one after another, each with its own Harness.
+        (Dispatcher? Run, int Written) logged = (null, 0);
+        void WriteLog(Dispatcher run)
+        {
+            if (logFile == null) return;
+            if (!ReferenceEquals(run, logged.Run)) logged = (run, 0);
+            for (; logged.Written < run.Log.Count; logged.Written++) logFile.WriteLine(ProtocolJson.Serialize(run.Log[logged.Written]));
+        }
         var server = new BrainServer(hello => HarnessFor(hello)(hello),
             received: wireFile == null ? null : message => wireFile.WriteLine(ProtocolJson.Serialize(message)),
+            answered: WriteLog,
             ended: (hello, harness, end) =>
         {
-            foreach (var entry in harness.Log) logFile?.WriteLine(ProtocolJson.Serialize(entry));
+            WriteLog(harness);
             var errors = workerPool?.TakeGameErrors() ?? [];
             Console.WriteLine($"{hello.Run.RunId} ({hello.Role}) {end.Reason} floor {end.Floor}, {harness.Brains.Values.Sum()} decisions" +
                               (harness.Replans > 0 ? $", {harness.Replans} replans" : "") +
