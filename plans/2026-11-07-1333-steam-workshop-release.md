@@ -242,3 +242,14 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
 - 2026-11-15 19:04: the listing's wins are v10-2-2 + c10-2-2's (8f298dc4: the test's SL runs, medium, the old table's
   seeds; A0 348 of 450, A10 288 of 1,200), and the item has a preview image, `distro/workshop/preview.png` (2649447a;
   1024 x 1024, 591 KB, no game art), both for the next upload, which waits on the real-game tests.
+- 2026-11-15 19:1x–19:17, the user: "完整搞好就可以公開了" (public once everything is done, without asking again). The
+  0.3.7 item's brains (48cae06c) off the game, each platform with its own build:
+  - macOS (the Mac, M4, its Steam install at v0.113.1, its own `sts2.dll`): `parity --world engine` (FOOL, DEFECT,
+    A0 and A10, seed 1132, `--continue 4`): 720 combats, 16,749 decisions, 0 differences, 363 won 357 lost, as on Linux;
+    exports 0.93 ms each. `run --check` cannot start there: its in-process wire uses an abstract Unix socket, which
+    only Linux has (a check tool's limit; the mod talks to its brain on stdin and stdout).
+  - Windows (the VM, the Linux snapshot's game assemblies): the same parity, 0 differences, 363 / 357; 2.12 ms an export.
+  - One SL run (IRONCLAD A10, low, seed 1138, 4 workers) on all three: the same run to the byte (won on floor 49, 896
+    decisions, the same deck, relics and maps), 26 s on the Mac, 48 s in the VM.
+  Left for going public: the real game on Linux (the player-interaction checklist) and on the Mac, both the user's;
+  then the tested build uploaded with the new texts and preview, and set public.
