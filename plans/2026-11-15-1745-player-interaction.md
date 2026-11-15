@@ -302,3 +302,13 @@
   - 0.3.9 只建了 Linux：Mac（簽 macOS 的大腦）連不上，`distro/build.sh` 停在那裡。照腳本的步驟只組 Linux 的部分
     （`tmp/player-interaction/item-0.3.9-linux/`），`out/` 留著 0.3.8 的完整 item。item 的大腦跑 `clones` 相同；裝進遊戲（0.3.8 移到
     `tmp/modeng/old-installs/`）。要上傳的完整 0.3.9 等 Mac 連得上再建。
+- 21:40–22:20 0.3.11（工作坊版）的真遊戲：第三幕 Boss 打完，決策 354（獎勵）大腦出錯「replay diverged: 1 decisions never asked for」。
+  - 原因：13:32:28（UTC）以後紀錄裡沒有任何出牌。`CardModel.OnPlayWrapper` 上的 Harmony prefix 在打了 60 張牌之後不再被呼叫，
+    沒有任何錯誤或日誌；Boss 戰後那次存檔的 prefix 也沒呼叫，所以沒有戰後的檢查點。Boss 戰一場就少了 40 張 AI 打的牌。
+  - 沒找到機制：同一個 Harmony 2.4.2 在遊戲自己的 .NET 9.0.7 上，小的 async 方法被呼叫 8 萬次、升到 tier 1 之後 prefix 照樣每次都跑；
+    RitsuLib 也 patch 這兩個方法，但只會拆它自己的 patch；今天 0.3.4、0.3.8 兩次遊戲同樣載入 RitsuLib，出牌都沒漏（0.3.8 那次漏的是
+    `GameAction.Execute` 上的 prefix，52 次以後不再呼叫）。
+  - 修法：出牌改從遊戲自己寫的戰鬥歷史讀（`CombatHistory.Changed`、`CardPlayStartedEntry`，`CombatActions.PlayStarted`），不靠 patch。
+    大腦在節點複本上答不出 SL 決策時，紀錄在這個房間剩下的時間停用（和玩家回到房間一樣），大腦整局照舊（以前會整局關掉）。
+  - 驗證：自我測試「the combat history's plays are the trace's」通過（無頭的一局，從歷史讀到的出牌就是 trace 的出牌）；
+    決策 354 補回那 40 張牌，複本問的和遊戲相同；C# 測試 152 + 61 全過。交給發版本號的 session 建置。
