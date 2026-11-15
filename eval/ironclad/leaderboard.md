@@ -14,3 +14,11 @@ The two environments are never ranked together, nor two characters or ascensions
 | combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-04 | `c1fbfd3` | 46.0 % (46/100, 36.6 %–55.7 %) | 41.39 | 100 | 313.8 |
 | combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-06 | `6f1e040` | 46.0 % (46/100, 36.6 %–55.7 %) | 41.39 | 100 | 401.0 |
 | combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone | 2026-11-04 | `c1fbfd3` | 1.0 % (1/100, 0.2 %–5.4 %) | 25.01 | 94 | 345.6 |
+
+## IRONCLAD, ascension 10: promotion-1-200
+
+### SL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone **(champion)** | 2026-11-14 | `b7e8d79` | 35.5 % (71/200, 29.2 %–42.3 %) | 38.49 | 183 | 102.7 |

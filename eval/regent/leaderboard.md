@@ -14,3 +14,11 @@ The two environments are never ranked together, nor two characters or ascensions
 | combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-04 | `c1fbfd3` | 35.0 % (35/100, 26.4 %–44.7 %) | 42.30 | 100 | 402.4 |
 | combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-06 | `6f1e040` | 34.0 % (34/100, 25.5 %–43.7 %) | 42.14 | 100 | 802.4 |
 | combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone | 2026-11-04 | `c1fbfd3` | 2.0 % (2/100, 0.6 %–7.0 %) | 22.57 | 76 | 269.1 |
+
+## REGENT, ascension 10: promotion-1-200
+
+### SL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone **(champion)** | 2026-11-14 | `b7e8d79` | 8.5 % (17/200, 5.4 %–13.2 %) | 34.16 | 187 | 110.2 |

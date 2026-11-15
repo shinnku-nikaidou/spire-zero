@@ -14,3 +14,11 @@ The two environments are never ranked together, nor two characters or ascensions
 | combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-04 | `c1fbfd3` | 31.0 % (31/100, 22.8 %–40.6 %) | 42.81 | 99 | 318.4 |
 | combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-06 | `6f1e040` | 30.0 % (30/100, 21.9 %–39.6 %) | 42.81 | 99 | 527.9 |
 | combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone | 2026-11-04 | `c1fbfd3` | 1.0 % (1/100, 0.2 %–5.4 %) | 35.21 | 98 | 347.5 |
+
+## DEFECT, ascension 10: promotion-1-200
+
+### SL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone **(champion)** | 2026-11-14 | `b7e8d79` | 16.5 % (33/200, 12.0 %–22.3 %) | 39.33 | 191 | 121.5 |

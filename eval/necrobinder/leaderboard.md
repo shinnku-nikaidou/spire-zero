@@ -14,3 +14,11 @@ The two environments are never ranked together, nor two characters or ascensions
 | combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-06 | `6f1e040` | 10.0 % (10/100, 5.5 %–17.4 %) | 35.94 | 98 | 826.3 |
 | combat plan c9-1 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-1 clone, macro prompts l0 v9-1 clone | 2026-11-04 | `c1fbfd3` | 9.0 % (9/100, 4.8 %–16.2 %) | 35.94 | 98 | 414.0 |
 | combat plan c9-0 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v9-0 clone, macro prompts l0 v9-0 clone | 2026-11-04 | `c1fbfd3` | 0.0 % (0/100, 0.0 %–3.7 %) | 19.26 | 72 | 321.9 |
+
+## NECROBINDER, ascension 10: promotion-1-200
+
+### SL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone **(champion)** | 2026-11-14 | `b7e8d79` | 7.0 % (14/200, 4.2 %–11.4 %) | 28.76 | 165 | 139.2 |
