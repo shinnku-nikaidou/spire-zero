@@ -19,15 +19,22 @@
 # git, engine/DESIGN.md), and only the libraries ship: linux-x64's built here, osx-arm64's on the Mac with its Rust,
 # whose linker signs it, win-x64's on a Windows machine with its Rust and Visual Studio's C++ build tools:
 # STS2_WIN=user@host and STS2_WIN_PORT in .env, reached by ssh, its shell PowerShell.
+# LINUX_ONLY=1 builds linux-x64 alone, for a test in this machine's game while the Mac or the Windows machine is away:
+# that item goes to tmp/item/REV/Sts2Ai, and out/ (the item to upload, all three platforms) stays as it is.
 set -e
 R=$(cd "$(dirname "$0")/.." && pwd)
 . "$R/.env"
-: "${STS2_MAC:?set STS2_MAC=user@host in .env, a Mac to sign the osx-arm64 launcher on}"
-: "${STS2_WIN:?set STS2_WIN=user@host in .env, a Windows machine to build win-x64's engine on}"
 rev=$(git -C "$R" rev-parse --short "${1:-HEAD}")
 B=$R/tmp/item/$rev
-I=$R/out/Sts2Ai
-rids="linux-x64 osx-arm64 win-x64"
+if [ -n "$LINUX_ONLY" ]; then
+  I=$B/Sts2Ai
+  rids="linux-x64"
+else
+  : "${STS2_MAC:?set STS2_MAC=user@host in .env, a Mac to sign the osx-arm64 launcher on}"
+  : "${STS2_WIN:?set STS2_WIN=user@host in .env, a Windows machine to build win-x64's engine on}"
+  I=$R/out/Sts2Ai
+  rids="linux-x64 osx-arm64 win-x64"
+fi
 
 rm -rf "$B"
 mkdir -p "$B/src"
@@ -51,6 +58,7 @@ done
 STS2_DECOMPILED="$R/tmp/decompiled/sts2-$game" STS2_BIN_DIR="$R/tmp/gamebin/$game" "$B/src/engine/gen.sh" --check >&2
 (cd "$B/src/engine" && cargo build --release -q)
 cp "$B/src/engine/target/release/libsts2ai_engine.so" "$B/brain/linux-x64/"
+if [ -z "$LINUX_ONLY" ]; then
 tar -C "$B/src" --exclude=engine/target -cf - engine | ssh "$STS2_MAC" \
   'set -e; d=$(mktemp -d); trap "rm -rf $d" EXIT; tar -xf - -C "$d"; cd "$d/engine"; PATH="$HOME/.cargo/bin:$PATH" cargo build --release -q >&2
    codesign -v target/release/libsts2ai_engine.dylib >&2; cat target/release/libsts2ai_engine.dylib' > "$B/brain/osx-arm64/libsts2ai_engine.dylib"
@@ -64,13 +72,16 @@ ssh -p "$win_port" "$STS2_WIN" '$d = "$HOME\sts2ai-engine"; if (Test-Path $d) { 
 scp -q -P "$win_port" "$STS2_WIN:sts2ai-engine/engine/target/release/sts2ai_engine.dll" "$B/brain/win-x64/"
 chmod 644 "$B/brain/win-x64/sts2ai_engine.dll"
 ssh -p "$win_port" "$STS2_WIN" 'Remove-Item -Recurse -Force "$HOME\sts2ai-engine", "$HOME\sts2ai-engine.tar"'
+fi
 for rid in $rids; do cp "$B/src/engine/crates/sts2ai-engine/src/gen/schema.json" "$B/brain/$rid/sts2ai_engine.schema.json"; done
 
-launcher=$B/brain/osx-arm64/Sts2Ai.SimWorker
-ssh "$STS2_MAC" 'f=$(mktemp) && cat > "$f" && codesign -s - -f "$f" && codesign -v "$f" && cat "$f" && rm -f "$f"' \
-  < "$launcher" > "$launcher.signed"
-mv "$launcher.signed" "$launcher"
-chmod +x "$launcher"
+if [ -z "$LINUX_ONLY" ]; then
+  launcher=$B/brain/osx-arm64/Sts2Ai.SimWorker
+  ssh "$STS2_MAC" 'f=$(mktemp) && cat > "$f" && codesign -s - -f "$f" && codesign -v "$f" && cat "$f" && rm -f "$f"' \
+    < "$launcher" > "$launcher.signed"
+  mv "$launcher.signed" "$launcher"
+  chmod +x "$launcher"
+fi
 
 # NoSL is not trained for now: it plays with SL's nets, the V and the combat net nosl.json names as sl.json does (PIMC
 # with them for NoSL hosts, the SL planner for SL hosts).
@@ -83,9 +94,9 @@ for net in $(grep -o 'weights/all/[^"]*\.json' "$champion" | sort -u); do
 done
 sed 's#weights/all/\([^"]*\)\.json#nets/\1.net#g' "$champion" > "$B/brain/champion.json"
 
-rm -rf "$R/out"
+if [ -z "$LINUX_ONLY" ]; then rm -rf "$R/out"; fi
 mkdir -p "$I"
 cp "$B/art/bin/Sts2Ai.Mod/release/Sts2Ai.dll" "$B/art/bin/Sts2Ai.Mod/release/Sts2Ai.json" "$I/"
 mv "$B/brain" "$I/brain"
-echo "$rev" > "$R/out/commit"
+if [ -z "$LINUX_ONLY" ]; then echo "$rev" > "$R/out/commit"; fi
 du -sh "$I" "$I"/brain/*/
