@@ -1,6 +1,8 @@
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using Godot;
 using HarmonyLib;
-using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Nodes;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
@@ -22,11 +24,17 @@ internal static class Host
 
     public static void Start()
     {
+        ModLog.Start();
         string version = NGame.GetGameVersion();
+        string modDir = Path.GetDirectoryName(typeof(Host).Assembly.Location)!;
+        ModLog.Write("start", $"mod {ModVersion(modDir)} from {modDir}");
+        ModLog.Write("start", $"game {version} ({ReleaseInfoManager.Instance.ReleaseInfo?.Branch ?? "no branch"}), " +
+                              $"{RuntimeInformation.OSDescription} {RuntimeInformation.ProcessArchitecture}; the game's log: {OS.GetUserDataDir()}/logs/godot.log");
+        ModLog.Write("start", $"settings: {Settings.Current}");
         if (version != PinnedVersion)
         {
             _off = $"off: game {version}, the mod is for {PinnedVersion}";
-            Log.Warn($"{Tag} {_off}");
+            ModLog.Warn("start", _off);
         }
         else
         {
@@ -35,14 +43,21 @@ internal static class Host
             ChoiceContexts.Patch(harmony);
             NodeRecord.Patch(harmony);
             SettingsTab.Patch(harmony);
-            // The brain shipped beside the mod plays with the running game's own assemblies, and logs beside the settings.
-            var bundled = BundledBrain.Find(Path.GetDirectoryName(typeof(Host).Assembly.Location)!, Path.GetDirectoryName(typeof(NGame).Assembly.Location)!,
-                version, Path.Combine(Settings.Dir, "brain.log"));
+            // The brain shipped beside the mod plays with the running game's own assemblies, and logs into this game
+            // session's folder.
+            var bundled = BundledBrain.Find(modDir, Path.GetDirectoryName(typeof(NGame).Assembly.Location)!, version, ModLog.Folder!);
             var link = BrainLink.Start(bundled);
             _assist = new Assist(link, version, bundled?.SchemaPath);
-            Log.Info($"{Tag} assist mode, {Settings.Current.Env}, brain: {link.Where}");
+            ModLog.Info("start", $"assist mode, {Settings.Current.Env}, brain: {link.Where}");
         }
         ((SceneTree)Engine.GetMainLoop()).ProcessFrame += Tick;
+    }
+
+    /// <summary>The version in the mod's manifest beside it.</summary>
+    private static string ModVersion(string modDir)
+    {
+        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(modDir, "Sts2Ai.json")));
+        return manifest.RootElement.GetProperty("version").GetString()!;
     }
 
     private static void Tick()
@@ -63,7 +78,7 @@ internal static class Host
             string error = e.ToString();
             if (error == _lastError) return;
             _lastError = error;
-            Log.Error($"{Tag} {error}");
+            ModLog.Error("mod", error);
             _panel?.Show("—", L10n.T("error"), null, L10n.T("Mod error"), e.Message, Tone.Error);
         }
     }

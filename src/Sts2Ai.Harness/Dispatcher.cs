@@ -78,7 +78,7 @@ public sealed class Dispatcher(
     private readonly ulong _runHash = ProtocolJson.Hash(runId);
     private readonly List<DecisionEntry> _log = [];
     private readonly Dictionary<string, int> _brains = [];
-    private readonly List<string> _nodeTrace = [];
+    private IReadOnlyList<string> _nodeTrace = [];
     private readonly MoveRecord _moves = new();
     private int _decisions;
     private NodeCheckpoint? _node;
@@ -219,22 +219,23 @@ public sealed class Dispatcher(
         return (answer, new(macro.Brain, plan, answer.Scored.Count > 0 ? answer.Scored : null));
     }
 
-    /// <summary>SL: the host arrived at a node; its decisions follow.</summary>
+    /// <summary>SL: a new checkpoint (one of the game's saves); the decisions after it follow.</summary>
     public void Checkpoint(NodeCheckpoint checkpoint)
     {
         if (env != PlayEnvironment.SL) throw new InvalidOperationException($"a node checkpoint in {env}");
         if (checkpoint.NodeIndex <= (_node?.NodeIndex ?? -1)) throw new InvalidDataException($"node {checkpoint.NodeIndex} after node {_node!.NodeIndex}");
         _node = checkpoint;
-        _nodeTrace.Clear();
+        _nodeTrace = [];
     }
 
-    /// <summary>SL: a decision taken in the current node.</summary>
-    public void Act(NodeAction action)
+    /// <summary>
+    /// The steps taken since the latest checkpoint, whole, before a decision (<see cref="DecisionRequest.Trace"/>): an SL
+    /// decision always comes with them, a NoSL one never.
+    /// </summary>
+    public void Steps(IReadOnlyList<string>? steps)
     {
-        if (env != PlayEnvironment.SL) throw new InvalidOperationException($"a node action in {env}");
-        if (action.NodeIndex != _node?.NodeIndex || action.Seq != _nodeTrace.Count)
-            throw new InvalidDataException($"node action {action.NodeIndex}:{action.Seq}, expected {_node?.NodeIndex}:{_nodeTrace.Count}");
-        _nodeTrace.Add(action.Action);
+        if (env == PlayEnvironment.SL) _nodeTrace = steps ?? throw new InvalidDataException("an SL decision without the steps since its checkpoint");
+        else if (steps != null) throw new InvalidOperationException($"node steps in {env}");
     }
 
     /// <summary>SL with <c>clones</c>: the node's clone at this decision, for the macro side.</summary>

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using MegaCrit.Sts2.Core.Logging;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Mod.UI;
@@ -31,9 +30,6 @@ internal enum SearchEffort { Brain, Low, Medium, High, Max }
 /// <param name="StopAtElites">Auto-play stops before it travels to an elite or a boss.</param>
 /// <param name="StopOnDrop">Auto-play stops when V's chance to win falls 3 points below the best it showed since auto-play started.</param>
 /// <param name="Effort">The SL planner's effort the mod asks the brain for; a change starts the run anew for the brain.</param>
-/// <param name="Record">Not on the settings screen, set in the file by hand: each brain the mod starts writes the messages
-/// it gets and its decision log (brain --wire, --log) under <see cref="Dir"/>/captures/, a pair of files per brain,
-/// for <c>clones</c> to check the SL records against.</param>
 internal sealed record Settings(
     bool Assist = true,
     PlayEnvironment Env = PlayEnvironment.SL,
@@ -48,8 +44,7 @@ internal sealed record Settings(
     AutoSpeed Speed = AutoSpeed.Medium,
     bool StopAtElites = true,
     bool StopOnDrop = true,
-    SearchEffort Effort = SearchEffort.Brain,
-    bool Record = false)
+    SearchEffort Effort = SearchEffort.Brain)
 {
     /// <summary>The effort as hello names it; null for the brain's own.</summary>
     public string? EffortName => Effort == SearchEffort.Brain ? null : Effort.ToString().ToLowerInvariant();
@@ -57,7 +52,7 @@ internal sealed record Settings(
     /// <summary>The wait before each auto-play action at <see cref="Speed"/>, in milliseconds.</summary>
     public int Delay => Speed switch { AutoSpeed.Slow => 1500, AutoSpeed.Medium => 800, _ => 200 };
 
-    /// <summary>The mod's own folder, outside the game's profile: the settings and the brain's log. $XDG_STATE_HOME/sts2ai, by default ~/.local/state/sts2ai.</summary>
+    /// <summary>The mod's own folder, outside the game's profile: the settings and the logs (<see cref="ModLog"/>). $XDG_STATE_HOME/sts2ai, by default ~/.local/state/sts2ai.</summary>
     public static readonly string Dir = Path.Combine(
         Environment.GetEnvironmentVariable("XDG_STATE_HOME") is { Length: > 0 } state
             ? state
@@ -81,7 +76,7 @@ internal sealed record Settings(
         }
         catch (IOException e)
         {
-            Log.Warn($"{Host.Tag} could not keep the settings in {Kept}: {e.Message}");
+            ModLog.Warn("settings", $"could not keep the settings in {Kept}: {e.Message}");
         }
     }
 
@@ -94,7 +89,7 @@ internal sealed record Settings(
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
-            Log.Warn($"{Host.Tag} could not read {Kept}, using the defaults: {e.Message}");
+            ModLog.Warn("settings", $"could not read {Kept}, using the defaults: {e.Message}");
             return new();
         }
     }

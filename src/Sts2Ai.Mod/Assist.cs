@@ -1,6 +1,5 @@
 using System.Globalization;
 using MegaCrit.Sts2.Core.Context;
-using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
@@ -31,8 +30,8 @@ internal enum Goal
 /// for a few frames, asks the brain about that state, and shows the answer while the state lasts. The player acts, or
 /// asks the AI to (<see cref="Press"/>): one action, to the end of the turn or the room, or on its own until paused.
 /// The AI plays only the brain's answer to the decision on screen, through <see cref="Executor"/>, once per state, and
-/// at auto-play's speed; it stops when an action does nothing, before an elite or a boss and when V's chance to win
-/// falls, if the player set those, and at the run's end.
+/// at auto-play's speed; it stops when the player acts (a step the AI did not take, or going back), when an action does
+/// nothing, before an elite or a boss and when V's chance to win falls, if the player set those, and at the run's end.
 /// One decision is in flight at a time: when the state moves on first, the mod cancels it and waits for its answer
 /// before asking about the new state, so a slow brain never falls behind.
 /// The environment and the SL planner's effort are the player's choice (<see cref="Settings"/>), kept across games.
@@ -40,9 +39,9 @@ internal enum Goal
 /// that point. In SL the brain plans a
 /// combat in its engine, on the live combat the mod writes out with each combat decision between actions
 /// (<see cref="DecisionRequest.Export"/>, along the engine's schema beside the brain), and crosses a card prompt and
-/// values every other option on a clone of the node, so before each decision the mod sends the node's checkpoint and the
-/// steps taken in it (<see cref="NodeRecord"/>), and asks nothing in a node it cannot clone; NoSL sends none of these,
-/// the live combat holding the hidden state.
+/// values every other option on a clone of the node, so the mod sends each checkpoint once and every SL decision with
+/// the steps taken since it (<see cref="NodeRecord"/>), and asks nothing where it cannot clone; NoSL sends none of these,
+/// the live combat holding the hidden state. Screens, decisions and answers go to <see cref="ModLog"/>.
 /// </summary>
 /// <param name="schemaPath">The engine's schema (<see cref="BundledBrain.SchemaPath"/>); null with no brain shipped.</param>
 internal sealed class Assist(BrainLink link, string gameVersion, string? schemaPath)
@@ -64,7 +63,8 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
 
     /// <param name="Key">The observation's hash and the legal actions: what the answer is for.</param>
     /// <param name="Sent">When it was sent, in <see cref="Environment.TickCount64"/> milliseconds.</param>
-    private sealed record Asked(long Id, string Key, Observation Obs, long Sent, bool Cancelled = false);
+    /// <param name="Cancelled">When the state moved on and the mod cancelled it, or null.</param>
+    private sealed record Asked(long Id, string Key, Observation Obs, long Sent, long? Cancelled = null);
 
     /// <summary>An answer as it is shown, and what it is for.</summary>
     private sealed record Answered(long Id, string Key, Recommendation Answer, Shown Shown, string Foot, MapRoute? Route, CombatPlan? Plan);
@@ -84,9 +84,8 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private (bool Over, bool Won, int Floor) _last;
     private string? _line;
 
-    // SL: the node and its steps the brain has been sent in this run.
+    // SL: the checkpoint the brain has been sent in this run.
     private int _sentNode;
-    private int _sentSteps;
 
     private long _next;
     private Asked? _asked;
@@ -108,6 +107,12 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private string _surface = Surfaces.Combat;
     private readonly List<string> _recent = [];
 
+    /// <summary>The player's acts (<see cref="NodeRecord.PlayerActs"/>) already seen: one more stops the AI.</summary>
+    private int _playerActs;
+
+    /// <summary>The screen as the log last wrote it.</summary>
+    private string? _logged;
+
     // V's chance to win at the latest macro decisions, and the SL planner's expected end of the current fight.
     private double? _win;
     private double? _before;
@@ -121,7 +126,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private void Switch(PlayEnvironment env)
     {
         _env = env;
-        Log.Info($"{Host.Tag} environment {env}");
+        ModLog.Info("settings", $"environment {env}");
         if (_run != null) End("aborted");
     }
 
@@ -129,7 +134,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private void Switch(SearchEffort effort)
     {
         _effort = effort;
-        Log.Info($"{Host.Tag} effort {effort}");
+        ModLog.Info("settings", $"effort {effort}");
         if (_run != null) End("aborted");
     }
 
@@ -159,11 +164,15 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     }
 
     /// <summary>A new goal: a state the AI played before without effect may be played again.</summary>
-    private void Begin(Goal goal) => (_goal, _acts, _lastSurface, _waiting, _acted) = (goal, 0, null, null, null);
+    private void Begin(Goal goal)
+    {
+        (_goal, _acts, _lastSurface, _waiting, _acted) = (goal, 0, null, null, null);
+        ModLog.Write("auto", $"AI goal {goal}");
+    }
 
     private void Stop(string reason)
     {
-        if (_goal != Goal.Off) Log.Info($"{Host.Tag} AI stopped: {reason}");
+        if (_goal != Goal.Off) ModLog.Info("auto", $"AI stopped: {reason}");
         (_goal, _stopped) = (Goal.Off, reason);
     }
 
@@ -184,6 +193,13 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         string note = "";
         var asking = single ? _screens.Read(run!, me!, out note) : null;
         if (asking != null) NodeRecord.Seen(asking);
+        Screen(asking, note);
+        // The player acted (a step the AI did not take, or going back): the AI hands over.
+        if (NodeRecord.PlayerActs != _playerActs)
+        {
+            _playerActs = NodeRecord.PlayerActs;
+            if (_goal != Goal.Off) Stop(L10n.T("you acted"));
+        }
         // The screen does not show a step's result before the step ends.
         if (asking != null && NodeRecord.Running(asking.Surface)) asking = null;
 
@@ -211,8 +227,9 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         }
         if (_run == null)
         {
-            (_run, _champion, _failure, _next, _sentNode, _sentSteps) = (id, null, null, 0, -1, 0);
+            (_run, _champion, _failure, _next, _sentNode) = (id, null, null, 0, -1);
             link.Send(new Hello(gameVersion, _env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel), settings.EffortName));
+            ModLog.Write("brain", $"hello: run {id}, {me.Character.Id.Entry} A{run.AscensionLevel}, {_env}, effort {settings.EffortName ?? "the brain's"}");
         }
         _last = (run.IsGameOver, run.IsGameOver && run.CurrentRoom?.IsVictoryRoom == true, run.TotalFloor);
         if (run.IsGameOver && _goal != Goal.Off) Stop(L10n.T("the run is over"));
@@ -274,20 +291,35 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         if (key == _askedKey) return;
         if (_asked != null)
         {
-            if (!_asked.Cancelled)
+            if (_asked.Cancelled == null)
             {
                 link.Send(new Cancel(_asked.Id));
-                _asked = _asked with { Cancelled = true };
+                _asked = _asked with { Cancelled = Environment.TickCount64 };
+                ModLog.Write("decision", $"{_asked.Id} cancelled: the state moved on");
             }
             return;
         }
-        if (_env == PlayEnvironment.SL) SendNode();
+        bool sl = _env == PlayEnvironment.SL;
+        if (sl) SendNode();
         // In the same frame as the observation, with the action queue empty: the combat as it is shown.
-        string? export = _env == PlayEnvironment.SL && asking.Surface == Surfaces.Combat
+        string? export = sl && asking.Surface == Surfaces.Combat
             ? Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes)
             : null;
+        var trace = sl ? NodeRecord.Steps : null;
         (_asked, _askedKey) = (new Asked(_next++, key, asking.Obs, Environment.TickCount64), key);
-        link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal, export));
+        link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal, export, trace));
+        ModLog.Write("decision", $"{_asked.Id} asked: {asking.Surface}, floor {asking.Obs.Run.Floor}, {asking.Legal.Count} legal" +
+                                 (trace != null ? $", checkpoint {NodeRecord.Node} + {trace.Count} steps" : "") + (export != null ? $", live combat {export.Length} chars" : ""));
+    }
+
+    /// <summary>The screen's decision in the log, when it changes: its surface and legal actions, or what the game waits on.</summary>
+    private void Screen(Asking? asking, string note)
+    {
+        string now = asking != null ? $"{asking.Surface}: {(asking.Legal.Count > 0 ? string.Join(" ", asking.Legal) : "a card prompt")}"
+            : note != "" ? $"no decision: {note}" : "no decision";
+        if (now == _logged) return;
+        _logged = now;
+        ModLog.Write("screen", now);
     }
 
     /// <summary>
@@ -317,24 +349,29 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             return;
         }
         Acted done;
+        // Before the press: a button's handler may take the step at once, inside it.
+        NodeRecord.Expect(Step(asking, answer.Answer.Action));
         try
         {
             done = Executor.Run(asking, answer.Answer.Action, run, me);
         }
         catch (Exception e)
         {
-            Log.Warn($"{Host.Tag} could not play {answer.Answer.Action}: {e}");
+            NodeRecord.Expect(null);
+            ModLog.Warn("auto", $"could not play {answer.Answer.Action}: {e}");
             Stop(L10n.T("the AI cannot press this: {0}", e.Message));
             return;
         }
         if (done == Acted.Again)
         {
+            NodeRecord.Expect(null);
             _shown = now;
             if (_waiting is not { } waiting || waiting.Key != answer.Key) _waiting = (answer.Key, now);
             else if (now - waiting.Since > Patience) Stop(L10n.T("the AI cannot press this: {0}", answer.Shown.Next));
             return;
         }
         (_acted, _waiting) = ((answer.Key, now), null);
+        ModLog.Write("auto", $"AI pressed {answer.Answer.Action} for decision {answer.Id} ({asking.Surface})");
         link.Send(new Executed(answer.Id, answer.Answer.Action, true));
         _recent.Insert(0, $"{L10n.T("floor {0}", asking.Obs.Run.Floor)} · {answer.Shown.Next}{Value(answer)}");
         if (_recent.Count > Remembered) _recent.RemoveAt(_recent.Count - 1);
@@ -342,6 +379,13 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         bool ended = CombatAction.TryParse(answer.Answer.Action, out var action) && action.Kind == CombatActionKind.EndTurn;
         if (_goal == Goal.One || _goal == Goal.Turn && ended) _goal = Goal.Off;
     }
+
+    /// <summary>The action of the step the record takes for the AI's answer: a card prompt's picks as the game's own
+    /// indexes, as the record names them; every other answer as it is.</summary>
+    private static string Step(Asking asking, string action) =>
+        asking.Surface == Surfaces.CardChoice && asking.GameIndex is { } index && MacroAction.Parse(action) is { Verb: MacroAction.PickVerb } pick
+            ? string.Join(",", pick.Picks.Select(i => index[i]))
+            : action;
 
     /// <summary>Why auto-play stops before this answer, by the player's settings; null to play it.</summary>
     private string? Stops(Asking asking, Answered answer)
@@ -366,7 +410,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     {
         if (_goal is not (Goal.Auto or Goal.Room) || Environment.TickCount64 - _idle < NudgeAfter) return;
         _idle = Environment.TickCount64;
-        if (Executor.Nudge() is { } pressed) Log.Info($"{Host.Tag} auto-play pressed the {pressed}");
+        if (Executor.Nudge() is { } pressed) ModLog.Info("auto", $"auto-play pressed the {pressed}");
     }
 
     /// <summary>Whether the decisions on this surface are a combat's: its own and its card prompts.</summary>
@@ -405,16 +449,12 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
 
     private static string Percent(double p, bool whole = false) => (p * 100).ToString(whole ? "0" : "0.0", CultureInfo.InvariantCulture) + "%";
 
-    /// <summary>SL: the current node's checkpoint once, and its steps the brain has not had yet, before the next decision.</summary>
+    /// <summary>SL: the current checkpoint, once, before the first decision after it.</summary>
     private void SendNode()
     {
-        if (NodeRecord.Checkpoint is not { } checkpoint) return;
-        if (NodeRecord.Node != _sentNode)
-        {
-            link.Send(new NodeCheckpoint(NodeRecord.Node, checkpoint));
-            (_sentNode, _sentSteps) = (NodeRecord.Node, 0);
-        }
-        for (var steps = NodeRecord.Steps; _sentSteps < steps.Count; _sentSteps++) link.Send(new NodeAction(_sentNode, _sentSteps, steps[_sentSteps]));
+        if (NodeRecord.Checkpoint is not { } checkpoint || NodeRecord.Node == _sentNode) return;
+        link.Send(new NodeCheckpoint(NodeRecord.Node, checkpoint));
+        _sentNode = NodeRecord.Node;
     }
 
     private void Handle(LinkEvent e)
@@ -423,11 +463,11 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         {
             case LinkUp:
                 _connected = true;
-                Log.Info($"{Host.Tag} connected to the brain");
+                ModLog.Info("brain", "connected to the brain");
                 break;
             case LinkDown down:
                 // A new connection starts again from hello.
-                if (_connected || _down != down.Reason) Log.Info($"{Host.Tag} no brain: {down.Reason}");
+                if (_connected || _down != down.Reason) ModLog.Info("brain", $"no brain: {down.Reason}");
                 (_connected, _down, _run) = (false, down.Reason, null);
                 // The toolbar is gone without a brain: the AI stops, and starts again only when the player asks.
                 Reset();
@@ -435,13 +475,21 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 break;
             case Received { Message: Ready ready }:
                 _champion = ready.Champion;
+                ModLog.Write("brain", $"ready: {ready.Champion}");
                 break;
             case Received { Message: Recommendation answer }:
                 if (_asked?.Id != answer.DecisionId) break;
                 // Cleared first, so an answer that cannot be described does not leave the mod waiting for it.
                 var asked = _asked;
                 _asked = null;
-                if (asked.Cancelled) break;
+                long now = Environment.TickCount64;
+                if (asked.Cancelled is { } cancelled)
+                {
+                    ModLog.Write("decision", $"{asked.Id} answered after it was cancelled: the mod waited {now - cancelled} ms for it");
+                    break;
+                }
+                ModLog.Write("decision", $"{asked.Id} answered in {now - asked.Sent} ms by {answer.Brain}: {answer.Action}" +
+                                         (answer.Candidates is { Count: > 0 } c ? $"; best {string.Join(", ", c.Take(3).Select(Candidate))}" : ""));
                 var shown = Describe.Recommendation(answer, asked.Obs);
                 Note(shown, answer);
                 _answer = new(asked.Id, asked.Key, answer, shown, $"{answer.Brain} · {(Environment.TickCount64 - asked.Sent) / 1000.0:0.0} s",
@@ -449,7 +497,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 break;
             case Received { Message: WireError error }:
                 // The brain refused the run or could not answer: the run goes on without it.
-                Log.Warn($"{Host.Tag} brain: {error.Message}");
+                ModLog.Warn("brain", $"brain: {error.Message}");
                 if (_run != null)
                 {
                     _failure = error.Message;
@@ -458,10 +506,14 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 Forget();
                 break;
             case Received { Message: var other }:
-                Log.Warn($"{Host.Tag} unexpected {other.GetType().Name} from the brain");
+                ModLog.Warn("brain", $"unexpected {other.GetType().Name} from the brain");
                 break;
         }
     }
+
+    /// <summary>A scored candidate in the log: its action, value and, from a fight's plan, its chance to win and HP left.</summary>
+    private static string Candidate(Candidate c) =>
+        string.Create(CultureInfo.InvariantCulture, $"{c.Action} {c.Value:0.####}{(c.Win is { } w ? $" win {w:0.###}" : "")}{(c.Hp is { } hp ? $" hp {hp:0.#}" : "")}");
 
     /// <summary>Keeps V's chance to win from a macro answer, and the fight's expected end from a planned combat answer.</summary>
     private void Note(Shown shown, Recommendation answer)
@@ -482,6 +534,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private void End(string reason)
     {
         if (_failure == null) link.Send(new RunEnd(_last.Won, _last.Floor, reason));
+        ModLog.Write("brain", $"run end: {reason}, floor {_last.Floor}");
         _run = null;
         Reset();
         Forget();

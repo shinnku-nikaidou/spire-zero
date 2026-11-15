@@ -13,7 +13,8 @@ namespace Sts2Ai.SimWorker.Commands;
 /// </summary>
 internal static class ClonesCommand
 {
-    private static readonly Option<string> Wire = Opt.Required<string>("--wire", "a host's messages, one JSON line each, as brain --wire writes them");
+    private static readonly Option<string> Wire = Opt.Required<string>("--wire",
+        "a host's messages, one JSON line each, as brain --wire writes them; or a game session's folder of the mod's logs, which holds them in wire.jsonl");
 
     public static Command Command()
     {
@@ -26,9 +27,11 @@ internal static class ClonesCommand
     {
         string? env = null;
         NodeCheckpoint? node = null;
-        var steps = new List<string>();
         int decisions = 0, equal = 0, outside = 0;
-        foreach (var line in File.ReadLines(r.GetValue(Wire)!))
+        string path = r.GetValue(Wire)!;
+        // A game session's folder of the mod's logs holds its brains' messages in wire.jsonl.
+        if (Directory.Exists(path)) path = Path.Combine(path, "wire.jsonl");
+        foreach (var line in File.ReadLines(path))
         {
             switch (ProtocolJson.Deserialize<WireMessage>(line))
             {
@@ -36,12 +39,7 @@ internal static class ClonesCommand
                     (env, node) = (hello.Env, null);
                     break;
                 case NodeCheckpoint checkpoint:
-                    (node, steps) = (checkpoint, []);
-                    break;
-                case NodeAction action:
-                    if (action.NodeIndex != node?.NodeIndex || action.Seq != steps.Count)
-                        throw new CliException($"node action {action.NodeIndex}:{action.Seq} after {node?.NodeIndex}:{steps.Count - 1}");
-                    steps.Add(action.Action);
+                    node = checkpoint;
                     break;
                 case DecisionRequest request when env == nameof(PlayEnvironment.SL):
                     if (node == null)
@@ -50,8 +48,9 @@ internal static class ClonesCommand
                         break;
                     }
                     decisions++;
-                    var (asked, failure) = NextDecision(pump, new NodeClone(node.Checkpoint, [.. steps], node.AutoWin));
-                    string where = $"node {node.NodeIndex} step {steps.Count}, decision {request.DecisionId} ({request.Surface})";
+                    var steps = request.Trace ?? throw new CliException($"SL decision {request.DecisionId} without its steps");
+                    var (asked, failure) = NextDecision(pump, new NodeClone(node.Checkpoint, steps, node.AutoWin));
+                    string where = $"checkpoint {node.NodeIndex} step {steps.Count}, decision {request.DecisionId} ({request.Surface})";
                     if (asked == null) Console.WriteLine($"{where}: the clone fails: {failure}");
                     else if (DecisionRequest.HashOf(asked) != request.ObsHash)
                         Console.WriteLine($"{where}: the clone asks another decision: {Difference(ProtocolJson.Serialize(request.Obs), ProtocolJson.Serialize(asked))}");

@@ -78,12 +78,21 @@ public class DispatcherTests
             return new(CombatAction.EndTurn, [], []);
         }), new("l0", macro), new("l0", macro));
         dispatcher.Checkpoint(new(0, "{}", [0, 1]));
-        dispatcher.Act(new(0, 0, "event event:1"));
+        dispatcher.Steps(["event event:1", "rewards reward:0"]);
         dispatcher.Choose(Decision(Fixtures.Slugs()));
-        Assert.True(seen is { Save: "{}" } && seen.Trace.SequenceEqual(["event event:1"]));
+        Assert.True(seen is { Save: "{}" } && seen.Trace.SequenceEqual(["event event:1", "rewards reward:0"]));
         // The run's rule goes with the clone, so that its fights and probes play by it.
         Assert.Equal([0, 1], seen.AutoWin);
+        // Each decision brings the steps whole: a player who went back sends fewer.
+        dispatcher.Steps(["event event:1"]);
+        dispatcher.Choose(Decision(Fixtures.Slugs()));
+        Assert.True(seen.Trace.SequenceEqual(["event event:1"]));
+        Assert.Throws<InvalidDataException>(() => dispatcher.Steps(null));
     }
+
+    [Fact]
+    public void RefusesNodeStepsInNoSL() =>
+        Assert.Throws<InvalidOperationException>(() => Make(CombatRoute.Of("test", new EndTurns())).Steps(["event event:1"]));
 
     private static readonly CardChoice Asked = new()
     {

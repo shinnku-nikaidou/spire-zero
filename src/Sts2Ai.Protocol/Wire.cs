@@ -18,11 +18,10 @@ namespace Sts2Ai.Protocol;
 [JsonDerivedType(typeof(RunEnd), "run_end")]
 [JsonDerivedType(typeof(WireError), "error")]
 [JsonDerivedType(typeof(NodeCheckpoint), "node_checkpoint")]
-[JsonDerivedType(typeof(NodeAction), "node_action")]
 public abstract record WireMessage
 {
     /// <summary>Bumped on any breaking change.</summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     [JsonPropertyOrder(-1)]
     public int V { get; init; } = Version;
@@ -54,7 +53,12 @@ public sealed record Ready(string Champion) : WireMessage;
 /// <param name="Export">SL only, at a combat decision between actions (not at a card prompt): the live combat as the
 /// bridge's <c>EngineExport</c> wrote it, in base64, for the engine to take in. It holds the hidden state, so a NoSL
 /// host never sends it.</param>
-public sealed record DecisionRequest(long DecisionId, string ObsHash, string Surface, Observation Obs, IReadOnlyList<string> Legal, string? Export = null)
+/// <param name="Trace">SL only, and always there: every step taken since the latest <see cref="NodeCheckpoint"/>, in the
+/// order the steps took effect, as "surface action" (a card prompt's picks as the game's own indexes). With the
+/// checkpoint it is the clone this decision is asked on (<see cref="NodeClone"/>). Sent whole each time: a host whose
+/// player went back (into a room left for the map, out of a card reward unanswered) sends a shorter one.</param>
+public sealed record DecisionRequest(long DecisionId, string ObsHash, string Surface, Observation Obs, IReadOnlyList<string> Legal, string? Export = null,
+    IReadOnlyList<string>? Trace = null)
     : WireMessage
 {
     public static string HashOf(Observation obs) => ProtocolJson.Hash(obs).ToString("x16");
@@ -82,18 +86,12 @@ public sealed record RunEnd(bool Won, int Floor, string Reason) : WireMessage;
 public sealed record WireError(string Message) : WireMessage;
 
 /// <summary>
-/// Host → brain, SL only: the node's checkpoint on arrival, before the node's first decision: the game's
-/// save and the relic fields it drops, opaque outside the simulator. Nodes are numbered from 0 in
-/// the run. <see cref="AutoWin"/> is the run's rule, which the node's clones keep (<see cref="NodeClone.AutoWin"/>); null
-/// in the normal game, and always from the real game.
+/// Host → brain, SL only: a checkpoint, before the first decision after it: one of the game's saves (on arrival at a map
+/// point, or inside a room the game marked finished: after a won fight, after an ancient) and the relic fields it drops,
+/// opaque outside the simulator. Checkpoints are numbered from 0 in the run. <see cref="AutoWin"/> is the run's rule,
+/// which the clones keep (<see cref="NodeClone.AutoWin"/>); null in the normal game, and always from the real game.
 /// </summary>
 public sealed record NodeCheckpoint(int NodeIndex, string Checkpoint, IReadOnlyList<int>? AutoWin = null) : WireMessage;
-
-/// <summary>
-/// Host → brain, SL only: a decision taken in the node, numbered by <see cref="Seq"/> from 0, as "surface action" (a
-/// card prompt's picks as the game's own indexes). Sent before the next decision.
-/// </summary>
-public sealed record NodeAction(int NodeIndex, int Seq, string Action) : WireMessage;
 
 
 /// <summary>One end of a connection: messages as JSON lines, read from <paramref name="input"/> and written to <paramref name="output"/>.</summary>

@@ -8,8 +8,8 @@ namespace Sts2Ai.Harness;
 /// The brain's end of the wire. Each run on a connection gets its own Harness from
 /// <paramref name="harness"/>, made at hello (it refuses the run by throwing); each decision is routed through it and
 /// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
-/// observation that does not match its hash) gets an error instead, and the host ends the run. SL node messages get
-/// no answer: one that Harness refuses fails the run's next decision. <paramref name="ended"/> gets each run's Harness at
+/// observation that does not match its hash) gets an error instead, and the host ends the run. An SL checkpoint gets
+/// no answer: one that Harness refuses fails the run's next decision; each SL decision brings the steps since it. <paramref name="ended"/> gets each run's Harness at
 /// run_end; <paramref name="received"/> every message a host sends; <paramref name="answered"/> the run's Harness after
 /// each answer is sent, so its decision log can be written as it grows.
 /// </summary>
@@ -62,6 +62,7 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
                         if (refused != null) throw new InvalidDataException(refused);
                         if (request.DecisionId <= last) throw new InvalidDataException($"decision {request.DecisionId} after decision {last}");
                         last = request.DecisionId;
+                        run.Steps(request.Trace);
                         wire.Send(Answer(run, request));
                         answered?.Invoke(run);
                     }
@@ -70,12 +71,11 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
                         wire.Send(new WireError(Describe(e)));
                     }
                     break;
-                case NodeCheckpoint or NodeAction:
+                case NodeCheckpoint checkpoint:
                     try
                     {
                         if (run == null) throw new InvalidDataException($"{message.GetType().Name} outside a run");
-                        if (message is NodeCheckpoint checkpoint) run.Checkpoint(checkpoint);
-                        else run.Act((NodeAction)message);
+                        run.Checkpoint(checkpoint);
                     }
                     catch (Exception e)
                     {

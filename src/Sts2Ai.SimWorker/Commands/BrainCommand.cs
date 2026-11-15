@@ -39,8 +39,9 @@ internal static class BrainCommand
         var (champion, sl) = Champions(r);
 
         using var workerPool = champion.Pool() ?? sl.Pool();
-        using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;
-        using var wireFile = r.GetValue(Wire) is { } wirePath ? new StreamWriter(wirePath) { AutoFlush = true } : null;
+        // Added to: the mod starts a brain again in the same game session when one ends, with the same files.
+        using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath, append: true) { AutoFlush = true } : null;
+        using var wireFile = r.GetValue(Wire) is { } wirePath ? new StreamWriter(wirePath, append: true) { AutoFlush = true } : null;
         // One Harness maker per environment and effort asked for, made at the first run that asks.
         var harnesses = new Dictionary<(string Env, string? Effort), Func<Hello, Dispatcher>>();
         Func<Hello, Dispatcher> HarnessFor(Hello hello)

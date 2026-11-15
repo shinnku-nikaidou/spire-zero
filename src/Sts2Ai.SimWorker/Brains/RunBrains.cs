@@ -23,11 +23,11 @@ internal interface IRunBrain : ICombatPolicy, IChoicePolicy, IMacroPolicy
     /// <summary>Harness's <see cref="Dispatcher.Search"/>, when Harness is in this process.</summary>
     PlanTally? Search { get; }
 
-    /// <summary>SL: the host arrived at a node.</summary>
+    /// <summary>SL: a new checkpoint.</summary>
     void Checkpoint(NodeCheckpoint checkpoint);
 
-    /// <summary>SL: a decision taken in the current node, sent before the next decision.</summary>
-    void Act(NodeAction action);
+    /// <summary>SL: the steps taken since the latest checkpoint, whole, before each decision.</summary>
+    void Steps(IReadOnlyList<string> steps);
 
     /// <summary>Once, when the run is over; <paramref name="failure"/> if it failed.</summary>
     void End(RunEnd end, string? failure);
@@ -45,20 +45,18 @@ internal sealed class LocalBrain(Dispatcher harness) : IRunBrain
     public ChoiceAnswer Choose(ChoiceDecision decision) => harness.Choose(decision);
     public MacroAnswer Choose(MacroDecision decision) => harness.Choose(decision);
     public void Checkpoint(NodeCheckpoint checkpoint) => harness.Checkpoint(checkpoint);
-    public void Act(NodeAction action) => harness.Act(action);
+    public void Steps(IReadOnlyList<string> steps) => harness.Steps(steps);
     public void End(RunEnd end, string? failure) { }
 }
 
 /// <summary>
-/// SL: before each decision, tells the brain what it has not heard of the current node: its
-/// checkpoint on arrival, then the decisions taken in it since, card prompts included. <see cref="Session"/> is the run,
-/// set once it has started.
+/// SL: before each decision, tells the brain the current node's checkpoint on arrival if it has not had it, then the
+/// decisions taken in the node since, card prompts included. <see cref="Session"/> is the run, set once it has started.
 /// </summary>
 internal sealed class NodeExport(IRunBrain brain) : IRunBrain
 {
     private int _node = -1;
     private int _start = -1;
-    private int _sent;
 
     public RunSession? Session { get; set; }
 
@@ -87,7 +85,7 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
     }
 
     public void Checkpoint(NodeCheckpoint checkpoint) => brain.Checkpoint(checkpoint);
-    public void Act(NodeAction action) => brain.Act(action);
+    public void Steps(IReadOnlyList<string> steps) => brain.Steps(steps);
     public void End(RunEnd end, string? failure) => brain.End(end, failure);
 
     /// <summary>A node's decisions begin at a new place in the run's trace, as each node has at least its travel.</summary>
@@ -97,10 +95,10 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
         var clone = session.Clone();
         if (session.NodeStart != _start)
         {
-            (_node, _start, _sent) = (_node + 1, session.NodeStart, 0);
+            (_node, _start) = (_node + 1, session.NodeStart);
             brain.Checkpoint(new NodeCheckpoint(_node, clone.Save, clone.AutoWin));
         }
-        for (; _sent < clone.Trace.Count; _sent++) brain.Act(new NodeAction(_node, _sent, clone.Trace[_sent]));
+        brain.Steps(clone.Trace);
     }
 }
 
@@ -116,6 +114,7 @@ internal sealed class WireBrain : IRunBrain
     private readonly Dictionary<string, int> _brains = [];
     private long _next;
     private (long Id, string Action)? _pending;
+    private IReadOnlyList<string>? _steps;
 
     private WireBrain(WireStream wire, string champion, bool sl)
     {
@@ -157,11 +156,8 @@ internal sealed class WireBrain : IRunBrain
         _wire.Send(checkpoint);
     }
 
-    public void Act(NodeAction action)
-    {
-        Report(null);
-        _wire.Send(action);
-    }
+    /// <summary>Sent with the next decision.</summary>
+    public void Steps(IReadOnlyList<string> steps) => _steps = steps;
 
     public void End(RunEnd end, string? failure)
     {
@@ -174,7 +170,7 @@ internal sealed class WireBrain : IRunBrain
         Report(null);
         long id = _next++;
         string hash = DecisionRequest.HashOf(obs);
-        _wire.Send(new DecisionRequest(id, hash, surface, obs, legal, export));
+        _wire.Send(new DecisionRequest(id, hash, surface, obs, legal, export, _sl ? _steps ?? [] : null));
         var answer = _wire.Expect<Recommendation>();
         if (answer.DecisionId != id || answer.ObsHash != hash)
             throw new InvalidDataException($"a recommendation for decision {answer.DecisionId} ({answer.ObsHash}), not {id} ({hash})");

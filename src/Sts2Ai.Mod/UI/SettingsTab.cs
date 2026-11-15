@@ -1,7 +1,6 @@
 using System.Reflection;
 using Godot;
 using HarmonyLib;
-using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens.Settings;
 using Sts2Ai.Protocol;
@@ -39,7 +38,7 @@ internal static class SettingsTab
         }
         catch (Exception e)
         {
-            Log.Error($"{Host.Tag} no AI settings tab: {e}");
+            ModLog.Error("settings", $"no AI settings tab: {e}");
         }
     }).CallDeferred();
 

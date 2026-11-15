@@ -43,8 +43,8 @@ internal enum Acted
 /// the crystal sphere, the belt), that; where the click does more (rewards, rest options, events, every way out of a
 /// room), the button's own handler, pressed only when it is enabled and on screen; and a card prompt or a card reward
 /// answered as its screen answers itself, through the task it awaits. The actions go through the game entry points the
-/// SL record watches, so they are recorded as the player's would be (<see cref="NodeRecord"/>). Only legal actions come
-/// here: the brain's answer to the decision on screen.
+/// SL record watches, so they are recorded as the player's would be, and marked as the AI's (<see cref="NodeRecord.Expect"/>).
+/// Only legal actions come here: the brain's answer to the decision on screen.
 /// </summary>
 internal static class Executor
 {

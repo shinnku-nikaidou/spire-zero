@@ -5,7 +5,6 @@ using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
-using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom;
@@ -158,7 +157,7 @@ internal sealed class Screens
         _prompt = prompt;
         _context = last != null && !ReferenceEquals(last, _bound) ? last : null;
         if (_context != null) _bound = _context;
-        else Log.Warn($"{Host.Tag} a card prompt ({prompt.GetType().Name}) without its context, left to the player");
+        else ModLog.Warn("screen", $"a card prompt ({prompt.GetType().Name}) without its context, left to the player");
         return _context;
     }
 
