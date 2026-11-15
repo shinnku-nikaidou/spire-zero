@@ -218,3 +218,13 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   the player's turn, and NodeRecord took both, so the clone drank it and then found slot 0 empty (the save the game
   keeps from the room's arrival, `current_run.save.backup`, held one Weak potion in slot 0). Fixed in 0.3.3 at bef85f60:
   a put-aside request is skipped and recorded when it comes again.
+- 2026-11-15 ~17:50, the user (still on 0.3.3, floor 33): a run continued after THE_INSATIABLE_BOSS had no SL clone
+  on its card reward ("the run was continued from a save made after this room began"); then on floor 35 the map-return
+  stopgap broke the record again. Both are what plans/2026-11-15-1745-player-interaction.md (approved 17:50) is for.
+- 2026-11-15 18:22: 0.3.4 at d62ea0b2 (that plan's record, log and protocol 3: a checkpoint at every save the game
+  makes and at the save a continued run loads, steps taken where they take effect, going back followed, the AI
+  stopping when the player acts, a log folder per game session). Built with distro/build.sh (378 MB, three
+  platforms). The item's Linux brain on `run --check` against the Steam install's game files (REGENT A10, low, seed
+  1136): over the wire identical to in-process, 49/49 nodes and 24/24 saves inside a finished room replay exactly, 0
+  game errors. Installed in `mods/Sts2Ai` by swapping the folder (0.3.3 moved to `tmp/modeng/old-installs/`); the game
+  was running 0.3.3 and loads 0.3.4 once restarted. Logs: `~/.local/state/sts2ai/logs/<UTC start>/`.
