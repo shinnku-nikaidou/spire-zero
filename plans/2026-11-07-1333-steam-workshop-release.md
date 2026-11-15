@@ -205,3 +205,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   treasure room: SIGSEGV in the mod's `Field<bool>(room, "_hasChestBeenOpened")`, a field v0.113.0 dropped (the core
   dump's code is a null virtual call then an unbox to bool). Fixed at fb104fbf (the chest's button's IsEnabled; a missing
   field throws a named exception); every other member the mod reads by name exists in v0.113.1. Reinstalled in `mods/`.
+- 2026-11-15 ~17:15, the fourth try (0.3.2 at fb104fbf): from the treasure room to floor 15, 85 decisions, no engine
+  error. Then the user closed the map and went back to the elite's rewards, which the simulator never does (it travels
+  once the room is done); the next decision's clone ran the record on the map while the game asked on rewards
+  (`reward:1` against the map's surface). Fixed at 76050b51: going back into a room from the map it was left for breaks
+  the node's SL record, so the rest of the room is decided without the clone. Reinstalled in `mods/` (17:22). Seen in
+  the same run, sent to its own session: potions left on the rewards with free slots, a Duplication potion drunk and
+  the turn ended with energy unspent.
