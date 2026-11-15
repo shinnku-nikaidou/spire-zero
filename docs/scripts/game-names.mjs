@@ -59,7 +59,8 @@ for (const [site, game] of Object.entries(langs)) {
     encounter: titles(json(game, 'encounters')),
     ancient: titles(json(game, 'ancients')),
     character: titles(json(game, 'characters')),
-    monster: titles(json(game, 'monsters'), 'name'),
+    // A word that holds a variable dropped, as the mod's Describe.Monster does: Test Subject's "#C{Count}".
+    monster: Object.fromEntries(Object.entries(titles(json(game, 'monsters'), 'name')).map(([k, v]) => [k, v.replace(/\s*\S*\{[^}]*\}\S*/g, '')])),
     power: titles(json(game, 'powers')),
     map: Object.fromEntries(Object.entries(legend).map(([type, key]) => [type, map[`LEGEND_${key}.title`]])),
     // A rest site's options, by the id of their action (rest:SMITH).

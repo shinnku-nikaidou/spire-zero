@@ -215,7 +215,7 @@ internal static partial class Describe
     private static string Card(CardView card) => (Text("cards", card.Id + ".title") ?? card.Id) + (card.Up is > 0 ? "+" : "");
     private static string Relic(string id) => Text("relics", id + ".title") ?? id;
     private static string Potion(string id) => Text("potions", id + ".title") ?? id;
-    private static string Monster(string id) => Text("monsters", id + ".name") ?? id;
+    private static string Monster(string id) => Text("monsters", id + ".name") is { } name ? Variable().Replace(name, "") : id;
 
     /// <summary>The text as the game's loc tables hold it, without its markup; null when it has none.</summary>
     private static string? Text(string table, string key) =>
@@ -223,4 +223,8 @@ internal static partial class Describe
 
     [GeneratedRegex(@"\[/?[a-z_]+[^\]]*\]")]
     private static partial Regex Markup();
+
+    // A word of a monster's name that holds a variable, dropped: Test Subject's "#C{Count}" (the profile's kills).
+    [GeneratedRegex(@"\s*\S*\{[^}]*\}\S*")]
+    private static partial Regex Variable();
 }

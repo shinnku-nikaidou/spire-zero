@@ -147,9 +147,9 @@
     "zh-TW": "防禦"
    },
    {
-    "en": "Pinpoint+ → Test Subject #C{Count}",
-    "zh-CN": "精密瞄准+ → 实验体 #C{Count}",
-    "zh-TW": "精密瞄準+ → 實驗體 #C{Count}"
+    "en": "Pinpoint+ → Test Subject",
+    "zh-CN": "精密瞄准+ → 实验体",
+    "zh-TW": "精密瞄準+ → 實驗體"
    },
    {
     "en": "Sidestep+",
@@ -157,9 +157,9 @@
     "zh-TW": "側步+"
    },
    {
-    "en": "Pinpoint+ → Test Subject #C{Count}",
-    "zh-CN": "精密瞄准+ → 实验体 #C{Count}",
-    "zh-TW": "精密瞄準+ → 實驗體 #C{Count}"
+    "en": "Pinpoint+ → Test Subject",
+    "zh-CN": "精密瞄准+ → 实验体",
+    "zh-TW": "精密瞄準+ → 實驗體"
    },
    {
     "en": "end turn",
@@ -196,9 +196,9 @@
    },
    {
     "name": {
-     "en": "Strike → Test Subject #C{Count}",
-     "zh-CN": "打击 → 实验体 #C{Count}",
-     "zh-TW": "打擊 → 實驗體 #C{Count}"
+     "en": "Strike → Test Subject",
+     "zh-CN": "打击 → 实验体",
+     "zh-TW": "打擊 → 實驗體"
     },
     "value": 0.9874,
     "ci": 0.0012,
@@ -242,14 +242,14 @@
     "zh-TW": "第 48 層 · 結束回合"
    },
    {
-    "en": "floor 48 · drink Weak Potion → Test Subject #C{Count}",
-    "zh-CN": "第 48 层 · 喝 虚弱药水 → 实验体 #C{Count}",
-    "zh-TW": "第 48 層 · 喝 虛弱藥水 → 實驗體 #C{Count}"
+    "en": "floor 48 · drink Weak Potion → Test Subject",
+    "zh-CN": "第 48 层 · 喝 虚弱药水 → 实验体",
+    "zh-TW": "第 48 層 · 喝 虛弱藥水 → 實驗體"
    },
    {
-    "en": "floor 48 · drink Weak Potion → Test Subject #C{Count}",
-    "zh-CN": "第 48 层 · 喝 虚弱药水 → 实验体 #C{Count}",
-    "zh-TW": "第 48 層 · 喝 虛弱藥水 → 實驗體 #C{Count}"
+    "en": "floor 48 · drink Weak Potion → Test Subject",
+    "zh-CN": "第 48 层 · 喝 虚弱药水 → 实验体",
+    "zh-TW": "第 48 層 · 喝 虛弱藥水 → 實驗體"
    },
    {
     "en": "floor 48 · Piercing Wail",
