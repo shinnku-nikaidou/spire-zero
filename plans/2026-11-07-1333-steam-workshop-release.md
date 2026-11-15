@@ -281,3 +281,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   untouched; 51 s). Its brain on `run --check` (IRONCLAD A10, low, seed 1138): identical over the wire, 31/31 nodes and
   18/18 saves in a finished room replay exactly, 0 game errors. Installed in `mods/` over 0.3.9 with the game closed.
   The game compares manifest versions as numbers (SemanticVersion), so 0.3.10 is above the Workshop's 0.3.7.
+- 2026-11-15 21:16: **0.3.11 uploaded** (the user: "Spire Zero：殺戮尖塔 2 AI 軍師 ok, 正式發版本吧"). 77e58d1f: 0.3.10's code,
+  the game's mod list names it Spire Zero (was STS2 AI); the Workshop title in the 17 languages is "Spire Zero: AI
+  Strategist for Slay the Spire 2" (zh-TW 殺戮尖塔 2 AI 軍師, e5a87fa1), the descriptions unchanged. The Mac answered again,
+  so distro/build.sh built all three platforms (378 MB, 3 min 47 s; the champion v10-2-2 + c10-2-2, nets byte for byte
+  `weights/all/`'s). The brain and engine sources are 0.3.8's (only the mod's dll changed since). The game closed on all
+  three machines; the first upload's commit timed out (k_EResultTimeout, without `--note`, the item untouched), the same
+  command again went through. Public, 394.2 MB; the page shows the new title. Not uploaded: the preview (unchanged).
