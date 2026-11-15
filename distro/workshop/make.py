@@ -1,6 +1,7 @@
 # Writes the Workshop title and description in each of the game's 17 languages into distro/workshop/STEAMLANG.bbcode.
 # The characters' and the ascension's names are the game's own (tmp/workshop/names.json, from the pck by names.mjs);
-# the numbers are v10-2 + c10-2's SL runs on test seeds (A0: test-v10-2-c10-2; A10: the six promotion-1-200 reports).
+# the numbers are v10-2-2 + c10-2-2's SL runs on test seeds, medium (the test test-v10-2-2-c10-2-2: A0 promotion-1-50,
+# the FOOL's promotion-1-200; A10 promotion-1-200).
 import json
 import pathlib
 
@@ -8,12 +9,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 NAMES = json.loads((ROOT / "tmp/workshop/names.json").read_text())
 CHARS = ["IRONCLAD", "SILENT", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
 WINS = {  # (A0 won, A0 runs, A10 won, A10 runs)
-    "IRONCLAD": (48, 50, 71, 200),
-    "SILENT": (46, 50, 41, 200),
-    "DEFECT": (46, 50, 33, 200),
-    "REGENT": (41, 50, 17, 200),
-    "NECROBINDER": (39, 50, 14, 200),
-    "FOOL": (125, 200, 3, 200),
+    "IRONCLAD": (49, 50, 83, 200),
+    "SILENT": (43, 50, 61, 200),
+    "DEFECT": (49, 50, 68, 200),
+    "REGENT": (47, 50, 44, 200),
+    "NECROBINDER": (45, 50, 31, 200),
+    "FOOL": (115, 200, 1, 200),
 }
 REPO = "https://github.com/shinnku-nikaidou/spire-zero"
 DOCS = "https://sts2-docs.shinnkunikaidou.workers.dev/"
