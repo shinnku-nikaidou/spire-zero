@@ -48,8 +48,14 @@ Windows; installing it is copying that folder into the game's `mods/` folder.
 ## Private settings
 
 Machine addresses and keys never go into git. Scripts that need them read the repository's `.env` (ignored by git):
-the work pool's hub and hosts (`pool/README.md`) and `STS2_MAC`, the Mac that signs the macOS launcher
-(`distro/build.sh`).
+the work pool's hub and hosts (`pool/README.md`), `STS2_MAC`, the Mac that signs the macOS launcher, and `STS2_WIN` with
+`STS2_WIN_PORT`, the Windows machine that builds the Windows engine (both for `distro/build.sh`).
+
+## Credit
+
+The idea of a Rust port of the rules checked in lockstep against the real game, and many answers to how the game's
+rules work in detail, come from Thomas Friedel's [spire-mentor](https://github.com/tfriedel/spire-mentor) (MIT). Our
+engine is a translation of the game's own code and shares no code with it ([engine/DESIGN.md](engine/DESIGN.md)).
 
 ## License
 
