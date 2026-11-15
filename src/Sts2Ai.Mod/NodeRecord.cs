@@ -24,9 +24,9 @@ namespace Sts2Ai.Mod;
 /// simulator calls itself, so a step is known exactly, before the game plays it.
 /// The record is kept in both environments, so switching to SL works in the room the player is in; only SL sends it.
 ///
-/// A step the simulator has no decision for (a potion thrown away in combat, a card reward closed unanswered) breaks the
-/// record for the rest of the node, as does a run continued from a save made inside the room: the brain cannot clone
-/// that node.
+/// A step the simulator has no decision for (a potion thrown away in combat, a card reward closed unanswered, going back
+/// into the room from the map it was left for) breaks the record for the rest of the node, as does a run continued from
+/// a save made inside the room: the brain cannot clone that node.
 /// Everything here runs on the game's main thread.
 /// </summary>
 internal static class NodeRecord
@@ -44,6 +44,10 @@ internal static class NodeRecord
 
     /// <summary>The decision last on screen, which the player's next answer is read against.</summary>
     private static Asking? _screen;
+
+    /// <summary>The room was left for the map (a fight's rewards proceeded from, an event, a shop or a rest site left):
+    /// the simulator travels next, but the game lets the player close the map and go back in.</summary>
+    private static bool _leftForMap;
 
     /// <summary>The node's number in the run, from 0 at the first node the game entered while the mod ran; -1 before.</summary>
     public static int Node { get; private set; } = -1;
@@ -120,6 +124,7 @@ internal static class NodeRecord
     public static void Seen(Asking asking)
     {
         if (asking.Surface == Surfaces.Map) Leave();
+        else if (_leftForMap) Break("back in the room from the map, which the simulator never does");
         _screen = asking;
     }
 
@@ -132,7 +137,11 @@ internal static class NodeRecord
             Surfaces.Shop or Surfaces.Rest => MacroAction.Leave,
             _ => null,
         };
-        if (leave is { } action && room.Legal.Contains(action.ToString())) Add(room.Surface, action);
+        if (leave is { } action && room.Legal.Contains(action.ToString()))
+        {
+            Add(room.Surface, action);
+            _leftForMap = true;
+        }
     }
 
     // ---- node entry ----
@@ -155,7 +164,7 @@ internal static class NodeRecord
         if (!ReferenceEquals(run, _run)) (_run, Node) = (run, -1);
         Node++;
         _steps.Clear();
-        _screen = null;
+        (_screen, _leftForMap) = (null, false);
         (Checkpoint, Broken) = (null, arrived ? "no checkpoint was taken" : "the run was continued from a save made after this room began");
         if (arrived) (Checkpoint, Broken) = (GameBridge.Checkpoint.Take(LocalContext.GetMe(run)!), null);
     }
@@ -193,6 +202,7 @@ internal static class NodeRecord
             case VoteForMapCoordAction vote when Destination(vote) is { } to:
                 if (_screen?.Surface != Surfaces.Map) Leave();
                 var travel = MapActions.Of(to.coord);
+                _leftForMap = false;
                 if (MapActions.Legal(run).Contains(travel)) Add(Surfaces.Map, travel);
                 else Break($"a travel to {travel}, which the map does not offer");
                 break;
@@ -252,6 +262,8 @@ internal static class NodeRecord
     {
         if (_screen?.Surface != Surfaces.Rewards) return;
         Add(Surfaces.Rewards, MacroAction.RewardsDone);
+        // A fight's rewards end its room: the map opens.
+        if (_screen.Source is RewardsSet set && RewardActions.IsTerminal(set)) _leftForMap = true;
         // Some screens call two of these.
         _screen = null;
     }
