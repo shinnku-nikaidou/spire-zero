@@ -228,3 +228,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   1136): over the wire identical to in-process, 49/49 nodes and 24/24 saves inside a finished room replay exactly, 0
   game errors. Installed in `mods/Sts2Ai` by swapping the folder (0.3.3 moved to `tmp/modeng/old-installs/`); the game
   was running 0.3.3 and loads 0.3.4 once restarted. Logs: `~/.local/state/sts2ai/logs/<UTC start>/`.
+- 2026-11-15 18:41: 0.3.5 at 5ee23fa6 (0.3.4's code, the champion now v10-2-2 + c10-2-2 since bb91bdab; the user,
+  through the capacity session: "通知mod也升級一下版本，用v10-2-2"). Built for the three platforms; the item's
+  `brain/champion.json` names v10-2-2 / c10-2-2 and its nets are byte for byte `weights/all/`'s. Installed in `mods/`
+  over 0.3.4 (the game still running 0.3.4's code until restarted). The listing's win table is v10-2 + c10-2's: it
+  needs the new pair's numbers before the next upload.
