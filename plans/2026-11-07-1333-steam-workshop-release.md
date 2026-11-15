@@ -197,3 +197,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   item's Linux brain on `parity --world engine`, the same 720 combats as before, 0 differences. Installed locally in
   `mods_STEAMTEST` (the user: no upload for each fix): the game keeps the higher version, 0.3.1, over the Workshop's
   0.3.0. The Workshop gets 0.3.1 after the real game passes.
+- 2026-11-15 ~16:55: the second try failed the same way: the game had loaded another session's 0.3.1 from `mods/`
+  (its panel work, with the brain from before afa491a2), which wins a tie over `mods_STEAMTEST` (a Steam source to the
+  game). The user: a session whose version another took goes one up; old local copies are deleted, the Workshop
+  subscription left alone. 0.3.2 at 515a5187 (the panel commits and afa491a2) is now the only local copy, in `mods/`.
