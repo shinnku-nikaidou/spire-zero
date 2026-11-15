@@ -1,5 +1,6 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Actions;
@@ -107,7 +108,7 @@ internal static class NodeRecord
         Prefix(harmony, typeof(ActionQueueSynchronizer), nameof(ActionQueueSynchronizer.RequestEnqueue), nameof(Requested));
         Prefix(harmony, typeof(GameAction), nameof(GameAction.Execute), nameof(Executing));
         Prefix(harmony, typeof(GameAction), nameof(GameAction.Cancel), nameof(Cancelled));
-        Prefix(harmony, typeof(CardModel), nameof(CardModel.OnPlayWrapper), nameof(Played));
+        CombatManager.Instance.History.Changed += Played;
         Prefix(harmony, typeof(PotionModel), nameof(PotionModel.OnUseWrapper), nameof(Used));
         Prefix(harmony, typeof(PotionCmd), nameof(PotionCmd.Discard), nameof(Discarded));
         Prefix(harmony, typeof(PlayerCmd), nameof(PlayerCmd.EndTurn), nameof(TurnEnded));
@@ -265,12 +266,23 @@ internal static class NodeRecord
 
     private static GameAction? RunningAction => RunManager.Instance.ActionExecutor.CurrentlyRunningAction;
 
-    /// <summary>A card played from the hand: its action passed its checks and spent its cost. Auto-played cards are no decision.</summary>
-    private static void Played(bool isAutoPlay) => Guard(() =>
+    /// <summary>How many of the combat history's entries <see cref="Played"/> has read.</summary>
+    private static int _historyRead;
+
+    /// <summary>
+    /// A card played from the hand: its action passed its checks and spent its cost, and the game wrote the play's start
+    /// into the combat's history. Auto-played cards, and a card's further plays in its series, are no decision. Read off
+    /// the history, an event of the game's: a Harmony prefix on <c>CardModel.OnPlayWrapper</c> stopped firing in the middle
+    /// of a real game (0.3.11, 2026-11-15, after 60 plays) with nothing in any log, and every later play was missing.
+    /// </summary>
+    private static void Played() => Guard(() =>
     {
-        if (isAutoPlay || RunningAction is not PlayCardAction play) return;
-        // The card's combat id is the one it was queued with.
-        Add(Surfaces.Combat, CombatActions.PlayOf(play.NetCombatCard.ToCardModel(), play.TargetId).ToString());
+        // The history only grows during a combat (a list behind its enumerable), and a new combat clears it.
+        var entries = (IReadOnlyList<CombatHistoryEntry>)CombatManager.Instance.History.Entries;
+        if (entries.Count < _historyRead) _historyRead = 0;
+        for (int i = _historyRead; i < entries.Count; i++)
+            if (CombatActions.PlayStarted(entries[i], RunningAction) is { } play) Add(Surfaces.Combat, play.ToString());
+        _historyRead = entries.Count;
     });
 
     /// <summary>A potion drunk: its action found it and its target.</summary>
@@ -456,6 +468,9 @@ internal static class NodeRecord
             Break($"{e.GetType().Name}: {e.Message}");
         }
     }
+
+    /// <summary>The node's clone failed in the brain: the record is off until the next checkpoint, with the reason.</summary>
+    public static void CloneFailed(string reason) => Break(reason);
 
     private static void Break(string reason)
     {

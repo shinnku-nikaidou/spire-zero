@@ -1,4 +1,6 @@
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Combat.History;
+using MegaCrit.Sts2.Core.Combat.History.Entries;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
@@ -115,6 +117,18 @@ public static class CombatActions
     /// </summary>
     public static CombatAction PlayOf(CardModel card, uint? target) =>
         CombatAction.Play(NetCombatCardDb.Instance.GetCardId(card), PicksTarget(card.TargetType) ? target : null);
+
+    /// <summary>
+    /// The player's own play from the hand whose start <paramref name="entry"/> writes into the combat's history, as
+    /// <see cref="PlayOf"/> names it, or null. Auto-played cards and a card's further plays in its series are no decision;
+    /// the play from the hand is the card of the <see cref="PlayCardAction"/> running, a card it plays in turn is not, and
+    /// its target is the one the action was queued with.
+    /// </summary>
+    public static CombatAction? PlayStarted(CombatHistoryEntry entry, GameAction? running) =>
+        entry is CardPlayStartedEntry { CardPlay: { IsAutoPlay: false, IsFirstInSeries: true } cardPlay }
+        && running is PlayCardAction play && play.NetCombatCard.ToCardModel() == cardPlay.Card
+            ? PlayOf(cardPlay.Card, play.TargetId)
+            : null;
 
     /// <summary>A use of the potion in <paramref name="slot"/> as <see cref="Legal"/> names it (see <see cref="PlayOf"/>).</summary>
     public static CombatAction PotionOf(Player player, int slot, uint? target) =>

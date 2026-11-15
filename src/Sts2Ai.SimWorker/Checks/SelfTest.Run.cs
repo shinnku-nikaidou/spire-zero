@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Brain;
@@ -258,6 +259,53 @@ internal static partial class SelfTest
         }
         if (HeadlessGame.TakeErrors() is [var error, ..]) wrong ??= $"game error: {Logs.FirstLine(error)}";
         check("a relic picked from a chest is the player's", wrong == null, $"{label}: {wrong}");
+    }
+
+    /// <summary>
+    /// The real game's SL record reads the player's card plays off the combat's history (<see cref="CombatActions.PlayStarted"/>):
+    /// a Harmony prefix there stopped firing in the middle of a real game. A run with random policies, over its first
+    /// fights: the plays read so are the plays of the run's own trace, in order.
+    /// </summary>
+    private static void HistoryPlaysAreTheTraces(Pump pump, int seed, Action<string, bool, string> check)
+    {
+        var rng = new Random(seed + 9);
+        var read = new List<string>();
+        int seen = 0;
+        void Changed()
+        {
+            var entries = (IReadOnlyList<CombatHistoryEntry>)CombatManager.Instance.History.Entries;
+            if (entries.Count < seen) seen = 0;
+            for (int i = seen; i < entries.Count; i++)
+                if (CombatActions.PlayStarted(entries[i], RunManager.Instance.ActionExecutor.CurrentlyRunningAction) is { } play)
+                    read.Add($"{Surfaces.Combat} {play}");
+            seen = entries.Count;
+        }
+        string label = $"run {GameSeeds.MakeSeed(seed + 9, 0)}";
+        string? wrong;
+        CombatManager.Instance.History.Changed += Changed;
+        try
+        {
+            using var session = RunSession.Start(pump, new RunSetup("IRONCLAD", GameSeeds.MakeSeed(seed + 9, 0)), FirstPicks.Instance,
+                new PlayPolicy(rng), new RandomMacro(rng));
+            for (int i = 0; i < 3000 && !session.IsOver && session.Combats.Count < 4; i++) session.Step();
+            var plays = session.Trace.Where(t => t.StartsWith($"{Surfaces.Combat} play:", StringComparison.Ordinal)).ToList();
+            int differ = Enumerable.Range(0, Math.Min(plays.Count, read.Count)).FirstOrDefault(i => plays[i] != read[i], -1);
+            wrong = plays.Count == 0 ? "no card played"
+                : differ >= 0 ? $"play {differ}: trace {plays[differ]}, history {read[differ]}"
+                : plays.Count != read.Count ? $"{plays.Count} plays in the trace, {read.Count} in the history"
+                : null;
+            if (wrong == null) label += $", {plays.Count} plays in {session.Combats.Count} fights";
+        }
+        catch (Exception e)
+        {
+            wrong = $"{e.GetType().Name}: {Logs.FirstLine(e.Message)}";
+        }
+        finally
+        {
+            CombatManager.Instance.History.Changed -= Changed;
+        }
+        if (HeadlessGame.TakeErrors() is [var error, ..]) wrong ??= $"game error: {Logs.FirstLine(error)}";
+        check("the combat history's plays are the trace's", wrong == null, wrong == null ? label : $"{label}: {wrong}");
     }
 
     /// <summary>A macro policy that answers first where its rule does, and leaves the rest to another.</summary>

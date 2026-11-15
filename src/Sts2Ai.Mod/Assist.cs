@@ -496,8 +496,18 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                     MapRoute.Of(answer, asked.Obs), CombatPlan.Of(answer, asked.Obs));
                 break;
             case Received { Message: WireError error }:
-                // The brain refused the run or could not answer: the run goes on without it.
                 ModLog.Warn("brain", $"brain: {error.Message}");
+                // An SL decision is asked on the node's clone, which the record builds: when it fails there, the record is
+                // off for the rest of the room, as one the player went back into, and the brain stays on for the run.
+                if (_asked != null && _env == PlayEnvironment.SL && NodeRecord.Checkpoint != null && NodeRecord.Broken == null)
+                {
+                    string line = error.Message.Split('\n')[0];
+                    int cause = line.LastIndexOf(": ", StringComparison.Ordinal);
+                    NodeRecord.CloneFailed($"the brain could not follow it ({(cause < 0 ? line : line[(cause + 2)..])})");
+                    Forget();
+                    break;
+                }
+                // The brain refused the run or could not answer: the run goes on without it.
                 if (_run != null)
                 {
                     _failure = error.Message;
