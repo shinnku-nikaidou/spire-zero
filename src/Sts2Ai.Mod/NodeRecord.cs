@@ -73,6 +73,10 @@ internal static class NodeRecord
     /// <summary>Where the step that left the room is, while the map is the decision and the player may still go back.</summary>
     private static int? _leave;
 
+    /// <summary>An act's last rewards, left for good (<see cref="ActDone"/>): on screen until the act changes, it is no
+    /// room to leave or come back to.</summary>
+    private static RewardsSet? _actEnd;
+
     /// <summary>The action of the step the AI just asked the game for, which is the AI's when it takes effect.</summary>
     private static string? _expected;
 
@@ -167,6 +171,7 @@ internal static class NodeRecord
     /// </summary>
     public static void Seen(Asking asking)
     {
+        if (_actEnd != null && ReferenceEquals(asking.Source, _actEnd)) return;
         if (asking.Surface == Surfaces.Map)
         {
             if (_screen?.Surface != Surfaces.Map) Leave();
@@ -224,7 +229,7 @@ internal static class NodeRecord
         if (!ReferenceEquals(run, _run)) (_run, Node) = (run, -1);
         Node++;
         _steps.Clear();
-        (_screen, _room, _leave, _expected) = (null, null, null, null);
+        (_screen, _room, _leave, _actEnd, _expected) = (null, null, null, null, null);
         (Checkpoint, Broken) = eventFight
             ? ((string?)null, "the run was continued from a save after an event's fight, which no clone has been checked on")
             : (GameBridge.Checkpoint.Take(me, room), (string?)null);
@@ -390,13 +395,14 @@ internal static class NodeRecord
 
     /// <summary>
     /// The proceed button of an act's last rewards: the game goes on to the next act, or to the Architect after the last
-    /// one, and disables the button for good (<c>NRewardsScreen</c>). No map opens and there is no going back, so the
-    /// step is final at once; the rewards screen stays up until the act changes, and seeing it again takes nothing back.
+    /// one, and disables the button for good (<c>NRewardsScreen</c>). There is no going back, so the step is final at
+    /// once, and the room is over: the rewards screen stays up until the act changes, and neither seeing it again nor
+    /// the next act's map, which opens without a travel, leaves it again.
     /// </summary>
     private static void ActDone() => Guard(() =>
     {
-        if (_screen is not { Surface: Surfaces.Rewards }) return;
-        _screen = null;
+        if (_screen is not { Surface: Surfaces.Rewards, Source: RewardsSet set }) return;
+        (_screen, _room, _actEnd) = (null, null, set);
         Add(Surfaces.Rewards, MacroAction.RewardsDone.ToString());
     });
 
