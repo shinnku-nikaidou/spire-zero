@@ -42,6 +42,7 @@ internal static class Host
             var harmony = new Harmony("sts2ai.mod");
             ChoiceContexts.Patch(harmony);
             NodeRecord.Patch(harmony);
+            Executor.Patch(harmony);
             SettingsTab.Patch(harmony);
             // The brain shipped beside the mod plays with the running game's own assemblies, and logs into this game
             // session's folder.

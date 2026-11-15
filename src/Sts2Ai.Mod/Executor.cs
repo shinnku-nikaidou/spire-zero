@@ -48,6 +48,22 @@ internal enum Acted
 /// </summary>
 internal static class Executor
 {
+    /// <summary>
+    /// How long a purchase waits after the shop's inventory opens. Opening it flashes each card a relic changed, which reads
+    /// the card's entry 0.4 s later (<c>NMerchantCard.DoRelicFlash</c>): a card bought before then has no entry left and
+    /// the game dies (SIGSEGV, 2026-11-15, an Ultimate Strike Molten Egg had upgraded). A person never buys that fast.
+    /// </summary>
+    private const long ShopSettles = 500;
+
+    /// <summary>When the shop's inventory last opened (<see cref="Environment.TickCount64"/>), by the player or the AI.</summary>
+    private static long _shopOpened;
+
+    public static void Patch(Harmony harmony) =>
+        harmony.Patch(AccessTools.DeclaredMethod(typeof(NMerchantInventory), nameof(NMerchantInventory.Open)),
+            postfix: new HarmonyMethod(typeof(Executor), nameof(ShopOpened)));
+
+    private static void ShopOpened() => _shopOpened = Environment.TickCount64;
+
     public static Acted Run(Asking asking, string text, RunState run, Player me)
     {
         if (asking.Surface == Surfaces.Combat)
@@ -107,10 +123,16 @@ internal static class Executor
             case Surfaces.Shop when NMerchantRoom.Instance is { } room && run.CurrentRoom is MerchantRoom:
                 if (action == MacroAction.Leave)
                     return room.Inventory.IsOpen ? Again(Click(Field<NBackButton>(room.Inventory, "_backButton"))) : Click(room.ProceedButton);
-                // The purchase does not need the shop open; opened, the player sees it. Checked here: the start is a task.
+                // The purchase is made in the open shop, so the player sees it, once the shop has settled. Checked here: the
+                // start is a task.
                 var inventory = RunManager.Instance.MerchantSynchronizer.GetLocalInventory();
                 if (!ShopActions.Legal(inventory).Contains(action)) throw Unknown(asking, action);
-                if (!room.Inventory.IsOpen) room.OpenInventory();
+                if (!room.Inventory.IsOpen)
+                {
+                    room.OpenInventory();
+                    return Acted.Again;
+                }
+                if (Environment.TickCount64 - _shopOpened < ShopSettles) return Acted.Again;
                 _ = ShopActions.Start(inventory, action);
                 return Acted.Done;
             case Surfaces.Rest when NRestSiteRoom.Instance is { } room:
