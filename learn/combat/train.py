@@ -14,6 +14,7 @@ the commit that will play the net (`"~/sts2/sim-REV.sh encode"`), or the program
         [--init ../weights/all/CHAMPION.json]
 """
 
+import functools
 import json
 import math
 import random
@@ -28,6 +29,7 @@ import torch  # noqa: E402
 
 import common  # noqa: E402
 import game_ids  # noqa: E402
+from batches import built  # noqa: E402
 from combat import data, export, report, spec  # noqa: E402
 from combat.net import POTION_WEIGHT, Batch, Net, loss  # noqa: E402
 from common import LearnError  # noqa: E402
@@ -50,6 +52,7 @@ def main(
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
     init: Annotated[str | None, typer.Option(help="a net file to go on from: its weights, read back from its ONNX")] = None,
     seed: int = 0,
+    workers: Annotated[int, typer.Option(help="processes that build the batches (0: this one)")] = 8,
 ) -> None:
     if env not in ("SL", "NoSL"):
         raise LearnError(f"--env is SL or NoSL, not {env}")
@@ -77,10 +80,12 @@ def main(
         raise LearnError(f"{init} holds other tables than learn/game_ids.json's")
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
 
+    build = functools.partial(Batch, index=index, device="cpu")
+
     def batches(part, shuffle):
         order = random.sample(range(len(part)), len(part)) if shuffle else list(range(len(part)))
-        for i in range(0, len(order), BATCH):
-            yield Batch([part[k] for k in order[i : i + BATCH]], index, device)
+        parts = ([part[k] for k in order[i : i + BATCH]] for i in range(0, len(order), BATCH))
+        yield from built(build, parts, device, workers)
 
     test_batches = list(batches(test, False))
 
