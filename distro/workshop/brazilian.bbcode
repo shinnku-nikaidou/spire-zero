@@ -1,0 +1,42 @@
+Spire Zero: uma IA que aprendeu Slay the Spire 2 do zero
+
+Uma IA dentro do jogo, para partidas solo:
+[list]
+[*][b]Conselhos[/b]: em cada decisão, ela mostra o que faria e a chance de vencer a partida com cada opção.
+[*][b]Jogo automático[/b]: quando você pedir, ela joga um passo, o resto de um turno ou de uma sala, ou continua até você pausar.
+[/list]
+Ninguém escreveu nenhuma parte do jeito como ela joga, e ela não aprendeu nada com partidas de humanos: aprendeu tudo com partidas que ela mesma jogou. Em cada decisão, ela testa as opções numa cópia do jogo e depois pergunta a uma rede treinada qual é a chance de vencer a partida a partir de onde cada uma leva.
+
+[h2]Dois modos (nas configurações)[/h2]
+[list]
+[*][b]SL[/b] (padrão): como salvar e carregar, ela testa as opções numa cópia real da sala em que você está, então vê o que vai mesmo acontecer ali (a ordem de compra das cartas, os resultados aleatórios). Ela trapaceia, e é assim que joga melhor.
+[*][b]NoSL[/b]: só o que um jogador pode ver. Sem espiar.
+[/list]
+
+[h2]O quanto ela joga bem[/h2]
+No SL, em seeds de teste, a parcela de partidas vencidas:
+[table]
+[tr][th][/th][th]Ascensão 0[/th][th]Ascensão 10[/th][/tr]
+[tr][td]O Rígido[/td][td]96% (48/50)[/td][td]35,5% (71/200)[/td][/tr]
+[tr][td]A Sorrateira[/td][td]92% (46/50)[/td][td]20,5% (41/200)[/td][/tr]
+[tr][td]O Defeituoso[/td][td]92% (46/50)[/td][td]16,5% (33/200)[/td][/tr]
+[tr][td]O Regente[/td][td]82% (41/50)[/td][td]8,5% (17/200)[/td][/tr]
+[tr][td]A Necroartífice[/td][td]78% (39/50)[/td][td]7% (14/200)[/td][/tr]
+[tr][td]O Bufão[/td][td]62,5% (125/200)[/td][td]1,5% (3/200)[/td][/tr]
+[/table]
+
+[h2]Requisitos[/h2]
+[list]
+[*]O jogo exatamente na [b]v0.113.1[/b], o branch [b]public-beta[/b] da Steam (nas propriedades do jogo na Steam). Em outra versão, o mod se desliga sozinho e diz por quê.
+[*]Windows (x64), Linux (x64) ou macOS (Apple silicon).
+[*]Apenas um jogador.
+[/list]
+
+[h2]O que ele roda no seu computador[/h2]
+Enquanto o jogo está aberto, o mod inicia o próprio cérebro, um programa em segundo plano onde a IA pensa, em metade dos seus processadores lógicos (no máximo 8). Ele fecha junto com o jogo. Não é preciso instalar mais nada.
+
+[h2]Código e design[/h2]
+Código aberto (MIT): [url=https://github.com/shinnku-nikaidou/spire-zero]github.com/shinnku-nikaidou/spire-zero[/url]
+Como ela foi projetada, em inglês, chinês simplificado e chinês tradicional: [url=https://sts2-docs.shinnkunikaidou.workers.dev/en/]sts2-docs.shinnkunikaidou.workers.dev[/url]
+
+Um projeto de fã não oficial, sem vínculo com a Mega Crit e sem o endosso dela.

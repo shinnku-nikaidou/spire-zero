@@ -1,0 +1,42 @@
+Spire Zero: eine KI, die Slay the Spire 2 von null an gelernt hat
+
+Eine KI im Spiel, für Einzelspieler-Runs:
+[list]
+[*][b]Ratschläge[/b]: Bei jeder Entscheidung zeigt sie, was sie tun würde, und wie gut die Siegchance des Runs mit jeder Option ist.
+[*][b]Automatisches Spielen[/b]: Auf Wunsch spielt sie einen Schritt, den Rest eines Zuges oder eines Raums, oder spielt weiter, bis du sie pausierst.
+[/list]
+Niemand hat auch nur einen Teil ihres Spiels von Hand geschrieben, und sie hat nichts aus Partien von Menschen gelernt: Alles hat sie aus Runs gelernt, die sie selbst gespielt hat. Bei jeder Entscheidung probiert sie die Optionen an einer Kopie des Spiels aus und fragt dann ein trainiertes Netz, wie wahrscheinlich der Run von dort aus gewonnen wird, wohin jede Option führt.
+
+[h2]Zwei Modi (in den Einstellungen)[/h2]
+[list]
+[*][b]SL[/b] (Standard): Wie beim Speichern und Laden probiert sie die Optionen an einer echten Kopie des Raums aus, in dem du bist, und sieht so, was dort wirklich passieren wird (die Reihenfolge der gezogenen Karten, die Zufallsergebnisse). Sie schummelt – und spielt so am stärksten.
+[*][b]NoSL[/b]: nur das, was ein Spieler sehen kann. Kein Spicken.
+[/list]
+
+[h2]Wie gut sie spielt[/h2]
+In SL, auf Test-Seeds, der Anteil gewonnener Runs:
+[table]
+[tr][th][/th][th]Aufstieg 0[/th][th]Aufstieg 10[/th][/tr]
+[tr][td]Der Eiserne[/td][td]96 % (48/50)[/td][td]35,5 % (71/200)[/td][/tr]
+[tr][td]Die Stille[/td][td]92 % (46/50)[/td][td]20,5 % (41/200)[/td][/tr]
+[tr][td]Das Defekte[/td][td]92 % (46/50)[/td][td]16,5 % (33/200)[/td][/tr]
+[tr][td]Der Regent[/td][td]82 % (41/50)[/td][td]8,5 % (17/200)[/td][/tr]
+[tr][td]Die Totenbinderin[/td][td]78 % (39/50)[/td][td]7 % (14/200)[/td][/tr]
+[tr][td]Der Narr[/td][td]62,5 % (125/200)[/td][td]1,5 % (3/200)[/td][/tr]
+[/table]
+
+[h2]Voraussetzungen[/h2]
+[list]
+[*]Das Spiel in genau [b]v0.113.1[/b], dem [b]public-beta[/b]-Branch auf Steam (in den Eigenschaften des Spiels auf Steam). Bei einer anderen Version schaltet sich die Mod selbst ab und sagt, warum.
+[*]Windows (x64), Linux (x64) oder macOS (Apple Silicon).
+[*]Nur Einzelspieler.
+[/list]
+
+[h2]Was sie auf deinem Computer ausführt[/h2]
+Während das Spiel läuft, startet die Mod ihr eigenes Gehirn, ein Hintergrundprogramm, in dem die KI denkt, auf der Hälfte deiner logischen Prozessoren (höchstens 8). Es endet mit dem Spiel. Sonst muss nichts installiert werden.
+
+[h2]Quellcode und Aufbau[/h2]
+Open Source (MIT): [url=https://github.com/shinnku-nikaidou/spire-zero]github.com/shinnku-nikaidou/spire-zero[/url]
+Wie sie aufgebaut ist, auf Englisch, vereinfachtem und traditionellem Chinesisch: [url=https://sts2-docs.shinnkunikaidou.workers.dev/en/]sts2-docs.shinnkunikaidou.workers.dev[/url]
+
+Ein inoffizielles Fanprojekt, weder mit Mega Crit verbunden noch von Mega Crit unterstützt.

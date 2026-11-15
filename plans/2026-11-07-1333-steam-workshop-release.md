@@ -170,3 +170,16 @@ writes each change is asked when the code lands.
 ## Not in this plan
 
 Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, the auto-run driver.
+
+## Progress (Taiwan time)
+
+- 2026-11-15 15:47: the item carries the Rust engine for linux-x64, osx-arm64 and win-x64
+  (`plans/2026-11-15-1240-mod-engine.md`), staged in `mods_STEAMTEST`; C (the real game on each platform) still to do.
+- 2026-11-15 (api.steamcmd.net): the default branch is still build 23811903 of 2026-06-19 (v0.107.1); public-beta is
+  build 26660232, v0.113.1. So the item supports public-beta only (`--branches public-beta:public-beta`, D1).
+- 2026-11-15 16:20, step 13 done: `src/Sts2Ai.Workshop`, the `workshop` tool (`check`, `create`, `upload`;
+  `distro/workshop/README.md`), with the game's Steamworks.NET and `libsteam_api.so` copied beside it from the snapshot.
+  `workshop check` here: Steam logged on, the game on public-beta build 26660232, no item yet. The texts are
+  `distro/workshop/LANGUAGE.bbcode` in the game's 17 languages (the user: the listing in many languages; only what was
+  done, "沒做過的事情直接不寫"), with each character's SL wins at A0 and A10 for v10-2 + c10-2.
+  Step 14 as the user put it: the Steam website steps are mine in Chrome, the user only accepts the agreement.

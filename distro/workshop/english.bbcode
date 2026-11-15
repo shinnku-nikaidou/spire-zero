@@ -1,0 +1,42 @@
+Spire Zero: an AI that learned Slay the Spire 2 from zero
+
+An AI inside the game, for single-player runs:
+[list]
+[*][b]Advice[/b]: at every decision it shows what it would do, and each option's chance to win the run.
+[*][b]Auto-play[/b]: on request it plays a step, the rest of a turn or a room, or keeps going until you pause it.
+[/list]
+Nobody wrote any part of how it plays, and it learned nothing from human games: it learned all of it from runs it played itself. At each decision it tries the options on a copy of the game, then asks a learned network how likely the run is to be won from where each one leads.
+
+[h2]Two modes (in the settings)[/h2]
+[list]
+[*][b]SL[/b] (the default): like saving and loading, it tries the options on a true copy of the room you are in, so it sees what will really happen there (the draw order, the random rolls). It cheats, and it plays at its strongest.
+[*][b]NoSL[/b]: only what a player can see. No peeking.
+[/list]
+
+[h2]How well it plays[/h2]
+In SL, on test seeds, the share of runs it won:
+[table]
+[tr][th][/th][th]Ascension 0[/th][th]Ascension 10[/th][/tr]
+[tr][td]The Ironclad[/td][td]96% (48/50)[/td][td]35.5% (71/200)[/td][/tr]
+[tr][td]The Silent[/td][td]92% (46/50)[/td][td]20.5% (41/200)[/td][/tr]
+[tr][td]The Defect[/td][td]92% (46/50)[/td][td]16.5% (33/200)[/td][/tr]
+[tr][td]The Regent[/td][td]82% (41/50)[/td][td]8.5% (17/200)[/td][/tr]
+[tr][td]The Necrobinder[/td][td]78% (39/50)[/td][td]7% (14/200)[/td][/tr]
+[tr][td]The Fool[/td][td]62.5% (125/200)[/td][td]1.5% (3/200)[/td][/tr]
+[/table]
+
+[h2]Requirements[/h2]
+[list]
+[*]The game at exactly [b]v0.113.1[/b], Steam's [b]public-beta[/b] branch (the game's Properties, then Betas). On another version the mod turns itself off and says why.
+[*]Windows (x64), Linux (x64) or macOS (Apple silicon).
+[*]Single-player only.
+[/list]
+
+[h2]What it runs on your computer[/h2]
+While the game runs, the mod starts its own brain, a background program where the AI thinks, on half of your logical processors (at most 8). It ends when the game does. There is nothing else to install.
+
+[h2]Source and design[/h2]
+Open source (MIT): [url=https://github.com/shinnku-nikaidou/spire-zero]github.com/shinnku-nikaidou/spire-zero[/url]
+How it is designed, in English, Simplified Chinese and Traditional Chinese: [url=https://sts2-docs.shinnkunikaidou.workers.dev/en/]sts2-docs.shinnkunikaidou.workers.dev[/url]
+
+An unofficial fan project, not affiliated with or endorsed by Mega Crit.

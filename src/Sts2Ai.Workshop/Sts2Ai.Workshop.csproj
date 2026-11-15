@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    workshop: creates the mod's Steam Workshop item and uploads it (distro/workshop/README.md), through the user's
+    running, logged-in Steam client as the game, with the game's own Steamworks.NET and steam_api, copied beside it
+    from the snapshot GameReferences.props names. Not in Sts2Ai.sln, like port: a tool run by hand.
+  -->
+  <Import Project="../GameReferences.props" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>workshop</AssemblyName>
+    <RootNamespace>Sts2Ai.Workshop</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Steamworks.NET"><HintPath>$(Sts2BinDir)/Steamworks.NET.dll</HintPath><Private>true</Private></Reference>
+    <None Include="$(Sts2BinDir)/libsteam_api.so" Link="libsteam_api.so" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

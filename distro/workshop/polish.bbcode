@@ -1,0 +1,42 @@
+Spire Zero: SI, która nauczyła się Slay the Spire 2 od zera
+
+SI w grze, do rozgrywek jednoosobowych:
+[list]
+[*][b]Podpowiedzi[/b]: przy każdej decyzji pokazuje, co by zrobiła, i jaką szansę na wygranie runu daje każda opcja.
+[*][b]Automatyczna gra[/b]: na żądanie rozgrywa jeden krok, resztę tury lub pomieszczenia albo gra dalej, aż ją zatrzymasz.
+[/list]
+Nikt nie napisał ani kawałka jej sposobu gry i nie uczyła się z partii ludzi: wszystkiego nauczyła się z runów, które rozegrała sama. Przy każdej decyzji sprawdza opcje na kopii gry, a potem pyta wytrenowaną sieć, jak duża jest szansa na wygranie runu z miejsca, do którego prowadzi każda z nich.
+
+[h2]Dwa tryby (w ustawieniach)[/h2]
+[list]
+[*][b]SL[/b] (domyślny): jak przy zapisywaniu i wczytywaniu, sprawdza opcje na prawdziwej kopii pomieszczenia, w którym jesteś, więc widzi, co naprawdę się tam stanie (kolejność dobierania kart, wyniki losowań). Oszukuje – i wtedy gra najmocniej.
+[*][b]NoSL[/b]: tylko to, co widzi gracz. Bez podglądania.
+[/list]
+
+[h2]Jak dobrze gra[/h2]
+W SL, na testowych seedach, odsetek wygranych runów:
+[table]
+[tr][th][/th][th]Wyniesienie 0[/th][th]Wyniesienie 10[/th][/tr]
+[tr][td]Pancernik[/td][td]96% (48/50)[/td][td]35,5% (71/200)[/td][/tr]
+[tr][td]Zjawa[/td][td]92% (46/50)[/td][td]20,5% (41/200)[/td][/tr]
+[tr][td]Defekt[/td][td]92% (46/50)[/td][td]16,5% (33/200)[/td][/tr]
+[tr][td]Monarcha[/td][td]82% (41/50)[/td][td]8,5% (17/200)[/td][/tr]
+[tr][td]Nekromantka[/td][td]78% (39/50)[/td][td]7% (14/200)[/td][/tr]
+[tr][td]Błazen[/td][td]62,5% (125/200)[/td][td]1,5% (3/200)[/td][/tr]
+[/table]
+
+[h2]Wymagania[/h2]
+[list]
+[*]Gra w wersji dokładnie [b]v0.113.1[/b], czyli gałąź [b]public-beta[/b] na Steamie (we właściwościach gry na Steamie). Przy innej wersji mod sam się wyłącza i mówi dlaczego.
+[*]Windows (x64), Linux (x64) lub macOS (Apple silicon).
+[*]Tylko gra jednoosobowa.
+[/list]
+
+[h2]Co uruchamia na twoim komputerze[/h2]
+Gdy gra jest włączona, mod uruchamia własny mózg – program w tle, w którym myśli SI – na połowie twoich procesorów logicznych (najwyżej 8). Kończy działanie razem z grą. Nie trzeba niczego doinstalowywać.
+
+[h2]Kod i projekt[/h2]
+Otwarte źródło (MIT): [url=https://github.com/shinnku-nikaidou/spire-zero]github.com/shinnku-nikaidou/spire-zero[/url]
+Jak jest zaprojektowana, po angielsku, chińsku uproszczonym i chińsku tradycyjnym: [url=https://sts2-docs.shinnkunikaidou.workers.dev/en/]sts2-docs.shinnkunikaidou.workers.dev[/url]
+
+Nieoficjalny projekt fanowski, niezwiązany z Mega Crit ani przez nie niepopierany.

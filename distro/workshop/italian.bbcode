@@ -1,0 +1,42 @@
+Spire Zero: un'IA che ha imparato Slay the Spire 2 da zero
+
+Un'IA dentro il gioco, per le partite in singolo:
+[list]
+[*][b]Consigli[/b]: a ogni decisione mostra cosa farebbe e la probabilità di vincere la partita con ciascuna opzione.
+[*][b]Gioco automatico[/b]: su richiesta gioca un passo, il resto di un turno o di una stanza, oppure continua finché non la metti in pausa.
+[/list]
+Nessuno ha scritto una sola parte del suo modo di giocare, e non ha imparato nulla da partite umane: ha imparato tutto dalle partite che ha giocato da sola. A ogni decisione prova le opzioni su una copia del gioco, poi chiede a una rete addestrata quanto è probabile vincere la partita da dove porta ciascuna.
+
+[h2]Due modalità (nelle impostazioni)[/h2]
+[list]
+[*][b]SL[/b] (predefinita): come salvare e ricaricare, prova le opzioni su una copia reale della stanza in cui ti trovi, quindi vede cosa succederà davvero lì (l'ordine di pesca, i risultati casuali). Bara, ed è così che gioca al meglio.
+[*][b]NoSL[/b]: solo ciò che un giocatore può vedere. Niente sbirciate.
+[/list]
+
+[h2]Quanto è forte[/h2]
+In SL, su seed di prova, la quota di partite vinte:
+[table]
+[tr][th][/th][th]Ascensione 0[/th][th]Ascensione 10[/th][/tr]
+[tr][td]Ironclad[/td][td]96% (48/50)[/td][td]35,5% (71/200)[/td][/tr]
+[tr][td]Silent[/td][td]92% (46/50)[/td][td]20,5% (41/200)[/td][/tr]
+[tr][td]Defect[/td][td]92% (46/50)[/td][td]16,5% (33/200)[/td][/tr]
+[tr][td]Regent[/td][td]82% (41/50)[/td][td]8,5% (17/200)[/td][/tr]
+[tr][td]Necrobinder[/td][td]78% (39/50)[/td][td]7% (14/200)[/td][/tr]
+[tr][td]Fool[/td][td]62,5% (125/200)[/td][td]1,5% (3/200)[/td][/tr]
+[/table]
+
+[h2]Requisiti[/h2]
+[list]
+[*]Il gioco esattamente alla [b]v0.113.1[/b], il ramo [b]public-beta[/b] di Steam (nelle proprietà del gioco su Steam). Con un'altra versione la mod si disattiva da sola e spiega perché.
+[*]Windows (x64), Linux (x64) o macOS (Apple silicon).
+[*]Solo giocatore singolo.
+[/list]
+
+[h2]Cosa esegue sul tuo computer[/h2]
+Mentre il gioco è aperto, la mod avvia il proprio cervello, un programma in background dove l'IA pensa, sulla metà dei tuoi processori logici (al massimo 8). Si chiude insieme al gioco. Non c'è altro da installare.
+
+[h2]Codice e progettazione[/h2]
+Open source (MIT): [url=https://github.com/shinnku-nikaidou/spire-zero]github.com/shinnku-nikaidou/spire-zero[/url]
+Come è progettata, in inglese, cinese semplificato e cinese tradizionale: [url=https://sts2-docs.shinnkunikaidou.workers.dev/en/]sts2-docs.shinnkunikaidou.workers.dev[/url]
+
+Un progetto amatoriale non ufficiale, non affiliato a Mega Crit né approvato da Mega Crit.

@@ -1,0 +1,42 @@
+Spire Zero: AI yang belajar Slay the Spire 2 dari nol
+
+AI di dalam game, untuk permainan pemain tunggal:
+[list]
+[*][b]Saran[/b]: di setiap keputusan, AI menunjukkan apa yang akan dipilihnya dan peluang tiap pilihan untuk memenangkan run.
+[*][b]Main otomatis[/b]: jika diminta, AI memainkan satu langkah, sisa giliran atau ruangan, atau terus bermain sampai kamu menjedanya.
+[/list]
+Tidak ada satu bagian pun dari cara bermainnya yang ditulis manusia, dan AI ini tidak belajar dari permainan manusia: semuanya dipelajari dari run yang dimainkannya sendiri. Di setiap keputusan, AI mencoba pilihan-pilihan itu pada salinan game, lalu bertanya pada jaringan yang sudah dilatih seberapa besar peluang memenangkan run dari tempat yang dituju setiap pilihan.
+
+[h2]Dua mode (di pengaturan)[/h2]
+[list]
+[*][b]SL[/b] (bawaan): seperti simpan dan muat, AI mencoba pilihan pada salinan asli ruangan tempat kamu berada, jadi ia melihat apa yang benar-benar akan terjadi di sana (urutan kartu yang ditarik, hasil acak). Ini curang, dan di sinilah ia bermain paling kuat.
+[*][b]NoSL[/b]: hanya yang bisa dilihat pemain. Tanpa mengintip.
+[/list]
+
+[h2]Seberapa bagus permainannya[/h2]
+Di SL, dengan seed uji, persentase run yang dimenangkan:
+[table]
+[tr][th][/th][th]Angkatan 0[/th][th]Angkatan 10[/th][/tr]
+[tr][td]Si Ironclad[/td][td]96% (48/50)[/td][td]35,5% (71/200)[/td][/tr]
+[tr][td]Si Silent[/td][td]92% (46/50)[/td][td]20,5% (41/200)[/td][/tr]
+[tr][td]Si Defect[/td][td]92% (46/50)[/td][td]16,5% (33/200)[/td][/tr]
+[tr][td]Si Regent[/td][td]82% (41/50)[/td][td]8,5% (17/200)[/td][/tr]
+[tr][td]Si Necrobinder[/td][td]78% (39/50)[/td][td]7% (14/200)[/td][/tr]
+[tr][td]Fool[/td][td]62,5% (125/200)[/td][td]1,5% (3/200)[/td][/tr]
+[/table]
+
+[h2]Persyaratan[/h2]
+[list]
+[*]Game harus tepat versi [b]v0.113.1[/b], yaitu cabang [b]public-beta[/b] di Steam (dari properti game di Steam). Di versi lain, mod akan menonaktifkan dirinya dan memberi tahu alasannya.
+[*]Windows (x64), Linux (x64), atau macOS (Apple silicon).
+[*]Hanya pemain tunggal.
+[/list]
+
+[h2]Apa yang dijalankan di komputermu[/h2]
+Selama game berjalan, mod menjalankan otaknya sendiri, program latar tempat AI berpikir, di separuh prosesor logismu (paling banyak 8). Program itu berhenti saat game ditutup. Tidak ada lagi yang perlu dipasang.
+
+[h2]Kode sumber dan desain[/h2]
+Sumber terbuka (MIT): [url=https://github.com/shinnku-nikaidou/spire-zero]github.com/shinnku-nikaidou/spire-zero[/url]
+Cara perancangannya, dalam bahasa Inggris, Tionghoa Sederhana, dan Tionghoa Tradisional: [url=https://sts2-docs.shinnkunikaidou.workers.dev/en/]sts2-docs.shinnkunikaidou.workers.dev[/url]
+
+Proyek penggemar tidak resmi, tidak berafiliasi dengan maupun didukung oleh Mega Crit.

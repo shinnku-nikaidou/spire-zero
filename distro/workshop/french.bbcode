@@ -1,0 +1,42 @@
+Spire Zero : une IA qui a appris Slay the Spire 2 à partir de zéro
+
+Une IA dans le jeu, pour les parties en solo :
+[list]
+[*][b]Conseils[/b] : à chaque décision, elle montre ce qu'elle ferait et les chances de gagner la partie avec chaque option.
+[*][b]Jeu automatique[/b] : à la demande, elle joue une action, la fin d'un tour ou d'une salle, ou continue jusqu'à ce que vous la mettiez en pause.
+[/list]
+Personne n'a écrit la moindre partie de sa façon de jouer, et elle n'a rien appris de parties humaines : elle a tout appris des parties qu'elle a jouées elle-même. À chaque décision, elle essaie les options sur une copie du jeu, puis demande à un réseau entraîné quelles sont les chances de gagner la partie depuis là où mène chaque option.
+
+[h2]Deux modes (dans les paramètres)[/h2]
+[list]
+[*][b]SL[/b] (par défaut) : comme avec une sauvegarde et un chargement, elle essaie les options sur une copie fidèle de la salle où vous êtes, et voit donc ce qui va vraiment s'y passer (l'ordre de pioche, les tirages aléatoires). Elle triche, et c'est là qu'elle joue le mieux.
+[*][b]NoSL[/b] : seulement ce qu'un joueur peut voir. Aucune triche.
+[/list]
+
+[h2]Son niveau[/h2]
+En SL, sur des seeds de test, la part des parties gagnées :
+[table]
+[tr][th][/th][th]Ascension 0[/th][th]Ascension 10[/th][/tr]
+[tr][td]Le Soldat de Fer[/td][td]96 % (48/50)[/td][td]35,5 % (71/200)[/td][/tr]
+[tr][td]La Silencieuse[/td][td]92 % (46/50)[/td][td]20,5 % (41/200)[/td][/tr]
+[tr][td]Le Défectueux[/td][td]92 % (46/50)[/td][td]16,5 % (33/200)[/td][/tr]
+[tr][td]Le Régent[/td][td]82 % (41/50)[/td][td]8,5 % (17/200)[/td][/tr]
+[tr][td]La Tisse-Mort[/td][td]78 % (39/50)[/td][td]7 % (14/200)[/td][/tr]
+[tr][td]L'Insensé[/td][td]62,5 % (125/200)[/td][td]1,5 % (3/200)[/td][/tr]
+[/table]
+
+[h2]Configuration requise[/h2]
+[list]
+[*]Le jeu en version [b]v0.113.1[/b] exactement, la branche [b]public-beta[/b] de Steam (dans les propriétés du jeu sur Steam). Avec une autre version, le mod se désactive et explique pourquoi.
+[*]Windows (x64), Linux (x64) ou macOS (puce Apple).
+[*]Solo uniquement.
+[/list]
+
+[h2]Ce qu'il lance sur votre ordinateur[/h2]
+Pendant que le jeu tourne, le mod lance son propre cerveau, un programme en arrière-plan où l'IA réfléchit, sur la moitié de vos processeurs logiques (8 au plus). Il s'arrête avec le jeu. Rien d'autre à installer.
+
+[h2]Code source et conception[/h2]
+Open source (MIT) : [url=https://github.com/shinnku-nikaidou/spire-zero]github.com/shinnku-nikaidou/spire-zero[/url]
+Sa conception, en anglais, en chinois simplifié et en chinois traditionnel : [url=https://sts2-docs.shinnkunikaidou.workers.dev/en/]sts2-docs.shinnkunikaidou.workers.dev[/url]
+
+Un projet de fan non officiel, sans lien avec Mega Crit et non approuvé par Mega Crit.
