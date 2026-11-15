@@ -261,3 +261,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   - with `--note`, the update's commit timed out three times (k_EResultTimeout, the content and preview already up);
     without it, the same update went through at once. The 0.3.7 change note is not on the page.
   Still to do: the real game on Linux (the checklist) and on the Mac through the subscription.
+- 2026-11-15 19:36: 0.3.8 at c54bb4b4 (0.3.7 with SL wins worth exactly the same planned by the fewest turns ended,
+  3fcdef51; the user: "好，升版"). Built with distro/build.sh (378 MB, three platforms; the champion v10-2-2 + c10-2-2,
+  nets byte for byte 0.3.7's). The item's Linux brain on the user's SLIMES_NORMAL decision (A10 SILENT, floor 6, the
+  0.3.7 log of 10:49 UTC, planned at round 1 and played for 23 rounds) plans a win with 9 turns ended, the same value,
+  56 HP and the Flex Potion kept. Installed in `mods/Sts2Ai` by swapping the folder (0.3.7 moved to
+  `tmp/modeng/old-installs/`). The local 0.3.8 is above the Workshop's 0.3.7, so the game loads 0.3.8: a real-game
+  test from now on tests 0.3.8, not the uploaded build.
