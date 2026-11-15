@@ -9,7 +9,9 @@ namespace Sts2Ai.SimWorker.Commands;
 /// brain: the brain alone, which serves the host that started it, the mod, on its stdin and stdout,
 /// with the champion its options name, and ends when stdin closes. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
 /// --sl-policy's (the SL planner by default), with the same macro brain, whose afterstates
-/// the environment sets (<see cref="Champions"/>), so one champion file serves both. A host may ask for
+/// the environment sets (<see cref="Champions"/>), so one champion file serves both. The SL planner searches in the
+/// engine (--combat-world engine, as run's), on the live combat an SL host sends with each combat decision
+/// (<see cref="DecisionRequest.Export"/>), and crosses a card prompt on the node's clone in the search workers. A host may ask for
 /// another effort of the SL planner for its run (<see cref="Hello.Effort"/>), which then plays with that preset's
 /// budget. Prints a line per run on stderr, with the game errors of its search workers.
 /// </summary>
@@ -19,7 +21,7 @@ internal static class BrainCommand
     private static readonly Option<string?> Wire = Opt.Maybe<string?>("--wire", "writes every message the hosts send, one JSON line each (what clones replays)");
     private static readonly Option<string> SlPolicy = Opt.Of("--sl-policy", "plan", "the combat brain of SL hosts; --policy is NoSL hosts'")
         .AcceptOnlyFromAmong(["pimc", "plan", .. Policies.CombatNames]);
-    private static readonly ChampionArgs Champion = new(file: true);
+    private static readonly ChampionArgs Champion = new(file: true, world: "engine");
 
     public static Command Command()
     {
@@ -35,7 +37,6 @@ internal static class BrainCommand
         var wireOut = Console.OpenStandardOutput();
         Console.SetOut(Console.Error);
         var (champion, sl) = Champions(r);
-        if (champion.Engine || sl.Engine) throw new CliException("--combat-world engine needs the game in the run's own process: a host over the wire sends no live combat");
 
         using var workerPool = champion.Pool() ?? sl.Pool();
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;

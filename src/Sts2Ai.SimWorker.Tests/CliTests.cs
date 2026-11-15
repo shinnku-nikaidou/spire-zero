@@ -28,9 +28,9 @@ public sealed class CliTests : IDisposable
         Assert.Equal("play", r.GetValue<string>("--policy"));
         Assert.Equal(8, r.GetValue<int>("--worlds"));
         Assert.Null(r.GetValue<int?>("--n"));
-        // run's plan searches in the engine; brain's hosts send no live combat, so its plan searches on the replayed clone.
+        // Both search in the engine: run on the combat of its own process, brain on the one an SL host sends.
         Assert.Equal("engine", r.GetValue<string>("--combat-world"));
-        Assert.Equal("replay", Cli.Parse(["brain"]).GetValue<string>("--combat-world"));
+        Assert.Equal("engine", Cli.Parse(["brain"]).GetValue<string>("--combat-world"));
     }
 
     [Fact]
@@ -40,14 +40,15 @@ public sealed class CliTests : IDisposable
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         string[] plan = ["--policy", "plan", "--combat-net", net, "--value", value];
         var run = new ChampionArgs(file: false, world: "engine");
-        var brain = new ChampionArgs(file: false);
+        // The eval commands' default.
+        var eval = new ChampionArgs(file: false);
         var runCommand = Opt.Command("run", "", run.Options);
-        var brainCommand = Opt.Command("brain", "", brain.Options);
+        var evalCommand = Opt.Command("eval", "", eval.Options);
 
         Assert.True(run.Read(runCommand.Parse(plan)).Engine);
         Assert.False(run.Read(runCommand.Parse([.. plan, "--combat-world", "replay"])).Engine);
-        Assert.False(brain.Read(brainCommand.Parse(plan)).Engine);
-        Assert.True(brain.Read(brainCommand.Parse([.. plan, "--combat-world", "engine"])).Engine);
+        Assert.False(eval.Read(evalCommand.Parse(plan)).Engine);
+        Assert.True(eval.Read(evalCommand.Parse([.. plan, "--combat-world", "engine"])).Engine);
         Assert.False(run.Read(runCommand.Parse(["--policy", "play"])).Engine);
         Assert.Throws<CliException>(() => run.Read(runCommand.Parse(["--policy", "play", "--combat-world", "engine"])));
     }
@@ -117,7 +118,9 @@ public sealed class CliTests : IDisposable
 
         Assert.False(noSl.OnClone);
         Assert.True(sl.OnClone);
-        Assert.False(noSl.Engine || sl.Engine);
+        // The SL planner searches in the engine on the live combat SL hosts send; pimc has no engine.
+        Assert.False(noSl.Engine);
+        Assert.True(sl.Engine);
         Assert.Equal("combat pimc combat-tiny 8x300, combat prompts first, macro l0 pure-v-tiny-win, macro prompts l0 pure-v-tiny-win", noSl.Name);
         Assert.EndsWith(", combat prompts first, macro l0 pure-v-tiny-win clone, macro prompts l0 pure-v-tiny-win clone", sl.Name);
         Assert.StartsWith("combat plan combat-tiny ", sl.Name);

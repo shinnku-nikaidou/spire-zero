@@ -41,6 +41,11 @@ public sealed record RunView
     /// <summary>Whether the rule wins a fight in a room of type <paramref name="room"/> at its start, in the act the run is in.</summary>
     public bool WinsAtStart(string? room) => WinsAtStart(AutoWin, Act, room);
 
+    /// <summary>The run with no card's upgrade preview (<see cref="CardView.Upgraded"/>), the deck in the order of those
+    /// cards' keys: as the bridge observes it with no previews, the run a combat's leaf reads.</summary>
+    public RunView WithoutPreviews() =>
+        this with { Deck = [.. Deck.Select(c => c.Upgraded == null ? c : c with { Upgraded = null }).OrderBy(ProtocolJson.CardKey, StringComparer.Ordinal)] };
+
     /// <summary>The rule itself, for the simulator, which applies it: <paramref name="acts"/> are <see cref="AutoWin"/>'s.</summary>
     public static bool WinsAtStart(IReadOnlyList<int>? acts, int act, string? room) => acts?.Contains(act) == true && room == "Monster";
 }

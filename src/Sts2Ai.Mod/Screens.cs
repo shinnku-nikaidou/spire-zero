@@ -127,8 +127,10 @@ internal sealed class Screens
 
     /// <summary>
     /// A card prompt, its options and limits as the selector would get them (CardSelectCmd). The answer picks
-    /// canonical indexes, so the brain's choice never depends on the screen's order; ties are broken the same way on
-    /// every frame, so the observation holds still.
+    /// canonical indexes, so the brain's choice never depends on the screen's order. Ties are broken by the prompt's
+    /// number in the node (<see cref="NodeRecord.Prompts"/>), as the simulator's selector breaks them, so a pick means the
+    /// same copy of a card here, on the node's clone and in the engine; the number holds while the prompt waits, and so
+    /// does the observation.
     /// </summary>
     private Asking? Prompt(RunState run, Player me, object prompt, CardSelectorPrefs prefs, IReadOnlyList<CardModel> cards) =>
         Prompt(run, me, prompt, prefs.MinSelect, prefs.MaxSelect, cards);
@@ -137,7 +139,7 @@ internal sealed class Screens
     {
         if (ContextOf(prompt) is not { } context || cards.Count == 0) return null;
         var (min, max) = ChoiceContexts.Bounds(context, minSelect, maxSelect, cards.Count);
-        var (choice, index) = CardChoices.Canonical(cards, min, max, context, new Random(0));
+        var (choice, index) = CardChoices.Canonical(cards, min, max, context, new Random(NodeRecord.Prompts));
         var st = CombatManager.Instance.IsInProgress ? CombatManager.Instance.DebugOnlyGetState() : null;
         var screen = new CardChoiceScreen { Choice = choice, Combat = st != null ? Observe.Combat(st, me) : null };
         return new Asking(Surfaces.CardChoice, Observe.Of(run, me, screen), [], cards, index);

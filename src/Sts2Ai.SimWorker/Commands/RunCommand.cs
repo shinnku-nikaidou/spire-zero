@@ -64,7 +64,6 @@ internal static class RunCommand
         bool log = check || logFile != null;
         var champion = Champion.Read(r);
         if (champion.Policy == "plan" && env != PlayEnvironment.SL) throw new CliException("plan plays in SL only (--env SL)");
-        if (champion.Engine && check) throw new CliException("--check plays each seed again over the wire, where no live combat reaches the engine: plan needs --combat-world replay there");
         using var workerPool = champion.Pool();
         var harness = champion.Harness(workerPool, log);
         // --check plays each seed again over the wire, to a brain server in this process with the same champion, whose

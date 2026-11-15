@@ -52,6 +52,12 @@ internal static class NodeRecord
 
     public static IReadOnlyList<string> Steps => _steps;
 
+    /// <summary>The prompts the node has asked so far (card prompts, card rewards, bundles), as the simulator's
+    /// selector counts them from the node's entry: the next prompt is this number, which seeds its ties' order.</summary>
+    public static int Prompts => _steps.Count(s => s.StartsWith(Surfaces.CardChoice + " ", StringComparison.Ordinal)
+                                                  || s.StartsWith(Surfaces.CardReward + " ", StringComparison.Ordinal)
+                                                  || s.StartsWith(Surfaces.Bundle + " ", StringComparison.Ordinal));
+
     /// <summary>Why the node cannot be cloned, or null.</summary>
     public static string? Broken { get; private set; }
 

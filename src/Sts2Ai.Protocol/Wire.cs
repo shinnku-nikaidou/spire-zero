@@ -22,7 +22,7 @@ namespace Sts2Ai.Protocol;
 public abstract record WireMessage
 {
     /// <summary>Bumped on any breaking change.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     [JsonPropertyOrder(-1)]
     public int V { get; init; } = Version;
@@ -51,7 +51,11 @@ public sealed record Ready(string Champion) : WireMessage;
 /// </summary>
 /// <param name="DecisionId">From 0, increasing within the run.</param>
 /// <param name="ObsHash"><see cref="ProtocolJson.Hash"/> of <see cref="Obs"/>, in hex.</param>
-public sealed record DecisionRequest(long DecisionId, string ObsHash, string Surface, Observation Obs, IReadOnlyList<string> Legal) : WireMessage
+/// <param name="Export">SL only, at a combat decision between actions (not at a card prompt): the live combat as the
+/// bridge's <c>EngineExport</c> wrote it, in base64, for the engine to take in. It holds the hidden state, so a NoSL
+/// host never sends it.</param>
+public sealed record DecisionRequest(long DecisionId, string ObsHash, string Surface, Observation Obs, IReadOnlyList<string> Legal, string? Export = null)
+    : WireMessage
 {
     public static string HashOf(Observation obs) => ProtocolJson.Hash(obs).ToString("x16");
 }

@@ -112,20 +112,22 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
 internal sealed class WireBrain : IRunBrain
 {
     private readonly WireStream _wire;
+    private readonly bool _sl;
     private readonly Dictionary<string, int> _brains = [];
     private long _next;
     private (long Id, string Action)? _pending;
 
-    private WireBrain(WireStream wire, string champion)
+    private WireBrain(WireStream wire, string champion, bool sl)
     {
         _wire = wire;
         Champion = champion;
+        _sl = sl;
     }
 
     public static WireBrain Start(WireStream wire, Hello hello)
     {
         wire.Send(hello);
-        return new WireBrain(wire, wire.Expect<Ready>().Champion);
+        return new WireBrain(wire, wire.Expect<Ready>().Champion, hello.Env == nameof(PlayEnvironment.SL));
     }
 
     public string Champion { get; }
@@ -134,8 +136,10 @@ internal sealed class WireBrain : IRunBrain
     public int Replans => 0;
     public PlanTally? Search => null;
 
+    /// <summary>In SL with the live combat too, as the mod sends it: the brain plans on it in the engine.</summary>
     public CombatAction Choose(CombatDecision decision) => CombatAction.Parse(Ask(Surfaces.Combat,
-        decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run"), [.. decision.Legal.Select(a => a.ToString())]));
+        decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run"), [.. decision.Legal.Select(a => a.ToString())],
+        _sl && decision.Export is { } live ? Convert.ToBase64String(live.Bytes) : null));
 
     public ChoiceAnswer Choose(ChoiceDecision decision)
     {
@@ -165,12 +169,12 @@ internal sealed class WireBrain : IRunBrain
         _wire.Send(end);
     }
 
-    private string Ask(string surface, Observation obs, IReadOnlyList<string> legal)
+    private string Ask(string surface, Observation obs, IReadOnlyList<string> legal, string? export = null)
     {
         Report(null);
         long id = _next++;
         string hash = DecisionRequest.HashOf(obs);
-        _wire.Send(new DecisionRequest(id, hash, surface, obs, legal));
+        _wire.Send(new DecisionRequest(id, hash, surface, obs, legal, export));
         var answer = _wire.Expect<Recommendation>();
         if (answer.DecisionId != id || answer.ObsHash != hash)
             throw new InvalidDataException($"a recommendation for decision {answer.DecisionId} ({answer.ObsHash}), not {id} ({hash})");

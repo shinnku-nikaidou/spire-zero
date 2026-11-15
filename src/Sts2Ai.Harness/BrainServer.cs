@@ -100,9 +100,12 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
         // A field this build does not know is dropped on reading, so a mod built from newer wire types fails here.
         if (DecisionRequest.HashOf(obs) != request.ObsHash)
             throw new InvalidDataException($"obs_hash {request.ObsHash} is not the observation's: are the mod and the brain built from the same commit?");
+        // The live combat an SL host sends, with the run around it as a combat's leaf reads it, as a host in this process gives it.
+        Func<CombatExport>? export = request.Export is { } bytes ? () => new CombatExport(Convert.FromBase64String(bytes), obs.Run.WithoutPreviews()) : null;
         var (action, note) = (request.Surface, obs.Screen) switch
         {
-            (Surfaces.Combat, CombatScreen screen) => Text(harness.Decide(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs))),
+            (Surfaces.Combat, CombatScreen screen) => Text(harness.Decide(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs,
+                export))),
             (Surfaces.CardChoice, CardChoiceScreen screen) => Text(harness.Decide(new ChoiceDecision(screen.Choice, () => obs))),
             (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
             _ => Text(harness.Decide(new MacroDecision(request.Surface, [.. request.Legal.Select(MacroAction.Parse)], () => obs))),

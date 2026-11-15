@@ -39,7 +39,7 @@ internal static class Host
             var bundled = BundledBrain.Find(Path.GetDirectoryName(typeof(Host).Assembly.Location)!, Path.GetDirectoryName(typeof(NGame).Assembly.Location)!,
                 Path.Combine(Settings.Dir, "brain.log"));
             var link = BrainLink.Start(bundled);
-            _assist = new Assist(link, version);
+            _assist = new Assist(link, version, bundled?.SchemaPath);
             Log.Info($"{Tag} assist mode, {Settings.Current.Env}, brain: {link.Where}");
         }
         ((SceneTree)Engine.GetMainLoop()).ProcessFrame += Tick;

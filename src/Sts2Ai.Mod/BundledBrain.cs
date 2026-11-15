@@ -23,6 +23,9 @@ internal sealed class BundledBrain
 
     public string Launcher { get; }
 
+    /// <summary>The engine's schema beside this platform's brain, which the live combat is written out along for it.</summary>
+    public string SchemaPath => Path.Combine(Path.GetDirectoryName(Launcher)!, "sts2ai_engine.schema.json");
+
     public string LogPath { get; }
 
     /// <summary>The brain beside the mod for this platform, or null when the mod ships none (an install for development).</summary>

@@ -30,8 +30,9 @@ the user's own copy of the game, like `tmp/gamebin`.
 
 `sim run`'s planner searches in the engine (`--combat-world engine`, its default): the run's own process holds the live
 game, so each plan imports the combat there. `--combat-world replay`, the node's clone in the worker processes, stays for
-checks. A host over the wire sends no live combat, so `sim brain` (the mod's brain) plans on the clone, and `run --check`,
-which plays each seed again over the wire, needs `--combat-world replay`.
+checks. Over the wire an SL host sends the live combat with each combat decision between actions (the mod from the
+real game, `run --check`'s host from its own), so `sim brain` (the mod's brain) and `run --check` plan in the engine
+too; a card prompt is crossed on the node's clone in the search workers, as in `sim run`. A NoSL host sends none.
 
 ## Pieces
 

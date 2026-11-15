@@ -37,12 +37,15 @@ internal enum Goal
 /// before asking about the new state, so a slow brain never falls behind.
 /// The environment and the SL planner's effort are the player's choice (<see cref="Settings"/>), kept across games.
 /// Switching either, or turning assist off, ends the run as the brain sees it; the next decision starts a new one from
-/// that point. In SL the brain plans
-/// combats and values every other option on a clone of the node, so before each decision the mod sends the node's
-/// checkpoint and the steps taken in it (<see cref="NodeRecord"/>), and asks nothing in a node it cannot clone; NoSL
-/// sends neither.
+/// that point. In SL the brain plans a
+/// combat in its engine, on the live combat the mod writes out with each combat decision between actions
+/// (<see cref="DecisionRequest.Export"/>, along the engine's schema beside the brain), and crosses a card prompt and
+/// values every other option on a clone of the node, so before each decision the mod sends the node's checkpoint and the
+/// steps taken in it (<see cref="NodeRecord"/>), and asks nothing in a node it cannot clone; NoSL sends none of these,
+/// the live combat holding the hidden state.
 /// </summary>
-internal sealed class Assist(BrainLink link, string gameVersion)
+/// <param name="schemaPath">The engine's schema (<see cref="BundledBrain.SchemaPath"/>); null with no brain shipped.</param>
+internal sealed class Assist(BrainLink link, string gameVersion, string? schemaPath)
 {
     /// <summary>How many frames in a row a state must hold before it counts as idle.</summary>
     private const int IdleFrames = 3;
@@ -67,6 +70,10 @@ internal sealed class Assist(BrainLink link, string gameVersion)
     private sealed record Answered(long Id, string Key, Recommendation Answer, Shown Shown, string Foot, MapRoute? Route, CombatPlan? Plan);
 
     private readonly Screens _screens = new();
+
+    /// <summary>Writes the live combat out for the engine, read from the schema at the first SL combat decision.</summary>
+    private readonly Lazy<EngineExport> _export = new(() => new EngineExport(EngineSchema.Load(
+        schemaPath ?? throw new InvalidOperationException("no engine schema: no brain ships with this copy of the mod"))));
     private bool _connected;
     private string? _down;
 
@@ -275,8 +282,12 @@ internal sealed class Assist(BrainLink link, string gameVersion)
             return;
         }
         if (_env == PlayEnvironment.SL) SendNode();
+        // In the same frame as the observation, with the action queue empty: the combat as it is shown.
+        string? export = _env == PlayEnvironment.SL && asking.Surface == Surfaces.Combat
+            ? Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes)
+            : null;
         (_asked, _askedKey) = (new Asked(_next++, key, asking.Obs, Environment.TickCount64), key);
-        link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal));
+        link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal, export));
     }
 
     /// <summary>

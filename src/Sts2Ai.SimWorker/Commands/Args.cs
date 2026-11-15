@@ -204,8 +204,8 @@ internal sealed class ChampionFileOption : Option<string?>
 
 /// <summary>The options that name a champion: its brains, the search's budget and workers, and weights files.</summary>
 /// <param name="file">Whether the command also takes --champion FILE to play (run, brain; gate's --champion is the one to beat).</param>
-/// <param name="world">The world plan searches in when --combat-world is not given: engine for run, replay for brain, whose
-/// hosts send no live combat over the wire.</param>
+/// <param name="world">The world plan searches in when --combat-world is not given: engine for run and brain, replay for
+/// the eval commands'.</param>
 internal sealed class ChampionArgs(bool file, string world = "replay")
 {
     private readonly ChampionFileOption? _file = file ? new() : null;
@@ -217,8 +217,9 @@ internal sealed class ChampionArgs(bool file, string world = "replay")
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's and plan's search worker processes (default: one per world, --worlds)");
     private readonly LeafArgs _leaf = new();
     private readonly Option<string> _world = Opt.Of("--combat-world", world,
-            "the world plan searches in: engine, the Rust engine in threads of this process, which needs the game in the run's own process (run, not brain " +
-            "or run --check); replay, the node's clone in the worker processes, for checks. The champion is the same one on both")
+            "the world plan searches in: engine, the Rust engine in threads of this process, on the live combat that the run's own process writes out " +
+            "or that an SL host sends over the wire (brain, run --check); replay, the node's clone in the worker processes, for checks. " +
+            "The champion is the same one on both")
         .AcceptOnlyFromAmong("replay", "engine");
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone")
