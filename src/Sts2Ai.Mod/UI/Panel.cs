@@ -41,7 +41,8 @@ internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pil
 /// answer (the next action, the plan after it, the options it scored with their chances to win) or a message saying
 /// why there is none. It also owns the marks the answer draws on the game's own nodes (<see cref="MapMark"/>,
 /// <see cref="CombatMark"/>). F8 hides and shows all of it; the settings (<see cref="Settings"/>) pick which parts show.
-/// The card's head moves it (dragged, and kept where it was let go), steps its opacity down, and closes it; F8 opens it again.
+/// A small orb opens and closes the card, which opens under it; the orb or the card's head drags both (kept where they
+/// were let go), and a button in the head steps the card's opacity down.
 /// The card's content is built again only when what it shows changes, not every frame.
 /// </summary>
 internal sealed class Panel
@@ -59,6 +60,9 @@ internal sealed class Panel
     private static readonly Color Error = Color.FromHtml("#ff8a70");
 
     private const float BarWidth = 56;
+
+    /// <summary>The orb's width, and the gap between it and the card.</summary>
+    private const int OrbSize = 40, Gap = 6;
 
     /// <summary>The opacities the head's button steps down through, then back to the first.</summary>
     private static readonly float[] Opacities = [1f, 0.75f, 0.5f, 0.3f];
@@ -79,13 +83,17 @@ internal sealed class Panel
     private readonly MapMark _map;
     private readonly CombatMark _combat;
     private readonly Action<Command>? _pressed;
-    private readonly Button _opacity, _close;
+    private readonly PanelContainer _orb;
+    private readonly Label _orbLabel;
+    private readonly Button _opacity;
     private readonly HashSet<Key> _down = [];
     private bool _hidden;
-    /// <summary>The close button hid the card alone; F8 opens it again.</summary>
-    private bool _closed;
-    /// <summary>While the head is dragged: where in the card the mouse took it.</summary>
+    private bool? _orbStyled;
+    /// <summary>While the orb or the head is held: where the mouse is from the orb's corner.</summary>
     private Vector2? _grab;
+    /// <summary>Where the mouse went down, and whether it has moved far enough since to be a drag, not a click.</summary>
+    private Vector2 _downAt;
+    private bool _dragged;
     private object? _built;
     private PlayEnvironment? _styled;
     private Drive? _drive;
@@ -102,17 +110,25 @@ internal sealed class Panel
         cardStyle.ContentMarginLeft = cardStyle.ContentMarginRight = 14;
         cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
         cardStyle.ShadowSize = 12;
-        _card = Quiet(new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY), CustomMinimumSize = new Vector2(340, 0) });
+        _card = Quiet(new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY + OrbSize + Gap), CustomMinimumSize = new Vector2(340, 0) });
         _card.AddThemeStyleboxOverride("panel", cardStyle);
         var column = Column(10);
         _card.AddChild(column);
 
-        // The head is the card's handle: it takes the mouse there, unlike the rest of the card.
+        // The orb: a click opens or closes the card, a drag moves both. It takes the mouse, unlike the card.
+        _orb = new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY), CustomMinimumSize = new Vector2(OrbSize, OrbSize),
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand };
+        _orbLabel = Text("AI", 14, Ink);
+        _orbLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _orbLabel.VerticalAlignment = VerticalAlignment.Center;
+        _orb.AddChild(_orbLabel);
+        _orb.GuiInput += e => Drag(e, toggle: true);
+
+        // The head is the card's handle too: it takes the mouse there, unlike the rest of the card.
         var head = Row(8);
         head.MouseFilter = Control.MouseFilterEnum.Stop;
         head.MouseDefaultCursorShape = Control.CursorShape.Move;
-        head.GuiInput += Drag;
-        head.AddChild(Badge("AI", 22, 6, Accent, null, 11));
+        head.GuiInput += e => Drag(e, toggle: false);
         // A champion's name can be a whole line of options: it takes the head's free width and is cut there.
         var names = Column(0);
         names.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -133,15 +149,12 @@ internal sealed class Panel
             head.AddChild(frame);
         }
         else _switch = [];
-        var corner = Row(0);
-        corner.AddChild(_opacity = HeadButton(Icons.Opacity, () =>
+        head.AddChild(_opacity = HeadButton(Icons.Opacity, () =>
         {
             float now = Settings.Current.Opacity;
             float next = Opacities.FirstOrDefault(o => o < now - 0.01f, Opacities[0]);
             Settings.Set(Settings.Current with { Opacity = next });
         }));
-        corner.AddChild(_close = HeadButton(Icons.Close, () => _closed = true));
-        head.AddChild(corner);
         column.AddChild(head);
 
         // The toolbar, in the style of a debugger's: continue / pause, step, step out.
@@ -208,19 +221,16 @@ internal sealed class Panel
         _body = Column(8);
         column.AddChild(_body);
         layer.AddChild(_card);
+        layer.AddChild(_orb);
         _map = new MapMark(layer);
         _combat = new CombatMark(layer);
         tree.Root.CallDeferred(Node.MethodName.AddChild, layer);
     }
 
-    /// <summary>Reads the keys: F8 hides and shows (and opens a closed card), F5, F10 and F11 are the toolbar's; once per frame.</summary>
+    /// <summary>Reads the keys: F8 hides and shows, F5, F10 and F11 are the toolbar's; once per frame.</summary>
     public void Poll()
     {
-        if (Pressed(Key.F8))
-        {
-            if (_closed) _closed = _hidden = false;
-            else _hidden = !_hidden;
-        }
+        if (Pressed(Key.F8)) _hidden = !_hidden;
         if (_pressed == null || _drive == null) return;
         if (Pressed(Key.F5)) _pressed(Command.Auto);
         if (Pressed(Key.F10)) _pressed(Command.Step);
@@ -240,7 +250,7 @@ internal sealed class Panel
     /// <summary>Nothing over the game: the player turned assist off.</summary>
     public void Hide()
     {
-        _card.Visible = false;
+        _card.Visible = _orb.Visible = false;
         _map.Show(null, false);
         _combat.Show(null, false);
     }
@@ -278,13 +288,24 @@ internal sealed class Panel
     private void Head(string champion, string status, PlayEnvironment? env, Drive? drive)
     {
         var settings = Settings.Current;
-        _card.Visible = !_hidden && !_closed && settings.Panel;
-        if (_card.Theme != Fonts.Theme) _card.Theme = Fonts.Theme;
+        _orb.Visible = !_hidden;
+        _card.Visible = !_hidden && settings.Panel;
+        if (_card.Theme != Fonts.Theme) _card.Theme = _orb.Theme = Fonts.Theme;
         if (_card.Modulate.A != settings.Opacity) _card.Modulate = Colors.White with { A = settings.Opacity };
+        if (_orbStyled != settings.Panel)
+        {
+            // Open: filled; closed: a ring.
+            _orbStyled = settings.Panel;
+            var style = Box(settings.Panel ? Accent : Color.FromHtml("#100c18"), OrbSize / 2, Accent, 2);
+            style.ShadowColor = new Color(0, 0, 0, 0.4f);
+            style.ShadowSize = 8;
+            _orb.AddThemeStyleboxOverride("panel", style);
+            _orbLabel.AddThemeColorOverride("font_color", settings.Panel ? Ink : Accent);
+        }
         // Where it was let go, kept inside the window as the card grows and shrinks.
-        if (_grab == null && _card.IsInsideTree()) _card.Position = Inside(new Vector2(settings.PanelX, settings.PanelY));
+        if (_grab == null && _card.IsInsideTree()) Place(new Vector2(settings.PanelX, settings.PanelY));
+        Tooltip(_orb, L10n.T("Click to open or close the panel, drag to move it"));
         Tooltip(_opacity, $"{L10n.T("Panel opacity")} {settings.Opacity * 100:0}%");
-        Tooltip(_close, L10n.T("Close · F8 brings it back"));
         _champion.Text = champion;
         _status.Text = status;
         if (env != _styled)
@@ -333,25 +354,51 @@ internal sealed class Panel
         if (control.TooltipText != text) control.TooltipText = text;
     }
 
-    /// <summary>Drags the card by its head; where it is let go is kept in the settings.</summary>
-    private void Drag(InputEvent e)
+    /// <summary>
+    /// Drags the orb and the card together, by the orb or the card's head; where they are let go is kept in the settings.
+    /// A press and release on the orb that moved under 4 pixels is a click: it opens or closes the card.
+    /// </summary>
+    private void Drag(InputEvent e, bool toggle)
     {
+        var mouse = _orb.GetGlobalMousePosition();
         if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left } button)
         {
-            if (button.Pressed) _grab = _card.GetGlobalMousePosition() - _card.Position;
+            if (button.Pressed)
+            {
+                _grab = mouse - _orb.Position;
+                _downAt = mouse;
+                _dragged = false;
+            }
             else if (_grab != null)
             {
                 _grab = null;
-                Settings.Set(Settings.Current with { PanelX = _card.Position.X, PanelY = _card.Position.Y });
+                if (_dragged) Settings.Set(Settings.Current with { PanelX = _orb.Position.X, PanelY = _orb.Position.Y });
+                else if (toggle) Settings.Set(Settings.Current with { Panel = !Settings.Current.Panel });
             }
         }
-        else if (e is InputEventMouseMotion && _grab is { } grab) _card.Position = Inside(_card.GetGlobalMousePosition() - grab);
+        else if (e is InputEventMouseMotion && _grab is { } grab && (_dragged || mouse.DistanceTo(_downAt) >= 4))
+        {
+            _dragged = true;
+            Place(mouse - grab);
+        }
     }
 
-    /// <summary><paramref name="at"/> moved as little as it takes for the whole card to be inside the window.</summary>
-    private Vector2 Inside(Vector2 at)
+    /// <summary>
+    /// The orb at <paramref name="at"/> and the card under it, or over it when there is no room under; both moved as
+    /// little as it takes to be inside the window.
+    /// </summary>
+    private void Place(Vector2 at)
     {
-        var room = _card.GetViewportRect().Size - _card.Size;
+        var window = _orb.GetViewportRect().Size;
+        var orb = _orb.Position = Inside(at, _orb.Size, window);
+        float under = orb.Y + OrbSize + Gap;
+        float y = under + _card.Size.Y <= window.Y ? under : orb.Y - Gap - _card.Size.Y;
+        _card.Position = Inside(new Vector2(orb.X, y), _card.Size, window);
+    }
+
+    private static Vector2 Inside(Vector2 at, Vector2 size, Vector2 window)
+    {
+        var room = window - size;
         return new Vector2(Math.Clamp(at.X, 0, Math.Max(room.X, 0)), Math.Clamp(at.Y, 0, Math.Max(room.Y, 0)));
     }
 
@@ -374,7 +421,7 @@ internal sealed class Panel
     {
         var key = (what, Settings.Current with
             {
-                Env = default, Assist = default, Opacity = default, PanelX = default, PanelY = default, Speed = default, StopAtElites = default,
+                Env = default, Assist = default, Panel = default, Opacity = default, PanelX = default, PanelY = default, Speed = default, StopAtElites = default,
                 StopOnDrop = default, Effort = default,
             },
             L10n.T("Next"));

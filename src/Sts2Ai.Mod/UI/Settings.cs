@@ -25,8 +25,9 @@ internal enum SearchEffort { Brain, Low, Medium, High, Max }
 /// <param name="Assist">Off: the mod asks the brain nothing and draws nothing.</param>
 /// <param name="Numbers">Order numbers on the cards the plan plays this turn.</param>
 /// <param name="Marks">The plan's target and end-turn marks.</param>
-/// <param name="Opacity">The panel's opacity, all of it: its box, text and buttons.</param>
-/// <param name="PanelX">Where the panel's top-left corner is, in the game's 1080p canvas; the player drags it there by its head.</param>
+/// <param name="Panel">The panel's card is open; its orb opens and closes it.</param>
+/// <param name="Opacity">The card's opacity, all of it: its box, text and buttons.</param>
+/// <param name="PanelX">Where the panel's orb is, its top-left corner in the game's 1080p canvas; the card opens under it. The player drags it.</param>
 /// <param name="StopAtElites">Auto-play stops before it travels to an elite or a boss.</param>
 /// <param name="StopOnDrop">Auto-play stops when V's chance to win falls 3 points below the best it showed since auto-play started.</param>
 /// <param name="Effort">The SL planner's effort the mod asks the brain for; a change starts the run anew for the brain.</param>
