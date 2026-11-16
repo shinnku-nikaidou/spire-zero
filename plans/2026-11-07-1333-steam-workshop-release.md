@@ -363,3 +363,13 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   ("打包 mod 上傳 Workshop", in the Fairy-in-a-Bottle session), public, three platforms (the VM started and shut down
   again). The commit timed out once, but the content had gone through: the item updated at 12:34:46Z and its change
   notes carry 0.3.18's. The 17 languages' texts then went up without `--content`, all OK.
+- 2026-11-16 20:45: the listing again, once the high report ended (20:42), on the user's word ("報告跑完再用 200 局更新簡介",
+  "寫局數"): 200 runs of each, the Defect's Dread 199 (one failed run left out), with the run counts and one decimal
+  where needed (rounding up would contradict the counts: 199/200 is not 100 %). Sent without `--content`: the 17
+  languages at once, no timeout. Checked on the public page in English, Traditional Chinese and German.
+- 2026-11-16 20:48: 0.3.19 at 947ddc07, Linux only, for the user's game: on a new profile the first act has no ancient
+  (Neow, its only one, waits for its epoch), and reading it threw "RoomSet.Ancient not set! You must call
+  GenerateRooms", which stopped the mod at the run's first map (the user's screenshot, A0 never played); the bridge now
+  asks the room set first, as the game does. Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): won,
+  identical over the wire, 49/49 nodes and 28/28 saves replay exactly, 0 game errors. Installed when the game closes
+  (it was running). Not uploaded: a new profile's run is to be tried in the real game first.
