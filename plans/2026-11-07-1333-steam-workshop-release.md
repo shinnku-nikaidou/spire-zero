@@ -323,3 +323,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   brain ran `parity --world engine` (FOOL, DEFECT, A0 and A10, seed 1132, `--continue 4`): 720 combats, 0 differences,
   363 / 357 as before; and `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire, 49/49 nodes and
   29/29 saves replay exactly, 0 game errors. Installed in `mods/` over 0.3.14 with the game closed. Not uploaded.
+- 2026-11-16 11:45: 0.3.16 at 8538a7fb (the user: "建"), from the auto-play session's 3f95f9e3 and 63e83938: on Linux
+  where SELinux enforces and .NET's W^X is on, MonoMod's rewrite of a patch after a tier-1 recompile is denied
+  (execheap) and the patch is silently lost, so the mod turns itself off and shows a notice over the game with the launch
+  option `DOTNET_EnableWriteXorExecute=0 %command%` to copy. Three platforms (3:56). Its Linux brain on `run --check`
+  (IRONCLAD A10, low, seed 1138): won, identical over the wire, 49/49 nodes and 29/29 saves replay exactly, 0 game
+  errors. Installed in `mods/` over 0.3.15 with the game closed. The game's Steam launch options (localconfig.vdf) are
+  empty, so its next start shows the notice. Not uploaded.
