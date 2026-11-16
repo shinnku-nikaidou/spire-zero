@@ -12,6 +12,7 @@ public sealed record WorkerHello(string Game);
 /// <summary>A request, with its type; its reply carries the same id.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(PimcWorldRequest), "pimc_world")]
+[JsonDerivedType(typeof(PimcSampleRequest), "pimc_sample")]
 [JsonDerivedType(typeof(SlTurnRequest), "sl_turn")]
 [JsonDerivedType(typeof(SlMacroRequest), "sl_macro")]
 [JsonDerivedType(typeof(SlPromptRequest), "sl_prompt")]
@@ -35,6 +36,21 @@ public sealed record PimcWorldRequest(
     int NodesPerFirst,
     IReadOnlyList<EnemyTurns> History,
     RunView Run) : WorkerRequest(Id);
+
+/// <summary>
+/// One NoSL world of a combat decision for PIMC's search in the engine: the world is built and determinized as
+/// <see cref="PimcWorldRequest"/>'s is, and the reply's <see cref="WorkerReply.Sample"/> holds it written out for the
+/// engine where it begins, at the decision. <see cref="History"/> is the combat's record of enemy moves so far, from
+/// which the monsters' move logs are built.
+/// </summary>
+public sealed record PimcSampleRequest(
+    long Id,
+    CombatObservation Observation,
+    string BuildSeed,
+    ulong SearchSeed,
+    int World,
+    int Worlds,
+    IReadOnlyList<EnemyTurns> History) : WorkerRequest(Id);
 
 /// <summary>
 /// The SL planner's search of one turn from one state of a combat decision in a run:
@@ -74,8 +90,10 @@ public sealed record PromptStep(CombatStatus Status, CombatObservation Observati
 /// <param name="Turn">The answer to an <see cref="SlTurnRequest"/>.</param>
 /// <param name="Afters">The answer to an <see cref="SlMacroRequest"/>.</param>
 /// <param name="Crossed">The answer to an <see cref="SlPromptRequest"/>.</param>
+/// <param name="Sample">The answer to a <see cref="PimcSampleRequest"/>: the world written out for the engine, the
+/// bridge's <c>EngineExport</c> bytes in base64.</param>
 public sealed record WorkerReply(long Id, IReadOnlyList<PlannedLine>? Lines, string? Error, IReadOnlyList<string> GameErrors, TurnSearch? Turn = null,
-    IReadOnlyList<Afterstate>? Afters = null, PromptStep? Crossed = null);
+    IReadOnlyList<Afterstate>? Afters = null, PromptStep? Crossed = null, string? Sample = null);
 
 /// <summary>
 /// What a path of answers from a decision in a node's clone leads to (<see cref="SlMacroRequest"/>): the run then, and

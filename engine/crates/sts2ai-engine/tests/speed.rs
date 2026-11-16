@@ -74,7 +74,7 @@ fn take(buf: ffi::SzBuf) -> Vec<u8> {
 
 impl World {
     fn import(export: &[u8]) -> Option<World> {
-        match unsafe { ffi::sz_world_import(export.as_ptr(), export.len()) } {
+        match unsafe { ffi::sz_world_import(export.as_ptr(), export.len(), 0) } {
             0 => None,
             world => Some(World(world)),
         }

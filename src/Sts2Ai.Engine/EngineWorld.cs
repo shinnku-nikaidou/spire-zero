@@ -5,10 +5,10 @@ namespace Sts2Ai.Engine;
 
 /// <summary>
 /// A combat in the engine, as search uses a world. It is made from a live combat as the bridge wrote it out
-/// (<see cref="Import"/>), or from another world (<see cref="Clone"/>); worlds share nothing, so each may be searched in
-/// a thread of its own. Each state of a search is one native world that never changes: an action makes the world after
-/// it from the one before (<c>sz_world_step</c>), which a snapshot keeps as it stands, and the step says the state's
-/// status and keys with it. A native world is freed when nothing stands on it any more: the world has moved on and
+/// (<see cref="Import"/>, the SL world; <see cref="Sample"/>, a NoSL world), or from another world (<see cref="Clone"/>);
+/// worlds share nothing, so each may be searched in a thread of its own. Each state of a search is one native world
+/// that never changes: an action makes the world after it from the one before (<c>sz_world_step</c>), which a snapshot
+/// keeps as it stands, and the step says the state's status and keys with it. A native world is freed when nothing stands on it any more: the world has moved on and
 /// every snapshot taken there is forgotten (<see cref="Forget"/>), or the world is disposed.
 /// </summary>
 public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
@@ -27,33 +27,51 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     private readonly RunView _run;
     private readonly long _weight;
     private readonly RunChanges _changes;
+    /// <summary>Whether the world is a NoSL sample (<see cref="Sample"/>).</summary>
+    private readonly bool _sample;
     private Place _at;
     /// <summary>The observation last made where the world stands now, and its text's hash; none once the world has moved.</summary>
     private CombatObservation? _shown;
     private ulong _shownHash;
 
-    private EngineWorld(WorldHandle world, RunView run, long weight, RunChanges changes)
+    private EngineWorld(WorldHandle world, RunView run, long weight, RunChanges changes, bool sample)
     {
         _at = new(world);
         _run = run;
         _weight = weight;
         _changes = changes;
+        _sample = sample;
     }
 
+    /// <summary>The SL world: the real combat, exact. Its states are told apart by the full hidden state
+    /// (<c>HiddenState.Full</c>).</summary>
     /// <param name="export">The live combat as <c>EngineExport</c> wrote it.</param>
     /// <param name="run">The run around the combat, as it stood at the export: <see cref="Run"/> is this with what the
     /// combat has changed since.</param>
     /// <exception cref="EngineException">The engine cannot take the combat in.</exception>
-    public static EngineWorld Import(ReadOnlySpan<byte> export, RunView run)
+    public static EngineWorld Import(ReadOnlySpan<byte> export, RunView run) => Take(export, run, sample: false);
+
+    /// <summary>
+    /// A NoSL world: a combat built to show what the player sees and determinized, one sample of what they cannot see,
+    /// as the replay's NoSL world is. Its states are told apart by what the observation hides that changes how plays
+    /// turn out (<c>HiddenState.Key</c>), and its run keeps <paramref name="run"/>'s deck: the built combat's own run
+    /// holds the combat's piles as its deck, not the real one.
+    /// </summary>
+    /// <param name="export">The built combat as <c>EngineExport</c> wrote it.</param>
+    /// <param name="run">The real run around the combat.</param>
+    /// <exception cref="EngineException">The engine cannot take the combat in.</exception>
+    public static EngineWorld Sample(ReadOnlySpan<byte> export, RunView run) => Take(export, run, sample: true);
+
+    private static EngineWorld Take(ReadOnlySpan<byte> export, RunView run, bool sample)
     {
         WorldHandle world;
-        fixed (byte* json = export) world = Native.sz_world_import(json, (nuint)export.Length);
+        fixed (byte* json = export) world = Native.sz_world_import(json, (nuint)export.Length, sample ? 1 : 0);
         if (world.IsInvalid) throw Native.Failed("sz_world_import");
-        return new(world.Weighing(export.Length), run, export.Length, new());
+        return new(world.Weighing(export.Length), run, export.Length, new(), sample);
     }
 
     /// <summary>An independent world standing where this one stands.</summary>
-    public EngineWorld Clone() => new(Copy(_at.Handle), _run, _weight, _changes);
+    public EngineWorld Clone() => new(Copy(_at.Handle), _run, _weight, _changes, _sample);
 
     private WorldHandle Copy(WorldHandle world)
     {
@@ -89,15 +107,16 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     public ulong StateKey(CombatObservation observation) =>
         ReferenceEquals(observation, _shown) ? StateKey() : ProtocolJson.StateKey(observation);
 
-    /// <summary>The run given at the import with what the combat has changed of it since (<see cref="RunChange"/>).
-    /// The deck and the relics are read once for as long as the engine writes them the same, for all the worlds of
-    /// one import: the same lists come back, so a leaf that priced one run knows the next for the same but its HP
-    /// and potions.</summary>
+    /// <summary>The run given at the import with what the combat has changed of it since (<see cref="RunChange"/>);
+    /// a NoSL sample's keeps the deck given. The deck and the relics are read once for as long as the engine writes
+    /// them the same, for all the worlds of one import: the same lists come back, so a leaf that priced one run knows
+    /// the next for the same but its HP and potions.</summary>
     public RunView Run()
     {
         Native.Buf buf;
         if (Native.sz_world_run(_at.Handle, &buf) != 0) throw Native.Failed("sz_world_run");
-        return _changes.Over(_run, Native.Take(buf));
+        var run = _changes.Over(_run, Native.Take(buf));
+        return _sample ? run with { Deck = _run.Deck } : run;
     }
 
     public IReadOnlyList<CombatAction> Legal()

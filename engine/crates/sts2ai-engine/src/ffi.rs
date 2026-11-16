@@ -48,6 +48,9 @@ type Engine = crate::world::Live;
 struct Handle<W: World> {
     world: W,
     shown: Option<Shown>,
+    /// Whether the world is one sample of what a NoSL player cannot see, rather than the one exact combat of SL: its
+    /// hidden key is then `HiddenState.Key`, not `Full`. Every world made from it is one too.
+    sample: bool,
 }
 
 /// What was read of a world where it stands: the observation, which the state key is the hash of too, and the draw
@@ -58,8 +61,12 @@ struct Shown {
 }
 
 impl<W: World> Handle<W> {
-    fn new(world: W) -> Handle<W> {
-        Handle { world, shown: None }
+    fn new(world: W, sample: bool) -> Handle<W> {
+        Handle {
+            world,
+            shown: None,
+            sample,
+        }
     }
 
     /// C#: RunSession.Combat. The combat as a decision shows it, with the prompt it waits on.
@@ -94,15 +101,27 @@ impl<W: World> Handle<W> {
                 hidden_key: 0,
             };
         }
-        self.shown();
+        let hidden_key = self.hidden_key();
         let shown = self.shown.as_ref().expect("just read");
-        let c = self.world.combat();
         SzNode {
             status,
             round,
             prompt,
             state_key: protocol::state_key(&shown.observation),
-            hidden_key: keys::full(st, player, &shown.draw, c),
+            hidden_key,
+        }
+    }
+
+    /// `ICombatWorld.HiddenKey`: `HiddenState.Full` for the SL world, `HiddenState.Key` for a NoSL sample.
+    fn hidden_key(&mut self) -> u64 {
+        self.shown();
+        let draw = &self.shown.as_ref().expect("just read").draw;
+        let c = self.world.combat();
+        let (st, player) = live(c);
+        if self.sample {
+            keys::key(st, player, draw, c)
+        } else {
+            keys::full(st, player, draw, c)
         }
     }
 }
@@ -224,8 +243,8 @@ fn give(bytes: Vec<u8>, out: *mut SzBuf) {
     unsafe { *out = SzBuf { ptr, len } };
 }
 
-fn make(world: Engine) -> u64 {
-    Box::into_raw(Box::new(Handle::new(world))) as u64
+fn make(world: Engine, sample: bool) -> u64 {
+    Box::into_raw(Box::new(Handle::new(world, sample))) as u64
 }
 
 /// The world of a handle. One world is used by one thread at a time (Native.cs).
@@ -260,13 +279,16 @@ unsafe fn fill(id: u64, out: *mut SzBuf, body: impl FnOnce(&mut Handle<Engine>) 
 // The functions
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// A world from a live combat as `EngineExport` wrote it; 0 on error.
+/// A world from a live combat as `EngineExport` wrote it; 0 on error. `sample` is 1 for a combat built from what a
+/// NoSL player sees and determinized, one sample of what they cannot see, whose states are told apart by
+/// `HiddenState.Key`; 0 for the SL world, the one exact combat, told apart by `HiddenState.Full`. Every world made from
+/// it (`sz_world_clone`, `sz_world_step`) is of the same kind.
 ///
 /// # Safety
 /// `json` points at `len` readable bytes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize) -> u64 {
-    call(0, || Ok(make(Engine::import(unsafe { text(json, len, "the export") }?)?)))
+pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize, sample: i32) -> u64 {
+    call(0, || Ok(make(Engine::import(unsafe { text(json, len, "the export") }?)?, sample != 0)))
 }
 
 /// An independent world standing where this one stands; 0 on error.
@@ -275,7 +297,10 @@ pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize) -> u64 {
 /// `world` is a live handle of this library, used by no other thread during the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_clone(world: u64) -> u64 {
-    call(0, || Ok(make(unsafe { self::world(world) }?.world.clone())))
+    call(0, || {
+        let handle = unsafe { self::world(world) }?;
+        Ok(make(handle.world.clone(), handle.sample))
+    })
 }
 
 /// Frees a world. Any thread may free a world no thread is using.
@@ -318,7 +343,7 @@ pub unsafe extern "C" fn sz_world_step(world: u64, action: *const u8, len: usize
         }
         let handle = unsafe { self::world(world) }?;
         let action = unsafe { text(action, len, "the action") }?;
-        let mut after = Handle::new(handle.world.step(action)?);
+        let mut after = Handle::new(handle.world.step(action)?, handle.sample);
         unsafe { *node = after.node() };
         Ok(Box::into_raw(Box::new(after)) as u64)
     })
@@ -385,20 +410,14 @@ pub unsafe extern "C" fn sz_world_run(world: u64, out: *mut SzBuf) -> i32 {
     }
 }
 
-/// `ICombatWorld.HiddenKey` of the SL world (`HiddenState.Full`). 0 with this thread's error set on error.
+/// `ICombatWorld.HiddenKey`: of the SL world `HiddenState.Full`, of a NoSL sample `HiddenState.Key`
+/// (`sz_world_import`). 0 with this thread's error set on error.
 ///
 /// # Safety
 /// `world` as for `sz_world_clone`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_world_hidden_key(world: u64) -> u64 {
-    call(0, || {
-        let handle = unsafe { self::world(world) }?;
-        handle.shown();
-        let draw = &handle.shown.as_ref().expect("just read").draw;
-        let c = handle.world.combat();
-        let (st, player) = live(c);
-        Ok(keys::full(st, player, draw, c))
-    })
+    call(0, || Ok(unsafe { self::world(world) }?.hidden_key()))
 }
 
 /// `PimcBrain.StateKey` of the world's observation. 0 with this thread's error set on error.

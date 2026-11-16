@@ -28,7 +28,7 @@ fn an_export() -> Vec<u8> {
 }
 
 fn import(export: &[u8]) -> u64 {
-    let world = unsafe { ffi::sz_world_import(export.as_ptr(), export.len()) };
+    let world = unsafe { ffi::sz_world_import(export.as_ptr(), export.len(), 0) };
     assert_ne!(world, 0, "sz_world_import: {}", last_error());
     world
 }
@@ -36,7 +36,7 @@ fn import(export: &[u8]) -> u64 {
 #[test]
 fn a_refused_import_says_why_to_its_own_thread() {
     let not_an_export = b"refuse";
-    assert_eq!(unsafe { ffi::sz_world_import(not_an_export.as_ptr(), not_an_export.len()) }, 0);
+    assert_eq!(unsafe { ffi::sz_world_import(not_an_export.as_ptr(), not_an_export.len(), 0) }, 0);
     let said = last_error();
     assert!(!said.is_empty(), "a refused import says nothing");
     assert_eq!(
@@ -46,7 +46,7 @@ fn a_refused_import_says_why_to_its_own_thread() {
     );
 
     let not_text = [0xffu8, 0xfe];
-    assert_eq!(unsafe { ffi::sz_world_import(not_text.as_ptr(), not_text.len()) }, 0);
+    assert_eq!(unsafe { ffi::sz_world_import(not_text.as_ptr(), not_text.len(), 0) }, 0);
     assert!(last_error().contains("UTF-8"), "{}", last_error());
 }
 

@@ -51,6 +51,7 @@ internal static class Serve
                     SlMacroRequest macro => new WorkerReply(id, null, null, [], Afters: NodeProbe.After(pump, macro.Node, macro.Paths)),
                     SlPromptRequest prompt => new WorkerReply(id, null, null, [], Crossed: Cross(pump, prompt)),
                     PimcWorldRequest world => new WorkerReply(id, Search(pump, pimc ?? throw NoLeaf(), world), null, []),
+                    PimcSampleRequest sample => new WorkerReply(id, null, null, [], Sample: Sample(pump, sample)),
                     _ => throw new InvalidDataException($"no search for {request.GetType().Name}"),
                 };
                 wire.WriteLine(ProtocolJson.Serialize(reply with { GameErrors = HeadlessGame.TakeErrors() }));
@@ -80,6 +81,14 @@ internal static class Serve
     {
         using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, r.Run, r.History);
         return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst, r.History);
+    }
+
+    /// <summary>PIMC's NoSL world for the engine: built and determinized as <see cref="Search"/>'s is, written out
+    /// where it begins.</summary>
+    private static string Sample(Pump pump, PimcSampleRequest r)
+    {
+        using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, run: null, r.History);
+        return Convert.ToBase64String(worlds.Sample(r.Worlds, r.SearchSeed, r.World));
     }
 
     /// <summary>What stands in the node's clone after a path of answers from the card prompt it waits on; where the

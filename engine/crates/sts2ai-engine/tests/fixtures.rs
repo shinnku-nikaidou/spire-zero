@@ -7,6 +7,8 @@
 //!    Each action makes the next world from the one before (`sz_world_step`), which still shows its own record.
 //!  - `continued`: the same from the world imported at every record, to the combat's end, each action taken in place
 //!    (`sz_world_apply`).
+//!  - `sampled`: every record with an export imported as a NoSL sample tells its state apart by `HiddenState.Key`, the
+//!    first line of the record's hidden.txt, and so does the world after its action.
 
 mod support;
 
@@ -34,7 +36,12 @@ fn take(buf: ffi::SzBuf) -> Vec<u8> {
 
 impl World {
     fn import(export: &[u8]) -> Result<World, String> {
-        match unsafe { ffi::sz_world_import(export.as_ptr(), export.len()) } {
+        World::import_as(export, 0)
+    }
+
+    /// `sample`: 1 for a NoSL sample, 0 for the SL world (`sz_world_import`).
+    fn import_as(export: &[u8], sample: i32) -> Result<World, String> {
+        match unsafe { ffi::sz_world_import(export.as_ptr(), export.len(), sample) } {
             0 => Err(format!("error: sz_world_import: {}", last_error())),
             world => Ok(World(world)),
         }
@@ -246,6 +253,59 @@ fn import() {
         tally
     })
     .finish("import");
+}
+
+/// C#: ProtocolJson.Hash of a string, the hash of the text as a JSON string.
+fn hash_of_text(text: &str) -> u64 {
+    let mut hash = sts2ai_engine::protocol::Fnv::new();
+    sts2ai_engine::protocol::string(text, &mut hash);
+    hash.0
+}
+
+/// A NoSL sample's hidden key at record `k`: `HiddenState.Key`, the hash of hidden.txt's first line.
+fn sample_key(world: &World, fixture: &Fixture, k: usize) -> Result<(), String> {
+    if fixture.records[k].keys.is_none() {
+        return Ok(());
+    }
+    let hidden = String::from_utf8(fixture.bytes(k, "hidden.txt")).map_err(|e| e.to_string())?;
+    let expected = hash_of_text(hidden.split('\n').next().unwrap_or(""));
+    let key = world.key("sz_world_hidden_key", ffi::sz_world_hidden_key)?;
+    if key != expected {
+        return Err(format!("sample hidden_key: {expected} != {key}"));
+    }
+    Ok(())
+}
+
+/// The sampled check: each export imported as a NoSL sample has `HiddenState.Key` for its hidden key, and so has the
+/// world its action makes (a clone and a step keep the kind of world), where the next record has an export too.
+#[test]
+fn sampled() {
+    sweep(|fixture| {
+        let mut tally = Tally::default();
+        for k in 0..fixture.records.len() {
+            if !fixture.has_export(k) {
+                tally.skipped += 1;
+                continue;
+            }
+            let checked = World::import_as(&fixture.bytes(k, "export.json"), 1).and_then(|world| {
+                sample_key(&world, fixture, k)?;
+                let copy = world.try_clone()?;
+                sample_key(&copy, fixture, k)?;
+                match fixture.records[k].action.as_deref() {
+                    Some(action) if fixture.records[k + 1].status == 0 => sample_key(&copy.step(action)?, fixture, k + 1),
+                    _ => Ok(()),
+                }
+            });
+            match checked {
+                Ok(()) => tally.passed += 1,
+                Err(difference) => tally
+                    .failed
+                    .push((format!("{} record {k}", fixture.name), difference)),
+            }
+        }
+        tally
+    })
+    .finish("sampled");
 }
 
 /// The step check: the world imported at a combat's first record is carried through the whole combat, card prompts

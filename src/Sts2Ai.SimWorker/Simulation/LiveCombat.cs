@@ -13,6 +13,8 @@ internal static class LiveCombat
     private static readonly Lazy<EngineExport> Writer = new(() => new EngineExport(EngineSchema.Load(EngineLibrary.SchemaPath)));
 
     /// <param name="run">The run around the combat as it stands.</param>
-    public static CombatExport Export(Player player, RunView run) =>
-        new(Writer.Value.Write(HeadlessGame.GameVersion, PromptSelector.Around()).Bytes, run);
+    public static CombatExport Export(Player player, RunView run) => new(Bytes(), run);
+
+    /// <summary>The live combat's bytes alone.</summary>
+    public static byte[] Bytes() => Writer.Value.Write(HeadlessGame.GameVersion, PromptSelector.Around()).Bytes;
 }

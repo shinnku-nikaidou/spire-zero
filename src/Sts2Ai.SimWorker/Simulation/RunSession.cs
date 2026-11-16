@@ -705,14 +705,6 @@ internal sealed class RunSession : IDisposable
                $"executorRunning={executor.IsRunning} paused={executor.IsPaused} action={executor.CurrentlyRunningAction} pending={_pump.Pending}";
     }
 
-    /// <summary>
-    /// The game's card db lets go of the piles it listens to only when a combat ends. A session left in the middle of
-    /// one, as a node's clone is, would leave the db holding its piles, and through them its whole run, for as long as
-    /// the process lives; and a combat written out for the engine later in that process would carry every such run
-    /// (the export starts from the db).
-    /// </summary>
-    private static readonly System.Reflection.MethodInfo CardDbCombatEnded = AccessTools.Method(typeof(NetCombatCardDb), "OnCombatEnded");
-
     public void Dispose()
     {
         RewardsSet.testSelector = null;
@@ -724,7 +716,7 @@ internal sealed class RunSession : IDisposable
         // Nothing runs while a prompt waits: the game stands where it asked until its run is cleaned up.
         _pump.Drain();
         // As the combat's end would; nothing where none is going on.
-        CardDbCombatEnded.Invoke(NetCombatCardDb.Instance, [null]);
+        CombatSession.CardDbLetsGo();
         RunManager.Instance.CleanUp(graceful: true);
         _selector.Drop();
         _pump.Drain();

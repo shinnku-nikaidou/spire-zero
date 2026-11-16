@@ -261,7 +261,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         {
             _root = world.Snapshot();
             var obs = world.Observe();
-            _rootHash = ProtocolJson.Hash(obs);
+            _rootHash = world.Hash(obs);
             _path.Add(new(obs, 0, _root));
             var lines = new PlannedLine[first.Count];
             for (int a = 0; a < first.Count; a++)
@@ -291,7 +291,7 @@ public sealed class PimcBrain(ICombatLeaf leaf)
             {
                 for (CombatAction? step = next; step is { } taken; step = world.Status == CombatStatus.InProgress && world.Observe().Prompt is { } prompt ? FirstPicks.Of(prompt) : null)
                 {
-                    hashes.Add(ProtocolJson.Hash(world.Observe()));
+                    hashes.Add(world.Hash(world.Observe()));
                     world.Execute(taken);
                     actions.Add(taken);
                 }
@@ -332,8 +332,8 @@ public sealed class PimcBrain(ICombatLeaf leaf)
         /// they are tried depth first.</param>
         private PlannedLine Best(CombatObservation obs, int? shareTo = null)
         {
-            ulong hash = ProtocolJson.Hash(obs);
-            var key = (StateKey(obs), world.HiddenKey());
+            ulong hash = world.Hash(obs);
+            var key = (world.StateKey(obs), world.HiddenKey());
             if (_memo.TryGetValue(key, out var known)) return known;
             var here = world.Snapshot();
             // A prompt stands in the middle of an action: a cycle is a move between states where the player can play.

@@ -19,11 +19,12 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
 {
     private readonly Pump _pump;
     private readonly CombatSnapshot _root;
-    private readonly RunView _run;
+    /// <summary>The run around the combat, for the leaves; none for worlds that are only written out (<see cref="Sample"/>).</summary>
+    private readonly RunView? _run;
     private CombatSession? _live;
     private World? _owner;
 
-    private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, RunView run)
+    private SimWorlds(Pump pump, PlayEnvironment environment, CombatSnapshot root, RunView? run)
     {
         _pump = pump;
         Environment = environment;
@@ -34,8 +35,9 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
     /// <exception cref="InvalidOperationException">The combat built from the observation does not show it exactly: search
     /// would explore some other combat.</exception>
     /// <param name="history">The enemies' intents in the rounds so far, for the monsters' move logs.</param>
-    /// <param name="run">The run around the combat, for the leaves (<see cref="World.Run"/>).</param>
-    public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed, RunView run, IReadOnlyList<EnemyTurns>? history = null)
+    /// <param name="run">The run around the combat, for the leaves (<see cref="World.Run"/>); none where the worlds are
+    /// only written out.</param>
+    public static SimWorlds NoSL(Pump pump, CombatObservation observation, string buildSeed, RunView? run, IReadOnlyList<EnemyTurns>? history = null)
     {
         var root = new CombatSnapshot(CombatBuilder.Setup(observation, buildSeed, history), []);
         using (var built = CombatSession.Start(pump, root.Setup, FirstPicks.Instance))
@@ -56,6 +58,17 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
             ulong seed = Mix(searchSeed, (ulong)i);
             return (ICombatWorld)new World(this, [new TraceEvent(TraceKind.Determinize, Seed: seed)]);
         }).ToList();
+
+    /// <summary>
+    /// NoSL: world <paramref name="world"/> of the <paramref name="k"/> that <see cref="Worlds"/> draws from
+    /// <paramref name="searchSeed"/>, where it begins, written out for the engine: the same combat PIMC's search on
+    /// replay starts that world from.
+    /// </summary>
+    public byte[] Sample(int k, ulong searchSeed, int world)
+    {
+        if (Environment != PlayEnvironment.NoSL) throw new InvalidOperationException("a sample is a NoSL world's");
+        return ((World)Worlds(k, searchSeed)[world]).Export();
+    }
 
     public void Dispose()
     {
@@ -105,7 +118,7 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
         public RunView Run()
         {
             var player = Live.Player;
-            return source._run with
+            return (source._run ?? throw new InvalidOperationException("these worlds are only written out: they have no run for the leaves")) with
             {
                 Relics = [.. player.Relics.Select(GameBridge.Observe.Relic)],
                 Potions = [.. player.PotionSlots.Select(p => p?.Id.Entry)],
@@ -130,6 +143,13 @@ internal sealed class SimWorlds : IWorldSource, IDisposable
         {
             Live.Execute(action);
             Sync();
+        }
+
+        /// <summary>The world as it stands, written out for the engine.</summary>
+        public byte[] Export()
+        {
+            _ = Live;
+            return LiveCombat.Bytes();
         }
 
         public WorldSnapshot Snapshot() => new([.. trace.Select(e => e.ToString())]);

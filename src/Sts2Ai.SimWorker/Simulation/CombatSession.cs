@@ -401,11 +401,25 @@ internal sealed class CombatSession : IDisposable
         return $"round {st.RoundNumber} hp {me.CurrentHp}/{me.MaxHp} block {me.Block} energy {pcs?.Energy} | {enemies} | hand [{hand}]";
     }
 
+    /// <summary>
+    /// The game's card db lets go of the piles it listens to only when a combat ends. A session left in the middle of
+    /// one (a world of search, a node's clone, a combat built from an observation) would leave the db holding its piles,
+    /// and through them its whole run, for as long as the process lives; and a combat written out for the engine later
+    /// in that process would carry every such run (the export starts from the db). This is what the combat's end does
+    /// there; nothing where no combat is going on.
+    /// </summary>
+    public static void CardDbLetsGo() => CardDbCombatEnded.Invoke(NetCombatCardDb.Instance, [null]);
+
+    private static readonly System.Reflection.MethodInfo CardDbCombatEnded =
+        typeof(NetCombatCardDb).GetMethod("OnCombatEnded", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+        ?? throw new MissingMethodException("NetCombatCardDb.OnCombatEnded: the game's card db changed");
+
     public void Dispose()
     {
         _selectorScope.Dispose();
         // Nothing runs while a prompt waits: the game stands where it asked until its run is cleaned up.
         _pump.Drain();
+        CardDbLetsGo();
         RunManager.Instance.CleanUp(graceful: true);
         _selector.Drop();
         _pump.Drain();

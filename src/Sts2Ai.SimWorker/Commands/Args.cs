@@ -204,8 +204,8 @@ internal sealed class ChampionFileOption : Option<string?>
 
 /// <summary>The options that name a champion: its brains, the search's budget and workers, and weights files.</summary>
 /// <param name="file">Whether the command also takes --champion FILE to play (run, brain; gate's --champion is the one to beat).</param>
-/// <param name="world">The world plan searches in when --combat-world is not given: engine for run and brain, replay for
-/// the eval commands'.</param>
+/// <param name="world">The world plan and pimc search in when --combat-world is not given: engine for run and brain,
+/// replay for the eval commands'.</param>
 internal sealed class ChampionArgs(bool file, string world = "replay")
 {
     private readonly ChampionFileOption? _file = file ? new() : null;
@@ -217,9 +217,9 @@ internal sealed class ChampionArgs(bool file, string world = "replay")
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's and plan's search worker processes (default: one per world, --worlds)");
     private readonly LeafArgs _leaf = new();
     private readonly Option<string> _world = Opt.Of("--combat-world", world,
-            "the world plan searches in: engine, the Rust engine in threads of this process, on the live combat that the run's own process writes out " +
-            "or that an SL host sends over the wire (brain, run --check); replay, the node's clone in the worker processes, for checks. " +
-            "The champion is the same one on both")
+            "the world plan and pimc search in: engine, the Rust engine in threads of this process, plan's on the live combat that the run's own " +
+            "process writes out or that an SL host sends over the wire (brain, run --check), pimc's on each world the workers build from the " +
+            "observation; replay, the node's clone or pimc's worlds replayed in the worker processes, for checks. The champion is the same one on both")
         .AcceptOnlyFromAmong("replay", "engine");
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone")
@@ -268,10 +268,10 @@ internal sealed class ChampionArgs(bool file, string world = "replay")
         if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
         if ((leaf.Value != null) != (macro == "l0" || leaf.Net != null)) throw new CliException("--value goes with --macro l0 or --combat-net, which need it");
         if (clone && leaf.Net == null) throw new CliException("--afterstates clone needs --combat-net: a fight an option starts is valued by the combat net");
-        // The world is plan's: another combat brain plays as it does whatever the default, and refuses the engine asked for by name.
-        bool engine = r.GetValue(_world) == "engine";
-        if (engine && policy != "plan" && r.GetResult(_world) is { Implicit: false }) throw new CliException("--combat-world is plan's; it needs --policy plan");
+        // The world is the search's: a placeholder plays as it does whatever the default, and refuses the engine asked for by name.
+        bool engine = r.GetValue(_world) == "engine", searches = policy is "plan" or "pimc";
+        if (engine && !searches && r.GetResult(_world) is { Implicit: false }) throw new CliException("--combat-world is plan's and pimc's; it needs --policy plan or pimc");
         return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore,
-            engine && policy == "plan");
+            engine && searches);
     }
 }

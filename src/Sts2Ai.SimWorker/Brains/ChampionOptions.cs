@@ -14,8 +14,9 @@ namespace Sts2Ai.SimWorker.Brains;
 /// evenly, whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
 /// <param name="MacroExplore">For self-play only: l0's softmax temperature τ over the log of V's values for the decisions
 /// not drawn evenly (--macro-explore, <see cref="Softmax"/>); 0 for none, V's best.</param>
-/// <param name="Engine">Whether plan searches in the engine (--combat-world engine, run's default, <see cref="EnginePlanner"/>)
-/// rather than on the node's clone (replay, brain's). It is the same champion either way, by the same name.</param>
+/// <param name="Engine">Whether the search runs in the engine (--combat-world engine, run's and brain's default): plan's
+/// (<see cref="EnginePlanner"/>) rather than on the node's clone, pimc's (<see cref="EnginePimc"/>) rather than on its
+/// worlds replayed in the workers. It is the same champion either way, by the same name.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue? Value, string? ValueFile,
     LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0, bool Engine = false)
 {
@@ -33,9 +34,9 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
     /// this process or over the wire; so does the exploring l0, from its own. pimc plays in NoSL; in SL, plan plans the
     /// whole combat on the node's clone, and with --afterstates clone l0 plays each option on it.
-    /// The search runs in <paramref name="pool"/> (<see cref="Pool"/>); with --combat-world engine, plan's runs in the
-    /// engine, in as many threads as the pool has workers, and the pool plays the node's clone across a card prompt a
-    /// plan is rooted at. With
+    /// The search runs in <paramref name="pool"/> (<see cref="Pool"/>); with --combat-world engine, it runs in the
+    /// engine, in as many threads as the pool has workers: the pool plays the node's clone across a card prompt a plan
+    /// is rooted at, and builds pimc's worlds. With
     /// <paramref name="explain"/>, for a host that shows the answers (the mod), map options carry their routes (<see cref="Dispatcher"/>),
     /// and l0 counts a state as decided once the host says it played the answer (<see cref="Executed"/>): its player may act instead.
     /// </summary>
@@ -51,7 +52,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         var rng = Rng("");
         var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
             : Policy == "plan" ? Engine ? new EnginePlanner(Leaf.Leaf, Workers).Route(Budget, Combat, pool) : new PooledPlanner(pool).Route(Budget, Combat)
-            : new PooledPimc(pool).Route(Budget, Combat);
+            : Engine ? new EnginePimc(Leaf.Leaf, Workers, pool).Route(Budget, Combat) : new PooledPimc(pool).Route(Budget, Combat);
         Dispatcher dispatcher;
         if (Macro == "l0")
         {

@@ -1,6 +1,6 @@
 # The combat engine
 
-A fast copy of Slay the Spire 2's combat in Rust, for the SL planner's search. The run itself (map, events, shops,
+A fast copy of Slay the Spire 2's combat in Rust, for the combat search: the SL planner's, and NoSL's PIMC. The run itself (map, events, shops,
 rewards) and every action actually taken stay on the real `sts2.dll`; the engine only answers "what happens if".
 
 ## Why it has this shape
@@ -33,6 +33,12 @@ game, so each plan imports the combat there. `--combat-world replay`, the node's
 checks. Over the wire an SL host sends the live combat with each combat decision between actions (the mod from the
 real game, `run --check`'s host from its own), so `sim brain` (the mod's brain) and `run --check` plan in the engine
 too; a card prompt is crossed on the node's clone in the search workers, as in `sim run`. A NoSL host sends none.
+
+NoSL's PIMC (`--policy pimc`) searches in the engine too, by the same option and default (`EnginePimc`). Its worlds
+are never the real combat: each is built from the observation and determinized in a search worker as on replay
+(`SimWorlds`, `PimcSampleRequest`), written out there where it begins, and taken in by the host as a NoSL sample
+(`EngineWorld.Sample`), one world per thread. A sample tells its states apart by `HiddenState.Key`, as the replay's
+NoSL world does, and its run keeps the real deck: the built combat's own run holds the combat's piles as its deck.
 
 ## Pieces
 
@@ -521,7 +527,7 @@ person to judge whether that is presentation.
 another, so different worlds may be used from different threads. Every function catches panics.
 
 ```c
-uint64_t sz_world_import(const uint8_t *json, size_t len);        // a live combat as EngineExport wrote it; 0 on error
+uint64_t sz_world_import(const uint8_t *json, size_t len, int32_t sample);   // a live combat as EngineExport wrote it; 0 on error
 uint64_t sz_world_clone(uint64_t world);
 void     sz_world_free(uint64_t world);
 int32_t  sz_world_apply(uint64_t world, const uint8_t *action, size_t len);   // "play:10:1", "potion:0", "end_turn", "pick:0,2"; 0 ok
@@ -530,13 +536,15 @@ int32_t  sz_world_status(uint64_t world);                          // 0 in progr
 int32_t  sz_world_legal(uint64_t world, sz_buf *out);              // the plays, one per line, in the game's order; empty at a prompt
 int32_t  sz_world_observe(uint64_t world, sz_buf *out);            // the CombatObservation's JSON, byte for byte ProtocolJson's
 int32_t  sz_world_run(uint64_t world, sz_buf *out);                // what the combat has changed of the run, for RunView
-uint64_t sz_world_hidden_key(uint64_t world);                      // as ICombatWorld.HiddenKey
+uint64_t sz_world_hidden_key(uint64_t world);                      // as ICombatWorld.HiddenKey: HiddenState.Full, or Key of a sample
 uint64_t sz_world_state_key(uint64_t world);                       // as PimcBrain.StateKey of its observation
 void     sz_buf_free(sz_buf buf);
 int32_t  sz_last_error(sz_buf *out);                               // this thread's last error
 ```
 
-`sz_buf` is `{ uint8_t *ptr; size_t len; }`. Actions are `CombatAction`'s text form.
+`sz_buf` is `{ uint8_t *ptr; size_t len; }`. Actions are `CombatAction`'s text form. `sample` is 1 for a NoSL world
+(a combat built from what the player sees and determinized), whose hidden key is `HiddenState.Key`, and 0 for the SL
+world, whose hidden key is `HiddenState.Full`; every world made from it (a clone, a step) is of the same kind.
 
 `sz_world_step` is how search makes a node: the world after the action is made of `world`, which stays as it is (what a
 snapshot is to search) and is freed on its own, in either order. It is one copy of the combat where a clone and an
@@ -580,7 +588,8 @@ The crate has the same checks without the game, over a dump of combats the game 
 --dump DIR`: for every decision the export, the observation, the legal actions and the action taken), named by
 `STS2AI_ENGINE_FIXTURES`: `cargo test --release --test fixtures` (`import`, `step`, `continued` as above, through the
 C ABI: a world is held against a record by its observation, its legal actions, its status, what it changed of the
-run and its two keys) and `--test world` (every combat is played through by the world alone, no action refused). A
+run and its two keys; `sampled`, each export taken in as a NoSL sample has `HiddenState.Key` for its hidden key) and
+`--test world` (every combat is played through by the world alone, no action refused). A
 dump is of one schema: it is stale when the schema's hash changes. `--test speed -- --ignored --nocapture` measures the
 engine's own operations on the middle decision of the dump's combats (import, clone, apply by kind of action, the
 observation and what its parts cost, the keys) and what a copy costs arena by arena; its `spin` does one kind of call

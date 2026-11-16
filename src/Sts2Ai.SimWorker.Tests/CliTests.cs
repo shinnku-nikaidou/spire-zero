@@ -34,11 +34,12 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
-    public void PlanSearchesInTheCommandsWorldAndOtherBrainsRefuseOnlyTheEngineAskedFor()
+    public void SearchesInTheCommandsWorldAndOtherBrainsRefuseOnlyTheEngineAskedFor()
     {
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         string[] plan = ["--policy", "plan", "--combat-net", net, "--value", value];
+        string[] pimc = ["--policy", "pimc", "--combat-net", net, "--value", value];
         var run = new ChampionArgs(file: false, world: "engine");
         // The eval commands' default.
         var eval = new ChampionArgs(file: false);
@@ -49,6 +50,9 @@ public sealed class CliTests : IDisposable
         Assert.False(run.Read(runCommand.Parse([.. plan, "--combat-world", "replay"])).Engine);
         Assert.False(eval.Read(evalCommand.Parse(plan)).Engine);
         Assert.True(eval.Read(evalCommand.Parse([.. plan, "--combat-world", "engine"])).Engine);
+        Assert.True(run.Read(runCommand.Parse(pimc)).Engine);
+        Assert.False(run.Read(runCommand.Parse([.. pimc, "--combat-world", "replay"])).Engine);
+        Assert.False(eval.Read(evalCommand.Parse(pimc)).Engine);
         Assert.False(run.Read(runCommand.Parse(["--policy", "play"])).Engine);
         Assert.Throws<CliException>(() => run.Read(runCommand.Parse(["--policy", "play", "--combat-world", "engine"])));
     }
@@ -118,8 +122,8 @@ public sealed class CliTests : IDisposable
 
         Assert.False(noSl.OnClone);
         Assert.True(sl.OnClone);
-        // The SL planner searches in the engine on the live combat SL hosts send; pimc has no engine.
-        Assert.False(noSl.Engine);
+        // Both search in the engine: the SL planner on the live combat SL hosts send, pimc on the worlds its workers build.
+        Assert.True(noSl.Engine);
         Assert.True(sl.Engine);
         Assert.Equal("combat pimc combat-tiny 8x300, combat prompts first, macro l0 pure-v-tiny-win, macro prompts l0 pure-v-tiny-win", noSl.Name);
         Assert.EndsWith(", combat prompts first, macro l0 pure-v-tiny-win clone, macro prompts l0 pure-v-tiny-win clone", sl.Name);

@@ -5,6 +5,7 @@
 //!  - each action costs 1 HP of 70, down to 0;
 //!  - a combat called "LONG" is won by "play:7" from round 3 on only; before, the play is a step like any other;
 //!  - a combat called "keyless" has no keys: both are 0, with an error, and a step from it fails;
+//!  - a world imported as a NoSL sample, and every world made of it, has 1 << 40 added to its hidden key;
 //!  - every call on a world forgets the thread's last error first, as the engine does.
 //! `sz_test_live` counts the worlds not yet freed, `sz_test_steps` and `sz_test_clones` the steps and clones made.
 
@@ -23,6 +24,7 @@ thread_local! {
 struct World {
     encounter: String,
     steps: Vec<String>,
+    sample: bool,
 }
 
 impl World {
@@ -104,14 +106,14 @@ unsafe fn text(bytes: *const u8, len: usize) -> String {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize) -> u64 {
+pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize, sample: i32) -> u64 {
     begin();
     let encounter = unsafe { text(json, len) };
     if encounter == "refuse" {
         fail("the stand-in takes no combat called refuse");
         return 0;
     }
-    make(World { encounter, steps: vec![] })
+    make(World { encounter, steps: vec![], sample: sample != 0 })
 }
 
 #[unsafe(no_mangle)]
@@ -191,7 +193,7 @@ pub unsafe extern "C" fn sz_world_run(id: u64, out: *mut Buf) -> i32 {
 }
 
 fn hidden_key(w: &World) -> u64 {
-    key(w, w.steps.len() as u64)
+    key(w, w.steps.len() as u64 + if w.sample { 1 << 40 } else { 0 })
 }
 
 /// What the observation shows: the encounter, the round and the HP.

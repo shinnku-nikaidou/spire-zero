@@ -36,14 +36,16 @@ internal static partial class SelfTest
     private sealed record Recording(List<CombatSnapshot> Snapshots, List<string> Observations, List<string> Hidden, string Trace, List<string> ProtocolErrors);
 
     /// <summary>
-    /// A few decisions, each searched here and in a pool of <paramref name="workers"/> serve processes with the same
-    /// seeds and the same combat net: the candidates, their values and the plan must be the same.
+    /// A few decisions, each searched here, in a pool of <paramref name="workers"/> serve processes, and in the engine on
+    /// the worlds that pool builds, with the same seeds and the same combat net: the candidates, their values and the
+    /// plan must be the same.
     /// </summary>
     private static void PooledMatches(Pump pump, CombatPool combats, int seed, int workers, LeafChoice net, Action<string, bool, string> check)
     {
         var brain = new PimcBrain(net.Leaf);
         using var workerPool = new WorkerPool(Program.SelfCommand(), workers, net.WorkerOptions());
         var pooled = new PooledPimc(workerPool);
+        var engine = new EnginePimc(net.Leaf, workers, workerPool);
         for (int i = 0; i < 4; i++)
         {
             var setup = combats.Setup(i, GameSeeds.MakeSeed(seed + 2, i));
@@ -66,6 +68,9 @@ internal static partial class SelfTest
             var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed, [], Alone(obs));
             check("pooled search matches in-process search",
                 Show(here) == Show(there), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; pooled {Show(there)}");
+            var inEngine = engine.Decide(obs, legal, buildSeed, budget, decisionSeed, [], Alone(obs));
+            check("engine search matches in-process search",
+                Show(here) == Show(inEngine), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; engine {Show(inEngine)}");
             var errors = workerPool.TakeGameErrors();
             check("no game errors in workers", errors.Count == 0, $"#{i}: {errors.FirstOrDefault()}");
         }

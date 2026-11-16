@@ -222,13 +222,29 @@ internal static class CombatBuilder
     /// <summary>
     /// The move of a stunned monster, made on the spot as the game's <see cref="Creature.StunInternal"/> makes it,
     /// since it is not one of the monster's own. On its turn the real one does what the stun's cause gives it to do;
-    /// this one does nothing, then goes on with <paramref name="followUp"/>, the last move logged.
+    /// this one does nothing (<see cref="NoStunMove"/>), then goes on with <paramref name="followUp"/>, the last move logged.
     /// </summary>
-    private static MoveState Stunned(string followUp) => new("STUNNED", _ => Task.CompletedTask, new StunIntent())
+    private static MoveState Stunned(string followUp) => new("STUNNED", NoStunMove, new StunIntent())
     {
         FollowUpStateId = followUp,
         MustPerformOnceBeforeTransitioning = true,
     };
+
+    /// <summary>
+    /// What a plain stun gives the monster to do on its turn, nothing: the game's own lambda of
+    /// <see cref="CreatureCmd.Stun(Creature, string?)"/>. A combat built here is written out for the engine (NoSL's
+    /// search), which holds the game's methods and none of ours, so the move must hold the game's.
+    /// </summary>
+    private static readonly Func<IReadOnlyList<Creature>, Task> NoStunMove = GamesNoStunMove();
+
+    private static Func<IReadOnlyList<Creature>, Task> GamesNoStunMove()
+    {
+        var lambdas = typeof(CreatureCmd).GetNestedType("<>c", BindingFlags.NonPublic)
+                      ?? throw new MissingMemberException("CreatureCmd has no lambdas class: the game's plain stun changed");
+        var method = lambdas.GetMethods(Private).Single(m => m.Name.StartsWith("<Stun>b__", StringComparison.Ordinal) && m.ReturnType == typeof(Task)
+            && m.GetParameters() is [var only] && only.ParameterType == typeof(IReadOnlyList<Creature>));
+        return method.CreateDelegate<Func<IReadOnlyList<Creature>, Task>>(lambdas.GetField("<>9", BindingFlags.Static | BindingFlags.Public)!.GetValue(null));
+    }
 
     /// <summary>
     /// The monster's moves that would show the same intents as <paramref name="intents"/>, by id. Of moves that look the

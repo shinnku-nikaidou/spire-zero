@@ -122,6 +122,23 @@ public sealed class EngineWorldTests(FakeEngine engine)
         Assert.Equal(before, after with { Hp = before.Hp, Potions = before.Potions });
     }
 
+    [Fact]
+    public void ANoSlSampleKeepsTheRunsDeckAndItsKindOfHiddenKey()
+    {
+        var deck = new List<CardView> { new() { Id = "NEUTRALIZE" } };
+        using var world = EngineWorld.Sample(Encoding.UTF8.GetBytes("NIBBITS_WEAK"), Around with { Deck = deck });
+        world.Execute(CombatAction.EndTurn);
+        using var copy = world.Clone();
+        copy.Execute(CombatAction.EndTurn);
+        var run = world.Run();
+        // The built combat's run holds its piles as its deck: the sample's run keeps the real one, the rest as the SL world's.
+        Assert.Equal((69, "RING_OF_THE_SNAKE"), (run.Hp, run.Relics.Single().Id));
+        Assert.Same(deck, run.Deck);
+        // The stand-in marks a sample's hidden key: the import's kind goes to every world made of it.
+        Assert.Equal((1UL << 40) + 1, world.HiddenKey());
+        Assert.Equal((1UL << 40) + 2, copy.HiddenKey());
+    }
+
     [Theory]
     [InlineData("play:7", CombatStatus.Won)]
     [InlineData("potion:0", CombatStatus.Lost)]
